@@ -1,0 +1,14 @@
+{
+  "name": "folio-whatsapp-bot",
+  "version": "1.0.0",
+  "description": "Bot de folios con WhatsApp y OpenAI",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "body-parser": "^1.20.2",
+    "express": "^4.18.2"
+  }
+}
