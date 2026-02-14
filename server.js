@@ -21,11 +21,10 @@ if (message.includes("crear folio")) {
   let prioridad = "Normal";
 
   if (message.includes("urgente")) {
-    prioridad = "Urgente No Programado";
+    prioridad = "Urgente no programado";
   }
 
   res.set("Content-Type", "text/xml");
-
   return res.send(`
     <Response>
       <Message>
