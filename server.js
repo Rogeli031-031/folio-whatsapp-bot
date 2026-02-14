@@ -8,8 +8,42 @@ app.use(bodyParser.json());
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
-app.post("/webhook", async (req, res) => {
+  app.post("/webhook", async (req, res) => {
   const incomingMsg = req.body.Body;
+  const message = incomingMsg.toLowerCase();
+
+  // ===== MANEJO CREAR FOLIO =====
+ // ====== MANEJO CREAR FOLIO ======
+if (message.includes("crear folio")) {
+
+  const folioId = "F-" + Date.now(); // ID único real
+
+  let prioridad = "Normal";
+
+  if (message.includes("urgente")) {
+    prioridad = "Urgente No Programado";
+  }
+
+  res.set("Content-Type", "text/xml");
+
+  return res.send(`
+    <Response>
+      <Message>
+Folio ${folioId} creado correctamente.
+
+Estado técnico: Generado
+Pendiente: Aprobación Planta
+Prioridad: ${prioridad}
+
+El folio ya fue enviado al flujo de autorización.
+      </Message>
+    </Response>
+  `);
+}
+
+
+  // ===== SI NO ES CREAR FOLIO, USA OPENAI =====
+
 
   try {
     const response = await axios.post(
