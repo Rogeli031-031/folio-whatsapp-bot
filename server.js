@@ -1,73 +1,60 @@
 // server.js
-// WhatsApp (Twilio) + PostgreSQL (Render) + S3 (cotizaciones PDF)
-// Flujo actual:
-// - crear folio ...
-// - estatus F-YYYYMM-XXX
-// - aprobar F-YYYYMM-XXX   (solo ZP) => notifica a GA, GG y CDMX
-// - cotizacion F-YYYYMM-XXX (enviar PDF adjunto) => sube a S3 y liga al folio
+// WhatsApp (Twilio) + PostgreSQL (Render) + S3 (cotizaciones) + OpenAI (opcional)
+//
+// Comandos:
+// - crear folio <concepto> [urgente]
+// - estatus F-YYYYMM-001
+// - aprobar F-YYYYMM-001              (solo ZP)
+// - cotizacion F-YYYYMM-001           (mandar PDF/archivo en el mismo mensaje o inmediatamente después)
+// - ayuda
 
 const express = require("express");
 const bodyParser = require("body-parser");
 const axios = require("axios");
 const { Pool } = require("pg");
-const twilio = require("twilio");
 
-const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
-const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
+// Twilio + AWS S3
+let twilioClient = null;
+let S3Client = null;
+let PutObjectCommand = null;
+let GetObjectCommand = null;
+let getSignedUrl = null;
+
+try {
+  const twilio = require("twilio");
+  const { S3Client: _S3Client, PutObjectCommand: _Put, GetObjectCommand: _Get } = require("@aws-sdk/client-s3");
+  const { getSignedUrl: _getSignedUrl } = require("@aws-sdk/s3-request-presigner");
+  S3Client = _S3Client;
+  PutObjectCommand = _Put;
+  GetObjectCommand = _Get;
+  getSignedUrl = _getSignedUrl;
+
+  const sid = process.env.TWILIO_ACCOUNT_SID || "";
+  const token = process.env.TWILIO_AUTH_TOKEN || "";
+  if (sid && token) twilioClient = twilio(sid, token);
+} catch (e) {
+  // Si no está instalado aún, el deploy falla. Por eso package.json debe incluir dependencias.
+}
 
 const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 
-// =========================
-// ENV
-// =========================
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 const DATABASE_URL = process.env.DATABASE_URL || "";
 
-const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || "";
-const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || "";
-const TWILIO_WHATSAPP_NUMBER = process.env.TWILIO_WHATSAPP_NUMBER || ""; // whatsapp:+1415...
-
+const TWILIO_WHATSAPP_NUMBER = process.env.TWILIO_WHATSAPP_NUMBER || ""; // "whatsapp:+14155238886"
 const AWS_ACCESS_KEY_ID = process.env.AWS_ACCESS_KEY_ID || "";
 const AWS_SECRET_ACCESS_KEY = process.env.AWS_SECRET_ACCESS_KEY || "";
 const AWS_REGION = process.env.AWS_REGION || "";
 const S3_BUCKET = process.env.S3_BUCKET || "";
 
-if (!DATABASE_URL) console.error("❌ Falta DATABASE_URL.");
-if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_WHATSAPP_NUMBER) {
-  console.warn("⚠️ Falta Twilio vars (no podrá notificar).");
-}
-if (!AWS_ACCESS_KEY_ID || !AWS_SECRET_ACCESS_KEY || !AWS_REGION || !S3_BUCKET) {
-  console.warn("⚠️ Falta AWS/S3 vars (no podrá subir cotizaciones).");
-}
+if (!DATABASE_URL) console.error("❌ Falta DATABASE_URL en Render.");
 
-// =========================
-// DB
-// =========================
 const pool = new Pool({
   connectionString: DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
+  ssl: { rejectUnauthorized: false },
 });
-
-// =========================
-// Twilio Client
-// =========================
-const twilioClient =
-  TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN
-    ? twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
-    : null;
-
-// =========================
-// S3 Client
-// =========================
-const s3 =
-  AWS_ACCESS_KEY_ID && AWS_SECRET_ACCESS_KEY && AWS_REGION
-    ? new S3Client({
-        region: AWS_REGION,
-        credentials: { accessKeyId: AWS_ACCESS_KEY_ID, secretAccessKey: AWS_SECRET_ACCESS_KEY }
-      })
-    : null;
 
 // =========================
 // Helpers
@@ -81,15 +68,14 @@ function twiml(msg) {
 }
 
 function normalizeFrom(from) {
-  // "whatsapp:+521..." -> "+521..."
+  // Twilio WhatsApp -> "whatsapp:+521..."
   return String(from || "").replace(/^whatsapp:/i, "").trim();
 }
 
-function toWhatsAppAddress(phoneE164) {
-  // "+521..." -> "whatsapp:+521..."
-  const p = String(phoneE164 || "").trim();
-  if (!p) return "";
-  return p.toLowerCase().startsWith("whatsapp:") ? p : `whatsapp:${p}`;
+function isPdfLike(contentType, filename) {
+  const ct = String(contentType || "").toLowerCase();
+  const fn = String(filename || "").toLowerCase();
+  return ct.includes("pdf") || fn.endsWith(".pdf");
 }
 
 function moneyToNumber(v) {
@@ -98,15 +84,15 @@ function moneyToNumber(v) {
   return Number.isFinite(n) ? n : 0;
 }
 
-function extractFolioId(text) {
-  const t = String(text || "").toUpperCase();
-  const m = t.match(/F-\d{6}-\d{3}/);
-  return m ? m[0] : "";
+function urgentIcon(prioridad) {
+  return String(prioridad || "").toLowerCase().includes("urgente") ? "🚨 " : "";
 }
 
-function urgentPrefix(prioridad) {
-  const p = String(prioridad || "").toLowerCase();
-  return p.includes("urg") ? "🔴 URGENTE " : "";
+function nowYyyymm() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  return `${y}${m}`;
 }
 
 // =========================
@@ -135,13 +121,16 @@ async function ensureSchema() {
       id SERIAL PRIMARY KEY,
       telefono VARCHAR(30) UNIQUE NOT NULL,
       nombre VARCHAR(120) NOT NULL,
+      email VARCHAR(160),                           -- ✅ FIX: ahora existe
       planta_id INT NULL REFERENCES plantas(id),
       rol_id INT NOT NULL REFERENCES roles(id),
-      email VARCHAR(180),
       activo BOOLEAN DEFAULT TRUE,
       creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
   `);
+
+  // ✅ Si tu tabla usuarios ya existía sin email, esto la corrige:
+  await pool.query(`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS email VARCHAR(160);`);
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS folio_counters (
@@ -163,13 +152,14 @@ async function ensureSchema() {
     );
   `);
 
-  // columnas nuevas
+  // columnas nuevas (si no existen)
   await pool.query(`ALTER TABLE folios ADD COLUMN IF NOT EXISTS prioridad VARCHAR(60);`);
   await pool.query(`ALTER TABLE folios ADD COLUMN IF NOT EXISTS beneficiario VARCHAR(120);`);
   await pool.query(`ALTER TABLE folios ADD COLUMN IF NOT EXISTS categoria VARCHAR(120);`);
   await pool.query(`ALTER TABLE folios ADD COLUMN IF NOT EXISTS subcategoria VARCHAR(120);`);
   await pool.query(`ALTER TABLE folios ADD COLUMN IF NOT EXISTS unidad VARCHAR(50);`);
   await pool.query(`ALTER TABLE folios ADD COLUMN IF NOT EXISTS cotizacion_url TEXT;`);
+  await pool.query(`ALTER TABLE folios ADD COLUMN IF NOT EXISTS cotizacion_s3key TEXT;`);
   await pool.query(`ALTER TABLE folios ADD COLUMN IF NOT EXISTS aprobado_por VARCHAR(120);`);
   await pool.query(`ALTER TABLE folios ADD COLUMN IF NOT EXISTS aprobado_en TIMESTAMP;`);
 
@@ -196,13 +186,13 @@ async function ensureSchema() {
     );
   `);
 
-  // Roles base con nivel (solo si no existen)
+  // Roles base (solo si no existen) ✅ incluye nivel
   await pool.query(`
     INSERT INTO roles (clave, nombre, nivel) VALUES
       ('GA','Gerente Administrativo', 10),
-      ('GG','Gerente General', 20),
-      ('ZP','Director ZP', 30),
-      ('CDMX','Contralor CDMX', 40)
+      ('GG','Gerente General',        20),
+      ('ZP','Director ZP',            30),
+      ('CDMX','Contralor CDMX',       40)
     ON CONFLICT (clave) DO NOTHING;
   `);
 
@@ -210,7 +200,7 @@ async function ensureSchema() {
 }
 
 // =========================
-// 2) Identidad por teléfono (DB)
+// 2) Identidad por teléfono
 // =========================
 async function getActorByPhone(fromRaw) {
   const tel = normalizeFrom(fromRaw);
@@ -219,10 +209,11 @@ async function getActorByPhone(fromRaw) {
     SELECT
       u.telefono,
       u.nombre AS usuario_nombre,
-      u.email,
+      u.email AS usuario_email,
       u.activo,
       r.clave AS rol,
       r.nombre AS rol_nombre,
+      r.nivel AS rol_nivel,
       p.clave AS planta_clave,
       p.nombre AS planta_nombre
     FROM usuarios u
@@ -235,36 +226,16 @@ async function getActorByPhone(fromRaw) {
   return r.rows[0] || null;
 }
 
-async function getNotifyRecipientsAfterZPApproval(plantaClave) {
-  // GA y GG de la planta, más CDMX (corporativo)
-  const sql = `
-    SELECT u.telefono, r.clave AS rol, p.clave AS planta
-    FROM usuarios u
-    JOIN roles r ON r.id = u.rol_id
-    LEFT JOIN plantas p ON p.id = u.planta_id
-    WHERE u.activo = TRUE
-      AND (
-        (r.clave IN ('GA','GG') AND p.clave = $1)
-        OR
-        (r.clave = 'CDMX')
-      );
-  `;
-  const r = await pool.query(sql, [plantaClave]);
-  return r.rows || [];
-}
-
 // =========================
-// 3) Consecutivo mensual persistente
+// 3) Consecutivo mensual
 // =========================
 async function buildMonthlyFolioIdDB() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const yyyymm = `${year}${month}`;
+  const yyyymm = nowYyyymm();
 
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+
     const r = await client.query(
       "SELECT last_seq FROM folio_counters WHERE yyyymm=$1 FOR UPDATE",
       [yyyymm]
@@ -286,8 +257,7 @@ async function buildMonthlyFolioIdDB() {
     }
 
     await client.query("COMMIT");
-    const correlativo = String(nextSeq).padStart(3, "0");
-    return `F-${yyyymm}-${correlativo}`;
+    return `F-${yyyymm}-${String(nextSeq).padStart(3, "0")}`;
   } catch (e) {
     await client.query("ROLLBACK");
     throw e;
@@ -297,21 +267,9 @@ async function buildMonthlyFolioIdDB() {
 }
 
 // =========================
-// 4) Folios DB
+// 4) CRUD folios
 // =========================
-async function crearFolioDB({
-  numero_folio,
-  planta,
-  descripcion,
-  monto,
-  estatus,
-  creado_por,
-  prioridad,
-  beneficiario,
-  categoria,
-  subcategoria,
-  unidad
-}) {
+async function crearFolioDB(data) {
   const sql = `
     INSERT INTO folios
       (numero_folio, planta, descripcion, monto, estatus, creado_por, prioridad, beneficiario, categoria, subcategoria, unidad)
@@ -320,17 +278,17 @@ async function crearFolioDB({
     RETURNING *;
   `;
   const params = [
-    numero_folio,
-    planta,
-    descripcion,
-    monto,
-    estatus,
-    creado_por,
-    prioridad || null,
-    beneficiario || null,
-    categoria || null,
-    subcategoria || null,
-    unidad || null
+    data.numero_folio,
+    data.planta,
+    data.descripcion,
+    data.monto,
+    data.estatus,
+    data.creado_por,
+    data.prioridad || null,
+    data.beneficiario || null,
+    data.categoria || null,
+    data.subcategoria || null,
+    data.unidad || null,
   ];
   const r = await pool.query(sql, params);
   return r.rows[0];
@@ -344,26 +302,24 @@ async function obtenerFolioDB(numero_folio) {
   return r.rows[0] || null;
 }
 
-async function aprobarFolioDB(numero_folio, actor) {
-  const aprobado_por = `${actor.usuario_nombre} (${actor.rol})`;
+async function aprobarFolioDB(numero_folio, aprobado_por) {
   const r = await pool.query(
-    `
-    UPDATE folios
-    SET estatus='Aprobado',
-        aprobado_por=$2,
-        aprobado_en=NOW()
-    WHERE numero_folio=$1
-    RETURNING *;
-  `,
+    `UPDATE folios
+     SET estatus='Aprobado', aprobado_por=$2, aprobado_en=NOW()
+     WHERE numero_folio=$1
+     RETURNING *;`,
     [numero_folio, aprobado_por]
   );
   return r.rows[0] || null;
 }
 
-async function setCotizacionUrlDB(numero_folio, url) {
+async function setCotizacionDB(numero_folio, { url, s3key }) {
   const r = await pool.query(
-    `UPDATE folios SET cotizacion_url=$2 WHERE numero_folio=$1 RETURNING *;`,
-    [numero_folio, url]
+    `UPDATE folios
+     SET cotizacion_url=$2, cotizacion_s3key=$3
+     WHERE numero_folio=$1
+     RETURNING *;`,
+    [numero_folio, url || null, s3key || null]
   );
   return r.rows[0] || null;
 }
@@ -372,63 +328,110 @@ async function logHistorial({ numero_folio, estatus, comentario, actor }) {
   await pool.query(
     `INSERT INTO folio_historial (numero_folio, estatus, comentario, actor_telefono, actor_rol)
      VALUES ($1,$2,$3,$4,$5)`,
-    [numero_folio, estatus, comentario || null, actor?.telefono || null, actor?.rol || null]
+    [
+      numero_folio,
+      estatus,
+      comentario || null,
+      actor?.telefono || null,
+      actor?.rol || null,
+    ]
   );
 }
 
 // =========================
-// 5) Twilio outbound notify
+// 5) Notificaciones WhatsApp (Twilio)
 // =========================
-async function sendWhatsAppMessage(toE164, text) {
-  if (!twilioClient) return;
-  const to = toWhatsAppAddress(toE164);
-  if (!to) return;
+function twilioReady() {
+  return !!(twilioClient && TWILIO_WHATSAPP_NUMBER);
+}
 
+async function sendWhatsApp(toPhoneE164, body) {
+  if (!twilioReady()) return false;
+  const to = `whatsapp:${toPhoneE164}`;
   await twilioClient.messages.create({
     from: TWILIO_WHATSAPP_NUMBER,
     to,
-    body: text
+    body,
   });
+  return true;
+}
+
+// Obtiene teléfonos por rol. Para GA/GG: preferimos misma planta; para CDMX: puede venir sin planta
+async function getRecipientsForAprobado(plantaClave) {
+  const sql = `
+    SELECT u.telefono, r.clave AS rol, p.clave AS planta
+    FROM usuarios u
+    JOIN roles r ON r.id = u.rol_id
+    LEFT JOIN plantas p ON p.id = u.planta_id
+    WHERE u.activo = TRUE
+      AND (
+        (r.clave IN ('GA','GG') AND p.clave = $1)
+        OR
+        (r.clave = 'CDMX')
+      );
+  `;
+  const r = await pool.query(sql, [plantaClave]);
+  return r.rows || [];
 }
 
 // =========================
-// 6) S3 Upload (PDF from Twilio MediaUrl)
+// 6) S3 (subir cotización)
 // =========================
-async function uploadPdfFromTwilioMediaToS3({ mediaUrl, folioId }) {
-  if (!s3) throw new Error("S3 no configurado.");
-  if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN) throw new Error("Twilio auth no configurado.");
+function s3Ready() {
+  return !!(AWS_ACCESS_KEY_ID && AWS_SECRET_ACCESS_KEY && AWS_REGION && S3_BUCKET && S3Client);
+}
 
-  // Descargar binario desde Twilio con Basic Auth
-  const resp = await axios.get(mediaUrl, {
+function buildS3() {
+  return new S3Client({
+    region: AWS_REGION,
+    credentials: {
+      accessKeyId: AWS_ACCESS_KEY_ID,
+      secretAccessKey: AWS_SECRET_ACCESS_KEY,
+    },
+  });
+}
+
+// Descarga media de Twilio (requiere auth)
+async function downloadTwilioMedia(mediaUrl) {
+  const sid = process.env.TWILIO_ACCOUNT_SID || "";
+  const token = process.env.TWILIO_AUTH_TOKEN || "";
+  if (!sid || !token) throw new Error("Twilio creds faltantes para descargar media");
+
+  const r = await axios.get(mediaUrl, {
     responseType: "arraybuffer",
-    auth: { username: TWILIO_ACCOUNT_SID, password: TWILIO_AUTH_TOKEN }
+    auth: { username: sid, password: token },
   });
 
-  const key = `cotizaciones/${folioId}/${Date.now()}.pdf`;
+  const contentType = r.headers["content-type"] || "application/octet-stream";
+  return { buffer: Buffer.from(r.data), contentType };
+}
+
+async function uploadToS3({ key, buffer, contentType }) {
+  const s3 = buildS3();
   await s3.send(
     new PutObjectCommand({
       Bucket: S3_BUCKET,
       Key: key,
-      Body: Buffer.from(resp.data),
-      ContentType: "application/pdf"
-      // Recomendación: bucket privado. Para compartir, generamos URL firmada.
+      Body: buffer,
+      ContentType: contentType,
     })
   );
 
-  // URL firmada (7 días) para consulta/descarga
+  // URL firmada (1 día) para consulta/descarga si bucket no es público
   const signed = await getSignedUrl(
     s3,
-    new (require("@aws-sdk/client-s3").GetObjectCommand)({ Bucket: S3_BUCKET, Key: key }),
-    { expiresIn: 60 * 60 * 24 * 7 }
+    new GetObjectCommand({ Bucket: S3_BUCKET, Key: key }),
+    { expiresIn: 60 * 60 * 24 }
   );
 
-  return { key, signedUrl: signed };
+  return signed;
 }
 
 // =========================
 // 7) Captura guiada (RAM)
 // =========================
-const drafts = {}; // drafts[telefono] = { ... }
+const drafts = {};      // drafts[telefono] = { ...campos }
+const pendingQuote = {}; // pendingQuote[telefono] = { folio: "F-..." }
 
 function parseKeyValueLines(text) {
   const out = {};
@@ -468,7 +471,7 @@ function missingFields(d) {
 }
 
 // =========================
-// Endpoints
+// 8) Endpoints
 // =========================
 app.get("/", (req, res) => res.send("Bot de folios activo 🚀"));
 
@@ -482,7 +485,7 @@ app.get("/health-db", async (req, res) => {
 });
 
 // =========================
-// Webhook Twilio WhatsApp
+// 9) Webhook Twilio WhatsApp
 // =========================
 app.post("/webhook", async (req, res) => {
   const incomingMsg = (req.body.Body || "").trim();
@@ -490,28 +493,87 @@ app.post("/webhook", async (req, res) => {
   const from = normalizeFrom(fromRaw);
   const message = incomingMsg.toLowerCase();
 
-  // Adjuntos Twilio
+  // Media (para cotizaciones)
   const numMedia = Number(req.body.NumMedia || 0);
-  const mediaUrl0 = req.body.MediaUrl0 || "";
-  const mediaType0 = req.body.MediaContentType0 || "";
+  const mediaUrl0 = req.body.MediaUrl0;
+  const mediaType0 = req.body.MediaContentType0;
 
   try {
-    // 1) Identificar usuario
+    // 9.1 Identificar usuario
     const actor = await getActorByPhone(fromRaw);
     if (!actor) {
       res.set("Content-Type", "text/xml");
       return res.send(
         twiml(
           "Tu número no está registrado en el sistema.\n" +
-            "Pide a IT que te dé de alta con: Planta + Rol + Nombre + Teléfono.\n" +
-            "Ejemplo roles: GA, GG, ZP, CDMX."
+          "Pide a IT que te dé de alta con: Planta + Rol + Nombre + Teléfono.\n" +
+          "Ejemplo roles: GA, GG, ZP, CDMX."
         )
       );
     }
 
     const plantaDetectada = actor.planta_clave || "CORPORATIVO";
 
-    // 2) ESTATUS
+    // Avisos de configuración (solo log)
+    if (!twilioReady()) console.warn("⚠️ Falta Twilio vars (no podrá notificar).");
+    if (!s3Ready()) console.warn("⚠️ Falta AWS/S3 vars (no podrá subir cotizaciones).");
+
+    // 9.2 Si el usuario mandó un PDF y está "pendiente" de cotización
+    if (numMedia > 0 && pendingQuote[from]?.folio) {
+      const folioNum = pendingQuote[from].folio;
+      const folio = await obtenerFolioDB(folioNum);
+
+      res.set("Content-Type", "text/xml");
+
+      if (!folio) {
+        delete pendingQuote[from];
+        return res.send(twiml(`No encontré el folio ${folioNum}.`));
+      }
+
+      if (!s3Ready()) {
+        return res.send(
+          twiml(
+            "Recibí el archivo, pero falta configurar AWS/S3 en Render.\n" +
+            "Agrega: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION y S3_BUCKET."
+          )
+        );
+      }
+
+      const { buffer, contentType } = await downloadTwilioMedia(mediaUrl0);
+
+      const key = `cotizaciones/${folioNum}/${Date.now()}-${from}.pdf`;
+      const signedUrl = await uploadToS3({ key, buffer, contentType });
+
+      const updated = await setCotizacionDB(folioNum, { url: signedUrl, s3key: key });
+
+      await logHistorial({
+        numero_folio: folioNum,
+        estatus: updated.estatus || "Actualizado",
+        comentario: `Cotización adjunta desde WhatsApp (S3 key: ${key})`,
+        actor
+      });
+
+      delete pendingQuote[from];
+      return res.send(
+        twiml(`✅ Cotización adjunta al folio ${folioNum}.\n(Ya quedó ligada al folio.)`)
+      );
+    }
+
+    // 9.3 Comando: ayuda
+    if (message === "ayuda" || message === "help") {
+      res.set("Content-Type", "text/xml");
+      return res.send(
+        twiml(
+          "Comandos:\n" +
+          "- crear folio <concepto> [urgente]\n" +
+          "- estatus <F-YYYYMM-XXX>\n" +
+          "- aprobar <F-YYYYMM-XXX> (solo ZP)\n" +
+          "- cotizacion <F-YYYYMM-XXX> (manda PDF)\n"
+        )
+      );
+    }
+
+    // 9.4 Comando: estatus F-YYYYMM-001
     if (message.startsWith("estatus")) {
       const num = incomingMsg.replace(/estatus/i, "").trim();
       const folio = await obtenerFolioDB(num);
@@ -520,108 +582,129 @@ app.post("/webhook", async (req, res) => {
       return res.send(
         twiml(
           folio
-            ? `${urgentPrefix(folio.prioridad)}Folio: ${folio.numero_folio}\nPlanta: ${folio.planta}\nEstatus: ${folio.estatus}\nMonto: ${folio.monto}\nDescripción: ${folio.descripcion}\nCotización: ${folio.cotizacion_url ? "✅ Adjunta" : "❌ Sin adjunto"}\nFecha: ${folio.fecha_creacion}`
+            ? `${urgentIcon(folio.prioridad)}Folio: ${folio.numero_folio}\n` +
+              `Planta: ${folio.planta}\nEstatus: ${folio.estatus}\nMonto: ${folio.monto}\n` +
+              `Concepto: ${folio.descripcion}\n` +
+              `Cotización: ${folio.cotizacion_url ? "✅ Adjunta" : "❌ No adjunta"}\n` +
+              `Creado: ${folio.fecha_creacion}`
             : `No encontré el folio ${num}`
         )
       );
     }
 
-    // 3) COTIZACION (PDF adjunto) => "cotizacion F-202602-001"
-    if (message.startsWith("cotizacion") || message.startsWith("cotización")) {
-      const folioId = extractFolioId(incomingMsg);
+    // 9.5 Comando: cotizacion F-XXXX (deja “pendiente” para que el siguiente mensaje sea el PDF)
+    if (message.startsWith("cotizacion")) {
+      const num = incomingMsg.replace(/cotizacion/i, "").trim();
+      const folio = await obtenerFolioDB(num);
 
       res.set("Content-Type", "text/xml");
+      if (!folio) return res.send(twiml(`No encontré el folio ${num}`));
 
-      if (!folioId) return res.send(twiml("Indica el folio así: cotizacion F-YYYYMM-XXX y adjunta el PDF."));
-      if (!numMedia || !mediaUrl0) return res.send(twiml("No veo el archivo. Reintenta enviando el PDF adjunto."));
-      if (!String(mediaType0).toLowerCase().includes("pdf")) {
-        return res.send(twiml("El archivo debe ser PDF (cotización)."));
+      // Si ya venía el archivo en el mismo mensaje
+      if (numMedia > 0 && mediaUrl0) {
+        if (!s3Ready()) {
+          return res.send(
+            twiml(
+              "Recibí el archivo, pero falta configurar AWS/S3 en Render.\n" +
+              "Agrega: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION y S3_BUCKET."
+            )
+          );
+        }
+
+        const { buffer, contentType } = await downloadTwilioMedia(mediaUrl0);
+        const key = `cotizaciones/${num}/${Date.now()}-${from}.pdf`;
+        const signedUrl = await uploadToS3({ key, buffer, contentType });
+
+        await setCotizacionDB(num, { url: signedUrl, s3key: key });
+        await logHistorial({
+          numero_folio: num,
+          estatus: folio.estatus || "Actualizado",
+          comentario: `Cotización adjunta desde WhatsApp (S3 key: ${key})`,
+          actor
+        });
+
+        return res.send(twiml(`✅ Cotización adjunta al folio ${num}.`));
       }
 
-      const folio = await obtenerFolioDB(folioId);
-      if (!folio) return res.send(twiml(`No existe el folio ${folioId}.`));
-
-      // Subir a S3
-      const up = await uploadPdfFromTwilioMediaToS3({ mediaUrl: mediaUrl0, folioId });
-      await setCotizacionUrlDB(folioId, up.signedUrl);
-
-      await logHistorial({
-        numero_folio: folioId,
-        estatus: folio.estatus || "Actualizado",
-        comentario: `Se adjuntó cotización PDF a S3. Key: ${up.key}`,
-        actor
-      });
-
-      return res.send(twiml(`✅ Cotización cargada y ligada al folio ${folioId}.\nURL (7 días): ${up.signedUrl}`));
-    }
-
-    // 4) APROBAR (solo ZP) => notifica GA, GG y CDMX
-    if (message.startsWith("aprobar")) {
-      res.set("Content-Type", "text/xml");
-
-      if (actor.rol !== "ZP") {
-        return res.send(twiml("Solo Director ZP puede aprobar. (Comando: aprobar F-YYYYMM-XXX)"));
-      }
-
-      const folioId = extractFolioId(incomingMsg);
-      if (!folioId) return res.send(twiml("Usa: aprobar F-YYYYMM-XXX"));
-
-      const folioAntes = await obtenerFolioDB(folioId);
-      if (!folioAntes) return res.send(twiml(`No existe el folio ${folioId}.`));
-
-      const folio = await aprobarFolioDB(folioId, actor);
-
-      await logHistorial({
-        numero_folio: folioId,
-        estatus: "Aprobado",
-        comentario: "Aprobado por Director ZP desde WhatsApp.",
-        actor
-      });
-
-      const faltaCot = !folio.cotizacion_url;
-      const urg = urgentPrefix(folio.prioridad);
-
-      // Notificar a GA, GG planta + CDMX
-      const recips = await getNotifyRecipientsAfterZPApproval(folio.planta);
-
-      const notaCot = faltaCot ? "\n⚠️ Aún no tiene la cotización adjunta." : "\n✅ Cotización adjunta.";
-      const msgNotify =
-        `${urg}FOLIO APROBADO\n` +
-        `Folio: ${folio.numero_folio}\n` +
-        `Planta: ${folio.planta}\n` +
-        `Monto: ${folio.monto}\n` +
-        `Descripción: ${folio.descripcion}\n` +
-        `Aprobó: ${folio.aprobado_por}\n` +
-        `Estatus: ${folio.estatus}` +
-        notaCot +
-        `\n\nComandos:\n- estatus ${folio.numero_folio}\n- cotizacion ${folio.numero_folio} (adjunta PDF)`;
-
-      // Enviar notificaciones
-      for (const r of recips) {
-        // Evitar enviarse a sí mismo por si coincide
-        if (normalizeFrom(toWhatsAppAddress(r.telefono)) === from) continue;
-        await sendWhatsAppMessage(r.telefono, msgNotify);
-      }
-
-      // Respuesta al ZP
+      pendingQuote[from] = { folio: num };
       return res.send(
         twiml(
-          `✅ Aprobado ${folio.numero_folio}.\n` +
-            `Notifiqué a GA, GG y Contralor CDMX.` +
-            (faltaCot ? `\n⚠️ Aún no tiene la cotización adjunta.\nEnvía: cotizacion ${folio.numero_folio} + PDF` : "")
+          `Ok. Ahora mándame el PDF/archivo de la cotización para el folio ${num}.\n` +
+          `(En el siguiente mensaje adjunta el documento.)`
         )
       );
     }
 
-    // 5) CREAR FOLIO
+    // 9.6 Comando: aprobar (solo ZP)
+    if (message.startsWith("aprobar")) {
+      const num = incomingMsg.replace(/aprobar/i, "").trim();
+      const folio = await obtenerFolioDB(num);
+
+      res.set("Content-Type", "text/xml");
+      if (!folio) return res.send(twiml(`No encontré el folio ${num}`));
+
+      if (actor.rol !== "ZP") {
+        return res.send(twiml("Solo el Director ZP puede aprobar folios."));
+      }
+
+      const aprobadoPor = `${actor.usuario_nombre} (ZP)`;
+      const updated = await aprobarFolioDB(num, aprobadoPor);
+
+      await logHistorial({
+        numero_folio: num,
+        estatus: "Aprobado",
+        comentario: `Aprobado por ${aprobadoPor}`,
+        actor
+      });
+
+      // Notificar GA, GG, CDMX
+      const recips = await getRecipientsForAprobado(updated.planta);
+
+      const prefix = urgentIcon(updated.prioridad);
+      const msgBase =
+        `${prefix}✅ Folio APROBADO: ${updated.numero_folio}\n` +
+        `Planta: ${updated.planta}\n` +
+        `Monto: ${updated.monto}\n` +
+        `Concepto: ${updated.descripcion}\n` +
+        `Prioridad: ${updated.prioridad || "Normal"}\n` +
+        `Cotización: ${updated.cotizacion_url ? "✅ Adjunta" : "❌ NO adjunta"}\n` +
+        `Aprobó: ${updated.aprobado_por}\n`;
+
+      // Si no tiene cotización -> incluir aviso especial
+      const msgFinal = updated.cotizacion_url
+        ? msgBase
+        : (msgBase + "\n⚠️ Aún no tiene la cotización adjunta.");
+
+      // Enviar notificaciones si Twilio listo
+      if (twilioReady()) {
+        for (const u of recips) {
+          await sendWhatsApp(u.telefono, msgFinal);
+        }
+      }
+
+      return res.send(
+        twiml(
+          `✅ Aprobado ${updated.numero_folio}.\n` +
+          `Notifiqué a GA/GG de ${updated.planta} y a Contralor CDMX ` +
+          `${twilioReady() ? "✅" : "(pero faltan vars de Twilio)"}.\n` +
+          `${updated.cotizacion_url ? "" : "⚠️ Aún no tiene la cotización adjunta."}`
+        )
+      );
+    }
+
+    // 9.7 Crear folio (captura guiada)
     if (message.includes("crear folio")) {
       drafts[from] = drafts[from] || {};
 
-      drafts[from].prioridad = message.includes("urgente") ? "Urgente no programado" : "Normal";
+      drafts[from].prioridad = message.includes("urgente")
+        ? "Urgente"
+        : "Normal";
 
+      // Concepto: lo que venga después de "crear folio"
       const concepto = incomingMsg.replace(/crear folio/i, "").trim();
       if (concepto) drafts[from].concepto = concepto;
 
+      // parse key: value
       Object.assign(drafts[from], parseKeyValueLines(incomingMsg));
 
       const miss = missingFields(drafts[from]);
@@ -630,14 +713,13 @@ app.post("/webhook", async (req, res) => {
         return res.send(
           twiml(
             `Ok. Para crear el folio me falta: ${miss.join(", ")}.\n` +
-              `Respóndeme en líneas así:\n` +
-              `Beneficiario: ____\n` +
-              `Importe: ____\n` +
-              `Categoría: Gastos / Inversiones / Derechos y Obligaciones / Taller\n` +
-              `Subcategoría: ____\n` +
-              (String(drafts[from].categoria || "").toLowerCase().includes("taller") ? `Unidad: AT-03 o C-03\n` : "") +
-              `(Concepto y prioridad ya los tomé)\n` +
-              `Planta detectada: ${plantaDetectada}\nRol: ${actor.rol}`
+            `Respóndeme en líneas así:\n` +
+            `Beneficiario: ____\n` +
+            `Importe: ____\n` +
+            `Categoría: Gastos / Inversiones / Derechos y Obligaciones / Taller\n` +
+            `Subcategoría: ____\n` +
+            (String(drafts[from].categoria || "").toLowerCase().includes("taller") ? `Unidad: AT-03 o C-03\n` : "") +
+            `Planta detectada: ${plantaDetectada}\nRol: ${actor.rol}`
           )
         );
       }
@@ -663,7 +745,10 @@ app.post("/webhook", async (req, res) => {
       await logHistorial({
         numero_folio: folioId,
         estatus: "Generado",
-        comentario: `Creado desde WhatsApp. Prioridad: ${d.prioridad}. Beneficiario: ${d.beneficiario}. Categoria: ${d.categoria}/${d.subcategoria}${d.unidad ? ` Unidad:${d.unidad}` : ""}`,
+        comentario:
+          `Creado desde WhatsApp. Prioridad: ${d.prioridad}. ` +
+          `Beneficiario: ${d.beneficiario}. Categoria: ${d.categoria}/${d.subcategoria}` +
+          (d.unidad ? ` Unidad:${d.unidad}` : ""),
         actor
       });
 
@@ -672,24 +757,23 @@ app.post("/webhook", async (req, res) => {
       res.set("Content-Type", "text/xml");
       return res.send(
         twiml(
-          `${urgentPrefix(d.prioridad)}✅ Folio ${guardado.numero_folio} creado y guardado.\n\n` +
-            `Planta: ${guardado.planta}\n` +
-            `Creado por: ${actor.usuario_nombre} (${actor.rol})\n` +
-            `Concepto: ${d.concepto}\n` +
-            `Beneficiario: ${d.beneficiario}\n` +
-            `Monto: ${monto}\n` +
-            `Categoría: ${d.categoria}\n` +
-            `Subcategoría: ${d.subcategoria}\n` +
-            (d.unidad ? `Unidad: ${d.unidad}\n` : "") +
-            `Prioridad: ${d.prioridad}\n\n` +
-            `Para consultar: estatus ${guardado.numero_folio}\n` +
-            `Para adjuntar cotización: cotizacion ${guardado.numero_folio} + PDF\n` +
-            `Para aprobar (ZP): aprobar ${guardado.numero_folio}`
+          `${urgentIcon(guardado.prioridad)}✅ Folio ${guardado.numero_folio} creado.\n\n` +
+          `Planta: ${guardado.planta}\n` +
+          `Creado por: ${guardado.creado_por}\n` +
+          `Concepto: ${guardado.descripcion}\n` +
+          `Beneficiario: ${guardado.beneficiario}\n` +
+          `Monto: ${guardado.monto}\n` +
+          `Categoría: ${guardado.categoria}\n` +
+          `Subcategoría: ${guardado.subcategoria}\n` +
+          (guardado.unidad ? `Unidad: ${guardado.unidad}\n` : "") +
+          `Prioridad: ${guardado.prioridad}\n\n` +
+          `Adjuntar cotización: "cotizacion ${guardado.numero_folio}" y manda el PDF.\n` +
+          `Consultar: "estatus ${guardado.numero_folio}"`
         )
       );
     }
 
-    // 6) Continuación de borrador
+    // 9.8 Si hay borrador abierto, el usuario está completando campos
     if (drafts[from]) {
       Object.assign(drafts[from], parseKeyValueLines(incomingMsg));
       const miss = missingFields(drafts[from]);
@@ -699,8 +783,8 @@ app.post("/webhook", async (req, res) => {
         return res.send(
           twiml(
             `Me falta: ${miss.join(", ")}.\n` +
-              `Respóndeme solo esos campos (ej: "Importe: 25000").\n` +
-              `Planta detectada: ${plantaDetectada}`
+            `Respóndeme solo esos campos (ej: "Importe: 25000").\n` +
+            `Planta detectada: ${plantaDetectada}`
           )
         );
       }
@@ -726,7 +810,10 @@ app.post("/webhook", async (req, res) => {
       await logHistorial({
         numero_folio: folioId,
         estatus: "Generado",
-        comentario: `Creado desde borrador. Prioridad: ${d.prioridad}. Beneficiario: ${d.beneficiario}. Categoria: ${d.categoria}/${d.subcategoria}${d.unidad ? ` Unidad:${d.unidad}` : ""}`,
+        comentario:
+          `Creado desde borrador. Prioridad: ${d.prioridad}. ` +
+          `Beneficiario: ${d.beneficiario}. Categoria: ${d.categoria}/${d.subcategoria}` +
+          (d.unidad ? ` Unidad:${d.unidad}` : ""),
         actor
       });
 
@@ -734,34 +821,61 @@ app.post("/webhook", async (req, res) => {
 
       return res.send(
         twiml(
-          `${urgentPrefix(d.prioridad)}✅ Folio ${guardado.numero_folio} creado y guardado.\n\n` +
-            `Planta: ${guardado.planta}\n` +
-            `Creado por: ${actor.usuario_nombre} (${actor.rol})\n` +
-            `Concepto: ${d.concepto}\n` +
-            `Beneficiario: ${d.beneficiario}\n` +
-            `Monto: ${monto}\n` +
-            `Categoría: ${d.categoria}\n` +
-            `Subcategoría: ${d.subcategoria}\n` +
-            (d.unidad ? `Unidad: ${d.unidad}\n` : "") +
-            `Prioridad: ${d.prioridad || "Normal"}\n\n` +
-            `Para consultar: estatus ${guardado.numero_folio}\n` +
-            `Para adjuntar cotización: cotizacion ${guardado.numero_folio} + PDF\n` +
-            `Para aprobar (ZP): aprobar ${guardado.numero_folio}`
+          `${urgentIcon(guardado.prioridad)}✅ Folio ${guardado.numero_folio} creado.\n\n` +
+          `Planta: ${guardado.planta}\n` +
+          `Creado por: ${guardado.creado_por}\n` +
+          `Concepto: ${guardado.descripcion}\n` +
+          `Beneficiario: ${guardado.beneficiario}\n` +
+          `Monto: ${guardado.monto}\n` +
+          `Categoría: ${guardado.categoria}\n` +
+          `Subcategoría: ${guardado.subcategoria}\n` +
+          (guardado.unidad ? `Unidad: ${guardado.unidad}\n` : "") +
+          `Prioridad: ${guardado.prioridad || "Normal"}\n\n` +
+          `Adjuntar cotización: "cotizacion ${guardado.numero_folio}" y manda el PDF.\n` +
+          `Consultar: "estatus ${guardado.numero_folio}"`
         )
       );
     }
 
-    // 7) Ayuda
-    res.set("Content-Type", "text/xml");
-    return res.send(
-      twiml(
-        "Comandos disponibles:\n" +
+    // 9.9 Fallback: OpenAI opcional
+    if (!OPENAI_API_KEY) {
+      res.set("Content-Type", "text/xml");
+      return res.send(
+        twiml(
+          "Comandos disponibles:\n" +
           "- crear folio <concepto> [urgente]\n" +
-          "- estatus F-YYYYMM-XXX\n" +
-          "- cotizacion F-YYYYMM-XXX + (adjunta PDF)\n" +
-          "- aprobar F-YYYYMM-XXX (solo ZP)\n"
-      )
+          "- estatus <F-YYYYMM-XXX>\n" +
+          "- aprobar <F-YYYYMM-XXX> (solo ZP)\n" +
+          "- cotizacion <F-YYYYMM-XXX> (manda PDF)\n"
+        )
+      );
+    }
+
+    const response = await axios.post(
+      "https://api.openai.com/v1/chat/completions",
+      {
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content:
+              "Eres un asistente corporativo para gestión de folios. " +
+              "Responde breve, claro y profesional. Si piden estatus sugiere: 'estatus F-YYYYMM-XXX'."
+          },
+          { role: "user", content: incomingMsg }
+        ],
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${OPENAI_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+      }
     );
+
+    const reply = response.data.choices?.[0]?.message?.content || "Ok.";
+    res.set("Content-Type", "text/xml");
+    return res.send(twiml(reply));
   } catch (error) {
     console.error("❌ Error webhook:", error?.response?.data || error?.message || error);
     res.set("Content-Type", "text/xml");
@@ -782,4 +896,3 @@ app.post("/webhook", async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("✅ Servidor corriendo en puerto " + PORT));
-
