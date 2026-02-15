@@ -1,6 +1,15 @@
 const express = require("express");
 const bodyParser = require("body-parser");
 const axios = require("axios");
+const { Pool } = require("pg");
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false
+  }
+});
+
 
 const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
