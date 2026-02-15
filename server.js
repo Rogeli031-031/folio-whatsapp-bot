@@ -2,7 +2,7 @@
 // Bot WhatsApp (Twilio) + PostgreSQL (Render) + (opcional) OpenAI
 // - Identifica PLANTA y ROL por teléfono (tabla usuarios)
 // - Crea folio con consecutivo mensual (tabla folio_counters)
-// - Guarda folio en tabla folios (la que ya creaste: numero_folio, planta, descripcion, monto, estatus, creado_por, fecha_creacion)
+// - Guarda folio en tabla folios
 // - Comando WhatsApp: "crear folio ..." y "estatus F-YYYYMM-001"
 
 const express = require("express");
@@ -37,24 +37,51 @@ function twiml(msg) {
   return `<Response><Message>${safe}</Message></Response>`;
 }
 
-function normalizeFrom(from) {
-  // Ej: "whatsapp:+5217443835403" -> "+527443835403"
-  // Ej: "whatsapp:+52 7443835403" -> "+527443835403"
-  let t = String(from || "").trim();
-
-  // quita prefijo whatsapp:
-  t = t.replace(/^whatsapp:/i, "");
-
-  // quita espacios
-  t = t.replace(/\s+/g, "");
-
-  // normaliza México: +521XXXXXXXXXX -> +52XXXXXXXXXX
-  if (t.startsWith("+521")) t = "+52" + t.slice(4);
-
-  return t;
+// Limpia "whatsapp:" y caracteres raros
+function stripWhatsappPrefix(from) {
+  return String(from || "")
+    .replace(/^whatsapp:/i, "")
+    .trim();
 }
 
+// Deja solo + y dígitos
+function sanitizePhone(p) {
+  let s = String(p || "").trim();
+  // quita espacios y símbolos (deja + y números)
+  s = s.replace(/[^\d+]/g, "");
+  // si no trae + pero trae dígitos, lo dejamos igual (idealmente siempre vendrá con +)
+  return s;
+}
 
+/**
+ * Twilio en MX suele mandar +521XXXXXXXXXX aunque tú guardes +52XXXXXXXXXX.
+ * Aquí regresamos variantes para comparar.
+ */
+function normalizePhoneVariants(fromRaw) {
+  const noPrefix = stripWhatsappPrefix(fromRaw);
+  const raw = sanitizePhone(noPrefix); // ej: +5217443835403
+
+  // Si viene sin +, lo regresamos como raw igual
+  // Variantes:
+  let tel52 = raw;
+  let tel521 = raw;
+
+  // Caso México: +521XXXXXXXXXX -> +52XXXXXXXXXX
+  if (raw.startsWith("+521") && raw.length >= 5) {
+    tel52 = "+52" + raw.slice(4); // quita el "1" después del 52
+    tel521 = raw;
+  }
+
+  // Caso México: +52XXXXXXXXXX -> +521XXXXXXXXXX (generamos la alternativa)
+  if (raw.startsWith("+52") && !raw.startsWith("+521")) {
+    // Si trae +52 y luego 10 dígitos (total 13 chars aprox con +), lo convertimos a +521...
+    // No forzamos longitud exacta por si hay números corporativos.
+    tel52 = raw;
+    tel521 = "+521" + raw.slice(3);
+  }
+
+  return { raw, tel52, tel521 };
+}
 
 function moneyToNumber(v) {
   // "$ 12,345.67" -> 12345.67
@@ -65,10 +92,8 @@ function moneyToNumber(v) {
 
 // =========================
 // 1) Esquema mínimo (auto-crea si falta)
-//    Esto te evita estar creando tablas a mano.
 // =========================
 async function ensureSchema() {
-  // Nota: NO borra nada, solo crea si no existe
   await pool.query(`
     CREATE TABLE IF NOT EXISTS plantas (
       id SERIAL PRIMARY KEY,
@@ -88,7 +113,7 @@ async function ensureSchema() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS usuarios (
       id SERIAL PRIMARY KEY,
-      telefono VARCHAR(30) UNIQUE NOT NULL, -- +521...
+      telefono VARCHAR(30) UNIQUE NOT NULL, -- +52... o +521...
       nombre VARCHAR(120) NOT NULL,
       planta_id INT NULL REFERENCES plantas(id),
       rol_id INT NOT NULL REFERENCES roles(id),
@@ -97,7 +122,6 @@ async function ensureSchema() {
     );
   `);
 
-  // Consecutivo mensual real (persistente)
   await pool.query(`
     CREATE TABLE IF NOT EXISTS folio_counters (
       yyyymm VARCHAR(6) PRIMARY KEY,
@@ -105,7 +129,6 @@ async function ensureSchema() {
     );
   `);
 
-  // Tabla de folios (tu estructura actual)
   await pool.query(`
     CREATE TABLE IF NOT EXISTS folios (
       id SERIAL PRIMARY KEY,
@@ -119,7 +142,6 @@ async function ensureSchema() {
     );
   `);
 
-  // Historial (auditoría)
   await pool.query(`
     CREATE TABLE IF NOT EXISTS folio_historial (
       id SERIAL PRIMARY KEY,
@@ -132,7 +154,6 @@ async function ensureSchema() {
     );
   `);
 
-  // Roles base (solo si no existen)
   await pool.query(`
     INSERT INTO roles (clave, nombre) VALUES
       ('GA','Gerente Administrativo'),
@@ -149,7 +170,7 @@ async function ensureSchema() {
 // 2) Identidad por teléfono (DB)
 // =========================
 async function getActorByPhone(fromRaw) {
-  const tel = normalizeFrom(fromRaw);
+  const { raw, tel52, tel521 } = normalizePhoneVariants(fromRaw);
 
   const sql = `
     SELECT
@@ -163,10 +184,12 @@ async function getActorByPhone(fromRaw) {
     FROM usuarios u
     JOIN roles r ON r.id = u.rol_id
     LEFT JOIN plantas p ON p.id = u.planta_id
-    WHERE u.telefono = $1 AND u.activo = TRUE
+    WHERE u.activo = TRUE
+      AND u.telefono IN ($1, $2, $3)
     LIMIT 1;
   `;
-  const r = await pool.query(sql, [tel]);
+
+  const r = await pool.query(sql, [raw, tel52, tel521]);
   return r.rows[0] || null;
 }
 
@@ -252,8 +275,7 @@ async function logHistorial({ numero_folio, estatus, comentario, actor }) {
 }
 
 // =========================
-// 5) Captura guiada (RAM) solo para completar campos del mensaje
-//    (si Render reinicia, se pierde borrador; el folio ya guardado no se pierde)
+// 5) Captura guiada (RAM)
 // =========================
 const drafts = {}; // drafts[telefono] = { concepto, prioridad, beneficiario, importe, categoria, subcategoria, unidad }
 
@@ -308,6 +330,12 @@ app.get("/health-db", async (req, res) => {
   }
 });
 
+// Debug opcional: ver cómo normaliza un teléfono
+app.get("/debug-phone", (req, res) => {
+  const from = req.query.from || "";
+  res.json({ ok: true, from, variants: normalizePhoneVariants(from) });
+});
+
 app.get("/folio/:numero", async (req, res) => {
   try {
     const folio = await obtenerFolioDB(req.params.numero);
@@ -324,8 +352,11 @@ app.get("/folio/:numero", async (req, res) => {
 app.post("/webhook", async (req, res) => {
   const incomingMsg = (req.body.Body || "").trim();
   const fromRaw = req.body.From || "unknown";
-  const from = normalizeFrom(fromRaw);
   const message = incomingMsg.toLowerCase();
+
+  // Logs clave para depurar
+  const variants = normalizePhoneVariants(fromRaw);
+  console.log("📩 INCOMING:", { fromRaw, variants, body: incomingMsg });
 
   try {
     // 7.1 Identificar usuario/rol/planta por teléfono
@@ -336,12 +367,18 @@ app.post("/webhook", async (req, res) => {
         twiml(
           "Tu número no está registrado en el sistema.\n" +
             "Pide a IT que te dé de alta con: Planta + Rol + Nombre + Teléfono.\n" +
-            "Ejemplo roles: GA, GG, ZP, CDMX."
+            "Ejemplo roles: GA, GG, ZP, CDMX.\n\n" +
+            `Tel recibido: ${variants.raw}\n` +
+            `Tel alt 52: ${variants.tel52}\n` +
+            `Tel alt 521: ${variants.tel521}`
         )
       );
     }
 
     const plantaDetectada = actor.planta_clave || "CORPORATIVO";
+
+    // Usamos como llave de draft el tel52 (más estable)
+    const draftKey = variants.tel52 || variants.raw;
 
     // 7.2 Comando: estatus F-YYYYMM-001
     if (message.startsWith("estatus")) {
@@ -360,18 +397,16 @@ app.post("/webhook", async (req, res) => {
 
     // 7.3 Crear folio (captura guiada)
     if (message.includes("crear folio")) {
-      drafts[from] = drafts[from] || {};
+      drafts[draftKey] = drafts[draftKey] || {};
 
-      drafts[from].prioridad = message.includes("urgente") ? "Urgente no programado" : "Normal";
+      drafts[draftKey].prioridad = message.includes("urgente") ? "Urgente no programado" : "Normal";
 
-      // Concepto: todo lo que venga después de "crear folio"
       const concepto = incomingMsg.replace(/crear folio/i, "").trim();
-      if (concepto) drafts[from].concepto = concepto;
+      if (concepto) drafts[draftKey].concepto = concepto;
 
-      // Por si ya mandó datos en el mismo mensaje
-      Object.assign(drafts[from], parseKeyValueLines(incomingMsg));
+      Object.assign(drafts[draftKey], parseKeyValueLines(incomingMsg));
 
-      const miss = missingFields(drafts[from]);
+      const miss = missingFields(drafts[draftKey]);
       if (miss.length) {
         res.set("Content-Type", "text/xml");
         return res.send(
@@ -382,16 +417,15 @@ app.post("/webhook", async (req, res) => {
               `Importe: ____\n` +
               `Categoría: Gastos / Inversiones / Derechos y Obligaciones / Taller\n` +
               `Subcategoría: ____\n` +
-              (String(drafts[from].categoria || "").toLowerCase().includes("taller") ? `Unidad: AT-03 o C-03\n` : "") +
+              (String(drafts[draftKey].categoria || "").toLowerCase().includes("taller") ? `Unidad: AT-03 o C-03\n` : "") +
               `(Concepto y prioridad ya los tomé)\n` +
               `Planta detectada: ${plantaDetectada}\nRol: ${actor.rol}`
           )
         );
       }
 
-      // ✅ Completo -> generar folio y guardar en DB
       const folioId = await buildMonthlyFolioIdDB();
-      const d = drafts[from];
+      const d = drafts[draftKey];
       const monto = moneyToNumber(d.importe);
 
       const guardado = await crearFolioDB({
@@ -410,7 +444,7 @@ app.post("/webhook", async (req, res) => {
         actor
       });
 
-      delete drafts[from];
+      delete drafts[draftKey];
 
       res.set("Content-Type", "text/xml");
       return res.send(
@@ -430,10 +464,10 @@ app.post("/webhook", async (req, res) => {
       );
     }
 
-    // 7.4 Si hay borrador abierto, el usuario está completando campos
-    if (drafts[from]) {
-      Object.assign(drafts[from], parseKeyValueLines(incomingMsg));
-      const miss = missingFields(drafts[from]);
+    // 7.4 Continuación borrador
+    if (drafts[draftKey]) {
+      Object.assign(drafts[draftKey], parseKeyValueLines(incomingMsg));
+      const miss = missingFields(drafts[draftKey]);
 
       res.set("Content-Type", "text/xml");
       if (miss.length) {
@@ -447,7 +481,7 @@ app.post("/webhook", async (req, res) => {
       }
 
       const folioId = await buildMonthlyFolioIdDB();
-      const d = drafts[from];
+      const d = drafts[draftKey];
       const monto = moneyToNumber(d.importe);
 
       const guardado = await crearFolioDB({
@@ -466,7 +500,7 @@ app.post("/webhook", async (req, res) => {
         actor
       });
 
-      delete drafts[from];
+      delete drafts[draftKey];
 
       return res.send(
         twiml(
@@ -544,67 +578,4 @@ app.post("/webhook", async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("✅ Servidor corriendo en puerto " + PORT));
-
-/*
-========================================
-IMPORTANTE: ALTA DE TELÉFONOS (USUARIOS)
-========================================
-
-1) En pgAdmin (Query Tool) agrega tus plantas:
-INSERT INTO plantas (clave, nombre) VALUES
-('ACAPULCO','Acapulco'),
-('PUEBLA','Puebla'),
-('TEHUACAN','Tehuacán'),
-('QUERETARO','Querétaro'),
-('SANLUIS','San Luis')
-ON CONFLICT (clave) DO NOTHING;
-
-2) Agrega usuarios por rol y teléfono:
--- GA Acapulco
-INSERT INTO usuarios (telefono, nombre, planta_id, rol_id)
-VALUES (
-  '+521234567890',
-  'GA Acapulco',
-  (SELECT id FROM plantas WHERE clave='ACAPULCO'),
-  (SELECT id FROM roles WHERE clave='GA')
-);
-
--- GG Acapulco
-INSERT INTO usuarios (telefono, nombre, planta_id, rol_id)
-VALUES (
-  '+521234567891',
-  'GG Acapulco',
-  (SELECT id FROM plantas WHERE clave='ACAPULCO'),
-  (SELECT id FROM roles WHERE clave='GG')
-);
-
--- Director ZP (sin planta)
-INSERT INTO usuarios (telefono, nombre, planta_id, rol_id)
-VALUES (
-  '+525511112222',
-  'Director ZP',
-  NULL,
-  (SELECT id FROM roles WHERE clave='ZP')
-);
-
--- Contralor CDMX (sin planta)
-INSERT INTO usuarios (telefono, nombre, planta_id, rol_id)
-VALUES (
-  '+525533334444',
-  'Contralor CDMX',
-  NULL,
-  (SELECT id FROM roles WHERE clave='CDMX')
-);
-
-3) Prueba en WhatsApp:
-- "crear folio modernizar baños urgente"
-- Luego responde con líneas:
-  Beneficiario: Proveedor X
-  Importe: 25000
-  Categoría: Inversiones
-  Subcategoría: Remodelación
-
-4) Consulta:
-- "estatus F-202602-001"
-*/
 
