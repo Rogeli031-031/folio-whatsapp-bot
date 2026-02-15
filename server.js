@@ -45,6 +45,12 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
+pool.query("SELECT current_database()")
+  .then(r => console.log("BD CONECTADA:", r.rows[0].current_database))
+  .catch(e => console.error("Error BD:", e));
+
+
+
 const twilioClient =
   TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN
     ? twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
