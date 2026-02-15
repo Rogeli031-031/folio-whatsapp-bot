@@ -38,9 +38,23 @@ function twiml(msg) {
 }
 
 function normalizeFrom(from) {
-  // Twilio WhatsApp -> "whatsapp:+521..."
-  return String(from || "").replace(/^whatsapp:/i, "").trim();
+  // Ej: "whatsapp:+5217443835403" -> "+527443835403"
+  // Ej: "whatsapp:+52 7443835403" -> "+527443835403"
+  let t = String(from || "").trim();
+
+  // quita prefijo whatsapp:
+  t = t.replace(/^whatsapp:/i, "");
+
+  // quita espacios
+  t = t.replace(/\s+/g, "");
+
+  // normaliza México: +521XXXXXXXXXX -> +52XXXXXXXXXX
+  if (t.startsWith("+521")) t = "+52" + t.slice(4);
+
+  return t;
 }
+
+
 
 function moneyToNumber(v) {
   // "$ 12,345.67" -> 12345.67
