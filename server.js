@@ -76,8 +76,21 @@ function twiml(msg) {
 }
 
 function normalizeFrom(from) {
-  return String(from || "").replace(/^whatsapp:/i, "").trim(); // "+521..."
+  // Twilio WhatsApp -> "whatsapp:+521..."
+  let tel = String(from || "").trim();
+
+  // quita prefijo whatsapp:
+  tel = tel.replace(/^whatsapp:/i, "").trim();
+
+  // normaliza MX: +521XXXXXXXXXX -> +52XXXXXXXXXX
+  tel = tel.replace(/^\+521/, "+52");
+
+  // quita espacios por si acaso
+  tel = tel.replace(/\s+/g, "");
+
+  return tel;
 }
+
 
 function normalizeWhatsApp(from) {
   // asegura "whatsapp:+52..."
