@@ -1,22 +1,17 @@
 {
   "name": "folio-whatsapp-bot",
-  "version": "1.0.0",
-  "description": "Bot de folios con WhatsApp (Twilio), PostgreSQL (Render), OpenAI y S3 (AWS).",
+  "version": "2.0.0",
+  "description": "Bot de folios con WhatsApp (Twilio), PostgreSQL (Render) y S3",
   "main": "server.js",
-  "type": "commonjs",
   "scripts": {
     "start": "node server.js"
   },
-  "engines": {
-    "node": ">=18"
-  },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.600.0",
-    "@aws-sdk/lib-storage": "^3.600.0",
-    "axios": "^1.6.8",
+    "@aws-sdk/s3-request-presigner": "^3.600.0",
+    "axios": "^1.6.0",
     "body-parser": "^1.20.2",
     "express": "^4.18.2",
-    "multer": "^1.4.5-lts.1",
     "pg": "^8.11.5",
     "twilio": "^4.23.0"
   }
