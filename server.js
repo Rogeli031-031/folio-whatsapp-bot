@@ -192,6 +192,7 @@ async function downloadTwilioMedia(mediaUrl) {
 // 1) Schema (crea/ajusta sin borrar)
 // =========================
 async function ensureSchema() {
+  // plantas
   await pool.query(`
     CREATE TABLE IF NOT EXISTS plantas (
       id SERIAL PRIMARY KEY,
@@ -200,16 +201,17 @@ async function ensureSchema() {
     );
   `);
 
-   await pool.query(`
+  // roles (con nivel)
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS roles (
       id SERIAL PRIMARY KEY,
       clave VARCHAR(50) UNIQUE NOT NULL,   -- GA, GG, ZP, CDMX
       nombre VARCHAR(100) NOT NULL,
-      nivel INT NOT NULL DEFAULT 0         -- <-- IMPORTANTE para tu BD
+      nivel INT NOT NULL DEFAULT 0
     );
   `);
 
-  // Roles base (solo si no existen)  ✅ ya incluye nivel
+  // Roles base (solo si no existen) ✅ incluye nivel
   await pool.query(`
     INSERT INTO roles (clave, nombre, nivel) VALUES
       ('GA','Gerente Administrativo', 10),
@@ -219,8 +221,7 @@ async function ensureSchema() {
     ON CONFLICT (clave) DO NOTHING;
   `);
 
-  `);
-
+  // consecutivo mensual
   await pool.query(`
     CREATE TABLE IF NOT EXISTS folio_counters (
       yyyymm VARCHAR(6) PRIMARY KEY,
@@ -252,6 +253,7 @@ async function ensureSchema() {
   await pool.query(`ALTER TABLE folios ADD COLUMN IF NOT EXISTS aprobado_por VARCHAR(120);`);
   await pool.query(`ALTER TABLE folios ADD COLUMN IF NOT EXISTS aprobado_en TIMESTAMP;`);
 
+  // historial
   await pool.query(`
     CREATE TABLE IF NOT EXISTS folio_historial (
       id SERIAL PRIMARY KEY,
@@ -264,6 +266,7 @@ async function ensureSchema() {
     );
   `);
 
+  // comentarios
   await pool.query(`
     CREATE TABLE IF NOT EXISTS comentarios (
       id SERIAL PRIMARY KEY,
@@ -275,17 +278,9 @@ async function ensureSchema() {
     );
   `);
 
-  await pool.query(`
-    INSERT INTO roles (clave, nombre) VALUES
-      ('GA','Gerente Administrativo'),
-      ('GG','Gerente General'),
-      ('ZP','Director ZP'),
-      ('CDMX','Contralor CDMX')
-    ON CONFLICT (clave) DO NOTHING;
-  `);
-
   console.log("✅ Schema verificado (tablas listas).");
 }
+
 
 // =========================
 // 2) Identidad por teléfono (DB)
