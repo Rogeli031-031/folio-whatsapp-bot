@@ -200,24 +200,25 @@ async function ensureSchema() {
     );
   `);
 
-  await pool.query(`
+   await pool.query(`
     CREATE TABLE IF NOT EXISTS roles (
       id SERIAL PRIMARY KEY,
-      clave VARCHAR(50) UNIQUE NOT NULL,
-      nombre VARCHAR(100) NOT NULL
+      clave VARCHAR(50) UNIQUE NOT NULL,   -- GA, GG, ZP, CDMX
+      nombre VARCHAR(100) NOT NULL,
+      nivel INT NOT NULL DEFAULT 0         -- <-- IMPORTANTE para tu BD
     );
   `);
 
+  // Roles base (solo si no existen)  ✅ ya incluye nivel
   await pool.query(`
-    CREATE TABLE IF NOT EXISTS usuarios (
-      id SERIAL PRIMARY KEY,
-      telefono VARCHAR(30) UNIQUE NOT NULL,
-      nombre VARCHAR(120) NOT NULL,
-      planta_id INT NULL REFERENCES plantas(id),
-      rol_id INT NOT NULL REFERENCES roles(id),
-      activo BOOLEAN DEFAULT TRUE,
-      creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
+    INSERT INTO roles (clave, nombre, nivel) VALUES
+      ('GA','Gerente Administrativo', 10),
+      ('GG','Gerente General',        20),
+      ('ZP','Director ZP',            30),
+      ('CDMX','Contralor CDMX',       40)
+    ON CONFLICT (clave) DO NOTHING;
+  `);
+
   `);
 
   await pool.query(`
