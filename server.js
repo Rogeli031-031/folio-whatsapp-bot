@@ -7,52 +7,24 @@ app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-let folioCounter = {};
-let sesiones = {};
 
-
-
-  app.post("/webhook", async (req, res) => {
-  const incomingMsg = req.body.Body;
-  const message = incomingMsg.toLowerCase();
-
-    if (!incomingMsg.includes("beneficiario") ||
-    !incomingMsg.includes("concepto") ||
-    !incomingMsg.includes("costo") ||
-    !incomingMsg.includes("categoría")) {
-
-  res.set("Content-Type", "text/xml");
-  return res.send(`
-    <Response>
-      <Message>
-Información incompleta.
-Debe incluir:
-Beneficiario
-Concepto
-Costo
-Categoría
-      </Message>
-    </Response>
-  `);
-}
-
-
-  // ===== MANEJO CREAR FOLIO =====
- // ====== MANEJO CREAR FOLIO ======
-// Simulación temporal (se pierde si se reinicia)
+// ===== Memoria temporal en RAM (se borra si Render reinicia) =====
 const drafts = {}; // drafts[from] = { concepto, prioridad, beneficiario, importe, categoria, subcategoria, unidad }
+const folioCounter = {}; // folioCounter["YYYYMM"] = consecutivo
 
 function parseKeyValueLines(text) {
-  // acepta líneas tipo "Beneficiario: Juan", "Importe: 12000", etc.
   const out = {};
-  const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
+  const lines = String(text || "").split("\n").map(l => l.trim()).filter(Boolean);
+
   for (const l of lines) {
     const m = l.match(/^([a-záéíóúñ\s]+)\s*:\s*(.+)$/i);
     if (!m) continue;
+
     const key = m[1].toLowerCase();
     const val = m[2].trim();
+
     if (key.includes("benefici")) out.beneficiario = val;
-    if (key.includes("import")) out.importe = val;
+    if (key.includes("import") || key.includes("costo")) out.importe = val; // acepta Importe o Costo
     if (key.includes("categor")) out.categoria = val;
     if (key.includes("sub")) out.subcategoria = val;
     if (key.includes("unidad")) out.unidad = val;
@@ -63,124 +35,126 @@ function parseKeyValueLines(text) {
 
 function missingFields(d) {
   const miss = [];
+  if (!d.concepto) miss.push("Concepto");
   if (!d.beneficiario) miss.push("Beneficiario");
-  if (!d.importe) miss.push("Importe");
+  if (!d.importe) miss.push("Importe (o Costo)");
   if (!d.categoria) miss.push("Categoría");
   if (!d.subcategoria) miss.push("Subcategoría");
-  if (String(d.categoria || "").toLowerCase().includes("taller") && !d.unidad) miss.push("Unidad (AT-03 / C-03)");
+
+  if (String(d.categoria || "").toLowerCase().includes("taller") && !d.unidad) {
+    miss.push("Unidad (AT-03 / C-03)");
+  }
   return miss;
 }
 
+function buildMonthlyFolioId() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const key = `${year}${month}`; // YYYYMM
+
+  folioCounter[key] = (folioCounter[key] || 0) + 1;
+  const correlativo = String(folioCounter[key]).padStart(3, "0"); // 001, 002...
+  return `F-${key}-${correlativo}`;
+}
+
+function twiml(msg) {
+  // Ojo: Twilio/TwiML es XML; evitamos caracteres raros rompiendo la etiqueta
+  const safe = String(msg || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return `<Response><Message>${safe}</Message></Response>`;
+}
+
 app.post("/webhook", async (req, res) => {
-  const incomingMsg = req.body.Body || "";
+  const incomingMsg = (req.body.Body || "").trim();
   const from = req.body.From || "unknown";
   const message = incomingMsg.toLowerCase();
 
-  // === CAPTURA GUIADA PARA CREAR FOLIO ===
+  // ===== 1) Si el usuario quiere crear folio =====
   if (message.includes("crear folio")) {
     drafts[from] = drafts[from] || {};
-    drafts[from].concepto = incomingMsg.replace(/crear folio/i, "").trim() || drafts[from].concepto;
+
+    // Prioridad
     drafts[from].prioridad = message.includes("urgente") ? "Urgente no programado" : "Normal";
 
+    // Concepto: lo que venga después de "crear folio"
+    const concepto = incomingMsg.replace(/crear folio/i, "").trim();
+    if (concepto) drafts[from].concepto = concepto;
+
+    // Si ya metió datos en el mismo mensaje, intentamos parsear
+    Object.assign(drafts[from], parseKeyValueLines(incomingMsg));
+
     const miss = missingFields(drafts[from]);
     if (miss.length) {
       res.set("Content-Type", "text/xml");
-      return res.send(`
-<Response>
-  <Message>
-Ok. Para crear el folio necesito: ${miss.join(", ")}.
-Respóndeme en líneas así:
-Beneficiario: ______
-Importe: ______
-Categoría: Gastos / Inversiones / Derechos y Obligaciones / Taller
-Subcategoría: ______
-${message.includes("taller") ? "Unidad: AT-03 o C-03\n" : ""}
-(Concepto ya lo tomé de tu mensaje)
-  </Message>
-</Response>`);
+      return res.send(
+        twiml(
+          `Ok. Para crear el folio me falta: ${miss.join(", ")}.\n` +
+          `Respóndeme en líneas así:\n` +
+          `Beneficiario: ____\n` +
+          `Importe: ____\n` +
+          `Categoría: Gastos / Inversiones / Derechos y Obligaciones / Taller\n` +
+          `Subcategoría: ____\n` +
+          (String(drafts[from].categoria || "").toLowerCase().includes("taller") ? `Unidad: AT-03 o C-03\n` : "") +
+          `(Concepto y prioridad ya los tomé)`
+        )
+      );
     }
 
-    // Aquí todavía NO generamos consecutivo por mes (eso va con DB)
-   const now = new Date();
-const year = now.getFullYear();
-const month = String(now.getMonth() + 1).padStart(2, "0");
+    // ✅ Ya cumple reglas => generamos folio consecutivo mensual
+    const folioId = buildMonthlyFolioId();
+    const d = drafts[from];
 
-const monthKey = `${year}${month}`;
-
-if (!folioCounter[monthKey]) {
-  folioCounter[monthKey] = 1;
-} else {
-  folioCounter[monthKey]++;
-}
-
-const correlativo = String(folioCounter[monthKey]).padStart(3, "0");
-
-const folioId = `F-${monthKey}-${correlativo}`;
-
+    // Limpia borrador (ya quedó "creado")
+    delete drafts[from];
 
     res.set("Content-Type", "text/xml");
-    return res.send(`
-<Response>
-  <Message>
-Folio ${folioId} creado correctamente.
-
-Estado técnico: Generado
-Pendiente: Aprobación Planta
-Prioridad: ${drafts[from].prioridad}
-
-Siguiente paso: el Gerente General debe aprobar.
-  </Message>
-</Response>`);
+    return res.send(
+      twiml(
+        `Folio ${folioId} creado.\n\n` +
+        `Beneficiario: ${d.beneficiario}\n` +
+        `Concepto: ${d.concepto}\n` +
+        `Costo: ${d.importe}\n` +
+        `Categoría: ${d.categoria}\n` +
+        `Subcategoría: ${d.subcategoria}\n` +
+        (d.unidad ? `Unidad: ${d.unidad}\n` : "") +
+        `\nEstado técnico: Generado\n` +
+        `Pendiente: Aprobación Planta\n` +
+        `Prioridad: ${d.prioridad}\n\n` +
+        `Siguiente paso: Aprobación de Gerente General.`
+      )
+    );
   }
 
-  // === SI NO ES CREAR FOLIO, PERMITE QUE EL USUARIO COMPLETE DATOS DEL BORRADOR ===
+  // ===== 2) Si hay borrador abierto, el usuario está completando datos =====
   if (drafts[from]) {
-    const kv = parseKeyValueLines(incomingMsg);
-    Object.assign(drafts[from], kv);
-
+    Object.assign(drafts[from], parseKeyValueLines(incomingMsg));
     const miss = missingFields(drafts[from]);
-    if (miss.length) {
-      res.set("Content-Type", "text/xml");
-      return res.send(`
-<Response>
-  <Message>
-Me faltan: ${miss.join(", ")}.
-Respóndeme con los campos faltantes (ej: "Importe: 12000").
-  </Message>
-</Response>`);
-    }
-
-    // ya está completo => crear folio (TEMP por ahora)
-    const folioId = "F-TEMP-" + Date.now();
-    const prioridad = drafts[from].prioridad || "Normal";
-    const concepto = drafts[from].concepto || "(sin concepto)";
-
-    delete drafts[from]; // limpia borrador
 
     res.set("Content-Type", "text/xml");
-    return res.send(`
-<Response>
-  <Message>
-Folio ${folioId} creado correctamente.
+    if (miss.length) {
+      return res.send(twiml(`Me falta: ${miss.join(", ")}.\nRespóndeme solo esos campos (ej: "Importe: 25000").`));
+    }
 
-Concepto: ${concepto}
-Estado técnico: Generado
-Pendiente: Aprobación Planta
-Prioridad: ${prioridad}
+    // Ya quedó completo => crear folio
+    const folioId = buildMonthlyFolioId();
+    const d = drafts[from];
+    delete drafts[from];
 
-El folio ya fue enviado al flujo de autorización.
-  </Message>
-</Response>`);
+    return res.send(
+      twiml(
+        `Folio ${folioId} creado.\n\n` +
+        `Beneficiario: ${d.beneficiario}\n` +
+        `Concepto: ${d.concepto}\n` +
+        `Costo: ${d.importe}\n` +
+        `Categoría: ${d.categoria}\n` +
+        `Subcategoría: ${d.subcategoria}\n` +
+        (d.unidad ? `Unidad: ${d.unidad}\n` : "") +
+        `\nEstado técnico: Generado\nPendiente: Aprobación Planta\nPrioridad: ${d.prioridad || "Normal"}`
+      )
+    );
   }
 
-  // === SI NO, OPENAI (tu bloque actual) ===
-  // ...
-});
-
-
-  // ===== SI NO ES CREAR FOLIO, USA OPENAI =====
-
-
+  // ===== 3) Si no es crear folio ni completar borrador, usamos OpenAI =====
   try {
     const response = await axios.post(
       "https://api.openai.com/v1/chat/completions",
@@ -190,12 +164,9 @@ El folio ya fue enviado al flujo de autorización.
           {
             role: "system",
             content:
-              "Eres un asistente que ayuda a gestionar folios corporativos. Responde claro, profesional y breve."
+              "Eres un asistente que ayuda a gestionar folios corporativos. Si el usuario pide estatus, pide el folio. Responde claro, profesional y breve."
           },
-          {
-            role: "user",
-            content: incomingMsg
-          }
+          { role: "user", content: incomingMsg }
         ]
       },
       {
@@ -206,25 +177,17 @@ El folio ya fue enviado al flujo de autorización.
       }
     );
 
-    const reply = response.data.choices[0].message.content;
-
+    const reply = response.data.choices?.[0]?.message?.content || "Ok.";
     res.set("Content-Type", "text/xml");
-    res.send(`
-      <Response>
-        <Message>${reply}</Message>
-      </Response>
-    `);
+    return res.send(twiml(reply));
   } catch (error) {
-    console.error(error);
-    res.send("<Response><Message>Error procesando solicitud</Message></Response>");
+    console.error("OpenAI error:", error?.response?.data || error.message);
+    res.set("Content-Type", "text/xml");
+    return res.send(twiml("Error procesando solicitud. Intenta de nuevo en 1 minuto."));
   }
 });
 
-app.get("/", (req, res) => {
-  res.send("Bot de folios activo 🚀");
-});
+app.get("/", (req, res) => res.send("Bot de folios activo 🚀"));
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log("Servidor corriendo en puerto " + PORT);
-});
+app.listen(PORT, () => console.log("Servidor corriendo en puerto " + PORT));
