@@ -7,10 +7,35 @@ app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+let folioCounter = {};
+let sesiones = {};
+
+
 
   app.post("/webhook", async (req, res) => {
   const incomingMsg = req.body.Body;
   const message = incomingMsg.toLowerCase();
+
+    if (!incomingMsg.includes("beneficiario") ||
+    !incomingMsg.includes("concepto") ||
+    !incomingMsg.includes("costo") ||
+    !incomingMsg.includes("categoría")) {
+
+  res.set("Content-Type", "text/xml");
+  return res.send(`
+    <Response>
+      <Message>
+Información incompleta.
+Debe incluir:
+Beneficiario
+Concepto
+Costo
+Categoría
+      </Message>
+    </Response>
+  `);
+}
+
 
   // ===== MANEJO CREAR FOLIO =====
  // ====== MANEJO CREAR FOLIO ======
@@ -76,7 +101,22 @@ ${message.includes("taller") ? "Unidad: AT-03 o C-03\n" : ""}
     }
 
     // Aquí todavía NO generamos consecutivo por mes (eso va con DB)
-    const folioId = "F-TEMP-" + Date.now();
+   const now = new Date();
+const year = now.getFullYear();
+const month = String(now.getMonth() + 1).padStart(2, "0");
+
+const monthKey = `${year}${month}`;
+
+if (!folioCounter[monthKey]) {
+  folioCounter[monthKey] = 1;
+} else {
+  folioCounter[monthKey]++;
+}
+
+const correlativo = String(folioCounter[monthKey]).padStart(3, "0");
+
+const folioId = `F-${monthKey}-${correlativo}`;
+
 
     res.set("Content-Type", "text/xml");
     return res.send(`
