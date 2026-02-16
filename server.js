@@ -1,10 +1,10 @@
 // server.js
-// WhatsApp (Twilio) + PostgreSQL (Render) + S3 (AWS opcional)
+// WhatsApp (Twilio) + PostgreSQL (Render) + S3 (AWS) + (opcional) OpenAI
 // Comandos:
 // - crear folio <concepto> [urgente]
 // - estatus F-YYYYMM-XXX
-// - aprobar F-YYYYMM-XXX (solo ZP)  [solo si tienes TWILIO vars para notificar]
-// - adjuntar F-YYYYMM-XXX (mandar PDF en el mismo mensaje) [si tienes S3 vars]
+// - aprobar F-YYYYMM-XXX        (solo ZP)
+// - adjuntar F-YYYYMM-XXX       (enviar PDF adjunto en el mensaje)
 
 const express = require("express");
 const bodyParser = require("body-parser");
@@ -20,6 +20,7 @@ app.use(bodyParser.json());
 // =========================
 // ENV
 // =========================
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 const DATABASE_URL = process.env.DATABASE_URL || "";
 const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || "";
 const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || "";
@@ -31,7 +32,6 @@ const AWS_REGION = process.env.AWS_REGION || "";
 const S3_BUCKET = process.env.S3_BUCKET || "";
 
 if (!DATABASE_URL) console.error("❌ Falta DATABASE_URL en Render.");
-
 if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_WHATSAPP_NUMBER) {
   console.warn("⚠️ Falta Twilio vars (solo responderá por TwiML; no podrá notificar outbound).");
 }
@@ -41,12 +41,12 @@ if (!AWS_ACCESS_KEY_ID || !AWS_SECRET_ACCESS_KEY || !AWS_REGION || !S3_BUCKET) {
 
 const pool = new Pool({
   connectionString: DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
+  ssl: { rejectUnauthorized: false },
 });
 
 pool.query("SELECT current_database()")
-  .then(r => console.log("BD CONECTADA:", r.rows[0].current_database))
-  .catch(e => console.error("Error BD:", e));
+  .then((r) => console.log("BD CONECTADA:", r.rows[0].current_database))
+  .catch((e) => console.error("Error BD:", e));
 
 const twilioClient =
   TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN
@@ -57,7 +57,10 @@ const s3 =
   AWS_ACCESS_KEY_ID && AWS_SECRET_ACCESS_KEY && AWS_REGION
     ? new S3Client({
         region: AWS_REGION,
-        credentials: { accessKeyId: AWS_ACCESS_KEY_ID, secretAccessKey: AWS_SECRET_ACCESS_KEY }
+        credentials: {
+          accessKeyId: AWS_ACCESS_KEY_ID,
+          secretAccessKey: AWS_SECRET_ACCESS_KEY,
+        },
       })
     : null;
 
@@ -73,10 +76,9 @@ function twiml(msg) {
 }
 
 function normalizeFrom(from) {
-  // Twilio WhatsApp -> "whatsapp:+521..."
   let tel = String(from || "").trim();
   tel = tel.replace(/^whatsapp:/i, "").trim();
-  tel = tel.replace(/^\+521/, "+52"); // MX
+  tel = tel.replace(/^\+521/, "+52");
   tel = tel.replace(/\s+/g, "");
   return tel;
 }
@@ -98,32 +100,68 @@ function urgentPrefix(prioridad) {
 }
 
 async function sendWhatsApp(toWhatsApp, text) {
-  if (!twilioClient) return; // si no hay vars, no envía outbound
+  if (!twilioClient) return;
   await twilioClient.messages.create({
     from: TWILIO_WHATSAPP_NUMBER,
     to: toWhatsApp,
-    body: text
+    body: text,
   });
 }
 
-async function columnExists(table, column) {
+// =========================
+// DB schema detection + safe SQL builders
+// =========================
+async function getTableColumns(tableName) {
   const r = await pool.query(
     `
-    SELECT 1
+    SELECT column_name
     FROM information_schema.columns
-    WHERE table_schema='public' AND table_name=$1 AND column_name=$2
-    LIMIT 1;
+    WHERE table_schema='public' AND table_name=$1
     `,
-    [table, column]
+    [tableName]
   );
-  return r.rowCount > 0;
+  return new Set((r.rows || []).map((x) => x.column_name));
 }
 
+function pickFirstExisting(colsSet, candidates) {
+  for (const c of candidates) if (colsSet.has(c)) return c;
+  return null;
+}
+
+function buildInsert(table, colsSet, dataObj) {
+  const keys = Object.keys(dataObj).filter((k) => colsSet.has(k) && dataObj[k] !== undefined);
+  if (!keys.length) throw new Error(`No hay columnas válidas para insertar en ${table}.`);
+  const cols = keys.map((k) => `"${k}"`).join(", ");
+  const vals = keys.map((_, i) => `$${i + 1}`).join(", ");
+  const params = keys.map((k) => dataObj[k]);
+  const sql = `INSERT INTO "${table}" (${cols}) VALUES (${vals}) RETURNING *;`;
+  return { sql, params };
+}
+
+function buildUpdate(table, colsSet, whereCol, whereVal, fields) {
+  const keys = Object.keys(fields).filter((k) => colsSet.has(k) && fields[k] !== undefined);
+  if (!keys.length) return null;
+  const sets = keys.map((k, i) => `"${k}"=$${i + 2}`).join(", ");
+  const params = [whereVal, ...keys.map((k) => fields[k])];
+  const sql = `UPDATE "${table}" SET ${sets} WHERE "${whereCol}"=$1;`;
+  return { sql, params };
+}
+
+// Global “map” de nombres reales en tu DB
+const DBMAP = {
+  folios: null,
+  folio_historial: null,
+  comentarios: null,
+  usuarios: null,
+  plantas: null,
+  roles: null,
+};
+
 // =========================
-// 1) Schema alineado a TU BD
+// 1) Schema (crea/ajusta sin borrar)
 // =========================
 async function ensureSchema() {
-  // Base catalogos
+  // Base tables
   await pool.query(`
     CREATE TABLE IF NOT EXISTS plantas (
       id SERIAL PRIMARY KEY,
@@ -147,13 +185,14 @@ async function ensureSchema() {
       id SERIAL PRIMARY KEY,
       telefono VARCHAR(30) UNIQUE NOT NULL,
       nombre VARCHAR(120) NOT NULL,
-      email VARCHAR(160),
       planta_id INT NULL REFERENCES plantas(id),
       rol_id INT NOT NULL REFERENCES roles(id),
       activo BOOLEAN DEFAULT TRUE,
       creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
   `);
+
+  await pool.query(`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS email VARCHAR(160);`);
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS folio_counters (
@@ -162,73 +201,91 @@ async function ensureSchema() {
     );
   `);
 
-  // ✅ Tu tabla real: folios con folio_codigo, planta_id, creado_por_id, concepto, importe...
+  // IMPORTANT: tu DB ya trae "folios" con columnas tipo folio_codigo/planta_id/creado_por_id/concepto/importe...
+  // Creamos si no existe, pero SIN asumir nombres; luego agregamos columnas faltantes.
   await pool.query(`
     CREATE TABLE IF NOT EXISTS folios (
-      id SERIAL PRIMARY KEY,
-      folio_codigo VARCHAR(50) UNIQUE,
-      planta_id INT REFERENCES plantas(id),
-      creado_por_id INT REFERENCES usuarios(id),
-      beneficiario VARCHAR(150),
-      concepto TEXT,
-      importe NUMERIC(12,2),
-      categoria VARCHAR(100),
-      subcategoria VARCHAR(100),
-      unidad VARCHAR(50),
-      prioridad VARCHAR(50),
-      estatus VARCHAR(50),
-      cotizacion_url TEXT,
-      creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      id SERIAL PRIMARY KEY
     );
   `);
 
-  // Por si tu tabla ya existía pero le faltaban columnas:
-  await pool.query(`ALTER TABLE folios ADD COLUMN IF NOT EXISTS folio_codigo VARCHAR(50);`);
-  await pool.query(`ALTER TABLE folios ADD COLUMN IF NOT EXISTS planta_id INT;`);
-  await pool.query(`ALTER TABLE folios ADD COLUMN IF NOT EXISTS creado_por_id INT;`);
-  await pool.query(`ALTER TABLE folios ADD COLUMN IF NOT EXISTS beneficiario VARCHAR(150);`);
-  await pool.query(`ALTER TABLE folios ADD COLUMN IF NOT EXISTS concepto TEXT;`);
-  await pool.query(`ALTER TABLE folios ADD COLUMN IF NOT EXISTS importe NUMERIC(12,2);`);
-  await pool.query(`ALTER TABLE folios ADD COLUMN IF NOT EXISTS categoria VARCHAR(100);`);
-  await pool.query(`ALTER TABLE folios ADD COLUMN IF NOT EXISTS subcategoria VARCHAR(100);`);
-  await pool.query(`ALTER TABLE folios ADD COLUMN IF NOT EXISTS unidad VARCHAR(50);`);
-  await pool.query(`ALTER TABLE folios ADD COLUMN IF NOT EXISTS prioridad VARCHAR(50);`);
-  await pool.query(`ALTER TABLE folios ADD COLUMN IF NOT EXISTS estatus VARCHAR(50);`);
-  await pool.query(`ALTER TABLE folios ADD COLUMN IF NOT EXISTS cotizacion_url TEXT;`);
-  await pool.query(`ALTER TABLE folios ADD COLUMN IF NOT EXISTS creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP;`);
+  // En tu DB real, estos campos suelen existir; agregamos los que falten.
+  await pool.query(`ALTER TABLE folios ADD COLUMN IF NOT EXISTS folio_codigo VARCHAR(50) UNIQUE;`);
+  await pool.query(`ALTER TABLE folios ADD COLUMN IF NOT EXISTS numero_folio VARCHAR(50) UNIQUE;`);
 
-  // ✅ Tu tabla real: folio_historial (y aquí era donde tronaba)
+  await pool.query(`ALTER TABLE folios ADD COLUMN IF NOT EXISTS planta_id INT NULL REFERENCES plantas(id);`);
+  await pool.query(`ALTER TABLE folios ADD COLUMN IF NOT EXISTS planta VARCHAR(50);`);
+
+  await pool.query(`ALTER TABLE folios ADD COLUMN IF NOT EXISTS creado_por_id INT NULL REFERENCES usuarios(id);`);
+  await pool.query(`ALTER TABLE folios ADD COLUMN IF NOT EXISTS creado_por VARCHAR(120);`);
+
+  await pool.query(`ALTER TABLE folios ADD COLUMN IF NOT EXISTS concepto TEXT;`);
+  await pool.query(`ALTER TABLE folios ADD COLUMN IF NOT EXISTS descripcion TEXT;`);
+
+  await pool.query(`ALTER TABLE folios ADD COLUMN IF NOT EXISTS importe NUMERIC(12,2);`);
+  await pool.query(`ALTER TABLE folios ADD COLUMN IF NOT EXISTS monto NUMERIC(12,2);`);
+
+  await pool.query(`ALTER TABLE folios ADD COLUMN IF NOT EXISTS categoria VARCHAR(120);`);
+  await pool.query(`ALTER TABLE folios ADD COLUMN IF NOT EXISTS subcategoria VARCHAR(120);`);
+  await pool.query(`ALTER TABLE folios ADD COLUMN IF NOT EXISTS unidad VARCHAR(50);`);
+  await pool.query(`ALTER TABLE folios ADD COLUMN IF NOT EXISTS prioridad VARCHAR(60);`);
+  await pool.query(`ALTER TABLE folios ADD COLUMN IF NOT EXISTS estatus VARCHAR(50);`);
+  await pool.query(`ALTER TABLE folios ADD COLUMN IF NOT EXISTS beneficiario VARCHAR(150);`);
+
+  await pool.query(`ALTER TABLE folios ADD COLUMN IF NOT EXISTS cotizacion_url TEXT;`);
+  await pool.query(`ALTER TABLE folios ADD COLUMN IF NOT EXISTS cotizacion_s3key TEXT;`);
+
+  await pool.query(`ALTER TABLE folios ADD COLUMN IF NOT EXISTS aprobado_por VARCHAR(120);`);
+  await pool.query(`ALTER TABLE folios ADD COLUMN IF NOT EXISTS aprobado_en TIMESTAMP;`);
+  await pool.query(`ALTER TABLE folios ADD COLUMN IF NOT EXISTS aprobado_por_id INT NULL REFERENCES usuarios(id);`);
+
+  await pool.query(`ALTER TABLE folios ADD COLUMN IF NOT EXISTS creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP;`);
+  await pool.query(`ALTER TABLE folios ADD COLUMN IF NOT EXISTS fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP;`);
+
+  // Historial (aquí estaba tronando)
   await pool.query(`
     CREATE TABLE IF NOT EXISTS folio_historial (
-      id SERIAL PRIMARY KEY,
-      folio_codigo VARCHAR(50) NOT NULL,
-      estatus VARCHAR(50),
-      comentario TEXT,
-      actor_id INT NULL,
-      actor_telefono VARCHAR(30),
-      actor_rol VARCHAR(50),
-      creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      id SERIAL PRIMARY KEY
     );
   `);
 
-  // Asegura columnas (para que no vuelva a tronar por "does not exist")
+  // Agregamos TODAS las variantes que has visto en errores:
+  await pool.query(`ALTER TABLE folio_historial ADD COLUMN IF NOT EXISTS numero_folio VARCHAR(50);`);
   await pool.query(`ALTER TABLE folio_historial ADD COLUMN IF NOT EXISTS folio_codigo VARCHAR(50);`);
+  await pool.query(`ALTER TABLE folio_historial ADD COLUMN IF NOT EXISTS folio_id INT;`);
+
   await pool.query(`ALTER TABLE folio_historial ADD COLUMN IF NOT EXISTS estatus VARCHAR(50);`);
   await pool.query(`ALTER TABLE folio_historial ADD COLUMN IF NOT EXISTS comentario TEXT;`);
-  await pool.query(`ALTER TABLE folio_historial ADD COLUMN IF NOT EXISTS actor_id INT;`);
+
   await pool.query(`ALTER TABLE folio_historial ADD COLUMN IF NOT EXISTS actor_telefono VARCHAR(30);`);
   await pool.query(`ALTER TABLE folio_historial ADD COLUMN IF NOT EXISTS actor_rol VARCHAR(50);`);
+  await pool.query(`ALTER TABLE folio_historial ADD COLUMN IF NOT EXISTS actor_id INT;`);
+
   await pool.query(`ALTER TABLE folio_historial ADD COLUMN IF NOT EXISTS creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP;`);
 
-  // Comentarios (opcional)
+  // Comentarios
   await pool.query(`
     CREATE TABLE IF NOT EXISTS comentarios (
+      id SERIAL PRIMARY KEY
+    );
+  `);
+  await pool.query(`ALTER TABLE comentarios ADD COLUMN IF NOT EXISTS numero_folio VARCHAR(50);`);
+  await pool.query(`ALTER TABLE comentarios ADD COLUMN IF NOT EXISTS folio_codigo VARCHAR(50);`);
+  await pool.query(`ALTER TABLE comentarios ADD COLUMN IF NOT EXISTS comentario TEXT;`);
+  await pool.query(`ALTER TABLE comentarios ADD COLUMN IF NOT EXISTS actor_telefono VARCHAR(30);`);
+  await pool.query(`ALTER TABLE comentarios ADD COLUMN IF NOT EXISTS actor_rol VARCHAR(50);`);
+  await pool.query(`ALTER TABLE comentarios ADD COLUMN IF NOT EXISTS creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP;`);
+
+  // Guarda requests Twilio para depurar "cómo lo envía"
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS webhook_events (
       id SERIAL PRIMARY KEY,
-      folio_codigo VARCHAR(50) NOT NULL,
-      comentario TEXT NOT NULL,
-      actor_id INT NULL,
-      actor_telefono VARCHAR(30),
-      actor_rol VARCHAR(50),
+      provider VARCHAR(30) DEFAULT 'twilio',
+      from_tel VARCHAR(40),
+      message_sid VARCHAR(80),
+      num_media INT,
+      body TEXT,
+      payload JSONB,
       creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
   `);
@@ -251,17 +308,29 @@ async function ensureSchema() {
   `);
 
   console.log("✅ Schema verificado (alineado a tu BD).");
+
+  // Detecta columnas reales
+  DBMAP.folios = await getTableColumns("folios");
+  DBMAP.folio_historial = await getTableColumns("folio_historial");
+  DBMAP.comentarios = await getTableColumns("comentarios");
+  DBMAP.usuarios = await getTableColumns("usuarios");
+  DBMAP.plantas = await getTableColumns("plantas");
+  DBMAP.roles = await getTableColumns("roles");
+
+  console.log("🧠 Columnas detectadas:");
+  console.log("folios:", [...DBMAP.folios].sort().join(", "));
+  console.log("folio_historial:", [...DBMAP.folio_historial].sort().join(", "));
 }
 
 // =========================
-// 2) Identidad por teléfono
+// 2) Identidad por teléfono (DB)
 // =========================
 async function getActorByPhone(fromRaw) {
   const tel = normalizeFrom(fromRaw);
 
   const sql = `
     SELECT
-      u.id AS usuario_id,
+      u.id as usuario_id,
       u.telefono,
       u.nombre AS usuario_nombre,
       u.email AS email,
@@ -282,15 +351,16 @@ async function getActorByPhone(fromRaw) {
   return r.rows[0] || null;
 }
 
-async function getUsersByRoleAndPlanta(rolClave, plantaId) {
+async function getUsersByRoleAndPlanta(rolClave, plantaClave) {
   const r = await pool.query(
     `
-    SELECT u.telefono, u.nombre, u.email, r.clave AS rol, u.planta_id
+    SELECT u.telefono, u.nombre, u.email, r.clave AS rol, p.clave AS planta
     FROM usuarios u
     JOIN roles r ON r.id=u.rol_id
-    WHERE u.activo=TRUE AND r.clave=$1 AND u.planta_id=$2
+    LEFT JOIN plantas p ON p.id=u.planta_id
+    WHERE u.activo=TRUE AND r.clave=$1 AND p.clave=$2
     `,
-    [rolClave, plantaId]
+    [rolClave, plantaClave]
   );
   return r.rows || [];
 }
@@ -308,13 +378,25 @@ async function getUsersByRole(rolClave) {
   return r.rows || [];
 }
 
-async function plantaIdByClave(plantaClaveUpper) {
-  const r = await pool.query(`SELECT id FROM plantas WHERE UPPER(clave)=UPPER($1) LIMIT 1`, [plantaClaveUpper]);
-  return r.rows[0]?.id || null;
+async function ensurePlantaExistsAndGetId(plantaClaveRaw) {
+  const clave = String(plantaClaveRaw || "").trim().toUpperCase();
+  if (!clave) return null;
+
+  // busca
+  let r = await pool.query(`SELECT id, clave FROM plantas WHERE clave=$1 LIMIT 1`, [clave]);
+  if (r.rowCount) return r.rows[0].id;
+
+  // crea si no existe
+  await pool.query(
+    `INSERT INTO plantas (clave, nombre) VALUES ($1,$2) ON CONFLICT (clave) DO NOTHING`,
+    [clave, clave]
+  );
+  r = await pool.query(`SELECT id FROM plantas WHERE clave=$1 LIMIT 1`, [clave]);
+  return r.rowCount ? r.rows[0].id : null;
 }
 
 // =========================
-// 3) Consecutivo mensual (DB)
+// 3) Consecutivo mensual persistente (DB)
 // =========================
 async function buildMonthlyFolioIdDB() {
   const now = new Date();
@@ -340,14 +422,13 @@ async function buildMonthlyFolioIdDB() {
       nextSeq = 1;
     } else {
       nextSeq = r.rows[0].last_seq + 1;
-      await client.query(
-        "UPDATE folio_counters SET last_seq=$2 WHERE yyyymm=$1",
-        [yyyymm, nextSeq]
-      );
+      await client.query("UPDATE folio_counters SET last_seq=$2 WHERE yyyymm=$1", [
+        yyyymm,
+        nextSeq,
+      ]);
     }
 
     await client.query("COMMIT");
-
     const correlativo = String(nextSeq).padStart(3, "0");
     return `F-${yyyymm}-${correlativo}`;
   } catch (e) {
@@ -359,89 +440,113 @@ async function buildMonthlyFolioIdDB() {
 }
 
 // =========================
-// 4) Folios DB (alineado a tu tabla)
+// 4) Folios DB (dinámico a tu esquema)
 // =========================
+function folioColName() {
+  // preferimos folio_codigo si existe, si no numero_folio
+  return pickFirstExisting(DBMAP.folios, ["folio_codigo", "numero_folio"]);
+}
+
+function folioTextConceptCol() {
+  return pickFirstExisting(DBMAP.folios, ["concepto", "descripcion"]);
+}
+
+function folioAmountCol() {
+  return pickFirstExisting(DBMAP.folios, ["importe", "monto"]);
+}
+
+function folioCreatedAtCol() {
+  return pickFirstExisting(DBMAP.folios, ["creado_en", "fecha_creacion"]);
+}
+
 async function crearFolioDB(payload) {
-  const sql = `
-    INSERT INTO folios
-      (folio_codigo, planta_id, creado_por_id, beneficiario, concepto, importe, categoria, subcategoria, unidad, prioridad, estatus)
-    VALUES
-      ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
-    RETURNING *;
-  `;
-  const p = [
-    payload.folio_codigo,
-    payload.planta_id,
-    payload.creado_por_id,
-    payload.beneficiario || null,
-    payload.concepto || null,
-    payload.importe ?? null,
-    payload.categoria || null,
-    payload.subcategoria || null,
-    payload.unidad || null,
-    payload.prioridad || null,
-    payload.estatus || null
-  ];
-  const r = await pool.query(sql, p);
+  const folioCol = folioColName();
+  const conceptCol = folioTextConceptCol();
+  const amountCol = folioAmountCol();
+  const createdAtCol = folioCreatedAtCol();
+
+  if (!folioCol) throw new Error("Tu tabla folios no tiene folio_codigo ni numero_folio.");
+
+  const plantaId = payload.planta_id || null;
+
+  const data = {
+    [folioCol]: payload.folio_id,
+    planta_id: plantaId,
+    planta: payload.planta_clave || null,
+    creado_por_id: payload.creado_por_id || null,
+    creado_por: payload.creado_por || null,
+    [conceptCol]: payload.concepto || null,
+    [amountCol]: payload.importe ?? null,
+    estatus: payload.estatus || "Generado",
+    prioridad: payload.prioridad || null,
+    beneficiario: payload.beneficiario || null,
+    categoria: payload.categoria || null,
+    subcategoria: payload.subcategoria || null,
+    unidad: payload.unidad || null,
+    [createdAtCol]: new Date(),
+  };
+
+  const { sql, params } = buildInsert("folios", DBMAP.folios, data);
+  const r = await pool.query(sql, params);
   return r.rows[0];
 }
 
-async function obtenerFolioDB(folioCodigo) {
+async function obtenerFolioDB(folioId) {
+  const folioCol = folioColName();
+  if (!folioCol) return null;
+
   const r = await pool.query(
-    `SELECT * FROM folios WHERE folio_codigo=$1 ORDER BY id DESC LIMIT 1`,
-    [folioCodigo]
+    `SELECT * FROM folios WHERE "${folioCol}"=$1 ORDER BY id DESC LIMIT 1`,
+    [folioId]
   );
   return r.rows[0] || null;
 }
 
-async function actualizarFolioDB(folioCodigo, fields) {
-  const keys = Object.keys(fields);
-  if (!keys.length) return;
+async function actualizarFolioDB(folioId, fields) {
+  const folioCol = folioColName();
+  if (!folioCol) return;
 
-  const sets = keys.map((k, i) => `${k}=$${i + 2}`).join(", ");
-  const values = keys.map((k) => fields[k]);
-
-  await pool.query(
-    `UPDATE folios SET ${sets} WHERE folio_codigo=$1`,
-    [folioCodigo, ...values]
-  );
+  const upd = buildUpdate("folios", DBMAP.folios, folioCol, folioId, fields);
+  if (!upd) return;
+  await pool.query(upd.sql, upd.params);
 }
 
-async function logHistorial({ folio_codigo, estatus, comentario, actor }) {
-  // Tu tabla ya existe y ahora aseguramos columnas, así que no debe fallar
-  await pool.query(
-    `
-    INSERT INTO folio_historial (folio_codigo, estatus, comentario, actor_id, actor_telefono, actor_rol)
-    VALUES ($1,$2,$3,$4,$5,$6)
-    `,
-    [
-      folio_codigo,
-      estatus || null,
-      comentario || null,
-      actor?.usuario_id || null,
-      actor?.telefono || null,
-      actor?.rol || null
-    ]
-  );
+async function logHistorial({ folioId, estatus, comentario, actor }) {
+  // Aquí corregimos tu error actual:
+  // - si folio_historial tiene NOT NULL en numero_folio => SIEMPRE mandamos numero_folio
+  // - también mandamos folio_codigo si existe
+  const data = {
+    numero_folio: folioId,
+    folio_codigo: folioId,
+    estatus: estatus || null,
+    comentario: comentario || null,
+    actor_telefono: actor?.telefono || actor?.telefono_normalizado || actor?.telefono || null,
+    actor_rol: actor?.rol || null,
+    actor_id: actor?.usuario_id || null,
+    creado_en: new Date(),
+  };
+
+  const { sql, params } = buildInsert("folio_historial", DBMAP.folio_historial, data);
+  await pool.query(sql, params);
 }
 
 // =========================
 // 5) S3: subir cotización
 // =========================
-async function uploadPdfToS3({ folio_codigo, mediaBuffer, contentType }) {
+async function uploadPdfToS3({ folioId, mediaBuffer, contentType }) {
   if (!s3) throw new Error("S3 no configurado");
 
-  const key = `cotizaciones/${folio_codigo}/${Date.now()}.pdf`;
+  const key = `cotizaciones/${folioId}/${Date.now()}.pdf`;
   await s3.send(
     new PutObjectCommand({
       Bucket: S3_BUCKET,
       Key: key,
       Body: mediaBuffer,
-      ContentType: contentType || "application/pdf"
+      ContentType: contentType || "application/pdf",
     })
   );
 
-  return `s3://${S3_BUCKET}/${key}`;
+  return { s3url: `s3://${S3_BUCKET}/${key}`, key };
 }
 
 // =========================
@@ -477,9 +582,7 @@ function missingFields(d, actor) {
   const miss = [];
   const rol = actor?.rol || "";
 
-  // Regla: ZP / CDMX deben indicar Planta SIEMPRE
   if ((rol === "ZP" || rol === "CDMX") && !d.planta) miss.push("Planta");
-
   if (!d.concepto) miss.push("Concepto");
   if (!d.beneficiario) miss.push("Beneficiario");
   if (!d.importe) miss.push("Importe (o Costo)");
@@ -489,7 +592,6 @@ function missingFields(d, actor) {
   if (String(d.categoria || "").toLowerCase().includes("taller") && !d.unidad) {
     miss.push("Unidad (AT-03 / C-03)");
   }
-
   return miss;
 }
 
@@ -507,6 +609,19 @@ app.get("/health-db", async (req, res) => {
   }
 });
 
+// Ver último payload recibido (para validar “cómo lo envía”)
+app.get("/debug-last", async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT id, from_tel, message_sid, num_media, body, creado_en, payload
+       FROM webhook_events ORDER BY id DESC LIMIT 1`
+    );
+    res.json({ ok: true, last: r.rows[0] || null });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
 // =========================
 // 8) Webhook Twilio WhatsApp
 // =========================
@@ -516,18 +631,21 @@ app.post("/webhook", async (req, res) => {
   const fromTel = normalizeFrom(fromRaw);
   const message = incomingMsg.toLowerCase();
 
-  // Media (PDF)
   const numMedia = Number(req.body.NumMedia || 0);
   const mediaUrl0 = req.body.MediaUrl0;
   const mediaType0 = req.body.MediaContentType0;
+  const messageSid = req.body.MessageSid || req.body.SmsMessageSid || "";
 
-  // ✅ LOG para validar “cómo lo envía”
-  console.log("📩 IN:", {
-    fromTel,
-    messageSid: req.body.MessageSid,
-    numMedia,
-    body: incomingMsg
-  });
+  // Guarda request para depuración
+  try {
+    await pool.query(
+      `INSERT INTO webhook_events (from_tel, message_sid, num_media, body, payload)
+       VALUES ($1,$2,$3,$4,$5)`,
+      [fromTel, messageSid, numMedia, incomingMsg, req.body]
+    );
+  } catch (e) {
+    console.warn("⚠️ No pude guardar webhook_events:", e?.message || e);
+  }
 
   try {
     const actor = await getActorByPhone(fromRaw);
@@ -546,23 +664,21 @@ app.post("/webhook", async (req, res) => {
     // A) ESTATUS
     // =========================
     if (message.startsWith("estatus")) {
-      const folioCodigo = incomingMsg.replace(/estatus/i, "").trim();
-      const folio = await obtenerFolioDB(folioCodigo);
+      const folioId = incomingMsg.replace(/estatus/i, "").trim();
+      const folio = await obtenerFolioDB(folioId);
 
       res.set("Content-Type", "text/xml");
       return res.send(
         twiml(
           folio
-            ? `${urgentPrefix(folio.prioridad)}Folio: ${folio.folio_codigo}\n` +
-              `Estatus: ${folio.estatus}\n` +
-              `Importe: ${folio.importe}\n` +
-              `Concepto: ${folio.concepto}\n` +
-              `Beneficiario: ${folio.beneficiario}\n` +
-              `Categoría: ${folio.categoria} / ${folio.subcategoria}\n` +
-              (folio.unidad ? `Unidad: ${folio.unidad}\n` : "") +
-              `Cotización: ${folio.cotizacion_url ? "✅ Adjunta" : "⚠️ No adjunta"}\n` +
-              `Creado: ${folio.creado_en}`
-            : `No encontré el folio ${folioCodigo}`
+            ? `${urgentPrefix(folio.prioridad)}Folio: ${folio[folioColName()]}\n` +
+                `Planta: ${folio.planta || "-"}\n` +
+                `Estatus: ${folio.estatus || "-"}\n` +
+                `Monto: ${(folio[folioAmountCol()] ?? "-")}\n` +
+                `Descripción: ${(folio[folioTextConceptCol()] ?? "-")}\n` +
+                `Cotización: ${folio.cotizacion_url ? "✅ Adjunta" : "⚠️ No adjunta"}\n` +
+                `Fecha: ${(folio[folioCreatedAtCol()] ?? "-")}`
+            : `No encontré el folio ${folioId}`
         )
       );
     }
@@ -576,38 +692,45 @@ app.post("/webhook", async (req, res) => {
         return res.send(twiml("Solo el Director ZP puede aprobar folios."));
       }
 
-      const folioCodigo = incomingMsg.replace(/aprobar/i, "").trim();
-      const folio = await obtenerFolioDB(folioCodigo);
+      const folioId = incomingMsg.replace(/aprobar/i, "").trim();
+      const folio = await obtenerFolioDB(folioId);
       if (!folio) {
         res.set("Content-Type", "text/xml");
-        return res.send(twiml(`No encontré el folio ${folioCodigo}`));
+        return res.send(twiml(`No encontré el folio ${folioId}`));
       }
 
-      await actualizarFolioDB(folioCodigo, { estatus: "Aprobado" });
-
-      await logHistorial({
-        folio_codigo: folioCodigo,
+      await actualizarFolioDB(folioId, {
         estatus: "Aprobado",
-        comentario: "Aprobado por Director ZP.",
-        actor
+        aprobado_por: `${actor.usuario_nombre} (ZP)`,
+        aprobado_en: new Date(),
+        aprobado_por_id: actor.usuario_id,
       });
 
-      // Notificar GA + GG de la planta + CDMX (solo si tienes TWILIO vars)
-      const gaList = await getUsersByRoleAndPlanta("GA", folio.planta_id);
-      const ggList = await getUsersByRoleAndPlanta("GG", folio.planta_id);
+      await logHistorial({
+        folioId,
+        estatus: "Aprobado",
+        comentario: "Aprobado por Director ZP.",
+        actor: { ...actor, telefono_normalizado: fromTel },
+      });
+
+      // Notificar GA + GG de la planta + CDMX
+      const plantaClave = actor.planta_clave || folio.planta || null;
+      const gaList = plantaClave ? await getUsersByRoleAndPlanta("GA", plantaClave) : [];
+      const ggList = plantaClave ? await getUsersByRoleAndPlanta("GG", plantaClave) : [];
       const cdmxList = await getUsersByRole("CDMX");
 
       const warnCot = folio.cotizacion_url ? "" : "\n⚠️ Aún no tiene la cotización adjunta.";
       const msgToSend =
-        `${urgentPrefix(folio.prioridad)}Folio APROBADO: ${folio.folio_codigo}\n` +
-        `Importe: ${folio.importe}\n` +
-        `Concepto: ${folio.concepto}\n` +
+        `${urgentPrefix(folio.prioridad)}Folio APROBADO: ${folioId}\n` +
+        `Planta: ${plantaClave || "-"}\n` +
+        `Monto: ${folio[folioAmountCol()] ?? "-"}\n` +
+        `Concepto: ${folio[folioTextConceptCol()] ?? "-"}\n` +
         `Beneficiario: ${folio.beneficiario || "-"}\n` +
         `Categoría: ${folio.categoria || "-"} / ${folio.subcategoria || "-"}\n` +
         (folio.unidad ? `Unidad: ${folio.unidad}\n` : "") +
         `Estatus: Aprobado\n` +
         warnCot +
-        `\n\nComandos:\n- estatus ${folio.folio_codigo}\n- adjuntar ${folio.folio_codigo} (mandando PDF)`;
+        `\n\nComandos:\n- estatus ${folioId}\n- adjuntar ${folioId} (mandando PDF)`;
 
       const recipients = [...gaList, ...ggList, ...cdmxList]
         .map((u) => u.telefono)
@@ -618,24 +741,30 @@ app.post("/webhook", async (req, res) => {
       }
 
       res.set("Content-Type", "text/xml");
-      return res.send(twiml(`✅ Folio ${folioCodigo} aprobado.`));
+      return res.send(
+        twiml(
+          `✅ Folio ${folioId} aprobado.\n` +
+            `Notifiqué a GA, GG y Contralor CDMX.\n` +
+            (folio.cotizacion_url ? "" : "⚠️ Nota: aún no tiene cotización adjunta.\n")
+        )
+      );
     }
 
     // =========================
     // C) ADJUNTAR (mandar PDF en el mensaje)
     // =========================
     if (message.startsWith("adjuntar")) {
-      const folioCodigo = incomingMsg.replace(/adjuntar/i, "").trim();
+      const folioId = incomingMsg.replace(/adjuntar/i, "").trim();
 
-      if (!folioCodigo) {
+      if (!folioId) {
         res.set("Content-Type", "text/xml");
         return res.send(twiml("Usa: adjuntar F-YYYYMM-XXX y manda el PDF en el mismo mensaje."));
       }
 
-      const folio = await obtenerFolioDB(folioCodigo);
+      const folio = await obtenerFolioDB(folioId);
       if (!folio) {
         res.set("Content-Type", "text/xml");
-        return res.send(twiml(`No encontré el folio ${folioCodigo}`));
+        return res.send(twiml(`No encontré el folio ${folioId}`));
       }
 
       if (!numMedia || !mediaUrl0) {
@@ -643,32 +772,37 @@ app.post("/webhook", async (req, res) => {
         return res.send(twiml("Manda el comando adjuntar + el PDF como archivo en el mismo mensaje."));
       }
 
-      // Descargar el PDF desde Twilio (requiere Basic Auth)
       const mediaResp = await axios.get(mediaUrl0, {
         responseType: "arraybuffer",
-        auth: { username: TWILIO_ACCOUNT_SID, password: TWILIO_AUTH_TOKEN }
+        auth: { username: TWILIO_ACCOUNT_SID, password: TWILIO_AUTH_TOKEN },
       });
 
       const buffer = Buffer.from(mediaResp.data);
       const ct = mediaType0 || "application/pdf";
 
-      const s3url = await uploadPdfToS3({
-        folio_codigo: folioCodigo,
+      const { s3url, key } = await uploadPdfToS3({
+        folioId,
         mediaBuffer: buffer,
-        contentType: ct
+        contentType: ct,
       });
 
-      await actualizarFolioDB(folioCodigo, { cotizacion_url: s3url });
+      await actualizarFolioDB(folioId, { cotizacion_url: s3url, cotizacion_s3key: key });
 
       await logHistorial({
-        folio_codigo: folioCodigo,
+        folioId,
         estatus: folio.estatus || "Actualizado",
         comentario: `Cotización adjunta subida a S3: ${s3url}`,
-        actor
+        actor: { ...actor, telefono_normalizado: fromTel },
       });
 
       res.set("Content-Type", "text/xml");
-      return res.send(twiml(`✅ Cotización adjunta al folio ${folioCodigo}.`));
+      return res.send(
+        twiml(
+          `✅ Cotización adjunta al folio ${folioId}.\n` +
+            `Guardé en S3.\n` +
+            `Estatus actual: ${folio.estatus || "-"}`
+        )
+      );
     }
 
     // =========================
@@ -679,15 +813,12 @@ app.post("/webhook", async (req, res) => {
 
       drafts[fromTel].prioridad = message.includes("urgente") ? "Urgente no programado" : "Normal";
 
-      // concepto: quitar "crear folio" y "urgente"
-      let concepto = incomingMsg.replace(/crear folio/i, "").trim();
-      concepto = concepto.replace(/\burgente\b/i, "").trim();
+      const concepto = incomingMsg.replace(/crear folio/i, "").trim();
       if (concepto) drafts[fromTel].concepto = concepto;
 
-      // Si mandó líneas, parsearlas
       Object.assign(drafts[fromTel], parseKeyValueLines(incomingMsg));
 
-      // Si el actor trae planta asignada, usarla (pero ojo: ZP/CDMX deben indicar Planta si no tienen planta_id)
+      // Si actor trae planta, la tomamos
       if (actor.planta_clave) drafts[fromTel].planta = actor.planta_clave;
 
       const miss = missingFields(drafts[fromTel], actor);
@@ -697,54 +828,53 @@ app.post("/webhook", async (req, res) => {
           twiml(
             `Ok. Para crear el folio me falta: ${miss.join(", ")}.\n` +
               `Respóndeme en líneas así:\n` +
-              ((actor.rol === "ZP" || actor.rol === "CDMX") ? `Planta: ACAPULCO / PUEBLA / TEHUACAN / ...\n` : "") +
+              ((actor.rol === "ZP" || actor.rol === "CDMX")
+                ? `Planta: ACAPULCO / PUEBLA / TEHUACAN / ...\n`
+                : "") +
               `Beneficiario: ____\n` +
               `Importe: ____\n` +
               `Categoría: Gastos / Inversiones / Derechos y Obligaciones / Taller\n` +
               `Subcategoría: ____\n` +
-              (String(drafts[fromTel].categoria || "").toLowerCase().includes("taller") ? `Unidad: AT-03 o C-03\n` : "") +
+              (String(drafts[fromTel].categoria || "").toLowerCase().includes("taller")
+                ? `Unidad: AT-03 o C-03\n`
+                : "") +
               `(Concepto y prioridad ya los tomé)\n` +
               `Rol: ${actor.rol}`
           )
         );
       }
 
-      // Ya está completo → guardar
       const d = drafts[fromTel];
-
-      const plantaClave = String(d.planta || "").toUpperCase().trim();
-      const plantaId = actor.planta_id || (plantaClave ? await plantaIdByClave(plantaClave) : null);
-
-      if (!plantaId) {
+      if (!d.planta) {
         res.set("Content-Type", "text/xml");
-        return res.send(twiml("No encontré esa planta en catálogo. Asegúrate que exista en tabla plantas (clave)."));
+        return res.send(twiml("Falta Planta. Escribe por ejemplo: Planta: ACAPULCO"));
       }
 
-      const folioCodigo = await buildMonthlyFolioIdDB();
+      const folioId = await buildMonthlyFolioIdDB();
       const importe = moneyToNumber(d.importe);
+      const plantaId = await ensurePlantaExistsAndGetId(d.planta);
 
       const guardado = await crearFolioDB({
-        folio_codigo: folioCodigo,
+        folio_id: folioId,
         planta_id: plantaId,
-        creado_por_id: actor.usuario_id,
-        beneficiario: d.beneficiario,
+        planta_clave: d.planta,
         concepto: d.concepto,
         importe,
+        estatus: "Generado",
+        creado_por: `${actor.usuario_nombre} (${actor.rol})`,
+        creado_por_id: actor.usuario_id,
+        prioridad: d.prioridad,
+        beneficiario: d.beneficiario,
         categoria: d.categoria,
         subcategoria: d.subcategoria,
         unidad: d.unidad,
-        prioridad: d.prioridad,
-        estatus: "Generado"
       });
 
       await logHistorial({
-        folio_codigo: folioCodigo,
+        folioId,
         estatus: "Generado",
-        comentario:
-          `Creado desde WhatsApp. Prioridad: ${d.prioridad}. ` +
-          `Beneficiario: ${d.beneficiario}. Categoria: ${d.categoria}/${d.subcategoria}` +
-          (d.unidad ? ` Unidad:${d.unidad}` : ""),
-        actor
+        comentario: `Creado desde WhatsApp. Prioridad: ${d.prioridad}. Beneficiario: ${d.beneficiario}. Categoria: ${d.categoria}/${d.subcategoria}${d.unidad ? ` Unidad:${d.unidad}` : ""}`,
+        actor: { ...actor, telefono_normalizado: fromTel },
       });
 
       delete drafts[fromTel];
@@ -752,8 +882,8 @@ app.post("/webhook", async (req, res) => {
       res.set("Content-Type", "text/xml");
       return res.send(
         twiml(
-          `✅ Folio ${guardado.folio_codigo} creado.\n\n` +
-            `${urgentPrefix(d.prioridad)}Planta: ${plantaClave || actor.planta_clave || "ID " + plantaId}\n` +
+          `✅ Folio ${folioId} creado y guardado.\n\n` +
+            `${urgentPrefix(d.prioridad)}Planta: ${d.planta}\n` +
             `Creado por: ${actor.usuario_nombre} (${actor.rol})\n` +
             `Concepto: ${d.concepto}\n` +
             `Beneficiario: ${d.beneficiario}\n` +
@@ -762,8 +892,8 @@ app.post("/webhook", async (req, res) => {
             `Subcategoría: ${d.subcategoria}\n` +
             (d.unidad ? `Unidad: ${d.unidad}\n` : "") +
             `Prioridad: ${d.prioridad}\n\n` +
-            `Para adjuntar cotización: "adjuntar ${guardado.folio_codigo}" + manda el PDF.\n` +
-            `Para consultar: "estatus ${guardado.folio_codigo}"`
+            `Para adjuntar cotización: "adjuntar ${folioId}" + manda el PDF.\n` +
+            `Para consultar: "estatus ${folioId}"`
         )
       );
     }
@@ -780,56 +910,46 @@ app.post("/webhook", async (req, res) => {
 
       if (miss.length) {
         return res.send(
-          twiml(
-            `Me falta: ${miss.join(", ")}.\n` +
-              `Respóndeme solo esos campos (ej: "Importe: 25000").`
-          )
+          twiml(`Me falta: ${miss.join(", ")}.\n` + `Respóndeme solo esos campos (ej: "Importe: 25000").`)
         );
       }
 
-      // completo → guardar
       const d = drafts[fromTel];
+      if (!d.planta) return res.send(twiml("Falta Planta. Escribe por ejemplo: Planta: ACAPULCO"));
 
-      const plantaClave = String(d.planta || "").toUpperCase().trim();
-      const plantaId = actor.planta_id || (plantaClave ? await plantaIdByClave(plantaClave) : null);
-
-      if (!plantaId) {
-        return res.send(twiml("No encontré esa planta en catálogo. Asegúrate que exista en tabla plantas (clave)."));
-      }
-
-      const folioCodigo = await buildMonthlyFolioIdDB();
+      const folioId = await buildMonthlyFolioIdDB();
       const importe = moneyToNumber(d.importe);
+      const plantaId = await ensurePlantaExistsAndGetId(d.planta);
 
-      const guardado = await crearFolioDB({
-        folio_codigo: folioCodigo,
+      await crearFolioDB({
+        folio_id: folioId,
         planta_id: plantaId,
-        creado_por_id: actor.usuario_id,
-        beneficiario: d.beneficiario,
+        planta_clave: d.planta,
         concepto: d.concepto,
         importe,
+        estatus: "Generado",
+        creado_por: `${actor.usuario_nombre} (${actor.rol})`,
+        creado_por_id: actor.usuario_id,
+        prioridad: d.prioridad,
+        beneficiario: d.beneficiario,
         categoria: d.categoria,
         subcategoria: d.subcategoria,
         unidad: d.unidad,
-        prioridad: d.prioridad,
-        estatus: "Generado"
       });
 
       await logHistorial({
-        folio_codigo: folioCodigo,
+        folioId,
         estatus: "Generado",
-        comentario:
-          `Creado desde borrador. Prioridad: ${d.prioridad}. ` +
-          `Beneficiario: ${d.beneficiario}. Categoria: ${d.categoria}/${d.subcategoria}` +
-          (d.unidad ? ` Unidad:${d.unidad}` : ""),
-        actor
+        comentario: `Creado desde borrador. Prioridad: ${d.prioridad}. Beneficiario: ${d.beneficiario}. Categoria: ${d.categoria}/${d.subcategoria}${d.unidad ? ` Unidad:${d.unidad}` : ""}`,
+        actor: { ...actor, telefono_normalizado: fromTel },
       });
 
       delete drafts[fromTel];
-
       return res.send(
         twiml(
-          `✅ Folio ${guardado.folio_codigo} creado.\n` +
-            `${urgentPrefix(d.prioridad)}Para adjuntar cotización: "adjuntar ${guardado.folio_codigo}" + manda el PDF.`
+          `✅ Folio ${folioId} creado.\n` +
+            `${urgentPrefix(d.prioridad)}Planta: ${d.planta}\n` +
+            `Para adjuntar cotización: "adjuntar ${folioId}" + manda el PDF.`
         )
       );
     }
