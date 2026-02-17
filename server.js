@@ -612,11 +612,16 @@ app.post("/twilio/whatsapp", async (req, res) => {
         const folio = await getFolioByNumero(client, numero);
         if (!folio) return safeReply(`No existe el folio ${numero}.`);
         const urg = folio.prioridad === "Urgente no programado" ? " 🔴💡 URGENTE" : "";
+        const estatusNorm = String(folio.estatus || "").trim();
+        const estaAprobado = estatusNorm.toLowerCase() === "aprobado" || !!folio.aprobado_por;
+        const estaCancelado = estatusNorm.toLowerCase() === "cancelado";
+
         let txt = `Folio ${folio.numero_folio}${urg}\nEstatus: ${folio.estatus}\n`;
+        txt += `Concepto: ${folio.concepto || "-"}\n`;
         txt += `Importe: $${Number(folio.importe) != null && !isNaN(Number(folio.importe)) ? Number(folio.importe).toLocaleString("es-MX", { minimumFractionDigits: 2 }) : "-"}\n`;
-        if (folio.estatus === "Aprobado" && folio.aprobado_por) {
-          txt += `Aprobado por: ${folio.aprobado_por}\n`;
-        } else if (folio.estatus !== "Cancelado" && folio.estatus !== "Aprobado") {
+        if (estaAprobado) {
+          txt += `Aprobado por: ${folio.aprobado_por || "ZP"}\n`;
+        } else if (!estaCancelado) {
           txt += `Faltan por aprobar: Director ZP\n`;
         }
         txt += `Cotización: ${folio.cotizacion_url ? "Sí" : "No"}\n`;
