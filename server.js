@@ -499,6 +499,35 @@ async function getUsersToNotifyOnApprove(client, plantaId) {
   return Array.from(phones);
 }
 
+/** Teléfonos de Directores ZP (para notificar solicitudes de cancelación). */
+async function getDirectoresZP(client) {
+  const r = await client.query(
+    `SELECT u.telefono FROM public.usuarios u
+     INNER JOIN public.roles r ON r.id = u.rol_id
+     WHERE r.clave = 'ZP' OR r.nombre ILIKE '%ZP%' OR r.nombre ILIKE '%Director%'`
+  );
+  return (r.rows || []).map((row) => row.telefono).filter(Boolean);
+}
+
+/** Notificar a GA, GG y CDMX cuando un folio es cancelado por Director ZP. */
+async function notifyOnCancel(folio, canceladoPor, motivo) {
+  if (!folio.planta_id) return;
+  const client = await pool.connect();
+  try {
+    const phones = await getUsersToNotifyOnApprove(client, folio.planta_id);
+    let msg = `📋 Folio ${folio.numero_folio} fue cancelado por ${canceladoPor}.\n`;
+    msg += `Motivo: ${motivo || "Sin motivo indicado"}\n`;
+    msg += `Concepto del folio: ${folio.concepto || "-"}`;
+    for (const phone of phones) {
+      if (phone && normalizePhone(phone) !== normalizePhone(canceladoPor)) {
+        await sendWhatsApp(phone, msg);
+      }
+    }
+  } finally {
+    client.release();
+  }
+}
+
 /* ==================== S3 / MEDIA ==================== */
 
 async function downloadTwilioMediaAsBuffer(mediaUrl) {
@@ -536,7 +565,7 @@ function buildHelpMessage() {
     `• estatus F-YYYYMM-XXX${FLAGS.ESTATUS ? "" : " (desactivado)"}`,
     `• historial F-YYYYMM-XXX${FLAGS.HISTORIAL ? "" : " (desactivado)"}`,
     FLAGS.APPROVALS ? "• aprobar F-YYYYMM-XXX (solo ZP)" : "• aprobar ... (desactivado)",
-    FLAGS.APPROVALS ? "• cancelar F-YYYYMM-XXX <motivo> (ZP/CDMX)" : "• cancelar ... (desactivado)",
+    FLAGS.APPROVALS ? "• cancelar F-YYYYMM-XXX <motivo> (GA/GG/CDMX solicitan; ZP aprueba)" : "• cancelar ... (desactivado)",
     FLAGS.ATTACHMENTS ? "• adjuntar F-YYYYMM-XXX (luego envía el PDF)" : "• adjuntar ... (desactivado)",
     "• version",
     "• ayuda / menu",
@@ -815,31 +844,69 @@ app.post("/twilio/whatsapp", async (req, res) => {
       }
 
       if (FLAGS.APPROVALS && /^cancelar\s+F-\d{6}-\d{3}/i.test(body)) {
-        const match = body.trim().match(/^cancelar\s+(F-\d{6}-\d{3})\s*(.*)$/i);
-        const numero = (match && match[1]) ? match[1].trim() : "";
-        const motivo = (match && match[2]) ? match[2].trim() : "Sin motivo";
-        if (!numero) return safeReply("Formato: cancelar F-YYYYMM-XXX <motivo>");
-
-        const claveRol = (actor.rol_clave || "").toUpperCase();
-        const canCancel = actor && (["ZP", "CDMX", "GG"].includes(claveRol) || (actor.rol_nombre && ["ZP", "CDMX", "GG"].some((r) => (actor.rol_nombre || "").toUpperCase().includes(r))));
-        if (!canCancel) {
-          return safeReply("No autorizado para cancelar. Solo ZP, CDMX o GG.");
-        }
-
-        const folio = await getFolioByNumero(client, numero);
-        if (!folio) return safeReply(`No existe el folio ${numero}.`);
-        if (folio.estatus === "Cancelado") return safeReply("Ese folio ya está cancelado.");
-
-        await client.query("BEGIN");
         try {
-          await updateFolioCancelado(client, folio.id);
-          await insertHistorial(client, folio.id, folio.numero_folio, folio.folio_codigo, "Cancelado", `Cancelado: ${motivo}`, fromNorm, actor.rol_nombre);
-          await client.query("COMMIT");
+          const match = body.trim().match(/^cancelar\s+(F-\d{6}-\d{3})\s*(.*)$/i);
+          const numero = (match && match[1]) ? match[1].trim() : "";
+          const motivo = (match && match[2]) ? match[2].trim() : "Sin motivo";
+          if (!numero) return safeReply("Formato: cancelar F-YYYYMM-XXX <motivo>");
+
+          const claveRol = (actor && actor.rol_clave) ? String(actor.rol_clave).toUpperCase() : "";
+          const rolNombre = (actor && actor.rol_nombre) ? String(actor.rol_nombre).toUpperCase() : "";
+          const esDirectorZP = actor && (claveRol === "ZP" || (rolNombre && (rolNombre.includes("ZP") || rolNombre.includes("DIRECTOR"))));
+          const puedeSolicitarCancelacion = actor && ["GA", "GG", "CDMX"].some((r) => claveRol === r || (rolNombre && rolNombre.includes(r)));
+
+          if (!actor) {
+            return safeReply("No se pudo identificar tu usuario. Solo GA, GG y Contralor CDMX pueden solicitar cancelación; Director ZP puede cancelar.");
+          }
+          if (!esDirectorZP && !puedeSolicitarCancelacion) {
+            return safeReply("No autorizado. Solo GA, GG y Contralor CDMX pueden solicitar cancelación; Director ZP puede cancelar o aprobar.");
+          }
+
+          const folio = await getFolioByNumero(client, numero);
+          if (!folio) return safeReply(`No existe el folio ${numero}.`);
+          if (String(folio.estatus || "").toLowerCase() === "cancelado") {
+            return safeReply("Ese folio ya está cancelado.");
+          }
+
+          const actorRolNombre = actor.rol_nombre || "Usuario";
+
+          if (esDirectorZP) {
+            await client.query("BEGIN");
+            try {
+              await updateFolioCancelado(client, folio.id);
+              await insertHistorial(client, folio.id, folio.numero_folio, folio.folio_codigo, "Cancelado", `Cancelado por Director ZP: ${motivo}`, fromNorm, actorRolNombre);
+              await client.query("COMMIT");
+            } catch (e) {
+              await client.query("ROLLBACK");
+              throw e;
+            }
+            try {
+              await notifyOnCancel(folio, fromNorm, motivo);
+            } catch (e) {
+              console.warn("Notificaciones de cancelación no enviadas:", e.message);
+            }
+            return safeReply(`Folio ${numero} cancelado. Notificaciones enviadas a GA, GG y CDMX.`);
+          }
+
+          // GA, GG o CDMX: solo solicitar cancelación (guardar en historial y notificar a Director ZP)
+          await client.query("BEGIN");
+          try {
+            await insertHistorial(client, folio.id, folio.numero_folio, folio.folio_codigo, "Solicitud de cancelación", `Solicitud de cancelación. Motivo: ${motivo}`, fromNorm, actorRolNombre);
+            await client.query("COMMIT");
+          } catch (e) {
+            await client.query("ROLLBACK");
+            throw e;
+          }
+          const directoresZP = await getDirectoresZP(client);
+          const msgZP = `📋 Solicitud de cancelación\nFolio: ${numero}\nSolicitado por: ${actorRolNombre}\nMotivo: ${motivo}\n\nResponde con: cancelar ${numero} para aprobar la cancelación.`;
+          for (const tel of directoresZP) {
+            if (tel) await sendWhatsApp(tel, msgZP);
+          }
+          return safeReply("Solicitud de cancelación registrada en el historial. Se notificó al Director ZP para su aprobación.");
         } catch (e) {
-          await client.query("ROLLBACK");
-          throw e;
+          console.error("Error en cancelar:", e);
+          return safeReply("Error al procesar la cancelación. Revisa el formato: cancelar F-YYYYMM-XXX <motivo>.");
         }
-        return safeReply(`Folio ${numero} cancelado. Motivo: ${motivo}`);
       }
 
       if (FLAGS.ATTACHMENTS && lower.startsWith("adjuntar")) {
