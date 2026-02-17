@@ -143,6 +143,15 @@ function parseCrearFolioCommand(body) {
   return { concepto: concepto || null, urgente };
 }
 
+/** Formato de fecha/hora en horario México Zona Centro. */
+const ZONA_MEXICO = "America/Mexico_City";
+function formatMexicoCentral(dateOrString) {
+  if (dateOrString == null) return "";
+  const d = typeof dateOrString === "string" ? new Date(dateOrString) : dateOrString;
+  if (isNaN(d.getTime())) return "";
+  return d.toLocaleString("es-MX", { timeZone: ZONA_MEXICO, dateStyle: "short", timeStyle: "short" });
+}
+
 /* ==================== SCHEMA (idempotente) ==================== */
 
 async function ensureSchema() {
@@ -161,6 +170,7 @@ async function ensureSchema() {
       );
     `);
     await client.query(`ALTER TABLE public.roles ADD COLUMN IF NOT EXISTS nivel INT DEFAULT 0;`);
+    await client.query(`ALTER TABLE public.roles ADD COLUMN IF NOT EXISTS clave VARCHAR(50);`);
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS public.usuarios (
@@ -171,6 +181,7 @@ async function ensureSchema() {
       );
     `).catch(() => {});
     await client.query(`ALTER TABLE public.usuarios ADD COLUMN IF NOT EXISTS email VARCHAR(255);`);
+    await client.query(`ALTER TABLE public.usuarios ADD COLUMN IF NOT EXISTS nombre VARCHAR(100);`);
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS public.folio_counters (
@@ -211,6 +222,7 @@ async function ensureSchema() {
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS aprobado_por VARCHAR(255);`);
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS aprobado_en TIMESTAMPTZ;`);
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS planta_id INT;`).catch(() => {});
+    await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS nivel_aprobado INT DEFAULT 1;`);
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS public.folio_historial (
@@ -234,12 +246,12 @@ async function ensureSchema() {
 
 /* ==================== REPOS / DB ==================== */
 
-/** Devuelve actor { id, telefono, rol_nombre, planta_id, planta_nombre } o null. */
+/** Devuelve actor { id, telefono, rol_nombre, rol_nivel, rol_clave, planta_id, planta_nombre } o null. */
 async function getActorByPhone(client, phone) {
   const norm = normalizePhone(phone);
   const alt = phoneAltForDb(norm);
   const q = `
-    SELECT u.id, u.telefono, u.planta_id, r.nombre AS rol_nombre, p.nombre AS planta_nombre
+    SELECT u.id, u.telefono, u.planta_id, r.nombre AS rol_nombre, r.nivel AS rol_nivel, r.clave AS rol_clave, p.nombre AS planta_nombre
     FROM public.usuarios u
     LEFT JOIN public.roles r ON r.id = u.rol_id
     LEFT JOIN public.plantas p ON p.id = u.planta_id
@@ -247,7 +259,9 @@ async function getActorByPhone(client, phone) {
     LIMIT 1
   `;
   const r = await client.query(q, [norm, alt]);
-  return r.rows[0] || null;
+  const row = r.rows[0] || null;
+  if (row && row.rol_nivel != null) row.rol_nivel = parseInt(row.rol_nivel, 10);
+  return row;
 }
 
 async function getPlantas(client) {
@@ -272,13 +286,17 @@ async function nextFolioNumber(client) {
 
 async function getFolioByNumero(client, numero) {
   const r = await client.query(
-    `SELECT id, numero_folio, folio_codigo, planta_id, beneficiario, concepto, importe,
-            categoria, subcategoria, unidad, prioridad, estatus, cotizacion_url, cotizacion_s3key,
-            aprobado_por, aprobado_en, creado_en
-     FROM public.folios WHERE numero_folio = $1`,
+    `SELECT f.id, f.numero_folio, f.folio_codigo, f.planta_id, f.beneficiario, f.concepto, f.importe,
+            f.categoria, f.subcategoria, f.unidad, f.prioridad, f.estatus, f.cotizacion_url, f.cotizacion_s3key,
+            f.aprobado_por, f.aprobado_en, f.creado_en, f.nivel_aprobado, p.nombre AS planta_nombre
+     FROM public.folios f
+     LEFT JOIN public.plantas p ON p.id = f.planta_id
+     WHERE f.numero_folio = $1`,
     [numero]
   );
-  return r.rows[0] || null;
+  const row = r.rows[0] || null;
+  if (row && row.nivel_aprobado != null) row.nivel_aprobado = parseInt(row.nivel_aprobado, 10);
+  return row;
 }
 
 async function insertFolio(client, dd) {
@@ -286,19 +304,33 @@ async function insertFolio(client, dd) {
   const folio_codigo = numero_folio;
   const prioridad = dd.urgente ? "Urgente no programado" : (dd.prioridad || null);
 
+  const nivelCreator = dd.actor_nivel != null ? parseInt(dd.actor_nivel, 10) : 0;
+  const esZP = nivelCreator >= 3 || (dd.actor_rol && String(dd.actor_rol).toUpperCase().includes("ZP"));
+  const estatusInicial = esZP ? "Aprobado" : "Generado";
+  const nivelInicial = esZP ? 3 : (nivelCreator === 2 ? 2 : 1);
+
   const ins = await client.query(
     `INSERT INTO public.folios (
       folio_codigo, numero_folio, planta_id, beneficiario, concepto, importe,
-      categoria, subcategoria, unidad, prioridad, estatus, creado_en
-    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'Generado', NOW())
-    RETURNING id, numero_folio, folio_codigo`,
+      categoria, subcategoria, unidad, prioridad, estatus, creado_en, nivel_aprobado
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW(),$12)
+    RETURNING id, numero_folio, folio_codigo, planta_id`,
     [
       folio_codigo, numero_folio, dd.planta_id || null, dd.beneficiario || null, dd.concepto || null,
       dd.importe || null, dd.categoria_nombre || null, dd.subcategoria_nombre || null,
-      dd.unidad || null, prioridad,
+      dd.unidad || null, prioridad, estatusInicial, nivelInicial,
     ]
   );
   const row = ins.rows[0];
+
+  if (esZP) {
+    await client.query(
+      `UPDATE public.folios SET estatus = 'Aprobado', nivel_aprobado = 3, aprobado_por = $1, aprobado_en = NOW() WHERE id = $2`,
+      [dd.actor_telefono || null, row.id]
+    );
+  } else if (nivelCreator === 2) {
+    await client.query(`UPDATE public.folios SET nivel_aprobado = 2 WHERE id = $1`, [row.id]);
+  }
 
   try {
     await client.query(
@@ -312,6 +344,25 @@ async function insertFolio(client, dd) {
     );
   } catch (e) {
     console.warn("Historial no insertado (folio creado):", e.message);
+  }
+
+  if (esZP) {
+    try {
+      await client.query(
+        `INSERT INTO public.folio_historial(
+          folio_id, numero_folio, folio_codigo, estatus, comentario, actor_telefono, actor_rol, creado_en
+        ) VALUES ($1,$2,$3,'Aprobado','Folio creado por Director ZP (auto-aprobado)',$4,$5,NOW())`,
+        [row.id, row.numero_folio, row.folio_codigo, dd.actor_telefono || null, dd.actor_rol || null]
+      );
+    } catch (e) {
+      console.warn("Historial Aprobado no insertado (ZP creó):", e.message);
+    }
+    try {
+      const folioConPlanta = { ...row, planta_id: row.planta_id };
+      await notifyOnApprove(folioConPlanta, dd.actor_telefono || "");
+    } catch (e) {
+      console.warn("Notificaciones no enviadas (ZP creó):", e.message);
+    }
   }
 
   return row;
@@ -378,6 +429,30 @@ async function getHistorial(client, numeroFolio, limit = 10) {
     [numeroFolio, limit]
   );
   return r.rows;
+}
+
+/** Mapa telefono (normalizado o +521) -> nombre desde public.usuarios (columna nombre si existe). */
+async function getNombresByTelefonos(client, telefonos) {
+  const unicos = [...new Set((telefonos || []).filter(Boolean).map((t) => normalizePhone(t)))];
+  if (unicos.length === 0) return new Map();
+  const alternativas = unicos.map((n) => phoneAltForDb(n)).filter(Boolean);
+  const todos = [...unicos, ...alternativas];
+  const r = await client.query(
+    `SELECT telefono, nombre FROM public.usuarios WHERE telefono = ANY($1::TEXT[])`,
+    [todos]
+  ).catch(() => ({ rows: [] }));
+  const map = new Map();
+  (r.rows || []).forEach((row) => {
+    const nom = row.nombre != null ? String(row.nombre).trim() : null;
+    if (nom) {
+      map.set(row.telefono, nom);
+      const norm = normalizePhone(row.telefono);
+      if (norm) map.set(norm, nom);
+      const alt = phoneAltForDb(norm);
+      if (alt) map.set(alt, nom);
+    }
+  });
+  return map;
 }
 
 /** Folios urgentes (no cancelados): numero_folio, importe, creado_en, concepto. */
@@ -613,7 +688,8 @@ app.post("/twilio/whatsapp", async (req, res) => {
         if (!folio) return safeReply(`No existe el folio ${numero}.`);
         const urg = folio.prioridad === "Urgente no programado" ? " 🔴💡 URGENTE" : "";
         const estatusNorm = String(folio.estatus || "").trim();
-        const estaAprobado = estatusNorm.toLowerCase() === "aprobado" || !!folio.aprobado_por;
+        const nivelApr = folio.nivel_aprobado != null ? parseInt(folio.nivel_aprobado, 10) : 0;
+        const estaAprobado = estatusNorm.toLowerCase() === "aprobado" || !!folio.aprobado_por || nivelApr >= 3;
         const estaCancelado = estatusNorm.toLowerCase() === "cancelado";
 
         let txt = `Folio ${folio.numero_folio}${urg}\nEstatus: ${folio.estatus}\n`;
@@ -622,7 +698,9 @@ app.post("/twilio/whatsapp", async (req, res) => {
         if (estaAprobado) {
           txt += `Aprobado por: ${folio.aprobado_por || "ZP"}\n`;
         } else if (!estaCancelado) {
-          txt += `Faltan por aprobar: Director ZP\n`;
+          if (nivelApr === 1) txt += `Faltan por aprobar: GG (Gerente General)\n`;
+          else if (nivelApr === 2) txt += `Faltan por aprobar: Director ZP\n`;
+          else txt += `Faltan por aprobar: Director ZP\n`;
         }
         txt += `Cotización: ${folio.cotizacion_url ? "Sí" : "No"}\n`;
 
@@ -648,24 +726,57 @@ app.post("/twilio/whatsapp", async (req, res) => {
         if (!folio) return safeReply(`No existe el folio ${numero}.`);
         const rows = await getHistorial(client, numero, 10);
         if (rows.length === 0) return safeReply(`Sin historial para ${numero}.`);
-        const lines = rows.map((r) => `${r.creado_en ? new Date(r.creado_en).toLocaleString() : ""} | ${r.estatus} | ${r.comentario || ""}`);
-        return safeReply("Historial (últimos 10):\n" + lines.join("\n"));
+
+        const telefonos = [...new Set(rows.map((r) => r.actor_telefono).filter(Boolean))];
+        const nombresMap = await getNombresByTelefonos(client, telefonos);
+
+        const esDirectorZP = actor && (String(actor.rol_nombre || "").toUpperCase().includes("ZP") || String(actor.rol_nombre || "").includes("Director"));
+        let txt = "Historial (últimos 10):\n";
+        if (esDirectorZP && folio.planta_nombre) txt += `Planta: ${folio.planta_nombre}\n\n`;
+
+        rows.forEach((r) => {
+          const fecha = formatMexicoCentral(r.creado_en);
+          let comentario = r.comentario || "";
+          if (comentario.trim() === "Folio creado por WhatsApp" && r.actor_telefono) {
+            const nombre = nombresMap.get(normalizePhone(r.actor_telefono)) || nombresMap.get(r.actor_telefono) || r.actor_telefono;
+            comentario = `Folio creado por ${nombre}`;
+          }
+          txt += `${fecha} | ${r.estatus} | ${comentario}\n`;
+        });
+        return safeReply(txt.trim());
       }
 
       if (FLAGS.APPROVALS && /^aprobar\s+F-\d{6}-\d{3}\s*$/i.test(body)) {
         const numero = body.replace(/^aprobar\s+/i, "").trim();
-        if (!actor || actor.rol_nombre !== "ZP") {
-          return safeReply("No autorizado. Solo Director ZP puede aprobar.");
-        }
+        if (!actor) return safeReply("No autorizado. No se pudo identificar tu usuario.");
         const folio = await getFolioByNumero(client, numero);
         if (!folio) return safeReply(`No existe el folio ${numero}.`);
-        if (folio.estatus === "Aprobado") return safeReply("Ese folio ya está aprobado.");
-        if (folio.estatus === "Cancelado") return safeReply("Ese folio está cancelado.");
+        if (String(folio.estatus || "").toLowerCase() === "aprobado") return safeReply("Ese folio ya está aprobado.");
+        if (String(folio.estatus || "").toLowerCase() === "cancelado") return safeReply("Ese folio está cancelado.");
+
+        const nivelApr = parseInt(folio.nivel_aprobado, 10) || 1;
+        const rolNivel = actor.rol_nivel != null ? parseInt(actor.rol_nivel, 10) : 0;
+        const esGG = rolNivel === 2 || (actor.rol_clave && actor.rol_clave.toUpperCase() === "GG");
+        const esZP = rolNivel >= 3 || (actor.rol_clave && actor.rol_clave.toUpperCase() === "ZP");
+
+        const puedeAprobarGG = nivelApr === 1 && esGG;
+        const puedeAprobarZP = nivelApr === 2 && esZP;
+        if (!puedeAprobarGG && !puedeAprobarZP) {
+          if (nivelApr === 1) return safeReply("No autorizado. Le falta aprobación a GG (Gerente General).");
+          if (nivelApr === 2) return safeReply("No autorizado. Le falta aprobación al Director ZP.");
+          return safeReply("No autorizado para aprobar este folio.");
+        }
 
         await client.query("BEGIN");
         try {
-          await updateFolioAprobado(client, folio.id, fromNorm);
-          await insertHistorial(client, folio.id, folio.numero_folio, folio.folio_codigo, "Aprobado", "Aprobado por ZP vía WhatsApp", fromNorm, actor.rol_nombre);
+          if (puedeAprobarZP) {
+            await updateFolioAprobado(client, folio.id, fromNorm);
+            await client.query(`UPDATE public.folios SET nivel_aprobado = 3 WHERE id = $1`, [folio.id]);
+            await insertHistorial(client, folio.id, folio.numero_folio, folio.folio_codigo, "Aprobado", "Aprobado por Director ZP vía WhatsApp", fromNorm, actor.rol_nombre);
+          } else {
+            await client.query(`UPDATE public.folios SET nivel_aprobado = 2 WHERE id = $1`, [folio.id]);
+            await insertHistorial(client, folio.id, folio.numero_folio, folio.folio_codigo, "Aprobado por GG", "Aprobado por GG vía WhatsApp", fromNorm, actor.rol_nombre);
+          }
           await client.query("COMMIT");
         } catch (e) {
           await client.query("ROLLBACK");
@@ -679,9 +790,9 @@ app.post("/twilio/whatsapp", async (req, res) => {
         }
 
         if (!twilioClient || !twilioWhatsAppFrom) {
-          return safeReply("Folio aprobado. No pude enviar notificaciones (Twilio no configurado).");
+          return safeReply(puedeAprobarZP ? "Folio aprobado. No pude enviar notificaciones (Twilio no configurado)." : "Folio aprobado por GG. Notificaciones no enviadas (Twilio no configurado).");
         }
-        return safeReply(`Folio ${numero} aprobado. Notificaciones enviadas a GA, GG y CDMX.`);
+        return safeReply(puedeAprobarZP ? `Folio ${numero} aprobado. Notificaciones enviadas a GA, GG y CDMX.` : `Folio ${numero} aprobado por GG. Pendiente de Director ZP. Notificaciones enviadas.`);
       }
 
       if (FLAGS.APPROVALS && /^cancelar\s+F-\d{6}-\d{3}/i.test(body)) {
@@ -690,7 +801,8 @@ app.post("/twilio/whatsapp", async (req, res) => {
         const motivo = (match && match[2]) ? match[2].trim() : "Sin motivo";
         if (!numero) return safeReply("Formato: cancelar F-YYYYMM-XXX <motivo>");
 
-        const canCancel = actor && ["ZP", "CDMX", "GG"].includes(actor.rol_nombre);
+        const claveRol = (actor.rol_clave || "").toUpperCase();
+        const canCancel = actor && (["ZP", "CDMX", "GG"].includes(claveRol) || (actor.rol_nombre && ["ZP", "CDMX", "GG"].some((r) => (actor.rol_nombre || "").toUpperCase().includes(r))));
         if (!canCancel) {
           return safeReply("No autorizado para cancelar. Solo ZP, CDMX o GG.");
         }
@@ -769,6 +881,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
         sess.dd = { actor_telefono: fromNorm };
         if (actorCreate) {
           sess.dd.actor_rol = actorCreate.rol_nombre;
+          sess.dd.actor_nivel = actorCreate.rol_nivel;
           sess.dd.actor_planta_id = actorCreate.planta_id;
         }
         if (crearParsed && crearParsed.concepto) sess.dd.concepto = crearParsed.concepto;
