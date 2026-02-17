@@ -431,25 +431,30 @@ async function getHistorial(client, numeroFolio, limit = 10) {
   return r.rows;
 }
 
-/** Mapa telefono (normalizado o +521) -> nombre desde public.usuarios (columna nombre si existe). */
+/** Mapa telefono (normalizado o +521) -> nombre desde public.usuarios. Asegura que +5217 y +527 sean el mismo. */
 async function getNombresByTelefonos(client, telefonos) {
-  const unicos = [...new Set((telefonos || []).filter(Boolean).map((t) => normalizePhone(t)))];
-  if (unicos.length === 0) return new Map();
+  const raw = [...new Set((telefonos || []).filter(Boolean))];
+  const unicos = [...new Set(raw.map((t) => normalizePhone(t)).filter(Boolean))];
   const alternativas = unicos.map((n) => phoneAltForDb(n)).filter(Boolean);
-  const todos = [...unicos, ...alternativas];
+  const todos = [...new Set([...raw, ...unicos, ...alternativas])];
+  if (todos.length === 0) return new Map();
+  const placeholders = todos.map((_, i) => `$${i + 1}`).join(", ");
   const r = await client.query(
-    `SELECT telefono, nombre FROM public.usuarios WHERE telefono = ANY($1::TEXT[])`,
-    [todos]
+    `SELECT telefono, nombre FROM public.usuarios WHERE telefono IN (${placeholders})`,
+    todos
   ).catch(() => ({ rows: [] }));
   const map = new Map();
   (r.rows || []).forEach((row) => {
     const nom = row.nombre != null ? String(row.nombre).trim() : null;
     if (nom) {
-      map.set(row.telefono, nom);
-      const norm = normalizePhone(row.telefono);
+      const t = row.telefono;
+      map.set(t, nom);
+      const norm = normalizePhone(t);
       if (norm) map.set(norm, nom);
       const alt = phoneAltForDb(norm);
       if (alt) map.set(alt, nom);
+      if (t.startsWith("+521")) map.set("+52" + t.slice(3), nom);
+      if (t.startsWith("+52") && !t.startsWith("+521")) map.set("+521" + t.slice(2), nom);
     }
   });
   return map;
@@ -738,8 +743,11 @@ app.post("/twilio/whatsapp", async (req, res) => {
           const fecha = formatMexicoCentral(r.creado_en);
           let comentario = r.comentario || "";
           if (comentario.trim() === "Folio creado por WhatsApp" && r.actor_telefono) {
-            const nombre = nombresMap.get(normalizePhone(r.actor_telefono)) || nombresMap.get(r.actor_telefono) || r.actor_telefono;
-            comentario = `Folio creado por ${nombre}`;
+            const tel = r.actor_telefono;
+            const nombre = nombresMap.get(tel) || nombresMap.get(normalizePhone(tel)) || nombresMap.get(phoneAltForDb(normalizePhone(tel))) || null;
+            const rol = r.actor_rol ? (String(r.actor_rol).toUpperCase().includes("ZP") ? "Director ZP" : r.actor_rol) : null;
+            const identidad = nombre ? (rol ? `${rol} - ${nombre}` : nombre) : (rol ? `${rol} - ${tel}` : tel);
+            comentario = `Folio creado por ${identidad}`;
           }
           txt += `${fecha} | ${r.estatus} | ${comentario}\n`;
         });
