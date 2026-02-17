@@ -257,6 +257,8 @@ async function ensureSchema() {
 async function getActorByPhone(client, phone) {
   const norm = normalizePhone(phone);
   const alt = phoneAltForDb(norm);
+  const last10 = phoneLast10(phone) || phoneLast10(norm);
+
   const q = `
     SELECT u.id, u.telefono, u.planta_id, r.nombre AS rol_nombre, r.nivel AS rol_nivel, r.clave AS rol_clave, p.nombre AS planta_nombre
     FROM public.usuarios u
@@ -265,8 +267,23 @@ async function getActorByPhone(client, phone) {
     WHERE u.telefono = $1::TEXT OR ($2::TEXT IS NOT NULL AND u.telefono = $2::TEXT)
     LIMIT 1
   `;
-  const r = await client.query(q, [norm, alt]);
-  const row = r.rows[0] || null;
+  let r = await client.query(q, [norm, alt]);
+  let row = r.rows[0] || null;
+
+  if (!row && last10) {
+    const qLast10 = `
+      SELECT u.id, u.telefono, u.planta_id, r.nombre AS rol_nombre, r.nivel AS rol_nivel, r.clave AS rol_clave, p.nombre AS planta_nombre
+      FROM public.usuarios u
+      LEFT JOIN public.roles r ON r.id = u.rol_id
+      LEFT JOIN public.plantas p ON p.id = u.planta_id
+      WHERE LENGTH(REGEXP_REPLACE(u.telefono, '\\D', '', 'g')) >= 10
+        AND RIGHT(REGEXP_REPLACE(u.telefono, '\\D', '', 'g'), 10) = $1
+      LIMIT 1
+    `;
+    r = await client.query(qLast10, [last10]);
+    row = r.rows[0] || null;
+  }
+
   if (row && row.rol_nivel != null) row.rol_nivel = parseInt(row.rol_nivel, 10);
   return row;
 }
