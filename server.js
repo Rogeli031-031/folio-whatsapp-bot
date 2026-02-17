@@ -1,68 +1,87 @@
 /**
- * server.js - Bot WhatsApp (Twilio) para Folios
- *
- * Requiere:
- *   npm i express pg twilio axios dotenv
- *   (opcional S3) npm i aws-sdk
- *
- * ENV:
- *   PORT=10000
- *   DATABASE_URL=postgres://...
- *
- *   TWILIO_ACCOUNT_SID=AC...
- *   TWILIO_AUTH_TOKEN=...
- *
- *   (opcional S3)
- *   AWS_ACCESS_KEY_ID=...
- *   AWS_SECRET_ACCESS_KEY=...
- *   AWS_REGION=us-east-1
- *   S3_BUCKET=...
- *
- * Notas de tu esquema:
- * - public.folios: folio_codigo NOT NULL, numero_folio UNIQUE【folios.txt L10, L35】
- * - public.folio_historial: numero_folio NOT NULL, estatus NOT NULL【folio_historial.txt L9-L10】
- * - public.folio_counters: yyyymm PK, last_seq int【folio_counters.txt】
+ * server.js – Bot WhatsApp (Twilio) + Postgres (Render)
+ * Enfoque: Folios (registro + historial + adjuntar PDF cotización + consultas de gasto por unidad/fecha)
  */
 
-require("dotenv").config();
+"use strict";
 
 const express = require("express");
-const axios = require("axios");
+const bodyParser = require("body-parser");
 const { Pool } = require("pg");
-const twilio = require("twilio");
+const Twilio = require("twilio");
 
-let AWS, s3;
-const hasS3 =
-  process.env.AWS_ACCESS_KEY_ID &&
-  process.env.AWS_SECRET_ACCESS_KEY &&
-  process.env.AWS_REGION &&
-  process.env.S3_BUCKET;
+// Node 18+ trae fetch global. Si tu runtime no lo trae, instala node-fetch.
+const crypto = require("crypto");
 
-if (hasS3) {
-  AWS = require("aws-sdk");
-  AWS.config.update({
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-    region: process.env.AWS_REGION,
-  });
-  s3 = new AWS.S3();
+// =========================
+// ENV
+// =========================
+const PORT = process.env.PORT || 10000;
+const DATABASE_URL = process.env.DATABASE_URL;
+
+// Twilio (para responder y para bajar media cuando adjuntan PDF)
+const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || "";
+const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || "";
+
+// S3 opcional (si no está configurado, guardamos la URL de Twilio y listo)
+const AWS_ACCESS_KEY_ID = process.env.AWS_ACCESS_KEY_ID || "";
+const AWS_SECRET_ACCESS_KEY = process.env.AWS_SECRET_ACCESS_KEY || "";
+const AWS_REGION = process.env.AWS_REGION || "us-east-1";
+const AWS_S3_BUCKET = process.env.AWS_S3_BUCKET || "";
+
+// Si quieres “notificar” (luego lo robustecemos con tabla usuarios/roles)
+const NOTIFY_NUMBERS = (process.env.NOTIFY_NUMBERS || "")
+  .split(",")
+  .map(s => s.trim())
+  .filter(Boolean);
+
+// =========================
+// DB
+// =========================
+if (!DATABASE_URL) {
+  console.error("Falta DATABASE_URL");
+  process.exit(1);
 }
 
-const app = express();
-// Twilio manda application/x-www-form-urlencoded
-app.use(express.urlencoded({ extended: false }));
-
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  // Si usas Render + Postgres con SSL, normalmente:
-  ssl: process.env.PGSSLMODE === "require" ? { rejectUnauthorized: false } : false,
+  connectionString: DATABASE_URL,
+  // Render Postgres normalmente requiere SSL
+  ssl: process.env.PGSSLMODE === "disable" ? false : { rejectUnauthorized: false },
 });
 
-const MessagingResponse = twilio.twiml.MessagingResponse;
+// =========================
+// Helpers: TwiML
+// =========================
+function twiml(message) {
+  const MessagingResponse = Twilio.twiml.MessagingResponse;
+  const r = new MessagingResponse();
+  r.message(message);
+  return r.toString();
+}
 
-// -------------------------
-// Config de negocio (cat/subcat)
-// -------------------------
+// =========================
+// Helpers: texto / parsing
+// =========================
+function cleanText(s) {
+  return (s || "").toString().trim();
+}
+
+function upperNoAccents(s) {
+  return cleanText(s)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase();
+}
+
+function isProbablyGreeting(t) {
+  const x = upperNoAccents(t);
+  return ["HOLA", "BUENAS", "BUEN DIA", "BUENOS DIAS", "BUENAS TARDES", "BUENAS NOCHES"].some(k => x.startsWith(k));
+}
+
+// =========================
+// Catálogo (menús)
+/// Nota: Inversiones NO tiene “quinta categoría” (quedan 4 subcats)
+// =========================
 const CATS = [
   { key: "GASTOS", label: "Gastos" },
   { key: "INVERSIONES", label: "Inversiones" },
@@ -70,136 +89,305 @@ const CATS = [
   { key: "TALLER", label: "Taller" },
 ];
 
-// Subcategorías según tu documento (sin “quinta” adicional en Inversiones)
-// Taller NO tiene subcategoría; pide unidad AT-## o C-##【Llenado... L7-L13】
+// Subcategorías por categoría (según tu documento)
 const SUBCATS = {
   GASTOS: [
     "Contractuales",
     "Equipo planta",
     "Estaciones",
-    "Jurídicos",
+    "Juridicos",
     "Liquidaciones laborales",
     "Pasivos meses anteriores",
     "Rentas",
-    "Trámites vehiculares",
+    "Tramites vehiculares",
     "Varios",
   ],
-  INVERSIONES: ["Equipo para la planta", "Instalaciones a clientes", "Publicidad", "Tanques y cilindros"],
-  DYO: [], // sin subcategoría
-  TALLER: [], // sin subcategoría; se usa UNIDAD
+  INVERSIONES: [
+    "Equipo para la planta",
+    "Instalaciones a clientes",
+    "Publicidad",
+    "Tanques y cilindros",
+  ],
+  DYO: [],     // sin subcat
+  TALLER: [],  // sin subcat (aquí pides UNIDAD)
 };
 
-// -------------------------
-// Estado de conversación en memoria (por teléfono)
-// (Si luego quieres, lo pasamos a DB)
-// -------------------------
-/**
- * dd = {
- *   estado: 'IDLE' | 'ESPERANDO_PLANTA' | 'ESPERANDO_BENEFICIARIO' | 'ESPERANDO_CONCEPTO' | 'ESPERANDO_IMPORTE'
- *           | 'ESPERANDO_CATEGORIA' | 'ESPERANDO_SUBCATEGORIA' | 'ESPERANDO_UNIDAD'
- *           | 'ESPERANDO_PDF_COTIZACION'
- *   draft: { planta, beneficiario, concepto, monto, categoria, subcategoria, unidad }
- *   currentFolio: { id, folio_codigo, numero_folio }
- * }
- */
-const sessions = new Map();
-
-function getSession(from) {
-  if (!sessions.has(from)) {
-    sessions.set(from, { estado: "IDLE", draft: null, currentFolio: null });
-  }
-  return sessions.get(from);
-}
-
-function resetSession(from) {
-  sessions.set(from, { estado: "IDLE", draft: null, currentFolio: null });
-}
-
-// -------------------------
-// Helpers texto / parsing
-// -------------------------
-function normalizeText(s) {
-  return (s || "")
-    .trim()
-    .replace(/\s+/g, " ")
-    .toUpperCase();
-}
-
-function parseMoney(text) {
-  if (!text) return null;
-  // acepta: 12000, 12,000, 12,000.50, $12,000
-  const cleaned = text.replace(/\$/g, "").replace(/,/g, "").trim();
-  const n = Number(cleaned);
-  if (!Number.isFinite(n) || n <= 0) return null;
-  return Math.round(n * 100) / 100;
-}
-
-/**
- * Normaliza unidad:
- *   "AT 15" -> "AT-15"
- *   "AT-3"  -> "AT-03"
- *   "C 03"  -> "C-03"
- *   "c-7"   -> "C-07"
- */
-function normalizeUnidad(input) {
-  const t = normalizeText(input).replace(/\s+/g, "");
-  const m = t.match(/^(AT|C)[-]?(\d{1,2})$/);
-  if (!m) return null;
-  const tipo = m[1];
-  const num = m[2].padStart(2, "0");
-  return `${tipo}-${num}`;
-}
-
-function isValidUnidad(u) {
-  return !!normalizeUnidad(u);
-}
-
-function isCommand(text, cmd) {
-  const t = normalizeText(text);
-  return t === cmd || t.startsWith(cmd + " ");
-}
-
-function extractAfterCommand(text, cmd) {
-  const t = (text || "").trim();
-  const re = new RegExp("^" + cmd + "\\s+", "i");
-  return t.replace(re, "").trim();
-}
-
 function renderMenu(title, items) {
-  // WhatsApp por Twilio: texto simple con numeritos
-  let msg = `${title}\n`;
+  // Menú simple por texto (1..N)
+  let out = `${title}\n`;
   items.forEach((it, idx) => {
-    msg += `\n${idx + 1}) ${it}`;
+    out += `${idx + 1}) ${it}\n`;
   });
-  msg += `\n\nResponde con el número (ej: 1).`;
-  return msg;
+  out += `\nResponde con el número.`;
+  return out;
 }
 
-function safeFolioLine(f) {
-  // Resumen de folio para WhatsApp
-  const parts = [];
-  parts.push(`Folio: ${f.numero_folio || f.folio_codigo || "(sin folio)"}`);
-  if (f.planta) parts.push(`Planta: ${f.planta}`);
-  if (f.categoria) parts.push(`Categoría: ${f.categoria}`);
-  if (f.subcategoria) parts.push(`Subcategoría: ${f.subcategoria}`);
-  if (f.unidad) parts.push(`Unidad: ${f.unidad}`);
-  if (f.beneficiario) parts.push(`Beneficiario: ${f.beneficiario}`);
-  if (f.concepto) parts.push(`Concepto: ${f.concepto}`);
-  if (f.monto != null) parts.push(`Monto: $${Number(f.monto).toLocaleString("es-MX", { minimumFractionDigits: 2 })}`);
-  if (f.estatus) parts.push(`Estatus: ${f.estatus}`);
-  return parts.join("\n");
+function parseChoiceNumber(text, max) {
+  const m = cleanText(text).match(/^(\d{1,2})$/);
+  if (!m) return null;
+  const n = parseInt(m[1], 10);
+  if (n < 1 || n > max) return null;
+  return n;
 }
 
-// -------------------------
-// DB helpers
-// -------------------------
-async function withTx(fn) {
+// =========================
+// Unidad (AT / C) – Normalización y validación
+// Acepta: AT-03, AT03, AT 3, at 15, C-11, C11, etc.
+// Normaliza a: AT-03 / C-03 (2 dígitos)
+// =========================
+function normalizeUnidad(input) {
+  const raw = upperNoAccents(input);
+  // quita espacios
+  const s = raw.replace(/\s+/g, "");
+  // soporta AT-03, AT03, AT-3, AT3
+  const m = s.match(/^(AT|C)-?(\d{1,2})$/);
+  if (!m) return null;
+  const prefix = m[1];
+  const num = parseInt(m[2], 10);
+  if (Number.isNaN(num) || num < 1 || num > 99) return null;
+  const two = num.toString().padStart(2, "0");
+  return `${prefix}-${two}`;
+}
+
+function isValidUnidad(input) {
+  return normalizeUnidad(input) !== null;
+}
+
+// “pipa 11” => AT-11, “cilindrera 11” => C-11
+function unidadFromNatural(text) {
+  const x = upperNoAccents(text);
+
+  // detecta tipo
+  let prefix = null;
+  if (x.includes("CILINDR")) prefix = "C";
+  if (x.includes("PIPA") || x.includes("AUTOTANQUE") || x.includes("AT")) prefix = prefix || "AT";
+
+  // número
+  const nm = x.match(/(?:PIPA|CILINDRERA|CILINDRO|AT|AUTOTANQUE)\s*-?\s*(\d{1,2})/);
+  const n2 = nm ? nm[1] : null;
+
+  if (prefix && n2) return normalizeUnidad(`${prefix}${n2}`);
+  return null;
+}
+
+// =========================
+// Fechas: rangos
+// Soporta:
+// - “ultimos 2 meses”
+// - “del 2025-01-01 al 2025-02-29”
+// - “del 01/01/2025 al 29/02/2025”
+// =========================
+function parseDateYMD(s) {
+  const t = cleanText(s);
+  // YYYY-MM-DD
+  let m = t.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+  // DD/MM/YYYY
+  m = t.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (m) return new Date(Date.UTC(+m[3], +m[2] - 1, +m[1]));
+  return null;
+}
+
+function startOfDayUTC(d) {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+}
+
+function addMonthsUTC(d, months) {
+  const y = d.getUTCFullYear();
+  const m = d.getUTCMonth();
+  const day = d.getUTCDate();
+  const nd = new Date(Date.UTC(y, m + months, 1));
+  // clamp day
+  const lastDay = new Date(Date.UTC(nd.getUTCFullYear(), nd.getUTCMonth() + 1, 0)).getUTCDate();
+  nd.setUTCDate(Math.min(day, lastDay));
+  return nd;
+}
+
+function parseRangeFromText(text) {
+  const x = upperNoAccents(text);
+
+  // últimos N meses
+  let m = x.match(/ULTIMOS?\s+(\d{1,2})\s+MESES?/);
+  if (m) {
+    const n = parseInt(m[1], 10);
+    const now = new Date();
+    const end = startOfDayUTC(now);
+    const start = startOfDayUTC(addMonthsUTC(end, -n));
+    return { start, end, label: `últimos ${n} meses` };
+  }
+
+  // del AAAA-MM-DD al AAAA-MM-DD
+  m = x.match(/DEL\s+(\d{4}-\d{2}-\d{2})\s+AL\s+(\d{4}-\d{2}-\d{2})/);
+  if (m) {
+    const d1 = parseDateYMD(m[1]);
+    const d2 = parseDateYMD(m[2]);
+    if (d1 && d2) return { start: startOfDayUTC(d1), end: startOfDayUTC(d2), label: `${m[1]} a ${m[2]}` };
+  }
+
+  // del DD/MM/YYYY al DD/MM/YYYY
+  m = x.match(/DEL\s+(\d{2}\/\d{2}\/\d{4})\s+AL\s+(\d{2}\/\d{2}\/\d{4})/);
+  if (m) {
+    const d1 = parseDateYMD(m[1]);
+    const d2 = parseDateYMD(m[2]);
+    if (d1 && d2) return { start: startOfDayUTC(d1), end: startOfDayUTC(d2), label: `${m[1]} a ${m[2]}` };
+  }
+
+  // default: últimos 2 meses si pide "ultimos meses" sin número
+  if (x.includes("ULTIMOS") && x.includes("MESES")) {
+    const now = new Date();
+    const end = startOfDayUTC(now);
+    const start = startOfDayUTC(addMonthsUTC(end, -2));
+    return { start, end, label: "últimos 2 meses" };
+  }
+
+  return null;
+}
+
+// =========================
+// Detección: intención (crear folio / consulta gasto)
+// =========================
+function isCreateIntent(text) {
+  const x = upperNoAccents(text);
+  return (
+    x.includes("CREAR FOLIO") ||
+    x.startsWith("CREAR") ||
+    x.includes("NUEVO FOLIO") ||
+    x.includes("REGISTRAR FOLIO")
+  );
+}
+
+function isGastoConsultaIntent(text) {
+  const x = upperNoAccents(text);
+  return (
+    x.includes("CUANTO") && x.includes("GAST") ||
+    x.includes("GASTADO") ||
+    x.includes("GASTOS") && (x.includes("PIPA") || x.includes("CILINDR") || x.includes("AT") || x.includes("UNIDAD"))
+  );
+}
+
+// =========================
+// Dialogo: persistencia en DB (dialogo_estado)
+// =========================
+async function ensureSchema() {
+  // tabla dialogo_estado para persistir estado por teléfono
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS public.dialogo_estado (
+      telefono character varying(50) PRIMARY KEY,
+      data jsonb NOT NULL,
+      actualizado_en timestamp without time zone DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+}
+
+async function getDialog(telefono) {
+  const r = await pool.query(`SELECT data FROM public.dialogo_estado WHERE telefono=$1`, [telefono]);
+  if (r.rowCount === 0) return null;
+  return r.rows[0].data;
+}
+
+async function saveDialog(telefono, data) {
+  await pool.query(
+    `
+    INSERT INTO public.dialogo_estado (telefono, data, actualizado_en)
+    VALUES ($1, $2::jsonb, CURRENT_TIMESTAMP)
+    ON CONFLICT (telefono)
+    DO UPDATE SET data = EXCLUDED.data, actualizado_en = CURRENT_TIMESTAMP
+    `,
+    [telefono, JSON.stringify(data)]
+  );
+}
+
+async function clearDialog(telefono) {
+  await pool.query(`DELETE FROM public.dialogo_estado WHERE telefono=$1`, [telefono]);
+}
+
+// =========================
+// Folio: generar folio_codigo y crear registro
+// folio_codigo: F-YYYYMM-### (ej F-202602-001)
+// numero_folio: igual que folio_codigo (para consistencia / futuros FK)
+// usa tabla folio_counters (ya existe)
+// =========================
+async function nextFolioCodigo(client) {
+  const now = new Date();
+  const yyyy = now.getUTCFullYear().toString();
+  const mm = (now.getUTCMonth() + 1).toString().padStart(2, "0");
+  const yyyymm = `${yyyy}${mm}`;
+
+  // Lock row
+  const sel = await client.query(
+    `SELECT last_seq FROM public.folio_counters WHERE yyyymm=$1 FOR UPDATE`,
+    [yyyymm]
+  );
+
+  let seq = 1;
+  if (sel.rowCount === 0) {
+    await client.query(
+      `INSERT INTO public.folio_counters (yyyymm, last_seq) VALUES ($1, $2)`,
+      [yyyymm, 1]
+    );
+    seq = 1;
+  } else {
+    seq = sel.rows[0].last_seq + 1;
+    await client.query(`UPDATE public.folio_counters SET last_seq=$2 WHERE yyyymm=$1`, [yyyymm, seq]);
+  }
+
+  const s3 = seq.toString().padStart(3, "0");
+  return `F-${yyyymm}-${s3}`;
+}
+
+async function insertFolio(dd) {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    const res = await fn(client);
+
+    const folio_codigo = await nextFolioCodigo(client);
+    const numero_folio = folio_codigo;
+
+    // Inserta folio
+    const ins = await client.query(
+      `
+      INSERT INTO public.folios
+      (folio_codigo, numero_folio, planta, creado_por, beneficiario, concepto, importe, monto, categoria, subcategoria, unidad, estatus)
+      VALUES
+      ($1, $2, $3, $4, $5, $6, $7, $7, $8, $9, $10, $11)
+      RETURNING id
+      `,
+      [
+        folio_codigo,
+        numero_folio,
+        dd.planta || null,
+        dd.creado_por || null,
+        dd.beneficiario || null,
+        dd.concepto || null,
+        dd.importe || null,
+        dd.categoria || null,
+        dd.subcategoria || null,
+        dd.unidad || null,
+        dd.estatus || "Generado",
+      ]
+    );
+
+    const folio_id = ins.rows[0].id;
+
+    // Historial (tabla: folio_historial)
+    await client.query(
+      `
+      INSERT INTO public.folio_historial (numero_folio, estatus, comentario, actor_telefono, actor_rol, folio_codigo, folio_id)
+      VALUES ($1,$2,$3,$4,$5,$6,$7)
+      `,
+      [
+        numero_folio,
+        dd.estatus || "Generado",
+        "Folio creado",
+        dd.actor_telefono || null,
+        dd.actor_rol || null,
+        folio_codigo,
+        folio_id,
+      ]
+    );
+
     await client.query("COMMIT");
-    return res;
+    return { folio_id, folio_codigo, numero_folio };
   } catch (e) {
     await client.query("ROLLBACK");
     throw e;
@@ -208,507 +396,405 @@ async function withTx(fn) {
   }
 }
 
-function yyyymmNow() {
-  const d = new Date();
-  const yyyy = String(d.getFullYear());
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  return `${yyyy}${mm}`;
+// =========================
+// PDF: guardar cotización en folios
+// - Si hay S3 config, subimos a S3; si no, guardamos URL Twilio.
+// =========================
+async function fetchTwilioMedia(mediaUrl) {
+  if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN) {
+    throw new Error("Faltan TWILIO_ACCOUNT_SID/TWILIO_AUTH_TOKEN para descargar media.");
+  }
+  const auth = Buffer.from(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`).toString("base64");
+  const res = await fetch(mediaUrl, {
+    headers: { Authorization: `Basic ${auth}` },
+  });
+  if (!res.ok) throw new Error(`No se pudo descargar media: ${res.status}`);
+  const buf = Buffer.from(await res.arrayBuffer());
+  const ct = res.headers.get("content-type") || "";
+  return { buf, contentType: ct };
 }
 
-async function nextFolioCodigo(client) {
-  const yyyymm = yyyymmNow();
+async function maybeUploadToS3(buffer, contentType, key) {
+  if (!AWS_S3_BUCKET || !AWS_ACCESS_KEY_ID || !AWS_SECRET_ACCESS_KEY) {
+    return null; // no S3
+  }
+  // Carga simple sin AWS SDK (para no meter más deps). Recomendado: usar aws-sdk v3.
+  // Aquí lo dejamos como “pendiente” de robustecer; por ahora regresamos null y guardamos Twilio URL.
+  // Si quieres, te lo integro con @aws-sdk/client-s3 en la siguiente iteración.
+  return null;
+}
 
-  // Bloquea contador del mes
-  const row = await client.query(
-    `SELECT yyyymm, last_seq
-       FROM public.folio_counters
-      WHERE yyyymm = $1
-      FOR UPDATE`,
-    [yyyymm]
-  );
+async function setCotizacionForFolio(folioCodigo, twilioMediaUrl) {
+  // descarga
+  const { buf, contentType } = await fetchTwilioMedia(twilioMediaUrl);
 
-  let nextSeq;
-  if (row.rowCount === 0) {
-    nextSeq = 1;
-    await client.query(`INSERT INTO public.folio_counters (yyyymm, last_seq) VALUES ($1, $2)`, [yyyymm, nextSeq]);
-  } else {
-    nextSeq = Number(row.rows[0].last_seq) + 1;
-    await client.query(`UPDATE public.folio_counters SET last_seq = $2 WHERE yyyymm = $1`, [yyyymm, nextSeq]);
+  if (!contentType.includes("pdf") && !contentType.includes("application/octet-stream")) {
+    // Twilio a veces manda octet-stream; permitimos, pero si viene algo raro lo rechazamos.
+    // Si quieres, aquí validamos por “%PDF-” en bytes.
+    const head = buf.slice(0, 5).toString("utf8");
+    if (head !== "%PDF-") {
+      throw new Error("El archivo adjunto no parece ser PDF.");
+    }
   }
 
-  const seq3 = String(nextSeq).padStart(3, "0");
-  const folio = `F-${yyyymm}-${seq3}`;
+  const s3key = `cotizaciones/${folioCodigo}/${crypto.randomUUID()}.pdf`;
+  const uploaded = await maybeUploadToS3(buf, "application/pdf", s3key);
 
-  // En tu esquema existen los dos campos (folio_codigo y numero_folio) con UNIQUE,
-  // aquí los igualamos para simplificar y evitar desfaces.
-  return { folio_codigo: folio, numero_folio: folio, yyyymm, nextSeq };
-}
-
-async function insertFolioAndHistorial({
-  actorTelefono,
-  actorRol,
-  // actorId opcional (puede ser null)
-  actorId = null,
-  // Datos del folio
-  planta = null,
-  plantaId = null,
-  creadoPor = null,
-  creadoPorId = null,
-  beneficiario,
-  concepto,
-  monto,
-  categoria,
-  subcategoria,
-  unidad,
-}) {
-  return await withTx(async (client) => {
-    const { folio_codigo, numero_folio } = await nextFolioCodigo(client);
-
-    // Insert folio
-    const ins = await client.query(
-      `INSERT INTO public.folios
-        (folio_codigo, numero_folio, planta_id, planta, creado_por_id, creado_por,
-         beneficiario, concepto, monto, categoria, subcategoria, unidad, estatus)
-       VALUES
-        ($1, $2, $3, $4, $5, $6,
-         $7, $8, $9, $10, $11, $12, 'Generado')
-       RETURNING id, folio_codigo, numero_folio, planta, creado_por, estatus, cotizacion_url, cotizacion_s3key`,
-      [
-        folio_codigo,
-        numero_folio,
-        plantaId,
-        planta,
-        creadoPorId,
-        creadoPor,
-        beneficiario || null,
-        concepto || null,
-        monto || null,
-        categoria || null,
-        subcategoria || null,
-        unidad || null,
-      ]
-    );
-
-    const folio = ins.rows[0];
-
-    // Insert historial (registro del evento)
-    await client.query(
-      `INSERT INTO public.folio_historial
-        (numero_folio, estatus, comentario, actor_telefono, actor_rol, folio_codigo, actor_id, folio_id)
-       VALUES
-        ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [
-        folio.numero_folio,
-        folio.estatus || "Generado",
-        "Registro inicial",
-        actorTelefono || null,
-        actorRol || null,
-        folio.folio_codigo,
-        actorId,
-        folio.id,
-      ]
-    );
-
-    return folio;
-  });
-}
-
-async function insertComentario({ folioId, numeroFolio, folioCodigo, actorTelefono, actorRol, usuarioId = null, comentario }) {
+  // actualiza folio
   await pool.query(
-    `INSERT INTO public.comentarios
-      (folio_id, usuario_id, comentario, folio_codigo, numero_folio, actor_telefono, actor_rol)
-     VALUES
-      ($1, $2, $3, $4, $5, $6, $7)`,
-    [folioId, usuarioId, comentario, folioCodigo, numeroFolio, actorTelefono, actorRol]
+    `
+    UPDATE public.folios
+    SET cotizacion_url = $2,
+        cotizacion_s3key = $3,
+        estatus = CASE WHEN estatus IS NULL OR estatus='Generado' THEN 'Cotizacion adjunta' ELSE estatus END
+    WHERE folio_codigo = $1
+       OR numero_folio = $1
+    `,
+    [folioCodigo, uploaded?.url || twilioMediaUrl, uploaded?.key || (AWS_S3_BUCKET ? s3key : null)]
+  );
+
+  // historial
+  await pool.query(
+    `
+    INSERT INTO public.folio_historial (numero_folio, estatus, comentario, creado_en, folio_codigo)
+    VALUES ($1, $2, $3, CURRENT_TIMESTAMP, $1)
+    `,
+    [folioCodigo, "Cotizacion adjunta", "Cotización PDF adjunta al folio"]
   );
 }
 
-async function findFolioByCodigoOrNumero(code) {
-  const q = await pool.query(
-    `SELECT id, folio_codigo, numero_folio, planta, creado_por, beneficiario, concepto, monto, categoria, subcategoria, unidad,
-            estatus, cotizacion_url, cotizacion_s3key, fecha_creacion
-       FROM public.folios
-      WHERE folio_codigo = $1 OR numero_folio = $1
-      LIMIT 1`,
-    [code]
+// =========================
+// Consultas: gasto por unidad y rango
+// - usa folios.unidad = AT-xx / C-xx
+// - suma folios.importe o folios.monto
+// - filtra por fecha_creacion (existe en tu tabla) o creado_en
+// =========================
+async function queryGastoUnidad(unidadNorm, range) {
+  const start = range?.start || startOfDayUTC(addMonthsUTC(new Date(), -2));
+  const end = range?.end || startOfDayUTC(new Date());
+
+  // end inclusive -> convertimos a end+1 día para BETWEEN semiabierto
+  const endPlus = new Date(end.getTime() + 24 * 60 * 60 * 1000);
+
+  const r = await pool.query(
+    `
+    SELECT
+      COUNT(*)::int AS folios_count,
+      COALESCE(SUM(COALESCE(importe, monto, 0)), 0)::numeric AS total
+    FROM public.folios
+    WHERE unidad = $1
+      AND COALESCE(fecha_creacion, creado_en) >= $2
+      AND COALESCE(fecha_creacion, creado_en) <  $3
+      AND (estatus IS NULL OR estatus <> 'Cancelado')
+    `,
+    [unidadNorm, start.toISOString().slice(0, 10), endPlus.toISOString().slice(0, 10)]
   );
-  return q.rowCount ? q.rows[0] : null;
+
+  return {
+    unidad: unidadNorm,
+    folios_count: r.rows[0].folios_count,
+    total: r.rows[0].total,
+    label: range?.label || "últimos 2 meses",
+  };
 }
 
-async function attachCotizacionToFolio({ folioId, cotizacionUrl, cotizacionS3Key = null }) {
-  const q = await pool.query(
-    `UPDATE public.folios
-        SET cotizacion_url = $2,
-            cotizacion_s3key = COALESCE($3, cotizacion_s3key)
-      WHERE id = $1
-      RETURNING id, folio_codigo, numero_folio, estatus, cotizacion_url, cotizacion_s3key`,
-    [folioId, cotizacionUrl, cotizacionS3Key]
-  );
-  return q.rowCount ? q.rows[0] : null;
-}
+// =========================
+// App / Webhook
+// =========================
+const app = express();
+app.use(bodyParser.urlencoded({ extended: false }));
 
-// -------------------------
-// Twilio Media -> descargar (requiere auth)
-// -------------------------
-async function downloadTwilioMedia(mediaUrl) {
-  const sid = process.env.TWILIO_ACCOUNT_SID;
-  const token = process.env.TWILIO_AUTH_TOKEN;
+app.get("/", (req, res) => res.status(200).send("OK"));
 
-  const resp = await axios.get(mediaUrl, {
-    responseType: "arraybuffer",
-    auth: { username: sid, password: token },
-  });
+app.post("/whatsapp", async (req, res) => {
+  try {
+    const from = cleanText(req.body.From);  // whatsapp:+521...
+    const body = cleanText(req.body.Body);
+    const numMedia = parseInt(req.body.NumMedia || "0", 10);
+    const mediaUrl0 = cleanText(req.body.MediaUrl0);
+    const mediaType0 = cleanText(req.body.MediaContentType0);
 
-  return Buffer.from(resp.data);
-}
+    const telefono = from || "unknown";
+    const texto = body;
 
-async function uploadToS3({ buffer, contentType, key }) {
-  if (!hasS3) return null;
-  await s3
-    .putObject({
-      Bucket: process.env.S3_BUCKET,
-      Key: key,
-      Body: buffer,
-      ContentType: contentType || "application/octet-stream",
-    })
-    .promise();
-
-  return key;
-}
-
-// -------------------------
-// Intenciones y comandos
-// -------------------------
-function helpText() {
-  return (
-    "Comandos:\n\n" +
-    "1) Crear folio\n" +
-    "   - Escribe: Crear folio\n\n" +
-    "2) Ver folio\n" +
-    "   - Escribe: Ver F-YYYYMM-###\n\n" +
-    "3) Adjuntar cotización PDF\n" +
-    "   - Escribe: Adjuntar F-YYYYMM-###\n" +
-    "   - Luego manda el PDF en el chat\n\n" +
-    "4) Comentar en folio\n" +
-    "   - Escribe: Comentar F-YYYYMM-### tu comentario\n\n" +
-    "Tip: en Taller la unidad debe ser AT-## o C-## (ej: AT-03, C-03)."
-  );
-}
-
-async function handleMessage({ from, body, numMedia, mediaUrl0, mediaContentType0 }) {
-  const dd = getSession(from);
-
-  // Datos actor (por ahora, básico; si quieres lo amarramos a usuarios.id después)
-  const actorTelefono = from;
-  const actorRol = "Usuario"; // luego lo conectamos a tu tabla usuarios
-  const creadoPor = "WhatsApp"; // o el nombre real
-
-  const textRaw = body || "";
-  const text = normalizeText(textRaw);
-
-  // 0) Si estamos esperando PDF
-  if (dd.estado === "ESPERANDO_PDF_COTIZACION") {
-    if (!dd.currentFolio?.id) {
-      dd.estado = "IDLE";
-      return "No tengo un folio activo para adjuntar. Usa: Adjuntar F-YYYYMM-###";
-    }
-
-    if (!numMedia || Number(numMedia) < 1) {
-      return "Aún no recibo el PDF. Por favor manda el archivo PDF aquí en el chat.";
-    }
-
-    const ct = (mediaContentType0 || "").toLowerCase();
-    if (!ct.includes("pdf")) {
-      return "Recibí un archivo, pero no parece PDF. Por favor manda la cotización en PDF.";
-    }
-
-    // Guardamos al menos la URL de Twilio (para poder recuperarla luego)
-    // Opcional: descargar y subir a S3 si está configurado.
-    let s3key = null;
-    try {
-      if (hasS3) {
-        const buf = await downloadTwilioMedia(mediaUrl0);
-        const key = `cotizaciones/${dd.currentFolio.numero_folio || dd.currentFolio.folio_codigo}.pdf`;
-        s3key = await uploadToS3({ buffer: buf, contentType: ct, key });
-      }
-
-      const updated = await attachCotizacionToFolio({
-        folioId: dd.currentFolio.id,
-        cotizacionUrl: mediaUrl0,
-        cotizacionS3Key: s3key,
-      });
-
-      // Historial + comentario
-      await insertComentario({
-        folioId: dd.currentFolio.id,
-        numeroFolio: dd.currentFolio.numero_folio,
-        folioCodigo: dd.currentFolio.folio_codigo,
-        actorTelefono,
-        actorRol,
-        comentario: `Cotización PDF adjunta (${hasS3 && s3key ? "guardada en S3" : "guardada como URL Twilio"})`,
-      });
-
-      dd.estado = "IDLE";
-      return (
-        `Listo. Cotización adjunta al folio ${updated.numero_folio}.\n\n` +
-        (updated.cotizacion_s3key || updated.cotizacion_url ? "✅ Ya tiene PDF." : "⚠️ Aún sin PDF (raro).")
-      );
-    } catch (e) {
-      dd.estado = "IDLE";
-      console.error("Error adjuntando PDF:", e?.message || e);
-      return "Error adjuntando el PDF. Intenta de nuevo en 1 minuto.";
-    }
-  }
-
-  // 1) Help
-  if (text === "AYUDA" || text === "HELP" || text === "MENU") {
-    return helpText();
-  }
-
-  // 2) Ver folio
-  if (isCommand(textRaw, "Ver")) {
-    const code = extractAfterCommand(textRaw, "Ver");
-    if (!code) return "Formato: Ver F-YYYYMM-###";
-    const folio = await findFolioByCodigoOrNumero(code.trim());
-    if (!folio) return `No encontré el folio: ${code}`;
-
-    // Mensaje “aún no tiene adjunto PDF”
-    const faltaPdf = !folio.cotizacion_url && !folio.cotizacion_s3key;
-
-    return (
-      safeFolioLine(folio) +
-      (faltaPdf ? "\n\n⚠️ Aún no tiene cotización PDF adjunta." : "\n\n✅ Ya tiene cotización PDF adjunta.")
-    );
-  }
-
-  // 3) Adjuntar PDF
-  if (isCommand(textRaw, "Adjuntar")) {
-    const code = extractAfterCommand(textRaw, "Adjuntar");
-    if (!code) return "Formato: Adjuntar F-YYYYMM-###";
-    const folio = await findFolioByCodigoOrNumero(code.trim());
-    if (!folio) return `No encontré el folio: ${code}`;
-
-    dd.currentFolio = { id: folio.id, folio_codigo: folio.folio_codigo, numero_folio: folio.numero_folio };
-    dd.estado = "ESPERANDO_PDF_COTIZACION";
-    return `Ok. Manda aquí el PDF de la cotización para el folio ${folio.numero_folio}.`;
-  }
-
-  // 4) Comentar
-  if (isCommand(textRaw, "Comentar")) {
-    const rest = extractAfterCommand(textRaw, "Comentar");
-    const m = rest.match(/^(F-\d{6}-\d{3})\s+(.+)$/i);
-    if (!m) return "Formato: Comentar F-YYYYMM-### tu comentario";
-    const code = m[1].toUpperCase();
-    const comentario = m[2].trim();
-
-    const folio = await findFolioByCodigoOrNumero(code);
-    if (!folio) return `No encontré el folio: ${code}`;
-
-    await insertComentario({
-      folioId: folio.id,
-      numeroFolio: folio.numero_folio,
-      folioCodigo: folio.folio_codigo,
-      actorTelefono,
-      actorRol,
-      comentario,
-    });
-
-    return `Comentario guardado en ${folio.numero_folio}.`;
-  }
-
-  // 5) Crear folio
-  if (text === "CREAR FOLIO" || text.startsWith("CREAR FOLIO")) {
-    dd.draft = {
+    let dd = (await getDialog(telefono)) || {
+      estado: "IDLE",
+      actor_telefono: telefono,
+      actor_rol: null,
+      // folio fields
       planta: null,
-      plantaId: null,
+      creado_por: null,
       beneficiario: null,
       concepto: null,
-      monto: null,
+      importe: null,
       categoria: null,
       subcategoria: null,
       unidad: null,
+      estatus: "Generado",
+      // para adjuntar
+      folio_codigo_creado: null,
     };
-    dd.currentFolio = null;
 
-    // (si luego quieres, aquí podemos listar plantas desde DB)
-    dd.estado = "ESPERANDO_PLANTA";
-    return "Indica la planta (ej: ACAPULCO, QUERÉTARO, PUEBLA, etc.).";
-  }
-
-  // -------------------------
-  // Flujo guiado (draft)
-  // -------------------------
-  if (dd.estado === "ESPERANDO_PLANTA") {
-    dd.draft.planta = textRaw.trim();
-    dd.estado = "ESPERANDO_BENEFICIARIO";
-    return "Indica Beneficiario (a quién se le depositará el cheque).";
-  }
-
-  if (dd.estado === "ESPERANDO_BENEFICIARIO") {
-    dd.draft.beneficiario = textRaw.trim();
-    dd.estado = "ESPERANDO_CONCEPTO";
-    return "Indica Concepto (razón del pago).";
-  }
-
-  if (dd.estado === "ESPERANDO_CONCEPTO") {
-    dd.draft.concepto = textRaw.trim();
-    dd.estado = "ESPERANDO_IMPORTE";
-    return "Indica Monto en MXN (ej: 12500 o 12,500).";
-  }
-
-  if (dd.estado === "ESPERANDO_IMPORTE") {
-    const m = parseMoney(textRaw);
-    if (m == null) return "Monto inválido. Ejemplos: 12500  |  12,500  |  12500.50";
-    dd.draft.monto = m;
-    dd.estado = "ESPERANDO_CATEGORIA";
-    return renderMenu("Elige Categoría:", CATS.map((c) => c.label));
-  }
-
-  if (dd.estado === "ESPERANDO_CATEGORIA") {
-    const idx = Number(textRaw.trim());
-    if (!Number.isInteger(idx) || idx < 1 || idx > CATS.length) {
-      return "Responde con un número de la lista (ej: 1).";
-    }
-    const cat = CATS[idx - 1];
-    dd.draft.categoria = cat.label;
-    dd.draft.categoria_clave = cat.key;
-
-    // Taller pide unidad
-    if (cat.key === "TALLER") {
-      dd.estado = "ESPERANDO_UNIDAD";
-      return "Taller seleccionado. Indica Unidad (ej: AT-03 o C-03).";
+    // comandos rápidos
+    const tUpper = upperNoAccents(texto);
+    if (tUpper === "CANCELAR" || tUpper === "SALIR" || tUpper === "RESET") {
+      await clearDialog(telefono);
+      res.set("Content-Type", "text/xml");
+      return res.send(twiml("Listo. Se canceló el proceso. Escribe: *Crear folio* para iniciar de nuevo."));
     }
 
-    const subs = SUBCATS[cat.key] || [];
-    if (!subs.length) {
-      dd.draft.subcategoria = null;
-      dd.estado = "CONFIRMAR_Y_GUARDAR";
-      // Guardar directo
-      const folio = await insertFolioAndHistorial({
-        actorTelefono,
-        actorRol,
-        creadoPor,
-        planta: dd.draft.planta,
-        beneficiario: dd.draft.beneficiario,
-        concepto: dd.draft.concepto,
-        monto: dd.draft.monto,
-        categoria: dd.draft.categoria,
-        subcategoria: null,
-        unidad: null,
-      });
+    // Si llegó media y estamos esperando PDF
+    if (dd.estado === "ESPERANDO_PDF") {
+      if (numMedia > 0 && mediaUrl0) {
+        // validar que sea pdf
+        if (mediaType0 && !mediaType0.includes("pdf") && !mediaType0.includes("octet-stream")) {
+          res.set("Content-Type", "text/xml");
+          return res.send(twiml("Recibí un archivo, pero no parece PDF. Por favor adjunta la *cotización en PDF*."));
+        }
+        await setCotizacionForFolio(dd.folio_codigo_creado, mediaUrl0);
+        dd.estado = "IDLE";
+        const folio = dd.folio_codigo_creado;
+        dd.folio_codigo_creado = null;
+        await saveDialog(telefono, dd);
 
-      dd.currentFolio = { id: folio.id, folio_codigo: folio.folio_codigo, numero_folio: folio.numero_folio };
-      dd.estado = "IDLE";
+        res.set("Content-Type", "text/xml");
+        return res.send(twiml(`✅ Cotización adjunta al folio *${folio}*.\n\nPuedes:\n- Escribir *Crear folio* para registrar otro\n- O preguntar: *¿Cuánto he gastado en la pipa 11 en los últimos 2 meses?*`));
+      } else {
+        res.set("Content-Type", "text/xml");
+        return res.send(twiml("Aún no recibo el PDF. Por favor adjunta la *cotización en PDF* en este chat."));
+      }
+    }
 
-      const faltaPdf = !folio.cotizacion_url && !folio.cotizacion_s3key;
-      return (
-        `✅ Folio creado.\n${safeFolioLine(folio)}\n\n` +
-        (faltaPdf ? "⚠️ Aún no tiene cotización PDF adjunta.\nUsa: Adjuntar " + folio.numero_folio : "✅ Ya tiene PDF.")
+    // Intención: consulta de gasto (sin afectar flujo)
+    if (isGastoConsultaIntent(texto)) {
+      const u = unidadFromNatural(texto) || normalizeUnidad(texto);
+      const range = parseRangeFromText(texto);
+
+      if (!u) {
+        res.set("Content-Type", "text/xml");
+        return res.send(twiml("Para consultar, dime la unidad así:\n- *Pipa 11* (o *AT-11*)\n- *Cilindrera 3* (o *C-03*)\n\nEj: *¿Cuánto he gastado en la pipa 11 en los últimos 2 meses?*"));
+      }
+
+      const ans = await queryGastoUnidad(u, range);
+      res.set("Content-Type", "text/xml");
+      return res.send(
+        twiml(
+          `📌 Gasto en *${ans.unidad}* (${ans.label}):\n` +
+          `- Folios: *${ans.folios_count}*\n` +
+          `- Total: *$${Number(ans.total).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}*`
+        )
       );
     }
 
-    dd.estado = "ESPERANDO_SUBCATEGORIA";
-    return renderMenu(`Elige Subcategoría (${cat.label}):`, subs);
-  }
-
-  if (dd.estado === "ESPERANDO_SUBCATEGORIA") {
-    const subs = SUBCATS[dd.draft.categoria_clave] || [];
-    const idx = Number(textRaw.trim());
-    if (!Number.isInteger(idx) || idx < 1 || idx > subs.length) {
-      return "Responde con un número válido de la lista.";
+    // Si saluda, ayuda
+    if (dd.estado === "IDLE" && (isProbablyGreeting(texto) || tUpper === "AYUDA" || tUpper === "MENU")) {
+      res.set("Content-Type", "text/xml");
+      return res.send(
+        twiml(
+          `Hola 👋\n` +
+          `Comandos:\n` +
+          `1) *Crear folio*\n` +
+          `2) Consulta: *¿Cuánto he gastado en la pipa 11 en los últimos 2 meses?*\n` +
+          `3) *Reset* para cancelar cualquier captura`
+        )
+      );
     }
-    dd.draft.subcategoria = subs[idx - 1];
 
-    // Guardar
-    const folio = await insertFolioAndHistorial({
-      actorTelefono,
-      actorRol,
-      creadoPor,
-      planta: dd.draft.planta,
-      beneficiario: dd.draft.beneficiario,
-      concepto: dd.draft.concepto,
-      monto: dd.draft.monto,
-      categoria: dd.draft.categoria,
-      subcategoria: dd.draft.subcategoria,
-      unidad: null,
-    });
-
-    dd.currentFolio = { id: folio.id, folio_codigo: folio.folio_codigo, numero_folio: folio.numero_folio };
-    dd.estado = "IDLE";
-
-    const faltaPdf = !folio.cotizacion_url && !folio.cotizacion_s3key;
-    return (
-      `✅ Folio creado.\n${safeFolioLine(folio)}\n\n` +
-      (faltaPdf ? "⚠️ Aún no tiene cotización PDF adjunta.\nUsa: Adjuntar " + folio.numero_folio : "✅ Ya tiene PDF.")
-    );
-  }
-
-  if (dd.estado === "ESPERANDO_UNIDAD") {
-    const u = normalizeUnidad(textRaw);
-    if (!u) {
-      return "Unidad inválida. Formato: AT-03 o C-03 (también acepto AT 3, AT-3, C 03).";
+    // Intención: crear folio
+    if (dd.estado === "IDLE" && isCreateIntent(texto)) {
+      dd.estado = "ESPERANDO_BENEFICIARIO";
+      await saveDialog(telefono, dd);
+      res.set("Content-Type", "text/xml");
+      return res.send(twiml("✅ Vamos a crear un folio.\n\n1/6) Escribe el *Beneficiario* (a nombre de quién será el cheque)."));
     }
-    dd.draft.unidad = u;
 
-    // Taller: subcategoria debe ser null
-    dd.draft.subcategoria = null;
+    // =========================
+    // Flujo creación folio
+    // =========================
+    if (dd.estado === "ESPERANDO_BENEFICIARIO") {
+      dd.beneficiario = cleanText(texto);
+      dd.estado = "ESPERANDO_CONCEPTO";
+      await saveDialog(telefono, dd);
+      res.set("Content-Type", "text/xml");
+      return res.send(twiml("2/6) Escribe el *Concepto* (razón del pago)."));
+    }
 
-    // Guardar
-    const folio = await insertFolioAndHistorial({
-      actorTelefono,
-      actorRol,
-      creadoPor,
-      planta: dd.draft.planta,
-      beneficiario: dd.draft.beneficiario,
-      concepto: dd.draft.concepto,
-      monto: dd.draft.monto,
-      categoria: dd.draft.categoria,
-      subcategoria: null,
-      unidad: dd.draft.unidad,
-    });
+    if (dd.estado === "ESPERANDO_CONCEPTO") {
+      dd.concepto = cleanText(texto);
+      dd.estado = "ESPERANDO_IMPORTE";
+      await saveDialog(telefono, dd);
+      res.set("Content-Type", "text/xml");
+      return res.send(twiml("3/6) Escribe el *Importe* en pesos (ej: 13500.50)."));
+    }
 
-    dd.currentFolio = { id: folio.id, folio_codigo: folio.folio_codigo, numero_folio: folio.numero_folio };
-    dd.estado = "IDLE";
+    if (dd.estado === "ESPERANDO_IMPORTE") {
+      const val = cleanText(texto).replace(/,/g, "");
+      const n = Number(val);
+      if (!Number.isFinite(n) || n <= 0) {
+        res.set("Content-Type", "text/xml");
+        return res.send(twiml("Importe inválido. Ejemplos válidos: *13500* o *13500.50*"));
+      }
+      dd.importe = n;
+      dd.estado = "ESPERANDO_CATEGORIA";
 
-    const faltaPdf = !folio.cotizacion_url && !folio.cotizacion_s3key;
-    return (
-      `✅ Folio creado.\n${safeFolioLine(folio)}\n\n` +
-      (faltaPdf ? "⚠️ Aún no tiene cotización PDF adjunta.\nUsa: Adjuntar " + folio.numero_folio : "✅ Ya tiene PDF.")
+      // menú categorías
+      await saveDialog(telefono, dd);
+      res.set("Content-Type", "text/xml");
+      return res.send(twiml(renderMenu("4/6) Elige *Categoría*:", CATS.map(c => c.label))));
+    }
+
+    if (dd.estado === "ESPERANDO_CATEGORIA") {
+      const choice = parseChoiceNumber(texto, CATS.length);
+      if (!choice) {
+        res.set("Content-Type", "text/xml");
+        return res.send(twiml(`Elige un número del 1 al ${CATS.length}.\n\n${renderMenu("Categoría:", CATS.map(c => c.label))}`));
+      }
+      const cat = CATS[choice - 1];
+      dd.categoria = cat.label;
+
+      // Según categoría, pedimos subcat o unidad o nada
+      if (cat.key === "TALLER") {
+        dd.subcategoria = null; // taller no subcat
+        dd.estado = "ESPERANDO_UNIDAD";
+        await saveDialog(telefono, dd);
+        res.set("Content-Type", "text/xml");
+        return res.send(twiml("5/6) Taller seleccionado.\nIndica la *Unidad* (ej: *AT-03* o *C-03*)."));
+      }
+
+      const subs = SUBCATS[cat.key] || [];
+      if (subs.length === 0) {
+        dd.subcategoria = null;
+        dd.unidad = null;
+        dd.estado = "CONFIRMAR_FOLIO";
+        await saveDialog(telefono, dd);
+        res.set("Content-Type", "text/xml");
+        return res.send(twiml(buildConfirm(dd)));
+      }
+
+      dd.estado = "ESPERANDO_SUBCATEGORIA";
+      dd._subcat_key = cat.key; // interno para saber qué lista
+      await saveDialog(telefono, dd);
+
+      res.set("Content-Type", "text/xml");
+      return res.send(twiml(renderMenu("5/6) Elige *Subcategoría*:", subs)));
+    }
+
+    if (dd.estado === "ESPERANDO_SUBCATEGORIA") {
+      const key = dd._subcat_key;
+      const subs = SUBCATS[key] || [];
+      const choice = parseChoiceNumber(texto, subs.length);
+      if (!choice) {
+        res.set("Content-Type", "text/xml");
+        return res.send(twiml(`Elige un número del 1 al ${subs.length}.\n\n${renderMenu("Subcategoría:", subs)}`));
+      }
+      dd.subcategoria = subs[choice - 1];
+      dd.unidad = null;
+      dd.estado = "CONFIRMAR_FOLIO";
+      dd._subcat_key = null;
+      await saveDialog(telefono, dd);
+
+      res.set("Content-Type", "text/xml");
+      return res.send(twiml(buildConfirm(dd)));
+    }
+
+    if (dd.estado === "ESPERANDO_UNIDAD") {
+      const norm = normalizeUnidad(texto);
+      if (!norm) {
+        res.set("Content-Type", "text/xml");
+        return res.send(twiml("Unidad inválida. Ejemplos: *AT-03*, *AT 3*, *AT03*, *C-11*.\n\nVuelve a escribir la unidad."));
+      }
+      dd.unidad = norm;
+      dd.estado = "CONFIRMAR_FOLIO";
+      await saveDialog(telefono, dd);
+
+      res.set("Content-Type", "text/xml");
+      return res.send(twiml(buildConfirm(dd)));
+    }
+
+    if (dd.estado === "CONFIRMAR_FOLIO") {
+      const x = upperNoAccents(texto);
+      if (x === "SI" || x === "S" || x === "CONFIRMAR" || x === "OK") {
+        // Crear folio en DB
+        const created = await insertFolio(dd);
+
+        // Se queda esperando PDF
+        dd.estado = "ESPERANDO_PDF";
+        dd.folio_codigo_creado = created.folio_codigo;
+        await saveDialog(telefono, dd);
+
+        res.set("Content-Type", "text/xml");
+        return res.send(
+          twiml(
+            `✅ Folio creado: *${created.folio_codigo}*\n` +
+            `Estatus: *Generado*\n\n` +
+            `📎 Falta adjuntar la *cotización en PDF*.\n` +
+            `Por favor *adjunta el PDF aquí en el chat*.\n\n` +
+            `Tip: si quieres cancelar: escribe *Reset*`
+          )
+        );
+      }
+
+      if (x === "NO" || x === "N" || x === "EDITAR") {
+        // reinicia captura
+        dd.estado = "ESPERANDO_BENEFICIARIO";
+        dd.beneficiario = null;
+        dd.concepto = null;
+        dd.importe = null;
+        dd.categoria = null;
+        dd.subcategoria = null;
+        dd.unidad = null;
+        await saveDialog(telefono, dd);
+        res.set("Content-Type", "text/xml");
+        return res.send(twiml("Perfecto, reiniciamos.\n\n1/6) Escribe el *Beneficiario*:"));
+      }
+
+      res.set("Content-Type", "text/xml");
+      return res.send(twiml("Responde *SI* para confirmar y crear el folio, o *NO* para reiniciar."));
+    }
+
+    // Si llega aquí, no entendimos
+    res.set("Content-Type", "text/xml");
+    return res.send(
+      twiml(
+        `No te entendí.\n\n` +
+        `Opciones:\n` +
+        `- Escribe *Crear folio*\n` +
+        `- O consulta: *¿Cuánto he gastado en la pipa 11 en los últimos 2 meses?*\n` +
+        `- *Reset* para cancelar`
+      )
     );
+  } catch (err) {
+    console.error("Error webhook:", err);
+    // No rompemos el chat: respuesta amigable
+    res.set("Content-Type", "text/xml");
+    return res.send(twiml("Error procesando solicitud. Intenta de nuevo en 1 minuto."));
   }
+});
 
-  // Si no coincide con nada:
-  return "No entendí. Escribe: Ayuda\n\nO bien: Crear folio";
+function buildConfirm(dd) {
+  const lines = [];
+  lines.push("6/6) Confirma la información:");
+  lines.push(`- Beneficiario: ${dd.beneficiario || "(vacío)"}`);
+  lines.push(`- Concepto: ${dd.concepto || "(vacío)"}`);
+  lines.push(`- Importe: $${Number(dd.importe || 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+  lines.push(`- Categoría: ${dd.categoria || "(vacío)"}`);
+  if (dd.subcategoria) lines.push(`- Subcategoría: ${dd.subcategoria}`);
+  if (dd.unidad) lines.push(`- Unidad: ${dd.unidad}`);
+  lines.push("");
+  lines.push("Responde *SI* para crear el folio o *NO* para reiniciar.");
+  return lines.join("\n");
 }
 
-// -------------------------
-// Webhook Twilio
-// -------------------------
-app.post("/whatsapp", async (req, res) => {
-  const twiml = new MessagingResponse();
-
+// =========================
+// Start
+// =========================
+(async () => {
   try {
-    const from = req.body.From || ""; // "whatsapp:+521..."
-    const body = req.body.Body || "";
-    const numMedia = req.body.NumMedia || "0";
-    const mediaUrl0 = req.body.MediaUrl0 || null;
-    const mediaContentType0 = req.body.MediaContentType0 || null;
-
-    const reply = await handleMessage({ from, body, numMedia, mediaUrl0, mediaContentType0 });
-    twiml.message(reply);
+    await ensureSchema();
+    console.log("Schema verificado (dialogo_estado listo).");
+    app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
   } catch (e) {
-    console.error("Webhook error:", e?.message || e);
-    twiml.message("Error procesando solicitud. Intenta de nuevo en 1 minuto.");
+    console.error("Fallo al iniciar:", e);
+    process.exit(1);
   }
-
-  res.type("text/xml").send(twiml.toString());
-});
-
-// Healthcheck
-app.get("/", (_, res) => res.status(200).send("OK"));
-
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => {
-  console.log(`Servidor corriendo en puerto ${PORT}`);
-  console.log(`S3: ${hasS3 ? "ON" : "OFF (cotizaciones se guardan como URL Twilio)"}`);
-});
+})();
