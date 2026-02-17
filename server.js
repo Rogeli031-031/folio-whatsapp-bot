@@ -380,6 +380,18 @@ async function getHistorial(client, numeroFolio, limit = 10) {
   return r.rows;
 }
 
+/** Folios urgentes (no cancelados): numero_folio, importe, creado_en. */
+async function getFoliosUrgentes(client, limit = 20) {
+  const r = await client.query(
+    `SELECT numero_folio, importe, creado_en
+     FROM public.folios
+     WHERE prioridad = 'Urgente no programado' AND estatus != 'Cancelado'
+     ORDER BY creado_en ASC`,
+    []
+  );
+  return (r.rows || []).slice(0, limit);
+}
+
 /** Usuarios a notificar al aprobar: GA y GG de la planta del folio + todos CDMX. */
 async function getUsersToNotifyOnApprove(client, plantaId) {
   const gaGG = await client.query(
@@ -601,9 +613,26 @@ app.post("/twilio/whatsapp", async (req, res) => {
         if (!folio) return safeReply(`No existe el folio ${numero}.`);
         const urg = folio.prioridad === "Urgente no programado" ? " 🔴💡 URGENTE" : "";
         let txt = `Folio ${folio.numero_folio}${urg}\nEstatus: ${folio.estatus}\n`;
-        if (folio.aprobado_por) txt += `Aprobado por: ${folio.aprobado_por}\n`;
-        txt += `Cotización: ${folio.cotizacion_url ? "Sí" : "No"}`;
-        return safeReply(txt);
+        txt += `Importe: $${Number(folio.importe) != null && !isNaN(Number(folio.importe)) ? Number(folio.importe).toLocaleString("es-MX", { minimumFractionDigits: 2 }) : "-"}\n`;
+        if (folio.estatus === "Aprobado" && folio.aprobado_por) {
+          txt += `Aprobado por: ${folio.aprobado_por}\n`;
+        } else if (folio.estatus !== "Cancelado" && folio.estatus !== "Aprobado") {
+          txt += `Faltan por aprobar: Director ZP\n`;
+        }
+        txt += `Cotización: ${folio.cotizacion_url ? "Sí" : "No"}\n`;
+
+        const urgentes = await getFoliosUrgentes(client, 15);
+        if (urgentes.length > 0) {
+          txt += "\n🔴 Folios urgentes (días | importe):\n";
+          const now = Date.now();
+          urgentes.forEach((f) => {
+            const creado = f.creado_en ? new Date(f.creado_en).getTime() : now;
+            const dias = Math.floor((now - creado) / (24 * 60 * 60 * 1000));
+            const imp = f.importe != null && !isNaN(Number(f.importe)) ? Number(f.importe).toLocaleString("es-MX", { minimumFractionDigits: 2 }) : "-";
+            txt += `${f.numero_folio} | ${dias} día(s) | $${imp}\n`;
+          });
+        }
+        return safeReply(txt.trim());
       }
 
       if (FLAGS.HISTORIAL && /^historial\s+F-\d{6}-\d{3}\s*$/i.test(body)) {
