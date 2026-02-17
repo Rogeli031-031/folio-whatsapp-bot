@@ -329,7 +329,9 @@ async function insertFolio(client, dd) {
   const prioridad = dd.urgente ? "Urgente no programado" : (dd.prioridad || null);
 
   const nivelCreator = dd.actor_nivel != null ? parseInt(dd.actor_nivel, 10) : 0;
-  const esZP = nivelCreator >= 3 || (dd.actor_rol && String(dd.actor_rol).toUpperCase().includes("ZP"));
+  const rolClave = dd.actor_clave ? String(dd.actor_clave).toUpperCase() : "";
+  const rolNombre = dd.actor_rol ? String(dd.actor_rol) : "";
+  const esZP = rolClave === "ZP" || nivelCreator >= 3 || (/director/i.test(rolNombre) && /zp/i.test(rolNombre));
   const estatusInicial = esZP ? "Aprobado" : "Generado";
   const nivelInicial = esZP ? 3 : 1;
 
@@ -1000,6 +1002,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
         if (actorCreate) {
           sess.dd.actor_rol = actorCreate.rol_nombre;
           sess.dd.actor_nivel = actorCreate.rol_nivel;
+          sess.dd.actor_clave = actorCreate.rol_clave;
           sess.dd.actor_planta_id = actorCreate.planta_id;
         }
         if (crearParsed && crearParsed.concepto) sess.dd.concepto = crearParsed.concepto;
