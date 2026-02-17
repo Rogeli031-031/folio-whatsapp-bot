@@ -243,7 +243,7 @@ async function getActorByPhone(client, phone) {
     FROM public.usuarios u
     LEFT JOIN public.roles r ON r.id = u.rol_id
     LEFT JOIN public.plantas p ON p.id = u.planta_id
-    WHERE u.telefono = $1 OR ($2 IS NOT NULL AND u.telefono = $2)
+    WHERE u.telefono = $1::TEXT OR ($2::TEXT IS NOT NULL AND u.telefono = $2::TEXT)
     LIMIT 1
   `;
   const r = await client.query(q, [norm, alt]);
