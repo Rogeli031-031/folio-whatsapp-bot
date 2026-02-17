@@ -380,10 +380,10 @@ async function getHistorial(client, numeroFolio, limit = 10) {
   return r.rows;
 }
 
-/** Folios urgentes (no cancelados): numero_folio, importe, creado_en. */
+/** Folios urgentes (no cancelados): numero_folio, importe, creado_en, concepto. */
 async function getFoliosUrgentes(client, limit = 20) {
   const r = await client.query(
-    `SELECT numero_folio, importe, creado_en
+    `SELECT numero_folio, importe, creado_en, concepto
      FROM public.folios
      WHERE prioridad = 'Urgente no programado' AND estatus != 'Cancelado'
      ORDER BY creado_en ASC`,
@@ -628,13 +628,15 @@ app.post("/twilio/whatsapp", async (req, res) => {
 
         const urgentes = await getFoliosUrgentes(client, 15);
         if (urgentes.length > 0) {
-          txt += "\n🔴 Folios urgentes (días | importe):\n";
+          txt += "\n🔴 Folios urgentes (días | importe | concepto):\n";
           const now = Date.now();
           urgentes.forEach((f) => {
             const creado = f.creado_en ? new Date(f.creado_en).getTime() : now;
             const dias = Math.floor((now - creado) / (24 * 60 * 60 * 1000));
             const imp = f.importe != null && !isNaN(Number(f.importe)) ? Number(f.importe).toLocaleString("es-MX", { minimumFractionDigits: 2 }) : "-";
-            txt += `${f.numero_folio} | ${dias} día(s) | $${imp}\n`;
+            const conceptoShort = (f.concepto || "-").toString().trim().substring(0, 45);
+            const conceptoDisplay = conceptoShort + (f.concepto && f.concepto.length > 45 ? "…" : "");
+            txt += `${f.numero_folio} | ${dias} día(s) | $${imp} | ${conceptoDisplay}\n`;
           });
         }
         return safeReply(txt.trim());
