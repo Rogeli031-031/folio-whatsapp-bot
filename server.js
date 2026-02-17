@@ -96,6 +96,60 @@ function moneyToNumber(v) {
   const n = Number(s);
   return Number.isFinite(n) ? n : 0;
 }
+// =========================
+// UNIDAD: parse + normalize
+// =========================
+
+function normalizeUnidadInput(raw) {
+  if (!raw) return "";
+  return String(raw)
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, " "); // colapsa espacios
+}
+
+// Devuelve { tipo, num, canon } o null si no se puede parsear
+function parseUnidad(raw) {
+  const s0 = normalizeUnidadInput(raw);
+
+  // Caso: "PIPA 11" / "PIPA-11" / "PIPA11"
+  // Caso: "P11" / "P-11"
+  let m =
+    s0.match(/^PIPA[\s-]*0*([0-9]{1,3})$/) ||
+    s0.match(/^P[\s-]*0*([0-9]{1,3})$/);
+
+  if (m) {
+    const num = parseInt(m[1], 10);
+    if (!Number.isFinite(num) || num <= 0) return null;
+    return { tipo: "PIPA", num, canon: `PIPA-${String(num).padStart(2, "0")}` };
+  }
+
+  // Caso: "AT-16" / "AT16" / "AT 16"
+  // Caso: "C-03" / "C03" / "C 3"
+  m = s0.match(/^([A-Z]{1,4})[\s-]*0*([0-9]{1,3})$/);
+  if (!m) return null;
+
+  const tipo = m[1];
+  const num = parseInt(m[2], 10);
+  if (!Number.isFinite(num) || num <= 0) return null;
+
+  // Tipos permitidos en TALLER (ajusta a tu gusto)
+  const allowed = new Set(["AT", "C", "PIPA"]);
+  if (!allowed.has(tipo)) return null;
+
+  const canon = `${tipo}-${String(num).padStart(2, "0")}`;
+  return { tipo, num, canon };
+}
+
+function isValidUnidad(raw) {
+  const p = parseUnidad(raw);
+  if (!p) return false;
+
+  // Rango permitido (ajusta)
+  if (p.num < 1 || p.num > 999) return false;
+
+  return true;
+}
 
 function urgentPrefix(prioridad) {
   const p = String(prioridad || "").toLowerCase();
@@ -842,18 +896,27 @@ app.post("/webhook", async (req, res) => {
         return res.send(twiml(renderMenu("Elige Categoría:", cats)));
       }
 
-      // 3) Reglas por categoría
-      if (dd.categoria_clave === "TALLER") {
-        if (!dd.unidad || !isValidUnidad(dd.unidad)) {
-          dd.estado = "ESPERANDO_UNIDAD";
-          res.set("Content-Type", "text/xml");
-          return res.send(twiml("Taller seleccionado. Indica Unidad válida: AT-03 o C-03 (ej: AT-03)."));
-        }
-        // Taller: subcategoría debe quedar null
-        dd.subcategoria_id = null;
-        dd.subcategoria_nombre = null;
-        dd.subcategoria_clave = null;
-      }
+    // 3) Reglas por categoría
+if (dd.categoria_clave === "TALLER") {
+  const parsed = parseUnidad(dd.unidad);
+
+  if (!parsed) {
+    dd.estado = "ESPERANDO_UNIDAD";
+    res.set("Content-Type", "text/xml");
+    return res.send(twiml(
+      "Taller seleccionado. Indica unidad (ej: AT-03, AT16, C-03, PIPA 11)."
+    ));
+  }
+
+  // guarda normalizado
+  dd.unidad = parsed.canon;
+
+  // Taller: subcategoría debe quedar null
+  dd.subcategoria_id = null;
+  dd.subcategoria_nombre = null;
+  dd.subcategoria_clave = null;
+}
+
 
       if (dd.categoria_clave === "DYO") {
         // DyO: sin subcategoría
