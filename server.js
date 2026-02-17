@@ -331,7 +331,7 @@ async function insertFolio(client, dd) {
   const nivelCreator = dd.actor_nivel != null ? parseInt(dd.actor_nivel, 10) : 0;
   const esZP = nivelCreator >= 3 || (dd.actor_rol && String(dd.actor_rol).toUpperCase().includes("ZP"));
   const estatusInicial = esZP ? "Aprobado" : "Generado";
-  const nivelInicial = esZP ? 3 : (nivelCreator === 2 ? 2 : 1);
+  const nivelInicial = esZP ? 3 : 1;
 
   const ins = await client.query(
     `INSERT INTO public.folios (
@@ -352,8 +352,6 @@ async function insertFolio(client, dd) {
       `UPDATE public.folios SET estatus = 'Aprobado', nivel_aprobado = 3, aprobado_por = $1, aprobado_en = NOW() WHERE id = $2`,
       [dd.actor_telefono || null, row.id]
     );
-  } else if (nivelCreator === 2) {
-    await client.query(`UPDATE public.folios SET nivel_aprobado = 2 WHERE id = $1`, [row.id]);
   }
 
   try {
@@ -386,6 +384,13 @@ async function insertFolio(client, dd) {
       await notifyOnApprove(folioConPlanta, dd.actor_telefono || "");
     } catch (e) {
       console.warn("Notificaciones no enviadas (ZP creó):", e.message);
+    }
+  } else {
+    try {
+      const folioConDetalle = { ...row, concepto: dd.concepto, importe: dd.importe };
+      await notifyDirectorZPNewFolio(folioConDetalle, dd.actor_rol || "Solicitante");
+    } catch (e) {
+      console.warn("Notificación a Director ZP (nuevo folio) no enviada:", e.message);
     }
   }
 
@@ -516,7 +521,7 @@ async function getUsersToNotifyOnApprove(client, plantaId) {
   return Array.from(phones);
 }
 
-/** Teléfonos de Directores ZP (para notificar solicitudes de cancelación). */
+/** Teléfonos de Directores ZP (para notificar solicitudes de cancelación y nuevos folios). */
 async function getDirectoresZP(client) {
   const r = await client.query(
     `SELECT u.telefono FROM public.usuarios u
@@ -524,6 +529,27 @@ async function getDirectoresZP(client) {
      WHERE r.clave = 'ZP' OR r.nombre ILIKE '%ZP%' OR r.nombre ILIKE '%Director%'`
   );
   return (r.rows || []).map((row) => row.telefono).filter(Boolean);
+}
+
+/** Notificar a Director ZP que hay un folio nuevo pendiente de su aprobación (creado por GA o GG). */
+async function notifyDirectorZPNewFolio(folioRow, creadorRol) {
+  const client = await pool.connect();
+  try {
+    const directoresZP = await getDirectoresZP(client);
+    const concepto = folioRow.concepto || "-";
+    const importe = folioRow.importe != null ? `$${Number(folioRow.importe).toLocaleString("es-MX", { minimumFractionDigits: 2 })}` : "-";
+    let msg = `📋 Nuevo folio pendiente de tu aprobación\n`;
+    msg += `Folio: ${folioRow.numero_folio}\n`;
+    msg += `Creado por: ${creadorRol || "GA/GG"}\n`;
+    msg += `Concepto: ${concepto}\n`;
+    msg += `Importe: ${importe}\n\n`;
+    msg += `Responde: aprobar ${folioRow.numero_folio}`;
+    for (const tel of directoresZP) {
+      if (tel) await sendWhatsApp(tel, msg);
+    }
+  } finally {
+    client.release();
+  }
 }
 
 /** Notificar a GA, GG y CDMX cuando un folio es cancelado por Director ZP. */
@@ -757,9 +783,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
         if (estaAprobado) {
           txt += `Aprobado por: ${folio.aprobado_por || "ZP"}\n`;
         } else if (!estaCancelado) {
-          if (nivelApr === 1) txt += `Faltan por aprobar: GG (Gerente General)\n`;
-          else if (nivelApr === 2) txt += `Faltan por aprobar: Director ZP\n`;
-          else txt += `Faltan por aprobar: Director ZP\n`;
+          txt += `Pendiente de aprobación del Director ZP (solicitud)\n`;
         }
         txt += `Cotización: ${folio.cotizacion_url ? "Sí" : "No"}\n`;
 
@@ -819,29 +843,20 @@ app.post("/twilio/whatsapp", async (req, res) => {
         if (String(folio.estatus || "").toLowerCase() === "aprobado") return safeReply("Ese folio ya está aprobado.");
         if (String(folio.estatus || "").toLowerCase() === "cancelado") return safeReply("Ese folio está cancelado.");
 
-        const nivelApr = parseInt(folio.nivel_aprobado, 10) || 1;
         const rolNivel = actor.rol_nivel != null ? parseInt(actor.rol_nivel, 10) : 0;
-        const esGG = rolNivel === 2 || (actor.rol_clave && actor.rol_clave.toUpperCase() === "GG");
-        const esZP = rolNivel >= 3 || (actor.rol_clave && actor.rol_clave.toUpperCase() === "ZP");
-
-        const puedeAprobarGG = nivelApr === 1 && esGG;
-        const puedeAprobarZP = nivelApr === 2 && esZP;
-        if (!puedeAprobarGG && !puedeAprobarZP) {
-          if (nivelApr === 1) return safeReply("No autorizado. Le falta aprobación a GG (Gerente General).");
-          if (nivelApr === 2) return safeReply("No autorizado. Le falta aprobación al Director ZP.");
-          return safeReply("No autorizado para aprobar este folio.");
+        const esZP = rolNivel >= 3 || (actor.rol_clave && actor.rol_clave.toUpperCase() === "ZP") || (actor.rol_nombre && String(actor.rol_nombre).toUpperCase().includes("ZP"));
+        if (!esZP) {
+          return safeReply("Solo el Director ZP puede aprobar solicitudes. GA, GG y Coordinador CDMX solo pueden solicitar (crear folios).");
         }
+
+        const nivelApr = parseInt(folio.nivel_aprobado, 10) || 1;
+        if (nivelApr >= 3) return safeReply("Ese folio ya está aprobado.");
 
         await client.query("BEGIN");
         try {
-          if (puedeAprobarZP) {
-            await updateFolioAprobado(client, folio.id, fromNorm);
-            await client.query(`UPDATE public.folios SET nivel_aprobado = 3 WHERE id = $1`, [folio.id]);
-            await insertHistorial(client, folio.id, folio.numero_folio, folio.folio_codigo, "Aprobado", "Aprobado por Director ZP vía WhatsApp", fromNorm, actor.rol_nombre);
-          } else {
-            await client.query(`UPDATE public.folios SET nivel_aprobado = 2 WHERE id = $1`, [folio.id]);
-            await insertHistorial(client, folio.id, folio.numero_folio, folio.folio_codigo, "Aprobado por GG", "Aprobado por GG vía WhatsApp", fromNorm, actor.rol_nombre);
-          }
+          await updateFolioAprobado(client, folio.id, fromNorm);
+          await client.query(`UPDATE public.folios SET nivel_aprobado = 3 WHERE id = $1`, [folio.id]);
+          await insertHistorial(client, folio.id, folio.numero_folio, folio.folio_codigo, "Aprobado", "Aprobado por Director ZP vía WhatsApp", fromNorm, actor.rol_nombre);
           await client.query("COMMIT");
         } catch (e) {
           await client.query("ROLLBACK");
@@ -855,9 +870,9 @@ app.post("/twilio/whatsapp", async (req, res) => {
         }
 
         if (!twilioClient || !twilioWhatsAppFrom) {
-          return safeReply(puedeAprobarZP ? "Folio aprobado. No pude enviar notificaciones (Twilio no configurado)." : "Folio aprobado por GG. Notificaciones no enviadas (Twilio no configurado).");
+          return safeReply("Folio aprobado. No pude enviar notificaciones (Twilio no configurado).");
         }
-        return safeReply(puedeAprobarZP ? `Folio ${numero} aprobado. Notificaciones enviadas a GA, GG y CDMX.` : `Folio ${numero} aprobado por GG. Pendiente de Director ZP. Notificaciones enviadas.`);
+        return safeReply(`Folio ${numero} aprobado. Notificaciones enviadas a GA, GG y CDMX.`);
       }
 
       if (FLAGS.APPROVALS && /^cancelar\s+F-\d{6}-\d{3}/i.test(body)) {
