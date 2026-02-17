@@ -94,6 +94,13 @@ function phoneAltForDb(normalized) {
   return "+521" + normalized.slice(3);
 }
 
+/** Últimos 10 dígitos del teléfono (México) para cruce sin depender de +52 vs +521. */
+function phoneLast10(phone) {
+  const digits = String(phone || "").replace(/\D/g, "");
+  if (digits.length >= 10) return digits.slice(-10);
+  return null;
+}
+
 function twimlMessage(text) {
   const r = new twilio.twiml.MessagingResponse();
   r.message(text);
@@ -431,13 +438,17 @@ async function getHistorial(client, numeroFolio, limit = 10) {
   return r.rows;
 }
 
-/** Mapa telefono (cualquier variante +52 / +521) -> nombre. Carga todos los usuarios y normaliza para que +5217 = +527. */
+/** Mapa telefono (cualquier variante +52 / +521 / 10 dígitos) -> nombre. */
 async function getNombresByTelefonos(client, _telefonos) {
   let r;
   try {
     r = await client.query(`SELECT telefono, nombre FROM public.usuarios`);
   } catch (e) {
-    return new Map();
+    try {
+      r = await client.query(`SELECT telefono, name AS nombre FROM public.usuarios`);
+    } catch (e2) {
+      return new Map();
+    }
   }
   const map = new Map();
   (r.rows || []).forEach((row) => {
@@ -446,9 +457,11 @@ async function getNombresByTelefonos(client, _telefonos) {
     if (!t || !nom) return;
     const norm = normalizePhone(t);
     const alt = norm && norm.length === 12 ? "+521" + norm.slice(3) : null;
+    const last10 = phoneLast10(t);
     map.set(t, nom);
     if (norm) map.set(norm, nom);
     if (alt) map.set(alt, nom);
+    if (last10) map.set(last10, nom);
     if (t.startsWith("+521") && t.length >= 13) map.set("+52" + t.slice(3), nom);
     if (t.startsWith("+52") && !t.startsWith("+521") && t.length >= 12) map.set("+521" + t.slice(2), nom);
   });
@@ -738,8 +751,11 @@ app.post("/twilio/whatsapp", async (req, res) => {
           const fecha = formatMexicoCentral(r.creado_en);
           let comentario = r.comentario || "";
           if (comentario.trim() === "Folio creado por WhatsApp" && r.actor_telefono) {
-            const tel = r.actor_telefono;
-            const nombre = nombresMap.get(tel) || nombresMap.get(normalizePhone(tel)) || nombresMap.get(phoneAltForDb(normalizePhone(tel))) || null;
+            const tel = String(r.actor_telefono || "").trim().replace(/\s/g, "");
+            const norm = normalizePhone(tel);
+            const alt = phoneAltForDb(norm);
+            const last10 = phoneLast10(tel);
+            const nombre = nombresMap.get(tel) || nombresMap.get(norm) || (alt && nombresMap.get(alt)) || (last10 && nombresMap.get(last10)) || null;
             const rol = r.actor_rol ? (String(r.actor_rol).toUpperCase().includes("ZP") ? "Director ZP" : r.actor_rol) : null;
             const identidad = nombre ? (rol ? `${rol} - ${nombre}` : nombre) : (rol ? `${rol} - ${tel}` : tel);
             comentario = `Folio creado por ${identidad}`;
