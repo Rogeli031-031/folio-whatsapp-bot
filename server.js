@@ -431,31 +431,26 @@ async function getHistorial(client, numeroFolio, limit = 10) {
   return r.rows;
 }
 
-/** Mapa telefono (normalizado o +521) -> nombre desde public.usuarios. Asegura que +5217 y +527 sean el mismo. */
-async function getNombresByTelefonos(client, telefonos) {
-  const raw = [...new Set((telefonos || []).filter(Boolean))];
-  const unicos = [...new Set(raw.map((t) => normalizePhone(t)).filter(Boolean))];
-  const alternativas = unicos.map((n) => phoneAltForDb(n)).filter(Boolean);
-  const todos = [...new Set([...raw, ...unicos, ...alternativas])];
-  if (todos.length === 0) return new Map();
-  const placeholders = todos.map((_, i) => `$${i + 1}`).join(", ");
-  const r = await client.query(
-    `SELECT telefono, nombre FROM public.usuarios WHERE telefono IN (${placeholders})`,
-    todos
-  ).catch(() => ({ rows: [] }));
+/** Mapa telefono (cualquier variante +52 / +521) -> nombre. Carga todos los usuarios y normaliza para que +5217 = +527. */
+async function getNombresByTelefonos(client, _telefonos) {
+  let r;
+  try {
+    r = await client.query(`SELECT telefono, nombre FROM public.usuarios`);
+  } catch (e) {
+    return new Map();
+  }
   const map = new Map();
   (r.rows || []).forEach((row) => {
+    const t = row.telefono != null ? String(row.telefono).trim().replace(/\s/g, "") : "";
     const nom = row.nombre != null ? String(row.nombre).trim() : null;
-    if (nom) {
-      const t = row.telefono;
-      map.set(t, nom);
-      const norm = normalizePhone(t);
-      if (norm) map.set(norm, nom);
-      const alt = phoneAltForDb(norm);
-      if (alt) map.set(alt, nom);
-      if (t.startsWith("+521")) map.set("+52" + t.slice(3), nom);
-      if (t.startsWith("+52") && !t.startsWith("+521")) map.set("+521" + t.slice(2), nom);
-    }
+    if (!t || !nom) return;
+    const norm = normalizePhone(t);
+    const alt = norm && norm.length === 12 ? "+521" + norm.slice(3) : null;
+    map.set(t, nom);
+    if (norm) map.set(norm, nom);
+    if (alt) map.set(alt, nom);
+    if (t.startsWith("+521") && t.length >= 13) map.set("+52" + t.slice(3), nom);
+    if (t.startsWith("+52") && !t.startsWith("+521") && t.length >= 12) map.set("+521" + t.slice(2), nom);
   });
   return map;
 }
