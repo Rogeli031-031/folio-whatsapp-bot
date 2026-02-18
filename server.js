@@ -40,7 +40,23 @@ const FLAGS = {
   HISTORIAL: true,
   ESTATUS: true,
 };
-const BOT_VERSION = "2.0.0";
+const BOT_VERSION = "3.0.0";
+
+/** Estados de folio (tabla folios.estatus). No se brinca proceso. */
+const ESTADOS = {
+  GENERADO: "GENERADO",
+  PENDIENTE_APROB_PLANTA: "PENDIENTE_APROB_PLANTA",
+  APROB_PLANTA: "APROB_PLANTA",
+  PENDIENTE_APROB_ZP: "PENDIENTE_APROB_ZP",
+  APROBADO_ZP: "APROBADO_ZP",
+  LISTO_PARA_PROGRAMACION: "LISTO_PARA_PROGRAMACION",
+  SELECCIONADO_SEMANA: "SELECCIONADO_SEMANA",
+  SOLICITANDO_PAGO: "SOLICITANDO_PAGO",
+  PAGADO: "PAGADO",
+  CERRADO: "CERRADO",
+  CANCELACION_SOLICITADA: "CANCELACION_SOLICITADA",
+  CANCELADO: "CANCELADO",
+};
 
 const REQUIRED_ENVS = ["DATABASE_URL", "TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN"];
 for (const k of REQUIRED_ENVS) {
@@ -99,6 +115,21 @@ function phoneLast10(phone) {
   const digits = String(phone || "").replace(/\D/g, "");
   if (digits.length >= 10) return digits.slice(-10);
   return null;
+}
+
+/** Normaliza teléfono para envío WhatsApp outbound: +521... -> +52..., limpia espacios; devuelve "whatsapp:+52..." o null si inválido. */
+function normalizePhoneForWhatsApp(phone) {
+  if (!phone) return null;
+  let s = String(phone).trim().replace(/\s/g, "").replace(/-/g, "");
+  s = s.replace(/^whatsapp:/i, "");
+  if (s.startsWith("+521") && s.length >= 13) s = "+52" + s.slice(3);
+  else if (s.startsWith("521") && s.length >= 12) s = "+52" + s.slice(2);
+  else if (s.startsWith("52") && !s.startsWith("521") && s.length >= 12) s = "+" + s;
+  else if (/^\d{10}$/.test(s)) s = "+52" + s;
+  else if (s.startsWith("+52") && s.length === 12) { /* ok */ }
+  else return null;
+  if (!/^\+52\d{10}$/.test(s)) return null;
+  return `whatsapp:${s}`;
 }
 
 function twimlMessage(text) {
@@ -189,6 +220,7 @@ async function ensureSchema() {
     `).catch(() => {});
     await client.query(`ALTER TABLE public.usuarios ADD COLUMN IF NOT EXISTS email VARCHAR(255);`);
     await client.query(`ALTER TABLE public.usuarios ADD COLUMN IF NOT EXISTS nombre VARCHAR(100);`);
+    await client.query(`ALTER TABLE public.usuarios ADD COLUMN IF NOT EXISTS activo BOOLEAN DEFAULT true;`);
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS public.folio_counters (
@@ -238,6 +270,36 @@ async function ensureSchema() {
         numero_folio VARCHAR(50),
         folio_codigo VARCHAR(50),
         estatus VARCHAR(100),
+        comentario TEXT,
+        actor_telefono VARCHAR(50),
+        actor_rol VARCHAR(100),
+        creado_en TIMESTAMPTZ DEFAULT NOW()
+      );
+    `).catch(() => {});
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS public.notificaciones_log (
+        id SERIAL PRIMARY KEY,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        folio_codigo VARCHAR(50),
+        planta_id INT,
+        evento VARCHAR(50),
+        to_phone VARCHAR(50),
+        status VARCHAR(20),
+        error_message TEXT
+      );
+    `).catch(() => {});
+
+    await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS estatus_anterior VARCHAR(50);`);
+    await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS override_planta BOOLEAN DEFAULT false;`);
+    await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS override_motivo TEXT;`);
+    await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS creado_por VARCHAR(255);`);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS public.comentarios (
+        id SERIAL PRIMARY KEY,
+        folio_id INT,
+        numero_folio VARCHAR(50),
         comentario TEXT,
         actor_telefono VARCHAR(50),
         actor_rol VARCHAR(100),
@@ -312,7 +374,8 @@ async function getFolioByNumero(client, numero) {
   const r = await client.query(
     `SELECT f.id, f.numero_folio, f.folio_codigo, f.planta_id, f.beneficiario, f.concepto, f.importe,
             f.categoria, f.subcategoria, f.unidad, f.prioridad, f.estatus, f.cotizacion_url, f.cotizacion_s3key,
-            f.aprobado_por, f.aprobado_en, f.creado_en, f.nivel_aprobado, p.nombre AS planta_nombre
+            f.aprobado_por, f.aprobado_en, f.creado_en, f.nivel_aprobado, f.estatus_anterior, f.override_planta, f.override_motivo, f.creado_por,
+            p.nombre AS planta_nombre
      FROM public.folios f
      LEFT JOIN public.plantas p ON p.id = f.planta_id
      WHERE f.numero_folio = $1`,
@@ -327,31 +390,31 @@ async function insertFolio(client, dd) {
   const numero_folio = await nextFolioNumber(client);
   const folio_codigo = numero_folio;
   const prioridad = dd.urgente ? "Urgente no programado" : (dd.prioridad || null);
+  const plantaId = dd.planta_id || dd.actor_planta_id || null;
 
-  const nivelCreator = dd.actor_nivel != null ? parseInt(dd.actor_nivel, 10) : 0;
   const rolClave = dd.actor_clave ? String(dd.actor_clave).toUpperCase() : "";
   const rolNombre = dd.actor_rol ? String(dd.actor_rol) : "";
-  const esZP = rolClave === "ZP" || nivelCreator >= 3 || (/director/i.test(rolNombre) && /zp/i.test(rolNombre));
-  const estatusInicial = esZP ? "Aprobado" : "Generado";
-  const nivelInicial = esZP ? 3 : 1;
+  const esZP = rolClave === "ZP" || (/director/i.test(rolNombre) && /zp/i.test(rolNombre));
+  const esCDMX = rolClave === "CDMX" || (rolNombre && rolNombre.toUpperCase().includes("CDMX"));
+  const estatusInicial = esZP ? ESTADOS.LISTO_PARA_PROGRAMACION : ESTADOS.PENDIENTE_APROB_PLANTA;
 
   const ins = await client.query(
     `INSERT INTO public.folios (
       folio_codigo, numero_folio, planta_id, beneficiario, concepto, importe,
-      categoria, subcategoria, unidad, prioridad, estatus, creado_en, nivel_aprobado
-    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW(),$12)
+      categoria, subcategoria, unidad, prioridad, estatus, creado_en, nivel_aprobado, creado_por
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW(),$12,$13)
     RETURNING id, numero_folio, folio_codigo, planta_id`,
     [
-      folio_codigo, numero_folio, dd.planta_id || null, dd.beneficiario || null, dd.concepto || null,
+      folio_codigo, numero_folio, plantaId, dd.beneficiario || null, dd.concepto || null,
       dd.importe || null, dd.categoria_nombre || null, dd.subcategoria_nombre || null,
-      dd.unidad || null, prioridad, estatusInicial, nivelInicial,
+      dd.unidad || null, prioridad, estatusInicial, esZP ? 3 : 1, dd.actor_telefono || null,
     ]
   );
   const row = ins.rows[0];
 
   if (esZP) {
     await client.query(
-      `UPDATE public.folios SET estatus = 'Aprobado', nivel_aprobado = 3, aprobado_por = $1, aprobado_en = NOW() WHERE id = $2`,
+      `UPDATE public.folios SET aprobado_por = $1, aprobado_en = NOW() WHERE id = $2`,
       [dd.actor_telefono || null, row.id]
     );
   }
@@ -360,9 +423,9 @@ async function insertFolio(client, dd) {
     await client.query(
       `INSERT INTO public.folio_historial(
         numero_folio, estatus, comentario, actor_telefono, actor_rol, creado_en, folio_codigo, folio_id
-      ) VALUES ($1,'Generado',$2,$3,$4,NOW(),$5,$6)`,
+      ) VALUES ($1,$2,$3,$4,$5,NOW(),$6,$7)`,
       [
-        row.numero_folio, "Folio creado por WhatsApp",
+        row.numero_folio, estatusInicial, "Folio creado por WhatsApp",
         dd.actor_telefono || null, dd.actor_rol || null, row.folio_codigo, row.id,
       ]
     );
@@ -375,14 +438,14 @@ async function insertFolio(client, dd) {
       await client.query(
         `INSERT INTO public.folio_historial(
           folio_id, numero_folio, folio_codigo, estatus, comentario, actor_telefono, actor_rol, creado_en
-        ) VALUES ($1,$2,$3,'Aprobado','Folio creado por Director ZP (auto-aprobado)',$4,$5,NOW())`,
-        [row.id, row.numero_folio, row.folio_codigo, dd.actor_telefono || null, dd.actor_rol || null]
+        ) VALUES ($1,$2,$3,$4,'Folio creado por Director ZP (auto-aprobado)',$5,$6,NOW())`,
+        [row.id, row.numero_folio, row.folio_codigo, ESTADOS.APROBADO_ZP, dd.actor_telefono || null, dd.actor_rol || null]
       );
     } catch (e) {
-      console.warn("Historial Aprobado no insertado (ZP creó):", e.message);
+      console.warn("Historial ZP no insertado:", e.message);
     }
     try {
-      const folioConPlanta = { ...row, planta_id: row.planta_id };
+      const folioConPlanta = { ...row, planta_id: row.planta_id, concepto: dd.concepto, importe: dd.importe, prioridad };
       await notifyOnApprove(folioConPlanta, dd.actor_telefono || "");
     } catch (e) {
       console.warn("Notificaciones no enviadas (ZP creó):", e.message);
@@ -408,15 +471,44 @@ async function insertHistorial(client, folioId, numeroFolio, folioCodigo, estatu
   );
 }
 
+async function updateFolioEstatus(client, folioId, estatus, extra = {}) {
+  const parts = ["estatus = $1"];
+  const params = [estatus];
+  let n = 2;
+  if (extra.aprobado_por != null) {
+    parts.push(`aprobado_por = $${n}`);
+    params.push(extra.aprobado_por);
+    n++;
+  }
+  if (extra.aprobado_en) parts.push("aprobado_en = NOW()");
+  if (extra.estatus_anterior != null) {
+    parts.push(`estatus_anterior = $${n}`);
+    params.push(extra.estatus_anterior);
+    n++;
+  }
+  if (extra.override_planta != null) {
+    parts.push(`override_planta = $${n}`);
+    params.push(extra.override_planta);
+    n++;
+  }
+  if (extra.override_motivo != null) {
+    parts.push(`override_motivo = $${n}`);
+    params.push(extra.override_motivo);
+    n++;
+  }
+  params.push(folioId);
+  await client.query(`UPDATE public.folios SET ${parts.join(", ")} WHERE id = $${params.length}`, params);
+}
+
 async function updateFolioAprobado(client, folioId, aprobadoPor) {
   await client.query(
-    `UPDATE public.folios SET estatus = 'Aprobado', aprobado_por = $1, aprobado_en = NOW() WHERE id = $2`,
-    [aprobadoPor, folioId]
+    `UPDATE public.folios SET estatus = $1, aprobado_por = $2, aprobado_en = NOW() WHERE id = $3`,
+    [ESTADOS.APROBADO_ZP, aprobadoPor, folioId]
   );
 }
 
 async function updateFolioCancelado(client, folioId) {
-  await client.query(`UPDATE public.folios SET estatus = 'Cancelado' WHERE id = $1`, [folioId]);
+  await client.query(`UPDATE public.folios SET estatus = $1 WHERE id = $2`, [ESTADOS.CANCELADO, folioId]);
 }
 
 async function attachCotizacionToFolio(client, folioId, s3Key, publicUrl, actorTelefono) {
@@ -462,6 +554,17 @@ async function getHistorial(client, numeroFolio, limit = 10) {
   return r.rows;
 }
 
+async function insertComentario(client, numeroFolio, texto, actorTelefono, actorRol) {
+  const folio = await getFolioByNumero(client, numeroFolio);
+  if (!folio) return null;
+  await client.query(
+    `INSERT INTO public.comentarios (folio_id, numero_folio, comentario, actor_telefono, actor_rol) VALUES ($1,$2,$3,$4,$5)`,
+    [folio.id, numeroFolio, texto, actorTelefono || null, actorRol || null]
+  );
+  await insertHistorial(client, folio.id, numeroFolio, folio.folio_codigo, folio.estatus, `Comentario: ${texto.substring(0, 200)}${texto.length > 200 ? "…" : ""}`, actorTelefono, actorRol);
+  return folio;
+}
+
 /** Mapa telefono (cualquier variante +52 / +521 / 10 dígitos) -> nombre. */
 async function getNombresByTelefonos(client, _telefonos) {
   let r;
@@ -497,11 +600,73 @@ async function getFoliosUrgentes(client, limit = 20) {
   const r = await client.query(
     `SELECT numero_folio, importe, creado_en, concepto
      FROM public.folios
-     WHERE prioridad = 'Urgente no programado' AND estatus != 'Cancelado'
+     WHERE prioridad = 'Urgente no programado' AND estatus != $1
      ORDER BY creado_en ASC`,
-    []
+    [ESTADOS.CANCELADO]
   );
   return (r.rows || []).slice(0, limit);
+}
+
+/** Últimos N folios de una planta (recientes primero). Retorna { rows, totalGeneral, totalUrgentes, countUrgentes }. */
+async function getFoliosByPlanta(client, plantaId, limit = 30) {
+  const r = await client.query(
+    `SELECT numero_folio, estatus, importe, prioridad
+     FROM public.folios
+     WHERE planta_id = $1
+     ORDER BY creado_en DESC
+     LIMIT $2`,
+    [plantaId, limit]
+  );
+  const rows = r.rows || [];
+  let totalGeneral = 0;
+  let totalUrgentes = 0;
+  let countUrgentes = 0;
+  rows.forEach((f) => {
+    const m = f.importe != null ? Number(f.importe) : 0;
+    totalGeneral += m;
+    if (f.prioridad && String(f.prioridad).toLowerCase().includes("urgente")) {
+      totalUrgentes += m;
+      countUrgentes++;
+    }
+  });
+  return { rows, totalGeneral, totalUrgentes, countUrgentes };
+}
+
+/** Usuarios por rol y planta (GA/GG). Solo activos con teléfono. rolClave: 'GA' | 'GG'. */
+async function getUsersByRoleAndPlanta(client, rolClave, plantaId) {
+  const q = `
+    SELECT u.telefono, u.nombre FROM public.usuarios u
+    INNER JOIN public.roles r ON r.id = u.rol_id
+    WHERE u.planta_id = $1 AND (r.clave = $2 OR r.nombre = $2)
+      AND TRIM(COALESCE(u.telefono,'')) <> ''
+      AND (u.activo IS NULL OR u.activo = true)
+  `;
+  const r = await client.query(q, [plantaId, rolClave]);
+  return (r.rows || []).map((row) => ({ telefono: row.telefono, nombre: row.nombre }));
+}
+
+/** Usuarios corporativos por rol (ZP, CDMX). Sin planta. Solo activos con teléfono. */
+async function getUsersByRole(client, rolClave) {
+  const q = `
+    SELECT u.telefono, u.nombre FROM public.usuarios u
+    INNER JOIN public.roles r ON r.id = u.rol_id
+    WHERE (r.clave = $1 OR r.nombre = $1)
+      AND TRIM(COALESCE(u.telefono,'')) <> ''
+      AND (u.activo IS NULL OR u.activo = true)
+  `;
+  const r = await client.query(q, [rolClave]);
+  return (r.rows || []).map((row) => ({ telefono: row.telefono, nombre: row.nombre }));
+}
+
+/** "Notificar a todos": GA + GG de la planta del folio + CDMX + ZP. Solo activos. */
+async function getTodosParaNotificacion(client, plantaId) {
+  const phones = new Set();
+  const ga = await getUsersByRoleAndPlanta(client, "GA", plantaId);
+  const gg = await getUsersByRoleAndPlanta(client, "GG", plantaId);
+  const cdmx = await getUsersByRole(client, "CDMX");
+  const zp = await getUsersByRole(client, "ZP");
+  [ga, gg, cdmx, zp].forEach((arr) => arr.forEach((u) => u.telefono && phones.add(u.telefono)));
+  return Array.from(phones);
 }
 
 /** Usuarios a notificar al aprobar: GA y GG de la planta del folio + todos CDMX. */
@@ -509,13 +674,14 @@ async function getUsersToNotifyOnApprove(client, plantaId) {
   const gaGG = await client.query(
     `SELECT u.telefono FROM public.usuarios u
      INNER JOIN public.roles r ON r.id = u.rol_id
-     WHERE u.planta_id = $1 AND r.nombre IN ('GA','GG')`,
+     WHERE u.planta_id = $1 AND (r.clave IN ('GA','GG') OR r.nombre IN ('GA','GG'))
+       AND (u.activo IS NULL OR u.activo = true)`,
     [plantaId]
   );
   const cdmx = await client.query(
     `SELECT u.telefono FROM public.usuarios u
      INNER JOIN public.roles r ON r.id = u.rol_id
-     WHERE r.nombre = 'CDMX'`
+     WHERE (r.clave = 'CDMX' OR r.nombre = 'CDMX') AND (u.activo IS NULL OR u.activo = true)`
   );
   const phones = new Set();
   gaGG.rows.forEach((row) => phones.add(row.telefono));
@@ -573,6 +739,130 @@ async function notifyOnCancel(folio, canceladoPor, motivo) {
   }
 }
 
+/* ==================== NOTIFICACIONES POR PLANTA ==================== */
+
+/** Obtiene destinatarios de la planta del folio. opts: { roles?: string[] } para filtrar por rol (ej. ['CDMX','FINANZAS']). Excluye inactivos y sin teléfono. */
+async function getRecipientsByFolio(client, folioCodigo, opts = {}) {
+  const folioRow = await client.query(
+    `SELECT f.id, f.numero_folio, f.folio_codigo, f.planta_id FROM public.folios f WHERE f.numero_folio = $1 OR f.folio_codigo = $1 LIMIT 1`,
+    [folioCodigo]
+  );
+  const folio = folioRow.rows[0] || null;
+  if (!folio || folio.planta_id == null) return { folio: null, recipients: [] };
+
+  let q = `
+    SELECT u.id AS user_id, COALESCE(u.nombre, '') AS nombre, u.telefono AS telefono_whatsapp, r.nombre AS rol
+    FROM public.usuarios u
+    LEFT JOIN public.roles r ON r.id = u.rol_id
+    WHERE u.planta_id = $1 AND TRIM(COALESCE(u.telefono,'')) <> ''
+  `;
+  const params = [folio.planta_id];
+  try {
+    const activoCol = await client.query(`
+      SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name='usuarios' AND column_name='activo'
+    `);
+    if (activoCol.rows.length > 0) {
+      q += ` AND (u.activo IS NULL OR u.activo = true)`;
+    }
+  } catch (_) {}
+  if (opts.roles && Array.isArray(opts.roles) && opts.roles.length > 0) {
+    q += ` AND r.nombre = ANY($2::TEXT[])`;
+    params.push(opts.roles);
+  }
+  q += ` ORDER BY u.id`;
+  const r = await client.query(q, params);
+  const recipients = (r.rows || []).map((row) => ({
+    user_id: row.user_id,
+    nombre: row.nombre || "",
+    telefono_whatsapp: row.telefono_whatsapp,
+    rol: row.rol || "",
+  }));
+  return { folio, recipients };
+}
+
+/** Registra un intento de notificación en notificaciones_log. */
+async function logNotification(client, data) {
+  const { folio_codigo, planta_id, evento, to_phone, status, error_message } = data;
+  await client.query(
+    `INSERT INTO public.notificaciones_log (folio_codigo, planta_id, evento, to_phone, status, error_message) VALUES ($1,$2,$3,$4,$5,$6)`,
+    [folio_codigo || null, planta_id ?? null, evento || null, to_phone || null, status || null, error_message || null]
+  );
+}
+
+/** Envía notificación por WhatsApp solo a miembros de la planta del folio. evento: CREADO|APROBADO|CANCELADO|ADJUNTO. extra: { roles?, excludePhone?, motivo?, concepto?, importe?, prioridad? }. Retorna { sent, failed, failures }. */
+async function notifyPlantByFolio(poolInstance, folioCodigo, evento, extra = {}) {
+  const client = await poolInstance.connect();
+  let sent = 0;
+  let failed = 0;
+  const failures = [];
+  try {
+    const folio = await getFolioByNumero(client, folioCodigo);
+    if (!folio) return { sent: 0, failed: 0, failures: [] };
+    if (folio.planta_id == null) return { sent: 0, failed: 0, failures: [] };
+
+    const message = buildPlantNotificationMessage(evento, folio, { ...extra, folioCodigo });
+    const { folio: _f, recipients } = await getRecipientsByFolio(client, folioCodigo, extra.roles ? { roles: extra.roles } : {});
+    if (!recipients || recipients.length === 0) return { sent: 0, failed: 0, failures: [] };
+
+    const plantaId = folio.planta_id;
+    const excludeNorm = extra.excludePhone ? normalizePhone(extra.excludePhone) : null;
+
+    for (const rec of recipients) {
+      const toPhone = rec.telefono_whatsapp;
+      if (!toPhone) continue;
+      if (excludeNorm && normalizePhone(toPhone) === excludeNorm) continue;
+
+      const result = await sendWhatsApp(toPhone, message);
+      try {
+        await logNotification(client, {
+          folio_codigo: folio.numero_folio || folioCodigo,
+          planta_id: plantaId,
+          evento,
+          to_phone: toPhone,
+          status: result.ok ? "SENT" : "FAILED",
+          error_message: result.error || null,
+        });
+      } catch (e) {
+        console.warn("logNotification error:", e.message);
+      }
+      if (result.ok) sent++;
+      else {
+        failed++;
+        failures.push({ to: toPhone, error: result.error || "unknown" });
+      }
+    }
+    return { sent, failed, failures };
+  } catch (e) {
+    console.warn("notifyPlantByFolio error:", e.message);
+    return { sent, failed, failures };
+  } finally {
+    client.release();
+  }
+}
+
+/** Construye mensaje por evento para notificación por planta. */
+function buildPlantNotificationMessage(evento, folio, extra = {}) {
+  const num = (folio && (folio.numero_folio || folio.folio_codigo)) || extra.folioCodigo || "?";
+  const urg = (folio && folio.prioridad === "Urgente no programado") ? " 🔴 URGENTE" : "";
+  switch (String(evento).toUpperCase()) {
+    case "CREADO":
+      return (
+        `📋 Se creó folio ${num}${urg}.\n` +
+        `Concepto: ${(folio && folio.concepto) || extra.concepto || "-"}\n` +
+        `Importe: $${folio && folio.importe != null ? Number(folio.importe).toLocaleString("es-MX", { minimumFractionDigits: 2 }) : (extra.importe != null ? Number(extra.importe).toLocaleString("es-MX", { minimumFractionDigits: 2 }) : "-")}\n` +
+        `Prioridad: ${(folio && folio.prioridad) || extra.prioridad || "-"}`
+      );
+    case "APROBADO":
+      return `✅ Folio aprobado: ${num}${urg}\nConcepto: ${(folio && folio.concepto) || "-"}\nImporte: $${folio && folio.importe != null ? Number(folio.importe).toLocaleString("es-MX", { minimumFractionDigits: 2 }) : "-"}`;
+    case "CANCELADO":
+      return `📋 Folio cancelado: ${num}\nMotivo: ${extra.motivo || "N/A"}`;
+    case "ADJUNTO":
+      return `📎 Cotización adjunta al folio ${num}.`;
+    default:
+      return `Folio ${num}: actualización.`;
+  }
+}
+
 /* ==================== S3 / MEDIA ==================== */
 
 async function downloadTwilioMediaAsBuffer(mediaUrl) {
@@ -603,18 +893,28 @@ async function uploadPdfToS3(buffer, key) {
 
 /* ==================== COMANDOS: TEXTO AYUDA / VERSION ==================== */
 
-function buildHelpMessage() {
-  const lines = [
-    "Comandos:",
-    "• crear folio [concepto] [urgente]",
-    `• estatus F-YYYYMM-XXX${FLAGS.ESTATUS ? "" : " (desactivado)"}`,
-    `• historial F-YYYYMM-XXX${FLAGS.HISTORIAL ? "" : " (desactivado)"}`,
-    FLAGS.APPROVALS ? "• aprobar F-YYYYMM-XXX (solo ZP)" : "• aprobar ... (desactivado)",
-    FLAGS.APPROVALS ? "• cancelar F-YYYYMM-XXX <motivo> (GA/GG/CDMX solicitan; ZP aprueba)" : "• cancelar ... (desactivado)",
-    FLAGS.ATTACHMENTS ? "• adjuntar F-YYYYMM-XXX (luego envía el PDF)" : "• adjuntar ... (desactivado)",
-    "• version",
-    "• ayuda / menu",
-  ];
+function buildHelpMessage(actor) {
+  const clave = (actor && actor.rol_clave) ? String(actor.rol_clave).toUpperCase() : "";
+  const lines = ["Comandos:"];
+  lines.push("• crear folio [concepto] [urgente]");
+  lines.push(`• estatus F-YYYYMM-XXX${FLAGS.ESTATUS ? "" : " (desactivado)"}`);
+  lines.push(`• historial F-YYYYMM-XXX${FLAGS.HISTORIAL ? "" : " (desactivado)"}`);
+  lines.push("• folios de planta");
+  lines.push("• comentario F-YYYYMM-XXX: <texto>");
+  if (FLAGS.ATTACHMENTS) lines.push("• adjuntar F-YYYYMM-XXX (luego envía el PDF)");
+  if (FLAGS.APPROVALS) {
+    if (clave === "GG") lines.push("• aprobar F-YYYYMM-XXX (aprobación planta)");
+    if (clave === "ZP") {
+      lines.push("• aprobar F-YYYYMM-XXX (aprobación dirección)");
+      lines.push("• aprobar_override F-YYYYMM-XXX motivo: <texto>");
+      lines.push("• autorizar cancelacion F-YYYYMM-XXX");
+      lines.push("• rechazar cancelacion F-YYYYMM-XXX motivo: <texto>");
+    }
+    if (clave === "CDMX") lines.push("• seleccionar F-YYYYMM-XXX (selección para semana)");
+    if (["GA", "GG", "CDMX"].includes(clave)) lines.push("• cancelar F-YYYYMM-XXX motivo: <texto>");
+  }
+  lines.push("• version");
+  lines.push("• ayuda / menu");
   return lines.join("\n");
 }
 
@@ -667,16 +967,22 @@ function resetSession(sess) {
 
 /* ==================== NOTIFICACIONES WHATSAPP ==================== */
 
+/** Envío outbound WhatsApp. Usa TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_WHATSAPP_NUMBER. Normaliza "to" a whatsapp:+52... Retorna { ok, error? }. */
 async function sendWhatsApp(toPhone, body) {
-  if (!twilioClient || !twilioWhatsAppFrom) return false;
-  const to = toPhone.startsWith("whatsapp:") ? toPhone : `whatsapp:${toPhone}`;
+  if (!twilioClient || !twilioWhatsAppFrom) {
+    return { ok: false, error: "Twilio no configurado (TWILIO_ACCOUNT_SID/AUTH_TOKEN/WHATSAPP_NUMBER)" };
+  }
+  const to = normalizePhoneForWhatsApp(toPhone);
+  if (!to) {
+    return { ok: false, error: "Teléfono inválido o no normalizable" };
+  }
   const from = twilioWhatsAppFrom.startsWith("whatsapp:") ? twilioWhatsAppFrom : `whatsapp:${twilioWhatsAppFrom}`;
   try {
     await twilioClient.messages.create({ body, from, to });
-    return true;
+    return { ok: true };
   } catch (e) {
     console.warn("Twilio send error:", e.message);
-    return false;
+    return { ok: false, error: e.message || String(e) };
   }
 }
 
@@ -750,10 +1056,6 @@ app.post("/twilio/whatsapp", async (req, res) => {
       return safeReply("Listo. Cancelé el flujo. Escribe: Crear folio o Ayuda");
     }
 
-    if (["ayuda", "help", "menu"].includes(lower)) {
-      return safeReply(buildHelpMessage());
-    }
-
     if (lower === "version") {
       return safeReply(buildVersionMessage());
     }
@@ -769,24 +1071,73 @@ app.post("/twilio/whatsapp", async (req, res) => {
         console.warn("getActorByPhone error:", e.message);
       }
 
+      if (["ayuda", "help", "menu"].includes(lower)) {
+        return safeReply(buildHelpMessage(actor));
+      }
+
+      if (/^comentario\s+F-\d{6}-\d{3}\s*:/i.test(body)) {
+        const match = body.trim().match(/^comentario\s+(F-\d{6}-\d{3})\s*:\s*(.+)$/is);
+        const numero = match ? match[1].trim() : "";
+        const texto = match && match[2] ? match[2].trim() : "";
+        if (!numero || !texto) return safeReply("Formato: comentario F-YYYYMM-XXX: <texto>");
+        const folio = await insertComentario(client, numero, texto, fromNorm, actor && actor.rol_nombre);
+        if (!folio) return safeReply(`No existe el folio ${numero}.`);
+        return safeReply(`Comentario guardado en folio ${numero}.`);
+      }
+
+      if (lower === "folios de planta") {
+        const plantas = await getPlantas(client);
+        sess.dd.intent = "LISTA_PLANTA";
+        sess.dd.esperando = "PLANTA";
+        sess.dd._plantasList = plantas;
+        if (!plantas.length) return safeReply("No hay plantas en catálogo.");
+        const list = plantas.map((p, i) => `${i + 1}) ${p.nombre}`).join("\n");
+        return safeReply("¿De qué planta?\n" + list + "\n\nResponde con el número o nombre.");
+      }
+
+      if (sess.dd.intent === "LISTA_PLANTA" && sess.dd.esperando === "PLANTA") {
+        const plantas = sess.dd._plantasList || [];
+        let plantaId = null;
+        let plantaNombre = "";
+        const num = parseInt(body.trim(), 10);
+        if (Number.isFinite(num) && num >= 1 && num <= plantas.length) {
+          plantaId = plantas[num - 1].id;
+          plantaNombre = plantas[num - 1].nombre;
+        } else {
+          const byName = plantas.find((p) => p.nombre.toLowerCase() === body.trim().toLowerCase());
+          if (byName) {
+            plantaId = byName.id;
+            plantaNombre = byName.nombre;
+          }
+        }
+        sess.dd.intent = null;
+        sess.dd.esperando = null;
+        sess.dd._plantasList = null;
+        if (!plantaId) return safeReply("Planta no reconocida. Responde con el número o nombre. Escribe: folios de planta");
+        const { rows, totalGeneral, totalUrgentes, countUrgentes } = await getFoliosByPlanta(client, plantaId, 30);
+        let txt = `FOLIOS - ${plantaNombre.toUpperCase()}\n`;
+        rows.forEach((f, i) => {
+          const urg = (f.prioridad && String(f.prioridad).toLowerCase().includes("urgente")) ? "🔴💡 " : "";
+          const imp = f.importe != null ? Number(f.importe).toLocaleString("es-MX", { minimumFractionDigits: 2 }) : "0.00";
+          txt += `${i + 1}) ${urg}${f.numero_folio} | ${f.estatus || "-"} | $${imp}\n`;
+        });
+        txt += `\nTotal urgentes: $${totalUrgentes.toLocaleString("es-MX", { minimumFractionDigits: 2 })}\n`;
+        txt += `Total general: $${totalGeneral.toLocaleString("es-MX", { minimumFractionDigits: 2 })}\n`;
+        if (rows.length >= 30) txt += "\nMostrando últimos 30.";
+        return safeReply(txt.trim());
+      }
+
       if (FLAGS.ESTATUS && /^estatus\s+F-\d{6}-\d{3}\s*$/i.test(body)) {
         const numero = body.replace(/^estatus\s+/i, "").trim();
         const folio = await getFolioByNumero(client, numero);
         if (!folio) return safeReply(`No existe el folio ${numero}.`);
         const urg = folio.prioridad === "Urgente no programado" ? " 🔴💡 URGENTE" : "";
         const estatusNorm = String(folio.estatus || "").trim();
-        const nivelApr = folio.nivel_aprobado != null ? parseInt(folio.nivel_aprobado, 10) : 0;
-        const estaAprobado = estatusNorm.toLowerCase() === "aprobado" || !!folio.aprobado_por || nivelApr >= 3;
-        const estaCancelado = estatusNorm.toLowerCase() === "cancelado";
 
-        let txt = `Folio ${folio.numero_folio}${urg}\nEstatus: ${folio.estatus}\n`;
+        let txt = `Folio ${folio.numero_folio}${urg}\nEstatus: ${folio.estatus || "-"}\n`;
         txt += `Concepto: ${folio.concepto || "-"}\n`;
         txt += `Importe: $${Number(folio.importe) != null && !isNaN(Number(folio.importe)) ? Number(folio.importe).toLocaleString("es-MX", { minimumFractionDigits: 2 }) : "-"}\n`;
-        if (estaAprobado) {
-          txt += `Aprobado por: ${folio.aprobado_por || "ZP"}\n`;
-        } else if (!estaCancelado) {
-          txt += `Pendiente de aprobación del Director ZP (solicitud)\n`;
-        }
+        if (folio.aprobado_por) txt += `Aprobado por: ${folio.aprobado_por}\n`;
         txt += `Cotización: ${folio.cotizacion_url ? "Sí" : "No"}\n`;
 
         const urgentes = await getFoliosUrgentes(client, 15);
@@ -842,105 +1193,238 @@ app.post("/twilio/whatsapp", async (req, res) => {
         if (!actor) return safeReply("No autorizado. No se pudo identificar tu usuario.");
         const folio = await getFolioByNumero(client, numero);
         if (!folio) return safeReply(`No existe el folio ${numero}.`);
-        if (String(folio.estatus || "").toLowerCase() === "aprobado") return safeReply("Ese folio ya está aprobado.");
-        if (String(folio.estatus || "").toLowerCase() === "cancelado") return safeReply("Ese folio está cancelado.");
-
-        const rolNivel = actor.rol_nivel != null ? parseInt(actor.rol_nivel, 10) : 0;
-        const esZP = rolNivel >= 3 || (actor.rol_clave && actor.rol_clave.toUpperCase() === "ZP") || (actor.rol_nombre && String(actor.rol_nombre).toUpperCase().includes("ZP"));
-        if (!esZP) {
-          return safeReply("Solo el Director ZP puede aprobar solicitudes. GA, GG y Coordinador CDMX solo pueden solicitar (crear folios).");
+        const estatus = String(folio.estatus || "").toUpperCase();
+        if (estatus === ESTADOS.CANCELADO || estatus === "CANCELADO") return safeReply("Ese folio está cancelado.");
+        if ([ESTADOS.APROBADO_ZP, ESTADOS.LISTO_PARA_PROGRAMACION, ESTADOS.SELECCIONADO_SEMANA, ESTADOS.PAGADO, ESTADOS.CERRADO].includes(estatus)) {
+          return safeReply("Ese folio ya está aprobado o en etapa posterior.");
         }
 
-        const nivelApr = parseInt(folio.nivel_aprobado, 10) || 1;
-        if (nivelApr >= 3) return safeReply("Ese folio ya está aprobado.");
+        const rolClave = (actor.rol_clave || "").toUpperCase();
+        const esGG = rolClave === "GG" || (actor.rol_nombre && String(actor.rol_nombre).toUpperCase().includes("GG"));
+        const esZP = rolClave === "ZP" || (actor.rol_nombre && /director/i.test(actor.rol_nombre) && /zp/i.test(actor.rol_nombre));
 
-        await client.query("BEGIN");
-        try {
-          await updateFolioAprobado(client, folio.id, fromNorm);
-          await client.query(`UPDATE public.folios SET nivel_aprobado = 3 WHERE id = $1`, [folio.id]);
-          await insertHistorial(client, folio.id, folio.numero_folio, folio.folio_codigo, "Aprobado", "Aprobado por Director ZP vía WhatsApp", fromNorm, actor.rol_nombre);
-          await client.query("COMMIT");
-        } catch (e) {
-          await client.query("ROLLBACK");
-          throw e;
-        }
-
-        try {
-          await notifyOnApprove(folio, fromNorm);
-        } catch (e) {
-          console.warn("Notificaciones no enviadas:", e.message);
-        }
-
-        if (!twilioClient || !twilioWhatsAppFrom) {
-          return safeReply("Folio aprobado. No pude enviar notificaciones (Twilio no configurado).");
-        }
-        return safeReply(`Folio ${numero} aprobado. Notificaciones enviadas a GA, GG y CDMX.`);
-      }
-
-      if (FLAGS.APPROVALS && /^cancelar\s+F-\d{6}-\d{3}/i.test(body)) {
-        try {
-          const match = body.trim().match(/^cancelar\s+(F-\d{6}-\d{3})\s*(.*)$/i);
-          const numero = (match && match[1]) ? match[1].trim() : "";
-          const motivo = (match && match[2]) ? match[2].trim() : "Sin motivo";
-          if (!numero) return safeReply("Formato: cancelar F-YYYYMM-XXX <motivo>");
-
-          const claveRol = (actor && actor.rol_clave) ? String(actor.rol_clave).toUpperCase() : "";
-          const rolNombre = (actor && actor.rol_nombre) ? String(actor.rol_nombre).toUpperCase() : "";
-          const esDirectorZP = actor && (claveRol === "ZP" || (rolNombre && (rolNombre.includes("ZP") || rolNombre.includes("DIRECTOR"))));
-          const puedeSolicitarCancelacion = actor && ["GA", "GG", "CDMX"].some((r) => claveRol === r || (rolNombre && rolNombre.includes(r)));
-
-          if (!actor) {
-            return safeReply("No se pudo identificar tu usuario. Solo GA, GG y Contralor CDMX pueden solicitar cancelación; Director ZP puede cancelar.");
-          }
-          if (!esDirectorZP && !puedeSolicitarCancelacion) {
-            return safeReply("No autorizado. Solo GA, GG y Contralor CDMX pueden solicitar cancelación; Director ZP puede cancelar o aprobar.");
-          }
-
-          const folio = await getFolioByNumero(client, numero);
-          if (!folio) return safeReply(`No existe el folio ${numero}.`);
-          if (String(folio.estatus || "").toLowerCase() === "cancelado") {
-            return safeReply("Ese folio ya está cancelado.");
-          }
-
-          const actorRolNombre = actor.rol_nombre || "Usuario";
-
-          if (esDirectorZP) {
-            await client.query("BEGIN");
-            try {
-              await updateFolioCancelado(client, folio.id);
-              await insertHistorial(client, folio.id, folio.numero_folio, folio.folio_codigo, "Cancelado", `Cancelado por Director ZP: ${motivo}`, fromNorm, actorRolNombre);
-              await client.query("COMMIT");
-            } catch (e) {
-              await client.query("ROLLBACK");
-              throw e;
-            }
-            try {
-              await notifyOnCancel(folio, fromNorm, motivo);
-            } catch (e) {
-              console.warn("Notificaciones de cancelación no enviadas:", e.message);
-            }
-            return safeReply(`Folio ${numero} cancelado. Notificaciones enviadas a GA, GG y CDMX.`);
-          }
-
-          // GA, GG o CDMX: solo solicitar cancelación (guardar en historial y notificar a Director ZP)
+        if (estatus === ESTADOS.PENDIENTE_APROB_PLANTA && esGG) {
           await client.query("BEGIN");
           try {
-            await insertHistorial(client, folio.id, folio.numero_folio, folio.folio_codigo, "Solicitud de cancelación", `Solicitud de cancelación. Motivo: ${motivo}`, fromNorm, actorRolNombre);
+            await client.query(`UPDATE public.folios SET estatus = $1 WHERE id = $2`, [ESTADOS.APROB_PLANTA, folio.id]);
+            await insertHistorial(client, folio.id, folio.numero_folio, folio.folio_codigo, ESTADOS.APROB_PLANTA, "Aprobado por GG (planta)", fromNorm, actor.rol_nombre);
+            await client.query(`UPDATE public.folios SET estatus = $1 WHERE id = $2`, [ESTADOS.PENDIENTE_APROB_ZP, folio.id]);
+            await insertHistorial(client, folio.id, folio.numero_folio, folio.folio_codigo, ESTADOS.PENDIENTE_APROB_ZP, "Pendiente aprobación Director ZP", fromNorm, actor.rol_nombre);
             await client.query("COMMIT");
           } catch (e) {
             await client.query("ROLLBACK");
             throw e;
           }
-          const directoresZP = await getDirectoresZP(client);
-          const msgZP = `📋 Solicitud de cancelación\nFolio: ${numero}\nSolicitado por: ${actorRolNombre}\nMotivo: ${motivo}\n\nResponde con: cancelar ${numero} para aprobar la cancelación.`;
-          for (const tel of directoresZP) {
-            if (tel) await sendWhatsApp(tel, msgZP);
+          const urgPrefix = (folio.prioridad === "Urgente no programado") ? "🔴💡 URGENTE | " : "";
+          let msgZP = `${urgPrefix}Nuevo folio pendiente de tu aprobación (aprobado planta por GG).\n`;
+          msgZP += `Folio: ${numero}\nConcepto: ${folio.concepto || "-"}\nImporte: $${folio.importe != null ? Number(folio.importe).toLocaleString("es-MX", { minimumFractionDigits: 2 }) : "-"}\n\nResponde: aprobar ${numero}`;
+          const zpList = await getUsersByRole(client, "ZP");
+          for (const u of zpList) {
+            if (u.telefono) await sendWhatsApp(u.telefono, msgZP);
           }
-          return safeReply("Solicitud de cancelación registrada en el historial. Se notificó al Director ZP para su aprobación.");
+          return safeReply(`Folio ${numero} aprobado por planta (GG). Pendiente de Director ZP. Se notificó a ZP.`);
+        }
+
+        if (estatus === ESTADOS.PENDIENTE_APROB_ZP && esZP) {
+          await client.query("BEGIN");
+          try {
+            await updateFolioEstatus(client, folio.id, ESTADOS.LISTO_PARA_PROGRAMACION, { aprobado_por: fromNorm, aprobado_en: true });
+            await client.query(`UPDATE public.folios SET nivel_aprobado = 3 WHERE id = $1`, [folio.id]);
+            await insertHistorial(client, folio.id, folio.numero_folio, folio.folio_codigo, ESTADOS.APROBADO_ZP, "Aprobado por Director ZP vía WhatsApp", fromNorm, actor.rol_nombre);
+            await client.query("COMMIT");
+          } catch (e) {
+            await client.query("ROLLBACK");
+            throw e;
+          }
+          try {
+            await notifyOnApprove(folio, fromNorm);
+          } catch (e) {
+            console.warn("Notificaciones no enviadas:", e.message);
+          }
+          setImmediate(() => {
+            notifyPlantByFolio(pool, numero, "APROBADO", { excludePhone: fromNorm }).catch((e) => console.warn("Notif APROBADO:", e.message));
+          });
+          return safeReply(`Folio ${numero} aprobado por Director ZP. Notificaciones enviadas a GA, GG y CDMX.`);
+        }
+
+        if (estatus === ESTADOS.PENDIENTE_APROB_PLANTA && !esGG) {
+          return safeReply("Le falta aprobación de GG (planta). Solo GG puede aprobar en esta etapa.");
+        }
+        if (estatus === ESTADOS.PENDIENTE_APROB_ZP && !esZP) {
+          return safeReply("Le falta aprobación del Director ZP. Solo ZP puede aprobar en esta etapa.");
+        }
+        return safeReply("No puedes aprobar este folio en su estado actual.");
+      }
+
+      if (FLAGS.APPROVALS && /^aprobar_override\s+F-\d{6}-\d{3}\s+motivo:/i.test(body)) {
+        const match = body.trim().match(/^aprobar_override\s+(F-\d{6}-\d{3})\s+motivo:\s*(.+)$/i);
+        const numero = match ? match[1].trim() : "";
+        const motivoOverride = match && match[2] ? match[2].trim() : "";
+        if (!numero || !motivoOverride) return safeReply('Formato: aprobar_override F-YYYYMM-XXX motivo: <texto>');
+        if (!actor) return safeReply("No autorizado.");
+        const rolClave = (actor.rol_clave || "").toUpperCase();
+        const esZP = rolClave === "ZP" || (actor.rol_nombre && /director/i.test(actor.rol_nombre) && /zp/i.test(actor.rol_nombre));
+        if (!esZP) return safeReply("Solo el Director ZP puede usar aprobar_override.");
+        const folio = await getFolioByNumero(client, numero);
+        if (!folio) return safeReply(`No existe el folio ${numero}.`);
+        const estatus = String(folio.estatus || "").toUpperCase();
+        if (estatus === ESTADOS.CANCELADO) return safeReply("Ese folio está cancelado.");
+        await client.query("BEGIN");
+        try {
+          await updateFolioEstatus(client, folio.id, ESTADOS.LISTO_PARA_PROGRAMACION, {
+            aprobado_por: fromNorm,
+            aprobado_en: true,
+            override_planta: true,
+            override_motivo: motivoOverride,
+          });
+          await client.query(`UPDATE public.folios SET nivel_aprobado = 3 WHERE id = $1`, [folio.id]);
+          await insertHistorial(client, folio.id, folio.numero_folio, folio.folio_codigo, ESTADOS.APROBADO_ZP, `Aprobado por override ZP. Motivo: ${motivoOverride}`, fromNorm, actor.rol_nombre);
+          await client.query("COMMIT");
+        } catch (e) {
+          await client.query("ROLLBACK");
+          throw e;
+        }
+        try {
+          await notifyOnApprove(folio, fromNorm);
+        } catch (e) {
+          console.warn("Notificaciones no enviadas:", e.message);
+        }
+        return safeReply(`Folio ${numero} aprobado por override (Director ZP). Motivo registrado.`);
+      }
+
+      if (FLAGS.APPROVALS && /^seleccionar\s+F-\d{6}-\d{3}\s*$/i.test(body)) {
+        const numero = body.replace(/^seleccionar\s+/i, "").trim();
+        if (!actor) return safeReply("No autorizado.");
+        const rolClave = (actor.rol_clave || "").toUpperCase();
+        const esCDMX = rolClave === "CDMX" || (actor.rol_nombre && String(actor.rol_nombre).toUpperCase().includes("CDMX"));
+        if (!esCDMX) return safeReply("Solo CDMX (Contralor) puede seleccionar folios para la semana.");
+        const folio = await getFolioByNumero(client, numero);
+        if (!folio) return safeReply(`No existe el folio ${numero}.`);
+        const estatus = String(folio.estatus || "").toUpperCase();
+        if (estatus !== ESTADOS.LISTO_PARA_PROGRAMACION) {
+          return safeReply("Solo se puede seleccionar un folio en estatus LISTO_PARA_PROGRAMACION.");
+        }
+        await client.query("BEGIN");
+        try {
+          await client.query(`UPDATE public.folios SET estatus = $1 WHERE id = $2`, [ESTADOS.SELECCIONADO_SEMANA, folio.id]);
+          await insertHistorial(client, folio.id, folio.numero_folio, folio.folio_codigo, ESTADOS.SELECCIONADO_SEMANA, "Seleccionado para pago esta semana por CDMX", fromNorm, actor.rol_nombre);
+          await client.query("COMMIT");
+        } catch (e) {
+          await client.query("ROLLBACK");
+          throw e;
+        }
+        const urgPrefix = (folio.prioridad === "Urgente no programado") ? "🔴💡 URGENTE | " : "";
+        const msgPlant = `${urgPrefix}Folio ${numero} seleccionado para pago esta semana.`;
+        const gaGG = await getUsersByRoleAndPlanta(client, "GA", folio.planta_id);
+        const ggList = await getUsersByRoleAndPlanta(client, "GG", folio.planta_id);
+        for (const u of [...gaGG, ...ggList]) {
+          if (u.telefono) await sendWhatsApp(u.telefono, msgPlant);
+        }
+        return safeReply(`Folio ${numero} seleccionado para esta semana. Notificación enviada a GA y GG de la planta.`);
+      }
+
+      if (FLAGS.APPROVALS && /^cancelar\s+F-\d{6}-\d{3}/i.test(body)) {
+        try {
+          const match = body.trim().match(/^cancelar\s+(F-\d{6}-\d{3})\s*(?:motivo:)?\s*(.*)$/i);
+          const numero = (match && match[1]) ? match[1].trim() : "";
+          let motivo = (match && match[2]) ? match[2].trim() : "";
+          if (!numero) return safeReply("Formato: cancelar F-YYYYMM-XXX motivo: <texto>");
+          const claveRol = (actor && actor.rol_clave) ? String(actor.rol_clave).toUpperCase() : "";
+          const rolNombre = (actor && actor.rol_nombre) ? String(actor.rol_nombre).toUpperCase() : "";
+          const puedeSolicitar = actor && ["GA", "GG", "CDMX"].some((r) => claveRol === r || (rolNombre && rolNombre.includes(r)));
+          if (!actor) return safeReply("No se pudo identificar tu usuario.");
+          if (!puedeSolicitar) return safeReply("Solo GA, GG y CDMX pueden solicitar cancelación. ZP autoriza o rechaza con: autorizar cancelacion / rechazar cancelacion.");
+          const folio = await getFolioByNumero(client, numero);
+          if (!folio) return safeReply(`No existe el folio ${numero}.`);
+          const estatus = String(folio.estatus || "").toUpperCase();
+          if (estatus === ESTADOS.CANCELADO) return safeReply("Ese folio ya está cancelado.");
+          if (estatus === ESTADOS.PAGADO || estatus === ESTADOS.CERRADO) {
+            return safeReply("No se puede cancelar folios PAGADOS o CERRADOS. Solicita ajuste por dirección.");
+          }
+          if (estatus === ESTADOS.CANCELACION_SOLICITADA) return safeReply("Ya hay una solicitud de cancelación pendiente. ZP debe autorizar o rechazar.");
+          if (!motivo) return safeReply("Indica el motivo. Formato: cancelar " + numero + " motivo: <razón>");
+          await client.query("BEGIN");
+          try {
+            await updateFolioEstatus(client, folio.id, ESTADOS.CANCELACION_SOLICITADA, { estatus_anterior: estatus });
+            await insertHistorial(client, folio.id, folio.numero_folio, folio.folio_codigo, ESTADOS.CANCELACION_SOLICITADA, `Solicitud de cancelación. Motivo: ${motivo}`, fromNorm, actor.rol_nombre);
+            await client.query("COMMIT");
+          } catch (e) {
+            await client.query("ROLLBACK");
+            throw e;
+          }
+          const urgPrefix = (folio.prioridad === "Urgente no programado") ? "🔴💡 URGENTE | " : "";
+          const msgTodos = `${urgPrefix}Solicitud de cancelación\nFolio: ${numero}\nSolicitado por: ${actor.rol_nombre || "Usuario"}\nMotivo: ${motivo}\n\nZP: responde "autorizar cancelacion ${numero}" o "rechazar cancelacion ${numero} motivo: ..."`;
+          const todos = await getTodosParaNotificacion(client, folio.planta_id);
+          for (const tel of todos) {
+            if (tel) await sendWhatsApp(tel, msgTodos);
+          }
+          return safeReply("Solicitud de cancelación registrada. Se notificó a GA, GG, CDMX y ZP.");
         } catch (e) {
           console.error("Error en cancelar:", e);
-          return safeReply("Error al procesar la cancelación. Revisa el formato: cancelar F-YYYYMM-XXX <motivo>.");
+          return safeReply("Error al procesar. Formato: cancelar F-YYYYMM-XXX motivo: <texto>");
         }
+      }
+
+      if (FLAGS.APPROVALS && /^autorizar\s+cancelacion\s+F-\d{6}-\d{3}\s*$/i.test(body)) {
+        const numero = body.replace(/^autorizar\s+cancelacion\s+/i, "").trim();
+        if (!actor) return safeReply("No autorizado.");
+        const rolClave = (actor.rol_clave || "").toUpperCase();
+        const esZP = rolClave === "ZP" || (actor.rol_nombre && /director/i.test(actor.rol_nombre) && /zp/i.test(actor.rol_nombre));
+        if (!esZP) return safeReply("Solo el Director ZP puede autorizar la cancelación.");
+        const folio = await getFolioByNumero(client, numero);
+        if (!folio) return safeReply(`No existe el folio ${numero}.`);
+        if (String(folio.estatus || "").toUpperCase() !== ESTADOS.CANCELACION_SOLICITADA) {
+          return safeReply("El folio debe estar en CANCELACION_SOLICITADA para autorizar.");
+        }
+        await client.query("BEGIN");
+        try {
+          await updateFolioCancelado(client, folio.id);
+          await insertHistorial(client, folio.id, folio.numero_folio, folio.folio_codigo, ESTADOS.CANCELADO, "Cancelación autorizada por Director ZP", fromNorm, actor.rol_nombre);
+          await client.query("COMMIT");
+        } catch (e) {
+          await client.query("ROLLBACK");
+          throw e;
+        }
+        const urgPrefix = (folio.prioridad === "Urgente no programado") ? "🔴💡 URGENTE | " : "";
+        const msgTodos = `${urgPrefix}Folio ${numero} cancelado (autorizado por Director ZP).`;
+        const todos = await getTodosParaNotificacion(client, folio.planta_id);
+        for (const tel of todos) {
+          if (tel) await sendWhatsApp(tel, msgTodos);
+        }
+        return safeReply(`Folio ${numero} cancelado. Notificación enviada a todos.`);
+      }
+
+      if (FLAGS.APPROVALS && /^rechazar\s+cancelacion\s+F-\d{6}-\d{3}\s+motivo:/i.test(body)) {
+        const match = body.trim().match(/^rechazar\s+cancelacion\s+(F-\d{6}-\d{3})\s+motivo:\s*(.+)$/i);
+        const numero = match ? match[1].trim() : "";
+        const motivoRechazo = match && match[2] ? match[2].trim() : "";
+        if (!numero || !motivoRechazo) return safeReply('Formato: rechazar cancelacion F-YYYYMM-XXX motivo: <texto>');
+        if (!actor) return safeReply("No autorizado.");
+        const rolClave = (actor.rol_clave || "").toUpperCase();
+        const esZP = rolClave === "ZP" || (actor.rol_nombre && /director/i.test(actor.rol_nombre) && /zp/i.test(actor.rol_nombre));
+        if (!esZP) return safeReply("Solo el Director ZP puede rechazar la cancelación.");
+        const folio = await getFolioByNumero(client, numero);
+        if (!folio) return safeReply(`No existe el folio ${numero}.`);
+        if (String(folio.estatus || "").toUpperCase() !== ESTADOS.CANCELACION_SOLICITADA) {
+          return safeReply("El folio debe estar en CANCELACION_SOLICITADA para rechazar.");
+        }
+        const estatusAnterior = folio.estatus_anterior || ESTADOS.GENERADO;
+        await client.query("BEGIN");
+        try {
+          await client.query(`UPDATE public.folios SET estatus = $1, estatus_anterior = NULL WHERE id = $2`, [estatusAnterior, folio.id]);
+          await insertHistorial(client, folio.id, folio.numero_folio, folio.folio_codigo, estatusAnterior, `Cancelación rechazada por ZP. Motivo: ${motivoRechazo}`, fromNorm, actor.rol_nombre);
+          await client.query("COMMIT");
+        } catch (e) {
+          await client.query("ROLLBACK");
+          throw e;
+        }
+        const urgPrefix = (folio.prioridad === "Urgente no programado") ? "🔴💡 URGENTE | " : "";
+        const msgTodos = `${urgPrefix}Cancelación rechazada para folio ${numero}. Motivo ZP: ${motivoRechazo}. Folio en: ${estatusAnterior}`;
+        const todos = await getTodosParaNotificacion(client, folio.planta_id);
+        for (const tel of todos) {
+          if (tel) await sendWhatsApp(tel, msgTodos);
+        }
+        return safeReply(`Cancelación rechazada. Folio ${numero} restaurado a ${estatusAnterior}.`);
       }
 
       if (FLAGS.ATTACHMENTS && lower.startsWith("adjuntar")) {
@@ -981,6 +1465,10 @@ app.post("/twilio/whatsapp", async (req, res) => {
           await attachCotizacionUrlOnly(client, folio.id, tempUrl, fromNorm);
         }
         sess.dd.attachNumero = null;
+        const folioCodigoAdjunto = folio.numero_folio;
+        setImmediate(() => {
+          notifyPlantByFolio(pool, folioCodigoAdjunto, "ADJUNTO").catch((e) => console.warn("Notif ADJUNTO:", e.message));
+        });
         return safeReply(`✅ Cotización guardada en el folio ${folio.numero_folio}.`);
       } finally {
         client.release();
@@ -1159,6 +1647,10 @@ app.post("/twilio/whatsapp", async (req, res) => {
         sess.lastFolioNumero = folio.numero_folio;
         sess.lastFolioId = folio.id;
         resetSession(sess);
+        const folioCodigoCreacion = folio.numero_folio;
+        setImmediate(() => {
+          notifyPlantByFolio(pool, folioCodigoCreacion, "CREADO").catch((e) => console.warn("Notif CREADO:", e.message));
+        });
         return safeReply(
           `✅ Folio creado: ${folio.numero_folio}. ` +
             "Puedes adjuntar la cotización en PDF: envía el archivo o escribe Adjuntar " + folio.numero_folio
