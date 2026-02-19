@@ -137,6 +137,14 @@ function phoneLast10(phone) {
   return null;
 }
 
+/** Forma canónica para comparar si dos números son el mismo (México: últimos 10 dígitos). */
+function samePhone(a, b) {
+  const la = phoneLast10(a);
+  const lb = phoneLast10(b);
+  if (!la || !lb) return false;
+  return la === lb;
+}
+
 /** Normaliza teléfono para envío WhatsApp outbound: +521... -> +52..., limpia espacios; devuelve "whatsapp:+52..." o null si inválido. */
 function normalizePhoneForWhatsApp(phone) {
   if (!phone) return null;
@@ -1084,7 +1092,7 @@ async function notifyOnCancel(folio, canceladoPor, motivo) {
     msg += `Motivo: ${motivo || "Sin motivo indicado"}\n`;
     msg += `Concepto del folio: ${folio.concepto || "-"}`;
     for (const phone of phones) {
-      if (phone && normalizePhone(phone) !== normalizePhone(canceladoPor)) {
+      if (phone && !samePhone(phone, canceladoPor)) {
         await sendWhatsApp(phone, msg);
       }
     }
@@ -1387,9 +1395,8 @@ async function notifyOnApprove(folio, aprobadoPor) {
   const client = await pool.connect();
   try {
     const phones = await getUsersToNotifyOnApprove(client, folio.planta_id);
-    const aprobadoNorm = normalizePhone(aprobadoPor);
-    const toNotify = phones.filter((p) => p && normalizePhone(p) !== aprobadoNorm);
-    console.log(`[notifyOnApprove] Folio ${folio.numero_folio} planta_id=${folio.planta_id} → ${phones.length} teléfonos, ${toNotify.length} a notificar (excl. aprobador).`);
+    const toNotify = phones.filter((p) => p && !samePhone(p, aprobadoPor));
+    console.log(`[notifyOnApprove] Folio ${folio.numero_folio} planta_id=${folio.planta_id} → ${phones.length} teléfonos, ${toNotify.length} a notificar (excl. aprobador por últimos 10 dígitos).`);
     if (toNotify.length === 0) return;
 
     const urgPrefix = (folio.prioridad === "Urgente no programado") ? "🔴💡 URGENTE | " : "";
