@@ -294,6 +294,7 @@ async function ensureSchema() {
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS override_planta BOOLEAN DEFAULT false;`);
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS override_motivo TEXT;`);
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS creado_por VARCHAR(255);`);
+    await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS descripcion TEXT;`);
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS public.comentarios (
@@ -375,6 +376,7 @@ async function getFolioByNumero(client, numero) {
     `SELECT f.id, f.numero_folio, f.folio_codigo, f.planta_id, f.beneficiario, f.concepto, f.importe,
             f.categoria, f.subcategoria, f.unidad, f.prioridad, f.estatus, f.cotizacion_url, f.cotizacion_s3key,
             f.aprobado_por, f.aprobado_en, f.creado_en, f.nivel_aprobado, f.estatus_anterior, f.override_planta, f.override_motivo, f.creado_por,
+            COALESCE(f.descripcion, f.concepto) AS descripcion,
             p.nombre AS planta_nombre
      FROM public.folios f
      LEFT JOIN public.plantas p ON p.id = f.planta_id
@@ -607,16 +609,20 @@ async function getFoliosUrgentes(client, limit = 20) {
   return (r.rows || []).slice(0, limit);
 }
 
-/** Últimos N folios de una planta (recientes primero). Retorna { rows, totalGeneral, totalUrgentes, countUrgentes }. */
-async function getFoliosByPlanta(client, plantaId, limit = 30) {
-  const r = await client.query(
-    `SELECT numero_folio, estatus, importe, prioridad
-     FROM public.folios
-     WHERE planta_id = $1
-     ORDER BY creado_en DESC
-     LIMIT $2`,
-    [plantaId, limit]
-  );
+/** Últimos N folios de una planta (recientes primero). soloUrgentes: solo filas con prioridad ILIKE '%urgente%'. Retorna { rows, totalGeneral, totalUrgentes, countUrgentes }. */
+async function getFoliosByPlanta(client, plantaId, limit = 30, soloUrgentes = false) {
+  let q = `
+    SELECT numero_folio, estatus, importe, prioridad, COALESCE(f.descripcion, f.concepto) AS concepto
+    FROM public.folios f
+    WHERE f.planta_id = $1
+  `;
+  const params = [plantaId];
+  if (soloUrgentes) {
+    q += ` AND f.prioridad ILIKE '%urgente%'`;
+  }
+  q += ` ORDER BY f.creado_en DESC LIMIT $2`;
+  params.push(limit);
+  const r = await client.query(q, params);
   const rows = r.rows || [];
   let totalGeneral = 0;
   let totalUrgentes = 0;
@@ -900,6 +906,7 @@ function buildHelpMessage(actor) {
   lines.push(`• estatus F-YYYYMM-XXX${FLAGS.ESTATUS ? "" : " (desactivado)"}`);
   lines.push(`• historial F-YYYYMM-XXX${FLAGS.HISTORIAL ? "" : " (desactivado)"}`);
   lines.push("• folios de planta");
+  lines.push("• folios urgentes de planta");
   lines.push("• comentario F-YYYYMM-XXX: <texto>");
   if (FLAGS.ATTACHMENTS) lines.push("• adjuntar F-YYYYMM-XXX (luego envía el PDF)");
   if (FLAGS.APPROVALS) {
@@ -1095,16 +1102,49 @@ app.post("/twilio/whatsapp", async (req, res) => {
         return safeReply("¿De qué planta?\n" + list + "\n\nResponde con el número o nombre.");
       }
 
-      if (sess.dd.intent === "LISTA_PLANTA" && sess.dd.esperando === "PLANTA") {
+      if (lower === "folios urgentes de planta") {
+        const plantas = await getPlantas(client);
+        sess.dd.intent = "LISTA_PLANTA_URGENTES";
+        sess.dd.esperando = "PLANTA";
+        sess.dd._plantasList = plantas;
+        if (!plantas.length) return safeReply("No hay plantas en catálogo.");
+        const list = plantas.map((p, i) => `${i + 1}) ${p.nombre}`).join("\n");
+        return safeReply("¿De qué planta? Selecciona número:\n" + list + "\n\nResponde con el número o nombre.");
+      }
+
+      function truncConcepto(s, maxLen = 60) {
+        const t = String(s || "").trim();
+        if (!t) return "-";
+        if (t.length <= maxLen) return t;
+        return t.substring(0, maxLen) + "…";
+      }
+
+      function formatFoliosList(rows, plantaNombre, totalGeneral, totalUrgentes, soloUrgentes) {
+        let txt = `FOLIOS - ${plantaNombre.toUpperCase()}\n`;
+        rows.forEach((f, i) => {
+          const urg = (f.prioridad && String(f.prioridad).toLowerCase().includes("urgente")) ? "🔴💡 " : "";
+          const imp = f.importe != null ? Number(f.importe).toLocaleString("es-MX", { minimumFractionDigits: 2 }) : "0.00";
+          const concepto = truncConcepto(f.concepto, 60);
+          txt += `${i + 1}) ${urg}${f.numero_folio} | ${f.estatus || "-"} | $${imp} | ${concepto}\n`;
+        });
+        txt += `\nTotal urgentes: $${totalUrgentes.toLocaleString("es-MX", { minimumFractionDigits: 2 })}\n`;
+        txt += `Total general: $${totalGeneral.toLocaleString("es-MX", { minimumFractionDigits: 2 })}\n`;
+        if (rows.length >= 30) txt += "\nMostrando últimos 30.";
+        return txt.trim();
+      }
+
+      if ((sess.dd.intent === "LISTA_PLANTA" || sess.dd.intent === "LISTA_PLANTA_URGENTES") && sess.dd.esperando === "PLANTA") {
         const plantas = sess.dd._plantasList || [];
+        const soloUrgentes = sess.dd.intent === "LISTA_PLANTA_URGENTES";
         let plantaId = null;
         let plantaNombre = "";
+        const bodyNorm = body.trim().toLowerCase().normalize("NFD").replace(/\u0300/g, "");
         const num = parseInt(body.trim(), 10);
         if (Number.isFinite(num) && num >= 1 && num <= plantas.length) {
           plantaId = plantas[num - 1].id;
           plantaNombre = plantas[num - 1].nombre;
         } else {
-          const byName = plantas.find((p) => p.nombre.toLowerCase() === body.trim().toLowerCase());
+          const byName = plantas.find((p) => (p.nombre || "").toLowerCase().normalize("NFD").replace(/\u0300/g, "") === bodyNorm || (p.nombre || "").toLowerCase() === body.trim().toLowerCase());
           if (byName) {
             plantaId = byName.id;
             plantaNombre = byName.nombre;
@@ -1113,46 +1153,39 @@ app.post("/twilio/whatsapp", async (req, res) => {
         sess.dd.intent = null;
         sess.dd.esperando = null;
         sess.dd._plantasList = null;
-        if (!plantaId) return safeReply("Planta no reconocida. Responde con el número o nombre. Escribe: folios de planta");
-        const { rows, totalGeneral, totalUrgentes, countUrgentes } = await getFoliosByPlanta(client, plantaId, 30);
-        let txt = `FOLIOS - ${plantaNombre.toUpperCase()}\n`;
-        rows.forEach((f, i) => {
-          const urg = (f.prioridad && String(f.prioridad).toLowerCase().includes("urgente")) ? "🔴💡 " : "";
-          const imp = f.importe != null ? Number(f.importe).toLocaleString("es-MX", { minimumFractionDigits: 2 }) : "0.00";
-          txt += `${i + 1}) ${urg}${f.numero_folio} | ${f.estatus || "-"} | $${imp}\n`;
-        });
-        txt += `\nTotal urgentes: $${totalUrgentes.toLocaleString("es-MX", { minimumFractionDigits: 2 })}\n`;
-        txt += `Total general: $${totalGeneral.toLocaleString("es-MX", { minimumFractionDigits: 2 })}\n`;
-        if (rows.length >= 30) txt += "\nMostrando últimos 30.";
-        return safeReply(txt.trim());
+        if (!plantaId) return safeReply("Planta no reconocida. Responde con el número o nombre. Escribe: " + (soloUrgentes ? "folios urgentes de planta" : "folios de planta"));
+        const { rows, totalGeneral, totalUrgentes, countUrgentes } = await getFoliosByPlanta(client, plantaId, 30, soloUrgentes);
+        if (soloUrgentes && rows.length === 0) {
+          return safeReply(`No hay folios urgentes en ${plantaNombre}.`);
+        }
+        const txt = formatFoliosList(rows, plantaNombre, totalGeneral, totalUrgentes, soloUrgentes);
+        if (soloUrgentes) {
+          const extra = `\nCantidad folios urgentes: ${countUrgentes}`;
+          return safeReply(txt + extra);
+        }
+        return safeReply(txt);
       }
 
       if (FLAGS.ESTATUS && /^estatus\s+F-\d{6}-\d{3}\s*$/i.test(body)) {
         const numero = body.replace(/^estatus\s+/i, "").trim();
         const folio = await getFolioByNumero(client, numero);
         if (!folio) return safeReply(`No existe el folio ${numero}.`);
-        const urg = folio.prioridad === "Urgente no programado" ? " 🔴💡 URGENTE" : "";
-        const estatusNorm = String(folio.estatus || "").trim();
-
-        let txt = `Folio ${folio.numero_folio}${urg}\nEstatus: ${folio.estatus || "-"}\n`;
-        txt += `Concepto: ${folio.concepto || "-"}\n`;
-        txt += `Importe: $${Number(folio.importe) != null && !isNaN(Number(folio.importe)) ? Number(folio.importe).toLocaleString("es-MX", { minimumFractionDigits: 2 }) : "-"}\n`;
+        const urg = (folio.prioridad && String(folio.prioridad).toLowerCase().includes("urgente")) ? " 🔴💡 URGENTE" : "";
+        const concepto = folio.descripcion || folio.concepto || "-";
+        const imp = Number(folio.importe) != null && !isNaN(Number(folio.importe)) ? Number(folio.importe).toLocaleString("es-MX", { minimumFractionDigits: 2 }) : "-";
+        const fecha = formatMexicoCentral(folio.creado_en);
+        let txt = `Folio ${folio.numero_folio}${urg}\n`;
+        txt += `Planta: ${folio.planta_nombre || "-"}\n`;
+        txt += `Estatus: ${folio.estatus || "-"}\n`;
+        txt += `Monto: $${imp}\n`;
+        txt += `Concepto: ${concepto}\n`;
+        txt += `Beneficiario: ${folio.beneficiario || "-"}\n`;
+        txt += `Categoría: ${folio.categoria || "-"}\n`;
+        txt += `Subcategoría: ${folio.subcategoria || "-"}\n`;
+        txt += `Urgente: ${(folio.prioridad && String(folio.prioridad).toLowerCase().includes("urgente")) ? "Sí" : "No"}\n`;
+        txt += `Cotización adjunta: ${folio.cotizacion_url ? "Sí" : "No"}\n`;
+        txt += `Fecha: ${fecha}\n`;
         if (folio.aprobado_por) txt += `Aprobado por: ${folio.aprobado_por}\n`;
-        txt += `Cotización: ${folio.cotizacion_url ? "Sí" : "No"}\n`;
-
-        const urgentes = await getFoliosUrgentes(client, 15);
-        if (urgentes.length > 0) {
-          txt += "\n🔴 Folios urgentes (días | importe | concepto):\n";
-          const now = Date.now();
-          urgentes.forEach((f) => {
-            const creado = f.creado_en ? new Date(f.creado_en).getTime() : now;
-            const dias = Math.floor((now - creado) / (24 * 60 * 60 * 1000));
-            const imp = f.importe != null && !isNaN(Number(f.importe)) ? Number(f.importe).toLocaleString("es-MX", { minimumFractionDigits: 2 }) : "-";
-            const conceptoShort = (f.concepto || "-").toString().trim().substring(0, 45);
-            const conceptoDisplay = conceptoShort + (f.concepto && f.concepto.length > 45 ? "…" : "");
-            txt += `${f.numero_folio} | ${dias} día(s) | $${imp} | ${conceptoDisplay}\n`;
-          });
-        }
         return safeReply(txt.trim());
       }
 
