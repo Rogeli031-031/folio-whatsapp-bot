@@ -42,6 +42,9 @@ const FLAGS = {
 };
 const BOT_VERSION = "3.0.0";
 
+/** Límite de caracteres para cuerpo de mensaje WhatsApp (Twilio ~1600; dejar margen por emojis). */
+const MAX_WHATSAPP_BODY = 1550;
+
 /** Estados de folio (tabla folios.estatus). No se brinca proceso. */
 const ESTADOS = {
   GENERADO: "GENERADO",
@@ -1130,17 +1133,64 @@ app.post("/twilio/whatsapp", async (req, res) => {
         return t.substring(0, maxLen) + "…";
       }
 
-      function formatFoliosList(rows, plantaNombre, totalGeneral, totalUrgentes, soloUrgentes) {
+      /** Formatea una línea de folio (índice 1-based). */
+      function formatFolioLine(f, index) {
+        const urg = (f.prioridad && String(f.prioridad).toLowerCase().includes("urgente")) ? "🔴💡 " : "";
+        const imp = f.importe != null ? Number(f.importe).toLocaleString("es-MX", { minimumFractionDigits: 2 }) : "0.00";
+        const concepto = truncConcepto(f.concepto, 60);
+        return `${index}) ${urg}${f.numero_folio} | ${f.estatus || "-"} | $${imp} | ${concepto}\n`;
+      }
+
+      /**
+       * Parte el listado de folios en varios mensajes, cada uno <= MAX_WHATSAPP_BODY.
+       * Retorna array de strings; el último incluye totales (y opcional cantidad urgentes).
+       */
+      function buildFoliosListChunks(rows, plantaNombre, totalGeneral, totalUrgentes, soloUrgentes, countUrgentes) {
+        const maxPerChunk = MAX_WHATSAPP_BODY - 120;
+        const header = `FOLIOS - ${plantaNombre.toUpperCase()}\n`;
+        const totalsBlock = `\nTotal urgentes: $${totalUrgentes.toLocaleString("es-MX", { minimumFractionDigits: 2 })}\nTotal general: $${totalGeneral.toLocaleString("es-MX", { minimumFractionDigits: 2 })}\n` + (soloUrgentes ? `Cantidad folios urgentes: ${countUrgentes || 0}\n` : "");
+        const chunks = [];
+        let current = "";
+        let currentLen = 0;
+        let partNum = 1;
+        for (let i = 0; i < rows.length; i++) {
+          const line = formatFolioLine(rows[i], i + 1);
+          if (currentLen + line.length > maxPerChunk && current.length > 0) {
+            chunks.push(current.trim());
+            partNum++;
+            current = `— Parte ${partNum} —\n`;
+            currentLen = current.length;
+          }
+          if (currentLen === 0 && chunks.length === 0) {
+            current = header;
+            currentLen = header.length;
+          }
+          current += line;
+          currentLen += line.length;
+        }
+        if (current.length > 0) {
+          const withTotals = current + totalsBlock + (rows.length >= 50 ? "\nMostrando últimos 50." : "");
+          if (withTotals.length <= MAX_WHATSAPP_BODY) {
+            chunks.push(withTotals.trim());
+          } else {
+            chunks.push(current.trim());
+            chunks.push((totalsBlock + (rows.length >= 50 ? "Mostrando últimos 50." : "")).trim());
+          }
+        }
+        return chunks.length ? chunks : [header.trim() + "\nSin folios."];
+      }
+
+      function formatFoliosList(rows, plantaNombre, totalGeneral, totalUrgentes, soloUrgentes, maxRows) {
+        const maxShow = maxRows != null ? Math.min(rows.length, maxRows) : rows.length;
         let txt = `FOLIOS - ${plantaNombre.toUpperCase()}\n`;
-        rows.forEach((f, i) => {
-          const urg = (f.prioridad && String(f.prioridad).toLowerCase().includes("urgente")) ? "🔴💡 " : "";
-          const imp = f.importe != null ? Number(f.importe).toLocaleString("es-MX", { minimumFractionDigits: 2 }) : "0.00";
-          const concepto = truncConcepto(f.concepto, 60);
-          txt += `${i + 1}) ${urg}${f.numero_folio} | ${f.estatus || "-"} | $${imp} | ${concepto}\n`;
-        });
+        for (let i = 0; i < maxShow; i++) {
+          txt += formatFolioLine(rows[i], i + 1);
+        }
         txt += `\nTotal urgentes: $${totalUrgentes.toLocaleString("es-MX", { minimumFractionDigits: 2 })}\n`;
         txt += `Total general: $${totalGeneral.toLocaleString("es-MX", { minimumFractionDigits: 2 })}\n`;
-        if (rows.length >= 50) txt += "\nMostrando últimos 50.";
+        if (rows.length > maxShow) txt += `\nMostrando ${maxShow} de ${rows.length} folios.`;
+        else if (rows.length >= 50) txt += "\nMostrando últimos 50.";
+        if (txt.length > MAX_WHATSAPP_BODY) txt = txt.substring(0, MAX_WHATSAPP_BODY - 20) + "\n...(mensaje recortado)";
         return txt.trim();
       }
 
@@ -1173,12 +1223,20 @@ app.post("/twilio/whatsapp", async (req, res) => {
         if (!soloUrgentes && rows.length === 0) {
           return safeReply(`No hay folios (no cancelados) en ${plantaNombre}. Revisa en la DB que los folios tengan planta_id = ${plantaId}.`);
         }
-        const txt = formatFoliosList(rows, plantaNombre, totalGeneral, totalUrgentes, soloUrgentes);
-        if (soloUrgentes) {
-          const extra = `\nCantidad folios urgentes: ${countUrgentes}`;
-          return safeReply(txt + extra);
+        const chunks = buildFoliosListChunks(rows, plantaNombre, totalGeneral, totalUrgentes, soloUrgentes, countUrgentes);
+        if (chunks.length === 1) {
+          return safeReply(chunks[0]);
         }
-        return safeReply(txt);
+        const userFrom = req.body.From;
+        setImmediate(() => {
+          (async () => {
+            for (let i = 1; i < chunks.length; i++) {
+              await new Promise((r) => setTimeout(r, 900));
+              await sendWhatsApp(userFrom, chunks[i]);
+            }
+          })().catch((e) => console.warn("Envío folios partes:", e.message));
+        });
+        return safeReply(chunks[0]);
       }
 
       if (FLAGS.ESTATUS && /^estatus\s+F-\d{6}-\d{3}\s*$/i.test(body)) {
