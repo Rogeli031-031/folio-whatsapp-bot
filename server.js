@@ -78,6 +78,10 @@ const twilioClient =
 
 const twilioWhatsAppFrom = process.env.TWILIO_WHATSAPP_NUMBER || null;
 
+if (!twilioClient || !twilioWhatsAppFrom) {
+  console.warn("⚠️ Notificaciones salientes desactivadas: configura TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN y TWILIO_WHATSAPP_NUMBER en Render → Environment.");
+}
+
 const s3Enabled =
   !!process.env.AWS_ACCESS_KEY_ID &&
   !!process.env.AWS_SECRET_ACCESS_KEY &&
