@@ -1435,6 +1435,34 @@ app.post("/twilio/whatsapp", async (req, res) => {
               yaAprobados.push(numero);
               continue;
             }
+            if (estatus === ESTADOS.PENDIENTE_APROB_PLANTA) {
+              try {
+                await client.query("BEGIN");
+                await client.query(`UPDATE public.folios SET estatus = $1 WHERE id = $2`, [ESTADOS.APROB_PLANTA, folio.id]);
+                await insertHistorial(client, folio.id, folio.numero_folio, folio.folio_codigo, ESTADOS.APROB_PLANTA, "Aprobado por GG (planta)", fromNorm, actor.rol_nombre);
+                await client.query(`UPDATE public.folios SET estatus = $1 WHERE id = $2`, [ESTADOS.PENDIENTE_APROB_ZP, folio.id]);
+                await insertHistorial(client, folio.id, folio.numero_folio, folio.folio_codigo, ESTADOS.PENDIENTE_APROB_ZP, "Pendiente aprobación Director ZP", fromNorm, actor.rol_nombre);
+                await updateFolioEstatus(client, folio.id, ESTADOS.LISTO_PARA_PROGRAMACION, { aprobado_por: fromNorm, aprobado_en: true });
+                await client.query(`UPDATE public.folios SET nivel_aprobado = 3 WHERE id = $1`, [folio.id]);
+                await insertHistorial(client, folio.id, folio.numero_folio, folio.folio_codigo, ESTADOS.APROBADO_ZP, "Aprobado por Director ZP vía WhatsApp", fromNorm, actor.rol_nombre);
+                await client.query("COMMIT");
+              } catch (e) {
+                await client.query("ROLLBACK");
+                noEncontrados.push(numero);
+                continue;
+              }
+              try {
+                await notifyOnApprove(folio, fromNorm);
+              } catch (e) {
+                console.warn("Notif aprobar:", e.message);
+              }
+              setImmediate(() => {
+                notifyPlantByFolio(pool, numero, "APROBADO", { excludePhone: fromNorm }).catch((e) => console.warn("Notif APROBADO:", e.message));
+              });
+              aprobados.push(numero);
+              if (!folio.cotizacion_url) sinCotizacion.push(numero);
+              continue;
+            }
             if (estatus !== ESTADOS.PENDIENTE_APROB_ZP) {
               noPendientesZP.push(numero);
               continue;
