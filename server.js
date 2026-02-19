@@ -2186,9 +2186,6 @@ app.post("/twilio/whatsapp", async (req, res) => {
               } catch (e) {
                 console.warn("Notif aprobar:", e.message);
               }
-              setImmediate(() => {
-                notifyPlantByFolio(pool, numero, "APROBADO", { excludePhone: fromNorm }).catch((e) => console.warn("Notif APROBADO:", e.message));
-              });
               aprobados.push(numero);
               if (!folio.cotizacion_url) sinCotizacion.push(numero);
               continue;
@@ -2214,9 +2211,6 @@ app.post("/twilio/whatsapp", async (req, res) => {
             } catch (e) {
               console.warn("Notif aprobar:", e.message);
             }
-            setImmediate(() => {
-              notifyPlantByFolio(pool, numero, "APROBADO", { excludePhone: fromNorm }).catch((e) => console.warn("Notif APROBADO:", e.message));
-            });
             aprobados.push(numero);
             if (!folio.cotizacion_url) sinCotizacion.push(numero);
           }
