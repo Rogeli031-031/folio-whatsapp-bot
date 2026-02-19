@@ -323,6 +323,7 @@ async function ensureSchema() {
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS override_motivo TEXT;`);
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS creado_por VARCHAR(255);`);
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS descripcion TEXT;`);
+    await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;`);
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS public.comentarios (
@@ -988,6 +989,93 @@ async function getFoliosByPlanta(client, plantaId, limit = 50, soloUrgentes = fa
   return { rows, totalGeneral, totalUrgentes, countUrgentes };
 }
 
+/**
+ * Pendientes "en mi cancha" para el usuario identificado por teléfono.
+ * Reutiliza reglas de aprobación por etapa: GG/GA = PENDIENTE_APROB_PLANTA (su planta); ZP = PENDIENTE_APROB_ZP + CANCELACION_SOLICITADA; CDMX = LISTO_PARA_PROGRAMACION.
+ * FIFO por fecha base: COALESCE(updated_at, creado_en) ASC (más antiguos primero).
+ * @returns {Promise<{ plantaInfo: { nombre }, urgentesCount, normalesCount, totalCount, urgentesSum, normalesSum, totalSum, rows, totalPages } | null>} null si usuario no existe.
+ */
+async function getPendientesForUser(client, fromNumber, page = 1, pageSize = 20) {
+  const actor = await getActorByPhone(client, fromNumber);
+  if (!actor) return null;
+
+  let rolClave = (actor.rol_clave && String(actor.rol_clave).toUpperCase()) || "";
+  if (!rolClave && actor.rol_nombre && /director/i.test(actor.rol_nombre) && /zp/i.test(actor.rol_nombre)) rolClave = "ZP";
+  const plantaId = actor.planta_id != null ? actor.planta_id : null;
+  const plantaNombre = actor.planta_nombre || (plantaId ? null : "Corporativo");
+
+  let whereClause = "";
+  const params = [];
+
+  if (rolClave === "GG" || rolClave === "GA") {
+    if (plantaId == null) return { plantaInfo: { nombre: "Corporativo" }, urgentesCount: 0, normalesCount: 0, totalCount: 0, urgentesSum: 0, normalesSum: 0, totalSum: 0, rows: [], totalPages: 0 };
+    whereClause = " AND f.planta_id = $1 AND f.estatus = $2";
+    params.push(plantaId, ESTADOS.PENDIENTE_APROB_PLANTA);
+  } else if (rolClave === "ZP") {
+    whereClause = " AND f.estatus = ANY($1::TEXT[])";
+    params.push([ESTADOS.PENDIENTE_APROB_ZP, ESTADOS.CANCELACION_SOLICITADA]);
+  } else if (rolClave === "CDMX") {
+    whereClause = " AND f.estatus = $1";
+    params.push(ESTADOS.LISTO_PARA_PROGRAMACION);
+  } else {
+    return { plantaInfo: { nombre: plantaNombre || "—" }, urgentesCount: 0, normalesCount: 0, totalCount: 0, urgentesSum: 0, normalesSum: 0, totalSum: 0, rows: [], totalPages: 0 };
+  }
+
+  const baseWhere = ` WHERE (f.estatus IS NULL OR UPPER(TRIM(f.estatus)) <> 'CANCELADO') ${whereClause}`;
+  const orderBy = " ORDER BY (CASE WHEN f.prioridad ILIKE '%urgente%' THEN 0 ELSE 1 END), COALESCE(f.updated_at, f.creado_en) ASC NULLS LAST, f.id ASC";
+
+  const countRes = await client.query(
+    `SELECT
+       COUNT(*)::INT AS total_count,
+       COUNT(*) FILTER (WHERE f.prioridad ILIKE '%urgente%')::INT AS urgentes_count,
+       COUNT(*) FILTER (WHERE (f.prioridad IS NULL OR f.prioridad NOT ILIKE '%urgente%'))::INT AS normales_count,
+       COALESCE(SUM(f.importe) FILTER (WHERE f.prioridad ILIKE '%urgente%'), 0)::NUMERIC AS urgentes_sum,
+       COALESCE(SUM(f.importe) FILTER (WHERE (f.prioridad IS NULL OR f.prioridad NOT ILIKE '%urgente%')), 0)::NUMERIC AS normales_sum
+     FROM public.folios f ${baseWhere}`,
+    params
+  );
+  const countRow = countRes.rows[0] || {};
+  const totalCount = parseInt(countRow.total_count, 10) || 0;
+  const urgentesCount = parseInt(countRow.urgentes_count, 10) || 0;
+  const normalesCount = parseInt(countRow.normales_count, 10) || 0;
+  const urgentesSum = Number(countRow.urgentes_sum) || 0;
+  const normalesSum = Number(countRow.normales_sum) || 0;
+  const totalSum = urgentesSum + normalesSum;
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+
+  const offset = (Math.max(1, page) - 1) * pageSize;
+  const rowsParams = [...params, offset, pageSize];
+  const rowsRes = await client.query(
+    `SELECT f.numero_folio, f.folio_codigo, f.estatus, f.importe, f.prioridad,
+            COALESCE(f.descripcion, f.concepto) AS concepto,
+            COALESCE(f.updated_at, f.creado_en) AS fecha_base
+     FROM public.folios f ${baseWhere} ${orderBy}
+     OFFSET $${params.length + 1} LIMIT $${params.length + 2}`,
+    rowsParams
+  );
+  const rows = rowsRes.rows || [];
+
+  const plantaNombreRes = plantaNombre || (plantaId ? null : "Corporativo");
+  let pNombre = plantaNombreRes;
+  if (!pNombre && plantaId) {
+    const p = await client.query("SELECT nombre FROM public.plantas WHERE id = $1", [plantaId]);
+    pNombre = (p.rows[0] && p.rows[0].nombre) || "Planta";
+  }
+  if (!pNombre) pNombre = "Corporativo";
+
+  return {
+    plantaInfo: { nombre: pNombre },
+    urgentesCount,
+    normalesCount,
+    totalCount,
+    urgentesSum,
+    normalesSum,
+    totalSum,
+    rows,
+    totalPages,
+  };
+}
+
 /** Usuarios por rol y planta (GA/GG). Solo activos con teléfono. rolClave: 'GA' | 'GG'. */
 async function getUsersByRoleAndPlanta(client, rolClave, plantaId) {
   const q = `
@@ -1266,6 +1354,7 @@ function buildHelpMessage(actor) {
   lines.push(`• historial F-YYYYMM-XXX${FLAGS.HISTORIAL ? "" : " (desactivado)"}`);
   lines.push("• folios de planta");
   lines.push("• folios urgentes de planta");
+  lines.push("• mis pendientes / pendientes [página]");
   lines.push("• comentario F-YYYYMM-XXX: <texto>");
   if (FLAGS.ATTACHMENTS) lines.push("• adjuntar F-YYYYMM-XXX (luego envía el PDF)");
   if (FLAGS.APPROVALS) {
@@ -1544,6 +1633,68 @@ app.post("/twilio/whatsapp", async (req, res) => {
           else lines.push(`${toDisplay} (${rec.nombre}) → ERROR ${result.error || "unknown"}`);
         }
         return safeReply("REPORTE PRUEBA NOTIFICACIÓN\n\n" + lines.join("\n"));
+      }
+
+      const matchPendientes = body.trim().match(/^(mis\s+pendientes|pendientes)(\s+(\d+))?$/i);
+      if (matchPendientes) {
+        if (!actor) {
+          return safeReply("No estás dado de alta. Contacta al administrador para registrar tu número en el sistema.");
+        }
+        const page = matchPendientes[3] ? parseInt(matchPendientes[3], 10) : 1;
+        const pageSize = 20;
+        const safeLimit = 1500;
+        try {
+          const data = await getPendientesForUser(client, from, page, pageSize);
+          if (!data) {
+            return safeReply("No estás dado de alta. Contacta al administrador para registrar tu número.");
+          }
+          console.log(`[misPendientes] from=${fromNorm} userId=${actor.id} planta=${data.plantaInfo.nombre} page=${page} total=${data.totalCount} returned=${data.rows.length} totalPages=${data.totalPages}`);
+          if (data.totalCount === 0) {
+            return safeReply("✅ No tienes pendientes.");
+          }
+          const fmtMxn = (n) => (Number(n) != null && !isNaN(Number(n)) ? Number(n).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00");
+          const truncConcepto = (s, max = 70) => {
+            const t = String(s || "").trim();
+            if (!t) return "";
+            if (t.length <= max) return t;
+            const cut = t.substring(0, max);
+            const lastSpace = cut.lastIndexOf(" ");
+            const pos = lastSpace > 40 ? lastSpace : max;
+            return t.substring(0, pos).trim() + "…";
+          };
+          const fmtFecha = (d) => {
+            if (!d) return "";
+            const dt = new Date(d);
+            return dt.toISOString().slice(0, 10);
+          };
+          let out = `📌 Mis pendientes (Planta: ${data.plantaInfo.nombre})\n`;
+          out += `🔥 Urgentes: ${data.urgentesCount} | $${fmtMxn(data.urgentesSum)}\n`;
+          out += `📄 Normales: ${data.normalesCount} | $${fmtMxn(data.normalesSum)}\n`;
+          out += `💰 Total: ${data.totalCount} | $${fmtMxn(data.totalSum)}\n\n`;
+          const lines = [];
+          for (const r of data.rows) {
+            const urg = (r.prioridad && String(r.prioridad).toLowerCase().includes("urgente")) ? "🔥 " : "   ";
+            const shortNum = (r.numero_folio || "").replace(/^F-\d{6}-/, "") || "";
+            const estatusPad = (r.estatus || "").padEnd(28).slice(0, 28);
+            const impPad = `$${fmtMxn(r.importe)}`.padStart(12);
+            const conceptoShort = truncConcepto(r.concepto, 70);
+            const fechaStr = fmtFecha(r.fecha_base);
+            lines.push(`${urg}${shortNum.padStart(3)} | ${r.numero_folio || ""} | ${estatusPad} | ${impPad} | ${conceptoShort} | ${fechaStr}`);
+          }
+          let added = 0;
+          for (const line of lines) {
+            if (out.length + line.length + 2 > safeLimit) break;
+            out += line + "\n";
+            added++;
+          }
+          out += `\nMostrando ${added} de ${data.totalCount}. Página ${page}/${data.totalPages}.`;
+          if (page < data.totalPages) out += ` Responde "mis pendientes ${page + 1}" para ver más.`;
+          console.log(`[misPendientes] chars=${out.length}`);
+          return safeReply(out);
+        } catch (e) {
+          console.warn("getPendientesForUser error:", e.message);
+          return safeReply("Error al cargar pendientes. Intenta más tarde.");
+        }
       }
 
       if (/^comentario\s+F-\d{6}-\d{3}\s*:/i.test(body)) {
