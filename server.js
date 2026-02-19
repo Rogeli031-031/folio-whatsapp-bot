@@ -359,6 +359,55 @@ async function getPlantas(client) {
   return r.rows;
 }
 
+/** YYYYMM actual del servidor (mismo criterio que el contador mensual de folios). */
+function getCurrentYYYYMM() {
+  const now = new Date();
+  return `${now.getUTCFullYear()}${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+/**
+ * Normaliza un token a número de folio completo "F-YYYYMM-XXX".
+ * - Si token es "F-YYYYMM-XXX" → se devuelve tal cual (normalizado).
+ * - Si token es 1-3 dígitos → se rellena a 3 y se usa yyyymmFallback → "F-YYYYMM-XXX".
+ * - Si token es 4+ dígitos → null (formato inválido).
+ */
+function normalizeFolioToken(token, yyyymmFallback) {
+  const t = String(token || "").trim();
+  const fullMatch = t.match(/^F-(\d{6})-(\d{3})$/i);
+  if (fullMatch) return `F-${fullMatch[1]}-${fullMatch[2]}`;
+  if (/^\d{1,3}$/.test(t)) return `F-${yyyymmFallback}-${t.padStart(3, "0")}`;
+  if (/^\d{4,}$/.test(t)) return null;
+  return null;
+}
+
+/**
+ * Extrae folios del texto después de "aprobar".
+ * Si hay al menos un folio completo F-YYYYMM-XXX, los consecutivos sueltos (1-3 dígitos) usan ese YYYYMM.
+ * Si no hay folio completo, se usa YYYYMM actual.
+ * Retorna { folios: string[] (sin duplicados), invalidTokens: string[] }.
+ */
+function parseFolioTokensFromText(text) {
+  const raw = String(text || "").trim();
+  const parts = raw.split(/[\s,\n]+|\s+y\s+/gi).map((p) => p.trim()).filter((p) => p && p.toLowerCase() !== "y");
+  const fullFolios = [];
+  const shortTokens = [];
+  const invalidTokens = [];
+  for (const p of parts) {
+    const m = p.match(/^F-(\d{6})-(\d{3})$/i);
+    if (m) fullFolios.push(`F-${m[1]}-${m[2]}`);
+    else if (/^\d{1,3}$/.test(p)) shortTokens.push(p);
+    else if (/^\d{4,}$/.test(p)) invalidTokens.push(p);
+  }
+  const yyyymm = fullFolios.length > 0 ? fullFolios[0].slice(2, 8) : getCurrentYYYYMM();
+  const foliosSet = new Set(fullFolios);
+  shortTokens.forEach((s) => {
+    const n = normalizeFolioToken(s, yyyymm);
+    if (n) foliosSet.add(n);
+  });
+  const folios = Array.from(foliosSet).sort();
+  return { folios, invalidTokens: [...new Set(invalidTokens)] };
+}
+
 async function nextFolioNumber(client) {
   const now = new Date();
   const yyyymm = `${now.getUTCFullYear()}${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
@@ -863,7 +912,7 @@ async function notifyPlantByFolio(poolInstance, folioCodigo, evento, extra = {})
 /** Construye mensaje por evento para notificación por planta. */
 function buildPlantNotificationMessage(evento, folio, extra = {}) {
   const num = (folio && (folio.numero_folio || folio.folio_codigo)) || extra.folioCodigo || "?";
-  const urg = (folio && folio.prioridad === "Urgente no programado") ? " 🔴 URGENTE" : "";
+  const urg = (folio && folio.prioridad && String(folio.prioridad).toLowerCase().includes("urgente")) ? " 🔴💡 URGENTE" : "";
   switch (String(evento).toUpperCase()) {
     case "CREADO":
       return (
@@ -872,8 +921,11 @@ function buildPlantNotificationMessage(evento, folio, extra = {}) {
         `Importe: $${folio && folio.importe != null ? Number(folio.importe).toLocaleString("es-MX", { minimumFractionDigits: 2 }) : (extra.importe != null ? Number(extra.importe).toLocaleString("es-MX", { minimumFractionDigits: 2 }) : "-")}\n` +
         `Prioridad: ${(folio && folio.prioridad) || extra.prioridad || "-"}`
       );
-    case "APROBADO":
-      return `✅ Folio aprobado: ${num}${urg}\nConcepto: ${(folio && folio.concepto) || "-"}\nImporte: $${folio && folio.importe != null ? Number(folio.importe).toLocaleString("es-MX", { minimumFractionDigits: 2 }) : "-"}`;
+    case "APROBADO": {
+      let aprobado = `✅ Folio aprobado: ${num}${urg}\nConcepto: ${(folio && folio.concepto) || "-"}\nImporte: $${folio && folio.importe != null ? Number(folio.importe).toLocaleString("es-MX", { minimumFractionDigits: 2 }) : "-"}`;
+      if (folio && !folio.cotizacion_url) aprobado += "\n⚠️ Aún no tiene cotización adjunta.";
+      return aprobado;
+    }
     case "CANCELADO":
       return `📋 Folio cancelado: ${num}\nMotivo: ${extra.motivo || "N/A"}`;
     case "ADJUNTO":
@@ -926,7 +978,7 @@ function buildHelpMessage(actor) {
   if (FLAGS.APPROVALS) {
     if (clave === "GG") lines.push("• aprobar F-YYYYMM-XXX (aprobación planta)");
     if (clave === "ZP") {
-      lines.push("• aprobar F-YYYYMM-XXX (aprobación dirección)");
+      lines.push("• aprobar 001 002 o F-YYYYMM-XXX (ZP; varios en un mensaje)");
       lines.push("• aprobar_override F-YYYYMM-XXX motivo: <texto>");
       lines.push("• autorizar cancelacion F-YYYYMM-XXX");
       lines.push("• rechazar cancelacion F-YYYYMM-XXX motivo: <texto>");
@@ -1294,72 +1346,104 @@ app.post("/twilio/whatsapp", async (req, res) => {
         return safeReply(txt.trim());
       }
 
-      if (FLAGS.APPROVALS && /^aprobar\s+F-\d{6}-\d{3}\s*$/i.test(body)) {
-        const numero = body.replace(/^aprobar\s+/i, "").trim();
+      if (FLAGS.APPROVALS && /^aprobar\s+/i.test(body)) {
+        const rest = body.replace(/^aprobar\s+/i, "").trim();
+        const { folios, invalidTokens } = parseFolioTokensFromText(rest);
         if (!actor) return safeReply("No autorizado. No se pudo identificar tu usuario.");
-        const folio = await getFolioByNumero(client, numero);
-        if (!folio) return safeReply(`No existe el folio ${numero}.`);
-        const estatus = String(folio.estatus || "").toUpperCase();
-        if (estatus === ESTADOS.CANCELADO || estatus === "CANCELADO") return safeReply("Ese folio está cancelado.");
-        if ([ESTADOS.APROBADO_ZP, ESTADOS.LISTO_PARA_PROGRAMACION, ESTADOS.SELECCIONADO_SEMANA, ESTADOS.PAGADO, ESTADOS.CERRADO].includes(estatus)) {
-          return safeReply("Ese folio ya está aprobado o en etapa posterior.");
-        }
-
         const rolClave = (actor.rol_clave || "").toUpperCase();
         const esGG = rolClave === "GG" || (actor.rol_nombre && String(actor.rol_nombre).toUpperCase().includes("GG"));
         const esZP = rolClave === "ZP" || (actor.rol_nombre && /director/i.test(actor.rol_nombre) && /zp/i.test(actor.rol_nombre));
 
-        if (estatus === ESTADOS.PENDIENTE_APROB_PLANTA && esGG) {
-          await client.query("BEGIN");
-          try {
-            await client.query(`UPDATE public.folios SET estatus = $1 WHERE id = $2`, [ESTADOS.APROB_PLANTA, folio.id]);
-            await insertHistorial(client, folio.id, folio.numero_folio, folio.folio_codigo, ESTADOS.APROB_PLANTA, "Aprobado por GG (planta)", fromNorm, actor.rol_nombre);
-            await client.query(`UPDATE public.folios SET estatus = $1 WHERE id = $2`, [ESTADOS.PENDIENTE_APROB_ZP, folio.id]);
-            await insertHistorial(client, folio.id, folio.numero_folio, folio.folio_codigo, ESTADOS.PENDIENTE_APROB_ZP, "Pendiente aprobación Director ZP", fromNorm, actor.rol_nombre);
-            await client.query("COMMIT");
-          } catch (e) {
-            await client.query("ROLLBACK");
-            throw e;
+        if (folios.length === 0 && invalidTokens.length === 0) return safeReply("Indica al menos un folio. Ejemplo: aprobar 001 002 o aprobar F-202602-001");
+
+        if (esZP) {
+          const aprobados = [];
+          const yaAprobados = [];
+          const noEncontrados = [];
+          const sinCotizacion = [];
+          for (const numero of folios) {
+            const folio = await getFolioByNumero(client, numero);
+            if (!folio) {
+              noEncontrados.push(numero);
+              continue;
+            }
+            const estatus = String(folio.estatus || "").toUpperCase();
+            if (estatus === ESTADOS.CANCELADO || estatus === "CANCELADO") {
+              noEncontrados.push(numero);
+              continue;
+            }
+            if ([ESTADOS.APROBADO_ZP, ESTADOS.LISTO_PARA_PROGRAMACION, ESTADOS.SELECCIONADO_SEMANA, ESTADOS.PAGADO, ESTADOS.CERRADO].includes(estatus)) {
+              yaAprobados.push(numero);
+              continue;
+            }
+            if (estatus !== ESTADOS.PENDIENTE_APROB_ZP) {
+              noEncontrados.push(numero);
+              continue;
+            }
+            try {
+              await client.query("BEGIN");
+              await updateFolioEstatus(client, folio.id, ESTADOS.LISTO_PARA_PROGRAMACION, { aprobado_por: fromNorm, aprobado_en: true });
+              await client.query(`UPDATE public.folios SET nivel_aprobado = 3 WHERE id = $1`, [folio.id]);
+              await insertHistorial(client, folio.id, folio.numero_folio, folio.folio_codigo, ESTADOS.APROBADO_ZP, "Aprobado por Director ZP vía WhatsApp", fromNorm, actor.rol_nombre);
+              await client.query("COMMIT");
+            } catch (e) {
+              await client.query("ROLLBACK");
+              noEncontrados.push(numero);
+              continue;
+            }
+            try {
+              await notifyOnApprove(folio, fromNorm);
+            } catch (e) {
+              console.warn("Notif aprobar:", e.message);
+            }
+            setImmediate(() => {
+              notifyPlantByFolio(pool, numero, "APROBADO", { excludePhone: fromNorm }).catch((e) => console.warn("Notif APROBADO:", e.message));
+            });
+            aprobados.push(numero);
+            if (!folio.cotizacion_url) sinCotizacion.push(numero);
           }
-          const urgPrefix = (folio.prioridad === "Urgente no programado") ? "🔴💡 URGENTE | " : "";
-          let msgZP = `${urgPrefix}Nuevo folio pendiente de tu aprobación (aprobado planta por GG).\n`;
-          msgZP += `Folio: ${numero}\nConcepto: ${folio.concepto || "-"}\nImporte: $${folio.importe != null ? Number(folio.importe).toLocaleString("es-MX", { minimumFractionDigits: 2 }) : "-"}\n\nResponde: aprobar ${numero}`;
-          const zpList = await getUsersByRole(client, "ZP");
-          for (const u of zpList) {
-            if (u.telefono) await sendWhatsApp(u.telefono, msgZP);
-          }
-          return safeReply(`Folio ${numero} aprobado por planta (GG). Pendiente de Director ZP. Se notificó a ZP.`);
+          let msg = "";
+          if (aprobados.length) msg += `✅ Aprobados: ${aprobados.join(", ")}\n`;
+          if (yaAprobados.length) msg += `⚠️ Ya aprobados: ${yaAprobados.join(", ")}\n`;
+          if (noEncontrados.length) msg += `❌ No encontrados: ${noEncontrados.join(", ")}\n`;
+          if (invalidTokens.length) msg += `❌ Formato inválido: ${invalidTokens.join(", ")}\n`;
+          if (sinCotizacion.length) msg += `⚠️ Sin cotización: ${sinCotizacion.join(", ")}\n`;
+          return safeReply(msg.trim() || "Nada que aprobar.");
         }
 
-        if (estatus === ESTADOS.PENDIENTE_APROB_ZP && esZP) {
-          await client.query("BEGIN");
-          try {
-            await updateFolioEstatus(client, folio.id, ESTADOS.LISTO_PARA_PROGRAMACION, { aprobado_por: fromNorm, aprobado_en: true });
-            await client.query(`UPDATE public.folios SET nivel_aprobado = 3 WHERE id = $1`, [folio.id]);
-            await insertHistorial(client, folio.id, folio.numero_folio, folio.folio_codigo, ESTADOS.APROBADO_ZP, "Aprobado por Director ZP vía WhatsApp", fromNorm, actor.rol_nombre);
-            await client.query("COMMIT");
-          } catch (e) {
-            await client.query("ROLLBACK");
-            throw e;
+        if (esGG && folios.length === 1 && invalidTokens.length === 0) {
+          const numero = folios[0];
+          const folio = await getFolioByNumero(client, numero);
+          if (!folio) return safeReply(`No existe el folio ${numero}.`);
+          const estatus = String(folio.estatus || "").toUpperCase();
+          if (estatus === ESTADOS.CANCELADO || estatus === "CANCELADO") return safeReply("Ese folio está cancelado.");
+          if ([ESTADOS.APROBADO_ZP, ESTADOS.LISTO_PARA_PROGRAMACION, ESTADOS.SELECCIONADO_SEMANA, ESTADOS.PAGADO, ESTADOS.CERRADO].includes(estatus)) {
+            return safeReply("Ese folio ya está aprobado o en etapa posterior.");
           }
-          try {
-            await notifyOnApprove(folio, fromNorm);
-          } catch (e) {
-            console.warn("Notificaciones no enviadas:", e.message);
+          if (estatus === ESTADOS.PENDIENTE_APROB_PLANTA) {
+            await client.query("BEGIN");
+            try {
+              await client.query(`UPDATE public.folios SET estatus = $1 WHERE id = $2`, [ESTADOS.APROB_PLANTA, folio.id]);
+              await insertHistorial(client, folio.id, folio.numero_folio, folio.folio_codigo, ESTADOS.APROB_PLANTA, "Aprobado por GG (planta)", fromNorm, actor.rol_nombre);
+              await client.query(`UPDATE public.folios SET estatus = $1 WHERE id = $2`, [ESTADOS.PENDIENTE_APROB_ZP, folio.id]);
+              await insertHistorial(client, folio.id, folio.numero_folio, folio.folio_codigo, ESTADOS.PENDIENTE_APROB_ZP, "Pendiente aprobación Director ZP", fromNorm, actor.rol_nombre);
+              await client.query("COMMIT");
+            } catch (e) {
+              await client.query("ROLLBACK");
+              throw e;
+            }
+            const urgPrefix = (folio.prioridad === "Urgente no programado") ? "🔴💡 URGENTE | " : "";
+            let msgZP = `${urgPrefix}Nuevo folio pendiente de tu aprobación (aprobado planta por GG).\n`;
+            msgZP += `Folio: ${numero}\nConcepto: ${folio.concepto || "-"}\nImporte: $${folio.importe != null ? Number(folio.importe).toLocaleString("es-MX", { minimumFractionDigits: 2 }) : "-"}\n\nResponde: aprobar ${numero}`;
+            const zpList = await getUsersByRole(client, "ZP");
+            for (const u of zpList) {
+              if (u.telefono) await sendWhatsApp(u.telefono, msgZP);
+            }
+            return safeReply(`Folio ${numero} aprobado por planta (GG). Pendiente de Director ZP. Se notificó a ZP.`);
           }
-          setImmediate(() => {
-            notifyPlantByFolio(pool, numero, "APROBADO", { excludePhone: fromNorm }).catch((e) => console.warn("Notif APROBADO:", e.message));
-          });
-          return safeReply(`Folio ${numero} aprobado por Director ZP. Notificaciones enviadas a GA, GG y CDMX.`);
         }
 
-        if (estatus === ESTADOS.PENDIENTE_APROB_PLANTA && !esGG) {
-          return safeReply("Le falta aprobación de GG (planta). Solo GG puede aprobar en esta etapa.");
-        }
-        if (estatus === ESTADOS.PENDIENTE_APROB_ZP && !esZP) {
-          return safeReply("Le falta aprobación del Director ZP. Solo ZP puede aprobar en esta etapa.");
-        }
-        return safeReply("No puedes aprobar este folio en su estado actual.");
+        return safeReply("Solo el Director ZP puede aprobar folios.");
       }
 
       if (FLAGS.APPROVALS && /^aprobar_override\s+F-\d{6}-\d{3}\s+motivo:/i.test(body)) {
