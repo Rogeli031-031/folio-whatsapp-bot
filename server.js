@@ -145,7 +145,7 @@ function samePhone(a, b) {
   return la === lb;
 }
 
-/** Normaliza teléfono para envío WhatsApp outbound: +521... -> +52..., limpia espacios; devuelve "whatsapp:+52..." o null si inválido. */
+/** Normaliza teléfono para envío WhatsApp outbound: +521... -> +52..., limpia espacios; devuelve "whatsapp:+52..." o null si inválido. México: +52 + 10 dígitos = 13 caracteres. */
 function normalizePhoneForWhatsApp(phone) {
   if (!phone) return null;
   let s = String(phone).trim().replace(/\s/g, "").replace(/-/g, "");
@@ -154,7 +154,7 @@ function normalizePhoneForWhatsApp(phone) {
   else if (s.startsWith("521") && s.length >= 12) s = "+52" + s.slice(2);
   else if (s.startsWith("52") && !s.startsWith("521") && s.length >= 12) s = "+" + s;
   else if (/^\d{10}$/.test(s)) s = "+52" + s;
-  else if (s.startsWith("+52") && s.length === 12) { /* ok */ }
+  else if (s.startsWith("+52") && /^\+52\d{10}$/.test(s)) { /* ok: +52 y 10 dígitos (México) */ }
   else return null;
   if (!/^\+52\d{10}$/.test(s)) return null;
   return `whatsapp:${s}`;
