@@ -1405,7 +1405,14 @@ async function notifyOnApprove(folio, aprobadoPor) {
     if (!folio.cotizacion_url) msg += "\n⚠️ Aún no tiene la cotización adjunta.";
 
     for (const phone of toNotify) {
-      await sendWhatsApp(phone, msg, { event: "notifyOnApprove" });
+      const result = await sendWhatsApp(phone, msg, { event: "notifyOnApprove" });
+      const last4 = (phone && String(phone).replace(/\D/g, "").slice(-4)) || "????";
+      const telMask = `***${last4}`;
+      if (result.ok) {
+        console.log(`[notifyOnApprove] Enviado a ${telMask} → ok sid=${result.sid || "-"} status=${result.status || "-"}`);
+      } else {
+        console.warn(`[notifyOnApprove] Enviado a ${telMask} → ERROR: ${result.error || "unknown"}`);
+      }
     }
   } catch (e) {
     console.warn("notifyOnApprove error:", e.message);
