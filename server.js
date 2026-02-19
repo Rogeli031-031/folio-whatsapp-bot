@@ -61,6 +61,14 @@ const ESTADOS = {
   CANCELADO: "CANCELADO",
 };
 
+/** Estados de proyecto (tabla proyectos.estatus). */
+const ESTADOS_PROYECTO = {
+  EN_CURSO: "EN_CURSO",
+  CERRADO: "CERRADO",
+  CANCELACION_SOLICITADA: "CANCELACION_SOLICITADA",
+  CANCELADO: "CANCELADO",
+};
+
 const REQUIRED_ENVS = ["DATABASE_URL", "TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN"];
 for (const k of REQUIRED_ENVS) {
   if (!process.env[k]) console.warn(`⚠️ Falta ENV ${k}. El bot puede fallar.`);
@@ -315,6 +323,59 @@ async function ensureSchema() {
       );
     `).catch(() => {});
 
+    await client.query(`ALTER TABLE public.plantas ADD COLUMN IF NOT EXISTS clave VARCHAR(50);`);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS public.proyecto_counters (
+        yyyymm VARCHAR(6) PRIMARY KEY,
+        last_seq INT NOT NULL DEFAULT 0
+      );
+    `).catch(() => {});
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS public.proyectos (
+        id SERIAL PRIMARY KEY,
+        codigo VARCHAR(50) UNIQUE NOT NULL,
+        planta_id INT REFERENCES public.plantas(id),
+        nombre VARCHAR(200) NOT NULL,
+        descripcion TEXT,
+        fecha_inicio DATE NOT NULL,
+        fecha_cierre_estimada DATE,
+        fecha_cierre_real TIMESTAMPTZ,
+        estatus VARCHAR(30) NOT NULL DEFAULT 'EN_CURSO',
+        aprobado_zp BOOLEAN NOT NULL DEFAULT FALSE,
+        aprobado_por VARCHAR(120),
+        aprobado_en TIMESTAMPTZ,
+        creado_por VARCHAR(120) NOT NULL,
+        creado_en TIMESTAMPTZ DEFAULT NOW()
+      );
+    `).catch(() => {});
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS public.proyecto_archivos (
+        id SERIAL PRIMARY KEY,
+        proyecto_id INT REFERENCES public.proyectos(id),
+        tipo VARCHAR(30) NOT NULL,
+        url TEXT NOT NULL,
+        subido_por VARCHAR(120),
+        subido_en TIMESTAMPTZ DEFAULT NOW()
+      );
+    `).catch(() => {});
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS public.proyecto_historial (
+        id SERIAL PRIMARY KEY,
+        proyecto_id INT REFERENCES public.proyectos(id),
+        evento VARCHAR(50) NOT NULL,
+        detalle TEXT,
+        actor_telefono VARCHAR(30),
+        actor_rol VARCHAR(50),
+        creado_en TIMESTAMPTZ DEFAULT NOW()
+      );
+    `).catch(() => {});
+
+    await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS proyecto_id INT REFERENCES public.proyectos(id);`).catch(() => {});
+
     return;
   } finally {
     client.release();
@@ -473,6 +534,186 @@ async function getManyFoliosStatus(client, numeros) {
   });
   return numeros.map((numero) => ({ numero, folio: map.get(numero) || null }));
 }
+
+/* ==================== PROYECTOS (DB) ==================== */
+
+async function nextProyectoCodigo(client) {
+  const yyyymm = getCurrentYYYYMM();
+  await client.query(
+    `INSERT INTO public.proyecto_counters(yyyymm, last_seq) VALUES ($1, 0) ON CONFLICT (yyyymm) DO NOTHING`,
+    [yyyymm]
+  );
+  const r = await client.query(
+    `UPDATE public.proyecto_counters SET last_seq = last_seq + 1 WHERE yyyymm = $1 RETURNING last_seq`,
+    [yyyymm]
+  );
+  const seq3 = String(r.rows[0].last_seq).padStart(3, "0");
+  return `PRJ-${yyyymm}-${seq3}`;
+}
+
+async function crearProyecto(client, data) {
+  const codigo = await nextProyectoCodigo(client);
+  const r = await client.query(
+    `INSERT INTO public.proyectos (codigo, planta_id, nombre, descripcion, fecha_inicio, fecha_cierre_estimada, estatus, creado_por)
+     VALUES ($1,$2,$3,$4,$5,$6,'EN_CURSO',$7)
+     RETURNING id, codigo, planta_id, nombre, estatus, creado_en`,
+    [
+      codigo,
+      data.planta_id,
+      data.nombre,
+      data.descripcion || null,
+      data.fecha_inicio,
+      data.fecha_cierre_estimada || null,
+      data.creado_por,
+    ]
+  );
+  const row = r.rows[0];
+  await insertProyectoHistorial(client, row.id, "CREADO", `Proyecto creado: ${row.nombre}`, data.creado_por, data.actor_rol || null);
+  return row;
+}
+
+async function getProyectoByCodigo(client, codigo) {
+  const r = await client.query(
+    `SELECT p.id, p.codigo, p.planta_id, p.nombre, p.descripcion, p.fecha_inicio, p.fecha_cierre_estimada, p.fecha_cierre_real,
+            p.estatus, p.aprobado_zp, p.aprobado_por, p.aprobado_en, p.creado_por, p.creado_en,
+            pl.nombre AS planta_nombre
+     FROM public.proyectos p
+     LEFT JOIN public.plantas pl ON pl.id = p.planta_id
+     WHERE p.codigo = $1`,
+    [codigo]
+  );
+  return r.rows[0] || null;
+}
+
+async function getProyectoById(client, id) {
+  const r = await client.query(
+    `SELECT p.id, p.codigo, p.planta_id, p.nombre, p.descripcion, p.fecha_inicio, p.fecha_cierre_estimada, p.fecha_cierre_real,
+            p.estatus, p.aprobado_zp, p.aprobado_por, p.aprobado_en, p.creado_por, p.creado_en,
+            pl.nombre AS planta_nombre
+     FROM public.proyectos p
+     LEFT JOIN public.plantas pl ON pl.id = p.planta_id
+     WHERE p.id = $1`,
+    [id]
+  );
+  return r.rows[0] || null;
+}
+
+/** Proyectos EN_CURSO de una planta (para listados y para asociar folio). */
+async function listarProyectosPorPlanta(client, plantaId, soloEnCurso = true) {
+  let q = `SELECT p.id, p.codigo, p.nombre, p.fecha_inicio, p.fecha_cierre_estimada, p.estatus, p.aprobado_zp
+           FROM public.proyectos p WHERE p.planta_id = $1`;
+  if (soloEnCurso) q += " AND p.estatus = 'EN_CURSO'";
+  q += " ORDER BY p.creado_en DESC";
+  const r = await client.query(q, [plantaId]);
+  return r.rows || [];
+}
+
+/** Con totales de folios y montos por proyecto. */
+async function listarProyectosPorPlantaConTotales(client, plantaId) {
+  const proyectos = await listarProyectosPorPlanta(client, plantaId, true);
+  const out = [];
+  for (const p of proyectos) {
+    const tot = await client.query(
+      `SELECT COUNT(*) AS cnt,
+              COALESCE(SUM(CASE WHEN f.estatus IS NULL OR UPPER(TRIM(f.estatus)) <> 'CANCELADO' THEN f.importe ELSE NULL END), 0) AS total,
+              COALESCE(SUM(CASE WHEN f.prioridad ILIKE '%urgente%' AND (f.estatus IS NULL OR UPPER(TRIM(f.estatus)) <> 'CANCELADO') THEN f.importe ELSE NULL END), 0) AS urgentes
+       FROM public.folios f WHERE f.proyecto_id = $1`,
+      [p.id]
+    );
+    const row = tot.rows[0];
+    out.push({
+      ...p,
+      total_folios: parseInt(row.cnt, 10) || 0,
+      total_monto: Number(row.total) || 0,
+      total_urgentes: Number(row.urgentes) || 0,
+    });
+  }
+  return out;
+}
+
+async function insertProyectoHistorial(client, proyectoId, evento, detalle, actorTelefono, actorRol) {
+  await client.query(
+    `INSERT INTO public.proyecto_historial (proyecto_id, evento, detalle, actor_telefono, actor_rol, creado_en)
+     VALUES ($1,$2,$3,$4,$5,NOW())`,
+    [proyectoId, evento, detalle || null, actorTelefono || null, actorRol || null]
+  );
+}
+
+async function agregarArchivoProyecto(client, proyectoId, tipo, url, subidoPor) {
+  const r = await client.query(
+    `INSERT INTO public.proyecto_archivos (proyecto_id, tipo, url, subido_por, subido_en)
+     VALUES ($1,$2,$3,$4,NOW())
+     RETURNING id, tipo, url, subido_en`,
+    [proyectoId, tipo, url, subidoPor]
+  );
+  return r.rows[0];
+}
+
+async function getArchivosProyecto(client, proyectoId) {
+  const r = await client.query(
+    `SELECT id, tipo, url, subido_por, subido_en FROM public.proyecto_archivos WHERE proyecto_id = $1 ORDER BY subido_en DESC`,
+    [proyectoId]
+  );
+  return r.rows || [];
+}
+
+async function getFoliosByProyecto(client, proyectoId, limit = 5) {
+  const r = await client.query(
+    `SELECT numero_folio, estatus, importe FROM public.folios WHERE proyecto_id = $1 ORDER BY creado_en DESC LIMIT $2`,
+    [proyectoId, limit]
+  );
+  return r.rows || [];
+}
+
+async function getTotalesFoliosProyecto(client, proyectoId) {
+  const r = await client.query(
+    `SELECT COUNT(*) AS cnt, COALESCE(SUM(importe), 0) AS total
+     FROM public.folios WHERE proyecto_id = $1 AND (estatus IS NULL OR UPPER(TRIM(estatus)) <> 'CANCELADO')`,
+    [proyectoId]
+  );
+  const row = r.rows[0];
+  return { cantidad: parseInt(row.cnt, 10) || 0, total: Number(row.total) || 0 };
+}
+
+async function updateProyectoAprobadoZP(client, proyectoId, aprobadoPor) {
+  await client.query(
+    `UPDATE public.proyectos SET aprobado_zp = TRUE, aprobado_por = $1, aprobado_en = NOW() WHERE id = $2`,
+    [aprobadoPor, proyectoId]
+  );
+}
+
+async function updateProyectoCerrado(client, proyectoId) {
+  await client.query(
+    `UPDATE public.proyectos SET estatus = 'CERRADO', fecha_cierre_real = NOW() WHERE id = $1`,
+    [proyectoId]
+  );
+}
+
+async function updateProyectoCancelacionSolicitada(client, proyectoId) {
+  await client.query(
+    `UPDATE public.proyectos SET estatus = 'CANCELACION_SOLICITADA' WHERE id = $1`,
+    [proyectoId]
+  );
+}
+
+async function updateProyectoCancelado(client, proyectoId) {
+  await client.query(
+    `UPDATE public.proyectos SET estatus = 'CANCELADO' WHERE id = $1`,
+    [proyectoId]
+  );
+}
+
+/** Resuelve código corto (ej. "001") a PRJ-YYYYMM-001 usando YYYYMM actual o el primero encontrado. */
+async function resolveProyectoCodigo(client, input) {
+  const t = String(input || "").trim();
+  if (/^PRJ-\d{6}-\d{3}$/i.test(t)) return t.toUpperCase();
+  if (/^\d{1,3}$/.test(t)) {
+    const yyyymm = getCurrentYYYYMM();
+    return `PRJ-${yyyymm}-${t.padStart(3, "0")}`;
+  }
+  return null;
+}
+
 async function insertFolio(client, dd) {
   const numero_folio = await nextFolioNumber(client);
   const folio_codigo = numero_folio;
@@ -487,12 +728,12 @@ async function insertFolio(client, dd) {
 
   const ins = await client.query(
     `INSERT INTO public.folios (
-      folio_codigo, numero_folio, planta_id, beneficiario, concepto, importe,
+      folio_codigo, numero_folio, planta_id, proyecto_id, beneficiario, concepto, importe,
       categoria, subcategoria, unidad, prioridad, estatus, creado_en, nivel_aprobado, creado_por
-    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW(),$12,$13)
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW(),$13,$14)
     RETURNING id, numero_folio, folio_codigo, planta_id`,
     [
-      folio_codigo, numero_folio, plantaId, dd.beneficiario || null, dd.concepto || null,
+      folio_codigo, numero_folio, plantaId, dd.proyecto_id || null, dd.beneficiario || null, dd.concepto || null,
       dd.importe || null, dd.categoria_nombre || null, dd.subcategoria_nombre || null,
       dd.unidad || null, prioridad, estatusInicial, esZP ? 3 : 1, dd.actor_telefono || null,
     ]
@@ -1019,6 +1260,16 @@ function buildHelpMessage(actor) {
     if (clave === "CDMX") lines.push("• seleccionar F-YYYYMM-XXX (selección para semana)");
     if (["GA", "GG", "CDMX"].includes(clave)) lines.push("• cancelar F-YYYYMM-XXX motivo: <texto>");
   }
+  lines.push("• crear proyecto");
+  lines.push("• proyectos de planta");
+  lines.push("• estatus proyecto PRJ-YYYYMM-XXX");
+  lines.push("• adjuntar proyecto PRJ-... (luego envía PDF)");
+  if (clave === "ZP") {
+    lines.push("• aprobar proyecto PRJ-...");
+    lines.push("• cerrar proyecto PRJ-...");
+    lines.push("• confirmar cancelacion proyecto PRJ-...");
+  }
+  lines.push("• cancelar proyecto PRJ-... (solicitar)");
   lines.push("• version");
   lines.push("• ayuda / menu");
   return lines.join("\n");
@@ -1061,14 +1312,29 @@ const sessions = new Map();
 
 function getSession(from) {
   if (!sessions.has(from)) {
-    sessions.set(from, { estado: "IDLE", dd: {}, lastFolioNumero: null, lastFolioId: null });
+    sessions.set(from, {
+      estado: "IDLE",
+      dd: {},
+      lastFolioNumero: null,
+      lastFolioId: null,
+      draftProyecto: {},
+      estadoProyecto: null,
+      pendingProjectAttach: null,
+    });
   }
-  return sessions.get(from);
+  const s = sessions.get(from);
+  if (s.draftProyecto === undefined) s.draftProyecto = {};
+  if (s.estadoProyecto === undefined) s.estadoProyecto = null;
+  if (s.pendingProjectAttach === undefined) s.pendingProjectAttach = null;
+  return s;
 }
 
 function resetSession(sess) {
   sess.estado = "IDLE";
   sess.dd = {};
+  sess.draftProyecto = {};
+  sess.estadoProyecto = null;
+  sess.pendingProjectAttach = null;
 }
 
 /* ==================== NOTIFICACIONES WHATSAPP ==================== */
@@ -1120,6 +1386,21 @@ app.get("/health-db", async (req, res) => {
   try {
     await pool.query("SELECT 1");
     res.json({ ok: true, hora: new Date().toISOString() });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message, hora: new Date().toISOString() });
+  }
+});
+
+app.get("/health-proyectos", async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT estatus, COUNT(*) AS cnt FROM public.proyectos GROUP BY estatus ORDER BY estatus`
+    );
+    const porEstatus = (r.rows || []).reduce((acc, row) => {
+      acc[row.estatus] = parseInt(row.cnt, 10);
+      return acc;
+    }, {});
+    res.json({ ok: true, proyectos_por_estatus: porEstatus, hora: new Date().toISOString() });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message, hora: new Date().toISOString() });
   }
@@ -1209,6 +1490,366 @@ app.post("/twilio/whatsapp", async (req, res) => {
         if (!plantas.length) return safeReply("No hay plantas en catálogo.");
         const list = plantas.map((p, i) => `${i + 1}) ${p.nombre}`).join("\n");
         return safeReply("¿De qué planta? Selecciona número:\n" + list + "\n\nResponde con el número o nombre.");
+      }
+
+      if (lower === "crear proyecto") {
+        sess.estadoProyecto = "CREAR_PROYECTO_PLANTA";
+        sess.draftProyecto = { actor_telefono: fromNorm, actor_rol: actor ? actor.rol_nombre : null };
+        const plantas = await getPlantas(client);
+        sess.draftProyecto._plantasList = plantas;
+        if (!plantas.length) return safeReply("No hay plantas en catálogo. Indica el nombre de la planta.");
+        const list = plantas.map((p, i) => `${i + 1}) ${p.nombre}`).join("\n");
+        return safeReply("Crear proyecto.\n1) Indica PLANTA (responde con el número):\n" + list);
+      }
+
+      if (sess.estadoProyecto && sess.estadoProyecto.startsWith("CREAR_PROYECTO")) {
+        const dp = sess.draftProyecto || {};
+        const plantas = dp._plantasList || [];
+
+        if (sess.estadoProyecto === "CREAR_PROYECTO_PLANTA") {
+          const num = parseInt(body.trim(), 10);
+          let plantaId = null;
+          let plantaNombre = "";
+          if (Number.isFinite(num) && num >= 1 && num <= plantas.length) {
+            plantaId = plantas[num - 1].id;
+            plantaNombre = plantas[num - 1].nombre;
+          } else {
+            const byName = plantas.find((p) => (p.nombre || "").toLowerCase() === body.trim().toLowerCase());
+            if (byName) {
+              plantaId = byName.id;
+              plantaNombre = byName.nombre;
+            }
+          }
+          if (!plantaId) return safeReply("Responde con el número o nombre de planta.");
+          dp.planta_id = plantaId;
+          dp.planta_nombre = plantaNombre;
+          sess.estadoProyecto = "CREAR_PROYECTO_NOMBRE";
+          return safeReply("2) Indica NOMBRE del proyecto.");
+        }
+
+        if (sess.estadoProyecto === "CREAR_PROYECTO_NOMBRE") {
+          if (body.length < 2) return safeReply("Nombre muy corto. Indica el nombre del proyecto.");
+          dp.nombre = body.trim();
+          sess.estadoProyecto = "CREAR_PROYECTO_DESCRIPCION";
+          return safeReply("3) Descripción breve (opcional). Responde con el texto o escribe - para omitir.");
+        }
+
+        if (sess.estadoProyecto === "CREAR_PROYECTO_DESCRIPCION") {
+          dp.descripcion = body.trim() === "-" || body.trim() === "" ? null : body.trim();
+          sess.estadoProyecto = "CREAR_PROYECTO_FECHA_INICIO";
+          return safeReply("4) Fecha de inicio (DD/MM/AAAA) o escribe HOY para usar hoy.");
+        }
+
+        if (sess.estadoProyecto === "CREAR_PROYECTO_FECHA_INICIO") {
+          let fechaInicio = null;
+          if (/^hoy$/i.test(body.trim())) {
+            const now = new Date();
+            fechaInicio = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+          } else {
+            const m = body.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+            if (m) fechaInicio = `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+          }
+          if (!fechaInicio) return safeReply("Formato: DD/MM/AAAA o escribe HOY.");
+          dp.fecha_inicio = fechaInicio;
+          sess.estadoProyecto = "CREAR_PROYECTO_FECHA_CIERRE";
+          return safeReply("5) Fecha de cierre estimada (DD/MM/AAAA) o - para omitir.");
+        }
+
+        if (sess.estadoProyecto === "CREAR_PROYECTO_FECHA_CIERRE") {
+          if (body.trim() !== "-") {
+            const m = body.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+            if (m) dp.fecha_cierre_estimada = `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+          }
+          sess.estadoProyecto = "CREAR_PROYECTO_PDFS";
+          return safeReply("6) ¿Tienen PDFs para adjuntar (planos/cotizaciones)? 1) Sí 2) No");
+        }
+
+        if (sess.estadoProyecto === "CREAR_PROYECTO_PDFS") {
+          const tienePdfs = /^1$|^s[ií]$|^si$/i.test(body.trim());
+          dp.tiene_pdfs = tienePdfs;
+          try {
+            const proy = await crearProyecto(client, {
+              planta_id: dp.planta_id,
+              nombre: dp.nombre,
+              descripcion: dp.descripcion,
+              fecha_inicio: dp.fecha_inicio,
+              fecha_cierre_estimada: dp.fecha_cierre_estimada || null,
+              creado_por: dp.actor_telefono || fromNorm,
+              actor_rol: dp.actor_rol,
+            });
+            sess.estadoProyecto = null;
+            sess.draftProyecto = {};
+            const msg = `✅ Proyecto creado: ${proy.codigo}\nPlanta: ${dp.planta_nombre}\nNombre: ${proy.nombre}\n\nPendiente de autorización por Dirección ZP.`;
+            try {
+              const zpList = await getUsersByRole(client, "ZP");
+              const notif = `📋 Nuevo proyecto pendiente de autorizar.\nCódigo: ${proy.codigo}\nPlanta: ${dp.planta_nombre}\nNombre: ${proy.nombre}\n${tienePdfs ? "Tiene PDFs por adjuntar." : "Sin PDFs indicados."}\n\nResponde: aprobar proyecto ${proy.codigo}`;
+              for (const u of zpList) {
+                if (u.telefono) await sendWhatsApp(u.telefono, notif);
+              }
+            } catch (e) {
+              console.warn("Notif ZP proyecto:", e.message);
+            }
+            return safeReply(msg);
+          } catch (e) {
+            console.error("Error crear proyecto:", e);
+            return safeReply("Error al guardar el proyecto. Intenta de nuevo.");
+          }
+        }
+      }
+
+      if (lower === "proyectos de planta") {
+        const plantas = await getPlantas(client);
+        sess.dd.intent = "LISTA_PROYECTOS_PLANTA";
+        sess.dd.esperando = "PLANTA";
+        sess.dd._plantasList = plantas;
+        if (!plantas.length) return safeReply("No hay plantas en catálogo.");
+        const list = plantas.map((p, i) => `${i + 1}) ${p.nombre}`).join("\n");
+        return safeReply("¿Qué planta?\n" + list + "\n\nResponde con el número o nombre.");
+      }
+
+      if (sess.dd.intent === "LISTA_PROYECTOS_PLANTA" && sess.dd.esperando === "PLANTA") {
+        const plantas = sess.dd._plantasList || [];
+        let plantaId = null;
+        let plantaNombre = "";
+        const num = parseInt(body.trim(), 10);
+        if (Number.isFinite(num) && num >= 1 && num <= plantas.length) {
+          plantaId = plantas[num - 1].id;
+          plantaNombre = plantas[num - 1].nombre;
+        } else {
+          const byName = plantas.find((p) => (p.nombre || "").toLowerCase() === body.trim().toLowerCase());
+          if (byName) {
+            plantaId = byName.id;
+            plantaNombre = byName.nombre;
+          }
+        }
+        sess.dd.intent = null;
+        sess.dd.esperando = null;
+        sess.dd._plantasList = null;
+        if (!plantaId) return safeReply("Planta no reconocida. Escribe: proyectos de planta");
+        const proyectos = await listarProyectosPorPlantaConTotales(client, plantaId);
+        if (!proyectos.length) return safeReply(`No hay proyectos EN_CURSO en ${plantaNombre}.`);
+        let txt = `PROYECTOS - ${plantaNombre.toUpperCase()}\n`;
+        let totalMonto = 0;
+        let totalUrgentes = 0;
+        proyectos.forEach((p, i) => {
+          const fecIni = p.fecha_inicio ? new Date(p.fecha_inicio).toLocaleDateString("es-MX") : "-";
+          const fecCierre = p.fecha_cierre_estimada ? new Date(p.fecha_cierre_estimada).toLocaleDateString("es-MX") : "-";
+          const monto = Number(p.total_monto) || 0;
+          totalMonto += monto;
+          totalUrgentes += Number(p.total_urgentes) || 0;
+          txt += `${i + 1}) ${p.codigo} | ${p.nombre} | ${fecIni} | cierre est. ${fecCierre}\n   Folios: ${p.total_folios} | $${monto.toLocaleString("es-MX", { minimumFractionDigits: 2 })}\n`;
+        });
+        txt += `\nTotal proyectos: ${proyectos.length}\nTotal monto: $${totalMonto.toLocaleString("es-MX", { minimumFractionDigits: 2 })}\nTotal urgentes: $${totalUrgentes.toLocaleString("es-MX", { minimumFractionDigits: 2 })}`;
+        if (txt.length > MAX_WHATSAPP_BODY) txt = txt.substring(0, MAX_WHATSAPP_BODY - 20) + "\n...(recortado)";
+        return safeReply(txt.trim());
+      }
+
+      if (/^estatus\s+proyecto\s+/i.test(body)) {
+        const rest = body.replace(/^estatus\s+proyecto\s+/i, "").trim();
+        if (!rest) return safeReply("Indica el código. Ejemplo: estatus proyecto PRJ-202602-001");
+        const codigo = await resolveProyectoCodigo(client, rest);
+        if (!codigo) return safeReply("Código de proyecto inválido. Use PRJ-YYYYMM-XXX o número corto (ej. 001).");
+        const proy = await getProyectoByCodigo(client, codigo);
+        if (!proy) return safeReply(`No existe el proyecto ${codigo}.`);
+        const archivos = await getArchivosProyecto(client, proy.id);
+        const totales = await getTotalesFoliosProyecto(client, proy.id);
+        const foliosRecientes = await getFoliosByProyecto(client, proy.id, 5);
+        const fecIni = proy.fecha_inicio ? new Date(proy.fecha_inicio).toLocaleDateString("es-MX") : "-";
+        const fecCierreEst = proy.fecha_cierre_estimada ? new Date(proy.fecha_cierre_estimada).toLocaleDateString("es-MX") : "-";
+        const fecCierreReal = proy.fecha_cierre_real ? formatMexicoCentral(proy.fecha_cierre_real) : "-";
+        let txt = `PROYECTO ${proy.codigo}\nPlanta: ${proy.planta_nombre || "-"}\nNombre: ${proy.nombre}\nEstatus: ${proy.estatus}\n`;
+        txt += `Inicio: ${fecIni} | Cierre est.: ${fecCierreEst} | Cierre real: ${fecCierreReal}\n`;
+        txt += `Aprobado ZP: ${proy.aprobado_zp ? "Sí" : "No"}${proy.aprobado_por ? " por " + proy.aprobado_por : ""}\n`;
+        txt += `Creado por: ${proy.creado_por || "-"} | ${formatMexicoCentral(proy.creado_en)}\n`;
+        if (archivos.length) {
+          txt += "\nPDFs:\n";
+          archivos.slice(0, 10).forEach((a) => {
+            txt += `  ${a.tipo} | ${formatMexicoCentral(a.subido_en)}\n`;
+          });
+        }
+        txt += `\nFolios ligados: ${totales.cantidad} | Suma: $${totales.total.toLocaleString("es-MX", { minimumFractionDigits: 2 })}`;
+        if (foliosRecientes.length) {
+          txt += "\nÚltimos: " + foliosRecientes.map((f) => f.numero_folio).join(", ");
+        }
+        if (txt.length > MAX_WHATSAPP_BODY) txt = txt.substring(0, MAX_WHATSAPP_BODY - 20) + "\n...(recortado)";
+        return safeReply(txt.trim());
+      }
+
+      if (/^adjuntar\s+proyecto\s+/i.test(body)) {
+        const codigo = body.replace(/^adjuntar\s+proyecto\s+/i, "").trim();
+        const codigoNorm = await resolveProyectoCodigo(client, codigo);
+        if (!codigoNorm) return safeReply("Formato: adjuntar proyecto PRJ-YYYYMM-XXX. Luego envía el PDF.");
+        const proy = await getProyectoByCodigo(client, codigoNorm);
+        if (!proy) return safeReply(`No existe el proyecto ${codigoNorm}.`);
+        if (proy.estatus !== ESTADOS_PROYECTO.EN_CURSO) return safeReply("Solo se pueden adjuntar PDFs a proyectos EN_CURSO.");
+        sess.pendingProjectAttach = { codigo: codigoNorm, proyecto_id: proy.id };
+        return safeReply(`Ok. Envía el PDF para el proyecto ${codigoNorm}. Después indicarás si es Plano, Cotización u Otro.`);
+      }
+
+      if (/^aprobar\s+proyecto\s+/i.test(body)) {
+        const codigo = body.replace(/^aprobar\s+proyecto\s+/i, "").trim();
+        const codigoNorm = await resolveProyectoCodigo(client, codigo);
+        if (!codigoNorm) return safeReply("Formato: aprobar proyecto PRJ-YYYYMM-XXX");
+        const rolClave = (actor && actor.rol_clave) ? String(actor.rol_clave).toUpperCase() : "";
+        const esZP = rolClave === "ZP" || (actor && actor.rol_nombre && /director/i.test(actor.rol_nombre) && /zp/i.test(actor.rol_nombre));
+        if (!esZP) return safeReply("Solo el Director ZP puede aprobar proyectos.");
+        const proy = await getProyectoByCodigo(client, codigoNorm);
+        if (!proy) return safeReply(`No existe el proyecto ${codigoNorm}.`);
+        if (proy.aprobado_zp) return safeReply(`El proyecto ${codigoNorm} ya estaba aprobado por ZP.`);
+        if (proy.estatus !== ESTADOS_PROYECTO.EN_CURSO) return safeReply("Solo se pueden aprobar proyectos EN_CURSO.");
+        await updateProyectoAprobadoZP(client, proy.id, fromNorm);
+        await insertProyectoHistorial(client, proy.id, "APROBADO_ZP", `Aprobado por ZP: ${fromNorm}`, fromNorm, actor ? actor.rol_nombre : null);
+        const archivos = await getArchivosProyecto(client, proy.id);
+        const tienePdfs = archivos.length > 0;
+        const msg = `✅ Proyecto ${codigoNorm} aprobado por Dirección ZP.${tienePdfs ? " Tiene PDFs adjuntos." : " ⚠️ Sin PDFs adjuntos."}`;
+        try {
+          const gaGG = await getUsersByRoleAndPlanta(client, "GA", proy.planta_id).catch(() => []);
+          const gaGG2 = await getUsersByRoleAndPlanta(client, "GG", proy.planta_id).catch(() => []);
+          const cdmx = await getUsersByRole(client, "CDMX").catch(() => []);
+          const notif = `Proyecto ${codigoNorm} (${proy.nombre}) aprobado por ZP. Planta: ${proy.planta_nombre}.${tienePdfs ? "" : " Sin PDFs adjuntos."}`;
+          for (const u of [...gaGG, ...gaGG2]) {
+            if (u && u.telefono) await sendWhatsApp(u.telefono, notif);
+          }
+          for (const u of cdmx) {
+            if (u && u.telefono) await sendWhatsApp(u.telefono, notif);
+          }
+        } catch (e) {
+          console.warn("Notif aprob proyecto:", e.message);
+        }
+        return safeReply(msg);
+      }
+
+      if (/^cerrar\s+proyecto\s+/i.test(body)) {
+        const codigo = body.replace(/^cerrar\s+proyecto\s+/i, "").trim();
+        const codigoNorm = await resolveProyectoCodigo(client, codigo);
+        if (!codigoNorm) return safeReply("Formato: cerrar proyecto PRJ-YYYYMM-XXX");
+        const rolClave = (actor && actor.rol_clave) ? String(actor.rol_clave).toUpperCase() : "";
+        const esZP = rolClave === "ZP" || (actor && actor.rol_nombre && /director/i.test(actor.rol_nombre) && /zp/i.test(actor.rol_nombre));
+        if (!esZP) return safeReply("Solo el Director ZP puede cerrar proyectos.");
+        const proy = await getProyectoByCodigo(client, codigoNorm);
+        if (!proy) return safeReply(`No existe el proyecto ${codigoNorm}.`);
+        if (proy.estatus !== ESTADOS_PROYECTO.EN_CURSO) return safeReply("Solo se pueden cerrar proyectos EN_CURSO.");
+        const totales = await getTotalesFoliosProyecto(client, proy.id);
+        const foliosNoFinales = await client.query(
+          `SELECT COUNT(*) AS c FROM public.folios WHERE proyecto_id = $1 AND (estatus IS NULL OR (UPPER(TRIM(estatus)) NOT IN ('PAGADO','CERRADO','CANCELADO')))`,
+          [proy.id]
+        );
+        const noFinal = parseInt(foliosNoFinales.rows[0].c, 10) || 0;
+        if (noFinal > 0) {
+          sess.dd.pendingCierreProyecto = { codigo: codigoNorm, proyecto_id: proy.id, proyecto_nombre: proy.nombre };
+          return safeReply(`El proyecto tiene ${noFinal} folio(s) que no están PAGADO/CERRADO. ¿Cerrar de todos modos? Responde SÍ o NO.`);
+        }
+        await updateProyectoCerrado(client, proy.id);
+        await insertProyectoHistorial(client, proy.id, "CERRADO", "Proyecto cerrado por ZP", fromNorm, actor ? actor.rol_nombre : null);
+        sess.dd.pendingCierreProyecto = null;
+        try {
+          const gaGG = await getUsersByRoleAndPlanta(client, "GA", proy.planta_id).catch(() => []);
+          const gaGG2 = await getUsersByRoleAndPlanta(client, "GG", proy.planta_id).catch(() => []);
+          const cdmx = await getUsersByRole(client, "CDMX").catch(() => []);
+          const notif = `Proyecto ${codigoNorm} (${proy.nombre}) cerrado. Planta: ${proy.planta_nombre}.`;
+          for (const u of [...gaGG, ...gaGG2]) {
+            if (u && u.telefono) await sendWhatsApp(u.telefono, notif);
+          }
+          for (const u of cdmx) {
+            if (u && u.telefono) await sendWhatsApp(u.telefono, notif);
+          }
+        } catch (e) {
+          console.warn("Notif cierre proyecto:", e.message);
+        }
+        return safeReply(`✅ Proyecto ${codigoNorm} cerrado.`);
+      }
+
+      if (sess.dd.pendingCierreProyecto && /^(s[ií]|si|no)$/i.test(body.trim())) {
+        const pend = sess.dd.pendingCierreProyecto;
+        const si = /^s[ií]|si$/i.test(body.trim());
+        sess.dd.pendingCierreProyecto = null;
+        if (!si) return safeReply("No se cerró el proyecto. Escribe: cerrar proyecto " + pend.codigo + " para intentar de nuevo.");
+        const proy = await getProyectoById(client, pend.proyecto_id);
+        if (!proy || proy.estatus !== ESTADOS_PROYECTO.EN_CURSO) return safeReply("El proyecto ya no está EN_CURSO.");
+        const rolClave = (actor && actor.rol_clave) ? String(actor.rol_clave).toUpperCase() : "";
+        const esZP = rolClave === "ZP" || (actor && actor.rol_nombre && /director/i.test(actor.rol_nombre) && /zp/i.test(actor.rol_nombre));
+        if (!esZP) return safeReply("Solo ZP puede confirmar el cierre.");
+        await updateProyectoCerrado(client, proy.id);
+        await insertProyectoHistorial(client, proy.id, "CERRADO", "Proyecto cerrado por ZP (confirmado)", fromNorm, actor ? actor.rol_nombre : null);
+        try {
+          const gaGG = await getUsersByRoleAndPlanta(client, "GA", proy.planta_id).catch(() => []);
+          const gaGG2 = await getUsersByRoleAndPlanta(client, "GG", proy.planta_id).catch(() => []);
+          const cdmx = await getUsersByRole(client, "CDMX").catch(() => []);
+          const notif = `Proyecto ${proy.codigo} (${proy.nombre}) cerrado. Planta: ${proy.planta_nombre}.`;
+          for (const u of [...gaGG, ...gaGG2]) {
+            if (u && u.telefono) await sendWhatsApp(u.telefono, notif);
+          }
+          for (const u of cdmx) {
+            if (u && u.telefono) await sendWhatsApp(u.telefono, notif);
+          }
+        } catch (e) {
+          console.warn("Notif cierre proyecto:", e.message);
+        }
+        return safeReply(`✅ Proyecto ${proy.codigo} cerrado.`);
+      }
+
+      if (/^cancelar\s+proyecto\s+/i.test(body)) {
+        const codigo = body.replace(/^cancelar\s+proyecto\s+/i, "").trim();
+        const codigoNorm = await resolveProyectoCodigo(client, codigo);
+        if (!codigoNorm) return safeReply("Formato: cancelar proyecto PRJ-YYYYMM-XXX");
+        const proy = await getProyectoByCodigo(client, codigoNorm);
+        if (!proy) return safeReply(`No existe el proyecto ${codigoNorm}.`);
+        if (proy.estatus === ESTADOS_PROYECTO.CANCELADO) return safeReply("El proyecto ya está cancelado.");
+        if (proy.estatus === ESTADOS_PROYECTO.CANCELACION_SOLICITADA) return safeReply("Ya hay solicitud de cancelación. ZP debe confirmar.");
+        if (proy.estatus !== ESTADOS_PROYECTO.EN_CURSO && proy.estatus !== ESTADOS_PROYECTO.CERRADO) return safeReply("No se puede cancelar en el estado actual.");
+        await updateProyectoCancelacionSolicitada(client, proy.id);
+        await insertProyectoHistorial(client, proy.id, "CANCELACION_SOLICITADA", `Solicitud de cancelación por ${fromNorm}`, fromNorm, actor ? actor.rol_nombre : null);
+        try {
+          const todos = await getTodosParaNotificacion(client, proy.planta_id);
+          const notif = `Solicitud de cancelación del proyecto ${codigoNorm} (${proy.nombre}). ZP debe confirmar: confirmar cancelacion proyecto ${codigoNorm}`;
+          for (const tel of todos) {
+            if (tel) await sendWhatsApp(tel, notif);
+          }
+        } catch (e) {
+          console.warn("Notif cancel proyecto:", e.message);
+        }
+        return safeReply(`Solicitud de cancelación registrada para ${codigoNorm}. ZP debe responder: confirmar cancelacion proyecto ${codigoNorm}`);
+      }
+
+      if (/^confirmar\s+cancelacion\s+proyecto\s+/i.test(body)) {
+        const codigo = body.replace(/^confirmar\s+cancelacion\s+proyecto\s+/i, "").trim();
+        const codigoNorm = await resolveProyectoCodigo(client, codigo);
+        if (!codigoNorm) return safeReply("Formato: confirmar cancelacion proyecto PRJ-YYYYMM-XXX");
+        const rolClave = (actor && actor.rol_clave) ? String(actor.rol_clave).toUpperCase() : "";
+        const esZP = rolClave === "ZP" || (actor && actor.rol_nombre && /director/i.test(actor.rol_nombre) && /zp/i.test(actor.rol_nombre));
+        if (!esZP) return safeReply("Solo el Director ZP puede confirmar la cancelación del proyecto.");
+        const proy = await getProyectoByCodigo(client, codigoNorm);
+        if (!proy) return safeReply(`No existe el proyecto ${codigoNorm}.`);
+        if (proy.estatus !== ESTADOS_PROYECTO.CANCELACION_SOLICITADA) return safeReply("El proyecto debe estar en CANCELACION_SOLICITADA.");
+        await updateProyectoCancelado(client, proy.id);
+        await insertProyectoHistorial(client, proy.id, "CANCELADO", "Cancelación confirmada por ZP", fromNorm, actor ? actor.rol_nombre : null);
+        try {
+          const todos = await getTodosParaNotificacion(client, proy.planta_id);
+          const notif = `Proyecto ${codigoNorm} (${proy.nombre}) cancelado por ZP.`;
+          for (const tel of todos) {
+            if (tel) await sendWhatsApp(tel, notif);
+          }
+        } catch (e) {
+          console.warn("Notif cancel proyecto:", e.message);
+        }
+        return safeReply(`✅ Proyecto ${codigoNorm} cancelado.`);
+      }
+
+      if (sess.pendingProjectAttach && sess.pendingProjectAttach.waitingTipo) {
+        const num = parseInt(body.trim(), 10);
+        const tipoMap = { 1: "PLANO", 2: "COTIZACION", 3: "OTRO" };
+        const tipo = tipoMap[num] || null;
+        if (!tipo) return safeReply("Responde 1) Plano 2) Cotización 3) Otro");
+        const pend = sess.pendingProjectAttach;
+        try {
+          await agregarArchivoProyecto(client, pend.proyecto_id, tipo, pend.url, fromNorm);
+          await insertProyectoHistorial(client, pend.proyecto_id, "ARCHIVO_AGREGADO", `PDF ${tipo} adjunto`, fromNorm, actor ? actor.rol_nombre : null);
+        } catch (e) {
+          console.warn("Error agregar archivo proyecto:", e.message);
+          return safeReply("Error al registrar el archivo. Intenta de nuevo.");
+        }
+        sess.pendingProjectAttach = null;
+        return safeReply(`✅ PDF (${tipo}) guardado en proyecto ${pend.codigo}.`);
       }
 
       function truncConcepto(s, maxLen = 60) {
@@ -1729,6 +2370,29 @@ app.post("/twilio/whatsapp", async (req, res) => {
       if (!mediaUrl) return safeReply("Recibí un adjunto pero no tengo la URL. Intenta de nuevo.");
       if (!mediaType.includes("pdf")) return safeReply("Solo acepto PDF para cotización.");
 
+      if (sess.pendingProjectAttach && !sess.pendingProjectAttach.waitingTipo) {
+        const pend = sess.pendingProjectAttach;
+        const client = await pool.connect();
+        try {
+          let publicUrl;
+          if (s3Enabled) {
+            const buffer = await downloadTwilioMediaAsBuffer(mediaUrl);
+            const s3Key = `proyectos/${pend.codigo}/${Date.now()}.pdf`;
+            publicUrl = await uploadPdfToS3(buffer, s3Key);
+          } else {
+            publicUrl = `TWILIO:${mediaUrl}`;
+          }
+          pend.url = publicUrl;
+          pend.waitingTipo = true;
+          return safeReply("PDF recibido. ¿Es 1) Plano 2) Cotización 3) Otro? Responde con el número.");
+        } catch (e) {
+          console.warn("Error subir PDF proyecto:", e.message);
+          return safeReply("Error al subir el PDF. Intenta de nuevo.");
+        } finally {
+          client.release();
+        }
+      }
+
       const client = await pool.connect();
       try {
         let targetNumero = sess.dd.attachNumero || sess.lastFolioNumero;
@@ -1816,6 +2480,43 @@ app.post("/twilio/whatsapp", async (req, res) => {
       } finally {
         client.release();
       }
+      sess.estado = "ESPERANDO_PROYECTO_SN";
+      return safeReply("¿Este folio pertenece a un proyecto? 1) Sí 2) No");
+    }
+
+    if (sess.estado === "ESPERANDO_PROYECTO_SN") {
+      const sn = body.trim().toLowerCase();
+      if (/^2$|^no$/i.test(sn)) {
+        sess.dd.proyecto_id = null;
+        sess.estado = "ESPERANDO_BENEFICIARIO";
+        return safeReply("2) Indica BENEFICIARIO (a quién se le paga).");
+      }
+      if (/^1$|^s[ií]$|^si$/i.test(sn)) {
+        const client = await pool.connect();
+        try {
+          const proyectos = await listarProyectosPorPlanta(client, sess.dd.planta_id, true);
+          if (!proyectos.length) {
+            sess.dd.proyecto_id = null;
+            sess.estado = "ESPERANDO_BENEFICIARIO";
+            return safeReply("No hay proyectos EN_CURSO en esta planta. Continuamos sin proyecto.\n2) Indica BENEFICIARIO (a quién se le paga).");
+          }
+          sess.dd._proyectosList = proyectos;
+          sess.estado = "ESPERANDO_PROYECTO_PICK";
+          const list = proyectos.map((p, i) => `${i + 1}) ${p.codigo} - ${p.nombre}`).join("\n");
+          return safeReply("Selecciona el proyecto (número):\n" + list);
+        } finally {
+          client.release();
+        }
+      }
+      return safeReply("Responde 1) Sí o 2) No.");
+    }
+
+    if (sess.estado === "ESPERANDO_PROYECTO_PICK") {
+      const proyectos = sess.dd._proyectosList || [];
+      const picked = pickByNumber(body, proyectos);
+      if (!picked) return safeReply("Responde con el número del proyecto.");
+      sess.dd.proyecto_id = picked.id;
+      sess.dd._proyectosList = null;
       sess.estado = "ESPERANDO_BENEFICIARIO";
       return safeReply("2) Indica BENEFICIARIO (a quién se le paga).");
     }
