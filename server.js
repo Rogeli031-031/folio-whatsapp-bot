@@ -1169,6 +1169,9 @@ app.post("/twilio/whatsapp", async (req, res) => {
         if (soloUrgentes && rows.length === 0) {
           return safeReply(`No hay folios urgentes en ${plantaNombre}.`);
         }
+        if (!soloUrgentes && rows.length === 0) {
+          return safeReply(`No hay folios (no cancelados) en ${plantaNombre}. Revisa en la DB que los folios tengan planta_id = ${plantaId}.`);
+        }
         const txt = formatFoliosList(rows, plantaNombre, totalGeneral, totalUrgentes, soloUrgentes);
         if (soloUrgentes) {
           const extra = `\nCantidad folios urgentes: ${countUrgentes}`;
