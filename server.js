@@ -145,7 +145,7 @@ function samePhone(a, b) {
   return la === lb;
 }
 
-/** Normaliza teléfono para envío WhatsApp outbound: +521... -> +52..., limpia espacios; devuelve "whatsapp:+52..." o null si inválido. México: +52 + 10 dígitos = 13 caracteres. */
+/** Normaliza teléfono para envío WhatsApp outbound. Acepta +52 o +521; devuelve "whatsapp:+521..." para coincidir con Twilio Sandbox (participants usan +521). México: +52 + 10 dígitos. */
 function normalizePhoneForWhatsApp(phone) {
   if (!phone) return null;
   let s = String(phone).trim().replace(/\s/g, "").replace(/-/g, "");
@@ -157,7 +157,7 @@ function normalizePhoneForWhatsApp(phone) {
   else if (s.startsWith("+52") && /^\+52\d{10}$/.test(s)) { /* ok: +52 y 10 dígitos (México) */ }
   else return null;
   if (!/^\+52\d{10}$/.test(s)) return null;
-  return `whatsapp:${s}`;
+  return `whatsapp:+521${s.slice(3)}`;
 }
 
 function twimlMessage(text) {
