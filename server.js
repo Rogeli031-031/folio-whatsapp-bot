@@ -352,7 +352,7 @@ async function getActorByPhone(client, phone) {
 }
 
 async function getPlantas(client) {
-  const r = await client.query(`SELECT id, nombre FROM public.plantas ORDER BY nombre`);
+  const r = await client.query(`SELECT id, nombre FROM public.plantas ORDER BY id ASC`);
   return r.rows;
 }
 
@@ -609,21 +609,32 @@ async function getFoliosUrgentes(client, limit = 20) {
   return (r.rows || []).slice(0, limit);
 }
 
-/** Últimos N folios de una planta (recientes primero). soloUrgentes: solo filas con prioridad ILIKE '%urgente%'. Retorna { rows, totalGeneral, totalUrgentes, countUrgentes }. */
-async function getFoliosByPlanta(client, plantaId, limit = 30, soloUrgentes = false) {
-  let q = `
-    SELECT numero_folio, estatus, importe, prioridad, COALESCE(f.descripcion, f.concepto) AS concepto
-    FROM public.folios f
-    WHERE f.planta_id = $1
-  `;
-  const params = [plantaId];
-  if (soloUrgentes) {
-    q += ` AND f.prioridad ILIKE '%urgente%'`;
+/** Últimos N folios de una planta (recientes primero). Muestra todos los folios no cancelados. soloUrgentes: solo filas con prioridad ILIKE '%urgente%'. Retorna { rows, totalGeneral, totalUrgentes, countUrgentes }. */
+async function getFoliosByPlanta(client, plantaId, limit = 50, soloUrgentes = false) {
+  const params = [plantaId, limit];
+  const whereEstatus = " AND (f.estatus IS NULL OR UPPER(TRIM(f.estatus)) <> 'CANCELADO')";
+  const whereUrg = soloUrgentes ? " AND f.prioridad ILIKE '%urgente%'" : "";
+  let r;
+  try {
+    r = await client.query(
+      `SELECT f.numero_folio, f.estatus, f.importe, f.prioridad, COALESCE(f.descripcion, f.concepto) AS concepto
+       FROM public.folios f
+       WHERE f.planta_id = $1 ${whereEstatus} ${whereUrg}
+       ORDER BY f.creado_en DESC NULLS LAST LIMIT $2`,
+      params
+    );
+  } catch (e) {
+    if (e.message && /descripcion|column/.test(e.message)) {
+      r = await client.query(
+        `SELECT f.numero_folio, f.estatus, f.importe, f.prioridad, f.concepto AS concepto
+         FROM public.folios f
+         WHERE f.planta_id = $1 ${whereEstatus} ${whereUrg}
+         ORDER BY f.creado_en DESC NULLS LAST LIMIT $2`,
+        params
+      );
+    } else throw e;
   }
-  q += ` ORDER BY f.creado_en DESC LIMIT $2`;
-  params.push(limit);
-  const r = await client.query(q, params);
-  const rows = r.rows || [];
+  const rows = (r && r.rows) || [];
   let totalGeneral = 0;
   let totalUrgentes = 0;
   let countUrgentes = 0;
@@ -1129,7 +1140,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
         });
         txt += `\nTotal urgentes: $${totalUrgentes.toLocaleString("es-MX", { minimumFractionDigits: 2 })}\n`;
         txt += `Total general: $${totalGeneral.toLocaleString("es-MX", { minimumFractionDigits: 2 })}\n`;
-        if (rows.length >= 30) txt += "\nMostrando últimos 30.";
+        if (rows.length >= 50) txt += "\nMostrando últimos 50.";
         return txt.trim();
       }
 
@@ -1154,7 +1165,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
         sess.dd.esperando = null;
         sess.dd._plantasList = null;
         if (!plantaId) return safeReply("Planta no reconocida. Responde con el número o nombre. Escribe: " + (soloUrgentes ? "folios urgentes de planta" : "folios de planta"));
-        const { rows, totalGeneral, totalUrgentes, countUrgentes } = await getFoliosByPlanta(client, plantaId, 30, soloUrgentes);
+        const { rows, totalGeneral, totalUrgentes, countUrgentes } = await getFoliosByPlanta(client, plantaId, 50, soloUrgentes);
         if (soloUrgentes && rows.length === 0) {
           return safeReply(`No hay folios urgentes en ${plantaNombre}.`);
         }
