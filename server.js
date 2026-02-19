@@ -1166,6 +1166,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
         sess.dd._plantasList = null;
         if (!plantaId) return safeReply("Planta no reconocida. Responde con el número o nombre. Escribe: " + (soloUrgentes ? "folios urgentes de planta" : "folios de planta"));
         const { rows, totalGeneral, totalUrgentes, countUrgentes } = await getFoliosByPlanta(client, plantaId, 50, soloUrgentes);
+        if (DEBUG || rows.length === 0) console.log("[foliosByPlanta] plantaId=" + plantaId + " plantaNombre=" + (plantaNombre || "") + " rows=" + rows.length);
         if (soloUrgentes && rows.length === 0) {
           return safeReply(`No hay folios urgentes en ${plantaNombre}.`);
         }
