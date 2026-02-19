@@ -381,10 +381,10 @@ function normalizeFolioToken(token, yyyymmFallback) {
 }
 
 /**
- * Extrae folios del texto después de "aprobar".
+ * Extrae folios del texto después de "aprobar" o "estatus".
  * Si hay al menos un folio completo F-YYYYMM-XXX, los consecutivos sueltos (1-3 dígitos) usan ese YYYYMM.
  * Si no hay folio completo, se usa YYYYMM actual.
- * Retorna { folios: string[] (sin duplicados), invalidTokens: string[] }.
+ * Retorna { folios: string[] (orden de primera aparición, sin duplicados), invalidTokens: string[] }.
  */
 function parseFolioTokensFromText(text) {
   const raw = String(text || "").trim();
@@ -399,12 +399,19 @@ function parseFolioTokensFromText(text) {
     else if (/^\d{4,}$/.test(p)) invalidTokens.push(p);
   }
   const yyyymm = fullFolios.length > 0 ? fullFolios[0].slice(2, 8) : getCurrentYYYYMM();
-  const foliosSet = new Set(fullFolios);
+  const seen = new Set();
+  const folios = [];
+  function add(num) {
+    if (!seen.has(num)) {
+      seen.add(num);
+      folios.push(num);
+    }
+  }
+  fullFolios.forEach(add);
   shortTokens.forEach((s) => {
     const n = normalizeFolioToken(s, yyyymm);
-    if (n) foliosSet.add(n);
+    if (n) add(n);
   });
-  const folios = Array.from(foliosSet).sort();
   return { folios, invalidTokens: [...new Set(invalidTokens)] };
 }
 
@@ -440,6 +447,28 @@ async function getFolioByNumero(client, numero) {
   return row;
 }
 
+/** Consulta varios folios por numero_folio. Retorna array en el mismo orden que numeros: { numero, folio } con folio null si no existe. */
+async function getManyFoliosStatus(client, numeros) {
+  if (!numeros || numeros.length === 0) return [];
+  const uniq = [...new Set(numeros)];
+  const r = await client.query(
+    `SELECT f.id, f.numero_folio, f.folio_codigo, f.planta_id, f.beneficiario, f.concepto, f.importe,
+            f.categoria, f.subcategoria, f.unidad, f.prioridad, f.estatus, f.cotizacion_url, f.cotizacion_s3key,
+            f.aprobado_por, f.aprobado_en, f.creado_en, f.nivel_aprobado, f.estatus_anterior, f.override_planta, f.override_motivo, f.creado_por,
+            COALESCE(f.descripcion, f.concepto) AS descripcion,
+            p.nombre AS planta_nombre
+     FROM public.folios f
+     LEFT JOIN public.plantas p ON p.id = f.planta_id
+     WHERE f.numero_folio = ANY($1::text[])`,
+    [uniq]
+  );
+  const map = new Map();
+  (r.rows || []).forEach((row) => {
+    if (row && row.nivel_aprobado != null) row.nivel_aprobado = parseInt(row.nivel_aprobado, 10);
+    map.set(row.numero_folio, row);
+  });
+  return numeros.map((numero) => ({ numero, folio: map.get(numero) || null }));
+}
 async function insertFolio(client, dd) {
   const numero_folio = await nextFolioNumber(client);
   const folio_codigo = numero_folio;
@@ -969,7 +998,7 @@ function buildHelpMessage(actor) {
   const clave = (actor && actor.rol_clave) ? String(actor.rol_clave).toUpperCase() : "";
   const lines = ["Comandos:"];
   lines.push("• crear folio [concepto] [urgente]");
-  lines.push(`• estatus F-YYYYMM-XXX${FLAGS.ESTATUS ? "" : " (desactivado)"}`);
+  lines.push(`• estatus 001 002 o F-YYYYMM-XXX (varios en un mensaje)${FLAGS.ESTATUS ? "" : " (desactivado)"}`);
   lines.push(`• historial F-YYYYMM-XXX${FLAGS.HISTORIAL ? "" : " (desactivado)"}`);
   lines.push("• folios de planta");
   lines.push("• folios urgentes de planta");
@@ -1291,26 +1320,54 @@ app.post("/twilio/whatsapp", async (req, res) => {
         return safeReply(chunks[0]);
       }
 
-      if (FLAGS.ESTATUS && /^estatus\s+F-\d{6}-\d{3}\s*$/i.test(body)) {
-        const numero = body.replace(/^estatus\s+/i, "").trim();
-        const folio = await getFolioByNumero(client, numero);
-        if (!folio) return safeReply(`No existe el folio ${numero}.`);
-        const urg = (folio.prioridad && String(folio.prioridad).toLowerCase().includes("urgente")) ? " 🔴💡 URGENTE" : "";
-        const concepto = folio.descripcion || folio.concepto || "-";
-        const imp = Number(folio.importe) != null && !isNaN(Number(folio.importe)) ? Number(folio.importe).toLocaleString("es-MX", { minimumFractionDigits: 2 }) : "-";
-        const fecha = formatMexicoCentral(folio.creado_en);
-        let txt = `Folio ${folio.numero_folio}${urg}\n`;
-        txt += `Planta: ${folio.planta_nombre || "-"}\n`;
-        txt += `Estatus: ${folio.estatus || "-"}\n`;
-        txt += `Monto: $${imp}\n`;
-        txt += `Concepto: ${concepto}\n`;
-        txt += `Beneficiario: ${folio.beneficiario || "-"}\n`;
-        txt += `Categoría: ${folio.categoria || "-"}\n`;
-        txt += `Subcategoría: ${folio.subcategoria || "-"}\n`;
-        txt += `Urgente: ${(folio.prioridad && String(folio.prioridad).toLowerCase().includes("urgente")) ? "Sí" : "No"}\n`;
-        txt += `Cotización adjunta: ${folio.cotizacion_url ? "Sí" : "No"}\n`;
-        txt += `Fecha: ${fecha}\n`;
-        if (folio.aprobado_por) txt += `Aprobado por: ${folio.aprobado_por}\n`;
+      if (FLAGS.ESTATUS && /^estatus\s+/i.test(body)) {
+        const rest = body.replace(/^estatus\s+/i, "").trim();
+        if (!rest) return safeReply("Indica al menos un folio. Ejemplo: estatus 045 044 o estatus F-202602-001");
+        const { folios, invalidTokens } = parseFolioTokensFromText(rest);
+        if (folios.length === 0 && invalidTokens.length === 0) return safeReply("Indica al menos un folio. Ejemplo: estatus 045 044 o estatus F-202602-001");
+        const results = await getManyFoliosStatus(client, folios);
+        const noEncontrados = results.filter((r) => !r.folio).map((r) => r.numero);
+
+        function formatEstatusCompacto(folio) {
+          const urg = (folio.prioridad && String(folio.prioridad).toLowerCase().includes("urgente")) ? "🔴💡 URGENTE | " : "";
+          const concepto = (folio.descripcion || folio.concepto || "-").toString().trim();
+          const conceptoShort = concepto.length > 60 ? concepto.substring(0, 60) + "…" : concepto;
+          const imp = Number(folio.importe) != null && !isNaN(Number(folio.importe)) ? Number(folio.importe).toLocaleString("es-MX", { minimumFractionDigits: 2 }) : "-";
+          const cotiz = folio.cotizacion_url ? "✅ Adjunta" : "⚠️ No adjunta";
+          return `${urg}${folio.numero_folio} | ${folio.planta_nombre || "-"} | ${folio.estatus || "-"} | $${imp}\n  Concepto: ${conceptoShort}\n  Cotización: ${cotiz}`;
+        }
+        function formatEstatusBonito(folio) {
+          const urg = (folio.prioridad && String(folio.prioridad).toLowerCase().includes("urgente")) ? " 🔴💡 URGENTE" : "";
+          const concepto = folio.descripcion || folio.concepto || "-";
+          const imp = Number(folio.importe) != null && !isNaN(Number(folio.importe)) ? Number(folio.importe).toLocaleString("es-MX", { minimumFractionDigits: 2 }) : "-";
+          const fecha = formatMexicoCentral(folio.creado_en);
+          let txt = `Folio ${folio.numero_folio}${urg}\n`;
+          txt += `Planta: ${folio.planta_nombre || "-"}\n`;
+          txt += `Estatus: ${folio.estatus || "-"}\n`;
+          txt += `Monto: $${imp}\n`;
+          txt += `Concepto: ${concepto}\n`;
+          txt += `Beneficiario: ${folio.beneficiario || "-"}\n`;
+          txt += `Categoría: ${folio.categoria || "-"}\n`;
+          txt += `Subcategoría: ${folio.subcategoria || "-"}\n`;
+          txt += `Urgente: ${(folio.prioridad && String(folio.prioridad).toLowerCase().includes("urgente")) ? "Sí" : "No"}\n`;
+          txt += `Cotización adjunta: ${folio.cotizacion_url ? "Sí" : "No"}\n`;
+          txt += `Fecha: ${fecha}\n`;
+          if (folio.aprobado_por) txt += `Aprobado por: ${folio.aprobado_por}\n`;
+          return txt.trim();
+        }
+
+        let txt = "";
+        if (results.length === 1 && results[0].folio) {
+          txt = formatEstatusBonito(results[0].folio);
+        } else {
+          const blocks = [];
+          results.forEach((r, i) => {
+            if (r.folio) blocks.push(formatEstatusCompacto(r.folio));
+          });
+          txt = blocks.join("\n\n");
+        }
+        if (noEncontrados.length) txt += (txt ? "\n\n" : "") + `❌ No encontrados: ${noEncontrados.join(", ")}`;
+        if (invalidTokens.length) txt += (txt ? "\n" : "") + `⚠️ Formato inválido: ${invalidTokens.join(", ")}`;
         return safeReply(txt.trim());
       }
 
@@ -1360,6 +1417,8 @@ app.post("/twilio/whatsapp", async (req, res) => {
           const aprobados = [];
           const yaAprobados = [];
           const noEncontrados = [];
+          const cancelados = [];
+          const noPendientesZP = [];
           const sinCotizacion = [];
           for (const numero of folios) {
             const folio = await getFolioByNumero(client, numero);
@@ -1369,7 +1428,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
             }
             const estatus = String(folio.estatus || "").toUpperCase();
             if (estatus === ESTADOS.CANCELADO || estatus === "CANCELADO") {
-              noEncontrados.push(numero);
+              cancelados.push(numero);
               continue;
             }
             if ([ESTADOS.APROBADO_ZP, ESTADOS.LISTO_PARA_PROGRAMACION, ESTADOS.SELECCIONADO_SEMANA, ESTADOS.PAGADO, ESTADOS.CERRADO].includes(estatus)) {
@@ -1377,7 +1436,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
               continue;
             }
             if (estatus !== ESTADOS.PENDIENTE_APROB_ZP) {
-              noEncontrados.push(numero);
+              noPendientesZP.push(numero);
               continue;
             }
             try {
@@ -1405,6 +1464,8 @@ app.post("/twilio/whatsapp", async (req, res) => {
           let msg = "";
           if (aprobados.length) msg += `✅ Aprobados: ${aprobados.join(", ")}\n`;
           if (yaAprobados.length) msg += `⚠️ Ya aprobados: ${yaAprobados.join(", ")}\n`;
+          if (noPendientesZP.length) msg += `⚠️ No pendientes de aprobación ZP: ${noPendientesZP.join(", ")}\n`;
+          if (cancelados.length) msg += `❌ Cancelados: ${cancelados.join(", ")}\n`;
           if (noEncontrados.length) msg += `❌ No encontrados: ${noEncontrados.join(", ")}\n`;
           if (invalidTokens.length) msg += `❌ Formato inválido: ${invalidTokens.join(", ")}\n`;
           if (sinCotizacion.length) msg += `⚠️ Sin cotización: ${sinCotizacion.join(", ")}\n`;
