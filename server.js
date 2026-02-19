@@ -22,6 +22,7 @@ const { Pool } = require("pg");
 const twilio = require("twilio");
 const axios = require("axios");
 const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
+const twilioNotify = require("./notifications/twilioClient");
 
 const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
@@ -84,11 +85,15 @@ const twilioClient =
     ? twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
     : null;
 
-const twilioWhatsAppFrom = process.env.TWILIO_WHATSAPP_NUMBER || null;
+const twilioWhatsAppFrom = (process.env.TWILIO_WHATSAPP_NUMBER || "").trim() || null;
 
-if (!twilioClient || !twilioWhatsAppFrom) {
-  console.warn("⚠️ Notificaciones salientes desactivadas: configura TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN y TWILIO_WHATSAPP_NUMBER en Render → Environment.");
-}
+(function logTwilioStartup() {
+  const debug = twilioNotify.getTwilioDebugInfo();
+  if (!debug.clientOk || !twilioWhatsAppFrom) {
+    console.warn("⚠️ Notificaciones salientes desactivadas:", debug.message);
+    if (debug.missing && debug.missing.length) console.warn("   Faltan ENV:", debug.missing.join(", "));
+  }
+})();
 
 const s3Enabled =
   !!process.env.AWS_ACCESS_KEY_ID &&
@@ -1270,6 +1275,10 @@ function buildHelpMessage(actor) {
     lines.push("• confirmar cancelacion proyecto PRJ-...");
   }
   lines.push("• cancelar proyecto PRJ-... (solicitar)");
+  if (clave === "ZP") {
+    lines.push("• debug twilio (diagnóstico outbound)");
+    lines.push("• probar notificacion (envío de prueba)");
+  }
   lines.push("• version");
   lines.push("• ayuda / menu");
   return lines.join("\n");
@@ -1339,23 +1348,28 @@ function resetSession(sess) {
 
 /* ==================== NOTIFICACIONES WHATSAPP ==================== */
 
-/** Envío outbound WhatsApp. Usa TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_WHATSAPP_NUMBER. Normaliza "to" a whatsapp:+52... Retorna { ok, error? }. */
-async function sendWhatsApp(toPhone, body) {
+/** Envío outbound WhatsApp. Usa módulo notifications/twilioClient con logs y resultado estructurado. Retorna { ok, error?, sid?, status? }. */
+async function sendWhatsApp(toPhone, body, meta = {}) {
+  const debug = twilioNotify.getTwilioDebugInfo();
   if (!twilioClient || !twilioWhatsAppFrom) {
-    return { ok: false, error: "Twilio no configurado (TWILIO_ACCOUNT_SID/AUTH_TOKEN/WHATSAPP_NUMBER)" };
+    const detail = debug.missing && debug.missing.length ? ` Faltan: ${debug.missing.join(", ")}.` : "";
+    console.warn("[NOTIFY] Twilio no configurado." + detail);
+    return { ok: false, error: "Twilio no configurado." + detail };
   }
   const to = normalizePhoneForWhatsApp(toPhone);
   if (!to) {
     return { ok: false, error: "Teléfono inválido o no normalizable" };
   }
   const from = twilioWhatsAppFrom.startsWith("whatsapp:") ? twilioWhatsAppFrom : `whatsapp:${twilioWhatsAppFrom}`;
-  try {
-    await twilioClient.messages.create({ body, from, to });
-    return { ok: true };
-  } catch (e) {
-    console.warn("Twilio send error:", e.message);
-    return { ok: false, error: e.message || String(e) };
-  }
+  const result = await twilioNotify.sendWhatsApp({
+    client: twilioClient,
+    from,
+    to,
+    body,
+    meta: { correlationId: meta.correlationId || twilioNotify.shortId(), event: meta.event },
+  });
+  if (result.ok) return { ok: true, sid: result.sid, status: result.status };
+  return { ok: false, error: result.errorMessage || result.errorCode || "Error desconocido" };
 }
 
 async function notifyOnApprove(folio, aprobadoPor) {
@@ -1460,6 +1474,44 @@ app.post("/twilio/whatsapp", async (req, res) => {
 
       if (["ayuda", "help", "menu"].includes(lower)) {
         return safeReply(buildHelpMessage(actor));
+      }
+
+      const rolClave = (actor && actor.rol_clave) ? String(actor.rol_clave).toUpperCase() : "";
+      const esZP = rolClave === "ZP" || (actor && actor.rol_nombre && /director/i.test(actor.rol_nombre) && /zp/i.test(actor.rol_nombre));
+
+      if (/^(debug\s+twilio|debug twilio)$/i.test(body.trim())) {
+        if (!esZP) return safeReply("Solo Director ZP puede usar: debug twilio");
+        const info = twilioNotify.getTwilioDebugInfo();
+        let msg = "DEBUG TWILIO (sin secretos)\n";
+        msg += `Account SID: ${info.hasAccountSid ? "✓ definido" : "✗ falta"}\n`;
+        msg += `Auth Token: ${info.hasAuthToken ? "✓ definido" : "✗ falta"}\n`;
+        msg += `FROM (TWILIO_WHATSAPP_NUMBER): ${info.fromDisplay}\n`;
+        msg += `Cliente OK: ${info.clientOk ? "Sí" : "No"}\n`;
+        msg += `— ${info.message}`;
+        console.log("[debug twilio]", JSON.stringify({ hasAccountSid: info.hasAccountSid, hasAuthToken: info.hasAuthToken, fromDisplay: info.fromDisplay }));
+        return safeReply(msg);
+      }
+
+      if (/^(probar\s+notificacion|probar notificacion|test\s+notify|test notify)$/i.test(body.trim())) {
+        if (!esZP) return safeReply("Solo Director ZP puede usar: probar notificacion");
+        const debug = twilioNotify.getTwilioDebugInfo();
+        if (!debug.clientOk || !twilioWhatsAppFrom) {
+          return safeReply(`No se puede probar: ${debug.message}`);
+        }
+        const r = await client.query(
+          `SELECT u.telefono, u.nombre, r.nombre AS rol FROM public.usuarios u LEFT JOIN public.roles r ON r.id = u.rol_id WHERE TRIM(COALESCE(u.telefono,'')) <> '' ORDER BY u.id LIMIT 5`
+        );
+        const recipients = (r.rows || []).map((row) => ({ telefono: row.telefono, nombre: row.nombre || "-", rol: row.rol || "-" }));
+        if (recipients.length === 0) return safeReply("No hay destinatarios en DB (usuarios con teléfono). Agrega al menos uno para probar.");
+        const testBody = `[Prueba notificación] ${new Date().toISOString()} — Si recibes esto, el outbound funciona.`;
+        const lines = [];
+        for (const rec of recipients) {
+          const result = await sendWhatsApp(rec.telefono, testBody, { event: "test_notify" });
+          const toDisplay = rec.telefono.replace(/\d{4}$/, "****");
+          if (result.ok) lines.push(`${toDisplay} (${rec.nombre}) → OK sid=${result.sid || "-"} status=${result.status || "-"}`);
+          else lines.push(`${toDisplay} (${rec.nombre}) → ERROR ${result.error || "unknown"}`);
+        }
+        return safeReply("REPORTE PRUEBA NOTIFICACIÓN\n\n" + lines.join("\n"));
       }
 
       if (/^comentario\s+F-\d{6}-\d{3}\s*:/i.test(body)) {
