@@ -1019,21 +1019,27 @@ async function getTodosParaNotificacion(client, plantaId) {
 
 /** Usuarios a notificar al aprobar: GA y GG de la planta del folio + todos CDMX. */
 async function getUsersToNotifyOnApprove(client, plantaId) {
+  let activoFilter = "";
+  try {
+    const col = await client.query(
+      `SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='usuarios' AND column_name='activo'`
+    );
+    if (col.rows && col.rows.length > 0) activoFilter = " AND (u.activo IS NULL OR u.activo = true)";
+  } catch (_) {}
   const gaGG = await client.query(
     `SELECT u.telefono FROM public.usuarios u
      INNER JOIN public.roles r ON r.id = u.rol_id
-     WHERE u.planta_id = $1 AND (r.clave IN ('GA','GG') OR r.nombre IN ('GA','GG'))
-       AND (u.activo IS NULL OR u.activo = true)`,
+     WHERE u.planta_id = $1 AND (r.clave IN ('GA','GG') OR r.nombre IN ('GA','GG'))${activoFilter}`,
     [plantaId]
   );
   const cdmx = await client.query(
     `SELECT u.telefono FROM public.usuarios u
      INNER JOIN public.roles r ON r.id = u.rol_id
-     WHERE (r.clave = 'CDMX' OR r.nombre = 'CDMX') AND (u.activo IS NULL OR u.activo = true)`
+     WHERE (r.clave = 'CDMX' OR r.nombre = 'CDMX')${activoFilter}`
   );
   const phones = new Set();
-  gaGG.rows.forEach((row) => phones.add(row.telefono));
-  cdmx.rows.forEach((row) => phones.add(row.telefono));
+  (gaGG.rows || []).forEach((row) => row.telefono && phones.add(row.telefono));
+  (cdmx.rows || []).forEach((row) => row.telefono && phones.add(row.telefono));
   return Array.from(phones);
 }
 
@@ -1373,18 +1379,30 @@ async function sendWhatsApp(toPhone, body, meta = {}) {
 }
 
 async function notifyOnApprove(folio, aprobadoPor) {
-  if (!folio.planta_id) return;
+  console.log(`[notifyOnApprove] ENTRADA folio=${folio && folio.numero_folio} planta_id=${folio && folio.planta_id}`);
+  if (!folio || !folio.planta_id) {
+    console.warn("[notifyOnApprove] Sin planta_id en folio, no se notifica.");
+    return;
+  }
   const client = await pool.connect();
   try {
     const phones = await getUsersToNotifyOnApprove(client, folio.planta_id);
+    const aprobadoNorm = normalizePhone(aprobadoPor);
+    const toNotify = phones.filter((p) => p && normalizePhone(p) !== aprobadoNorm);
+    console.log(`[notifyOnApprove] Folio ${folio.numero_folio} planta_id=${folio.planta_id} → ${phones.length} teléfonos, ${toNotify.length} a notificar (excl. aprobador).`);
+    if (toNotify.length === 0) return;
+
     const urgPrefix = (folio.prioridad === "Urgente no programado") ? "🔴💡 URGENTE | " : "";
     let msg = `${urgPrefix}Folio ${folio.numero_folio} aprobado por ${aprobadoPor}.\n`;
     msg += `Concepto: ${folio.concepto || "-"}\nImporte: $${folio.importe || "-"}`;
     if (!folio.cotizacion_url) msg += "\n⚠️ Aún no tiene la cotización adjunta.";
 
-    for (const phone of phones) {
-      if (phone && normalizePhone(phone) !== aprobadoPor) await sendWhatsApp(phone, msg);
+    for (const phone of toNotify) {
+      await sendWhatsApp(phone, msg, { event: "notifyOnApprove" });
     }
+  } catch (e) {
+    console.warn("notifyOnApprove error:", e.message);
+    throw e;
   } finally {
     client.release();
   }
@@ -2148,6 +2166,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
                 noEncontrados.push(numero);
                 continue;
               }
+              console.log("[aprobar ZP] Llamando notifyOnApprove (rama PENDIENTE_APROB_PLANTA) folio=" + numero);
               try {
                 await notifyOnApprove(folio, fromNorm);
               } catch (e) {
@@ -2175,6 +2194,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
               noEncontrados.push(numero);
               continue;
             }
+            console.log("[aprobar ZP] Llamando notifyOnApprove (rama PENDIENTE_APROB_ZP) folio=" + numero);
             try {
               await notifyOnApprove(folio, fromNorm);
             } catch (e) {
