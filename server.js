@@ -6,7 +6,7 @@
  * - DATABASE_URL (obligatorio)
  * - TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN (obligatorios)
  * - TWILIO_WHATSAPP_NUMBER (opcional; notificaciones salientes)
- * - S3_BUCKET, AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY (opcionales; PDFs en S3)
+ * - S3_BUCKET_NAME o S3_BUCKET, AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY (opcionales; PDFs en S3)
  * - OPENAI_API_KEY (opcional)
  * - DEBUG (opcional; "true" o "1" habilita GET /debug/actor y log from normalizado)
  * - DATABASE_SSL (opcional; "false" desactiva SSL para pg)
@@ -16,12 +16,14 @@
 
 "use strict";
 
+const crypto = require("crypto");
 const express = require("express");
 const bodyParser = require("body-parser");
 const { Pool } = require("pg");
 const twilio = require("twilio");
 const axios = require("axios");
-const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
+const { S3Client, PutObjectCommand, GetObjectCommand } = require("@aws-sdk/client-s3");
+const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const twilioNotify = require("./notifications/twilioClient");
 
 const app = express();
@@ -95,11 +97,12 @@ const twilioWhatsAppFrom = (process.env.TWILIO_WHATSAPP_NUMBER || "").trim() || 
   }
 })();
 
+const s3BucketName = process.env.S3_BUCKET_NAME || process.env.S3_BUCKET || "";
 const s3Enabled =
   !!process.env.AWS_ACCESS_KEY_ID &&
   !!process.env.AWS_SECRET_ACCESS_KEY &&
   !!process.env.AWS_REGION &&
-  !!process.env.S3_BUCKET;
+  !!s3BucketName;
 
 const s3 = s3Enabled
   ? new S3Client({
@@ -389,6 +392,39 @@ async function ensureSchema() {
     `).catch(() => {});
 
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS proyecto_id INT REFERENCES public.proyectos(id);`).catch(() => {});
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS public.folio_archivos (
+        id SERIAL PRIMARY KEY,
+        folio_id INT REFERENCES public.folios(id) ON DELETE CASCADE,
+        numero_folio VARCHAR(50) NOT NULL,
+        tipo VARCHAR(30) NOT NULL,
+        s3_key TEXT NOT NULL,
+        url TEXT,
+        file_name TEXT,
+        file_size_bytes BIGINT,
+        mime_type TEXT DEFAULT 'application/pdf',
+        sha256 TEXT,
+        status VARCHAR(30) NOT NULL DEFAULT 'PENDIENTE',
+        replace_of_id INT REFERENCES public.folio_archivos(id),
+        replaced_by_id INT REFERENCES public.folio_archivos(id),
+        subido_por TEXT,
+        subido_en TIMESTAMPTZ DEFAULT NOW(),
+        aprobado_por TEXT,
+        aprobado_en TIMESTAMPTZ,
+        rechazado_por TEXT,
+        rechazado_en TIMESTAMPTZ,
+        rechazado_motivo TEXT
+      );
+    `).catch(() => {});
+
+    await client.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS ux_folio_sha
+      ON public.folio_archivos(folio_id, sha256)
+      WHERE sha256 IS NOT NULL;
+    `).catch(() => {});
+
+    await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS cotizacion_archivo_id INT REFERENCES public.folio_archivos(id);`).catch(() => {});
 
     return;
   } finally {
@@ -887,6 +923,121 @@ async function attachCotizacionUrlOnly(client, folioId, url, actorTelefono) {
   return row;
 }
 
+/* ==================== FOLIO_ARCHIVOS (PDF auditable) ==================== */
+
+/** Busca archivo existente por folio_id y sha256 (anti-duplicado). */
+async function findFolioArchivoByHash(client, folioId, sha256) {
+  if (!sha256) return null;
+  const r = await client.query(
+    `SELECT id, status, subido_en, subido_por FROM public.folio_archivos WHERE folio_id = $1 AND sha256 = $2 LIMIT 1`,
+    [folioId, sha256]
+  );
+  return r.rows[0] || null;
+}
+
+/** Inserta registro en folio_archivos (status PENDIENTE). */
+async function insertFolioArchivo(client, data) {
+  const r = await client.query(
+    `INSERT INTO public.folio_archivos (
+      folio_id, numero_folio, tipo, s3_key, url, file_name, file_size_bytes, mime_type, sha256, status,
+      replace_of_id, subido_por
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'PENDIENTE',$10,$11)
+    RETURNING id, folio_id, numero_folio, tipo, status, subido_en, replace_of_id`,
+    [
+      data.folio_id, data.numero_folio, data.tipo, data.s3_key, data.url || null,
+      data.file_name || null, data.file_size_bytes || null, data.mime_type || "application/pdf",
+      data.sha256 || null, data.replace_of_id || null, data.subido_por || null,
+    ]
+  );
+  return r.rows[0];
+}
+
+/** Lista últimos N archivos del folio (por numero_folio). */
+async function listFolioArchivos(client, numeroFolio, limit = 10) {
+  const r = await client.query(
+    `SELECT fa.id, fa.tipo, fa.status, fa.file_name, fa.file_size_bytes, fa.subido_por, fa.subido_en, fa.replace_of_id
+     FROM public.folio_archivos fa
+     INNER JOIN public.folios f ON f.id = fa.folio_id
+     WHERE f.numero_folio = $1
+     ORDER BY fa.subido_en DESC
+     LIMIT $2`,
+    [numeroFolio, limit]
+  );
+  return r.rows || [];
+}
+
+/** Última cotización APROBADA del folio (por numero_folio). */
+async function getUltimaCotizacionAprobada(client, numeroFolio) {
+  const r = await client.query(
+    `SELECT fa.id, fa.s3_key, fa.url, fa.file_name, fa.subido_en, fa.aprobado_por, fa.aprobado_en
+     FROM public.folio_archivos fa
+     INNER JOIN public.folios f ON f.id = fa.folio_id
+     WHERE f.numero_folio = $1 AND fa.tipo = 'COTIZACION' AND fa.status = 'APROBADO'
+     ORDER BY fa.aprobado_en DESC NULLS LAST
+     LIMIT 1`,
+    [numeroFolio]
+  );
+  return r.rows[0] || null;
+}
+
+/** Archivo por id (para aprobar/rechazar/ver). */
+async function getFolioArchivoById(client, id) {
+  const r = await client.query(
+    `SELECT fa.id, fa.folio_id, fa.numero_folio, fa.tipo, fa.s3_key, fa.url, fa.status, fa.replace_of_id, fa.sha256,
+            fa.subido_por, fa.subido_en, f.concepto, f.importe, f.prioridad, p.nombre AS planta_nombre
+     FROM public.folio_archivos fa
+     INNER JOIN public.folios f ON f.id = fa.folio_id
+     LEFT JOIN public.plantas p ON p.id = f.planta_id
+     WHERE fa.id = $1`,
+    [id]
+  );
+  return r.rows[0] || null;
+}
+
+/** Cotizaciones APROBADAS del folio (para reemplazo: usuario elige ID). */
+async function getCotizacionesAprobadasByFolioId(client, folioId) {
+  const r = await client.query(
+    `SELECT id, file_name, subido_en, aprobado_por FROM public.folio_archivos
+     WHERE folio_id = $1 AND tipo = 'COTIZACION' AND status = 'APROBADO'
+     ORDER BY aprobado_en DESC`,
+    [folioId]
+  );
+  return r.rows || [];
+}
+
+/** Marca archivo APROBADO; actualiza folios.cotizacion_* y opcionalmente reemplazado. */
+async function aprobarFolioArchivoCDMX(client, archivoId, aprobadoPor) {
+  const arch = await getFolioArchivoById(client, archivoId);
+  if (!arch || arch.status !== "PENDIENTE") return null;
+  await client.query(
+    `UPDATE public.folio_archivos SET status = 'APROBADO', aprobado_por = $1, aprobado_en = NOW() WHERE id = $2`,
+    [aprobadoPor, archivoId]
+  );
+  const url = arch.url || (arch.s3_key ? await getSignedDownloadUrl(arch.s3_key, 60 * 60 * 24 * 7).catch(() => null) : null);
+  await client.query(
+    `UPDATE public.folios SET cotizacion_url = $1, cotizacion_s3key = $2, cotizacion_archivo_id = $3,
+      estatus = COALESCE(NULLIF(estatus,'Generado'),'Con cotización')
+     WHERE id = $4`,
+    [url, arch.s3_key, archivoId, arch.folio_id]
+  );
+  if (arch.replace_of_id) {
+    await client.query(
+      `UPDATE public.folio_archivos SET status = 'REEMPLAZADO', replaced_by_id = $1 WHERE id = $2`,
+      [archivoId, arch.replace_of_id]
+    );
+  }
+  return arch;
+}
+
+/** Marca archivo RECHAZADO. */
+async function rechazarFolioArchivoCDMX(client, archivoId, rechazadoPor, motivo) {
+  const r = await client.query(
+    `UPDATE public.folio_archivos SET status = 'RECHAZADO', rechazado_por = $1, rechazado_en = NOW(), rechazado_motivo = $2 WHERE id = $3 AND status = 'PENDIENTE' RETURNING id, folio_id, numero_folio`,
+    [rechazadoPor, motivo || null, archivoId]
+  );
+  return r.rows[0] || null;
+}
+
 async function getHistorial(client, numeroFolio, limit = 10) {
   const r = await client.query(
     `SELECT estatus, comentario, actor_telefono, actor_rol, creado_en
@@ -1336,12 +1487,24 @@ function buildS3PublicUrl(bucket, region, key) {
 
 async function uploadPdfToS3(buffer, key) {
   if (!s3Enabled) throw new Error("S3 no configurado");
-  const bucket = process.env.S3_BUCKET;
+  const bucket = s3BucketName;
   const region = process.env.AWS_REGION;
   await s3.send(new PutObjectCommand({
     Bucket: bucket, Key: key, Body: buffer, ContentType: "application/pdf",
   }));
   return buildS3PublicUrl(bucket, region, key);
+}
+
+/** URL firmada S3 para descarga (expira en segundos). */
+async function getSignedDownloadUrl(s3Key, expiresInSeconds = 600) {
+  if (!s3Enabled || !s3) throw new Error("S3 no configurado");
+  const command = new GetObjectCommand({ Bucket: s3BucketName, Key: s3Key });
+  return getSignedUrl(s3, command, { expiresIn: expiresInSeconds });
+}
+
+/** Hash SHA-256 del buffer en hex (obligatorio para anti-duplicado). */
+function sha256Hex(buffer) {
+  return crypto.createHash("sha256").update(buffer).digest("hex");
 }
 
 /* ==================== COMANDOS: TEXTO AYUDA / VERSION ==================== */
@@ -1356,7 +1519,13 @@ function buildHelpMessage(actor) {
   lines.push("• folios urgentes de planta");
   lines.push("• mis pendientes / pendientes [página]");
   lines.push("• comentario F-YYYYMM-XXX: <texto>");
-  if (FLAGS.ATTACHMENTS) lines.push("• adjuntar F-YYYYMM-XXX (luego envía el PDF)");
+  if (FLAGS.ATTACHMENTS) {
+    lines.push("• adjuntar F-YYYYMM-XXX (luego envía el PDF)");
+    lines.push("• archivos 045 / F-YYYYMM-XXX (lista archivos del folio)");
+    lines.push("• ver cotizacion 045 (última aprobada)");
+    lines.push("• ver archivo <id> (URL firmada 10 min)");
+    lines.push("• reemplazar cotizacion 045 (reemplazo controlado)");
+  }
   if (FLAGS.APPROVALS) {
     if (clave === "GG") lines.push("• aprobar F-YYYYMM-XXX (aprobación planta)");
     if (clave === "ZP") {
@@ -1365,7 +1534,11 @@ function buildHelpMessage(actor) {
       lines.push("• autorizar cancelacion F-YYYYMM-XXX");
       lines.push("• rechazar cancelacion F-YYYYMM-XXX motivo: <texto>");
     }
-    if (clave === "CDMX") lines.push("• seleccionar F-YYYYMM-XXX (selección para semana)");
+    if (clave === "CDMX") {
+      lines.push("• seleccionar F-YYYYMM-XXX (selección para semana)");
+      lines.push("• aprobar cotizacion <id>");
+      lines.push("• rechazar cotizacion <id> motivo: <texto>");
+    }
     if (["GA", "GG", "CDMX"].includes(clave)) lines.push("• cancelar F-YYYYMM-XXX motivo: <texto>");
   }
   lines.push("• crear proyecto");
@@ -1432,12 +1605,16 @@ function getSession(from) {
       draftProyecto: {},
       estadoProyecto: null,
       pendingProjectAttach: null,
+      pendingCotizacion: null,
+      pendingReemplazo: null,
     });
   }
   const s = sessions.get(from);
   if (s.draftProyecto === undefined) s.draftProyecto = {};
   if (s.estadoProyecto === undefined) s.estadoProyecto = null;
   if (s.pendingProjectAttach === undefined) s.pendingProjectAttach = null;
+  if (s.pendingCotizacion === undefined) s.pendingCotizacion = null;
+  if (s.pendingReemplazo === undefined) s.pendingReemplazo = null;
   return s;
 }
 
@@ -1447,6 +1624,8 @@ function resetSession(sess) {
   sess.draftProyecto = {};
   sess.estadoProyecto = null;
   sess.pendingProjectAttach = null;
+  sess.pendingCotizacion = null;
+  sess.pendingReemplazo = null;
 }
 
 /* ==================== NOTIFICACIONES WHATSAPP ==================== */
@@ -1508,6 +1687,30 @@ async function notifyOnApprove(folio, aprobadoPor) {
     throw e;
   } finally {
     client.release();
+  }
+}
+
+/** Notifica a todos los CDMX que hay una cotización PENDIENTE de aprobación. prioridad con "urgente" o "alta" → encabezado urgente. */
+async function notifyCDMXPendienteCotizacion(client, folio, archivoId, subidoPor, esReemplazo = false) {
+  const cdmxList = await getUsersByRole(client, "CDMX");
+  if (!cdmxList || cdmxList.length === 0) {
+    console.warn("[CDMX NOTIFY] No hay usuarios CDMX para notificar.");
+    return;
+  }
+  const prioridad = String(folio.prioridad || "").toLowerCase();
+  const urgente = prioridad.includes("urgente") || prioridad.includes("alta");
+  let msg = urgente ? "🚨 URGENTE / PRIORIDAD ALTA — APROBACIÓN REQUERIDA CDMX\n\n" : "";
+  msg += `Folio: ${folio.numero_folio}\n`;
+  msg += `Planta: ${folio.planta_nombre || "-"}\n`;
+  msg += `Concepto: ${folio.concepto || "-"}\n`;
+  msg += `Importe: $${folio.importe != null ? Number(folio.importe).toLocaleString("es-MX", { minimumFractionDigits: 2 }) : "-"}\n`;
+  msg += `ArchivoID: ${archivoId}\n`;
+  msg += `Subido por: ${subidoPor || "-"}\n`;
+  if (esReemplazo) msg += `(Reemplazo de cotización anterior)\n`;
+  msg += `\nComandos:\naprobar cotizacion ${archivoId}\nrechazar cotizacion ${archivoId} motivo: ...`;
+  console.log("[CDMX NOTIFY] Enviando a", cdmxList.length, "CDMX. ArchivoID:", archivoId);
+  for (const u of cdmxList) {
+    if (u && u.telefono) await sendWhatsApp(u.telefono, msg, { event: "cdmx_cotizacion_pendiente" });
   }
 }
 
@@ -1595,6 +1798,141 @@ app.post("/twilio/whatsapp", async (req, res) => {
 
       if (["ayuda", "help", "menu"].includes(lower)) {
         return safeReply(buildHelpMessage(actor));
+      }
+
+      if (/^CONFIRMO\s+/i.test(body.trim())) {
+        const hasCotizacion = sess.pendingCotizacion && sess.pendingCotizacion.waitingConfirm;
+        const hasReemplazo = sess.pendingReemplazo && sess.pendingReemplazo.waitingConfirm;
+        if (!hasCotizacion && !hasReemplazo) {
+          console.log("[CONFIRMACION] Sin proceso pendiente.");
+          return safeReply("No hay proceso pendiente.");
+        }
+      }
+
+      if (sess.pendingCotizacion && sess.pendingCotizacion.waitingImporte) {
+        const pend = sess.pendingCotizacion;
+        const folioImporte = pend.folio && pend.folio.importe != null ? Number(pend.folio.importe) : null;
+        const capturado = parseMoney(body);
+        if (capturado == null) {
+          return safeReply("Escribe solo el importe numérico (ej: 1500 o 1,500.50).");
+        }
+        const diff = folioImporte != null ? Math.abs(capturado - folioImporte) : 0;
+        if (folioImporte == null || diff > 0.01) {
+          try {
+            await insertHistorial(client, pend.folio_id, pend.numero_folio, pend.numero_folio, pend.folio.estatus || "", "Intento de cotización con importe incorrecto", fromNorm, actor ? actor.rol_nombre : null);
+          } catch (e) {
+            console.warn("Historial importe incorrecto:", e.message);
+          }
+          console.log("[VALIDACION] Importe no coincide. Folio:", folioImporte, "Capturado:", capturado);
+          const msg = `❌ El importe no coincide.\nFolio: $${folioImporte != null ? folioImporte.toLocaleString("es-MX", { minimumFractionDigits: 2 }) : "-"}\nCapturado: $${capturado.toLocaleString("es-MX", { minimumFractionDigits: 2 })}\nOperación cancelada.`;
+          sess.pendingCotizacion = null;
+          return safeReply(msg);
+        }
+        pend.waitingImporte = false;
+        pend.waitingConfirm = true;
+        pend.importeValidado = capturado;
+        console.log("[VALIDACION] Importe OK:", capturado);
+        let resumen = "Resumen:\n";
+        resumen += `Folio: ${pend.numero_folio}\n`;
+        resumen += `Importe validado: $${capturado.toLocaleString("es-MX", { minimumFractionDigits: 2 })}\n`;
+        resumen += `Archivo: ${pend.file_name || "PDF"}\n`;
+        resumen += `Tamaño: ${pend.file_size_bytes != null ? (pend.file_size_bytes / 1024).toFixed(1) + " KB" : "-"}\n`;
+        resumen += `Tipo: COTIZACION\n\n`;
+        resumen += "Responde exactamente: CONFIRMO COTIZACION";
+        return safeReply(resumen);
+      }
+
+      if (sess.pendingReemplazo && sess.pendingReemplazo.waitingImporte) {
+        const pend = sess.pendingReemplazo;
+        const folioImporte = pend.folio && pend.folio.importe != null ? Number(pend.folio.importe) : null;
+        const capturado = parseMoney(body);
+        if (capturado == null) {
+          return safeReply("Escribe solo el importe numérico (ej: 1500 o 1,500.50).");
+        }
+        const diff = folioImporte != null ? Math.abs(capturado - folioImporte) : 0;
+        if (folioImporte == null || diff > 0.01) {
+          try {
+            await insertHistorial(client, pend.folio_id, pend.numero_folio, pend.numero_folio, pend.folio.estatus || "", "Intento de cotización con importe incorrecto (reemplazo)", fromNorm, actor ? actor.rol_nombre : null);
+          } catch (e) {
+            console.warn("Historial importe incorrecto:", e.message);
+          }
+          console.log("[VALIDACION] Reemplazo importe no coincide.");
+          const msg = `❌ El importe no coincide.\nFolio: $${folioImporte != null ? folioImporte.toLocaleString("es-MX", { minimumFractionDigits: 2 }) : "-"}\nCapturado: $${capturado.toLocaleString("es-MX", { minimumFractionDigits: 2 })}\nOperación cancelada.`;
+          sess.pendingReemplazo = null;
+          return safeReply(msg);
+        }
+        pend.waitingImporte = false;
+        pend.waitingConfirm = true;
+        pend.importeValidado = capturado;
+        console.log("[VALIDACION] Reemplazo importe OK:", capturado);
+        let resumen = "Resumen (reemplazo):\n";
+        resumen += `Folio: ${pend.numero_folio}\n`;
+        resumen += `Importe validado: $${capturado.toLocaleString("es-MX", { minimumFractionDigits: 2 })}\n`;
+        resumen += `Archivo: ${pend.file_name || "PDF"}\n`;
+        resumen += `Reemplaza ID: ${pend.replace_of_id}\n\n`;
+        resumen += "Responde exactamente: CONFIRMO REEMPLAZO";
+        return safeReply(resumen);
+      }
+
+      if (sess.pendingCotizacion && sess.pendingCotizacion.waitingConfirm && body.trim() === "CONFIRMO COTIZACION") {
+        const pend = sess.pendingCotizacion;
+        try {
+          const row = await insertFolioArchivo(client, {
+            folio_id: pend.folio_id,
+            numero_folio: pend.numero_folio,
+            tipo: "COTIZACION",
+            s3_key: pend.s3_key,
+            url: pend.url,
+            file_name: pend.file_name,
+            file_size_bytes: pend.file_size_bytes,
+            sha256: pend.sha256,
+            subido_por: pend.subido_por || fromNorm,
+          });
+          await insertHistorial(client, pend.folio_id, pend.numero_folio, pend.numero_folio, pend.folio.estatus || "", "Cotización PDF registrada (pendiente aprobación CDMX)", fromNorm, actor ? actor.rol_nombre : null);
+          console.log("[CONFIRMACION] Cotización registrada. ArchivoID:", row.id);
+          const folioConPlanta = { ...pend.folio, planta_nombre: pend.folio.planta_nombre };
+          setImmediate(() => {
+            pool.connect().then((c) => {
+              notifyCDMXPendienteCotizacion(c, folioConPlanta, row.id, pend.subido_por || fromNorm, false).finally(() => c.release());
+            }).catch((e) => console.warn("notifyCDMXPendienteCotizacion:", e.message));
+          });
+          sess.pendingCotizacion = null;
+          return safeReply(`✅ Cotización registrada (ArchivoID: ${row.id}). Pendiente de aprobación CDMX.`);
+        } catch (e) {
+          console.error("insertFolioArchivo:", e);
+          return safeReply("Error al registrar. Intenta de nuevo.");
+        }
+      }
+
+      if (sess.pendingReemplazo && sess.pendingReemplazo.waitingConfirm && body.trim() === "CONFIRMO REEMPLAZO") {
+        const pend = sess.pendingReemplazo;
+        try {
+          const row = await insertFolioArchivo(client, {
+            folio_id: pend.folio_id,
+            numero_folio: pend.numero_folio,
+            tipo: "COTIZACION",
+            s3_key: pend.s3_key,
+            url: pend.url,
+            file_name: pend.file_name,
+            file_size_bytes: pend.file_size_bytes,
+            sha256: pend.sha256,
+            replace_of_id: pend.replace_of_id,
+            subido_por: pend.subido_por || fromNorm,
+          });
+          await insertHistorial(client, pend.folio_id, pend.numero_folio, pend.numero_folio, pend.folio.estatus || "", "Reemplazo de cotización registrado (pendiente aprobación CDMX)", fromNorm, actor ? actor.rol_nombre : null);
+          console.log("[REEMPLAZO] Registrado. ArchivoID:", row.id);
+          const folioConPlanta = { ...pend.folio, planta_nombre: pend.folio.planta_nombre };
+          setImmediate(() => {
+            pool.connect().then((c) => {
+              notifyCDMXPendienteCotizacion(c, folioConPlanta, row.id, pend.subido_por || fromNorm, true).finally(() => c.release());
+            }).catch((e) => console.warn("notifyCDMXPendienteCotizacion:", e.message));
+          });
+          sess.pendingReemplazo = null;
+          return safeReply(`✅ Reemplazo registrado (ArchivoID: ${row.id}). Pendiente de aprobación CDMX.`);
+        } catch (e) {
+          console.error("insertFolioArchivo reemplazo:", e);
+          return safeReply("Error al registrar. Intenta de nuevo.");
+        }
       }
 
       const rolClave = (actor && actor.rol_clave) ? String(actor.rol_clave).toUpperCase() : "";
@@ -2582,6 +2920,130 @@ app.post("/twilio/whatsapp", async (req, res) => {
         return safeReply(`Cancelación rechazada. Folio ${numero} restaurado a ${estatusAnterior}.`);
       }
 
+      if (/^aprobar\s+cotizacion\s+\d+\s*$/i.test(body.trim())) {
+        const idStr = body.trim().replace(/^aprobar\s+cotizacion\s+/i, "").trim();
+        const archivoId = parseInt(idStr, 10);
+        if (!Number.isFinite(archivoId)) return safeReply("Formato: aprobar cotizacion <id>");
+        const rolClave = (actor && actor.rol_clave) ? String(actor.rol_clave).toUpperCase() : "";
+        const esCDMX = rolClave === "CDMX" || (actor && actor.rol_nombre && String(actor.rol_nombre).toUpperCase().includes("CDMX"));
+        if (!esCDMX) return safeReply("Solo CDMX (Contralor Financiero) puede aprobar cotizaciones.");
+        const arch = await getFolioArchivoById(client, archivoId);
+        if (!arch) return safeReply(`No existe el archivo ${archivoId}.`);
+        if (arch.status !== "PENDIENTE") return safeReply(`El archivo ${archivoId} no está pendiente (estado: ${arch.status}).`);
+        await client.query("BEGIN");
+        try {
+          const aprobado = await aprobarFolioArchivoCDMX(client, archivoId, fromNorm);
+          if (!aprobado) throw new Error("aprobarFolioArchivoCDMX");
+          await insertHistorial(client, arch.folio_id, arch.numero_folio, arch.numero_folio, "", "Cotización aprobada por CDMX", fromNorm, actor ? actor.rol_nombre : null);
+          await client.query("COMMIT");
+        } catch (e) {
+          await client.query("ROLLBACK");
+          console.error("aprobar cotizacion:", e);
+          return safeReply("Error al aprobar. Intenta de nuevo.");
+        }
+        console.log("[APROBADO] ArchivoID:", archivoId, "por", fromNorm);
+        try {
+          const folio = await getFolioByNumero(client, arch.numero_folio);
+          if (folio && folio.planta_id) await notifyOnApprove(folio, fromNorm);
+        } catch (e) {
+          console.warn("notifyOnApprove después aprobar cotizacion:", e.message);
+        }
+        return safeReply(`✅ Cotización ${archivoId} aprobada. Se notificó a GA y GG de la planta.`);
+      }
+
+      if (/^rechazar\s+cotizacion\s+\d+/i.test(body.trim())) {
+        const match = body.trim().match(/^rechazar\s+cotizacion\s+(\d+)\s*(?:motivo:)?\s*(.*)$/i);
+        const idStr = match ? match[1].trim() : "";
+        const motivo = match && match[2] ? match[2].trim() : "";
+        const archivoId = parseInt(idStr, 10);
+        if (!Number.isFinite(archivoId)) return safeReply("Formato: rechazar cotizacion <id> motivo: <texto>");
+        const rolClave = (actor && actor.rol_clave) ? String(actor.rol_clave).toUpperCase() : "";
+        const esCDMX = rolClave === "CDMX" || (actor && actor.rol_nombre && String(actor.rol_nombre).toUpperCase().includes("CDMX"));
+        if (!esCDMX) return safeReply("Solo CDMX puede rechazar cotizaciones.");
+        const rechazado = await rechazarFolioArchivoCDMX(client, archivoId, fromNorm, motivo);
+        if (!rechazado) return safeReply(`No se pudo rechazar (archivo ${archivoId} no existe o no está PENDIENTE).`);
+        console.log("[RECHAZADO] ArchivoID:", archivoId);
+        return safeReply(`Cotización ${archivoId} rechazada. Motivo registrado.`);
+      }
+
+      if (/^archivos\s+(F-\d{6}-\d{3}|\d{1,3})\s*$/i.test(body.trim())) {
+        const token = body.trim().replace(/^archivos\s+/i, "").trim();
+        const numero = normalizeFolioToken(token, getCurrentYYYYMM());
+        if (!numero) return safeReply("Formato: archivos 045 o archivos F-YYYYMM-XXX");
+        const lista = await listFolioArchivos(client, numero, 10);
+        if (lista.length === 0) return safeReply(`No hay archivos registrados para ${numero}.`);
+        let msg = `Archivos folio ${numero} (últimos ${lista.length}):\n`;
+        lista.forEach((a) => {
+          msg += `ID ${a.id} | ${a.tipo} | ${a.status} | ${a.file_name || "-"} | ${formatMexicoCentral(a.subido_en)}\n`;
+        });
+        return safeReply(msg);
+      }
+
+      if (/^ver\s+cotizacion\s+(F-\d{6}-\d{3}|\d{1,3})\s*$/i.test(body.trim())) {
+        const token = body.trim().replace(/^ver\s+cotizacion\s+/i, "").trim();
+        const numero = normalizeFolioToken(token, getCurrentYYYYMM());
+        if (!numero) return safeReply("Formato: ver cotizacion 045 o ver cotizacion F-YYYYMM-XXX");
+        const ultima = await getUltimaCotizacionAprobada(client, numero);
+        if (!ultima) return safeReply(`No hay cotización aprobada para ${numero}.`);
+        let url = ultima.url;
+        if (ultima.s3_key && s3Enabled) {
+          try {
+            url = await getSignedDownloadUrl(ultima.s3_key, 600);
+          } catch (e) {
+            console.warn("getSignedDownloadUrl:", e.message);
+          }
+        }
+        let msg = `Cotización aprobada ${numero}\nArchivoID: ${ultima.id}\nSubido: ${formatMexicoCentral(ultima.subido_en)}\nAprobado por: ${ultima.aprobado_por || "-"}\n`;
+        if (url) msg += `Ver (10 min): ${url}`;
+        return safeReply(msg);
+      }
+
+      if (/^ver\s+archivo\s+\d+\s*$/i.test(body.trim())) {
+        const idStr = body.trim().replace(/^ver\s+archivo\s+/i, "").trim();
+        const archivoId = parseInt(idStr, 10);
+        if (!Number.isFinite(archivoId)) return safeReply("Formato: ver archivo <id>");
+        const arch = await getFolioArchivoById(client, archivoId);
+        if (!arch) return safeReply(`No existe el archivo ${archivoId}.`);
+        let url = arch.url;
+        if (arch.s3_key && s3Enabled) {
+          try {
+            url = await getSignedDownloadUrl(arch.s3_key, 600);
+          } catch (e) {
+            console.warn("getSignedDownloadUrl:", e.message);
+          }
+        }
+        if (!url) return safeReply("No hay URL disponible para este archivo.");
+        return safeReply(`Archivo ${archivoId} (${arch.numero_folio}) — URL válida 10 min:\n${url}`);
+      }
+
+      if (/^reemplazar\s+cotizacion\s+(F-\d{6}-\d{3}|\d{1,3})\s*$/i.test(body.trim())) {
+        const token = body.trim().replace(/^reemplazar\s+cotizacion\s+/i, "").trim();
+        const numero = normalizeFolioToken(token, getCurrentYYYYMM());
+        if (!numero) return safeReply("Formato: reemplazar cotizacion 045 o reemplazar cotizacion F-YYYYMM-XXX");
+        const folio = await getFolioByNumero(client, numero);
+        if (!folio) return safeReply(`No existe el folio ${numero}.`);
+        const aprobadas = await getCotizacionesAprobadasByFolioId(client, folio.id);
+        if (aprobadas.length === 0) return safeReply(`No hay cotizaciones aprobadas para reemplazar en ${numero}.`);
+        let listMsg = "Cotizaciones APROBADAS (responde con el número de ID):\n";
+        aprobadas.forEach((a, i) => {
+          listMsg += `${i + 1}) ID ${a.id} — ${a.file_name || "PDF"} — ${formatMexicoCentral(a.subido_en)}\n`;
+        });
+        sess.pendingReemplazo = { paso: "elegir_id", folio_id: folio.id, numero_folio: numero, folio: { ...folio, planta_nombre: folio.planta_nombre }, aprobadas };
+        return safeReply(listMsg);
+      }
+
+      if (sess.pendingReemplazo && sess.pendingReemplazo.paso === "elegir_id") {
+        const aprobadas = sess.pendingReemplazo.aprobadas || [];
+        const n = parseInt(body.trim(), 10);
+        if (!Number.isFinite(n) || n < 1 || n > aprobadas.length) {
+          return safeReply("Responde con el número de la lista (1, 2, ...).");
+        }
+        const elegida = aprobadas[n - 1];
+        sess.pendingReemplazo = { ...sess.pendingReemplazo, paso: "enviar_pdf", replace_of_id: elegida.id, replace_file_name: elegida.file_name };
+        sess.pendingReemplazo.aprobadas = null;
+        return safeReply(`Ok. Envía el nuevo PDF que reemplazará la cotización ID ${elegida.id}.`);
+      }
+
       if (FLAGS.ATTACHMENTS && lower.startsWith("adjuntar")) {
         const parts = body.split(/\s+/);
         const numero = parts[1] || "";
@@ -2600,6 +3062,49 @@ app.post("/twilio/whatsapp", async (req, res) => {
       const mediaType = (req.body.MediaContentType0 || "").toLowerCase();
       if (!mediaUrl) return safeReply("Recibí un adjunto pero no tengo la URL. Intenta de nuevo.");
       if (!mediaType.includes("pdf")) return safeReply("Solo acepto PDF para cotización.");
+
+      if (sess.pendingReemplazo && sess.pendingReemplazo.paso === "enviar_pdf" && s3Enabled) {
+        const clientReemp = await pool.connect();
+        try {
+          const pend = sess.pendingReemplazo;
+          const buffer = await downloadTwilioMediaAsBuffer(mediaUrl);
+          const hash = sha256Hex(buffer);
+          console.log("[HASH] sha256=" + hash);
+          const rReemp = await clientReemp.query(`SELECT sha256 FROM public.folio_archivos WHERE id = $1`, [pend.replace_of_id]);
+          const sha256Anterior = rReemp.rows[0] && rReemp.rows[0].sha256 ? rReemp.rows[0].sha256 : null;
+          if (sha256Anterior && hash === sha256Anterior) {
+            console.log("[REEMPLAZO] Mismo archivo (hash igual).");
+            sess.pendingReemplazo = null;
+            return safeReply("No es necesario reemplazar. Es el mismo archivo.");
+          }
+          const dup = await findFolioArchivoByHash(clientReemp, pend.folio_id, hash);
+          if (dup) {
+            console.log("[DUPLICATE] reemplazo folio_id=" + pend.folio_id);
+            await insertHistorial(clientReemp, pend.folio_id, pend.numero_folio, pend.numero_folio, "", "Intento de PDF duplicado detectado (reemplazo)", fromNorm, null);
+            sess.pendingReemplazo = null;
+            return safeReply(`⚠️ Este archivo ya fue subido antes. ArchivoID: ${dup.id}. Operación cancelada.`);
+          }
+          const s3Key = `cotizaciones/${pend.numero_folio}/${Date.now()}.pdf`;
+          const publicUrl = await uploadPdfToS3(buffer, s3Key);
+          const fileSize = Buffer.isBuffer(buffer) ? buffer.length : 0;
+          sess.pendingReemplazo = {
+            ...pend,
+            paso: null,
+            s3_key: s3Key,
+            url: publicUrl,
+            file_name: (req.body.MediaUrl0 || "").split("/").pop() || "documento.pdf",
+            file_size_bytes: fileSize,
+            sha256: hash,
+            subido_por: fromNorm,
+            waitingImporte: true,
+            waitingConfirm: false,
+          };
+          const importeFolio = pend.folio && pend.folio.importe != null ? Number(pend.folio.importe).toLocaleString("es-MX", { minimumFractionDigits: 2 }) : "-";
+          return safeReply(`Escribe el IMPORTE TOTAL que aparece en el PDF.\nDebe coincidir exactamente con el importe del folio: $${importeFolio}`);
+        } finally {
+          clientReemp.release();
+        }
+      }
 
       if (sess.pendingProjectAttach && !sess.pendingProjectAttach.waitingTipo) {
         const pend = sess.pendingProjectAttach;
@@ -2634,20 +3139,51 @@ app.post("/twilio/whatsapp", async (req, res) => {
         if (!folio) return safeReply(`No encuentro el folio ${targetNumero}.`);
 
         if (s3Enabled) {
+          console.log("[PDF] Descargando");
           const buffer = await downloadTwilioMediaAsBuffer(mediaUrl);
+          const hash = sha256Hex(buffer);
+          console.log("[HASH] sha256=" + hash);
+          const dup = await findFolioArchivoByHash(client, folio.id, hash);
+          if (dup) {
+            console.log("[DUPLICATE] folio_id=" + folio.id + " sha256=" + hash);
+            try {
+              await insertHistorial(client, folio.id, folio.numero_folio, folio.folio_codigo, folio.estatus || "", "Intento de PDF duplicado detectado", fromNorm, null);
+            } catch (e) {
+              console.warn("Historial duplicado:", e.message);
+            }
+            const fecha = dup.subido_en ? formatMexicoCentral(dup.subido_en) : "-";
+            sess.dd.attachNumero = null;
+            return safeReply(`⚠️ Este archivo ya fue subido antes.\nArchivoID: ${dup.id}\nEstado: ${dup.status}\nSubido: ${fecha} por ${dup.subido_por || "-"}`);
+          }
           const s3Key = `cotizaciones/${folio.numero_folio}/${Date.now()}.pdf`;
           const publicUrl = await uploadPdfToS3(buffer, s3Key);
-          await attachCotizacionToFolio(client, folio.id, s3Key, publicUrl, fromNorm);
+          const fileSize = Buffer.isBuffer(buffer) ? buffer.length : 0;
+          sess.pendingCotizacion = {
+            folio_id: folio.id,
+            numero_folio: folio.numero_folio,
+            folio: { ...folio, planta_nombre: folio.planta_nombre },
+            s3_key: s3Key,
+            url: publicUrl,
+            file_name: (req.body.MediaUrl0 || "").split("/").pop() || "documento.pdf",
+            file_size_bytes: fileSize,
+            sha256: hash,
+            subido_por: fromNorm,
+            waitingImporte: true,
+            tipo: "COTIZACION",
+          };
+          sess.dd.attachNumero = null;
+          const importeFolio = folio.importe != null ? Number(folio.importe).toLocaleString("es-MX", { minimumFractionDigits: 2 }) : "-";
+          return safeReply(`Escribe el IMPORTE TOTAL que aparece en el PDF.\nDebe coincidir exactamente con el importe del folio: $${importeFolio}`);
         } else {
           const tempUrl = `TWILIO:${mediaUrl}`;
           await attachCotizacionUrlOnly(client, folio.id, tempUrl, fromNorm);
+          sess.dd.attachNumero = null;
+          const folioCodigoAdjunto = folio.numero_folio;
+          setImmediate(() => {
+            notifyPlantByFolio(pool, folioCodigoAdjunto, "ADJUNTO").catch((e) => console.warn("Notif ADJUNTO:", e.message));
+          });
+          return safeReply(`✅ Cotización guardada en el folio ${folio.numero_folio}.`);
         }
-        sess.dd.attachNumero = null;
-        const folioCodigoAdjunto = folio.numero_folio;
-        setImmediate(() => {
-          notifyPlantByFolio(pool, folioCodigoAdjunto, "ADJUNTO").catch((e) => console.warn("Notif ADJUNTO:", e.message));
-        });
-        return safeReply(`✅ Cotización guardada en el folio ${folio.numero_folio}.`);
       } finally {
         client.release();
       }
