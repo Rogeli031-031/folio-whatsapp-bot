@@ -294,6 +294,7 @@ async function ensureSchema() {
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS categoria VARCHAR(255);`);
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS subcategoria VARCHAR(255);`);
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS unidad VARCHAR(100);`);
+    await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS estacion VARCHAR(120);`);
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS cotizacion_url TEXT;`);
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS cotizacion_s3key VARCHAR(512);`);
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS aprobado_por VARCHAR(255);`);
@@ -555,7 +556,7 @@ async function nextFolioNumber(client) {
 async function getFolioByNumero(client, numero) {
   const r = await client.query(
     `SELECT f.id, f.numero_folio, f.folio_codigo, f.planta_id, f.beneficiario, f.concepto, f.importe,
-            f.categoria, f.subcategoria, f.unidad, f.prioridad, f.estatus, f.cotizacion_url, f.cotizacion_s3key,
+            f.categoria, f.subcategoria, f.estacion, f.unidad, f.prioridad, f.estatus, f.cotizacion_url, f.cotizacion_s3key,
             f.aprobado_por, f.aprobado_en, f.creado_en, f.nivel_aprobado, f.estatus_anterior, f.override_planta, f.override_motivo, f.creado_por,
             COALESCE(f.descripcion, f.concepto) AS descripcion,
             p.nombre AS planta_nombre
@@ -575,7 +576,7 @@ async function getManyFoliosStatus(client, numeros) {
   const uniq = [...new Set(numeros)];
   const r = await client.query(
     `SELECT f.id, f.numero_folio, f.folio_codigo, f.planta_id, f.beneficiario, f.concepto, f.importe,
-            f.categoria, f.subcategoria, f.unidad, f.prioridad, f.estatus, f.cotizacion_url, f.cotizacion_s3key,
+            f.categoria, f.subcategoria, f.estacion, f.unidad, f.prioridad, f.estatus, f.cotizacion_url, f.cotizacion_s3key,
             f.aprobado_por, f.aprobado_en, f.creado_en, f.nivel_aprobado, f.estatus_anterior, f.override_planta, f.override_motivo, f.creado_por,
             COALESCE(f.descripcion, f.concepto) AS descripcion,
             p.nombre AS planta_nombre
@@ -786,13 +787,13 @@ async function insertFolio(client, dd) {
   const ins = await client.query(
     `INSERT INTO public.folios (
       folio_codigo, numero_folio, planta_id, proyecto_id, beneficiario, concepto, importe,
-      categoria, subcategoria, unidad, prioridad, estatus, creado_en, nivel_aprobado, creado_por
-    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW(),$13,$14)
+      categoria, subcategoria, estacion, unidad, prioridad, estatus, creado_en, nivel_aprobado, creado_por
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW(),$14,$15)
     RETURNING id, numero_folio, folio_codigo, planta_id`,
     [
       folio_codigo, numero_folio, plantaId, dd.proyecto_id || null, dd.beneficiario || null, dd.concepto || null,
       dd.importe || null, dd.categoria_nombre || null, dd.subcategoria_nombre || null,
-      dd.unidad || null, prioridad, estatusInicial, esZP ? 3 : 1, dd.actor_telefono || null,
+      dd.estacion || null, dd.unidad || null, prioridad, estatusInicial, esZP ? 3 : 1, dd.actor_telefono || null,
     ]
   );
   const row = ins.rows[0];
@@ -805,12 +806,13 @@ async function insertFolio(client, dd) {
   }
 
   try {
+    const comentarioHistorial = dd.estacion ? `Folio creado por WhatsApp. Estación: ${dd.estacion}` : "Folio creado por WhatsApp";
     await client.query(
       `INSERT INTO public.folio_historial(
         numero_folio, estatus, comentario, actor_telefono, actor_rol, creado_en, folio_codigo, folio_id
       ) VALUES ($1,$2,$3,$4,$5,NOW(),$6,$7)`,
       [
-        row.numero_folio, estatusInicial, "Folio creado por WhatsApp",
+        row.numero_folio, estatusInicial, comentarioHistorial,
         dd.actor_telefono || null, dd.actor_rol || null, row.folio_codigo, row.id,
       ]
     );
@@ -1753,6 +1755,50 @@ const SUBCATEGORIAS = {
 };
 
 const PRIORIDADES = ["Alta", "Media", "Baja"];
+
+/**
+ * Catálogo de estaciones por planta (nombre "bonito" para mostrar; guardar en DB normalizado).
+ * Pruebas manuales sugeridas:
+ * 1) GA crea folio → planta Puebla → categoría GASTOS → subcategoría Estaciones → pedir estación (lista Puebla) → elegir 2 → prioridad → confirmar → DB tiene estacion.
+ * 2) ZP crea folio → planta Acapulco → subcategoría Estaciones → pedir estación (lista grande) → elegir X.
+ * 3) Planta sin catálogo → permitir manual con doble confirmación (SI/NO).
+ * 4) Subcategoría distinta de Estaciones → no aparece paso estación.
+ */
+const ESTACIONES_POR_PLANTA = {
+  Puebla: ["NANACAMILPA", "CHACHAPA", "MAGDALENA", "METEPEC"],
+  Morelos: ["IGUALA", "YAUTEPEC", "COATETELCO"],
+  Querétaro: ["5 DE FEBRERO", "OPALOS", "LOBO", "PEDRO ESCOBEDO"],
+  "San Luis Potosí": ["VILLA ARISTA", "VILLA HIDALGO", "RAYÓN"],
+  Tehuacan: ["TEOTITLÁN"],
+  Acapulco: [
+    "ORGANOS", "OMETEPEC", "PETAQUILLAS", "PIE DE LA CUESTA", "PINOS", "RACELGAS", "SABANA", "TEXCA", "VACACIONAL", "ZAPATA",
+    "20 DE NOVIEMBRE", "BOULEVARD", "CRUZ GRANDE", "LIBERTAD", "LIBERTADORES", "MANGOS", "PEDREGOSO", "RETORNO", "SAN AGUSTIN",
+    "SAN LUIS ACATLAN", "SAN MARCOS", "TECOANAPA", "TOLVA", "VENTA", "COLOSO", "COLOSIO", "CNC", "RENACIMIENTO", "COLOSIO 2",
+    "CONSTITUYENTES", "PALMAR", "BONFIL", "LLANO LARGO", "RUIZ CORTINEZ", "ZAPAGAS",
+  ],
+};
+
+/** Normaliza nombre de estación para guardar en DB: uppercase, trim, colapsar espacios. */
+function normalizeEstacionNombre(text) {
+  return String(text || "").trim().replace(/\s+/g, " ").toUpperCase();
+}
+
+/**
+ * Devuelve lista de estaciones para una planta (por nombre de planta desde sess/DB).
+ * Mapea nombre de planta a llave del catálogo (case-insensitive, sin acentos opcional).
+ */
+function getEstacionesByPlanta(plantaNombre) {
+  if (!plantaNombre) return null;
+  const name = String(plantaNombre).trim();
+  const keys = Object.keys(ESTACIONES_POR_PLANTA);
+  const nameNorm = name.toLowerCase().normalize("NFD").replace(/\u0300-\u036f/g, "");
+  for (const key of keys) {
+    const keyNorm = key.toLowerCase().normalize("NFD").replace(/\u0300-\u036f/g, "");
+    if (keyNorm === nameNorm || key.toLowerCase() === name.toLowerCase()) return ESTACIONES_POR_PLANTA[key];
+    if (keyNorm.includes(nameNorm) || nameNorm.includes(keyNorm)) return ESTACIONES_POR_PLANTA[key];
+  }
+  return null;
+}
 
 /* ==================== SESIONES ==================== */
 
@@ -2929,6 +2975,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
           txt += `Beneficiario: ${folio.beneficiario || "-"}\n`;
           txt += `Categoría: ${folio.categoria || "-"}\n`;
           txt += `Subcategoría: ${folio.subcategoria || "-"}\n`;
+          txt += `Estación: ${folio.estacion || "-"}\n`;
           txt += `Urgente: ${(folio.prioridad && String(folio.prioridad).toLowerCase().includes("urgente")) ? "Sí" : "No"}\n`;
           txt += `Cotización adjunta: ${folio.cotizacion_url ? "Sí" : "No"}\n`;
           txt += `Fecha: ${fecha}\n`;
@@ -3800,8 +3847,69 @@ app.post("/twilio/whatsapp", async (req, res) => {
       const picked = pickByNumber(body, subs);
       if (!picked) return safeReply("Opción inválida.");
       sess.dd.subcategoria_nombre = picked;
+      const esEstaciones = (picked || "").trim().toLowerCase() === "estaciones";
+      if (esEstaciones) {
+        sess.dd.estacion = null;
+        const plantaNombre = sess.dd.planta_nombre || "";
+        const estacionesList = getEstacionesByPlanta(plantaNombre);
+        sess.dd._estacionesList = estacionesList || [];
+        if (!estacionesList || estacionesList.length === 0) {
+          sess.estado = "ESPERANDO_ESTACION_MANUAL";
+          return safeReply(
+            "No hay estaciones configuradas para esta planta. Escribe el nombre de la estación (mín. 3 caracteres) o responde CANCELAR para salir."
+          );
+        }
+        sess.estado = "ESPERANDO_ESTACION";
+        return safeReply("Selecciona la estación (responde con número):\n\n" + estacionesList.map((o, i) => `${i + 1}) ${o}`).join("\n") + "\n\n0) Escribir estación manual\n\nResponde con el número.");
+      }
       sess.estado = "ESPERANDO_PRIORIDAD";
       return safeReply(renderMenu("7) Elige PRIORIDAD:", sess.dd.urgente ? ["Urgente no programado", ...PRIORIDADES] : PRIORIDADES));
+    }
+
+    if (sess.estado === "ESPERANDO_ESTACION") {
+      const list = sess.dd._estacionesList || [];
+      const bodyTrim = body.trim();
+      const n = parseInt(bodyTrim, 10);
+      if (n === 0) {
+        sess.estado = "ESPERANDO_ESTACION_MANUAL";
+        return safeReply("Escribe el nombre de la estación (mín. 3 caracteres).");
+      }
+      if (Number.isFinite(n) && n >= 1 && n <= list.length) {
+        sess.dd.estacion = normalizeEstacionNombre(list[n - 1]);
+        sess.dd._estacionesList = null;
+        sess.estado = "ESPERANDO_PRIORIDAD";
+        return safeReply(renderMenu("7) Elige PRIORIDAD:", sess.dd.urgente ? ["Urgente no programado", ...PRIORIDADES] : PRIORIDADES));
+      }
+      return safeReply("Opción inválida. Responde con el número de la estación o 0 para escribir manual.");
+    }
+
+    if (sess.estado === "ESPERANDO_ESTACION_MANUAL") {
+      if (/^cancelar$/i.test(body.trim())) {
+        sess.dd._estacionDraft = null;
+        sess.dd.estacion = null;
+        sess.estado = "ESPERANDO_PRIORIDAD";
+        return safeReply("Sin estación. " + renderMenu("7) Elige PRIORIDAD:", sess.dd.urgente ? ["Urgente no programado", ...PRIORIDADES] : PRIORIDADES));
+      }
+      const texto = body.trim();
+      if (texto.length < 3) return safeReply("Escribe al menos 3 caracteres para la estación.");
+      sess.dd._estacionDraft = normalizeEstacionNombre(texto);
+      sess.estado = "CONFIRMAR_ESTACION_MANUAL";
+      return safeReply(`Vas a guardar estación: "${sess.dd._estacionDraft}". Responde SI para confirmar o NO para volver a escribir.`);
+    }
+
+    if (sess.estado === "CONFIRMAR_ESTACION_MANUAL") {
+      const resp = body.trim().toLowerCase();
+      if (resp === "no" || resp === "n") {
+        sess.estado = "ESPERANDO_ESTACION_MANUAL";
+        return safeReply("Escribe de nuevo el nombre de la estación (mín. 3 caracteres).");
+      }
+      if (resp === "si" || resp === "sí" || resp === "s") {
+        sess.dd.estacion = sess.dd._estacionDraft || null;
+        sess.dd._estacionDraft = null;
+        sess.estado = "ESPERANDO_PRIORIDAD";
+        return safeReply(renderMenu("7) Elige PRIORIDAD:", sess.dd.urgente ? ["Urgente no programado", ...PRIORIDADES] : PRIORIDADES));
+      }
+      return safeReply("Responde SI para confirmar o NO para volver a escribir.");
     }
 
     if (sess.estado === "ESPERANDO_UNIDAD") {
@@ -3828,6 +3936,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
         `Importe: $${sess.dd.importe}`,
         `Categoría: ${sess.dd.categoria_nombre}`,
         `Subcategoría: ${sess.dd.subcategoria_nombre || "(N/A)"}`,
+        `Estación: ${sess.dd.estacion || "(N/A)"}`,
         `Unidad: ${sess.dd.unidad || "(N/A)"}`,
         `Prioridad: ${sess.dd.prioridad}`,
         "",
