@@ -1091,9 +1091,87 @@ function normalizeForIcon(text) {
 }
 
 /**
- * Icono para una fila del historial: completado (✅🟢) o en proceso (🟡).
- * histRow: { estatus, comentario } (opcionalmente event_type).
- * context: no usado por ahora; para etapas futuras si se agregan.
+ * Mapea evento a una etapa lógica para deduplicación (misma etapa = una sola fila).
+ * evento: { estatus, comentario, creado_en }. Los comentarios de usuario (Comentario: ...) no se fusionan.
+ */
+function normalizeStageKey(evento) {
+  const estatus = typeof evento === "string" ? evento : (evento && evento.estatus);
+  const comentario = evento && evento.comentario;
+  const creado_en = evento && evento.creado_en;
+  const s = String(estatus || "").trim().toUpperCase();
+  if ((comentario || "").trim().toLowerCase().startsWith("comentario:")) {
+    return "COMENTARIO_" + (creado_en ? new Date(creado_en).getTime() : Math.random());
+  }
+  if (!s) return "_VACIO_";
+  if (/CANCELADO|CANCELACION_SOLICITADA/.test(s)) return "CANCELACION";
+  if (/PENDIENTE_APROB_ZP|APROBADO_ZP|RECHAZADO_ZP/.test(s)) return "DIRECCION_ZP";
+  if (/(CONTRALOR|CDMX).*(PENDIENTE|APROBADO|RECHAZADO)|(PENDIENTE|APROBADO|RECHAZADO).*(CONTRALOR|CDMX)/.test(s)) return "CONTRALOR_CDMX";
+  if (/PENDIENTE_TESORERIA|PAGADO_TESORERIA|RECHAZADO_TESORERIA/.test(s)) return "TESORERIA";
+  if (/PENDIENTE_APROB_PLANTA|APROB_PLANTA|APROBADO_PLANTA/.test(s)) return "PLANTA";
+  if (/LISTO_PARA_PROGRAMACION|SELECCIONADO_SEMANA|SOLICITANDO_PAGO|PAGADO|CERRADO/.test(s)) return "PROGRAMACION";
+  if (/GENERADO|CREADO|REGISTRADO|CAPTURADO/.test(s)) return "CREACION";
+  return s;
+}
+
+/** true si el estado es final (aprobado/rechazado/cancelado/pagado/cerrado). */
+function isFinalStatus(estatus) {
+  const s = String(estatus || "").trim().toUpperCase();
+  return /^APROBADO_|^APROB_|^RECHAZADO_|^CANCELADO|^PAGADO|^CERRADO|^COMPLETADO|^FINALIZADO|^LIBERADO|^ENVIADO/.test(s) || s === "PAGADO" || s === "CERRADO" || s === "CANCELADO";
+}
+
+/** Prioridad para desempate: mayor = más definitivo. Transitorios 0, aprobados 1, rechazados 2, cancelado 3. */
+function statusPriority(estatus) {
+  const s = String(estatus || "").trim().toUpperCase();
+  if (/^CANCELADO/.test(s)) return 3;
+  if (/^RECHAZADO/.test(s)) return 2;
+  if (/^APROBADO|^APROB_|^PAGADO|^CERRADO|^COMPLETADO|^FINALIZADO/.test(s) || s === "PAGADO" || s === "CERRADO") return 1;
+  return 0;
+}
+
+/**
+ * Deduplica eventos del historial por etapa: una sola fila por stage_key (la más definitiva y reciente).
+ * Si el evento elegido no tiene comentario, arrastra el comentario más reciente no vacío del mismo stage.
+ * Retorna array ordenado por creado_en ASC.
+ */
+function dedupeHistorialByStage(histRows) {
+  if (!histRows || histRows.length === 0) return [];
+  const byStage = new Map();
+  for (const r of histRows) {
+    const key = normalizeStageKey(r);
+    if (!byStage.has(key)) byStage.set(key, []);
+    byStage.get(key).push({ ...r, _stageKey: key, _isFinal: isFinalStatus(r.estatus), _priority: statusPriority(r.estatus) });
+  }
+  const result = [];
+  for (const [stageKey, events] of byStage) {
+    const before = events.length;
+    const finals = events.filter((e) => e._isFinal);
+    const transitorios = events.filter((e) => !e._isFinal);
+    let chosen;
+    if (finals.length > 0) {
+      chosen = finals.sort((a, b) => {
+        const pa = a._priority;
+        const pb = b._priority;
+        if (pa !== pb) return pb - pa;
+        const ta = new Date(a.creado_en || 0).getTime();
+        const tb = new Date(b.creado_en || 0).getTime();
+        return tb - ta;
+      })[0];
+    } else {
+      chosen = transitorios.sort((a, b) => new Date(b.creado_en || 0).getTime() - new Date(a.creado_en || 0).getTime())[0];
+    }
+    const comentarioMasReciente = [...events].sort((a, b) => new Date(b.creado_en || 0).getTime() - new Date(a.creado_en || 0).getTime()).find((e) => (e.comentario || "").trim().length > 0);
+    if ((!chosen.comentario || !String(chosen.comentario).trim()) && comentarioMasReciente && comentarioMasReciente.comentario) {
+      chosen = { ...chosen, comentario: comentarioMasReciente.comentario };
+    }
+    result.push(chosen);
+    if (before > 1) console.log(`[HIST] stage=${stageKey} before=${before} after=1 chosen=${chosen.estatus || "-"}`);
+  }
+  result.sort((a, b) => new Date(a.creado_en || 0).getTime() - new Date(b.creado_en || 0).getTime());
+  return result;
+}
+
+/**
+ * Icono para una fila del historial: completado (✅🟢), rechazado/cancelado (❌🔴), en proceso (🟡).
  */
 function getStepIcon(histRow, _context) {
   const estatus = (histRow.estatus || "").trim();
@@ -1101,7 +1179,11 @@ function getStepIcon(histRow, _context) {
   const text = normalizeForIcon(estatus + " " + comentario);
   if (!text) return "✅🟢 ";
 
-  const cerrados = ["aprobado", "autorizado", "pagado", "cerrado", "completado", "finalizado", "liberado", "enviado", "cancelado", "seleccionado_semana", "aprob_planta"];
+  const rechazadoCancelado = ["rechazado", "cancelado"];
+  for (const k of rechazadoCancelado) {
+    if (text.includes(k)) return "❌🔴 ";
+  }
+  const cerrados = ["aprobado", "autorizado", "pagado", "cerrado", "completado", "finalizado", "liberado", "enviado", "seleccionado_semana", "aprob_planta"];
   const pendientes = ["pendiente", "en proceso", "espera", "por aprobar", "requiere", "revision", "validacion", "solicitado", "cancelacion_solicitada", "listo_para_programacion"];
 
   for (const k of cerrados) {
@@ -1115,14 +1197,17 @@ function getStepIcon(histRow, _context) {
 
 /**
  * Formatea filas de folio_historial en texto de timeline con iconos.
+ * Aplica deduplicación por etapa (una fila por etapa lógica) antes de formatear.
  * histRows: array de { creado_en, estatus, comentario, ... }
- * opts: { formatFecha = formatMexicoCentral, resolveComentario(row) => string }
+ * opts: { formatFecha, resolveComentario(row), dedupe = true }
  */
 function formatTimeline(histRows, opts = {}) {
+  const dedupe = opts.dedupe !== false;
+  const rows = dedupe ? dedupeHistorialByStage(histRows) : histRows;
   const formatFecha = opts.formatFecha || formatMexicoCentral;
   const resolveComentario = opts.resolveComentario;
   let out = "";
-  for (const r of histRows) {
+  for (const r of rows) {
     const icon = getStepIcon(r, opts.context);
     const fecha = formatFecha(r.creado_en);
     const estatus = (r.estatus || "").trim() || "-";
@@ -3002,8 +3087,9 @@ app.post("/twilio/whatsapp", async (req, res) => {
         const numero = body.replace(/^historial\s+/i, "").trim();
         const folio = await getFolioByNumero(client, numero);
         if (!folio) return safeReply(`No existe el folio ${numero}.`);
-        const rows = await getHistorial(client, numero, 80);
+        let rows = await getHistorial(client, numero, 80);
         if (rows.length === 0) return safeReply(`Sin historial para ${numero}.`);
+        rows = dedupeHistorialByStage(rows);
 
         console.log(`[Historial] Folio: ${numero}`);
         console.log(`[Historial] Eventos: ${rows.length}`);
