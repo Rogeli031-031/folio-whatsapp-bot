@@ -1079,6 +1079,58 @@ async function getHistorial(client, numeroFolio, limit = 80) {
   return r.rows;
 }
 
+/** Normaliza texto para comparación case-insensitive y sin acentos. */
+function normalizeForIcon(text) {
+  return String(text || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\u0300-\u036f/g, "");
+}
+
+/**
+ * Icono para una fila del historial: completado (✅🟢) o en proceso (🟡).
+ * histRow: { estatus, comentario } (opcionalmente event_type).
+ * context: no usado por ahora; para etapas futuras si se agregan.
+ */
+function getStepIcon(histRow, _context) {
+  const estatus = (histRow.estatus || "").trim();
+  const comentario = (histRow.comentario || "").trim();
+  const text = normalizeForIcon(estatus + " " + comentario);
+  if (!text) return "✅🟢 ";
+
+  const cerrados = ["aprobado", "autorizado", "pagado", "cerrado", "completado", "finalizado", "liberado", "enviado", "cancelado", "seleccionado_semana", "aprob_planta"];
+  const pendientes = ["pendiente", "en proceso", "espera", "por aprobar", "requiere", "revision", "validacion", "solicitado", "cancelacion_solicitada", "listo_para_programacion"];
+
+  for (const k of cerrados) {
+    if (text.includes(k)) return "✅🟢 ";
+  }
+  for (const k of pendientes) {
+    if (text.includes(k)) return "🟡 ";
+  }
+  return "✅🟢 ";
+}
+
+/**
+ * Formatea filas de folio_historial en texto de timeline con iconos.
+ * histRows: array de { creado_en, estatus, comentario, ... }
+ * opts: { formatFecha = formatMexicoCentral, resolveComentario(row) => string }
+ */
+function formatTimeline(histRows, opts = {}) {
+  const formatFecha = opts.formatFecha || formatMexicoCentral;
+  const resolveComentario = opts.resolveComentario;
+  let out = "";
+  for (const r of histRows) {
+    const icon = getStepIcon(r, opts.context);
+    const fecha = formatFecha(r.creado_en);
+    const estatus = (r.estatus || "").trim() || "-";
+    let comentario = resolveComentario ? resolveComentario(r) : (r.comentario || "").trim();
+    if (comentario === "") comentario = "-";
+    out += `${icon}${fecha} | ${estatus} | ${comentario}\n`;
+  }
+  return out;
+}
+
 async function insertComentario(client, numeroFolio, texto, actorTelefono, actorRol) {
   const folio = await getFolioByNumero(client, numeroFolio);
   if (!folio) return null;
@@ -2764,13 +2816,14 @@ app.post("/twilio/whatsapp", async (req, res) => {
           for (const { folio: f, rows: histRows } of historialesPorFolio) {
             txt += `\n--- ${f.numero_folio} | ${f.estatus || "-"} | $${fmtMxn(f.importe)} | ${(f.planta_nombre || "").slice(0, 20)}\n`;
             txt += `Concepto: ${(f.concepto || "").toString().trim().slice(0, 60)}${(f.concepto || "").length > 60 ? "…" : ""}\n`;
-            for (const r of histRows) {
-              const fecha = formatMexicoCentral(r.creado_en);
-              let comentario = (r.comentario || "").trim();
-              if (comentario === "Folio creado por WhatsApp") comentario = "Folio creado por " + resolveActorHistorial(r);
-              if (!comentario) comentario = "-";
-              txt += `${fecha} | ${r.estatus || "-"} | ${comentario}\n`;
-            }
+            txt += formatTimeline(histRows, {
+              formatFecha: formatMexicoCentral,
+              resolveComentario: (r) => {
+                let c = (r.comentario || "").trim();
+                if (c === "Folio creado por WhatsApp") c = "Folio creado por " + resolveActorHistorial(r);
+                return c || "-";
+              },
+            });
           }
           txt += "\n---\nResumen unidad " + unidadNorm + "\n✅ Gastado: $" + fmtMxn(gastado) + "\n🕒 Por gastarse: $" + fmtMxn(porGastarse) + "\n📌 Folios (no cancelados): " + rows.length;
           if (txt.length > MAX_WHATSAPP_BODY) txt = txt.substring(0, MAX_WHATSAPP_BODY - 35) + "\n\n... (recortado por límite de WhatsApp)";
@@ -2955,6 +3008,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
         let comentariosRenderizados = 0;
         normalized.forEach((ev) => {
           const fecha = formatMexicoCentral(ev.created_at);
+          const icon = getStepIcon(ev);
           if (ev.event_type === "COMENTARIO") {
             const text = (ev.comment_text || "").trim();
             if (!text) return;
@@ -2964,13 +3018,13 @@ app.post("/twilio/whatsapp", async (req, res) => {
             if (displayText.length > 700) {
               displayText = displayText.substring(0, 680) + "… (recortado)";
             }
-            txt += `💬 Comentario — ${displayActor}\n"${displayText}"\n${fecha}\n\n`;
+            txt += `${icon}💬 Comentario — ${displayActor}\n"${displayText}"\n${fecha}\n\n`;
           } else {
             let comentario = ev.comentario || "";
             if (comentario.trim() === "Folio creado por WhatsApp") {
               comentario = `Folio creado por ${ev.actor || "Sistema"}`;
             }
-            txt += `${fecha} | ${ev.estatus} | ${comentario}\n`;
+            txt += `${icon}${fecha} | ${ev.estatus} | ${comentario}\n`;
           }
         });
 
