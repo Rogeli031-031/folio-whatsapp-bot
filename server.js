@@ -2983,18 +2983,36 @@ app.post("/twilio/whatsapp", async (req, res) => {
         const token = body.trim().replace(/^ver\s+cotizacion\s+/i, "").trim();
         const numero = normalizeFolioToken(token, getCurrentYYYYMM());
         if (!numero) return safeReply("Formato: ver cotizacion 045 o ver cotizacion F-YYYYMM-XXX");
-        const ultima = await getUltimaCotizacionAprobada(client, numero);
-        if (!ultima) return safeReply(`No hay cotización aprobada para ${numero}.`);
-        let url = ultima.url;
-        if (ultima.s3_key && s3Enabled) {
-          try {
-            url = await getSignedDownloadUrl(ultima.s3_key, 600);
-          } catch (e) {
-            console.warn("getSignedDownloadUrl:", e.message);
+        let ultima = await getUltimaCotizacionAprobada(client, numero);
+        let url = null;
+        let msg = "";
+        if (ultima) {
+          url = ultima.url;
+          if (ultima.s3_key && s3Enabled) {
+            try {
+              url = await getSignedDownloadUrl(ultima.s3_key, 600);
+            } catch (e) {
+              console.warn("getSignedDownloadUrl:", e.message);
+            }
+          }
+          msg = `Cotización aprobada ${numero}\nArchivoID: ${ultima.id}\nSubido: ${formatMexicoCentral(ultima.subido_en)}\nAprobado por: ${ultima.aprobado_por || "-"}\n`;
+        } else {
+          const folio = await getFolioByNumero(client, numero);
+          if (folio && (folio.cotizacion_s3key || folio.cotizacion_url)) {
+            if (folio.cotizacion_s3key && s3Enabled) {
+              try {
+                url = await getSignedDownloadUrl(folio.cotizacion_s3key, 600);
+              } catch (e) {
+                console.warn("getSignedDownloadUrl (folio legacy):", e.message);
+              }
+            } else if (folio.cotizacion_url && !folio.cotizacion_url.startsWith("TWILIO:")) {
+              url = folio.cotizacion_url;
+            }
+            msg = `Cotización folio ${numero}\n(Enlace directo del folio)\n`;
           }
         }
-        let msg = `Cotización aprobada ${numero}\nArchivoID: ${ultima.id}\nSubido: ${formatMexicoCentral(ultima.subido_en)}\nAprobado por: ${ultima.aprobado_por || "-"}\n`;
-        if (url) msg += `Ver (10 min): ${url}`;
+        if (!url) return safeReply(ultima ? `No hay URL disponible para ${numero}.` : `No hay cotización para ${numero}.`);
+        msg += `Ver (10 min): ${url}`;
         return safeReply(msg);
       }
 
