@@ -295,6 +295,7 @@ async function ensureSchema() {
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS subcategoria VARCHAR(255);`);
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS unidad VARCHAR(100);`);
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS estacion VARCHAR(120);`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_folios_estaciones ON public.folios (planta_id, subcategoria, estacion, estatus, creado_en);`).catch(() => {});
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS cotizacion_url TEXT;`);
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS cotizacion_s3key VARCHAR(512);`);
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS aprobado_por VARCHAR(255);`);
@@ -1348,6 +1349,102 @@ async function getFoliosByUnidad(client, unidad, opts = {}) {
   return { rows: (r && r.rows) || [] };
 }
 
+/** En proceso = no cancelado, no pagado, no cerrado. */
+const ESTACIONES_ESTATUS_EXCLUIDOS = [ESTADOS.CANCELADO, ESTADOS.PAGADO, ESTADOS.CERRADO];
+
+/**
+ * Agregados por estación (folios Gastos/Estaciones en proceso).
+ * opts: { soloUrgentes: boolean }. Retorna { rows: [{ estacion, folios_count, total_mxn }], totalFolios, totalMxn }.
+ */
+async function queryStationAggregates(client, plantaId, opts = {}) {
+  const soloUrgentes = !!opts.soloUrgentes;
+  const whereUrg = soloUrgentes ? " AND (f.prioridad ILIKE '%urgente%' OR f.prioridad ILIKE '%alta%')" : "";
+  const params = [plantaId, ESTADOS.CANCELADO, ESTADOS.PAGADO, ESTADOS.CERRADO];
+  let r;
+  try {
+    r = await client.query(
+      `SELECT UPPER(TRIM(f.estacion)) AS estacion,
+              COUNT(*)::INT AS folios_count,
+              COALESCE(SUM(f.importe), 0)::NUMERIC AS total_mxn
+       FROM public.folios f
+       WHERE f.planta_id = $1
+         AND UPPER(TRIM(COALESCE(f.subcategoria,''))) = 'ESTACIONES'
+         AND (f.categoria IS NULL OR UPPER(TRIM(f.categoria)) LIKE '%GASTOS%')
+         AND f.estacion IS NOT NULL AND TRIM(f.estacion) <> ''
+         AND (f.estatus IS NULL OR (UPPER(TRIM(f.estatus)) <> $2 AND UPPER(TRIM(f.estatus)) <> $3 AND UPPER(TRIM(f.estatus)) <> $4))
+         ${whereUrg}
+       GROUP BY UPPER(TRIM(f.estacion))
+       ORDER BY total_mxn DESC`,
+      params
+    );
+  } catch (e) {
+    if (e.message && /column/.test(e.message)) return { rows: [], totalFolios: 0, totalMxn: 0 };
+    throw e;
+  }
+  const rows = (r && r.rows) || [];
+  let totalFolios = 0;
+  let totalMxn = 0;
+  rows.forEach((row) => {
+    totalFolios += parseInt(row.folios_count, 10) || 0;
+    totalMxn += Number(row.total_mxn) || 0;
+  });
+  return { rows, totalFolios, totalMxn };
+}
+
+/**
+ * Folios FIFO por estación (en proceso). estacionNorm = 'TODAS' o nombre normalizado.
+ */
+async function queryFoliosFIFOByEstacion(client, plantaId, estacionNorm, limit = 10, offset = 0) {
+  const excl = [ESTADOS.CANCELADO, ESTADOS.PAGADO, ESTADOS.CERRADO];
+  let res;
+  try {
+    if (estacionNorm === "TODAS") {
+      res = await client.query(
+        `SELECT f.id, f.numero_folio, f.folio_codigo, f.estacion, f.prioridad, f.estatus, f.creado_en AS fecha, f.importe
+         FROM public.folios f
+         WHERE f.planta_id = $1
+           AND UPPER(TRIM(COALESCE(f.subcategoria,''))) = 'ESTACIONES'
+           AND (f.categoria IS NULL OR UPPER(TRIM(f.categoria)) LIKE '%GASTOS%')
+           AND f.estacion IS NOT NULL AND TRIM(f.estacion) <> ''
+           AND (f.estatus IS NULL OR (UPPER(TRIM(f.estatus)) <> $2 AND UPPER(TRIM(f.estatus)) <> $3 AND UPPER(TRIM(f.estatus)) <> $4))
+         ORDER BY f.creado_en ASC NULLS LAST, f.id ASC
+         LIMIT $5 OFFSET $6`,
+        [plantaId, ...excl, limit, offset]
+      );
+    } else {
+      res = await client.query(
+        `SELECT f.id, f.numero_folio, f.folio_codigo, f.estacion, f.prioridad, f.estatus, f.creado_en AS fecha, f.importe
+         FROM public.folios f
+         WHERE f.planta_id = $1 AND UPPER(REPLACE(TRIM(COALESCE(f.estacion,'')),' ','')) = UPPER(REPLACE(TRIM($2),' ',''))
+           AND UPPER(TRIM(COALESCE(f.subcategoria,''))) = 'ESTACIONES'
+           AND (f.categoria IS NULL OR UPPER(TRIM(f.categoria)) LIKE '%GASTOS%')
+           AND (f.estatus IS NULL OR (UPPER(TRIM(f.estatus)) <> $3 AND UPPER(TRIM(f.estatus)) <> $4 AND UPPER(TRIM(f.estatus)) <> $5))
+         ORDER BY f.creado_en ASC NULLS LAST, f.id ASC
+         LIMIT $6 OFFSET $7`,
+        [plantaId, estacionNorm, ...excl, limit, offset]
+      );
+    }
+  } catch (e) {
+    if (e.message && /column/.test(e.message)) return { rows: [], total: 0 };
+    throw e;
+  }
+  const rows = (res && res.rows) || [];
+  let countRes;
+  if (estacionNorm === "TODAS") {
+    countRes = await client.query(
+      `SELECT COUNT(*)::INT AS c FROM public.folios f WHERE f.planta_id = $1 AND UPPER(TRIM(COALESCE(f.subcategoria,''))) = 'ESTACIONES' AND f.estacion IS NOT NULL AND TRIM(f.estacion) <> '' AND (f.estatus IS NULL OR (UPPER(TRIM(f.estatus)) <> $2 AND UPPER(TRIM(f.estatus)) <> $3 AND UPPER(TRIM(f.estatus)) <> $4))`,
+      [plantaId, ...excl]
+    ).catch(() => ({ rows: [{ c: 0 }] }));
+  } else {
+    countRes = await client.query(
+      `SELECT COUNT(*)::INT AS c FROM public.folios f WHERE f.planta_id = $1 AND UPPER(REPLACE(TRIM(COALESCE(f.estacion,'')),' ','')) = UPPER(REPLACE(TRIM($2),' ','')) AND UPPER(TRIM(COALESCE(f.subcategoria,''))) = 'ESTACIONES' AND (f.categoria IS NULL OR UPPER(TRIM(f.categoria)) LIKE '%GASTOS%') AND (f.estatus IS NULL OR (UPPER(TRIM(f.estatus)) <> $3 AND UPPER(TRIM(f.estatus)) <> $4 AND UPPER(TRIM(f.estatus)) <> $5))`,
+      [plantaId, estacionNorm, ...excl]
+    ).catch(() => ({ rows: [{ c: 0 }] }));
+  }
+  const total = (countRes.rows[0] && parseInt(countRes.rows[0].c, 10)) || 0;
+  return { rows, total };
+}
+
 /**
  * Pendientes "en mi cancha" para el usuario identificado por teléfono.
  * Reutiliza reglas de aprobación por etapa: GG/GA = PENDIENTE_APROB_PLANTA (su planta); ZP = PENDIENTE_APROB_ZP + CANCELACION_SOLICITADA; CDMX = LISTO_PARA_PROGRAMACION.
@@ -1767,6 +1864,7 @@ function buildHelpMessage(actor) {
   lines.push("• folios de planta");
   lines.push("• folios urgentes de planta");
   lines.push("• folios de pipa");
+  lines.push("• folios por estación");
   lines.push("• mis pendientes / pendientes [página]");
   lines.push("• comentario F-YYYYMM-XXX: <texto>");
   if (FLAGS.ATTACHMENTS) {
@@ -2412,6 +2510,31 @@ app.post("/twilio/whatsapp", async (req, res) => {
         );
       }
 
+      if (lower === "folios por estación") {
+        console.log("[ESTACIONES] comando iniciado");
+        const rolClave = (actor && actor.rol_clave) ? String(actor.rol_clave).toUpperCase() : "";
+        const rolNombre = (actor && actor.rol_nombre) ? String(actor.rol_nombre).toUpperCase() : "";
+        const needsPlanta = ["CDMX", "ZP"].includes(rolClave) || /CDMX|ZP|ASISTENTE/.test(rolNombre);
+        sess.dd.intent = "ESTACIONES_REPORT";
+        if (needsPlanta) {
+          const plantas = await getPlantas(client);
+          sess.dd.step = "PLANTA";
+          sess.dd._plantasList = plantas;
+          if (!plantas.length) return safeReply("No hay plantas en catálogo.");
+          const list = plantas.map((p, i) => `${i + 1}) ${p.nombre}`).join("\n");
+          return safeReply("¿De qué planta?\n" + list + "\n\nResponde con el número o nombre.");
+        }
+        if (!actor) return safeReply("No estás dado de alta. Contacta al administrador.");
+        sess.dd.planta_id = actor.planta_id != null ? actor.planta_id : null;
+        sess.dd.planta_nombre = actor.planta_nombre || null;
+        if (sess.dd.planta_id == null && !sess.dd.planta_nombre) return safeReply("No tengo tu planta asignada. Pide al admin asignarte una planta.");
+        sess.dd.step = "OPCION";
+        sess.dd._plantasList = null;
+        return safeReply(
+          "FOLIOS POR ESTACIÓN\n\nSelecciona opción:\n1) Totales por estación\n2) Urgentes por estación\n3) FIFO (pendientes más antiguos)\n\nResponde con el número."
+        );
+      }
+
       if (lower === "crear proyecto") {
         sess.estadoProyecto = "CREAR_PROYECTO_PLANTA";
         sess.draftProyecto = { actor_telefono: fromNorm, actor_rol: actor ? actor.rol_nombre : null };
@@ -2838,6 +2961,175 @@ app.post("/twilio/whatsapp", async (req, res) => {
         else if (rows.length >= 50) txt += "\nMostrando últimos 50.";
         if (txt.length > MAX_WHATSAPP_BODY) txt = txt.substring(0, MAX_WHATSAPP_BODY - 20) + "\n...(mensaje recortado)";
         return txt.trim();
+      }
+
+      if (sess.dd.intent === "ESTACIONES_REPORT") {
+        const step = sess.dd.step;
+        const fmtMxn = (n) => (Number(n) != null && !isNaN(Number(n)) ? Number(n).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00");
+
+        if (step === "PLANTA") {
+          const plantas = sess.dd._plantasList || [];
+          let plantaId = null;
+          let plantaNombre = "";
+          const bodyNorm = body.trim().toLowerCase().normalize("NFD").replace(/\u0300/g, "");
+          const num = parseInt(body.trim(), 10);
+          if (Number.isFinite(num) && num >= 1 && num <= plantas.length) {
+            plantaId = plantas[num - 1].id;
+            plantaNombre = plantas[num - 1].nombre;
+          } else {
+            const byName = plantas.find((p) => (p.nombre || "").toLowerCase().normalize("NFD").replace(/\u0300/g, "") === bodyNorm || (p.nombre || "").toLowerCase() === body.trim().toLowerCase());
+            if (byName) { plantaId = byName.id; plantaNombre = byName.nombre; }
+          }
+          if (!plantaId) return safeReply("Planta no reconocida. Responde con el número o nombre.");
+          sess.dd.planta_id = plantaId;
+          sess.dd.planta_nombre = plantaNombre;
+          sess.dd.step = "OPCION";
+          sess.dd._plantasList = null;
+          console.log("[ESTACIONES] planta resuelta:", plantaNombre);
+          return safeReply("FOLIOS POR ESTACIÓN\n\nSelecciona opción:\n1) Totales por estación\n2) Urgentes por estación\n3) FIFO (pendientes más antiguos)\n\nResponde con el número.");
+        }
+
+        if (step === "OPCION") {
+          const n = parseInt(body.trim(), 10);
+          if (n !== 1 && n !== 2 && n !== 3) return safeReply("Responde 1, 2 o 3.");
+          let plantaId = sess.dd.planta_id;
+          if (!plantaId && sess.dd.planta_nombre) {
+            const plantas = await getPlantas(client);
+            const byName = plantas.find((p) => (p.nombre || "").toLowerCase() === (sess.dd.planta_nombre || "").toLowerCase());
+            if (byName) plantaId = byName.id;
+          }
+          if (!plantaId) return safeReply("No se pudo determinar la planta. Cancela y vuelve a intentar.");
+          sess.dd.planta_id = plantaId;
+
+          if (n === 1 || n === 2) {
+            const { rows, totalFolios, totalMxn } = await queryStationAggregates(client, plantaId, { soloUrgentes: n === 2 });
+            console.log("[ESTACIONES] opción:", n === 1 ? "Totales" : "Urgentes", "resultados:", rows.length);
+            const catalog = getEstacionesByPlanta(sess.dd.planta_nombre || "");
+            const byEst = new Map(rows.map((r) => [normalizeEstacionNombre(r.estacion), r]));
+            const uniq = catalog ? [...new Set(catalog.map((e) => normalizeEstacionNombre(e)))] : [...byEst.keys()];
+            let txt = n === 1 ? "TOTALES POR ESTACIÓN\n\n" : "URGENTES POR ESTACIÓN\n\n";
+            txt += "ESTACIÓN | # Folios | $ Total\n";
+            txt += "-------------------\n";
+            let sumFolios = 0;
+            let sumMxn = 0;
+            for (const est of uniq) {
+              const row = byEst.get(est);
+              const cnt = row ? parseInt(row.folios_count, 10) || 0 : 0;
+              const mxn = row ? Number(row.total_mxn) || 0 : 0;
+              sumFolios += cnt;
+              sumMxn += mxn;
+              txt += `${est} | ${cnt} | $${fmtMxn(mxn)}\n`;
+            }
+            txt += "-------------------\n";
+            txt += (n === 1 ? "TOTAL GENERAL: " : "TOTAL URGENTES: ") + `${sumFolios} folios | $${fmtMxn(sumMxn)}`;
+            sess.dd.intent = null;
+            sess.dd.step = null;
+            sess.dd.planta_id = null;
+            sess.dd.planta_nombre = null;
+            if (txt.length > MAX_WHATSAPP_BODY) txt = txt.substring(0, MAX_WHATSAPP_BODY - 30) + "\n...(recortado)";
+            return safeReply(txt);
+          }
+
+          sess.dd.estacion_opcion = 3;
+          const estacionesList = getEstacionesByPlanta(sess.dd.planta_nombre || "");
+          sess.dd._estacionesList = estacionesList || [];
+          sess.dd.step = "FIFO_ESTACION";
+          if (!estacionesList || estacionesList.length === 0) return safeReply("No hay estaciones configuradas para esta planta.");
+          const list = estacionesList.map((e, i) => `${i + 1}) ${e}`).join("\n");
+          return safeReply("¿De qué estación? (o escribe TODAS)\n\n" + list + "\n\nResponde con el número o nombre.");
+        }
+
+        if (step === "FIFO_ESTACION") {
+          const list = sess.dd._estacionesList || [];
+          const bodyUp = body.trim().toUpperCase();
+          let estacionNorm = "TODAS";
+          if (bodyUp !== "TODAS" && bodyUp !== "TODA") {
+            const num = parseInt(body.trim(), 10);
+            if (Number.isFinite(num) && num >= 1 && num <= list.length) {
+              estacionNorm = normalizeEstacionNombre(list[num - 1]);
+            } else {
+              const partial = body.trim().replace(/\s+/g, " ").toUpperCase();
+              const matches = list.filter((e) => normalizeEstacionNombre(e).indexOf(partial) >= 0 || partial.indexOf(normalizeEstacionNombre(e)) >= 0);
+              if (matches.length === 0) return safeReply("Estación no reconocida. Responde con el número, nombre o TODAS.");
+              if (matches.length > 1) return safeReply("Varias estaciones coinciden. Responde con el número:\n" + matches.map((m, i) => `${i + 1}) ${m}`).join("\n"));
+              estacionNorm = normalizeEstacionNombre(matches[0]);
+            }
+          }
+          sess.dd._fifoEstacionNorm = estacionNorm;
+          sess.dd._fifoPage = 0;
+          sess.dd.step = "FIFO_LIST";
+          const limit = 10;
+          const { rows, total } = await queryFoliosFIFOByEstacion(client, sess.dd.planta_id, estacionNorm, limit, 0);
+          console.log("[ESTACIONES] FIFO estación:", estacionNorm, "total:", total);
+          let txt = `FIFO — ${estacionNorm}\n(Pendientes más antiguos)\n\n`;
+          const now = Date.now();
+          for (let i = 0; i < rows.length; i++) {
+            const f = rows[i];
+            const fecha = f.fecha ? new Date(f.fecha) : null;
+            const dias = fecha ? Math.floor((now - fecha.getTime()) / 86400000) : "-";
+            const urg = (f.prioridad && String(f.prioridad).toLowerCase().includes("urgente")) ? "🟡 " : "";
+            txt += `${i + 1}) ${urg}${f.numero_folio || f.folio_codigo} | ${fecha ? formatMexicoCentral(fecha) : "-"} | ${dias} días | $${fmtMxn(f.importe)} | ${(f.estatus || "").slice(0, 20)}\n`;
+          }
+          txt += `\nMostrando 1-${rows.length} de ${total}. Escribe "siguiente" para más o "ver F-XXX" para detalle.`;
+          if (txt.length > MAX_WHATSAPP_BODY) txt = txt.substring(0, MAX_WHATSAPP_BODY - 30) + "\n...(recortado)";
+          return safeReply(txt);
+        }
+
+        if (step === "FIFO_LIST") {
+          const bodyTrim = body.trim();
+          if (/^ver\s+/i.test(bodyTrim)) {
+            const numero = bodyTrim.replace(/^ver\s+/i, "").trim();
+            const folio = await getFolioByNumero(client, numero);
+            if (!folio) return safeReply(`No existe el folio ${numero}.`);
+            const histRows = await getHistorial(client, numero, 80);
+            const rows = dedupeHistorialByStage(histRows);
+            const telefonos = [...new Set(rows.map((r) => r.actor_telefono).filter(Boolean))];
+            const nombresMap = await getNombresByTelefonos(client, telefonos);
+            const resolveActor = (r) => {
+              if (!r.actor_telefono && !r.actor_rol) return "Sistema";
+              const tel = String(r.actor_telefono || "").trim().replace(/\s/g, "");
+              if (!tel) return r.actor_rol || "Sistema";
+              const norm = normalizePhone(tel);
+              const alt = phoneAltForDb(norm);
+              const last10 = phoneLast10(tel);
+              const nombre = nombresMap.get(tel) || nombresMap.get(norm) || (alt && nombresMap.get(alt)) || (last10 && nombresMap.get(last10)) || null;
+              const rol = r.actor_rol ? (String(r.actor_rol).toUpperCase().includes("ZP") ? "Director ZP" : r.actor_rol) : null;
+              return nombre ? (rol ? `${rol} - ${nombre}` : nombre) : (rol ? `${rol} - ${tel}` : tel);
+            };
+            let det = `Folio ${folio.numero_folio}\nPlanta: ${folio.planta_nombre || "-"}\nEstatus: ${folio.estatus || "-"}\nMonto: $${fmtMxn(folio.importe)}\nConcepto: ${(folio.descripcion || folio.concepto || "-").toString().slice(0, 60)}\n\nTimeline:\n`;
+            det += formatTimeline(rows, { resolveComentario: (r) => { let c = (r.comentario || "").trim(); if (c === "Folio creado por WhatsApp") c = "Folio creado por " + resolveActor(r); return c || "-"; } });
+            sess.dd.intent = null;
+            sess.dd.step = null;
+            sess.dd.planta_id = null;
+            sess.dd.planta_nombre = null;
+            sess.dd._estacionesList = null;
+            sess.dd._fifoPage = null;
+            sess.dd._fifoEstacionNorm = null;
+            if (det.length > MAX_WHATSAPP_BODY) det = det.substring(0, MAX_WHATSAPP_BODY - 30) + "\n...(recortado)";
+            return safeReply(det);
+          }
+          if (/^siguiente$/i.test(bodyTrim)) {
+            const page = (sess.dd._fifoPage || 0) + 1;
+            sess.dd._fifoPage = page;
+            const limit = 10;
+            const offset = page * limit;
+            const { rows, total } = await queryFoliosFIFOByEstacion(client, sess.dd.planta_id, sess.dd._fifoEstacionNorm || "TODAS", limit, offset);
+            if (rows.length === 0) return safeReply("No hay más folios en esta página.");
+            let txt = `FIFO — ${sess.dd._fifoEstacionNorm || "TODAS"} (pág. ${page + 1})\n\n`;
+            const now = Date.now();
+            for (let i = 0; i < rows.length; i++) {
+              const f = rows[i];
+              const fecha = f.fecha ? new Date(f.fecha) : null;
+              const dias = fecha ? Math.floor((now - fecha.getTime()) / 86400000) : "-";
+              const urg = (f.prioridad && String(f.prioridad).toLowerCase().includes("urgente")) ? "🟡 " : "";
+              txt += `${offset + i + 1}) ${urg}${f.numero_folio || f.folio_codigo} | ${fecha ? formatMexicoCentral(fecha) : "-"} | ${dias} días | $${fmtMxn(f.importe)}\n`;
+            }
+            txt += `\nMostrando ${offset + 1}-${offset + rows.length} de ${total}. "siguiente" o "ver F-XXX".`;
+            if (txt.length > MAX_WHATSAPP_BODY) txt = txt.substring(0, MAX_WHATSAPP_BODY - 30) + "\n...(recortado)";
+            return safeReply(txt);
+          }
+          return safeReply('Escribe "siguiente" para más folios o "ver F-XXX" para ver detalle.');
+        }
       }
 
       if (sess.dd.intent === "PIPA_FOLIOS") {
