@@ -1158,9 +1158,10 @@ async function getFoliosByPlanta(client, plantaId, limit = 50, soloUrgentes = fa
  * Pendientes "en mi cancha" para el usuario identificado por teléfono.
  * Reutiliza reglas de aprobación por etapa: GG/GA = PENDIENTE_APROB_PLANTA (su planta); ZP = PENDIENTE_APROB_ZP + CANCELACION_SOLICITADA; CDMX = LISTO_PARA_PROGRAMACION.
  * FIFO por fecha base: COALESCE(updated_at, creado_en) ASC (más antiguos primero).
+ * opts.corporativo: si true y rol ZP/CDMX, devuelve todas las filas con planta_nombre (sin paginar, límite 500).
  * @returns {Promise<{ plantaInfo: { nombre }, urgentesCount, normalesCount, totalCount, urgentesSum, normalesSum, totalSum, rows, totalPages } | null>} null si usuario no existe.
  */
-async function getPendientesForUser(client, fromNumber, page = 1, pageSize = 20) {
+async function getPendientesForUser(client, fromNumber, page = 1, pageSize = 20, opts = {}) {
   const actor = await getActorByPhone(client, fromNumber);
   if (!actor) return null;
 
@@ -1168,6 +1169,7 @@ async function getPendientesForUser(client, fromNumber, page = 1, pageSize = 20)
   if (!rolClave && actor.rol_nombre && /director/i.test(actor.rol_nombre) && /zp/i.test(actor.rol_nombre)) rolClave = "ZP";
   const plantaId = actor.planta_id != null ? actor.planta_id : null;
   const plantaNombre = actor.planta_nombre || (plantaId ? null : "Corporativo");
+  const corporativo = !!(opts && opts.corporativo && (rolClave === "ZP" || rolClave === "CDMX"));
 
   let whereClause = "";
   const params = [];
@@ -1187,7 +1189,7 @@ async function getPendientesForUser(client, fromNumber, page = 1, pageSize = 20)
   }
 
   const baseWhere = ` WHERE (f.estatus IS NULL OR UPPER(TRIM(f.estatus)) <> 'CANCELADO') ${whereClause}`;
-  const orderBy = " ORDER BY (CASE WHEN f.prioridad ILIKE '%urgente%' THEN 0 ELSE 1 END), COALESCE(f.updated_at, f.creado_en) ASC NULLS LAST, f.id ASC";
+  const orderBy = " ORDER BY (CASE WHEN f.prioridad ILIKE '%urgente%' OR f.prioridad ILIKE '%alta%' THEN 0 ELSE 1 END), COALESCE(f.updated_at, f.creado_en) ASC NULLS LAST, f.id ASC";
 
   const countRes = await client.query(
     `SELECT
@@ -1206,20 +1208,37 @@ async function getPendientesForUser(client, fromNumber, page = 1, pageSize = 20)
   const urgentesSum = Number(countRow.urgentes_sum) || 0;
   const normalesSum = Number(countRow.normales_sum) || 0;
   const totalSum = urgentesSum + normalesSum;
-  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
-  const offset = (Math.max(1, page) - 1) * pageSize;
-  const rowsParams = [...params, offset, pageSize];
-  const rowsRes = await client.query(
-    `SELECT f.numero_folio, f.folio_codigo, f.estatus, f.importe, f.prioridad,
-            COALESCE(f.descripcion, f.concepto) AS concepto,
-            COALESCE(f.updated_at, f.creado_en) AS fecha_base
-     FROM public.folios f ${baseWhere} ${orderBy}
-     OFFSET $${params.length + 1} LIMIT $${params.length + 2}`,
-    rowsParams
-  );
-  const rows = rowsRes.rows || [];
+  let rows = [];
+  if (corporativo) {
+    const rowsRes = await client.query(
+      `SELECT f.numero_folio, f.folio_codigo, f.estatus, f.importe, f.prioridad,
+              COALESCE(f.descripcion, f.concepto) AS concepto,
+              COALESCE(f.updated_at, f.creado_en) AS fecha_base,
+              COALESCE(p.nombre, 'Sin planta') AS planta_nombre
+       FROM public.folios f
+       LEFT JOIN public.plantas p ON p.id = f.planta_id
+       ${baseWhere} ${orderBy}
+       LIMIT 500`,
+      params
+    );
+    rows = rowsRes.rows || [];
+  } else {
+    const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+    const offset = (Math.max(1, page) - 1) * pageSize;
+    const rowsParams = [...params, offset, pageSize];
+    const rowsRes = await client.query(
+      `SELECT f.numero_folio, f.folio_codigo, f.estatus, f.importe, f.prioridad,
+              COALESCE(f.descripcion, f.concepto) AS concepto,
+              COALESCE(f.updated_at, f.creado_en) AS fecha_base
+       FROM public.folios f ${baseWhere} ${orderBy}
+       OFFSET $${params.length + 1} LIMIT $${params.length + 2}`,
+      rowsParams
+    );
+    rows = rowsRes.rows || [];
+  }
 
+  const totalPages = corporativo ? 1 : Math.max(1, Math.ceil(totalCount / pageSize));
   const plantaNombreRes = plantaNombre || (plantaId ? null : "Corporativo");
   let pNombre = plantaNombreRes;
   if (!pNombre && plantaId) {
@@ -1238,6 +1257,8 @@ async function getPendientesForUser(client, fromNumber, page = 1, pageSize = 20)
     totalSum,
     rows,
     totalPages,
+    corporativo,
+    rolClave,
   };
 }
 
@@ -2014,13 +2035,17 @@ app.post("/twilio/whatsapp", async (req, res) => {
         }
         const page = matchPendientes[3] ? parseInt(matchPendientes[3], 10) : 1;
         const pageSize = 20;
-        const safeLimit = 1500;
+        const rolClave = (actor.rol_clave && String(actor.rol_clave).toUpperCase()) || "";
+        const esCorporativo = rolClave === "ZP" || rolClave === "CDMX" || (actor.rol_nombre && /director/i.test(actor.rol_nombre) && /zp/i.test(actor.rol_nombre));
         try {
-          const data = await getPendientesForUser(client, from, page, pageSize);
+          const data = esCorporativo
+            ? await getPendientesForUser(client, from, 1, 500, { corporativo: true })
+            : await getPendientesForUser(client, from, page, pageSize);
           if (!data) {
             return safeReply("No estás dado de alta. Contacta al administrador para registrar tu número.");
           }
-          console.log(`[misPendientes] from=${fromNorm} userId=${actor.id} planta=${data.plantaInfo.nombre} page=${page} total=${data.totalCount} returned=${data.rows.length} totalPages=${data.totalPages}`);
+          console.log(`[Pendientes] Actor: ${actor.rol_nombre || rolClave || "?"} (${fromNorm})`);
+          console.log(`[Pendientes] Total encontrados: ${data.totalCount}`);
           if (data.totalCount === 0) {
             return safeReply("✅ No tienes pendientes.");
           }
@@ -2037,31 +2062,56 @@ app.post("/twilio/whatsapp", async (req, res) => {
           const fmtFecha = (d) => {
             if (!d) return "";
             const dt = new Date(d);
-            return dt.toISOString().slice(0, 10);
+            const day = dt.getDate();
+            const months = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+            return `${day} ${months[dt.getMonth()]}`;
           };
-          let out = `📌 Mis pendientes (Planta: ${data.plantaInfo.nombre})\n`;
-          out += `🔥 Urgentes: ${data.urgentesCount} | $${fmtMxn(data.urgentesSum)}\n`;
-          out += `📄 Normales: ${data.normalesCount} | $${fmtMxn(data.normalesSum)}\n`;
-          out += `💰 Total: ${data.totalCount} | $${fmtMxn(data.totalSum)}\n\n`;
-          const lines = [];
-          for (const r of data.rows) {
-            const urg = (r.prioridad && String(r.prioridad).toLowerCase().includes("urgente")) ? "🔥 " : "   ";
-            const shortNum = (r.numero_folio || "").replace(/^F-\d{6}-/, "") || "";
-            const estatusPad = (r.estatus || "").padEnd(28).slice(0, 28);
-            const impPad = `$${fmtMxn(r.importe)}`.padStart(12);
-            const conceptoShort = truncConcepto(r.concepto, 70);
-            const fechaStr = fmtFecha(r.fecha_base);
-            lines.push(`${urg}${shortNum.padStart(3)} | ${r.numero_folio || ""} | ${estatusPad} | ${impPad} | ${conceptoShort} | ${fechaStr}`);
+          const esUrgente = (r) => r.prioridad && (String(r.prioridad).toLowerCase().includes("urgente") || String(r.prioridad).toLowerCase().includes("alta"));
+          const shortNum = (r) => (r.numero_folio || "").replace(/^F-\d{6}-/, "") || (r.numero_folio || "");
+
+          let out = "📌 MIS PENDIENTES\n\n";
+          if (data.corporativo && data.rows.length > 0) {
+            const byPlanta = {};
+            for (const r of data.rows) {
+              const p = (r.planta_nombre || "Sin planta").trim();
+              if (!byPlanta[p]) byPlanta[p] = [];
+              byPlanta[p].push(r);
+            }
+            const plantasOrden = Object.keys(byPlanta).sort();
+            console.log(`[Pendientes] Plantas involucradas: ${plantasOrden.join(", ")}`);
+            for (const nombrePlanta of plantasOrden) {
+              const filas = byPlanta[nombrePlanta];
+              out += `🏭 ${nombrePlanta}\n`;
+              out += "-------------------\n";
+              for (const r of filas) {
+                const urg = esUrgente(r) ? "🔴 " : "⚪ ";
+                out += `${urg}${shortNum(r)} | $${fmtMxn(r.importe)}\n`;
+                out += `Concepto: ${truncConcepto(r.concepto, 60)}\n`;
+                out += `Estado: ${r.estatus || "—"}\n`;
+                out += `Fecha: ${fmtFecha(r.fecha_base)}\n\n`;
+              }
+              out += `Total ${nombrePlanta}: ${filas.length} folio${filas.length !== 1 ? "s" : ""}\n\n`;
+            }
+          } else {
+            for (const r of data.rows) {
+              const urg = esUrgente(r) ? "🔴 " : "⚪ ";
+              const plantaNombreRow = data.plantaInfo.nombre || "—";
+              out += `${urg}${shortNum(r)} | ${plantaNombreRow} | $${fmtMxn(r.importe)}\n`;
+              out += `Concepto: ${truncConcepto(r.concepto, 60)}\n`;
+              out += `Estado: ${r.estatus || "—"}\n`;
+              out += `Fecha: ${fmtFecha(r.fecha_base)}\n\n`;
+            }
+            if (page < data.totalPages) out += `Página ${page}/${data.totalPages}. Responde "mis pendientes ${page + 1}" para ver más.\n\n`;
           }
-          let added = 0;
-          for (const line of lines) {
-            if (out.length + line.length + 2 > safeLimit) break;
-            out += line + "\n";
-            added++;
+
+          out += "-------------------\n";
+          out += `Total urgentes: ${data.urgentesCount}\n`;
+          out += `Total pendientes: ${data.totalCount}`;
+
+          if (out.length > 3500) {
+            out = out.substring(0, 3400) + "\n\n... (mensaje recortado por límite de WhatsApp)";
           }
-          out += `\nMostrando ${added} de ${data.totalCount}. Página ${page}/${data.totalPages}.`;
-          if (page < data.totalPages) out += ` Responde "mis pendientes ${page + 1}" para ver más.`;
-          console.log(`[misPendientes] chars=${out.length}`);
+          console.log(`[Pendientes] chars=${out.length}`);
           return safeReply(out);
         } catch (e) {
           console.warn("getPendientesForUser error:", e.message);
