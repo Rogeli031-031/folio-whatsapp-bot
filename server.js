@@ -195,6 +195,13 @@ function parseMoney(text) {
 
 function normalizeUnidad(input) {
   const raw = String(input || "").trim().toUpperCase().replace(/\s+/g, "");
+  if (!raw) return null;
+  // Solo dígitos => AT-{num} por defecto
+  if (/^\d{1,4}$/.test(raw)) {
+    const num = parseInt(raw, 10);
+    if (!Number.isFinite(num) || num < 1 || num > 1000) return null;
+    return `AT-${num}`;
+  }
   const m = raw.match(/^(AT|C)\-?(\d{1,4})$/);
   if (!m) return null;
   const num = parseInt(m[2], 10);
@@ -1166,6 +1173,43 @@ async function getFoliosByPlanta(client, plantaId, limit = 50, soloUrgentes = fa
 }
 
 /**
+ * Folios por unidad (pipa) con filtro opcional de planta y tipo.
+ * opts: { plantaId?: number | null, soloCancelados: boolean, limit?: number }
+ */
+async function getFoliosByUnidad(client, unidad, opts = {}) {
+  const plantaId = opts.plantaId != null ? opts.plantaId : null;
+  const soloCancelados = !!opts.soloCancelados;
+  const limit = Math.min(Math.max(1, opts.limit || 50), 100);
+  const unidadNorm = String(unidad || "").trim().toUpperCase().replace(/\s+/g, "");
+  if (!unidadNorm) return { rows: [] };
+
+  let r;
+  try {
+    r = await client.query(
+      `SELECT f.id, f.numero_folio, f.folio_codigo, f.planta_id, p.nombre AS planta_nombre,
+              f.unidad, f.estatus, f.importe, f.prioridad, COALESCE(f.descripcion, f.concepto) AS concepto,
+              f.creado_en, f.updated_at
+       FROM public.folios f
+       LEFT JOIN public.plantas p ON p.id = f.planta_id
+       WHERE UPPER(REPLACE(REPLACE(COALESCE(f.unidad,''),' ',''),'-','')) = UPPER(REPLACE(REPLACE($1,' ',''),'-',''))
+         AND ($2::INT IS NULL OR f.planta_id = $2)
+         AND (
+           ($3::BOOL = TRUE  AND UPPER(TRIM(COALESCE(f.estatus,''))) = 'CANCELADO')
+           OR
+           ($3::BOOL = FALSE AND (f.estatus IS NULL OR UPPER(TRIM(f.estatus)) <> 'CANCELADO'))
+         )
+       ORDER BY COALESCE(f.updated_at, f.creado_en) DESC NULLS LAST, f.id DESC
+       LIMIT $4`,
+      [unidadNorm, plantaId, soloCancelados, limit]
+    );
+  } catch (e) {
+    if (e.message && /unidad|column/.test(e.message)) return { rows: [] };
+    throw e;
+  }
+  return { rows: (r && r.rows) || [] };
+}
+
+/**
  * Pendientes "en mi cancha" para el usuario identificado por teléfono.
  * Reutiliza reglas de aprobación por etapa: GG/GA = PENDIENTE_APROB_PLANTA (su planta); ZP = PENDIENTE_APROB_ZP + CANCELACION_SOLICITADA; CDMX = LISTO_PARA_PROGRAMACION.
  * FIFO por fecha base: COALESCE(updated_at, creado_en) ASC (más antiguos primero).
@@ -1583,6 +1627,7 @@ function buildHelpMessage(actor) {
   lines.push(`• historial F-YYYYMM-XXX${FLAGS.HISTORIAL ? "" : " (desactivado)"}`);
   lines.push("• folios de planta");
   lines.push("• folios urgentes de planta");
+  lines.push("• folios de pipa");
   lines.push("• mis pendientes / pendientes [página]");
   lines.push("• comentario F-YYYYMM-XXX: <texto>");
   if (FLAGS.ATTACHMENTS) {
@@ -2160,6 +2205,30 @@ app.post("/twilio/whatsapp", async (req, res) => {
         return safeReply("¿De qué planta? Selecciona número:\n" + list + "\n\nResponde con el número o nombre.");
       }
 
+      if (lower === "folios de pipa") {
+        const rolClave = (actor && actor.rol_clave) ? String(actor.rol_clave).toUpperCase() : "";
+        const rolNombre = (actor && actor.rol_nombre) ? String(actor.rol_nombre).toUpperCase() : "";
+        const needsPlanta = ["CDMX", "ZP"].includes(rolClave) || /CDMX|ZP|ASISTENTE/.test(rolNombre);
+        console.log(`[PIPA] start from=${fromNorm} role=${rolNombre || rolClave} needsPlanta=${needsPlanta}`);
+        sess.dd.intent = "PIPA_FOLIOS";
+        if (needsPlanta) {
+          const plantas = await getPlantas(client);
+          sess.dd.step = "PLANTA";
+          sess.dd._plantasList = plantas;
+          if (!plantas.length) return safeReply("No hay plantas en catálogo.");
+          const list = plantas.map((p, i) => `${i + 1}) ${p.nombre}`).join("\n");
+          return safeReply("¿De qué planta?\n" + list + "\n\nResponde con el número o nombre.");
+        }
+        const plantaId = actor && actor.planta_id != null ? actor.planta_id : null;
+        if (!actor) return safeReply("No estás dado de alta. Contacta al administrador.");
+        sess.dd.planta_id = plantaId;
+        sess.dd.step = "OPCION";
+        sess.dd._plantasList = null;
+        return safeReply(
+          "FOLIOS DE PIPA\n\n1) Folios en proceso\n2) Folios cancelados\n\nResponde con el número."
+        );
+      }
+
       if (lower === "crear proyecto") {
         sess.estadoProyecto = "CREAR_PROYECTO_PLANTA";
         sess.draftProyecto = { actor_telefono: fromNorm, actor_rol: actor ? actor.rol_nombre : null };
@@ -2586,6 +2655,151 @@ app.post("/twilio/whatsapp", async (req, res) => {
         else if (rows.length >= 50) txt += "\nMostrando últimos 50.";
         if (txt.length > MAX_WHATSAPP_BODY) txt = txt.substring(0, MAX_WHATSAPP_BODY - 20) + "\n...(mensaje recortado)";
         return txt.trim();
+      }
+
+      if (sess.dd.intent === "PIPA_FOLIOS") {
+        const step = sess.dd.step;
+        if (step === "PLANTA") {
+          const plantas = sess.dd._plantasList || [];
+          let plantaId = null;
+          const bodyNorm = body.trim().toLowerCase().normalize("NFD").replace(/\u0300/g, "");
+          const num = parseInt(body.trim(), 10);
+          if (Number.isFinite(num) && num >= 1 && num <= plantas.length) {
+            plantaId = plantas[num - 1].id;
+          } else {
+            const byName = plantas.find((p) => (p.nombre || "").toLowerCase().normalize("NFD").replace(/\u0300/g, "") === bodyNorm || (p.nombre || "").toLowerCase() === body.trim().toLowerCase());
+            if (byName) plantaId = byName.id;
+          }
+          if (!plantaId) return safeReply("Planta no reconocida. Responde con el número o nombre.");
+          sess.dd.planta_id = plantaId;
+          sess.dd.step = "OPCION";
+          sess.dd._plantasList = null;
+          return safeReply("FOLIOS DE PIPA\n\n1) Folios en proceso\n2) Folios cancelados\n\nResponde con el número.");
+        }
+        if (step === "OPCION") {
+          const n = parseInt(body.trim(), 10);
+          if (n !== 1 && n !== 2) return safeReply("Responde 1 o 2.");
+          sess.dd.pipa_opcion = n;
+          sess.dd.step = "UNIDAD";
+          return safeReply("Indica número de unidad (ej: AT-03, AT03, AT3, 3).");
+        }
+        if (step === "UNIDAD") {
+          let unidadNorm = normalizeUnidad(body);
+          if (!unidadNorm) return safeReply("Unidad inválida. Ej: AT-15, C-3, 3");
+          sess.dd.unidad_normalizada = unidadNorm;
+          const plantaId = sess.dd.planta_id != null ? sess.dd.planta_id : null;
+          const soloCancelados = sess.dd.pipa_opcion === 2;
+          const limit = soloCancelados ? 20 : 50;
+          const { rows } = await getFoliosByUnidad(client, unidadNorm, { plantaId, soloCancelados, limit });
+          console.log(`[PIPA] planta=${plantaId} opcion=${sess.dd.pipa_opcion} unidad=${unidadNorm}`);
+          console.log(`[PIPA] folios encontrados=${rows.length}`);
+
+          const fmtMxn = (n) => (Number(n) != null && !isNaN(Number(n)) ? Number(n).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00");
+          const titulo = `FOLIOS DE PIPA — ${unidadNorm}\n`;
+
+          if (rows.length === 0) {
+            sess.dd.intent = null;
+            sess.dd.step = null;
+            sess.dd.planta_id = null;
+            sess.dd.pipa_opcion = null;
+            sess.dd.unidad_normalizada = null;
+            return safeReply(titulo + (soloCancelados ? "No hay folios cancelados para esta unidad." : "No hay folios en proceso para esta unidad."));
+          }
+
+          let gastado = 0;
+          let porGastarse = 0;
+          const PAGADO_CERRADO = [ESTADOS.PAGADO, ESTADOS.CERRADO];
+          rows.forEach((f) => {
+            const m = Number(f.importe) || 0;
+            const est = (f.estatus || "").toUpperCase().trim();
+            if (est === ESTADOS.CANCELADO) return;
+            if (PAGADO_CERRADO.includes(est)) gastado += m;
+            else if (est) porGastarse += m;
+          });
+          const totalCancelado = rows.reduce((s, f) => s + ((f.estatus || "").toUpperCase().trim() === ESTADOS.CANCELADO ? Number(f.importe) || 0 : 0), 0);
+
+          if (soloCancelados) {
+            let txt = titulo + "\n";
+            const maxShow = Math.min(rows.length, 20);
+            for (let i = 0; i < maxShow; i++) {
+              const f = rows[i];
+              txt += `${f.numero_folio} | $${fmtMxn(f.importe)} | ${(f.concepto || "").toString().trim().slice(0, 50)}${(f.concepto || "").length > 50 ? "…" : ""}\n`;
+            }
+            txt += "\n---\nResumen unidad " + unidadNorm + "\n❌ Cancelado: $" + fmtMxn(totalCancelado) + "\n📌 Folios cancelados: " + rows.length;
+            if (txt.length > MAX_WHATSAPP_BODY) txt = txt.substring(0, MAX_WHATSAPP_BODY - 35) + "\n\n... (recortado por límite de WhatsApp)";
+            sess.dd.intent = null;
+            sess.dd.step = null;
+            sess.dd.planta_id = null;
+            sess.dd.pipa_opcion = null;
+            sess.dd.unidad_normalizada = null;
+            return safeReply(txt.trim());
+          }
+
+          const maxFoliosConTimeline = 3;
+          const foliosParaMostrar = rows.slice(0, maxFoliosConTimeline);
+          const telefonosHistorial = new Set();
+          const historialesPorFolio = [];
+          for (const f of foliosParaMostrar) {
+            const hist = await getHistorial(client, f.numero_folio, 25);
+            historialesPorFolio.push({ folio: f, rows: hist });
+            hist.forEach((h) => { if (h.actor_telefono) telefonosHistorial.add(h.actor_telefono); });
+          }
+          const nombresMap = await getNombresByTelefonos(client, [...telefonosHistorial]);
+
+          function resolveActorHistorial(r) {
+            if (!r.actor_telefono && !r.actor_rol) return "Sistema";
+            const tel = String(r.actor_telefono || "").trim().replace(/\s/g, "");
+            if (tel) {
+              const norm = normalizePhone(tel);
+              const alt = phoneAltForDb(norm);
+              const last10 = phoneLast10(tel);
+              const nombre = nombresMap.get(tel) || nombresMap.get(norm) || (alt && nombresMap.get(alt)) || (last10 && nombresMap.get(last10)) || null;
+              const rol = r.actor_rol ? (String(r.actor_rol).toUpperCase().includes("ZP") ? "Director ZP" : r.actor_rol) : null;
+              return nombre ? (rol ? `${rol} - ${nombre}` : nombre) : (rol ? `${rol} - ${tel}` : tel);
+            }
+            return r.actor_rol || "Sistema";
+          }
+
+          let txt = titulo + "\n";
+          for (const { folio: f, rows: histRows } of historialesPorFolio) {
+            txt += `\n--- ${f.numero_folio} | ${f.estatus || "-"} | $${fmtMxn(f.importe)} | ${(f.planta_nombre || "").slice(0, 20)}\n`;
+            txt += `Concepto: ${(f.concepto || "").toString().trim().slice(0, 60)}${(f.concepto || "").length > 60 ? "…" : ""}\n`;
+            for (const r of histRows) {
+              const fecha = formatMexicoCentral(r.creado_en);
+              let comentario = (r.comentario || "").trim();
+              if (comentario === "Folio creado por WhatsApp") comentario = "Folio creado por " + resolveActorHistorial(r);
+              if (!comentario) comentario = "-";
+              txt += `${fecha} | ${r.estatus || "-"} | ${comentario}\n`;
+            }
+          }
+          txt += "\n---\nResumen unidad " + unidadNorm + "\n✅ Gastado: $" + fmtMxn(gastado) + "\n🕒 Por gastarse: $" + fmtMxn(porGastarse) + "\n📌 Folios (no cancelados): " + rows.length;
+          if (txt.length > MAX_WHATSAPP_BODY) txt = txt.substring(0, MAX_WHATSAPP_BODY - 35) + "\n\n... (recortado por límite de WhatsApp)";
+          const chunks = [];
+          let pos = 0;
+          const maxChunk = MAX_WHATSAPP_BODY - 50;
+          while (pos < txt.length) {
+            chunks.push(txt.slice(pos, pos + maxChunk));
+            pos += maxChunk;
+          }
+          if (chunks.length > 1) {
+            console.log(`[PIPA] chunks=${chunks.length}`);
+            const userFrom = req.body.From;
+            setImmediate(() => {
+              (async () => {
+                for (let i = 1; i < chunks.length; i++) {
+                  await new Promise((r) => setTimeout(r, 900));
+                  await sendWhatsApp(userFrom, chunks[i]);
+                }
+              })().catch((e) => console.warn("Envío PIPA partes:", e.message));
+            });
+          }
+          sess.dd.intent = null;
+          sess.dd.step = null;
+          sess.dd.planta_id = null;
+          sess.dd.pipa_opcion = null;
+          sess.dd.unidad_normalizada = null;
+          return safeReply(chunks[0] || txt.trim());
+        }
       }
 
       if ((sess.dd.intent === "LISTA_PLANTA" || sess.dd.intent === "LISTA_PLANTA_URGENTES") && sess.dd.esperando === "PLANTA") {
