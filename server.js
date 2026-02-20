@@ -435,6 +435,38 @@ async function ensureSchema() {
 
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS cotizacion_archivo_id INT REFERENCES public.folio_archivos(id);`).catch(() => {});
 
+    /* Presupuesto semanal por planta (CDMX asigna, GG selecciona folios, CDMX envía a cheques). */
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS public.presupuestos_semanales (
+        id SERIAL PRIMARY KEY,
+        planta_id INT NOT NULL REFERENCES public.plantas(id),
+        semana_inicio DATE NOT NULL,
+        semana_fin DATE NOT NULL,
+        monto_asignado NUMERIC(18,2) NOT NULL,
+        estatus VARCHAR(30) NOT NULL DEFAULT 'ABIERTO',
+        creado_por VARCHAR(50),
+        creado_en TIMESTAMPTZ DEFAULT NOW(),
+        enviado_cheques_por VARCHAR(50),
+        enviado_cheques_en TIMESTAMPTZ,
+        nota TEXT,
+        UNIQUE(planta_id, semana_inicio, semana_fin)
+      );
+    `).catch(() => {});
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS public.presupuesto_folios (
+        id SERIAL PRIMARY KEY,
+        presupuesto_id INT NOT NULL REFERENCES public.presupuestos_semanales(id) ON DELETE CASCADE,
+        folio_id INT NOT NULL REFERENCES public.folios(id),
+        numero_folio VARCHAR(50),
+        importe NUMERIC(18,2),
+        prioridad VARCHAR(255),
+        ligado_por VARCHAR(50),
+        ligado_en TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(presupuesto_id, folio_id)
+      );
+    `).catch(() => {});
+    await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS presupuesto_id INT REFERENCES public.presupuestos_semanales(id);`).catch(() => {});
+
     return;
   } finally {
     client.release();
@@ -487,6 +519,25 @@ async function getPlantas(client) {
 function getCurrentYYYYMM() {
   const now = new Date();
   return `${now.getUTCFullYear()}${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+/** Semana actual en zona México (lunes = 1, domingo = 0). Retorna { lunes: Date, domingo: Date } en UTC. */
+function getCurrentWeekMexico() {
+  const now = new Date();
+  const utc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const dow = utc.getUTCDay();
+  const lunesOffset = dow === 0 ? -6 : 1 - dow;
+  const lunes = new Date(utc);
+  lunes.setUTCDate(utc.getUTCDate() + lunesOffset);
+  const domingo = new Date(lunes);
+  domingo.setUTCDate(lunes.getUTCDate() + 6);
+  return { lunes, domingo };
+}
+
+/** Formatea Date a YYYY-MM-DD para PostgreSQL. */
+function dateToPg(date) {
+  const d = date instanceof Date ? date : new Date(date);
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
 }
 
 /**
@@ -592,6 +643,192 @@ async function getManyFoliosStatus(client, numeros) {
     map.set(row.numero_folio, row);
   });
   return numeros.map((numero) => ({ numero, folio: map.get(numero) || null }));
+}
+
+/* ==================== PRESUPUESTO SEMANAL ==================== */
+
+const PRESUP_ESTATUS = { ABIERTO: "ABIERTO", EN_PROCESO_CHEQUE: "EN_PROCESO_CHEQUE", CERRADO: "CERRADO", CANCELADO: "CANCELADO" };
+
+/** Presupuesto ABIERTO para planta y semana. Si no se pasan fechas, usa semana actual (México). */
+async function getPresupuestoAbierto(client, plantaId, semanaInicio, semanaFin) {
+  let inicio = semanaInicio;
+  let fin = semanaFin;
+  if (!inicio || !fin) {
+    const { lunes, domingo } = getCurrentWeekMexico();
+    inicio = dateToPg(lunes);
+    fin = dateToPg(domingo);
+  }
+  const r = await client.query(
+    `SELECT id, planta_id, semana_inicio, semana_fin, monto_asignado, estatus, creado_por, creado_en, enviado_cheques_por, enviado_cheques_en, nota
+     FROM public.presupuestos_semanales
+     WHERE planta_id = $1 AND semana_inicio = $2::date AND semana_fin = $3::date AND estatus = $4`,
+    [plantaId, inicio, fin, PRESUP_ESTATUS.ABIERTO]
+  );
+  return r.rows[0] || null;
+}
+
+/** Resumen: asignado, seleccionado, disponible, # folios, urgentes. Incluye filas de presupuesto_folios ordenadas (urgentes primero, luego FIFO). */
+async function getPresupuestoResumen(client, presupuestoId) {
+  const pre = await client.query(
+    `SELECT id, planta_id, semana_inicio, semana_fin, monto_asignado, estatus, creado_por, creado_en, enviado_cheques_por, enviado_cheques_en, nota
+     FROM public.presupuestos_semanales WHERE id = $1`,
+    [presupuestoId]
+  );
+  const row = pre.rows[0] || null;
+  if (!row) return null;
+  const folios = await client.query(
+    `SELECT pf.id, pf.folio_id, pf.numero_folio, pf.importe, pf.prioridad, pf.ligado_por, pf.ligado_en
+     FROM public.presupuesto_folios pf
+     WHERE pf.presupuesto_id = $1
+     ORDER BY (CASE WHEN UPPER(TRIM(COALESCE(pf.prioridad,''))) LIKE '%URGENTE%' THEN 0 ELSE 1 END), pf.ligado_en ASC`,
+    [presupuestoId]
+  );
+  const lista = (folios.rows || []).map((r) => ({
+    numero_folio: r.numero_folio,
+    importe: Number(r.importe) || 0,
+    prioridad: r.prioridad,
+    ligado_por: r.ligado_por,
+  }));
+  const seleccionado = lista.reduce((s, f) => s + f.importe, 0);
+  const asignado = Number(row.monto_asignado) || 0;
+  const disponible = Math.max(0, asignado - seleccionado);
+  const urgentes = lista.filter((f) => /urgente/i.test(String(f.prioridad || ""))).length;
+  return {
+    presupuesto: row,
+    asignado,
+    seleccionado,
+    disponible,
+    numFolios: lista.length,
+    urgentes,
+    folios: lista,
+  };
+}
+
+/** Crear o actualizar presupuesto. Si ya existe ABIERTO misma planta/semana, reemplaza monto (upsert). */
+async function createOrUpdatePresupuesto(client, plantaId, semanaInicio, semanaFin, monto, creadoPor, opts = {}) {
+  const replace = !!opts.replace;
+  const existente = await client.query(
+    `SELECT id, estatus FROM public.presupuestos_semanales
+     WHERE planta_id = $1 AND semana_inicio = $2::date AND semana_fin = $3::date`,
+    [plantaId, semanaInicio, semanaFin]
+  );
+  const row = existente.rows[0] || null;
+  if (row && row.estatus === PRESUP_ESTATUS.ABIERTO && !replace) {
+    return { id: row.id, created: false, updated: false };
+  }
+  if (row && row.estatus === PRESUP_ESTATUS.ABIERTO && replace) {
+    await client.query(
+      `UPDATE public.presupuestos_semanales SET monto_asignado = $1, creado_por = $2, creado_en = NOW() WHERE id = $3`,
+      [monto, creadoPor, row.id]
+    );
+    return { id: row.id, created: false, updated: true };
+  }
+  if (row) {
+    return { id: row.id, created: false, updated: false };
+  }
+  const ins = await client.query(
+    `INSERT INTO public.presupuestos_semanales (planta_id, semana_inicio, semana_fin, monto_asignado, estatus, creado_por)
+     VALUES ($1, $2::date, $3::date, $4, $5, $6) RETURNING id`,
+    [plantaId, semanaInicio, semanaFin, monto, PRESUP_ESTATUS.ABIERTO, creadoPor]
+  );
+  return { id: ins.rows[0].id, created: true, updated: false };
+}
+
+/** Bloquea presupuesto y devuelve total ya seleccionado (sum presupuesto_folios). */
+async function getPresupuestoSeleccionadoConLock(client, presupuestoId) {
+  const r = await client.query(
+    `SELECT COALESCE(SUM(pf.importe), 0) AS total
+     FROM public.presupuestos_semanales p
+     LEFT JOIN public.presupuesto_folios pf ON pf.presupuesto_id = p.id
+     WHERE p.id = $1
+     FOR UPDATE OF p`,
+    [presupuestoId]
+  );
+  const total = Number(r.rows[0]?.total) || 0;
+  return total;
+}
+
+/** Dado lista de folios (con importe y creado_en), ordenar por FIFO y tomar hasta cubrir disponible. */
+function proposePartialFIFO(foliosConImporte, disponible) {
+  const sorted = [...foliosConImporte].sort((a, b) => new Date(a.creado_en || 0) - new Date(b.creado_en || 0));
+  const out = [];
+  let sum = 0;
+  for (const f of sorted) {
+    const imp = Number(f.importe) || 0;
+    if (imp <= 0) continue;
+    if (sum + imp > disponible) break;
+    out.push(f);
+    sum += imp;
+  }
+  return { folios: out, total: sum };
+}
+
+/** Ligar folios al presupuesto en transacción (LOCK presupuesto). Actualiza folios.estatus a SELECCIONADO_SEMANA y opcionalmente folios.presupuesto_id. */
+async function linkFoliosToPresupuesto(client, presupuestoId, foliosRows, ligadoPor) {
+  await client.query("BEGIN");
+  try {
+    const presup = await client.query(
+      `SELECT id, monto_asignado FROM public.presupuestos_semanales WHERE id = $1 FOR UPDATE`,
+      [presupuestoId]
+    );
+    if (!presup.rows[0]) {
+      await client.query("ROLLBACK");
+      return { ok: false, error: "Presupuesto no encontrado." };
+    }
+    const montoAsignado = Number(presup.rows[0].monto_asignado) || 0;
+    const rSum = await client.query(
+      `SELECT COALESCE(SUM(importe), 0) AS total FROM public.presupuesto_folios WHERE presupuesto_id = $1`,
+      [presupuestoId]
+    );
+    const yaSeleccionado = Number(rSum.rows[0]?.total) || 0;
+    const nuevoTotal = foliosRows.reduce((s, f) => s + (Number(f.importe) || 0), 0);
+    if (yaSeleccionado + nuevoTotal > montoAsignado) {
+      await client.query("ROLLBACK");
+      return { ok: false, error: "EXCEED", disponible: Math.max(0, montoAsignado - yaSeleccionado), solicitado: nuevoTotal, yaSeleccionado };
+    }
+    for (const f of foliosRows) {
+      await client.query(
+        `INSERT INTO public.presupuesto_folios (presupuesto_id, folio_id, numero_folio, importe, prioridad, ligado_por)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (presupuesto_id, folio_id) DO NOTHING`,
+        [presupuestoId, f.id, f.numero_folio, f.importe ?? 0, f.prioridad || null, ligadoPor]
+      );
+      await client.query(
+        `UPDATE public.folios SET estatus = $1, presupuesto_id = $2 WHERE id = $3`,
+        [ESTADOS.SELECCIONADO_SEMANA, presupuestoId, f.id]
+      );
+      await insertHistorial(client, f.id, f.numero_folio, f.folio_codigo, ESTADOS.SELECCIONADO_SEMANA, "Seleccionado dentro de presupuesto semanal", ligadoPor, null);
+    }
+    await client.query("COMMIT");
+    return { ok: true };
+  } catch (e) {
+    await client.query("ROLLBACK");
+    throw e;
+  }
+}
+
+/** Marcar presupuesto como EN_PROCESO_CHEQUE y registrar enviado_cheques_por/en. Opcional: actualizar folios a SOLICITANDO_PAGO. */
+async function enviarPresupuestoACheques(client, presupuestoId, enviadoPor) {
+  const presup = await client.query(
+    `SELECT id, planta_id FROM public.presupuestos_semanales WHERE id = $1 AND estatus = $2`,
+    [presupuestoId, PRESUP_ESTATUS.ABIERTO]
+  );
+  if (!presup.rows[0]) return { ok: false, error: "Presupuesto no encontrado o no está ABIERTO." };
+  await client.query(
+    `UPDATE public.presupuestos_semanales SET estatus = $1, enviado_cheques_por = $2, enviado_cheques_en = NOW() WHERE id = $3`,
+    [PRESUP_ESTATUS.EN_PROCESO_CHEQUE, enviadoPor, presupuestoId]
+  );
+  const folios = await client.query(
+    `SELECT folio_id FROM public.presupuesto_folios WHERE presupuesto_id = $1`,
+    [presupuestoId]
+  );
+  for (const r of (folios.rows || [])) {
+    await client.query(
+      `UPDATE public.folios SET estatus = $1 WHERE id = $2`,
+      [ESTADOS.SOLICITANDO_PAGO, r.folio_id]
+    );
+  }
+  return { ok: true, plantaId: presup.rows[0].planta_id };
 }
 
 /* ==================== PROYECTOS (DB) ==================== */
@@ -1874,6 +2111,12 @@ function buildHelpMessage(actor) {
     lines.push("• ver archivo <id> (URL firmada 10 min)");
     lines.push("• reemplazar cotizacion 045 (reemplazo controlado)");
   }
+  lines.push("• mi presupuesto (presupuesto semanal por planta)");
+  if (clave === "GG") lines.push("• seleccionar folios 001 002 010 (ligar al presupuesto semanal)");
+  if (clave === "CDMX") {
+    lines.push("• asignar presupuesto");
+    lines.push("• enviar a cheques");
+  }
   if (FLAGS.APPROVALS) {
     if (clave === "GG") lines.push("• aprobar F-YYYYMM-XXX (aprobación planta)");
     if (clave === "ZP") {
@@ -2533,6 +2776,67 @@ app.post("/twilio/whatsapp", async (req, res) => {
         return safeReply(
           "FOLIOS POR ESTACIÓN\n\nSelecciona opción:\n1) Totales por estación\n2) Urgentes por estación\n3) FIFO (pendientes más antiguos)\n\nResponde con el número."
         );
+      }
+
+      if (lower === "asignar presupuesto") {
+        const rolClave = (actor && actor.rol_clave) ? String(actor.rol_clave).toUpperCase() : "";
+        const esCDMX = rolClave === "CDMX" || (actor && actor.rol_nombre && String(actor.rol_nombre).toUpperCase().includes("CDMX"));
+        if (!esCDMX) return safeReply("Solo CDMX (Contralor) puede asignar presupuesto.");
+        const plantas = await getPlantas(client);
+        if (!plantas.length) return safeReply("No hay plantas en catálogo.");
+        sess.dd.intent = "PRESUP_ASIGNAR";
+        sess.dd.step = "PLANTA";
+        sess.dd._plantasList = plantas;
+        const list = plantas.map((p, i) => `${i + 1}) ${p.nombre}`).join("\n");
+        console.log("[PRESUP] Inicio asignar presupuesto (CDMX)");
+        return safeReply("ASIGNAR PRESUPUESTO\n\n¿Planta?\n" + list + "\n\nResponde con el número o nombre.");
+      }
+
+      if (lower === "mi presupuesto") {
+        const rolClave = (actor && actor.rol_clave) ? String(actor.rol_clave).toUpperCase() : "";
+        const rolNombre = (actor && actor.rol_nombre) ? String(actor.rol_nombre).toUpperCase() : "";
+        const needsPlanta = ["CDMX", "ZP"].includes(rolClave) || /CDMX|ZP|ASISTENTE/.test(rolNombre);
+        let plantaId = null;
+        let plantaNombre = null;
+        if (!needsPlanta && actor) {
+          plantaId = actor.planta_id != null ? actor.planta_id : null;
+          plantaNombre = actor.planta_nombre || null;
+        }
+        if (needsPlanta) {
+          const plantas = await getPlantas(client);
+          if (!plantas.length) return safeReply("No hay plantas en catálogo.");
+          sess.dd.intent = "PRESUP_MI";
+          sess.dd.step = "PLANTA";
+          sess.dd._plantasList = plantas;
+          const list = plantas.map((p, i) => `${i + 1}) ${p.nombre}`).join("\n");
+          return safeReply("¿Presupuesto de qué planta?\n" + list + "\n\nResponde con el número o nombre.");
+        }
+        if (!plantaId && !plantaNombre) return safeReply("No tengo tu planta asignada. Pide al admin o usa el comando indicando la planta.");
+        const { lunes, domingo } = getCurrentWeekMexico();
+        const presup = await getPresupuestoAbierto(client, plantaId, dateToPg(lunes), dateToPg(domingo));
+        const fmtMxn = (n) => (Number(n) != null && !isNaN(Number(n)) ? Number(n).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00");
+        if (!presup) return safeReply("No hay presupuesto asignado para tu planta esta semana. Solicita a CDMX.");
+        const resumen = await getPresupuestoResumen(client, presup.id);
+        let txt = `PRESUPUESTO SEMANA (${plantaNombre || "tu planta"})\n`;
+        txt += `Asignado: $${fmtMxn(resumen.asignado)} | Seleccionado: $${fmtMxn(resumen.seleccionado)} | Disponible: $${fmtMxn(resumen.disponible)}\n`;
+        txt += `Folios: ${resumen.numFolios} | Urgentes: ${resumen.urgentes}\n`;
+        txt += "Para seleccionar: seleccionar folios 001 002 010 (o números/códigos)";
+        if (txt.length > MAX_WHATSAPP_BODY) txt = txt.substring(0, MAX_WHATSAPP_BODY - 20) + "\n...(recortado)";
+        return safeReply(txt);
+      }
+
+      if (lower === "enviar a cheques") {
+        const rolClave = (actor && actor.rol_clave) ? String(actor.rol_clave).toUpperCase() : "";
+        const esCDMX = rolClave === "CDMX" || (actor && actor.rol_nombre && String(actor.rol_nombre).toUpperCase().includes("CDMX"));
+        if (!esCDMX) return safeReply("Solo CDMX puede enviar el presupuesto a cheques.");
+        const plantas = await getPlantas(client);
+        if (!plantas.length) return safeReply("No hay plantas en catálogo.");
+        sess.dd.intent = "PRESUP_ENVIAR_CHEQUES";
+        sess.dd.step = "PLANTA";
+        sess.dd._plantasList = plantas;
+        const list = plantas.map((p, i) => `${i + 1}) ${p.nombre}`).join("\n");
+        console.log("[PRESUP] Inicio enviar a cheques (CDMX)");
+        return safeReply("ENVIAR A CHEQUES\n\n¿Planta?\n" + list + "\n\nResponde con el número o nombre.");
       }
 
       if (lower === "crear proyecto") {
@@ -3323,6 +3627,223 @@ app.post("/twilio/whatsapp", async (req, res) => {
         return safeReply(chunks[0]);
       }
 
+      if (sess.dd.intent === "PRESUP_MI" && sess.dd.step === "PLANTA") {
+        const plantas = sess.dd._plantasList || [];
+        let plantaId = null;
+        let plantaNombre = "";
+        const bodyNorm = body.trim().toLowerCase().normalize("NFD").replace(/\u0300/g, "");
+        const num = parseInt(body.trim(), 10);
+        if (Number.isFinite(num) && num >= 1 && num <= plantas.length) {
+          plantaId = plantas[num - 1].id;
+          plantaNombre = plantas[num - 1].nombre;
+        } else {
+          const byName = plantas.find((p) => (p.nombre || "").toLowerCase().normalize("NFD").replace(/\u0300/g, "") === bodyNorm || (p.nombre || "").toLowerCase() === body.trim().toLowerCase());
+          if (byName) { plantaId = byName.id; plantaNombre = byName.nombre; }
+        }
+        sess.dd.intent = null;
+        sess.dd.step = null;
+        sess.dd._plantasList = null;
+        if (!plantaId) return safeReply("Planta no reconocida. Responde con el número o nombre.");
+        const { lunes, domingo } = getCurrentWeekMexico();
+        const presup = await getPresupuestoAbierto(client, plantaId, dateToPg(lunes), dateToPg(domingo));
+        const fmtMxn = (n) => (Number(n) != null && !isNaN(Number(n)) ? Number(n).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00");
+        if (!presup) return safeReply(`No hay presupuesto ABIERTO para ${plantaNombre} esta semana.`);
+        const resumen = await getPresupuestoResumen(client, presup.id);
+        let txt = `PRESUPUESTO SEMANA — ${plantaNombre}\n`;
+        txt += `Asignado: $${fmtMxn(resumen.asignado)} | Seleccionado: $${fmtMxn(resumen.seleccionado)} | Disponible: $${fmtMxn(resumen.disponible)}\n`;
+        txt += `Folios: ${resumen.numFolios} | Urgentes: ${resumen.urgentes}`;
+        if (txt.length > MAX_WHATSAPP_BODY) txt = txt.substring(0, MAX_WHATSAPP_BODY - 20) + "\n...(recortado)";
+        return safeReply(txt);
+      }
+
+      if (sess.dd.intent === "PRESUP_ASIGNAR") {
+        const step = sess.dd.step;
+        const plantas = sess.dd._plantasList || [];
+
+        if (step === "PLANTA") {
+          let plantaId = null;
+          let plantaNombre = "";
+          const bodyNorm = body.trim().toLowerCase().normalize("NFD").replace(/\u0300/g, "");
+          const num = parseInt(body.trim(), 10);
+          if (Number.isFinite(num) && num >= 1 && num <= plantas.length) {
+            plantaId = plantas[num - 1].id;
+            plantaNombre = plantas[num - 1].nombre;
+          } else {
+            const byName = plantas.find((p) => (p.nombre || "").toLowerCase().normalize("NFD").replace(/\u0300/g, "") === bodyNorm || (p.nombre || "").toLowerCase() === body.trim().toLowerCase());
+            if (byName) { plantaId = byName.id; plantaNombre = byName.nombre; }
+          }
+          if (!plantaId) return safeReply("Planta no reconocida. Responde con el número o nombre.");
+          sess.dd.planta_id = plantaId;
+          sess.dd.planta_nombre = plantaNombre;
+          sess.dd.step = "SEMANA";
+          return safeReply("¿Semana? Responde:\n1) Esta semana\n2) Fecha del lunes (DD/MM/AAAA)");
+        }
+
+        if (step === "SEMANA") {
+          let semanaInicio = null;
+          let semanaFin = null;
+          const opt = body.trim().toLowerCase();
+          if (opt === "1" || opt === "esta semana") {
+            const { lunes, domingo } = getCurrentWeekMexico();
+            semanaInicio = dateToPg(lunes);
+            semanaFin = dateToPg(domingo);
+          } else {
+            const m = body.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+            if (m) {
+              semanaInicio = `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+              const dLunes = new Date(semanaInicio + "T12:00:00Z");
+              const dDomingo = new Date(dLunes);
+              dDomingo.setUTCDate(dLunes.getUTCDate() + 6);
+              semanaFin = dateToPg(dDomingo);
+            }
+          }
+          if (!semanaInicio) return safeReply("Responde 1 (esta semana) o DD/MM/AAAA (lunes).");
+          sess.dd.semana_inicio = semanaInicio;
+          sess.dd.semana_fin = semanaFin;
+          sess.dd.step = "MONTO";
+          return safeReply("Monto asignado (MXN). Ejemplo: 150000 o 150000.50");
+        }
+
+        if (step === "MONTO") {
+          const monto = parseMoney(body);
+          if (monto == null || monto < 0) return safeReply("Escribe el monto numérico (ej: 150000).");
+          sess.dd.monto = monto;
+          sess.dd.step = "CONFIRMAR";
+          const existente = await getPresupuestoAbierto(client, sess.dd.planta_id, sess.dd.semana_inicio, sess.dd.semana_fin);
+          if (existente) {
+            sess.dd._yaExistia = true;
+            return safeReply(`Ya existe presupuesto ABIERTO para esa planta/semana. ¿Reemplazar monto con $${monto.toLocaleString("es-MX", { minimumFractionDigits: 2 })}? Responde SI o NO.`);
+          }
+          return safeReply(`Confirmar: Planta ${sess.dd.planta_nombre}, semana ${sess.dd.semana_inicio} a ${sess.dd.semana_fin}, monto $${monto.toLocaleString("es-MX", { minimumFractionDigits: 2 })}. Responde SI o NO.`);
+        }
+
+        if (step === "CONFIRMAR") {
+          const resp = body.trim().toUpperCase();
+          if (resp !== "SI" && resp !== "NO") return safeReply("Responde SI o NO.");
+          if (resp === "NO") {
+            sess.dd.intent = null;
+            sess.dd.step = null;
+            sess.dd.planta_id = null;
+            sess.dd.planta_nombre = null;
+            sess.dd.semana_inicio = null;
+            sess.dd.semana_fin = null;
+            sess.dd.monto = null;
+            sess.dd._plantasList = null;
+            sess.dd._yaExistia = null;
+            return safeReply("Cancelado.");
+          }
+          const replace = !!sess.dd._yaExistia;
+          const { id } = await createOrUpdatePresupuesto(client, sess.dd.planta_id, sess.dd.semana_inicio, sess.dd.semana_fin, sess.dd.monto, fromNorm, { replace });
+          console.log("[PRESUP] Crear/actualizar presupuesto id=" + id);
+          const ggList = await getUsersByRoleAndPlanta(client, "GG", sess.dd.planta_id);
+          const resumen = await getPresupuestoResumen(client, id);
+          const fmtMxn = (n) => (Number(n) != null && !isNaN(Number(n)) ? Number(n).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00");
+          const msgGG = `Presupuesto asignado (${sess.dd.planta_nombre}). Semana ${sess.dd.semana_inicio} a ${sess.dd.semana_fin}. Asignado: $${fmtMxn(resumen.asignado)} | Disponible: $${fmtMxn(resumen.disponible)}. Para seleccionar: seleccionar folios 001 002 010`;
+          for (const u of ggList) {
+            if (u.telefono) {
+              try {
+                await sendWhatsApp(u.telefono, msgGG);
+                console.log("[PRESUP] Notificando GG:", u.telefono);
+              } catch (e) {
+                console.warn("[PRESUP] Notif GG:", e.message);
+              }
+            }
+          }
+          sess.dd.intent = null;
+          sess.dd.step = null;
+          sess.dd.planta_id = null;
+          sess.dd.planta_nombre = null;
+          sess.dd.semana_inicio = null;
+          sess.dd.semana_fin = null;
+          sess.dd.monto = null;
+          sess.dd._plantasList = null;
+          sess.dd._yaExistia = null;
+          return safeReply("Presupuesto registrado. GG de la planta notificado.");
+        }
+      }
+
+      if (sess.dd.intent === "PRESUP_ENVIAR_CHEQUES") {
+        const step = sess.dd.step;
+        const plantas = sess.dd._plantasList || [];
+
+        if (step === "PLANTA") {
+          let plantaId = null;
+          let plantaNombre = "";
+          const bodyNorm = body.trim().toLowerCase().normalize("NFD").replace(/\u0300/g, "");
+          const num = parseInt(body.trim(), 10);
+          if (Number.isFinite(num) && num >= 1 && num <= plantas.length) {
+            plantaId = plantas[num - 1].id;
+            plantaNombre = plantas[num - 1].nombre;
+          } else {
+            const byName = plantas.find((p) => (p.nombre || "").toLowerCase().normalize("NFD").replace(/\u0300/g, "") === bodyNorm || (p.nombre || "").toLowerCase() === body.trim().toLowerCase());
+            if (byName) { plantaId = byName.id; plantaNombre = byName.nombre; }
+          }
+          if (!plantaId) return safeReply("Planta no reconocida. Responde con el número o nombre.");
+          sess.dd.planta_id = plantaId;
+          sess.dd.planta_nombre = plantaNombre;
+          sess.dd.step = "SEMANA";
+          const { lunes, domingo } = getCurrentWeekMexico();
+          sess.dd._semana_inicio = dateToPg(lunes);
+          sess.dd._semana_fin = dateToPg(domingo);
+          return safeReply("¿Semana? 1) Esta semana 2) Lunes DD/MM/AAAA");
+        }
+
+        if (step === "SEMANA") {
+          let semanaInicio = sess.dd._semana_inicio;
+          let semanaFin = sess.dd._semana_fin;
+          const opt = body.trim().toLowerCase();
+          const m = body.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+          if (m) {
+            semanaInicio = `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+            const dLunes = new Date(semanaInicio + "T12:00:00Z");
+            const dDomingo = new Date(dLunes);
+            dDomingo.setUTCDate(dLunes.getUTCDate() + 6);
+            semanaFin = dateToPg(dDomingo);
+          } else if (opt !== "1" && opt !== "esta semana") {
+            sess.dd.intent = null;
+            sess.dd.step = null;
+            sess.dd.planta_id = null;
+            sess.dd.planta_nombre = null;
+            sess.dd._plantasList = null;
+            sess.dd._semana_inicio = null;
+            sess.dd._semana_fin = null;
+            return safeReply("Responde 1 (esta semana) o DD/MM/AAAA (lunes).");
+          }
+          const presup = await getPresupuestoAbierto(client, sess.dd.planta_id, semanaInicio, semanaFin);
+          if (!presup) return safeReply("No hay presupuesto ABIERTO para esa planta/semana.");
+          const resumen = await getPresupuestoResumen(client, presup.id);
+          if (resumen.numFolios === 0) return safeReply("El presupuesto no tiene folios ligados. Primero GG debe seleccionar folios.");
+          const result = await enviarPresupuestoACheques(client, presup.id, fromNorm);
+          if (!result.ok) {
+            sess.dd.intent = null;
+            sess.dd.step = null;
+            sess.dd.planta_id = null;
+            sess.dd.planta_nombre = null;
+            sess.dd._plantasList = null;
+            sess.dd._semana_inicio = null;
+            sess.dd._semana_fin = null;
+            return safeReply(result.error || "Error al enviar.");
+          }
+          console.log("[PRESUP] Enviado a cheques presupuesto id=" + presup.id);
+          const fmtMxn = (n) => (Number(n) != null && !isNaN(Number(n)) ? Number(n).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00");
+          const msgGG = `Paquete enviado a cheques: total $${fmtMxn(resumen.seleccionado)}, folios: ${resumen.folios.map((f) => f.numero_folio).join(", ")}`;
+          const ggList = await getUsersByRoleAndPlanta(client, "GG", sess.dd.planta_id);
+          for (const u of ggList) {
+            if (u.telefono) {
+              try { await sendWhatsApp(u.telefono, msgGG); } catch (e) { console.warn("[PRESUP] Notif GG:", e.message); }
+            }
+          }
+          sess.dd.intent = null;
+          sess.dd.step = null;
+          sess.dd.planta_id = null;
+          sess.dd.planta_nombre = null;
+          sess.dd._plantasList = null;
+          sess.dd._semana_inicio = null;
+          sess.dd._semana_fin = null;
+          return safeReply("Presupuesto enviado a cheques. GG notificado.");
+        }
+      }
+
       if (FLAGS.ESTATUS && /^estatus\s+/i.test(body)) {
         const rest = body.replace(/^estatus\s+/i, "").trim();
         if (!rest) return safeReply("Indica al menos un folio. Ejemplo: estatus 045 044 o estatus F-202602-001");
@@ -3624,6 +4145,99 @@ app.post("/twilio/whatsapp", async (req, res) => {
           console.warn("Notificaciones no enviadas:", e.message);
         }
         return safeReply(`Folio ${numero} aprobado por override (Director ZP). Motivo registrado.`);
+      }
+
+      if (sess.presupuestoPartialPending && (body.trim().toUpperCase() === "SI" || body.trim().toUpperCase() === "NO")) {
+        const pend = sess.presupuestoPartialPending;
+        const resp = body.trim().toUpperCase();
+        sess.presupuestoPartialPending = null;
+        if (resp === "NO") return safeReply("Selección parcial cancelada. Puedes enviar otra lista de folios.");
+        const partialRows = pend.foliosPartial || [];
+        if (partialRows.length === 0) return safeReply("No hay folios en la propuesta. Intenta con otra lista.");
+        const result = await linkFoliosToPresupuesto(client, pend.presupuesto_id, partialRows, pend.ligado_por || fromNorm);
+        if (!result.ok) {
+          console.warn("[PRESUP] Selección parcial falló:", result.error);
+          return safeReply("No se pudo aplicar. El disponible pudo haber cambiado. Intenta de nuevo con: seleccionar folios ...");
+        }
+        console.log("[PRESUP] Selección parcial aplicada presupuesto=" + pend.presupuesto_id + " folios=" + partialRows.length);
+        const resumen = await getPresupuestoResumen(client, pend.presupuesto_id);
+        const fmtMxn = (n) => (Number(n) != null && !isNaN(Number(n)) ? Number(n).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00");
+        let msgCDMX = `GG seleccionó folios (parcial): ${partialRows.map((f) => f.numero_folio).join(", ")}. Total: $${fmtMxn(partialRows.reduce((s, f) => s + (Number(f.importe) || 0), 0))}. Disponible restante: $${fmtMxn(resumen.disponible)}`;
+        const cdmxList = await getUsersByRole(client, "CDMX");
+        for (const u of cdmxList) {
+          if (u.telefono) { try { await sendWhatsApp(u.telefono, msgCDMX); } catch (e) { console.warn("[PRESUP] Notif CDMX:", e.message); } }
+        }
+        return safeReply(`Selección parcial aplicada: ${partialRows.map((f) => f.numero_folio).join(", ")}. Disponible: $${fmtMxn(resumen.disponible)}`);
+      }
+
+      if (FLAGS.APPROVALS && /^seleccionar\s+folios\s+.+$/i.test(body)) {
+        const rest = body.replace(/^seleccionar\s+folios\s+/i, "").trim();
+        const rolClave = (actor && actor.rol_clave) ? String(actor.rol_clave).toUpperCase() : "";
+        const esGG = rolClave === "GG" || (actor && actor.rol_nombre && String(actor.rol_nombre).toUpperCase().includes("GG"));
+        if (!esGG || !actor) return safeReply("Solo GG puede seleccionar folios dentro del presupuesto. Usa: seleccionar folios 001 002 010");
+        const plantaId = actor.planta_id != null ? actor.planta_id : null;
+        if (!plantaId) return safeReply("No tienes planta asignada. Contacta al administrador.");
+        const { folios: numeros, invalidTokens } = parseFolioTokensFromText(rest);
+        if (numeros.length === 0) return safeReply("Indica al menos un folio. Ej: seleccionar folios 001 002 010");
+        const { lunes, domingo } = getCurrentWeekMexico();
+        const presup = await getPresupuestoAbierto(client, plantaId, dateToPg(lunes), dateToPg(domingo));
+        if (!presup) return safeReply("No hay presupuesto asignado para tu planta esta semana. Solicita a CDMX.");
+        const results = await getManyFoliosStatus(client, numeros);
+        const fmtMxn = (n) => (Number(n) != null && !isNaN(Number(n)) ? Number(n).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00");
+        const candidatos = [];
+        const noEncontrados = [];
+        const otraPlanta = [];
+        const malEstatus = [];
+        for (const { numero, folio } of results) {
+          if (!folio) { noEncontrados.push(numero); continue; }
+          if (folio.planta_id != null && folio.planta_id !== plantaId) { otraPlanta.push(numero); continue; }
+          const est = String(folio.estatus || "").toUpperCase();
+          if (est === ESTADOS.CANCELADO || est === ESTADOS.PAGADO || est === ESTADOS.CERRADO) { malEstatus.push(numero); continue; }
+          if (est !== ESTADOS.LISTO_PARA_PROGRAMACION) { malEstatus.push(numero); continue; }
+          const imp = Number(folio.importe);
+          if (imp == null || isNaN(imp) || imp <= 0) { malEstatus.push(numero); continue; }
+          candidatos.push({ ...folio, creado_en: folio.creado_en });
+        }
+        if (candidatos.length === 0) {
+          let msg = "Ningún folio válido para seleccionar (planta, estatus LISTO_PARA_PROGRAMACION, importe).";
+          if (noEncontrados.length) msg += " No encontrados: " + noEncontrados.join(", ");
+          if (otraPlanta.length) msg += " Otra planta: " + otraPlanta.join(", ");
+          if (malEstatus.length) msg += " Estatus/no válidos: " + malEstatus.join(", ");
+          return safeReply(msg);
+        }
+        const result = await linkFoliosToPresupuesto(client, presup.id, candidatos, fromNorm);
+        if (result.ok) {
+          console.log("[PRESUP] GG selecciona folios presupuesto=" + presup.id + " count=" + candidatos.length);
+          const resumen = await getPresupuestoResumen(client, presup.id);
+          const totalSel = candidatos.reduce((s, f) => s + (Number(f.importe) || 0), 0);
+          const msgCDMX = `GG seleccionó: ${candidatos.map((f) => f.numero_folio).join(", ")}. Total: $${fmtMxn(totalSel)}. Disponible: $${fmtMxn(resumen.disponible)}`;
+          const cdmxList = await getUsersByRole(client, "CDMX");
+          for (const u of cdmxList) {
+            if (u.telefono) { try { await sendWhatsApp(u.telefono, msgCDMX); } catch (e) { console.warn("[PRESUP] Notif CDMX:", e.message); } }
+          }
+          return safeReply(`Folios ligados: ${candidatos.map((f) => f.numero_folio).join(", ")}. Disponible: $${fmtMxn(resumen.disponible)}`);
+        }
+        if (result.error === "EXCEED" && result.disponible != null) {
+          const disponible = result.disponible;
+          const solicitado = candidatos.reduce((s, f) => s + (Number(f.importe) || 0), 0);
+          const excedente = solicitado - disponible;
+          console.log("[PRESUP] Rechazo por excedente disponible=" + disponible + " solicitado=" + solicitado);
+          const { folios: foliosPartial } = proposePartialFIFO(candidatos, disponible);
+          if (foliosPartial.length === 0) return safeReply(`Disponible: $${fmtMxn(disponible)}. Solicitado: $${fmtMxn(solicitado)}. Excedente: $${fmtMxn(excedente)}. No hay folios que quepan. Reduce la lista.`);
+          sess.presupuestoPartialPending = {
+            presupuesto_id: presup.id,
+            ligado_por: fromNorm,
+            foliosPartial,
+            disponible,
+            solicitado,
+            excedente,
+          };
+          let msg = `Excede presupuesto. Solicitado: $${fmtMxn(solicitado)} | Disponible: $${fmtMxn(disponible)} | Excedente: $${fmtMxn(excedente)}.\n`;
+          msg += `Selección parcial (FIFO): ${foliosPartial.map((f) => f.numero_folio).join(", ")} = $${fmtMxn(foliosPartial.reduce((s, f) => s + (Number(f.importe) || 0), 0))}.\n`;
+          msg += "Responde SI para aplicar selección parcial o NO para cancelar.";
+          return safeReply(msg);
+        }
+        return safeReply(result.error || "Error al ligar folios.");
       }
 
       if (FLAGS.APPROVALS && /^seleccionar\s+F-\d{6}-\d{3}\s*$/i.test(body)) {
@@ -4367,6 +4981,15 @@ app.post("/twilio/whatsapp", async (req, res) => {
     return res.status(200).send(twimlMessage("Error procesando solicitud. Intenta de nuevo en 1 minuto."));
   }
 });
+
+/*
+  PRUEBAS MANUALES — PRESUPUESTO SEMANAL
+  1) CDMX asigna presupuesto: WhatsApp "asignar presupuesto" → elegir planta → 1 (esta semana) o DD/MM/AAAA → monto → SI. Verificar notificación a GG.
+  2) GG consulta: "mi presupuesto" → debe mostrar asignado, seleccionado, disponible, # folios, urgentes e instructivo.
+  3) GG selecciona dentro del monto: "seleccionar folios 001 002 010" (folios en LISTO_PARA_PROGRAMACION de su planta). Debe ligar y notificar a CDMX.
+  4) GG excede y aplica parcial: "seleccionar folios ..." con suma > disponible → mensaje excedente y propuesta FIFO → responder SI para aplicar selección parcial o NO para cancelar.
+  5) CDMX envía a cheques: "enviar a cheques" → planta → 1 (esta semana) o DD/MM/AAAA → presupuesto pasa a EN_PROCESO_CHEQUE, folios a SOLICITANDO_PAGO, notificación a GG.
+*/
 
 /* ==================== START ==================== */
 
