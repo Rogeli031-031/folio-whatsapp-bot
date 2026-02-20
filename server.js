@@ -1052,10 +1052,21 @@ async function rechazarFolioArchivoCDMX(client, archivoId, rechazadoPor, motivo)
   return r.rows[0] || null;
 }
 
-async function getHistorial(client, numeroFolio, limit = 10) {
+/**
+ * Única fuente del timeline: public.folio_historial.
+ * Devuelve los últimos `limit` eventos en orden cronológico ASC (más antiguo primero).
+ */
+async function getHistorial(client, numeroFolio, limit = 80) {
   const r = await client.query(
     `SELECT estatus, comentario, actor_telefono, actor_rol, creado_en
-     FROM public.folio_historial WHERE numero_folio = $1 ORDER BY creado_en DESC LIMIT $2`,
+     FROM (
+       SELECT estatus, comentario, actor_telefono, actor_rol, creado_en
+       FROM public.folio_historial
+       WHERE numero_folio = $1
+       ORDER BY creado_en DESC
+       LIMIT $2
+     ) sub
+     ORDER BY creado_en ASC`,
     [numeroFolio, limit]
   );
   return r.rows;
@@ -2677,32 +2688,85 @@ app.post("/twilio/whatsapp", async (req, res) => {
         const numero = body.replace(/^historial\s+/i, "").trim();
         const folio = await getFolioByNumero(client, numero);
         if (!folio) return safeReply(`No existe el folio ${numero}.`);
-        const rows = await getHistorial(client, numero, 10);
+        const rows = await getHistorial(client, numero, 80);
         if (rows.length === 0) return safeReply(`Sin historial para ${numero}.`);
+
+        console.log(`[Historial] Folio: ${numero}`);
+        console.log(`[Historial] Eventos: ${rows.length}`);
 
         const telefonos = [...new Set(rows.map((r) => r.actor_telefono).filter(Boolean))];
         const nombresMap = await getNombresByTelefonos(client, telefonos);
 
+        function resolveActor(r) {
+          if (r.actor_rol || r.actor_telefono) {
+            const tel = String(r.actor_telefono || "").trim().replace(/\s/g, "");
+            if (tel) {
+              const norm = normalizePhone(tel);
+              const alt = phoneAltForDb(norm);
+              const last10 = phoneLast10(tel);
+              const nombre = nombresMap.get(tel) || nombresMap.get(norm) || (alt && nombresMap.get(alt)) || (last10 && nombresMap.get(last10)) || null;
+              const rol = r.actor_rol ? (String(r.actor_rol).toUpperCase().includes("ZP") ? "Director ZP" : r.actor_rol) : null;
+              return nombre ? (rol ? `${rol} - ${nombre}` : nombre) : (rol ? `${rol} - ${tel}` : tel);
+            }
+            return r.actor_rol || null;
+          }
+          return null;
+        }
+
+        const COMMENT_PREFIX = "comentario:";
+        const normalized = rows.map((r) => {
+          const rawComment = (r.comentario || "").trim();
+          const isCommentEvent = rawComment.toLowerCase().startsWith(COMMENT_PREFIX);
+          const event_type = isCommentEvent ? "COMENTARIO" : null;
+          let comment_text = null;
+          if (isCommentEvent) {
+            comment_text = rawComment.slice(COMMENT_PREFIX.length).trim();
+          }
+          return {
+            created_at: r.creado_en,
+            actor: resolveActor(r),
+            event_type,
+            comment_text,
+            estatus: r.estatus,
+            comentario: r.comentario,
+            actor_telefono: r.actor_telefono,
+            actor_rol: r.actor_rol,
+          };
+        });
+
         const esDirectorZP = actor && (String(actor.rol_nombre || "").toUpperCase().includes("ZP") || String(actor.rol_nombre || "").includes("Director"));
-        let txt = "Historial (últimos 10):\n";
+        let txt = "Historial (cronológico):\n";
         if (esDirectorZP && folio.planta_nombre) txt += `Planta: ${folio.planta_nombre}\n\n`;
 
-        rows.forEach((r) => {
-          const fecha = formatMexicoCentral(r.creado_en);
-          let comentario = r.comentario || "";
-          if (comentario.trim() === "Folio creado por WhatsApp" && r.actor_telefono) {
-            const tel = String(r.actor_telefono || "").trim().replace(/\s/g, "");
-            const norm = normalizePhone(tel);
-            const alt = phoneAltForDb(norm);
-            const last10 = phoneLast10(tel);
-            const nombre = nombresMap.get(tel) || nombresMap.get(norm) || (alt && nombresMap.get(alt)) || (last10 && nombresMap.get(last10)) || null;
-            const rol = r.actor_rol ? (String(r.actor_rol).toUpperCase().includes("ZP") ? "Director ZP" : r.actor_rol) : null;
-            const identidad = nombre ? (rol ? `${rol} - ${nombre}` : nombre) : (rol ? `${rol} - ${tel}` : tel);
-            comentario = `Folio creado por ${identidad}`;
+        let comentariosRenderizados = 0;
+        normalized.forEach((ev) => {
+          const fecha = formatMexicoCentral(ev.created_at);
+          if (ev.event_type === "COMENTARIO") {
+            const text = (ev.comment_text || "").trim();
+            if (!text) return;
+            comentariosRenderizados += 1;
+            const displayActor = ev.actor || "Sistema";
+            let displayText = text;
+            if (displayText.length > 700) {
+              displayText = displayText.substring(0, 680) + "… (recortado)";
+            }
+            txt += `💬 Comentario — ${displayActor}\n"${displayText}"\n${fecha}\n\n`;
+          } else {
+            let comentario = ev.comentario || "";
+            if (comentario.trim() === "Folio creado por WhatsApp") {
+              comentario = `Folio creado por ${ev.actor || "Sistema"}`;
+            }
+            txt += `${fecha} | ${ev.estatus} | ${comentario}\n`;
           }
-          txt += `${fecha} | ${r.estatus} | ${comentario}\n`;
         });
-        return safeReply(txt.trim());
+
+        console.log(`[Historial] Comentarios renderizados: ${comentariosRenderizados}`);
+
+        txt = txt.trim();
+        if (txt.length > 3500) {
+          txt = txt.substring(0, 3400) + "\n\n... (historial recortado por límite de WhatsApp)";
+        }
+        return safeReply(txt);
       }
 
       if (FLAGS.APPROVALS && /^aprobar\s+/i.test(body)) {
