@@ -22,7 +22,7 @@ const bodyParser = require("body-parser");
 const { Pool } = require("pg");
 const twilio = require("twilio");
 const axios = require("axios");
-const { S3Client, PutObjectCommand, GetObjectCommand } = require("@aws-sdk/client-s3");
+const { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const twilioNotify = require("./notifications/twilioClient");
 
@@ -969,11 +969,25 @@ async function listFolioArchivos(client, numeroFolio, limit = 10) {
 /** Última cotización APROBADA del folio (por numero_folio). */
 async function getUltimaCotizacionAprobada(client, numeroFolio) {
   const r = await client.query(
-    `SELECT fa.id, fa.s3_key, fa.url, fa.file_name, fa.subido_en, fa.aprobado_por, fa.aprobado_en
+    `SELECT fa.id, fa.s3_key, fa.url, fa.file_name, fa.subido_en, fa.aprobado_por, fa.aprobado_en, fa.status
      FROM public.folio_archivos fa
      INNER JOIN public.folios f ON f.id = fa.folio_id
      WHERE f.numero_folio = $1 AND fa.tipo = 'COTIZACION' AND fa.status = 'APROBADO'
      ORDER BY fa.aprobado_en DESC NULLS LAST
+     LIMIT 1`,
+    [numeroFolio]
+  );
+  return r.rows[0] || null;
+}
+
+/** Última cotización del folio (cualquier estado: PENDIENTE, APROBADO, etc.) para poder verla aunque CDMX no haya aprobado. */
+async function getUltimaCotizacionCualquiera(client, numeroFolio) {
+  const r = await client.query(
+    `SELECT fa.id, fa.s3_key, fa.url, fa.file_name, fa.subido_en, fa.subido_por, fa.aprobado_por, fa.aprobado_en, fa.status
+     FROM public.folio_archivos fa
+     INNER JOIN public.folios f ON f.id = fa.folio_id
+     WHERE f.numero_folio = $1 AND fa.tipo = 'COTIZACION'
+     ORDER BY fa.subido_en DESC
      LIMIT 1`,
     [numeroFolio]
   );
@@ -1500,6 +1514,26 @@ async function getSignedDownloadUrl(s3Key, expiresInSeconds = 600) {
   if (!s3Enabled || !s3) throw new Error("S3 no configurado");
   const command = new GetObjectCommand({ Bucket: s3BucketName, Key: s3Key });
   return getSignedUrl(s3, command, { expiresIn: expiresInSeconds });
+}
+
+/** Busca en S3 el objeto más reciente bajo cotizaciones/<numero_folio>/ (fallback cuando el folio no tiene cotizacion_s3key en BD). */
+async function findLatestCotizacionKeyInS3(numeroFolio) {
+  if (!s3Enabled || !s3) return null;
+  const prefix = `cotizaciones/${numeroFolio}/`;
+  try {
+    const list = await s3.send(new ListObjectsV2Command({
+      Bucket: s3BucketName,
+      Prefix: prefix,
+      MaxKeys: 10,
+    }));
+    const contents = (list.Contents || []).filter((o) => o.Key && !o.Key.endsWith("/"));
+    if (contents.length === 0) return null;
+    contents.sort((a, b) => (b.LastModified || 0) - (a.LastModified || 0));
+    return contents[0].Key;
+  } catch (e) {
+    console.warn("findLatestCotizacionKeyInS3:", e.message);
+    return null;
+  }
 }
 
 /** Hash SHA-256 del buffer en hex (obligatorio para anti-duplicado). */
@@ -2997,21 +3031,46 @@ app.post("/twilio/whatsapp", async (req, res) => {
           }
           msg = `Cotización aprobada ${numero}\nArchivoID: ${ultima.id}\nSubido: ${formatMexicoCentral(ultima.subido_en)}\nAprobado por: ${ultima.aprobado_por || "-"}\n`;
         } else {
-          const folio = await getFolioByNumero(client, numero);
-          if (folio && (folio.cotizacion_s3key || folio.cotizacion_url)) {
-            if (folio.cotizacion_s3key && s3Enabled) {
+          const ultimaCualquiera = await getUltimaCotizacionCualquiera(client, numero);
+          if (ultimaCualquiera) {
+            url = ultimaCualquiera.url;
+            if (ultimaCualquiera.s3_key && s3Enabled) {
               try {
-                url = await getSignedDownloadUrl(folio.cotizacion_s3key, 600);
+                url = await getSignedDownloadUrl(ultimaCualquiera.s3_key, 600);
               } catch (e) {
-                console.warn("getSignedDownloadUrl (folio legacy):", e.message);
+                console.warn("getSignedDownloadUrl:", e.message);
               }
-            } else if (folio.cotizacion_url && !folio.cotizacion_url.startsWith("TWILIO:")) {
-              url = folio.cotizacion_url;
             }
-            msg = `Cotización folio ${numero}\n(Enlace directo del folio)\n`;
+            const estado = (ultimaCualquiera.status || "").toUpperCase();
+            const estadoTexto = estado === "PENDIENTE" ? "Pendiente de aprobación CDMX" : estado;
+            msg = `Cotización ${numero}\nArchivoID: ${ultimaCualquiera.id}\nSubido: ${formatMexicoCentral(ultimaCualquiera.subido_en)} por ${ultimaCualquiera.subido_por || "-"}\nEstado: ${estadoTexto}\n`;
+          } else {
+            const folio = await getFolioByNumero(client, numero);
+            if (folio) {
+              if (folio.cotizacion_s3key && s3Enabled) {
+                try {
+                  url = await getSignedDownloadUrl(folio.cotizacion_s3key, 600);
+                } catch (e) {
+                  console.warn("getSignedDownloadUrl (folio legacy):", e.message);
+                }
+              } else if (folio.cotizacion_url && !folio.cotizacion_url.startsWith("TWILIO:")) {
+                url = folio.cotizacion_url;
+              }
+              if (!url && s3Enabled) {
+                const keyFromS3 = await findLatestCotizacionKeyInS3(numero);
+                if (keyFromS3) {
+                  try {
+                    url = await getSignedDownloadUrl(keyFromS3, 600);
+                  } catch (e) {
+                    console.warn("getSignedDownloadUrl (S3 fallback):", e.message);
+                  }
+                }
+              }
+              if (url) msg = `Cotización folio ${numero}\n(Enlace de descarga)\n`;
+            }
           }
         }
-        if (!url) return safeReply(ultima ? `No hay URL disponible para ${numero}.` : `No hay cotización para ${numero}.`);
+        if (!url) return safeReply(msg ? `No hay URL disponible para ${numero}.` : `No hay cotización para ${numero}.`);
         msg += `Ver (10 min): ${url}`;
         return safeReply(msg);
       }
