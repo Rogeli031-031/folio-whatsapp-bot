@@ -31,6 +31,7 @@ const IGF_KEYWORDS = [
   "corporativo",
   "corp",
   "delta",
+  "como cambio",   // "cómo cambió" sin tilde; para "Como cambio Morelos", etc.
   "resumen igf",
   "como esta puebla",
   "cómo está puebla",
