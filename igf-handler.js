@@ -52,12 +52,23 @@ function esPreguntaIGF(texto) {
 
 /**
  * Extrae nombre de planta del mensaje (ej. "puebla", "gt puebla") para usar en ILIKE.
- * Si no hay nombre reconocido, devuelve null (se usará consulta sin filtro de planta o resumen).
+ * Solo para consultas que no son "margen X"; en "margen X" usamos extraerPlantaDespuesDeMargen.
  */
 function extraerNombrePlanta(texto) {
   const t = textoParaDeteccion(texto);
-  const match = t.match(/\b(puebla|cdmx|monterrey|guadalajara|queretaro|querétaro|leon|león|merida|mérida)\b/);
+  const match = t.match(/\b(puebla|cdmx|monterrey|guadalajara|queretaro|querétaro|leon|león|merida|mérida|morelos)\b/);
   return match ? match[1] : null;
+}
+
+/**
+ * Si el mensaje es tipo "margen X" o "margen X Y", devuelve "X" o "X Y" para buscar en empresa (cualquier planta).
+ * Así "Margen Morelos" -> "morelos", "margen gt puebla" -> "gt puebla".
+ */
+function extraerPlantaDespuesDeMargen(textoNormalizado) {
+  if (!textoNormalizado || typeof textoNormalizado !== "string") return null;
+  const match = textoNormalizado.match(/margen\s+(.+)/);
+  const term = match ? match[1].trim() : null;
+  return term && term.length > 0 ? term : null;
 }
 
 /**
@@ -71,9 +82,12 @@ async function consultarIGF(client, texto) {
   const planta = extraerNombrePlanta(texto);
 
   try {
-    // A) Margen actual de una planta (ej. "margen puebla")
-    if ((t.includes("margen") && (planta || t.includes("puebla"))) || (t.includes("margen") && t.includes("igf"))) {
-      const nombreBusqueda = planta || "puebla";
+    // A) Margen actual de una planta: "margen Puebla", "margen Morelos", "Margen GT Puebla", etc.
+    if (t.includes("margen")) {
+      const nombreBusqueda = extraerPlantaDespuesDeMargen(t);
+      if (!nombreBusqueda) {
+        return "IGF – Indica la planta. Ejemplos: margen Puebla, margen Morelos, margen GT Puebla.";
+      }
       const res = await client.query(
         `SELECT c.empresa, c.margen_kg, c.venta_ton,
                 (c.margen_kg * c.venta_ton * 1000) AS margen_mxn
