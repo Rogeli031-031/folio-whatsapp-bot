@@ -25,6 +25,7 @@ const axios = require("axios");
 const { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const twilioNotify = require("./notifications/twilioClient");
+const igfHandler = require("./igf-handler");
 
 const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
@@ -2146,6 +2147,7 @@ function buildHelpMessage(actor) {
     lines.push("• debug twilio (diagnóstico outbound)");
     lines.push("• probar notificacion (envío de prueba)");
   }
+  lines.push("• IGF: margen puebla, resumen igf, cómo cambió puebla, top 10");
   lines.push("• version");
   lines.push("• ayuda / menu");
   return lines.join("\n");
@@ -2433,6 +2435,18 @@ app.post("/twilio/whatsapp", async (req, res) => {
 
       if (["ayuda", "help", "menu"].includes(lower)) {
         return safeReply(buildHelpMessage(actor));
+      }
+
+      // Preguntas IGF: consultar esquema igf y responder
+      if (igfHandler.esPreguntaIGF(body)) {
+        try {
+          const respuestaIGF = await igfHandler.consultarIGF(client, body);
+          const txt = respuestaIGF.length > MAX_WHATSAPP_BODY ? respuestaIGF.substring(0, MAX_WHATSAPP_BODY - 20) + "\n...(recortado)" : respuestaIGF;
+          return safeReply(txt);
+        } catch (e) {
+          console.warn("[IGF] Error en webhook:", e.message);
+          return safeReply("IGF – Error al consultar. Intenta más tarde.");
+        }
       }
 
       if (/^CONFIRMO\s+/i.test(body.trim())) {
