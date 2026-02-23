@@ -72,6 +72,17 @@ function extraerPlantaDespuesDeMargen(textoNormalizado) {
 }
 
 /**
+ * Si el mensaje es tipo "cómo cambió X", "como cambio X" o "delta X", devuelve "X" (cualquier planta).
+ * Texto normalizado ya sin tildes, así "cómo cambió" -> "como cambio".
+ */
+function extraerPlantaDespuesDeCambio(textoNormalizado) {
+  if (!textoNormalizado || typeof textoNormalizado !== "string") return null;
+  const match = textoNormalizado.match(/(?:como\s+cambio|delta)\s+(.+)/);
+  const term = match ? match[1].trim() : null;
+  return term && term.length > 0 ? term : null;
+}
+
+/**
  * Ejecuta la consulta adecuada al esquema igf y devuelve texto formateado para WhatsApp.
  * @param {object} client - Cliente pg (ya conectado).
  * @param {string} texto - Mensaje del usuario en minúsculas/normalizado.
@@ -79,7 +90,6 @@ function extraerPlantaDespuesDeMargen(textoNormalizado) {
  */
 async function consultarIGF(client, texto) {
   const t = textoParaDeteccion(texto);
-  const planta = extraerNombrePlanta(texto);
 
   try {
     // A) Margen actual de una planta: "margen Puebla", "margen Morelos", "Margen GT Puebla", etc.
@@ -106,9 +116,12 @@ async function consultarIGF(client, texto) {
       return `IGF – Margen ${r.empresa || nombreBusqueda} (actual): ${margenKg} $/kg. Margen en pesos: ${margenMxn} MXN.`;
     }
 
-    // B) Cómo cambió una planta (deltas)
-    if ((t.includes("como cambio") || t.includes("cómo cambió") || t.includes("delta")) && (planta || t.includes("puebla"))) {
-      const nombreBusqueda = planta || "puebla";
+    // B) Cómo cambió una planta (deltas): "cómo cambió Puebla", "delta Morelos", etc. (cualquier planta)
+    if (t.includes("como cambio") || t.includes("delta")) {
+      const nombreBusqueda = extraerPlantaDespuesDeCambio(t);
+      if (!nombreBusqueda) {
+        return "IGF – Indica la planta. Ejemplos: cómo cambió Puebla, cómo cambió Morelos, delta Morelos.";
+      }
       const res = await client.query(
         `SELECT empresa, year, month, version_number,
                 cargo_planta_mxn, delta_cargo_planta_mxn, cambio_cargo_planta,
