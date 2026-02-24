@@ -188,19 +188,48 @@ async function consultarIGF(client, texto) {
       return lines.join("\n");
     }
 
-    // Pregunta IGF genérica: devolver resumen reciente
+    // E) Solo nombre de planta (ej. "Puebla", "Morelos"): devolver deltas de esa planta, NO totales globales
+    const soloPalabras = /^[\w\sáéíóúüñ\-]+$/i.test(t.replace(/[\u0300-\u036f]/g, ""));
+    const posiblePlanta = t.length >= 2 && t.length <= 50 && soloPalabras && !/^\d+$/.test(t);
+    if (posiblePlanta && !t.includes("resumen") && !t.includes("totales") && !t.includes("top 10")) {
+      const nombreBusqueda = t.trim();
+      const res = await client.query(
+        `SELECT empresa, year, month, version_number,
+                cargo_planta_mxn, delta_cargo_planta_mxn, cambio_cargo_planta,
+                corp_mxn, delta_corp_mxn, cambio_corp
+         FROM igf.v_compromiso_analisis_detalle
+         WHERE empresa ILIKE $1
+         ORDER BY year DESC, month DESC, version_number DESC
+         LIMIT 2`,
+        ["%" + nombreBusqueda + "%"]
+      );
+      const rows = res.rows || [];
+      if (rows.length > 0) {
+        const r = rows[0];
+        const cargoDir = (r.cambio_cargo_planta || "").trim().toUpperCase() || "—";
+        const corpDir = (r.cambio_corp || "").trim().toUpperCase() || "—";
+        const deltaCargo = r.delta_cargo_planta_mxn != null ? Number(r.delta_cargo_planta_mxn).toLocaleString("es-MX", { minimumFractionDigits: 2 }) : "-";
+        const deltaCorp = r.delta_corp_mxn != null ? Number(r.delta_corp_mxn).toLocaleString("es-MX", { minimumFractionDigits: 2 }) : "-";
+        return `IGF – Cambios (deltas) ${r.empresa || nombreBusqueda}: Cargo planta ${cargoDir} ${deltaCargo} MXN. Corporativo ${corpDir} ${deltaCorp} MXN.`;
+      }
+    }
+
+    // Pregunta IGF genérica: devolver resumen reciente (totales de la versión, no por planta)
     const res = await client.query(
-      `SELECT year, month, version_number, total_cargo_planta_mxn, total_corp_mxn
+      `SELECT year, month, version_number, total_cargo_planta_mxn, total_corp_mxn,
+              delta_cargo_planta_mxn, delta_corp_mxn
        FROM igf.v_compromiso_analisis_resumen
        ORDER BY year DESC, month DESC, version_number DESC
        LIMIT 1`
     );
     const rows = res.rows || [];
-    if (rows.length === 0) return "IGF – No hay datos para esa consulta. Prueba: margen puebla, resumen igf, top 10.";
+    if (rows.length === 0) return "IGF – No hay datos para esa consulta. Prueba: margen puebla, cómo cambió puebla, resumen igf, top 10.";
     const r = rows[0];
     const cargo = r.total_cargo_planta_mxn != null ? Number(r.total_cargo_planta_mxn).toLocaleString("es-MX", { minimumFractionDigits: 2 }) : "-";
     const corp = r.total_corp_mxn != null ? Number(r.total_corp_mxn).toLocaleString("es-MX", { minimumFractionDigits: 2 }) : "-";
-    return `IGF – Última versión: ${r.year}/${r.month} v.${r.version_number}. Cargo planta: ${cargo} MXN. Corp: ${corp} MXN. (Escribe "margen puebla", "resumen igf" o "top 10" para más.)`;
+    const dCargo = r.delta_cargo_planta_mxn != null ? Number(r.delta_cargo_planta_mxn).toLocaleString("es-MX", { minimumFractionDigits: 2 }) : "-";
+    const dCorp = r.delta_corp_mxn != null ? Number(r.delta_corp_mxn).toLocaleString("es-MX", { minimumFractionDigits: 2 }) : "-";
+    return `IGF – Última versión: ${r.year}/${r.month} v.${r.version_number}. Totales: Cargo planta ${cargo} MXN, Corp ${corp} MXN. Deltas versión: Cargo ${dCargo}, Corp ${dCorp}. (Para una planta: "margen Puebla" o "cómo cambió Puebla".)`;
   } catch (err) {
     console.error("[IGF] consultarIGF error:", err.message);
     return "IGF – No pude consultar los datos. Revisa que el esquema igf exista en la base.";
