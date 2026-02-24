@@ -74,13 +74,44 @@ function extraerPlantaDespuesDeMargen(textoNormalizado) {
 
 /**
  * Si el mensaje es tipo "cómo cambió X", "como cambio X" o "delta X", devuelve "X" (cualquier planta).
+ * Puede incluir "vs v2", "comparar con v5", "vs mes anterior" al final; se recorta para dejar solo el nombre de planta.
  * Texto normalizado ya sin tildes, así "cómo cambió" -> "como cambio".
  */
 function extraerPlantaDespuesDeCambio(textoNormalizado) {
   if (!textoNormalizado || typeof textoNormalizado !== "string") return null;
   const match = textoNormalizado.match(/(?:como\s+cambio|delta)\s+(.+)/);
-  const term = match ? match[1].trim() : null;
-  return term && term.length > 0 ? term : null;
+  let term = match ? match[1].trim() : null;
+  if (!term) return null;
+  // Quitar sufijos "vs v3", "comparar con v2", "vs v.5", "vs mes anterior", "comparar mes anterior", "vs v2 mes anterior"
+  term = term
+    .replace(/\s+vs\s+v\.?\s*\d+\s*(mes\s+anterior)?\s*$/i, "")
+    .replace(/\s+vs\s+mes\s+anterior\s*$/i, "")
+    .replace(/\s+comparar\s+(con\s+)?v\.?\s*\d+\s*(mes\s+anterior)?\s*$/i, "")
+    .replace(/\s+comparar\s+mes\s+anterior\s*$/i, "")
+    .trim();
+  return term.length > 0 ? term : null;
+}
+
+/**
+ * Parsea con qué versión comparar desde el mensaje normalizado.
+ * Devuelve { tipo: 'anterior'|'mismo_mes'|'mes_anterior', versionNumber?: number } o null si no hay "vs".
+ * - "vs v2" / "comparar con v5" -> { tipo: 'mismo_mes', versionNumber: 2 o 5 }
+ * - "vs mes anterior" / "comparar mes anterior" -> { tipo: 'mes_anterior' } (última versión del mes anterior)
+ * - "vs v2 mes anterior" -> { tipo: 'mes_anterior', versionNumber: 2 }
+ * - Sin "vs" -> null (comportamiento por defecto: deltas de la vista)
+ */
+function parsearComparacionVersión(textoNormalizado) {
+  if (!textoNormalizado || typeof textoNormalizado !== "string") return null;
+  const t = textoNormalizado;
+  // vs v2 mes anterior / comparar con v2 mes anterior
+  const vsVnMesAnterior = t.match(/(?:vs|comparar\s+(?:con\s+)?)v\.?\s*(\d+)\s*mes\s+anterior/i);
+  if (vsVnMesAnterior) return { tipo: "mes_anterior", versionNumber: parseInt(vsVnMesAnterior[1], 10) };
+  // vs mes anterior / comparar mes anterior
+  if (/\b(?:vs|comparar)\s+mes\s+anterior\b/i.test(t)) return { tipo: "mes_anterior" };
+  // vs v2 / comparar con v5 / vs v.3
+  const vsVn = t.match(/(?:vs|comparar\s+(?:con\s+)?)v\.?\s*(\d+)\b/i);
+  if (vsVn) return { tipo: "mismo_mes", versionNumber: parseInt(vsVn[1], 10) };
+  return null;
 }
 
 /**
@@ -117,30 +148,107 @@ async function consultarIGF(client, texto) {
       return `IGF – Margen ${r.empresa || nombreBusqueda} (actual): ${margenKg} $/kg. Margen en pesos: ${margenMxn} MXN.`;
     }
 
-    // B) Cómo cambió una planta (deltas): "cómo cambió Puebla", "delta Morelos", etc. (cualquier planta)
+    // B) Cómo cambió una planta (deltas): "cómo cambió Puebla", "delta Morelos", "cómo cambió Puebla vs v2", "vs mes anterior"
     if (t.includes("como cambio") || t.includes("delta")) {
       const nombreBusqueda = extraerPlantaDespuesDeCambio(t);
       if (!nombreBusqueda) {
-        return "IGF – Indica la planta. Ejemplos: cómo cambió Puebla, cómo cambió Morelos, delta Morelos.";
+        return "IGF – Indica la planta. Ejemplos: cómo cambió Puebla, cómo cambió Puebla vs v2, cómo cambió Puebla vs mes anterior.";
       }
-      const res = await client.query(
-        `SELECT empresa, year, month, version_number,
-                cargo_planta_mxn, delta_cargo_planta_mxn, cambio_cargo_planta,
-                corp_mxn, delta_corp_mxn, cambio_corp
-         FROM igf.v_compromiso_analisis_detalle
-         WHERE empresa ILIKE $1
-         ORDER BY year DESC, month DESC, version_number DESC
-         LIMIT 2`,
-        ["%" + nombreBusqueda + "%"]
+      const comparacion = parsearComparacionVersión(t);
+
+      if (!comparacion) {
+        // Comportamiento por defecto: deltas de la vista (última vs anterior)
+        const res = await client.query(
+          `SELECT empresa, year, month, version_number,
+                  cargo_planta_mxn, delta_cargo_planta_mxn, cambio_cargo_planta,
+                  corp_mxn, delta_corp_mxn, cambio_corp
+           FROM igf.v_compromiso_analisis_detalle
+           WHERE empresa ILIKE $1
+           ORDER BY year DESC, month DESC, version_number DESC
+           LIMIT 2`,
+          ["%" + nombreBusqueda + "%"]
+        );
+        const rows = res.rows || [];
+        if (rows.length === 0) return "IGF – No hay datos de cambios (deltas) para esa planta.";
+        const r = rows[0];
+        const cargoDir = (r.cambio_cargo_planta || "").trim().toUpperCase() || "—";
+        const corpDir = (r.cambio_corp || "").trim().toUpperCase() || "—";
+        const deltaCargo = r.delta_cargo_planta_mxn != null ? Number(r.delta_cargo_planta_mxn).toLocaleString("es-MX", { minimumFractionDigits: 2 }) : "-";
+        const deltaCorp = r.delta_corp_mxn != null ? Number(r.delta_corp_mxn).toLocaleString("es-MX", { minimumFractionDigits: 2 }) : "-";
+        return `IGF – ${r.empresa || nombreBusqueda}: Cargo planta ${cargoDir} ${deltaCargo} MXN. Corporativo ${corpDir} ${deltaCorp} MXN. (Para elegir versión: "cómo cambió Puebla vs v2" o "vs mes anterior".)`;
+      }
+
+      // Comparación explícita: última vs la que eligió (mismo mes o mes anterior)
+      const resumenCur = await client.query(
+        `SELECT year, month, version_number FROM igf.v_compromiso_analisis_resumen
+         ORDER BY year DESC, month DESC, version_number DESC LIMIT 1`
       );
-      const rows = res.rows || [];
-      if (rows.length === 0) return "IGF – No hay datos de cambios (deltas) para esa planta.";
-      const r = rows[0];
-      const cargoDir = (r.cambio_cargo_planta || "").trim().toUpperCase() || "—";
-      const corpDir = (r.cambio_corp || "").trim().toUpperCase() || "—";
-      const deltaCargo = r.delta_cargo_planta_mxn != null ? Number(r.delta_cargo_planta_mxn).toLocaleString("es-MX", { minimumFractionDigits: 2 }) : "-";
-      const deltaCorp = r.delta_corp_mxn != null ? Number(r.delta_corp_mxn).toLocaleString("es-MX", { minimumFractionDigits: 2 }) : "-";
-      return `IGF – ${r.empresa || nombreBusqueda}: Cargo planta ${cargoDir} ${deltaCargo} MXN. Corporativo ${corpDir} ${deltaCorp} MXN.`;
+      const cur = resumenCur.rows && resumenCur.rows[0] ? resumenCur.rows[0] : null;
+      if (!cur) return "IGF – No hay versión actual en el resumen.";
+
+      let yearOtra = cur.year;
+      let monthOtra = cur.month;
+      let versionOtra = comparacion.versionNumber != null ? comparacion.versionNumber : null;
+
+      if (comparacion.tipo === "mes_anterior") {
+        const resumenPrev = await client.query(
+          `SELECT year, month FROM (
+             SELECT DISTINCT year, month FROM igf.v_compromiso_analisis_resumen
+             ORDER BY year DESC, month DESC LIMIT 2
+           ) m ORDER BY year DESC, month DESC OFFSET 1 LIMIT 1`
+        );
+        const prev = resumenPrev.rows && resumenPrev.rows[0] ? resumenPrev.rows[0] : null;
+        if (!prev) return "IGF – No hay datos del mes anterior para comparar.";
+        yearOtra = prev.year;
+        monthOtra = prev.month;
+        if (versionOtra == null) {
+          const maxV = await client.query(
+            `SELECT MAX(version_number) AS mv FROM igf.v_compromiso_analisis_resumen WHERE year = $1 AND month = $2`,
+            [yearOtra, monthOtra]
+          );
+          versionOtra = (maxV.rows && maxV.rows[0] && maxV.rows[0].mv != null) ? parseInt(maxV.rows[0].mv, 10) : 1;
+        }
+      } else {
+        // mismo_mes: comparar con v.X del mismo año/mes
+        if (versionOtra == null) versionOtra = Math.max(1, (cur.version_number != null ? parseInt(cur.version_number, 10) : 1) - 1);
+      }
+
+      const fmt = (n) => (n != null && !isNaN(Number(n)) ? Number(n).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "-");
+      const rowActual = await client.query(
+        `SELECT empresa, year, month, version_number, cargo_planta_mxn, corp_mxn
+         FROM igf.v_compromiso_analisis_detalle
+         WHERE empresa ILIKE $1 AND year = $2 AND month = $3 AND version_number = $4
+         LIMIT 1`,
+        ["%" + nombreBusqueda + "%", cur.year, cur.month, cur.version_number]
+      );
+      const rowOtra = await client.query(
+        `SELECT empresa, year, month, version_number, cargo_planta_mxn, corp_mxn
+         FROM igf.v_compromiso_analisis_detalle
+         WHERE empresa ILIKE $1 AND year = $2 AND month = $3 AND version_number = $4
+         LIMIT 1`,
+        ["%" + nombreBusqueda + "%", yearOtra, monthOtra, versionOtra]
+      );
+      const rActual = rowActual.rows && rowActual.rows[0] ? rowActual.rows[0] : null;
+      const rOtra = rowOtra.rows && rowOtra.rows[0] ? rowOtra.rows[0] : null;
+      if (!rActual) return "IGF – No hay datos de esa planta en la versión actual.";
+      if (!rOtra) return `IGF – No hay datos de esa planta en la versión a comparar (${yearOtra}/${monthOtra} v.${versionOtra}).`;
+      const cargoActual = rActual.cargo_planta_mxn != null ? Number(rActual.cargo_planta_mxn) : null;
+      const cargoOtra = rOtra.cargo_planta_mxn != null ? Number(rOtra.cargo_planta_mxn) : null;
+      const corpActual = rActual.corp_mxn != null ? Number(rActual.corp_mxn) : null;
+      const corpOtra = rOtra.corp_mxn != null ? Number(rOtra.corp_mxn) : null;
+      const deltaCargo = (cargoActual != null && cargoOtra != null) ? cargoActual - cargoOtra : null;
+      const deltaCorp = (corpActual != null && corpOtra != null) ? corpActual - corpOtra : null;
+      const dirCargo = deltaCargo != null ? (deltaCargo >= 0 ? "SUBIÓ" : "BAJÓ") : "—";
+      const dirCorp = deltaCorp != null ? (deltaCorp >= 0 ? "SUBIÓ" : "BAJÓ") : "—";
+      const labelOtra = comparacion.tipo === "mes_anterior"
+        ? `${yearOtra}/${monthOtra} v.${versionOtra}`
+        : `v.${versionOtra} (${cur.year}/${cur.month})`;
+      return (
+        `IGF – ${rActual.empresa || nombreBusqueda}\n` +
+        `Última (${cur.year}/${cur.month} v.${cur.version_number}) vs ${labelOtra}.\n` +
+        `Cargo planta: ${dirCargo} ${fmt(deltaCargo)} MXN.\n` +
+        `Corporativo: ${dirCorp} ${fmt(deltaCorp)} MXN.`
+      );
     }
 
     // C) Resumen por versión (totales)
@@ -236,9 +344,152 @@ async function consultarIGF(client, texto) {
   }
 }
 
+/** Nombres de mes en español (minúsculas, sin tildes para coincidir con textoParaDeteccion). */
+const MESES_ES = [
+  "enero", "febrero", "marzo", "abril", "mayo", "junio",
+  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"
+];
+
+/**
+ * Lista de (year, month) disponibles en el resumen IGF, más recientes primero.
+ * @param {object} client - Cliente pg.
+ * @returns {Promise<Array<{year: number, month: number}>>}
+ */
+async function getMesesDisponibles(client) {
+  const r = await client.query(
+    `SELECT DISTINCT year, month FROM igf.v_compromiso_analisis_resumen
+     ORDER BY year DESC, month DESC LIMIT 24`
+  );
+  return (r.rows || []).map((row) => ({
+    year: row.year != null ? parseInt(row.year, 10) : null,
+    month: row.month != null ? parseInt(row.month, 10) : null,
+  })).filter((m) => m.year != null && m.month != null);
+}
+
+/**
+ * Parsea la respuesta del usuario para "¿De qué mes?".
+ * Acepta: "febrero", "2", "02", "2026/2", "2026-02", "febrero 2026".
+ * @param {string} texto - Respuesta del usuario.
+ * @param {Array<{year: number, month: number}>} mesesDisponibles - Lista de meses disponibles (getMesesDisponibles).
+ * @returns {{ year: number, month: number } | null}
+ */
+function parseMesUsuario(texto, mesesDisponibles) {
+  if (!texto || !mesesDisponibles || mesesDisponibles.length === 0) return null;
+  const t = textoParaDeteccion(texto);
+  // 2026/2 o 2026-2
+  const yyyymm = t.match(/^(20\d{2})[\/\-](\d{1,2})$/);
+  if (yyyymm) {
+    const y = parseInt(yyyymm[1], 10);
+    const m = parseInt(yyyymm[2], 10);
+    if (y >= 2000 && y < 2100 && m >= 1 && m <= 12) {
+      const found = mesesDisponibles.find((mes) => mes.year === y && mes.month === m);
+      if (found) return found;
+      return { year: y, month: m };
+    }
+  }
+  // Solo número 1..12 = mes (usar año del primer mes disponible = más reciente)
+  const soloNum = t.match(/^(\d{1,2})$/);
+  if (soloNum) {
+    const m = parseInt(soloNum[1], 10);
+    if (m >= 1 && m <= 12) {
+      const found = mesesDisponibles.find((mes) => mes.month === m);
+      if (found) return found;
+    }
+  }
+  // Nombre del mes
+  for (let i = 0; i < MESES_ES.length; i++) {
+    if (t.includes(MESES_ES[i]) || t === String(i + 1)) {
+      const mesNum = i + 1;
+      const found = mesesDisponibles.find((mes) => mes.month === mesNum);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+/**
+ * Cuenta y lista versiones de un mes en el resumen IGF.
+ * @param {object} client - Cliente pg.
+ * @param {number} year - Año.
+ * @param {number} month - Mes.
+ * @returns {Promise<{ count: number, versiones: number[] }>}
+ */
+async function getVersionesDelMes(client, year, month) {
+  const r = await client.query(
+    `SELECT version_number FROM igf.v_compromiso_analisis_resumen
+     WHERE year = $1 AND month = $2 ORDER BY version_number ASC`,
+    [year, month]
+  );
+  const versiones = (r.rows || []).map((row) => parseInt(row.version_number, 10)).filter((n) => !isNaN(n));
+  const uniq = [...new Set(versiones)];
+  return { count: uniq.length, versiones: uniq.sort((a, b) => a - b) };
+}
+
+/**
+ * Ejecuta la comparación: última versión (actual) vs (yearOtra, monthOtra, versionOtra) para la planta.
+ * @param {object} client - Cliente pg.
+ * @param {string} nombrePlanta - Nombre de planta para ILIKE.
+ * @returns {Promise<string>} Mensaje formateado para WhatsApp.
+ */
+async function ejecutarComparacion(client, nombrePlanta, yearOtra, monthOtra, versionOtra) {
+  const resumenCur = await client.query(
+    `SELECT year, month, version_number FROM igf.v_compromiso_analisis_resumen
+     ORDER BY year DESC, month DESC, version_number DESC LIMIT 1`
+  );
+  const cur = resumenCur.rows && resumenCur.rows[0] ? resumenCur.rows[0] : null;
+  if (!cur) return "IGF – No hay versión actual en el resumen.";
+  const fmt = (n) => (n != null && !isNaN(Number(n)) ? Number(n).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "-");
+  const rowActual = await client.query(
+    `SELECT empresa, cargo_planta_mxn, corp_mxn FROM igf.v_compromiso_analisis_detalle
+     WHERE empresa ILIKE $1 AND year = $2 AND month = $3 AND version_number = $4 LIMIT 1`,
+    ["%" + nombrePlanta + "%", cur.year, cur.month, cur.version_number]
+  );
+  const rowOtra = await client.query(
+    `SELECT empresa, cargo_planta_mxn, corp_mxn FROM igf.v_compromiso_analisis_detalle
+     WHERE empresa ILIKE $1 AND year = $2 AND month = $3 AND version_number = $4 LIMIT 1`,
+    ["%" + nombrePlanta + "%", yearOtra, monthOtra, versionOtra]
+  );
+  const rActual = rowActual.rows && rowActual.rows[0] ? rowActual.rows[0] : null;
+  const rOtra = rowOtra.rows && rowOtra.rows[0] ? rowOtra.rows[0] : null;
+  if (!rActual) return "IGF – No hay datos de esa planta en la versión actual.";
+  if (!rOtra) return `IGF – No hay datos de esa planta en ${yearOtra}/${monthOtra} v.${versionOtra}.`;
+  const cargoActual = rActual.cargo_planta_mxn != null ? Number(rActual.cargo_planta_mxn) : null;
+  const cargoOtra = rOtra.cargo_planta_mxn != null ? Number(rOtra.cargo_planta_mxn) : null;
+  const corpActual = rActual.corp_mxn != null ? Number(rActual.corp_mxn) : null;
+  const corpOtra = rOtra.corp_mxn != null ? Number(rOtra.corp_mxn) : null;
+  const deltaCargo = (cargoActual != null && cargoOtra != null) ? cargoActual - cargoOtra : null;
+  const deltaCorp = (corpActual != null && corpOtra != null) ? corpActual - corpOtra : null;
+  const dirCargo = deltaCargo != null ? (deltaCargo >= 0 ? "SUBIÓ" : "BAJÓ") : "—";
+  const dirCorp = deltaCorp != null ? (deltaCorp >= 0 ? "SUBIÓ" : "BAJÓ") : "—";
+  return (
+    `IGF – ${rActual.empresa || nombrePlanta}\n` +
+    `Última (${cur.year}/${cur.month} v.${cur.version_number}) vs ${yearOtra}/${monthOtra} v.${versionOtra}.\n` +
+    `Cargo planta: ${dirCargo} ${fmt(deltaCargo)} MXN.\n` +
+    `Corporativo: ${dirCorp} ${fmt(deltaCorp)} MXN.`
+  );
+}
+
+/**
+ * Indica si el mensaje es "cómo cambió X" o "delta X" SIN indicar versión (vs v2, vs mes anterior, etc.).
+ * En ese caso se debe iniciar el flujo de preguntas (mes → versión).
+ */
+function esCompararSinVersión(texto) {
+  const t = textoParaDeteccion(texto);
+  if (!t.includes("como cambio") && !t.includes("delta")) return false;
+  if (parsearComparacionVersión(t)) return false; // ya tiene vs v2 / vs mes anterior
+  return !!extraerPlantaDespuesDeCambio(t);
+}
+
 module.exports = {
   esPreguntaIGF,
   consultarIGF,
   quitarTildes,
   textoParaDeteccion,
+  extraerPlantaDespuesDeCambio,
+  parsearComparacionVersión,
+  getMesesDisponibles,
+  parseMesUsuario,
+  getVersionesDelMes,
+  ejecutarComparacion,
+  esCompararSinVersión,
 };
