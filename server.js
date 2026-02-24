@@ -1078,7 +1078,7 @@ async function insertFolio(client, dd) {
     }
   } else {
     try {
-      const folioConDetalle = { ...row, concepto: dd.concepto, importe: dd.importe };
+      const folioConDetalle = { ...row, concepto: dd.concepto, importe: dd.importe, planta_nombre: dd.planta_nombre || null };
       await notifyDirectorZPNewFolio(folioConDetalle, dd.actor_rol || "Solicitante");
     } catch (e) {
       console.warn("Notificación a Director ZP (nuevo folio) no enviada:", e.message);
@@ -1868,11 +1868,17 @@ async function getDirectoresZP(client) {
 async function notifyDirectorZPNewFolio(folioRow, creadorRol) {
   const client = await pool.connect();
   try {
+    let plantaNombre = folioRow.planta_nombre || null;
+    if (!plantaNombre && folioRow.planta_id != null) {
+      const r = await client.query(`SELECT nombre FROM public.plantas WHERE id = $1 LIMIT 1`, [folioRow.planta_id]);
+      plantaNombre = (r.rows && r.rows[0]) ? r.rows[0].nombre : null;
+    }
     const directoresZP = await getDirectoresZP(client);
     const concepto = folioRow.concepto || "-";
     const importe = folioRow.importe != null ? `$${Number(folioRow.importe).toLocaleString("es-MX", { minimumFractionDigits: 2 })}` : "-";
     let msg = `📋 Nuevo folio pendiente de tu aprobación\n`;
     msg += `Folio: ${folioRow.numero_folio}\n`;
+    msg += `Planta: ${plantaNombre || "-"}\n`;
     msg += `Creado por: ${creadorRol || "GA/GG"}\n`;
     msg += `Concepto: ${concepto}\n`;
     msg += `Importe: ${importe}\n\n`;
@@ -4113,7 +4119,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
             }
             const urgPrefix = (folio.prioridad === "Urgente no programado") ? "🔴💡 URGENTE | " : "";
             let msgZP = `${urgPrefix}Nuevo folio pendiente de tu aprobación (aprobado planta por GG).\n`;
-            msgZP += `Folio: ${numero}\nConcepto: ${folio.concepto || "-"}\nImporte: $${folio.importe != null ? Number(folio.importe).toLocaleString("es-MX", { minimumFractionDigits: 2 }) : "-"}\n\nResponde: aprobar ${numero}`;
+            msgZP += `Folio: ${numero}\nPlanta: ${folio.planta_nombre || "-"}\nConcepto: ${folio.concepto || "-"}\nImporte: $${folio.importe != null ? Number(folio.importe).toLocaleString("es-MX", { minimumFractionDigits: 2 }) : "-"}\n\nResponde: aprobar ${numero}`;
             const zpList = await getUsersByRole(client, "ZP");
             for (const u of zpList) {
               if (u.telefono) await sendWhatsApp(u.telefono, msgZP);
