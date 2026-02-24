@@ -2444,8 +2444,8 @@ app.post("/twilio/whatsapp", async (req, res) => {
         return safeReply(buildHelpMessage(actor));
       }
 
-      // Flujo "cómo cambió" por pasos: ya estamos en mes o en versión
-      if (sess.igfComparar && (sess.igfComparar.paso === "mes" || sess.igfComparar.paso === "version")) {
+      // Flujo "cómo cambió" por pasos: mes → versión → tipo (cargo planta / gasto corporativo)
+      if (sess.igfComparar && (sess.igfComparar.paso === "mes" || sess.igfComparar.paso === "version" || sess.igfComparar.paso === "tipo")) {
         try {
           if (sess.igfComparar.paso === "mes") {
             const meses = await igfHandler.getMesesDisponibles(client);
@@ -2474,11 +2474,21 @@ app.post("/twilio/whatsapp", async (req, res) => {
               const lista = versiones.slice(0, 15).join(", ");
               return safeReply(`IGF – Esa versión no existe en ese mes. Elige una de: ${lista}.`);
             }
+            sess.igfComparar.paso = "tipo";
+            sess.igfComparar.versionElegida = num;
+            return safeReply("IGF – ¿Quieres el resultado de cargo planta o gasto corporativo?\nResponde: 1) Cargo planta, 2) Gasto corporativo, 3) Ambos");
+          }
+          if (sess.igfComparar.paso === "tipo") {
+            const tipo = igfHandler.parseTipoResultado(body);
+            if (!tipo) {
+              return safeReply("IGF – Responde: 1) Cargo planta, 2) Gasto corporativo, 3) Ambos");
+            }
             const planta = sess.igfComparar.planta;
             const yearOtra = sess.igfComparar.year;
             const monthOtra = sess.igfComparar.month;
+            const versionOtra = sess.igfComparar.versionElegida;
             sess.igfComparar = null;
-            const resultado = await igfHandler.ejecutarComparacion(client, planta, yearOtra, monthOtra, num);
+            const resultado = await igfHandler.ejecutarComparacion(client, planta, yearOtra, monthOtra, versionOtra, tipo);
             const txt = resultado.length > MAX_WHATSAPP_BODY ? resultado.substring(0, MAX_WHATSAPP_BODY - 20) + "\n...(recortado)" : resultado;
             return safeReply(txt);
           }
