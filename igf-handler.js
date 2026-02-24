@@ -429,9 +429,13 @@ async function getVersionesDelMes(client, year, month) {
  * Ejecuta la comparación: última versión (actual) vs (yearOtra, monthOtra, versionOtra) para la planta.
  * @param {object} client - Cliente pg.
  * @param {string} nombrePlanta - Nombre de planta para ILIKE.
+ * @param {number} yearOtra - Año de la versión a comparar.
+ * @param {number} monthOtra - Mes de la versión a comparar.
+ * @param {number} versionOtra - Número de versión a comparar.
+ * @param {string} tipoSalida - 'cargo' | 'corp' | 'ambos': qué deltas incluir en el resultado.
  * @returns {Promise<string>} Mensaje formateado para WhatsApp.
  */
-async function ejecutarComparacion(client, nombrePlanta, yearOtra, monthOtra, versionOtra) {
+async function ejecutarComparacion(client, nombrePlanta, yearOtra, monthOtra, versionOtra, tipoSalida = "ambos") {
   const resumenCur = await client.query(
     `SELECT year, month, version_number FROM igf.v_compromiso_analisis_resumen
      ORDER BY year DESC, month DESC, version_number DESC LIMIT 1`
@@ -461,12 +465,35 @@ async function ejecutarComparacion(client, nombrePlanta, yearOtra, monthOtra, ve
   const deltaCorp = (corpActual != null && corpOtra != null) ? corpActual - corpOtra : null;
   const dirCargo = deltaCargo != null ? (deltaCargo >= 0 ? "SUBIÓ" : "BAJÓ") : "—";
   const dirCorp = deltaCorp != null ? (deltaCorp >= 0 ? "SUBIÓ" : "BAJÓ") : "—";
-  return (
-    `IGF – ${rActual.empresa || nombrePlanta}\n` +
-    `Última (${cur.year}/${cur.month} v.${cur.version_number}) vs ${yearOtra}/${monthOtra} v.${versionOtra}.\n` +
-    `Cargo planta: ${dirCargo} ${fmt(deltaCargo)} MXN.\n` +
-    `Corporativo: ${dirCorp} ${fmt(deltaCorp)} MXN.`
-  );
+
+  const cabecera = `IGF – ${rActual.empresa || nombrePlanta}\nÚltima (${cur.year}/${cur.month} v.${cur.version_number}) vs ${yearOtra}/${monthOtra} v.${versionOtra}.`;
+  const lineas = [];
+  if (tipoSalida === "cargo" || tipoSalida === "ambos") {
+    lineas.push(`• Cargo planta: ${dirCargo} ${fmt(deltaCargo)} MXN`);
+  }
+  if (tipoSalida === "corp" || tipoSalida === "ambos") {
+    lineas.push(`• Gasto corporativo: ${dirCorp} ${fmt(deltaCorp)} MXN`);
+  }
+  return lineas.length > 0 ? `${cabecera}\n\nDeltas:\n${lineas.join("\n")}` : cabecera;
+}
+
+/**
+ * Parsea la respuesta del usuario para "¿Cargo planta o gasto corporativo?".
+ * Acepta: 1, 2, 3, "cargo planta", "cargo", "gasto corporativo", "corporativo", "corp", "ambos", "los dos".
+ * @returns {'cargo'|'corp'|'ambos'|null}
+ */
+function parseTipoResultado(texto) {
+  if (!texto || typeof texto !== "string") return null;
+  const t = textoParaDeteccion(texto);
+  if (/^[123]$/.test(t)) {
+    if (t === "1") return "cargo";
+    if (t === "2") return "corp";
+    if (t === "3") return "ambos";
+  }
+  if (t.includes("cargo") && !t.includes("corporativo")) return "cargo";
+  if (t.includes("corporativo") || t.includes("corp") || (t.includes("gasto") && t.includes("corp"))) return "corp";
+  if (t.includes("ambos") || t.includes("los dos") || t.includes("ambas")) return "ambos";
+  return null;
 }
 
 /**
@@ -491,5 +518,6 @@ module.exports = {
   parseMesUsuario,
   getVersionesDelMes,
   ejecutarComparacion,
+  parseTipoResultado,
   esCompararSinVersión,
 };
