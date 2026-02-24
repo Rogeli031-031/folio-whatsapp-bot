@@ -2153,7 +2153,7 @@ function buildHelpMessage(actor) {
     lines.push("• debug twilio (diagnóstico outbound)");
     lines.push("• probar notificacion (envío de prueba)");
   }
-  lines.push("• IGF: margen puebla, resumen igf, cómo cambió puebla, top 10");
+  lines.push("• IGF: margen puebla, resumen igf, cómo cambió puebla [vs v2 | vs mes anterior], top 10");
   lines.push("• version");
   lines.push("• ayuda / menu");
   return lines.join("\n");
@@ -2269,6 +2269,7 @@ function resetSession(sess) {
   sess.pendingProjectAttach = null;
   sess.pendingCotizacion = null;
   sess.pendingReemplazo = null;
+  sess.igfComparar = null;
 }
 
 /* ==================== NOTIFICACIONES WHATSAPP ==================== */
@@ -2443,9 +2444,61 @@ app.post("/twilio/whatsapp", async (req, res) => {
         return safeReply(buildHelpMessage(actor));
       }
 
-      // Preguntas IGF: consultar esquema igf y responder
+      // Flujo "cómo cambió" por pasos: ya estamos en mes o en versión
+      if (sess.igfComparar && (sess.igfComparar.paso === "mes" || sess.igfComparar.paso === "version")) {
+        try {
+          if (sess.igfComparar.paso === "mes") {
+            const meses = await igfHandler.getMesesDisponibles(client);
+            const elegido = igfHandler.parseMesUsuario(body, meses);
+            if (!elegido) {
+              const ejemplos = meses.slice(0, 5).map((m) => `${m.year}/${m.month}`).join(", ");
+              return safeReply(`IGF – No entendí el mes. Ejemplos: febrero, 2, 2026/2. Disponibles: ${ejemplos}.`);
+            }
+            const { count, versiones } = await igfHandler.getVersionesDelMes(client, elegido.year, elegido.month);
+            if (count === 0) return safeReply(`IGF – No hay versiones para ${elegido.year}/${elegido.month}.`);
+            sess.igfComparar.paso = "version";
+            sess.igfComparar.year = elegido.year;
+            sess.igfComparar.month = elegido.month;
+            sess.igfComparar.cantidadVersiones = count;
+            sess.igfComparar.versiones = versiones;
+            const lista = versiones.slice(0, 15).join(", ");
+            return safeReply(`IGF – Tienes ${count} versión(es) en ${elegido.year}/${elegido.month}: ${lista}.\n¿Cuál versión quieres? (Responde con el número, ej: 1, 2, ${count})`);
+          }
+          if (sess.igfComparar.paso === "version") {
+            const num = parseInt(String(body).trim().replace(/^v\.?/i, ""), 10);
+            if (!Number.isFinite(num) || num < 1) {
+              return safeReply(`IGF – Responde con el número de versión (1 a ${sess.igfComparar.cantidadVersiones}). Ej: 2 o v2`);
+            }
+            const versiones = sess.igfComparar.versiones || [];
+            if (!versiones.includes(num)) {
+              const lista = versiones.slice(0, 15).join(", ");
+              return safeReply(`IGF – Esa versión no existe en ese mes. Elige una de: ${lista}.`);
+            }
+            const planta = sess.igfComparar.planta;
+            const yearOtra = sess.igfComparar.year;
+            const monthOtra = sess.igfComparar.month;
+            sess.igfComparar = null;
+            const resultado = await igfHandler.ejecutarComparacion(client, planta, yearOtra, monthOtra, num);
+            const txt = resultado.length > MAX_WHATSAPP_BODY ? resultado.substring(0, MAX_WHATSAPP_BODY - 20) + "\n...(recortado)" : resultado;
+            return safeReply(txt);
+          }
+        } catch (e) {
+          console.warn("[IGF] Error flujo comparar:", e.message);
+          sess.igfComparar = null;
+          return safeReply("IGF – Error al comparar. Escribe de nuevo: cómo cambió Puebla");
+        }
+      }
+
+      // Preguntas IGF: consultar esquema igf y responder (o iniciar flujo "cómo cambió" por pasos)
       if (igfHandler.esPreguntaIGF(body)) {
         try {
+          if (igfHandler.esCompararSinVersión(body)) {
+            const planta = igfHandler.extraerPlantaDespuesDeCambio(igfHandler.textoParaDeteccion(body));
+            if (planta) {
+              sess.igfComparar = { paso: "mes", planta };
+              return safeReply("IGF – ¿Con IGF de qué mes? (Ej: febrero, 2, 2026/2)");
+            }
+          }
           const respuestaIGF = await igfHandler.consultarIGF(client, body);
           const txt = respuestaIGF.length > MAX_WHATSAPP_BODY ? respuestaIGF.substring(0, MAX_WHATSAPP_BODY - 20) + "\n...(recortado)" : respuestaIGF;
           return safeReply(txt);
