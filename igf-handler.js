@@ -468,13 +468,140 @@ async function ejecutarComparacion(client, nombrePlanta, yearOtra, monthOtra, ve
 
   const cabecera = `IGF – ${rActual.empresa || nombrePlanta}\nÚltima (${cur.year}/${cur.month} v.${cur.version_number}) vs ${yearOtra}/${monthOtra} v.${versionOtra}.`;
   const lineas = [];
+
   if (tipoSalida === "cargo" || tipoSalida === "ambos") {
-    lineas.push(`• Cargo planta: ${dirCargo} ${fmt(deltaCargo)} MXN`);
+    lineas.push(`• Cargo planta (total): ${dirCargo} ${fmt(deltaCargo)} MXN`);
+    const varsCargo = await obtenerDeltasVariablesCargoPlanta(client, nombrePlanta, cur, yearOtra, monthOtra, versionOtra);
+    if (varsCargo.length > 0) {
+      varsCargo.forEach((v) => lineas.push(`  ${v.nombre}: ${v.direccion} ${v.delta} ${v.unit}`));
+    }
   }
   if (tipoSalida === "corp" || tipoSalida === "ambos") {
-    lineas.push(`• Gasto corporativo: ${dirCorp} ${fmt(deltaCorp)} MXN`);
+    lineas.push(`• Gasto corporativo (total): ${dirCorp} ${fmt(deltaCorp)} MXN`);
+    const varsCorp = await obtenerDeltasVariablesCorporativo(client, nombrePlanta, cur, yearOtra, monthOtra, versionOtra);
+    if (varsCorp.length > 0) {
+      varsCorp.forEach((v) => lineas.push(`  ${v.nombre}: ${v.direccion} ${v.delta} ${v.unit}`));
+    }
   }
   return lineas.length > 0 ? `${cabecera}\n\nDeltas:\n${lineas.join("\n")}` : cabecera;
+}
+
+/** Variables internas de cargo planta (columnas en compromiso_lines o vista detalle). */
+const VARIABLES_CARGO_PLANTA = [
+  { col: "com_desc_kg", nombre: "Comisión/descuento", unit: "kg" },
+  { col: "gasto_kg", nombre: "Gasto", unit: "kg" },
+  { col: "impuesto_kg", nombre: "Impuesto", unit: "kg" },
+  { col: "bancos_planta_kg", nombre: "Bancos planta", unit: "kg" },
+  { col: "provision_planta_kg", nombre: "Provisión planta", unit: "kg" },
+];
+
+/**
+ * Obtiene los deltas de las variables internas de cargo planta desde igf.compromiso_lines.
+ * Necesita version_id: se obtiene de igf.versions (is_current para actual, year/month/version_number para otra).
+ */
+async function obtenerDeltasVariablesCargoPlanta(client, nombrePlanta, cur, yearOtra, monthOtra, versionOtra) {
+  const out = [];
+  let idActual = null;
+  let idOtra = null;
+  try {
+    const rCur = await client.query(
+      `SELECT id FROM igf.versions WHERE plant_code = 'GLOBAL' AND is_current = true LIMIT 1`
+    );
+    idActual = rCur.rows && rCur.rows[0] ? rCur.rows[0].id : null;
+    let rOtra = await client.query(
+      `SELECT id FROM igf.versions WHERE plant_code = 'GLOBAL' AND year = $1 AND month = $2 AND version_number = $3 LIMIT 1`,
+      [yearOtra, monthOtra, versionOtra]
+    ).catch(() => ({ rows: [] }));
+    idOtra = rOtra.rows && rOtra.rows[0] ? rOtra.rows[0].id : null;
+    if (!idOtra) {
+      const detalleOtra = await client.query(
+        `SELECT version_id FROM igf.v_compromiso_analisis_detalle WHERE empresa ILIKE $1 AND year = $2 AND month = $3 AND version_number = $4 LIMIT 1`,
+        ["%" + nombrePlanta + "%", yearOtra, monthOtra, versionOtra]
+      ).catch(() => ({ rows: [] }));
+      idOtra = detalleOtra.rows && detalleOtra.rows[0] && detalleOtra.rows[0].version_id != null ? detalleOtra.rows[0].version_id : null;
+    }
+    if (!idActual || !idOtra) return out;
+    const cols = VARIABLES_CARGO_PLANTA.map((v) => v.col).join(", ");
+    const rowA = await client.query(
+      `SELECT ${cols} FROM igf.compromiso_lines WHERE version_id = $1 AND empresa ILIKE $2 LIMIT 1`,
+      [idActual, "%" + nombrePlanta + "%"]
+    );
+    const rowB = await client.query(
+      `SELECT ${cols} FROM igf.compromiso_lines WHERE version_id = $2 AND empresa ILIKE $1 LIMIT 1`,
+      ["%" + nombrePlanta + "%", idOtra]
+    );
+    const rA = rowA.rows && rowA.rows[0] ? rowA.rows[0] : null;
+    const rB = rowB.rows && rowB.rows[0] ? rowB.rows[0] : null;
+    if (!rA || !rB) return out;
+    const fmtKg = (n) => (n != null && !isNaN(Number(n)) ? Number(n).toLocaleString("es-MX", { minimumFractionDigits: 4, maximumFractionDigits: 4 }) : "-");
+    for (const v of VARIABLES_CARGO_PLANTA) {
+      const valA = rA[v.col] != null ? Number(rA[v.col]) : null;
+      const valB = rB[v.col] != null ? Number(rB[v.col]) : null;
+      if (valA == null && valB == null) continue;
+      const delta = (valA != null && valB != null) ? valA - valB : null;
+      const dir = delta != null ? (delta >= 0 ? "SUBIÓ" : "BAJÓ") : "—";
+      out.push({ nombre: v.nombre, delta: fmtKg(delta), direccion: dir, unit: v.unit });
+    }
+  } catch (e) {
+    console.warn("[IGF] Variables cargo planta:", e.message);
+  }
+  return out;
+}
+
+/**
+ * Variables internas de gasto corporativo (si existen en compromiso_lines).
+ */
+const VARIABLES_CORP = [
+  { col: "corp_kg", nombre: "Corporativo", unit: "kg" },
+];
+
+async function obtenerDeltasVariablesCorporativo(client, nombrePlanta, cur, yearOtra, monthOtra, versionOtra) {
+  const out = [];
+  let idActual = null;
+  let idOtra = null;
+  try {
+    const rCur = await client.query(
+      `SELECT id FROM igf.versions WHERE plant_code = 'GLOBAL' AND is_current = true LIMIT 1`
+    );
+    idActual = rCur.rows && rCur.rows[0] ? rCur.rows[0].id : null;
+    let rOtra = await client.query(
+      `SELECT id FROM igf.versions WHERE plant_code = 'GLOBAL' AND year = $1 AND month = $2 AND version_number = $3 LIMIT 1`,
+      [yearOtra, monthOtra, versionOtra]
+    ).catch(() => ({ rows: [] }));
+    idOtra = rOtra.rows && rOtra.rows[0] ? rOtra.rows[0].id : null;
+    if (!idOtra) {
+      const detalleOtra = await client.query(
+        `SELECT version_id FROM igf.v_compromiso_analisis_detalle WHERE empresa ILIKE $1 AND year = $2 AND month = $3 AND version_number = $4 LIMIT 1`,
+        ["%" + nombrePlanta + "%", yearOtra, monthOtra, versionOtra]
+      ).catch(() => ({ rows: [] }));
+      idOtra = detalleOtra.rows && detalleOtra.rows[0] && detalleOtra.rows[0].version_id != null ? detalleOtra.rows[0].version_id : null;
+    }
+    if (!idActual || !idOtra) return out;
+    const cols = VARIABLES_CORP.map((v) => v.col).join(", ");
+    const rowA = await client.query(
+      `SELECT ${cols} FROM igf.compromiso_lines WHERE version_id = $1 AND empresa ILIKE $2 LIMIT 1`,
+      [idActual, "%" + nombrePlanta + "%"]
+    );
+    const rowB = await client.query(
+      `SELECT ${cols} FROM igf.compromiso_lines WHERE version_id = $2 AND empresa ILIKE $1 LIMIT 1`,
+      ["%" + nombrePlanta + "%", idOtra]
+    );
+    const rA = rowA.rows && rowA.rows[0] ? rowA.rows[0] : null;
+    const rB = rowB.rows && rowB.rows[0] ? rowB.rows[0] : null;
+    if (!rA || !rB) return out;
+    const fmtKg = (n) => (n != null && !isNaN(Number(n)) ? Number(n).toLocaleString("es-MX", { minimumFractionDigits: 4, maximumFractionDigits: 4 }) : "-");
+    for (const v of VARIABLES_CORP) {
+      const valA = rA[v.col] != null ? Number(rA[v.col]) : null;
+      const valB = rB[v.col] != null ? Number(rB[v.col]) : null;
+      if (valA == null && valB == null) continue;
+      const delta = (valA != null && valB != null) ? valA - valB : null;
+      const dir = delta != null ? (delta >= 0 ? "SUBIÓ" : "BAJÓ") : "—";
+      out.push({ nombre: v.nombre, delta: fmtKg(delta), direccion: dir, unit: v.unit });
+    }
+  } catch (e) {
+    console.warn("[IGF] Variables corporativo:", e.message);
+  }
+  return out;
 }
 
 /**
