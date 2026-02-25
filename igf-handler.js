@@ -549,6 +549,8 @@ async function obtenerDeltasVariablesCargoPlanta(client, nombrePlanta, cur, year
     if (!rA || !rB) return { lineas: out, ventaKgActual: null };
     const ventaTonActual = rA.venta_ton != null ? Number(rA.venta_ton) : null;
     ventaKgActual = (ventaTonActual != null && !isNaN(ventaTonActual)) ? ventaTonActual * 1000 : null;
+    const ventaTonOtra = rB.venta_ton != null ? Number(rB.venta_ton) : null;
+    const ventaKgOtra = (ventaTonOtra != null && !isNaN(ventaTonOtra)) ? ventaTonOtra * 1000 : null;
     const fmtKg = (n) => (n != null && !isNaN(Number(n)) ? Number(n).toLocaleString("es-MX", { minimumFractionDigits: 4, maximumFractionDigits: 4 }) : "-");
     const fmtMxn = (n) => (n != null && !isNaN(Number(n)) ? Number(n).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : null);
     for (const v of VARIABLES_CARGO_PLANTA) {
@@ -557,7 +559,10 @@ async function obtenerDeltasVariablesCargoPlanta(client, nombrePlanta, cur, year
       if (valA == null && valB == null) continue;
       const delta = (valA != null && valB != null) ? valA - valB : null;
       const dir = delta != null ? (delta >= 0 ? "SUBIÓ" : "BAJÓ") : "—";
-      const deltaMxn = (delta != null && ventaKgActual != null && ventaKgActual > 0) ? delta * ventaKgActual : null;
+      // Delta MXN = (valor_actual $/kg * venta_kg_actual) - (valor_otra $/kg * venta_kg_otra), misma lógica que el total
+      const mxnActual = (valA != null && ventaKgActual != null && ventaKgActual > 0) ? valA * ventaKgActual : null;
+      const mxnOtra = (valB != null && ventaKgOtra != null && ventaKgOtra > 0) ? valB * ventaKgOtra : null;
+      const deltaMxn = (mxnActual != null && mxnOtra != null) ? mxnActual - mxnOtra : null;
       out.push({ nombre: v.nombre, delta: fmtKg(delta), direccion: dir, unit: v.unit, deltaMxn: deltaMxn != null ? fmtMxn(deltaMxn) : null });
     }
   } catch (e) {
@@ -609,6 +614,8 @@ async function obtenerDeltasVariablesCorporativo(client, nombrePlanta, cur, year
     if (!rA || !rB) return out;
     const ventaTonActual = rA.venta_ton != null ? Number(rA.venta_ton) : null;
     const ventaKgActual = (ventaTonActual != null && !isNaN(ventaTonActual)) ? ventaTonActual * 1000 : null;
+    const ventaTonOtra = rB.venta_ton != null ? Number(rB.venta_ton) : null;
+    const ventaKgOtra = (ventaTonOtra != null && !isNaN(ventaTonOtra)) ? ventaTonOtra * 1000 : null;
     const fmtKg = (n) => (n != null && !isNaN(Number(n)) ? Number(n).toLocaleString("es-MX", { minimumFractionDigits: 4, maximumFractionDigits: 4 }) : "-");
     const fmtMxn = (n) => (n != null && !isNaN(Number(n)) ? Number(n).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : null);
     for (const v of VARIABLES_CORP) {
@@ -617,7 +624,9 @@ async function obtenerDeltasVariablesCorporativo(client, nombrePlanta, cur, year
       if (valA == null && valB == null) continue;
       const delta = (valA != null && valB != null) ? valA - valB : null;
       const dir = delta != null ? (delta >= 0 ? "SUBIÓ" : "BAJÓ") : "—";
-      const deltaMxn = (delta != null && ventaKgActual != null && ventaKgActual > 0) ? delta * ventaKgActual : null;
+      const mxnActual = (valA != null && ventaKgActual != null && ventaKgActual > 0) ? valA * ventaKgActual : null;
+      const mxnOtra = (valB != null && ventaKgOtra != null && ventaKgOtra > 0) ? valB * ventaKgOtra : null;
+      const deltaMxn = (mxnActual != null && mxnOtra != null) ? mxnActual - mxnOtra : null;
       out.push({ nombre: v.nombre, delta: fmtKg(delta), direccion: dir, unit: v.unit, deltaMxn: deltaMxn != null ? fmtMxn(deltaMxn) : null });
     }
   } catch (e) {
