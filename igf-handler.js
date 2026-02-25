@@ -487,8 +487,15 @@ async function ejecutarComparacion(client, nombrePlanta, yearOtra, monthOtra, ve
     }
   }
   if (tipoSalida === "corp" || tipoSalida === "ambos") {
-    lineas.push(`• Gasto corporativo (total): ${dirCorp} ${fmt(deltaCorp)} MXN`);
-    const varsCorp = await obtenerDeltasVariablesCorporativo(client, nombrePlanta, cur, yearOtra, monthOtra, versionOtra);
+    const { lineas: varsCorp, ventaKgActual: ventaKgCorp } = await obtenerDeltasVariablesCorporativo(client, nombrePlanta, cur, yearOtra, monthOtra, versionOtra);
+    const pesosKgCorp = (ventaKgCorp != null && ventaKgCorp > 0 && deltaCorp != null)
+      ? (deltaCorp / ventaKgCorp).toLocaleString("es-MX", { minimumFractionDigits: 4, maximumFractionDigits: 4 })
+      : null;
+    if (pesosKgCorp != null) {
+      lineas.push(`• Gasto corporativo (total): ${dirCorp} ${fmt(deltaCorp)} MXN (${pesosKgCorp} $/kg)`);
+    } else {
+      lineas.push(`• Gasto corporativo (total): ${dirCorp} ${fmt(deltaCorp)} MXN`);
+    }
     if (varsCorp.length > 0) {
       varsCorp.forEach((v) => {
         const mxnPart = v.deltaMxn != null ? ` (${v.deltaMxn} MXN)` : "";
@@ -572,16 +579,59 @@ async function obtenerDeltasVariablesCargoPlanta(client, nombrePlanta, cur, year
 }
 
 /**
- * Variables internas de gasto corporativo (si existen en compromiso_lines).
+ * Variables internas de gasto corporativo (columnas en compromiso_lines).
+ * Son las de la tabla: gtos_apoyos_corp_kg, bancos_corp_kg, otros_programas_kg, inversiones_kg, resultado_final_kg.
  */
-const VARIABLES_CORP = [
+const VARIABLES_CORP_FULL = [
+  { col: "gtos_apoyos_corp_kg", nombre: "Gtos apoyos corp", unit: "kg" },
+  { col: "bancos_corp_kg", nombre: "Bancos corp", unit: "kg" },
+  { col: "otros_programas_kg", nombre: "Otros programas", unit: "kg" },
+  { col: "inversiones_kg", nombre: "Inversiones", unit: "kg" },
+  { col: "resultado_final_kg", nombre: "Resultado final", unit: "kg" },
+];
+const VARIABLES_CORP_SIMPLE = [
   { col: "corp_kg", nombre: "Corporativo", unit: "kg" },
 ];
 
 async function obtenerDeltasVariablesCorporativo(client, nombrePlanta, cur, yearOtra, monthOtra, versionOtra) {
   const out = [];
+  let ventaKgActual = null;
   let idActual = null;
   let idOtra = null;
+
+  const runWithVars = async (variables) => {
+    const cols = ["venta_ton", ...variables.map((v) => v.col)].join(", ");
+    const rowA = await client.query(
+      `SELECT ${cols} FROM igf.compromiso_lines WHERE version_id = $1 AND empresa ILIKE $2 LIMIT 1`,
+      [idActual, "%" + nombrePlanta + "%"]
+    );
+    const rowB = await client.query(
+      `SELECT ${cols} FROM igf.compromiso_lines WHERE version_id = $2 AND empresa ILIKE $1 LIMIT 1`,
+      ["%" + nombrePlanta + "%", idOtra]
+    );
+    const rA = rowA.rows && rowA.rows[0] ? rowA.rows[0] : null;
+    const rB = rowB.rows && rowB.rows[0] ? rowB.rows[0] : null;
+    if (!rA || !rB) return null;
+    const ventaTonActual = rA.venta_ton != null ? Number(rA.venta_ton) : null;
+    ventaKgActual = (ventaTonActual != null && !isNaN(ventaTonActual)) ? ventaTonActual * 1000 : null;
+    const ventaTonOtra = rB.venta_ton != null ? Number(rB.venta_ton) : null;
+    const ventaKgOtra = (ventaTonOtra != null && !isNaN(ventaTonOtra)) ? ventaTonOtra * 1000 : null;
+    const fmtKg = (n) => (n != null && !isNaN(Number(n)) ? Number(n).toLocaleString("es-MX", { minimumFractionDigits: 4, maximumFractionDigits: 4 }) : "-");
+    const fmtMxn = (n) => (n != null && !isNaN(Number(n)) ? Number(n).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : null);
+    for (const v of variables) {
+      const valA = rA[v.col] != null ? Number(rA[v.col]) : null;
+      const valB = rB[v.col] != null ? Number(rB[v.col]) : null;
+      if (valA == null && valB == null) continue;
+      const delta = (valA != null && valB != null) ? valA - valB : null;
+      const dir = delta != null ? (delta >= 0 ? "SUBIÓ" : "BAJÓ") : "—";
+      const mxnActual = (valA != null && ventaKgActual != null && ventaKgActual > 0) ? valA * ventaKgActual : null;
+      const mxnOtra = (valB != null && ventaKgOtra != null && ventaKgOtra > 0) ? valB * ventaKgOtra : null;
+      const deltaMxn = (mxnActual != null && mxnOtra != null) ? mxnActual - mxnOtra : null;
+      out.push({ nombre: v.nombre, delta: fmtKg(delta), direccion: dir, unit: v.unit, deltaMxn: deltaMxn != null ? fmtMxn(deltaMxn) : null });
+    }
+    return true;
+  };
+
   try {
     const rCur = await client.query(
       `SELECT id FROM igf.versions WHERE plant_code = 'GLOBAL' AND is_current = true LIMIT 1`
@@ -599,40 +649,13 @@ async function obtenerDeltasVariablesCorporativo(client, nombrePlanta, cur, year
       ).catch(() => ({ rows: [] }));
       idOtra = detalleOtra.rows && detalleOtra.rows[0] && detalleOtra.rows[0].version_id != null ? detalleOtra.rows[0].version_id : null;
     }
-    if (!idActual || !idOtra) return out;
-    const cols = ["venta_ton", ...VARIABLES_CORP.map((v) => v.col)].join(", ");
-    const rowA = await client.query(
-      `SELECT ${cols} FROM igf.compromiso_lines WHERE version_id = $1 AND empresa ILIKE $2 LIMIT 1`,
-      [idActual, "%" + nombrePlanta + "%"]
-    );
-    const rowB = await client.query(
-      `SELECT ${cols} FROM igf.compromiso_lines WHERE version_id = $2 AND empresa ILIKE $1 LIMIT 1`,
-      ["%" + nombrePlanta + "%", idOtra]
-    );
-    const rA = rowA.rows && rowA.rows[0] ? rowA.rows[0] : null;
-    const rB = rowB.rows && rowB.rows[0] ? rowB.rows[0] : null;
-    if (!rA || !rB) return out;
-    const ventaTonActual = rA.venta_ton != null ? Number(rA.venta_ton) : null;
-    const ventaKgActual = (ventaTonActual != null && !isNaN(ventaTonActual)) ? ventaTonActual * 1000 : null;
-    const ventaTonOtra = rB.venta_ton != null ? Number(rB.venta_ton) : null;
-    const ventaKgOtra = (ventaTonOtra != null && !isNaN(ventaTonOtra)) ? ventaTonOtra * 1000 : null;
-    const fmtKg = (n) => (n != null && !isNaN(Number(n)) ? Number(n).toLocaleString("es-MX", { minimumFractionDigits: 4, maximumFractionDigits: 4 }) : "-");
-    const fmtMxn = (n) => (n != null && !isNaN(Number(n)) ? Number(n).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : null);
-    for (const v of VARIABLES_CORP) {
-      const valA = rA[v.col] != null ? Number(rA[v.col]) : null;
-      const valB = rB[v.col] != null ? Number(rB[v.col]) : null;
-      if (valA == null && valB == null) continue;
-      const delta = (valA != null && valB != null) ? valA - valB : null;
-      const dir = delta != null ? (delta >= 0 ? "SUBIÓ" : "BAJÓ") : "—";
-      const mxnActual = (valA != null && ventaKgActual != null && ventaKgActual > 0) ? valA * ventaKgActual : null;
-      const mxnOtra = (valB != null && ventaKgOtra != null && ventaKgOtra > 0) ? valB * ventaKgOtra : null;
-      const deltaMxn = (mxnActual != null && mxnOtra != null) ? mxnActual - mxnOtra : null;
-      out.push({ nombre: v.nombre, delta: fmtKg(delta), direccion: dir, unit: v.unit, deltaMxn: deltaMxn != null ? fmtMxn(deltaMxn) : null });
-    }
+    if (!idActual || !idOtra) return { lineas: out, ventaKgActual: null };
+    const ok = await runWithVars(VARIABLES_CORP_FULL).catch(() => null);
+    if (!ok) await runWithVars(VARIABLES_CORP_SIMPLE).catch(() => null);
   } catch (e) {
     console.warn("[IGF] Variables corporativo:", e.message);
   }
-  return out;
+  return { lineas: out, ventaKgActual };
 }
 
 /**
