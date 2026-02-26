@@ -564,7 +564,7 @@ const NOMBRE_PLANTA_A_CODIGOS = {
 };
 
 async function seedPresupuestoAcapulco(client) {
-  const periodo = getCurrentPeriodoPresupuesto();
+  const periodo = PERIODO_PRESUPUESTO_DEFAULT;
   const ids = { E9: null, E10: null, E15: null, E7: null, E8: null, E11: null, E12: null };
   const rPlantas = await client.query(
     `SELECT id, nombre FROM public.plantas WHERE nombre = ANY($1::TEXT[]) ORDER BY nombre`,
@@ -673,12 +673,20 @@ async function seedPresupuestoAcapulco(client) {
   }
 }
 
-/** YYYY-MM para presupuesto Acapulco (mes actual). */
+/** YYYY-MM para presupuesto: mes actual (solo para etiquetas/fallback). */
 function getCurrentPeriodoPresupuesto() {
   const now = new Date();
   const y = now.getUTCFullYear();
   const m = String(now.getUTCMonth() + 1).padStart(2, "0");
   return `${y}-${m}`;
+}
+
+/** Periodo por defecto para consulta y seed. Los presupuestos subidos son marzo 2026 (2026-03). Permite env PRESUPUESTO_PERIODO_DEFAULT. */
+const PERIODO_PRESUPUESTO_DEFAULT = process.env.PRESUPUESTO_PERIODO_DEFAULT || "2026-03";
+
+/** Periodo a usar en consulta "mi presupuesto" (por defecto 2026-03). Más adelante se puede elegir de la lista de periodos disponibles. */
+function getPeriodoPresupuestoConsulta() {
+  return PERIODO_PRESUPUESTO_DEFAULT;
 }
 
 /** Plantas con presupuesto: E9, E10 (Acapulco), E15 (Morelos). */
@@ -742,6 +750,46 @@ async function queryPresupuestoSubcategorias(client, periodo, categoria) {
     bySub[sub][row.planta_nombre] = Number(row.monto_aprobado);
   }
   return Object.values(bySub);
+}
+
+/** Periodos con datos en presupuesto_asignacion_detalle. [ { periodo } ] ordenados DESC (más reciente primero). */
+async function getPeriodosPresupuestoDisponibles(client) {
+  const r = await client.query(
+    `SELECT DISTINCT periodo FROM public.presupuesto_asignacion_detalle ORDER BY periodo DESC`
+  );
+  return r.rows.map((row) => row.periodo);
+}
+
+/** Deltas de presupuesto entre dos periodos para una planta. { totalA, totalB, delta, porCategoria: [ { categoria, montoA, montoB, delta } ], porSubcategoria: [ { categoria, subcategoria, montoA, montoB, delta } ] } */
+async function queryPresupuestoDeltas(client, plantaNombre, periodoA, periodoB) {
+  const r = await client.query(
+    `SELECT d.periodo, d.categoria, d.subcategoria, d.monto_aprobado
+     FROM public.presupuesto_asignacion_detalle d
+     JOIN public.plantas p ON p.id = d.planta_id
+     WHERE p.nombre = $1 AND d.periodo IN ($2, $3)`,
+    [plantaNombre, periodoA, periodoB]
+  );
+  const byKey = {};
+  for (const row of r.rows) {
+    const key = `${row.categoria}\t${row.subcategoria}`;
+    if (!byKey[key]) byKey[key] = { categoria: row.categoria, subcategoria: row.subcategoria, montoA: 0, montoB: 0 };
+    if (row.periodo === periodoA) byKey[key].montoA = Number(row.monto_aprobado);
+    else byKey[key].montoB = Number(row.monto_aprobado);
+  }
+  const porSubcategoria = Object.values(byKey).map((x) => ({
+    ...x,
+    delta: x.montoB - x.montoA,
+  }));
+  const byCat = {};
+  for (const s of porSubcategoria) {
+    if (!byCat[s.categoria]) byCat[s.categoria] = { categoria: s.categoria, montoA: 0, montoB: 0, delta: 0 };
+    byCat[s.categoria].montoA += s.montoA;
+    byCat[s.categoria].montoB += s.montoB;
+  }
+  const porCategoria = Object.values(byCat).map((x) => ({ ...x, delta: x.montoB - x.montoA }));
+  const totalA = porCategoria.reduce((sum, x) => sum + x.montoA, 0);
+  const totalB = porCategoria.reduce((sum, x) => sum + x.montoB, 0);
+  return { totalA, totalB, delta: totalB - totalA, porCategoria, porSubcategoria };
 }
 
 /* ==================== SCHEMA (idempotente) ==================== */
@@ -1008,6 +1056,24 @@ async function ensureSchema() {
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_presup_asig_planta_periodo
       ON public.presupuesto_asignacion_detalle(planta_id, periodo);
+    `).catch(() => {});
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_presup_asig_periodo
+      ON public.presupuesto_asignacion_detalle(periodo);
+    `).catch(() => {});
+
+    /* Nivel detalle bajo categoría/subcategoría (ej. Nóminas, Rentas con líneas extra). Para uso futuro. */
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS public.presupuesto_linea_detalle (
+        id SERIAL PRIMARY KEY,
+        planta_id INT NOT NULL REFERENCES public.plantas(id),
+        periodo VARCHAR(7) NOT NULL,
+        categoria VARCHAR(120) NOT NULL,
+        subcategoria VARCHAR(255) NOT NULL,
+        linea_detalle VARCHAR(255) NOT NULL,
+        monto NUMERIC(18,2) NOT NULL DEFAULT 0,
+        UNIQUE(planta_id, periodo, categoria, subcategoria, linea_detalle)
+      );
     `).catch(() => {});
 
     await seedPresupuestoAcapulco(client);
@@ -2662,7 +2728,8 @@ function buildHelpMessage(actor) {
     lines.push("• ver archivo <id> (URL firmada 10 min)");
     lines.push("• reemplazar cotizacion 045 (reemplazo controlado)");
   }
-  lines.push("• mi presupuesto (presupuesto semanal por planta)");
+  lines.push("• mi presupuesto (presupuesto por planta y periodo, ej. 2026-03)");
+  lines.push("• comparar presupuesto (cambios entre dos periodos por planta)");
   if (clave === "GG") lines.push("• seleccionar folios 001 002 010 (ligar al presupuesto semanal)");
   if (clave === "CDMX") {
     lines.push("• asignar presupuesto");
@@ -2795,6 +2862,7 @@ function getSession(from) {
       pendingCotizacion: null,
       pendingReemplazo: null,
       presupuestoConsulta: null,
+      presupuestoComparar: null,
     });
   }
   const s = sessions.get(from);
@@ -2804,6 +2872,7 @@ function getSession(from) {
   if (s.pendingCotizacion === undefined) s.pendingCotizacion = null;
   if (s.pendingReemplazo === undefined) s.pendingReemplazo = null;
   if (s.presupuestoConsulta === undefined) s.presupuestoConsulta = null;
+  if (s.presupuestoComparar === undefined) s.presupuestoComparar = null;
   return s;
 }
 
@@ -2995,9 +3064,89 @@ app.post("/twilio/whatsapp", async (req, res) => {
         return safeReply(buildHelpMessage(actor));
       }
 
-      /* ----- Presupuesto Acapulco (E9/E10): "cual es mi presupuesto" ----- */
-      const periodoPresup = getCurrentPeriodoPresupuesto();
+      /* ----- Presupuesto: "cual es mi presupuesto" (periodo por defecto 2026-03) ----- */
+      const periodoPresup = getPeriodoPresupuestoConsulta();
       const MAX_BODY = 1500;
+
+      /* ----- Comparar presupuesto entre dos periodos ----- */
+      if (sess.presupuestoComparar) {
+        const bodyTrim = body.trim();
+        const cmp = sess.presupuestoComparar;
+        if (/^cancelar$|^no$/i.test(bodyTrim)) {
+          sess.presupuestoComparar = null;
+          return safeReply("Listo. Escribe \"comparar presupuesto\" cuando quieras ver cambios entre periodos.");
+        }
+        if (cmp.paso === "elegir_planta") {
+          const plantas = cmp._plantas || [];
+          let plantaNombre = null;
+          const num = parseInt(bodyTrim, 10);
+          if (Number.isFinite(num) && num >= 1 && num <= plantas.length) plantaNombre = plantas[num - 1].nombre;
+          else if (/^e(7|8|9|10|11|12|15)$/i.test(bodyTrim)) plantaNombre = bodyTrim.toUpperCase().replace(/^E(\d+)$/, "E$1");
+          else {
+            const key = bodyTrim.toLowerCase().replace(/[áàä]/g, "a").replace(/[éèë]/g, "e").replace(/[íìï]/g, "i").replace(/[óòö]/g, "o").replace(/[úùü]/g, "u").trim();
+            const codigos = NOMBRE_PLANTA_A_CODIGOS[key];
+            if (codigos && codigos.length === 1) plantaNombre = codigos[0];
+            else if (codigos && codigos.length > 1) {
+              sess.presupuestoComparar = { ...cmp, paso: "elegir_codigo_planta", _opciones: codigos };
+              return safeReply(`${key.charAt(0).toUpperCase() + key.slice(1)} tiene ${codigos.join(" y ")}. ¿Cuál? 1) ${codigos[0]}  2) ${codigos[1]}`);
+            }
+          }
+          if (!plantaNombre) {
+            return safeReply("Responde con el número, el código (E7, E8, E9, E10, E11, E12, E15) o el nombre de la planta.");
+          }
+          const periodos = await getPeriodosPresupuestoDisponibles(client);
+          if (!periodos.length) {
+            sess.presupuestoComparar = null;
+            return safeReply("No hay periodos con datos. Sube presupuestos de distintos meses primero.");
+          }
+          const listadoP = periodos.map((p, i) => `${i + 1}) ${p}`).join("\n");
+          sess.presupuestoComparar = { paso: "elegir_periodo_a", plantaNombre, _periodos: periodos };
+          return safeReply(`📅 Periodo inicial (el que quieres comparar contra el otro):\n\n${listadoP}\n\nResponde con el número o el periodo (ej. 2026-02).`);
+        }
+        if (cmp.paso === "elegir_codigo_planta") {
+          const opciones = cmp._opciones || [];
+          const num = parseInt(bodyTrim, 10);
+          const plantaNombre = (Number.isFinite(num) && num >= 1 && num <= opciones.length) ? opciones[num - 1] : (opciones.includes(bodyTrim.toUpperCase()) ? bodyTrim.toUpperCase() : null);
+          if (!plantaNombre) return safeReply(`Responde 1) ${opciones[0]} o 2) ${opciones[1]}.`);
+          const periodos = await getPeriodosPresupuestoDisponibles(client);
+          if (!periodos.length) { sess.presupuestoComparar = null; return safeReply("No hay periodos con datos."); }
+          const listadoP = periodos.map((p, i) => `${i + 1}) ${p}`).join("\n");
+          sess.presupuestoComparar = { paso: "elegir_periodo_a", plantaNombre, _periodos: periodos };
+          return safeReply(`Periodo inicial:\n\n${listadoP}\n\nResponde con el número o el periodo (ej. 2026-02).`);
+        }
+        if (cmp.paso === "elegir_periodo_a") {
+          const periodos = cmp._periodos || [];
+          let periodoA = null;
+          const num = parseInt(bodyTrim, 10);
+          if (Number.isFinite(num) && num >= 1 && num <= periodos.length) periodoA = periodos[num - 1];
+          else if (/^\d{4}-\d{2}$/.test(bodyTrim) && periodos.includes(bodyTrim)) periodoA = bodyTrim;
+          if (!periodoA) return safeReply("Responde con el número del periodo o YYYY-MM (ej. 2026-02).");
+          const periodosRestantes = periodos.filter((p) => p !== periodoA);
+          sess.presupuestoComparar = { ...cmp, paso: "elegir_periodo_b", periodoA, _periodosRestantes: periodosRestantes };
+          const listadoP = periodosRestantes.map((p, i) => `${i + 1}) ${p}`).join("\n");
+          return safeReply(`Periodo a comparar (contra ${periodoA}):\n\n${listadoP || "(no hay otro periodo)"}\n\nResponde con el número o el periodo.`);
+        }
+        if (cmp.paso === "elegir_periodo_b") {
+          const periodosRestantes = cmp._periodosRestantes || [];
+          const periodoA = cmp.periodoA;
+          let periodoB = null;
+          const num = parseInt(bodyTrim, 10);
+          if (Number.isFinite(num) && num >= 1 && num <= periodosRestantes.length) periodoB = periodosRestantes[num - 1];
+          else if (/^\d{4}-\d{2}$/.test(bodyTrim) && periodosRestantes.includes(bodyTrim)) periodoB = bodyTrim;
+          if (!periodoB || periodoB === periodoA) return safeReply("Elige un periodo distinto al inicial. Responde con el número o YYYY-MM.");
+          const deltas = await queryPresupuestoDeltas(client, cmp.plantaNombre, periodoA, periodoB);
+          const fmt = (n) => n.toLocaleString("es-MX", { minimumFractionDigits: 2 });
+          let msg = `📊 Cambios presupuesto ${cmp.plantaNombre}\n${periodoA} → ${periodoB}\n\n`;
+          msg += `TOTAL: $${fmt(deltas.totalA)} → $${fmt(deltas.totalB)}  (${deltas.delta >= 0 ? "+" : ""}$${fmt(deltas.delta)})\n\n`;
+          const conCambio = deltas.porCategoria.filter((c) => c.delta !== 0);
+          if (conCambio.length) {
+            msg += "Por categoría:\n";
+            for (const c of conCambio) msg += `${c.categoria}: $${fmt(c.montoA)} → $${fmt(c.montoB)}  (${c.delta >= 0 ? "+" : ""}$${fmt(c.delta)})\n`;
+          }
+          sess.presupuestoComparar = null;
+          return safeReply(msg.length > MAX_BODY ? msg.substring(0, MAX_BODY - 20) + "\n...(recortado)" : msg);
+        }
+      }
 
       if (sess.presupuestoConsulta) {
         const bodyTrim = body.trim();
@@ -3138,6 +3287,14 @@ app.post("/twilio/whatsapp", async (req, res) => {
             return safeReply(msg);
           }
         }
+      }
+
+      if (/comparar\s+presupuesto|qué\s+cambió\s+presupuesto|cuál\s+cambió\s+presupuesto|cambios\s+presupuesto|presupuesto\s+comparar/i.test(body.trim())) {
+        const plantasPresup = await getPlantasPresupuesto(client);
+        if (!plantasPresup.length) return safeReply("No hay plantas de presupuesto configuradas.");
+        const listado = plantasPresup.map((p, i) => `${i + 1}) ${p.nombre}`).join("\n");
+        sess.presupuestoComparar = { paso: "elegir_planta", _plantas: plantasPresup };
+        return safeReply("¿De qué planta quieres comparar presupuestos?\n\n" + listado + "\n\nResponde con el número, código (E7, E8, …) o nombre. (Escribe Cancelar para salir.)");
       }
 
       if (/cual es mi presupuesto|cuál es mi presupuesto|mi presupuesto/i.test(body.trim())) {
