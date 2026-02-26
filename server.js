@@ -203,11 +203,12 @@ function normalizeUnidad(input) {
     if (!Number.isFinite(num) || num < 1 || num > 1000) return null;
     return `AT-${num}`;
   }
-  const m = raw.match(/^(AT|C)\-?(\d{1,4})$/);
+  // AT o C + guión/espacio (cualquier tipo de guión) + dígitos 1-1000; se conserva el número tal cual (ej. AT-03)
+  const m = raw.match(/^(AT|C)[\-\s\u2010-\u2015\u2212\uFF0D]*(\d{1,4})$/);
   if (!m) return null;
   const num = parseInt(m[2], 10);
   if (!Number.isFinite(num) || num < 1 || num > 1000) return null;
-  return `${m[1]}-${num}`;
+  return `${m[1]}-${m[2]}`;
 }
 
 /** Parsea "crear folio <concepto> [urgente]" -> { concepto, urgente }. */
@@ -4848,6 +4849,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
           txt += `Categoría: ${folio.categoria || "-"}\n`;
           txt += `Subcategoría: ${folio.subcategoria || "-"}\n`;
           txt += `Estación: ${folio.estacion || "-"}\n`;
+          txt += `Unidad: ${folio.unidad || "-"}\n`;
           txt += `Urgente: ${(folio.prioridad && String(folio.prioridad).toLowerCase().includes("urgente")) ? "Sí" : "No"}\n`;
           txt += `Cotización adjunta: ${folio.cotizacion_url ? "Sí" : "No"}\n`;
           txt += `Fecha: ${fecha}\n`;
@@ -5050,18 +5052,39 @@ app.post("/twilio/whatsapp", async (req, res) => {
           return safeReply(msg.trim() || "Nada que aprobar.");
         }
 
-        if (esGG && folios.length === 1 && invalidTokens.length === 0) {
-          const numero = folios[0];
-          const folio = await getFolioByNumero(client, numero);
-          if (!folio) return safeReply(`No existe el folio ${numero}.`);
-          const estatus = String(folio.estatus || "").toUpperCase();
-          if (estatus === ESTADOS.CANCELADO || estatus === "CANCELADO") return safeReply("Ese folio está cancelado.");
-          if ([ESTADOS.APROBADO_ZP, ESTADOS.LISTO_PARA_PROGRAMACION, ESTADOS.SELECCIONADO_SEMANA, ESTADOS.PAGADO, ESTADOS.CERRADO].includes(estatus)) {
-            return safeReply("Ese folio ya está aprobado o en etapa posterior.");
-          }
-          if (estatus === ESTADOS.PENDIENTE_APROB_PLANTA) {
-            await client.query("BEGIN");
+        if (esGG && invalidTokens.length === 0) {
+          const plantaIdGG = actor.planta_id != null ? actor.planta_id : null;
+          const aprobados = [];
+          const yaAprobados = [];
+          const noEncontrados = [];
+          const cancelados = [];
+          const noPendientesPlanta = [];
+          const otraPlanta = [];
+          for (const numero of folios) {
+            const folio = await getFolioByNumero(client, numero);
+            if (!folio) {
+              noEncontrados.push(numero);
+              continue;
+            }
+            const estatus = String(folio.estatus || "").toUpperCase();
+            if (estatus === ESTADOS.CANCELADO || estatus === "CANCELADO") {
+              cancelados.push(numero);
+              continue;
+            }
+            if ([ESTADOS.APROBADO_ZP, ESTADOS.LISTO_PARA_PROGRAMACION, ESTADOS.SELECCIONADO_SEMANA, ESTADOS.PAGADO, ESTADOS.CERRADO].includes(estatus)) {
+              yaAprobados.push(numero);
+              continue;
+            }
+            if (estatus !== ESTADOS.PENDIENTE_APROB_PLANTA) {
+              noPendientesPlanta.push(numero);
+              continue;
+            }
+            if (plantaIdGG != null && folio.planta_id !== plantaIdGG) {
+              otraPlanta.push(numero);
+              continue;
+            }
             try {
+              await client.query("BEGIN");
               await client.query(`UPDATE public.folios SET estatus = $1 WHERE id = $2`, [ESTADOS.APROB_PLANTA, folio.id]);
               await insertHistorial(client, folio.id, folio.numero_folio, folio.folio_codigo, ESTADOS.APROB_PLANTA, "Aprobado por GG (planta)", fromNorm, actor.rol_nombre);
               await client.query(`UPDATE public.folios SET estatus = $1 WHERE id = $2`, [ESTADOS.PENDIENTE_APROB_ZP, folio.id]);
@@ -5069,17 +5092,31 @@ app.post("/twilio/whatsapp", async (req, res) => {
               await client.query("COMMIT");
             } catch (e) {
               await client.query("ROLLBACK");
-              throw e;
+              noEncontrados.push(numero);
+              continue;
             }
             const urgPrefix = (folio.prioridad === "Urgente no programado") ? "🔴💡 URGENTE | " : "";
             let msgZP = `${urgPrefix}Nuevo folio pendiente de tu aprobación (aprobado planta por GG).\n`;
             msgZP += `Folio: ${numero}\nPlanta: ${folio.planta_nombre || "-"}\nConcepto: ${folio.concepto || "-"}\nImporte: $${folio.importe != null ? Number(folio.importe).toLocaleString("es-MX", { minimumFractionDigits: 2 }) : "-"}\n\nResponde: aprobar ${numero}`;
-            const zpList = await getUsersByRole(client, "ZP");
-            for (const u of zpList) {
-              if (u.telefono) await sendWhatsApp(u.telefono, msgZP);
+            try {
+              const zpList = await getUsersByRole(client, "ZP");
+              for (const u of zpList) {
+                if (u.telefono) await sendWhatsApp(u.telefono, msgZP);
+              }
+            } catch (e) {
+              console.warn("Notif ZP:", e.message);
             }
-            return safeReply(`Folio ${numero} aprobado por planta (GG). Pendiente de Director ZP. Se notificó a ZP.`);
+            aprobados.push(numero);
           }
+          let msg = "";
+          if (aprobados.length) msg += `✅ Aprobados por planta (GG): ${aprobados.join(", ")}. Pendiente de Director ZP. Se notificó a ZP.\n`;
+          if (yaAprobados.length) msg += `⚠️ Ya aprobados o en etapa posterior: ${yaAprobados.join(", ")}\n`;
+          if (noPendientesPlanta.length) msg += `⚠️ No están en pendiente aprobación planta: ${noPendientesPlanta.join(", ")}\n`;
+          if (otraPlanta.length) msg += `⚠️ No son de tu planta: ${otraPlanta.join(", ")}\n`;
+          if (cancelados.length) msg += `❌ Cancelados: ${cancelados.join(", ")}\n`;
+          if (noEncontrados.length) msg += `❌ No encontrados: ${noEncontrados.join(", ")}\n`;
+          if (invalidTokens.length) msg += `❌ Formato inválido: ${invalidTokens.join(", ")}\n`;
+          return safeReply(msg.trim() || "Nada que aprobar (solo puedes aprobar folios en PENDIENTE_APROB_PLANTA de tu planta).");
         }
 
         return safeReply("Solo el Director ZP puede aprobar folios.");
