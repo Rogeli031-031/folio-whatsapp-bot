@@ -295,11 +295,15 @@ async function seedPresupuestoAcapulco(client) {
     if (row.nombre === "E10") idE10 = row.id;
   }
   if (!idE9) {
-    const ins = await client.query(`INSERT INTO public.plantas (nombre) VALUES ('E9') RETURNING id`);
+    const ins = await client.query(
+      `INSERT INTO public.plantas (nombre, clave) VALUES ('E9', 'E9') RETURNING id`
+    );
     idE9 = ins.rows[0].id;
   }
   if (!idE10) {
-    const ins = await client.query(`INSERT INTO public.plantas (nombre) VALUES ('E10') RETURNING id`);
+    const ins = await client.query(
+      `INSERT INTO public.plantas (nombre, clave) VALUES ('E10', 'E10') RETURNING id`
+    );
     idE10 = ins.rows[0].id;
   }
   for (const [categoria, subcategoria, m9, m10] of ACAPULCO_PRESUPUESTO_SEED) {
