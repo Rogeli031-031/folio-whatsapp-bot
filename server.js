@@ -3307,6 +3307,29 @@ app.post("/twilio/whatsapp", async (req, res) => {
         return safeReply("¿De qué planta?\n\n" + listado + "\n\nResponde con el número, el código (E7, E8, E9, E10, E11, E12, E15) o el nombre: Acapulco, Morelos, Puebla, San Luis, Tehuacán, Querétaro.");
       }
 
+      // Si en el paso anterior pedimos la planta ("Cómo cambio" sin planta), la siguiente respuesta es el nombre de la planta
+      // Salida: si el usuario escribe otro comando conocido, no tratarlo como planta y dejar que lo procese su flujo
+      if (sess.igfComparar && sess.igfComparar.paso === "planta") {
+        const bodyTrim = body.trim();
+        const esOtroComando =
+          /^ayuda$|^help$|^menu$/i.test(bodyTrim) ||
+          /\bcrear\s*folio\b/i.test(bodyTrim) ||
+          /cual es mi presupuesto|cuál es mi presupuesto|^mi presupuesto$/i.test(bodyTrim) ||
+          /comparar\s+presupuesto|presupuesto\s+comparar/i.test(bodyTrim) ||
+          /^(cancelar|salir|no)$/i.test(bodyTrim);
+        if (esOtroComando) {
+          sess.igfComparar = null;
+          // No devolver: el resto del webhook procesará el comando (Crear folio, Ayuda, etc.)
+        } else {
+          const plantaNombre = bodyTrim;
+          if (!plantaNombre) {
+            return safeReply("IGF – Indica la planta. Ejemplos: cómo cambió Puebla, cómo cambió Acapulco, cómo cambió Morelos.");
+          }
+          sess.igfComparar = { paso: "mes", planta: plantaNombre };
+          return safeReply("IGF – ¿Con IGF de qué mes? (Ej: febrero, 2, 2026/2)");
+        }
+      }
+
       // Flujo "cómo cambió" por pasos: mes → versión → tipo (cargo planta / gasto corporativo)
       if (sess.igfComparar && (sess.igfComparar.paso === "mes" || sess.igfComparar.paso === "version" || sess.igfComparar.paso === "tipo")) {
         try {
@@ -3365,12 +3388,17 @@ app.post("/twilio/whatsapp", async (req, res) => {
       // Preguntas IGF: consultar esquema igf y responder (o iniciar flujo "cómo cambió" por pasos)
       if (igfHandler.esPreguntaIGF(body)) {
         try {
-          if (igfHandler.esCompararSinVersión(body)) {
-            const planta = igfHandler.extraerPlantaDespuesDeCambio(igfHandler.textoParaDeteccion(body));
+          const t = igfHandler.textoParaDeteccion(body);
+          const esComoCambioODelta = t.includes("como cambio") || t.includes("delta");
+          if (esComoCambioODelta) {
+            const planta = igfHandler.extraerPlantaDespuesDeCambio(t);
             if (planta) {
               sess.igfComparar = { paso: "mes", planta };
               return safeReply("IGF – ¿Con IGF de qué mes? (Ej: febrero, 2, 2026/2)");
             }
+            // "Cómo cambio" sin planta: guardar sesión para que la siguiente respuesta sea la planta
+            sess.igfComparar = { paso: "planta" };
+            return safeReply("IGF – Indica la planta. Ejemplos: cómo cambió Puebla, cómo cambió Puebla vs v2, cómo cambió Puebla vs mes anterior.");
           }
           const respuestaIGF = await igfHandler.consultarIGF(client, body);
           const txt = respuestaIGF.length > MAX_WHATSAPP_BODY ? respuestaIGF.substring(0, MAX_WHATSAPP_BODY - 20) + "\n...(recortado)" : respuestaIGF;
