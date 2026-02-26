@@ -2425,6 +2425,10 @@ app.post("/twilio/whatsapp", async (req, res) => {
       return safeReply("Listo. Cancelé el flujo. Escribe: Crear folio o Ayuda");
     }
 
+    if (sess.estado === "ESPERANDO_COTIZACION_PDF" && numMedia === 0) {
+      return safeReply("Envía la cotización en PDF para crear el folio. Responde con el archivo adjunto. (O escribe Cancelar para salir.)");
+    }
+
     if (lower === "version") {
       return safeReply(buildVersionMessage());
     }
@@ -4644,6 +4648,34 @@ app.post("/twilio/whatsapp", async (req, res) => {
       if (!mediaUrl) return safeReply("Recibí un adjunto pero no tengo la URL. Intenta de nuevo.");
       if (!mediaType.includes("pdf")) return safeReply("Solo acepto PDF para cotización.");
 
+      if (sess.estado === "ESPERANDO_COTIZACION_PDF") {
+        const clientCrear = await pool.connect();
+        try {
+          if (!sess.dd.planta_id && sess.dd.planta_nombre) {
+            const plantas = await getPlantas(clientCrear);
+            const byName = plantas.find((p) => (p.nombre || "").toLowerCase() === (sess.dd.planta_nombre || "").toLowerCase());
+            if (byName) sess.dd.planta_id = byName.id;
+          }
+          if (!sess.dd.planta_id && !sess.dd.planta_nombre) {
+            return safeReply("Falta indicar la planta. Cancela y vuelve a crear el folio indicando la planta.");
+          }
+          const folio = await insertFolio(clientCrear, sess.dd);
+          sess.lastFolioNumero = folio.numero_folio;
+          sess.lastFolioId = folio.id;
+          sess.dd.attachNumero = folio.numero_folio;
+          sess.estado = "IDLE";
+          setImmediate(() => {
+            notifyPlantByFolio(pool, folio.numero_folio, "CREADO").catch((e) => console.warn("Notif CREADO:", e.message));
+          });
+        } catch (e) {
+          console.error("Error creando folio (con PDF):", e);
+          clientCrear.release();
+          return safeReply("Error al guardar el folio. Revisa los datos e intenta de nuevo.");
+        } finally {
+          clientCrear.release();
+        }
+      }
+
       if (sess.pendingReemplazo && sess.pendingReemplazo.paso === "enviar_pdf" && s3Enabled) {
         const clientReemp = await pool.connect();
         try {
@@ -4779,6 +4811,11 @@ app.post("/twilio/whatsapp", async (req, res) => {
           actorCreate = await getActorByPhone(clientForActor, from);
         } finally {
           clientForActor.release();
+        }
+        const rolClave = (actorCreate && actorCreate.rol_clave && String(actorCreate.rol_clave).toUpperCase()) || "";
+        const puedeCrear = rolClave === "GA" || rolClave === "CDMX" || rolClave === "ZC";
+        if (!puedeCrear) {
+          return safeReply("Solo GA (Gerente Administrativo) y Contralor financiero (CDMX/ZC) pueden crear folios.");
         }
         sess.estado = "ESPERANDO_PLANTA";
         sess.dd = { actor_telefono: fromNorm };
@@ -5027,34 +5064,10 @@ app.post("/twilio/whatsapp", async (req, res) => {
       }
       if (lower !== "si" && lower !== "sí") return safeReply("Responde SI o NO.");
 
-      const client = await pool.connect();
-      try {
-        if (!sess.dd.planta_id && sess.dd.planta_nombre) {
-          const plantas = await getPlantas(client);
-          const byName = plantas.find((p) => p.nombre.toLowerCase() === (sess.dd.planta_nombre || "").toLowerCase());
-          if (byName) sess.dd.planta_id = byName.id;
-        }
-        if (!sess.dd.planta_id && !sess.dd.planta_nombre) {
-          return safeReply("Falta indicar la planta. Cancela y vuelve a crear el folio indicando la planta.");
-        }
-        const folio = await insertFolio(client, sess.dd);
-        sess.lastFolioNumero = folio.numero_folio;
-        sess.lastFolioId = folio.id;
-        resetSession(sess);
-        const folioCodigoCreacion = folio.numero_folio;
-        setImmediate(() => {
-          notifyPlantByFolio(pool, folioCodigoCreacion, "CREADO").catch((e) => console.warn("Notif CREADO:", e.message));
-        });
-        return safeReply(
-          `✅ Folio creado: ${folio.numero_folio}. ` +
-            "Puedes adjuntar la cotización en PDF: envía el archivo o escribe Adjuntar " + folio.numero_folio
-        );
-      } catch (e) {
-        console.error("Error creando folio:", e);
-        return safeReply("Error al guardar el folio. Revisa los datos e intenta de nuevo.");
-      } finally {
-        client.release();
-      }
+      sess.estado = "ESPERANDO_COTIZACION_PDF";
+      return safeReply(
+        "Para crear el folio es obligatorio adjuntar la cotización en PDF.\nEnvía el archivo PDF ahora (o escribe Cancelar para salir)."
+      );
     }
 
     return safeReply('No entendí. Escribe "Crear folio" o "Ayuda".');
