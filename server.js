@@ -2655,16 +2655,27 @@ app.post("/twilio/whatsapp", async (req, res) => {
       const MAX_BODY = 1500;
 
       if (sess.presupuestoConsulta) {
-        const pc = sess.presupuestoConsulta;
-        if (/^no$/i.test(body.trim())) {
+        const bodyTrim = body.trim();
+        // Si el usuario escribe otro comando, salir del menú presupuesto y dejar que lo procese el flujo correspondiente.
+        const esOtroComando =
+          igfHandler.esPreguntaIGF(body) ||
+          /\bcrear\s*folio/i.test(bodyTrim) ||
+          /^ayuda$|^help$|^menu$/i.test(bodyTrim) ||
+          /cual es mi presupuesto|cuál es mi presupuesto|^mi presupuesto$/i.test(bodyTrim);
+        if (esOtroComando) {
           sess.presupuestoConsulta = null;
-          return safeReply("Listo. Escribe \"cual es mi presupuesto\" cuando quieras consultar de nuevo.");
-        }
-        if (pc.paso === "elegir_categoria") {
-          const n = parseInt(body.trim(), 10);
-          if (!Number.isFinite(n) || n < 1 || n > 7) {
-            return safeReply("Responde con el número de categoría (1-7) o NO para terminar.");
+          // No devolver: el resto del webhook procesará (IGF "cómo cambio", "Crear folio", etc.)
+        } else {
+          const pc = sess.presupuestoConsulta;
+          if (/^no$/i.test(bodyTrim)) {
+            sess.presupuestoConsulta = null;
+            return safeReply("Listo. Escribe \"cual es mi presupuesto\" cuando quieras consultar de nuevo.");
           }
+          if (pc.paso === "elegir_categoria") {
+            const n = parseInt(bodyTrim, 10);
+            if (!Number.isFinite(n) || n < 1 || n > 7) {
+              return safeReply("Responde con el número de categoría (1-7) o NO para terminar.");
+            }
           const categoria = CATEGORIAS_ACAPULCO[n - 1];
           const porPlanta = await queryPresupuestoPorCategoria(client, periodoPresup, categoria);
           let msg = `📊 ${categoria}\n`;
@@ -2696,6 +2707,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
           sess.presupuestoConsulta = { paso: "elegir_categoria" };
           msg += "\n\n¿Quieres más detalles de otra categoría? Responde con el número (1-7) o NO para terminar.\n\n1) NOMINA\n2) RENTAS\n3) SERVICIOS\n4) TALLER\n5) MANTENIMIENTO\n6) GASTOS GENERALES\n7) IMPUESTOS PLANTA";
           return safeReply(msg);
+        }
         }
       }
 
