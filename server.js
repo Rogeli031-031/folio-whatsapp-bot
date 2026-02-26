@@ -286,48 +286,114 @@ const ACAPULCO_PRESUPUESTO_SEED = [
   ["IMPUESTOS PLANTA", "PROV. IMPUESTO PLANTA", -331733, -35873],
 ];
 
+/** Morelos E15 — [ categoria, subcategoria, monto ] (mismas categorías/sub que E9/E10). */
+const PRESUPUESTO_E15_SEED = [
+  ["NOMINA", "SLDOS. Y SALR. ADMINISTRATIVOS N1", 533987],
+  ["NOMINA", "SLDOS. Y SALR. ADMINISTRATIVOS N2", 76014],
+  ["NOMINA", "SLDOS. Y SALR. OPERATIVOS N1", 513818],
+  ["NOMINA", "SLDOS. Y SALR. OPERATIVOS N2", 240218],
+  ["RENTAS", "RENTAS DE OFICINAS", 26124],
+  ["RENTAS", "RENTAS DE CASA HABITACION", 51442],
+  ["RENTAS", "RENTAS DE ESTACIONES EN OPERACIÓN", 0],
+  ["SERVICIOS", "ENERGIA ELECTRICA", 17000],
+  ["SERVICIOS", "SERVICIO DE AGUA", 3700],
+  ["SERVICIOS", "TELEFONIA FIJA", 13577],
+  ["SERVICIOS", "TELEFONIA Y DATOS MOVILES", 11874],
+  ["SERVICIOS", "INTERNET", 8050],
+  ["SERVICIOS", "TRASLADO DE VALORES", 110000],
+  ["SERVICIOS", "GPS DE UNIDADES", 0],
+  ["SERVICIOS", "VIGILANCIA", 0],
+  ["SERVICIOS", "RECOLECCION DE BASURA", 0],
+  ["SERVICIOS", "DESCARGA AL DRENAJE", 0],
+  ["SERVICIOS", "HONORARIOS", 22000],
+  ["SERVICIOS", "SECCION AMARILLA", 0],
+  ["SERVICIOS", "SEGUROS DE UNIDADES", 0],
+  ["SERVICIOS", "SERVICIO DE TRANSPORTE DE PERSONAL", 0],
+  ["TALLER", "REF. Y REP. DE EQ. DE REPARTO", 170000],
+  ["TALLER", "REPARACIONES Y COMPRA DE LLANTAS", 0],
+  ["TALLER", "CARROCERIA", 0],
+  ["MANTENIMIENTO", "MANTENIMIENTO PLANTA", 0],
+  ["MANTENIMIENTO", "MANTENIMIENTO DE OFICINAS", 2500],
+  ["MANTENIMIENTO", "MANTENIMIENTO DE CILINDROS", 11400],
+  ["MANTENIMIENTO", "MANTENIMIENTO ESTACIONES DE CARBURACION", 0],
+  ["MANTENIMIENTO", "MANTENIMIENTO TANQUES DE ALMACEN", 0],
+  ["MANTENIMIENTO", "COMBUSTIBLES Y DIESEL", 221000],
+  ["MANTENIMIENTO", "ACEITES Y LUBRICANTES", 35000],
+  ["MANTENIMIENTO", "PINTURA Y THINER", 0],
+  ["GASTOS GENERALES", "PAPELERIA, IMPRENTA Y ARTICULOS DE OFICINA", 10318],
+  ["GASTOS GENERALES", "VIATICOS, CASETAS Y ESTACIONAMIENTOS", 27848],
+  ["GASTOS GENERALES", "MANTENIMIENTO CLIENTES", 0],
+  ["GASTOS GENERALES", "MANT. ARREND. DE MOBILIARIO Y EQUIPO", 3364],
+  ["GASTOS GENERALES", "ARTICULOS DE SERVICIOS Y LIMPIEZA", 0],
+  ["GASTOS GENERALES", "PESAJES, GRUAS Y MANIOBRAS", 0],
+  ["GASTOS GENERALES", "CUOTA SINDICAL", 3000],
+  ["GASTOS GENERALES", "PUBLICIDAD Y MERCADOTECNIA", 6000],
+  ["GASTOS GENERALES", "UNIFORMES Y HERRAMIENTAS DE TRABAJO", 0],
+  ["GASTOS GENERALES", "ARTICULOS Y SERVICIOS MEDICOS", 0],
+  ["GASTOS GENERALES", "CORPORATIVO ZONA MEXICO", 27000],
+  ["GASTOS GENERALES", "OTROS GASTOS", 79000],
+  ["IMPUESTOS PLANTA", "IMSS", 185000],
+  ["IMPUESTOS PLANTA", "RCV", 169774],
+  ["IMPUESTOS PLANTA", "INFONAVIT", 134038],
+  ["IMPUESTOS PLANTA", "ESTATALES", 35000],
+  ["IMPUESTOS PLANTA", "PROV. IMPUESTO PLANTA", -151906],
+];
+
+const PLANTAS_PRESUPUESTO = ["E9", "E10", "E15"];
+
 async function seedPresupuestoAcapulco(client) {
   const periodo = getCurrentPeriodoPresupuesto();
-  let idE9 = null, idE10 = null;
-  const rPlantas = await client.query(`SELECT id, nombre FROM public.plantas WHERE nombre IN ('E9','E10') ORDER BY nombre`);
+  const ids = { E9: null, E10: null, E15: null };
+  const rPlantas = await client.query(
+    `SELECT id, nombre FROM public.plantas WHERE nombre IN ('E9','E10','E15') ORDER BY nombre`
+  );
   for (const row of rPlantas.rows) {
-    if (row.nombre === "E9") idE9 = row.id;
-    if (row.nombre === "E10") idE10 = row.id;
+    if (row.nombre in ids) ids[row.nombre] = row.id;
   }
-  if (!idE9) {
-    const ins = await client.query(
-      `INSERT INTO public.plantas (nombre, clave) VALUES ('E9', 'E9') RETURNING id`
-    );
-    idE9 = ins.rows[0].id;
-  }
-  if (!idE10) {
-    const ins = await client.query(
-      `INSERT INTO public.plantas (nombre, clave) VALUES ('E10', 'E10') RETURNING id`
-    );
-    idE10 = ins.rows[0].id;
+  for (const nombre of ["E9", "E10", "E15"]) {
+    if (!ids[nombre]) {
+      const ins = await client.query(
+        `INSERT INTO public.plantas (nombre, clave) VALUES ($1, $1) RETURNING id`,
+        [nombre]
+      );
+      ids[nombre] = ins.rows[0].id;
+    }
   }
   for (const [categoria, subcategoria, m9, m10] of ACAPULCO_PRESUPUESTO_SEED) {
     await client.query(
       `INSERT INTO public.presupuesto_catalogo (planta_id, categoria, subcategoria) VALUES ($1,$2,$3)
        ON CONFLICT (planta_id, categoria, subcategoria) DO NOTHING`,
-      [idE9, categoria, subcategoria]
+      [ids.E9, categoria, subcategoria]
     );
     await client.query(
       `INSERT INTO public.presupuesto_catalogo (planta_id, categoria, subcategoria) VALUES ($1,$2,$3)
        ON CONFLICT (planta_id, categoria, subcategoria) DO NOTHING`,
-      [idE10, categoria, subcategoria]
+      [ids.E10, categoria, subcategoria]
     );
     await client.query(
       `INSERT INTO public.presupuesto_asignacion_detalle (planta_id, periodo, categoria, subcategoria, monto_aprobado)
        VALUES ($1,$2,$3,$4,$5)
        ON CONFLICT (planta_id, periodo, categoria, subcategoria) DO UPDATE SET monto_aprobado = EXCLUDED.monto_aprobado`,
-      [idE9, periodo, categoria, subcategoria, m9]
+      [ids.E9, periodo, categoria, subcategoria, m9]
     );
     await client.query(
       `INSERT INTO public.presupuesto_asignacion_detalle (planta_id, periodo, categoria, subcategoria, monto_aprobado)
        VALUES ($1,$2,$3,$4,$5)
        ON CONFLICT (planta_id, periodo, categoria, subcategoria) DO UPDATE SET monto_aprobado = EXCLUDED.monto_aprobado`,
-      [idE10, periodo, categoria, subcategoria, m10]
+      [ids.E10, periodo, categoria, subcategoria, m10]
+    );
+  }
+  for (const [categoria, subcategoria, m15] of PRESUPUESTO_E15_SEED) {
+    await client.query(
+      `INSERT INTO public.presupuesto_catalogo (planta_id, categoria, subcategoria) VALUES ($1,$2,$3)
+       ON CONFLICT (planta_id, categoria, subcategoria) DO NOTHING`,
+      [ids.E15, categoria, subcategoria]
+    );
+    await client.query(
+      `INSERT INTO public.presupuesto_asignacion_detalle (planta_id, periodo, categoria, subcategoria, monto_aprobado)
+       VALUES ($1,$2,$3,$4,$5)
+       ON CONFLICT (planta_id, periodo, categoria, subcategoria) DO UPDATE SET monto_aprobado = EXCLUDED.monto_aprobado`,
+      [ids.E15, periodo, categoria, subcategoria, m15]
     );
   }
 }
@@ -340,10 +406,11 @@ function getCurrentPeriodoPresupuesto() {
   return `${y}-${m}`;
 }
 
-/** Plantas E9 y E10 (Acapulco). */
-async function getPlantasAcapulco(client) {
+/** Plantas con presupuesto: E9, E10 (Acapulco), E15 (Morelos). */
+async function getPlantasPresupuesto(client) {
   const r = await client.query(
-    `SELECT id, nombre FROM public.plantas WHERE nombre IN ('E9','E10') ORDER BY nombre ASC`
+    `SELECT id, nombre FROM public.plantas WHERE nombre = ANY($1::TEXT[]) ORDER BY nombre ASC`,
+    [PLANTAS_PRESUPUESTO]
   );
   return r.rows;
 }
@@ -354,9 +421,9 @@ async function queryPresupuestoTotalesAcapulco(client, periodo) {
     `SELECT p.id AS planta_id, p.nombre, COALESCE(SUM(d.monto_aprobado), 0) AS total
      FROM public.plantas p
      LEFT JOIN public.presupuesto_asignacion_detalle d ON d.planta_id = p.id AND d.periodo = $1
-     WHERE p.nombre IN ('E9','E10')
+     WHERE p.nombre = ANY($2::TEXT[])
      GROUP BY p.id, p.nombre ORDER BY p.nombre`,
-    [periodo]
+    [periodo, PLANTAS_PRESUPUESTO]
   );
   const porPlanta = r.rows.map((row) => ({
     planta_id: row.planta_id,
@@ -367,33 +434,36 @@ async function queryPresupuestoTotalesAcapulco(client, periodo) {
   return { total, porPlanta };
 }
 
-/** Monto total por categoría para E9 y E10. categoria nombre, porPlanta: [ { nombre, total } ] */
+/** Monto total por categoría por planta. [ { nombre, total } ] */
 async function queryPresupuestoPorCategoria(client, periodo, categoria) {
   const r = await client.query(
     `SELECT p.nombre, COALESCE(SUM(d.monto_aprobado), 0) AS total
      FROM public.plantas p
      LEFT JOIN public.presupuesto_asignacion_detalle d ON d.planta_id = p.id AND d.periodo = $1 AND d.categoria = $2
-     WHERE p.nombre IN ('E9','E10')
+     WHERE p.nombre = ANY($3::TEXT[])
      GROUP BY p.id, p.nombre ORDER BY p.nombre`,
-    [periodo, categoria]
+    [periodo, categoria, PLANTAS_PRESUPUESTO]
   );
   return r.rows.map((row) => ({ nombre: row.nombre, total: Number(row.total) }));
 }
 
-/** Lista de subcategorías de una categoría con monto por planta. [ { subcategoria, E9, E10 } ] */
+/** Lista de subcategorías de una categoría con monto por planta. [ { subcategoria, E9?, E10?, E15? } ] */
 async function queryPresupuestoSubcategorias(client, periodo, categoria) {
   const r = await client.query(
     `SELECT d.subcategoria, p.nombre AS planta_nombre, d.monto_aprobado
      FROM public.presupuesto_asignacion_detalle d
      JOIN public.plantas p ON p.id = d.planta_id
-     WHERE d.periodo = $1 AND d.categoria = $2 AND p.nombre IN ('E9','E10')
+     WHERE d.periodo = $1 AND d.categoria = $2 AND p.nombre = ANY($3::TEXT[])
      ORDER BY d.subcategoria, p.nombre`,
-    [periodo, categoria]
+    [periodo, categoria, PLANTAS_PRESUPUESTO]
   );
   const bySub = {};
   for (const row of r.rows) {
     const sub = row.subcategoria;
-    if (!bySub[sub]) bySub[sub] = { subcategoria: sub, E9: 0, E10: 0 };
+    if (!bySub[sub]) {
+      bySub[sub] = { subcategoria: sub };
+      for (const n of PLANTAS_PRESUPUESTO) bySub[sub][n] = 0;
+    }
     bySub[sub][row.planta_nombre] = Number(row.monto_aprobado);
   }
   return Object.values(bySub);
@@ -2671,61 +2741,85 @@ app.post("/twilio/whatsapp", async (req, res) => {
             sess.presupuestoConsulta = null;
             return safeReply("Listo. Escribe \"cual es mi presupuesto\" cuando quieras consultar de nuevo.");
           }
+          if (pc.paso === "elegir_planta") {
+            const plantas = pc._plantas || [];
+            let plantaNombre = null;
+            const num = parseInt(bodyTrim, 10);
+            if (Number.isFinite(num) && num >= 1 && num <= plantas.length) {
+              plantaNombre = plantas[num - 1].nombre;
+            } else if (/^e9$/i.test(bodyTrim)) plantaNombre = "E9";
+            else if (/^e10$/i.test(bodyTrim)) plantaNombre = "E10";
+            else if (/^e15$/i.test(bodyTrim)) plantaNombre = "E15";
+            if (!plantaNombre) {
+              return safeReply("Responde con el número de planta (1, 2, 3) o el nombre (E9, E10, E15).");
+            }
+            const { porPlanta } = await queryPresupuestoTotalesAcapulco(client, periodoPresup);
+            const fila = porPlanta.find((p) => p.nombre === plantaNombre);
+            const totalPlanta = fila ? fila.total : 0;
+            let msg = `📊 Presupuesto ${plantaNombre} (periodo ${periodoPresup})\n\n`;
+            msg += "TOTAL: $" + totalPlanta.toLocaleString("es-MX", { minimumFractionDigits: 2 });
+            msg += "\n\n¿Quieres más detalles de alguna categoría? Responde con el número (1-7) o NO.\n\n";
+            msg += "1) NOMINA\n2) RENTAS\n3) SERVICIOS\n4) TALLER\n5) MANTENIMIENTO\n6) GASTOS GENERALES\n7) IMPUESTOS PLANTA";
+            sess.presupuestoConsulta = { paso: "elegir_categoria", plantaNombre };
+            return safeReply(msg);
+          }
           if (pc.paso === "elegir_categoria") {
             const n = parseInt(bodyTrim, 10);
             if (!Number.isFinite(n) || n < 1 || n > 7) {
               return safeReply("Responde con el número de categoría (1-7) o NO para terminar.");
             }
-          const categoria = CATEGORIAS_ACAPULCO[n - 1];
-          const porPlanta = await queryPresupuestoPorCategoria(client, periodoPresup, categoria);
-          let msg = `📊 ${categoria}\n`;
-          for (const p of porPlanta) {
-            msg += `${p.nombre}: $${Number(p.total).toLocaleString("es-MX", { minimumFractionDigits: 2 })}\n`;
+            const categoria = CATEGORIAS_ACAPULCO[n - 1];
+            const porPlanta = await queryPresupuestoPorCategoria(client, periodoPresup, categoria);
+            const plantaNombre = pc.plantaNombre || null;
+            let msg = `📊 ${categoria}` + (plantaNombre ? ` (${plantaNombre})` : "") + "\n";
+            if (plantaNombre) {
+              const fila = porPlanta.find((p) => p.nombre === plantaNombre);
+              msg += `${plantaNombre}: $${(fila ? Number(fila.total) : 0).toLocaleString("es-MX", { minimumFractionDigits: 2 })}\n`;
+            } else {
+              for (const p of porPlanta) msg += `${p.nombre}: $${Number(p.total).toLocaleString("es-MX", { minimumFractionDigits: 2 })}\n`;
+            }
+            const subcategorias = await queryPresupuestoSubcategorias(client, periodoPresup, categoria);
+            sess.presupuestoConsulta = {
+              paso: "elegir_subcategoria",
+              categoria,
+              categoriaNum: n,
+              subcategorias,
+              plantaNombre: plantaNombre || undefined,
+            };
+            let list = subcategorias.map((s, i) => {
+              const monto = plantaNombre != null ? (s[plantaNombre] != null ? Number(s[plantaNombre]) : 0) : null;
+              const sufijo = monto != null ? `  $${monto.toLocaleString("es-MX", { minimumFractionDigits: 2 })}` : "";
+              return `${i + 1}) ${s.subcategoria}${sufijo}`;
+            }).join("\n");
+            if (list.length > 800) list = list.substring(0, 797) + "...";
+            msg += "\n¿Quieres el detalle de una subcategoría? Responde con el número o NO.\n\n" + list;
+            return safeReply(msg.length > MAX_BODY ? msg.substring(0, MAX_BODY - 20) + "\n...(recortado)" : msg);
           }
-          const subcategorias = await queryPresupuestoSubcategorias(client, periodoPresup, categoria);
-          sess.presupuestoConsulta = {
-            paso: "elegir_subcategoria",
-            categoria,
-            categoriaNum: n,
-            subcategorias,
-          };
-          let list = subcategorias.map((s, i) => `${i + 1}) ${s.subcategoria}`).join("\n");
-          if (list.length > 800) list = list.substring(0, 797) + "...";
-          msg += "\n¿Quieres el detalle de una subcategoría? Responde con el número o NO.\n\n" + list;
-          return safeReply(msg.length > MAX_BODY ? msg.substring(0, MAX_BODY - 20) + "\n...(recortado)" : msg);
-        }
-        if (pc.paso === "elegir_subcategoria") {
-          const n = parseInt(body.trim(), 10);
-          if (!Number.isFinite(n) || n < 1 || n > (pc.subcategorias || []).length) {
-            sess.presupuestoConsulta = { paso: "elegir_categoria" };
-            return safeReply("¿Quieres más detalles de otra categoría? Responde con el número (1-7) o NO para terminar.\n\n1) NOMINA\n2) RENTAS\n3) SERVICIOS\n4) TALLER\n5) MANTENIMIENTO\n6) GASTOS GENERALES\n7) IMPUESTOS PLANTA");
+          if (pc.paso === "elegir_subcategoria") {
+            const n = parseInt(body.trim(), 10);
+            if (!Number.isFinite(n) || n < 1 || n > (pc.subcategorias || []).length) {
+              sess.presupuestoConsulta = { paso: "elegir_categoria", plantaNombre: pc.plantaNombre };
+              return safeReply("¿Quieres más detalles de otra categoría? Responde con el número (1-7) o NO para terminar.\n\n1) NOMINA\n2) RENTAS\n3) SERVICIOS\n4) TALLER\n5) MANTENIMIENTO\n6) GASTOS GENERALES\n7) IMPUESTOS PLANTA");
+            }
+            const sub = pc.subcategorias[n - 1];
+            const plantaNombre = pc.plantaNombre;
+            const monto = (plantaNombre && sub[plantaNombre] != null ? Number(sub[plantaNombre]) : 0);
+            let msg = `📋 ${sub.subcategoria}\n${plantaNombre || "Total"}: $${monto.toLocaleString("es-MX", { minimumFractionDigits: 2 })}`;
+            sess.presupuestoConsulta = { paso: "elegir_categoria", plantaNombre: pc.plantaNombre };
+            msg += "\n\n¿Quieres más detalles de otra categoría? Responde con el número (1-7) o NO para terminar.\n\n1) NOMINA\n2) RENTAS\n3) SERVICIOS\n4) TALLER\n5) MANTENIMIENTO\n6) GASTOS GENERALES\n7) IMPUESTOS PLANTA";
+            return safeReply(msg);
           }
-          const sub = pc.subcategorias[n - 1];
-          const e9 = (sub.E9 != null ? Number(sub.E9) : 0);
-          const e10 = (sub.E10 != null ? Number(sub.E10) : 0);
-          let msg = `📋 ${sub.subcategoria}\nE9: $${e9.toLocaleString("es-MX", { minimumFractionDigits: 2 })}\nE10: $${e10.toLocaleString("es-MX", { minimumFractionDigits: 2 })}`;
-          sess.presupuestoConsulta = { paso: "elegir_categoria" };
-          msg += "\n\n¿Quieres más detalles de otra categoría? Responde con el número (1-7) o NO para terminar.\n\n1) NOMINA\n2) RENTAS\n3) SERVICIOS\n4) TALLER\n5) MANTENIMIENTO\n6) GASTOS GENERALES\n7) IMPUESTOS PLANTA";
-          return safeReply(msg);
-        }
         }
       }
 
       if (/cual es mi presupuesto|cuál es mi presupuesto|mi presupuesto/i.test(body.trim())) {
-        const plantasAcap = await getPlantasAcapulco(client);
-        if (!plantasAcap.length) {
-          return safeReply("No hay datos de presupuesto Acapulco (E9/E10) configurados.");
+        const plantasPresup = await getPlantasPresupuesto(client);
+        if (!plantasPresup.length) {
+          return safeReply("No hay datos de presupuesto (E9/E10/E15) configurados.");
         }
-        const { total, porPlanta } = await queryPresupuestoTotalesAcapulco(client, periodoPresup);
-        let msg = "📊 Presupuesto Acapulco (periodo " + periodoPresup + ")\n\n";
-        msg += "TOTAL: $" + total.toLocaleString("es-MX", { minimumFractionDigits: 2 }) + "\n\n";
-        for (const p of porPlanta) {
-          msg += p.nombre + ": $" + p.total.toLocaleString("es-MX", { minimumFractionDigits: 2 }) + "\n";
-        }
-        msg += "\n¿Quieres más detalles de alguna categoría? Responde con el número (1-7) o NO.\n\n";
-        msg += "1) NOMINA\n2) RENTAS\n3) SERVICIOS\n4) TALLER\n5) MANTENIMIENTO\n6) GASTOS GENERALES\n7) IMPUESTOS PLANTA";
-        sess.presupuestoConsulta = { paso: "elegir_categoria" };
-        return safeReply(msg);
+        const listado = plantasPresup.map((p, i) => `${i + 1}) ${p.nombre}`).join("\n");
+        sess.presupuestoConsulta = { paso: "elegir_planta", _plantas: plantasPresup };
+        return safeReply("¿De qué planta?\n\n" + listado + "\n\nResponde con el número (1, 2, 3) o el nombre (E9, E10, E15).");
       }
 
       // Flujo "cómo cambió" por pasos: mes → versión → tipo (cargo planta / gasto corporativo)
