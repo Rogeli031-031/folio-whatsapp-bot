@@ -2739,7 +2739,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
               return safeReply(`IGF – No entendí el mes. Ejemplos: febrero, 2, 2026/2. Disponibles: ${ejemplos}.`);
             }
             const { count, versiones } = await igfHandler.getVersionesDelMes(client, elegido.year, elegido.month);
-            if (count === 0) return safeReply(`IGF – No hay versiones para ${elegido.year}/${elegido.month}.`);
+            if (count === 0) return safeReply(`IGF – No hay versiones anteriores para comparar en ${elegido.year}/${elegido.month} (solo está la actual). Elige otro mes para ver deltas.`);
             sess.igfComparar.paso = "version";
             sess.igfComparar.year = elegido.year;
             sess.igfComparar.month = elegido.month;

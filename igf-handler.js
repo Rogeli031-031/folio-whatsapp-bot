@@ -408,7 +408,25 @@ function parseMesUsuario(texto, mesesDisponibles) {
 }
 
 /**
+ * Devuelve la versión actual (última) del resumen IGF: { year, month, version_number } o null.
+ */
+async function getVersionActual(client) {
+  const r = await client.query(
+    `SELECT year, month, version_number FROM igf.v_compromiso_analisis_resumen
+     ORDER BY year DESC, month DESC, version_number DESC LIMIT 1`
+  );
+  const row = r.rows && r.rows[0] ? r.rows[0] : null;
+  if (!row) return null;
+  return {
+    year: row.year != null ? parseInt(row.year, 10) : null,
+    month: row.month != null ? parseInt(row.month, 10) : null,
+    version_number: row.version_number != null ? parseInt(row.version_number, 10) : null,
+  };
+}
+
+/**
  * Cuenta y lista versiones de un mes en el resumen IGF.
+ * Si el mes elegido es el mismo que la versión actual, excluye esa versión para que la comparación no sea "última vs última" (ceros).
  * @param {object} client - Cliente pg.
  * @param {number} year - Año.
  * @param {number} month - Mes.
@@ -420,9 +438,15 @@ async function getVersionesDelMes(client, year, month) {
      WHERE year = $1 AND month = $2 ORDER BY version_number ASC`,
     [year, month]
   );
-  const versiones = (r.rows || []).map((row) => parseInt(row.version_number, 10)).filter((n) => !isNaN(n));
-  const uniq = [...new Set(versiones)];
-  return { count: uniq.length, versiones: uniq.sort((a, b) => a - b) };
+  let versiones = (r.rows || []).map((row) => parseInt(row.version_number, 10)).filter((n) => !isNaN(n));
+  const uniq = [...new Set(versiones)].sort((a, b) => a - b);
+  const cur = await getVersionActual(client);
+  if (cur && cur.year === year && cur.month === month && cur.version_number != null) {
+    versiones = uniq.filter((v) => v !== cur.version_number);
+  } else {
+    versiones = uniq;
+  }
+  return { count: versiones.length, versiones };
 }
 
 /**
