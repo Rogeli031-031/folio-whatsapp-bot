@@ -498,7 +498,60 @@ const PRESUPUESTO_E12_SEED = [
   ["IMPUESTOS PLANTA", "PROV. IMPUESTO PLANTA", -61911],
 ];
 
-const PLANTAS_PRESUPUESTO = ["E9", "E10", "E15", "E7", "E8", "E12"];
+/** San Luis E11 — [ categoria, subcategoria, monto ]. */
+const PRESUPUESTO_E11_SEED = [
+  ["NOMINA", "SLDOS. Y SALR. ADMINISTRATIVOS N1", 362836],
+  ["NOMINA", "SLDOS. Y SALR. ADMINISTRATIVOS N2", 84647],
+  ["NOMINA", "SLDOS. Y SALR. OPERATIVOS N1", 283738],
+  ["NOMINA", "SLDOS. Y SALR. OPERATIVOS N2", 69713],
+  ["RENTAS", "RENTAS DE OFICINAS", 0],
+  ["RENTAS", "RENTAS DE CASA HABITACION", 21300],
+  ["RENTAS", "RENTAS DE ESTACIONES EN OPERACIÓN", 46185],
+  ["SERVICIOS", "ENERGIA ELECTRICA", 11563],
+  ["SERVICIOS", "SERVICIO DE AGUA", 5900],
+  ["SERVICIOS", "TELEFONIA FIJA", 8077],
+  ["SERVICIOS", "TELEFONIA Y DATOS MOVILES", 15691],
+  ["SERVICIOS", "INTERNET", 2840],
+  ["SERVICIOS", "TRASLADO DE VALORES", 22241],
+  ["SERVICIOS", "GPS DE UNIDADES", 0],
+  ["SERVICIOS", "VIGILANCIA", 40079],
+  ["SERVICIOS", "RECOLECCION DE BASURA", 0],
+  ["SERVICIOS", "DESCARGA AL DRENAJE", 0],
+  ["SERVICIOS", "HONORARIOS", 0],
+  ["SERVICIOS", "SECCION AMARILLA", 0],
+  ["SERVICIOS", "SEGUROS DE UNIDADES", 0],
+  ["SERVICIOS", "SERVICIO DE TRANSPORTE DE PERSONAL", 0],
+  ["TALLER", "REF. Y REP. DE EQ. DE REPARTO", 61347],
+  ["TALLER", "REPARACIONES Y COMPRA DE LLANTAS", 0],
+  ["TALLER", "CARROCERIA", 0],
+  ["MANTENIMIENTO", "MANTENIMIENTO PLANTA", 2500],
+  ["MANTENIMIENTO", "MANTENIMIENTO DE OFICINAS", 0],
+  ["MANTENIMIENTO", "MANTENIMIENTO DE CILINDROS", 0],
+  ["MANTENIMIENTO", "MANTENIMIENTO ESTACIONES DE CARBURACION", 0],
+  ["MANTENIMIENTO", "MANTENIMIENTO TANQUES DE ALMACEN", 0],
+  ["MANTENIMIENTO", "COMBUSTIBLES Y DIESEL", 38000],
+  ["MANTENIMIENTO", "ACEITES Y LUBRICANTES", 15000],
+  ["MANTENIMIENTO", "PINTURA Y THINER", 7332],
+  ["GASTOS GENERALES", "PAPELERIA, IMPRENTA Y ARTICULOS DE OFICINA", 3000],
+  ["GASTOS GENERALES", "VIATICOS, CASETAS Y ESTACIONAMIENTOS", 8000],
+  ["GASTOS GENERALES", "MANTENIMIENTO CLIENTES", 0],
+  ["GASTOS GENERALES", "MANT. ARREND. DE MOBILIARIO Y EQUIPO", 1682],
+  ["GASTOS GENERALES", "ARTICULOS DE SERVICIOS Y LIMPIEZA", 0],
+  ["GASTOS GENERALES", "PESAJES, GRUAS Y MANIOBRAS", 500],
+  ["GASTOS GENERALES", "CUOTA SINDICAL", 0],
+  ["GASTOS GENERALES", "PUBLICIDAD Y MERCADOTECNIA", 0],
+  ["GASTOS GENERALES", "UNIFORMES Y HERRAMIENTAS DE TRABAJO", 0],
+  ["GASTOS GENERALES", "ARTICULOS Y SERVICIOS MEDICOS", 0],
+  ["GASTOS GENERALES", "CORPORATIVO ZONA MEXICO", 11000],
+  ["GASTOS GENERALES", "OTROS GASTOS", 64205],
+  ["IMPUESTOS PLANTA", "IMSS", 77000],
+  ["IMPUESTOS PLANTA", "RCV", 7506],
+  ["IMPUESTOS PLANTA", "INFONAVIT", 77700],
+  ["IMPUESTOS PLANTA", "ESTATALES", 17000],
+  ["IMPUESTOS PLANTA", "PROV. IMPUESTO PLANTA", -2603],
+];
+
+const PLANTAS_PRESUPUESTO = ["E9", "E10", "E15", "E7", "E8", "E11", "E12"];
 
 /** Nombre de planta (sin tildes, minúsculas) -> códigos presupuesto. Si uno solo, se elige directo; si varios, se pregunta. */
 const NOMBRE_PLANTA_A_CODIGOS = {
@@ -506,20 +559,21 @@ const NOMBRE_PLANTA_A_CODIGOS = {
   morelos: ["E15"],
   puebla: ["E7"],
   tehuacan: ["E8"],
+  "san luis": ["E11"],
   queretaro: ["E12"],
 };
 
 async function seedPresupuestoAcapulco(client) {
   const periodo = getCurrentPeriodoPresupuesto();
-  const ids = { E9: null, E10: null, E15: null, E7: null, E8: null, E12: null };
+  const ids = { E9: null, E10: null, E15: null, E7: null, E8: null, E11: null, E12: null };
   const rPlantas = await client.query(
     `SELECT id, nombre FROM public.plantas WHERE nombre = ANY($1::TEXT[]) ORDER BY nombre`,
-    [["E9", "E10", "E15", "E7", "E8", "E12"]]
+    [["E9", "E10", "E15", "E7", "E8", "E11", "E12"]]
   );
   for (const row of rPlantas.rows) {
     if (row.nombre in ids) ids[row.nombre] = row.id;
   }
-  for (const nombre of ["E9", "E10", "E15", "E7", "E8", "E12"]) {
+  for (const nombre of ["E9", "E10", "E15", "E7", "E8", "E11", "E12"]) {
     if (!ids[nombre]) {
       const ins = await client.query(
         `INSERT INTO public.plantas (nombre, clave) VALUES ($1, $1) RETURNING id`,
@@ -589,6 +643,19 @@ async function seedPresupuestoAcapulco(client) {
        VALUES ($1,$2,$3,$4,$5)
        ON CONFLICT (planta_id, periodo, categoria, subcategoria) DO UPDATE SET monto_aprobado = EXCLUDED.monto_aprobado`,
       [ids.E8, periodo, categoria, subcategoria, m8]
+    );
+  }
+  for (const [categoria, subcategoria, m11] of PRESUPUESTO_E11_SEED) {
+    await client.query(
+      `INSERT INTO public.presupuesto_catalogo (planta_id, categoria, subcategoria) VALUES ($1,$2,$3)
+       ON CONFLICT (planta_id, categoria, subcategoria) DO NOTHING`,
+      [ids.E11, categoria, subcategoria]
+    );
+    await client.query(
+      `INSERT INTO public.presupuesto_asignacion_detalle (planta_id, periodo, categoria, subcategoria, monto_aprobado)
+       VALUES ($1,$2,$3,$4,$5)
+       ON CONFLICT (planta_id, periodo, categoria, subcategoria) DO UPDATE SET monto_aprobado = EXCLUDED.monto_aprobado`,
+      [ids.E11, periodo, categoria, subcategoria, m11]
     );
   }
   for (const [categoria, subcategoria, m12] of PRESUPUESTO_E12_SEED) {
@@ -2941,7 +3008,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
           const num = parseInt(bodyTrim, 10);
           const plantas = pc._plantas || [];
           if (Number.isFinite(num) && num >= 1 && num <= Math.max(plantas.length, 10)) esRespuestaValidaPresupuesto = true;
-          else if (/^e(7|8|9|10|12|15)$/i.test(bodyTrim)) esRespuestaValidaPresupuesto = true;
+          else if (/^e(7|8|9|10|11|12|15)$/i.test(bodyTrim)) esRespuestaValidaPresupuesto = true;
           else {
             const key = bodyTrim.toLowerCase().replace(/[áàä]/g, "a").replace(/[éèë]/g, "e").replace(/[íìï]/g, "i").replace(/[óòö]/g, "o").replace(/[úùü]/g, "u").trim();
             if (NOMBRE_PLANTA_A_CODIGOS[key]) esRespuestaValidaPresupuesto = true;
@@ -2976,6 +3043,8 @@ app.post("/twilio/whatsapp", async (req, res) => {
             else if (/^e8$/i.test(bodyTrim)) plantaNombre = "E8";
             else if (/^e9$/i.test(bodyTrim)) plantaNombre = "E9";
             else if (/^e10$/i.test(bodyTrim)) plantaNombre = "E10";
+            else if (/^e11$/i.test(bodyTrim)) plantaNombre = "E11";
+            else if (/^e12$/i.test(bodyTrim)) plantaNombre = "E12";
             else if (/^e15$/i.test(bodyTrim)) plantaNombre = "E15";
             else {
               const key = bodyTrim.toLowerCase().replace(/[áàä]/g, "a").replace(/[éèë]/g, "e").replace(/[íìï]/g, "i").replace(/[óòö]/g, "o").replace(/[úùü]/g, "u").trim();
@@ -2990,7 +3059,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
               }
             }
             if (!plantaNombre) {
-              return safeReply("Responde con el número, el código (E7, E8, E9, E10, E12, E15) o el nombre: Acapulco, Morelos, Puebla, Tehuacán, Querétaro.");
+              return safeReply("Responde con el número, el código (E7, E8, E9, E10, E11, E12, E15) o el nombre: Acapulco, Morelos, Puebla, San Luis, Tehuacán, Querétaro.");
             }
             const { porPlanta } = await queryPresupuestoTotalesAcapulco(client, periodoPresup);
             const fila = porPlanta.find((p) => p.nombre === plantaNombre);
@@ -3078,7 +3147,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
         }
         const listado = plantasPresup.map((p, i) => `${i + 1}) ${p.nombre}`).join("\n");
         sess.presupuestoConsulta = { paso: "elegir_planta", _plantas: plantasPresup };
-        return safeReply("¿De qué planta?\n\n" + listado + "\n\nResponde con el número, el código (E7, E8, E9, E10, E12, E15) o el nombre: Acapulco, Morelos, Puebla, Tehuacán, Querétaro.");
+        return safeReply("¿De qué planta?\n\n" + listado + "\n\nResponde con el número, el código (E7, E8, E9, E10, E11, E12, E15) o el nombre: Acapulco, Morelos, Puebla, San Luis, Tehuacán, Querétaro.");
       }
 
       // Flujo "cómo cambió" por pasos: mes → versión → tipo (cargo planta / gasto corporativo)
