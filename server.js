@@ -229,6 +229,172 @@ function formatMexicoCentral(dateOrString) {
   return d.toLocaleString("es-MX", { timeZone: ZONA_MEXICO, dateStyle: "short", timeStyle: "short" });
 }
 
+/* ==================== PRESUPUESTO ACAPULCO (E9/E10) SEED ==================== */
+
+const CATEGORIAS_ACAPULCO = ["NOMINA", "RENTAS", "SERVICIOS", "TALLER", "MANTENIMIENTO", "GASTOS GENERALES", "IMPUESTOS PLANTA"];
+
+/** [ categoria, subcategoria, monto E9, monto E10 ] - desde docs PRESUPUESTO_ACAPULCO_E9_E10.md */
+const ACAPULCO_PRESUPUESTO_SEED = [
+  ["NOMINA", "SLDOS. Y SALR. ADMINISTRATIVOS N1", 1679459, 212705],
+  ["NOMINA", "SLDOS. Y SALR. ADMINISTRATIVOS N2", 410405, 18926.44],
+  ["NOMINA", "SLDOS. Y SALR. OPERATIVOS N1", 535926, 0],
+  ["NOMINA", "SLDOS. Y SALR. OPERATIVOS N2", 144215, 0],
+  ["RENTAS", "RENTAS DE OFICINAS", 25820, 0],
+  ["RENTAS", "RENTAS DE CASA HABITACION", 46500, 0],
+  ["RENTAS", "RENTAS DE ESTACIONES EN OPERACIÓN", 193041, 447990.34],
+  ["SERVICIOS", "ENERGIA ELECTRICA", 53600, 9550],
+  ["SERVICIOS", "SERVICIO DE AGUA", 1500, 1650],
+  ["SERVICIOS", "TELEFONIA FIJA", 49950, 2680.21],
+  ["SERVICIOS", "TELEFONIA Y DATOS MOVILES", 25516, 7347],
+  ["SERVICIOS", "INTERNET", 5100, 0],
+  ["SERVICIOS", "TRASLADO DE VALORES", 104511, 31500],
+  ["SERVICIOS", "GPS DE UNIDADES", 26004, 0],
+  ["SERVICIOS", "VIGILANCIA", 40416, 11000],
+  ["SERVICIOS", "RECOLECCION DE BASURA", 0, 2587],
+  ["SERVICIOS", "DESCARGA AL DRENAJE", 0, 0],
+  ["SERVICIOS", "HONORARIOS", 28258, 9548.7],
+  ["SERVICIOS", "SECCION AMARILLA", 0, 0],
+  ["SERVICIOS", "SEGUROS DE UNIDADES", 0, 0],
+  ["SERVICIOS", "SERVICIO DE TRANSPORTE DE PERSONAL", 0, 0],
+  ["TALLER", "REF. Y REP. DE EQ. DE REPARTO", 119813, 9536],
+  ["TALLER", "REPARACIONES Y COMPRA DE LLANTAS", 0, 0],
+  ["TALLER", "CARROCERIA", 0, 0],
+  ["MANTENIMIENTO", "MANTENIMIENTO PLANTA", 0, 0],
+  ["MANTENIMIENTO", "MANTENIMIENTO DE OFICINAS", 0, 0],
+  ["MANTENIMIENTO", "MANTENIMIENTO DE CILINDROS", 0, 0],
+  ["MANTENIMIENTO", "MANTENIMIENTO ESTACIONES DE CARBURACION", 0, 0],
+  ["MANTENIMIENTO", "MANTENIMIENTO TANQUES DE ALMACEN", 0, 0],
+  ["MANTENIMIENTO", "COMBUSTIBLES Y DIESEL", 506500, 0],
+  ["MANTENIMIENTO", "ACEITES Y LUBRICANTES", 15000, 0],
+  ["MANTENIMIENTO", "PINTURA Y THINER", 0, 0],
+  ["GASTOS GENERALES", "PAPELERIA, IMPRENTA Y ARTICULOS DE OFICINA", 31618, 9027],
+  ["GASTOS GENERALES", "VIATICOS, CASETAS Y ESTACIONAMIENTOS", 72350, 0],
+  ["GASTOS GENERALES", "MANTENIMIENTO CLIENTES", 0, 0],
+  ["GASTOS GENERALES", "MANT. ARREND. DE MOBILIARIO Y EQUIPO", 7682, 0],
+  ["GASTOS GENERALES", "ARTICULOS DE SERVICIOS Y LIMPIEZA", 4100, 0],
+  ["GASTOS GENERALES", "PESAJES, GRUAS Y MANIOBRAS", 0, 0],
+  ["GASTOS GENERALES", "CUOTA SINDICAL", 0, 1500],
+  ["GASTOS GENERALES", "PUBLICIDAD Y MERCADOTECNIA", 0, 0],
+  ["GASTOS GENERALES", "UNIFORMES Y HERRAMIENTAS DE TRABAJO", 0, 0],
+  ["GASTOS GENERALES", "ARTICULOS Y SERVICIOS MEDICOS", 0, 0],
+  ["GASTOS GENERALES", "CORPORATIVO ZONA MEXICO", 29000, 0],
+  ["GASTOS GENERALES", "OTROS GASTOS", 340597, 107800],
+  ["IMPUESTOS PLANTA", "IMSS", 310000, 41000],
+  ["IMPUESTOS PLANTA", "RCV", 352188, 42655.4],
+  ["IMPUESTOS PLANTA", "INFONAVIT", 311278, 29089.87],
+  ["IMPUESTOS PLANTA", "ESTATALES", 98000, 9500],
+  ["IMPUESTOS PLANTA", "PROV. IMPUESTO PLANTA", -331733, -35873],
+];
+
+async function seedPresupuestoAcapulco(client) {
+  const periodo = getCurrentPeriodoPresupuesto();
+  let idE9 = null, idE10 = null;
+  const rPlantas = await client.query(`SELECT id, nombre FROM public.plantas WHERE nombre IN ('E9','E10') ORDER BY nombre`);
+  for (const row of rPlantas.rows) {
+    if (row.nombre === "E9") idE9 = row.id;
+    if (row.nombre === "E10") idE10 = row.id;
+  }
+  if (!idE9) {
+    const ins = await client.query(`INSERT INTO public.plantas (nombre) VALUES ('E9') RETURNING id`);
+    idE9 = ins.rows[0].id;
+  }
+  if (!idE10) {
+    const ins = await client.query(`INSERT INTO public.plantas (nombre) VALUES ('E10') RETURNING id`);
+    idE10 = ins.rows[0].id;
+  }
+  for (const [categoria, subcategoria, m9, m10] of ACAPULCO_PRESUPUESTO_SEED) {
+    await client.query(
+      `INSERT INTO public.presupuesto_catalogo (planta_id, categoria, subcategoria) VALUES ($1,$2,$3)
+       ON CONFLICT (planta_id, categoria, subcategoria) DO NOTHING`,
+      [idE9, categoria, subcategoria]
+    );
+    await client.query(
+      `INSERT INTO public.presupuesto_catalogo (planta_id, categoria, subcategoria) VALUES ($1,$2,$3)
+       ON CONFLICT (planta_id, categoria, subcategoria) DO NOTHING`,
+      [idE10, categoria, subcategoria]
+    );
+    await client.query(
+      `INSERT INTO public.presupuesto_asignacion_detalle (planta_id, periodo, categoria, subcategoria, monto_aprobado)
+       VALUES ($1,$2,$3,$4,$5)
+       ON CONFLICT (planta_id, periodo, categoria, subcategoria) DO UPDATE SET monto_aprobado = EXCLUDED.monto_aprobado`,
+      [idE9, periodo, categoria, subcategoria, m9]
+    );
+    await client.query(
+      `INSERT INTO public.presupuesto_asignacion_detalle (planta_id, periodo, categoria, subcategoria, monto_aprobado)
+       VALUES ($1,$2,$3,$4,$5)
+       ON CONFLICT (planta_id, periodo, categoria, subcategoria) DO UPDATE SET monto_aprobado = EXCLUDED.monto_aprobado`,
+      [idE10, periodo, categoria, subcategoria, m10]
+    );
+  }
+}
+
+/** YYYY-MM para presupuesto Acapulco (mes actual). */
+function getCurrentPeriodoPresupuesto() {
+  const now = new Date();
+  const y = now.getUTCFullYear();
+  const m = String(now.getUTCMonth() + 1).padStart(2, "0");
+  return `${y}-${m}`;
+}
+
+/** Plantas E9 y E10 (Acapulco). */
+async function getPlantasAcapulco(client) {
+  const r = await client.query(
+    `SELECT id, nombre FROM public.plantas WHERE nombre IN ('E9','E10') ORDER BY nombre ASC`
+  );
+  return r.rows;
+}
+
+/** Totales por planta y total general para periodo. { total, porPlanta: [ { planta_id, nombre, total } ] } */
+async function queryPresupuestoTotalesAcapulco(client, periodo) {
+  const r = await client.query(
+    `SELECT p.id AS planta_id, p.nombre, COALESCE(SUM(d.monto_aprobado), 0) AS total
+     FROM public.plantas p
+     LEFT JOIN public.presupuesto_asignacion_detalle d ON d.planta_id = p.id AND d.periodo = $1
+     WHERE p.nombre IN ('E9','E10')
+     GROUP BY p.id, p.nombre ORDER BY p.nombre`,
+    [periodo]
+  );
+  const porPlanta = r.rows.map((row) => ({
+    planta_id: row.planta_id,
+    nombre: row.nombre,
+    total: Number(row.total),
+  }));
+  const total = porPlanta.reduce((s, x) => s + x.total, 0);
+  return { total, porPlanta };
+}
+
+/** Monto total por categoría para E9 y E10. categoria nombre, porPlanta: [ { nombre, total } ] */
+async function queryPresupuestoPorCategoria(client, periodo, categoria) {
+  const r = await client.query(
+    `SELECT p.nombre, COALESCE(SUM(d.monto_aprobado), 0) AS total
+     FROM public.plantas p
+     LEFT JOIN public.presupuesto_asignacion_detalle d ON d.planta_id = p.id AND d.periodo = $1 AND d.categoria = $2
+     WHERE p.nombre IN ('E9','E10')
+     GROUP BY p.id, p.nombre ORDER BY p.nombre`,
+    [periodo, categoria]
+  );
+  return r.rows.map((row) => ({ nombre: row.nombre, total: Number(row.total) }));
+}
+
+/** Lista de subcategorías de una categoría con monto por planta. [ { subcategoria, E9, E10 } ] */
+async function queryPresupuestoSubcategorias(client, periodo, categoria) {
+  const r = await client.query(
+    `SELECT d.subcategoria, p.nombre AS planta_nombre, d.monto_aprobado
+     FROM public.presupuesto_asignacion_detalle d
+     JOIN public.plantas p ON p.id = d.planta_id
+     WHERE d.periodo = $1 AND d.categoria = $2 AND p.nombre IN ('E9','E10')
+     ORDER BY d.subcategoria, p.nombre`,
+    [periodo, categoria]
+  );
+  const bySub = {};
+  for (const row of r.rows) {
+    const sub = row.subcategoria;
+    if (!bySub[sub]) bySub[sub] = { subcategoria: sub, E9: 0, E10: 0 };
+    bySub[sub][row.planta_nombre] = Number(row.monto_aprobado);
+  }
+  return Object.values(bySub);
+}
+
 /* ==================== SCHEMA (idempotente) ==================== */
 
 async function ensureSchema() {
@@ -467,6 +633,35 @@ async function ensureSchema() {
       );
     `).catch(() => {});
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS presupuesto_id INT REFERENCES public.presupuestos_semanales(id);`).catch(() => {});
+
+    /* Presupuesto Acapulco (E9 / E10): catálogo y asignación por subcategoría */
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS public.presupuesto_catalogo (
+        id SERIAL PRIMARY KEY,
+        planta_id INT NOT NULL REFERENCES public.plantas(id),
+        categoria VARCHAR(120) NOT NULL,
+        subcategoria VARCHAR(255) NOT NULL,
+        activo BOOLEAN DEFAULT true,
+        UNIQUE(planta_id, categoria, subcategoria)
+      );
+    `).catch(() => {});
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS public.presupuesto_asignacion_detalle (
+        id SERIAL PRIMARY KEY,
+        planta_id INT NOT NULL REFERENCES public.plantas(id),
+        periodo VARCHAR(7) NOT NULL,
+        categoria VARCHAR(120) NOT NULL,
+        subcategoria VARCHAR(255) NOT NULL,
+        monto_aprobado NUMERIC(18,2) NOT NULL DEFAULT 0,
+        UNIQUE(planta_id, periodo, categoria, subcategoria)
+      );
+    `).catch(() => {});
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_presup_asig_planta_periodo
+      ON public.presupuesto_asignacion_detalle(planta_id, periodo);
+    `).catch(() => {});
+
+    await seedPresupuestoAcapulco(client);
 
     return;
   } finally {
@@ -2250,6 +2445,7 @@ function getSession(from) {
       pendingProjectAttach: null,
       pendingCotizacion: null,
       pendingReemplazo: null,
+      presupuestoConsulta: null,
     });
   }
   const s = sessions.get(from);
@@ -2258,6 +2454,7 @@ function getSession(from) {
   if (s.pendingProjectAttach === undefined) s.pendingProjectAttach = null;
   if (s.pendingCotizacion === undefined) s.pendingCotizacion = null;
   if (s.pendingReemplazo === undefined) s.pendingReemplazo = null;
+  if (s.presupuestoConsulta === undefined) s.presupuestoConsulta = null;
   return s;
 }
 
@@ -2270,6 +2467,7 @@ function resetSession(sess) {
   sess.pendingCotizacion = null;
   sess.pendingReemplazo = null;
   sess.igfComparar = null;
+  sess.presupuestoConsulta = null;
 }
 
 /* ==================== NOTIFICACIONES WHATSAPP ==================== */
@@ -2446,6 +2644,72 @@ app.post("/twilio/whatsapp", async (req, res) => {
 
       if (["ayuda", "help", "menu"].includes(lower)) {
         return safeReply(buildHelpMessage(actor));
+      }
+
+      /* ----- Presupuesto Acapulco (E9/E10): "cual es mi presupuesto" ----- */
+      const periodoPresup = getCurrentPeriodoPresupuesto();
+      const MAX_BODY = 1500;
+
+      if (sess.presupuestoConsulta) {
+        const pc = sess.presupuestoConsulta;
+        if (/^no$/i.test(body.trim())) {
+          sess.presupuestoConsulta = null;
+          return safeReply("Listo. Escribe \"cual es mi presupuesto\" cuando quieras consultar de nuevo.");
+        }
+        if (pc.paso === "elegir_categoria") {
+          const n = parseInt(body.trim(), 10);
+          if (!Number.isFinite(n) || n < 1 || n > 7) {
+            return safeReply("Responde con el número de categoría (1-7) o NO para terminar.");
+          }
+          const categoria = CATEGORIAS_ACAPULCO[n - 1];
+          const porPlanta = await queryPresupuestoPorCategoria(client, periodoPresup, categoria);
+          let msg = `📊 ${categoria}\n`;
+          for (const p of porPlanta) {
+            msg += `${p.nombre}: $${Number(p.total).toLocaleString("es-MX", { minimumFractionDigits: 2 })}\n`;
+          }
+          const subcategorias = await queryPresupuestoSubcategorias(client, periodoPresup, categoria);
+          sess.presupuestoConsulta = {
+            paso: "elegir_subcategoria",
+            categoria,
+            categoriaNum: n,
+            subcategorias,
+          };
+          let list = subcategorias.map((s, i) => `${i + 1}) ${s.subcategoria}`).join("\n");
+          if (list.length > 800) list = list.substring(0, 797) + "...";
+          msg += "\n¿Quieres el detalle de una subcategoría? Responde con el número o NO.\n\n" + list;
+          return safeReply(msg.length > MAX_BODY ? msg.substring(0, MAX_BODY - 20) + "\n...(recortado)" : msg);
+        }
+        if (pc.paso === "elegir_subcategoria") {
+          const n = parseInt(body.trim(), 10);
+          if (!Number.isFinite(n) || n < 1 || n > (pc.subcategorias || []).length) {
+            sess.presupuestoConsulta = { paso: "elegir_categoria" };
+            return safeReply("¿Quieres más detalles de otra categoría? Responde con el número (1-7) o NO para terminar.\n\n1) NOMINA\n2) RENTAS\n3) SERVICIOS\n4) TALLER\n5) MANTENIMIENTO\n6) GASTOS GENERALES\n7) IMPUESTOS PLANTA");
+          }
+          const sub = pc.subcategorias[n - 1];
+          const e9 = (sub.E9 != null ? Number(sub.E9) : 0);
+          const e10 = (sub.E10 != null ? Number(sub.E10) : 0);
+          let msg = `📋 ${sub.subcategoria}\nE9: $${e9.toLocaleString("es-MX", { minimumFractionDigits: 2 })}\nE10: $${e10.toLocaleString("es-MX", { minimumFractionDigits: 2 })}`;
+          sess.presupuestoConsulta = { paso: "elegir_categoria" };
+          msg += "\n\n¿Quieres más detalles de otra categoría? Responde con el número (1-7) o NO para terminar.\n\n1) NOMINA\n2) RENTAS\n3) SERVICIOS\n4) TALLER\n5) MANTENIMIENTO\n6) GASTOS GENERALES\n7) IMPUESTOS PLANTA";
+          return safeReply(msg);
+        }
+      }
+
+      if (/cual es mi presupuesto|cuál es mi presupuesto|mi presupuesto/i.test(body.trim())) {
+        const plantasAcap = await getPlantasAcapulco(client);
+        if (!plantasAcap.length) {
+          return safeReply("No hay datos de presupuesto Acapulco (E9/E10) configurados.");
+        }
+        const { total, porPlanta } = await queryPresupuestoTotalesAcapulco(client, periodoPresup);
+        let msg = "📊 Presupuesto Acapulco (periodo " + periodoPresup + ")\n\n";
+        msg += "TOTAL: $" + total.toLocaleString("es-MX", { minimumFractionDigits: 2 }) + "\n\n";
+        for (const p of porPlanta) {
+          msg += p.nombre + ": $" + p.total.toLocaleString("es-MX", { minimumFractionDigits: 2 }) + "\n";
+        }
+        msg += "\n¿Quieres más detalles de alguna categoría? Responde con el número (1-7) o NO.\n\n";
+        msg += "1) NOMINA\n2) RENTAS\n3) SERVICIOS\n4) TALLER\n5) MANTENIMIENTO\n6) GASTOS GENERALES\n7) IMPUESTOS PLANTA";
+        sess.presupuestoConsulta = { paso: "elegir_categoria" };
+        return safeReply(msg);
       }
 
       // Flujo "cómo cambió" por pasos: mes → versión → tipo (cargo planta / gasto corporativo)
