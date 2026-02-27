@@ -51,6 +51,160 @@ function esPreguntaIGF(texto) {
   return IGF_KEYWORDS.some((kw) => t.includes(kw));
 }
 
+/** True si existe una relación (tabla/vista) en schema dado. */
+async function existeRelacion(client, schema, name) {
+  const r = await client.query(
+    `SELECT 1
+     FROM pg_catalog.pg_class c
+     JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+     WHERE n.nspname = $1 AND c.relname = $2
+     LIMIT 1`,
+    [schema, name]
+  );
+  return (r.rows || []).length > 0;
+}
+
+/** Devuelve columnas disponibles para una tabla/vista (en minúsculas). */
+async function getColumnas(client, schema, name) {
+  const r = await client.query(
+    `SELECT column_name
+     FROM information_schema.columns
+     WHERE table_schema = $1 AND table_name = $2`,
+    [schema, name]
+  );
+  return (r.rows || []).map((x) => String(x.column_name || "").toLowerCase()).filter(Boolean);
+}
+
+/** Arma un término SQL COALESCE(col,0) solo si la columna existe. */
+function termIfColumnExists(colsLower, colName) {
+  const c = String(colName || "").toLowerCase();
+  if (!colsLower.includes(c)) return "0";
+  // colName viene de whitelist interna; seguro interpolarlo como identificador simple.
+  return `COALESCE(${colName}, 0)`;
+}
+
+/** Obtiene versión actual (GLOBAL/is_current) o null. */
+async function getVersionActualGlobal(client) {
+  const r = await client.query(
+    `SELECT id, year, month, version_number
+     FROM igf.versions
+     WHERE plant_code = 'GLOBAL' AND is_current = true
+     ORDER BY year DESC, month DESC, version_number DESC
+     LIMIT 1`
+  );
+  return r.rows && r.rows[0] ? r.rows[0] : null;
+}
+
+/** Obtiene versión previa (la inmediatamente anterior a la actual). */
+async function getVersionPreviaGlobal(client, cur) {
+  if (!cur || cur.year == null || cur.month == null || cur.version_number == null) return null;
+  // Preferir misma fecha (year/month) y version_number menor.
+  const sameMonth = await client.query(
+    `SELECT id, year, month, version_number
+     FROM igf.versions
+     WHERE plant_code = 'GLOBAL'
+       AND year = $1 AND month = $2
+       AND version_number < $3
+     ORDER BY version_number DESC
+     LIMIT 1`,
+    [cur.year, cur.month, cur.version_number]
+  );
+  if (sameMonth.rows && sameMonth.rows[0]) return sameMonth.rows[0];
+  // Fallback: la más reciente distinta a la actual.
+  const anyPrev = await client.query(
+    `SELECT id, year, month, version_number
+     FROM igf.versions
+     WHERE plant_code = 'GLOBAL' AND id <> $1
+     ORDER BY year DESC, month DESC, version_number DESC
+     LIMIT 1`,
+    [cur.id]
+  );
+  return anyPrev.rows && anyPrev.rows[0] ? anyPrev.rows[0] : null;
+}
+
+/**
+ * Calcula totales de cargo/corp en MXN para una versión a partir de igf.compromiso_lines.
+ * Si no existen algunas columnas, se consideran 0.
+ */
+async function calcularTotalesDesdeCompromisoLines(client, versionId) {
+  const cols = await getColumnas(client, "igf", "compromiso_lines");
+  if (!cols.includes("version_id") || !cols.includes("empresa") || !cols.includes("venta_ton")) {
+    throw new Error("compromiso_lines no tiene columnas mínimas (version_id/empresa/venta_ton).");
+  }
+
+  const cargoKgExpr = [
+    termIfColumnExists(cols, "com_desc_kg"),
+    termIfColumnExists(cols, "gasto_kg"),
+    termIfColumnExists(cols, "impuesto_kg"),
+    termIfColumnExists(cols, "bancos_planta_kg"),
+    termIfColumnExists(cols, "provision_planta_kg"),
+  ].join(" + ");
+
+  const corpKgExpr = cols.includes("corp_kg")
+    ? termIfColumnExists(cols, "corp_kg")
+    : [
+        termIfColumnExists(cols, "gtos_apoyos_corp_kg"),
+        termIfColumnExists(cols, "bancos_corp_kg"),
+        termIfColumnExists(cols, "otros_programas_kg"),
+        termIfColumnExists(cols, "inversiones_kg"),
+        termIfColumnExists(cols, "resultado_final_kg"),
+      ].join(" + ");
+
+  const r = await client.query(
+    `SELECT
+       SUM( (${cargoKgExpr}) * COALESCE(venta_ton, 0) * 1000 ) AS total_cargo_planta_mxn,
+       SUM( (${corpKgExpr}) * COALESCE(venta_ton, 0) * 1000 ) AS total_corp_mxn
+     FROM igf.compromiso_lines
+     WHERE version_id = $1`,
+    [versionId]
+  );
+  const row = r.rows && r.rows[0] ? r.rows[0] : {};
+  return {
+    totalCargo: row.total_cargo_planta_mxn != null ? Number(row.total_cargo_planta_mxn) : 0,
+    totalCorp: row.total_corp_mxn != null ? Number(row.total_corp_mxn) : 0,
+  };
+}
+
+/** Top N por delta de cargo planta (MXN) entre dos versiones. */
+async function topVariacionCargoDesdeCompromisoLines(client, versionActualId, versionPrevId, limit = 10) {
+  const cols = await getColumnas(client, "igf", "compromiso_lines");
+  if (!cols.includes("version_id") || !cols.includes("empresa") || !cols.includes("venta_ton")) {
+    throw new Error("compromiso_lines no tiene columnas mínimas (version_id/empresa/venta_ton).");
+  }
+
+  const cargoKgExpr = [
+    termIfColumnExists(cols, "com_desc_kg"),
+    termIfColumnExists(cols, "gasto_kg"),
+    termIfColumnExists(cols, "impuesto_kg"),
+    termIfColumnExists(cols, "bancos_planta_kg"),
+    termIfColumnExists(cols, "provision_planta_kg"),
+  ].join(" + ");
+
+  const r = await client.query(
+    `WITH a AS (
+       SELECT empresa,
+              ((${cargoKgExpr}) * COALESCE(venta_ton, 0) * 1000) AS cargo_mxn
+       FROM igf.compromiso_lines
+       WHERE version_id = $1
+     ),
+     b AS (
+       SELECT empresa,
+              ((${cargoKgExpr}) * COALESCE(venta_ton, 0) * 1000) AS cargo_mxn
+       FROM igf.compromiso_lines
+       WHERE version_id = $2
+     )
+     SELECT
+       COALESCE(a.empresa, b.empresa) AS empresa,
+       (COALESCE(a.cargo_mxn, 0) - COALESCE(b.cargo_mxn, 0)) AS delta_cargo_planta_mxn
+     FROM a
+     FULL OUTER JOIN b ON b.empresa = a.empresa
+     ORDER BY ABS(COALESCE(a.cargo_mxn, 0) - COALESCE(b.cargo_mxn, 0)) DESC
+     LIMIT $3`,
+    [versionActualId, versionPrevId, limit]
+  );
+  return r.rows || [];
+}
+
 /**
  * Extrae nombre de planta del mensaje (ej. "puebla", "gt puebla") para usar en ILIKE.
  * Solo para consultas que no son "margen X"; en "margen X" usamos extraerPlantaDespuesDeMargen.
@@ -253,47 +407,81 @@ async function consultarIGF(client, texto) {
 
     // C) Resumen por versión (totales)
     if (t.includes("resumen") || t.includes("totales")) {
-      const res = await client.query(
-        `SELECT year, month, version_number, total_cargo_planta_mxn, total_corp_mxn,
-                delta_cargo_planta_mxn, delta_corp_mxn
-         FROM igf.v_compromiso_analisis_resumen
-         ORDER BY year DESC, month DESC, version_number DESC
-         LIMIT 5`
-      );
-      const rows = res.rows || [];
-      if (rows.length === 0) return "IGF – No hay datos de resumen.";
-      const r = rows[0];
-      const cargo = r.total_cargo_planta_mxn != null ? Number(r.total_cargo_planta_mxn).toLocaleString("es-MX", { minimumFractionDigits: 2 }) : "-";
-      const corp = r.total_corp_mxn != null ? Number(r.total_corp_mxn).toLocaleString("es-MX", { minimumFractionDigits: 2 }) : "-";
-      const dCargo = r.delta_cargo_planta_mxn != null ? Number(r.delta_cargo_planta_mxn).toLocaleString("es-MX", { minimumFractionDigits: 2 }) : "-";
-      const dCorp = r.delta_corp_mxn != null ? Number(r.delta_corp_mxn).toLocaleString("es-MX", { minimumFractionDigits: 2 }) : "-";
-      return `IGF – Última versión: ${r.year}/${r.month} v.${r.version_number}. Cargo planta total: ${cargo} MXN. Corp: ${corp} MXN. Deltas: Cargo ${dCargo}, Corp ${dCorp}.`;
+      const fmt = (n) => (n != null && !isNaN(Number(n)) ? Number(n).toLocaleString("es-MX", { minimumFractionDigits: 2 }) : "-");
+      try {
+        const res = await client.query(
+          `SELECT year, month, version_number, total_cargo_planta_mxn, total_corp_mxn,
+                  delta_cargo_planta_mxn, delta_corp_mxn
+           FROM igf.v_compromiso_analisis_resumen
+           ORDER BY year DESC, month DESC, version_number DESC
+           LIMIT 1`
+        );
+        const rows = res.rows || [];
+        if (rows.length === 0) return "IGF – No hay datos de resumen.";
+        const r = rows[0];
+        return `IGF – Última versión: ${r.year}/${r.month} v.${r.version_number}. Cargo planta total: ${fmt(r.total_cargo_planta_mxn)} MXN. Corp: ${fmt(r.total_corp_mxn)} MXN. Deltas: Cargo ${fmt(r.delta_cargo_planta_mxn)}, Corp ${fmt(r.delta_corp_mxn)}.`;
+      } catch (e) {
+        // Fallback si no existe la vista resumen: calcular desde igf.versions + igf.compromiso_lines
+        const hasVersions = await existeRelacion(client, "igf", "versions");
+        const hasLines = await existeRelacion(client, "igf", "compromiso_lines");
+        if (!hasVersions || !hasLines) throw e;
+        const cur = await getVersionActualGlobal(client);
+        if (!cur) return "IGF – No hay versión actual para resumen.";
+        const prev = await getVersionPreviaGlobal(client, cur);
+        const totCur = await calcularTotalesDesdeCompromisoLines(client, cur.id);
+        const totPrev = prev ? await calcularTotalesDesdeCompromisoLines(client, prev.id) : null;
+        const dCargo = totPrev ? (totCur.totalCargo - totPrev.totalCargo) : null;
+        const dCorp = totPrev ? (totCur.totalCorp - totPrev.totalCorp) : null;
+        const prevLabel = prev ? `${prev.year}/${prev.month} v.${prev.version_number}` : "—";
+        return `IGF – Última versión: ${cur.year}/${cur.month} v.${cur.version_number}. Cargo planta total: ${fmt(totCur.totalCargo)} MXN. Corp: ${fmt(totCur.totalCorp)} MXN. Deltas vs ${prevLabel}: Cargo ${fmt(dCargo)}, Corp ${fmt(dCorp)}.`;
+      }
     }
 
     // D) Top 10 mayor variación
     if (t.includes("top 10") || t.includes("mayor variacion") || t.includes("mayor variación")) {
-      const resVersion = await client.query(
-        `SELECT id FROM igf.versions WHERE is_current = true AND plant_code = 'GLOBAL' LIMIT 1`
-      );
-      const versionId = resVersion.rows && resVersion.rows[0] ? resVersion.rows[0].id : null;
-      if (!versionId) return "IGF – No hay versión actual para Top 10.";
-      const res = await client.query(
-        `SELECT empresa, delta_cargo_planta_mxn, cambio_cargo_planta
-         FROM igf.v_compromiso_analisis_top10
-         WHERE version_id = $1
-         ORDER BY rn
-         LIMIT 10`,
-        [versionId]
-      );
-      const rows = res.rows || [];
-      if (rows.length === 0) return "IGF – No hay datos Top 10 para la versión actual.";
-      const lines = ["IGF – Top 10 mayor variación (cargo planta):"];
-      rows.forEach((r, i) => {
-        const delta = r.delta_cargo_planta_mxn != null ? Number(r.delta_cargo_planta_mxn).toLocaleString("es-MX", { minimumFractionDigits: 2 }) : "-";
-        const cambio = (r.cambio_cargo_planta || "").trim() || "—";
-        lines.push(`${i + 1}. ${r.empresa || "?"}: ${cambio} ${delta} MXN`);
-      });
-      return lines.join("\n");
+      const fmt = (n) => (n != null && !isNaN(Number(n)) ? Number(n).toLocaleString("es-MX", { minimumFractionDigits: 2 }) : "-");
+      try {
+        const resVersion = await client.query(
+          `SELECT id FROM igf.versions WHERE is_current = true AND plant_code = 'GLOBAL' LIMIT 1`
+        );
+        const versionId = resVersion.rows && resVersion.rows[0] ? resVersion.rows[0].id : null;
+        if (!versionId) return "IGF – No hay versión actual para Top 10.";
+        const res = await client.query(
+          `SELECT empresa, delta_cargo_planta_mxn, cambio_cargo_planta
+           FROM igf.v_compromiso_analisis_top10
+           WHERE version_id = $1
+           ORDER BY rn
+           LIMIT 10`,
+          [versionId]
+        );
+        const rows = res.rows || [];
+        if (rows.length === 0) return "IGF – No hay datos Top 10 para la versión actual.";
+        const lines = ["IGF – Top 10 mayor variación (cargo planta):"];
+        rows.forEach((r, i) => {
+          const delta = fmt(r.delta_cargo_planta_mxn);
+          const cambio = (r.cambio_cargo_planta || "").trim() || "—";
+          lines.push(`${i + 1}. ${r.empresa || "?"}: ${cambio} ${delta} MXN`);
+        });
+        return lines.join("\n");
+      } catch (e) {
+        // Fallback si no existe la vista top10: calcular delta cargo desde compromiso_lines (última vs anterior)
+        const hasVersions = await existeRelacion(client, "igf", "versions");
+        const hasLines = await existeRelacion(client, "igf", "compromiso_lines");
+        if (!hasVersions || !hasLines) throw e;
+        const cur = await getVersionActualGlobal(client);
+        if (!cur) return "IGF – No hay versión actual para Top 10.";
+        const prev = await getVersionPreviaGlobal(client, cur);
+        if (!prev) return "IGF – No hay versión previa para calcular Top 10.";
+        const rows = await topVariacionCargoDesdeCompromisoLines(client, cur.id, prev.id, 10);
+        if (!rows.length) return "IGF – No hay datos Top 10 para la versión actual.";
+        const lines = [`IGF – Top 10 mayor variación (cargo planta)`, `(${cur.year}/${cur.month} v.${cur.version_number} vs ${prev.year}/${prev.month} v.${prev.version_number})`];
+        rows.forEach((r, i) => {
+          const d = r.delta_cargo_planta_mxn != null ? Number(r.delta_cargo_planta_mxn) : null;
+          const cambio = d == null ? "—" : (d >= 0 ? "SUBIÓ" : "BAJÓ");
+          lines.push(`${i + 1}. ${r.empresa || "?"}: ${cambio} ${fmt(d)} MXN`);
+        });
+        return lines.join("\n");
+      }
     }
 
     // E) Solo nombre de planta (ej. "Puebla", "Morelos"): devolver deltas de esa planta, NO totales globales
