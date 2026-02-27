@@ -340,6 +340,59 @@ const ACAPULCO_PRESUPUESTO_202602_SEED = [
   ["IMPUESTOS PLANTA", "PROV. IMPUESTO PLANTA", 331733, 35873],
 ];
 
+/** Acapulco E9/E10 febrero 2025 (2025-02) — [ categoria, subcategoria, monto E9, monto E10 ]. Solo E9 con datos; E10 en 0. */
+const ACAPULCO_PRESUPUESTO_202502_SEED = [
+  ["NOMINA", "SLDOS. Y SALR. ADMINISTRATIVOS N1", 1849813, 0],
+  ["NOMINA", "SLDOS. Y SALR. ADMINISTRATIVOS N2", 426137, 0],
+  ["NOMINA", "SLDOS. Y SALR. OPERATIVOS N1", 0, 0],
+  ["NOMINA", "SLDOS. Y SALR. OPERATIVOS N2", 0, 0],
+  ["RENTAS", "RENTAS DE OFICINAS", 25820, 0],
+  ["RENTAS", "RENTAS DE CASA HABITACION", 46000, 0],
+  ["RENTAS", "RENTAS DE ESTACIONES EN OPERACIÓN", 182175, 0],
+  ["SERVICIOS", "ENERGIA ELECTRICA", 53600, 0],
+  ["SERVICIOS", "SERVICIO DE AGUA", 1500, 0],
+  ["SERVICIOS", "TELEFONIA FIJA", 49950, 0],
+  ["SERVICIOS", "TELEFONIA Y DATOS MOVILES", 14567, 0],
+  ["SERVICIOS", "INTERNET", 5100, 0],
+  ["SERVICIOS", "TRASLADO DE VALORES", 104511, 0],
+  ["SERVICIOS", "GPS DE UNIDADES", 15442, 0],
+  ["SERVICIOS", "VIGILANCIA", 29530, 0],
+  ["SERVICIOS", "RECOLECCION DE BASURA", 0, 0],
+  ["SERVICIOS", "DESCARGA AL DRENAJE", 0, 0],
+  ["SERVICIOS", "HONORARIOS", 28258, 0],
+  ["SERVICIOS", "SECCION AMARILLA", 0, 0],
+  ["SERVICIOS", "SEGUROS DE UNIDADES", 0, 0],
+  ["SERVICIOS", "SERVICIO DE TRANSPORTE DE PERSONAL", 0, 0],
+  ["TALLER", "REF. Y REP. DE EQ. DE REPARTO", 119813, 0],
+  ["TALLER", "REPARACIONES Y COMPRA DE LLANTAS", 0, 0],
+  ["TALLER", "CARROCERIA", 0, 0],
+  ["MANTENIMIENTO", "MANTENIMIENTO PLANTA", 0, 0],
+  ["MANTENIMIENTO", "MANTENIMIENTO DE OFICINAS", 0, 0],
+  ["MANTENIMIENTO", "MANTENIMIENTO DE CILINDROS", 0, 0],
+  ["MANTENIMIENTO", "MANTENIMIENTO ESTACIONES DE CARBURACION", 0, 0],
+  ["MANTENIMIENTO", "MANTENIMIENTO TANQUES DE ALMACEN", 0, 0],
+  ["MANTENIMIENTO", "COMBUSTIBLES Y DIESEL", 335700, 0],
+  ["MANTENIMIENTO", "ACEITES Y LUBRICANTES", 15000, 0],
+  ["MANTENIMIENTO", "PINTURA Y THINER", 0, 0],
+  ["GASTOS GENERALES", "PAPELERIA, IMPRENTA Y ARTICULOS DE OFICINA", 36467, 0],
+  ["GASTOS GENERALES", "VIATICOS, CASETAS Y ESTACIONAMIENTOS", 75350, 0],
+  ["GASTOS GENERALES", "MANTENIMIENTO CLIENTES", 0, 0],
+  ["GASTOS GENERALES", "MANT. ARREND. DE MOBILIARIO Y EQUIPO", 7682, 0],
+  ["GASTOS GENERALES", "ARTICULOS DE SERVICIOS Y LIMPIEZA", 4100, 0],
+  ["GASTOS GENERALES", "PESAJES, GRUAS Y MANIOBRAS", 0, 0],
+  ["GASTOS GENERALES", "CUOTA SINDICAL", 0, 0],
+  ["GASTOS GENERALES", "PUBLICIDAD Y MERCADOTECNIA", 0, 0],
+  ["GASTOS GENERALES", "UNIFORMES Y HERRAMIENTAS DE TRABAJO", 0, 0],
+  ["GASTOS GENERALES", "ARTICULOS Y SERVICIOS MEDICOS", 0, 0],
+  ["GASTOS GENERALES", "CORPORATIVO ZONA MEXICO", 19000, 0],
+  ["GASTOS GENERALES", "OTROS GASTOS", 310883, 0],
+  ["IMPUESTOS PLANTA", "IMSS", 267041, 0],
+  ["IMPUESTOS PLANTA", "RCV", 0, 0],
+  ["IMPUESTOS PLANTA", "INFONAVIT", 0, 0],
+  ["IMPUESTOS PLANTA", "ESTATALES", 77381, 0],
+  ["IMPUESTOS PLANTA", "PROV. IMPUESTO PLANTA", 296306, 0],
+];
+
 /** Morelos E15 — [ categoria, subcategoria, monto ] (mismas categorías/sub que E9/E10). */
 const PRESUPUESTO_E15_SEED = [
   ["NOMINA", "SLDOS. Y SALR. ADMINISTRATIVOS N1", 533987],
@@ -993,6 +1046,21 @@ async function seedPresupuestoAcapulco(client) {
        VALUES ($1,$2,$3,$4,$5)
        ON CONFLICT (planta_id, periodo, categoria, subcategoria) DO UPDATE SET monto_aprobado = EXCLUDED.monto_aprobado`,
       [ids.E10, periodoFeb2026, categoria, subcategoria, m10]
+    );
+  }
+  const periodoFeb2025 = "2025-02";
+  for (const [categoria, subcategoria, m9, m10] of ACAPULCO_PRESUPUESTO_202502_SEED) {
+    await client.query(
+      `INSERT INTO public.presupuesto_asignacion_detalle (planta_id, periodo, categoria, subcategoria, monto_aprobado)
+       VALUES ($1,$2,$3,$4,$5)
+       ON CONFLICT (planta_id, periodo, categoria, subcategoria) DO UPDATE SET monto_aprobado = EXCLUDED.monto_aprobado`,
+      [ids.E9, periodoFeb2025, categoria, subcategoria, m9]
+    );
+    await client.query(
+      `INSERT INTO public.presupuesto_asignacion_detalle (planta_id, periodo, categoria, subcategoria, monto_aprobado)
+       VALUES ($1,$2,$3,$4,$5)
+       ON CONFLICT (planta_id, periodo, categoria, subcategoria) DO UPDATE SET monto_aprobado = EXCLUDED.monto_aprobado`,
+      [ids.E10, periodoFeb2025, categoria, subcategoria, m10]
     );
   }
   for (const [categoria, subcategoria, m15] of PRESUPUESTO_E15_202602_SEED) {
