@@ -3700,6 +3700,7 @@ function resetSession(sess) {
   sess.pendingCotizacion = null;
   sess.pendingReemplazo = null;
   sess.igfComparar = null;
+  sess.igfMargen = null;
   sess.presupuestoConsulta = null;
 }
 
@@ -4123,6 +4124,40 @@ app.post("/twilio/whatsapp", async (req, res) => {
         return safeReply("¿De qué planta?\n\n" + listado + "\n\nResponde con el número, el código (E7, E8, E9, E10, E11, E12, E13, E15) o el nombre: Acapulco, Morelos, Puebla, San Luis, San Luis E13, Tehuacán, Querétaro.");
       }
 
+      // Si en el paso anterior pedimos la planta para "margen" (usuario escribió "margen" sin planta),
+      // la siguiente respuesta se interpreta como planta para el comando margen.
+      if (sess.igfMargen && sess.igfMargen.paso === "planta") {
+        const bodyTrim = body.trim();
+        const t = igfHandler.textoParaDeteccion(bodyTrim);
+        const esCancelar = /^(cancelar|salir|no)$/i.test(bodyTrim);
+        const esComandoNoIGF =
+          /^ayuda$|^help$|^menu$/i.test(bodyTrim) ||
+          /\bcrear\s*folio\b/i.test(bodyTrim) ||
+          /cual es mi presupuesto|cuál es mi presupuesto|^mi presupuesto$/i.test(bodyTrim) ||
+          /comparar\s+presupuesto|presupuesto\s+comparar/i.test(bodyTrim);
+        const esNuevoComandoIGF = /\b(margen|como\s+cambio|delta|resumen|totales|top\s*10|mayor\s+variacion|mayor\s+variación)\b/i.test(t);
+
+        if (esCancelar) {
+          sess.igfMargen = null;
+          return safeReply("Listo. Cancelé el flujo. Escribe: Crear folio o Ayuda");
+        }
+
+        if (esComandoNoIGF || esNuevoComandoIGF) {
+          sess.igfMargen = null;
+          // No devolver: el resto del webhook procesará el comando
+        } else {
+          sess.igfMargen = null;
+          try {
+            const respuestaIGF = await igfHandler.consultarIGF(client, `margen ${bodyTrim}`);
+            const txt = respuestaIGF.length > MAX_WHATSAPP_BODY ? respuestaIGF.substring(0, MAX_WHATSAPP_BODY - 20) + "\n...(recortado)" : respuestaIGF;
+            return safeReply(txt);
+          } catch (e) {
+            console.warn("[IGF] Error margen por pasos:", e.message);
+            return safeReply("IGF – Error al consultar. Intenta: margen Puebla");
+          }
+        }
+      }
+
       // Si en el paso anterior pedimos la planta ("Cómo cambio" sin planta), la siguiente respuesta es el nombre de la planta
       // Salida: si el usuario escribe otro comando conocido, no tratarlo como planta y dejar que lo procese su flujo
       if (sess.igfComparar && sess.igfComparar.paso === "planta") {
@@ -4205,6 +4240,11 @@ app.post("/twilio/whatsapp", async (req, res) => {
       if (igfHandler.esPreguntaIGF(body)) {
         try {
           const t = igfHandler.textoParaDeteccion(body);
+          // Caso especial: "margen" sin planta → pedir planta y esperar el siguiente mensaje
+          if (t.includes("margen") && !/margen\s+\S/.test(t)) {
+            sess.igfMargen = { paso: "planta" };
+            return safeReply("IGF – Indica la planta. Ejemplos: margen Puebla, margen Morelos, margen GT Puebla.");
+          }
           const esComoCambioODelta = t.includes("como cambio") || t.includes("delta");
           if (esComoCambioODelta) {
             const planta = igfHandler.extraerPlantaDespuesDeCambio(t);
