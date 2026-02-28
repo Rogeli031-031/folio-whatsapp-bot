@@ -4886,51 +4886,56 @@ app.post("/twilio/whatsapp", async (req, res) => {
 
       const matchDashboard = body.trim().match(/^dashboard(\s+(zp|gg|resumen|etapa|planta|categoria))?(\s+(.+))?$/i);
       if (matchDashboard) {
-        if (!actor) {
-          return safeReply("No estás dado de alta. Contacta al administrador para registrar tu número.");
+        try {
+          if (!actor) {
+            return safeReply("No estás dado de alta. Contacta al administrador para registrar tu número.");
+          }
+          const subcmd = (matchDashboard[2] || "").toLowerCase();
+          const rolClave = (actor.rol_clave && String(actor.rol_clave).toUpperCase()) || "";
+          const esZP = rolClave === "ZP" || (actor.rol_nombre && /director/i.test(actor.rol_nombre) && /zp/i.test(actor.rol_nombre));
+          const role = esZP ? "ZP" : "GG";
+          let plantasPermitidas = [];
+          if (esZP) {
+            const plantas = await getPlantas(client);
+            plantasPermitidas = (plantas || []).map((p) => p.id).filter(Number.isFinite);
+          } else if (actor.planta_id != null) {
+            plantasPermitidas = [actor.planta_id];
+          }
+          const token = createDashboardToken({
+            role,
+            actor_id: actor.id,
+            plantas_permitidas: plantasPermitidas,
+            default_filters: {},
+          });
+          const baseUrl = (process.env.DASHBOARD_URL || process.env.FRONTEND_URL || "").trim() || "https://dashboard.example.com";
+          const link = `${baseUrl.replace(/\/$/, "")}/dashboard?t=${encodeURIComponent(token)}`;
+          let msg = "📊 Dashboard de Folios\n\n";
+          if (subcmd === "resumen") {
+            const filters = parseDashboardFilters({});
+            const { where, params } = buildDashboardWhere(
+              { role, plantas_permitidas: plantasPermitidas },
+              { ...filters, soloActivos: true }
+            );
+            const whereActivos = where + " AND UPPER(TRIM(COALESCE(f.estatus,''))) NOT IN ('CERRADO','CANCELADO')";
+            const k = await client.query(`SELECT COUNT(*)::INT AS total, COALESCE(SUM(f.importe), 0)::NUMERIC AS mxn FROM public.folios f WHERE 1=1 ${whereActivos}`, params);
+            const rZp = await client.query(`SELECT COUNT(*)::INT AS c FROM public.folios f WHERE 1=1 ${where} AND UPPER(TRIM(COALESCE(f.estatus,''))) = 'PENDIENTE_APROB_ZP'`, params);
+            const rOld = await client.query(`SELECT f.folio_codigo, EXTRACT(DAY FROM (NOW() - f.creado_en))::INT AS aging FROM public.folios f WHERE 1=1 ${whereActivos} AND f.creado_en IS NOT NULL ORDER BY f.creado_en ASC LIMIT 1`, params);
+            const total = (k.rows[0] && k.rows[0].total) || 0;
+            const mxn = k.rows[0] && k.rows[0].mxn != null ? Number(k.rows[0].mxn) : null;
+            const pendZp = (rZp.rows[0] && rZp.rows[0].c) || 0;
+            const oldest = rOld.rows[0] ? { folio: rOld.rows[0].folio_codigo, dias: rOld.rows[0].aging } : null;
+            msg += `Folios activos: ${total}\n`;
+            if (mxn != null) msg += `$ comprometido: $${mxn.toLocaleString("es-MX", { minimumFractionDigits: 2 })}\n`;
+            msg += `Pend. aprob. ZP: ${pendZp}\n`;
+            if (oldest) msg += `Más antiguo: ${oldest.folio} (${oldest.dias} días)\n`;
+          }
+          msg += `\n🔗 Acceso (válido 20 min):\n${link}`;
+          if (msg.length > MAX_WHATSAPP_BODY) msg = msg.substring(0, MAX_WHATSAPP_BODY - 30) + "\n...(recortado)\n" + link;
+          return safeReply(msg);
+        } catch (dashboardErr) {
+          console.error("[Dashboard command error]", dashboardErr);
+          return safeReply("Error al generar el enlace del dashboard. Revisa los logs del servidor o contacta al administrador.");
         }
-        const subcmd = (matchDashboard[2] || "").toLowerCase();
-        const rolClave = (actor.rol_clave && String(actor.rol_clave).toUpperCase()) || "";
-        const esZP = rolClave === "ZP" || (actor.rol_nombre && /director/i.test(actor.rol_nombre) && /zp/i.test(actor.rol_nombre));
-        const role = esZP ? "ZP" : "GG";
-        let plantasPermitidas = [];
-        if (esZP) {
-          const plantas = await getPlantas(client);
-          plantasPermitidas = (plantas || []).map((p) => p.id).filter(Number.isFinite);
-        } else if (actor.planta_id != null) {
-          plantasPermitidas = [actor.planta_id];
-        }
-        const token = createDashboardToken({
-          role,
-          actor_id: actor.id,
-          plantas_permitidas: plantasPermitidas,
-          default_filters: {},
-        });
-        const baseUrl = (process.env.DASHBOARD_URL || process.env.FRONTEND_URL || "").trim() || "https://dashboard.example.com";
-        const link = `${baseUrl.replace(/\/$/, "")}/dashboard?t=${encodeURIComponent(token)}`;
-        let msg = "📊 Dashboard de Folios\n\n";
-        if (subcmd === "resumen") {
-          const filters = parseDashboardFilters({});
-          const { where, params } = buildDashboardWhere(
-            { role, plantas_permitidas: plantasPermitidas },
-            { ...filters, soloActivos: true }
-          );
-          const whereActivos = where + " AND UPPER(TRIM(COALESCE(f.estatus,''))) NOT IN ('CERRADO','CANCELADO')";
-          const k = await client.query(`SELECT COUNT(*)::INT AS total, COALESCE(SUM(f.importe), 0)::NUMERIC AS mxn FROM public.folios f WHERE 1=1 ${whereActivos}`, params);
-          const rZp = await client.query(`SELECT COUNT(*)::INT AS c FROM public.folios f WHERE 1=1 ${where} AND UPPER(TRIM(COALESCE(f.estatus,''))) = 'PENDIENTE_APROB_ZP'`, params);
-          const rOld = await client.query(`SELECT f.folio_codigo, EXTRACT(DAY FROM (NOW() - f.creado_en))::INT AS aging FROM public.folios f WHERE 1=1 ${whereActivos} AND f.creado_en IS NOT NULL ORDER BY f.creado_en ASC LIMIT 1`, params);
-          const total = (k.rows[0] && k.rows[0].total) || 0;
-          const mxn = k.rows[0] && k.rows[0].mxn != null ? Number(k.rows[0].mxn) : null;
-          const pendZp = (rZp.rows[0] && rZp.rows[0].c) || 0;
-          const oldest = rOld.rows[0] ? { folio: rOld.rows[0].folio_codigo, dias: rOld.rows[0].aging } : null;
-          msg += `Folios activos: ${total}\n`;
-          if (mxn != null) msg += `$ comprometido: $${mxn.toLocaleString("es-MX", { minimumFractionDigits: 2 })}\n`;
-          msg += `Pend. aprob. ZP: ${pendZp}\n`;
-          if (oldest) msg += `Más antiguo: ${oldest.folio} (${oldest.dias} días)\n`;
-        }
-        msg += `\n🔗 Acceso (válido 20 min):\n${link}`;
-        if (msg.length > MAX_WHATSAPP_BODY) msg = msg.substring(0, MAX_WHATSAPP_BODY - 30) + "\n...(recortado)\n" + link;
-        return safeReply(msg);
       }
 
       const matchCarrito = body.trim().match(/^carrito(\s+agregar\s+(\S+)|\s+quitar\s+(\S+))?$/i);
