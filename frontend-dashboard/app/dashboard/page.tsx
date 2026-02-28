@@ -10,7 +10,7 @@ import {
 import {
   fetchKanban,
   fetchKpis,
-  type KanbanBoard,
+  type KanbanBoard as KanbanBoardData,
   type Kpis,
   type DashboardFilters,
 } from "@/lib/api";
@@ -23,7 +23,7 @@ function DashboardContent() {
   const searchParams = useSearchParams();
   const [token, setToken] = useState<string | null>(null);
   const [unauthorized, setUnauthorized] = useState(false);
-  const [kanban, setKanban] = useState<KanbanBoard | null>(null);
+  const [kanban, setKanban] = useState<KanbanBoardData | null>(null);
   const [kpis, setKpis] = useState<Kpis | null>(null);
   const [filters, setFilters] = useState<DashboardFilters>({ solo_activos: "1" });
   const [drawerFolioId, setDrawerFolioId] = useState<number | null>(null);
