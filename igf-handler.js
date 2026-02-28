@@ -83,6 +83,18 @@ function termIfColumnExists(colsLower, colName) {
   return `COALESCE(${colName}, 0)`;
 }
 
+/**
+ * Filtro por planta para no mezclar plantas cuyo nombre es subcadena de otra (ej. Unigas vs Unigas Tlahuac).
+ * Si el usuario escribe "Unigas", excluimos empresas que contengan "Unigas " (con espacio), así no se suma Unigas Tlahuac.
+ * @param {string} nombrePlanta - Nombre extraído del mensaje (ej. "unigas", "unigas tlahuac").
+ * @returns {{ include: string, exclude: string|null }} include para ILIKE; exclude para NOT ILIKE (null si nombre tiene espacio).
+ */
+function buildEmpresaFilter(nombrePlanta) {
+  const include = "%" + nombrePlanta + "%";
+  const exclude = (nombrePlanta.indexOf(" ") >= 0) ? null : "%" + nombrePlanta + " %";
+  return { include, exclude };
+}
+
 /** Obtiene versión actual (GLOBAL/is_current) o null. */
 async function getVersionActualGlobal(client) {
   const r = await client.query(
@@ -284,6 +296,7 @@ async function consultarIGF(client, texto) {
       if (!nombreBusqueda) {
         return "IGF – Indica la planta. Ejemplos: margen Puebla, margen Morelos, margen GT Puebla.";
       }
+      const empFilterMargen = buildEmpresaFilter(nombreBusqueda);
       const res = await client.query(
         `SELECT c.empresa, c.margen_kg, c.venta_ton,
                 (c.margen_kg * c.venta_ton * 1000) AS margen_mxn
@@ -291,8 +304,8 @@ async function consultarIGF(client, texto) {
          JOIN igf.compromiso_lines c ON c.version_id = v.id
          WHERE v.plant_code = 'GLOBAL'
            AND v.is_current = true
-           AND c.empresa ILIKE $1`,
-        ["%" + nombreBusqueda + "%"]
+           AND c.empresa ILIKE $1 AND ($2::text IS NULL OR c.empresa NOT ILIKE $2)`,
+        [empFilterMargen.include, empFilterMargen.exclude]
       );
       const rows = res.rows || [];
       if (rows.length === 0) return "IGF – No hay datos de margen para esa planta en la versión actual.";
@@ -312,15 +325,16 @@ async function consultarIGF(client, texto) {
 
       if (!comparacion) {
         // Comportamiento por defecto: deltas de la vista (última vs anterior)
+        const empFilterDef = buildEmpresaFilter(nombreBusqueda);
         const res = await client.query(
           `SELECT empresa, year, month, version_number,
                   cargo_planta_mxn, delta_cargo_planta_mxn, cambio_cargo_planta,
                   corp_mxn, delta_corp_mxn, cambio_corp
            FROM igf.v_compromiso_analisis_detalle
-           WHERE empresa ILIKE $1
+           WHERE empresa ILIKE $1 AND ($2::text IS NULL OR empresa NOT ILIKE $2)
            ORDER BY year DESC, month DESC, version_number DESC
            LIMIT 2`,
-          ["%" + nombreBusqueda + "%"]
+          [empFilterDef.include, empFilterDef.exclude]
         );
         const rows = res.rows || [];
         if (rows.length === 0) return "IGF – No hay datos de cambios (deltas) para esa planta.";
@@ -368,19 +382,20 @@ async function consultarIGF(client, texto) {
       }
 
       const fmt = (n) => (n != null && !isNaN(Number(n)) ? Number(n).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "-");
+      const empFilterCmp = buildEmpresaFilter(nombreBusqueda);
       const rowActual = await client.query(
         `SELECT empresa, year, month, version_number, cargo_planta_mxn, corp_mxn
          FROM igf.v_compromiso_analisis_detalle
-         WHERE empresa ILIKE $1 AND year = $2 AND month = $3 AND version_number = $4
+         WHERE empresa ILIKE $1 AND ($2::text IS NULL OR empresa NOT ILIKE $2) AND year = $3 AND month = $4 AND version_number = $5
          LIMIT 1`,
-        ["%" + nombreBusqueda + "%", cur.year, cur.month, cur.version_number]
+        [empFilterCmp.include, empFilterCmp.exclude, cur.year, cur.month, cur.version_number]
       );
       const rowOtra = await client.query(
         `SELECT empresa, year, month, version_number, cargo_planta_mxn, corp_mxn
          FROM igf.v_compromiso_analisis_detalle
-         WHERE empresa ILIKE $1 AND year = $2 AND month = $3 AND version_number = $4
+         WHERE empresa ILIKE $1 AND ($2::text IS NULL OR empresa NOT ILIKE $2) AND year = $3 AND month = $4 AND version_number = $5
          LIMIT 1`,
-        ["%" + nombreBusqueda + "%", yearOtra, monthOtra, versionOtra]
+        [empFilterCmp.include, empFilterCmp.exclude, yearOtra, monthOtra, versionOtra]
       );
       const rActual = rowActual.rows && rowActual.rows[0] ? rowActual.rows[0] : null;
       const rOtra = rowOtra.rows && rowOtra.rows[0] ? rowOtra.rows[0] : null;
@@ -489,15 +504,16 @@ async function consultarIGF(client, texto) {
     const posiblePlanta = t.length >= 2 && t.length <= 50 && soloPalabras && !/^\d+$/.test(t);
     if (posiblePlanta && !t.includes("resumen") && !t.includes("totales") && !t.includes("top 10")) {
       const nombreBusqueda = t.trim();
+      const empFilterPlanta = buildEmpresaFilter(nombreBusqueda);
       const res = await client.query(
         `SELECT empresa, year, month, version_number,
                 cargo_planta_mxn, delta_cargo_planta_mxn, cambio_cargo_planta,
                 corp_mxn, delta_corp_mxn, cambio_corp
          FROM igf.v_compromiso_analisis_detalle
-         WHERE empresa ILIKE $1
+         WHERE empresa ILIKE $1 AND ($2::text IS NULL OR empresa NOT ILIKE $2)
          ORDER BY year DESC, month DESC, version_number DESC
          LIMIT 2`,
-        ["%" + nombreBusqueda + "%"]
+        [empFilterPlanta.include, empFilterPlanta.exclude]
       );
       const rows = res.rows || [];
       if (rows.length > 0) {
@@ -655,15 +671,16 @@ async function ejecutarComparacion(client, nombrePlanta, yearOtra, monthOtra, ve
   const cur = resumenCur.rows && resumenCur.rows[0] ? resumenCur.rows[0] : null;
   if (!cur) return "IGF – No hay versión actual en el resumen.";
   const fmt = (n) => (n != null && !isNaN(Number(n)) ? Number(n).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "-");
+  const empFilter = buildEmpresaFilter(nombrePlanta);
   const rowActual = await client.query(
     `SELECT empresa, cargo_planta_mxn, corp_mxn FROM igf.v_compromiso_analisis_detalle
-     WHERE empresa ILIKE $1 AND year = $2 AND month = $3 AND version_number = $4 LIMIT 1`,
-    ["%" + nombrePlanta + "%", cur.year, cur.month, cur.version_number]
+     WHERE empresa ILIKE $1 AND ($2::text IS NULL OR empresa NOT ILIKE $2) AND year = $3 AND month = $4 AND version_number = $5 LIMIT 1`,
+    [empFilter.include, empFilter.exclude, cur.year, cur.month, cur.version_number]
   );
   const rowOtra = await client.query(
     `SELECT empresa, cargo_planta_mxn, corp_mxn FROM igf.v_compromiso_analisis_detalle
-     WHERE empresa ILIKE $1 AND year = $2 AND month = $3 AND version_number = $4 LIMIT 1`,
-    ["%" + nombrePlanta + "%", yearOtra, monthOtra, versionOtra]
+     WHERE empresa ILIKE $1 AND ($2::text IS NULL OR empresa NOT ILIKE $2) AND year = $3 AND month = $4 AND version_number = $5 LIMIT 1`,
+    [empFilter.include, empFilter.exclude, yearOtra, monthOtra, versionOtra]
   );
   const rActual = rowActual.rows && rowActual.rows[0] ? rowActual.rows[0] : null;
   const rOtra = rowOtra.rows && rowOtra.rows[0] ? rowOtra.rows[0] : null;
@@ -740,10 +757,11 @@ async function obtenerDeltaMargen(client, nombrePlanta, cur, yearOtra, monthOtra
       [yearOtra, monthOtra, versionOtra]
     ).catch(() => ({ rows: [] }));
     idOtra = rOtra.rows && rOtra.rows[0] ? rOtra.rows[0].id : null;
+    const empFilter = buildEmpresaFilter(nombrePlanta);
     if (!idOtra) {
       const detalleOtra = await client.query(
-        `SELECT version_id FROM igf.v_compromiso_analisis_detalle WHERE empresa ILIKE $1 AND year = $2 AND month = $3 AND version_number = $4 LIMIT 1`,
-        ["%" + nombrePlanta + "%", yearOtra, monthOtra, versionOtra]
+        `SELECT version_id FROM igf.v_compromiso_analisis_detalle WHERE empresa ILIKE $1 AND ($2::text IS NULL OR empresa NOT ILIKE $2) AND year = $3 AND month = $4 AND version_number = $5 LIMIT 1`,
+        [empFilter.include, empFilter.exclude, yearOtra, monthOtra, versionOtra]
       ).catch(() => ({ rows: [] }));
       idOtra = detalleOtra.rows && detalleOtra.rows[0] && detalleOtra.rows[0].version_id != null ? detalleOtra.rows[0].version_id : null;
     }
@@ -751,13 +769,13 @@ async function obtenerDeltaMargen(client, nombrePlanta, cur, yearOtra, monthOtra
     // MXN = Margen $/kg × venta kg por cada fila; si hay varias líneas por planta se suma.
     const rowA = await client.query(
       `SELECT SUM(margen_kg * COALESCE(venta_ton, 0) * 1000) AS margen_mxn, SUM(COALESCE(venta_ton, 0)) AS venta_ton
-       FROM igf.compromiso_lines WHERE version_id = $1 AND empresa ILIKE $2`,
-      [idActual, "%" + nombrePlanta + "%"]
+       FROM igf.compromiso_lines WHERE version_id = $1 AND empresa ILIKE $2 AND ($3::text IS NULL OR empresa NOT ILIKE $3)`,
+      [idActual, empFilter.include, empFilter.exclude]
     );
     const rowB = await client.query(
       `SELECT SUM(margen_kg * COALESCE(venta_ton, 0) * 1000) AS margen_mxn, SUM(COALESCE(venta_ton, 0)) AS venta_ton
-       FROM igf.compromiso_lines WHERE version_id = $2 AND empresa ILIKE $1`,
-      ["%" + nombrePlanta + "%", idOtra]
+       FROM igf.compromiso_lines WHERE version_id = $2 AND empresa ILIKE $1 AND ($3::text IS NULL OR empresa NOT ILIKE $3)`,
+      [empFilter.include, idOtra, empFilter.exclude]
     );
     const rA = rowA.rows && rowA.rows[0] ? rowA.rows[0] : null;
     const rB = rowB.rows && rowB.rows[0] ? rowB.rows[0] : null;
@@ -773,12 +791,12 @@ async function obtenerDeltaMargen(client, nombrePlanta, cur, yearOtra, monthOtra
     // Delta $/kg: si hay una sola fila por versión, usar margen_kg directo (V5 - V4). Si no, promedio ponderado.
     let deltaKg = null;
     const detailA = await client.query(
-      `SELECT margen_kg, venta_ton FROM igf.compromiso_lines WHERE version_id = $1 AND empresa ILIKE $2`,
-      [idActual, "%" + nombrePlanta + "%"]
+      `SELECT margen_kg, venta_ton FROM igf.compromiso_lines WHERE version_id = $1 AND empresa ILIKE $2 AND ($3::text IS NULL OR empresa NOT ILIKE $3)`,
+      [idActual, empFilter.include, empFilter.exclude]
     );
     const detailB = await client.query(
-      `SELECT margen_kg, venta_ton FROM igf.compromiso_lines WHERE version_id = $2 AND empresa ILIKE $1`,
-      ["%" + nombrePlanta + "%", idOtra]
+      `SELECT margen_kg, venta_ton FROM igf.compromiso_lines WHERE version_id = $2 AND empresa ILIKE $1 AND ($3::text IS NULL OR empresa NOT ILIKE $3)`,
+      [empFilter.include, idOtra, empFilter.exclude]
     );
     const rowsA = detailA.rows || [];
     const rowsB = detailB.rows || [];
@@ -832,10 +850,11 @@ async function obtenerDeltasVariablesCargoPlanta(client, nombrePlanta, cur, year
       [yearOtra, monthOtra, versionOtra]
     ).catch(() => ({ rows: [] }));
     idOtra = rOtra.rows && rOtra.rows[0] ? rOtra.rows[0].id : null;
+    const empFilter = buildEmpresaFilter(nombrePlanta);
     if (!idOtra) {
       const detalleOtra = await client.query(
-        `SELECT version_id FROM igf.v_compromiso_analisis_detalle WHERE empresa ILIKE $1 AND year = $2 AND month = $3 AND version_number = $4 LIMIT 1`,
-        ["%" + nombrePlanta + "%", yearOtra, monthOtra, versionOtra]
+        `SELECT version_id FROM igf.v_compromiso_analisis_detalle WHERE empresa ILIKE $1 AND ($2::text IS NULL OR empresa NOT ILIKE $2) AND year = $3 AND month = $4 AND version_number = $5 LIMIT 1`,
+        [empFilter.include, empFilter.exclude, yearOtra, monthOtra, versionOtra]
       ).catch(() => ({ rows: [] }));
       idOtra = detalleOtra.rows && detalleOtra.rows[0] && detalleOtra.rows[0].version_id != null ? detalleOtra.rows[0].version_id : null;
     }
@@ -843,13 +862,13 @@ async function obtenerDeltasVariablesCargoPlanta(client, nombrePlanta, cur, year
     const sumExprs = VARIABLES_CARGO_PLANTA.map((v) => `SUM(${v.col} * COALESCE(venta_ton, 0) * 1000) AS ${v.col}_mxn`).join(", ");
     const rowA = await client.query(
       `SELECT SUM(COALESCE(venta_ton, 0)) AS venta_ton, ${sumExprs}
-       FROM igf.compromiso_lines WHERE version_id = $1 AND empresa ILIKE $2`,
-      [idActual, "%" + nombrePlanta + "%"]
+       FROM igf.compromiso_lines WHERE version_id = $1 AND empresa ILIKE $2 AND ($3::text IS NULL OR empresa NOT ILIKE $3)`,
+      [idActual, empFilter.include, empFilter.exclude]
     );
     const rowB = await client.query(
       `SELECT SUM(COALESCE(venta_ton, 0)) AS venta_ton, ${sumExprs}
-       FROM igf.compromiso_lines WHERE version_id = $2 AND empresa ILIKE $1`,
-      ["%" + nombrePlanta + "%", idOtra]
+       FROM igf.compromiso_lines WHERE version_id = $2 AND empresa ILIKE $1 AND ($3::text IS NULL OR empresa NOT ILIKE $3)`,
+      [empFilter.include, idOtra, empFilter.exclude]
     );
     const rA = rowA.rows && rowA.rows[0] ? rowA.rows[0] : null;
     const rB = rowB.rows && rowB.rows[0] ? rowB.rows[0] : null;
@@ -898,17 +917,17 @@ async function obtenerDeltasVariablesCorporativo(client, nombrePlanta, cur, year
   let idActual = null;
   let idOtra = null;
 
-  const runWithVars = async (variables) => {
+  const runWithVars = async (variables, empFilter) => {
     const sumExprs = variables.map((v) => `SUM(${v.col} * COALESCE(venta_ton, 0) * 1000) AS ${v.col}_mxn`).join(", ");
     const rowA = await client.query(
       `SELECT SUM(COALESCE(venta_ton, 0)) AS venta_ton, ${sumExprs}
-       FROM igf.compromiso_lines WHERE version_id = $1 AND empresa ILIKE $2`,
-      [idActual, "%" + nombrePlanta + "%"]
+       FROM igf.compromiso_lines WHERE version_id = $1 AND empresa ILIKE $2 AND ($3::text IS NULL OR empresa NOT ILIKE $3)`,
+      [idActual, empFilter.include, empFilter.exclude]
     );
     const rowB = await client.query(
       `SELECT SUM(COALESCE(venta_ton, 0)) AS venta_ton, ${sumExprs}
-       FROM igf.compromiso_lines WHERE version_id = $2 AND empresa ILIKE $1`,
-      ["%" + nombrePlanta + "%", idOtra]
+       FROM igf.compromiso_lines WHERE version_id = $2 AND empresa ILIKE $1 AND ($3::text IS NULL OR empresa NOT ILIKE $3)`,
+      [empFilter.include, idOtra, empFilter.exclude]
     );
     const rA = rowA.rows && rowA.rows[0] ? rowA.rows[0] : null;
     const rB = rowB.rows && rowB.rows[0] ? rowB.rows[0] : null;
@@ -944,16 +963,17 @@ async function obtenerDeltasVariablesCorporativo(client, nombrePlanta, cur, year
       [yearOtra, monthOtra, versionOtra]
     ).catch(() => ({ rows: [] }));
     idOtra = rOtra.rows && rOtra.rows[0] ? rOtra.rows[0].id : null;
+    const empFilter = buildEmpresaFilter(nombrePlanta);
     if (!idOtra) {
       const detalleOtra = await client.query(
-        `SELECT version_id FROM igf.v_compromiso_analisis_detalle WHERE empresa ILIKE $1 AND year = $2 AND month = $3 AND version_number = $4 LIMIT 1`,
-        ["%" + nombrePlanta + "%", yearOtra, monthOtra, versionOtra]
+        `SELECT version_id FROM igf.v_compromiso_analisis_detalle WHERE empresa ILIKE $1 AND ($2::text IS NULL OR empresa NOT ILIKE $2) AND year = $3 AND month = $4 AND version_number = $5 LIMIT 1`,
+        [empFilter.include, empFilter.exclude, yearOtra, monthOtra, versionOtra]
       ).catch(() => ({ rows: [] }));
       idOtra = detalleOtra.rows && detalleOtra.rows[0] && detalleOtra.rows[0].version_id != null ? detalleOtra.rows[0].version_id : null;
     }
     if (!idActual || !idOtra) return { lineas: out, ventaKgActual: null };
-    const ok = await runWithVars(VARIABLES_CORP_FULL).catch(() => null);
-    if (!ok) await runWithVars(VARIABLES_CORP_SIMPLE).catch(() => null);
+    const ok = await runWithVars(VARIABLES_CORP_FULL, empFilter).catch(() => null);
+    if (!ok) await runWithVars(VARIABLES_CORP_SIMPLE, empFilter).catch(() => null);
   } catch (e) {
     console.warn("[IGF] Variables corporativo:", e.message);
   }
