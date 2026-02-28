@@ -681,6 +681,9 @@ async function ejecutarComparacion(client, nombrePlanta, yearOtra, monthOtra, ve
   const cabecera = `IGF – ${rActual.empresa || nombrePlanta}\nÚltima (${cur.year}/${cur.month} v.${cur.version_number}) vs ${yearOtra}/${monthOtra} v.${versionOtra}.`;
   const lineas = [];
 
+  const lineaMargen = await obtenerDeltaMargen(client, nombrePlanta, cur, yearOtra, monthOtra, versionOtra);
+  if (lineaMargen) lineas.push(lineaMargen);
+
   if (tipoSalida === "cargo" || tipoSalida === "ambos") {
     const { lineas: varsCargo, ventaKgActual } = await obtenerDeltasVariablesCargoPlanta(client, nombrePlanta, cur, yearOtra, monthOtra, versionOtra);
     const pesosKg = (ventaKgActual != null && ventaKgActual > 0 && deltaCargo != null)
@@ -718,6 +721,64 @@ async function ejecutarComparacion(client, nombrePlanta, yearOtra, monthOtra, ve
   return lineas.length > 0 ? `${cabecera}\n\nDeltas:\n${lineas.join("\n")}` : cabecera;
 }
 
+/**
+ * Obtiene la línea de "Cambio en el margen" ($/kg y MXN) entre la versión actual (cur) y la otra.
+ * Usa la misma resolución de version_id que el resto del desglose.
+ * @returns {Promise<string|null>} Línea formateada o null si no hay datos de margen.
+ */
+async function obtenerDeltaMargen(client, nombrePlanta, cur, yearOtra, monthOtra, versionOtra) {
+  let idActual = null;
+  let idOtra = null;
+  try {
+    const rCur = await client.query(
+      `SELECT id FROM igf.versions WHERE plant_code = 'GLOBAL' AND year = $1 AND month = $2 AND version_number = $3 LIMIT 1`,
+      [cur.year, cur.month, cur.version_number]
+    );
+    idActual = rCur.rows && rCur.rows[0] ? rCur.rows[0].id : null;
+    let rOtra = await client.query(
+      `SELECT id FROM igf.versions WHERE plant_code = 'GLOBAL' AND year = $1 AND month = $2 AND version_number = $3 LIMIT 1`,
+      [yearOtra, monthOtra, versionOtra]
+    ).catch(() => ({ rows: [] }));
+    idOtra = rOtra.rows && rOtra.rows[0] ? rOtra.rows[0].id : null;
+    if (!idOtra) {
+      const detalleOtra = await client.query(
+        `SELECT version_id FROM igf.v_compromiso_analisis_detalle WHERE empresa ILIKE $1 AND year = $2 AND month = $3 AND version_number = $4 LIMIT 1`,
+        ["%" + nombrePlanta + "%", yearOtra, monthOtra, versionOtra]
+      ).catch(() => ({ rows: [] }));
+      idOtra = detalleOtra.rows && detalleOtra.rows[0] && detalleOtra.rows[0].version_id != null ? detalleOtra.rows[0].version_id : null;
+    }
+    if (!idActual || !idOtra) return null;
+    const rowA = await client.query(
+      `SELECT margen_kg, venta_ton FROM igf.compromiso_lines WHERE version_id = $1 AND empresa ILIKE $2 LIMIT 1`,
+      [idActual, "%" + nombrePlanta + "%"]
+    );
+    const rowB = await client.query(
+      `SELECT margen_kg, venta_ton FROM igf.compromiso_lines WHERE version_id = $2 AND empresa ILIKE $1 LIMIT 1`,
+      ["%" + nombrePlanta + "%", idOtra]
+    );
+    const rA = rowA.rows && rowA.rows[0] ? rowA.rows[0] : null;
+    const rB = rowB.rows && rowB.rows[0] ? rowB.rows[0] : null;
+    if (!rA || !rB) return null;
+    const margenKgActual = rA.margen_kg != null ? Number(rA.margen_kg) : null;
+    const margenKgOtra = rB.margen_kg != null ? Number(rB.margen_kg) : null;
+    const ventaTonActual = rA.venta_ton != null ? Number(rA.venta_ton) : null;
+    const ventaTonOtra = rB.venta_ton != null ? Number(rB.venta_ton) : null;
+    if (margenKgActual == null && margenKgOtra == null) return null;
+    const deltaKg = (margenKgActual != null && margenKgOtra != null) ? margenKgActual - margenKgOtra : null;
+    const margenMxnActual = (margenKgActual != null && ventaTonActual != null) ? margenKgActual * ventaTonActual * 1000 : null;
+    const margenMxnOtra = (margenKgOtra != null && ventaTonOtra != null) ? margenKgOtra * ventaTonOtra * 1000 : null;
+    const deltaMxn = (margenMxnActual != null && margenMxnOtra != null) ? margenMxnActual - margenMxnOtra : null;
+    const fmt = (n) => (n != null && !isNaN(Number(n)) ? Number(n).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "-");
+    const dir = deltaKg != null ? (deltaKg >= 0 ? "SUBIÓ" : "BAJÓ") : "—";
+    const kgStr = deltaKg != null ? deltaKg.toLocaleString("es-MX", { minimumFractionDigits: 4, maximumFractionDigits: 4 }) : "-";
+    if (deltaMxn != null) return `• Cambio en el margen: ${dir} ${kgStr} $/kg (${fmt(deltaMxn)} MXN)`;
+    return `• Cambio en el margen: ${dir} ${kgStr} $/kg`;
+  } catch (e) {
+    console.warn("[IGF] Delta margen:", e.message);
+    return null;
+  }
+}
+
 /** Variables internas de cargo planta (columnas en compromiso_lines o vista detalle). */
 const VARIABLES_CARGO_PLANTA = [
   { col: "com_desc_kg", nombre: "Comisión/descuento", unit: "kg" },
@@ -729,7 +790,7 @@ const VARIABLES_CARGO_PLANTA = [
 
 /**
  * Obtiene los deltas de las variables internas de cargo planta desde igf.compromiso_lines.
- * Necesita version_id: se obtiene de igf.versions (is_current para actual, year/month/version_number para otra).
+ * Necesita version_id: misma versión que la "actual" del resumen (cur) para que los totales y el desglose coincidan.
  */
 async function obtenerDeltasVariablesCargoPlanta(client, nombrePlanta, cur, yearOtra, monthOtra, versionOtra) {
   const out = [];
@@ -738,7 +799,8 @@ async function obtenerDeltasVariablesCargoPlanta(client, nombrePlanta, cur, year
   let idOtra = null;
   try {
     const rCur = await client.query(
-      `SELECT id FROM igf.versions WHERE plant_code = 'GLOBAL' AND is_current = true LIMIT 1`
+      `SELECT id FROM igf.versions WHERE plant_code = 'GLOBAL' AND year = $1 AND month = $2 AND version_number = $3 LIMIT 1`,
+      [cur.year, cur.month, cur.version_number]
     );
     idActual = rCur.rows && rCur.rows[0] ? rCur.rows[0].id : null;
     let rOtra = await client.query(
@@ -846,7 +908,8 @@ async function obtenerDeltasVariablesCorporativo(client, nombrePlanta, cur, year
 
   try {
     const rCur = await client.query(
-      `SELECT id FROM igf.versions WHERE plant_code = 'GLOBAL' AND is_current = true LIMIT 1`
+      `SELECT id FROM igf.versions WHERE plant_code = 'GLOBAL' AND year = $1 AND month = $2 AND version_number = $3 LIMIT 1`,
+      [cur.year, cur.month, cur.version_number]
     );
     idActual = rCur.rows && rCur.rows[0] ? rCur.rows[0].id : null;
     let rOtra = await client.query(
