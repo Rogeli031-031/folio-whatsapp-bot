@@ -32,6 +32,27 @@ const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 
+/* ==================== CORS (Dashboard) ==================== */
+const dashboardOrigin = process.env.DASHBOARD_URL || process.env.CORS_ORIGIN || "https://folio-dashboard.onrender.com";
+const corsOrigins = [
+  dashboardOrigin,
+  "http://localhost:3000",
+  "http://127.0.0.1:3000",
+];
+function corsMiddleware(req, res, next) {
+  const origin = req.headers.origin;
+  const allow = origin && corsOrigins.some(o => origin === o || origin.startsWith(o.replace(/\/$/, ""))) ? origin : corsOrigins[0];
+  res.setHeader("Access-Control-Allow-Origin", allow);
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type");
+  res.setHeader("Access-Control-Max-Age", "86400");
+  if (req.method === "OPTIONS") {
+    return res.status(204).end();
+  }
+  next();
+}
+app.use(corsMiddleware);
+
 /* ==================== ENV & FLAGS ==================== */
 
 const PORT = process.env.PORT || 10000;
