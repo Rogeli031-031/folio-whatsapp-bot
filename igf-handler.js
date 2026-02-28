@@ -749,7 +749,6 @@ async function obtenerDeltaMargen(client, nombrePlanta, cur, yearOtra, monthOtra
     }
     if (!idActual || !idOtra) return null;
     // MXN = Margen $/kg × venta kg por cada fila; si hay varias líneas por planta se suma.
-    // Fórmula: V5(Margen $/kg × venta kg) - V4(Margen $/kg × venta kg) agregado por planta.
     const rowA = await client.query(
       `SELECT SUM(margen_kg * COALESCE(venta_ton, 0) * 1000) AS margen_mxn, SUM(COALESCE(venta_ton, 0)) AS venta_ton
        FROM igf.compromiso_lines WHERE version_id = $1 AND empresa ILIKE $2`,
@@ -770,9 +769,29 @@ async function obtenerDeltaMargen(client, nombrePlanta, cur, yearOtra, monthOtra
     const ventaKgActual = (ventaTonActual != null && ventaTonActual > 0) ? ventaTonActual * 1000 : null;
     const ventaKgOtra = (ventaTonOtra != null && ventaTonOtra > 0) ? ventaTonOtra * 1000 : null;
     const deltaMxn = (margenMxnActual != null && margenMxnOtra != null) ? margenMxnActual - margenMxnOtra : null;
-    const margenKgActual = (ventaKgActual != null && ventaKgActual > 0 && margenMxnActual != null) ? margenMxnActual / ventaKgActual : null;
-    const margenKgOtra = (ventaKgOtra != null && ventaKgOtra > 0 && margenMxnOtra != null) ? margenMxnOtra / ventaKgOtra : null;
-    const deltaKg = (margenKgActual != null && margenKgOtra != null) ? margenKgActual - margenKgOtra : null;
+
+    // Delta $/kg: si hay una sola fila por versión, usar margen_kg directo (V5 - V4). Si no, promedio ponderado.
+    let deltaKg = null;
+    const detailA = await client.query(
+      `SELECT margen_kg, venta_ton FROM igf.compromiso_lines WHERE version_id = $1 AND empresa ILIKE $2`,
+      [idActual, "%" + nombrePlanta + "%"]
+    );
+    const detailB = await client.query(
+      `SELECT margen_kg, venta_ton FROM igf.compromiso_lines WHERE version_id = $2 AND empresa ILIKE $1`,
+      ["%" + nombrePlanta + "%", idOtra]
+    );
+    const rowsA = detailA.rows || [];
+    const rowsB = detailB.rows || [];
+    if (rowsA.length === 1 && rowsB.length === 1) {
+      const mgA = rowsA[0].margen_kg != null ? Number(rowsA[0].margen_kg) : null;
+      const mgB = rowsB[0].margen_kg != null ? Number(rowsB[0].margen_kg) : null;
+      if (mgA != null && mgB != null) deltaKg = mgA - mgB;
+    }
+    if (deltaKg == null) {
+      const margenKgActual = (ventaKgActual != null && ventaKgActual > 0 && margenMxnActual != null) ? margenMxnActual / ventaKgActual : null;
+      const margenKgOtra = (ventaKgOtra != null && ventaKgOtra > 0 && margenMxnOtra != null) ? margenMxnOtra / ventaKgOtra : null;
+      deltaKg = (margenKgActual != null && margenKgOtra != null) ? margenKgActual - margenKgOtra : null;
+    }
     const fmt = (n) => (n != null && !isNaN(Number(n)) ? Number(n).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "-");
     const dir = deltaKg != null ? (deltaKg >= 0 ? "SUBIÓ" : "BAJÓ") : "—";
     const kgStr = deltaKg != null ? deltaKg.toLocaleString("es-MX", { minimumFractionDigits: 4, maximumFractionDigits: 4 }) : "-";
