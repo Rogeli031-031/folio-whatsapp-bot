@@ -26,6 +26,7 @@ const { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command } = r
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const twilioNotify = require("./notifications/twilioClient");
 const igfHandler = require("./igf-handler");
+const { createDashboardToken, dashboardAuthMiddleware } = require("./lib/dashboard-auth");
 
 const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
@@ -2048,6 +2049,41 @@ async function getFolioByNumero(client, numero) {
   return row;
 }
 
+async function getFolioById(client, id) {
+  const r = await client.query(
+    `SELECT f.id, f.numero_folio, f.folio_codigo, f.planta_id, f.beneficiario, f.concepto, f.importe,
+            f.categoria, f.subcategoria, f.estacion, f.unidad, f.prioridad, f.estatus, f.cotizacion_url, f.cotizacion_s3key,
+            f.aprobado_por, f.aprobado_en, f.creado_en, f.nivel_aprobado, f.estatus_anterior, f.override_planta, f.override_motivo, f.creado_por,
+            f.presupuesto_id, f.descripcion,
+            COALESCE(f.descripcion, f.concepto) AS descripcion_display,
+            p.nombre AS planta_nombre
+     FROM public.folios f
+     LEFT JOIN public.plantas p ON p.id = f.planta_id
+     WHERE f.id = $1`,
+    [id]
+  );
+  const row = r.rows[0] || null;
+  if (row && row.nivel_aprobado != null) row.nivel_aprobado = parseInt(row.nivel_aprobado, 10);
+  return row;
+}
+
+/** Historial por folio_id (para API dashboard). */
+async function getHistorialByFolioId(client, folioId, limit = 80) {
+  const r = await client.query(
+    `SELECT estatus, comentario, actor_telefono, actor_rol, creado_en
+     FROM (
+       SELECT estatus, comentario, actor_telefono, actor_rol, creado_en
+       FROM public.folio_historial
+       WHERE folio_id = $1
+       ORDER BY creado_en DESC
+       LIMIT $2
+     ) sub
+     ORDER BY creado_en ASC`,
+    [folioId, limit]
+  );
+  return r.rows || [];
+}
+
 /** Consulta varios folios por numero_folio. Retorna array en el mismo orden que numeros: { numero, folio } con folio null si no existe. */
 async function getManyFoliosStatus(client, numeros) {
   if (!numeros || numeros.length === 0) return [];
@@ -2635,6 +2671,19 @@ async function listFolioArchivos(client, numeroFolio, limit = 10) {
      ORDER BY fa.subido_en DESC
      LIMIT $2`,
     [numeroFolio, limit]
+  );
+  return r.rows || [];
+}
+
+/** Lista archivos del folio por folio_id (para API dashboard: COTIZACION, ANTES, DESPUES). */
+async function listFolioArchivosByFolioId(client, folioId, limit = 20) {
+  const r = await client.query(
+    `SELECT fa.id, fa.tipo, fa.status, fa.file_name, fa.s3_key, fa.file_size_bytes, fa.subido_por, fa.subido_en
+     FROM public.folio_archivos fa
+     WHERE fa.folio_id = $1
+     ORDER BY fa.subido_en DESC
+     LIMIT $2`,
+    [folioId, limit]
   );
   return r.rows || [];
 }
@@ -3535,6 +3584,8 @@ function buildHelpMessage(actor) {
   lines.push("• folios de pipa");
   lines.push("• folios por estación");
   lines.push("• mis pendientes / pendientes [página]");
+  lines.push("• dashboard / dashboard resumen (link al tablero)");
+  if (clave === "GG") lines.push("• carrito / carrito agregar F-XXX / carrito quitar F-XXX");
   lines.push("• comentario F-YYYYMM-XXX: <texto>");
   if (FLAGS.ATTACHMENTS) {
     lines.push("• adjuntar F-YYYYMM-XXX (luego envía el PDF)");
@@ -3834,6 +3885,401 @@ if (DEBUG) {
     }
   });
 }
+
+/* ==================== DASHBOARD API ==================== */
+
+const ETAPAS_ORDER = [
+  ESTADOS.GENERADO,
+  ESTADOS.PENDIENTE_APROB_PLANTA,
+  ESTADOS.APROB_PLANTA,
+  ESTADOS.PENDIENTE_APROB_ZP,
+  ESTADOS.APROBADO_ZP,
+  ESTADOS.LISTO_PARA_PROGRAMACION,
+  ESTADOS.SELECCIONADO_SEMANA,
+  ESTADOS.SOLICITANDO_PAGO,
+  ESTADOS.PAGADO,
+  ESTADOS.CERRADO,
+  ESTADOS.CANCELACION_SOLICITADA,
+  ESTADOS.CANCELADO,
+];
+const CATEGORIAS_FOLIO = ["GASTOS", "INVERSIONES", "DYO", "TALLER"];
+
+function parseDashboardFilters(q) {
+  const plantas = (q.planta_id || q.plantas || q.planta || "")
+    .toString()
+    .split(",")
+    .map((s) => parseInt(s, 10))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  const categorias = (q.categoria || q.categorias || "")
+    .toString()
+    .split(",")
+    .map((s) => String(s).trim().toUpperCase())
+    .filter(Boolean);
+  const etapas = (q.etapa || q.etapas || "")
+    .toString()
+    .split(",")
+    .map((s) => String(s).trim().toUpperCase())
+    .filter(Boolean);
+  const soloActivos = q.solo_activos === "true" || q.solo_activos === "1" || q.activos === "1";
+  const miSemana = q.mi_semana === "true" || q.mi_semana === "1";
+  let fechaDesde = q.fecha_desde || q.desde || null;
+  let fechaHasta = q.fecha_hasta || q.hasta || null;
+  if (fechaDesde && !/^\d{4}-\d{2}-\d{2}$/.test(fechaDesde)) fechaDesde = null;
+  if (fechaHasta && !/^\d{4}-\d{2}-\d{2}$/.test(fechaHasta)) fechaHasta = null;
+  return { plantas, categorias, etapas, soloActivos, miSemana, fechaDesde, fechaHasta };
+}
+
+function buildDashboardWhere(auth, filters) {
+  const conditions = [];
+  const params = [];
+  let n = 1;
+  if (auth.role === "GG") {
+    if (auth.plantas_permitidas && auth.plantas_permitidas.length > 0) {
+      conditions.push(`f.planta_id = ANY($${n}::INT[])`);
+      params.push(auth.plantas_permitidas);
+      n++;
+    } else {
+      conditions.push("f.planta_id = -1");
+    }
+  }
+  if (filters.plantas && filters.plantas.length > 0) {
+    conditions.push(`f.planta_id = ANY($${n}::INT[])`);
+    params.push(filters.plantas);
+    n++;
+  }
+  if (filters.categorias && filters.categorias.length > 0) {
+    conditions.push(`UPPER(TRIM(COALESCE(f.categoria,''))) = ANY($${n}::TEXT[])`);
+    params.push(filters.categorias);
+    n++;
+  }
+  if (filters.etapas && filters.etapas.length > 0) {
+    conditions.push(`UPPER(TRIM(COALESCE(f.estatus,''))) = ANY($${n}::TEXT[])`);
+    params.push(filters.etapas);
+    n++;
+  }
+  if (filters.soloActivos) {
+    conditions.push(`UPPER(TRIM(COALESCE(f.estatus,''))) NOT IN ('CERRADO','CANCELADO')`);
+  }
+  if (filters.miSemana) {
+    conditions.push(`UPPER(TRIM(COALESCE(f.estatus,''))) = 'SELECCIONADO_SEMANA'`);
+  }
+  if (filters.fechaDesde) {
+    conditions.push(`(f.creado_en::DATE >= $${n}::DATE)`);
+    params.push(filters.fechaDesde);
+    n++;
+  }
+  if (filters.fechaHasta) {
+    conditions.push(`(f.creado_en::DATE <= $${n}::DATE)`);
+    params.push(filters.fechaHasta);
+    n++;
+  }
+  const where = conditions.length ? " AND " + conditions.join(" AND ") : "";
+  return { where, params };
+}
+
+function cardFromFolioRow(row) {
+  const creado = row.creado_en ? new Date(row.creado_en) : null;
+  const aging = creado ? Math.floor((Date.now() - creado.getTime()) / (24 * 60 * 60 * 1000)) : null;
+  return {
+    id: row.id,
+    numero_folio: row.numero_folio,
+    folio_codigo: row.folio_codigo,
+    planta_id: row.planta_id,
+    planta_nombre: row.planta_nombre || null,
+    categoria: row.categoria || null,
+    subcategoria: row.subcategoria || null,
+    unidad: row.unidad || null,
+    importe: row.importe != null ? Number(row.importe) : null,
+    estatus: row.estatus || null,
+    descripcion: (row.descripcion_display || row.concepto || "").toString().slice(0, 120),
+    creado_en: row.creado_en,
+    aging,
+  };
+}
+
+app.get("/api/dashboard/kanban", dashboardAuthMiddleware, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const filters = parseDashboardFilters(req.query);
+    const { where, params } = buildDashboardWhere(req.dashboardAuth, filters);
+    const q = `
+      SELECT f.id, f.numero_folio, f.folio_codigo, f.planta_id, f.categoria, f.subcategoria, f.unidad,
+             f.importe, f.estatus, f.creado_en, COALESCE(f.descripcion, f.concepto) AS descripcion_display,
+             p.nombre AS planta_nombre
+      FROM public.folios f
+      LEFT JOIN public.plantas p ON p.id = f.planta_id
+      WHERE 1=1 ${where}
+      ORDER BY f.creado_en ASC NULLS LAST
+    `;
+    const r = await client.query(q, params);
+    const rows = r.rows || [];
+    const etapasSet = new Set(ETAPAS_ORDER);
+    const byEtapa = {};
+    ETAPAS_ORDER.forEach((e) => { byEtapa[e] = []; });
+    rows.forEach((row) => {
+      const est = (row.estatus || "").toString().trim().toUpperCase() || "GENERADO";
+      const etapa = etapasSet.has(est) ? est : ESTADOS.GENERADO;
+      if (!byEtapa[etapa]) byEtapa[etapa] = [];
+      byEtapa[etapa].push(row);
+    });
+    const board = ETAPAS_ORDER.map((etapa) => {
+      const folios = byEtapa[etapa] || [];
+      const count = folios.length;
+      const totalMxn = folios.reduce((s, f) => s + (Number(f.importe) || 0), 0);
+      const agings = folios.map((f) => {
+        const d = f.creado_en ? new Date(f.creado_en) : null;
+        return d ? Math.floor((Date.now() - d.getTime()) / (24 * 60 * 60 * 1000)) : 0;
+      }).filter((a) => a >= 0);
+      const avgAging = agings.length ? Math.round(agings.reduce((s, a) => s + a, 0) / agings.length) : null;
+      const byPlanta = {};
+      folios.forEach((f) => {
+        const pid = f.planta_id != null ? f.planta_id : 0;
+        const pnom = f.planta_nombre || "Sin planta";
+        if (!byPlanta[pid]) byPlanta[pid] = { planta_id: pid, planta_nombre: pnom, folios: [] };
+        byPlanta[pid].folios.push(f);
+      });
+      const plantas = Object.values(byPlanta).map((p) => {
+        const fols = p.folios;
+        const pCount = fols.length;
+        const pTotal = fols.reduce((s, f) => s + (Number(f.importe) || 0), 0);
+        const pAgings = fols.map((f) => {
+          const d = f.creado_en ? new Date(f.creado_en) : null;
+          return d ? Math.floor((Date.now() - d.getTime()) / (24 * 60 * 60 * 1000)) : 0;
+        }).filter((a) => a >= 0);
+        const pAvgAging = pAgings.length ? Math.round(pAgings.reduce((s, a) => s + a, 0) / pAgings.length) : null;
+        const porCategoria = { GASTOS: [], INVERSIONES: [], DYO: [], TALLER: [] };
+        fols.forEach((f) => {
+          const cat = (f.categoria || "").toString().trim().toUpperCase() || "GASTOS";
+          const key = CATEGORIAS_FOLIO.includes(cat) ? cat : "GASTOS";
+          porCategoria[key].push(cardFromFolioRow(f));
+        });
+        return {
+          planta_id: p.planta_id,
+          planta_nombre: p.planta_nombre,
+          stats: { count: pCount, total_mxn: pTotal || null, avg_aging: pAvgAging },
+          porCategoria,
+        };
+      });
+      return {
+        etapa,
+        stats: { count, total_mxn: totalMxn || null, avg_aging: avgAging },
+        plantas,
+      };
+    });
+    res.json({
+      meta: { filters, role: req.dashboardAuth.role },
+      etapas: ETAPAS_ORDER,
+      categorias: CATEGORIAS_FOLIO,
+      board,
+    });
+  } catch (e) {
+    console.error("[Dashboard kanban]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+app.get("/api/dashboard/kpis", dashboardAuthMiddleware, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const filters = parseDashboardFilters(req.query);
+    const { where, params } = buildDashboardWhere(req.dashboardAuth, filters);
+    const whereActivos = where + (filters.soloActivos ? " AND UPPER(TRIM(COALESCE(f.estatus,''))) NOT IN ('CERRADO','CANCELADO')" : "");
+    const r = await client.query(
+      `SELECT COUNT(*)::INT AS total_activos, COALESCE(SUM(f.importe), 0)::NUMERIC AS total_mxn
+       FROM public.folios f WHERE 1=1 ${whereActivos}`,
+      params
+    );
+    const row = r.rows[0] || {};
+    const totalActivos = parseInt(row.total_activos, 10) || 0;
+    const totalMxn = row.total_mxn != null ? Number(row.total_mxn) : null;
+    const rZp = await client.query(
+      `SELECT COUNT(*)::INT AS c FROM public.folios f WHERE 1=1 ${where} AND UPPER(TRIM(COALESCE(f.estatus,''))) = 'PENDIENTE_APROB_ZP'`,
+      params
+    );
+    const pendientesZp = parseInt((rZp.rows[0] || {}).c, 10) || 0;
+    const rAging = await client.query(
+      `SELECT f.id, f.numero_folio, f.folio_codigo, f.estatus, f.creado_en, p.nombre AS planta_nombre,
+              EXTRACT(DAY FROM (NOW() - f.creado_en))::INT AS aging
+       FROM public.folios f LEFT JOIN public.plantas p ON p.id = f.planta_id
+       WHERE 1=1 ${whereActivos} AND f.creado_en IS NOT NULL
+       ORDER BY f.creado_en ASC NULLS LAST LIMIT 1`,
+      params
+    );
+    const oldestRow = rAging.rows[0] || null;
+    const oldest = oldestRow
+      ? {
+          folio_codigo: oldestRow.folio_codigo,
+          aging: parseInt(oldestRow.aging, 10) || 0,
+          etapa: oldestRow.estatus,
+          planta: oldestRow.planta_nombre || null,
+        }
+      : null;
+    const avgAgingRes = await client.query(
+      `SELECT AVG(EXTRACT(DAY FROM (NOW() - f.creado_en)))::NUMERIC AS avg_aging
+       FROM public.folios f WHERE 1=1 ${whereActivos} AND f.creado_en IS NOT NULL`,
+      params
+    );
+    const avgAging = avgAgingRes.rows[0] && avgAgingRes.rows[0].avg_aging != null ? Math.round(Number(avgAgingRes.rows[0].avg_aging)) : null;
+    const rTopPlanta = await client.query(
+      `SELECT f.planta_id, p.nombre AS planta_nombre, COUNT(*)::INT AS cnt, COALESCE(SUM(f.importe), 0)::NUMERIC AS total_mxn
+       FROM public.folios f LEFT JOIN public.plantas p ON p.id = f.planta_id
+       WHERE 1=1 ${whereActivos}
+       GROUP BY f.planta_id, p.nombre ORDER BY cnt DESC, total_mxn DESC NULLS LAST LIMIT 1`,
+      params
+    );
+    const topPlantaRow = rTopPlanta.rows[0] || null;
+    const topPlanta = topPlantaRow ? { nombre: topPlantaRow.planta_nombre || "Sin planta", count: parseInt(topPlantaRow.cnt, 10) || 0, total_mxn: Number(topPlantaRow.total_mxn) || null } : null;
+    const rTopCat = await client.query(
+      `SELECT UPPER(TRIM(COALESCE(f.categoria,''))) AS cat, COUNT(*)::INT AS cnt, COALESCE(SUM(f.importe), 0)::NUMERIC AS total_mxn
+       FROM public.folios f WHERE 1=1 ${whereActivos}
+       GROUP BY UPPER(TRIM(COALESCE(f.categoria,''))) ORDER BY cnt DESC, total_mxn DESC NULLS LAST LIMIT 1`,
+      params
+    );
+    const topCatRow = rTopCat.rows[0] || null;
+    const topCategoria = topCatRow ? { nombre: topCatRow.cat || "N/A", count: parseInt(topCatRow.cnt, 10) || 0, total_mxn: topCatRow.total_mxn != null ? Number(topCatRow.total_mxn) : null } : null;
+    res.json({
+      total_activos: totalActivos,
+      total_mxn: totalMxn,
+      pendientes_zp: pendientesZp,
+      avg_aging: avgAging,
+      top_planta: topPlanta,
+      top_categoria: topCategoria,
+      oldest,
+    });
+  } catch (e) {
+    console.error("[Dashboard KPIs]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+app.get("/api/folios/:id/media", dashboardAuthMiddleware, async (req, res) => {
+  const folioId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
+  const client = await pool.connect();
+  try {
+    const folio = await getFolioById(client, folioId);
+    if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
+    if (req.dashboardAuth.role === "GG" && req.dashboardAuth.plantas_permitidas && req.dashboardAuth.plantas_permitidas.length > 0) {
+      if (!folio.planta_id || !req.dashboardAuth.plantas_permitidas.includes(folio.planta_id)) {
+        return res.status(403).json({ error: "Sin permiso para este folio" });
+      }
+    }
+    const items = await listFolioArchivosByFolioId(client, folioId, 20);
+    res.json({ folio_id: folioId, numero_folio: folio.numero_folio, items });
+  } catch (e) {
+    console.error("[Dashboard media]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+app.get("/api/folios/:id/media/:mediaId/url", dashboardAuthMiddleware, async (req, res) => {
+  const folioId = parseInt(req.params.id, 10);
+  const mediaId = parseInt(req.params.mediaId, 10);
+  if (!Number.isFinite(folioId) || !Number.isFinite(mediaId)) return res.status(400).json({ error: "id o mediaId inválido" });
+  const client = await pool.connect();
+  try {
+    const folio = await getFolioById(client, folioId);
+    if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
+    if (req.dashboardAuth.role === "GG" && req.dashboardAuth.plantas_permitidas?.length > 0) {
+      if (!folio.planta_id || !req.dashboardAuth.plantas_permitidas.includes(folio.planta_id)) {
+        return res.status(403).json({ error: "Sin permiso" });
+      }
+    }
+    const arch = await getFolioArchivoById(client, mediaId);
+    if (!arch || arch.folio_id !== folioId) return res.status(404).json({ error: "Archivo no encontrado" });
+    const url = arch.s3_key ? await getSignedDownloadUrl(arch.s3_key, 600).catch(() => null) : (arch.url || null);
+    if (!url) return res.status(404).json({ error: "URL no disponible" });
+    res.json({ url, expires_in: 600 });
+  } catch (e) {
+    console.error("[Dashboard media url]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+app.get("/api/folios/:id/timeline", dashboardAuthMiddleware, async (req, res) => {
+  const folioId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
+  const client = await pool.connect();
+  try {
+    const folio = await getFolioById(client, folioId);
+    if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
+    if (req.dashboardAuth.role === "GG" && req.dashboardAuth.plantas_permitidas?.length > 0) {
+      if (!folio.planta_id || !req.dashboardAuth.plantas_permitidas.includes(folio.planta_id)) {
+        return res.status(403).json({ error: "Sin permiso" });
+      }
+    }
+    const events = await getHistorialByFolioId(client, folioId, 80);
+    res.json({ folio_id: folioId, numero_folio: folio.numero_folio, events });
+  } catch (e) {
+    console.error("[Dashboard timeline]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+app.get("/api/folios/:id/finanzas", dashboardAuthMiddleware, async (req, res) => {
+  const folioId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
+  const client = await pool.connect();
+  try {
+    const folio = await getFolioById(client, folioId);
+    if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
+    if (req.dashboardAuth.role === "GG" && req.dashboardAuth.plantas_permitidas?.length > 0) {
+      if (!folio.planta_id || !req.dashboardAuth.plantas_permitidas.includes(folio.planta_id)) {
+        return res.status(403).json({ error: "Sin permiso" });
+      }
+    }
+    const montoMxn = folio.importe != null ? Number(folio.importe) : null;
+    res.json({
+      status: "PENDIENTE_INTEGRACION",
+      monto_mxn: montoMxn,
+      categoria_presupuestal: null,
+      impacto_estimado: null,
+      notas: null,
+    });
+  } catch (e) {
+    console.error("[Dashboard finanzas]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+app.get("/api/folios/:id", dashboardAuthMiddleware, async (req, res) => {
+  const folioId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
+  const client = await pool.connect();
+  try {
+    const folio = await getFolioById(client, folioId);
+    if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
+    if (req.dashboardAuth.role === "GG" && req.dashboardAuth.plantas_permitidas?.length > 0) {
+      if (!folio.planta_id || !req.dashboardAuth.plantas_permitidas.includes(folio.planta_id)) {
+        return res.status(403).json({ error: "Sin permiso" });
+      }
+    }
+    const creado = folio.creado_en ? new Date(folio.creado_en) : null;
+    const aging = creado ? Math.floor((Date.now() - creado.getTime()) / (24 * 60 * 60 * 1000)) : null;
+    res.json({
+      ...folio,
+      descripcion_display: folio.descripcion_display || folio.concepto,
+      aging,
+    });
+  } catch (e) {
+    console.error("[Dashboard folio]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
 
 /* ==================== WEBHOOK WHATSAPP ==================== */
 
@@ -4436,6 +4882,110 @@ app.post("/twilio/whatsapp", async (req, res) => {
           else lines.push(`${toDisplay} (${rec.nombre}) → ERROR ${result.error || "unknown"}`);
         }
         return safeReply("REPORTE PRUEBA NOTIFICACIÓN\n\n" + lines.join("\n"));
+      }
+
+      const matchDashboard = body.trim().match(/^dashboard(\s+(zp|gg|resumen|etapa|planta|categoria))?(\s+(.+))?$/i);
+      if (matchDashboard) {
+        if (!actor) {
+          return safeReply("No estás dado de alta. Contacta al administrador para registrar tu número.");
+        }
+        const subcmd = (matchDashboard[2] || "").toLowerCase();
+        const rolClave = (actor.rol_clave && String(actor.rol_clave).toUpperCase()) || "";
+        const esZP = rolClave === "ZP" || (actor.rol_nombre && /director/i.test(actor.rol_nombre) && /zp/i.test(actor.rol_nombre));
+        const role = esZP ? "ZP" : "GG";
+        let plantasPermitidas = [];
+        if (esZP) {
+          const plantas = await getPlantas(client);
+          plantasPermitidas = (plantas || []).map((p) => p.id).filter(Number.isFinite);
+        } else if (actor.planta_id != null) {
+          plantasPermitidas = [actor.planta_id];
+        }
+        const token = createDashboardToken({
+          role,
+          actor_id: actor.id,
+          plantas_permitidas: plantasPermitidas,
+          default_filters: {},
+        });
+        const baseUrl = (process.env.DASHBOARD_URL || process.env.FRONTEND_URL || "").trim() || "https://dashboard.example.com";
+        const link = `${baseUrl.replace(/\/$/, "")}/dashboard?t=${encodeURIComponent(token)}`;
+        let msg = "📊 Dashboard de Folios\n\n";
+        if (subcmd === "resumen") {
+          const filters = parseDashboardFilters({});
+          const { where, params } = buildDashboardWhere(
+            { role, plantas_permitidas: plantasPermitidas },
+            { ...filters, soloActivos: true }
+          );
+          const whereActivos = where + " AND UPPER(TRIM(COALESCE(f.estatus,''))) NOT IN ('CERRADO','CANCELADO')";
+          const k = await client.query(`SELECT COUNT(*)::INT AS total, COALESCE(SUM(f.importe), 0)::NUMERIC AS mxn FROM public.folios f WHERE 1=1 ${whereActivos}`, params);
+          const rZp = await client.query(`SELECT COUNT(*)::INT AS c FROM public.folios f WHERE 1=1 ${where} AND UPPER(TRIM(COALESCE(f.estatus,''))) = 'PENDIENTE_APROB_ZP'`, params);
+          const rOld = await client.query(`SELECT f.folio_codigo, EXTRACT(DAY FROM (NOW() - f.creado_en))::INT AS aging FROM public.folios f WHERE 1=1 ${whereActivos} AND f.creado_en IS NOT NULL ORDER BY f.creado_en ASC LIMIT 1`, params);
+          const total = (k.rows[0] && k.rows[0].total) || 0;
+          const mxn = k.rows[0] && k.rows[0].mxn != null ? Number(k.rows[0].mxn) : null;
+          const pendZp = (rZp.rows[0] && rZp.rows[0].c) || 0;
+          const oldest = rOld.rows[0] ? { folio: rOld.rows[0].folio_codigo, dias: rOld.rows[0].aging } : null;
+          msg += `Folios activos: ${total}\n`;
+          if (mxn != null) msg += `$ comprometido: $${mxn.toLocaleString("es-MX", { minimumFractionDigits: 2 })}\n`;
+          msg += `Pend. aprob. ZP: ${pendZp}\n`;
+          if (oldest) msg += `Más antiguo: ${oldest.folio} (${oldest.dias} días)\n`;
+        }
+        msg += `\n🔗 Acceso (válido 20 min):\n${link}`;
+        if (msg.length > MAX_WHATSAPP_BODY) msg = msg.substring(0, MAX_WHATSAPP_BODY - 30) + "\n...(recortado)\n" + link;
+        return safeReply(msg);
+      }
+
+      const matchCarrito = body.trim().match(/^carrito(\s+agregar\s+(\S+)|\s+quitar\s+(\S+))?$/i);
+      if (matchCarrito) {
+        if (!actor) {
+          return safeReply("No estás dado de alta. Contacta al administrador.");
+        }
+        const rolClave = (actor.rol_clave && String(actor.rol_clave).toUpperCase()) || "";
+        const esGG = rolClave === "GG";
+        if (!esGG) {
+          return safeReply("Solo GG puede usar el carrito. Usa: seleccionar folios 001 002 010 para ligar al presupuesto semanal.");
+        }
+        const accion = matchCarrito[1] ? (matchCarrito[1].toLowerCase().includes("agregar") ? "agregar" : "quitar") : null;
+        const tokenFolio = matchCarrito[2] || matchCarrito[3] || null;
+        if (!accion || !tokenFolio) {
+          const baseUrl = (process.env.DASHBOARD_URL || process.env.FRONTEND_URL || "").trim() || "https://dashboard.example.com";
+          const token = createDashboardToken({
+            role: "GG",
+            actor_id: actor.id,
+            plantas_permitidas: actor.planta_id != null ? [actor.planta_id] : [],
+            default_filters: {},
+          });
+          const link = `${baseUrl.replace(/\/$/, "")}/dashboard?t=${encodeURIComponent(token)}&mi_semana=1`;
+          return safeReply("🛒 Carrito (presupuesto semanal)\n\nEn el dashboard GG puedes seleccionar folios para la semana.\n\nComandos:\n• carrito → ver link\n• carrito agregar F-XXX → (en dashboard)\n• carrito quitar F-XXX → (en dashboard)\n\nO usa: seleccionar folios 001 002 010\n\n🔗 " + link);
+        }
+        const numero = normalizeFolioToken(tokenFolio.trim(), getCurrentYYYYMM());
+        if (!numero) return safeReply("Folio inválido. Ej: F-202602-001 o 001");
+        const folio = await getFolioByNumero(client, numero);
+        if (!folio) return safeReply(`No existe el folio ${numero}.`);
+        if (folio.planta_id !== actor.planta_id) return safeReply("Solo puedes agregar/quitar folios de tu planta.");
+        const estatus = String(folio.estatus || "").toUpperCase();
+        if (accion === "agregar") {
+          if (estatus !== ESTADOS.LISTO_PARA_PROGRAMACION) {
+            return safeReply(`El folio debe estar en LISTO_PARA_PROGRAMACION. Estado actual: ${folio.estatus || "-"}`);
+          }
+          const { lunes, domingo } = getCurrentWeekMexico();
+          const presup = await client.query(
+            `SELECT id FROM public.presupuestos_semanales WHERE planta_id = $1 AND semana_inicio = $2::date AND semana_fin = $3::date AND estatus = 'ABIERTO' LIMIT 1`,
+            [actor.planta_id, dateToPg(lunes), dateToPg(domingo)]
+          );
+          if (!presup.rows[0]) {
+            return safeReply("No hay presupuesto semanal ABIERTO para tu planta esta semana. Pide a CDMX que asigne.");
+          }
+          const result = await linkFoliosToPresupuesto(client, presup.rows[0].id, [folio], fromNorm);
+          if (!result.ok) return safeReply(result.error || "No se pudo agregar.");
+          return safeReply(`✅ Folio ${numero} agregado al presupuesto de la semana.`);
+        } else {
+          if (estatus !== ESTADOS.SELECCIONADO_SEMANA) return safeReply("El folio no está en el carrito de esta semana.");
+          const pf = await client.query(`SELECT id FROM public.presupuesto_folios WHERE folio_id = $1 LIMIT 1`, [folio.id]);
+          if (!pf.rows[0]) return safeReply("No está en presupuesto_folios.");
+          await client.query(`DELETE FROM public.presupuesto_folios WHERE folio_id = $1`, [folio.id]);
+          await client.query(`UPDATE public.folios SET estatus = $1, presupuesto_id = NULL WHERE id = $2`, [ESTADOS.LISTO_PARA_PROGRAMACION, folio.id]);
+          await insertHistorial(client, folio.id, folio.numero_folio, folio.folio_codigo, ESTADOS.LISTO_PARA_PROGRAMACION, "Quitado del presupuesto semanal (carrito)", fromNorm, actor.rol_nombre);
+          return safeReply(`✅ Folio ${numero} quitado del carrito.`);
+        }
       }
 
       const matchPendientes = body.trim().match(/^(mis\s+pendientes|pendientes)(\s+(\d+))?$/i);
