@@ -748,26 +748,31 @@ async function obtenerDeltaMargen(client, nombrePlanta, cur, yearOtra, monthOtra
       idOtra = detalleOtra.rows && detalleOtra.rows[0] && detalleOtra.rows[0].version_id != null ? detalleOtra.rows[0].version_id : null;
     }
     if (!idActual || !idOtra) return null;
+    // MXN = Margen $/kg × venta kg por cada fila; si hay varias líneas por planta se suma.
+    // Fórmula: V5(Margen $/kg × venta kg) - V4(Margen $/kg × venta kg) agregado por planta.
     const rowA = await client.query(
-      `SELECT margen_kg, venta_ton FROM igf.compromiso_lines WHERE version_id = $1 AND empresa ILIKE $2 LIMIT 1`,
+      `SELECT SUM(margen_kg * COALESCE(venta_ton, 0) * 1000) AS margen_mxn, SUM(COALESCE(venta_ton, 0)) AS venta_ton
+       FROM igf.compromiso_lines WHERE version_id = $1 AND empresa ILIKE $2`,
       [idActual, "%" + nombrePlanta + "%"]
     );
     const rowB = await client.query(
-      `SELECT margen_kg, venta_ton FROM igf.compromiso_lines WHERE version_id = $2 AND empresa ILIKE $1 LIMIT 1`,
+      `SELECT SUM(margen_kg * COALESCE(venta_ton, 0) * 1000) AS margen_mxn, SUM(COALESCE(venta_ton, 0)) AS venta_ton
+       FROM igf.compromiso_lines WHERE version_id = $2 AND empresa ILIKE $1`,
       ["%" + nombrePlanta + "%", idOtra]
     );
     const rA = rowA.rows && rowA.rows[0] ? rowA.rows[0] : null;
     const rB = rowB.rows && rowB.rows[0] ? rowB.rows[0] : null;
     if (!rA || !rB) return null;
-    const margenKgActual = rA.margen_kg != null ? Number(rA.margen_kg) : null;
-    const margenKgOtra = rB.margen_kg != null ? Number(rB.margen_kg) : null;
+    const margenMxnActual = rA.margen_mxn != null ? Number(rA.margen_mxn) : null;
+    const margenMxnOtra = rB.margen_mxn != null ? Number(rB.margen_mxn) : null;
     const ventaTonActual = rA.venta_ton != null ? Number(rA.venta_ton) : null;
     const ventaTonOtra = rB.venta_ton != null ? Number(rB.venta_ton) : null;
-    if (margenKgActual == null && margenKgOtra == null) return null;
-    const deltaKg = (margenKgActual != null && margenKgOtra != null) ? margenKgActual - margenKgOtra : null;
-    const margenMxnActual = (margenKgActual != null && ventaTonActual != null) ? margenKgActual * ventaTonActual * 1000 : null;
-    const margenMxnOtra = (margenKgOtra != null && ventaTonOtra != null) ? margenKgOtra * ventaTonOtra * 1000 : null;
+    const ventaKgActual = (ventaTonActual != null && ventaTonActual > 0) ? ventaTonActual * 1000 : null;
+    const ventaKgOtra = (ventaTonOtra != null && ventaTonOtra > 0) ? ventaTonOtra * 1000 : null;
     const deltaMxn = (margenMxnActual != null && margenMxnOtra != null) ? margenMxnActual - margenMxnOtra : null;
+    const margenKgActual = (ventaKgActual != null && ventaKgActual > 0 && margenMxnActual != null) ? margenMxnActual / ventaKgActual : null;
+    const margenKgOtra = (ventaKgOtra != null && ventaKgOtra > 0 && margenMxnOtra != null) ? margenMxnOtra / ventaKgOtra : null;
+    const deltaKg = (margenKgActual != null && margenKgOtra != null) ? margenKgActual - margenKgOtra : null;
     const fmt = (n) => (n != null && !isNaN(Number(n)) ? Number(n).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "-");
     const dir = deltaKg != null ? (deltaKg >= 0 ? "SUBIÓ" : "BAJÓ") : "—";
     const kgStr = deltaKg != null ? deltaKg.toLocaleString("es-MX", { minimumFractionDigits: 4, maximumFractionDigits: 4 }) : "-";
@@ -816,13 +821,15 @@ async function obtenerDeltasVariablesCargoPlanta(client, nombrePlanta, cur, year
       idOtra = detalleOtra.rows && detalleOtra.rows[0] && detalleOtra.rows[0].version_id != null ? detalleOtra.rows[0].version_id : null;
     }
     if (!idActual || !idOtra) return { lineas: out, ventaKgActual: null };
-    const cols = ["venta_ton", ...VARIABLES_CARGO_PLANTA.map((v) => v.col)].join(", ");
+    const sumExprs = VARIABLES_CARGO_PLANTA.map((v) => `SUM(${v.col} * COALESCE(venta_ton, 0) * 1000) AS ${v.col}_mxn`).join(", ");
     const rowA = await client.query(
-      `SELECT ${cols} FROM igf.compromiso_lines WHERE version_id = $1 AND empresa ILIKE $2 LIMIT 1`,
+      `SELECT SUM(COALESCE(venta_ton, 0)) AS venta_ton, ${sumExprs}
+       FROM igf.compromiso_lines WHERE version_id = $1 AND empresa ILIKE $2`,
       [idActual, "%" + nombrePlanta + "%"]
     );
     const rowB = await client.query(
-      `SELECT ${cols} FROM igf.compromiso_lines WHERE version_id = $2 AND empresa ILIKE $1 LIMIT 1`,
+      `SELECT SUM(COALESCE(venta_ton, 0)) AS venta_ton, ${sumExprs}
+       FROM igf.compromiso_lines WHERE version_id = $2 AND empresa ILIKE $1`,
       ["%" + nombrePlanta + "%", idOtra]
     );
     const rA = rowA.rows && rowA.rows[0] ? rowA.rows[0] : null;
@@ -835,15 +842,14 @@ async function obtenerDeltasVariablesCargoPlanta(client, nombrePlanta, cur, year
     const fmtKg = (n) => (n != null && !isNaN(Number(n)) ? Number(n).toLocaleString("es-MX", { minimumFractionDigits: 4, maximumFractionDigits: 4 }) : "-");
     const fmtMxn = (n) => (n != null && !isNaN(Number(n)) ? Number(n).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : null);
     for (const v of VARIABLES_CARGO_PLANTA) {
-      const valA = rA[v.col] != null ? Number(rA[v.col]) : null;
-      const valB = rB[v.col] != null ? Number(rB[v.col]) : null;
-      if (valA == null && valB == null) continue;
-      const delta = (valA != null && valB != null) ? valA - valB : null;
-      const dir = delta != null ? (delta >= 0 ? "SUBIÓ" : "BAJÓ") : "—";
-      // Delta MXN = (valor_actual $/kg * venta_kg_actual) - (valor_otra $/kg * venta_kg_otra), misma lógica que el total
-      const mxnActual = (valA != null && ventaKgActual != null && ventaKgActual > 0) ? valA * ventaKgActual : null;
-      const mxnOtra = (valB != null && ventaKgOtra != null && ventaKgOtra > 0) ? valB * ventaKgOtra : null;
+      const mxnActual = rA[`${v.col}_mxn`] != null ? Number(rA[`${v.col}_mxn`]) : null;
+      const mxnOtra = rB[`${v.col}_mxn`] != null ? Number(rB[`${v.col}_mxn`]) : null;
+      if (mxnActual == null && mxnOtra == null) continue;
       const deltaMxn = (mxnActual != null && mxnOtra != null) ? mxnActual - mxnOtra : null;
+      const valActual = (ventaKgActual != null && ventaKgActual > 0 && mxnActual != null) ? mxnActual / ventaKgActual : null;
+      const valOtra = (ventaKgOtra != null && ventaKgOtra > 0 && mxnOtra != null) ? mxnOtra / ventaKgOtra : null;
+      const delta = (valActual != null && valOtra != null) ? valActual - valOtra : null;
+      const dir = delta != null ? (delta >= 0 ? "SUBIÓ" : "BAJÓ") : "—";
       out.push({ nombre: v.nombre, delta: fmtKg(delta), direccion: dir, unit: v.unit, deltaMxn: deltaMxn != null ? fmtMxn(deltaMxn) : null });
     }
   } catch (e) {
@@ -874,13 +880,15 @@ async function obtenerDeltasVariablesCorporativo(client, nombrePlanta, cur, year
   let idOtra = null;
 
   const runWithVars = async (variables) => {
-    const cols = ["venta_ton", ...variables.map((v) => v.col)].join(", ");
+    const sumExprs = variables.map((v) => `SUM(${v.col} * COALESCE(venta_ton, 0) * 1000) AS ${v.col}_mxn`).join(", ");
     const rowA = await client.query(
-      `SELECT ${cols} FROM igf.compromiso_lines WHERE version_id = $1 AND empresa ILIKE $2 LIMIT 1`,
+      `SELECT SUM(COALESCE(venta_ton, 0)) AS venta_ton, ${sumExprs}
+       FROM igf.compromiso_lines WHERE version_id = $1 AND empresa ILIKE $2`,
       [idActual, "%" + nombrePlanta + "%"]
     );
     const rowB = await client.query(
-      `SELECT ${cols} FROM igf.compromiso_lines WHERE version_id = $2 AND empresa ILIKE $1 LIMIT 1`,
+      `SELECT SUM(COALESCE(venta_ton, 0)) AS venta_ton, ${sumExprs}
+       FROM igf.compromiso_lines WHERE version_id = $2 AND empresa ILIKE $1`,
       ["%" + nombrePlanta + "%", idOtra]
     );
     const rA = rowA.rows && rowA.rows[0] ? rowA.rows[0] : null;
@@ -893,14 +901,14 @@ async function obtenerDeltasVariablesCorporativo(client, nombrePlanta, cur, year
     const fmtKg = (n) => (n != null && !isNaN(Number(n)) ? Number(n).toLocaleString("es-MX", { minimumFractionDigits: 4, maximumFractionDigits: 4 }) : "-");
     const fmtMxn = (n) => (n != null && !isNaN(Number(n)) ? Number(n).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : null);
     for (const v of variables) {
-      const valA = rA[v.col] != null ? Number(rA[v.col]) : null;
-      const valB = rB[v.col] != null ? Number(rB[v.col]) : null;
-      if (valA == null && valB == null) continue;
-      const delta = (valA != null && valB != null) ? valA - valB : null;
-      const dir = delta != null ? (delta >= 0 ? "SUBIÓ" : "BAJÓ") : "—";
-      const mxnActual = (valA != null && ventaKgActual != null && ventaKgActual > 0) ? valA * ventaKgActual : null;
-      const mxnOtra = (valB != null && ventaKgOtra != null && ventaKgOtra > 0) ? valB * ventaKgOtra : null;
+      const mxnActual = rA[`${v.col}_mxn`] != null ? Number(rA[`${v.col}_mxn`]) : null;
+      const mxnOtra = rB[`${v.col}_mxn`] != null ? Number(rB[`${v.col}_mxn`]) : null;
+      if (mxnActual == null && mxnOtra == null) continue;
       const deltaMxn = (mxnActual != null && mxnOtra != null) ? mxnActual - mxnOtra : null;
+      const valActual = (ventaKgActual != null && ventaKgActual > 0 && mxnActual != null) ? mxnActual / ventaKgActual : null;
+      const valOtra = (ventaKgOtra != null && ventaKgOtra > 0 && mxnOtra != null) ? mxnOtra / ventaKgOtra : null;
+      const delta = (valActual != null && valOtra != null) ? valActual - valOtra : null;
+      const dir = delta != null ? (delta >= 0 ? "SUBIÓ" : "BAJÓ") : "—";
       out.push({ nombre: v.nombre, delta: fmtKg(delta), direccion: dir, unit: v.unit, deltaMxn: deltaMxn != null ? fmtMxn(deltaMxn) : null });
     }
     return true;
