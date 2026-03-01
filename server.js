@@ -5027,6 +5027,10 @@ app.post("/twilio/whatsapp", async (req, res) => {
           const botBase = (process.env.BASE_URL || process.env.PUBLIC_URL || "").trim() || `${req.protocol}://${req.get("host") || "localhost"}`;
           const linkForecast = `${botBase.replace(/\/$/, "")}/api/arr/dashboard-excel?year=${yF}&month=${mF}&t=${encodeURIComponent(token)}`;
           msg += `\n\n📈 Forecast (Ventas/IGF ${yF}/${mF}):\n${linkForecast}`;
+          const mAnt = mF === 1 ? 12 : mF - 1;
+          const yAnt = mF === 1 ? yF - 1 : yF;
+          const linkForecastAnt = `${botBase.replace(/\/$/, "")}/api/arr/dashboard-excel?year=${yAnt}&month=${mAnt}&t=${encodeURIComponent(token)}`;
+          msg += `\n\n📈 Forecast mes anterior (${yAnt}/${mAnt}):\n${linkForecastAnt}`;
           if (msg.length > MAX_WHATSAPP_BODY) msg = msg.substring(0, MAX_WHATSAPP_BODY - 30) + "\n...(recortado)\n" + link;
           return safeReply(msg);
         } catch (dashboardErr) {
