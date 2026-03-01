@@ -27,6 +27,9 @@ const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const twilioNotify = require("./notifications/twilioClient");
 const igfHandler = require("./igf-handler");
 const { createDashboardToken, dashboardAuthMiddleware } = require("./lib/dashboard-auth");
+const arrLoad = require("./lib/arr-load");
+const forecastMensual = require("./lib/forecast-mensual");
+const dashboardArrForecast = require("./lib/dashboard-arr-forecast");
 
 const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
@@ -4296,6 +4299,73 @@ app.get("/api/folios/:id", dashboardAuthMiddleware, async (req, res) => {
     });
   } catch (e) {
     console.error("[Dashboard folio]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/* ==================== ARR / Forecast (módulo adicional; no modifica flujo existente) ==================== */
+
+app.post("/api/arr/load", dashboardAuthMiddleware, async (req, res) => {
+  const plantCode = (req.body.plant_code || "").trim();
+  if (!plantCode) return res.status(400).json({ error: "Falta plant_code" });
+  let fileBuffer = null;
+  if (Buffer.isBuffer(req.body.file)) fileBuffer = req.body.file;
+  else if (typeof req.body.fileBase64 === "string") {
+    try { fileBuffer = Buffer.from(req.body.fileBase64, "base64"); } catch (e) { return res.status(400).json({ error: "fileBase64 inválido" }); }
+  }
+  if (!fileBuffer || fileBuffer.length === 0) return res.status(400).json({ error: "Envía file (buffer) o fileBase64" });
+  const client = await pool.connect();
+  try {
+    const result = await arrLoad.loadArrFromBuffer(client, plantCode, fileBuffer, {
+      targetYear: req.body.targetYear != null ? parseInt(req.body.targetYear, 10) : undefined,
+      targetMonth: req.body.targetMonth != null ? parseInt(req.body.targetMonth, 10) : undefined,
+    });
+    res.json({ ok: true, ...result });
+  } catch (e) {
+    console.error("[ARR load]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+app.post("/api/arr/forecast", dashboardAuthMiddleware, async (req, res) => {
+  const plantCode = (req.body.plant_code || "").trim();
+  const year = parseInt(req.body.year, 10);
+  const month = parseInt(req.body.month, 10);
+  if (!plantCode || !Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
+    return res.status(400).json({ error: "Faltan plant_code, year, month válidos" });
+  }
+  const client = await pool.connect();
+  try {
+    const result = await forecastMensual.calcularForecastMensual(client, plantCode, year, month, req.body.today || null);
+    res.json({ ok: true, ...result });
+  } catch (e) {
+    console.error("[ARR forecast]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) => {
+  const plantCode = (req.query.plant_code || "").trim() || null;
+  const year = parseInt(req.query.year, 10);
+  const month = parseInt(req.query.month, 10);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
+    return res.status(400).json({ error: "Faltan year y month válidos en query" });
+  }
+  const client = await pool.connect();
+  try {
+    const buf = await dashboardArrForecast.generarDashboardArrForecast(client, year, month, plantCode);
+    const filename = `Dashboard_ARR_Forecast_${year}_${month}.xlsx`;
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(buf);
+  } catch (e) {
+    console.error("[ARR dashboard-excel]", e);
     res.status(500).json({ error: e.message });
   } finally {
     client.release();
