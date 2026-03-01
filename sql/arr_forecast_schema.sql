@@ -12,9 +12,9 @@ CREATE TABLE IF NOT EXISTS arr.ventas_diarias_cliente (
     fecha        DATE        NOT NULL,
     cliente_norm VARCHAR(200) NOT NULL,
     canal        VARCHAR(50) NOT NULL DEFAULT 'Casa',       -- Casa | Comisionista
-    subcanal     VARCHAR(100),                              -- Autotanque, Portátil, Predios, etc.
+    subcanal     VARCHAR(100) NOT NULL DEFAULT '',          -- Autotanque, Portátil, Predios, etc. ('' si no aplica)
     kg           NUMERIC(18,4) NOT NULL DEFAULT 0,
-    PRIMARY KEY (plant_code, fecha, cliente_norm, canal, COALESCE(subcanal, ''))
+    PRIMARY KEY (plant_code, fecha, cliente_norm, canal, subcanal)
 );
 
 CREATE INDEX IF NOT EXISTS idx_ventas_diarias_plant_fecha
@@ -66,7 +66,7 @@ CREATE TABLE IF NOT EXISTS arr.forecast_mensual (
     year             SMALLINT    NOT NULL,
     month            SMALLINT    NOT NULL,
     canal            VARCHAR(50) NOT NULL,
-    subcanal         VARCHAR(100),
+    subcanal         VARCHAR(100) NOT NULL DEFAULT '',      -- '' si no aplica
     kg_actual        NUMERIC(18,4) NOT NULL DEFAULT 0,
     kg_proyectado    NUMERIC(18,4) NOT NULL DEFAULT 0,
     kg_forecast      NUMERIC(18,4) NOT NULL DEFAULT 0,
@@ -75,7 +75,7 @@ CREATE TABLE IF NOT EXISTS arr.forecast_mensual (
     desc_forecast    NUMERIC(18,2) NOT NULL DEFAULT 0,
     desc_kg_forecast NUMERIC(18,6),         -- desc_forecast / kg_forecast cuando kg_forecast > 0
     updated_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
-    PRIMARY KEY (plant_code, year, month, canal, COALESCE(subcanal, ''))
+    PRIMARY KEY (plant_code, year, month, canal, subcanal)
 );
 
 CREATE INDEX IF NOT EXISTS idx_forecast_mensual_plant_ym
