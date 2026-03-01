@@ -108,12 +108,27 @@ ARR_ZONA_PROVINCIA=Puebla,Morelos,Acapulco
 
 (lista separada por comas; debe coincidir con los nombres de empresa en IGF).
 
+## 5. Ver el Forecast desde WhatsApp (comando Dashboard)
+
+Cuando un usuario escribe **dashboard** o **dashboard resumen** en WhatsApp, el bot responde con:
+
+1. **Link al Dashboard de Folios** (tablero web, mismo que antes).
+2. **Link al Forecast (Ventas/IGF)** del mes actual: al abrirlo en el navegador se descarga el Excel con las 3 hojas.
+
+El enlace del Forecast incluye el token en la URL (`?t=...`), así que al hacer clic (o abrir desde el celular) se descarga el archivo sin tener que poner el token a mano. El token es válido 20 minutos.
+
+**Comandos en WhatsApp:**
+- `dashboard` → link al tablero + link Forecast del mes.
+- `dashboard resumen` → lo mismo + resumen de folios activos y pendientes ZP.
+
+Si el bot está en un servidor (ej. Render), configura `BASE_URL` o `PUBLIC_URL` con la URL pública del bot (ej. `https://folio-bot.onrender.com`) para que el link del Forecast funcione desde WhatsApp. Si no está configurado, se usa el host de la petición.
+
 ## Orden recomendado de ejecución
 
 1. Aplicar `sql/arr_forecast_schema.sql` (una vez por base).
 2. **Cada día:** subir el ARR de cada planta (`POST /api/arr/load`).
 3. Después de la carga (o cuando se quiera actualizar el forecast): `POST /api/arr/forecast` por planta.
-4. Cuando se necesite el reporte: `GET /api/arr/dashboard-excel` para descargar el Excel con las 3 hojas.
+4. Para ver el reporte: escribir **dashboard** en WhatsApp y abrir el segundo link (Forecast), o llamar a `GET /api/arr/dashboard-excel` con token.
 
 ## Carga de %HG diario (opcional)
 

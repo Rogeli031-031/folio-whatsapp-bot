@@ -3608,7 +3608,7 @@ function buildHelpMessage(actor) {
   lines.push("• folios de pipa");
   lines.push("• folios por estación");
   lines.push("• mis pendientes / pendientes [página]");
-  lines.push("• dashboard / dashboard resumen (link al tablero)");
+  lines.push("• dashboard / dashboard resumen (link al tablero + link Forecast Ventas/IGF)");
   if (clave === "GG") lines.push("• carrito / carrito agregar F-XXX / carrito quitar F-XXX");
   lines.push("• comentario F-YYYYMM-XXX: <texto>");
   if (FLAGS.ATTACHMENTS) {
@@ -5021,6 +5021,12 @@ app.post("/twilio/whatsapp", async (req, res) => {
             if (oldest) msg += `Más antiguo: ${oldest.folio} (${oldest.dias} días)\n`;
           }
           msg += `\n🔗 Acceso (válido 20 min):\n${link}`;
+          const yyyymm = getCurrentYYYYMM();
+          const yF = parseInt(yyyymm.slice(0, 4), 10);
+          const mF = parseInt(yyyymm.slice(4, 6), 10);
+          const botBase = (process.env.BASE_URL || process.env.PUBLIC_URL || "").trim() || `${req.protocol}://${req.get("host") || "localhost"}`;
+          const linkForecast = `${botBase.replace(/\/$/, "")}/api/arr/dashboard-excel?year=${yF}&month=${mF}&t=${encodeURIComponent(token)}`;
+          msg += `\n\n📈 Forecast (Ventas/IGF ${yF}/${mF}):\n${linkForecast}`;
           if (msg.length > MAX_WHATSAPP_BODY) msg = msg.substring(0, MAX_WHATSAPP_BODY - 30) + "\n...(recortado)\n" + link;
           return safeReply(msg);
         } catch (dashboardErr) {
