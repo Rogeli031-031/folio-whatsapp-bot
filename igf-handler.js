@@ -95,6 +95,32 @@ function buildEmpresaFilter(nombrePlanta) {
   return { include, exclude };
 }
 
+/**
+ * Resuelve el nombre de planta del usuario al valor real de empresa en la BD (ignorando acentos y mayúsculas).
+ * Así "Tehuacan" coincide con "Tehuacán". Usado para evitar "no hay datos" cuando solo cambia la tilde.
+ * @param {object} client - pg client
+ * @param {string} nombrePlanta - Texto que escribió el usuario (ej. "Tehuacan").
+ * @param {number} year - Año de la versión donde buscar.
+ * @param {number} month - Mes.
+ * @param {number} versionNumber - Número de versión.
+ * @returns {Promise<string|null>} empresa tal como está en la BD o null si no hay coincidencia.
+ */
+async function resolveEmpresaEnDetalle(client, nombrePlanta, year, month, versionNumber) {
+  const r = await client.query(
+    `SELECT DISTINCT empresa FROM igf.v_compromiso_analisis_detalle
+     WHERE year = $1 AND month = $2 AND version_number = $3`,
+    [year, month, versionNumber]
+  );
+  const nombreNorm = quitarTildes((nombrePlanta || "").toLowerCase());
+  if (!nombreNorm) return null;
+  for (const row of (r.rows || [])) {
+    const emp = (row.empresa || "").trim();
+    if (!emp) continue;
+    if (quitarTildes(emp.toLowerCase()).includes(nombreNorm)) return emp;
+  }
+  return null;
+}
+
 /** Obtiene versión actual (GLOBAL/is_current) o null. */
 async function getVersionActualGlobal(client) {
   const r = await client.query(
@@ -674,7 +700,9 @@ async function obtenerDatosComparacionEnOrden(client, nombrePlanta, yearOtra, mo
   );
   const cur = resumenCur.rows && resumenCur.rows[0] ? resumenCur.rows[0] : null;
   if (!cur) return null;
-  const empFilter = buildEmpresaFilter(nombrePlanta);
+  const empresaResuelta = await resolveEmpresaEnDetalle(client, nombrePlanta, cur.year, cur.month, cur.version_number);
+  const nombreParaFiltro = empresaResuelta != null ? empresaResuelta : nombrePlanta;
+  const empFilter = buildEmpresaFilter(nombreParaFiltro);
   const rowActual = await client.query(
     `SELECT empresa, cargo_planta_mxn, corp_mxn FROM igf.v_compromiso_analisis_detalle
      WHERE empresa ILIKE $1 AND ($2::text IS NULL OR empresa NOT ILIKE $2) AND year = $3 AND month = $4 AND version_number = $5 LIMIT 1`,
