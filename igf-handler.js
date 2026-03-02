@@ -663,14 +663,17 @@ async function getVersionesDelMes(client, year, month) {
  * @param {string} tipoSalida - 'cargo' | 'corp' | 'ambos': qué deltas incluir en el resultado.
  * @returns {Promise<string>} Mensaje formateado para WhatsApp.
  */
-async function ejecutarComparacion(client, nombrePlanta, yearOtra, monthOtra, versionOtra, tipoSalida = "ambos") {
+/**
+ * Obtiene todos los deltas de la comparación en el orden ORDER_DELTAS para mensaje y Excel.
+ * @returns {{ cabecera, deltas: Array<{ label, dir, deltaStr, deltaMxn, key, tipo }>, deltaCargo, deltaCorp, cur, yearOtra, monthOtra, versionOtra, nombrePlanta } | null }
+ */
+async function obtenerDatosComparacionEnOrden(client, nombrePlanta, yearOtra, monthOtra, versionOtra) {
   const resumenCur = await client.query(
     `SELECT year, month, version_number FROM igf.v_compromiso_analisis_resumen
      ORDER BY year DESC, month DESC, version_number DESC LIMIT 1`
   );
   const cur = resumenCur.rows && resumenCur.rows[0] ? resumenCur.rows[0] : null;
-  if (!cur) return "IGF – No hay versión actual en el resumen.";
-  const fmt = (n) => (n != null && !isNaN(Number(n)) ? Number(n).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "-");
+  if (!cur) return null;
   const empFilter = buildEmpresaFilter(nombrePlanta);
   const rowActual = await client.query(
     `SELECT empresa, cargo_planta_mxn, corp_mxn FROM igf.v_compromiso_analisis_detalle
@@ -684,58 +687,155 @@ async function ejecutarComparacion(client, nombrePlanta, yearOtra, monthOtra, ve
   );
   const rActual = rowActual.rows && rowActual.rows[0] ? rowActual.rows[0] : null;
   const rOtra = rowOtra.rows && rowOtra.rows[0] ? rowOtra.rows[0] : null;
-  if (!rActual) return "IGF – No hay datos de esa planta en la versión actual.";
-  if (!rOtra) return `IGF – No hay datos de esa planta en ${yearOtra}/${monthOtra} v.${versionOtra}.`;
+  if (!rActual || !rOtra) return null;
+
   const cargoActual = rActual.cargo_planta_mxn != null ? Number(rActual.cargo_planta_mxn) : null;
   const cargoOtra = rOtra.cargo_planta_mxn != null ? Number(rOtra.cargo_planta_mxn) : null;
   const corpActual = rActual.corp_mxn != null ? Number(rActual.corp_mxn) : null;
   const corpOtra = rOtra.corp_mxn != null ? Number(rOtra.corp_mxn) : null;
   const deltaCargo = (cargoActual != null && cargoOtra != null) ? cargoActual - cargoOtra : null;
   const deltaCorp = (corpActual != null && corpOtra != null) ? corpActual - corpOtra : null;
-  const dirCargo = deltaCargo != null ? (deltaCargo >= 0 ? "SUBIÓ" : "BAJÓ") : "—";
-  const dirCorp = deltaCorp != null ? (deltaCorp >= 0 ? "SUBIÓ" : "BAJÓ") : "—";
+
+  let idActual = null;
+  let idOtra = null;
+  const rCur = await client.query(
+    `SELECT id FROM igf.versions WHERE plant_code = 'GLOBAL' AND year = $1 AND month = $2 AND version_number = $3 LIMIT 1`,
+    [cur.year, cur.month, cur.version_number]
+  );
+  idActual = rCur.rows && rCur.rows[0] ? rCur.rows[0].id : null;
+  let rOtraV = await client.query(
+    `SELECT id FROM igf.versions WHERE plant_code = 'GLOBAL' AND year = $1 AND month = $2 AND version_number = $3 LIMIT 1`,
+    [yearOtra, monthOtra, versionOtra]
+  ).catch(() => ({ rows: [] }));
+  idOtra = rOtraV.rows && rOtraV.rows[0] ? rOtraV.rows[0].id : null;
+  if (!idOtra) {
+    const detalleOtra = await client.query(
+      `SELECT version_id FROM igf.v_compromiso_analisis_detalle WHERE empresa ILIKE $1 AND ($2::text IS NULL OR empresa NOT ILIKE $2) AND year = $3 AND month = $4 AND version_number = $5 LIMIT 1`,
+      [empFilter.include, empFilter.exclude, yearOtra, monthOtra, versionOtra]
+    ).catch(() => ({ rows: [] }));
+    idOtra = detalleOtra.rows && detalleOtra.rows[0] && detalleOtra.rows[0].version_id != null ? detalleOtra.rows[0].version_id : null;
+  }
+  if (!idActual || !idOtra) return null;
+
+  const cols = await getColumnas(client, "igf", "compromiso_lines");
+  const varCols = ORDER_DELTAS.filter((d) => (d.tipo === "var" || d.tipo === "corp") && cols.includes(d.key));
+  const sumParts = ["SUM(COALESCE(venta_ton, 0)) AS venta_ton", "SUM(margen_kg * COALESCE(venta_ton, 0) * 1000) AS margen_mxn"];
+  for (const v of varCols) {
+    sumParts.push(`SUM(${v.key} * COALESCE(venta_ton, 0) * 1000) AS ${v.key}_mxn`);
+  }
+  const selectExpr = sumParts.join(", ");
+  const rowA = await client.query(
+    `SELECT ${selectExpr} FROM igf.compromiso_lines WHERE version_id = $1 AND empresa ILIKE $2 AND ($3::text IS NULL OR empresa NOT ILIKE $3)`,
+    [idActual, empFilter.include, empFilter.exclude]
+  );
+  const rowB = await client.query(
+    `SELECT ${selectExpr} FROM igf.compromiso_lines WHERE version_id = $2 AND empresa ILIKE $1 AND ($3::text IS NULL OR empresa NOT ILIKE $3)`,
+    [empFilter.include, idOtra, empFilter.exclude]
+  );
+  const rA = rowA.rows && rowA.rows[0] ? rowA.rows[0] : null;
+  const rB = rowB.rows && rowB.rows[0] ? rowB.rows[0] : null;
+  if (!rA || !rB) return null;
+
+  const ventaTonA = rA.venta_ton != null ? Number(rA.venta_ton) : null;
+  const ventaTonB = rB.venta_ton != null ? Number(rB.venta_ton) : null;
+  const ventaKgA = (ventaTonA != null && ventaTonA > 0) ? ventaTonA * 1000 : null;
+  const ventaKgB = (ventaTonB != null && ventaTonB > 0) ? ventaTonB * 1000 : null;
+  const fmt = (n) => (n != null && !isNaN(Number(n)) ? Number(n).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "-");
+  const fmtKg = (n) => (n != null && !isNaN(Number(n)) ? Number(n).toLocaleString("es-MX", { minimumFractionDigits: 4, maximumFractionDigits: 4 }) : "-");
+
+  const deltas = [];
+  for (const item of ORDER_DELTAS) {
+    let dir = "—";
+    let deltaStr = "-";
+    let deltaMxn = null;
+    if (item.tipo === "venta") {
+      const deltaTon = (ventaTonA != null && ventaTonB != null) ? ventaTonA - ventaTonB : null;
+      dir = deltaTon != null ? (deltaTon >= 0 ? "SUBIÓ" : "BAJÓ") : "—";
+      deltaStr = deltaTon != null ? fmtKg(deltaTon) + " ton" : "-";
+      deltas.push({ label: item.label, dir, deltaStr, deltaMxn, key: item.key, tipo: item.tipo });
+      continue;
+    }
+    if (item.tipo === "margen") {
+      const margenMxnA = rA.margen_mxn != null ? Number(rA.margen_mxn) : null;
+      const margenMxnB = rB.margen_mxn != null ? Number(rB.margen_mxn) : null;
+      const deltaMxnVal = (margenMxnA != null && margenMxnB != null) ? margenMxnA - margenMxnB : null;
+      let deltaKg = null;
+      if (ventaKgA != null && ventaKgA > 0 && margenMxnA != null && ventaKgB != null && ventaKgB > 0 && margenMxnB != null) {
+        deltaKg = margenMxnA / ventaKgA - margenMxnB / ventaKgB;
+      }
+      dir = (deltaKg != null ? deltaKg : deltaMxnVal) != null ? ((deltaKg != null ? deltaKg : deltaMxnVal) >= 0 ? "SUBIÓ" : "BAJÓ") : "—";
+      deltaStr = deltaKg != null ? fmtKg(deltaKg) + " $/kg" : "-";
+      deltaMxn = deltaMxnVal != null ? fmt(deltaMxnVal) : null;
+      deltas.push({ label: item.label, dir, deltaStr, deltaMxn, key: item.key, tipo: item.tipo });
+      continue;
+    }
+    if (item.tipo === "var" || item.tipo === "corp") {
+      if (!cols.includes(item.key)) continue;
+      const mxnA = rA[`${item.key}_mxn`] != null ? Number(rA[`${item.key}_mxn`]) : null;
+      const mxnB = rB[`${item.key}_mxn`] != null ? Number(rB[`${item.key}_mxn`]) : null;
+      const deltaMxnVal = (mxnA != null && mxnB != null) ? mxnA - mxnB : null;
+      const valA = (ventaKgA != null && ventaKgA > 0 && mxnA != null) ? mxnA / ventaKgA : null;
+      const valB = (ventaKgB != null && ventaKgB > 0 && mxnB != null) ? mxnB / ventaKgB : null;
+      const deltaKg = (valA != null && valB != null) ? valA - valB : null;
+      dir = (deltaKg != null ? deltaKg : deltaMxnVal) != null ? ((deltaKg != null ? deltaKg : deltaMxnVal) >= 0 ? "SUBIÓ" : "BAJÓ") : "—";
+      deltaStr = deltaKg != null ? fmtKg(deltaKg) + " $/kg" : "-";
+      deltaMxn = deltaMxnVal != null ? fmt(deltaMxnVal) : null;
+      deltas.push({ label: item.label, dir, deltaStr, deltaMxn, key: item.key, tipo: item.tipo });
+      continue;
+    }
+    if (item.tipo === "total_cargo") {
+      dir = deltaCargo != null ? (deltaCargo >= 0 ? "SUBIÓ" : "BAJÓ") : "—";
+      deltaStr = deltaCargo != null ? fmt(deltaCargo) + " MXN" : "-";
+      const pesosKg = (ventaKgA != null && ventaKgA > 0 && deltaCargo != null) ? fmtKg(deltaCargo / ventaKgA) + " $/kg" : null;
+      deltas.push({ label: item.label, dir, deltaStr, deltaMxn: deltaCargo != null ? fmt(deltaCargo) : null, key: item.key, tipo: item.tipo, pesosKg });
+      continue;
+    }
+    if (item.tipo === "total_corp") {
+      dir = deltaCorp != null ? (deltaCorp >= 0 ? "SUBIÓ" : "BAJÓ") : "—";
+      deltaStr = deltaCorp != null ? fmt(deltaCorp) + " MXN" : "-";
+      const pesosKg = (ventaKgA != null && ventaKgA > 0 && deltaCorp != null) ? fmtKg(deltaCorp / ventaKgA) + " $/kg" : null;
+      deltas.push({ label: item.label, dir, deltaStr, deltaMxn: deltaCorp != null ? fmt(deltaCorp) : null, key: item.key, tipo: item.tipo, pesosKg });
+    }
+  }
 
   const cabecera = `IGF – ${rActual.empresa || nombrePlanta}\nÚltima (${cur.year}/${cur.month} v.${cur.version_number}) vs ${yearOtra}/${monthOtra} v.${versionOtra}.`;
+  return { cabecera, deltas, deltaCargo, deltaCorp, cur, yearOtra, monthOtra, versionOtra, nombrePlanta };
+}
+
+async function ejecutarComparacion(client, nombrePlanta, yearOtra, monthOtra, versionOtra, tipoSalida = "ambos") {
+  const datos = await obtenerDatosComparacionEnOrden(client, nombrePlanta, yearOtra, monthOtra, versionOtra);
+  if (!datos) {
+    const resumenCur = await client.query(
+      `SELECT year, month, version_number FROM igf.v_compromiso_analisis_resumen ORDER BY year DESC, month DESC, version_number DESC LIMIT 1`
+    );
+    const cur = resumenCur.rows && resumenCur.rows[0] ? resumenCur.rows[0] : null;
+    if (!cur) return "IGF – No hay versión actual en el resumen.";
+    const empFilter = buildEmpresaFilter(nombrePlanta);
+    const rowActual = await client.query(
+      `SELECT 1 FROM igf.v_compromiso_analisis_detalle WHERE empresa ILIKE $1 AND ($2::text IS NULL OR empresa NOT ILIKE $2) AND year = $3 AND month = $4 AND version_number = $5 LIMIT 1`,
+      [empFilter.include, empFilter.exclude, cur.year, cur.month, cur.version_number]
+    );
+    const rActual = rowActual.rows && rowActual.rows[0];
+    if (!rActual) return "IGF – No hay datos de esa planta en la versión actual.";
+    return `IGF – No hay datos de esa planta en ${yearOtra}/${monthOtra} v.${versionOtra}.`;
+  }
   const lineas = [];
-
-  const lineaMargen = await obtenerDeltaMargen(client, nombrePlanta, cur, yearOtra, monthOtra, versionOtra);
-  if (lineaMargen) lineas.push(lineaMargen);
-
-  if (tipoSalida === "cargo" || tipoSalida === "ambos") {
-    const { lineas: varsCargo, ventaKgActual } = await obtenerDeltasVariablesCargoPlanta(client, nombrePlanta, cur, yearOtra, monthOtra, versionOtra);
-    const pesosKg = (ventaKgActual != null && ventaKgActual > 0 && deltaCargo != null)
-      ? (deltaCargo / ventaKgActual).toLocaleString("es-MX", { minimumFractionDigits: 4, maximumFractionDigits: 4 })
-      : null;
-    if (pesosKg != null) {
-      lineas.push(`• Cargo planta (total): ${dirCargo} ${fmt(deltaCargo)} MXN (${pesosKg} $/kg)`);
-    } else {
-      lineas.push(`• Cargo planta (total): ${dirCargo} ${fmt(deltaCargo)} MXN`);
-    }
-    if (varsCargo.length > 0) {
-      varsCargo.forEach((v) => {
-        const mxnPart = v.deltaMxn != null ? ` (${v.deltaMxn} MXN)` : "";
-        lineas.push(`  ${v.nombre}: ${v.direccion} ${v.delta} ${v.unit}${mxnPart}`);
-      });
-    }
+  const incluirCargo = tipoSalida === "cargo" || tipoSalida === "ambos";
+  const incluirCorp = tipoSalida === "corp" || tipoSalida === "ambos";
+  for (const d of datos.deltas) {
+    let mostrar = false;
+    if (d.tipo === "venta" || d.tipo === "margen") mostrar = incluirCargo || incluirCorp;
+    else if (d.tipo === "var") mostrar = incluirCargo;
+    else if (d.tipo === "corp") mostrar = incluirCorp;
+    else if (d.tipo === "total_cargo") mostrar = incluirCargo;
+    else if (d.tipo === "total_corp") mostrar = incluirCorp;
+    if (!mostrar) continue;
+    let linea = `• Delta ${d.label}: ${d.dir} ${d.deltaStr}`;
+    if (d.deltaMxn) linea += ` (${d.deltaMxn} MXN)`;
+    if (d.pesosKg) linea += ` (${d.pesosKg})`;
+    lineas.push(linea);
   }
-  if (tipoSalida === "corp" || tipoSalida === "ambos") {
-    const { lineas: varsCorp, ventaKgActual: ventaKgCorp } = await obtenerDeltasVariablesCorporativo(client, nombrePlanta, cur, yearOtra, monthOtra, versionOtra);
-    const pesosKgCorp = (ventaKgCorp != null && ventaKgCorp > 0 && deltaCorp != null)
-      ? (deltaCorp / ventaKgCorp).toLocaleString("es-MX", { minimumFractionDigits: 4, maximumFractionDigits: 4 })
-      : null;
-    if (pesosKgCorp != null) {
-      lineas.push(`• Gasto corporativo (total): ${dirCorp} ${fmt(deltaCorp)} MXN (${pesosKgCorp} $/kg)`);
-    } else {
-      lineas.push(`• Gasto corporativo (total): ${dirCorp} ${fmt(deltaCorp)} MXN`);
-    }
-    if (varsCorp.length > 0) {
-      varsCorp.forEach((v) => {
-        const mxnPart = v.deltaMxn != null ? ` (${v.deltaMxn} MXN)` : "";
-        lineas.push(`  ${v.nombre}: ${v.direccion} ${v.delta} ${v.unit}${mxnPart}`);
-      });
-    }
-  }
-  return lineas.length > 0 ? `${cabecera}\n\nDeltas:\n${lineas.join("\n")}` : cabecera;
+  return lineas.length > 0 ? `${datos.cabecera}\n\nDeltas:\n${lineas.join("\n")}` : datos.cabecera;
 }
 
 /**
@@ -828,6 +928,26 @@ const VARIABLES_CARGO_PLANTA = [
   { col: "impuesto_kg", nombre: "Impuesto", unit: "kg" },
   { col: "bancos_planta_kg", nombre: "Bancos planta", unit: "kg" },
   { col: "provision_planta_kg", nombre: "Provisión planta", unit: "kg" },
+];
+
+/** Orden exacto de deltas para "Cómo cambió": venta, margen, comisión, gasto, impuesto, HG, bancos planta, provisión planta, util oper, corp vars, total cargo, total corp. */
+const ORDER_DELTAS = [
+  { key: "venta", label: "Venta", unit: "ton", tipo: "venta" },
+  { key: "margen", label: "Margen", unit: "$/kg", tipo: "margen" },
+  { key: "com_desc_kg", label: "Comisión", unit: "$/kg", tipo: "var" },
+  { key: "gasto_kg", label: "Gasto", unit: "$/kg", tipo: "var" },
+  { key: "impuesto_kg", label: "Impuesto", unit: "$/kg", tipo: "var" },
+  { key: "hg_kg", label: "HG", unit: "$/kg", tipo: "var" },
+  { key: "bancos_planta_kg", label: "Bancos planta", unit: "$/kg", tipo: "var" },
+  { key: "provision_planta_kg", label: "Provisión planta", unit: "$/kg", tipo: "var" },
+  { key: "util_oper_kg", label: "Utilidad operativa", unit: "$/kg", tipo: "var" },
+  { key: "gtos_apoyos_corp_kg", label: "Gasto Corporativo", unit: "$/kg", tipo: "corp" },
+  { key: "bancos_corp_kg", label: "Bancos corporativo", unit: "$/kg", tipo: "corp" },
+  { key: "otros_programas_kg", label: "Otros programas", unit: "$/kg", tipo: "corp" },
+  { key: "inversiones_kg", label: "Inversiones", unit: "$/kg", tipo: "corp" },
+  { key: "resultado_final_kg", label: "Resultado final", unit: "$/kg", tipo: "corp" },
+  { key: "total_cargo", label: "Cargo planta (total)", unit: "MXN", tipo: "total_cargo" },
+  { key: "total_corp", label: "Gasto corporativo (total)", unit: "MXN", tipo: "total_corp" },
 ];
 
 /**
@@ -1021,6 +1141,7 @@ module.exports = {
   parseMesUsuario,
   getVersionesDelMes,
   ejecutarComparacion,
+  obtenerDatosComparacionEnOrden,
   parseTipoResultado,
   esCompararSinVersión,
 };

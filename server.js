@@ -26,7 +26,8 @@ const { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command } = r
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const twilioNotify = require("./notifications/twilioClient");
 const igfHandler = require("./igf-handler");
-const { createDashboardToken, dashboardAuthMiddleware } = require("./lib/dashboard-auth");
+const { createDashboardToken, dashboardAuthMiddleware, createIgfComoCambioToken, verifyIgfComoCambioToken } = require("./lib/dashboard-auth");
+const XLSX = require("xlsx");
 const arrLoad = require("./lib/arr-load");
 const arrRefreshProvincia = require("./lib/arr-refresh-provincia");
 const forecastMensual = require("./lib/forecast-mensual");
@@ -4482,6 +4483,38 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
   }
 });
 
+app.get("/api/igf/como-cambio-excel", async (req, res) => {
+  const token = (req.query.t || "").trim();
+  const payload = verifyIgfComoCambioToken(token);
+  if (!payload || payload.planta == null || payload.yearOtra == null || payload.monthOtra == null || payload.versionOtra == null) {
+    return res.status(401).json({ error: "Enlace inválido o expirado" });
+  }
+  const client = await pool.connect();
+  try {
+    const datos = await igfHandler.obtenerDatosComparacionEnOrden(client, payload.planta, payload.yearOtra, payload.monthOtra, payload.versionOtra);
+    if (!datos || !datos.deltas || datos.deltas.length === 0) {
+      return res.status(404).json({ error: "No hay datos para esta comparación" });
+    }
+    const rows = [["Concepto", "Dirección", "Delta", "MXN"]];
+    for (const d of datos.deltas) {
+      rows.push([`Delta ${d.label}`, d.dir, d.deltaStr, d.deltaMxn || ""]);
+    }
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    XLSX.utils.book_append_sheet(wb, ws, "Deltas");
+    const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+    const filename = `IGF_Como_Cambio_${payload.planta}_vs_${payload.yearOtra}_${payload.monthOtra}_v${payload.versionOtra}.xlsx`;
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(buf);
+  } catch (e) {
+    console.error("[IGF como-cambio-excel]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
 /* ==================== WEBHOOK WHATSAPP ==================== */
 
 app.post("/twilio/whatsapp", async (req, res) => {
@@ -4873,7 +4906,11 @@ app.post("/twilio/whatsapp", async (req, res) => {
             const versionOtra = sess.igfComparar.versionElegida;
             sess.igfComparar = null;
             const resultado = await igfHandler.ejecutarComparacion(client, planta, yearOtra, monthOtra, versionOtra, tipo);
-            const txt = resultado.length > MAX_WHATSAPP_BODY ? resultado.substring(0, MAX_WHATSAPP_BODY - 20) + "\n...(recortado)" : resultado;
+            let txt = resultado.length > MAX_WHATSAPP_BODY ? resultado.substring(0, MAX_WHATSAPP_BODY - 20) + "\n...(recortado)" : resultado;
+            const excelToken = createIgfComoCambioToken({ planta, yearOtra, monthOtra, versionOtra });
+            const botBase = (process.env.BASE_URL || process.env.PUBLIC_URL || "").trim() || `${req.protocol}://${req.get("host") || "localhost"}`;
+            const excelLink = `${botBase.replace(/\/$/, "")}/api/igf/como-cambio-excel?t=${encodeURIComponent(excelToken)}`;
+            txt += `\n\n📥 Descarga Excel:\n${excelLink}`;
             return safeReply(txt);
           }
         } catch (e) {
