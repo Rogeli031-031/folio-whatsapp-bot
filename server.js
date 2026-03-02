@@ -4492,12 +4492,13 @@ app.get("/api/igf/como-cambio-excel", async (req, res) => {
   const client = await pool.connect();
   try {
     const datos = await igfHandler.obtenerDatosComparacionEnOrden(client, payload.planta, payload.yearOtra, payload.monthOtra, payload.versionOtra);
-    if (!datos || !datos.deltas || datos.deltas.length === 0) {
-      return res.status(404).json({ error: "No hay datos para esta comparación" });
-    }
     const rows = [["Concepto", "Dirección", "Delta", "MXN"]];
-    for (const d of datos.deltas) {
-      rows.push([`Delta ${d.label}`, d.dir, d.deltaStr, d.deltaMxn || ""]);
+    if (datos && datos.deltas && datos.deltas.length > 0) {
+      for (const d of datos.deltas) {
+        rows.push([`Delta ${d.label}`, d.dir, d.deltaStr, d.deltaMxn || ""]);
+      }
+    } else {
+      rows.push(["Sin datos para esta comparación", "", "", ""]);
     }
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet(rows);
