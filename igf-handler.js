@@ -679,6 +679,17 @@ async function getVersionesDelMes(client, year, month) {
   return { count: versiones.length, versiones };
 }
 
+/** Todas las versiones del mes (sin excluir la actual). Para elegir versión A o B en comparación flexible. */
+async function getVersionesDelMesTodas(client, year, month) {
+  const r = await client.query(
+    `SELECT version_number FROM igf.v_compromiso_analisis_resumen
+     WHERE year = $1 AND month = $2 ORDER BY version_number ASC`,
+    [year, month]
+  );
+  const versiones = [...new Set((r.rows || []).map((row) => parseInt(row.version_number, 10)).filter((n) => !isNaN(n)))].sort((a, b) => a - b);
+  return { count: versiones.length, versiones };
+}
+
 /**
  * Ejecuta la comparación: última versión (actual) vs (yearOtra, monthOtra, versionOtra) para la planta.
  * @param {object} client - Cliente pg.
@@ -690,53 +701,26 @@ async function getVersionesDelMes(client, year, month) {
  * @returns {Promise<string>} Mensaje formateado para WhatsApp.
  */
 /**
- * Obtiene todos los deltas de la comparación en el orden ORDER_DELTAS para mensaje y Excel.
- * @returns {{ cabecera, deltas: Array<{ label, dir, deltaStr, deltaMxn, key, tipo }>, deltaCargo, deltaCorp, cur, yearOtra, monthOtra, versionOtra, nombrePlanta } | null }
+ * Comparación flexible: versión A (base) vs versión B. Sin usar "última" del resumen.
+ * @returns {{ cabecera, deltas, deltaCargo, deltaCorp, yearA, monthA, versionA, yearB, monthB, versionB, nombrePlanta } | null }
  */
-async function obtenerDatosComparacionEnOrden(client, nombrePlanta, yearOtra, monthOtra, versionOtra) {
-  const resumenCur = await client.query(
-    `SELECT year, month, version_number FROM igf.v_compromiso_analisis_resumen
-     ORDER BY year DESC, month DESC, version_number DESC LIMIT 1`
-  );
-  const cur = resumenCur.rows && resumenCur.rows[0] ? resumenCur.rows[0] : null;
-  if (!cur) return null;
-  // Resolver nombre (Tehuacan→Tehuacán, Queretaro→Querétaro) usando la versión que eligió el usuario,
-  // donde la planta existe; si no, intentar con la versión actual.
-  let empresaResuelta = await resolveEmpresaEnDetalle(client, nombrePlanta, yearOtra, monthOtra, versionOtra);
-  if (empresaResuelta == null) empresaResuelta = await resolveEmpresaEnDetalle(client, nombrePlanta, cur.year, cur.month, cur.version_number);
+async function obtenerDatosComparacionDosVersiones(client, nombrePlanta, yearA, monthA, versionA, yearB, monthB, versionB) {
+  let empresaResuelta = await resolveEmpresaEnDetalle(client, nombrePlanta, yearA, monthA, versionA);
+  if (empresaResuelta == null) empresaResuelta = await resolveEmpresaEnDetalle(client, nombrePlanta, yearB, monthB, versionB);
   const nombreParaFiltro = empresaResuelta != null ? empresaResuelta : nombrePlanta;
   const empFilter = buildEmpresaFilter(nombreParaFiltro);
   const rowActual = await client.query(
     `SELECT empresa, cargo_planta_mxn, corp_mxn FROM igf.v_compromiso_analisis_detalle
      WHERE empresa ILIKE $1 AND ($2::text IS NULL OR empresa NOT ILIKE $2) AND year = $3 AND month = $4 AND version_number = $5 LIMIT 1`,
-    [empFilter.include, empFilter.exclude, cur.year, cur.month, cur.version_number]
+    [empFilter.include, empFilter.exclude, yearA, monthA, versionA]
   );
   const rowOtra = await client.query(
     `SELECT empresa, cargo_planta_mxn, corp_mxn FROM igf.v_compromiso_analisis_detalle
      WHERE empresa ILIKE $1 AND ($2::text IS NULL OR empresa NOT ILIKE $2) AND year = $3 AND month = $4 AND version_number = $5 LIMIT 1`,
-    [empFilter.include, empFilter.exclude, yearOtra, monthOtra, versionOtra]
+    [empFilter.include, empFilter.exclude, yearB, monthB, versionB]
   );
-  let rActual = rowActual.rows && rowActual.rows[0] ? rowActual.rows[0] : null;
-  let rOtra = rowOtra.rows && rowOtra.rows[0] ? rowOtra.rows[0] : null;
-  let curUsar = cur;
-  if (!rActual && rOtra) {
-    const curVersions = await client.query(
-      `SELECT year, month, version_number FROM igf.versions WHERE plant_code = 'GLOBAL' AND is_current = true LIMIT 1`
-    ).catch(() => ({ rows: [] }));
-    const cur2 = curVersions.rows && curVersions.rows[0] ? curVersions.rows[0] : null;
-    if (cur2 && (cur2.year !== cur.year || cur2.month !== cur.month || cur2.version_number !== cur.version_number)) {
-      const rowActual2 = await client.query(
-        `SELECT empresa, cargo_planta_mxn, corp_mxn FROM igf.v_compromiso_analisis_detalle
-         WHERE empresa ILIKE $1 AND ($2::text IS NULL OR empresa NOT ILIKE $2) AND year = $3 AND month = $4 AND version_number = $5 LIMIT 1`,
-        [empFilter.include, empFilter.exclude, cur2.year, cur2.month, cur2.version_number]
-      );
-      const rActual2 = rowActual2.rows && rowActual2.rows[0] ? rowActual2.rows[0] : null;
-      if (rActual2) {
-        rActual = rActual2;
-        curUsar = cur2;
-      }
-    }
-  }
+  const rActual = rowActual.rows && rowActual.rows[0] ? rowActual.rows[0] : null;
+  const rOtra = rowOtra.rows && rowOtra.rows[0] ? rowOtra.rows[0] : null;
   if (!rActual || !rOtra) return null;
 
   const cargoActual = rActual.cargo_planta_mxn != null ? Number(rActual.cargo_planta_mxn) : null;
@@ -748,20 +732,20 @@ async function obtenerDatosComparacionEnOrden(client, nombrePlanta, yearOtra, mo
 
   let idActual = null;
   let idOtra = null;
-  const rCur = await client.query(
+  const rCurA = await client.query(
     `SELECT id FROM igf.versions WHERE plant_code = 'GLOBAL' AND year = $1 AND month = $2 AND version_number = $3 LIMIT 1`,
-    [curUsar.year, curUsar.month, curUsar.version_number]
+    [yearA, monthA, versionA]
   );
-  idActual = rCur.rows && rCur.rows[0] ? rCur.rows[0].id : null;
+  idActual = rCurA.rows && rCurA.rows[0] ? rCurA.rows[0].id : null;
   let rOtraV = await client.query(
     `SELECT id FROM igf.versions WHERE plant_code = 'GLOBAL' AND year = $1 AND month = $2 AND version_number = $3 LIMIT 1`,
-    [yearOtra, monthOtra, versionOtra]
+    [yearB, monthB, versionB]
   ).catch(() => ({ rows: [] }));
   idOtra = rOtraV.rows && rOtraV.rows[0] ? rOtraV.rows[0].id : null;
   if (!idOtra) {
     const detalleOtra = await client.query(
       `SELECT version_id FROM igf.v_compromiso_analisis_detalle WHERE empresa ILIKE $1 AND ($2::text IS NULL OR empresa NOT ILIKE $2) AND year = $3 AND month = $4 AND version_number = $5 LIMIT 1`,
-      [empFilter.include, empFilter.exclude, yearOtra, monthOtra, versionOtra]
+      [empFilter.include, empFilter.exclude, yearB, monthB, versionB]
     ).catch(() => ({ rows: [] }));
     idOtra = detalleOtra.rows && detalleOtra.rows[0] && detalleOtra.rows[0].version_id != null ? detalleOtra.rows[0].version_id : null;
   }
@@ -848,26 +832,28 @@ async function obtenerDatosComparacionEnOrden(client, nombrePlanta, yearOtra, mo
     }
   }
 
-  const cabecera = `IGF – ${rActual.empresa || nombrePlanta}\nÚltima (${curUsar.year}/${curUsar.month} v.${curUsar.version_number}) vs ${yearOtra}/${monthOtra} v.${versionOtra}.`;
-  return { cabecera, deltas, deltaCargo, deltaCorp, cur: curUsar, yearOtra, monthOtra, versionOtra, nombrePlanta };
+  const cabecera = `IGF – ${rActual.empresa || nombrePlanta}\n${yearA}/${monthA} v.${versionA} vs ${yearB}/${monthB} v.${versionB}.`;
+  return { cabecera, deltas, deltaCargo, deltaCorp, yearA, monthA, versionA, yearB, monthB, versionB, nombrePlanta };
 }
 
-async function ejecutarComparacion(client, nombrePlanta, yearOtra, monthOtra, versionOtra, tipoSalida = "ambos") {
-  const datos = await obtenerDatosComparacionEnOrden(client, nombrePlanta, yearOtra, monthOtra, versionOtra);
+/**
+ * Wrapper: obtiene "versión actual" del resumen y compara contra (yearOtra, monthOtra, versionOtra).
+ * Usado cuando se llama con una sola versión (compatibilidad).
+ */
+async function obtenerDatosComparacionEnOrden(client, nombrePlanta, yearOtra, monthOtra, versionOtra) {
+  const resumenCur = await client.query(
+    `SELECT year, month, version_number FROM igf.v_compromiso_analisis_resumen
+     ORDER BY year DESC, month DESC, version_number DESC LIMIT 1`
+  );
+  const cur = resumenCur.rows && resumenCur.rows[0] ? resumenCur.rows[0] : null;
+  if (!cur) return null;
+  return obtenerDatosComparacionDosVersiones(client, nombrePlanta, cur.year, cur.month, cur.version_number, yearOtra, monthOtra, versionOtra);
+}
+
+async function ejecutarComparacion(client, nombrePlanta, yearA, monthA, versionA, yearB, monthB, versionB, tipoSalida = "ambos") {
+  const datos = await obtenerDatosComparacionDosVersiones(client, nombrePlanta, yearA, monthA, versionA, yearB, monthB, versionB);
   if (!datos) {
-    const resumenCur = await client.query(
-      `SELECT year, month, version_number FROM igf.v_compromiso_analisis_resumen ORDER BY year DESC, month DESC, version_number DESC LIMIT 1`
-    );
-    const cur = resumenCur.rows && resumenCur.rows[0] ? resumenCur.rows[0] : null;
-    if (!cur) return "IGF – No hay versión actual en el resumen.";
-    const empFilter = buildEmpresaFilter(nombrePlanta);
-    const rowActual = await client.query(
-      `SELECT 1 FROM igf.v_compromiso_analisis_detalle WHERE empresa ILIKE $1 AND ($2::text IS NULL OR empresa NOT ILIKE $2) AND year = $3 AND month = $4 AND version_number = $5 LIMIT 1`,
-      [empFilter.include, empFilter.exclude, cur.year, cur.month, cur.version_number]
-    );
-    const rActual = rowActual.rows && rowActual.rows[0];
-    if (!rActual) return "IGF – No hay datos de esa planta en la versión actual.";
-    return `IGF – No hay datos de esa planta en ${yearOtra}/${monthOtra} v.${versionOtra}.`;
+    return `IGF – No hay datos de esa planta en ${yearA}/${monthA} v.${versionA} o en ${yearB}/${monthB} v.${versionB}.`;
   }
   const lineas = [];
   const incluirCargo = tipoSalida === "cargo" || tipoSalida === "ambos";
@@ -1190,8 +1176,10 @@ module.exports = {
   getMesesDisponibles,
   parseMesUsuario,
   getVersionesDelMes,
+  getVersionesDelMesTodas,
   ejecutarComparacion,
   obtenerDatosComparacionEnOrden,
+  obtenerDatosComparacionDosVersiones,
   parseTipoResultado,
   esCompararSinVersión,
 };

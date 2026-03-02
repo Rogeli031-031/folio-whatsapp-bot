@@ -4486,12 +4486,12 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
 app.get("/api/igf/como-cambio-excel", async (req, res) => {
   const token = (req.query.t || "").trim();
   const payload = verifyIgfComoCambioToken(token);
-  if (!payload || payload.planta == null || payload.yearOtra == null || payload.monthOtra == null || payload.versionOtra == null) {
+  if (!payload || payload.planta == null || payload.yearA == null || payload.monthA == null || payload.versionA == null || payload.yearB == null || payload.monthB == null || payload.versionB == null) {
     return res.status(401).json({ error: "Enlace inválido o expirado" });
   }
   const client = await pool.connect();
   try {
-    const datos = await igfHandler.obtenerDatosComparacionEnOrden(client, payload.planta, payload.yearOtra, payload.monthOtra, payload.versionOtra);
+    const datos = await igfHandler.obtenerDatosComparacionDosVersiones(client, payload.planta, payload.yearA, payload.monthA, payload.versionA, payload.yearB, payload.monthB, payload.versionB);
     const rows = [["Concepto", "Dirección", "Delta", "MXN"]];
     if (datos && datos.deltas && datos.deltas.length > 0) {
       for (const d of datos.deltas) {
@@ -4504,7 +4504,7 @@ app.get("/api/igf/como-cambio-excel", async (req, res) => {
     const ws = XLSX.utils.aoa_to_sheet(rows);
     XLSX.utils.book_append_sheet(wb, ws, "Deltas");
     const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
-    const filename = `IGF_Como_Cambio_${payload.planta}_vs_${payload.yearOtra}_${payload.monthOtra}_v${payload.versionOtra}.xlsx`;
+    const filename = `IGF_Como_Cambio_${payload.planta}_${payload.yearA}_${payload.monthA}_v${payload.versionA}_vs_${payload.yearB}_${payload.monthB}_v${payload.versionB}.xlsx`;
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
     res.send(buf);
@@ -4858,12 +4858,12 @@ app.post("/twilio/whatsapp", async (req, res) => {
             return safeReply("IGF – Indica la planta. Ejemplos: cómo cambió Puebla, cómo cambió Acapulco, cómo cambió Morelos.");
           }
           sess.igfComparar = { paso: "mes", planta: plantaNombre };
-          return safeReply("IGF – ¿Con IGF de qué mes? (Ej: febrero, 2, 2026/2)");
+          return safeReply("IGF – ¿Mes de la versión BASE (A)? (Ej: febrero, 2, 2026/2)");
         }
       }
 
-      // Flujo "cómo cambió" por pasos: mes → versión → tipo (cargo planta / gasto corporativo)
-      if (sess.igfComparar && (sess.igfComparar.paso === "mes" || sess.igfComparar.paso === "version" || sess.igfComparar.paso === "tipo")) {
+      // Flujo "cómo cambió" por pasos: mes A → versión A → mes B → versión B → tipo (flexible: elegir ambas versiones)
+      if (sess.igfComparar && (sess.igfComparar.paso === "mes" || sess.igfComparar.paso === "version" || sess.igfComparar.paso === "mesB" || sess.igfComparar.paso === "versionB" || sess.igfComparar.paso === "tipo")) {
         try {
           if (sess.igfComparar.paso === "mes") {
             const meses = await igfHandler.getMesesDisponibles(client);
@@ -4872,15 +4872,15 @@ app.post("/twilio/whatsapp", async (req, res) => {
               const ejemplos = meses.slice(0, 5).map((m) => `${m.year}/${m.month}`).join(", ");
               return safeReply(`IGF – No entendí el mes. Ejemplos: febrero, 2, 2026/2. Disponibles: ${ejemplos}.`);
             }
-            const { count, versiones } = await igfHandler.getVersionesDelMes(client, elegido.year, elegido.month);
-            if (count === 0) return safeReply(`IGF – No hay versiones anteriores para comparar en ${elegido.year}/${elegido.month} (solo está la actual). Elige otro mes para ver deltas.`);
+            const { count, versiones } = await igfHandler.getVersionesDelMesTodas(client, elegido.year, elegido.month);
+            if (count === 0) return safeReply(`IGF – No hay versiones en ${elegido.year}/${elegido.month}. Elige otro mes.`);
             sess.igfComparar.paso = "version";
-            sess.igfComparar.year = elegido.year;
-            sess.igfComparar.month = elegido.month;
+            sess.igfComparar.yearA = elegido.year;
+            sess.igfComparar.monthA = elegido.month;
             sess.igfComparar.cantidadVersiones = count;
             sess.igfComparar.versiones = versiones;
             const lista = versiones.slice(0, 15).join(", ");
-            return safeReply(`IGF – Tienes ${count} versión(es) en ${elegido.year}/${elegido.month}: ${lista}.\n¿Cuál versión quieres? (Responde con el número, ej: 1, 2, ${count})`);
+            return safeReply(`IGF – Versión BASE (A): ${elegido.year}/${elegido.month}. Tienes ${count} versión(es): ${lista}.\n¿Cuál versión como base? (Ej: ${count})`);
           }
           if (sess.igfComparar.paso === "version") {
             const num = parseInt(String(body).trim().replace(/^v\.?/i, ""), 10);
@@ -4890,10 +4890,43 @@ app.post("/twilio/whatsapp", async (req, res) => {
             const versiones = sess.igfComparar.versiones || [];
             if (!versiones.includes(num)) {
               const lista = versiones.slice(0, 15).join(", ");
-              return safeReply(`IGF – Esa versión no existe en ese mes. Elige una de: ${lista}.`);
+              return safeReply(`IGF – Esa versión no existe. Elige una de: ${lista}.`);
+            }
+            sess.igfComparar.paso = "mesB";
+            sess.igfComparar.versionA = num;
+            const meses = await igfHandler.getMesesDisponibles(client);
+            const ejemplos = meses.slice(0, 4).map((m) => `${m.year}/${m.month}`).join(", ");
+            return safeReply(`IGF – ¿Contra qué mes quieres comparar (versión B)? (Ej: ${ejemplos})`);
+          }
+          if (sess.igfComparar.paso === "mesB") {
+            const meses = await igfHandler.getMesesDisponibles(client);
+            const elegido = igfHandler.parseMesUsuario(body, meses);
+            if (!elegido) {
+              const ejemplos = meses.slice(0, 5).map((m) => `${m.year}/${m.month}`).join(", ");
+              return safeReply(`IGF – No entendí el mes. Ejemplos: ${ejemplos}.`);
+            }
+            const { count, versiones } = await igfHandler.getVersionesDelMesTodas(client, elegido.year, elegido.month);
+            if (count === 0) return safeReply(`IGF – No hay versiones en ${elegido.year}/${elegido.month}. Elige otro mes.`);
+            sess.igfComparar.paso = "versionB";
+            sess.igfComparar.yearB = elegido.year;
+            sess.igfComparar.monthB = elegido.month;
+            sess.igfComparar.cantidadVersionesB = count;
+            sess.igfComparar.versionesB = versiones;
+            const lista = versiones.slice(0, 15).join(", ");
+            return safeReply(`IGF – Versión B: ${elegido.year}/${elegido.month}. Tienes ${count} versión(es): ${lista}.\n¿Cuál versión (B)? (Ej: 1)`);
+          }
+          if (sess.igfComparar.paso === "versionB") {
+            const num = parseInt(String(body).trim().replace(/^v\.?/i, ""), 10);
+            if (!Number.isFinite(num) || num < 1) {
+              return safeReply(`IGF – Responde con el número de versión (1 a ${sess.igfComparar.cantidadVersionesB}). Ej: 1 o v1`);
+            }
+            const versionesB = sess.igfComparar.versionesB || [];
+            if (!versionesB.includes(num)) {
+              const lista = versionesB.slice(0, 15).join(", ");
+              return safeReply(`IGF – Esa versión no existe. Elige una de: ${lista}.`);
             }
             sess.igfComparar.paso = "tipo";
-            sess.igfComparar.versionElegida = num;
+            sess.igfComparar.versionB = num;
             return safeReply("IGF – ¿Quieres el resultado de cargo planta o gasto corporativo?\nResponde: 1) Cargo planta, 2) Gasto corporativo, 3) Ambos");
           }
           if (sess.igfComparar.paso === "tipo") {
@@ -4902,13 +4935,16 @@ app.post("/twilio/whatsapp", async (req, res) => {
               return safeReply("IGF – Responde: 1) Cargo planta, 2) Gasto corporativo, 3) Ambos");
             }
             const planta = sess.igfComparar.planta;
-            const yearOtra = sess.igfComparar.year;
-            const monthOtra = sess.igfComparar.month;
-            const versionOtra = sess.igfComparar.versionElegida;
+            const yearA = sess.igfComparar.yearA;
+            const monthA = sess.igfComparar.monthA;
+            const versionA = sess.igfComparar.versionA;
+            const yearB = sess.igfComparar.yearB;
+            const monthB = sess.igfComparar.monthB;
+            const versionB = sess.igfComparar.versionB;
             sess.igfComparar = null;
-            const resultado = await igfHandler.ejecutarComparacion(client, planta, yearOtra, monthOtra, versionOtra, tipo);
+            const resultado = await igfHandler.ejecutarComparacion(client, planta, yearA, monthA, versionA, yearB, monthB, versionB, tipo);
             let txt = resultado.length > MAX_WHATSAPP_BODY ? resultado.substring(0, MAX_WHATSAPP_BODY - 20) + "\n...(recortado)" : resultado;
-            const excelToken = createIgfComoCambioToken({ planta, yearOtra, monthOtra, versionOtra });
+            const excelToken = createIgfComoCambioToken({ planta, yearA, monthA, versionA, yearB, monthB, versionB });
             const botBase = (process.env.BASE_URL || process.env.PUBLIC_URL || "").trim() || `${req.protocol}://${req.get("host") || "localhost"}`;
             const excelLink = `${botBase.replace(/\/$/, "")}/api/igf/como-cambio-excel?t=${encodeURIComponent(excelToken)}`;
             txt += `\n\n📥 Descarga Excel:\n${excelLink}`;
@@ -4935,7 +4971,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
             const planta = igfHandler.extraerPlantaDespuesDeCambio(t);
             if (planta) {
               sess.igfComparar = { paso: "mes", planta };
-              return safeReply("IGF – ¿Con IGF de qué mes? (Ej: febrero, 2, 2026/2)");
+              return safeReply("IGF – ¿Mes de la versión BASE (A)? (Ej: febrero, 2, 2026/2)");
             }
             // "Cómo cambio" sin planta: guardar sesión para que la siguiente respuesta sea la planta
             sess.igfComparar = { paso: "planta" };
