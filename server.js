@@ -4338,6 +4338,26 @@ app.post("/api/arr/load", dashboardAuthMiddleware, async (req, res) => {
   }
 });
 
+app.post("/api/arr/refresh-provincia", dashboardAuthMiddleware, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const refresh = await arrRefreshProvincia.refreshProvinciaDiario(client);
+    const r = await client.query("SELECT plant_code FROM arr.provincia_plants ORDER BY plant_code");
+    const provinciaPlants = (r.rows || []).map((row) => row.plant_code);
+    res.json({
+      ok: true,
+      ventaRows: refresh.ventaRows,
+      descuentoRows: refresh.descuentoRows,
+      provinciaPlants,
+    });
+  } catch (e) {
+    console.error("[ARR refresh-provincia]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
 app.post("/api/arr/forecast", dashboardAuthMiddleware, async (req, res) => {
   const plantCode = (req.body.plant_code || "").trim();
   const year = parseInt(req.body.year, 10);

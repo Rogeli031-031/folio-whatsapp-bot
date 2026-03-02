@@ -112,11 +112,11 @@ ARR_ZONA_PROVINCIA=Puebla,Morelos,Acapulco
 
 Para reportes de **venta en toneladas diarias** y **descuento por kilo diario** solo de plantas de provincia se usan:
 
-- **`arr.provincia_plants`** – Lista de códigos de planta considerados "provincia". Se sincroniza automáticamente desde `ARR_ZONA_PROVINCIA` cada vez que se ejecuta el refresh.
+- **`arr.provincia_plants`** – Lista de códigos de planta considerados "provincia". Se sincroniza desde `ARR_ZONA_PROVINCIA` (env) si está definida; si no, desde **public.plantas**: primeras 6 por `id`, excluyendo Corporativo (se usa `nombre` como plant_code para coincidir con la carga ARR).
 - **`arr.venta_toneladas_diarias_provincia`** – Por (plant_code, fecha): venta en toneladas, redondeada a 0. Se rellena desde `arr.ventas_diarias_cliente` (suma de kg/1000 por planta y fecha).
 - **`arr.descuento_por_kilo_diario_provincia`** – Por (plant_code, fecha): descuento por kilo en $/kg con 2 decimales (total descuento / total kg del día).
 
-**Cuándo se actualizan:** Tras cada **carga ARR** (`POST /api/arr/load`) se ejecuta automáticamente el refresh: se actualiza `arr.provincia_plants` desde el env y se recalculan las dos tablas. La respuesta del load puede incluir `provinciaRefresh: { ventaRows, descuentoRows }`. Para refrescar solo estas tablas sin cargar de nuevo (p. ej. desde un cron), usar en código `arrRefreshProvincia.refreshProvinciaDiario(client)`. También existe el script SQL `sql/arr_refresh_provincia_diario.sql` para ejecutarlo a mano en la base.
+**Cuándo se actualizan:** Tras cada **carga ARR** (`POST /api/arr/load`) se ejecuta el refresh (sincroniza provincia y recalcula las dos tablas). También puedes llamar a **`POST /api/arr/refresh-provincia`** (mismo auth) para refrescar sin subir archivo; la respuesta incluye `provinciaPlants`, `ventaRows` y `descuentoRows`. Para rellenar solo `arr.provincia_plants` desde **public.plantas** (primeras 6, sin Corporativo), ejecutar una vez: `psql $DATABASE_URL -f sql/arr_provincia_plants_seed.sql`. Si en la carga ARR usas la **clave** de la planta (ej. PUEBLA) en vez del nombre, edita ese script y cambia `p.nombre` por `p.clave`.
 
 ## 5. Ver el Forecast desde WhatsApp (comando Dashboard)
 
