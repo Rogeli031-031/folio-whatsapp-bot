@@ -38,6 +38,8 @@ export interface KanbanBoard {
   categorias: string[];
   board: {
     etapa: string;
+    etapa_label?: string;
+    etapa_icon?: string;
     stats: { count: number; total_mxn: number | null; avg_aging: number | null };
     plantas: {
       planta_id: number;

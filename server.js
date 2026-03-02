@@ -2948,10 +2948,10 @@ function formatTimeline(histRows, opts = {}) {
   for (const r of rows) {
     const icon = getStepIcon(r, opts.context);
     const fecha = formatFecha(r.creado_en);
-    const estatus = (r.estatus || "").trim() || "-";
+    const estatusText = opts.useVisibleLabel !== false ? getEtapaVisibleForWhatsApp(r.estatus) : ((r.estatus || "").trim() || "-");
     let comentario = resolveComentario ? resolveComentario(r) : (r.comentario || "").trim();
     if (comentario === "") comentario = "-";
-    out += `${icon}${fecha} | ${estatus} | ${comentario}\n`;
+    out += `${icon}${fecha} | ${estatusText} | ${comentario}\n`;
   }
   return out;
 }
@@ -3913,6 +3913,68 @@ if (DEBUG) {
 
 /* ==================== DASHBOARD API ==================== */
 
+/** Etapas visuales (4 + cancelado). Solo presentación; no cambian estados en DB. */
+const ETAPA_VISUAL = {
+  PENDIENTE_APROB_PLANTA: "PENDIENTE_APROB_PLANTA",
+  APROB_DIRECTOR_ZP: "APROB_DIRECTOR_ZP",
+  CARRO_COMPRA: "CARRO_COMPRA",
+  DEPOSITO_CIERRE: "DEPOSITO_CIERRE",
+  CANCELADO: "CANCELADO",
+};
+
+/** Orden de columnas del Kanban: 4 etapas de flujo + cancelados. */
+const ETAPAS_VISUAL_ORDER = [
+  ETAPA_VISUAL.PENDIENTE_APROB_PLANTA,
+  ETAPA_VISUAL.APROB_DIRECTOR_ZP,
+  ETAPA_VISUAL.CARRO_COMPRA,
+  ETAPA_VISUAL.DEPOSITO_CIERRE,
+  ETAPA_VISUAL.CANCELADO,
+];
+
+/** Estatus técnico → etapa visual (una columna por etapa visual). */
+function estatusToEtapaVisual(estatus) {
+  const s = String(estatus || "").trim().toUpperCase();
+  if (!s) return ETAPA_VISUAL.PENDIENTE_APROB_PLANTA;
+  if (s === ESTADOS.CANCELADO) return ETAPA_VISUAL.CANCELADO;
+  if (s === ESTADOS.CANCELACION_SOLICITADA) return ETAPA_VISUAL.APROB_DIRECTOR_ZP;
+  if ([ESTADOS.PAGADO, ESTADOS.CERRADO].includes(s)) return ETAPA_VISUAL.DEPOSITO_CIERRE;
+  if ([ESTADOS.APROBADO_ZP, ESTADOS.LISTO_PARA_PROGRAMACION, ESTADOS.SELECCIONADO_SEMANA, ESTADOS.SOLICITANDO_PAGO].includes(s)) return ETAPA_VISUAL.CARRO_COMPRA;
+  if ([ESTADOS.PENDIENTE_APROB_ZP].includes(s) || /RECHAZADO_ZP/.test(s)) return ETAPA_VISUAL.APROB_DIRECTOR_ZP;
+  return ETAPA_VISUAL.PENDIENTE_APROB_PLANTA;
+}
+
+/** Labels e íconos para WhatsApp y dashboard. */
+const ETAPA_VISIBLE = {
+  [ETAPA_VISUAL.PENDIENTE_APROB_PLANTA]: { label: "Pendiente aprobación planta", icon: "🕒" },
+  [ETAPA_VISUAL.APROB_DIRECTOR_ZP]: { label: "Aprobación Director ZP", icon: "🧾" },
+  [ETAPA_VISUAL.CARRO_COMPRA]: { label: "Carro de compra", icon: "🛒" },
+  [ETAPA_VISUAL.DEPOSITO_CIERRE]: { label: "Depósito y cierre", icon: "🏦" },
+  [ETAPA_VISUAL.CANCELADO]: { label: "Cancelado", icon: "🔴" },
+};
+
+function getEtapaVisibleLabel(estatus) {
+  const ev = estatusToEtapaVisual(estatus);
+  return ETAPA_VISIBLE[ev] ? ETAPA_VISIBLE[ev].label : (estatus || "—");
+}
+
+/** Para filtros: etapa visual → lista de estatus técnicos. */
+function etapaVisualToEstatusTecnicos(etapaVisual) {
+  const ev = String(etapaVisual || "").trim().toUpperCase();
+  if (ev === ETAPA_VISUAL.PENDIENTE_APROB_PLANTA) return [ESTADOS.GENERADO, ESTADOS.PENDIENTE_APROB_PLANTA, ESTADOS.APROB_PLANTA];
+  if (ev === ETAPA_VISUAL.APROB_DIRECTOR_ZP) return [ESTADOS.PENDIENTE_APROB_ZP, ESTADOS.CANCELACION_SOLICITADA];
+  if (ev === ETAPA_VISUAL.CARRO_COMPRA) return [ESTADOS.APROBADO_ZP, ESTADOS.LISTO_PARA_PROGRAMACION, ESTADOS.SELECCIONADO_SEMANA, ESTADOS.SOLICITANDO_PAGO];
+  if (ev === ETAPA_VISUAL.DEPOSITO_CIERRE) return [ESTADOS.PAGADO, ESTADOS.CERRADO];
+  if (ev === ETAPA_VISUAL.CANCELADO) return [ESTADOS.CANCELADO];
+  return [ev];
+}
+
+function getEtapaVisibleForWhatsApp(estatus) {
+  const ev = estatusToEtapaVisual(estatus);
+  const o = ETAPA_VISIBLE[ev];
+  return o ? `${o.icon} ${o.label}` : (estatus || "—");
+}
+
+/** Orden de etapas técnicas (legacy/filtros); Kanban usa ETAPAS_VISUAL_ORDER. */
 const ETAPAS_ORDER = [
   ESTADOS.GENERADO,
   ESTADOS.PENDIENTE_APROB_PLANTA,
@@ -3978,9 +4040,21 @@ function buildDashboardWhere(auth, filters) {
     n++;
   }
   if (filters.etapas && filters.etapas.length > 0) {
-    conditions.push(`UPPER(TRIM(COALESCE(f.estatus,''))) = ANY($${n}::TEXT[])`);
-    params.push(filters.etapas);
-    n++;
+    const estatusList = [];
+    for (const e of filters.etapas) {
+      const ev = String(e).trim().toUpperCase();
+      if (ETAPAS_VISUAL_ORDER.includes(ev)) {
+        estatusList.push(...etapaVisualToEstatusTecnicos(ev));
+      } else {
+        estatusList.push(ev);
+      }
+    }
+    const uniq = [...new Set(estatusList)];
+    if (uniq.length > 0) {
+      conditions.push(`UPPER(TRIM(COALESCE(f.estatus,''))) = ANY($${n}::TEXT[])`);
+      params.push(uniq);
+      n++;
+    }
   }
   if (filters.soloActivos) {
     conditions.push(`UPPER(TRIM(COALESCE(f.estatus,''))) NOT IN ('CERRADO','CANCELADO')`);
@@ -4038,17 +4112,16 @@ app.get("/api/dashboard/kanban", dashboardAuthMiddleware, async (req, res) => {
     `;
     const r = await client.query(q, params);
     const rows = r.rows || [];
-    const etapasSet = new Set(ETAPAS_ORDER);
     const byEtapa = {};
-    ETAPAS_ORDER.forEach((e) => { byEtapa[e] = []; });
+    ETAPAS_VISUAL_ORDER.forEach((e) => { byEtapa[e] = []; });
     rows.forEach((row) => {
-      const est = (row.estatus || "").toString().trim().toUpperCase() || "GENERADO";
-      const etapa = etapasSet.has(est) ? est : ESTADOS.GENERADO;
-      if (!byEtapa[etapa]) byEtapa[etapa] = [];
-      byEtapa[etapa].push(row);
+      const etapaVisual = estatusToEtapaVisual(row.estatus);
+      if (!byEtapa[etapaVisual]) byEtapa[etapaVisual] = [];
+      byEtapa[etapaVisual].push(row);
     });
-    const board = ETAPAS_ORDER.map((etapa) => {
+    const board = ETAPAS_VISUAL_ORDER.map((etapa) => {
       const folios = byEtapa[etapa] || [];
+      const meta = ETAPA_VISIBLE[etapa] || { label: etapa, icon: "" };
       const count = folios.length;
       const totalMxn = folios.reduce((s, f) => s + (Number(f.importe) || 0), 0);
       const agings = folios.map((f) => {
@@ -4087,13 +4160,15 @@ app.get("/api/dashboard/kanban", dashboardAuthMiddleware, async (req, res) => {
       });
       return {
         etapa,
+        etapa_label: meta.label,
+        etapa_icon: meta.icon,
         stats: { count, total_mxn: totalMxn || null, avg_aging: avgAging },
         plantas,
       };
     });
     res.json({
       meta: { filters, role: req.dashboardAuth.role },
-      etapas: ETAPAS_ORDER,
+      etapas: ETAPAS_VISUAL_ORDER,
       categorias: CATEGORIAS_FOLIO,
       board,
     });
@@ -4241,7 +4316,13 @@ app.get("/api/folios/:id/timeline", dashboardAuthMiddleware, async (req, res) =>
         return res.status(403).json({ error: "Sin permiso" });
       }
     }
-    const events = await getHistorialByFolioId(client, folioId, 80);
+    let events = await getHistorialByFolioId(client, folioId, 80);
+    events = dedupeHistorialByStage(events);
+    events = events.map((ev) => ({
+      ...ev,
+      estatus_visible: getEtapaVisibleLabel(ev.estatus),
+      etapa_icon: (ETAPA_VISIBLE[estatusToEtapaVisual(ev.estatus)] || {}).icon || "",
+    }));
     res.json({ folio_id: folioId, numero_folio: folio.numero_folio, events });
   } catch (e) {
     console.error("[Dashboard timeline]", e);
@@ -4297,6 +4378,8 @@ app.get("/api/folios/:id", dashboardAuthMiddleware, async (req, res) => {
       ...folio,
       descripcion_display: folio.descripcion_display || folio.concepto,
       aging,
+      estatus_visible: getEtapaVisibleLabel(folio.estatus),
+      etapa_icon: (ETAPA_VISIBLE[estatusToEtapaVisual(folio.estatus)] || {}).icon || "",
     });
   } catch (e) {
     console.error("[Dashboard folio]", e);
@@ -5913,7 +5996,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
               const rol = r.actor_rol ? (String(r.actor_rol).toUpperCase().includes("ZP") ? "Director ZP" : r.actor_rol) : null;
               return nombre ? (rol ? `${rol} - ${nombre}` : nombre) : (rol ? `${rol} - ${tel}` : tel);
             };
-            let det = `Folio ${folio.numero_folio}\nPlanta: ${folio.planta_nombre || "-"}\nEstatus: ${folio.estatus || "-"}\nMonto: $${fmtMxn(folio.importe)}\nConcepto: ${(folio.descripcion || folio.concepto || "-").toString().slice(0, 60)}\n\nTimeline:\n`;
+            let det = `Folio ${folio.numero_folio}\nPlanta: ${folio.planta_nombre || "-"}\nEstatus: ${getEtapaVisibleForWhatsApp(folio.estatus)}\nMonto: $${fmtMxn(folio.importe)}\nConcepto: ${(folio.descripcion || folio.concepto || "-").toString().slice(0, 60)}\n\nTimeline:\n`;
             det += formatTimeline(rows, { resolveComentario: (r) => { let c = (r.comentario || "").trim(); if (c === "Folio creado por WhatsApp") c = "Folio creado por " + resolveActor(r); return c || "-"; } });
             sess.dd.intent = null;
             sess.dd.step = null;
@@ -6380,7 +6463,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
           const fecha = formatMexicoCentral(folio.creado_en);
           let txt = `Folio ${folio.numero_folio}${urg}\n`;
           txt += `Planta: ${folio.planta_nombre || "-"}\n`;
-          txt += `Estatus: ${folio.estatus || "-"}\n`;
+          txt += `Estatus: ${getEtapaVisibleForWhatsApp(folio.estatus)}\n`;
           txt += `Monto: $${imp}\n`;
           txt += `Concepto: ${concepto}\n`;
           txt += `Beneficiario: ${folio.beneficiario || "-"}\n`;

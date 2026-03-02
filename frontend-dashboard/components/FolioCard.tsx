@@ -8,14 +8,31 @@ interface Props {
   role: string;
 }
 
+/** Estatus técnico → etapa visual (alineado con backend). */
+function estatusToEtapaVisual(estatus: string | null): string {
+  const s = (estatus || "").trim().toUpperCase();
+  if (!s) return "PENDIENTE_APROB_PLANTA";
+  if (s === "CANCELADO") return "CANCELADO";
+  if (s === "CANCELACION_SOLICITADA") return "APROB_DIRECTOR_ZP";
+  if (["PAGADO", "CERRADO"].includes(s)) return "DEPOSITO_CIERRE";
+  if (["APROBADO_ZP", "LISTO_PARA_PROGRAMACION", "SELECCIONADO_SEMANA", "SOLICITANDO_PAGO"].includes(s)) return "CARRO_COMPRA";
+  if (s === "PENDIENTE_APROB_ZP" || /RECHAZADO_ZP/.test(s)) return "APROB_DIRECTOR_ZP";
+  return "PENDIENTE_APROB_PLANTA";
+}
+
+/** Color del borde por etapa visual. Carro = neutro; preparado para modoColorCarrito "por_igf" en el futuro. */
+const MODO_COLOR_CARRITO = "default" as const;
+
 function etapaColor(estatus: string | null): string {
-  if (!estatus) return "bg-slate-600";
-  const e = (estatus || "").toUpperCase();
-  if (e.includes("PENDIENTE") || e.includes("CANCELACION")) return "border-l-amber-500";
-  if (e.includes("APROB") || e.includes("LISTO")) return "border-l-blue-500";
-  if (e.includes("PAGO") || e.includes("PAGADO") || e.includes("CERRADO")) return "border-l-green-600";
-  if (e.includes("CANCELADO")) return "border-l-red-900";
-  return "border-l-slate-500";
+  if (!estatus) return "border-l-slate-500";
+  const etapa = estatusToEtapaVisual(estatus);
+  if (etapa === "CANCELADO") return "border-l-red-900";
+  if (etapa === "DEPOSITO_CIERRE") return "border-l-green-600";
+  if (etapa === "CARRO_COMPRA") {
+    return MODO_COLOR_CARRITO === "default" ? "border-l-slate-400" : "border-l-slate-400";
+  }
+  if (etapa === "APROB_DIRECTOR_ZP") return "border-l-amber-500";
+  return "border-l-amber-500";
 }
 
 export default function FolioCard({ card, onOpen, role }: Props) {

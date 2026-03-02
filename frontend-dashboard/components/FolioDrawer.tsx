@@ -17,7 +17,7 @@ interface Props {
 
 export default function FolioDrawer({ folioId, token, onClose }: Props) {
   const [folio, setFolio] = useState<Record<string, unknown> | null>(null);
-  const [timeline, setTimeline] = useState<{ estatus: string; comentario: string; actor_rol: string | null; creado_en: string }[]>([]);
+  const [timeline, setTimeline] = useState<{ estatus: string; estatus_visible?: string; etapa_icon?: string; comentario: string; actor_rol: string | null; creado_en: string }[]>([]);
   const [media, setMedia] = useState<{ id: number; tipo: string; file_name: string | null }[]>([]);
   const [finanzas, setFinanzas] = useState<{ status: string; monto_mxn?: number | null } | null>(null);
   const [loading, setLoading] = useState(false);
@@ -85,7 +85,7 @@ export default function FolioDrawer({ folioId, token, onClose }: Props) {
                 <h3 className="mb-2 text-sm font-medium text-slate-400">Datos</h3>
                 <dl className="space-y-1 text-sm">
                   <div><dt className="text-slate-500">Planta</dt><dd className="text-slate-200">{String(folio.planta_nombre ?? "—")}</dd></div>
-                  <div><dt className="text-slate-500">Estatus</dt><dd className="text-slate-200">{String(folio.estatus ?? "—")}</dd></div>
+                  <div><dt className="text-slate-500">Estatus</dt><dd className="text-slate-200">{folio.etapa_icon ? <span className="mr-1">{folio.etapa_icon as string}</span> : null}{String(folio.estatus_visible ?? folio.estatus ?? "—")}</dd></div>
                   <div><dt className="text-slate-500">Importe</dt><dd className="text-slate-200">{folio.importe != null ? `$${Number(folio.importe).toLocaleString("es-MX")}` : "N/A"}</dd></div>
                   <div><dt className="text-slate-500">Concepto</dt><dd className="text-slate-200">{String(folio.descripcion_display ?? folio.concepto ?? "—")}</dd></div>
                 </dl>
@@ -96,7 +96,10 @@ export default function FolioDrawer({ folioId, token, onClose }: Props) {
                   {timeline.map((ev, i) => (
                     <li key={i} className="border-l-2 border-slate-600 pl-2">
                       <span className="text-slate-500">{new Date(ev.creado_en).toLocaleString("es-MX")}</span>
-                      <span className="ml-2 text-slate-300">{ev.estatus || "—"}</span>
+                      <span className="ml-2 text-slate-300">
+                        {ev.etapa_icon ? <span className="mr-1">{ev.etapa_icon}</span> : null}
+                        {ev.estatus_visible || ev.estatus || "—"}
+                      </span>
                       {ev.comentario && <p className="text-slate-400">{ev.comentario}</p>}
                       {ev.actor_rol && <span className="text-xs text-slate-500">{ev.actor_rol}</span>}
                     </li>
