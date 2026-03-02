@@ -28,6 +28,7 @@ const twilioNotify = require("./notifications/twilioClient");
 const igfHandler = require("./igf-handler");
 const { createDashboardToken, dashboardAuthMiddleware } = require("./lib/dashboard-auth");
 const arrLoad = require("./lib/arr-load");
+const arrRefreshProvincia = require("./lib/arr-refresh-provincia");
 const forecastMensual = require("./lib/forecast-mensual");
 const dashboardArrForecast = require("./lib/dashboard-arr-forecast");
 
@@ -4322,6 +4323,12 @@ app.post("/api/arr/load", dashboardAuthMiddleware, async (req, res) => {
       targetYear: req.body.targetYear != null ? parseInt(req.body.targetYear, 10) : undefined,
       targetMonth: req.body.targetMonth != null ? parseInt(req.body.targetMonth, 10) : undefined,
     });
+    try {
+      const refresh = await arrRefreshProvincia.refreshProvinciaDiario(client);
+      result.provinciaRefresh = refresh;
+    } catch (e) {
+      console.error("[ARR load] refresh provincia:", e);
+    }
     res.json({ ok: true, ...result });
   } catch (e) {
     console.error("[ARR load]", e);

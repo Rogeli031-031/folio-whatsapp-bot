@@ -36,3 +36,12 @@ Módulo **ModArrForecastUpload.bas** para ejecutar **dentro** del archivo **ARR 
 - Inserta de nuevo ese mes en las tres tablas.
 
 Después de subir, puedes calcular el forecast desde Node (`POST /api/arr/forecast`) o desde el script `upload-arr-puebla.js`, y ver el dashboard desde WhatsApp (comando **dashboard** → link Forecast).
+
+## Cómo verificar que se cargó la información (ej. Puebla)
+
+En tu cliente SQL (DBeaver, pgAdmin, etc.) ejecuta las consultas del archivo **`sql/arr_verificar_carga.sql`**. Ajusta `plant_code`, fechas y `year`/`month` si usaste otra planta o mes:
+
+- **Ventas:** `arr.ventas_diarias_cliente` debe tener filas por fecha con `plant_code = 'Puebla'` y total de kg.
+- **Descuentos:** `arr.descuentos_diarias_cliente` debe tener filas con montos (negativos).
+- **Catálogo:** `arr.cliente_categoria_mes` debe tener registros para ese año/mes.
+- **Forecast:** `arr.forecast_mensual` solo tiene datos después de ejecutar el forecast (API o script).

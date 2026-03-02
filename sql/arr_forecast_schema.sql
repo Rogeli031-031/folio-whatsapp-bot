@@ -35,6 +35,29 @@ CREATE TABLE IF NOT EXISTS arr.descuentos_diarios_cliente (
 CREATE INDEX IF NOT EXISTS idx_descuentos_diarios_plant_fecha
     ON arr.descuentos_diarios_cliente (plant_code, fecha);
 
+-- Desglose por origen (para validar contra Excel por separado): Notas, Factura, Comisión Extra.
+CREATE TABLE IF NOT EXISTS arr.descuentos_notas (
+    plant_code   VARCHAR(20) NOT NULL,
+    fecha        DATE        NOT NULL,
+    cliente_norm VARCHAR(200) NOT NULL,
+    monto        NUMERIC(18,2) NOT NULL,
+    PRIMARY KEY (plant_code, fecha, cliente_norm)
+);
+CREATE TABLE IF NOT EXISTS arr.descuentos_factura (
+    plant_code   VARCHAR(20) NOT NULL,
+    fecha        DATE        NOT NULL,
+    cliente_norm VARCHAR(200) NOT NULL,
+    monto        NUMERIC(18,2) NOT NULL,
+    PRIMARY KEY (plant_code, fecha, cliente_norm)
+);
+CREATE TABLE IF NOT EXISTS arr.descuentos_comision_extra (
+    plant_code   VARCHAR(20) NOT NULL,
+    fecha        DATE        NOT NULL,
+    cliente_norm VARCHAR(200) NOT NULL,
+    monto        NUMERIC(18,2) NOT NULL,
+    PRIMARY KEY (plant_code, fecha, cliente_norm)
+);
+
 -- Catálogo cliente → canal/subcanal por mes (desde Categoria: Comisionista → canal, sub canal com → subcanal).
 CREATE TABLE IF NOT EXISTS arr.cliente_categoria_mes (
     plant_code   VARCHAR(20) NOT NULL,
@@ -80,3 +103,32 @@ CREATE TABLE IF NOT EXISTS arr.forecast_mensual (
 
 CREATE INDEX IF NOT EXISTS idx_forecast_mensual_plant_ym
     ON arr.forecast_mensual (plant_code, year, month);
+
+-- ============================================================
+-- Plantas provincia (lista para reportes diarios)
+-- INSERT manual o desde app: INSERT INTO arr.provincia_plants VALUES ('Puebla'), ('Morelos'), ('Acapulco');
+-- ============================================================
+CREATE TABLE IF NOT EXISTS arr.provincia_plants (
+    plant_code VARCHAR(20) NOT NULL PRIMARY KEY
+);
+
+-- Venta en toneladas diarias (solo plantas provincia). venta_ton = redondeado a 0.
+CREATE TABLE IF NOT EXISTS arr.venta_toneladas_diarias_provincia (
+    plant_code   VARCHAR(20) NOT NULL,
+    fecha        DATE        NOT NULL,
+    venta_ton    INTEGER     NOT NULL DEFAULT 0,
+    PRIMARY KEY (plant_code, fecha)
+);
+
+-- Descuento por kilo diario $/kg (solo plantas provincia). 2 decimales.
+CREATE TABLE IF NOT EXISTS arr.descuento_por_kilo_diario_provincia (
+    plant_code        VARCHAR(20)  NOT NULL,
+    fecha             DATE         NOT NULL,
+    descuento_por_kg  NUMERIC(18,2) NOT NULL DEFAULT 0,
+    PRIMARY KEY (plant_code, fecha)
+);
+
+CREATE INDEX IF NOT EXISTS idx_venta_ton_provincia_fecha
+    ON arr.venta_toneladas_diarias_provincia (fecha);
+CREATE INDEX IF NOT EXISTS idx_descuento_kg_provincia_fecha
+    ON arr.descuento_por_kilo_diario_provincia (fecha);

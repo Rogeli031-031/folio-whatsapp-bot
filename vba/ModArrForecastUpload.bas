@@ -89,6 +89,14 @@ Private Function ArrGetCell(ByVal dataArr As Variant, ByVal rowIdx As Long, ByVa
     ArrGetCell = Empty
 End Function
 
+' Obtiene kg: prueba "Total kilos" y si no existe "Total kilo" (por variaciones en el encabezado).
+Private Function ArrGetKg(ByVal dataArr As Variant, ByVal rowIdx As Long, ByRef headerList() As String) As Variant
+    Dim v As Variant
+    v = ArrGetCell(dataArr, rowIdx, "Total kilos", headerList)
+    If IsEmpty(v) Then v = ArrGetCell(dataArr, rowIdx, "Total kilo", headerList)
+    ArrGetKg = v
+End Function
+
 Private Function FechaToSql(ByVal d As Variant) As String
     If IsNull(d) Or IsEmpty(d) Then FechaToSql = "NULL": Exit Function
     On Error Resume Next
@@ -174,6 +182,11 @@ Public Sub Subir_ARR_Forecast()
     DetectarMesAnioDesdeTotal defaultYear, defaultMonth
     If defaultYear = 0 Then defaultYear = Year(Date)
     If defaultMonth = 0 Then defaultMonth = Month(Date)
+    ' Si no se detectó desde el archivo y hoy es día 1, sugerir mes anterior (datos de cierre)
+    If defaultYear = Year(Date) And defaultMonth = Month(Date) And Day(Date) = 1 Then
+        defaultMonth = defaultMonth - 1
+        If defaultMonth = 0 Then defaultMonth = 12: defaultYear = defaultYear - 1
+    End If
     
     plantCode = Trim(InputBox("Código de planta (detectado del nombre del archivo; puedes editarlo):", "ARR Forecast", PlantaDesdeNombreLibro()))
     If plantCode = "" Then Exit Sub
@@ -262,22 +275,23 @@ Private Sub CargarDesdeHojas(ByVal cnn As Object, ByVal plantCode As String, ByV
                 fecha = ArrParseDateSafe(ArrGetCell(arr, r, "Fecha", headers))
                 If IsNull(fecha) Then GoTo NextTotal
                 fechaStr = Format(CDate(fecha), "yyyy-mm-dd")
-                If fechaStr = hoyStr Then GoTo NextTotal
                 cliente = NormalizeClient(ArrGetCell(arr, r, "Cliente", headers))
                 If cliente = "" Then cliente = NormalizeClient(ArrGetCell(arr, r, "cliente", headers))
                 If cliente = "" Then GoTo NextTotal
-                kg = ArrParseNumberSafe(ArrGetCell(arr, r, "Total kilos", headers))
+                ' Ventas: siempre cargar (aunque la fecha sea hoy)
+                kg = ArrParseNumberSafe(ArrGetKg(arr, r, headers))
                 If Not IsNull(kg) And kg <> 0 Then
                     key = fechaStr & "|" & cliente & "|Casa|"
                     If Not dicVentas.Exists(key) Then dicVentas(key) = 0
                     dicVentas(key) = dicVentas(key) + CDbl(kg)
                 End If
+                ' Descuentos contado (Total): omitir día de hoy (día no cerrado)
                 comision = ArrParseNumberSafe(ArrGetCell(arr, r, "Comision $", headers))
                 comisionAcum = ArrParseNumberSafe(ArrGetCell(arr, r, "Comision acumulada $", headers))
                 dip = ArrParseNumberSafe(ArrGetCell(arr, r, "DIP $", headers))
                 desc = ArrParseNumberSafe(ArrGetCell(arr, r, "Descuento $", headers))
                 contado = -(NzD(comision) + NzD(comisionAcum) + NzD(dip) + NzD(desc))
-                If contado <> 0 Then
+                If contado <> 0 And fechaStr <> hoyStr Then
                     key = fechaStr & "|" & cliente
                     If Not dicDescuentos.Exists(key) Then dicDescuentos(key) = 0
                     dicDescuentos(key) = dicDescuentos(key) + contado
@@ -375,7 +389,6 @@ NextCE:
                 fecha = ArrParseDateSafe(ArrGetCell(arr, r, "Fecha", headers))
                 If IsNull(fecha) Then GoTo NextCat
                 fechaStr = Format(CDate(fecha), "yyyy-mm-dd")
-                If fechaStr = hoyStr Then GoTo NextCat
                 cliente = NormalizeClient(ArrGetCell(arr, r, "Cliente", headers))
                 If cliente = "" Then GoTo NextCat
                 comisionista = ArrGetCell(arr, r, "Comisionista", headers)
@@ -387,7 +400,7 @@ NextCE:
                 subcanal = Trim(CStr(ArrGetCell(arr, r, "sub canal com", headers)))
                 If subcanal = "" Then subcanal = Trim(CStr(ArrGetCell(arr, r, "Subcanal", headers)))
                 dicCatalog(cliente) = Array(canal, subcanal)
-                kg = ArrParseNumberSafe(ArrGetCell(arr, r, "Total kilos", headers))
+                kg = ArrParseNumberSafe(ArrGetKg(arr, r, headers))
                 If Not IsNull(kg) And kg <> 0 Then
                     key = fechaStr & "|" & cliente & "|" & canal & "|" & subcanal
                     If Not dicVentas.Exists(key) Then dicVentas(key) = 0
