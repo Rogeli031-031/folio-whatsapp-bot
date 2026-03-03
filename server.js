@@ -4547,7 +4547,7 @@ app.post("/api/dashboard/igf-como-cambio-datos", dashboardAuthMiddleware, async 
     const botBase = (process.env.BASE_URL || process.env.PUBLIC_URL || "").trim() || `${req.protocol}://${req.get("host") || "localhost"}`;
     const url = `${botBase.replace(/\/$/, "")}/api/igf/como-cambio-excel?t=${encodeURIComponent(excelToken)}`;
     if (!datos) {
-      return res.json({ cabecera: null, deltas: [], deltaCargo: null, deltaCorp: null, sinDatos: true, url });
+      return res.json({ cabecera: null, deltas: [], deltaCargo: null, deltaCorp: null, sinDatos: true, url, versionALabel: `${yA}/${mA} v.${vA}`, versionBLabel: `${yB}/${mB} v.${vB}` });
     }
     res.json({
       cabecera: datos.cabecera,
@@ -4556,6 +4556,8 @@ app.post("/api/dashboard/igf-como-cambio-datos", dashboardAuthMiddleware, async 
       deltaCorp: datos.deltaCorp,
       sinDatos: false,
       url,
+      versionALabel: `${yA}/${mA} v.${vA}`,
+      versionBLabel: `${yB}/${mB} v.${vB}`,
     });
   } catch (e) {
     console.error("[Dashboard igf-como-cambio-datos]", e);

@@ -155,12 +155,14 @@ export interface IgfDeltaItem {
   deltaStr?: string;
   deltaMxn?: string | number | null;
   tipo?: string;
+  valorA?: string;
+  valorB?: string;
 }
 
 export function postIgfComoCambioDatos(
   token: string,
   body: { planta: string; yearA: number; monthA: number; versionA: number; yearB: number; monthB: number; versionB: number }
-): Promise<{ cabecera: string | null; deltas: IgfDeltaItem[]; deltaCargo: number | null; deltaCorp: number | null; sinDatos: boolean; url: string }> {
+): Promise<{ cabecera: string | null; deltas: IgfDeltaItem[]; deltaCargo: number | null; deltaCorp: number | null; sinDatos: boolean; url: string; versionALabel?: string; versionBLabel?: string }> {
   return apiFetch("/api/dashboard/igf-como-cambio-datos", {
     token,
     method: "POST",

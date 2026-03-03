@@ -852,7 +852,9 @@ async function obtenerDatosComparacionDosVersiones(client, nombrePlanta, yearA, 
       const deltaTon = (ventaTonA != null && ventaTonB != null) ? ventaTonA - ventaTonB : null;
       dir = deltaTon != null ? (deltaTon >= 0 ? "SUBIÓ" : "BAJÓ") : "—";
       deltaStr = deltaTon != null ? fmtKg(deltaTon) + " ton" : "-";
-      deltas.push({ label: item.label, dir, deltaStr, deltaMxn, key: item.key, tipo: item.tipo });
+      const valorA = ventaTonA != null ? fmtKg(ventaTonA) + " ton" : "-";
+      const valorB = ventaTonB != null ? fmtKg(ventaTonB) + " ton" : "-";
+      deltas.push({ label: item.label, dir, deltaStr, deltaMxn, key: item.key, tipo: item.tipo, valorA, valorB });
       continue;
     }
     if (item.tipo === "margen") {
@@ -866,7 +868,9 @@ async function obtenerDatosComparacionDosVersiones(client, nombrePlanta, yearA, 
       dir = (deltaKg != null ? deltaKg : deltaMxnVal) != null ? ((deltaKg != null ? deltaKg : deltaMxnVal) >= 0 ? "SUBIÓ" : "BAJÓ") : "—";
       deltaStr = deltaKg != null ? fmtKg(deltaKg) + " $/kg" : "-";
       deltaMxn = deltaMxnVal != null ? fmt(deltaMxnVal) : null;
-      deltas.push({ label: item.label, dir, deltaStr, deltaMxn, key: item.key, tipo: item.tipo });
+      const valorA = (ventaKgA != null && ventaKgA > 0 && margenMxnA != null) ? fmtKg(margenMxnA / ventaKgA) + " $/kg" : "-";
+      const valorB = (ventaKgB != null && ventaKgB > 0 && margenMxnB != null) ? fmtKg(margenMxnB / ventaKgB) + " $/kg" : "-";
+      deltas.push({ label: item.label, dir, deltaStr, deltaMxn, key: item.key, tipo: item.tipo, valorA, valorB });
       continue;
     }
     if (item.tipo === "var" || item.tipo === "corp") {
@@ -880,21 +884,27 @@ async function obtenerDatosComparacionDosVersiones(client, nombrePlanta, yearA, 
       dir = (deltaKg != null ? deltaKg : deltaMxnVal) != null ? ((deltaKg != null ? deltaKg : deltaMxnVal) >= 0 ? "SUBIÓ" : "BAJÓ") : "—";
       deltaStr = deltaKg != null ? fmtKg(deltaKg) + " $/kg" : "-";
       deltaMxn = deltaMxnVal != null ? fmt(deltaMxnVal) : null;
-      deltas.push({ label: item.label, dir, deltaStr, deltaMxn, key: item.key, tipo: item.tipo });
+      const valorA = valA != null ? fmtKg(valA) + " $/kg" : "-";
+      const valorB = valB != null ? fmtKg(valB) + " $/kg" : "-";
+      deltas.push({ label: item.label, dir, deltaStr, deltaMxn, key: item.key, tipo: item.tipo, valorA, valorB });
       continue;
     }
     if (item.tipo === "total_cargo") {
       dir = deltaCargo != null ? (deltaCargo >= 0 ? "SUBIÓ" : "BAJÓ") : "—";
       deltaStr = deltaCargo != null ? fmt(deltaCargo) + " MXN" : "-";
       const pesosKg = (ventaKgA != null && ventaKgA > 0 && deltaCargo != null) ? fmtKg(deltaCargo / ventaKgA) + " $/kg" : null;
-      deltas.push({ label: item.label, dir, deltaStr, deltaMxn: deltaCargo != null ? fmt(deltaCargo) : null, key: item.key, tipo: item.tipo, pesosKg });
+      const valorA = cargoActual != null ? fmt(cargoActual) + " MXN" : "-";
+      const valorB = cargoOtra != null ? fmt(cargoOtra) + " MXN" : "-";
+      deltas.push({ label: item.label, dir, deltaStr, deltaMxn: deltaCargo != null ? fmt(deltaCargo) : null, key: item.key, tipo: item.tipo, pesosKg, valorA, valorB });
       continue;
     }
     if (item.tipo === "total_corp") {
       dir = deltaCorp != null ? (deltaCorp >= 0 ? "SUBIÓ" : "BAJÓ") : "—";
       deltaStr = deltaCorp != null ? fmt(deltaCorp) + " MXN" : "-";
       const pesosKg = (ventaKgA != null && ventaKgA > 0 && deltaCorp != null) ? fmtKg(deltaCorp / ventaKgA) + " $/kg" : null;
-      deltas.push({ label: item.label, dir, deltaStr, deltaMxn: deltaCorp != null ? fmt(deltaCorp) : null, key: item.key, tipo: item.tipo, pesosKg });
+      const valorA = corpActual != null ? fmt(corpActual) + " MXN" : "-";
+      const valorB = corpOtra != null ? fmt(corpOtra) + " MXN" : "-";
+      deltas.push({ label: item.label, dir, deltaStr, deltaMxn: deltaCorp != null ? fmt(deltaCorp) : null, key: item.key, tipo: item.tipo, pesosKg, valorA, valorB });
     }
   }
 

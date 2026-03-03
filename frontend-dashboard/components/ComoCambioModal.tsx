@@ -16,6 +16,8 @@ interface Resultado {
   deltaCorp: number | null;
   sinDatos: boolean;
   url: string;
+  versionALabel?: string;
+  versionBLabel?: string;
 }
 
 const MES_LABELS: Record<number, string> = {
@@ -77,7 +79,7 @@ export default function ComoCambioModal({ token, plantas, onClose }: Props) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
       <div
-        className={`w-full rounded-lg border border-slate-700 bg-slate-900 p-4 shadow-xl ${resultado != null ? "max-w-2xl" : "max-w-md"}`}
+        className={`w-full rounded-lg border border-slate-700 bg-slate-900 p-4 shadow-xl ${resultado != null ? "max-w-6xl" : "max-w-md"}`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-center justify-between border-b border-slate-700 pb-2">
@@ -104,20 +106,24 @@ export default function ComoCambioModal({ token, plantas, onClose }: Props) {
                 {resultado.cabecera && (
                   <p className="whitespace-pre-line border-b border-slate-700 pb-2 text-sm font-medium text-slate-200">{resultado.cabecera}</p>
                 )}
-                <div className="max-h-64 overflow-y-auto rounded border border-slate-700 bg-slate-800/50 p-2">
-                  <table className="w-full text-left text-xs">
+                <div className="max-h-80 overflow-y-auto overflow-x-auto rounded border border-slate-700 bg-slate-800/50 p-2">
+                  <table className="w-full min-w-[32rem] text-left text-xs">
                     <thead>
                       <tr className="border-b border-slate-600 text-slate-400">
-                        <th className="py-1 pr-2">Concepto</th>
-                        <th className="py-1 pr-2">Dirección</th>
-                        <th className="py-1">Delta / MXN</th>
+                        <th className="py-1.5 pr-3">Concepto</th>
+                        <th className="py-1.5 pr-3 whitespace-nowrap">{resultado.versionALabel ?? "Versión A"}</th>
+                        <th className="py-1.5 pr-3 whitespace-nowrap">{resultado.versionBLabel ?? "Versión B"}</th>
+                        <th className="py-1.5 pr-3">Dirección</th>
+                        <th className="py-1.5">Delta / MXN</th>
                       </tr>
                     </thead>
                     <tbody className="text-slate-300">
                       {resultado.deltas.map((d, i) => (
                         <tr key={i} className="border-b border-slate-700/50">
-                          <td className="py-1 pr-2">{d.label != null ? `Delta ${d.label}` : "—"}</td>
-                          <td className="py-1 pr-2">{d.dir ?? "—"}</td>
+                          <td className="py-1 pr-3">{d.label != null ? `Delta ${d.label}` : "—"}</td>
+                          <td className="py-1 pr-3">{d.valorA ?? "—"}</td>
+                          <td className="py-1 pr-3">{d.valorB ?? "—"}</td>
+                          <td className="py-1 pr-3">{d.dir ?? "—"}</td>
                           <td className="py-1">{d.deltaStr ?? ""}{d.deltaMxn != null && d.deltaMxn !== "" ? ` (${d.deltaMxn} MXN)` : ""}</td>
                         </tr>
                       ))}
