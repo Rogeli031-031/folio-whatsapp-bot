@@ -89,10 +89,11 @@ function termIfColumnExists(colsLower, colName) {
  * @param {string} nombrePlanta - Nombre extraído del mensaje (ej. "unigas", "unigas tlahuac").
  * @returns {{ include: string, exclude: string|null }} include para ILIKE; exclude para NOT ILIKE (null si nombre tiene espacio).
  */
-function buildEmpresaFilter(nombrePlanta) {
+function buildEmpresaFilter(nombrePlanta, segundoNombre = null) {
   const include = "%" + nombrePlanta + "%";
   const exclude = (nombrePlanta.indexOf(" ") >= 0) ? null : "%" + nombrePlanta + " %";
-  return { include, exclude };
+  const include2 = (segundoNombre && segundoNombre !== nombrePlanta) ? "%" + segundoNombre + "%" : null;
+  return { include, include2, exclude };
 }
 
 /**
@@ -708,9 +709,10 @@ async function obtenerDatosComparacionDosVersiones(client, nombrePlanta, yearA, 
   let empresaResuelta = await resolveEmpresaEnDetalle(client, nombrePlanta, yearA, monthA, versionA);
   if (empresaResuelta == null) empresaResuelta = await resolveEmpresaEnDetalle(client, nombrePlanta, yearB, monthB, versionB);
   // Si el nombre resuelto contiene lo que escribió el usuario (ej. "GT - Puebla" contiene "Puebla"),
-  // usar el texto del usuario para el filtro y así coincidir con variantes ("GT Puebla", "GT - Puebla").
-  // Si solo cambia el acento (Tehuacán vs Tehuacan), seguir usando el nombre resuelto.
+  // usar el texto del usuario para el filtro. Si solo cambia el acento (Tehuacán vs Tehuacan), añadir
+  // ambos al filtro (OR) para que marzo y febrero coincidan aunque en una versión esté con tilde y en otra sin ella.
   let nombreParaFiltro = nombrePlanta;
+  let segundoParaFiltro = null;
   if (empresaResuelta != null) {
     const normResuelta = quitarTildes(empresaResuelta.toLowerCase());
     const normInput = quitarTildes(nombrePlanta.toLowerCase());
@@ -718,18 +720,25 @@ async function obtenerDatosComparacionDosVersiones(client, nombrePlanta, yearA, 
       nombreParaFiltro = nombrePlanta;
     } else {
       nombreParaFiltro = empresaResuelta;
+      if ((empresaResuelta || "").trim() !== (nombrePlanta || "").trim()) segundoParaFiltro = nombrePlanta;
     }
   }
-  const empFilter = buildEmpresaFilter(nombreParaFiltro);
+  const empFilter = buildEmpresaFilter(nombreParaFiltro, segundoParaFiltro);
+  const condEmpresa = empFilter.include2
+    ? `(empresa ILIKE $1 OR empresa ILIKE $2) AND ($3::text IS NULL OR empresa NOT ILIKE $3)`
+    : `empresa ILIKE $1 AND ($2::text IS NULL OR empresa NOT ILIKE $2)`;
+  const paramsDetalle = empFilter.include2
+    ? [empFilter.include, empFilter.include2, empFilter.exclude]
+    : [empFilter.include, empFilter.exclude];
   const rowActual = await client.query(
     `SELECT empresa, cargo_planta_mxn, corp_mxn FROM igf.v_compromiso_analisis_detalle
-     WHERE empresa ILIKE $1 AND ($2::text IS NULL OR empresa NOT ILIKE $2) AND year = $3 AND month = $4 AND version_number = $5 LIMIT 1`,
-    [empFilter.include, empFilter.exclude, yearA, monthA, versionA]
+     WHERE ${condEmpresa} AND year = $${paramsDetalle.length + 1} AND month = $${paramsDetalle.length + 2} AND version_number = $${paramsDetalle.length + 3} LIMIT 1`,
+    [...paramsDetalle, yearA, monthA, versionA]
   );
   const rowOtra = await client.query(
     `SELECT empresa, cargo_planta_mxn, corp_mxn FROM igf.v_compromiso_analisis_detalle
-     WHERE empresa ILIKE $1 AND ($2::text IS NULL OR empresa NOT ILIKE $2) AND year = $3 AND month = $4 AND version_number = $5 LIMIT 1`,
-    [empFilter.include, empFilter.exclude, yearB, monthB, versionB]
+     WHERE ${condEmpresa} AND year = $${paramsDetalle.length + 1} AND month = $${paramsDetalle.length + 2} AND version_number = $${paramsDetalle.length + 3} LIMIT 1`,
+    [...paramsDetalle, yearB, monthB, versionB]
   );
   const rActual = rowActual.rows && rowActual.rows[0] ? rowActual.rows[0] : null;
   const rOtra = rowOtra.rows && rowOtra.rows[0] ? rowOtra.rows[0] : null;
@@ -756,8 +765,8 @@ async function obtenerDatosComparacionDosVersiones(client, nombrePlanta, yearA, 
   idOtra = rOtraV.rows && rOtraV.rows[0] ? rOtraV.rows[0].id : null;
   if (!idOtra) {
     const detalleOtra = await client.query(
-      `SELECT version_id FROM igf.v_compromiso_analisis_detalle WHERE empresa ILIKE $1 AND ($2::text IS NULL OR empresa NOT ILIKE $2) AND year = $3 AND month = $4 AND version_number = $5 LIMIT 1`,
-      [empFilter.include, empFilter.exclude, yearB, monthB, versionB]
+      `SELECT version_id FROM igf.v_compromiso_analisis_detalle WHERE ${condEmpresa} AND year = $${paramsDetalle.length + 1} AND month = $${paramsDetalle.length + 2} AND version_number = $${paramsDetalle.length + 3} LIMIT 1`,
+      [...paramsDetalle, yearB, monthB, versionB]
     ).catch(() => ({ rows: [] }));
     idOtra = detalleOtra.rows && detalleOtra.rows[0] && detalleOtra.rows[0].version_id != null ? detalleOtra.rows[0].version_id : null;
   }
@@ -770,14 +779,23 @@ async function obtenerDatosComparacionDosVersiones(client, nombrePlanta, yearA, 
     sumParts.push(`SUM(${v.key} * COALESCE(venta_ton, 0) * 1000) AS ${v.key}_mxn`);
   }
   const selectExpr = sumParts.join(", ");
+  const condCompromiso = empFilter.include2
+    ? "(empresa ILIKE $2 OR empresa ILIKE $3) AND ($4::text IS NULL OR empresa NOT ILIKE $4)"
+    : "empresa ILIKE $2 AND ($3::text IS NULL OR empresa NOT ILIKE $3)";
+  const paramsA = empFilter.include2 ? [idActual, empFilter.include, empFilter.include2, empFilter.exclude] : [idActual, empFilter.include, empFilter.exclude];
   const rowA = await client.query(
-    `SELECT ${selectExpr} FROM igf.compromiso_lines WHERE version_id = $1 AND empresa ILIKE $2 AND ($3::text IS NULL OR empresa NOT ILIKE $3)`,
-    [idActual, empFilter.include, empFilter.exclude]
+    `SELECT ${selectExpr} FROM igf.compromiso_lines WHERE version_id = $1 AND ${condCompromiso}`,
+    paramsA
   );
-  const rowB = await client.query(
-    `SELECT ${selectExpr} FROM igf.compromiso_lines WHERE version_id = $2 AND empresa ILIKE $1 AND ($3::text IS NULL OR empresa NOT ILIKE $3)`,
-    [empFilter.include, idOtra, empFilter.exclude]
-  );
+  const rowB = empFilter.include2
+    ? await client.query(
+        `SELECT ${selectExpr} FROM igf.compromiso_lines WHERE version_id = $1 AND (empresa ILIKE $2 OR empresa ILIKE $3) AND ($4::text IS NULL OR empresa NOT ILIKE $4)`,
+        [idOtra, empFilter.include, empFilter.include2, empFilter.exclude]
+      )
+    : await client.query(
+        `SELECT ${selectExpr} FROM igf.compromiso_lines WHERE version_id = $2 AND empresa ILIKE $1 AND ($3::text IS NULL OR empresa NOT ILIKE $3)`,
+        [empFilter.include, idOtra, empFilter.exclude]
+      );
   const rA = rowA.rows && rowA.rows[0] ? rowA.rows[0] : null;
   const rB = rowB.rows && rowB.rows[0] ? rowB.rows[0] : null;
   if (!rA || !rB) return null;
