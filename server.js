@@ -5053,18 +5053,22 @@ app.post("/twilio/whatsapp", async (req, res) => {
           const rows = await getDeltaVentaClientes(client, dv.plantaNombre, periodoA, periodoB);
           const fmtKg = (kg) => (kg != null && !isNaN(kg) ? (kg / 1000).toLocaleString("es-MX", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : "0.0");
           let lista = [];
+          let totalDeltaKg = 0;
           if (dv.modo === "dejaron") {
-            lista = rows
-              .filter((r) => r.kgA > 0 && r.kgB <= 0)
-              .sort((a, b) => b.kgA - a.kgA);
+            const candidatos = rows
+              .filter((r) => r.kgA > 0 && r.kgB <= 0);
+            totalDeltaKg = candidatos.reduce((sum, r) => sum + (r.kgA != null ? Number(r.kgA) : 0), 0);
+            lista = candidatos.sort((a, b) => b.kgA - a.kgA);
           } else if (dv.modo === "mas") {
-            lista = rows
-              .filter((r) => r.deltaKg > 0)
-              .sort((a, b) => b.deltaKg - a.deltaKg);
+            const candidatos = rows
+              .filter((r) => r.deltaKg > 0);
+            totalDeltaKg = candidatos.reduce((sum, r) => sum + (r.deltaKg != null ? Number(r.deltaKg) : 0), 0);
+            lista = candidatos.sort((a, b) => b.deltaKg - a.deltaKg);
           } else {
-            lista = rows
-              .filter((r) => r.kgA > 0 && r.kgB > 0 && r.deltaKg < 0)
-              .sort((a, b) => a.deltaKg - b.deltaKg);
+            const candidatos = rows
+              .filter((r) => r.kgA > 0 && r.kgB > 0 && r.deltaKg < 0);
+            totalDeltaKg = candidatos.reduce((sum, r) => sum + (r.deltaKg != null ? -Number(r.deltaKg) : 0), 0);
+            lista = candidatos.sort((a, b) => a.deltaKg - b.deltaKg);
           }
           const top20pct = Math.max(1, Math.ceil(lista.length * 0.2));
           lista = lista.slice(0, top20pct);
@@ -5073,7 +5077,8 @@ app.post("/twilio/whatsapp", async (req, res) => {
             return safeReply("Delta Venta – No se encontraron clientes que cumplan esa condición para esos periodos.");
           }
           const tituloModo = dv.modo === "dejaron" ? "Clientes que dejaron de comprar" : dv.modo === "mas" ? "Clientes que compraron más" : "Clientes que disminuyeron su compra";
-          let msg = `📊 Delta Venta – ${tituloModo}\n${dv.plantaNombre}\n${periodoA} → ${periodoB}\n\n`;
+          const signoTotal = dv.modo === "mas" ? "+" : "-";
+          let msg = `📊 Delta Venta – ${tituloModo}\n${dv.plantaNombre}\n${periodoA} → ${periodoB}\nDelta total: ${signoTotal}${fmtKg(totalDeltaKg)} ton\n\n`;
           lista.forEach((r, i) => {
             if (dv.modo === "dejaron") {
               msg += `${i + 1}) ${r.cliente}: ${fmtKg(r.kgA)} ton → 0.0 ton\n`;
