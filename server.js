@@ -4972,10 +4972,10 @@ app.post("/twilio/whatsapp", async (req, res) => {
 
         if (dv.paso === "tipo") {
           const n = parseInt(bodyTrim, 10);
-          if (!Number.isFinite(n) || n < 1 || n > 2) {
-            return safeReply("Delta Venta – Elige opción:\n1) Clientes que dejaron de comprar\n2) Clientes que compraron más\nResponde 1 o 2 (o Cancelar).");
+          if (!Number.isFinite(n) || n < 1 || n > 3) {
+            return safeReply("Delta Venta – Elige opción:\n1) Clientes que dejaron de comprar\n2) Clientes que compraron más\n3) Clientes que disminuyeron su compra\nResponde 1, 2 o 3 (o Cancelar).");
           }
-          dv.modo = n === 1 ? "dejaron" : "mas";
+          dv.modo = n === 1 ? "dejaron" : n === 2 ? "mas" : "disminuyeron";
           if (dv.rol === "ZP" || !dv.plantaNombre) {
             const plantas = await getPlantasDeltaVenta(client);
             if (!plantas.length) {
@@ -5057,10 +5057,14 @@ app.post("/twilio/whatsapp", async (req, res) => {
             lista = rows
               .filter((r) => r.kgA > 0 && r.kgB <= 0)
               .sort((a, b) => b.kgA - a.kgA);
-          } else {
+          } else if (dv.modo === "mas") {
             lista = rows
               .filter((r) => r.deltaKg > 0)
               .sort((a, b) => b.deltaKg - a.deltaKg);
+          } else {
+            lista = rows
+              .filter((r) => r.kgA > 0 && r.kgB > 0 && r.deltaKg < 0)
+              .sort((a, b) => a.deltaKg - b.deltaKg);
           }
           const top20pct = Math.max(1, Math.ceil(lista.length * 0.2));
           lista = lista.slice(0, top20pct);
@@ -5068,12 +5072,15 @@ app.post("/twilio/whatsapp", async (req, res) => {
             sess.deltaVenta = null;
             return safeReply("Delta Venta – No se encontraron clientes que cumplan esa condición para esos periodos.");
           }
-          let msg = `📊 Delta Venta – ${dv.modo === "dejaron" ? "Clientes que dejaron de comprar" : "Clientes que compraron más"}\n${dv.plantaNombre}\n${periodoA} → ${periodoB}\n\n`;
+          const tituloModo = dv.modo === "dejaron" ? "Clientes que dejaron de comprar" : dv.modo === "mas" ? "Clientes que compraron más" : "Clientes que disminuyeron su compra";
+          let msg = `📊 Delta Venta – ${tituloModo}\n${dv.plantaNombre}\n${periodoA} → ${periodoB}\n\n`;
           lista.forEach((r, i) => {
             if (dv.modo === "dejaron") {
               msg += `${i + 1}) ${r.cliente}: ${fmtKg(r.kgA)} ton → 0.0 ton\n`;
-            } else {
+            } else if (dv.modo === "mas") {
               msg += `${i + 1}) ${r.cliente}: ${fmtKg(r.kgA)} → ${fmtKg(r.kgB)} ton  (+${fmtKg(r.deltaKg)} ton)\n`;
+            } else {
+              msg += `${i + 1}) ${r.cliente}: ${fmtKg(r.kgA)} → ${fmtKg(r.kgB)} ton  (${fmtKg(r.deltaKg)} ton)\n`;
             }
           });
           if (msg.length > MAX_BODY) msg = msg.substring(0, MAX_BODY - 20) + "\n...(recortado)";
@@ -5253,7 +5260,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
           plantaNombreCmd = actor.planta_nombre || null;
         }
         sess.deltaVenta = { paso: "tipo", rol: rolClaveCmd, plantaNombre: plantaNombreCmd };
-        return safeReply("Delta Venta – Elige opción:\n1) Clientes que dejaron de comprar\n2) Clientes que compraron más\nResponde 1 o 2 (o Cancelar).");
+        return safeReply("Delta Venta – Elige opción:\n1) Clientes que dejaron de comprar\n2) Clientes que compraron más\n3) Clientes que disminuyeron su compra\nResponde 1, 2 o 3 (o Cancelar).");
       }
 
       // Si en el paso anterior pedimos la planta para "margen" (usuario escribió "margen" sin planta),
