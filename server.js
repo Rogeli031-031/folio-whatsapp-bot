@@ -1531,6 +1531,17 @@ function getPeriodoPresupuestoConsulta() {
   return PERIODO_PRESUPUESTO_DEFAULT;
 }
 
+/** Resuelve nombre de planta (ej. "Morelos") al código usado en presupuesto (ej. "E15"). Igual lógica que WhatsApp. */
+function resolvePlantaPresupuestoNombre(plantaInput) {
+  const t = (plantaInput || "").trim();
+  if (!t) return null;
+  if (/^e(7|8|9|10|11|12|13|15)$/i.test(t)) return t.toUpperCase().replace(/^e(\d+)$/i, "E$1");
+  const key = t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+  const codigos = NOMBRE_PLANTA_A_CODIGOS[key];
+  if (codigos && codigos.length >= 1) return codigos[0];
+  return t;
+}
+
 /** Plantas con presupuesto: E9, E10 (Acapulco), E15 (Morelos). */
 async function getPlantasPresupuesto(client) {
   const r = await client.query(
@@ -4578,9 +4589,10 @@ app.post("/api/dashboard/presupuesto-comparar", dashboardAuthMiddleware, async (
   if (!pa || !pb) {
     return res.status(400).json({ error: "Faltan periodoA y periodoB (formato YYYY-MM)" });
   }
+  const plantaNombre = resolvePlantaPresupuestoNombre(planta.trim());
   const client = await pool.connect();
   try {
-    const deltas = await queryPresupuestoDeltas(client, planta.trim(), pa, pb);
+    const deltas = await queryPresupuestoDeltas(client, plantaNombre, pa, pb);
     res.json(deltas);
   } catch (e) {
     console.error("[Dashboard presupuesto-comparar]", e);
