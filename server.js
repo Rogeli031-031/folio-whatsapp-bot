@@ -4156,7 +4156,8 @@ function buildDashboardWhere(auth, filters) {
   const params = [];
   let n = 1;
   const esZP = (auth.role && String(auth.role).toUpperCase()) === "ZP";
-  if (!esZP) {
+  const esAD = (auth.role && String(auth.role).toUpperCase()) === "AD";
+  if (!esZP && !esAD) {
     conditions.push("(f.creado_por_rol_clave IS NULL OR UPPER(TRIM(COALESCE(f.creado_por_rol_clave,''))) <> 'AD')");
   }
   if (auth.role === "GG") {
@@ -4520,7 +4521,8 @@ app.get("/api/folios/:id", dashboardAuthMiddleware, async (req, res) => {
     if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
     const creadoPorAD = folio.creado_por_rol_clave && String(folio.creado_por_rol_clave).toUpperCase() === "AD";
     const esZPDash = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) === "ZP";
-    if (creadoPorAD && !esZPDash) return res.status(404).json({ error: "Folio no encontrado" });
+    const esADDash = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) === "AD";
+    if (creadoPorAD && !esZPDash && !esADDash) return res.status(404).json({ error: "Folio no encontrado" });
     if (req.dashboardAuth.role === "GG" && req.dashboardAuth.plantas_permitidas?.length > 0) {
       if (!folio.planta_id || !req.dashboardAuth.plantas_permitidas.includes(folio.planta_id)) {
         return res.status(403).json({ error: "Sin permiso" });
@@ -4608,6 +4610,57 @@ app.post("/api/folios/:id/regresar-zp", dashboardAuthMiddleware, async (req, res
   } catch (e) {
     console.error("[Dashboard folio regresar-zp]", e);
     res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/** Asistente de dirección: subir póliza (comprobante de depósito) para folio en carrito; pasa a Depósito y cierre. */
+app.post("/api/folios/:id/poliza", dashboardAuthMiddleware, async (req, res) => {
+  const folioId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
+  const role = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) || "";
+  if (role !== "AD") return res.status(403).json({ error: "Solo Asistente de dirección puede subir la póliza desde el dashboard." });
+  let fileBuffer = null;
+  if (typeof req.body.fileBase64 === "string") {
+    try { fileBuffer = Buffer.from(req.body.fileBase64, "base64"); } catch (e) { return res.status(400).json({ error: "fileBase64 inválido" }); }
+  }
+  if (!fileBuffer || fileBuffer.length === 0) return res.status(400).json({ error: "Envía fileBase64 (PDF)" });
+  const mesCargo = (req.body.mes_cargo || "").toString().trim();
+  if (!/^\d{4}-\d{2}$/.test(mesCargo)) return res.status(400).json({ error: "mes_cargo requerido (formato YYYY-MM)" });
+  const client = await pool.connect();
+  try {
+    const folio = await getFolioById(client, folioId);
+    if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
+    const est = String(folio.estatus || "").toUpperCase();
+    if (est !== ESTADOS.SELECCIONADO_SEMANA) {
+      return res.status(400).json({ error: "Solo se puede subir la póliza cuando el folio está en el carrito (Carro de compra)." });
+    }
+    if (!s3Enabled) return res.status(503).json({ error: "Almacenamiento no configurado" });
+    const s3Key = `polizas/${folio.numero_folio}/${Date.now()}.pdf`;
+    const publicUrl = await uploadPdfToS3(fileBuffer, s3Key);
+    const fileName = (req.body.fileName && String(req.body.fileName).trim()) || "poliza.pdf";
+    const hash = crypto.createHash("sha256").update(fileBuffer).digest("hex");
+    await insertFolioArchivo(client, {
+      folio_id: folioId,
+      numero_folio: folio.numero_folio,
+      tipo: "POLIZA",
+      s3_key: s3Key,
+      url: publicUrl,
+      file_name: fileName,
+      file_size_bytes: fileBuffer.length,
+      sha256: hash,
+      subido_por: req.dashboardAuth.actor_id != null ? `Dashboard:${req.dashboardAuth.actor_id}` : "Dashboard",
+    });
+    await client.query(
+      `UPDATE public.folios SET estatus = $1, mes_cargo = $2 WHERE id = $3`,
+      [ESTADOS.PAGADO, mesCargo, folioId]
+    );
+    await insertHistorial(client, folioId, folio.numero_folio, folio.folio_codigo, ESTADOS.PAGADO, `Póliza adjunta desde dashboard. Pago cargado al mes ${mesCargo}.`, null, "Asistente de dirección");
+    return res.json({ ok: true, estatus: ESTADOS.PAGADO, mes_cargo: mesCargo });
+  } catch (e) {
+    console.error("[Dashboard folio poliza]", e);
+    res.status(500).json({ error: e.message || "Error al guardar la póliza" });
   } finally {
     client.release();
   }
@@ -5772,10 +5825,12 @@ app.post("/twilio/whatsapp", async (req, res) => {
           }
           const subcmd = (matchDashboard[2] || "").toLowerCase();
           const rolClave = (actor.rol_clave && String(actor.rol_clave).toUpperCase()) || "";
-          const esZP = rolClave === "ZP" || (actor.rol_nombre && /director/i.test(actor.rol_nombre) && /zp/i.test(actor.rol_nombre));
-          const role = esZP ? "ZP" : "GG";
+          const rolNom = (actor.rol_nombre && String(actor.rol_nombre)) || "";
+          const esZP = rolClave === "ZP" || (rolNom && /director/i.test(rolNom) && /zp/i.test(rolNom));
+          const esAD = rolClave === "AD" || (/asistente/i.test(rolNom) && /direccion/i.test(rolNom.replace(/ó/g, "o")));
+          const role = esZP ? "ZP" : esAD ? "AD" : "GG";
           let plantasPermitidas = [];
-          if (esZP) {
+          if (esZP || esAD) {
             const plantas = await getPlantas(client);
             plantasPermitidas = (plantas || []).map((p) => p.id).filter(Number.isFinite);
           } else if (actor.planta_id != null) {

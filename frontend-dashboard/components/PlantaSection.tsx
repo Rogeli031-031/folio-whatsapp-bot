@@ -10,11 +10,12 @@ interface Props {
   porCategoria: Record<string, FolioCardType[]>;
   onOpenFolio: (id: number) => void;
   role: string;
+  onSubirPoliza?: (id: number) => void;
 }
 
 const CAT_ORDER = ["GASTOS", "INVERSIONES", "DYO", "TALLER"];
 
-export default function PlantaSection({ planta_nombre, stats, porCategoria, onOpenFolio, role }: Props) {
+export default function PlantaSection({ planta_nombre, stats, porCategoria, onOpenFolio, role, onSubirPoliza }: Props) {
   const fmtMxn = (n: number) =>
     n != null && !isNaN(n) ? `$${n.toLocaleString("es-MX", { maximumFractionDigits: 0 })}` : "N/A";
 
@@ -40,7 +41,7 @@ export default function PlantaSection({ planta_nombre, stats, porCategoria, onOp
               </div>
               <div className="space-y-1.5">
                 {cards.map((c) => (
-                  <FolioCard key={c.id} card={c} onOpen={onOpenFolio} role={role} />
+                  <FolioCard key={c.id} card={c} onOpen={onOpenFolio} role={role} onSubirPoliza={onSubirPoliza} />
                 ))}
               </div>
             </div>

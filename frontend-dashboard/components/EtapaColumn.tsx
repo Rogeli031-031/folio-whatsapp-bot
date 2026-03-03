@@ -7,6 +7,7 @@ interface Props {
   column: KanbanBoard["board"][0];
   onOpenFolio: (id: number) => void;
   role: string;
+  onSubirPoliza?: (id: number) => void;
 }
 
 const ETAPA_LABELS: Record<string, string> = {
@@ -38,7 +39,7 @@ function EtapaIcon({ etapa, icon }: { etapa: string; icon?: string }) {
   return null;
 }
 
-export default function EtapaColumn({ column, onOpenFolio, role }: Props) {
+export default function EtapaColumn({ column, onOpenFolio, role, onSubirPoliza }: Props) {
   const label = column.etapa_label ?? ETAPA_LABELS[column.etapa] ?? column.etapa;
   const fmtMxn = (n: number | null) =>
     n != null && !isNaN(n) ? `$${n.toLocaleString("es-MX", { maximumFractionDigits: 0 })}` : "—";
@@ -66,6 +67,7 @@ export default function EtapaColumn({ column, onOpenFolio, role }: Props) {
             porCategoria={planta.porCategoria}
             onOpenFolio={onOpenFolio}
             role={role}
+            onSubirPoliza={onSubirPoliza}
           />
         ))}
       </div>

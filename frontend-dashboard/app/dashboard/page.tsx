@@ -17,6 +17,7 @@ import KanbanBoard from "@/components/KanbanBoard";
 import FolioDrawer from "@/components/FolioDrawer";
 import ComoCambioModal from "@/components/ComoCambioModal";
 import DeltaVentaModal from "@/components/DeltaVentaModal";
+import PolizaModal from "@/components/PolizaModal";
 
 function DashboardContent() {
   const searchParams = useSearchParams();
@@ -27,6 +28,7 @@ function DashboardContent() {
   const [drawerFolioId, setDrawerFolioId] = useState<number | null>(null);
   const [showComoCambioModal, setShowComoCambioModal] = useState(false);
   const [showDeltaVentaModal, setShowDeltaVentaModal] = useState(false);
+  const [polizaFolioId, setPolizaFolioId] = useState<number | null>(null);
 
   useEffect(() => {
     const t = parseTokenFromQuery(searchParams) || getTokenFromStorage();
@@ -130,6 +132,7 @@ function DashboardContent() {
         <KanbanBoard
           data={kanban}
           onOpenFolio={setDrawerFolioId}
+          onSubirPoliza={setPolizaFolioId}
         />
       </main>
       <FolioDrawer
@@ -138,6 +141,14 @@ function DashboardContent() {
         onClose={() => setDrawerFolioId(null)}
         onApproved={loadData}
       />
+      {polizaFolioId != null && token && (
+        <PolizaModal
+          folioId={polizaFolioId}
+          token={token}
+          onClose={() => setPolizaFolioId(null)}
+          onSuccess={loadData}
+        />
+      )}
     </div>
   );
 }

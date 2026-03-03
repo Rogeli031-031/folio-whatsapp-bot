@@ -6,9 +6,10 @@ import type { KanbanBoard as KanbanBoardType } from "@/lib/api";
 interface Props {
   data: KanbanBoardType | null;
   onOpenFolio: (id: number) => void;
+  onSubirPoliza?: (id: number) => void;
 }
 
-export default function KanbanBoard({ data, onOpenFolio }: Props) {
+export default function KanbanBoard({ data, onOpenFolio, onSubirPoliza }: Props) {
   if (!data) {
     return (
       <div className="flex items-center justify-center p-8 text-slate-400">Cargando tablero…</div>
@@ -26,6 +27,7 @@ export default function KanbanBoard({ data, onOpenFolio }: Props) {
             column={col}
             onOpenFolio={onOpenFolio}
             role={role}
+            onSubirPoliza={onSubirPoliza}
           />
         ))}
       </div>

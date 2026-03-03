@@ -248,3 +248,15 @@ export function postDeltaVentaDatos(
     body: JSON.stringify(body),
   });
 }
+
+export function postFolioPoliza(
+  token: string,
+  folioId: number,
+  body: { fileBase64: string; fileName?: string; mes_cargo: string }
+): Promise<{ ok: boolean; estatus: string; mes_cargo: string }> {
+  return apiFetch(`/api/folios/${folioId}/poliza`, {
+    token,
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
