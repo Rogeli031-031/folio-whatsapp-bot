@@ -116,6 +116,10 @@ export function postAprobarFolio(token: string, id: number): Promise<{ ok: boole
   return apiFetch<{ ok: boolean; estatus: string }>(`/api/folios/${id}/aprobar`, { token, method: "POST" });
 }
 
+export function postRegresarFolioAZp(token: string, id: number): Promise<{ ok: boolean; estatus: string }> {
+  return apiFetch<{ ok: boolean; estatus: string }>(`/api/folios/${id}/regresar-zp`, { token, method: "POST" });
+}
+
 export function fetchTimeline(token: string, id: number): Promise<{ events: { estatus: string; comentario: string; actor_telefono: string | null; actor_rol: string | null; creado_en: string }[] }> {
   return apiFetch(`/api/folios/${id}/timeline`, { token });
 }

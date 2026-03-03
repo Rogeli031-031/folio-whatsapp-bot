@@ -4441,6 +4441,36 @@ app.post("/api/folios/:id/aprobar", dashboardAuthMiddleware, async (req, res) =>
   }
 });
 
+/** Regresa un folio desde Carro de compra a Aprobación Director ZP. */
+app.post("/api/folios/:id/regresar-zp", dashboardAuthMiddleware, async (req, res) => {
+  const folioId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
+  const client = await pool.connect();
+  try {
+    const folio = await getFolioById(client, folioId);
+    if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
+    if (req.dashboardAuth.role === "GG" && req.dashboardAuth.plantas_permitidas?.length > 0) {
+      if (!folio.planta_id || !req.dashboardAuth.plantas_permitidas.includes(folio.planta_id)) {
+        return res.status(403).json({ error: "Sin permiso para modificar folios de esta planta" });
+      }
+    }
+    const estatus = (folio.estatus || "").trim().toUpperCase();
+    const rol = req.dashboardAuth.role || "Dashboard";
+    const estadosCarro = [ESTADOS.APROBADO_ZP, ESTADOS.LISTO_PARA_PROGRAMACION, ESTADOS.SELECCIONADO_SEMANA, ESTADOS.SOLICITANDO_PAGO];
+    if (!estadosCarro.includes(estatus)) {
+      return res.status(400).json({ error: "Solo se pueden regresar folios desde Carro de compra" });
+    }
+    await updateFolioEstatus(client, folioId, ESTADOS.PENDIENTE_APROB_ZP, { estatus_anterior: estatus });
+    await insertHistorial(client, folioId, folio.numero_folio, folio.folio_codigo, ESTADOS.PENDIENTE_APROB_ZP, "Regresado a Aprobación Director ZP desde dashboard", null, rol);
+    return res.json({ ok: true, estatus: ESTADOS.PENDIENTE_APROB_ZP });
+  } catch (e) {
+    console.error("[Dashboard folio regresar-zp]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
 /* ==================== ARR / Forecast (módulo adicional; no modifica flujo existente) ==================== */
 
 app.post("/api/arr/load", dashboardAuthMiddleware, async (req, res) => {

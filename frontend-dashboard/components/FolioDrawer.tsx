@@ -8,6 +8,7 @@ import {
   fetchFinanzas,
   fetchMediaUrl,
   postAprobarFolio,
+  postRegresarFolioAZp,
 } from "@/lib/api";
 
 interface Props {
@@ -18,6 +19,7 @@ interface Props {
 }
 
 const ESTADOS_APROBABLES = ["PENDIENTE_APROB_PLANTA", "APROB_PLANTA", "PENDIENTE_APROB_ZP"];
+const ESTADOS_CARRO_COMPRA = ["APROBADO_ZP", "LISTO_PARA_PROGRAMACION", "SELECCIONADO_SEMANA", "SOLICITANDO_PAGO"];
 
 export default function FolioDrawer({ folioId, token, onClose, onApproved }: Props) {
   const [folio, setFolio] = useState<Record<string, unknown> | null>(null);
@@ -68,7 +70,9 @@ export default function FolioDrawer({ folioId, token, onClose, onApproved }: Pro
   };
 
   const estatus = (folio?.estatus as string) || "";
-  const puedeAprobar = ESTADOS_APROBABLES.includes(estatus.trim().toUpperCase());
+  const estatusUpper = estatus.trim().toUpperCase();
+  const puedeAprobar = ESTADOS_APROBABLES.includes(estatusUpper);
+  const puedeRegresarZp = ESTADOS_CARRO_COMPRA.includes(estatusUpper);
 
   const handleAprobar = async () => {
     if (!token || !folioId || !puedeAprobar) return;
@@ -82,6 +86,23 @@ export default function FolioDrawer({ folioId, token, onClose, onApproved }: Pro
       onApproved?.();
     } catch (e) {
       setApproveError((e as Error).message || "Error al aprobar");
+    } finally {
+      setApproving(false);
+    }
+  };
+
+  const handleRegresarZp = async () => {
+    if (!token || !folioId || !puedeRegresarZp) return;
+    setApproveError(null);
+    setApproving(true);
+    try {
+      await postRegresarFolioAZp(token, folioId);
+      const [f, t] = await Promise.all([fetchFolio(token, folioId), fetchTimeline(token, folioId)]);
+      setFolio(f as Record<string, unknown>);
+      setTimeline((t as { events: typeof timeline }).events || []);
+      onApproved?.();
+    } catch (e) {
+      setApproveError((e as Error).message || "Error al regresar a ZP");
     } finally {
       setApproving(false);
     }
@@ -111,7 +132,7 @@ export default function FolioDrawer({ folioId, token, onClose, onApproved }: Pro
                 <h3 className="mb-2 text-sm font-medium text-slate-400">Datos</h3>
                 <dl className="space-y-1 text-sm">
                   <div><dt className="text-slate-500">Planta</dt><dd className="text-slate-200">{String(folio.planta_nombre ?? "—")}</dd></div>
-                  <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex flex-wrap items-center gap-2">
                     <div className="min-w-0 flex-1">
                       <dt className="text-slate-500">Estatus</dt>
                       <dd className="text-slate-200">{folio.etapa_icon ? <span className="mr-1">{folio.etapa_icon as string}</span> : null}{String(folio.estatus_visible ?? folio.estatus ?? "—")}</dd>
@@ -124,6 +145,16 @@ export default function FolioDrawer({ folioId, token, onClose, onApproved }: Pro
                         className="rounded bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
                       >
                         {approving ? "…" : "Aprobar folio"}
+                      </button>
+                    )}
+                    {puedeRegresarZp && (
+                      <button
+                        type="button"
+                        onClick={handleRegresarZp}
+                        disabled={approving}
+                        className="rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+                      >
+                        {approving ? "…" : "Regresar a ZP"}
                       </button>
                     )}
                   </div>
