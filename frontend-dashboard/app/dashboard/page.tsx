@@ -18,6 +18,7 @@ import KPIHeader from "@/components/KPIHeader";
 import FiltersBar from "@/components/FiltersBar";
 import KanbanBoard from "@/components/KanbanBoard";
 import FolioDrawer from "@/components/FolioDrawer";
+import ComoCambioModal from "@/components/ComoCambioModal";
 
 function DashboardContent() {
   const searchParams = useSearchParams();
@@ -27,6 +28,7 @@ function DashboardContent() {
   const [kpis, setKpis] = useState<Kpis | null>(null);
   const [filters, setFilters] = useState<DashboardFilters>({ solo_activos: "1" });
   const [drawerFolioId, setDrawerFolioId] = useState<number | null>(null);
+  const [showComoCambioModal, setShowComoCambioModal] = useState(false);
 
   useEffect(() => {
     const t = parseTokenFromQuery(searchParams) || getTokenFromStorage();
@@ -94,7 +96,15 @@ function DashboardContent() {
         filters={filters}
         onFiltersChange={setFilters}
         plantas={plantas}
+        onComoCambioClick={() => setShowComoCambioModal(true)}
       />
+      {showComoCambioModal && token && (
+        <ComoCambioModal
+          token={token}
+          plantas={plantas}
+          onClose={() => setShowComoCambioModal(false)}
+        />
+      )}
       <main className="flex-1">
         <KanbanBoard
           data={kanban}

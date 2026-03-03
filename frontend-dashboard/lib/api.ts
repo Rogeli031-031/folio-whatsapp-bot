@@ -127,3 +127,24 @@ export function fetchMediaUrl(token: string, folioId: number, mediaId: number): 
 export function fetchFinanzas(token: string, id: number): Promise<{ status: string; monto_mxn?: number | null }> {
   return apiFetch(`/api/folios/${id}/finanzas`, { token });
 }
+
+export interface IgfPeriodo {
+  year: number;
+  month: number;
+  versiones: number[];
+}
+
+export function fetchIgfVersiones(token: string): Promise<{ periodos: IgfPeriodo[] }> {
+  return apiFetch<{ periodos: IgfPeriodo[] }>("/api/dashboard/igf-versiones", { token });
+}
+
+export function postIgfComoCambioToken(
+  token: string,
+  body: { planta: string; yearA: number; monthA: number; versionA: number; yearB: number; monthB: number; versionB: number }
+): Promise<{ url: string }> {
+  return apiFetch<{ url: string }>("/api/dashboard/igf-como-cambio-token", {
+    token,
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}

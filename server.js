@@ -4483,6 +4483,47 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
   }
 });
 
+/** Lista periodos IGF (year, month) y versiones por periodo para el modal "Cómo cambió" del dashboard. */
+app.get("/api/dashboard/igf-versiones", dashboardAuthMiddleware, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const meses = await igfHandler.getMesesDisponibles(client);
+    const periodos = [];
+    for (const m of meses) {
+      const { versiones } = await igfHandler.getVersionesDelMesTodas(client, m.year, m.month);
+      periodos.push({ year: m.year, month: m.month, versiones: versiones || [] });
+    }
+    res.json({ periodos });
+  } catch (e) {
+    console.error("[Dashboard igf-versiones]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/** Genera token y URL para descarga Excel "Cómo cambió" (mismo flujo que WhatsApp). */
+app.post("/api/dashboard/igf-como-cambio-token", dashboardAuthMiddleware, async (req, res) => {
+  const { planta, yearA, monthA, versionA, yearB, monthB, versionB } = req.body || {};
+  const p = (v) => (v != null && v !== "" ? parseInt(v, 10) : null);
+  const yA = p(yearA); const mA = p(monthA); const vA = p(versionA);
+  const yB = p(yearB); const mB = p(monthB); const vB = p(versionB);
+  if (!planta || typeof planta !== "string" || !planta.trim()) {
+    return res.status(400).json({ error: "Falta planta" });
+  }
+  if (!Number.isFinite(yA) || !Number.isFinite(mA) || !Number.isFinite(vA) || !Number.isFinite(yB) || !Number.isFinite(mB) || !Number.isFinite(vB)) {
+    return res.status(400).json({ error: "Faltan year/month/version para A o B" });
+  }
+  const excelToken = createIgfComoCambioToken({
+    planta: planta.trim(),
+    yearA: yA, monthA: mA, versionA: vA,
+    yearB: yB, monthB: mB, versionB: vB,
+  });
+  const botBase = (process.env.BASE_URL || process.env.PUBLIC_URL || "").trim() || `${req.protocol}://${req.get("host") || "localhost"}`;
+  const url = `${botBase.replace(/\/$/, "")}/api/igf/como-cambio-excel?t=${encodeURIComponent(excelToken)}`;
+  res.json({ url });
+});
+
 app.get("/api/igf/como-cambio-excel", async (req, res) => {
   const token = (req.query.t || "").trim();
   const payload = verifyIgfComoCambioToken(token);

@@ -6,9 +6,10 @@ interface Props {
   filters: DashboardFilters;
   onFiltersChange: (f: DashboardFilters) => void;
   plantas?: { id: number; nombre: string }[];
+  onComoCambioClick?: () => void;
 }
 
-export default function FiltersBar({ filters, onFiltersChange, plantas = [] }: Props) {
+export default function FiltersBar({ filters, onFiltersChange, plantas = [], onComoCambioClick }: Props) {
   const toggle = (key: keyof DashboardFilters, value: string) => {
     const current = filters[key];
     onFiltersChange({ ...filters, [key]: current === value ? undefined : value });
@@ -55,6 +56,17 @@ export default function FiltersBar({ filters, onFiltersChange, plantas = [] }: P
         onChange={(e) => onFiltersChange({ ...filters, fecha_desde: e.target.value || undefined })}
         className="rounded border border-slate-600 bg-slate-800 px-2 py-1 text-slate-200"
       />
+      {onComoCambioClick && (
+        <button
+          type="button"
+          onClick={onComoCambioClick}
+          className="flex items-center gap-1.5 rounded border border-slate-600 bg-blue-700/80 px-2.5 py-1 text-slate-100 hover:bg-blue-600/90"
+          title="Cómo cambió (IGF): comparar dos versiones y descargar deltas"
+        >
+          <span aria-hidden>Δ</span>
+          <span className="text-sm">Cómo cambió</span>
+        </button>
+      )}
       <input
         type="date"
         value={filters.fecha_hasta || ""}
