@@ -1862,6 +1862,8 @@ async function ensureSchema() {
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS override_planta BOOLEAN DEFAULT false;`);
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS override_motivo TEXT;`);
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS creado_por VARCHAR(255);`);
+    await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS creado_por_rol_clave VARCHAR(20);`);
+    await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS mes_cargo VARCHAR(7);`);
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS descripcion TEXT;`);
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;`);
 
@@ -2184,7 +2186,7 @@ async function getFolioByNumero(client, numero) {
   const r = await client.query(
     `SELECT f.id, f.numero_folio, f.folio_codigo, f.planta_id, f.beneficiario, f.concepto, f.importe,
             f.categoria, f.subcategoria, f.estacion, f.unidad, f.prioridad, f.estatus, f.cotizacion_url, f.cotizacion_s3key,
-            f.aprobado_por, f.aprobado_en, f.creado_en, f.nivel_aprobado, f.estatus_anterior, f.override_planta, f.override_motivo, f.creado_por,
+            f.aprobado_por, f.aprobado_en, f.creado_en, f.nivel_aprobado, f.estatus_anterior, f.override_planta, f.override_motivo, f.creado_por, f.creado_por_rol_clave,
             COALESCE(f.descripcion, f.concepto) AS descripcion,
             p.nombre AS planta_nombre
      FROM public.folios f
@@ -2201,8 +2203,8 @@ async function getFolioById(client, id) {
   const r = await client.query(
     `SELECT f.id, f.numero_folio, f.folio_codigo, f.planta_id, f.beneficiario, f.concepto, f.importe,
             f.categoria, f.subcategoria, f.estacion, f.unidad, f.prioridad, f.estatus, f.cotizacion_url, f.cotizacion_s3key,
-            f.aprobado_por, f.aprobado_en, f.creado_en, f.nivel_aprobado, f.estatus_anterior, f.override_planta, f.override_motivo, f.creado_por,
-            f.presupuesto_id, f.descripcion,
+            f.aprobado_por, f.aprobado_en, f.creado_en, f.nivel_aprobado, f.estatus_anterior, f.override_planta, f.override_motivo, f.creado_por, f.creado_por_rol_clave,
+            f.presupuesto_id, f.descripcion, f.mes_cargo,
             COALESCE(f.descripcion, f.concepto) AS descripcion_display,
             p.nombre AS planta_nombre
      FROM public.folios f
@@ -2239,7 +2241,7 @@ async function getManyFoliosStatus(client, numeros) {
   const r = await client.query(
     `SELECT f.id, f.numero_folio, f.folio_codigo, f.planta_id, f.beneficiario, f.concepto, f.importe,
             f.categoria, f.subcategoria, f.estacion, f.unidad, f.prioridad, f.estatus, f.cotizacion_url, f.cotizacion_s3key,
-            f.aprobado_por, f.aprobado_en, f.creado_en, f.nivel_aprobado, f.estatus_anterior, f.override_planta, f.override_motivo, f.creado_por,
+            f.aprobado_por, f.aprobado_en, f.creado_en, f.nivel_aprobado, f.estatus_anterior, f.override_planta, f.override_motivo, f.creado_por, f.creado_por_rol_clave,
             COALESCE(f.descripcion, f.concepto) AS descripcion,
             p.nombre AS planta_nombre
      FROM public.folios f
@@ -2630,18 +2632,20 @@ async function insertFolio(client, dd) {
   const rolNombre = dd.actor_rol ? String(dd.actor_rol) : "";
   const esZP = rolClave === "ZP" || (/director/i.test(rolNombre) && /zp/i.test(rolNombre));
   const esCDMX = rolClave === "CDMX" || (rolNombre && rolNombre.toUpperCase().includes("CDMX"));
-  const estatusInicial = esZP ? ESTADOS.LISTO_PARA_PROGRAMACION : ESTADOS.PENDIENTE_APROB_PLANTA;
+  const esAD = rolClave === "AD" || (/asistente/i.test(rolNombre) && /direccion/i.test(rolNombre.replace(/ó/g, "o")));
+  const estatusInicial = esZP ? ESTADOS.LISTO_PARA_PROGRAMACION : (esAD ? ESTADOS.PENDIENTE_APROB_ZP : ESTADOS.PENDIENTE_APROB_PLANTA);
 
   const ins = await client.query(
     `INSERT INTO public.folios (
       folio_codigo, numero_folio, planta_id, proyecto_id, beneficiario, concepto, importe,
-      categoria, subcategoria, estacion, unidad, prioridad, estatus, creado_en, nivel_aprobado, creado_por
-    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW(),$14,$15)
+      categoria, subcategoria, estacion, unidad, prioridad, estatus, creado_en, nivel_aprobado, creado_por, creado_por_rol_clave
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW(),$14,$15,$16)
     RETURNING id, numero_folio, folio_codigo, planta_id`,
     [
       folio_codigo, numero_folio, plantaId, dd.proyecto_id || null, dd.beneficiario || null, dd.concepto || null,
       dd.importe || null, dd.categoria_nombre || null, dd.subcategoria_nombre || null,
       dd.estacion || null, dd.unidad || null, prioridad, estatusInicial, esZP ? 3 : 1, dd.actor_telefono || null,
+      rolClave || null,
     ]
   );
   const row = ins.rows[0];
@@ -3778,6 +3782,9 @@ function buildHelpMessage(actor) {
     lines.push("• debug twilio (diagnóstico outbound)");
     lines.push("• probar notificacion (envío de prueba)");
   }
+  if (clave === "AD") {
+    lines.push("• adjuntar poliza F-XXX (folio en carrito; luego envía PDF y mes de cargo)");
+  }
   lines.push("• IGF: margen puebla, resumen igf, cómo cambió puebla [vs v2 | vs mes anterior], top 10");
   lines.push("• version");
   lines.push("• ayuda / menu");
@@ -3889,6 +3896,7 @@ function getSession(from) {
   if (s.presupuestoConsulta === undefined) s.presupuestoConsulta = null;
   if (s.presupuestoComparar === undefined) s.presupuestoComparar = null;
   if (s.deltaVenta === undefined) s.deltaVenta = null;
+  if (s.adPoliza === undefined) s.adPoliza = null;
   return s;
 }
 
@@ -3904,6 +3912,7 @@ function resetSession(sess) {
   sess.igfMargen = null;
   sess.presupuestoConsulta = null;
   sess.deltaVenta = null;
+  sess.adPoliza = null;
 }
 
 /* ==================== NOTIFICACIONES WHATSAPP ==================== */
@@ -4146,6 +4155,10 @@ function buildDashboardWhere(auth, filters) {
   const conditions = [];
   const params = [];
   let n = 1;
+  const esZP = (auth.role && String(auth.role).toUpperCase()) === "ZP";
+  if (!esZP) {
+    conditions.push("(f.creado_por_rol_clave IS NULL OR UPPER(TRIM(COALESCE(f.creado_por_rol_clave,''))) <> 'AD')");
+  }
   if (auth.role === "GG") {
     if (auth.plantas_permitidas && auth.plantas_permitidas.length > 0) {
       conditions.push(`f.planta_id = ANY($${n}::INT[])`);
@@ -4505,6 +4518,9 @@ app.get("/api/folios/:id", dashboardAuthMiddleware, async (req, res) => {
   try {
     const folio = await getFolioById(client, folioId);
     if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
+    const creadoPorAD = folio.creado_por_rol_clave && String(folio.creado_por_rol_clave).toUpperCase() === "AD";
+    const esZPDash = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) === "ZP";
+    if (creadoPorAD && !esZPDash) return res.status(404).json({ error: "Folio no encontrado" });
     if (req.dashboardAuth.role === "GG" && req.dashboardAuth.plantas_permitidas?.length > 0) {
       if (!folio.planta_id || !req.dashboardAuth.plantas_permitidas.includes(folio.planta_id)) {
         return res.status(403).json({ error: "Sin permiso" });
@@ -4941,6 +4957,9 @@ app.post("/twilio/whatsapp", async (req, res) => {
     if (sess.estado === "ESPERANDO_COTIZACION_PDF" && numMedia === 0) {
       return safeReply("Envía la cotización en PDF para crear el folio. Responde con el archivo adjunto. (O escribe Cancelar para salir.)");
     }
+    if (sess.adPoliza && !sess.adPoliza.paso && numMedia === 0) {
+      return safeReply("Envía el PDF del comprobante de depósito (póliza) o escribe Cancelar para salir.");
+    }
 
     if (lower === "version") {
       return safeReply(buildVersionMessage());
@@ -4959,6 +4978,44 @@ app.post("/twilio/whatsapp", async (req, res) => {
 
       if (["ayuda", "help", "menu"].includes(lower)) {
         return safeReply(buildHelpMessage(actor));
+      }
+
+      if (sess.adPoliza && sess.adPoliza.paso === "mes") {
+        const bodyTrim = body.trim();
+        let mesCargo = null;
+        if (/^\d{4}-\d{2}$/.test(bodyTrim)) {
+          mesCargo = bodyTrim;
+        } else {
+          const mesesStr = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+          const numMatch = bodyTrim.match(/^(\d{1,2})[\/\-]?\s*(\d{4})$/);
+          const textMatch = !numMatch && bodyTrim.match(/^(\w+)\s+(\d{4})$/);
+          if (numMatch) {
+            const monthNum = parseInt(numMatch[1], 10);
+            const y = parseInt(numMatch[2], 10);
+            if (Number.isFinite(y) && monthNum >= 1 && monthNum <= 12) mesCargo = `${y}-${String(monthNum).padStart(2, "0")}`;
+          } else if (textMatch) {
+            const y = parseInt(textMatch[2], 10);
+            const mStr = textMatch[1].toLowerCase().replace(/ó/g, "o").substring(0, 3);
+            const idx = mesesStr.findIndex((nombre) => nombre.substring(0, 3) === mStr || nombre.startsWith(mStr));
+            if (Number.isFinite(y) && idx >= 0) mesCargo = `${y}-${String(idx + 1).padStart(2, "0")}`;
+          }
+        }
+        if (!mesCargo) {
+          return safeReply("Indica el mes del pago. Ejemplos: 2025-03, marzo 2025, 3/2025.");
+        }
+        const pend = sess.adPoliza;
+        try {
+          await client.query(
+            `UPDATE public.folios SET estatus = $1, mes_cargo = $2 WHERE id = $3`,
+            [ESTADOS.PAGADO, mesCargo, pend.folio_id]
+          );
+          await insertHistorial(client, pend.folio_id, pend.numero_folio, pend.folio_codigo, ESTADOS.PAGADO, `Póliza adjunta por Asistente de dirección. Pago cargado al mes ${mesCargo}.`, fromNorm, actor ? actor.rol_nombre : null);
+          sess.adPoliza = null;
+          return safeReply(`✅ Folio ${pend.numero_folio} pasado a Depósito y cierre. Pago cargado al mes ${mesCargo}.`);
+        } catch (e) {
+          console.warn("Error actualizar folio PAGADO (poliza AD):", e.message);
+          return safeReply("Error al guardar. Intenta de nuevo.");
+        }
       }
 
       /* ----- Presupuesto: "cual es mi presupuesto" (periodo por defecto 2026-03) ----- */
@@ -7250,11 +7307,14 @@ app.post("/twilio/whatsapp", async (req, res) => {
                 noEncontrados.push(numero);
                 continue;
               }
-              console.log("[aprobar ZP] Llamando notifyOnApprove (rama PENDIENTE_APROB_PLANTA) folio=" + numero);
-              try {
-                await notifyOnApprove(folio, fromNorm);
-              } catch (e) {
-                console.warn("Notif aprobar:", e.message);
+              const creadoPorRol = (folio.creado_por_rol_clave && String(folio.creado_por_rol_clave).toUpperCase()) || "";
+              if (creadoPorRol !== "AD") {
+                console.log("[aprobar ZP] Llamando notifyOnApprove (rama PENDIENTE_APROB_PLANTA) folio=" + numero);
+                try {
+                  await notifyOnApprove(folio, fromNorm);
+                } catch (e) {
+                  console.warn("Notif aprobar:", e.message);
+                }
               }
               aprobados.push(numero);
               if (!folio.cotizacion_url) sinCotizacion.push(numero);
@@ -7275,11 +7335,14 @@ app.post("/twilio/whatsapp", async (req, res) => {
               noEncontrados.push(numero);
               continue;
             }
-            console.log("[aprobar ZP] Llamando notifyOnApprove (rama PENDIENTE_APROB_ZP) folio=" + numero);
-            try {
-              await notifyOnApprove(folio, fromNorm);
-            } catch (e) {
-              console.warn("Notif aprobar:", e.message);
+            const creadoPorRolB = (folio.creado_por_rol_clave && String(folio.creado_por_rol_clave).toUpperCase()) || "";
+            if (creadoPorRolB !== "AD") {
+              console.log("[aprobar ZP] Llamando notifyOnApprove (rama PENDIENTE_APROB_ZP) folio=" + numero);
+              try {
+                await notifyOnApprove(folio, fromNorm);
+              } catch (e) {
+                console.warn("Notif aprobar:", e.message);
+              }
             }
             aprobados.push(numero);
             if (!folio.cotizacion_url) sinCotizacion.push(numero);
@@ -7796,6 +7859,24 @@ app.post("/twilio/whatsapp", async (req, res) => {
         return safeReply(`Ok. Envía el nuevo PDF que reemplazará la cotización ID ${elegida.id}.`);
       }
 
+      const rolClaveBar = (actor && actor.rol_clave && String(actor.rol_clave).toUpperCase()) || "";
+      const rolNomBar = (actor && actor.rol_nombre) ? String(actor.rol_nombre) : "";
+      const esADBar = rolClaveBar === "AD" || (/asistente/i.test(rolNomBar) && /direccion/i.test(rolNomBar.replace(/ó/g, "o")));
+      if (esADBar && /^(adjuntar\s+)?pol[ií]za\s+\S+/.test(body.trim())) {
+        const numero = body.trim().replace(/^(adjuntar\s+)?pol[ií]za\s+/i, "").trim().toUpperCase();
+        if (!/^F-\d{6}-\d{3}$/.test(numero)) {
+          return safeReply("Formato: adjuntar poliza F-YYYYMM-XXX (o poliza F-YYYYMM-XXX). El folio debe estar en el carrito.");
+        }
+        const folio = await getFolioByNumero(client, numero);
+        if (!folio) return safeReply(`No encuentro el folio ${numero}.`);
+        const est = String(folio.estatus || "").toUpperCase();
+        if (est !== ESTADOS.SELECCIONADO_SEMANA) {
+          return safeReply(`El folio ${numero} no está en el carrito (está en ${est}). Solo puedes adjuntar la póliza cuando el folio está en el carrito.`);
+        }
+        sess.adPoliza = { folio_id: folio.id, numero_folio: folio.numero_folio, folio_codigo: folio.folio_codigo };
+        return safeReply("Envía el PDF del comprobante de depósito (póliza) para el folio " + numero + ".");
+      }
+
       if (FLAGS.ATTACHMENTS && lower.startsWith("adjuntar")) {
         const parts = body.split(/\s+/);
         const numero = parts[1] || "";
@@ -7909,6 +7990,36 @@ app.post("/twilio/whatsapp", async (req, res) => {
         }
       }
 
+      if (sess.adPoliza && !sess.adPoliza.paso && s3Enabled) {
+        const clientAd = await pool.connect();
+        try {
+          const pend = sess.adPoliza;
+          const buffer = await downloadTwilioMediaAsBuffer(mediaUrl);
+          const hash = sha256Hex(buffer);
+          const s3Key = `polizas/${pend.numero_folio}/${Date.now()}.pdf`;
+          const publicUrl = await uploadPdfToS3(buffer, s3Key);
+          const fileSize = Buffer.isBuffer(buffer) ? buffer.length : 0;
+          await insertFolioArchivo(clientAd, {
+            folio_id: pend.folio_id,
+            numero_folio: pend.numero_folio,
+            tipo: "POLIZA",
+            s3_key: s3Key,
+            url: publicUrl,
+            file_name: (req.body.MediaUrl0 || "").split("/").pop() || "poliza.pdf",
+            file_size_bytes: fileSize,
+            sha256: hash,
+            subido_por: fromNorm,
+          });
+          sess.adPoliza = { ...pend, paso: "mes" };
+          return safeReply("✅ Póliza recibida. ¿A qué mes corresponde el pago? (ej. 2025-03 o marzo 2025)");
+        } catch (e) {
+          console.warn("Error subir póliza AD:", e.message);
+          return safeReply("Error al guardar la póliza. Intenta de nuevo.");
+        } finally {
+          clientAd.release();
+        }
+      }
+
       const client = await pool.connect();
       try {
         let targetNumero = sess.dd.attachNumero || sess.lastFolioNumero;
@@ -7980,9 +8091,11 @@ app.post("/twilio/whatsapp", async (req, res) => {
           clientForActor.release();
         }
         const rolClave = (actorCreate && actorCreate.rol_clave && String(actorCreate.rol_clave).toUpperCase()) || "";
-        const puedeCrear = rolClave === "GA" || rolClave === "CDMX" || rolClave === "ZC";
+        const rolNom = (actorCreate && actorCreate.rol_nombre) ? String(actorCreate.rol_nombre) : "";
+        const esAD = rolClave === "AD" || (/asistente/i.test(rolNom) && /direccion/i.test(rolNom.replace(/ó/g, "o")));
+        const puedeCrear = rolClave === "GA" || rolClave === "CDMX" || rolClave === "ZC" || esAD;
         if (!puedeCrear) {
-          return safeReply("Solo GA (Gerente Administrativo) y Contralor financiero (CDMX/ZC) pueden crear folios.");
+          return safeReply("Solo GA (Gerente Administrativo), Asistente de dirección y Contralor financiero (CDMX/ZC) pueden crear folios.");
         }
         sess.estado = "ESPERANDO_PLANTA";
         sess.dd = { actor_telefono: fromNorm };
