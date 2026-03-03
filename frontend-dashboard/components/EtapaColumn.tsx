@@ -44,7 +44,7 @@ export default function EtapaColumn({ column, onOpenFolio, role }: Props) {
     n != null && !isNaN(n) ? `$${n.toLocaleString("es-MX", { maximumFractionDigits: 0 })}` : "—";
 
   return (
-    <div className="flex-shrink-0 w-80 rounded-lg border border-slate-700 bg-slate-900/50">
+    <div className="flex-shrink-0 w-[60rem] rounded-lg border border-slate-700 bg-slate-900/50">
       <div className="border-b border-slate-700 p-2">
         <div className="flex items-center gap-2 font-medium text-slate-200">
           <EtapaIcon etapa={column.etapa} icon={column.etapa_icon} />
