@@ -4636,7 +4636,8 @@ app.post("/api/folios/:id/poliza", dashboardAuthMiddleware, async (req, res) => 
     const folio = await getFolioById(client, folioId);
     if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
     const est = String(folio.estatus || "").toUpperCase();
-    if (est !== ESTADOS.SELECCIONADO_SEMANA) {
+    const etapaVisual = estatusToEtapaVisual(est);
+    if (etapaVisual !== ETAPA_VISUAL.CARRO_COMPRA) {
       return res.status(400).json({ error: "Solo se puede subir la póliza cuando el folio está en el carrito (Carro de compra)." });
     }
     if (!s3Enabled) return res.status(503).json({ error: "Almacenamiento no configurado" });
