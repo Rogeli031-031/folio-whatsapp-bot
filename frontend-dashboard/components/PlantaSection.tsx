@@ -31,9 +31,13 @@ export default function PlantaSection({ planta_nombre, stats, porCategoria, onOp
         {CAT_ORDER.map((cat) => {
           const cards = porCategoria[cat] || [];
           if (cards.length === 0) return null;
+          const totalCol = cards.reduce((s, c) => s + (Number(c.importe) || 0), 0);
           return (
             <div key={cat} className="space-y-1.5">
-              <span className="text-[10px] uppercase tracking-wide text-slate-500">{cat}</span>
+              <div className="flex items-baseline justify-between gap-1">
+                <span className="text-[10px] uppercase tracking-wide text-slate-500">{cat}</span>
+                <span className="text-[10px] font-medium text-amber-400/90">{fmtMxn(totalCol)}</span>
+              </div>
               <div className="space-y-1.5">
                 {cards.map((c) => (
                   <FolioCard key={c.id} card={c} onOpen={onOpenFolio} role={role} />
