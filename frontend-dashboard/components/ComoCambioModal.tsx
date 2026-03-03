@@ -1,12 +1,21 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { fetchIgfVersiones, postIgfComoCambioToken, type IgfPeriodo } from "@/lib/api";
+import { fetchIgfVersiones, postIgfComoCambioDatos, type IgfPeriodo, type IgfDeltaItem } from "@/lib/api";
 
 interface Props {
   token: string;
   plantas: { id: number; nombre: string }[];
   onClose: () => void;
+}
+
+interface Resultado {
+  cabecera: string | null;
+  deltas: IgfDeltaItem[];
+  deltaCargo: number | null;
+  deltaCorp: number | null;
+  sinDatos: boolean;
+  url: string;
 }
 
 const MES_LABELS: Record<number, string> = {
@@ -19,6 +28,7 @@ export default function ComoCambioModal({ token, plantas, onClose }: Props) {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resultado, setResultado] = useState<Resultado | null>(null);
 
   const [planta, setPlanta] = useState("");
   const [yearA, setYearA] = useState<number | "">("");
@@ -54,23 +64,20 @@ export default function ComoCambioModal({ token, plantas, onClose }: Props) {
     }
     setError(null);
     setSubmitting(true);
-    postIgfComoCambioToken(token, {
+    postIgfComoCambioDatos(token, {
       planta: p,
       yearA: yA, monthA: mA, versionA: vA,
       yearB: yB, monthB: mB, versionB: vB,
     })
-      .then((r) => {
-        if (r.url) window.open(r.url, "_blank");
-        onClose();
-      })
-      .catch((e) => setError(e.message || "Error al generar enlace"))
+      .then((r) => setResultado(r))
+      .catch((e) => setError(e.message || "Error al obtener datos"))
       .finally(() => setSubmitting(false));
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
       <div
-        className="w-full max-w-md rounded-lg border border-slate-700 bg-slate-900 p-4 shadow-xl"
+        className={`w-full rounded-lg border border-slate-700 bg-slate-900 p-4 shadow-xl ${resultado != null ? "max-w-2xl" : "max-w-md"}`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-center justify-between border-b border-slate-700 pb-2">
@@ -88,7 +95,67 @@ export default function ComoCambioModal({ token, plantas, onClose }: Props) {
         {loading && <p className="py-4 text-center text-sm text-slate-400">Cargando versiones…</p>}
         {error && <p className="mb-2 rounded bg-red-900/40 px-2 py-1 text-sm text-red-200">{error}</p>}
 
-        {!loading && (
+        {resultado != null && (
+          <div className="space-y-3">
+            {resultado.sinDatos ? (
+              <p className="rounded bg-amber-900/30 px-2 py-2 text-sm text-amber-200">No hay datos para esta comparación. Revisa planta y versiones.</p>
+            ) : (
+              <>
+                {resultado.cabecera && (
+                  <p className="whitespace-pre-line border-b border-slate-700 pb-2 text-sm font-medium text-slate-200">{resultado.cabecera}</p>
+                )}
+                <div className="max-h-64 overflow-y-auto rounded border border-slate-700 bg-slate-800/50 p-2">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-600 text-slate-400">
+                        <th className="py-1 pr-2">Concepto</th>
+                        <th className="py-1 pr-2">Dirección</th>
+                        <th className="py-1">Delta / MXN</th>
+                      </tr>
+                    </thead>
+                    <tbody className="text-slate-300">
+                      {resultado.deltas.map((d, i) => (
+                        <tr key={i} className="border-b border-slate-700/50">
+                          <td className="py-1 pr-2">{d.label != null ? `Delta ${d.label}` : "—"}</td>
+                          <td className="py-1 pr-2">{d.dir ?? "—"}</td>
+                          <td className="py-1">{d.deltaStr ?? ""}{d.deltaMxn != null && d.deltaMxn !== "" ? ` (${d.deltaMxn} MXN)` : ""}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+            <div className="flex flex-wrap gap-2 pt-2">
+              {resultado.url && (
+                <a
+                  href={resultado.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded bg-green-700/80 px-3 py-1.5 text-sm text-white hover:bg-green-600"
+                >
+                  Descargar Excel
+                </a>
+              )}
+              <button
+                type="button"
+                onClick={() => setResultado(null)}
+                className="rounded border border-slate-600 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-700"
+              >
+                Nueva comparación
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded bg-slate-600 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-500"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        )}
+
+        {!loading && resultado == null && (
           <form onSubmit={handleSubmit} className="space-y-3">
             <div>
               <label className="block text-xs text-slate-400">Planta</label>
@@ -180,7 +247,7 @@ export default function ComoCambioModal({ token, plantas, onClose }: Props) {
             </div>
 
             <p className="text-xs text-slate-500">
-              Se abrirá la descarga del Excel con los deltas (igual que el comando en WhatsApp).
+              Los deltas se muestran aquí y puedes descargar el Excel.
             </p>
 
             <div className="flex justify-end gap-2 pt-2">
@@ -196,7 +263,7 @@ export default function ComoCambioModal({ token, plantas, onClose }: Props) {
                 disabled={submitting}
                 className="rounded bg-amber-600 px-3 py-1.5 text-sm text-white hover:bg-amber-500 disabled:opacity-50"
               >
-                {submitting ? "…" : "Ver deltas / Excel"}
+                {submitting ? "…" : "Ver deltas"}
               </button>
             </div>
           </form>

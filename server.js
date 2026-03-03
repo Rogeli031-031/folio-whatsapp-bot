@@ -4524,6 +4524,47 @@ app.post("/api/dashboard/igf-como-cambio-token", dashboardAuthMiddleware, async 
   res.json({ url });
 });
 
+/** Devuelve los deltas de la comparación IGF en JSON para mostrarlos en el modal del dashboard. */
+app.post("/api/dashboard/igf-como-cambio-datos", dashboardAuthMiddleware, async (req, res) => {
+  const { planta, yearA, monthA, versionA, yearB, monthB, versionB } = req.body || {};
+  const p = (v) => (v != null && v !== "" ? parseInt(v, 10) : null);
+  const yA = p(yearA); const mA = p(monthA); const vA = p(versionA);
+  const yB = p(yearB); const mB = p(monthB); const vB = p(versionB);
+  if (!planta || typeof planta !== "string" || !planta.trim()) {
+    return res.status(400).json({ error: "Falta planta" });
+  }
+  if (!Number.isFinite(yA) || !Number.isFinite(mA) || !Number.isFinite(vA) || !Number.isFinite(yB) || !Number.isFinite(mB) || !Number.isFinite(vB)) {
+    return res.status(400).json({ error: "Faltan year/month/version para A o B" });
+  }
+  const client = await pool.connect();
+  try {
+    const datos = await igfHandler.obtenerDatosComparacionDosVersiones(client, planta.trim(), yA, mA, vA, yB, mB, vB);
+    const excelToken = createIgfComoCambioToken({
+      planta: planta.trim(),
+      yearA: yA, monthA: mA, versionA: vA,
+      yearB: yB, monthB: mB, versionB: vB,
+    });
+    const botBase = (process.env.BASE_URL || process.env.PUBLIC_URL || "").trim() || `${req.protocol}://${req.get("host") || "localhost"}`;
+    const url = `${botBase.replace(/\/$/, "")}/api/igf/como-cambio-excel?t=${encodeURIComponent(excelToken)}`;
+    if (!datos) {
+      return res.json({ cabecera: null, deltas: [], deltaCargo: null, deltaCorp: null, sinDatos: true, url });
+    }
+    res.json({
+      cabecera: datos.cabecera,
+      deltas: datos.deltas || [],
+      deltaCargo: datos.deltaCargo,
+      deltaCorp: datos.deltaCorp,
+      sinDatos: false,
+      url,
+    });
+  } catch (e) {
+    console.error("[Dashboard igf-como-cambio-datos]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
 app.get("/api/igf/como-cambio-excel", async (req, res) => {
   const token = (req.query.t || "").trim();
   const payload = verifyIgfComoCambioToken(token);
