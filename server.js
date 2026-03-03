@@ -1645,6 +1645,117 @@ async function queryPresupuestoDeltas(client, plantaNombre, periodoA, periodoB) 
   return { totalA, totalB, delta: totalB - totalA, porCategoria, porSubcategoria };
 }
 
+/** Plantas con datos de ventas diarias (Delta Venta), usando mapeo Provincia. */
+async function getPlantasDeltaVenta(client) {
+  const r = await client.query(`
+    WITH prov_map AS (
+      SELECT DISTINCT
+             p.nombre AS prov_name,
+             UPPER(TRIM(p.nombre)) AS key_nombre,
+             UPPER(TRIM(COALESCE(p.clave, ''))) AS key_clave
+        FROM public.plantas p
+        JOIN arr.provincia_plants ap
+          ON UPPER(TRIM(ap.plant_code)) = UPPER(TRIM(p.nombre))
+          OR (p.clave IS NOT NULL AND TRIM(p.clave) <> '' AND UPPER(TRIM(ap.plant_code)) = UPPER(TRIM(p.clave)))
+       WHERE UPPER(TRIM(COALESCE(p.nombre, ''))) != 'CORPORATIVO'
+         AND UPPER(TRIM(COALESCE(p.clave, ''))) != 'CORPORATIVO'
+    )
+    SELECT DISTINCT pm.prov_name AS nombre
+      FROM arr.ventas_diarias_cliente v
+      JOIN prov_map pm
+        ON UPPER(TRIM(v.plant_code)) = pm.key_nombre
+        OR (pm.key_clave <> '' AND UPPER(TRIM(v.plant_code)) = pm.key_clave)
+     ORDER BY pm.prov_name
+  `);
+  return (r.rows || []).map((row) => row.nombre).filter(Boolean);
+}
+
+/** Periodos disponibles (YYYY-MM) para Delta Venta por planta Provincia. */
+async function getPeriodosDeltaVenta(client, plantaNombre) {
+  const r = await client.query(
+    `WITH prov_map AS (
+       SELECT DISTINCT
+              p.nombre AS prov_name,
+              UPPER(TRIM(p.nombre)) AS key_nombre,
+              UPPER(TRIM(COALESCE(p.clave, ''))) AS key_clave
+         FROM public.plantas p
+         JOIN arr.provincia_plants ap
+           ON UPPER(TRIM(ap.plant_code)) = UPPER(TRIM(p.nombre))
+           OR (p.clave IS NOT NULL AND TRIM(p.clave) <> '' AND UPPER(TRIM(ap.plant_code)) = UPPER(TRIM(p.clave)))
+        WHERE UPPER(TRIM(COALESCE(p.nombre, ''))) != 'CORPORATIVO'
+          AND UPPER(TRIM(COALESCE(p.clave, ''))) != 'CORPORATIVO'
+     )
+     SELECT DISTINCT to_char(v.fecha, 'YYYY-MM') AS periodo
+       FROM arr.ventas_diarias_cliente v
+       JOIN prov_map pm
+         ON UPPER(TRIM(v.plant_code)) = pm.key_nombre
+         OR (pm.key_clave <> '' AND UPPER(TRIM(v.plant_code)) = UPPER(TRIM(p.clave)))
+      WHERE pm.prov_name = $1
+      ORDER BY periodo DESC`,
+    [plantaNombre]
+  );
+  return (r.rows || []).map((row) => row.periodo).filter(Boolean);
+}
+
+/** Delta de venta por cliente entre dos periodos (kg). */
+async function getDeltaVentaClientes(client, plantaNombre, periodoA, periodoB) {
+  const [yA, mA] = periodoA.split("-").map((s) => parseInt(s, 10));
+  const [yB, mB] = periodoB.split("-").map((s) => parseInt(s, 10));
+  if (!Number.isFinite(yA) || !Number.isFinite(mA) || !Number.isFinite(yB) || !Number.isFinite(mB)) {
+    return [];
+  }
+  const r = await client.query(
+    `WITH prov_map AS (
+       SELECT DISTINCT
+              p.nombre AS prov_name,
+              UPPER(TRIM(p.nombre)) AS key_nombre,
+              UPPER(TRIM(COALESCE(p.clave, ''))) AS key_clave
+         FROM public.plantas p
+         JOIN arr.provincia_plants ap
+           ON UPPER(TRIM(ap.plant_code)) = UPPER(TRIM(p.nombre))
+           OR (p.clave IS NOT NULL AND TRIM(p.clave) <> '' AND UPPER(TRIM(ap.plant_code)) = UPPER(TRIM(p.clave)))
+        WHERE UPPER(TRIM(COALESCE(p.nombre, ''))) != 'CORPORATIVO'
+          AND UPPER(TRIM(COALESCE(p.clave, ''))) != 'CORPORATIVO'
+     ),
+     ventas_mes AS (
+       SELECT pm.prov_name AS planta,
+              DATE_PART('year', v.fecha)::INT AS year,
+              DATE_PART('month', v.fecha)::INT AS month,
+              v.cliente_norm,
+              SUM(v.kg) AS kg
+         FROM arr.ventas_diarias_cliente v
+         JOIN prov_map pm
+           ON UPPER(TRIM(v.plant_code)) = pm.key_nombre
+           OR (pm.key_clave <> '' AND UPPER(TRIM(v.plant_code)) = pm.key_clave)
+        GROUP BY pm.prov_name, year, month, v.cliente_norm
+     ),
+     mesA AS (
+       SELECT cliente_norm, kg
+         FROM ventas_mes
+        WHERE planta = $1 AND year = $2 AND month = $3
+     ),
+     mesB AS (
+       SELECT cliente_norm, kg
+         FROM ventas_mes
+        WHERE planta = $1 AND year = $4 AND month = $5
+     )
+     SELECT
+       COALESCE(a.cliente_norm, b.cliente_norm) AS cliente_norm,
+       COALESCE(a.kg, 0) AS kg_a,
+       COALESCE(b.kg, 0) AS kg_b,
+       COALESCE(b.kg, 0) - COALESCE(a.kg, 0) AS delta_kg
+       FROM mesA a
+       FULL OUTER JOIN mesB b ON a.cliente_norm = b.cliente_norm`,
+    [plantaNombre, yA, mA, yB, mB]
+  );
+  return (r.rows || []).map((row) => ({
+    cliente: row.cliente_norm,
+    kgA: row.kg_a != null ? Number(row.kg_a) : 0,
+    kgB: row.kg_b != null ? Number(row.kg_b) : 0,
+    deltaKg: row.delta_kg != null ? Number(row.delta_kg) : 0,
+  }));
+}
+
 /* ==================== SCHEMA (idempotente) ==================== */
 
 async function ensureSchema() {
@@ -3766,6 +3877,7 @@ function getSession(from) {
       pendingReemplazo: null,
       presupuestoConsulta: null,
       presupuestoComparar: null,
+      deltaVenta: null,
     });
   }
   const s = sessions.get(from);
@@ -3776,6 +3888,7 @@ function getSession(from) {
   if (s.pendingReemplazo === undefined) s.pendingReemplazo = null;
   if (s.presupuestoConsulta === undefined) s.presupuestoConsulta = null;
   if (s.presupuestoComparar === undefined) s.presupuestoComparar = null;
+  if (s.deltaVenta === undefined) s.deltaVenta = null;
   return s;
 }
 
@@ -3790,6 +3903,7 @@ function resetSession(sess) {
   sess.igfComparar = null;
   sess.igfMargen = null;
   sess.presupuestoConsulta = null;
+  sess.deltaVenta = null;
 }
 
 /* ==================== NOTIFICACIONES WHATSAPP ==================== */
@@ -4846,6 +4960,128 @@ app.post("/twilio/whatsapp", async (req, res) => {
         }
       }
 
+      /* ----- Delta Venta (clientes que dejaron de comprar / compraron más) ----- */
+      if (sess.deltaVenta) {
+        const bodyTrim = body.trim();
+        const dv = sess.deltaVenta;
+        if (/^cancelar$|^no$/i.test(bodyTrim)) {
+          sess.deltaVenta = null;
+          return safeReply("Delta Venta cancelado.");
+        }
+        const rolClave = (actor && actor.rol_clave && String(actor.rol_clave).toUpperCase()) || "";
+
+        if (dv.paso === "tipo") {
+          const n = parseInt(bodyTrim, 10);
+          if (!Number.isFinite(n) || n < 1 || n > 2) {
+            return safeReply("Delta Venta – Elige opción:\n1) Clientes que dejaron de comprar\n2) Clientes que compraron más\nResponde 1 o 2 (o Cancelar).");
+          }
+          dv.modo = n === 1 ? "dejaron" : "mas";
+          if (dv.rol === "ZP" || !dv.plantaNombre) {
+            const plantas = await getPlantasDeltaVenta(client);
+            if (!plantas.length) {
+              sess.deltaVenta = null;
+              return safeReply("Delta Venta – No hay plantas con datos de ventas.");
+            }
+            sess.deltaVenta = { ...dv, paso: "planta", _plantas: plantas };
+            const listado = plantas.map((p, i) => `${i + 1}) ${p}`).join("\n");
+            return safeReply(`Delta Venta – ¿De qué planta?\n\n${listado}\n\nResponde con el número o el nombre. (Escribe Cancelar para salir.)`);
+          }
+          const periodos = await getPeriodosDeltaVenta(client, dv.plantaNombre);
+          if (!periodos.length) {
+            sess.deltaVenta = null;
+            return safeReply("Delta Venta – No hay periodos con datos de ventas para esa planta.");
+          }
+          const listadoP = periodos.map((p, i) => `${i + 1}) ${p}`).join("\n");
+          sess.deltaVenta = { ...dv, paso: "periodoA", _periodos: periodos };
+          return safeReply(`Delta Venta – Periodo de referencia:\n\n${listadoP}\n\nResponde con el número o el periodo (ej. 2026-03).`);
+        }
+
+        if (dv.paso === "planta") {
+          const plantas = dv._plantas || [];
+          let plantaNombre = null;
+          const num = parseInt(bodyTrim, 10);
+          if (Number.isFinite(num) && num >= 1 && num <= plantas.length) plantaNombre = plantas[num - 1];
+          else {
+            const byName = plantas.find((p) => p.toLowerCase() === bodyTrim.toLowerCase());
+            if (byName) plantaNombre = byName;
+          }
+          if (!plantaNombre) {
+            const listado = plantas.map((p, i) => `${i + 1}) ${p}`).join("\n");
+            return safeReply(`Responde con el número o el nombre de la planta:\n\n${listado}`);
+          }
+          const periodos = await getPeriodosDeltaVenta(client, plantaNombre);
+          if (!periodos.length) {
+            sess.deltaVenta = null;
+            return safeReply("Delta Venta – No hay periodos con datos de ventas para esa planta.");
+          }
+          const listadoP = periodos.map((p, i) => `${i + 1}) ${p}`).join("\n");
+          sess.deltaVenta = { ...dv, plantaNombre, paso: "periodoA", _periodos: periodos };
+          return safeReply(`Delta Venta – Periodo de referencia:\n\n${listadoP}\n\nResponde con el número o el periodo (ej. 2026-03).`);
+        }
+
+        if (dv.paso === "periodoA") {
+          const periodos = dv._periodos || [];
+          let periodoA = null;
+          const num = parseInt(bodyTrim, 10);
+          if (Number.isFinite(num) && num >= 1 && num <= periodos.length) periodoA = periodos[num - 1];
+          else if (/^\d{4}-\d{2}$/.test(bodyTrim) && periodos.includes(bodyTrim)) periodoA = bodyTrim;
+          if (!periodoA) {
+            const listadoP = periodos.map((p, i) => `${i + 1}) ${p}`).join("\n");
+            return safeReply(`Delta Venta – responde con el número o el periodo (YYYY-MM):\n\n${listadoP}`);
+          }
+          const periodosRestantes = periodos.filter((p) => p !== periodoA);
+          if (!periodosRestantes.length) {
+            sess.deltaVenta = null;
+            return safeReply("Delta Venta – No hay otro periodo para comparar contra el de referencia.");
+          }
+          const listadoP = periodosRestantes.map((p, i) => `${i + 1}) ${p}`).join("\n");
+          sess.deltaVenta = { ...dv, paso: "periodoB", periodoA, _periodosRestantes: periodosRestantes };
+          return safeReply(`Periodo a comparar (contra ${periodoA}):\n\n${listadoP}\n\nResponde con el número o el periodo.`);
+        }
+
+        if (dv.paso === "periodoB") {
+          const periodosRestantes = dv._periodosRestantes || [];
+          const periodoA = dv.periodoA;
+          let periodoB = null;
+          const num = parseInt(bodyTrim, 10);
+          if (Number.isFinite(num) && num >= 1 && num <= periodosRestantes.length) periodoB = periodosRestantes[num - 1];
+          else if (/^\d{4}-\d{2}$/.test(bodyTrim) && periodosRestantes.includes(bodyTrim)) periodoB = bodyTrim;
+          if (!periodoB || !periodoA || periodoB === periodoA) {
+            const listadoP = periodosRestantes.map((p, i) => `${i + 1}) ${p}`).join("\n");
+            return safeReply(`Elige un periodo distinto al inicial. Responde con el número o YYYY-MM.\n\n${listadoP}`);
+          }
+          const rows = await getDeltaVentaClientes(client, dv.plantaNombre, periodoA, periodoB);
+          const fmtKg = (kg) => (kg != null && !isNaN(kg) ? (kg / 1000).toLocaleString("es-MX", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : "0.0");
+          let lista = [];
+          if (dv.modo === "dejaron") {
+            lista = rows
+              .filter((r) => r.kgA > 0 && r.kgB <= 0)
+              .sort((a, b) => b.kgA - a.kgA)
+              .slice(0, 40);
+          } else {
+            lista = rows
+              .filter((r) => r.deltaKg > 0)
+              .sort((a, b) => b.deltaKg - a.deltaKg)
+              .slice(0, 40);
+          }
+          if (!lista.length) {
+            sess.deltaVenta = null;
+            return safeReply("Delta Venta – No se encontraron clientes que cumplan esa condición para esos periodos.");
+          }
+          let msg = `📊 Delta Venta – ${dv.modo === "dejaron" ? "Clientes que dejaron de comprar" : "Clientes que compraron más"}\n${dv.plantaNombre}\n${periodoA} → ${periodoB}\n\n`;
+          lista.forEach((r, i) => {
+            if (dv.modo === "dejaron") {
+              msg += `${i + 1}) ${r.cliente}: ${fmtKg(r.kgA)} ton → 0.0 ton\n`;
+            } else {
+              msg += `${i + 1}) ${r.cliente}: ${fmtKg(r.kgA)} → ${fmtKg(r.kgB)} ton  (+${fmtKg(r.deltaKg)} ton)\n`;
+            }
+          });
+          if (msg.length > MAX_BODY) msg = msg.substring(0, MAX_BODY - 20) + "\n...(recortado)";
+          sess.deltaVenta = null;
+          return safeReply(msg);
+        }
+      }
+
       if (sess.presupuestoConsulta) {
         const bodyTrim = body.trim();
         const pc = sess.presupuestoConsulta;
@@ -5004,6 +5240,20 @@ app.post("/twilio/whatsapp", async (req, res) => {
         const listado = plantasPresup.map((p, i) => `${i + 1}) ${p.nombre}`).join("\n");
         sess.presupuestoConsulta = { paso: "elegir_planta", _plantas: plantasPresup };
         return safeReply("¿De qué planta?\n\n" + listado + "\n\nResponde con el número, el código (E7, E8, E9, E10, E11, E12, E13, E15) o el nombre: Acapulco, Morelos, Puebla, San Luis, San Luis E13, Tehuacán, Querétaro.");
+      }
+
+      // Comando nuevo: "Delta Venta"
+      if (!sess.deltaVenta && /^delta\s+venta\b/i.test(body.trim())) {
+        if (!actor) {
+          return safeReply("Delta Venta – No estás dado de alta. Contacta al administrador.");
+        }
+        const rolClaveCmd = (actor.rol_clave && String(actor.rol_clave).toUpperCase()) || "";
+        let plantaNombreCmd = null;
+        if (rolClaveCmd === "GG" || rolClaveCmd === "GA") {
+          plantaNombreCmd = actor.planta_nombre || null;
+        }
+        sess.deltaVenta = { paso: "tipo", rol: rolClaveCmd, plantaNombre: plantaNombreCmd };
+        return safeReply("Delta Venta – Elige opción:\n1) Clientes que dejaron de comprar\n2) Clientes que compraron más\nResponde 1 o 2 (o Cancelar).");
       }
 
       // Si en el paso anterior pedimos la planta para "margen" (usuario escribió "margen" sin planta),
