@@ -2052,14 +2052,14 @@ async function ensureSchema() {
 
 /* ==================== REPOS / DB ==================== */
 
-/** Devuelve actor { id, telefono, rol_nombre, rol_nivel, rol_clave, planta_id, planta_nombre } o null. */
+/** Devuelve actor { id, telefono, nombre, rol_nombre, rol_nivel, rol_clave, planta_id, planta_nombre } o null. */
 async function getActorByPhone(client, phone) {
   const norm = normalizePhone(phone);
   const alt = phoneAltForDb(norm);
   const last10 = phoneLast10(phone) || phoneLast10(norm);
 
   const q = `
-    SELECT u.id, u.telefono, u.planta_id, r.nombre AS rol_nombre, r.nivel AS rol_nivel, r.clave AS rol_clave, p.nombre AS planta_nombre
+    SELECT u.id, u.telefono, u.nombre, u.planta_id, r.nombre AS rol_nombre, r.nivel AS rol_nivel, r.clave AS rol_clave, p.nombre AS planta_nombre
     FROM public.usuarios u
     LEFT JOIN public.roles r ON r.id = u.rol_id
     LEFT JOIN public.plantas p ON p.id = u.planta_id
@@ -2071,7 +2071,7 @@ async function getActorByPhone(client, phone) {
 
   if (!row && last10) {
     const qLast10 = `
-      SELECT u.id, u.telefono, u.planta_id, r.nombre AS rol_nombre, r.nivel AS rol_nivel, r.clave AS rol_clave, p.nombre AS planta_nombre
+      SELECT u.id, u.telefono, u.nombre, u.planta_id, r.nombre AS rol_nombre, r.nivel AS rol_nivel, r.clave AS rol_clave, p.nombre AS planta_nombre
       FROM public.usuarios u
       LEFT JOIN public.roles r ON r.id = u.rol_id
       LEFT JOIN public.plantas p ON p.id = u.planta_id
@@ -4155,10 +4155,11 @@ function buildDashboardWhere(auth, filters) {
   const conditions = [];
   const params = [];
   let n = 1;
-  const roleNorm = (auth.role && String(auth.role).trim().toUpperCase()) || "";
+  // Normalizar role del token (p. ej. "AD", "ad", " AD ") para Asistente de Dirección
+  const roleNorm = (auth.role != null && auth.role !== "" ? String(auth.role).replace(/\s/g, "").toUpperCase() : "") || "";
   const esZP = roleNorm === "ZP";
   const esAD = roleNorm === "AD";
-  // ZP y Asistente de Dirección ven todos los folios (sin ocultar por creador ni por planta)
+  // ZP y Asistente de Dirección (AD) ven todos los folios: no filtrar por creador ni por planta
   if (!esZP && !esAD) {
     conditions.push("(f.creado_por_rol_clave IS NULL OR UPPER(TRIM(COALESCE(f.creado_por_rol_clave,''))) <> 'AD')");
   }
@@ -5829,9 +5830,11 @@ app.post("/twilio/whatsapp", async (req, res) => {
           const rolClave = (actor.rol_clave && String(actor.rol_clave).toUpperCase()) || "";
           const rolNom = (actor.rol_nombre && String(actor.rol_nombre)) || "";
           const esZP = rolClave === "ZP" || (rolNom && /director/i.test(rolNom) && /zp/i.test(rolNom));
-          // Asistente de Dirección / asistente Direccion: acceso dashboard como AD
-          const rolNorm = (rolNom || "").toLowerCase().replace(/ó/g, "o").replace(/[\s\u00a0]+/g, " ").trim();
-          const esAD = rolClave === "AD" || (/asistente/.test(rolNorm) && /direccion/.test(rolNorm));
+          // Asistente de Dirección: por rol (clave/nombre) o por nombre de usuario (si rol es null)
+          const normalizarParaAD = (s) => (s || "").toLowerCase().normalize("NFD").replace(/\p{M}/gu, "").replace(/[\s\u00a0]+/g, " ").trim();
+          const rolNormNombre = normalizarParaAD(rolNom);
+          const nombreUsuarioNorm = normalizarParaAD(actor.nombre);
+          const esAD = rolClave === "AD" || (/asistente/.test(rolNormNombre) && /direccion/.test(rolNormNombre)) || (/asistente/.test(nombreUsuarioNorm) && /direccion/.test(nombreUsuarioNorm));
           const role = esZP ? "ZP" : esAD ? "AD" : "GG";
           let plantasPermitidas = [];
           if (esZP || esAD) {
