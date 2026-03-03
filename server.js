@@ -4798,6 +4798,91 @@ app.post("/api/dashboard/presupuesto-comparar", dashboardAuthMiddleware, async (
   }
 });
 
+/** Periodos (YYYY-MM) disponibles para Delta Venta en una planta (dashboard). */
+app.get("/api/dashboard/delta-venta-periodos", dashboardAuthMiddleware, async (req, res) => {
+  const planta = (req.query.planta || "").toString().trim();
+  if (!planta) {
+    return res.status(400).json({ error: "Falta planta" });
+  }
+  const client = await pool.connect();
+  try {
+    const periodos = await getPeriodosDeltaVenta(client, planta);
+    res.json({ periodos: periodos || [] });
+  } catch (e) {
+    console.error("[Dashboard delta-venta-periodos]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/** Datos Delta Venta para las 3 opciones (dejaron, mas, disminuyeron) con regla 80/20. */
+app.post("/api/dashboard/delta-venta-datos", dashboardAuthMiddleware, async (req, res) => {
+  const { planta, periodoA, periodoB } = req.body || {};
+  const pa = (typeof periodoA === "string" && /^\d{4}-\d{2}$/.test(periodoA)) ? periodoA : null;
+  const pb = (typeof periodoB === "string" && /^\d{4}-\d{2}$/.test(periodoB)) ? periodoB : null;
+  if (!planta || typeof planta !== "string" || !planta.trim()) {
+    return res.status(400).json({ error: "Falta planta" });
+  }
+  if (!pa || !pb) {
+    return res.status(400).json({ error: "Faltan periodoA y periodoB (formato YYYY-MM)" });
+  }
+  if (pa === pb) {
+    return res.status(400).json({ error: "Los dos periodos deben ser distintos" });
+  }
+  const fmtKg = (kg) => (kg != null && !isNaN(kg) ? (kg / 1000).toLocaleString("es-MX", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : "0.0");
+  const client = await pool.connect();
+  try {
+    const rows = await getDeltaVentaClientes(client, planta.trim(), pa, pb);
+    const build = (filter, sort, totalReduce, signPositive) => {
+      const candidatos = filter(rows).sort(sort);
+      const totalDeltaKg = candidatos.reduce(totalReduce, 0);
+      const top20 = Math.max(1, Math.ceil(candidatos.length * 0.2));
+      const clientes = candidatos.slice(0, top20).map((r) => ({
+        cliente: r.cliente,
+        kgA: r.kgA,
+        kgB: r.kgB,
+        deltaKg: r.deltaKg,
+        kgAStr: fmtKg(r.kgA),
+        kgBStr: fmtKg(r.kgB),
+        deltaKgStr: fmtKg(r.deltaKg),
+      }));
+      return { totalDeltaKg, totalDeltaKgStr: fmtKg(Math.abs(totalDeltaKg)), signPositive, clientes };
+    };
+    const dejaron = build(
+      (r) => r.kgA > 0 && r.kgB <= 0,
+      (a, b) => b.kgA - a.kgA,
+      (sum, r) => sum + (r.kgA != null ? Number(r.kgA) : 0),
+      false
+    );
+    const mas = build(
+      (r) => r.deltaKg > 0,
+      (a, b) => b.deltaKg - a.deltaKg,
+      (sum, r) => sum + (r.deltaKg != null ? Number(r.deltaKg) : 0),
+      true
+    );
+    const disminuyeron = build(
+      (r) => r.kgA > 0 && r.kgB > 0 && r.deltaKg < 0,
+      (a, b) => a.deltaKg - b.deltaKg,
+      (sum, r) => sum + (r.deltaKg != null ? -Number(r.deltaKg) : 0),
+      false
+    );
+    res.json({
+      planta: planta.trim(),
+      periodoA: pa,
+      periodoB: pb,
+      dejaron,
+      mas,
+      disminuyeron,
+    });
+  } catch (e) {
+    console.error("[Dashboard delta-venta-datos]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
 app.get("/api/igf/como-cambio-excel", async (req, res) => {
   const token = (req.query.t || "").trim();
   const payload = verifyIgfComoCambioToken(token);

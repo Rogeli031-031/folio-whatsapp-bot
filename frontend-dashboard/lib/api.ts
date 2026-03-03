@@ -204,3 +204,47 @@ export function postPresupuestoComparar(
     body: JSON.stringify(body),
   });
 }
+
+export interface DeltaVentaCliente {
+  cliente: string;
+  kgA: number;
+  kgB: number;
+  deltaKg: number;
+  kgAStr: string;
+  kgBStr: string;
+  deltaKgStr: string;
+}
+
+export interface DeltaVentaOpcion {
+  totalDeltaKg: number;
+  totalDeltaKgStr: string;
+  signPositive: boolean;
+  clientes: DeltaVentaCliente[];
+}
+
+export interface DeltaVentaDatosResult {
+  planta: string;
+  periodoA: string;
+  periodoB: string;
+  dejaron: DeltaVentaOpcion;
+  mas: DeltaVentaOpcion;
+  disminuyeron: DeltaVentaOpcion;
+}
+
+export function fetchDeltaVentaPeriodos(token: string, planta: string): Promise<{ periodos: string[] }> {
+  return apiFetch<{ periodos: string[] }>("/api/dashboard/delta-venta-periodos", {
+    token,
+    params: { planta },
+  });
+}
+
+export function postDeltaVentaDatos(
+  token: string,
+  body: { planta: string; periodoA: string; periodoB: string }
+): Promise<DeltaVentaDatosResult> {
+  return apiFetch<DeltaVentaDatosResult>("/api/dashboard/delta-venta-datos", {
+    token,
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}

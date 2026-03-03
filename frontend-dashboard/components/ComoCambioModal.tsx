@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { fetchIgfVersiones, postIgfComoCambioDatos, postPresupuestoComparar, type IgfPeriodo, type IgfDeltaItem, type PresupuestoCompararResult } from "@/lib/api";
+import { fetchIgfVersiones, postIgfComoCambioDatos, postPresupuestoComparar, fetchDeltaVentaPeriodos, postDeltaVentaDatos, type IgfPeriodo, type IgfDeltaItem, type PresupuestoCompararResult, type DeltaVentaDatosResult } from "@/lib/api";
 
 interface Props {
   token: string;
@@ -43,12 +43,35 @@ export default function ComoCambioModal({ token, plantas, onClose }: Props) {
   const [monthB, setMonthB] = useState<number | "">("");
   const [versionB, setVersionB] = useState<number | "">("");
 
+  const [deltaVentaOpen, setDeltaVentaOpen] = useState(false);
+  const [deltaVentaPeriodos, setDeltaVentaPeriodos] = useState<string[]>([]);
+  const [deltaVentaPeriodosLoading, setDeltaVentaPeriodosLoading] = useState(false);
+  const [deltaVentaPeriodoA, setDeltaVentaPeriodoA] = useState("");
+  const [deltaVentaPeriodoB, setDeltaVentaPeriodoB] = useState("");
+  const [deltaVentaLoading, setDeltaVentaLoading] = useState(false);
+  const [deltaVentaError, setDeltaVentaError] = useState<string | null>(null);
+  const [deltaVentaResult, setDeltaVentaResult] = useState<DeltaVentaDatosResult | null>(null);
+
   useEffect(() => {
     fetchIgfVersiones(token)
       .then((r) => setPeriodos(r.periodos || []))
       .catch((e) => setError(e.message || "Error al cargar versiones"))
       .finally(() => setLoading(false));
   }, [token]);
+
+  useEffect(() => {
+    if (!deltaVentaOpen || !planta.trim()) return;
+    setDeltaVentaPeriodosLoading(true);
+    setDeltaVentaPeriodos([]);
+    setDeltaVentaPeriodoA("");
+    setDeltaVentaPeriodoB("");
+    setDeltaVentaResult(null);
+    setDeltaVentaError(null);
+    fetchDeltaVentaPeriodos(token, planta.trim())
+      .then((r) => setDeltaVentaPeriodos(r.periodos || []))
+      .catch((e) => setDeltaVentaError(e.message || "Error al cargar periodos"))
+      .finally(() => setDeltaVentaPeriodosLoading(false));
+  }, [token, planta, deltaVentaOpen]);
 
   const versionesA = periodos.find((p) => p.year === yearA && p.month === monthA)?.versiones ?? [];
   const versionesB = periodos.find((p) => p.year === yearB && p.month === monthB)?.versiones ?? [];
@@ -93,6 +116,30 @@ export default function ComoCambioModal({ token, plantas, onClose }: Props) {
       .finally(() => setPresupuestoLoading(false));
   };
 
+  const handleDeltaVentaOpen = () => {
+    setDeltaVentaOpen(true);
+  };
+
+  const handleDeltaVentaBack = () => {
+    setDeltaVentaOpen(false);
+    setDeltaVentaResult(null);
+    setDeltaVentaError(null);
+    setDeltaVentaPeriodoA("");
+    setDeltaVentaPeriodoB("");
+  };
+
+  const handleDeltaVentaSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const p = planta.trim();
+    if (!p || !deltaVentaPeriodoA || !deltaVentaPeriodoB || deltaVentaPeriodoA === deltaVentaPeriodoB) return;
+    setDeltaVentaError(null);
+    setDeltaVentaLoading(true);
+    postDeltaVentaDatos(token, { planta: p, periodoA: deltaVentaPeriodoA, periodoB: deltaVentaPeriodoB })
+      .then(setDeltaVentaResult)
+      .catch((e) => setDeltaVentaError(e.message || "Error al obtener Delta Venta"))
+      .finally(() => setDeltaVentaLoading(false));
+  };
+
   const fmtMxn = (n: number) => (n != null && !isNaN(n) ? n.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—");
 
   return (
@@ -116,7 +163,105 @@ export default function ComoCambioModal({ token, plantas, onClose }: Props) {
         {loading && <p className="py-4 text-center text-sm text-slate-400">Cargando versiones…</p>}
         {error && <p className="mb-2 rounded bg-red-900/40 px-2 py-1 text-sm text-red-200">{error}</p>}
 
-        {resultado != null && (
+        {resultado != null && deltaVentaOpen && (
+          <div className="space-y-3">
+            {!deltaVentaResult ? (
+              <>
+                <p className="text-sm text-slate-300">Delta Venta – <strong>{planta}</strong>. Elige periodos (no uses los meses de la comparación IGF).</p>
+                {deltaVentaPeriodosLoading && <p className="text-sm text-slate-400">Cargando periodos…</p>}
+                {deltaVentaError && <p className="rounded bg-red-900/40 px-2 py-1 text-sm text-red-200">{deltaVentaError}</p>}
+                {!deltaVentaPeriodosLoading && deltaVentaPeriodos.length > 0 && (
+                  <form onSubmit={handleDeltaVentaSubmit} className="space-y-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-xs text-slate-400">Periodo referencia (A)</label>
+                        <select
+                          value={deltaVentaPeriodoA}
+                          onChange={(e) => setDeltaVentaPeriodoA(e.target.value)}
+                          className="mt-0.5 w-full rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-slate-200"
+                        >
+                          <option value="">— Elegir —</option>
+                          {deltaVentaPeriodos.map((per) => (
+                            <option key={per} value={per}>{per}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-slate-400">Periodo a comparar (B)</label>
+                        <select
+                          value={deltaVentaPeriodoB}
+                          onChange={(e) => setDeltaVentaPeriodoB(e.target.value)}
+                          className="mt-0.5 w-full rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-slate-200"
+                        >
+                          <option value="">— Elegir —</option>
+                          {deltaVentaPeriodos.filter((p) => p !== deltaVentaPeriodoA).map((per) => (
+                            <option key={per} value={per}>{per}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 pt-1">
+                      <button type="button" onClick={handleDeltaVentaBack} className="rounded border border-slate-600 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-700">Volver</button>
+                      <button type="submit" disabled={deltaVentaLoading || !deltaVentaPeriodoA || !deltaVentaPeriodoB || deltaVentaPeriodoA === deltaVentaPeriodoB} className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-500 disabled:opacity-50">{deltaVentaLoading ? "…" : "Ver Delta Venta"}</button>
+                    </div>
+                  </form>
+                )}
+                {!deltaVentaPeriodosLoading && deltaVentaPeriodos.length === 0 && !deltaVentaError && <p className="text-sm text-slate-400">No hay periodos de venta para esta planta.</p>}
+              </>
+            ) : (
+              <>
+                <p className="border-b border-slate-700 pb-2 text-sm font-medium text-slate-200">Delta Venta – {deltaVentaResult.planta} · {deltaVentaResult.periodoA} → {deltaVentaResult.periodoB}</p>
+                {deltaVentaError && <p className="rounded bg-red-900/40 px-2 py-1 text-sm text-red-200">{deltaVentaError}</p>}
+                <div className="max-h-[70vh] space-y-4 overflow-y-auto">
+                  <div className="rounded border border-slate-700 bg-slate-800/50 p-2">
+                    <p className="mb-1.5 text-xs font-medium text-slate-300">Clientes que dejaron de comprar · Delta total: -{deltaVentaResult.dejaron.totalDeltaKgStr} ton</p>
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[24rem] text-left text-xs">
+                        <thead><tr className="border-b border-slate-600 text-slate-400"><th className="py-1 pr-2">#</th><th className="py-1 pr-2">Cliente</th><th className="py-1 pr-2 text-right">Periodo A (ton)</th><th className="py-1 text-right">Periodo B (ton)</th></tr></thead>
+                        <tbody className="text-slate-300">
+                          {deltaVentaResult.dejaron.clientes.map((c, i) => (
+                            <tr key={i} className="border-b border-slate-700/50"><td className="py-1 pr-2">{i + 1}</td><td className="py-1 pr-2">{c.cliente}</td><td className="py-1 pr-2 text-right tabular-nums">{c.kgAStr}</td><td className="py-1 text-right tabular-nums">0.0</td></tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                  <div className="rounded border border-slate-700 bg-slate-800/50 p-2">
+                    <p className="mb-1.5 text-xs font-medium text-slate-300">Clientes que compraron más · Delta total: +{deltaVentaResult.mas.totalDeltaKgStr} ton</p>
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[28rem] text-left text-xs">
+                        <thead><tr className="border-b border-slate-600 text-slate-400"><th className="py-1 pr-2">#</th><th className="py-1 pr-2">Cliente</th><th className="py-1 pr-2 text-right">A (ton)</th><th className="py-1 pr-2 text-right">B (ton)</th><th className="py-1 text-right">Delta (ton)</th></tr></thead>
+                        <tbody className="text-slate-300">
+                          {deltaVentaResult.mas.clientes.map((c, i) => (
+                            <tr key={i} className="border-b border-slate-700/50"><td className="py-1 pr-2">{i + 1}</td><td className="py-1 pr-2">{c.cliente}</td><td className="py-1 pr-2 text-right tabular-nums">{c.kgAStr}</td><td className="py-1 pr-2 text-right tabular-nums">{c.kgBStr}</td><td className="py-1 text-right tabular-nums text-emerald-400/90">+{c.deltaKgStr}</td></tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                  <div className="rounded border border-slate-700 bg-slate-800/50 p-2">
+                    <p className="mb-1.5 text-xs font-medium text-slate-300">Clientes que disminuyeron su compra · Delta total: -{deltaVentaResult.disminuyeron.totalDeltaKgStr} ton</p>
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[28rem] text-left text-xs">
+                        <thead><tr className="border-b border-slate-600 text-slate-400"><th className="py-1 pr-2">#</th><th className="py-1 pr-2">Cliente</th><th className="py-1 pr-2 text-right">A (ton)</th><th className="py-1 pr-2 text-right">B (ton)</th><th className="py-1 text-right">Delta (ton)</th></tr></thead>
+                        <tbody className="text-slate-300">
+                          {deltaVentaResult.disminuyeron.clientes.map((c, i) => (
+                            <tr key={i} className="border-b border-slate-700/50"><td className="py-1 pr-2">{i + 1}</td><td className="py-1 pr-2">{c.cliente}</td><td className="py-1 pr-2 text-right tabular-nums">{c.kgAStr}</td><td className="py-1 pr-2 text-right tabular-nums">{c.kgBStr}</td><td className="py-1 text-right tabular-nums text-red-400/90">{c.deltaKgStr}</td></tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+                <div className="pt-2">
+                  <button type="button" onClick={handleDeltaVentaBack} className="rounded bg-slate-600 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-500">Volver</button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {resultado != null && !deltaVentaOpen && (
           <div className="space-y-3">
             {resultado.sinDatos ? (
               <p className="rounded bg-amber-900/30 px-2 py-2 text-sm text-amber-200">No hay datos para esta comparación. Revisa planta y versiones.</p>
@@ -216,6 +361,14 @@ export default function ComoCambioModal({ token, plantas, onClose }: Props) {
                 className="rounded border border-slate-600 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-700"
               >
                 Nueva comparación
+              </button>
+              <button
+                type="button"
+                onClick={handleDeltaVentaOpen}
+                disabled={!planta.trim()}
+                className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-500 disabled:opacity-50"
+              >
+                Delta Venta
               </button>
               <button
                 type="button"
