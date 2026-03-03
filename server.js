@@ -4401,6 +4401,39 @@ app.get("/api/folios/:id", dashboardAuthMiddleware, async (req, res) => {
   }
 });
 
+/** Aprobar folio desde dashboard: pasa de Pendiente aprobación planta a Aprobación Director ZP (mueve la tarjeta de columna). */
+app.post("/api/folios/:id/aprobar", dashboardAuthMiddleware, async (req, res) => {
+  const folioId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
+  const client = await pool.connect();
+  try {
+    const folio = await getFolioById(client, folioId);
+    if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
+    if (req.dashboardAuth.role === "GG" && req.dashboardAuth.plantas_permitidas?.length > 0) {
+      if (!folio.planta_id || !req.dashboardAuth.plantas_permitidas.includes(folio.planta_id)) {
+        return res.status(403).json({ error: "Sin permiso para aprobar folios de esta planta" });
+      }
+    }
+    const estatus = (folio.estatus || "").trim().toUpperCase();
+    const permitidos = [ESTADOS.PENDIENTE_APROB_PLANTA, ESTADOS.APROB_PLANTA];
+    if (!permitidos.includes(estatus)) {
+      return res.status(400).json({ error: "Solo se puede aprobar un folio en Pendiente aprobación planta" });
+    }
+    await client.query(
+      `UPDATE public.folios SET estatus = $1 WHERE id = $2`,
+      [ESTADOS.PENDIENTE_APROB_ZP, folioId]
+    );
+    const aprobadoPor = req.dashboardAuth.actor_id != null ? `Dashboard:${req.dashboardAuth.actor_id}` : "Dashboard";
+    await insertHistorial(client, folioId, folio.numero_folio, folio.folio_codigo, ESTADOS.PENDIENTE_APROB_ZP, "Aprobado desde dashboard (pasa a ZP)", null, req.dashboardAuth.role || "Dashboard");
+    res.json({ ok: true, estatus: ESTADOS.PENDIENTE_APROB_ZP });
+  } catch (e) {
+    console.error("[Dashboard folio aprobar]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
 /* ==================== ARR / Forecast (módulo adicional; no modifica flujo existente) ==================== */
 
 app.post("/api/arr/load", dashboardAuthMiddleware, async (req, res) => {

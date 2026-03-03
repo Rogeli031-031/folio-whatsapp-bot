@@ -7,20 +7,26 @@ import {
   fetchMedia,
   fetchFinanzas,
   fetchMediaUrl,
+  postAprobarFolio,
 } from "@/lib/api";
 
 interface Props {
   folioId: number | null;
   token: string | null;
   onClose: () => void;
+  onApproved?: () => void;
 }
 
-export default function FolioDrawer({ folioId, token, onClose }: Props) {
+const ESTADOS_APROBABLES = ["PENDIENTE_APROB_PLANTA", "APROB_PLANTA"];
+
+export default function FolioDrawer({ folioId, token, onClose, onApproved }: Props) {
   const [folio, setFolio] = useState<Record<string, unknown> | null>(null);
   const [timeline, setTimeline] = useState<{ estatus: string; estatus_visible?: string; etapa_icon?: string; comentario: string; actor_rol: string | null; creado_en: string }[]>([]);
   const [media, setMedia] = useState<{ id: number; tipo: string; file_name: string | null }[]>([]);
   const [finanzas, setFinanzas] = useState<{ status: string; monto_mxn?: number | null } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [approving, setApproving] = useState(false);
+  const [approveError, setApproveError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!folioId || !token) {
@@ -61,6 +67,26 @@ export default function FolioDrawer({ folioId, token, onClose }: Props) {
     }
   };
 
+  const estatus = (folio?.estatus as string) || "";
+  const puedeAprobar = ESTADOS_APROBABLES.includes(estatus.trim().toUpperCase());
+
+  const handleAprobar = async () => {
+    if (!token || !folioId || !puedeAprobar) return;
+    setApproveError(null);
+    setApproving(true);
+    try {
+      await postAprobarFolio(token, folioId);
+      const [f, t] = await Promise.all([fetchFolio(token, folioId), fetchTimeline(token, folioId)]);
+      setFolio(f as Record<string, unknown>);
+      setTimeline((t as { events: typeof timeline }).events || []);
+      onApproved?.();
+    } catch (e) {
+      setApproveError((e as Error).message || "Error al aprobar");
+    } finally {
+      setApproving(false);
+    }
+  };
+
   return (
     <>
       <div className="fixed inset-0 z-40 bg-black/50" onClick={onClose} aria-hidden />
@@ -85,7 +111,23 @@ export default function FolioDrawer({ folioId, token, onClose }: Props) {
                 <h3 className="mb-2 text-sm font-medium text-slate-400">Datos</h3>
                 <dl className="space-y-1 text-sm">
                   <div><dt className="text-slate-500">Planta</dt><dd className="text-slate-200">{String(folio.planta_nombre ?? "—")}</dd></div>
-                  <div><dt className="text-slate-500">Estatus</dt><dd className="text-slate-200">{folio.etapa_icon ? <span className="mr-1">{folio.etapa_icon as string}</span> : null}{String(folio.estatus_visible ?? folio.estatus ?? "—")}</dd></div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="min-w-0 flex-1">
+                      <dt className="text-slate-500">Estatus</dt>
+                      <dd className="text-slate-200">{folio.etapa_icon ? <span className="mr-1">{folio.etapa_icon as string}</span> : null}{String(folio.estatus_visible ?? folio.estatus ?? "—")}</dd>
+                    </div>
+                    {puedeAprobar && (
+                      <button
+                        type="button"
+                        onClick={handleAprobar}
+                        disabled={approving}
+                        className="rounded bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+                      >
+                        {approving ? "…" : "Aprobar folio"}
+                      </button>
+                    )}
+                  </div>
+                  {approveError && <p className="text-sm text-red-400">{approveError}</p>}
                   <div><dt className="text-slate-500">Importe</dt><dd className="text-slate-200">{folio.importe != null ? `$${Number(folio.importe).toLocaleString("es-MX")}` : "N/A"}</dd></div>
                   <div><dt className="text-slate-500">Concepto</dt><dd className="text-slate-200">{String(folio.descripcion_display ?? folio.concepto ?? "—")}</dd></div>
                 </dl>

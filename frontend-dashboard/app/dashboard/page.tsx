@@ -115,6 +115,7 @@ function DashboardContent() {
         folioId={drawerFolioId}
         token={token}
         onClose={() => setDrawerFolioId(null)}
+        onApproved={loadData}
       />
     </div>
   );

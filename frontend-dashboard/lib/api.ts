@@ -112,6 +112,10 @@ export function fetchFolio(token: string, id: number): Promise<Record<string, un
   return apiFetch<Record<string, unknown>>(`/api/folios/${id}`, { token });
 }
 
+export function postAprobarFolio(token: string, id: number): Promise<{ ok: boolean; estatus: string }> {
+  return apiFetch<{ ok: boolean; estatus: string }>(`/api/folios/${id}/aprobar`, { token, method: "POST" });
+}
+
 export function fetchTimeline(token: string, id: number): Promise<{ events: { estatus: string; comentario: string; actor_telefono: string | null; actor_rol: string | null; creado_en: string }[] }> {
   return apiFetch(`/api/folios/${id}/timeline`, { token });
 }
