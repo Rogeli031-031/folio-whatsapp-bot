@@ -122,6 +122,39 @@ async function resolveEmpresaEnDetalle(client, nombrePlanta, year, month, versio
   return null;
 }
 
+/**
+ * Obtiene todas las empresas que coinciden con nombrePlanta (ignorando acentos) en ambas versiones.
+ * Así si en versión A está "Queretaro" y en B "Querétaro", devuelve ambos para usarlos en el filtro OR.
+ * @returns {Promise<string[]>} Lista de valores distintos de empresa (orden estable).
+ */
+async function resolveEmpresasEnDetalleAmbasVersiones(client, nombrePlanta, yearA, monthA, versionA, yearB, monthB, versionB) {
+  const nombreNorm = quitarTildes((nombrePlanta || "").toLowerCase());
+  if (!nombreNorm) return [];
+  const seen = new Set();
+  const result = [];
+  const add = (emp) => {
+    const e = (emp || "").trim();
+    if (!e) return;
+    const key = e.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    result.push(e);
+  };
+  for (const [y, m, v] of [[yearA, monthA, versionA], [yearB, monthB, versionB]]) {
+    const r = await client.query(
+      `SELECT DISTINCT empresa FROM igf.v_compromiso_analisis_detalle
+       WHERE year = $1 AND month = $2 AND version_number = $3`,
+      [y, m, v]
+    );
+    for (const row of (r.rows || [])) {
+      const emp = (row.empresa || "").trim();
+      if (!emp) continue;
+      if (quitarTildes(emp.toLowerCase()).includes(nombreNorm)) add(emp);
+    }
+  }
+  return result;
+}
+
 /** Obtiene versión actual (GLOBAL/is_current) o null. */
 async function getVersionActualGlobal(client) {
   const r = await client.query(
@@ -706,11 +739,9 @@ async function getVersionesDelMesTodas(client, year, month) {
  * @returns {{ cabecera, deltas, deltaCargo, deltaCorp, yearA, monthA, versionA, yearB, monthB, versionB, nombrePlanta } | null }
  */
 async function obtenerDatosComparacionDosVersiones(client, nombrePlanta, yearA, monthA, versionA, yearB, monthB, versionB) {
-  let empresaResuelta = await resolveEmpresaEnDetalle(client, nombrePlanta, yearA, monthA, versionA);
-  if (empresaResuelta == null) empresaResuelta = await resolveEmpresaEnDetalle(client, nombrePlanta, yearB, monthB, versionB);
-  // Si el nombre resuelto contiene lo que escribió el usuario (ej. "GT - Puebla" contiene "Puebla"),
-  // usar el texto del usuario para el filtro. Si solo cambia el acento (Tehuacán vs Tehuacan), añadir
-  // ambos al filtro (OR) para que marzo y febrero coincidan aunque en una versión esté con tilde y en otra sin ella.
+  // Resolver en ambas versiones para incluir todas las grafías (ej. Queretaro y Querétaro) en el filtro.
+  const empresasEnAmbas = await resolveEmpresasEnDetalleAmbasVersiones(client, nombrePlanta, yearA, monthA, versionA, yearB, monthB, versionB);
+  const empresaResuelta = empresasEnAmbas.length > 0 ? empresasEnAmbas[0] : null;
   let nombreParaFiltro = nombrePlanta;
   let segundoParaFiltro = null;
   if (empresaResuelta != null) {
@@ -720,7 +751,12 @@ async function obtenerDatosComparacionDosVersiones(client, nombrePlanta, yearA, 
       nombreParaFiltro = nombrePlanta;
     } else {
       nombreParaFiltro = empresaResuelta;
-      if ((empresaResuelta || "").trim() !== (nombrePlanta || "").trim()) segundoParaFiltro = nombrePlanta;
+    }
+    // Incluir segunda variante si existe (p. ej. Querétaro vs Queretaro en cada versión).
+    if (empresasEnAmbas.length > 1 && (empresasEnAmbas[1] || "").trim() !== (nombreParaFiltro || "").trim()) {
+      segundoParaFiltro = empresasEnAmbas[1];
+    } else if ((empresaResuelta || "").trim() !== (nombrePlanta || "").trim()) {
+      segundoParaFiltro = nombrePlanta;
     }
   }
   const empFilter = buildEmpresaFilter(nombreParaFiltro, segundoParaFiltro);
