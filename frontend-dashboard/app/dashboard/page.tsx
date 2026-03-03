@@ -9,26 +9,24 @@ import {
 } from "@/lib/auth";
 import {
   fetchKanban,
-  fetchKpis,
   type KanbanBoard as KanbanBoardData,
-  type Kpis,
   type DashboardFilters,
 } from "@/lib/api";
-import KPIHeader from "@/components/KPIHeader";
 import FiltersBar from "@/components/FiltersBar";
 import KanbanBoard from "@/components/KanbanBoard";
 import FolioDrawer from "@/components/FolioDrawer";
 import ComoCambioModal from "@/components/ComoCambioModal";
+import DeltaVentaModal from "@/components/DeltaVentaModal";
 
 function DashboardContent() {
   const searchParams = useSearchParams();
   const [token, setToken] = useState<string | null>(null);
   const [unauthorized, setUnauthorized] = useState(false);
   const [kanban, setKanban] = useState<KanbanBoardData | null>(null);
-  const [kpis, setKpis] = useState<Kpis | null>(null);
   const [filters, setFilters] = useState<DashboardFilters>({ solo_activos: "1" });
   const [drawerFolioId, setDrawerFolioId] = useState<number | null>(null);
   const [showComoCambioModal, setShowComoCambioModal] = useState(false);
+  const [showDeltaVentaModal, setShowDeltaVentaModal] = useState(false);
 
   useEffect(() => {
     const t = parseTokenFromQuery(searchParams) || getTokenFromStorage();
@@ -49,9 +47,6 @@ function DashboardContent() {
       .catch((e) => {
         if (e.message.includes("401") || e.message.includes("Token")) setUnauthorized(true);
       });
-    fetchKpis(token, filters)
-      .then(setKpis)
-      .catch(() => {});
   }, [token, filters]);
 
   useEffect(() => {
@@ -91,18 +86,44 @@ function DashboardContent() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <KPIHeader kpis={kpis} />
+      <div className="flex items-center justify-between border-b border-slate-700 bg-slate-900/50 px-4 py-2">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowComoCambioModal(true)}
+            className="flex items-center gap-1.5 rounded border border-slate-600 bg-blue-700/80 px-2.5 py-1.5 text-sm text-slate-100 hover:bg-blue-600/90"
+            title="Cómo cambió (IGF): comparar dos versiones y descargar deltas"
+          >
+            <span aria-hidden>Δ</span>
+            <span>Cómo cambió</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowDeltaVentaModal(true)}
+            className="flex items-center gap-1.5 rounded border border-slate-600 bg-blue-600 px-2.5 py-1.5 text-sm text-white hover:bg-blue-500"
+            title="Delta Venta: clientes que dejaron de comprar, compraron más o disminuyeron"
+          >
+            Delta Venta
+          </button>
+        </div>
+      </div>
       <FiltersBar
         filters={filters}
         onFiltersChange={setFilters}
         plantas={plantas}
-        onComoCambioClick={() => setShowComoCambioModal(true)}
       />
       {showComoCambioModal && token && (
         <ComoCambioModal
           token={token}
           plantas={plantas}
           onClose={() => setShowComoCambioModal(false)}
+        />
+      )}
+      {showDeltaVentaModal && token && (
+        <DeltaVentaModal
+          token={token}
+          plantas={plantas}
+          onClose={() => setShowDeltaVentaModal(false)}
         />
       )}
       <main className="flex-1">

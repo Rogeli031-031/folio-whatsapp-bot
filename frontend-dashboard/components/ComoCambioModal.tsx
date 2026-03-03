@@ -364,14 +364,6 @@ export default function ComoCambioModal({ token, plantas, onClose }: Props) {
               </button>
               <button
                 type="button"
-                onClick={handleDeltaVentaOpen}
-                disabled={!planta.trim()}
-                className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-500 disabled:opacity-50"
-              >
-                Delta Venta
-              </button>
-              <button
-                type="button"
                 onClick={onClose}
                 className="rounded bg-slate-600 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-500"
               >
