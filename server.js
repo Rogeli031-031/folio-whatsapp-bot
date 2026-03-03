@@ -4401,7 +4401,7 @@ app.get("/api/folios/:id", dashboardAuthMiddleware, async (req, res) => {
   }
 });
 
-/** Aprobar folio desde dashboard: pasa de Pendiente aprobación planta a Aprobación Director ZP (mueve la tarjeta de columna). */
+/** Aprobar folio desde dashboard: Pendiente aprobación planta → ZP; Aprobación Director ZP → Carro de compra. */
 app.post("/api/folios/:id/aprobar", dashboardAuthMiddleware, async (req, res) => {
   const folioId = parseInt(req.params.id, 10);
   if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
@@ -4415,17 +4415,24 @@ app.post("/api/folios/:id/aprobar", dashboardAuthMiddleware, async (req, res) =>
       }
     }
     const estatus = (folio.estatus || "").trim().toUpperCase();
-    const permitidos = [ESTADOS.PENDIENTE_APROB_PLANTA, ESTADOS.APROB_PLANTA];
-    if (!permitidos.includes(estatus)) {
-      return res.status(400).json({ error: "Solo se puede aprobar un folio en Pendiente aprobación planta" });
-    }
-    await client.query(
-      `UPDATE public.folios SET estatus = $1 WHERE id = $2`,
-      [ESTADOS.PENDIENTE_APROB_ZP, folioId]
-    );
     const aprobadoPor = req.dashboardAuth.actor_id != null ? `Dashboard:${req.dashboardAuth.actor_id}` : "Dashboard";
-    await insertHistorial(client, folioId, folio.numero_folio, folio.folio_codigo, ESTADOS.PENDIENTE_APROB_ZP, "Aprobado desde dashboard (pasa a ZP)", null, req.dashboardAuth.role || "Dashboard");
-    res.json({ ok: true, estatus: ESTADOS.PENDIENTE_APROB_ZP });
+    const rol = req.dashboardAuth.role || "Dashboard";
+
+    if ([ESTADOS.PENDIENTE_APROB_PLANTA, ESTADOS.APROB_PLANTA].includes(estatus)) {
+      await client.query(
+        `UPDATE public.folios SET estatus = $1 WHERE id = $2`,
+        [ESTADOS.PENDIENTE_APROB_ZP, folioId]
+      );
+      await insertHistorial(client, folioId, folio.numero_folio, folio.folio_codigo, ESTADOS.PENDIENTE_APROB_ZP, "Aprobado desde dashboard (pasa a ZP)", null, rol);
+      return res.json({ ok: true, estatus: ESTADOS.PENDIENTE_APROB_ZP });
+    }
+    if (estatus === ESTADOS.PENDIENTE_APROB_ZP) {
+      await updateFolioEstatus(client, folioId, ESTADOS.APROBADO_ZP, { aprobado_por: aprobadoPor, aprobado_en: true });
+      await insertHistorial(client, folioId, folio.numero_folio, folio.folio_codigo, ESTADOS.APROBADO_ZP, "Aprobado por Director ZP desde dashboard", null, rol);
+      return res.json({ ok: true, estatus: ESTADOS.APROBADO_ZP });
+    }
+
+    return res.status(400).json({ error: "Solo se puede aprobar un folio en Pendiente aprobación planta o Aprobación Director ZP" });
   } catch (e) {
     console.error("[Dashboard folio aprobar]", e);
     res.status(500).json({ error: e.message });
