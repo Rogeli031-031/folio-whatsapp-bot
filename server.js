@@ -5827,7 +5827,9 @@ app.post("/twilio/whatsapp", async (req, res) => {
           const rolClave = (actor.rol_clave && String(actor.rol_clave).toUpperCase()) || "";
           const rolNom = (actor.rol_nombre && String(actor.rol_nombre)) || "";
           const esZP = rolClave === "ZP" || (rolNom && /director/i.test(rolNom) && /zp/i.test(rolNom));
-          const esAD = rolClave === "AD" || (/asistente/i.test(rolNom) && /direccion/i.test(rolNom.replace(/ó/g, "o")));
+          // Asistente de Dirección / asistente Direccion: acceso dashboard como AD
+          const rolNorm = (rolNom || "").toLowerCase().replace(/ó/g, "o").replace(/[\s\u00a0]+/g, " ").trim();
+          const esAD = rolClave === "AD" || (/asistente/.test(rolNorm) && /direccion/.test(rolNorm));
           const role = esZP ? "ZP" : esAD ? "AD" : "GG";
           let plantasPermitidas = [];
           if (esZP || esAD) {
