@@ -4834,8 +4834,8 @@ app.post("/api/dashboard/delta-venta-datos", dashboardAuthMiddleware, async (req
   const client = await pool.connect();
   try {
     const rows = await getDeltaVentaClientes(client, planta.trim(), pa, pb);
-    const build = (filter, sort, totalReduce, signPositive) => {
-      const candidatos = filter(rows).sort(sort);
+    const build = (filterFn, sortFn, totalReduce, signPositive) => {
+      const candidatos = (rows || []).filter(filterFn).sort(sortFn);
       const totalDeltaKg = candidatos.reduce(totalReduce, 0);
       const top20 = Math.max(1, Math.ceil(candidatos.length * 0.2));
       const clientes = candidatos.slice(0, top20).map((r) => ({
