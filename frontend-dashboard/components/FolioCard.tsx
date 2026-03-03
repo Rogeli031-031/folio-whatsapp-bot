@@ -40,9 +40,13 @@ export default function FolioCard({ card, onOpen, role }: Props) {
     ? `$${card.importe.toLocaleString("es-MX", { maximumFractionDigits: 0 })}`
     : null;
 
+  const bordeClase = card.tiene_cotizacion === false
+    ? "border-l-red-700"
+    : etapaColor(card.estatus);
+
   return (
     <div
-      className={`rounded border border-slate-700 bg-slate-800/80 p-2.5 border-l-4 ${etapaColor(card.estatus)} cursor-pointer hover:bg-slate-700/80 transition-colors`}
+      className={`rounded border border-slate-700 bg-slate-800/80 p-2.5 border-l-4 ${bordeClase} cursor-pointer hover:bg-slate-700/80 transition-colors`}
       onClick={() => onOpen(card.id)}
       role="button"
       tabIndex={0}

@@ -64,6 +64,7 @@ export interface FolioCard {
   descripcion: string;
   creado_en: string | null;
   aging: number | null;
+   tiene_cotizacion?: boolean;
 }
 
 export interface Kpis {
