@@ -4118,7 +4118,17 @@ app.get("/api/dashboard/kanban", dashboardAuthMiddleware, async (req, res) => {
       SELECT f.id, f.numero_folio, f.folio_codigo, f.planta_id, f.categoria, f.subcategoria, f.unidad,
              f.importe, f.estatus, f.creado_en, COALESCE(f.descripcion, f.concepto) AS descripcion_display,
              p.nombre AS planta_nombre,
-             (f.cotizacion_s3key IS NOT NULL OR f.cotizacion_url IS NOT NULL) AS tiene_cotizacion
+             (
+               EXISTS (
+                 SELECT 1
+                 FROM public.folio_archivos fa
+                 WHERE fa.folio_id = f.id
+                   AND fa.tipo = 'COTIZACION'
+                   AND fa.status <> 'RECHAZADO'
+               )
+               OR f.cotizacion_s3key IS NOT NULL
+               OR f.cotizacion_url IS NOT NULL
+             ) AS tiene_cotizacion
       FROM public.folios f
       LEFT JOIN public.plantas p ON p.id = f.planta_id
       WHERE 1=1 ${where}
