@@ -1689,7 +1689,7 @@ async function getPeriodosDeltaVenta(client, plantaNombre) {
        FROM arr.ventas_diarias_cliente v
        JOIN prov_map pm
          ON UPPER(TRIM(v.plant_code)) = pm.key_nombre
-         OR (pm.key_clave <> '' AND UPPER(TRIM(v.plant_code)) = UPPER(TRIM(p.clave)))
+         OR (pm.key_clave <> '' AND UPPER(TRIM(v.plant_code)) = pm.key_clave)
       WHERE pm.prov_name = $1
       ORDER BY periodo DESC`,
     [plantaNombre]
@@ -5056,14 +5056,14 @@ app.post("/twilio/whatsapp", async (req, res) => {
           if (dv.modo === "dejaron") {
             lista = rows
               .filter((r) => r.kgA > 0 && r.kgB <= 0)
-              .sort((a, b) => b.kgA - a.kgA)
-              .slice(0, 40);
+              .sort((a, b) => b.kgA - a.kgA);
           } else {
             lista = rows
               .filter((r) => r.deltaKg > 0)
-              .sort((a, b) => b.deltaKg - a.deltaKg)
-              .slice(0, 40);
+              .sort((a, b) => b.deltaKg - a.deltaKg);
           }
+          const top20pct = Math.max(1, Math.ceil(lista.length * 0.2));
+          lista = lista.slice(0, top20pct);
           if (!lista.length) {
             sess.deltaVenta = null;
             return safeReply("Delta Venta – No se encontraron clientes que cumplan esa condición para esos periodos.");
