@@ -4155,12 +4155,14 @@ function buildDashboardWhere(auth, filters) {
   const conditions = [];
   const params = [];
   let n = 1;
-  const esZP = (auth.role && String(auth.role).toUpperCase()) === "ZP";
-  const esAD = (auth.role && String(auth.role).toUpperCase()) === "AD";
+  const roleNorm = (auth.role && String(auth.role).trim().toUpperCase()) || "";
+  const esZP = roleNorm === "ZP";
+  const esAD = roleNorm === "AD";
+  // ZP y Asistente de Dirección ven todos los folios (sin ocultar por creador ni por planta)
   if (!esZP && !esAD) {
     conditions.push("(f.creado_por_rol_clave IS NULL OR UPPER(TRIM(COALESCE(f.creado_por_rol_clave,''))) <> 'AD')");
   }
-  if (auth.role === "GG") {
+  if (roleNorm === "GG") {
     if (auth.plantas_permitidas && auth.plantas_permitidas.length > 0) {
       conditions.push(`f.planta_id = ANY($${n}::INT[])`);
       params.push(auth.plantas_permitidas);
