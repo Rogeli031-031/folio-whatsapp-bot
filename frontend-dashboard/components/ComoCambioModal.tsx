@@ -157,19 +157,38 @@ export default function ComoCambioModal({ token, plantas, onClose }: Props) {
             {presupuestoResultado != null && (
               <div className="rounded border border-slate-600 bg-slate-800/50 p-3 text-sm">
                 <p className="mb-2 font-medium text-slate-200">Comparar Presupuesto – {planta}</p>
-                <p className="text-slate-300">
-                  TOTAL: ${fmtMxn(presupuestoResultado.totalA)} → ${fmtMxn(presupuestoResultado.totalB)}
-                  {" "}({presupuestoResultado.delta >= 0 ? "+" : ""}${fmtMxn(presupuestoResultado.delta)})
-                </p>
-                {presupuestoResultado.porCategoria && presupuestoResultado.porCategoria.length > 0 && (
-                  <ul className="mt-2 space-y-0.5 text-xs text-slate-400">
-                    {presupuestoResultado.porCategoria.map((c, i) => (
-                      <li key={i}>
-                        {c.categoria}: ${fmtMxn(c.montoA)} → ${fmtMxn(c.montoB)} ({c.delta >= 0 ? "+" : ""}${fmtMxn(c.delta)})
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                <div className="overflow-x-auto rounded border border-slate-700">
+                  <table className="w-full min-w-[28rem] text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-600 bg-slate-800/80 text-slate-400">
+                        <th className="py-2 pr-3 pl-1 font-medium">Categoría</th>
+                        <th className="py-2 pr-3 text-right font-medium">Periodo A</th>
+                        <th className="py-2 pr-3 text-right font-medium">Periodo B</th>
+                        <th className="py-2 pr-2 text-right font-medium">Delta</th>
+                      </tr>
+                    </thead>
+                    <tbody className="text-slate-300">
+                      {presupuestoResultado.porCategoria && presupuestoResultado.porCategoria.map((c, i) => (
+                        <tr key={i} className="border-b border-slate-700/50">
+                          <td className="py-1.5 pr-3 pl-1">{c.categoria}</td>
+                          <td className="py-1.5 pr-3 text-right tabular-nums">${fmtMxn(c.montoA)}</td>
+                          <td className="py-1.5 pr-3 text-right tabular-nums">${fmtMxn(c.montoB)}</td>
+                          <td className={`py-1.5 pr-2 text-right tabular-nums ${c.delta >= 0 ? "text-emerald-400/90" : "text-red-400/90"}`}>
+                            {c.delta >= 0 ? "+" : ""}${fmtMxn(c.delta)}
+                          </td>
+                        </tr>
+                      ))}
+                      <tr className="border-t-2 border-slate-600 bg-slate-800/60 font-medium text-slate-200">
+                        <td className="py-2 pr-3 pl-1">TOTAL</td>
+                        <td className="py-2 pr-3 text-right tabular-nums">${fmtMxn(presupuestoResultado.totalA)}</td>
+                        <td className="py-2 pr-3 text-right tabular-nums">${fmtMxn(presupuestoResultado.totalB)}</td>
+                        <td className={`py-2 pr-2 text-right tabular-nums ${presupuestoResultado.delta >= 0 ? "text-emerald-400/90" : "text-red-400/90"}`}>
+                          {presupuestoResultado.delta >= 0 ? "+" : ""}${fmtMxn(presupuestoResultado.delta)}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
             <div className="flex flex-wrap gap-2 pt-2">
