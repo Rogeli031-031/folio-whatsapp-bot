@@ -4567,6 +4567,29 @@ app.post("/api/dashboard/igf-como-cambio-datos", dashboardAuthMiddleware, async 
   }
 });
 
+/** Comparar presupuesto entre dos periodos para la planta seleccionada (mismo flujo que "comparar presupuesto" en WhatsApp). */
+app.post("/api/dashboard/presupuesto-comparar", dashboardAuthMiddleware, async (req, res) => {
+  const { planta, periodoA, periodoB } = req.body || {};
+  const pa = (typeof periodoA === "string" && /^\d{4}-\d{2}$/.test(periodoA)) ? periodoA : null;
+  const pb = (typeof periodoB === "string" && /^\d{4}-\d{2}$/.test(periodoB)) ? periodoB : null;
+  if (!planta || typeof planta !== "string" || !planta.trim()) {
+    return res.status(400).json({ error: "Falta planta" });
+  }
+  if (!pa || !pb) {
+    return res.status(400).json({ error: "Faltan periodoA y periodoB (formato YYYY-MM)" });
+  }
+  const client = await pool.connect();
+  try {
+    const deltas = await queryPresupuestoDeltas(client, planta.trim(), pa, pb);
+    res.json(deltas);
+  } catch (e) {
+    console.error("[Dashboard presupuesto-comparar]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
 app.get("/api/igf/como-cambio-excel", async (req, res) => {
   const token = (req.query.t || "").trim();
   const payload = verifyIgfComoCambioToken(token);

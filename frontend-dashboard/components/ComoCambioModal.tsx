@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { fetchIgfVersiones, postIgfComoCambioDatos, type IgfPeriodo, type IgfDeltaItem } from "@/lib/api";
+import { fetchIgfVersiones, postIgfComoCambioDatos, postPresupuestoComparar, type IgfPeriodo, type IgfDeltaItem, type PresupuestoCompararResult } from "@/lib/api";
 
 interface Props {
   token: string;
@@ -31,6 +31,9 @@ export default function ComoCambioModal({ token, plantas, onClose }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resultado, setResultado] = useState<Resultado | null>(null);
+  const [presupuestoResultado, setPresupuestoResultado] = useState<PresupuestoCompararResult | null>(null);
+  const [presupuestoLoading, setPresupuestoLoading] = useState(false);
+  const [presupuestoError, setPresupuestoError] = useState<string | null>(null);
 
   const [planta, setPlanta] = useState("");
   const [yearA, setYearA] = useState<number | "">("");
@@ -75,6 +78,22 @@ export default function ComoCambioModal({ token, plantas, onClose }: Props) {
       .catch((e) => setError(e.message || "Error al obtener datos"))
       .finally(() => setSubmitting(false));
   };
+
+  const handleCompararPresupuesto = () => {
+    const p = planta.trim();
+    if (!p || yearA === "" || monthA === "" || yearB === "" || monthB === "") return;
+    const periodoA = `${yearA}-${String(monthA).padStart(2, "0")}`;
+    const periodoB = `${yearB}-${String(monthB).padStart(2, "0")}`;
+    setPresupuestoError(null);
+    setPresupuestoResultado(null);
+    setPresupuestoLoading(true);
+    postPresupuestoComparar(token, { planta: p, periodoA, periodoB })
+      .then(setPresupuestoResultado)
+      .catch((e) => setPresupuestoError(e.message || "Error al comparar presupuesto"))
+      .finally(() => setPresupuestoLoading(false));
+  };
+
+  const fmtMxn = (n: number) => (n != null && !isNaN(n) ? n.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—");
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
@@ -132,6 +151,27 @@ export default function ComoCambioModal({ token, plantas, onClose }: Props) {
                 </div>
               </>
             )}
+            {presupuestoError && (
+              <p className="rounded bg-red-900/40 px-2 py-1 text-sm text-red-200">{presupuestoError}</p>
+            )}
+            {presupuestoResultado != null && (
+              <div className="rounded border border-slate-600 bg-slate-800/50 p-3 text-sm">
+                <p className="mb-2 font-medium text-slate-200">Comparar Presupuesto – {planta}</p>
+                <p className="text-slate-300">
+                  TOTAL: ${fmtMxn(presupuestoResultado.totalA)} → ${fmtMxn(presupuestoResultado.totalB)}
+                  {" "}({presupuestoResultado.delta >= 0 ? "+" : ""}${fmtMxn(presupuestoResultado.delta)})
+                </p>
+                {presupuestoResultado.porCategoria && presupuestoResultado.porCategoria.length > 0 && (
+                  <ul className="mt-2 space-y-0.5 text-xs text-slate-400">
+                    {presupuestoResultado.porCategoria.map((c, i) => (
+                      <li key={i}>
+                        {c.categoria}: ${fmtMxn(c.montoA)} → ${fmtMxn(c.montoB)} ({c.delta >= 0 ? "+" : ""}${fmtMxn(c.delta)})
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
             <div className="flex flex-wrap gap-2 pt-2">
               {resultado.url && (
                 <a
@@ -145,7 +185,15 @@ export default function ComoCambioModal({ token, plantas, onClose }: Props) {
               )}
               <button
                 type="button"
-                onClick={() => setResultado(null)}
+                onClick={handleCompararPresupuesto}
+                disabled={presupuestoLoading || !planta.trim()}
+                className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-500 disabled:opacity-50"
+              >
+                {presupuestoLoading ? "…" : "Comparar Presupuesto"}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setResultado(null); setPresupuestoResultado(null); setPresupuestoError(null); }}
                 className="rounded border border-slate-600 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-700"
               >
                 Nueva comparación

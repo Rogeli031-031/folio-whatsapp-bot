@@ -169,3 +169,29 @@ export function postIgfComoCambioDatos(
     body: JSON.stringify(body),
   });
 }
+
+export interface PresupuestoCompararItem {
+  categoria: string;
+  montoA: number;
+  montoB: number;
+  delta: number;
+}
+
+export interface PresupuestoCompararResult {
+  totalA: number;
+  totalB: number;
+  delta: number;
+  porCategoria: PresupuestoCompararItem[];
+  porSubcategoria: { categoria: string; subcategoria: string; montoA: number; montoB: number; delta: number }[];
+}
+
+export function postPresupuestoComparar(
+  token: string,
+  body: { planta: string; periodoA: string; periodoB: string }
+): Promise<PresupuestoCompararResult> {
+  return apiFetch<PresupuestoCompararResult>("/api/dashboard/presupuesto-comparar", {
+    token,
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
