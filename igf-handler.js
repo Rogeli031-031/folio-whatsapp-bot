@@ -707,7 +707,19 @@ async function getVersionesDelMesTodas(client, year, month) {
 async function obtenerDatosComparacionDosVersiones(client, nombrePlanta, yearA, monthA, versionA, yearB, monthB, versionB) {
   let empresaResuelta = await resolveEmpresaEnDetalle(client, nombrePlanta, yearA, monthA, versionA);
   if (empresaResuelta == null) empresaResuelta = await resolveEmpresaEnDetalle(client, nombrePlanta, yearB, monthB, versionB);
-  const nombreParaFiltro = empresaResuelta != null ? empresaResuelta : nombrePlanta;
+  // Si el nombre resuelto contiene lo que escribió el usuario (ej. "GT - Puebla" contiene "Puebla"),
+  // usar el texto del usuario para el filtro y así coincidir con variantes ("GT Puebla", "GT - Puebla").
+  // Si solo cambia el acento (Tehuacán vs Tehuacan), seguir usando el nombre resuelto.
+  let nombreParaFiltro = nombrePlanta;
+  if (empresaResuelta != null) {
+    const normResuelta = quitarTildes(empresaResuelta.toLowerCase());
+    const normInput = quitarTildes(nombrePlanta.toLowerCase());
+    if (normResuelta.includes(normInput) && empresaResuelta.length > nombrePlanta.length) {
+      nombreParaFiltro = nombrePlanta;
+    } else {
+      nombreParaFiltro = empresaResuelta;
+    }
+  }
   const empFilter = buildEmpresaFilter(nombreParaFiltro);
   const rowActual = await client.query(
     `SELECT empresa, cargo_planta_mxn, corp_mxn FROM igf.v_compromiso_analisis_detalle
@@ -853,7 +865,22 @@ async function obtenerDatosComparacionEnOrden(client, nombrePlanta, yearOtra, mo
 async function ejecutarComparacion(client, nombrePlanta, yearA, monthA, versionA, yearB, monthB, versionB, tipoSalida = "ambos") {
   const datos = await obtenerDatosComparacionDosVersiones(client, nombrePlanta, yearA, monthA, versionA, yearB, monthB, versionB);
   if (!datos) {
-    return `IGF – No hay datos de esa planta en ${yearA}/${monthA} v.${versionA} o en ${yearB}/${monthB} v.${versionB}.`;
+    const countA = await client.query(
+      `SELECT COUNT(*) AS n FROM igf.v_compromiso_analisis_detalle WHERE year = $1 AND month = $2 AND version_number = $3`,
+      [yearA, monthA, versionA]
+    ).catch(() => ({ rows: [{ n: 0 }] }));
+    const countB = await client.query(
+      `SELECT COUNT(*) AS n FROM igf.v_compromiso_analisis_detalle WHERE year = $1 AND month = $2 AND version_number = $3`,
+      [yearB, monthB, versionB]
+    ).catch(() => ({ rows: [{ n: 0 }] }));
+    const nA = (countA.rows && countA.rows[0] && countA.rows[0].n != null) ? parseInt(countA.rows[0].n, 10) : 0;
+    const nB = (countB.rows && countB.rows[0] && countB.rows[0].n != null) ? parseInt(countB.rows[0].n, 10) : 0;
+    let motivo = "";
+    if (nA === 0 && nB === 0) motivo = " No hay datos cargados en IGF para ninguna de las dos versiones (revisa la carga de compromiso).";
+    else if (nA === 0) motivo = ` No hay datos cargados en IGF para ${yearA}/${monthA} v.${versionA} (revisa la carga de compromiso para ese mes/versión).`;
+    else if (nB === 0) motivo = ` No hay datos cargados en IGF para ${yearB}/${monthB} v.${versionB} (revisa la carga de compromiso para ese mes/versión).`;
+    else motivo = ` Hay datos para esas versiones pero no para la planta "${nombrePlanta}". Comprueba el nombre (ej. Puebla, Tehuacán, Querétaro).`;
+    return `IGF – No hay datos de esa planta en ${yearA}/${monthA} v.${versionA} o en ${yearB}/${monthB} v.${versionB}.${motivo}`;
   }
   const lineas = [];
   const incluirCargo = tipoSalida === "cargo" || tipoSalida === "ambos";
