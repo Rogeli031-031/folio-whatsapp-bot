@@ -258,7 +258,12 @@ export default function DeltaIngresoModal({ token, plantas, onClose }: Props) {
                 </div>
               </div>
               <div className="rounded border border-slate-700 bg-slate-800/50 p-2">
-                <p className="mb-1.5 text-xs font-medium text-slate-300">2. -Ingreso · Delta total: -{result.disminuyeron.totalDeltaIngresoStr}{result.disminuyeron.totalTonAStr != null ? ` · Suma ton: A = ${result.disminuyeron.totalTonAStr} · B = ${result.disminuyeron.totalTonBStr}` : ""}</p>
+                <p className="mb-1.5 text-xs font-medium text-slate-300 flex items-center gap-1">
+                  <span className="inline-flex items-center justify-center w-6 h-6 rounded bg-red-500/20 text-red-400 shrink-0" aria-hidden>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-4 h-4"><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                  </span>
+                  2. − Ingreso · Delta total: -{result.disminuyeron.totalDeltaIngresoStr}{result.disminuyeron.totalTonAStr != null ? ` · Suma ton: A = ${result.disminuyeron.totalTonAStr} · B = ${result.disminuyeron.totalTonBStr}` : ""}
+                </p>
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[56rem] text-left text-xs">
                     <thead><tr className="border-b border-slate-600 text-slate-400"><th className="py-1 pr-2">#</th><th className="py-1 pr-2">Cliente</th><th className="py-1 pr-2 text-right">A (MXN)</th><th className="py-1 pr-2 text-right">A venta (ton)</th><th className="py-1 pr-2 text-right">A margen</th><th className="py-1 pr-2 text-right">A desc $/kg</th><th className="py-1 pr-2 text-right">B (MXN)</th><th className="py-1 pr-2 text-right">B venta (ton)</th><th className="py-1 pr-2 text-right">B margen</th><th className="py-1 pr-2 text-right">B desc $/kg</th><th className="py-1 text-right">Delta (MXN)</th></tr></thead>
@@ -284,7 +289,12 @@ export default function DeltaIngresoModal({ token, plantas, onClose }: Props) {
                 </div>
               </div>
               <div className="rounded border border-slate-700 bg-slate-800/50 p-2">
-                <p className="mb-1.5 text-xs font-medium text-slate-300">4. +Ingreso · Delta total: +{result.mas.totalDeltaIngresoStr}{result.mas.totalTonAStr != null ? ` · Suma ton: A = ${result.mas.totalTonAStr} · B = ${result.mas.totalTonBStr}` : ""}</p>
+                <p className="mb-1.5 text-xs font-medium text-slate-300 flex items-center gap-1">
+                  <span className="inline-flex items-center justify-center w-6 h-6 rounded bg-emerald-500/20 text-emerald-400 shrink-0" aria-hidden>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-4 h-4"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                  </span>
+                  4. + Ingreso · Delta total: +{result.mas.totalDeltaIngresoStr}{result.mas.totalTonAStr != null ? ` · Suma ton: A = ${result.mas.totalTonAStr} · B = ${result.mas.totalTonBStr}` : ""}
+                </p>
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[56rem] text-left text-xs">
                     <thead><tr className="border-b border-slate-600 text-slate-400"><th className="py-1 pr-2">#</th><th className="py-1 pr-2">Cliente</th><th className="py-1 pr-2 text-right">A (MXN)</th><th className="py-1 pr-2 text-right">A venta (ton)</th><th className="py-1 pr-2 text-right">A margen</th><th className="py-1 pr-2 text-right">A desc $/kg</th><th className="py-1 pr-2 text-right">B (MXN)</th><th className="py-1 pr-2 text-right">B venta (ton)</th><th className="py-1 pr-2 text-right">B margen</th><th className="py-1 pr-2 text-right">B desc $/kg</th><th className="py-1 text-right">Delta (MXN)</th></tr></thead>

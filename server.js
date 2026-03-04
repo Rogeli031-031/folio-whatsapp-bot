@@ -5414,7 +5414,7 @@ app.post("/api/dashboard/delta-ingreso-datos", dashboardAuthMiddleware, async (r
       false
     );
     const mas = build(
-      (r) => r.deltaIngreso > 0,
+      (r) => r.deltaIngreso > 0 && (r.kgA || 0) > 0,
       (a, b) => b.deltaIngreso - a.deltaIngreso,
       (sum, r) => sum + (r.deltaIngreso != null ? Number(r.deltaIngreso) : 0),
       true
@@ -5432,7 +5432,7 @@ app.post("/api/dashboard/delta-ingreso-datos", dashboardAuthMiddleware, async (r
       true
     );
     const esDejaron = (r) => r.ingresoA > 0 && r.ingresoB <= 0;
-    const esMas = (r) => r.deltaIngreso > 0;
+    const esMas = (r) => r.deltaIngreso > 0 && (r.kgA || 0) > 0;
     const esDisminuyeron = (r) => r.ingresoA > 0 && r.ingresoB > 0 && r.deltaIngreso < 0;
     const esNuevo = (r) => (r.kgA || 0) <= 0 && (r.kgB || 0) > 0;
     const otrosClientes = build(
