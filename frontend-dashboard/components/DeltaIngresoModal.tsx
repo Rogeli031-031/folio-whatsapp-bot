@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import * as XLSX from "xlsx";
 import { fetchDeltaIngresoPeriodos, postDeltaIngresoDatos, type DeltaIngresoDatosResult } from "@/lib/api";
 
 interface Props {
@@ -69,6 +70,52 @@ export default function DeltaIngresoModal({ token, plantas, onClose }: Props) {
       })
       .catch((e) => setError(e.message || "Error al obtener Delta Ingreso"))
       .finally(() => setLoading(false));
+  };
+
+  const handleDescargarExcel = () => {
+    if (!result) return;
+    const negTonA = (result.dejaron.totalTonA ?? 0) + (result.disminuyeron.totalTonA ?? 0);
+    const negTonB = (result.dejaron.totalTonB ?? 0) + (result.disminuyeron.totalTonB ?? 0);
+    const negIngreso = (result.dejaron.totalDeltaIngreso ?? 0) + (result.disminuyeron.totalDeltaIngreso ?? 0);
+    const posTonA = (result.clientesNuevos.totalTonA ?? 0) + (result.mas.totalTonA ?? 0);
+    const posTonB = (result.clientesNuevos.totalTonB ?? 0) + (result.mas.totalTonB ?? 0);
+    const posIngreso = (result.clientesNuevos.totalDeltaIngreso ?? 0) + (result.mas.totalDeltaIngreso ?? 0);
+    const fmtMxn = (m: number) => (m != null && !isNaN(m) ? m.toLocaleString("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 0, maximumFractionDigits: 0 }) : "$0");
+    const rows: (string | number)[][] = [
+      ["Delta Ingreso", result.planta, result.periodoA, "→", result.periodoB],
+      [],
+      ["Negativo (1+2)", "Suma ton A", "Suma ton B", "Suma ingreso"],
+      ["", negTonA, negTonB, fmtMxn(negIngreso)],
+      [],
+      ["Positivo (3+4)", "Suma ton A", "Suma ton B", "Suma ingreso"],
+      ["", posTonA, posTonB, fmtMxn(posIngreso)],
+      [],
+    ];
+    if (result.totalTonAGeneralStr != null && result.totalTonBGeneralStr != null) {
+      rows.push(["Total general", `A = ${result.totalTonAGeneralStr}`, `B = ${result.totalTonBGeneralStr}`], []);
+    }
+    const colHeadersFull = ["#", "Cliente", "A (MXN)", "A venta (ton)", "A margen $/kg", "A desc $/kg", "B (MXN)", "B venta (ton)", "B margen $/kg", "B desc $/kg", "Delta (MXN)"];
+    const sections: { titulo: string; opcion: typeof result.dejaron; soloA?: boolean }[] = [
+      { titulo: "1. No compran", opcion: result.dejaron, soloA: true },
+      { titulo: "2. -Ingreso", opcion: result.disminuyeron },
+      { titulo: "3. Nuevos", opcion: result.clientesNuevos },
+      { titulo: "4. +Ingreso", opcion: result.mas },
+      { titulo: "5. Otros clientes", opcion: result.otrosClientes },
+    ];
+    for (const { titulo, opcion, soloA } of sections) {
+      rows.push([titulo], colHeadersFull);
+      if (soloA) {
+        opcion.clientes.forEach((c, i) => rows.push([i + 1, c.cliente, c.ingresoAStr, c.kgAStr ?? "", c.margenAStr ?? "", c.descKgAStr ?? "", "$0", "", "", "", ""]));
+      } else {
+        opcion.clientes.forEach((c, i) => rows.push([i + 1, c.cliente, c.ingresoAStr ?? "$0", c.kgAStr ?? "0.0", c.margenAStr ?? "", c.descKgAStr ?? "", c.ingresoBStr, c.kgBStr ?? "", c.margenBStr ?? "", c.descKgBStr ?? "", c.deltaIngresoStr]));
+      }
+      rows.push([], []);
+    }
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Delta Ingreso");
+    const name = `Delta_Ingreso_${result.planta}_${result.periodoA}_${result.periodoB}.xlsx`.replace(/\s+/g, "_");
+    XLSX.writeFile(wb, name);
   };
 
   return (
@@ -159,14 +206,23 @@ export default function DeltaIngresoModal({ token, plantas, onClose }: Props) {
           <div className="space-y-3">
             <div className="flex items-center justify-between border-b border-slate-700 pb-2">
               <p className="text-sm font-medium text-slate-200">Delta Ingreso – {result.planta} · {result.periodoA} → {result.periodoB}{result.margenAStr && result.margenBStr ? ` · Margen A: ${result.margenAStr} · Margen B: ${result.margenBStr}` : ""}</p>
-              <button
-                type="button"
-                onClick={handleToggleRegla}
-                disabled={loading}
-                className="rounded border border-slate-500 px-2.5 py-1 text-xs text-slate-100 hover:bg-slate-700 disabled:opacity-50"
-              >
-                {sinRegla8020 ? "Ver top 20% (80/20)" : "Ver todos los clientes"}
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleDescargarExcel}
+                  className="rounded border border-slate-500 px-2.5 py-1 text-xs text-slate-100 hover:bg-slate-700"
+                >
+                  Descargar Excel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleToggleRegla}
+                  disabled={loading}
+                  className="rounded border border-slate-500 px-2.5 py-1 text-xs text-slate-100 hover:bg-slate-700 disabled:opacity-50"
+                >
+                  {sinRegla8020 ? "Ver top 20% (80/20)" : "Ver todos los clientes"}
+                </button>
+              </div>
             </div>
             {(() => {
               const negTonA = (result.dejaron.totalTonA ?? 0) + (result.disminuyeron.totalTonA ?? 0);
