@@ -14,6 +14,7 @@ import {
 interface Props {
   folioId: number | null;
   token: string | null;
+  role?: string;
   onClose: () => void;
   onApproved?: () => void;
 }
@@ -21,7 +22,7 @@ interface Props {
 const ESTADOS_APROBABLES = ["PENDIENTE_APROB_PLANTA", "APROB_PLANTA", "PENDIENTE_APROB_ZP"];
 const ESTADOS_CARRO_COMPRA = ["APROBADO_ZP", "LISTO_PARA_PROGRAMACION", "SELECCIONADO_SEMANA", "SOLICITANDO_PAGO"];
 
-export default function FolioDrawer({ folioId, token, onClose, onApproved }: Props) {
+export default function FolioDrawer({ folioId, token, role = "GG", onClose, onApproved }: Props) {
   const [folio, setFolio] = useState<Record<string, unknown> | null>(null);
   const [timeline, setTimeline] = useState<{ estatus: string; estatus_visible?: string; etapa_icon?: string; comentario: string; actor_rol: string | null; creado_en: string }[]>([]);
   const [media, setMedia] = useState<{ id: number; tipo: string; file_name: string | null }[]>([]);
@@ -71,8 +72,9 @@ export default function FolioDrawer({ folioId, token, onClose, onApproved }: Pro
 
   const estatus = (folio?.estatus as string) || "";
   const estatusUpper = estatus.trim().toUpperCase();
-  const puedeAprobar = ESTADOS_APROBABLES.includes(estatusUpper);
-  const puedeRegresarZp = ESTADOS_CARRO_COMPRA.includes(estatusUpper);
+  const soloLectura = (role && String(role).toUpperCase()) === "CF_CDMX";
+  const puedeAprobar = !soloLectura && ESTADOS_APROBABLES.includes(estatusUpper);
+  const puedeRegresarZp = !soloLectura && ESTADOS_CARRO_COMPRA.includes(estatusUpper);
 
   const handleAprobar = async () => {
     if (!token || !folioId || !puedeAprobar) return;

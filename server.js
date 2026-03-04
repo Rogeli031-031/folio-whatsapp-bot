@@ -4416,12 +4416,13 @@ function buildDashboardWhere(auth, filters) {
   const conditions = [];
   const params = [];
   let n = 1;
-  // Normalizar role del token (p. ej. "AD", "ad", " AD ") para Asistente de Dirección
+  // Normalizar role del token (p. ej. "AD", "ad", " AD ") para Asistente de Dirección; CF_CDMX = Contralor financiero CDMX (solo ver)
   const roleNorm = (auth.role != null && auth.role !== "" ? String(auth.role).replace(/\s/g, "").toUpperCase() : "") || "";
   const esZP = roleNorm === "ZP";
   const esAD = roleNorm === "AD";
-  // ZP y Asistente de Dirección (AD) ven todos los folios: no filtrar por creador ni por planta
-  if (!esZP && !esAD) {
+  const esCFCDMX = roleNorm === "CF_CDMX";
+  // ZP, Asistente de Dirección (AD) y Contralor financiero CDMX ven todos los folios: no filtrar por creador ni por planta
+  if (!esZP && !esAD && !esCFCDMX) {
     conditions.push("(f.creado_por_rol_clave IS NULL OR UPPER(TRIM(COALESCE(f.creado_por_rol_clave,''))) <> 'AD')");
   }
   if (roleNorm === "GG") {
@@ -4811,6 +4812,7 @@ app.get("/api/folios/:id", dashboardAuthMiddleware, async (req, res) => {
 
 /** Aprobar folio desde dashboard: Pendiente aprobación planta → ZP; Aprobación Director ZP → Carro de compra. */
 app.post("/api/folios/:id/aprobar", dashboardAuthMiddleware, async (req, res) => {
+  if (req.dashboardAuth.role === "CF_CDMX") return res.status(403).json({ error: "Contralor financiero CDMX solo puede ver el dashboard, no autorizar." });
   const folioId = parseInt(req.params.id, 10);
   if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
   const client = await pool.connect();
@@ -4851,6 +4853,7 @@ app.post("/api/folios/:id/aprobar", dashboardAuthMiddleware, async (req, res) =>
 
 /** Regresa un folio desde Carro de compra a Aprobación Director ZP. */
 app.post("/api/folios/:id/regresar-zp", dashboardAuthMiddleware, async (req, res) => {
+  if (req.dashboardAuth.role === "CF_CDMX") return res.status(403).json({ error: "Contralor financiero CDMX solo puede ver el dashboard, no autorizar." });
   const folioId = parseInt(req.params.id, 10);
   if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
   const client = await pool.connect();
@@ -6338,9 +6341,11 @@ app.post("/twilio/whatsapp", async (req, res) => {
           const rolNormNombre = normalizarParaAD(rolNom);
           const nombreUsuarioNorm = normalizarParaAD(actor.nombre);
           const esAD = rolClave === "AD" || (/asistente/.test(rolNormNombre) && /direccion/.test(rolNormNombre)) || (/asistente/.test(nombreUsuarioNorm) && /direccion/.test(nombreUsuarioNorm));
-          const role = esZP ? "ZP" : esAD ? "AD" : "GG";
+          // Contralor financiero CDMX: solo ver dashboard, no autorizar (misma visibilidad que AD)
+          const esCFCDMX = rolClave === "CF_CDMX" || (/contralor/.test(rolNormNombre) && /financiero/.test(rolNormNombre) && /cdmx/.test(rolNormNombre));
+          const role = esZP ? "ZP" : esAD ? "AD" : esCFCDMX ? "CF_CDMX" : "GG";
           let plantasPermitidas = [];
-          if (esZP || esAD) {
+          if (esZP || esAD || esCFCDMX) {
             const plantas = await getPlantas(client);
             plantasPermitidas = (plantas || []).map((p) => p.id).filter(Number.isFinite);
           } else if (actor.planta_id != null) {

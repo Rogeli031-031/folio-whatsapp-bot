@@ -172,6 +172,7 @@ function DashboardContent() {
       <FolioDrawer
         folioId={drawerFolioId}
         token={token}
+        role={kanban?.meta?.role ?? "GG"}
         onClose={() => setDrawerFolioId(null)}
         onApproved={loadData}
       />
