@@ -4645,6 +4645,28 @@ app.post("/api/folios/:id/poliza", dashboardAuthMiddleware, async (req, res) => 
     const publicUrl = await uploadPdfToS3(fileBuffer, s3Key);
     const fileName = (req.body.fileName && String(req.body.fileName).trim()) || "poliza.pdf";
     const hash = crypto.createHash("sha256").update(fileBuffer).digest("hex");
+    // Evitar error por reintentos: el mismo PDF (sha256) para el mismo folio ya existe
+    const existing = await findFolioArchivoByHash(client, folioId, hash);
+    if (existing && existing.id) {
+      // Si ya estaba en carrito, de todas formas avanzar a PAGADO (idempotente)
+      if (![ESTADOS.PAGADO, ESTADOS.CERRADO].includes(est)) {
+        await client.query(
+          `UPDATE public.folios SET estatus = $1, mes_cargo = $2 WHERE id = $3`,
+          [ESTADOS.PAGADO, mesCargo, folioId]
+        );
+        await insertHistorial(
+          client,
+          folioId,
+          folio.numero_folio,
+          folio.folio_codigo,
+          ESTADOS.PAGADO,
+          `Póliza ya registrada (reintento desde dashboard). Pago cargado al mes ${mesCargo}.`,
+          null,
+          "Asistente de dirección"
+        );
+      }
+      return res.json({ ok: true, duplicate: true, archivo_id: existing.id, estatus: ESTADOS.PAGADO, mes_cargo: mesCargo });
+    }
     await insertFolioArchivo(client, {
       folio_id: folioId,
       numero_folio: folio.numero_folio,
