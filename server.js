@@ -1897,7 +1897,7 @@ async function getDeltaDescuentoClientes(client, plantaNombre, periodoA, periodo
  * Margen por kilo ($/kg) del periodo para una planta desde IGF.
  * Siempre usa la última versión del mes correspondiente (version_number DESC para ese year/month).
  * Ej.: para enero 2026 usa la versión de igf.versions con year=2026, month=1 y el mayor version_number.
- * Devuelve null si no hay datos. Empresa se matchea con la planta (ej. "Puebla" → "GT Puebla", "GT - Puebla").
+ * Devuelve null si no hay datos. Empresa se matchea con la planta ignorando tildes (ej. "Tehuacán" coincide con "Tehuacan" en IGF), igual que el comando "margen" en WhatsApp.
  */
 async function getMargenKgPorPeriodo(client, plantaNombre, year, month) {
   try {
@@ -1907,11 +1907,13 @@ async function getMargenKgPorPeriodo(client, plantaNombre, year, month) {
     );
     const versionId = ver.rows && ver.rows[0] && ver.rows[0].id;
     if (versionId == null) return null;
-    const pattern = "%" + (plantaNombre || "").trim() + "%";
+    const nombre = (plantaNombre || "").trim();
+    const patternConTilde = "%" + nombre + "%";
+    const patternSinTilde = "%" + igfHandler.quitarTildes(nombre) + "%";
     const r = await client.query(
       `SELECT SUM(margen_kg * COALESCE(venta_ton, 0)) / NULLIF(SUM(COALESCE(venta_ton, 0)), 0) AS margen_kg
-       FROM igf.compromiso_lines WHERE version_id = $1 AND empresa ILIKE $2`,
-      [versionId, pattern]
+       FROM igf.compromiso_lines WHERE version_id = $1 AND (empresa ILIKE $2 OR empresa ILIKE $3)`,
+      [versionId, patternConTilde, patternSinTilde]
     );
     const val = r.rows && r.rows[0] && r.rows[0].margen_kg != null ? Number(r.rows[0].margen_kg) : null;
     return val;
