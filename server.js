@@ -32,6 +32,8 @@ const arrLoad = require("./lib/arr-load");
 const arrRefreshProvincia = require("./lib/arr-refresh-provincia");
 const forecastMensual = require("./lib/forecast-mensual");
 const dashboardArrForecast = require("./lib/dashboard-arr-forecast");
+const deltaIngresoAi = require("./lib/delta-ingreso-ai");
+const deltaIngresoAiDb = require("./lib/delta-ingreso-ai-db");
 
 const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
@@ -5349,6 +5351,80 @@ app.get("/api/dashboard/delta-ingreso-periodos", dashboardAuthMiddleware, async 
   }
 });
 
+/** Interno: mismo resultado que POST delta-ingreso-datos. Usado por dashboard y por módulo Delta Ingreso AI. */
+async function getDeltaIngresoDatosInternal(client, planta, periodoA, periodoB, sinRegla8020) {
+  const pa = (typeof periodoA === "string" && /^\d{4}-\d{2}$/.test(periodoA)) ? periodoA : null;
+  const pb = (typeof periodoB === "string" && /^\d{4}-\d{2}$/.test(periodoB)) ? periodoB : null;
+  if (!planta || !pa || !pb || pa === pb) return null;
+  const fmtMxn = (m) => (m != null && !isNaN(m) ? m.toLocaleString("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 0, maximumFractionDigits: 0 }) : "$0");
+  const fmtKg = (kg) => (kg != null && !isNaN(kg) ? (kg / 1000).toLocaleString("es-MX", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : "0.0");
+  const fmtDescKg = (r) => (r != null && !isNaN(r) ? `${r.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} $/kg` : "0.00 $/kg");
+  const sinCorte8020 = !!sinRegla8020;
+  const { rows, margenA, margenB } = await getDeltaIngresoClientes(client, planta.trim(), pa, pb);
+  const margenAStr = fmtDescKg(margenA);
+  const margenBStr = fmtDescKg(margenB);
+  const fmtTon = (ton) => (ton != null && !isNaN(ton) ? ton.toLocaleString("es-MX", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + " ton" : "0.0 ton");
+  const build = (filterFn, sortFn, totalReduce, signPositive) => {
+    const candidatos = (rows || []).filter(filterFn).sort(sortFn);
+    const totalDeltaIngreso = candidatos.reduce(totalReduce, 0);
+    const top20 = sinCorte8020 ? candidatos.length : Math.max(1, Math.ceil(candidatos.length * 0.2));
+    const clientes = candidatos.slice(0, top20).map((r) => ({
+      cliente: r.cliente,
+      ingresoA: r.ingresoA,
+      ingresoB: r.ingresoB,
+      deltaIngreso: r.deltaIngreso,
+      ingresoAStr: fmtMxn(r.ingresoA),
+      ingresoBStr: fmtMxn(r.ingresoB),
+      deltaIngresoStr: fmtMxn(r.deltaIngreso),
+      kgA: r.kgA,
+      kgB: r.kgB,
+      kgAStr: fmtKg(r.kgA),
+      kgBStr: fmtKg(r.kgB),
+      descKgAStr: fmtDescKg(r.descKgA),
+      descKgBStr: fmtDescKg(r.descKgB),
+      margenAStr,
+      margenBStr,
+    }));
+    const totalTonA = clientes.reduce((s, c) => s + (c.kgA || 0) / 1000, 0);
+    const totalTonB = clientes.reduce((s, c) => s + (c.kgB || 0) / 1000, 0);
+    return {
+      totalDeltaIngreso,
+      totalDeltaIngresoStr: fmtMxn(Math.abs(totalDeltaIngreso)),
+      signPositive,
+      clientes,
+      totalTonA,
+      totalTonB,
+      totalTonAStr: fmtTon(totalTonA),
+      totalTonBStr: fmtTon(totalTonB),
+    };
+  };
+  const dejaron = build((r) => r.ingresoA > 0 && r.ingresoB <= 0, (a, b) => b.ingresoA - a.ingresoA, (sum, r) => sum + (r.ingresoA != null ? Number(r.ingresoA) : 0), false);
+  const mas = build((r) => r.deltaIngreso > 0 && (r.kgA || 0) > 0, (a, b) => b.deltaIngreso - a.deltaIngreso, (sum, r) => sum + (r.deltaIngreso != null ? Number(r.deltaIngreso) : 0), true);
+  const disminuyeron = build((r) => r.ingresoA > 0 && r.ingresoB > 0 && r.deltaIngreso < 0, (a, b) => a.deltaIngreso - b.deltaIngreso, (sum, r) => sum + (r.deltaIngreso != null ? -Number(r.deltaIngreso) : 0), false);
+  const clientesNuevos = build((r) => (r.kgA || 0) <= 0 && (r.kgB || 0) > 0, (a, b) => (b.kgB || 0) - (a.kgB || 0), (sum, r) => sum + (r.ingresoB != null ? Number(r.ingresoB) : 0), true);
+  const esDejaron = (r) => r.ingresoA > 0 && r.ingresoB <= 0;
+  const esMas = (r) => r.deltaIngreso > 0 && (r.kgA || 0) > 0;
+  const esDisminuyeron = (r) => r.ingresoA > 0 && r.ingresoB > 0 && r.deltaIngreso < 0;
+  const esNuevo = (r) => (r.kgA || 0) <= 0 && (r.kgB || 0) > 0;
+  const otrosClientes = build((r) => !esDejaron(r) && !esMas(r) && !esDisminuyeron(r) && !esNuevo(r), (a, b) => (b.kgA || 0) + (b.kgB || 0) - ((a.kgA || 0) + (a.kgB || 0)), (sum, r) => sum + (r.deltaIngreso != null ? Number(r.deltaIngreso) : 0), false);
+  const totalTonAGeneral = (rows || []).reduce((s, r) => s + (r.kgA || 0) / 1000, 0);
+  const totalTonBGeneral = (rows || []).reduce((s, r) => s + (r.kgB || 0) / 1000, 0);
+  return {
+    planta: planta.trim(),
+    periodoA: pa,
+    periodoB: pb,
+    margenAStr,
+    margenBStr,
+    totalTonAGeneralStr: fmtTon(totalTonAGeneral),
+    totalTonBGeneralStr: fmtTon(totalTonBGeneral),
+    dejaron,
+    mas,
+    disminuyeron,
+    clientesNuevos,
+    otrosClientes,
+  };
+}
+
 /** Datos Delta Ingreso: ingreso = venta_kg * (margen_$/kg - |descuento_$/kg|). Margen desde IGF con última versión del mes. 80/20 sobre la muestra de este delta (Delta Ingreso), no de otro. Si sinRegla8020=true, se muestran todos los clientes (sin recorte 80/20). */
 app.post("/api/dashboard/delta-ingreso-datos", dashboardAuthMiddleware, async (req, res) => {
   const { planta, periodoA, periodoB, sinRegla8020 } = req.body || {};
@@ -5363,105 +5439,143 @@ app.post("/api/dashboard/delta-ingreso-datos", dashboardAuthMiddleware, async (r
   if (pa === pb) {
     return res.status(400).json({ error: "Los dos periodos deben ser distintos" });
   }
-  const fmtMxn = (m) => (m != null && !isNaN(m) ? m.toLocaleString("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 0, maximumFractionDigits: 0 }) : "$0");
-  const fmtKg = (kg) => (kg != null && !isNaN(kg) ? (kg / 1000).toLocaleString("es-MX", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : "0.0");
-  const fmtDescKg = (r) => (r != null && !isNaN(r) ? `${r.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} $/kg` : "0.00 $/kg");
-  const sinCorte8020 = !!sinRegla8020;
   const client = await pool.connect();
   try {
-    const { rows, margenA, margenB } = await getDeltaIngresoClientes(client, planta.trim(), pa, pb);
-    const margenAStr = fmtDescKg(margenA);
-    const margenBStr = fmtDescKg(margenB);
-    const fmtTon = (ton) => (ton != null && !isNaN(ton) ? ton.toLocaleString("es-MX", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + " ton" : "0.0 ton");
-    const build = (filterFn, sortFn, totalReduce, signPositive) => {
-      const candidatos = (rows || []).filter(filterFn).sort(sortFn);
-      const totalDeltaIngreso = candidatos.reduce(totalReduce, 0);
-      const top20 = sinCorte8020 ? candidatos.length : Math.max(1, Math.ceil(candidatos.length * 0.2));
-      const clientes = candidatos.slice(0, top20).map((r) => ({
-        cliente: r.cliente,
-        ingresoA: r.ingresoA,
-        ingresoB: r.ingresoB,
-        deltaIngreso: r.deltaIngreso,
-        ingresoAStr: fmtMxn(r.ingresoA),
-        ingresoBStr: fmtMxn(r.ingresoB),
-        deltaIngresoStr: fmtMxn(r.deltaIngreso),
-        kgA: r.kgA,
-        kgB: r.kgB,
-        kgAStr: fmtKg(r.kgA),
-        kgBStr: fmtKg(r.kgB),
-        descKgAStr: fmtDescKg(r.descKgA),
-        descKgBStr: fmtDescKg(r.descKgB),
-        margenAStr,
-        margenBStr,
-      }));
-      const totalTonA = clientes.reduce((s, c) => s + (c.kgA || 0) / 1000, 0);
-      const totalTonB = clientes.reduce((s, c) => s + (c.kgB || 0) / 1000, 0);
-      return {
-        totalDeltaIngreso,
-        totalDeltaIngresoStr: fmtMxn(Math.abs(totalDeltaIngreso)),
-        signPositive,
-        clientes,
-        totalTonA,
-        totalTonB,
-        totalTonAStr: fmtTon(totalTonA),
-        totalTonBStr: fmtTon(totalTonB),
-      };
-    };
-    const dejaron = build(
-      (r) => r.ingresoA > 0 && r.ingresoB <= 0,
-      (a, b) => b.ingresoA - a.ingresoA,
-      (sum, r) => sum + (r.ingresoA != null ? Number(r.ingresoA) : 0),
-      false
-    );
-    const mas = build(
-      (r) => r.deltaIngreso > 0 && (r.kgA || 0) > 0,
-      (a, b) => b.deltaIngreso - a.deltaIngreso,
-      (sum, r) => sum + (r.deltaIngreso != null ? Number(r.deltaIngreso) : 0),
-      true
-    );
-    const disminuyeron = build(
-      (r) => r.ingresoA > 0 && r.ingresoB > 0 && r.deltaIngreso < 0,
-      (a, b) => a.deltaIngreso - b.deltaIngreso,
-      (sum, r) => sum + (r.deltaIngreso != null ? -Number(r.deltaIngreso) : 0),
-      false
-    );
-    const clientesNuevos = build(
-      (r) => (r.kgA || 0) <= 0 && (r.kgB || 0) > 0,
-      (a, b) => (b.kgB || 0) - (a.kgB || 0),
-      (sum, r) => sum + (r.ingresoB != null ? Number(r.ingresoB) : 0),
-      true
-    );
-    const esDejaron = (r) => r.ingresoA > 0 && r.ingresoB <= 0;
-    const esMas = (r) => r.deltaIngreso > 0 && (r.kgA || 0) > 0;
-    const esDisminuyeron = (r) => r.ingresoA > 0 && r.ingresoB > 0 && r.deltaIngreso < 0;
-    const esNuevo = (r) => (r.kgA || 0) <= 0 && (r.kgB || 0) > 0;
-    const otrosClientes = build(
-      (r) => !esDejaron(r) && !esMas(r) && !esDisminuyeron(r) && !esNuevo(r),
-      (a, b) => (b.kgA || 0) + (b.kgB || 0) - ((a.kgA || 0) + (a.kgB || 0)),
-      (sum, r) => sum + (r.deltaIngreso != null ? Number(r.deltaIngreso) : 0),
-      false
-    );
-    const totalTonAGeneral = (rows || []).reduce((s, r) => s + (r.kgA || 0) / 1000, 0);
-    const totalTonBGeneral = (rows || []).reduce((s, r) => s + (r.kgB || 0) / 1000, 0);
-    res.json({
-      planta: planta.trim(),
-      periodoA: pa,
-      periodoB: pb,
-      margenAStr,
-      margenBStr,
-      totalTonAGeneralStr: fmtTon(totalTonAGeneral),
-      totalTonBGeneralStr: fmtTon(totalTonBGeneral),
-      dejaron,
-      mas,
-      disminuyeron,
-      clientesNuevos,
-      otrosClientes,
-    });
+    const data = await getDeltaIngresoDatosInternal(client, planta, pa, pb, sinRegla8020);
+    if (!data) return res.status(400).json({ error: "Datos no disponibles" });
+    res.json(data);
   } catch (e) {
     console.error("[Dashboard delta-ingreso-datos]", e);
     res.status(500).json({ error: e.message });
   } finally {
     client.release();
+  }
+});
+
+/* ==================== Delta Ingreso AI (módulo aislado: WhatsApp + OpenAI + seguimiento) ==================== */
+const TEST_MODE_AI = (process.env.TEST_MODE || "").toLowerCase() === "true";
+const PERIODO_AI_A = process.env.DELTA_INGRESO_AI_PERIODO_A || "2026-01";
+const PERIODO_AI_B = process.env.DELTA_INGRESO_AI_PERIODO_B || "2026-02";
+
+app.get("/api/ai/delta-ingreso/test/help", (req, res) => {
+  const base = (process.env.BASE_URL || process.env.PUBLIC_URL || "").trim() || "http://localhost:10000";
+  res.json({
+    titulo: "Guía paso a paso – Delta Ingreso AI (para Luis)",
+    pasos: [
+      "1) Variables de entorno: En .env o en Render añade TEST_MODE=true para modo prueba (17:00 y 17:45). OPENAI_API_KEY=sk-... para redacción/parseo. DELTA_INGRESO_AI_PERIODO_A=2026-01 y DELTA_INGRESO_AI_PERIODO_B=2026-02.",
+      "2) Desplegar: Reinicia el servidor (npm start o redeploy en Render) para que cargue TEST_MODE y las tablas delta_ingreso_ai_*.",
+      "3) Disparar pregunta ahora: POST " + base + "/api/ai/delta-ingreso/test/send-question-now (body vacío o {}). Envía mensaje a gerentes GG de Provincia con top negativos y petición 5W2H.",
+      "4) Disparar resumen ahora: POST " + base + "/api/ai/delta-ingreso/test/send-summary-now. Envía resumen ejecutivo a ZP.",
+      "5) Ver estado: GET " + base + "/api/ai/delta-ingreso/test/status. Devuelve última ejecución y conteos de outbox/actions.",
+      "6) Logs: Revisa consola del servidor por [delta-ingreso-ai] y [Delta Ingreso AI].",
+      "7) DB: Tablas public.delta_ingreso_ai_outbox, delta_ingreso_ai_inbox, delta_ingreso_ai_actions, delta_ingreso_ai_summary_zp.",
+    ],
+    checklist: ["TEST_MODE en .env", "OPENAI_API_KEY configurada", "Servidor reiniciado", "POST send-question-now ejecutado", "WhatsApp recibido por GG", "GET status revisado"],
+  });
+});
+
+app.get("/api/ai/delta-ingreso/test/status", async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await deltaIngresoAiDb.ensureDeltaIngresoAiSchema(client);
+    const out = await client.query("SELECT COUNT(*) AS c FROM public.delta_ingreso_ai_outbox");
+    const act = await client.query("SELECT COUNT(*) AS c FROM public.delta_ingreso_ai_actions");
+    const last = await client.query("SELECT MAX(sent_at) AS last_sent FROM public.delta_ingreso_ai_outbox WHERE status = 'SENT'");
+    res.json({
+      test_mode: TEST_MODE_AI,
+      periodoA: PERIODO_AI_A,
+      periodoB: PERIODO_AI_B,
+      outbox_count: (out.rows[0] && out.rows[0].c) || 0,
+      actions_count: (act.rows[0] && act.rows[0].c) || 0,
+      last_sent_at: (last.rows[0] && last.rows[0].last_sent) || null,
+    });
+  } catch (e) {
+    console.error("[Delta Ingreso AI status]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+async function runDeltaIngresoAiSendQuestion() {
+  const client = await pool.connect();
+  try {
+    await deltaIngresoAiDb.ensureDeltaIngresoAiSchema(client);
+    const plants = await deltaIngresoAiDb.getProvinciaPlantsWithPlantaId(client);
+    let sent = 0;
+    for (const row of plants) {
+      const data = await getDeltaIngresoDatosInternal(client, row.plant_code, PERIODO_AI_A, PERIODO_AI_B, false);
+      if (!data) continue;
+      const brief = deltaIngresoAi.buildBrief(row.plant_code, data);
+      const openActions = await deltaIngresoAiDb.getOpenActionsByPlant(client, row.plant_code, PERIODO_AI_A, PERIODO_AI_B);
+      const text = await deltaIngresoAi.composeManagerQuestion(brief, openActions);
+      const gerentes = await getUsersByRoleAndPlanta(client, "GG", row.planta_id);
+      for (const g of gerentes) {
+        if (!g.telefono) continue;
+        const ob = await deltaIngresoAiDb.insertOutbox(client, { plant_code: row.plant_code, to_phone: g.telefono, kind: "QUESTION", text });
+        try {
+          await sendWhatsApp(g.telefono, text, { event: "delta_ingreso_ai_question" });
+          await deltaIngresoAiDb.updateOutboxSent(client, ob.id, new Date());
+          sent++;
+        } catch (e) {
+          console.warn("[Delta Ingreso AI] send question to", g.telefono, e.message);
+        }
+      }
+    }
+    return { sent, plants: plants.length };
+  } finally {
+    client.release();
+  }
+}
+
+async function runDeltaIngresoAiSendSummary() {
+  const client = await pool.connect();
+  try {
+    await deltaIngresoAiDb.ensureDeltaIngresoAiSchema(client);
+    const plants = await deltaIngresoAiDb.getProvinciaPlantsWithPlantaId(client);
+    const allBriefs = [];
+    for (const row of plants) {
+      const data = await getDeltaIngresoDatosInternal(client, row.plant_code, PERIODO_AI_A, PERIODO_AI_B, false);
+      if (data) allBriefs.push(deltaIngresoAi.buildBrief(row.plant_code, data));
+    }
+    const actions = await deltaIngresoAiDb.getActionsForSummary(client, PERIODO_AI_A, PERIODO_AI_B);
+    const zpList = await getUsersByRole(client, "ZP");
+    const summaryText = await deltaIngresoAi.composeZPSummary(allBriefs, actions, { periodoA: PERIODO_AI_A, periodoB: PERIODO_AI_B }, []);
+    const today = new Date().toISOString().slice(0, 10);
+    let sent = 0;
+    for (const z of zpList) {
+      if (!z.telefono) continue;
+      try {
+        await sendWhatsApp(z.telefono, summaryText, { event: "delta_ingreso_ai_summary" });
+        sent++;
+      } catch (e) {
+        console.warn("[Delta Ingreso AI] send summary to ZP", e.message);
+      }
+    }
+    await deltaIngresoAiDb.saveSummaryZp(client, today, PERIODO_AI_A, PERIODO_AI_B, summaryText, { actions_count: actions.length }, new Date());
+    return { sent, summary_length: summaryText.length };
+  } finally {
+    client.release();
+  }
+}
+
+app.post("/api/ai/delta-ingreso/test/send-question-now", async (req, res) => {
+  try {
+    const result = await runDeltaIngresoAiSendQuestion();
+    res.json({ ok: true, ...result });
+  } catch (e) {
+    console.error("[Delta Ingreso AI send-question]", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post("/api/ai/delta-ingreso/test/send-summary-now", async (req, res) => {
+  try {
+    const result = await runDeltaIngresoAiSendSummary();
+    res.json({ ok: true, ...result });
+  } catch (e) {
+    console.error("[Delta Ingreso AI send-summary]", e);
+    res.status(500).json({ error: e.message });
   }
 });
 
@@ -5544,6 +5658,15 @@ app.post("/twilio/whatsapp", async (req, res) => {
 
       if (["ayuda", "help", "menu"].includes(lower)) {
         return safeReply(buildHelpMessage(actor));
+      }
+
+      if (actor && (actor.rol_clave === "GG" || (actor.rol_nombre && String(actor.rol_nombre).toUpperCase().includes("GG"))) && body.length > 15 && (/\bCERRADO\s*:/i.test(body) || /(CLIENTE|WHAT|WHY|WHEN|WHO|HOW)\s*:|\bWHAT\b|\bWHY\b|\bWHEN\b|\bWHO\b|\bHOW\b/i.test(body))) {
+        try {
+          const reply = await deltaIngresoAi.handleIncoming(client, fromNorm, body, actor, getDeltaIngresoDatosInternal, getUsersByRoleAndPlanta);
+          if (reply) return safeReply(reply);
+        } catch (e) {
+          console.warn("[Delta Ingreso AI handleIncoming]", e.message);
+        }
       }
 
       if (sess.adPoliza && sess.adPoliza.paso === "mes") {
@@ -8947,8 +9070,37 @@ process.on("unhandledRejection", (r) => console.error("unhandledRejection:", r))
 process.on("uncaughtException", (e) => console.error("uncaughtException:", e));
 
 ensureSchema()
-  .then(() => {
+  .then(async () => {
+    const client = await pool.connect();
+    try {
+      await deltaIngresoAiDb.ensureDeltaIngresoAiSchema(client);
+    } finally {
+      client.release();
+    }
     app.listen(PORT, () => console.log(`✅ Bot corriendo en puerto ${PORT}`));
+    if (TEST_MODE_AI) console.log("[Delta Ingreso AI] TEST_MODE activo: 17:00 y 17:45 (America/Mexico_City)");
+    let lastDeltaAiSlot = null;
+    const mxFormatter = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Mexico_City", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
+    setInterval(() => {
+      const now = new Date();
+      const parts = mxFormatter.formatToParts(now);
+      const get = (t) => (parts.find((p) => p.type === t) || {}).value || "0";
+      const h = parseInt(get("hour"), 10) || 0;
+      const m = parseInt(get("minute"), 10) || 0;
+      const slot = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+      const today = `${get("year")}-${get("month")}-${get("day")}`;
+      const slotsQuestion = TEST_MODE_AI ? ["17:00"] : ["08:00"];
+      const slotsSummary = TEST_MODE_AI ? ["17:45"] : ["15:30"];
+      const isQuestionSlot = slotsQuestion.includes(slot);
+      const isSummarySlot = slotsSummary.includes(slot);
+      if (isQuestionSlot && lastDeltaAiSlot !== `q-${today}-${slot}`) {
+        lastDeltaAiSlot = `q-${today}-${slot}`;
+        runDeltaIngresoAiSendQuestion().then((r) => console.log("[Delta Ingreso AI] scheduler question:", r)).catch((e) => console.warn("[Delta Ingreso AI] scheduler question error:", e.message));
+      } else if (isSummarySlot && lastDeltaAiSlot !== `s-${today}-${slot}`) {
+        lastDeltaAiSlot = `s-${today}-${slot}`;
+        runDeltaIngresoAiSendSummary().then((r) => console.log("[Delta Ingreso AI] scheduler summary:", r)).catch((e) => console.warn("[Delta Ingreso AI] scheduler summary error:", e.message));
+      }
+    }, 60000);
   })
   .catch((e) => {
     console.error("ensureSchema failed:", e);
