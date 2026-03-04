@@ -18,6 +18,7 @@ import FolioDrawer from "@/components/FolioDrawer";
 import ComoCambioModal from "@/components/ComoCambioModal";
 import DeltaVentaModal from "@/components/DeltaVentaModal";
 import DeltaDescuentoModal from "@/components/DeltaDescuentoModal";
+import DeltaIngresoModal from "@/components/DeltaIngresoModal";
 import PolizaModal from "@/components/PolizaModal";
 
 function DashboardContent() {
@@ -30,6 +31,7 @@ function DashboardContent() {
   const [showComoCambioModal, setShowComoCambioModal] = useState(false);
   const [showDeltaVentaModal, setShowDeltaVentaModal] = useState(false);
   const [showDeltaDescuentoModal, setShowDeltaDescuentoModal] = useState(false);
+  const [showDeltaIngresoModal, setShowDeltaIngresoModal] = useState(false);
   const [polizaFolioId, setPolizaFolioId] = useState<number | null>(null);
 
   useEffect(() => {
@@ -117,6 +119,14 @@ function DashboardContent() {
           >
             Delta Descuento
           </button>
+          <button
+            type="button"
+            onClick={() => setShowDeltaIngresoModal(true)}
+            className="flex items-center gap-1.5 rounded border border-slate-600 bg-blue-600 px-2.5 py-1.5 text-sm text-white hover:bg-blue-500"
+            title="Delta Ingreso: venta kg × (margen $/kg − descuento $/kg) por periodo; clientes que dejaron, subieron o bajaron"
+          >
+            Delta Ingreso
+          </button>
         </div>
       </div>
       <FiltersBar
@@ -143,6 +153,13 @@ function DashboardContent() {
           token={token}
           plantas={plantas}
           onClose={() => setShowDeltaDescuentoModal(false)}
+        />
+      )}
+      {showDeltaIngresoModal && token && (
+        <DeltaIngresoModal
+          token={token}
+          plantas={plantas}
+          onClose={() => setShowDeltaIngresoModal(false)}
         />
       )}
       <main className="flex-1">
