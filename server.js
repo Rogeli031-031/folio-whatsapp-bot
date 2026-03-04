@@ -6341,8 +6341,8 @@ app.post("/twilio/whatsapp", async (req, res) => {
           const rolNormNombre = normalizarParaAD(rolNom);
           const nombreUsuarioNorm = normalizarParaAD(actor.nombre);
           const esAD = rolClave === "AD" || (/asistente/.test(rolNormNombre) && /direccion/.test(rolNormNombre)) || (/asistente/.test(nombreUsuarioNorm) && /direccion/.test(nombreUsuarioNorm));
-          // Contralor financiero CDMX: solo ver dashboard, no autorizar (misma visibilidad que AD)
-          const esCFCDMX = rolClave === "CF_CDMX" || (/contralor/.test(rolNormNombre) && /financiero/.test(rolNormNombre) && /cdmx/.test(rolNormNombre));
+          // Contralor financiero CDMX / Contralor CDMX: solo ver dashboard, no autorizar (misma visibilidad que AD)
+          const esCFCDMX = rolClave === "CF_CDMX" || (/contralor/.test(rolNormNombre) && /cdmx/.test(rolNormNombre)) || (/contralor/.test(nombreUsuarioNorm) && /cdmx/.test(nombreUsuarioNorm));
           const role = esZP ? "ZP" : esAD ? "AD" : esCFCDMX ? "CF_CDMX" : "GG";
           let plantasPermitidas = [];
           if (esZP || esAD || esCFCDMX) {
