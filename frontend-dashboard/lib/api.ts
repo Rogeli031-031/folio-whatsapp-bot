@@ -316,6 +316,10 @@ export interface DeltaIngresoOpcion {
   totalDeltaIngresoStr: string;
   signPositive: boolean;
   clientes: DeltaIngresoCliente[];
+  totalTonA?: number;
+  totalTonB?: number;
+  totalTonAStr?: string;
+  totalTonBStr?: string;
 }
 
 export interface DeltaIngresoDatosResult {
@@ -324,9 +328,12 @@ export interface DeltaIngresoDatosResult {
   periodoB: string;
   margenAStr?: string;
   margenBStr?: string;
+  totalTonAGeneralStr?: string;
+  totalTonBGeneralStr?: string;
   dejaron: DeltaIngresoOpcion;
   mas: DeltaIngresoOpcion;
   disminuyeron: DeltaIngresoOpcion;
+  clientesNuevos: DeltaIngresoOpcion;
 }
 
 export function fetchDeltaIngresoPeriodos(token: string, planta: string): Promise<{ periodos: string[] }> {

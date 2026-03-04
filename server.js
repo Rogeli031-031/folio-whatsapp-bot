@@ -5364,6 +5364,7 @@ app.post("/api/dashboard/delta-ingreso-datos", dashboardAuthMiddleware, async (r
     const { rows, margenA, margenB } = await getDeltaIngresoClientes(client, planta.trim(), pa, pb);
     const margenAStr = fmtDescKg(margenA);
     const margenBStr = fmtDescKg(margenB);
+    const fmtTon = (ton) => (ton != null && !isNaN(ton) ? ton.toLocaleString("es-MX", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + " ton" : "0.0 ton");
     const build = (filterFn, sortFn, totalReduce, signPositive) => {
       const candidatos = (rows || []).filter(filterFn).sort(sortFn);
       const totalDeltaIngreso = candidatos.reduce(totalReduce, 0);
@@ -5385,7 +5386,18 @@ app.post("/api/dashboard/delta-ingreso-datos", dashboardAuthMiddleware, async (r
         margenAStr,
         margenBStr,
       }));
-      return { totalDeltaIngreso, totalDeltaIngresoStr: fmtMxn(Math.abs(totalDeltaIngreso)), signPositive, clientes };
+      const totalTonA = clientes.reduce((s, c) => s + (c.kgA || 0) / 1000, 0);
+      const totalTonB = clientes.reduce((s, c) => s + (c.kgB || 0) / 1000, 0);
+      return {
+        totalDeltaIngreso,
+        totalDeltaIngresoStr: fmtMxn(Math.abs(totalDeltaIngreso)),
+        signPositive,
+        clientes,
+        totalTonA,
+        totalTonB,
+        totalTonAStr: fmtTon(totalTonA),
+        totalTonBStr: fmtTon(totalTonB),
+      };
     };
     const dejaron = build(
       (r) => r.ingresoA > 0 && r.ingresoB <= 0,
@@ -5405,15 +5417,26 @@ app.post("/api/dashboard/delta-ingreso-datos", dashboardAuthMiddleware, async (r
       (sum, r) => sum + (r.deltaIngreso != null ? -Number(r.deltaIngreso) : 0),
       false
     );
+    const clientesNuevos = build(
+      (r) => (r.kgA || 0) <= 0 && (r.kgB || 0) > 0,
+      (a, b) => (b.kgB || 0) - (a.kgB || 0),
+      (sum, r) => sum + (r.ingresoB != null ? Number(r.ingresoB) : 0),
+      true
+    );
+    const totalTonAGeneral = (rows || []).reduce((s, r) => s + (r.kgA || 0) / 1000, 0);
+    const totalTonBGeneral = (rows || []).reduce((s, r) => s + (r.kgB || 0) / 1000, 0);
     res.json({
       planta: planta.trim(),
       periodoA: pa,
       periodoB: pb,
       margenAStr,
       margenBStr,
+      totalTonAGeneralStr: fmtTon(totalTonAGeneral),
+      totalTonBGeneralStr: fmtTon(totalTonBGeneral),
       dejaron,
       mas,
       disminuyeron,
+      clientesNuevos,
     });
   } catch (e) {
     console.error("[Dashboard delta-ingreso-datos]", e);
