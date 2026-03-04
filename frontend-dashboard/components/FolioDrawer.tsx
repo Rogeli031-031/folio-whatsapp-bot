@@ -187,17 +187,34 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
                   <p className="text-sm text-slate-500">Sin adjuntos</p>
                 ) : (
                   <ul className="space-y-1">
-                    {media.map((m) => (
-                      <li key={m.id}>
-                        <button
-                          type="button"
-                          onClick={() => openMediaUrl(m.id)}
-                          className="text-sm text-blue-400 hover:underline"
-                        >
-                          {m.tipo} {m.file_name || `#${m.id}`}
-                        </button>
-                      </li>
-                    ))}
+                    {(() => {
+                      const byTipo = {} as Record<string, { id: number; tipo: string; file_name: string | null }>;
+                      media.forEach((m) => {
+                        const t = (m.tipo || "").toUpperCase();
+                        if (t === "COTIZACION" && !byTipo.COTIZACION) byTipo.COTIZACION = m;
+                        if (t === "POLIZA" && !byTipo.POLIZA) byTipo.POLIZA = m;
+                      });
+                      const items = [
+                        byTipo.COTIZACION ? { label: "Cotización", ...byTipo.COTIZACION } : null,
+                        byTipo.POLIZA ? { label: "Póliza", ...byTipo.POLIZA } : null,
+                      ].filter(Boolean) as { label: string; id: number; file_name: string | null }[];
+                      if (items.length === 0) {
+                        return media.map((m) => (
+                          <li key={m.id}>
+                            <button type="button" onClick={() => openMediaUrl(m.id)} className="text-sm text-blue-400 hover:underline">
+                              {m.tipo} {m.file_name || `#${m.id}`}
+                            </button>
+                          </li>
+                        ));
+                      }
+                      return items.map((it) => (
+                        <li key={it.id}>
+                          <button type="button" onClick={() => openMediaUrl(it.id)} className="text-sm text-blue-400 hover:underline">
+                            {it.label}: {it.file_name || `#${it.id}`}
+                          </button>
+                        </li>
+                      ));
+                    })()}
                   </ul>
                 )}
               </section>

@@ -3088,13 +3088,13 @@ async function listFolioArchivos(client, numeroFolio, limit = 10) {
   return r.rows || [];
 }
 
-/** Lista archivos del folio por folio_id (para API dashboard: COTIZACION, ANTES, DESPUES). */
+/** Lista archivos del folio por folio_id (para API dashboard: COTIZACION, POLIZA, etc.). Orden: Cotización primero, luego Póliza, para mostrar ambas ligas por separado. */
 async function listFolioArchivosByFolioId(client, folioId, limit = 20) {
   const r = await client.query(
     `SELECT fa.id, fa.tipo, fa.status, fa.file_name, fa.s3_key, fa.file_size_bytes, fa.subido_por, fa.subido_en
      FROM public.folio_archivos fa
      WHERE fa.folio_id = $1
-     ORDER BY fa.subido_en DESC
+     ORDER BY (CASE WHEN fa.tipo = 'COTIZACION' THEN 0 WHEN fa.tipo = 'POLIZA' THEN 1 ELSE 2 END), fa.subido_en DESC
      LIMIT $2`,
     [folioId, limit]
   );
