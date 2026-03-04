@@ -17,6 +17,7 @@ import KanbanBoard from "@/components/KanbanBoard";
 import FolioDrawer from "@/components/FolioDrawer";
 import ComoCambioModal from "@/components/ComoCambioModal";
 import DeltaVentaModal from "@/components/DeltaVentaModal";
+import DeltaDescuentoModal from "@/components/DeltaDescuentoModal";
 import PolizaModal from "@/components/PolizaModal";
 
 function DashboardContent() {
@@ -28,6 +29,7 @@ function DashboardContent() {
   const [drawerFolioId, setDrawerFolioId] = useState<number | null>(null);
   const [showComoCambioModal, setShowComoCambioModal] = useState(false);
   const [showDeltaVentaModal, setShowDeltaVentaModal] = useState(false);
+  const [showDeltaDescuentoModal, setShowDeltaDescuentoModal] = useState(false);
   const [polizaFolioId, setPolizaFolioId] = useState<number | null>(null);
 
   useEffect(() => {
@@ -107,6 +109,14 @@ function DashboardContent() {
           >
             Delta Venta
           </button>
+          <button
+            type="button"
+            onClick={() => setShowDeltaDescuentoModal(true)}
+            className="flex items-center gap-1.5 rounded border border-slate-600 bg-blue-600 px-2.5 py-1.5 text-sm text-white hover:bg-blue-500"
+            title="Delta Descuento: clientes que dejaron de tener descuento, tienen más o disminuyeron"
+          >
+            Delta Descuento
+          </button>
         </div>
       </div>
       <FiltersBar
@@ -126,6 +136,13 @@ function DashboardContent() {
           token={token}
           plantas={plantas}
           onClose={() => setShowDeltaVentaModal(false)}
+        />
+      )}
+      {showDeltaDescuentoModal && token && (
+        <DeltaDescuentoModal
+          token={token}
+          plantas={plantas}
+          onClose={() => setShowDeltaDescuentoModal(false)}
         />
       )}
       <main className="flex-1">

@@ -249,6 +249,50 @@ export function postDeltaVentaDatos(
   });
 }
 
+export interface DeltaDescuentoCliente {
+  cliente: string;
+  ratioA: number;
+  ratioB: number;
+  deltaRatio: number;
+  ratioAStr: string;
+  ratioBStr: string;
+  deltaRatioStr: string;
+}
+
+export interface DeltaDescuentoOpcion {
+  totalDeltaRatio: number;
+  totalDeltaRatioStr: string;
+  signPositive: boolean;
+  clientes: DeltaDescuentoCliente[];
+}
+
+export interface DeltaDescuentoDatosResult {
+  planta: string;
+  periodoA: string;
+  periodoB: string;
+  dejaron: DeltaDescuentoOpcion;
+  mas: DeltaDescuentoOpcion;
+  disminuyeron: DeltaDescuentoOpcion;
+}
+
+export function fetchDeltaDescuentoPeriodos(token: string, planta: string): Promise<{ periodos: string[] }> {
+  return apiFetch<{ periodos: string[] }>("/api/dashboard/delta-descuento-periodos", {
+    token,
+    params: { planta },
+  });
+}
+
+export function postDeltaDescuentoDatos(
+  token: string,
+  body: { planta: string; periodoA: string; periodoB: string }
+): Promise<DeltaDescuentoDatosResult> {
+  return apiFetch<DeltaDescuentoDatosResult>("/api/dashboard/delta-descuento-datos", {
+    token,
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
 export function postFolioPoliza(
   token: string,
   folioId: number,

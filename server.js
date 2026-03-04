@@ -1756,6 +1756,143 @@ async function getDeltaVentaClientes(client, plantaNombre, periodoA, periodoB) {
   }));
 }
 
+/** Plantas con datos de descuentos diarios (Delta Descuento), usando mapeo Provincia. */
+async function getPlantasDeltaDescuento(client) {
+  const r = await client.query(`
+    WITH prov_map AS (
+      SELECT DISTINCT
+             p.nombre AS prov_name,
+             UPPER(TRIM(p.nombre)) AS key_nombre,
+             UPPER(TRIM(COALESCE(p.clave, ''))) AS key_clave
+        FROM public.plantas p
+        JOIN arr.provincia_plants ap
+          ON UPPER(TRIM(ap.plant_code)) = UPPER(TRIM(p.nombre))
+          OR (p.clave IS NOT NULL AND TRIM(p.clave) <> '' AND UPPER(TRIM(ap.plant_code)) = UPPER(TRIM(p.clave)))
+       WHERE UPPER(TRIM(COALESCE(p.nombre, ''))) != 'CORPORATIVO'
+         AND UPPER(TRIM(COALESCE(p.clave, ''))) != 'CORPORATIVO'
+    )
+    SELECT DISTINCT pm.prov_name AS nombre
+      FROM arr.descuentos_diarios_cliente d
+      JOIN prov_map pm
+        ON UPPER(TRIM(d.plant_code)) = pm.key_nombre
+        OR (pm.key_clave <> '' AND UPPER(TRIM(d.plant_code)) = pm.key_clave)
+     ORDER BY pm.prov_name
+  `);
+  return (r.rows || []).map((row) => row.nombre).filter(Boolean);
+}
+
+/** Periodos disponibles (YYYY-MM) para Delta Descuento por planta Provincia. */
+async function getPeriodosDeltaDescuento(client, plantaNombre) {
+  const r = await client.query(
+    `WITH prov_map AS (
+       SELECT DISTINCT
+              p.nombre AS prov_name,
+              UPPER(TRIM(p.nombre)) AS key_nombre,
+              UPPER(TRIM(COALESCE(p.clave, ''))) AS key_clave
+         FROM public.plantas p
+         JOIN arr.provincia_plants ap
+           ON UPPER(TRIM(ap.plant_code)) = UPPER(TRIM(p.nombre))
+           OR (p.clave IS NOT NULL AND TRIM(p.clave) <> '' AND UPPER(TRIM(ap.plant_code)) = UPPER(TRIM(p.clave)))
+        WHERE UPPER(TRIM(COALESCE(p.nombre, ''))) != 'CORPORATIVO'
+          AND UPPER(TRIM(COALESCE(p.clave, ''))) != 'CORPORATIVO'
+     )
+     SELECT DISTINCT to_char(d.fecha, 'YYYY-MM') AS periodo
+       FROM arr.descuentos_diarios_cliente d
+       JOIN prov_map pm
+         ON UPPER(TRIM(d.plant_code)) = pm.key_nombre
+         OR (pm.key_clave <> '' AND UPPER(TRIM(d.plant_code)) = pm.key_clave)
+      WHERE pm.prov_name = $1
+      ORDER BY periodo DESC`,
+    [plantaNombre]
+  );
+  return (r.rows || []).map((row) => row.periodo).filter(Boolean);
+}
+
+/** Delta de descuento por kilo ($/kg) por cliente entre dos periodos. Usa descuento total y kg de ventas por periodo. */
+async function getDeltaDescuentoClientes(client, plantaNombre, periodoA, periodoB) {
+  const [yA, mA] = periodoA.split("-").map((s) => parseInt(s, 10));
+  const [yB, mB] = periodoB.split("-").map((s) => parseInt(s, 10));
+  if (!Number.isFinite(yA) || !Number.isFinite(mA) || !Number.isFinite(yB) || !Number.isFinite(mB)) {
+    return [];
+  }
+  const r = await client.query(
+    `WITH prov_map AS (
+       SELECT DISTINCT
+              p.nombre AS prov_name,
+              UPPER(TRIM(p.nombre)) AS key_nombre,
+              UPPER(TRIM(COALESCE(p.clave, ''))) AS key_clave
+         FROM public.plantas p
+         JOIN arr.provincia_plants ap
+           ON UPPER(TRIM(ap.plant_code)) = UPPER(TRIM(p.nombre))
+           OR (p.clave IS NOT NULL AND TRIM(p.clave) <> '' AND UPPER(TRIM(ap.plant_code)) = UPPER(TRIM(p.clave)))
+        WHERE UPPER(TRIM(COALESCE(p.nombre, ''))) != 'CORPORATIVO'
+          AND UPPER(TRIM(COALESCE(p.clave, ''))) != 'CORPORATIVO'
+     ),
+     desc_mes AS (
+       SELECT pm.prov_name AS planta,
+              DATE_PART('year', d.fecha)::INT AS year,
+              DATE_PART('month', d.fecha)::INT AS month,
+              d.cliente_norm,
+              SUM(d.monto) AS monto
+         FROM arr.descuentos_diarios_cliente d
+         JOIN prov_map pm
+           ON UPPER(TRIM(d.plant_code)) = pm.key_nombre
+           OR (pm.key_clave <> '' AND UPPER(TRIM(d.plant_code)) = pm.key_clave)
+        GROUP BY pm.prov_name, year, month, d.cliente_norm
+     ),
+     ventas_mes AS (
+       SELECT pm.prov_name AS planta,
+              DATE_PART('year', v.fecha)::INT AS year,
+              DATE_PART('month', v.fecha)::INT AS month,
+              v.cliente_norm,
+              SUM(v.kg) AS kg
+         FROM arr.ventas_diarias_cliente v
+         JOIN prov_map pm
+           ON UPPER(TRIM(v.plant_code)) = pm.key_nombre
+           OR (pm.key_clave <> '' AND UPPER(TRIM(v.plant_code)) = pm.key_clave)
+        GROUP BY pm.prov_name, year, month, v.cliente_norm
+     ),
+     desc_a AS (SELECT cliente_norm, monto AS monto_a FROM desc_mes WHERE planta = $1 AND year = $2 AND month = $3),
+     ventas_a AS (SELECT cliente_norm, kg AS kg_a FROM ventas_mes WHERE planta = $1 AND year = $2 AND month = $3),
+     desc_b AS (SELECT cliente_norm, monto AS monto_b FROM desc_mes WHERE planta = $1 AND year = $4 AND month = $5),
+     ventas_b AS (SELECT cliente_norm, kg AS kg_b FROM ventas_mes WHERE planta = $1 AND year = $4 AND month = $5),
+     period_a AS (
+       SELECT COALESCE(d.cliente_norm, v.cliente_norm) AS cliente_norm,
+              COALESCE(d.monto_a, 0) AS monto_a,
+              COALESCE(v.kg_a, 0) AS kg_a
+         FROM desc_a d
+         FULL OUTER JOIN ventas_a v ON d.cliente_norm = v.cliente_norm
+     ),
+     period_b AS (
+       SELECT COALESCE(d.cliente_norm, v.cliente_norm) AS cliente_norm,
+              COALESCE(d.monto_b, 0) AS monto_b,
+              COALESCE(v.kg_b, 0) AS kg_b
+         FROM desc_b d
+         FULL OUTER JOIN ventas_b v ON d.cliente_norm = v.cliente_norm
+     )
+     SELECT
+       COALESCE(a.cliente_norm, b.cliente_norm) AS cliente_norm,
+       a.monto_a, a.kg_a, b.monto_b, b.kg_b,
+       (CASE WHEN (a.kg_a IS NULL OR a.kg_a = 0) THEN 0 ELSE a.monto_a::numeric / a.kg_a END) AS ratio_a,
+       (CASE WHEN (b.kg_b IS NULL OR b.kg_b = 0) THEN 0 ELSE b.monto_b::numeric / b.kg_b END) AS ratio_b,
+       (CASE WHEN (b.kg_b IS NULL OR b.kg_b = 0) THEN 0 ELSE b.monto_b::numeric / b.kg_b END)
+       - (CASE WHEN (a.kg_a IS NULL OR a.kg_a = 0) THEN 0 ELSE a.monto_a::numeric / a.kg_a END) AS delta_ratio
+       FROM period_a a
+       FULL OUTER JOIN period_b b ON a.cliente_norm = b.cliente_norm`,
+    [plantaNombre, yA, mA, yB, mB]
+  );
+  return (r.rows || []).map((row) => ({
+    cliente: row.cliente_norm,
+    montoA: row.monto_a != null ? Number(row.monto_a) : 0,
+    montoB: row.monto_b != null ? Number(row.monto_b) : 0,
+    kgA: row.kg_a != null ? Number(row.kg_a) : 0,
+    kgB: row.kg_b != null ? Number(row.kg_b) : 0,
+    ratioA: row.ratio_a != null ? Number(row.ratio_a) : 0,
+    ratioB: row.ratio_b != null ? Number(row.ratio_b) : 0,
+    deltaRatio: row.delta_ratio != null ? Number(row.delta_ratio) : 0,
+  }));
+}
+
 /* ==================== SCHEMA (idempotente) ==================== */
 
 async function ensureSchema() {
@@ -4972,6 +5109,91 @@ app.post("/api/dashboard/delta-venta-datos", dashboardAuthMiddleware, async (req
     });
   } catch (e) {
     console.error("[Dashboard delta-venta-datos]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/** Periodos (YYYY-MM) disponibles para Delta Descuento en una planta (dashboard). */
+app.get("/api/dashboard/delta-descuento-periodos", dashboardAuthMiddleware, async (req, res) => {
+  const planta = (req.query.planta || "").toString().trim();
+  if (!planta) {
+    return res.status(400).json({ error: "Falta planta" });
+  }
+  const client = await pool.connect();
+  try {
+    const periodos = await getPeriodosDeltaDescuento(client, planta);
+    res.json({ periodos: periodos || [] });
+  } catch (e) {
+    console.error("[Dashboard delta-descuento-periodos]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/** Datos Delta Descuento para las 3 opciones (dejaron, mas, disminuyeron) con regla 80/20. */
+app.post("/api/dashboard/delta-descuento-datos", dashboardAuthMiddleware, async (req, res) => {
+  const { planta, periodoA, periodoB } = req.body || {};
+  const pa = (typeof periodoA === "string" && /^\d{4}-\d{2}$/.test(periodoA)) ? periodoA : null;
+  const pb = (typeof periodoB === "string" && /^\d{4}-\d{2}$/.test(periodoB)) ? periodoB : null;
+  if (!planta || typeof planta !== "string" || !planta.trim()) {
+    return res.status(400).json({ error: "Falta planta" });
+  }
+  if (!pa || !pb) {
+    return res.status(400).json({ error: "Faltan periodoA y periodoB (formato YYYY-MM)" });
+  }
+  if (pa === pb) {
+    return res.status(400).json({ error: "Los dos periodos deben ser distintos" });
+  }
+  const fmtDescKg = (r) => (r != null && !isNaN(r) ? `${r.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} $/kg` : "0.00 $/kg");
+  const client = await pool.connect();
+  try {
+    const rows = await getDeltaDescuentoClientes(client, planta.trim(), pa, pb);
+    const build = (filterFn, sortFn, totalReduce, signPositive) => {
+      const candidatos = (rows || []).filter(filterFn).sort(sortFn);
+      const totalDeltaRatio = candidatos.length ? candidatos.reduce(totalReduce, 0) / candidatos.length : 0;
+      const top20 = Math.max(1, Math.ceil(candidatos.length * 0.2));
+      const clientes = candidatos.slice(0, top20).map((r) => ({
+        cliente: r.cliente,
+        ratioA: r.ratioA,
+        ratioB: r.ratioB,
+        deltaRatio: r.deltaRatio,
+        ratioAStr: fmtDescKg(r.ratioA),
+        ratioBStr: fmtDescKg(r.ratioB),
+        deltaRatioStr: fmtDescKg(r.deltaRatio),
+      }));
+      return { totalDeltaRatio, totalDeltaRatioStr: fmtDescKg(totalDeltaRatio), signPositive, clientes };
+    };
+    const dejaron = build(
+      (r) => r.ratioA < 0 && (r.kgB === 0 || r.ratioB >= 0),
+      (a, b) => a.ratioA - b.ratioA,
+      (sum, r) => sum + (r.ratioA != null ? Number(r.ratioA) : 0),
+      false
+    );
+    const mas = build(
+      (r) => r.deltaRatio < 0,
+      (a, b) => a.deltaRatio - b.deltaRatio,
+      (sum, r) => sum + (r.deltaRatio != null ? Number(r.deltaRatio) : 0),
+      false
+    );
+    const disminuyeron = build(
+      (r) => r.kgA > 0 && r.kgB > 0 && r.ratioA < 0 && r.ratioB < 0 && r.deltaRatio > 0,
+      (a, b) => b.deltaRatio - a.deltaRatio,
+      (sum, r) => sum + (r.deltaRatio != null ? Number(r.deltaRatio) : 0),
+      true
+    );
+    res.json({
+      planta: planta.trim(),
+      periodoA: pa,
+      periodoB: pb,
+      dejaron,
+      mas,
+      disminuyeron,
+    });
+  } catch (e) {
+    console.error("[Dashboard delta-descuento-datos]", e);
     res.status(500).json({ error: e.message });
   } finally {
     client.release();
