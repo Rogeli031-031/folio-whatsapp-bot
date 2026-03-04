@@ -5671,13 +5671,13 @@ app.post("/twilio/whatsapp", async (req, res) => {
 
       /* ----- Delta Ingreso AI: Q&A (ZP y GG) – solo temas Delta Ingreso ----- */
       const rolClaveQA = (actor && actor.rol_clave) ? String(actor.rol_clave).toUpperCase() : "";
-      const esZP = rolClaveQA === "ZP" || (actor && actor.rol_nombre && /director/i.test(actor.rol_nombre) && /zp/i.test(actor.rol_nombre));
-      const esGG = rolClaveQA === "GG" || (actor && actor.rol_nombre && String(actor.rol_nombre).toUpperCase().includes("GG"));
-      if (actor && (esZP || esGG) && body.trim().length >= 2) {
+      const esZPQA = rolClaveQA === "ZP" || (actor && actor.rol_nombre && /director/i.test(actor.rol_nombre) && /zp/i.test(actor.rol_nombre));
+      const esGGQA = rolClaveQA === "GG" || (actor && actor.rol_nombre && String(actor.rol_nombre).toUpperCase().includes("GG"));
+      if (actor && (esZPQA || esGGQA) && body.trim().length >= 2) {
         try {
           await deltaIngresoAiDb.ensureDeltaIngresoAiSchema(client);
           let context = null;
-          if (esZP) {
+          if (esZPQA) {
             const plantsQA = await deltaIngresoAiDb.getProvinciaPlantsWithPlantaId(client);
             const allBriefs = [];
             for (const row of plantsQA) {
@@ -5693,7 +5693,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
             }
           }
           if (context) {
-            const actorRoleQA = esZP ? "ZP" : "GG";
+            const actorRoleQA = esZPQA ? "ZP" : "GG";
             const answer = await deltaIngresoAi.answerDeltaIngresoQuestion(body.trim(), context, actorRoleQA);
             await deltaIngresoAiDb.insertQuery(client, { from_phone: fromNorm, actor_role: actorRoleQA, question: body.trim(), answer: answer || "", sources_json: null });
             return safeReply(answer || "No pude generar una respuesta. Solo respondo sobre Delta Ingreso (periodos configurados).");
