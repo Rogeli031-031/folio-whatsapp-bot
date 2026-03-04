@@ -301,6 +301,14 @@ export interface DeltaIngresoCliente {
   ingresoAStr: string;
   ingresoBStr: string;
   deltaIngresoStr: string;
+  kgA?: number;
+  kgB?: number;
+  kgAStr?: string;
+  kgBStr?: string;
+  descKgAStr?: string;
+  descKgBStr?: string;
+  margenAStr?: string;
+  margenBStr?: string;
 }
 
 export interface DeltaIngresoOpcion {
@@ -314,6 +322,8 @@ export interface DeltaIngresoDatosResult {
   planta: string;
   periodoA: string;
   periodoB: string;
+  margenAStr?: string;
+  margenBStr?: string;
   dejaron: DeltaIngresoOpcion;
   mas: DeltaIngresoOpcion;
   disminuyeron: DeltaIngresoOpcion;

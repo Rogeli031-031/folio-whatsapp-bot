@@ -1993,7 +1993,7 @@ async function getDeltaIngresoClientes(client, plantaNombre, periodoA, periodoB)
        FULL OUTER JOIN period_b b ON a.cliente_norm = b.cliente_norm`,
     [plantaNombre, yA, mA, yB, mB]
   );
-  return (r.rows || []).map((row) => {
+  const rows = (r.rows || []).map((row) => {
     const kgA = row.kg_a != null ? Number(row.kg_a) : 0;
     const kgB = row.kg_b != null ? Number(row.kg_b) : 0;
     const descKgA = row.desc_kg_a != null ? Number(row.desc_kg_a) : 0;
@@ -2006,8 +2006,13 @@ async function getDeltaIngresoClientes(client, plantaNombre, periodoA, periodoB)
       ingresoA,
       ingresoB,
       deltaIngreso,
+      kgA,
+      kgB,
+      descKgA,
+      descKgB,
     };
   });
+  return { rows, margenA, margenB };
 }
 
 /* ==================== SCHEMA (idempotente) ==================== */
@@ -5350,9 +5355,13 @@ app.post("/api/dashboard/delta-ingreso-datos", dashboardAuthMiddleware, async (r
     return res.status(400).json({ error: "Los dos periodos deben ser distintos" });
   }
   const fmtMxn = (m) => (m != null && !isNaN(m) ? m.toLocaleString("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 0, maximumFractionDigits: 0 }) : "$0");
+  const fmtKg = (kg) => (kg != null && !isNaN(kg) ? (kg / 1000).toLocaleString("es-MX", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : "0.0");
+  const fmtDescKg = (r) => (r != null && !isNaN(r) ? `${r.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} $/kg` : "0.00 $/kg");
   const client = await pool.connect();
   try {
-    const rows = await getDeltaIngresoClientes(client, planta.trim(), pa, pb);
+    const { rows, margenA, margenB } = await getDeltaIngresoClientes(client, planta.trim(), pa, pb);
+    const margenAStr = fmtDescKg(margenA);
+    const margenBStr = fmtDescKg(margenB);
     const build = (filterFn, sortFn, totalReduce, signPositive) => {
       const candidatos = (rows || []).filter(filterFn).sort(sortFn);
       const totalDeltaIngreso = candidatos.reduce(totalReduce, 0);
@@ -5365,6 +5374,14 @@ app.post("/api/dashboard/delta-ingreso-datos", dashboardAuthMiddleware, async (r
         ingresoAStr: fmtMxn(r.ingresoA),
         ingresoBStr: fmtMxn(r.ingresoB),
         deltaIngresoStr: fmtMxn(r.deltaIngreso),
+        kgA: r.kgA,
+        kgB: r.kgB,
+        kgAStr: fmtKg(r.kgA),
+        kgBStr: fmtKg(r.kgB),
+        descKgAStr: fmtDescKg(r.descKgA),
+        descKgBStr: fmtDescKg(r.descKgB),
+        margenAStr,
+        margenBStr,
       }));
       return { totalDeltaIngreso, totalDeltaIngresoStr: fmtMxn(Math.abs(totalDeltaIngreso)), signPositive, clientes };
     };
@@ -5390,6 +5407,8 @@ app.post("/api/dashboard/delta-ingreso-datos", dashboardAuthMiddleware, async (r
       planta: planta.trim(),
       periodoA: pa,
       periodoB: pb,
+      margenAStr,
+      margenBStr,
       dejaron,
       mas,
       disminuyeron,

@@ -141,16 +141,16 @@ export default function DeltaIngresoModal({ token, plantas, onClose }: Props) {
 
         {step === "resultado" && result && (
           <div className="space-y-3">
-            <p className="border-b border-slate-700 pb-2 text-sm font-medium text-slate-200">Delta Ingreso – {result.planta} · {result.periodoA} → {result.periodoB}</p>
+            <p className="border-b border-slate-700 pb-2 text-sm font-medium text-slate-200">Delta Ingreso – {result.planta} · {result.periodoA} → {result.periodoB}{result.margenAStr && result.margenBStr ? ` · Margen A: ${result.margenAStr} · Margen B: ${result.margenBStr}` : ""}</p>
             <div className="max-h-[70vh] space-y-4 overflow-y-auto">
               <div className="rounded border border-slate-700 bg-slate-800/50 p-2">
                 <p className="mb-1.5 text-xs font-medium text-slate-300">Clientes que dejaron de generar ingreso · Total A: {result.dejaron.totalDeltaIngresoStr}</p>
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[24rem] text-left text-xs">
-                    <thead><tr className="border-b border-slate-600 text-slate-400"><th className="py-1 pr-2">#</th><th className="py-1 pr-2">Cliente</th><th className="py-1 pr-2 text-right">Periodo A</th><th className="py-1 text-right">Periodo B</th></tr></thead>
+                  <table className="w-full min-w-[48rem] text-left text-xs">
+                    <thead><tr className="border-b border-slate-600 text-slate-400"><th className="py-1 pr-2">#</th><th className="py-1 pr-2">Cliente</th><th className="py-1 pr-2 text-right">A (MXN)</th><th className="py-1 pr-2 text-right">A venta (ton)</th><th className="py-1 pr-2 text-right">A margen $/kg</th><th className="py-1 pr-2 text-right">A desc $/kg</th><th className="py-1 text-right">B (MXN)</th></tr></thead>
                     <tbody className="text-slate-300">
                       {result.dejaron.clientes.map((c, i) => (
-                        <tr key={i} className="border-b border-slate-700/50"><td className="py-1 pr-2">{i + 1}</td><td className="py-1 pr-2">{c.cliente}</td><td className="py-1 pr-2 text-right tabular-nums">{c.ingresoAStr}</td><td className="py-1 text-right tabular-nums">$0</td></tr>
+                        <tr key={i} className="border-b border-slate-700/50"><td className="py-1 pr-2">{i + 1}</td><td className="py-1 pr-2">{c.cliente}</td><td className="py-1 pr-2 text-right tabular-nums">{c.ingresoAStr}</td><td className="py-1 pr-2 text-right tabular-nums">{c.kgAStr ?? "—"}</td><td className="py-1 pr-2 text-right tabular-nums">{c.margenAStr ?? "—"}</td><td className="py-1 pr-2 text-right tabular-nums">{c.descKgAStr ?? "—"}</td><td className="py-1 text-right tabular-nums">$0</td></tr>
                       ))}
                     </tbody>
                   </table>
@@ -159,11 +159,11 @@ export default function DeltaIngresoModal({ token, plantas, onClose }: Props) {
               <div className="rounded border border-slate-700 bg-slate-800/50 p-2">
                 <p className="mb-1.5 text-xs font-medium text-slate-300">Clientes con más ingreso en B · Delta total: +{result.mas.totalDeltaIngresoStr}</p>
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[28rem] text-left text-xs">
-                    <thead><tr className="border-b border-slate-600 text-slate-400"><th className="py-1 pr-2">#</th><th className="py-1 pr-2">Cliente</th><th className="py-1 pr-2 text-right">A (MXN)</th><th className="py-1 pr-2 text-right">B (MXN)</th><th className="py-1 text-right">Delta (MXN)</th></tr></thead>
+                  <table className="w-full min-w-[56rem] text-left text-xs">
+                    <thead><tr className="border-b border-slate-600 text-slate-400"><th className="py-1 pr-2">#</th><th className="py-1 pr-2">Cliente</th><th className="py-1 pr-2 text-right">A (MXN)</th><th className="py-1 pr-2 text-right">A venta (ton)</th><th className="py-1 pr-2 text-right">A margen</th><th className="py-1 pr-2 text-right">A desc $/kg</th><th className="py-1 pr-2 text-right">B (MXN)</th><th className="py-1 pr-2 text-right">B venta (ton)</th><th className="py-1 pr-2 text-right">B margen</th><th className="py-1 pr-2 text-right">B desc $/kg</th><th className="py-1 text-right">Delta (MXN)</th></tr></thead>
                     <tbody className="text-slate-300">
                       {result.mas.clientes.map((c, i) => (
-                        <tr key={i} className="border-b border-slate-700/50"><td className="py-1 pr-2">{i + 1}</td><td className="py-1 pr-2">{c.cliente}</td><td className="py-1 pr-2 text-right tabular-nums">{c.ingresoAStr}</td><td className="py-1 pr-2 text-right tabular-nums">{c.ingresoBStr}</td><td className="py-1 text-right tabular-nums text-emerald-400/90">+{c.deltaIngresoStr}</td></tr>
+                        <tr key={i} className="border-b border-slate-700/50"><td className="py-1 pr-2">{i + 1}</td><td className="py-1 pr-2">{c.cliente}</td><td className="py-1 pr-2 text-right tabular-nums">{c.ingresoAStr}</td><td className="py-1 pr-2 text-right tabular-nums">{c.kgAStr ?? "—"}</td><td className="py-1 pr-2 text-right tabular-nums">{c.margenAStr ?? "—"}</td><td className="py-1 pr-2 text-right tabular-nums">{c.descKgAStr ?? "—"}</td><td className="py-1 pr-2 text-right tabular-nums">{c.ingresoBStr}</td><td className="py-1 pr-2 text-right tabular-nums">{c.kgBStr ?? "—"}</td><td className="py-1 pr-2 text-right tabular-nums">{c.margenBStr ?? "—"}</td><td className="py-1 pr-2 text-right tabular-nums">{c.descKgBStr ?? "—"}</td><td className="py-1 text-right tabular-nums text-emerald-400/90">+{c.deltaIngresoStr}</td></tr>
                       ))}
                     </tbody>
                   </table>
@@ -172,11 +172,11 @@ export default function DeltaIngresoModal({ token, plantas, onClose }: Props) {
               <div className="rounded border border-slate-700 bg-slate-800/50 p-2">
                 <p className="mb-1.5 text-xs font-medium text-slate-300">Clientes que disminuyeron su ingreso · Delta total: -{result.disminuyeron.totalDeltaIngresoStr}</p>
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[28rem] text-left text-xs">
-                    <thead><tr className="border-b border-slate-600 text-slate-400"><th className="py-1 pr-2">#</th><th className="py-1 pr-2">Cliente</th><th className="py-1 pr-2 text-right">A (MXN)</th><th className="py-1 pr-2 text-right">B (MXN)</th><th className="py-1 text-right">Delta (MXN)</th></tr></thead>
+                  <table className="w-full min-w-[56rem] text-left text-xs">
+                    <thead><tr className="border-b border-slate-600 text-slate-400"><th className="py-1 pr-2">#</th><th className="py-1 pr-2">Cliente</th><th className="py-1 pr-2 text-right">A (MXN)</th><th className="py-1 pr-2 text-right">A venta (ton)</th><th className="py-1 pr-2 text-right">A margen</th><th className="py-1 pr-2 text-right">A desc $/kg</th><th className="py-1 pr-2 text-right">B (MXN)</th><th className="py-1 pr-2 text-right">B venta (ton)</th><th className="py-1 pr-2 text-right">B margen</th><th className="py-1 pr-2 text-right">B desc $/kg</th><th className="py-1 text-right">Delta (MXN)</th></tr></thead>
                     <tbody className="text-slate-300">
                       {result.disminuyeron.clientes.map((c, i) => (
-                        <tr key={i} className="border-b border-slate-700/50"><td className="py-1 pr-2">{i + 1}</td><td className="py-1 pr-2">{c.cliente}</td><td className="py-1 pr-2 text-right tabular-nums">{c.ingresoAStr}</td><td className="py-1 pr-2 text-right tabular-nums">{c.ingresoBStr}</td><td className="py-1 text-right tabular-nums text-red-400/90">{c.deltaIngresoStr}</td></tr>
+                        <tr key={i} className="border-b border-slate-700/50"><td className="py-1 pr-2">{i + 1}</td><td className="py-1 pr-2">{c.cliente}</td><td className="py-1 pr-2 text-right tabular-nums">{c.ingresoAStr}</td><td className="py-1 pr-2 text-right tabular-nums">{c.kgAStr ?? "—"}</td><td className="py-1 pr-2 text-right tabular-nums">{c.margenAStr ?? "—"}</td><td className="py-1 pr-2 text-right tabular-nums">{c.descKgAStr ?? "—"}</td><td className="py-1 pr-2 text-right tabular-nums">{c.ingresoBStr}</td><td className="py-1 pr-2 text-right tabular-nums">{c.kgBStr ?? "—"}</td><td className="py-1 pr-2 text-right tabular-nums">{c.margenBStr ?? "—"}</td><td className="py-1 pr-2 text-right tabular-nums">{c.descKgBStr ?? "—"}</td><td className="py-1 text-right tabular-nums text-red-400/90">{c.deltaIngresoStr}</td></tr>
                       ))}
                     </tbody>
                   </table>
