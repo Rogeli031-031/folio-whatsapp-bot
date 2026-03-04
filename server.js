@@ -5423,6 +5423,16 @@ app.post("/api/dashboard/delta-ingreso-datos", dashboardAuthMiddleware, async (r
       (sum, r) => sum + (r.ingresoB != null ? Number(r.ingresoB) : 0),
       true
     );
+    const esDejaron = (r) => r.ingresoA > 0 && r.ingresoB <= 0;
+    const esMas = (r) => r.deltaIngreso > 0;
+    const esDisminuyeron = (r) => r.ingresoA > 0 && r.ingresoB > 0 && r.deltaIngreso < 0;
+    const esNuevo = (r) => (r.kgA || 0) <= 0 && (r.kgB || 0) > 0;
+    const otrosClientes = build(
+      (r) => !esDejaron(r) && !esMas(r) && !esDisminuyeron(r) && !esNuevo(r),
+      (a, b) => (b.kgA || 0) + (b.kgB || 0) - ((a.kgA || 0) + (a.kgB || 0)),
+      (sum, r) => sum + (r.deltaIngreso != null ? Number(r.deltaIngreso) : 0),
+      false
+    );
     const totalTonAGeneral = (rows || []).reduce((s, r) => s + (r.kgA || 0) / 1000, 0);
     const totalTonBGeneral = (rows || []).reduce((s, r) => s + (r.kgB || 0) / 1000, 0);
     res.json({
@@ -5437,6 +5447,7 @@ app.post("/api/dashboard/delta-ingreso-datos", dashboardAuthMiddleware, async (r
       mas,
       disminuyeron,
       clientesNuevos,
+      otrosClientes,
     });
   } catch (e) {
     console.error("[Dashboard delta-ingreso-datos]", e);

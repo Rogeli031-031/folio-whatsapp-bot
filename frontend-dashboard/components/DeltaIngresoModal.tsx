@@ -198,6 +198,19 @@ export default function DeltaIngresoModal({ token, plantas, onClose }: Props) {
                   </table>
                 </div>
               </div>
+              <div className="rounded border border-slate-700 bg-slate-800/50 p-2">
+                <p className="mb-1.5 text-xs font-medium text-slate-300">Otros clientes (resto; suma de las 5 listas = total) · Delta: {result.otrosClientes.totalDeltaIngresoStr}{result.otrosClientes.totalTonAStr != null ? ` · Suma ton: A = ${result.otrosClientes.totalTonAStr} · B = ${result.otrosClientes.totalTonBStr}` : ""}</p>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[56rem] text-left text-xs">
+                    <thead><tr className="border-b border-slate-600 text-slate-400"><th className="py-1 pr-2">#</th><th className="py-1 pr-2">Cliente</th><th className="py-1 pr-2 text-right">A (MXN)</th><th className="py-1 pr-2 text-right">A venta (ton)</th><th className="py-1 pr-2 text-right">A margen</th><th className="py-1 pr-2 text-right">A desc $/kg</th><th className="py-1 pr-2 text-right">B (MXN)</th><th className="py-1 pr-2 text-right">B venta (ton)</th><th className="py-1 pr-2 text-right">B margen</th><th className="py-1 pr-2 text-right">B desc $/kg</th><th className="py-1 text-right">Delta (MXN)</th></tr></thead>
+                    <tbody className="text-slate-300">
+                      {result.otrosClientes.clientes.map((c, i) => (
+                        <tr key={i} className="border-b border-slate-700/50"><td className="py-1 pr-2">{i + 1}</td><td className="py-1 pr-2">{c.cliente}</td><td className="py-1 pr-2 text-right tabular-nums">{c.ingresoAStr}</td><td className="py-1 pr-2 text-right tabular-nums">{c.kgAStr ?? "—"}</td><td className="py-1 pr-2 text-right tabular-nums">{c.margenAStr ?? "—"}</td><td className="py-1 pr-2 text-right tabular-nums">{c.descKgAStr ?? "—"}</td><td className="py-1 pr-2 text-right tabular-nums">{c.ingresoBStr}</td><td className="py-1 pr-2 text-right tabular-nums">{c.kgBStr ?? "—"}</td><td className="py-1 pr-2 text-right tabular-nums">{c.margenBStr ?? "—"}</td><td className="py-1 pr-2 text-right tabular-nums">{c.descKgBStr ?? "—"}</td><td className="py-1 text-right tabular-nums">{c.deltaIngresoStr}</td></tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
             <div className="pt-2">
               <button type="button" onClick={() => { setStep("periodos"); setResult(null); }} className="rounded border border-slate-600 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-700 mr-2">Otra comparación</button>

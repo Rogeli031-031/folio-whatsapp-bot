@@ -334,6 +334,7 @@ export interface DeltaIngresoDatosResult {
   mas: DeltaIngresoOpcion;
   disminuyeron: DeltaIngresoOpcion;
   clientesNuevos: DeltaIngresoOpcion;
+  otrosClientes: DeltaIngresoOpcion;
 }
 
 export function fetchDeltaIngresoPeriodos(token: string, planta: string): Promise<{ periodos: string[] }> {
