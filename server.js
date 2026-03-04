@@ -5342,9 +5342,9 @@ app.get("/api/dashboard/delta-ingreso-periodos", dashboardAuthMiddleware, async 
   }
 });
 
-/** Datos Delta Ingreso: ingreso = venta_kg * (margen_$/kg - |descuento_$/kg|). Margen desde IGF con última versión del mes. 80/20 sobre la muestra de este delta (Delta Ingreso), no de otro. */
+/** Datos Delta Ingreso: ingreso = venta_kg * (margen_$/kg - |descuento_$/kg|). Margen desde IGF con última versión del mes. 80/20 sobre la muestra de este delta (Delta Ingreso), no de otro. Si sinRegla8020=true, se muestran todos los clientes (sin recorte 80/20). */
 app.post("/api/dashboard/delta-ingreso-datos", dashboardAuthMiddleware, async (req, res) => {
-  const { planta, periodoA, periodoB } = req.body || {};
+  const { planta, periodoA, periodoB, sinRegla8020 } = req.body || {};
   const pa = (typeof periodoA === "string" && /^\d{4}-\d{2}$/.test(periodoA)) ? periodoA : null;
   const pb = (typeof periodoB === "string" && /^\d{4}-\d{2}$/.test(periodoB)) ? periodoB : null;
   if (!planta || typeof planta !== "string" || !planta.trim()) {
@@ -5359,6 +5359,7 @@ app.post("/api/dashboard/delta-ingreso-datos", dashboardAuthMiddleware, async (r
   const fmtMxn = (m) => (m != null && !isNaN(m) ? m.toLocaleString("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 0, maximumFractionDigits: 0 }) : "$0");
   const fmtKg = (kg) => (kg != null && !isNaN(kg) ? (kg / 1000).toLocaleString("es-MX", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : "0.0");
   const fmtDescKg = (r) => (r != null && !isNaN(r) ? `${r.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} $/kg` : "0.00 $/kg");
+  const sinCorte8020 = !!sinRegla8020;
   const client = await pool.connect();
   try {
     const { rows, margenA, margenB } = await getDeltaIngresoClientes(client, planta.trim(), pa, pb);
@@ -5368,7 +5369,7 @@ app.post("/api/dashboard/delta-ingreso-datos", dashboardAuthMiddleware, async (r
     const build = (filterFn, sortFn, totalReduce, signPositive) => {
       const candidatos = (rows || []).filter(filterFn).sort(sortFn);
       const totalDeltaIngreso = candidatos.reduce(totalReduce, 0);
-      const top20 = Math.max(1, Math.ceil(candidatos.length * 0.2));
+      const top20 = sinCorte8020 ? candidatos.length : Math.max(1, Math.ceil(candidatos.length * 0.2));
       const clientes = candidatos.slice(0, top20).map((r) => ({
         cliente: r.cliente,
         ingresoA: r.ingresoA,

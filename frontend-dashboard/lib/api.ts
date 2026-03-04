@@ -346,7 +346,7 @@ export function fetchDeltaIngresoPeriodos(token: string, planta: string): Promis
 
 export function postDeltaIngresoDatos(
   token: string,
-  body: { planta: string; periodoA: string; periodoB: string }
+  body: { planta: string; periodoA: string; periodoB: string; sinRegla8020?: boolean }
 ): Promise<DeltaIngresoDatosResult> {
   return apiFetch<DeltaIngresoDatosResult>("/api/dashboard/delta-ingreso-datos", {
     token,

@@ -18,6 +18,7 @@ export default function DeltaIngresoModal({ token, plantas, onClose }: Props) {
   const [periodosLoading, setPeriodosLoading] = useState(false);
   const [periodoA, setPeriodoA] = useState("");
   const [periodoB, setPeriodoB] = useState("");
+  const [sinRegla8020, setSinRegla8020] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<DeltaIngresoDatosResult | null>(null);
@@ -46,7 +47,22 @@ export default function DeltaIngresoModal({ token, plantas, onClose }: Props) {
     if (!planta.trim() || !periodoA || !periodoB || periodoA === periodoB) return;
     setError(null);
     setLoading(true);
-    postDeltaIngresoDatos(token, { planta: planta.trim(), periodoA, periodoB })
+    postDeltaIngresoDatos(token, { planta: planta.trim(), periodoA, periodoB, sinRegla8020 })
+      .then((r) => {
+        setResult(r);
+        setStep("resultado");
+      })
+      .catch((e) => setError(e.message || "Error al obtener Delta Ingreso"))
+      .finally(() => setLoading(false));
+  };
+
+  const handleToggleRegla = () => {
+    if (!planta.trim() || !periodoA || !periodoB || periodoA === periodoB || !token) return;
+    const next = !sinRegla8020;
+    setSinRegla8020(next);
+    setError(null);
+    setLoading(true);
+    postDeltaIngresoDatos(token, { planta: planta.trim(), periodoA, periodoB, sinRegla8020: next })
       .then((r) => {
         setResult(r);
         setStep("resultado");
@@ -141,7 +157,17 @@ export default function DeltaIngresoModal({ token, plantas, onClose }: Props) {
 
         {step === "resultado" && result && (
           <div className="space-y-3">
-            <p className="border-b border-slate-700 pb-2 text-sm font-medium text-slate-200">Delta Ingreso – {result.planta} · {result.periodoA} → {result.periodoB}{result.margenAStr && result.margenBStr ? ` · Margen A: ${result.margenAStr} · Margen B: ${result.margenBStr}` : ""}</p>
+            <div className="flex items-center justify-between border-b border-slate-700 pb-2">
+              <p className="text-sm font-medium text-slate-200">Delta Ingreso – {result.planta} · {result.periodoA} → {result.periodoB}{result.margenAStr && result.margenBStr ? ` · Margen A: ${result.margenAStr} · Margen B: ${result.margenBStr}` : ""}</p>
+              <button
+                type="button"
+                onClick={handleToggleRegla}
+                disabled={loading}
+                className="rounded border border-slate-500 px-2.5 py-1 text-xs text-slate-100 hover:bg-slate-700 disabled:opacity-50"
+              >
+                {sinRegla8020 ? "Ver top 20% (80/20)" : "Ver todos los clientes"}
+              </button>
+            </div>
             {result.totalTonAGeneralStr != null && result.totalTonBGeneralStr != null && (
               <p className="rounded bg-slate-800/80 px-2 py-1.5 text-sm font-medium text-slate-200">Total general (ton): A = {result.totalTonAGeneralStr} · B = {result.totalTonBGeneralStr}</p>
             )}
