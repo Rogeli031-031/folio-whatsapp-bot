@@ -34,6 +34,8 @@ Módulo aislado: WhatsApp + OpenAI para reducir negativos (No compran, −Ingres
 
 4. **Q&A:** ZP y GG pueden escribir por WhatsApp cualquier pregunta; la IA responde **solo** sobre Delta Ingreso (periodos y datos del contexto). Se guarda en `delta_ingreso_ai_queries_zp` (campo `actor_role`).
 
+5. **“Preguntale al GG y me informas”:** ZP puede pedir que se le pregunte algo a un gerente y se le avise cuando responda. Ejemplos: “Preguntale al gerente de Puebla: ¿cuándo esperan recuperar al cliente X?” o “Preguntale al GG y me informas en cuanto tengas la información”. La IA extrae planta (o “todos”) y la pregunta; se envía por WhatsApp al GG; cuando el GG responde, se reenvía esa respuesta a ZP y se confirma al GG. Tabla: `delta_ingreso_ai_zp_asks_gg`.
+
 ## Archivos
 
 - `lib/delta-ingreso-ai-db.js` – Schema y persistencia.

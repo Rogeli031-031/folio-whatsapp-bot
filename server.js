@@ -5669,6 +5669,58 @@ app.post("/twilio/whatsapp", async (req, res) => {
         }
       }
 
+      /* ----- Delta Ingreso AI: GG responde a pregunta pendiente de ZP ----- */
+      const esGGAsk = actor && (actor.rol_clave === "GG" || (actor.rol_nombre && String(actor.rol_nombre).toUpperCase().includes("GG")));
+      const plantCodeGG = esGGAsk && (actor.planta_nombre || actor.planta_id);
+      if (esGGAsk && plantCodeGG && body.trim().length >= 1) {
+        try {
+          await deltaIngresoAiDb.ensureDeltaIngresoAiSchema(client);
+          const pending = await deltaIngresoAiDb.getPendingZPAskForPlantAndGG(client, plantCodeGG, fromNorm);
+          if (pending) {
+            await deltaIngresoAiDb.markZPAskGGAnswered(client, pending.id, body.trim());
+            const msgToZP = `📩 Respuesta del gerente (${plantCodeGG}): ${body.trim().substring(0, 500)}`;
+            await sendWhatsApp(pending.zp_phone, msgToZP, { event: "delta_ingreso_ai_zp_ask_answer" });
+            return safeReply("Gracias. Ya le informé al Director.");
+          }
+        } catch (e) {
+          console.warn("[Delta Ingreso AI ZP ask answer]", e.message);
+        }
+      }
+
+      /* ----- Delta Ingreso AI: ZP pide "preguntale al GG y me informas" ----- */
+      const esZPAsk = actor && ((actor.rol_clave && String(actor.rol_clave).toUpperCase()) === "ZP" || (actor.rol_nombre && /director/i.test(actor.rol_nombre) && /zp/i.test(actor.rol_nombre)));
+      if (esZPAsk && body.trim().length >= 10) {
+        try {
+          await deltaIngresoAiDb.ensureDeltaIngresoAiSchema(client);
+          const plantsHint = (await deltaIngresoAiDb.getProvinciaPlantsWithPlantaId(client)).map((r) => r.plant_code);
+          const intent = await deltaIngresoAi.parseZPAskGGIntent(body.trim(), plantsHint);
+          if (intent.isAskGG && intent.question_text) {
+            const provinciaRows = await deltaIngresoAiDb.getProvinciaPlantsWithPlantaId(client);
+            const targets = intent.plant_code === "ALL" ? provinciaRows : provinciaRows.filter((r) => String(r.plant_code).toUpperCase() === String(intent.plant_code).toUpperCase());
+            if (targets.length === 0) targets.push(...provinciaRows.filter((r) => String(r.plant_code).toLowerCase().includes(String(intent.plant_code).toLowerCase())));
+            let sent = 0;
+            for (const row of targets.length ? targets : provinciaRows) {
+              const gerentes = await getUsersByRoleAndPlanta(client, "GG", row.planta_id);
+              const msgToGG = `📩 El Director ZP pregunta: ${intent.question_text}\n\nResponde aquí y le llegará tu respuesta.`;
+              for (const g of gerentes) {
+                if (!g.telefono) continue;
+                try {
+                  await sendWhatsApp(g.telefono, msgToGG, { event: "delta_ingreso_ai_zp_ask_gg" });
+                  await deltaIngresoAiDb.insertZPAskGG(client, { zp_phone: fromNorm, plant_code: row.plant_code, question_text: intent.question_text, gg_phone: normalizePhone(g.telefono) });
+                  sent++;
+                } catch (err) {
+                  console.warn("[Delta Ingreso AI ZP ask GG]", err.message);
+                }
+              }
+            }
+            if (sent) return safeReply(`Le pregunté al gerente${targets.length === 1 ? ` de ${targets[0].plant_code}` : ""}. Te aviso cuando responda.`);
+            return safeReply("No encontré gerentes de esa planta en Provincia. Revisa el nombre (Acapulco, Morelos, Puebla, Querétaro, San Luis, Tehuacán).");
+          }
+        } catch (e) {
+          console.warn("[Delta Ingreso AI ZP ask GG parse]", e.message);
+        }
+      }
+
       /* ----- Delta Ingreso AI: Q&A (ZP y GG) – solo temas Delta Ingreso ----- */
       const rolClaveQA = (actor && actor.rol_clave) ? String(actor.rol_clave).toUpperCase() : "";
       const esZPQA = rolClaveQA === "ZP" || (actor && actor.rol_nombre && /director/i.test(actor.rol_nombre) && /zp/i.test(actor.rol_nombre));
