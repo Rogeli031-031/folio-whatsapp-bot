@@ -1893,7 +1893,12 @@ async function getDeltaDescuentoClientes(client, plantaNombre, periodoA, periodo
   }));
 }
 
-/** Margen por kilo ($/kg) del periodo para una planta desde IGF (última versión del mes). Devuelve null si no hay datos. */
+/**
+ * Margen por kilo ($/kg) del periodo para una planta desde IGF.
+ * Siempre usa la última versión del mes correspondiente (version_number DESC para ese year/month).
+ * Ej.: para enero 2026 usa la versión de igf.versions con year=2026, month=1 y el mayor version_number.
+ * Devuelve null si no hay datos. Empresa se matchea con la planta (ej. "Puebla" → "GT Puebla", "GT - Puebla").
+ */
 async function getMargenKgPorPeriodo(client, plantaNombre, year, month) {
   try {
     const ver = await client.query(
@@ -5160,7 +5165,7 @@ app.get("/api/dashboard/delta-venta-periodos", dashboardAuthMiddleware, async (r
   }
 });
 
-/** Datos Delta Venta para las 3 opciones (dejaron, mas, disminuyeron) con regla 80/20. */
+/** Datos Delta Venta para las 3 opciones (dejaron, mas, disminuyeron). 80/20 se aplica sobre la muestra de este delta (Delta Venta), no de otro. */
 app.post("/api/dashboard/delta-venta-datos", dashboardAuthMiddleware, async (req, res) => {
   const { planta, periodoA, periodoB } = req.body || {};
   const pa = (typeof periodoA === "string" && /^\d{4}-\d{2}$/.test(periodoA)) ? periodoA : null;
@@ -5245,7 +5250,7 @@ app.get("/api/dashboard/delta-descuento-periodos", dashboardAuthMiddleware, asyn
   }
 });
 
-/** Datos Delta Descuento para las 3 opciones (dejaron, mas, disminuyeron) con regla 80/20. */
+/** Datos Delta Descuento para las 3 opciones (dejaron, mas, disminuyeron). 80/20 se aplica sobre la muestra de este delta (Delta Descuento), no de Delta Venta ni otro. */
 app.post("/api/dashboard/delta-descuento-datos", dashboardAuthMiddleware, async (req, res) => {
   const { planta, periodoA, periodoB } = req.body || {};
   const pa = (typeof periodoA === "string" && /^\d{4}-\d{2}$/.test(periodoA)) ? periodoA : null;
@@ -5330,7 +5335,7 @@ app.get("/api/dashboard/delta-ingreso-periodos", dashboardAuthMiddleware, async 
   }
 });
 
-/** Datos Delta Ingreso: ingreso = venta_kg * (margen_$/kg - |descuento_$/kg|). Misma regla que Delta Venta (dejaron, mas, disminuyeron) y 80/20. */
+/** Datos Delta Ingreso: ingreso = venta_kg * (margen_$/kg - |descuento_$/kg|). Margen desde IGF con última versión del mes. 80/20 sobre la muestra de este delta (Delta Ingreso), no de otro. */
 app.post("/api/dashboard/delta-ingreso-datos", dashboardAuthMiddleware, async (req, res) => {
   const { planta, periodoA, periodoB } = req.body || {};
   const pa = (typeof periodoA === "string" && /^\d{4}-\d{2}$/.test(periodoA)) ? periodoA : null;
