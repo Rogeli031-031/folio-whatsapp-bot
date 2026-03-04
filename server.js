@@ -3047,13 +3047,17 @@ async function attachCotizacionUrlOnly(client, folioId, url, actorTelefono) {
 
 /* ==================== FOLIO_ARCHIVOS (PDF auditable) ==================== */
 
-/** Busca archivo existente por folio_id y sha256 (anti-duplicado). */
-async function findFolioArchivoByHash(client, folioId, sha256) {
+/** Busca archivo existente por folio_id y sha256 (anti-duplicado). Si tipoFilter se indica, solo considera filas de ese tipo (para que cotización y póliza puedan coexistir como dos ligas). */
+async function findFolioArchivoByHash(client, folioId, sha256, tipoFilter = null) {
   if (!sha256) return null;
-  const r = await client.query(
-    `SELECT id, status, subido_en, subido_por FROM public.folio_archivos WHERE folio_id = $1 AND sha256 = $2 LIMIT 1`,
-    [folioId, sha256]
-  );
+  let q = `SELECT id, status, subido_en, subido_por FROM public.folio_archivos WHERE folio_id = $1 AND sha256 = $2`;
+  const params = [folioId, sha256];
+  if (tipoFilter && String(tipoFilter).trim()) {
+    q += ` AND tipo = $3`;
+    params.push(String(tipoFilter).trim().toUpperCase());
+  }
+  q += ` LIMIT 1`;
+  const r = await client.query(q, params);
   return r.rows[0] || null;
 }
 
@@ -4909,8 +4913,8 @@ app.post("/api/folios/:id/poliza", dashboardAuthMiddleware, async (req, res) => 
     const publicUrl = await uploadPdfToS3(fileBuffer, s3Key);
     const fileName = (req.body.fileName && String(req.body.fileName).trim()) || "poliza.pdf";
     const hash = crypto.createHash("sha256").update(fileBuffer).digest("hex");
-    // Evitar error por reintentos: el mismo PDF (sha256) para el mismo folio ya existe
-    const existing = await findFolioArchivoByHash(client, folioId, hash);
+    // Evitar error por reintentos: solo considerar duplicado si ya existe una PÓLIZA con el mismo hash (así cotización y póliza siguen siendo dos ligas)
+    const existing = await findFolioArchivoByHash(client, folioId, hash, "POLIZA");
     if (existing && existing.id) {
       // Si ya estaba en carrito, de todas formas avanzar a PAGADO (idempotente)
       if (![ESTADOS.PAGADO, ESTADOS.CERRADO].includes(est)) {
