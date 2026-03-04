@@ -24,13 +24,15 @@ Módulo aislado: WhatsApp + OpenAI para reducir negativos (No compran, −Ingres
 - `delta_ingreso_ai_inbox` – Respuestas recibidas.
 - `delta_ingreso_ai_actions` – Planes 5W2H por cliente (OPEN / IN_PROGRESS / RISK / DONE / CANCELLED). Cierre solo cuando el gerente confirma "CERRADO: <cliente>".
 - `delta_ingreso_ai_summary_zp` – Resúmenes diarios enviados a ZP.
-- `delta_ingreso_ai_queries_zp` – (Opcional) Q&A ZP.
+- `delta_ingreso_ai_queries_zp` – Q&A ZP y GG (preguntas sobre Delta Ingreso); incluye columna `actor_role` (ZP/GG).
 
 ## Flujo
 
 1. **08:00 (o 17:00 en TEST_MODE):** Se obtiene Delta Ingreso por planta (Provincia), se arma brief con top 3 No compran + top 3 −Ingreso, se redacta mensaje con OpenAI y se envía por WhatsApp a cada GG de esa planta.
 2. **Gerente responde:** Plan 5W2H por cliente o "CERRADO: <cliente>". El webhook Twilio detecta GG y contenido tipo plan/cierre, llama a `handleIncoming`, parsea con OpenAI y actualiza `delta_ingreso_ai_actions`.
 3. **15:30 (o 17:45 en TEST_MODE):** Se arma resumen ejecutivo con OpenAI y se envía a ZP.
+
+4. **Q&A:** ZP y GG pueden escribir por WhatsApp cualquier pregunta; la IA responde **solo** sobre Delta Ingreso (periodos y datos del contexto). Se guarda en `delta_ingreso_ai_queries_zp` (campo `actor_role`).
 
 ## Archivos
 

@@ -5669,6 +5669,40 @@ app.post("/twilio/whatsapp", async (req, res) => {
         }
       }
 
+      /* ----- Delta Ingreso AI: Q&A (ZP y GG) – solo temas Delta Ingreso ----- */
+      const rolClaveQA = (actor && actor.rol_clave) ? String(actor.rol_clave).toUpperCase() : "";
+      const esZP = rolClaveQA === "ZP" || (actor && actor.rol_nombre && /director/i.test(actor.rol_nombre) && /zp/i.test(actor.rol_nombre));
+      const esGG = rolClaveQA === "GG" || (actor && actor.rol_nombre && String(actor.rol_nombre).toUpperCase().includes("GG"));
+      if (actor && (esZP || esGG) && body.trim().length >= 2) {
+        try {
+          await deltaIngresoAiDb.ensureDeltaIngresoAiSchema(client);
+          let context = null;
+          if (esZP) {
+            const plantsQA = await deltaIngresoAiDb.getProvinciaPlantsWithPlantaId(client);
+            const allBriefs = [];
+            for (const row of plantsQA) {
+              const data = await getDeltaIngresoDatosInternal(client, row.plant_code, PERIODO_AI_A, PERIODO_AI_B, false);
+              if (data) allBriefs.push(deltaIngresoAi.buildBrief(row.plant_code, data));
+            }
+            context = { role: "ZP", periodos: { periodoA: PERIODO_AI_A, periodoB: PERIODO_AI_B }, briefs: allBriefs };
+          } else {
+            const plantCodeQA = actor.planta_nombre || actor.planta_id;
+            if (plantCodeQA) {
+              const data = await getDeltaIngresoDatosInternal(client, plantCodeQA, PERIODO_AI_A, PERIODO_AI_B, false);
+              context = { role: "GG", periodos: { periodoA: PERIODO_AI_A, periodoB: PERIODO_AI_B }, brief: data ? deltaIngresoAi.buildBrief(plantCodeQA, data) : null };
+            }
+          }
+          if (context) {
+            const actorRoleQA = esZP ? "ZP" : "GG";
+            const answer = await deltaIngresoAi.answerDeltaIngresoQuestion(body.trim(), context, actorRoleQA);
+            await deltaIngresoAiDb.insertQuery(client, { from_phone: fromNorm, actor_role: actorRoleQA, question: body.trim(), answer: answer || "", sources_json: null });
+            return safeReply(answer || "No pude generar una respuesta. Solo respondo sobre Delta Ingreso (periodos configurados).");
+          }
+        } catch (e) {
+          console.warn("[Delta Ingreso AI Q&A]", e.message);
+        }
+      }
+
       if (sess.adPoliza && sess.adPoliza.paso === "mes") {
         const bodyTrim = body.trim();
         let mesCargo = null;
