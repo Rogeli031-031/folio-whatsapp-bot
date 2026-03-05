@@ -2094,6 +2094,8 @@ async function ensureSchema() {
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS aprobado_en TIMESTAMPTZ;`);
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS planta_id INT;`).catch(() => {});
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS nivel_aprobado INT DEFAULT 1;`);
+    await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS banco VARCHAR(255);`);
+    await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS cuenta_bancaria VARCHAR(255);`);
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS public.folio_historial (
@@ -2902,14 +2904,16 @@ async function insertFolio(client, dd) {
   const ins = await client.query(
     `INSERT INTO public.folios (
       folio_codigo, numero_folio, planta_id, proyecto_id, beneficiario, concepto, importe,
-      categoria, subcategoria, estacion, unidad, prioridad, estatus, creado_en, nivel_aprobado, creado_por, creado_por_rol_clave
-    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW(),$14,$15,$16)
+      categoria, subcategoria, estacion, unidad, prioridad, estatus, creado_en, nivel_aprobado, creado_por, creado_por_rol_clave,
+      banco, cuenta_bancaria
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW(),$14,$15,$16,$17,$18)
     RETURNING id, numero_folio, folio_codigo, planta_id`,
     [
       folio_codigo, numero_folio, plantaId, dd.proyecto_id || null, dd.beneficiario || null, dd.concepto || null,
       dd.importe || null, dd.categoria_nombre || null, dd.subcategoria_nombre || null,
       dd.estacion || null, dd.unidad || null, prioridad, estatusInicial, esZP ? 3 : 1, dd.actor_telefono || null,
       rolClave || null,
+      dd.banco || null, dd.cuenta_bancaria || null,
     ]
   );
   const row = ins.rows[0];
@@ -9016,6 +9020,9 @@ app.post("/twilio/whatsapp", async (req, res) => {
           if (!sess.dd.planta_id && !sess.dd.planta_nombre) {
             return safeReply("Falta indicar la planta. Cancela y vuelve a crear el folio indicando la planta.");
           }
+          if (!sess.dd.banco || !sess.dd.cuenta_bancaria) {
+            return safeReply("Faltan Banco o Cuenta bancaria. Cancela y vuelve a crear el folio e indica ambos datos.");
+          }
           const folio = await insertFolio(clientCrear, sess.dd);
           sess.lastFolioNumero = folio.numero_folio;
           sess.lastFolioId = folio.id;
@@ -9427,7 +9434,30 @@ app.post("/twilio/whatsapp", async (req, res) => {
       const picked = pickByNumber(body, opciones);
       if (!picked) return safeReply("Opción inválida.");
       sess.dd.prioridad = picked;
+      sess.estado = "ESPERANDO_BANCO";
+      return safeReply("A) Indica BANCO (nombre del banco).");
+    }
 
+    if (sess.estado === "ESPERANDO_BANCO") {
+      if (/^cancelar$/i.test(body.trim())) {
+        resetSession(sess);
+        return safeReply("Cancelado. Escribe: Crear folio");
+      }
+      const banco = body.trim();
+      if (banco.length < 2) return safeReply("Indica el nombre del banco (mín. 2 caracteres).");
+      sess.dd.banco = banco;
+      sess.estado = "ESPERANDO_CUENTA_BANCARIA";
+      return safeReply("B) Indica CUENTA BANCARIA (número de cuenta o CLABE).");
+    }
+
+    if (sess.estado === "ESPERANDO_CUENTA_BANCARIA") {
+      if (/^cancelar$/i.test(body.trim())) {
+        resetSession(sess);
+        return safeReply("Cancelado. Escribe: Crear folio");
+      }
+      const cuenta = body.trim();
+      if (cuenta.length < 4) return safeReply("Indica la cuenta bancaria (mín. 4 caracteres, ej. número de cuenta o CLABE).");
+      sess.dd.cuenta_bancaria = cuenta;
       sess.estado = "CONFIRMAR";
       const resumen = [
         "Confirma el folio:",
@@ -9440,6 +9470,8 @@ app.post("/twilio/whatsapp", async (req, res) => {
         `Estación: ${sess.dd.estacion || "(N/A)"}`,
         `Unidad: ${sess.dd.unidad || "(N/A)"}`,
         `Prioridad: ${sess.dd.prioridad}`,
+        `Banco: ${sess.dd.banco}`,
+        `Cuenta bancaria: ${sess.dd.cuenta_bancaria}`,
         "",
         "Responde SI para guardar, NO para cancelar.",
       ].join("\n");
