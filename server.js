@@ -5695,13 +5695,14 @@ app.post("/twilio/whatsapp", async (req, res) => {
 
       /* Prefijo "di " => solo comandos Delta Ingreso; no toca folios ni flujo existente */
       const text = (body || "").trim();
-      /* Modo natural: texto que parece Delta Ingreso (sin prefijo) se traduce a "di ..." */
-      if (!text.toLowerCase().startsWith("di ") && deltaIngresoCommands.deltaIngresoLikelyText(text)) {
-        const translated = deltaIngresoCommands.translateNaturalToDi(text);
-        if (translated && translated.toLowerCase().startsWith("di ")) {
+      /* Modo conversacional: pregunta en lenguaje natural → traducir a "di ..." y ejecutar */
+      if (!text.toLowerCase().startsWith("di ")) {
+        const conv = deltaIngresoCommands.deltaIngresoConversationalRouter(text);
+        if (conv && conv.translatedCommand) {
+          console.log("DI conversational ->", conv.translatedCommand);
           try {
             await deltaIngresoCommands.handleDeltaIngresoCommand({
-              text: translated.slice(3).trim(),
+              text: conv.translatedCommand.slice(3).trim(),
               actor,
               client,
               fromNorm,
@@ -5715,7 +5716,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
             });
             return;
           } catch (e) {
-            console.warn("[Delta Ingreso natural]", e.message);
+            console.warn("[Delta Ingreso conversational]", e.message);
           }
         }
       }
