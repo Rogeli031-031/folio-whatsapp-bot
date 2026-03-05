@@ -5403,6 +5403,8 @@ async function getDeltaIngresoDatosInternal(client, planta, periodoA, periodoB, 
   const mas = build((r) => r.deltaIngreso > 0 && (r.kgA || 0) > 0, (a, b) => b.deltaIngreso - a.deltaIngreso, (sum, r) => sum + (r.deltaIngreso != null ? Number(r.deltaIngreso) : 0), true);
   const disminuyeron = build((r) => r.ingresoA > 0 && r.ingresoB > 0 && r.deltaIngreso < 0, (a, b) => a.deltaIngreso - b.deltaIngreso, (sum, r) => sum + (r.deltaIngreso != null ? -Number(r.deltaIngreso) : 0), false);
   const clientesNuevos = build((r) => (r.kgA || 0) <= 0 && (r.kgB || 0) > 0, (a, b) => (b.kgB || 0) - (a.kgB || 0), (sum, r) => sum + (r.ingresoB != null ? Number(r.ingresoB) : 0), true);
+  const crecen = build((r) => (r.kgA || 0) < (r.kgB || 0), (a, b) => ((b.kgB || 0) - (b.kgA || 0)) - ((a.kgB || 0) - (a.kgA || 0)), (sum, r) => sum + (r.deltaIngreso != null ? Number(r.deltaIngreso) : 0), true);
+  const estables = build((r) => (r.kgA || 0) > 0 && Math.abs((r.kgB || 0) - (r.kgA || 0)) / (r.kgA || 1) < 0.05, (a, b) => Math.abs((b.kgB || 0) - (b.kgA || 0)) - Math.abs((a.kgB || 0) - (a.kgA || 0)), (sum, r) => sum + (r.deltaIngreso != null ? Number(r.deltaIngreso) : 0), false);
   const esDejaron = (r) => r.ingresoA > 0 && r.ingresoB <= 0;
   const esMas = (r) => r.deltaIngreso > 0 && (r.kgA || 0) > 0;
   const esDisminuyeron = (r) => r.ingresoA > 0 && r.ingresoB > 0 && r.deltaIngreso < 0;
@@ -5422,6 +5424,8 @@ async function getDeltaIngresoDatosInternal(client, planta, periodoA, periodoB, 
     mas,
     disminuyeron,
     clientesNuevos,
+    crecen,
+    estables,
     otrosClientes,
   };
 }
@@ -5832,8 +5836,34 @@ app.post("/twilio/whatsapp", async (req, res) => {
             }
           }
 
-          /* D) Consulta de datos (heurística) => responder con BD, no escalar */
+          /* D) Consulta de datos => intentar comando por router conversacional; si no, QA con contexto */
           if (deltaIngresoAi.isDataQuery(textTrim)) {
+            const conv = deltaIngresoCommands.deltaIngresoConversationalRouter(textTrim);
+            if (conv && conv.translatedCommand) {
+              console.log("DI conversational (data fallback) ->", conv.translatedCommand);
+              try {
+                const parsed = deltaIngresoCommands.parseDeltaIngresoCommand(conv.translatedCommand.slice(3).trim(), plantsHint);
+                if (!parsed) throw new Error("parse failed");
+                const cmdResponse = await deltaIngresoCommands.executeDeltaIngresoCommand(parsed, {
+                  client,
+                  fromPhone: fromNorm,
+                  periodos: { periodoA: PERIODO_AI_A, periodoB: PERIODO_AI_B },
+                  getDeltaIngresoDatosInternal,
+                  plantsWithId,
+                  aiDb: deltaIngresoAiDb,
+                  getUsersByRole,
+                  sendWhatsApp,
+                  actorNombre: actor?.nombre || fromNorm,
+                });
+                if (cmdResponse) {
+                  const replyText = typeof cmdResponse === "object" && cmdResponse.reply ? cmdResponse.reply : cmdResponse;
+                  await deltaIngresoAiDb.insertQuery(client, { from_phone: fromNorm, actor_role: "ZP", question: textTrim, answer: replyText, sources_json: { intent: "data_query_cmd" } });
+                  return safeReply(replyText);
+                }
+              } catch (e) {
+                console.warn("[Delta Ingreso data fallback]", e.message);
+              }
+            }
             const allBriefs = [];
             for (const row of plantsWithId) {
               const data = await getDeltaIngresoDatosInternal(client, row.plant_code, PERIODO_AI_A, PERIODO_AI_B, false);
