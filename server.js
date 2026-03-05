@@ -37,7 +37,7 @@ const deltaIngresoAiDb = require("./lib/delta-ingreso-ai-db");
 
 const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
-app.use(bodyParser.json());
+app.use(bodyParser.json({ limit: "300kb" }));
 
 /* ==================== CORS (Dashboard) ==================== */
 const dashboardOrigin = process.env.DASHBOARD_URL || process.env.CORS_ORIGIN || "https://folio-dashboard.onrender.com";
