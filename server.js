@@ -5904,8 +5904,8 @@ app.post("/twilio/whatsapp", async (req, res) => {
                       console.warn("[Delta Ingreso AI ZP ask GG auto]", err.message);
                     }
                   }
-                
-              
+                }
+              }
               await deltaIngresoAiDb.insertQuery(client, { from_phone: fromNorm, actor_role: "ZP", question: textTrim, answer: replyText, sources_json: { intent: cmd.type, planta: cmd.planta || null } });
               await deltaIngresoAiDb.insertOutbox(client, { plant_code: "ZP", to_phone: fromNorm, kind: "ZP_REPLY", text: replyText });
               return safeReply(replyText);
@@ -6024,7 +6024,6 @@ app.post("/twilio/whatsapp", async (req, res) => {
         catch (e) {
           console.warn("[Delta Ingreso AI ZP router]", e.message);
           return safeReply("Error interno en Delta Ingreso.");
-        }
         }
       }
 
