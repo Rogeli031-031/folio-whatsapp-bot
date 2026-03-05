@@ -38,7 +38,7 @@ const deltaIngresoCommands = require("./lib/delta-ingreso-commands");
 
 const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
-app.use(bodyParser.json({ limit: "300kb" }));
+app.use(bodyParser.json({ limit: "8mb" }));
 
 /* ==================== CORS (Dashboard) ==================== */
 const dashboardOrigin = process.env.DASHBOARD_URL || process.env.CORS_ORIGIN || "https://folio-dashboard.onrender.com";
