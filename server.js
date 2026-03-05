@@ -34,6 +34,7 @@ const forecastMensual = require("./lib/forecast-mensual");
 const dashboardArrForecast = require("./lib/dashboard-arr-forecast");
 const deltaIngresoAi = require("./lib/delta-ingreso-ai");
 const deltaIngresoAiDb = require("./lib/delta-ingreso-ai-db");
+const deltaIngresoCommands = require("./lib/delta-ingreso-commands");
 
 const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
@@ -5534,13 +5535,45 @@ async function runDeltaIngresoAiSendSummary() {
     await deltaIngresoAiDb.ensureDeltaIngresoAiSchema(client);
     const plants = await deltaIngresoAiDb.getProvinciaPlantsWithPlantaId(client);
     const allBriefs = [];
+    const plantasNegativos = [];
+    const todosClientesCriticos = [];
     for (const row of plants) {
       const data = await getDeltaIngresoDatosInternal(client, row.plant_code, PERIODO_AI_A, PERIODO_AI_B, false);
-      if (data) allBriefs.push(deltaIngresoAi.buildBrief(row.plant_code, data));
+      if (data) {
+        allBriefs.push(deltaIngresoAi.buildBrief(row.plant_code, data));
+        const dejaronVal = data.dejaron?.totalDeltaIngreso != null ? data.dejaron.totalDeltaIngreso : 0;
+        const disminVal = data.disminuyeron?.totalDeltaIngreso != null ? data.disminuyeron.totalDeltaIngreso : 0;
+        const totalNeg = dejaronVal + Math.abs(Math.min(0, disminVal));
+        if (totalNeg > 0) plantasNegativos.push({ planta: row.plant_code, totalNeg });
+        const combined = [
+          ...(data.dejaron?.clientes || []).map((c) => ({ cliente: c.cliente, delta: c.ingresoA })),
+          ...(data.disminuyeron?.clientes || []).map((c) => ({ cliente: c.cliente, delta: c.deltaIngreso })),
+        ];
+        combined.sort((a, b) => (a.delta != null && b.delta != null ? a.delta - b.delta : 0));
+        todosClientesCriticos.push(...combined.slice(0, 2).map((x) => x.cliente));
+      }
     }
+    plantasNegativos.sort((a, b) => b.totalNeg - a.totalNeg);
+    const totalProvincia = plantasNegativos.reduce((s, x) => s + x.totalNeg, 0);
+    const top3Plantas = plantasNegativos.slice(0, 3).map((x, i) => `${i + 1} ${x.planta}`).join(", ");
+    const clientesUnicos = [...new Set(todosClientesCriticos)].slice(0, 3);
     const actions = await deltaIngresoAiDb.getActionsForSummary(client, PERIODO_AI_A, PERIODO_AI_B);
+    const abiertas = (actions || []).filter((a) => a.action_status !== "DONE").length;
+    const cerradasHoy = await client.query(
+      `SELECT COUNT(*) AS n FROM public.delta_ingreso_ai_actions WHERE periodo_a = $1 AND periodo_b = $2 AND closed_confirmed_at IS NOT NULL AND (closed_confirmed_at AT TIME ZONE 'America/Mexico_City')::date = (CURRENT_TIMESTAMP AT TIME ZONE 'America/Mexico_City')::date`,
+      [PERIODO_AI_A, PERIODO_AI_B]
+    ).then((r) => (r.rows && r.rows[0] ? parseInt(r.rows[0].n, 10) : 0)).catch(() => 0);
+    const fmtMxn = (n) => (n != null && !isNaN(n) ? n.toLocaleString("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 0, maximumFractionDigits: 0 }) : "$0");
+    const summaryLines = [
+      "Resumen Delta Ingreso",
+      `Total negativos provincia: ${fmtMxn(totalProvincia)}`,
+      `Plantas más afectadas: ${top3Plantas || "-"}`,
+      `Clientes críticos: ${clientesUnicos.join(", ") || "-"}`,
+      `Acciones abiertas: ${abiertas}`,
+      `Acciones cerradas hoy: ${cerradasHoy}`,
+    ];
+    const summaryText = summaryLines.join("\n");
     const zpList = await getUsersByRole(client, "ZP");
-    const summaryText = await deltaIngresoAi.composeZPSummary(allBriefs, actions, { periodoA: PERIODO_AI_A, periodoB: PERIODO_AI_B }, []);
     const today = new Date().toISOString().slice(0, 10);
     let sent = 0;
     for (const z of zpList) {
@@ -5552,7 +5585,7 @@ async function runDeltaIngresoAiSendSummary() {
         console.warn("[Delta Ingreso AI] send summary to ZP", e.message);
       }
     }
-    await deltaIngresoAiDb.saveSummaryZp(client, today, PERIODO_AI_A, PERIODO_AI_B, summaryText, { actions_count: actions.length }, new Date());
+    await deltaIngresoAiDb.saveSummaryZp(client, today, PERIODO_AI_A, PERIODO_AI_B, summaryText, { actions_count: actions.length, abiertas, cerradas_hoy: cerradasHoy }, new Date());
     return { sent, summary_length: summaryText.length };
   } finally {
     client.release();
@@ -5663,7 +5696,20 @@ app.post("/twilio/whatsapp", async (req, res) => {
       if (actor && (actor.rol_clave === "GG" || (actor.rol_nombre && String(actor.rol_nombre).toUpperCase().includes("GG"))) && body.length > 15 && (/\bCERRADO\s*:/i.test(body) || /(CLIENTE|WHAT|WHY|WHEN|WHO|HOW)\s*:|\bWHAT\b|\bWHY\b|\bWHEN\b|\bWHO\b|\bHOW\b/i.test(body))) {
         try {
           const reply = await deltaIngresoAi.handleIncoming(client, fromNorm, body, actor, getDeltaIngresoDatosInternal, getUsersByRoleAndPlanta);
-          if (reply) return safeReply(reply);
+          if (reply) {
+            if (reply.includes("Cierre registrado")) {
+              try {
+                const zpUsers = await getUsersByRole(client, "ZP");
+                const notif = `✅ Delta Ingreso: ${reply}`;
+                for (const u of zpUsers) {
+                  if (u && u.telefono) await sendWhatsApp(u.telefono, notif, { event: "delta_ingreso_ai_cierre_gg" });
+                }
+              } catch (e) {
+                console.warn("[Delta Ingreso AI notif ZP cierre]", e.message);
+              }
+            }
+            return safeReply(reply);
+          }
         } catch (e) {
           console.warn("[Delta Ingreso AI handleIncoming]", e.message);
         }
@@ -5688,37 +5734,109 @@ app.post("/twilio/whatsapp", async (req, res) => {
         }
       }
 
-      /* ----- Delta Ingreso AI: ZP pide "preguntale al GG y me informas" ----- */
+      /* ----- Delta Ingreso AI: Router ZP (orden A→F) ----- */
       const esZPAsk = actor && ((actor.rol_clave && String(actor.rol_clave).toUpperCase()) === "ZP" || (actor.rol_nombre && /director/i.test(actor.rol_nombre) && /zp/i.test(actor.rol_nombre)));
       if (esZPAsk && body.trim().length >= 10) {
         try {
           await deltaIngresoAiDb.ensureDeltaIngresoAiSchema(client);
-          const plantsHint = (await deltaIngresoAiDb.getProvinciaPlantsWithPlantaId(client)).map((r) => r.plant_code);
-          const intent = await deltaIngresoAi.parseZPAskGGIntent(body.trim(), plantsHint);
-          if (intent.isAskGG && intent.question_text) {
-            const provinciaRows = await deltaIngresoAiDb.getProvinciaPlantsWithPlantaId(client);
-            const targets = intent.plant_code === "ALL" ? provinciaRows : provinciaRows.filter((r) => String(r.plant_code).toUpperCase() === String(intent.plant_code).toUpperCase());
-            if (targets.length === 0) targets.push(...provinciaRows.filter((r) => String(r.plant_code).toLowerCase().includes(String(intent.plant_code).toLowerCase())));
-            let sent = 0;
-            for (const row of targets.length ? targets : provinciaRows) {
-              const gerentes = await getUsersByRoleAndPlanta(client, "GG", row.planta_id);
-              const msgToGG = `📩 El Director ZP pregunta: ${intent.question_text}\n\nResponde aquí y le llegará tu respuesta.`;
-              for (const g of gerentes) {
-                if (!g.telefono) continue;
-                try {
-                  await sendWhatsApp(g.telefono, msgToGG, { event: "delta_ingreso_ai_zp_ask_gg" });
-                  await deltaIngresoAiDb.insertZPAskGG(client, { zp_phone: fromNorm, plant_code: row.plant_code, question_text: intent.question_text, gg_phone: normalizePhone(g.telefono) });
-                  sent++;
-                } catch (err) {
-                  console.warn("[Delta Ingreso AI ZP ask GG]", err.message);
+          const textTrim = body.trim();
+          const plantsWithId = await deltaIngresoAiDb.getProvinciaPlantsWithPlantaId(client);
+          const plantsHint = plantsWithId.map((r) => r.plant_code);
+
+          /* A) Registrar inbound (inbox) */
+          await deltaIngresoAiDb.insertInbox(client, { from_phone: fromNorm, plant_code: null, text: textTrim });
+
+          /* C) Comando reconocido => ejecutar, registrar, responder */
+          const cmd = deltaIngresoCommands.parseDeltaIngresoCommand(textTrim, plantsHint);
+          if (cmd) {
+            const cmdResponse = await deltaIngresoCommands.executeDeltaIngresoCommand(cmd, {
+              client,
+              fromPhone: fromNorm,
+              periodos: { periodoA: PERIODO_AI_A, periodoB: PERIODO_AI_B },
+              getDeltaIngresoDatosInternal,
+              plantsWithId,
+              aiDb: deltaIngresoAiDb,
+            });
+            if (cmdResponse) {
+              const isAskGGTicket = typeof cmdResponse === "object" && cmdResponse.askGG;
+              const replyText = isAskGGTicket ? cmdResponse.reply : cmdResponse;
+              if (isAskGGTicket && cmdResponse.askGG.plant_code && cmdResponse.askGG.question_text) {
+                const provinciaRows = await deltaIngresoAiDb.getProvinciaPlantsWithPlantaId(client);
+                const target = provinciaRows.find((r) => String(r.plant_code).toLowerCase() === String(cmdResponse.askGG.plant_code).toLowerCase());
+                if (target) {
+                  const gerentes = await getUsersByRoleAndPlanta(client, "GG", target.planta_id);
+                  const msgToGG = `📩 El Director ZP pregunta: ${cmdResponse.askGG.question_text}\n\nResponde aquí y le llegará tu respuesta.`;
+                  for (const g of gerentes) {
+                    if (!g.telefono) continue;
+                    try {
+                      await sendWhatsApp(g.telefono, msgToGG, { event: "delta_ingreso_ai_zp_ask_gg" });
+                      await deltaIngresoAiDb.insertZPAskGG(client, { zp_phone: fromNorm, plant_code: target.plant_code, question_text: cmdResponse.askGG.question_text, gg_phone: normalizePhone(g.telefono) });
+                    } catch (err) {
+                      console.warn("[Delta Ingreso AI ZP ask GG auto]", err.message);
+                    }
+                  }
                 }
               }
+              await deltaIngresoAiDb.insertQuery(client, { from_phone: fromNorm, actor_role: "ZP", question: textTrim, answer: replyText, sources_json: { intent: cmd.type, planta: cmd.planta || null } });
+              await deltaIngresoAiDb.insertOutbox(client, { plant_code: "ZP", to_phone: fromNorm, kind: "ZP_REPLY", text: replyText });
+              return safeReply(replyText);
             }
-            if (sent) return safeReply(`Le pregunté al gerente${targets.length === 1 ? ` de ${targets[0].plant_code}` : ""}. Te aviso cuando responda.`);
-            return safeReply("No encontré gerentes de esa planta en Provincia. Revisa el nombre (Acapulco, Morelos, Puebla, Querétaro, San Luis, Tehuacán).");
           }
+
+          /* D) Consulta de datos (heurística) => responder con BD, no escalar */
+          if (deltaIngresoAi.isDataQuery(textTrim)) {
+            const allBriefs = [];
+            for (const row of plantsWithId) {
+              const data = await getDeltaIngresoDatosInternal(client, row.plant_code, PERIODO_AI_A, PERIODO_AI_B, false);
+              if (data) allBriefs.push(deltaIngresoAi.buildBrief(row.plant_code, data));
+            }
+            const context = { role: "ZP", periodos: { periodoA: PERIODO_AI_A, periodoB: PERIODO_AI_B }, briefs: allBriefs };
+            const answer = await deltaIngresoAi.answerDeltaIngresoQuestion(textTrim, context, "ZP");
+            const replyText = answer || "No pude generar una respuesta. Solo respondo sobre Delta Ingreso (periodos configurados).";
+            await deltaIngresoAiDb.insertQuery(client, { from_phone: fromNorm, actor_role: "ZP", question: textTrim, answer: replyText, sources_json: { intent: "data_query" } });
+            return safeReply(replyText);
+          }
+
+          /* E) Solo si es explícito "preguntar al GG" => parseZPAskGGIntent y ticket */
+          if (deltaIngresoAi.isExplicitAskGG(textTrim)) {
+            const intent = await deltaIngresoAi.parseZPAskGGIntent(textTrim, plantsHint);
+            if (intent.isAskGG && intent.question_text) {
+              const provinciaRows = await deltaIngresoAiDb.getProvinciaPlantsWithPlantaId(client);
+              const targets = intent.plant_code === "ALL" ? provinciaRows : provinciaRows.filter((r) => String(r.plant_code).toUpperCase() === String(intent.plant_code).toUpperCase());
+              if (targets.length === 0) targets.push(...provinciaRows.filter((r) => String(r.plant_code).toLowerCase().includes(String(intent.plant_code).toLowerCase())));
+              let sent = 0;
+              for (const row of targets.length ? targets : provinciaRows) {
+                const gerentes = await getUsersByRoleAndPlanta(client, "GG", row.planta_id);
+                const msgToGG = `📩 El Director ZP pregunta: ${intent.question_text}\n\nResponde aquí y le llegará tu respuesta.`;
+                for (const g of gerentes) {
+                  if (!g.telefono) continue;
+                  try {
+                    await sendWhatsApp(g.telefono, msgToGG, { event: "delta_ingreso_ai_zp_ask_gg" });
+                    await deltaIngresoAiDb.insertZPAskGG(client, { zp_phone: fromNorm, plant_code: row.plant_code, question_text: intent.question_text, gg_phone: normalizePhone(g.telefono) });
+                    sent++;
+                  } catch (err) {
+                    console.warn("[Delta Ingreso AI ZP ask GG]", err.message);
+                  }
+                }
+              }
+              const ackMsg = sent ? `Listo, pregunté al gerente${targets.length === 1 ? ` de ${targets[0].plant_code}` : ""}. Te aviso cuando responda.` : "No encontré gerentes de esa planta en Provincia. Revisa el nombre (Acapulco, Morelos, Puebla, Querétaro, San Luis, Tehuacán).";
+              await deltaIngresoAiDb.insertOutbox(client, { plant_code: "ZP", to_phone: fromNorm, kind: "ZP_ASK_GG_ACK", text: ackMsg });
+              return safeReply(ackMsg);
+            }
+          }
+
+          /* F) Preguntas abiertas: si !cmd && !isDataQuery && !isExplicitAskGG => answerDeltaIngresoQuestion (ej. "qué pasó con gasisa", "qué clientes dejaron de comprar", "qué planta está peor") */
+          const allBriefs = [];
+          for (const row of plantsWithId) {
+            const data = await getDeltaIngresoDatosInternal(client, row.plant_code, PERIODO_AI_A, PERIODO_AI_B, false);
+            if (data) allBriefs.push(deltaIngresoAi.buildBrief(row.plant_code, data));
+          }
+          const context = { role: "ZP", periodos: { periodoA: PERIODO_AI_A, periodoB: PERIODO_AI_B }, briefs: allBriefs };
+          const answer = await deltaIngresoAi.answerDeltaIngresoQuestion(textTrim, context, "ZP");
+          await deltaIngresoAiDb.insertQuery(client, { from_phone: fromNorm, actor_role: "ZP", question: textTrim, answer: answer || "", sources_json: { intent: "open_question" } });
+          return safeReply(answer || "No pude generar una respuesta. Solo respondo sobre Delta Ingreso (periodos configurados).");
         } catch (e) {
-          console.warn("[Delta Ingreso AI ZP ask GG parse]", e.message);
+          console.warn("[Delta Ingreso AI ZP router]", e.message);
         }
       }
 
