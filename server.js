@@ -6022,9 +6022,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
           
           }
           
-        } catch (e) {
-          console.warn("[Delta Ingreso AI ZP router]", e.message);
-        }
+        } 
       }
 
       /* ----- Delta Ingreso AI: Q&A (ZP y GG) – solo temas Delta Ingreso ----- */
