@@ -5995,7 +5995,10 @@ app.post("/twilio/whatsapp", async (req, res) => {
       const rolClaveQA = (actor && actor.rol_clave) ? String(actor.rol_clave).toUpperCase() : "";
       const esZPQA = rolClaveQA === "ZP" || (actor && actor.rol_nombre && /director/i.test(actor.rol_nombre) && /zp/i.test(actor.rol_nombre));
       const esGGQA = rolClaveQA === "GG" || (actor && actor.rol_nombre && String(actor.rol_nombre).toUpperCase().includes("GG"));
-      if (actor && (esZPQA || esGGQA) && body.trim().toLowerCase().startsWith("di ")) {
+      const textTrim = String(body || "").trim();
+      const lowerText = textTrim.toLowerCase();
+
+      if (AI_ENABLED && actor && (esZPQA || esGGQA) && lowerText.startsWith("di ")) {
         try {
           await deltaIngresoAiDb.ensureDeltaIngresoAiSchema(client);
           let context = null;
