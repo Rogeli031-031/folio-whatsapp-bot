@@ -5715,6 +5715,13 @@ app.get("/api/igf/como-cambio-excel", async (req, res) => {
   }
 });
 
+
+const AI_ENABLED = String(process.env.AI_ENABLED || "").toLowerCase() === "true"
+  || String(process.env.AI_ENABLED || "") === "1";
+
+
+
+
 /* ==================== WEBHOOK WHATSAPP ==================== */
 
 app.post("/twilio/whatsapp", async (req, res) => {
@@ -5988,7 +5995,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
       const rolClaveQA = (actor && actor.rol_clave) ? String(actor.rol_clave).toUpperCase() : "";
       const esZPQA = rolClaveQA === "ZP" || (actor && actor.rol_nombre && /director/i.test(actor.rol_nombre) && /zp/i.test(actor.rol_nombre));
       const esGGQA = rolClaveQA === "GG" || (actor && actor.rol_nombre && String(actor.rol_nombre).toUpperCase().includes("GG"));
-      if (actor && (esZPQA || esGGQA) && body.trim().length >= 2) {
+      if (actor && (esZPQA || esGGQA) && body.trim().toLowerCase().startsWith("di ")) {
         try {
           await deltaIngresoAiDb.ensureDeltaIngresoAiSchema(client);
           let context = null;
