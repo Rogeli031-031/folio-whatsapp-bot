@@ -3993,70 +3993,136 @@ function sha256Hex(buffer) {
 
 /* ==================== COMANDOS: TEXTO AYUDA / VERSION ==================== */
 
-function buildHelpMessage(actor) {
+/** Menú principal de módulos (ayuda / menu / help). */
+function buildHelpMain() {
+  return [
+    "Sistema Corporativo",
+    "",
+    "Módulos disponibles:",
+    "",
+    "1️⃣ Folios",
+    "2️⃣ Proyectos",
+    "3️⃣ Delta Ingreso (Análisis Comercial)",
+    "4️⃣ IGF (Análisis Financiero Planta)",
+    "",
+    "Escribe:",
+    "ayuda folios",
+    "ayuda proyectos",
+    "ayuda delta",
+    "ayuda igf",
+  ].join("\n");
+}
+
+/** Ayuda solo Folios. */
+function buildHelpFolios(actor) {
   const clave = (actor && actor.rol_clave) ? String(actor.rol_clave).toUpperCase() : "";
-  const lines = ["Comandos:"];
-  lines.push("• crear folio [concepto] [urgente]");
-  lines.push(`• estatus 001 002 o F-YYYYMM-XXX (varios en un mensaje)${FLAGS.ESTATUS ? "" : " (desactivado)"}`);
-  lines.push(`• historial F-YYYYMM-XXX${FLAGS.HISTORIAL ? "" : " (desactivado)"}`);
-  lines.push("• folios de planta");
-  lines.push("• folios urgentes de planta");
-  lines.push("• folios de pipa");
-  lines.push("• folios por estación");
-  lines.push("• mis pendientes / pendientes [página]");
-  lines.push("• dashboard / dashboard resumen (link al tablero + link Forecast Ventas/IGF)");
-  if (clave === "GG") lines.push("• carrito / carrito agregar F-XXX / carrito quitar F-XXX");
-  lines.push("• comentario F-YYYYMM-XXX: <texto>");
-  if (FLAGS.ATTACHMENTS) {
-    lines.push("• adjuntar F-YYYYMM-XXX (luego envía el PDF)");
-    lines.push("• archivos 045 / F-YYYYMM-XXX (lista archivos del folio)");
-    lines.push("• ver cotizacion 045 (última aprobada)");
-    lines.push("• ver archivo <id> (URL firmada 10 min)");
-    lines.push("• reemplazar cotizacion 045 (reemplazo controlado)");
-  }
-  lines.push("• mi presupuesto (presupuesto por planta y periodo, ej. 2026-03)");
-  lines.push("• comparar presupuesto (cambios entre dos periodos por planta)");
-  if (clave === "GG") lines.push("• seleccionar folios 001 002 010 (ligar al presupuesto semanal)");
-  if (clave === "CDMX") {
-    lines.push("• asignar presupuesto");
-    lines.push("• enviar a cheques");
-  }
+  const lines = ["Comandos Folios", ""];
+  lines.push("crear folio [concepto] [urgente]");
+  lines.push("estatus 001 002 o F-YYYYMM-XXX");
+  lines.push("historial F-YYYYMM-XXX");
+  lines.push("folios de planta");
+  lines.push("folios urgentes de planta");
+  lines.push("folios de pipa");
+  lines.push("folios por estación");
+  lines.push("mis pendientes");
+  lines.push("dashboard");
+  lines.push("comentario F-YYYYMM-XXX: texto");
+  lines.push("adjuntar F-YYYYMM-XXX");
+  lines.push("archivos 045");
+  lines.push("ver cotizacion 045");
+  lines.push("ver archivo <id>");
+  lines.push("reemplazar cotizacion 045");
   if (FLAGS.APPROVALS) {
-    if (clave === "GG") lines.push("• aprobar F-YYYYMM-XXX (aprobación planta)");
-    if (clave === "ZP") {
-      lines.push("• aprobar 001 002 o F-YYYYMM-XXX (ZP; varios en un mensaje)");
-      lines.push("• aprobar_override F-YYYYMM-XXX motivo: <texto>");
-      lines.push("• autorizar cancelacion F-YYYYMM-XXX");
-      lines.push("• rechazar cancelacion F-YYYYMM-XXX motivo: <texto>");
-    }
-    if (clave === "CDMX") {
-      lines.push("• seleccionar F-YYYYMM-XXX (selección para semana)");
-      lines.push("• aprobar cotizacion <id>");
-      lines.push("• rechazar cotizacion <id> motivo: <texto>");
-    }
-    if (["GA", "GG", "CDMX"].includes(clave)) lines.push("• cancelar F-YYYYMM-XXX motivo: <texto>");
+    if (clave === "GG") lines.push("aprobar F-YYYYMM-XXX");
+    if (clave === "ZP") lines.push("aprobar 001 002 o F-YYYYMM-XXX");
+    if (["GA", "GG", "CDMX"].includes(clave)) lines.push("cancelar F-YYYYMM-XXX motivo: <texto>");
   }
-  lines.push("• crear proyecto");
-  lines.push("• proyectos de planta");
-  lines.push("• estatus proyecto PRJ-YYYYMM-XXX");
-  lines.push("• adjuntar proyecto PRJ-... (luego envía PDF)");
-  if (clave === "ZP") {
-    lines.push("• aprobar proyecto PRJ-...");
-    lines.push("• cerrar proyecto PRJ-...");
-    lines.push("• confirmar cancelacion proyecto PRJ-...");
-  }
-  lines.push("• cancelar proyecto PRJ-... (solicitar)");
-  if (clave === "ZP") {
-    lines.push("• debug twilio (diagnóstico outbound)");
-    lines.push("• probar notificacion (envío de prueba)");
-  }
-  if (clave === "AD") {
-    lines.push("• adjuntar poliza F-XXX (folio en carrito; luego envía PDF y mes de cargo)");
-  }
-  lines.push("• IGF: margen puebla, resumen igf, cómo cambió puebla [vs v2 | vs mes anterior], top 10");
-  lines.push("• version");
-  lines.push("• ayuda / menu");
   return lines.join("\n");
+}
+
+/** Ayuda solo Proyectos. */
+function buildHelpProyectos(actor) {
+  const clave = (actor && actor.rol_clave) ? String(actor.rol_clave).toUpperCase() : "";
+  const lines = ["Comandos Proyectos", ""];
+  lines.push("crear proyecto");
+  lines.push("proyectos de planta");
+  lines.push("estatus proyecto PRJ-YYYYMM-XXX");
+  lines.push("adjuntar proyecto PRJ-XXX");
+  lines.push("aprobar proyecto PRJ-XXX");
+  lines.push("cerrar proyecto PRJ-XXX");
+  lines.push("cancelar proyecto PRJ-XXX");
+  lines.push("confirmar cancelacion proyecto PRJ-XXX");
+  return lines.join("\n");
+}
+
+/** Ayuda Delta Ingreso. */
+function buildHelpDelta() {
+  return [
+    "📊 Comandos Delta Ingreso",
+    "",
+    "Resumen",
+    "di resumen",
+    "di resumen morelos",
+    "",
+    "Problemas",
+    "di peores",
+    "di top perdida",
+    "di foco",
+    "",
+    "Riesgos",
+    "di riesgo",
+    "di riesgo clientes",
+    "",
+    "Crecimiento",
+    "di crecimiento",
+    "di nuevos",
+    "di top crecimiento",
+    "",
+    "Clientes",
+    "di recuperables",
+    "di estables",
+    "di detalle top morelos",
+    "",
+    "Plantas",
+    "di plantas crecimiento",
+    "",
+    "Seguimiento",
+    "di pendientes",
+    "di estatus morelos granjas roxana",
+  ].join("\n");
+}
+
+/** Ayuda IGF. */
+function buildHelpIgf() {
+  return [
+    "📊 Comandos IGF",
+    "",
+    "margen puebla",
+    "resumen igf",
+    "como cambio puebla vs mes anterior",
+    "top 10",
+    "comparar plantas",
+  ].join("\n");
+}
+
+/** Despacha ayuda por texto: main, folios, proyectos, delta, igf. */
+function getHelpForInput(bodyTrim, actor) {
+  const t = (bodyTrim || "").trim().toLowerCase();
+  if (t === "ayuda" || t === "help" || t === "menu") return buildHelpMain();
+  if (/^ayuda\s+folios$/i.test(bodyTrim)) return buildHelpFolios(actor);
+  if (/^ayuda\s+proyectos$/i.test(bodyTrim)) return buildHelpProyectos(actor);
+  if (/^ayuda\s+delta$/i.test(bodyTrim)) return buildHelpDelta();
+  if (/^ayuda\s+igf$/i.test(bodyTrim)) return buildHelpIgf();
+  if (/^comandos\s+delta$/i.test(bodyTrim)) return buildHelpDelta();
+  return null;
+}
+
+/** Ayuda completa (folios + proyectos) para compatibilidad. */
+function buildHelpMessage(actor) {
+  const helpMain = buildHelpMain();
+  const helpFolios = buildHelpFolios(actor);
+  const helpProyectos = buildHelpProyectos(actor);
+  return helpMain + "\n\n---\nPara ver solo un módulo: ayuda folios | ayuda proyectos | ayuda delta | ayuda igf";
 }
 
 function buildVersionMessage() {
@@ -5693,9 +5759,8 @@ app.post("/twilio/whatsapp", async (req, res) => {
         console.warn("getActorByPhone error:", e.message);
       }
 
-      if (["ayuda", "help", "menu"].includes(lower)) {
-        return safeReply(buildHelpMessage(actor));
-      }
+      const helpMsg = getHelpForInput(body.trim(), actor);
+      if (helpMsg) return safeReply(helpMsg);
 
       /* Prefijo "di " => solo comandos Delta Ingreso; no toca folios ni flujo existente */
       const text = (body || "").trim();
