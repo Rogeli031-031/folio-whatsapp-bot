@@ -5695,6 +5695,30 @@ app.post("/twilio/whatsapp", async (req, res) => {
 
       /* Prefijo "di " => solo comandos Delta Ingreso; no toca folios ni flujo existente */
       const text = (body || "").trim();
+      /* Modo natural: texto que parece Delta Ingreso (sin prefijo) se traduce a "di ..." */
+      if (!text.toLowerCase().startsWith("di ") && deltaIngresoCommands.deltaIngresoLikelyText(text)) {
+        const translated = deltaIngresoCommands.translateNaturalToDi(text);
+        if (translated && translated.toLowerCase().startsWith("di ")) {
+          try {
+            await deltaIngresoCommands.handleDeltaIngresoCommand({
+              text: translated.slice(3).trim(),
+              actor,
+              client,
+              fromNorm,
+              safeReply,
+              getDeltaIngresoDatosInternal,
+              deltaIngresoAiDb,
+              getUsersByRole,
+              sendWhatsApp,
+              PERIODO_AI_A,
+              PERIODO_AI_B,
+            });
+            return;
+          } catch (e) {
+            console.warn("[Delta Ingreso natural]", e.message);
+          }
+        }
+      }
       if (text.toLowerCase().startsWith("di ")) {
         try {
           await deltaIngresoCommands.handleDeltaIngresoCommand({
