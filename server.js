@@ -6020,10 +6020,12 @@ app.post("/twilio/whatsapp", async (req, res) => {
               answer || "No pude generar una respuesta. Solo respondo sobre Delta Ingreso (periodos configurados)."
             );
           
-          }
-          
-        } 
-      }
+        } catch (e) {
+          console.warn("[Delta Ingreso AI ZP router]", e.message);
+          return safeReply("Error interno en Delta Ingreso.");
+        }
+        }
+        
 
       /* ----- Delta Ingreso AI: Q&A (ZP y GG) – solo temas Delta Ingreso ----- */
       const rolClaveQA = (actor && actor.rol_clave) ? String(actor.rol_clave).toUpperCase() : "";
@@ -6039,7 +6041,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
           if (esZPQA) {
             const plantsQA = await deltaIngresoAiDb.getProvinciaPlantsWithPlantaId(client);
             const allBriefs = [];
-            for (const row of plantsQA) {
+            for (const row of plantsWithId) {
               const data = await getDeltaIngresoDatosInternal(client, row.plant_code, PERIODO_AI_A, PERIODO_AI_B, false);
               if (data) allBriefs.push(deltaIngresoAi.buildBrief(row.plant_code, data));
             }
