@@ -5940,12 +5940,12 @@ app.post("/twilio/whatsapp", async (req, res) => {
                 console.warn("[Delta Ingreso data fallback]", e.message);
               }
             }
-            const allBriefs = [];
-            for (const row of plantsWithId) {
+            const allBriefsQA = [];
+            for (const row of plantsQA) {
               const data = await getDeltaIngresoDatosInternal(client, row.plant_code, PERIODO_AI_A, PERIODO_AI_B, false);
-              if (data) allBriefs.push(deltaIngresoAi.buildBrief(row.plant_code, data));
+              if (data) allBriefsQA.push(deltaIngresoAi.buildBrief(row.plant_code, data));
             }
-            const context = { role: "ZP", periodos: { periodoA: PERIODO_AI_A, periodoB: PERIODO_AI_B }, briefs: allBriefs };
+            const context = { role: "ZP", periodos: { periodoA: PERIODO_AI_A, periodoB: PERIODO_AI_B }, briefs: allBriefsQA };
             if (esDI) {
               if (!AI_ENABLED) {
                 return safeReply("Delta Ingreso (IA desactivada). Usa: di resumen o di pendientes.");
@@ -6034,7 +6034,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
       const textTrim = String(body || "").trim();
       const lowerText = textTrim.toLowerCase();
 
-      if (AI_ENABLED && actor && (esZPQA || esGGQA) && lowerText.startsWith("di ")) {
+      if (AI_ENABLED && actor && (esZPQA || esGGQA) && esDI){
         try {
           await deltaIngresoAiDb.ensureDeltaIngresoAiSchema(client);
           let context = null;
