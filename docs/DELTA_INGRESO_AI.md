@@ -38,40 +38,56 @@ Módulo aislado: WhatsApp + OpenAI para reducir negativos (No compran, −Ingres
 
 ## Comandos "di" (Delta Ingreso)
 
-Todos los comandos se invocan con prefijo `di ` (ej. `di peores`). También se admite **modo natural** para frases que claramente piden datos de Delta Ingreso (sin palabras de folios): se traduce internamente a un comando `di ...`.
+Todos los comandos se invocan con prefijo `di ` (ej. `di peores`). **Si el mensaje no empieza con `di `, no se ejecuta ningún comando nuevo.** También se admite **modo natural** para frases que claramente piden datos de Delta Ingreso (sin palabras de folios): se traduce internamente a un comando `di ...`.
 
+### Resumen / Riesgo / Oportunidades
+- `di resumen provincia` – Total negativos, top 3 plantas, top 5 clientes, acciones (abiertas/bloqueadas/cerradas hoy).
+- `di resumen {planta}` – Totales por categoría (No compran, −Ingreso, Nuevos, +Ingreso), top 3 afectados, acciones.
+- `di riesgo provincia` / `di riesgo {planta}` – Top 10 riesgos (NO_COMPRA, CAIDA_VOL, BLOQUEO).
+- `di oportunidades provincia` / `di oportunidades {planta}` – Top 10 oportunidades (+Ingreso ≥30k, Nuevos tonB≥5).
+
+### Director (foco / seguimiento / hoy)
+- `di foco provincia [topN]` / `di foco {planta} [topN]` – 80/20 negativos (clientes que explican ~80% del total negativo).
+- `di seguimiento provincia` / `di seguimiento {planta}` – Acciones por estado, responsables, más urgentes sin update.
+- `di hoy provincia` / `di hoy {planta}` – Cerradas hoy, actualizadas hoy, nuevos bloqueos, vencidas.
+
+### Otros
 - `di ayuda` – Lista de comandos.
-- `di periodos` / `di periodos queretaro` – Periodos configurados.
-- `di set periodos A=2026-01 B=2026-02` – Guarda preferencia (TTL 24h).
+- `di periodos` / `di set periodos A=YYYY-MM B=YYYY-MM` – Periodos.
 - `di peores` – Plantas con mayor impacto.
-- `di resumen [planta]` – Resumen ejecutivo (totales, top 3, causas).
-- `di no compran {planta} [topN]` – Clientes que dejaron de comprar.
-- `di menos ingreso` / `di nuevos` / `di mas ingreso` + planta y opcional topN.
+- `di no compran` / `di menos ingreso` / `di nuevos` / `di mas ingreso` + {planta} [topN].
 - `di detalle top {planta}` – Detalle venta/descuento top 3.
-- `di venta descuento [planta] topN` – Venta y descuento por mes de los más afectados.
+- `di venta descuento [planta] topN` – Venta y descuento por mes.
 - `di cliente [planta] {nombre}` – Búsqueda por cliente.
-- `di crear accion {planta} {cliente}` – Crea acción en delta_ingreso_ai_actions.
-- `di 5w2h #ID` – Plantilla 5W2H para completar.
-- `di actualizar #ID campo=valor` – Actualiza campos de la acción.
-- `di pendientes [planta]` – Lista acciones abiertas.
-- `di cerrar #ID [motivo]` – Cierra acción y notifica a ZP.
+- `di crear accion {planta} {cliente}` – Crea acción.
+- `di 5w2h #ID` | `di actualizar #ID campo=valor` | `di pendientes [planta]` | `di cerrar #ID [motivo]`.
 - `di causa [planta] [topN]` – Agrupación por why_tag.
+- `di mix {planta}` – % negativos No compran vs −Ingreso.
+- `di causas` / `di bloqueos` / `di vencidas` / `di semaforo` / `di kpis` + [provincia|planta].
 
 ## Pruebas manuales sugeridas
 
-Probar por WhatsApp (o simular body en webhook):
+Probar por WhatsApp (o simular body en webhook). **Confirmar que si el mensaje NO empieza con `di ` no se ejecuta ningún comando nuevo.**
 
-1. `di peores`
-2. `di detalle top queretaro`
-3. `di venta descuento queretaro top3`
-4. `di no compran puebla top5`
-5. `di cliente morelos granjas`
-6. `di crear accion queretaro plant factory`
-7. `di 5w2h #1` (reemplazar 1 por un ID real)
-8. `di actualizar #1 why_tag=INVENTARIO why_detail="Faltante" how_much_impact_mxn=100000`
-9. `di pendientes queretaro`
-10. `di cerrar #1 "recuperado"`
-11. Frase natural: *¿cuáles son los peores?* – debe responder como `di peores` (modo natural).
+### Obligatorias (resumen / riesgo / oportunidades / foco / seguimiento / hoy)
+1. `di resumen provincia`
+2. `di resumen queretaro`
+3. `di riesgo provincia`
+4. `di riesgo morelos`
+5. `di oportunidades provincia`
+6. `di oportunidades puebla`
+7. `di foco provincia`
+8. `di foco queretaro`
+9. `di seguimiento provincia`
+10. `di seguimiento queretaro`
+11. `di hoy provincia`
+12. `di hoy queretaro`
+
+### Otras
+13. `di peores` | `di detalle top queretaro` | `di venta descuento queretaro top3`
+14. `di no compran puebla top5` | `di cliente morelos granjas`
+15. `di crear accion queretaro plant factory` | `di 5w2h #1` | `di actualizar #1 why_tag=INVENTARIO` | `di pendientes queretaro` | `di cerrar #1 "recuperado"`
+16. Frase natural: *¿cuáles son los peores?* – debe responder como `di peores` (modo natural).
 
 ## Archivos
 
