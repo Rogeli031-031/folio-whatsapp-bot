@@ -5693,6 +5693,30 @@ app.post("/twilio/whatsapp", async (req, res) => {
         return safeReply(buildHelpMessage(actor));
       }
 
+      /* Prefijo "di " => solo comandos Delta Ingreso; no toca folios ni flujo existente */
+      const text = (body || "").trim();
+      if (text.toLowerCase().startsWith("di ")) {
+        try {
+          await deltaIngresoCommands.handleDeltaIngresoCommand({
+            text: text.slice(3).trim(),
+            actor,
+            client,
+            fromNorm,
+            safeReply,
+            getDeltaIngresoDatosInternal,
+            deltaIngresoAiDb,
+            getUsersByRole,
+            sendWhatsApp,
+            PERIODO_AI_A,
+            PERIODO_AI_B,
+          });
+          return;
+        } catch (e) {
+          console.warn("[Delta Ingreso di]", e.message);
+          return safeReply("Error al procesar comando. Intenta de nuevo.");
+        }
+      }
+
       if (actor && (actor.rol_clave === "GG" || (actor.rol_nombre && String(actor.rol_nombre).toUpperCase().includes("GG"))) && body.length > 15 && (/\bCERRADO\s*:/i.test(body) || /(CLIENTE|WHAT|WHY|WHEN|WHO|HOW)\s*:|\bWHAT\b|\bWHY\b|\bWHEN\b|\bWHO\b|\bHOW\b/i.test(body))) {
         try {
           const reply = await deltaIngresoAi.handleIncoming(client, fromNorm, body, actor, getDeltaIngresoDatosInternal, getUsersByRoleAndPlanta);
