@@ -6019,6 +6019,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
             return safeReply(
               answer || "No pude generar una respuesta. Solo respondo sobre Delta Ingreso (periodos configurados)."
             );
+          }
           
         } catch (e) {
           console.warn("[Delta Ingreso AI ZP router]", e.message);
