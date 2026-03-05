@@ -20,6 +20,7 @@ import DeltaVentaModal from "@/components/DeltaVentaModal";
 import DeltaDescuentoModal from "@/components/DeltaDescuentoModal";
 import DeltaIngresoModal from "@/components/DeltaIngresoModal";
 import PolizaModal from "@/components/PolizaModal";
+import ImprimirGastosModal from "@/components/ImprimirGastosModal";
 
 function DashboardContent() {
   const searchParams = useSearchParams();
@@ -33,6 +34,7 @@ function DashboardContent() {
   const [showDeltaDescuentoModal, setShowDeltaDescuentoModal] = useState(false);
   const [showDeltaIngresoModal, setShowDeltaIngresoModal] = useState(false);
   const [polizaFolioId, setPolizaFolioId] = useState<number | null>(null);
+  const [imprimirGastos, setImprimirGastos] = useState<{ id: number; numeroFolio: string } | null>(null);
 
   useEffect(() => {
     const t = parseTokenFromQuery(searchParams) || getTokenFromStorage();
@@ -167,6 +169,7 @@ function DashboardContent() {
           data={kanban}
           onOpenFolio={setDrawerFolioId}
           onSubirPoliza={setPolizaFolioId}
+          onImprimirGastos={(id, numeroFolio) => setImprimirGastos({ id, numeroFolio })}
         />
       </main>
       <FolioDrawer
@@ -182,6 +185,14 @@ function DashboardContent() {
           token={token}
           onClose={() => setPolizaFolioId(null)}
           onSuccess={loadData}
+        />
+      )}
+      {imprimirGastos != null && token && (
+        <ImprimirGastosModal
+          folioId={imprimirGastos.id}
+          numeroFolio={imprimirGastos.numeroFolio}
+          token={token}
+          onClose={() => setImprimirGastos(null)}
         />
       )}
     </div>

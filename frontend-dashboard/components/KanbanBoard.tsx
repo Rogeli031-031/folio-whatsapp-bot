@@ -7,9 +7,10 @@ interface Props {
   data: KanbanBoardType | null;
   onOpenFolio: (id: number) => void;
   onSubirPoliza?: (id: number) => void;
+  onImprimirGastos?: (id: number, numeroFolio: string) => void;
 }
 
-export default function KanbanBoard({ data, onOpenFolio, onSubirPoliza }: Props) {
+export default function KanbanBoard({ data, onOpenFolio, onSubirPoliza, onImprimirGastos }: Props) {
   if (!data) {
     return (
       <div className="flex items-center justify-center p-8 text-slate-400">Cargando tablero…</div>
@@ -28,6 +29,7 @@ export default function KanbanBoard({ data, onOpenFolio, onSubirPoliza }: Props)
             onOpenFolio={onOpenFolio}
             role={role}
             onSubirPoliza={onSubirPoliza}
+            onImprimirGastos={onImprimirGastos}
           />
         ))}
       </div>

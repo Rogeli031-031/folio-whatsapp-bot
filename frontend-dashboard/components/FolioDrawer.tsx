@@ -9,7 +9,23 @@ import {
   fetchMediaUrl,
   postAprobarFolio,
   postRegresarFolioAZp,
+  patchFolioMesCargo,
 } from "@/lib/api";
+
+function getMesesOpciones(): { value: string; label: string }[] {
+  const out: { value: string; label: string }[] = [];
+  const now = new Date();
+  const meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+  for (let i = 0; i < 24; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const y = d.getFullYear();
+    const m = d.getMonth() + 1;
+    const value = `${y}-${String(m).padStart(2, "0")}`;
+    const label = `${meses[m - 1]} ${y}`;
+    out.push({ value, label });
+  }
+  return out;
+}
 
 interface Props {
   folioId: number | null;
@@ -30,6 +46,8 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
   const [loading, setLoading] = useState(false);
   const [approving, setApproving] = useState(false);
   const [approveError, setApproveError] = useState<string | null>(null);
+  const [mesCargoEdit, setMesCargoEdit] = useState<string>("");
+  const [savingMesCargo, setSavingMesCargo] = useState(false);
 
   useEffect(() => {
     if (!folioId || !token) {
@@ -47,7 +65,9 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
       fetchFinanzas(token, folioId),
     ])
       .then(([f, t, m, fin]) => {
-        setFolio(f as Record<string, unknown>);
+        const fol = f as Record<string, unknown>;
+        setFolio(fol);
+        setMesCargoEdit((fol.mes_cargo as string) || "");
         setTimeline((t as { events: typeof timeline }).events || []);
         setMedia((m as { items: typeof media }).items || []);
         setFinanzas(fin as { status: string; monto_mxn?: number | null });
@@ -101,12 +121,30 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
       await postRegresarFolioAZp(token, folioId);
       const [f, t] = await Promise.all([fetchFolio(token, folioId), fetchTimeline(token, folioId)]);
       setFolio(f as Record<string, unknown>);
+      setMesCargoEdit((f as Record<string, unknown>).mes_cargo as string || "");
       setTimeline((t as { events: typeof timeline }).events || []);
       onApproved?.();
     } catch (e) {
       setApproveError((e as Error).message || "Error al regresar a ZP");
     } finally {
       setApproving(false);
+    }
+  };
+
+  const handleSaveMesCargo = async () => {
+    if (!token || !folioId || !puedeRegresarZp) return;
+    setApproveError(null);
+    setSavingMesCargo(true);
+    try {
+      await patchFolioMesCargo(token, folioId, mesCargoEdit && /^\d{4}-\d{2}$/.test(mesCargoEdit) ? mesCargoEdit : null);
+      const f = await fetchFolio(token, folioId);
+      setFolio(f as Record<string, unknown>);
+      setMesCargoEdit((f as Record<string, unknown>).mes_cargo as string || "");
+      onApproved?.();
+    } catch (e) {
+      setApproveError((e as Error).message || "Error al guardar mes de cargo");
+    } finally {
+      setSavingMesCargo(false);
     }
   };
 
@@ -161,6 +199,31 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
                     )}
                   </div>
                   {approveError && <p className="text-sm text-red-400">{approveError}</p>}
+                  {puedeRegresarZp && (
+                    <div className="pt-2 border-t border-slate-700">
+                      <dt className="text-slate-500 mb-1">Mes de cargo (para documento e impresión)</dt>
+                      <dd className="flex flex-wrap items-center gap-2">
+                        <select
+                          value={mesCargoEdit}
+                          onChange={(e) => setMesCargoEdit(e.target.value)}
+                          className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
+                        >
+                          <option value="">— Sin definir —</option>
+                          {getMesesOpciones().map((o) => (
+                            <option key={o.value} value={o.value}>{o.label}</option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={handleSaveMesCargo}
+                          disabled={savingMesCargo}
+                          className="rounded bg-slate-600 px-2 py-1.5 text-sm text-white hover:bg-slate-500 disabled:opacity-50"
+                        >
+                          {savingMesCargo ? "…" : "Guardar"}
+                        </button>
+                      </dd>
+                    </div>
+                  )}
                   <div><dt className="text-slate-500">Importe</dt><dd className="text-slate-200">{folio.importe != null ? `$${Number(folio.importe).toLocaleString("es-MX")}` : "N/A"}</dd></div>
                   <div><dt className="text-slate-500">Concepto</dt><dd className="text-slate-200">{String(folio.descripcion_display ?? folio.concepto ?? "—")}</dd></div>
                 </dl>

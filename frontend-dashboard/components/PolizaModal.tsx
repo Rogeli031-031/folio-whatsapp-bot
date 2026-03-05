@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { postFolioPoliza } from "@/lib/api";
+import { useState, useEffect } from "react";
+import { fetchFolio, postFolioPoliza } from "@/lib/api";
 
 interface Props {
   folioId: number;
@@ -32,6 +32,16 @@ export default function PolizaModal({ folioId, token, onClose, onSuccess }: Prop
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (!token || !folioId) return;
+    fetchFolio(token, folioId)
+      .then((f) => {
+        const mc = (f.mes_cargo as string) || "";
+        if (mc && /^\d{4}-\d{2}$/.test(mc)) setMesCargo(mc);
+      })
+      .catch(() => {});
+  }, [token, folioId]);
+
   const opciones = getMesesOpciones();
 
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -60,8 +70,8 @@ export default function PolizaModal({ folioId, token, onClose, onSuccess }: Prop
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fileBase64 || !mesCargo) {
-      setError("Selecciona el PDF y el mes al que corresponde el pago.");
+    if (!fileBase64) {
+      setError("Selecciona el PDF de la póliza.");
       return;
     }
     setError(null);
@@ -70,7 +80,7 @@ export default function PolizaModal({ folioId, token, onClose, onSuccess }: Prop
       await postFolioPoliza(token, folioId, {
         fileBase64,
         fileName: file?.name || "poliza.pdf",
-        mes_cargo: mesCargo,
+        mes_cargo: mesCargo || undefined,
       });
       onSuccess();
       onClose();
@@ -112,14 +122,13 @@ export default function PolizaModal({ folioId, token, onClose, onSuccess }: Prop
             {file && <span className="mt-1 block text-xs text-slate-500">{file.name}</span>}
           </div>
           <div>
-            <label className="block text-xs text-slate-400">¿A qué mes corresponde el pago?</label>
+            <label className="block text-xs text-slate-400">Mes de cargo (opcional; si no eliges, se usa el del folio o el actual)</label>
             <select
               value={mesCargo}
               onChange={(e) => setMesCargo(e.target.value)}
               className="mt-1 w-full rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-slate-200"
-              required
             >
-              <option value="">— Elegir mes —</option>
+              <option value="">— Usar mes del folio / actual —</option>
               {opciones.map((o) => (
                 <option key={o.value} value={o.value}>{o.label}</option>
               ))}
@@ -131,7 +140,7 @@ export default function PolizaModal({ folioId, token, onClose, onSuccess }: Prop
             </button>
             <button
               type="submit"
-              disabled={loading || !fileBase64 || !mesCargo}
+              disabled={loading || !fileBase64}
               className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-500 disabled:opacity-50"
             >
               {loading ? "…" : "Subir póliza"}

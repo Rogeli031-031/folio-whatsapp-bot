@@ -358,11 +358,45 @@ export function postDeltaIngresoDatos(
 export function postFolioPoliza(
   token: string,
   folioId: number,
-  body: { fileBase64: string; fileName?: string; mes_cargo: string }
+  body: { fileBase64: string; fileName?: string; mes_cargo?: string }
 ): Promise<{ ok: boolean; estatus: string; mes_cargo: string }> {
   return apiFetch(`/api/folios/${folioId}/poliza`, {
     token,
     method: "POST",
     body: JSON.stringify(body),
   });
+}
+
+export function patchFolioMesCargo(
+  token: string,
+  folioId: number,
+  mes_cargo: string | null
+): Promise<{ ok: boolean; mes_cargo: string | null }> {
+  return apiFetch(`/api/folios/${folioId}`, {
+    token,
+    method: "PATCH",
+    body: JSON.stringify({ mes_cargo }),
+  });
+}
+
+export async function fetchDocumentoGastosHtml(token: string, folioId: number): Promise<string> {
+  const url = getApiUrl(`/api/folios/${folioId}/documento-gastos?format=html`);
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(await res.text().catch(() => res.statusText));
+  return res.text();
+}
+
+export async function fetchDocumentoGastosPdf(
+  token: string,
+  folioId: number,
+  includeCotizacion: boolean
+): Promise<Blob> {
+  const url = getApiUrl(`/api/folios/${folioId}/documento-gastos?format=pdf&include_cotizacion=${includeCotizacion ? "1" : "0"}`);
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(await res.text().catch(() => res.statusText));
+  return res.blob();
 }

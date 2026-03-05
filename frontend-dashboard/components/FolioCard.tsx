@@ -7,6 +7,7 @@ interface Props {
   onOpen: (id: number) => void;
   role: string;
   onSubirPoliza?: (id: number) => void;
+  onImprimirGastos?: (id: number, numeroFolio: string) => void;
 }
 
 /** Estatus técnico → etapa visual (alineado con backend). */
@@ -36,7 +37,7 @@ function etapaColor(estatus: string | null): string {
   return "border-l-amber-500";
 }
 
-export default function FolioCard({ card, onOpen, role, onSubirPoliza }: Props) {
+export default function FolioCard({ card, onOpen, role, onSubirPoliza, onImprimirGastos }: Props) {
   const mxn = card.importe != null && !isNaN(card.importe)
     ? `$${card.importe.toLocaleString("es-MX", { maximumFractionDigits: 0 })}`
     : null;
@@ -47,6 +48,7 @@ export default function FolioCard({ card, onOpen, role, onSubirPoliza }: Props) 
 
   const etapa = estatusToEtapaVisual(card.estatus);
   const showPolizaBtn = role === "AD" && etapa === "CARRO_COMPRA" && onSubirPoliza;
+  const showImprimirBtn = etapa === "APROB_DIRECTOR_ZP" && card.tiene_cotizacion !== false && onImprimirGastos;
 
   return (
     <div
@@ -80,6 +82,15 @@ export default function FolioCard({ card, onOpen, role, onSubirPoliza }: Props) 
             className="ml-auto rounded bg-blue-600 px-2 py-1 text-[10px] font-medium text-white hover:bg-blue-500"
           >
             Subir póliza
+          </button>
+        )}
+        {showImprimirBtn && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); e.preventDefault(); onImprimirGastos(card.id, card.numero_folio || card.folio_codigo || String(card.id)); }}
+            className="ml-auto rounded bg-amber-600 px-2 py-1 text-[10px] font-medium text-white hover:bg-amber-500"
+          >
+            Imprimir
           </button>
         )}
       </div>

@@ -28,6 +28,7 @@ const twilioNotify = require("./notifications/twilioClient");
 const igfHandler = require("./igf-handler");
 const { createDashboardToken, dashboardAuthMiddleware, createIgfComoCambioToken, verifyIgfComoCambioToken } = require("./lib/dashboard-auth");
 const XLSX = require("xlsx");
+const { PDFDocument, StandardFonts } = require("pdf-lib");
 const arrLoad = require("./lib/arr-load");
 const arrRefreshProvincia = require("./lib/arr-refresh-provincia");
 const forecastMensual = require("./lib/forecast-mensual");
@@ -2354,7 +2355,25 @@ async function getActorByPhone(client, phone) {
 }
 
 async function getPlantas(client) {
-  const r = await client.query(`SELECT id, nombre FROM public.plantas ORDER BY id ASC`);
+  const r = await client.query(`SELECT id, nombre, clave FROM public.plantas ORDER BY id ASC`);
+  return r.rows;
+}
+
+/** Plantas de ubicación para "crear folio" (excluye códigos E7, E8, E9, etc. para que Acapulco muestre una opción y luego se pregunte E9/E10). */
+const CLAVES_UBICACION_CREAR_FOLIO = ["ACAPULCO", "PUEBLA", "TEHUACAN", "QUERETARO", "SANLUIS", "MORELOS", "CORPORATIVO"];
+function filterPlantasUbicacionParaCrearFolio(plantas) {
+  if (!Array.isArray(plantas)) return [];
+  return plantas.filter((p) => CLAVES_UBICACION_CREAR_FOLIO.includes((p.clave || "").toUpperCase()));
+}
+
+/** Mapeo ubicación -> clave de planta única (para no-Acapulco). Acapulco se resuelve con E9/E10 en flujo aparte. */
+const MAP_UBICACION_A_CLAVE_PLANTA = { PUEBLA: "E7", TEHUACAN: "E8", QUERETARO: "E12", SANLUIS: "E13", MORELOS: "E15" };
+
+/** Obtiene plantas por claves (ej. ['E9','E10'] o ['E7']). */
+async function getPlantasByClaves(client, claves) {
+  if (!claves || claves.length === 0) return [];
+  const placeholders = claves.map((_, i) => `$${i + 1}`).join(",");
+  const r = await client.query(`SELECT id, nombre, clave FROM public.plantas WHERE UPPER(TRIM(clave)) IN (${placeholders}) ORDER BY clave`, claves.map((c) => String(c).toUpperCase()));
   return r.rows;
 }
 
@@ -3970,6 +3989,16 @@ async function getSignedDownloadUrl(s3Key, expiresInSeconds = 600) {
   return getSignedUrl(s3, command, { expiresIn: expiresInSeconds });
 }
 
+/** Descarga un objeto S3 como buffer (para PDF cotización en documento gastos). */
+async function getBufferFromS3(s3Key) {
+  if (!s3Enabled || !s3) throw new Error("S3 no configurado");
+  const command = new GetObjectCommand({ Bucket: s3BucketName, Key: s3Key });
+  const resp = await s3.send(command);
+  const chunks = [];
+  for await (const chunk of resp.Body) chunks.push(chunk);
+  return Buffer.concat(chunks);
+}
+
 /** Busca en S3 el objeto más reciente bajo cotizaciones/<numero_folio>/ (fallback cuando el folio no tiene cotizacion_s3key en BD). */
 async function findLatestCotizacionKeyInS3(numeroFolio) {
   if (!s3Enabled || !s3) return null;
@@ -4887,6 +4916,164 @@ app.get("/api/folios/:id", dashboardAuthMiddleware, async (req, res) => {
   }
 });
 
+/** Formatea mes_cargo (YYYY-MM) a "01 al 31 de [mes] de [año]". */
+function formatFechasDelAl(mesCargo) {
+  if (!mesCargo || !/^\d{4}-\d{2}$/.test(mesCargo)) return "—";
+  const [y, m] = mesCargo.split("-").map(Number);
+  const meses = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+  const lastDay = new Date(y, m, 0).getDate();
+  return `01 al ${lastDay} de ${meses[m - 1] || ""} de ${y}`;
+}
+
+/** Documento Gastos Extraordinarios (imprimir/descargar). Requiere folio con cotización. */
+app.get("/api/folios/:id/documento-gastos", dashboardAuthMiddleware, async (req, res) => {
+  const folioId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
+  const format = (req.query.format || "html").toLowerCase();
+  const includeCotizacion = String(req.query.include_cotizacion || "0") === "1";
+  const client = await pool.connect();
+  try {
+    const r = await client.query(
+      `SELECT f.id, f.numero_folio, f.folio_codigo, f.beneficiario, f.concepto, f.importe, f.creado_en, f.mes_cargo,
+              p.nombre AS planta_nombre, p.clave AS planta_clave
+       FROM public.folios f
+       LEFT JOIN public.plantas p ON p.id = f.planta_id
+       WHERE f.id = $1`,
+      [folioId]
+    );
+    const folio = r.rows[0] || null;
+    if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
+    const archivos = await listFolioArchivosByFolioId(client, folioId, 20);
+    const tieneCotizacion = archivos.some((a) => (a.tipo || "").toUpperCase() === "COTIZACION");
+    if (!tieneCotizacion) return res.status(400).json({ error: "El folio no tiene cotización; no se puede imprimir." });
+    const cotizacionRow = archivos.find((a) => (a.tipo || "").toUpperCase() === "COTIZACION");
+    const fechasDelAl = formatFechasDelAl(folio.mes_cargo);
+    const fechaSolicitud = folio.creado_en
+      ? new Date(folio.creado_en).toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric" })
+      : "—";
+    const plantaDisplay = [folio.planta_clave, folio.planta_nombre].filter(Boolean).join(" - ") || "—";
+    const importeStr = folio.importe != null ? Number(folio.importe).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00";
+
+    if (format === "html") {
+      const html = `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>Gastos Extraordinarios - ${folio.numero_folio}</title><style>
+        body{font-family:system-ui,sans-serif;max-width:800px;margin:1rem auto;padding:1rem;font-size:12px;}
+        h1{text-align:center;font-size:18px;margin:0 0 0.25rem 0;}
+        .subtitle{text-align:center;font-size:14px;margin:0 0 1rem 0;}
+        .meta{display:flex;justify-content:space-between;margin-bottom:1rem;}
+        .plant-folio{text-align:right;font-weight:bold;}
+        table{width:100%;border-collapse:collapse;margin:1rem 0;}
+        th,td{border:1px solid #333;padding:6px 8px;text-align:left;}
+        th{background:#eee;}
+        .total{text-align:right;font-weight:bold;margin-top:0.5rem;}
+        .firmas{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;margin-top:2rem;font-size:11px;}
+        .firma-col p{margin:0.25rem 0;}
+      </style></head><body>
+        <h1>GASTOS EXTRAORDINARIOS</h1>
+        <p class="subtitle">APOYOS</p>
+        <div class="meta">
+          <div>FECHAS DEL: ${fechasDelAl}<br>FECHA DE SOLICITUD: ${fechaSolicitud}</div>
+          <div class="plant-folio">${plantaDisplay}<br>FOLIO - ${(folio.numero_folio || "").trim() || folioId}</div>
+        </div>
+        <table>
+          <thead><tr><th>SOLICITUD</th><th>BENEFICIARIO</th><th>CONCEPTO</th><th>IMPORTE</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td>${(folio.beneficiario || "").replace(/</g, "&lt;")}</td><td>${(folio.concepto || "").replace(/</g, "&lt;")}</td><td>$ ${importeStr}</td></tr>
+            <tr><td>2</td><td></td><td></td><td></td></tr>
+            <tr><td>3</td><td></td><td></td><td></td></tr>
+          </tbody>
+        </table>
+        <div class="total">TOTAL &nbsp; $ ${importeStr}</div>
+        <div class="firmas">
+          <div class="firma-col"><p>CF. DAMIAN DIAZ LOPEZ.</p><p>COORD. ADMON Y FINANZAS ZONA PROVINCIA</p><p>LIC. ALFREDO GONZÁLEZ R.</p><p>DIRECTOR DE ZONA</p><p>LIC. LEONEL REQUENES R.</p><p>TITULAR TESORERÍA</p></div>
+          <div class="firma-col"><p>CP. ARMANDO GARZA HDEZ.</p><p>COORD. FINANZAS E INVERSIONES DE ZONA</p><p>ING. LUIS ROGELIO ZARAGOZA A</p><p>DIRECTOR ZONA PROVINCIA</p><p>C.P. FEDERICO ROBLES N.</p><p>DIRECTOR DE FINANZAS</p></div>
+          <div class="firma-col"><p>OBSERVACIONES:</p><p style="border-bottom:1px solid #333;min-height:1.5em;"></p><p>FECHA DE PAGO:</p><p style="border-bottom:1px solid #333;"></p><p>CHEQUE:</p><p>$</p><p>CHEQUE:</p><p>$</p></div>
+        </div>
+      </body></html>`;
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      return res.send(html);
+    }
+
+    if (format === "pdf") {
+      const pdfDoc = await PDFDocument.create();
+      const page = pdfDoc.addPage([612, 792]);
+      const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+      const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+      let y = 750;
+      const line = (text, size = 10, bold = false) => {
+        const f = bold ? fontBold : font;
+        page.drawText(text, { x: 50, y, size, font: f });
+        y -= size + 4;
+      };
+      line("GASTOS EXTRAORDINARIOS", 16, true);
+      line("APOYOS", 12);
+      y -= 8;
+      line(`FECHAS DEL: ${fechasDelAl}`, 10);
+      line(`FECHA DE SOLICITUD: ${fechaSolicitud}`, 10);
+      page.drawText(`${plantaDisplay}  |  FOLIO - ${folio.numero_folio}`, { x: 350, y: y + 24, size: 10, font: fontBold });
+      y -= 20;
+      line("SOLICITUD   BENEFICIARIO   CONCEPTO   IMPORTE", 9, true);
+      const ben = (folio.beneficiario || "").substring(0, 35);
+      const con = (folio.concepto || "").substring(0, 50);
+      line(`1   ${ben}   ${con}   $ ${importeStr}`, 9);
+      y -= 12;
+      line(`TOTAL   $ ${importeStr}`, 10, true);
+      y -= 30;
+      line("CF. DAMIAN DIAZ LOPEZ.  COORD. ADMON Y FINANZAS ZONA PROVINCIA", 8);
+      line("LIC. ALFREDO GONZÁLEZ R.  DIRECTOR DE ZONA", 8);
+      line("CP. ARMANDO GARZA HDEZ.  COORD. FINANZAS E INVERSIONES DE ZONA", 8);
+      line("ING. LUIS ROGELIO ZARAGOZA A  DIRECTOR ZONA PROVINCIA", 8);
+      line("C.P. FEDERICO ROBLES N.  DIRECTOR DE FINANZAS", 8);
+      line("LIC. LEONEL REQUENES R.  TITULAR TESORERÍA", 8);
+
+      if (includeCotizacion && cotizacionRow && cotizacionRow.s3_key && s3Enabled) {
+        try {
+          const cotizacionBuf = await getBufferFromS3(cotizacionRow.s3_key);
+          const cotizacionPdf = await PDFDocument.load(cotizacionBuf);
+          const paginas = await pdfDoc.copyPages(cotizacionPdf, cotizacionPdf.getPageIndices());
+          paginas.forEach((p) => pdfDoc.addPage(p));
+        } catch (e) {
+          console.warn("[documento-gastos] No se pudo adjuntar cotización:", e.message);
+        }
+      }
+
+      const pdfBytes = await pdfDoc.save();
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="Gastos-Extraordinarios-${(folio.numero_folio || folioId).replace(/\s/g, "-")}.pdf"`);
+      return res.send(Buffer.from(pdfBytes));
+    }
+
+    return res.status(400).json({ error: "format debe ser html o pdf" });
+  } catch (e) {
+    console.error("[documento-gastos]", e);
+    res.status(500).json({ error: e.message || "Error al generar documento" });
+  } finally {
+    client.release();
+  }
+});
+
+/** Actualizar mes_cargo del folio (solo cuando está en carrito). */
+app.patch("/api/folios/:id", dashboardAuthMiddleware, async (req, res) => {
+  const folioId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
+  const mesCargo = (req.body.mes_cargo != null && req.body.mes_cargo !== "") ? String(req.body.mes_cargo).trim() : null;
+  if (mesCargo !== null && !/^\d{4}-\d{2}$/.test(mesCargo)) return res.status(400).json({ error: "mes_cargo debe ser YYYY-MM" });
+  const client = await pool.connect();
+  try {
+    const folio = await getFolioById(client, folioId);
+    if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
+    const est = String(folio.estatus || "").toUpperCase();
+    const enCarrito = [ESTADOS.APROBADO_ZP, ESTADOS.LISTO_PARA_PROGRAMACION, ESTADOS.SELECCIONADO_SEMANA, ESTADOS.SOLICITANDO_PAGO].includes(est);
+    if (!enCarrito) return res.status(400).json({ error: "Solo se puede editar el mes de cargo cuando el folio está en el carrito." });
+    await client.query(`UPDATE public.folios SET mes_cargo = $1 WHERE id = $2`, [mesCargo, folioId]);
+    res.json({ ok: true, mes_cargo: mesCargo });
+  } catch (e) {
+    console.error("[Dashboard PATCH folio]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
 /** Aprobar folio desde dashboard: Pendiente aprobación planta → ZP; Aprobación Director ZP → Carro de compra. */
 app.post("/api/folios/:id/aprobar", dashboardAuthMiddleware, async (req, res) => {
   if (req.dashboardAuth.role === "CF_CDMX") return res.status(403).json({ error: "Contralor financiero CDMX solo puede ver el dashboard, no autorizar." });
@@ -4970,12 +5157,16 @@ app.post("/api/folios/:id/poliza", dashboardAuthMiddleware, async (req, res) => 
     try { fileBuffer = Buffer.from(req.body.fileBase64, "base64"); } catch (e) { return res.status(400).json({ error: "fileBase64 inválido" }); }
   }
   if (!fileBuffer || fileBuffer.length === 0) return res.status(400).json({ error: "Envía fileBase64 (PDF)" });
-  const mesCargo = (req.body.mes_cargo || "").toString().trim();
-  if (!/^\d{4}-\d{2}$/.test(mesCargo)) return res.status(400).json({ error: "mes_cargo requerido (formato YYYY-MM)" });
   const client = await pool.connect();
   try {
     const folio = await getFolioById(client, folioId);
     if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
+    let mesCargo = (req.body.mes_cargo || "").toString().trim();
+    if (!/^\d{4}-\d{2}$/.test(mesCargo)) mesCargo = folio.mes_cargo || null;
+    if (!mesCargo || !/^\d{4}-\d{2}$/.test(mesCargo)) {
+      const now = new Date();
+      mesCargo = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    }
     const est = String(folio.estatus || "").toUpperCase();
     const etapaVisual = estatusToEtapaVisual(est);
     if (etapaVisual !== ETAPA_VISUAL.CARRO_COMPRA) {
@@ -6082,44 +6273,6 @@ app.post("/twilio/whatsapp", async (req, res) => {
           
         } catch (e) {
           console.warn("[Delta Ingreso AI Q&A]", e.message);
-        }
-      }
-
-      if (sess.adPoliza && sess.adPoliza.paso === "mes") {
-        const bodyTrim = body.trim();
-        let mesCargo = null;
-        if (/^\d{4}-\d{2}$/.test(bodyTrim)) {
-          mesCargo = bodyTrim;
-        } else {
-          const mesesStr = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
-          const numMatch = bodyTrim.match(/^(\d{1,2})[\/\-]?\s*(\d{4})$/);
-          const textMatch = !numMatch && bodyTrim.match(/^(\w+)\s+(\d{4})$/);
-          if (numMatch) {
-            const monthNum = parseInt(numMatch[1], 10);
-            const y = parseInt(numMatch[2], 10);
-            if (Number.isFinite(y) && monthNum >= 1 && monthNum <= 12) mesCargo = `${y}-${String(monthNum).padStart(2, "0")}`;
-          } else if (textMatch) {
-            const y = parseInt(textMatch[2], 10);
-            const mStr = textMatch[1].toLowerCase().replace(/ó/g, "o").substring(0, 3);
-            const idx = mesesStr.findIndex((nombre) => nombre.substring(0, 3) === mStr || nombre.startsWith(mStr));
-            if (Number.isFinite(y) && idx >= 0) mesCargo = `${y}-${String(idx + 1).padStart(2, "0")}`;
-          }
-        }
-        if (!mesCargo) {
-          return safeReply("Indica el mes del pago. Ejemplos: 2025-03, marzo 2025, 3/2025.");
-        }
-        const pend = sess.adPoliza;
-        try {
-          await client.query(
-            `UPDATE public.folios SET estatus = $1, mes_cargo = $2 WHERE id = $3`,
-            [ESTADOS.PAGADO, mesCargo, pend.folio_id]
-          );
-          await insertHistorial(client, pend.folio_id, pend.numero_folio, pend.folio_codigo, ESTADOS.PAGADO, `Póliza adjunta por Asistente de dirección. Pago cargado al mes ${mesCargo}.`, fromNorm, actor ? actor.rol_nombre : null);
-          sess.adPoliza = null;
-          return safeReply(`✅ Folio ${pend.numero_folio} pasado a Depósito y cierre. Pago cargado al mes ${mesCargo}.`);
-        } catch (e) {
-          console.warn("Error actualizar folio PAGADO (poliza AD):", e.message);
-          return safeReply("Error al guardar. Intenta de nuevo.");
         }
       }
 
@@ -9126,8 +9279,19 @@ app.post("/twilio/whatsapp", async (req, res) => {
             sha256: hash,
             subido_por: fromNorm,
           });
-          sess.adPoliza = { ...pend, paso: "mes" };
-          return safeReply("✅ Póliza recibida. ¿A qué mes corresponde el pago? (ej. 2025-03 o marzo 2025)");
+          const folioActual = await clientAd.query(`SELECT mes_cargo FROM public.folios WHERE id = $1`, [pend.folio_id]);
+          let mesCargo = folioActual.rows[0] && folioActual.rows[0].mes_cargo;
+          if (!mesCargo || !/^\d{4}-\d{2}$/.test(mesCargo)) {
+            const now = new Date();
+            mesCargo = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+          }
+          await clientAd.query(
+            `UPDATE public.folios SET estatus = $1, mes_cargo = $2 WHERE id = $3`,
+            [ESTADOS.PAGADO, mesCargo, pend.folio_id]
+          );
+          await insertHistorial(clientAd, pend.folio_id, pend.numero_folio, pend.folio_codigo, ESTADOS.PAGADO, `Póliza adjunta por Asistente de dirección. Pago cargado al mes ${mesCargo}.`, fromNorm, actor ? actor.rol_nombre : null);
+          sess.adPoliza = null;
+          return safeReply(`✅ Folio ${pend.numero_folio} pasado a Depósito y cierre. Pago cargado al mes ${mesCargo}.`);
         } catch (e) {
           console.warn("Error subir póliza AD:", e.message);
           return safeReply("Error al guardar la póliza. Intenta de nuevo.");
@@ -9227,14 +9391,17 @@ app.post("/twilio/whatsapp", async (req, res) => {
         const client = await pool.connect();
         let msg = "Vamos a crear un folio.";
         try {
-          const plantas = await getPlantas(client);
+          const todasPlantas = await getPlantas(client);
+          const plantas = filterPlantasUbicacionParaCrearFolio(todasPlantas);
           if (plantas.length > 0) {
             sess.dd._plantasList = plantas;
             msg += "\n1) Indica PLANTA (responde con el número):\n" + plantas.map((p, i) => `${i + 1}) ${p.nombre}`).join("\n");
           } else {
-            sess.dd._plantasList = [];
-            msg += "\n1) No hay plantas en catálogo. Indica el nombre de la planta (texto).";
-            sess.estado = "ESPERANDO_PLANTA_TEXTO";
+            sess.dd._plantasList = todasPlantas.length > 0 ? todasPlantas : [];
+            msg += "\n1) Indica PLANTA (responde con el número):\n" + (sess.dd._plantasList.length ? sess.dd._plantasList.map((p, i) => `${i + 1}) ${p.nombre}`).join("\n") : "No hay plantas en catálogo.");
+            if (sess.dd._plantasList.length === 0) {
+              sess.estado = "ESPERANDO_PLANTA_TEXTO";
+            }
           }
         } finally {
           client.release();
@@ -9253,14 +9420,54 @@ app.post("/twilio/whatsapp", async (req, res) => {
         if (plantas.length > 0) {
           const picked = pickByNumber(body, plantas);
           if (!picked) return safeReply("Responde con el número de planta.");
-          sess.dd.planta_id = picked.id;
-          sess.dd.planta_nombre = picked.nombre;
+          const clave = (picked.clave || "").toUpperCase();
+          if (clave === "ACAPULCO") {
+            const codigos = await getPlantasByClaves(client, ["E9", "E10"]);
+            if (codigos.length >= 2) {
+              sess.dd._claveAcapulcoList = codigos;
+              sess.estado = "ESPERANDO_CLAVE_ACAPULCO";
+              return safeReply("¿A cuál clave pertenece? 1) E9  2) E10");
+            }
+            if (codigos.length === 1) {
+              sess.dd.planta_id = codigos[0].id;
+              sess.dd.planta_nombre = (codigos[0].clave || codigos[0].nombre) + " - Acapulco";
+            } else {
+              sess.dd.planta_id = picked.id;
+              sess.dd.planta_nombre = picked.nombre;
+            }
+          } else if (MAP_UBICACION_A_CLAVE_PLANTA[clave]) {
+            const codigos = await getPlantasByClaves(client, [MAP_UBICACION_A_CLAVE_PLANTA[clave]]);
+            if (codigos.length > 0) {
+              sess.dd.planta_id = codigos[0].id;
+              sess.dd.planta_nombre = (codigos[0].clave || codigos[0].nombre) + " - " + (picked.nombre || "");
+            } else {
+              sess.dd.planta_id = picked.id;
+              sess.dd.planta_nombre = picked.nombre;
+            }
+          } else {
+            sess.dd.planta_id = picked.id;
+            sess.dd.planta_nombre = picked.nombre;
+          }
         } else {
           return safeReply("Indica el nombre de la planta (texto).");
         }
       } finally {
         client.release();
       }
+      if (sess.estado !== "ESPERANDO_CLAVE_ACAPULCO") {
+        sess.estado = "ESPERANDO_PROYECTO_SN";
+        return safeReply("¿Este folio pertenece a un proyecto? 1) Sí 2) No");
+      }
+      return;
+    }
+
+    if (sess.estado === "ESPERANDO_CLAVE_ACAPULCO") {
+      const list = sess.dd._claveAcapulcoList || [];
+      const picked = pickByNumber(body, list);
+      if (!picked) return safeReply("Responde 1) E9 o 2) E10.");
+      sess.dd.planta_id = picked.id;
+      sess.dd.planta_nombre = (picked.clave || picked.nombre) + " - Acapulco";
+      sess.dd._claveAcapulcoList = null;
       sess.estado = "ESPERANDO_PROYECTO_SN";
       return safeReply("¿Este folio pertenece a un proyecto? 1) Sí 2) No");
     }
