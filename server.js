@@ -5904,8 +5904,8 @@ app.post("/twilio/whatsapp", async (req, res) => {
                       console.warn("[Delta Ingreso AI ZP ask GG auto]", err.message);
                     }
                   }
-                }
-              }
+                
+              
               await deltaIngresoAiDb.insertQuery(client, { from_phone: fromNorm, actor_role: "ZP", question: textTrim, answer: replyText, sources_json: { intent: cmd.type, planta: cmd.planta || null } });
               await deltaIngresoAiDb.insertOutbox(client, { plant_code: "ZP", to_phone: fromNorm, kind: "ZP_REPLY", text: replyText });
               return safeReply(replyText);
@@ -5959,11 +5959,12 @@ app.post("/twilio/whatsapp", async (req, res) => {
                 actor_role: "ZP",
                 question: textTrim,
                 answer: replyText
+          
               });
             
               return safeReply(replyText);
             }
-            
+          }
 
           /* E) Solo si es explícito "preguntar al GG" => parseZPAskGGIntent y ticket */
           if (deltaIngresoAi.isExplicitAskGG(textTrim)) {
@@ -6017,16 +6018,15 @@ app.post("/twilio/whatsapp", async (req, res) => {
             });
           
             return safeReply(
-              answer || "No pude generar una respuesta. Solo respondo sobre Delta Ingreso (periodos configurados)."
-            );
+              answer || "No pude generar una respuesta. Solo respondo sobre Delta Ingreso (periodos configurados).");
           }
-          
-        } catch (e) {
+        } 
+        catch (e) {
           console.warn("[Delta Ingreso AI ZP router]", e.message);
           return safeReply("Error interno en Delta Ingreso.");
         }
         }
-        
+      }
 
       /* ----- Delta Ingreso AI: Q&A (ZP y GG) – solo temas Delta Ingreso ----- */
       const rolClaveQA = (actor && actor.rol_clave) ? String(actor.rol_clave).toUpperCase() : "";
