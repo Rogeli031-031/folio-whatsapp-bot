@@ -5675,7 +5675,8 @@ app.post("/twilio/whatsapp", async (req, res) => {
       if (esGGAsk && plantCodeGG && body.trim().length >= 1) {
         try {
           await deltaIngresoAiDb.ensureDeltaIngresoAiSchema(client);
-          const pending = await deltaIngresoAiDb.getPendingZPAskForPlantAndGG(client, plantCodeGG, fromNorm);
+          const last10 = phoneLast10(req.body.From) || phoneLast10(fromNorm);
+          const pending = await deltaIngresoAiDb.getPendingZPAskForPlantAndGG(client, plantCodeGG, fromNorm, last10);
           if (pending) {
             await deltaIngresoAiDb.markZPAskGGAnswered(client, pending.id, body.trim());
             const msgToZP = `📩 Respuesta del gerente (${plantCodeGG}): ${body.trim().substring(0, 500)}`;
