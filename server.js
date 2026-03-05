@@ -5734,6 +5734,10 @@ app.post("/twilio/whatsapp", async (req, res) => {
     const from = req.body.From || "unknown";
     const fromNorm = normalizePhone(from);
     const body = normalizeText(req.body.Body);
+    const textTrim = String(body || "").trim();
+    const lowerText = textTrim.toLowerCase();
+    const esDI = lowerText.startsWith("di ");
+
     const numMedia = parseInt(req.body.NumMedia || "0", 10) || 0;
     const sess = getSession(from);
     const lower = body.toLowerCase();
@@ -5942,11 +5946,24 @@ app.post("/twilio/whatsapp", async (req, res) => {
               if (data) allBriefs.push(deltaIngresoAi.buildBrief(row.plant_code, data));
             }
             const context = { role: "ZP", periodos: { periodoA: PERIODO_AI_A, periodoB: PERIODO_AI_B }, briefs: allBriefs };
-            const answer = await deltaIngresoAi.answerDeltaIngresoQuestion(textTrim, context, "ZP");
-            const replyText = answer || "No pude generar una respuesta. Solo respondo sobre Delta Ingreso (periodos configurados).";
-            await deltaIngresoAiDb.insertQuery(client, { from_phone: fromNorm, actor_role: "ZP", question: textTrim, answer: replyText, sources_json: { intent: "data_query" } });
-            return safeReply(replyText);
-          }
+            if (esDI) {
+              if (!AI_ENABLED) {
+                return safeReply("Delta Ingreso (IA desactivada). Usa: di resumen o di pendientes.");
+              }
+            
+              const answer = await deltaIngresoAi.answerDeltaIngresoQuestion(textTrim, context, "ZP");
+              const replyText = answer || "No pude generar una respuesta. Solo respondo sobre Delta Ingreso (periodos configurados).";
+            
+              await deltaIngresoAiDb.insertQuery(client, {
+                from_phone: fromNorm,
+                actor_role: "ZP",
+                question: textTrim,
+                answer: replyText
+              });
+            
+              return safeReply(replyText);
+            }
+            
 
           /* E) Solo si es explícito "preguntar al GG" => parseZPAskGGIntent y ticket */
           if (deltaIngresoAi.isExplicitAskGG(textTrim)) {
@@ -5982,10 +5999,29 @@ app.post("/twilio/whatsapp", async (req, res) => {
             const data = await getDeltaIngresoDatosInternal(client, row.plant_code, PERIODO_AI_A, PERIODO_AI_B, false);
             if (data) allBriefs.push(deltaIngresoAi.buildBrief(row.plant_code, data));
           }
-          const context = { role: "ZP", periodos: { periodoA: PERIODO_AI_A, periodoB: PERIODO_AI_B }, briefs: allBriefs };
-          const answer = await deltaIngresoAi.answerDeltaIngresoQuestion(textTrim, context, "ZP");
-          await deltaIngresoAiDb.insertQuery(client, { from_phone: fromNorm, actor_role: "ZP", question: textTrim, answer: answer || "", sources_json: { intent: "open_question" } });
-          return safeReply(answer || "No pude generar una respuesta. Solo respondo sobre Delta Ingreso (periodos configurados).");
+          if (esDI) {
+
+            const context = {
+              role: "ZP",
+              periodos: { periodoA: PERIODO_AI_A, periodoB: PERIODO_AI_B },
+              briefs: allBriefs
+            };
+          
+            const answer = await deltaIngresoAi.answerDeltaIngresoQuestion(textTrim, context, "ZP");
+          
+            await deltaIngresoAiDb.insertQuery(client, {
+              from_phone: fromNorm,
+              actor_role: "ZP",
+              question: textTrim,
+              answer: answer
+            });
+          
+            return safeReply(
+              answer || "No pude generar una respuesta. Solo respondo sobre Delta Ingreso (periodos configurados)."
+            );
+          
+          }
+          
         } catch (e) {
           console.warn("[Delta Ingreso AI ZP router]", e.message);
         }
@@ -6017,12 +6053,29 @@ app.post("/twilio/whatsapp", async (req, res) => {
               context = { role: "GG", periodos: { periodoA: PERIODO_AI_A, periodoB: PERIODO_AI_B }, brief: data ? deltaIngresoAi.buildBrief(plantCodeQA, data) : null };
             }
           }
-          if (context) {
+          if (context && esDI) {
+
             const actorRoleQA = esZPQA ? "ZP" : "GG";
-            const answer = await deltaIngresoAi.answerDeltaIngresoQuestion(body.trim(), context, actorRoleQA);
-            await deltaIngresoAiDb.insertQuery(client, { from_phone: fromNorm, actor_role: actorRoleQA, question: body.trim(), answer: answer || "", sources_json: null });
-            return safeReply(answer || "No pude generar una respuesta. Solo respondo sobre Delta Ingreso (periodos configurados).");
+          
+            const answer = await deltaIngresoAi.answerDeltaIngresoQuestion(
+              body.trim(),
+              context,
+              actorRoleQA
+            );
+          
+            await deltaIngresoAiDb.insertQuery(client, {
+              from_phone: fromNorm,
+              actor_role: actorRoleQA,
+              question: body.trim(),
+              answer: answer
+            });
+          
+            return safeReply(
+              answer || "No pude generar una respuesta. Solo respondo sobre Delta Ingreso (periodos configurados)."
+            );
+          
           }
+          
         } catch (e) {
           console.warn("[Delta Ingreso AI Q&A]", e.message);
         }
