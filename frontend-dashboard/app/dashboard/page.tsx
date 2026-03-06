@@ -82,6 +82,8 @@ function DashboardContent() {
     );
   }
 
+  /** Códigos de identificación (E7, E8, etc.) no se muestran en el filtro; solo plantas por nombre (Acapulco, Morelos, etc.). */
+  const CLAVES_CODIGO_PLANTA = ["E7", "E8", "E9", "E10", "E11", "E12", "E13", "E15"];
   const plantas = kanban
     ? Array.from(
         new Map(
@@ -89,6 +91,10 @@ function DashboardContent() {
             col.plantas.map((p) => [p.planta_id, { id: p.planta_id, nombre: p.planta_nombre }])
           )
         ).values()
+      ).filter(
+        (p) =>
+          !CLAVES_CODIGO_PLANTA.includes((p.nombre || "").trim().toUpperCase()) &&
+          !/^E\d+$/.test((p.nombre || "").trim())
       )
     : [];
 

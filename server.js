@@ -2369,6 +2369,28 @@ function filterPlantasUbicacionParaCrearFolio(plantas) {
 /** Mapeo ubicación -> clave de planta única (para no-Acapulco). Acapulco se resuelve con E9/E10 en flujo aparte. */
 const MAP_UBICACION_A_CLAVE_PLANTA = { PUEBLA: "E7", TEHUACAN: "E8", QUERETARO: "E12", SANLUIS: "E13", MORELOS: "E15" };
 
+/**
+ * Para GG/GA: folios pueden estar en planta "ubicación" (ej. Morelos id 6) o en planta "código" (ej. E15 id 13).
+ * Devuelve los planta_id equivalentes para que "mis pendientes" incluya ambos.
+ * IDs según tabla plantas: 1 Acapulco, 2 Puebla, 3 Tehuacán, 4 Querétaro, 5 San Luis, 6 Morelos, 7 Corporativo;
+ * 11 E9, 12 E10, 13 E15, 14 E7, 15 E8, 16 E12, 17 E11, 18 E13.
+ */
+function getPlantaIdsEquivalentesForPendientes(plantaId) {
+  if (plantaId == null) return [];
+  const id = parseInt(plantaId, 10);
+  if (!Number.isFinite(id)) return [plantaId];
+  const grupos = {
+    1: [1, 11, 12], 11: [1, 11, 12], 12: [1, 11, 12],
+    2: [2, 14], 14: [2, 14],
+    3: [3, 15], 15: [3, 15],
+    4: [4, 16], 16: [4, 16],
+    5: [5, 18], 18: [5, 18],
+    6: [6, 13], 13: [6, 13],
+    7: [7], 17: [17],
+  };
+  return grupos[id] || [id];
+}
+
 /** Obtiene plantas por claves (ej. ['E9','E10'] o ['E7']). */
 async function getPlantasByClaves(client, claves) {
   if (!claves || claves.length === 0) return [];
@@ -3622,8 +3644,9 @@ async function getPendientesForUser(client, fromNumber, page = 1, pageSize = 20,
 
   if (rolClave === "GG" || rolClave === "GA") {
     if (plantaId == null) return { plantaInfo: { nombre: "Corporativo" }, urgentesCount: 0, normalesCount: 0, totalCount: 0, urgentesSum: 0, normalesSum: 0, totalSum: 0, rows: [], totalPages: 0 };
-    whereClause = " AND f.planta_id = $1 AND f.estatus = $2";
-    params.push(plantaId, ESTADOS.PENDIENTE_APROB_PLANTA);
+    const plantaIdsEquivalentes = getPlantaIdsEquivalentesForPendientes(plantaId);
+    whereClause = " AND f.planta_id = ANY($1::INT[]) AND f.estatus = $2";
+    params.push(plantaIdsEquivalentes, ESTADOS.PENDIENTE_APROB_PLANTA);
   } else if (rolClave === "ZP") {
     whereClause = " AND f.estatus = ANY($1::TEXT[])";
     params.push([ESTADOS.PENDIENTE_APROB_ZP, ESTADOS.CANCELACION_SOLICITADA]);
@@ -4541,9 +4564,16 @@ function buildDashboardWhere(auth, filters) {
     }
   }
   if (filters.plantas && filters.plantas.length > 0) {
-    conditions.push(`f.planta_id = ANY($${n}::INT[])`);
-    params.push(filters.plantas);
-    n++;
+    const plantasExpandidas = [];
+    for (const pid of filters.plantas) {
+      plantasExpandidas.push(...getPlantaIdsEquivalentesForPendientes(pid));
+    }
+    const plantasUnicas = [...new Set(plantasExpandidas)].filter((id) => Number.isFinite(id) && id > 0);
+    if (plantasUnicas.length > 0) {
+      conditions.push(`f.planta_id = ANY($${n}::INT[])`);
+      params.push(plantasUnicas);
+      n++;
+    }
   }
   if (filters.categorias && filters.categorias.length > 0) {
     conditions.push(`UPPER(TRIM(COALESCE(f.categoria,''))) = ANY($${n}::TEXT[])`);
