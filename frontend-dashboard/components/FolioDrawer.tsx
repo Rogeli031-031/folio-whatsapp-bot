@@ -100,6 +100,11 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
   const puedeRegresarZp = !soloLectura && ESTADOS_CARRO_COMPRA.includes(estatusUpper);
   const puedeSoloZpAd = roleUpper === "ZP" || roleUpper === "AD";
   const soloZpAd = !!folio?.solo_zp_ad;
+  const puedeSolicitarCancelacion = (roleUpper === "GA" || roleUpper === "GG" || roleUpper === "CF_CDMX") && !["CANCELADO", "PAGADO", "CERRADO", "CANCELACION_SOLICITADA"].includes(estatusUpper);
+  const whatsappNumber = (process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "").trim().replace(/\D/g, "");
+  const numeroFolio = (folio?.numero_folio as string) || (folio?.folio_codigo as string) || "";
+  const cmdCancelacion = numeroFolio ? `cancelar ${numeroFolio} motivo: ` : "cancelar F-YYYYMM-XXX motivo: ";
+  const solicitudCancelacionHref = whatsappNumber ? `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(cmdCancelacion)}` : null;
 
   const handleAprobar = async () => {
     if (!token || !folioId || !puedeAprobar) return;
@@ -115,6 +120,18 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
       setApproveError((e as Error).message || "Error al aprobar");
     } finally {
       setApproving(false);
+    }
+  };
+
+  const handleSolicitudCancelacion = () => {
+    if (!puedeSolicitarCancelacion) return;
+    if (solicitudCancelacionHref) {
+      window.open(solicitudCancelacionHref, "_blank", "noopener,noreferrer");
+    } else {
+      navigator.clipboard
+        .writeText(cmdCancelacion)
+        .then(() => alert(`Comando copiado: ${cmdCancelacion}`))
+        .catch(() => {});
     }
   };
 
@@ -198,26 +215,37 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
                       <dt className="text-slate-500">Estatus</dt>
                       <dd className="text-slate-200">{folio.etapa_icon ? <span className="mr-1">{folio.etapa_icon as string}</span> : null}{String(folio.estatus_visible ?? folio.estatus ?? "—")}</dd>
                     </div>
-                    {puedeAprobar && (
-                      <button
-                        type="button"
-                        onClick={handleAprobar}
-                        disabled={approving}
-                        className="rounded bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
-                      >
-                        {approving ? "…" : "Aprobar folio"}
-                      </button>
-                    )}
-                    {puedeRegresarZp && (
-                      <button
-                        type="button"
-                        onClick={handleRegresarZp}
-                        disabled={approving}
-                        className="rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
-                      >
-                        {approving ? "…" : "Regresar a ZP"}
-                      </button>
-                    )}
+                    <div className="flex flex-col items-end gap-2">
+                      {puedeSolicitarCancelacion && (
+                        <button
+                          type="button"
+                          onClick={handleSolicitudCancelacion}
+                          className="rounded bg-red-900/80 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-800"
+                        >
+                          Solicitud de cancelación
+                        </button>
+                      )}
+                      {puedeAprobar && (
+                        <button
+                          type="button"
+                          onClick={handleAprobar}
+                          disabled={approving}
+                          className="rounded bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+                        >
+                          {approving ? "…" : "Aprobar folio"}
+                        </button>
+                      )}
+                      {puedeRegresarZp && (
+                        <button
+                          type="button"
+                          onClick={handleRegresarZp}
+                          disabled={approving}
+                          className="rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+                        >
+                          {approving ? "…" : "Regresar a ZP"}
+                        </button>
+                      )}
+                    </div>
                   </div>
                   {approveError && <p className="text-sm text-red-400">{approveError}</p>}
                   {puedeSoloZpAd && (
