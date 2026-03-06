@@ -13,12 +13,13 @@ interface Props {
   onSubirPoliza?: (id: number) => void;
   onImprimirGastos?: (id: number, numeroFolio: string) => void;
   onCrearFolio?: (plantaId: number, plantaNombre: string) => void;
+  onCrearFolioUrgente?: (plantaId: number, plantaNombre: string) => void;
   onCrearProyecto?: (plantaId: number, plantaNombre: string) => void;
 }
 
 const CAT_ORDER = ["GASTOS", "INVERSIONES", "DYO", "TALLER"];
 
-export default function PlantaSection({ planta_id, planta_nombre, stats, porCategoria, onOpenFolio, role, onSubirPoliza, onImprimirGastos, onCrearFolio, onCrearProyecto }: Props) {
+export default function PlantaSection({ planta_id, planta_nombre, stats, porCategoria, onOpenFolio, role, onSubirPoliza, onImprimirGastos, onCrearFolio, onCrearFolioUrgente, onCrearProyecto }: Props) {
   const fmtMxn = (n: number) =>
     n != null && !isNaN(n) ? `$${n.toLocaleString("es-MX", { maximumFractionDigits: 0 })}` : "N/A";
 
@@ -48,6 +49,15 @@ export default function PlantaSection({ planta_id, planta_nombre, stats, porCate
               className="flex-shrink-0 rounded bg-emerald-700 px-2 py-1 text-[10px] font-medium text-white hover:bg-emerald-600"
             >
               Crear folio
+            </button>
+          )}
+          {onCrearFolioUrgente && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onCrearFolioUrgente(planta_id, planta_nombre); }}
+              className="flex-shrink-0 rounded bg-amber-600 px-2 py-1 text-[10px] font-medium text-white hover:bg-amber-500"
+            >
+              Crear folio urgente
             </button>
           )}
           {onCrearProyecto && (
