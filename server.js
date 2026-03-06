@@ -2131,6 +2131,7 @@ async function ensureSchema() {
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS creado_por VARCHAR(255);`);
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS creado_por_rol_clave VARCHAR(20);`);
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS solo_zp_ad BOOLEAN DEFAULT false;`);
+    await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS por_recuperar BOOLEAN DEFAULT false;`);
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS mes_cargo VARCHAR(7);`);
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS descripcion TEXT;`);
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;`);
@@ -2392,6 +2393,13 @@ function getPlantaIdsEquivalentesForPendientes(plantaId) {
   return grupos[id] || [id];
 }
 
+/** Id canónico de planta para agrupar en dashboard (E13 y San Luis = mismo grupo; devuelve el id de "ubicación", ej. 5). */
+function getCanonicalPlantaId(plantaId) {
+  if (plantaId == null) return plantaId;
+  const ids = getPlantaIdsEquivalentesForPendientes(plantaId);
+  return ids.length ? Math.min(...ids) : plantaId;
+}
+
 /** Obtiene plantas por claves (ej. ['E9','E10'] o ['E7']). */
 async function getPlantasByClaves(client, claves) {
   if (!claves || claves.length === 0) return [];
@@ -2512,7 +2520,7 @@ async function getFolioById(client, id) {
     `SELECT f.id, f.numero_folio, f.folio_codigo, f.planta_id, f.beneficiario, f.concepto, f.importe,
             f.categoria, f.subcategoria, f.estacion, f.unidad, f.prioridad, f.estatus, f.cotizacion_url, f.cotizacion_s3key,
             f.aprobado_por, f.aprobado_en, f.creado_en, f.nivel_aprobado, f.estatus_anterior, f.override_planta, f.override_motivo, f.creado_por, f.creado_por_rol_clave,
-            f.presupuesto_id, f.descripcion, f.mes_cargo, f.solo_zp_ad,
+            f.presupuesto_id, f.descripcion, f.mes_cargo, f.solo_zp_ad, COALESCE(f.por_recuperar, false) AS por_recuperar,
             COALESCE(f.descripcion, f.concepto) AS descripcion_display,
             p.nombre AS planta_nombre
      FROM public.folios f
@@ -4677,6 +4685,7 @@ function cardFromFolioRow(row) {
     aging,
     tiene_cotizacion: !!row.tiene_cotizacion,
     solo_zp_ad: !!row.solo_zp_ad,
+    por_recuperar: !!row.por_recuperar,
   };
 }
 
@@ -4687,7 +4696,7 @@ app.get("/api/dashboard/kanban", dashboardAuthMiddleware, async (req, res) => {
     const { where, params } = buildDashboardWhere(req.dashboardAuth, filters);
     const q = `
       SELECT f.id, f.numero_folio, f.folio_codigo, f.planta_id, f.categoria, f.subcategoria, f.unidad,
-             f.importe, f.estatus, f.creado_en, COALESCE(f.solo_zp_ad, false) AS solo_zp_ad,
+             f.importe, f.estatus, f.creado_en, COALESCE(f.solo_zp_ad, false) AS solo_zp_ad, COALESCE(f.por_recuperar, false) AS por_recuperar,
              COALESCE(f.descripcion, f.concepto) AS descripcion_display,
              p.nombre AS planta_nombre,
              (
@@ -4715,6 +4724,9 @@ app.get("/api/dashboard/kanban", dashboardAuthMiddleware, async (req, res) => {
       if (!byEtapa[etapaVisual]) byEtapa[etapaVisual] = [];
       byEtapa[etapaVisual].push(row);
     });
+    const plantasList = await getPlantas(client);
+    const nombreByPlantaId = {};
+    (plantasList || []).forEach((p) => { nombreByPlantaId[p.id] = p.nombre || p.clave || `Planta ${p.id}`; });
     const board = ETAPAS_VISUAL_ORDER.map((etapa) => {
       const folios = byEtapa[etapa] || [];
       const meta = ETAPA_VISIBLE[etapa] || { label: etapa, icon: "" };
@@ -4728,9 +4740,10 @@ app.get("/api/dashboard/kanban", dashboardAuthMiddleware, async (req, res) => {
       const byPlanta = {};
       folios.forEach((f) => {
         const pid = f.planta_id != null ? f.planta_id : 0;
-        const pnom = f.planta_nombre || "Sin planta";
-        if (!byPlanta[pid]) byPlanta[pid] = { planta_id: pid, planta_nombre: pnom, folios: [] };
-        byPlanta[pid].folios.push(f);
+        const cid = pid ? getCanonicalPlantaId(pid) : 0;
+        const pnom = (cid && nombreByPlantaId[cid]) ? nombreByPlantaId[cid] : (f.planta_nombre || "Sin planta");
+        if (!byPlanta[cid]) byPlanta[cid] = { planta_id: cid, planta_nombre: pnom, folios: [] };
+        byPlanta[cid].folios.push(f);
       });
       const plantas = Object.values(byPlanta).map((p) => {
         const fols = p.folios;
@@ -5252,6 +5265,30 @@ app.patch("/api/folios/:id/solo-zp-ad", dashboardAuthMiddleware, async (req, res
     res.json({ ok: true, solo_zp_ad: soloZpAd });
   } catch (e) {
     console.error("[Dashboard PATCH solo-zp-ad]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/** Marcar/desmarcar folio como "Por recuperar" (pagado de presupuesto, debe recuperarse). Identificado en UI con color azul. */
+app.patch("/api/folios/:id/por-recuperar", dashboardAuthMiddleware, async (req, res) => {
+  const folioId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
+  const porRecuperar = req.body.por_recuperar === true || req.body.por_recuperar === "true";
+  const client = await pool.connect();
+  try {
+    const folio = await getFolioById(client, folioId);
+    if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
+    if ((req.dashboardAuth.role === "GG" || req.dashboardAuth.role === "GA") && req.dashboardAuth.plantas_permitidas?.length > 0) {
+      if (!folio.planta_id || !req.dashboardAuth.plantas_permitidas.includes(folio.planta_id)) {
+        return res.status(403).json({ error: "Sin permiso para este folio" });
+      }
+    }
+    await client.query(`UPDATE public.folios SET por_recuperar = $1 WHERE id = $2`, [porRecuperar, folioId]);
+    res.json({ ok: true, por_recuperar: porRecuperar });
+  } catch (e) {
+    console.error("[Dashboard PATCH por-recuperar]", e);
     res.status(500).json({ error: e.message });
   } finally {
     client.release();

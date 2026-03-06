@@ -11,6 +11,7 @@ import {
   postRegresarFolioAZp,
   patchFolioMesCargo,
   patchFolioSoloZpAd,
+  patchFolioPorRecuperar,
 } from "@/lib/api";
 
 function getMesesOpciones(): { value: string; label: string }[] {
@@ -50,6 +51,7 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
   const [mesCargoEdit, setMesCargoEdit] = useState<string>("");
   const [savingMesCargo, setSavingMesCargo] = useState(false);
   const [savingSoloZpAd, setSavingSoloZpAd] = useState(false);
+  const [savingPorRecuperar, setSavingPorRecuperar] = useState(false);
 
   useEffect(() => {
     if (!folioId || !token) {
@@ -100,6 +102,7 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
   const puedeRegresarZp = !soloLectura && ESTADOS_CARRO_COMPRA.includes(estatusUpper);
   const puedeSoloZpAd = roleUpper === "ZP" || roleUpper === "AD";
   const soloZpAd = !!folio?.solo_zp_ad;
+  const porRecuperar = !!folio?.por_recuperar;
   const puedeSolicitarCancelacion = (roleUpper === "GA" || roleUpper === "GG" || roleUpper === "CF_CDMX") && !["CANCELADO", "PAGADO", "CERRADO", "CANCELACION_SOLICITADA"].includes(estatusUpper);
   const whatsappNumber = (process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "").trim().replace(/\D/g, "");
   const numeroFolio = (folio?.numero_folio as string) || (folio?.folio_codigo as string) || "";
@@ -166,6 +169,22 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
       setApproveError((e as Error).message || "Error al cambiar visibilidad");
     } finally {
       setSavingSoloZpAd(false);
+    }
+  };
+
+  const handlePorRecuperar = async () => {
+    if (!token || !folioId) return;
+    setApproveError(null);
+    setSavingPorRecuperar(true);
+    try {
+      await patchFolioPorRecuperar(token, folioId, !porRecuperar);
+      const f = await fetchFolio(token, folioId);
+      setFolio(f as Record<string, unknown>);
+      onApproved?.();
+    } catch (e) {
+      setApproveError((e as Error).message || "Error al marcar por recuperar");
+    } finally {
+      setSavingPorRecuperar(false);
     }
   };
 
@@ -261,6 +280,17 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
                       {soloZpAd && <p className="text-xs text-slate-500 mt-1">Solo Director ZP y Asistente de Dirección pueden ver este folio.</p>}
                     </div>
                   )}
+                  <div className="pt-2 border-t border-slate-700">
+                    <button
+                      type="button"
+                      onClick={handlePorRecuperar}
+                      disabled={savingPorRecuperar}
+                      className={`rounded px-3 py-1.5 text-sm font-medium ${porRecuperar ? "bg-blue-600 text-white hover:bg-blue-500" : "bg-slate-600 text-white hover:bg-slate-500"} disabled:opacity-50`}
+                    >
+                      {savingPorRecuperar ? "…" : porRecuperar ? "Por recuperar (marcado)" : "Por recuperar"}
+                    </button>
+                    <p className="text-xs text-slate-500 mt-1">Pagado de presupuesto y debe recuperarse. Se identifica en azul en el tablero.</p>
+                  </div>
                   {puedeRegresarZp && (
                     <div className="pt-2 border-t border-slate-700">
                       <dt className="text-slate-500 mb-1">Mes de cargo (para documento e impresión)</dt>
@@ -308,9 +338,35 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
               </section>
               <section>
                 <h3 className="mb-2 text-sm font-medium text-slate-400">Adjuntos</h3>
-                {media.length === 0 ? (
-                  <p className="text-sm text-slate-500">Sin adjuntos</p>
-                ) : (
+                {(() => {
+                  const tieneCotizacion = !!(folio.cotizacion_url || folio.cotizacion_s3key) || media.some((m) => (m.tipo || "").toUpperCase() === "COTIZACION");
+                  const cmdAdjuntar = numeroFolio ? `adjuntar ${numeroFolio}` : "";
+                  const whatsappAdjuntar = whatsappNumber && cmdAdjuntar ? `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(cmdAdjuntar)}` : null;
+                  return (
+                    <>
+                      {!tieneCotizacion && cmdAdjuntar && (
+                        <div className="mb-2">
+                          <p className="text-xs text-slate-500 mb-1">Este folio no tiene cotización adjunta (se muestra en rojo en el tablero).</p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (whatsappAdjuntar) window.open(whatsappAdjuntar, "_blank", "noopener,noreferrer");
+                              else navigator.clipboard.writeText(cmdAdjuntar).then(() => alert("Comando copiado: " + cmdAdjuntar)).catch(() => {});
+                            }}
+                            className="rounded bg-amber-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-500"
+                          >
+                            Adjuntar cotización
+                          </button>
+                          <span className="ml-2 text-xs text-slate-500">(abre WhatsApp o copia el comando)</span>
+                        </div>
+                      )}
+                      {media.length === 0 ? (
+                        <p className="text-sm text-slate-500">Sin adjuntos</p>
+                      ) : null}
+                    </>
+                  );
+                })()}
+                {media.length === 0 ? null : (
                   <ul className="space-y-1">
                     {(() => {
                       const byTipo = {} as Record<string, { id: number; tipo: string; file_name: string | null }>;

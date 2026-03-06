@@ -52,7 +52,9 @@ export default function FolioCard({ card, onOpen, role, onSubirPoliza, onImprimi
     ? `$${card.importe.toLocaleString("es-MX", { maximumFractionDigits: 0 })}`
     : null;
 
-  const bordeClase = card.tiene_cotizacion === false
+  const bordeClase = card.por_recuperar
+    ? "border-l-blue-600"
+    : card.tiene_cotizacion === false
     ? "border-l-red-700"
     : etapaColor(card.estatus);
 

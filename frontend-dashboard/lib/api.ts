@@ -66,6 +66,7 @@ export interface FolioCard {
   aging: number | null;
   tiene_cotizacion?: boolean;
   solo_zp_ad?: boolean;
+  por_recuperar?: boolean;
 }
 
 export interface Kpis {
@@ -415,6 +416,18 @@ export function patchFolioSoloZpAd(
     token,
     method: "PATCH",
     body: JSON.stringify({ solo_zp_ad }),
+  });
+}
+
+export function patchFolioPorRecuperar(
+  token: string,
+  folioId: number,
+  por_recuperar: boolean
+): Promise<{ ok: boolean; por_recuperar: boolean }> {
+  return apiFetch(`/api/folios/${folioId}/por-recuperar`, {
+    token,
+    method: "PATCH",
+    body: JSON.stringify({ por_recuperar }),
   });
 }
 
