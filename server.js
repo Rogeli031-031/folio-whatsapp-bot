@@ -5447,6 +5447,55 @@ app.post("/api/folios/:id/poliza", dashboardAuthMiddleware, async (req, res) => 
   }
 });
 
+/** Subir cotización PDF desde el dashboard (selector de archivo). Cualquier rol con acceso al folio puede subir; se marca como APROBADA y se actualiza folio. */
+app.post("/api/folios/:id/cotizacion", dashboardAuthMiddleware, async (req, res) => {
+  const folioId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
+  let fileBuffer = null;
+  if (typeof req.body.fileBase64 === "string") {
+    try { fileBuffer = Buffer.from(req.body.fileBase64, "base64"); } catch (e) { return res.status(400).json({ error: "fileBase64 inválido" }); }
+  }
+  if (!fileBuffer || fileBuffer.length === 0) return res.status(400).json({ error: "Envía fileBase64 (PDF)" });
+  const client = await pool.connect();
+  try {
+    const folio = await getFolioById(client, folioId);
+    if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
+    if ((req.dashboardAuth.role === "GG" || req.dashboardAuth.role === "GA") && req.dashboardAuth.plantas_permitidas?.length > 0) {
+      if (!folio.planta_id || !req.dashboardAuth.plantas_permitidas.includes(folio.planta_id)) {
+        return res.status(403).json({ error: "Sin permiso para este folio" });
+      }
+    }
+    if (!s3Enabled) return res.status(503).json({ error: "Almacenamiento no configurado" });
+    const s3Key = `cotizaciones/${folio.numero_folio}/${Date.now()}.pdf`;
+    const publicUrl = await uploadPdfToS3(fileBuffer, s3Key);
+    const fileName = (req.body.fileName && String(req.body.fileName).trim()) || "cotizacion.pdf";
+    const hash = crypto.createHash("sha256").update(fileBuffer).digest("hex");
+    const existing = await findFolioArchivoByHash(client, folioId, hash, "COTIZACION");
+    if (existing && existing.id) {
+      await aprobarFolioArchivoCDMX(client, existing.id, req.dashboardAuth.actor_id != null ? `Dashboard:${req.dashboardAuth.actor_id}` : "Dashboard");
+      return res.json({ ok: true, duplicate: true });
+    }
+    const row = await insertFolioArchivo(client, {
+      folio_id: folioId,
+      numero_folio: folio.numero_folio,
+      tipo: "COTIZACION",
+      s3_key: s3Key,
+      url: publicUrl,
+      file_name: fileName,
+      file_size_bytes: fileBuffer.length,
+      sha256: hash,
+      subido_por: req.dashboardAuth.actor_id != null ? `Dashboard:${req.dashboardAuth.actor_id}` : "Dashboard",
+    });
+    await aprobarFolioArchivoCDMX(client, row.id, req.dashboardAuth.actor_id != null ? `Dashboard:${req.dashboardAuth.actor_id}` : "Dashboard");
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error("[Dashboard folio cotizacion]", e);
+    res.status(500).json({ error: e.message || "Error al guardar la cotización" });
+  } finally {
+    client.release();
+  }
+});
+
 /* ==================== ARR / Forecast (módulo adicional; no modifica flujo existente) ==================== */
 
 app.post("/api/arr/load", dashboardAuthMiddleware, async (req, res) => {

@@ -12,6 +12,7 @@ import {
   patchFolioMesCargo,
   patchFolioSoloZpAd,
   patchFolioPorRecuperar,
+  postFolioCotizacion,
 } from "@/lib/api";
 
 function getMesesOpciones(): { value: string; label: string }[] {
@@ -52,6 +53,10 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
   const [savingMesCargo, setSavingMesCargo] = useState(false);
   const [savingSoloZpAd, setSavingSoloZpAd] = useState(false);
   const [savingPorRecuperar, setSavingPorRecuperar] = useState(false);
+  const [cotizacionFile, setCotizacionFile] = useState<File | null>(null);
+  const [cotizacionBase64, setCotizacionBase64] = useState<string | null>(null);
+  const [uploadingCotizacion, setUploadingCotizacion] = useState(false);
+  const [cotizacionError, setCotizacionError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!folioId || !token) {
@@ -185,6 +190,53 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
       setApproveError((e as Error).message || "Error al marcar por recuperar");
     } finally {
       setSavingPorRecuperar(false);
+    }
+  };
+
+  const onCotizacionFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    setCotizacionError(null);
+    setCotizacionFile(null);
+    setCotizacionBase64(null);
+    if (!f) return;
+    if (!f.type.includes("pdf")) {
+      setCotizacionError("Solo se acepta PDF.");
+      return;
+    }
+    setCotizacionFile(f);
+    const reader = new FileReader();
+    reader.onload = () => {
+      const data = reader.result as string;
+      const base64 = data.indexOf(",") >= 0 ? data.split(",")[1] : data;
+      setCotizacionBase64(base64 || null);
+    };
+    reader.readAsDataURL(f);
+  };
+
+  const handleSubirCotizacion = async () => {
+    if (!token || !folioId || !cotizacionBase64) return;
+    setCotizacionError(null);
+    setUploadingCotizacion(true);
+    try {
+      await postFolioCotizacion(token, folioId, {
+        fileBase64: cotizacionBase64,
+        fileName: cotizacionFile?.name || "cotizacion.pdf",
+      });
+      setCotizacionFile(null);
+      setCotizacionBase64(null);
+      const [f, t, m] = await Promise.all([
+        fetchFolio(token, folioId),
+        fetchTimeline(token, folioId),
+        fetchMedia(token, folioId),
+      ]);
+      setFolio(f as Record<string, unknown>);
+      setTimeline((t as { events: typeof timeline }).events || []);
+      setMedia((m as { items: typeof media }).items || []);
+      onApproved?.();
+    } catch (e) {
+      setCotizacionError((e as Error).message || "Error al subir la cotización");
+    } finally {
+      setUploadingCotizacion(false);
     }
   };
 
@@ -340,24 +392,27 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
                 <h3 className="mb-2 text-sm font-medium text-slate-400">Adjuntos</h3>
                 {(() => {
                   const tieneCotizacion = !!(folio.cotizacion_url || folio.cotizacion_s3key) || media.some((m) => (m.tipo || "").toUpperCase() === "COTIZACION");
-                  const cmdAdjuntar = numeroFolio ? `adjuntar ${numeroFolio}` : "";
-                  const whatsappAdjuntar = whatsappNumber && cmdAdjuntar ? `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(cmdAdjuntar)}` : null;
                   return (
                     <>
-                      {!tieneCotizacion && cmdAdjuntar && (
-                        <div className="mb-2">
-                          <p className="text-xs text-slate-500 mb-1">Este folio no tiene cotización adjunta (se muestra en rojo en el tablero).</p>
+                      {!tieneCotizacion && (
+                        <div className="mb-3">
+                          <p className="text-xs text-slate-500 mb-1">Este folio no tiene cotización adjunta (se muestra en rojo en el tablero). Selecciona un PDF para subir.</p>
+                          <input
+                            type="file"
+                            accept=".pdf,application/pdf"
+                            onChange={onCotizacionFileChange}
+                            className="mt-1 w-full rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200 file:mr-2 file:rounded file:border-0 file:bg-amber-600 file:px-2 file:py-1 file:text-white file:hover:bg-amber-500"
+                          />
+                          {cotizacionFile && <span className="mt-1 block text-xs text-slate-500">{cotizacionFile.name}</span>}
+                          {cotizacionError && <p className="mt-1 text-xs text-red-400">{cotizacionError}</p>}
                           <button
                             type="button"
-                            onClick={() => {
-                              if (whatsappAdjuntar) window.open(whatsappAdjuntar, "_blank", "noopener,noreferrer");
-                              else navigator.clipboard.writeText(cmdAdjuntar).then(() => alert("Comando copiado: " + cmdAdjuntar)).catch(() => {});
-                            }}
-                            className="rounded bg-amber-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-500"
+                            onClick={handleSubirCotizacion}
+                            disabled={uploadingCotizacion || !cotizacionBase64}
+                            className="mt-2 rounded bg-amber-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-500 disabled:opacity-50"
                           >
-                            Adjuntar cotización
+                            {uploadingCotizacion ? "…" : "Subir cotización"}
                           </button>
-                          <span className="ml-2 text-xs text-slate-500">(abre WhatsApp o copia el comando)</span>
                         </div>
                       )}
                       {media.length === 0 ? (

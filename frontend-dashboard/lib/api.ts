@@ -395,6 +395,18 @@ export function postFolioPoliza(
   });
 }
 
+export function postFolioCotizacion(
+  token: string,
+  folioId: number,
+  body: { fileBase64: string; fileName?: string }
+): Promise<{ ok: boolean }> {
+  return apiFetch(`/api/folios/${folioId}/cotizacion`, {
+    token,
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
 export function patchFolioMesCargo(
   token: string,
   folioId: number,
