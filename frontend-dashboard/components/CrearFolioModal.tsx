@@ -17,7 +17,7 @@ const SUBCATEGORIAS: Record<string, string[]> = {
   TALLER: [],
 };
 
-const PRIORIDADES = ["Alta", "Media", "Baja"];
+const PRIORIDADES = ["Urgente no programado", "Alta", "Media", "Baja"];
 
 interface Props {
   open: boolean;
@@ -26,16 +26,20 @@ interface Props {
   plantaNombre: string;
   token: string;
   onCreated: () => void;
+  /** Si true, el folio se crea con prioridad "Urgente no programado" */
+  urgente?: boolean;
 }
 
-export default function CrearFolioModal({ open, onClose, plantaId, plantaNombre, token, onCreated }: Props) {
+const PRIORIDAD_URGENTE = "Urgente no programado";
+
+export default function CrearFolioModal({ open, onClose, plantaId, plantaNombre, token, onCreated, urgente = false }: Props) {
   const [plantas, setPlantas] = useState<{ id: number; nombre: string }[]>([]);
   const [beneficiario, setBeneficiario] = useState("");
   const [concepto, setConcepto] = useState("");
   const [importe, setImporte] = useState("");
   const [categoria, setCategoria] = useState("GASTOS");
   const [subcategoria, setSubcategoria] = useState("");
-  const [prioridad, setPrioridad] = useState("Media");
+  const [prioridad, setPrioridad] = useState(urgente ? PRIORIDAD_URGENTE : "Media");
   const [unidad, setUnidad] = useState("");
   const [estacion, setEstacion] = useState("");
   const [banco, setBanco] = useState("");
@@ -50,9 +54,10 @@ export default function CrearFolioModal({ open, onClose, plantaId, plantaNombre,
     if (open) {
       setSelectedPlantaId(plantaId);
       setProyectoId(null);
+      setPrioridad(urgente ? PRIORIDAD_URGENTE : "Media");
       if (token) fetchPlantas(token).then((r) => setPlantas(r.plantas || [])).catch(() => setPlantas([]));
     }
-  }, [open, token, plantaId]);
+  }, [open, token, plantaId, urgente]);
 
   useEffect(() => {
     if (!open || !token || !selectedPlantaId) {
@@ -127,7 +132,7 @@ export default function CrearFolioModal({ open, onClose, plantaId, plantaNombre,
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
       <div className="w-full max-w-3xl rounded-lg border border-slate-600 bg-slate-900 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-slate-700 px-4 py-2">
-          <h2 className="text-lg font-medium text-slate-200">Crear folio</h2>
+          <h2 className="text-lg font-medium text-slate-200">{urgente ? "Crear folio urgente" : "Crear folio"}</h2>
           <button type="button" onClick={onClose} className="rounded p-1 text-slate-400 hover:bg-slate-700 hover:text-white">
             ✕
           </button>

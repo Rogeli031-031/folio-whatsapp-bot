@@ -40,7 +40,7 @@ export default function PlantaSection({ planta_id, planta_nombre, stats, porCate
   return (
     <div className="rounded border border-slate-700 bg-slate-800/40 p-3">
       <div className="mb-2 flex items-center justify-between gap-2 border-b border-slate-600 pb-2">
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex flex-wrap items-center gap-2 min-w-0">
           <span className="font-medium text-slate-200">{planta_nombre}</span>
           {onCrearFolio && (
             <button

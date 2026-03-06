@@ -67,6 +67,7 @@ export interface FolioCard {
   tiene_cotizacion?: boolean;
   solo_zp_ad?: boolean;
   por_recuperar?: boolean;
+  prioridad?: string | null;
 }
 
 export interface Kpis {
@@ -455,6 +456,18 @@ export function patchFolioSoloZpAd(
   });
 }
 
+export function patchFolioPrioridad(
+  token: string,
+  folioId: number,
+  prioridad: string | null
+): Promise<{ ok: boolean; prioridad: string | null }> {
+  return apiFetch(`/api/folios/${folioId}/prioridad`, {
+    token,
+    method: "PATCH",
+    body: JSON.stringify({ prioridad }),
+  });
+}
+
 export function patchFolioPorRecuperar(
   token: string,
   folioId: number,
@@ -464,6 +477,13 @@ export function patchFolioPorRecuperar(
     token,
     method: "PATCH",
     body: JSON.stringify({ por_recuperar }),
+  });
+}
+
+export function postSolicitarPorRecuperar(token: string, folioId: number): Promise<{ ok: boolean }> {
+  return apiFetch(`/api/folios/${folioId}/solicitar-por-recuperar`, {
+    token,
+    method: "POST",
   });
 }
 

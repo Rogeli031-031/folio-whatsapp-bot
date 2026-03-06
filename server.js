@@ -2132,6 +2132,8 @@ async function ensureSchema() {
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS creado_por_rol_clave VARCHAR(20);`);
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS solo_zp_ad BOOLEAN DEFAULT false;`);
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS por_recuperar BOOLEAN DEFAULT false;`);
+    await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS solicitud_por_recuperar_pendiente BOOLEAN DEFAULT false;`);
+    await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS solicitud_por_recuperar_pendiente BOOLEAN DEFAULT false;`);
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS mes_cargo VARCHAR(7);`);
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS descripcion TEXT;`);
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;`);
@@ -2521,6 +2523,7 @@ async function getFolioById(client, id) {
             f.categoria, f.subcategoria, f.estacion, f.unidad, f.prioridad, f.estatus, f.cotizacion_url, f.cotizacion_s3key,
             f.aprobado_por, f.aprobado_en, f.creado_en, f.nivel_aprobado, f.estatus_anterior, f.override_planta, f.override_motivo, f.creado_por, f.creado_por_rol_clave,
             f.presupuesto_id, f.descripcion, f.mes_cargo, f.solo_zp_ad, COALESCE(f.por_recuperar, false) AS por_recuperar,
+            COALESCE(f.solicitud_por_recuperar_pendiente, false) AS solicitud_por_recuperar_pendiente,
             COALESCE(f.descripcion, f.concepto) AS descripcion_display,
             p.nombre AS planta_nombre
      FROM public.folios f
@@ -4686,6 +4689,8 @@ function cardFromFolioRow(row) {
     tiene_cotizacion: !!row.tiene_cotizacion,
     solo_zp_ad: !!row.solo_zp_ad,
     por_recuperar: !!row.por_recuperar,
+    prioridad: row.prioridad || null,
+    solicitud_por_recuperar_pendiente: !!row.solicitud_por_recuperar_pendiente,
   };
 }
 
@@ -4696,7 +4701,9 @@ app.get("/api/dashboard/kanban", dashboardAuthMiddleware, async (req, res) => {
     const { where, params } = buildDashboardWhere(req.dashboardAuth, filters);
     const q = `
       SELECT f.id, f.numero_folio, f.folio_codigo, f.planta_id, f.categoria, f.subcategoria, f.unidad,
-             f.importe, f.estatus, f.creado_en, COALESCE(f.solo_zp_ad, false) AS solo_zp_ad, COALESCE(f.por_recuperar, false) AS por_recuperar,
+             f.importe, f.estatus, f.creado_en, f.prioridad,
+             COALESCE(f.solo_zp_ad, false) AS solo_zp_ad, COALESCE(f.por_recuperar, false) AS por_recuperar,
+             COALESCE(f.solicitud_por_recuperar_pendiente, false) AS solicitud_por_recuperar_pendiente,
              COALESCE(f.descripcion, f.concepto) AS descripcion_display,
              p.nombre AS planta_nombre,
              (
@@ -5326,15 +5333,88 @@ app.patch("/api/folios/:id/solo-zp-ad", dashboardAuthMiddleware, async (req, res
   }
 });
 
-/** Marcar/desmarcar folio como "Por recuperar" (pagado de presupuesto, debe recuperarse). Identificado en UI con color azul. */
-app.patch("/api/folios/:id/por-recuperar", dashboardAuthMiddleware, async (req, res) => {
+/** Marcar/desmarcar folio como urgente (prioridad "Urgente no programado"). Solo GG, AD, ZP. */
+app.patch("/api/folios/:id/prioridad", dashboardAuthMiddleware, async (req, res) => {
+  const role = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) || "";
+  if (["GA", "CF_CDMX"].includes(role)) return res.status(403).json({ error: "Sin permiso para cambiar prioridad." });
   const folioId = parseInt(req.params.id, 10);
   if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
-  const porRecuperar = req.body.por_recuperar === true || req.body.por_recuperar === "true";
+  const prioridad = (req.body.prioridad != null && req.body.prioridad !== "") ? String(req.body.prioridad).trim() : null;
   const client = await pool.connect();
   try {
     const folio = await getFolioById(client, folioId);
     if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
+    if ((role === "GG" || role === "GA") && req.dashboardAuth.plantas_permitidas?.length > 0) {
+      if (!folio.planta_id || !req.dashboardAuth.plantas_permitidas.includes(folio.planta_id)) {
+        return res.status(403).json({ error: "Sin permiso para este folio" });
+      }
+    }
+    await client.query(`UPDATE public.folios SET prioridad = $1 WHERE id = $2`, [prioridad, folioId]);
+    res.json({ ok: true, prioridad });
+  } catch (e) {
+    console.error("[Dashboard PATCH prioridad]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/** Solicitar marcar folio como "Por recuperar". Crea solicitud y notifica a CDMX para aprobar/rechazar. */
+app.post("/api/folios/:id/solicitar-por-recuperar", dashboardAuthMiddleware, async (req, res) => {
+  const folioId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
+  const client = await pool.connect();
+  try {
+    const folio = await getFolioById(client, folioId);
+    if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
+    if (folio.por_recuperar) return res.status(400).json({ error: "El folio ya está marcado como por recuperar." });
+    if (folio.solicitud_por_recuperar_pendiente) return res.status(400).json({ error: "Ya existe una solicitud pendiente de aprobación CDMX." });
+    if ((req.dashboardAuth.role === "GG" || req.dashboardAuth.role === "GA") && req.dashboardAuth.plantas_permitidas?.length > 0) {
+      if (!folio.planta_id || !req.dashboardAuth.plantas_permitidas.includes(folio.planta_id)) {
+        return res.status(403).json({ error: "Sin permiso para este folio" });
+      }
+    }
+    await client.query(`UPDATE public.folios SET solicitud_por_recuperar_pendiente = TRUE WHERE id = $1`, [folioId]);
+    await insertHistorial(client, folioId, folio.numero_folio, folio.folio_codigo, null, "Solicitud Por recuperar enviada (pendiente CDMX)", null, req.dashboardAuth.role || "Dashboard");
+    const cdmxList = await getUsersByRole(client, "CDMX");
+    const numero = folio.numero_folio || folio.folio_codigo || `F-${folioId}`;
+    const msg = `📋 Solicitud Por recuperar\n\nFolio: ${numero}\nPlanta: ${folio.planta_nombre || "—"}\nImporte: $${(folio.importe != null ? Number(folio.importe).toLocaleString("es-MX", { minimumFractionDigits: 2 }) : "—")}\n\nPara aprobar: aprobar por recuperar ${numero}\nPara rechazar: rechazar por recuperar ${numero} motivo: ...`;
+    for (const u of cdmxList || []) {
+      if (u && u.telefono) await sendWhatsApp(u.telefono, msg, { event: "solicitud_por_recuperar" }).catch((e) => console.warn("Notif CDMX por recuperar:", e.message));
+    }
+    res.json({ ok: true, solicitud_enviada: true });
+  } catch (e) {
+    console.error("[Dashboard POST solicitar-por-recuperar]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/** Marcar/desmarcar folio como "Por recuperar". Cuando hay solicitud pendiente, solo CDMX puede aprobar (true) o rechazar (false). */
+app.patch("/api/folios/:id/por-recuperar", dashboardAuthMiddleware, async (req, res) => {
+  const folioId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
+  const porRecuperar = req.body.por_recuperar === true || req.body.por_recuperar === "true";
+  const role = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) || "";
+  const esCDMX = role === "CF_CDMX" || role === "CDMX";
+  const client = await pool.connect();
+  try {
+    const folio = await getFolioById(client, folioId);
+    if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
+    const solicitudPendiente = !!folio.solicitud_por_recuperar_pendiente;
+    if (solicitudPendiente && !esCDMX) return res.status(403).json({ error: "Solo Contralor Financiero CDMX puede aprobar o rechazar la solicitud Por recuperar." });
+    if (solicitudPendiente && !porRecuperar) {
+      await client.query(`UPDATE public.folios SET por_recuperar = FALSE, solicitud_por_recuperar_pendiente = FALSE WHERE id = $1`, [folioId]);
+      await insertHistorial(client, folioId, folio.numero_folio, folio.folio_codigo, null, "Solicitud Por recuperar rechazada por CDMX", null, "CDMX");
+      return res.json({ ok: true, por_recuperar: false, rechazado: true });
+    }
+    if (solicitudPendiente && porRecuperar) {
+      await client.query(`UPDATE public.folios SET por_recuperar = TRUE, solicitud_por_recuperar_pendiente = FALSE WHERE id = $1`, [folioId]);
+      await insertHistorial(client, folioId, folio.numero_folio, folio.folio_codigo, null, "Solicitud Por recuperar aprobada por CDMX", null, "CDMX");
+      return res.json({ ok: true, por_recuperar: true, aprobado: true });
+    }
+    if (!solicitudPendiente && porRecuperar) return res.status(400).json({ error: "Debe solicitar Por recuperar primero. Use el botón Por recuperar." });
     if ((req.dashboardAuth.role === "GG" || req.dashboardAuth.role === "GA") && req.dashboardAuth.plantas_permitidas?.length > 0) {
       if (!folio.planta_id || !req.dashboardAuth.plantas_permitidas.includes(folio.planta_id)) {
         return res.status(403).json({ error: "Sin permiso para este folio" });
@@ -9393,6 +9473,38 @@ app.post("/twilio/whatsapp", async (req, res) => {
         if (!rechazado) return safeReply(`No se pudo rechazar (archivo ${archivoId} no existe o no está PENDIENTE).`);
         console.log("[RECHAZADO] ArchivoID:", archivoId);
         return safeReply(`Cotización ${archivoId} rechazada. Motivo registrado.`);
+      }
+
+      if (/^aprobar\s+por\s+recuperar\s+(F-\d{6}-\d{3}|\d{1,3})\s*$/i.test(body.trim())) {
+        const token = body.trim().replace(/^aprobar\s+por\s+recuperar\s+/i, "").trim();
+        const numero = normalizeFolioToken(token, getCurrentYYYYMM());
+        if (!numero) return safeReply("Formato: aprobar por recuperar F-YYYYMM-XXX");
+        const rolClave = (actor && actor.rol_clave) ? String(actor.rol_clave).toUpperCase() : "";
+        const esCDMX = rolClave === "CDMX" || (actor && actor.rol_nombre && String(actor.rol_nombre).toUpperCase().includes("CDMX"));
+        if (!esCDMX) return safeReply("Solo Contralor Financiero CDMX puede aprobar solicitudes Por recuperar.");
+        const folio = await getFolioByNumero(client, numero);
+        if (!folio) return safeReply(`No existe el folio ${numero}.`);
+        if (!folio.solicitud_por_recuperar_pendiente) return safeReply(`No hay solicitud Por recuperar pendiente para ${numero}.`);
+        await client.query(`UPDATE public.folios SET por_recuperar = TRUE, solicitud_por_recuperar_pendiente = FALSE WHERE id = $1`, [folio.id]);
+        await insertHistorial(client, folio.id, folio.numero_folio, folio.folio_codigo, null, "Por recuperar aprobado por CDMX", null, actor ? actor.rol_nombre : "CDMX");
+        return safeReply(`✅ Solicitud Por recuperar aprobada para ${numero}.`);
+      }
+
+      if (/^rechazar\s+por\s+recuperar\s+(F-\d{6}-\d{3}|\d{1,3})\s*(?:motivo:)?\s*(.*)$/i.test(body.trim())) {
+        const match = body.trim().match(/^rechazar\s+por\s+recuperar\s+(F-\d{6}-\d{3}|\d{1,3})\s*(?:motivo:)?\s*(.*)$/i);
+        const token = match && match[1] ? match[1].trim() : "";
+        const motivo = match && match[2] ? match[2].trim() : "Sin motivo";
+        const numero = normalizeFolioToken(token, getCurrentYYYYMM());
+        if (!numero) return safeReply("Formato: rechazar por recuperar F-YYYYMM-XXX motivo: <texto>");
+        const rolClave = (actor && actor.rol_clave) ? String(actor.rol_clave).toUpperCase() : "";
+        const esCDMX = rolClave === "CDMX" || (actor && actor.rol_nombre && String(actor.rol_nombre).toUpperCase().includes("CDMX"));
+        if (!esCDMX) return safeReply("Solo Contralor Financiero CDMX puede rechazar solicitudes Por recuperar.");
+        const folio = await getFolioByNumero(client, numero);
+        if (!folio) return safeReply(`No existe el folio ${numero}.`);
+        if (!folio.solicitud_por_recuperar_pendiente) return safeReply(`No hay solicitud Por recuperar pendiente para ${numero}.`);
+        await client.query(`UPDATE public.folios SET solicitud_por_recuperar_pendiente = FALSE WHERE id = $1`, [folio.id]);
+        await insertHistorial(client, folio.id, folio.numero_folio, folio.folio_codigo, null, `Solicitud Por recuperar rechazada por CDMX. Motivo: ${motivo}`, null, actor ? actor.rol_nombre : "CDMX");
+        return safeReply(`Solicitud Por recuperar rechazada para ${numero}.`);
       }
 
       if (/^archivos\s+(F-\d{6}-\d{3}|\d{1,3})\s*$/i.test(body.trim())) {

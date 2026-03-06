@@ -12,6 +12,8 @@ import {
   patchFolioMesCargo,
   patchFolioSoloZpAd,
   patchFolioPorRecuperar,
+  patchFolioPrioridad,
+  postSolicitarPorRecuperar,
   postFolioCotizacion,
 } from "@/lib/api";
 
@@ -107,6 +109,9 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
   const puedeSoloZpAd = roleUpper === "ZP" || roleUpper === "AD";
   const soloZpAd = !!folio?.solo_zp_ad;
   const porRecuperar = !!folio?.por_recuperar;
+  const solicitudPorRecuperarPendiente = !!folio?.solicitud_por_recuperar_pendiente;
+  const esUrgente = (folio?.prioridad as string) && String(folio.prioridad).toLowerCase().includes("urgente");
+  const puedeMarcarUrgente = !soloLectura && (roleUpper === "GG" || roleUpper === "AD" || roleUpper === "ZP");
   const puedeSolicitarCancelacion = (roleUpper === "GA" || roleUpper === "GG" || roleUpper === "CF_CDMX") && !["CANCELADO", "PAGADO", "CERRADO", "CANCELACION_SOLICITADA"].includes(estatusUpper);
   const whatsappNumber = (process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "").trim().replace(/\D/g, "");
   const numeroFolio = (folio?.numero_folio as string) || (folio?.folio_codigo as string) || "";
@@ -177,18 +182,31 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
   };
 
   const handlePorRecuperar = async () => {
-    if (!token || !folioId) return;
+    if (!token || !folioId || porRecuperar || solicitudPorRecuperarPendiente) return;
     setApproveError(null);
     setSavingPorRecuperar(true);
     try {
-      await patchFolioPorRecuperar(token, folioId, !porRecuperar);
+      await postSolicitarPorRecuperar(token, folioId);
       const f = await fetchFolio(token, folioId);
       setFolio(f as Record<string, unknown>);
       onApproved?.();
     } catch (e) {
-      setApproveError((e as Error).message || "Error al marcar por recuperar");
+      setApproveError((e as Error).message || "Error al enviar solicitud");
     } finally {
       setSavingPorRecuperar(false);
+    }
+  };
+
+  const handleMarcarUrgente = async (checked: boolean) => {
+    if (!token || !folioId || !puedeMarcarUrgente) return;
+    setApproveError(null);
+    try {
+      await patchFolioPrioridad(token, folioId, checked ? "Urgente no programado" : "Media");
+      const f = await fetchFolio(token, folioId);
+      setFolio(f as Record<string, unknown>);
+      onApproved?.();
+    } catch (e) {
+      setApproveError((e as Error).message || "Error al cambiar prioridad");
     }
   };
 
@@ -332,12 +350,14 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
                     <button
                       type="button"
                       onClick={handlePorRecuperar}
-                      disabled={savingPorRecuperar}
-                      className={`rounded px-3 py-1.5 text-sm font-medium ${porRecuperar ? "bg-blue-600 text-white hover:bg-blue-500" : "bg-slate-600 text-white hover:bg-slate-500"} disabled:opacity-50`}
+                      disabled={savingPorRecuperar || porRecuperar || solicitudPorRecuperarPendiente}
+                      className={`rounded px-3 py-1.5 text-sm font-medium ${porRecuperar ? "bg-blue-600 text-white" : solicitudPorRecuperarPendiente ? "bg-amber-700/80 text-amber-100" : "bg-slate-600 text-white hover:bg-slate-500"} disabled:opacity-50`}
                     >
-                      {savingPorRecuperar ? "…" : porRecuperar ? "Por recuperar (marcado)" : "Por recuperar"}
+                      {savingPorRecuperar ? "…" : porRecuperar ? "Por recuperar (aprobado)" : solicitudPorRecuperarPendiente ? "Solicitud enviada (pendiente CDMX)" : "Por recuperar"}
                     </button>
-                    <p className="text-xs text-slate-500 mt-1">Pagado de presupuesto y debe recuperarse. Se identifica en azul en el tablero.</p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      {solicitudPorRecuperarPendiente ? "El Contralor Financiero CDMX debe aprobar o rechazar por WhatsApp." : "Pagado de presupuesto y debe recuperarse. Se identifica en azul en el tablero."}
+                    </p>
                   </div>
                   {puedeRegresarZp && (
                     <div className="pt-2 border-t border-slate-700">

@@ -32,6 +32,16 @@ function IconFantasma({ className }: { className?: string }) {
   );
 }
 
+/** Icono de alarma para folios urgentes. */
+function IconAlarma({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <title>Urgente</title>
+      <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.89 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z" />
+    </svg>
+  );
+}
+
 /** Color del borde por etapa visual. Carro = neutro; preparado para modoColorCarrito "por_igf" en el futuro. */
 const MODO_COLOR_CARRITO = "default" as const;
 
@@ -73,6 +83,9 @@ export default function FolioCard({ card, onOpen, role, onSubirPoliza, onImprimi
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-1.5 min-w-0">
           <span className="font-mono text-xs font-medium text-slate-200">{card.folio_codigo}</span>
+          {(card.prioridad && String(card.prioridad).toLowerCase().includes("urgente")) && (
+            <IconAlarma className="h-4 w-4 flex-shrink-0 text-red-500" aria-hidden />
+          )}
           {card.solo_zp_ad && (
             <IconFantasma className="h-4 w-4 flex-shrink-0 text-purple-400" aria-hidden />
           )}

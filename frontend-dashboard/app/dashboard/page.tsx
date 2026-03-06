@@ -38,6 +38,7 @@ function DashboardContent() {
   const [polizaFolioId, setPolizaFolioId] = useState<number | null>(null);
   const [imprimirGastos, setImprimirGastos] = useState<{ id: number; numeroFolio: string } | null>(null);
   const [crearFolio, setCrearFolio] = useState<{ planta_id: number; planta_nombre: string } | null>(null);
+  const [crearFolioUrgente, setCrearFolioUrgente] = useState<{ planta_id: number; planta_nombre: string } | null>(null);
   const [crearProyecto, setCrearProyecto] = useState<{ planta_id: number; planta_nombre: string } | null>(null);
 
   useEffect(() => {
@@ -181,6 +182,7 @@ function DashboardContent() {
           onSubirPoliza={setPolizaFolioId}
           onImprimirGastos={(id, numeroFolio) => setImprimirGastos({ id, numeroFolio })}
           onCrearFolio={(plantaId, plantaNombre) => setCrearFolio({ planta_id: plantaId, planta_nombre: plantaNombre })}
+          onCrearFolioUrgente={(plantaId, plantaNombre) => setCrearFolioUrgente({ planta_id: plantaId, planta_nombre: plantaNombre })}
           onCrearProyecto={(plantaId, plantaNombre) => setCrearProyecto({ planta_id: plantaId, planta_nombre: plantaNombre })}
         />
       </main>
@@ -215,6 +217,17 @@ function DashboardContent() {
           plantaNombre={crearFolio.planta_nombre}
           token={token}
           onCreated={loadData}
+        />
+      )}
+      {crearFolioUrgente != null && token && (
+        <CrearFolioModal
+          open={true}
+          onClose={() => setCrearFolioUrgente(null)}
+          plantaId={crearFolioUrgente.planta_id}
+          plantaNombre={crearFolioUrgente.planta_nombre}
+          token={token}
+          onCreated={loadData}
+          urgente={true}
         />
       )}
       {crearProyecto != null && token && (
