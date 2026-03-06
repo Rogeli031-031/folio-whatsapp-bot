@@ -9,9 +9,10 @@ interface Props {
   onSubirPoliza?: (id: number) => void;
   onImprimirGastos?: (id: number, numeroFolio: string) => void;
   onCrearFolio?: (plantaId: number, plantaNombre: string) => void;
+  onCrearProyecto?: (plantaId: number, plantaNombre: string) => void;
 }
 
-export default function KanbanBoard({ data, onOpenFolio, onSubirPoliza, onImprimirGastos, onCrearFolio }: Props) {
+export default function KanbanBoard({ data, onOpenFolio, onSubirPoliza, onImprimirGastos, onCrearFolio, onCrearProyecto }: Props) {
   if (!data) {
     return (
       <div className="flex items-center justify-center p-8 text-slate-400">Cargando tablero…</div>
@@ -32,6 +33,7 @@ export default function KanbanBoard({ data, onOpenFolio, onSubirPoliza, onImprim
             onSubirPoliza={onSubirPoliza}
             onImprimirGastos={onImprimirGastos}
             onCrearFolio={onCrearFolio}
+            onCrearProyecto={onCrearProyecto}
           />
         ))}
       </div>

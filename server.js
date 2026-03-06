@@ -4802,6 +4802,59 @@ app.get("/api/dashboard/plantas", dashboardAuthMiddleware, async (req, res) => {
   }
 });
 
+/** Proyectos EN_CURSO de una planta (o equivalentes) para selector en crear folio. */
+app.get("/api/dashboard/proyectos", dashboardAuthMiddleware, async (req, res) => {
+  const planta_id = req.query.planta_id != null ? parseInt(String(req.query.planta_id), 10) : null;
+  if (!planta_id || !Number.isFinite(planta_id)) return res.status(400).json({ error: "planta_id requerido" });
+  const client = await pool.connect();
+  try {
+    const proyectos = await listarProyectosPorPlantaOEquivalentes(client, planta_id, true);
+    res.json({ proyectos: (proyectos || []).map((p) => ({ id: p.id, codigo: p.codigo, nombre: p.nombre })) });
+  } catch (e) {
+    console.error("[Dashboard proyectos]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/** Crear proyecto desde dashboard. Solo GA, GG, AD, ZP. */
+app.post("/api/proyectos", dashboardAuthMiddleware, async (req, res) => {
+  const role = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) || "";
+  const puedeCrear = ["GA", "GG", "AD", "ZP"].includes(role);
+  if (!puedeCrear) return res.status(403).json({ error: "Solo GA, GG, Asistente de Dirección y Director ZP pueden crear proyectos desde el dashboard." });
+  const body = req.body || {};
+  const planta_id = body.planta_id != null ? parseInt(body.planta_id, 10) : null;
+  if (!planta_id || !Number.isFinite(planta_id)) return res.status(400).json({ error: "planta_id es obligatorio" });
+  const nombre = (body.nombre != null && body.nombre !== "") ? String(body.nombre).trim() : null;
+  if (!nombre || nombre.length < 2) return res.status(400).json({ error: "nombre es obligatorio (mín. 2 caracteres)" });
+  const descripcion = (body.descripcion != null && body.descripcion !== "") ? String(body.descripcion).trim() : null;
+  let fecha_inicio = (body.fecha_inicio != null && body.fecha_inicio !== "") ? String(body.fecha_inicio).trim() : null;
+  if (!fecha_inicio) {
+    const now = new Date();
+    fecha_inicio = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  }
+  let fecha_cierre_estimada = (body.fecha_cierre_estimada != null && body.fecha_cierre_estimada !== "") ? String(body.fecha_cierre_estimada).trim() : null;
+  const client = await pool.connect();
+  try {
+    const proy = await crearProyecto(client, {
+      planta_id,
+      nombre,
+      descripcion: descripcion || null,
+      fecha_inicio,
+      fecha_cierre_estimada: fecha_cierre_estimada || null,
+      creado_por: req.dashboardAuth.actor_id != null ? `Dashboard:${req.dashboardAuth.actor_id}` : "Dashboard",
+      actor_rol: role,
+    });
+    res.status(201).json({ id: proy.id, codigo: proy.codigo, planta_id: proy.planta_id, nombre: proy.nombre });
+  } catch (e) {
+    console.error("[Dashboard POST proyectos]", e);
+    res.status(500).json({ error: e.message || "Error al crear proyecto" });
+  } finally {
+    client.release();
+  }
+});
+
 /** Crear folio desde dashboard (formulario). Solo GA, GG, AD, ZP. */
 app.post("/api/folios", dashboardAuthMiddleware, async (req, res) => {
   const role = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) || "";
@@ -4810,6 +4863,7 @@ app.post("/api/folios", dashboardAuthMiddleware, async (req, res) => {
   const body = req.body || {};
   const planta_id = body.planta_id != null ? parseInt(body.planta_id, 10) : null;
   if (!planta_id || !Number.isFinite(planta_id)) return res.status(400).json({ error: "planta_id es obligatorio" });
+  const proyecto_id = body.proyecto_id != null && body.proyecto_id !== "" ? parseInt(body.proyecto_id, 10) : null;
   const beneficiario = (body.beneficiario != null && body.beneficiario !== "") ? String(body.beneficiario).trim() : null;
   const concepto = (body.concepto != null && body.concepto !== "") ? String(body.concepto).trim() : null;
   const importe = body.importe != null ? parseFloat(body.importe) : null;
@@ -4830,6 +4884,7 @@ app.post("/api/folios", dashboardAuthMiddleware, async (req, res) => {
     const dd = {
       planta_id,
       planta_nombre,
+      proyecto_id: (proyecto_id && Number.isFinite(proyecto_id)) ? proyecto_id : null,
       beneficiario: beneficiario || null,
       concepto,
       importe,

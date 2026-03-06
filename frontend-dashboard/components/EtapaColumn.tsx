@@ -10,6 +10,7 @@ interface Props {
   onSubirPoliza?: (id: number) => void;
   onImprimirGastos?: (id: number, numeroFolio: string) => void;
   onCrearFolio?: (plantaId: number, plantaNombre: string) => void;
+  onCrearProyecto?: (plantaId: number, plantaNombre: string) => void;
 }
 
 const ETAPA_LABELS: Record<string, string> = {
@@ -41,7 +42,7 @@ function EtapaIcon({ etapa, icon }: { etapa: string; icon?: string }) {
   return null;
 }
 
-export default function EtapaColumn({ column, onOpenFolio, role, onSubirPoliza, onImprimirGastos, onCrearFolio }: Props) {
+export default function EtapaColumn({ column, onOpenFolio, role, onSubirPoliza, onImprimirGastos, onCrearFolio, onCrearProyecto }: Props) {
   const label = column.etapa_label ?? ETAPA_LABELS[column.etapa] ?? column.etapa;
   const fmtMxn = (n: number | null) =>
     n != null && !isNaN(n) ? `$${n.toLocaleString("es-MX", { maximumFractionDigits: 0 })}` : "—";
@@ -71,7 +72,8 @@ export default function EtapaColumn({ column, onOpenFolio, role, onSubirPoliza, 
             role={role}
             onSubirPoliza={onSubirPoliza}
             onImprimirGastos={onImprimirGastos}
-            onCrearFolio={onCrearFolio}
+            onCrearFolio={column.etapa === "PENDIENTE_APROB_PLANTA" ? onCrearFolio : undefined}
+            onCrearProyecto={column.etapa === "PENDIENTE_APROB_PLANTA" ? onCrearProyecto : undefined}
           />
         ))}
       </div>

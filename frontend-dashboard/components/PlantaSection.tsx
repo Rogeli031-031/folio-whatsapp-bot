@@ -13,11 +13,12 @@ interface Props {
   onSubirPoliza?: (id: number) => void;
   onImprimirGastos?: (id: number, numeroFolio: string) => void;
   onCrearFolio?: (plantaId: number, plantaNombre: string) => void;
+  onCrearProyecto?: (plantaId: number, plantaNombre: string) => void;
 }
 
 const CAT_ORDER = ["GASTOS", "INVERSIONES", "DYO", "TALLER"];
 
-export default function PlantaSection({ planta_id, planta_nombre, stats, porCategoria, onOpenFolio, role, onSubirPoliza, onImprimirGastos, onCrearFolio }: Props) {
+export default function PlantaSection({ planta_id, planta_nombre, stats, porCategoria, onOpenFolio, role, onSubirPoliza, onImprimirGastos, onCrearFolio, onCrearProyecto }: Props) {
   const fmtMxn = (n: number) =>
     n != null && !isNaN(n) ? `$${n.toLocaleString("es-MX", { maximumFractionDigits: 0 })}` : "N/A";
 
@@ -40,13 +41,24 @@ export default function PlantaSection({ planta_id, planta_nombre, stats, porCate
       <div className="mb-2 flex items-center justify-between gap-2 border-b border-slate-600 pb-2">
         <div className="flex items-center gap-2 min-w-0">
           <span className="font-medium text-slate-200">{planta_nombre}</span>
-          <button
-            type="button"
-            onClick={handleCrearFolio}
-            className="flex-shrink-0 rounded bg-emerald-700 px-2 py-1 text-[10px] font-medium text-white hover:bg-emerald-600"
-          >
-            Crear folio
-          </button>
+          {onCrearFolio && (
+            <button
+              type="button"
+              onClick={handleCrearFolio}
+              className="flex-shrink-0 rounded bg-emerald-700 px-2 py-1 text-[10px] font-medium text-white hover:bg-emerald-600"
+            >
+              Crear folio
+            </button>
+          )}
+          {onCrearProyecto && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onCrearProyecto(planta_id, planta_nombre); }}
+              className="flex-shrink-0 rounded bg-blue-600 px-2 py-1 text-[10px] font-medium text-white hover:bg-blue-500"
+            >
+              Crear proyecto
+            </button>
+          )}
         </div>
         <span className="text-xs text-slate-400 flex-shrink-0">
           {stats.count} folios · {fmtMxn(stats.total_mxn)}

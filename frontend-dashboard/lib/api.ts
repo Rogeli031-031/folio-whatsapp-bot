@@ -107,6 +107,7 @@ export function fetchPlantas(token: string): Promise<{ plantas: { id: number; no
 
 export interface CrearFolioPayload {
   planta_id: number;
+  proyecto_id?: number | null;
   beneficiario?: string;
   concepto: string;
   importe: number;
@@ -117,6 +118,29 @@ export interface CrearFolioPayload {
   estacion?: string;
   banco?: string;
   cuenta_bancaria?: string;
+}
+
+export function fetchProyectosPorPlanta(token: string, plantaId: number): Promise<{ proyectos: { id: number; codigo: string; nombre: string }[] }> {
+  return apiFetch<{ proyectos: { id: number; codigo: string; nombre: string }[] }>("/api/dashboard/proyectos", {
+    token,
+    params: { planta_id: String(plantaId) },
+  });
+}
+
+export interface CrearProyectoPayload {
+  planta_id: number;
+  nombre: string;
+  descripcion?: string;
+  fecha_inicio?: string;
+  fecha_cierre_estimada?: string;
+}
+
+export function postCrearProyecto(token: string, payload: CrearProyectoPayload): Promise<{ id: number; codigo: string; planta_id: number; nombre: string }> {
+  return apiFetch<{ id: number; codigo: string; planta_id: number; nombre: string }>("/api/proyectos", {
+    token,
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export function postCrearFolio(token: string, payload: CrearFolioPayload): Promise<{ id: number; numero_folio: string; folio_codigo: string; planta_id: number }> {
