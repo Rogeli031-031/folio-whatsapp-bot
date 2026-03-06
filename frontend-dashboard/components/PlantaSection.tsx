@@ -20,11 +20,31 @@ export default function PlantaSection({ planta_nombre, stats, porCategoria, onOp
   const fmtMxn = (n: number) =>
     n != null && !isNaN(n) ? `$${n.toLocaleString("es-MX", { maximumFractionDigits: 0 })}` : "N/A";
 
+  const whatsappNumber = typeof process !== "undefined" ? (process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "").trim().replace(/\D/g, "") : "";
+  const crearFolioHref = whatsappNumber ? `https://wa.me/${whatsappNumber}?text=${encodeURIComponent("crear folio")}` : undefined;
+
+  const handleCrearFolio = () => {
+    if (crearFolioHref) {
+      window.open(crearFolioHref, "_blank", "noopener,noreferrer");
+    } else {
+      navigator.clipboard.writeText("crear folio").then(() => alert("Comando copiado: crear folio. Pégalo en WhatsApp.")).catch(() => {});
+    }
+  };
+
   return (
     <div className="rounded border border-slate-700 bg-slate-800/40 p-3">
-      <div className="mb-2 flex items-center justify-between border-b border-slate-600 pb-2">
-        <span className="font-medium text-slate-200">{planta_nombre}</span>
-        <span className="text-xs text-slate-400">
+      <div className="mb-2 flex items-center justify-between gap-2 border-b border-slate-600 pb-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="font-medium text-slate-200">{planta_nombre}</span>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); handleCrearFolio(); }}
+            className="flex-shrink-0 rounded bg-emerald-700 px-2 py-1 text-[10px] font-medium text-white hover:bg-emerald-600"
+          >
+            Crear folio
+          </button>
+        </div>
+        <span className="text-xs text-slate-400 flex-shrink-0">
           {stats.count} folios · {fmtMxn(stats.total_mxn)}
           {stats.avg_aging != null && ` · ${stats.avg_aging}d prom`}
         </span>

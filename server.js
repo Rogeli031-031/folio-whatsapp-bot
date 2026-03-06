@@ -4224,7 +4224,7 @@ const CATEGORIAS = [
 
 const SUBCATEGORIAS = {
   GASTOS: ["Contractuales", "Equipo planta", "Estaciones", "Jurídicos", "Liquidaciones laborales", "Pasivos meses anteriores", "Rentas", "Trámites vehiculares", "Varios"],
-  INVERSIONES: ["Equipo para la planta", "Instalaciones a clientes", "Publicidad", "Tanques y cilindros"],
+  INVERSIONES: ["Equipo para la planta", "Instalaciones a clientes", "Publicidad", "Tanques y cilindros", "Estaciones"],
   DYO: [],
   TALLER: [],
 };

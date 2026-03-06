@@ -47,8 +47,26 @@ export default function FolioCard({ card, onOpen, role, onSubirPoliza, onImprimi
     : etapaColor(card.estatus);
 
   const etapa = estatusToEtapaVisual(card.estatus);
+  const estatusUpper = (card.estatus || "").trim().toUpperCase();
+  const noCancelable = ["CANCELADO", "PAGADO", "CERRADO", "CANCELACION_SOLICITADA"].includes(estatusUpper);
+  const showSolicitudCancelacion = !noCancelable;
   const showPolizaBtn = role === "AD" && etapa === "CARRO_COMPRA" && onSubirPoliza;
   const showImprimirBtn = card.tiene_cotizacion !== false && onImprimirGastos;
+
+  const whatsappNumber = typeof process !== "undefined" ? (process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "").trim().replace(/\D/g, "") : "";
+  const numeroFolio = card.numero_folio || card.folio_codigo || `F-${card.id}`;
+  const cmdCancelacion = `cancelar ${numeroFolio} motivo: `;
+  const solicitudCancelacionHref = whatsappNumber ? `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(cmdCancelacion)}` : undefined;
+
+  const handleSolicitudCancelacion = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (solicitudCancelacionHref) {
+      window.open(solicitudCancelacionHref, "_blank", "noopener,noreferrer");
+    } else {
+      navigator.clipboard.writeText(cmdCancelacion).then(() => alert(`Comando copiado: ${cmdCancelacion}`)).catch(() => {});
+    }
+  };
 
   return (
     <div
@@ -91,6 +109,15 @@ export default function FolioCard({ card, onOpen, role, onSubirPoliza, onImprimi
             className="ml-auto rounded bg-amber-600 px-2 py-1 text-[10px] font-medium text-white hover:bg-amber-500"
           >
             Imprimir
+          </button>
+        )}
+        {showSolicitudCancelacion && (
+          <button
+            type="button"
+            onClick={handleSolicitudCancelacion}
+            className="rounded bg-red-900/80 px-2 py-1 text-[10px] font-medium text-white hover:bg-red-800"
+          >
+            Solicitud de cancelación
           </button>
         )}
       </div>
