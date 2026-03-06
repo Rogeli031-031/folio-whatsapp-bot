@@ -2842,6 +2842,20 @@ async function listarProyectosPorPlanta(client, plantaId, soloEnCurso = true) {
   return r.rows || [];
 }
 
+/** Proyectos EN_CURSO de una planta o de sus equivalentes (ubicación/código). Para asociar folio cuando la planta elegida puede ser E8 y el proyecto estar en Tehuacán id 3. */
+async function listarProyectosPorPlantaOEquivalentes(client, plantaId, soloEnCurso = true) {
+  const ids = getPlantaIdsEquivalentesForPendientes(plantaId);
+  if (ids.length === 0) return listarProyectosPorPlanta(client, plantaId, soloEnCurso);
+  if (ids.length === 1) return listarProyectosPorPlanta(client, ids[0], soloEnCurso);
+  const placeholders = ids.map((_, i) => `$${i + 1}`).join(",");
+  let q = `SELECT p.id, p.codigo, p.nombre, p.fecha_inicio, p.fecha_cierre_estimada, p.estatus, p.aprobado_zp
+           FROM public.proyectos p WHERE p.planta_id IN (${placeholders})`;
+  if (soloEnCurso) q += " AND p.estatus = 'EN_CURSO'";
+  q += " ORDER BY p.creado_en DESC";
+  const r = await client.query(q, ids);
+  return r.rows || [];
+}
+
 /** Con totales de folios y montos por proyecto. */
 async function listarProyectosPorPlantaConTotales(client, plantaId) {
   const proyectos = await listarProyectosPorPlanta(client, plantaId, true);
@@ -9718,7 +9732,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
       if (/^1$|^s[ií]$|^si$/i.test(sn)) {
         const client = await pool.connect();
         try {
-          const proyectos = await listarProyectosPorPlanta(client, sess.dd.planta_id, true);
+          const proyectos = await listarProyectosPorPlantaOEquivalentes(client, sess.dd.planta_id, true);
           if (!proyectos.length) {
             sess.dd.proyecto_id = null;
             sess.estado = "ESPERANDO_BENEFICIARIO";
