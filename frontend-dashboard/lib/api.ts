@@ -100,6 +100,32 @@ export function fetchKanban(token: string, filters: DashboardFilters = {}): Prom
   return apiFetch<KanbanBoard>("/api/dashboard/kanban", { token, params });
 }
 
+export function fetchPlantas(token: string): Promise<{ plantas: { id: number; nombre: string }[] }> {
+  return apiFetch<{ plantas: { id: number; nombre: string }[] }>("/api/dashboard/plantas", { token });
+}
+
+export interface CrearFolioPayload {
+  planta_id: number;
+  beneficiario?: string;
+  concepto: string;
+  importe: number;
+  categoria: string;
+  subcategoria?: string;
+  prioridad?: string;
+  unidad?: string;
+  estacion?: string;
+  banco?: string;
+  cuenta_bancaria?: string;
+}
+
+export function postCrearFolio(token: string, payload: CrearFolioPayload): Promise<{ id: number; numero_folio: string; folio_codigo: string; planta_id: number }> {
+  return apiFetch<{ id: number; numero_folio: string; folio_codigo: string; planta_id: number }>("/api/folios", {
+    token,
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export function fetchKpis(token: string, filters: DashboardFilters = {}): Promise<Kpis> {
   const params: Record<string, string> = {};
   if (filters.plantas) params.planta_id = filters.plantas;

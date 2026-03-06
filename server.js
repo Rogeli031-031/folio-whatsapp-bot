@@ -2986,7 +2986,9 @@ async function insertFolio(client, dd) {
   }
 
   try {
-    const comentarioHistorial = dd.estacion ? `Folio creado por WhatsApp. Estación: ${dd.estacion}` : "Folio creado por WhatsApp";
+    const origen = dd.origen === "dashboard" ? "dashboard" : "WhatsApp";
+    const baseComentario = dd.origen === "dashboard" ? "Folio creado desde dashboard" : "Folio creado por WhatsApp";
+    const comentarioHistorial = dd.estacion ? `${baseComentario}. Estación: ${dd.estacion}` : baseComentario;
     await client.query(
       `INSERT INTO public.folio_historial(
         numero_folio, estatus, comentario, actor_telefono, actor_rol, creado_en, folio_codigo, folio_id
@@ -4755,6 +4757,73 @@ app.get("/api/dashboard/kanban", dashboardAuthMiddleware, async (req, res) => {
   } catch (e) {
     console.error("[Dashboard kanban]", e);
     res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+app.get("/api/dashboard/plantas", dashboardAuthMiddleware, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const plantas = await getPlantas(client);
+    res.json({ plantas: (plantas || []).map((p) => ({ id: p.id, nombre: p.nombre || p.clave || `Planta ${p.id}` })) });
+  } catch (e) {
+    console.error("[Dashboard plantas]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/** Crear folio desde dashboard (formulario). Solo GA, GG, AD, ZP. */
+app.post("/api/folios", dashboardAuthMiddleware, async (req, res) => {
+  const role = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) || "";
+  const puedeCrear = ["GA", "GG", "AD", "ZP"].includes(role);
+  if (!puedeCrear) return res.status(403).json({ error: "Solo GA, GG, Asistente de Dirección y Director ZP pueden crear folios desde el dashboard." });
+  const body = req.body || {};
+  const planta_id = body.planta_id != null ? parseInt(body.planta_id, 10) : null;
+  if (!planta_id || !Number.isFinite(planta_id)) return res.status(400).json({ error: "planta_id es obligatorio" });
+  const beneficiario = (body.beneficiario != null && body.beneficiario !== "") ? String(body.beneficiario).trim() : null;
+  const concepto = (body.concepto != null && body.concepto !== "") ? String(body.concepto).trim() : null;
+  const importe = body.importe != null ? parseFloat(body.importe) : null;
+  const categoria = (body.categoria != null && body.categoria !== "") ? String(body.categoria).trim().toUpperCase() : null;
+  const subcategoria = (body.subcategoria != null && body.subcategoria !== "") ? String(body.subcategoria).trim() : null;
+  const prioridad = (body.prioridad != null && body.prioridad !== "") ? String(body.prioridad).trim() : null;
+  const unidad = (body.unidad != null && body.unidad !== "") ? String(body.unidad).trim() : null;
+  const estacion = (body.estacion != null && body.estacion !== "") ? String(body.estacion).trim() : null;
+  const banco = (body.banco != null && body.banco !== "") ? String(body.banco).trim() : null;
+  const cuenta_bancaria = (body.cuenta_bancaria != null && body.cuenta_bancaria !== "") ? String(body.cuenta_bancaria).trim() : null;
+  if (!concepto || concepto.length < 2) return res.status(400).json({ error: "concepto es obligatorio (mín. 2 caracteres)" });
+  if (importe == null || !Number.isFinite(importe) || importe < 0) return res.status(400).json({ error: "importe debe ser un número mayor o igual a 0" });
+  const client = await pool.connect();
+  try {
+    const plantaRow = await client.query("SELECT id, nombre FROM public.plantas WHERE id = $1", [planta_id]);
+    const planta_nombre = (plantaRow.rows[0] && plantaRow.rows[0].nombre) || null;
+    const categoriaNombre = (categoria === "GASTOS" && "Gastos") || (categoria === "INVERSIONES" && "Inversiones") || (categoria === "DYO" && "Derechos y Obligaciones") || (categoria === "TALLER" && "Taller") || categoria || null;
+    const dd = {
+      planta_id,
+      planta_nombre,
+      beneficiario: beneficiario || null,
+      concepto,
+      importe,
+      categoria_nombre: categoriaNombre,
+      subcategoria_nombre: subcategoria || null,
+      prioridad: prioridad || "Media",
+      unidad: unidad || null,
+      estacion: estacion || null,
+      banco: banco || null,
+      cuenta_bancaria: cuenta_bancaria || null,
+      urgente: prioridad === "Urgente no programado",
+      actor_telefono: req.dashboardAuth.actor_id != null ? `Dashboard:${req.dashboardAuth.actor_id}` : "Dashboard",
+      actor_rol: role,
+      actor_clave: role,
+      origen: "dashboard",
+    };
+    const row = await insertFolio(client, dd);
+    res.status(201).json({ id: row.id, numero_folio: row.numero_folio, folio_codigo: row.folio_codigo, planta_id: row.planta_id });
+  } catch (e) {
+    console.error("[Dashboard POST folios]", e);
+    res.status(500).json({ error: e.message || "Error al crear folio" });
   } finally {
     client.release();
   }

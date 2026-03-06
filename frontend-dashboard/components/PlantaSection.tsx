@@ -12,22 +12,26 @@ interface Props {
   role: string;
   onSubirPoliza?: (id: number) => void;
   onImprimirGastos?: (id: number, numeroFolio: string) => void;
+  onCrearFolio?: (plantaId: number, plantaNombre: string) => void;
 }
 
 const CAT_ORDER = ["GASTOS", "INVERSIONES", "DYO", "TALLER"];
 
-export default function PlantaSection({ planta_nombre, stats, porCategoria, onOpenFolio, role, onSubirPoliza, onImprimirGastos }: Props) {
+export default function PlantaSection({ planta_id, planta_nombre, stats, porCategoria, onOpenFolio, role, onSubirPoliza, onImprimirGastos, onCrearFolio }: Props) {
   const fmtMxn = (n: number) =>
     n != null && !isNaN(n) ? `$${n.toLocaleString("es-MX", { maximumFractionDigits: 0 })}` : "N/A";
 
-  const whatsappNumber = typeof process !== "undefined" ? (process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "").trim().replace(/\D/g, "") : "";
-  const crearFolioHref = whatsappNumber ? `https://wa.me/${whatsappNumber}?text=${encodeURIComponent("crear folio")}` : undefined;
-
-  const handleCrearFolio = () => {
-    if (crearFolioHref) {
-      window.open(crearFolioHref, "_blank", "noopener,noreferrer");
+  const handleCrearFolio = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onCrearFolio) {
+      onCrearFolio(planta_id, planta_nombre);
     } else {
-      navigator.clipboard.writeText("crear folio").then(() => alert("Comando copiado: crear folio. Pégalo en WhatsApp.")).catch(() => {});
+      const whatsappNumber = typeof process !== "undefined" ? (process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "").trim().replace(/\D/g, "") : "";
+      if (whatsappNumber) {
+        window.open(`https://wa.me/${whatsappNumber}?text=${encodeURIComponent("crear folio")}`, "_blank", "noopener,noreferrer");
+      } else {
+        navigator.clipboard.writeText("crear folio").then(() => alert("Comando copiado: crear folio. Pégalo en WhatsApp.")).catch(() => {});
+      }
     }
   };
 
@@ -38,7 +42,7 @@ export default function PlantaSection({ planta_nombre, stats, porCategoria, onOp
           <span className="font-medium text-slate-200">{planta_nombre}</span>
           <button
             type="button"
-            onClick={(e) => { e.stopPropagation(); handleCrearFolio(); }}
+            onClick={handleCrearFolio}
             className="flex-shrink-0 rounded bg-emerald-700 px-2 py-1 text-[10px] font-medium text-white hover:bg-emerald-600"
           >
             Crear folio

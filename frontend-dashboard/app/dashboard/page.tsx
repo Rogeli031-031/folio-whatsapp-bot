@@ -21,6 +21,7 @@ import DeltaDescuentoModal from "@/components/DeltaDescuentoModal";
 import DeltaIngresoModal from "@/components/DeltaIngresoModal";
 import PolizaModal from "@/components/PolizaModal";
 import ImprimirGastosModal from "@/components/ImprimirGastosModal";
+import CrearFolioModal from "@/components/CrearFolioModal";
 
 function DashboardContent() {
   const searchParams = useSearchParams();
@@ -35,6 +36,7 @@ function DashboardContent() {
   const [showDeltaIngresoModal, setShowDeltaIngresoModal] = useState(false);
   const [polizaFolioId, setPolizaFolioId] = useState<number | null>(null);
   const [imprimirGastos, setImprimirGastos] = useState<{ id: number; numeroFolio: string } | null>(null);
+  const [crearFolio, setCrearFolio] = useState<{ planta_id: number; planta_nombre: string } | null>(null);
 
   useEffect(() => {
     const t = parseTokenFromQuery(searchParams) || getTokenFromStorage();
@@ -176,6 +178,7 @@ function DashboardContent() {
           onOpenFolio={setDrawerFolioId}
           onSubirPoliza={setPolizaFolioId}
           onImprimirGastos={(id, numeroFolio) => setImprimirGastos({ id, numeroFolio })}
+          onCrearFolio={(plantaId, plantaNombre) => setCrearFolio({ planta_id: plantaId, planta_nombre: plantaNombre })}
         />
       </main>
       <FolioDrawer
@@ -199,6 +202,16 @@ function DashboardContent() {
           numeroFolio={imprimirGastos.numeroFolio}
           token={token}
           onClose={() => setImprimirGastos(null)}
+        />
+      )}
+      {crearFolio != null && token && (
+        <CrearFolioModal
+          open={true}
+          onClose={() => setCrearFolio(null)}
+          plantaId={crearFolio.planta_id}
+          plantaNombre={crearFolio.planta_nombre}
+          token={token}
+          onCreated={loadData}
         />
       )}
     </div>
