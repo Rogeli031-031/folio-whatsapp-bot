@@ -10,6 +10,7 @@ import {
   postAprobarFolio,
   postRegresarFolioAZp,
   patchFolioMesCargo,
+  patchFolioSoloZpAd,
 } from "@/lib/api";
 
 function getMesesOpciones(): { value: string; label: string }[] {
@@ -48,6 +49,7 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
   const [approveError, setApproveError] = useState<string | null>(null);
   const [mesCargoEdit, setMesCargoEdit] = useState<string>("");
   const [savingMesCargo, setSavingMesCargo] = useState(false);
+  const [savingSoloZpAd, setSavingSoloZpAd] = useState(false);
 
   useEffect(() => {
     if (!folioId || !token) {
@@ -96,6 +98,8 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
   const soloLectura = roleUpper === "CF_CDMX" || roleUpper === "GA"; // Contralor CDMX y GA solo ven e imprimen, no aprueban
   const puedeAprobar = !soloLectura && ESTADOS_APROBABLES.includes(estatusUpper);
   const puedeRegresarZp = !soloLectura && ESTADOS_CARRO_COMPRA.includes(estatusUpper);
+  const puedeSoloZpAd = roleUpper === "ZP" || roleUpper === "AD";
+  const soloZpAd = !!folio?.solo_zp_ad;
 
   const handleAprobar = async () => {
     if (!token || !folioId || !puedeAprobar) return;
@@ -129,6 +133,22 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
       setApproveError((e as Error).message || "Error al regresar a ZP");
     } finally {
       setApproving(false);
+    }
+  };
+
+  const handleSoloZpAd = async () => {
+    if (!token || !folioId || !puedeSoloZpAd) return;
+    setApproveError(null);
+    setSavingSoloZpAd(true);
+    try {
+      await patchFolioSoloZpAd(token, folioId, !soloZpAd);
+      const f = await fetchFolio(token, folioId);
+      setFolio(f as Record<string, unknown>);
+      onApproved?.();
+    } catch (e) {
+      setApproveError((e as Error).message || "Error al cambiar visibilidad");
+    } finally {
+      setSavingSoloZpAd(false);
     }
   };
 
@@ -200,6 +220,19 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
                     )}
                   </div>
                   {approveError && <p className="text-sm text-red-400">{approveError}</p>}
+                  {puedeSoloZpAd && (
+                    <div className="pt-2 border-t border-slate-700">
+                      <button
+                        type="button"
+                        onClick={handleSoloZpAd}
+                        disabled={savingSoloZpAd}
+                        className={`rounded px-3 py-1.5 text-sm font-medium ${soloZpAd ? "bg-amber-700 text-white hover:bg-amber-600" : "bg-slate-600 text-white hover:bg-slate-500"} disabled:opacity-50`}
+                      >
+                        {savingSoloZpAd ? "…" : soloZpAd ? "Quitar privado (visible para todos)" : "Solo ZP y AD (hacer privado)"}
+                      </button>
+                      {soloZpAd && <p className="text-xs text-slate-500 mt-1">Solo Director ZP y Asistente de Dirección pueden ver este folio.</p>}
+                    </div>
+                  )}
                   {puedeRegresarZp && (
                     <div className="pt-2 border-t border-slate-700">
                       <dt className="text-slate-500 mb-1">Mes de cargo (para documento e impresión)</dt>

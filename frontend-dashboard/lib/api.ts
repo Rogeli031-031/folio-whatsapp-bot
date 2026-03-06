@@ -379,6 +379,18 @@ export function patchFolioMesCargo(
   });
 }
 
+export function patchFolioSoloZpAd(
+  token: string,
+  folioId: number,
+  solo_zp_ad: boolean
+): Promise<{ ok: boolean; solo_zp_ad: boolean }> {
+  return apiFetch(`/api/folios/${folioId}/solo-zp-ad`, {
+    token,
+    method: "PATCH",
+    body: JSON.stringify({ solo_zp_ad }),
+  });
+}
+
 export async function fetchDocumentoGastosHtml(token: string, folioId: number): Promise<string> {
   const url = getApiUrl(`/api/folios/${folioId}/documento-gastos?format=html`);
   const res = await fetch(url, {

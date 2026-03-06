@@ -2130,6 +2130,7 @@ async function ensureSchema() {
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS override_motivo TEXT;`);
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS creado_por VARCHAR(255);`);
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS creado_por_rol_clave VARCHAR(20);`);
+    await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS solo_zp_ad BOOLEAN DEFAULT false;`);
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS mes_cargo VARCHAR(7);`);
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS descripcion TEXT;`);
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;`);
@@ -2511,7 +2512,7 @@ async function getFolioById(client, id) {
     `SELECT f.id, f.numero_folio, f.folio_codigo, f.planta_id, f.beneficiario, f.concepto, f.importe,
             f.categoria, f.subcategoria, f.estacion, f.unidad, f.prioridad, f.estatus, f.cotizacion_url, f.cotizacion_s3key,
             f.aprobado_por, f.aprobado_en, f.creado_en, f.nivel_aprobado, f.estatus_anterior, f.override_planta, f.override_motivo, f.creado_por, f.creado_por_rol_clave,
-            f.presupuesto_id, f.descripcion, f.mes_cargo,
+            f.presupuesto_id, f.descripcion, f.mes_cargo, f.solo_zp_ad,
             COALESCE(f.descripcion, f.concepto) AS descripcion_display,
             p.nombre AS planta_nombre
      FROM public.folios f
@@ -4571,7 +4572,10 @@ function buildDashboardWhere(auth, filters) {
   const esZP = roleNorm === "ZP";
   const esAD = roleNorm === "AD";
   const esCFCDMX = roleNorm === "CF_CDMX";
-  // ZP, Asistente de Dirección (AD) y Contralor financiero CDMX ven todos los folios: no filtrar por creador ni por planta
+  // ZP y AD ven todos los folios; GG, GA y CF_CDMX no ven folios privados (solo ZP/AD) ni los creados por AD
+  if (!esZP && !esAD) {
+    conditions.push("(COALESCE(f.solo_zp_ad, false) = false)");
+  }
   if (!esZP && !esAD && !esCFCDMX) {
     conditions.push("(f.creado_por_rol_clave IS NULL OR UPPER(TRIM(COALESCE(f.creado_por_rol_clave,''))) <> 'AD')");
   }
@@ -4837,6 +4841,9 @@ app.get("/api/folios/:id/media", dashboardAuthMiddleware, async (req, res) => {
   try {
     const folio = await getFolioById(client, folioId);
     if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
+    const esZPMedia = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) === "ZP";
+    const esADMedia = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) === "AD";
+    if (folio.solo_zp_ad && !esZPMedia && !esADMedia) return res.status(404).json({ error: "Folio no encontrado" });
     if ((req.dashboardAuth.role === "GG" || req.dashboardAuth.role === "GA") && req.dashboardAuth.plantas_permitidas && req.dashboardAuth.plantas_permitidas.length > 0) {
       if (!folio.planta_id || !req.dashboardAuth.plantas_permitidas.includes(folio.planta_id)) {
         return res.status(403).json({ error: "Sin permiso para este folio" });
@@ -4860,6 +4867,9 @@ app.get("/api/folios/:id/media/:mediaId/url", dashboardAuthMiddleware, async (re
   try {
     const folio = await getFolioById(client, folioId);
     if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
+    const esZPUrl = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) === "ZP";
+    const esADUrl = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) === "AD";
+    if (folio.solo_zp_ad && !esZPUrl && !esADUrl) return res.status(404).json({ error: "Folio no encontrado" });
     if ((req.dashboardAuth.role === "GG" || req.dashboardAuth.role === "GA") && req.dashboardAuth.plantas_permitidas?.length > 0) {
       if (!folio.planta_id || !req.dashboardAuth.plantas_permitidas.includes(folio.planta_id)) {
         return res.status(403).json({ error: "Sin permiso" });
@@ -4885,6 +4895,9 @@ app.get("/api/folios/:id/timeline", dashboardAuthMiddleware, async (req, res) =>
   try {
     const folio = await getFolioById(client, folioId);
     if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
+    const esZPTl = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) === "ZP";
+    const esADTl = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) === "AD";
+    if (folio.solo_zp_ad && !esZPTl && !esADTl) return res.status(404).json({ error: "Folio no encontrado" });
     if ((req.dashboardAuth.role === "GG" || req.dashboardAuth.role === "GA") && req.dashboardAuth.plantas_permitidas?.length > 0) {
       if (!folio.planta_id || !req.dashboardAuth.plantas_permitidas.includes(folio.planta_id)) {
         return res.status(403).json({ error: "Sin permiso" });
@@ -4913,6 +4926,9 @@ app.get("/api/folios/:id/finanzas", dashboardAuthMiddleware, async (req, res) =>
   try {
     const folio = await getFolioById(client, folioId);
     if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
+    const esZPFin = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) === "ZP";
+    const esADFin = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) === "AD";
+    if (folio.solo_zp_ad && !esZPFin && !esADFin) return res.status(404).json({ error: "Folio no encontrado" });
     if ((req.dashboardAuth.role === "GG" || req.dashboardAuth.role === "GA") && req.dashboardAuth.plantas_permitidas?.length > 0) {
       if (!folio.planta_id || !req.dashboardAuth.plantas_permitidas.includes(folio.planta_id)) {
         return res.status(403).json({ error: "Sin permiso" });
@@ -4941,9 +4957,10 @@ app.get("/api/folios/:id", dashboardAuthMiddleware, async (req, res) => {
   try {
     const folio = await getFolioById(client, folioId);
     if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
-    const creadoPorAD = folio.creado_por_rol_clave && String(folio.creado_por_rol_clave).toUpperCase() === "AD";
     const esZPDash = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) === "ZP";
     const esADDash = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) === "AD";
+    if (folio.solo_zp_ad && !esZPDash && !esADDash) return res.status(404).json({ error: "Folio no encontrado" });
+    const creadoPorAD = folio.creado_por_rol_clave && String(folio.creado_por_rol_clave).toUpperCase() === "AD";
     if (creadoPorAD && !esZPDash && !esADDash) return res.status(404).json({ error: "Folio no encontrado" });
     if ((req.dashboardAuth.role === "GG" || req.dashboardAuth.role === "GA") && req.dashboardAuth.plantas_permitidas?.length > 0) {
       if (!folio.planta_id || !req.dashboardAuth.plantas_permitidas.includes(folio.planta_id)) {
@@ -4985,7 +5002,7 @@ app.get("/api/folios/:id/documento-gastos", dashboardAuthMiddleware, async (req,
   const client = await pool.connect();
   try {
     const r = await client.query(
-      `SELECT f.id, f.planta_id, f.numero_folio, f.folio_codigo, f.beneficiario, f.concepto, f.importe, f.creado_en, f.mes_cargo,
+      `SELECT f.id, f.planta_id, f.solo_zp_ad, f.numero_folio, f.folio_codigo, f.beneficiario, f.concepto, f.importe, f.creado_en, f.mes_cargo,
               p.nombre AS planta_nombre, p.clave AS planta_clave
        FROM public.folios f
        LEFT JOIN public.plantas p ON p.id = f.planta_id
@@ -4994,6 +5011,9 @@ app.get("/api/folios/:id/documento-gastos", dashboardAuthMiddleware, async (req,
     );
     const folio = r.rows[0] || null;
     if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
+    const esZPDoc = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) === "ZP";
+    const esADDoc = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) === "AD";
+    if (folio.solo_zp_ad && !esZPDoc && !esADDoc) return res.status(404).json({ error: "Folio no encontrado" });
     if ((req.dashboardAuth.role === "GG" || req.dashboardAuth.role === "GA") && req.dashboardAuth.plantas_permitidas?.length > 0) {
       const folioPlantaId = folio.planta_id != null ? folio.planta_id : null;
       if (folioPlantaId == null || !req.dashboardAuth.plantas_permitidas.includes(folioPlantaId)) {
@@ -5126,6 +5146,27 @@ app.patch("/api/folios/:id", dashboardAuthMiddleware, async (req, res) => {
     res.json({ ok: true, mes_cargo: mesCargo });
   } catch (e) {
     console.error("[Dashboard PATCH folio]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/** Marcar folio como solo visible para Director ZP y Asistente de Dirección (privado). Solo ZP y AD pueden cambiar esta opción. */
+app.patch("/api/folios/:id/solo-zp-ad", dashboardAuthMiddleware, async (req, res) => {
+  const role = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) || "";
+  if (role !== "ZP" && role !== "AD") return res.status(403).json({ error: "Solo Director ZP y Asistente de Dirección pueden marcar folios como privados." });
+  const folioId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
+  const soloZpAd = req.body.solo_zp_ad === true || req.body.solo_zp_ad === "true";
+  const client = await pool.connect();
+  try {
+    const folio = await getFolioById(client, folioId);
+    if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
+    await client.query(`UPDATE public.folios SET solo_zp_ad = $1 WHERE id = $2`, [soloZpAd, folioId]);
+    res.json({ ok: true, solo_zp_ad: soloZpAd });
+  } catch (e) {
+    console.error("[Dashboard PATCH solo-zp-ad]", e);
     res.status(500).json({ error: e.message });
   } finally {
     client.release();
