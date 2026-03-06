@@ -25,7 +25,8 @@ function estatusToEtapaVisual(estatus: string | null): string {
 /** Icono fantasma para folios privados (solo ZP y AD). */
 function IconFantasma({ className }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden title="Privado (solo ZP y AD)">
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <title>Privado (solo ZP y AD)</title>
       <path d="M12 2C6.48 2 2 6.48 2 12c0 2.5 1 4.8 2.6 6.4V22l3.4-2.2 3.4 2.2 3.4-2.2 3.4 2.2v-3.6C20 16.8 22 14.5 22 12c0-5.52-4.48-10-10-10zm0 2c4.41 0 8 3.59 8 8 0 1.85-.63 3.55-1.69 4.9L17 15.17l-2.5-1.6L12 15.17l-2.5-1.6L7 15.17l-1.31-.91C4.63 13.55 4 11.85 4 10c0-4.41 3.59-8 8-8zm-2.5 6a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm5 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z" />
     </svg>
   );
