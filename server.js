@@ -2623,6 +2623,24 @@ async function getPresupuestoResumen(client, presupuestoId) {
   };
 }
 
+/** Presupuesto ejercido (autorizado por GG) por categoría para una o más plantas. plantaIds: array de planta_id (ej. equivalentes). */
+async function getPresupuestoEjercidoPorCategoria(client, plantaIds) {
+  if (!plantaIds || plantaIds.length === 0) return { categorias: [], totalGeneral: 0 };
+  const r = await client.query(
+    `SELECT COALESCE(NULLIF(TRIM(f.categoria), ''), 'Sin categoría') AS categoria, COALESCE(SUM(pf.importe), 0)::NUMERIC AS total
+     FROM public.presupuesto_folios pf
+     INNER JOIN public.presupuestos_semanales p ON p.id = pf.presupuesto_id
+     INNER JOIN public.folios f ON f.id = pf.folio_id
+     WHERE p.planta_id = ANY($1::INT[])
+     GROUP BY COALESCE(NULLIF(TRIM(f.categoria), ''), 'Sin categoría')
+     ORDER BY categoria`,
+    [plantaIds]
+  );
+  const categorias = (r.rows || []).map((row) => ({ categoria: row.categoria, total: Number(row.total) || 0 }));
+  const totalGeneral = categorias.reduce((s, c) => s + c.total, 0);
+  return { categorias, totalGeneral };
+}
+
 /** Crear o actualizar presupuesto. Si ya existe ABIERTO misma planta/semana, reemplaza monto (upsert). */
 async function createOrUpdatePresupuesto(client, plantaId, semanaInicio, semanaFin, monto, creadoPor, opts = {}) {
   const replace = !!opts.replace;
@@ -4274,6 +4292,7 @@ function getSession(from) {
       pendingReemplazo: null,
       presupuestoConsulta: null,
       presupuestoComparar: null,
+      presupuestoEjercido: null,
       deltaVenta: null,
     });
   }
@@ -4285,6 +4304,7 @@ function getSession(from) {
   if (s.pendingReemplazo === undefined) s.pendingReemplazo = null;
   if (s.presupuestoConsulta === undefined) s.presupuestoConsulta = null;
   if (s.presupuestoComparar === undefined) s.presupuestoComparar = null;
+  if (s.presupuestoEjercido === undefined) s.presupuestoEjercido = null;
   if (s.deltaVenta === undefined) s.deltaVenta = null;
   if (s.adPoliza === undefined) s.adPoliza = null;
   return s;
@@ -4301,6 +4321,7 @@ function resetSession(sess) {
   sess.igfComparar = null;
   sess.igfMargen = null;
   sess.presupuestoConsulta = null;
+  sess.presupuestoEjercido = null;
   sess.deltaVenta = null;
   sess.adPoliza = null;
 }
@@ -4554,7 +4575,7 @@ function buildDashboardWhere(auth, filters) {
   if (!esZP && !esAD && !esCFCDMX) {
     conditions.push("(f.creado_por_rol_clave IS NULL OR UPPER(TRIM(COALESCE(f.creado_por_rol_clave,''))) <> 'AD')");
   }
-  if (roleNorm === "GG") {
+  if (roleNorm === "GG" || roleNorm === "GA") {
     if (auth.plantas_permitidas && auth.plantas_permitidas.length > 0) {
       conditions.push(`f.planta_id = ANY($${n}::INT[])`);
       params.push(auth.plantas_permitidas);
@@ -4816,7 +4837,7 @@ app.get("/api/folios/:id/media", dashboardAuthMiddleware, async (req, res) => {
   try {
     const folio = await getFolioById(client, folioId);
     if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
-    if (req.dashboardAuth.role === "GG" && req.dashboardAuth.plantas_permitidas && req.dashboardAuth.plantas_permitidas.length > 0) {
+    if ((req.dashboardAuth.role === "GG" || req.dashboardAuth.role === "GA") && req.dashboardAuth.plantas_permitidas && req.dashboardAuth.plantas_permitidas.length > 0) {
       if (!folio.planta_id || !req.dashboardAuth.plantas_permitidas.includes(folio.planta_id)) {
         return res.status(403).json({ error: "Sin permiso para este folio" });
       }
@@ -4839,7 +4860,7 @@ app.get("/api/folios/:id/media/:mediaId/url", dashboardAuthMiddleware, async (re
   try {
     const folio = await getFolioById(client, folioId);
     if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
-    if (req.dashboardAuth.role === "GG" && req.dashboardAuth.plantas_permitidas?.length > 0) {
+    if ((req.dashboardAuth.role === "GG" || req.dashboardAuth.role === "GA") && req.dashboardAuth.plantas_permitidas?.length > 0) {
       if (!folio.planta_id || !req.dashboardAuth.plantas_permitidas.includes(folio.planta_id)) {
         return res.status(403).json({ error: "Sin permiso" });
       }
@@ -4864,7 +4885,7 @@ app.get("/api/folios/:id/timeline", dashboardAuthMiddleware, async (req, res) =>
   try {
     const folio = await getFolioById(client, folioId);
     if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
-    if (req.dashboardAuth.role === "GG" && req.dashboardAuth.plantas_permitidas?.length > 0) {
+    if ((req.dashboardAuth.role === "GG" || req.dashboardAuth.role === "GA") && req.dashboardAuth.plantas_permitidas?.length > 0) {
       if (!folio.planta_id || !req.dashboardAuth.plantas_permitidas.includes(folio.planta_id)) {
         return res.status(403).json({ error: "Sin permiso" });
       }
@@ -4892,7 +4913,7 @@ app.get("/api/folios/:id/finanzas", dashboardAuthMiddleware, async (req, res) =>
   try {
     const folio = await getFolioById(client, folioId);
     if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
-    if (req.dashboardAuth.role === "GG" && req.dashboardAuth.plantas_permitidas?.length > 0) {
+    if ((req.dashboardAuth.role === "GG" || req.dashboardAuth.role === "GA") && req.dashboardAuth.plantas_permitidas?.length > 0) {
       if (!folio.planta_id || !req.dashboardAuth.plantas_permitidas.includes(folio.planta_id)) {
         return res.status(403).json({ error: "Sin permiso" });
       }
@@ -4924,7 +4945,7 @@ app.get("/api/folios/:id", dashboardAuthMiddleware, async (req, res) => {
     const esZPDash = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) === "ZP";
     const esADDash = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) === "AD";
     if (creadoPorAD && !esZPDash && !esADDash) return res.status(404).json({ error: "Folio no encontrado" });
-    if (req.dashboardAuth.role === "GG" && req.dashboardAuth.plantas_permitidas?.length > 0) {
+    if ((req.dashboardAuth.role === "GG" || req.dashboardAuth.role === "GA") && req.dashboardAuth.plantas_permitidas?.length > 0) {
       if (!folio.planta_id || !req.dashboardAuth.plantas_permitidas.includes(folio.planta_id)) {
         return res.status(403).json({ error: "Sin permiso" });
       }
@@ -4964,7 +4985,7 @@ app.get("/api/folios/:id/documento-gastos", dashboardAuthMiddleware, async (req,
   const client = await pool.connect();
   try {
     const r = await client.query(
-      `SELECT f.id, f.numero_folio, f.folio_codigo, f.beneficiario, f.concepto, f.importe, f.creado_en, f.mes_cargo,
+      `SELECT f.id, f.planta_id, f.numero_folio, f.folio_codigo, f.beneficiario, f.concepto, f.importe, f.creado_en, f.mes_cargo,
               p.nombre AS planta_nombre, p.clave AS planta_clave
        FROM public.folios f
        LEFT JOIN public.plantas p ON p.id = f.planta_id
@@ -4973,6 +4994,12 @@ app.get("/api/folios/:id/documento-gastos", dashboardAuthMiddleware, async (req,
     );
     const folio = r.rows[0] || null;
     if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
+    if ((req.dashboardAuth.role === "GG" || req.dashboardAuth.role === "GA") && req.dashboardAuth.plantas_permitidas?.length > 0) {
+      const folioPlantaId = folio.planta_id != null ? folio.planta_id : null;
+      if (folioPlantaId == null || !req.dashboardAuth.plantas_permitidas.includes(folioPlantaId)) {
+        return res.status(403).json({ error: "Sin permiso para este folio" });
+      }
+    }
     const archivos = await listFolioArchivosByFolioId(client, folioId, 20);
     const tieneCotizacion = archivos.some((a) => (a.tipo || "").toUpperCase() === "COTIZACION");
     if (!tieneCotizacion) return res.status(400).json({ error: "El folio no tiene cotización; no se puede imprimir." });
@@ -5083,6 +5110,7 @@ app.get("/api/folios/:id/documento-gastos", dashboardAuthMiddleware, async (req,
 
 /** Actualizar mes_cargo del folio (solo cuando está en carrito). */
 app.patch("/api/folios/:id", dashboardAuthMiddleware, async (req, res) => {
+  if (req.dashboardAuth.role === "GA") return res.status(403).json({ error: "GA solo puede ver e imprimir en el dashboard." });
   const folioId = parseInt(req.params.id, 10);
   if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
   const mesCargo = (req.body.mes_cargo != null && req.body.mes_cargo !== "") ? String(req.body.mes_cargo).trim() : null;
@@ -5107,13 +5135,14 @@ app.patch("/api/folios/:id", dashboardAuthMiddleware, async (req, res) => {
 /** Aprobar folio desde dashboard: Pendiente aprobación planta → ZP; Aprobación Director ZP → Carro de compra. */
 app.post("/api/folios/:id/aprobar", dashboardAuthMiddleware, async (req, res) => {
   if (req.dashboardAuth.role === "CF_CDMX") return res.status(403).json({ error: "Contralor financiero CDMX solo puede ver el dashboard, no autorizar." });
+  if (req.dashboardAuth.role === "GA") return res.status(403).json({ error: "GA solo puede ver e imprimir en el dashboard, no aprobar." });
   const folioId = parseInt(req.params.id, 10);
   if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
   const client = await pool.connect();
   try {
     const folio = await getFolioById(client, folioId);
     if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
-    if (req.dashboardAuth.role === "GG" && req.dashboardAuth.plantas_permitidas?.length > 0) {
+    if ((req.dashboardAuth.role === "GG" || req.dashboardAuth.role === "GA") && req.dashboardAuth.plantas_permitidas?.length > 0) {
       if (!folio.planta_id || !req.dashboardAuth.plantas_permitidas.includes(folio.planta_id)) {
         return res.status(403).json({ error: "Sin permiso para aprobar folios de esta planta" });
       }
@@ -5148,13 +5177,14 @@ app.post("/api/folios/:id/aprobar", dashboardAuthMiddleware, async (req, res) =>
 /** Regresa un folio desde Carro de compra a Aprobación Director ZP. */
 app.post("/api/folios/:id/regresar-zp", dashboardAuthMiddleware, async (req, res) => {
   if (req.dashboardAuth.role === "CF_CDMX") return res.status(403).json({ error: "Contralor financiero CDMX solo puede ver el dashboard, no autorizar." });
+  if (req.dashboardAuth.role === "GA") return res.status(403).json({ error: "GA solo puede ver e imprimir en el dashboard, no autorizar." });
   const folioId = parseInt(req.params.id, 10);
   if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
   const client = await pool.connect();
   try {
     const folio = await getFolioById(client, folioId);
     if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
-    if (req.dashboardAuth.role === "GG" && req.dashboardAuth.plantas_permitidas?.length > 0) {
+    if ((req.dashboardAuth.role === "GG" || req.dashboardAuth.role === "GA") && req.dashboardAuth.plantas_permitidas?.length > 0) {
       if (!folio.planta_id || !req.dashboardAuth.plantas_permitidas.includes(folio.planta_id)) {
         return res.status(403).json({ error: "Sin permiso para modificar folios de esta planta" });
       }
@@ -6390,6 +6420,40 @@ app.post("/twilio/whatsapp", async (req, res) => {
         }
       }
 
+      /* ----- Presupuesto ejercido: respuesta "¿De qué planta?" (solo Contralor CDMX / Director ZP) ----- */
+      if (sess.presupuestoEjercido && sess.presupuestoEjercido.paso === "elegir_planta") {
+        const bodyTrim = body.trim();
+        if (/^(cancelar|salir|no)$/i.test(bodyTrim)) {
+          sess.presupuestoEjercido = null;
+          return safeReply("Listo. Escribe \"presupuesto ejercido\" cuando quieras consultar de nuevo.");
+        }
+        const plantas = sess.presupuestoEjercido._plantas || [];
+        let plantaId = null;
+        let plantaNombre = null;
+        const num = parseInt(bodyTrim, 10);
+        if (Number.isFinite(num) && num >= 1 && num <= plantas.length) {
+          plantaId = plantas[num - 1].id;
+          plantaNombre = plantas[num - 1].nombre || plantas[num - 1].clave;
+        } else {
+          const byName = plantas.find((p) => (p.nombre && p.nombre.toLowerCase() === bodyTrim.toLowerCase()) || (p.clave && p.clave.toUpperCase() === bodyTrim.toUpperCase()));
+          if (byName) {
+            plantaId = byName.id;
+            plantaNombre = byName.nombre || byName.clave;
+          }
+        }
+        if (plantaId == null) {
+          const list = plantas.map((p, i) => `${i + 1}) ${p.nombre || p.clave}`).join("\n");
+          return safeReply("¿De qué planta?\n\n" + list + "\n\nResponde con el número o el nombre. (Cancelar para salir.)");
+        }
+        const { categorias, totalGeneral } = await getPresupuestoEjercidoPorCategoria(client, [plantaId]);
+        sess.presupuestoEjercido = null;
+        const fmt = (n) => Number(n).toLocaleString("es-MX", { minimumFractionDigits: 2 });
+        let msg = `📊 Presupuesto ejercido (autorizado por GG)\n${plantaNombre || "Planta"}\n\n`;
+        for (const c of categorias) msg += `${c.categoria}: $${fmt(c.total)}\n`;
+        msg += `\nTOTAL: $${fmt(totalGeneral)}`;
+        return safeReply(msg.length > MAX_WHATSAPP_BODY ? msg.substring(0, MAX_WHATSAPP_BODY - 30) + "\n...(recortado)" : msg);
+      }
+
       /* ----- Delta Venta (clientes que dejaron de comprar / compraron más) ----- */
       if (sess.deltaVenta) {
         const bodyTrim = body.trim();
@@ -6672,6 +6736,35 @@ app.post("/twilio/whatsapp", async (req, res) => {
         const listado = plantasPresup.map((p, i) => `${i + 1}) ${p.nombre}`).join("\n");
         sess.presupuestoComparar = { paso: "elegir_planta", _plantas: plantasPresup };
         return safeReply("¿De qué planta quieres comparar presupuestos?\n\n" + listado + "\n\nResponde con el número, código (E7, E8, …) o nombre. (Escribe Cancelar para salir.)");
+      }
+
+      if (/presupuesto\s+ejercido/i.test(body.trim())) {
+        if (!actor) return safeReply("No estás dado de alta. Contacta al administrador.");
+        const rolClave = (actor.rol_clave && String(actor.rol_clave).toUpperCase()) || "";
+        const rolNom = (actor.rol_nombre && String(actor.rol_nombre)) || "";
+        const esZP = rolClave === "ZP" || (rolNom && /director/i.test(rolNom) && /zp/i.test(rolNom));
+        const esCFCDMX = rolClave === "CF_CDMX" || (/contralor/i.test(rolNom) && /cdmx/i.test(rolNom));
+        const esGA = rolClave === "GA";
+        const esGG = rolClave === "GG";
+        const puedeUsar = esGA || esGG || esCFCDMX || esZP;
+        if (!puedeUsar) return safeReply("Solo GA, GG, Contralor CDMX y Director ZP pueden consultar presupuesto ejercido.");
+        if (esCFCDMX || esZP) {
+          const plantas = await getPlantas(client);
+          if (!plantas.length) return safeReply("No hay plantas en catálogo.");
+          sess.presupuestoEjercido = { paso: "elegir_planta", _plantas: plantas };
+          const list = plantas.map((p, i) => `${i + 1}) ${p.nombre || p.clave}`).join("\n");
+          return safeReply("¿De qué planta?\n\n" + list + "\n\nResponde con el número o el nombre. (Cancelar para salir.)");
+        }
+        const plantaId = actor.planta_id != null ? actor.planta_id : null;
+        if (plantaId == null) return safeReply("No tienes planta asignada. Contacta al administrador.");
+        const plantaIds = getPlantaIdsEquivalentesForPendientes(plantaId);
+        const { categorias, totalGeneral } = await getPresupuestoEjercidoPorCategoria(client, plantaIds);
+        const plantaNombre = actor.planta_nombre || "Planta";
+        const fmt = (n) => Number(n).toLocaleString("es-MX", { minimumFractionDigits: 2 });
+        let msg = `📊 Presupuesto ejercido (autorizado por GG)\n${plantaNombre}\n\n`;
+        for (const c of categorias) msg += `${c.categoria}: $${fmt(c.total)}\n`;
+        msg += `\nTOTAL: $${fmt(totalGeneral)}`;
+        return safeReply(msg.length > MAX_WHATSAPP_BODY ? msg.substring(0, MAX_WHATSAPP_BODY - 30) + "\n...(recortado)" : msg);
       }
 
       if (/cual es mi presupuesto|cuál es mi presupuesto|mi presupuesto/i.test(body.trim())) {
@@ -7069,13 +7162,14 @@ app.post("/twilio/whatsapp", async (req, res) => {
           const esAD = rolClave === "AD" || (/asistente/.test(rolNormNombre) && /direccion/.test(rolNormNombre)) || (/asistente/.test(nombreUsuarioNorm) && /direccion/.test(nombreUsuarioNorm));
           // Contralor financiero CDMX / Contralor CDMX: solo ver dashboard, no autorizar (misma visibilidad que AD)
           const esCFCDMX = rolClave === "CF_CDMX" || (/contralor/.test(rolNormNombre) && /cdmx/.test(rolNormNombre)) || (/contralor/.test(nombreUsuarioNorm) && /cdmx/.test(nombreUsuarioNorm));
-          const role = esZP ? "ZP" : esAD ? "AD" : esCFCDMX ? "CF_CDMX" : "GG";
+          const esGA = rolClave === "GA";
+          const role = esZP ? "ZP" : esAD ? "AD" : esCFCDMX ? "CF_CDMX" : esGA ? "GA" : "GG";
           let plantasPermitidas = [];
           if (esZP || esAD || esCFCDMX) {
             const plantas = await getPlantas(client);
             plantasPermitidas = (plantas || []).map((p) => p.id).filter(Number.isFinite);
           } else if (actor.planta_id != null) {
-            plantasPermitidas = [actor.planta_id];
+            plantasPermitidas = getPlantaIdsEquivalentesForPendientes(actor.planta_id);
           }
           const token = createDashboardToken({
             role,

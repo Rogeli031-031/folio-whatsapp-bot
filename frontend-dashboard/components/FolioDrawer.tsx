@@ -92,7 +92,8 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
 
   const estatus = (folio?.estatus as string) || "";
   const estatusUpper = estatus.trim().toUpperCase();
-  const soloLectura = (role && String(role).toUpperCase()) === "CF_CDMX";
+  const roleUpper = role && String(role).toUpperCase();
+  const soloLectura = roleUpper === "CF_CDMX" || roleUpper === "GA"; // Contralor CDMX y GA solo ven e imprimen, no aprueban
   const puedeAprobar = !soloLectura && ESTADOS_APROBABLES.includes(estatusUpper);
   const puedeRegresarZp = !soloLectura && ESTADOS_CARRO_COMPRA.includes(estatusUpper);
 
