@@ -48,7 +48,7 @@ export default function FolioCard({ card, onOpen, role, onSubirPoliza, onImprimi
 
   const etapa = estatusToEtapaVisual(card.estatus);
   const showPolizaBtn = role === "AD" && etapa === "CARRO_COMPRA" && onSubirPoliza;
-  const showImprimirBtn = etapa === "APROB_DIRECTOR_ZP" && card.tiene_cotizacion !== false && onImprimirGastos;
+  const showImprimirBtn = card.tiene_cotizacion !== false && onImprimirGastos;
 
   return (
     <div
