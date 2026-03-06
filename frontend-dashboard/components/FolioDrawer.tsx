@@ -54,7 +54,6 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
   const [savingSoloZpAd, setSavingSoloZpAd] = useState(false);
   const [savingPorRecuperar, setSavingPorRecuperar] = useState(false);
   const [cotizacionFile, setCotizacionFile] = useState<File | null>(null);
-  const [cotizacionBase64, setCotizacionBase64] = useState<string | null>(null);
   const [uploadingCotizacion, setUploadingCotizacion] = useState(false);
   const [cotizacionError, setCotizacionError] = useState<string | null>(null);
 
@@ -197,47 +196,44 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
     const f = e.target.files?.[0];
     setCotizacionError(null);
     setCotizacionFile(null);
-    setCotizacionBase64(null);
     if (!f) return;
     if (!f.type.includes("pdf")) {
       setCotizacionError("Solo se acepta PDF.");
       return;
     }
     setCotizacionFile(f);
+    setUploadingCotizacion(true);
     const reader = new FileReader();
-    reader.onload = () => {
+    reader.onload = async () => {
       const data = reader.result as string;
       const base64 = data.indexOf(",") >= 0 ? data.split(",")[1] : data;
-      setCotizacionBase64(base64 || null);
+      if (!token || !folioId || !base64) {
+        setUploadingCotizacion(false);
+        return;
+      }
+      setCotizacionError(null);
+      try {
+        await postFolioCotizacion(token, folioId, {
+          fileBase64: base64,
+          fileName: f.name || "cotizacion.pdf",
+        });
+        setCotizacionFile(null);
+        const [fol, t, m] = await Promise.all([
+          fetchFolio(token, folioId),
+          fetchTimeline(token, folioId),
+          fetchMedia(token, folioId),
+        ]);
+        setFolio(fol as Record<string, unknown>);
+        setTimeline((t as { events: typeof timeline }).events || []);
+        setMedia((m as { items: typeof media }).items || []);
+        onApproved?.();
+      } catch (err) {
+        setCotizacionError((err as Error).message || "Error al subir la cotización");
+      } finally {
+        setUploadingCotizacion(false);
+      }
     };
     reader.readAsDataURL(f);
-  };
-
-  const handleSubirCotizacion = async () => {
-    if (!token || !folioId || !cotizacionBase64) return;
-    setCotizacionError(null);
-    setUploadingCotizacion(true);
-    try {
-      await postFolioCotizacion(token, folioId, {
-        fileBase64: cotizacionBase64,
-        fileName: cotizacionFile?.name || "cotizacion.pdf",
-      });
-      setCotizacionFile(null);
-      setCotizacionBase64(null);
-      const [f, t, m] = await Promise.all([
-        fetchFolio(token, folioId),
-        fetchTimeline(token, folioId),
-        fetchMedia(token, folioId),
-      ]);
-      setFolio(f as Record<string, unknown>);
-      setTimeline((t as { events: typeof timeline }).events || []);
-      setMedia((m as { items: typeof media }).items || []);
-      onApproved?.();
-    } catch (e) {
-      setCotizacionError((e as Error).message || "Error al subir la cotización");
-    } finally {
-      setUploadingCotizacion(false);
-    }
   };
 
   const handleSaveMesCargo = async () => {
@@ -401,18 +397,11 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
                             type="file"
                             accept=".pdf,application/pdf"
                             onChange={onCotizacionFileChange}
-                            className="mt-1 w-full rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200 file:mr-2 file:rounded file:border-0 file:bg-amber-600 file:px-2 file:py-1 file:text-white file:hover:bg-amber-500"
+                            disabled={uploadingCotizacion}
+                            className="mt-1 w-full rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200 file:mr-2 file:rounded file:border-0 file:bg-amber-600 file:px-2 file:py-1 file:text-white file:hover:bg-amber-500 disabled:opacity-50"
                           />
-                          {cotizacionFile && <span className="mt-1 block text-xs text-slate-500">{cotizacionFile.name}</span>}
+                          {cotizacionFile && <span className="mt-1 block text-xs text-slate-500">{uploadingCotizacion ? "Subiendo…" : cotizacionFile.name}</span>}
                           {cotizacionError && <p className="mt-1 text-xs text-red-400">{cotizacionError}</p>}
-                          <button
-                            type="button"
-                            onClick={handleSubirCotizacion}
-                            disabled={uploadingCotizacion || !cotizacionBase64}
-                            className="mt-2 rounded bg-amber-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-500 disabled:opacity-50"
-                          >
-                            {uploadingCotizacion ? "…" : "Subir cotización"}
-                          </button>
                         </div>
                       )}
                       {media.length === 0 ? (
