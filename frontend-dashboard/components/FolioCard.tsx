@@ -22,6 +22,15 @@ function estatusToEtapaVisual(estatus: string | null): string {
   return "PENDIENTE_APROB_PLANTA";
 }
 
+/** Icono fantasma para folios privados (solo ZP y AD). */
+function IconFantasma({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden title="Privado (solo ZP y AD)">
+      <path d="M12 2C6.48 2 2 6.48 2 12c0 2.5 1 4.8 2.6 6.4V22l3.4-2.2 3.4 2.2 3.4-2.2 3.4 2.2v-3.6C20 16.8 22 14.5 22 12c0-5.52-4.48-10-10-10zm0 2c4.41 0 8 3.59 8 8 0 1.85-.63 3.55-1.69 4.9L17 15.17l-2.5-1.6L12 15.17l-2.5-1.6L7 15.17l-1.31-.91C4.63 13.55 4 11.85 4 10c0-4.41 3.59-8 8-8zm-2.5 6a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm5 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z" />
+    </svg>
+  );
+}
+
 /** Color del borde por etapa visual. Carro = neutro; preparado para modoColorCarrito "por_igf" en el futuro. */
 const MODO_COLOR_CARRITO = "default" as const;
 
@@ -59,8 +68,13 @@ export default function FolioCard({ card, onOpen, role, onSubirPoliza, onImprimi
       onKeyDown={(e) => e.key === "Enter" && onOpen(card.id)}
     >
       <div className="flex items-start justify-between gap-2">
-        <span className="font-mono text-xs font-medium text-slate-200">{card.folio_codigo}</span>
-        {mxn && <span className="text-xs text-slate-400">{mxn}</span>}
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="font-mono text-xs font-medium text-slate-200">{card.folio_codigo}</span>
+          {card.solo_zp_ad && (
+            <IconFantasma className="h-4 w-4 flex-shrink-0 text-purple-400" aria-hidden />
+          )}
+        </div>
+        {mxn && <span className="text-xs text-slate-400 flex-shrink-0">{mxn}</span>}
       </div>
       <p className="mt-1 line-clamp-2 text-xs text-slate-400">{card.descripcion || "—"}</p>
       <div className="mt-2 flex flex-wrap gap-1 items-center">

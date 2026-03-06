@@ -4660,6 +4660,7 @@ function cardFromFolioRow(row) {
     creado_en: row.creado_en,
     aging,
     tiene_cotizacion: !!row.tiene_cotizacion,
+    solo_zp_ad: !!row.solo_zp_ad,
   };
 }
 
@@ -4670,7 +4671,8 @@ app.get("/api/dashboard/kanban", dashboardAuthMiddleware, async (req, res) => {
     const { where, params } = buildDashboardWhere(req.dashboardAuth, filters);
     const q = `
       SELECT f.id, f.numero_folio, f.folio_codigo, f.planta_id, f.categoria, f.subcategoria, f.unidad,
-             f.importe, f.estatus, f.creado_en, COALESCE(f.descripcion, f.concepto) AS descripcion_display,
+             f.importe, f.estatus, f.creado_en, COALESCE(f.solo_zp_ad, false) AS solo_zp_ad,
+             COALESCE(f.descripcion, f.concepto) AS descripcion_display,
              p.nombre AS planta_nombre,
              (
                EXISTS (
