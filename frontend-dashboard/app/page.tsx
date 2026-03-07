@@ -98,6 +98,8 @@ function KpiContent() {
                     <th className="text-right py-2 px-2 font-medium text-slate-400">Com. y Desc. ($/kg)</th>
                     <th className="text-right py-2 px-2 font-medium text-slate-400">Gasto ($/kg)</th>
                     <th className="text-right py-2 px-2 font-medium text-slate-400">Impuesto ($/kg)</th>
+                    <th className="text-right py-2 px-2 font-medium text-slate-400">HG (%)</th>
+                    <th className="text-right py-2 px-2 font-medium text-slate-400">HG ($/kg)</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -112,6 +114,8 @@ function KpiContent() {
                       <td className="py-1.5 px-2 text-right text-slate-300">{fmtNum(row.com_desc_kg)}</td>
                       <td className="py-1.5 px-2 text-right text-slate-300">{fmtNum(row.gasto_kg)}</td>
                       <td className="py-1.5 px-2 text-right text-slate-300">{fmtNum(row.impuesto_kg)}</td>
+                      <td className="py-1.5 px-2 text-right text-slate-300">{row.hg_pct != null ? `${(Number(row.hg_pct) * 100).toFixed(1)}%` : "—"}</td>
+                      <td className="py-1.5 px-2 text-right text-slate-300">{fmtNum(row.hg_kg)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -122,7 +126,7 @@ function KpiContent() {
             </div>
           )}
           <p className="mt-3 text-xs text-slate-500">
-            Próximamente: venta/descuento forecast, presupuesto, folios Carro/Depósito, HG, Util. Operación, Resultado final y botones por rol.
+            Próximamente: presupuesto, folios Carro/Depósito, Util. Operación, Resultado final y botones por rol.
           </p>
         </section>
         <div className="mt-6 flex flex-wrap gap-3">

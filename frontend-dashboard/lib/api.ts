@@ -113,6 +113,19 @@ export interface IgfForecastRow {
   com_desc_kg: number | null;
   gasto_kg: number | null;
   impuesto_kg: number | null;
+  hg_pct?: number | null;
+  hg_kg?: number | null;
+  bancos_planta_kg?: number | null;
+  provision_planta_kg?: number | null;
+  util_oper_kg?: number | null;
+  util_oper_importe?: number | null;
+  gtos_apoyos_corp_kg?: number | null;
+  bancos_corp_kg?: number | null;
+  otros_programas_kg?: number | null;
+  inversiones_kg?: number | null;
+  resultado_final_kg?: number | null;
+  resultado_final_importe?: number | null;
+  [k: string]: string | number | null | undefined;
 }
 
 export interface IgfForecastResponse {
@@ -121,13 +134,7 @@ export interface IgfForecastResponse {
   version_id: number | null;
   version_number: number | null;
   rows: IgfForecastRow[];
-  totales: {
-    venta_ton: number | null;
-    margen_kg: number | null;
-    com_desc_kg: number | null;
-    gasto_kg: number | null;
-    impuesto_kg: number | null;
-  } | null;
+  totales: Record<string, number | null> | null;
 }
 
 export function fetchIgfForecast(

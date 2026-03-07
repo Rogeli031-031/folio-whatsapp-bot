@@ -4994,46 +4994,75 @@ app.get("/api/dashboard/kpis", dashboardAuthMiddleware, async (req, res) => {
   }
 });
 
+/** Normaliza texto para comparación: quita acentos (á->a, é->e, etc.) y deja mayúsculas. */
+function normalizeAccents(s) {
+  if (s == null || s === "") return "";
+  const t = String(s).normalize("NFD").replace(/\p{M}/gu, "").trim().toUpperCase();
+  return t;
+}
+
 /**
  * Venta forecast por planta (solo mes actual): promedio por día de semana (últimas 2 semanas)
  * × ocurrencias restantes del mes + venta acumulada hasta ayer. Fuente: arr.ventas_diarias_cliente.
+ * Usa prov_map (nombre/clave de public.plantas) para agrupar igual que refresh_provincia.
  * @param {object} client - pg client
  * @param {number} year
  * @param {number} month
- * @returns {Promise<Map<string,number>>} plant_code -> venta_forecast_ton
+ * @returns {Promise<Map<string,number>>} plant_code (prov_name) -> venta_forecast_ton
  */
 async function getVentaForecastProvinciaDesdeArr(client, year, month) {
   const today = new Date();
   const isCurrentMonth = today.getFullYear() === year && today.getMonth() + 1 === month;
   if (!isCurrentMonth) return new Map();
 
-  const todayStr = today.toISOString().slice(0, 10);
   const lastDay = new Date(year, month, 0).getDate();
   const firstDayStr = `${year}-${String(month).padStart(2, "0")}-01`;
-  const lastDayStr = `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
 
   const prov = await client.query("SELECT plant_code FROM arr.provincia_plants ORDER BY plant_code");
   const plantCodes = (prov.rows || []).map((r) => (r.plant_code || "").trim()).filter(Boolean);
   if (plantCodes.length === 0) return new Map();
 
-  const placeholders = plantCodes.map((_, i) => `$${i + 1}`).join(",");
-  const params = [...plantCodes];
-
-  // Últimas 2 semanas (14 días antes de hoy, hasta ayer)
+  // Mismo mapeo que arr-refresh-provincia: ventas por nombre o clave de planta → prov_name
   const r14 = await client.query(
-    `SELECT plant_code, fecha, EXTRACT(ISODOW FROM fecha)::int AS dow, SUM(kg) AS kg
-     FROM arr.ventas_diarias_cliente
-     WHERE plant_code IN (${placeholders}) AND fecha >= (CURRENT_DATE - INTERVAL '14 days') AND fecha < CURRENT_DATE
-     GROUP BY plant_code, fecha`,
-    params
+    `WITH prov_map AS (
+       SELECT DISTINCT p.nombre AS prov_name,
+              UPPER(TRIM(p.nombre)) AS key_nombre,
+              UPPER(TRIM(COALESCE(p.clave, ''))) AS key_clave
+         FROM public.plantas p
+         JOIN arr.provincia_plants ap
+           ON UPPER(TRIM(ap.plant_code)) = UPPER(TRIM(p.nombre))
+           OR (p.clave IS NOT NULL AND TRIM(p.clave) <> '' AND UPPER(TRIM(ap.plant_code)) = UPPER(TRIM(p.clave)))
+        WHERE UPPER(TRIM(COALESCE(p.nombre, ''))) != 'CORPORATIVO'
+          AND UPPER(TRIM(COALESCE(p.clave, ''))) != 'CORPORATIVO'
+     )
+     SELECT pm.prov_name AS plant_code, v.fecha, EXTRACT(ISODOW FROM v.fecha)::int AS dow, SUM(v.kg) AS kg
+       FROM arr.ventas_diarias_cliente v
+       JOIN prov_map pm
+         ON UPPER(TRIM(v.plant_code)) = pm.key_nombre
+         OR (pm.key_clave <> '' AND UPPER(TRIM(v.plant_code)) = pm.key_clave)
+      WHERE v.fecha >= (CURRENT_DATE - INTERVAL '14 days') AND v.fecha < CURRENT_DATE
+      GROUP BY pm.prov_name, v.fecha`
   );
-  // Acumulado en el mes hasta ayer
   const rAcum = await client.query(
-    `SELECT plant_code, COALESCE(SUM(kg), 0) AS kg
-     FROM arr.ventas_diarias_cliente
-     WHERE plant_code IN (${placeholders}) AND fecha >= $${plantCodes.length + 1}::date AND fecha < CURRENT_DATE
-     GROUP BY plant_code`,
-    [...params, firstDayStr]
+    `WITH prov_map AS (
+       SELECT DISTINCT p.nombre AS prov_name,
+              UPPER(TRIM(p.nombre)) AS key_nombre,
+              UPPER(TRIM(COALESCE(p.clave, ''))) AS key_clave
+         FROM public.plantas p
+         JOIN arr.provincia_plants ap
+           ON UPPER(TRIM(ap.plant_code)) = UPPER(TRIM(p.nombre))
+           OR (p.clave IS NOT NULL AND TRIM(p.clave) <> '' AND UPPER(TRIM(ap.plant_code)) = UPPER(TRIM(p.clave)))
+        WHERE UPPER(TRIM(COALESCE(p.nombre, ''))) != 'CORPORATIVO'
+          AND UPPER(TRIM(COALESCE(p.clave, ''))) != 'CORPORATIVO'
+     )
+     SELECT pm.prov_name AS plant_code, COALESCE(SUM(v.kg), 0) AS kg
+       FROM arr.ventas_diarias_cliente v
+       JOIN prov_map pm
+         ON UPPER(TRIM(v.plant_code)) = pm.key_nombre
+         OR (pm.key_clave <> '' AND UPPER(TRIM(v.plant_code)) = pm.key_clave)
+      WHERE v.fecha >= $1::date AND v.fecha < CURRENT_DATE
+      GROUP BY pm.prov_name`,
+    [firstDayStr]
   );
   const acumByPlant = new Map((rAcum.rows || []).map((row) => [row.plant_code, Number(row.kg) || 0]));
 
@@ -5094,22 +5123,46 @@ async function getDescuentoForecastProvinciaDesdeArr(client, year, month) {
   const plantCodes = (prov.rows || []).map((r) => (r.plant_code || "").trim()).filter(Boolean);
   if (plantCodes.length === 0) return new Map();
 
-  const placeholders = plantCodes.map((_, i) => `$${i + 1}`).join(",");
-  const params = [...plantCodes];
-
   const r14 = await client.query(
-    `SELECT plant_code, fecha, EXTRACT(ISODOW FROM fecha)::int AS dow, SUM(monto) AS monto
-     FROM arr.descuentos_diarios_cliente
-     WHERE plant_code IN (${placeholders}) AND fecha >= (CURRENT_DATE - INTERVAL '14 days') AND fecha < CURRENT_DATE
-     GROUP BY plant_code, fecha`,
-    params
+    `WITH prov_map AS (
+       SELECT DISTINCT p.nombre AS prov_name,
+              UPPER(TRIM(p.nombre)) AS key_nombre,
+              UPPER(TRIM(COALESCE(p.clave, ''))) AS key_clave
+         FROM public.plantas p
+         JOIN arr.provincia_plants ap
+           ON UPPER(TRIM(ap.plant_code)) = UPPER(TRIM(p.nombre))
+           OR (p.clave IS NOT NULL AND TRIM(p.clave) <> '' AND UPPER(TRIM(ap.plant_code)) = UPPER(TRIM(p.clave)))
+        WHERE UPPER(TRIM(COALESCE(p.nombre, ''))) != 'CORPORATIVO'
+          AND UPPER(TRIM(COALESCE(p.clave, ''))) != 'CORPORATIVO'
+     )
+     SELECT pm.prov_name AS plant_code, d.fecha, EXTRACT(ISODOW FROM d.fecha)::int AS dow, SUM(d.monto) AS monto
+       FROM arr.descuentos_diarios_cliente d
+       JOIN prov_map pm
+         ON UPPER(TRIM(d.plant_code)) = pm.key_nombre
+         OR (pm.key_clave <> '' AND UPPER(TRIM(d.plant_code)) = pm.key_clave)
+      WHERE d.fecha >= (CURRENT_DATE - INTERVAL '14 days') AND d.fecha < CURRENT_DATE
+      GROUP BY pm.prov_name, d.fecha`
   );
   const rAcum = await client.query(
-    `SELECT plant_code, COALESCE(SUM(monto), 0) AS monto
-     FROM arr.descuentos_diarios_cliente
-     WHERE plant_code IN (${placeholders}) AND fecha >= $${plantCodes.length + 1}::date AND fecha < CURRENT_DATE
-     GROUP BY plant_code`,
-    [...params, firstDayStr]
+    `WITH prov_map AS (
+       SELECT DISTINCT p.nombre AS prov_name,
+              UPPER(TRIM(p.nombre)) AS key_nombre,
+              UPPER(TRIM(COALESCE(p.clave, ''))) AS key_clave
+         FROM public.plantas p
+         JOIN arr.provincia_plants ap
+           ON UPPER(TRIM(ap.plant_code)) = UPPER(TRIM(p.nombre))
+           OR (p.clave IS NOT NULL AND TRIM(p.clave) <> '' AND UPPER(TRIM(ap.plant_code)) = UPPER(TRIM(p.clave)))
+        WHERE UPPER(TRIM(COALESCE(p.nombre, ''))) != 'CORPORATIVO'
+          AND UPPER(TRIM(COALESCE(p.clave, ''))) != 'CORPORATIVO'
+     )
+     SELECT pm.prov_name AS plant_code, COALESCE(SUM(d.monto), 0) AS monto
+       FROM arr.descuentos_diarios_cliente d
+       JOIN prov_map pm
+         ON UPPER(TRIM(d.plant_code)) = pm.key_nombre
+         OR (pm.key_clave <> '' AND UPPER(TRIM(d.plant_code)) = pm.key_clave)
+      WHERE d.fecha >= $1::date AND d.fecha < CURRENT_DATE
+      GROUP BY pm.prov_name`,
+    [firstDayStr]
   );
   const acumByPlant = new Map((rAcum.rows || []).map((row) => [row.plant_code, Number(row.monto) || 0]));
 
@@ -5170,48 +5223,51 @@ app.get("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, res)
     }
     const versionNumber = ver.rows[0].version_number;
     const r = await client.query(
-      `SELECT empresa, venta_ton, margen_kg, com_desc_kg, gasto_kg, impuesto_kg
-       FROM igf.compromiso_lines
-       WHERE version_id = $1
-       ORDER BY empresa`,
+      `SELECT * FROM igf.compromiso_lines WHERE version_id = $1 ORDER BY empresa`,
       [versionId]
     );
-    const allRows = (r.rows || []).map((row) => ({
-      empresa: (row.empresa || "").trim(),
-      venta_ton: row.venta_ton != null ? Number(row.venta_ton) : null,
-      margen_kg: row.margen_kg != null ? Number(row.margen_kg) : null,
-      com_desc_kg: row.com_desc_kg != null ? Number(row.com_desc_kg) : null,
-      gasto_kg: row.gasto_kg != null ? Number(row.gasto_kg) : null,
-      impuesto_kg: row.impuesto_kg != null ? Number(row.impuesto_kg) : null,
-    }));
+    const toNum = (v) => (v == null || v === "" ? null : (Number.isFinite(Number(v)) ? Number(v) : null));
+    const allRows = (r.rows || []).map((row) => {
+      const obj = { empresa: (row.empresa || "").trim() };
+      for (const [k, v] of Object.entries(row)) {
+        if (k === "empresa" || k === "version_id" || k === "id") continue;
+        obj[k] = typeof v === "number" ? v : toNum(v);
+      }
+      return obj;
+    });
     const totalRow = allRows.find((x) => /^TOTALES?$/i.test(x.empresa));
     const ventaForecastByPlant = await getVentaForecastProvinciaDesdeArr(client, year, month);
     const descuentoForecastByPlant = await getDescuentoForecastProvinciaDesdeArr(client, year, month);
 
     function empresaEsProvincia(empresa) {
       if (!empresa || /^TOTALES?$/i.test(empresa)) return false;
-      const empU = empresa.toUpperCase();
+      const empNorm = normalizeAccents(empresa);
       return provinciaPlantCodes.some((p) => {
-        const pU = (p || "").toUpperCase();
-        return empU === pU || empU.includes(pU);
+        const pNorm = normalizeAccents(p);
+        return empNorm === pNorm || empNorm.includes(pNorm) || pNorm.includes(empNorm);
       });
+    }
+    function bestPlantCodeForEmpresa(empresa) {
+      if (!empresa) return null;
+      const empNorm = normalizeAccents(empresa);
+      const match = provinciaPlantCodes.filter((p) => {
+        const pNorm = normalizeAccents(p);
+        return empNorm.includes(pNorm) || pNorm.includes(empNorm);
+      });
+      return match.length ? match.reduce((a, b) => (a.length >= b.length ? a : b)) : null;
     }
 
     const rows = allRows.filter((row) => empresaEsProvincia(row.empresa)).map((row) => {
       let venta_ton = row.venta_ton;
       let com_desc_kg = row.com_desc_kg;
-      if (ventaForecastByPlant.size > 0 && row.empresa) {
-        const empU = (row.empresa || "").toUpperCase();
-        const match = provinciaPlantCodes.filter((p) => empU.includes((p || "").toUpperCase()) || (p || "").toUpperCase().includes(empU));
-        const best = match.length ? match.reduce((a, b) => (a.length >= b.length ? a : b)) : null;
-        if (best != null) {
-          const f = ventaForecastByPlant.get(best);
-          if (f != null) venta_ton = f;
-          const ventaForecastKg = (venta_ton || 0) * 1000;
-          const descMonto = descuentoForecastByPlant.get(best);
-          if (ventaForecastKg > 0 && descMonto != null) {
-            com_desc_kg = Math.round((Math.abs(descMonto) / ventaForecastKg) * 100) / 100;
-          }
+      const best = bestPlantCodeForEmpresa(row.empresa);
+      if (best != null && ventaForecastByPlant.size > 0) {
+        const f = ventaForecastByPlant.get(best);
+        if (f != null) venta_ton = f;
+        const ventaForecastKg = (venta_ton || 0) * 1000;
+        const descMonto = descuentoForecastByPlant.get(best);
+        if (ventaForecastKg > 0 && descMonto != null) {
+          com_desc_kg = Math.round((Math.abs(descMonto) / ventaForecastKg) * 100) / 100;
         }
       }
       return { ...row, venta_ton, com_desc_kg };
@@ -5228,6 +5284,11 @@ app.get("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, res)
         gasto_kg: totalRow && totalRow.gasto_kg != null ? totalRow.gasto_kg : (rows.reduce((s, x) => s + (Number(x.gasto_kg) || 0), 0) / rows.length),
         impuesto_kg: totalRow && totalRow.impuesto_kg != null ? totalRow.impuesto_kg : (rows.reduce((s, x) => s + (Number(x.impuesto_kg) || 0), 0) / rows.length),
       };
+      for (const key of Object.keys(rows[0] || {})) {
+        if (key === "empresa" || totales[key] !== undefined) continue;
+        const vals = rows.map((x) => x[key]).filter((v) => v != null && Number.isFinite(Number(v)));
+        if (vals.length) totales[key] = key.endsWith("_importe") ? vals.reduce((a, b) => a + b, 0) : vals.reduce((a, b) => a + b, 0) / vals.length;
+      }
     }
     res.json({ year, month, version_id: versionId, version_number: versionNumber, rows, totales });
   } catch (e) {
