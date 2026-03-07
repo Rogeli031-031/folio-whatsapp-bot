@@ -4994,6 +4994,54 @@ app.get("/api/dashboard/kpis", dashboardAuthMiddleware, async (req, res) => {
   }
 });
 
+/** IGF Forecast: última versión del mes (por empresa). Devuelve venta_ton, margen_kg, com_desc_kg, gasto_kg, impuesto_kg. */
+app.get("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, res) => {
+  const year = req.query.year != null ? parseInt(String(req.query.year), 10) : new Date().getFullYear();
+  const month = req.query.month != null ? parseInt(String(req.query.month), 10) : new Date().getMonth() + 1;
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
+    return res.status(400).json({ error: "year y month inválidos" });
+  }
+  const client = await pool.connect();
+  try {
+    const ver = await client.query(
+      `SELECT id, version_number FROM igf.versions
+       WHERE plant_code = 'GLOBAL' AND year = $1 AND month = $2
+       ORDER BY version_number DESC LIMIT 1`,
+      [year, month]
+    );
+    const versionId = ver.rows && ver.rows[0] && ver.rows[0].id;
+    if (versionId == null) {
+      return res.json({ year, month, version_id: null, version_number: null, rows: [], totales: null });
+    }
+    const versionNumber = ver.rows[0].version_number;
+    const r = await client.query(
+      `SELECT empresa, venta_ton, margen_kg, com_desc_kg, gasto_kg, impuesto_kg
+       FROM igf.compromiso_lines
+       WHERE version_id = $1
+       ORDER BY empresa`,
+      [versionId]
+    );
+    const rows = (r.rows || []).map((row) => ({
+      empresa: (row.empresa || "").trim(),
+      venta_ton: row.venta_ton != null ? Number(row.venta_ton) : null,
+      margen_kg: row.margen_kg != null ? Number(row.margen_kg) : null,
+      com_desc_kg: row.com_desc_kg != null ? Number(row.com_desc_kg) : null,
+      gasto_kg: row.gasto_kg != null ? Number(row.gasto_kg) : null,
+      impuesto_kg: row.impuesto_kg != null ? Number(row.impuesto_kg) : null,
+    }));
+    const totalRow = rows.find((x) => /^TOTALES?$/i.test(x.empresa));
+    const totales = totalRow
+      ? { venta_ton: totalRow.venta_ton, margen_kg: totalRow.margen_kg, com_desc_kg: totalRow.com_desc_kg, gasto_kg: totalRow.gasto_kg, impuesto_kg: totalRow.impuesto_kg }
+      : null;
+    res.json({ year, month, version_id: versionId, version_number: versionNumber, rows, totales });
+  } catch (e) {
+    console.error("[Dashboard IGF Forecast]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
 app.get("/api/folios/:id/media", dashboardAuthMiddleware, async (req, res) => {
   const folioId = parseInt(req.params.id, 10);
   if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });

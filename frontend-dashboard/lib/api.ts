@@ -106,6 +106,40 @@ export function fetchPlantas(token: string): Promise<{ plantas: { id: number; no
   return apiFetch<{ plantas: { id: number; nombre: string }[] }>("/api/dashboard/plantas", { token });
 }
 
+export interface IgfForecastRow {
+  empresa: string;
+  venta_ton: number | null;
+  margen_kg: number | null;
+  com_desc_kg: number | null;
+  gasto_kg: number | null;
+  impuesto_kg: number | null;
+}
+
+export interface IgfForecastResponse {
+  year: number;
+  month: number;
+  version_id: number | null;
+  version_number: number | null;
+  rows: IgfForecastRow[];
+  totales: {
+    venta_ton: number | null;
+    margen_kg: number | null;
+    com_desc_kg: number | null;
+    gasto_kg: number | null;
+    impuesto_kg: number | null;
+  } | null;
+}
+
+export function fetchIgfForecast(
+  token: string,
+  params?: { year?: number; month?: number }
+): Promise<IgfForecastResponse> {
+  const p: Record<string, string> = {};
+  if (params?.year != null) p.year = String(params.year);
+  if (params?.month != null) p.month = String(params.month);
+  return apiFetch<IgfForecastResponse>("/api/dashboard/igf-forecast", { token, params: Object.keys(p).length ? p : undefined });
+}
+
 export interface CrearFolioPayload {
   planta_id: number;
   proyecto_id?: number | null;
