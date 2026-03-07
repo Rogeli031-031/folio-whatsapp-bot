@@ -5199,6 +5199,24 @@ async function getDescuentoForecastProvinciaDesdeArr(client, year, month) {
   return out;
 }
 
+/** Variables IGF que son costos/egresos: en pantalla se muestran con signo negativo. El resto (margen, util_oper, resultado) conservan su signo. */
+const IGF_VAR_COSTO_PARA_DISPLAY = [
+  "com_desc_kg", "gasto_kg", "impuesto_kg", "hg_kg",
+  "bancos_planta_kg", "provision_planta_kg",
+  "gtos_apoyos_corp_kg", "bancos_corp_kg", "otros_programas_kg", "inversiones_kg",
+  "presupuesto_kg", "folios_aprob_zp_kg", "folios_carro_kg",
+];
+function aplicarSignosDisplayIgf(row) {
+  const out = { ...row };
+  for (const key of IGF_VAR_COSTO_PARA_DISPLAY) {
+    if (out[key] != null && Number.isFinite(Number(out[key]))) {
+      const v = Number(out[key]);
+      out[key] = v > 0 ? -v : v;
+    }
+  }
+  return out;
+}
+
 /** IGF Forecast: última versión del mes; solo plantas provincia; venta y com_desc = forecast desde ARR (mes actual). */
 app.get("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, res) => {
   const year = req.query.year != null ? parseInt(String(req.query.year), 10) : new Date().getFullYear();
@@ -5272,6 +5290,61 @@ app.get("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, res)
       }
       return { ...row, venta_ton, com_desc_kg };
     });
+
+    const periodoStr = `${year}-${String(month).padStart(2, "0")}`;
+    const plantaIdByPlantCode = new Map();
+    const provPlantas = await client.query(
+      `SELECT ap.plant_code, p.id AS planta_id
+       FROM arr.provincia_plants ap
+       JOIN public.plantas p ON UPPER(TRIM(p.nombre)) = UPPER(TRIM(ap.plant_code))
+        OR (p.clave IS NOT NULL AND TRIM(p.clave) <> '' AND UPPER(TRIM(p.clave)) = UPPER(TRIM(ap.plant_code)))`
+    );
+    for (const r of provPlantas.rows || []) {
+      if (r.plant_code != null && r.planta_id != null) plantaIdByPlantCode.set((r.plant_code || "").trim(), r.planta_id);
+    }
+    const plantaIds = Array.from(plantaIdByPlantCode.values()).filter((id) => id != null);
+    let presupuestoByPlanta = new Map();
+    let foliosAprobZpByPlanta = new Map();
+    let foliosCarroByPlanta = new Map();
+    if (plantaIds.length > 0) {
+      const ph = plantaIds.map((_, i) => `$${i + 1}`).join(",");
+      const pres = await client.query(
+        `SELECT planta_id, COALESCE(SUM(monto_aprobado), 0) AS total
+         FROM public.presupuesto_asignacion_detalle WHERE periodo = $1 AND planta_id IN (${ph}) GROUP BY planta_id`,
+        [periodoStr, ...plantaIds]
+      );
+      presupuestoByPlanta = new Map((pres.rows || []).map((r) => [r.planta_id, Number(r.total) || 0]));
+      const estAprobZp = [ESTADOS.PENDIENTE_APROB_ZP, ESTADOS.CANCELACION_SOLICITADA];
+      const estCarro = [ESTADOS.APROBADO_ZP, ESTADOS.LISTO_PARA_PROGRAMACION, ESTADOS.SELECCIONADO_SEMANA, ESTADOS.SOLICITANDO_PAGO];
+      const phFol = plantaIds.map((_, i) => `$${i + 3}`).join(",");
+      const folAprob = await client.query(
+        `SELECT planta_id, COALESCE(SUM(COALESCE(importe, 0)), 0) AS total FROM public.folios
+         WHERE mes_cargo = $1 AND estatus = ANY($2::text[]) AND planta_id IN (${phFol}) GROUP BY planta_id`,
+        [periodoStr, estAprobZp, ...plantaIds]
+      );
+      foliosAprobZpByPlanta = new Map((folAprob.rows || []).map((r) => [r.planta_id, Number(r.total) || 0]));
+      const folCarro = await client.query(
+        `SELECT planta_id, COALESCE(SUM(COALESCE(importe, 0)), 0) AS total FROM public.folios
+         WHERE mes_cargo = $1 AND estatus = ANY($2::text[]) AND planta_id IN (${phFol}) GROUP BY planta_id`,
+        [periodoStr, estCarro, ...plantaIds]
+      );
+      foliosCarroByPlanta = new Map((folCarro.rows || []).map((r) => [r.planta_id, Number(r.total) || 0]));
+    }
+    for (const row of rows) {
+      const best = bestPlantCodeForEmpresa(row.empresa);
+      const plantaId = best != null ? plantaIdByPlantCode.get(best) : null;
+      const ventaKg = (row.venta_ton != null ? Number(row.venta_ton) : 0) * 1000;
+      row.presupuesto_kg = ventaKg > 0 && plantaId != null
+        ? Math.round((presupuestoByPlanta.get(plantaId) || 0) / ventaKg * 100) / 100
+        : null;
+      row.folios_aprob_zp_kg = ventaKg > 0 && plantaId != null
+        ? Math.round((foliosAprobZpByPlanta.get(plantaId) || 0) / ventaKg * 100) / 100
+        : null;
+      row.folios_carro_kg = ventaKg > 0 && plantaId != null
+        ? Math.round((foliosCarroByPlanta.get(plantaId) || 0) / ventaKg * 100) / 100
+        : null;
+    }
+    for (let i = 0; i < rows.length; i++) rows[i] = aplicarSignosDisplayIgf(rows[i]);
 
     const ordenProvincia = ["GT - Puebla", "Tehuacán", "Acapulco", "GTM - Querétaro", "GTM - San Luis P.", "Morelos"];
     rows.sort((a, b) => {

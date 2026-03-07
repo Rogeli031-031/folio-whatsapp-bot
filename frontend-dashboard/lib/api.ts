@@ -113,6 +113,9 @@ export interface IgfForecastRow {
   com_desc_kg: number | null;
   gasto_kg: number | null;
   impuesto_kg: number | null;
+  presupuesto_kg?: number | null;
+  folios_aprob_zp_kg?: number | null;
+  folios_carro_kg?: number | null;
   hg_pct?: number | null;
   hg_kg?: number | null;
   bancos_planta_kg?: number | null;

@@ -112,7 +112,9 @@ function KpiContent() {
                     <th className="text-right py-2 px-2 font-medium text-slate-400">Venta (ton)</th>
                     <th className="text-right py-2 px-2 font-medium text-slate-400">Margen ($/kg)</th>
                     <th className="text-right py-2 px-2 font-medium text-slate-400">Com. y Desc. ($/kg)</th>
-                    <th className="text-right py-2 px-2 font-medium text-slate-400">Gasto ($/kg)</th>
+                    <th className="text-right py-2 px-2 font-medium text-slate-400">Presupuesto ($/kg)</th>
+                    <th className="text-right py-2 px-2 font-medium text-slate-400">Folios Aprob. Director ZP ($/kg)</th>
+                    <th className="text-right py-2 px-2 font-medium text-slate-400">Folios en carro ($/kg)</th>
                     <th className="text-right py-2 px-2 font-medium text-slate-400">Impuesto ($/kg)</th>
                     <th className="text-right py-2 px-2 font-medium text-slate-400">HG (%)</th>
                     <th className="text-right py-2 px-2 font-medium text-slate-400">HG ($/kg)</th>
@@ -140,7 +142,9 @@ function KpiContent() {
                         <td className="py-1.5 px-2 text-right text-slate-300">{fmtNum(row.venta_ton, 2)}</td>
                         <td className="py-1.5 px-2 text-right text-slate-300">{fmtNum(row.margen_kg)}</td>
                         <td className="py-1.5 px-2 text-right text-slate-300">{fmtNum(row.com_desc_kg)}</td>
-                        <td className="py-1.5 px-2 text-right text-slate-300">{fmtNum(row.gasto_kg)}</td>
+                        <td className="py-1.5 px-2 text-right text-slate-300">{fmtNum(row.presupuesto_kg ?? null)}</td>
+                        <td className="py-1.5 px-2 text-right text-slate-300">{fmtNum((row as Record<string, unknown>).folios_aprob_zp_kg ?? null)}</td>
+                        <td className="py-1.5 px-2 text-right text-slate-300">{fmtNum(row.folios_carro_kg ?? null)}</td>
                         <td className="py-1.5 px-2 text-right text-slate-300">{fmtNum(row.impuesto_kg)}</td>
                         <td className="py-1.5 px-2 text-right text-slate-300">
                           <input
