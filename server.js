@@ -5199,6 +5199,16 @@ async function getDescuentoForecastProvinciaDesdeArr(client, year, month) {
   return out;
 }
 
+/** Mapeo empresa IGF (nombre en tabla) -> nombre planta en DB (presupuesto por E7, E8, etc.). Mismo criterio que "mi presupuesto". */
+const EMPRESA_IGF_A_NOMBRE_PLANTA = {
+  "GT - Puebla": "E7",
+  "Tehuacán": "E8",
+  "Acapulco": "E9",
+  "GTM - Querétaro": "E12",
+  "GTM - San Luis P.": "E11",
+  "Morelos": "E15",
+};
+
 /** Signos para presentación: verde = positivo (margen, HG $/kg); rojo = negativo (costos/egresos). Azul = calculados (Util. Oper., Resultado). */
 const IGF_VAR_COSTO_PARA_DISPLAY = [
   "com_desc_kg", "gasto_kg", "impuesto_kg",
@@ -5213,6 +5223,9 @@ function aplicarSignosDisplayIgf(row) {
       const v = Number(out[key]);
       out[key] = v > 0 ? -v : v;
     }
+  }
+  if (out.hg_kg != null && Number.isFinite(Number(out.hg_kg))) {
+    out.hg_kg = Math.abs(Number(out.hg_kg));
   }
   return out;
 }
@@ -5302,7 +5315,20 @@ app.get("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, res)
     for (const r of provPlantas.rows || []) {
       if (r.plant_code != null && r.planta_id != null) plantaIdByPlantCode.set((r.plant_code || "").trim(), Number(r.planta_id));
     }
-    const plantaIds = Array.from(plantaIdByPlantCode.values()).filter((id) => id != null && Number.isFinite(Number(id))).map((id) => Number(id));
+    const nombresPresupuesto = ["E7", "E8", "E9", "E10", "E11", "E12", "E13", "E15"];
+    const rPlantasPresup = await client.query(
+      `SELECT id, nombre FROM public.plantas WHERE nombre = ANY($1::text[])`,
+      [nombresPresupuesto]
+    );
+    const plantaIdByNombrePresup = new Map((rPlantasPresup.rows || []).map((r) => [r.nombre, Number(r.id)]));
+    const empresaToPlantaId = new Map();
+    for (const [empresa, nombrePlanta] of Object.entries(EMPRESA_IGF_A_NOMBRE_PLANTA)) {
+      const id = plantaIdByNombrePresup.get(nombrePlanta);
+      if (id != null) empresaToPlantaId.set(empresa, id);
+    }
+    const idsFromJoin = Array.from(plantaIdByPlantCode.values()).filter((id) => id != null && Number.isFinite(Number(id)));
+    const idsFromPresupuesto = Array.from(empresaToPlantaId.values());
+    const plantaIds = [...new Set([...idsFromJoin.map((id) => Number(id)), ...idsFromPresupuesto])];
     let presupuestoByPlanta = new Map();
     let foliosAprobZpByPlanta = new Map();
     let foliosCarroByPlanta = new Map();
@@ -5328,9 +5354,20 @@ app.get("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, res)
       );
       foliosCarroByPlanta = new Map((folCarro.rows || []).map((r) => [Number(r.planta_id), Number(r.total) || 0]));
     }
+    function resolvePlantaIdForRow(empresa) {
+      const best = bestPlantCodeForEmpresa(empresa);
+      let id = best != null ? plantaIdByPlantCode.get(best) : null;
+      if (id != null) return id;
+      id = empresaToPlantaId.get(empresa);
+      if (id != null) return id;
+      const empNorm = normalizeAccents(empresa);
+      for (const [key, val] of empresaToPlantaId) {
+        if (normalizeAccents(key) === empNorm) return val;
+      }
+      return null;
+    }
     for (const row of rows) {
-      const best = bestPlantCodeForEmpresa(row.empresa);
-      const plantaId = best != null ? plantaIdByPlantCode.get(best) : null;
+      const plantaId = resolvePlantaIdForRow(row.empresa);
       const ventaKg = (row.venta_ton != null ? Number(row.venta_ton) : 0) * 1000;
       row.presupuesto_kg = ventaKg > 0 && plantaId != null
         ? Math.round((presupuestoByPlanta.get(plantaId) || 0) / ventaKg * 100) / 100
@@ -5411,7 +5448,8 @@ function recalcularUtilYResultado(row) {
   const otrosProg = n(row.otros_programas_kg);
   const inversiones = n(row.inversiones_kg);
 
-  const util_oper_kg = margen - comDesc - gasto - impuesto + hgKg - bancosPlanta - provisionPlanta - presupuesto - foliosZP - foliosCarro;
+  const hgContribucion = Math.abs(hgKg);
+  const util_oper_kg = margen - comDesc - gasto - impuesto + hgContribucion - bancosPlanta - provisionPlanta - presupuesto - foliosZP - foliosCarro;
   const util_oper_importe = ventaKg > 0 ? util_oper_kg * ventaKg : 0;
   const resultado_final_kg = util_oper_kg - gtosCorp - bancosCorp - otrosProg - inversiones;
   const resultado_final_importe = ventaKg > 0 ? resultado_final_kg * ventaKg : 0;
