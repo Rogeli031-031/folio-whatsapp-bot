@@ -40,6 +40,7 @@ function KpiContent() {
   const [igfLoading, setIgfLoading] = useState(false);
   const [igfError, setIgfError] = useState<string | null>(null);
   const [hgSaving, setHgSaving] = useState<string | null>(null);
+  const [plantaFilter, setPlantaFilter] = useState<string>("");
 
   useEffect(() => {
     const t = parseTokenFromQuery(searchParams) || getTokenFromStorage();
@@ -90,21 +91,38 @@ function KpiContent() {
         <h1 className="text-xl font-semibold text-white">KPI Financieros</h1>
         <p className="mt-1 text-sm text-slate-400">IGF Forecast y métricas por planta / provincia</p>
       </div>
-      <main className="flex-1 p-4">
-        <section className="rounded-lg border border-slate-700 bg-slate-800/60 p-4">
+      <main className={plantaFilter ? "flex-1 p-4 flex flex-col" : "flex-1 p-4"}>
+        <section className={`rounded-lg border border-slate-700 bg-slate-800/60 p-4 ${plantaFilter ? "flex-shrink-0" : ""}`}>
           <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
             <h2 className="text-lg font-medium text-slate-200">IGF Forecast</h2>
-            {igfForecast && (
-              <span className="text-xs text-slate-500">
-                {MESES[igfForecast.month - 1]} {igfForecast.year}
-                {igfForecast.version_number != null && ` · v${igfForecast.version_number}`}
-              </span>
-            )}
+            <div className="flex flex-wrap items-center gap-2">
+              {igfForecast && (
+                <>
+                  <label className="flex items-center gap-1.5 text-xs text-slate-400">
+                    <span>Planta:</span>
+                    <select
+                      value={plantaFilter}
+                      onChange={(e) => setPlantaFilter(e.target.value)}
+                      className="rounded border border-slate-600 bg-slate-700 px-2 py-1 text-slate-200 text-xs"
+                    >
+                      <option value="">Todas</option>
+                      {[...new Set(igfForecast.rows.map((r) => r.empresa?.trim()).filter(Boolean))].sort().map((emp) => (
+                        <option key={emp} value={emp}>{emp}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <span className="text-xs text-slate-500">
+                    {MESES[igfForecast.month - 1]} {igfForecast.year}
+                    {igfForecast.version_number != null && ` · v${igfForecast.version_number}`}
+                  </span>
+                </>
+              )}
+            </div>
           </div>
           {igfLoading && <p className="text-sm text-slate-400">Cargando datos…</p>}
           {igfError && <p className="text-sm text-red-400">{igfError}</p>}
           {!igfLoading && !igfError && igfForecast && (
-            <div className="overflow-x-auto">
+            <div className={`overflow-x-auto ${plantaFilter ? "max-h-[55vh] overflow-y-auto" : ""}`}>
               <table className="w-full border-collapse text-sm">
                 <thead>
                   <tr className="border-b border-slate-600 bg-slate-800/80 text-[0.6em]">
@@ -133,8 +151,10 @@ function KpiContent() {
                 </thead>
                 <tbody>
                   {(() => {
-                    const sorted = [...igfForecast.rows]
-                      .filter((r) => !/^TOTALES?$/i.test(r.empresa?.trim() || ""))
+                    const filtered = plantaFilter
+                      ? igfForecast.rows.filter((r) => (r.empresa?.trim() || "") === plantaFilter)
+                      : igfForecast.rows.filter((r) => !/^TOTALES?$/i.test(r.empresa?.trim() || ""));
+                    const sorted = [...filtered]
                       .sort((a, b) => {
                         const iA = ORDEN_PROVINCIA.indexOf(a.empresa?.trim() || "");
                         const iB = ORDEN_PROVINCIA.indexOf(b.empresa?.trim() || "");
@@ -212,7 +232,7 @@ function KpiContent() {
                     ));
                   })()}
                 </tbody>
-                {igfForecast.totales && (
+                {igfForecast.totales && !plantaFilter && (
                   <tfoot>
                     <tr className="border-t-2 border-slate-600 bg-slate-700/50">
                       <td className="py-3 px-2 text-base font-bold text-slate-100 border-r border-slate-600">Total</td>
@@ -242,7 +262,7 @@ function KpiContent() {
             Próximamente: presupuesto, folios Carro/Depósito y botones por rol.
           </p>
         </section>
-        <div className="mt-6 flex flex-wrap gap-3">
+        <div className="mt-4 flex flex-wrap gap-3 flex-shrink-0">
           <Link
             href="/dashboard"
             className="inline-flex items-center gap-2 rounded bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-600"
@@ -250,6 +270,7 @@ function KpiContent() {
             Ver dashboard de folios
           </Link>
         </div>
+        {plantaFilter ? <div className="flex-1 min-h-[35vh] mt-6" aria-hidden /> : null}
       </main>
     </div>
   );
