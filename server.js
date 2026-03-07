@@ -4994,7 +4994,159 @@ app.get("/api/dashboard/kpis", dashboardAuthMiddleware, async (req, res) => {
   }
 });
 
-/** IGF Forecast: última versión del mes (por empresa). Devuelve venta_ton, margen_kg, com_desc_kg, gasto_kg, impuesto_kg. */
+/**
+ * Venta forecast por planta (solo mes actual): promedio por día de semana (últimas 2 semanas)
+ * × ocurrencias restantes del mes + venta acumulada hasta ayer. Fuente: arr.ventas_diarias_cliente.
+ * @param {object} client - pg client
+ * @param {number} year
+ * @param {number} month
+ * @returns {Promise<Map<string,number>>} plant_code -> venta_forecast_ton
+ */
+async function getVentaForecastProvinciaDesdeArr(client, year, month) {
+  const today = new Date();
+  const isCurrentMonth = today.getFullYear() === year && today.getMonth() + 1 === month;
+  if (!isCurrentMonth) return new Map();
+
+  const todayStr = today.toISOString().slice(0, 10);
+  const lastDay = new Date(year, month, 0).getDate();
+  const firstDayStr = `${year}-${String(month).padStart(2, "0")}-01`;
+  const lastDayStr = `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+
+  const prov = await client.query("SELECT plant_code FROM arr.provincia_plants ORDER BY plant_code");
+  const plantCodes = (prov.rows || []).map((r) => (r.plant_code || "").trim()).filter(Boolean);
+  if (plantCodes.length === 0) return new Map();
+
+  const placeholders = plantCodes.map((_, i) => `$${i + 1}`).join(",");
+  const params = [...plantCodes];
+
+  // Últimas 2 semanas (14 días antes de hoy, hasta ayer)
+  const r14 = await client.query(
+    `SELECT plant_code, fecha, EXTRACT(ISODOW FROM fecha)::int AS dow, SUM(kg) AS kg
+     FROM arr.ventas_diarias_cliente
+     WHERE plant_code IN (${placeholders}) AND fecha >= (CURRENT_DATE - INTERVAL '14 days') AND fecha < CURRENT_DATE
+     GROUP BY plant_code, fecha`,
+    params
+  );
+  // Acumulado en el mes hasta ayer
+  const rAcum = await client.query(
+    `SELECT plant_code, COALESCE(SUM(kg), 0) AS kg
+     FROM arr.ventas_diarias_cliente
+     WHERE plant_code IN (${placeholders}) AND fecha >= $${plantCodes.length + 1}::date AND fecha < CURRENT_DATE
+     GROUP BY plant_code`,
+    [...params, firstDayStr]
+  );
+  const acumByPlant = new Map((rAcum.rows || []).map((row) => [row.plant_code, Number(row.kg) || 0]));
+
+  // Promedio por día de semana (1-7) por planta: sum(kg) por (plant_code, dow) / count de días con ese dow
+  const byPlantDow = new Map();
+  for (const row of r14.rows || []) {
+    const key = `${row.plant_code}|${row.dow}`;
+    if (!byPlantDow.has(key)) byPlantDow.set(key, { sum: 0, count: 0 });
+    const rec = byPlantDow.get(key);
+    rec.sum += Number(row.kg) || 0;
+    rec.count += 1;
+  }
+  const avgByPlantDow = new Map();
+  for (const [key, { sum, count }] of byPlantDow) {
+    avgByPlantDow.set(key, count > 0 ? sum / count : 0);
+  }
+
+  // Días restantes del mes (hoy inclusive) por dow
+  const restCountByDow = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0 };
+  for (let d = today.getDate(); d <= lastDay; d++) {
+    const fd = new Date(year, month - 1, d);
+    const dow = fd.getDay() || 7;
+    restCountByDow[dow] = (restCountByDow[dow] || 0) + 1;
+  }
+
+  const out = new Map();
+  for (const plant_code of plantCodes) {
+    let proy = 0;
+    for (let dow = 1; dow <= 7; dow++) {
+      const avg = avgByPlantDow.get(`${plant_code}|${dow}`) || 0;
+      proy += avg * (restCountByDow[dow] || 0);
+    }
+    const acum = acumByPlant.get(plant_code) || 0;
+    const forecastKg = acum + proy;
+    out.set(plant_code, Math.round((forecastKg / 1000) * 100) / 100);
+  }
+  return out;
+}
+
+/**
+ * Descuento forecast por planta (solo mes actual): misma lógica que venta — promedio por día de semana
+ * (últimas 2 semanas) × ocurrencias restantes del mes + descuento acumulado hasta ayer.
+ * Fuente: arr.descuentos_diarios_cliente (monto en $).
+ * @param {object} client - pg client
+ * @param {number} year
+ * @param {number} month
+ * @returns {Promise<Map<string,number>>} plant_code -> descuento_forecast_monto ($)
+ */
+async function getDescuentoForecastProvinciaDesdeArr(client, year, month) {
+  const today = new Date();
+  const isCurrentMonth = today.getFullYear() === year && today.getMonth() + 1 === month;
+  if (!isCurrentMonth) return new Map();
+
+  const lastDay = new Date(year, month, 0).getDate();
+  const firstDayStr = `${year}-${String(month).padStart(2, "0")}-01`;
+
+  const prov = await client.query("SELECT plant_code FROM arr.provincia_plants ORDER BY plant_code");
+  const plantCodes = (prov.rows || []).map((r) => (r.plant_code || "").trim()).filter(Boolean);
+  if (plantCodes.length === 0) return new Map();
+
+  const placeholders = plantCodes.map((_, i) => `$${i + 1}`).join(",");
+  const params = [...plantCodes];
+
+  const r14 = await client.query(
+    `SELECT plant_code, fecha, EXTRACT(ISODOW FROM fecha)::int AS dow, SUM(monto) AS monto
+     FROM arr.descuentos_diarios_cliente
+     WHERE plant_code IN (${placeholders}) AND fecha >= (CURRENT_DATE - INTERVAL '14 days') AND fecha < CURRENT_DATE
+     GROUP BY plant_code, fecha`,
+    params
+  );
+  const rAcum = await client.query(
+    `SELECT plant_code, COALESCE(SUM(monto), 0) AS monto
+     FROM arr.descuentos_diarios_cliente
+     WHERE plant_code IN (${placeholders}) AND fecha >= $${plantCodes.length + 1}::date AND fecha < CURRENT_DATE
+     GROUP BY plant_code`,
+    [...params, firstDayStr]
+  );
+  const acumByPlant = new Map((rAcum.rows || []).map((row) => [row.plant_code, Number(row.monto) || 0]));
+
+  const byPlantDow = new Map();
+  for (const row of r14.rows || []) {
+    const key = `${row.plant_code}|${row.dow}`;
+    if (!byPlantDow.has(key)) byPlantDow.set(key, { sum: 0, count: 0 });
+    const rec = byPlantDow.get(key);
+    rec.sum += Number(row.monto) || 0;
+    rec.count += 1;
+  }
+  const avgByPlantDow = new Map();
+  for (const [key, { sum, count }] of byPlantDow) {
+    avgByPlantDow.set(key, count > 0 ? sum / count : 0);
+  }
+
+  const restCountByDow = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0 };
+  for (let d = today.getDate(); d <= lastDay; d++) {
+    const fd = new Date(year, month - 1, d);
+    const dow = fd.getDay() || 7;
+    restCountByDow[dow] = (restCountByDow[dow] || 0) + 1;
+  }
+
+  const out = new Map();
+  for (const plant_code of plantCodes) {
+    let proy = 0;
+    for (let dow = 1; dow <= 7; dow++) {
+      const avg = avgByPlantDow.get(`${plant_code}|${dow}`) || 0;
+      proy += avg * (restCountByDow[dow] || 0);
+    }
+    const acum = acumByPlant.get(plant_code) || 0;
+    out.set(plant_code, Math.round((acum + proy) * 100) / 100);
+  }
+  return out;
+}
+
+/** IGF Forecast: última versión del mes; solo plantas provincia; venta y com_desc = forecast desde ARR (mes actual). */
 app.get("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, res) => {
   const year = req.query.year != null ? parseInt(String(req.query.year), 10) : new Date().getFullYear();
   const month = req.query.month != null ? parseInt(String(req.query.month), 10) : new Date().getMonth() + 1;
@@ -5003,6 +5155,9 @@ app.get("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, res)
   }
   const client = await pool.connect();
   try {
+    const { provincia: provinciaEmpresas } = await dashboardArrForecast.getPlantasZona(client, year, month);
+    const provinciaSet = new Set(provinciaEmpresas.map((e) => (e || "").trim().toUpperCase()));
+
     const ver = await client.query(
       `SELECT id, version_number FROM igf.versions
        WHERE plant_code = 'GLOBAL' AND year = $1 AND month = $2
@@ -5021,7 +5176,7 @@ app.get("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, res)
        ORDER BY empresa`,
       [versionId]
     );
-    const rows = (r.rows || []).map((row) => ({
+    const allRows = (r.rows || []).map((row) => ({
       empresa: (row.empresa || "").trim(),
       venta_ton: row.venta_ton != null ? Number(row.venta_ton) : null,
       margen_kg: row.margen_kg != null ? Number(row.margen_kg) : null,
@@ -5029,10 +5184,46 @@ app.get("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, res)
       gasto_kg: row.gasto_kg != null ? Number(row.gasto_kg) : null,
       impuesto_kg: row.impuesto_kg != null ? Number(row.impuesto_kg) : null,
     }));
-    const totalRow = rows.find((x) => /^TOTALES?$/i.test(x.empresa));
-    const totales = totalRow
-      ? { venta_ton: totalRow.venta_ton, margen_kg: totalRow.margen_kg, com_desc_kg: totalRow.com_desc_kg, gasto_kg: totalRow.gasto_kg, impuesto_kg: totalRow.impuesto_kg }
-      : null;
+    const totalRow = allRows.find((x) => /^TOTALES?$/i.test(x.empresa));
+    const ventaForecastByPlant = await getVentaForecastProvinciaDesdeArr(client, year, month);
+    const descuentoForecastByPlant = await getDescuentoForecastProvinciaDesdeArr(client, year, month);
+    const provinciaPlantCodes = Array.from(ventaForecastByPlant.keys());
+
+    const rows = allRows.filter((row) => {
+      if (/^TOTALES?$/i.test(row.empresa)) return false;
+      return provinciaSet.has((row.empresa || "").toUpperCase());
+    }).map((row) => {
+      let venta_ton = row.venta_ton;
+      let com_desc_kg = row.com_desc_kg;
+      if (ventaForecastByPlant.size > 0 && row.empresa) {
+        const empU = (row.empresa || "").toUpperCase();
+        const match = provinciaPlantCodes.filter((p) => empU.includes((p || "").toUpperCase()) || (p || "").toUpperCase().includes(empU));
+        const best = match.length ? match.reduce((a, b) => (a.length >= b.length ? a : b)) : null;
+        if (best != null) {
+          const f = ventaForecastByPlant.get(best);
+          if (f != null) venta_ton = f;
+          const ventaForecastKg = (venta_ton || 0) * 1000;
+          const descMonto = descuentoForecastByPlant.get(best);
+          if (ventaForecastKg > 0 && descMonto != null) {
+            com_desc_kg = Math.round((Math.abs(descMonto) / ventaForecastKg) * 100) / 100;
+          }
+        }
+      }
+      return { ...row, venta_ton, com_desc_kg };
+    });
+
+    let totales = null;
+    if (rows.length) {
+      const sumVenta = rows.reduce((s, x) => s + (Number(x.venta_ton) || 0), 0);
+      const sumVentaPos = sumVenta > 0 ? sumVenta : 1;
+      totales = {
+        venta_ton: sumVenta,
+        margen_kg: totalRow && totalRow.margen_kg != null ? totalRow.margen_kg : (rows.reduce((s, x) => s + (Number(x.margen_kg) || 0), 0) / rows.length),
+        com_desc_kg: Math.round((rows.reduce((s, x) => s + (Number(x.com_desc_kg) || 0) * (Number(x.venta_ton) || 0), 0) / sumVentaPos) * 100) / 100,
+        gasto_kg: totalRow && totalRow.gasto_kg != null ? totalRow.gasto_kg : (rows.reduce((s, x) => s + (Number(x.gasto_kg) || 0), 0) / rows.length),
+        impuesto_kg: totalRow && totalRow.impuesto_kg != null ? totalRow.impuesto_kg : (rows.reduce((s, x) => s + (Number(x.impuesto_kg) || 0), 0) / rows.length),
+      };
+    }
     res.json({ year, month, version_id: versionId, version_number: versionNumber, rows, totales });
   } catch (e) {
     console.error("[Dashboard IGF Forecast]", e);
