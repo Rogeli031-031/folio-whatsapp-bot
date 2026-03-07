@@ -115,7 +115,7 @@ function KpiContent() {
                       <td className="py-1.5 px-2 text-right text-slate-300">{fmtNum(row.gasto_kg)}</td>
                       <td className="py-1.5 px-2 text-right text-slate-300">{fmtNum(row.impuesto_kg)}</td>
                       <td className="py-1.5 px-2 text-right text-slate-300">{row.hg_pct != null ? `${(Number(row.hg_pct) * 100).toFixed(1)}%` : "—"}</td>
-                      <td className="py-1.5 px-2 text-right text-slate-300">{fmtNum(row.hg_kg)}</td>
+                      <td className="py-1.5 px-2 text-right text-slate-300">{fmtNum(row.hg_kg ?? null)}</td>
                     </tr>
                   ))}
                 </tbody>
