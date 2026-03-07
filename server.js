@@ -5311,7 +5311,37 @@ app.get("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, res)
   }
 });
 
-/** PATCH IGF Forecast: actualizar HG % (y opcionalmente HG $/kg) por empresa en la última versión del mes. */
+/**
+ * Recalcula Util. Oper. y Resultado final a partir de HG y el resto de variables de la fila IGF.
+ * Fórmulas: util_oper_kg = margen - com_desc - gasto - impuesto - hg_kg - bancos_planta - provision_planta;
+ *           util_oper_importe = util_oper_kg * venta_ton * 1000;
+ *           resultado_final_kg = util_oper_kg - gtos_apoyos_corp - bancos_corp - otros_programas - inversiones;
+ *           resultado_final_importe = resultado_final_kg * venta_ton * 1000.
+ */
+function recalcularUtilYResultado(row) {
+  const n = (v) => (v != null && Number.isFinite(Number(v)) ? Number(v) : 0);
+  const margen = n(row.margen_kg);
+  const comDesc = n(row.com_desc_kg);
+  const gasto = n(row.gasto_kg);
+  const impuesto = n(row.impuesto_kg);
+  const hgKg = n(row.hg_kg);
+  const bancosPlanta = n(row.bancos_planta_kg);
+  const provisionPlanta = n(row.provision_planta_kg);
+  const ventaTon = n(row.venta_ton);
+  const ventaKg = ventaTon * 1000;
+  const gtosCorp = n(row.gtos_apoyos_corp_kg);
+  const bancosCorp = n(row.bancos_corp_kg);
+  const otrosProg = n(row.otros_programas_kg);
+  const inversiones = n(row.inversiones_kg);
+
+  const util_oper_kg = margen - comDesc - gasto - impuesto - hgKg - bancosPlanta - provisionPlanta;
+  const util_oper_importe = ventaKg > 0 ? util_oper_kg * ventaKg : 0;
+  const resultado_final_kg = util_oper_kg - gtosCorp - bancosCorp - otrosProg - inversiones;
+  const resultado_final_importe = ventaKg > 0 ? resultado_final_kg * ventaKg : 0;
+  return { util_oper_kg, util_oper_importe, resultado_final_kg, resultado_final_importe };
+}
+
+/** PATCH IGF Forecast: actualizar HG % (y opcionalmente HG $/kg) por empresa; recalcula Util. Oper. y Resultado. */
 app.patch("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, res) => {
   const year = req.body?.year != null ? parseInt(String(req.body.year), 10) : new Date().getFullYear();
   const month = req.body?.month != null ? parseInt(String(req.body.month), 10) : new Date().getMonth() + 1;
@@ -5329,27 +5359,43 @@ app.patch("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, re
     );
     const versionId = ver.rows && ver.rows[0] && ver.rows[0].id;
     if (versionId == null) return res.status(404).json({ error: "No hay versión IGF para ese mes" });
-    const updates = [];
-    const params = [];
-    let idx = 1;
-    if (hg_pct != null && Number.isFinite(hg_pct)) {
-      updates.push(`hg_pct = $${idx}`);
-      params.push(hg_pct >= 0 && hg_pct <= 1 ? hg_pct : hg_pct / 100);
-      idx++;
-    }
-    if (hg_kg != null && Number.isFinite(hg_kg)) {
-      updates.push(`hg_kg = $${idx}`);
-      params.push(hg_kg);
-      idx++;
-    }
-    if (updates.length === 0) return res.status(400).json({ error: "Indica hg_pct o hg_kg" });
-    params.push(versionId, empresa);
-    const r = await client.query(
-      `UPDATE igf.compromiso_lines SET ${updates.join(", ")} WHERE version_id = $${idx} AND empresa = $${idx + 1} RETURNING empresa`,
-      params
+
+    const row = await client.query(
+      `SELECT margen_kg, com_desc_kg, gasto_kg, impuesto_kg, venta_ton, hg_kg, hg_pct,
+              bancos_planta_kg, provision_planta_kg, gtos_apoyos_corp_kg, bancos_corp_kg, otros_programas_kg, inversiones_kg
+       FROM igf.compromiso_lines WHERE version_id = $1 AND empresa = $2`,
+      [versionId, empresa]
     );
-    if (!r.rowCount) return res.status(404).json({ error: "Empresa no encontrada en esta versión" });
-    res.json({ ok: true, empresa, year, month });
+    const current = row.rows && row.rows[0];
+    if (!current) return res.status(404).json({ error: "Empresa no encontrada en esta versión" });
+
+    let newHgPct = current.hg_pct;
+    let newHgKg = current.hg_kg != null ? Number(current.hg_kg) : 0;
+    if (hg_pct != null && Number.isFinite(hg_pct)) {
+      newHgPct = hg_pct >= 0 && hg_pct <= 1 ? hg_pct : hg_pct / 100;
+      if (hg_kg == null || !Number.isFinite(hg_kg)) {
+        const margen = current.margen_kg != null ? Number(current.margen_kg) : 0;
+        newHgKg = margen * newHgPct;
+      }
+    }
+    if (hg_kg != null && Number.isFinite(hg_kg)) newHgKg = hg_kg;
+
+    const updatedRow = {
+      ...current,
+      hg_pct: newHgPct,
+      hg_kg: newHgKg,
+    };
+    const { util_oper_kg, util_oper_importe, resultado_final_kg, resultado_final_importe } = recalcularUtilYResultado(updatedRow);
+
+    await client.query(
+      `UPDATE igf.compromiso_lines SET
+         hg_pct = $1, hg_kg = $2,
+         util_oper_kg = $3, util_oper_importe = $4,
+         resultado_final_kg = $5, resultado_final_importe = $6
+       WHERE version_id = $7 AND empresa = $8`,
+      [newHgPct, newHgKg, util_oper_kg, util_oper_importe, resultado_final_kg, resultado_final_importe, versionId, empresa]
+    );
+    res.json({ ok: true, empresa, year, month, util_oper_importe, resultado_final_importe });
   } catch (e) {
     console.error("[Dashboard IGF Forecast PATCH]", e);
     res.status(500).json({ error: e.message });

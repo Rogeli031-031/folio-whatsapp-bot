@@ -164,15 +164,11 @@ function KpiContent() {
                                   empresa: row.empresa || "",
                                   hg_pct: v / 100,
                                 });
-                                setIgfForecast((prev) => {
-                                  if (!prev) return prev;
-                                  return {
-                                    ...prev,
-                                    rows: prev.rows.map((r) =>
-                                      r.empresa === row.empresa ? { ...r, hg_pct: v / 100 } : r
-                                    ),
-                                  };
+                                const updated = await fetchIgfForecast(token, {
+                                  year: igfForecast.year,
+                                  month: igfForecast.month,
                                 });
+                                setIgfForecast(updated);
                               } catch {
                                 e.target.value = row.hg_pct != null ? (Number(row.hg_pct) * 100).toFixed(1) : "";
                               } finally {
