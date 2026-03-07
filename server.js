@@ -5230,16 +5230,9 @@ function aplicarSignosDisplayIgf(row) {
   return out;
 }
 
-/** IGF Forecast: última versión del mes; solo plantas provincia; venta y com_desc = forecast desde ARR (mes actual). */
-app.get("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, res) => {
-  const year = req.query.year != null ? parseInt(String(req.query.year), 10) : new Date().getFullYear();
-  const month = req.query.month != null ? parseInt(String(req.query.month), 10) : new Date().getMonth() + 1;
-  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
-    return res.status(400).json({ error: "year y month inválidos" });
-  }
-  const client = await pool.connect();
-  try {
-    const provRes = await client.query("SELECT plant_code FROM arr.provincia_plants ORDER BY plant_code");
+/** Construye payload IGF Forecast (misma lógica que GET /api/dashboard/igf-forecast). Para API y Excel. */
+async function buildIgfForecastPayload(client, year, month) {
+  const provRes = await client.query("SELECT plant_code FROM arr.provincia_plants ORDER BY plant_code");
     const provinciaPlantCodes = (provRes.rows || []).map((r) => (r.plant_code || "").trim()).filter(Boolean);
 
     const ver = await client.query(
@@ -5248,10 +5241,10 @@ app.get("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, res)
        ORDER BY version_number DESC LIMIT 1`,
       [year, month]
     );
-    const versionId = ver.rows && ver.rows[0] && ver.rows[0].id != null ? Number(ver.rows[0].id) : null;
-    if (versionId == null) {
-      return res.json({ year, month, version_id: null, version_number: null, rows: [], totales: null });
-    }
+  const versionId = ver.rows && ver.rows[0] && ver.rows[0].id != null ? Number(ver.rows[0].id) : null;
+  if (versionId == null) {
+    return { year, month, version_id: null, version_number: null, rows: [], totales: null };
+  }
     const versionNumber = ver.rows[0].version_number;
     const r = await client.query(
       `SELECT * FROM igf.compromiso_lines WHERE version_id = $1::int ORDER BY empresa`,
@@ -5453,7 +5446,20 @@ app.get("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, res)
         if (vals.length) totales[key] = key.endsWith("_importe") ? vals.reduce((a, b) => a + b, 0) : vals.reduce((a, b) => a + b, 0) / vals.length;
       }
     }
-    res.json({ year, month, version_id: versionId, version_number: versionNumber, rows, totales });
+  return { year, month, version_id: versionId, version_number: versionNumber, rows, totales };
+}
+
+/** IGF Forecast: última versión del mes; solo plantas provincia; venta y com_desc = forecast desde ARR (mes actual). */
+app.get("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, res) => {
+  const year = req.query.year != null ? parseInt(String(req.query.year), 10) : new Date().getFullYear();
+  const month = req.query.month != null ? parseInt(String(req.query.month), 10) : new Date().getMonth() + 1;
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
+    return res.status(400).json({ error: "year y month inválidos" });
+  }
+  const client = await pool.connect();
+  try {
+    const payload = await buildIgfForecastPayload(client, year, month);
+    res.json(payload);
   } catch (e) {
     console.error("[Dashboard IGF Forecast]", e);
     res.status(500).json({ error: e.message });
@@ -6274,7 +6280,8 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
   }
   const client = await pool.connect();
   try {
-    const buf = await dashboardArrForecast.generarDashboardArrForecast(client, year, month, plantCode);
+    const igfForecast = await buildIgfForecastPayload(client, year, month);
+    const buf = await dashboardArrForecast.generarDashboardArrForecast(client, year, month, plantCode, { igfForecast });
     const filename = `Dashboard_ARR_Forecast_${year}_${month}.xlsx`;
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
