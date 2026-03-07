@@ -5300,9 +5300,9 @@ app.get("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, res)
         OR (p.clave IS NOT NULL AND TRIM(p.clave) <> '' AND UPPER(TRIM(p.clave)) = UPPER(TRIM(ap.plant_code)))`
     );
     for (const r of provPlantas.rows || []) {
-      if (r.plant_code != null && r.planta_id != null) plantaIdByPlantCode.set((r.plant_code || "").trim(), r.planta_id);
+      if (r.plant_code != null && r.planta_id != null) plantaIdByPlantCode.set((r.plant_code || "").trim(), Number(r.planta_id));
     }
-    const plantaIds = Array.from(plantaIdByPlantCode.values()).filter((id) => id != null);
+    const plantaIds = Array.from(plantaIdByPlantCode.values()).filter((id) => id != null && Number.isFinite(Number(id))).map((id) => Number(id));
     let presupuestoByPlanta = new Map();
     let foliosAprobZpByPlanta = new Map();
     let foliosCarroByPlanta = new Map();
