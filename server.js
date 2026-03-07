@@ -5231,17 +5231,17 @@ app.get("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, res)
 
     const ver = await client.query(
       `SELECT id, version_number FROM igf.versions
-       WHERE plant_code = 'GLOBAL' AND year = $1 AND month = $2
+       WHERE plant_code = 'GLOBAL' AND year = $1::int AND month = $2::int
        ORDER BY version_number DESC LIMIT 1`,
       [year, month]
     );
-    const versionId = ver.rows && ver.rows[0] && ver.rows[0].id;
+    const versionId = ver.rows && ver.rows[0] && ver.rows[0].id != null ? Number(ver.rows[0].id) : null;
     if (versionId == null) {
       return res.json({ year, month, version_id: null, version_number: null, rows: [], totales: null });
     }
     const versionNumber = ver.rows[0].version_number;
     const r = await client.query(
-      `SELECT * FROM igf.compromiso_lines WHERE version_id = $1 ORDER BY empresa`,
+      `SELECT * FROM igf.compromiso_lines WHERE version_id = $1::int ORDER BY empresa`,
       [versionId]
     );
     const toNum = (v) => (v == null || v === "" ? null : (Number.isFinite(Number(v)) ? Number(v) : null));
@@ -5307,28 +5307,26 @@ app.get("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, res)
     let foliosAprobZpByPlanta = new Map();
     let foliosCarroByPlanta = new Map();
     if (plantaIds.length > 0) {
-      const ph = plantaIds.map((_, i) => `$${i + 1}`).join(",");
       const pres = await client.query(
         `SELECT planta_id, COALESCE(SUM(monto_aprobado), 0) AS total
-         FROM public.presupuesto_asignacion_detalle WHERE periodo = $1 AND planta_id IN (${ph}) GROUP BY planta_id`,
-        [periodoStr, ...plantaIds]
+         FROM public.presupuesto_asignacion_detalle WHERE periodo = $1 AND planta_id = ANY($2::int[]) GROUP BY planta_id`,
+        [periodoStr, plantaIds]
       );
-      presupuestoByPlanta = new Map((pres.rows || []).map((r) => [r.planta_id, Number(r.total) || 0]));
+      presupuestoByPlanta = new Map((pres.rows || []).map((r) => [Number(r.planta_id), Number(r.total) || 0]));
       const estAprobZp = [ESTADOS.PENDIENTE_APROB_ZP, ESTADOS.CANCELACION_SOLICITADA];
       const estCarro = [ESTADOS.APROBADO_ZP, ESTADOS.LISTO_PARA_PROGRAMACION, ESTADOS.SELECCIONADO_SEMANA, ESTADOS.SOLICITANDO_PAGO];
-      const phFol = plantaIds.map((_, i) => `$${i + 3}`).join(",");
       const folAprob = await client.query(
         `SELECT planta_id, COALESCE(SUM(COALESCE(importe, 0)), 0) AS total FROM public.folios
-         WHERE mes_cargo = $1 AND estatus = ANY($2::text[]) AND planta_id IN (${phFol}) GROUP BY planta_id`,
-        [periodoStr, estAprobZp, ...plantaIds]
+         WHERE mes_cargo = $1 AND estatus = ANY($2::text[]) AND planta_id = ANY($3::int[]) GROUP BY planta_id`,
+        [periodoStr, estAprobZp, plantaIds]
       );
-      foliosAprobZpByPlanta = new Map((folAprob.rows || []).map((r) => [r.planta_id, Number(r.total) || 0]));
+      foliosAprobZpByPlanta = new Map((folAprob.rows || []).map((r) => [Number(r.planta_id), Number(r.total) || 0]));
       const folCarro = await client.query(
         `SELECT planta_id, COALESCE(SUM(COALESCE(importe, 0)), 0) AS total FROM public.folios
-         WHERE mes_cargo = $1 AND estatus = ANY($2::text[]) AND planta_id IN (${phFol}) GROUP BY planta_id`,
-        [periodoStr, estCarro, ...plantaIds]
+         WHERE mes_cargo = $1 AND estatus = ANY($2::text[]) AND planta_id = ANY($3::int[]) GROUP BY planta_id`,
+        [periodoStr, estCarro, plantaIds]
       );
-      foliosCarroByPlanta = new Map((folCarro.rows || []).map((r) => [r.planta_id, Number(r.total) || 0]));
+      foliosCarroByPlanta = new Map((folCarro.rows || []).map((r) => [Number(r.planta_id), Number(r.total) || 0]));
     }
     for (const row of rows) {
       const best = bestPlantCodeForEmpresa(row.empresa);
