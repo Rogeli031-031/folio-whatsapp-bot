@@ -123,6 +123,8 @@ export interface IgfForecastRow {
   hg_kg?: number | null;
   bancos_planta_kg?: number | null;
   provision_planta_kg?: number | null;
+  deposito_importe?: number | null;
+  cierre_importe?: number | null;
   util_oper_kg?: number | null;
   util_oper_importe?: number | null;
   gtos_apoyos_corp_kg?: number | null;

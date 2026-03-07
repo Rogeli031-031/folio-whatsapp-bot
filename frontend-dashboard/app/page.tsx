@@ -18,6 +18,8 @@ const COLS_EXTRA: { key: keyof IgfForecastRow | string; label: string }[] = [
   { key: "bancos_planta_kg", label: "Bancos Planta" },
   { key: "provision_planta_kg", label: "Prov. Planta" },
   { key: "util_oper_kg", label: "Util. Oper. ($/kg)" },
+  { key: "deposito_importe", label: "Depósito" },
+  { key: "cierre_importe", label: "Cierre" },
   { key: "util_oper_importe", label: "Util. Oper. (Importe)" },
   { key: "gtos_apoyos_corp_kg", label: "Gtos/Apoyos Corp" },
   { key: "bancos_corp_kg", label: "Bancos Corp." },
@@ -121,6 +123,8 @@ function KpiContent() {
                     <th className="text-right py-2.5 px-2 font-semibold text-slate-300">Bancos Planta</th>
                     <th className="text-right py-2.5 px-2 font-semibold text-slate-300">Prov. Planta</th>
                     <th className="text-right py-2.5 px-2 font-semibold text-slate-300 border-r border-slate-600">Util. Oper. ($/kg)</th>
+                    <th className="text-right py-2.5 px-2 font-semibold text-slate-300">Depósito</th>
+                    <th className="text-right py-2.5 px-2 font-semibold text-slate-300">Cierre</th>
                     <th className="text-right py-2.5 px-2 font-semibold text-slate-300">Util. Oper. (Importe)</th>
                     <th className="text-right py-2.5 px-2 font-semibold text-slate-300">Gtos/Apoyos Corp</th>
                     <th className="text-right py-2.5 px-2 font-semibold text-slate-300">Bancos Corp.</th>
@@ -192,16 +196,19 @@ function KpiContent() {
                           {hgSaving === row.empresa && <span className="ml-1 text-xs text-slate-500">Guardando…</span>}
                         </td>
                         <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(row.hg_kg ?? null)}</td>
-                        {COLS_EXTRA.map((c) => (
-                          <td
-                            key={c.key}
-                            className={`py-2 px-2 text-right tabular-nums text-slate-300 ${c.key === "util_oper_kg" ? "border-r border-slate-600" : ""}`}
-                          >
-                            {c.key === "resultado_final_importe" || c.key === "util_oper_importe"
-                              ? fmtNum((row as Record<string, unknown>)[c.key] as number | null ?? null, 0)
-                              : fmtNum((row as Record<string, unknown>)[c.key] as number | null ?? null)}
-                          </td>
-                        ))}
+                        {COLS_EXTRA.map((c) => {
+                          const val = (row as Record<string, unknown>)[c.key] as number | null | undefined;
+                          const isImporte = c.key === "resultado_final_importe" || c.key === "util_oper_importe" || c.key === "deposito_importe" || c.key === "cierre_importe";
+                          const isNegativo = (c.key === "deposito_importe" || c.key === "cierre_importe") && val != null && Number(val) < 0;
+                          return (
+                            <td
+                              key={c.key}
+                              className={`py-2 px-2 text-right tabular-nums ${isNegativo ? "text-red-400" : "text-slate-300"} ${c.key === "util_oper_kg" ? "border-r border-slate-600" : ""}`}
+                            >
+                              {isImporte ? fmtNum(val ?? null, 0) : fmtNum(val ?? null)}
+                            </td>
+                          );
+                        })}
                       </tr>
                     ));
                   })()}
@@ -215,6 +222,12 @@ function KpiContent() {
                       </td>
                       <td colSpan={10} className="py-3 px-2" />
                       <td className="py-3 px-2 border-r border-slate-600" />
+                      <td className="py-3 px-2 text-right tabular-nums text-base font-bold text-red-400">
+                        {fmtNum(igfForecast.totales.deposito_importe ?? null, 0)}
+                      </td>
+                      <td className="py-3 px-2 text-right tabular-nums text-base font-bold text-red-400">
+                        {fmtNum(igfForecast.totales.cierre_importe ?? null, 0)}
+                      </td>
                       <td className="py-3 px-2 text-right tabular-nums text-base font-bold text-slate-100">
                         {fmtNum(igfForecast.totales.util_oper_importe ?? null, 0)}
                       </td>

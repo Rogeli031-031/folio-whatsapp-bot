@@ -96,7 +96,7 @@ export default function FolioCard({ card, onOpen, role, onSubirPoliza, onImprimi
       onKeyDown={(e) => e.key === "Enter" && onOpen(card.id)}
     >
       {mesCargo && (
-        <div className="text-base font-semibold text-slate-100 tracking-wide mb-1.5">{mesCargo}</div>
+        <div className="text-base font-semibold text-amber-400 tracking-wide mb-1.5">{mesCargo}</div>
       )}
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-1.5 min-w-0">

@@ -5374,6 +5374,8 @@ async function buildIgfForecastPayload(client, year, month) {
     presupuestoByPlanta = new Map((pres.rows || []).map((r) => [Number(r.planta_id), Number(r.total) || 0]));
     let foliosAprobZpByPlanta = new Map();
     let foliosCarroByPlanta = new Map();
+    let foliosDepositoByPlanta = new Map();
+    let foliosCierreByPlanta = new Map();
     if (plantaIds.length > 0) {
       const estAprobZp = [ESTADOS.PENDIENTE_APROB_ZP, ESTADOS.CANCELACION_SOLICITADA];
       const estCarro = [ESTADOS.APROBADO_ZP, ESTADOS.LISTO_PARA_PROGRAMACION, ESTADOS.SELECCIONADO_SEMANA, ESTADOS.SOLICITANDO_PAGO];
@@ -5389,6 +5391,18 @@ async function buildIgfForecastPayload(client, year, month) {
         [periodoStr, estCarro, plantaIds]
       );
       foliosCarroByPlanta = new Map((folCarro.rows || []).map((r) => [Number(r.planta_id), Number(r.total) || 0]));
+      const folDeposito = await client.query(
+        `SELECT planta_id, COALESCE(SUM(COALESCE(importe, 0)), 0) AS total FROM public.folios
+         WHERE mes_cargo = $1 AND estatus = $2 AND planta_id = ANY($3::int[]) GROUP BY planta_id`,
+        [periodoStr, ESTADOS.PAGADO, plantaIds]
+      );
+      foliosDepositoByPlanta = new Map((folDeposito.rows || []).map((r) => [Number(r.planta_id), Number(r.total) || 0]));
+      const folCierre = await client.query(
+        `SELECT planta_id, COALESCE(SUM(COALESCE(importe, 0)), 0) AS total FROM public.folios
+         WHERE mes_cargo = $1 AND estatus = $2 AND planta_id = ANY($3::int[]) GROUP BY planta_id`,
+        [periodoStr, ESTADOS.CERRADO, plantaIds]
+      );
+      foliosCierreByPlanta = new Map((folCierre.rows || []).map((r) => [Number(r.planta_id), Number(r.total) || 0]));
     }
     function resolvePlantaIdsForRow(empresa) {
       const emp = (empresa || "").trim();
@@ -5407,6 +5421,8 @@ async function buildIgfForecastPayload(client, year, month) {
       const totalPresupuesto = plantaIdsRow.reduce((s, id) => s + (presupuestoByPlanta.get(id) || 0), 0);
       const totalFoliosZp = plantaIdsRow.reduce((s, id) => s + (foliosAprobZpByPlanta.get(id) || 0), 0);
       const totalFoliosCarro = plantaIdsRow.reduce((s, id) => s + (foliosCarroByPlanta.get(id) || 0), 0);
+      const totalDeposito = plantaIdsRow.reduce((s, id) => s + (foliosDepositoByPlanta.get(id) || 0), 0);
+      const totalCierre = plantaIdsRow.reduce((s, id) => s + (foliosCierreByPlanta.get(id) || 0), 0);
       row.presupuesto_kg = ventaKg > 0 && plantaIdsRow.length > 0
         ? Math.round((totalPresupuesto / ventaKg) * 100) / 100
         : null;
@@ -5416,9 +5432,11 @@ async function buildIgfForecastPayload(client, year, month) {
       row.folios_carro_kg = ventaKg > 0 && plantaIdsRow.length > 0
         ? Math.round((totalFoliosCarro / ventaKg) * 100) / 100
         : null;
+      row.deposito_importe = totalDeposito > 0 ? -totalDeposito : 0;
+      row.cierre_importe = totalCierre > 0 ? -totalCierre : 0;
       const calc = recalcularUtilYResultado(row);
       row.util_oper_kg = calc.util_oper_kg;
-      row.util_oper_importe = calc.util_oper_importe;
+      row.util_oper_importe = (calc.util_oper_importe || 0) + (row.deposito_importe || 0) + (row.cierre_importe || 0);
       row.resultado_final_kg = calc.resultado_final_kg;
       row.resultado_final_importe = calc.resultado_final_importe;
     }
