@@ -70,23 +70,12 @@ function formatMesCargo(mesCargo: string | null | undefined): string | null {
   return `${MESES[monthIdx]} ${m[1]}`;
 }
 
-/** Fallback: extrae mes desde numero_folio (ej. F-202602-131 → Feb 2026). */
-function mesCargoFromNumero(numeroFolio: string | null): string | null {
-  if (!numeroFolio || typeof numeroFolio !== "string") return null;
-  const m = numeroFolio.trim().match(/^F-(\d{4})(\d{2})-\d+/);
-  if (!m) return null;
-  const year = m[1];
-  const monthIdx = parseInt(m[2], 10) - 1;
-  if (monthIdx < 0 || monthIdx > 11) return null;
-  return `${MESES[monthIdx]} ${year}`;
-}
-
 export default function FolioCard({ card, onOpen, role, onSubirPoliza, onImprimirGastos }: Props) {
   const mxn = card.importe != null && !isNaN(card.importe)
     ? `$${card.importe.toLocaleString("es-MX", { maximumFractionDigits: 0 })}`
     : null;
 
-  const mesCargo = formatMesCargo(card.mes_cargo) ?? mesCargoFromNumero(card.numero_folio || card.folio_codigo || "");
+  const mesCargo = formatMesCargo(card.mes_cargo);
 
   const bordeClase = card.por_recuperar
     ? "border-l-blue-600"
