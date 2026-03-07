@@ -5199,9 +5199,9 @@ async function getDescuentoForecastProvinciaDesdeArr(client, year, month) {
   return out;
 }
 
-/** Mapeo empresa IGF (nombre en tabla) -> nombre planta en DB (presupuesto por E7, E8, etc.). Mismo criterio que "mi presupuesto". */
-const EMPRESA_IGF_A_NOMBRE_PLANTA = {
-  "GT - Puebla": "E7",
+/** Mapeo empresa IGF -> clave(s) planta en DB. GT - Puebla tiene dos plantas (id 2 Puebla/PUEBLA, id 14 E7); se suman presupuesto/folios de ambas. */
+const EMPRESA_IGF_A_PLANTA_KEYS = {
+  "GT - Puebla": ["E7", "Puebla"],
   "Tehuacán": "E8",
   "Acapulco": "E9",
   "GTM - Querétaro": "E12",
@@ -5315,31 +5315,47 @@ app.get("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, res)
     for (const r of provPlantas.rows || []) {
       if (r.plant_code != null && r.planta_id != null) plantaIdByPlantCode.set((r.plant_code || "").trim(), Number(r.planta_id));
     }
-    const nombresPresupuesto = ["E7", "E8", "E9", "E10", "E11", "E12", "E13", "E15"];
+    const nombresPresupuesto = ["E7", "E8", "E9", "E10", "E11", "E12", "E13", "E15", "Puebla", "PUEBLA"];
     const rPlantasPresup = await client.query(
-      `SELECT id, nombre FROM public.plantas WHERE nombre = ANY($1::text[])`,
+      `SELECT id, nombre, clave FROM public.plantas
+       WHERE nombre = ANY($1::text[])
+          OR (clave IS NOT NULL AND TRIM(clave) <> '' AND UPPER(TRIM(clave)) = ANY(
+            ARRAY(SELECT UPPER(x) FROM unnest($1::text[]) AS x)
+          ))`,
       [nombresPresupuesto]
     );
-    const plantaIdByNombrePresup = new Map((rPlantasPresup.rows || []).map((r) => [r.nombre, Number(r.id)]));
+    const plantaIdByNombrePresup = new Map();
+    for (const r of rPlantasPresup.rows || []) {
+      const id = Number(r.id);
+      if (r.nombre && nombresPresupuesto.includes(r.nombre)) plantaIdByNombrePresup.set(r.nombre, id);
+      const claveNorm = r.clave ? String(r.clave).trim().toUpperCase() : "";
+      const claveOrig = r.clave ? String(r.clave).trim() : "";
+      if (claveNorm && nombresPresupuesto.some((n) => n.toUpperCase() === claveNorm)) plantaIdByNombrePresup.set(claveNorm, id);
+      if (claveOrig && nombresPresupuesto.includes(claveOrig)) plantaIdByNombrePresup.set(claveOrig, id);
+    }
     const empresaToPlantaId = new Map();
+    const empresaToPlantaIds = new Map();
     const empresaNormToPlantaId = new Map();
-    for (const [empresa, nombrePlanta] of Object.entries(EMPRESA_IGF_A_NOMBRE_PLANTA)) {
-      const id = plantaIdByNombrePresup.get(nombrePlanta);
-      if (id != null) {
-        empresaToPlantaId.set(empresa, id);
+    for (const [empresa, keys] of Object.entries(EMPRESA_IGF_A_PLANTA_KEYS)) {
+      const arr = Array.isArray(keys) ? keys : [keys];
+      const ids = [...new Set(arr.map((k) => plantaIdByNombrePresup.get(k) || plantaIdByNombrePresup.get(String(k).toUpperCase())).filter(Boolean))];
+      if (ids.length > 0) {
+        empresaToPlantaIds.set(empresa, ids);
+        empresaToPlantaId.set(empresa, ids[0]);
         const keyNorm = normalizeAccents(empresa).replace(/\s+/g, "").toLowerCase();
-        empresaNormToPlantaId.set(keyNorm, id);
+        empresaNormToPlantaId.set(keyNorm, ids[0]);
       }
     }
     const idsFromJoin = Array.from(plantaIdByPlantCode.values()).filter((id) => id != null && Number.isFinite(Number(id)));
-    const idsFromPresupuesto = Array.from(empresaToPlantaId.values());
-    const plantaIds = [...new Set([...idsFromJoin.map((id) => Number(id)), ...idsFromPresupuesto])];
+    const idsFromPresupuesto = Array.from(empresaToPlantaIds.values()).flat();
+    const plantaIds = [...new Set([...idsFromJoin.map((id) => Number(id)), ...idsFromPresupuesto.map((id) => Number(id))])];
     let presupuestoByPlanta = new Map();
     let pres = await client.query(
       `SELECT p.id AS planta_id, COALESCE(SUM(d.monto_aprobado), 0) AS total
        FROM public.plantas p
        LEFT JOIN public.presupuesto_asignacion_detalle d ON d.planta_id = p.id AND d.periodo = $1
        WHERE p.nombre = ANY($2::text[])
+          OR (p.clave IS NOT NULL AND TRIM(p.clave) <> '' AND UPPER(TRIM(p.clave)) = ANY($2::text[]))
        GROUP BY p.id`,
       [periodoStr, nombresPresupuesto]
     );
@@ -5350,6 +5366,7 @@ app.get("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, res)
          FROM public.plantas p
          LEFT JOIN public.presupuesto_asignacion_detalle d ON d.planta_id = p.id AND d.periodo = $1
          WHERE p.nombre = ANY($2::text[])
+            OR (p.clave IS NOT NULL AND TRIM(p.clave) <> '' AND UPPER(TRIM(p.clave)) = ANY($2::text[]))
          GROUP BY p.id`,
         [PERIODO_PRESUPUESTO_DEFAULT, nombresPresupuesto]
       );
@@ -5373,32 +5390,31 @@ app.get("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, res)
       );
       foliosCarroByPlanta = new Map((folCarro.rows || []).map((r) => [Number(r.planta_id), Number(r.total) || 0]));
     }
-    function resolvePlantaIdForRow(empresa) {
+    function resolvePlantaIdsForRow(empresa) {
       const emp = (empresa || "").trim();
-      const best = bestPlantCodeForEmpresa(emp);
-      let id = best != null ? plantaIdByPlantCode.get(best) : null;
-      if (id != null) return id;
-      id = empresaToPlantaId.get(emp) || empresaToPlantaId.get(empresa);
-      if (id != null) return id;
-      id = empresaNormToPlantaId.get(normalizeAccents(emp).replace(/\s+/g, "").toLowerCase());
-      if (id != null) return id;
-      const empNorm = normalizeAccents(emp);
-      for (const [key, val] of empresaToPlantaId) {
-        if (normalizeAccents((key || "").trim()) === empNorm) return val;
+      const ids = empresaToPlantaIds.get(emp) || empresaToPlantaIds.get(empresa);
+      if (ids && ids.length > 0) return ids;
+      const keyNorm = normalizeAccents(emp).replace(/\s+/g, "").toLowerCase();
+      for (const [key, val] of empresaToPlantaIds) {
+        if (normalizeAccents((key || "").trim()).replace(/\s+/g, "").toLowerCase() === keyNorm) return val;
       }
-      return null;
+      const singleId = empresaToPlantaId.get(emp) || empresaToPlantaId.get(empresa) || empresaNormToPlantaId.get(keyNorm);
+      return singleId != null ? [singleId] : [];
     }
     for (const row of rows) {
-      const plantaId = resolvePlantaIdForRow(row.empresa);
+      const plantaIdsRow = resolvePlantaIdsForRow(row.empresa);
       const ventaKg = (row.venta_ton != null ? Number(row.venta_ton) : 0) * 1000;
-      row.presupuesto_kg = ventaKg > 0 && plantaId != null
-        ? Math.round((presupuestoByPlanta.get(plantaId) || 0) / ventaKg * 100) / 100
+      const totalPresupuesto = plantaIdsRow.reduce((s, id) => s + (presupuestoByPlanta.get(id) || 0), 0);
+      const totalFoliosZp = plantaIdsRow.reduce((s, id) => s + (foliosAprobZpByPlanta.get(id) || 0), 0);
+      const totalFoliosCarro = plantaIdsRow.reduce((s, id) => s + (foliosCarroByPlanta.get(id) || 0), 0);
+      row.presupuesto_kg = ventaKg > 0 && plantaIdsRow.length > 0
+        ? Math.round((totalPresupuesto / ventaKg) * 100) / 100
         : null;
-      row.folios_aprob_zp_kg = ventaKg > 0 && plantaId != null
-        ? Math.round((foliosAprobZpByPlanta.get(plantaId) || 0) / ventaKg * 100) / 100
+      row.folios_aprob_zp_kg = ventaKg > 0 && plantaIdsRow.length > 0
+        ? Math.round((totalFoliosZp / ventaKg) * 100) / 100
         : null;
-      row.folios_carro_kg = ventaKg > 0 && plantaId != null
-        ? Math.round((foliosCarroByPlanta.get(plantaId) || 0) / ventaKg * 100) / 100
+      row.folios_carro_kg = ventaKg > 0 && plantaIdsRow.length > 0
+        ? Math.round((totalFoliosCarro / ventaKg) * 100) / 100
         : null;
       const calc = recalcularUtilYResultado(row);
       row.util_oper_kg = calc.util_oper_kg;
