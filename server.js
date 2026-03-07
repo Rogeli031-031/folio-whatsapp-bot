@@ -5155,8 +5155,8 @@ app.get("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, res)
   }
   const client = await pool.connect();
   try {
-    const { provincia: provinciaEmpresas } = await dashboardArrForecast.getPlantasZona(client, year, month);
-    const provinciaSet = new Set(provinciaEmpresas.map((e) => (e || "").trim().toUpperCase()));
+    const provRes = await client.query("SELECT plant_code FROM arr.provincia_plants ORDER BY plant_code");
+    const provinciaPlantCodes = (provRes.rows || []).map((r) => (r.plant_code || "").trim()).filter(Boolean);
 
     const ver = await client.query(
       `SELECT id, version_number FROM igf.versions
@@ -5187,12 +5187,17 @@ app.get("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, res)
     const totalRow = allRows.find((x) => /^TOTALES?$/i.test(x.empresa));
     const ventaForecastByPlant = await getVentaForecastProvinciaDesdeArr(client, year, month);
     const descuentoForecastByPlant = await getDescuentoForecastProvinciaDesdeArr(client, year, month);
-    const provinciaPlantCodes = Array.from(ventaForecastByPlant.keys());
 
-    const rows = allRows.filter((row) => {
-      if (/^TOTALES?$/i.test(row.empresa)) return false;
-      return provinciaSet.has((row.empresa || "").toUpperCase());
-    }).map((row) => {
+    function empresaEsProvincia(empresa) {
+      if (!empresa || /^TOTALES?$/i.test(empresa)) return false;
+      const empU = empresa.toUpperCase();
+      return provinciaPlantCodes.some((p) => {
+        const pU = (p || "").toUpperCase();
+        return empU === pU || empU.includes(pU);
+      });
+    }
+
+    const rows = allRows.filter((row) => empresaEsProvincia(row.empresa)).map((row) => {
       let venta_ton = row.venta_ton;
       let com_desc_kg = row.com_desc_kg;
       if (ventaForecastByPlant.size > 0 && row.empresa) {
