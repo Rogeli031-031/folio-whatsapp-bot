@@ -5273,6 +5273,18 @@ app.get("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, res)
       return { ...row, venta_ton, com_desc_kg };
     });
 
+    const ordenProvincia = ["GT - Puebla", "Tehuacán", "Acapulco", "GTM - Querétaro", "GTM - San Luis P.", "Morelos"];
+    rows.sort((a, b) => {
+      const empA = (a.empresa || "").trim();
+      const empB = (b.empresa || "").trim();
+      const ia = ordenProvincia.findIndex((e) => e === empA || normalizeAccents(e) === normalizeAccents(empA));
+      const ib = ordenProvincia.findIndex((e) => e === empB || normalizeAccents(e) === normalizeAccents(empB));
+      const iA = ia >= 0 ? ia : ordenProvincia.length;
+      const iB = ib >= 0 ? ib : ordenProvincia.length;
+      if (iA !== iB) return iA - iB;
+      return (empA || "").localeCompare(empB || "");
+    });
+
     let totales = null;
     if (rows.length) {
       const sumVenta = rows.reduce((s, x) => s + (Number(x.venta_ton) || 0), 0);
@@ -5293,6 +5305,53 @@ app.get("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, res)
     res.json({ year, month, version_id: versionId, version_number: versionNumber, rows, totales });
   } catch (e) {
     console.error("[Dashboard IGF Forecast]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/** PATCH IGF Forecast: actualizar HG % (y opcionalmente HG $/kg) por empresa en la última versión del mes. */
+app.patch("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, res) => {
+  const year = req.body?.year != null ? parseInt(String(req.body.year), 10) : new Date().getFullYear();
+  const month = req.body?.month != null ? parseInt(String(req.body.month), 10) : new Date().getMonth() + 1;
+  const empresa = req.body?.empresa != null ? String(req.body.empresa).trim() : "";
+  const hg_pct = req.body?.hg_pct != null && req.body.hg_pct !== "" ? Number(req.body.hg_pct) : null;
+  const hg_kg = req.body?.hg_kg != null && req.body.hg_kg !== "" ? Number(req.body.hg_kg) : null;
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12 || !empresa) {
+    return res.status(400).json({ error: "Faltan year, month o empresa" });
+  }
+  const client = await pool.connect();
+  try {
+    const ver = await client.query(
+      `SELECT id FROM igf.versions WHERE plant_code = 'GLOBAL' AND year = $1 AND month = $2 ORDER BY version_number DESC LIMIT 1`,
+      [year, month]
+    );
+    const versionId = ver.rows && ver.rows[0] && ver.rows[0].id;
+    if (versionId == null) return res.status(404).json({ error: "No hay versión IGF para ese mes" });
+    const updates = [];
+    const params = [];
+    let idx = 1;
+    if (hg_pct != null && Number.isFinite(hg_pct)) {
+      updates.push(`hg_pct = $${idx}`);
+      params.push(hg_pct >= 0 && hg_pct <= 1 ? hg_pct : hg_pct / 100);
+      idx++;
+    }
+    if (hg_kg != null && Number.isFinite(hg_kg)) {
+      updates.push(`hg_kg = $${idx}`);
+      params.push(hg_kg);
+      idx++;
+    }
+    if (updates.length === 0) return res.status(400).json({ error: "Indica hg_pct o hg_kg" });
+    params.push(versionId, empresa);
+    const r = await client.query(
+      `UPDATE igf.compromiso_lines SET ${updates.join(", ")} WHERE version_id = $${idx} AND empresa = $${idx + 1} RETURNING empresa`,
+      params
+    );
+    if (!r.rowCount) return res.status(404).json({ error: "Empresa no encontrada en esta versión" });
+    res.json({ ok: true, empresa, year, month });
+  } catch (e) {
+    console.error("[Dashboard IGF Forecast PATCH]", e);
     res.status(500).json({ error: e.message });
   } finally {
     client.release();

@@ -8,9 +8,24 @@ import {
   getTokenFromStorage,
   setTokenInStorage,
 } from "@/lib/auth";
-import { fetchIgfForecast, type IgfForecastResponse, type IgfForecastRow } from "@/lib/api";
+import { fetchIgfForecast, patchIgfForecastHg, type IgfForecastResponse, type IgfForecastRow } from "@/lib/api";
 
 const MESES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+
+const ORDEN_PROVINCIA = ["GT - Puebla", "Tehuacán", "Acapulco", "GTM - Querétaro", "GTM - San Luis P.", "Morelos"];
+
+const COLS_EXTRA: { key: keyof IgfForecastRow | string; label: string }[] = [
+  { key: "bancos_planta_kg", label: "Bancos Planta" },
+  { key: "provision_planta_kg", label: "Prov. Planta" },
+  { key: "util_oper_kg", label: "Util. Oper. ($/kg)" },
+  { key: "util_oper_importe", label: "Util. Oper. (Importe)" },
+  { key: "gtos_apoyos_corp_kg", label: "Gtos/Apoyos Corp" },
+  { key: "bancos_corp_kg", label: "Bancos Corp." },
+  { key: "otros_programas_kg", label: "Otros Programas" },
+  { key: "inversiones_kg", label: "Inversiones" },
+  { key: "resultado_final_kg", label: "Resultado ($/kg)" },
+  { key: "resultado_final_importe", label: "Resultado (Importe)" },
+];
 
 function fmtNum(v: number | null, decimals = 2): string {
   if (v == null || Number.isNaN(v)) return "—";
@@ -24,6 +39,7 @@ function KpiContent() {
   const [igfForecast, setIgfForecast] = useState<IgfForecastResponse | null>(null);
   const [igfLoading, setIgfLoading] = useState(false);
   const [igfError, setIgfError] = useState<string | null>(null);
+  const [hgSaving, setHgSaving] = useState<string | null>(null);
 
   useEffect(() => {
     const t = parseTokenFromQuery(searchParams) || getTokenFromStorage();
@@ -100,24 +116,83 @@ function KpiContent() {
                     <th className="text-right py-2 px-2 font-medium text-slate-400">Impuesto ($/kg)</th>
                     <th className="text-right py-2 px-2 font-medium text-slate-400">HG (%)</th>
                     <th className="text-right py-2 px-2 font-medium text-slate-400">HG ($/kg)</th>
+                    {COLS_EXTRA.map((c) => (
+                      <th key={c.key} className="text-right py-2 px-2 font-medium text-slate-400">{c.label}</th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {igfForecast.rows.map((row: IgfForecastRow, i: number) => (
-                    <tr
-                      key={row.empresa ? row.empresa : `row-${i}`}
-                      className={`border-b border-slate-700/80 ${/^TOTALES?$/i.test(row.empresa) ? "bg-slate-700/40 font-medium" : ""}`}
-                    >
-                      <td className="py-1.5 px-2 text-slate-200">{row.empresa || "—"}</td>
-                      <td className="py-1.5 px-2 text-right text-slate-300">{fmtNum(row.venta_ton, 2)}</td>
-                      <td className="py-1.5 px-2 text-right text-slate-300">{fmtNum(row.margen_kg)}</td>
-                      <td className="py-1.5 px-2 text-right text-slate-300">{fmtNum(row.com_desc_kg)}</td>
-                      <td className="py-1.5 px-2 text-right text-slate-300">{fmtNum(row.gasto_kg)}</td>
-                      <td className="py-1.5 px-2 text-right text-slate-300">{fmtNum(row.impuesto_kg)}</td>
-                      <td className="py-1.5 px-2 text-right text-slate-300">{row.hg_pct != null ? `${(Number(row.hg_pct) * 100).toFixed(1)}%` : "—"}</td>
-                      <td className="py-1.5 px-2 text-right text-slate-300">{fmtNum(row.hg_kg ?? null)}</td>
-                    </tr>
-                  ))}
+                  {(() => {
+                    const sorted = [...igfForecast.rows].sort((a, b) => {
+                      const iA = ORDEN_PROVINCIA.indexOf(a.empresa?.trim() || "");
+                      const iB = ORDEN_PROVINCIA.indexOf(b.empresa?.trim() || "");
+                      if (iA === -1 && iB === -1) return (a.empresa || "").localeCompare(b.empresa || "");
+                      if (iA === -1) return 1;
+                      if (iB === -1) return -1;
+                      return iA - iB;
+                    });
+                    return sorted.map((row: IgfForecastRow, i: number) => (
+                      <tr
+                        key={row.empresa ? row.empresa : `row-${i}`}
+                        className={`border-b border-slate-700/80 ${/^TOTALES?$/i.test(row.empresa) ? "bg-slate-700/40 font-medium" : ""}`}
+                      >
+                        <td className="py-1.5 px-2 text-slate-200">{row.empresa || "—"}</td>
+                        <td className="py-1.5 px-2 text-right text-slate-300">{fmtNum(row.venta_ton, 2)}</td>
+                        <td className="py-1.5 px-2 text-right text-slate-300">{fmtNum(row.margen_kg)}</td>
+                        <td className="py-1.5 px-2 text-right text-slate-300">{fmtNum(row.com_desc_kg)}</td>
+                        <td className="py-1.5 px-2 text-right text-slate-300">{fmtNum(row.gasto_kg)}</td>
+                        <td className="py-1.5 px-2 text-right text-slate-300">{fmtNum(row.impuesto_kg)}</td>
+                        <td className="py-1.5 px-2 text-right text-slate-300">
+                          <input
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            max="100"
+                            className="w-14 bg-slate-700 border border-slate-600 rounded px-1 py-0.5 text-right text-slate-200 text-sm"
+                            defaultValue={row.hg_pct != null ? (Number(row.hg_pct) * 100).toFixed(1) : ""}
+                            placeholder="—"
+                            onBlur={async (e) => {
+                              const raw = e.target.value.trim();
+                              if (raw === "" || !token || !igfForecast) return;
+                              const v = parseFloat(raw);
+                              if (Number.isNaN(v)) return;
+                              setHgSaving(row.empresa || null);
+                              try {
+                                await patchIgfForecastHg(token, {
+                                  year: igfForecast.year,
+                                  month: igfForecast.month,
+                                  empresa: row.empresa || "",
+                                  hg_pct: v / 100,
+                                });
+                                setIgfForecast((prev) => {
+                                  if (!prev) return prev;
+                                  return {
+                                    ...prev,
+                                    rows: prev.rows.map((r) =>
+                                      r.empresa === row.empresa ? { ...r, hg_pct: v / 100 } : r
+                                    ),
+                                  };
+                                });
+                              } catch {
+                                e.target.value = row.hg_pct != null ? (Number(row.hg_pct) * 100).toFixed(1) : "";
+                              } finally {
+                                setHgSaving(null);
+                              }
+                            }}
+                          />
+                          {hgSaving === row.empresa && <span className="ml-1 text-xs text-slate-500">Guardando…</span>}
+                        </td>
+                        <td className="py-1.5 px-2 text-right text-slate-300">{fmtNum(row.hg_kg ?? null)}</td>
+                        {COLS_EXTRA.map((c) => (
+                          <td key={c.key} className="py-1.5 px-2 text-right text-slate-300">
+                            {c.key === "resultado_final_importe" || c.key === "util_oper_importe"
+                              ? fmtNum((row as Record<string, unknown>)[c.key] as number | null ?? null, 0)
+                              : fmtNum((row as Record<string, unknown>)[c.key] as number | null ?? null)}
+                          </td>
+                        ))}
+                      </tr>
+                    ));
+                  })()}
                 </tbody>
               </table>
               {igfForecast.rows.length === 0 && (
@@ -126,7 +201,7 @@ function KpiContent() {
             </div>
           )}
           <p className="mt-3 text-xs text-slate-500">
-            Próximamente: presupuesto, folios Carro/Depósito, Util. Operación, Resultado final y botones por rol.
+            Próximamente: presupuesto, folios Carro/Depósito y botones por rol.
           </p>
         </section>
         <div className="mt-6 flex flex-wrap gap-3">

@@ -147,6 +147,17 @@ export function fetchIgfForecast(
   return apiFetch<IgfForecastResponse>("/api/dashboard/igf-forecast", { token, params: Object.keys(p).length ? p : undefined });
 }
 
+export function patchIgfForecastHg(
+  token: string,
+  payload: { year: number; month: number; empresa: string; hg_pct?: number | null; hg_kg?: number | null }
+): Promise<{ ok: boolean; empresa: string; year: number; month: number }> {
+  return apiFetch<{ ok: boolean; empresa: string; year: number; month: number }>("/api/dashboard/igf-forecast", {
+    token,
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
 export interface CrearFolioPayload {
   planta_id: number;
   proyecto_id?: number | null;
