@@ -5432,11 +5432,13 @@ async function buildIgfForecastPayload(client, year, month) {
       row.folios_carro_kg = ventaKg > 0 && plantaIdsRow.length > 0
         ? Math.round((totalFoliosCarro / ventaKg) * 100) / 100
         : null;
-      row.deposito_importe = totalDeposito > 0 ? -totalDeposito : 0;
-      row.cierre_importe = totalCierre > 0 ? -totalCierre : 0;
+      const totalDepositoCierre = totalDeposito + totalCierre;
+      row.deposito_cierre_kg = ventaKg > 0 && totalDepositoCierre > 0
+        ? Math.round((-totalDepositoCierre / ventaKg) * 100) / 100
+        : null;
       const calc = recalcularUtilYResultado(row);
       row.util_oper_kg = calc.util_oper_kg;
-      row.util_oper_importe = (calc.util_oper_importe || 0) + (row.deposito_importe || 0) + (row.cierre_importe || 0);
+      row.util_oper_importe = calc.util_oper_importe;
       row.resultado_final_kg = calc.resultado_final_kg;
       row.resultado_final_importe = calc.resultado_final_importe;
     }
@@ -5509,6 +5511,7 @@ function recalcularUtilYResultado(row) {
   const presupuesto = n(row.presupuesto_kg);
   const foliosZP = n(row.folios_aprob_zp_kg);
   const foliosCarro = n(row.folios_carro_kg);
+  const depositoCierreKg = n(row.deposito_cierre_kg);
   const ventaTon = n(row.venta_ton);
   const ventaKg = ventaTon * 1000;
   const gtosCorp = n(row.gtos_apoyos_corp_kg);
@@ -5517,7 +5520,7 @@ function recalcularUtilYResultado(row) {
   const inversiones = n(row.inversiones_kg);
 
   const hgContribucion = Math.abs(hgKg);
-  const util_oper_kg = margen - comDesc - impuesto + hgContribucion - bancosPlanta - provisionPlanta - presupuesto - foliosZP - foliosCarro;
+  const util_oper_kg = margen - comDesc - impuesto + hgContribucion - bancosPlanta - provisionPlanta - presupuesto - foliosZP - foliosCarro + depositoCierreKg;
   const util_oper_importe = ventaKg > 0 ? util_oper_kg * ventaKg : 0;
   const resultado_final_kg = util_oper_kg - gtosCorp - bancosCorp - otrosProg - inversiones;
   const resultado_final_importe = ventaKg > 0 ? resultado_final_kg * ventaKg : 0;
