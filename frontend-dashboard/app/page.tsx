@@ -107,7 +107,7 @@ function KpiContent() {
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-sm">
                 <thead>
-                  <tr className="border-b border-slate-600 bg-slate-800/80">
+                  <tr className="border-b border-slate-600 bg-slate-800/80 text-[0.6em]">
                     <th className="text-left py-2.5 px-2 font-semibold text-slate-300 border-r border-slate-600">Empresa</th>
                     <th className="text-right py-2.5 px-2 font-semibold text-slate-300 border-r border-slate-600">Venta (ton)</th>
                     <th className="text-right py-2.5 px-2 font-semibold text-slate-300">Margen ($/kg)</th>
@@ -147,7 +147,7 @@ function KpiContent() {
                         key={row.empresa ? row.empresa : `row-${i}`}
                         className="border-b border-slate-700/80"
                       >
-                        <td className="py-2 px-2 text-base font-semibold text-slate-100 border-r border-slate-600">{row.empresa || "—"}</td>
+                        <td className="py-2 px-2 text-[0.6em] font-semibold text-slate-100 border-r border-slate-600">{row.empresa || "—"}</td>
                         <td className="py-2 px-2 text-right tabular-nums text-slate-300 border-r border-slate-600">{fmtNum(row.venta_ton, 2)}</td>
                         <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(row.margen_kg)}</td>
                         <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(row.com_desc_kg)}</td>
