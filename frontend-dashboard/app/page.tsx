@@ -108,42 +108,26 @@ function KpiContent() {
               <table className="w-full border-collapse text-sm">
                 <thead>
                   <tr className="border-b border-slate-600 bg-slate-800/80">
-                    <th className="text-left py-2.5 px-2 font-semibold text-slate-300">Empresa</th>
-                    <th className="text-right py-2.5 px-2 font-semibold text-slate-300">Venta (ton)</th>
+                    <th className="text-left py-2.5 px-2 font-semibold text-slate-300 border-r border-slate-600">Empresa</th>
+                    <th className="text-right py-2.5 px-2 font-semibold text-slate-300 border-r border-slate-600">Venta (ton)</th>
                     <th className="text-right py-2.5 px-2 font-semibold text-slate-300">Margen ($/kg)</th>
-                    <th colSpan={2} className="border-l border-slate-600 text-right py-2.5 px-2 font-semibold text-slate-300">Com. y Desc. / Presupuesto</th>
-                    <th colSpan={2} className="border-l border-slate-600 text-right py-2.5 px-2 font-semibold text-slate-300">Folios (ZP / Carro)</th>
+                    <th className="text-right py-2.5 px-2 font-semibold text-slate-300">Com. y Desc. ($/kg)</th>
+                    <th className="text-right py-2.5 px-2 font-semibold text-slate-300">Presupuesto ($/kg)</th>
+                    <th className="text-right py-2.5 px-2 font-semibold text-slate-300">Folios Aprob. Director ZP ($/kg)</th>
+                    <th className="text-right py-2.5 px-2 font-semibold text-slate-300">Folios en carro ($/kg)</th>
                     <th className="text-right py-2.5 px-2 font-semibold text-slate-300">Impuesto ($/kg)</th>
                     <th className="text-right py-2.5 px-2 font-semibold text-slate-300">HG (%)</th>
                     <th className="text-right py-2.5 px-2 font-semibold text-slate-300">HG ($/kg)</th>
                     <th className="text-right py-2.5 px-2 font-semibold text-slate-300">Bancos Planta</th>
                     <th className="text-right py-2.5 px-2 font-semibold text-slate-300">Prov. Planta</th>
-                    <th className="text-right py-2.5 px-2 font-semibold text-slate-300">Util. Oper. ($/kg)</th>
-                    <th className="border-l border-slate-600 text-right py-2.5 px-2 font-semibold text-slate-300">Util. Oper. (Importe)</th>
-                    <th colSpan={4} className="border-l border-slate-600 text-right py-2.5 px-2 font-semibold text-slate-300">Corporativo y otros</th>
-                    <th colSpan={2} className="border-l border-slate-600 text-right py-2.5 px-2 font-semibold text-slate-300">Resultado</th>
-                  </tr>
-                  <tr className="border-b border-slate-600 bg-slate-800/60 text-slate-400">
-                    <th scope="col" className="py-1.5 px-2 font-medium text-left text-xs uppercase tracking-wide" />
-                    <th scope="col" className="py-1.5 px-2 font-medium text-right text-xs uppercase tracking-wide" />
-                    <th scope="col" className="py-1.5 px-2 font-medium text-right text-xs uppercase tracking-wide" />
-                    <th scope="col" className="border-l border-slate-600 py-1.5 px-2 font-medium text-right text-xs">Com. y Desc. ($/kg)</th>
-                    <th scope="col" className="py-1.5 px-2 font-medium text-right text-xs">Presupuesto ($/kg)</th>
-                    <th scope="col" className="border-l border-slate-600 py-1.5 px-2 font-medium text-right text-xs">Folios Aprob. ZP ($/kg)</th>
-                    <th scope="col" className="py-1.5 px-2 font-medium text-right text-xs">Folios en carro ($/kg)</th>
-                    <th scope="col" className="py-1.5 px-2 font-medium text-right text-xs" />
-                    <th scope="col" className="py-1.5 px-2 font-medium text-right text-xs" />
-                    <th scope="col" className="py-1.5 px-2 font-medium text-right text-xs" />
-                    <th scope="col" className="py-1.5 px-2 font-medium text-right text-xs" />
-                    <th scope="col" className="py-1.5 px-2 font-medium text-right text-xs" />
-                    <th scope="col" className="py-1.5 px-2 font-medium text-right text-xs" />
-                    <th scope="col" className="border-l border-slate-600 py-1.5 px-2 font-medium text-right text-xs" />
-                    <th scope="col" className="border-l border-slate-600 py-1.5 px-2 font-medium text-right text-xs">Gtos/Apoyos Corp</th>
-                    <th scope="col" className="py-1.5 px-2 font-medium text-right text-xs">Bancos Corp.</th>
-                    <th scope="col" className="py-1.5 px-2 font-medium text-right text-xs">Otros Programas</th>
-                    <th scope="col" className="py-1.5 px-2 font-medium text-right text-xs">Inversiones</th>
-                    <th scope="col" className="border-l border-slate-600 py-1.5 px-2 font-medium text-right text-xs">Resultado ($/kg)</th>
-                    <th scope="col" className="py-1.5 px-2 font-medium text-right text-xs">Resultado (Importe)</th>
+                    <th className="text-right py-2.5 px-2 font-semibold text-slate-300 border-r border-slate-600">Util. Oper. ($/kg)</th>
+                    <th className="text-right py-2.5 px-2 font-semibold text-slate-300">Util. Oper. (Importe)</th>
+                    <th className="text-right py-2.5 px-2 font-semibold text-slate-300">Gtos/Apoyos Corp</th>
+                    <th className="text-right py-2.5 px-2 font-semibold text-slate-300">Bancos Corp.</th>
+                    <th className="text-right py-2.5 px-2 font-semibold text-slate-300">Otros Programas</th>
+                    <th className="text-right py-2.5 px-2 font-semibold text-slate-300">Inversiones</th>
+                    <th className="text-right py-2.5 px-2 font-semibold text-slate-300">Resultado ($/kg)</th>
+                    <th className="text-right py-2.5 px-2 font-semibold text-slate-300">Resultado (Importe)</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -163,12 +147,12 @@ function KpiContent() {
                         key={row.empresa ? row.empresa : `row-${i}`}
                         className="border-b border-slate-700/80"
                       >
-                        <td className="py-2 px-2 text-base font-semibold text-slate-100">{row.empresa || "—"}</td>
-                        <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(row.venta_ton, 2)}</td>
+                        <td className="py-2 px-2 text-base font-semibold text-slate-100 border-r border-slate-600">{row.empresa || "—"}</td>
+                        <td className="py-2 px-2 text-right tabular-nums text-slate-300 border-r border-slate-600">{fmtNum(row.venta_ton, 2)}</td>
                         <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(row.margen_kg)}</td>
-                        <td className="border-l border-slate-700/80 py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(row.com_desc_kg)}</td>
+                        <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(row.com_desc_kg)}</td>
                         <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(row.presupuesto_kg ?? null)}</td>
-                        <td className="border-l border-slate-700/80 py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(row.folios_aprob_zp_kg ?? null)}</td>
+                        <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(row.folios_aprob_zp_kg ?? null)}</td>
                         <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(row.folios_carro_kg ?? null)}</td>
                         <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(row.impuesto_kg)}</td>
                         <td className="py-2 px-2 text-right text-slate-300">
@@ -211,7 +195,7 @@ function KpiContent() {
                         {COLS_EXTRA.map((c) => (
                           <td
                             key={c.key}
-                            className={`py-2 px-2 text-right tabular-nums text-slate-300 ${c.key === "util_oper_importe" ? "border-l border-slate-700/80" : ""} ${c.key === "gtos_apoyos_corp_kg" ? "border-l border-slate-700/80" : ""} ${c.key === "resultado_final_kg" ? "border-l border-slate-700/80" : ""}`}
+                            className={`py-2 px-2 text-right tabular-nums text-slate-300 ${c.key === "util_oper_kg" ? "border-r border-slate-600" : ""}`}
                           >
                             {c.key === "resultado_final_importe" || c.key === "util_oper_importe"
                               ? fmtNum((row as Record<string, unknown>)[c.key] as number | null ?? null, 0)
@@ -225,17 +209,18 @@ function KpiContent() {
                 {igfForecast.totales && (
                   <tfoot>
                     <tr className="border-t-2 border-slate-600 bg-slate-700/50">
-                      <td className="py-3 px-2 text-base font-bold text-slate-100">Total</td>
-                      <td className="py-3 px-2 text-right tabular-nums text-base font-bold text-slate-100">
+                      <td className="py-3 px-2 text-base font-bold text-slate-100 border-r border-slate-600">Total</td>
+                      <td className="py-3 px-2 text-right tabular-nums text-base font-bold text-slate-100 border-r border-slate-600">
                         {fmtNum(igfForecast.totales.venta_ton ?? null, 2)}
                       </td>
-                      <td colSpan={11} className="py-3 px-2" />
-                      <td className="py-3 px-2 text-right tabular-nums text-base font-bold text-slate-100 border-l border-slate-600">
+                      <td colSpan={10} className="py-3 px-2" />
+                      <td className="py-3 px-2 border-r border-slate-600" />
+                      <td className="py-3 px-2 text-right tabular-nums text-base font-bold text-slate-100">
                         {fmtNum(igfForecast.totales.util_oper_importe ?? null, 0)}
                       </td>
                       <td colSpan={4} className="py-3 px-2" />
                       <td className="py-3 px-2" />
-                      <td className="py-3 px-2 text-right tabular-nums text-base font-bold text-slate-100 border-l border-slate-600">
+                      <td className="py-3 px-2 text-right tabular-nums text-base font-bold text-slate-100">
                         {fmtNum(igfForecast.totales.resultado_final_importe ?? null, 0)}
                       </td>
                     </tr>
