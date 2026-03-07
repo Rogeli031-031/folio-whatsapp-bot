@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import {
   parseTokenFromQuery,
   getTokenFromStorage,
@@ -107,6 +108,12 @@ function DashboardContent() {
     <div className="min-h-screen flex flex-col">
       <div className="flex items-center justify-between border-b border-slate-700 bg-slate-900/50 px-4 py-2">
         <div className="flex items-center gap-2">
+          <Link
+            href="/"
+            className="flex items-center gap-1.5 rounded border border-slate-600 bg-slate-700 px-2.5 py-1.5 text-sm text-slate-200 hover:bg-slate-600"
+          >
+            Inicio
+          </Link>
           <button
             type="button"
             onClick={() => setShowComoCambioModal(true)}
