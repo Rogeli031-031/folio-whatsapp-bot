@@ -6254,7 +6254,8 @@ app.post("/api/arr/forecast", dashboardAuthMiddleware, async (req, res) => {
   }
   const client = await pool.connect();
   try {
-    const result = await forecastMensual.calcularForecastMensual(client, plantCode, year, month, req.body.today || null);
+    // Siempre usar fecha del servidor para corte real/proyección (inicio mes hasta ayer = real, hoy en adelante = proyección). No usar última fecha del archivo.
+    const result = await forecastMensual.calcularForecastMensual(client, plantCode, year, month, null);
     res.json({ ok: true, ...result });
   } catch (e) {
     console.error("[ARR forecast]", e);
