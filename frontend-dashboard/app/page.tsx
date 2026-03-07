@@ -106,7 +106,7 @@ function KpiContent() {
                       className="rounded border border-slate-600 bg-slate-700 px-2 py-1 text-slate-200 text-xs"
                     >
                       <option value="">Todas</option>
-                      {[...new Set(igfForecast.rows.map((r) => r.empresa?.trim()).filter(Boolean))].sort().map((emp) => (
+                      {Array.from(new Set(igfForecast.rows.map((r) => r.empresa?.trim()).filter(Boolean))).sort().map((emp) => (
                         <option key={emp} value={emp}>{emp}</option>
                       ))}
                     </select>
