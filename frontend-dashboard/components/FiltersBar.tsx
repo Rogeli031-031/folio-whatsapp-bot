@@ -17,6 +17,15 @@ export default function FiltersBar({ filters, onFiltersChange, plantas = [] }: P
   return (
     <div className="flex flex-wrap items-center gap-3 border-b border-slate-700 bg-slate-900/30 px-4 py-2 text-sm">
       <span className="text-slate-400">Filtros:</span>
+      <label className="flex items-center gap-2">
+        <span className="text-slate-400">Mes:</span>
+        <input
+          type="month"
+          value={filters.mes || ""}
+          onChange={(e) => onFiltersChange({ ...filters, mes: e.target.value || undefined })}
+          className="rounded border border-slate-600 bg-slate-800 px-2 py-1 text-slate-200"
+        />
+      </label>
       <label className="flex items-center gap-2 cursor-pointer">
         <input
           type="checkbox"

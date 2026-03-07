@@ -4585,6 +4585,12 @@ function parseDashboardFilters(q) {
   const miSemana = q.mi_semana === "true" || q.mi_semana === "1";
   let fechaDesde = q.fecha_desde || q.desde || null;
   let fechaHasta = q.fecha_hasta || q.hasta || null;
+  if (q.mes && /^\d{4}-\d{2}$/.test(String(q.mes).trim())) {
+    const [y, m] = String(q.mes).trim().split("-");
+    const lastDay = new Date(parseInt(y, 10), parseInt(m, 10), 0).getDate();
+    fechaDesde = `${y}-${m}-01`;
+    fechaHasta = `${y}-${m}-${String(lastDay).padStart(2, "0")}`;
+  }
   if (fechaDesde && !/^\d{4}-\d{2}-\d{2}$/.test(fechaDesde)) fechaDesde = null;
   if (fechaHasta && !/^\d{4}-\d{2}-\d{2}$/.test(fechaHasta)) fechaHasta = null;
   return { plantas, categorias, etapas, soloActivos, miSemana, fechaDesde, fechaHasta };

@@ -57,10 +57,25 @@ function etapaColor(estatus: string | null): string {
   return "border-l-amber-500";
 }
 
+const MESES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+
+/** Extrae mes de cargo desde numero_folio (ej. F-202602-131 → Feb 2026). */
+function mesCargoFromNumero(numeroFolio: string | null): string | null {
+  if (!numeroFolio || typeof numeroFolio !== "string") return null;
+  const m = numeroFolio.trim().match(/^F-(\d{4})(\d{2})-\d+/);
+  if (!m) return null;
+  const year = m[1];
+  const monthIdx = parseInt(m[2], 10) - 1;
+  if (monthIdx < 0 || monthIdx > 11) return null;
+  return `${MESES[monthIdx]} ${year}`;
+}
+
 export default function FolioCard({ card, onOpen, role, onSubirPoliza, onImprimirGastos }: Props) {
   const mxn = card.importe != null && !isNaN(card.importe)
     ? `$${card.importe.toLocaleString("es-MX", { maximumFractionDigits: 0 })}`
     : null;
+
+  const mesCargo = mesCargoFromNumero(card.numero_folio || card.folio_codigo || "");
 
   const bordeClase = card.por_recuperar
     ? "border-l-blue-600"
@@ -80,6 +95,9 @@ export default function FolioCard({ card, onOpen, role, onSubirPoliza, onImprimi
       tabIndex={0}
       onKeyDown={(e) => e.key === "Enter" && onOpen(card.id)}
     >
+      {mesCargo && (
+        <div className="text-base font-semibold text-slate-100 tracking-wide mb-1.5">{mesCargo}</div>
+      )}
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-1.5 min-w-0">
           <span className="font-mono text-xs font-medium text-slate-200">{card.folio_codigo}</span>

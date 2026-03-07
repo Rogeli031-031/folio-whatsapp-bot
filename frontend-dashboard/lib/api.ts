@@ -88,6 +88,7 @@ export interface DashboardFilters {
   mi_semana?: string;
   fecha_desde?: string;
   fecha_hasta?: string;
+  mes?: string;
 }
 
 export function fetchKanban(token: string, filters: DashboardFilters = {}): Promise<KanbanBoard> {
@@ -99,6 +100,7 @@ export function fetchKanban(token: string, filters: DashboardFilters = {}): Prom
   if (filters.mi_semana === "1") params.mi_semana = "true";
   if (filters.fecha_desde) params.fecha_desde = filters.fecha_desde;
   if (filters.fecha_hasta) params.fecha_hasta = filters.fecha_hasta;
+  if (filters.mes) params.mes = filters.mes;
   return apiFetch<KanbanBoard>("/api/dashboard/kanban", { token, params });
 }
 
