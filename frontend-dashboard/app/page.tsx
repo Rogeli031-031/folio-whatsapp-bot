@@ -181,6 +181,7 @@ function KpiContent() {
                         <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(row.impuesto_kg)}</td>
                         <td className="py-2 px-2 text-right text-slate-300">
                           <input
+                            key={`hg-${row.empresa ?? i}-${row.hg_pct != null ? (Number(row.hg_pct) * 100).toFixed(1) : ""}`}
                             type="number"
                             step="0.1"
                             min="0"
@@ -193,13 +194,16 @@ function KpiContent() {
                               if (raw === "" || !token || !igfForecast) return;
                               const v = parseFloat(raw);
                               if (Number.isNaN(v)) return;
+                              const newPct = v / 100;
+                              const currentPct = row.hg_pct != null ? Number(row.hg_pct) : null;
+                              if (currentPct !== null && Math.abs(newPct - currentPct) < 1e-9) return;
                               setHgSaving(row.empresa || null);
                               try {
                                 await patchIgfForecastHg(token, {
                                   year: igfForecast.year,
                                   month: igfForecast.month,
                                   empresa: row.empresa || "",
-                                  hg_pct: v / 100,
+                                  hg_pct: newPct,
                                 });
                                 const updated = await fetchIgfForecast(token, {
                                   year: igfForecast.year,

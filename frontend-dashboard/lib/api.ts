@@ -151,7 +151,11 @@ export function fetchIgfForecast(
   const p: Record<string, string> = {};
   if (params?.year != null) p.year = String(params.year);
   if (params?.month != null) p.month = String(params.month);
-  return apiFetch<IgfForecastResponse>("/api/dashboard/igf-forecast", { token, params: Object.keys(p).length ? p : undefined });
+  return apiFetch<IgfForecastResponse>("/api/dashboard/igf-forecast", {
+    token,
+    params: Object.keys(p).length ? p : undefined,
+    cache: "no-store",
+  });
 }
 
 export function patchIgfForecastHg(
