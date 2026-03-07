@@ -5199,9 +5199,9 @@ async function getDescuentoForecastProvinciaDesdeArr(client, year, month) {
   return out;
 }
 
-/** Variables IGF que son costos/egresos: en pantalla se muestran con signo negativo. El resto (margen, util_oper, resultado) conservan su signo. */
+/** Signos para presentación: verde = positivo (margen, HG $/kg); rojo = negativo (costos/egresos). Azul = calculados (Util. Oper., Resultado). */
 const IGF_VAR_COSTO_PARA_DISPLAY = [
-  "com_desc_kg", "gasto_kg", "impuesto_kg", "hg_kg",
+  "com_desc_kg", "gasto_kg", "impuesto_kg",
   "bancos_planta_kg", "provision_planta_kg",
   "gtos_apoyos_corp_kg", "bancos_corp_kg", "otros_programas_kg", "inversiones_kg",
   "presupuesto_kg", "folios_aprob_zp_kg", "folios_carro_kg",

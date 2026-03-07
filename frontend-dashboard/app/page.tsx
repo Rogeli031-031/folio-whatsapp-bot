@@ -143,7 +143,7 @@ function KpiContent() {
                         <td className="py-1.5 px-2 text-right text-slate-300">{fmtNum(row.margen_kg)}</td>
                         <td className="py-1.5 px-2 text-right text-slate-300">{fmtNum(row.com_desc_kg)}</td>
                         <td className="py-1.5 px-2 text-right text-slate-300">{fmtNum(row.presupuesto_kg ?? null)}</td>
-                        <td className="py-1.5 px-2 text-right text-slate-300">{fmtNum((row as Record<string, unknown>).folios_aprob_zp_kg ?? null)}</td>
+                        <td className="py-1.5 px-2 text-right text-slate-300">{fmtNum(row.folios_aprob_zp_kg ?? null)}</td>
                         <td className="py-1.5 px-2 text-right text-slate-300">{fmtNum(row.folios_carro_kg ?? null)}</td>
                         <td className="py-1.5 px-2 text-right text-slate-300">{fmtNum(row.impuesto_kg)}</td>
                         <td className="py-1.5 px-2 text-right text-slate-300">
