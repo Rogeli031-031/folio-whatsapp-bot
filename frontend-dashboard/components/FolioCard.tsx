@@ -59,7 +59,18 @@ function etapaColor(estatus: string | null): string {
 
 const MESES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 
-/** Extrae mes de cargo desde numero_folio (ej. F-202602-131 → Feb 2026). */
+/** Formatea mes_cargo (YYYY-MM) a "Mar 2026". */
+function formatMesCargo(mesCargo: string | null | undefined): string | null {
+  if (!mesCargo || typeof mesCargo !== "string") return null;
+  const t = mesCargo.trim();
+  const m = t.match(/^(\d{4})-(\d{2})$/);
+  if (!m) return null;
+  const monthIdx = parseInt(m[2], 10) - 1;
+  if (monthIdx < 0 || monthIdx > 11) return null;
+  return `${MESES[monthIdx]} ${m[1]}`;
+}
+
+/** Fallback: extrae mes desde numero_folio (ej. F-202602-131 → Feb 2026). */
 function mesCargoFromNumero(numeroFolio: string | null): string | null {
   if (!numeroFolio || typeof numeroFolio !== "string") return null;
   const m = numeroFolio.trim().match(/^F-(\d{4})(\d{2})-\d+/);
@@ -75,7 +86,7 @@ export default function FolioCard({ card, onOpen, role, onSubirPoliza, onImprimi
     ? `$${card.importe.toLocaleString("es-MX", { maximumFractionDigits: 0 })}`
     : null;
 
-  const mesCargo = mesCargoFromNumero(card.numero_folio || card.folio_codigo || "");
+  const mesCargo = formatMesCargo(card.mes_cargo) ?? mesCargoFromNumero(card.numero_folio || card.folio_codigo || "");
 
   const bordeClase = card.por_recuperar
     ? "border-l-blue-600"

@@ -68,6 +68,7 @@ export interface FolioCard {
   solo_zp_ad?: boolean;
   por_recuperar?: boolean;
   prioridad?: string | null;
+  mes_cargo?: string | null;
 }
 
 export interface Kpis {

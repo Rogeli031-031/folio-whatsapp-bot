@@ -4585,15 +4585,10 @@ function parseDashboardFilters(q) {
   const miSemana = q.mi_semana === "true" || q.mi_semana === "1";
   let fechaDesde = q.fecha_desde || q.desde || null;
   let fechaHasta = q.fecha_hasta || q.hasta || null;
-  if (q.mes && /^\d{4}-\d{2}$/.test(String(q.mes).trim())) {
-    const [y, m] = String(q.mes).trim().split("-");
-    const lastDay = new Date(parseInt(y, 10), parseInt(m, 10), 0).getDate();
-    fechaDesde = `${y}-${m}-01`;
-    fechaHasta = `${y}-${m}-${String(lastDay).padStart(2, "0")}`;
-  }
+  const mes = (q.mes && /^\d{4}-\d{2}$/.test(String(q.mes).trim())) ? String(q.mes).trim() : null;
   if (fechaDesde && !/^\d{4}-\d{2}-\d{2}$/.test(fechaDesde)) fechaDesde = null;
   if (fechaHasta && !/^\d{4}-\d{2}-\d{2}$/.test(fechaHasta)) fechaHasta = null;
-  return { plantas, categorias, etapas, soloActivos, miSemana, fechaDesde, fechaHasta };
+  return { plantas, categorias, etapas, soloActivos, miSemana, fechaDesde, fechaHasta, mes };
 }
 
 function buildDashboardWhere(auth, filters) {
@@ -4661,6 +4656,11 @@ function buildDashboardWhere(auth, filters) {
   if (filters.miSemana) {
     conditions.push(`UPPER(TRIM(COALESCE(f.estatus,''))) = 'SELECCIONADO_SEMANA'`);
   }
+  if (filters.mes) {
+    conditions.push(`(f.mes_cargo = $${n}::TEXT)`);
+    params.push(filters.mes);
+    n++;
+  }
   if (filters.fechaDesde) {
     conditions.push(`(f.creado_en::DATE >= $${n}::DATE)`);
     params.push(filters.fechaDesde);
@@ -4697,6 +4697,7 @@ function cardFromFolioRow(row) {
     por_recuperar: !!row.por_recuperar,
     prioridad: row.prioridad || null,
     solicitud_por_recuperar_pendiente: !!row.solicitud_por_recuperar_pendiente,
+    mes_cargo: row.mes_cargo || null,
   };
 }
 
@@ -4707,7 +4708,7 @@ app.get("/api/dashboard/kanban", dashboardAuthMiddleware, async (req, res) => {
     const { where, params } = buildDashboardWhere(req.dashboardAuth, filters);
     const q = `
       SELECT f.id, f.numero_folio, f.folio_codigo, f.planta_id, f.categoria, f.subcategoria, f.unidad,
-             f.importe, f.estatus, f.creado_en, f.prioridad,
+             f.importe, f.estatus, f.creado_en, f.prioridad, f.mes_cargo,
              COALESCE(f.solo_zp_ad, false) AS solo_zp_ad, COALESCE(f.por_recuperar, false) AS por_recuperar,
              COALESCE(f.solicitud_por_recuperar_pendiente, false) AS solicitud_por_recuperar_pendiente,
              COALESCE(f.descripcion, f.concepto) AS descripcion_display,
