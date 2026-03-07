@@ -5322,15 +5322,20 @@ app.get("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, res)
     );
     const plantaIdByNombrePresup = new Map((rPlantasPresup.rows || []).map((r) => [r.nombre, Number(r.id)]));
     const empresaToPlantaId = new Map();
+    const empresaNormToPlantaId = new Map();
     for (const [empresa, nombrePlanta] of Object.entries(EMPRESA_IGF_A_NOMBRE_PLANTA)) {
       const id = plantaIdByNombrePresup.get(nombrePlanta);
-      if (id != null) empresaToPlantaId.set(empresa, id);
+      if (id != null) {
+        empresaToPlantaId.set(empresa, id);
+        const keyNorm = normalizeAccents(empresa).replace(/\s+/g, "").toLowerCase();
+        empresaNormToPlantaId.set(keyNorm, id);
+      }
     }
     const idsFromJoin = Array.from(plantaIdByPlantCode.values()).filter((id) => id != null && Number.isFinite(Number(id)));
     const idsFromPresupuesto = Array.from(empresaToPlantaId.values());
     const plantaIds = [...new Set([...idsFromJoin.map((id) => Number(id)), ...idsFromPresupuesto])];
     let presupuestoByPlanta = new Map();
-    const pres = await client.query(
+    let pres = await client.query(
       `SELECT p.id AS planta_id, COALESCE(SUM(d.monto_aprobado), 0) AS total
        FROM public.plantas p
        LEFT JOIN public.presupuesto_asignacion_detalle d ON d.planta_id = p.id AND d.periodo = $1
@@ -5338,6 +5343,17 @@ app.get("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, res)
        GROUP BY p.id`,
       [periodoStr, nombresPresupuesto]
     );
+    const tienePresupuesto = (pres.rows || []).some((r) => (Number(r.total) || 0) > 0);
+    if (!tienePresupuesto && periodoStr !== PERIODO_PRESUPUESTO_DEFAULT) {
+      pres = await client.query(
+        `SELECT p.id AS planta_id, COALESCE(SUM(d.monto_aprobado), 0) AS total
+         FROM public.plantas p
+         LEFT JOIN public.presupuesto_asignacion_detalle d ON d.planta_id = p.id AND d.periodo = $1
+         WHERE p.nombre = ANY($2::text[])
+         GROUP BY p.id`,
+        [PERIODO_PRESUPUESTO_DEFAULT, nombresPresupuesto]
+      );
+    }
     presupuestoByPlanta = new Map((pres.rows || []).map((r) => [Number(r.planta_id), Number(r.total) || 0]));
     let foliosAprobZpByPlanta = new Map();
     let foliosCarroByPlanta = new Map();
@@ -5363,6 +5379,8 @@ app.get("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, res)
       let id = best != null ? plantaIdByPlantCode.get(best) : null;
       if (id != null) return id;
       id = empresaToPlantaId.get(emp) || empresaToPlantaId.get(empresa);
+      if (id != null) return id;
+      id = empresaNormToPlantaId.get(normalizeAccents(emp).replace(/\s+/g, "").toLowerCase());
       if (id != null) return id;
       const empNorm = normalizeAccents(emp);
       for (const [key, val] of empresaToPlantaId) {
@@ -5430,8 +5448,8 @@ app.get("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, res)
 
 /**
  * Recalcula Util. Oper. y Resultado final.
- * Util. Oper. ($/kg) = suma de las 8 variables: Margen, Com.Desc, Impuesto, HG $/kg, Bancos Planta, Prov. Planta, Gtos/Apoyos Corp, Otros Programas (con sus signos: costos en negativo).
- * Resultado = Util. Oper. - bancos corp - inversiones.
+ * Util. Oper. ($/kg) = suma de los 9 conceptos: Margen, Com.Desc, Presupuesto, Folios ZP, Folios carro, Impuesto, HG $/kg, Bancos Planta, Prov. Planta.
+ * Resultado = Util. Oper. - Gtos/Apoyos Corp - Bancos Corp - Otros Programas - Inversiones.
  */
 function recalcularUtilYResultado(row) {
   const n = (v) => (v != null && Number.isFinite(Number(v)) ? Number(v) : 0);
@@ -5441,17 +5459,20 @@ function recalcularUtilYResultado(row) {
   const hgKg = n(row.hg_kg);
   const bancosPlanta = n(row.bancos_planta_kg);
   const provisionPlanta = n(row.provision_planta_kg);
-  const gtosCorp = n(row.gtos_apoyos_corp_kg);
-  const otrosProg = n(row.otros_programas_kg);
+  const presupuesto = n(row.presupuesto_kg);
+  const foliosZP = n(row.folios_aprob_zp_kg);
+  const foliosCarro = n(row.folios_carro_kg);
   const ventaTon = n(row.venta_ton);
   const ventaKg = ventaTon * 1000;
+  const gtosCorp = n(row.gtos_apoyos_corp_kg);
   const bancosCorp = n(row.bancos_corp_kg);
+  const otrosProg = n(row.otros_programas_kg);
   const inversiones = n(row.inversiones_kg);
 
   const hgContribucion = Math.abs(hgKg);
-  const util_oper_kg = margen - comDesc - impuesto + hgContribucion - bancosPlanta - provisionPlanta - gtosCorp - otrosProg;
+  const util_oper_kg = margen - comDesc - impuesto + hgContribucion - bancosPlanta - provisionPlanta - presupuesto - foliosZP - foliosCarro;
   const util_oper_importe = ventaKg > 0 ? util_oper_kg * ventaKg : 0;
-  const resultado_final_kg = util_oper_kg - bancosCorp - inversiones;
+  const resultado_final_kg = util_oper_kg - gtosCorp - bancosCorp - otrosProg - inversiones;
   const resultado_final_importe = ventaKg > 0 ? resultado_final_kg * ventaKg : 0;
   return { util_oper_kg, util_oper_importe, resultado_final_kg, resultado_final_importe };
 }
