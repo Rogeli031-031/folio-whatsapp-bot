@@ -5341,6 +5341,11 @@ app.get("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, res)
       row.folios_carro_kg = ventaKg > 0 && plantaId != null
         ? Math.round((foliosCarroByPlanta.get(plantaId) || 0) / ventaKg * 100) / 100
         : null;
+      const calc = recalcularUtilYResultado(row);
+      row.util_oper_kg = calc.util_oper_kg;
+      row.util_oper_importe = calc.util_oper_importe;
+      row.resultado_final_kg = calc.resultado_final_kg;
+      row.resultado_final_importe = calc.resultado_final_importe;
     }
     for (let i = 0; i < rows.length; i++) rows[i] = aplicarSignosDisplayIgf(rows[i]);
 
@@ -5383,11 +5388,9 @@ app.get("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, res)
 });
 
 /**
- * Recalcula Util. Oper. y Resultado final a partir de HG y el resto de variables de la fila IGF.
- * Fórmulas: util_oper_kg = margen - com_desc - gasto - impuesto - hg_kg - bancos_planta - provision_planta;
- *           util_oper_importe = util_oper_kg * venta_ton * 1000;
- *           resultado_final_kg = util_oper_kg - gtos_apoyos_corp - bancos_corp - otros_programas - inversiones;
- *           resultado_final_importe = resultado_final_kg * venta_ton * 1000.
+ * Recalcula Util. Oper. y Resultado final a partir de las variables $/kg de la fila IGF.
+ * Util. Oper. = Margen - costos (Com.Desc, Presupuesto, Folios ZP/Carro, Impuesto, Bancos Planta, Prov. Planta) + HG $/kg.
+ * Resultado = Util. Oper. - gtos corp, bancos corp, otros programas, inversiones.
  */
 function recalcularUtilYResultado(row) {
   const n = (v) => (v != null && Number.isFinite(Number(v)) ? Number(v) : 0);
@@ -5398,6 +5401,9 @@ function recalcularUtilYResultado(row) {
   const hgKg = n(row.hg_kg);
   const bancosPlanta = n(row.bancos_planta_kg);
   const provisionPlanta = n(row.provision_planta_kg);
+  const presupuesto = n(row.presupuesto_kg);
+  const foliosZP = n(row.folios_aprob_zp_kg);
+  const foliosCarro = n(row.folios_carro_kg);
   const ventaTon = n(row.venta_ton);
   const ventaKg = ventaTon * 1000;
   const gtosCorp = n(row.gtos_apoyos_corp_kg);
@@ -5405,7 +5411,7 @@ function recalcularUtilYResultado(row) {
   const otrosProg = n(row.otros_programas_kg);
   const inversiones = n(row.inversiones_kg);
 
-  const util_oper_kg = margen - comDesc - gasto - impuesto - hgKg - bancosPlanta - provisionPlanta;
+  const util_oper_kg = margen - comDesc - gasto - impuesto + hgKg - bancosPlanta - provisionPlanta - presupuesto - foliosZP - foliosCarro;
   const util_oper_importe = ventaKg > 0 ? util_oper_kg * ventaKg : 0;
   const resultado_final_kg = util_oper_kg - gtosCorp - bancosCorp - otrosProg - inversiones;
   const resultado_final_importe = ventaKg > 0 ? resultado_final_kg * ventaKg : 0;
