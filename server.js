@@ -5199,14 +5199,14 @@ async function getDescuentoForecastProvinciaDesdeArr(client, year, month) {
   return out;
 }
 
-/** Mapeo empresa IGF -> clave(s) planta en DB. Algunas empresas tienen dos filas en plantas (por nombre y por código); se suman presupuesto/folios de todas. */
+/** Mapeo empresa IGF -> clave(s) planta en DB. Incluye código (E7, E8…) y nombre de planta; se suman presupuesto/folios de todas las filas que coincidan. */
 const EMPRESA_IGF_A_PLANTA_KEYS = {
   "GT - Puebla": ["E7", "Puebla"],
   "Tehuacán": ["E8", "Tehuacán"],
-  "Acapulco": "E9",
-  "GTM - Querétaro": "E12",
-  "GTM - San Luis P.": "E11",
-  "Morelos": "E15",
+  "Acapulco": ["E9", "E10", "Acapulco"],
+  "GTM - Querétaro": ["E12", "Querétaro"],
+  "GTM - San Luis P.": ["E11", "San Luis P.", "San Luis"],
+  "Morelos": ["E15", "Morelos"],
 };
 
 /** Signos para presentación: verde = positivo (margen, HG $/kg); rojo = negativo (costos/egresos). Azul = calculados (Util. Oper., Resultado). */
@@ -5315,7 +5315,7 @@ app.get("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, res)
     for (const r of provPlantas.rows || []) {
       if (r.plant_code != null && r.planta_id != null) plantaIdByPlantCode.set((r.plant_code || "").trim(), Number(r.planta_id));
     }
-    const nombresPresupuesto = ["E7", "E8", "E9", "E10", "E11", "E12", "E13", "E15", "Puebla", "PUEBLA", "Tehuacán"];
+    const nombresPresupuesto = ["E7", "E8", "E9", "E10", "E11", "E12", "E13", "E15", "Puebla", "PUEBLA", "Tehuacán", "Acapulco", "Querétaro", "San Luis P.", "San Luis", "Morelos"];
     const rPlantasPresup = await client.query(
       `SELECT id, nombre, clave FROM public.plantas
        WHERE nombre = ANY($1::text[])
