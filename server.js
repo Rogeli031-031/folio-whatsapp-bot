@@ -6937,6 +6937,169 @@ app.post("/twilio/whatsapp", async (req, res) => {
       const helpMsg = getHelpForInput(body.trim(), actor);
       if (helpMsg) return safeReply(helpMsg);
 
+      /* Comandos dashboard y mis pendientes (antes de Delta Ingreso para que GG los use correctamente) */
+      const matchDashboardEarly = body.trim().match(/^dashboard(\s+(zp|gg|resumen|etapa|planta|categoria))?(\s+(.+))?$/i);
+      if (matchDashboardEarly) {
+        try {
+          if (!actor) {
+            return safeReply("No estás dado de alta. Contacta al administrador para registrar tu número.");
+          }
+          const subcmd = (matchDashboardEarly[2] || "").toLowerCase();
+          const rolClave = (actor.rol_clave && String(actor.rol_clave).toUpperCase()) || "";
+          const rolNom = (actor.rol_nombre && String(actor.rol_nombre)) || "";
+          const esZP = rolClave === "ZP" || (rolNom && /director/i.test(rolNom) && /zp/i.test(rolNom));
+          const normalizarParaAD = (s) => (s || "").toLowerCase().normalize("NFD").replace(/\p{M}/gu, "").replace(/[\s\u00a0]+/g, " ").trim();
+          const rolNormNombre = normalizarParaAD(rolNom);
+          const nombreUsuarioNorm = normalizarParaAD(actor.nombre);
+          const esAD = rolClave === "AD" || (/asistente/.test(rolNormNombre) && /direccion/.test(rolNormNombre)) || (/asistente/.test(nombreUsuarioNorm) && /direccion/.test(nombreUsuarioNorm));
+          const esCFCDMX = rolClave === "CF_CDMX" || (/contralor/.test(rolNormNombre) && /cdmx/.test(rolNormNombre)) || (/contralor/.test(nombreUsuarioNorm) && /cdmx/.test(nombreUsuarioNorm));
+          const esGA = rolClave === "GA";
+          const role = esZP ? "ZP" : esAD ? "AD" : esCFCDMX ? "CF_CDMX" : esGA ? "GA" : "GG";
+          let plantasPermitidas = [];
+          if (esZP || esAD || esCFCDMX) {
+            const plantas = await getPlantas(client);
+            plantasPermitidas = (plantas || []).map((p) => p.id).filter(Number.isFinite);
+          } else if (actor.planta_id != null) {
+            plantasPermitidas = getPlantaIdsEquivalentesForPendientes(actor.planta_id);
+          }
+          const token = createDashboardToken({
+            role,
+            actor_id: actor.id,
+            plantas_permitidas: plantasPermitidas,
+            default_filters: {},
+          });
+          const baseUrl = (process.env.DASHBOARD_URL || process.env.FRONTEND_URL || "").trim() || "https://dashboard.example.com";
+          const link = `${baseUrl.replace(/\/$/, "")}/dashboard?t=${encodeURIComponent(token)}`;
+          let msg = "📊 Dashboard de Folios\n\n";
+          if (subcmd === "resumen") {
+            const filters = parseDashboardFilters({});
+            const { where, params } = buildDashboardWhere(
+              { role, plantas_permitidas: plantasPermitidas },
+              { ...filters, soloActivos: true }
+            );
+            const whereActivos = where + " AND UPPER(TRIM(COALESCE(f.estatus,''))) NOT IN ('CERRADO','CANCELADO')";
+            const k = await client.query(`SELECT COUNT(*)::INT AS total, COALESCE(SUM(f.importe), 0)::NUMERIC AS mxn FROM public.folios f WHERE 1=1 ${whereActivos}`, params);
+            const rZp = await client.query(`SELECT COUNT(*)::INT AS c FROM public.folios f WHERE 1=1 ${where} AND UPPER(TRIM(COALESCE(f.estatus,''))) = 'PENDIENTE_APROB_ZP'`, params);
+            const rOld = await client.query(`SELECT f.folio_codigo, EXTRACT(DAY FROM (NOW() - f.creado_en))::INT AS aging FROM public.folios f WHERE 1=1 ${whereActivos} AND f.creado_en IS NOT NULL ORDER BY f.creado_en ASC LIMIT 1`, params);
+            const total = (k.rows[0] && k.rows[0].total) || 0;
+            const mxn = k.rows[0] && k.rows[0].mxn != null ? Number(k.rows[0].mxn) : null;
+            const pendZp = (rZp.rows[0] && rZp.rows[0].c) || 0;
+            const oldest = rOld.rows[0] ? { folio: rOld.rows[0].folio_codigo, dias: rOld.rows[0].aging } : null;
+            msg += `Folios activos: ${total}\n`;
+            if (mxn != null) msg += `$ comprometido: $${mxn.toLocaleString("es-MX", { minimumFractionDigits: 2 })}\n`;
+            msg += `Pend. aprob. ZP: ${pendZp}\n`;
+            if (oldest) msg += `Más antiguo: ${oldest.folio} (${oldest.dias} días)\n`;
+          }
+          msg += `\n🔗 Acceso (válido 20 min):\n${link}`;
+          const yyyymm = getCurrentYYYYMM();
+          const yF = parseInt(yyyymm.slice(0, 4), 10);
+          const mF = parseInt(yyyymm.slice(4, 6), 10);
+          const botBase = (process.env.BASE_URL || process.env.PUBLIC_URL || "").trim() || `${req.protocol}://${req.get("host") || "localhost"}`;
+          const linkForecast = `${botBase.replace(/\/$/, "")}/api/arr/dashboard-excel?year=${yF}&month=${mF}&t=${encodeURIComponent(token)}`;
+          msg += `\n\n📈 Forecast (Ventas/IGF ${yF}/${mF}):\n${linkForecast}`;
+          const mAnt = mF === 1 ? 12 : mF - 1;
+          const yAnt = mF === 1 ? yF - 1 : yF;
+          const linkForecastAnt = `${botBase.replace(/\/$/, "")}/api/arr/dashboard-excel?year=${yAnt}&month=${mAnt}&t=${encodeURIComponent(token)}`;
+          msg += `\n\n📈 Forecast mes anterior (${yAnt}/${mAnt}):\n${linkForecastAnt}`;
+          if (msg.length > MAX_WHATSAPP_BODY) msg = msg.substring(0, MAX_WHATSAPP_BODY - 30) + "\n...(recortado)\n" + link;
+          return safeReply(msg);
+        } catch (dashboardErr) {
+          console.error("[Dashboard command error]", dashboardErr);
+          return safeReply("Error al generar el enlace del dashboard. Revisa los logs del servidor o contacta al administrador.");
+        }
+      }
+
+      const matchPendientesEarly = body.trim().match(/^(mis\s+pendientes|pendientes)(\s+(\d+))?$/i);
+      if (matchPendientesEarly) {
+        if (!actor) {
+          return safeReply("No estás dado de alta. Contacta al administrador para registrar tu número en el sistema.");
+        }
+        const page = matchPendientesEarly[3] ? parseInt(matchPendientesEarly[3], 10) : 1;
+        const pageSize = 20;
+        const rolClaveP = (actor.rol_clave && String(actor.rol_clave).toUpperCase()) || "";
+        const esCorporativo = rolClaveP === "ZP" || rolClaveP === "CDMX" || (actor.rol_nombre && /director/i.test(actor.rol_nombre) && /zp/i.test(actor.rol_nombre));
+        try {
+          const data = esCorporativo
+            ? await getPendientesForUser(client, from, 1, 500, { corporativo: true })
+            : await getPendientesForUser(client, from, page, pageSize);
+          if (!data) {
+            return safeReply("No estás dado de alta. Contacta al administrador para registrar tu número.");
+          }
+          console.log(`[Pendientes] Actor: ${actor.rol_nombre || rolClaveP || "?"} (${fromNorm})`);
+          console.log(`[Pendientes] Total encontrados: ${data.totalCount}`);
+          if (data.totalCount === 0) {
+            return safeReply("✅ No tienes pendientes.");
+          }
+          const fmtMxn = (n) => (Number(n) != null && !isNaN(Number(n)) ? Number(n).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00");
+          const truncConcepto = (s, max = 70) => {
+            const t = String(s || "").trim();
+            if (!t) return "";
+            if (t.length <= max) return t;
+            const cut = t.substring(0, max);
+            const lastSpace = cut.lastIndexOf(" ");
+            const pos = lastSpace > 40 ? lastSpace : max;
+            return t.substring(0, pos).trim() + "…";
+          };
+          const fmtFecha = (d) => {
+            if (!d) return "";
+            const dt = new Date(d);
+            const day = dt.getDate();
+            const months = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+            return `${day} ${months[dt.getMonth()]}`;
+          };
+          const esUrgente = (r) => r.prioridad && (String(r.prioridad).toLowerCase().includes("urgente") || String(r.prioridad).toLowerCase().includes("alta"));
+          const shortNum = (r) => (r.numero_folio || "").replace(/^F-\d{6}-/, "") || (r.numero_folio || "");
+
+          let out = "📌 MIS PENDIENTES\n\n";
+          if (data.corporativo && data.rows.length > 0) {
+            const byPlanta = {};
+            for (const r of data.rows) {
+              const p = (r.planta_nombre || "Sin planta").trim();
+              if (!byPlanta[p]) byPlanta[p] = [];
+              byPlanta[p].push(r);
+            }
+            const plantasOrden = Object.keys(byPlanta).sort();
+            console.log(`[Pendientes] Plantas involucradas: ${plantasOrden.join(", ")}`);
+            for (const nombrePlanta of plantasOrden) {
+              const filas = byPlanta[nombrePlanta];
+              out += `🏭 ${nombrePlanta}\n`;
+              out += "-------------------\n";
+              for (const r of filas) {
+                const urg = esUrgente(r) ? "🔴 " : "⚪ ";
+                out += `${urg}${shortNum(r)} | $${fmtMxn(r.importe)}\n`;
+                out += `Concepto: ${truncConcepto(r.concepto, 60)}\n`;
+                out += `Estado: ${r.estatus || "—"}\n`;
+                out += `Fecha: ${fmtFecha(r.fecha_base)}\n\n`;
+              }
+              out += `Total ${nombrePlanta}: ${filas.length} folio${filas.length !== 1 ? "s" : ""}\n\n`;
+            }
+          } else {
+            for (const r of data.rows) {
+              const urg = esUrgente(r) ? "🔴 " : "⚪ ";
+              const plantaNombreRow = data.plantaInfo.nombre || "—";
+              out += `${urg}${shortNum(r)} | ${plantaNombreRow} | $${fmtMxn(r.importe)}\n`;
+              out += `Concepto: ${truncConcepto(r.concepto, 60)}\n`;
+              out += `Estado: ${r.estatus || "—"}\n`;
+              out += `Fecha: ${fmtFecha(r.fecha_base)}\n\n`;
+            }
+            if (page < data.totalPages) out += `Página ${page}/${data.totalPages}. Responde "mis pendientes ${page + 1}" para ver más.\n\n`;
+          }
+
+          out += "-------------------\n";
+          out += `Total urgentes: ${data.urgentesCount}\n`;
+          out += `Total pendientes: ${data.totalCount}`;
+
+          if (out.length > 3500) {
+            out = out.substring(0, 3400) + "\n\n... (mensaje recortado por límite de WhatsApp)";
+          }
+          console.log(`[Pendientes] chars=${out.length}`);
+          return safeReply(out);
+        } catch (e) {
+          console.warn("getPendientesForUser error:", e.message);
+          return safeReply("Error al cargar pendientes. Intenta más tarde.");
+        }
+      }
+
       /* Prefijo "di " => solo comandos Delta Ingreso; no toca folios ni flujo existente */
       const text = (body || "").trim();
       /* Modo conversacional: pregunta en lenguaje natural → traducir a "di ..." y ejecutar */
@@ -7011,7 +7174,8 @@ app.post("/twilio/whatsapp", async (req, res) => {
       /* ----- Delta Ingreso AI: GG responde a pregunta pendiente de ZP ----- */
       const esGGAsk = actor && (actor.rol_clave === "GG" || (actor.rol_nombre && String(actor.rol_nombre).toUpperCase().includes("GG")));
       const plantCodeGG = esGGAsk && (actor.planta_nombre || actor.planta_id);
-      if (esGGAsk && plantCodeGG && body.trim().length >= 1) {
+      const esComandoFoliosGG = /^dashboard(\s|$)/i.test(body.trim()) || /^(mis\s+pendientes|pendientes)(\s+\d+)?$/i.test(body.trim());
+      if (esGGAsk && plantCodeGG && body.trim().length >= 1 && !esComandoFoliosGG) {
         try {
           await deltaIngresoAiDb.ensureDeltaIngresoAiSchema(client);
           const last10 = phoneLast10(req.body.From) || phoneLast10(fromNorm);
@@ -8054,79 +8218,6 @@ app.post("/twilio/whatsapp", async (req, res) => {
         return safeReply("REPORTE PRUEBA NOTIFICACIÓN\n\n" + lines.join("\n"));
       }
 
-      const matchDashboard = body.trim().match(/^dashboard(\s+(zp|gg|resumen|etapa|planta|categoria))?(\s+(.+))?$/i);
-      if (matchDashboard) {
-        try {
-          if (!actor) {
-            return safeReply("No estás dado de alta. Contacta al administrador para registrar tu número.");
-          }
-          const subcmd = (matchDashboard[2] || "").toLowerCase();
-          const rolClave = (actor.rol_clave && String(actor.rol_clave).toUpperCase()) || "";
-          const rolNom = (actor.rol_nombre && String(actor.rol_nombre)) || "";
-          const esZP = rolClave === "ZP" || (rolNom && /director/i.test(rolNom) && /zp/i.test(rolNom));
-          // Asistente de Dirección: por rol (clave/nombre) o por nombre de usuario (si rol es null)
-          const normalizarParaAD = (s) => (s || "").toLowerCase().normalize("NFD").replace(/\p{M}/gu, "").replace(/[\s\u00a0]+/g, " ").trim();
-          const rolNormNombre = normalizarParaAD(rolNom);
-          const nombreUsuarioNorm = normalizarParaAD(actor.nombre);
-          const esAD = rolClave === "AD" || (/asistente/.test(rolNormNombre) && /direccion/.test(rolNormNombre)) || (/asistente/.test(nombreUsuarioNorm) && /direccion/.test(nombreUsuarioNorm));
-          // Contralor financiero CDMX / Contralor CDMX: solo ver dashboard, no autorizar (misma visibilidad que AD)
-          const esCFCDMX = rolClave === "CF_CDMX" || (/contralor/.test(rolNormNombre) && /cdmx/.test(rolNormNombre)) || (/contralor/.test(nombreUsuarioNorm) && /cdmx/.test(nombreUsuarioNorm));
-          const esGA = rolClave === "GA";
-          const role = esZP ? "ZP" : esAD ? "AD" : esCFCDMX ? "CF_CDMX" : esGA ? "GA" : "GG";
-          let plantasPermitidas = [];
-          if (esZP || esAD || esCFCDMX) {
-            const plantas = await getPlantas(client);
-            plantasPermitidas = (plantas || []).map((p) => p.id).filter(Number.isFinite);
-          } else if (actor.planta_id != null) {
-            plantasPermitidas = getPlantaIdsEquivalentesForPendientes(actor.planta_id);
-          }
-          const token = createDashboardToken({
-            role,
-            actor_id: actor.id,
-            plantas_permitidas: plantasPermitidas,
-            default_filters: {},
-          });
-          const baseUrl = (process.env.DASHBOARD_URL || process.env.FRONTEND_URL || "").trim() || "https://dashboard.example.com";
-          const link = `${baseUrl.replace(/\/$/, "")}/dashboard?t=${encodeURIComponent(token)}`;
-          let msg = "📊 Dashboard de Folios\n\n";
-          if (subcmd === "resumen") {
-            const filters = parseDashboardFilters({});
-            const { where, params } = buildDashboardWhere(
-              { role, plantas_permitidas: plantasPermitidas },
-              { ...filters, soloActivos: true }
-            );
-            const whereActivos = where + " AND UPPER(TRIM(COALESCE(f.estatus,''))) NOT IN ('CERRADO','CANCELADO')";
-            const k = await client.query(`SELECT COUNT(*)::INT AS total, COALESCE(SUM(f.importe), 0)::NUMERIC AS mxn FROM public.folios f WHERE 1=1 ${whereActivos}`, params);
-            const rZp = await client.query(`SELECT COUNT(*)::INT AS c FROM public.folios f WHERE 1=1 ${where} AND UPPER(TRIM(COALESCE(f.estatus,''))) = 'PENDIENTE_APROB_ZP'`, params);
-            const rOld = await client.query(`SELECT f.folio_codigo, EXTRACT(DAY FROM (NOW() - f.creado_en))::INT AS aging FROM public.folios f WHERE 1=1 ${whereActivos} AND f.creado_en IS NOT NULL ORDER BY f.creado_en ASC LIMIT 1`, params);
-            const total = (k.rows[0] && k.rows[0].total) || 0;
-            const mxn = k.rows[0] && k.rows[0].mxn != null ? Number(k.rows[0].mxn) : null;
-            const pendZp = (rZp.rows[0] && rZp.rows[0].c) || 0;
-            const oldest = rOld.rows[0] ? { folio: rOld.rows[0].folio_codigo, dias: rOld.rows[0].aging } : null;
-            msg += `Folios activos: ${total}\n`;
-            if (mxn != null) msg += `$ comprometido: $${mxn.toLocaleString("es-MX", { minimumFractionDigits: 2 })}\n`;
-            msg += `Pend. aprob. ZP: ${pendZp}\n`;
-            if (oldest) msg += `Más antiguo: ${oldest.folio} (${oldest.dias} días)\n`;
-          }
-          msg += `\n🔗 Acceso (válido 20 min):\n${link}`;
-          const yyyymm = getCurrentYYYYMM();
-          const yF = parseInt(yyyymm.slice(0, 4), 10);
-          const mF = parseInt(yyyymm.slice(4, 6), 10);
-          const botBase = (process.env.BASE_URL || process.env.PUBLIC_URL || "").trim() || `${req.protocol}://${req.get("host") || "localhost"}`;
-          const linkForecast = `${botBase.replace(/\/$/, "")}/api/arr/dashboard-excel?year=${yF}&month=${mF}&t=${encodeURIComponent(token)}`;
-          msg += `\n\n📈 Forecast (Ventas/IGF ${yF}/${mF}):\n${linkForecast}`;
-          const mAnt = mF === 1 ? 12 : mF - 1;
-          const yAnt = mF === 1 ? yF - 1 : yF;
-          const linkForecastAnt = `${botBase.replace(/\/$/, "")}/api/arr/dashboard-excel?year=${yAnt}&month=${mAnt}&t=${encodeURIComponent(token)}`;
-          msg += `\n\n📈 Forecast mes anterior (${yAnt}/${mAnt}):\n${linkForecastAnt}`;
-          if (msg.length > MAX_WHATSAPP_BODY) msg = msg.substring(0, MAX_WHATSAPP_BODY - 30) + "\n...(recortado)\n" + link;
-          return safeReply(msg);
-        } catch (dashboardErr) {
-          console.error("[Dashboard command error]", dashboardErr);
-          return safeReply("Error al generar el enlace del dashboard. Revisa los logs del servidor o contacta al administrador.");
-        }
-      }
-
       const matchCarrito = body.trim().match(/^carrito(\s+agregar\s+(\S+)|\s+quitar\s+(\S+))?$/i);
       if (matchCarrito) {
         if (!actor) {
@@ -8179,97 +8270,6 @@ app.post("/twilio/whatsapp", async (req, res) => {
           await client.query(`UPDATE public.folios SET estatus = $1, presupuesto_id = NULL WHERE id = $2`, [ESTADOS.LISTO_PARA_PROGRAMACION, folio.id]);
           await insertHistorial(client, folio.id, folio.numero_folio, folio.folio_codigo, ESTADOS.LISTO_PARA_PROGRAMACION, "Quitado del presupuesto semanal (carrito)", fromNorm, actor.rol_nombre);
           return safeReply(`✅ Folio ${numero} quitado del carrito.`);
-        }
-      }
-
-      const matchPendientes = body.trim().match(/^(mis\s+pendientes|pendientes)(\s+(\d+))?$/i);
-      if (matchPendientes) {
-        if (!actor) {
-          return safeReply("No estás dado de alta. Contacta al administrador para registrar tu número en el sistema.");
-        }
-        const page = matchPendientes[3] ? parseInt(matchPendientes[3], 10) : 1;
-        const pageSize = 20;
-        const rolClave = (actor.rol_clave && String(actor.rol_clave).toUpperCase()) || "";
-        const esCorporativo = rolClave === "ZP" || rolClave === "CDMX" || (actor.rol_nombre && /director/i.test(actor.rol_nombre) && /zp/i.test(actor.rol_nombre));
-        try {
-          const data = esCorporativo
-            ? await getPendientesForUser(client, from, 1, 500, { corporativo: true })
-            : await getPendientesForUser(client, from, page, pageSize);
-          if (!data) {
-            return safeReply("No estás dado de alta. Contacta al administrador para registrar tu número.");
-          }
-          console.log(`[Pendientes] Actor: ${actor.rol_nombre || rolClave || "?"} (${fromNorm})`);
-          console.log(`[Pendientes] Total encontrados: ${data.totalCount}`);
-          if (data.totalCount === 0) {
-            return safeReply("✅ No tienes pendientes.");
-          }
-          const fmtMxn = (n) => (Number(n) != null && !isNaN(Number(n)) ? Number(n).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00");
-          const truncConcepto = (s, max = 70) => {
-            const t = String(s || "").trim();
-            if (!t) return "";
-            if (t.length <= max) return t;
-            const cut = t.substring(0, max);
-            const lastSpace = cut.lastIndexOf(" ");
-            const pos = lastSpace > 40 ? lastSpace : max;
-            return t.substring(0, pos).trim() + "…";
-          };
-          const fmtFecha = (d) => {
-            if (!d) return "";
-            const dt = new Date(d);
-            const day = dt.getDate();
-            const months = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
-            return `${day} ${months[dt.getMonth()]}`;
-          };
-          const esUrgente = (r) => r.prioridad && (String(r.prioridad).toLowerCase().includes("urgente") || String(r.prioridad).toLowerCase().includes("alta"));
-          const shortNum = (r) => (r.numero_folio || "").replace(/^F-\d{6}-/, "") || (r.numero_folio || "");
-
-          let out = "📌 MIS PENDIENTES\n\n";
-          if (data.corporativo && data.rows.length > 0) {
-            const byPlanta = {};
-            for (const r of data.rows) {
-              const p = (r.planta_nombre || "Sin planta").trim();
-              if (!byPlanta[p]) byPlanta[p] = [];
-              byPlanta[p].push(r);
-            }
-            const plantasOrden = Object.keys(byPlanta).sort();
-            console.log(`[Pendientes] Plantas involucradas: ${plantasOrden.join(", ")}`);
-            for (const nombrePlanta of plantasOrden) {
-              const filas = byPlanta[nombrePlanta];
-              out += `🏭 ${nombrePlanta}\n`;
-              out += "-------------------\n";
-              for (const r of filas) {
-                const urg = esUrgente(r) ? "🔴 " : "⚪ ";
-                out += `${urg}${shortNum(r)} | $${fmtMxn(r.importe)}\n`;
-                out += `Concepto: ${truncConcepto(r.concepto, 60)}\n`;
-                out += `Estado: ${r.estatus || "—"}\n`;
-                out += `Fecha: ${fmtFecha(r.fecha_base)}\n\n`;
-              }
-              out += `Total ${nombrePlanta}: ${filas.length} folio${filas.length !== 1 ? "s" : ""}\n\n`;
-            }
-          } else {
-            for (const r of data.rows) {
-              const urg = esUrgente(r) ? "🔴 " : "⚪ ";
-              const plantaNombreRow = data.plantaInfo.nombre || "—";
-              out += `${urg}${shortNum(r)} | ${plantaNombreRow} | $${fmtMxn(r.importe)}\n`;
-              out += `Concepto: ${truncConcepto(r.concepto, 60)}\n`;
-              out += `Estado: ${r.estatus || "—"}\n`;
-              out += `Fecha: ${fmtFecha(r.fecha_base)}\n\n`;
-            }
-            if (page < data.totalPages) out += `Página ${page}/${data.totalPages}. Responde "mis pendientes ${page + 1}" para ver más.\n\n`;
-          }
-
-          out += "-------------------\n";
-          out += `Total urgentes: ${data.urgentesCount}\n`;
-          out += `Total pendientes: ${data.totalCount}`;
-
-          if (out.length > 3500) {
-            out = out.substring(0, 3400) + "\n\n... (mensaje recortado por límite de WhatsApp)";
-          }
-          console.log(`[Pendientes] chars=${out.length}`);
-          return safeReply(out);
-        } catch (e) {
-          console.warn("getPendientesForUser error:", e.message);
-          return safeReply("Error al cargar pendientes. Intenta más tarde.");
         }
       }
 
