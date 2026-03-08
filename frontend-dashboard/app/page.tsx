@@ -38,7 +38,7 @@ function normalizeEmpresa(s: string): string {
     .toLowerCase()
     .replace(/\s+/g, " ")
     .normalize("NFD")
-    .replace(/\p{M}/gu, "");
+    .replace(/[\u0300-\u036f]/g, "");
 }
 
 function findRowByPlanta(rows: IgfForecastRow[], planta: string): IgfForecastRow | undefined {
