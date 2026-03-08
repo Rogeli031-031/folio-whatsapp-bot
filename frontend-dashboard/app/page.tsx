@@ -405,7 +405,7 @@ function KpiContent() {
                           const hasDelta = d !== null;
                           return (
                             <td key={c.key} className={`py-2 px-2 text-right tabular-nums ${hasDelta && d! > 0 ? "text-green-400" : hasDelta && d! < 0 ? "text-red-400" : "text-slate-400"}`}>
-                              {hasDelta ? (d! >= 0 ? "+" : "") + (c.isPct ? fmtNum(d!, 1) : c.fmt(d!)) : "—"}
+                              {hasDelta ? "MXN " + ((d! >= 0 ? "+" : "") + (c.isPct ? fmtNum(d!, 1) : c.fmt(d!))) : "—"}
                             </td>
                           );
                         })}
