@@ -43,9 +43,19 @@ function normalizeEmpresa(s: string): string {
 
 function findRowByPlanta(rows: IgfForecastRow[], planta: string): IgfForecastRow | undefined {
   const norm = normalizeEmpresa(planta);
+  const exact = rows.find((r) => (r.empresa?.trim() || "") === planta);
+  if (exact) return exact;
+  const normMatch = rows.find((r) => normalizeEmpresa(r.empresa || "") === norm);
+  if (normMatch) return normMatch;
+  const suffix = (planta.split(" - ").pop() || planta).trim();
+  const normSuffix = normalizeEmpresa(suffix);
+  if (!normSuffix) return undefined;
   return (
-    rows.find((r) => (r.empresa?.trim() || "") === planta) ??
-    rows.find((r) => normalizeEmpresa(r.empresa || "") === norm)
+    rows.find((r) => normalizeEmpresa(r.empresa || "") === normSuffix) ??
+    rows.find((r) => {
+      const rn = normalizeEmpresa(r.empresa || "");
+      return rn.indexOf(normSuffix) >= 0 || normSuffix.indexOf(rn) >= 0;
+    })
   );
 }
 
