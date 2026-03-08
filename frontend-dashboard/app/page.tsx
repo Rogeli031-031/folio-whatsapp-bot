@@ -32,6 +32,23 @@ function fmtNum(v: number | null, decimals = 2): string {
   return v.toLocaleString("es-MX", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 }
 
+function normalizeEmpresa(s: string): string {
+  return (s || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "");
+}
+
+function findRowByPlanta(rows: IgfForecastRow[], planta: string): IgfForecastRow | undefined {
+  const norm = normalizeEmpresa(planta);
+  return (
+    rows.find((r) => (r.empresa?.trim() || "") === planta) ??
+    rows.find((r) => normalizeEmpresa(r.empresa || "") === norm)
+  );
+}
+
 function KpiContent() {
   const searchParams = useSearchParams();
   const [token, setToken] = useState<string | null>(null);
@@ -111,7 +128,7 @@ function KpiContent() {
       <main className={plantaFilter ? "flex-1 p-4 flex flex-col" : "flex-1 p-4"}>
         <section className={`rounded-lg border border-slate-700 bg-slate-800/60 p-4 ${plantaFilter ? "flex-shrink-0" : ""}`}>
           <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-            <h2 className="text-lg font-medium text-slate-200">IGF Forecast</h2>
+            <h2 className="text-lg font-medium text-slate-200">{plantaFilter ? "Comparación por planta" : "IGF Forecast"}</h2>
             <div className="flex flex-wrap items-center gap-2">
               {igfForecast && (
                 <>
@@ -136,6 +153,8 @@ function KpiContent() {
               )}
             </div>
           </div>
+          {!plantaFilter && (
+          <>
           {igfLoading && <p className="text-sm text-slate-400">Cargando datos…</p>}
           {igfError && <p className="text-sm text-red-400">{igfError}</p>}
           {!igfLoading && !igfError && igfForecast && (
@@ -293,18 +312,17 @@ function KpiContent() {
               )}
             </div>
           )}
+          </>
+          )}
         </section>
         {plantaFilter && igfForecast && (
           <section className="mt-6 rounded-lg border border-slate-700 bg-slate-800/60 p-4 flex-shrink-0">
             <h3 className="text-base font-medium text-slate-200 mb-2">Comparación IGF Forecast vs última versión del mes anterior</h3>
             {igfMesAnteriorLoading && <p className="text-sm text-slate-400">Cargando mes anterior…</p>}
-            {!igfMesAnteriorLoading && (!igfMesAnterior || !igfMesAnterior.rows.find((r) => (r.empresa?.trim() || "") === plantaFilter)) && (
-              <p className="text-sm text-slate-500">No hay versión del mes anterior para esta planta.</p>
-            )}
-            {!igfMesAnteriorLoading && igfForecast && igfMesAnterior && (() => {
-              const rowF = igfForecast.rows.find((r) => (r.empresa?.trim() || "") === plantaFilter);
-              const rowA = igfMesAnterior.rows.find((r) => (r.empresa?.trim() || "") === plantaFilter);
-              if (!rowF || !rowA) return null;
+            {!igfMesAnteriorLoading && igfForecast && (() => {
+              const rowF = findRowByPlanta(igfForecast.rows, plantaFilter);
+              const rowA = igfMesAnterior ? findRowByPlanta(igfMesAnterior.rows, plantaFilter) : undefined;
+              if (!rowF) return <p className="text-sm text-slate-500">No hay datos de forecast para esta planta.</p>;
               const n = (v: number | null | undefined) => (v != null && !Number.isNaN(Number(v)) ? Number(v) : 0);
               const delta = (a: number | null | undefined, b: number | null | undefined) => n(a) - n(b);
               type Col = { key: string; label: string; fmt: (v: number) => string; isPct?: boolean };
@@ -328,14 +346,15 @@ function KpiContent() {
                 { key: "resultado_final_kg", label: "Resultado ($/kg)", fmt: (v) => fmtNum(v) },
                 { key: "resultado_final_importe", label: "Resultado (Importe)", fmt: (v) => fmtNum(v, 0) },
               ];
-              const cellVal = (row: IgfForecastRow, c: Col) => {
+              const cellVal = (row: IgfForecastRow | undefined, c: Col) => {
+                if (!row) return "—";
                 if (c.key === "empresa") return row.empresa ?? "—";
                 const v = (row as Record<string, unknown>)[c.key];
                 if (c.isPct && v != null) return (Number(v) * 100).toFixed(1);
                 return fmtNum(v as number | null ?? null, c.key.includes("importe") || c.key === "util_oper_importe" || c.key === "resultado_final_importe" ? 0 : 2);
               };
-              const cellDeltaNum = (c: Col) => {
-                if (c.key === "empresa") return 0;
+              const cellDeltaNum = (c: Col): number | null => {
+                if (c.key === "empresa" || !rowA) return null;
                 const vF = (rowF as Record<string, unknown>)[c.key] as number | null | undefined;
                 const vA = (rowA as Record<string, unknown>)[c.key] as number | null | undefined;
                 return c.isPct ? (n(vF) - n(vA)) * 100 : delta(vF, vA);
@@ -373,9 +392,10 @@ function KpiContent() {
                         <td className="py-2 px-2 text-[0.6em] font-semibold text-slate-200 border-r border-slate-600">Cambio</td>
                         {cols.slice(1).map((c) => {
                           const d = cellDeltaNum(c);
+                          const hasDelta = d !== null;
                           return (
-                            <td key={c.key} className={`py-2 px-2 text-right tabular-nums ${d > 0 ? "text-green-400" : d < 0 ? "text-red-400" : "text-slate-400"}`}>
-                              {(d >= 0 ? "+" : "") + (c.isPct ? fmtNum(d, 1) : c.fmt(d))}
+                            <td key={c.key} className={`py-2 px-2 text-right tabular-nums ${hasDelta && d! > 0 ? "text-green-400" : hasDelta && d! < 0 ? "text-red-400" : "text-slate-400"}`}>
+                              {hasDelta ? (d! >= 0 ? "+" : "") + (c.isPct ? fmtNum(d!, 1) : c.fmt(d!)) : "—"}
                             </td>
                           );
                         })}
