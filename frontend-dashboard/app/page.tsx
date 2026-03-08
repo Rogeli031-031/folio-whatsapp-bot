@@ -377,7 +377,7 @@ function KpiContent() {
                 const vA = (rowA as Record<string, unknown>)[c.key] as number | null | undefined;
                 if (c.key === "venta_ton") {
                   const deltaTon = n(vF) - n(vA);
-                  const resultadoKgA = n((rowA as Record<string, unknown>).resultado_final_kg);
+                  const resultadoKgA = n((rowA as Record<string, unknown>).resultado_final_kg as number | null | undefined);
                   return deltaTon * 1000 * resultadoKgA;
                 }
                 if (c.key === "util_oper_importe" || c.key === "resultado_final_importe") return delta(vF, vA);
