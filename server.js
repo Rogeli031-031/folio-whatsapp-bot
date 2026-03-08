@@ -5436,6 +5436,8 @@ async function buildIgfForecastPayload(client, year, month) {
       row.deposito_cierre_kg = ventaKg > 0 && totalDepositoCierre > 0
         ? Math.round((-totalDepositoCierre / ventaKg) * 100) / 100
         : null;
+      const n = (x) => (x != null && Number.isFinite(Number(x)) ? Number(x) : 0);
+      row.gasto_kg = Math.round((n(row.presupuesto_kg) + n(row.folios_aprob_zp_kg) + n(row.folios_carro_kg) + n(row.deposito_cierre_kg)) * 100) / 100;
       const calc = recalcularUtilYResultado(row);
       row.util_oper_kg = calc.util_oper_kg;
       row.util_oper_importe = calc.util_oper_importe;

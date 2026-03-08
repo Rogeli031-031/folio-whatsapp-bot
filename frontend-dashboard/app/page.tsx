@@ -41,6 +41,8 @@ function KpiContent() {
   const [igfError, setIgfError] = useState<string | null>(null);
   const [hgSaving, setHgSaving] = useState<string | null>(null);
   const [plantaFilter, setPlantaFilter] = useState<string>("");
+  const [igfMesAnterior, setIgfMesAnterior] = useState<IgfForecastResponse | null>(null);
+  const [igfMesAnteriorLoading, setIgfMesAnteriorLoading] = useState(false);
 
   useEffect(() => {
     const t = parseTokenFromQuery(searchParams) || getTokenFromStorage();
@@ -63,6 +65,22 @@ function KpiContent() {
       .catch((e) => setIgfError(e.message || "Error al cargar IGF Forecast"))
       .finally(() => setIgfLoading(false));
   }, [token]);
+
+  useEffect(() => {
+    if (!token || !igfForecast || !plantaFilter) {
+      setIgfMesAnterior(null);
+      return;
+    }
+    const y = igfForecast.year;
+    const m = igfForecast.month;
+    const prevMonth = m === 1 ? 12 : m - 1;
+    const prevYear = m === 1 ? y - 1 : y;
+    setIgfMesAnteriorLoading(true);
+    fetchIgfForecast(token, { year: prevYear, month: prevMonth })
+      .then(setIgfMesAnterior)
+      .catch(() => setIgfMesAnterior(null))
+      .finally(() => setIgfMesAnteriorLoading(false));
+  }, [token, plantaFilter, igfForecast?.year, igfForecast?.month]);
 
   if (unauthorized) {
     return (
@@ -89,7 +107,6 @@ function KpiContent() {
     <div className="min-h-screen flex flex-col">
       <div className="border-b border-slate-700 bg-slate-900/50 px-4 py-3">
         <h1 className="text-xl font-semibold text-white">KPI Financieros</h1>
-        <p className="mt-1 text-sm text-slate-400">IGF Forecast y métricas por planta / provincia</p>
       </div>
       <main className={plantaFilter ? "flex-1 p-4 flex flex-col" : "flex-1 p-4"}>
         <section className={`rounded-lg border border-slate-700 bg-slate-800/60 p-4 ${plantaFilter ? "flex-shrink-0" : ""}`}>
@@ -130,10 +147,16 @@ function KpiContent() {
                     <th className="text-right py-2.5 px-2 font-semibold text-slate-300 border-r border-slate-600">Venta (ton)</th>
                     <th className="text-right py-2.5 px-2 font-semibold text-slate-300">Margen ($/kg)</th>
                     <th className="text-right py-2.5 px-2 font-semibold text-slate-300">Com. y Desc. ($/kg)</th>
-                    <th className="text-right py-2.5 px-2 font-semibold text-slate-300">Presupuesto ($/kg)</th>
-                    <th className="text-right py-2.5 px-2 font-semibold text-slate-300">Folios Aprob. Director ZP ($/kg)</th>
-                    <th className="text-right py-2.5 px-2 font-semibold text-slate-300">Folios en carro ($/kg)</th>
-                    <th className="text-right py-2.5 px-2 font-semibold text-slate-300">Depósito y cierre ($/kg)</th>
+                    {plantaFilter ? (
+                      <th className="text-right py-2.5 px-2 font-semibold text-slate-300">Gasto ($/kg)</th>
+                    ) : (
+                      <>
+                        <th className="text-right py-2.5 px-2 font-semibold text-slate-300">Presupuesto ($/kg)</th>
+                        <th className="text-right py-2.5 px-2 font-semibold text-slate-300">Folios Aprob. Director ZP ($/kg)</th>
+                        <th className="text-right py-2.5 px-2 font-semibold text-slate-300">Folios en carro ($/kg)</th>
+                        <th className="text-right py-2.5 px-2 font-semibold text-slate-300">Depósito y cierre ($/kg)</th>
+                      </>
+                    )}
                     <th className="text-right py-2.5 px-2 font-semibold text-slate-300">Impuesto ($/kg)</th>
                     <th className="text-right py-2.5 px-2 font-semibold text-slate-300">HG (%)</th>
                     <th className="text-right py-2.5 px-2 font-semibold text-slate-300">HG ($/kg)</th>
@@ -172,12 +195,20 @@ function KpiContent() {
                         <td className="py-2 px-2 text-right tabular-nums text-slate-300 border-r border-slate-600">{fmtNum(row.venta_ton, 2)}</td>
                         <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(row.margen_kg)}</td>
                         <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(row.com_desc_kg)}</td>
-                        <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(row.presupuesto_kg ?? null)}</td>
-                        <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(row.folios_aprob_zp_kg ?? null)}</td>
-                        <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(row.folios_carro_kg ?? null)}</td>
-                        <td className={`py-2 px-2 text-right tabular-nums ${row.deposito_cierre_kg != null && Number(row.deposito_cierre_kg) < 0 ? "text-red-400" : "text-slate-300"}`}>
-                          {fmtNum(row.deposito_cierre_kg ?? null)}
-                        </td>
+                        {plantaFilter ? (
+                          <td className={`py-2 px-2 text-right tabular-nums ${row.gasto_kg != null && Number(row.gasto_kg) < 0 ? "text-red-400" : "text-slate-300"}`}>
+                            {fmtNum(row.gasto_kg ?? null)}
+                          </td>
+                        ) : (
+                          <>
+                            <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(row.presupuesto_kg ?? null)}</td>
+                            <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(row.folios_aprob_zp_kg ?? null)}</td>
+                            <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(row.folios_carro_kg ?? null)}</td>
+                            <td className={`py-2 px-2 text-right tabular-nums ${row.deposito_cierre_kg != null && Number(row.deposito_cierre_kg) < 0 ? "text-red-400" : "text-slate-300"}`}>
+                              {fmtNum(row.deposito_cierre_kg ?? null)}
+                            </td>
+                          </>
+                        )}
                         <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(row.impuesto_kg)}</td>
                         <td className="py-2 px-2 text-right text-slate-300">
                           <input
@@ -262,10 +293,89 @@ function KpiContent() {
               )}
             </div>
           )}
-          <p className="mt-3 text-xs text-slate-500">
-            Próximamente: presupuesto, folios Carro/Depósito y botones por rol.
-          </p>
         </section>
+        {plantaFilter && igfForecast && (
+          <>
+            <section className="mt-6 rounded-lg border border-slate-700 bg-slate-800/60 p-4 flex-shrink-0">
+              <h3 className="text-base font-medium text-slate-200 mb-2">IGF última versión del mes anterior</h3>
+              {igfMesAnteriorLoading && <p className="text-sm text-slate-400">Cargando…</p>}
+              {!igfMesAnteriorLoading && igfMesAnterior && (() => {
+                const rowAnterior = igfMesAnterior.rows.find((r) => (r.empresa?.trim() || "") === plantaFilter);
+                if (!rowAnterior) return <p className="text-sm text-slate-500">Sin datos del mes anterior para esta planta.</p>;
+                return (
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse text-sm">
+                      <thead>
+                        <tr className="border-b border-slate-600 bg-slate-800/80 text-[0.6em]">
+                          <th className="text-left py-2 px-2 font-semibold text-slate-300">Empresa</th>
+                          <th className="text-right py-2 px-2 font-semibold text-slate-300">Venta (ton)</th>
+                          <th className="text-right py-2 px-2 font-semibold text-slate-300">Margen ($/kg)</th>
+                          <th className="text-right py-2 px-2 font-semibold text-slate-300">Com. y Desc. ($/kg)</th>
+                          <th className="text-right py-2 px-2 font-semibold text-slate-300">Gasto ($/kg)</th>
+                          <th className="text-right py-2 px-2 font-semibold text-slate-300">Impuesto ($/kg)</th>
+                          <th className="text-right py-2 px-2 font-semibold text-slate-300">HG ($/kg)</th>
+                          <th className="text-right py-2 px-2 font-semibold text-slate-300">Util. Oper. ($/kg)</th>
+                          <th className="text-right py-2 px-2 font-semibold text-slate-300">Util. Oper. (Importe)</th>
+                          <th className="text-right py-2 px-2 font-semibold text-slate-300">Resultado ($/kg)</th>
+                          <th className="text-right py-2 px-2 font-semibold text-slate-300">Resultado (Importe)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr className="border-b border-slate-700/80">
+                          <td className="py-2 px-2 font-semibold text-slate-100">{rowAnterior.empresa}</td>
+                          <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(rowAnterior.venta_ton, 2)}</td>
+                          <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(rowAnterior.margen_kg)}</td>
+                          <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(rowAnterior.com_desc_kg)}</td>
+                          <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(rowAnterior.gasto_kg ?? null)}</td>
+                          <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(rowAnterior.impuesto_kg)}</td>
+                          <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(rowAnterior.hg_kg ?? null)}</td>
+                          <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(rowAnterior.util_oper_kg ?? null)}</td>
+                          <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(rowAnterior.util_oper_importe ?? null, 0)}</td>
+                          <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(rowAnterior.resultado_final_kg ?? null)}</td>
+                          <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(rowAnterior.resultado_final_importe ?? null, 0)}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
+              {!igfMesAnteriorLoading && !igfMesAnterior && <p className="text-sm text-slate-500">No hay versión del mes anterior.</p>}
+            </section>
+            {igfForecast && igfMesAnterior && (() => {
+              const rowF = igfForecast.rows.find((r) => (r.empresa?.trim() || "") === plantaFilter);
+              const rowA = igfMesAnterior.rows.find((r) => (r.empresa?.trim() || "") === plantaFilter);
+              if (!rowF || !rowA) return null;
+              const n = (v: number | null | undefined) => (v != null && !Number.isNaN(Number(v)) ? Number(v) : 0);
+              const delta = (a: number | null | undefined, b: number | null | undefined) => n(a) - n(b);
+              const items = [
+                { label: "Venta (ton)", cambio: delta(rowF.venta_ton, rowA.venta_ton), fmt: (x: number) => fmtNum(x, 2) },
+                { label: "Com. y Desc. ($/kg)", cambio: delta(rowF.com_desc_kg, rowA.com_desc_kg), fmt: fmtNum },
+                { label: "Gasto ($/kg)", cambio: delta(rowF.gasto_kg, rowA.gasto_kg), fmt: fmtNum },
+                { label: "Impuesto ($/kg)", cambio: delta(rowF.impuesto_kg, rowA.impuesto_kg), fmt: fmtNum },
+                { label: "HG ($/kg)", cambio: delta(rowF.hg_kg, rowA.hg_kg), fmt: fmtNum },
+                { label: "Util. Oper. ($/kg)", cambio: delta(rowF.util_oper_kg, rowA.util_oper_kg), fmt: fmtNum },
+                { label: "Util. Oper. (Importe)", cambio: delta(rowF.util_oper_importe, rowA.util_oper_importe), fmt: (x: number) => fmtNum(x, 0) },
+                { label: "Resultado ($/kg)", cambio: delta(rowF.resultado_final_kg, rowA.resultado_final_kg), fmt: fmtNum },
+                { label: "Resultado (Importe)", cambio: delta(rowF.resultado_final_importe, rowA.resultado_final_importe), fmt: (x: number) => fmtNum(x, 0) },
+              ];
+              return (
+                <section className="mt-4 rounded-lg border border-slate-700 bg-slate-800/60 p-4 flex-shrink-0">
+                  <h3 className="text-base font-medium text-slate-200 mb-3">Cómo cambió cada variable (Forecast vs mes anterior)</h3>
+                  <ul className="space-y-1.5 text-sm">
+                    {items.map(({ label, cambio, fmt }) => (
+                      <li key={label} className="flex justify-between gap-4 text-slate-300">
+                        <span>{label}:</span>
+                        <span className={cambio > 0 ? "text-green-400" : cambio < 0 ? "text-red-400" : ""}>
+                          {cambio >= 0 ? "+" : ""}{fmt(cambio)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              );
+            })()}
+          </>
+        )}
         <div className="mt-4 flex flex-wrap gap-3 flex-shrink-0">
           <Link
             href="/dashboard"
