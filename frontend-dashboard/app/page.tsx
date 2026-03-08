@@ -376,9 +376,10 @@ function KpiContent() {
                 const vF = (rowF as Record<string, unknown>)[c.key] as number | null | undefined;
                 const vA = (rowA as Record<string, unknown>)[c.key] as number | null | undefined;
                 if (c.key === "venta_ton") {
-                  const deltaTon = n(vF) - n(vA);
-                  const resultadoKgA = n((rowA as Record<string, unknown>).resultado_final_kg as number | null | undefined);
-                  return deltaTon * 1000 * resultadoKgA;
+                  const deltaVentaKg = (n(vF) - n(vA)) * 1000;
+                  const margenF = n((rowF as Record<string, unknown>).margen_kg as number | null | undefined);
+                  const comDescF = n((rowF as Record<string, unknown>).com_desc_kg as number | null | undefined);
+                  return (margenF + comDescF) * deltaVentaKg;
                 }
                 if (c.key === "util_oper_importe" || c.key === "resultado_final_importe") return delta(vF, vA);
                 const deltaKg = c.isPct ? (n(vF) - n(vA)) * 100 : delta(vF, vA);
