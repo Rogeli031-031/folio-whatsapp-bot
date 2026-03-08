@@ -295,86 +295,97 @@ function KpiContent() {
           )}
         </section>
         {plantaFilter && igfForecast && (
-          <>
-            <section className="mt-6 rounded-lg border border-slate-700 bg-slate-800/60 p-4 flex-shrink-0">
-              <h3 className="text-base font-medium text-slate-200 mb-2">IGF última versión del mes anterior</h3>
-              {igfMesAnteriorLoading && <p className="text-sm text-slate-400">Cargando…</p>}
-              {!igfMesAnteriorLoading && igfMesAnterior && (() => {
-                const rowAnterior = igfMesAnterior.rows.find((r) => (r.empresa?.trim() || "") === plantaFilter);
-                if (!rowAnterior) return <p className="text-sm text-slate-500">Sin datos del mes anterior para esta planta.</p>;
-                return (
-                  <div className="overflow-x-auto">
-                    <table className="w-full border-collapse text-sm">
-                      <thead>
-                        <tr className="border-b border-slate-600 bg-slate-800/80 text-[0.6em]">
-                          <th className="text-left py-2 px-2 font-semibold text-slate-300">Empresa</th>
-                          <th className="text-right py-2 px-2 font-semibold text-slate-300">Venta (ton)</th>
-                          <th className="text-right py-2 px-2 font-semibold text-slate-300">Margen ($/kg)</th>
-                          <th className="text-right py-2 px-2 font-semibold text-slate-300">Com. y Desc. ($/kg)</th>
-                          <th className="text-right py-2 px-2 font-semibold text-slate-300">Gasto ($/kg)</th>
-                          <th className="text-right py-2 px-2 font-semibold text-slate-300">Impuesto ($/kg)</th>
-                          <th className="text-right py-2 px-2 font-semibold text-slate-300">HG ($/kg)</th>
-                          <th className="text-right py-2 px-2 font-semibold text-slate-300">Util. Oper. ($/kg)</th>
-                          <th className="text-right py-2 px-2 font-semibold text-slate-300">Util. Oper. (Importe)</th>
-                          <th className="text-right py-2 px-2 font-semibold text-slate-300">Resultado ($/kg)</th>
-                          <th className="text-right py-2 px-2 font-semibold text-slate-300">Resultado (Importe)</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr className="border-b border-slate-700/80">
-                          <td className="py-2 px-2 font-semibold text-slate-100">{rowAnterior.empresa}</td>
-                          <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(rowAnterior.venta_ton, 2)}</td>
-                          <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(rowAnterior.margen_kg)}</td>
-                          <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(rowAnterior.com_desc_kg)}</td>
-                          <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(rowAnterior.gasto_kg ?? null)}</td>
-                          <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(rowAnterior.impuesto_kg)}</td>
-                          <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(rowAnterior.hg_kg ?? null)}</td>
-                          <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(rowAnterior.util_oper_kg ?? null)}</td>
-                          <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(rowAnterior.util_oper_importe ?? null, 0)}</td>
-                          <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(rowAnterior.resultado_final_kg ?? null)}</td>
-                          <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(rowAnterior.resultado_final_importe ?? null, 0)}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                );
-              })()}
-              {!igfMesAnteriorLoading && !igfMesAnterior && <p className="text-sm text-slate-500">No hay versión del mes anterior.</p>}
-            </section>
-            {igfForecast && igfMesAnterior && (() => {
+          <section className="mt-6 rounded-lg border border-slate-700 bg-slate-800/60 p-4 flex-shrink-0">
+            <h3 className="text-base font-medium text-slate-200 mb-2">Comparación IGF Forecast vs última versión del mes anterior</h3>
+            {igfMesAnteriorLoading && <p className="text-sm text-slate-400">Cargando mes anterior…</p>}
+            {!igfMesAnteriorLoading && (!igfMesAnterior || !igfMesAnterior.rows.find((r) => (r.empresa?.trim() || "") === plantaFilter)) && (
+              <p className="text-sm text-slate-500">No hay versión del mes anterior para esta planta.</p>
+            )}
+            {!igfMesAnteriorLoading && igfForecast && igfMesAnterior && (() => {
               const rowF = igfForecast.rows.find((r) => (r.empresa?.trim() || "") === plantaFilter);
               const rowA = igfMesAnterior.rows.find((r) => (r.empresa?.trim() || "") === plantaFilter);
               if (!rowF || !rowA) return null;
               const n = (v: number | null | undefined) => (v != null && !Number.isNaN(Number(v)) ? Number(v) : 0);
               const delta = (a: number | null | undefined, b: number | null | undefined) => n(a) - n(b);
-              const items = [
-                { label: "Venta (ton)", cambio: delta(rowF.venta_ton, rowA.venta_ton), fmt: (x: number) => fmtNum(x, 2) },
-                { label: "Com. y Desc. ($/kg)", cambio: delta(rowF.com_desc_kg, rowA.com_desc_kg), fmt: fmtNum },
-                { label: "Gasto ($/kg)", cambio: delta(rowF.gasto_kg, rowA.gasto_kg), fmt: fmtNum },
-                { label: "Impuesto ($/kg)", cambio: delta(rowF.impuesto_kg, rowA.impuesto_kg), fmt: fmtNum },
-                { label: "HG ($/kg)", cambio: delta(rowF.hg_kg, rowA.hg_kg), fmt: fmtNum },
-                { label: "Util. Oper. ($/kg)", cambio: delta(rowF.util_oper_kg, rowA.util_oper_kg), fmt: fmtNum },
-                { label: "Util. Oper. (Importe)", cambio: delta(rowF.util_oper_importe, rowA.util_oper_importe), fmt: (x: number) => fmtNum(x, 0) },
-                { label: "Resultado ($/kg)", cambio: delta(rowF.resultado_final_kg, rowA.resultado_final_kg), fmt: fmtNum },
-                { label: "Resultado (Importe)", cambio: delta(rowF.resultado_final_importe, rowA.resultado_final_importe), fmt: (x: number) => fmtNum(x, 0) },
+              type Col = { key: string; label: string; fmt: (v: number) => string; isPct?: boolean };
+              const cols: Col[] = [
+                { key: "empresa", label: "Empresa", fmt: () => "" },
+                { key: "venta_ton", label: "Venta (ton)", fmt: (v) => fmtNum(v, 2) },
+                { key: "margen_kg", label: "Margen ($/kg)", fmt: (v) => fmtNum(v) },
+                { key: "com_desc_kg", label: "Com. y Desc. ($/kg)", fmt: (v) => fmtNum(v) },
+                { key: "gasto_kg", label: "Gasto ($/kg)", fmt: (v) => fmtNum(v) },
+                { key: "impuesto_kg", label: "Impuesto ($/kg)", fmt: (v) => fmtNum(v) },
+                { key: "hg_pct", label: "HG (%)", fmt: (v) => fmtNum(v * 100, 1), isPct: true },
+                { key: "hg_kg", label: "HG ($/kg)", fmt: (v) => fmtNum(v) },
+                { key: "bancos_planta_kg", label: "Bancos Planta", fmt: (v) => fmtNum(v) },
+                { key: "provision_planta_kg", label: "Prov. Planta", fmt: (v) => fmtNum(v) },
+                { key: "util_oper_kg", label: "Util. Oper. ($/kg)", fmt: (v) => fmtNum(v) },
+                { key: "util_oper_importe", label: "Util. Oper. (Importe)", fmt: (v) => fmtNum(v, 0) },
+                { key: "gtos_apoyos_corp_kg", label: "Gtos/Apoyos Corp", fmt: (v) => fmtNum(v) },
+                { key: "bancos_corp_kg", label: "Bancos Corp.", fmt: (v) => fmtNum(v) },
+                { key: "otros_programas_kg", label: "Otros Programas", fmt: (v) => fmtNum(v) },
+                { key: "inversiones_kg", label: "Inversiones", fmt: (v) => fmtNum(v) },
+                { key: "resultado_final_kg", label: "Resultado ($/kg)", fmt: (v) => fmtNum(v) },
+                { key: "resultado_final_importe", label: "Resultado (Importe)", fmt: (v) => fmtNum(v, 0) },
               ];
+              const cellVal = (row: IgfForecastRow, c: Col) => {
+                if (c.key === "empresa") return row.empresa ?? "—";
+                const v = (row as Record<string, unknown>)[c.key];
+                if (c.isPct && v != null) return (Number(v) * 100).toFixed(1);
+                return fmtNum(v as number | null ?? null, c.key.includes("importe") || c.key === "util_oper_importe" || c.key === "resultado_final_importe" ? 0 : 2);
+              };
+              const cellDeltaNum = (c: Col) => {
+                if (c.key === "empresa") return 0;
+                const vF = (rowF as Record<string, unknown>)[c.key] as number | null | undefined;
+                const vA = (rowA as Record<string, unknown>)[c.key] as number | null | undefined;
+                return c.isPct ? (n(vF) - n(vA)) * 100 : delta(vF, vA);
+              };
               return (
-                <section className="mt-4 rounded-lg border border-slate-700 bg-slate-800/60 p-4 flex-shrink-0">
-                  <h3 className="text-base font-medium text-slate-200 mb-3">Cómo cambió cada variable (Forecast vs mes anterior)</h3>
-                  <ul className="space-y-1.5 text-sm">
-                    {items.map(({ label, cambio, fmt }) => (
-                      <li key={label} className="flex justify-between gap-4 text-slate-300">
-                        <span>{label}:</span>
-                        <span className={cambio > 0 ? "text-green-400" : cambio < 0 ? "text-red-400" : ""}>
-                          {cambio >= 0 ? "+" : ""}{fmt(cambio)}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-600 bg-slate-800/80 text-[0.6em]">
+                        {cols.map((c) => (
+                          <th key={c.key} className={c.key === "empresa" ? "text-left py-2 px-2 font-semibold text-slate-300 border-r border-slate-600" : "text-right py-2 px-2 font-semibold text-slate-300"}>
+                            {c.label}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="border-b border-slate-600 bg-slate-800/40">
+                        <td className="py-2 px-2 text-[0.6em] font-semibold text-amber-200 border-r border-slate-600">IGF Forecast</td>
+                        {cols.slice(1).map((c) => (
+                          <td key={c.key} className="py-2 px-2 text-right tabular-nums text-slate-300">
+                            {cellVal(rowF, c)}
+                          </td>
+                        ))}
+                      </tr>
+                      <tr className="border-b border-slate-600 bg-slate-800/40">
+                        <td className="py-2 px-2 text-[0.6em] font-semibold text-slate-300 border-r border-slate-600">IGF mes anterior</td>
+                        {cols.slice(1).map((c) => (
+                          <td key={c.key} className="py-2 px-2 text-right tabular-nums text-slate-300">
+                            {cellVal(rowA, c)}
+                          </td>
+                        ))}
+                      </tr>
+                      <tr className="border-t-2 border-slate-500 bg-slate-700/50">
+                        <td className="py-2 px-2 text-[0.6em] font-semibold text-slate-200 border-r border-slate-600">Cambio</td>
+                        {cols.slice(1).map((c) => {
+                          const d = cellDeltaNum(c);
+                          return (
+                            <td key={c.key} className={`py-2 px-2 text-right tabular-nums ${d > 0 ? "text-green-400" : d < 0 ? "text-red-400" : "text-slate-400"}`}>
+                              {(d >= 0 ? "+" : "") + (c.isPct ? fmtNum(d, 1) : c.fmt(d))}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
               );
             })()}
-          </>
+          </section>
         )}
         <div className="mt-4 flex flex-wrap gap-3 flex-shrink-0">
           <Link
