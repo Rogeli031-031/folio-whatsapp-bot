@@ -369,6 +369,22 @@ function KpiContent() {
                 const vA = (rowA as Record<string, unknown>)[c.key] as number | null | undefined;
                 return c.isPct ? (n(vF) - n(vA)) * 100 : delta(vF, vA);
               };
+              const ventaKgA = n((rowA as Record<string, unknown>).venta_ton) * 1000;
+              const cellImpacto = (c: Col): number | null => {
+                if (c.key === "empresa" || !rowA) return null;
+                if (c.key === "hg_pct") return null;
+                const vF = (rowF as Record<string, unknown>)[c.key] as number | null | undefined;
+                const vA = (rowA as Record<string, unknown>)[c.key] as number | null | undefined;
+                if (c.key === "venta_ton") {
+                  const deltaTon = n(vF) - n(vA);
+                  const resultadoKgA = n((rowA as Record<string, unknown>).resultado_final_kg);
+                  return deltaTon * 1000 * resultadoKgA;
+                }
+                if (c.key === "util_oper_importe" || c.key === "resultado_final_importe") return delta(vF, vA);
+                const deltaKg = c.isPct ? (n(vF) - n(vA)) * 100 : delta(vF, vA);
+                if (c.isPct) return null;
+                return deltaKg * ventaKgA;
+              };
               return (
                 <div className="overflow-x-auto">
                   <table className="w-full border-collapse text-sm">
@@ -405,7 +421,19 @@ function KpiContent() {
                           const hasDelta = d !== null;
                           return (
                             <td key={c.key} className={`py-2 px-2 text-right tabular-nums ${hasDelta && d! > 0 ? "text-green-400" : hasDelta && d! < 0 ? "text-red-400" : "text-slate-400"}`}>
-                              {hasDelta ? "MXN " + ((d! >= 0 ? "+" : "") + (c.isPct ? fmtNum(d!, 1) : c.fmt(d!))) : "—"}
+                              {hasDelta ? (d! >= 0 ? "+" : "") + (c.isPct ? fmtNum(d!, 1) : c.fmt(d!)) : "—"}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                      <tr className="border-t border-slate-600 bg-slate-700/40">
+                        <td className="py-2 px-2 text-[0.6em] font-semibold text-slate-300 border-r border-slate-600">Impacto (Importe)</td>
+                        {cols.slice(1).map((c) => {
+                          const imp = cellImpacto(c);
+                          const hasImp = imp !== null;
+                          return (
+                            <td key={c.key} className={`py-2 px-2 text-right tabular-nums ${hasImp && imp! > 0 ? "text-green-400" : hasImp && imp! < 0 ? "text-red-400" : "text-slate-400"}`}>
+                              {hasImp ? (imp! >= 0 ? "+" : "") + fmtNum(imp!, 0) : "—"}
                             </td>
                           );
                         })}
