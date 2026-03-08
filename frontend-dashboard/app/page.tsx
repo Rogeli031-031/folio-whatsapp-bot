@@ -381,6 +381,7 @@ function KpiContent() {
                   const comDescF = n((rowF as Record<string, unknown>).com_desc_kg as number | null | undefined);
                   return (margenF + comDescF) * deltaVentaKg;
                 }
+                if (c.key === "gasto_kg") return (n(vA) - n(vF)) * ventaKgA;
                 if (c.key === "util_oper_importe" || c.key === "resultado_final_importe") return delta(vF, vA);
                 const deltaKg = c.isPct ? (n(vF) - n(vA)) * 100 : delta(vF, vA);
                 if (c.isPct) return null;
