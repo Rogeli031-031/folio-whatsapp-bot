@@ -388,6 +388,7 @@ function KpiContent() {
               const cellImpacto = (c: Col): number | null => {
                 if (c.key === "empresa" || !rowA) return null;
                 if (c.key === "hg_pct") return null;
+                if (c.key === "util_oper_kg") return null;
                 const vF = (rowF as Record<string, unknown>)[c.key] as number | null | undefined;
                 const vA = (rowA as Record<string, unknown>)[c.key] as number | null | undefined;
                 if (c.key === "venta_ton") {
@@ -395,11 +396,11 @@ function KpiContent() {
                   const utilOperF = n((rowF as Record<string, unknown>).util_oper_kg as number | null | undefined);
                   return (ventaKgF - ventaKgA) * utilOperF;
                 }
-                if (c.key === "com_desc_kg") return (n(vA) - n(vF)) * ventaKgA;
-                if (c.key === "gasto_kg") return (n(vA) - n(vF)) * ventaKgA;
-                if (c.key === "impuesto_kg") return (n(vA) - n(vF)) * ventaKgA;
-                if (c.key === "bancos_planta_kg") return (n(vA) - n(vF)) * ventaKgA;
-                if (c.key === "provision_planta_kg") return (n(vA) - n(vF)) * ventaKgA;
+                if (c.key === "com_desc_kg") return (n(vF) - n(vA)) * ventaKgA;
+                if (c.key === "gasto_kg") return (n(vF) - n(vA)) * ventaKgA;
+                if (c.key === "impuesto_kg") return (n(vF) - n(vA)) * ventaKgA;
+                if (c.key === "bancos_planta_kg") return (n(vF) - n(vA)) * ventaKgA;
+                if (c.key === "provision_planta_kg") return (n(vF) - n(vA)) * ventaKgA;
                 if (c.key === "util_oper_importe") return n((rowF as Record<string, unknown>).util_oper_importe as number | null | undefined) - utilOperImporteA;
                 if (c.key === "resultado_final_importe") return delta(vF, vA);
                 const deltaKg = c.isPct ? (n(vF) - n(vA)) * 100 : delta(vF, vA);
