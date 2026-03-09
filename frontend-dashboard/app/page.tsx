@@ -8,7 +8,7 @@ import {
   getTokenFromStorage,
   setTokenInStorage,
 } from "@/lib/auth";
-import { fetchIgfForecast, patchIgfForecastHg, type IgfForecastResponse, type IgfForecastRow } from "@/lib/api";
+import { fetchIgfForecast, patchIgfForecastHg, getDashboardExcelDownloadUrl, type IgfForecastResponse, type IgfForecastRow } from "@/lib/api";
 
 const MESES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 
@@ -506,6 +506,16 @@ function KpiContent() {
           </section>
         )}
         <div className="mt-4 flex flex-wrap gap-3 flex-shrink-0">
+          {igfForecast && (
+            <a
+              href={getDashboardExcelDownloadUrl(token!, igfForecast.year, igfForecast.month)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 rounded bg-slate-600 px-4 py-2 text-sm font-medium text-white hover:bg-slate-500"
+            >
+              Descargar Excel (Forecast)
+            </a>
+          )}
           <Link
             href="/dashboard"
             className="inline-flex items-center gap-2 rounded bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-600"

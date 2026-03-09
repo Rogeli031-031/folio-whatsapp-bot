@@ -11,6 +11,12 @@ function getApiUrl(path: string): string {
   return `/api-backend${path.startsWith("/") ? path : `/${path}`}`;
 }
 
+/** URL para descargar el Excel del Forecast (mes actual) que envía la segunda liga del comando dashboard. */
+export function getDashboardExcelDownloadUrl(token: string, year: number, month: number): string {
+  const base = getApiUrl("/api/arr/dashboard-excel");
+  return `${base}?year=${year}&month=${month}&t=${encodeURIComponent(token)}`;
+}
+
 export async function apiFetch<T>(
   path: string,
   options: RequestInit & { token?: string; params?: Record<string, string> } = {}
