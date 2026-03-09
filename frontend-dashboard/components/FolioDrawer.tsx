@@ -369,11 +369,11 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
                     <div className="pt-2 border-t border-slate-700">
                       <dt className="text-slate-500 mb-1">Préstamos a planta</dt>
                       <dd>
-                        {(folio as Record<string, unknown>).prestamo_a_planta && (
-                          <p className="text-sm text-slate-300 mb-1">
-                            Cargado a: <strong>{(folio as Record<string, unknown>).prestamo_a_planta as string}</strong>
-                          </p>
-                        )}
+{(folio as Record<string, unknown>).prestamo_a_planta ? (
+                            <p className="text-sm text-slate-300 mb-1">
+                              Cargado a: <strong>{(folio as Record<string, unknown>).prestamo_a_planta as string}</strong>
+                            </p>
+                        ) : null}
                         {!prestamoOpen ? (
                           <button
                             type="button"
