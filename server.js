@@ -5344,6 +5344,11 @@ async function buildIgfForecastPayload(client, year, month) {
         empresaToPlantaId.set(empresa, ids[0]);
         const keyNorm = normalizeAccents(empresa).replace(/\s+/g, "").toLowerCase();
         empresaNormToPlantaId.set(keyNorm, ids[0]);
+        const suffix = (empresa.split(" - ").pop() || empresa).trim();
+        if (suffix && !empresaToPlantaIds.has(suffix)) empresaToPlantaIds.set(suffix, ids);
+        for (const k of arr) {
+          if (k && typeof k === "string" && !empresaToPlantaIds.has(k.trim())) empresaToPlantaIds.set(k.trim(), ids);
+        }
       }
     }
     const idsFromJoin = Array.from(plantaIdByPlantCode.values()).filter((id) => id != null && Number.isFinite(Number(id)));
@@ -5411,6 +5416,13 @@ async function buildIgfForecastPayload(client, year, month) {
       const keyNorm = normalizeAccents(emp).replace(/\s+/g, "").toLowerCase();
       for (const [key, val] of empresaToPlantaIds) {
         if (normalizeAccents((key || "").trim()).replace(/\s+/g, "").toLowerCase() === keyNorm) return val;
+      }
+      const keyNormCompact = keyNorm.replace(/\s+/g, "").replace(/\./g, "");
+      for (const [key, val] of empresaToPlantaIds) {
+        const suf = (key.split(" - ").pop() || key).trim();
+        const sufNorm = normalizeAccents(suf).replace(/\s+/g, "").replace(/\./g, "").toLowerCase();
+        if (keyNorm === sufNorm || keyNorm.includes(sufNorm) || sufNorm.includes(keyNorm)) return val;
+        if (keyNormCompact.indexOf(sufNorm) >= 0 || sufNorm.indexOf(keyNormCompact) >= 0) return val;
       }
       const singleId = empresaToPlantaId.get(emp) || empresaToPlantaId.get(empresa) || empresaNormToPlantaId.get(keyNorm);
       return singleId != null ? [singleId] : [];

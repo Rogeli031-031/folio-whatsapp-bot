@@ -50,13 +50,20 @@ function findRowByPlanta(rows: IgfForecastRow[], planta: string): IgfForecastRow
   const suffix = (planta.split(" - ").pop() || planta).trim();
   const normSuffix = normalizeEmpresa(suffix);
   if (!normSuffix) return undefined;
-  return (
-    rows.find((r) => normalizeEmpresa(r.empresa || "") === normSuffix) ??
-    rows.find((r) => {
+  const bySuffix = rows.find((r) => normalizeEmpresa(r.empresa || "") === normSuffix);
+  if (bySuffix) return bySuffix;
+  const byContains = rows.find((r) => {
+    const rn = normalizeEmpresa(r.empresa || "");
+    return rn.indexOf(normSuffix) >= 0 || normSuffix.indexOf(rn) >= 0;
+  });
+  if (byContains) return byContains;
+  if (normSuffix.indexOf("san luis") >= 0) {
+    return rows.find((r) => {
       const rn = normalizeEmpresa(r.empresa || "");
-      return rn.indexOf(normSuffix) >= 0 || normSuffix.indexOf(rn) >= 0;
-    })
-  );
+      return rn.indexOf("san luis") >= 0;
+    });
+  }
+  return undefined;
 }
 
 function KpiContent() {
