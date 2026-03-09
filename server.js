@@ -36,6 +36,7 @@ const dashboardArrForecast = require("./lib/dashboard-arr-forecast");
 const deltaIngresoAi = require("./lib/delta-ingreso-ai");
 const deltaIngresoAiDb = require("./lib/delta-ingreso-ai-db");
 const deltaIngresoCommands = require("./lib/delta-ingreso-commands");
+const deltaIngresoForecast = require("./lib/delta-ingreso-forecast");
 
 const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
@@ -6690,6 +6691,23 @@ app.post("/api/dashboard/delta-descuento-datos", dashboardAuthMiddleware, async 
   }
 });
 
+/** Obtiene un plant_code de arr que corresponde al nombre de planta (prov_map). */
+async function getPlantCodeArrFromPlantaNombre(client, plantaNombre) {
+  const r = await client.query(
+    `WITH prov_map AS (
+       SELECT DISTINCT p.nombre AS prov_name, UPPER(TRIM(p.nombre)) AS key_nombre, UPPER(TRIM(COALESCE(p.clave, ''))) AS key_clave
+         FROM public.plantas p
+         JOIN arr.provincia_plants ap ON UPPER(TRIM(ap.plant_code)) = UPPER(TRIM(p.nombre)) OR (p.clave IS NOT NULL AND TRIM(p.clave) <> '' AND UPPER(TRIM(ap.plant_code)) = UPPER(TRIM(p.clave)))
+        WHERE UPPER(TRIM(COALESCE(p.nombre, ''))) != 'CORPORATIVO' AND UPPER(TRIM(COALESCE(p.clave, ''))) != 'CORPORATIVO'
+     )
+     SELECT v.plant_code FROM arr.ventas_diarias_cliente v
+     JOIN prov_map pm ON UPPER(TRIM(v.plant_code)) = pm.key_nombre OR (pm.key_clave <> '' AND UPPER(TRIM(v.plant_code)) = pm.key_clave)
+     WHERE pm.prov_name = $1 LIMIT 1`,
+    [plantaNombre.trim()]
+  );
+  return (r.rows && r.rows[0] && r.rows[0].plant_code) ? r.rows[0].plant_code : plantaNombre.trim();
+}
+
 /** Periodos (YYYY-MM) disponibles para Delta Ingreso en una planta (mismos que Delta Venta). */
 app.get("/api/dashboard/delta-ingreso-periodos", dashboardAuthMiddleware, async (req, res) => {
   const planta = (req.query.planta || "").toString().trim();
@@ -6702,6 +6720,127 @@ app.get("/api/dashboard/delta-ingreso-periodos", dashboardAuthMiddleware, async 
     res.json({ periodos: periodos || [] });
   } catch (e) {
     console.error("[Dashboard delta-ingreso-periodos]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/** Delta Ingreso Forecast: A = mes anterior real, B = forecast a cierre. Devuelve dejaron, nuevos, aumentaron, disminuyeron y byCategoria. */
+app.post("/api/dashboard/delta-ingreso-forecast-datos", dashboardAuthMiddleware, async (req, res) => {
+  const { planta, periodoA, periodoB } = req.body || {};
+  const pa = (typeof periodoA === "string" && /^\d{4}-\d{2}$/.test(periodoA)) ? periodoA : null;
+  const pb = (typeof periodoB === "string" && /^\d{4}-\d{2}$/.test(periodoB)) ? periodoB : null;
+  if (!planta || typeof planta !== "string" || !planta.trim()) {
+    return res.status(400).json({ error: "Falta planta" });
+  }
+  if (!pa || !pb) {
+    return res.status(400).json({ error: "Faltan periodoA y periodoB (formato YYYY-MM)" });
+  }
+  if (pa === pb) {
+    return res.status(400).json({ error: "Los dos periodos deben ser distintos" });
+  }
+  const [yA, mA] = pa.split("-").map((s) => parseInt(s, 10));
+  const [yB, mB] = pb.split("-").map((s) => parseInt(s, 10));
+  if (!Number.isFinite(yA) || !Number.isFinite(mA) || !Number.isFinite(yB) || !Number.isFinite(mB)) {
+    return res.status(400).json({ error: "Periodos inválidos" });
+  }
+  const client = await pool.connect();
+  try {
+    const plantCode = await getPlantCodeArrFromPlantaNombre(client, planta.trim());
+    const data = await deltaIngresoForecast.computeDeltaIngresoForecast(
+      client,
+      plantCode,
+      yA,
+      mA,
+      yB,
+      mB,
+      getMargenKgPorPeriodo,
+      planta.trim()
+    );
+    res.json(data);
+  } catch (e) {
+    console.error("[Dashboard delta-ingreso-forecast-datos]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/** Excel Delta Ingreso Forecast: una hoja por categoría (dejaron, nuevos, aumentaron, disminuyeron) y resumen por canal/subcanal. */
+app.get("/api/dashboard/delta-ingreso-forecast-excel", dashboardAuthMiddleware, async (req, res) => {
+  const planta = (req.query.planta || "").toString().trim();
+  const periodoA = (req.query.periodoA || "").toString().trim();
+  const periodoB = (req.query.periodoB || "").toString().trim();
+  if (!planta || !/^\d{4}-\d{2}$/.test(periodoA) || !/^\d{4}-\d{2}$/.test(periodoB) || periodoA === periodoB) {
+    return res.status(400).json({ error: "Faltan planta, periodoA y periodoB (YYYY-MM) o son inválidos" });
+  }
+  const [yA, mA] = periodoA.split("-").map((s) => parseInt(s, 10));
+  const [yB, mB] = periodoB.split("-").map((s) => parseInt(s, 10));
+  const client = await pool.connect();
+  try {
+    const plantCode = await getPlantCodeArrFromPlantaNombre(client, planta);
+    const data = await deltaIngresoForecast.computeDeltaIngresoForecast(
+      client,
+      plantCode,
+      yA,
+      mA,
+      yB,
+      mB,
+      getMargenKgPorPeriodo,
+      planta
+    );
+    const wb = XLSX.utils.book_new();
+    const hojas = [
+      { name: "Dejaron de comprar", list: data.dejaron.clientes },
+      { name: "Nuevos", list: data.nuevos.clientes },
+      { name: "Aumentaron", list: data.aumentaron.clientes },
+      { name: "Disminuyeron", list: data.disminuyeron.clientes },
+    ];
+    for (const h of hojas) {
+      const rows = [
+        ["Cliente", "Canal", "Subcanal", "Estado", "Ingreso A", "Ingreso B", "Delta Ingreso", "Ton A", "Ton B", "Desc $/kg A", "Desc $/kg B"],
+        ...(h.list || []).map((c) => [
+          c.cliente,
+          c.canal || "",
+          c.subcanal || "",
+          c.estado || "",
+          c.ingresoAStr || "",
+          c.ingresoBStr || "",
+          c.deltaIngresoStr || "",
+          c.kgAStr || "",
+          c.kgBStr || "",
+          c.descKgAStr || "",
+          c.descKgBStr || "",
+        ]),
+      ];
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      XLSX.utils.book_append_sheet(wb, ws, h.name.slice(0, 31));
+    }
+    const resumen = [
+      ["Canal", "Subcanal", "Dejaron (count)", "Dejaron (total)", "Nuevos (count)", "Nuevos (total)", "Aumentaron (count)", "Aumentaron (total)", "Disminuyeron (count)", "Disminuyeron (total)"],
+      ...(data.byCategoria || []).map((c) => [
+        c.canal,
+        c.subcanal,
+        c.dejaron.count,
+        c.dejaron.totalDeltaIngresoStr,
+        c.nuevos.count,
+        c.nuevos.totalDeltaIngresoStr,
+        c.aumentaron.count,
+        c.aumentaron.totalDeltaIngresoStr,
+        c.disminuyeron.count,
+        c.disminuyeron.totalDeltaIngresoStr,
+      ]),
+    ];
+    const wsRes = XLSX.utils.aoa_to_sheet(resumen);
+    XLSX.utils.book_append_sheet(wb, wsRes, "Resumen por canal");
+    const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+    const filename = `Delta_Ingreso_Forecast_${planta.replace(/\s+/g, "_")}_${periodoA}_${periodoB}.xlsx`;
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(buf);
+  } catch (e) {
+    console.error("[Dashboard delta-ingreso-forecast-excel]", e);
     res.status(500).json({ error: e.message });
   } finally {
     client.release();

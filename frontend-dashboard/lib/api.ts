@@ -493,6 +493,55 @@ export function postDeltaIngresoDatos(
   });
 }
 
+export interface DeltaIngresoForecastCliente extends DeltaIngresoCliente {
+  canal?: string;
+  subcanal?: string;
+  estado?: string;
+}
+
+export interface DeltaIngresoForecastCategoria {
+  canal: string;
+  subcanal: string;
+  dejaron: { count: number; totalDeltaIngresoStr: string };
+  nuevos: { count: number; totalDeltaIngresoStr: string };
+  aumentaron: { count: number; totalDeltaIngresoStr: string };
+  disminuyeron: { count: number; totalDeltaIngresoStr: string };
+}
+
+export interface DeltaIngresoForecastResult {
+  planta: string;
+  periodoA: string;
+  periodoB: string;
+  margenAStr?: string;
+  margenBStr?: string;
+  dejaron: { totalDeltaIngresoStr: string; clientes: DeltaIngresoForecastCliente[] };
+  nuevos: { totalDeltaIngresoStr: string; clientes: DeltaIngresoForecastCliente[] };
+  aumentaron: { totalDeltaIngresoStr: string; clientes: DeltaIngresoForecastCliente[] };
+  disminuyeron: { totalDeltaIngresoStr: string; clientes: DeltaIngresoForecastCliente[] };
+  byCategoria: DeltaIngresoForecastCategoria[];
+}
+
+export function postDeltaIngresoForecastDatos(
+  token: string,
+  body: { planta: string; periodoA: string; periodoB: string }
+): Promise<DeltaIngresoForecastResult> {
+  return apiFetch<DeltaIngresoForecastResult>("/api/dashboard/delta-ingreso-forecast-datos", {
+    token,
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function getDeltaIngresoForecastExcelUrl(
+  token: string,
+  planta: string,
+  periodoA: string,
+  periodoB: string
+): string {
+  const base = getApiUrl("/api/dashboard/delta-ingreso-forecast-excel");
+  return `${base}?planta=${encodeURIComponent(planta)}&periodoA=${encodeURIComponent(periodoA)}&periodoB=${encodeURIComponent(periodoB)}&t=${encodeURIComponent(token)}`;
+}
+
 export function postFolioPoliza(
   token: string,
   folioId: number,

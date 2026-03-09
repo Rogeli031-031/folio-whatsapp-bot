@@ -8,7 +8,17 @@ import {
   getTokenFromStorage,
   setTokenInStorage,
 } from "@/lib/auth";
-import { fetchIgfForecast, patchIgfForecastHg, getDashboardExcelDownloadUrl, type IgfForecastResponse, type IgfForecastRow } from "@/lib/api";
+import {
+  fetchIgfForecast,
+  patchIgfForecastHg,
+  getDashboardExcelDownloadUrl,
+  fetchDeltaIngresoPeriodos,
+  postDeltaIngresoForecastDatos,
+  getDeltaIngresoForecastExcelUrl,
+  type IgfForecastResponse,
+  type IgfForecastRow,
+  type DeltaIngresoForecastResult,
+} from "@/lib/api";
 
 const MESES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 
@@ -77,6 +87,23 @@ function KpiContent() {
   const [plantaFilter, setPlantaFilter] = useState<string>("");
   const [igfMesAnterior, setIgfMesAnterior] = useState<IgfForecastResponse | null>(null);
   const [igfMesAnteriorLoading, setIgfMesAnteriorLoading] = useState(false);
+  const [deltaForecastPlanta, setDeltaForecastPlanta] = useState("");
+  const [deltaForecastPeriodos, setDeltaForecastPeriodos] = useState<string[]>([]);
+  const [deltaForecastPeriodoA, setDeltaForecastPeriodoA] = useState("");
+  const [deltaForecastPeriodoB, setDeltaForecastPeriodoB] = useState("");
+  const [deltaForecastData, setDeltaForecastData] = useState<DeltaIngresoForecastResult | null>(null);
+  const [deltaForecastLoading, setDeltaForecastLoading] = useState(false);
+  const [deltaForecastError, setDeltaForecastError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!token || !deltaForecastPlanta) {
+      setDeltaForecastPeriodos([]);
+      return;
+    }
+    fetchDeltaIngresoPeriodos(token, deltaForecastPlanta)
+      .then((r) => setDeltaForecastPeriodos(r.periodos || []))
+      .catch(() => setDeltaForecastPeriodos([]));
+  }, [token, deltaForecastPlanta]);
 
   useEffect(() => {
     const t = parseTokenFromQuery(searchParams) || getTokenFromStorage();
@@ -168,6 +195,24 @@ function KpiContent() {
     <div className="min-h-screen flex flex-col">
       <div className="border-b border-slate-700 bg-slate-900/50 px-4 py-3">
         <h1 className="text-xl font-semibold text-white">KPI Financieros</h1>
+      </div>
+      <div className="flex flex-wrap gap-3 px-4 py-3 border-b border-slate-700/80 bg-slate-800/30">
+        {igfForecast && token && (
+          <a
+            href={getDashboardExcelDownloadUrl(token, igfForecast.year, igfForecast.month)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded bg-slate-600 px-4 py-2 text-sm font-medium text-white hover:bg-slate-500"
+          >
+            Descargar Excel (Forecast)
+          </a>
+        )}
+        <Link
+          href="/dashboard"
+          className="inline-flex items-center gap-2 rounded bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-600"
+        >
+          Ver dashboard de folios
+        </Link>
       </div>
       <main className={plantaFilter ? "flex-1 p-4 flex flex-col" : "flex-1 p-4"}>
         <section className={`rounded-lg border border-slate-700 bg-slate-800/60 p-4 ${plantaFilter ? "flex-shrink-0" : ""}`}>
@@ -505,24 +550,157 @@ function KpiContent() {
             })()}
           </section>
         )}
-        <div className="mt-4 flex flex-wrap gap-3 flex-shrink-0">
-          {igfForecast && (
-            <a
-              href={getDashboardExcelDownloadUrl(token!, igfForecast.year, igfForecast.month)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 rounded bg-slate-600 px-4 py-2 text-sm font-medium text-white hover:bg-slate-500"
+        <section className="mt-6 rounded-lg border border-slate-700 bg-slate-800/60 p-4 flex-shrink-0">
+          <h3 className="text-base font-medium text-slate-200 mb-3">Delta ingreso Forecast</h3>
+          <p className="text-sm text-slate-400 mb-3">A = mes anterior real · B = forecast a cierre. Clasificación por planta y canal/subcanal.</p>
+          <div className="flex flex-wrap items-end gap-3 mb-3">
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-slate-500">Planta</span>
+              <select
+                value={deltaForecastPlanta}
+                onChange={(e) => {
+                  setDeltaForecastPlanta(e.target.value);
+                  setDeltaForecastData(null);
+                }}
+                className="rounded border border-slate-600 bg-slate-700 px-2 py-1.5 text-sm text-slate-200"
+              >
+                <option value="">— Seleccionar —</option>
+                {igfForecast?.rows?.map((r) => r.empresa?.trim()).filter(Boolean)
+                  ? Array.from(new Set(igfForecast.rows.map((r) => r.empresa?.trim()).filter(Boolean))).sort().map((emp) => (
+                      <option key={emp} value={emp}>{emp}</option>
+                    ))
+                  : null}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-slate-500">Periodo A (mes anterior)</span>
+              <select
+                value={deltaForecastPeriodoA}
+                onChange={(e) => setDeltaForecastPeriodoA(e.target.value)}
+                className="rounded border border-slate-600 bg-slate-700 px-2 py-1.5 text-sm text-slate-200"
+              >
+                <option value="">—</option>
+                {deltaForecastPeriodos.map((p) => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-slate-500">Periodo B (forecast)</span>
+              <select
+                value={deltaForecastPeriodoB}
+                onChange={(e) => setDeltaForecastPeriodoB(e.target.value)}
+                className="rounded border border-slate-600 bg-slate-700 px-2 py-1.5 text-sm text-slate-200"
+              >
+                <option value="">—</option>
+                {deltaForecastPeriodos.map((p) => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              disabled={!token || !deltaForecastPlanta || !deltaForecastPeriodoA || !deltaForecastPeriodoB || deltaForecastPeriodoA === deltaForecastPeriodoB || deltaForecastLoading}
+              onClick={async () => {
+                if (!token) return;
+                setDeltaForecastLoading(true);
+                setDeltaForecastError(null);
+                try {
+                  const data = await postDeltaIngresoForecastDatos(token, {
+                    planta: deltaForecastPlanta,
+                    periodoA: deltaForecastPeriodoA,
+                    periodoB: deltaForecastPeriodoB,
+                  });
+                  setDeltaForecastData(data);
+                } catch (e: unknown) {
+                  setDeltaForecastError((e as Error)?.message || "Error al cargar");
+                } finally {
+                  setDeltaForecastLoading(false);
+                }
+              }}
+              className="rounded bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-500 disabled:opacity-50"
             >
-              Descargar Excel (Forecast)
-            </a>
+              {deltaForecastLoading ? "Cargando…" : "Cargar"}
+            </button>
+            {deltaForecastData && token && (
+              <a
+                href={getDeltaIngresoForecastExcelUrl(token, deltaForecastPlanta, deltaForecastPeriodoA, deltaForecastPeriodoB)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded bg-slate-600 px-4 py-2 text-sm font-medium text-white hover:bg-slate-500"
+              >
+                Descargar Excel
+              </a>
+            )}
+          </div>
+          {deltaForecastError && <p className="text-sm text-red-400 mb-2">{deltaForecastError}</p>}
+          {deltaForecastData && (
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-sm">
+                <thead>
+                  <tr className="border-b border-slate-600 bg-slate-800/80 text-xs">
+                    <th className="text-left py-2 px-2 font-semibold text-slate-300">Canal</th>
+                    <th className="text-left py-2 px-2 font-semibold text-slate-300">Subcanal</th>
+                    <th className="text-right py-2 px-2 font-semibold text-slate-300">Dejaron</th>
+                    <th className="text-right py-2 px-2 font-semibold text-slate-300">Nuevos</th>
+                    <th className="text-right py-2 px-2 font-semibold text-slate-300">Aumentaron</th>
+                    <th className="text-right py-2 px-2 font-semibold text-slate-300">Disminuyeron</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {deltaForecastData.byCategoria?.map((c, i) => (
+                    <tr key={i} className="border-b border-slate-700/80">
+                      <td className="py-2 px-2 text-slate-300">{c.canal}</td>
+                      <td className="py-2 px-2 text-slate-300">{c.subcanal}</td>
+                      <td className="py-2 px-2 text-right tabular-nums text-slate-300">{c.dejaron.count} ({c.dejaron.totalDeltaIngresoStr})</td>
+                      <td className="py-2 px-2 text-right tabular-nums text-slate-300">{c.nuevos.count} ({c.nuevos.totalDeltaIngresoStr})</td>
+                      <td className="py-2 px-2 text-right tabular-nums text-emerald-400">{c.aumentaron.count} ({c.aumentaron.totalDeltaIngresoStr})</td>
+                      <td className="py-2 px-2 text-right tabular-nums text-red-400">{c.disminuyeron.count} ({c.disminuyeron.totalDeltaIngresoStr})</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-4 text-xs">
+                <div>
+                  <h4 className="font-semibold text-slate-400 mb-1">Dejaron de comprar</h4>
+                  <ul className="space-y-0.5 text-slate-300 max-h-32 overflow-y-auto">
+                    {(deltaForecastData.dejaron?.clientes || []).slice(0, 15).map((c, i) => (
+                      <li key={i}>{c.cliente}: {c.ingresoAStr}</li>
+                    ))}
+                    {(deltaForecastData.dejaron?.clientes?.length || 0) > 15 && <li className="text-slate-500">… y más</li>}
+                  </ul>
+                </div>
+                <div>
+                  <h4 className="font-semibold text-slate-400 mb-1">Nuevos</h4>
+                  <ul className="space-y-0.5 text-slate-300 max-h-32 overflow-y-auto">
+                    {(deltaForecastData.nuevos?.clientes || []).slice(0, 15).map((c, i) => (
+                      <li key={i}>{c.cliente}: {c.ingresoBStr}</li>
+                    ))}
+                    {(deltaForecastData.nuevos?.clientes?.length || 0) > 15 && <li className="text-slate-500">… y más</li>}
+                  </ul>
+                </div>
+                <div>
+                  <h4 className="font-semibold text-emerald-400 mb-1">Aumentaron</h4>
+                  <ul className="space-y-0.5 text-slate-300 max-h-32 overflow-y-auto">
+                    {(deltaForecastData.aumentaron?.clientes || []).slice(0, 15).map((c, i) => (
+                      <li key={i}>{c.cliente}: {c.deltaIngresoStr}</li>
+                    ))}
+                    {(deltaForecastData.aumentaron?.clientes?.length || 0) > 15 && <li className="text-slate-500">… y más</li>}
+                  </ul>
+                </div>
+                <div>
+                  <h4 className="font-semibold text-red-400 mb-1">Disminuyeron</h4>
+                  <ul className="space-y-0.5 text-slate-300 max-h-32 overflow-y-auto">
+                    {(deltaForecastData.disminuyeron?.clientes || []).slice(0, 15).map((c, i) => (
+                      <li key={i}>{c.cliente}: {c.deltaIngresoStr}</li>
+                    ))}
+                    {(deltaForecastData.disminuyeron?.clientes?.length || 0) > 15 && <li className="text-slate-500">… y más</li>}
+                  </ul>
+                </div>
+              </div>
+            </div>
           )}
-          <Link
-            href="/dashboard"
-            className="inline-flex items-center gap-2 rounded bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-600"
-          >
-            Ver dashboard de folios
-          </Link>
-        </div>
+        </section>
         {plantaFilter ? <div className="flex-1 min-h-[35vh] mt-6" aria-hidden /> : null}
       </main>
     </div>
