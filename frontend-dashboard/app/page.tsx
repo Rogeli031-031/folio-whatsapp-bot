@@ -359,7 +359,8 @@ function KpiContent() {
               const calcUtilOperKg = (row: IgfForecastRow | undefined): number => {
                 if (!row) return 0;
                 const r = row as Record<string, unknown>;
-                return n(r.margen_kg) - n(r.com_desc_kg) - n(r.impuesto_kg) + Math.abs(n(r.hg_kg)) - n(r.bancos_planta_kg) - n(r.provision_planta_kg) - n(r.gasto_kg);
+                const num = (x: unknown) => n(x as number | null | undefined);
+                return num(r.margen_kg) - num(r.com_desc_kg) - num(r.impuesto_kg) + Math.abs(num(r.hg_kg)) - num(r.bancos_planta_kg) - num(r.provision_planta_kg) - num(r.gasto_kg);
               };
               const cellVal = (row: IgfForecastRow | undefined, c: Col) => {
                 if (!row) return "—";
