@@ -2024,9 +2024,96 @@ async function getDeltaIngresoClientes(client, plantaNombre, periodoA, periodoB)
 
 /* ==================== SCHEMA (idempotente) ==================== */
 
+async function ensureArrSchema(client) {
+  await client.query("CREATE SCHEMA IF NOT EXISTS arr;");
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS arr.ventas_diarias_cliente (
+      plant_code   VARCHAR(20) NOT NULL,
+      fecha        DATE        NOT NULL,
+      cliente_norm VARCHAR(200) NOT NULL,
+      canal        VARCHAR(50) NOT NULL DEFAULT 'Casa',
+      subcanal     VARCHAR(100) NOT NULL DEFAULT '',
+      kg           NUMERIC(18,4) NOT NULL DEFAULT 0,
+      PRIMARY KEY (plant_code, fecha, cliente_norm, canal, subcanal)
+    );
+  `).catch(() => {});
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS arr.descuentos_diarias_cliente (
+      plant_code   VARCHAR(20) NOT NULL,
+      fecha        DATE        NOT NULL,
+      cliente_norm VARCHAR(200) NOT NULL,
+      monto        NUMERIC(18,2) NOT NULL,
+      PRIMARY KEY (plant_code, fecha, cliente_norm)
+    );
+  `).catch(() => {});
+  await client.query(`
+    CREATE INDEX IF NOT EXISTS idx_ventas_diarias_plant_fecha ON arr.ventas_diarias_cliente (plant_code, fecha);
+  `).catch(() => {});
+  await client.query(`
+    CREATE INDEX IF NOT EXISTS idx_descuentos_diarias_plant_fecha ON arr.descuentos_diarias_cliente (plant_code, fecha);
+  `).catch(() => {});
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS arr.descuentos_notas (
+      plant_code VARCHAR(20) NOT NULL, fecha DATE NOT NULL, cliente_norm VARCHAR(200) NOT NULL, monto NUMERIC(18,2) NOT NULL,
+      PRIMARY KEY (plant_code, fecha, cliente_norm)
+    );
+  `).catch(() => {});
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS arr.descuentos_factura (
+      plant_code VARCHAR(20) NOT NULL, fecha DATE NOT NULL, cliente_norm VARCHAR(200) NOT NULL, monto NUMERIC(18,2) NOT NULL,
+      PRIMARY KEY (plant_code, fecha, cliente_norm)
+    );
+  `).catch(() => {});
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS arr.descuentos_comision_extra (
+      plant_code VARCHAR(20) NOT NULL, fecha DATE NOT NULL, cliente_norm VARCHAR(200) NOT NULL, monto NUMERIC(18,2) NOT NULL,
+      PRIMARY KEY (plant_code, fecha, cliente_norm)
+    );
+  `).catch(() => {});
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS arr.cliente_categoria_mes (
+      plant_code VARCHAR(20) NOT NULL, year SMALLINT NOT NULL, month SMALLINT NOT NULL, cliente_norm VARCHAR(200) NOT NULL,
+      canal VARCHAR(50) NOT NULL DEFAULT 'Casa', subcanal VARCHAR(100),
+      PRIMARY KEY (plant_code, year, month, cliente_norm)
+    );
+  `).catch(() => {});
+  await client.query(`
+    CREATE INDEX IF NOT EXISTS idx_cliente_categoria_mes_lookup ON arr.cliente_categoria_mes (plant_code, year, month);
+  `).catch(() => {});
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS arr.hg_diario (
+      plant_code VARCHAR(20) NOT NULL, fecha DATE NOT NULL, hg_pct NUMERIC(10,6) NOT NULL, PRIMARY KEY (plant_code, fecha)
+    );
+  `).catch(() => {});
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS arr.forecast_mensual (
+      plant_code VARCHAR(20) NOT NULL, year SMALLINT NOT NULL, month SMALLINT NOT NULL, canal VARCHAR(50) NOT NULL,
+      subcanal VARCHAR(100) NOT NULL DEFAULT '', kg_actual NUMERIC(18,4) NOT NULL DEFAULT 0, kg_proyectado NUMERIC(18,4) NOT NULL DEFAULT 0,
+      kg_forecast NUMERIC(18,4) NOT NULL DEFAULT 0, desc_actual NUMERIC(18,2) NOT NULL DEFAULT 0, desc_proyectado NUMERIC(18,2) NOT NULL DEFAULT 0,
+      desc_forecast NUMERIC(18,2) NOT NULL DEFAULT 0, desc_kg_forecast NUMERIC(18,6), updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (plant_code, year, month, canal, subcanal)
+    );
+  `).catch(() => {});
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS arr.provincia_plants (plant_code VARCHAR(20) NOT NULL PRIMARY KEY);
+  `).catch(() => {});
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS arr.venta_toneladas_diarias_provincia (
+      plant_code VARCHAR(20) NOT NULL, fecha DATE NOT NULL, venta_ton INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (plant_code, fecha)
+    );
+  `).catch(() => {});
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS arr.descuento_por_kilo_diario_provincia (
+      plant_code VARCHAR(20) NOT NULL, fecha DATE NOT NULL, descuento_por_kg NUMERIC(18,2) NOT NULL DEFAULT 0, PRIMARY KEY (plant_code, fecha)
+    );
+  `).catch(() => {});
+}
+
 async function ensureSchema() {
   const client = await pool.connect();
   try {
+    await ensureArrSchema(client);
+
     await client.query(`
       CREATE TABLE IF NOT EXISTS public.plantas (
         id SERIAL PRIMARY KEY,
