@@ -5253,6 +5253,21 @@ async function buildIgfForecastPayload(client, year, month) {
     return { year, month, version_id: null, version_number: null, rows: [], totales: null };
   }
     const versionNumber = ver.rows[0].version_number;
+    const prevVer = await client.query(
+      `SELECT id FROM igf.versions WHERE plant_code = 'GLOBAL' AND year = $1::int AND month = $2::int AND version_number = $3::int LIMIT 1`,
+      [year, month, Math.max(1, versionNumber - 1)]
+    );
+    const prevVersionId = prevVer.rows && prevVer.rows[0] && prevVer.rows[0].id != null ? Number(prevVer.rows[0].id) : null;
+    let baseHgByEmpresa = new Map();
+    if (prevVersionId != null && prevVersionId !== versionId) {
+      const prevLines = await client.query(`SELECT empresa, hg_kg, hg_pct FROM igf.compromiso_lines WHERE version_id = $1`, [prevVersionId]);
+      for (const rw of prevLines.rows || []) {
+        const emp = (rw.empresa || "").trim();
+        if (emp && rw.hg_pct != null && Number(rw.hg_pct) !== 0) {
+          baseHgByEmpresa.set(emp, { hg_kg: Number(rw.hg_kg) || 0, hg_pct: Number(rw.hg_pct) });
+        }
+      }
+    }
     const r = await client.query(
       `SELECT * FROM igf.compromiso_lines WHERE version_id = $1::int ORDER BY empresa`,
       [versionId]
@@ -5291,6 +5306,7 @@ async function buildIgfForecastPayload(client, year, month) {
     const rows = allRows.filter((row) => empresaEsProvincia(row.empresa)).map((row) => {
       let venta_ton = row.venta_ton;
       let com_desc_kg = row.com_desc_kg;
+      let hg_kg = row.hg_kg;
       const best = bestPlantCodeForEmpresa(row.empresa);
       if (best != null && ventaForecastByPlant.size > 0) {
         const f = ventaForecastByPlant.get(best);
@@ -5301,7 +5317,12 @@ async function buildIgfForecastPayload(client, year, month) {
           com_desc_kg = Math.round((Math.abs(descMonto) / ventaForecastKg) * 100) / 100;
         }
       }
-      return { ...row, venta_ton, com_desc_kg };
+      const base = baseHgByEmpresa.get((row.empresa || "").trim());
+      if (base != null && row.hg_pct != null && Number(row.hg_pct) !== 0) {
+        const costoCompra = Math.abs(base.hg_kg) / base.hg_pct;
+        hg_kg = Math.round(costoCompra * Number(row.hg_pct) * 1e8) / 1e8;
+      }
+      return { ...row, venta_ton, com_desc_kg, hg_kg };
     });
 
     const periodoStr = `${year}-${String(month).padStart(2, "0")}`;
@@ -5554,10 +5575,11 @@ app.patch("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, re
   const client = await pool.connect();
   try {
     const ver = await client.query(
-      `SELECT id FROM igf.versions WHERE plant_code = 'GLOBAL' AND year = $1 AND month = $2 ORDER BY version_number DESC LIMIT 1`,
+      `SELECT id, version_number FROM igf.versions WHERE plant_code = 'GLOBAL' AND year = $1 AND month = $2 ORDER BY version_number DESC LIMIT 1`,
       [year, month]
     );
     const versionId = ver.rows && ver.rows[0] && ver.rows[0].id;
+    const versionNumber = ver.rows && ver.rows[0] && ver.rows[0].version_number != null ? Number(ver.rows[0].version_number) : 1;
     if (versionId == null) return res.status(404).json({ error: "No hay versión IGF para ese mes" });
 
     const row = await client.query(
@@ -5574,10 +5596,28 @@ app.patch("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, re
     if (hg_pct != null && Number.isFinite(hg_pct)) {
       newHgPct = hg_pct >= 0 && hg_pct <= 1 ? hg_pct : hg_pct / 100;
       if (hg_kg == null || !Number.isFinite(hg_kg)) {
-        // Fórmula: costo_compra = (HG $/kg último IGF) / (HG % último IGF); HG $/kg forecast = costo_compra * (HG % forecast)
-        const curHgPct = current.hg_pct != null && Number(current.hg_pct) !== 0 ? Number(current.hg_pct) : null;
-        const curHgKg = current.hg_kg != null ? Number(current.hg_kg) : 0;
-        const costoCompra = curHgPct != null ? Math.abs(curHgKg) / curHgPct : 0;
+        // Costo de compra del último IGF subido (versión anterior); HG $/kg forecast = costo_compra * (HG % forecast)
+        let costoCompra = 0;
+        const prevVer = await client.query(
+          `SELECT id FROM igf.versions WHERE plant_code = 'GLOBAL' AND year = $1 AND month = $2 AND version_number = $3 LIMIT 1`,
+          [year, month, Math.max(1, versionNumber - 1)]
+        );
+        const prevVersionId = prevVer.rows && prevVer.rows[0] && prevVer.rows[0].id != null ? Number(prevVer.rows[0].id) : null;
+        if (prevVersionId != null && prevVersionId !== versionId) {
+          const baseRow = await client.query(
+            `SELECT hg_kg, hg_pct FROM igf.compromiso_lines WHERE version_id = $1 AND empresa = $2`,
+            [prevVersionId, empresa]
+          );
+          const base = baseRow.rows && baseRow.rows[0];
+          if (base && base.hg_pct != null && Number(base.hg_pct) !== 0) {
+            costoCompra = Math.abs(Number(base.hg_kg) || 0) / Number(base.hg_pct);
+          }
+        }
+        if (costoCompra === 0) {
+          const curHgPct = current.hg_pct != null && Number(current.hg_pct) !== 0 ? Number(current.hg_pct) : null;
+          const curHgKg = current.hg_kg != null ? Number(current.hg_kg) : 0;
+          costoCompra = curHgPct != null ? Math.abs(curHgKg) / curHgPct : 0;
+        }
         newHgKg = costoCompra * newHgPct;
       }
     }
