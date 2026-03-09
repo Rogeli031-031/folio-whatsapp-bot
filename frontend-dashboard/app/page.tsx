@@ -418,7 +418,8 @@ function KpiContent() {
                 return c.isPct ? (n(vF) - n(vA)) * 100 : delta(vF, vA);
               };
               const ventaKgA = rowA ? n((rowA as Record<string, unknown>).venta_ton as number | null | undefined) * 1000 : 0;
-              // Puente: util_oper_importe_A + impactos = util_oper_importe_F. Signos: ayuda a rentabilidad → +; perjudica → −.
+              const ventaKgF = n((rowF as Record<string, unknown>).venta_ton as number | null | undefined) * 1000;
+              // Impacto (Importe): fórmula Excel (COL_fila2*$B$2)-(COL_fila3*$B$3) = (valor_forecast*venta_kg_forecast) - (valor_mes_anterior*venta_kg_mes_anterior) para Gtos/Apoyos Corp, Bancos Corp., Otros Programas, Inversiones.
               const cellImpacto = (c: Col): number | null => {
                 if (c.key === "empresa" || !rowA) return null;
                 if (c.key === "hg_pct") return null;
@@ -426,7 +427,6 @@ function KpiContent() {
                 const vF = (rowF as Record<string, unknown>)[c.key] as number | null | undefined;
                 const vA = (rowA as Record<string, unknown>)[c.key] as number | null | undefined;
                 if (c.key === "venta_ton") {
-                  const ventaKgF = n((rowF as Record<string, unknown>).venta_ton as number | null | undefined) * 1000;
                   const utilOperF = n((rowF as Record<string, unknown>).util_oper_kg as number | null | undefined);
                   return (ventaKgF - ventaKgA) * utilOperF;
                 }
@@ -435,6 +435,10 @@ function KpiContent() {
                 if (c.key === "impuesto_kg") return (n(vF) - n(vA)) * ventaKgA;
                 if (c.key === "bancos_planta_kg") return (n(vF) - n(vA)) * ventaKgA;
                 if (c.key === "provision_planta_kg") return (n(vF) - n(vA)) * ventaKgA;
+                // Fórmula imagen: (valor_forecast * venta_kg_forecast) - (valor_mes_anterior * venta_kg_mes_anterior)
+                if (c.key === "gtos_apoyos_corp_kg" || c.key === "bancos_corp_kg" || c.key === "otros_programas_kg" || c.key === "inversiones_kg") {
+                  return (n(vF) * ventaKgF) - (n(vA) * ventaKgA);
+                }
                 if (c.key === "util_oper_importe") return n((rowF as Record<string, unknown>).util_oper_importe as number | null | undefined) - utilOperImporteA;
                 if (c.key === "resultado_final_importe") return delta(vF, vA);
                 const deltaKg = c.isPct ? (n(vF) - n(vA)) * 100 : delta(vF, vA);
