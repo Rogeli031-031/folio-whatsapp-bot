@@ -5574,8 +5574,11 @@ app.patch("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, re
     if (hg_pct != null && Number.isFinite(hg_pct)) {
       newHgPct = hg_pct >= 0 && hg_pct <= 1 ? hg_pct : hg_pct / 100;
       if (hg_kg == null || !Number.isFinite(hg_kg)) {
-        const margen = current.margen_kg != null ? Number(current.margen_kg) : 0;
-        newHgKg = margen * newHgPct;
+        // Fórmula: costo_compra = (HG $/kg último IGF) / (HG % último IGF); HG $/kg forecast = costo_compra * (HG % forecast)
+        const curHgPct = current.hg_pct != null && Number(current.hg_pct) !== 0 ? Number(current.hg_pct) : null;
+        const curHgKg = current.hg_kg != null ? Number(current.hg_kg) : 0;
+        const costoCompra = curHgPct != null ? Math.abs(curHgKg) / curHgPct : 0;
+        newHgKg = costoCompra * newHgPct;
       }
     }
     if (hg_kg != null && Number.isFinite(hg_kg)) newHgKg = hg_kg;
