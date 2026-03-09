@@ -370,18 +370,18 @@ function KpiContent() {
                 return c.isPct ? (n(vF) - n(vA)) * 100 : delta(vF, vA);
               };
               const ventaKgA = rowA ? n((rowA as Record<string, unknown>).venta_ton as number | null | undefined) * 1000 : 0;
+              // Puente operativo: util_oper_importe_A + impactos_operativos = util_oper_importe_F. Base tasa = ventaKgA.
+              // Ayudan cuando suben → impacto (B-A)*ventaKgA. Perjudican cuando suben → (A-B)*ventaKgA.
               const cellImpacto = (c: Col): number | null => {
                 if (c.key === "empresa" || !rowA) return null;
                 if (c.key === "hg_pct") return null;
                 const vF = (rowF as Record<string, unknown>)[c.key] as number | null | undefined;
                 const vA = (rowA as Record<string, unknown>)[c.key] as number | null | undefined;
-                // Efecto volumen: util_oper_kg_B * (ventaKgB - ventaKgA) para cuadrar con cambio total Util. Oper. (Importe)
                 if (c.key === "venta_ton") {
-                  const ventaKgB = n((rowF as Record<string, unknown>).venta_ton as number | null | undefined) * 1000;
-                  const utilOperB = n((rowF as Record<string, unknown>).util_oper_kg as number | null | undefined);
-                  return utilOperB * (ventaKgB - ventaKgA);
+                  const ventaKgF = n((rowF as Record<string, unknown>).venta_ton as number | null | undefined) * 1000;
+                  const utilOperF = n((rowF as Record<string, unknown>).util_oper_kg as number | null | undefined);
+                  return (ventaKgF - ventaKgA) * utilOperF;
                 }
-                // Drivers de tasa (contribución a util_oper): signos según util_oper = margen - com_desc - impuesto + hg - bancos - prov - gasto
                 if (c.key === "com_desc_kg") return (n(vA) - n(vF)) * ventaKgA;
                 if (c.key === "gasto_kg") return (n(vA) - n(vF)) * ventaKgA;
                 if (c.key === "impuesto_kg") return (n(vA) - n(vF)) * ventaKgA;
@@ -390,7 +390,6 @@ function KpiContent() {
                 if (c.key === "util_oper_importe" || c.key === "resultado_final_importe") return delta(vF, vA);
                 const deltaKg = c.isPct ? (n(vF) - n(vA)) * 100 : delta(vF, vA);
                 if (c.isPct) return null;
-                // Margen, HG ($/kg): (B-A)*ventaKgA. Util. Oper. ($/kg): subtotal derivado (efecto tasa total), no driver.
                 return deltaKg * ventaKgA;
               };
               return (
