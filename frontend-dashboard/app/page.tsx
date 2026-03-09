@@ -356,17 +356,29 @@ function KpiContent() {
                 { key: "resultado_final_kg", label: "Resultado ($/kg)", fmt: (v) => fmtNum(v) },
                 { key: "resultado_final_importe", label: "Resultado (Importe)", fmt: (v) => fmtNum(v, 0) },
               ];
+              const calcUtilOperKg = (row: IgfForecastRow | undefined): number => {
+                if (!row) return 0;
+                const r = row as Record<string, unknown>;
+                return n(r.margen_kg) - n(r.com_desc_kg) - n(r.impuesto_kg) + Math.abs(n(r.hg_kg)) - n(r.bancos_planta_kg) - n(r.provision_planta_kg) - n(r.gasto_kg);
+              };
               const cellVal = (row: IgfForecastRow | undefined, c: Col) => {
                 if (!row) return "—";
                 if (c.key === "empresa") return row.empresa ?? "—";
+                if (row === rowA && (c.key === "util_oper_kg" || c.key === "util_oper_importe")) {
+                  const utilKg = calcUtilOperKg(row);
+                  if (c.key === "util_oper_kg") return fmtNum(utilKg);
+                  return fmtNum(utilKg * n((row as Record<string, unknown>).venta_ton as number | null | undefined) * 1000, 0);
+                }
                 const v = (row as Record<string, unknown>)[c.key];
                 if (c.isPct && v != null) return (Number(v) * 100).toFixed(1);
                 return fmtNum(v as number | null ?? null, c.key.includes("importe") || c.key === "util_oper_importe" || c.key === "resultado_final_importe" ? 0 : 2);
               };
+              const utilOperKgA = rowA ? calcUtilOperKg(rowA) : 0;
+              const utilOperImporteA = rowA ? utilOperKgA * n((rowA as Record<string, unknown>).venta_ton as number | null | undefined) * 1000 : 0;
               const cellDeltaNum = (c: Col): number | null => {
                 if (c.key === "empresa" || !rowA) return null;
                 const vF = (rowF as Record<string, unknown>)[c.key] as number | null | undefined;
-                const vA = (rowA as Record<string, unknown>)[c.key] as number | null | undefined;
+                const vA = c.key === "util_oper_kg" ? utilOperKgA : c.key === "util_oper_importe" ? utilOperImporteA : (rowA as Record<string, unknown>)[c.key] as number | null | undefined;
                 return c.isPct ? (n(vF) - n(vA)) * 100 : delta(vF, vA);
               };
               const ventaKgA = rowA ? n((rowA as Record<string, unknown>).venta_ton as number | null | undefined) * 1000 : 0;
@@ -387,7 +399,8 @@ function KpiContent() {
                 if (c.key === "impuesto_kg") return (n(vA) - n(vF)) * ventaKgA;
                 if (c.key === "bancos_planta_kg") return (n(vA) - n(vF)) * ventaKgA;
                 if (c.key === "provision_planta_kg") return (n(vA) - n(vF)) * ventaKgA;
-                if (c.key === "util_oper_importe" || c.key === "resultado_final_importe") return delta(vF, vA);
+                if (c.key === "util_oper_importe") return n((rowF as Record<string, unknown>).util_oper_importe as number | null | undefined) - utilOperImporteA;
+                if (c.key === "resultado_final_importe") return delta(vF, vA);
                 const deltaKg = c.isPct ? (n(vF) - n(vA)) * 100 : delta(vF, vA);
                 if (c.isPct) return null;
                 return deltaKg * ventaKgA;
