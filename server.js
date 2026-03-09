@@ -6389,7 +6389,22 @@ app.get("/api/dashboard/igf-versiones", dashboardAuthMiddleware, async (req, res
   }
 });
 
-/** Lista de empresas (plantas) que aparecen en IGF versiones (última versión del mes más reciente). Para "Préstamos a planta". */
+/** Normaliza nombre de empresa para agrupar variantes (acentos, guiones, espacios). */
+function normalizarEmpresaKey(s) {
+  if (typeof s !== "string") return "";
+  const t = s
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[-–—]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\s+p\.?\s*$/, "");
+  return t;
+}
+
+/** Lista de empresas (plantas) que aparecen en IGF versiones (última versión del mes más reciente). Para "Préstamos a planta". Sin duplicados por escritura (acentos/guiones). */
 app.get("/api/dashboard/igf-empresas", dashboardAuthMiddleware, async (req, res) => {
   const client = await pool.connect();
   try {
@@ -6399,7 +6414,14 @@ app.get("/api/dashboard/igf-empresas", dashboardAuthMiddleware, async (req, res)
        WHERE v.plant_code = 'GLOBAL'
        ORDER BY c.empresa`
     );
-    const empresas = (r.rows || []).map((row) => (row.empresa || "").trim()).filter((e) => e && !/^TOTALES?$/i.test(e));
+    const raw = (r.rows || []).map((row) => (row.empresa || "").trim()).filter((e) => e && !/^TOTALES?$/i.test(e));
+    const byKey = new Map();
+    for (const name of raw) {
+      const key = normalizarEmpresaKey(name);
+      if (!key) continue;
+      if (!byKey.has(key)) byKey.set(key, name);
+    }
+    const empresas = [...byKey.values()].sort((a, b) => a.localeCompare(b));
     res.json({ empresas });
   } catch (e) {
     console.error("[Dashboard igf-empresas]", e);
