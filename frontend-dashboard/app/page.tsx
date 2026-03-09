@@ -92,12 +92,39 @@ function KpiContent() {
 
   useEffect(() => {
     if (!token) return;
-    setIgfLoading(true);
-    setIgfError(null);
-    fetchIgfForecast(token)
-      .then(setIgfForecast)
-      .catch((e) => setIgfError(e.message || "Error al cargar IGF Forecast"))
-      .finally(() => setIgfLoading(false));
+
+    let cancelled = false;
+    let fetching = false;
+
+    const load = async () => {
+      if (fetching || !token || cancelled) return;
+      fetching = true;
+      if (!igfForecast) setIgfLoading(true);
+      setIgfError(null);
+      try {
+        const data = await fetchIgfForecast(token);
+        if (!cancelled) {
+          setIgfForecast(data);
+        }
+      } catch (e: any) {
+        if (!cancelled) {
+          setIgfError(e?.message || "Error al cargar IGF Forecast");
+        }
+      } finally {
+        fetching = false;
+        if (!cancelled && !igfForecast) {
+          setIgfLoading(false);
+        }
+      }
+    };
+
+    load();
+    const id = setInterval(load, 60000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
   }, [token]);
 
   useEffect(() => {
