@@ -367,7 +367,7 @@ function KpiContent() {
               const rowF = findRowByPlanta(igfForecast.rows, plantaFilter);
               const rowA = igfMesAnterior ? findRowByPlanta(igfMesAnterior.rows, plantaFilter) : undefined;
               if (!rowF) return <p className="text-sm text-slate-500">No hay datos de forecast para esta planta.</p>;
-              const n = (v: number | null | undefined) => (v != null && !Number.isNaN(Number(v)) ? Number(v) : 0);
+              const n = (v: unknown): number => (v != null && !Number.isNaN(Number(v)) ? Number(v) : 0);
               const delta = (a: number | null | undefined, b: number | null | undefined) => n(a) - n(b);
               type Col = { key: string; label: string; fmt: (v: number) => string; isPct?: boolean };
               const cols: Col[] = [
