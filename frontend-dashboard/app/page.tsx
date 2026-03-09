@@ -356,12 +356,12 @@ function KpiContent() {
                 { key: "resultado_final_kg", label: "Resultado ($/kg)", fmt: (v) => fmtNum(v) },
                 { key: "resultado_final_importe", label: "Resultado (Importe)", fmt: (v) => fmtNum(v, 0) },
               ];
-              // Util. Oper. ($/kg) = margen - com_desc - impuesto + hg_kg - bancos - prov - gasto. HG% no se suma.
+              // Util. Oper. ($/kg) = suma de las 7 líneas (Margen, Com.Desc, Gasto, Impuesto, HG $/kg, Bancos Planta, Prov. Planta). HG% no se suma.
               const calcUtilOperKg = (row: IgfForecastRow | undefined): number => {
                 if (!row) return 0;
                 const r = row as Record<string, unknown>;
                 const num = (x: unknown) => n(x as number | null | undefined);
-                return num(r.margen_kg) - num(r.com_desc_kg) - num(r.impuesto_kg) + Math.abs(num(r.hg_kg)) - num(r.bancos_planta_kg) - num(r.provision_planta_kg) - num(r.gasto_kg);
+                return num(r.margen_kg) + num(r.com_desc_kg) + num(r.gasto_kg) + num(r.impuesto_kg) + num(r.hg_kg) + num(r.bancos_planta_kg) + num(r.provision_planta_kg);
               };
               const cellVal = (row: IgfForecastRow | undefined, c: Col) => {
                 if (!row) return "—";
