@@ -356,6 +356,7 @@ function KpiContent() {
                 { key: "resultado_final_kg", label: "Resultado ($/kg)", fmt: (v) => fmtNum(v) },
                 { key: "resultado_final_importe", label: "Resultado (Importe)", fmt: (v) => fmtNum(v, 0) },
               ];
+              // Util. Oper. ($/kg) = margen - com_desc - impuesto + hg_kg - bancos - prov - gasto. HG% no se suma.
               const calcUtilOperKg = (row: IgfForecastRow | undefined): number => {
                 if (!row) return 0;
                 const r = row as Record<string, unknown>;
@@ -383,8 +384,7 @@ function KpiContent() {
                 return c.isPct ? (n(vF) - n(vA)) * 100 : delta(vF, vA);
               };
               const ventaKgA = rowA ? n((rowA as Record<string, unknown>).venta_ton as number | null | undefined) * 1000 : 0;
-              // Puente operativo: util_oper_importe_A + impactos_operativos = util_oper_importe_F. Base tasa = ventaKgA.
-              // Ayudan cuando suben → impacto (B-A)*ventaKgA. Perjudican cuando suben → (A-B)*ventaKgA.
+              // Puente: util_oper_importe_A + impactos = util_oper_importe_F. Signos: ayuda a rentabilidad → +; perjudica → −.
               const cellImpacto = (c: Col): number | null => {
                 if (c.key === "empresa" || !rowA) return null;
                 if (c.key === "hg_pct") return null;
