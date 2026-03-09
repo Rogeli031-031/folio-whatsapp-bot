@@ -2135,6 +2135,7 @@ async function ensureSchema() {
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS solicitud_por_recuperar_pendiente BOOLEAN DEFAULT false;`);
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS solicitud_por_recuperar_pendiente BOOLEAN DEFAULT false;`);
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS mes_cargo VARCHAR(7);`);
+    await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS prestamo_a_planta VARCHAR(255);`);
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS descripcion TEXT;`);
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;`);
 
@@ -2522,7 +2523,8 @@ async function getFolioById(client, id) {
     `SELECT f.id, f.numero_folio, f.folio_codigo, f.planta_id, f.beneficiario, f.concepto, f.importe,
             f.categoria, f.subcategoria, f.estacion, f.unidad, f.prioridad, f.estatus, f.cotizacion_url, f.cotizacion_s3key,
             f.aprobado_por, f.aprobado_en, f.creado_en, f.nivel_aprobado, f.estatus_anterior, f.override_planta, f.override_motivo, f.creado_por, f.creado_por_rol_clave,
-            f.presupuesto_id, f.descripcion, f.mes_cargo, f.solo_zp_ad, COALESCE(f.por_recuperar, false) AS por_recuperar,
+            f.presupuesto_id, f.descripcion, f.mes_cargo, f.solo_zp_ad, f.prestamo_a_planta,
+            COALESCE(f.por_recuperar, false) AS por_recuperar,
             COALESCE(f.solicitud_por_recuperar_pendiente, false) AS solicitud_por_recuperar_pendiente,
             COALESCE(f.descripcion, f.concepto) AS descripcion_display,
             p.nombre AS planta_nombre
@@ -5927,6 +5929,33 @@ app.patch("/api/folios/:id", dashboardAuthMiddleware, async (req, res) => {
   }
 });
 
+/** Asignar folio como préstamo a otra planta (empresa IGF). Identifica el folio cargado a esa planta. */
+app.patch("/api/folios/:id/prestamo-a-planta", dashboardAuthMiddleware, async (req, res) => {
+  if (req.dashboardAuth.role === "GA") return res.status(403).json({ error: "GA solo puede ver e imprimir en el dashboard." });
+  const folioId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
+  const prestamoAPlanta = (req.body.prestamo_a_planta != null && req.body.prestamo_a_planta !== "")
+    ? String(req.body.prestamo_a_planta).trim()
+    : null;
+  const client = await pool.connect();
+  try {
+    const folio = await getFolioById(client, folioId);
+    if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
+    if ((req.dashboardAuth.role === "GG" || req.dashboardAuth.role === "GA") && req.dashboardAuth.plantas_permitidas?.length > 0) {
+      if (!folio.planta_id || !req.dashboardAuth.plantas_permitidas.includes(folio.planta_id)) {
+        return res.status(403).json({ error: "Sin permiso para este folio" });
+      }
+    }
+    await client.query(`UPDATE public.folios SET prestamo_a_planta = $1 WHERE id = $2`, [prestamoAPlanta, folioId]);
+    res.json({ ok: true, prestamo_a_planta: prestamoAPlanta });
+  } catch (e) {
+    console.error("[Dashboard PATCH prestamo-a-planta]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
 /** Marcar folio como solo visible para Director ZP y Asistente de Dirección (privado). Solo ZP y AD pueden cambiar esta opción. */
 app.patch("/api/folios/:id/solo-zp-ad", dashboardAuthMiddleware, async (req, res) => {
   const role = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) || "";
@@ -6354,6 +6383,26 @@ app.get("/api/dashboard/igf-versiones", dashboardAuthMiddleware, async (req, res
     res.json({ periodos });
   } catch (e) {
     console.error("[Dashboard igf-versiones]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/** Lista de empresas (plantas) que aparecen en IGF versiones (última versión del mes más reciente). Para "Préstamos a planta". */
+app.get("/api/dashboard/igf-empresas", dashboardAuthMiddleware, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const r = await client.query(
+      `SELECT DISTINCT c.empresa FROM igf.compromiso_lines c
+       JOIN igf.versions v ON v.id = c.version_id
+       WHERE v.plant_code = 'GLOBAL'
+       ORDER BY c.empresa`
+    );
+    const empresas = (r.rows || []).map((row) => (row.empresa || "").trim()).filter((e) => e && !/^TOTALES?$/i.test(e));
+    res.json({ empresas });
+  } catch (e) {
+    console.error("[Dashboard igf-empresas]", e);
     res.status(500).json({ error: e.message });
   } finally {
     client.release();

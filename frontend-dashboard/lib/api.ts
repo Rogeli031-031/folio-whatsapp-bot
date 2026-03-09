@@ -263,6 +263,22 @@ export function fetchIgfVersiones(token: string): Promise<{ periodos: IgfPeriodo
   return apiFetch<{ periodos: IgfPeriodo[] }>("/api/dashboard/igf-versiones", { token });
 }
 
+export function fetchIgfEmpresas(token: string): Promise<{ empresas: string[] }> {
+  return apiFetch<{ empresas: string[] }>("/api/dashboard/igf-empresas", { token });
+}
+
+export function patchFolioPrestamoAPlanta(
+  token: string,
+  folioId: number,
+  prestamoAPlanta: string | null
+): Promise<{ ok: boolean; prestamo_a_planta: string | null }> {
+  return apiFetch<{ ok: boolean; prestamo_a_planta: string | null }>(`/api/folios/${folioId}/prestamo-a-planta`, {
+    token,
+    method: "PATCH",
+    body: JSON.stringify({ prestamo_a_planta: prestamoAPlanta }),
+  });
+}
+
 export function postIgfComoCambioToken(
   token: string,
   body: { planta: string; yearA: number; monthA: number; versionA: number; yearB: number; monthB: number; versionB: number }

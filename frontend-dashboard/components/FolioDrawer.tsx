@@ -15,6 +15,8 @@ import {
   patchFolioPrioridad,
   postSolicitarPorRecuperar,
   postFolioCotizacion,
+  fetchIgfEmpresas,
+  patchFolioPrestamoAPlanta,
 } from "@/lib/api";
 
 function getMesesOpciones(): { value: string; label: string }[] {
@@ -58,6 +60,10 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
   const [cotizacionFile, setCotizacionFile] = useState<File | null>(null);
   const [uploadingCotizacion, setUploadingCotizacion] = useState(false);
   const [cotizacionError, setCotizacionError] = useState<string | null>(null);
+  const [prestamoOpen, setPrestamoOpen] = useState(false);
+  const [igfEmpresas, setIgfEmpresas] = useState<string[]>([]);
+  const [prestamoSelect, setPrestamoSelect] = useState<string>("");
+  const [savingPrestamo, setSavingPrestamo] = useState(false);
 
   useEffect(() => {
     if (!folioId || !token) {
@@ -359,6 +365,77 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
                       {solicitudPorRecuperarPendiente ? "El Contralor Financiero CDMX debe aprobar o rechazar por WhatsApp." : "Pagado de presupuesto y debe recuperarse. Se identifica en azul en el tablero."}
                     </p>
                   </div>
+                  {!soloLectura && (
+                    <div className="pt-2 border-t border-slate-700">
+                      <dt className="text-slate-500 mb-1">Préstamos a planta</dt>
+                      <dd>
+                        {(folio as Record<string, unknown>).prestamo_a_planta && (
+                          <p className="text-sm text-slate-300 mb-1">
+                            Cargado a: <strong>{(folio as Record<string, unknown>).prestamo_a_planta as string}</strong>
+                          </p>
+                        )}
+                        {!prestamoOpen ? (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (!token) return;
+                              setPrestamoOpen(true);
+                              setPrestamoSelect(((folio as Record<string, unknown>).prestamo_a_planta as string) || "");
+                              try {
+                                const { empresas } = await fetchIgfEmpresas(token);
+                                setIgfEmpresas(empresas || []);
+                              } catch {
+                                setIgfEmpresas([]);
+                              }
+                            }}
+                            className="rounded bg-slate-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-500"
+                          >
+                            Préstamos a planta
+                          </button>
+                        ) : (
+                          <div className="flex flex-wrap items-center gap-2">
+                            <select
+                              value={prestamoSelect}
+                              onChange={(e) => setPrestamoSelect(e.target.value)}
+                              className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
+                            >
+                              <option value="">— Ninguna —</option>
+                              {igfEmpresas.map((emp) => (
+                                <option key={emp} value={emp}>{emp}</option>
+                              ))}
+                            </select>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (!token || folioId == null) return;
+                                setSavingPrestamo(true);
+                                try {
+                                  await patchFolioPrestamoAPlanta(token, folioId, prestamoSelect.trim() || null);
+                                  const f = await fetchFolio(token, folioId);
+                                  setFolio(f as Record<string, unknown>);
+                                  setPrestamoOpen(false);
+                                  onApproved?.();
+                                } finally {
+                                  setSavingPrestamo(false);
+                                }
+                              }}
+                              disabled={savingPrestamo}
+                              className="rounded bg-slate-600 px-2 py-1.5 text-sm text-white hover:bg-slate-500 disabled:opacity-50"
+                            >
+                              {savingPrestamo ? "…" : "Guardar"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setPrestamoOpen(false)}
+                              className="rounded px-2 py-1.5 text-sm text-slate-400 hover:text-slate-200"
+                            >
+                              Cancelar
+                            </button>
+                          </div>
+                        )}
+                      </dd>
+                    </div>
+                  )}
                   {puedeRegresarZp && (
                     <div className="pt-2 border-t border-slate-700">
                       <dt className="text-slate-500 mb-1">Mes de cargo (para documento e impresión)</dt>
