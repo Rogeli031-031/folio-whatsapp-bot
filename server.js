@@ -4196,12 +4196,14 @@ function buildHelpMain() {
     "2️⃣ Proyectos",
     "3️⃣ Delta Ingreso (Análisis Comercial)",
     "4️⃣ IGF (Análisis Financiero Planta)",
+    "5️⃣ Presupuesto (semanal)",
     "",
     "Escribe:",
     "ayuda folios",
     "ayuda proyectos",
     "ayuda delta",
     "ayuda igf",
+    "ayuda presupuesto",
   ].join("\n");
 }
 
@@ -4297,7 +4299,20 @@ function buildHelpIgf() {
   ].join("\n");
 }
 
-/** Despacha ayuda por texto: main, folios, proyectos, delta, igf. */
+/** Ayuda Presupuesto semanal (GA solicita, GG aprueba/asigna). */
+function buildHelpPresupuesto() {
+  return [
+    "📋 Comandos Presupuesto semanal",
+    "",
+    "Solicitar (GA): solicitar presupuesto",
+    "Asignar (GG/CDMX): asignar presupuesto",
+    "Consultar: mi presupuesto",
+    "Carrito (GG): carrito | seleccionar folios 001 002",
+    "Enviar a cheques (CDMX): enviar a cheques",
+  ].join("\n");
+}
+
+/** Despacha ayuda por texto: main, folios, proyectos, delta, igf, presupuesto. */
 function getHelpForInput(bodyTrim, actor) {
   const t = (bodyTrim || "").trim().toLowerCase();
   if (t === "ayuda" || t === "help" || t === "menu") return buildHelpMain();
@@ -4305,6 +4320,7 @@ function getHelpForInput(bodyTrim, actor) {
   if (/^ayuda\s+proyectos$/i.test(bodyTrim)) return buildHelpProyectos(actor);
   if (/^ayuda\s+delta$/i.test(bodyTrim)) return buildHelpDelta();
   if (/^ayuda\s+igf$/i.test(bodyTrim)) return buildHelpIgf();
+  if (/^ayuda\s+presupuesto$/i.test(bodyTrim)) return buildHelpPresupuesto();
   if (/^comandos\s+delta$/i.test(bodyTrim)) return buildHelpDelta();
   return null;
 }
@@ -4314,7 +4330,7 @@ function buildHelpMessage(actor) {
   const helpMain = buildHelpMain();
   const helpFolios = buildHelpFolios(actor);
   const helpProyectos = buildHelpProyectos(actor);
-  return helpMain + "\n\n---\nPara ver solo un módulo: ayuda folios | ayuda proyectos | ayuda delta | ayuda igf";
+  return helpMain + "\n\n---\nPara ver solo un módulo: ayuda folios | ayuda proyectos | ayuda delta | ayuda igf | ayuda presupuesto";
 }
 
 function buildVersionMessage() {
@@ -6778,21 +6794,42 @@ app.post("/api/dashboard/delta-descuento-datos", dashboardAuthMiddleware, async 
   }
 });
 
-/** Obtiene un plant_code de arr que corresponde al nombre de planta (prov_map). */
+/** Alias nombre dropdown/IGF -> nombre en public.plantas (para Delta Ingreso Forecast y listas). */
+const ALIAS_PLANTA_NOMBRE = {
+  "gt puebla": "Puebla",
+  "gt - puebla": "Puebla",
+  "gtm queretaro": "Querétaro",
+  "gtm querétaro": "Querétaro",
+  "gtm - querétaro": "Querétaro",
+  "gtm san luis": "San Luis",
+  "gtm san luis p.": "San Luis",
+  "gtm - san luis p.": "San Luis",
+  "tehuacan": "Tehuacán",
+  "tehuacán": "Tehuacán",
+};
+
+/** Obtiene un plant_code de arr que corresponde al nombre de planta. No exige datos en ventas; todas las plantas en provincia_plants pueden usar Delta Forecast. */
 async function getPlantCodeArrFromPlantaNombre(client, plantaNombre) {
+  const raw = plantaNombre.trim();
+  const alias = ALIAS_PLANTA_NOMBRE[raw.toLowerCase()] || raw;
   const r = await client.query(
     `WITH prov_map AS (
-       SELECT DISTINCT p.nombre AS prov_name, UPPER(TRIM(p.nombre)) AS key_nombre, UPPER(TRIM(COALESCE(p.clave, ''))) AS key_clave
+       SELECT DISTINCT p.nombre AS prov_name, ap.plant_code AS arr_plant_code
          FROM public.plantas p
          JOIN arr.provincia_plants ap ON UPPER(TRIM(ap.plant_code)) = UPPER(TRIM(p.nombre)) OR (p.clave IS NOT NULL AND TRIM(p.clave) <> '' AND UPPER(TRIM(ap.plant_code)) = UPPER(TRIM(p.clave)))
         WHERE UPPER(TRIM(COALESCE(p.nombre, ''))) != 'CORPORATIVO' AND UPPER(TRIM(COALESCE(p.clave, ''))) != 'CORPORATIVO'
      )
-     SELECT v.plant_code FROM arr.ventas_diarias_cliente v
-     JOIN prov_map pm ON UPPER(TRIM(v.plant_code)) = pm.key_nombre OR (pm.key_clave <> '' AND UPPER(TRIM(v.plant_code)) = pm.key_clave)
-     WHERE pm.prov_name = $1 LIMIT 1`,
-    [plantaNombre.trim()]
+     SELECT pm.arr_plant_code AS plant_code FROM prov_map pm
+     WHERE pm.prov_name = $1 OR UPPER(TRIM(pm.prov_name)) = UPPER(TRIM($1))
+     LIMIT 1`,
+    [alias]
   );
-  return (r.rows && r.rows[0] && r.rows[0].plant_code) ? r.rows[0].plant_code : plantaNombre.trim();
+  if (r.rows && r.rows[0] && r.rows[0].plant_code) return r.rows[0].plant_code;
+  const r2 = await client.query(
+    `SELECT plant_code FROM arr.provincia_plants WHERE UPPER(TRIM(plant_code)) = UPPER(TRIM($1)) LIMIT 1`,
+    [raw]
+  );
+  return (r2.rows && r2.rows[0] && r2.rows[0].plant_code) ? r2.rows[0].plant_code : raw;
 }
 
 /** Periodos (YYYY-MM) disponibles para Delta Ingreso en una planta (mismos que Delta Venta). */
@@ -8704,10 +8741,35 @@ app.post("/twilio/whatsapp", async (req, res) => {
         );
       }
 
+      if (/^solicitar\s+presupuesto$/i.test(body.trim())) {
+        if (!actor) return safeReply("No estás dado de alta. Contacta al administrador.");
+        const rolClave = (actor.rol_clave && String(actor.rol_clave).toUpperCase()) || "";
+        const esGA = rolClave === "GA";
+        if (!esGA) return safeReply("Solo GA (Gerente Administrativo) puede solicitar presupuesto. GG aprueba con: asignar presupuesto.");
+        const plantaId = actor.planta_id != null ? actor.planta_id : null;
+        const plantaNombre = (actor.planta_nombre && String(actor.planta_nombre).trim()) || "mi planta";
+        if (!plantaId) return safeReply("No tienes planta asignada. Pide al administrador asignarte una planta.");
+        const ggList = await getUsersByRoleAndPlanta(client, "GG", plantaId);
+        const nombreGA = (actor.nombre && String(actor.nombre).trim()) || "GA";
+        const msgGG = `📋 Solicitud de presupuesto semanal: ${plantaNombre} (solicitado por ${nombreGA}). Para aprobar: asignar presupuesto`;
+        for (const u of ggList) {
+          if (u.telefono) {
+            try {
+              await sendWhatsApp(u.telefono, msgGG);
+            } catch (e) {
+              console.warn("[PRESUP] Notif GG solicitud:", e.message);
+            }
+          }
+        }
+        if (ggList.length === 0) return safeReply("Solicitud registrada. No hay GG asignado a tu planta; CDMX o GG pueden asignar presupuesto con: asignar presupuesto.");
+        return safeReply("Solicitud de presupuesto semanal enviada a GG. Te asignarán el monto para tu planta.");
+      }
+
       if (lower === "asignar presupuesto") {
         const rolClave = (actor && actor.rol_clave) ? String(actor.rol_clave).toUpperCase() : "";
         const esCDMX = rolClave === "CDMX" || (actor && actor.rol_nombre && String(actor.rol_nombre).toUpperCase().includes("CDMX"));
-        if (!esCDMX) return safeReply("Solo CDMX (Contralor) puede asignar presupuesto.");
+        const esGG = rolClave === "GG";
+        if (!esCDMX && !esGG) return safeReply("Solo GG o CDMX (Contralor) pueden asignar presupuesto. GA solicita con: solicitar presupuesto.");
         const plantas = await getPlantas(client);
         if (!plantas.length) return safeReply("No hay plantas en catálogo.");
         sess.dd.intent = "PRESUP_ASIGNAR";
