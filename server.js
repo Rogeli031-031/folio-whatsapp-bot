@@ -6832,15 +6832,16 @@ async function getPlantCodeArrFromPlantaNombre(client, plantaNombre) {
   return (r2.rows && r2.rows[0] && r2.rows[0].plant_code) ? r2.rows[0].plant_code : raw;
 }
 
-/** Periodos (YYYY-MM) disponibles para Delta Ingreso en una planta (mismos que Delta Venta). */
+/** Periodos (YYYY-MM) disponibles para Delta Ingreso en una planta (mismos que Delta Venta). Usa mismo alias que getPlantCodeArrFromPlantaNombre para que todas las plantas del dropdown tengan fechas. */
 app.get("/api/dashboard/delta-ingreso-periodos", dashboardAuthMiddleware, async (req, res) => {
   const planta = (req.query.planta || "").toString().trim();
   if (!planta) {
     return res.status(400).json({ error: "Falta planta" });
   }
+  const plantaResuelta = ALIAS_PLANTA_NOMBRE[planta.toLowerCase()] || planta;
   const client = await pool.connect();
   try {
-    const periodos = await getPeriodosDeltaVenta(client, planta);
+    const periodos = await getPeriodosDeltaVenta(client, plantaResuelta);
     res.json({ periodos: periodos || [] });
   } catch (e) {
     console.error("[Dashboard delta-ingreso-periodos]", e);
