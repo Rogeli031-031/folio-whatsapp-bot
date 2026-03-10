@@ -1663,11 +1663,35 @@ async function getCategoriasPresupuestoCatalogo(client, plantaId) {
   return (r.rows || []).map((row) => row.categoria).filter(Boolean);
 }
 
+/** Categorías en presupuesto_catalogo para una o varias plantas (ej. equivalentes: Puebla + E7). Mismo catálogo que "mi presupuesto". */
+async function getCategoriasPresupuestoCatalogoPorPlantas(client, plantaIds) {
+  if (!plantaIds || plantaIds.length === 0) return [];
+  const ids = plantaIds.map((id) => parseInt(id, 10)).filter(Number.isFinite);
+  if (ids.length === 0) return [];
+  const r = await client.query(
+    `SELECT DISTINCT categoria FROM public.presupuesto_catalogo WHERE planta_id = ANY($1::INT[]) AND (activo IS NULL OR activo = true) ORDER BY categoria`,
+    [ids]
+  );
+  return (r.rows || []).map((row) => row.categoria).filter(Boolean);
+}
+
 /** Subcategorías en presupuesto_catalogo para planta y categoría. */
 async function getSubcategoriasPresupuestoCatalogo(client, plantaId, categoria) {
   const r = await client.query(
     `SELECT subcategoria FROM public.presupuesto_catalogo WHERE planta_id = $1 AND categoria = $2 AND (activo IS NULL OR activo = true) ORDER BY subcategoria`,
     [plantaId, categoria]
+  );
+  return (r.rows || []).map((row) => row.subcategoria).filter(Boolean);
+}
+
+/** Subcategorías en presupuesto_catalogo para una o varias plantas (equivalentes) y categoría. */
+async function getSubcategoriasPresupuestoCatalogoPorPlantas(client, plantaIds, categoria) {
+  if (!plantaIds || plantaIds.length === 0 || !categoria) return [];
+  const ids = plantaIds.map((id) => parseInt(id, 10)).filter(Number.isFinite);
+  if (ids.length === 0) return [];
+  const r = await client.query(
+    `SELECT DISTINCT subcategoria FROM public.presupuesto_catalogo WHERE planta_id = ANY($1::INT[]) AND categoria = $2 AND (activo IS NULL OR activo = true) ORDER BY subcategoria`,
+    [ids, categoria]
   );
   return (r.rows || []).map((row) => row.subcategoria).filter(Boolean);
 }
@@ -7510,12 +7534,14 @@ app.post("/twilio/whatsapp", async (req, res) => {
             if (m >= 1 && m <= 12) {
               pre.periodo = `${y}-${String(m).padStart(2, "0")}`;
               pre.step = "CATEGORIA";
-              const categorias = await getCategoriasPresupuestoCatalogo(client, pre.planta_id);
+              const plantasEquiv = getPlantaIdsEquivalentesForPendientes(pre.planta_id);
+              const categorias = await getCategoriasPresupuestoCatalogoPorPlantas(client, plantasEquiv);
               if (!categorias.length) {
                 sess.presupuestoSolicitud = null;
                 return safeReply("Tu planta no tiene catálogo de presupuesto. Contacta al administrador.");
               }
               pre._categorias = categorias;
+              pre._plantasEquiv = plantasEquiv;
               const list = categorias.map((c, i) => `${i + 1}) ${c}`).join("\n");
               return safeReply(`Periodo: ${pre.periodo}.\n\n¿Categoría?\n${list}\nResponde con el número o nombre.`);
             }
@@ -7526,7 +7552,8 @@ app.post("/twilio/whatsapp", async (req, res) => {
         }
 
         if (step === "CATEGORIA") {
-          const categorias = pre._categorias || await getCategoriasPresupuestoCatalogo(client, pre.planta_id);
+          const plantasEquiv = pre._plantasEquiv || getPlantaIdsEquivalentesForPendientes(pre.planta_id);
+          const categorias = pre._categorias || await getCategoriasPresupuestoCatalogoPorPlantas(client, plantasEquiv);
           const num = parseInt(bodyTrim, 10);
           let categoria = null;
           if (Number.isFinite(num) && num >= 1 && num <= categorias.length) categoria = categorias[num - 1];
@@ -7534,7 +7561,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
           if (!categoria) return safeReply("Responde con el número o nombre de la categoría.");
           pre.categoria = categoria;
           pre.step = "SUBCATEGORIA";
-          const subcats = await getSubcategoriasPresupuestoCatalogo(client, pre.planta_id, categoria);
+          const subcats = await getSubcategoriasPresupuestoCatalogoPorPlantas(client, plantasEquiv, categoria);
           if (!subcats.length) return safeReply("No hay subcategorías para esa categoría. Responde CANCELAR para salir.");
           pre._subcategorias = subcats;
           const list = subcats.map((s, i) => `${i + 1}) ${s}`).join("\n");
