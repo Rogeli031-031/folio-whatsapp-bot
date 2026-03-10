@@ -1650,6 +1650,109 @@ async function queryPresupuestoDeltas(client, plantaNombre, periodoA, periodoB) 
   return { totalA, totalB, delta: totalB - totalA, porCategoria, porSubcategoria };
 }
 
+/* ==================== PRESUPUESTO SOLICITUDES (PRE) ==================== */
+
+const PRESUP_ESTATUS_SOLICITUD = { PENDIENTE_APROBACION_GG: "PENDIENTE_APROBACION_GG", APROBADO: "APROBADO", RECHAZADO: "RECHAZADO" };
+
+/** Categorías distintas en presupuesto_catalogo para una planta. */
+async function getCategoriasPresupuestoCatalogo(client, plantaId) {
+  const r = await client.query(
+    `SELECT DISTINCT categoria FROM public.presupuesto_catalogo WHERE planta_id = $1 AND (activo IS NULL OR activo = true) ORDER BY categoria`,
+    [plantaId]
+  );
+  return (r.rows || []).map((row) => row.categoria).filter(Boolean);
+}
+
+/** Subcategorías en presupuesto_catalogo para planta y categoría. */
+async function getSubcategoriasPresupuestoCatalogo(client, plantaId, categoria) {
+  const r = await client.query(
+    `SELECT subcategoria FROM public.presupuesto_catalogo WHERE planta_id = $1 AND categoria = $2 AND (activo IS NULL OR activo = true) ORDER BY subcategoria`,
+    [plantaId, categoria]
+  );
+  return (r.rows || []).map((row) => row.subcategoria).filter(Boolean);
+}
+
+/** Siguiente consecutivo PRE para planta+periodo (YYYYMM). Devuelve { numero_pre, seq }. */
+async function getNextPresupuestoConsecutivo(client, plantaId, periodoYyyymm) {
+  const up = await client.query(
+    `INSERT INTO public.presupuesto_counters (planta_id, periodo_yyyymm, last_seq) VALUES ($1, $2, 1)
+     ON CONFLICT (planta_id, periodo_yyyymm) DO UPDATE SET last_seq = presupuesto_counters.last_seq + 1
+     RETURNING last_seq`,
+    [plantaId, periodoYyyymm]
+  );
+  const seq = (up.rows && up.rows[0] && up.rows[0].last_seq) ? parseInt(up.rows[0].last_seq, 10) : 1;
+  const numero_pre = `PRE-${periodoYyyymm}-${String(seq).padStart(3, "0")}`;
+  return { numero_pre, seq };
+}
+
+/** Inserta presupuesto_solicitudes. Devuelve row con id, numero_pre. */
+async function insertPresupuestoSolicitud(client, data) {
+  const r = await client.query(
+    `INSERT INTO public.presupuesto_solicitudes (numero_pre, planta_id, periodo, categoria, subcategoria, monto, concepto, prioridad, estatus, creado_por)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id, numero_pre, periodo, planta_id`,
+    [
+      data.numero_pre,
+      data.planta_id,
+      data.periodo,
+      data.categoria,
+      data.subcategoria,
+      data.monto,
+      data.concepto || null,
+      data.prioridad || "NORMAL",
+      data.estatus || PRESUP_ESTATUS_SOLICITUD.PENDIENTE_APROBACION_GG,
+      data.creado_por || null,
+    ]
+  );
+  return r.rows[0];
+}
+
+/** Inserta presupuesto_archivos. */
+async function insertPresupuestoArchivo(client, data) {
+  const r = await client.query(
+    `INSERT INTO public.presupuesto_archivos (solicitud_id, tipo_documento, s3_key, url, hash, file_name, file_size_bytes, mime_type, subido_por)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+    [
+      data.solicitud_id,
+      data.tipo_documento || "COTIZACION",
+      data.s3_key,
+      data.url || null,
+      data.hash || null,
+      data.file_name || null,
+      data.file_size_bytes || null,
+      data.mime_type || "application/pdf",
+      data.subido_por || null,
+    ]
+  );
+  return r.rows[0];
+}
+
+/** Inserta presupuesto_historial. */
+async function insertPresupuestoHistorial(client, data) {
+  await client.query(
+    `INSERT INTO public.presupuesto_historial (solicitud_id, numero_pre, evento, detalle, actor) VALUES ($1, $2, $3, $4, $5)`,
+    [data.solicitud_id || null, data.numero_pre || null, data.evento, data.detalle || null, data.actor || null]
+  );
+}
+
+/** Solicitud por numero_pre. */
+async function getPresupuestoSolicitudByNumero(client, numeroPre) {
+  const r = await client.query(
+    `SELECT id, numero_pre, planta_id, periodo, categoria, subcategoria, monto, concepto, prioridad, estatus, creado_por, creado_en, aprobado_por, aprobado_en, motivo_rechazo
+     FROM public.presupuesto_solicitudes WHERE numero_pre = $1`,
+    [numeroPre]
+  );
+  return r.rows[0] || null;
+}
+
+/** Archivos activos de una solicitud (para mostrar link PDF a GG). */
+async function listPresupuestoArchivosBySolicitudId(client, solicitudId) {
+  const r = await client.query(
+    `SELECT id, tipo_documento, s3_key, url, file_name, subido_en FROM public.presupuesto_archivos WHERE solicitud_id = $1 AND (activo IS NULL OR activo = true) ORDER BY subido_en DESC`,
+    [solicitudId]
+  );
+  return r.rows || [];
+}
+
 /** Plantas con datos de ventas diarias (Delta Venta), usando mapeo Provincia. */
 async function getPlantasDeltaVenta(client) {
   const r = await client.query(`
@@ -2399,6 +2502,64 @@ async function ensureSchema() {
         linea_detalle VARCHAR(255) NOT NULL,
         monto NUMERIC(18,2) NOT NULL DEFAULT 0,
         UNIQUE(planta_id, periodo, categoria, subcategoria, linea_detalle)
+      );
+    `).catch(() => {});
+
+    /* Solicitudes de presupuesto (GA solicita, GG aprueba). PRE-YYYYMM-XXX. */
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS public.presupuesto_counters (
+        planta_id INT NOT NULL REFERENCES public.plantas(id),
+        periodo_yyyymm VARCHAR(6) NOT NULL,
+        last_seq INT NOT NULL DEFAULT 0,
+        PRIMARY KEY (planta_id, periodo_yyyymm)
+      );
+    `).catch(() => {});
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS public.presupuesto_solicitudes (
+        id SERIAL PRIMARY KEY,
+        numero_pre VARCHAR(20) NOT NULL UNIQUE,
+        planta_id INT NOT NULL REFERENCES public.plantas(id),
+        periodo VARCHAR(7) NOT NULL,
+        categoria VARCHAR(120) NOT NULL,
+        subcategoria VARCHAR(255) NOT NULL,
+        monto NUMERIC(18,2) NOT NULL,
+        concepto TEXT,
+        prioridad VARCHAR(20) DEFAULT 'NORMAL',
+        estatus VARCHAR(40) NOT NULL DEFAULT 'PENDIENTE_APROBACION_GG',
+        creado_por VARCHAR(120),
+        creado_en TIMESTAMPTZ DEFAULT NOW(),
+        aprobado_por VARCHAR(120),
+        aprobado_en TIMESTAMPTZ,
+        motivo_rechazo TEXT,
+        saldo_antes NUMERIC(18,2),
+        saldo_despues NUMERIC(18,2)
+      );
+    `).catch(() => {});
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS public.presupuesto_archivos (
+        id SERIAL PRIMARY KEY,
+        solicitud_id INT NOT NULL REFERENCES public.presupuesto_solicitudes(id) ON DELETE CASCADE,
+        tipo_documento VARCHAR(30) NOT NULL DEFAULT 'COTIZACION',
+        s3_key TEXT NOT NULL,
+        url TEXT,
+        hash VARCHAR(64),
+        file_name TEXT,
+        file_size_bytes BIGINT,
+        mime_type TEXT DEFAULT 'application/pdf',
+        subido_en TIMESTAMPTZ DEFAULT NOW(),
+        subido_por VARCHAR(120),
+        activo BOOLEAN DEFAULT true
+      );
+    `).catch(() => {});
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS public.presupuesto_historial (
+        id SERIAL PRIMARY KEY,
+        solicitud_id INT REFERENCES public.presupuesto_solicitudes(id),
+        numero_pre VARCHAR(20),
+        evento VARCHAR(60) NOT NULL,
+        detalle TEXT,
+        actor VARCHAR(120),
+        creado_en TIMESTAMPTZ DEFAULT NOW()
       );
     `).catch(() => {});
 
@@ -4299,16 +4460,16 @@ function buildHelpIgf() {
   ].join("\n");
 }
 
-/** Ayuda Presupuesto semanal (GA solicita, GG aprueba/asigna). */
+/** Ayuda Presupuesto (semanal + solicitudes PRE). */
 function buildHelpPresupuesto() {
   return [
-    "📋 Comandos Presupuesto semanal",
+    "📋 Comandos Presupuesto",
     "",
-    "Solicitar (GA): solicitar presupuesto",
-    "Asignar (GG/CDMX): asignar presupuesto",
-    "Consultar: mi presupuesto",
-    "Carrito (GG): carrito | seleccionar folios 001 002",
-    "Enviar a cheques (CDMX): enviar a cheques",
+    "Solicitud de gasto (GA): solicitar presupuesto → formulario (periodo, categoría, subcategoría, concepto, importe, PDF) → CONFIRMAR. Se crea PRE-YYYYMM-XXX y se envía a GG.",
+    "Aprobar (GG): aprobar presupuesto PRE-202603-001",
+    "Rechazar (GG): rechazar presupuesto PRE-202603-001 motivo: (texto)",
+    "",
+    "Presupuesto semanal: asignar presupuesto (GG/CDMX), mi presupuesto, carrito, seleccionar folios 001 002, enviar a cheques (CDMX).",
   ].join("\n");
 }
 
@@ -4428,6 +4589,7 @@ function getSession(from) {
       presupuestoComparar: null,
       presupuestoEjercido: null,
       deltaVenta: null,
+      presupuestoSolicitud: null,
     });
   }
   const s = sessions.get(from);
@@ -4441,6 +4603,7 @@ function getSession(from) {
   if (s.presupuestoEjercido === undefined) s.presupuestoEjercido = null;
   if (s.deltaVenta === undefined) s.deltaVenta = null;
   if (s.adPoliza === undefined) s.adPoliza = null;
+  if (s.presupuestoSolicitud === undefined) s.presupuestoSolicitud = null;
   return s;
 }
 
@@ -4458,6 +4621,7 @@ function resetSession(sess) {
   sess.presupuestoEjercido = null;
   sess.deltaVenta = null;
   sess.adPoliza = null;
+  sess.presupuestoSolicitud = null;
 }
 
 /* ==================== NOTIFICACIONES WHATSAPP ==================== */
@@ -7301,6 +7465,11 @@ app.post("/twilio/whatsapp", async (req, res) => {
       resetSession(sess);
       return safeReply("Listo. Cancelé el flujo. Escribe: Crear folio o Ayuda");
     }
+    // Dentro del formulario PRE, CANCELAR solo sale de ese flujo
+    if (sess.presupuestoSolicitud && /^(cancelar|salir|no)$/i.test(body.trim())) {
+      sess.presupuestoSolicitud = null;
+      return safeReply("Solicitud de presupuesto cancelada. Escribe: Crear folio o Ayuda");
+    }
 
     if (sess.estado === "ESPERANDO_COTIZACION_PDF" && numMedia === 0) {
       return safeReply("Envía la cotización en PDF para crear el folio. Responde con el archivo adjunto. (O escribe Cancelar para salir.)");
@@ -7326,6 +7495,131 @@ app.post("/twilio/whatsapp", async (req, res) => {
 
       const helpMsg = getHelpForInput(body.trim(), actor);
       if (helpMsg) return safeReply(helpMsg);
+
+      /* Formulario Solicitud de Presupuesto (PRE): GA llena paso a paso, luego CONFIRMAR y notificación a GG */
+      if (sess.presupuestoSolicitud && sess.presupuestoSolicitud.planta_id && numMedia === 0) {
+        const pre = sess.presupuestoSolicitud;
+        const step = pre.step;
+        const bodyTrim = body.trim();
+
+        if (step === "PERIODO") {
+          const periodoMatch = bodyTrim.match(/^(\d{4})-(\d{2})$/);
+          if (periodoMatch) {
+            const y = parseInt(periodoMatch[1], 10);
+            const m = parseInt(periodoMatch[2], 10);
+            if (m >= 1 && m <= 12) {
+              pre.periodo = `${y}-${String(m).padStart(2, "0")}`;
+              pre.step = "CATEGORIA";
+              const categorias = await getCategoriasPresupuestoCatalogo(client, pre.planta_id);
+              if (!categorias.length) {
+                sess.presupuestoSolicitud = null;
+                return safeReply("Tu planta no tiene catálogo de presupuesto. Contacta al administrador.");
+              }
+              pre._categorias = categorias;
+              const list = categorias.map((c, i) => `${i + 1}) ${c}`).join("\n");
+              return safeReply(`Periodo: ${pre.periodo}.\n\n¿Categoría?\n${list}\nResponde con el número o nombre.`);
+            }
+          }
+          const now = new Date();
+          const mesActual = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+          return safeReply(`Indica el periodo (YYYY-MM). Ejemplo: ${mesActual}`);
+        }
+
+        if (step === "CATEGORIA") {
+          const categorias = pre._categorias || await getCategoriasPresupuestoCatalogo(client, pre.planta_id);
+          const num = parseInt(bodyTrim, 10);
+          let categoria = null;
+          if (Number.isFinite(num) && num >= 1 && num <= categorias.length) categoria = categorias[num - 1];
+          else categoria = categorias.find((c) => c.toLowerCase() === bodyTrim.toLowerCase()) || null;
+          if (!categoria) return safeReply("Responde con el número o nombre de la categoría.");
+          pre.categoria = categoria;
+          pre.step = "SUBCATEGORIA";
+          const subcats = await getSubcategoriasPresupuestoCatalogo(client, pre.planta_id, categoria);
+          if (!subcats.length) return safeReply("No hay subcategorías para esa categoría. Responde CANCELAR para salir.");
+          pre._subcategorias = subcats;
+          const list = subcats.map((s, i) => `${i + 1}) ${s}`).join("\n");
+          return safeReply(`Categoría: ${categoria}.\n\n¿Subcategoría?\n${list}\nResponde con el número o nombre.`);
+        }
+
+        if (step === "SUBCATEGORIA") {
+          const subcats = pre._subcategorias || [];
+          const num = parseInt(bodyTrim, 10);
+          let subcat = null;
+          if (Number.isFinite(num) && num >= 1 && num <= subcats.length) subcat = subcats[num - 1];
+          else subcat = subcats.find((s) => s.toLowerCase() === bodyTrim.toLowerCase()) || null;
+          if (!subcat) return safeReply("Responde con el número o nombre de la subcategoría.");
+          pre.subcategoria = subcat;
+          pre.step = "CONCEPTO";
+          return safeReply("Escribe el concepto (descripción del gasto).");
+        }
+
+        if (step === "CONCEPTO") {
+          if (bodyTrim.length < 2) return safeReply("Indica un concepto (al menos 2 caracteres).");
+          pre.concepto = bodyTrim.substring(0, 500);
+          pre.step = "MONTO";
+          return safeReply("Escribe el importe (número mayor a 0). Ejemplo: 15000 o 15000.50");
+        }
+
+        if (step === "MONTO") {
+          const monto = parseFloat(bodyTrim.replace(/,/g, ""));
+          if (!Number.isFinite(monto) || monto <= 0) return safeReply("Escribe un importe válido (número mayor a 0).");
+          pre.monto = Math.round(monto * 100) / 100;
+          pre.step = "ESPERANDO_PDF";
+          return safeReply("Envía el PDF (cotización o vale firmado). Es obligatorio. Responde con el archivo adjunto.");
+        }
+
+        if (step === "CONFIRMAR" && /^confirmar$/i.test(bodyTrim)) {
+          if (!pre.pendingPdf || !pre.pendingPdf.s3_key) {
+            return safeReply("Debes adjuntar al menos un PDF antes de confirmar. Envía el archivo ahora.");
+          }
+          const periodoYyyymm = (pre.periodo || "").replace("-", "");
+          const { numero_pre } = await getNextPresupuestoConsecutivo(client, pre.planta_id, periodoYyyymm);
+          const row = await insertPresupuestoSolicitud(client, {
+            numero_pre,
+            planta_id: pre.planta_id,
+            periodo: pre.periodo,
+            categoria: pre.categoria,
+            subcategoria: pre.subcategoria,
+            monto: pre.monto,
+            concepto: pre.concepto,
+            prioridad: "NORMAL",
+            estatus: PRESUP_ESTATUS_SOLICITUD.PENDIENTE_APROBACION_GG,
+            creado_por: fromNorm,
+          });
+          await insertPresupuestoArchivo(client, {
+            solicitud_id: row.id,
+            tipo_documento: "COTIZACION",
+            s3_key: pre.pendingPdf.s3_key,
+            url: pre.pendingPdf.url,
+            hash: pre.pendingPdf.sha256,
+            file_name: pre.pendingPdf.file_name,
+            file_size_bytes: pre.pendingPdf.file_size_bytes,
+            subido_por: fromNorm,
+          });
+          await insertPresupuestoHistorial(client, { solicitud_id: row.id, numero_pre, evento: "CREADO", detalle: "Solicitud enviada a GG", actor: fromNorm });
+          const ggList = await getUsersByRoleAndPlanta(client, "GG", pre.planta_id);
+          const nombreGA = (actor && actor.nombre && String(actor.nombre).trim()) || "GA";
+          const msgGG = `📋 Solicitud de presupuesto ${numero_pre}\nPlanta: ${pre.planta_nombre}\nConcepto: ${(pre.concepto || "").substring(0, 80)}\nCategoría: ${pre.categoria} / ${pre.subcategoria}\nMonto: $${Number(pre.monto).toLocaleString("es-MX", { minimumFractionDigits: 2 })}\n\nPara aprobar: aprobar presupuesto ${numero_pre}\nPara rechazar: rechazar presupuesto ${numero_pre} motivo: (texto)`;
+          for (const u of ggList) {
+            if (u.telefono) {
+              try {
+                await sendWhatsApp(u.telefono, msgGG);
+              } catch (e) {
+                console.warn("[PRE] Notif GG:", e.message);
+              }
+            }
+          }
+          sess.presupuestoSolicitud = null;
+          return safeReply(`✅ Solicitud ${numero_pre} creada y enviada a GG para aprobación. Te notificarán cuando la aprueben.`);
+        }
+
+        if (step === "CONFIRMAR") {
+          return safeReply("Responde CONFIRMAR para enviar la solicitud a GG o CANCELAR para salir.");
+        }
+        if (step === "ESPERANDO_PDF") {
+          return safeReply("Envía el PDF (cotización o vale firmado). Es obligatorio. Responde con el archivo adjunto.");
+        }
+      }
 
       /* Comandos dashboard y mis pendientes (antes de Delta Ingreso para que GG los use correctamente) */
       const matchDashboardEarly = body.trim().match(/^dashboard(\s+(zp|gg|resumen|etapa|planta|categoria))?(\s+(.+))?$/i);
@@ -8746,24 +9040,18 @@ app.post("/twilio/whatsapp", async (req, res) => {
         if (!actor) return safeReply("No estás dado de alta. Contacta al administrador.");
         const rolClave = (actor.rol_clave && String(actor.rol_clave).toUpperCase()) || "";
         const esGA = rolClave === "GA";
-        if (!esGA) return safeReply("Solo GA (Gerente Administrativo) puede solicitar presupuesto. GG aprueba con: asignar presupuesto.");
+        if (!esGA) return safeReply("Solo GA (Gerente Administrativo) puede solicitar presupuesto.");
         const plantaId = actor.planta_id != null ? actor.planta_id : null;
         const plantaNombre = (actor.planta_nombre && String(actor.planta_nombre).trim()) || "mi planta";
         if (!plantaId) return safeReply("No tienes planta asignada. Pide al administrador asignarte una planta.");
-        const ggList = await getUsersByRoleAndPlanta(client, "GG", plantaId);
-        const nombreGA = (actor.nombre && String(actor.nombre).trim()) || "GA";
-        const msgGG = `📋 Solicitud de presupuesto semanal: ${plantaNombre} (solicitado por ${nombreGA}). Para aprobar: asignar presupuesto`;
-        for (const u of ggList) {
-          if (u.telefono) {
-            try {
-              await sendWhatsApp(u.telefono, msgGG);
-            } catch (e) {
-              console.warn("[PRESUP] Notif GG solicitud:", e.message);
-            }
-          }
-        }
-        if (ggList.length === 0) return safeReply("Solicitud registrada. No hay GG asignado a tu planta; CDMX o GG pueden asignar presupuesto con: asignar presupuesto.");
-        return safeReply("Solicitud de presupuesto semanal enviada a GG. Te asignarán el monto para tu planta.");
+        sess.presupuestoSolicitud = {
+          step: "PERIODO",
+          planta_id: plantaId,
+          planta_nombre: plantaNombre,
+        };
+        const now = new Date();
+        const mesActual = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+        return safeReply(`Solicitud de presupuesto (gasto). Planta: ${plantaNombre}.\n\n1) Indica el periodo (YYYY-MM). Ejemplo: ${mesActual}`);
       }
 
       if (lower === "asignar presupuesto") {
@@ -8826,6 +9114,67 @@ app.post("/twilio/whatsapp", async (req, res) => {
         const list = plantas.map((p, i) => `${i + 1}) ${p.nombre}`).join("\n");
         console.log("[PRESUP] Inicio enviar a cheques (CDMX)");
         return safeReply("ENVIAR A CHEQUES\n\n¿Planta?\n" + list + "\n\nResponde con el número o nombre.");
+      }
+
+      const matchAprobarPresupuesto = body.trim().match(/^aprobar\s+presupuesto\s+(PRE-\d{6}-\d{2,3})$/i);
+      if (matchAprobarPresupuesto) {
+        if (!actor) return safeReply("No estás dado de alta.");
+        const rolClave = (actor.rol_clave && String(actor.rol_clave).toUpperCase()) || "";
+        if (rolClave !== "GG") return safeReply("Solo GG puede aprobar solicitudes de presupuesto.");
+        const numeroPre = matchAprobarPresupuesto[1].toUpperCase();
+        const sol = await getPresupuestoSolicitudByNumero(client, numeroPre);
+        if (!sol) return safeReply(`No existe la solicitud ${numeroPre}.`);
+        if (String(sol.estatus || "").toUpperCase() === "APROBADO") return safeReply(`La solicitud ${numeroPre} ya fue aprobada.`);
+        if (String(sol.estatus || "").toUpperCase() !== "PENDIENTE_APROBACION_GG") return safeReply(`La solicitud ${numeroPre} no está pendiente de aprobación.`);
+        if (sol.planta_id !== actor.planta_id) return safeReply("Solo puedes aprobar solicitudes de tu planta.");
+        await client.query(
+          `UPDATE public.presupuesto_solicitudes SET estatus = $1, aprobado_por = $2, aprobado_en = NOW() WHERE id = $3`,
+          [PRESUP_ESTATUS_SOLICITUD.APROBADO, fromNorm, sol.id]
+        );
+        await insertPresupuestoHistorial(client, { solicitud_id: sol.id, numero_pre: numeroPre, evento: "APROBADO", detalle: "Aprobado por GG", actor: fromNorm });
+        const gaList = await getUsersByRoleAndPlanta(client, "GA", sol.planta_id);
+        const msgGA = `✅ Tu solicitud ${numeroPre} fue aprobada por GG.`;
+        for (const u of gaList) {
+          if (u.telefono) {
+            try {
+              await sendWhatsApp(u.telefono, msgGA);
+            } catch (e) {
+              console.warn("[PRE] Notif GA aprobado:", e.message);
+            }
+          }
+        }
+        return safeReply(`✅ Solicitud ${numeroPre} aprobada. GA notificado.`);
+      }
+
+      const matchRechazarPresupuesto = body.trim().match(/^rechazar\s+presupuesto\s+(PRE-\d{6}-\d{2,3})\s+motivo:\s*(.+)$/is);
+      if (matchRechazarPresupuesto) {
+        if (!actor) return safeReply("No estás dado de alta.");
+        const rolClave = (actor.rol_clave && String(actor.rol_clave).toUpperCase()) || "";
+        if (rolClave !== "GG") return safeReply("Solo GG puede rechazar solicitudes de presupuesto.");
+        const numeroPre = matchRechazarPresupuesto[1].toUpperCase();
+        const motivo = (matchRechazarPresupuesto[2] || "").trim().substring(0, 500);
+        if (!motivo) return safeReply("Indica el motivo. Ejemplo: rechazar presupuesto PRE-202603-001 motivo: no hay partida.");
+        const sol = await getPresupuestoSolicitudByNumero(client, numeroPre);
+        if (!sol) return safeReply(`No existe la solicitud ${numeroPre}.`);
+        if (String(sol.estatus || "").toUpperCase() !== "PENDIENTE_APROBACION_GG") return safeReply(`La solicitud ${numeroPre} no está pendiente de aprobación.`);
+        if (sol.planta_id !== actor.planta_id) return safeReply("Solo puedes rechazar solicitudes de tu planta.");
+        await client.query(
+          `UPDATE public.presupuesto_solicitudes SET estatus = $1, motivo_rechazo = $2, aprobado_por = $3, aprobado_en = NOW() WHERE id = $4`,
+          [PRESUP_ESTATUS_SOLICITUD.RECHAZADO, motivo, fromNorm, sol.id]
+        );
+        await insertPresupuestoHistorial(client, { solicitud_id: sol.id, numero_pre: numeroPre, evento: "RECHAZADO", detalle: motivo, actor: fromNorm });
+        const gaList = await getUsersByRoleAndPlanta(client, "GA", sol.planta_id);
+        const msgGA = `La solicitud ${numeroPre} fue rechazada por GG.\nMotivo: ${motivo}`;
+        for (const u of gaList) {
+          if (u.telefono) {
+            try {
+              await sendWhatsApp(u.telefono, msgGA);
+            } catch (e) {
+              console.warn("[PRE] Notif GA rechazado:", e.message);
+            }
+          }
+        }
+        return safeReply(`Solicitud ${numeroPre} rechazada. GA notificado.`);
       }
 
       if (lower === "crear proyecto") {
@@ -10641,6 +10990,30 @@ app.post("/twilio/whatsapp", async (req, res) => {
       const mediaType = (req.body.MediaContentType0 || "").toLowerCase();
       if (!mediaUrl) return safeReply("Recibí un adjunto pero no tengo la URL. Intenta de nuevo.");
       if (!mediaType.includes("pdf")) return safeReply("Solo acepto PDF para cotización.");
+
+      if (sess.presupuestoSolicitud && sess.presupuestoSolicitud.step === "ESPERANDO_PDF") {
+        const pre = sess.presupuestoSolicitud;
+        try {
+          const buffer = await downloadTwilioMediaAsBuffer(mediaUrl);
+          const hash = sha256Hex(buffer);
+          const numeroPreTentativo = `PRE-${(pre.periodo || "").replace("-", "")}-000`;
+          const s3Key = `presupuesto/${numeroPreTentativo}/${Date.now()}.pdf`;
+          const publicUrl = await uploadPdfToS3(buffer, s3Key);
+          const fileSize = Buffer.isBuffer(buffer) ? buffer.length : 0;
+          pre.pendingPdf = {
+            s3_key: s3Key,
+            url: publicUrl,
+            sha256: hash,
+            file_name: (req.body.MediaUrl0 || "").split("/").pop() || "documento.pdf",
+            file_size_bytes: fileSize,
+          };
+          pre.step = "CONFIRMAR";
+          return safeReply("PDF recibido. Responde CONFIRMAR para enviar la solicitud a GG o CANCELAR para salir.");
+        } catch (e) {
+          console.warn("[PRE] Error subir PDF:", e.message);
+          return safeReply("Error al subir el PDF. Intenta de nuevo.");
+        }
+      }
 
       if (sess.estado === "ESPERANDO_COTIZACION_PDF") {
         const clientCrear = await pool.connect();
