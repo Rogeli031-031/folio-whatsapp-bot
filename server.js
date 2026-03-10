@@ -10423,6 +10423,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
 
         if (esGG && invalidTokens.length === 0) {
           const plantaIdGG = actor.planta_id != null ? actor.planta_id : null;
+          const plantasPermitidasGG = getPlantaIdsEquivalentesForPendientes(plantaIdGG);
           const aprobados = [];
           const yaAprobados = [];
           const noEncontrados = [];
@@ -10448,7 +10449,9 @@ app.post("/twilio/whatsapp", async (req, res) => {
               noPendientesPlanta.push(numero);
               continue;
             }
-            if (plantaIdGG != null && folio.planta_id !== plantaIdGG) {
+            const folioPlantaId = folio.planta_id != null ? parseInt(folio.planta_id, 10) : null;
+            const permitidos = plantasPermitidasGG.map((id) => parseInt(id, 10)).filter(Number.isFinite);
+            if (plantaIdGG != null && permitidos.length > 0 && (folioPlantaId == null || !permitidos.includes(folioPlantaId))) {
               otraPlanta.push(numero);
               continue;
             }
