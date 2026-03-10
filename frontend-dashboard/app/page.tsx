@@ -51,6 +51,12 @@ function normalizeEmpresa(s: string): string {
     .replace(/[\u0300-\u036f]/g, "");
 }
 
+/** Gasto $/kg cuando hay filtro por planta: suma de Presupuesto + Folios Aprob. ZP + Folios en carro + Depósito y cierre (mismos 4 de la página inicio). */
+function gastoKgFromFour(row: IgfForecastRow): number {
+  const n = (v: number | null | undefined) => (v != null && !Number.isNaN(Number(v)) ? Number(v) : 0);
+  return n(row.presupuesto_kg) + n(row.folios_aprob_zp_kg) + n(row.folios_carro_kg) + n(row.deposito_cierre_kg);
+}
+
 function findRowByPlanta(rows: IgfForecastRow[], planta: string): IgfForecastRow | undefined {
   const norm = normalizeEmpresa(planta);
   const exact = rows.find((r) => (r.empresa?.trim() || "") === planta);
@@ -304,8 +310,8 @@ function KpiContent() {
                         <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(row.margen_kg)}</td>
                         <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(row.com_desc_kg)}</td>
                         {plantaFilter ? (
-                          <td className={`py-2 px-2 text-right tabular-nums ${row.gasto_kg != null && Number(row.gasto_kg) < 0 ? "text-red-400" : "text-slate-300"}`}>
-                            {fmtNum(row.gasto_kg ?? null)}
+                          <td className={`py-2 px-2 text-right tabular-nums ${gastoKgFromFour(row) < 0 ? "text-red-400" : "text-slate-300"}`}>
+                            {fmtNum(gastoKgFromFour(row))}
                           </td>
                         ) : (
                           <>
@@ -435,16 +441,18 @@ function KpiContent() {
                 { key: "resultado_final_kg", label: "Resultado ($/kg)", fmt: (v) => fmtNum(v) },
                 { key: "resultado_final_importe", label: "Resultado (Importe)", fmt: (v) => fmtNum(v, 0) },
               ];
-              // Util. Oper. ($/kg) = suma de las 7 líneas (Margen, Com.Desc, Gasto, Impuesto, HG $/kg, Bancos Planta, Prov. Planta). HG% no se suma.
+              // Util. Oper. ($/kg) = suma de las 7 líneas (Margen, Com.Desc, Gasto, Impuesto, HG $/kg, Bancos Planta, Prov. Planta). Gasto = suma de los 4 (Presupuesto, Folios ZP, Folios carro, Depósito y cierre).
               const calcUtilOperKg = (row: IgfForecastRow | undefined): number => {
                 if (!row) return 0;
                 const r = row as Record<string, unknown>;
                 const num = (x: unknown) => n(x as number | null | undefined);
-                return num(r.margen_kg) + num(r.com_desc_kg) + num(r.gasto_kg) + num(r.impuesto_kg) + num(r.hg_kg) + num(r.bancos_planta_kg) + num(r.provision_planta_kg);
+                const gastoKg = gastoKgFromFour(row);
+                return num(r.margen_kg) + num(r.com_desc_kg) + gastoKg + num(r.impuesto_kg) + num(r.hg_kg) + num(r.bancos_planta_kg) + num(r.provision_planta_kg);
               };
               const cellVal = (row: IgfForecastRow | undefined, c: Col) => {
                 if (!row) return "—";
                 if (c.key === "empresa") return row.empresa ?? "—";
+                if (c.key === "gasto_kg") return fmtNum(gastoKgFromFour(row));
                 if (row === rowA && (c.key === "util_oper_kg" || c.key === "util_oper_importe")) {
                   const utilKg = calcUtilOperKg(row);
                   if (c.key === "util_oper_kg") return fmtNum(utilKg);
@@ -458,8 +466,8 @@ function KpiContent() {
               const utilOperImporteA = rowA ? utilOperKgA * n((rowA as Record<string, unknown>).venta_ton as number | null | undefined) * 1000 : 0;
               const cellDeltaNum = (c: Col): number | null => {
                 if (c.key === "empresa" || !rowA) return null;
-                const vF = (rowF as Record<string, unknown>)[c.key] as number | null | undefined;
-                const vA = c.key === "util_oper_kg" ? utilOperKgA : c.key === "util_oper_importe" ? utilOperImporteA : (rowA as Record<string, unknown>)[c.key] as number | null | undefined;
+                const vF = c.key === "gasto_kg" ? gastoKgFromFour(rowF) : (rowF as Record<string, unknown>)[c.key] as number | null | undefined;
+                const vA = c.key === "util_oper_kg" ? utilOperKgA : c.key === "util_oper_importe" ? utilOperImporteA : c.key === "gasto_kg" ? gastoKgFromFour(rowA) : (rowA as Record<string, unknown>)[c.key] as number | null | undefined;
                 return c.isPct ? (n(vF) - n(vA)) * 100 : delta(vF, vA);
               };
               const ventaKgA = rowA ? n((rowA as Record<string, unknown>).venta_ton as number | null | undefined) * 1000 : 0;
@@ -476,7 +484,7 @@ function KpiContent() {
                   return (ventaKgF - ventaKgA) * utilOperF;
                 }
                 if (c.key === "com_desc_kg") return (n(vF) - n(vA)) * ventaKgA;
-                if (c.key === "gasto_kg") return (n(vF) - n(vA)) * ventaKgA;
+                if (c.key === "gasto_kg") return (gastoKgFromFour(rowF) - gastoKgFromFour(rowA)) * ventaKgA;
                 if (c.key === "impuesto_kg") return (n(vF) - n(vA)) * ventaKgA;
                 if (c.key === "bancos_planta_kg") return (n(vF) - n(vA)) * ventaKgA;
                 if (c.key === "provision_planta_kg") return (n(vF) - n(vA)) * ventaKgA;
