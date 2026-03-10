@@ -7674,7 +7674,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
             msg += `Pend. aprob. ZP: ${pendZp}\n`;
             if (oldest) msg += `Más antiguo: ${oldest.folio} (${oldest.dias} días)\n`;
           }
-          msg += `\n🔗 Acceso (válido 20 min):\n${link}`;
+          msg += `\n🔗 Acceso (válido 5 horas):\n${link}`;
           const yyyymm = getCurrentYYYYMM();
           const yF = parseInt(yyyymm.slice(0, 4), 10);
           const mF = parseInt(yyyymm.slice(4, 6), 10);

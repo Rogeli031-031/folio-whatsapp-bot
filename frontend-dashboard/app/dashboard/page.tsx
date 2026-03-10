@@ -73,7 +73,7 @@ function DashboardContent() {
         <div className="rounded-lg border border-slate-700 bg-slate-800 p-6 text-center">
           <h1 className="text-lg font-semibold text-white">Acceso no autorizado</h1>
           <p className="mt-2 text-sm text-slate-400">
-            Abre el enlace que recibiste por WhatsApp (válido 20 min) o escribe &quot;dashboard&quot; en el bot.
+            Abre el enlace que recibiste por WhatsApp (válido 5 horas) o escribe &quot;dashboard&quot; en el bot.
           </p>
         </div>
       </div>
