@@ -642,3 +642,13 @@ export async function fetchDocumentoGastosPdf(
   if (!res.ok) throw new Error(await res.text().catch(() => res.statusText));
   return res.blob();
 }
+
+/** Descarga el PDF del documento Póliza Cheque (formato oficial con datos del folio). */
+export async function fetchDocumentoPolizaPdf(token: string, folioId: number): Promise<Blob> {
+  const url = getApiUrl(`/api/folios/${folioId}/poliza/documento?format=pdf`);
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(await res.text().catch(() => res.statusText));
+  return res.blob();
+}
