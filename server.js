@@ -6775,10 +6775,10 @@ async function generatePolizaPdfBytes(folio) {
           beneficiarioImporte: { x: 50, y: 518, size: 9 },
           importeLetra2: { x: 50, y: 488, size: 8 },
           concepto: { x: 115, y: 448, size: 9 },
-          planta: { x: 50, y: 398, size: 9 },
-          fecha2: { x: 170, y: 398, size: 9 },
-          beneficiario2: { x: 50, y: 378, size: 9 },
-          importe2: { x: 430, y: 378, size: 9 },
+          planta: { x: 50, y: 240, size: 9 },
+          fecha2: { x: 170, y: 240, size: 9 },
+          beneficiario2: { x: 50, y: 151, size: 9 },
+          importe2: { x: 430, y: 151, size: 9 },
         };
 
         const draw = (text, x, y, size = 9, bold = false, maxLen = 140) => {
