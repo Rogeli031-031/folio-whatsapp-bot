@@ -6281,59 +6281,8 @@ app.get("/api/folios/:id/documento-completo", dashboardAuthMiddleware, async (re
     const plantaDisplay = [folio.planta_clave, folio.planta_nombre].filter(Boolean).join(" - ") || "—";
     const importeStr = folio.importe != null ? Number(folio.importe).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00";
 
-    // 1) Generar PDF Póliza
-    const importeNum = folio.importe != null ? Number(folio.importe) : 0;
-    const importeLetra = numeroALetra(importeNum);
-    const beneficiario = (folio.beneficiario || "").trim() || "—";
-    const concepto = (folio.concepto || "").trim() || "—";
-    const plantaDisplayPoliza = (folio.planta_clave || folio.planta_nombre || "").toString().trim() || "—";
-    const ahora = new Date();
-    const fechaTexto = ahora.toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric" });
-    const mesCargo = (folio.mes_cargo || "").toString().trim();
-    const mesesAbr = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
-    let recursoTexto = "—";
-    if (/^\d{4}-\d{2}$/.test(mesCargo)) {
-      const [y, m] = mesCargo.split("-").map(Number);
-      recursoTexto = `${mesesAbr[m - 1] || ""} ${y}`;
-    }
-    const pdfPoliza = await PDFDocument.create();
-    const pagePoliza = pdfPoliza.addPage([612, 792]);
-    const fontP = await pdfPoliza.embedFont(StandardFonts.Helvetica);
-    const fontBoldP = await pdfPoliza.embedFont(StandardFonts.HelveticaBold);
-    const marginLeft = 50;
-    const marginRight = 562;
-    const width = marginRight - marginLeft;
-    let yP = 760;
-    const drawLineP = (x1, y1, x2, y2) => { pagePoliza.drawLine({ start: { x: x1, y: y1 }, end: { x: x2, y: y2 }, thickness: 1 }); };
-    const txtP = (str, x, yPos, size = 10, bold = false) => { pagePoliza.drawText(String(str).substring(0, 120), { x, y: yPos, size, font: bold ? fontBoldP : fontP }); };
-    const numeroFolioCompleto = (folio.numero_folio || folio.folio_codigo || `F-${folioId}`).toString().trim();
-    txtP("POLIZA CHEQUE", marginLeft, yP, 16, true);
-    txtP(`FOLIO - ${numeroFolioCompleto}`, 400, yP, 10, true);
-    yP -= 24;
-    txtP("CTA:", marginLeft, yP, 10); yP -= 20;
-    const tabW = width / 3;
-    const x1 = marginLeft, x2 = marginLeft + tabW, x3 = marginLeft + tabW * 2;
-    drawLineP(x1, yP, marginRight, yP);
-    txtP("PARCIAL", x1 + 4, yP - 12, 9, true); txtP("DEBE", x2 + 4, yP - 12, 9, true); txtP("HABER", x3 + 4, yP - 12, 9, true);
-    drawLineP(x1, yP - 14, marginRight, yP - 14); drawLineP(x1, yP, x1, yP - 14); drawLineP(x2, yP, x2, yP - 14); drawLineP(x3, yP, x3, yP - 14); drawLineP(marginRight, yP, marginRight, yP - 14);
-    yP -= 28;
-    drawLineP(x1, yP, marginRight, yP); drawLineP(x1, yP + 14, x1, yP); drawLineP(x2, yP + 14, x2, yP); drawLineP(x3, yP + 14, x3, yP); drawLineP(marginRight, yP + 14, marginRight, yP);
-    txtP("HECHO POR:", x1 + 4, yP - 12, 8); txtP("AUTORIZADO:", x2 + 4, yP - 12, 8); txtP("*RESPONSABLE A COMPROBAR EL GASTO:", x3 + 4, yP - 12, 8);
-    yP -= 18; drawLineP(x1, yP, marginRight, yP);
-    txtP("NOMBRE", x1 + 4, yP - 10, 8); txtP("ADMINISTRADOR", x2 + 4, yP - 10, 8); txtP(beneficiario, x1 + 4, yP - 22, 9);
-    yP -= 26; drawLineP(x1, yP, marginRight, yP);
-    txtP("RECURSO:", x1 + 4, yP - 10, 8); txtP(recursoTexto, x2 + 4, yP - 10, 9);
-    yP -= 22; txtP("Recibí cheque original (Nombre completo, fecha y firma)", marginLeft, yP, 8);
-    yP -= 18; (importeLetra.length > 70 ? [importeLetra.substring(0, 70), importeLetra.substring(70)] : [importeLetra]).forEach((line) => { txtP(line, marginLeft, yP, 9); yP -= 14; });
-    yP -= 8; txtP("SUMAS IGUALES", marginLeft, yP, 9); txtP("REVISADO", marginLeft + 180, yP, 9); txtP("MESA DE", marginLeft + 320, yP, 9); txtP("CONTROL.", marginLeft + 320, yP - 12, 9);
-    yP -= 28; txtP(fechaTexto, marginLeft, yP, 9); txtP(`${beneficiario}  ${importeStr}`, marginLeft, yP - 14, 9);
-    yP -= 28; txtP(importeLetra, marginLeft, yP, 8);
-    yP -= 22; txtP("NO. CHEQUE:", marginLeft, yP, 8);
-    yP -= 18; txtP("CONCEPTO:", marginLeft, yP, 8); txtP(concepto, marginLeft + 65, yP, 9);
-    yP -= 22; txtP("NOMBRE", marginLeft, yP, 8); txtP("COPIA DEL CHEQUE", marginLeft + 200, yP, 8);
-    yP -= 22; txtP(plantaDisplayPoliza, marginLeft, yP, 9); txtP(fechaTexto, marginLeft + 120, yP, 9); txtP(beneficiario, marginLeft, yP - 14, 9); txtP(importeStr, marginLeft + 380, yP - 14, 9);
-    yP -= 28; txtP("RECIBI CHEQUE", marginLeft, yP, 9);
-    const polizaBytes = await pdfPoliza.save();
+    // 1) Generar PDF Póliza (misma lógica que GET poliza/documento: plantilla S3/local o fallback)
+    const polizaBytes = await generatePolizaPdfBytes(folio);
 
     // 2) Generar PDF Gastos + cotización
     const pdfGastos = await PDFDocument.create();
@@ -6710,49 +6659,14 @@ app.post("/api/folios/:id/poliza", dashboardAuthMiddleware, async (req, res) => 
   }
 });
 
-/** Documento Póliza Cheque (formato oficial). Genera PDF con datos del folio. */
-app.get("/api/folios/:id/poliza/documento", dashboardAuthMiddleware, async (req, res) => {
-  console.log("[poliza/documento] ENDPOINT GOLPEADO", {
-    folioId: req.params.id,
-    format: req.query.format,
-    hasAuthHeader: !!req.headers.authorization,
-  });
-  const folioId = parseInt(req.params.id, 10);
-  if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
-
-  const format = (req.query.format || "pdf").toLowerCase();
-  if (format !== "pdf") return res.status(400).json({ error: "Solo format=pdf" });
-
-  const client = await pool.connect();
-
-  try {
-    const r = await client.query(
-      `SELECT f.id, f.planta_id, f.solo_zp_ad, f.numero_folio, f.folio_codigo, f.beneficiario, f.concepto, f.importe, f.creado_en, f.mes_cargo,
-              p.nombre AS planta_nombre, p.clave AS planta_clave
-       FROM public.folios f
-       LEFT JOIN public.plantas p ON p.id = f.planta_id
-       WHERE f.id = $1`,
-      [folioId]
-    );
-
-    const folio = r.rows[0] || null;
-    if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
-
-    const esZPDoc = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) === "ZP";
-    const esADDoc = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) === "AD";
-
-    if (folio.solo_zp_ad && !esZPDoc && !esADDoc) {
-      return res.status(404).json({ error: "Folio no encontrado" });
-    }
-
-    if ((req.dashboardAuth.role === "GG" || req.dashboardAuth.role === "GA") && req.dashboardAuth.plantas_permitidas?.length > 0) {
-      const folioPlantaId = folio.planta_id != null ? folio.planta_id : null;
-      if (folioPlantaId == null || !req.dashboardAuth.plantas_permitidas.includes(folioPlantaId)) {
-        return res.status(403).json({ error: "Sin permiso para este folio" });
-      }
-    }
-
-    const numeroFolio = (folio.numero_folio || folio.folio_codigo || `F-${folioId}`).toString().trim();
+/**
+ * Genera el PDF de Póliza Cheque (plantilla S3/local si está disponible, si no fallback manual).
+ * @param {Object} folio - { id, numero_folio, folio_codigo, beneficiario, concepto, importe, mes_cargo, planta_nombre, planta_clave }
+ * @returns {Promise<Buffer>}
+ */
+async function generatePolizaPdfBytes(folio) {
+  const folioId = folio.id;
+  const numeroFolio = (folio.numero_folio || folio.folio_codigo || `F-${folioId}`).toString().trim();
     const importeNum = folio.importe != null ? Number(folio.importe) : 0;
     const importeStr = Number(importeNum).toLocaleString("es-MX", {
       minimumFractionDigits: 2,
@@ -6906,10 +6820,14 @@ app.get("/api/folios/:id/poliza/documento", dashboardAuthMiddleware, async (req,
         usedTemplate = false;
         pdfBytes = null;
 
+        const preview = templateBuf && templateBuf.length >= 5
+          ? templateBuf.slice(0, 20).toString("latin1").replace(/[^\x20-\x7E]/g, ".")
+          : "(sin buffer)";
         console.warn("[poliza/documento] ERROR al cargar o rellenar plantilla. Se usará fallback manual.", {
           templateSource,
           name: e?.name,
           message: e?.message,
+          primerosBytes: preview,
           stackTop: e?.stack ? String(e.stack).split("\n").slice(0, 3).join(" | ") : null,
         });
       }
@@ -7050,14 +6968,48 @@ app.get("/api/folios/:id/poliza/documento", dashboardAuthMiddleware, async (req,
     }
 
     if (!pdfBytes) throw new Error("No se pudo generar el PDF de póliza");
+    return Buffer.from(pdfBytes);
+}
 
+/** Documento Póliza Cheque (formato oficial). Genera PDF con datos del folio. */
+app.get("/api/folios/:id/poliza/documento", dashboardAuthMiddleware, async (req, res) => {
+  console.log("[poliza/documento] ENDPOINT GOLPEADO", {
+    folioId: req.params.id,
+    format: req.query.format,
+    hasAuthHeader: !!req.headers.authorization,
+  });
+  const folioId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
+  const format = (req.query.format || "pdf").toLowerCase();
+  if (format !== "pdf") return res.status(400).json({ error: "Solo format=pdf" });
+  const client = await pool.connect();
+  try {
+    const r = await client.query(
+      `SELECT f.id, f.planta_id, f.solo_zp_ad, f.numero_folio, f.folio_codigo, f.beneficiario, f.concepto, f.importe, f.creado_en, f.mes_cargo,
+              p.nombre AS planta_nombre, p.clave AS planta_clave
+       FROM public.folios f
+       LEFT JOIN public.plantas p ON p.id = f.planta_id
+       WHERE f.id = $1`,
+      [folioId]
+    );
+    const folio = r.rows[0] || null;
+    if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
+    const esZPDoc = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) === "ZP";
+    const esADDoc = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) === "AD";
+    if (folio.solo_zp_ad && !esZPDoc && !esADDoc) return res.status(404).json({ error: "Folio no encontrado" });
+    if ((req.dashboardAuth.role === "GG" || req.dashboardAuth.role === "GA") && req.dashboardAuth.plantas_permitidas?.length > 0) {
+      const folioPlantaId = folio.planta_id != null ? folio.planta_id : null;
+      if (folioPlantaId == null || !req.dashboardAuth.plantas_permitidas.includes(folioPlantaId)) {
+        return res.status(403).json({ error: "Sin permiso para este folio" });
+      }
+    }
+    const pdfBytes = await generatePolizaPdfBytes(folio);
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(
       "Content-Disposition",
       `attachment; filename="Poliza-Cheque-${String(folio.numero_folio || folioId).replace(/\s/g, "-")}.pdf"`
     );
-
-    return res.send(Buffer.from(pdfBytes));
+    return res.send(pdfBytes);
   } catch (e) {
     console.error("[poliza/documento] ERROR GENERAL:", e);
     return res.status(500).json({ error: e.message || "Error al generar documento de póliza" });
