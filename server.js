@@ -12103,49 +12103,53 @@ app.post("/twilio/whatsapp", async (req, res) => {
 process.on("unhandledRejection", (r) => console.error("unhandledRejection:", r));
 process.on("uncaughtException", (e) => console.error("uncaughtException:", e));
 
-ensureSchema()
-  .then(async () => {
-    const client = await pool.connect();
-    try {
-      await deltaIngresoAiDb.ensureDeltaIngresoAiSchema(client);
-    } finally {
-      client.release();
-    }
-    app.listen(PORT, () => {
-      console.log(`✅ Bot corriendo en puerto ${PORT}`);
-      const localPath = path.join(__dirname, "templates", "formato-poliza.pdf");
-      const localExists = fs.existsSync(localPath);
-      if (process.env.POLIZA_TEMPLATE_S3_KEY) {
-        console.log("[Poliza] Plantilla: S3 key =", process.env.POLIZA_TEMPLATE_S3_KEY);
-      } else {
-        console.log("[Poliza] Plantilla local:", localPath, localExists ? "✓ existe" : "✗ no encontrada (usa S3 o copia el PDF ahí)");
+// Enlazar puerto PRIMERO para que Render detecte el servicio (evita "Port scan timeout").
+// La inicialización de DB (ensureSchema, delta-ingreso-ai) se hace después en segundo plano.
+app.listen(PORT, () => {
+  console.log(`✅ Bot corriendo en puerto ${PORT}`);
+  const localPath = path.join(__dirname, "templates", "formato-poliza.pdf");
+  const localExists = fs.existsSync(localPath);
+  if (process.env.POLIZA_TEMPLATE_S3_KEY) {
+    console.log("[Poliza] Plantilla: S3 key =", process.env.POLIZA_TEMPLATE_S3_KEY);
+  } else {
+    console.log("[Poliza] Plantilla local:", localPath, localExists ? "✓ existe" : "✗ no encontrada (usa S3 o copia el PDF ahí)");
+  }
+
+  ensureSchema()
+    .then(async () => {
+      const client = await pool.connect();
+      try {
+        await deltaIngresoAiDb.ensureDeltaIngresoAiSchema(client);
+      } finally {
+        client.release();
       }
+      console.log("[Startup] Schema y Delta Ingreso AI listos.");
+      if (TEST_MODE_AI) console.log("[Delta Ingreso AI] TEST_MODE activo: 17:00 y 17:45 (America/Mexico_City)");
+      let lastDeltaAiSlot = null;
+      const mxFormatter = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Mexico_City", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
+      setInterval(() => {
+        const now = new Date();
+        const parts = mxFormatter.formatToParts(now);
+        const get = (t) => (parts.find((p) => p.type === t) || {}).value || "0";
+        const h = parseInt(get("hour"), 10) || 0;
+        const m = parseInt(get("minute"), 10) || 0;
+        const slot = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+        const today = `${get("year")}-${get("month")}-${get("day")}`;
+        const slotsQuestion = TEST_MODE_AI ? ["17:00"] : ["08:00"];
+        const slotsSummary = TEST_MODE_AI ? ["17:45"] : ["15:30"];
+        const isQuestionSlot = slotsQuestion.includes(slot);
+        const isSummarySlot = slotsSummary.includes(slot);
+        if (isQuestionSlot && lastDeltaAiSlot !== `q-${today}-${slot}`) {
+          lastDeltaAiSlot = `q-${today}-${slot}`;
+          runDeltaIngresoAiSendQuestion().then((r) => console.log("[Delta Ingreso AI] scheduler question:", r)).catch((e) => console.warn("[Delta Ingreso AI] scheduler question error:", e.message));
+        } else if (isSummarySlot && lastDeltaAiSlot !== `s-${today}-${slot}`) {
+          lastDeltaAiSlot = `s-${today}-${slot}`;
+          runDeltaIngresoAiSendSummary().then((r) => console.log("[Delta Ingreso AI] scheduler summary:", r)).catch((e) => console.warn("[Delta Ingreso AI] scheduler summary error:", e.message));
+        }
+      }, 60000);
+    })
+    .catch((e) => {
+      console.error("[Startup] ensureSchema failed:", e);
+      // No hacer process.exit(1): el servidor ya está escuchando; las rutas que necesiten DB fallarán hasta que se resuelva.
     });
-    if (TEST_MODE_AI) console.log("[Delta Ingreso AI] TEST_MODE activo: 17:00 y 17:45 (America/Mexico_City)");
-    let lastDeltaAiSlot = null;
-    const mxFormatter = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Mexico_City", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
-    setInterval(() => {
-      const now = new Date();
-      const parts = mxFormatter.formatToParts(now);
-      const get = (t) => (parts.find((p) => p.type === t) || {}).value || "0";
-      const h = parseInt(get("hour"), 10) || 0;
-      const m = parseInt(get("minute"), 10) || 0;
-      const slot = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-      const today = `${get("year")}-${get("month")}-${get("day")}`;
-      const slotsQuestion = TEST_MODE_AI ? ["17:00"] : ["08:00"];
-      const slotsSummary = TEST_MODE_AI ? ["17:45"] : ["15:30"];
-      const isQuestionSlot = slotsQuestion.includes(slot);
-      const isSummarySlot = slotsSummary.includes(slot);
-      if (isQuestionSlot && lastDeltaAiSlot !== `q-${today}-${slot}`) {
-        lastDeltaAiSlot = `q-${today}-${slot}`;
-        runDeltaIngresoAiSendQuestion().then((r) => console.log("[Delta Ingreso AI] scheduler question:", r)).catch((e) => console.warn("[Delta Ingreso AI] scheduler question error:", e.message));
-      } else if (isSummarySlot && lastDeltaAiSlot !== `s-${today}-${slot}`) {
-        lastDeltaAiSlot = `s-${today}-${slot}`;
-        runDeltaIngresoAiSendSummary().then((r) => console.log("[Delta Ingreso AI] scheduler summary:", r)).catch((e) => console.warn("[Delta Ingreso AI] scheduler summary error:", e.message));
-      }
-    }, 60000);
-  })
-  .catch((e) => {
-    console.error("ensureSchema failed:", e);
-    process.exit(1);
-  });
+});
