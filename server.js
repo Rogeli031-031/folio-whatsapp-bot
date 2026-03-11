@@ -6772,7 +6772,7 @@ async function generatePolizaPdfBytes(folio) {
           recurso: { x: 220, y: 700, size: 9 },
           importeLetra1: { x: 50, y: 651, size: 9 },
           fecha1: { x: 220, y: 372, size: 9 },
-          importe2: { x: 430, y: 682, size: 9 },
+          importe2Top: { x: 430, y: 682, size: 9 },
           importeLetra2: { x: 50, y: 109, size: 8 },
           concepto: { x: 115, y: 568, size: 9 },
           planta: { x: 50, y: 717, size: 10 },
@@ -6804,6 +6804,7 @@ async function generatePolizaPdfBytes(folio) {
         draw(plantaDisplay, POS.planta.x, POS.planta.y, POS.planta.size);
         draw(fechaTexto, POS.fecha2.x, POS.fecha2.y, POS.fecha2.size);
         draw(beneficiario, POS.beneficiario2.x, POS.beneficiario2.y, POS.beneficiario2.size);
+        draw(importeStr, POS.importe2Top.x, POS.importe2Top.y, POS.importe2Top.size);
         draw(importeStr, POS.importe2.x, POS.importe2.y, POS.importe2.size);
 
         pdfBytes = await pdfDoc.save();
