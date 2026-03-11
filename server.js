@@ -6070,6 +6070,7 @@ function numeroALetra(importe) {
   const centavos = Math.round((n - entero) * 100) % 100;
   const unidades = ["", "UN", "DOS", "TRES", "CUATRO", "CINCO", "SEIS", "SIETE", "OCHO", "NUEVE"];
   const diez = ["", "DIEZ", "ONCE", "DOCE", "TRECE", "CATORCE", "QUINCE", "DIECISÉIS", "DIECISIETE", "DIECIOCHO", "DIECINUEVE"];
+  const veintis = ["", "VEINTIUN", "VEINTIDÓS", "VEINTITRÉS", "VEINTICUATRO", "VEINTICINCO", "VEINTISÉIS", "VEINTISIETE", "VEINTIOCHO", "VEINTINUEVE"];
   const decenas = ["", "", "VEINTE", "TREINTA", "CUARENTA", "CINCUENTA", "SESENTA", "SETENTA", "OCHENTA", "NOVENTA"];
   const centenas = ["", "CIENTO", "DOSCIENTOS", "TRESCIENTOS", "CUATROCIENTOS", "QUINIENTOS", "SEISCIENTOS", "SETECIENTOS", "OCHOCIENTOS", "NOVECIENTOS"];
   function hasta99(num) {
@@ -6079,6 +6080,7 @@ function numeroALetra(importe) {
     const d = Math.floor(num / 10);
     const u = num % 10;
     if (u === 0) return decenas[d];
+    if (d === 2) return veintis[u];
     return decenas[d] + " Y " + unidades[u];
   }
   function hasta999(num) {
@@ -6300,8 +6302,8 @@ app.get("/api/folios/:id/documento-completo", dashboardAuthMiddleware, async (re
     let yP = 760;
     const drawLineP = (x1, y1, x2, y2) => { pagePoliza.drawLine({ start: { x: x1, y: y1 }, end: { x: x2, y: y2 }, thickness: 1 }); };
     const txtP = (str, x, yPos, size = 10, bold = false) => { pagePoliza.drawText(String(str).substring(0, 120), { x, y: yPos, size, font: bold ? fontBoldP : fontP }); };
-    txtP("POLIZA CHEQUE", marginLeft, yP, 16, true); yP -= 22;
-    txtP("CTA:", marginLeft, yP, 10); yP -= 18;
+    txtP("POLIZA CHEQUE", marginLeft, yP, 16, true); yP -= 24;
+    txtP("CTA:", marginLeft, yP, 10); yP -= 20;
     const tabW = width / 3;
     const x1 = marginLeft, x2 = marginLeft + tabW, x3 = marginLeft + tabW * 2;
     drawLineP(x1, yP, marginRight, yP);
@@ -6310,16 +6312,17 @@ app.get("/api/folios/:id/documento-completo", dashboardAuthMiddleware, async (re
     yP -= 28;
     drawLineP(x1, yP, marginRight, yP); drawLineP(x1, yP + 14, x1, yP); drawLineP(x2, yP + 14, x2, yP); drawLineP(x3, yP + 14, x3, yP); drawLineP(marginRight, yP + 14, marginRight, yP);
     txtP("HECHO POR:", x1 + 4, yP - 12, 8); txtP("AUTORIZADO:", x2 + 4, yP - 12, 8); txtP("*RESPONSABLE A COMPROBAR EL GASTO:", x3 + 4, yP - 12, 8);
-    yP -= 22; drawLineP(x1, yP, marginRight, yP);
-    txtP("NOMBRE", x1 + 4, yP - 11, 8); txtP(beneficiario, x1 + 4, yP - 22, 9); txtP("ADMINISTRADOR", x2 + 4, yP - 11, 8);
-    yP -= 32; txtP("RECURSO:", marginLeft, yP, 8); txtP(recursoTexto, marginLeft + 70, yP, 9);
-    yP -= 20; txtP("Recibí cheque original (Nombre completo, fecha y firma)", marginLeft, yP, 8);
+    yP -= 18; drawLineP(x1, yP, marginRight, yP);
+    txtP("NOMBRE", x1 + 4, yP - 10, 8); txtP("ADMINISTRADOR", x2 + 4, yP - 10, 8); txtP(beneficiario, x1 + 4, yP - 22, 9);
+    yP -= 26; drawLineP(x1, yP, marginRight, yP);
+    txtP("RECURSO:", x1 + 4, yP - 10, 8); txtP(recursoTexto, x2 + 4, yP - 10, 9);
+    yP -= 22; txtP("Recibí cheque original (Nombre completo, fecha y firma)", marginLeft, yP, 8);
     yP -= 18; (importeLetra.length > 70 ? [importeLetra.substring(0, 70), importeLetra.substring(70)] : [importeLetra]).forEach((line) => { txtP(line, marginLeft, yP, 9); yP -= 14; });
-    yP -= 6; txtP("SUMAS IGUALES", marginLeft, yP, 9); txtP("REVISADO", marginLeft + 180, yP, 9); txtP("MESA DE", marginLeft + 320, yP, 9); txtP("CONTROL.", marginLeft + 320, yP - 12, 9);
-    yP -= 28; txtP(fechaTexto, marginLeft, yP, 9); txtP(`${beneficiario}    ${importeStr}`, marginLeft, yP - 14, 9);
-    yP -= 32; txtP(importeLetra, marginLeft, yP, 8);
+    yP -= 8; txtP("SUMAS IGUALES", marginLeft, yP, 9); txtP("REVISADO", marginLeft + 180, yP, 9); txtP("MESA DE", marginLeft + 320, yP, 9); txtP("CONTROL.", marginLeft + 320, yP - 12, 9);
+    yP -= 28; txtP(fechaTexto, marginLeft, yP, 9); txtP(`${beneficiario}  ${importeStr}`, marginLeft, yP - 14, 9);
+    yP -= 28; txtP(importeLetra, marginLeft, yP, 8);
     yP -= 22; txtP("NO. CHEQUE:", marginLeft, yP, 8);
-    yP -= 18; txtP("CONCEPTO:", marginLeft, yP, 8); txtP(concepto, marginLeft + 60, yP, 9);
+    yP -= 18; txtP("CONCEPTO:", marginLeft, yP, 8); txtP(concepto, marginLeft + 65, yP, 9);
     yP -= 22; txtP("NOMBRE", marginLeft, yP, 8); txtP("COPIA DEL CHEQUE", marginLeft + 200, yP, 8);
     yP -= 22; txtP(plantaDisplayPoliza, marginLeft, yP, 9); txtP(fechaTexto, marginLeft + 120, yP, 9); txtP(beneficiario, marginLeft, yP - 14, 9); txtP(importeStr, marginLeft + 380, yP - 14, 9);
     yP -= 28; txtP("RECIBI CHEQUE", marginLeft, yP, 9);
@@ -6760,10 +6763,13 @@ app.get("/api/folios/:id/poliza/documento", dashboardAuthMiddleware, async (req,
       page.drawText(String(str).substring(0, 120), { x, y: yPos, size, font: f });
     };
 
+    // Título
     txt("POLIZA CHEQUE", marginLeft, y, 16, true);
-    y -= 22;
+    y -= 24;
+    // CTA: (formato referencia: CTA: 8097 2735 en dos columnas; dejamos vacío o placeholder)
     txt("CTA:", marginLeft, y, 10);
-    y -= 18;
+    y -= 20;
+    // Tabla PARCIAL | DEBE | HABER
     const tabW = width / 3;
     const x1 = marginLeft;
     const x2 = marginLeft + tabW;
@@ -6778,6 +6784,7 @@ app.get("/api/folios/:id/poliza/documento", dashboardAuthMiddleware, async (req,
     drawLine(x3, y, x3, y - 14);
     drawLine(marginRight, y, marginRight, y - 14);
     y -= 28;
+    // Fila: HECHO POR | AUTORIZADO | *RESPONSABLE A COMPROBAR EL GASTO
     drawLine(x1, y, marginRight, y);
     drawLine(x1, y + 14, x1, y);
     drawLine(x2, y + 14, x2, y);
@@ -6786,34 +6793,37 @@ app.get("/api/folios/:id/poliza/documento", dashboardAuthMiddleware, async (req,
     txt("HECHO POR:", x1 + 4, y - 12, 8);
     txt("AUTORIZADO:", x2 + 4, y - 12, 8);
     txt("*RESPONSABLE A COMPROBAR EL GASTO:", x3 + 4, y - 12, 8);
-    y -= 22;
+    y -= 18;
+    // Fila: NOMBRE (col1) | ADMINISTRADOR (col2) — como en Poliza.pdf
     drawLine(x1, y, marginRight, y);
-    txt("NOMBRE", x1 + 4, y - 11, 8);
+    txt("NOMBRE", x1 + 4, y - 10, 8);
+    txt("ADMINISTRADOR", x2 + 4, y - 10, 8);
     txt(beneficiario, x1 + 4, y - 22, 9);
-    txt("ADMINISTRADOR", x2 + 4, y - 11, 8);
-    y -= 32;
-    txt("RECURSO:", marginLeft, y, 8);
-    txt(recursoTexto, marginLeft + 70, y, 9);
-    y -= 20;
+    y -= 26;
+    // Fila: RECURSO: (col1) | valor ej. DYO FEB 26 (col2)
+    drawLine(x1, y, marginRight, y);
+    txt("RECURSO:", x1 + 4, y - 10, 8);
+    txt(recursoTexto, x2 + 4, y - 10, 9);
+    y -= 22;
     txt("Recibí cheque original (Nombre completo, fecha y firma)", marginLeft, y, 8);
     y -= 18;
     const importeLetraLines = importeLetra.length > 70 ? [importeLetra.substring(0, 70), importeLetra.substring(70)] : [importeLetra];
     importeLetraLines.forEach((line) => { txt(line, marginLeft, y, 9); y -= 14; });
-    y -= 6;
+    y -= 8;
     txt("SUMAS IGUALES", marginLeft, y, 9);
     txt("REVISADO", marginLeft + 180, y, 9);
     txt("MESA DE", marginLeft + 320, y, 9);
     txt("CONTROL.", marginLeft + 320, y - 12, 9);
     y -= 28;
     txt(fechaTexto, marginLeft, y, 9);
-    txt(`${beneficiario}    ${importeStr}`, marginLeft, y - 14, 9);
-    y -= 32;
+    txt(`${beneficiario}  ${importeStr}`, marginLeft, y - 14, 9);
+    y -= 28;
     txt(importeLetra, marginLeft, y, 8);
     y -= 22;
     txt("NO. CHEQUE:", marginLeft, y, 8);
     y -= 18;
     txt("CONCEPTO:", marginLeft, y, 8);
-    txt(concepto, marginLeft + 60, y, 9);
+    txt(concepto, marginLeft + 65, y, 9);
     y -= 22;
     txt("NOMBRE", marginLeft, y, 8);
     txt("COPIA DEL CHEQUE", marginLeft + 200, y, 8);
