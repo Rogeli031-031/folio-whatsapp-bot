@@ -652,3 +652,13 @@ export async function fetchDocumentoPolizaPdf(token: string, folioId: number): P
   if (!res.ok) throw new Error(await res.text().catch(() => res.statusText));
   return res.blob();
 }
+
+/** Descarga el PDF documento completo: Póliza (con datos) + Folio (gastos) + Cotización. */
+export async function fetchDocumentoCompletoPdf(token: string, folioId: number): Promise<Blob> {
+  const url = getApiUrl(`/api/folios/${folioId}/documento-completo?format=pdf`);
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(await res.text().catch(() => res.statusText));
+  return res.blob();
+}

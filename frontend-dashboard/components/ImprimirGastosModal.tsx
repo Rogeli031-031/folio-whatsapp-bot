@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { fetchDocumentoGastosHtml, fetchDocumentoGastosPdf } from "@/lib/api";
+import { fetchDocumentoGastosHtml, fetchDocumentoGastosPdf, fetchDocumentoCompletoPdf } from "@/lib/api";
+
+type ModoImpresion = "solo_folio" | "folio_cotizacion" | "poliza_folio_cotizacion";
 
 interface Props {
   folioId: number;
@@ -11,7 +13,7 @@ interface Props {
 }
 
 export default function ImprimirGastosModal({ folioId, numeroFolio, token, onClose }: Props) {
-  const [includeCotizacion, setIncludeCotizacion] = useState(false);
+  const [modo, setModo] = useState<ModoImpresion>("solo_folio");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -19,14 +21,23 @@ export default function ImprimirGastosModal({ folioId, numeroFolio, token, onClo
     setError(null);
     setLoading(true);
     try {
-      const html = await fetchDocumentoGastosHtml(token, folioId);
-      const w = window.open("", "_blank");
-      if (w) {
-        w.document.write(html);
-        w.document.close();
-        w.focus();
+      if (modo === "poliza_folio_cotizacion") {
+        const blob = await fetchDocumentoCompletoPdf(token, folioId);
+        const url = URL.createObjectURL(blob);
+        const w = window.open(url, "_blank");
+        if (w) w.focus();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        onClose();
+      } else {
+        const html = await fetchDocumentoGastosHtml(token, folioId);
+        const w = window.open("", "_blank");
+        if (w) {
+          w.document.write(html);
+          w.document.close();
+          w.focus();
+        }
+        onClose();
       }
-      onClose();
     } catch (e) {
       setError((e as Error).message || "Error al cargar el documento.");
     } finally {
@@ -38,11 +49,19 @@ export default function ImprimirGastosModal({ folioId, numeroFolio, token, onClo
     setError(null);
     setLoading(true);
     try {
-      const blob = await fetchDocumentoGastosPdf(token, folioId, includeCotizacion);
+      let blob: Blob;
+      let filename: string;
+      if (modo === "poliza_folio_cotizacion") {
+        blob = await fetchDocumentoCompletoPdf(token, folioId);
+        filename = `Documento-Completo-${numeroFolio.replace(/\s/g, "-")}.pdf`;
+      } else {
+        blob = await fetchDocumentoGastosPdf(token, folioId, modo === "folio_cotizacion");
+        filename = `Gastos-Extraordinarios-${numeroFolio.replace(/\s/g, "-")}.pdf`;
+      }
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `Gastos-Extraordinarios-${numeroFolio.replace(/\s/g, "-")}.pdf`;
+      a.download = filename;
       a.click();
       URL.revokeObjectURL(url);
       onClose();
@@ -77,8 +96,8 @@ export default function ImprimirGastosModal({ folioId, numeroFolio, token, onClo
             <input
               type="radio"
               name="incluir"
-              checked={!includeCotizacion}
-              onChange={() => setIncludeCotizacion(false)}
+              checked={modo === "solo_folio"}
+              onChange={() => setModo("solo_folio")}
               className="rounded border-slate-600"
             />
             <span className="text-sm text-slate-300">Solo formato del folio</span>
@@ -87,11 +106,21 @@ export default function ImprimirGastosModal({ folioId, numeroFolio, token, onClo
             <input
               type="radio"
               name="incluir"
-              checked={includeCotizacion}
-              onChange={() => setIncludeCotizacion(true)}
+              checked={modo === "folio_cotizacion"}
+              onChange={() => setModo("folio_cotizacion")}
               className="rounded border-slate-600"
             />
             <span className="text-sm text-slate-300">Folio + cotización</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="radio"
+              name="incluir"
+              checked={modo === "poliza_folio_cotizacion"}
+              onChange={() => setModo("poliza_folio_cotizacion")}
+              className="rounded border-slate-600"
+            />
+            <span className="text-sm text-slate-300">Póliza con datos + folio + cotización</span>
           </label>
         </div>
         <div className="flex gap-2">

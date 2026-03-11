@@ -6237,6 +6237,148 @@ app.get("/api/folios/:id/documento-gastos", dashboardAuthMiddleware, async (req,
   }
 });
 
+/** Documento completo: Póliza (con datos) + Folio (gastos) + Cotización en un solo PDF. Requiere folio con cotización. */
+app.get("/api/folios/:id/documento-completo", dashboardAuthMiddleware, async (req, res) => {
+  const folioId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
+  const format = (req.query.format || "pdf").toLowerCase();
+  if (format !== "pdf") return res.status(400).json({ error: "Solo format=pdf" });
+  const client = await pool.connect();
+  try {
+    const r = await client.query(
+      `SELECT f.id, f.planta_id, f.solo_zp_ad, f.numero_folio, f.folio_codigo, f.beneficiario, f.concepto, f.importe, f.creado_en, f.mes_cargo,
+              p.nombre AS planta_nombre, p.clave AS planta_clave
+       FROM public.folios f
+       LEFT JOIN public.plantas p ON p.id = f.planta_id
+       WHERE f.id = $1`,
+      [folioId]
+    );
+    const folio = r.rows[0] || null;
+    if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
+    const esZPDoc = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) === "ZP";
+    const esADDoc = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) === "AD";
+    if (folio.solo_zp_ad && !esZPDoc && !esADDoc) return res.status(404).json({ error: "Folio no encontrado" });
+    if ((req.dashboardAuth.role === "GG" || req.dashboardAuth.role === "GA") && req.dashboardAuth.plantas_permitidas?.length > 0) {
+      const folioPlantaId = folio.planta_id != null ? folio.planta_id : null;
+      if (folioPlantaId == null || !req.dashboardAuth.plantas_permitidas.includes(folioPlantaId)) {
+        return res.status(403).json({ error: "Sin permiso para este folio" });
+      }
+    }
+    const archivos = await listFolioArchivosByFolioId(client, folioId, 20);
+    const tieneCotizacion = archivos.some((a) => (a.tipo || "").toUpperCase() === "COTIZACION");
+    if (!tieneCotizacion) return res.status(400).json({ error: "El folio no tiene cotización; no se puede generar el documento completo." });
+    const cotizacionRow = archivos.find((a) => (a.tipo || "").toUpperCase() === "COTIZACION");
+    const fechasDelAl = formatFechasDelAl(folio.mes_cargo);
+    const fechaSolicitud = folio.creado_en
+      ? new Date(folio.creado_en).toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric" })
+      : "—";
+    const plantaDisplay = [folio.planta_clave, folio.planta_nombre].filter(Boolean).join(" - ") || "—";
+    const importeStr = folio.importe != null ? Number(folio.importe).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00";
+
+    // 1) Generar PDF Póliza
+    const importeNum = folio.importe != null ? Number(folio.importe) : 0;
+    const importeLetra = numeroALetra(importeNum);
+    const beneficiario = (folio.beneficiario || "").trim() || "—";
+    const concepto = (folio.concepto || "").trim() || "—";
+    const plantaDisplayPoliza = (folio.planta_clave || folio.planta_nombre || "").toString().trim() || "—";
+    const ahora = new Date();
+    const fechaTexto = ahora.toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric" });
+    const mesCargo = (folio.mes_cargo || "").toString().trim();
+    const mesesAbr = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+    let recursoTexto = "—";
+    if (/^\d{4}-\d{2}$/.test(mesCargo)) {
+      const [y, m] = mesCargo.split("-").map(Number);
+      recursoTexto = `${mesesAbr[m - 1] || ""} ${y}`;
+    }
+    const pdfPoliza = await PDFDocument.create();
+    const pagePoliza = pdfPoliza.addPage([612, 792]);
+    const fontP = await pdfPoliza.embedFont(StandardFonts.Helvetica);
+    const fontBoldP = await pdfPoliza.embedFont(StandardFonts.HelveticaBold);
+    const marginLeft = 50;
+    const marginRight = 562;
+    const width = marginRight - marginLeft;
+    let yP = 760;
+    const drawLineP = (x1, y1, x2, y2) => { pagePoliza.drawLine({ start: { x: x1, y: y1 }, end: { x: x2, y: y2 }, thickness: 1 }); };
+    const txtP = (str, x, yPos, size = 10, bold = false) => { pagePoliza.drawText(String(str).substring(0, 120), { x, y: yPos, size, font: bold ? fontBoldP : fontP }); };
+    txtP("POLIZA CHEQUE", marginLeft, yP, 16, true); yP -= 22;
+    txtP("CTA:", marginLeft, yP, 10); yP -= 18;
+    const tabW = width / 3;
+    const x1 = marginLeft, x2 = marginLeft + tabW, x3 = marginLeft + tabW * 2;
+    drawLineP(x1, yP, marginRight, yP);
+    txtP("PARCIAL", x1 + 4, yP - 12, 9, true); txtP("DEBE", x2 + 4, yP - 12, 9, true); txtP("HABER", x3 + 4, yP - 12, 9, true);
+    drawLineP(x1, yP - 14, marginRight, yP - 14); drawLineP(x1, yP, x1, yP - 14); drawLineP(x2, yP, x2, yP - 14); drawLineP(x3, yP, x3, yP - 14); drawLineP(marginRight, yP, marginRight, yP - 14);
+    yP -= 28;
+    drawLineP(x1, yP, marginRight, yP); drawLineP(x1, yP + 14, x1, yP); drawLineP(x2, yP + 14, x2, yP); drawLineP(x3, yP + 14, x3, yP); drawLineP(marginRight, yP + 14, marginRight, yP);
+    txtP("HECHO POR:", x1 + 4, yP - 12, 8); txtP("AUTORIZADO:", x2 + 4, yP - 12, 8); txtP("*RESPONSABLE A COMPROBAR EL GASTO:", x3 + 4, yP - 12, 8);
+    yP -= 22; drawLineP(x1, yP, marginRight, yP);
+    txtP("NOMBRE", x1 + 4, yP - 11, 8); txtP(beneficiario, x1 + 4, yP - 22, 9); txtP("ADMINISTRADOR", x2 + 4, yP - 11, 8);
+    yP -= 32; txtP("RECURSO:", marginLeft, yP, 8); txtP(recursoTexto, marginLeft + 70, yP, 9);
+    yP -= 20; txtP("Recibí cheque original (Nombre completo, fecha y firma)", marginLeft, yP, 8);
+    yP -= 18; (importeLetra.length > 70 ? [importeLetra.substring(0, 70), importeLetra.substring(70)] : [importeLetra]).forEach((line) => { txtP(line, marginLeft, yP, 9); yP -= 14; });
+    yP -= 6; txtP("SUMAS IGUALES", marginLeft, yP, 9); txtP("REVISADO", marginLeft + 180, yP, 9); txtP("MESA DE", marginLeft + 320, yP, 9); txtP("CONTROL.", marginLeft + 320, yP - 12, 9);
+    yP -= 28; txtP(fechaTexto, marginLeft, yP, 9); txtP(`${beneficiario}    ${importeStr}`, marginLeft, yP - 14, 9);
+    yP -= 32; txtP(importeLetra, marginLeft, yP, 8);
+    yP -= 22; txtP("NO. CHEQUE:", marginLeft, yP, 8);
+    yP -= 18; txtP("CONCEPTO:", marginLeft, yP, 8); txtP(concepto, marginLeft + 60, yP, 9);
+    yP -= 22; txtP("NOMBRE", marginLeft, yP, 8); txtP("COPIA DEL CHEQUE", marginLeft + 200, yP, 8);
+    yP -= 22; txtP(plantaDisplayPoliza, marginLeft, yP, 9); txtP(fechaTexto, marginLeft + 120, yP, 9); txtP(beneficiario, marginLeft, yP - 14, 9); txtP(importeStr, marginLeft + 380, yP - 14, 9);
+    yP -= 28; txtP("RECIBI CHEQUE", marginLeft, yP, 9);
+    const polizaBytes = await pdfPoliza.save();
+
+    // 2) Generar PDF Gastos + cotización
+    const pdfGastos = await PDFDocument.create();
+    const pageG = pdfGastos.addPage([612, 792]);
+    const fontG = await pdfGastos.embedFont(StandardFonts.Helvetica);
+    const fontBoldG = await pdfGastos.embedFont(StandardFonts.HelveticaBold);
+    let yG = 750;
+    const lineG = (text, size = 10, bold = false) => { pageG.drawText(text, { x: 50, y: yG, size, font: bold ? fontBoldG : fontG }); yG -= size + 4; };
+    lineG("GASTOS EXTRAORDINARIOS", 16, true); lineG("APOYOS", 12); yG -= 8;
+    lineG(`FECHAS DEL: ${fechasDelAl}`, 10); lineG(`FECHA DE SOLICITUD: ${fechaSolicitud}`, 10);
+    pageG.drawText(`${plantaDisplay}  |  FOLIO - ${folio.numero_folio}`, { x: 350, y: yG + 24, size: 10, font: fontBoldG }); yG -= 20;
+    lineG("SOLICITUD   BENEFICIARIO   CONCEPTO   IMPORTE", 9, true);
+    const ben = (folio.beneficiario || "").substring(0, 35);
+    const con = (folio.concepto || "").substring(0, 50);
+    lineG(`1   ${ben}   ${con}   $ ${importeStr}`, 9); yG -= 12;
+    lineG(`TOTAL   $ ${importeStr}`, 10, true); yG -= 30;
+    lineG("CF. DAMIAN DIAZ LOPEZ.  COORD. ADMON Y FINANZAS ZONA PROVINCIA", 8);
+    lineG("LIC. ALFREDO GONZÁLEZ R.  DIRECTOR DE ZONA", 8);
+    lineG("CP. ARMANDO GARZA HDEZ.  COORD. FINANZAS E INVERSIONES DE ZONA", 8);
+    lineG("ING. LUIS ROGELIO ZARAGOZA A  DIRECTOR ZONA PROVINCIA", 8);
+    lineG("C.P. FEDERICO ROBLES N.  DIRECTOR DE FINANZAS", 8);
+    lineG("LIC. LEONEL REQUENES R.  TITULAR TESORERÍA", 8);
+    if (cotizacionRow && cotizacionRow.s3_key && s3Enabled) {
+      try {
+        const cotizacionBuf = await getBufferFromS3(cotizacionRow.s3_key);
+        const cotizacionPdf = await PDFDocument.load(cotizacionBuf);
+        const paginas = await pdfGastos.copyPages(cotizacionPdf, cotizacionPdf.getPageIndices());
+        paginas.forEach((p) => pdfGastos.addPage(p));
+      } catch (e) {
+        console.warn("[documento-completo] No se pudo adjuntar cotización:", e.message);
+      }
+    }
+    const gastosBytes = await pdfGastos.save();
+
+    // 3) Unir: primero póliza, luego gastos + cotización
+    const mergedDoc = await PDFDocument.create();
+    const polizaDoc = await PDFDocument.load(polizaBytes);
+    const paginasPoliza = await mergedDoc.copyPages(polizaDoc, polizaDoc.getPageIndices());
+    paginasPoliza.forEach((p) => mergedDoc.addPage(p));
+    const gastosDoc = await PDFDocument.load(gastosBytes);
+    const paginasGastos = await mergedDoc.copyPages(gastosDoc, gastosDoc.getPageIndices());
+    paginasGastos.forEach((p) => mergedDoc.addPage(p));
+    const finalBytes = await mergedDoc.save();
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="Documento-Completo-${(folio.numero_folio || folioId).replace(/\s/g, "-")}.pdf"`);
+    return res.send(Buffer.from(finalBytes));
+  } catch (e) {
+    console.error("[documento-completo]", e);
+    res.status(500).json({ error: e.message || "Error al generar documento completo" });
+  } finally {
+    client.release();
+  }
+});
+
 /** Actualizar mes_cargo del folio (solo cuando está en carrito). */
 app.patch("/api/folios/:id", dashboardAuthMiddleware, async (req, res) => {
   if (req.dashboardAuth.role === "GA") return res.status(403).json({ error: "GA solo puede ver e imprimir en el dashboard." });
