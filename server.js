@@ -6306,7 +6306,10 @@ app.get("/api/folios/:id/documento-completo", dashboardAuthMiddleware, async (re
     let yP = 760;
     const drawLineP = (x1, y1, x2, y2) => { pagePoliza.drawLine({ start: { x: x1, y: y1 }, end: { x: x2, y: y2 }, thickness: 1 }); };
     const txtP = (str, x, yPos, size = 10, bold = false) => { pagePoliza.drawText(String(str).substring(0, 120), { x, y: yPos, size, font: bold ? fontBoldP : fontP }); };
-    txtP("POLIZA CHEQUE", marginLeft, yP, 16, true); yP -= 24;
+    const numeroFolioCompleto = (folio.numero_folio || folio.folio_codigo || `F-${folioId}`).toString().trim();
+    txtP("POLIZA CHEQUE", marginLeft, yP, 16, true);
+    txtP(`FOLIO - ${numeroFolioCompleto}`, 400, yP, 10, true);
+    yP -= 24;
     txtP("CTA:", marginLeft, yP, 10); yP -= 20;
     const tabW = width / 3;
     const x1 = marginLeft, x2 = marginLeft + tabW, x3 = marginLeft + tabW * 2;
@@ -6734,6 +6737,7 @@ app.get("/api/folios/:id/poliza/documento", dashboardAuthMiddleware, async (req,
         return res.status(403).json({ error: "Sin permiso para este folio" });
       }
     }
+    const numeroFolio = (folio.numero_folio || folio.folio_codigo || `F-${folioId}`).toString().trim();
     const importeNum = folio.importe != null ? Number(folio.importe) : 0;
     const importeStr = Number(importeNum).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const importeLetra = numeroALetra(importeNum);
@@ -6773,7 +6777,9 @@ app.get("/api/folios/:id/poliza/documento", dashboardAuthMiddleware, async (req,
         const pdfDoc = await PDFDocument.load(templateBuf);
         const page = pdfDoc.getPage(0);
         const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-        const draw = (text, x, y, size = 9) => { page.drawText(String(text).substring(0, 100), { x, y, size, font }); };
+        const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+        const draw = (text, x, y, size = 9, bold = false) => { page.drawText(String(text).substring(0, 100), { x, y, size, font: bold ? fontBold : font }); };
+        draw(`FOLIO - ${numeroFolio}`, 400, 760, 10, true);
         draw(beneficiario, 55, 658, 9);
         draw("ADMINISTRADOR", 220, 658, 8);
         draw(recursoTexto, 220, 635, 9);
@@ -6810,8 +6816,9 @@ app.get("/api/folios/:id/poliza/documento", dashboardAuthMiddleware, async (req,
       page.drawText(String(str).substring(0, 120), { x, y: yPos, size, font: f });
     };
 
-    // Título
+    // Título y folio (formato folios)
     txt("POLIZA CHEQUE", marginLeft, y, 16, true);
+    txt(`FOLIO - ${numeroFolio}`, 400, y, 10, true);
     y -= 24;
     // CTA: (formato referencia: CTA: 8097 2735 en dos columnas; dejamos vacío o placeholder)
     txt("CTA:", marginLeft, y, 10);
