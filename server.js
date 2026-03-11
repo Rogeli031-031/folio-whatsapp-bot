@@ -7,6 +7,7 @@
  * - TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN (obligatorios)
  * - TWILIO_WHATSAPP_NUMBER (opcional; notificaciones salientes)
  * - S3_BUCKET_NAME o S3_BUCKET, AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY (opcionales; PDFs en S3)
+ * - POLIZA_TEMPLATE_S3_KEY (opcional; ej. plantillas/formato-poliza.pdf — plantilla Póliza Cheque desde S3)
  * - OPENAI_API_KEY (opcional)
  * - DEBUG (opcional; "true" o "1" habilita GET /debug/actor y log from normalizado)
  * - DATABASE_SSL (opcional; "false" desactiva SSL para pg)
@@ -17,6 +18,9 @@
 "use strict";
 
 const crypto = require("crypto");
+const path = require("path");
+const fs = require("fs");
+const fsPromises = fs.promises;
 const express = require("express");
 const bodyParser = require("body-parser");
 const { Pool } = require("pg");
@@ -6742,12 +6746,55 @@ app.get("/api/folios/:id/poliza/documento", dashboardAuthMiddleware, async (req,
     const mesesAbr = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
     let recursoTexto = "—";
     if (/^\d{4}-\d{2}$/.test(mesCargo)) {
-      const [y, m] = mesCargo.split("-").map(Number);
-      recursoTexto = `${mesesAbr[m - 1] || ""} ${y}`;
+      const [yr, mo] = mesCargo.split("-").map(Number);
+      recursoTexto = `${mesesAbr[mo - 1] || ""} ${yr}`;
     }
 
-    const pdfDoc = await PDFDocument.create();
-    const page = pdfDoc.addPage([612, 792]);
+    let pdfBytes;
+    let templateBuf = null;
+    const s3TemplateKey = process.env.POLIZA_TEMPLATE_S3_KEY;
+    if (s3Enabled && s3TemplateKey) {
+      try {
+        templateBuf = await getBufferFromS3(s3TemplateKey);
+      } catch (e) {
+        if (e.name !== "NoSuchKey") console.warn("[poliza/documento] Plantilla S3 no cargada:", e.message);
+      }
+    }
+    if (!templateBuf) {
+      const templatePath = process.env.POLIZA_TEMPLATE_PATH || path.join(__dirname, "templates", "formato-poliza.pdf");
+      try {
+        templateBuf = await fsPromises.readFile(templatePath);
+      } catch (e) {
+        if (e.code !== "ENOENT") console.warn("[poliza/documento] Plantilla local no usada:", e.message);
+      }
+    }
+    if (templateBuf) {
+      try {
+        const pdfDoc = await PDFDocument.load(templateBuf);
+        const page = pdfDoc.getPage(0);
+        const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+        const draw = (text, x, y, size = 9) => { page.drawText(String(text).substring(0, 100), { x, y, size, font }); };
+        draw(beneficiario, 55, 658, 9);
+        draw("ADMINISTRADOR", 220, 658, 8);
+        draw(recursoTexto, 220, 635, 9);
+        draw(importeLetra, 50, 578, 9);
+        draw(fechaTexto, 50, 538, 9);
+        draw(`${beneficiario}  ${importeStr}`, 50, 518, 9);
+        draw(importeLetra, 50, 488, 8);
+        draw(concepto, 115, 448, 9);
+        draw(plantaDisplay, 50, 398, 9);
+        draw(fechaTexto, 170, 398, 9);
+        draw(beneficiario, 50, 378, 9);
+        draw(importeStr, 430, 378, 9);
+        pdfBytes = await pdfDoc.save();
+      } catch (e) {
+        console.warn("[poliza/documento] Error al rellenar plantilla:", e.message);
+        templateBuf = null;
+      }
+    }
+    if (!templateBuf || pdfBytes === undefined) {
+      const pdfDoc = await PDFDocument.create();
+      const page = pdfDoc.addPage([612, 792]);
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
     const marginLeft = 50;
@@ -6835,7 +6882,9 @@ app.get("/api/folios/:id/poliza/documento", dashboardAuthMiddleware, async (req,
     y -= 28;
     txt("RECIBI CHEQUE", marginLeft, y, 9);
 
-    const pdfBytes = await pdfDoc.save();
+      pdfBytes = await pdfDoc.save();
+    }
+    if (!pdfBytes) throw new Error("No se pudo generar el PDF de póliza");
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="Poliza-Cheque-${(folio.numero_folio || folioId).replace(/\s/g, "-")}.pdf"`);
     return res.send(Buffer.from(pdfBytes));
