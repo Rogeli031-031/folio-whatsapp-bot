@@ -19,17 +19,16 @@ import {
   patchFolioPrestamoAPlanta,
 } from "@/lib/api";
 
+/** Opciones de mes de cargo: solo Enero 2026 a Diciembre 2026. */
 function getMesesOpciones(): { value: string; label: string }[] {
-  const out: { value: string; label: string }[] = [];
-  const now = new Date();
   const meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
-  for (let i = 0; i < 24; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const y = d.getFullYear();
-    const m = d.getMonth() + 1;
-    const value = `${y}-${String(m).padStart(2, "0")}`;
-    const label = `${meses[m - 1]} ${y}`;
-    out.push({ value, label });
+  const out: { value: string; label: string }[] = [];
+  const y = 2026;
+  for (let m = 1; m <= 12; m++) {
+    out.push({
+      value: `${y}-${String(m).padStart(2, "0")}`,
+      label: `${meses[m - 1]} ${y}`,
+    });
   }
   return out;
 }
