@@ -6768,7 +6768,7 @@ async function generatePolizaPdfBytes(folio) {
         const POS = {
           folio: { x: 400, y: 760, size: 10 },
           beneficiarioTop: { x: 55, y: 682, size: 9 },
-          administrador: { x: 220, y: 658, size: 8 },
+          administrador: { x: 220, y: 404, size: 8 },
           recurso: { x: 220, y: 700, size: 9 },
           importeLetra1: { x: 50, y: 651, size: 9 },
           fecha1: { x: 50, y: 538, size: 9 },
