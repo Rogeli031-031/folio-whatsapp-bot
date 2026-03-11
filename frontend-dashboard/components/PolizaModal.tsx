@@ -73,6 +73,7 @@ export default function PolizaModal({ folioId, token, onClose, onSuccess }: Prop
   const handleDescargarFormato = async () => {
     setError(null);
     setLoadingPdf(true);
+    console.log("[poliza/front] abriendo póliza", { folioId });
     try {
       const blob = await fetchDocumentoPolizaPdf(token, folioId);
       const url = URL.createObjectURL(blob);
@@ -82,7 +83,25 @@ export default function PolizaModal({ folioId, token, onClose, onSuccess }: Prop
       a.click();
       URL.revokeObjectURL(url);
     } catch (e) {
+      console.error("[poliza/front] error abriendo póliza", e);
       setError((e as Error).message || "Error al descargar el formato.");
+    } finally {
+      setLoadingPdf(false);
+    }
+  };
+
+  const handleAbrirEnPestana = async () => {
+    setError(null);
+    setLoadingPdf(true);
+    console.log("[poliza/front] abriendo póliza en pestaña", { folioId });
+    try {
+      const blob = await fetchDocumentoPolizaPdf(token, folioId);
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank", "noopener,noreferrer");
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (e) {
+      console.error("[poliza/front] error abriendo póliza", e);
+      setError((e as Error).message || "Error al abrir el PDF.");
     } finally {
       setLoadingPdf(false);
     }
@@ -130,14 +149,22 @@ export default function PolizaModal({ folioId, token, onClose, onSuccess }: Prop
         </div>
         <p className="mb-3 text-sm text-slate-400">Folio ID: {folioId}. El folio pasará a Depósito y cierre.</p>
         {error && <p className="mb-2 rounded bg-red-900/40 px-2 py-1 text-sm text-red-200">{error}</p>}
-        <div className="mb-3">
+        <div className="mb-3 flex flex-wrap gap-2">
           <button
             type="button"
             onClick={handleDescargarFormato}
             disabled={loadingPdf}
             className="rounded bg-slate-600 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-500 disabled:opacity-50"
           >
-            {loadingPdf ? "…" : "Descargar formato Póliza (PDF con datos del folio)"}
+            {loadingPdf ? "…" : "Descargar formato Póliza"}
+          </button>
+          <button
+            type="button"
+            onClick={handleAbrirEnPestana}
+            disabled={loadingPdf}
+            className="rounded bg-slate-600 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-500 disabled:opacity-50"
+          >
+            {loadingPdf ? "…" : "Abrir PDF en nueva pestaña"}
           </button>
         </div>
         <form onSubmit={handleSubmit} className="space-y-3">

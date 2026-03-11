@@ -6712,6 +6712,11 @@ app.post("/api/folios/:id/poliza", dashboardAuthMiddleware, async (req, res) => 
 
 /** Documento Póliza Cheque (formato oficial). Genera PDF con datos del folio. */
 app.get("/api/folios/:id/poliza/documento", dashboardAuthMiddleware, async (req, res) => {
+  console.log("[poliza/documento] ENDPOINT GOLPEADO", {
+    folioId: req.params.id,
+    format: req.query.format,
+    hasAuthHeader: !!req.headers.authorization,
+  });
   const folioId = parseInt(req.params.id, 10);
   if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
 
