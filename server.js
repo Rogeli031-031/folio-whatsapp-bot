@@ -6756,20 +6756,28 @@ app.get("/api/folios/:id/poliza/documento", dashboardAuthMiddleware, async (req,
 
     let pdfBytes;
     let templateBuf = null;
+    let templateSource = null;
     const s3TemplateKey = process.env.POLIZA_TEMPLATE_S3_KEY;
     if (s3Enabled && s3TemplateKey) {
       try {
         templateBuf = await getBufferFromS3(s3TemplateKey);
+        templateSource = "S3:" + s3TemplateKey;
       } catch (e) {
-        if (e.name !== "NoSuchKey") console.warn("[poliza/documento] Plantilla S3 no cargada:", e.message);
+        const isNoSuchKey = e.name === "NoSuchKey" || e.Code === "NoSuchKey" || (e.message && e.message.includes("NoSuchKey"));
+        if (!isNoSuchKey) console.warn("[poliza/documento] Plantilla S3 no cargada:", e.message);
       }
     }
     if (!templateBuf) {
       const templatePath = process.env.POLIZA_TEMPLATE_PATH || path.join(__dirname, "templates", "formato-poliza.pdf");
       try {
         templateBuf = await fsPromises.readFile(templatePath);
+        templateSource = "local:" + templatePath;
       } catch (e) {
-        if (e.code !== "ENOENT") console.warn("[poliza/documento] Plantilla local no usada:", e.message);
+        if (e.code === "ENOENT") {
+          console.warn("[poliza/documento] Plantilla local no encontrada:", templatePath);
+        } else {
+          console.warn("[poliza/documento] Plantilla local no usada:", e.message);
+        }
       }
     }
     if (templateBuf) {
@@ -6793,12 +6801,15 @@ app.get("/api/folios/:id/poliza/documento", dashboardAuthMiddleware, async (req,
         draw(beneficiario, 50, 378, 9);
         draw(importeStr, 430, 378, 9);
         pdfBytes = await pdfDoc.save();
+        if (templateSource) console.log("[poliza/documento] Póliza generada con plantilla:", templateSource);
       } catch (e) {
-        console.warn("[poliza/documento] Error al rellenar plantilla:", e.message);
+        console.warn("[poliza/documento] Error al cargar o rellenar plantilla (se usa formato por código):", e.message);
         templateBuf = null;
+        pdfBytes = undefined;
       }
     }
     if (!templateBuf || pdfBytes === undefined) {
+      console.log("[poliza/documento] Generando póliza desde cero (sin plantilla)");
       const pdfDoc = await PDFDocument.create();
       const page = pdfDoc.addPage([612, 792]);
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -11996,7 +12007,16 @@ ensureSchema()
     } finally {
       client.release();
     }
-    app.listen(PORT, () => console.log(`✅ Bot corriendo en puerto ${PORT}`));
+    app.listen(PORT, () => {
+      console.log(`✅ Bot corriendo en puerto ${PORT}`);
+      const localPath = path.join(__dirname, "templates", "formato-poliza.pdf");
+      const localExists = fs.existsSync(localPath);
+      if (process.env.POLIZA_TEMPLATE_S3_KEY) {
+        console.log("[Poliza] Plantilla: S3 key =", process.env.POLIZA_TEMPLATE_S3_KEY);
+      } else {
+        console.log("[Poliza] Plantilla local:", localPath, localExists ? "✓ existe" : "✗ no encontrada (usa S3 o copia el PDF ahí)");
+      }
+    });
     if (TEST_MODE_AI) console.log("[Delta Ingreso AI] TEST_MODE activo: 17:00 y 17:45 (America/Mexico_City)");
     let lastDeltaAiSlot = null;
     const mxFormatter = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Mexico_City", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
