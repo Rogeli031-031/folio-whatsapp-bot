@@ -635,9 +635,9 @@ function KpiContent() {
                     setDeltaForecastLoading(false);
                   }
                 }}
-                className="rounded bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-500 disabled:opacity-50"
+                className="rounded border border-amber-500 px-4 py-2 text-sm font-medium text-amber-300 hover:bg-amber-500/10 disabled:opacity-50"
               >
-                {deltaForecastLoading ? "Cargando…" : "Cargar"}
+                {deltaForecastLoading ? "Cargando…" : "Delta Ingreso Forecast"}
               </button>
               <button
                 type="button"
