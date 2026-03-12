@@ -6766,7 +6766,7 @@ async function generatePolizaPdfBytes(folio) {
         // Coordenadas AJUSTABLES según tu plantilla real
         // ========================================================
         const POS = {
-          folio: { x: 400, y: 760, size: 10 },
+          folio: { x: 412.5, y: 610.9, size: 10 },
           beneficiarioTop: { x: 50, y: 682, size: 9 },
           administrador: { x: 381.5, y: 395, size: 8 },
           recurso: { x: 381.5, y: 375, size: 9 },
