@@ -100,6 +100,7 @@ function KpiContent() {
   const [deltaForecastData, setDeltaForecastData] = useState<DeltaIngresoForecastResult | null>(null);
   const [deltaForecastLoading, setDeltaForecastLoading] = useState(false);
   const [deltaForecastError, setDeltaForecastError] = useState<string | null>(null);
+  const [showDeltaCliente, setShowDeltaCliente] = useState(false);
   const [deltaClienteSel, setDeltaClienteSel] = useState<{ grupo: string; cliente: import("@/lib/api").DeltaIngresoForecastCliente } | null>(null);
 
   useEffect(() => {
@@ -572,8 +573,9 @@ function KpiContent() {
               <select
                 value={deltaForecastPlanta}
                 onChange={(e) => {
-                  setDeltaForecastPlanta(e.target.value);
-                  setDeltaForecastData(null);
+                setDeltaForecastPlanta(e.target.value);
+                setDeltaForecastData(null);
+                setShowDeltaCliente(false);
                 }}
                 className="rounded border border-slate-600 bg-slate-700 px-2 py-1.5 text-sm text-slate-200"
               >
@@ -611,30 +613,59 @@ function KpiContent() {
                 ))}
               </select>
             </label>
-            <button
-              type="button"
-              disabled={!token || !deltaForecastPlanta || !deltaForecastPeriodoA || !deltaForecastPeriodoB || deltaForecastPeriodoA === deltaForecastPeriodoB || deltaForecastLoading}
-              onClick={async () => {
-                if (!token) return;
-                setDeltaForecastLoading(true);
-                setDeltaForecastError(null);
-                try {
-                  const data = await postDeltaIngresoForecastDatos(token, {
-                    planta: deltaForecastPlanta,
-                    periodoA: deltaForecastPeriodoA,
-                    periodoB: deltaForecastPeriodoB,
-                  });
-                  setDeltaForecastData(data);
-                } catch (e: unknown) {
-                  setDeltaForecastError((e as Error)?.message || "Error al cargar");
-                } finally {
-                  setDeltaForecastLoading(false);
-                }
-              }}
-              className="rounded bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-500 disabled:opacity-50"
-            >
-              {deltaForecastLoading ? "Cargando…" : "Cargar"}
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                disabled={!token || !deltaForecastPlanta || !deltaForecastPeriodoA || !deltaForecastPeriodoB || deltaForecastPeriodoA === deltaForecastPeriodoB || deltaForecastLoading}
+                onClick={async () => {
+                  if (!token) return;
+                  setDeltaForecastLoading(true);
+                  setDeltaForecastError(null);
+                  setShowDeltaCliente(false);
+                  try {
+                    const data = await postDeltaIngresoForecastDatos(token, {
+                      planta: deltaForecastPlanta,
+                      periodoA: deltaForecastPeriodoA,
+                      periodoB: deltaForecastPeriodoB,
+                    });
+                    setDeltaForecastData(data);
+                  } catch (e: unknown) {
+                    setDeltaForecastError((e as Error)?.message || "Error al cargar");
+                  } finally {
+                    setDeltaForecastLoading(false);
+                  }
+                }}
+                className="rounded bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-500 disabled:opacity-50"
+              >
+                {deltaForecastLoading ? "Cargando…" : "Cargar"}
+              </button>
+              <button
+                type="button"
+                disabled={!token || !deltaForecastPlanta || !deltaForecastPeriodoA || !deltaForecastPeriodoB || deltaForecastPeriodoA === deltaForecastPeriodoB || deltaForecastLoading}
+                onClick={async () => {
+                  if (!token) return;
+                  setDeltaForecastLoading(true);
+                  setDeltaForecastError(null);
+                  try {
+                    // Reutiliza el mismo cálculo Forecast, pero activa la vista por cliente.
+                    const data = await postDeltaIngresoForecastDatos(token, {
+                      planta: deltaForecastPlanta,
+                      periodoA: deltaForecastPeriodoA,
+                      periodoB: deltaForecastPeriodoB,
+                    });
+                    setDeltaForecastData(data);
+                    setShowDeltaCliente(true);
+                  } catch (e: unknown) {
+                    setDeltaForecastError((e as Error)?.message || "Error al cargar");
+                  } finally {
+                    setDeltaForecastLoading(false);
+                  }
+                }}
+                className="rounded border border-amber-500 px-4 py-2 text-sm font-medium text-amber-300 hover:bg-amber-500/10 disabled:opacity-50"
+              >
+                {deltaForecastLoading ? "…" : "Delta Ingreso Cliente Forecast"}
+              </button>
+            </div>
             {deltaForecastData && token && (
               <a
                 href={getDeltaIngresoForecastExcelUrl(token, deltaForecastPlanta, deltaForecastPeriodoA, deltaForecastPeriodoB)}
@@ -673,6 +704,7 @@ function KpiContent() {
                   ))}
                 </tbody>
               </table>
+              {showDeltaCliente && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-4 text-xs">
                 <div>
                   <h4 className="font-semibold text-slate-400 mb-1">Dejaron de comprar</h4>
@@ -743,6 +775,7 @@ function KpiContent() {
                   </ul>
                 </div>
               </div>
+              )}
             </div>
           )}
         </section>
