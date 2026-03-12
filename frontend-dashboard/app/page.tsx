@@ -826,14 +826,17 @@ function KpiContent() {
                   <h4 className="font-semibold text-slate-400 mb-1">Dejaron de comprar</h4>
                   <ul className="space-y-0.5 text-slate-300 max-h-32 overflow-y-auto">
                     {(dicfData?.dejaron?.clientes ?? deltaForecastData?.dejaron?.clientes ?? []).slice(0, 15).map((c, i) => (
-                      <li key={i}>
+                      <li key={i} className="border-b border-slate-800/50 pb-1 mb-0.5">
                         <button
                           type="button"
                           onClick={() => setDeltaClienteSel({ grupo: "Dejaron de comprar", cliente: c })}
                           className="w-full text-left hover:text-amber-300"
                         >
-                          {c.cliente}: {c.deltaKgStr != null ? `${c.deltaKgStr} Ton · ` : ""}{c.ingresoAStr}
+                          <span className="font-medium">{c.cliente}</span>: {c.deltaKgStr != null ? `${c.deltaKgStr} Ton · ` : ""}{c.ingresoAStr}
                         </button>
+                        <p className="text-[0.65rem] text-slate-500 pl-0.5 mt-0.5">
+                          Frec.: {c.freqDays != null && c.freqDays < 9000 ? `cada ${c.freqDays.toFixed(0)} d` : "N/A"} · Última: {c.lastPurchaseDate ? `${c.lastPurchaseDate} (${c.daysSinceLastReal ?? "?"} d)` : (typeof c.daysSinceLast === "number" ? `${c.daysSinceLast} d` : "N/D")} · {c.estado ?? "—"}
+                        </p>
                       </li>
                     ))}
                     {(dicfData?.dejaron?.clientes?.length ?? deltaForecastData?.dejaron?.clientes?.length ?? 0) > 15 && <li className="text-slate-500">… y más</li>}
@@ -843,14 +846,17 @@ function KpiContent() {
                   <h4 className="font-semibold text-slate-400 mb-1" title="Clientes sin compras el mes anterior y con proyección a cierre este mes">Nuevos</h4>
                   <ul className="space-y-0.5 text-slate-300 max-h-32 overflow-y-auto">
                     {(dicfData?.nuevos?.clientes ?? deltaForecastData?.nuevos?.clientes ?? []).slice(0, 15).map((c, i) => (
-                      <li key={i}>
+                      <li key={i} className="border-b border-slate-800/50 pb-1 mb-0.5">
                         <button
                           type="button"
                           onClick={() => setDeltaClienteSel({ grupo: "Nuevos", cliente: c })}
                           className="w-full text-left hover:text-amber-300"
                         >
-                          {c.cliente}: {c.deltaKgStr != null ? `${c.deltaKgStr} Ton · ` : ""}{c.ingresoBStr}
+                          <span className="font-medium">{c.cliente}</span>: {c.deltaKgStr != null ? `${c.deltaKgStr} Ton · ` : ""}{c.ingresoBStr}
                         </button>
+                        <p className="text-[0.65rem] text-slate-500 pl-0.5 mt-0.5">
+                          Frec.: {c.freqDays != null && c.freqDays < 9000 ? `cada ${c.freqDays.toFixed(0)} d` : "N/A"} · Última: {typeof c.daysSinceLast === "number" ? `${c.daysSinceLast} d` : "N/D"} · {c.estado ?? "—"}
+                        </p>
                       </li>
                     ))}
                     {(dicfData?.nuevos?.clientes?.length ?? deltaForecastData?.nuevos?.clientes?.length ?? 0) > 15 && <li className="text-slate-500">… y más</li>}
@@ -860,14 +866,17 @@ function KpiContent() {
                   <h4 className="font-semibold text-emerald-400 mb-1">Aumentaron</h4>
                   <ul className="space-y-0.5 text-slate-300 max-h-32 overflow-y-auto">
                     {(dicfData?.aumentaron?.clientes ?? deltaForecastData?.aumentaron?.clientes ?? []).slice(0, 15).map((c, i) => (
-                      <li key={i}>
+                      <li key={i} className="border-b border-slate-800/50 pb-1 mb-0.5">
                         <button
                           type="button"
                           onClick={() => setDeltaClienteSel({ grupo: "+ Ingreso", cliente: c })}
                           className="w-full text-left hover:text-amber-300"
                         >
-                          {c.cliente}: {c.deltaKgStr != null ? `${c.deltaKgStr} Ton · ` : ""}{c.deltaIngresoStr}
+                          <span className="font-medium">{c.cliente}</span>: {c.deltaKgStr != null ? `${c.deltaKgStr} Ton · ` : ""}{c.deltaIngresoStr}
                         </button>
+                        <p className="text-[0.65rem] text-slate-500 pl-0.5 mt-0.5">
+                          Frec.: {c.freqDays != null && c.freqDays < 9000 ? `cada ${c.freqDays.toFixed(0)} d` : "N/A"} · Última: {typeof c.daysSinceLast === "number" ? `${c.daysSinceLast} d` : "N/D"} · {c.estado ?? "—"}
+                        </p>
                       </li>
                     ))}
                     {(dicfData?.aumentaron?.clientes?.length ?? deltaForecastData?.aumentaron?.clientes?.length ?? 0) > 15 && <li className="text-slate-500">… y más</li>}
@@ -877,14 +886,17 @@ function KpiContent() {
                   <h4 className="font-semibold text-red-400 mb-1">Disminuyeron</h4>
                   <ul className="space-y-0.5 text-slate-300 max-h-32 overflow-y-auto">
                     {(dicfData?.disminuyeron?.clientes ?? deltaForecastData?.disminuyeron?.clientes ?? []).slice(0, 15).map((c, i) => (
-                      <li key={i}>
+                      <li key={i} className="border-b border-slate-800/50 pb-1 mb-0.5">
                         <button
                           type="button"
                           onClick={() => setDeltaClienteSel({ grupo: "- Ingreso", cliente: c })}
                           className="w-full text-left hover:text-amber-300"
                         >
-                          {c.cliente}: {c.deltaKgStr != null ? `${c.deltaKgStr} Ton · ` : ""}{c.deltaIngresoStr}
+                          <span className="font-medium">{c.cliente}</span>: {c.deltaKgStr != null ? `${c.deltaKgStr} Ton · ` : ""}{c.deltaIngresoStr}
                         </button>
+                        <p className="text-[0.65rem] text-slate-500 pl-0.5 mt-0.5">
+                          Frec.: {c.freqDays != null && c.freqDays < 9000 ? `cada ${c.freqDays.toFixed(0)} d` : "N/A"} · Última: {typeof c.daysSinceLast === "number" ? `${c.daysSinceLast} d` : "N/D"} · {c.estado ?? "—"}
+                        </p>
                       </li>
                     ))}
                     {(dicfData?.disminuyeron?.clientes?.length ?? deltaForecastData?.disminuyeron?.clientes?.length ?? 0) > 15 && <li className="text-slate-500">… y más</li>}
@@ -930,11 +942,16 @@ function KpiContent() {
                     : (deltaClienteSel.cliente.freqDays != null && deltaClienteSel.cliente.freqDays >= 9000
                       ? "sin compras en la ventana"
                       : "sin datos")}{" "}
-                  · Días desde última compra:{" "}
+                  · Estado: {deltaClienteSel.cliente.estado || "N/D"}
+                </p>
+                <p>
+                  Días desde última compra (en ventana):{" "}
                   {typeof deltaClienteSel.cliente.daysSinceLast === "number"
                     ? `${deltaClienteSel.cliente.daysSinceLast} días`
-                    : "N/D"} · Estado:{" "}
-                  {deltaClienteSel.cliente.estado || "N/D"}
+                    : "N/D"}
+                  {deltaClienteSel.cliente.lastPurchaseDate && (
+                    <> · Última compra real: {deltaClienteSel.cliente.lastPurchaseDate}{typeof deltaClienteSel.cliente.daysSinceLastReal === "number" ? ` (hace ${deltaClienteSel.cliente.daysSinceLastReal} días)` : ""}</>
+                  )}
                 </p>
                 <div className="mt-2">
                   <h4 className="mb-1 text-[0.7rem] font-semibold text-slate-400">Compras últimas 4 semanas</h4>

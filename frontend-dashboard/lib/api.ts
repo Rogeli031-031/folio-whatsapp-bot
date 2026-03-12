@@ -499,6 +499,8 @@ export interface DeltaIngresoForecastCliente extends DeltaIngresoCliente {
   estado?: string;
   freqDays?: number;
   daysSinceLast?: number;
+  lastPurchaseDate?: string | null;
+  daysSinceLastReal?: number | null;
   historyLast4Weeks?: { fecha: string; kg: number }[];
   kgAStr?: string;
   kgBStr?: string;
