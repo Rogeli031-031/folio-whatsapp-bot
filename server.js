@@ -6777,7 +6777,7 @@ async function generatePolizaPdfBytes(folio) {
           importeLetra2: { x: 35, y: 103.8, size: 8 },
           concepto: { x: 130, y: 568, size: 7 },
           planta: { x: 100, y: 717, size: 12 },
-          fecha2: { x: 170, y: 166, size: 9 },
+          fecha2: { x: 246.8, y: 151.7, size: 9 },
           beneficiario2: { x: 35, y: 129.8, size: 9 },
           importe2: { x: 392.5, y: 132, size: 9 },
         };
