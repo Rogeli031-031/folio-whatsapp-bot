@@ -6767,19 +6767,19 @@ async function generatePolizaPdfBytes(folio) {
         // ========================================================
         const POS = {
           folio: { x: 400, y: 760, size: 10 },
-          beneficiarioTop: { x: 100, y: 682, size: 11 },
+          beneficiarioTop: { x: 50, y: 682, size: 9 },
           administrador: { x: 381.5, y: 395, size: 8 },
           recurso: { x: 220, y: 700, size: 9 },
           importeLetra1: { x: 50, y: 651, size: 9 },
-          fecha1: { x: 381.5, y: 375, size: 9 },
-          beneficiarioImporte: { x: 50, y: 518, size: 9 },
+          fecha1: { x: 381.5, y: 717, size: 9 },
+          beneficiarioImporte: { x: 50, y: 490, size: 9 },
           importe2Top: { x: 430, y: 682, size: 9 },
-          importeLetra2: { x: 50, y: 103.8, size: 8 },
-          concepto: { x: 120, y: 568, size: 7 },
-          planta: { x: 50, y: 717, size: 10 },
+          importeLetra2: { x: 35, y: 103.8, size: 8 },
+          concepto: { x: 130, y: 568, size: 7 },
+          planta: { x: 100, y: 717, size: 12 },
           fecha2: { x: 170, y: 166, size: 9 },
-          beneficiario2: { x: 50, y: 129.8, size: 9 },
-          importe2: { x: 430, y: 129.8, size: 9 },
+          beneficiario2: { x: 35 y: 129.8, size: 9 },
+          importe2: { x: 392.5, y: 132, size: 9 },
         };
 
         const draw = (text, x, y, size = 9, bold = false, maxLen = 140) => {
