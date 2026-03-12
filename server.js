@@ -2800,7 +2800,7 @@ async function getFolioById(client, id) {
     `SELECT f.id, f.numero_folio, f.folio_codigo, f.planta_id, f.beneficiario, f.concepto, f.importe,
             f.categoria, f.subcategoria, f.estacion, f.unidad, f.prioridad, f.estatus, f.cotizacion_url, f.cotizacion_s3key,
             f.aprobado_por, f.aprobado_en, f.creado_en, f.nivel_aprobado, f.estatus_anterior, f.override_planta, f.override_motivo, f.creado_por, f.creado_por_rol_clave,
-            f.presupuesto_id, f.descripcion, f.mes_cargo, f.solo_zp_ad, f.prestamo_a_planta,
+            f.presupuesto_id, f.descripcion, f.mes_cargo, f.solo_zp_ad, f.prestamo_a_planta, f.proyecto_id, f.banco, f.cuenta_bancaria,
             COALESCE(f.por_recuperar, false) AS por_recuperar,
             COALESCE(f.solicitud_por_recuperar_pendiente, false) AS solicitud_por_recuperar_pendiente,
             COALESCE(f.descripcion, f.concepto) AS descripcion_display,
@@ -6486,6 +6486,89 @@ app.patch("/api/folios/:id/prioridad", dashboardAuthMiddleware, async (req, res)
     res.json({ ok: true, prioridad });
   } catch (e) {
     console.error("[Dashboard PATCH prioridad]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/** Editar campos base del folio (solo Asistente de Dirección). */
+app.patch("/api/folios/:id/editar", dashboardAuthMiddleware, async (req, res) => {
+  const role = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) || "";
+  if (role !== "AD") return res.status(403).json({ error: "Solo Asistente de Dirección puede editar folios." });
+  const folioId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
+
+  const client = await pool.connect();
+  try {
+    const folio = await getFolioById(client, folioId);
+    if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
+
+    const next = {
+      beneficiario: (req.body.beneficiario != null && String(req.body.beneficiario).trim() !== "") ? String(req.body.beneficiario).trim() : null,
+      concepto: (req.body.concepto != null && String(req.body.concepto).trim() !== "") ? String(req.body.concepto).trim() : null,
+      descripcion: (req.body.descripcion != null && String(req.body.descripcion).trim() !== "") ? String(req.body.descripcion).trim() : null,
+      categoria: (req.body.categoria != null && String(req.body.categoria).trim() !== "") ? String(req.body.categoria).trim() : null,
+      subcategoria: (req.body.subcategoria != null && String(req.body.subcategoria).trim() !== "") ? String(req.body.subcategoria).trim() : null,
+      estacion: (req.body.estacion != null && String(req.body.estacion).trim() !== "") ? String(req.body.estacion).trim() : null,
+      unidad: (req.body.unidad != null && String(req.body.unidad).trim() !== "") ? String(req.body.unidad).trim() : null,
+      prioridad: (req.body.prioridad != null && String(req.body.prioridad).trim() !== "") ? String(req.body.prioridad).trim() : null,
+      mes_cargo: (req.body.mes_cargo != null && String(req.body.mes_cargo).trim() !== "") ? String(req.body.mes_cargo).trim() : null,
+      banco: (req.body.banco != null && String(req.body.banco).trim() !== "") ? String(req.body.banco).trim() : null,
+      cuenta_bancaria: (req.body.cuenta_bancaria != null && String(req.body.cuenta_bancaria).trim() !== "") ? String(req.body.cuenta_bancaria).trim() : null,
+      proyecto_id: (req.body.proyecto_id != null && String(req.body.proyecto_id).trim() !== "") ? parseInt(req.body.proyecto_id, 10) : null,
+      importe: (req.body.importe != null && String(req.body.importe).trim() !== "") ? Number(req.body.importe) : null,
+    };
+
+    if (next.mes_cargo !== null && !/^\d{4}-\d{2}$/.test(next.mes_cargo)) return res.status(400).json({ error: "mes_cargo debe ser YYYY-MM" });
+    if (next.proyecto_id != null && !Number.isFinite(next.proyecto_id)) return res.status(400).json({ error: "proyecto_id inválido" });
+    if (next.importe != null && (!Number.isFinite(next.importe) || next.importe < 0)) return res.status(400).json({ error: "importe inválido" });
+
+    const fields = [
+      ["beneficiario", folio.beneficiario, next.beneficiario],
+      ["concepto", folio.concepto, next.concepto],
+      ["descripcion", folio.descripcion, next.descripcion],
+      ["categoria", folio.categoria, next.categoria],
+      ["subcategoria", folio.subcategoria, next.subcategoria],
+      ["estacion", folio.estacion, next.estacion],
+      ["unidad", folio.unidad, next.unidad],
+      ["prioridad", folio.prioridad, next.prioridad],
+      ["mes_cargo", folio.mes_cargo, next.mes_cargo],
+      ["banco", folio.banco, next.banco],
+      ["cuenta_bancaria", folio.cuenta_bancaria, next.cuenta_bancaria],
+      ["proyecto_id", folio.proyecto_id, next.proyecto_id],
+      ["importe", folio.importe, next.importe],
+    ];
+    const changed = fields.filter(([, prev, nx]) => {
+      const p = prev == null ? null : String(prev);
+      const n = nx == null ? null : String(nx);
+      return p !== n;
+    });
+    if (changed.length === 0) return res.json({ ok: true, changed: false });
+
+    const setParts = [];
+    const params = [];
+    let idx = 1;
+    for (const [k, , v] of changed) {
+      setParts.push(`${k} = $${idx}`);
+      params.push(v);
+      idx++;
+    }
+    params.push(folioId);
+    await client.query(`UPDATE public.folios SET ${setParts.join(", ")} WHERE id = $${idx}`, params);
+
+    const cambiosTxt = changed
+      .map(([k, prev, nx]) => {
+        const p = prev == null || String(prev).trim() === "" ? "—" : String(prev);
+        const n = nx == null || String(nx).trim() === "" ? "—" : String(nx);
+        return `${k}: ${p} → ${n}`;
+      })
+      .join("; ");
+    await insertHistorial(client, folioId, folio.numero_folio, folio.folio_codigo, null, `Edición AD: ${cambiosTxt}`, null, "AD");
+
+    res.json({ ok: true, changed: true });
+  } catch (e) {
+    console.error("[Dashboard PATCH folio editar]", e);
     res.status(500).json({ error: e.message });
   } finally {
     client.release();

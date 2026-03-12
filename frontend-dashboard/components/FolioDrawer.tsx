@@ -18,6 +18,7 @@ import {
   fetchIgfEmpresas,
   patchFolioPrestamoAPlanta,
 } from "@/lib/api";
+import EditarFolioModal from "@/components/EditarFolioModal";
 
 /** Opciones de mes de cargo: solo Enero 2026 a Diciembre 2026. */
 function getMesesOpciones(): { value: string; label: string }[] {
@@ -56,6 +57,7 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
   const [savingMesCargo, setSavingMesCargo] = useState(false);
   const [savingSoloZpAd, setSavingSoloZpAd] = useState(false);
   const [savingPorRecuperar, setSavingPorRecuperar] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const [cotizacionFile, setCotizacionFile] = useState<File | null>(null);
   const [uploadingCotizacion, setUploadingCotizacion] = useState(false);
   const [cotizacionError, setCotizacionError] = useState<string | null>(null);
@@ -109,6 +111,7 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
   const estatusUpper = estatus.trim().toUpperCase();
   const roleUpper = role && String(role).toUpperCase();
   const soloLectura = roleUpper === "CF_CDMX" || roleUpper === "GA"; // Contralor CDMX y GA solo ven e imprimen, no aprueban
+  const puedeEditar = roleUpper === "AD";
   const puedeAprobar = !soloLectura && ESTADOS_APROBABLES.includes(estatusUpper);
   const puedeRegresarZp = !soloLectura && ESTADOS_CARRO_COMPRA.includes(estatusUpper);
   const puedeSoloZpAd = roleUpper === "ZP" || roleUpper === "AD";
@@ -306,6 +309,15 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
                       <dd className="text-slate-200">{folio.etapa_icon ? <span className="mr-1">{folio.etapa_icon as string}</span> : null}{String(folio.estatus_visible ?? folio.estatus ?? "—")}</dd>
                     </div>
                     <div className="flex flex-col items-end gap-2">
+                      {puedeEditar && (
+                        <button
+                          type="button"
+                          onClick={() => setEditOpen(true)}
+                          className="rounded bg-slate-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-500"
+                        >
+                          Editar
+                        </button>
+                      )}
                       {puedeSolicitarCancelacion && (
                         <button
                           type="button"
@@ -554,6 +566,22 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
           )}
         </div>
       </div>
+      {editOpen && token && folioId != null && folio && (
+        <EditarFolioModal
+          open={editOpen}
+          token={token}
+          folioId={folioId}
+          folio={folio}
+          onClose={() => setEditOpen(false)}
+          onSaved={async () => {
+            const [f, t] = await Promise.all([fetchFolio(token, folioId), fetchTimeline(token, folioId)]);
+            setFolio(f as Record<string, unknown>);
+            setMesCargoEdit((f as Record<string, unknown>).mes_cargo as string || "");
+            setTimeline((t as { events: typeof timeline }).events || []);
+            onApproved?.();
+          }}
+        />
+      )}
     </>
   );
 }

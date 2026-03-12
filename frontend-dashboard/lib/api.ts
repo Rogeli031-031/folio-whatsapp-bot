@@ -614,6 +614,32 @@ export function patchFolioPorRecuperar(
   });
 }
 
+export function patchFolioEditar(
+  token: string,
+  folioId: number,
+  payload: {
+    beneficiario?: string | null;
+    concepto?: string | null;
+    descripcion?: string | null;
+    importe?: number | null;
+    categoria?: string | null;
+    subcategoria?: string | null;
+    estacion?: string | null;
+    unidad?: string | null;
+    prioridad?: string | null;
+    mes_cargo?: string | null;
+    banco?: string | null;
+    cuenta_bancaria?: string | null;
+    proyecto_id?: number | null;
+  }
+): Promise<{ ok: boolean; changed?: boolean }> {
+  return apiFetch(`/api/folios/${folioId}/editar`, {
+    token,
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
 export function postSolicitarPorRecuperar(token: string, folioId: number): Promise<{ ok: boolean }> {
   return apiFetch(`/api/folios/${folioId}/solicitar-por-recuperar`, {
     token,
