@@ -6792,14 +6792,14 @@ async function generatePolizaPdfBytes(folio) {
             font: bold ? fontBold : font,
           });
         };
-        // Misma altura, más ancho (espaciado entre caracteres mayor, tipo letra “O” más redonda/ancha)
-        const drawWide = (text, x, y, size = 9, maxLen = 140) => {
+        // Efecto Helvetica Condensed: espaciado estrecho (avance 0.42). pdf-lib StandardFonts no incluye Condensed. “O” más redonda/ancha)
+        const drawCondensed = (text, x, y, size = 9, maxLen = 140) => {
           const safe = String(text ?? "").trim().substring(0, maxLen);
           if (!safe) return;
           let xPos = x;
           for (const char of safe) {
             page.drawText(char, { x: xPos, y, size, font });
-            xPos += size * 0.6;
+            xPos += size * 0.42;
           }
         };
 
@@ -6810,13 +6810,13 @@ async function generatePolizaPdfBytes(folio) {
         draw(importeLetra, POS.importeLetra1.x, POS.importeLetra1.y, POS.importeLetra1.size);
         draw(fechaTexto, POS.fecha1.x, POS.fecha1.y, POS.fecha1.size);
         draw(`${beneficiario}   ${importeStr}`, POS.beneficiarioImporte.x, POS.beneficiarioImporte.y, POS.beneficiarioImporte.size);
-        drawWide(importeLetra, POS.importeLetra2.x, POS.importeLetra2.y, POS.importeLetra2.size);
+        drawCondensed(importeLetra, POS.importeLetra2.x, POS.importeLetra2.y, POS.importeLetra2.size);
         draw(concepto, POS.concepto.x, POS.concepto.y, POS.concepto.size);
         draw(plantaDisplay, POS.planta.x, POS.planta.y, POS.planta.size);
-        drawWide(fechaTexto, POS.fecha2.x, POS.fecha2.y, POS.fecha2.size);
-        drawWide(beneficiario, POS.beneficiario2.x, POS.beneficiario2.y, POS.beneficiario2.size);
-        drawWide(importeStr, POS.importe2Top.x, POS.importe2Top.y, POS.importe2Top.size);
-        drawWide(importeStr, POS.importe2.x, POS.importe2.y, POS.importe2.size);
+        drawCondensed(fechaTexto, POS.fecha2.x, POS.fecha2.y, POS.fecha2.size);
+        drawCondensed(beneficiario, POS.beneficiario2.x, POS.beneficiario2.y, POS.beneficiario2.size);
+        drawCondensed(importeStr, POS.importe2Top.x, POS.importe2Top.y, POS.importe2Top.size);
+        drawCondensed(importeStr, POS.importe2.x, POS.importe2.y, POS.importe2.size);
 
         pdfBytes = await pdfDoc.save();
         usedTemplate = true;
