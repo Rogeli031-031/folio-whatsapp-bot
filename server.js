@@ -8508,7 +8508,9 @@ app.post("/twilio/whatsapp", async (req, res) => {
 
       /* ----- Delta Ingreso AI: Router ZP (orden A→F) ----- */
       const esZPAsk = actor && ((actor.rol_clave && String(actor.rol_clave).toUpperCase()) === "ZP" || (actor.rol_nombre && /director/i.test(actor.rol_nombre) && /zp/i.test(actor.rol_nombre)));
-      if (esZPAsk && body.trim().length >= 10) {
+      const esComandoEstatus = FLAGS.ESTATUS && /^estatus\s+/i.test(body.trim());
+      const esComandoHistorial = FLAGS.HISTORIAL && /^historial\s+F-\d{6}-\d{3}\s*$/i.test(body.trim());
+      if (esZPAsk && body.trim().length >= 10 && !esComandoEstatus && !esComandoHistorial) {
         try {
           await deltaIngresoAiDb.ensureDeltaIngresoAiSchema(client);
           const textTrim = body.trim();
