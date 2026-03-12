@@ -7852,6 +7852,80 @@ app.post("/api/dashboard/dicf-datos", dashboardAuthMiddleware, async (req, res) 
   }
 });
 
+/** Obtener parámetros DICF editables para una planta y mes (year, month). */
+app.get("/api/dashboard/dicf-config", dashboardAuthMiddleware, async (req, res) => {
+  const planta = (req.query.planta || "").toString().trim();
+  const year = parseInt(req.query.year, 10);
+  const month = parseInt(req.query.month, 10);
+  if (!planta || !Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
+    return res.status(400).json({ error: "Faltan planta, year o month válidos" });
+  }
+  const client = await pool.connect();
+  try {
+    const plantCode = await getPlantCodeArrFromPlantaNombre(client, planta);
+    const r = await client.query(
+      `SELECT window_days, tolerancia_dias, umbral_mxn, umbral_pct_neg, umbral_pct_pos, min_kg_hist
+       FROM arr.dicf_config WHERE UPPER(TRIM(plant_code)) = UPPER(TRIM($1)) AND year = $2 AND month = $3`,
+      [plantCode, year, month]
+    );
+    const row = r.rows?.[0];
+    res.json({
+      planta,
+      year,
+      month,
+      window_days: row?.window_days != null ? Number(row.window_days) : 60,
+      tolerancia_dias: row?.tolerancia_dias != null ? Number(row.tolerancia_dias) : 2,
+      umbral_mxn: row?.umbral_mxn != null ? Number(row.umbral_mxn) : 50000,
+      umbral_pct_neg: row?.umbral_pct_neg != null ? Number(row.umbral_pct_neg) : 0.15,
+      umbral_pct_pos: row?.umbral_pct_pos != null ? Number(row.umbral_pct_pos) : 0.15,
+      min_kg_hist: row?.min_kg_hist != null ? Number(row.min_kg_hist) : 0,
+    });
+  } catch (e) {
+    console.error("[Dashboard dicf-config GET]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/** Guardar parámetros DICF editables (upsert por planta, year, month). */
+app.post("/api/dashboard/dicf-config", dashboardAuthMiddleware, async (req, res) => {
+  const { planta, year, month, window_days, tolerancia_dias, umbral_mxn, umbral_pct_neg, umbral_pct_pos, min_kg_hist } = req.body || {};
+  const y = parseInt(year, 10);
+  const m = parseInt(month, 10);
+  if (!planta || typeof planta !== "string" || !planta.trim() || !Number.isFinite(y) || !Number.isFinite(m) || m < 1 || m > 12) {
+    return res.status(400).json({ error: "Faltan planta, year o month válidos" });
+  }
+  const client = await pool.connect();
+  try {
+    const plantCode = await getPlantCodeArrFromPlantaNombre(client, planta.trim());
+    const wd = window_days != null && Number(window_days) > 0 ? Math.max(1, Math.min(365, Number(window_days))) : 60;
+    const td = tolerancia_dias != null && Number(tolerancia_dias) >= 0 ? Number(tolerancia_dias) : 2;
+    const umxn = umbral_mxn != null && !Number.isNaN(Number(umbral_mxn)) ? Number(umbral_mxn) : 50000;
+    const upn = umbral_pct_neg != null && !Number.isNaN(Number(umbral_pct_neg)) ? Number(umbral_pct_neg) : 0.15;
+    const upp = umbral_pct_pos != null && !Number.isNaN(Number(umbral_pct_pos)) ? Number(umbral_pct_pos) : 0.15;
+    const mkg = min_kg_hist != null && !Number.isNaN(Number(min_kg_hist)) ? Number(min_kg_hist) : 0;
+    await client.query(
+      `INSERT INTO arr.dicf_config (plant_code, year, month, window_days, tolerancia_dias, umbral_mxn, umbral_pct_neg, umbral_pct_pos, min_kg_hist)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       ON CONFLICT (plant_code, year, month) DO UPDATE SET
+         window_days = EXCLUDED.window_days,
+         tolerancia_dias = EXCLUDED.tolerancia_dias,
+         umbral_mxn = EXCLUDED.umbral_mxn,
+         umbral_pct_neg = EXCLUDED.umbral_pct_neg,
+         umbral_pct_pos = EXCLUDED.umbral_pct_pos,
+         min_kg_hist = EXCLUDED.min_kg_hist`,
+      [plantCode, y, m, wd, td, umxn, upn, upp, mkg]
+    );
+    res.json({ ok: true, planta: planta.trim(), year: y, month: m, window_days: wd });
+  } catch (e) {
+    console.error("[Dashboard dicf-config POST]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
 /** Excel Delta Ingreso Forecast: una hoja por categoría (dejaron, nuevos, aumentaron, disminuyeron) y resumen por canal/subcanal. */
 app.get("/api/dashboard/delta-ingreso-forecast-excel", dashboardAuthMiddleware, async (req, res) => {
   const planta = (req.query.planta || "").toString().trim();

@@ -16,10 +16,13 @@ import {
   postDeltaIngresoForecastDatos,
   getDeltaIngresoForecastExcelUrl,
   postDicfDatos,
+  fetchDicfConfig,
+  postDicfConfig,
   type IgfForecastResponse,
   type IgfForecastRow,
   type DeltaIngresoForecastResult,
   type DicfResult,
+  type DicfConfig,
 } from "@/lib/api";
 
 const MESES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
@@ -105,6 +108,16 @@ function KpiContent() {
   const [deltaForecastError, setDeltaForecastError] = useState<string | null>(null);
   const [showDeltaCliente, setShowDeltaCliente] = useState(false);
   const [deltaClienteSel, setDeltaClienteSel] = useState<{ grupo: string; cliente: import("@/lib/api").DeltaIngresoForecastCliente } | null>(null);
+  const [dicfConfig, setDicfConfig] = useState<DicfConfig | null>(null);
+  const [showDicfParams, setShowDicfParams] = useState(false);
+  const [dicfParamsLoading, setDicfParamsLoading] = useState(false);
+  const [dicfParamsSaving, setDicfParamsSaving] = useState(false);
+  const [dicfParamsWindowDays, setDicfParamsWindowDays] = useState<string>("60");
+  const [dicfParamsToleranciaDias, setDicfParamsToleranciaDias] = useState<string>("2");
+  const [dicfParamsUmbralMxn, setDicfParamsUmbralMxn] = useState<string>("50000");
+  const [dicfParamsUmbralPctNeg, setDicfParamsUmbralPctNeg] = useState<string>("0.15");
+  const [dicfParamsUmbralPctPos, setDicfParamsUmbralPctPos] = useState<string>("0.15");
+  const [dicfParamsMinKgHist, setDicfParamsMinKgHist] = useState<string>("0");
 
   useEffect(() => {
     if (!token || !deltaForecastPlanta) {
@@ -682,9 +695,98 @@ function KpiContent() {
           {(deltaForecastData || dicfData) && (
             <div className="overflow-x-auto">
               {dicfData && (
-                <p className="text-xs text-slate-400 mb-2">
-                  Proyección a cierre del mes (últimos {dicfData.window_days} días · datos hasta {dicfData.last_date ?? "—"}).
-                </p>
+                <div className="flex flex-wrap items-center gap-2 mb-2">
+                  <p className="text-xs text-slate-400">
+                    Proyección a cierre del mes (últimos {dicfData.window_days} días · datos hasta {dicfData.last_date ?? "—"}).
+                  </p>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!token || !deltaForecastPlanta || !dicfData?.periodoMes) return;
+                      const [y, m] = dicfData.periodoMes.split("-").map(Number);
+                      if (!Number.isFinite(y) || !Number.isFinite(m)) return;
+                      setShowDicfParams((v) => !v);
+                      if (!showDicfParams) {
+                        setDicfParamsLoading(true);
+                        try {
+                          const cfg = await fetchDicfConfig(token, deltaForecastPlanta, y, m);
+                          setDicfConfig(cfg);
+                          setDicfParamsWindowDays(String(cfg.window_days));
+                          setDicfParamsToleranciaDias(String(cfg.tolerancia_dias));
+                          setDicfParamsUmbralMxn(String(cfg.umbral_mxn));
+                          setDicfParamsUmbralPctNeg(String(cfg.umbral_pct_neg));
+                          setDicfParamsUmbralPctPos(String(cfg.umbral_pct_pos));
+                          setDicfParamsMinKgHist(String(cfg.min_kg_hist));
+                        } catch {
+                          setDicfConfig(null);
+                          setDicfParamsWindowDays("60");
+                        } finally {
+                          setDicfParamsLoading(false);
+                        }
+                      }
+                    }}
+                    className="text-xs rounded border border-slate-600 px-2 py-1 text-slate-400 hover:bg-slate-800"
+                  >
+                    {dicfParamsLoading ? "…" : showDicfParams ? "Ocultar parámetros" : "Parámetros DICF"}
+                  </button>
+                </div>
+              )}
+              {showDicfParams && dicfData?.periodoMes && token && deltaForecastPlanta && (
+                <div className="mb-3 p-3 rounded border border-slate-700 bg-slate-800/50 text-sm">
+                  <h4 className="font-semibold text-slate-300 mb-2">Parámetros editables (mes {dicfData.periodoMes})</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-3">
+                    <label className="text-slate-400 flex flex-col gap-0.5">
+                      Días de ventana (historial)
+                      <input type="number" min={1} max={365} value={dicfParamsWindowDays} onChange={(e) => setDicfParamsWindowDays(e.target.value)} className="rounded border border-slate-600 bg-slate-900 px-2 py-1 text-slate-200 w-full" />
+                    </label>
+                    <label className="text-slate-400 flex flex-col gap-0.5">
+                      Tolerancia (días)
+                      <input type="number" min={0} step={0.5} value={dicfParamsToleranciaDias} onChange={(e) => setDicfParamsToleranciaDias(e.target.value)} className="rounded border border-slate-600 bg-slate-900 px-2 py-1 text-slate-200 w-full" />
+                    </label>
+                    <label className="text-slate-400 flex flex-col gap-0.5">
+                      Umbral MXN
+                      <input type="number" min={0} value={dicfParamsUmbralMxn} onChange={(e) => setDicfParamsUmbralMxn(e.target.value)} className="rounded border border-slate-600 bg-slate-900 px-2 py-1 text-slate-200 w-full" />
+                    </label>
+                    <label className="text-slate-400 flex flex-col gap-0.5">
+                      Umbral % negativo
+                      <input type="number" min={0} max={1} step={0.01} value={dicfParamsUmbralPctNeg} onChange={(e) => setDicfParamsUmbralPctNeg(e.target.value)} className="rounded border border-slate-600 bg-slate-900 px-2 py-1 text-slate-200 w-full" />
+                    </label>
+                    <label className="text-slate-400 flex flex-col gap-0.5">
+                      Umbral % positivo
+                      <input type="number" min={0} max={1} step={0.01} value={dicfParamsUmbralPctPos} onChange={(e) => setDicfParamsUmbralPctPos(e.target.value)} className="rounded border border-slate-600 bg-slate-900 px-2 py-1 text-slate-200 w-full" />
+                    </label>
+                    <label className="text-slate-400 flex flex-col gap-0.5">
+                      Mín. kg historial
+                      <input type="number" min={0} value={dicfParamsMinKgHist} onChange={(e) => setDicfParamsMinKgHist(e.target.value)} className="rounded border border-slate-600 bg-slate-900 px-2 py-1 text-slate-200 w-full" />
+                    </label>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={dicfParamsSaving}
+                    onClick={async () => {
+                      if (!token || !deltaForecastPlanta || !dicfData?.periodoMes) return;
+                      const [y, m] = dicfData.periodoMes.split("-").map(Number);
+                      if (!Number.isFinite(y) || !Number.isFinite(m)) return;
+                      const wd = Math.max(1, Math.min(365, parseInt(dicfParamsWindowDays, 10) || 60));
+                      const td = Math.max(0, parseFloat(dicfParamsToleranciaDias) || 2);
+                      const umxn = Math.max(0, parseFloat(dicfParamsUmbralMxn) || 50000);
+                      const upn = Math.max(0, Math.min(1, parseFloat(dicfParamsUmbralPctNeg) || 0.15));
+                      const upp = Math.max(0, Math.min(1, parseFloat(dicfParamsUmbralPctPos) || 0.15));
+                      const mkg = Math.max(0, parseFloat(dicfParamsMinKgHist) || 0);
+                      setDicfParamsSaving(true);
+                      try {
+                        await postDicfConfig(token, { planta: deltaForecastPlanta, year: y, month: m, window_days: wd, tolerancia_dias: td, umbral_mxn: umxn, umbral_pct_neg: upn, umbral_pct_pos: upp, min_kg_hist: mkg });
+                        setDicfConfig((c) => (c ? { ...c, window_days: wd, tolerancia_dias: td, umbral_mxn: umxn, umbral_pct_neg: upn, umbral_pct_pos: upp, min_kg_hist: mkg } : null));
+                      } finally {
+                        setDicfParamsSaving(false);
+                      }
+                    }}
+                    className="rounded bg-amber-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-500 disabled:opacity-50"
+                  >
+                    {dicfParamsSaving ? "Guardando…" : "Guardar parámetros"}
+                  </button>
+                  <p className="text-xs text-slate-500 mt-1">Al guardar, vuelve a ejecutar &quot;Delta Ingreso Cliente Forecast&quot; para aplicar los cambios.</p>
+                </div>
               )}
               <table className="w-full border-collapse text-sm">
                 <thead>
@@ -738,7 +840,7 @@ function KpiContent() {
                   </ul>
                 </div>
                 <div>
-                  <h4 className="font-semibold text-slate-400 mb-1">Nuevos</h4>
+                  <h4 className="font-semibold text-slate-400 mb-1" title="Clientes sin compras el mes anterior y con proyección a cierre este mes">Nuevos</h4>
                   <ul className="space-y-0.5 text-slate-300 max-h-32 overflow-y-auto">
                     {(dicfData?.nuevos?.clientes ?? deltaForecastData?.nuevos?.clientes ?? []).slice(0, 15).map((c, i) => (
                       <li key={i}>
@@ -824,10 +926,14 @@ function KpiContent() {
                 <p>
                   Frecuencia estimada:{" "}
                   {deltaClienteSel.cliente.freqDays != null && deltaClienteSel.cliente.freqDays < 9000
-                    ? `${deltaClienteSel.cliente.freqDays.toFixed(1)} días`
-                    : "sin datos"}{" "}
+                    ? `cada ${deltaClienteSel.cliente.freqDays.toFixed(1)} días`
+                    : (deltaClienteSel.cliente.freqDays != null && deltaClienteSel.cliente.freqDays >= 9000
+                      ? "sin compras en la ventana"
+                      : "sin datos")}{" "}
                   · Días desde última compra:{" "}
-                  {deltaClienteSel.cliente.daysSinceLast != null ? `${deltaClienteSel.cliente.daysSinceLast}` : "N/D"} · Estado:{" "}
+                  {typeof deltaClienteSel.cliente.daysSinceLast === "number"
+                    ? `${deltaClienteSel.cliente.daysSinceLast} días`
+                    : "N/D"} · Estado:{" "}
                   {deltaClienteSel.cliente.estado || "N/D"}
                 </p>
                 <div className="mt-2">

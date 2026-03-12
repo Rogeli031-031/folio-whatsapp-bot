@@ -573,6 +573,41 @@ export function postDicfDatos(
   });
 }
 
+export interface DicfConfig {
+  planta: string;
+  year: number;
+  month: number;
+  window_days: number;
+  tolerancia_dias: number;
+  umbral_mxn: number;
+  umbral_pct_neg: number;
+  umbral_pct_pos: number;
+  min_kg_hist: number;
+}
+
+export function fetchDicfConfig(
+  token: string,
+  planta: string,
+  year: number,
+  month: number
+): Promise<DicfConfig> {
+  return apiFetch<DicfConfig>("/api/dashboard/dicf-config", {
+    token,
+    params: { planta, year: String(year), month: String(month) },
+  });
+}
+
+export function postDicfConfig(
+  token: string,
+  body: { planta: string; year: number; month: number; window_days?: number; tolerancia_dias?: number; umbral_mxn?: number; umbral_pct_neg?: number; umbral_pct_pos?: number; min_kg_hist?: number }
+): Promise<{ ok: boolean; planta: string; year: number; month: number; window_days: number }> {
+  return apiFetch("/api/dashboard/dicf-config", {
+    token,
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
 export function postFolioPoliza(
   token: string,
   folioId: number,
