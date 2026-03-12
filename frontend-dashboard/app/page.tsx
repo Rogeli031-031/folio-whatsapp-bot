@@ -562,8 +562,10 @@ function KpiContent() {
           </section>
         )}
         <section className="mt-6 rounded-lg border border-slate-700 bg-slate-800/60 p-4 flex-shrink-0">
-          <h3 className="text-base font-medium text-slate-200 mb-3">Delta ingreso Forecast</h3>
-          <p className="text-sm text-slate-400 mb-3">A = mes anterior real · B = forecast a cierre. Clasificación por planta, canal/subcanal y cliente.</p>
+          <h3 className="text-base font-medium text-slate-200 mb-1">Delta ingreso Forecast</h3>
+          <p className="text-xs text-slate-400 mb-3">
+            A = mes anterior real · B = forecast a cierre. Clasificación por planta, canal/subcanal y cliente.
+          </p>
           <div className="flex flex-wrap items-end gap-3 mb-3">
             <label className="flex flex-col gap-1">
               <span className="text-xs text-slate-500">Planta</span>
