@@ -497,6 +497,9 @@ export interface DeltaIngresoForecastCliente extends DeltaIngresoCliente {
   canal?: string;
   subcanal?: string;
   estado?: string;
+  freqDays?: number;
+  daysSinceLast?: number;
+  historyLast4Weeks?: { fecha: string; kg: number }[];
 }
 
 export interface DeltaIngresoForecastCategoria {

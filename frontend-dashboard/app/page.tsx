@@ -100,6 +100,7 @@ function KpiContent() {
   const [deltaForecastData, setDeltaForecastData] = useState<DeltaIngresoForecastResult | null>(null);
   const [deltaForecastLoading, setDeltaForecastLoading] = useState(false);
   const [deltaForecastError, setDeltaForecastError] = useState<string | null>(null);
+  const [deltaClienteSel, setDeltaClienteSel] = useState<{ grupo: string; cliente: import("@/lib/api").DeltaIngresoForecastCliente } | null>(null);
 
   useEffect(() => {
     if (!token || !deltaForecastPlanta) {
@@ -562,7 +563,7 @@ function KpiContent() {
         )}
         <section className="mt-6 rounded-lg border border-slate-700 bg-slate-800/60 p-4 flex-shrink-0">
           <h3 className="text-base font-medium text-slate-200 mb-3">Delta ingreso Forecast</h3>
-          <p className="text-sm text-slate-400 mb-3">A = mes anterior real · B = forecast a cierre. Clasificación por planta y canal/subcanal.</p>
+          <p className="text-sm text-slate-400 mb-3">A = mes anterior real · B = forecast a cierre. Clasificación por planta, canal/subcanal y cliente.</p>
           <div className="flex flex-wrap items-end gap-3 mb-3">
             <label className="flex flex-col gap-1">
               <span className="text-xs text-slate-500">Planta</span>
@@ -675,7 +676,15 @@ function KpiContent() {
                   <h4 className="font-semibold text-slate-400 mb-1">Dejaron de comprar</h4>
                   <ul className="space-y-0.5 text-slate-300 max-h-32 overflow-y-auto">
                     {(deltaForecastData.dejaron?.clientes || []).slice(0, 15).map((c, i) => (
-                      <li key={i}>{c.cliente}: {c.ingresoAStr}</li>
+                      <li key={i}>
+                        <button
+                          type="button"
+                          onClick={() => setDeltaClienteSel({ grupo: "Dejaron de comprar", cliente: c })}
+                          className="w-full text-left hover:text-amber-300"
+                        >
+                          {c.cliente}: {c.ingresoAStr}
+                        </button>
+                      </li>
                     ))}
                     {(deltaForecastData.dejaron?.clientes?.length || 0) > 15 && <li className="text-slate-500">… y más</li>}
                   </ul>
@@ -684,7 +693,15 @@ function KpiContent() {
                   <h4 className="font-semibold text-slate-400 mb-1">Nuevos</h4>
                   <ul className="space-y-0.5 text-slate-300 max-h-32 overflow-y-auto">
                     {(deltaForecastData.nuevos?.clientes || []).slice(0, 15).map((c, i) => (
-                      <li key={i}>{c.cliente}: {c.ingresoBStr}</li>
+                      <li key={i}>
+                        <button
+                          type="button"
+                          onClick={() => setDeltaClienteSel({ grupo: "Nuevos", cliente: c })}
+                          className="w-full text-left hover:text-amber-300"
+                        >
+                          {c.cliente}: {c.ingresoBStr}
+                        </button>
+                      </li>
                     ))}
                     {(deltaForecastData.nuevos?.clientes?.length || 0) > 15 && <li className="text-slate-500">… y más</li>}
                   </ul>
@@ -693,7 +710,15 @@ function KpiContent() {
                   <h4 className="font-semibold text-emerald-400 mb-1">Aumentaron</h4>
                   <ul className="space-y-0.5 text-slate-300 max-h-32 overflow-y-auto">
                     {(deltaForecastData.aumentaron?.clientes || []).slice(0, 15).map((c, i) => (
-                      <li key={i}>{c.cliente}: {c.deltaIngresoStr}</li>
+                      <li key={i}>
+                        <button
+                          type="button"
+                          onClick={() => setDeltaClienteSel({ grupo: "+ Ingreso", cliente: c })}
+                          className="w-full text-left hover:text-amber-300"
+                        >
+                          {c.cliente}: {c.deltaIngresoStr}
+                        </button>
+                      </li>
                     ))}
                     {(deltaForecastData.aumentaron?.clientes?.length || 0) > 15 && <li className="text-slate-500">… y más</li>}
                   </ul>
@@ -702,7 +727,15 @@ function KpiContent() {
                   <h4 className="font-semibold text-red-400 mb-1">Disminuyeron</h4>
                   <ul className="space-y-0.5 text-slate-300 max-h-32 overflow-y-auto">
                     {(deltaForecastData.disminuyeron?.clientes || []).slice(0, 15).map((c, i) => (
-                      <li key={i}>{c.cliente}: {c.deltaIngresoStr}</li>
+                      <li key={i}>
+                        <button
+                          type="button"
+                          onClick={() => setDeltaClienteSel({ grupo: "- Ingreso", cliente: c })}
+                          className="w-full text-left hover:text-amber-300"
+                        >
+                          {c.cliente}: {c.deltaIngresoStr}
+                        </button>
+                      </li>
                     ))}
                     {(deltaForecastData.disminuyeron?.clientes?.length || 0) > 15 && <li className="text-slate-500">… y más</li>}
                   </ul>
@@ -711,6 +744,72 @@ function KpiContent() {
             </div>
           )}
         </section>
+        {deltaClienteSel && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => setDeltaClienteSel(null)}>
+            <div
+              className="w-full max-w-lg rounded-lg border border-slate-700 bg-slate-900 p-4 shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="mb-3 flex items-center justify-between border-b border-slate-700 pb-2">
+                <h3 className="text-sm font-semibold text-slate-200">
+                  Delta Ingreso Cliente Forecast · {deltaForecastPlanta} · {deltaForecastPeriodoB}
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setDeltaClienteSel(null)}
+                  className="rounded p-1 text-slate-400 hover:bg-slate-700 hover:text-white"
+                >
+                  ×
+                </button>
+              </div>
+              <div className="space-y-2 text-xs text-slate-300">
+                <p>
+                  <span className="font-semibold">{deltaClienteSel.cliente.cliente}</span>{" "}
+                  <span className="text-slate-400">· {deltaClienteSel.grupo}</span>
+                </p>
+                <p>
+                  Ingreso A: <span className="font-mono">{deltaClienteSel.cliente.ingresoAStr ?? "$0"}</span> · Ingreso B forecast:{" "}
+                  <span className="font-mono">{deltaClienteSel.cliente.ingresoBStr ?? "$0"}</span> · Delta:{" "}
+                  <span className="font-mono">{deltaClienteSel.cliente.deltaIngresoStr ?? "$0"}</span>
+                </p>
+                <p>
+                  Frecuencia estimada:{" "}
+                  {deltaClienteSel.cliente.freqDays != null && deltaClienteSel.cliente.freqDays < 9000
+                    ? `${deltaClienteSel.cliente.freqDays.toFixed(1)} días`
+                    : "sin datos"}{" "}
+                  · Días desde última compra:{" "}
+                  {deltaClienteSel.cliente.daysSinceLast != null ? `${deltaClienteSel.cliente.daysSinceLast}` : "N/D"} · Estado:{" "}
+                  {deltaClienteSel.cliente.estado || "N/D"}
+                </p>
+                <div className="mt-2">
+                  <h4 className="mb-1 text-[0.7rem] font-semibold text-slate-400">Compras últimas 4 semanas</h4>
+                  {deltaClienteSel.cliente.historyLast4Weeks && deltaClienteSel.cliente.historyLast4Weeks.length > 0 ? (
+                    <table className="w-full border-collapse text-[0.68rem]">
+                      <thead>
+                        <tr className="border-b border-slate-700 text-slate-400">
+                          <th className="py-1 pr-2 text-left">Fecha</th>
+                          <th className="py-1 text-right">Volumen (kg)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {deltaClienteSel.cliente.historyLast4Weeks.map((h, idx) => (
+                          <tr key={idx} className="border-b border-slate-800">
+                            <td className="py-1 pr-2">{h.fecha}</td>
+                            <td className="py-1 text-right tabular-nums">
+                              {h.kg.toLocaleString("es-MX", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <p className="text-[0.68rem] text-slate-500">Sin compras en las últimas 4 semanas.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
         {plantaFilter ? <div className="flex-1 min-h-[35vh] mt-6" aria-hidden /> : null}
       </main>
     </div>
