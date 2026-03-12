@@ -2239,7 +2239,23 @@ async function ensureArrSchema(client) {
     );
   `).catch(() => {});
   await client.query(`
-    CREATE TABLE IF NOT EXISTS arr.delta_ingreso_forecast_cliente (
+    CREATE TABLE IF NOT EXISTS arr.dicf_config (
+      id SERIAL PRIMARY KEY,
+      plant_code VARCHAR(20) NOT NULL,
+      year SMALLINT NOT NULL,
+      month SMALLINT NOT NULL,
+      window_days SMALLINT NOT NULL DEFAULT 60,
+      tolerancia_dias SMALLINT NOT NULL DEFAULT 2,
+      umbral_mxn NUMERIC(18,2) NOT NULL DEFAULT 50000,
+      umbral_pct_neg NUMERIC(8,4) NOT NULL DEFAULT 0.15,
+      umbral_pct_pos NUMERIC(8,4) NOT NULL DEFAULT 0.15,
+      min_kg_hist NUMERIC(18,4) NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE (plant_code, year, month)
+    );
+  `).catch(() => {});
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS arr.dicf_cliente_mes (
       plant_code VARCHAR(20) NOT NULL,
       year SMALLINT NOT NULL,
       month SMALLINT NOT NULL,
@@ -2247,14 +2263,21 @@ async function ensureArrSchema(client) {
       canal VARCHAR(50) NOT NULL DEFAULT 'Casa',
       subcanal VARCHAR(100) NOT NULL DEFAULT '',
       estado VARCHAR(20),
+      categoria_riesgo VARCHAR(30),
+      comentario_corto TEXT,
+      window_days SMALLINT NOT NULL,
+      last_date DATE NOT NULL,
       freq_days NUMERIC(10,2),
       days_since_last INTEGER,
-      kg_a NUMERIC(18,4),
-      ingreso_a NUMERIC(18,2),
-      kg_b_real NUMERIC(18,4),
-      kg_b_proj NUMERIC(18,4),
-      ingreso_b NUMERIC(18,2),
-      delta_ingreso NUMERIC(18,2),
+      kg_hist NUMERIC(18,4),
+      desc_hist NUMERIC(18,2),
+      desc_kg_hist NUMERIC(18,6),
+      kg_mes_real NUMERIC(18,4),
+      kg_mes_forecast NUMERIC(18,4),
+      margen_mes_kg NUMERIC(18,6),
+      ingreso_forecast NUMERIC(18,2),
+      es_nuevo BOOLEAN,
+      es_recuperable BOOLEAN,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       PRIMARY KEY (plant_code, year, month, cliente_norm)
     );
