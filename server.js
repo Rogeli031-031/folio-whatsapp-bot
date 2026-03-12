@@ -6806,8 +6806,8 @@ async function generatePolizaPdfBytes(folio, opts) {
           fecha2: { x: 246.8, y: 151.7, size: 8 },
           beneficiario2: { x: 35, y: 129.8, size: 8 },
           importe2: { x: 392.5, y: 132, size: 8 },
-          cuenta: { x: 130, y: 600, size: 9 },
-          numeroCheque: { x: 325, y: 600, size: 8 },
+          cuenta: { x: 130, y: 602, size: 10 },
+          numeroCheque: { x: 325, y: 602, size: 10 },
         };
 
         const draw = (text, x, y, size = 9, bold = false, maxLen = 140) => {
