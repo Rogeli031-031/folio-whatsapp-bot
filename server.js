@@ -6694,6 +6694,24 @@ async function generatePolizaPdfBytes(folio) {
       recursoTexto = `${mesesAbr[mo - 1] || ""} ${yr}`;
     }
 
+    const wrapText = (text, size, maxWidthPoints) => {
+      const maxChars = Math.max(20, Math.floor(maxWidthPoints / (size * 0.5)));
+      const words = String(text || "").trim().split(/\s+/).filter(Boolean);
+      if (words.length === 0) return [""];
+      const lines = [];
+      let current = "";
+      for (const w of words) {
+        const next = current ? current + " " + w : w;
+        if (next.length <= maxChars) current = next;
+        else {
+          if (current) lines.push(current);
+          current = w.length <= maxChars ? w : w.substring(0, maxChars);
+        }
+      }
+      if (current) lines.push(current);
+      return lines.length ? lines : [""];
+    };
+
     let pdfBytes = null;
     let templateBuf = null;
     let templateSource = null;
@@ -6814,7 +6832,12 @@ async function generatePolizaPdfBytes(folio) {
         draw(fechaTexto, POS.fecha1.x, POS.fecha1.y, POS.fecha1.size);
         draw(bancoYCuentaTexto, POS.beneficiarioImporte.x, POS.beneficiarioImporte.y, POS.beneficiarioImporte.size);
         draw(importeLetra, POS.importeLetra2.x, POS.importeLetra2.y, POS.importeLetra2.size);
-        draw(concepto, POS.concepto.x, POS.concepto.y, POS.concepto.size);
+        const conceptoLines = wrapText(concepto, POS.concepto.size, 400);
+        let conceptoY = POS.concepto.y;
+        conceptoLines.forEach((line) => {
+          draw(line, POS.concepto.x, conceptoY, POS.concepto.size);
+          conceptoY -= POS.concepto.size * 1.2;
+        });
         draw(plantaDisplay, POS.planta.x, POS.planta.y, POS.planta.size);
         draw(fechaTexto, POS.fecha2.x, POS.fecha2.y, POS.fecha2.size);
         draw(beneficiario, POS.beneficiario2.x, POS.beneficiario2.y, POS.beneficiario2.size);
@@ -6948,7 +6971,7 @@ async function generatePolizaPdfBytes(folio) {
 
       y -= 28;
       txt(fechaTexto, marginLeft, y, 9);
-      txt(`${beneficiario}   ${importeStr}`, marginLeft, y - 14, 9);
+      txt(bancoYCuentaTexto, marginLeft, y - 14, 9);
 
       y -= 28;
       txt(importeLetra, marginLeft, y, 8);
@@ -6958,7 +6981,8 @@ async function generatePolizaPdfBytes(folio) {
 
       y -= 18;
       txt("CONCEPTO:", marginLeft, y, 8);
-      txt(concepto, marginLeft + 65, y, 9);
+      const conceptoLines = wrapText(concepto, 9, 380);
+      conceptoLines.forEach((line) => { txt(line, marginLeft + 65, y, 9); y -= 10; });
 
       y -= 22;
       txt("NOMBRE", marginLeft, y, 8);
