@@ -8508,9 +8508,45 @@ app.post("/twilio/whatsapp", async (req, res) => {
 
       /* ----- Delta Ingreso AI: Router ZP (orden A→F) ----- */
       const esZPAsk = actor && ((actor.rol_clave && String(actor.rol_clave).toUpperCase()) === "ZP" || (actor.rol_nombre && /director/i.test(actor.rol_nombre) && /zp/i.test(actor.rol_nombre)));
-      const esComandoEstatus = FLAGS.ESTATUS && /^estatus\s+/i.test(body.trim());
-      const esComandoHistorial = FLAGS.HISTORIAL && /^historial\s+F-\d{6}-\d{3}\s*$/i.test(body.trim());
-      if (esZPAsk && body.trim().length >= 10 && !esComandoEstatus && !esComandoHistorial) {
+      const b = body.trim();
+      const esComandoFoliosWhatsApp = (FLAGS.ESTATUS && /^estatus\s+/i.test(b))
+        || (FLAGS.HISTORIAL && /^historial\s+F-\d{6}-\d{3}\s*$/i.test(b))
+        || /^ver\s+cotizacion\s+(F-\d{6}-\d{3}|\d{1,3})\s*$/i.test(b)
+        || /^ver\s+archivo\s+\d+\s*$/i.test(b)
+        || /^reemplazar\s+cotizacion\s+(F-\d{6}-\d{3}|\d{1,3})\s*$/i.test(b)
+        || /^archivos\s+(F-\d{6}-\d{3}|\d{1,3})\s*$/i.test(b)
+        || /^comentario\s+F-\d{6}-\d{3}\s*:/i.test(b)
+        || /^estatus\s+proyecto\s+/i.test(b)
+        || /^adjuntar\s+proyecto\s+/i.test(b)
+        || /^aprobar\s+proyecto\s+/i.test(b)
+        || /^cerrar\s+proyecto\s+/i.test(b)
+        || /^cancelar\s+proyecto\s+/i.test(b)
+        || /^confirmar\s+cancelacion\s+proyecto\s+/i.test(b)
+        || (FLAGS.APPROVALS && /^aprobar\s+/i.test(b))
+        || /^aprobar_override\s+F-\d{6}-\d{3}\s+motivo:/i.test(b)
+        || (FLAGS.APPROVALS && /^seleccionar\s+folios\s+/.i.test(b))
+        || (FLAGS.APPROVALS && /^seleccionar\s+F-\d{6}-\d{3}\s*$/i.test(b))
+        || (FLAGS.APPROVALS && /^cancelar\s+F-\d{6}-\d{3}/i.test(b))
+        || (FLAGS.APPROVALS && /^autorizar\s+cancelacion\s+F-\d{6}-\d{3}\s*$/i.test(b))
+        || (FLAGS.APPROVALS && /^rechazar\s+cancelacion\s+F-\d{6}-\d{3}\s+motivo:/i.test(b))
+        || /^aprobar\s+cotizacion\s+\d+\s*$/i.test(b)
+        || /^rechazar\s+cotizacion\s+\d+/i.test(b)
+        || /^aprobar\s+por\s+recuperar\s+(F-\d{6}-\d{3}|\d{1,3})\s*$/i.test(b)
+        || /^rechazar\s+por\s+recuperar\s+(F-\d{6}-\d{3}|\d{1,3})/i.test(b)
+        || (FLAGS.ATTACHMENTS && /^adjuntar\s+/i.test(b))
+        || (b.toLowerCase() === "folios de planta")
+        || (b.toLowerCase() === "folios urgentes de planta")
+        || (b.toLowerCase() === "folios por estación")
+        || (b.toLowerCase() === "crear proyecto")
+        || (b.toLowerCase().includes("crear folio"))
+        || (/^solicitar\s+presupuesto$/i.test(b))
+        || (b.toLowerCase() === "asignar presupuesto")
+        || (b.toLowerCase() === "mi presupuesto")
+        || (b.toLowerCase() === "enviar a cheques")
+        || (/^ayuda\s+(folios|proyectos|delta|igf|presupuesto)$/i.test(b))
+        || (/^comandos\s+delta$/i.test(b))
+        || (/^CONFIRMO\s+/i.test(b));
+      if (esZPAsk && b.length >= 10 && !esComandoFoliosWhatsApp) {
         try {
           await deltaIngresoAiDb.ensureDeltaIngresoAiSchema(client);
           const textTrim = body.trim();
