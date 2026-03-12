@@ -500,15 +500,18 @@ export interface DeltaIngresoForecastCliente extends DeltaIngresoCliente {
   freqDays?: number;
   daysSinceLast?: number;
   historyLast4Weeks?: { fecha: string; kg: number }[];
+  kgAStr?: string;
+  kgBStr?: string;
+  deltaKgStr?: string;
 }
 
 export interface DeltaIngresoForecastCategoria {
   canal: string;
   subcanal: string;
-  dejaron: { count: number; totalDeltaIngresoStr: string };
-  nuevos: { count: number; totalDeltaIngresoStr: string };
-  aumentaron: { count: number; totalDeltaIngresoStr: string };
-  disminuyeron: { count: number; totalDeltaIngresoStr: string };
+  dejaron: { count: number; totalDeltaIngresoStr: string; totalDeltaKgStr?: string };
+  nuevos: { count: number; totalDeltaIngresoStr: string; totalDeltaKgStr?: string };
+  aumentaron: { count: number; totalDeltaIngresoStr: string; totalDeltaKgStr?: string };
+  disminuyeron: { count: number; totalDeltaIngresoStr: string; totalDeltaKgStr?: string };
 }
 
 export interface DeltaIngresoForecastResult {
@@ -552,10 +555,10 @@ export interface DicfResult {
   window_days: number;
   periodoMes: string | null;
   margenStr?: string;
-  dejaron: { totalDeltaIngresoStr: string; clientes: DeltaIngresoForecastCliente[] };
-  nuevos: { totalDeltaIngresoStr: string; clientes: DeltaIngresoForecastCliente[] };
-  aumentaron: { totalDeltaIngresoStr: string; clientes: DeltaIngresoForecastCliente[] };
-  disminuyeron: { totalDeltaIngresoStr: string; clientes: DeltaIngresoForecastCliente[] };
+  dejaron: { totalDeltaIngresoStr: string; totalDeltaKgStr?: string; clientes: DeltaIngresoForecastCliente[] };
+  nuevos: { totalDeltaIngresoStr: string; totalDeltaKgStr?: string; clientes: DeltaIngresoForecastCliente[] };
+  aumentaron: { totalDeltaIngresoStr: string; totalDeltaKgStr?: string; clientes: DeltaIngresoForecastCliente[] };
+  disminuyeron: { totalDeltaIngresoStr: string; totalDeltaKgStr?: string; clientes: DeltaIngresoForecastCliente[] };
   byCategoria: DeltaIngresoForecastCategoria[];
 }
 

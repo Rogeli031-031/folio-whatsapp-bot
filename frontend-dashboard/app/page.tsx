@@ -702,10 +702,18 @@ function KpiContent() {
                     <tr key={i} className="border-b border-slate-700/80">
                       <td className="py-2 px-2 text-slate-300">{c.canal}</td>
                       <td className="py-2 px-2 text-slate-300">{c.subcanal}</td>
-                      <td className="py-2 px-2 text-right tabular-nums text-slate-300">{c.dejaron.count} ({c.dejaron.totalDeltaIngresoStr})</td>
-                      <td className="py-2 px-2 text-right tabular-nums text-slate-300">{c.nuevos.count} ({c.nuevos.totalDeltaIngresoStr})</td>
-                      <td className="py-2 px-2 text-right tabular-nums text-emerald-400">{c.aumentaron.count} ({c.aumentaron.totalDeltaIngresoStr})</td>
-                      <td className="py-2 px-2 text-right tabular-nums text-red-400">{c.disminuyeron.count} ({c.disminuyeron.totalDeltaIngresoStr})</td>
+                      <td className="py-2 px-2 text-right tabular-nums text-slate-300">
+                        {c.dejaron.count} ({c.dejaron.totalDeltaKgStr != null ? `${c.dejaron.totalDeltaKgStr} Ton · ` : ""}{c.dejaron.totalDeltaIngresoStr})
+                      </td>
+                      <td className="py-2 px-2 text-right tabular-nums text-slate-300">
+                        {c.nuevos.count} ({c.nuevos.totalDeltaKgStr != null ? `${c.nuevos.totalDeltaKgStr} Ton · ` : ""}{c.nuevos.totalDeltaIngresoStr})
+                      </td>
+                      <td className="py-2 px-2 text-right tabular-nums text-emerald-400">
+                        {c.aumentaron.count} ({c.aumentaron.totalDeltaKgStr != null ? `${c.aumentaron.totalDeltaKgStr} Ton · ` : ""}{c.aumentaron.totalDeltaIngresoStr})
+                      </td>
+                      <td className="py-2 px-2 text-right tabular-nums text-red-400">
+                        {c.disminuyeron.count} ({c.disminuyeron.totalDeltaKgStr != null ? `${c.disminuyeron.totalDeltaKgStr} Ton · ` : ""}{c.disminuyeron.totalDeltaIngresoStr})
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -722,7 +730,7 @@ function KpiContent() {
                           onClick={() => setDeltaClienteSel({ grupo: "Dejaron de comprar", cliente: c })}
                           className="w-full text-left hover:text-amber-300"
                         >
-                          {c.cliente}: {c.ingresoAStr}
+                          {c.cliente}: {c.deltaKgStr != null ? `${c.deltaKgStr} Ton · ` : ""}{c.ingresoAStr}
                         </button>
                       </li>
                     ))}
@@ -739,7 +747,7 @@ function KpiContent() {
                           onClick={() => setDeltaClienteSel({ grupo: "Nuevos", cliente: c })}
                           className="w-full text-left hover:text-amber-300"
                         >
-                          {c.cliente}: {c.ingresoBStr}
+                          {c.cliente}: {c.deltaKgStr != null ? `${c.deltaKgStr} Ton · ` : ""}{c.ingresoBStr}
                         </button>
                       </li>
                     ))}
@@ -756,7 +764,7 @@ function KpiContent() {
                           onClick={() => setDeltaClienteSel({ grupo: "+ Ingreso", cliente: c })}
                           className="w-full text-left hover:text-amber-300"
                         >
-                          {c.cliente}: {c.deltaIngresoStr}
+                          {c.cliente}: {c.deltaKgStr != null ? `${c.deltaKgStr} Ton · ` : ""}{c.deltaIngresoStr}
                         </button>
                       </li>
                     ))}
@@ -773,7 +781,7 @@ function KpiContent() {
                           onClick={() => setDeltaClienteSel({ grupo: "- Ingreso", cliente: c })}
                           className="w-full text-left hover:text-amber-300"
                         >
-                          {c.cliente}: {c.deltaIngresoStr}
+                          {c.cliente}: {c.deltaKgStr != null ? `${c.deltaKgStr} Ton · ` : ""}{c.deltaIngresoStr}
                         </button>
                       </li>
                     ))}
