@@ -6676,6 +6676,9 @@ async function generatePolizaPdfBytes(folio) {
     const beneficiario = (folio.beneficiario || "").trim() || "—";
     const concepto = (folio.concepto || "").trim() || "—";
     const plantaDisplay = (folio.planta_clave || folio.planta_nombre || "").toString().trim() || "—";
+    const bancoYCuentaTexto = [String(folio.banco || "").trim(), String(folio.cuenta_bancaria || "").trim()].filter(Boolean).length > 0
+      ? [String(folio.banco || "").trim(), String(folio.cuenta_bancaria || "").trim()].filter(Boolean).join("  ")
+      : "Banco y cuenta bancaria";
     const ahora = new Date();
     const fechaTexto = ahora.toLocaleDateString("es-MX", {
       day: "numeric",
@@ -6809,7 +6812,7 @@ async function generatePolizaPdfBytes(folio) {
         draw(recursoTexto, POS.recurso.x, POS.recurso.y, POS.recurso.size);
         draw(importeLetra, POS.importeLetra1.x, POS.importeLetra1.y, POS.importeLetra1.size);
         draw(fechaTexto, POS.fecha1.x, POS.fecha1.y, POS.fecha1.size);
-        draw(`${beneficiario}   ${importeStr}`, POS.beneficiarioImporte.x, POS.beneficiarioImporte.y, POS.beneficiarioImporte.size);
+        draw(bancoYCuentaTexto, POS.beneficiarioImporte.x, POS.beneficiarioImporte.y, POS.beneficiarioImporte.size);
         draw(importeLetra, POS.importeLetra2.x, POS.importeLetra2.y, POS.importeLetra2.size);
         draw(concepto, POS.concepto.x, POS.concepto.y, POS.concepto.size);
         draw(plantaDisplay, POS.planta.x, POS.planta.y, POS.planta.size);
@@ -6997,7 +7000,7 @@ app.get("/api/folios/:id/poliza/documento", dashboardAuthMiddleware, async (req,
   const client = await pool.connect();
   try {
     const r = await client.query(
-      `SELECT f.id, f.planta_id, f.solo_zp_ad, f.numero_folio, f.folio_codigo, f.beneficiario, f.concepto, f.importe, f.creado_en, f.mes_cargo,
+      `SELECT f.id, f.planta_id, f.solo_zp_ad, f.numero_folio, f.folio_codigo, f.beneficiario, f.concepto, f.importe, f.creado_en, f.mes_cargo, f.banco, f.cuenta_bancaria,
               p.nombre AS planta_nombre, p.clave AS planta_clave
        FROM public.folios f
        LEFT JOIN public.plantas p ON p.id = f.planta_id
