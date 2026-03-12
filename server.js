@@ -5537,6 +5537,8 @@ function aplicarSignosDisplayIgf(row) {
 
 /** Construye payload IGF Forecast (misma lógica que GET /api/dashboard/igf-forecast). Para API y Excel. */
 async function buildIgfForecastPayload(client, year, month) {
+  const now = new Date();
+  const isMesActual = year === now.getFullYear() && month === (now.getMonth() + 1);
   const provRes = await client.query("SELECT plant_code FROM arr.provincia_plants ORDER BY plant_code");
     const provinciaPlantCodes = (provRes.rows || []).map((r) => (r.plant_code || "").trim()).filter(Boolean);
 
@@ -5684,58 +5686,72 @@ async function buildIgfForecastPayload(client, year, month) {
       const estAprobZp = [ESTADOS.PENDIENTE_APROB_ZP, ESTADOS.CANCELACION_SOLICITADA];
       const estCarro = [ESTADOS.APROBADO_ZP, ESTADOS.LISTO_PARA_PROGRAMACION, ESTADOS.SELECCIONADO_SEMANA, ESTADOS.SOLICITANDO_PAGO];
       const folAprob = await client.query(
-        `SELECT planta_id, COALESCE(SUM(COALESCE(importe, 0)), 0) AS total FROM public.folios
-         WHERE mes_cargo = $1
-           AND estatus = ANY($2::text[])
-           AND planta_id = ANY($3::int[])
-           AND (categoria IS NULL OR UPPER(TRIM(categoria)) <> 'INVERSIONES')
-         GROUP BY planta_id`,
+        isMesActual
+          ? `SELECT planta_id, COALESCE(SUM(COALESCE(importe, 0)), 0) AS total FROM public.folios
+             WHERE mes_cargo = $1
+               AND estatus = ANY($2::text[])
+               AND planta_id = ANY($3::int[])
+               AND (categoria IS NULL OR UPPER(TRIM(categoria)) <> 'INVERSIONES')
+             GROUP BY planta_id`
+          : `SELECT planta_id, COALESCE(SUM(COALESCE(importe, 0)), 0) AS total FROM public.folios
+             WHERE mes_cargo = $1 AND estatus = ANY($2::text[]) AND planta_id = ANY($3::int[]) GROUP BY planta_id`,
         [periodoStr, estAprobZp, plantaIds]
       );
       foliosAprobZpByPlanta = new Map((folAprob.rows || []).map((r) => [Number(r.planta_id), Number(r.total) || 0]));
       const folCarro = await client.query(
-        `SELECT planta_id, COALESCE(SUM(COALESCE(importe, 0)), 0) AS total FROM public.folios
-         WHERE mes_cargo = $1
-           AND estatus = ANY($2::text[])
-           AND planta_id = ANY($3::int[])
-           AND (categoria IS NULL OR UPPER(TRIM(categoria)) <> 'INVERSIONES')
-         GROUP BY planta_id`,
+        isMesActual
+          ? `SELECT planta_id, COALESCE(SUM(COALESCE(importe, 0)), 0) AS total FROM public.folios
+             WHERE mes_cargo = $1
+               AND estatus = ANY($2::text[])
+               AND planta_id = ANY($3::int[])
+               AND (categoria IS NULL OR UPPER(TRIM(categoria)) <> 'INVERSIONES')
+             GROUP BY planta_id`
+          : `SELECT planta_id, COALESCE(SUM(COALESCE(importe, 0)), 0) AS total FROM public.folios
+             WHERE mes_cargo = $1 AND estatus = ANY($2::text[]) AND planta_id = ANY($3::int[]) GROUP BY planta_id`,
         [periodoStr, estCarro, plantaIds]
       );
       foliosCarroByPlanta = new Map((folCarro.rows || []).map((r) => [Number(r.planta_id), Number(r.total) || 0]));
       const folDeposito = await client.query(
-        `SELECT planta_id, COALESCE(SUM(COALESCE(importe, 0)), 0) AS total FROM public.folios
-         WHERE mes_cargo = $1
-           AND estatus = $2
-           AND planta_id = ANY($3::int[])
-           AND (categoria IS NULL OR UPPER(TRIM(categoria)) <> 'INVERSIONES')
-         GROUP BY planta_id`,
+        isMesActual
+          ? `SELECT planta_id, COALESCE(SUM(COALESCE(importe, 0)), 0) AS total FROM public.folios
+             WHERE mes_cargo = $1
+               AND estatus = $2
+               AND planta_id = ANY($3::int[])
+               AND (categoria IS NULL OR UPPER(TRIM(categoria)) <> 'INVERSIONES')
+             GROUP BY planta_id`
+          : `SELECT planta_id, COALESCE(SUM(COALESCE(importe, 0)), 0) AS total FROM public.folios
+             WHERE mes_cargo = $1 AND estatus = $2 AND planta_id = ANY($3::int[]) GROUP BY planta_id`,
         [periodoStr, ESTADOS.PAGADO, plantaIds]
       );
       foliosDepositoByPlanta = new Map((folDeposito.rows || []).map((r) => [Number(r.planta_id), Number(r.total) || 0]));
       const folCierre = await client.query(
-        `SELECT planta_id, COALESCE(SUM(COALESCE(importe, 0)), 0) AS total FROM public.folios
-         WHERE mes_cargo = $1
-           AND estatus = $2
-           AND planta_id = ANY($3::int[])
-           AND (categoria IS NULL OR UPPER(TRIM(categoria)) <> 'INVERSIONES')
-         GROUP BY planta_id`,
+        isMesActual
+          ? `SELECT planta_id, COALESCE(SUM(COALESCE(importe, 0)), 0) AS total FROM public.folios
+             WHERE mes_cargo = $1
+               AND estatus = $2
+               AND planta_id = ANY($3::int[])
+               AND (categoria IS NULL OR UPPER(TRIM(categoria)) <> 'INVERSIONES')
+             GROUP BY planta_id`
+          : `SELECT planta_id, COALESCE(SUM(COALESCE(importe, 0)), 0) AS total FROM public.folios
+             WHERE mes_cargo = $1 AND estatus = $2 AND planta_id = ANY($3::int[]) GROUP BY planta_id`,
         [periodoStr, ESTADOS.CERRADO, plantaIds]
       );
       foliosCierreByPlanta = new Map((folCierre.rows || []).map((r) => [Number(r.planta_id), Number(r.total) || 0]));
 
       // Inversiones: sumar por planta todos los folios categoría INVERSIONES con mes_cargo (excluye cancelados).
-      const folInv = await client.query(
-        `SELECT planta_id, COALESCE(SUM(COALESCE(importe, 0)), 0) AS total
-         FROM public.folios
-         WHERE mes_cargo = $1
-           AND planta_id = ANY($2::int[])
-           AND UPPER(TRIM(categoria)) = 'INVERSIONES'
-           AND (estatus IS NULL OR estatus <> $3)
-         GROUP BY planta_id`,
-        [periodoStr, plantaIds, ESTADOS.CANCELADO]
-      );
-      foliosInversionesByPlanta = new Map((folInv.rows || []).map((r) => [Number(r.planta_id), Number(r.total) || 0]));
+      if (isMesActual) {
+        const folInv = await client.query(
+          `SELECT planta_id, COALESCE(SUM(COALESCE(importe, 0)), 0) AS total
+           FROM public.folios
+           WHERE mes_cargo = $1
+             AND planta_id = ANY($2::int[])
+             AND UPPER(TRIM(categoria)) = 'INVERSIONES'
+             AND (estatus IS NULL OR estatus <> $3)
+           GROUP BY planta_id`,
+          [periodoStr, plantaIds, ESTADOS.CANCELADO]
+        );
+        foliosInversionesByPlanta = new Map((folInv.rows || []).map((r) => [Number(r.planta_id), Number(r.total) || 0]));
+      }
     }
     function resolvePlantaIdsForRow(empresa) {
       const emp = (empresa || "").trim();
@@ -5777,10 +5793,13 @@ async function buildIgfForecastPayload(client, year, month) {
       row.deposito_cierre_kg = ventaKg > 0 && totalDepositoCierre > 0
         ? Math.round((-totalDepositoCierre / ventaKg) * 100) / 100
         : null;
-      // Inversiones $/kg: se guarda positivo; en display se invierte el signo (como costos).
-      row.inversiones_kg = ventaKg > 0 && totalInversiones > 0
-        ? Math.round((totalInversiones / ventaKg) * 100) / 100
-        : null;
+      // Inversiones $/kg por folios SOLO para mes actual; para meses anteriores se deja el valor IGF (como estaba).
+      if (isMesActual) {
+        // Se guarda positivo; en display se invierte el signo (como costos).
+        row.inversiones_kg = ventaKg > 0 && totalInversiones > 0
+          ? Math.round((totalInversiones / ventaKg) * 100) / 100
+          : null;
+      }
       const n = (x) => (x != null && Number.isFinite(Number(x)) ? Number(x) : 0);
       row.gasto_kg = Math.round((n(row.presupuesto_kg) + n(row.folios_aprob_zp_kg) + n(row.folios_carro_kg) + n(row.deposito_cierre_kg)) * 100) / 100;
       const calc = recalcularUtilYResultado(row);
