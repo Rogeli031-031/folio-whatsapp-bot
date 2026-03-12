@@ -2239,6 +2239,27 @@ async function ensureArrSchema(client) {
     );
   `).catch(() => {});
   await client.query(`
+    CREATE TABLE IF NOT EXISTS arr.delta_ingreso_forecast_cliente (
+      plant_code VARCHAR(20) NOT NULL,
+      year SMALLINT NOT NULL,
+      month SMALLINT NOT NULL,
+      cliente_norm VARCHAR(200) NOT NULL,
+      canal VARCHAR(50) NOT NULL DEFAULT 'Casa',
+      subcanal VARCHAR(100) NOT NULL DEFAULT '',
+      estado VARCHAR(20),
+      freq_days NUMERIC(10,2),
+      days_since_last INTEGER,
+      kg_a NUMERIC(18,4),
+      ingreso_a NUMERIC(18,2),
+      kg_b_real NUMERIC(18,4),
+      kg_b_proj NUMERIC(18,4),
+      ingreso_b NUMERIC(18,2),
+      delta_ingreso NUMERIC(18,2),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (plant_code, year, month, cliente_norm)
+    );
+  `).catch(() => {});
+  await client.query(`
     CREATE TABLE IF NOT EXISTS arr.dicf_config (
       id SERIAL PRIMARY KEY,
       plant_code VARCHAR(20) NOT NULL,
