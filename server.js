@@ -8534,6 +8534,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
         || /^aprobar\s+por\s+recuperar\s+(F-\d{6}-\d{3}|\d{1,3})\s*$/i.test(b)
         || /^rechazar\s+por\s+recuperar\s+(F-\d{6}-\d{3}|\d{1,3})/i.test(b)
         || (FLAGS.ATTACHMENTS && /^adjuntar\s+/i.test(b))
+        || (b.toLowerCase() === "folios de pipa")
         || (b.toLowerCase() === "folios de planta")
         || (b.toLowerCase() === "folios urgentes de planta")
         || (b.toLowerCase() === "folios por estación")
