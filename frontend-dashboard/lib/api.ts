@@ -545,6 +545,31 @@ export function getDeltaIngresoForecastExcelUrl(
   return `${base}?planta=${encodeURIComponent(planta)}&periodoA=${encodeURIComponent(periodoA)}&periodoB=${encodeURIComponent(periodoB)}&t=${encodeURIComponent(token)}`;
 }
 
+/** Delta Ingreso Cliente Forecast: solo planta, 60 días historial, proyección a cierre del mes (sin periodo A/B). */
+export interface DicfResult {
+  planta: string;
+  last_date: string | null;
+  window_days: number;
+  periodoMes: string | null;
+  margenStr?: string;
+  dejaron: { totalDeltaIngresoStr: string; clientes: DeltaIngresoForecastCliente[] };
+  nuevos: { totalDeltaIngresoStr: string; clientes: DeltaIngresoForecastCliente[] };
+  aumentaron: { totalDeltaIngresoStr: string; clientes: DeltaIngresoForecastCliente[] };
+  disminuyeron: { totalDeltaIngresoStr: string; clientes: DeltaIngresoForecastCliente[] };
+  byCategoria: DeltaIngresoForecastCategoria[];
+}
+
+export function postDicfDatos(
+  token: string,
+  body: { planta: string }
+): Promise<DicfResult> {
+  return apiFetch<DicfResult>("/api/dashboard/dicf-datos", {
+    token,
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
 export function postFolioPoliza(
   token: string,
   folioId: number,

@@ -41,6 +41,7 @@ const deltaIngresoAi = require("./lib/delta-ingreso-ai");
 const deltaIngresoAiDb = require("./lib/delta-ingreso-ai-db");
 const deltaIngresoCommands = require("./lib/delta-ingreso-commands");
 const deltaIngresoForecast = require("./lib/delta-ingreso-forecast");
+const dicf = require("./lib/dicf");
 
 const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
@@ -7826,6 +7827,25 @@ app.post("/api/dashboard/delta-ingreso-forecast-datos", dashboardAuthMiddleware,
     res.json(data);
   } catch (e) {
     console.error("[Dashboard delta-ingreso-forecast-datos]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/** Delta Ingreso Cliente Forecast (DICF): solo planta, 60 días historial, proyección a cierre del mes. Sin periodo A/B. */
+app.post("/api/dashboard/dicf-datos", dashboardAuthMiddleware, async (req, res) => {
+  const { planta } = req.body || {};
+  if (!planta || typeof planta !== "string" || !planta.trim()) {
+    return res.status(400).json({ error: "Falta planta" });
+  }
+  const client = await pool.connect();
+  try {
+    const plantCode = await getPlantCodeArrFromPlantaNombre(client, planta.trim());
+    const data = await dicf.computeDicf(client, plantCode, planta.trim(), getMargenKgPorPeriodo);
+    res.json(data);
+  } catch (e) {
+    console.error("[Dashboard dicf-datos]", e);
     res.status(500).json({ error: e.message });
   } finally {
     client.release();

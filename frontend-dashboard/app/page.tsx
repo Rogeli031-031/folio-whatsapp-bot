@@ -15,9 +15,11 @@ import {
   fetchDeltaIngresoPeriodos,
   postDeltaIngresoForecastDatos,
   getDeltaIngresoForecastExcelUrl,
+  postDicfDatos,
   type IgfForecastResponse,
   type IgfForecastRow,
   type DeltaIngresoForecastResult,
+  type DicfResult,
 } from "@/lib/api";
 
 const MESES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
@@ -98,6 +100,7 @@ function KpiContent() {
   const [deltaForecastPeriodoA, setDeltaForecastPeriodoA] = useState("");
   const [deltaForecastPeriodoB, setDeltaForecastPeriodoB] = useState("");
   const [deltaForecastData, setDeltaForecastData] = useState<DeltaIngresoForecastResult | null>(null);
+  const [dicfData, setDicfData] = useState<DicfResult | null>(null);
   const [deltaForecastLoading, setDeltaForecastLoading] = useState(false);
   const [deltaForecastError, setDeltaForecastError] = useState<string | null>(null);
   const [showDeltaCliente, setShowDeltaCliente] = useState(false);
@@ -575,6 +578,7 @@ function KpiContent() {
                 onChange={(e) => {
                 setDeltaForecastPlanta(e.target.value);
                 setDeltaForecastData(null);
+                setDicfData(null);
                 setShowDeltaCliente(false);
                 }}
                 className="rounded border border-slate-600 bg-slate-700 px-2 py-1.5 text-sm text-slate-200"
@@ -622,6 +626,7 @@ function KpiContent() {
                   setDeltaForecastLoading(true);
                   setDeltaForecastError(null);
                   setShowDeltaCliente(false);
+                  setDicfData(null);
                   try {
                     const data = await postDeltaIngresoForecastDatos(token, {
                       planta: deltaForecastPlanta,
@@ -641,19 +646,15 @@ function KpiContent() {
               </button>
               <button
                 type="button"
-                disabled={!token || !deltaForecastPlanta || !deltaForecastPeriodoA || !deltaForecastPeriodoB || deltaForecastPeriodoA === deltaForecastPeriodoB || deltaForecastLoading}
+                disabled={!token || !deltaForecastPlanta || deltaForecastLoading}
                 onClick={async () => {
                   if (!token) return;
                   setDeltaForecastLoading(true);
                   setDeltaForecastError(null);
+                  setDeltaForecastData(null);
                   try {
-                    // Reutiliza el mismo cálculo Forecast, pero activa la vista por cliente.
-                    const data = await postDeltaIngresoForecastDatos(token, {
-                      planta: deltaForecastPlanta,
-                      periodoA: deltaForecastPeriodoA,
-                      periodoB: deltaForecastPeriodoB,
-                    });
-                    setDeltaForecastData(data);
+                    const data = await postDicfDatos(token, { planta: deltaForecastPlanta });
+                    setDicfData(data);
                     setShowDeltaCliente(true);
                   } catch (e: unknown) {
                     setDeltaForecastError((e as Error)?.message || "Error al cargar");
@@ -666,7 +667,7 @@ function KpiContent() {
                 {deltaForecastLoading ? "…" : "Delta Ingreso Cliente Forecast"}
               </button>
             </div>
-            {deltaForecastData && token && (
+            {deltaForecastData && token && !dicfData && (
               <a
                 href={getDeltaIngresoForecastExcelUrl(token, deltaForecastPlanta, deltaForecastPeriodoA, deltaForecastPeriodoB)}
                 target="_blank"
@@ -678,8 +679,13 @@ function KpiContent() {
             )}
           </div>
           {deltaForecastError && <p className="text-sm text-red-400 mb-2">{deltaForecastError}</p>}
-          {deltaForecastData && (
+          {(deltaForecastData || dicfData) && (
             <div className="overflow-x-auto">
+              {dicfData && (
+                <p className="text-xs text-slate-400 mb-2">
+                  Proyección a cierre del mes (últimos {dicfData.window_days} días · datos hasta {dicfData.last_date ?? "—"}).
+                </p>
+              )}
               <table className="w-full border-collapse text-sm">
                 <thead>
                   <tr className="border-b border-slate-600 bg-slate-800/80 text-xs">
@@ -692,7 +698,7 @@ function KpiContent() {
                   </tr>
                 </thead>
                 <tbody>
-                  {deltaForecastData.byCategoria?.map((c, i) => (
+                  {(dicfData?.byCategoria ?? deltaForecastData?.byCategoria)?.map((c, i) => (
                     <tr key={i} className="border-b border-slate-700/80">
                       <td className="py-2 px-2 text-slate-300">{c.canal}</td>
                       <td className="py-2 px-2 text-slate-300">{c.subcanal}</td>
@@ -704,12 +710,12 @@ function KpiContent() {
                   ))}
                 </tbody>
               </table>
-              {showDeltaCliente && (
+              {(dicfData || (showDeltaCliente && deltaForecastData)) && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-4 text-xs">
                 <div>
                   <h4 className="font-semibold text-slate-400 mb-1">Dejaron de comprar</h4>
                   <ul className="space-y-0.5 text-slate-300 max-h-32 overflow-y-auto">
-                    {(deltaForecastData.dejaron?.clientes || []).slice(0, 15).map((c, i) => (
+                    {(dicfData?.dejaron?.clientes ?? deltaForecastData?.dejaron?.clientes ?? []).slice(0, 15).map((c, i) => (
                       <li key={i}>
                         <button
                           type="button"
@@ -720,13 +726,13 @@ function KpiContent() {
                         </button>
                       </li>
                     ))}
-                    {(deltaForecastData.dejaron?.clientes?.length || 0) > 15 && <li className="text-slate-500">… y más</li>}
+                    {(dicfData?.dejaron?.clientes?.length ?? deltaForecastData?.dejaron?.clientes?.length ?? 0) > 15 && <li className="text-slate-500">… y más</li>}
                   </ul>
                 </div>
                 <div>
                   <h4 className="font-semibold text-slate-400 mb-1">Nuevos</h4>
                   <ul className="space-y-0.5 text-slate-300 max-h-32 overflow-y-auto">
-                    {(deltaForecastData.nuevos?.clientes || []).slice(0, 15).map((c, i) => (
+                    {(dicfData?.nuevos?.clientes ?? deltaForecastData?.nuevos?.clientes ?? []).slice(0, 15).map((c, i) => (
                       <li key={i}>
                         <button
                           type="button"
@@ -737,13 +743,13 @@ function KpiContent() {
                         </button>
                       </li>
                     ))}
-                    {(deltaForecastData.nuevos?.clientes?.length || 0) > 15 && <li className="text-slate-500">… y más</li>}
+                    {(dicfData?.nuevos?.clientes?.length ?? deltaForecastData?.nuevos?.clientes?.length ?? 0) > 15 && <li className="text-slate-500">… y más</li>}
                   </ul>
                 </div>
                 <div>
                   <h4 className="font-semibold text-emerald-400 mb-1">Aumentaron</h4>
                   <ul className="space-y-0.5 text-slate-300 max-h-32 overflow-y-auto">
-                    {(deltaForecastData.aumentaron?.clientes || []).slice(0, 15).map((c, i) => (
+                    {(dicfData?.aumentaron?.clientes ?? deltaForecastData?.aumentaron?.clientes ?? []).slice(0, 15).map((c, i) => (
                       <li key={i}>
                         <button
                           type="button"
@@ -754,13 +760,13 @@ function KpiContent() {
                         </button>
                       </li>
                     ))}
-                    {(deltaForecastData.aumentaron?.clientes?.length || 0) > 15 && <li className="text-slate-500">… y más</li>}
+                    {(dicfData?.aumentaron?.clientes?.length ?? deltaForecastData?.aumentaron?.clientes?.length ?? 0) > 15 && <li className="text-slate-500">… y más</li>}
                   </ul>
                 </div>
                 <div>
                   <h4 className="font-semibold text-red-400 mb-1">Disminuyeron</h4>
                   <ul className="space-y-0.5 text-slate-300 max-h-32 overflow-y-auto">
-                    {(deltaForecastData.disminuyeron?.clientes || []).slice(0, 15).map((c, i) => (
+                    {(dicfData?.disminuyeron?.clientes ?? deltaForecastData?.disminuyeron?.clientes ?? []).slice(0, 15).map((c, i) => (
                       <li key={i}>
                         <button
                           type="button"
@@ -771,7 +777,7 @@ function KpiContent() {
                         </button>
                       </li>
                     ))}
-                    {(deltaForecastData.disminuyeron?.clientes?.length || 0) > 15 && <li className="text-slate-500">… y más</li>}
+                    {(dicfData?.disminuyeron?.clientes?.length ?? deltaForecastData?.disminuyeron?.clientes?.length ?? 0) > 15 && <li className="text-slate-500">… y más</li>}
                   </ul>
                 </div>
               </div>
@@ -787,7 +793,7 @@ function KpiContent() {
             >
               <div className="mb-3 flex items-center justify-between border-b border-slate-700 pb-2">
                 <h3 className="text-sm font-semibold text-slate-200">
-                  Delta Ingreso Cliente Forecast · {deltaForecastPlanta} · {deltaForecastPeriodoB}
+                  Delta Ingreso Cliente Forecast · {deltaForecastPlanta} · {dicfData?.periodoMes ?? deltaForecastPeriodoB}
                 </h3>
                 <button
                   type="button"
