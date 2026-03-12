@@ -368,10 +368,12 @@ function KpiContent() {
                         {COLS_EXTRA.map((c) => {
                           const val = (row as Record<string, unknown>)[c.key] as number | null | undefined;
                           const isImporte = c.key === "resultado_final_importe" || c.key === "util_oper_importe";
+                          const isInversionesKg = c.key === "inversiones_kg";
+                          const invIsNeg = !isImporte && val != null && Number(val) < 0;
                           return (
                             <td
                               key={c.key}
-                              className={`py-2 px-2 text-right tabular-nums text-slate-300 ${c.key === "util_oper_kg" ? "border-r border-slate-600" : ""}`}
+                              className={`py-2 px-2 text-right tabular-nums ${isInversionesKg && invIsNeg ? "text-red-400" : "text-slate-300"} ${c.key === "util_oper_kg" ? "border-r border-slate-600" : ""}`}
                             >
                               {isImporte ? fmtNum(val ?? null, 0) : fmtNum(val ?? null)}
                             </td>
