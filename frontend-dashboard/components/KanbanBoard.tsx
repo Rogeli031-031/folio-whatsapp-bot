@@ -7,7 +7,7 @@ interface Props {
   data: KanbanBoardType | null;
   onOpenFolio: (id: number) => void;
   onSubirPoliza?: (id: number) => void;
-  onImprimirGastos?: (id: number, numeroFolio: string) => void;
+  onImprimirGastos?: (id: number, numeroFolio: string, etapa?: string) => void;
   onCrearFolio?: (plantaId: number, plantaNombre: string) => void;
   onCrearFolioUrgente?: (plantaId: number, plantaNombre: string) => void;
   onCrearProyecto?: (plantaId: number, plantaNombre: string) => void;

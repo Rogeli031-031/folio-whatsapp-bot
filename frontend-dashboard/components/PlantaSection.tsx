@@ -11,7 +11,7 @@ interface Props {
   onOpenFolio: (id: number) => void;
   role: string;
   onSubirPoliza?: (id: number) => void;
-  onImprimirGastos?: (id: number, numeroFolio: string) => void;
+  onImprimirGastos?: (id: number, numeroFolio: string, etapa?: string) => void;
   onCrearFolio?: (plantaId: number, plantaNombre: string) => void;
   onCrearFolioUrgente?: (plantaId: number, plantaNombre: string) => void;
   onCrearProyecto?: (plantaId: number, plantaNombre: string) => void;

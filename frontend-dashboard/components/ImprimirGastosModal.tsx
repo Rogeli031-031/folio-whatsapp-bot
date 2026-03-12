@@ -9,20 +9,28 @@ interface Props {
   folioId: number;
   numeroFolio: string;
   token: string;
+  etapa?: string;
   onClose: () => void;
 }
 
-export default function ImprimirGastosModal({ folioId, numeroFolio, token, onClose }: Props) {
+export default function ImprimirGastosModal({ folioId, numeroFolio, token, etapa, onClose }: Props) {
   const [modo, setModo] = useState<ModoImpresion>("solo_folio");
+  const [cuenta, setCuenta] = useState("");
+  const [numeroCheque, setNumeroCheque] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const mostrarOpcionPolizaCompleta = etapa === "APROB_DIRECTOR_ZP";
+  const requiereDatosCheque = modo === "poliza_folio_cotizacion";
+  const datosChequeOk = cuenta.trim() !== "" && numeroCheque.trim() !== "";
+  const deshabilitarAcciones = requiereDatosCheque && !datosChequeOk;
 
   const handleImprimir = async () => {
     setError(null);
     setLoading(true);
     try {
       if (modo === "poliza_folio_cotizacion") {
-        const blob = await fetchDocumentoCompletoPdf(token, folioId);
+        const blob = await fetchDocumentoCompletoPdf(token, folioId, { cuenta: cuenta.trim(), numero_cheque: numeroCheque.trim() });
         const url = URL.createObjectURL(blob);
         const w = window.open(url, "_blank");
         if (w) w.focus();
@@ -52,7 +60,7 @@ export default function ImprimirGastosModal({ folioId, numeroFolio, token, onClo
       let blob: Blob;
       let filename: string;
       if (modo === "poliza_folio_cotizacion") {
-        blob = await fetchDocumentoCompletoPdf(token, folioId);
+        blob = await fetchDocumentoCompletoPdf(token, folioId, { cuenta: cuenta.trim(), numero_cheque: numeroCheque.trim() });
         filename = `Documento-Completo-${numeroFolio.replace(/\s/g, "-")}.pdf`;
       } else {
         blob = await fetchDocumentoGastosPdf(token, folioId, modo === "folio_cotizacion");
@@ -112,22 +120,50 @@ export default function ImprimirGastosModal({ folioId, numeroFolio, token, onClo
             />
             <span className="text-sm text-slate-300">Folio + cotización</span>
           </label>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="radio"
-              name="incluir"
-              checked={modo === "poliza_folio_cotizacion"}
-              onChange={() => setModo("poliza_folio_cotizacion")}
-              className="rounded border-slate-600"
-            />
-            <span className="text-sm text-slate-300">Póliza con datos + folio + cotización</span>
-          </label>
+          {mostrarOpcionPolizaCompleta && (
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="incluir"
+                checked={modo === "poliza_folio_cotizacion"}
+                onChange={() => setModo("poliza_folio_cotizacion")}
+                className="rounded border-slate-600"
+              />
+              <span className="text-sm text-slate-300">Póliza con datos + folio + cotización</span>
+            </label>
+          )}
         </div>
+        {requiereDatosCheque && (
+          <div className="mb-4 space-y-2 rounded border border-slate-600 bg-slate-800/50 p-3">
+            <p className="text-xs font-medium text-slate-400">Datos para la póliza</p>
+            <div>
+              <label className="block text-xs text-slate-400 mb-0.5">Cuenta</label>
+              <input
+                type="text"
+                value={cuenta}
+                onChange={(e) => setCuenta(e.target.value)}
+                placeholder="Cuenta"
+                className="w-full rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200 placeholder:text-slate-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-slate-400 mb-0.5">Número de cheque</label>
+              <input
+                type="text"
+                value={numeroCheque}
+                onChange={(e) => setNumeroCheque(e.target.value)}
+                placeholder="Número de cheque"
+                className="w-full rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200 placeholder:text-slate-500"
+              />
+            </div>
+            {!datosChequeOk && <p className="text-xs text-amber-400">Complete cuenta y número de cheque para habilitar Imprimir / Descargar.</p>}
+          </div>
+        )}
         <div className="flex gap-2">
           <button
             type="button"
             onClick={handleImprimir}
-            disabled={loading}
+            disabled={loading || deshabilitarAcciones}
             className="rounded bg-amber-600 px-3 py-1.5 text-sm text-white hover:bg-amber-500 disabled:opacity-50"
           >
             {loading ? "…" : "Imprimir"}
@@ -135,7 +171,7 @@ export default function ImprimirGastosModal({ folioId, numeroFolio, token, onClo
           <button
             type="button"
             onClick={handleDescargar}
-            disabled={loading}
+            disabled={loading || deshabilitarAcciones}
             className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-500 disabled:opacity-50"
           >
             {loading ? "…" : "Descargar PDF"}

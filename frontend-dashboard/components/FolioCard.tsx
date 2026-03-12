@@ -7,7 +7,7 @@ interface Props {
   onOpen: (id: number) => void;
   role: string;
   onSubirPoliza?: (id: number) => void;
-  onImprimirGastos?: (id: number, numeroFolio: string) => void;
+  onImprimirGastos?: (id: number, numeroFolio: string, etapa?: string) => void;
 }
 
 /** Estatus técnico → etapa visual (alineado con backend). */
@@ -135,7 +135,7 @@ export default function FolioCard({ card, onOpen, role, onSubirPoliza, onImprimi
         {showImprimirBtn && (
           <button
             type="button"
-            onClick={(e) => { e.stopPropagation(); e.preventDefault(); onImprimirGastos(card.id, card.numero_folio || card.folio_codigo || String(card.id)); }}
+            onClick={(e) => { e.stopPropagation(); e.preventDefault(); onImprimirGastos(card.id, card.numero_folio || card.folio_codigo || String(card.id), etapa); }}
             className="ml-auto rounded bg-amber-600 px-2 py-1 text-[10px] font-medium text-white hover:bg-amber-500"
           >
             Imprimir

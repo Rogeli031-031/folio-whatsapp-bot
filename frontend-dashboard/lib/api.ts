@@ -653,9 +653,15 @@ export async function fetchDocumentoPolizaPdf(token: string, folioId: number): P
   return res.blob();
 }
 
-/** Descarga el PDF documento completo: Póliza (con datos) + Folio (gastos) + Cotización. */
-export async function fetchDocumentoCompletoPdf(token: string, folioId: number): Promise<Blob> {
-  const url = getApiUrl(`/api/folios/${folioId}/documento-completo?format=pdf`);
+/** Descarga el PDF documento completo: Póliza (con datos) + Folio (gastos) + Cotización. cuenta y numero_cheque opcionales (para póliza en etapa Director ZP). */
+export async function fetchDocumentoCompletoPdf(
+  token: string,
+  folioId: number,
+  opts?: { cuenta?: string; numero_cheque?: string }
+): Promise<Blob> {
+  let url = getApiUrl(`/api/folios/${folioId}/documento-completo?format=pdf`);
+  if (opts?.cuenta?.trim()) url += `&cuenta=${encodeURIComponent(opts.cuenta.trim())}`;
+  if (opts?.numero_cheque?.trim()) url += `&numero_cheque=${encodeURIComponent(opts.numero_cheque.trim())}`;
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${token}` },
   });

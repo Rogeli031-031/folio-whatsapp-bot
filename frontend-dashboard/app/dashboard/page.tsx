@@ -37,7 +37,7 @@ function DashboardContent() {
   const [showDeltaDescuentoModal, setShowDeltaDescuentoModal] = useState(false);
   const [showDeltaIngresoModal, setShowDeltaIngresoModal] = useState(false);
   const [polizaFolioId, setPolizaFolioId] = useState<number | null>(null);
-  const [imprimirGastos, setImprimirGastos] = useState<{ id: number; numeroFolio: string } | null>(null);
+  const [imprimirGastos, setImprimirGastos] = useState<{ id: number; numeroFolio: string; etapa?: string } | null>(null);
   const [crearFolio, setCrearFolio] = useState<{ planta_id: number; planta_nombre: string } | null>(null);
   const [crearFolioUrgente, setCrearFolioUrgente] = useState<{ planta_id: number; planta_nombre: string } | null>(null);
   const [crearProyecto, setCrearProyecto] = useState<{ planta_id: number; planta_nombre: string } | null>(null);
@@ -187,7 +187,7 @@ function DashboardContent() {
           data={kanban}
           onOpenFolio={setDrawerFolioId}
           onSubirPoliza={setPolizaFolioId}
-          onImprimirGastos={(id, numeroFolio) => setImprimirGastos({ id, numeroFolio })}
+          onImprimirGastos={(id, numeroFolio, etapa) => setImprimirGastos({ id, numeroFolio, etapa })}
           onCrearFolio={(plantaId, plantaNombre) => setCrearFolio({ planta_id: plantaId, planta_nombre: plantaNombre })}
           onCrearFolioUrgente={(plantaId, plantaNombre) => setCrearFolioUrgente({ planta_id: plantaId, planta_nombre: plantaNombre })}
           onCrearProyecto={(plantaId, plantaNombre) => setCrearProyecto({ planta_id: plantaId, planta_nombre: plantaNombre })}
@@ -213,6 +213,7 @@ function DashboardContent() {
           folioId={imprimirGastos.id}
           numeroFolio={imprimirGastos.numeroFolio}
           token={token}
+          etapa={imprimirGastos.etapa}
           onClose={() => setImprimirGastos(null)}
         />
       )}

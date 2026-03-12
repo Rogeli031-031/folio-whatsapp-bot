@@ -6281,8 +6281,10 @@ app.get("/api/folios/:id/documento-completo", dashboardAuthMiddleware, async (re
     const plantaDisplay = [folio.planta_clave, folio.planta_nombre].filter(Boolean).join(" - ") || "—";
     const importeStr = folio.importe != null ? Number(folio.importe).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00";
 
-    // 1) Generar PDF Póliza (misma lógica que GET poliza/documento: plantilla S3/local o fallback)
-    const polizaBytes = await generatePolizaPdfBytes(folio);
+    // 1) Generar PDF Póliza (cuenta y numero_cheque opcionales por query, para impresión desde Director ZP)
+    const cuentaPoliza = (req.query.cuenta != null && String(req.query.cuenta).trim() !== "") ? String(req.query.cuenta).trim() : null;
+    const numeroChequePoliza = (req.query.numero_cheque != null && String(req.query.numero_cheque).trim() !== "") ? String(req.query.numero_cheque).trim() : null;
+    const polizaBytes = await generatePolizaPdfBytes(folio, { cuenta: cuentaPoliza, numero_cheque: numeroChequePoliza });
 
     // 2) Generar PDF Gastos + cotización
     const pdfGastos = await PDFDocument.create();
@@ -6661,12 +6663,15 @@ app.post("/api/folios/:id/poliza", dashboardAuthMiddleware, async (req, res) => 
 
 /**
  * Genera el PDF de Póliza Cheque (plantilla S3/local si está disponible, si no fallback manual).
- * @param {Object} folio - { id, numero_folio, folio_codigo, beneficiario, concepto, importe, mes_cargo, planta_nombre, planta_clave }
+ * @param {Object} folio - { id, numero_folio, folio_codigo, beneficiario, concepto, importe, mes_cargo, planta_nombre, planta_clave, banco, cuenta_bancaria }
+ * @param {Object} [opts] - { cuenta, numero_cheque } opcionales (para impresión desde Director ZP).
  * @returns {Promise<Buffer>}
  */
-async function generatePolizaPdfBytes(folio) {
+async function generatePolizaPdfBytes(folio, opts) {
   const folioId = folio.id;
   const numeroFolio = (folio.numero_folio || folio.folio_codigo || `F-${folioId}`).toString().trim();
+  const cuentaPoliza = (opts && opts.cuenta != null && String(opts.cuenta).trim() !== "") ? String(opts.cuenta).trim() : "—";
+  const numeroChequePoliza = (opts && opts.numero_cheque != null && String(opts.numero_cheque).trim() !== "") ? String(opts.numero_cheque).trim() : "—";
     const importeNum = folio.importe != null ? Number(folio.importe) : 0;
     const importeStr = Number(importeNum).toLocaleString("es-MX", {
       minimumFractionDigits: 2,
@@ -6801,6 +6806,8 @@ async function generatePolizaPdfBytes(folio) {
           fecha2: { x: 246.8, y: 151.7, size: 8 },
           beneficiario2: { x: 35, y: 129.8, size: 8 },
           importe2: { x: 392.5, y: 132, size: 8 },
+          cuenta: { x: 80, y: 700, size: 9 },
+          numeroCheque: { x: 130, y: 358, size: 8 },
         };
 
         const draw = (text, x, y, size = 9, bold = false, maxLen = 140) => {
@@ -6843,6 +6850,8 @@ async function generatePolizaPdfBytes(folio) {
         draw(beneficiario, POS.beneficiario2.x, POS.beneficiario2.y, POS.beneficiario2.size);
         draw(importeStr, POS.importe2Top.x, POS.importe2Top.y, POS.importe2Top.size);
         draw(importeStr, POS.importe2.x, POS.importe2.y, POS.importe2.size);
+        draw(cuentaPoliza, POS.cuenta.x, POS.cuenta.y, POS.cuenta.size);
+        draw(numeroChequePoliza, POS.numeroCheque.x, POS.numeroCheque.y, POS.numeroCheque.size);
 
         pdfBytes = await pdfDoc.save();
         usedTemplate = true;
@@ -6913,6 +6922,7 @@ async function generatePolizaPdfBytes(folio) {
       txt(`FOLIO - ${numeroFolio}`, 400, y, 10, true);
       y -= 24;
       txt("CTA:", marginLeft, y, 10);
+      txt(cuentaPoliza, marginLeft + 40, y, 9);
       y -= 20;
 
       const tabW = width / 3;
@@ -6978,6 +6988,7 @@ async function generatePolizaPdfBytes(folio) {
 
       y -= 22;
       txt("NO. CHEQUE:", marginLeft, y, 8);
+      txt(numeroChequePoliza, marginLeft + 75, y, 8);
 
       y -= 18;
       txt("CONCEPTO:", marginLeft, y, 8);
