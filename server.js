@@ -8524,7 +8524,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
         || /^confirmar\s+cancelacion\s+proyecto\s+/i.test(b)
         || (FLAGS.APPROVALS && /^aprobar\s+/i.test(b))
         || /^aprobar_override\s+F-\d{6}-\d{3}\s+motivo:/i.test(b)
-        || (FLAGS.APPROVALS && /^seleccionar\s+folios\s+/.i.test(b))
+        || (FLAGS.APPROVALS && /^seleccionar\s+folios\s+/i.test(b))
         || (FLAGS.APPROVALS && /^seleccionar\s+F-\d{6}-\d{3}\s*$/i.test(b))
         || (FLAGS.APPROVALS && /^cancelar\s+F-\d{6}-\d{3}/i.test(b))
         || (FLAGS.APPROVALS && /^autorizar\s+cancelacion\s+F-\d{6}-\d{3}\s*$/i.test(b))
