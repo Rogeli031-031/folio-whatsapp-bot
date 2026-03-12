@@ -6252,7 +6252,7 @@ app.get("/api/folios/:id/documento-completo", dashboardAuthMiddleware, async (re
   const client = await pool.connect();
   try {
     const r = await client.query(
-      `SELECT f.id, f.planta_id, f.solo_zp_ad, f.numero_folio, f.folio_codigo, f.beneficiario, f.concepto, f.importe, f.creado_en, f.mes_cargo,
+      `SELECT f.id, f.planta_id, f.solo_zp_ad, f.numero_folio, f.folio_codigo, f.beneficiario, f.concepto, f.importe, f.creado_en, f.mes_cargo, f.banco, f.cuenta_bancaria,
               p.nombre AS planta_nombre, p.clave AS planta_clave
        FROM public.folios f
        LEFT JOIN public.plantas p ON p.id = f.planta_id
