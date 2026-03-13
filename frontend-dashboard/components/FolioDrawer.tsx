@@ -303,6 +303,7 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
                 <h3 className="mb-2 text-sm font-medium text-slate-400">Datos</h3>
                 <dl className="space-y-1 text-sm">
                   <div><dt className="text-slate-500">Planta</dt><dd className="text-slate-200">{String(folio.planta_nombre ?? "—")}</dd></div>
+                  <div><dt className="text-slate-500">Beneficiario</dt><dd className="text-slate-200">{String((folio as Record<string, unknown>).beneficiario ?? "—")}</dd></div>
                   <div className="flex flex-wrap items-center gap-2">
                     <div className="min-w-0 flex-1">
                       <dt className="text-slate-500">Estatus</dt>
