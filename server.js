@@ -7887,10 +7887,16 @@ app.get("/api/dashboard/dicf-excel", dashboardAuthMiddleware, async (req, res) =
 
     const wb = XLSX.utils.book_new();
     const headerRow = ["Cliente", "Estatus", ...dates];
-
+    const numCols = dates.length;
+    const pad = (arr, len, fill) => {
+      const a = (arr || []).slice(0, len);
+      while (a.length < len) a.push(fill);
+      return a;
+    };
     const sheet1Rows = [headerRow];
     for (const c of clientes) {
-      const tonValues = (c.kgLast30 || []).map((v) => (v != null && Number.isFinite(v) ? v : ""));
+      const raw = (c.kgLast30 || []).map((v) => (v != null && Number.isFinite(v) ? v : ""));
+      const tonValues = pad(raw, numCols, "");
       sheet1Rows.push([c.cliente || "", c.estado || "", ...tonValues]);
     }
     const ws1 = XLSX.utils.aoa_to_sheet(sheet1Rows);
@@ -7898,7 +7904,8 @@ app.get("/api/dashboard/dicf-excel", dashboardAuthMiddleware, async (req, res) =
 
     const sheet2Rows = [headerRow];
     for (const c of clientes) {
-      const descValues = (c.descKgLast30 || []).map((v) => (v != null && Number.isFinite(v) ? Number(v.toFixed(4)) : ""));
+      const raw = (c.descKgLast30 || []).map((v) => (v != null && Number.isFinite(v) ? Number(v.toFixed(4)) : ""));
+      const descValues = pad(raw, numCols, "");
       sheet2Rows.push([c.cliente || "", c.estado || "", ...descValues]);
     }
     const ws2 = XLSX.utils.aoa_to_sheet(sheet2Rows);
