@@ -32,6 +32,7 @@ function matchesSearch(card: FolioCardType, term: string | undefined): boolean {
     card.numero_folio,
     card.folio_codigo,
     card.descripcion,
+    (card as any).beneficiario,
     card.categoria,
     card.subcategoria,
     importeStr,

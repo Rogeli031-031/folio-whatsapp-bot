@@ -62,6 +62,7 @@ export interface FolioCard {
   folio_codigo: string;
   planta_id: number | null;
   planta_nombre: string | null;
+  beneficiario?: string | null;
   categoria: string | null;
   subcategoria: string | null;
   unidad: string | null;

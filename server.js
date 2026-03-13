@@ -5048,6 +5048,7 @@ function cardFromFolioRow(row) {
     folio_codigo: row.folio_codigo,
     planta_id: row.planta_id,
     planta_nombre: row.planta_nombre || null,
+    beneficiario: row.beneficiario || null,
     categoria: row.categoria || null,
     subcategoria: row.subcategoria || null,
     unidad: row.unidad || null,
@@ -5072,7 +5073,7 @@ app.get("/api/dashboard/kanban", dashboardAuthMiddleware, async (req, res) => {
     const { where, params } = buildDashboardWhere(req.dashboardAuth, filters);
     const q = `
       SELECT f.id, f.numero_folio, f.folio_codigo, f.planta_id, f.categoria, f.subcategoria, f.unidad,
-             f.importe, f.estatus, f.creado_en, f.prioridad, f.mes_cargo,
+             f.importe, f.estatus, f.creado_en, f.prioridad, f.mes_cargo, f.beneficiario,
              COALESCE(f.solo_zp_ad, false) AS solo_zp_ad, COALESCE(f.por_recuperar, false) AS por_recuperar,
              COALESCE(f.solicitud_por_recuperar_pendiente, false) AS solicitud_por_recuperar_pendiente,
              COALESCE(f.descripcion, f.concepto) AS descripcion_display,
