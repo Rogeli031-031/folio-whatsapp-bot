@@ -297,13 +297,13 @@ function KpiContent() {
                     <th className="text-right py-2.5 px-2 font-semibold text-slate-300">Bancos Planta</th>
                     <th className="text-right py-2.5 px-2 font-semibold text-slate-300">Prov. Planta</th>
                     <th className="text-right py-2.5 px-2 font-semibold text-slate-300 border-r border-slate-600">Util. Oper. ($/kg)</th>
-                    <th className="text-right py-2.5 px-2 font-semibold text-slate-300">Util. Oper. (Importe)</th>
+                    <th className="text-right py-2.5 px-2 font-semibold text-emerald-300 bg-slate-900/80">Util. Oper. (Importe)</th>
                     <th className="text-right py-2.5 px-2 font-semibold text-slate-300">Gtos/Apoyos Corp</th>
                     <th className="text-right py-2.5 px-2 font-semibold text-slate-300">Bancos Corp.</th>
                     <th className="text-right py-2.5 px-2 font-semibold text-slate-300">Otros Programas</th>
                     <th className="text-right py-2.5 px-2 font-semibold text-slate-300">Inversiones</th>
                     <th className="text-right py-2.5 px-2 font-semibold text-slate-300">Resultado ($/kg)</th>
-                    <th className="text-right py-2.5 px-2 font-semibold text-slate-300">Resultado (Importe)</th>
+                    <th className="text-right py-2.5 px-2 font-semibold text-amber-300 bg-slate-900/80">Resultado (Importe)</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -390,10 +390,16 @@ function KpiContent() {
                           const isImporte = c.key === "resultado_final_importe" || c.key === "util_oper_importe";
                           const isInversionesKg = c.key === "inversiones_kg";
                           const invIsNeg = !isImporte && val != null && Number(val) < 0;
+                          const highlightClass =
+                            c.key === "util_oper_importe"
+                              ? "bg-emerald-900/30 text-emerald-300 font-semibold"
+                              : c.key === "resultado_final_importe"
+                              ? "bg-amber-900/30 text-amber-300 font-semibold"
+                              : "";
                           return (
                             <td
                               key={c.key}
-                              className={`py-2 px-2 text-right tabular-nums ${isInversionesKg && invIsNeg ? "text-red-400" : "text-slate-300"} ${c.key === "util_oper_kg" ? "border-r border-slate-600" : ""}`}
+                              className={`py-2 px-2 text-right tabular-nums ${isInversionesKg && invIsNeg ? "text-red-400" : "text-slate-300"} ${c.key === "util_oper_kg" ? "border-r border-slate-600" : ""} ${highlightClass}`}
                             >
                               {isImporte ? fmtNum(val ?? null, 0) : fmtNum(val ?? null)}
                             </td>
