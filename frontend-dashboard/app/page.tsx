@@ -105,6 +105,7 @@ function KpiContent() {
   const [deltaForecastPeriodoB, setDeltaForecastPeriodoB] = useState("");
   const [deltaForecastData, setDeltaForecastData] = useState<DeltaIngresoForecastResult | null>(null);
   const [dicfData, setDicfData] = useState<DicfResult | null>(null);
+  const [deltaCanalFilter, setDeltaCanalFilter] = useState<{ tipo: "dejaron" | "nuevos" | "aumentaron" | "disminuyeron"; canal: string; subcanal: string } | null>(null);
   const [deltaForecastLoading, setDeltaForecastLoading] = useState(false);
   const [deltaForecastError, setDeltaForecastError] = useState<string | null>(null);
   const [showDeltaCliente, setShowDeltaCliente] = useState(false);
@@ -817,16 +818,76 @@ function KpiContent() {
                       <td className="py-2 px-2 text-slate-300">{c.canal}</td>
                       <td className="py-2 px-2 text-slate-300">{c.subcanal}</td>
                       <td className="py-2 px-2 text-right tabular-nums text-slate-300">
-                        {c.dejaron.count} ({c.dejaron.totalDeltaKgStr != null ? `${c.dejaron.totalDeltaKgStr} Ton · ` : ""}{c.dejaron.totalDeltaIngresoStr})
+                        <button
+                          type="button"
+                          className="inline-flex items-center justify-end rounded border border-slate-600 bg-slate-800 px-2 py-1 text-xs font-medium text-slate-200 hover:bg-slate-700 w-full"
+                          onClick={() =>
+                            setDeltaCanalFilter((prev) =>
+                              prev &&
+                              prev.tipo === "dejaron" &&
+                              prev.canal === c.canal &&
+                              prev.subcanal === c.subcanal
+                                ? null
+                                : { tipo: "dejaron", canal: c.canal, subcanal: c.subcanal }
+                            )
+                          }
+                        >
+                          {c.dejaron.count} ({c.dejaron.totalDeltaKgStr != null ? `${c.dejaron.totalDeltaKgStr} Ton · ` : ""}{c.dejaron.totalDeltaIngresoStr})
+                        </button>
                       </td>
                       <td className="py-2 px-2 text-right tabular-nums text-slate-300">
-                        {c.nuevos.count} ({c.nuevos.totalDeltaKgStr != null ? `${c.nuevos.totalDeltaKgStr} Ton · ` : ""}{c.nuevos.totalDeltaIngresoStr})
+                        <button
+                          type="button"
+                          className="inline-flex items-center justify-end rounded border border-slate-600 bg-slate-800 px-2 py-1 text-xs font-medium text-slate-200 hover:bg-slate-700 w-full"
+                          onClick={() =>
+                            setDeltaCanalFilter((prev) =>
+                              prev &&
+                              prev.tipo === "nuevos" &&
+                              prev.canal === c.canal &&
+                              prev.subcanal === c.subcanal
+                                ? null
+                                : { tipo: "nuevos", canal: c.canal, subcanal: c.subcanal }
+                            )
+                          }
+                        >
+                          {c.nuevos.count} ({c.nuevos.totalDeltaKgStr != null ? `${c.nuevos.totalDeltaKgStr} Ton · ` : ""}{c.nuevos.totalDeltaIngresoStr})
+                        </button>
                       </td>
                       <td className="py-2 px-2 text-right tabular-nums text-emerald-400">
-                        {c.aumentaron.count} ({c.aumentaron.totalDeltaKgStr != null ? `${c.aumentaron.totalDeltaKgStr} Ton · ` : ""}{c.aumentaron.totalDeltaIngresoStr})
+                        <button
+                          type="button"
+                          className="inline-flex items-center justify-end rounded border border-emerald-500/60 bg-emerald-900/20 px-2 py-1 text-xs font-medium text-emerald-300 hover:bg-emerald-800/40 w-full"
+                          onClick={() =>
+                            setDeltaCanalFilter((prev) =>
+                              prev &&
+                              prev.tipo === "aumentaron" &&
+                              prev.canal === c.canal &&
+                              prev.subcanal === c.subcanal
+                                ? null
+                                : { tipo: "aumentaron", canal: c.canal, subcanal: c.subcanal }
+                            )
+                          }
+                        >
+                          {c.aumentaron.count} ({c.aumentaron.totalDeltaKgStr != null ? `${c.aumentaron.totalDeltaKgStr} Ton · ` : ""}{c.aumentaron.totalDeltaIngresoStr})
+                        </button>
                       </td>
                       <td className="py-2 px-2 text-right tabular-nums text-red-400">
-                        {c.disminuyeron.count} ({c.disminuyeron.totalDeltaKgStr != null ? `${c.disminuyeron.totalDeltaKgStr} Ton · ` : ""}{c.disminuyeron.totalDeltaIngresoStr})
+                        <button
+                          type="button"
+                          className="inline-flex items-center justify-end rounded border border-red-500/60 bg-red-900/20 px-2 py-1 text-xs font-medium text-red-300 hover:bg-red-800/40 w-full"
+                          onClick={() =>
+                            setDeltaCanalFilter((prev) =>
+                              prev &&
+                              prev.tipo === "disminuyeron" &&
+                              prev.canal === c.canal &&
+                              prev.subcanal === c.subcanal
+                                ? null
+                                : { tipo: "disminuyeron", canal: c.canal, subcanal: c.subcanal }
+                            )
+                          }
+                        >
+                          {c.disminuyeron.count} ({c.disminuyeron.totalDeltaKgStr != null ? `${c.disminuyeron.totalDeltaKgStr} Ton · ` : ""}{c.disminuyeron.totalDeltaIngresoStr})
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -837,7 +898,14 @@ function KpiContent() {
                 <div>
                   <h4 className="font-semibold text-slate-400 mb-1">Dejaron de comprar</h4>
                   <ul className="space-y-0.5 text-slate-300 max-h-32 overflow-y-auto">
-                    {(dicfData?.dejaron?.clientes ?? deltaForecastData?.dejaron?.clientes ?? []).slice(0, 15).map((c, i) => (
+                  {(dicfData?.dejaron?.clientes ?? deltaForecastData?.dejaron?.clientes ?? [])
+                    .filter((c) =>
+                      !deltaCanalFilter || deltaCanalFilter.tipo !== "dejaron"
+                        ? true
+                        : (c.canal || "") === deltaCanalFilter.canal && (c.subcanal || "") === deltaCanalFilter.subcanal
+                    )
+                    .slice(0, 15)
+                    .map((c, i) => (
                       <li key={i} className="border-b border-slate-800/50 pb-1 mb-0.5">
                         <button
                           type="button"
@@ -857,7 +925,14 @@ function KpiContent() {
                 <div>
                   <h4 className="font-semibold text-slate-400 mb-1" title="Clientes sin compras el mes anterior y con proyección a cierre este mes">Nuevos</h4>
                   <ul className="space-y-0.5 text-slate-300 max-h-32 overflow-y-auto">
-                    {(dicfData?.nuevos?.clientes ?? deltaForecastData?.nuevos?.clientes ?? []).slice(0, 15).map((c, i) => (
+                  {(dicfData?.nuevos?.clientes ?? deltaForecastData?.nuevos?.clientes ?? [])
+                    .filter((c) =>
+                      !deltaCanalFilter || deltaCanalFilter.tipo !== "nuevos"
+                        ? true
+                        : (c.canal || "") === deltaCanalFilter.canal && (c.subcanal || "") === deltaCanalFilter.subcanal
+                    )
+                    .slice(0, 15)
+                    .map((c, i) => (
                       <li key={i} className="border-b border-slate-800/50 pb-1 mb-0.5">
                         <button
                           type="button"
@@ -877,7 +952,14 @@ function KpiContent() {
                 <div>
                   <h4 className="font-semibold text-emerald-400 mb-1">Aumentaron</h4>
                   <ul className="space-y-0.5 text-slate-300 max-h-32 overflow-y-auto">
-                    {(dicfData?.aumentaron?.clientes ?? deltaForecastData?.aumentaron?.clientes ?? []).slice(0, 15).map((c, i) => (
+                  {(dicfData?.aumentaron?.clientes ?? deltaForecastData?.aumentaron?.clientes ?? [])
+                    .filter((c) =>
+                      !deltaCanalFilter || deltaCanalFilter.tipo !== "aumentaron"
+                        ? true
+                        : (c.canal || "") === deltaCanalFilter.canal && (c.subcanal || "") === deltaCanalFilter.subcanal
+                    )
+                    .slice(0, 15)
+                    .map((c, i) => (
                       <li key={i} className="border-b border-slate-800/50 pb-1 mb-0.5">
                         <button
                           type="button"
@@ -897,7 +979,14 @@ function KpiContent() {
                 <div>
                   <h4 className="font-semibold text-red-400 mb-1">Disminuyeron</h4>
                   <ul className="space-y-0.5 text-slate-300 max-h-32 overflow-y-auto">
-                    {(dicfData?.disminuyeron?.clientes ?? deltaForecastData?.disminuyeron?.clientes ?? []).slice(0, 15).map((c, i) => (
+                  {(dicfData?.disminuyeron?.clientes ?? deltaForecastData?.disminuyeron?.clientes ?? [])
+                    .filter((c) =>
+                      !deltaCanalFilter || deltaCanalFilter.tipo !== "disminuyeron"
+                        ? true
+                        : (c.canal || "") === deltaCanalFilter.canal && (c.subcanal || "") === deltaCanalFilter.subcanal
+                    )
+                    .slice(0, 15)
+                    .map((c, i) => (
                       <li key={i} className="border-b border-slate-800/50 pb-1 mb-0.5">
                         <button
                           type="button"
