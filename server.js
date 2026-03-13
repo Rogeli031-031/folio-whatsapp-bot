@@ -7902,7 +7902,7 @@ app.get("/api/dashboard/dicf-excel", dashboardAuthMiddleware, async (req, res) =
       sheet2Rows.push([c.cliente || "", c.estado || "", ...descValues]);
     }
     const ws2 = XLSX.utils.aoa_to_sheet(sheet2Rows);
-    XLSX.utils.book_append_sheet(wb, ws2, "Descuento ($/kg)");
+    XLSX.utils.book_append_sheet(wb, ws2, "Descuento ($ por kg)");
 
     const sheet3Rows = [headerRow];
     for (const c of clientes) {
@@ -7910,7 +7910,7 @@ app.get("/api/dashboard/dicf-excel", dashboardAuthMiddleware, async (req, res) =
       sheet3Rows.push([c.cliente || "", c.estado || "", ...margenValues]);
     }
     const ws3 = XLSX.utils.aoa_to_sheet(sheet3Rows);
-    XLSX.utils.book_append_sheet(wb, ws3, "Margen ($/kg)");
+    XLSX.utils.book_append_sheet(wb, ws3, "Margen ($ por kg)");
 
     const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
     const filename = `Delta_Ingreso_Cliente_Forecast_${planta.replace(/\s+/g, "_")}_${data.periodoMes || "mes"}.xlsx`;
