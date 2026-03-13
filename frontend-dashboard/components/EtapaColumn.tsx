@@ -5,6 +5,7 @@ import type { KanbanBoard } from "@/lib/api";
 
 interface Props {
   column: KanbanBoard["board"][0];
+  selectedPlantaId?: number;
   onOpenFolio: (id: number) => void;
   role: string;
   onSubirPoliza?: (id: number) => void;
@@ -43,10 +44,14 @@ function EtapaIcon({ etapa, icon }: { etapa: string; icon?: string }) {
   return null;
 }
 
-export default function EtapaColumn({ column, onOpenFolio, role, onSubirPoliza, onImprimirGastos, onCrearFolio, onCrearFolioUrgente, onCrearProyecto }: Props) {
+export default function EtapaColumn({ column, selectedPlantaId, onOpenFolio, role, onSubirPoliza, onImprimirGastos, onCrearFolio, onCrearFolioUrgente, onCrearProyecto }: Props) {
   const label = column.etapa_label ?? ETAPA_LABELS[column.etapa] ?? column.etapa;
   const fmtMxn = (n: number | null) =>
     n != null && !isNaN(n) ? `$${n.toLocaleString("es-MX", { maximumFractionDigits: 0 })}` : "—";
+
+  const plantasFiltradas = selectedPlantaId
+    ? column.plantas.filter((planta) => planta.planta_id === selectedPlantaId)
+    : column.plantas;
 
   return (
     <div className="flex-shrink-0 w-[60rem] rounded-lg border border-slate-700 bg-slate-900/50">
@@ -62,7 +67,7 @@ export default function EtapaColumn({ column, onOpenFolio, role, onSubirPoliza, 
         </div>
       </div>
       <div className="max-h-[70vh] space-y-3 overflow-y-auto p-2">
-        {column.plantas.map((planta) => (
+        {plantasFiltradas.map((planta) => (
           <PlantaSection
             key={planta.planta_id}
             planta_id={planta.planta_id}

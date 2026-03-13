@@ -104,6 +104,8 @@ function DashboardContent() {
       )
     : [];
 
+  const selectedPlantaId = filters.plantas ? Number(filters.plantas) || undefined : undefined;
+
   return (
     <div className="min-h-screen flex flex-col">
       <div className="flex items-center justify-between border-b border-slate-700 bg-slate-900/50 px-4 py-2">
@@ -185,6 +187,7 @@ function DashboardContent() {
       <main className="flex-1">
         <KanbanBoard
           data={kanban}
+          selectedPlantaId={selectedPlantaId}
           onOpenFolio={setDrawerFolioId}
           onSubirPoliza={setPolizaFolioId}
           onImprimirGastos={(id, numeroFolio, etapa) => setImprimirGastos({ id, numeroFolio, etapa })}
