@@ -927,7 +927,7 @@ function KpiContent() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-4 text-xs">
                 <div>
                   <h4 className="font-semibold text-slate-400 mb-1">Dejaron de comprar</h4>
-                  <ul className="space-y-0.5 text-slate-300 max-h-32 overflow-y-auto">
+                  <ul className="space-y-0.5 text-slate-300 max-h-96 overflow-y-auto">
                   {(dicfData?.dejaron?.clientes ?? deltaForecastData?.dejaron?.clientes ?? [])
                     .filter((c) =>
                       !deltaCanalFilter || deltaCanalFilter.tipo !== "dejaron"
@@ -954,7 +954,7 @@ function KpiContent() {
                 </div>
                 <div>
                   <h4 className="font-semibold text-slate-400 mb-1" title="Clientes sin compras el mes anterior y con proyección a cierre este mes">Nuevos</h4>
-                  <ul className="space-y-0.5 text-slate-300 max-h-32 overflow-y-auto">
+                  <ul className="space-y-0.5 text-slate-300 max-h-96 overflow-y-auto">
                   {(dicfData?.nuevos?.clientes ?? deltaForecastData?.nuevos?.clientes ?? [])
                     .filter((c) =>
                       !deltaCanalFilter || deltaCanalFilter.tipo !== "nuevos"
@@ -981,7 +981,7 @@ function KpiContent() {
                 </div>
                 <div>
                   <h4 className="font-semibold text-emerald-400 mb-1">Aumentaron</h4>
-                  <ul className="space-y-0.5 text-slate-300 max-h-32 overflow-y-auto">
+                  <ul className="space-y-0.5 text-slate-300 max-h-96 overflow-y-auto">
                   {(dicfData?.aumentaron?.clientes ?? deltaForecastData?.aumentaron?.clientes ?? [])
                     .filter((c) =>
                       !deltaCanalFilter || deltaCanalFilter.tipo !== "aumentaron"
@@ -1008,7 +1008,7 @@ function KpiContent() {
                 </div>
                 <div>
                   <h4 className="font-semibold text-red-400 mb-1">Disminuyeron</h4>
-                  <ul className="space-y-0.5 text-slate-300 max-h-32 overflow-y-auto">
+                  <ul className="space-y-0.5 text-slate-300 max-h-96 overflow-y-auto">
                   {(dicfData?.disminuyeron?.clientes ?? deltaForecastData?.disminuyeron?.clientes ?? [])
                     .filter((c) =>
                       !deltaCanalFilter || deltaCanalFilter.tipo !== "disminuyeron"
