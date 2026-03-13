@@ -922,11 +922,11 @@ function KpiContent() {
         {deltaClienteSel && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => setDeltaClienteSel(null)}>
             <div
-              className="w-full max-w-5xl max-h-[85vh] overflow-y-auto rounded-lg border border-slate-700 bg-slate-900 p-6 shadow-xl"
+              className="w-full max-w-5xl max-h-[85vh] min-h-[40vh] overflow-y-auto rounded-lg border border-slate-700 bg-slate-900 p-8 shadow-xl"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="mb-3 flex items-center justify-between border-b border-slate-700 pb-2">
-                <h3 className="text-sm font-semibold text-slate-200">
+              <div className="mb-4 flex items-center justify-between border-b border-slate-700 pb-3">
+                <h3 className="text-xl font-semibold text-slate-200">
                   Delta Ingreso Cliente Forecast · {deltaForecastPlanta} · {dicfData?.periodoMes ?? deltaForecastPeriodoB}
                 </h3>
                 <button
@@ -937,7 +937,7 @@ function KpiContent() {
                   ×
                 </button>
               </div>
-              <div className="space-y-2 text-xs text-slate-300">
+              <div className="space-y-3 text-sm text-slate-300">
                 <p>
                   <span className="font-semibold">{deltaClienteSel.cliente.cliente}</span>{" "}
                   <span className="text-slate-400">· {deltaClienteSel.grupo}</span>
@@ -966,9 +966,9 @@ function KpiContent() {
                   )}
                 </p>
                 <div className="mt-2">
-                  <h4 className="mb-1 text-[0.7rem] font-semibold text-slate-400">Compras últimas 4 semanas</h4>
+                  <h4 className="mb-2 text-base font-semibold text-slate-400">Compras últimas 4 semanas</h4>
                   {deltaClienteSel.cliente.historyLast4Weeks && deltaClienteSel.cliente.historyLast4Weeks.length > 0 ? (
-                    <table className="w-full border-collapse text-[0.68rem]">
+                    <table className="w-full border-collapse text-sm">
                       <thead>
                         <tr className="border-b border-slate-700 text-slate-400">
                           <th className="py-1 pr-2 text-left">Fecha</th>
@@ -987,7 +987,7 @@ function KpiContent() {
                       </tbody>
                     </table>
                   ) : (
-                    <p className="text-[0.68rem] text-slate-500">Sin compras en las últimas 4 semanas.</p>
+                    <p className="text-sm text-slate-500">Sin compras en las últimas 4 semanas.</p>
                   )}
                 </div>
               </div>
