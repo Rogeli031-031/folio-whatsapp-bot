@@ -922,7 +922,7 @@ function KpiContent() {
         {deltaClienteSel && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => setDeltaClienteSel(null)}>
             <div
-              className="w-full max-w-lg rounded-lg border border-slate-700 bg-slate-900 p-4 shadow-xl"
+              className="w-full max-w-5xl max-h-[85vh] overflow-y-auto rounded-lg border border-slate-700 bg-slate-900 p-6 shadow-xl"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="mb-3 flex items-center justify-between border-b border-slate-700 pb-2">

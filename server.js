@@ -7884,20 +7884,41 @@ app.get("/api/dashboard/dicf-excel", dashboardAuthMiddleware, async (req, res) =
     const dates = excelData.dates;
     const margen = excelData.margen != null && Number.isFinite(excelData.margen) ? excelData.margen : 0;
     const clientes = excelData.clientes;
+    const meses = excelData.meses || [];
+    const margenPorMes = excelData.margenPorMes || [];
 
-    const wb = XLSX.utils.book_new();
-    const headerRow = ["Cliente", "Estatus", ...dates];
+    const monthHeaders = [];
+    for (const m of meses) {
+      monthHeaders.push(`Venta ${m.label}`, `Descuento ${m.label}`, `Margen ${m.label}`);
+    }
+    const headerRow = ["Cliente", "Estatus", ...monthHeaders, ...dates];
     const numCols = dates.length;
     const pad = (arr, len, fill) => {
       const a = (arr || []).slice(0, len);
       while (a.length < len) a.push(fill);
       return a;
     };
+    const numMeses = meses.length;
+    const monthValsForClient = (c) => {
+      const ventaPorMes = (c.ventaPorMes || []).slice(0, numMeses);
+      const descuentoPorMes = (c.descuentoPorMes || []).slice(0, numMeses);
+      const out = [];
+      for (let i = 0; i < numMeses; i++) {
+        const v = ventaPorMes[i];
+        const d = descuentoPorMes[i];
+        const mg = margenPorMes[i];
+        out.push(v != null && Number.isFinite(v) ? v : "");
+        out.push(d != null && Number.isFinite(d) ? d : "");
+        out.push(mg != null && Number.isFinite(mg) ? mg : "");
+      }
+      return out;
+    };
+
     const sheet1Rows = [headerRow];
     for (const c of clientes) {
       const raw = (c.kgLast30 || []).map((v) => (v != null && Number.isFinite(v) ? v : ""));
       const tonValues = pad(raw, numCols, "");
-      sheet1Rows.push([c.cliente || "", c.estado || "", ...tonValues]);
+      sheet1Rows.push([c.cliente || "", c.estado || "", ...monthValsForClient(c), ...tonValues]);
     }
     const ws1 = XLSX.utils.aoa_to_sheet(sheet1Rows);
     XLSX.utils.book_append_sheet(wb, ws1, "Venta (Ton)");
@@ -7906,7 +7927,7 @@ app.get("/api/dashboard/dicf-excel", dashboardAuthMiddleware, async (req, res) =
     for (const c of clientes) {
       const raw = (c.descKgLast30 || []).map((v) => (v != null && Number.isFinite(v) ? Number(v.toFixed(4)) : ""));
       const descValues = pad(raw, numCols, "");
-      sheet2Rows.push([c.cliente || "", c.estado || "", ...descValues]);
+      sheet2Rows.push([c.cliente || "", c.estado || "", ...monthValsForClient(c), ...descValues]);
     }
     const ws2 = XLSX.utils.aoa_to_sheet(sheet2Rows);
     XLSX.utils.book_append_sheet(wb, ws2, "Descuento ($ por kg)");
@@ -7914,7 +7935,7 @@ app.get("/api/dashboard/dicf-excel", dashboardAuthMiddleware, async (req, res) =
     const sheet3Rows = [headerRow];
     for (const c of clientes) {
       const margenValues = dates.map(() => margen);
-      sheet3Rows.push([c.cliente || "", c.estado || "", ...margenValues]);
+      sheet3Rows.push([c.cliente || "", c.estado || "", ...monthValsForClient(c), ...margenValues]);
     }
     const ws3 = XLSX.utils.aoa_to_sheet(sheet3Rows);
     XLSX.utils.book_append_sheet(wb, ws3, "Margen ($ por kg)");
