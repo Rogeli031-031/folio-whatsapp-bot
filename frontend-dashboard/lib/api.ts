@@ -575,10 +575,18 @@ export function postDicfDatos(
   });
 }
 
-/** URL para descargar Excel de Delta Ingreso Cliente Forecast (3 hojas: venta Ton, desc $/kg, margen). */
-export function getDicfExcelUrl(token: string, planta: string): string {
+/** URL para descargar Excel de Delta Ingreso Cliente Forecast (3 hojas: venta Ton, desc $/kg, margen). Si se pasa filter, el Excel solo incluye clientes de ese canal/subcanal/tipo. */
+export function getDicfExcelUrl(
+  token: string,
+  planta: string,
+  filter?: { tipo: "dejaron" | "nuevos" | "aumentaron" | "disminuyeron"; canal: string; subcanal: string } | null
+): string {
   const base = getApiUrl("/api/dashboard/dicf-excel");
-  return `${base}?planta=${encodeURIComponent(planta)}&t=${encodeURIComponent(token)}`;
+  let url = `${base}?planta=${encodeURIComponent(planta)}&t=${encodeURIComponent(token)}`;
+  if (filter?.canal != null && filter?.subcanal != null && filter?.tipo) {
+    url += `&canal=${encodeURIComponent(filter.canal)}&subcanal=${encodeURIComponent(filter.subcanal)}&tipo=${encodeURIComponent(filter.tipo)}`;
+  }
+  return url;
 }
 
 export interface DicfConfig {

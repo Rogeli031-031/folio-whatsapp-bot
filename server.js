@@ -7883,7 +7883,17 @@ app.get("/api/dashboard/dicf-excel", dashboardAuthMiddleware, async (req, res) =
     }
     const dates = excelData.dates;
     const margen = excelData.margen != null && Number.isFinite(excelData.margen) ? excelData.margen : 0;
-    const clientes = excelData.clientes;
+    let clientes = excelData.clientes || [];
+    const canal = (req.query.canal || "").toString().trim();
+    const subcanal = (req.query.subcanal || "").toString().trim();
+    const tipo = (req.query.tipo || "").toString().trim().toLowerCase();
+    const ESTADO_BY_TIPO = { dejaron: "Dejaron de comprar", nuevos: "Nuevo", aumentaron: "Aumentaron", disminuyeron: "Disminuyeron" };
+    if (canal !== "" && subcanal !== "" && tipo !== "" && ESTADO_BY_TIPO[tipo]) {
+      const estadoFilter = ESTADO_BY_TIPO[tipo];
+      clientes = clientes.filter(
+        (c) => (c.canal || "") === canal && (c.subcanal || "") === subcanal && (c.estado || "") === estadoFilter
+      );
+    }
     const meses = excelData.meses || [];
     const margenPorMes = excelData.margenPorMes || [];
 
@@ -7943,7 +7953,11 @@ app.get("/api/dashboard/dicf-excel", dashboardAuthMiddleware, async (req, res) =
     XLSX.utils.book_append_sheet(wb, ws3, "Margen ($ por kg)");
 
     const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
-    const filename = `Delta_Ingreso_Cliente_Forecast_${planta.replace(/\s+/g, "_")}_${data.periodoMes || "mes"}.xlsx`;
+    let filename = `Delta_Ingreso_Cliente_Forecast_${planta.replace(/\s+/g, "_")}_${data.periodoMes || "mes"}.xlsx`;
+    if (canal !== "" && subcanal !== "" && tipo !== "") {
+      const safe = (s) => (s || "").replace(/[\s/\\?*:[\]]+/g, "_");
+      filename = `Delta_Ingreso_Cliente_Forecast_${planta.replace(/\s+/g, "_")}_${safe(canal)}_${safe(subcanal)}_${tipo}.xlsx`;
+    }
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
     res.send(buf);

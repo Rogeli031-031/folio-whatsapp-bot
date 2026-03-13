@@ -694,11 +694,13 @@ function KpiContent() {
             )}
             {dicfData && token && deltaForecastPlanta && (
               <a
-                href={getDicfExcelUrl(token, deltaForecastPlanta)}
+                href={getDicfExcelUrl(token, deltaForecastPlanta, deltaCanalFilter)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="rounded bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-600"
-                title="Excel con 3 hojas: Venta (Ton), Descuento ($/kg), Margen ($/kg) — últimos 30 días por cliente"
+                title={deltaCanalFilter
+                  ? `Excel filtrado: ${deltaCanalFilter.canal} · ${deltaCanalFilter.subcanal} · ${deltaCanalFilter.tipo}`
+                  : "Excel con 3 hojas: Venta (Ton), Descuento ($/kg), Margen ($/kg) — últimos 30 días por cliente. Selecciona un botón de la tabla para exportar solo esa celda."}
               >
                 Descargar Excel (Cliente Forecast)
               </a>
