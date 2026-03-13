@@ -2170,7 +2170,7 @@ async function ensureArrSchema(client) {
     );
   `).catch(() => {});
   await client.query(`
-    CREATE TABLE IF NOT EXISTS arr.descuentos_diarias_cliente (
+    CREATE TABLE IF NOT EXISTS arr.descuentos_diarios_cliente (
       plant_code   VARCHAR(20) NOT NULL,
       fecha        DATE        NOT NULL,
       cliente_norm VARCHAR(200) NOT NULL,
@@ -2182,7 +2182,7 @@ async function ensureArrSchema(client) {
     CREATE INDEX IF NOT EXISTS idx_ventas_diarias_plant_fecha ON arr.ventas_diarias_cliente (plant_code, fecha);
   `).catch(() => {});
   await client.query(`
-    CREATE INDEX IF NOT EXISTS idx_descuentos_diarias_plant_fecha ON arr.descuentos_diarias_cliente (plant_code, fecha);
+    CREATE INDEX IF NOT EXISTS idx_descuentos_diarios_plant_fecha ON arr.descuentos_diarios_cliente (plant_code, fecha);
   `).catch(() => {});
   await client.query(`
     CREATE TABLE IF NOT EXISTS arr.descuentos_notas (

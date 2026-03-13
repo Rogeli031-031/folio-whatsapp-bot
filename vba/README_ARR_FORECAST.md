@@ -42,6 +42,6 @@ Después de subir, puedes calcular el forecast desde Node (`POST /api/arr/foreca
 En tu cliente SQL (DBeaver, pgAdmin, etc.) ejecuta las consultas del archivo **`sql/arr_verificar_carga.sql`**. Ajusta `plant_code`, fechas y `year`/`month` si usaste otra planta o mes:
 
 - **Ventas:** `arr.ventas_diarias_cliente` debe tener filas por fecha con `plant_code = 'Puebla'` y total de kg.
-- **Descuentos:** `arr.descuentos_diarias_cliente` debe tener filas con montos (negativos).
+- **Descuentos:** `arr.descuentos_diarios_cliente` debe tener filas con montos (negativos).
 - **Catálogo:** `arr.cliente_categoria_mes` debe tener registros para ese año/mes.
 - **Forecast:** `arr.forecast_mensual` solo tiene datos después de ejecutar el forecast (API o script).
