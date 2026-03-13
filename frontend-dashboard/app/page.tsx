@@ -820,7 +820,14 @@ function KpiContent() {
                       <td className="py-2 px-2 text-right tabular-nums text-slate-300">
                         <button
                           type="button"
-                          className="inline-flex items-center justify-end rounded border border-slate-600 bg-slate-800 px-2 py-1 text-xs font-medium text-slate-200 hover:bg-slate-700 w-full"
+                          className={`inline-flex items-center justify-end rounded px-2 py-1 text-xs font-medium w-full border ${
+                            deltaCanalFilter &&
+                            deltaCanalFilter.tipo === "dejaron" &&
+                            deltaCanalFilter.canal === c.canal &&
+                            deltaCanalFilter.subcanal === c.subcanal
+                              ? "border-amber-400 bg-amber-900/40 text-amber-100 ring-1 ring-amber-400/70"
+                              : "border-slate-600 bg-slate-800 text-slate-200 hover:bg-slate-700"
+                          }`}
                           onClick={() =>
                             setDeltaCanalFilter((prev) =>
                               prev &&
@@ -838,7 +845,14 @@ function KpiContent() {
                       <td className="py-2 px-2 text-right tabular-nums text-slate-300">
                         <button
                           type="button"
-                          className="inline-flex items-center justify-end rounded border border-slate-600 bg-slate-800 px-2 py-1 text-xs font-medium text-slate-200 hover:bg-slate-700 w-full"
+                          className={`inline-flex items-center justify-end rounded px-2 py-1 text-xs font-medium w-full border ${
+                            deltaCanalFilter &&
+                            deltaCanalFilter.tipo === "nuevos" &&
+                            deltaCanalFilter.canal === c.canal &&
+                            deltaCanalFilter.subcanal === c.subcanal
+                              ? "border-amber-400 bg-amber-900/40 text-amber-100 ring-1 ring-amber-400/70"
+                              : "border-slate-600 bg-slate-800 text-slate-200 hover:bg-slate-700"
+                          }`}
                           onClick={() =>
                             setDeltaCanalFilter((prev) =>
                               prev &&
@@ -856,7 +870,14 @@ function KpiContent() {
                       <td className="py-2 px-2 text-right tabular-nums text-emerald-400">
                         <button
                           type="button"
-                          className="inline-flex items-center justify-end rounded border border-emerald-500/60 bg-emerald-900/20 px-2 py-1 text-xs font-medium text-emerald-300 hover:bg-emerald-800/40 w-full"
+                          className={`inline-flex items-center justify-end rounded px-2 py-1 text-xs font-medium w-full border ${
+                            deltaCanalFilter &&
+                            deltaCanalFilter.tipo === "aumentaron" &&
+                            deltaCanalFilter.canal === c.canal &&
+                            deltaCanalFilter.subcanal === c.subcanal
+                              ? "border-emerald-300 bg-emerald-900/60 text-emerald-100 ring-1 ring-emerald-300/80"
+                              : "border-emerald-500/60 bg-emerald-900/20 text-emerald-300 hover:bg-emerald-800/40"
+                          }`}
                           onClick={() =>
                             setDeltaCanalFilter((prev) =>
                               prev &&
@@ -874,7 +895,14 @@ function KpiContent() {
                       <td className="py-2 px-2 text-right tabular-nums text-red-400">
                         <button
                           type="button"
-                          className="inline-flex items-center justify-end rounded border border-red-500/60 bg-red-900/20 px-2 py-1 text-xs font-medium text-red-300 hover:bg-red-800/40 w-full"
+                          className={`inline-flex items-center justify-end rounded px-2 py-1 text-xs font-medium w-full border ${
+                            deltaCanalFilter &&
+                            deltaCanalFilter.tipo === "disminuyeron" &&
+                            deltaCanalFilter.canal === c.canal &&
+                            deltaCanalFilter.subcanal === c.subcanal
+                              ? "border-red-300 bg-red-900/60 text-red-100 ring-1 ring-red-300/80"
+                              : "border-red-500/60 bg-red-900/20 text-red-300 hover:bg-red-800/40"
+                          }`}
                           onClick={() =>
                             setDeltaCanalFilter((prev) =>
                               prev &&
