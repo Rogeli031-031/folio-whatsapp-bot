@@ -5105,6 +5105,12 @@ app.get("/api/dashboard/kanban", dashboardAuthMiddleware, async (req, res) => {
     const plantasList = await getPlantas(client);
     const nombreByPlantaId = {};
     (plantasList || []).forEach((p) => { nombreByPlantaId[p.id] = p.nombre || p.clave || `Planta ${p.id}`; });
+    const auth = req.dashboardAuth;
+    const roleNorm = (auth.role != null && auth.role !== "" ? String(auth.role).replace(/\s/g, "").toUpperCase() : "") || "";
+    const visiblePlantIds = (roleNorm === "GG" || roleNorm === "GA") && auth.plantas_permitidas && auth.plantas_permitidas.length > 0
+      ? auth.plantas_permitidas
+      : (plantasList || []).map((p) => p.id);
+    const canonicalIdsParaCrear = [...new Set(visiblePlantIds.map((pid) => getCanonicalPlantaId(pid)).filter((cid) => cid != null && cid > 0))];
     const board = ETAPAS_VISUAL_ORDER.map((etapa) => {
       const folios = byEtapa[etapa] || [];
       const meta = ETAPA_VISIBLE[etapa] || { label: etapa, icon: "" };
@@ -5123,6 +5129,17 @@ app.get("/api/dashboard/kanban", dashboardAuthMiddleware, async (req, res) => {
         if (!byPlanta[cid]) byPlanta[cid] = { planta_id: cid, planta_nombre: pnom, folios: [] };
         byPlanta[cid].folios.push(f);
       });
+      if (etapa === "PENDIENTE_APROB_PLANTA") {
+        canonicalIdsParaCrear.forEach((cid) => {
+          if (!byPlanta[cid]) {
+            byPlanta[cid] = {
+              planta_id: cid,
+              planta_nombre: nombreByPlantaId[cid] || `Planta ${cid}`,
+              folios: [],
+            };
+          }
+        });
+      }
       const plantas = Object.values(byPlanta).map((p) => {
         const fols = p.folios;
         const pCount = fols.length;
