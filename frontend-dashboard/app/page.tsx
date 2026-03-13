@@ -531,37 +531,80 @@ function KpiContent() {
                   <table className="w-full border-collapse text-sm">
                     <thead>
                       <tr className="border-b border-slate-600 bg-slate-800/80 text-[0.6em]">
-                        {cols.map((c) => (
-                          <th key={c.key} className={c.key === "empresa" ? "text-left py-2 px-2 font-semibold text-slate-300 border-r border-slate-600" : "text-right py-2 px-2 font-semibold text-slate-300"}>
-                            {c.label}
-                          </th>
-                        ))}
+                        {cols.map((c) => {
+                          if (c.key === "empresa") {
+                            return (
+                              <th key={c.key} className="text-left py-2 px-2 font-semibold text-slate-300 border-r border-slate-600">
+                                {c.label}
+                              </th>
+                            );
+                          }
+                          const highlightHeaderClass =
+                            c.key === "util_oper_importe"
+                              ? "text-emerald-300 bg-slate-900/80"
+                              : c.key === "resultado_final_importe"
+                              ? "text-amber-300 bg-slate-900/80"
+                              : "text-slate-300";
+                          return (
+                            <th
+                              key={c.key}
+                              className={`text-right py-2 px-2 font-semibold ${highlightHeaderClass}`}
+                            >
+                              {c.label}
+                            </th>
+                          );
+                        })}
                       </tr>
                     </thead>
                     <tbody>
                       <tr className="border-b border-slate-600 bg-slate-800/40">
                         <td className="py-2 px-2 text-[0.6em] font-semibold text-amber-200 border-r border-slate-600">IGF Forecast</td>
-                        {cols.slice(1).map((c) => (
-                          <td key={c.key} className="py-2 px-2 text-right tabular-nums text-slate-300">
-                            {cellVal(rowF, c)}
-                          </td>
-                        ))}
+                        {cols.slice(1).map((c) => {
+                          const highlightColClass =
+                            c.key === "util_oper_importe"
+                              ? "bg-emerald-900/30 text-emerald-300 font-semibold"
+                              : c.key === "resultado_final_importe"
+                              ? "bg-amber-900/30 text-amber-300 font-semibold"
+                              : "text-slate-300";
+                          return (
+                            <td key={c.key} className={`py-2 px-2 text-right tabular-nums ${highlightColClass}`}>
+                              {cellVal(rowF, c)}
+                            </td>
+                          );
+                        })}
                       </tr>
                       <tr className="border-b border-slate-600 bg-slate-800/40">
                         <td className="py-2 px-2 text-[0.6em] font-semibold text-slate-300 border-r border-slate-600">IGF mes anterior</td>
-                        {cols.slice(1).map((c) => (
-                          <td key={c.key} className="py-2 px-2 text-right tabular-nums text-slate-300">
-                            {cellVal(rowA, c)}
-                          </td>
-                        ))}
+                        {cols.slice(1).map((c) => {
+                          const highlightColClass =
+                            c.key === "util_oper_importe"
+                              ? "bg-emerald-900/10 text-emerald-200"
+                              : c.key === "resultado_final_importe"
+                              ? "bg-amber-900/10 text-amber-200"
+                              : "text-slate-300";
+                          return (
+                            <td key={c.key} className={`py-2 px-2 text-right tabular-nums ${highlightColClass}`}>
+                              {cellVal(rowA, c)}
+                            </td>
+                          );
+                        })}
                       </tr>
                       <tr className="border-t-2 border-slate-500 bg-slate-700/50">
                         <td className="py-2 px-2 text-[0.6em] font-semibold text-slate-200 border-r border-slate-600">Cambio</td>
                         {cols.slice(1).map((c) => {
                           const d = cellDeltaNum(c);
                           const hasDelta = d !== null;
+                          const highlightColClass =
+                            c.key === "util_oper_importe"
+                              ? "bg-emerald-900/20"
+                              : c.key === "resultado_final_importe"
+                              ? "bg-amber-900/20"
+                              : "";
                           return (
-                            <td key={c.key} className={`py-2 px-2 text-right tabular-nums ${hasDelta && d! > 0 ? "text-green-400" : hasDelta && d! < 0 ? "text-red-400" : "text-slate-400"}`}>
+                            <td
+                              key={c.key}
+                              className={`py-2 px-2 text-right tabular-nums ${hasDelta && d! > 0 ? "text-green-400" : hasDelta && d! < 0 ? "text-red-400" : "text-slate-400"} ${highlightColClass}`}
+                            >
                               {hasDelta ? (d! >= 0 ? "+" : "") + (c.isPct ? fmtNum(d!, 1) : c.fmt(d!)) : "—"}
                             </td>
                           );
@@ -572,8 +615,17 @@ function KpiContent() {
                         {cols.slice(1).map((c) => {
                           const imp = cellImpacto(c);
                           const hasImp = imp !== null;
+                          const highlightColClass =
+                            c.key === "util_oper_importe"
+                              ? "bg-emerald-900/20"
+                              : c.key === "resultado_final_importe"
+                              ? "bg-amber-900/20"
+                              : "";
                           return (
-                            <td key={c.key} className={`py-2 px-2 text-right tabular-nums ${hasImp && imp! > 0 ? "text-green-400" : hasImp && imp! < 0 ? "text-red-400" : "text-slate-400"}`}>
+                            <td
+                              key={c.key}
+                              className={`py-2 px-2 text-right tabular-nums ${hasImp && imp! > 0 ? "text-green-400" : hasImp && imp! < 0 ? "text-red-400" : "text-slate-400"} ${highlightColClass}`}
+                            >
                               {hasImp ? (imp! >= 0 ? "+" : "") + fmtNum(imp!, 0) : "—"}
                             </td>
                           );
