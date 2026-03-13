@@ -41,6 +41,7 @@ function DashboardContent() {
   const [crearFolio, setCrearFolio] = useState<{ planta_id: number; planta_nombre: string } | null>(null);
   const [crearFolioUrgente, setCrearFolioUrgente] = useState<{ planta_id: number; planta_nombre: string } | null>(null);
   const [crearProyecto, setCrearProyecto] = useState<{ planta_id: number; planta_nombre: string } | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
     const t = parseTokenFromQuery(searchParams) || getTokenFromStorage();
@@ -155,6 +156,8 @@ function DashboardContent() {
         filters={filters}
         onFiltersChange={setFilters}
         plantas={plantas}
+        searchTerm={searchTerm}
+        onSearchTermChange={setSearchTerm}
       />
       {showComoCambioModal && token && (
         <ComoCambioModal
@@ -188,6 +191,7 @@ function DashboardContent() {
         <KanbanBoard
           data={kanban}
           selectedPlantaId={selectedPlantaId}
+          searchTerm={searchTerm}
           onOpenFolio={setDrawerFolioId}
           onSubirPoliza={setPolizaFolioId}
           onImprimirGastos={(id, numeroFolio, etapa) => setImprimirGastos({ id, numeroFolio, etapa })}

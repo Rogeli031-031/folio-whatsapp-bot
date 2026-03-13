@@ -15,11 +15,31 @@ interface Props {
   onCrearFolio?: (plantaId: number, plantaNombre: string) => void;
   onCrearFolioUrgente?: (plantaId: number, plantaNombre: string) => void;
   onCrearProyecto?: (plantaId: number, plantaNombre: string) => void;
+   /** Texto libre para buscar folios en esta planta. */
+  searchTerm?: string;
 }
 
 const CAT_ORDER = ["GASTOS", "INVERSIONES", "DYO", "TALLER"];
 
-export default function PlantaSection({ planta_id, planta_nombre, stats, porCategoria, onOpenFolio, role, onSubirPoliza, onImprimirGastos, onCrearFolio, onCrearFolioUrgente, onCrearProyecto }: Props) {
+function matchesSearch(card: FolioCardType, term: string | undefined): boolean {
+  const q = (term || "").trim().toLowerCase();
+  if (!q) return true;
+  const importeStr =
+    card.importe != null && !isNaN(card.importe)
+      ? card.importe.toLocaleString("es-MX", { maximumFractionDigits: 0 })
+      : "";
+  const fields = [
+    card.numero_folio,
+    card.folio_codigo,
+    card.descripcion,
+    card.categoria,
+    card.subcategoria,
+    importeStr,
+  ];
+  return fields.some((f) => (f || "").toString().toLowerCase().includes(q));
+}
+
+export default function PlantaSection({ planta_id, planta_nombre, stats, porCategoria, onOpenFolio, role, onSubirPoliza, onImprimirGastos, onCrearFolio, onCrearFolioUrgente, onCrearProyecto, searchTerm }: Props) {
   const fmtMxn = (n: number) =>
     n != null && !isNaN(n) ? `$${n.toLocaleString("es-MX", { maximumFractionDigits: 0 })}` : "N/A";
 
@@ -77,7 +97,7 @@ export default function PlantaSection({ planta_id, planta_nombre, stats, porCate
       </div>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
         {CAT_ORDER.map((cat) => {
-          const cards = porCategoria[cat] || [];
+          const cards = (porCategoria[cat] || []).filter((c) => matchesSearch(c, searchTerm));
           if (cards.length === 0) return null;
           const totalCol = cards.reduce((s, c) => s + (Number(c.importe) || 0), 0);
           return (

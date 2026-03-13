@@ -6,9 +6,12 @@ interface Props {
   filters: DashboardFilters;
   onFiltersChange: (f: DashboardFilters) => void;
   plantas?: { id: number; nombre: string }[];
+  /** Texto libre para buscar folios (beneficiario, descripción, importe, etc.). */
+  searchTerm?: string;
+  onSearchTermChange?: (value: string) => void;
 }
 
-export default function FiltersBar({ filters, onFiltersChange, plantas = [] }: Props) {
+export default function FiltersBar({ filters, onFiltersChange, plantas = [], searchTerm = "", onSearchTermChange }: Props) {
   const toggle = (key: keyof DashboardFilters, value: string) => {
     const current = filters[key];
     onFiltersChange({ ...filters, [key]: current === value ? undefined : value });
@@ -70,6 +73,18 @@ export default function FiltersBar({ filters, onFiltersChange, plantas = [] }: P
         onChange={(e) => onFiltersChange({ ...filters, fecha_hasta: e.target.value || undefined })}
         className="rounded border border-slate-600 bg-slate-800 px-2 py-1 text-slate-200"
       />
+      {onSearchTermChange && (
+        <div className="ml-auto flex items-center gap-1">
+          <span className="text-slate-400 text-xs">Buscar folio:</span>
+          <input
+            type="search"
+            value={searchTerm}
+            onChange={(e) => onSearchTermChange(e.target.value)}
+            placeholder="Beneficiario, descripción, importe…"
+            className="w-64 rounded border border-slate-600 bg-slate-900 px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500"
+          />
+        </div>
+      )}
     </div>
   );
 }

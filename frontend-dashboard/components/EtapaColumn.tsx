@@ -6,6 +6,7 @@ import type { KanbanBoard } from "@/lib/api";
 interface Props {
   column: KanbanBoard["board"][0];
   selectedPlantaId?: number;
+  searchTerm?: string;
   onOpenFolio: (id: number) => void;
   role: string;
   onSubirPoliza?: (id: number) => void;
@@ -44,7 +45,7 @@ function EtapaIcon({ etapa, icon }: { etapa: string; icon?: string }) {
   return null;
 }
 
-export default function EtapaColumn({ column, selectedPlantaId, onOpenFolio, role, onSubirPoliza, onImprimirGastos, onCrearFolio, onCrearFolioUrgente, onCrearProyecto }: Props) {
+export default function EtapaColumn({ column, selectedPlantaId, searchTerm, onOpenFolio, role, onSubirPoliza, onImprimirGastos, onCrearFolio, onCrearFolioUrgente, onCrearProyecto }: Props) {
   const label = column.etapa_label ?? ETAPA_LABELS[column.etapa] ?? column.etapa;
   const fmtMxn = (n: number | null) =>
     n != null && !isNaN(n) ? `$${n.toLocaleString("es-MX", { maximumFractionDigits: 0 })}` : "—";
@@ -74,6 +75,7 @@ export default function EtapaColumn({ column, selectedPlantaId, onOpenFolio, rol
             planta_nombre={planta.planta_nombre}
             stats={planta.stats}
             porCategoria={planta.porCategoria}
+            searchTerm={searchTerm}
             onOpenFolio={onOpenFolio}
             role={role}
             onSubirPoliza={onSubirPoliza}

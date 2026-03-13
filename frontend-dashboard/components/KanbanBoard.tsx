@@ -6,6 +6,7 @@ import type { KanbanBoard as KanbanBoardType } from "@/lib/api";
 interface Props {
   data: KanbanBoardType | null;
   selectedPlantaId?: number;
+  searchTerm?: string;
   onOpenFolio: (id: number) => void;
   onSubirPoliza?: (id: number) => void;
   onImprimirGastos?: (id: number, numeroFolio: string, etapa?: string) => void;
@@ -14,7 +15,7 @@ interface Props {
   onCrearProyecto?: (plantaId: number, plantaNombre: string) => void;
 }
 
-export default function KanbanBoard({ data, selectedPlantaId, onOpenFolio, onSubirPoliza, onImprimirGastos, onCrearFolio, onCrearFolioUrgente, onCrearProyecto }: Props) {
+export default function KanbanBoard({ data, selectedPlantaId, searchTerm, onOpenFolio, onSubirPoliza, onImprimirGastos, onCrearFolio, onCrearFolioUrgente, onCrearProyecto }: Props) {
   if (!data) {
     return (
       <div className="flex items-center justify-center p-8 text-slate-400">Cargando tablero…</div>
@@ -31,6 +32,7 @@ export default function KanbanBoard({ data, selectedPlantaId, onOpenFolio, onSub
             key={col.etapa}
             column={col}
             selectedPlantaId={selectedPlantaId}
+            searchTerm={searchTerm}
             onOpenFolio={onOpenFolio}
             role={role}
             onSubirPoliza={onSubirPoliza}
