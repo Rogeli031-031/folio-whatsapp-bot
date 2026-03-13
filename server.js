@@ -7876,7 +7876,7 @@ app.get("/api/dashboard/dicf-excel", dashboardAuthMiddleware, async (req, res) =
   const client = await pool.connect();
   try {
     const plantCode = await getPlantCodeArrFromPlantaNombre(client, planta);
-    const data = await dicf.computeDicf(client, plantCode, planta, getMargenKgPorPeriodo);
+    const data = await dicf.computeDicfExcel(client, plantCode, planta, getMargenKgPorPeriodo);
     const excelData = data.excelData;
     if (!excelData || !excelData.dates || !excelData.clientes) {
       return res.status(400).json({ error: "Sin datos para Excel (ejecuta primero Delta Ingreso Cliente Forecast)" });
