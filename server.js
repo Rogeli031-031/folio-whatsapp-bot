@@ -7952,6 +7952,24 @@ app.get("/api/dashboard/dicf-excel", dashboardAuthMiddleware, async (req, res) =
     const ws3 = XLSX.utils.aoa_to_sheet(sheet3Rows);
     XLSX.utils.book_append_sheet(wb, ws3, "Margen ($ por kg)");
 
+    const ingresoHeaders = ["Cliente", "Estatus", ...meses.map((m) => `Ingreso ${m.label}`)];
+    const ingresoRows = [ingresoHeaders];
+    for (const c of clientes) {
+      const ventaPorMes = (c.ventaPorMes || []).slice(0, numMeses);
+      const descuentoPorMes = (c.descuentoPorMes || []).slice(0, numMeses);
+      const ingresoVals = [];
+      for (let i = 0; i < numMeses; i++) {
+        const v = ventaPorMes[i] != null && Number.isFinite(ventaPorMes[i]) ? ventaPorMes[i] : 0;
+        const d = descuentoPorMes[i] != null && Number.isFinite(descuentoPorMes[i]) ? descuentoPorMes[i] : 0;
+        const mg = margenPorMes[i] != null && Number.isFinite(margenPorMes[i]) ? margenPorMes[i] : 0;
+        const ingreso = v * 1000 * mg - Math.abs(Number(d));
+        ingresoVals.push(Number.isFinite(ingreso) ? Math.round(ingreso * 100) / 100 : "");
+      }
+      ingresoRows.push([c.cliente || "", c.estado || "", ...ingresoVals]);
+    }
+    const wsIngreso = XLSX.utils.aoa_to_sheet(ingresoRows);
+    XLSX.utils.book_append_sheet(wb, wsIngreso, "Ingreso por cliente");
+
     const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
     let filename = `Delta_Ingreso_Cliente_Forecast_${planta.replace(/\s+/g, "_")}_${data.periodoMes || "mes"}.xlsx`;
     if (canal !== "" && subcanal !== "" && tipo !== "") {
