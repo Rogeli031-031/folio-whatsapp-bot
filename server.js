@@ -7887,6 +7887,8 @@ app.get("/api/dashboard/dicf-excel", dashboardAuthMiddleware, async (req, res) =
     const meses = excelData.meses || [];
     const margenPorMes = excelData.margenPorMes || [];
 
+    const wb = XLSX.utils.book_new();
+
     const monthHeaders = [];
     for (const m of meses) {
       monthHeaders.push(`Venta ${m.label}`, `Descuento ${m.label}`, `Margen ${m.label}`);
