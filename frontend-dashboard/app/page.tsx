@@ -803,6 +803,32 @@ function KpiContent() {
                   <p className="text-xs text-slate-500 mt-1">Al guardar, vuelve a ejecutar &quot;Delta Ingreso Cliente Forecast&quot; para aplicar los cambios.</p>
                 </div>
               )}
+              {(() => {
+                const CANAL_ORDER = ["Casa", "Comisionista"];
+                const SUBCANAL_ORDER = ["Autotanque", "Carburación", "Portátil"];
+                const parseMxn = (s: string) => {
+                  if (!s || typeof s !== "string") return 0;
+                  const n = parseFloat(s.replace(/[$,]\s*/g, "").trim());
+                  return Number.isFinite(n) ? n : 0;
+                };
+                const byCategoria = (dicfData?.byCategoria ?? deltaForecastData?.byCategoria) ?? [];
+                const sorted = [...byCategoria].sort((a, b) => {
+                  const canalA = CANAL_ORDER.indexOf((a.canal || "").trim());
+                  const canalB = CANAL_ORDER.indexOf((b.canal || "").trim());
+                  const ic = (canalA === -1 ? 999 : canalA) - (canalB === -1 ? 999 : canalB);
+                  if (ic !== 0) return ic;
+                  const subA = SUBCANAL_ORDER.indexOf((a.subcanal || "").trim());
+                  const subB = SUBCANAL_ORDER.indexOf((b.subcanal || "").trim());
+                  const is = (subA === -1 ? 999 : subA) - (subB === -1 ? 999 : subB);
+                  if (is !== 0) return is;
+                  return (a.subcanal || "").localeCompare(b.subcanal || "");
+                });
+                const sumDejaron = sorted.reduce((s, c) => s + parseMxn(c.dejaron?.totalDeltaIngresoStr ?? ""), 0);
+                const sumDisminuyeron = sorted.reduce((s, c) => s + parseMxn(c.disminuyeron?.totalDeltaIngresoStr ?? ""), 0);
+                const sumAumentaron = sorted.reduce((s, c) => s + parseMxn(c.aumentaron?.totalDeltaIngresoStr ?? ""), 0);
+                const sumNuevos = sorted.reduce((s, c) => s + parseMxn(c.nuevos?.totalDeltaIngresoStr ?? ""), 0);
+                const fmtSum = (n: number) => n.toLocaleString("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 0, maximumFractionDigits: 0 });
+                return (
               <table className="w-full border-collapse text-sm">
                 <thead>
                   <tr className="border-b border-slate-600 bg-slate-800/80 text-xs">
@@ -813,9 +839,16 @@ function KpiContent() {
                     <th className="text-right py-2 px-2 font-semibold text-slate-300">Aumentaron</th>
                     <th className="text-right py-2 px-2 font-semibold text-slate-300">Nuevos</th>
                   </tr>
+                  <tr className="border-b border-slate-600 bg-slate-800/60 text-xs">
+                    <th className="text-left py-1 px-2 font-normal text-slate-500" colSpan={2}>Total impacto</th>
+                    <th className="text-right py-1 px-2 font-medium text-slate-300 tabular-nums">{fmtSum(sumDejaron)}</th>
+                    <th className="text-right py-1 px-2 font-medium text-red-400 tabular-nums">{fmtSum(sumDisminuyeron)}</th>
+                    <th className="text-right py-1 px-2 font-medium text-emerald-400 tabular-nums">{fmtSum(sumAumentaron)}</th>
+                    <th className="text-right py-1 px-2 font-medium text-slate-300 tabular-nums">{fmtSum(sumNuevos)}</th>
+                  </tr>
                 </thead>
                 <tbody>
-                  {(dicfData?.byCategoria ?? deltaForecastData?.byCategoria)?.map((c, i) => (
+                  {sorted.map((c, i) => (
                     <tr key={i} className="border-b border-slate-700/80">
                       <td className="py-2 px-2 text-slate-300">{c.canal}</td>
                       <td className="py-2 px-2 text-slate-300">{c.subcanal}</td>
@@ -923,6 +956,8 @@ function KpiContent() {
                   ))}
                 </tbody>
               </table>
+                );
+              })()}
               {(dicfData || (showDeltaCliente && deltaForecastData)) && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-4 text-xs">
                 <div>
