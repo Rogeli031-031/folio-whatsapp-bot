@@ -15,6 +15,7 @@ import {
   fetchDeltaIngresoPeriodos,
   postDeltaIngresoForecastDatos,
   getDeltaIngresoForecastExcelUrl,
+  getDicfExcelUrl,
   postDicfDatos,
   fetchDicfConfig,
   postDicfConfig,
@@ -688,6 +689,17 @@ function KpiContent() {
                 className="rounded bg-slate-600 px-4 py-2 text-sm font-medium text-white hover:bg-slate-500"
               >
                 Descargar Excel
+              </a>
+            )}
+            {dicfData && token && deltaForecastPlanta && (
+              <a
+                href={getDicfExcelUrl(token, deltaForecastPlanta)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-600"
+                title="Excel con 3 hojas: Venta (Ton), Descuento ($/kg), Margen ($/kg) — últimos 30 días por cliente"
+              >
+                Descargar Excel (Cliente Forecast)
               </a>
             )}
           </div>

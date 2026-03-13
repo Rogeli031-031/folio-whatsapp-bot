@@ -7869,6 +7869,62 @@ app.post("/api/dashboard/dicf-datos", dashboardAuthMiddleware, async (req, res) 
   }
 });
 
+/** Excel Delta Ingreso Cliente Forecast: 3 hojas (venta Ton, desc $/kg, margen) — clientes en A, estatus en B, últimos 30 días en columnas. */
+app.get("/api/dashboard/dicf-excel", dashboardAuthMiddleware, async (req, res) => {
+  const planta = (req.query.planta || "").toString().trim();
+  if (!planta) return res.status(400).json({ error: "Falta planta" });
+  const client = await pool.connect();
+  try {
+    const plantCode = await getPlantCodeArrFromPlantaNombre(client, planta);
+    const data = await dicf.computeDicf(client, plantCode, planta, getMargenKgPorPeriodo);
+    const excelData = data.excelData;
+    if (!excelData || !excelData.dates || !excelData.clientes) {
+      return res.status(400).json({ error: "Sin datos para Excel (ejecuta primero Delta Ingreso Cliente Forecast)" });
+    }
+    const dates = excelData.dates;
+    const margen = excelData.margen != null && Number.isFinite(excelData.margen) ? excelData.margen : 0;
+    const clientes = excelData.clientes;
+
+    const wb = XLSX.utils.book_new();
+    const headerRow = ["Cliente", "Estatus", ...dates];
+
+    const sheet1Rows = [headerRow];
+    for (const c of clientes) {
+      const tonValues = (c.kgLast30 || []).map((v) => (v != null && Number.isFinite(v) ? v : ""));
+      sheet1Rows.push([c.cliente || "", c.estado || "", ...tonValues]);
+    }
+    const ws1 = XLSX.utils.aoa_to_sheet(sheet1Rows);
+    XLSX.utils.book_append_sheet(wb, ws1, "Venta (Ton)");
+
+    const sheet2Rows = [headerRow];
+    for (const c of clientes) {
+      const descValues = (c.descKgLast30 || []).map((v) => (v != null && Number.isFinite(v) ? Number(v.toFixed(4)) : ""));
+      sheet2Rows.push([c.cliente || "", c.estado || "", ...descValues]);
+    }
+    const ws2 = XLSX.utils.aoa_to_sheet(sheet2Rows);
+    XLSX.utils.book_append_sheet(wb, ws2, "Descuento ($/kg)");
+
+    const sheet3Rows = [headerRow];
+    for (const c of clientes) {
+      const margenValues = dates.map(() => margen);
+      sheet3Rows.push([c.cliente || "", c.estado || "", ...margenValues]);
+    }
+    const ws3 = XLSX.utils.aoa_to_sheet(sheet3Rows);
+    XLSX.utils.book_append_sheet(wb, ws3, "Margen ($/kg)");
+
+    const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+    const filename = `Delta_Ingreso_Cliente_Forecast_${planta.replace(/\s+/g, "_")}_${data.periodoMes || "mes"}.xlsx`;
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(buf);
+  } catch (e) {
+    console.error("[Dashboard dicf-excel]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
 /** Obtener parámetros DICF editables para una planta y mes (year, month). */
 app.get("/api/dashboard/dicf-config", dashboardAuthMiddleware, async (req, res) => {
   const planta = (req.query.planta || "").toString().trim();
