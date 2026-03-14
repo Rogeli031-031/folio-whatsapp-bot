@@ -14,6 +14,26 @@ const ETAPA_LABELS: Record<string, string> = {
   CANCELADO: "Cancelado",
 };
 
+function IconCarrito({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <circle cx="9" cy="21" r="1" />
+      <circle cx="20" cy="21" r="1" />
+      <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
+    </svg>
+  );
+}
+
+function EtapaIcon({ etapa, icon }: { etapa: string; icon?: string }) {
+  if (etapa === "CARRO_COMPRA") {
+    return <IconCarrito className="h-5 w-5 text-slate-300" />;
+  }
+  if (icon) {
+    return <span className="text-lg leading-none" aria-hidden>{icon}</span>;
+  }
+  return null;
+}
+
 function matchesSearch(card: FolioCardType, term: string | undefined): boolean {
   const q = (term || "").trim().toLowerCase();
   if (!q) return true;
@@ -43,6 +63,8 @@ function isUrgente(card: FolioCardType): boolean {
 export interface StageData {
   etapa: string;
   etapa_label?: string;
+  etapa_icon?: string;
+  stats?: { count: number; total_mxn: number; avg_aging: number | null };
   porCategoria: Record<string, FolioCardType[]>;
 }
 
@@ -133,21 +155,35 @@ export default function PlantTable({
         </div>
       </div>
 
-      <div className="overflow-visible">
-        <table className="w-full border-collapse">
+      <div className="overflow-x-auto pb-2">
+        <table className="w-full min-w-0 border-collapse">
           <thead>
             <tr>
-              <th className="w-[140px] border border-slate-600 bg-slate-800/80 p-2 text-left text-[10px] font-medium uppercase tracking-wide text-slate-400 align-top">
+              <th className="w-[140px] flex-shrink-0 border border-slate-600 bg-slate-800/80 p-2 text-left text-[10px] font-medium uppercase tracking-wide text-slate-400 align-top">
                 Categoría
               </th>
-              {stagesData.map((s) => (
-                <th
-                  key={s.etapa}
-                  className="min-w-[240px] border border-slate-600 bg-slate-800/80 p-2 text-left text-[10px] font-medium uppercase tracking-wide text-slate-400 align-top"
-                >
-                  {s.etapa_label ?? ETAPA_LABELS[s.etapa] ?? s.etapa}
-                </th>
-              ))}
+              {stagesData.map((s) => {
+                const label = s.etapa_label ?? ETAPA_LABELS[s.etapa] ?? s.etapa;
+                const st = s.stats;
+                return (
+                  <th
+                    key={s.etapa}
+                    className="min-w-[220px] w-[220px] border border-slate-600 bg-slate-800/80 p-2 text-left align-top"
+                  >
+                    <div className="flex items-center gap-2 font-medium text-slate-200">
+                      <EtapaIcon etapa={s.etapa} icon={s.etapa_icon} />
+                      <span className="text-sm">{label}</span>
+                    </div>
+                    {st && (
+                      <div className="mt-1 flex gap-2 text-xs text-slate-400">
+                        <span>{st.count} folios</span>
+                        <span>{fmtMxn(st.total_mxn)}</span>
+                        {st.avg_aging != null && <span>{st.avg_aging}d prom</span>}
+                      </div>
+                    )}
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>
@@ -164,7 +200,7 @@ export default function PlantTable({
                   return (
                     <td
                       key={s.etapa}
-                      className="min-w-[240px] border border-slate-600 bg-slate-900/40 p-2 align-top"
+                      className="min-w-[220px] w-[220px] border border-slate-600 bg-slate-900/40 p-2 align-top"
                     >
                       <div className="mb-1 text-[10px] text-amber-400/90">{fmtMxn(total)}</div>
                       <div className="space-y-1.5">

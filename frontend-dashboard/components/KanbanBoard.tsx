@@ -39,6 +39,8 @@ export default function KanbanBoard({ data, selectedPlantaId, searchTerm, onOpen
       return {
         etapa: col.etapa,
         etapa_label: col.etapa_label,
+        etapa_icon: col.etapa_icon,
+        stats: p?.stats ? { count: p.stats.count, total_mxn: p.stats.total_mxn ?? 0, avg_aging: p.stats.avg_aging ?? null } : undefined,
         porCategoria: p?.porCategoria ?? EMPTY_POR_CAT,
       };
     }),
