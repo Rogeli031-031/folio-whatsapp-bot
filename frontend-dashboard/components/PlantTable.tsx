@@ -252,13 +252,17 @@ export default function PlantTable({
                             return (
                               <div
                                 key={subName}
-                                className="flex-shrink-0 w-[200px] rounded border border-slate-600 bg-slate-800/60 p-1.5"
+                                className={
+                                  masDeSeis
+                                    ? "flex-shrink-0 w-[630px] min-w-[630px] rounded border border-slate-600 bg-slate-800/60 p-1.5"
+                                    : "flex-shrink-0 w-[200px] rounded border border-slate-600 bg-slate-800/60 p-1.5"
+                                }
                               >
                                 <div className="mb-1 text-[10px] font-medium text-slate-400 truncate" title={subName}>
                                   {subName}
                                 </div>
                                 <div className="text-[10px] text-amber-400/80 mb-1">{fmtMxn(subTotal)}</div>
-                                <div className={masDeSeis ? "grid grid-cols-3 gap-1" : "space-y-1"}>
+                                <div className={masDeSeis ? "grid grid-cols-3 gap-2" : "space-y-1"}>
                                   {subCards.map((c) => (
                                     <FolioCard
                                       key={c.id}
