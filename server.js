@@ -5199,9 +5199,16 @@ app.get("/api/dashboard/kanban", dashboardAuthMiddleware, async (req, res) => {
         }).filter((a) => a >= 0);
         const pAvgAging = pAgings.length ? Math.round(pAgings.reduce((s, a) => s + a, 0) / pAgings.length) : null;
         const porCategoria = { GASTOS: [], INVERSIONES: [], DYO: [], TALLER: [] };
+        function categoriaToKey(categoria) {
+          const c = (categoria || "").toString().trim().toUpperCase() || "GASTOS";
+          if (CATEGORIAS_FOLIO.includes(c)) return c;
+          if (c.includes("TALLER")) return "TALLER";
+          if (c === "DYO" || c.includes("DERECHOS") || c.includes("OBLIGACIONES")) return "DYO";
+          if (c.includes("INVERSION")) return "INVERSIONES";
+          return "GASTOS";
+        }
         fols.forEach((f) => {
-          const cat = (f.categoria || "").toString().trim().toUpperCase() || "GASTOS";
-          const key = CATEGORIAS_FOLIO.includes(cat) ? cat : "GASTOS";
+          const key = categoriaToKey(f.categoria);
           porCategoria[key].push(cardFromFolioRow(f));
         });
         return {
