@@ -1,0 +1,192 @@
+"use client";
+
+import FolioCard from "./FolioCard";
+import type { FolioCard as FolioCardType } from "@/lib/api";
+
+const CAT_ORDER = ["GASTOS", "INVERSIONES", "DYO", "TALLER"];
+const ROW_ORDER = ["Urgentes", "Proyectos", ...CAT_ORDER] as const;
+
+const ETAPA_LABELS: Record<string, string> = {
+  PENDIENTE_APROB_PLANTA: "Pendiente aprobación planta",
+  APROB_DIRECTOR_ZP: "Aprobación Director ZP",
+  CARRO_COMPRA: "Carro de compra",
+  DEPOSITO_CIERRE: "Depósito y cierre",
+  CANCELADO: "Cancelado",
+};
+
+function matchesSearch(card: FolioCardType, term: string | undefined): boolean {
+  const q = (term || "").trim().toLowerCase();
+  if (!q) return true;
+  const importeStr =
+    card.importe != null && !isNaN(card.importe)
+      ? card.importe.toLocaleString("es-MX", { maximumFractionDigits: 0 })
+      : "";
+  const fields = [
+    card.numero_folio,
+    card.folio_codigo,
+    card.descripcion,
+    (card as any).beneficiario,
+    card.categoria,
+    card.subcategoria,
+    card.proyecto_codigo,
+    card.proyecto_nombre,
+    importeStr,
+  ];
+  return fields.some((f) => (f || "").toString().toLowerCase().includes(q));
+}
+
+function isUrgente(card: FolioCardType): boolean {
+  const p = (card.prioridad || "").toString().toLowerCase();
+  return p.includes("urgente") || p.includes("alta");
+}
+
+export interface StageData {
+  etapa: string;
+  etapa_label?: string;
+  porCategoria: Record<string, FolioCardType[]>;
+}
+
+interface Props {
+  planta_id: number;
+  planta_nombre: string;
+  stagesData: StageData[];
+  searchTerm?: string;
+  onOpenFolio: (id: number) => void;
+  role: string;
+  onSubirPoliza?: (id: number) => void;
+  onImprimirGastos?: (id: number, numeroFolio: string, etapa?: string) => void;
+  onCrearFolio?: (plantaId: number, plantaNombre: string) => void;
+  onCrearFolioUrgente?: (plantaId: number, plantaNombre: string) => void;
+  onCrearProyecto?: (plantaId: number, plantaNombre: string) => void;
+}
+
+export default function PlantTable({
+  planta_id,
+  planta_nombre,
+  stagesData,
+  searchTerm,
+  onOpenFolio,
+  role,
+  onSubirPoliza,
+  onImprimirGastos,
+  onCrearFolio,
+  onCrearFolioUrgente,
+  onCrearProyecto,
+}: Props) {
+  const fmtMxn = (n: number) =>
+    n != null && !isNaN(n) ? `$${n.toLocaleString("es-MX", { maximumFractionDigits: 0 })}` : "N/A";
+
+  const handleCrearFolio = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onCrearFolio) {
+      onCrearFolio(planta_id, planta_nombre);
+    } else {
+      const whatsappNumber = typeof process !== "undefined" ? (process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "").trim().replace(/\D/g, "") : "";
+      if (whatsappNumber) {
+        window.open(`https://wa.me/${whatsappNumber}?text=${encodeURIComponent("crear folio")}`, "_blank", "noopener,noreferrer");
+      } else {
+        navigator.clipboard.writeText("crear folio").then(() => alert("Comando copiado: crear folio. Pégalo en WhatsApp.")).catch(() => {});
+      }
+    }
+  };
+
+  const getCardsForRowAndStage = (rowKey: string, porCategoria: Record<string, FolioCardType[]>): FolioCardType[] => {
+    const all = CAT_ORDER.flatMap((cat) => porCategoria[cat] || []);
+    const filtered = all.filter((c) => matchesSearch(c, searchTerm));
+    if (rowKey === "Urgentes") return filtered.filter(isUrgente);
+    if (rowKey === "Proyectos") return filtered.filter((c) => c.proyecto_id != null);
+    return (porCategoria[rowKey] || []).filter((c) => matchesSearch(c, searchTerm));
+  };
+
+  return (
+    <div className="rounded border border-slate-700 bg-slate-800/40 p-3">
+      <div className="mb-3 flex items-center justify-between gap-2 border-b border-slate-600 pb-2">
+        <div className="flex flex-wrap items-center gap-2 min-w-0">
+          <span className="font-medium text-slate-200">{planta_nombre}</span>
+          {onCrearFolio && (
+            <button
+              type="button"
+              onClick={handleCrearFolio}
+              className="flex-shrink-0 rounded bg-emerald-700 px-2 py-1 text-[10px] font-medium text-white hover:bg-emerald-600"
+            >
+              Crear folio
+            </button>
+          )}
+          {onCrearFolioUrgente && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onCrearFolioUrgente(planta_id, planta_nombre); }}
+              className="flex-shrink-0 rounded bg-amber-600 px-2 py-1 text-[10px] font-medium text-white hover:bg-amber-500"
+            >
+              Crear folio urgente
+            </button>
+          )}
+          {onCrearProyecto && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onCrearProyecto(planta_id, planta_nombre); }}
+              className="flex-shrink-0 rounded bg-blue-600 px-2 py-1 text-[10px] font-medium text-white hover:bg-blue-500"
+            >
+              Crear proyecto
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="overflow-visible">
+        <table className="w-full border-collapse">
+          <thead>
+            <tr>
+              <th className="w-[140px] border border-slate-600 bg-slate-800/80 p-2 text-left text-[10px] font-medium uppercase tracking-wide text-slate-400 align-top">
+                Categoría
+              </th>
+              {stagesData.map((s) => (
+                <th
+                  key={s.etapa}
+                  className="min-w-[240px] border border-slate-600 bg-slate-800/80 p-2 text-left text-[10px] font-medium uppercase tracking-wide text-slate-400 align-top"
+                >
+                  {s.etapa_label ?? ETAPA_LABELS[s.etapa] ?? s.etapa}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {ROW_ORDER.map((rowKey) => (
+              <tr key={rowKey}>
+                <td className="w-[140px] border border-slate-600 bg-slate-800/60 p-2 align-top">
+                  <span className="text-xs font-medium text-slate-300" style={{ writingMode: "horizontal-tb" }}>
+                    {rowKey}
+                  </span>
+                </td>
+                {stagesData.map((s) => {
+                  const cards = getCardsForRowAndStage(rowKey, s.porCategoria);
+                  const total = cards.reduce((sum, c) => sum + (Number(c.importe) || 0), 0);
+                  return (
+                    <td
+                      key={s.etapa}
+                      className="min-w-[240px] border border-slate-600 bg-slate-900/40 p-2 align-top"
+                    >
+                      <div className="mb-1 text-[10px] text-amber-400/90">{fmtMxn(total)}</div>
+                      <div className="space-y-1.5">
+                        {cards.map((c) => (
+                          <FolioCard
+                            key={c.id}
+                            card={c}
+                            onOpen={onOpenFolio}
+                            role={role}
+                            onSubirPoliza={onSubirPoliza}
+                            onImprimirGastos={onImprimirGastos ? (id, num) => onImprimirGastos(id, num, s.etapa) : undefined}
+                          />
+                        ))}
+                      </div>
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}

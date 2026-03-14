@@ -1,6 +1,6 @@
 "use client";
 
-import EtapaColumn from "./EtapaColumn";
+import PlantTable, { type StageData } from "./PlantTable";
 import type { KanbanBoard as KanbanBoardType } from "@/lib/api";
 
 interface Props {
@@ -15,6 +15,8 @@ interface Props {
   onCrearProyecto?: (plantaId: number, plantaNombre: string) => void;
 }
 
+const EMPTY_POR_CAT = { GASTOS: [], INVERSIONES: [], DYO: [], TALLER: [] };
+
 export default function KanbanBoard({ data, selectedPlantaId, searchTerm, onOpenFolio, onSubirPoliza, onImprimirGastos, onCrearFolio, onCrearFolioUrgente, onCrearProyecto }: Props) {
   if (!data) {
     return (
@@ -24,14 +26,33 @@ export default function KanbanBoard({ data, selectedPlantaId, searchTerm, onOpen
 
   const role = data.meta?.role || "GG";
 
+  const plants = data.board[0]?.plantas ?? [];
+  const plantsFiltered = selectedPlantaId
+    ? plants.filter((p) => p.planta_id === selectedPlantaId)
+    : plants;
+
+  const stagesDataByPlant = plantsFiltered.map((plant) => ({
+    planta_id: plant.planta_id,
+    planta_nombre: plant.planta_nombre,
+    stagesData: data.board.map((col): StageData => {
+      const p = col.plantas.find((x) => x.planta_id === plant.planta_id);
+      return {
+        etapa: col.etapa,
+        etapa_label: col.etapa_label,
+        porCategoria: p?.porCategoria ?? EMPTY_POR_CAT,
+      };
+    }),
+  }));
+
   return (
-    <div className="overflow-x-auto pb-4">
-      <div className="flex gap-4 p-4">
-        {data.board.map((col) => (
-          <EtapaColumn
-            key={col.etapa}
-            column={col}
-            selectedPlantaId={selectedPlantaId}
+    <div className="overflow-visible pb-4">
+      <div className="space-y-4 p-4">
+        {stagesDataByPlant.map(({ planta_id, planta_nombre, stagesData }) => (
+          <PlantTable
+            key={planta_id}
+            planta_id={planta_id}
+            planta_nombre={planta_nombre}
+            stagesData={stagesData}
             searchTerm={searchTerm}
             onOpenFolio={onOpenFolio}
             role={role}
