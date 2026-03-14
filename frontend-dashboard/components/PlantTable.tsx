@@ -137,6 +137,19 @@ export default function PlantTable({
     return out;
   };
 
+  /** Agrupa tarjetas por proyecto (para la fila Proyectos). Clave: id_codigo para ordenar. */
+  const groupByProyecto = (cards: FolioCardType[]): Record<string, FolioCardType[]> => {
+    const out: Record<string, FolioCardType[]> = {};
+    for (const c of cards) {
+      const id = c.proyecto_id ?? 0;
+      const cod = (c.proyecto_codigo || "").trim() || "—";
+      const key = `${id}_${cod}`;
+      if (!out[key]) out[key] = [];
+      out[key].push(c);
+    }
+    return out;
+  };
+
   return (
     <div className="rounded border border-slate-700 bg-slate-800/40 p-3">
       <div className="sticky top-0 z-20 -mx-3 -mt-3 mb-3 flex items-center justify-between gap-2 border-b border-slate-600 bg-slate-900 px-3 py-2 shadow-md">
@@ -214,8 +227,9 @@ export default function PlantTable({
                 {stagesData.map((s) => {
                   const cards = getCardsForRowAndStage(rowKey, s.porCategoria);
                   const total = cards.reduce((sum, c) => sum + (Number(c.importe) || 0), 0);
-                  const bySub = groupBySubcategoria(cards);
-                  const subKeys = Object.keys(bySub).sort((a, b) => (a === "—" ? 1 : b === "—" ? -1 : a.localeCompare(b)));
+                  const isProyectos = rowKey === "Proyectos";
+                  const bySub = isProyectos ? groupByProyecto(cards) : groupBySubcategoria(cards);
+                  const subKeys = Object.keys(bySub).sort((a, b) => (a === "—" || a.startsWith("0_") ? 1 : b === "—" || b.startsWith("0_") ? -1 : a.localeCompare(b)));
                   return (
                     <td
                       key={s.etapa}
@@ -226,21 +240,33 @@ export default function PlantTable({
                         {subKeys.length === 0 ? (
                           <span className="text-xs text-slate-500">—</span>
                         ) : (
-                          subKeys.map((subName) => {
-                            const subCards = bySub[subName] || [];
+                          subKeys.map((subKey) => {
+                            const subCards = bySub[subKey] || [];
                             const subTotal = subCards.reduce((sum, c) => sum + (Number(c.importe) || 0), 0);
                             const masDeSeis = subCards.length > 6;
+                            const first = subCards[0];
+                            const blockTitle = isProyectos
+                              ? (first?.proyecto_codigo || first?.proyecto_nombre || "—")
+                              : subKey;
+                            const blockDesc = isProyectos ? (first?.proyecto_nombre || "") : "";
                             return (
                               <div
-                                key={subName}
+                                key={subKey}
                                 className={
                                   masDeSeis
                                     ? "flex-shrink-0 w-[630px] min-w-[630px] rounded border border-slate-600 bg-slate-800/60 p-1.5"
                                     : "flex-shrink-0 w-[200px] rounded border border-slate-600 bg-slate-800/60 p-1.5"
                                 }
                               >
-                                <div className="mb-1 text-[10px] font-medium text-slate-400 truncate" title={subName}>
-                                  {subName}
+                                <div className="mb-1 text-[10px] font-medium text-slate-400 truncate" title={isProyectos ? `${first?.proyecto_codigo ?? ""} ${first?.proyecto_nombre ?? ""}`.trim() || undefined : subKey}>
+                                  {isProyectos ? (
+                                    <>
+                                      <span className="block truncate">{first?.proyecto_codigo || "—"}</span>
+                                      {blockDesc ? <span className="block truncate text-slate-500 font-normal">{blockDesc}</span> : null}
+                                    </>
+                                  ) : (
+                                    blockTitle
+                                  )}
                                 </div>
                                 <div className="text-[10px] text-amber-400/80 mb-1">{fmtMxn(subTotal)}</div>
                                 <div className={masDeSeis ? "grid grid-cols-3 gap-2" : "space-y-1"}>
