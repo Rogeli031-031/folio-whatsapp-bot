@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { fetchProyectosPorPlanta, patchFolioEditar } from "@/lib/api";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { fetchProyectosPorPlanta, patchFolioEditar, postFolioFactura } from "@/lib/api";
 
 type FolioLike = Record<string, unknown>;
 
@@ -55,6 +55,8 @@ export default function EditarFolioModal({ open, token, folioId, folio, onClose,
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [proyectos, setProyectos] = useState<{ id: number; codigo: string; nombre: string }[]>([]);
+  const [uploadingFactura, setUploadingFactura] = useState(false);
+  const facturaInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -96,13 +98,53 @@ export default function EditarFolioModal({ open, token, folioId, folio, onClose,
         <div className="w-full max-w-2xl rounded-lg border border-slate-700 bg-slate-900 shadow-xl">
           <div className="flex items-center justify-between border-b border-slate-700 bg-slate-800 px-4 py-3">
             <h3 className="text-sm font-semibold text-white">Editar folio</h3>
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded p-2 text-slate-400 hover:bg-slate-700 hover:text-white"
-            >
-              ✕
-            </button>
+            <div className="flex items-center gap-1">
+              <input
+                ref={facturaInputRef}
+                type="file"
+                accept=".pdf,application/pdf"
+                className="hidden"
+                onChange={async (e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = "";
+                  if (!f || !f.type.includes("pdf")) return;
+                  setUploadingFactura(true);
+                  setError(null);
+                  try {
+                    const reader = new FileReader();
+                    const base64 = await new Promise<string>((res, rej) => {
+                      reader.onload = () => {
+                        const data = reader.result as string;
+                        res(data.indexOf(",") >= 0 ? data.split(",")[1] : data);
+                      };
+                      reader.onerror = rej;
+                      reader.readAsDataURL(f);
+                    });
+                    await postFolioFactura(token, folioId, { fileBase64: base64, fileName: f.name || "factura.pdf" });
+                    onSaved();
+                  } catch (err) {
+                    setError((err as Error).message || "Error al subir la factura");
+                  } finally {
+                    setUploadingFactura(false);
+                  }
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => facturaInputRef.current?.click()}
+                disabled={uploadingFactura}
+                className="rounded bg-amber-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-amber-500 disabled:opacity-50"
+              >
+                {uploadingFactura ? "Subiendo…" : "Adjuntar Factura"}
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded p-2 text-slate-400 hover:bg-slate-700 hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
           </div>
 
           <div className="max-h-[75vh] overflow-y-auto p-4">

@@ -2849,6 +2849,7 @@ async function getFolioByNumero(client, numero) {
     `SELECT f.id, f.numero_folio, f.folio_codigo, f.planta_id, f.beneficiario, f.concepto, f.importe,
             f.categoria, f.subcategoria, f.estacion, f.unidad, f.prioridad, f.estatus, f.cotizacion_url, f.cotizacion_s3key,
             f.aprobado_por, f.aprobado_en, f.creado_en, f.nivel_aprobado, f.estatus_anterior, f.override_planta, f.override_motivo, f.creado_por, f.creado_por_rol_clave,
+            COALESCE(f.solo_zp_ad, false) AS solo_zp_ad,
             COALESCE(f.descripcion, f.concepto) AS descripcion,
             p.nombre AS planta_nombre
      FROM public.folios f
@@ -3331,12 +3332,13 @@ async function insertFolio(client, dd) {
   const esAD = rolClave === "AD" || (/asistente/i.test(rolNombre) && /direccion/i.test(rolNombre.replace(/ó/g, "o")));
   const estatusInicial = esZP ? ESTADOS.LISTO_PARA_PROGRAMACION : (esAD ? ESTADOS.PENDIENTE_APROB_ZP : ESTADOS.PENDIENTE_APROB_PLANTA);
 
+  const soloZpAd = dd.solo_zp_ad === true || dd.solo_zp_ad === "true";
   const ins = await client.query(
     `INSERT INTO public.folios (
       folio_codigo, numero_folio, planta_id, proyecto_id, beneficiario, concepto, importe,
       categoria, subcategoria, estacion, unidad, prioridad, estatus, creado_en, nivel_aprobado, creado_por, creado_por_rol_clave,
-      banco, cuenta_bancaria
-    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW(),$14,$15,$16,$17,$18)
+      banco, cuenta_bancaria, solo_zp_ad
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW(),$14,$15,$16,$17,$18,$19)
     RETURNING id, numero_folio, folio_codigo, planta_id`,
     [
       folio_codigo, numero_folio, plantaId, dd.proyecto_id || null, dd.beneficiario || null, dd.concepto || null,
@@ -3344,6 +3346,7 @@ async function insertFolio(client, dd) {
       dd.estacion || null, dd.unidad || null, prioridad, estatusInicial, esZP ? 3 : 1, dd.actor_telefono || null,
       rolClave || null,
       dd.banco || null, dd.cuenta_bancaria || null,
+      soloZpAd,
     ]
   );
   const row = ins.rows[0];
@@ -3383,11 +3386,13 @@ async function insertFolio(client, dd) {
     } catch (e) {
       console.warn("Historial ZP no insertado:", e.message);
     }
-    try {
-      const folioConPlanta = { ...row, planta_id: row.planta_id, concepto: dd.concepto, importe: dd.importe, prioridad };
-      await notifyOnApprove(folioConPlanta, dd.actor_telefono || "");
-    } catch (e) {
-      console.warn("Notificaciones no enviadas (ZP creó):", e.message);
+    if (!soloZpAd) {
+      try {
+        const folioConPlanta = { ...row, planta_id: row.planta_id, concepto: dd.concepto, importe: dd.importe, prioridad };
+        await notifyOnApprove(folioConPlanta, dd.actor_telefono || "");
+      } catch (e) {
+        console.warn("Notificaciones no enviadas (ZP creó):", e.message);
+      }
     }
   } else {
     try {
@@ -3531,13 +3536,13 @@ async function listFolioArchivos(client, numeroFolio, limit = 10) {
   return r.rows || [];
 }
 
-/** Lista archivos del folio por folio_id (para API dashboard: COTIZACION, POLIZA, etc.). Orden: Cotización primero, luego Póliza, para mostrar ambas ligas por separado. */
+/** Lista archivos del folio por folio_id (para API dashboard: COTIZACION, POLIZA, FACTURA, etc.). Orden: Cotización, Póliza, Factura. */
 async function listFolioArchivosByFolioId(client, folioId, limit = 20) {
   const r = await client.query(
     `SELECT fa.id, fa.tipo, fa.status, fa.file_name, fa.s3_key, fa.file_size_bytes, fa.subido_por, fa.subido_en
      FROM public.folio_archivos fa
      WHERE fa.folio_id = $1
-     ORDER BY (CASE WHEN fa.tipo = 'COTIZACION' THEN 0 WHEN fa.tipo = 'POLIZA' THEN 1 ELSE 2 END), fa.subido_en DESC
+     ORDER BY (CASE WHEN fa.tipo = 'COTIZACION' THEN 0 WHEN fa.tipo = 'POLIZA' THEN 1 WHEN fa.tipo = 'FACTURA' THEN 2 ELSE 3 END), fa.subido_en DESC
      LIMIT $2`,
     [folioId, limit]
   );
@@ -4222,12 +4227,14 @@ async function notifyDirectorZPNewFolio(folioRow, creadorRol) {
   }
 }
 
-/** Notificar a GA, GG y CDMX cuando un folio es cancelado por Director ZP. */
+/** Notificar a GA, GG y CDMX cuando un folio es cancelado por Director ZP. Para folios solo_zp_ad solo notifica a ZP. */
 async function notifyOnCancel(folio, canceladoPor, motivo) {
-  if (!folio.planta_id) return;
   const client = await pool.connect();
   try {
-    const phones = await getUsersToNotifyOnApprove(client, folio.planta_id);
+    const phones = folio.solo_zp_ad
+      ? await getDirectoresZP(client)
+      : (folio.planta_id ? await getUsersToNotifyOnApprove(client, folio.planta_id) : []);
+    if (phones.length === 0) return;
     let msg = `📋 Folio ${folio.numero_folio} fue cancelado por ${canceladoPor}.\n`;
     msg += `Motivo: ${motivo || "Sin motivo indicado"}\n`;
     msg += `Concepto del folio: ${folio.concepto || "-"}`;
@@ -4291,7 +4298,7 @@ async function logNotification(client, data) {
   );
 }
 
-/** Envía notificación por WhatsApp solo a miembros de la planta del folio. evento: CREADO|APROBADO|CANCELADO|ADJUNTO. extra: { roles?, excludePhone?, motivo?, concepto?, importe?, prioridad? }. Retorna { sent, failed, failures }. */
+/** Envía notificación por WhatsApp solo a miembros de la planta del folio. evento: CREADO|APROBADO|CANCELADO|ADJUNTO. extra: { roles?, excludePhone?, motivo?, concepto?, importe?, prioridad? }. Retorna { sent, failed, failures }. Para folios solo_zp_ad solo notifica a ZP. */
 async function notifyPlantByFolio(poolInstance, folioCodigo, evento, extra = {}) {
   const client = await poolInstance.connect();
   let sent = 0;
@@ -4300,6 +4307,31 @@ async function notifyPlantByFolio(poolInstance, folioCodigo, evento, extra = {})
   try {
     const folio = await getFolioByNumero(client, folioCodigo);
     if (!folio) return { sent: 0, failed: 0, failures: [] };
+    if (folio.solo_zp_ad) {
+      const zpPhones = await getDirectoresZP(client);
+      const message = buildPlantNotificationMessage(evento, folio, { ...extra, folioCodigo });
+      const excludeNorm = extra.excludePhone ? normalizePhone(extra.excludePhone) : null;
+      for (const toPhone of zpPhones) {
+        if (!toPhone) continue;
+        if (excludeNorm && normalizePhone(toPhone) === excludeNorm) continue;
+        const result = await sendWhatsApp(toPhone, message);
+        try {
+          await logNotification(client, {
+            folio_codigo: folio.numero_folio || folioCodigo,
+            planta_id: folio.planta_id,
+            evento,
+            to_phone: toPhone,
+            status: result.ok ? "SENT" : "FAILED",
+            error_message: result.error || null,
+          });
+        } catch (e) {
+          console.warn("logNotification error:", e.message);
+        }
+        if (result.ok) sent++;
+        else { failed++; failures.push({ to: toPhone, error: result.error || "unknown" }); }
+      }
+      return { sent, failed, failures };
+    }
     if (folio.planta_id == null) return { sent: 0, failed: 0, failures: [] };
 
     const message = buildPlantNotificationMessage(evento, folio, { ...extra, folioCodigo });
@@ -4745,16 +4777,26 @@ async function sendWhatsApp(toPhone, body, meta = {}) {
 }
 
 async function notifyOnApprove(folio, aprobadoPor) {
-  console.log(`[notifyOnApprove] ENTRADA folio=${folio && folio.numero_folio} planta_id=${folio && folio.planta_id}`);
-  if (!folio || !folio.planta_id) {
-    console.warn("[notifyOnApprove] Sin planta_id en folio, no se notifica.");
+  console.log(`[notifyOnApprove] ENTRADA folio=${folio && folio.numero_folio} planta_id=${folio && folio.planta_id} solo_zp_ad=${!!(folio && folio.solo_zp_ad)}`);
+  if (!folio) {
+    console.warn("[notifyOnApprove] Sin folio, no se notifica.");
     return;
   }
   const client = await pool.connect();
   try {
-    const phones = await getUsersToNotifyOnApprove(client, folio.planta_id);
+    let phones;
+    if (folio.solo_zp_ad) {
+      phones = await getDirectoresZP(client);
+      if (phones.length === 0) return;
+    } else {
+      if (!folio.planta_id) {
+        console.warn("[notifyOnApprove] Sin planta_id en folio, no se notifica.");
+        return;
+      }
+      phones = await getUsersToNotifyOnApprove(client, folio.planta_id);
+    }
     const toNotify = phones.filter((p) => p && !samePhone(p, aprobadoPor));
-    console.log(`[notifyOnApprove] Folio ${folio.numero_folio} planta_id=${folio.planta_id} → ${phones.length} teléfonos, ${toNotify.length} a notificar (excl. aprobador por últimos 10 dígitos).`);
+    console.log(`[notifyOnApprove] Folio ${folio.numero_folio} solo_zp_ad=${!!folio.solo_zp_ad} → ${phones.length} teléfonos, ${toNotify.length} a notificar.`);
     if (toNotify.length === 0) return;
 
     const urgPrefix = (folio.prioridad === "Urgente no programado") ? "🔴💡 URGENTE | " : "";
@@ -4780,8 +4822,9 @@ async function notifyOnApprove(folio, aprobadoPor) {
   }
 }
 
-/** Notifica a todos los CDMX que hay una cotización PENDIENTE de aprobación. prioridad con "urgente" o "alta" → encabezado urgente. */
+/** Notifica a todos los CDMX que hay una cotización PENDIENTE de aprobación. prioridad con "urgente" o "alta" → encabezado urgente. No notifica a CDMX si el folio es solo_zp_ad (privado). */
 async function notifyCDMXPendienteCotizacion(client, folio, archivoId, subidoPor, esReemplazo = false) {
+  if (folio.solo_zp_ad) return;
   const cdmxList = await getUsersByRole(client, "CDMX");
   if (!cdmxList || cdmxList.length === 0) {
     console.warn("[CDMX NOTIFY] No hay usuarios CDMX para notificar.");
@@ -5270,6 +5313,7 @@ app.post("/api/folios", dashboardAuthMiddleware, async (req, res) => {
   const estacion = (body.estacion != null && body.estacion !== "") ? String(body.estacion).trim() : null;
   const banco = (body.banco != null && body.banco !== "") ? String(body.banco).trim() : null;
   const cuenta_bancaria = (body.cuenta_bancaria != null && body.cuenta_bancaria !== "") ? String(body.cuenta_bancaria).trim() : null;
+  const solo_zp_ad = body.solo_zp_ad === true || body.solo_zp_ad === "true";
   if (!concepto || concepto.length < 2) return res.status(400).json({ error: "concepto es obligatorio (mín. 2 caracteres)" });
   if (importe == null || !Number.isFinite(importe) || importe < 0) return res.status(400).json({ error: "importe debe ser un número mayor o igual a 0" });
   const client = await pool.connect();
@@ -5291,6 +5335,7 @@ app.post("/api/folios", dashboardAuthMiddleware, async (req, res) => {
       estacion: estacion || null,
       banco: banco || null,
       cuenta_bancaria: cuenta_bancaria || null,
+      solo_zp_ad: solo_zp_ad || undefined,
       urgente: prioridad === "Urgente no programado",
       actor_telefono: req.dashboardAuth.actor_id != null ? `Dashboard:${req.dashboardAuth.actor_id}` : "Dashboard",
       actor_rol: role,
@@ -7333,6 +7378,57 @@ app.post("/api/folios/:id/cotizacion", dashboardAuthMiddleware, async (req, res)
   } catch (e) {
     console.error("[Dashboard folio cotizacion]", e);
     res.status(500).json({ error: e.message || "Error al guardar la cotización" });
+  } finally {
+    client.release();
+  }
+});
+
+/** Subir factura PDF desde el dashboard (mismo procedimiento que cotización/póliza). Cualquier rol con acceso al folio puede subir. */
+app.post("/api/folios/:id/factura", dashboardAuthMiddleware, async (req, res) => {
+  const folioId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
+  let fileBuffer = null;
+  if (typeof req.body.fileBase64 === "string") {
+    try { fileBuffer = Buffer.from(req.body.fileBase64, "base64"); } catch (e) { return res.status(400).json({ error: "fileBase64 inválido" }); }
+  }
+  if (!fileBuffer || fileBuffer.length === 0) return res.status(400).json({ error: "Envía fileBase64 (PDF)" });
+  const client = await pool.connect();
+  try {
+    const folio = await getFolioById(client, folioId);
+    if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
+    if ((req.dashboardAuth.role === "GG" || req.dashboardAuth.role === "GA") && req.dashboardAuth.plantas_permitidas?.length > 0) {
+      if (!folio.planta_id || !req.dashboardAuth.plantas_permitidas.includes(folio.planta_id)) {
+        return res.status(403).json({ error: "Sin permiso para este folio" });
+      }
+    }
+    if (!s3Enabled) return res.status(503).json({ error: "Almacenamiento no configurado" });
+    const s3Key = `facturas/${folio.numero_folio}/${Date.now()}.pdf`;
+    const publicUrl = await uploadPdfToS3(fileBuffer, s3Key);
+    const fileName = (req.body.fileName && String(req.body.fileName).trim()) || "factura.pdf";
+    const hash = crypto.createHash("sha256").update(fileBuffer).digest("hex");
+    const existing = await findFolioArchivoByHash(client, folioId, hash, "FACTURA");
+    if (existing && existing.id) {
+      return res.json({ ok: true, duplicate: true });
+    }
+    const row = await insertFolioArchivo(client, {
+      folio_id: folioId,
+      numero_folio: folio.numero_folio,
+      tipo: "FACTURA",
+      s3_key: s3Key,
+      url: publicUrl,
+      file_name: fileName,
+      file_size_bytes: fileBuffer.length,
+      sha256: hash,
+      subido_por: req.dashboardAuth.actor_id != null ? `Dashboard:${req.dashboardAuth.actor_id}` : "Dashboard",
+    });
+    await client.query(
+      `UPDATE public.folio_archivos SET status = 'APROBADO', aprobado_por = $1, aprobado_en = NOW() WHERE id = $2`,
+      [req.dashboardAuth.actor_id != null ? `Dashboard:${req.dashboardAuth.actor_id}` : "Dashboard", row.id]
+    );
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error("[Dashboard folio factura]", e);
+    res.status(500).json({ error: e.message || "Error al guardar la factura" });
   } finally {
     client.release();
   }

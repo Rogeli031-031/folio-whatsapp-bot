@@ -49,6 +49,7 @@ export default function CrearFolioModal({ open, onClose, plantaId, plantaNombre,
   const [selectedPlantaId, setSelectedPlantaId] = useState(plantaId);
   const [proyectoId, setProyectoId] = useState<number | null>(null);
   const [proyectos, setProyectos] = useState<{ id: number; codigo: string; nombre: string }[]>([]);
+  const [soloZpAd, setSoloZpAd] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -101,6 +102,7 @@ export default function CrearFolioModal({ open, onClose, plantaId, plantaNombre,
         estacion: estacion.trim() || undefined,
         banco: banco.trim() || undefined,
         cuenta_bancaria: cuenta_bancaria.trim() || undefined,
+        solo_zp_ad: soloZpAd || undefined,
       };
       await postCrearFolio(token, payload);
       onCreated();
@@ -113,6 +115,7 @@ export default function CrearFolioModal({ open, onClose, plantaId, plantaNombre,
       setEstacion("");
       setBanco("");
       setCuentaBancaria("");
+      setSoloZpAd(false);
     } catch (err) {
       setError((err as Error).message || "Error al guardar el folio.");
     } finally {
@@ -289,6 +292,18 @@ export default function CrearFolioModal({ open, onClose, plantaId, plantaNombre,
                 placeholder="CLABE o número de cuenta"
               />
             </div>
+          </div>
+          <div className="pt-2">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={soloZpAd}
+                onChange={(e) => setSoloZpAd(e.target.checked)}
+                className="rounded border-slate-600 bg-slate-800 text-amber-500 focus:ring-amber-500"
+              />
+              <span className="text-sm text-slate-300">Solo ZP y AD (hacer privado)</span>
+            </label>
+            <p className="mt-0.5 text-xs text-slate-500">El folio solo lo verán Director ZP y Asistente de Dirección. No se enviarán notificaciones por WhatsApp excepto a ZP.</p>
           </div>
           <div className="flex gap-2 pt-2">
             <button type="button" onClick={onClose} className="rounded border border-slate-600 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-700">

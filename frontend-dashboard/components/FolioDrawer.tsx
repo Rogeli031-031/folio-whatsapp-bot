@@ -15,6 +15,7 @@ import {
   patchFolioPrioridad,
   postSolicitarPorRecuperar,
   postFolioCotizacion,
+  postFolioFactura,
   fetchIgfEmpresas,
   patchFolioPrestamoAPlanta,
 } from "@/lib/api";
@@ -61,6 +62,9 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
   const [cotizacionFile, setCotizacionFile] = useState<File | null>(null);
   const [uploadingCotizacion, setUploadingCotizacion] = useState(false);
   const [cotizacionError, setCotizacionError] = useState<string | null>(null);
+  const [facturaFile, setFacturaFile] = useState<File | null>(null);
+  const [uploadingFactura, setUploadingFactura] = useState(false);
+  const [facturaError, setFacturaError] = useState<string | null>(null);
   const [prestamoOpen, setPrestamoOpen] = useState(false);
   const [igfEmpresas, setIgfEmpresas] = useState<string[]>([]);
   const [prestamoSelect, setPrestamoSelect] = useState<string>("");
@@ -257,6 +261,50 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
         setCotizacionError((err as Error).message || "Error al subir la cotización");
       } finally {
         setUploadingCotizacion(false);
+      }
+    };
+    reader.readAsDataURL(f);
+  };
+
+  const onFacturaFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    setFacturaError(null);
+    setFacturaFile(null);
+    if (!f) return;
+    if (!f.type.includes("pdf")) {
+      setFacturaError("Solo se acepta PDF.");
+      return;
+    }
+    setFacturaFile(f);
+    setUploadingFactura(true);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const data = reader.result as string;
+      const base64 = data.indexOf(",") >= 0 ? data.split(",")[1] : data;
+      if (!token || !folioId || !base64) {
+        setUploadingFactura(false);
+        return;
+      }
+      setFacturaError(null);
+      try {
+        await postFolioFactura(token, folioId, {
+          fileBase64: base64,
+          fileName: f.name || "factura.pdf",
+        });
+        setFacturaFile(null);
+        const [fol, t, m] = await Promise.all([
+          fetchFolio(token, folioId),
+          fetchTimeline(token, folioId),
+          fetchMedia(token, folioId),
+        ]);
+        setFolio(fol as Record<string, unknown>);
+        setTimeline((t as { events: typeof timeline }).events || []);
+        setMedia((m as { items: typeof media }).items || []);
+        onApproved?.();
+      } catch (err) {
+        setFacturaError((err as Error).message || "Error al subir la factura");
+      } finally {
+        setUploadingFactura(false);
       }
     };
     reader.readAsDataURL(f);
@@ -519,7 +567,7 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
                     </>
                   );
                 })()}
-                {media.length === 0 ? null : (
+                      {media.length === 0 ? null : (
                   <ul className="space-y-1">
                     {(() => {
                       const byTipo = {} as Record<string, { id: number; tipo: string; file_name: string | null }>;
@@ -527,10 +575,12 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
                         const t = (m.tipo || "").toUpperCase();
                         if (t === "COTIZACION" && !byTipo.COTIZACION) byTipo.COTIZACION = m;
                         if (t === "POLIZA" && !byTipo.POLIZA) byTipo.POLIZA = m;
+                        if (t === "FACTURA" && !byTipo.FACTURA) byTipo.FACTURA = m;
                       });
                       const items = [
                         byTipo.COTIZACION ? { label: "Cotización", ...byTipo.COTIZACION } : null,
                         byTipo.POLIZA ? { label: "Póliza", ...byTipo.POLIZA } : null,
+                        byTipo.FACTURA ? { label: "Factura", ...byTipo.FACTURA } : null,
                       ].filter(Boolean) as { label: string; id: number; file_name: string | null }[];
                       if (items.length === 0) {
                         return media.map((m) => (
@@ -551,6 +601,18 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
                     })()}
                   </ul>
                 )}
+                <div className="mt-3">
+                  <p className="text-xs text-slate-500 mb-1">Adjuntar factura (PDF).</p>
+                  <input
+                    type="file"
+                    accept=".pdf,application/pdf"
+                    onChange={onFacturaFileChange}
+                    disabled={uploadingFactura}
+                    className="mt-1 w-full rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200 file:mr-2 file:rounded file:border-0 file:bg-amber-600 file:px-2 file:py-1 file:text-white file:hover:bg-amber-500 disabled:opacity-50"
+                  />
+                  {facturaFile && <span className="mt-1 block text-xs text-slate-500">{uploadingFactura ? "Subiendo…" : facturaFile.name}</span>}
+                  {facturaError && <p className="mt-1 text-xs text-red-400">{facturaError}</p>}
+                </div>
               </section>
               <section>
                 <h3 className="mb-2 text-sm font-medium text-slate-400">Finanzas</h3>

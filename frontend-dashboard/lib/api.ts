@@ -189,6 +189,8 @@ export interface CrearFolioPayload {
   estacion?: string;
   banco?: string;
   cuenta_bancaria?: string;
+  /** Si true, el folio solo es visible para Director ZP y Asistente de Dirección; no se envían notificaciones Twilio excepto a ZP. */
+  solo_zp_ad?: boolean;
 }
 
 export function fetchProyectosPorPlanta(token: string, plantaId: number): Promise<{ proyectos: { id: number; codigo: string; nombre: string }[] }> {
@@ -643,6 +645,18 @@ export function postFolioCotizacion(
   body: { fileBase64: string; fileName?: string }
 ): Promise<{ ok: boolean }> {
   return apiFetch(`/api/folios/${folioId}/cotizacion`, {
+    token,
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function postFolioFactura(
+  token: string,
+  folioId: number,
+  body: { fileBase64: string; fileName?: string }
+): Promise<{ ok: boolean }> {
+  return apiFetch(`/api/folios/${folioId}/factura`, {
     token,
     method: "POST",
     body: JSON.stringify(body),
