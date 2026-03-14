@@ -76,6 +76,9 @@ export interface FolioCard {
   por_recuperar?: boolean;
   prioridad?: string | null;
   mes_cargo?: string | null;
+  proyecto_id?: number | null;
+  proyecto_codigo?: string | null;
+  proyecto_nombre?: string | null;
 }
 
 export interface Kpis {

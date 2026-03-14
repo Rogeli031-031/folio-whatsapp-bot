@@ -15,7 +15,7 @@ interface Props {
   onCrearFolio?: (plantaId: number, plantaNombre: string) => void;
   onCrearFolioUrgente?: (plantaId: number, plantaNombre: string) => void;
   onCrearProyecto?: (plantaId: number, plantaNombre: string) => void;
-   /** Texto libre para buscar folios en esta planta. */
+  /** Texto libre para buscar folios en esta planta. */
   searchTerm?: string;
 }
 
@@ -35,9 +35,16 @@ function matchesSearch(card: FolioCardType, term: string | undefined): boolean {
     (card as any).beneficiario,
     card.categoria,
     card.subcategoria,
+    card.proyecto_codigo,
+    card.proyecto_nombre,
     importeStr,
   ];
   return fields.some((f) => (f || "").toString().toLowerCase().includes(q));
+}
+
+function isUrgente(card: FolioCardType): boolean {
+  const p = (card.prioridad || "").toString().toLowerCase();
+  return p.includes("urgente") || p.includes("alta");
 }
 
 export default function PlantaSection({ planta_id, planta_nombre, stats, porCategoria, onOpenFolio, role, onSubirPoliza, onImprimirGastos, onCrearFolio, onCrearFolioUrgente, onCrearProyecto, searchTerm }: Props) {
@@ -57,6 +64,34 @@ export default function PlantaSection({ planta_id, planta_nombre, stats, porCate
       }
     }
   };
+
+  const allCards = CAT_ORDER.flatMap((cat) => porCategoria[cat] || []);
+  const filteredCards = allCards.filter((c) => matchesSearch(c, searchTerm));
+  const urgentes = filteredCards.filter(isUrgente);
+  const porProyecto = filteredCards.reduce<Record<string, FolioCardType[]>>((acc, c) => {
+    const key = c.proyecto_id != null
+      ? `${c.proyecto_id}:${(c.proyecto_codigo || c.proyecto_nombre || "Proyecto").toString().trim()}`
+      : "__sin_proyecto";
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(c);
+    return acc;
+  }, {});
+  const proyectoKeys = Object.keys(porProyecto).filter((k) => k !== "__sin_proyecto");
+  const sinProyecto = porProyecto["__sin_proyecto"] || [];
+
+  const renderColumn = (titulo: string, cards: FolioCardType[], totalMxn: number) => (
+    <div key={titulo} className="flex-shrink-0 w-[280px] rounded border border-slate-600 bg-slate-800/60 p-2">
+      <div className="mb-1.5 flex items-baseline justify-between gap-1 border-b border-slate-600 pb-1">
+        <span className="text-[10px] font-medium uppercase tracking-wide text-slate-400 truncate">{titulo}</span>
+        <span className="text-[10px] font-medium text-amber-400/90 flex-shrink-0">{fmtMxn(totalMxn)}</span>
+      </div>
+      <div className="space-y-1.5 max-h-[50vh] overflow-y-auto">
+        {cards.map((c) => (
+          <FolioCard key={c.id} card={c} onOpen={onOpenFolio} role={role} onSubirPoliza={onSubirPoliza} onImprimirGastos={onImprimirGastos} />
+        ))}
+      </div>
+    </div>
+  );
 
   return (
     <div className="rounded border border-slate-700 bg-slate-800/40 p-3">
@@ -96,25 +131,34 @@ export default function PlantaSection({ planta_id, planta_nombre, stats, porCate
           {stats.avg_aging != null && ` · ${stats.avg_aging}d prom`}
         </span>
       </div>
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
-        {CAT_ORDER.map((cat) => {
-          const cards = (porCategoria[cat] || []).filter((c) => matchesSearch(c, searchTerm));
-          if (cards.length === 0) return null;
-          const totalCol = cards.reduce((s, c) => s + (Number(c.importe) || 0), 0);
-          return (
-            <div key={cat} className="space-y-1.5">
-              <div className="flex items-baseline justify-between gap-1">
-                <span className="text-[10px] uppercase tracking-wide text-slate-500">{cat}</span>
-                <span className="text-[10px] font-medium text-amber-400/90">{fmtMxn(totalCol)}</span>
-              </div>
-              <div className="space-y-1.5">
-                {cards.map((c) => (
-                  <FolioCard key={c.id} card={c} onOpen={onOpenFolio} role={role} onSubirPoliza={onSubirPoliza} onImprimirGastos={onImprimirGastos} />
-                ))}
-              </div>
-            </div>
-          );
-        })}
+      <div className="overflow-x-auto pb-2">
+        <div className="flex gap-3 min-w-0">
+          {urgentes.length > 0 && renderColumn(
+            "Urgentes",
+            urgentes,
+            urgentes.reduce((s, c) => s + (Number(c.importe) || 0), 0)
+          )}
+          {proyectoKeys.map((key) => {
+            const label = key.replace(/^\d+:/, "");
+            const cards = porProyecto[key] || [];
+            return renderColumn(
+              label,
+              cards,
+              cards.reduce((s, c) => s + (Number(c.importe) || 0), 0)
+            );
+          })}
+          {sinProyecto.length > 0 && renderColumn(
+            "Sin proyecto",
+            sinProyecto,
+            sinProyecto.reduce((s, c) => s + (Number(c.importe) || 0), 0)
+          )}
+          {CAT_ORDER.map((cat) => {
+            const cards = (porCategoria[cat] || []).filter((c) => matchesSearch(c, searchTerm));
+            if (cards.length === 0) return null;
+            const totalCol = cards.reduce((s, c) => s + (Number(c.importe) || 0), 0);
+            return renderColumn(cat, cards, totalCol);
+          })}
+        </div>
       </div>
     </div>
   );
