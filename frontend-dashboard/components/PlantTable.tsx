@@ -60,6 +60,12 @@ function isUrgente(card: FolioCardType): boolean {
   return p.includes("urgente") || p.includes("alta");
 }
 
+/** True si la tarjeta corresponde a la categoría DYO (no debe duplicarse en Urgentes). */
+function isCategoriaDYO(card: FolioCardType): boolean {
+  const c = (card.categoria || "").toString().trim().toUpperCase();
+  return c === "DYO" || c.includes("DERECHOS") || c.includes("OBLIGACIONES");
+}
+
 export interface StageData {
   etapa: string;
   etapa_label?: string;
@@ -115,7 +121,7 @@ export default function PlantTable({
   const getCardsForRowAndStage = (rowKey: string, porCategoria: Record<string, FolioCardType[]>): FolioCardType[] => {
     const all = CAT_ORDER.flatMap((cat) => porCategoria[cat] || []);
     const filtered = all.filter((c) => matchesSearch(c, searchTerm));
-    if (rowKey === "Urgentes") return filtered.filter(isUrgente);
+    if (rowKey === "Urgentes") return filtered.filter(isUrgente).filter((c) => !isCategoriaDYO(c));
     if (rowKey === "Proyectos") return filtered.filter((c) => c.proyecto_id != null);
     return (porCategoria[rowKey] || []).filter((c) => matchesSearch(c, searchTerm));
   };
