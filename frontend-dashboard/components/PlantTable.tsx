@@ -131,6 +131,18 @@ export default function PlantTable({
     return out;
   };
 
+  /** Para TALLER: reparte los grupos de subcategoría en 3 columnas. */
+  const distribuirEn3Columnas = (bySub: Record<string, FolioCardType[]>): [string[], string[], string[]] => {
+    const subKeys = Object.keys(bySub).sort((a, b) => (a === "—" ? 1 : b === "—" ? -1 : a.localeCompare(b)));
+    const n = subKeys.length;
+    if (n === 0) return [[], [], []];
+    if (n === 1) return [subKeys, [], []];
+    if (n === 2) return [subKeys.slice(0, 1), subKeys.slice(1, 2), []];
+    if (n === 3) return [subKeys.slice(0, 1), subKeys.slice(1, 2), subKeys.slice(2, 3)];
+    const porCol = Math.ceil(n / 3);
+    return [subKeys.slice(0, porCol), subKeys.slice(porCol, porCol * 2), subKeys.slice(porCol * 2, n)];
+  };
+
   return (
     <div className="rounded border border-slate-700 bg-slate-800/40 p-3">
       <div className="sticky top-0 z-20 -mx-3 -mt-3 mb-3 flex items-center justify-between gap-2 border-b border-slate-600 bg-slate-900 px-3 py-2 shadow-md">
@@ -166,7 +178,7 @@ export default function PlantTable({
         </div>
       </div>
 
-      <div className="overflow-auto max-h-[calc(100vh-14rem)] pb-2">
+      <div className="overflow-auto max-h-[calc(100vh-14rem)] pb-0 -mr-3">
         <table className="w-full min-w-0 border-collapse">
           <thead>
             <tr>
@@ -209,6 +221,7 @@ export default function PlantTable({
                   const cards = getCardsForRowAndStage(rowKey, s.porCategoria);
                   const total = cards.reduce((sum, c) => sum + (Number(c.importe) || 0), 0);
                   const bySub = groupBySubcategoria(cards);
+                  const isTaller = rowKey === "TALLER";
                   const subKeys = Object.keys(bySub).sort((a, b) => (a === "—" ? 1 : b === "—" ? -1 : a.localeCompare(b)));
                   return (
                     <td
@@ -216,39 +229,72 @@ export default function PlantTable({
                       className="min-w-0 border border-slate-600 bg-slate-900/40 p-2 align-top"
                     >
                       <div className="mb-1 text-[10px] text-amber-400/90">{fmtMxn(total)}</div>
-                      <div className="flex gap-2 overflow-x-auto min-h-[40px]">
-                        {subKeys.length === 0 ? (
-                          <span className="text-xs text-slate-500">—</span>
-                        ) : (
-                          subKeys.map((subName) => {
-                            const subCards = bySub[subName] || [];
-                            const subTotal = subCards.reduce((sum, c) => sum + (Number(c.importe) || 0), 0);
-                            return (
-                              <div
-                                key={subName}
-                                className="flex-shrink-0 w-[200px] rounded border border-slate-600 bg-slate-800/60 p-1.5"
-                              >
-                                <div className="mb-1 text-[10px] font-medium text-slate-400 truncate" title={subName}>
-                                  {subName}
+                      {isTaller && subKeys.length > 0 ? (
+                        <div className="grid grid-cols-3 gap-2 min-h-[40px]">
+                          {distribuirEn3Columnas(bySub).map((colKeys, colIdx) => (
+                            <div key={colIdx} className="flex flex-col gap-2 rounded border border-slate-600 bg-slate-800/60 p-1.5">
+                              {colKeys.map((subName) => {
+                                const subCards = bySub[subName] || [];
+                                const subTotal = subCards.reduce((sum, c) => sum + (Number(c.importe) || 0), 0);
+                                return (
+                                  <div key={subName}>
+                                    <div className="mb-0.5 text-[10px] font-medium text-slate-400 truncate" title={subName}>
+                                      {subName}
+                                    </div>
+                                    <div className="text-[10px] text-amber-400/80 mb-0.5">{fmtMxn(subTotal)}</div>
+                                    <div className="space-y-1">
+                                      {subCards.map((c) => (
+                                        <FolioCard
+                                          key={c.id}
+                                          card={c}
+                                          onOpen={onOpenFolio}
+                                          role={role}
+                                          onSubirPoliza={onSubirPoliza}
+                                          onImprimirGastos={onImprimirGastos ? (id, num) => onImprimirGastos(id, num, s.etapa) : undefined}
+                                        />
+                                      ))}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="flex gap-2 overflow-x-auto min-h-[40px]">
+                          {subKeys.length === 0 ? (
+                            <span className="text-xs text-slate-500">—</span>
+                          ) : (
+                            subKeys.map((subName) => {
+                              const subCards = bySub[subName] || [];
+                              const subTotal = subCards.reduce((sum, c) => sum + (Number(c.importe) || 0), 0);
+                              return (
+                                <div
+                                  key={subName}
+                                  className="flex-shrink-0 w-[200px] rounded border border-slate-600 bg-slate-800/60 p-1.5"
+                                >
+                                  <div className="mb-1 text-[10px] font-medium text-slate-400 truncate" title={subName}>
+                                    {subName}
+                                  </div>
+                                  <div className="text-[10px] text-amber-400/80 mb-1">{fmtMxn(subTotal)}</div>
+                                  <div className="space-y-1">
+                                    {subCards.map((c) => (
+                                      <FolioCard
+                                        key={c.id}
+                                        card={c}
+                                        onOpen={onOpenFolio}
+                                        role={role}
+                                        onSubirPoliza={onSubirPoliza}
+                                        onImprimirGastos={onImprimirGastos ? (id, num) => onImprimirGastos(id, num, s.etapa) : undefined}
+                                      />
+                                    ))}
+                                  </div>
                                 </div>
-                                <div className="text-[10px] text-amber-400/80 mb-1">{fmtMxn(subTotal)}</div>
-                                <div className="space-y-1">
-                                  {subCards.map((c) => (
-                                    <FolioCard
-                                      key={c.id}
-                                      card={c}
-                                      onOpen={onOpenFolio}
-                                      role={role}
-                                      onSubirPoliza={onSubirPoliza}
-                                      onImprimirGastos={onImprimirGastos ? (id, num) => onImprimirGastos(id, num, s.etapa) : undefined}
-                                    />
-                                  ))}
-                                </div>
-                              </div>
-                            );
-                          })
-                        )}
-                      </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      )}
                     </td>
                   );
                 })}
