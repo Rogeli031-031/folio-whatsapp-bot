@@ -1,6 +1,5 @@
 "use client";
 
-import { useRef, useEffect } from "react";
 import FolioCard from "./FolioCard";
 import type { FolioCard as FolioCardType } from "@/lib/api";
 
@@ -96,27 +95,6 @@ export default function PlantTable({
   onCrearFolioUrgente,
   onCrearProyecto,
 }: Props) {
-  const sectionRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const el = sectionRef.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const e of entries) {
-          if (e.isIntersecting) {
-            el.querySelectorAll<HTMLElement>("[data-h-scroll]").forEach((node) => {
-              node.scrollLeft = 0;
-            });
-          }
-        }
-      },
-      { root: null, rootMargin: "0px", threshold: 0.1 }
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-
   const fmtMxn = (n: number) =>
     n != null && !isNaN(n) ? `$${n.toLocaleString("es-MX", { maximumFractionDigits: 0 })}` : "N/A";
 
@@ -154,7 +132,7 @@ export default function PlantTable({
   };
 
   return (
-    <div ref={sectionRef} className="rounded border border-slate-700 bg-slate-800/40 p-3">
+    <div className="rounded border border-slate-700 bg-slate-800/40 p-3">
       <div className="sticky top-0 z-20 -mx-3 -mt-3 mb-3 flex items-center justify-between gap-2 border-b border-slate-600 bg-slate-900 px-3 py-2 shadow-md">
         <div className="flex flex-wrap items-center gap-2 min-w-0">
           <span className="font-medium text-slate-200">{planta_nombre}</span>
@@ -188,11 +166,8 @@ export default function PlantTable({
         </div>
       </div>
 
-      <div className="overflow-auto max-h-[calc(100vh-14rem)] pb-0 -mr-3">
-        <table
-          className="border-collapse table-fixed"
-          style={{ width: 140 + 220 * stagesData.length }}
-        >
+      <div className="pb-0 -mr-3">
+        <table className="w-full border-collapse">
           <thead>
             <tr>
               <th className="sticky left-0 top-0 z-10 w-[140px] flex-shrink-0 border border-slate-600 bg-slate-800 p-2 text-left text-[10px] font-medium uppercase tracking-wide text-slate-400 align-top shadow-[2px_0_4px_rgba(0,0,0,0.2)]">
@@ -204,7 +179,7 @@ export default function PlantTable({
                 return (
                   <th
                     key={s.etapa}
-                    className="sticky top-0 z-10 min-w-[220px] w-[220px] border border-slate-600 bg-slate-800 p-2 text-left align-top shadow-[0_2px_4px_rgba(0,0,0,0.2)]"
+                    className="sticky top-0 z-10 min-w-[220px] border border-slate-600 bg-slate-800 p-2 text-left align-top shadow-[0_2px_4px_rgba(0,0,0,0.2)]"
                   >
                     <div className="flex items-center gap-2 font-medium text-slate-200">
                       <EtapaIcon etapa={s.etapa} icon={s.etapa_icon} />
@@ -238,10 +213,10 @@ export default function PlantTable({
                   return (
                     <td
                       key={s.etapa}
-                      className="w-[220px] max-w-[220px] border border-slate-600 bg-slate-900/40 p-2 align-top overflow-hidden"
+                      className="min-w-[220px] border border-slate-600 bg-slate-900/40 p-2 align-top"
                     >
                       <div className="mb-1 text-[10px] text-amber-400/90">{fmtMxn(total)}</div>
-                      <div data-h-scroll className="flex gap-2 overflow-x-auto min-h-[40px] min-w-0 max-w-full">
+                      <div className="flex gap-2 min-h-[40px]">
                         {subKeys.length === 0 ? (
                           <span className="text-xs text-slate-500">—</span>
                         ) : (
