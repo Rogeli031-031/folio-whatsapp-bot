@@ -6521,10 +6521,13 @@ app.get("/api/folios/:id/documento-folio", dashboardAuthMiddleware, async (req, 
         } catch (_) {}
 
         if (!usedForm) {
+          const conceptoXStart = 300;
+          const conceptoXEnd = 595;
+          const conceptoMaxWidthPoints = conceptoXEnd - conceptoXStart;
           const POS = {
             folio: { x: 600, y: 580, size: 12 },
             beneficiario: { x: 150, y: 456.5, size: 8 },
-            concepto: { x: 300, y: 456.5, size: 8 },
+            concepto: { x: conceptoXStart, y: 456.5, size: 8 },
             importe: { x: 605, y: 456.5, size: 9 },
             planta: { x: 100, y: 580, size: 11 },
             fecha: { x: 381, y: 580, size: 9 },
@@ -6534,9 +6537,31 @@ app.get("/api/folios/:id/documento-folio", dashboardAuthMiddleware, async (req, 
             if (!safe) return;
             page.drawText(safe, { x, y, size, font: bold ? fontBold : font });
           };
+          const wrapConcepto = (text, size) => {
+            const maxChars = Math.max(15, Math.floor(conceptoMaxWidthPoints / (size * 0.5)));
+            const words = String(text || "").trim().split(/\s+/).filter(Boolean);
+            if (words.length === 0) return [""];
+            const lines = [];
+            let current = "";
+            for (const w of words) {
+              const next = current ? current + " " + w : w;
+              if (next.length <= maxChars) current = next;
+              else {
+                if (current) lines.push(current);
+                current = w.length <= maxChars ? w : w.substring(0, maxChars);
+              }
+            }
+            if (current) lines.push(current);
+            return lines.length ? lines : [""];
+          };
           draw(`FOLIO - ${numeroFolio}`, POS.folio.x, POS.folio.y, POS.folio.size, true);
           draw(beneficiario, POS.beneficiario.x, POS.beneficiario.y, POS.beneficiario.size);
-          draw(concepto, POS.concepto.x, POS.concepto.y, POS.concepto.size);
+          const conceptoLines = wrapConcepto(concepto, POS.concepto.size);
+          let conceptoY = POS.concepto.y;
+          conceptoLines.forEach((line) => {
+            draw(line, POS.concepto.x, conceptoY, POS.concepto.size, false, 500);
+            conceptoY -= POS.concepto.size * 1.2;
+          });
           draw(`$ ${importeStr}`, POS.importe.x, POS.importe.y, POS.importe.size);
           draw(plantaDisplay, POS.planta.x, POS.planta.y, POS.planta.size);
           draw(fechaSolicitud, POS.fecha.x, POS.fecha.y, POS.fecha.size);
