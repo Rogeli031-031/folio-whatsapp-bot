@@ -6522,12 +6522,12 @@ app.get("/api/folios/:id/documento-folio", dashboardAuthMiddleware, async (req, 
 
         if (!usedForm) {
           const POS = {
-            folio: { x: 600, y: 590, size: 10 },
+            folio: { x: 600, y: 580, size: 12 },
             beneficiario: { x: 150, y: 436.5, size: 9 },
             concepto: { x: 300, y: 436.5, size: 9 },
-            importe: { x: 530, y: 436.5, size: 9 },
-            planta: { x: 100, y: 590, size: 10 },
-            fecha: { x: 381, y: 590, size: 9 },
+            importe: { x: 630, y: 436.5, size: 9 },
+            planta: { x: 100, y: 580, size: 11 },
+            fecha: { x: 381, y: 580, size: 9 },
           };
           const draw = (text, x, y, size = 9, bold = false, maxLen = 120) => {
             const safe = String(text ?? "").trim().substring(0, maxLen);
