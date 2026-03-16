@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { fetchDocumentoGastosHtml, fetchDocumentoGastosPdf, fetchDocumentoCompletoPdf } from "@/lib/api";
+import { fetchDocumentoFolioPdf, fetchDocumentoGastosHtml, fetchDocumentoGastosPdf, fetchDocumentoCompletoPdf } from "@/lib/api";
 
 type ModoImpresion = "solo_folio" | "folio_cotizacion" | "poliza_folio_cotizacion";
 
@@ -36,6 +36,13 @@ export default function ImprimirGastosModal({ folioId, numeroFolio, token, etapa
         if (w) w.focus();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
         onClose();
+      } else if (modo === "solo_folio") {
+        const blob = await fetchDocumentoFolioPdf(token, folioId);
+        const url = URL.createObjectURL(blob);
+        const w = window.open(url, "_blank");
+        if (w) w.focus();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        onClose();
       } else {
         const html = await fetchDocumentoGastosHtml(token, folioId);
         const w = window.open("", "_blank");
@@ -62,6 +69,9 @@ export default function ImprimirGastosModal({ folioId, numeroFolio, token, etapa
       if (modo === "poliza_folio_cotizacion") {
         blob = await fetchDocumentoCompletoPdf(token, folioId, { cuenta: cuenta.trim(), numero_cheque: numeroCheque.trim() });
         filename = `Documento-Completo-${numeroFolio.replace(/\s/g, "-")}.pdf`;
+      } else if (modo === "solo_folio") {
+        blob = await fetchDocumentoFolioPdf(token, folioId);
+        filename = `Formato-Folio-${numeroFolio.replace(/\s/g, "-")}.pdf`;
       } else {
         blob = await fetchDocumentoGastosPdf(token, folioId, modo === "folio_cotizacion");
         filename = `Gastos-Extraordinarios-${numeroFolio.replace(/\s/g, "-")}.pdf`;

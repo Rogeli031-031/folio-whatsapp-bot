@@ -6446,6 +6446,140 @@ app.get("/api/folios/:id/documento-gastos", dashboardAuthMiddleware, async (req,
   }
 });
 
+/** Documento "Solo formato del folio": PDF generado con plantilla S3 (FOLIO_TEMPLATE_S3_KEY) rellenada con datos del folio. Para Imprimir/Descargar en dashboard. */
+app.get("/api/folios/:id/documento-folio", dashboardAuthMiddleware, async (req, res) => {
+  const folioId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
+  const client = await pool.connect();
+  try {
+    const r = await client.query(
+      `SELECT f.id, f.planta_id, f.solo_zp_ad, f.numero_folio, f.folio_codigo, f.beneficiario, f.concepto, f.importe, f.creado_en, f.mes_cargo,
+              p.nombre AS planta_nombre, p.clave AS planta_clave
+       FROM public.folios f
+       LEFT JOIN public.plantas p ON p.id = f.planta_id
+       WHERE f.id = $1`,
+      [folioId]
+    );
+    const folio = r.rows[0] || null;
+    if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
+    const esZPDoc = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) === "ZP";
+    const esADDoc = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) === "AD";
+    if (folio.solo_zp_ad && !esZPDoc && !esADDoc) return res.status(404).json({ error: "Folio no encontrado" });
+    if ((req.dashboardAuth.role === "GG" || req.dashboardAuth.role === "GA") && req.dashboardAuth.plantas_permitidas?.length > 0) {
+      const folioPlantaId = folio.planta_id != null ? folio.planta_id : null;
+      if (folioPlantaId == null || !req.dashboardAuth.plantas_permitidas.includes(folioPlantaId)) {
+        return res.status(403).json({ error: "Sin permiso para este folio" });
+      }
+    }
+
+    const numeroFolio = (folio.numero_folio || folio.folio_codigo || `F-${folioId}`).toString().trim();
+    const beneficiario = (folio.beneficiario || "").toString().trim() || "—";
+    const concepto = (folio.concepto || "").toString().trim() || "—";
+    const importeNum = folio.importe != null ? Number(folio.importe) : 0;
+    const importeStr = Number(importeNum).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const plantaDisplay = [folio.planta_clave, folio.planta_nombre].filter(Boolean).join(" - ") || "—";
+    const fechaSolicitud = folio.creado_en
+      ? new Date(folio.creado_en).toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric" })
+      : "—";
+    const fechasDelAl = formatFechasDelAl(folio.mes_cargo);
+
+    const s3TemplateKey = (process.env.FOLIO_TEMPLATE_S3_KEY || "").trim();
+    let pdfBytes = null;
+
+    if (s3Enabled && s3TemplateKey) {
+      try {
+        const templateBuf = await getBufferFromS3(s3TemplateKey);
+        const pdfDoc = await PDFDocument.load(templateBuf, { ignoreEncryption: true });
+        const pages = pdfDoc.getPages();
+        if (!pages || pages.length === 0) throw new Error("La plantilla no contiene páginas");
+        const page = pages[0];
+        const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+        const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+        let usedForm = false;
+        try {
+          const form = pdfDoc.getForm();
+          const fields = form.getFields ? form.getFields() : [];
+          for (const field of fields) {
+            const name = (field.getName && field.getName()) || "";
+            const n = name.toLowerCase();
+            let val = null;
+            if (n.includes("folio") || n.includes("numero")) val = numeroFolio;
+            else if (n.includes("beneficiario")) val = beneficiario;
+            else if (n.includes("concepto")) val = concepto;
+            else if (n.includes("importe")) val = importeStr;
+            else if (n.includes("planta")) val = plantaDisplay;
+            else if (n.includes("fecha")) val = fechaSolicitud;
+            if (val != null && val !== "") {
+              try {
+                const tf = form.getTextField(name);
+                if (tf) { tf.setText(String(val)); usedForm = true; }
+              } catch (_) {}
+            }
+          }
+          if (usedForm && form.flatten) form.flatten();
+        } catch (_) {}
+
+        if (!usedForm) {
+          const POS = {
+            folio: { x: 412, y: 610, size: 10 },
+            beneficiario: { x: 50, y: 582, size: 9 },
+            concepto: { x: 50, y: 555, size: 9 },
+            importe: { x: 430, y: 582, size: 9 },
+            planta: { x: 100, y: 717, size: 10 },
+            fecha: { x: 381, y: 717, size: 9 },
+          };
+          const draw = (text, x, y, size = 9, bold = false, maxLen = 120) => {
+            const safe = String(text ?? "").trim().substring(0, maxLen);
+            if (!safe) return;
+            page.drawText(safe, { x, y, size, font: bold ? fontBold : font });
+          };
+          draw(`FOLIO - ${numeroFolio}`, POS.folio.x, POS.folio.y, POS.folio.size, true);
+          draw(beneficiario, POS.beneficiario.x, POS.beneficiario.y, POS.beneficiario.size);
+          draw(concepto, POS.concepto.x, POS.concepto.y, POS.concepto.size);
+          draw(`$ ${importeStr}`, POS.importe.x, POS.importe.y, POS.importe.size);
+          draw(plantaDisplay, POS.planta.x, POS.planta.y, POS.planta.size);
+          draw(fechaSolicitud, POS.fecha.x, POS.fecha.y, POS.fecha.size);
+        }
+
+        pdfBytes = await pdfDoc.save();
+      } catch (e) {
+        console.warn("[documento-folio] Plantilla S3:", e.message);
+      }
+    }
+
+    if (!pdfBytes) {
+      const pdfDoc = await PDFDocument.create();
+      const page = pdfDoc.addPage([612, 792]);
+      const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+      const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+      let y = 750;
+      const line = (text, size = 10, bold = false) => {
+        page.drawText(String(text ?? "").substring(0, 100), { x: 50, y, size, font: bold ? fontBold : font });
+        y -= size + 4;
+      };
+      line("GASTOS EXTRAORDINARIOS - FORMATO FOLIO", 14, true);
+      line(`FOLIO - ${numeroFolio}`, 12);
+      line(`Planta: ${plantaDisplay}`, 10);
+      line(`Fechas del: ${fechasDelAl}  |  Fecha solicitud: ${fechaSolicitud}`, 9);
+      y -= 8;
+      line(`Beneficiario: ${beneficiario}`, 10);
+      line(`Concepto: ${concepto}`, 10);
+      line(`Importe: $ ${importeStr}`, 10, true);
+      pdfBytes = await pdfDoc.save();
+    }
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="Formato-Folio-${(folio.numero_folio || folioId).toString().replace(/\s/g, "-")}.pdf"`);
+    return res.send(Buffer.from(pdfBytes));
+  } catch (e) {
+    console.error("[documento-folio]", e);
+    res.status(500).json({ error: e.message || "Error al generar documento" });
+  } finally {
+    client.release();
+  }
+});
+
 /** Documento completo: Póliza (con datos) + Folio (gastos) + Cotización en un solo PDF. Requiere folio con cotización. */
 app.get("/api/folios/:id/documento-completo", dashboardAuthMiddleware, async (req, res) => {
   const folioId = parseInt(req.params.id, 10);

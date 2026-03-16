@@ -769,6 +769,16 @@ export async function fetchDocumentoGastosPdf(
   return res.blob();
 }
 
+/** Descarga el PDF "Solo formato del folio" (usa plantilla S3 FOLIO_TEMPLATE_S3_KEY si está configurada). */
+export async function fetchDocumentoFolioPdf(token: string, folioId: number): Promise<Blob> {
+  const url = getApiUrl(`/api/folios/${folioId}/documento-folio`);
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(await res.text().catch(() => res.statusText));
+  return res.blob();
+}
+
 /** Descarga el PDF del documento Póliza Cheque (formato oficial con datos del folio). */
 export async function fetchDocumentoPolizaPdf(token: string, folioId: number): Promise<Blob> {
   const url = getApiUrl(`/api/folios/${folioId}/poliza/documento?format=pdf`);
