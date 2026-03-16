@@ -6454,9 +6454,12 @@ app.get("/api/folios/:id/documento-folio", dashboardAuthMiddleware, async (req, 
   try {
     const r = await client.query(
       `SELECT f.id, f.planta_id, f.solo_zp_ad, f.numero_folio, f.folio_codigo, f.beneficiario, f.concepto, f.importe, f.creado_en, f.mes_cargo,
-              p.nombre AS planta_nombre, p.clave AS planta_clave
+              f.categoria, f.subcategoria,
+              p.nombre AS planta_nombre, p.clave AS planta_clave,
+              pr.codigo AS proyecto_codigo, pr.nombre AS proyecto_nombre
        FROM public.folios f
        LEFT JOIN public.plantas p ON p.id = f.planta_id
+       LEFT JOIN public.proyectos pr ON pr.id = f.proyecto_id
        WHERE f.id = $1`,
       [folioId]
     );
@@ -6482,6 +6485,9 @@ app.get("/api/folios/:id/documento-folio", dashboardAuthMiddleware, async (req, 
       ? new Date(folio.creado_en).toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric" })
       : "—";
     const fechasDelAl = formatFechasDelAl(folio.mes_cargo);
+    const categoriaDisplay = (folio.categoria || "").toString().trim() || "—";
+    const subcategoriaDisplay = (folio.subcategoria || "").toString().trim() || "—";
+    const proyectoDisplay = [folio.proyecto_codigo, folio.proyecto_nombre].filter(Boolean).join(" - ") || "—";
 
     const s3TemplateKey = (process.env.FOLIO_TEMPLATE_S3_KEY || "").trim();
     let pdfBytes = null;
@@ -6510,6 +6516,9 @@ app.get("/api/folios/:id/documento-folio", dashboardAuthMiddleware, async (req, 
             else if (n.includes("importe")) val = importeStr;
             else if (n.includes("planta")) val = plantaDisplay;
             else if (n.includes("fecha")) val = fechaSolicitud;
+            else if (n.includes("categoria") && !n.includes("sub")) val = categoriaDisplay;
+            else if (n.includes("subcategoria")) val = subcategoriaDisplay;
+            else if (n.includes("proyecto")) val = proyectoDisplay;
             if (val != null && val !== "") {
               try {
                 const tf = form.getTextField(name);
@@ -6531,6 +6540,9 @@ app.get("/api/folios/:id/documento-folio", dashboardAuthMiddleware, async (req, 
             importe: { x: 605, y: 456.5, size: 9 },
             planta: { x: 100, y: 580, size: 11 },
             fecha: { x: 381, y: 580, size: 9 },
+            categoria: { x: 50, y: 550, size: 9 },
+            subcategoria: { x: 50, y: 520, size: 9 },
+            proyecto: { x: 600, y: 540, size: 9 },
           };
           const draw = (text, x, y, size = 9, bold = false, maxLen = 120) => {
             const safe = String(text ?? "").trim().substring(0, maxLen);
@@ -6565,6 +6577,9 @@ app.get("/api/folios/:id/documento-folio", dashboardAuthMiddleware, async (req, 
           draw(`$ ${importeStr}`, POS.importe.x, POS.importe.y, POS.importe.size);
           draw(plantaDisplay, POS.planta.x, POS.planta.y, POS.planta.size);
           draw(fechaSolicitud, POS.fecha.x, POS.fecha.y, POS.fecha.size);
+          draw(categoriaDisplay, POS.categoria.x, POS.categoria.y, POS.categoria.size);
+          draw(subcategoriaDisplay, POS.subcategoria.x, POS.subcategoria.y, POS.subcategoria.size);
+          draw(proyectoDisplay, POS.proyecto.x, POS.proyecto.y, POS.proyecto.size);
         }
 
         pdfBytes = await pdfDoc.save();
@@ -6591,6 +6606,7 @@ app.get("/api/folios/:id/documento-folio", dashboardAuthMiddleware, async (req, 
       line(`Beneficiario: ${beneficiario}`, 10);
       line(`Concepto: ${concepto}`, 10);
       line(`Importe: $ ${importeStr}`, 10, true);
+      line(`Categoría: ${categoriaDisplay}  |  Subcategoría: ${subcategoriaDisplay}  |  Proyecto: ${proyectoDisplay}`, 9);
       pdfBytes = await pdfDoc.save();
     }
 
