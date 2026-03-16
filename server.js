@@ -6521,8 +6521,8 @@ app.get("/api/folios/:id/documento-folio", dashboardAuthMiddleware, async (req, 
         } catch (_) {}
 
         if (!usedForm) {
-          const conceptoXStart = 300;
-          const conceptoXEnd = 565;
+          const conceptoXStart = 295;
+          const conceptoXEnd = 550;
           const conceptoMaxWidthPoints = conceptoXEnd - conceptoXStart;
           const POS = {
             folio: { x: 600, y: 580, size: 12 },
