@@ -6523,9 +6523,9 @@ app.get("/api/folios/:id/documento-folio", dashboardAuthMiddleware, async (req, 
         if (!usedForm) {
           const POS = {
             folio: { x: 600, y: 590, size: 10 },
-            beneficiario: { x: 250, y: 436.5, size: 9 },
-            concepto: { x: 50, y: 436.5, size: 9 },
-            importe: { x: 430, y: 436.5, size: 9 },
+            beneficiario: { x: 150, y: 436.5, size: 9 },
+            concepto: { x: 300, y: 436.5, size: 9 },
+            importe: { x: 530, y: 436.5, size: 9 },
             planta: { x: 100, y: 590, size: 10 },
             fecha: { x: 381, y: 590, size: 9 },
           };
