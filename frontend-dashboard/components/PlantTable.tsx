@@ -4,7 +4,7 @@ import FolioCard from "./FolioCard";
 import type { FolioCard as FolioCardType } from "@/lib/api";
 
 const CAT_ORDER = ["GASTOS", "INVERSIONES", "DYO", "TALLER"];
-const ROW_ORDER = ["Urgentes", "Proyectos", ...CAT_ORDER] as const;
+const ROW_ORDER = ["Proyectos", ...CAT_ORDER] as const;
 
 const ETAPA_LABELS: Record<string, string> = {
   PENDIENTE_APROB_PLANTA: "Pendiente aprobación planta",

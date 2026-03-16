@@ -4395,6 +4395,14 @@ function buildPlantNotificationMessage(evento, folio, extra = {}) {
       return `📋 Folio cancelado: ${num}\nMotivo: ${extra.motivo || "N/A"}`;
     case "ADJUNTO":
       return `📎 Cotización adjunta al folio ${num}.`;
+    case "POLIZA": {
+      const concepto = (folio && (folio.concepto || folio.descripcion_display)) || extra.concepto || "-";
+      const importeStr = folio && folio.importe != null ? Number(folio.importe).toLocaleString("es-MX", { minimumFractionDigits: 2 }) : (extra.importe != null ? Number(extra.importe).toLocaleString("es-MX", { minimumFractionDigits: 2 }) : "-");
+      const mesCargo = extra.mes_cargo || (folio && folio.mes_cargo) || "";
+      let msg = `📄 Póliza adjunta al folio ${num}.\nConcepto: ${concepto}\nImporte: $${importeStr}`;
+      if (mesCargo) msg += `\nMes de cargo: ${mesCargo}`;
+      return msg;
+    }
     default:
       return `Folio ${num}: actualización.`;
   }
@@ -6930,6 +6938,13 @@ app.post("/api/folios/:id/poliza", dashboardAuthMiddleware, async (req, res) => 
       [ESTADOS.PAGADO, mesCargo, folioId]
     );
     await insertHistorial(client, folioId, folio.numero_folio, folio.folio_codigo, ESTADOS.PAGADO, `Póliza adjunta desde dashboard. Pago cargado al mes ${mesCargo}.`, null, "Asistente de dirección");
+    if (!folio.solo_zp_ad) {
+      try {
+        await notifyPlantByFolio(pool, folio.numero_folio, "POLIZA", { roles: ["GG", "GA"], mes_cargo: mesCargo });
+      } catch (notifErr) {
+        console.warn("[Dashboard folio poliza] Notificación GG/GA:", notifErr.message);
+      }
+    }
     return res.json({ ok: true, estatus: ESTADOS.PAGADO, mes_cargo: mesCargo });
   } catch (e) {
     console.error("[Dashboard folio poliza]", e);
@@ -12302,6 +12317,14 @@ app.post("/twilio/whatsapp", async (req, res) => {
             [ESTADOS.PAGADO, mesCargo, pend.folio_id]
           );
           await insertHistorial(clientAd, pend.folio_id, pend.numero_folio, pend.folio_codigo, ESTADOS.PAGADO, `Póliza adjunta por Asistente de dirección. Pago cargado al mes ${mesCargo}.`, fromNorm, actor ? actor.rol_nombre : null);
+          const folioPoliza = await getFolioById(clientAd, pend.folio_id);
+          if (folioPoliza && !folioPoliza.solo_zp_ad) {
+            try {
+              await notifyPlantByFolio(pool, pend.numero_folio, "POLIZA", { roles: ["GG", "GA"], mes_cargo: mesCargo });
+            } catch (notifErr) {
+              console.warn("[WhatsApp poliza] Notificación GG/GA:", notifErr.message);
+            }
+          }
           sess.adPoliza = null;
           return safeReply(`✅ Folio ${pend.numero_folio} pasado a Depósito y cierre. Pago cargado al mes ${mesCargo}.`);
         } catch (e) {
