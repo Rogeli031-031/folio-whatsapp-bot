@@ -1540,6 +1540,17 @@ function getPeriodoPresupuestoConsulta() {
   return PERIODO_PRESUPUESTO_DEFAULT;
 }
 
+/** GEND (MXN) para planta por env: PRESUPUESTO_GEND_MORELOS, PRESUPUESTO_GEND_ACAPULCO, PRESUPUESTO_GEND_E15, etc. */
+function getGendMxnForPlanta(plantaNombre) {
+  if (!plantaNombre || typeof plantaNombre !== "string") return 0;
+  const key = String(plantaNombre).toUpperCase().replace(/\s+/g, "_").replace(/[^A-Z0-9_]/g, "");
+  if (!key) return 0;
+  const val = process.env["PRESUPUESTO_GEND_" + key];
+  if (val === undefined || val === "") return 0;
+  const n = Number(val);
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+}
+
 /** Resuelve nombre de planta (ej. "Morelos") al código usado en presupuesto (ej. "E15"). Igual lógica que WhatsApp. */
 function resolvePlantaPresupuestoNombre(plantaInput) {
   const t = (plantaInput || "").trim();
@@ -9859,8 +9870,13 @@ app.post("/twilio/whatsapp", async (req, res) => {
             const { porPlanta } = await queryPresupuestoTotalesAcapulco(client, periodoPresup);
             const fila = porPlanta.find((p) => p.nombre === plantaNombre);
             const totalPlanta = fila ? fila.total : 0;
+            const gendMxn = getGendMxnForPlanta(plantaNombre);
             let msg = `📊 Presupuesto ${plantaNombre} (periodo ${periodoPresup})\n\n`;
             msg += "TOTAL: $" + totalPlanta.toLocaleString("es-MX", { minimumFractionDigits: 2 });
+            if (gendMxn > 0) {
+              msg += "\nGEND (MXN): $" + gendMxn.toLocaleString("es-MX", { minimumFractionDigits: 2 });
+              msg += "\nTOTAL (con GEND): $" + (totalPlanta + gendMxn).toLocaleString("es-MX", { minimumFractionDigits: 2 });
+            }
             msg += "\n\n¿Quieres más detalles de alguna categoría? Responde con el número (1-7) o NO.\n\n";
             msg += "1) NOMINA\n2) RENTAS\n3) SERVICIOS\n4) TALLER\n5) MANTENIMIENTO\n6) GASTOS GENERALES\n7) IMPUESTOS PLANTA";
             sess.presupuestoConsulta = { paso: "elegir_categoria", plantaNombre };
@@ -9879,8 +9895,13 @@ app.post("/twilio/whatsapp", async (req, res) => {
             const { porPlanta } = await queryPresupuestoTotalesAcapulco(client, periodoPresup);
             const fila = porPlanta.find((p) => p.nombre === plantaNombre);
             const totalPlanta = fila ? fila.total : 0;
+            const gendMxn = getGendMxnForPlanta(plantaNombre);
             let msg = `📊 Presupuesto ${plantaNombre} (periodo ${periodoPresup})\n\n`;
             msg += "TOTAL: $" + totalPlanta.toLocaleString("es-MX", { minimumFractionDigits: 2 });
+            if (gendMxn > 0) {
+              msg += "\nGEND (MXN): $" + gendMxn.toLocaleString("es-MX", { minimumFractionDigits: 2 });
+              msg += "\nTOTAL (con GEND): $" + (totalPlanta + gendMxn).toLocaleString("es-MX", { minimumFractionDigits: 2 });
+            }
             msg += "\n\n¿Quieres más detalles de alguna categoría? Responde con el número (1-7) o NO.\n\n";
             msg += "1) NOMINA\n2) RENTAS\n3) SERVICIOS\n4) TALLER\n5) MANTENIMIENTO\n6) GASTOS GENERALES\n7) IMPUESTOS PLANTA";
             sess.presupuestoConsulta = { paso: "elegir_categoria", plantaNombre };

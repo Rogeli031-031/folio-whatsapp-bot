@@ -1521,6 +1521,22 @@ function KpiContent() {
                   {fmtNum(getPresupuestoKgWithGend(presupuestoDetalle) ?? null)} $/kg
                 </span>
               </p>
+              {(() => {
+                const gendMxn = presupuestoGendByEmpresa[presupuestoDetalle.empresa || ""] ?? 0;
+                if (gendMxn === 0) return null;
+                return (
+                  <p className="text-slate-200">
+                    GEND (MXN):{" "}
+                    <span className="font-mono font-medium">
+                      {Math.abs(gendMxn).toLocaleString("es-MX", {
+                        style: "currency",
+                        currency: "MXN",
+                        maximumFractionDigits: 0,
+                      })}
+                    </span>
+                  </p>
+                );
+              })()}
               <p>
                 Importe total aproximado:{" "}
                 <span className="font-mono">
