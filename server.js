@@ -6540,7 +6540,7 @@ app.get("/api/folios/:id/documento-folio", dashboardAuthMiddleware, async (req, 
             importe: { x: 605, y: 456.5, size: 9 },
             planta: { x: 100, y: 580, size: 14 },
             fecha: { x: 381, y: 580, size: 9 },
-            categoria: { x: 50, y: 520, size: 12 },
+            categoria: { x: 50, y: 550, size: 14 },
             subcategoria: { x: 50, y: 520, size: 10 },
             proyecto: { x: 600, y: 540, size: 9 },
           };
