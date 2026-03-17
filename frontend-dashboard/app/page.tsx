@@ -1318,8 +1318,11 @@ function KpiContent() {
                   const fmtTon = (n: number | null) => (n != null && Number.isFinite(n) ? n.toLocaleString("es-MX", { minimumFractionDigits: 3, maximumFractionDigits: 3 }) : "—");
                   const fmtKg = (n: number | null) => (n != null && Number.isFinite(n) ? n.toLocaleString("es-MX", { minimumFractionDigits: 3, maximumFractionDigits: 3 }) : "—");
                   const fmtMxn0 = (n: number | null) => (n != null && Number.isFinite(n) ? n.toLocaleString("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 0, maximumFractionDigits: 0 }) : "—");
-                  const realTonActual = deltaClienteSel.cliente?.kgA != null && Number.isFinite(Number(deltaClienteSel.cliente.kgA))
-                    ? Number(deltaClienteSel.cliente.kgA) / 1000
+                  const excelCliente = dicfData?.excelData?.clientes?.find(
+                    (x) => (x.cliente || "").trim().toLowerCase() === clienteNombre.toLowerCase()
+                  );
+                  const realTonForecast = excelCliente?.kg_mes_real != null && Number.isFinite(Number(excelCliente.kg_mes_real))
+                    ? Number(excelCliente.kg_mes_real) / 1000
                     : null;
                   return (
                     <div className="mt-2 rounded border border-slate-700 bg-slate-800/40 p-3">
@@ -1342,9 +1345,11 @@ function KpiContent() {
                                 <tr key={idx} className="border-b border-slate-800">
                                   <td className="py-1 pr-2">
                                     {r.mes}
-                                    {realTonActual != null && /forecast/i.test(r.mes) ? ` (${fmtTon(realTonActual)} real)` : ""}
                                   </td>
-                                  <td className="py-1 pr-2 text-right tabular-nums">{fmtTon(r.ventaTon)}</td>
+                                  <td className="py-1 pr-2 text-right tabular-nums">
+                                    {fmtTon(r.ventaTon)}
+                                    {realTonForecast != null && /forecast/i.test(r.mes) ? ` (${fmtTon(realTonForecast)})` : ""}
+                                  </td>
                                   <td className="py-1 text-right tabular-nums">{fmtKg(r.descKg)}</td>
                                   <td className="py-1 text-right tabular-nums">{fmtMxn0(r.ingresoMxn)}</td>
                                 </tr>

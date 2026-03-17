@@ -568,6 +568,25 @@ export interface DicfResult {
   aumentaron: { totalDeltaIngresoStr: string; totalDeltaKgStr?: string; clientes: DeltaIngresoForecastCliente[] };
   disminuyeron: { totalDeltaIngresoStr: string; totalDeltaKgStr?: string; clientes: DeltaIngresoForecastCliente[] };
   byCategoria: DeltaIngresoForecastCategoria[];
+  excelData?: {
+    dates: string[];
+    margen: number;
+    clientes: {
+      cliente: string;
+      estado?: string;
+      canal?: string;
+      subcanal?: string;
+      kgLast30?: number[];
+      descKgLast30?: (number | null)[];
+      ventaPorMes?: number[];
+      descuentoPorMes?: number[];
+      kg_mes_real?: number;
+      kg_mes_forecast?: number;
+      desc_kg_hist?: number;
+    }[];
+    meses?: { year: number; month: number; label: string }[];
+    margenPorMes?: number[];
+  };
 }
 
 export function postDicfDatos(
