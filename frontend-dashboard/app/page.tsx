@@ -1536,6 +1536,22 @@ function KpiContent() {
                     }}
                   />
                 </label>
+                {(() => {
+                  const gendMxn = presupuestoGendByEmpresa[presupuestoDetalle.empresa || ""] ?? 0;
+                  if (gendMxn === 0) return null;
+                  return (
+                    <p className="mt-1 font-medium text-slate-200">
+                      GEND aplicado:{" "}
+                      <span className="font-mono">
+                        {Math.abs(gendMxn).toLocaleString("es-MX", {
+                          style: "currency",
+                          currency: "MXN",
+                          maximumFractionDigits: 0,
+                        })}
+                      </span>
+                    </p>
+                  );
+                })()}
               </div>
               <p className="mt-3 text-xs text-slate-500">
                 Nota: Importe estimado = Venta (kg) × |Presupuesto $/kg|, donde Presupuesto $/kg ya incluye el ajuste GEND (MXN) capturado arriba.
