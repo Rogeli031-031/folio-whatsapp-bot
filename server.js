@@ -6480,7 +6480,9 @@ app.get("/api/folios/:id/documento-folio", dashboardAuthMiddleware, async (req, 
     const concepto = (folio.concepto || "").toString().trim() || "—";
     const importeNum = folio.importe != null ? Number(folio.importe) : 0;
     const importeStr = Number(importeNum).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    const plantaDisplay = [folio.planta_clave, folio.planta_nombre].filter(Boolean).join(" - ") || "—";
+    const plantaDisplay = (folio.planta_clave && folio.planta_nombre)
+      ? `${String(folio.planta_clave).trim()}-${String(folio.planta_nombre).trim().toUpperCase()}`
+      : (folio.planta_clave || String(folio.planta_nombre || "").trim().toUpperCase() || "—");
     const fechaSolicitud = folio.creado_en
       ? new Date(folio.creado_en).toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric" })
       : "—";
