@@ -20,11 +20,13 @@ import {
   postDicfDatos,
   fetchDicfConfig,
   postDicfConfig,
+  fetchPresupuestoDetalle,
   type IgfForecastResponse,
   type IgfForecastRow,
   type DeltaIngresoForecastResult,
   type DicfResult,
   type DicfConfig,
+  type PresupuestoDetalleItem,
 } from "@/lib/api";
 
 const MESES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
@@ -99,6 +101,9 @@ function KpiContent() {
   const [hgSaving, setHgSaving] = useState<string | null>(null);
   const [plantaFilter, setPlantaFilter] = useState<string>("");
   const [presupuestoDetalle, setPresupuestoDetalle] = useState<IgfForecastRow | null>(null);
+  const [presupuestoDetalleItems, setPresupuestoDetalleItems] = useState<PresupuestoDetalleItem[] | null>(null);
+  const [presupuestoDetalleLoading, setPresupuestoDetalleLoading] = useState(false);
+  const [presupuestoDetalleError, setPresupuestoDetalleError] = useState<string | null>(null);
   const [igfMesAnterior, setIgfMesAnterior] = useState<IgfForecastResponse | null>(null);
   const [igfMesAnteriorLoading, setIgfMesAnteriorLoading] = useState(false);
   const [deltaForecastPlanta, setDeltaForecastPlanta] = useState("");
@@ -359,7 +364,7 @@ function KpiContent() {
           <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
             <h2 className="text-lg font-medium text-slate-200">{plantaFilter ? "Comparación por planta" : "IGF Forecast"}</h2>
             <div className="flex flex-wrap items-center gap-2">
-              {igfForecast && (
+                        {igfForecast && (
                 <>
                   <label className="flex items-center gap-1.5 text-xs text-slate-400">
                     <span>Planta:</span>
@@ -453,7 +458,22 @@ function KpiContent() {
                               <button
                                 type="button"
                                 className="min-w-[3rem] rounded border border-slate-600 bg-slate-800 px-1.5 py-0.5 text-[0.65rem] text-slate-200 hover:bg-slate-700"
-                                onClick={() => setPresupuestoDetalle(row)}
+                                onClick={async () => {
+                                  setPresupuestoDetalle(row);
+                                  setPresupuestoDetalleItems(null);
+                                  setPresupuestoDetalleError(null);
+                                  if (!token || !igfForecast) return;
+                                  setPresupuestoDetalleLoading(true);
+                                  try {
+                                    const periodo = `${igfForecast.year}-${String(igfForecast.month).padStart(2, "0")}`;
+                                    const detalle = await fetchPresupuestoDetalle(token, row.empresa || "", periodo);
+                                    setPresupuestoDetalleItems(detalle.detalle || []);
+                                  } catch (e: any) {
+                                    setPresupuestoDetalleError(e?.message || "Error al cargar detalle de presupuesto");
+                                  } finally {
+                                    setPresupuestoDetalleLoading(false);
+                                  }
+                                }}
                               >
                                 {fmtNum(row.presupuesto_kg ?? null)}
                               </button>
@@ -1478,6 +1498,42 @@ function KpiContent() {
               <p className="mt-3 text-xs text-slate-500">
                 Nota: Importe estimado = Venta (kg) × |Presupuesto $/kg| para la planta correspondiente del IGF Forecast.
               </p>
+              <div className="mt-4">
+                <h4 className="mb-1 text-sm font-semibold text-slate-200">Desglose por categoría y subcategoría</h4>
+                {presupuestoDetalleLoading && <p className="text-xs text-slate-400">Cargando detalle…</p>}
+                {presupuestoDetalleError && <p className="text-xs text-red-400">{presupuestoDetalleError}</p>}
+                {!presupuestoDetalleLoading && !presupuestoDetalleError && presupuestoDetalleItems && presupuestoDetalleItems.length > 0 && (
+                  <div className="max-h-64 overflow-y-auto border border-slate-700 rounded">
+                    <table className="w-full border-collapse text-xs">
+                      <thead>
+                        <tr className="border-b border-slate-700 bg-slate-800 text-slate-300">
+                          <th className="py-1 px-2 text-left">Categoría</th>
+                          <th className="py-1 px-2 text-left">Subcategoría</th>
+                          <th className="py-1 px-2 text-right">Monto aprobado (MXN)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {presupuestoDetalleItems.map((it, idx) => (
+                          <tr key={`${it.categoria}-${it.subcategoria}-${idx}`} className="border-b border-slate-800 text-slate-200">
+                            <td className="py-1 px-2">{it.categoria}</td>
+                            <td className="py-1 px-2">{it.subcategoria}</td>
+                            <td className="py-1 px-2 text-right tabular-nums">
+                              {it.monto_aprobado.toLocaleString("es-MX", {
+                                style: "currency",
+                                currency: "MXN",
+                                maximumFractionDigits: 0,
+                              })}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                {!presupuestoDetalleLoading && !presupuestoDetalleError && (!presupuestoDetalleItems || presupuestoDetalleItems.length === 0) && (
+                  <p className="text-xs text-slate-500">No hay presupuesto asignado por categoría para esta planta y periodo.</p>
+                )}
+              </div>
             </div>
           </div>
         </div>

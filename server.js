@@ -1655,6 +1655,23 @@ async function queryPresupuestoDeltas(client, plantaNombre, periodoA, periodoB) 
   return { totalA, totalB, delta: totalB - totalA, porCategoria, porSubcategoria };
 }
 
+/** Detalle de presupuesto (monto aprobado) por categoría y subcategoría para una planta y periodo. */
+async function queryPresupuestoDetallePorPlanta(client, plantaNombre, periodo) {
+  const r = await client.query(
+    `SELECT d.categoria, d.subcategoria, d.monto_aprobado
+       FROM public.presupuesto_asignacion_detalle d
+       JOIN public.plantas p ON p.id = d.planta_id
+      WHERE p.nombre = $1 AND d.periodo = $2
+      ORDER BY d.categoria, d.subcategoria`,
+    [plantaNombre, periodo]
+  );
+  return r.rows.map((row) => ({
+    categoria: row.categoria,
+    subcategoria: row.subcategoria,
+    monto_aprobado: Number(row.monto_aprobado) || 0,
+  }));
+}
+
 /* ==================== PRESUPUESTO SOLICITUDES (PRE) ==================== */
 
 const PRESUP_ESTATUS_SOLICITUD = { PENDIENTE_APROBACION_GG: "PENDIENTE_APROBACION_GG", APROBADO: "APROBADO", RECHAZADO: "RECHAZADO" };
@@ -7923,6 +7940,29 @@ app.post("/api/dashboard/presupuesto-comparar", dashboardAuthMiddleware, async (
     res.json(deltas);
   } catch (e) {
     console.error("[Dashboard presupuesto-comparar]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/** Detalle de presupuesto por planta y periodo (categoría / subcategoría / monto_aprobado). */
+app.get("/api/dashboard/presupuesto-detalle", dashboardAuthMiddleware, async (req, res) => {
+  const planta = (req.query.planta || "").toString().trim();
+  const periodo = (req.query.periodo || "").toString().trim() || getPeriodoPresupuestoConsulta();
+  if (!planta) {
+    return res.status(400).json({ error: "Falta planta" });
+  }
+  if (!/^\d{4}-\d{2}$/.test(periodo)) {
+    return res.status(400).json({ error: "Periodo inválido (esperado YYYY-MM)" });
+  }
+  const plantaNombre = resolvePlantaPresupuestoNombre(planta.trim());
+  const client = await pool.connect();
+  try {
+    const detalle = await queryPresupuestoDetallePorPlanta(client, plantaNombre, periodo);
+    res.json({ planta: plantaNombre, periodo, detalle });
+  } catch (e) {
+    console.error("[Dashboard presupuesto-detalle]", e);
     res.status(500).json({ error: e.message });
   } finally {
     client.release();

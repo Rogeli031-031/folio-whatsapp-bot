@@ -154,6 +154,29 @@ export interface IgfForecastResponse {
   totales: Record<string, number | null> | null;
 }
 
+export interface PresupuestoDetalleItem {
+  categoria: string;
+  subcategoria: string;
+  monto_aprobado: number;
+}
+
+export interface PresupuestoDetalleResponse {
+  planta: string;
+  periodo: string;
+  detalle: PresupuestoDetalleItem[];
+}
+
+export function fetchPresupuestoDetalle(
+  token: string,
+  planta: string,
+  periodo: string
+): Promise<PresupuestoDetalleResponse> {
+  return apiFetch<PresupuestoDetalleResponse>("/api/dashboard/presupuesto-detalle", {
+    token,
+    params: { planta, periodo },
+  });
+}
+
 export function fetchIgfForecast(
   token: string,
   params?: { year?: number; month?: number }
