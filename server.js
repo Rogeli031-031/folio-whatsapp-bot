@@ -6518,9 +6518,17 @@ app.get("/api/folios/:id/documento-folio", dashboardAuthMiddleware, async (req, 
     const importeNum = folio.importe != null ? Number(folio.importe) : 0;
     const importeStr = Number(importeNum).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const PLANTA_CODIGO_A_NOMBRE = { E7: "PUEBLA", E8: "TEHUACAN", E9: "ACAPULCO", E10: "ACAPULCO", E12: "QUERETARO", E13: "SAN LUIS", E15: "MORELOS" };
+    const PLANTA_NOMBRE_A_CODIGO = { PUEBLA: "E7", TEHUACAN: "E8", ACAPULCO: "E9", QUERETARO: "E12", SANLUIS: "E13", "SAN LUIS": "E13", MORELOS: "E15" };
     const claveNorm = String(folio.planta_clave || "").trim().toUpperCase();
-    const nombreMapeado = claveNorm ? (PLANTA_CODIGO_A_NOMBRE[claveNorm] || String(folio.planta_nombre || "").trim().toUpperCase()) : "";
-    const plantaDisplay = (claveNorm && nombreMapeado) ? `${claveNorm}-${nombreMapeado}` : (claveNorm || String(folio.planta_nombre || "").trim().toUpperCase() || "—");
+    const nombreNorm = (s) => String(s || "").trim().toUpperCase().replace(/\s+/g, " ").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    let codigoPlanta = (claveNorm && PLANTA_CODIGO_A_NOMBRE[claveNorm]) ? claveNorm : null;
+    if (!codigoPlanta) {
+      const claveSinAcentos = nombreNorm(folio.planta_clave).replace(/\s/g, "");
+      const nombreSinAcentos = nombreNorm(folio.planta_nombre).replace(/\s/g, "");
+      codigoPlanta = PLANTA_NOMBRE_A_CODIGO[claveSinAcentos] || PLANTA_NOMBRE_A_CODIGO[nombreSinAcentos] || PLANTA_NOMBRE_A_CODIGO[claveNorm] || PLANTA_NOMBRE_A_CODIGO[nombreNorm(folio.planta_nombre)];
+    }
+    const nombreDisplay = codigoPlanta ? PLANTA_CODIGO_A_NOMBRE[codigoPlanta] : "";
+    const plantaDisplay = (codigoPlanta && nombreDisplay) ? `${codigoPlanta}-${nombreDisplay}` : (claveNorm || String(folio.planta_nombre || "").trim().toUpperCase() || "—");
     const fechaSolicitud = folio.creado_en
       ? new Date(folio.creado_en).toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric" })
       : "—";
