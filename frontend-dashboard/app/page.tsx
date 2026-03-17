@@ -104,6 +104,7 @@ function KpiContent() {
   const [presupuestoDetalleItems, setPresupuestoDetalleItems] = useState<PresupuestoDetalleItem[] | null>(null);
   const [presupuestoDetalleLoading, setPresupuestoDetalleLoading] = useState(false);
   const [presupuestoDetalleError, setPresupuestoDetalleError] = useState<string | null>(null);
+  const [presupuestoDetalleCategoriaSel, setPresupuestoDetalleCategoriaSel] = useState<string | null>(null);
   const [igfMesAnterior, setIgfMesAnterior] = useState<IgfForecastResponse | null>(null);
   const [igfMesAnteriorLoading, setIgfMesAnteriorLoading] = useState(false);
   const [deltaForecastPlanta, setDeltaForecastPlanta] = useState("");
@@ -462,6 +463,7 @@ function KpiContent() {
                                   setPresupuestoDetalle(row);
                                   setPresupuestoDetalleItems(null);
                                   setPresupuestoDetalleError(null);
+                                  setPresupuestoDetalleCategoriaSel(null);
                                   if (!token || !igfForecast) return;
                                   setPresupuestoDetalleLoading(true);
                                   try {
@@ -1446,7 +1448,15 @@ function KpiContent() {
         {plantaFilter ? <div className="flex-1 min-h-[35vh] mt-6" aria-hidden /> : null}
       </main>
       {presupuestoDetalle && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4" onClick={() => setPresupuestoDetalle(null)}>
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4"
+          onClick={() => {
+            setPresupuestoDetalle(null);
+            setPresupuestoDetalleItems(null);
+            setPresupuestoDetalleCategoriaSel(null);
+            setPresupuestoDetalleError(null);
+          }}
+        >
           <div
             className="w-full max-w-lg rounded-lg border border-slate-700 bg-slate-900 p-6 shadow-xl"
             onClick={(e) => e.stopPropagation()}
@@ -1457,7 +1467,12 @@ function KpiContent() {
               </h3>
               <button
                 type="button"
-                onClick={() => setPresupuestoDetalle(null)}
+                onClick={() => {
+                  setPresupuestoDetalle(null);
+                  setPresupuestoDetalleItems(null);
+                  setPresupuestoDetalleCategoriaSel(null);
+                  setPresupuestoDetalleError(null);
+                }}
                 className="rounded p-1 text-slate-400 hover:bg-slate-700 hover:text-white"
               >
                 ×
@@ -1502,34 +1517,82 @@ function KpiContent() {
                 <h4 className="mb-1 text-sm font-semibold text-slate-200">Desglose por categoría y subcategoría</h4>
                 {presupuestoDetalleLoading && <p className="text-xs text-slate-400">Cargando detalle…</p>}
                 {presupuestoDetalleError && <p className="text-xs text-red-400">{presupuestoDetalleError}</p>}
-                {!presupuestoDetalleLoading && !presupuestoDetalleError && presupuestoDetalleItems && presupuestoDetalleItems.length > 0 && (
-                  <div className="max-h-64 overflow-y-auto border border-slate-700 rounded">
-                    <table className="w-full border-collapse text-xs">
-                      <thead>
-                        <tr className="border-b border-slate-700 bg-slate-800 text-slate-300">
-                          <th className="py-1 px-2 text-left">Categoría</th>
-                          <th className="py-1 px-2 text-left">Subcategoría</th>
-                          <th className="py-1 px-2 text-right">Monto aprobado (MXN)</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {presupuestoDetalleItems.map((it, idx) => (
-                          <tr key={`${it.categoria}-${it.subcategoria}-${idx}`} className="border-b border-slate-800 text-slate-200">
-                            <td className="py-1 px-2">{it.categoria}</td>
-                            <td className="py-1 px-2">{it.subcategoria}</td>
-                            <td className="py-1 px-2 text-right tabular-nums">
-                              {it.monto_aprobado.toLocaleString("es-MX", {
-                                style: "currency",
-                                currency: "MXN",
-                                maximumFractionDigits: 0,
-                              })}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                {!presupuestoDetalleLoading && !presupuestoDetalleError && presupuestoDetalleItems && presupuestoDetalleItems.length > 0 && (() => {
+                  const byCat: Record<string, number> = {};
+                  for (const it of presupuestoDetalleItems) {
+                    const cat = it.categoria || "—";
+                    byCat[cat] = (byCat[cat] || 0) + (it.monto_aprobado || 0);
+                  }
+                  const categorias = Object.keys(byCat).sort((a, b) => byCat[b] - byCat[a]);
+                  const subitems =
+                    presupuestoDetalleCategoriaSel && presupuestoDetalleItems
+                      ? presupuestoDetalleItems.filter((it) => (it.categoria || "—") === presupuestoDetalleCategoriaSel)
+                      : [];
+                  return (
+                    <div className="space-y-3">
+                      <div className="max-h-40 overflow-y-auto border border-slate-700 rounded">
+                        <table className="w-full border-collapse text-xs">
+                          <thead>
+                            <tr className="border-b border-slate-700 bg-slate-800 text-slate-300">
+                              <th className="py-1 px-2 text-left">Categoría</th>
+                              <th className="py-1 px-2 text-right">Total aprobado (MXN)</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {categorias.map((cat) => (
+                              <tr
+                                key={cat}
+                                className={`border-b border-slate-800 text-slate-200 hover:bg-slate-800 cursor-pointer ${
+                                  presupuestoDetalleCategoriaSel === cat ? "bg-slate-800" : ""
+                                }`}
+                                onClick={() =>
+                                  setPresupuestoDetalleCategoriaSel((prev) => (prev === cat ? null : cat))
+                                }
+                              >
+                                <td className="py-1 px-2">{cat}</td>
+                                <td className="py-1 px-2 text-right tabular-nums">
+                                  {byCat[cat].toLocaleString("es-MX", {
+                                    style: "currency",
+                                    currency: "MXN",
+                                    maximumFractionDigits: 0,
+                                  })}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      {presupuestoDetalleCategoriaSel && (
+                        <div className="max-h-40 overflow-y-auto border border-slate-700 rounded">
+                          <table className="w-full border-collapse text-xs">
+                            <thead>
+                              <tr className="border-b border-slate-700 bg-slate-800 text-slate-300">
+                                <th className="py-1 px-2 text-left">
+                                  Subcategorías · {presupuestoDetalleCategoriaSel}
+                                </th>
+                                <th className="py-1 px-2 text-right">Monto aprobado (MXN)</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {subitems.map((it, idx) => (
+                                <tr key={`${it.categoria}-${it.subcategoria}-${idx}`} className="border-b border-slate-800 text-slate-200">
+                                  <td className="py-1 px-2">{it.subcategoria}</td>
+                                  <td className="py-1 px-2 text-right tabular-nums">
+                                    {it.monto_aprobado.toLocaleString("es-MX", {
+                                      style: "currency",
+                                      currency: "MXN",
+                                      maximumFractionDigits: 0,
+                                    })}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
                 {!presupuestoDetalleLoading && !presupuestoDetalleError && (!presupuestoDetalleItems || presupuestoDetalleItems.length === 0) && (
                   <p className="text-xs text-slate-500">No hay presupuesto asignado por categoría para esta planta y periodo.</p>
                 )}
