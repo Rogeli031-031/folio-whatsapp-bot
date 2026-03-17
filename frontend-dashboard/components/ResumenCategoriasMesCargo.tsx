@@ -56,6 +56,10 @@ function fmtMxn(n: number): string {
 
 export default function ResumenCategoriasMesCargo({ data, selectedPlantaId, onOpenFolio }: Props) {
   const cards = useMemo(() => flattenCardsFromKanban(data, selectedPlantaId), [data, selectedPlantaId]);
+  const prestamosCards = useMemo(
+    () => cards.filter((c) => c.prestamo_a_planta),
+    [cards]
+  );
 
   const { byMes, byMesCat, byMesCatSub, detalleList } = useMemo(() => {
     const byMes: Record<MesCargo, number> = {};
@@ -158,6 +162,26 @@ export default function ResumenCategoriasMesCargo({ data, selectedPlantaId, onOp
     XLSX.writeFile(wb, "resumen_categorias_mes_cargo.xlsx");
   };
 
+  const handleExportPrestamosExcel = () => {
+    const aoa: (string | number)[][] = [
+      ["Número folio", "Planta origen (A)", "Cargado a planta (B)", "Mes cargo", "Importe (MXN)", "Concepto"],
+    ];
+    for (const f of prestamosCards) {
+      const prestamo = f.prestamo_a_planta || "";
+      aoa.push([
+        f.numero_folio || f.folio_codigo || "",
+        (f.planta_nombre || "").trim() || "—",
+        prestamo,
+        formatMesCargo(String(f.mes_cargo || "").trim()) || "—",
+        f.importe ?? 0,
+        (f.descripcion || "").slice(0, 500),
+      ]);
+    }
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), "Préstamos A a B");
+    XLSX.writeFile(wb, "prestamos_a_planta.xlsx");
+  };
+
   const showDetalle = selectedMes != null && selectedCategoria != null && selectedSubcategoria != null;
   const showSubcategorias = selectedMes != null && selectedCategoria != null && !showDetalle;
   const showCategorias = selectedMes != null && !selectedCategoria;
@@ -176,13 +200,24 @@ export default function ResumenCategoriasMesCargo({ data, selectedPlantaId, onOp
     <div className="mx-4 mt-3 rounded border border-slate-600 bg-slate-800/60 px-4 py-3">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-semibold text-slate-200">Resumen por categoría y mes de cargo</h2>
-        <button
-          type="button"
-          onClick={handleExportExcel}
-          className="rounded bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-600"
-        >
-          Exportar a Excel
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={handleExportPrestamosExcel}
+            disabled={prestamosCards.length === 0}
+            title={prestamosCards.length === 0 ? "No hay folios marcados como préstamo a planta" : "Exportar folios que son préstamos de planta A a planta B"}
+            className="rounded bg-sky-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Exportar préstamos A→B ({prestamosCards.length})
+          </button>
+          <button
+            type="button"
+            onClick={handleExportExcel}
+            className="rounded bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-600"
+          >
+            Exportar a Excel
+          </button>
+        </div>
       </div>
       <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
         {(selectedMes || selectedCategoria || selectedSubcategoria) && (

@@ -79,6 +79,7 @@ export interface FolioCard {
   proyecto_id?: number | null;
   proyecto_codigo?: string | null;
   proyecto_nombre?: string | null;
+  prestamo_a_planta?: string | null;
 }
 
 export interface Kpis {

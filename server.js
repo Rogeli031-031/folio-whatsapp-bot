@@ -5159,6 +5159,7 @@ function cardFromFolioRow(row) {
     proyecto_id: row.proyecto_id != null ? row.proyecto_id : null,
     proyecto_codigo: row.proyecto_codigo || null,
     proyecto_nombre: row.proyecto_nombre || null,
+    prestamo_a_planta: row.prestamo_a_planta != null && String(row.prestamo_a_planta).trim() !== "" ? String(row.prestamo_a_planta).trim() : null,
   };
 }
 
@@ -5170,6 +5171,7 @@ app.get("/api/dashboard/kanban", dashboardAuthMiddleware, async (req, res) => {
     const q = `
       SELECT f.id, f.numero_folio, f.folio_codigo, f.planta_id, f.categoria, f.subcategoria, f.unidad,
              f.importe, f.estatus, f.creado_en, f.prioridad, f.mes_cargo, f.beneficiario, f.proyecto_id,
+             f.prestamo_a_planta,
              COALESCE(f.solo_zp_ad, false) AS solo_zp_ad, COALESCE(f.por_recuperar, false) AS por_recuperar,
              COALESCE(f.solicitud_por_recuperar_pendiente, false) AS solicitud_por_recuperar_pendiente,
              COALESCE(f.descripcion, f.concepto) AS descripcion_display,
