@@ -100,7 +100,26 @@ function KpiContent() {
   const [igfError, setIgfError] = useState<string | null>(null);
   const [hgSaving, setHgSaving] = useState<string | null>(null);
   const [plantaFilter, setPlantaFilter] = useState<string>("");
-  const [presupuestoGendByEmpresa, setPresupuestoGendByEmpresa] = useState<Record<string, number>>({});
+  const PRESUPUESTO_GEND_STORAGE_KEY = "dashboard-presupuesto-gend";
+  const [presupuestoGendByEmpresa, setPresupuestoGendByEmpresa] = useState<Record<string, number>>(() => {
+    if (typeof window === "undefined") return {};
+    try {
+      const s = localStorage.getItem(PRESUPUESTO_GEND_STORAGE_KEY);
+      if (!s) return {};
+      const parsed = JSON.parse(s) as Record<string, number>;
+      return typeof parsed === "object" && parsed !== null ? parsed : {};
+    } catch {
+      return {};
+    }
+  });
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem(PRESUPUESTO_GEND_STORAGE_KEY, JSON.stringify(presupuestoGendByEmpresa));
+    } catch {
+      // ignore
+    }
+  }, [presupuestoGendByEmpresa]);
   const [presupuestoDetalle, setPresupuestoDetalle] = useState<IgfForecastRow | null>(null);
   const [presupuestoDetalleItems, setPresupuestoDetalleItems] = useState<PresupuestoDetalleItem[] | null>(null);
   const [presupuestoDetalleLoading, setPresupuestoDetalleLoading] = useState(false);
