@@ -66,7 +66,8 @@ export default function ResumenCategoriasMesCargo({ data, selectedPlantaId, onOp
     for (const c of cards) {
       const mes = String(c.mes_cargo || "").trim();
       const cat = (c.categoria || "").trim() || "—";
-      const sub = (c.subcategoria || "").trim() || "—";
+      const subRaw = (c.subcategoria || c.unidad || "").trim();
+      const sub = subRaw || "—";
       const imp = Number(c.importe) || 0;
 
       byMes[mes] = (byMes[mes] || 0) + imp;
