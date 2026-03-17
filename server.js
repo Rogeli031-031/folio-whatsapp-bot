@@ -6480,9 +6480,10 @@ app.get("/api/folios/:id/documento-folio", dashboardAuthMiddleware, async (req, 
     const concepto = (folio.concepto || "").toString().trim() || "—";
     const importeNum = folio.importe != null ? Number(folio.importe) : 0;
     const importeStr = Number(importeNum).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    const plantaDisplay = (folio.planta_clave && folio.planta_nombre)
-      ? `${String(folio.planta_clave).trim()}-${String(folio.planta_nombre).trim().toUpperCase()}`
-      : (folio.planta_clave || String(folio.planta_nombre || "").trim().toUpperCase() || "—");
+    const PLANTA_CODIGO_A_NOMBRE = { E7: "PUEBLA", E8: "TEHUACAN", E9: "ACAPULCO", E10: "ACAPULCO", E12: "QUERETARO", E13: "SAN LUIS", E15: "MORELOS" };
+    const claveNorm = String(folio.planta_clave || "").trim().toUpperCase();
+    const nombreMapeado = claveNorm ? (PLANTA_CODIGO_A_NOMBRE[claveNorm] || String(folio.planta_nombre || "").trim().toUpperCase()) : "";
+    const plantaDisplay = (claveNorm && nombreMapeado) ? `${claveNorm}-${nombreMapeado}` : (claveNorm || String(folio.planta_nombre || "").trim().toUpperCase() || "—");
     const fechaSolicitud = folio.creado_en
       ? new Date(folio.creado_en).toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric" })
       : "—";
