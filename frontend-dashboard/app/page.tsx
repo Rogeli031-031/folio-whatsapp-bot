@@ -1510,7 +1510,7 @@ function KpiContent() {
                       ? Number(presupuestoDetalle.venta_ton)
                       : 0;
                     const pKgEff = getPresupuestoKgWithGend(presupuestoDetalle) ?? 0;
-                    const total = vTon * 1000 * Math.abs(pKg);
+                    const total = vTon * 1000 * Math.abs(pKgEff);
                     return total.toLocaleString("es-MX", {
                       style: "currency",
                       currency: "MXN",
