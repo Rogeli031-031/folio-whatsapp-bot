@@ -118,6 +118,7 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
   const puedeEditar = roleUpper === "AD";
   const puedeAprobar = !soloLectura && ESTADOS_APROBABLES.includes(estatusUpper);
   const puedeRegresarZp = !soloLectura && ESTADOS_CARRO_COMPRA.includes(estatusUpper);
+  const puedeAsignarMesCargo = (roleUpper === "GG" || roleUpper === "AD" || roleUpper === "ZP") && ESTADOS_CARRO_COMPRA.includes(estatusUpper);
   const puedeSoloZpAd = roleUpper === "ZP" || roleUpper === "AD";
   const soloZpAd = !!folio?.solo_zp_ad;
   const porRecuperar = !!folio?.por_recuperar;
@@ -311,7 +312,7 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
   };
 
   const handleSaveMesCargo = async () => {
-    if (!token || !folioId || !puedeRegresarZp) return;
+    if (!token || !folioId || !puedeAsignarMesCargo) return;
     setApproveError(null);
     setSavingMesCargo(true);
     try {
@@ -496,7 +497,7 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
                       </dd>
                     </div>
                   )}
-                  {puedeRegresarZp && (
+                  {puedeAsignarMesCargo && (
                     <div className="pt-2 border-t border-slate-700">
                       <dt className="text-slate-500 mb-1">Mes de cargo (para documento e impresión)</dt>
                       <dd className="flex flex-wrap items-center gap-2">
