@@ -60,6 +60,19 @@ function normalizeEmpresa(s: string): string {
     .replace(/[\u0300-\u036f]/g, "");
 }
 
+/** Clave única por planta para GEND: "GTM San Luis" y "San Luis" → "san luis", "Morelos" → "morelos", etc. */
+function presupuestoGendKey(empresa: string): string {
+  const n = normalizeEmpresa(empresa || "");
+  if (!n) return "";
+  if (n.includes("san luis")) return "san luis";
+  if (n.includes("puebla")) return "puebla";
+  if (n.includes("queretaro")) return "queretaro";
+  if (n.includes("tehuacan")) return "tehuacan";
+  if (n.includes("acapulco")) return "acapulco";
+  if (n.includes("morelos")) return "morelos";
+  return n;
+}
+
 /** Gasto $/kg cuando hay filtro por planta: suma de Presupuesto + Folios Aprob. ZP + Folios en carro + Depósito y cierre (mismos 4 de la página inicio). */
 function gastoKgFromFour(row: IgfForecastRow): number {
   const n = (v: number | null | undefined) => (v != null && !Number.isNaN(Number(v)) ? Number(v) : 0);
@@ -107,7 +120,13 @@ function KpiContent() {
       const s = localStorage.getItem(PRESUPUESTO_GEND_STORAGE_KEY);
       if (!s) return {};
       const parsed = JSON.parse(s) as Record<string, number>;
-      return typeof parsed === "object" && parsed !== null ? parsed : {};
+      if (typeof parsed !== "object" || parsed === null) return {};
+      const normalized: Record<string, number> = {};
+      for (const [key, val] of Object.entries(parsed)) {
+        const nKey = presupuestoGendKey(key);
+        if (nKey && typeof val === "number" && !Number.isNaN(val)) normalized[nKey] = val;
+      }
+      return normalized;
     } catch {
       return {};
     }
@@ -359,7 +378,7 @@ function KpiContent() {
 
   const getPresupuestoKgWithGend = (row: IgfForecastRow): number | null => {
     const base = row.presupuesto_kg != null && !Number.isNaN(Number(row.presupuesto_kg)) ? Number(row.presupuesto_kg) : null;
-    const extraMxn = presupuestoGendByEmpresa[row.empresa || ""] ?? 0;
+    const extraMxn = presupuestoGendByEmpresa[presupuestoGendKey(row.empresa || "")] ?? 0;
     const ventaTon = row.venta_ton != null && !Number.isNaN(Number(row.venta_ton)) ? Number(row.venta_ton) : 0;
     const ventaKg = ventaTon * 1000;
     if (!ventaKg || !extraMxn) return base;
@@ -1522,7 +1541,7 @@ function KpiContent() {
                 </span>
               </p>
               {(() => {
-                const gendMxn = presupuestoGendByEmpresa[presupuestoDetalle.empresa || ""] ?? 0;
+                const gendMxn = presupuestoGendByEmpresa[presupuestoGendKey(presupuestoDetalle.empresa || "")] ?? 0;
                 if (gendMxn === 0) return null;
                 return (
                   <p className="text-slate-200">
@@ -1560,10 +1579,10 @@ function KpiContent() {
                   <input
                     type="number"
                     className="mt-1 w-32 rounded border border-slate-600 bg-slate-800 px-2 py-1 text-xs text-slate-100"
-                    value={presupuestoGendByEmpresa[presupuestoDetalle.empresa || ""] ?? ""}
+                    value={presupuestoGendByEmpresa[presupuestoGendKey(presupuestoDetalle.empresa || "")] ?? ""}
                     onChange={(e) => {
                       const raw = e.target.value.trim();
-                      const key = presupuestoDetalle.empresa || "";
+                      const key = presupuestoGendKey(presupuestoDetalle.empresa || "");
                       setPresupuestoGendByEmpresa((prev) => ({
                         ...prev,
                         [key]: raw === "" ? 0 : Number(raw) || 0,
@@ -1572,7 +1591,7 @@ function KpiContent() {
                   />
                 </label>
                 {(() => {
-                  const gendMxn = presupuestoGendByEmpresa[presupuestoDetalle.empresa || ""] ?? 0;
+                  const gendMxn = presupuestoGendByEmpresa[presupuestoGendKey(presupuestoDetalle.empresa || "")] ?? 0;
                   if (gendMxn === 0) return null;
                   return (
                     <p className="mt-1 font-medium text-slate-200">
@@ -1602,7 +1621,7 @@ function KpiContent() {
                     byCat[cat] = (byCat[cat] || 0) + (it.monto_aprobado || 0);
                   }
                   // Añadir categoría virtual GEND si hay monto capturado.
-                  const extraMxn = presupuestoGendByEmpresa[presupuestoDetalle.empresa || ""] ?? 0;
+                  const extraMxn = presupuestoGendByEmpresa[presupuestoGendKey(presupuestoDetalle.empresa || "")] ?? 0;
                   if (extraMxn) {
                     byCat["GEND"] = (byCat["GEND"] || 0) + Math.abs(extraMxn);
                   }
