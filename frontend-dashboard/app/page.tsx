@@ -111,7 +111,11 @@ function KpiContent() {
   const [deltaForecastError, setDeltaForecastError] = useState<string | null>(null);
   const [showDeltaCliente, setShowDeltaCliente] = useState(false);
   const [deltaClienteSel, setDeltaClienteSel] = useState<{ grupo: string; cliente: import("@/lib/api").DeltaIngresoForecastCliente } | null>(null);
-  const [dicfMesRowsByCliente, setDicfMesRowsByCliente] = useState<Record<string, { loading: boolean; error: string | null; rows: { mes: string; ventaTon: number | null; descMxn: number | null; descKg: number | null }[] }>>({});
+  const [dicfMesRowsByCliente, setDicfMesRowsByCliente] = useState<Record<string, {
+    loading: boolean;
+    error: string | null;
+    rows: { mes: string; ventaTon: number | null; descKg: number | null; ingresoMxn: number | null; _descMxn?: number | null; _margenKg?: number | null }[];
+  }>>({});
   const [dicfConfig, setDicfConfig] = useState<DicfConfig | null>(null);
   const [showDicfParams, setShowDicfParams] = useState(false);
   const [dicfParamsLoading, setDicfParamsLoading] = useState(false);
@@ -263,13 +267,20 @@ function KpiContent() {
         const rows = monthLabels.map((mes) => {
           const iV = findHeaderIdx(`Venta ${mes}`);
           const iD = findHeaderIdx(`Descuento ${mes}`);
+          const iM = findHeaderIdx(`Margen ${mes}`);
           const ventaTonRaw = iV >= 0 ? Number(row[iV]) : NaN;
           const descMxnRaw = iD >= 0 ? Number(row[iD]) : NaN;
+          const margenKgRaw = iM >= 0 ? Number(row[iM]) : NaN;
           const ventaTon = Number.isFinite(ventaTonRaw) ? ventaTonRaw : null;
           const descMxn = Number.isFinite(descMxnRaw) ? descMxnRaw : null;
+          const margenKg = Number.isFinite(margenKgRaw) ? margenKgRaw : null;
           const ventaKg = ventaTon != null ? ventaTon * 1000 : null;
           const descKg = ventaKg != null && ventaKg > 0 && descMxn != null ? descMxn / ventaKg : null;
-          return { mes, ventaTon, descMxn, descKg };
+          const ingresoMxn =
+            ventaKg != null && ventaKg > 0 && margenKg != null
+              ? ventaKg * margenKg - Math.abs(descMxn != null ? descMxn : 0)
+              : null;
+          return { mes, ventaTon, descKg, ingresoMxn, _descMxn: descMxn, _margenKg: margenKg };
         });
 
         if (cancelled) return;
@@ -1269,8 +1280,11 @@ function KpiContent() {
                   const cacheKey = `${deltaForecastPlanta}||${tipo}||${canal}||${subcanal}||${clienteNombre}`.toLowerCase();
                   const st = dicfMesRowsByCliente[cacheKey];
                   const fmtTon = (n: number | null) => (n != null && Number.isFinite(n) ? n.toLocaleString("es-MX", { minimumFractionDigits: 3, maximumFractionDigits: 3 }) : "—");
-                  const fmtMxn0 = (n: number | null) => (n != null && Number.isFinite(n) ? n.toLocaleString("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 0, maximumFractionDigits: 0 }) : "—");
                   const fmtKg = (n: number | null) => (n != null && Number.isFinite(n) ? n.toLocaleString("es-MX", { minimumFractionDigits: 3, maximumFractionDigits: 3 }) : "—");
+                  const fmtMxn0 = (n: number | null) => (n != null && Number.isFinite(n) ? n.toLocaleString("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 0, maximumFractionDigits: 0 }) : "—");
+                  const realTonActual = deltaClienteSel.cliente?.kgA != null && Number.isFinite(Number(deltaClienteSel.cliente.kgA))
+                    ? Number(deltaClienteSel.cliente.kgA) / 1000
+                    : null;
                   return (
                     <div className="mt-2 rounded border border-slate-700 bg-slate-800/40 p-3">
                       <h4 className="mb-2 text-base font-semibold text-slate-300">Venta y descuento por mes (Enero → Forecast)</h4>
@@ -1283,17 +1297,20 @@ function KpiContent() {
                               <tr className="border-b border-slate-700 text-slate-400">
                                 <th className="py-1 pr-2 text-left">Mes</th>
                                 <th className="py-1 pr-2 text-right">Venta (Ton)</th>
-                                <th className="py-1 pr-2 text-right">Descuento (MXN)</th>
                                 <th className="py-1 text-right">Descuento ($/Kg)</th>
+                                <th className="py-1 text-right">Ingreso (MXN)</th>
                               </tr>
                             </thead>
                             <tbody>
                               {st.rows.map((r, idx) => (
                                 <tr key={idx} className="border-b border-slate-800">
-                                  <td className="py-1 pr-2">{r.mes}</td>
+                                  <td className="py-1 pr-2">
+                                    {r.mes}
+                                    {realTonActual != null && /forecast/i.test(r.mes) ? ` (${fmtTon(realTonActual)} real)` : ""}
+                                  </td>
                                   <td className="py-1 pr-2 text-right tabular-nums">{fmtTon(r.ventaTon)}</td>
-                                  <td className="py-1 pr-2 text-right tabular-nums">{fmtMxn0(r.descMxn)}</td>
                                   <td className="py-1 text-right tabular-nums">{fmtKg(r.descKg)}</td>
+                                  <td className="py-1 text-right tabular-nums">{fmtMxn0(r.ingresoMxn)}</td>
                                 </tr>
                               ))}
                             </tbody>
