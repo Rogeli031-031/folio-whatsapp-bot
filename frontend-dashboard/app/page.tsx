@@ -107,6 +107,7 @@ function KpiContent() {
   const [deltaForecastData, setDeltaForecastData] = useState<DeltaIngresoForecastResult | null>(null);
   const [dicfData, setDicfData] = useState<DicfResult | null>(null);
   const [deltaCanalFilter, setDeltaCanalFilter] = useState<{ tipo: "dejaron" | "nuevos" | "aumentaron" | "disminuyeron"; canal: string; subcanal: string } | null>(null);
+  const [dicfClienteQuery, setDicfClienteQuery] = useState<string>("");
   const [deltaForecastLoading, setDeltaForecastLoading] = useState(false);
   const [deltaForecastError, setDeltaForecastError] = useState<string | null>(null);
   const [showDeltaCliente, setShowDeltaCliente] = useState(false);
@@ -136,6 +137,12 @@ function KpiContent() {
       .then((r) => setDeltaForecastPeriodos(r.periodos || []))
       .catch(() => setDeltaForecastPeriodos([]));
   }, [token, deltaForecastPlanta]);
+
+  useEffect(() => {
+    // Cambia de planta -> reinicia búsqueda/selección para no mezclar clientes.
+    setDicfClienteQuery("");
+    setDeltaClienteSel(null);
+  }, [deltaForecastPlanta]);
 
   useEffect(() => {
     const t = parseTokenFromQuery(searchParams) || getTokenFromStorage();
@@ -846,6 +853,15 @@ function KpiContent() {
                 {deltaForecastLoading ? "…" : "Delta Ingreso Cliente Forecast"}
               </button>
             </div>
+            <div className="min-w-[14rem]">
+              <label className="block text-xs text-slate-500 mb-1">Buscar cliente</label>
+              <input
+                value={dicfClienteQuery}
+                onChange={(e) => setDicfClienteQuery(e.target.value)}
+                placeholder="Escribe el nombre…"
+                className="w-full rounded border border-slate-600 bg-slate-700 px-2 py-1.5 text-sm text-slate-200 placeholder:text-slate-500"
+              />
+            </div>
             {deltaForecastData && token && !dicfData && (
               <a
                 href={getDeltaIngresoForecastExcelUrl(token, deltaForecastPlanta, deltaForecastPeriodoA, deltaForecastPeriodoB)}
@@ -1133,6 +1149,11 @@ function KpiContent() {
                         ? true
                         : (c.canal || "") === deltaCanalFilter.canal && (c.subcanal || "") === deltaCanalFilter.subcanal
                     )
+                    .filter((c) => {
+                      const q = (dicfClienteQuery || "").trim().toLowerCase();
+                      if (!q) return true;
+                      return (c.cliente || "").toLowerCase().includes(q);
+                    })
                     .slice(0, 15)
                     .map((c, i) => (
                       <li key={i} className="border-b border-slate-800/50 pb-1 mb-0.5">
@@ -1160,6 +1181,11 @@ function KpiContent() {
                         ? true
                         : (c.canal || "") === deltaCanalFilter.canal && (c.subcanal || "") === deltaCanalFilter.subcanal
                     )
+                    .filter((c) => {
+                      const q = (dicfClienteQuery || "").trim().toLowerCase();
+                      if (!q) return true;
+                      return (c.cliente || "").toLowerCase().includes(q);
+                    })
                     .slice(0, 15)
                     .map((c, i) => (
                       <li key={i} className="border-b border-slate-800/50 pb-1 mb-0.5">
@@ -1187,6 +1213,11 @@ function KpiContent() {
                         ? true
                         : (c.canal || "") === deltaCanalFilter.canal && (c.subcanal || "") === deltaCanalFilter.subcanal
                     )
+                    .filter((c) => {
+                      const q = (dicfClienteQuery || "").trim().toLowerCase();
+                      if (!q) return true;
+                      return (c.cliente || "").toLowerCase().includes(q);
+                    })
                     .slice(0, 15)
                     .map((c, i) => (
                       <li key={i} className="border-b border-slate-800/50 pb-1 mb-0.5">
@@ -1214,6 +1245,11 @@ function KpiContent() {
                         ? true
                         : (c.canal || "") === deltaCanalFilter.canal && (c.subcanal || "") === deltaCanalFilter.subcanal
                     )
+                    .filter((c) => {
+                      const q = (dicfClienteQuery || "").trim().toLowerCase();
+                      if (!q) return true;
+                      return (c.cliente || "").toLowerCase().includes(q);
+                    })
                     .slice(0, 15)
                     .map((c, i) => (
                       <li key={i} className="border-b border-slate-800/50 pb-1 mb-0.5">
