@@ -24,6 +24,7 @@ import PolizaModal from "@/components/PolizaModal";
 import ImprimirGastosModal from "@/components/ImprimirGastosModal";
 import CrearFolioModal from "@/components/CrearFolioModal";
 import CrearProyectoModal from "@/components/CrearProyectoModal";
+import ResumenCategoriasMesCargo from "@/components/ResumenCategoriasMesCargo";
 
 function DashboardContent() {
   const searchParams = useSearchParams();
@@ -188,6 +189,11 @@ function DashboardContent() {
         />
       )}
       <main className="flex-1 min-h-0 overflow-auto">
+        <ResumenCategoriasMesCargo
+          data={kanban}
+          selectedPlantaId={selectedPlantaId}
+          onOpenFolio={setDrawerFolioId}
+        />
         <KanbanBoard
           data={kanban}
           selectedPlantaId={selectedPlantaId}
