@@ -289,7 +289,7 @@ function KpiContent() {
     return () => {
       cancelled = true;
     };
-  }, [token, deltaForecastPlanta, deltaClienteSel, dicfData, dicfMesRowsByCliente]);
+  }, [token, deltaForecastPlanta, deltaClienteSel, dicfData]);
 
   if (unauthorized) {
     return (
