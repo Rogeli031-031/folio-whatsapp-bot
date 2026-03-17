@@ -100,6 +100,7 @@ function KpiContent() {
   const [igfError, setIgfError] = useState<string | null>(null);
   const [hgSaving, setHgSaving] = useState<string | null>(null);
   const [plantaFilter, setPlantaFilter] = useState<string>("");
+  const [presupuestoGendByEmpresa, setPresupuestoGendByEmpresa] = useState<Record<string, number>>({});
   const [presupuestoDetalle, setPresupuestoDetalle] = useState<IgfForecastRow | null>(null);
   const [presupuestoDetalleItems, setPresupuestoDetalleItems] = useState<PresupuestoDetalleItem[] | null>(null);
   const [presupuestoDetalleLoading, setPresupuestoDetalleLoading] = useState(false);
@@ -337,6 +338,16 @@ function KpiContent() {
     );
   }
 
+  const getPresupuestoKgWithGend = (row: IgfForecastRow): number | null => {
+    const base = row.presupuesto_kg != null && !Number.isNaN(Number(row.presupuesto_kg)) ? Number(row.presupuesto_kg) : null;
+    const extraMxn = presupuestoGendByEmpresa[row.empresa || ""] ?? 0;
+    const ventaTon = row.venta_ton != null && !Number.isNaN(Number(row.venta_ton)) ? Number(row.venta_ton) : 0;
+    const ventaKg = ventaTon * 1000;
+    if (!ventaKg || !extraMxn) return base;
+    const deltaKg = -(Math.abs(extraMxn) / ventaKg);
+    return (base ?? 0) + deltaKg;
+  };
+
   return (
     <div className="min-h-screen flex flex-col">
       <div className="border-b border-slate-700 bg-slate-900/50 px-4 py-3">
@@ -477,7 +488,7 @@ function KpiContent() {
                                   }
                                 }}
                               >
-                                {fmtNum(row.presupuesto_kg ?? null)}
+                                {fmtNum(getPresupuestoKgWithGend(row))}
                               </button>
                             </td>
                             <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(row.folios_aprob_zp_kg ?? null)}</td>
@@ -1486,9 +1497,9 @@ function KpiContent() {
                 </span>
               </p>
               <p>
-                Presupuesto:{" "}
+                Presupuesto (incluye GEND):{" "}
                 <span className="font-mono">
-                  {fmtNum(presupuestoDetalle.presupuesto_kg ?? null)} $/kg
+                  {fmtNum(getPresupuestoKgWithGend(presupuestoDetalle) ?? null)} $/kg
                 </span>
               </p>
               <p>
@@ -1498,9 +1509,7 @@ function KpiContent() {
                     const vTon = presupuestoDetalle.venta_ton != null && !Number.isNaN(Number(presupuestoDetalle.venta_ton))
                       ? Number(presupuestoDetalle.venta_ton)
                       : 0;
-                    const pKg = presupuestoDetalle.presupuesto_kg != null && !Number.isNaN(Number(presupuestoDetalle.presupuesto_kg))
-                      ? Number(presupuestoDetalle.presupuesto_kg)
-                      : 0;
+                    const pKgEff = getPresupuestoKgWithGend(presupuestoDetalle) ?? 0;
                     const total = vTon * 1000 * Math.abs(pKg);
                     return total.toLocaleString("es-MX", {
                       style: "currency",
@@ -1510,8 +1519,26 @@ function KpiContent() {
                   })()}
                 </span>
               </p>
+              <div className="mt-2 space-y-1 text-xs text-slate-300">
+                <label className="block">
+                  <span className="mr-1">GEND (MXN) para esta planta:</span>
+                  <input
+                    type="number"
+                    className="mt-1 w-32 rounded border border-slate-600 bg-slate-800 px-2 py-1 text-xs text-slate-100"
+                    value={presupuestoGendByEmpresa[presupuestoDetalle.empresa || ""] ?? ""}
+                    onChange={(e) => {
+                      const raw = e.target.value.trim();
+                      const key = presupuestoDetalle.empresa || "";
+                      setPresupuestoGendByEmpresa((prev) => ({
+                        ...prev,
+                        [key]: raw === "" ? 0 : Number(raw) || 0,
+                      }));
+                    }}
+                  />
+                </label>
+              </div>
               <p className="mt-3 text-xs text-slate-500">
-                Nota: Importe estimado = Venta (kg) × |Presupuesto $/kg| para la planta correspondiente del IGF Forecast.
+                Nota: Importe estimado = Venta (kg) × |Presupuesto $/kg|, donde Presupuesto $/kg ya incluye el ajuste GEND (MXN) capturado arriba.
               </p>
               <div className="mt-4">
                 <h4 className="mb-1 text-sm font-semibold text-slate-200">Desglose por categoría y subcategoría</h4>
@@ -1523,10 +1550,21 @@ function KpiContent() {
                     const cat = it.categoria || "—";
                     byCat[cat] = (byCat[cat] || 0) + (it.monto_aprobado || 0);
                   }
+                  // Añadir categoría virtual GEND si hay monto capturado.
+                  const extraMxn = presupuestoGendByEmpresa[presupuestoDetalle.empresa || ""] ?? 0;
+                  if (extraMxn) {
+                    byCat["GEND"] = (byCat["GEND"] || 0) + Math.abs(extraMxn);
+                  }
                   const categorias = Object.keys(byCat).sort((a, b) => byCat[b] - byCat[a]);
                   const subitems =
                     presupuestoDetalleCategoriaSel && presupuestoDetalleItems
-                      ? presupuestoDetalleItems.filter((it) => (it.categoria || "—") === presupuestoDetalleCategoriaSel)
+                      ? presupuestoDetalleItems
+                          .filter((it) => (it.categoria || "—") === presupuestoDetalleCategoriaSel)
+                          .concat(
+                            presupuestoDetalleCategoriaSel === "GEND" && extraMxn
+                              ? [{ categoria: "GEND", subcategoria: "GEND", monto_aprobado: Math.abs(extraMxn) } as PresupuestoDetalleItem]
+                              : []
+                          )
                       : [];
                   return (
                     <div className="space-y-3">
