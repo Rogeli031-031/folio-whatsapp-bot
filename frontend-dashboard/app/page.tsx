@@ -3,6 +3,7 @@
 import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import * as XLSX from "xlsx";
 import {
   parseTokenFromQuery,
   getTokenFromStorage,
@@ -110,6 +111,7 @@ function KpiContent() {
   const [deltaForecastError, setDeltaForecastError] = useState<string | null>(null);
   const [showDeltaCliente, setShowDeltaCliente] = useState(false);
   const [deltaClienteSel, setDeltaClienteSel] = useState<{ grupo: string; cliente: import("@/lib/api").DeltaIngresoForecastCliente } | null>(null);
+  const [dicfMesRowsByCliente, setDicfMesRowsByCliente] = useState<Record<string, { loading: boolean; error: string | null; rows: { mes: string; ventaTon: number | null; descMxn: number | null; descKg: number | null }[] }>>({});
   const [dicfConfig, setDicfConfig] = useState<DicfConfig | null>(null);
   const [showDicfParams, setShowDicfParams] = useState(false);
   const [dicfParamsLoading, setDicfParamsLoading] = useState(false);
@@ -195,6 +197,99 @@ function KpiContent() {
       .catch(() => setIgfMesAnterior(null))
       .finally(() => setIgfMesAnteriorLoading(false));
   }, [token, plantaFilter, igfForecast?.year, igfForecast?.month]);
+
+  useEffect(() => {
+    if (!token || !deltaForecastPlanta || !deltaClienteSel || !dicfData) return;
+
+    const clienteNombre = (deltaClienteSel.cliente?.cliente || "").trim();
+    if (!clienteNombre) return;
+
+    const grupo = (deltaClienteSel.grupo || "").toLowerCase();
+    const tipo: "dejaron" | "nuevos" | "aumentaron" | "disminuyeron" | null =
+      grupo.includes("dejaron") ? "dejaron"
+        : grupo.includes("nuevos") ? "nuevos"
+          : grupo.includes("aument") ? "aumentaron"
+            : (grupo.includes("dismin") || grupo.includes("- ingreso")) ? "disminuyeron"
+              : grupo.includes("+ ingreso") ? "aumentaron"
+                : null;
+
+    const canal = (deltaClienteSel.cliente?.canal || "").trim();
+    const subcanal = (deltaClienteSel.cliente?.subcanal || "").trim();
+    const cacheKey = `${deltaForecastPlanta}||${tipo || "?"}||${canal}||${subcanal}||${clienteNombre}`.toLowerCase();
+    const cached = dicfMesRowsByCliente[cacheKey];
+    if (cached?.loading || (cached?.rows?.length ?? 0) > 0 || cached?.error) return;
+
+    let cancelled = false;
+    setDicfMesRowsByCliente((prev) => ({
+      ...prev,
+      [cacheKey]: { loading: true, error: null, rows: [] },
+    }));
+
+    (async () => {
+      try {
+        const url = getDicfExcelUrl(
+          token,
+          deltaForecastPlanta,
+          tipo && canal && subcanal ? { tipo, canal, subcanal } : null
+        );
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error(`Error al descargar Excel (${resp.status})`);
+        const buf = await resp.arrayBuffer();
+        const wb = XLSX.read(buf, { type: "array" });
+        const ws = wb.Sheets["Venta (Ton)"] || wb.Sheets[wb.SheetNames?.[0] || ""];
+        if (!ws) throw new Error("No se encontró hoja 'Venta (Ton)' en el Excel");
+
+        const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true }) as any[][];
+        const header = (aoa?.[0] || []).map((x) => (x != null ? String(x).trim() : ""));
+        if (!header.length) throw new Error("Excel vacío");
+
+        const monthLabels: string[] = [];
+        for (const h of header) {
+          if (/^venta\s+/i.test(h || "")) {
+            const label = String(h).replace(/^venta\s+/i, "").trim();
+            if (label) monthLabels.push(label);
+          }
+        }
+
+        const findHeaderIdx = (fullLabel: string) =>
+          header.findIndex((h) => (h || "").toLowerCase() === fullLabel.toLowerCase());
+
+        const row = (aoa || []).find((r) => {
+          const c = r?.[0] != null ? String(r[0]).trim() : "";
+          return c === clienteNombre || c.toLowerCase() === clienteNombre.toLowerCase();
+        });
+        if (!row) throw new Error("No se encontró el cliente en el Excel");
+
+        const rows = monthLabels.map((mes) => {
+          const iV = findHeaderIdx(`Venta ${mes}`);
+          const iD = findHeaderIdx(`Descuento ${mes}`);
+          const ventaTonRaw = iV >= 0 ? Number(row[iV]) : NaN;
+          const descMxnRaw = iD >= 0 ? Number(row[iD]) : NaN;
+          const ventaTon = Number.isFinite(ventaTonRaw) ? ventaTonRaw : null;
+          const descMxn = Number.isFinite(descMxnRaw) ? descMxnRaw : null;
+          const ventaKg = ventaTon != null ? ventaTon * 1000 : null;
+          const descKg = ventaKg != null && ventaKg > 0 && descMxn != null ? descMxn / ventaKg : null;
+          return { mes, ventaTon, descMxn, descKg };
+        });
+
+        if (cancelled) return;
+        setDicfMesRowsByCliente((prev) => ({
+          ...prev,
+          [cacheKey]: { loading: false, error: null, rows },
+        }));
+      } catch (e: any) {
+        if (cancelled) return;
+        setDicfMesRowsByCliente((prev) => ({
+          ...prev,
+          [cacheKey]: { loading: false, error: e?.message || "Error al leer Excel", rows: [] },
+        }));
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token, deltaForecastPlanta, deltaClienteSel, dicfData, dicfMesRowsByCliente]);
 
   if (unauthorized) {
     return (
@@ -1159,6 +1254,61 @@ function KpiContent() {
                   <span className="font-mono">{deltaClienteSel.cliente.ingresoBStr ?? "$0"}</span> · Delta:{" "}
                   <span className="font-mono">{deltaClienteSel.cliente.deltaIngresoStr ?? "$0"}</span>
                 </p>
+                {(() => {
+                  const clienteNombre = (deltaClienteSel.cliente?.cliente || "").trim();
+                  const grupo = (deltaClienteSel.grupo || "").toLowerCase();
+                  const tipo =
+                    grupo.includes("dejaron") ? "dejaron"
+                      : grupo.includes("nuevos") ? "nuevos"
+                        : grupo.includes("aument") ? "aumentaron"
+                          : (grupo.includes("dismin") || grupo.includes("- ingreso")) ? "disminuyeron"
+                            : grupo.includes("+ ingreso") ? "aumentaron"
+                              : "?";
+                  const canal = (deltaClienteSel.cliente?.canal || "").trim();
+                  const subcanal = (deltaClienteSel.cliente?.subcanal || "").trim();
+                  const cacheKey = `${deltaForecastPlanta}||${tipo}||${canal}||${subcanal}||${clienteNombre}`.toLowerCase();
+                  const st = dicfMesRowsByCliente[cacheKey];
+                  const fmtTon = (n: number | null) => (n != null && Number.isFinite(n) ? n.toLocaleString("es-MX", { minimumFractionDigits: 3, maximumFractionDigits: 3 }) : "—");
+                  const fmtMxn0 = (n: number | null) => (n != null && Number.isFinite(n) ? n.toLocaleString("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 0, maximumFractionDigits: 0 }) : "—");
+                  const fmtKg = (n: number | null) => (n != null && Number.isFinite(n) ? n.toLocaleString("es-MX", { minimumFractionDigits: 3, maximumFractionDigits: 3 }) : "—");
+                  return (
+                    <div className="mt-2 rounded border border-slate-700 bg-slate-800/40 p-3">
+                      <h4 className="mb-2 text-base font-semibold text-slate-300">Venta y descuento por mes (Enero → Forecast)</h4>
+                      {st?.loading && <p className="text-sm text-slate-400">Cargando datos del Excel…</p>}
+                      {st?.error && <p className="text-sm text-red-300">No se pudo leer el Excel: {st.error}</p>}
+                      {!st?.loading && !st?.error && st?.rows && st.rows.length > 0 && (
+                        <div className="overflow-x-auto">
+                          <table className="w-full min-w-[40rem] border-collapse text-sm">
+                            <thead>
+                              <tr className="border-b border-slate-700 text-slate-400">
+                                <th className="py-1 pr-2 text-left">Mes</th>
+                                <th className="py-1 pr-2 text-right">Venta (Ton)</th>
+                                <th className="py-1 pr-2 text-right">Descuento (MXN)</th>
+                                <th className="py-1 text-right">Descuento ($/Kg)</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {st.rows.map((r, idx) => (
+                                <tr key={idx} className="border-b border-slate-800">
+                                  <td className="py-1 pr-2">{r.mes}</td>
+                                  <td className="py-1 pr-2 text-right tabular-nums">{fmtTon(r.ventaTon)}</td>
+                                  <td className="py-1 pr-2 text-right tabular-nums">{fmtMxn0(r.descMxn)}</td>
+                                  <td className="py-1 text-right tabular-nums">{fmtKg(r.descKg)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                      {!st?.loading && !st?.error && (!st?.rows || st.rows.length === 0) && (
+                        <p className="text-sm text-slate-500">Sin datos por mes.</p>
+                      )}
+                      <p className="mt-2 text-[0.7rem] text-slate-500">
+                        Nota: Descuento $/Kg = Descuento MXN / Venta kg del mismo mes.
+                      </p>
+                    </div>
+                  );
+                })()}
                 <p>
                   Frecuencia estimada:{" "}
                   {deltaClienteSel.cliente.freqDays != null && deltaClienteSel.cliente.freqDays < 9000
