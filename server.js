@@ -1286,9 +1286,8 @@ const NOMBRE_PLANTA_A_CODIGOS = {
   morelos: ["E15"],
   puebla: ["E7"],
   tehuacan: ["E8"],
+  queretaro: ["E12", "E13"],
   "san luis": ["E11"],
-  queretaro: ["E12"],
-  "san luis e13": ["E13"],
 };
 
 async function seedPresupuestoAcapulco(client) {
@@ -1546,7 +1545,22 @@ function resolvePlantaPresupuestoNombre(plantaInput) {
   const t = (plantaInput || "").trim();
   if (!t) return null;
   if (/^e(7|8|9|10|11|12|13|15)$/i.test(t)) return t.toUpperCase().replace(/^e(\d+)$/i, "E$1");
-  const key = t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+  // Normalizar nombres como "GT Puebla", "GTM Querétaro", etc. a la planta base.
+  const normBase = t
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  let base = normBase;
+  if (normBase.includes("puebla")) base = "puebla";
+  else if (normBase.includes("queretaro")) base = "queretaro";
+  else if (normBase.includes("san luis")) base = "san luis";
+  else if (normBase.includes("tehuacan")) base = "tehuacan";
+  else if (normBase.includes("acapulco")) base = "acapulco";
+  else if (normBase.includes("morelos")) base = "morelos";
+
+  const key = base;
   const codigos = NOMBRE_PLANTA_A_CODIGOS[key];
   if (codigos && codigos.length >= 1) return codigos[0];
   return t;
