@@ -80,6 +80,8 @@ export interface FolioCard {
   proyecto_codigo?: string | null;
   proyecto_nombre?: string | null;
   prestamo_a_planta?: string | null;
+  /** Etapa visual del kanban (ej. "Pendiente aprobación planta"). Solo en datos aplanados del resumen. */
+  etapa_label?: string | null;
 }
 
 export interface Kpis {

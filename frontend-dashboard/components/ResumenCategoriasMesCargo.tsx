@@ -25,14 +25,17 @@ interface AggRow {
 function flattenCardsFromKanban(data: KanbanBoardType | null, selectedPlantaId?: number): FolioCard[] {
   if (!data?.board) return [];
   const cards: FolioCard[] = [];
+  const etapaLabel = (col: (typeof data.board)[0]) => col.etapa_label || col.etapa || "";
   for (const col of data.board) {
+    const label = etapaLabel(col);
     for (const p of col.plantas || []) {
       if (selectedPlantaId != null && p.planta_id !== selectedPlantaId) continue;
       const porCat = p.porCategoria || {};
       for (const key of Object.keys(porCat)) {
         const arr = porCat[key] || [];
         for (const c of arr) {
-          if (c.mes_cargo != null && String(c.mes_cargo).trim() !== "") cards.push(c);
+          if (c.mes_cargo != null && String(c.mes_cargo).trim() !== "")
+            cards.push({ ...c, etapa_label: label || c.etapa_label || null });
         }
       }
     }
@@ -141,7 +144,7 @@ export default function ResumenCategoriasMesCargo({ data, selectedPlantaId, onOp
     for (const r of detalleList) {
       aoaResumen.push([formatMesCargo(r.mes_cargo), r.categoria, r.subcategoria, r.total]);
     }
-    const aoaDetalle: (string | number)[][] = [["Mes de cargo", "Categoría", "Subcategoría", "Número folio", "Importe", "Beneficiario", "Descripción"]];
+    const aoaDetalle: (string | number)[][] = [["Mes de cargo", "Categoría", "Subcategoría", "Etapa", "Número folio", "Importe", "Beneficiario", "Descripción"]];
     for (const r of detalleList) {
       for (const f of r.folios) {
         const ben = f.beneficiario ?? "";
@@ -149,6 +152,7 @@ export default function ResumenCategoriasMesCargo({ data, selectedPlantaId, onOp
           formatMesCargo(r.mes_cargo),
           r.categoria,
           r.subcategoria,
+          f.etapa_label ?? "—",
           f.numero_folio || f.folio_codigo || "",
           f.importe ?? 0,
           ben,
