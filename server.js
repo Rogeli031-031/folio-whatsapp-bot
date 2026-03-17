@@ -6311,6 +6311,43 @@ function numeroALetra(importe) {
   return `SON ${letra} PESOS ${String(centavos).padStart(2, "0")}/100 M.N.`;
 }
 
+/** Descarga solo la cotización adjunta del folio (PDF). Para Imprimir/Descargar opción Cotización. */
+app.get("/api/folios/:id/cotizacion", dashboardAuthMiddleware, async (req, res) => {
+  const folioId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
+  const client = await pool.connect();
+  try {
+    const r = await client.query(
+      `SELECT f.id, f.planta_id, f.solo_zp_ad, f.numero_folio FROM public.folios f WHERE f.id = $1`,
+      [folioId]
+    );
+    const folio = r.rows[0] || null;
+    if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
+    const esZPDoc = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) === "ZP";
+    const esADDoc = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) === "AD";
+    if (folio.solo_zp_ad && !esZPDoc && !esADDoc) return res.status(404).json({ error: "Folio no encontrado" });
+    if ((req.dashboardAuth.role === "GG" || req.dashboardAuth.role === "GA") && req.dashboardAuth.plantas_permitidas?.length > 0) {
+      const folioPlantaId = folio.planta_id != null ? folio.planta_id : null;
+      if (folioPlantaId == null || !req.dashboardAuth.plantas_permitidas.includes(folioPlantaId)) {
+        return res.status(403).json({ error: "Sin permiso para este folio" });
+      }
+    }
+    const archivos = await listFolioArchivosByFolioId(client, folioId, 20);
+    const cotizacionRow = archivos.find((a) => (a.tipo || "").toUpperCase() === "COTIZACION");
+    if (!cotizacionRow || !cotizacionRow.s3_key) return res.status(400).json({ error: "El folio no tiene cotización adjunta." });
+    if (!s3Enabled) return res.status(503).json({ error: "Almacenamiento no configurado" });
+    const pdfBuf = await getBufferFromS3(cotizacionRow.s3_key);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="Cotizacion-${(folio.numero_folio || folioId).toString().replace(/\s/g, "-")}.pdf"`);
+    return res.send(pdfBuf);
+  } catch (e) {
+    console.error("[folios cotizacion]", e);
+    res.status(500).json({ error: e.message || "Error al obtener cotización" });
+  } finally {
+    client.release();
+  }
+});
+
 /** Documento Gastos Extraordinarios (imprimir/descargar). Requiere folio con cotización. */
 app.get("/api/folios/:id/documento-gastos", dashboardAuthMiddleware, async (req, res) => {
   const folioId = parseInt(req.params.id, 10);
