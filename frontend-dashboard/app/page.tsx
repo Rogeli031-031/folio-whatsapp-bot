@@ -98,6 +98,7 @@ function KpiContent() {
   const [igfError, setIgfError] = useState<string | null>(null);
   const [hgSaving, setHgSaving] = useState<string | null>(null);
   const [plantaFilter, setPlantaFilter] = useState<string>("");
+  const [presupuestoDetalle, setPresupuestoDetalle] = useState<IgfForecastRow | null>(null);
   const [igfMesAnterior, setIgfMesAnterior] = useState<IgfForecastResponse | null>(null);
   const [igfMesAnteriorLoading, setIgfMesAnteriorLoading] = useState(false);
   const [deltaForecastPlanta, setDeltaForecastPlanta] = useState("");
@@ -448,7 +449,15 @@ function KpiContent() {
                           </td>
                         ) : (
                           <>
-                            <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(row.presupuesto_kg ?? null)}</td>
+                            <td className="py-2 px-2 text-right tabular-nums">
+                              <button
+                                type="button"
+                                className="min-w-[3rem] rounded border border-slate-600 bg-slate-800 px-1.5 py-0.5 text-[0.65rem] text-slate-200 hover:bg-slate-700"
+                                onClick={() => setPresupuestoDetalle(row)}
+                              >
+                                {fmtNum(row.presupuesto_kg ?? null)}
+                              </button>
+                            </td>
                             <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(row.folios_aprob_zp_kg ?? null)}</td>
                             <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(row.folios_carro_kg ?? null)}</td>
                             <td className={`py-2 px-2 text-right tabular-nums ${row.deposito_cierre_kg != null && Number(row.deposito_cierre_kg) < 0 ? "text-red-400" : "text-slate-300"}`}>
@@ -1416,6 +1425,63 @@ function KpiContent() {
         )}
         {plantaFilter ? <div className="flex-1 min-h-[35vh] mt-6" aria-hidden /> : null}
       </main>
+      {presupuestoDetalle && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4" onClick={() => setPresupuestoDetalle(null)}>
+          <div
+            className="w-full max-w-lg rounded-lg border border-slate-700 bg-slate-900 p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center justify-between border-b border-slate-700 pb-2">
+              <h3 className="text-base font-semibold text-slate-200">
+                Presupuesto $/kg · {presupuestoDetalle.empresa || "Planta"}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setPresupuestoDetalle(null)}
+                className="rounded p-1 text-slate-400 hover:bg-slate-700 hover:text-white"
+              >
+                ×
+              </button>
+            </div>
+            <div className="space-y-2 text-sm text-slate-300">
+              <p>
+                Venta forecast:{" "}
+                <span className="font-mono">
+                  {fmtNum(presupuestoDetalle.venta_ton, 2)} ton
+                </span>
+              </p>
+              <p>
+                Presupuesto:{" "}
+                <span className="font-mono">
+                  {fmtNum(presupuestoDetalle.presupuesto_kg ?? null)} $/kg
+                </span>
+              </p>
+              <p>
+                Importe total aproximado:{" "}
+                <span className="font-mono">
+                  {(() => {
+                    const vTon = presupuestoDetalle.venta_ton != null && !Number.isNaN(Number(presupuestoDetalle.venta_ton))
+                      ? Number(presupuestoDetalle.venta_ton)
+                      : 0;
+                    const pKg = presupuestoDetalle.presupuesto_kg != null && !Number.isNaN(Number(presupuestoDetalle.presupuesto_kg))
+                      ? Number(presupuestoDetalle.presupuesto_kg)
+                      : 0;
+                    const total = vTon * 1000 * Math.abs(pKg);
+                    return total.toLocaleString("es-MX", {
+                      style: "currency",
+                      currency: "MXN",
+                      maximumFractionDigits: 0,
+                    });
+                  })()}
+                </span>
+              </p>
+              <p className="mt-3 text-xs text-slate-500">
+                Nota: Importe estimado = Venta (kg) × |Presupuesto $/kg| para la planta correspondiente del IGF Forecast.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
