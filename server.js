@@ -6594,8 +6594,17 @@ app.get("/api/folios/:id/documento-folio", dashboardAuthMiddleware, async (req, 
     const s3TemplateKeyAcapulco = (process.env.FOLIO_TEMPLATE_S3_KEY_ACAPULCO || "").trim();
     // Soporte para env var nombrada en tu UI: FOLIO_MOR_TEMPLATE_S3_KEY
     const s3TemplateKeyMorelos = (process.env.FOLIO_TEMPLATE_S3_KEY_MORELOS || process.env.FOLIO_MOR_TEMPLATE_S3_KEY || "").trim();
+    // Soporte para env var nombrada en tu UI: FOLIO_PUE_TEMPLATE_S3_KEY
+    const s3TemplateKeyPueblaRaw = (process.env.FOLIO_TEMPLATE_S3_KEY_PUEBLA || process.env.FOLIO_PUE_TEMPLATE_S3_KEY || "").trim();
+    const normalizeTemplateKey = (key) => {
+      const k = (key || "").trim();
+      if (!k) return "";
+      return /\.pdf$/i.test(k) ? k : `${k}.pdf`;
+    };
+    const s3TemplateKeyPuebla = normalizeTemplateKey(s3TemplateKeyPueblaRaw);
     const isAcapulcoPlant = (codigoPlanta === "E9" || codigoPlanta === "E10");
     const isMorelosPlant = (codigoPlanta === "E15");
+    const isPueblaPlant = (codigoPlanta === "E7");
     let s3TemplateKey = s3TemplateKeyDefault;
 
     if (isAcapulcoPlant) {
@@ -6616,6 +6625,15 @@ app.get("/api/folios/:id/documento-folio", dashboardAuthMiddleware, async (req, 
         const derived = s3TemplateKeyDefault.replace(/formato-folio\.pdf$/i, "formato-folio-Morelos.pdf");
         if (derived && derived !== s3TemplateKeyDefault) s3TemplateKey = derived;
       }
+    } else if (isPueblaPlant) {
+      if (s3TemplateKeyPuebla) {
+        s3TemplateKey = s3TemplateKeyPuebla;
+      } else {
+        // Derivación automática si el default se llama "formato-folio.pdf"
+        // y el Puebla se llama "formato-folio-Puebla.pdf".
+        const derived = s3TemplateKeyDefault.replace(/formato-folio\.pdf$/i, "formato-folio-Puebla.pdf");
+        if (derived && derived !== s3TemplateKeyDefault) s3TemplateKey = derived;
+      }
     }
     let pdfBytes = null;
 
@@ -6627,12 +6645,13 @@ app.get("/api/folios/:id/documento-folio", dashboardAuthMiddleware, async (req, 
         } catch (e) {
           // Si para Acapulco derivamos una key diferente y falla (no existe),
           // regresamos al default para no romper la generación.
-          if ((isAcapulcoPlant || isMorelosPlant) && s3TemplateKey !== s3TemplateKeyDefault) {
+          if ((isAcapulcoPlant || isMorelosPlant || isPueblaPlant) && s3TemplateKey !== s3TemplateKeyDefault) {
             console.warn("[documento-folio] No se pudo cargar plantilla (override), intentando default:", {
               overrideKey: s3TemplateKey,
               defaultKey: s3TemplateKeyDefault,
               isAcapulcoPlant,
               isMorelosPlant,
+              isPueblaPlant,
               message: e?.message,
             });
             templateBuf = await getBufferFromS3(s3TemplateKeyDefault);
