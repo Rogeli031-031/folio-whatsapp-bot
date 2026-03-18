@@ -6714,7 +6714,8 @@ app.get("/api/folios/:id/documento-folio", dashboardAuthMiddleware, async (req, 
           const conceptoMaxWidthPoints = conceptoXEnd - conceptoXStart;
           const POS = {
             folio: { x: 600, y: 580, size: 12 },
-            beneficiario: { x: 149, y: 456.5, size: 7 },
+            // Limitar beneficiario al rango X:147..X:280 para evitar traslape con concepto.
+            beneficiario: { x: 147, y: 456.5, size: 7 },
             concepto: { x: conceptoXStart, y: 456.5, size: 8 },
             importe: { x: 610, y: 456.5, size: 9 },
             planta: { x: 100, y: 580, size: 16 },
@@ -6746,8 +6747,31 @@ app.get("/api/folios/:id/documento-folio", dashboardAuthMiddleware, async (req, 
             if (current) lines.push(current);
             return lines.length ? lines : [""];
           };
+
+          const wrapBeneficiario = (text, size) => {
+            const maxWidthPoints = 280 - POS.beneficiario.x;
+            const maxChars = Math.max(10, Math.floor(maxWidthPoints / (size * 0.5)));
+            const words = String(text || "").trim().split(/\s+/).filter(Boolean);
+            if (words.length === 0) return [""];
+            const lines = [];
+            let current = "";
+            for (const w of words) {
+              const next = current ? current + " " + w : w;
+              if (next.length <= maxChars) current = next;
+              else {
+                if (current) lines.push(current);
+                current = w.length <= maxChars ? w : w.substring(0, maxChars);
+              }
+            }
+            if (current) lines.push(current);
+            return lines.length ? lines : [""];
+          };
+
           draw(`FOLIO - ${numeroFolio}`, POS.folio.x, POS.folio.y, POS.folio.size, true);
-          draw(beneficiario, POS.beneficiario.x, POS.beneficiario.y, POS.beneficiario.size);
+          const beneficiarioLines = wrapBeneficiario(beneficiario, POS.beneficiario.size);
+          beneficiarioLines.forEach((line, i) => {
+            draw(line, POS.beneficiario.x, POS.beneficiario.y - i * POS.beneficiario.size * 1.2, POS.beneficiario.size, false, 500);
+          });
           const conceptoLines = wrapConcepto(concepto, POS.concepto.size);
           let conceptoY = POS.concepto.y;
           conceptoLines.forEach((line) => {
