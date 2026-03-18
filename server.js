@@ -7998,6 +7998,8 @@ app.get("/api/dashboard/presupuesto-detalle", dashboardAuthMiddleware, async (re
 
 /** Periodos (YYYY-MM) disponibles para Delta Venta en una planta (dashboard). */
 app.get("/api/dashboard/delta-venta-periodos", dashboardAuthMiddleware, async (req, res) => {
+  const roleNorm = (req.dashboardAuth && req.dashboardAuth.role) ? String(req.dashboardAuth.role).toUpperCase() : "";
+  if (roleNorm === "GA") return res.status(403).json({ error: "Sin permiso para Delta (GA restringido)." });
   const planta = (req.query.planta || "").toString().trim();
   if (!planta) {
     return res.status(400).json({ error: "Falta planta" });
@@ -8016,6 +8018,8 @@ app.get("/api/dashboard/delta-venta-periodos", dashboardAuthMiddleware, async (r
 
 /** Datos Delta Venta para las 3 opciones (dejaron, mas, disminuyeron). 80/20 se aplica sobre la muestra de este delta (Delta Venta), no de otro. */
 app.post("/api/dashboard/delta-venta-datos", dashboardAuthMiddleware, async (req, res) => {
+  const roleNorm = (req.dashboardAuth && req.dashboardAuth.role) ? String(req.dashboardAuth.role).toUpperCase() : "";
+  if (roleNorm === "GA") return res.status(403).json({ error: "Sin permiso para Delta (GA restringido)." });
   const { planta, periodoA, periodoB } = req.body || {};
   const pa = (typeof periodoA === "string" && /^\d{4}-\d{2}$/.test(periodoA)) ? periodoA : null;
   const pb = (typeof periodoB === "string" && /^\d{4}-\d{2}$/.test(periodoB)) ? periodoB : null;
@@ -8083,6 +8087,8 @@ app.post("/api/dashboard/delta-venta-datos", dashboardAuthMiddleware, async (req
 
 /** Periodos (YYYY-MM) disponibles para Delta Descuento en una planta (dashboard). */
 app.get("/api/dashboard/delta-descuento-periodos", dashboardAuthMiddleware, async (req, res) => {
+  const roleNorm = (req.dashboardAuth && req.dashboardAuth.role) ? String(req.dashboardAuth.role).toUpperCase() : "";
+  if (roleNorm === "GA") return res.status(403).json({ error: "Sin permiso para Delta (GA restringido)." });
   const planta = (req.query.planta || "").toString().trim();
   if (!planta) {
     return res.status(400).json({ error: "Falta planta" });
@@ -8101,6 +8107,8 @@ app.get("/api/dashboard/delta-descuento-periodos", dashboardAuthMiddleware, asyn
 
 /** Datos Delta Descuento para las 3 opciones (dejaron, mas, disminuyeron). 80/20 se aplica sobre la muestra de este delta (Delta Descuento), no de Delta Venta ni otro. */
 app.post("/api/dashboard/delta-descuento-datos", dashboardAuthMiddleware, async (req, res) => {
+  const roleNorm = (req.dashboardAuth && req.dashboardAuth.role) ? String(req.dashboardAuth.role).toUpperCase() : "";
+  if (roleNorm === "GA") return res.status(403).json({ error: "Sin permiso para Delta (GA restringido)." });
   const { planta, periodoA, periodoB } = req.body || {};
   const pa = (typeof periodoA === "string" && /^\d{4}-\d{2}$/.test(periodoA)) ? periodoA : null;
   const pb = (typeof periodoB === "string" && /^\d{4}-\d{2}$/.test(periodoB)) ? periodoB : null;
@@ -8206,6 +8214,8 @@ async function getPlantCodeArrFromPlantaNombre(client, plantaNombre) {
 
 /** Periodos (YYYY-MM) disponibles para Delta Ingreso en una planta (mismos que Delta Venta). Usa mismo alias que getPlantCodeArrFromPlantaNombre para que todas las plantas del dropdown tengan fechas. */
 app.get("/api/dashboard/delta-ingreso-periodos", dashboardAuthMiddleware, async (req, res) => {
+  const roleNorm = (req.dashboardAuth && req.dashboardAuth.role) ? String(req.dashboardAuth.role).toUpperCase() : "";
+  if (roleNorm === "GA") return res.status(403).json({ error: "Sin permiso para Delta (GA restringido)." });
   const planta = (req.query.planta || "").toString().trim();
   if (!planta) {
     return res.status(400).json({ error: "Falta planta" });
@@ -8635,6 +8645,8 @@ async function getDeltaIngresoDatosInternal(client, planta, periodoA, periodoB, 
 
 /** Datos Delta Ingreso: ingreso = venta_kg * (margen_$/kg - |descuento_$/kg|). Margen desde IGF con última versión del mes. 80/20 sobre la muestra de este delta (Delta Ingreso), no de otro. Si sinRegla8020=true, se muestran todos los clientes (sin recorte 80/20). */
 app.post("/api/dashboard/delta-ingreso-datos", dashboardAuthMiddleware, async (req, res) => {
+  const roleNorm = (req.dashboardAuth && req.dashboardAuth.role) ? String(req.dashboardAuth.role).toUpperCase() : "";
+  if (roleNorm === "GA") return res.status(403).json({ error: "Sin permiso para Delta (GA restringido)." });
   const { planta, periodoA, periodoB, sinRegla8020 } = req.body || {};
   const pa = (typeof periodoA === "string" && /^\d{4}-\d{2}$/.test(periodoA)) ? periodoA : null;
   const pb = (typeof periodoB === "string" && /^\d{4}-\d{2}$/.test(periodoB)) ? periodoB : null;

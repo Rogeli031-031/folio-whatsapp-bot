@@ -7,6 +7,7 @@ import {
   parseTokenFromQuery,
   getTokenFromStorage,
   setTokenInStorage,
+  getRoleFromDashboardToken,
 } from "@/lib/auth";
 import {
   fetchKanban,
@@ -30,6 +31,7 @@ function DashboardContent() {
   const searchParams = useSearchParams();
   const [token, setToken] = useState<string | null>(null);
   const [unauthorized, setUnauthorized] = useState(false);
+  const [roleHint, setRoleHint] = useState<string | null>(null);
   const [kanban, setKanban] = useState<KanbanBoardData | null>(null);
   const [filters, setFilters] = useState<DashboardFilters>({ solo_activos: "1" });
   const [drawerFolioId, setDrawerFolioId] = useState<number | null>(null);
@@ -49,9 +51,11 @@ function DashboardContent() {
     if (t) {
       setTokenInStorage(t);
       setToken(t);
+      setRoleHint(getRoleFromDashboardToken(t));
       setUnauthorized(false);
     } else {
       setToken(null);
+      setRoleHint(null);
       setUnauthorized(true);
     }
   }, [searchParams]);
@@ -107,6 +111,8 @@ function DashboardContent() {
     : [];
 
   const selectedPlantaId = filters.plantas ? Number(filters.plantas) || undefined : undefined;
+  const role = (kanban?.meta?.role ?? roleHint ?? "GG").toUpperCase();
+  const isGA = role === "GA";
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -127,30 +133,34 @@ function DashboardContent() {
             <span aria-hidden>Δ</span>
             <span>Cómo cambió</span>
           </button>
-          <button
-            type="button"
-            onClick={() => setShowDeltaVentaModal(true)}
-            className="flex items-center gap-1.5 rounded border border-slate-600 bg-blue-600 px-2.5 py-1.5 text-sm text-white hover:bg-blue-500"
-            title="Delta Venta: clientes que dejaron de comprar, compraron más o disminuyeron"
-          >
-            Delta Venta
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowDeltaDescuentoModal(true)}
-            className="flex items-center gap-1.5 rounded border border-slate-600 bg-blue-600 px-2.5 py-1.5 text-sm text-white hover:bg-blue-500"
-            title="Delta Descuento: clientes que dejaron de tener descuento, tienen más o disminuyeron"
-          >
-            Delta Descuento
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowDeltaIngresoModal(true)}
-            className="flex items-center gap-1.5 rounded border border-slate-600 bg-blue-600 px-2.5 py-1.5 text-sm text-white hover:bg-blue-500"
-            title="Delta Ingreso: venta kg × (margen $/kg − descuento $/kg) por periodo; clientes que dejaron, subieron o bajaron"
-          >
-            Delta Ingreso
-          </button>
+          {!isGA && (
+            <>
+              <button
+                type="button"
+                onClick={() => setShowDeltaVentaModal(true)}
+                className="flex items-center gap-1.5 rounded border border-slate-600 bg-blue-600 px-2.5 py-1.5 text-sm text-white hover:bg-blue-500"
+                title="Delta Venta: clientes que dejaron de comprar, compraron más o disminuyeron"
+              >
+                Delta Venta
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowDeltaDescuentoModal(true)}
+                className="flex items-center gap-1.5 rounded border border-slate-600 bg-blue-600 px-2.5 py-1.5 text-sm text-white hover:bg-blue-500"
+                title="Delta Descuento: clientes que dejaron de tener descuento, tienen más o disminuyeron"
+              >
+                Delta Descuento
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowDeltaIngresoModal(true)}
+                className="flex items-center gap-1.5 rounded border border-slate-600 bg-blue-600 px-2.5 py-1.5 text-sm text-white hover:bg-blue-500"
+                title="Delta Ingreso: venta kg × (margen $/kg − descuento $/kg) por periodo; clientes que dejaron, subieron o bajaron"
+              >
+                Delta Ingreso
+              </button>
+            </>
+          )}
         </div>
       </div>
       <FiltersBar
@@ -209,7 +219,7 @@ function DashboardContent() {
       <FolioDrawer
         folioId={drawerFolioId}
         token={token}
-        role={kanban?.meta?.role ?? "GG"}
+        role={role}
         onClose={() => setDrawerFolioId(null)}
         onApproved={loadData}
       />
