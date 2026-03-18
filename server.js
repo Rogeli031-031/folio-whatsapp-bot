@@ -6581,12 +6581,41 @@ app.get("/api/folios/:id/documento-folio", dashboardAuthMiddleware, async (req, 
     const subcategoriaDisplay = (folio.subcategoria || "").toString().trim() || "—";
     const proyectoDisplay = [folio.proyecto_codigo, folio.proyecto_nombre].filter(Boolean).join(" - ") || "—";
 
-    const s3TemplateKey = (process.env.FOLIO_TEMPLATE_S3_KEY || "").trim();
+    const s3TemplateKeyDefault = (process.env.FOLIO_TEMPLATE_S3_KEY || "").trim();
+    const s3TemplateKeyAcapulco = (process.env.FOLIO_TEMPLATE_S3_KEY_ACAPULCO || "").trim();
+    const isAcapulcoPlant = (codigoPlanta === "E9" || codigoPlanta === "E10");
+    let s3TemplateKey = s3TemplateKeyDefault;
+    if (isAcapulcoPlant) {
+      if (s3TemplateKeyAcapulco) {
+        s3TemplateKey = s3TemplateKeyAcapulco;
+      } else {
+        // Derivación automática si el default se llama "formato-folio.pdf"
+        // y el Acapulco se llama "formato-folio-Acapulco.pdf".
+        const derived = s3TemplateKeyDefault.replace(/formato-folio\.pdf$/i, "formato-folio-Acapulco.pdf");
+        if (derived && derived !== s3TemplateKeyDefault) s3TemplateKey = derived;
+      }
+    }
     let pdfBytes = null;
 
     if (s3Enabled && s3TemplateKey) {
       try {
-        const templateBuf = await getBufferFromS3(s3TemplateKey);
+        let templateBuf = null;
+        try {
+          templateBuf = await getBufferFromS3(s3TemplateKey);
+        } catch (e) {
+          // Si para Acapulco derivamos una key diferente y falla (no existe),
+          // regresamos al default para no romper la generación.
+          if (isAcapulcoPlant && s3TemplateKey !== s3TemplateKeyDefault) {
+            console.warn("[documento-folio] No se pudo cargar plantilla Acapulco, intentando default:", {
+              acapulcoKey: s3TemplateKey,
+              defaultKey: s3TemplateKeyDefault,
+              message: e?.message,
+            });
+            templateBuf = await getBufferFromS3(s3TemplateKeyDefault);
+          } else {
+            throw e;
+          }
+        }
         const pdfDoc = await PDFDocument.load(templateBuf, { ignoreEncryption: true });
         const pages = pdfDoc.getPages();
         if (!pages || pages.length === 0) throw new Error("La plantilla no contiene páginas");
