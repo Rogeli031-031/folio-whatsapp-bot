@@ -6313,6 +6313,14 @@ function formatFechasDelAl(mesCargo) {
   return `01 al ${lastDay} de ${meses[m - 1] || ""} de ${y}`;
 }
 
+/** Formatea mes_cargo (YYYY-MM) a "Mar 2026" (abreviación en español). */
+function formatMesCargoLabel(mesCargo) {
+  if (!mesCargo || !/^\d{4}-\d{2}$/.test(mesCargo)) return "—";
+  const [y, m] = mesCargo.split("-").map(Number);
+  const meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+  return `${meses[m - 1] || ""} ${y}`;
+}
+
 /** Convierte importe numérico a letra (es-MX): "SON DOS MIL NOVECIENTOS OCHENTA Y OCHO PESOS 51/100 M.N." */
 function numeroALetra(importe) {
   const n = Number(importe);
@@ -6577,6 +6585,7 @@ app.get("/api/folios/:id/documento-folio", dashboardAuthMiddleware, async (req, 
       ? new Date(folio.creado_en).toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric" })
       : "—";
     const fechasDelAl = formatFechasDelAl(folio.mes_cargo);
+    const mesCargoLabel = formatMesCargoLabel(folio.mes_cargo);
     const categoriaDisplay = (folio.categoria || "").toString().trim() || "—";
     const subcategoriaDisplay = (folio.subcategoria || "").toString().trim() || "—";
     const proyectoDisplay = [folio.proyecto_codigo, folio.proyecto_nombre].filter(Boolean).join(" - ") || "—";
@@ -6637,6 +6646,7 @@ app.get("/api/folios/:id/documento-folio", dashboardAuthMiddleware, async (req, 
             else if (n.includes("importe")) val = importeStr;
             else if (n.includes("planta")) val = plantaDisplay;
             else if (n.includes("fecha")) val = fechaSolicitud;
+            else if (n.includes("mes") && n.includes("cargo")) val = mesCargoLabel;
             else if (n.includes("categoria") && !n.includes("sub")) val = categoriaDisplay;
             else if (n.includes("subcategoria")) val = subcategoriaDisplay;
             else if (n.includes("proyecto")) val = proyectoDisplay;
@@ -6657,11 +6667,12 @@ app.get("/api/folios/:id/documento-folio", dashboardAuthMiddleware, async (req, 
           const POS = {
             folio: { x: 600, y: 580, size: 12 },
             beneficiario: { x: 149, y: 456.5, size: 7 },
-            concepto: { x: conceptoXStart, y: 456.5, size: 7 },
-            importe: { x: 605, y: 456.5, size: 9 },
+            concepto: { x: conceptoXStart, y: 456.5, size: 8 },
+            importe: { x: 610, y: 456.5, size: 9 },
             planta: { x: 100, y: 580, size: 16 },
             fecha: { x: 381, y: 580, size: 9 },
             categoria: { x: 50, y: 540, size: 15 },
+            mes_cargo: { x: 381, y: 540, size: 15 },
             subcategoria: { x: 50, y: 520, size: 10 },
             proyecto: { x: 600, y: 540, size: 9 },
           };
@@ -6699,6 +6710,7 @@ app.get("/api/folios/:id/documento-folio", dashboardAuthMiddleware, async (req, 
           draw(plantaDisplay, POS.planta.x, POS.planta.y, POS.planta.size);
           draw(fechaSolicitud, POS.fecha.x, POS.fecha.y, POS.fecha.size);
           draw(categoriaDisplay, POS.categoria.x, POS.categoria.y, POS.categoria.size);
+          draw(mesCargoLabel, POS.mes_cargo.x, POS.mes_cargo.y, POS.mes_cargo.size);
           draw(subcategoriaDisplay, POS.subcategoria.x, POS.subcategoria.y, POS.subcategoria.size);
           draw(proyectoDisplay, POS.proyecto.x, POS.proyecto.y, POS.proyecto.size);
         }
