@@ -6715,7 +6715,7 @@ app.get("/api/folios/:id/documento-folio", dashboardAuthMiddleware, async (req, 
           const POS = {
             folio: { x: 600, y: 580, size: 12 },
             // Limitar beneficiario al rango X:147..X:280 para evitar traslape con concepto.
-            beneficiario: { x: 146, y: 456.5, size: 8 },
+            beneficiario: { x: 145, y: 456.5, size: 8 },
             concepto: { x: conceptoXStart, y: 456.5, size: 8 },
             importe: { x: 610, y: 456.5, size: 9 },
             planta: { x: 100, y: 580, size: 16 },
