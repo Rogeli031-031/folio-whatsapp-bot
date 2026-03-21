@@ -5739,6 +5739,20 @@ function aplicarSignosDisplayIgf(row) {
   return out;
 }
 
+/**
+ * Excluye del acumulado de folios (IGF forecast) lo mismo que INVERSIONES, más DYO / derechos y obligaciones,
+ * y comisiones (etiqueta en subcategoría o categoría COMISIONES).
+ */
+const SQL_WHERE_IGF_EXCLUYE_FOLIOS_CATEGORIA = `
+  AND (
+    (categoria IS NULL OR (
+      UPPER(TRIM(categoria)) NOT IN ('INVERSIONES', 'DYO', 'COMISIONES')
+      AND UPPER(TRIM(categoria)) NOT LIKE '%DERECHOS%'
+      AND UPPER(TRIM(categoria)) NOT LIKE '%OBLIGACIONES%'
+    ))
+    AND (subcategoria IS NULL OR UPPER(TRIM(subcategoria)) <> 'COMISIONES')
+  )`;
+
 /** Construye payload IGF Forecast (misma lógica que GET /api/dashboard/igf-forecast). Para API y Excel. */
 async function buildIgfForecastPayload(client, year, month) {
   const now = new Date();
@@ -5890,54 +5904,42 @@ async function buildIgfForecastPayload(client, year, month) {
       const estAprobZp = [ESTADOS.PENDIENTE_APROB_ZP, ESTADOS.CANCELACION_SOLICITADA];
       const estCarro = [ESTADOS.APROBADO_ZP, ESTADOS.LISTO_PARA_PROGRAMACION, ESTADOS.SELECCIONADO_SEMANA, ESTADOS.SOLICITANDO_PAGO];
       const folAprob = await client.query(
-        isMesActual
-          ? `SELECT planta_id, COALESCE(SUM(COALESCE(importe, 0)), 0) AS total FROM public.folios
+        `SELECT planta_id, COALESCE(SUM(COALESCE(importe, 0)), 0) AS total FROM public.folios
              WHERE mes_cargo = $1
                AND estatus = ANY($2::text[])
                AND planta_id = ANY($3::int[])
-               AND (categoria IS NULL OR UPPER(TRIM(categoria)) <> 'INVERSIONES')
-             GROUP BY planta_id`
-          : `SELECT planta_id, COALESCE(SUM(COALESCE(importe, 0)), 0) AS total FROM public.folios
-             WHERE mes_cargo = $1 AND estatus = ANY($2::text[]) AND planta_id = ANY($3::int[]) GROUP BY planta_id`,
+               ${SQL_WHERE_IGF_EXCLUYE_FOLIOS_CATEGORIA}
+             GROUP BY planta_id`,
         [periodoStr, estAprobZp, plantaIds]
       );
       foliosAprobZpByPlanta = new Map((folAprob.rows || []).map((r) => [Number(r.planta_id), Number(r.total) || 0]));
       const folCarro = await client.query(
-        isMesActual
-          ? `SELECT planta_id, COALESCE(SUM(COALESCE(importe, 0)), 0) AS total FROM public.folios
+        `SELECT planta_id, COALESCE(SUM(COALESCE(importe, 0)), 0) AS total FROM public.folios
              WHERE mes_cargo = $1
                AND estatus = ANY($2::text[])
                AND planta_id = ANY($3::int[])
-               AND (categoria IS NULL OR UPPER(TRIM(categoria)) <> 'INVERSIONES')
-             GROUP BY planta_id`
-          : `SELECT planta_id, COALESCE(SUM(COALESCE(importe, 0)), 0) AS total FROM public.folios
-             WHERE mes_cargo = $1 AND estatus = ANY($2::text[]) AND planta_id = ANY($3::int[]) GROUP BY planta_id`,
+               ${SQL_WHERE_IGF_EXCLUYE_FOLIOS_CATEGORIA}
+             GROUP BY planta_id`,
         [periodoStr, estCarro, plantaIds]
       );
       foliosCarroByPlanta = new Map((folCarro.rows || []).map((r) => [Number(r.planta_id), Number(r.total) || 0]));
       const folDeposito = await client.query(
-        isMesActual
-          ? `SELECT planta_id, COALESCE(SUM(COALESCE(importe, 0)), 0) AS total FROM public.folios
+        `SELECT planta_id, COALESCE(SUM(COALESCE(importe, 0)), 0) AS total FROM public.folios
              WHERE mes_cargo = $1
                AND estatus = $2
                AND planta_id = ANY($3::int[])
-               AND (categoria IS NULL OR UPPER(TRIM(categoria)) <> 'INVERSIONES')
-             GROUP BY planta_id`
-          : `SELECT planta_id, COALESCE(SUM(COALESCE(importe, 0)), 0) AS total FROM public.folios
-             WHERE mes_cargo = $1 AND estatus = $2 AND planta_id = ANY($3::int[]) GROUP BY planta_id`,
+               ${SQL_WHERE_IGF_EXCLUYE_FOLIOS_CATEGORIA}
+             GROUP BY planta_id`,
         [periodoStr, ESTADOS.PAGADO, plantaIds]
       );
       foliosDepositoByPlanta = new Map((folDeposito.rows || []).map((r) => [Number(r.planta_id), Number(r.total) || 0]));
       const folCierre = await client.query(
-        isMesActual
-          ? `SELECT planta_id, COALESCE(SUM(COALESCE(importe, 0)), 0) AS total FROM public.folios
+        `SELECT planta_id, COALESCE(SUM(COALESCE(importe, 0)), 0) AS total FROM public.folios
              WHERE mes_cargo = $1
                AND estatus = $2
                AND planta_id = ANY($3::int[])
-               AND (categoria IS NULL OR UPPER(TRIM(categoria)) <> 'INVERSIONES')
-             GROUP BY planta_id`
-          : `SELECT planta_id, COALESCE(SUM(COALESCE(importe, 0)), 0) AS total FROM public.folios
-             WHERE mes_cargo = $1 AND estatus = $2 AND planta_id = ANY($3::int[]) GROUP BY planta_id`,
+               ${SQL_WHERE_IGF_EXCLUYE_FOLIOS_CATEGORIA}
+             GROUP BY planta_id`,
         [periodoStr, ESTADOS.CERRADO, plantaIds]
       );
       foliosCierreByPlanta = new Map((folCierre.rows || []).map((r) => [Number(r.planta_id), Number(r.total) || 0]));
