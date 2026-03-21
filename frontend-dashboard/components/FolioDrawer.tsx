@@ -21,6 +21,16 @@ import {
 } from "@/lib/api";
 import EditarFolioModal from "@/components/EditarFolioModal";
 
+/** Campana roja (misma idea que en FolioCard). */
+function IconAlarma({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <title>Urgente</title>
+      <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.89 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z" />
+    </svg>
+  );
+}
+
 /** Opciones de mes de cargo: solo Enero 2026 a Diciembre 2026. */
 function getMesesOpciones(): { value: string; label: string }[] {
   const meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
@@ -71,6 +81,7 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
   const [igfEmpresas, setIgfEmpresas] = useState<string[]>([]);
   const [prestamoSelect, setPrestamoSelect] = useState<string>("");
   const [savingPrestamo, setSavingPrestamo] = useState(false);
+  const [savingUrgente, setSavingUrgente] = useState(false);
 
   useEffect(() => {
     if (!folioId || !token) {
@@ -220,6 +231,7 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
   const handleMarcarUrgente = async (checked: boolean) => {
     if (!token || !folioId || !puedeMarcarUrgente) return;
     setApproveError(null);
+    setSavingUrgente(true);
     try {
       await patchFolioPrioridad(token, folioId, checked ? "Urgente no programado" : "Media");
       const f = await fetchFolio(token, folioId);
@@ -227,6 +239,8 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
       onApproved?.();
     } catch (e) {
       setApproveError((e as Error).message || "Error al cambiar prioridad");
+    } finally {
+      setSavingUrgente(false);
     }
   };
 
@@ -357,7 +371,29 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
           {folio && !loading && (
             <>
               <section>
-                <h3 className="mb-2 text-sm font-medium text-slate-400">Datos</h3>
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="text-sm font-medium text-slate-400">Datos</h3>
+                  <div className="flex items-center gap-2">
+                    {puedeMarcarUrgente ? (
+                      <label className="inline-flex cursor-pointer items-center gap-2 rounded border border-slate-600 bg-slate-800/80 px-2 py-1.5 text-sm text-slate-200 hover:bg-slate-800">
+                        <input
+                          type="checkbox"
+                          checked={esUrgente}
+                          disabled={savingUrgente}
+                          onChange={(e) => void handleMarcarUrgente(e.target.checked)}
+                          className="rounded border-slate-500 text-slate-200 focus:ring-offset-slate-900"
+                        />
+                        <span>{savingUrgente ? "Guardando…" : esUrgente ? "Urgente (quitar)" : "Marcar urgente"}</span>
+                        {esUrgente && <IconAlarma className="h-4 w-4 text-red-500" aria-hidden />}
+                      </label>
+                    ) : esUrgente ? (
+                      <span className="inline-flex items-center gap-1 rounded border border-red-500/40 bg-red-950/40 px-2 py-1 text-xs font-medium text-red-400">
+                        <IconAlarma className="h-4 w-4 text-red-500" aria-hidden />
+                        Urgente
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
                 <dl className="space-y-1 text-sm">
                   <div><dt className="text-slate-500">Planta</dt><dd className="text-slate-200">{String(folio.planta_nombre ?? "—")}</dd></div>
                   <div><dt className="text-slate-500">Beneficiario</dt><dd className="text-slate-200">{String((folio as Record<string, unknown>).beneficiario ?? "—")}</dd></div>
