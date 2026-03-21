@@ -6936,7 +6936,7 @@ app.get("/api/folios/:id/documento-completo", dashboardAuthMiddleware, async (re
   }
 });
 
-/** Actualizar mes_cargo del folio (solo cuando está en carrito). */
+/** Actualizar mes_cargo del folio (Aprobación Director ZP o carrito de compra). */
 app.patch("/api/folios/:id", dashboardAuthMiddleware, async (req, res) => {
   if (req.dashboardAuth.role === "GA") return res.status(403).json({ error: "GA solo puede ver e imprimir en el dashboard." });
   const folioId = parseInt(req.params.id, 10);
@@ -6949,7 +6949,10 @@ app.patch("/api/folios/:id", dashboardAuthMiddleware, async (req, res) => {
     if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
     const est = String(folio.estatus || "").toUpperCase();
     const enCarrito = [ESTADOS.APROBADO_ZP, ESTADOS.LISTO_PARA_PROGRAMACION, ESTADOS.SELECCIONADO_SEMANA, ESTADOS.SOLICITANDO_PAGO].includes(est);
-    if (!enCarrito) return res.status(400).json({ error: "Solo se puede editar el mes de cargo cuando el folio está en el carrito." });
+    const enAprobacionZp = est === ESTADOS.PENDIENTE_APROB_ZP;
+    if (!enCarrito && !enAprobacionZp) {
+      return res.status(400).json({ error: "Solo se puede editar el mes de cargo en Aprobación Director ZP o en el carrito de compra." });
+    }
     await client.query(`UPDATE public.folios SET mes_cargo = $1 WHERE id = $2`, [mesCargo, folioId]);
     res.json({ ok: true, mes_cargo: mesCargo });
   } catch (e) {
@@ -7216,6 +7219,9 @@ app.post("/api/folios/:id/aprobar", dashboardAuthMiddleware, async (req, res) =>
       return res.json({ ok: true, estatus: ESTADOS.PENDIENTE_APROB_ZP });
     }
     if (estatus === ESTADOS.PENDIENTE_APROB_ZP) {
+      if (rol === "GG") {
+        return res.status(403).json({ error: "Solo Director ZP (o Asistente de Dirección) puede aprobar en Aprobación Director ZP." });
+      }
       await updateFolioEstatus(client, folioId, ESTADOS.APROBADO_ZP, { aprobado_por: aprobadoPor, aprobado_en: true });
       await insertHistorial(client, folioId, folio.numero_folio, folio.folio_codigo, ESTADOS.APROBADO_ZP, "Aprobado por Director ZP desde dashboard", null, rol);
       return res.json({ ok: true, estatus: ESTADOS.APROBADO_ZP });

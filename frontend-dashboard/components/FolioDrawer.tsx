@@ -45,6 +45,8 @@ interface Props {
 
 const ESTADOS_APROBABLES = ["PENDIENTE_APROB_PLANTA", "APROB_PLANTA", "PENDIENTE_APROB_ZP"];
 const ESTADOS_CARRO_COMPRA = ["APROBADO_ZP", "LISTO_PARA_PROGRAMACION", "SELECCIONADO_SEMANA", "SOLICITANDO_PAGO"];
+/** Mes de cargo: carrito o Aprobación Director ZP (misma edición en API). */
+const ESTADOS_MES_CARGO = [...ESTADOS_CARRO_COMPRA, "PENDIENTE_APROB_ZP"];
 
 export default function FolioDrawer({ folioId, token, role = "GG", onClose, onApproved }: Props) {
   const [folio, setFolio] = useState<Record<string, unknown> | null>(null);
@@ -116,9 +118,14 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
   const roleUpper = role && String(role).toUpperCase();
   const soloLectura = roleUpper === "CF_CDMX" || roleUpper === "GA"; // Contralor CDMX y GA solo ven e imprimen, no aprueban
   const puedeEditar = roleUpper === "AD";
-  const puedeAprobar = !soloLectura && ESTADOS_APROBABLES.includes(estatusUpper);
+  /** GG no aprueba el paso a carrito (solo Director ZP / AD); sí puede asignar mes de cargo. */
+  const puedeAprobar =
+    !soloLectura &&
+    ESTADOS_APROBABLES.includes(estatusUpper) &&
+    !(roleUpper === "GG" && estatusUpper === "PENDIENTE_APROB_ZP");
   const puedeRegresarZp = !soloLectura && ESTADOS_CARRO_COMPRA.includes(estatusUpper);
-  const puedeAsignarMesCargo = (roleUpper === "GG" || roleUpper === "AD" || roleUpper === "ZP") && ESTADOS_CARRO_COMPRA.includes(estatusUpper);
+  const puedeAsignarMesCargo =
+    (roleUpper === "GG" || roleUpper === "AD" || roleUpper === "ZP") && ESTADOS_MES_CARGO.includes(estatusUpper);
   const puedeSoloZpAd = roleUpper === "ZP" || roleUpper === "AD";
   const soloZpAd = !!folio?.solo_zp_ad;
   const porRecuperar = !!folio?.por_recuperar;
@@ -321,6 +328,7 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
       setFolio(f as Record<string, unknown>);
       setMesCargoEdit((f as Record<string, unknown>).mes_cargo as string || "");
       onApproved?.();
+      onClose();
     } catch (e) {
       setApproveError((e as Error).message || "Error al guardar mes de cargo");
     } finally {
