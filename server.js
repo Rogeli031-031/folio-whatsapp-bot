@@ -8422,7 +8422,8 @@ app.post("/api/dashboard/dicf-datos", dashboardAuthMiddleware, async (req, res) 
   try {
     const plantCode = await getPlantCodeArrFromPlantaNombre(client, planta.trim());
     const data = await dicf.computeDicf(client, plantCode, planta.trim(), getMargenKgPorPeriodo);
-    res.json(data);
+    const { dicfRowsByCliente: _dicfRows, ...rest } = data || {};
+    res.json(rest);
   } catch (e) {
     console.error("[Dashboard dicf-datos]", e);
     res.status(500).json({ error: e.message });

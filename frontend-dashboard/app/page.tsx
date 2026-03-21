@@ -1398,6 +1398,11 @@ function KpiContent() {
                   <span className="font-mono">{deltaClienteSel.cliente.ingresoBStr ?? "$0"}</span> · Delta:{" "}
                   <span className="font-mono">{deltaClienteSel.cliente.deltaIngresoStr ?? "$0"}</span>
                 </p>
+                <p className="text-xs text-slate-500 max-w-3xl">
+                  <strong>Ingreso A</strong> = ingreso del <strong>mes calendario anterior completo</strong> (kg del mes × margen IGF de ese mes − descuentos del mes).{" "}
+                  <strong>Ingreso B</strong> = proyección a cierre del <strong>mes en curso</strong>, usando margen IGF del mes actual y el descuento $/kg calculado sobre la ventana de historial (p. ej. 60 días).{" "}
+                  <strong>Delta</strong> = B − A. Por eso puede marcar &quot;disminuyeron&quot; aunque la venta suba en toneladas: el margen o el descuento $/kg del historial pueden diferir del mes anterior.
+                </p>
                 {(() => {
                   const clienteNombre = (deltaClienteSel.cliente?.cliente || "").trim();
                   const grupo = (deltaClienteSel.grupo || "").toLowerCase();
