@@ -5753,6 +5753,156 @@ const SQL_WHERE_IGF_EXCLUYE_FOLIOS_CATEGORIA = `
     AND (subcategoria IS NULL OR UPPER(TRIM(subcategoria)) <> 'COMISIONES')
   )`;
 
+/** Misma exclusión, con alias `f` para JOIN en listados de folios. */
+const SQL_WHERE_IGF_EXCLUYE_FOLIOS_CATEGORIA_F = `
+  AND (
+    (f.categoria IS NULL OR (
+      UPPER(TRIM(f.categoria)) NOT IN ('INVERSIONES', 'DYO', 'COMISIONES')
+      AND UPPER(TRIM(f.categoria)) NOT LIKE '%DERECHOS%'
+      AND UPPER(TRIM(f.categoria)) NOT LIKE '%OBLIGACIONES%'
+    ))
+    AND (f.subcategoria IS NULL OR UPPER(TRIM(f.subcategoria)) <> 'COMISIONES')
+  )`;
+
+/**
+ * Resuelve empresa IGF (GT - Puebla, Acapulco, …) a planta_id(s) y lista global de plantas provincia/presupuesto.
+ * Usado en buildIgfForecastPayload y en el detalle de folios IGF.
+ */
+async function loadIgfEmpresaPlantaResolver(client) {
+  const plantaIdByPlantCode = new Map();
+  const provPlantas = await client.query(
+    `SELECT ap.plant_code, p.id AS planta_id
+     FROM arr.provincia_plants ap
+     JOIN public.plantas p ON UPPER(TRIM(p.nombre)) = UPPER(TRIM(ap.plant_code))
+      OR (p.clave IS NOT NULL AND TRIM(p.clave) <> '' AND UPPER(TRIM(p.clave)) = UPPER(TRIM(ap.plant_code)))`
+  );
+  for (const r of provPlantas.rows || []) {
+    if (r.plant_code != null && r.planta_id != null) plantaIdByPlantCode.set((r.plant_code || "").trim(), Number(r.planta_id));
+  }
+  const nombresPresupuesto = ["E7", "E8", "E9", "E10", "E11", "E12", "E13", "E15", "Puebla", "PUEBLA", "Tehuacán", "Acapulco", "Querétaro", "San Luis P.", "San Luis", "Morelos"];
+  const rPlantasPresup = await client.query(
+    `SELECT id, nombre, clave FROM public.plantas
+     WHERE nombre = ANY($1::text[])
+        OR (clave IS NOT NULL AND TRIM(clave) <> '' AND UPPER(TRIM(clave)) = ANY(
+          ARRAY(SELECT UPPER(x) FROM unnest($1::text[]) AS x)
+        ))`,
+    [nombresPresupuesto]
+  );
+  const plantaIdByNombrePresup = new Map();
+  for (const r of rPlantasPresup.rows || []) {
+    const id = Number(r.id);
+    if (r.nombre && nombresPresupuesto.includes(r.nombre)) plantaIdByNombrePresup.set(r.nombre, id);
+    const claveNorm = r.clave ? String(r.clave).trim().toUpperCase() : "";
+    const claveOrig = r.clave ? String(r.clave).trim() : "";
+    if (claveNorm && nombresPresupuesto.some((n) => n.toUpperCase() === claveNorm)) plantaIdByNombrePresup.set(claveNorm, id);
+    if (claveOrig && nombresPresupuesto.includes(claveOrig)) plantaIdByNombrePresup.set(claveOrig, id);
+  }
+  const empresaToPlantaId = new Map();
+  const empresaToPlantaIds = new Map();
+  const empresaNormToPlantaId = new Map();
+  for (const [empresa, keys] of Object.entries(EMPRESA_IGF_A_PLANTA_KEYS)) {
+    const arr = Array.isArray(keys) ? keys : [keys];
+    const ids = [...new Set(arr.map((k) => plantaIdByNombrePresup.get(k) || plantaIdByNombrePresup.get(String(k).toUpperCase())).filter(Boolean))];
+    if (ids.length > 0) {
+      empresaToPlantaIds.set(empresa, ids);
+      empresaToPlantaId.set(empresa, ids[0]);
+      const keyNorm = normalizeAccents(empresa).replace(/\s+/g, "").toLowerCase();
+      empresaNormToPlantaId.set(keyNorm, ids[0]);
+      const suffix = (empresa.split(" - ").pop() || empresa).trim();
+      if (suffix && !empresaToPlantaIds.has(suffix)) empresaToPlantaIds.set(suffix, ids);
+      for (const k of arr) {
+        if (k && typeof k === "string" && !empresaToPlantaIds.has(k.trim())) empresaToPlantaIds.set(k.trim(), ids);
+      }
+    }
+  }
+  const idsFromJoin = Array.from(plantaIdByPlantCode.values()).filter((id) => id != null && Number.isFinite(Number(id)));
+  const idsFromPresupuesto = Array.from(empresaToPlantaIds.values()).flat();
+  const plantaIds = [...new Set([...idsFromJoin.map((id) => Number(id)), ...idsFromPresupuesto.map((id) => Number(id))])];
+
+  function resolvePlantaIdsForRow(empresa) {
+    const emp = (empresa || "").trim();
+    const ids = empresaToPlantaIds.get(emp) || empresaToPlantaIds.get(empresa);
+    if (ids && ids.length > 0) return ids;
+    const keyNorm = normalizeAccents(emp).replace(/\s+/g, "").toLowerCase();
+    for (const [key, val] of empresaToPlantaIds) {
+      if (normalizeAccents((key || "").trim()).replace(/\s+/g, "").toLowerCase() === keyNorm) return val;
+    }
+    const keyNormCompact = keyNorm.replace(/\s+/g, "").replace(/\./g, "");
+    for (const [key, val] of empresaToPlantaIds) {
+      const suf = (key.split(" - ").pop() || key).trim();
+      const sufNorm = normalizeAccents(suf).replace(/\s+/g, "").replace(/\./g, "").toLowerCase();
+      if (keyNorm === sufNorm || keyNorm.includes(sufNorm) || sufNorm.includes(keyNorm)) return val;
+      if (keyNormCompact.indexOf(sufNorm) >= 0 || sufNorm.indexOf(keyNormCompact) >= 0) return val;
+    }
+    const singleId = empresaToPlantaId.get(emp) || empresaToPlantaId.get(empresa) || empresaNormToPlantaId.get(keyNorm);
+    return singleId != null ? [singleId] : [];
+  }
+  return { resolvePlantaIdsForRow, plantaIds };
+}
+
+/** Lista de folios que componen los totales IGF por tipo (mismos filtros que buildIgfForecastPayload). */
+async function fetchIgfFoliosDetalleList(client, year, month, empresa, tipo) {
+  const periodoStr = `${year}-${String(month).padStart(2, "0")}`;
+  const { resolvePlantaIdsForRow } = await loadIgfEmpresaPlantaResolver(client);
+  const plantaIdsRow = resolvePlantaIdsForRow(empresa);
+  if (!plantaIdsRow.length) {
+    return { empresa: (empresa || "").trim(), periodo: periodoStr, tipo, folios: [] };
+  }
+  const estAprobZp = [ESTADOS.PENDIENTE_APROB_ZP, ESTADOS.CANCELACION_SOLICITADA];
+  const estCarro = [ESTADOS.APROBADO_ZP, ESTADOS.LISTO_PARA_PROGRAMACION, ESTADOS.SELECCIONADO_SEMANA, ESTADOS.SOLICITANDO_PAGO];
+  let sql;
+  let params;
+  if (tipo === "aprob_zp") {
+    sql = `
+      SELECT f.id, f.numero_folio, f.folio_codigo, f.planta_id, f.importe, f.estatus, f.categoria, f.subcategoria,
+             COALESCE(f.descripcion, f.concepto) AS descripcion_display, f.mes_cargo, p.nombre AS planta_nombre
+      FROM public.folios f
+      LEFT JOIN public.plantas p ON p.id = f.planta_id
+      WHERE f.mes_cargo = $1 AND f.planta_id = ANY($2::int[]) AND f.estatus = ANY($3::text[])
+      ${SQL_WHERE_IGF_EXCLUYE_FOLIOS_CATEGORIA_F}
+      ORDER BY f.numero_folio NULLS LAST, f.id`;
+    params = [periodoStr, plantaIdsRow, estAprobZp];
+  } else if (tipo === "carro") {
+    sql = `
+      SELECT f.id, f.numero_folio, f.folio_codigo, f.planta_id, f.importe, f.estatus, f.categoria, f.subcategoria,
+             COALESCE(f.descripcion, f.concepto) AS descripcion_display, f.mes_cargo, p.nombre AS planta_nombre
+      FROM public.folios f
+      LEFT JOIN public.plantas p ON p.id = f.planta_id
+      WHERE f.mes_cargo = $1 AND f.planta_id = ANY($2::int[]) AND f.estatus = ANY($3::text[])
+      ${SQL_WHERE_IGF_EXCLUYE_FOLIOS_CATEGORIA_F}
+      ORDER BY f.numero_folio NULLS LAST, f.id`;
+    params = [periodoStr, plantaIdsRow, estCarro];
+  } else if (tipo === "deposito_cierre") {
+    sql = `
+      SELECT f.id, f.numero_folio, f.folio_codigo, f.planta_id, f.importe, f.estatus, f.categoria, f.subcategoria,
+             COALESCE(f.descripcion, f.concepto) AS descripcion_display, f.mes_cargo, p.nombre AS planta_nombre
+      FROM public.folios f
+      LEFT JOIN public.plantas p ON p.id = f.planta_id
+      WHERE f.mes_cargo = $1 AND f.planta_id = ANY($2::int[])
+        AND (f.estatus = $3 OR f.estatus = $4)
+      ${SQL_WHERE_IGF_EXCLUYE_FOLIOS_CATEGORIA_F}
+      ORDER BY f.estatus, f.numero_folio NULLS LAST, f.id`;
+    params = [periodoStr, plantaIdsRow, ESTADOS.PAGADO, ESTADOS.CERRADO];
+  } else {
+    throw new Error("tipo inválido");
+  }
+  const r = await client.query(sql, params);
+  const folios = (r.rows || []).map((row) => ({
+    id: row.id,
+    numero_folio: row.numero_folio,
+    folio_codigo: row.folio_codigo,
+    planta_id: row.planta_id,
+    planta_nombre: row.planta_nombre || null,
+    importe: row.importe != null ? Number(row.importe) : null,
+    estatus: row.estatus || null,
+    categoria: row.categoria || null,
+    subcategoria: row.subcategoria || null,
+    descripcion: (row.descripcion_display || "").toString().slice(0, 500),
+    mes_cargo: row.mes_cargo || null,
+  }));
+  return { empresa: (empresa || "").trim(), periodo: periodoStr, tipo, folios };
+}
+
 /** Construye payload IGF Forecast (misma lógica que GET /api/dashboard/igf-forecast). Para API y Excel. */
 async function buildIgfForecastPayload(client, year, month) {
   const now = new Date();
@@ -5823,55 +5973,8 @@ async function buildIgfForecastPayload(client, year, month) {
     });
 
     const periodoStr = `${year}-${String(month).padStart(2, "0")}`;
-    const plantaIdByPlantCode = new Map();
-    const provPlantas = await client.query(
-      `SELECT ap.plant_code, p.id AS planta_id
-       FROM arr.provincia_plants ap
-       JOIN public.plantas p ON UPPER(TRIM(p.nombre)) = UPPER(TRIM(ap.plant_code))
-        OR (p.clave IS NOT NULL AND TRIM(p.clave) <> '' AND UPPER(TRIM(p.clave)) = UPPER(TRIM(ap.plant_code)))`
-    );
-    for (const r of provPlantas.rows || []) {
-      if (r.plant_code != null && r.planta_id != null) plantaIdByPlantCode.set((r.plant_code || "").trim(), Number(r.planta_id));
-    }
+    const { resolvePlantaIdsForRow, plantaIds } = await loadIgfEmpresaPlantaResolver(client);
     const nombresPresupuesto = ["E7", "E8", "E9", "E10", "E11", "E12", "E13", "E15", "Puebla", "PUEBLA", "Tehuacán", "Acapulco", "Querétaro", "San Luis P.", "San Luis", "Morelos"];
-    const rPlantasPresup = await client.query(
-      `SELECT id, nombre, clave FROM public.plantas
-       WHERE nombre = ANY($1::text[])
-          OR (clave IS NOT NULL AND TRIM(clave) <> '' AND UPPER(TRIM(clave)) = ANY(
-            ARRAY(SELECT UPPER(x) FROM unnest($1::text[]) AS x)
-          ))`,
-      [nombresPresupuesto]
-    );
-    const plantaIdByNombrePresup = new Map();
-    for (const r of rPlantasPresup.rows || []) {
-      const id = Number(r.id);
-      if (r.nombre && nombresPresupuesto.includes(r.nombre)) plantaIdByNombrePresup.set(r.nombre, id);
-      const claveNorm = r.clave ? String(r.clave).trim().toUpperCase() : "";
-      const claveOrig = r.clave ? String(r.clave).trim() : "";
-      if (claveNorm && nombresPresupuesto.some((n) => n.toUpperCase() === claveNorm)) plantaIdByNombrePresup.set(claveNorm, id);
-      if (claveOrig && nombresPresupuesto.includes(claveOrig)) plantaIdByNombrePresup.set(claveOrig, id);
-    }
-    const empresaToPlantaId = new Map();
-    const empresaToPlantaIds = new Map();
-    const empresaNormToPlantaId = new Map();
-    for (const [empresa, keys] of Object.entries(EMPRESA_IGF_A_PLANTA_KEYS)) {
-      const arr = Array.isArray(keys) ? keys : [keys];
-      const ids = [...new Set(arr.map((k) => plantaIdByNombrePresup.get(k) || plantaIdByNombrePresup.get(String(k).toUpperCase())).filter(Boolean))];
-      if (ids.length > 0) {
-        empresaToPlantaIds.set(empresa, ids);
-        empresaToPlantaId.set(empresa, ids[0]);
-        const keyNorm = normalizeAccents(empresa).replace(/\s+/g, "").toLowerCase();
-        empresaNormToPlantaId.set(keyNorm, ids[0]);
-        const suffix = (empresa.split(" - ").pop() || empresa).trim();
-        if (suffix && !empresaToPlantaIds.has(suffix)) empresaToPlantaIds.set(suffix, ids);
-        for (const k of arr) {
-          if (k && typeof k === "string" && !empresaToPlantaIds.has(k.trim())) empresaToPlantaIds.set(k.trim(), ids);
-        }
-      }
-    }
-    const idsFromJoin = Array.from(plantaIdByPlantCode.values()).filter((id) => id != null && Number.isFinite(Number(id)));
-    const idsFromPresupuesto = Array.from(empresaToPlantaIds.values()).flat();
-    const plantaIds = [...new Set([...idsFromJoin.map((id) => Number(id)), ...idsFromPresupuesto.map((id) => Number(id))])];
     let presupuestoByPlanta = new Map();
     let pres = await client.query(
       `SELECT p.id AS planta_id, COALESCE(SUM(d.monto_aprobado), 0) AS total
@@ -5959,24 +6062,6 @@ async function buildIgfForecastPayload(client, year, month) {
         foliosInversionesByPlanta = new Map((folInv.rows || []).map((r) => [Number(r.planta_id), Number(r.total) || 0]));
       }
     }
-    function resolvePlantaIdsForRow(empresa) {
-      const emp = (empresa || "").trim();
-      const ids = empresaToPlantaIds.get(emp) || empresaToPlantaIds.get(empresa);
-      if (ids && ids.length > 0) return ids;
-      const keyNorm = normalizeAccents(emp).replace(/\s+/g, "").toLowerCase();
-      for (const [key, val] of empresaToPlantaIds) {
-        if (normalizeAccents((key || "").trim()).replace(/\s+/g, "").toLowerCase() === keyNorm) return val;
-      }
-      const keyNormCompact = keyNorm.replace(/\s+/g, "").replace(/\./g, "");
-      for (const [key, val] of empresaToPlantaIds) {
-        const suf = (key.split(" - ").pop() || key).trim();
-        const sufNorm = normalizeAccents(suf).replace(/\s+/g, "").replace(/\./g, "").toLowerCase();
-        if (keyNorm === sufNorm || keyNorm.includes(sufNorm) || sufNorm.includes(keyNorm)) return val;
-        if (keyNormCompact.indexOf(sufNorm) >= 0 || sufNorm.indexOf(keyNormCompact) >= 0) return val;
-      }
-      const singleId = empresaToPlantaId.get(emp) || empresaToPlantaId.get(empresa) || empresaNormToPlantaId.get(keyNorm);
-      return singleId != null ? [singleId] : [];
-    }
     for (const row of rows) {
       const plantaIdsRow = resolvePlantaIdsForRow(row.empresa);
       const ventaKg = (row.venta_ton != null ? Number(row.venta_ton) : 0) * 1000;
@@ -6062,6 +6147,34 @@ app.get("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, res)
     res.json(payload);
   } catch (e) {
     console.error("[Dashboard IGF Forecast]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/** Folios que componen las columnas Folios Aprob. Director ZP / Folios en carro / Depósito y cierre (IGF). */
+app.get("/api/dashboard/igf-folios-detalle", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGAFinancialKpis(req, res)) return;
+  const year = req.query.year != null ? parseInt(String(req.query.year), 10) : new Date().getFullYear();
+  const month = req.query.month != null ? parseInt(String(req.query.month), 10) : new Date().getMonth() + 1;
+  const empresa = (req.query.empresa || "").toString().trim();
+  const tipo = (req.query.tipo || "").toString().trim();
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
+    return res.status(400).json({ error: "year y month inválidos" });
+  }
+  if (!empresa || /^TOTALES?$/i.test(empresa)) {
+    return res.status(400).json({ error: "Falta empresa" });
+  }
+  if (!["aprob_zp", "carro", "deposito_cierre"].includes(tipo)) {
+    return res.status(400).json({ error: "tipo debe ser aprob_zp, carro o deposito_cierre" });
+  }
+  const client = await pool.connect();
+  try {
+    const payload = await fetchIgfFoliosDetalleList(client, year, month, empresa, tipo);
+    res.json(payload);
+  } catch (e) {
+    console.error("[Dashboard IGF folios detalle]", e);
     res.status(500).json({ error: e.message });
   } finally {
     client.release();

@@ -180,6 +180,45 @@ export function fetchPresupuestoDetalle(
   });
 }
 
+export type IgfFolioDetalleTipo = "aprob_zp" | "carro" | "deposito_cierre";
+
+export interface IgfFolioDetalleItem {
+  id: number;
+  numero_folio: string | null;
+  folio_codigo: string | null;
+  planta_id: number | null;
+  planta_nombre: string | null;
+  importe: number | null;
+  estatus: string | null;
+  categoria: string | null;
+  subcategoria: string | null;
+  descripcion: string;
+  mes_cargo: string | null;
+}
+
+export interface IgfFolioDetalleResponse {
+  empresa: string;
+  periodo: string;
+  tipo: IgfFolioDetalleTipo;
+  folios: IgfFolioDetalleItem[];
+}
+
+export function fetchIgfFoliosDetalle(
+  token: string,
+  params: { year: number; month: number; empresa: string; tipo: IgfFolioDetalleTipo }
+): Promise<IgfFolioDetalleResponse> {
+  return apiFetch<IgfFolioDetalleResponse>("/api/dashboard/igf-folios-detalle", {
+    token,
+    params: {
+      year: String(params.year),
+      month: String(params.month),
+      empresa: params.empresa,
+      tipo: params.tipo,
+    },
+    cache: "no-store",
+  });
+}
+
 export function fetchIgfForecast(
   token: string,
   params?: { year?: number; month?: number }

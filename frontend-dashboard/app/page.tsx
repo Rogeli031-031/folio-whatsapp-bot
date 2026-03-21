@@ -22,8 +22,11 @@ import {
   fetchDicfConfig,
   postDicfConfig,
   fetchPresupuestoDetalle,
+  fetchIgfFoliosDetalle,
   type IgfForecastResponse,
   type IgfForecastRow,
+  type IgfFolioDetalleItem,
+  type IgfFolioDetalleTipo,
   type DeltaIngresoForecastResult,
   type DicfResult,
   type DicfConfig,
@@ -146,6 +149,10 @@ function KpiContent() {
   const [presupuestoDetalleLoading, setPresupuestoDetalleLoading] = useState(false);
   const [presupuestoDetalleError, setPresupuestoDetalleError] = useState<string | null>(null);
   const [presupuestoDetalleCategoriaSel, setPresupuestoDetalleCategoriaSel] = useState<string | null>(null);
+  const [igfFoliosModal, setIgfFoliosModal] = useState<{ empresa: string; label: string; tipo: IgfFolioDetalleTipo } | null>(null);
+  const [igfFoliosItems, setIgfFoliosItems] = useState<IgfFolioDetalleItem[] | null>(null);
+  const [igfFoliosLoading, setIgfFoliosLoading] = useState(false);
+  const [igfFoliosError, setIgfFoliosError] = useState<string | null>(null);
   const [igfMesAnterior, setIgfMesAnterior] = useState<IgfForecastResponse | null>(null);
   const [igfMesAnteriorLoading, setIgfMesAnteriorLoading] = useState(false);
   const [deltaForecastPlanta, setDeltaForecastPlanta] = useState("");
@@ -403,6 +410,27 @@ function KpiContent() {
     return (base ?? 0) + deltaKg;
   };
 
+  const openIgfFoliosDetalle = async (row: IgfForecastRow, tipo: IgfFolioDetalleTipo, label: string) => {
+    setIgfFoliosModal({ empresa: row.empresa || "", tipo, label });
+    setIgfFoliosItems(null);
+    setIgfFoliosError(null);
+    if (!token || !igfForecast) return;
+    setIgfFoliosLoading(true);
+    try {
+      const data = await fetchIgfFoliosDetalle(token, {
+        year: igfForecast.year,
+        month: igfForecast.month,
+        empresa: row.empresa || "",
+        tipo,
+      });
+      setIgfFoliosItems(data.folios || []);
+    } catch (e: unknown) {
+      setIgfFoliosError(e instanceof Error ? e.message : "Error al cargar folios");
+    } finally {
+      setIgfFoliosLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen flex flex-col">
       <div className="border-b border-slate-700 bg-slate-900/50 px-4 py-3">
@@ -546,10 +574,36 @@ function KpiContent() {
                                 {fmtNum(getPresupuestoKgWithGend(row))}
                               </button>
                             </td>
-                            <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(row.folios_aprob_zp_kg ?? null)}</td>
-                            <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(row.folios_carro_kg ?? null)}</td>
+                            <td className="py-2 px-2 text-right tabular-nums text-slate-300">
+                              <button
+                                type="button"
+                                className="min-w-[3rem] rounded border border-slate-600 bg-slate-800 px-1.5 py-0.5 text-[0.65rem] text-slate-200 hover:bg-slate-700"
+                                onClick={() => openIgfFoliosDetalle(row, "aprob_zp", "Folios Aprob. Director ZP ($/kg)")}
+                              >
+                                {fmtNum(row.folios_aprob_zp_kg ?? null)}
+                              </button>
+                            </td>
+                            <td className="py-2 px-2 text-right tabular-nums text-slate-300">
+                              <button
+                                type="button"
+                                className="min-w-[3rem] rounded border border-slate-600 bg-slate-800 px-1.5 py-0.5 text-[0.65rem] text-slate-200 hover:bg-slate-700"
+                                onClick={() => openIgfFoliosDetalle(row, "carro", "Folios en carro ($/kg)")}
+                              >
+                                {fmtNum(row.folios_carro_kg ?? null)}
+                              </button>
+                            </td>
                             <td className={`py-2 px-2 text-right tabular-nums ${row.deposito_cierre_kg != null && Number(row.deposito_cierre_kg) < 0 ? "text-red-400" : "text-slate-300"}`}>
-                              {fmtNum(row.deposito_cierre_kg ?? null)}
+                              <button
+                                type="button"
+                                className={`min-w-[3rem] rounded border px-1.5 py-0.5 text-[0.65rem] hover:bg-slate-700 ${
+                                  row.deposito_cierre_kg != null && Number(row.deposito_cierre_kg) < 0
+                                    ? "border-red-500/50 bg-red-950/40 text-red-200"
+                                    : "border-slate-600 bg-slate-800 text-slate-200"
+                                }`}
+                                onClick={() => openIgfFoliosDetalle(row, "deposito_cierre", "Depósito y cierre ($/kg)")}
+                              >
+                                {fmtNum(row.deposito_cierre_kg ?? null)}
+                              </button>
                             </td>
                           </>
                         )}
@@ -1728,6 +1782,89 @@ function KpiContent() {
                 )}
               </div>
             </div>
+          </div>
+        </div>
+      )}
+      {igfFoliosModal && (
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4"
+          onClick={() => {
+            setIgfFoliosModal(null);
+            setIgfFoliosItems(null);
+            setIgfFoliosError(null);
+          }}
+        >
+          <div
+            className="w-full max-w-4xl max-h-[85vh] overflow-hidden flex flex-col rounded-lg border border-slate-700 bg-slate-900 p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 flex flex-shrink-0 items-center justify-between border-b border-slate-700 pb-2">
+              <div>
+                <h3 className="text-base font-semibold text-slate-200">{igfFoliosModal.label}</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {igfFoliosModal.empresa} · {igfForecast ? `${MESES[igfForecast.month - 1]} ${igfForecast.year}` : ""}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIgfFoliosModal(null);
+                  setIgfFoliosItems(null);
+                  setIgfFoliosError(null);
+                }}
+                className="rounded p-1 text-slate-400 hover:bg-slate-700 hover:text-white"
+              >
+                ×
+              </button>
+            </div>
+            {igfFoliosLoading && <p className="text-sm text-slate-400">Cargando folios…</p>}
+            {igfFoliosError && <p className="text-sm text-red-400">{igfFoliosError}</p>}
+            {!igfFoliosLoading && !igfFoliosError && igfFoliosItems && (
+              <div className="overflow-auto flex-1 min-h-0 -mx-1">
+                {igfFoliosItems.length === 0 ? (
+                  <p className="text-sm text-slate-500">No hay folios que coincidan con este criterio y periodo.</p>
+                ) : (
+                  <table className="w-full border-collapse text-xs">
+                    <thead className="sticky top-0 bg-slate-900 z-10">
+                      <tr className="border-b border-slate-600 text-slate-300">
+                        <th className="py-2 px-2 text-left">Folio</th>
+                        <th className="py-2 px-2 text-right">Importe</th>
+                        <th className="py-2 px-2 text-left">Estatus</th>
+                        <th className="py-2 px-2 text-left">Categoría</th>
+                        <th className="py-2 px-2 text-left">Subcategoría</th>
+                        <th className="py-2 px-2 text-left">Mes cargo</th>
+                        <th className="py-2 px-2 text-left">Planta</th>
+                        <th className="py-2 px-2 text-left">Descripción</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {igfFoliosItems.map((f) => (
+                        <tr key={f.id} className="border-b border-slate-800 text-slate-200">
+                          <td className="py-1.5 px-2 font-mono whitespace-nowrap">{f.numero_folio || f.folio_codigo || f.id}</td>
+                          <td className="py-1.5 px-2 text-right tabular-nums">
+                            {f.importe != null
+                              ? f.importe.toLocaleString("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 })
+                              : "—"}
+                          </td>
+                          <td className="py-1.5 px-2">{f.estatus || "—"}</td>
+                          <td className="py-1.5 px-2 max-w-[120px] truncate" title={f.categoria || ""}>
+                            {f.categoria || "—"}
+                          </td>
+                          <td className="py-1.5 px-2 max-w-[120px] truncate" title={f.subcategoria || ""}>
+                            {f.subcategoria || "—"}
+                          </td>
+                          <td className="py-1.5 px-2 whitespace-nowrap">{f.mes_cargo || "—"}</td>
+                          <td className="py-1.5 px-2 max-w-[140px] truncate" title={f.planta_nombre || ""}>
+                            {f.planta_nombre || "—"}
+                          </td>
+                          <td className="py-1.5 px-2 text-slate-400 max-w-[220px]">{f.descripcion || "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
