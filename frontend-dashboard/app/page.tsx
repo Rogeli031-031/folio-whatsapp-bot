@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useState, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import * as XLSX from "xlsx";
 import {
   parseTokenFromQuery,
   getTokenFromStorage,
   setTokenInStorage,
+  getRoleFromDashboardToken,
 } from "@/lib/auth";
 import {
   fetchIgfForecast,
@@ -106,6 +107,7 @@ function findRowByPlanta(rows: IgfForecastRow[], planta: string): IgfForecastRow
 
 function KpiContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
   const [unauthorized, setUnauthorized] = useState(false);
   const [igfForecast, setIgfForecast] = useState<IgfForecastResponse | null>(null);
@@ -174,15 +176,22 @@ function KpiContent() {
   const [dicfParamsUmbralPctPos, setDicfParamsUmbralPctPos] = useState<string>("0.15");
   const [dicfParamsMinKgHist, setDicfParamsMinKgHist] = useState<string>("0");
 
+  const isGAPageBlocked = token ? getRoleFromDashboardToken(token) === "GA" : false;
+
   useEffect(() => {
-    if (!token || !deltaForecastPlanta) {
+    if (!token || !isGAPageBlocked) return;
+    router.replace(`/dashboard?t=${encodeURIComponent(token)}`);
+  }, [token, isGAPageBlocked, router]);
+
+  useEffect(() => {
+    if (!token || !deltaForecastPlanta || isGAPageBlocked) {
       setDeltaForecastPeriodos([]);
       return;
     }
     fetchDeltaIngresoPeriodos(token, deltaForecastPlanta)
       .then((r) => setDeltaForecastPeriodos(r.periodos || []))
       .catch(() => setDeltaForecastPeriodos([]));
-  }, [token, deltaForecastPlanta]);
+  }, [token, deltaForecastPlanta, isGAPageBlocked]);
 
   useEffect(() => {
     // Cambia de planta -> reinicia búsqueda/selección para no mezclar clientes.
@@ -203,7 +212,7 @@ function KpiContent() {
   }, [searchParams]);
 
   useEffect(() => {
-    if (!token) return;
+    if (!token || isGAPageBlocked) return;
 
     let cancelled = false;
     let fetching = false;
@@ -237,10 +246,10 @@ function KpiContent() {
       cancelled = true;
       clearInterval(id);
     };
-  }, [token]);
+  }, [token, isGAPageBlocked]);
 
   useEffect(() => {
-    if (!token || !igfForecast || !plantaFilter) {
+    if (!token || isGAPageBlocked || !igfForecast || !plantaFilter) {
       setIgfMesAnterior(null);
       return;
     }
@@ -253,10 +262,10 @@ function KpiContent() {
       .then(setIgfMesAnterior)
       .catch(() => setIgfMesAnterior(null))
       .finally(() => setIgfMesAnteriorLoading(false));
-  }, [token, plantaFilter, igfForecast?.year, igfForecast?.month]);
+  }, [token, plantaFilter, igfForecast?.year, igfForecast?.month, isGAPageBlocked]);
 
   useEffect(() => {
-    if (!token || !deltaForecastPlanta || !deltaClienteSel || !dicfData) return;
+    if (!token || isGAPageBlocked || !deltaForecastPlanta || !deltaClienteSel || !dicfData) return;
 
     const clienteNombre = (deltaClienteSel.cliente?.cliente || "").trim();
     if (!clienteNombre) return;
@@ -353,7 +362,7 @@ function KpiContent() {
     return () => {
       cancelled = true;
     };
-  }, [token, deltaForecastPlanta, deltaClienteSel, dicfData]);
+  }, [token, deltaForecastPlanta, deltaClienteSel, dicfData, isGAPageBlocked]);
 
   if (unauthorized) {
     return (
@@ -372,6 +381,14 @@ function KpiContent() {
     return (
       <div className="flex min-h-screen items-center justify-center p-4">
         <p className="text-slate-400">Cargando…</p>
+      </div>
+    );
+  }
+
+  if (isGAPageBlocked) {
+    return (
+      <div className="flex min-h-screen items-center justify-center p-4">
+        <p className="text-slate-400">Redirigiendo al dashboard…</p>
       </div>
     );
   }

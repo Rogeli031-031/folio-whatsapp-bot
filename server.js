@@ -5416,7 +5416,18 @@ app.post("/api/folios", dashboardAuthMiddleware, async (req, res) => {
   }
 });
 
+/** GA: sin acceso a KPIs financieros (página Inicio, IGF, Excel ARR, DICF, presupuesto, etc.). */
+function dashboardBlockGAFinancialKpis(req, res) {
+  const roleNorm = req.dashboardAuth && req.dashboardAuth.role ? String(req.dashboardAuth.role).toUpperCase() : "";
+  if (roleNorm === "GA") {
+    res.status(403).json({ error: "GA no tiene acceso a KPIs financieros." });
+    return true;
+  }
+  return false;
+}
+
 app.get("/api/dashboard/kpis", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGAFinancialKpis(req, res)) return;
   const client = await pool.connect();
   try {
     const filters = parseDashboardFilters(req.query);
@@ -6037,6 +6048,7 @@ async function buildIgfForecastPayload(client, year, month) {
 
 /** IGF Forecast: última versión del mes; solo plantas provincia; venta y com_desc = forecast desde ARR (mes actual). */
 app.get("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGAFinancialKpis(req, res)) return;
   const year = req.query.year != null ? parseInt(String(req.query.year), 10) : new Date().getFullYear();
   const month = req.query.month != null ? parseInt(String(req.query.month), 10) : new Date().getMonth() + 1;
   if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
@@ -6088,6 +6100,7 @@ function recalcularUtilYResultado(row) {
 
 /** PATCH IGF Forecast: actualizar HG % (y opcionalmente HG $/kg) por empresa; recalcula Util. Oper. y Resultado. */
 app.patch("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGAFinancialKpis(req, res)) return;
   const year = req.body?.year != null ? parseInt(String(req.body.year), 10) : new Date().getFullYear();
   const month = req.body?.month != null ? parseInt(String(req.body.month), 10) : new Date().getMonth() + 1;
   const empresa = req.body?.empresa != null ? String(req.body.empresa).trim() : "";
@@ -7844,6 +7857,7 @@ app.post("/api/folios/:id/factura", dashboardAuthMiddleware, async (req, res) =>
 /* ==================== ARR / Forecast (módulo adicional; no modifica flujo existente) ==================== */
 
 app.post("/api/arr/load", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGAFinancialKpis(req, res)) return;
   const plantCode = (req.body.plant_code || "").trim();
   if (!plantCode) return res.status(400).json({ error: "Falta plant_code" });
   let fileBuffer = null;
@@ -7874,6 +7888,7 @@ app.post("/api/arr/load", dashboardAuthMiddleware, async (req, res) => {
 });
 
 app.post("/api/arr/refresh-provincia", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGAFinancialKpis(req, res)) return;
   const client = await pool.connect();
   try {
     const refresh = await arrRefreshProvincia.refreshProvinciaDiario(client);
@@ -7894,6 +7909,7 @@ app.post("/api/arr/refresh-provincia", dashboardAuthMiddleware, async (req, res)
 });
 
 app.post("/api/arr/forecast", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGAFinancialKpis(req, res)) return;
   const plantCode = (req.body.plant_code || "").trim();
   const year = parseInt(req.body.year, 10);
   const month = parseInt(req.body.month, 10);
@@ -7914,6 +7930,7 @@ app.post("/api/arr/forecast", dashboardAuthMiddleware, async (req, res) => {
 });
 
 app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGAFinancialKpis(req, res)) return;
   const plantCode = (req.query.plant_code || "").trim() || null;
   const year = parseInt(req.query.year, 10);
   const month = parseInt(req.query.month, 10);
@@ -7938,6 +7955,7 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
 
 /** Lista periodos IGF (year, month) y versiones por periodo para el modal "Cómo cambió" del dashboard. */
 app.get("/api/dashboard/igf-versiones", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGAFinancialKpis(req, res)) return;
   const client = await pool.connect();
   try {
     const meses = await igfHandler.getMesesDisponibles(client);
@@ -7972,6 +7990,7 @@ function normalizarEmpresaKey(s) {
 
 /** Lista de empresas (plantas) que aparecen en IGF versiones (última versión del mes más reciente). Para "Préstamos a planta". Sin duplicados por escritura (acentos/guiones). */
 app.get("/api/dashboard/igf-empresas", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGAFinancialKpis(req, res)) return;
   const client = await pool.connect();
   try {
     const r = await client.query(
@@ -7999,6 +8018,7 @@ app.get("/api/dashboard/igf-empresas", dashboardAuthMiddleware, async (req, res)
 
 /** Genera token y URL para descarga Excel "Cómo cambió" (mismo flujo que WhatsApp). */
 app.post("/api/dashboard/igf-como-cambio-token", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGAFinancialKpis(req, res)) return;
   const { planta, yearA, monthA, versionA, yearB, monthB, versionB } = req.body || {};
   const p = (v) => (v != null && v !== "" ? parseInt(v, 10) : null);
   const yA = p(yearA); const mA = p(monthA); const vA = p(versionA);
@@ -8021,6 +8041,7 @@ app.post("/api/dashboard/igf-como-cambio-token", dashboardAuthMiddleware, async 
 
 /** Devuelve los deltas de la comparación IGF en JSON para mostrarlos en el modal del dashboard. */
 app.post("/api/dashboard/igf-como-cambio-datos", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGAFinancialKpis(req, res)) return;
   const { planta, yearA, monthA, versionA, yearB, monthB, versionB } = req.body || {};
   const p = (v) => (v != null && v !== "" ? parseInt(v, 10) : null);
   const yA = p(yearA); const mA = p(monthA); const vA = p(versionA);
@@ -8064,6 +8085,7 @@ app.post("/api/dashboard/igf-como-cambio-datos", dashboardAuthMiddleware, async 
 
 /** Comparar presupuesto entre dos periodos para la planta seleccionada (mismo flujo que "comparar presupuesto" en WhatsApp). */
 app.post("/api/dashboard/presupuesto-comparar", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGAFinancialKpis(req, res)) return;
   const { planta, periodoA, periodoB } = req.body || {};
   const pa = (typeof periodoA === "string" && /^\d{4}-\d{2}$/.test(periodoA)) ? periodoA : null;
   const pb = (typeof periodoB === "string" && /^\d{4}-\d{2}$/.test(periodoB)) ? periodoB : null;
@@ -8088,6 +8110,7 @@ app.post("/api/dashboard/presupuesto-comparar", dashboardAuthMiddleware, async (
 
 /** Detalle de presupuesto por planta y periodo (categoría / subcategoría / monto_aprobado). */
 app.get("/api/dashboard/presupuesto-detalle", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGAFinancialKpis(req, res)) return;
   const planta = (req.query.planta || "").toString().trim();
   const periodo = (req.query.periodo || "").toString().trim() || getPeriodoPresupuestoConsulta();
   if (!planta) {
@@ -8348,6 +8371,7 @@ app.get("/api/dashboard/delta-ingreso-periodos", dashboardAuthMiddleware, async 
 
 /** Delta Ingreso Forecast: A = mes anterior real, B = forecast a cierre. Devuelve dejaron, nuevos, aumentaron, disminuyeron y byCategoria. */
 app.post("/api/dashboard/delta-ingreso-forecast-datos", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGAFinancialKpis(req, res)) return;
   const { planta, periodoA, periodoB } = req.body || {};
   const pa = (typeof periodoA === "string" && /^\d{4}-\d{2}$/.test(periodoA)) ? periodoA : null;
   const pb = (typeof periodoB === "string" && /^\d{4}-\d{2}$/.test(periodoB)) ? periodoB : null;
@@ -8389,6 +8413,7 @@ app.post("/api/dashboard/delta-ingreso-forecast-datos", dashboardAuthMiddleware,
 
 /** Delta Ingreso Cliente Forecast (DICF): solo planta, 60 días historial, proyección a cierre del mes. Sin periodo A/B. */
 app.post("/api/dashboard/dicf-datos", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGAFinancialKpis(req, res)) return;
   const { planta } = req.body || {};
   if (!planta || typeof planta !== "string" || !planta.trim()) {
     return res.status(400).json({ error: "Falta planta" });
@@ -8408,6 +8433,7 @@ app.post("/api/dashboard/dicf-datos", dashboardAuthMiddleware, async (req, res) 
 
 /** Excel Delta Ingreso Cliente Forecast: 3 hojas (venta Ton, desc $/kg, margen) — clientes en A, estatus en B, últimos 30 días en columnas. */
 app.get("/api/dashboard/dicf-excel", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGAFinancialKpis(req, res)) return;
   const planta = (req.query.planta || "").toString().trim();
   if (!planta) return res.status(400).json({ error: "Falta planta" });
   const client = await pool.connect();
@@ -8526,6 +8552,7 @@ app.get("/api/dashboard/dicf-excel", dashboardAuthMiddleware, async (req, res) =
 
 /** Obtener parámetros DICF editables para una planta y mes (year, month). */
 app.get("/api/dashboard/dicf-config", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGAFinancialKpis(req, res)) return;
   const planta = (req.query.planta || "").toString().trim();
   const year = parseInt(req.query.year, 10);
   const month = parseInt(req.query.month, 10);
@@ -8562,6 +8589,7 @@ app.get("/api/dashboard/dicf-config", dashboardAuthMiddleware, async (req, res) 
 
 /** Guardar parámetros DICF editables (upsert por planta, year, month). */
 app.post("/api/dashboard/dicf-config", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGAFinancialKpis(req, res)) return;
   const { planta, year, month, window_days, tolerancia_dias, umbral_mxn, umbral_pct_neg, umbral_pct_pos, min_kg_hist } = req.body || {};
   const y = parseInt(year, 10);
   const m = parseInt(month, 10);
@@ -8600,6 +8628,7 @@ app.post("/api/dashboard/dicf-config", dashboardAuthMiddleware, async (req, res)
 
 /** Excel Delta Ingreso Forecast: una hoja por categoría (dejaron, nuevos, aumentaron, disminuyeron) y resumen por canal/subcanal. */
 app.get("/api/dashboard/delta-ingreso-forecast-excel", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGAFinancialKpis(req, res)) return;
   const planta = (req.query.planta || "").toString().trim();
   const periodoA = (req.query.periodoA || "").toString().trim();
   const periodoB = (req.query.periodoB || "").toString().trim();
