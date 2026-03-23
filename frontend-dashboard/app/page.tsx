@@ -665,7 +665,21 @@ function KpiContent() {
                               key={c.key}
                               className={`py-2 px-2 text-right tabular-nums ${isInversionesKg && invIsNeg ? "text-red-400" : "text-slate-300"} ${c.key === "util_oper_kg" ? "border-r border-slate-600" : ""} ${highlightClass}`}
                             >
-                              {isImporte ? fmtNum(val ?? null, 0) : fmtNum(val ?? null)}
+                              {isInversionesKg && val != null ? (
+                                <button
+                                  type="button"
+                                  className={`min-w-[3rem] rounded border px-1.5 py-0.5 text-[0.65rem] hover:bg-slate-700 ${
+                                    invIsNeg
+                                      ? "border-red-500/50 bg-red-950/40 text-red-200"
+                                      : "border-slate-600 bg-slate-800 text-slate-200"
+                                  }`}
+                                  onClick={() => openIgfFoliosDetalle(row, "inversiones", "Inversiones ($/kg)")}
+                                >
+                                  {fmtNum(val ?? null)}
+                                </button>
+                              ) : (
+                                isImporte ? fmtNum(val ?? null, 0) : fmtNum(val ?? null)
+                              )}
                             </td>
                           );
                         })}

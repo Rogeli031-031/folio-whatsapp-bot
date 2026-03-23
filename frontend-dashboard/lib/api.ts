@@ -180,7 +180,7 @@ export function fetchPresupuestoDetalle(
   });
 }
 
-export type IgfFolioDetalleTipo = "aprob_zp" | "carro" | "deposito_cierre";
+export type IgfFolioDetalleTipo = "aprob_zp" | "carro" | "deposito_cierre" | "inversiones";
 
 export interface IgfFolioDetalleItem {
   id: number;

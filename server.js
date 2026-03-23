@@ -5883,6 +5883,17 @@ async function fetchIgfFoliosDetalleList(client, year, month, empresa, tipo) {
       ${SQL_WHERE_IGF_EXCLUYE_FOLIOS_CATEGORIA_F}
       ORDER BY f.estatus, f.numero_folio NULLS LAST, f.id`;
     params = [periodoStr, plantaIdsRow, ESTADOS.PAGADO, ESTADOS.CERRADO];
+  } else if (tipo === "inversiones") {
+    sql = `
+      SELECT f.id, f.numero_folio, f.folio_codigo, f.planta_id, f.importe, f.estatus, f.categoria, f.subcategoria,
+             COALESCE(f.descripcion, f.concepto) AS descripcion_display, f.mes_cargo, p.nombre AS planta_nombre
+      FROM public.folios f
+      LEFT JOIN public.plantas p ON p.id = f.planta_id
+      WHERE f.mes_cargo = $1 AND f.planta_id = ANY($2::int[])
+        AND UPPER(TRIM(f.categoria)) = 'INVERSIONES'
+        AND (f.estatus IS NULL OR f.estatus <> $3)
+      ORDER BY f.numero_folio NULLS LAST, f.id`;
+    params = [periodoStr, plantaIdsRow, ESTADOS.CANCELADO];
   } else {
     throw new Error("tipo inválido");
   }
@@ -6166,8 +6177,8 @@ app.get("/api/dashboard/igf-folios-detalle", dashboardAuthMiddleware, async (req
   if (!empresa || /^TOTALES?$/i.test(empresa)) {
     return res.status(400).json({ error: "Falta empresa" });
   }
-  if (!["aprob_zp", "carro", "deposito_cierre"].includes(tipo)) {
-    return res.status(400).json({ error: "tipo debe ser aprob_zp, carro o deposito_cierre" });
+  if (!["aprob_zp", "carro", "deposito_cierre", "inversiones"].includes(tipo)) {
+    return res.status(400).json({ error: "tipo debe ser aprob_zp, carro, deposito_cierre o inversiones" });
   }
   const client = await pool.connect();
   try {
