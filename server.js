@@ -4828,9 +4828,52 @@ async function sendWhatsApp(toPhone, body, meta = {}) {
   return { ok: false, error: result.errorMessage || result.errorCode || "Error desconocido" };
 }
 
+/** Enlaces con JWT real para notificación DICF (antes se enviaba ?t=<tu_token> literal). */
+async function buildDicfNotifDashboardUrls(client, usuarioRow) {
+  if (!usuarioRow || usuarioRow.id == null) return { kpi: "", folios: "" };
+  const rolClave = (usuarioRow.rol_clave && String(usuarioRow.rol_clave).toUpperCase()) || "";
+  const rolNom = (usuarioRow.rol_nombre && String(usuarioRow.rol_nombre)) || "";
+  const esZP = rolClave === "ZP" || (rolNom && /director/i.test(rolNom) && /zp/i.test(rolNom));
+  const normalizarParaAD = (s) => (s || "").toLowerCase().normalize("NFD").replace(/\p{M}/gu, "").replace(/[\s\u00a0]+/g, " ").trim();
+  const rolNormNombre = normalizarParaAD(rolNom);
+  const nombreUsuarioNorm = normalizarParaAD(usuarioRow.nombre || "");
+  const esAD =
+    rolClave === "AD" ||
+    (/asistente/.test(rolNormNombre) && /direccion/.test(rolNormNombre)) ||
+    (/asistente/.test(nombreUsuarioNorm) && /direccion/.test(nombreUsuarioNorm));
+  const esCFCDMX =
+    rolClave === "CF_CDMX" ||
+    (/contralor/.test(rolNormNombre) && /cdmx/.test(rolNormNombre)) ||
+    (/contralor/.test(nombreUsuarioNorm) && /cdmx/.test(nombreUsuarioNorm));
+  const esGA = rolClave === "GA";
+  const esGV = rolClave === "GV";
+  const role = esZP ? "ZP" : esAD ? "AD" : esCFCDMX ? "CF_CDMX" : esGA ? "GA" : esGV ? "GV" : "GG";
+  let plantasPermitidas = [];
+  if (esZP || esAD || esCFCDMX) {
+    const plantas = await getPlantas(client);
+    plantasPermitidas = (plantas || []).map((p) => p.id).filter(Number.isFinite);
+  } else if (usuarioRow.planta_id != null) {
+    plantasPermitidas = getPlantaIdsEquivalentesForPendientes(usuarioRow.planta_id);
+  }
+  const token = createDashboardToken({
+    role,
+    actor_id: usuarioRow.id,
+    plantas_permitidas: plantasPermitidas,
+    default_filters: {},
+  });
+  const base = (process.env.DASHBOARD_URL || process.env.FRONTEND_URL || "").trim().replace(/\/$/, "");
+  if (!base) return { kpi: "", folios: "" };
+  const enc = encodeURIComponent(token);
+  return {
+    kpi: `${base}/?t=${enc}`,
+    folios: `${base}/dashboard?t=${enc}`,
+  };
+}
+
 dicfAccionesLib.initDicfAcciones({
   sendWhatsApp,
   getDashboardBaseUrl: () => (process.env.DASHBOARD_URL || process.env.FRONTEND_URL || "").trim(),
+  buildDicfNotifDashboardUrls,
 });
 
 async function notifyOnApprove(folio, aprobadoPor) {
@@ -9493,8 +9536,13 @@ app.post("/twilio/whatsapp", async (req, res) => {
       }
 
       if (/^COMPROMISO\s+/i.test(textTrim)) {
-        const cw = await dicfAccionesLib.handleCompromisoWhatsApp(client, actor, textTrim);
-        if (cw.handled) return safeReply(cw.reply || "Listo.");
+        try {
+          const cw = await dicfAccionesLib.handleCompromisoWhatsApp(client, actor, textTrim);
+          if (cw.handled) return safeReply(cw.reply || "Listo.");
+        } catch (e) {
+          console.warn("[DICF COMPROMISO]", e.message);
+          return safeReply("No pude registrar el compromiso. Intenta de nuevo o usa el dashboard.");
+        }
       }
 
       const helpMsg = getHelpForInput(body.trim(), actor);
@@ -10100,7 +10148,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
           if (esZPQA) {
             const plantsQA = await deltaIngresoAiDb.getProvinciaPlantsWithPlantaId(client);
             const allBriefs = [];
-            for (const row of plantsWithId) {
+            for (const row of plantsQA) {
               const data = await getDeltaIngresoDatosInternal(client, row.plant_code, PERIODO_AI_A, PERIODO_AI_B, false);
               if (data) allBriefs.push(deltaIngresoAi.buildBrief(row.plant_code, data));
             }
