@@ -4567,9 +4567,9 @@ function buildHelpFolios(actor) {
   lines.push("ver archivo <id>");
   lines.push("reemplazar cotizacion 045");
   if (FLAGS.APPROVALS) {
-    if (clave === "GG") lines.push("aprobar F-YYYYMM-XXX");
+    if (clave === "GG" || clave === "AD") lines.push("aprobar F-YYYYMM-XXX");
     if (clave === "ZP") lines.push("aprobar 001 002 o F-YYYYMM-XXX");
-    if (["GA", "GG", "CDMX"].includes(clave)) lines.push("cancelar F-YYYYMM-XXX motivo: <texto>");
+    if (["GA", "GG", "AD", "CDMX"].includes(clave)) lines.push("cancelar F-YYYYMM-XXX motivo: <texto>");
   }
   return lines.join("\n");
 }
@@ -4656,7 +4656,7 @@ function buildHelpPresupuesto() {
 function getHelpForInput(bodyTrim, actor) {
   const t = (bodyTrim || "").trim().toLowerCase();
   if (t === "ayuda" || t === "help" || t === "menu") return buildHelpMain();
-  if (/^ayuda\s+folios$/i.test(bodyTrim)) return buildHelpFolios(actor);
+  if (/^ayuda\s+folios?$/i.test(bodyTrim)) return buildHelpFolios(actor);
   if (/^ayuda\s+proyectos$/i.test(bodyTrim)) return buildHelpProyectos(actor);
   if (/^ayuda\s+delta$/i.test(bodyTrim)) return buildHelpDelta();
   if (/^ayuda\s+igf$/i.test(bodyTrim)) return buildHelpIgf();
@@ -5220,6 +5220,7 @@ function cardFromFolioRow(row) {
 }
 
 app.get("/api/dashboard/kanban", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGVForbidden(req, res)) return;
   const client = await pool.connect();
   try {
     const filters = parseDashboardFilters(req.query);
@@ -5352,7 +5353,12 @@ app.get("/api/dashboard/plantas", dashboardAuthMiddleware, async (req, res) => {
   const client = await pool.connect();
   try {
     const plantas = await getPlantas(client);
-    res.json({ plantas: (plantas || []).map((p) => ({ id: p.id, nombre: p.nombre || p.clave || `Planta ${p.id}` })) });
+    let list = (plantas || []).map((p) => ({ id: p.id, nombre: p.nombre || p.clave || `Planta ${p.id}` }));
+    if (isDashboardGV(req)) {
+      const allowed = new Set((req.dashboardAuth.plantas_permitidas || []).map((x) => Number(x)).filter(Number.isFinite));
+      list = list.filter((p) => allowed.has(Number(p.id)));
+    }
+    res.json({ plantas: list });
   } catch (e) {
     console.error("[Dashboard plantas]", e);
     res.status(500).json({ error: e.message });
@@ -5363,6 +5369,7 @@ app.get("/api/dashboard/plantas", dashboardAuthMiddleware, async (req, res) => {
 
 /** Proyectos EN_CURSO de una planta (o equivalentes) para selector en crear folio. */
 app.get("/api/dashboard/proyectos", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGVForbidden(req, res)) return;
   const planta_id = req.query.planta_id != null ? parseInt(String(req.query.planta_id), 10) : null;
   if (!planta_id || !Number.isFinite(planta_id)) return res.status(400).json({ error: "planta_id requerido" });
   const client = await pool.connect();
@@ -5415,7 +5422,7 @@ app.post("/api/proyectos", dashboardAuthMiddleware, async (req, res) => {
 });
 
 /** Crear folio desde dashboard (formulario). Solo GA, GG, AD, ZP. */
-app.post("/api/folios", dashboardAuthMiddleware, async (req, res) => {
+app.post("/api/folios", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddleware, async (req, res) => {
   const role = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) || "";
   const puedeCrear = ["GA", "GG", "AD", "ZP"].includes(role);
   if (!puedeCrear) return res.status(403).json({ error: "Solo GA, GG, Asistente de Dirección y Director ZP pueden crear folios desde el dashboard." });
@@ -5492,8 +5499,42 @@ function dashboardBlockDicfAccionesRole(req, res) {
   return false;
 }
 
+function dashboardAuthRoleNorm(auth) {
+  if (!auth || auth.role == null || auth.role === "") return "";
+  return String(auth.role).replace(/\s/g, "").toUpperCase();
+}
+
+function isDashboardGV(req) {
+  return dashboardAuthRoleNorm(req.dashboardAuth) === "GV";
+}
+
+/** GV: sin folios, IGF, ARR ni descargas Excel de forecast/DICF cliente. */
+function dashboardBlockGVForbidden(req, res) {
+  if (!isDashboardGV(req)) return false;
+  res.status(403).json({ error: "Tu rol (GV) solo tiene acceso a Delta ingreso Forecast y acciones DICF en tu planta." });
+  return true;
+}
+
+/** Tras dashboardAuthMiddleware: bloquea GV en rutas /api/folios. */
+function dashboardBlockGVFoliosMiddleware(req, res, next) {
+  if (isDashboardGV(req)) {
+    return res.status(403).json({ error: "Tu rol (GV) no tiene acceso al dashboard de folios." });
+  }
+  next();
+}
+
+async function assertGVPlantaNombreAccess(client, auth, plantaNombre) {
+  if (dashboardAuthRoleNorm(auth) !== "GV") return { ok: true };
+  const raw = await dicfAccionesLib.resolvePlantaId(client, String(plantaNombre || "").trim());
+  if (!raw) return { ok: false, status: 400, error: "Planta no encontrada" };
+  const canon = dicfAccionesLib.getCanonicalPlantaId(raw);
+  if (!dicfAccionesLib.assertPlantaAcceso(auth, canon)) return { ok: false, status: 403, error: "Sin acceso a esta planta" };
+  return { ok: true };
+}
+
 app.get("/api/dashboard/kpis", dashboardAuthMiddleware, async (req, res) => {
   if (dashboardBlockGAFinancialKpis(req, res)) return;
+  if (dashboardBlockGVForbidden(req, res)) return;
   const client = await pool.connect();
   try {
     const filters = parseDashboardFilters(req.query);
@@ -6270,6 +6311,7 @@ async function buildIgfForecastPayload(client, year, month) {
 /** IGF Forecast: última versión del mes; solo plantas provincia; venta y com_desc = forecast desde ARR (mes actual). */
 app.get("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, res) => {
   if (dashboardBlockGAFinancialKpis(req, res)) return;
+  if (dashboardBlockGVForbidden(req, res)) return;
   const year = req.query.year != null ? parseInt(String(req.query.year), 10) : new Date().getFullYear();
   const month = req.query.month != null ? parseInt(String(req.query.month), 10) : new Date().getMonth() + 1;
   if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
@@ -6290,6 +6332,7 @@ app.get("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, res)
 /** Folios que componen las columnas Folios Aprob. Director ZP / Folios en carro / Depósito y cierre (IGF). */
 app.get("/api/dashboard/igf-folios-detalle", dashboardAuthMiddleware, async (req, res) => {
   if (dashboardBlockGAFinancialKpis(req, res)) return;
+  if (dashboardBlockGVForbidden(req, res)) return;
   const year = req.query.year != null ? parseInt(String(req.query.year), 10) : new Date().getFullYear();
   const month = req.query.month != null ? parseInt(String(req.query.month), 10) : new Date().getMonth() + 1;
   const empresa = (req.query.empresa || "").toString().trim();
@@ -6350,6 +6393,7 @@ function recalcularUtilYResultado(row) {
 /** PATCH IGF Forecast: actualizar HG % (y opcionalmente HG $/kg) por empresa; recalcula Util. Oper. y Resultado. */
 app.patch("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, res) => {
   if (dashboardBlockGAFinancialKpis(req, res)) return;
+  if (dashboardBlockGVForbidden(req, res)) return;
   const year = req.body?.year != null ? parseInt(String(req.body.year), 10) : new Date().getFullYear();
   const month = req.body?.month != null ? parseInt(String(req.body.month), 10) : new Date().getMonth() + 1;
   const empresa = req.body?.empresa != null ? String(req.body.empresa).trim() : "";
@@ -6416,7 +6460,7 @@ app.patch("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, re
   }
 });
 
-app.get("/api/folios/:id/media", dashboardAuthMiddleware, async (req, res) => {
+app.get("/api/folios/:id/media", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddleware, async (req, res) => {
   const folioId = parseInt(req.params.id, 10);
   if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
   const client = await pool.connect();
@@ -6441,7 +6485,7 @@ app.get("/api/folios/:id/media", dashboardAuthMiddleware, async (req, res) => {
   }
 });
 
-app.get("/api/folios/:id/media/:mediaId/url", dashboardAuthMiddleware, async (req, res) => {
+app.get("/api/folios/:id/media/:mediaId/url", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddleware, async (req, res) => {
   const folioId = parseInt(req.params.id, 10);
   const mediaId = parseInt(req.params.mediaId, 10);
   if (!Number.isFinite(folioId) || !Number.isFinite(mediaId)) return res.status(400).json({ error: "id o mediaId inválido" });
@@ -6470,7 +6514,7 @@ app.get("/api/folios/:id/media/:mediaId/url", dashboardAuthMiddleware, async (re
   }
 });
 
-app.get("/api/folios/:id/timeline", dashboardAuthMiddleware, async (req, res) => {
+app.get("/api/folios/:id/timeline", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddleware, async (req, res) => {
   const folioId = parseInt(req.params.id, 10);
   if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
   const client = await pool.connect();
@@ -6501,7 +6545,7 @@ app.get("/api/folios/:id/timeline", dashboardAuthMiddleware, async (req, res) =>
   }
 });
 
-app.get("/api/folios/:id/finanzas", dashboardAuthMiddleware, async (req, res) => {
+app.get("/api/folios/:id/finanzas", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddleware, async (req, res) => {
   const folioId = parseInt(req.params.id, 10);
   if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
   const client = await pool.connect();
@@ -6532,7 +6576,7 @@ app.get("/api/folios/:id/finanzas", dashboardAuthMiddleware, async (req, res) =>
   }
 });
 
-app.get("/api/folios/:id", dashboardAuthMiddleware, async (req, res) => {
+app.get("/api/folios/:id", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddleware, async (req, res) => {
   const folioId = parseInt(req.params.id, 10);
   if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
   const client = await pool.connect();
@@ -6626,7 +6670,7 @@ function numeroALetra(importe) {
 }
 
 /** Descarga solo la cotización adjunta del folio (PDF). Para Imprimir/Descargar opción Cotización. */
-app.get("/api/folios/:id/cotizacion", dashboardAuthMiddleware, async (req, res) => {
+app.get("/api/folios/:id/cotizacion", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddleware, async (req, res) => {
   const folioId = parseInt(req.params.id, 10);
   if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
   const client = await pool.connect();
@@ -6663,7 +6707,7 @@ app.get("/api/folios/:id/cotizacion", dashboardAuthMiddleware, async (req, res) 
 });
 
 /** Documento Gastos Extraordinarios (imprimir/descargar). Requiere folio con cotización. */
-app.get("/api/folios/:id/documento-gastos", dashboardAuthMiddleware, async (req, res) => {
+app.get("/api/folios/:id/documento-gastos", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddleware, async (req, res) => {
   const folioId = parseInt(req.params.id, 10);
   if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
   const format = (req.query.format || "html").toLowerCase();
@@ -6798,7 +6842,7 @@ app.get("/api/folios/:id/documento-gastos", dashboardAuthMiddleware, async (req,
 });
 
 /** Documento "Solo formato del folio": PDF generado con plantilla S3 (FOLIO_TEMPLATE_S3_KEY) rellenada con datos del folio. Para Imprimir/Descargar en dashboard. */
-app.get("/api/folios/:id/documento-folio", dashboardAuthMiddleware, async (req, res) => {
+app.get("/api/folios/:id/documento-folio", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddleware, async (req, res) => {
   const folioId = parseInt(req.params.id, 10);
   if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
   const client = await pool.connect();
@@ -7113,7 +7157,7 @@ app.get("/api/folios/:id/documento-folio", dashboardAuthMiddleware, async (req, 
 });
 
 /** Documento completo: Póliza (con datos) + Folio (gastos) + Cotización en un solo PDF. Requiere folio con cotización. */
-app.get("/api/folios/:id/documento-completo", dashboardAuthMiddleware, async (req, res) => {
+app.get("/api/folios/:id/documento-completo", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddleware, async (req, res) => {
   const folioId = parseInt(req.params.id, 10);
   if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
   const format = (req.query.format || "pdf").toLowerCase();
@@ -7210,7 +7254,7 @@ app.get("/api/folios/:id/documento-completo", dashboardAuthMiddleware, async (re
 });
 
 /** Actualizar mes_cargo del folio (Aprobación Director ZP o carrito de compra). */
-app.patch("/api/folios/:id", dashboardAuthMiddleware, async (req, res) => {
+app.patch("/api/folios/:id", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddleware, async (req, res) => {
   if (req.dashboardAuth.role === "GA") return res.status(403).json({ error: "GA solo puede ver e imprimir en el dashboard." });
   const folioId = parseInt(req.params.id, 10);
   if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
@@ -7237,7 +7281,7 @@ app.patch("/api/folios/:id", dashboardAuthMiddleware, async (req, res) => {
 });
 
 /** Asignar folio como préstamo a otra planta (empresa IGF). Identifica el folio cargado a esa planta. */
-app.patch("/api/folios/:id/prestamo-a-planta", dashboardAuthMiddleware, async (req, res) => {
+app.patch("/api/folios/:id/prestamo-a-planta", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddleware, async (req, res) => {
   if (req.dashboardAuth.role === "GA") return res.status(403).json({ error: "GA solo puede ver e imprimir en el dashboard." });
   const folioId = parseInt(req.params.id, 10);
   if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
@@ -7264,7 +7308,7 @@ app.patch("/api/folios/:id/prestamo-a-planta", dashboardAuthMiddleware, async (r
 });
 
 /** Marcar folio como solo visible para Director ZP y Asistente de Dirección (privado). Solo ZP y AD pueden cambiar esta opción. */
-app.patch("/api/folios/:id/solo-zp-ad", dashboardAuthMiddleware, async (req, res) => {
+app.patch("/api/folios/:id/solo-zp-ad", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddleware, async (req, res) => {
   const role = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) || "";
   if (role !== "ZP" && role !== "AD") return res.status(403).json({ error: "Solo Director ZP y Asistente de Dirección pueden marcar folios como privados." });
   const folioId = parseInt(req.params.id, 10);
@@ -7285,7 +7329,7 @@ app.patch("/api/folios/:id/solo-zp-ad", dashboardAuthMiddleware, async (req, res
 });
 
 /** Marcar/desmarcar folio como urgente (prioridad "Urgente no programado"). Solo GG, AD, ZP. */
-app.patch("/api/folios/:id/prioridad", dashboardAuthMiddleware, async (req, res) => {
+app.patch("/api/folios/:id/prioridad", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddleware, async (req, res) => {
   const role = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) || "";
   if (["GA", "CF_CDMX"].includes(role)) return res.status(403).json({ error: "Sin permiso para cambiar prioridad." });
   const folioId = parseInt(req.params.id, 10);
@@ -7311,7 +7355,7 @@ app.patch("/api/folios/:id/prioridad", dashboardAuthMiddleware, async (req, res)
 });
 
 /** Editar campos base del folio (solo Asistente de Dirección). */
-app.patch("/api/folios/:id/editar", dashboardAuthMiddleware, async (req, res) => {
+app.patch("/api/folios/:id/editar", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddleware, async (req, res) => {
   const role = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) || "";
   if (role !== "AD") return res.status(403).json({ error: "Solo Asistente de Dirección puede editar folios." });
   const folioId = parseInt(req.params.id, 10);
@@ -7394,7 +7438,7 @@ app.patch("/api/folios/:id/editar", dashboardAuthMiddleware, async (req, res) =>
 });
 
 /** Solicitar marcar folio como "Por recuperar". Crea solicitud y notifica a CDMX para aprobar/rechazar. */
-app.post("/api/folios/:id/solicitar-por-recuperar", dashboardAuthMiddleware, async (req, res) => {
+app.post("/api/folios/:id/solicitar-por-recuperar", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddleware, async (req, res) => {
   const folioId = parseInt(req.params.id, 10);
   if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
   const client = await pool.connect();
@@ -7426,7 +7470,7 @@ app.post("/api/folios/:id/solicitar-por-recuperar", dashboardAuthMiddleware, asy
 });
 
 /** Marcar/desmarcar folio como "Por recuperar". Cuando hay solicitud pendiente, solo CDMX puede aprobar (true) o rechazar (false). */
-app.patch("/api/folios/:id/por-recuperar", dashboardAuthMiddleware, async (req, res) => {
+app.patch("/api/folios/:id/por-recuperar", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddleware, async (req, res) => {
   const folioId = parseInt(req.params.id, 10);
   if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
   const porRecuperar = req.body.por_recuperar === true || req.body.por_recuperar === "true";
@@ -7465,7 +7509,7 @@ app.patch("/api/folios/:id/por-recuperar", dashboardAuthMiddleware, async (req, 
 });
 
 /** Aprobar folio desde dashboard: Pendiente aprobación planta → ZP; Aprobación Director ZP → Carro de compra. */
-app.post("/api/folios/:id/aprobar", dashboardAuthMiddleware, async (req, res) => {
+app.post("/api/folios/:id/aprobar", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddleware, async (req, res) => {
   if (req.dashboardAuth.role === "CF_CDMX") return res.status(403).json({ error: "Contralor financiero CDMX solo puede ver el dashboard, no autorizar." });
   if (req.dashboardAuth.role === "GA") return res.status(403).json({ error: "GA solo puede ver e imprimir en el dashboard, no aprobar." });
   const folioId = parseInt(req.params.id, 10);
@@ -7474,7 +7518,7 @@ app.post("/api/folios/:id/aprobar", dashboardAuthMiddleware, async (req, res) =>
   try {
     const folio = await getFolioById(client, folioId);
     if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
-    if ((req.dashboardAuth.role === "GG" || req.dashboardAuth.role === "GA") && req.dashboardAuth.plantas_permitidas?.length > 0) {
+    if ((req.dashboardAuth.role === "GG" || req.dashboardAuth.role === "GA" || req.dashboardAuth.role === "AD") && req.dashboardAuth.plantas_permitidas?.length > 0) {
       if (!folio.planta_id || !req.dashboardAuth.plantas_permitidas.includes(folio.planta_id)) {
         return res.status(403).json({ error: "Sin permiso para aprobar folios de esta planta" });
       }
@@ -7510,7 +7554,7 @@ app.post("/api/folios/:id/aprobar", dashboardAuthMiddleware, async (req, res) =>
 });
 
 /** Regresa un folio desde Carro de compra a Aprobación Director ZP. */
-app.post("/api/folios/:id/regresar-zp", dashboardAuthMiddleware, async (req, res) => {
+app.post("/api/folios/:id/regresar-zp", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddleware, async (req, res) => {
   if (req.dashboardAuth.role === "CF_CDMX") return res.status(403).json({ error: "Contralor financiero CDMX solo puede ver el dashboard, no autorizar." });
   if (req.dashboardAuth.role === "GA") return res.status(403).json({ error: "GA solo puede ver e imprimir en el dashboard, no autorizar." });
   const folioId = parseInt(req.params.id, 10);
@@ -7542,7 +7586,7 @@ app.post("/api/folios/:id/regresar-zp", dashboardAuthMiddleware, async (req, res
 });
 
 /** Asistente de dirección: subir póliza (comprobante de depósito) para folio en carrito; pasa a Depósito y cierre. */
-app.post("/api/folios/:id/poliza", dashboardAuthMiddleware, async (req, res) => {
+app.post("/api/folios/:id/poliza", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddleware, async (req, res) => {
   const folioId = parseInt(req.params.id, 10);
   if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
   const role = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) || "";
@@ -7987,7 +8031,7 @@ async function generatePolizaPdfBytes(folio, opts) {
 }
 
 /** Documento Póliza Cheque (formato oficial). Genera PDF con datos del folio. */
-app.get("/api/folios/:id/poliza/documento", dashboardAuthMiddleware, async (req, res) => {
+app.get("/api/folios/:id/poliza/documento", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddleware, async (req, res) => {
   console.log("[poliza/documento] ENDPOINT GOLPEADO", {
     folioId: req.params.id,
     format: req.query.format,
@@ -8034,7 +8078,7 @@ app.get("/api/folios/:id/poliza/documento", dashboardAuthMiddleware, async (req,
 });
 
 /** Subir cotización PDF desde el dashboard (selector de archivo). Cualquier rol con acceso al folio puede subir; se marca como APROBADA y se actualiza folio. */
-app.post("/api/folios/:id/cotizacion", dashboardAuthMiddleware, async (req, res) => {
+app.post("/api/folios/:id/cotizacion", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddleware, async (req, res) => {
   const folioId = parseInt(req.params.id, 10);
   if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
   let fileBuffer = null;
@@ -8083,7 +8127,7 @@ app.post("/api/folios/:id/cotizacion", dashboardAuthMiddleware, async (req, res)
 });
 
 /** Subir factura PDF desde el dashboard (mismo procedimiento que cotización/póliza). Cualquier rol con acceso al folio puede subir. */
-app.post("/api/folios/:id/factura", dashboardAuthMiddleware, async (req, res) => {
+app.post("/api/folios/:id/factura", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddleware, async (req, res) => {
   const folioId = parseInt(req.params.id, 10);
   if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
   let fileBuffer = null;
@@ -8137,6 +8181,7 @@ app.post("/api/folios/:id/factura", dashboardAuthMiddleware, async (req, res) =>
 
 app.post("/api/arr/load", dashboardAuthMiddleware, async (req, res) => {
   if (dashboardBlockGAFinancialKpis(req, res)) return;
+  if (dashboardBlockGVForbidden(req, res)) return;
   const plantCode = (req.body.plant_code || "").trim();
   if (!plantCode) return res.status(400).json({ error: "Falta plant_code" });
   let fileBuffer = null;
@@ -8168,6 +8213,7 @@ app.post("/api/arr/load", dashboardAuthMiddleware, async (req, res) => {
 
 app.post("/api/arr/refresh-provincia", dashboardAuthMiddleware, async (req, res) => {
   if (dashboardBlockGAFinancialKpis(req, res)) return;
+  if (dashboardBlockGVForbidden(req, res)) return;
   const client = await pool.connect();
   try {
     const refresh = await arrRefreshProvincia.refreshProvinciaDiario(client);
@@ -8189,6 +8235,7 @@ app.post("/api/arr/refresh-provincia", dashboardAuthMiddleware, async (req, res)
 
 app.post("/api/arr/forecast", dashboardAuthMiddleware, async (req, res) => {
   if (dashboardBlockGAFinancialKpis(req, res)) return;
+  if (dashboardBlockGVForbidden(req, res)) return;
   const plantCode = (req.body.plant_code || "").trim();
   const year = parseInt(req.body.year, 10);
   const month = parseInt(req.body.month, 10);
@@ -8210,6 +8257,7 @@ app.post("/api/arr/forecast", dashboardAuthMiddleware, async (req, res) => {
 
 app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) => {
   if (dashboardBlockGAFinancialKpis(req, res)) return;
+  if (dashboardBlockGVForbidden(req, res)) return;
   const plantCode = (req.query.plant_code || "").trim() || null;
   const year = parseInt(req.query.year, 10);
   const month = parseInt(req.query.month, 10);
@@ -8235,6 +8283,7 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
 /** Lista periodos IGF (year, month) y versiones por periodo para el modal "Cómo cambió" del dashboard. */
 app.get("/api/dashboard/igf-versiones", dashboardAuthMiddleware, async (req, res) => {
   if (dashboardBlockGAFinancialKpis(req, res)) return;
+  if (dashboardBlockGVForbidden(req, res)) return;
   const client = await pool.connect();
   try {
     const meses = await igfHandler.getMesesDisponibles(client);
@@ -8270,6 +8319,7 @@ function normalizarEmpresaKey(s) {
 /** Lista de empresas (plantas) que aparecen en IGF versiones (última versión del mes más reciente). Para "Préstamos a planta". Sin duplicados por escritura (acentos/guiones). */
 app.get("/api/dashboard/igf-empresas", dashboardAuthMiddleware, async (req, res) => {
   if (dashboardBlockGAFinancialKpis(req, res)) return;
+  if (dashboardBlockGVForbidden(req, res)) return;
   const client = await pool.connect();
   try {
     const r = await client.query(
@@ -8298,6 +8348,7 @@ app.get("/api/dashboard/igf-empresas", dashboardAuthMiddleware, async (req, res)
 /** Genera token y URL para descarga Excel "Cómo cambió" (mismo flujo que WhatsApp). */
 app.post("/api/dashboard/igf-como-cambio-token", dashboardAuthMiddleware, async (req, res) => {
   if (dashboardBlockGAFinancialKpis(req, res)) return;
+  if (dashboardBlockGVForbidden(req, res)) return;
   const { planta, yearA, monthA, versionA, yearB, monthB, versionB } = req.body || {};
   const p = (v) => (v != null && v !== "" ? parseInt(v, 10) : null);
   const yA = p(yearA); const mA = p(monthA); const vA = p(versionA);
@@ -8321,6 +8372,7 @@ app.post("/api/dashboard/igf-como-cambio-token", dashboardAuthMiddleware, async 
 /** Devuelve los deltas de la comparación IGF en JSON para mostrarlos en el modal del dashboard. */
 app.post("/api/dashboard/igf-como-cambio-datos", dashboardAuthMiddleware, async (req, res) => {
   if (dashboardBlockGAFinancialKpis(req, res)) return;
+  if (dashboardBlockGVForbidden(req, res)) return;
   const { planta, yearA, monthA, versionA, yearB, monthB, versionB } = req.body || {};
   const p = (v) => (v != null && v !== "" ? parseInt(v, 10) : null);
   const yA = p(yearA); const mA = p(monthA); const vA = p(versionA);
@@ -8365,6 +8417,7 @@ app.post("/api/dashboard/igf-como-cambio-datos", dashboardAuthMiddleware, async 
 /** Comparar presupuesto entre dos periodos para la planta seleccionada (mismo flujo que "comparar presupuesto" en WhatsApp). */
 app.post("/api/dashboard/presupuesto-comparar", dashboardAuthMiddleware, async (req, res) => {
   if (dashboardBlockGAFinancialKpis(req, res)) return;
+  if (dashboardBlockGVForbidden(req, res)) return;
   const { planta, periodoA, periodoB } = req.body || {};
   const pa = (typeof periodoA === "string" && /^\d{4}-\d{2}$/.test(periodoA)) ? periodoA : null;
   const pb = (typeof periodoB === "string" && /^\d{4}-\d{2}$/.test(periodoB)) ? periodoB : null;
@@ -8390,6 +8443,7 @@ app.post("/api/dashboard/presupuesto-comparar", dashboardAuthMiddleware, async (
 /** Detalle de presupuesto por planta y periodo (categoría / subcategoría / monto_aprobado). */
 app.get("/api/dashboard/presupuesto-detalle", dashboardAuthMiddleware, async (req, res) => {
   if (dashboardBlockGAFinancialKpis(req, res)) return;
+  if (dashboardBlockGVForbidden(req, res)) return;
   const planta = (req.query.planta || "").toString().trim();
   const periodo = (req.query.periodo || "").toString().trim() || getPeriodoPresupuestoConsulta();
   if (!planta) {
@@ -8415,6 +8469,7 @@ app.get("/api/dashboard/presupuesto-detalle", dashboardAuthMiddleware, async (re
 app.get("/api/dashboard/delta-venta-periodos", dashboardAuthMiddleware, async (req, res) => {
   const roleNorm = (req.dashboardAuth && req.dashboardAuth.role) ? String(req.dashboardAuth.role).toUpperCase() : "";
   if (roleNorm === "GA") return res.status(403).json({ error: "Sin permiso para Delta (GA restringido)." });
+  if (dashboardBlockGVForbidden(req, res)) return;
   const planta = (req.query.planta || "").toString().trim();
   if (!planta) {
     return res.status(400).json({ error: "Falta planta" });
@@ -8435,6 +8490,7 @@ app.get("/api/dashboard/delta-venta-periodos", dashboardAuthMiddleware, async (r
 app.post("/api/dashboard/delta-venta-datos", dashboardAuthMiddleware, async (req, res) => {
   const roleNorm = (req.dashboardAuth && req.dashboardAuth.role) ? String(req.dashboardAuth.role).toUpperCase() : "";
   if (roleNorm === "GA") return res.status(403).json({ error: "Sin permiso para Delta (GA restringido)." });
+  if (dashboardBlockGVForbidden(req, res)) return;
   const { planta, periodoA, periodoB } = req.body || {};
   const pa = (typeof periodoA === "string" && /^\d{4}-\d{2}$/.test(periodoA)) ? periodoA : null;
   const pb = (typeof periodoB === "string" && /^\d{4}-\d{2}$/.test(periodoB)) ? periodoB : null;
@@ -8504,6 +8560,7 @@ app.post("/api/dashboard/delta-venta-datos", dashboardAuthMiddleware, async (req
 app.get("/api/dashboard/delta-descuento-periodos", dashboardAuthMiddleware, async (req, res) => {
   const roleNorm = (req.dashboardAuth && req.dashboardAuth.role) ? String(req.dashboardAuth.role).toUpperCase() : "";
   if (roleNorm === "GA") return res.status(403).json({ error: "Sin permiso para Delta (GA restringido)." });
+  if (dashboardBlockGVForbidden(req, res)) return;
   const planta = (req.query.planta || "").toString().trim();
   if (!planta) {
     return res.status(400).json({ error: "Falta planta" });
@@ -8524,6 +8581,7 @@ app.get("/api/dashboard/delta-descuento-periodos", dashboardAuthMiddleware, asyn
 app.post("/api/dashboard/delta-descuento-datos", dashboardAuthMiddleware, async (req, res) => {
   const roleNorm = (req.dashboardAuth && req.dashboardAuth.role) ? String(req.dashboardAuth.role).toUpperCase() : "";
   if (roleNorm === "GA") return res.status(403).json({ error: "Sin permiso para Delta (GA restringido)." });
+  if (dashboardBlockGVForbidden(req, res)) return;
   const { planta, periodoA, periodoB } = req.body || {};
   const pa = (typeof periodoA === "string" && /^\d{4}-\d{2}$/.test(periodoA)) ? periodoA : null;
   const pb = (typeof periodoB === "string" && /^\d{4}-\d{2}$/.test(periodoB)) ? periodoB : null;
@@ -8638,6 +8696,10 @@ app.get("/api/dashboard/delta-ingreso-periodos", dashboardAuthMiddleware, async 
   const plantaResuelta = ALIAS_PLANTA_NOMBRE[planta.toLowerCase()] || planta;
   const client = await pool.connect();
   try {
+    if (isDashboardGV(req)) {
+      const chk = await assertGVPlantaNombreAccess(client, req.dashboardAuth, planta);
+      if (!chk.ok) return res.status(chk.status).json({ error: chk.error });
+    }
     const periodos = await getPeriodosDeltaVenta(client, plantaResuelta);
     res.json({ periodos: periodos || [] });
   } catch (e) {
@@ -8670,6 +8732,8 @@ app.post("/api/dashboard/delta-ingreso-forecast-datos", dashboardAuthMiddleware,
   }
   const client = await pool.connect();
   try {
+    const gvChk = await assertGVPlantaNombreAccess(client, req.dashboardAuth, planta.trim());
+    if (!gvChk.ok) return res.status(gvChk.status).json({ error: gvChk.error });
     const plantCode = await getPlantCodeArrFromPlantaNombre(client, planta.trim());
     const data = await deltaIngresoForecast.computeDeltaIngresoForecast(
       client,
@@ -8699,6 +8763,8 @@ app.post("/api/dashboard/dicf-datos", dashboardAuthMiddleware, async (req, res) 
   }
   const client = await pool.connect();
   try {
+    const gvChk = await assertGVPlantaNombreAccess(client, req.dashboardAuth, planta.trim());
+    if (!gvChk.ok) return res.status(gvChk.status).json({ error: gvChk.error });
     const plantCode = await getPlantCodeArrFromPlantaNombre(client, planta.trim());
     const data = await dicf.computeDicf(client, plantCode, planta.trim(), getMargenKgPorPeriodo);
     const { dicfRowsByCliente: _dicfRows, ...rest } = data || {};
@@ -8714,6 +8780,7 @@ app.post("/api/dashboard/dicf-datos", dashboardAuthMiddleware, async (req, res) 
 /** Excel Delta Ingreso Cliente Forecast: 3 hojas (venta Ton, desc $/kg, margen) — clientes en A, estatus en B, últimos 30 días en columnas. */
 app.get("/api/dashboard/dicf-excel", dashboardAuthMiddleware, async (req, res) => {
   if (dashboardBlockGAFinancialKpis(req, res)) return;
+  if (dashboardBlockGVForbidden(req, res)) return;
   const planta = (req.query.planta || "").toString().trim();
   if (!planta) return res.status(400).json({ error: "Falta planta" });
   const client = await pool.connect();
@@ -8841,6 +8908,8 @@ app.get("/api/dashboard/dicf-config", dashboardAuthMiddleware, async (req, res) 
   }
   const client = await pool.connect();
   try {
+    const gvChk = await assertGVPlantaNombreAccess(client, req.dashboardAuth, planta);
+    if (!gvChk.ok) return res.status(gvChk.status).json({ error: gvChk.error });
     const plantCode = await getPlantCodeArrFromPlantaNombre(client, planta);
     const r = await client.query(
       `SELECT window_days, tolerancia_dias, umbral_mxn, umbral_pct_neg, umbral_pct_pos, min_kg_hist
@@ -8870,6 +8939,7 @@ app.get("/api/dashboard/dicf-config", dashboardAuthMiddleware, async (req, res) 
 /** Guardar parámetros DICF editables (upsert por planta, year, month). */
 app.post("/api/dashboard/dicf-config", dashboardAuthMiddleware, async (req, res) => {
   if (dashboardBlockGAFinancialKpis(req, res)) return;
+  if (dashboardBlockGVForbidden(req, res)) return;
   const { planta, year, month, window_days, tolerancia_dias, umbral_mxn, umbral_pct_neg, umbral_pct_pos, min_kg_hist } = req.body || {};
   const y = parseInt(year, 10);
   const m = parseInt(month, 10);
@@ -9130,6 +9200,7 @@ app.get("/api/dashboard/dicf-acciones-excel", dashboardAuthMiddleware, async (re
 /** Excel Delta Ingreso Forecast: una hoja por categoría (dejaron, nuevos, aumentaron, disminuyeron) y resumen por canal/subcanal. */
 app.get("/api/dashboard/delta-ingreso-forecast-excel", dashboardAuthMiddleware, async (req, res) => {
   if (dashboardBlockGAFinancialKpis(req, res)) return;
+  if (dashboardBlockGVForbidden(req, res)) return;
   const planta = (req.query.planta || "").toString().trim();
   const periodoA = (req.query.periodoA || "").toString().trim();
   const periodoB = (req.query.periodoB || "").toString().trim();
@@ -9290,6 +9361,7 @@ async function getDeltaIngresoDatosInternal(client, planta, periodoA, periodoB, 
 app.post("/api/dashboard/delta-ingreso-datos", dashboardAuthMiddleware, async (req, res) => {
   const roleNorm = (req.dashboardAuth && req.dashboardAuth.role) ? String(req.dashboardAuth.role).toUpperCase() : "";
   if (roleNorm === "GA") return res.status(403).json({ error: "Sin permiso para Delta (GA restringido)." });
+  if (dashboardBlockGVForbidden(req, res)) return;
   const { planta, periodoA, periodoB, sinRegla8020 } = req.body || {};
   const pa = (typeof periodoA === "string" && /^\d{4}-\d{2}$/.test(periodoA)) ? periodoA : null;
   const pb = (typeof periodoB === "string" && /^\d{4}-\d{2}$/.test(periodoB)) ? periodoB : null;
@@ -9523,6 +9595,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
   };
 
   try {
+    if (!req.body || typeof req.body !== "object") req.body = {};
     const from = req.body.From || "unknown";
     const fromNorm = normalizePhone(from);
     const body = normalizeText(req.body.Body);
@@ -9772,7 +9845,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
             msg += `Pend. aprob. ZP: ${pendZp}\n`;
             if (oldest) msg += `Más antiguo: ${oldest.folio} (${oldest.dias} días)\n`;
           }
-          msg += `\n🔗 Acceso (válido 5 horas):\n${link}`;
+          msg += `\n🔗 Acceso (válido 20 horas):\n${link}`;
           const yyyymm = getCurrentYYYYMM();
           const yF = parseInt(yyyymm.slice(0, 4), 10);
           const mF = parseInt(yyyymm.slice(4, 6), 10);
@@ -12474,7 +12547,10 @@ app.post("/twilio/whatsapp", async (req, res) => {
         const { folios, invalidTokens } = parseFolioTokensFromText(rest);
         if (!actor) return safeReply("No autorizado. No se pudo identificar tu usuario.");
         const rolClave = (actor.rol_clave || "").toUpperCase();
-        const esGG = rolClave === "GG" || (actor.rol_nombre && String(actor.rol_nombre).toUpperCase().includes("GG"));
+        const esGG =
+          rolClave === "GG" ||
+          rolClave === "AD" ||
+          (actor.rol_nombre && String(actor.rol_nombre).toUpperCase().includes("GG"));
         const esZP = isDirectorZPForDashboard(rolClave, actor.rol_nombre);
 
         if (folios.length === 0 && invalidTokens.length === 0) return safeReply("Indica al menos un folio. Ejemplo: aprobar 001 002 o aprobar F-202602-001");
@@ -12569,8 +12645,13 @@ app.post("/twilio/whatsapp", async (req, res) => {
         }
 
         if (esGG && invalidTokens.length === 0) {
-          const plantaIdGG = actor.planta_id != null ? actor.planta_id : null;
-          const plantasPermitidasGG = getPlantaIdsEquivalentesForPendientes(plantaIdGG);
+          let plantaIdGG = actor.planta_id != null ? actor.planta_id : null;
+          let plantasPermitidasGG = getPlantaIdsEquivalentesForPendientes(plantaIdGG);
+          if (rolClave === "AD") {
+            const todas = await getPlantas(client);
+            plantasPermitidasGG = (todas || []).map((p) => p.id).filter(Number.isFinite);
+            plantaIdGG = null;
+          }
           const aprobados = [];
           const yaAprobados = [];
           const noEncontrados = [];
@@ -12638,7 +12719,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
           return safeReply(msg.trim() || "Nada que aprobar (solo puedes aprobar folios en PENDIENTE_APROB_PLANTA de tu planta).");
         }
 
-        return safeReply("Solo el Director ZP puede aprobar folios.");
+        return safeReply("Solo Director ZP (etapa ZP), GG o AD (aprobación de planta) pueden aprobar folios por aquí.");
       }
 
       if (FLAGS.APPROVALS && /^aprobar_override\s+F-\d{6}-\d{3}\s+motivo:/i.test(body)) {
@@ -12809,9 +12890,12 @@ app.post("/twilio/whatsapp", async (req, res) => {
           if (!numero) return safeReply("Formato: cancelar F-YYYYMM-XXX motivo: <texto>");
           const claveRol = (actor && actor.rol_clave) ? String(actor.rol_clave).toUpperCase() : "";
           const rolNombre = (actor && actor.rol_nombre) ? String(actor.rol_nombre).toUpperCase() : "";
-          const puedeSolicitar = actor && ["GA", "GG", "CDMX"].some((r) => claveRol === r || (rolNombre && rolNombre.includes(r)));
+          const puedeSolicitar =
+            actor &&
+            (claveRol === "AD" ||
+              ["GA", "GG", "CDMX"].some((r) => claveRol === r || (rolNombre && rolNombre.includes(r))));
           if (!actor) return safeReply("No se pudo identificar tu usuario.");
-          if (!puedeSolicitar) return safeReply("Solo GA, GG y CDMX pueden solicitar cancelación. ZP autoriza o rechaza con: autorizar cancelacion / rechazar cancelacion.");
+          if (!puedeSolicitar) return safeReply("Solo GA, GG, AD y CDMX pueden solicitar cancelación. ZP autoriza o rechaza con: autorizar cancelacion / rechazar cancelacion.");
           const folio = await getFolioByNumero(client, numero);
           if (!folio) return safeReply(`No existe el folio ${numero}.`);
           const estatus = String(folio.estatus || "").toUpperCase();
@@ -13189,7 +13273,6 @@ app.post("/twilio/whatsapp", async (req, res) => {
           });
         } catch (e) {
           console.error("Error creando folio (con PDF):", e);
-          clientCrear.release();
           return safeReply("Error al guardar el folio. Revisa los datos e intenta de nuevo.");
         } finally {
           clientCrear.release();

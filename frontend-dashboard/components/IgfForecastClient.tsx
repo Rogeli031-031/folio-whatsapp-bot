@@ -108,11 +108,17 @@ export function IgfForecastContent() {
   const [igfMesAnteriorLoading, setIgfMesAnteriorLoading] = useState(false);
 
   const isGAPageBlocked = token ? getRoleFromDashboardToken(token) === "GA" : false;
+  const isGVPageBlocked = token ? getRoleFromDashboardToken(token) === "GV" : false;
 
   useEffect(() => {
     if (!token || !isGAPageBlocked) return;
     router.replace(`/dashboard?t=${encodeURIComponent(token)}`);
   }, [token, isGAPageBlocked, router]);
+
+  useEffect(() => {
+    if (!token || !isGVPageBlocked) return;
+    router.replace(`/?t=${encodeURIComponent(token)}`);
+  }, [token, isGVPageBlocked, router]);
 
 
   useEffect(() => {
@@ -128,7 +134,7 @@ export function IgfForecastContent() {
   }, [searchParams]);
 
   useEffect(() => {
-    if (!token || isGAPageBlocked) return;
+    if (!token || isGAPageBlocked || isGVPageBlocked) return;
 
     let cancelled = false;
     let fetching = false;
@@ -162,10 +168,10 @@ export function IgfForecastContent() {
       cancelled = true;
       clearInterval(id);
     };
-  }, [token, isGAPageBlocked]);
+  }, [token, isGAPageBlocked, isGVPageBlocked]);
 
   useEffect(() => {
-    if (!token || isGAPageBlocked || !igfForecast || !plantaFilter) {
+    if (!token || isGAPageBlocked || isGVPageBlocked || !igfForecast || !plantaFilter) {
       setIgfMesAnterior(null);
       return;
     }
@@ -178,7 +184,7 @@ export function IgfForecastContent() {
       .then(setIgfMesAnterior)
       .catch(() => setIgfMesAnterior(null))
       .finally(() => setIgfMesAnteriorLoading(false));
-  }, [token, plantaFilter, igfForecast?.year, igfForecast?.month, isGAPageBlocked]);
+  }, [token, plantaFilter, igfForecast?.year, igfForecast?.month, isGAPageBlocked, isGVPageBlocked]);
 
 
   if (unauthorized) {
@@ -187,7 +193,7 @@ export function IgfForecastContent() {
         <div className="rounded-lg border border-slate-700 bg-slate-800 p-6 text-center">
           <h1 className="text-lg font-semibold text-white">Acceso no autorizado</h1>
           <p className="mt-2 text-sm text-slate-400">
-            Abre el enlace que recibiste por WhatsApp (válido 5 horas) o escribe &quot;dashboard&quot; en el bot.
+            Abre el enlace que recibiste por WhatsApp (válido 20 horas) o escribe &quot;dashboard&quot; en el bot.
           </p>
         </div>
       </div>
@@ -206,6 +212,14 @@ export function IgfForecastContent() {
     return (
       <div className="flex min-h-screen items-center justify-center p-4">
         <p className="text-slate-400">Redirigiendo al dashboard…</p>
+      </div>
+    );
+  }
+
+  if (isGVPageBlocked) {
+    return (
+      <div className="flex min-h-screen items-center justify-center p-4">
+        <p className="text-slate-400">Redirigiendo a Delta ingreso Forecast…</p>
       </div>
     );
   }

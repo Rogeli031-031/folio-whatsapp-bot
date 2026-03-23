@@ -69,40 +69,28 @@ function KpiContent() {
   const isGAPageBlocked = token ? getRoleFromDashboardToken(token) === "GA" : false;
   const dashboardRole = token ? getRoleFromDashboardToken(token) : null;
   const canDicfAcciones =
-    dashboardRole === "ZP" || dashboardRole === "GG" || dashboardRole === "GV";
+    dashboardRole === "ZP" || dashboardRole === "GG" || dashboardRole === "GV" || dashboardRole === "AD";
+  const isGV = dashboardRole === "GV";
 
-  /** GV: una sola planta en JWT; alinear con nombres IGF del select. */
+  /** GV: una sola planta desde catálogo (JWT); no usa IGF. */
   useEffect(() => {
-    if (!token || dashboardRole !== "GV" || deltaForecastPlanta) return;
-    if (!igfForecast?.rows?.length) return;
+    if (!token || !isGV || deltaForecastPlanta) return;
     const payload = decodeDashboardTokenPayload(token);
     const raw = payload?.plantas_permitidas;
     const ids = Array.isArray(raw) ? raw.map((x) => Number(x)).filter((n) => Number.isFinite(n)) : [];
-    const firstId = ids[0];
-    if (!firstId) return;
+    if (!ids.length) return;
     let cancelled = false;
     fetchPlantas(token)
       .then((d) => {
         if (cancelled) return;
-        const p = d.plantas.find((x) => x.id === firstId);
-        if (!p?.nombre) return;
-        const emps = Array.from(
-          new Set(igfForecast.rows.map((r) => r.empresa?.trim()).filter(Boolean))
-        ) as string[];
-        const needle = p.nombre.toLowerCase();
-        const match =
-          emps.find((e) => e.toLowerCase().includes(needle)) ||
-          emps.find((e) => {
-            const tail = e.split("-").pop()?.trim().toLowerCase() ?? "";
-            return tail && (needle.includes(tail) || tail.includes(needle));
-          });
-        setDeltaForecastPlanta(match || p.nombre);
+        const p = d.plantas.find((x) => ids.includes(Number(x.id)));
+        if (p?.nombre) setDeltaForecastPlanta(p.nombre);
       })
       .catch(() => {});
     return () => {
       cancelled = true;
     };
-  }, [token, dashboardRole, igfForecast, deltaForecastPlanta]);
+  }, [token, isGV, deltaForecastPlanta]);
 
   useEffect(() => {
     if (!token || !isGAPageBlocked) return;
@@ -138,7 +126,7 @@ function KpiContent() {
   }, [searchParams]);
 
   useEffect(() => {
-    if (!token || isGAPageBlocked) return;
+    if (!token || isGAPageBlocked || isGV) return;
 
     let cancelled = false;
     let fetching = false;
@@ -172,10 +160,10 @@ function KpiContent() {
       cancelled = true;
       clearInterval(id);
     };
-  }, [token, isGAPageBlocked]);
+  }, [token, isGAPageBlocked, isGV]);
 
   useEffect(() => {
-    if (!token || isGAPageBlocked || !deltaForecastPlanta || !deltaClienteSel || !dicfData) return;
+    if (!token || isGAPageBlocked || isGV || !deltaForecastPlanta || !deltaClienteSel || !dicfData) return;
 
     const clienteNombre = (deltaClienteSel.cliente?.cliente || "").trim();
     if (!clienteNombre) return;
@@ -272,7 +260,7 @@ function KpiContent() {
     return () => {
       cancelled = true;
     };
-  }, [token, deltaForecastPlanta, deltaClienteSel, dicfData, isGAPageBlocked]);
+  }, [token, deltaForecastPlanta, deltaClienteSel, dicfData, isGAPageBlocked, isGV]);
 
   if (unauthorized) {
     return (
@@ -280,7 +268,7 @@ function KpiContent() {
         <div className="rounded-lg border border-slate-700 bg-slate-800 p-6 text-center">
           <h1 className="text-lg font-semibold text-white">Acceso no autorizado</h1>
           <p className="mt-2 text-sm text-slate-400">
-            Abre el enlace que recibiste por WhatsApp (válido 5 horas) o escribe &quot;dashboard&quot; en el bot.
+            Abre el enlace que recibiste por WhatsApp (válido 20 horas) o escribe &quot;dashboard&quot; en el bot.
           </p>
         </div>
       </div>
@@ -306,59 +294,69 @@ function KpiContent() {
   return (
     <div className="min-h-screen flex flex-col">
       <div className="border-b border-slate-700 bg-slate-900/50 px-4 py-3">
-        <h1 className="text-xl font-semibold text-white">KPI Financieros</h1>
+        <h1 className="text-xl font-semibold text-white">
+          {isGV ? "Delta ingreso Forecast · tu planta" : "KPI Financieros"}
+        </h1>
       </div>
-      <div className="flex flex-wrap gap-3 px-4 py-3 border-b border-slate-700/80 bg-slate-800/30">
-        {igfForecast && token && (
-          <a
-            href={getDashboardExcelDownloadUrl(token, igfForecast.year, igfForecast.month)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded bg-slate-600 px-4 py-2 text-sm font-medium text-white hover:bg-slate-500"
+      {!isGV && (
+        <div className="flex flex-wrap gap-3 px-4 py-3 border-b border-slate-700/80 bg-slate-800/30">
+          {igfForecast && token && (
+            <a
+              href={getDashboardExcelDownloadUrl(token, igfForecast.year, igfForecast.month)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 rounded bg-slate-600 px-4 py-2 text-sm font-medium text-white hover:bg-slate-500"
+            >
+              Descargar Excel (Forecast)
+            </a>
+          )}
+          <Link
+            href={token ? `/dashboard?t=${encodeURIComponent(token)}` : "/dashboard"}
+            className="inline-flex items-center gap-2 rounded bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-600"
           >
-            Descargar Excel (Forecast)
-          </a>
-        )}
-        <Link
-          href={token ? `/dashboard?t=${encodeURIComponent(token)}` : "/dashboard"}
-          className="inline-flex items-center gap-2 rounded bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-600"
-        >
-          Ver dashboard de folios
-        </Link>
-        <Link
-          href={token ? `/igf-forecast?t=${encodeURIComponent(token)}` : "/igf-forecast"}
-          className="inline-flex items-center gap-2 rounded border border-amber-500 px-4 py-2 text-sm font-medium text-amber-300 hover:bg-amber-500/10"
-        >
-          IGF Forecast
-        </Link>
-      </div>
+            Ver dashboard de folios
+          </Link>
+          <Link
+            href={token ? `/igf-forecast?t=${encodeURIComponent(token)}` : "/igf-forecast"}
+            className="inline-flex items-center gap-2 rounded border border-amber-500 px-4 py-2 text-sm font-medium text-amber-300 hover:bg-amber-500/10"
+          >
+            IGF Forecast
+          </Link>
+        </div>
+      )}
       <main className="flex-1 p-4">
         <section className="mt-6 rounded-lg border border-slate-700 bg-slate-800/60 p-4 flex-shrink-0">
           <h3 className="text-base font-medium text-slate-200 mb-1">Delta ingreso Forecast</h3>
           <p className="text-xs text-slate-400 mb-3">
             A = mes anterior real · B = forecast a cierre. Clasificación por planta, canal/subcanal y cliente.
           </p>
-          {igfLoading && <p className="text-xs text-slate-500 mb-2">Cargando lista de plantas (IGF)…</p>}
-          {igfError && <p className="text-xs text-red-400 mb-2">{igfError}</p>}
+          {isGV && !deltaForecastPlanta && (
+            <p className="text-xs text-slate-500 mb-2">Cargando planta asignada…</p>
+          )}
+          {!isGV && igfLoading && <p className="text-xs text-slate-500 mb-2">Cargando lista de plantas (IGF)…</p>}
+          {!isGV && igfError && <p className="text-xs text-red-400 mb-2">{igfError}</p>}
           <div className="flex flex-wrap items-end gap-3 mb-3">
             <label className="flex flex-col gap-1">
               <span className="text-xs text-slate-500">Planta</span>
               <select
                 value={deltaForecastPlanta}
+                disabled={isGV}
                 onChange={(e) => {
                 setDeltaForecastPlanta(e.target.value);
                 setDeltaForecastData(null);
                 setDicfData(null);
                 setShowDeltaCliente(false);
                 }}
-                className="rounded border border-slate-600 bg-slate-700 px-2 py-1.5 text-sm text-slate-200"
+                className="rounded border border-slate-600 bg-slate-700 px-2 py-1.5 text-sm text-slate-200 disabled:opacity-70"
               >
                 <option value="">— Seleccionar —</option>
-                {igfForecast?.rows?.map((r) => r.empresa?.trim()).filter(Boolean)
-                  ? Array.from(new Set(igfForecast.rows.map((r) => r.empresa?.trim()).filter(Boolean))).sort().map((emp) => (
-                      <option key={emp} value={emp}>{emp}</option>
-                    ))
-                  : null}
+                {isGV && deltaForecastPlanta ? (
+                  <option value={deltaForecastPlanta}>{deltaForecastPlanta}</option>
+                ) : igfForecast?.rows?.map((r) => r.empresa?.trim()).filter(Boolean) ? (
+                  Array.from(new Set(igfForecast.rows.map((r) => r.empresa?.trim()).filter(Boolean))).sort().map((emp) => (
+                    <option key={emp} value={emp}>{emp}</option>
+                  ))
+                ) : null}
               </select>
             </label>
             <label className="flex flex-col gap-1">
@@ -446,7 +444,7 @@ function KpiContent() {
                 className="w-full rounded border border-slate-600 bg-slate-700 px-2 py-1.5 text-sm text-slate-200 placeholder:text-slate-500"
               />
             </div>
-            {deltaForecastData && token && !dicfData && (
+            {!isGV && deltaForecastData && token && !dicfData && (
               <a
                 href={getDeltaIngresoForecastExcelUrl(token, deltaForecastPlanta, deltaForecastPeriodoA, deltaForecastPeriodoB)}
                 target="_blank"
@@ -456,7 +454,7 @@ function KpiContent() {
                 Descargar Excel
               </a>
             )}
-            {dicfData && token && deltaForecastPlanta && (
+            {!isGV && dicfData && token && deltaForecastPlanta && (
               <a
                 href={getDicfExcelUrl(token, deltaForecastPlanta, deltaCanalFilter)}
                 target="_blank"
@@ -493,39 +491,41 @@ function KpiContent() {
                   <p className="text-xs text-slate-400">
                     Proyección a cierre del mes (últimos {dicfData.window_days} días · datos hasta {dicfData.last_date ?? "—"}).
                   </p>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      if (!token || !deltaForecastPlanta || !dicfData?.periodoMes) return;
-                      const [y, m] = dicfData.periodoMes.split("-").map(Number);
-                      if (!Number.isFinite(y) || !Number.isFinite(m)) return;
-                      setShowDicfParams((v) => !v);
-                      if (!showDicfParams) {
-                        setDicfParamsLoading(true);
-                        try {
-                          const cfg = await fetchDicfConfig(token, deltaForecastPlanta, y, m);
-                          setDicfConfig(cfg);
-                          setDicfParamsWindowDays(String(cfg.window_days));
-                          setDicfParamsToleranciaDias(String(cfg.tolerancia_dias));
-                          setDicfParamsUmbralMxn(String(cfg.umbral_mxn));
-                          setDicfParamsUmbralPctNeg(String(cfg.umbral_pct_neg));
-                          setDicfParamsUmbralPctPos(String(cfg.umbral_pct_pos));
-                          setDicfParamsMinKgHist(String(cfg.min_kg_hist));
-                        } catch {
-                          setDicfConfig(null);
-                          setDicfParamsWindowDays("60");
-                        } finally {
-                          setDicfParamsLoading(false);
+                  {!isGV && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!token || !deltaForecastPlanta || !dicfData?.periodoMes) return;
+                        const [y, m] = dicfData.periodoMes.split("-").map(Number);
+                        if (!Number.isFinite(y) || !Number.isFinite(m)) return;
+                        setShowDicfParams((v) => !v);
+                        if (!showDicfParams) {
+                          setDicfParamsLoading(true);
+                          try {
+                            const cfg = await fetchDicfConfig(token, deltaForecastPlanta, y, m);
+                            setDicfConfig(cfg);
+                            setDicfParamsWindowDays(String(cfg.window_days));
+                            setDicfParamsToleranciaDias(String(cfg.tolerancia_dias));
+                            setDicfParamsUmbralMxn(String(cfg.umbral_mxn));
+                            setDicfParamsUmbralPctNeg(String(cfg.umbral_pct_neg));
+                            setDicfParamsUmbralPctPos(String(cfg.umbral_pct_pos));
+                            setDicfParamsMinKgHist(String(cfg.min_kg_hist));
+                          } catch {
+                            setDicfConfig(null);
+                            setDicfParamsWindowDays("60");
+                          } finally {
+                            setDicfParamsLoading(false);
+                          }
                         }
-                      }
-                    }}
-                    className="text-xs rounded border border-slate-600 px-2 py-1 text-slate-400 hover:bg-slate-800"
-                  >
-                    {dicfParamsLoading ? "…" : showDicfParams ? "Ocultar parámetros" : "Parámetros DICF"}
-                  </button>
+                      }}
+                      className="text-xs rounded border border-slate-600 px-2 py-1 text-slate-400 hover:bg-slate-800"
+                    >
+                      {dicfParamsLoading ? "…" : showDicfParams ? "Ocultar parámetros" : "Parámetros DICF"}
+                    </button>
+                  )}
                 </div>
               )}
-              {showDicfParams && dicfData?.periodoMes && token && deltaForecastPlanta && (
+              {!isGV && showDicfParams && dicfData?.periodoMes && token && deltaForecastPlanta && (
                 <div className="mb-3 p-3 rounded border border-slate-700 bg-slate-800/50 text-sm">
                   <h4 className="font-semibold text-slate-300 mb-2">Parámetros editables (mes {dicfData.periodoMes})</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-3">

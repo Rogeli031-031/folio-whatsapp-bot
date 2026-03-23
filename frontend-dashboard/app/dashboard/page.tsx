@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   parseTokenFromQuery,
@@ -29,6 +29,7 @@ import ResumenCategoriasMesCargo from "@/components/ResumenCategoriasMesCargo";
 
 function DashboardContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
   const [unauthorized, setUnauthorized] = useState(false);
   const [roleHint, setRoleHint] = useState<string | null>(null);
@@ -73,13 +74,27 @@ function DashboardContent() {
     loadData();
   }, [loadData]);
 
+  const isGVDashboardBlocked = token ? getRoleFromDashboardToken(token) === "GV" : false;
+  useEffect(() => {
+    if (!token || !isGVDashboardBlocked) return;
+    router.replace(`/?t=${encodeURIComponent(token)}`);
+  }, [token, isGVDashboardBlocked, router]);
+
+  if (isGVDashboardBlocked && token) {
+    return (
+      <div className="flex min-h-screen items-center justify-center p-4">
+        <p className="text-slate-400">Redirigiendo a Delta ingreso Forecast…</p>
+      </div>
+    );
+  }
+
   if (unauthorized) {
     return (
       <div className="flex min-h-screen items-center justify-center p-4">
         <div className="rounded-lg border border-slate-700 bg-slate-800 p-6 text-center">
           <h1 className="text-lg font-semibold text-white">Acceso no autorizado</h1>
           <p className="mt-2 text-sm text-slate-400">
-            Abre el enlace que recibiste por WhatsApp (válido 5 horas) o escribe &quot;dashboard&quot; en el bot.
+            Abre el enlace que recibiste por WhatsApp (válido 20 horas) o escribe &quot;dashboard&quot; en el bot.
           </p>
         </div>
       </div>
