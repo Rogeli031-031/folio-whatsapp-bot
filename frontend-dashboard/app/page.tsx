@@ -449,6 +449,15 @@ function KpiContent() {
     return totalMxn > 0 ? -(Math.round((totalMxn / ventaKg) * 100) / 100) : base;
   };
 
+  const getResultadoFinalImporteWithCdjz = (row: IgfForecastRow): number => {
+    const n = (x: unknown): number => (x != null && !Number.isNaN(Number(x)) ? Number(x) : 0);
+    const ventaKg = n(row.venta_ton) * 1000;
+    const baseInvKg = n(row.inversiones_kg);
+    const adjInvKg = n(getInversionesKgWithCdjz(row));
+    const deltaInvCostKg = Math.abs(adjInvKg) - Math.abs(baseInvKg);
+    return n(row.resultado_final_importe) - (deltaInvCostKg * ventaKg);
+  };
+
   const openIgfFoliosDetalle = async (row: IgfForecastRow, tipo: IgfFolioDetalleTipo, label: string) => {
     setIgfFoliosModal({ empresa: row.empresa || "", tipo, label });
     setIgfFoliosItems(null);
@@ -760,7 +769,12 @@ function KpiContent() {
                       <td colSpan={4} className="py-3 px-2" />
                       <td className="py-3 px-2" />
                       <td className="py-3 px-2 text-right tabular-nums text-base font-bold text-slate-100">
-                        {fmtNum(igfForecast.totales.resultado_final_importe ?? null, 0)}
+                        {fmtNum(
+                          igfForecast.rows
+                            .filter((r) => !/^TOTALES?$/i.test(r.empresa?.trim() || ""))
+                            .reduce((sum, r) => sum + getResultadoFinalImporteWithCdjz(r), 0),
+                          0
+                        )}
                       </td>
                     </tr>
                   </tfoot>
