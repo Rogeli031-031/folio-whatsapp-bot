@@ -119,6 +119,7 @@ function KpiContent() {
   const [hgSaving, setHgSaving] = useState<string | null>(null);
   const [plantaFilter, setPlantaFilter] = useState<string>("");
   const PRESUPUESTO_GEND_STORAGE_KEY = "dashboard-presupuesto-gend";
+  const INVERSION_CDJZ_STORAGE_KEY = "dashboard-inversion-cdjz";
   const [presupuestoGendByEmpresa, setPresupuestoGendByEmpresa] = useState<Record<string, number>>(() => {
     if (typeof window === "undefined") return {};
     try {
@@ -144,6 +145,31 @@ function KpiContent() {
       // ignore
     }
   }, [presupuestoGendByEmpresa]);
+  const [inversionCdjzByEmpresa, setInversionCdjzByEmpresa] = useState<Record<string, number>>(() => {
+    if (typeof window === "undefined") return {};
+    try {
+      const s = localStorage.getItem(INVERSION_CDJZ_STORAGE_KEY);
+      if (!s) return {};
+      const parsed = JSON.parse(s) as Record<string, number>;
+      if (typeof parsed !== "object" || parsed === null) return {};
+      const normalized: Record<string, number> = {};
+      for (const [key, val] of Object.entries(parsed)) {
+        const nKey = presupuestoGendKey(key);
+        if (nKey && typeof val === "number" && !Number.isNaN(val)) normalized[nKey] = val;
+      }
+      return normalized;
+    } catch {
+      return {};
+    }
+  });
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem(INVERSION_CDJZ_STORAGE_KEY, JSON.stringify(inversionCdjzByEmpresa));
+    } catch {
+      // ignore
+    }
+  }, [inversionCdjzByEmpresa]);
   const [presupuestoDetalle, setPresupuestoDetalle] = useState<IgfForecastRow | null>(null);
   const [presupuestoDetalleItems, setPresupuestoDetalleItems] = useState<PresupuestoDetalleItem[] | null>(null);
   const [presupuestoDetalleLoading, setPresupuestoDetalleLoading] = useState(false);
@@ -410,6 +436,17 @@ function KpiContent() {
     return (base ?? 0) + deltaKg;
   };
 
+  const getInversionesKgWithCdjz = (row: IgfForecastRow): number | null => {
+    const base = row.inversiones_kg != null && !Number.isNaN(Number(row.inversiones_kg)) ? Number(row.inversiones_kg) : null;
+    const extraMxn = inversionCdjzByEmpresa[presupuestoGendKey(row.empresa || "")] ?? 0;
+    const ventaTon = row.venta_ton != null && !Number.isNaN(Number(row.venta_ton)) ? Number(row.venta_ton) : 0;
+    const ventaKg = ventaTon * 1000;
+    if (!ventaKg || !extraMxn) return base;
+    const baseMxn = Math.abs(base ?? 0) * ventaKg;
+    const totalMxn = baseMxn + Math.abs(extraMxn);
+    return totalMxn > 0 ? -(Math.round((totalMxn / ventaKg) * 100) / 100) : base;
+  };
+
   const openIgfFoliosDetalle = async (row: IgfForecastRow, tipo: IgfFolioDetalleTipo, label: string) => {
     setIgfFoliosModal({ empresa: row.empresa || "", tipo, label });
     setIgfFoliosItems(null);
@@ -650,9 +687,10 @@ function KpiContent() {
                         </td>
                         <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(row.hg_kg ?? null)}</td>
                         {COLS_EXTRA.map((c) => {
-                          const val = (row as Record<string, unknown>)[c.key] as number | null | undefined;
+                          const rawVal = (row as Record<string, unknown>)[c.key] as number | null | undefined;
                           const isImporte = c.key === "resultado_final_importe" || c.key === "util_oper_importe";
                           const isInversionesKg = c.key === "inversiones_kg";
+                          const val = isInversionesKg ? getInversionesKgWithCdjz(row) : rawVal;
                           const invIsNeg = !isImporte && val != null && Number(val) < 0;
                           const highlightClass =
                             c.key === "util_oper_importe"
@@ -1835,6 +1873,56 @@ function KpiContent() {
             {igfFoliosError && <p className="text-sm text-red-400">{igfFoliosError}</p>}
             {!igfFoliosLoading && !igfFoliosError && igfFoliosItems && (
               <div className="overflow-auto flex-1 min-h-0 -mx-1">
+                {igfFoliosModal.tipo === "inversiones" && (() => {
+                  const empresa = igfFoliosModal.empresa || "";
+                  const rowEmpresa = igfForecast ? findRowByPlanta(igfForecast.rows, empresa) : undefined;
+                  const ventaTon = rowEmpresa?.venta_ton != null && !Number.isNaN(Number(rowEmpresa.venta_ton)) ? Number(rowEmpresa.venta_ton) : 0;
+                  const ventaKg = ventaTon * 1000;
+                  const foliosMxn = igfFoliosItems.reduce((s, f) => s + Math.abs(Number(f.importe || 0)), 0);
+                  const key = presupuestoGendKey(empresa);
+                  const inversionCdjzMxn = inversionCdjzByEmpresa[key] ?? 0;
+                  const totalMxn = foliosMxn + Math.abs(inversionCdjzMxn);
+                  const invKg = ventaKg > 0 && totalMxn > 0 ? -(totalMxn / ventaKg) : null;
+                  return (
+                    <div className="mb-3 rounded border border-slate-700 bg-slate-900/70 p-3 text-sm text-slate-300">
+                      <p>
+                        Venta forecast: <span className="font-mono">{fmtNum(ventaTon || null, 2)} ton</span>
+                      </p>
+                      <p>
+                        Inversión folios (MXN):{" "}
+                        <span className="font-mono">
+                          {foliosMxn.toLocaleString("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 })}
+                        </span>
+                      </p>
+                      <p>
+                        Inversión total (folios + CDJZ):{" "}
+                        <span className="font-mono">
+                          {totalMxn.toLocaleString("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 })}
+                        </span>
+                      </p>
+                      <p>
+                        Inversiones ($/kg): <span className="font-mono">{invKg != null ? fmtNum(invKg) : "—"} $/kg</span>
+                      </p>
+                      <div className="mt-2">
+                        <label className="block text-xs text-slate-300">
+                          <span className="mr-1">Inversión CDJZ (MXN) para esta planta:</span>
+                          <input
+                            type="number"
+                            className="mt-1 w-44 rounded border border-slate-600 bg-slate-800 px-2 py-1 text-xs text-slate-100"
+                            value={inversionCdjzByEmpresa[key] ?? ""}
+                            onChange={(e) => {
+                              const raw = e.target.value.trim();
+                              setInversionCdjzByEmpresa((prev) => ({
+                                ...prev,
+                                [key]: raw === "" ? 0 : Number(raw) || 0,
+                              }));
+                            }}
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  );
+                })()}
                 {igfFoliosItems.length === 0 ? (
                   <p className="text-sm text-slate-500">No hay folios que coincidan con este criterio y periodo.</p>
                 ) : (
