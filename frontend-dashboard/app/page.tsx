@@ -179,6 +179,8 @@ function KpiContent() {
   const [igfFoliosItems, setIgfFoliosItems] = useState<IgfFolioDetalleItem[] | null>(null);
   const [igfFoliosLoading, setIgfFoliosLoading] = useState(false);
   const [igfFoliosError, setIgfFoliosError] = useState<string | null>(null);
+  const [inversionCdjzDraft, setInversionCdjzDraft] = useState<string>("");
+  const [inversionCdjzSaved, setInversionCdjzSaved] = useState(false);
   const [igfMesAnterior, setIgfMesAnterior] = useState<IgfForecastResponse | null>(null);
   const [igfMesAnteriorLoading, setIgfMesAnteriorLoading] = useState(false);
   const [deltaForecastPlanta, setDeltaForecastPlanta] = useState("");
@@ -451,6 +453,12 @@ function KpiContent() {
     setIgfFoliosModal({ empresa: row.empresa || "", tipo, label });
     setIgfFoliosItems(null);
     setIgfFoliosError(null);
+    setInversionCdjzSaved(false);
+    if (tipo === "inversiones") {
+      const key = presupuestoGendKey(row.empresa || "");
+      const current = inversionCdjzByEmpresa[key] ?? 0;
+      setInversionCdjzDraft(current ? String(current) : "");
+    }
     if (!token || !igfForecast) return;
     setIgfFoliosLoading(true);
     try {
@@ -687,10 +695,22 @@ function KpiContent() {
                         </td>
                         <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(row.hg_kg ?? null)}</td>
                         {COLS_EXTRA.map((c) => {
+                          const n = (x: unknown): number => (x != null && !Number.isNaN(Number(x)) ? Number(x) : 0);
+                          const ventaKgRow = n(row.venta_ton) * 1000;
+                          const baseInvKg = n(row.inversiones_kg);
+                          const adjInvKg = n(getInversionesKgWithCdjz(row));
+                          const deltaInvCostKg = Math.abs(adjInvKg) - Math.abs(baseInvKg);
                           const rawVal = (row as Record<string, unknown>)[c.key] as number | null | undefined;
                           const isImporte = c.key === "resultado_final_importe" || c.key === "util_oper_importe";
                           const isInversionesKg = c.key === "inversiones_kg";
-                          const val = isInversionesKg ? getInversionesKgWithCdjz(row) : rawVal;
+                          const val =
+                            c.key === "inversiones_kg"
+                              ? getInversionesKgWithCdjz(row)
+                              : c.key === "resultado_final_kg"
+                              ? n(rawVal) - deltaInvCostKg
+                              : c.key === "resultado_final_importe"
+                              ? n(rawVal) - (deltaInvCostKg * ventaKgRow)
+                              : rawVal;
                           const invIsNeg = !isImporte && val != null && Number(val) < 0;
                           const highlightClass =
                             c.key === "util_oper_importe"
@@ -1881,8 +1901,11 @@ function KpiContent() {
                   const foliosMxn = igfFoliosItems.reduce((s, f) => s + Math.abs(Number(f.importe || 0)), 0);
                   const key = presupuestoGendKey(empresa);
                   const inversionCdjzMxn = inversionCdjzByEmpresa[key] ?? 0;
+                  const draftNum = inversionCdjzDraft.trim() === "" ? 0 : Number(inversionCdjzDraft) || 0;
+                  const inversionPreviewMxn = Math.abs(draftNum);
                   const totalMxn = foliosMxn + Math.abs(inversionCdjzMxn);
-                  const invKg = ventaKg > 0 && totalMxn > 0 ? -(totalMxn / ventaKg) : null;
+                  const totalPreviewMxn = foliosMxn + inversionPreviewMxn;
+                  const invKg = ventaKg > 0 && totalPreviewMxn > 0 ? -(totalPreviewMxn / ventaKg) : null;
                   return (
                     <div className="mb-3 rounded border border-slate-700 bg-slate-900/70 p-3 text-sm text-slate-300">
                       <p>
@@ -1895,9 +1918,15 @@ function KpiContent() {
                         </span>
                       </p>
                       <p>
-                        Inversión total (folios + CDJZ):{" "}
+                        Inversión total guardada (folios + CDJZ):{" "}
                         <span className="font-mono">
                           {totalMxn.toLocaleString("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 })}
+                        </span>
+                      </p>
+                      <p>
+                        Inversión total preview (folios + CDJZ):{" "}
+                        <span className="font-mono">
+                          {totalPreviewMxn.toLocaleString("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 })}
                         </span>
                       </p>
                       <p>
@@ -1909,16 +1938,30 @@ function KpiContent() {
                           <input
                             type="number"
                             className="mt-1 w-44 rounded border border-slate-600 bg-slate-800 px-2 py-1 text-xs text-slate-100"
-                            value={inversionCdjzByEmpresa[key] ?? ""}
+                            value={inversionCdjzDraft}
                             onChange={(e) => {
-                              const raw = e.target.value.trim();
+                              setInversionCdjzDraft(e.target.value);
+                              setInversionCdjzSaved(false);
+                            }}
+                          />
+                        </label>
+                        <div className="mt-2 flex items-center gap-2">
+                          <button
+                            type="button"
+                            className="rounded bg-emerald-700 px-3 py-1 text-xs font-medium text-white hover:bg-emerald-600"
+                            onClick={() => {
+                              const raw = inversionCdjzDraft.trim();
                               setInversionCdjzByEmpresa((prev) => ({
                                 ...prev,
                                 [key]: raw === "" ? 0 : Number(raw) || 0,
                               }));
+                              setInversionCdjzSaved(true);
                             }}
-                          />
-                        </label>
+                          >
+                            Guardar CDJZ
+                          </button>
+                          {inversionCdjzSaved && <span className="text-xs text-emerald-300">Guardado</span>}
+                        </div>
                       </div>
                     </div>
                   );
