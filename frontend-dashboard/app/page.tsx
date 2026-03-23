@@ -848,7 +848,11 @@ function KpiContent() {
                   // Regla pedida:
                   // - Forecast (fila superior): gasto recalculado por componentes.
                   // - Mes anterior: usar gasto_kg original de IGF versión previa.
-                  if (row === rowA) return fmtNum((row as Record<string, unknown>).gasto_kg as number | null ?? null);
+                  if (row === rowA) {
+                    const rawIgf = (row as Record<string, unknown>).gasto_kg_igf as number | null | undefined;
+                    const fallback = (row as Record<string, unknown>).gasto_kg as number | null | undefined;
+                    return fmtNum((rawIgf ?? fallback) ?? null);
+                  }
                   return fmtNum(gastoKgFromFour(row));
                 }
                 if (row === rowA && (c.key === "util_oper_kg" || c.key === "util_oper_importe")) {
@@ -878,7 +882,7 @@ function KpiContent() {
                   : c.key === "util_oper_importe"
                   ? utilOperImporteA
                   : c.key === "gasto_kg"
-                  ? ((rowA as Record<string, unknown>).gasto_kg as number | null | undefined)
+                  ? (((rowA as Record<string, unknown>).gasto_kg_igf as number | null | undefined) ?? ((rowA as Record<string, unknown>).gasto_kg as number | null | undefined))
                   : (rowA as Record<string, unknown>)[c.key] as number | null | undefined;
                 return c.isPct ? (n(vF) - n(vA)) * 100 : delta(vF, vA);
               };
@@ -898,7 +902,10 @@ function KpiContent() {
                   return (ventaKgF - ventaKgA) * utilOperF;
                 }
                 if (c.key === "com_desc_kg") return (n(vF) - n(vA)) * ventaKgA;
-                if (c.key === "gasto_kg") return (gastoKgFromFour(rowF) - n((rowA as Record<string, unknown>).gasto_kg as number | null | undefined)) * ventaKgA;
+                if (c.key === "gasto_kg") {
+                  const gastoA = ((rowA as Record<string, unknown>).gasto_kg_igf as number | null | undefined) ?? ((rowA as Record<string, unknown>).gasto_kg as number | null | undefined);
+                  return (gastoKgFromFour(rowF) - n(gastoA)) * ventaKgA;
+                }
                 if (c.key === "impuesto_kg") return (n(vF) - n(vA)) * ventaKgA;
                 if (c.key === "bancos_planta_kg") return (n(vF) - n(vA)) * ventaKgA;
                 if (c.key === "provision_planta_kg") return (n(vF) - n(vA)) * ventaKgA;

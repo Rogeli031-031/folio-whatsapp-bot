@@ -6030,7 +6030,7 @@ async function buildIgfForecastPayload(client, year, month) {
           com_desc_kg = Math.round((Math.abs(descMonto) / ventaForecastKg) * 100) / 100;
         }
       }
-      return { ...row, venta_ton, com_desc_kg };
+      return { ...row, venta_ton, com_desc_kg, gasto_kg_igf: row.gasto_kg != null ? Number(row.gasto_kg) : null };
     });
 
     const periodoStr = `${year}-${String(month).padStart(2, "0")}`;
