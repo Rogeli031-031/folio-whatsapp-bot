@@ -5510,6 +5510,44 @@ function normalizeAccents(s) {
   return t;
 }
 
+function fmtDateYmdLocal(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/** Última fecha cargada del mes para forecast ARR; evita que cambie por paso de día si no hay upload. */
+async function getArrForecastCutoffDate(client, tableName, year, month) {
+  const start = `${year}-${String(month).padStart(2, "0")}-01`;
+  const endDay = new Date(year, month, 0).getDate();
+  const end = `${year}-${String(month).padStart(2, "0")}-${String(endDay).padStart(2, "0")}`;
+  const todayStr = fmtDateYmdLocal(new Date());
+  const sql = `
+    WITH prov_map AS (
+      SELECT DISTINCT p.nombre AS prov_name,
+             UPPER(TRIM(p.nombre)) AS key_nombre,
+             UPPER(TRIM(COALESCE(p.clave, ''))) AS key_clave
+        FROM public.plantas p
+        JOIN arr.provincia_plants ap
+          ON UPPER(TRIM(ap.plant_code)) = UPPER(TRIM(p.nombre))
+          OR (p.clave IS NOT NULL AND TRIM(p.clave) <> '' AND UPPER(TRIM(ap.plant_code)) = UPPER(TRIM(p.clave)))
+       WHERE UPPER(TRIM(COALESCE(p.nombre, ''))) != 'CORPORATIVO'
+         AND UPPER(TRIM(COALESCE(p.clave, ''))) != 'CORPORATIVO'
+    )
+    SELECT MAX(t.fecha)::date AS cutoff
+      FROM ${tableName} t
+      JOIN prov_map pm
+        ON UPPER(TRIM(t.plant_code)) = pm.key_nombre
+        OR (pm.key_clave <> '' AND UPPER(TRIM(t.plant_code)) = pm.key_clave)
+     WHERE t.fecha >= $1::date AND t.fecha <= $2::date AND t.fecha < $3::date
+  `;
+  const r = await client.query(sql, [start, end, todayStr]);
+  const cutoffRaw = r.rows && r.rows[0] ? r.rows[0].cutoff : null;
+  if (!cutoffRaw) return null;
+  return cutoffRaw instanceof Date ? fmtDateYmdLocal(cutoffRaw) : String(cutoffRaw).slice(0, 10);
+}
+
 /**
  * Venta forecast por planta (solo mes actual): promedio por día de semana (últimas 2 semanas)
  * × ocurrencias restantes del mes + venta acumulada hasta ayer. Fuente: arr.ventas_diarias_cliente.
@@ -5523,6 +5561,10 @@ async function getVentaForecastProvinciaDesdeArr(client, year, month) {
   const today = new Date();
   const isCurrentMonth = today.getFullYear() === year && today.getMonth() + 1 === month;
   if (!isCurrentMonth) return new Map();
+  const cutoffDate = await getArrForecastCutoffDate(client, "arr.ventas_diarias_cliente", year, month);
+  if (!cutoffDate) return new Map();
+  const cutoffDay = parseInt(cutoffDate.slice(8, 10), 10);
+  if (!Number.isFinite(cutoffDay) || cutoffDay < 1) return new Map();
 
   const lastDay = new Date(year, month, 0).getDate();
   const firstDayStr = `${year}-${String(month).padStart(2, "0")}-01`;
@@ -5549,8 +5591,10 @@ async function getVentaForecastProvinciaDesdeArr(client, year, month) {
        JOIN prov_map pm
          ON UPPER(TRIM(v.plant_code)) = pm.key_nombre
          OR (pm.key_clave <> '' AND UPPER(TRIM(v.plant_code)) = pm.key_clave)
-      WHERE v.fecha >= (CURRENT_DATE - INTERVAL '14 days') AND v.fecha < CURRENT_DATE
+      WHERE v.fecha >= ($1::date - INTERVAL '13 days') AND v.fecha <= $1::date
       GROUP BY pm.prov_name, v.fecha`
+    ,
+    [cutoffDate]
   );
   const rAcum = await client.query(
     `WITH prov_map AS (
@@ -5569,9 +5613,9 @@ async function getVentaForecastProvinciaDesdeArr(client, year, month) {
        JOIN prov_map pm
          ON UPPER(TRIM(v.plant_code)) = pm.key_nombre
          OR (pm.key_clave <> '' AND UPPER(TRIM(v.plant_code)) = pm.key_clave)
-      WHERE v.fecha >= $1::date AND v.fecha < CURRENT_DATE
+      WHERE v.fecha >= $1::date AND v.fecha <= $2::date
       GROUP BY pm.prov_name`,
-    [firstDayStr]
+    [firstDayStr, cutoffDate]
   );
   const acumByPlant = new Map((rAcum.rows || []).map((row) => [row.plant_code, Number(row.kg) || 0]));
 
@@ -5589,9 +5633,9 @@ async function getVentaForecastProvinciaDesdeArr(client, year, month) {
     avgByPlantDow.set(key, count > 0 ? sum / count : 0);
   }
 
-  // Días restantes del mes (hoy inclusive) por dow
+  // Días restantes del mes a partir del día posterior al último día cargado.
   const restCountByDow = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0 };
-  for (let d = today.getDate(); d <= lastDay; d++) {
+  for (let d = cutoffDay + 1; d <= lastDay; d++) {
     const fd = new Date(year, month - 1, d);
     const dow = fd.getDay() || 7;
     restCountByDow[dow] = (restCountByDow[dow] || 0) + 1;
@@ -5624,6 +5668,10 @@ async function getDescuentoForecastProvinciaDesdeArr(client, year, month) {
   const today = new Date();
   const isCurrentMonth = today.getFullYear() === year && today.getMonth() + 1 === month;
   if (!isCurrentMonth) return new Map();
+  const cutoffDate = await getArrForecastCutoffDate(client, "arr.descuentos_diarios_cliente", year, month);
+  if (!cutoffDate) return new Map();
+  const cutoffDay = parseInt(cutoffDate.slice(8, 10), 10);
+  if (!Number.isFinite(cutoffDay) || cutoffDay < 1) return new Map();
 
   const lastDay = new Date(year, month, 0).getDate();
   const firstDayStr = `${year}-${String(month).padStart(2, "0")}-01`;
@@ -5649,8 +5697,10 @@ async function getDescuentoForecastProvinciaDesdeArr(client, year, month) {
        JOIN prov_map pm
          ON UPPER(TRIM(d.plant_code)) = pm.key_nombre
          OR (pm.key_clave <> '' AND UPPER(TRIM(d.plant_code)) = pm.key_clave)
-      WHERE d.fecha >= (CURRENT_DATE - INTERVAL '14 days') AND d.fecha < CURRENT_DATE
+      WHERE d.fecha >= ($1::date - INTERVAL '13 days') AND d.fecha <= $1::date
       GROUP BY pm.prov_name, d.fecha`
+    ,
+    [cutoffDate]
   );
   const rAcum = await client.query(
     `WITH prov_map AS (
@@ -5669,9 +5719,9 @@ async function getDescuentoForecastProvinciaDesdeArr(client, year, month) {
        JOIN prov_map pm
          ON UPPER(TRIM(d.plant_code)) = pm.key_nombre
          OR (pm.key_clave <> '' AND UPPER(TRIM(d.plant_code)) = pm.key_clave)
-      WHERE d.fecha >= $1::date AND d.fecha < CURRENT_DATE
+      WHERE d.fecha >= $1::date AND d.fecha <= $2::date
       GROUP BY pm.prov_name`,
-    [firstDayStr]
+    [firstDayStr, cutoffDate]
   );
   const acumByPlant = new Map((rAcum.rows || []).map((row) => [row.plant_code, Number(row.monto) || 0]));
 
@@ -5689,7 +5739,7 @@ async function getDescuentoForecastProvinciaDesdeArr(client, year, month) {
   }
 
   const restCountByDow = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0 };
-  for (let d = today.getDate(); d <= lastDay; d++) {
+  for (let d = cutoffDay + 1; d <= lastDay; d++) {
     const fd = new Date(year, month - 1, d);
     const dow = fd.getDay() || 7;
     restCountByDow[dow] = (restCountByDow[dow] || 0) + 1;
