@@ -844,7 +844,13 @@ function KpiContent() {
               const cellVal = (row: IgfForecastRow | undefined, c: Col) => {
                 if (!row) return "—";
                 if (c.key === "empresa") return row.empresa ?? "—";
-                if (c.key === "gasto_kg") return fmtNum(gastoKgFromFour(row));
+                if (c.key === "gasto_kg") {
+                  // Regla pedida:
+                  // - Forecast (fila superior): gasto recalculado por componentes.
+                  // - Mes anterior: usar gasto_kg original de IGF versión previa.
+                  if (row === rowA) return fmtNum((row as Record<string, unknown>).gasto_kg as number | null ?? null);
+                  return fmtNum(gastoKgFromFour(row));
+                }
                 if (row === rowA && (c.key === "util_oper_kg" || c.key === "util_oper_importe")) {
                   const utilKg = calcUtilOperKg(row);
                   if (c.key === "util_oper_kg") return fmtNum(utilKg);
@@ -867,7 +873,13 @@ function KpiContent() {
                   : (c.key === "inversiones_kg" || c.key === "resultado_final_kg" || c.key === "resultado_final_importe")
                   ? adjustedForecastValue(rowF, c.key)
                   : (rowF as Record<string, unknown>)[c.key] as number | null | undefined;
-                const vA = c.key === "util_oper_kg" ? utilOperKgA : c.key === "util_oper_importe" ? utilOperImporteA : c.key === "gasto_kg" ? gastoKgFromFour(rowA) : (rowA as Record<string, unknown>)[c.key] as number | null | undefined;
+                const vA = c.key === "util_oper_kg"
+                  ? utilOperKgA
+                  : c.key === "util_oper_importe"
+                  ? utilOperImporteA
+                  : c.key === "gasto_kg"
+                  ? ((rowA as Record<string, unknown>).gasto_kg as number | null | undefined)
+                  : (rowA as Record<string, unknown>)[c.key] as number | null | undefined;
                 return c.isPct ? (n(vF) - n(vA)) * 100 : delta(vF, vA);
               };
               const ventaKgA = rowA ? n((rowA as Record<string, unknown>).venta_ton as number | null | undefined) * 1000 : 0;
@@ -886,7 +898,7 @@ function KpiContent() {
                   return (ventaKgF - ventaKgA) * utilOperF;
                 }
                 if (c.key === "com_desc_kg") return (n(vF) - n(vA)) * ventaKgA;
-                if (c.key === "gasto_kg") return (gastoKgFromFour(rowF) - gastoKgFromFour(rowA)) * ventaKgA;
+                if (c.key === "gasto_kg") return (gastoKgFromFour(rowF) - n((rowA as Record<string, unknown>).gasto_kg as number | null | undefined)) * ventaKgA;
                 if (c.key === "impuesto_kg") return (n(vF) - n(vA)) * ventaKgA;
                 if (c.key === "bancos_planta_kg") return (n(vF) - n(vA)) * ventaKgA;
                 if (c.key === "provision_planta_kg") return (n(vF) - n(vA)) * ventaKgA;
