@@ -1873,7 +1873,7 @@ function KpiContent() {
             {igfFoliosError && <p className="text-sm text-red-400">{igfFoliosError}</p>}
             {!igfFoliosLoading && !igfFoliosError && igfFoliosItems && (
               <div className="overflow-auto flex-1 min-h-0 -mx-1">
-                {igfFoliosModal.tipo === "inversiones" && (() => {
+                {(igfFoliosModal.tipo === "inversiones" || /inversiones/i.test(igfFoliosModal.label || "")) && (() => {
                   const empresa = igfFoliosModal.empresa || "";
                   const rowEmpresa = igfForecast ? findRowByPlanta(igfForecast.rows, empresa) : undefined;
                   const ventaTon = rowEmpresa?.venta_ton != null && !Number.isNaN(Number(rowEmpresa.venta_ton)) ? Number(rowEmpresa.venta_ton) : 0;
