@@ -720,6 +720,112 @@ export function postDicfConfig(
   });
 }
 
+/** Registro de acciones DICF (ZP / GG / GV). */
+export interface DicfAccionRow {
+  id: number;
+  public_code: string;
+  planta_id: number;
+  planta_label: string;
+  grupo_tipo: string;
+  canal: string;
+  subcanal: string;
+  cliente_nombre: string;
+  cliente_key: string;
+  descripcion: string;
+  responsable_usuario_id: number;
+  creado_por_usuario_id: number;
+  estado: string;
+  compromiso_deadline_at: string;
+  fecha_compromiso: string | null;
+  compromiso_tarde: boolean;
+  cerrado_at: string | null;
+  responsable_nombre?: string | null;
+  creador_nombre?: string | null;
+  cerrado_por_nombre?: string | null;
+  created_at?: string;
+}
+
+export function postDicfAccionesClienteKey(
+  token: string,
+  body: { planta: string; grupo_tipo: string; canal?: string; subcanal?: string; cliente_nombre: string }
+): Promise<{ cliente_key: string }> {
+  return apiFetch("/api/dashboard/dicf-acciones/cliente-key", {
+    token,
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function fetchDicfAccionesAsignables(
+  token: string,
+  planta: string
+): Promise<{ usuarios: { id: number; nombre: string; telefono?: string; rol_clave: string }[] }> {
+  return apiFetch("/api/dashboard/dicf-acciones/asignables", { token, params: { planta } });
+}
+
+export function fetchDicfAccionesList(
+  token: string,
+  params: { planta?: string; cliente_key?: string }
+): Promise<{ acciones: DicfAccionRow[] }> {
+  const p: Record<string, string> = {};
+  if (params.planta) p.planta = params.planta;
+  if (params.cliente_key) p.cliente_key = params.cliente_key;
+  return apiFetch("/api/dashboard/dicf-acciones", { token, params: p });
+}
+
+export function postDicfAccionCreate(
+  token: string,
+  body: {
+    planta: string;
+    grupo_tipo: string;
+    canal?: string;
+    subcanal?: string;
+    cliente_nombre: string;
+    descripcion: string;
+    responsable_usuario_id: number;
+  }
+): Promise<{ accion: DicfAccionRow; notificacion?: { ok: boolean; error?: string } }> {
+  return apiFetch("/api/dashboard/dicf-acciones", {
+    token,
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function fetchDicfAccionHistorial(
+  token: string,
+  accionId: number
+): Promise<{ historial: { id: number; evento: string; detalle: unknown; creado_en: string; actor_nombre?: string }[] }> {
+  return apiFetch(`/api/dashboard/dicf-acciones/${accionId}/historial`, { token });
+}
+
+export function patchDicfAccionCompromiso(
+  token: string,
+  accionId: number,
+  fecha_compromiso: string
+): Promise<{ ok?: boolean; accion?: DicfAccionRow; error?: string }> {
+  return apiFetch(`/api/dashboard/dicf-acciones/${accionId}/compromiso`, {
+    token,
+    method: "PATCH",
+    body: JSON.stringify({ fecha_compromiso }),
+  });
+}
+
+export function patchDicfAccionCerrar(token: string, accionId: number): Promise<{ ok?: boolean; error?: string }> {
+  return apiFetch(`/api/dashboard/dicf-acciones/${accionId}/cerrar`, {
+    token,
+    method: "PATCH",
+    body: JSON.stringify({}),
+  });
+}
+
+export function getDicfAccionesExcelUrl(token: string, planta?: string): string {
+  const base = getApiUrl("/api/dashboard/dicf-acciones-excel");
+  let url = `${base}?t=${encodeURIComponent(token)}`;
+  if (planta) url += `&planta=${encodeURIComponent(planta)}`;
+  return url;
+}
+
 export function postFolioPoliza(
   token: string,
   folioId: number,

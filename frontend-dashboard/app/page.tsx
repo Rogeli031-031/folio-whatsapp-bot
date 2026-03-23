@@ -9,14 +9,17 @@ import {
   getTokenFromStorage,
   setTokenInStorage,
   getRoleFromDashboardToken,
+  decodeDashboardTokenPayload,
 } from "@/lib/auth";
 import {
   fetchIgfForecast,
   getDashboardExcelDownloadUrl,
   fetchDeltaIngresoPeriodos,
+  fetchPlantas,
   postDeltaIngresoForecastDatos,
   getDeltaIngresoForecastExcelUrl,
   getDicfExcelUrl,
+  getDicfAccionesExcelUrl,
   postDicfDatos,
   fetchDicfConfig,
   postDicfConfig,
@@ -25,6 +28,7 @@ import {
   type DicfResult,
   type DicfConfig,
 } from "@/lib/api";
+import { DicfAccionesClientePanel } from "@/components/DicfAccionesClientePanel";
 
 function KpiContent() {
   const searchParams = useSearchParams();
@@ -63,6 +67,42 @@ function KpiContent() {
   const [dicfParamsMinKgHist, setDicfParamsMinKgHist] = useState<string>("0");
 
   const isGAPageBlocked = token ? getRoleFromDashboardToken(token) === "GA" : false;
+  const dashboardRole = token ? getRoleFromDashboardToken(token) : null;
+  const canDicfAcciones =
+    dashboardRole === "ZP" || dashboardRole === "GG" || dashboardRole === "GV";
+
+  /** GV: una sola planta en JWT; alinear con nombres IGF del select. */
+  useEffect(() => {
+    if (!token || dashboardRole !== "GV" || deltaForecastPlanta) return;
+    if (!igfForecast?.rows?.length) return;
+    const payload = decodeDashboardTokenPayload(token);
+    const raw = payload?.plantas_permitidas;
+    const ids = Array.isArray(raw) ? raw.map((x) => Number(x)).filter((n) => Number.isFinite(n)) : [];
+    const firstId = ids[0];
+    if (!firstId) return;
+    let cancelled = false;
+    fetchPlantas(token)
+      .then((d) => {
+        if (cancelled) return;
+        const p = d.plantas.find((x) => x.id === firstId);
+        if (!p?.nombre) return;
+        const emps = Array.from(
+          new Set(igfForecast.rows.map((r) => r.empresa?.trim()).filter(Boolean))
+        ) as string[];
+        const needle = p.nombre.toLowerCase();
+        const match =
+          emps.find((e) => e.toLowerCase().includes(needle)) ||
+          emps.find((e) => {
+            const tail = e.split("-").pop()?.trim().toLowerCase() ?? "";
+            return tail && (needle.includes(tail) || tail.includes(needle));
+          });
+        setDeltaForecastPlanta(match || p.nombre);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [token, dashboardRole, igfForecast, deltaForecastPlanta]);
 
   useEffect(() => {
     if (!token || !isGAPageBlocked) return;
@@ -427,6 +467,21 @@ function KpiContent() {
                   : "Excel con 3 hojas: Venta (Ton), Descuento ($/kg), Margen ($/kg) — últimos 30 días por cliente. Selecciona un botón de la tabla para exportar solo esa celda."}
               >
                 Descargar Excel (Cliente Forecast)
+              </a>
+            )}
+            {canDicfAcciones && token && (dashboardRole === "ZP" || !!deltaForecastPlanta) && (
+              <a
+                href={
+                  dashboardRole === "ZP"
+                    ? getDicfAccionesExcelUrl(token)
+                    : getDicfAccionesExcelUrl(token, deltaForecastPlanta)
+                }
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded bg-amber-800 px-4 py-2 text-sm font-medium text-amber-100 hover:bg-amber-700"
+                title="Exportar registro de acciones DICF (auditoría)"
+              >
+                Excel acciones DICF
               </a>
             )}
           </div>
@@ -916,6 +971,15 @@ function KpiContent() {
                     </div>
                   );
                 })()}
+                {token && deltaForecastPlanta && (
+                  <DicfAccionesClientePanel
+                    token={token}
+                    planta={deltaForecastPlanta}
+                    grupoLabel={deltaClienteSel.grupo}
+                    cliente={deltaClienteSel.cliente}
+                    canUse={!!canDicfAcciones}
+                  />
+                )}
                 <p>
                   Frecuencia estimada:{" "}
                   {deltaClienteSel.cliente.freqDays != null && deltaClienteSel.cliente.freqDays < 9000

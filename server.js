@@ -42,6 +42,7 @@ const deltaIngresoAiDb = require("./lib/delta-ingreso-ai-db");
 const deltaIngresoCommands = require("./lib/delta-ingreso-commands");
 const deltaIngresoForecast = require("./lib/delta-ingreso-forecast");
 const dicf = require("./lib/dicf");
+const dicfAccionesLib = require("./lib/dicf-acciones");
 
 const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
@@ -2346,6 +2347,7 @@ async function ensureArrSchema(client) {
       PRIMARY KEY (plant_code, year, month, cliente_norm)
     );
   `).catch(() => {});
+  await dicfAccionesLib.ensureDicfAccionesTables(client);
 }
 
 async function ensureSchema() {
@@ -4826,6 +4828,11 @@ async function sendWhatsApp(toPhone, body, meta = {}) {
   return { ok: false, error: result.errorMessage || result.errorCode || "Error desconocido" };
 }
 
+dicfAccionesLib.initDicfAcciones({
+  sendWhatsApp,
+  getDashboardBaseUrl: () => (process.env.DASHBOARD_URL || process.env.FRONTEND_URL || "").trim(),
+});
+
 async function notifyOnApprove(folio, aprobadoPor) {
   console.log(`[notifyOnApprove] ENTRADA folio=${folio && folio.numero_folio} planta_id=${folio && folio.planta_id} solo_zp_ad=${!!(folio && folio.solo_zp_ad)}`);
   if (!folio) {
@@ -5421,6 +5428,16 @@ function dashboardBlockGAFinancialKpis(req, res) {
   const roleNorm = req.dashboardAuth && req.dashboardAuth.role ? String(req.dashboardAuth.role).toUpperCase() : "";
   if (roleNorm === "GA") {
     res.status(403).json({ error: "GA no tiene acceso a KPIs financieros." });
+    return true;
+  }
+  return false;
+}
+
+/** Acciones DICF (registro, compromiso, WhatsApp): solo ZP, GG, GV. */
+function dashboardBlockDicfAccionesRole(req, res) {
+  if (dashboardBlockGAFinancialKpis(req, res)) return true;
+  if (!dicfAccionesLib.isDicfAccionesRole(req.dashboardAuth)) {
+    res.status(403).json({ error: "Solo Director ZP, GG o GV pueden usar acciones DICF." });
     return true;
   }
   return false;
@@ -8840,6 +8857,201 @@ app.post("/api/dashboard/dicf-config", dashboardAuthMiddleware, async (req, res)
   }
 });
 
+/** Clave estable cliente DICF (planta + grupo + canal + subcanal + nombre). */
+app.post("/api/dashboard/dicf-acciones/cliente-key", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockDicfAccionesRole(req, res)) return;
+  const { planta, grupo_tipo, canal, subcanal, cliente_nombre } = req.body || {};
+  if (!planta || !grupo_tipo || !cliente_nombre) {
+    return res.status(400).json({ error: "Faltan planta, grupo_tipo o cliente_nombre" });
+  }
+  const client = await pool.connect();
+  try {
+    const raw = await dicfAccionesLib.resolvePlantaId(client, String(planta).trim());
+    if (!raw) return res.status(400).json({ error: "Planta no encontrada" });
+    const canon = dicfAccionesLib.getCanonicalPlantaId(raw);
+    if (!dicfAccionesLib.assertPlantaAcceso(req.dashboardAuth, canon)) {
+      return res.status(403).json({ error: "Sin acceso a esta planta" });
+    }
+    const key = dicfAccionesLib.buildClienteKey(canon, grupo_tipo, canal, subcanal, cliente_nombre);
+    res.json({ cliente_key: key });
+  } catch (e) {
+    console.error("[dicf-acciones cliente-key]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+app.get("/api/dashboard/dicf-acciones/asignables", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockDicfAccionesRole(req, res)) return;
+  const planta = (req.query.planta || "").toString().trim();
+  if (!planta) return res.status(400).json({ error: "Falta planta" });
+  const client = await pool.connect();
+  try {
+    const raw = await dicfAccionesLib.resolvePlantaId(client, planta);
+    if (!raw) return res.status(400).json({ error: "Planta no encontrada" });
+    const canon = dicfAccionesLib.getCanonicalPlantaId(raw);
+    if (!dicfAccionesLib.assertPlantaAcceso(req.dashboardAuth, canon)) {
+      return res.status(403).json({ error: "Sin acceso a esta planta" });
+    }
+    const out = await dicfAccionesLib.listAssignableUsers(client, planta);
+    if (out.error) return res.status(400).json({ error: out.error });
+    res.json(out);
+  } catch (e) {
+    console.error("[dicf-acciones asignables]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+app.get("/api/dashboard/dicf-acciones", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockDicfAccionesRole(req, res)) return;
+  const client = await pool.connect();
+  try {
+    const out = await dicfAccionesLib.listAcciones(client, req.dashboardAuth, req.query || {});
+    if (out.error) return res.status(400).json({ error: out.error });
+    res.json(out);
+  } catch (e) {
+    console.error("[dicf-acciones list]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+app.post("/api/dashboard/dicf-acciones", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockDicfAccionesRole(req, res)) return;
+  const client = await pool.connect();
+  try {
+    const out = await dicfAccionesLib.createAccion(client, req.dashboardAuth, req.body || {});
+    if (out.error) return res.status(400).json({ error: out.error });
+    res.status(201).json(out);
+  } catch (e) {
+    console.error("[dicf-acciones create]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+app.get("/api/dashboard/dicf-acciones/:id/historial", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockDicfAccionesRole(req, res)) return;
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: "ID inválido" });
+  const client = await pool.connect();
+  try {
+    const out = await dicfAccionesLib.getHistorial(client, req.dashboardAuth, id);
+    if (out.error) return res.status(404).json({ error: out.error });
+    res.json(out);
+  } catch (e) {
+    console.error("[dicf-acciones historial]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+app.patch("/api/dashboard/dicf-acciones/:id/compromiso", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockDicfAccionesRole(req, res)) return;
+  const id = parseInt(req.params.id, 10);
+  const fecha = (req.body && req.body.fecha_compromiso) || "";
+  if (!Number.isFinite(id)) return res.status(400).json({ error: "ID inválido" });
+  const client = await pool.connect();
+  try {
+    const out = await dicfAccionesLib.setFechaCompromiso(client, req.dashboardAuth, id, fecha, null);
+    if (out.error) return res.status(400).json({ error: out.error });
+    res.json(out);
+  } catch (e) {
+    console.error("[dicf-acciones compromiso]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+app.patch("/api/dashboard/dicf-acciones/:id/cerrar", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockDicfAccionesRole(req, res)) return;
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: "ID inválido" });
+  const client = await pool.connect();
+  try {
+    const out = await dicfAccionesLib.cerrarAccion(client, req.dashboardAuth, id);
+    if (out.error) return res.status(400).json({ error: out.error });
+    res.json(out);
+  } catch (e) {
+    console.error("[dicf-acciones cerrar]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+app.get("/api/dashboard/dicf-acciones-excel", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockDicfAccionesRole(req, res)) return;
+  const planta = (req.query.planta || "").toString().trim();
+  const client = await pool.connect();
+  try {
+    const out = await dicfAccionesLib.exportExcelRows(client, req.dashboardAuth, planta);
+    if (out.error) return res.status(400).json({ error: out.error });
+    const rows = out.rows || [];
+    const aoa = [
+      [
+        "id",
+        "public_code",
+        "planta",
+        "grupo_tipo",
+        "canal",
+        "subcanal",
+        "cliente",
+        "descripcion",
+        "estado",
+        "compromiso_deadline_at",
+        "fecha_compromiso",
+        "compromiso_tarde",
+        "created_at",
+        "cerrado_at",
+        "responsable",
+        "creador",
+        "cerrado_por",
+        "notify_error",
+      ],
+      ...rows.map((r) => [
+        r.id,
+        r.public_code,
+        r.planta_label,
+        r.grupo_tipo,
+        r.canal,
+        r.subcanal,
+        r.cliente_nombre,
+        r.descripcion,
+        r.estado,
+        r.compromiso_deadline_at ? new Date(r.compromiso_deadline_at).toISOString() : "",
+        r.fecha_compromiso || "",
+        r.compromiso_tarde ? "Sí" : "No",
+        r.created_at ? new Date(r.created_at).toISOString() : "",
+        r.cerrado_at ? new Date(r.cerrado_at).toISOString() : "",
+        r.responsable || "",
+        r.creador || "",
+        r.cerrado_por || "",
+        r.notify_error || "",
+      ]),
+    ];
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    XLSX.utils.book_append_sheet(wb, ws, "Acciones DICF");
+    const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", "attachment; filename=\"dicf_acciones.xlsx\"");
+    res.send(buf);
+  } catch (e) {
+    console.error("[dicf-acciones excel]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
 /** Excel Delta Ingreso Forecast: una hoja por categoría (dejaron, nuevos, aumentaron, disminuyeron) y resumen por canal/subcanal. */
 app.get("/api/dashboard/delta-ingreso-forecast-excel", dashboardAuthMiddleware, async (req, res) => {
   if (dashboardBlockGAFinancialKpis(req, res)) return;
@@ -9280,6 +9492,11 @@ app.post("/twilio/whatsapp", async (req, res) => {
         console.warn("getActorByPhone error:", e.message);
       }
 
+      if (/^COMPROMISO\s+/i.test(textTrim)) {
+        const cw = await dicfAccionesLib.handleCompromisoWhatsApp(client, actor, textTrim);
+        if (cw.handled) return safeReply(cw.reply || "Listo.");
+      }
+
       const helpMsg = getHelpForInput(body.trim(), actor);
       if (helpMsg) return safeReply(helpMsg);
 
@@ -9428,7 +9645,8 @@ app.post("/twilio/whatsapp", async (req, res) => {
           const esAD = rolClave === "AD" || (/asistente/.test(rolNormNombre) && /direccion/.test(rolNormNombre)) || (/asistente/.test(nombreUsuarioNorm) && /direccion/.test(nombreUsuarioNorm));
           const esCFCDMX = rolClave === "CF_CDMX" || (/contralor/.test(rolNormNombre) && /cdmx/.test(rolNormNombre)) || (/contralor/.test(nombreUsuarioNorm) && /cdmx/.test(nombreUsuarioNorm));
           const esGA = rolClave === "GA";
-          const role = esZP ? "ZP" : esAD ? "AD" : esCFCDMX ? "CF_CDMX" : esGA ? "GA" : "GG";
+          const esGV = rolClave === "GV";
+          const role = esZP ? "ZP" : esAD ? "AD" : esCFCDMX ? "CF_CDMX" : esGA ? "GA" : esGV ? "GV" : "GG";
           let plantasPermitidas = [];
           if (esZP || esAD || esCFCDMX) {
             const plantas = await getPlantas(client);
