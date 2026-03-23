@@ -798,6 +798,20 @@ function KpiContent() {
               if (!rowF) return <p className="text-sm text-slate-500">No hay datos de forecast para esta planta.</p>;
               const n = (v: unknown): number => (v != null && !Number.isNaN(Number(v)) ? Number(v) : 0);
               const delta = (a: number | null | undefined, b: number | null | undefined) => n(a) - n(b);
+              const adjustedForecastValue = (row: IgfForecastRow, key: string): number => {
+                const r = row as Record<string, unknown>;
+                const ventaKg = n(r.venta_ton as number | null | undefined) * 1000;
+                if (key === "inversiones_kg") return n(getInversionesKgWithCdjz(row));
+                if (key === "resultado_final_importe") return getResultadoFinalImporteWithCdjz(row);
+                if (key === "resultado_final_kg") {
+                  if (ventaKg > 0) return getResultadoFinalImporteWithCdjz(row) / ventaKg;
+                  const baseInvKg = n(r.inversiones_kg as number | null | undefined);
+                  const adjInvKg = n(getInversionesKgWithCdjz(row));
+                  const deltaInvCostKg = Math.abs(adjInvKg) - Math.abs(baseInvKg);
+                  return n(r.resultado_final_kg as number | null | undefined) - deltaInvCostKg;
+                }
+                return n(r[key] as number | null | undefined);
+              };
               type Col = { key: string; label: string; fmt: (v: number) => string; isPct?: boolean };
               const cols: Col[] = [
                 { key: "empresa", label: "Empresa", fmt: () => "" },
@@ -836,6 +850,10 @@ function KpiContent() {
                   if (c.key === "util_oper_kg") return fmtNum(utilKg);
                   return fmtNum(utilKg * n((row as Record<string, unknown>).venta_ton as number | null | undefined) * 1000, 0);
                 }
+                if (row === rowF && (c.key === "inversiones_kg" || c.key === "resultado_final_kg" || c.key === "resultado_final_importe")) {
+                  const vAdj = adjustedForecastValue(row, c.key);
+                  return fmtNum(vAdj, c.key.includes("importe") ? 0 : 2);
+                }
                 const v = (row as Record<string, unknown>)[c.key];
                 if (c.isPct && v != null) return (Number(v) * 100).toFixed(1);
                 return fmtNum(v as number | null ?? null, c.key.includes("importe") || c.key === "util_oper_importe" || c.key === "resultado_final_importe" ? 0 : 2);
@@ -844,7 +862,11 @@ function KpiContent() {
               const utilOperImporteA = rowA ? utilOperKgA * n((rowA as Record<string, unknown>).venta_ton as number | null | undefined) * 1000 : 0;
               const cellDeltaNum = (c: Col): number | null => {
                 if (c.key === "empresa" || !rowA) return null;
-                const vF = c.key === "gasto_kg" ? gastoKgFromFour(rowF) : (rowF as Record<string, unknown>)[c.key] as number | null | undefined;
+                const vF = c.key === "gasto_kg"
+                  ? gastoKgFromFour(rowF)
+                  : (c.key === "inversiones_kg" || c.key === "resultado_final_kg" || c.key === "resultado_final_importe")
+                  ? adjustedForecastValue(rowF, c.key)
+                  : (rowF as Record<string, unknown>)[c.key] as number | null | undefined;
                 const vA = c.key === "util_oper_kg" ? utilOperKgA : c.key === "util_oper_importe" ? utilOperImporteA : c.key === "gasto_kg" ? gastoKgFromFour(rowA) : (rowA as Record<string, unknown>)[c.key] as number | null | undefined;
                 return c.isPct ? (n(vF) - n(vA)) * 100 : delta(vF, vA);
               };
@@ -855,7 +877,9 @@ function KpiContent() {
                 if (c.key === "empresa" || !rowA) return null;
                 if (c.key === "hg_pct") return null;
                 if (c.key === "util_oper_kg") return null;
-                const vF = (rowF as Record<string, unknown>)[c.key] as number | null | undefined;
+                const vF = (c.key === "inversiones_kg" || c.key === "resultado_final_kg" || c.key === "resultado_final_importe")
+                  ? adjustedForecastValue(rowF, c.key)
+                  : (rowF as Record<string, unknown>)[c.key] as number | null | undefined;
                 const vA = (rowA as Record<string, unknown>)[c.key] as number | null | undefined;
                 if (c.key === "venta_ton") {
                   const utilOperF = n((rowF as Record<string, unknown>).util_oper_kg as number | null | undefined);
