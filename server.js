@@ -43,6 +43,7 @@ const deltaIngresoCommands = require("./lib/delta-ingreso-commands");
 const deltaIngresoForecast = require("./lib/delta-ingreso-forecast");
 const dicf = require("./lib/dicf");
 const dicfAccionesLib = require("./lib/dicf-acciones");
+const { isDirectorZPForDashboard } = require("./lib/dashboard-es-zp");
 
 const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
@@ -3371,7 +3372,7 @@ async function insertFolio(client, dd) {
 
   const rolClave = dd.actor_clave ? String(dd.actor_clave).toUpperCase() : "";
   const rolNombre = dd.actor_rol ? String(dd.actor_rol) : "";
-  const esZP = rolClave === "ZP" || (/director/i.test(rolNombre) && /zp/i.test(rolNombre));
+  const esZP = isDirectorZPForDashboard(rolClave, rolNombre);
   const esCDMX = rolClave === "CDMX" || (rolNombre && rolNombre.toUpperCase().includes("CDMX"));
   const esAD = rolClave === "AD" || (/asistente/i.test(rolNombre) && /direccion/i.test(rolNombre.replace(/ó/g, "o")));
   const estatusInicial = esZP ? ESTADOS.LISTO_PARA_PROGRAMACION : (esAD ? ESTADOS.PENDIENTE_APROB_ZP : ESTADOS.PENDIENTE_APROB_PLANTA);
@@ -4833,7 +4834,7 @@ async function buildDicfNotifDashboardUrls(client, usuarioRow, accionMeta) {
   if (!usuarioRow || usuarioRow.id == null) return { kpi: "", folios: "", accion: "" };
   const rolClave = (usuarioRow.rol_clave && String(usuarioRow.rol_clave).toUpperCase()) || "";
   const rolNom = (usuarioRow.rol_nombre && String(usuarioRow.rol_nombre)) || "";
-  const esZP = rolClave === "ZP" || (rolNom && /director/i.test(rolNom) && /zp/i.test(rolNom));
+  const esZP = isDirectorZPForDashboard(rolClave, rolNom);
   const normalizarParaAD = (s) => (s || "").toLowerCase().normalize("NFD").replace(/\p{M}/gu, "").replace(/[\s\u00a0]+/g, " ").trim();
   const rolNormNombre = normalizarParaAD(rolNom);
   const nombreUsuarioNorm = normalizarParaAD(usuarioRow.nombre || "");
@@ -9727,7 +9728,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
           const subcmd = (matchDashboardEarly[2] || "").toLowerCase();
           const rolClave = (actor.rol_clave && String(actor.rol_clave).toUpperCase()) || "";
           const rolNom = (actor.rol_nombre && String(actor.rol_nombre)) || "";
-          const esZP = rolClave === "ZP" || (rolNom && /director/i.test(rolNom) && /zp/i.test(rolNom));
+          const esZP = isDirectorZPForDashboard(rolClave, rolNom);
           const normalizarParaAD = (s) => (s || "").toLowerCase().normalize("NFD").replace(/\p{M}/gu, "").replace(/[\s\u00a0]+/g, " ").trim();
           const rolNormNombre = normalizarParaAD(rolNom);
           const nombreUsuarioNorm = normalizarParaAD(actor.nombre);
@@ -10645,7 +10646,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
         if (!actor) return safeReply("No estás dado de alta. Contacta al administrador.");
         const rolClave = (actor.rol_clave && String(actor.rol_clave).toUpperCase()) || "";
         const rolNom = (actor.rol_nombre && String(actor.rol_nombre)) || "";
-        const esZP = rolClave === "ZP" || (rolNom && /director/i.test(rolNom) && /zp/i.test(rolNom));
+        const esZP = isDirectorZPForDashboard(rolClave, rolNom);
         const esCFCDMX = rolClave === "CF_CDMX" || (/contralor/i.test(rolNom) && /cdmx/i.test(rolNom));
         const esGA = rolClave === "GA";
         const esGG = rolClave === "GG";
@@ -11011,7 +11012,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
       }
 
       const rolClave = (actor && actor.rol_clave) ? String(actor.rol_clave).toUpperCase() : "";
-      const esZP = rolClave === "ZP" || (actor && actor.rol_nombre && /director/i.test(actor.rol_nombre) && /zp/i.test(actor.rol_nombre));
+      const esZP = isDirectorZPForDashboard(rolClave, actor && actor.rol_nombre);
 
       if (/^(debug\s+twilio|debug twilio)$/i.test(body.trim())) {
         if (!esZP) return safeReply("Solo Director ZP puede usar: debug twilio");
@@ -11522,7 +11523,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
         const codigoNorm = await resolveProyectoCodigo(client, codigo);
         if (!codigoNorm) return safeReply("Formato: aprobar proyecto PRJ-YYYYMM-XXX");
         const rolClave = (actor && actor.rol_clave) ? String(actor.rol_clave).toUpperCase() : "";
-        const esZP = rolClave === "ZP" || (actor && actor.rol_nombre && /director/i.test(actor.rol_nombre) && /zp/i.test(actor.rol_nombre));
+        const esZP = isDirectorZPForDashboard(rolClave, actor && actor.rol_nombre);
         if (!esZP) return safeReply("Solo el Director ZP puede aprobar proyectos.");
         const proy = await getProyectoByCodigo(client, codigoNorm);
         if (!proy) return safeReply(`No existe el proyecto ${codigoNorm}.`);
@@ -11555,7 +11556,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
         const codigoNorm = await resolveProyectoCodigo(client, codigo);
         if (!codigoNorm) return safeReply("Formato: cerrar proyecto PRJ-YYYYMM-XXX");
         const rolClave = (actor && actor.rol_clave) ? String(actor.rol_clave).toUpperCase() : "";
-        const esZP = rolClave === "ZP" || (actor && actor.rol_nombre && /director/i.test(actor.rol_nombre) && /zp/i.test(actor.rol_nombre));
+        const esZP = isDirectorZPForDashboard(rolClave, actor && actor.rol_nombre);
         if (!esZP) return safeReply("Solo el Director ZP puede cerrar proyectos.");
         const proy = await getProyectoByCodigo(client, codigoNorm);
         if (!proy) return safeReply(`No existe el proyecto ${codigoNorm}.`);
@@ -11598,7 +11599,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
         const proy = await getProyectoById(client, pend.proyecto_id);
         if (!proy || proy.estatus !== ESTADOS_PROYECTO.EN_CURSO) return safeReply("El proyecto ya no está EN_CURSO.");
         const rolClave = (actor && actor.rol_clave) ? String(actor.rol_clave).toUpperCase() : "";
-        const esZP = rolClave === "ZP" || (actor && actor.rol_nombre && /director/i.test(actor.rol_nombre) && /zp/i.test(actor.rol_nombre));
+        const esZP = isDirectorZPForDashboard(rolClave, actor && actor.rol_nombre);
         if (!esZP) return safeReply("Solo ZP puede confirmar el cierre.");
         await updateProyectoCerrado(client, proy.id);
         await insertProyectoHistorial(client, proy.id, "CERRADO", "Proyecto cerrado por ZP (confirmado)", fromNorm, actor ? actor.rol_nombre : null);
@@ -11647,7 +11648,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
         const codigoNorm = await resolveProyectoCodigo(client, codigo);
         if (!codigoNorm) return safeReply("Formato: confirmar cancelacion proyecto PRJ-YYYYMM-XXX");
         const rolClave = (actor && actor.rol_clave) ? String(actor.rol_clave).toUpperCase() : "";
-        const esZP = rolClave === "ZP" || (actor && actor.rol_nombre && /director/i.test(actor.rol_nombre) && /zp/i.test(actor.rol_nombre));
+        const esZP = isDirectorZPForDashboard(rolClave, actor && actor.rol_nombre);
         if (!esZP) return safeReply("Solo el Director ZP puede confirmar la cancelación del proyecto.");
         const proy = await getProyectoByCodigo(client, codigoNorm);
         if (!proy) return safeReply(`No existe el proyecto ${codigoNorm}.`);
@@ -12474,7 +12475,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
         if (!actor) return safeReply("No autorizado. No se pudo identificar tu usuario.");
         const rolClave = (actor.rol_clave || "").toUpperCase();
         const esGG = rolClave === "GG" || (actor.rol_nombre && String(actor.rol_nombre).toUpperCase().includes("GG"));
-        const esZP = rolClave === "ZP" || (actor.rol_nombre && /director/i.test(actor.rol_nombre) && /zp/i.test(actor.rol_nombre));
+        const esZP = isDirectorZPForDashboard(rolClave, actor.rol_nombre);
 
         if (folios.length === 0 && invalidTokens.length === 0) return safeReply("Indica al menos un folio. Ejemplo: aprobar 001 002 o aprobar F-202602-001");
 
@@ -12647,7 +12648,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
         if (!numero || !motivoOverride) return safeReply('Formato: aprobar_override F-YYYYMM-XXX motivo: <texto>');
         if (!actor) return safeReply("No autorizado.");
         const rolClave = (actor.rol_clave || "").toUpperCase();
-        const esZP = rolClave === "ZP" || (actor.rol_nombre && /director/i.test(actor.rol_nombre) && /zp/i.test(actor.rol_nombre));
+        const esZP = isDirectorZPForDashboard(rolClave, actor.rol_nombre);
         if (!esZP) return safeReply("Solo el Director ZP puede usar aprobar_override.");
         const folio = await getFolioByNumero(client, numero);
         if (!folio) return safeReply(`No existe el folio ${numero}.`);
@@ -12846,7 +12847,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
         const numero = body.replace(/^autorizar\s+cancelacion\s+/i, "").trim();
         if (!actor) return safeReply("No autorizado.");
         const rolClave = (actor.rol_clave || "").toUpperCase();
-        const esZP = rolClave === "ZP" || (actor.rol_nombre && /director/i.test(actor.rol_nombre) && /zp/i.test(actor.rol_nombre));
+        const esZP = isDirectorZPForDashboard(rolClave, actor.rol_nombre);
         if (!esZP) return safeReply("Solo el Director ZP puede autorizar la cancelación.");
         const folio = await getFolioByNumero(client, numero);
         if (!folio) return safeReply(`No existe el folio ${numero}.`);
@@ -12878,7 +12879,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
         if (!numero || !motivoRechazo) return safeReply('Formato: rechazar cancelacion F-YYYYMM-XXX motivo: <texto>');
         if (!actor) return safeReply("No autorizado.");
         const rolClave = (actor.rol_clave || "").toUpperCase();
-        const esZP = rolClave === "ZP" || (actor.rol_nombre && /director/i.test(actor.rol_nombre) && /zp/i.test(actor.rol_nombre));
+        const esZP = isDirectorZPForDashboard(rolClave, actor.rol_nombre);
         if (!esZP) return safeReply("Solo el Director ZP puede rechazar la cancelación.");
         const folio = await getFolioByNumero(client, numero);
         if (!folio) return safeReply(`No existe el folio ${numero}.`);
