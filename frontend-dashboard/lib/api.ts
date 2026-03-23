@@ -145,6 +145,12 @@ export interface IgfForecastRow {
   inversiones_kg?: number | null;
   resultado_final_kg?: number | null;
   resultado_final_importe?: number | null;
+  /** Valores IGF crudos (última versión cargada) antes del recálculo en servidor; usados en comparación "mes anterior". */
+  util_oper_kg_igf?: number | null;
+  util_oper_importe_igf?: number | null;
+  resultado_final_kg_igf?: number | null;
+  resultado_final_importe_igf?: number | null;
+  gasto_kg_igf?: number | null;
   [k: string]: string | number | null | undefined;
 }
 

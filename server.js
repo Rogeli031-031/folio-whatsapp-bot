@@ -6124,6 +6124,13 @@ async function buildIgfForecastPayload(client, year, month) {
       }
     }
     for (const row of rows) {
+      // Valores tal como vienen del último IGF cargado (compromiso_lines), antes de recalcular con folios/presupuesto/forecast.
+      // La comparación "IGF mes anterior" en KPI usa estos campos para util. oper. y resultado.
+      row.util_oper_kg_igf = row.util_oper_kg != null ? Number(row.util_oper_kg) : null;
+      row.util_oper_importe_igf = row.util_oper_importe != null ? Number(row.util_oper_importe) : null;
+      row.resultado_final_kg_igf = row.resultado_final_kg != null ? Number(row.resultado_final_kg) : null;
+      row.resultado_final_importe_igf = row.resultado_final_importe != null ? Number(row.resultado_final_importe) : null;
+
       const plantaIdsRow = resolvePlantaIdsForRow(row.empresa);
       const ventaKg = (row.venta_ton != null ? Number(row.venta_ton) : 0) * 1000;
       const totalPresupuesto = plantaIdsRow.reduce((s, id) => s + (presupuestoByPlanta.get(id) || 0), 0);
