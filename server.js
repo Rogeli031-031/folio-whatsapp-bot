@@ -4829,8 +4829,8 @@ async function sendWhatsApp(toPhone, body, meta = {}) {
 }
 
 /** Enlaces con JWT real para notificación DICF (antes se enviaba ?t=<tu_token> literal). */
-async function buildDicfNotifDashboardUrls(client, usuarioRow) {
-  if (!usuarioRow || usuarioRow.id == null) return { kpi: "", folios: "" };
+async function buildDicfNotifDashboardUrls(client, usuarioRow, accionMeta) {
+  if (!usuarioRow || usuarioRow.id == null) return { kpi: "", folios: "", accion: "" };
   const rolClave = (usuarioRow.rol_clave && String(usuarioRow.rol_clave).toUpperCase()) || "";
   const rolNom = (usuarioRow.rol_nombre && String(usuarioRow.rol_nombre)) || "";
   const esZP = rolClave === "ZP" || (rolNom && /director/i.test(rolNom) && /zp/i.test(rolNom));
@@ -4862,9 +4862,14 @@ async function buildDicfNotifDashboardUrls(client, usuarioRow) {
     default_filters: {},
   });
   const base = (process.env.DASHBOARD_URL || process.env.FRONTEND_URL || "").trim().replace(/\/$/, "");
-  if (!base) return { kpi: "", folios: "" };
+  if (!base) return { kpi: "", folios: "", accion: "" };
   const enc = encodeURIComponent(token);
+  const codigo =
+    accionMeta && accionMeta.public_code != null ? String(accionMeta.public_code).trim() : "";
+  const accion =
+    codigo !== "" ? `${base}/dicf-accion?t=${enc}&codigo=${encodeURIComponent(codigo)}` : "";
   return {
+    accion,
     kpi: `${base}/?t=${enc}`,
     folios: `${base}/dashboard?t=${enc}`,
   };
@@ -8963,6 +8968,26 @@ app.get("/api/dashboard/dicf-acciones", dashboardAuthMiddleware, async (req, res
   }
 });
 
+app.get("/api/dashboard/dicf-acciones/lookup", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockDicfAccionesRole(req, res)) return;
+  const public_code = (req.query.public_code || req.query.codigo || "").toString().trim();
+  if (!public_code) return res.status(400).json({ error: "Falta public_code" });
+  const client = await pool.connect();
+  try {
+    const out = await dicfAccionesLib.lookupAccionPorPublicCode(client, req.dashboardAuth, public_code);
+    if (out.error) {
+      const st = out.error === "Acción no encontrada" ? 404 : out.error === "Sin acceso" ? 403 : 400;
+      return res.status(st).json({ error: out.error });
+    }
+    res.json(out);
+  } catch (e) {
+    console.error("[dicf-acciones lookup]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
 app.post("/api/dashboard/dicf-acciones", dashboardAuthMiddleware, async (req, res) => {
   if (dashboardBlockDicfAccionesRole(req, res)) return;
   const client = await pool.connect();
@@ -9019,7 +9044,11 @@ app.patch("/api/dashboard/dicf-acciones/:id/cerrar", dashboardAuthMiddleware, as
   if (!Number.isFinite(id)) return res.status(400).json({ error: "ID inválido" });
   const client = await pool.connect();
   try {
-    const out = await dicfAccionesLib.cerrarAccion(client, req.dashboardAuth, id);
+    const resultado =
+      (req.body && (req.body.resultado ?? req.body.resultado_cierre)) != null
+        ? String(req.body.resultado ?? req.body.resultado_cierre)
+        : "";
+    const out = await dicfAccionesLib.cerrarAccion(client, req.dashboardAuth, id, resultado);
     if (out.error) return res.status(400).json({ error: out.error });
     res.json(out);
   } catch (e) {
@@ -9054,6 +9083,7 @@ app.get("/api/dashboard/dicf-acciones-excel", dashboardAuthMiddleware, async (re
         "compromiso_tarde",
         "created_at",
         "cerrado_at",
+        "resultado_cierre",
         "responsable",
         "creador",
         "cerrado_por",
@@ -9074,6 +9104,7 @@ app.get("/api/dashboard/dicf-acciones-excel", dashboardAuthMiddleware, async (re
         r.compromiso_tarde ? "Sí" : "No",
         r.created_at ? new Date(r.created_at).toISOString() : "",
         r.cerrado_at ? new Date(r.cerrado_at).toISOString() : "",
+        r.resultado_cierre || "",
         r.responsable || "",
         r.creador || "",
         r.cerrado_por || "",
@@ -9542,6 +9573,16 @@ app.post("/twilio/whatsapp", async (req, res) => {
         } catch (e) {
           console.warn("[DICF COMPROMISO]", e.message);
           return safeReply("No pude registrar el compromiso. Intenta de nuevo o usa el dashboard.");
+        }
+      }
+
+      if (/^DICF\s+CERRAR\s+/i.test(textTrim)) {
+        try {
+          const cw = await dicfAccionesLib.handleCerrarDicfWhatsApp(client, actor, textTrim);
+          if (cw.handled) return safeReply(cw.reply || "Listo.");
+        } catch (e) {
+          console.warn("[DICF CERRAR]", e.message);
+          return safeReply("No pude cerrar la acción. Intenta de nuevo o usa el dashboard.");
         }
       }
 

@@ -739,6 +739,7 @@ export interface DicfAccionRow {
   fecha_compromiso: string | null;
   compromiso_tarde: boolean;
   cerrado_at: string | null;
+  resultado_cierre?: string | null;
   responsable_nombre?: string | null;
   creador_nombre?: string | null;
   cerrado_por_nombre?: string | null;
@@ -761,6 +762,16 @@ export function fetchDicfAccionesAsignables(
   planta: string
 ): Promise<{ usuarios: { id: number; nombre: string; telefono?: string; rol_clave: string }[] }> {
   return apiFetch("/api/dashboard/dicf-acciones/asignables", { token, params: { planta } });
+}
+
+export function fetchDicfAccionLookup(
+  token: string,
+  publicCode: string
+): Promise<{ accion: DicfAccionRow }> {
+  return apiFetch("/api/dashboard/dicf-acciones/lookup", {
+    token,
+    params: { public_code: publicCode.trim() },
+  });
 }
 
 export function fetchDicfAccionesList(
@@ -811,11 +822,15 @@ export function patchDicfAccionCompromiso(
   });
 }
 
-export function patchDicfAccionCerrar(token: string, accionId: number): Promise<{ ok?: boolean; error?: string }> {
+export function patchDicfAccionCerrar(
+  token: string,
+  accionId: number,
+  resultado: string
+): Promise<{ ok?: boolean; error?: string; accion?: DicfAccionRow }> {
   return apiFetch(`/api/dashboard/dicf-acciones/${accionId}/cerrar`, {
     token,
     method: "PATCH",
-    body: JSON.stringify({}),
+    body: JSON.stringify({ resultado: resultado.trim() }),
   });
 }
 

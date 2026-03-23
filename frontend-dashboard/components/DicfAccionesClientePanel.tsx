@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import type { DeltaIngresoForecastCliente } from "@/lib/api";
 import {
   fetchDicfAccionesAsignables,
@@ -12,6 +12,8 @@ import {
   postDicfAccionesClienteKey,
   type DicfAccionRow,
 } from "@/lib/api";
+
+const MIN_RESULTADO_CIERRE = 20;
 
 const PLANTILLAS: { label: string; texto: string }[] = [
   { label: "Perdido: contacto recuperación", texto: "Llamar al cliente para ofrecer condiciones de reactivación y causa de baja." },
@@ -56,6 +58,7 @@ export function DicfAccionesClientePanel(props: {
   const [fechaComp, setFechaComp] = useState("");
   const [histId, setHistId] = useState<number | null>(null);
   const [hist, setHist] = useState<{ evento: string; creado_en: string; actor_nombre?: string; detalle: unknown }[]>([]);
+  const [resultadoCierreDraft, setResultadoCierreDraft] = useState<Record<number, string>>({});
 
   const reload = useCallback(async () => {
     if (!planta || !clienteKey) return;
@@ -120,8 +123,10 @@ export function DicfAccionesClientePanel(props: {
     <div className="mt-4 rounded border border-amber-700/40 bg-slate-900/60 p-4">
       <h4 className="mb-2 text-base font-semibold text-amber-200">Registro de acciones (DICF)</h4>
       <p className="text-xs text-slate-500 mb-2">
-        Cada acción tiene responsable (GG/GV). Recibe aviso por WhatsApp. Define fecha compromiso en 3h (CDMX):{" "}
-        <code className="text-amber-200/90">COMPROMISO CÓDIGO AAAA-MM-DD</code>
+        Cada acción tiene responsable (GG/GV). Define fecha compromiso en 3h (CDMX):{" "}
+        <code className="text-amber-200/90">COMPROMISO CÓDIGO AAAA-MM-DD</code>. Para cerrar hay que registrar qué pasó (llamada,
+        respuesta del cliente, siguiente paso). WhatsApp:{" "}
+        <code className="text-amber-200/90">DICF CERRAR CÓDIGO tu texto…</code> (mín. {MIN_RESULTADO_CIERRE} caracteres).
       </p>
       {err && <p className="text-sm text-red-400 mb-2">{err}</p>}
       {clienteKey && <p className="text-[0.65rem] text-slate-600 mb-2 font-mono break-all">Clave: {clienteKey}</p>}
@@ -212,59 +217,97 @@ export function DicfAccionesClientePanel(props: {
           </thead>
           <tbody>
             {acciones.map((a) => (
-              <tr key={a.id} className="border-t border-slate-800">
-                <td className="py-1 px-2 font-mono text-amber-200/90">{a.public_code}</td>
-                <td className="py-1 px-2">{a.estado}</td>
-                <td className="py-1 px-2">{a.responsable_nombre || "—"}</td>
-                <td className="py-1 px-2 max-w-[12rem] truncate" title={a.descripcion}>
-                  {a.descripcion}
-                </td>
-                <td className="py-1 px-2 whitespace-nowrap">
-                  <button type="button" className="text-amber-400 hover:underline mr-2" onClick={() => setHistId(a.id)}>
-                    Historial
-                  </button>
-                  {a.estado !== "hecho" && (
-                    <>
-                      <input
-                        type="date"
-                        className="rounded border border-slate-600 bg-slate-800 text-[0.65rem] w-32 mr-1"
-                        value={fechaComp}
-                        onChange={(e) => setFechaComp(e.target.value)}
+              <Fragment key={a.id}>
+                <tr className="border-t border-slate-800">
+                  <td className="py-1 px-2 font-mono text-amber-200/90">{a.public_code}</td>
+                  <td className="py-1 px-2">{a.estado}</td>
+                  <td className="py-1 px-2">{a.responsable_nombre || "—"}</td>
+                  <td className="py-1 px-2 max-w-[12rem] truncate" title={a.descripcion}>
+                    {a.descripcion}
+                  </td>
+                  <td className="py-1 px-2 whitespace-nowrap align-top">
+                    <button type="button" className="text-amber-400 hover:underline mr-2" onClick={() => setHistId(a.id)}>
+                      Historial
+                    </button>
+                    {a.estado !== "hecho" && (
+                      <>
+                        <input
+                          type="date"
+                          className="rounded border border-slate-600 bg-slate-800 text-[0.65rem] w-32 mr-1"
+                          value={fechaComp}
+                          onChange={(e) => setFechaComp(e.target.value)}
+                        />
+                        <button
+                          type="button"
+                          className="text-emerald-400 hover:underline mr-2"
+                          onClick={async () => {
+                            if (!fechaComp) return;
+                            try {
+                              await patchDicfAccionCompromiso(token, a.id, fechaComp);
+                              setFechaComp("");
+                              await reload();
+                            } catch (e: unknown) {
+                              setErr(e instanceof Error ? e.message : "Error");
+                            }
+                          }}
+                        >
+                          Compromiso
+                        </button>
+                      </>
+                    )}
+                  </td>
+                </tr>
+                {a.estado !== "hecho" && (
+                  <tr key={`${a.id}-res`} className="border-t border-slate-800/80 bg-slate-900/40">
+                    <td colSpan={5} className="py-2 px-2">
+                      <label className="block text-[0.65rem] text-slate-500 mb-1">
+                        Resultado antes de cerrar (obligatorio, mín. {MIN_RESULTADO_CIERRE} caracteres): qué hiciste, qué dijo el
+                        cliente, qué sigue…
+                      </label>
+                      <textarea
+                        className="w-full rounded border border-slate-600 bg-slate-800 px-2 py-1 text-xs text-slate-200 min-h-[3.5rem] mb-1"
+                        placeholder="Ej.: Llamé al contacto; acordó revisar propuesta el viernes. Siguiente: enviar cotización y llamada de seguimiento lunes."
+                        value={resultadoCierreDraft[a.id] ?? ""}
+                        onChange={(e) =>
+                          setResultadoCierreDraft((prev) => ({ ...prev, [a.id]: e.target.value }))
+                        }
                       />
                       <button
                         type="button"
-                        className="text-emerald-400 hover:underline mr-2"
+                        disabled={
+                          (resultadoCierreDraft[a.id] ?? "").trim().length < MIN_RESULTADO_CIERRE || !a.fecha_compromiso
+                        }
+                        className="text-slate-200 text-xs rounded border border-slate-500 px-2 py-1 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                        title={!a.fecha_compromiso ? "Primero registra fecha compromiso" : undefined}
                         onClick={async () => {
-                          if (!fechaComp) return;
+                          const txt = (resultadoCierreDraft[a.id] ?? "").trim();
+                          if (txt.length < MIN_RESULTADO_CIERRE) return;
                           try {
-                            await patchDicfAccionCompromiso(token, a.id, fechaComp);
-                            setFechaComp("");
+                            await patchDicfAccionCerrar(token, a.id, txt);
+                            setResultadoCierreDraft((prev) => {
+                              const n = { ...prev };
+                              delete n[a.id];
+                              return n;
+                            });
                             await reload();
                           } catch (e: unknown) {
                             setErr(e instanceof Error ? e.message : "Error");
                           }
                         }}
                       >
-                        Compromiso
+                        Cerrar acción
                       </button>
-                      <button
-                        type="button"
-                        className="text-slate-300 hover:underline"
-                        onClick={async () => {
-                          try {
-                            await patchDicfAccionCerrar(token, a.id);
-                            await reload();
-                          } catch (e: unknown) {
-                            setErr(e instanceof Error ? e.message : "Error");
-                          }
-                        }}
-                      >
-                        Cerrar
-                      </button>
-                    </>
-                  )}
-                </td>
-              </tr>
+                    </td>
+                  </tr>
+                )}
+                {a.estado === "hecho" && (a.resultado_cierre || "").trim() ? (
+                  <tr key={`${a.id}-done`} className="border-t border-slate-800/50">
+                    <td colSpan={5} className="py-1 px-2 text-[0.7rem] text-slate-400">
+                      <span className="text-slate-500">Resultado registrado:</span> {a.resultado_cierre}
+                    </td>
+                  </tr>
+                ) : null}
+              </Fragment>
             ))}
           </tbody>
         </table>
