@@ -6794,6 +6794,8 @@ app.get("/api/folios/:id/documento-folio", dashboardAuthMiddleware, async (req, 
     const s3TemplateKeyPueblaRaw = (process.env.FOLIO_TEMPLATE_S3_KEY_PUEBLA || process.env.FOLIO_PUE_TEMPLATE_S3_KEY || "").trim();
     // Soporte para env var nombrada en tu UI: FOLIO_TEH_TEMPLATE_S3_KEY
     const s3TemplateKeyTehuacanRaw = (process.env.FOLIO_TEMPLATE_S3_KEY_TEHUACAN || process.env.FOLIO_TEH_TEMPLATE_S3_KEY || "").trim();
+    // Soporte env UI: FOLIO_QUE_TEMPLATE_S3_KEY → Plantillas/formato-folio-Queretaro.pdf
+    const s3TemplateKeyQueretaroRaw = (process.env.FOLIO_TEMPLATE_S3_KEY_QUERETARO || process.env.FOLIO_QUE_TEMPLATE_S3_KEY || "").trim();
     const normalizeTemplateKey = (key) => {
       const k = (key || "").trim();
       if (!k) return "";
@@ -6801,10 +6803,12 @@ app.get("/api/folios/:id/documento-folio", dashboardAuthMiddleware, async (req, 
     };
     const s3TemplateKeyPuebla = normalizeTemplateKey(s3TemplateKeyPueblaRaw);
     const s3TemplateKeyTehuacan = normalizeTemplateKey(s3TemplateKeyTehuacanRaw);
+    const s3TemplateKeyQueretaro = normalizeTemplateKey(s3TemplateKeyQueretaroRaw);
     const isAcapulcoPlant = (codigoPlanta === "E9" || codigoPlanta === "E10");
     const isMorelosPlant = (codigoPlanta === "E15");
     const isPueblaPlant = (codigoPlanta === "E7");
     const isTehuacanPlant = (codigoPlanta === "E8");
+    const isQueretaroPlant = (codigoPlanta === "E12");
     let s3TemplateKey = s3TemplateKeyDefault;
 
     if (isAcapulcoPlant) {
@@ -6843,6 +6847,13 @@ app.get("/api/folios/:id/documento-folio", dashboardAuthMiddleware, async (req, 
         const derived = s3TemplateKeyDefault.replace(/formato-folio\.pdf$/i, "formato-folio-Tehuacan.pdf");
         if (derived && derived !== s3TemplateKeyDefault) s3TemplateKey = derived;
       }
+    } else if (isQueretaroPlant) {
+      if (s3TemplateKeyQueretaro) {
+        s3TemplateKey = s3TemplateKeyQueretaro;
+      } else {
+        const derived = s3TemplateKeyDefault.replace(/formato-folio\.pdf$/i, "formato-folio-Queretaro.pdf");
+        if (derived && derived !== s3TemplateKeyDefault) s3TemplateKey = derived;
+      }
     }
     let pdfBytes = null;
 
@@ -6854,7 +6865,7 @@ app.get("/api/folios/:id/documento-folio", dashboardAuthMiddleware, async (req, 
         } catch (e) {
           // Si para Acapulco derivamos una key diferente y falla (no existe),
           // regresamos al default para no romper la generación.
-          if ((isAcapulcoPlant || isMorelosPlant || isPueblaPlant || isTehuacanPlant) && s3TemplateKey !== s3TemplateKeyDefault) {
+          if ((isAcapulcoPlant || isMorelosPlant || isPueblaPlant || isTehuacanPlant || isQueretaroPlant) && s3TemplateKey !== s3TemplateKeyDefault) {
             console.warn("[documento-folio] No se pudo cargar plantilla (override), intentando default:", {
               overrideKey: s3TemplateKey,
               defaultKey: s3TemplateKeyDefault,
@@ -6862,6 +6873,7 @@ app.get("/api/folios/:id/documento-folio", dashboardAuthMiddleware, async (req, 
               isMorelosPlant,
               isPueblaPlant,
               isTehuacanPlant,
+              isQueretaroPlant,
               message: e?.message,
             });
             templateBuf = await getBufferFromS3(s3TemplateKeyDefault);
