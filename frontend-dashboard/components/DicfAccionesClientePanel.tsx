@@ -55,7 +55,8 @@ export function DicfAccionesClientePanel(props: {
   const [err, setErr] = useState<string | null>(null);
   const [desc, setDesc] = useState("");
   const [respId, setRespId] = useState<number | "">("");
-  const [fechaComp, setFechaComp] = useState("");
+  /** Fecha por acción (cada fila la suya; hay que pulsar «Registrar» para guardar en servidor). */
+  const [fechaCompPorAccion, setFechaCompPorAccion] = useState<Record<number, string>>({});
   const [histId, setHistId] = useState<number | null>(null);
   const [hist, setHist] = useState<{ evento: string; creado_en: string; actor_nombre?: string; detalle: unknown }[]>([]);
   const [resultadoCierreDraft, setResultadoCierreDraft] = useState<Record<number, string>>({});
@@ -123,10 +124,11 @@ export function DicfAccionesClientePanel(props: {
     <div className="mt-4 rounded border border-amber-700/40 bg-slate-900/60 p-4">
       <h4 className="mb-2 text-base font-semibold text-amber-200">Registro de acciones (DICF)</h4>
       <p className="text-xs text-slate-500 mb-2">
-        Cada acción tiene responsable (GG/GV). Define fecha compromiso en 3h (CDMX):{" "}
-        <code className="text-amber-200/90">COMPROMISO CÓDIGO AAAA-MM-DD</code>. Para cerrar hay que registrar qué pasó (llamada,
-        respuesta del cliente, siguiente paso). WhatsApp:{" "}
-        <code className="text-amber-200/90">DICF CERRAR CÓDIGO tu texto…</code> (mín. {MIN_RESULTADO_CIERRE} caracteres).
+        Cada acción tiene responsable (GG/GV). <strong className="text-slate-400">Orden:</strong> primero{" "}
+        <strong className="text-amber-200/90">registrar la fecha de compromiso</strong> (botón verde), luego escribir el resultado y{" "}
+        <strong className="text-amber-200/90">Cerrar acción</strong>. WhatsApp compromiso:{" "}
+        <code className="text-amber-200/90">COMPROMISO CÓDIGO AAAA-MM-DD</code>. Cerrar:{" "}
+        <code className="text-amber-200/90">DICF CERRAR CÓDIGO …</code> (mín. {MIN_RESULTADO_CIERRE} caracteres).
       </p>
       {err && <p className="text-sm text-red-400 mb-2">{err}</p>}
       {clienteKey && <p className="text-[0.65rem] text-slate-600 mb-2 font-mono break-all">Clave: {clienteKey}</p>}
@@ -229,74 +231,110 @@ export function DicfAccionesClientePanel(props: {
                     <button type="button" className="text-amber-400 hover:underline mr-2" onClick={() => setHistId(a.id)}>
                       Historial
                     </button>
-                    {a.estado !== "hecho" && (
-                      <>
-                        <input
-                          type="date"
-                          className="rounded border border-slate-600 bg-slate-800 text-[0.65rem] w-32 mr-1"
-                          value={fechaComp}
-                          onChange={(e) => setFechaComp(e.target.value)}
+                  </td>
+                </tr>
+                {a.estado !== "hecho" && (
+                  <tr key={`${a.id}-res`} className="border-t border-slate-800/80 bg-slate-900/40">
+                    <td colSpan={5} className="py-2 px-2 space-y-2">
+                      <div className="rounded-md border border-slate-600 bg-slate-800/60 p-2">
+                        <p className="text-[0.7rem] font-medium text-slate-300 mb-1">1) Fecha de compromiso</p>
+                        {a.fecha_compromiso ? (
+                          <p className="text-xs text-emerald-400">
+                            ✓ Registrada: <span className="font-mono">{a.fecha_compromiso}</span> (puedes cerrar abajo si ya
+                            escribiste el resultado)
+                          </p>
+                        ) : (
+                          <>
+                            <p className="text-[0.65rem] text-amber-200/90 mb-2">
+                              El calendario <strong>no guarda solo</strong>: elige fecha y pulsa{" "}
+                              <strong>Registrar compromiso</strong>. Sin eso, «Cerrar acción» sigue deshabilitado.
+                            </p>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <input
+                                type="date"
+                                className="rounded border border-slate-500 bg-slate-900 px-2 py-1 text-xs text-slate-200"
+                                value={fechaCompPorAccion[a.id] ?? ""}
+                                onChange={(e) =>
+                                  setFechaCompPorAccion((prev) => ({ ...prev, [a.id]: e.target.value }))
+                                }
+                              />
+                              <button
+                                type="button"
+                                disabled={!(fechaCompPorAccion[a.id] ?? "").trim()}
+                                className="rounded bg-emerald-700 px-3 py-1 text-xs font-medium text-white hover:bg-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed"
+                                onClick={async () => {
+                                  const f = (fechaCompPorAccion[a.id] ?? "").trim();
+                                  if (!f) return;
+                                  try {
+                                    await patchDicfAccionCompromiso(token, a.id, f);
+                                    setFechaCompPorAccion((prev) => {
+                                      const n = { ...prev };
+                                      delete n[a.id];
+                                      return n;
+                                    });
+                                    await reload();
+                                  } catch (e: unknown) {
+                                    setErr(e instanceof Error ? e.message : "Error");
+                                  }
+                                }}
+                              >
+                                Registrar compromiso
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-[0.65rem] text-slate-500 mb-1">
+                          2) Resultado antes de cerrar (mín. {MIN_RESULTADO_CIERRE} caracteres): qué hiciste, qué dijo el cliente,
+                          qué sigue…
+                        </label>
+                        <textarea
+                          className="w-full rounded border border-slate-600 bg-slate-800 px-2 py-1 text-xs text-slate-200 min-h-[3.5rem] mb-2"
+                          placeholder="Ej.: Llamé al contacto; acordó revisar propuesta el viernes. Siguiente: enviar cotización y llamada de seguimiento lunes."
+                          value={resultadoCierreDraft[a.id] ?? ""}
+                          onChange={(e) =>
+                            setResultadoCierreDraft((prev) => ({ ...prev, [a.id]: e.target.value }))
+                          }
                         />
+                      </div>
+
+                      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
                         <button
                           type="button"
-                          className="text-emerald-400 hover:underline mr-2"
+                          disabled={
+                            (resultadoCierreDraft[a.id] ?? "").trim().length < MIN_RESULTADO_CIERRE || !a.fecha_compromiso
+                          }
+                          className="rounded bg-amber-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed"
                           onClick={async () => {
-                            if (!fechaComp) return;
+                            const txt = (resultadoCierreDraft[a.id] ?? "").trim();
+                            if (txt.length < MIN_RESULTADO_CIERRE || !a.fecha_compromiso) return;
                             try {
-                              await patchDicfAccionCompromiso(token, a.id, fechaComp);
-                              setFechaComp("");
+                              await patchDicfAccionCerrar(token, a.id, txt);
+                              setResultadoCierreDraft((prev) => {
+                                const n = { ...prev };
+                                delete n[a.id];
+                                return n;
+                              });
                               await reload();
                             } catch (e: unknown) {
                               setErr(e instanceof Error ? e.message : "Error");
                             }
                           }}
                         >
-                          Compromiso
+                          3) Cerrar acción
                         </button>
-                      </>
-                    )}
-                  </td>
-                </tr>
-                {a.estado !== "hecho" && (
-                  <tr key={`${a.id}-res`} className="border-t border-slate-800/80 bg-slate-900/40">
-                    <td colSpan={5} className="py-2 px-2">
-                      <label className="block text-[0.65rem] text-slate-500 mb-1">
-                        Resultado antes de cerrar (obligatorio, mín. {MIN_RESULTADO_CIERRE} caracteres): qué hiciste, qué dijo el
-                        cliente, qué sigue…
-                      </label>
-                      <textarea
-                        className="w-full rounded border border-slate-600 bg-slate-800 px-2 py-1 text-xs text-slate-200 min-h-[3.5rem] mb-1"
-                        placeholder="Ej.: Llamé al contacto; acordó revisar propuesta el viernes. Siguiente: enviar cotización y llamada de seguimiento lunes."
-                        value={resultadoCierreDraft[a.id] ?? ""}
-                        onChange={(e) =>
-                          setResultadoCierreDraft((prev) => ({ ...prev, [a.id]: e.target.value }))
-                        }
-                      />
-                      <button
-                        type="button"
-                        disabled={
-                          (resultadoCierreDraft[a.id] ?? "").trim().length < MIN_RESULTADO_CIERRE || !a.fecha_compromiso
-                        }
-                        className="text-slate-200 text-xs rounded border border-slate-500 px-2 py-1 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                        title={!a.fecha_compromiso ? "Primero registra fecha compromiso" : undefined}
-                        onClick={async () => {
-                          const txt = (resultadoCierreDraft[a.id] ?? "").trim();
-                          if (txt.length < MIN_RESULTADO_CIERRE) return;
-                          try {
-                            await patchDicfAccionCerrar(token, a.id, txt);
-                            setResultadoCierreDraft((prev) => {
-                              const n = { ...prev };
-                              delete n[a.id];
-                              return n;
-                            });
-                            await reload();
-                          } catch (e: unknown) {
-                            setErr(e instanceof Error ? e.message : "Error");
-                          }
-                        }}
-                      >
-                        Cerrar acción
-                      </button>
+                        {(!a.fecha_compromiso ||
+                          (resultadoCierreDraft[a.id] ?? "").trim().length < MIN_RESULTADO_CIERRE) && (
+                          <span className="text-[0.65rem] text-slate-500">
+                            {!a.fecha_compromiso && <>Falta paso 1 (fecha guardada con el botón verde). </>}
+                            {a.fecha_compromiso &&
+                              (resultadoCierreDraft[a.id] ?? "").trim().length < MIN_RESULTADO_CIERRE &&
+                              <>Escribe al menos {MIN_RESULTADO_CIERRE} caracteres en el resultado.</>}
+                          </span>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 )}

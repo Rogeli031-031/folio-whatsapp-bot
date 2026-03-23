@@ -100,44 +100,56 @@ export function DicfAccionResponderPanel(props: {
 
       {accion.estado !== "hecho" && (
         <div className="space-y-3 border-t border-slate-700 pt-3">
-          <p className="text-xs text-slate-500">
-            Registra la fecha compromiso (también por WhatsApp:{" "}
-            <code className="text-amber-200/90">COMPROMISO {accion.public_code} AAAA-MM-DD</code>).
-          </p>
-          <div className="flex flex-wrap items-center gap-2">
-            <input
-              type="date"
-              className="rounded border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-slate-200"
-              value={fechaComp}
-              onChange={(e) => setFechaComp(e.target.value)}
-            />
-            <button
-              type="button"
-              disabled={!fechaComp || busy}
-              className="rounded bg-emerald-800 px-3 py-1.5 text-sm text-white hover:bg-emerald-700 disabled:opacity-50"
-              onClick={async () => {
-                if (!fechaComp) return;
-                setBusy(true);
-                setErr(null);
-                try {
-                  const r = await patchDicfAccionCompromiso(token, accion.id, fechaComp);
-                  setFechaComp("");
-                  if (r.accion) setAccion(r.accion as DicfAccionRow);
-                  await onReload();
-                } catch (e: unknown) {
-                  setErr(e instanceof Error ? e.message : "Error");
-                } finally {
-                  setBusy(false);
-                }
-              }}
-            >
-              Guardar compromiso
-            </button>
+          <div className="rounded-md border border-slate-600 bg-slate-800/50 p-3">
+            <p className="mb-1 text-xs font-medium text-slate-300">1) Fecha de compromiso</p>
+            {accion.fecha_compromiso ? (
+              <p className="text-sm text-emerald-400">
+                ✓ Registrada: <span className="font-mono">{accion.fecha_compromiso}</span>
+              </p>
+            ) : (
+              <>
+                <p className="mb-2 text-xs text-amber-200/90">
+                  Elige la fecha y pulsa <strong>Guardar compromiso</strong>. Solo elegir en el calendario no basta. También por
+                  WhatsApp:{" "}
+                  <code className="text-amber-200/80">COMPROMISO {accion.public_code} AAAA-MM-DD</code>
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="date"
+                    className="rounded border border-slate-600 bg-slate-900 px-2 py-1 text-sm text-slate-200"
+                    value={fechaComp}
+                    onChange={(e) => setFechaComp(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    disabled={!fechaComp || busy}
+                    className="rounded bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-600 disabled:opacity-50"
+                    onClick={async () => {
+                      if (!fechaComp) return;
+                      setBusy(true);
+                      setErr(null);
+                      try {
+                        const r = await patchDicfAccionCompromiso(token, accion.id, fechaComp);
+                        setFechaComp("");
+                        if (r.accion) setAccion(r.accion as DicfAccionRow);
+                        await onReload();
+                      } catch (e: unknown) {
+                        setErr(e instanceof Error ? e.message : "Error");
+                      } finally {
+                        setBusy(false);
+                      }
+                    }}
+                  >
+                    Guardar compromiso
+                  </button>
+                </div>
+              </>
+            )}
           </div>
 
           <div>
             <label className="mb-1 block text-xs text-slate-500">
-              Resultado al cerrar (mín. {MIN_RESULTADO_CIERRE} caracteres): qué hiciste, qué dijo el cliente, qué sigue…
+              2) Resultado al cerrar (mín. {MIN_RESULTADO_CIERRE} caracteres)
             </label>
             <textarea
               className="mb-2 w-full rounded border border-slate-600 bg-slate-800 px-2 py-2 text-sm text-slate-200 min-h-[5rem]"
@@ -145,33 +157,42 @@ export function DicfAccionResponderPanel(props: {
               value={resultadoDraft}
               onChange={(e) => setResultadoDraft(e.target.value)}
             />
-            <button
-              type="button"
-              disabled={
-                busy ||
-                resultadoDraft.trim().length < MIN_RESULTADO_CIERRE ||
-                !accion.fecha_compromiso
-              }
-              className="rounded border border-slate-500 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
-              title={!accion.fecha_compromiso ? "Primero registra la fecha compromiso" : undefined}
-              onClick={async () => {
-                const txt = resultadoDraft.trim();
-                if (txt.length < MIN_RESULTADO_CIERRE) return;
-                setBusy(true);
-                setErr(null);
-                try {
-                  await patchDicfAccionCerrar(token, accion.id, txt);
-                  setResultadoDraft("");
-                  await onReload();
-                } catch (e: unknown) {
-                  setErr(e instanceof Error ? e.message : "Error");
-                } finally {
-                  setBusy(false);
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+              <button
+                type="button"
+                disabled={
+                  busy ||
+                  resultadoDraft.trim().length < MIN_RESULTADO_CIERRE ||
+                  !accion.fecha_compromiso
                 }
-              }}
-            >
-              Cerrar acción
-            </button>
+                className="rounded bg-amber-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-40"
+                onClick={async () => {
+                  const txt = resultadoDraft.trim();
+                  if (txt.length < MIN_RESULTADO_CIERRE || !accion.fecha_compromiso) return;
+                  setBusy(true);
+                  setErr(null);
+                  try {
+                    await patchDicfAccionCerrar(token, accion.id, txt);
+                    setResultadoDraft("");
+                    await onReload();
+                  } catch (e: unknown) {
+                    setErr(e instanceof Error ? e.message : "Error");
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                3) Cerrar acción
+              </button>
+              {(!accion.fecha_compromiso || resultadoDraft.trim().length < MIN_RESULTADO_CIERRE) && (
+                <span className="text-xs text-slate-500">
+                  {!accion.fecha_compromiso && <>Completa el paso 1 (botón verde). </>}
+                  {accion.fecha_compromiso && resultadoDraft.trim().length < MIN_RESULTADO_CIERRE && (
+                    <>Escribe al menos {MIN_RESULTADO_CIERRE} caracteres.</>
+                  )}
+                </span>
+              )}
+            </div>
           </div>
         </div>
       )}
