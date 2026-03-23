@@ -798,6 +798,10 @@ function KpiContent() {
               if (!rowF) return <p className="text-sm text-slate-500">No hay datos de forecast para esta planta.</p>;
               const n = (v: unknown): number => (v != null && !Number.isNaN(Number(v)) ? Number(v) : 0);
               const delta = (a: number | null | undefined, b: number | null | undefined) => n(a) - n(b);
+              const toCostoNeg = (v: number | null | undefined): number => {
+                const x = n(v);
+                return x > 0 ? -x : x;
+              };
               const adjustedForecastValue = (row: IgfForecastRow, key: string): number => {
                 const r = row as Record<string, unknown>;
                 const ventaKg = n(r.venta_ton as number | null | undefined) * 1000;
@@ -851,7 +855,7 @@ function KpiContent() {
                   if (row === rowA) {
                     const rawIgf = (row as Record<string, unknown>).gasto_kg_igf as number | null | undefined;
                     const fallback = (row as Record<string, unknown>).gasto_kg as number | null | undefined;
-                    return fmtNum((rawIgf ?? fallback) ?? null);
+                    return fmtNum(toCostoNeg((rawIgf ?? fallback) ?? null));
                   }
                   return fmtNum(gastoKgFromFour(row));
                 }
@@ -882,7 +886,7 @@ function KpiContent() {
                   : c.key === "util_oper_importe"
                   ? utilOperImporteA
                   : c.key === "gasto_kg"
-                  ? (((rowA as Record<string, unknown>).gasto_kg_igf as number | null | undefined) ?? ((rowA as Record<string, unknown>).gasto_kg as number | null | undefined))
+                  ? toCostoNeg((((rowA as Record<string, unknown>).gasto_kg_igf as number | null | undefined) ?? ((rowA as Record<string, unknown>).gasto_kg as number | null | undefined)))
                   : (rowA as Record<string, unknown>)[c.key] as number | null | undefined;
                 return c.isPct ? (n(vF) - n(vA)) * 100 : delta(vF, vA);
               };
@@ -904,7 +908,7 @@ function KpiContent() {
                 if (c.key === "com_desc_kg") return (n(vF) - n(vA)) * ventaKgA;
                 if (c.key === "gasto_kg") {
                   const gastoA = ((rowA as Record<string, unknown>).gasto_kg_igf as number | null | undefined) ?? ((rowA as Record<string, unknown>).gasto_kg as number | null | undefined);
-                  return (gastoKgFromFour(rowF) - n(gastoA)) * ventaKgA;
+                  return (gastoKgFromFour(rowF) - toCostoNeg(gastoA)) * ventaKgA;
                 }
                 if (c.key === "impuesto_kg") return (n(vF) - n(vA)) * ventaKgA;
                 if (c.key === "bancos_planta_kg") return (n(vF) - n(vA)) * ventaKgA;
