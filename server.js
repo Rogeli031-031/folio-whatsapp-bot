@@ -10278,8 +10278,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
       const rolClaveQA = (actor && actor.rol_clave) ? String(actor.rol_clave).toUpperCase() : "";
       const esZPQA = rolClaveQA === "ZP" || (actor && actor.rol_nombre && /director/i.test(actor.rol_nombre) && /zp/i.test(actor.rol_nombre));
       const esGGQA = rolClaveQA === "GG" || (actor && actor.rol_nombre && String(actor.rol_nombre).toUpperCase().includes("GG"));
-      const textTrim = String(body || "").trim();
-      const lowerText = textTrim.toLowerCase();
+      /* textTrim / lowerText ya están arriba en el webhook; redeclararlos aquí rompía TDZ y fallaba COMPROMISO/dashboard (ReferenceError). */
 
       if (AI_ENABLED && actor && (esZPQA || esGGQA) && esDI){
         try {
