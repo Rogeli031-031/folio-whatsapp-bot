@@ -117,9 +117,14 @@ for (const k of REQUIRED_ENVS) {
   if (!process.env[k]) console.warn(`⚠️ Falta ENV ${k}. El bot puede fallar.`);
 }
 
+const _pgPoolMax = parseInt(process.env.PG_POOL_MAX || "20", 10);
+const _pgConnTimeout = parseInt(process.env.PG_CONNECTION_TIMEOUT_MS || "15000", 10);
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.DATABASE_SSL === "false" ? false : { rejectUnauthorized: false },
+  max: Number.isFinite(_pgPoolMax) && _pgPoolMax > 0 ? _pgPoolMax : 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: Number.isFinite(_pgConnTimeout) && _pgConnTimeout > 0 ? _pgConnTimeout : 15000,
 });
 
 const twilioClient =
@@ -9595,7 +9600,9 @@ app.post("/twilio/whatsapp", async (req, res) => {
   };
 
   try {
-    if (!req.body || typeof req.body !== "object") req.body = {};
+    if (!req.body || typeof req.body !== "object" || Buffer.isBuffer(req.body) || Array.isArray(req.body)) {
+      req.body = {};
+    }
     const from = req.body.From || "unknown";
     const fromNorm = normalizePhone(from);
     const body = normalizeText(req.body.Body);
@@ -9631,7 +9638,23 @@ app.post("/twilio/whatsapp", async (req, res) => {
 
     if (DEBUG) console.log("[debug] from:", from, "| normalized:", fromNorm, "| body:", body.substring(0, 80));
 
-    const client = await pool.connect();
+    /** Ayuda / menú: no requiere PostgreSQL. Evita fallo total si la BD no conecta o el pool está saturado. */
+    try {
+      const helpEarly = getHelpForInput(body.trim(), null);
+      if (helpEarly) return safeReply(helpEarly);
+    } catch (helpErr) {
+      console.error("[WhatsApp] getHelpForInput (sin BD):", helpErr && helpErr.message, helpErr && helpErr.stack);
+    }
+
+    let client;
+    try {
+      client = await pool.connect();
+    } catch (poolErr) {
+      console.error("[WhatsApp] pool.connect falló:", poolErr && poolErr.message, poolErr && poolErr.stack);
+      return safeReply(
+        "⚠️ No hay conexión a la base de datos. Verifica DATABASE_URL, firewall y que el servicio PostgreSQL esté arriba. Intenta en 1–2 minutos."
+      );
+    }
     try {
       let actor = null;
       try {
@@ -9659,9 +9682,6 @@ app.post("/twilio/whatsapp", async (req, res) => {
           return safeReply("No pude cerrar la acción. Intenta de nuevo o usa el dashboard.");
         }
       }
-
-      const helpMsg = getHelpForInput(body.trim(), actor);
-      if (helpMsg) return safeReply(helpMsg);
 
       /* Formulario Solicitud de Presupuesto (PRE): GA llena paso a paso, luego CONFIRMAR y notificación a GG */
       if (sess.presupuestoSolicitud && sess.presupuestoSolicitud.planta_id && numMedia === 0) {
@@ -13794,7 +13814,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
 
     return safeReply('No entendí. Escribe "Crear folio" o "Ayuda".');
   } catch (err) {
-    console.error("Webhook error:", err);
+    console.error("Webhook error:", err && err.stack ? err.stack : err);
     res.set("Content-Type", "text/xml");
     return res.status(200).send(twimlMessage("Error procesando solicitud. Intenta de nuevo en 1 minuto."));
   }
