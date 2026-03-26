@@ -761,7 +761,13 @@ function KpiContent() {
                           onClick={() => setDeltaClienteSel({ grupo: "Dejaron de comprar", cliente: c })}
                           className="w-full text-left hover:text-amber-300"
                         >
-                          <span className="font-medium">{c.cliente}</span>: {c.deltaKgStr != null ? `${c.deltaKgStr} Ton · ` : ""}{c.ingresoAStr}
+                          <span className="font-medium">{c.cliente}</span>
+                          {(c.acciones_abiertas || 0) > 0 && (
+                            <span className="ml-2 inline-flex items-center rounded border border-amber-700/60 bg-amber-900/30 px-1.5 py-0.5 text-[0.65rem] text-amber-200">
+                              Acciones: {c.acciones_abiertas}
+                            </span>
+                          )}
+                          : {c.deltaKgStr != null ? `${c.deltaKgStr} Ton · ` : ""}{c.ingresoAStr}
                         </button>
                         <p className="text-[0.65rem] text-slate-500 pl-0.5 mt-0.5">
                           Frec.: {c.freqDays != null && c.freqDays < 9000 ? `cada ${c.freqDays.toFixed(0)} d` : "N/A"} · Última: {c.lastPurchaseDate ? `${c.lastPurchaseDate} (${c.daysSinceLastReal ?? "?"} d)` : (typeof c.daysSinceLast === "number" ? `${c.daysSinceLast} d` : "N/D")} · {c.estado ?? "—"}
@@ -793,7 +799,13 @@ function KpiContent() {
                           onClick={() => setDeltaClienteSel({ grupo: "- Ingreso", cliente: c })}
                           className="w-full text-left hover:text-amber-300"
                         >
-                          <span className="font-medium">{c.cliente}</span>: {c.deltaKgStr != null ? `${c.deltaKgStr} Ton · ` : ""}{c.deltaIngresoStr}
+                          <span className="font-medium">{c.cliente}</span>
+                          {(c.acciones_abiertas || 0) > 0 && (
+                            <span className="ml-2 inline-flex items-center rounded border border-amber-700/60 bg-amber-900/30 px-1.5 py-0.5 text-[0.65rem] text-amber-200">
+                              Acciones: {c.acciones_abiertas}
+                            </span>
+                          )}
+                          : {c.deltaKgStr != null ? `${c.deltaKgStr} Ton · ` : ""}{c.deltaIngresoStr}
                         </button>
                         <p className="text-[0.65rem] text-slate-500 pl-0.5 mt-0.5">
                           Frec.: {c.freqDays != null && c.freqDays < 9000 ? `cada ${c.freqDays.toFixed(0)} d` : "N/A"} · Última: {typeof c.daysSinceLast === "number" ? `${c.daysSinceLast} d` : "N/D"} · {c.estado ?? "—"}
@@ -825,7 +837,13 @@ function KpiContent() {
                           onClick={() => setDeltaClienteSel({ grupo: "+ Ingreso", cliente: c })}
                           className="w-full text-left hover:text-amber-300"
                         >
-                          <span className="font-medium">{c.cliente}</span>: {c.deltaKgStr != null ? `${c.deltaKgStr} Ton · ` : ""}{c.deltaIngresoStr}
+                          <span className="font-medium">{c.cliente}</span>
+                          {(c.acciones_abiertas || 0) > 0 && (
+                            <span className="ml-2 inline-flex items-center rounded border border-amber-700/60 bg-amber-900/30 px-1.5 py-0.5 text-[0.65rem] text-amber-200">
+                              Acciones: {c.acciones_abiertas}
+                            </span>
+                          )}
+                          : {c.deltaKgStr != null ? `${c.deltaKgStr} Ton · ` : ""}{c.deltaIngresoStr}
                         </button>
                         <p className="text-[0.65rem] text-slate-500 pl-0.5 mt-0.5">
                           Frec.: {c.freqDays != null && c.freqDays < 9000 ? `cada ${c.freqDays.toFixed(0)} d` : "N/A"} · Última: {typeof c.daysSinceLast === "number" ? `${c.daysSinceLast} d` : "N/D"} · {c.estado ?? "—"}
@@ -857,7 +875,13 @@ function KpiContent() {
                           onClick={() => setDeltaClienteSel({ grupo: "Nuevos", cliente: c })}
                           className="w-full text-left hover:text-amber-300"
                         >
-                          <span className="font-medium">{c.cliente}</span>: {c.deltaKgStr != null ? `${c.deltaKgStr} Ton · ` : ""}{c.ingresoBStr}
+                          <span className="font-medium">{c.cliente}</span>
+                          {(c.acciones_abiertas || 0) > 0 && (
+                            <span className="ml-2 inline-flex items-center rounded border border-amber-700/60 bg-amber-900/30 px-1.5 py-0.5 text-[0.65rem] text-amber-200">
+                              Acciones: {c.acciones_abiertas}
+                            </span>
+                          )}
+                          : {c.deltaKgStr != null ? `${c.deltaKgStr} Ton · ` : ""}{c.ingresoBStr}
                         </button>
                         <p className="text-[0.65rem] text-slate-500 pl-0.5 mt-0.5">
                           Frec.: {c.freqDays != null && c.freqDays < 9000 ? `cada ${c.freqDays.toFixed(0)} d` : "N/A"} · Última: {typeof c.daysSinceLast === "number" ? `${c.daysSinceLast} d` : "N/D"} · {c.estado ?? "—"}

@@ -8773,7 +8773,51 @@ app.post("/api/dashboard/dicf-datos", dashboardAuthMiddleware, async (req, res) 
     const plantCode = await getPlantCodeArrFromPlantaNombre(client, planta.trim());
     const data = await dicf.computeDicf(client, plantCode, planta.trim(), getMargenKgPorPeriodo);
     const { dicfRowsByCliente: _dicfRows, ...rest } = data || {};
-    res.json(rest);
+
+    // Indicador de acciones DICF abiertas por cliente (para marcar en listas Dejar/Dismin/Aum/Nuevos)
+    const pr = await client.query(
+      `SELECT id FROM public.plantas
+        WHERE UPPER(TRIM(COALESCE(nombre,''))) = UPPER(TRIM($1))
+           OR UPPER(TRIM(COALESCE(clave,'')))  = UPPER(TRIM($1))
+        LIMIT 1`,
+      [planta.trim()]
+    );
+    const plantaId = pr.rows && pr.rows[0] ? Number(pr.rows[0].id) : null;
+    const accionesAbiertasByCliente = new Map();
+    if (Number.isFinite(plantaId)) {
+      const ar = await client.query(
+        `SELECT cliente_nombre, COUNT(*)::int AS c
+           FROM arr.dicf_acciones
+          WHERE planta_id = $1
+            AND (cerrado_at IS NULL)
+            AND (estado IS NULL OR estado <> 'hecho')
+          GROUP BY cliente_nombre`,
+        [plantaId]
+      );
+      for (const row of ar.rows || []) {
+        const k = normalizeAccents(row.cliente_nombre).replace(/\s+/g, " ").trim();
+        accionesAbiertasByCliente.set(k, Number(row.c) || 0);
+      }
+    }
+    const inject = (grp) => {
+      if (!grp || !Array.isArray(grp.clientes)) return grp;
+      return {
+        ...grp,
+        clientes: grp.clientes.map((c) => {
+          const key = normalizeAccents(c && c.cliente != null ? c.cliente : "").replace(/\s+/g, " ").trim();
+          const n = accionesAbiertasByCliente.get(key) || 0;
+          return { ...c, acciones_abiertas: n };
+        }),
+      };
+    };
+    const out = {
+      ...rest,
+      dejaron: inject(rest.dejaron),
+      disminuyeron: inject(rest.disminuyeron),
+      aumentaron: inject(rest.aumentaron),
+      nuevos: inject(rest.nuevos),
+    };
+    res.json(out);
   } catch (e) {
     console.error("[Dashboard dicf-datos]", e);
     res.status(500).json({ error: e.message });

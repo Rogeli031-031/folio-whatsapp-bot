@@ -574,6 +574,7 @@ export interface DeltaIngresoForecastCliente extends DeltaIngresoCliente {
   canal?: string;
   subcanal?: string;
   estado?: string;
+  acciones_abiertas?: number;
   freqDays?: number;
   daysSinceLast?: number;
   lastPurchaseDate?: string | null;
