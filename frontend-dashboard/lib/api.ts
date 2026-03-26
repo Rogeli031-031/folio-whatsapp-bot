@@ -760,7 +760,7 @@ export function postDicfAccionesClienteKey(
 export function fetchDicfAccionesAsignables(
   token: string,
   planta: string
-): Promise<{ usuarios: { id: number; nombre: string; telefono?: string; rol_clave: string }[] }> {
+): Promise<{ usuarios: { id: number; nombre: string; nombre_persona?: string | null; puesto_nombre?: string | null; telefono?: string; rol_clave: string }[] }> {
   return apiFetch("/api/dashboard/dicf-acciones/asignables", { token, params: { planta } });
 }
 

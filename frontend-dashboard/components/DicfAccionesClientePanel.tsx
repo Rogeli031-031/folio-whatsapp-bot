@@ -50,7 +50,7 @@ export function DicfAccionesClientePanel(props: {
 
   const [clienteKey, setClienteKey] = useState<string | null>(null);
   const [acciones, setAcciones] = useState<DicfAccionRow[]>([]);
-  const [asignables, setAsignables] = useState<{ id: number; nombre: string; rol_clave: string }[]>([]);
+  const [asignables, setAsignables] = useState<{ id: number; nombre: string; nombre_persona?: string | null; puesto_nombre?: string | null; rol_clave: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [desc, setDesc] = useState("");
@@ -159,7 +159,7 @@ export function DicfAccionesClientePanel(props: {
       />
       <div className="flex flex-wrap items-end gap-2 mb-3">
         <label className="flex flex-col gap-0.5 text-xs text-slate-400">
-          Responsable (GG/GV)
+          Responsable (GG/GV/AD)
           <select
             className="rounded border border-slate-600 bg-slate-700 px-2 py-1 text-sm text-slate-200 min-w-[12rem]"
             value={respId}
@@ -168,7 +168,9 @@ export function DicfAccionesClientePanel(props: {
             <option value="">— Elegir —</option>
             {asignables.map((u) => (
               <option key={u.id} value={u.id}>
-                {u.nombre} ({u.rol_clave})
+                {u.nombre}
+                {u.puesto_nombre && u.puesto_nombre !== u.nombre ? ` — ${u.puesto_nombre}` : ""}
+                {` (${u.rol_clave})`}
               </option>
             ))}
           </select>

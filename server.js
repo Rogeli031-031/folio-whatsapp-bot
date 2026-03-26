@@ -2386,6 +2386,7 @@ async function ensureSchema() {
     `).catch(() => {});
     await client.query(`ALTER TABLE public.usuarios ADD COLUMN IF NOT EXISTS email VARCHAR(255);`);
     await client.query(`ALTER TABLE public.usuarios ADD COLUMN IF NOT EXISTS nombre VARCHAR(100);`);
+    await client.query(`ALTER TABLE public.usuarios ADD COLUMN IF NOT EXISTS nombre_persona VARCHAR(150);`);
     await client.query(`ALTER TABLE public.usuarios ADD COLUMN IF NOT EXISTS activo BOOLEAN DEFAULT true;`);
 
     await client.query(`
