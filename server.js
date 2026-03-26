@@ -5634,7 +5634,6 @@ async function getArrForecastCutoffDate(client, tableName, year, month) {
   const start = `${year}-${String(month).padStart(2, "0")}-01`;
   const endDay = new Date(year, month, 0).getDate();
   const end = `${year}-${String(month).padStart(2, "0")}-${String(endDay).padStart(2, "0")}`;
-  const todayStr = fmtDateYmdLocal(new Date());
   const sql = `
     WITH prov_map AS (
       SELECT DISTINCT p.nombre AS prov_name,
@@ -5652,9 +5651,9 @@ async function getArrForecastCutoffDate(client, tableName, year, month) {
       JOIN prov_map pm
         ON UPPER(TRIM(t.plant_code)) = pm.key_nombre
         OR (pm.key_clave <> '' AND UPPER(TRIM(t.plant_code)) = pm.key_clave)
-     WHERE t.fecha >= $1::date AND t.fecha <= $2::date AND t.fecha < $3::date
+     WHERE t.fecha >= $1::date AND t.fecha <= $2::date
   `;
-  const r = await client.query(sql, [start, end, todayStr]);
+  const r = await client.query(sql, [start, end]);
   const cutoffRaw = r.rows && r.rows[0] ? r.rows[0].cutoff : null;
   if (!cutoffRaw) return null;
   return cutoffRaw instanceof Date ? fmtDateYmdLocal(cutoffRaw) : String(cutoffRaw).slice(0, 10);
