@@ -8774,7 +8774,9 @@ app.post("/api/dashboard/dicf-datos", dashboardAuthMiddleware, async (req, res) 
     const data = await dicf.computeDicf(client, plantCode, planta.trim(), getMargenKgPorPeriodo);
     const { dicfRowsByCliente: _dicfRows, ...rest } = data || {};
 
-    // Indicador de acciones DICF abiertas por cliente (para marcar en listas Dejar/Dismin/Aum/Nuevos)
+    // Indicador de acciones DICF abiertas por cliente (misma planta canónica + cliente_key que al crear acciones).
+    // Las acciones se guardan con planta_id canónico y ANY(id equivalente); antes se filtraba un solo id de
+    // public.plantas y en San Luis/Querétaro etc. no coincidía → sin badge. Empate por cliente_key y respaldo por nombre.
     const pr = await client.query(
       `SELECT id FROM public.plantas
         WHERE UPPER(TRIM(COALESCE(nombre,''))) = UPPER(TRIM($1))
@@ -8782,21 +8784,39 @@ app.post("/api/dashboard/dicf-datos", dashboardAuthMiddleware, async (req, res) 
         LIMIT 1`,
       [planta.trim()]
     );
-    const plantaId = pr.rows && pr.rows[0] ? Number(pr.rows[0].id) : null;
-    const accionesAbiertasByCliente = new Map();
-    if (Number.isFinite(plantaId)) {
-      const ar = await client.query(
+    const plantaIdRaw = pr.rows && pr.rows[0] ? Number(pr.rows[0].id) : null;
+    const canonPlantaId = Number.isFinite(plantaIdRaw) ? dicfAccionesLib.getCanonicalPlantaId(plantaIdRaw) : null;
+    const plantaIdsEquiv =
+      Number.isFinite(canonPlantaId) && canonPlantaId != null
+        ? dicfAccionesLib.getPlantaIdsEquivalentes(canonPlantaId)
+        : [];
+    const accionesAbiertasByKey = new Map();
+    const accionesAbiertasByNombre = new Map();
+    if (plantaIdsEquiv.length) {
+      const arKey = await client.query(
+        `SELECT cliente_key, COUNT(*)::int AS c
+           FROM arr.dicf_acciones
+          WHERE planta_id = ANY($1::int[])
+            AND (cerrado_at IS NULL)
+            AND (estado IS NULL OR estado <> 'hecho')
+          GROUP BY cliente_key`,
+        [plantaIdsEquiv]
+      );
+      for (const row of arKey.rows || []) {
+        if (row.cliente_key) accionesAbiertasByKey.set(String(row.cliente_key), Number(row.c) || 0);
+      }
+      const arNom = await client.query(
         `SELECT cliente_nombre, COUNT(*)::int AS c
            FROM arr.dicf_acciones
-          WHERE planta_id = $1
+          WHERE planta_id = ANY($1::int[])
             AND (cerrado_at IS NULL)
             AND (estado IS NULL OR estado <> 'hecho')
           GROUP BY cliente_nombre`,
-        [plantaId]
+        [plantaIdsEquiv]
       );
-      for (const row of ar.rows || []) {
+      for (const row of arNom.rows || []) {
         const k = normalizeAccents(row.cliente_nombre).replace(/\s+/g, " ").trim();
-        accionesAbiertasByCliente.set(k, Number(row.c) || 0);
+        accionesAbiertasByNombre.set(k, Number(row.c) || 0);
       }
     }
     const inject = (grp) => {
@@ -8804,8 +8824,21 @@ app.post("/api/dashboard/dicf-datos", dashboardAuthMiddleware, async (req, res) 
       return {
         ...grp,
         clientes: grp.clientes.map((c) => {
-          const key = normalizeAccents(c && c.cliente != null ? c.cliente : "").replace(/\s+/g, " ").trim();
-          const n = accionesAbiertasByCliente.get(key) || 0;
+          const ck =
+            canonPlantaId != null && Number.isFinite(canonPlantaId)
+              ? dicfAccionesLib.buildClienteKey(
+                  canonPlantaId,
+                  (c.estado != null && String(c.estado).trim()) || "",
+                  (c.canal != null && String(c.canal).trim()) || "",
+                  (c.subcanal != null && String(c.subcanal).trim()) || "",
+                  (c.cliente != null && String(c.cliente).trim()) || ""
+                )
+              : "";
+          let n = ck ? accionesAbiertasByKey.get(ck) || 0 : 0;
+          if (!n) {
+            const nk = normalizeAccents(c && c.cliente != null ? c.cliente : "").replace(/\s+/g, " ").trim();
+            n = accionesAbiertasByNombre.get(nk) || 0;
+          }
           return { ...c, acciones_abiertas: n };
         }),
       };
