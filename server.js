@@ -8774,17 +8774,10 @@ app.post("/api/dashboard/dicf-datos", dashboardAuthMiddleware, async (req, res) 
     const data = await dicf.computeDicf(client, plantCode, planta.trim(), getMargenKgPorPeriodo);
     const { dicfRowsByCliente: _dicfRows, ...rest } = data || {};
 
-    // Indicador de acciones DICF abiertas por cliente (misma planta canónica + cliente_key que al crear acciones).
-    // Las acciones se guardan con planta_id canónico y ANY(id equivalente); antes se filtraba un solo id de
-    // public.plantas y en San Luis/Querétaro etc. no coincidía → sin badge. Empate por cliente_key y respaldo por nombre.
-    const pr = await client.query(
-      `SELECT id FROM public.plantas
-        WHERE UPPER(TRIM(COALESCE(nombre,''))) = UPPER(TRIM($1))
-           OR UPPER(TRIM(COALESCE(clave,'')))  = UPPER(TRIM($1))
-        LIMIT 1`,
-      [planta.trim()]
-    );
-    const plantaIdRaw = pr.rows && pr.rows[0] ? Number(pr.rows[0].id) : null;
+    // Indicador de acciones DICF abiertas (sin cerrar): incluye sin_compromiso, pendiente, vencido, etc.
+    // Resolución de planta: MISMA que createAccion / Delta (alias "GTM San Luis" → San Luis). La consulta directa
+    // a public.plantas sin alias devolvía null y no cargaba ninguna acción.
+    const plantaIdRaw = await dicfAccionesLib.resolvePlantaId(client, planta.trim());
     const canonPlantaId = Number.isFinite(plantaIdRaw) ? dicfAccionesLib.getCanonicalPlantaId(plantaIdRaw) : null;
     const plantaIdsEquiv =
       Number.isFinite(canonPlantaId) && canonPlantaId != null
@@ -8815,28 +8808,32 @@ app.post("/api/dashboard/dicf-datos", dashboardAuthMiddleware, async (req, res) 
         [plantaIdsEquiv]
       );
       for (const row of arNom.rows || []) {
-        const k = normalizeAccents(row.cliente_nombre).replace(/\s+/g, " ").trim();
-        accionesAbiertasByNombre.set(k, Number(row.c) || 0);
+        const k = dicfAccionesLib.normalizeKeyPart(row.cliente_nombre);
+        accionesAbiertasByNombre.set(k, (accionesAbiertasByNombre.get(k) || 0) + (Number(row.c) || 0));
       }
     }
-    const inject = (grp) => {
+    const inject = (grp, grupoLista) => {
       if (!grp || !Array.isArray(grp.clientes)) return grp;
       return {
         ...grp,
         clientes: grp.clientes.map((c) => {
-          const ck =
-            canonPlantaId != null && Number.isFinite(canonPlantaId)
-              ? dicfAccionesLib.buildClienteKey(
-                  canonPlantaId,
-                  (c.estado != null && String(c.estado).trim()) || "",
-                  (c.canal != null && String(c.canal).trim()) || "",
-                  (c.subcanal != null && String(c.subcanal).trim()) || "",
-                  (c.cliente != null && String(c.cliente).trim()) || ""
-                )
-              : "";
-          let n = ck ? accionesAbiertasByKey.get(ck) || 0 : 0;
+          const canal = (c.canal != null && String(c.canal).trim()) || "";
+          const subcanal = (c.subcanal != null && String(c.subcanal).trim()) || "";
+          const cli = (c.cliente != null && String(c.cliente).trim()) || "";
+          const gruposTry = new Set(
+            [String(c.estado || "").trim(), typeof grupoLista === "string" ? grupoLista.trim() : ""].filter(
+              (x) => x && x.length
+            )
+          );
+          let n = 0;
+          if (canonPlantaId != null && Number.isFinite(canonPlantaId)) {
+            for (const g of gruposTry) {
+              const ck = dicfAccionesLib.buildClienteKey(canonPlantaId, g, canal, subcanal, cli);
+              n = Math.max(n, accionesAbiertasByKey.get(ck) || 0);
+            }
+          }
           if (!n) {
-            const nk = normalizeAccents(c && c.cliente != null ? c.cliente : "").replace(/\s+/g, " ").trim();
+            const nk = dicfAccionesLib.normalizeKeyPart(c && c.cliente != null ? c.cliente : "");
             n = accionesAbiertasByNombre.get(nk) || 0;
           }
           return { ...c, acciones_abiertas: n };
@@ -8845,10 +8842,10 @@ app.post("/api/dashboard/dicf-datos", dashboardAuthMiddleware, async (req, res) 
     };
     const out = {
       ...rest,
-      dejaron: inject(rest.dejaron),
-      disminuyeron: inject(rest.disminuyeron),
-      aumentaron: inject(rest.aumentaron),
-      nuevos: inject(rest.nuevos),
+      dejaron: inject(rest.dejaron, "Dejaron de comprar"),
+      disminuyeron: inject(rest.disminuyeron, "Disminuyeron"),
+      aumentaron: inject(rest.aumentaron, "Aumentaron"),
+      nuevos: inject(rest.nuevos, "Nuevo"),
     };
     res.json(out);
   } catch (e) {
