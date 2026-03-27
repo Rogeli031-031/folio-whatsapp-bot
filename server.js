@@ -4204,9 +4204,9 @@ async function getUsersByRole(client, rolClave) {
   return (r.rows || []).map((row) => ({ telefono: row.telefono, nombre: row.nombre }));
 }
 
-/** Destinatarios únicos (por teléfono) para resumen Delta Ingreso: GG, ZP (Director Zona), AD, GV, GA, CDMX. */
+/** Destinatarios únicos (por teléfono) para resumen Delta Ingreso: ZP (Director Zona), AD, GV, GA, CDMX. */
 async function getUsersDeltaIngresoResumenRoles(client) {
-  const roles = ["GG", "ZP", "AD", "GV", "GA", "CDMX"];
+  const roles = ["ZP", "AD", "GV", "GA", "CDMX"];
   const seen = new Set();
   const out = [];
   for (const rol of roles) {
@@ -9609,69 +9609,34 @@ function chunkWhatsAppText(text, maxLen = 1400) {
 async function runDeltaIngresoAiSendSummary() {
   const client = await pool.connect();
   try {
-    const isOverdueAction = (a) => {
-      if (!a || !a.when_date) return false;
-      const x = new Date(a.when_date);
-      if (Number.isNaN(x.getTime())) return false;
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      x.setHours(0, 0, 0, 0);
-      return x < today && String(a.action_status || "").toUpperCase() !== "DONE";
+    const formatPlantLabel = (plantCode) => {
+      const key = String(plantCode || "").trim().toLowerCase();
+      if (key === "tehuacan" || key === "tehuacán") return "Tehuacán";
+      if (key === "queretaro" || key === "querétaro") return "Querétaro";
+      return String(plantCode || "").trim();
     };
 
     await deltaIngresoAiDb.ensureDeltaIngresoAiSchema(client);
     await dicfAccionesLib.ensureDicfAccionesTables(client);
     const plants = await deltaIngresoAiDb.getProvinciaPlantsWithPlantaId(client);
-    const plantasNegativos = [];
-    const todosClientesCriticos = [];
     const detalleDeltaPorPlanta = [];
     for (const row of plants) {
       const data = await getDeltaIngresoDatosInternal(client, row.plant_code, PERIODO_AI_A, PERIODO_AI_B, false);
       if (data) {
-        const dejaronVal = data.dejaron?.totalDeltaIngreso != null ? data.dejaron.totalDeltaIngreso : 0;
-        const disminVal = data.disminuyeron?.totalDeltaIngreso != null ? data.disminuyeron.totalDeltaIngreso : 0;
-        const totalNeg = dejaronVal + Math.abs(Math.min(0, disminVal));
-        if (totalNeg > 0) plantasNegativos.push({ planta: row.plant_code, totalNeg });
-        const combined = [
-          ...(data.dejaron?.clientes || []).map((c) => ({ cliente: c.cliente, delta: c.ingresoA })),
-          ...(data.disminuyeron?.clientes || []).map((c) => ({ cliente: c.cliente, delta: c.deltaIngreso })),
-        ];
-        combined.sort((a, b) => (a.delta != null && b.delta != null ? a.delta - b.delta : 0));
-        todosClientesCriticos.push(...combined.slice(0, 2).map((x) => x.cliente));
-
         const topNo = (data.dejaron?.clientes || []).slice(0, 2);
         const topMenos = (data.disminuyeron?.clientes || []).slice(0, 2);
-        const openActions = await deltaIngresoAiDb.getOpenActionsByPlant(client, row.plant_code, PERIODO_AI_A, PERIODO_AI_B).catch(() => []);
-        const byCliente = new Map();
-        (openActions || []).forEach((a) => {
-          const key = String(a.cliente_norm || "").trim().toLowerCase();
-          if (!key) return;
-          if (!byCliente.has(key)) byCliente.set(key, a);
-        });
-        const lines = [];
+        const lines = [`Planta ${formatPlantLabel(row.plant_code)}`];
         for (const c of topNo) {
-          const key = String(c.cliente || "").trim().toLowerCase();
-          const a = byCliente.get(key);
-          const nota = a ? String(a.last_update_text || a.what || "").trim() : "";
-          const vencida = a && isOverdueAction(a) ? " 🔴" : "";
-          lines.push(`- No compran ${c.cliente}: A ${c.kgAStr || "0.0"} ton -> B ${c.kgBStr || "0.0"} ton | Delta ${c.ingresoAStr || "$0"}${a ? ` | Seg: ${a.action_status || "OPEN"}${vencida} ${nota ? `| ${nota.slice(0, 90)}${nota.length > 90 ? "..." : ""}` : ""}` : " | Seg: sin action register"}`);
+          lines.push("", `- No compran ${c.cliente}: A ${c.kgAStr || "0.0"} ton -> B ${c.kgBStr || "0.0"} ton | Delta ${c.ingresoAStr || "$0"} | Seg: sin action register`);
         }
         for (const c of topMenos) {
-          const key = String(c.cliente || "").trim().toLowerCase();
-          const a = byCliente.get(key);
-          const nota = a ? String(a.last_update_text || a.what || "").trim() : "";
-          const vencida = a && isOverdueAction(a) ? " 🔴" : "";
-          lines.push(`- Disminuyeron ${c.cliente}: A ${c.kgAStr || "0.0"} ton -> B ${c.kgBStr || "0.0"} ton | Delta ${c.deltaIngresoStr || "$0"}${a ? ` | Seg: ${a.action_status || "OPEN"}${vencida} ${nota ? `| ${nota.slice(0, 90)}${nota.length > 90 ? "..." : ""}` : ""}` : " | Seg: sin action register"}`);
+          lines.push("", `- Disminuyeron ${c.cliente}: A ${c.kgAStr || "0.0"} ton -> B ${c.kgBStr || "0.0"} ton | Delta ${c.deltaIngresoStr || "$0"} | Seg: sin action register`);
         }
         if (lines.length) {
-          detalleDeltaPorPlanta.push(`\nPlanta ${row.plant_code}\n${lines.join("\n")}`);
+          detalleDeltaPorPlanta.push(lines.join("\n"));
         }
       }
     }
-    plantasNegativos.sort((a, b) => b.totalNeg - a.totalNeg);
-    const totalProvincia = plantasNegativos.reduce((s, x) => s + x.totalNeg, 0);
-    const top3Plantas = plantasNegativos.slice(0, 3).map((x, i) => `${i + 1} ${x.planta}`).join(", ");
-    const clientesUnicos = [...new Set(todosClientesCriticos)].slice(0, 3);
     const actions = await deltaIngresoAiDb.getActionsForSummary(client, PERIODO_AI_A, PERIODO_AI_B);
     const abiertasIa = (actions || []).filter((a) => a.action_status !== "DONE").length;
     const cerradasHoyIa = await client.query(
@@ -9702,7 +9667,6 @@ async function runDeltaIngresoAiSendSummary() {
           AND (cerrado_at AT TIME ZONE 'America/Mexico_City')::date = (CURRENT_TIMESTAMP AT TIME ZONE 'America/Mexico_City')::date`
     ).then((r) => (r.rows && r.rows[0] ? parseInt(r.rows[0].n, 10) : 0)).catch(() => 0);
 
-    const fmtMxn = (n) => (n != null && !isNaN(n) ? n.toLocaleString("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 0, maximumFractionDigits: 0 }) : "$0");
     const fmtFecha = (d) => {
       if (!d) return null;
       const x = d instanceof Date ? d : new Date(d);
@@ -9710,20 +9674,9 @@ async function runDeltaIngresoAiSendSummary() {
       return x.toISOString().slice(0, 10);
     };
 
-    const headerLines = [
-      "Resumen Delta Ingreso",
-      `Periodos comparación: ${PERIODO_AI_A} → ${PERIODO_AI_B}`,
-      `Total negativos provincia: ${fmtMxn(totalProvincia)}`,
-      `Plantas más afectadas: ${top3Plantas || "-"}`,
-      `Clientes críticos: ${clientesUnicos.join(", ") || "-"}`,
-      `Acciones seguimiento IA (5W2H) abiertas: ${abiertasIa} · cerradas hoy: ${cerradasHoyIa}`,
-      `Acciones DICF cerradas hoy: ${cerradasDicfHoy}`,
-      "",
-    ];
-
     const deltaDetalleText = detalleDeltaPorPlanta.length
-      ? `📉 Delta Ingreso por planta (toneladas, MXN y seguimiento):\n${detalleDeltaPorPlanta.join("\n")}\n`
-      : "📉 Delta Ingreso por planta: sin datos.";
+      ? `${detalleDeltaPorPlanta.join("\n\n")}\n`
+      : "Sin datos de Delta Ingreso por planta.\n";
 
     let dicfBody = "";
     if (!dicfRows.length) {
@@ -9747,7 +9700,7 @@ async function runDeltaIngresoAiSendSummary() {
       dicfBody = `📋 Acciones DICF abiertas (${dicfRows.length}) — con o sin fecha de compromiso:\n\n${blocks.join("\n\n")}`;
     }
 
-    const summaryText = `${headerLines.join("\n")}\n${deltaDetalleText}\n${dicfBody}`;
+    const summaryText = `${deltaDetalleText}\n${dicfBody}`;
     const parts = chunkWhatsAppText(summaryText);
     const recipients = await getUsersDeltaIngresoResumenRoles(client);
     const today = new Date().toISOString().slice(0, 10);
