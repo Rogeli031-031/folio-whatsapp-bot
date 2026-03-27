@@ -9580,8 +9580,11 @@ async function runDeltaIngresoAiSendQuestion(options = {}) {
   }
 }
 
-/** Parte mensajes largos para WhatsApp (límite ~4k; usamos 3500). */
-function chunkWhatsAppText(text, maxLen = 3500) {
+/** Parte mensajes largos para WhatsApp.
+ * Twilio WhatsApp rechaza cuerpos concatenados > 1600 chars (error 21617),
+ * por eso usamos margen conservador.
+ */
+function chunkWhatsAppText(text, maxLen = 1400) {
   if (!text || text.length <= maxLen) return [text];
   const out = [];
   let rest = text;
@@ -14094,8 +14097,8 @@ app.listen(PORT, () => {
               "20:34": "San Luis",
               "20:35": "Queretaro",
             };
-        // Resumen para roles corporativos (incluye ZP). Se agrega 21:35 para reintento manual de hoy.
-        const slotsSummary = TEST_MODE_AI ? ["17:45"] : ["08:00", "20:30", "21:35"];
+        // Resumen para roles corporativos (incluye ZP). Se agregan slots manuales para reintentos controlados.
+        const slotsSummary = TEST_MODE_AI ? ["17:45"] : ["08:00", "20:30", "21:35", "21:43"];
         const slotPlantKey = Object.prototype.hasOwnProperty.call(slotsQuestionMap, slot) ? slotsQuestionMap[slot] : undefined;
         const qKey = `q-${today}-${slot}-${slotPlantKey || "all"}`;
         const sKey = `s-${today}-${slot}`;
@@ -14105,6 +14108,7 @@ app.listen(PORT, () => {
         }
         if (slotsSummary.includes(slot) && lastDeltaAiSummaryKey !== sKey) {
           lastDeltaAiSummaryKey = sKey;
+          console.log("[Delta Ingreso AI] scheduler summary trigger:", { slot, today });
           runDeltaIngresoAiSendSummary().then((r) => console.log("[Delta Ingreso AI] scheduler summary:", r)).catch((e) => console.warn("[Delta Ingreso AI] scheduler summary error:", e.message));
         }
       }, 60000);
