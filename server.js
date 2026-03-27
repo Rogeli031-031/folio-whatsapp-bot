@@ -14094,7 +14094,8 @@ app.listen(PORT, () => {
               "20:34": "San Luis",
               "20:35": "Queretaro",
             };
-        const slotsSummary = TEST_MODE_AI ? ["17:45"] : ["08:00", "20:00"];
+        // Resumen para roles corporativos (incluye ZP). Se agrega 21:35 para reintento manual de hoy.
+        const slotsSummary = TEST_MODE_AI ? ["17:45"] : ["08:00", "20:30", "21:35"];
         const slotPlantKey = Object.prototype.hasOwnProperty.call(slotsQuestionMap, slot) ? slotsQuestionMap[slot] : undefined;
         const qKey = `q-${today}-${slot}-${slotPlantKey || "all"}`;
         const sKey = `s-${today}-${slot}`;
