@@ -41,6 +41,7 @@ const deltaIngresoAi = require("./lib/delta-ingreso-ai");
 const deltaIngresoAiDb = require("./lib/delta-ingreso-ai-db");
 const deltaIngresoCommands = require("./lib/delta-ingreso-commands");
 const deltaIngresoForecast = require("./lib/delta-ingreso-forecast");
+const ventaProyeccionMes = require("./lib/venta-proyeccion-mes");
 const dicf = require("./lib/dicf");
 const dicfAccionesLib = require("./lib/dicf-acciones");
 const { isDirectorZPForDashboard } = require("./lib/dashboard-es-zp");
@@ -6351,6 +6352,49 @@ app.get("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, res)
   }
 });
 
+/**
+ * Proyección de venta (ton) para un mes futuro: promedio de las últimas 2 semanas por día de la semana,
+ * multiplicado por los días de ese DOW en el mes objetivo. Útil para escenarios tipo abril en Excel.
+ * Query: target_year, target_month (mes a proyectar), opcional plant_code, fecha_hasta (último día de la ventana de 14 días; default ayer),
+ * mes_cargo_inversiones (default 2026-04) — recordatorio para folios/inversiones en el mismo escenario.
+ */
+app.get("/api/dashboard/venta-proyeccion-mes", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGAFinancialKpis(req, res)) return;
+  if (dashboardBlockGVForbidden(req, res)) return;
+  const targetYear = req.query.target_year != null ? parseInt(String(req.query.target_year), 10) : NaN;
+  const targetMonth = req.query.target_month != null ? parseInt(String(req.query.target_month), 10) : NaN;
+  let fechaHasta = (req.query.fecha_hasta || "").toString().trim().slice(0, 10);
+  if (!fechaHasta) {
+    const t = new Date();
+    t.setDate(t.getDate() - 1);
+    fechaHasta = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
+  }
+  const plantCode = (req.query.plant_code || "").toString().trim();
+  if (!Number.isFinite(targetYear) || !Number.isFinite(targetMonth) || targetMonth < 1 || targetMonth > 12) {
+    return res.status(400).json({ error: "target_year y target_month (1-12) son obligatorios" });
+  }
+  const mesCargoInversiones = (req.query.mes_cargo_inversiones || "2026-04").toString().trim();
+  const client = await pool.connect();
+  try {
+    if (plantCode) {
+      const row = await ventaProyeccionMes.computeVentaProyectadaMes(client, plantCode, targetYear, targetMonth, fechaHasta);
+      return res.json({ ok: true, inversiones_mes_cargo: mesCargoInversiones, ...row });
+    }
+    const r = await client.query(`SELECT plant_code FROM arr.provincia_plants ORDER BY plant_code`);
+    const plants = (r.rows || []).map((x) => x.plant_code).filter(Boolean);
+    const plantas = [];
+    for (const p of plants) {
+      plantas.push(await ventaProyeccionMes.computeVentaProyectadaMes(client, p, targetYear, targetMonth, fechaHasta));
+    }
+    res.json({ ok: true, inversiones_mes_cargo: mesCargoInversiones, plantas });
+  } catch (e) {
+    console.error("[Dashboard venta-proyeccion-mes]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
 /** Folios que componen las columnas Folios Aprob. Director ZP / Folios en carro / Depósito y cierre (IGF). */
 app.get("/api/dashboard/igf-folios-detalle", dashboardAuthMiddleware, async (req, res) => {
   if (dashboardBlockGAFinancialKpis(req, res)) return;
@@ -8286,10 +8330,25 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
   if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
     return res.status(400).json({ error: "Faltan year y month válidos en query" });
   }
+  const proyeccionHasta = (req.query.proyeccion_hasta || "").toString().trim().slice(0, 10) || null;
+  let proyeccionCatSub = null;
+  if (req.query.proyeccion_mes != null && req.query.proyeccion_anio != null) {
+    const proyeccionMes = parseInt(String(req.query.proyeccion_mes), 10);
+    const proyeccionAnio = parseInt(String(req.query.proyeccion_anio), 10);
+    if (!Number.isFinite(proyeccionMes) || !Number.isFinite(proyeccionAnio) || proyeccionMes < 1 || proyeccionMes > 12) {
+      return res.status(400).json({ error: "proyeccion_mes (1-12) y proyeccion_anio deben ser válidos" });
+    }
+    proyeccionCatSub = {
+      targetYear: proyeccionAnio,
+      targetMonth: proyeccionMes,
+      fechaHasta: proyeccionHasta,
+      plantCodeFilter: plantCode,
+    };
+  }
   const client = await pool.connect();
   try {
     const igfForecast = await buildIgfForecastPayload(client, year, month);
-    const buf = await dashboardArrForecast.generarDashboardArrForecast(client, year, month, plantCode, { igfForecast });
+    const buf = await dashboardArrForecast.generarDashboardArrForecast(client, year, month, plantCode, { igfForecast, proyeccionCatSub });
     const filename = `Dashboard_ARR_Forecast_${year}_${month}.xlsx`;
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
