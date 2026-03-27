@@ -4204,6 +4204,23 @@ async function getUsersByRole(client, rolClave) {
   return (r.rows || []).map((row) => ({ telefono: row.telefono, nombre: row.nombre }));
 }
 
+/** Destinatarios únicos (por teléfono) para resumen Delta Ingreso: GG, ZP (Director Zona), AD, GV, GA, CDMX. */
+async function getUsersDeltaIngresoResumenRoles(client) {
+  const roles = ["GG", "ZP", "AD", "GV", "GA", "CDMX"];
+  const seen = new Set();
+  const out = [];
+  for (const rol of roles) {
+    const users = await getUsersByRole(client, rol);
+    for (const u of users) {
+      const key = normalizePhone(u.telefono);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      out.push({ telefono: u.telefono, nombre: u.nombre, rol });
+    }
+  }
+  return out;
+}
+
 /** "Notificar a todos": GA + GG de la planta del folio + CDMX + ZP. Solo activos. */
 async function getTodosParaNotificacion(client, plantaId) {
   const phones = new Set();
@@ -9479,7 +9496,7 @@ app.get("/api/ai/delta-ingreso/test/help", (req, res) => {
       "1) Variables de entorno: En .env o en Render añade TEST_MODE=true para modo prueba (17:00 y 17:45). OPENAI_API_KEY=sk-... para redacción/parseo. DELTA_INGRESO_AI_PERIODO_A=2026-01 y DELTA_INGRESO_AI_PERIODO_B=2026-02.",
       "2) Desplegar: Reinicia el servidor (npm start o redeploy en Render) para que cargue TEST_MODE y las tablas delta_ingreso_ai_*.",
       "3) Disparar pregunta ahora: POST " + base + "/api/ai/delta-ingreso/test/send-question-now (body vacío o {}). Envía mensaje a gerentes GG de Provincia con top negativos y petición 5W2H.",
-      "4) Disparar resumen ahora: POST " + base + "/api/ai/delta-ingreso/test/send-summary-now. Envía resumen ejecutivo a ZP.",
+      "4) Disparar resumen ahora: POST " + base + "/api/ai/delta-ingreso/test/send-summary-now. Envía resumen (provincia + acciones DICF abiertas) a GG, ZP, AD, GV, GA, CDMX.",
       "5) Ver estado: GET " + base + "/api/ai/delta-ingreso/test/status. Devuelve última ejecución y conteos de outbox/actions.",
       "6) Logs: Revisa consola del servidor por [delta-ingreso-ai] y [Delta Ingreso AI].",
       "7) DB: Tablas public.delta_ingreso_ai_outbox, delta_ingreso_ai_inbox, delta_ingreso_ai_actions, delta_ingreso_ai_summary_zp.",
@@ -9542,18 +9559,36 @@ async function runDeltaIngresoAiSendQuestion() {
   }
 }
 
+/** Parte mensajes largos para WhatsApp (límite ~4k; usamos 3500). */
+function chunkWhatsAppText(text, maxLen = 3500) {
+  if (!text || text.length <= maxLen) return [text];
+  const out = [];
+  let rest = text;
+  while (rest.length) {
+    if (rest.length <= maxLen) {
+      out.push(rest);
+      break;
+    }
+    let cut = rest.lastIndexOf("\n\n", maxLen);
+    if (cut < maxLen * 0.5) cut = rest.lastIndexOf("\n", maxLen);
+    if (cut < maxLen * 0.5) cut = maxLen;
+    out.push(rest.slice(0, cut).trim());
+    rest = rest.slice(cut).trim();
+  }
+  return out;
+}
+
 async function runDeltaIngresoAiSendSummary() {
   const client = await pool.connect();
   try {
     await deltaIngresoAiDb.ensureDeltaIngresoAiSchema(client);
+    await dicfAccionesLib.ensureDicfAccionesTables(client);
     const plants = await deltaIngresoAiDb.getProvinciaPlantsWithPlantaId(client);
-    const allBriefs = [];
     const plantasNegativos = [];
     const todosClientesCriticos = [];
     for (const row of plants) {
       const data = await getDeltaIngresoDatosInternal(client, row.plant_code, PERIODO_AI_A, PERIODO_AI_B, false);
       if (data) {
-        allBriefs.push(deltaIngresoAi.buildBrief(row.plant_code, data));
         const dejaronVal = data.dejaron?.totalDeltaIngreso != null ? data.dejaron.totalDeltaIngreso : 0;
         const disminVal = data.disminuyeron?.totalDeltaIngreso != null ? data.disminuyeron.totalDeltaIngreso : 0;
         const totalNeg = dejaronVal + Math.abs(Math.min(0, disminVal));
@@ -9571,35 +9606,111 @@ async function runDeltaIngresoAiSendSummary() {
     const top3Plantas = plantasNegativos.slice(0, 3).map((x, i) => `${i + 1} ${x.planta}`).join(", ");
     const clientesUnicos = [...new Set(todosClientesCriticos)].slice(0, 3);
     const actions = await deltaIngresoAiDb.getActionsForSummary(client, PERIODO_AI_A, PERIODO_AI_B);
-    const abiertas = (actions || []).filter((a) => a.action_status !== "DONE").length;
-    const cerradasHoy = await client.query(
+    const abiertasIa = (actions || []).filter((a) => a.action_status !== "DONE").length;
+    const cerradasHoyIa = await client.query(
       `SELECT COUNT(*) AS n FROM public.delta_ingreso_ai_actions WHERE periodo_a = $1 AND periodo_b = $2 AND closed_confirmed_at IS NOT NULL AND (closed_confirmed_at AT TIME ZONE 'America/Mexico_City')::date = (CURRENT_TIMESTAMP AT TIME ZONE 'America/Mexico_City')::date`,
       [PERIODO_AI_A, PERIODO_AI_B]
     ).then((r) => (r.rows && r.rows[0] ? parseInt(r.rows[0].n, 10) : 0)).catch(() => 0);
+
+    let dicfRows = [];
+    try {
+      const dicfRes = await client.query(
+        `SELECT a.public_code, a.planta_label, a.cliente_nombre, a.grupo_tipo, a.canal, a.subcanal,
+                a.estado AS estado_workflow, a.fecha_compromiso, a.descripcion,
+                COALESCE(NULLIF(TRIM(COALESCE(rp.nombre_persona,'')), ''), rp.nombre) AS responsable_nombre
+           FROM arr.dicf_acciones a
+           LEFT JOIN public.usuarios rp ON rp.id = a.responsable_usuario_id
+          WHERE a.cerrado_at IS NULL
+            AND (a.estado IS NULL OR a.estado <> 'hecho')
+          ORDER BY a.planta_label NULLS LAST, a.cliente_nombre NULLS LAST, a.id`
+      );
+      dicfRows = dicfRes.rows || [];
+    } catch (e) {
+      console.warn("[Delta Ingreso AI] DICF resumen query:", e.message);
+    }
+
+    const cerradasDicfHoy = await client.query(
+      `SELECT COUNT(*)::int AS n FROM arr.dicf_acciones
+        WHERE cerrado_at IS NOT NULL
+          AND (cerrado_at AT TIME ZONE 'America/Mexico_City')::date = (CURRENT_TIMESTAMP AT TIME ZONE 'America/Mexico_City')::date`
+    ).then((r) => (r.rows && r.rows[0] ? parseInt(r.rows[0].n, 10) : 0)).catch(() => 0);
+
     const fmtMxn = (n) => (n != null && !isNaN(n) ? n.toLocaleString("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 0, maximumFractionDigits: 0 }) : "$0");
-    const summaryLines = [
+    const fmtFecha = (d) => {
+      if (!d) return null;
+      const x = d instanceof Date ? d : new Date(d);
+      if (Number.isNaN(x.getTime())) return null;
+      return x.toISOString().slice(0, 10);
+    };
+
+    const headerLines = [
       "Resumen Delta Ingreso",
+      `Periodos comparación: ${PERIODO_AI_A} → ${PERIODO_AI_B}`,
       `Total negativos provincia: ${fmtMxn(totalProvincia)}`,
       `Plantas más afectadas: ${top3Plantas || "-"}`,
       `Clientes críticos: ${clientesUnicos.join(", ") || "-"}`,
-      `Acciones abiertas: ${abiertas}`,
-      `Acciones cerradas hoy: ${cerradasHoy}`,
+      `Acciones seguimiento IA (5W2H) abiertas: ${abiertasIa} · cerradas hoy: ${cerradasHoyIa}`,
+      `Acciones DICF cerradas hoy: ${cerradasDicfHoy}`,
+      "",
     ];
-    const summaryText = summaryLines.join("\n");
-    const zpList = await getUsersByRole(client, "ZP");
+
+    let dicfBody = "";
+    if (!dicfRows.length) {
+      dicfBody = "📋 Acciones DICF abiertas: ninguna.";
+    } else {
+      const blocks = dicfRows.map((row, idx) => {
+        const comp = row.fecha_compromiso ? `Compromiso: ${fmtFecha(row.fecha_compromiso)}` : "Sin fecha de compromiso";
+        const desc = String(row.descripcion || "").slice(0, 280);
+        const more = String(row.descripcion || "").length > 280 ? "…" : "";
+        return (
+          `— ${idx + 1}/${dicfRows.length} —\n` +
+          `Planta: ${row.planta_label || "—"}\n` +
+          `Cliente: ${row.cliente_nombre || "—"}\n` +
+          `Grupo: ${row.grupo_tipo || "—"} · Canal: ${row.canal || "—"} · Subcanal: ${row.subcanal || "—"}\n` +
+          `Código: ${row.public_code || "—"}\n` +
+          `Estado: ${row.estado_workflow || "—"} · ${comp}\n` +
+          `Responsable: ${row.responsable_nombre || "—"}\n` +
+          `Descripción: ${desc}${more}`
+        );
+      });
+      dicfBody = `📋 Acciones DICF abiertas (${dicfRows.length}) — con o sin fecha de compromiso:\n\n${blocks.join("\n\n")}`;
+    }
+
+    const summaryText = `${headerLines.join("\n")}\n${dicfBody}`;
+    const parts = chunkWhatsAppText(summaryText);
+    const recipients = await getUsersDeltaIngresoResumenRoles(client);
     const today = new Date().toISOString().slice(0, 10);
-    let sent = 0;
-    for (const z of zpList) {
-      if (!z.telefono) continue;
-      try {
-        await sendWhatsApp(z.telefono, summaryText, { event: "delta_ingreso_ai_summary" });
-        sent++;
-      } catch (e) {
-        console.warn("[Delta Ingreso AI] send summary to ZP", e.message);
+    let messagesSent = 0;
+    for (const u of recipients) {
+      if (!u.telefono) continue;
+      for (let i = 0; i < parts.length; i++) {
+        const ptext = parts.length > 1 ? `${parts[i]}\n\n— Parte ${i + 1}/${parts.length} —` : parts[i];
+        try {
+          await sendWhatsApp(u.telefono, ptext, { event: "delta_ingreso_ai_summary" });
+          messagesSent++;
+        } catch (e) {
+          console.warn("[Delta Ingreso AI] send summary to", u.telefono, e.message);
+        }
       }
     }
-    await deltaIngresoAiDb.saveSummaryZp(client, today, PERIODO_AI_A, PERIODO_AI_B, summaryText, { actions_count: actions.length, abiertas, cerradas_hoy: cerradasHoy }, new Date());
-    return { sent, summary_length: summaryText.length };
+    await deltaIngresoAiDb.saveSummaryZp(
+      client,
+      today,
+      PERIODO_AI_A,
+      PERIODO_AI_B,
+      summaryText,
+      {
+        actions_ia_count: actions.length,
+        abiertas_ia: abiertasIa,
+        cerradas_hoy_ia: cerradasHoyIa,
+        dicf_abiertas: dicfRows.length,
+        cerradas_hoy_dicf: cerradasDicfHoy,
+        recipients: recipients.length,
+        messages_sent: messagesSent,
+      },
+      new Date()
+    );
+    return { messages_sent: messagesSent, recipients: recipients.length, summary_length: summaryText.length, dicf_abiertas: dicfRows.length };
   } finally {
     client.release();
   }
@@ -13933,8 +14044,9 @@ app.listen(PORT, () => {
         client.release();
       }
       console.log("[Startup] Schema y Delta Ingreso AI listos.");
-      if (TEST_MODE_AI) console.log("[Delta Ingreso AI] TEST_MODE activo: 17:00 y 17:45 (America/Mexico_City)");
-      let lastDeltaAiSlot = null;
+      if (TEST_MODE_AI) console.log("[Delta Ingreso AI] TEST_MODE activo: pregunta 17:00 · resumen 17:45 (America/Mexico_City)");
+      let lastDeltaAiQuestionKey = null;
+      let lastDeltaAiSummaryKey = null;
       const mxFormatter = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Mexico_City", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
       setInterval(() => {
         const now = new Date();
@@ -13944,15 +14056,17 @@ app.listen(PORT, () => {
         const m = parseInt(get("minute"), 10) || 0;
         const slot = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
         const today = `${get("year")}-${get("month")}-${get("day")}`;
-        const slotsQuestion = TEST_MODE_AI ? ["17:00"] : ["08:00"];
-        const slotsSummary = TEST_MODE_AI ? ["17:45"] : ["15:30"];
-        const isQuestionSlot = slotsQuestion.includes(slot);
-        const isSummarySlot = slotsSummary.includes(slot);
-        if (isQuestionSlot && lastDeltaAiSlot !== `q-${today}-${slot}`) {
-          lastDeltaAiSlot = `q-${today}-${slot}`;
+        /** Pregunta 5W2H a GG por planta (no coincide con resumen para evitar dos mensajes a la vez). */
+        const slotsQuestion = TEST_MODE_AI ? ["17:00"] : ["09:00"];
+        const slotsSummary = TEST_MODE_AI ? ["17:45"] : ["08:00", "20:00"];
+        const qKey = `q-${today}-${slot}`;
+        const sKey = `s-${today}-${slot}`;
+        if (slotsQuestion.includes(slot) && lastDeltaAiQuestionKey !== qKey) {
+          lastDeltaAiQuestionKey = qKey;
           runDeltaIngresoAiSendQuestion().then((r) => console.log("[Delta Ingreso AI] scheduler question:", r)).catch((e) => console.warn("[Delta Ingreso AI] scheduler question error:", e.message));
-        } else if (isSummarySlot && lastDeltaAiSlot !== `s-${today}-${slot}`) {
-          lastDeltaAiSlot = `s-${today}-${slot}`;
+        }
+        if (slotsSummary.includes(slot) && lastDeltaAiSummaryKey !== sKey) {
+          lastDeltaAiSummaryKey = sKey;
           runDeltaIngresoAiSendSummary().then((r) => console.log("[Delta Ingreso AI] scheduler summary:", r)).catch((e) => console.warn("[Delta Ingreso AI] scheduler summary error:", e.message));
         }
       }, 60000);
