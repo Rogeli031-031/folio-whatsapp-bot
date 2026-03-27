@@ -14081,12 +14081,18 @@ app.listen(PORT, () => {
         const slotsQuestionMap = TEST_MODE_AI
           ? { "17:00": null }
           : {
-              "08:15": "Acapulco",
-              "08:16": "Morelos",
-              "08:17": "Puebla",
-              "08:18": "Tehuacan",
-              "08:19": "San Luis",
-              "08:20": "Queretaro",
+              "08:00": "Acapulco",
+              "08:01": "Morelos",
+              "08:02": "Puebla",
+              "08:03": "Tehuacan",
+              "08:04": "San Luis",
+              "08:05": "Queretaro",
+              "20:30": "Acapulco",
+              "20:31": "Morelos",
+              "20:32": "Puebla",
+              "20:33": "Tehuacan",
+              "20:34": "San Luis",
+              "20:35": "Queretaro",
             };
         const slotsSummary = TEST_MODE_AI ? ["17:45"] : ["08:00", "20:00"];
         const slotPlantKey = Object.prototype.hasOwnProperty.call(slotsQuestionMap, slot) ? slotsQuestionMap[slot] : undefined;
