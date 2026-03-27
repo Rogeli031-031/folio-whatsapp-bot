@@ -9528,11 +9528,32 @@ app.get("/api/ai/delta-ingreso/test/status", async (req, res) => {
   }
 });
 
-async function runDeltaIngresoAiSendQuestion() {
+function normalizePlantSlotKey(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+}
+
+function matchesQuestionPlantSlot(rowPlantCode, slotPlantKey) {
+  const normCode = normalizePlantSlotKey(rowPlantCode);
+  const normSlot = normalizePlantSlotKey(slotPlantKey);
+  if (!normCode || !normSlot) return false;
+  if (normCode.includes(normSlot)) return true;
+  if (normSlot === "sanluis" && normCode.includes("sanluis")) return true;
+  return false;
+}
+
+async function runDeltaIngresoAiSendQuestion(options = {}) {
+  const slotPlantKey = options && options.slotPlantKey ? String(options.slotPlantKey) : null;
   const client = await pool.connect();
   try {
     await deltaIngresoAiDb.ensureDeltaIngresoAiSchema(client);
-    const plants = await deltaIngresoAiDb.getProvinciaPlantsWithPlantaId(client);
+    const allPlants = await deltaIngresoAiDb.getProvinciaPlantsWithPlantaId(client);
+    const plants = slotPlantKey
+      ? allPlants.filter((row) => matchesQuestionPlantSlot(row.plant_code, slotPlantKey))
+      : allPlants;
     let sent = 0;
     for (const row of plants) {
       const data = await getDeltaIngresoDatosInternal(client, row.plant_code, PERIODO_AI_A, PERIODO_AI_B, false);
@@ -9553,7 +9574,7 @@ async function runDeltaIngresoAiSendQuestion() {
         }
       }
     }
-    return { sent, plants: plants.length };
+    return { sent, plants: plants.length, slotPlantKey: slotPlantKey || null };
   } finally {
     client.release();
   }
@@ -14056,14 +14077,24 @@ app.listen(PORT, () => {
         const m = parseInt(get("minute"), 10) || 0;
         const slot = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
         const today = `${get("year")}-${get("month")}-${get("day")}`;
-        /** Pregunta 5W2H a GG por planta (no coincide con resumen para evitar dos mensajes a la vez). */
-        const slotsQuestion = TEST_MODE_AI ? ["17:00"] : ["09:00"];
+        /** Pregunta 5W2H a GG por planta (desfasada 1 minuto por planta para evitar saturación). */
+        const slotsQuestionMap = TEST_MODE_AI
+          ? { "17:00": null }
+          : {
+              "08:15": "Acapulco",
+              "08:16": "Morelos",
+              "08:17": "Puebla",
+              "08:18": "Tehuacan",
+              "08:19": "San Luis",
+              "08:20": "Queretaro",
+            };
         const slotsSummary = TEST_MODE_AI ? ["17:45"] : ["08:00", "20:00"];
-        const qKey = `q-${today}-${slot}`;
+        const slotPlantKey = Object.prototype.hasOwnProperty.call(slotsQuestionMap, slot) ? slotsQuestionMap[slot] : undefined;
+        const qKey = `q-${today}-${slot}-${slotPlantKey || "all"}`;
         const sKey = `s-${today}-${slot}`;
-        if (slotsQuestion.includes(slot) && lastDeltaAiQuestionKey !== qKey) {
+        if (slotPlantKey !== undefined && lastDeltaAiQuestionKey !== qKey) {
           lastDeltaAiQuestionKey = qKey;
-          runDeltaIngresoAiSendQuestion().then((r) => console.log("[Delta Ingreso AI] scheduler question:", r)).catch((e) => console.warn("[Delta Ingreso AI] scheduler question error:", e.message));
+          runDeltaIngresoAiSendQuestion({ slotPlantKey }).then((r) => console.log("[Delta Ingreso AI] scheduler question:", r)).catch((e) => console.warn("[Delta Ingreso AI] scheduler question error:", e.message));
         }
         if (slotsSummary.includes(slot) && lastDeltaAiSummaryKey !== sKey) {
           lastDeltaAiSummaryKey = sKey;
