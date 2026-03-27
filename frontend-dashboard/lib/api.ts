@@ -249,6 +249,24 @@ export function fetchIgfForecast(
   });
 }
 
+/** Escribe arr.forecast_mensual para todas las plantas provincia (mismo mes). Luego vuelve a cargar IGF con fetchIgfForecast. */
+export function postForecastProvincia(
+  token: string,
+  payload: { year: number; month: number }
+): Promise<{
+  ok: boolean;
+  year: number;
+  month: number;
+  plants: number;
+  results: Array<{ plant_code: string; ok: boolean; error?: string }>;
+}> {
+  return apiFetch("/api/arr/forecast-provincia", {
+    token,
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export function patchIgfForecastHg(
   token: string,
   payload: { year: number; month: number; empresa: string; hg_pct?: number | null; hg_kg?: number | null }

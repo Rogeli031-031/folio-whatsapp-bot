@@ -5648,6 +5648,22 @@ function fmtDateYmdLocal(d) {
   return `${y}-${m}-${day}`;
 }
 
+function yesterdayYmdLocal() {
+  const t = new Date();
+  t.setHours(12, 0, 0, 0);
+  t.setDate(t.getDate() - 1);
+  return fmtDateYmdLocal(t);
+}
+
+/** En el mes en curso, no usar como corte un día posterior a ayer (evita día incompleto en DB que achica proyección). */
+function capForecastCutoffToYesterday(cutoffDateStr, year, month) {
+  const now = new Date();
+  const isCurrentMonth = now.getFullYear() === year && now.getMonth() + 1 === month;
+  if (!isCurrentMonth || !cutoffDateStr) return cutoffDateStr;
+  const y = yesterdayYmdLocal();
+  return cutoffDateStr > y ? y : cutoffDateStr;
+}
+
 /** Última fecha cargada del mes para forecast ARR; evita que cambie por paso de día si no hay upload. */
 async function getArrForecastCutoffDate(client, tableName, year, month) {
   const start = `${year}-${String(month).padStart(2, "0")}-01`;
@@ -5691,8 +5707,9 @@ async function getVentaForecastProvinciaDesdeArr(client, year, month) {
   const today = new Date();
   const isCurrentMonth = today.getFullYear() === year && today.getMonth() + 1 === month;
   if (!isCurrentMonth) return new Map();
-  const cutoffDate = await getArrForecastCutoffDate(client, "arr.ventas_diarias_cliente", year, month);
+  let cutoffDate = await getArrForecastCutoffDate(client, "arr.ventas_diarias_cliente", year, month);
   if (!cutoffDate) return new Map();
+  cutoffDate = capForecastCutoffToYesterday(cutoffDate, year, month);
   const cutoffDay = parseInt(cutoffDate.slice(8, 10), 10);
   if (!Number.isFinite(cutoffDay) || cutoffDay < 1) return new Map();
 
@@ -5798,8 +5815,9 @@ async function getDescuentoForecastProvinciaDesdeArr(client, year, month) {
   const today = new Date();
   const isCurrentMonth = today.getFullYear() === year && today.getMonth() + 1 === month;
   if (!isCurrentMonth) return new Map();
-  const cutoffDate = await getArrForecastCutoffDate(client, "arr.descuentos_diarios_cliente", year, month);
+  let cutoffDate = await getArrForecastCutoffDate(client, "arr.descuentos_diarios_cliente", year, month);
   if (!cutoffDate) return new Map();
+  cutoffDate = capForecastCutoffToYesterday(cutoffDate, year, month);
   const cutoffDay = parseInt(cutoffDate.slice(8, 10), 10);
   if (!Number.isFinite(cutoffDay) || cutoffDay < 1) return new Map();
 
@@ -8315,6 +8333,37 @@ app.post("/api/arr/forecast", dashboardAuthMiddleware, async (req, res) => {
     res.json({ ok: true, ...result });
   } catch (e) {
     console.error("[ARR forecast]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/** Recalcula arr.forecast_mensual para todas las plantas provincia (mismo mes). Útil para refrescar sin resubir archivo. */
+app.post("/api/arr/forecast-provincia", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGAFinancialKpis(req, res)) return;
+  if (dashboardBlockGVForbidden(req, res)) return;
+  const year = req.body?.year != null ? parseInt(String(req.body.year), 10) : NaN;
+  const month = req.body?.month != null ? parseInt(String(req.body.month), 10) : NaN;
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
+    return res.status(400).json({ error: "year y month (1-12) son obligatorios" });
+  }
+  const client = await pool.connect();
+  try {
+    const r = await client.query(`SELECT plant_code FROM arr.provincia_plants ORDER BY plant_code`);
+    const plants = (r.rows || []).map((row) => (row.plant_code || "").trim()).filter(Boolean);
+    const results = [];
+    for (const p of plants) {
+      try {
+        await forecastMensual.calcularForecastMensual(client, p, year, month, null);
+        results.push({ plant_code: p, ok: true });
+      } catch (err) {
+        results.push({ plant_code: p, ok: false, error: err && err.message ? String(err.message) : String(err) });
+      }
+    }
+    res.json({ ok: true, year, month, plants: results.length, results });
+  } catch (e) {
+    console.error("[ARR forecast-provincia]", e);
     res.status(500).json({ error: e.message });
   } finally {
     client.release();

@@ -11,6 +11,7 @@ import {
 } from "@/lib/auth";
 import {
   fetchIgfForecast,
+  postForecastProvincia,
   patchIgfForecastHg,
   getDashboardExcelDownloadUrl,
   fetchPresupuestoDetalle,
@@ -106,6 +107,8 @@ export function IgfForecastContent() {
   const [inversionCdjzSaved, setInversionCdjzSaved] = useState(false);
   const [igfMesAnterior, setIgfMesAnterior] = useState<IgfForecastResponse | null>(null);
   const [igfMesAnteriorLoading, setIgfMesAnteriorLoading] = useState(false);
+  const [forecastRecalcLoading, setForecastRecalcLoading] = useState(false);
+  const [forecastRecalcMsg, setForecastRecalcMsg] = useState<string | null>(null);
 
   const isGAPageBlocked = token ? getRoleFromDashboardToken(token) === "GA" : false;
   const isGVPageBlocked = token ? getRoleFromDashboardToken(token) === "GV" : false;
@@ -254,6 +257,22 @@ export function IgfForecastContent() {
     return n(row.resultado_final_importe) - (deltaInvCostKg * ventaKg);
   };
 
+  const handleRecalcForecastProvincia = async () => {
+    if (!token || !igfForecast) return;
+    setForecastRecalcLoading(true);
+    setForecastRecalcMsg(null);
+    try {
+      await postForecastProvincia(token, { year: igfForecast.year, month: igfForecast.month });
+      const data = await fetchIgfForecast(token, { year: igfForecast.year, month: igfForecast.month });
+      setIgfForecast(data);
+      setForecastRecalcMsg("Venta forecast recalculado (ARR provincia) y tabla actualizada.");
+    } catch (e: unknown) {
+      setForecastRecalcMsg(e instanceof Error ? e.message : "Error al recalcular forecast");
+    } finally {
+      setForecastRecalcLoading(false);
+    }
+  };
+
   const openIgfFoliosDetalle = async (row: IgfForecastRow, tipo: IgfFolioDetalleTipo, label: string) => {
     setIgfFoliosModal({ empresa: row.empresa || "", tipo, label });
     setIgfFoliosItems(null);
@@ -292,7 +311,7 @@ export function IgfForecastContent() {
           ← KPI Financieros
         </Link>
       </div>
-      <div className="flex flex-wrap gap-3 px-4 py-3 border-b border-slate-700/80 bg-slate-800/30">
+      <div className="flex flex-wrap gap-3 px-4 py-3 border-b border-slate-700/80 bg-slate-800/30 items-center">
         {igfForecast && token && (
           <a
             href={getDashboardExcelDownloadUrl(token, igfForecast.year, igfForecast.month)}
@@ -302,6 +321,21 @@ export function IgfForecastContent() {
           >
             Descargar Excel (Forecast)
           </a>
+        )}
+        {igfForecast && token && (
+          <button
+            type="button"
+            onClick={() => void handleRecalcForecastProvincia()}
+            disabled={forecastRecalcLoading}
+            className="inline-flex items-center gap-2 rounded bg-indigo-700 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-600 disabled:opacity-50"
+          >
+            {forecastRecalcLoading ? "Calculando…" : "Recalcular venta forecast (ARR)"}
+          </button>
+        )}
+        {forecastRecalcMsg && (
+          <span className={`text-sm ${forecastRecalcMsg.startsWith("Error") ? "text-red-400" : "text-emerald-400"}`}>
+            {forecastRecalcMsg}
+          </span>
         )}
         <Link
           href={token ? `/dashboard?t=${encodeURIComponent(token)}` : "/dashboard"}
