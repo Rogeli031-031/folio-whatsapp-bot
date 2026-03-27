@@ -9561,16 +9561,20 @@ async function runDeltaIngresoAiSendQuestion(options = {}) {
       const brief = deltaIngresoAi.buildBrief(row.plant_code, data);
       const openActions = await deltaIngresoAiDb.getOpenActionsByPlant(client, row.plant_code, PERIODO_AI_A, PERIODO_AI_B);
       const text = await deltaIngresoAi.composeManagerQuestion(brief, openActions);
+      const parts = chunkWhatsAppText(text, 1400);
       const gerentes = await getUsersByRoleAndPlanta(client, "GG", row.planta_id);
       for (const g of gerentes) {
         if (!g.telefono) continue;
-        const ob = await deltaIngresoAiDb.insertOutbox(client, { plant_code: row.plant_code, to_phone: g.telefono, kind: "QUESTION", text });
-        try {
-          await sendWhatsApp(g.telefono, text, { event: "delta_ingreso_ai_question" });
-          await deltaIngresoAiDb.updateOutboxSent(client, ob.id, new Date());
-          sent++;
-        } catch (e) {
-          console.warn("[Delta Ingreso AI] send question to", g.telefono, e.message);
+        for (let i = 0; i < parts.length; i++) {
+          const ptext = parts.length > 1 ? `${parts[i]}\n\n— Parte ${i + 1}/${parts.length} —` : parts[i];
+          const ob = await deltaIngresoAiDb.insertOutbox(client, { plant_code: row.plant_code, to_phone: g.telefono, kind: "QUESTION", text: ptext });
+          try {
+            await sendWhatsApp(g.telefono, ptext, { event: "delta_ingreso_ai_question" });
+            await deltaIngresoAiDb.updateOutboxSent(client, ob.id, new Date());
+            sent++;
+          } catch (e) {
+            console.warn("[Delta Ingreso AI] send question to", g.telefono, e.message);
+          }
         }
       }
     }
@@ -9605,11 +9609,22 @@ function chunkWhatsAppText(text, maxLen = 1400) {
 async function runDeltaIngresoAiSendSummary() {
   const client = await pool.connect();
   try {
+    const isOverdueAction = (a) => {
+      if (!a || !a.when_date) return false;
+      const x = new Date(a.when_date);
+      if (Number.isNaN(x.getTime())) return false;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      x.setHours(0, 0, 0, 0);
+      return x < today && String(a.action_status || "").toUpperCase() !== "DONE";
+    };
+
     await deltaIngresoAiDb.ensureDeltaIngresoAiSchema(client);
     await dicfAccionesLib.ensureDicfAccionesTables(client);
     const plants = await deltaIngresoAiDb.getProvinciaPlantsWithPlantaId(client);
     const plantasNegativos = [];
     const todosClientesCriticos = [];
+    const detalleDeltaPorPlanta = [];
     for (const row of plants) {
       const data = await getDeltaIngresoDatosInternal(client, row.plant_code, PERIODO_AI_A, PERIODO_AI_B, false);
       if (data) {
@@ -9623,6 +9638,34 @@ async function runDeltaIngresoAiSendSummary() {
         ];
         combined.sort((a, b) => (a.delta != null && b.delta != null ? a.delta - b.delta : 0));
         todosClientesCriticos.push(...combined.slice(0, 2).map((x) => x.cliente));
+
+        const topNo = (data.dejaron?.clientes || []).slice(0, 2);
+        const topMenos = (data.disminuyeron?.clientes || []).slice(0, 2);
+        const openActions = await deltaIngresoAiDb.getOpenActionsByPlant(client, row.plant_code, PERIODO_AI_A, PERIODO_AI_B).catch(() => []);
+        const byCliente = new Map();
+        (openActions || []).forEach((a) => {
+          const key = String(a.cliente_norm || "").trim().toLowerCase();
+          if (!key) return;
+          if (!byCliente.has(key)) byCliente.set(key, a);
+        });
+        const lines = [];
+        for (const c of topNo) {
+          const key = String(c.cliente || "").trim().toLowerCase();
+          const a = byCliente.get(key);
+          const nota = a ? String(a.last_update_text || a.what || "").trim() : "";
+          const vencida = a && isOverdueAction(a) ? " 🔴" : "";
+          lines.push(`- No compran ${c.cliente}: A ${c.kgAStr || "0.0"} ton -> B ${c.kgBStr || "0.0"} ton | Delta ${c.ingresoAStr || "$0"}${a ? ` | Seg: ${a.action_status || "OPEN"}${vencida} ${nota ? `| ${nota.slice(0, 90)}${nota.length > 90 ? "..." : ""}` : ""}` : " | Seg: sin action register"}`);
+        }
+        for (const c of topMenos) {
+          const key = String(c.cliente || "").trim().toLowerCase();
+          const a = byCliente.get(key);
+          const nota = a ? String(a.last_update_text || a.what || "").trim() : "";
+          const vencida = a && isOverdueAction(a) ? " 🔴" : "";
+          lines.push(`- Disminuyeron ${c.cliente}: A ${c.kgAStr || "0.0"} ton -> B ${c.kgBStr || "0.0"} ton | Delta ${c.deltaIngresoStr || "$0"}${a ? ` | Seg: ${a.action_status || "OPEN"}${vencida} ${nota ? `| ${nota.slice(0, 90)}${nota.length > 90 ? "..." : ""}` : ""}` : " | Seg: sin action register"}`);
+        }
+        if (lines.length) {
+          detalleDeltaPorPlanta.push(`\nPlanta ${row.plant_code}\n${lines.join("\n")}`);
+        }
       }
     }
     plantasNegativos.sort((a, b) => b.totalNeg - a.totalNeg);
@@ -9678,6 +9721,10 @@ async function runDeltaIngresoAiSendSummary() {
       "",
     ];
 
+    const deltaDetalleText = detalleDeltaPorPlanta.length
+      ? `📉 Delta Ingreso por planta (toneladas, MXN y seguimiento):\n${detalleDeltaPorPlanta.join("\n")}\n`
+      : "📉 Delta Ingreso por planta: sin datos.";
+
     let dicfBody = "";
     if (!dicfRows.length) {
       dicfBody = "📋 Acciones DICF abiertas: ninguna.";
@@ -9700,7 +9747,7 @@ async function runDeltaIngresoAiSendSummary() {
       dicfBody = `📋 Acciones DICF abiertas (${dicfRows.length}) — con o sin fecha de compromiso:\n\n${blocks.join("\n\n")}`;
     }
 
-    const summaryText = `${headerLines.join("\n")}\n${dicfBody}`;
+    const summaryText = `${headerLines.join("\n")}\n${deltaDetalleText}\n${dicfBody}`;
     const parts = chunkWhatsAppText(summaryText);
     const recipients = await getUsersDeltaIngresoResumenRoles(client);
     const today = new Date().toISOString().slice(0, 10);
@@ -14090,15 +14137,14 @@ app.listen(PORT, () => {
               "08:03": "Tehuacan",
               "08:04": "San Luis",
               "08:05": "Queretaro",
-              "20:30": "Acapulco",
-              "20:31": "Morelos",
-              "20:32": "Puebla",
-              "20:33": "Tehuacan",
-              "20:34": "San Luis",
-              "20:35": "Queretaro",
+              "15:30": "Acapulco",
+              "15:31": "Morelos",
+              "15:32": "Puebla",
+              "15:33": "Tehuacan",
+              "15:34": "San Luis",
+              "15:35": "Queretaro",
             };
-        // Resumen para roles corporativos (incluye ZP). Se agregan slots manuales para reintentos controlados.
-        const slotsSummary = TEST_MODE_AI ? ["17:45"] : ["08:00", "20:30", "21:35", "21:43"];
+        const slotsSummary = TEST_MODE_AI ? ["17:45"] : ["08:00", "15:30"];
         const slotPlantKey = Object.prototype.hasOwnProperty.call(slotsQuestionMap, slot) ? slotsQuestionMap[slot] : undefined;
         const qKey = `q-${today}-${slot}-${slotPlantKey || "all"}`;
         const sKey = `s-${today}-${slot}`;
