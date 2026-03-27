@@ -11,10 +11,20 @@ function getApiUrl(path: string): string {
   return `/api-backend${path.startsWith("/") ? path : `/${path}`}`;
 }
 
-/** URL para descargar el Excel del Forecast (mes actual) que envía la segunda liga del comando dashboard. */
+/** Mes calendario siguiente a (year, month), para la hoja "Proy cat/sub mes" en el mismo Excel. */
+function nextCalendarMonth(year: number, month: number): { y: number; m: number } {
+  if (month === 12) return { y: year + 1, m: 1 };
+  return { y: year, m: month + 1 };
+}
+
+/**
+ * URL para descargar el Excel del Forecast (Provincia Venta/Comisiones + IGF + proyección siguiente mes por cat/sub).
+ * Incluye proyeccion_anio/mes = mes siguiente al seleccionado (ej. marzo 2026 → abril 2026).
+ */
 export function getDashboardExcelDownloadUrl(token: string, year: number, month: number): string {
   const base = getApiUrl("/api/arr/dashboard-excel");
-  return `${base}?year=${year}&month=${month}&t=${encodeURIComponent(token)}`;
+  const next = nextCalendarMonth(year, month);
+  return `${base}?year=${year}&month=${month}&proyeccion_anio=${next.y}&proyeccion_mes=${next.m}&t=${encodeURIComponent(token)}`;
 }
 
 export async function apiFetch<T>(
