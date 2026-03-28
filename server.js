@@ -5648,56 +5648,17 @@ function fmtDateYmdLocal(d) {
   return `${y}-${m}-${day}`;
 }
 
-function yesterdayYmdLocal() {
-  const t = new Date();
-  t.setHours(12, 0, 0, 0);
-  t.setDate(t.getDate() - 1);
-  return fmtDateYmdLocal(t);
-}
-
-/** En el mes en curso, no usar como corte un día posterior a ayer (evita día incompleto en DB que achica proyección). */
-function capForecastCutoffToYesterday(cutoffDateStr, year, month) {
-  const now = new Date();
-  const isCurrentMonth = now.getFullYear() === year && now.getMonth() + 1 === month;
-  if (!isCurrentMonth || !cutoffDateStr) return cutoffDateStr;
-  const y = yesterdayYmdLocal();
-  return cutoffDateStr > y ? y : cutoffDateStr;
-}
-
-/** Última fecha cargada del mes para forecast ARR; evita que cambie por paso de día si no hay upload. */
-async function getArrForecastCutoffDate(client, tableName, year, month) {
-  const start = `${year}-${String(month).padStart(2, "0")}-01`;
-  const endDay = new Date(year, month, 0).getDate();
-  const end = `${year}-${String(month).padStart(2, "0")}-${String(endDay).padStart(2, "0")}`;
-  const sql = `
-    WITH prov_map AS (
-      SELECT DISTINCT p.nombre AS prov_name,
-             UPPER(TRIM(p.nombre)) AS key_nombre,
-             UPPER(TRIM(COALESCE(p.clave, ''))) AS key_clave
-        FROM public.plantas p
-        JOIN arr.provincia_plants ap
-          ON UPPER(TRIM(ap.plant_code)) = UPPER(TRIM(p.nombre))
-          OR (p.clave IS NOT NULL AND TRIM(p.clave) <> '' AND UPPER(TRIM(ap.plant_code)) = UPPER(TRIM(p.clave)))
-       WHERE UPPER(TRIM(COALESCE(p.nombre, ''))) != 'CORPORATIVO'
-         AND UPPER(TRIM(COALESCE(p.clave, ''))) != 'CORPORATIVO'
-    )
-    SELECT MAX(t.fecha)::date AS cutoff
-      FROM ${tableName} t
-      JOIN prov_map pm
-        ON UPPER(TRIM(t.plant_code)) = pm.key_nombre
-        OR (pm.key_clave <> '' AND UPPER(TRIM(t.plant_code)) = pm.key_clave)
-     WHERE t.fecha >= $1::date AND t.fecha <= $2::date
-  `;
-  const r = await client.query(sql, [start, end]);
-  const cutoffRaw = r.rows && r.rows[0] ? r.rows[0].cutoff : null;
-  if (!cutoffRaw) return null;
-  return cutoffRaw instanceof Date ? fmtDateYmdLocal(cutoffRaw) : String(cutoffRaw).slice(0, 10);
+/** Fecha de hoy en YYYY-MM-DD (calendario del servidor). Día de “carga” literal para forecast: no se infiere de MAX(fecha) en BD. */
+function getLocalTodayYmd() {
+  return fmtDateYmdLocal(new Date());
 }
 
 /**
  * Venta forecast por planta (solo mes actual): promedio por día de semana (últimas 2 semanas)
- * × ocurrencias restantes del mes + venta acumulada hasta ayer. Fuente: arr.ventas_diarias_cliente.
- * Usa prov_map (nombre/clave de public.plantas) para agrupar igual que refresh_provincia.
+ * × días a proyectar + venta acumulada solo en días “cerrados”.
+ * El día de carga es la fecha calendario de hoy (no la última fecha en los datos subidos). Si en BD hay filas
+ * con esa fecha, no entran al acumulado ni a la ventana de 14 días; ese día va solo a la proyección (hasta fin de mes).
+ * Fuente: arr.ventas_diarias_cliente. Usa prov_map igual que refresh_provincia.
  * @param {object} client - pg client
  * @param {number} year
  * @param {number} month
@@ -5707,11 +5668,13 @@ async function getVentaForecastProvinciaDesdeArr(client, year, month) {
   const today = new Date();
   const isCurrentMonth = today.getFullYear() === year && today.getMonth() + 1 === month;
   if (!isCurrentMonth) return new Map();
-  let cutoffDate = await getArrForecastCutoffDate(client, "arr.ventas_diarias_cliente", year, month);
-  if (!cutoffDate) return new Map();
-  cutoffDate = capForecastCutoffToYesterday(cutoffDate, year, month);
-  const cutoffDay = parseInt(cutoffDate.slice(8, 10), 10);
-  if (!Number.isFinite(cutoffDay) || cutoffDay < 1) return new Map();
+  const uploadDayStr = getLocalTodayYmd();
+  const uploadY = parseInt(uploadDayStr.slice(0, 4), 10);
+  const uploadM = parseInt(uploadDayStr.slice(5, 7), 10);
+  const uploadDayNum = parseInt(uploadDayStr.slice(8, 10), 10);
+  if (!Number.isFinite(uploadY) || !Number.isFinite(uploadM) || !Number.isFinite(uploadDayNum) || uploadY !== year || uploadM !== month) {
+    return new Map();
+  }
 
   const lastDay = new Date(year, month, 0).getDate();
   const firstDayStr = `${year}-${String(month).padStart(2, "0")}-01`;
@@ -5720,7 +5683,8 @@ async function getVentaForecastProvinciaDesdeArr(client, year, month) {
   const plantCodes = (prov.rows || []).map((r) => (r.plant_code || "").trim()).filter(Boolean);
   if (plantCodes.length === 0) return new Map();
 
-  // Mismo mapeo que arr-refresh-provincia: ventas por nombre o clave de planta → prov_name
+  // Mismo mapeo que arr-refresh-provincia: ventas por nombre o clave de planta → prov_name.
+  // Excluye explícitamente v.fecha < día de carga (hoy): cualquier kg subido para hoy no cuenta como real.
   const r14 = await client.query(
     `WITH prov_map AS (
        SELECT DISTINCT p.nombre AS prov_name,
@@ -5738,10 +5702,10 @@ async function getVentaForecastProvinciaDesdeArr(client, year, month) {
        JOIN prov_map pm
          ON UPPER(TRIM(v.plant_code)) = pm.key_nombre
          OR (pm.key_clave <> '' AND UPPER(TRIM(v.plant_code)) = pm.key_clave)
-      WHERE v.fecha >= ($1::date - INTERVAL '13 days') AND v.fecha <= $1::date
+      WHERE v.fecha >= ($1::date - INTERVAL '14 days') AND v.fecha < $1::date
       GROUP BY pm.prov_name, v.fecha`
     ,
-    [cutoffDate]
+    [uploadDayStr]
   );
   const rAcum = await client.query(
     `WITH prov_map AS (
@@ -5760,9 +5724,9 @@ async function getVentaForecastProvinciaDesdeArr(client, year, month) {
        JOIN prov_map pm
          ON UPPER(TRIM(v.plant_code)) = pm.key_nombre
          OR (pm.key_clave <> '' AND UPPER(TRIM(v.plant_code)) = pm.key_clave)
-      WHERE v.fecha >= $1::date AND v.fecha <= $2::date
+      WHERE v.fecha >= $1::date AND v.fecha < $2::date
       GROUP BY pm.prov_name`,
-    [firstDayStr, cutoffDate]
+    [firstDayStr, uploadDayStr]
   );
   const acumByPlant = new Map((rAcum.rows || []).map((row) => [row.plant_code, Number(row.kg) || 0]));
 
@@ -5780,9 +5744,9 @@ async function getVentaForecastProvinciaDesdeArr(client, year, month) {
     avgByPlantDow.set(key, count > 0 ? sum / count : 0);
   }
 
-  // Días restantes del mes a partir del día posterior al último día cargado.
+  // Días a proyectar: desde hoy (día de carga literal) hasta fin de mes, inclusive.
   const restCountByDow = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0 };
-  for (let d = cutoffDay + 1; d <= lastDay; d++) {
+  for (let d = uploadDayNum; d <= lastDay; d++) {
     const fd = new Date(year, month - 1, d);
     const dow = fd.getDay() || 7;
     restCountByDow[dow] = (restCountByDow[dow] || 0) + 1;
@@ -5804,7 +5768,7 @@ async function getVentaForecastProvinciaDesdeArr(client, year, month) {
 
 /**
  * Descuento forecast por planta (solo mes actual): misma lógica que venta — promedio por día de semana
- * (últimas 2 semanas) × ocurrencias restantes del mes + descuento acumulado hasta ayer.
+ * (últimas 2 semanas) × días a proyectar + descuento acumulado solo hasta ayer (día anterior al de hoy).
  * Fuente: arr.descuentos_diarios_cliente (monto en $).
  * @param {object} client - pg client
  * @param {number} year
@@ -5815,11 +5779,13 @@ async function getDescuentoForecastProvinciaDesdeArr(client, year, month) {
   const today = new Date();
   const isCurrentMonth = today.getFullYear() === year && today.getMonth() + 1 === month;
   if (!isCurrentMonth) return new Map();
-  let cutoffDate = await getArrForecastCutoffDate(client, "arr.descuentos_diarios_cliente", year, month);
-  if (!cutoffDate) return new Map();
-  cutoffDate = capForecastCutoffToYesterday(cutoffDate, year, month);
-  const cutoffDay = parseInt(cutoffDate.slice(8, 10), 10);
-  if (!Number.isFinite(cutoffDay) || cutoffDay < 1) return new Map();
+  const uploadDayStr = getLocalTodayYmd();
+  const uploadY = parseInt(uploadDayStr.slice(0, 4), 10);
+  const uploadM = parseInt(uploadDayStr.slice(5, 7), 10);
+  const uploadDayNum = parseInt(uploadDayStr.slice(8, 10), 10);
+  if (!Number.isFinite(uploadY) || !Number.isFinite(uploadM) || !Number.isFinite(uploadDayNum) || uploadY !== year || uploadM !== month) {
+    return new Map();
+  }
 
   const lastDay = new Date(year, month, 0).getDate();
   const firstDayStr = `${year}-${String(month).padStart(2, "0")}-01`;
@@ -5845,10 +5811,10 @@ async function getDescuentoForecastProvinciaDesdeArr(client, year, month) {
        JOIN prov_map pm
          ON UPPER(TRIM(d.plant_code)) = pm.key_nombre
          OR (pm.key_clave <> '' AND UPPER(TRIM(d.plant_code)) = pm.key_clave)
-      WHERE d.fecha >= ($1::date - INTERVAL '13 days') AND d.fecha <= $1::date
+      WHERE d.fecha >= ($1::date - INTERVAL '14 days') AND d.fecha < $1::date
       GROUP BY pm.prov_name, d.fecha`
     ,
-    [cutoffDate]
+    [uploadDayStr]
   );
   const rAcum = await client.query(
     `WITH prov_map AS (
@@ -5867,9 +5833,9 @@ async function getDescuentoForecastProvinciaDesdeArr(client, year, month) {
        JOIN prov_map pm
          ON UPPER(TRIM(d.plant_code)) = pm.key_nombre
          OR (pm.key_clave <> '' AND UPPER(TRIM(d.plant_code)) = pm.key_clave)
-      WHERE d.fecha >= $1::date AND d.fecha <= $2::date
+      WHERE d.fecha >= $1::date AND d.fecha < $2::date
       GROUP BY pm.prov_name`,
-    [firstDayStr, cutoffDate]
+    [firstDayStr, uploadDayStr]
   );
   const acumByPlant = new Map((rAcum.rows || []).map((row) => [row.plant_code, Number(row.monto) || 0]));
 
@@ -5887,7 +5853,7 @@ async function getDescuentoForecastProvinciaDesdeArr(client, year, month) {
   }
 
   const restCountByDow = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0 };
-  for (let d = cutoffDay + 1; d <= lastDay; d++) {
+  for (let d = uploadDayNum; d <= lastDay; d++) {
     const fd = new Date(year, month - 1, d);
     const dow = fd.getDay() || 7;
     restCountByDow[dow] = (restCountByDow[dow] || 0) + 1;
