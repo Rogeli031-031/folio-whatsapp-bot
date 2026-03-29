@@ -2277,6 +2277,20 @@ async function ensureArrSchema(client) {
     );
   `).catch(() => {});
   await client.query(`
+    CREATE TABLE IF NOT EXISTS arr.upload_log (
+      id BIGSERIAL PRIMARY KEY,
+      plant_code VARCHAR(20) NOT NULL,
+      year SMALLINT NOT NULL,
+      month SMALLINT NOT NULL,
+      uploaded_day DATE NOT NULL,
+      uploaded_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      uploaded_by TEXT
+    );
+  `).catch(() => {});
+  await client.query(`
+    CREATE INDEX IF NOT EXISTS idx_upload_log_ym ON arr.upload_log (year, month, uploaded_at DESC);
+  `).catch(() => {});
+  await client.query(`
     CREATE TABLE IF NOT EXISTS arr.provincia_plants (plant_code VARCHAR(20) NOT NULL PRIMARY KEY);
   `).catch(() => {});
   await client.query(`
@@ -5680,10 +5694,11 @@ function getForecastBusinessTodayYmd() {
  * @param {object} client - pg client
  * @param {number} year
  * @param {number} month
+ * @param {string|null} uploadDayOverrideYmd - YYYY-MM-DD (opcional); define el corte real/proyección
  * @returns {Promise<Map<string,number>>} plant_code (prov_name) -> venta_forecast_ton
  */
-async function getVentaForecastProvinciaDesdeArr(client, year, month) {
-  const uploadDayStr = getForecastBusinessTodayYmd();
+async function getVentaForecastProvinciaDesdeArr(client, year, month, uploadDayOverrideYmd = null) {
+  const uploadDayStr = (uploadDayOverrideYmd || getForecastBusinessTodayYmd()).toString().trim().slice(0, 10);
   const uploadY = parseInt(uploadDayStr.slice(0, 4), 10);
   const uploadM = parseInt(uploadDayStr.slice(5, 7), 10);
   const uploadDayNum = parseInt(uploadDayStr.slice(8, 10), 10);
@@ -5788,10 +5803,11 @@ async function getVentaForecastProvinciaDesdeArr(client, year, month) {
  * @param {object} client - pg client
  * @param {number} year
  * @param {number} month
+ * @param {string|null} uploadDayOverrideYmd - YYYY-MM-DD (opcional); define el corte real/proyección
  * @returns {Promise<Map<string,number>>} plant_code -> descuento_forecast_monto ($)
  */
-async function getDescuentoForecastProvinciaDesdeArr(client, year, month) {
-  const uploadDayStr = getForecastBusinessTodayYmd();
+async function getDescuentoForecastProvinciaDesdeArr(client, year, month, uploadDayOverrideYmd = null) {
+  const uploadDayStr = (uploadDayOverrideYmd || getForecastBusinessTodayYmd()).toString().trim().slice(0, 10);
   const uploadY = parseInt(uploadDayStr.slice(0, 4), 10);
   const uploadM = parseInt(uploadDayStr.slice(5, 7), 10);
   const uploadDayNum = parseInt(uploadDayStr.slice(8, 10), 10);
@@ -6091,7 +6107,7 @@ async function fetchIgfFoliosDetalleList(client, year, month, empresa, tipo) {
 }
 
 /** Construye payload IGF Forecast (misma lógica que GET /api/dashboard/igf-forecast). Para API y Excel. */
-async function buildIgfForecastPayload(client, year, month) {
+async function buildIgfForecastPayload(client, year, month, opts = {}) {
   const now = new Date();
   const isMesActual = year === now.getFullYear() && month === (now.getMonth() + 1);
   const provRes = await client.query("SELECT plant_code FROM arr.provincia_plants ORDER BY plant_code");
@@ -6122,8 +6138,9 @@ async function buildIgfForecastPayload(client, year, month) {
       return obj;
     });
     const totalRow = allRows.find((x) => /^TOTALES?$/i.test(x.empresa));
-    const ventaForecastByPlant = await getVentaForecastProvinciaDesdeArr(client, year, month);
-    const descuentoForecastByPlant = await getDescuentoForecastProvinciaDesdeArr(client, year, month);
+    const uploadDayOverrideYmd = opts && typeof opts.upload_day === "string" ? opts.upload_day.trim().slice(0, 10) : null;
+    const ventaForecastByPlant = await getVentaForecastProvinciaDesdeArr(client, year, month, uploadDayOverrideYmd);
+    const descuentoForecastByPlant = await getDescuentoForecastProvinciaDesdeArr(client, year, month, uploadDayOverrideYmd);
 
     function empresaEsProvincia(empresa) {
       if (!empresa || /^TOTALES?$/i.test(empresa)) return false;
@@ -6333,12 +6350,23 @@ app.get("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, res)
   if (dashboardBlockGVForbidden(req, res)) return;
   const year = req.query.year != null ? parseInt(String(req.query.year), 10) : new Date().getFullYear();
   const month = req.query.month != null ? parseInt(String(req.query.month), 10) : new Date().getMonth() + 1;
+  const uploadDay = (req.query.upload_day || "").toString().trim().slice(0, 10) || null;
   if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
     return res.status(400).json({ error: "year y month inválidos" });
   }
+  if (uploadDay && !/^\d{4}-\d{2}-\d{2}$/.test(uploadDay)) {
+    return res.status(400).json({ error: "upload_day debe ser YYYY-MM-DD" });
+  }
+  if (uploadDay) {
+    const uy = parseInt(uploadDay.slice(0, 4), 10);
+    const um = parseInt(uploadDay.slice(5, 7), 10);
+    if (!Number.isFinite(uy) || !Number.isFinite(um) || uy !== year || um !== month) {
+      return res.status(400).json({ error: "upload_day debe pertenecer al mismo year/month" });
+    }
+  }
   const client = await pool.connect();
   try {
-    const payload = await buildIgfForecastPayload(client, year, month);
+    const payload = await buildIgfForecastPayload(client, year, month, uploadDay ? { upload_day: uploadDay } : undefined);
     res.json(payload);
   } catch (e) {
     console.error("[Dashboard IGF Forecast]", e);
@@ -8259,6 +8287,23 @@ app.post("/api/arr/load", dashboardAuthMiddleware, async (req, res) => {
       targetMonth: req.body.targetMonth != null ? parseInt(req.body.targetMonth, 10) : undefined,
     });
     try {
+      const uploadDayStr = getForecastBusinessTodayYmd();
+      await client.query(
+        `INSERT INTO arr.upload_log (plant_code, year, month, uploaded_day, uploaded_by)
+         VALUES ($1, $2::int, $3::int, $4::date, $5)`,
+        [
+          plantCode,
+          result.year,
+          result.month,
+          uploadDayStr,
+          req.dashboardAuth?.actor_id != null ? `Dashboard:${req.dashboardAuth.actor_id}` : "Dashboard",
+        ]
+      );
+      result.upload_day = uploadDayStr;
+    } catch (e) {
+      console.error("[ARR load] upload_log:", e);
+    }
+    try {
       const refresh = await arrRefreshProvincia.refreshProvinciaDiario(client);
       result.provinciaRefresh = refresh;
     } catch (e) {
@@ -8267,6 +8312,45 @@ app.post("/api/arr/load", dashboardAuthMiddleware, async (req, res) => {
     res.json({ ok: true, ...result });
   } catch (e) {
     console.error("[ARR load]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/** Última fecha de carga ARR registrada (para selector de corte del forecast). */
+app.get("/api/arr/last-upload-day", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGAFinancialKpis(req, res)) return;
+  if (dashboardBlockGVForbidden(req, res)) return;
+  const year = req.query.year != null ? parseInt(String(req.query.year), 10) : NaN;
+  const month = req.query.month != null ? parseInt(String(req.query.month), 10) : NaN;
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
+    return res.status(400).json({ error: "year y month (1-12) son obligatorios" });
+  }
+  const client = await pool.connect();
+  try {
+    const r = await client.query(
+      `SELECT plant_code, uploaded_day, uploaded_at, uploaded_by
+         FROM arr.upload_log
+        WHERE year = $1::int AND month = $2::int
+        ORDER BY uploaded_at DESC
+        LIMIT 1`,
+      [year, month]
+    );
+    const row = r.rows && r.rows[0] ? r.rows[0] : null;
+    if (!row) return res.json({ ok: true, year, month, upload_day: null });
+    const uploadDay = row.uploaded_day && (typeof row.uploaded_day === "string" ? row.uploaded_day : row.uploaded_day.toISOString?.().slice(0, 10));
+    return res.json({
+      ok: true,
+      year,
+      month,
+      upload_day: uploadDay || null,
+      plant_code: row.plant_code || null,
+      uploaded_at: row.uploaded_at || null,
+      uploaded_by: row.uploaded_by || null,
+    });
+  } catch (e) {
+    console.error("[ARR last-upload-day]", e);
     res.status(500).json({ error: e.message });
   } finally {
     client.release();

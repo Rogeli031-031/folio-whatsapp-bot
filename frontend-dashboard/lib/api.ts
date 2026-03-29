@@ -237,14 +237,26 @@ export function fetchIgfFoliosDetalle(
 
 export function fetchIgfForecast(
   token: string,
-  params?: { year?: number; month?: number }
+  params?: { year?: number; month?: number; upload_day?: string }
 ): Promise<IgfForecastResponse> {
   const p: Record<string, string> = {};
   if (params?.year != null) p.year = String(params.year);
   if (params?.month != null) p.month = String(params.month);
+  if (params?.upload_day) p.upload_day = params.upload_day;
   return apiFetch<IgfForecastResponse>("/api/dashboard/igf-forecast", {
     token,
     params: Object.keys(p).length ? p : undefined,
+    cache: "no-store",
+  });
+}
+
+export function fetchArrLastUploadDay(
+  token: string,
+  params: { year: number; month: number }
+): Promise<{ ok: boolean; year: number; month: number; upload_day: string | null }> {
+  return apiFetch("/api/arr/last-upload-day", {
+    token,
+    params: { year: String(params.year), month: String(params.month) },
     cache: "no-store",
   });
 }

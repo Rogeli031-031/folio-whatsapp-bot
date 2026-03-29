@@ -11,6 +11,7 @@ import {
 } from "@/lib/auth";
 import {
   fetchIgfForecast,
+  fetchArrLastUploadDay,
   postForecastProvincia,
   patchIgfForecastHg,
   getDashboardExcelDownloadUrl,
@@ -44,6 +45,8 @@ export function IgfForecastContent() {
   const [igfError, setIgfError] = useState<string | null>(null);
   const [hgSaving, setHgSaving] = useState<string | null>(null);
   const [plantaFilter, setPlantaFilter] = useState<string>("");
+  const [uploadDay, setUploadDay] = useState<string>(""); // YYYY-MM-DD (corte real/proyección)
+  const [uploadDayHint, setUploadDayHint] = useState<string | null>(null);
   const [presupuestoGendByEmpresa, setPresupuestoGendByEmpresa] = useState<Record<string, number>>(() => {
     if (typeof window === "undefined") return {};
     try {
@@ -148,7 +151,12 @@ export function IgfForecastContent() {
       if (!igfForecast) setIgfLoading(true);
       setIgfError(null);
       try {
-        const data = await fetchIgfForecast(token);
+        const up = uploadDay.trim();
+        const params =
+          up && /^\d{4}-\d{2}-\d{2}$/.test(up)
+            ? { year: Number(up.slice(0, 4)), month: Number(up.slice(5, 7)), upload_day: up }
+            : undefined;
+        const data = await fetchIgfForecast(token, params);
         if (!cancelled) {
           setIgfForecast(data);
         }
@@ -171,7 +179,29 @@ export function IgfForecastContent() {
       cancelled = true;
       clearInterval(id);
     };
-  }, [token, isGAPageBlocked, isGVPageBlocked]);
+  }, [token, isGAPageBlocked, isGVPageBlocked, uploadDay, igfForecast]);
+
+  useEffect(() => {
+    if (!token || isGAPageBlocked || isGVPageBlocked || !igfForecast) return;
+    if (uploadDay.trim()) return;
+    let cancelled = false;
+    fetchArrLastUploadDay(token, { year: igfForecast.year, month: igfForecast.month })
+      .then((r) => {
+        if (cancelled) return;
+        if (r?.upload_day) {
+          setUploadDay(r.upload_day);
+          setUploadDayHint(`Última carga detectada: ${r.upload_day}`);
+        } else {
+          setUploadDayHint("No hay fecha de carga registrada (se usa la fecha de hoy).");
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setUploadDayHint(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, igfForecast?.year, igfForecast?.month, isGAPageBlocked, isGVPageBlocked, uploadDay]);
 
   useEffect(() => {
     if (!token || isGAPageBlocked || isGVPageBlocked || !igfForecast || !plantaFilter) {
@@ -263,7 +293,11 @@ export function IgfForecastContent() {
     setForecastRecalcMsg(null);
     try {
       await postForecastProvincia(token, { year: igfForecast.year, month: igfForecast.month });
-      const data = await fetchIgfForecast(token, { year: igfForecast.year, month: igfForecast.month });
+      const up = uploadDay.trim();
+      const data =
+        up && /^\d{4}-\d{2}-\d{2}$/.test(up)
+          ? await fetchIgfForecast(token, { year: igfForecast.year, month: igfForecast.month, upload_day: up })
+          : await fetchIgfForecast(token, { year: igfForecast.year, month: igfForecast.month });
       setIgfForecast(data);
       setForecastRecalcMsg("Venta forecast recalculado (ARR provincia) y tabla actualizada.");
     } catch (e: unknown) {
@@ -322,6 +356,16 @@ export function IgfForecastContent() {
             Descargar Excel (Forecast)
           </a>
         )}
+        <label className="inline-flex items-center gap-2 rounded border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-200">
+          <span className="text-slate-400">Fecha de carga (corte):</span>
+          <input
+            type="date"
+            value={uploadDay}
+            onChange={(e) => setUploadDay(e.target.value)}
+            className="rounded border border-slate-600 bg-slate-900 px-2 py-1 text-slate-200 text-sm"
+          />
+        </label>
+        {uploadDayHint && <span className="text-xs text-slate-400">{uploadDayHint}</span>}
         {igfForecast && token && (
           <button
             type="button"
