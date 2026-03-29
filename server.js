@@ -5654,6 +5654,24 @@ function getLocalTodayYmd() {
 }
 
 /**
+ * “Hoy” para forecast provincia (venta/desc. IGF): calendario en zona de negocio.
+ * Si el servidor está en UTC (p. ej. Render), a última hora en México puede ser aún el día anterior en UTC;
+ * el bucle de días restantes empezaría un día tarde y se pierde la proyección del día actual (ej. todo un sábado).
+ * Override: FORECAST_BUSINESS_TZ (IANA), por defecto America/Mexico_City.
+ */
+function getForecastBusinessTodayYmd() {
+  const tz = (process.env.FORECAST_BUSINESS_TZ || "America/Mexico_City").trim();
+  if (!tz) return getLocalTodayYmd();
+  try {
+    const s = new Date().toLocaleDateString("en-CA", { timeZone: tz });
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  } catch {
+    /* IANA inválida u host sin datos TZ */
+  }
+  return getLocalTodayYmd();
+}
+
+/**
  * Venta forecast por planta (solo mes actual): promedio por día de semana (últimas 2 semanas)
  * × días a proyectar + venta acumulada solo en días “cerrados”.
  * El día de carga es la fecha calendario de hoy (no la última fecha en los datos subidos). Si en BD hay filas
@@ -5665,10 +5683,7 @@ function getLocalTodayYmd() {
  * @returns {Promise<Map<string,number>>} plant_code (prov_name) -> venta_forecast_ton
  */
 async function getVentaForecastProvinciaDesdeArr(client, year, month) {
-  const today = new Date();
-  const isCurrentMonth = today.getFullYear() === year && today.getMonth() + 1 === month;
-  if (!isCurrentMonth) return new Map();
-  const uploadDayStr = getLocalTodayYmd();
+  const uploadDayStr = getForecastBusinessTodayYmd();
   const uploadY = parseInt(uploadDayStr.slice(0, 4), 10);
   const uploadM = parseInt(uploadDayStr.slice(5, 7), 10);
   const uploadDayNum = parseInt(uploadDayStr.slice(8, 10), 10);
@@ -5776,10 +5791,7 @@ async function getVentaForecastProvinciaDesdeArr(client, year, month) {
  * @returns {Promise<Map<string,number>>} plant_code -> descuento_forecast_monto ($)
  */
 async function getDescuentoForecastProvinciaDesdeArr(client, year, month) {
-  const today = new Date();
-  const isCurrentMonth = today.getFullYear() === year && today.getMonth() + 1 === month;
-  if (!isCurrentMonth) return new Map();
-  const uploadDayStr = getLocalTodayYmd();
+  const uploadDayStr = getForecastBusinessTodayYmd();
   const uploadY = parseInt(uploadDayStr.slice(0, 4), 10);
   const uploadM = parseInt(uploadDayStr.slice(5, 7), 10);
   const uploadDayNum = parseInt(uploadDayStr.slice(8, 10), 10);
