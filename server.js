@@ -2277,6 +2277,17 @@ async function ensureArrSchema(client) {
     );
   `).catch(() => {});
   await client.query(`
+    CREATE TABLE IF NOT EXISTS arr.igf_venta_forecast_snapshot (
+      plant_code VARCHAR(80) NOT NULL,
+      year SMALLINT NOT NULL,
+      month SMALLINT NOT NULL,
+      venta_ton NUMERIC(18,4),
+      desc_monto NUMERIC(18,2),
+      frozen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (plant_code, year, month)
+    );
+  `).catch(() => {});
+  await client.query(`
     CREATE TABLE IF NOT EXISTS arr.provincia_plants (plant_code VARCHAR(20) NOT NULL PRIMARY KEY);
   `).catch(() => {});
   await client.query(`
@@ -5872,6 +5883,82 @@ async function getDescuentoForecastProvinciaDesdeArr(client, year, month) {
   return out;
 }
 
+/**
+ * Agregado por planta provincia desde arr.forecast_mensual (misma unión que el dashboard ARR).
+ * Se rellena al ejecutar POST /api/arr/forecast-provincia o forecast por planta; no cambia en cada GET.
+ * @returns {{ ventaTonByPlant: Map<string, number>, descMontoByPlant: Map<string, number> }}
+ */
+async function getIgfForecastSnapshotFromForecastMensual(client, year, month) {
+  const r = await client.query(
+    `SELECT ap.plant_code,
+            COALESCE(SUM(fm.kg_forecast), 0) AS kg_forecast,
+            COALESCE(SUM(fm.desc_forecast), 0) AS desc_forecast
+       FROM arr.forecast_mensual fm
+       JOIN public.plantas p ON UPPER(TRIM(fm.plant_code)) = UPPER(TRIM(p.nombre))
+         OR (p.clave IS NOT NULL AND TRIM(p.clave) <> '' AND UPPER(TRIM(fm.plant_code)) = UPPER(TRIM(p.clave)))
+       JOIN arr.provincia_plants ap ON UPPER(TRIM(ap.plant_code)) = UPPER(TRIM(p.nombre))
+         OR (ap.plant_code = p.clave AND TRIM(COALESCE(p.clave,'')) <> '')
+      WHERE fm.year = $1 AND fm.month = $2
+      GROUP BY ap.plant_code`,
+    [year, month]
+  );
+  const ventaTonByPlant = new Map();
+  const descMontoByPlant = new Map();
+  for (const row of r.rows || []) {
+    const pc = (row.plant_code || "").trim();
+    if (!pc) continue;
+    const kg = Number(row.kg_forecast) || 0;
+    const desc = Number(row.desc_forecast) || 0;
+    ventaTonByPlant.set(pc, Math.round((kg / 1000) * 100) / 100);
+    descMontoByPlant.set(pc, desc);
+  }
+  return { ventaTonByPlant, descMontoByPlant };
+}
+
+/**
+ * Snapshot guardado al subir ARR (POST /api/arr/load): congela venta/desc. forecast provincia hasta la próxima carga.
+ * Evita que el corte por “hoy” o el paso de las horas cambien el número en cada GET.
+ */
+async function getIgfForecastSnapshotFromArrLoad(client, year, month) {
+  const r = await client.query(
+    `SELECT plant_code, venta_ton, desc_monto FROM arr.igf_venta_forecast_snapshot WHERE year = $1::int AND month = $2::int`,
+    [year, month]
+  );
+  const ventaTonByPlant = new Map();
+  const descMontoByPlant = new Map();
+  for (const row of r.rows || []) {
+    const pc = (row.plant_code || "").trim();
+    if (!pc) continue;
+    if (row.venta_ton != null && Number.isFinite(Number(row.venta_ton))) ventaTonByPlant.set(pc, Number(row.venta_ton));
+    if (row.desc_monto != null && Number.isFinite(Number(row.desc_monto))) descMontoByPlant.set(pc, Number(row.desc_monto));
+  }
+  return { ventaTonByPlant, descMontoByPlant };
+}
+
+/**
+ * Tras cargar ventas ARR del mes calendario actual: guarda el forecast provincia (misma función que antes en GET en vivo).
+ * Así el dashboard no “mueve” el total durante el día hasta nueva subida.
+ */
+async function persistIgfVentaForecastSnapshotAfterArrLoad(client, year, month) {
+  const now = new Date();
+  if (year !== now.getFullYear() || month !== now.getMonth() + 1) return;
+  const ventaMap = await getVentaForecastProvinciaDesdeArr(client, year, month);
+  const descMap = await getDescuentoForecastProvinciaDesdeArr(client, year, month);
+  const prov = await client.query("SELECT plant_code FROM arr.provincia_plants ORDER BY plant_code");
+  const plantCodes = (prov.rows || []).map((row) => (row.plant_code || "").trim()).filter(Boolean);
+  for (const pc of plantCodes) {
+    const vt = ventaMap.has(pc) ? ventaMap.get(pc) : null;
+    const dm = descMap.has(pc) ? descMap.get(pc) : null;
+    await client.query(
+      `INSERT INTO arr.igf_venta_forecast_snapshot (plant_code, year, month, venta_ton, desc_monto, frozen_at)
+       VALUES ($1, $2::int, $3::int, $4, $5, now())
+       ON CONFLICT (plant_code, year, month)
+       DO UPDATE SET venta_ton = EXCLUDED.venta_ton, desc_monto = EXCLUDED.desc_monto, frozen_at = now()`,
+      [pc, year, month, vt, dm]
+    );
+  }
+}
+
 /** Mapeo empresa IGF -> clave(s) planta en DB. Incluye código (E7, E8…) y nombre de planta; se suman presupuesto/folios de todas las filas que coincidan. */
 const EMPRESA_IGF_A_PLANTA_KEYS = {
   "GT - Puebla": ["E7", "Puebla"],
@@ -6110,8 +6197,26 @@ async function buildIgfForecastPayload(client, year, month) {
       return obj;
     });
     const totalRow = allRows.find((x) => /^TOTALES?$/i.test(x.empresa));
-    const ventaForecastByPlant = await getVentaForecastProvinciaDesdeArr(client, year, month);
-    const descuentoForecastByPlant = await getDescuentoForecastProvinciaDesdeArr(client, year, month);
+    /** live = recalcula en cada GET. snapshot_then_igf = default: snapshot post-carga ARR, luego forecast_mensual, luego IGF. snapshot_then_live = snapshots o ARR en vivo. igf_only = solo IGF. */
+    const igfVentaSource = (process.env.IGF_FORECAST_VENTA_SOURCE || "snapshot_then_igf").trim().toLowerCase();
+    let ventaForecastByPlant = new Map();
+    let descuentoForecastByPlant = new Map();
+    let loadSnapshotVenta = new Map();
+    let loadSnapshotDesc = new Map();
+    let snapshotVenta = new Map();
+    let snapshotDescMonto = new Map();
+    if (igfVentaSource === "live" || igfVentaSource === "snapshot_then_live") {
+      ventaForecastByPlant = await getVentaForecastProvinciaDesdeArr(client, year, month);
+      descuentoForecastByPlant = await getDescuentoForecastProvinciaDesdeArr(client, year, month);
+    }
+    if (igfVentaSource === "snapshot_then_igf" || igfVentaSource === "snapshot_then_live") {
+      const loadSnap = await getIgfForecastSnapshotFromArrLoad(client, year, month);
+      loadSnapshotVenta = loadSnap.ventaTonByPlant;
+      loadSnapshotDesc = loadSnap.descMontoByPlant;
+      const snap = await getIgfForecastSnapshotFromForecastMensual(client, year, month);
+      snapshotVenta = snap.ventaTonByPlant;
+      snapshotDescMonto = snap.descMontoByPlant;
+    }
 
     function empresaEsProvincia(empresa) {
       if (!empresa || /^TOTALES?$/i.test(empresa)) return false;
@@ -6135,13 +6240,60 @@ async function buildIgfForecastPayload(client, year, month) {
       let venta_ton = row.venta_ton;
       let com_desc_kg = row.com_desc_kg;
       const best = bestPlantCodeForEmpresa(row.empresa);
-      if (best != null && ventaForecastByPlant.size > 0) {
-        const f = ventaForecastByPlant.get(best);
-        if (f != null) venta_ton = f;
-        const ventaForecastKg = (venta_ton || 0) * 1000;
-        const descMonto = descuentoForecastByPlant.get(best);
-        if (ventaForecastKg > 0 && descMonto != null) {
-          com_desc_kg = Math.round((Math.abs(descMonto) / ventaForecastKg) * 100) / 100;
+      if (best != null) {
+        if (igfVentaSource === "live") {
+          if (ventaForecastByPlant.size > 0) {
+            const f = ventaForecastByPlant.get(best);
+            if (f != null) venta_ton = f;
+            const ventaForecastKg = (venta_ton || 0) * 1000;
+            const descMonto = descuentoForecastByPlant.get(best);
+            if (ventaForecastKg > 0 && descMonto != null) {
+              com_desc_kg = Math.round((Math.abs(descMonto) / ventaForecastKg) * 100) / 100;
+            }
+          }
+        } else if (igfVentaSource === "igf_only") {
+          /* venta_ton / com_desc_kg desde compromiso_lines */
+        } else if (igfVentaSource === "snapshot_then_live") {
+          if (loadSnapshotVenta.has(best)) {
+            venta_ton = loadSnapshotVenta.get(best);
+            const ventaForecastKg = (venta_ton || 0) * 1000;
+            const descMonto = loadSnapshotDesc.get(best);
+            if (ventaForecastKg > 0 && descMonto != null) {
+              com_desc_kg = Math.round((Math.abs(descMonto) / ventaForecastKg) * 100) / 100;
+            }
+          } else if (snapshotVenta.has(best)) {
+            venta_ton = snapshotVenta.get(best);
+            const ventaForecastKg = (venta_ton || 0) * 1000;
+            const descMonto = snapshotDescMonto.get(best);
+            if (ventaForecastKg > 0 && descMonto != null) {
+              com_desc_kg = Math.round((Math.abs(descMonto) / ventaForecastKg) * 100) / 100;
+            }
+          } else if (ventaForecastByPlant.size > 0) {
+            const f = ventaForecastByPlant.get(best);
+            if (f != null) venta_ton = f;
+            const ventaForecastKg = (venta_ton || 0) * 1000;
+            const descMonto = descuentoForecastByPlant.get(best);
+            if (ventaForecastKg > 0 && descMonto != null) {
+              com_desc_kg = Math.round((Math.abs(descMonto) / ventaForecastKg) * 100) / 100;
+            }
+          }
+        } else {
+          /* snapshot_then_igf (default) o valor desconocido: snapshot post-carga, luego forecast_mensual, luego IGF */
+          if (loadSnapshotVenta.has(best)) {
+            venta_ton = loadSnapshotVenta.get(best);
+            const ventaForecastKg = (venta_ton || 0) * 1000;
+            const descMonto = loadSnapshotDesc.get(best);
+            if (ventaForecastKg > 0 && descMonto != null) {
+              com_desc_kg = Math.round((Math.abs(descMonto) / ventaForecastKg) * 100) / 100;
+            }
+          } else if (snapshotVenta.has(best)) {
+            venta_ton = snapshotVenta.get(best);
+            const ventaForecastKg = (venta_ton || 0) * 1000;
+            const descMonto = snapshotDescMonto.get(best);
+            if (ventaForecastKg > 0 && descMonto != null) {
+              com_desc_kg = Math.round((Math.abs(descMonto) / ventaForecastKg) * 100) / 100;
+            }
+          }
         }
       }
       return { ...row, venta_ton, com_desc_kg, gasto_kg_igf: row.gasto_kg != null ? Number(row.gasto_kg) : null };
@@ -8251,6 +8403,15 @@ app.post("/api/arr/load", dashboardAuthMiddleware, async (req, res) => {
       result.provinciaRefresh = refresh;
     } catch (e) {
       console.error("[ARR load] refresh provincia:", e);
+    }
+    try {
+      const nowSnap = new Date();
+      if (result.year === nowSnap.getFullYear() && result.month === nowSnap.getMonth() + 1) {
+        await persistIgfVentaForecastSnapshotAfterArrLoad(client, result.year, result.month);
+        result.igfVentaForecastSnapshot = true;
+      }
+    } catch (e) {
+      console.error("[ARR load] igf venta forecast snapshot:", e);
     }
     res.json({ ok: true, ...result });
   } catch (e) {
