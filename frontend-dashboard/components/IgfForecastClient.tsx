@@ -38,6 +38,7 @@ import {
 export function IgfForecastContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const UPLOAD_DAY_STORAGE_KEY = "Diana";
   const [token, setToken] = useState<string | null>(null);
   const [unauthorized, setUnauthorized] = useState(false);
   const [igfForecast, setIgfForecast] = useState<IgfForecastResponse | null>(null);
@@ -45,7 +46,15 @@ export function IgfForecastContent() {
   const [igfError, setIgfError] = useState<string | null>(null);
   const [hgSaving, setHgSaving] = useState<string | null>(null);
   const [plantaFilter, setPlantaFilter] = useState<string>("");
-  const [uploadDay, setUploadDay] = useState<string>(""); // YYYY-MM-DD (corte real/proyección)
+  const [uploadDay, setUploadDay] = useState<string>(() => {
+    if (typeof window === "undefined") return "";
+    try {
+      const v = localStorage.getItem(UPLOAD_DAY_STORAGE_KEY);
+      return v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : "";
+    } catch {
+      return "";
+    }
+  }); // YYYY-MM-DD (corte real/proyección)
   const [uploadDayHint, setUploadDayHint] = useState<string | null>(null);
   const [presupuestoGendByEmpresa, setPresupuestoGendByEmpresa] = useState<Record<string, number>>(() => {
     if (typeof window === "undefined") return {};
@@ -97,6 +106,32 @@ export function IgfForecastContent() {
       // ignore
     }
   }, [inversionCdjzByEmpresa]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const up = uploadDay.trim();
+    try {
+      if (up && /^\d{4}-\d{2}-\d{2}$/.test(up)) {
+        localStorage.setItem(UPLOAD_DAY_STORAGE_KEY, up);
+      } else {
+        localStorage.removeItem(UPLOAD_DAY_STORAGE_KEY);
+      }
+    } catch {
+      // ignore
+    }
+  }, [uploadDay]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onStorage = (e: StorageEvent) => {
+      if (e.storageArea !== localStorage) return;
+      if (e.key !== UPLOAD_DAY_STORAGE_KEY) return;
+      const next = e.newValue && /^\d{4}-\d{2}-\d{2}$/.test(e.newValue) ? e.newValue : "";
+      setUploadDay((prev) => (prev === next ? prev : next));
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
   const [presupuestoDetalle, setPresupuestoDetalle] = useState<IgfForecastRow | null>(null);
   const [presupuestoDetalleItems, setPresupuestoDetalleItems] = useState<PresupuestoDetalleItem[] | null>(null);
   const [presupuestoDetalleLoading, setPresupuestoDetalleLoading] = useState(false);
