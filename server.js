@@ -8478,12 +8478,40 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
   const client = await pool.connect();
   try {
     const igfForecast = await buildIgfForecastPayload(client, year, month, uploadDay ? { upload_day: uploadDay } : undefined);
+    // Mapear "empresa" IGF → plant_code provincia (nombres no siempre coinciden exacto: "GTM Puebla" vs "Puebla").
     const forecastKgByPlant = {};
-    for (const r of (igfForecast?.rows || [])) {
-      const emp = (r?.empresa || "").trim();
-      const ton = r?.venta_ton != null && Number.isFinite(Number(r.venta_ton)) ? Number(r.venta_ton) : null;
-      if (!emp || ton == null) continue;
-      forecastKgByPlant[emp] = ton * 1000;
+    const igfRows = (igfForecast?.rows || [])
+      .map((r) => {
+        const emp = (r?.empresa || "").trim();
+        const ton = r?.venta_ton != null && Number.isFinite(Number(r.venta_ton)) ? Number(r.venta_ton) : null;
+        return emp && ton != null ? { emp, empNorm: normalizeAccents(emp), kg: ton * 1000 } : null;
+      })
+      .filter(Boolean);
+    // 1) Inicial: coincidencia exacta por empresa
+    for (const row of igfRows) {
+      forecastKgByPlant[row.emp] = row.kg;
+    }
+    // 2) Para cada plant_code provincia, buscar mejor match en IGF (contains bidireccional sobre nombre normalizado).
+    const provPlantsR = await client.query(`SELECT plant_code FROM arr.provincia_plants ORDER BY plant_code`);
+    const provPlants = (provPlantsR.rows || []).map((x) => (x.plant_code || "").trim()).filter(Boolean);
+    for (const p of provPlants) {
+      const pNorm = normalizeAccents(p);
+      if (forecastKgByPlant[p] != null) continue; // ya existe exacto
+      let best = null;
+      for (const row of igfRows) {
+        if (!row.empNorm) continue;
+        if (row.empNorm.includes(pNorm) || pNorm.includes(row.empNorm)) {
+          // Preferir el match más "cercano": nombre más corto (más específico) o mayor kg si empata.
+          if (
+            !best ||
+            row.empNorm.length < best.empNorm.length ||
+            (row.empNorm.length === best.empNorm.length && row.kg > best.kg)
+          ) {
+            best = row;
+          }
+        }
+      }
+      if (best) forecastKgByPlant[p] = best.kg;
     }
     proyeccionCatSubForecast.forecastKgByPlant = forecastKgByPlant;
     const buf = await dashboardArrForecast.generarDashboardArrForecast(client, year, month, plantCode, { igfForecast, proyeccionCatSub, proyeccionCatSubForecast });
