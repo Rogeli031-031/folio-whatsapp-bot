@@ -8462,6 +8462,7 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
     fechaHasta: proyeccionHasta,
     plantCodeFilter: plantCode,
     sheetName: "Proy cat-sub Forecast",
+    scaleToForecastTotal: true,
   };
   const client = await pool.connect();
   try {
