@@ -8464,8 +8464,8 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
     fechaHasta: proyeccionHasta,
     plantCodeFilter: plantCode,
     sheetName: "Proy cat-sub Forecast",
-    // Paso 1: solo acumulado real (sin proyección/ajuste).
-    scaleToForecastTotal: false,
+    // Acumulado + factor por planta + proyección por regla de tres para cerrar con IGF.
+    scaleToForecastTotal: true,
     useMtdRuleOfThree: false,
     useMtdAcumulado: true,
   };
