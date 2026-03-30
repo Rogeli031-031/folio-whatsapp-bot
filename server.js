@@ -8441,8 +8441,13 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
   if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
     return res.status(400).json({ error: "Faltan year y month válidos en query" });
   }
-  const uploadDay = (req.query.upload_day || "").toString().trim().slice(0, 10) || null;
   const proyeccionHasta = (req.query.proyeccion_hasta || "").toString().trim().slice(0, 10) || null;
+  // Si el frontend no manda upload_day, usar el mismo corte (proyeccion_hasta)
+  // para que el IGF Forecast dentro del Excel sea consistente con la fecha seleccionada.
+  const uploadDay =
+    ((req.query.upload_day || "").toString().trim().slice(0, 10)) ||
+    proyeccionHasta ||
+    null;
   let proyeccionCatSub = null;
   if (req.query.proyeccion_mes != null && req.query.proyeccion_anio != null) {
     const proyeccionMes = parseInt(String(req.query.proyeccion_mes), 10);
