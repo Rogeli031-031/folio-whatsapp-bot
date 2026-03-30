@@ -8464,8 +8464,10 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
     fechaHasta: proyeccionHasta,
     plantCodeFilter: plantCode,
     sheetName: "Proy cat-sub Forecast",
-    scaleToForecastTotal: true,
-    useMtdRuleOfThree: true,
+    // Paso 1: solo acumulado real (sin proyección/ajuste).
+    scaleToForecastTotal: false,
+    useMtdRuleOfThree: false,
+    useMtdAcumulado: true,
   };
   const client = await pool.connect();
   try {
