@@ -8456,10 +8456,17 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
       plantCodeFilter: plantCode,
     };
   }
+  const proyeccionCatSubForecast = {
+    targetYear: year,
+    targetMonth: month,
+    fechaHasta: proyeccionHasta,
+    plantCodeFilter: plantCode,
+    sheetName: "Proy cat-sub Forecast",
+  };
   const client = await pool.connect();
   try {
     const igfForecast = await buildIgfForecastPayload(client, year, month);
-    const buf = await dashboardArrForecast.generarDashboardArrForecast(client, year, month, plantCode, { igfForecast, proyeccionCatSub });
+    const buf = await dashboardArrForecast.generarDashboardArrForecast(client, year, month, plantCode, { igfForecast, proyeccionCatSub, proyeccionCatSubForecast });
     const filename = `Dashboard_ARR_Forecast_${year}_${month}.xlsx`;
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
