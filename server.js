@@ -8454,6 +8454,8 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
       targetMonth: proyeccionMes,
       fechaHasta: proyeccionHasta,
       plantCodeFilter: plantCode,
+      // También aplicar regla de tres para que coincida con el total oficial del mes objetivo (si existe en forecast_mensual).
+      scaleToForecastTotal: true,
     };
   }
   const proyeccionCatSubForecast = {
