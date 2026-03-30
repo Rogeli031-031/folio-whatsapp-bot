@@ -25,8 +25,10 @@ export function getDashboardExcelDownloadUrl(token: string, year: number, month:
   const base = getApiUrl("/api/arr/dashboard-excel");
   const next = nextCalendarMonth(year, month);
   const up = (uploadDay || "").trim();
-  const hasta = up && /^\d{4}-\d{2}-\d{2}$/.test(up) ? `&proyeccion_hasta=${encodeURIComponent(up)}` : "";
-  return `${base}?year=${year}&month=${month}&proyeccion_anio=${next.y}&proyeccion_mes=${next.m}${hasta}&t=${encodeURIComponent(token)}`;
+  const isYmd = up && /^\d{4}-\d{2}-\d{2}$/.test(up);
+  const hasta = isYmd ? `&proyeccion_hasta=${encodeURIComponent(up)}` : "";
+  const upload = isYmd ? `&upload_day=${encodeURIComponent(up)}` : "";
+  return `${base}?year=${year}&month=${month}&proyeccion_anio=${next.y}&proyeccion_mes=${next.m}${hasta}${upload}&t=${encodeURIComponent(token)}`;
 }
 
 export async function apiFetch<T>(

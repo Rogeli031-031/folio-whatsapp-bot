@@ -8441,6 +8441,7 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
   if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
     return res.status(400).json({ error: "Faltan year y month válidos en query" });
   }
+  const uploadDay = (req.query.upload_day || "").toString().trim().slice(0, 10) || null;
   const proyeccionHasta = (req.query.proyeccion_hasta || "").toString().trim().slice(0, 10) || null;
   let proyeccionCatSub = null;
   if (req.query.proyeccion_mes != null && req.query.proyeccion_anio != null) {
@@ -8471,7 +8472,7 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
   };
   const client = await pool.connect();
   try {
-    const igfForecast = await buildIgfForecastPayload(client, year, month);
+    const igfForecast = await buildIgfForecastPayload(client, year, month, uploadDay ? { upload_day: uploadDay } : undefined);
     const forecastKgByPlant = {};
     for (const r of (igfForecast?.rows || [])) {
       const emp = (r?.empresa || "").trim();
