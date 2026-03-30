@@ -383,7 +383,7 @@ export function IgfForecastContent() {
       <div className="flex flex-wrap gap-3 px-4 py-3 border-b border-slate-700/80 bg-slate-800/30 items-center">
         {igfForecast && token && (
           <a
-            href={getDashboardExcelDownloadUrl(token, igfForecast.year, igfForecast.month)}
+            href={getDashboardExcelDownloadUrl(token, igfForecast.year, igfForecast.month, uploadDay)}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 rounded bg-slate-600 px-4 py-2 text-sm font-medium text-white hover:bg-slate-500"

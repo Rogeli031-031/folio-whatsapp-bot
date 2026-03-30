@@ -8467,6 +8467,14 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
   const client = await pool.connect();
   try {
     const igfForecast = await buildIgfForecastPayload(client, year, month);
+    const forecastKgByPlant = {};
+    for (const r of (igfForecast?.rows || [])) {
+      const emp = (r?.empresa || "").trim();
+      const ton = r?.venta_ton != null && Number.isFinite(Number(r.venta_ton)) ? Number(r.venta_ton) : null;
+      if (!emp || ton == null) continue;
+      forecastKgByPlant[emp] = ton * 1000;
+    }
+    proyeccionCatSubForecast.forecastKgByPlant = forecastKgByPlant;
     const buf = await dashboardArrForecast.generarDashboardArrForecast(client, year, month, plantCode, { igfForecast, proyeccionCatSub, proyeccionCatSubForecast });
     const filename = `Dashboard_ARR_Forecast_${year}_${month}.xlsx`;
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");

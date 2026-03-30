@@ -21,10 +21,12 @@ function nextCalendarMonth(year: number, month: number): { y: number; m: number 
  * URL para descargar el Excel del Forecast (Provincia Venta/Comisiones + IGF + proyección siguiente mes por cat/sub).
  * Incluye proyeccion_anio/mes = mes siguiente al seleccionado (ej. marzo 2026 → abril 2026).
  */
-export function getDashboardExcelDownloadUrl(token: string, year: number, month: number): string {
+export function getDashboardExcelDownloadUrl(token: string, year: number, month: number, uploadDay?: string | null): string {
   const base = getApiUrl("/api/arr/dashboard-excel");
   const next = nextCalendarMonth(year, month);
-  return `${base}?year=${year}&month=${month}&proyeccion_anio=${next.y}&proyeccion_mes=${next.m}&t=${encodeURIComponent(token)}`;
+  const up = (uploadDay || "").trim();
+  const hasta = up && /^\d{4}-\d{2}-\d{2}$/.test(up) ? `&proyeccion_hasta=${encodeURIComponent(up)}` : "";
+  return `${base}?year=${year}&month=${month}&proyeccion_anio=${next.y}&proyeccion_mes=${next.m}${hasta}&t=${encodeURIComponent(token)}`;
 }
 
 export async function apiFetch<T>(
