@@ -9098,7 +9098,7 @@ app.post("/api/dashboard/dicf-datos", dashboardAuthMiddleware, async (req, res) 
   }
 });
 
-/** Excel Delta Ingreso Cliente Forecast: 3 hojas (venta Ton, desc $/kg, margen) — clientes en A, estatus en B, últimos 30 días en columnas. */
+/** Excel Delta Ingreso Cliente Forecast: hojas venta Ton, desc $/kg, margen, ingreso — A=Cliente, B=Estatus, C=Categoría (canal), D=Subcategoría, luego meses y últimos N días. */
 app.get("/api/dashboard/dicf-excel", dashboardAuthMiddleware, async (req, res) => {
   if (dashboardBlockGAFinancialKpis(req, res)) return;
   if (dashboardBlockGVForbidden(req, res)) return;
@@ -9134,7 +9134,7 @@ app.get("/api/dashboard/dicf-excel", dashboardAuthMiddleware, async (req, res) =
     for (const m of meses) {
       monthHeaders.push(`Venta ${m.label}`, `Descuento ${m.label}`, `Margen ${m.label}`);
     }
-    const headerRow = ["Cliente", "Estatus", ...monthHeaders, ...dates];
+    const headerRow = ["Cliente", "Estatus", "Categoría", "Subcategoría", ...monthHeaders, ...dates];
     const numCols = dates.length;
     const pad = (arr, len, fill) => {
       const a = (arr || []).slice(0, len);
@@ -9161,7 +9161,7 @@ app.get("/api/dashboard/dicf-excel", dashboardAuthMiddleware, async (req, res) =
     for (const c of clientes) {
       const raw = (c.kgLast30 || []).map((v) => (v != null && Number.isFinite(v) ? v : ""));
       const tonValues = pad(raw, numCols, "");
-      sheet1Rows.push([c.cliente || "", c.estado || "", ...monthValsForClient(c), ...tonValues]);
+      sheet1Rows.push([c.cliente || "", c.estado || "", c.canal || "", c.subcanal || "", ...monthValsForClient(c), ...tonValues]);
     }
     const ws1 = XLSX.utils.aoa_to_sheet(sheet1Rows);
     XLSX.utils.book_append_sheet(wb, ws1, "Venta (Ton)");
@@ -9170,7 +9170,7 @@ app.get("/api/dashboard/dicf-excel", dashboardAuthMiddleware, async (req, res) =
     for (const c of clientes) {
       const raw = (c.descKgLast30 || []).map((v) => (v != null && Number.isFinite(v) ? Number(v.toFixed(4)) : ""));
       const descValues = pad(raw, numCols, "");
-      sheet2Rows.push([c.cliente || "", c.estado || "", ...monthValsForClient(c), ...descValues]);
+      sheet2Rows.push([c.cliente || "", c.estado || "", c.canal || "", c.subcanal || "", ...monthValsForClient(c), ...descValues]);
     }
     const ws2 = XLSX.utils.aoa_to_sheet(sheet2Rows);
     XLSX.utils.book_append_sheet(wb, ws2, "Descuento ($ por kg)");
@@ -9178,12 +9178,12 @@ app.get("/api/dashboard/dicf-excel", dashboardAuthMiddleware, async (req, res) =
     const sheet3Rows = [headerRow];
     for (const c of clientes) {
       const margenValues = dates.map(() => margen);
-      sheet3Rows.push([c.cliente || "", c.estado || "", ...monthValsForClient(c), ...margenValues]);
+      sheet3Rows.push([c.cliente || "", c.estado || "", c.canal || "", c.subcanal || "", ...monthValsForClient(c), ...margenValues]);
     }
     const ws3 = XLSX.utils.aoa_to_sheet(sheet3Rows);
     XLSX.utils.book_append_sheet(wb, ws3, "Margen ($ por kg)");
 
-    const ingresoHeaders = ["Cliente", "Estatus", ...meses.map((m) => `Ingreso ${m.label}`)];
+    const ingresoHeaders = ["Cliente", "Estatus", "Categoría", "Subcategoría", ...meses.map((m) => `Ingreso ${m.label}`)];
     const ingresoRows = [ingresoHeaders];
     for (const c of clientes) {
       const ventaPorMes = (c.ventaPorMes || []).slice(0, numMeses);
@@ -9196,7 +9196,7 @@ app.get("/api/dashboard/dicf-excel", dashboardAuthMiddleware, async (req, res) =
         const ingreso = v * 1000 * mg - Math.abs(Number(d));
         ingresoVals.push(Number.isFinite(ingreso) ? Math.round(ingreso * 100) / 100 : "");
       }
-      ingresoRows.push([c.cliente || "", c.estado || "", ...ingresoVals]);
+      ingresoRows.push([c.cliente || "", c.estado || "", c.canal || "", c.subcanal || "", ...ingresoVals]);
     }
     const wsIngreso = XLSX.utils.aoa_to_sheet(ingresoRows);
     XLSX.utils.book_append_sheet(wb, wsIngreso, "Ingreso por cliente");
