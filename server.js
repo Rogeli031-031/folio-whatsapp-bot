@@ -14301,6 +14301,7 @@ app.listen(PORT, () => {
       let lastDeltaAiQuestionKey = null;
       let lastDeltaAiSummaryKey = null;
       const mxFormatter = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Mexico_City", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
+      const mxWeekdayFmt = new Intl.DateTimeFormat("en-US", { timeZone: "America/Mexico_City", weekday: "short" });
       setInterval(() => {
         const now = new Date();
         const parts = mxFormatter.formatToParts(now);
@@ -14309,32 +14310,28 @@ app.listen(PORT, () => {
         const m = parseInt(get("minute"), 10) || 0;
         const slot = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
         const today = `${get("year")}-${get("month")}-${get("day")}`;
+        const weekdayShort = mxWeekdayFmt.format(now);
+        const schedulerDayOk = TEST_MODE_AI || weekdayShort === "Mon" || weekdayShort === "Thu";
         /** Pregunta 5W2H a GG por planta (desfasada 1 minuto por planta para evitar saturación). */
         const slotsQuestionMap = TEST_MODE_AI
           ? { "17:00": null }
           : {
-              "08:00": "Acapulco",
-              "08:01": "Morelos",
-              "08:02": "Puebla",
-              "08:03": "Tehuacan",
-              "08:04": "San Luis",
-              "08:05": "Queretaro",
-              "15:30": "Acapulco",
-              "15:31": "Morelos",
-              "15:32": "Puebla",
-              "15:33": "Tehuacan",
-              "15:34": "San Luis",
-              "15:35": "Queretaro",
+              "07:45": "Acapulco",
+              "07:46": "Morelos",
+              "07:47": "Puebla",
+              "07:48": "Tehuacan",
+              "07:49": "San Luis",
+              "07:50": "Queretaro",
             };
-        const slotsSummary = TEST_MODE_AI ? ["17:45"] : ["08:00", "15:30"];
+        const slotsSummary = TEST_MODE_AI ? ["17:45"] : ["07:45"];
         const slotPlantKey = Object.prototype.hasOwnProperty.call(slotsQuestionMap, slot) ? slotsQuestionMap[slot] : undefined;
         const qKey = `q-${today}-${slot}-${slotPlantKey || "all"}`;
         const sKey = `s-${today}-${slot}`;
-        if (slotPlantKey !== undefined && lastDeltaAiQuestionKey !== qKey) {
+        if (schedulerDayOk && slotPlantKey !== undefined && lastDeltaAiQuestionKey !== qKey) {
           lastDeltaAiQuestionKey = qKey;
           runDeltaIngresoAiSendQuestion({ slotPlantKey }).then((r) => console.log("[Delta Ingreso AI] scheduler question:", r)).catch((e) => console.warn("[Delta Ingreso AI] scheduler question error:", e.message));
         }
-        if (slotsSummary.includes(slot) && lastDeltaAiSummaryKey !== sKey) {
+        if (schedulerDayOk && slotsSummary.includes(slot) && lastDeltaAiSummaryKey !== sKey) {
           lastDeltaAiSummaryKey = sKey;
           console.log("[Delta Ingreso AI] scheduler summary trigger:", { slot, today });
           runDeltaIngresoAiSendSummary().then((r) => console.log("[Delta Ingreso AI] scheduler summary:", r)).catch((e) => console.warn("[Delta Ingreso AI] scheduler summary error:", e.message));
