@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { fetchDeltaDescuentoPeriodos, postDeltaDescuentoDatos, type DeltaDescuentoDatosResult } from "@/lib/api";
+import {
+  fetchDeltaDescuentoPeriodos,
+  postDeltaDescuentoDatos,
+  postWeeklyDiscountLectura,
+  type DeltaDescuentoDatosResult,
+  type WeeklyDiscountLecturaResult,
+} from "@/lib/api";
 
 interface Props {
   token: string;
@@ -21,6 +27,12 @@ export default function DeltaDescuentoModal({ token, plantas, onClose }: Props) 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<DeltaDescuentoDatosResult | null>(null);
+  const [lecturaLoading, setLecturaLoading] = useState(false);
+  const [lectura, setLectura] = useState<WeeklyDiscountLecturaResult | null>(null);
+
+  useEffect(() => {
+    setLectura(null);
+  }, [planta]);
 
   useEffect(() => {
     if (step !== "periodos" || !planta.trim()) return;
@@ -58,7 +70,7 @@ export default function DeltaDescuentoModal({ token, plantas, onClose }: Props) 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
       <div
-        className={`w-full rounded-lg border border-slate-700 bg-slate-900 p-4 shadow-xl ${result ? "max-w-6xl" : "max-w-md"}`}
+        className={`w-full rounded-lg border border-slate-700 bg-slate-900 p-4 shadow-xl ${result || lectura ? "max-w-6xl" : "max-w-md"}`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-center justify-between border-b border-slate-700 pb-2">
@@ -88,6 +100,69 @@ export default function DeltaDescuentoModal({ token, plantas, onClose }: Props) 
                 <option key={p.id} value={p.nombre}>{p.nombre}</option>
               ))}
             </select>
+            <div className="mt-4 rounded border border-slate-700 bg-slate-800/40 p-3">
+              <p className="mb-2 text-xs font-medium text-slate-300">Lectura semanal de descuento (LD)</p>
+              <p className="mb-2 text-xs text-slate-400">Vista previa del mensaje tipo WhatsApp (misma lógica que el comando LD y el envío automático los lunes).</p>
+              <button
+                type="button"
+                disabled={!planta.trim() || lecturaLoading}
+                onClick={() => {
+                  if (!planta.trim()) return;
+                  setError(null);
+                  setLecturaLoading(true);
+                  setLectura(null);
+                  postWeeklyDiscountLectura(token, { planta: planta.trim() })
+                    .then(setLectura)
+                    .catch((e) => setError(e.message || "Error al generar lectura"))
+                    .finally(() => setLecturaLoading(false));
+                }}
+                className="rounded bg-emerald-700 px-3 py-1.5 text-sm text-white hover:bg-emerald-600 disabled:opacity-50"
+              >
+                {lecturaLoading ? "Generando…" : "Generar lectura semanal"}
+              </button>
+              {lectura && (
+                <div className="mt-3 space-y-2 text-xs">
+                  <p className="text-slate-400">Corte: {lectura.fecha_corte}</p>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    <div className="rounded border border-slate-600/80 bg-slate-900/80 p-2">
+                      <p className="text-slate-500">$/kg mes anterior</p>
+                      <p className="tabular-nums text-slate-200">
+                        {lectura.descuento_kg_mes_anterior != null ? `${lectura.descuento_kg_mes_anterior.toFixed(2)}` : "—"}
+                      </p>
+                    </div>
+                    <div className="rounded border border-slate-600/80 bg-slate-900/80 p-2">
+                      <p className="text-slate-500">$/kg acumulado</p>
+                      <p className="tabular-nums text-slate-200">
+                        {lectura.descuento_kg_actual != null ? `${lectura.descuento_kg_actual.toFixed(2)}` : "—"}
+                      </p>
+                    </div>
+                    <div className="rounded border border-slate-600/80 bg-slate-900/80 p-2">
+                      <p className="text-slate-500">$/kg proyectado</p>
+                      <p className="tabular-nums text-slate-200">
+                        {lectura.descuento_kg_proyectado != null ? `${lectura.descuento_kg_proyectado.toFixed(2)}` : "—"}
+                      </p>
+                    </div>
+                  </div>
+                  <p className="text-slate-400">
+                    Impacto negativo:{" "}
+                    <span className="text-slate-200">{lectura.cliente_mayor_impacto_negativo?.cliente || "—"}</span>
+                  </p>
+                  <p className="text-slate-400">
+                    Impacto positivo:{" "}
+                    <span className="text-slate-200">{lectura.cliente_mayor_impacto_positivo?.cliente || "—"}</span>
+                  </p>
+                  {lectura.factores_principales && lectura.factores_principales.length > 0 && (
+                    <ul className="list-inside list-disc text-slate-400">
+                      {lectura.factores_principales.slice(0, 3).map((f, i) => (
+                        <li key={i}>{f}</li>
+                      ))}
+                    </ul>
+                  )}
+                  <label className="block text-slate-500">Vista previa WhatsApp</label>
+                  <pre className="max-h-56 overflow-auto whitespace-pre-wrap rounded border border-slate-600 bg-slate-950 p-2 text-slate-200">{lectura.narrativa_whatsapp}</pre>
+                </div>
+              )}
+            </div>
             <div className="flex gap-2 pt-2">
               <button type="button" onClick={onClose} className="rounded border border-slate-600 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-700">Cancelar</button>
               <button type="button" onClick={handlePlantaNext} disabled={!planta.trim()} className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-500 disabled:opacity-50">Siguiente</button>

@@ -552,6 +552,46 @@ export function postDeltaDescuentoDatos(
   });
 }
 
+export interface WeeklyDiscountImpactCliente {
+  cliente: string | null;
+  impacto_estimado: number | null;
+  razon: string | null;
+}
+
+export interface WeeklyDiscountLecturaResult {
+  planta: string;
+  fecha_corte: string;
+  mes_anterior?: string;
+  mes_actual?: string;
+  error?: string;
+  insuficiente_datos?: boolean;
+  descuento_kg_mes_anterior?: number | null;
+  descuento_kg_actual?: number | null;
+  descuento_kg_proyectado?: number | null;
+  descuento_total_mes_anterior?: number;
+  descuento_total_actual?: number;
+  descuento_total_proyectado?: number;
+  venta_kg_mes_anterior?: number;
+  venta_kg_actual?: number;
+  venta_kg_proyectada?: number;
+  cliente_mayor_impacto_negativo?: WeeklyDiscountImpactCliente;
+  cliente_mayor_impacto_positivo?: WeeklyDiscountImpactCliente;
+  factores_principales?: string[];
+  detalle_clientes_relevantes?: Array<Record<string, unknown>>;
+  narrativa_whatsapp: string;
+}
+
+export function postWeeklyDiscountLectura(
+  token: string,
+  body: { planta: string; fecha_corte?: string }
+): Promise<WeeklyDiscountLecturaResult> {
+  return apiFetch<WeeklyDiscountLecturaResult>("/api/dashboard/weekly-discount-lectura", {
+    token,
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
 export interface DeltaIngresoCliente {
   cliente: string;
   ingresoA: number;

@@ -42,6 +42,9 @@ const deltaIngresoAiDb = require("./lib/delta-ingreso-ai-db");
 const deltaIngresoCommands = require("./lib/delta-ingreso-commands");
 const deltaIngresoForecast = require("./lib/delta-ingreso-forecast");
 const ventaProyeccionMes = require("./lib/venta-proyeccion-mes");
+const weeklyDiscountNarrative = require("./lib/weekly-discount-narrative");
+const weeklyDiscountLdConfig = require("./lib/weekly-discount-ld-config");
+const weeklyDiscountLdScheduler = require("./lib/weekly-discount-ld-scheduler");
 const dicf = require("./lib/dicf");
 const dicfAccionesLib = require("./lib/dicf-acciones");
 const { isDirectorZPForDashboard } = require("./lib/dashboard-es-zp");
@@ -8894,6 +8897,28 @@ app.post("/api/dashboard/delta-descuento-datos", dashboardAuthMiddleware, async 
   }
 });
 
+/** Lectura semanal de descuento (LD): vista previa / JSON para dashboard (Delta Descuento). */
+app.post("/api/dashboard/weekly-discount-lectura", dashboardAuthMiddleware, async (req, res) => {
+  const roleNorm = (req.dashboardAuth && req.dashboardAuth.role) ? String(req.dashboardAuth.role).toUpperCase() : "";
+  if (roleNorm === "GA") return res.status(403).json({ error: "Sin permiso para Delta (GA restringido)." });
+  if (dashboardBlockGVForbidden(req, res)) return;
+  const planta = (req.body && req.body.planta) ? String(req.body.planta).trim() : "";
+  if (!planta) {
+    return res.status(400).json({ error: "Falta planta" });
+  }
+  const fc = (req.body && req.body.fecha_corte) ? String(req.body.fecha_corte).trim().slice(0, 10) : weeklyDiscountLdConfig.getYesterdayMexicoYmd();
+  const client = await pool.connect();
+  try {
+    const data = await weeklyDiscountNarrative.buildWeeklyDiscountNarrative(client, planta, fc);
+    res.json(data);
+  } catch (e) {
+    console.error("[Dashboard weekly-discount-lectura]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
 /** Alias nombre dropdown/IGF -> nombre en public.plantas (para Delta Ingreso Forecast y listas). */
 const ALIAS_PLANTA_NOMBRE = {
   "gt puebla": "Puebla",
@@ -10287,6 +10312,29 @@ app.post("/twilio/whatsapp", async (req, res) => {
         } catch (e) {
           console.warn("getPendientesForUser error:", e.message);
           return safeReply("Error al cargar pendientes. Intenta más tarde.");
+        }
+      }
+
+      /** Lectura semanal de descuento (LD) — ARR / Delta Descuento; no afecta Delta Ingreso. */
+      const ldParsed = weeklyDiscountLdConfig.parseLDCommand(bodyForCmd);
+      if (ldParsed) {
+        if (!ldParsed.ok) {
+          return safeReply(
+            "Lectura semanal de descuento (LD).\nEscribe: LD y el nombre de la planta.\nEjemplos: LD MORELOS · LD PUEBLA · LD GAS URIBE · LD TEHUACAN"
+          );
+        }
+        try {
+          const fc = weeklyDiscountLdConfig.getYesterdayMexicoYmd();
+          const result = await weeklyDiscountNarrative.buildWeeklyDiscountNarrative(client, ldParsed.plantDisplayName, fc);
+          if (result.error === "planta_no_encontrada") {
+            return safeReply("Formato no reconocido. Usa: LD MORELOS");
+          }
+          let txt = result.narrativa_whatsapp || "";
+          if (txt.length > MAX_WHATSAPP_BODY) txt = txt.substring(0, MAX_WHATSAPP_BODY - 25) + "\n...(recortado)";
+          return safeReply(txt);
+        } catch (e) {
+          console.warn("[LD WhatsApp]", e.message);
+          return safeReply("No pude generar la lectura LD ahora. Intenta más tarde.");
         }
       }
 
@@ -14337,6 +14385,13 @@ app.listen(PORT, () => {
           runDeltaIngresoAiSendSummary().then((r) => console.log("[Delta Ingreso AI] scheduler summary:", r)).catch((e) => console.warn("[Delta Ingreso AI] scheduler summary error:", e.message));
         }
       }, 60000);
+
+      /** Lectura semanal LD: lunes, hora base México (default 08:15), una planta por minuto. Ver lib/weekly-discount-ld-scheduler.js */
+      weeklyDiscountLdScheduler.scheduleWeeklyLDDispatch({
+        pool,
+        sendWhatsApp,
+        maxBodyLength: MAX_WHATSAPP_BODY,
+      });
     })
     .catch((e) => {
       console.error("[Startup] ensureSchema failed:", e);
