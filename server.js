@@ -8517,7 +8517,14 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
       if (best) forecastKgByPlant[p] = best.kg;
     }
     proyeccionCatSubForecast.forecastKgByPlant = forecastKgByPlant;
-    const buf = await dashboardArrForecast.generarDashboardArrForecast(client, year, month, plantCode, { igfForecast, proyeccionCatSub, proyeccionCatSubForecast });
+    const buf = await dashboardArrForecast.generarDashboardArrForecast(client, year, month, plantCode, {
+      igfForecast,
+      proyeccionCatSub,
+      proyeccionCatSubForecast,
+      // Fecha de corte seleccionada en el dashboard: a partir de aquí no debe aparecer venta/desc (cero).
+      // Si no viene, se usa la fecha del servidor como fallback.
+      fechaCorte: uploadDay || proyeccionHasta || null,
+    });
     const filename = `Dashboard_ARR_Forecast_${year}_${month}.xlsx`;
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
