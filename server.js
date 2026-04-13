@@ -5945,27 +5945,6 @@ const EMPRESA_IGF_A_PLANTA_KEYS = {
   "Morelos": ["E15", "Morelos"],
 };
 
-/** Signos para presentación: verde = positivo (margen, HG $/kg); rojo = negativo (costos/egresos). Azul = calculados (Util. Oper., Resultado). */
-const IGF_VAR_COSTO_PARA_DISPLAY = [
-  "com_desc_kg", "gasto_kg", "impuesto_kg",
-  "bancos_planta_kg", "provision_planta_kg",
-  "gtos_apoyos_corp_kg", "bancos_corp_kg", "otros_programas_kg", "inversiones_kg",
-  "presupuesto_kg", "folios_aprob_zp_kg", "folios_carro_kg",
-];
-function aplicarSignosDisplayIgf(row) {
-  const out = { ...row };
-  for (const key of IGF_VAR_COSTO_PARA_DISPLAY) {
-    if (out[key] != null && Number.isFinite(Number(out[key]))) {
-      const v = Number(out[key]);
-      out[key] = v > 0 ? -v : v;
-    }
-  }
-  if (out.hg_kg != null && Number.isFinite(Number(out.hg_kg))) {
-    out.hg_kg = Math.abs(Number(out.hg_kg));
-  }
-  return out;
-}
-
 /**
  * Excluye del acumulado de folios (IGF forecast) lo mismo que INVERSIONES, más DYO / derechos y obligaciones,
  * y comisiones (etiqueta en subcategoría o categoría COMISIONES).
@@ -6345,7 +6324,6 @@ async function buildIgfForecastPayload(client, year, month, opts = {}) {
       row.resultado_final_kg = calc.resultado_final_kg;
       row.resultado_final_importe = calc.resultado_final_importe;
     }
-    for (let i = 0; i < rows.length; i++) rows[i] = aplicarSignosDisplayIgf(rows[i]);
 
     const ordenProvincia = ["GT - Puebla", "Tehuacán", "Acapulco", "GTM - Querétaro", "GTM - San Luis P.", "Morelos"];
     rows.sort((a, b) => {
