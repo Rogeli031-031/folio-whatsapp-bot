@@ -175,6 +175,8 @@ export interface IgfForecastResponse {
   version_number: number | null;
   rows: IgfForecastRow[];
   totales: Record<string, number | null> | null;
+  /** Si se pidió `include_mini=1` en GET /api/dashboard/igf-forecast (evita segunda petición al mini). */
+  mini?: IgfForecastMiniResponse;
 }
 
 export interface PresupuestoDetalleItem {
@@ -261,6 +263,10 @@ export interface PronosticoVentaSheetWeek {
   label: string;
   dow: (number | string | null)[];
   total_semana: number | string | null;
+  /** Por columna DOW: hist | lookback | pending | "" (misma semántica que Excel amarillo/azul). */
+  cell_bg?: ("hist" | "lookback" | "pending" | "")[];
+  /** Días que entran en el cálculo del PROM (borde rojo). */
+  prom_highlight?: boolean[];
 }
 
 export interface PronosticoVentaSheet {
@@ -345,12 +351,13 @@ export function fetchIgfFoliosDetalle(
 
 export function fetchIgfForecast(
   token: string,
-  params?: { year?: number; month?: number; upload_day?: string }
+  params?: { year?: number; month?: number; upload_day?: string; include_mini?: boolean }
 ): Promise<IgfForecastResponse> {
   const p: Record<string, string> = {};
   if (params?.year != null) p.year = String(params.year);
   if (params?.month != null) p.month = String(params.month);
   if (params?.upload_day) p.upload_day = params.upload_day;
+  if (params?.include_mini) p.include_mini = "1";
   return apiFetch<IgfForecastResponse>("/api/dashboard/igf-forecast", {
     token,
     params: Object.keys(p).length ? p : undefined,

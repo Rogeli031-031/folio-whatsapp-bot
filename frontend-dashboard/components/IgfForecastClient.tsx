@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -40,6 +40,7 @@ import {
   PRESUPUESTO_GEND_STORAGE_KEY,
   INVERSION_CDJZ_STORAGE_KEY,
 } from "@/lib/igf-kpi-ui";
+import { recomputeVentaSheetFromDays } from "@/lib/pronostico-local-recalc";
 
 export function IgfForecastContent() {
   const searchParams = useSearchParams();
@@ -162,6 +163,11 @@ export function IgfForecastContent() {
   const [pronosticoError, setPronosticoError] = useState<string | null>(null);
   const [pronosticoSaving, setPronosticoSaving] = useState(false);
 
+  const pronosticoSheetDisplay = useMemo(() => {
+    if (!pronosticoDetail?.venta_sheet) return null;
+    return recomputeVentaSheetFromDays(pronosticoDetail) ?? pronosticoDetail.venta_sheet;
+  }, [pronosticoDetail]);
+
   const isGAPageBlocked = token ? getRoleFromDashboardToken(token) === "GA" : false;
   const isGVPageBlocked = token ? getRoleFromDashboardToken(token) === "GV" : false;
 
@@ -203,11 +209,16 @@ export function IgfForecastContent() {
         const up = uploadDay.trim();
         const params =
           up && /^\d{4}-\d{2}-\d{2}$/.test(up)
-            ? { year: Number(up.slice(0, 4)), month: Number(up.slice(5, 7)), upload_day: up }
-            : undefined;
+            ? { year: Number(up.slice(0, 4)), month: Number(up.slice(5, 7)), upload_day: up, include_mini: true }
+            : { include_mini: true };
         const data = await fetchIgfForecast(token, params);
         if (!cancelled) {
           setIgfForecast(data);
+          if (data.mini) {
+            setIgfMini(data.mini);
+            setIgfMiniLoading(false);
+            setIgfMiniError(null);
+          }
         }
       } catch (e: any) {
         if (!cancelled) {
@@ -232,6 +243,12 @@ export function IgfForecastContent() {
 
   useEffect(() => {
     if (!token || isGAPageBlocked || isGVPageBlocked || !igfForecast) return;
+    if (igfForecast.mini) {
+      setIgfMini(igfForecast.mini);
+      setIgfMiniLoading(false);
+      setIgfMiniError(null);
+      return;
+    }
     let cancelled = false;
     const ac = new AbortController();
     const timeoutMs = 120000;
@@ -385,9 +402,18 @@ export function IgfForecastContent() {
       const up = uploadDay.trim();
       const data =
         up && /^\d{4}-\d{2}-\d{2}$/.test(up)
-          ? await fetchIgfForecast(token, { year: igfForecast.year, month: igfForecast.month, upload_day: up })
-          : await fetchIgfForecast(token, { year: igfForecast.year, month: igfForecast.month });
+          ? await fetchIgfForecast(token, {
+              year: igfForecast.year,
+              month: igfForecast.month,
+              upload_day: up,
+              include_mini: true,
+            })
+          : await fetchIgfForecast(token, { year: igfForecast.year, month: igfForecast.month, include_mini: true });
       setIgfForecast(data);
+      if (data.mini) {
+        setIgfMini(data.mini);
+        setIgfMiniError(null);
+      }
       setForecastRecalcMsg("Venta forecast recalculado (ARR provincia) y tabla actualizada.");
     } catch (e: unknown) {
       setForecastRecalcMsg(e instanceof Error ? e.message : "Error al recalcular forecast");
@@ -459,12 +485,14 @@ export function IgfForecastContent() {
         ...(up && /^\d{4}-\d{2}-\d{2}$/.test(up) ? { upload_day: up } : {}),
         days: pronosticoDetail.days.map((d) => ({ fecha: d.fecha, selected: d.selected })),
       });
-      const miniParams =
-        up && /^\d{4}-\d{2}-\d{2}$/.test(up)
-          ? { year: igfForecast.year, month: igfForecast.month, upload_day: up }
-          : { year: igfForecast.year, month: igfForecast.month };
-      const mini = await fetchIgfForecastMini(token, miniParams);
-      setIgfMini(mini);
+      const data = await fetchIgfForecast(token, {
+        year: igfForecast.year,
+        month: igfForecast.month,
+        ...(up && /^\d{4}-\d{2}-\d{2}$/.test(up) ? { upload_day: up } : {}),
+        include_mini: true,
+      });
+      setIgfForecast(data);
+      if (data.mini) setIgfMini(data.mini);
       const refreshed = await fetchPronosticoDetalle(token, {
         year: igfForecast.year,
         month: igfForecast.month,
@@ -824,8 +852,13 @@ export function IgfForecastContent() {
                                 const updated = await fetchIgfForecast(token, {
                                   year: igfForecast.year,
                                   month: igfForecast.month,
+                                  include_mini: true,
                                 });
                                 setIgfForecast(updated);
+                                if (updated.mini) {
+                                  setIgfMini(updated.mini);
+                                  setIgfMiniError(null);
+                                }
                               } catch {
                                 e.target.value = row.hg_pct != null ? (Number(row.hg_pct) * 100).toFixed(1) : "";
                               } finally {
@@ -1435,15 +1468,20 @@ export function IgfForecastContent() {
                   Ventana PROM: {pronosticoDetail.lookback_start || "—"} → {pronosticoDetail.lookback_end || "—"} · Corte:{" "}
                   {pronosticoDetail.corte_day}
                 </p>
-                {pronosticoDetail.venta_sheet && (
+                {pronosticoSheetDisplay && (
                   <div className="overflow-x-auto mb-4 rounded border border-slate-700">
                     <p className="text-[0.7rem] text-amber-200/90 px-2 py-1 bg-slate-800/80 border-b border-slate-700">
-                      {pronosticoDetail.venta_sheet.title} · {pronosticoDetail.venta_sheet.year_month}
+                      {pronosticoSheetDisplay.title} · {pronosticoSheetDisplay.year_month}
+                    </p>
+                    <p className="text-[0.65rem] text-slate-500 px-2 py-1 border-b border-slate-700/80">
+                      Amarillo: histórico (lookback o mes antes del corte). Azul: días del mes pendientes. Borde rojo: día
+                      incluido en el PROM. Marque días abajo para ver el PROY actualizado; guarde para fijar descuento y
+                      mini-resumen.
                     </p>
                     <table className="w-full min-w-[720px] text-[0.65rem] border-collapse">
                       <thead>
                         <tr className="bg-slate-800 text-slate-200">
-                          {pronosticoDetail.venta_sheet.columns.map((h) => (
+                          {pronosticoSheetDisplay.columns.map((h) => (
                             <th
                               key={h}
                               className="border border-slate-600 px-1 py-1 text-center font-semibold whitespace-nowrap"
@@ -1454,16 +1492,30 @@ export function IgfForecastContent() {
                         </tr>
                       </thead>
                       <tbody className="text-slate-100">
-                        {pronosticoDetail.venta_sheet.weeks.map((w) => (
+                        {pronosticoSheetDisplay.weeks.map((w) => (
                           <tr key={w.label} className="border-b border-slate-700/80">
                             <td className="border border-slate-700/80 px-1 py-0.5 text-left whitespace-nowrap bg-slate-900/40">
                               {w.label}
                             </td>
-                            {w.dow.map((v, i) => (
-                              <td key={i} className="border border-slate-700/80 px-1 py-0.5 text-right tabular-nums">
-                                {v === "" || v == null ? "" : fmtNum(Number(v), 2)}
-                              </td>
-                            ))}
+                            {w.dow.map((v, i) => {
+                              const bg = w.cell_bg?.[i] ?? "";
+                              const ph = w.prom_highlight?.[i];
+                              const bgCls =
+                                bg === "hist" || bg === "lookback"
+                                  ? "bg-amber-400/15"
+                                  : bg === "pending"
+                                    ? "bg-sky-600/30"
+                                    : "";
+                              const ringCls = ph ? "ring-2 ring-red-500 ring-inset" : "";
+                              return (
+                                <td
+                                  key={i}
+                                  className={`border border-slate-700/80 px-1 py-0.5 text-right tabular-nums ${bgCls} ${ringCls}`}
+                                >
+                                  {v === "" || v == null ? "" : fmtNum(Number(v), 2)}
+                                </td>
+                              );
+                            })}
                             <td className="border border-slate-700/80 px-1 py-0.5 text-right font-medium tabular-nums">
                               {w.total_semana === "" || w.total_semana == null ? "" : fmtNum(Number(w.total_semana), 2)}
                             </td>
@@ -1471,49 +1523,49 @@ export function IgfForecastContent() {
                         ))}
                         <tr className="bg-slate-800/90 font-medium">
                           <td className="border border-slate-600 px-1 py-1">PROM mes (por día de semana)</td>
-                          {pronosticoDetail.venta_sheet.prom_mes_dow.map((v, i) => (
+                          {pronosticoSheetDisplay.prom_mes_dow.map((v, i) => (
                             <td key={i} className="border border-slate-600 px-1 py-1 text-right tabular-nums">
                               {v === "" ? "" : fmtNum(Number(v), 2)}
                             </td>
                           ))}
                           <td className="border border-slate-600 px-1 py-1 text-right tabular-nums">
-                            {fmtNum(pronosticoDetail.venta_sheet.prom_mes_total, 2)}
+                            {fmtNum(pronosticoSheetDisplay.prom_mes_total, 2)}
                           </td>
                         </tr>
                         <tr className="bg-slate-800/70">
                           <td className="border border-slate-600 px-1 py-1">TOTAL mes (por día de semana)</td>
-                          {pronosticoDetail.venta_sheet.total_mes_dow.map((v, i) => (
+                          {pronosticoSheetDisplay.total_mes_dow.map((v, i) => (
                             <td key={i} className="border border-slate-600 px-1 py-1 text-right tabular-nums">
                               {fmtNum(v, 2)}
                             </td>
                           ))}
                           <td className="border border-slate-600 px-1 py-1 text-right tabular-nums">
-                            {fmtNum(pronosticoDetail.venta_sheet.total_mes_sum, 2)}
+                            {fmtNum(pronosticoSheetDisplay.total_mes_sum, 2)}
                           </td>
                         </tr>
                         <tr className="h-2">
-                          <td colSpan={pronosticoDetail.venta_sheet.columns.length} />
+                          <td colSpan={pronosticoSheetDisplay.columns.length} />
                         </tr>
                         <tr className="bg-slate-800/70">
                           <td className="border border-slate-600 px-1 py-1">POR COMPRAR</td>
-                          {pronosticoDetail.venta_sheet.por_comprar_dow.map((v, i) => (
+                          {pronosticoSheetDisplay.por_comprar_dow.map((v, i) => (
                             <td key={i} className="border border-slate-600 px-1 py-1 text-right tabular-nums">
                               {v === "" ? "" : fmtNum(Number(v), 2)}
                             </td>
                           ))}
                           <td className="border border-slate-600 px-1 py-1 text-right tabular-nums">
-                            {fmtNum(pronosticoDetail.venta_sheet.por_comprar_sum, 2)}
+                            {fmtNum(pronosticoSheetDisplay.por_comprar_sum, 2)}
                           </td>
                         </tr>
                         <tr className="bg-blue-950/60 font-semibold text-cyan-100">
                           <td className="border border-slate-600 px-1 py-1">PROY</td>
-                          {pronosticoDetail.venta_sheet.proy_dow.map((v, i) => (
+                          {pronosticoSheetDisplay.proy_dow.map((v, i) => (
                             <td key={i} className="border border-slate-600 px-1 py-1 text-right tabular-nums">
                               {fmtNum(v, 2)}
                             </td>
                           ))}
                           <td className="border border-slate-600 px-1 py-1 text-right tabular-nums">
-                            {fmtNum(pronosticoDetail.venta_sheet.proy_total_ton, 2)}
+                            {fmtNum(pronosticoSheetDisplay.proy_total_ton, 2)}
                           </td>
                         </tr>
                       </tbody>
@@ -1562,15 +1614,18 @@ export function IgfForecastContent() {
                   )}
                 </details>
                 <div className="mt-3 pt-3 border-t border-slate-700 text-sm text-slate-300">
-                  PROY venta (API):{" "}
+                  PROY venta (tabla):{" "}
                   <span className="font-mono text-cyan-300">
-                    {pronosticoDetail.proy_venta_ton != null ? fmtNum(pronosticoDetail.proy_venta_ton, 2) : "—"}
+                    {pronosticoSheetDisplay?.proy_total_ton != null
+                      ? fmtNum(pronosticoSheetDisplay.proy_total_ton, 2)
+                      : pronosticoDetail.proy_venta_ton != null
+                        ? fmtNum(pronosticoDetail.proy_venta_ton, 2)
+                        : "—"}
                   </span>{" "}
-                  ton · Desc. PROY:{" "}
+                  ton · Desc. PROY ($/kg, servidor hasta guardar):{" "}
                   <span className="font-mono">
                     {pronosticoDetail.proy_desc_kg != null ? fmtNum(pronosticoDetail.proy_desc_kg) : "—"}
-                  </span>{" "}
-                  $/kg
+                  </span>
                 </div>
                 <div className="mt-4 flex flex-wrap items-center gap-2">
                   <button
