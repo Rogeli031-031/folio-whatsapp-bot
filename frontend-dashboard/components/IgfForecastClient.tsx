@@ -31,6 +31,7 @@ import {
   presupuestoGendKey,
   gastoKgFromFour,
   findRowByPlanta,
+  computeIgfMiniResumenRows,
   PRESUPUESTO_GEND_STORAGE_KEY,
   INVERSION_CDJZ_STORAGE_KEY,
 } from "@/lib/igf-kpi-ui";
@@ -456,6 +457,82 @@ export function IgfForecastContent() {
           {igfLoading && <p className="text-sm text-slate-400">Cargando datos…</p>}
           {igfError && <p className="text-sm text-red-400">{igfError}</p>}
           {!igfLoading && !igfError && igfForecast && (
+            <>
+            {(() => {
+              const { plantRows, zona } = computeIgfMiniResumenRows(igfForecast.rows, {
+                gastoKg: (r) => gastoKgFromFour(r),
+                inversionesKg: (r) => getInversionesKgWithCdjz(r),
+              });
+              if (plantRows.length === 0) return null;
+              const miniCols = [
+                { key: "ventaTon" as const, label: "Venta", fmt: (v: number) => fmtNum(v, 2), money: false },
+                { key: "margen" as const, label: "Margen", fmt: (v: number) => fmtNum(v), money: false },
+                { key: "comDesc" as const, label: "Com. y Desc.", fmt: (v: number) => fmtNum(v), money: false },
+                { key: "impuestos" as const, label: "Impuestos", fmt: (v: number) => fmtNum(v), money: false },
+                { key: "hgKg" as const, label: "HG - $/Kg", fmt: (v: number) => fmtNum(v), money: false },
+                { key: "ingreso" as const, label: "INGRESO", fmt: (v: number) => fmtNum(v, 0), money: true },
+                { key: "operativos" as const, label: "OPERATIVOS", fmt: (v: number) => fmtNum(v, 0), money: true },
+                { key: "corporativos" as const, label: "CORPORATIVOS", fmt: (v: number) => fmtNum(v, 0), money: true },
+                { key: "gasto" as const, label: "GASTO", fmt: (v: number) => fmtNum(v, 0), money: true },
+                { key: "utilOperImporte" as const, label: "Util. Operación - Importe", fmt: (v: number) => fmtNum(v, 0), money: true },
+                { key: "resultadoFinalImporte" as const, label: "Resultado Final - Importe", fmt: (v: number) => fmtNum(v, 0), money: true },
+              ];
+              const renderRow = (r: (typeof plantRows)[0] | typeof zona, isZona: boolean) => (
+                <tr
+                  key={r.empresa}
+                  className={
+                    isZona
+                      ? "border-t border-black bg-[#7F7F7F] text-white"
+                      : "border-b border-slate-600/80 bg-slate-800/30"
+                  }
+                >
+                  <td
+                    className={`py-2 px-2 text-left text-[0.65em] font-semibold border-r border-black ${
+                      isZona ? "text-white" : "bg-[#D9D9D9] text-slate-900"
+                    }`}
+                  >
+                    {r.empresa}
+                  </td>
+                  {miniCols.map((c) => {
+                    const v = r[c.key];
+                    const neg = c.money && typeof v === "number" && v < 0;
+                    return (
+                      <td
+                        key={c.key}
+                        className={`py-2 px-2 text-right tabular-nums text-[0.65em] border-r border-black last:border-r-0 ${
+                          isZona ? "text-white font-semibold" : neg ? "text-red-400" : "text-slate-200"
+                        }`}
+                      >
+                        {c.fmt(v)}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+              return (
+                <div className="mb-6 overflow-x-auto rounded border border-black">
+                  <table className="w-full min-w-[1100px] border-collapse text-sm">
+                    <thead>
+                      <tr className="bg-[#1F4E78] text-white">
+                        <th className="text-center py-2 px-2 text-[0.65em] font-semibold border border-black">Empresa</th>
+                        {miniCols.map((c) => (
+                          <th
+                            key={c.key}
+                            className="text-center py-2 px-2 text-[0.65em] font-semibold border border-black whitespace-normal"
+                          >
+                            {c.label}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {plantRows.map((r) => renderRow(r, false))}
+                      {renderRow(zona, true)}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })()}
             <div className={`overflow-x-auto ${plantaFilter ? "max-h-[55vh] overflow-y-auto" : ""}`}>
               <table className="w-full border-collapse text-sm">
                 <thead>
@@ -699,6 +776,7 @@ export function IgfForecastContent() {
                 <p className="text-sm text-slate-500 py-4">No hay datos IGF para este mes.</p>
               )}
             </div>
+            </>
           )}
           </>
           )}

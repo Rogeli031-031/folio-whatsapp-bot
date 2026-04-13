@@ -84,3 +84,95 @@ export function findRowByPlanta(rows: IgfForecastRow[], planta: string): IgfFore
   }
   return undefined;
 }
+
+/** Misma secuencia que `IGF_PROVINCIA_RESUMEN_PLANTAS` en el Excel (mini-resumen). */
+export const IGF_MINI_RESUMEN_LABELS = [
+  "GT Puebla",
+  "Tehuacan",
+  "Acapulco",
+  "GTM Queretaro",
+  "GTM San Luis",
+  "Morelos",
+] as const;
+
+export type IgfMiniResumenRow = {
+  empresa: string;
+  ventaTon: number;
+  margen: number;
+  comDesc: number;
+  impuestos: number;
+  hgKg: number;
+  ingreso: number;
+  operativos: number;
+  corporativos: number;
+  gasto: number;
+  utilOperImporte: number;
+  resultadoFinalImporte: number;
+};
+
+/**
+ * Mini-resumen IGF (misma lógica que Excel `applyIgfMiniResumenFormulas` sobre filas forecast).
+ */
+export function computeIgfMiniResumenRows(
+  rows: IgfForecastRow[],
+  opts?: {
+    gastoKg?: (row: IgfForecastRow) => number;
+    inversionesKg?: (row: IgfForecastRow) => number | null;
+  }
+): { plantRows: IgfMiniResumenRow[]; zona: IgfMiniResumenRow } {
+  const n = (v: number | null | undefined) => (v != null && !Number.isNaN(Number(v)) ? Number(v) : 0);
+  const gastoKg = opts?.gastoKg ?? gastoKgFromFour;
+  const invKg = opts?.inversionesKg ?? ((r: IgfForecastRow) => r.inversiones_kg ?? null);
+
+  const plantRows: IgfMiniResumenRow[] = [];
+  for (const label of IGF_MINI_RESUMEN_LABELS) {
+    const row = findRowByPlanta(rows, label);
+    if (!row) continue;
+    const bTon = n(row.venta_ton);
+    const c = n(row.margen_kg);
+    const d = n(row.com_desc_kg);
+    const eImp = n(row.impuesto_kg);
+    const fHg = n(row.hg_kg);
+    const gOp = gastoKg(row);
+    const iBancos = n(row.bancos_planta_kg);
+    const jProv = n(row.provision_planta_kg);
+    const mCorp = n(row.gtos_apoyos_corp_kg) + n(row.bancos_corp_kg) + n(row.otros_programas_kg) + n(invKg(row));
+    const ingreso = (c + fHg + d) * bTon * 1000;
+    const operativos = (gOp + iBancos + jProv + eImp) * bTon * 1000;
+    const corporativos = mCorp * bTon * 1000;
+    const gasto = operativos + corporativos;
+    const utilOperImporte = ingreso - operativos;
+    const resultadoFinalImporte = utilOperImporte - corporativos;
+    plantRows.push({
+      empresa: row.empresa || label,
+      ventaTon: bTon,
+      margen: c,
+      comDesc: d,
+      impuestos: eImp,
+      hgKg: fHg,
+      ingreso,
+      operativos,
+      corporativos,
+      gasto,
+      utilOperImporte,
+      resultadoFinalImporte,
+    });
+  }
+
+  const zona: IgfMiniResumenRow = {
+    empresa: "Zona Provincia",
+    ventaTon: 0,
+    margen: 0,
+    comDesc: 0,
+    impuestos: 0,
+    hgKg: 0,
+    ingreso: plantRows.reduce((s, r) => s + r.ingreso, 0),
+    operativos: plantRows.reduce((s, r) => s + r.operativos, 0),
+    corporativos: plantRows.reduce((s, r) => s + r.corporativos, 0),
+    gasto: plantRows.reduce((s, r) => s + r.gasto, 0),
+    utilOperImporte: plantRows.reduce((s, r) => s + r.utilOperImporte, 0),
+    resultadoFinalImporte: plantRows.reduce((s, r) => s + r.resultadoFinalImporte, 0),
+  };
+
+  return { plantRows, zona };
+}
