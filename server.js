@@ -2307,6 +2307,22 @@ async function ensureArrSchema(client) {
     );
   `).catch(() => {});
   await client.query(`
+    CREATE TABLE IF NOT EXISTS arr.pronostico_dias_seleccion (
+      plant_code VARCHAR(20) NOT NULL,
+      year SMALLINT NOT NULL,
+      month SMALLINT NOT NULL,
+      corte_day DATE NOT NULL,
+      fecha DATE NOT NULL,
+      selected BOOLEAN NOT NULL DEFAULT true,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (plant_code, year, month, corte_day, fecha)
+    );
+  `).catch(() => {});
+  await client.query(`
+    CREATE INDEX IF NOT EXISTS idx_pronostico_dias_sel_lookup
+      ON arr.pronostico_dias_seleccion (year, month, corte_day, plant_code);
+  `).catch(() => {});
+  await client.query(`
     CREATE TABLE IF NOT EXISTS arr.delta_ingreso_forecast_cliente (
       plant_code VARCHAR(20) NOT NULL,
       year SMALLINT NOT NULL,
