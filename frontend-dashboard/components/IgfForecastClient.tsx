@@ -233,6 +233,9 @@ export function IgfForecastContent() {
   useEffect(() => {
     if (!token || isGAPageBlocked || isGVPageBlocked || !igfForecast) return;
     let cancelled = false;
+    const ac = new AbortController();
+    const timeoutMs = 120000;
+    const tid = setTimeout(() => ac.abort(), timeoutMs);
     setIgfMiniLoading(true);
     setIgfMiniError(null);
     const up = uploadDay.trim();
@@ -240,18 +243,30 @@ export function IgfForecastContent() {
       up && /^\d{4}-\d{2}-\d{2}$/.test(up)
         ? { year: Number(up.slice(0, 4)), month: Number(up.slice(5, 7)), upload_day: up }
         : { year: igfForecast.year, month: igfForecast.month };
-    fetchIgfForecastMini(token, params)
+    fetchIgfForecastMini(token, params, { signal: ac.signal })
       .then((data) => {
         if (!cancelled) setIgfMini(data);
       })
       .catch((e: unknown) => {
-        if (!cancelled) setIgfMiniError(e instanceof Error ? e.message : "Error al cargar mini-resumen");
+        if (!cancelled) {
+          const msg = e instanceof Error ? e.message : "Error al cargar mini-resumen";
+          const isAbort =
+            (e instanceof Error && e.name === "AbortError") || (typeof msg === "string" && /aborted|abort/i.test(msg));
+          setIgfMiniError(
+            isAbort
+              ? `Tiempo de espera agotado (${timeoutMs / 1000}s). El servidor puede estar ocupado o frío (p. ej. Render); reintente. Tras descargar el Excel al menos una vez, el mini-resumen suele ser más rápido (snapshot PROY).`
+              : msg
+          );
+        }
       })
       .finally(() => {
+        clearTimeout(tid);
         if (!cancelled) setIgfMiniLoading(false);
       });
     return () => {
       cancelled = true;
+      clearTimeout(tid);
+      ac.abort();
     };
   }, [token, isGAPageBlocked, isGVPageBlocked, igfForecast, uploadDay]);
 

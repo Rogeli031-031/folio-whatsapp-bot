@@ -337,7 +337,8 @@ export function fetchIgfForecast(
 
 export function fetchIgfForecastMini(
   token: string,
-  params?: { year?: number; month?: number; upload_day?: string }
+  params?: { year?: number; month?: number; upload_day?: string },
+  init?: { signal?: AbortSignal }
 ): Promise<IgfForecastMiniResponse> {
   const p: Record<string, string> = {};
   if (params?.year != null) p.year = String(params.year);
@@ -347,6 +348,7 @@ export function fetchIgfForecastMini(
     token,
     params: Object.keys(p).length ? p : undefined,
     cache: "no-store",
+    signal: init?.signal,
   });
 }
 

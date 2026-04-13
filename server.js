@@ -6439,35 +6439,9 @@ app.get("/api/dashboard/igf-forecast-mini", dashboardAuthMiddleware, async (req,
   try {
     const igf = await buildIgfForecastPayload(client, year, month, uploadDay ? { upload_day: uploadDay } : undefined);
     const fechaCorteStr = uploadDay || "";
-    const ctxProno = await dashboardArrForecast.buildPronosticoVentaDescMaps(client, year, month, fechaCorteStr);
-    let proyByPlant = await dashboardArrForecast.computePronosticoProyByPlant(client, year, month, { fechaCorte: fechaCorteStr });
-    const snapMini = await dashboardArrForecast.loadPronosticoMiniSnapshot(client, year, month, ctxProno.corteYmdStr);
-    if (snapMini && snapMini.size > 0) {
-      proyByPlant = new Map(proyByPlant);
-      for (const [k, v] of snapMini.entries()) {
-        if (v && Number.isFinite(Number(v.proy_venta_ton))) {
-          proyByPlant.set(k, {
-            proy_venta_ton: Number(v.proy_venta_ton),
-            proy_desc_kg: v.proy_desc_kg != null && Number.isFinite(Number(v.proy_desc_kg)) ? Number(v.proy_desc_kg) : 0,
-          });
-        }
-      }
-    }
-
-    const norm = (s) =>
-      String(s || "")
-        .trim()
-        .toLowerCase()
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .replace(/[-–—]/g, " ")
-        .replace(/\s+/g, " ");
-
     const miniLabels = ["GT Puebla", "Tehuacan", "Acapulco", "GTM Queretaro", "GTM San Luis", "Morelos"];
     const labelToPlantCode = new Map();
     try {
-      // Invertir mapeo PRONOSTICO -> etiquetas IGF (definido en lib/dashboard-arr-forecast.js)
-      // Map fijo (alineado con PRONOSTICO_PLANT_CODE_TO_IGF_RESUMEN_LABELS en lib)
       const inv = {
         Puebla: ["GT Puebla"],
         "Tehuacán": ["Tehuacan"],
@@ -6484,6 +6458,52 @@ app.get("/api/dashboard/igf-forecast-mini", dashboardAuthMiddleware, async (req,
     } catch {
       /* ignore */
     }
+    const needPlantCodes = miniLabels.map((label) => String(labelToPlantCode.get(label) || label).trim());
+    const corteYmdFast = dashboardArrForecast.getPronosticoCorteYmdStr(year, month, fechaCorteStr);
+    const snapMini = await dashboardArrForecast.loadPronosticoMiniSnapshot(client, year, month, corteYmdFast);
+    const snapHasAllMini = needPlantCodes.every((code) => {
+      const v = snapMini.get(code);
+      return v && Number.isFinite(Number(v.proy_venta_ton));
+    });
+
+    let proyByPlant;
+    if (snapHasAllMini) {
+      proyByPlant = new Map();
+      for (const code of needPlantCodes) {
+        const v = snapMini.get(code);
+        proyByPlant.set(code, {
+          proy_venta_ton: Number(v.proy_venta_ton),
+          proy_desc_kg: v.proy_desc_kg != null && Number.isFinite(Number(v.proy_desc_kg)) ? Number(v.proy_desc_kg) : 0,
+        });
+      }
+    } else {
+      const ctxProno = await dashboardArrForecast.buildPronosticoVentaDescMaps(client, year, month, fechaCorteStr);
+      let computed = await dashboardArrForecast.computePronosticoProyByPlant(client, year, month, {
+        fechaCorte: fechaCorteStr,
+        prebuiltVentaDescCtx: ctxProno,
+      });
+      if (snapMini && snapMini.size > 0) {
+        computed = new Map(computed);
+        for (const [k, v] of snapMini.entries()) {
+          if (v && Number.isFinite(Number(v.proy_venta_ton))) {
+            computed.set(k, {
+              proy_venta_ton: Number(v.proy_venta_ton),
+              proy_desc_kg: v.proy_desc_kg != null && Number.isFinite(Number(v.proy_desc_kg)) ? Number(v.proy_desc_kg) : 0,
+            });
+          }
+        }
+      }
+      proyByPlant = computed;
+    }
+
+    const norm = (s) =>
+      String(s || "")
+        .trim()
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[-–—]/g, " ")
+        .replace(/\s+/g, " ");
 
     const findIgfRowForLabel = (label) => {
       const want = norm(label);
