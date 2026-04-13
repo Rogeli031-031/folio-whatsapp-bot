@@ -6380,6 +6380,176 @@ app.get("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, res)
 });
 
 /**
+ * IGF Forecast — mini-resumen (igual al bloque superior del Excel "IGF Forecast", hoja Compromiso 18 col).
+ * IMPORTANTE: NO se deriva de la tabla web de abajo; se calcula con la misma lógica de "Pronostico" (PROY) + regla de tres.
+ */
+app.get("/api/dashboard/igf-forecast-mini", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGAFinancialKpis(req, res)) return;
+  if (dashboardBlockGVForbidden(req, res)) return;
+  const year = req.query.year != null ? parseInt(String(req.query.year), 10) : new Date().getFullYear();
+  const month = req.query.month != null ? parseInt(String(req.query.month), 10) : new Date().getMonth() + 1;
+  const uploadDay = (req.query.upload_day || "").toString().trim().slice(0, 10) || null;
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
+    return res.status(400).json({ error: "year y month inválidos" });
+  }
+  if (uploadDay && !/^\d{4}-\d{2}-\d{2}$/.test(uploadDay)) {
+    return res.status(400).json({ error: "upload_day debe ser YYYY-MM-DD" });
+  }
+  if (uploadDay) {
+    const uy = parseInt(uploadDay.slice(0, 4), 10);
+    const um = parseInt(uploadDay.slice(5, 7), 10);
+    if (!Number.isFinite(uy) || !Number.isFinite(um) || uy !== year || um !== month) {
+      return res.status(400).json({ error: "upload_day debe pertenecer al mismo year/month" });
+    }
+  }
+
+  const client = await pool.connect();
+  try {
+    const igf = await buildIgfForecastPayload(client, year, month, uploadDay ? { upload_day: uploadDay } : undefined);
+    const proyByPlant = await dashboardArrForecast.computePronosticoProyByPlant(client, year, month, { fechaCorte: uploadDay || "" });
+
+    const norm = (s) =>
+      String(s || "")
+        .trim()
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[-–—]/g, " ")
+        .replace(/\s+/g, " ");
+
+    const miniLabels = ["GT Puebla", "Tehuacan", "Acapulco", "GTM Queretaro", "GTM San Luis", "Morelos"];
+    const labelToPlantCode = new Map();
+    try {
+      // Invertir mapeo PRONOSTICO -> etiquetas IGF (definido en lib/dashboard-arr-forecast.js)
+      // Map fijo (alineado con PRONOSTICO_PLANT_CODE_TO_IGF_RESUMEN_LABELS en lib)
+      const inv = {
+        Puebla: ["GT Puebla"],
+        "Tehuacán": ["Tehuacan"],
+        Tehuacan: ["Tehuacan"],
+        Acapulco: ["Acapulco"],
+        "Querétaro": ["GTM Queretaro"],
+        Queretaro: ["GTM Queretaro"],
+        "San Luis": ["GTM San Luis"],
+        Morelos: ["Morelos"],
+      };
+      for (const [plant, labels] of Object.entries(inv)) {
+        for (const l of labels) labelToPlantCode.set(l, plant);
+      }
+    } catch {
+      /* ignore */
+    }
+
+    const findIgfRowForLabel = (label) => {
+      const want = norm(label);
+      let best = null;
+      let bestScore = -1;
+      for (const r of igf.rows || []) {
+        const emp = (r.empresa || "").trim();
+        if (!emp) continue;
+        const en = norm(emp);
+        if (!en) continue;
+        let score = -1;
+        if (en === want) score = 10000;
+        else if (en.includes(want) || want.includes(en)) score = 5000 - Math.abs(en.length - want.length);
+        else {
+          const strip = (x) => x.replace(/^(gtm|gt)\s+/i, "").trim();
+          const a = strip(en);
+          const b = strip(want);
+          if (a && b && (a === b || a.includes(b) || b.includes(a))) score = 4000;
+        }
+        if (score > bestScore) {
+          bestScore = score;
+          best = r;
+        }
+      }
+      return bestScore >= 500 ? best : null;
+    };
+
+    const n = (x) => (x != null && Number.isFinite(Number(x)) ? Number(x) : 0);
+    const r2 = (x) => Math.round(Number(x || 0) * 100) / 100;
+
+    const plantRows = [];
+    for (const label of miniLabels) {
+      const igfRow = findIgfRowForLabel(label);
+      const plantCode = labelToPlantCode.get(label) || label;
+      const proy = proyByPlant.get(plantCode) || proyByPlant.get(String(plantCode).trim()) || null;
+      const B = proy && Number.isFinite(Number(proy.proy_venta_ton)) ? Number(proy.proy_venta_ton) : 0;
+      const igfVenta = igfRow ? n(igfRow.venta_ton) : 0;
+      const scale = B > 0 ? (igfVenta / B) : 0;
+
+      const C = igfRow ? n(igfRow.margen_kg) : 0;
+      const D = proy && Number.isFinite(Number(proy.proy_desc_kg)) ? Number(proy.proy_desc_kg) : (igfRow ? n(igfRow.com_desc_kg) : 0);
+      const F = igfRow ? n(igfRow.impuesto_kg) : 0;
+      const G = igfRow ? n(igfRow.hg_pct) : 0;
+      const H = igfRow ? n(igfRow.hg_kg) : 0;
+
+      // Regla de tres (E,I,J,M,N,O,P): valor_igf * venta_igf / venta_proy
+      const E = igfRow ? r2(n(igfRow.gasto_kg) * scale) : 0;
+      const I = igfRow ? r2(n(igfRow.bancos_planta_kg) * scale) : 0;
+      const J = igfRow ? r2(n(igfRow.provision_planta_kg) * scale) : 0;
+      const M = igfRow ? r2(n(igfRow.gtos_apoyos_corp_kg) * scale) : 0;
+      const N = igfRow ? r2(n(igfRow.bancos_corp_kg) * scale) : 0;
+      const O = igfRow ? r2(n(igfRow.otros_programas_kg) * scale) : 0;
+      const P = igfRow ? r2(n(igfRow.inversiones_kg) * scale) : 0;
+
+      // Derivados del bloque provincia (plantilla 18 col)
+      const K = r2(C + D - E - F + H - I - J);
+      const L = Math.round(K * B * 1000);
+      const Q = r2(K - M - N - O - P);
+      const R = Math.round(Q * B * 1000);
+
+      // Mini-resumen (tabla verde)
+      const ingreso = Math.round((C + H + D) * B * 1000);
+      const operativos = Math.round((E + I + J + F) * B * 1000);
+      const corporativos = Math.round((M + N + O + P) * B * 1000);
+      const gasto = operativos + corporativos;
+      const utilOperImporte = ingreso - operativos;
+      const resultadoFinalImporte = utilOperImporte - corporativos;
+
+      plantRows.push({
+        empresa: label,
+        ventaTon: B,
+        margen: C,
+        comDesc: D,
+        impuestos: F,
+        hgKg: H,
+        ingreso,
+        operativos,
+        corporativos,
+        gasto,
+        utilOperImporte,
+        resultadoFinalImporte,
+        _debug: { igfVenta, hgPct: G, K, L, Q, R },
+      });
+    }
+
+    const zona = {
+      empresa: "Zona Provincia",
+      ventaTon: 0,
+      margen: 0,
+      comDesc: 0,
+      impuestos: 0,
+      hgKg: 0,
+      ingreso: plantRows.reduce((s, r) => s + (Number(r.ingreso) || 0), 0),
+      operativos: plantRows.reduce((s, r) => s + (Number(r.operativos) || 0), 0),
+      corporativos: plantRows.reduce((s, r) => s + (Number(r.corporativos) || 0), 0),
+      gasto: plantRows.reduce((s, r) => s + (Number(r.gasto) || 0), 0),
+      utilOperImporte: plantRows.reduce((s, r) => s + (Number(r.utilOperImporte) || 0), 0),
+      resultadoFinalImporte: plantRows.reduce((s, r) => s + (Number(r.resultadoFinalImporte) || 0), 0),
+    };
+
+    // No exponer _debug en prod por defecto (pero se deja si DEBUG está activo)
+    const rows = DEBUG ? plantRows : plantRows.map(({ _debug, ...rest }) => rest);
+    res.json({ ok: true, year, month, upload_day: uploadDay, rows, zona });
+  } catch (e) {
+    console.error("[Dashboard IGF Forecast mini]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/**
  * Proyección de venta (ton) para un mes futuro: promedio de las últimas 2 semanas por día de la semana,
  * multiplicado por los días de ese DOW en el mes objetivo. Útil para escenarios tipo abril en Excel.
  * Query: target_year, target_month (mes a proyectar), opcional plant_code, fecha_hasta (último día de la ventana de 14 días; default ayer),

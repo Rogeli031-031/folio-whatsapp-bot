@@ -11,6 +11,7 @@ import {
 } from "@/lib/auth";
 import {
   fetchIgfForecast,
+  fetchIgfForecastMini,
   fetchArrLastUploadDay,
   postForecastProvincia,
   patchIgfForecastHg,
@@ -19,6 +20,7 @@ import {
   fetchIgfFoliosDetalle,
   type IgfForecastResponse,
   type IgfForecastRow,
+  type IgfForecastMiniResponse,
   type IgfFolioDetalleItem,
   type IgfFolioDetalleTipo,
   type PresupuestoDetalleItem,
@@ -31,7 +33,6 @@ import {
   presupuestoGendKey,
   gastoKgFromFour,
   findRowByPlanta,
-  computeIgfMiniResumenRows,
   PRESUPUESTO_GEND_STORAGE_KEY,
   INVERSION_CDJZ_STORAGE_KEY,
 } from "@/lib/igf-kpi-ui";
@@ -43,6 +44,9 @@ export function IgfForecastContent() {
   const [token, setToken] = useState<string | null>(null);
   const [unauthorized, setUnauthorized] = useState(false);
   const [igfForecast, setIgfForecast] = useState<IgfForecastResponse | null>(null);
+  const [igfMini, setIgfMini] = useState<IgfForecastMiniResponse | null>(null);
+  const [igfMiniLoading, setIgfMiniLoading] = useState(false);
+  const [igfMiniError, setIgfMiniError] = useState<string | null>(null);
   const [igfLoading, setIgfLoading] = useState(false);
   const [igfError, setIgfError] = useState<string | null>(null);
   const [hgSaving, setHgSaving] = useState<string | null>(null);
@@ -216,6 +220,31 @@ export function IgfForecastContent() {
       clearInterval(id);
     };
   }, [token, isGAPageBlocked, isGVPageBlocked, uploadDay, igfForecast]);
+
+  useEffect(() => {
+    if (!token || isGAPageBlocked || isGVPageBlocked || !igfForecast) return;
+    let cancelled = false;
+    setIgfMiniLoading(true);
+    setIgfMiniError(null);
+    const up = uploadDay.trim();
+    const params =
+      up && /^\d{4}-\d{2}-\d{2}$/.test(up)
+        ? { year: Number(up.slice(0, 4)), month: Number(up.slice(5, 7)), upload_day: up }
+        : { year: igfForecast.year, month: igfForecast.month };
+    fetchIgfForecastMini(token, params)
+      .then((data) => {
+        if (!cancelled) setIgfMini(data);
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setIgfMiniError(e instanceof Error ? e.message : "Error al cargar mini-resumen");
+      })
+      .finally(() => {
+        if (!cancelled) setIgfMiniLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, isGAPageBlocked, isGVPageBlocked, igfForecast, uploadDay]);
 
   useEffect(() => {
     if (!token || isGAPageBlocked || isGVPageBlocked || !igfForecast) return;
@@ -458,15 +487,11 @@ export function IgfForecastContent() {
           {igfError && <p className="text-sm text-red-400">{igfError}</p>}
           {!igfLoading && !igfError && igfForecast && (
             <>
-            {(() => {
-              const { plantRows, zona } = computeIgfMiniResumenRows(igfForecast.rows, {
-                utilOperImporte: (r) => {
-                  const x = r.util_oper_importe_igf ?? r.util_oper_importe;
-                  return x != null && !Number.isNaN(Number(x)) ? Number(x) : 0;
-                },
-                resultadoFinalImporte: (r) => getResultadoFinalImporteWithCdjz(r),
-              });
-              if (plantRows.length === 0) return null;
+            {igfMiniLoading && <p className="text-xs text-slate-400 mb-2">Cargando mini-resumen…</p>}
+            {igfMiniError && <p className="text-xs text-red-400 mb-2">{igfMiniError}</p>}
+            {igfMini && igfMini.rows && igfMini.rows.length > 0 && (() => {
+              const plantRows = igfMini.rows;
+              const zona = igfMini.zona;
               const miniCols = [
                 { key: "ventaTon" as const, label: "Venta", fmt: (v: number) => fmtNum(v, 2), money: false },
                 { key: "margen" as const, label: "Margen", fmt: (v: number) => fmtNum(v), money: false },

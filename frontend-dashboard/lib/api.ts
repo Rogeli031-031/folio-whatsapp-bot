@@ -223,6 +223,30 @@ export interface IgfFolioDetalleResponse {
   folios: IgfFolioDetalleItem[];
 }
 
+export interface IgfForecastMiniRow {
+  empresa: string;
+  ventaTon: number;
+  margen: number;
+  comDesc: number;
+  impuestos: number;
+  hgKg: number;
+  ingreso: number;
+  operativos: number;
+  corporativos: number;
+  gasto: number;
+  utilOperImporte: number;
+  resultadoFinalImporte: number;
+}
+
+export interface IgfForecastMiniResponse {
+  ok: boolean;
+  year: number;
+  month: number;
+  upload_day: string | null;
+  rows: IgfForecastMiniRow[];
+  zona: IgfForecastMiniRow;
+}
+
 export function fetchIgfFoliosDetalle(
   token: string,
   params: { year: number; month: number; empresa: string; tipo: IgfFolioDetalleTipo }
@@ -248,6 +272,21 @@ export function fetchIgfForecast(
   if (params?.month != null) p.month = String(params.month);
   if (params?.upload_day) p.upload_day = params.upload_day;
   return apiFetch<IgfForecastResponse>("/api/dashboard/igf-forecast", {
+    token,
+    params: Object.keys(p).length ? p : undefined,
+    cache: "no-store",
+  });
+}
+
+export function fetchIgfForecastMini(
+  token: string,
+  params?: { year?: number; month?: number; upload_day?: string }
+): Promise<IgfForecastMiniResponse> {
+  const p: Record<string, string> = {};
+  if (params?.year != null) p.year = String(params.year);
+  if (params?.month != null) p.month = String(params.month);
+  if (params?.upload_day) p.upload_day = params.upload_day;
+  return apiFetch<IgfForecastMiniResponse>("/api/dashboard/igf-forecast-mini", {
     token,
     params: Object.keys(p).length ? p : undefined,
     cache: "no-store",
