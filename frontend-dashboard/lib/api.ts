@@ -225,6 +225,8 @@ export interface IgfFolioDetalleResponse {
 
 export interface IgfForecastMiniRow {
   empresa: string;
+  /** Código provincia (hoja Pronostico); null en fila Zona. */
+  plant_code?: string | null;
   ventaTon: number;
   margen: number;
   comDesc: number;
@@ -245,6 +247,61 @@ export interface IgfForecastMiniResponse {
   upload_day: string | null;
   rows: IgfForecastMiniRow[];
   zona: IgfForecastMiniRow;
+}
+
+export interface PronosticoDetalleDay {
+  fecha: string;
+  venta_ton: number | null;
+  desc_ratio: number | null;
+  selected: boolean;
+}
+
+export interface PronosticoDetalleResponse {
+  ok: boolean;
+  plant_code: string;
+  year: number;
+  month: number;
+  corte_day: string;
+  lookback_start: string | null;
+  lookback_end: string | null;
+  days: PronosticoDetalleDay[];
+  proy_venta_ton: number | null;
+  proy_desc_kg: number | null;
+  dow_headers?: string[];
+}
+
+export function fetchPronosticoDetalle(
+  token: string,
+  params: { year: number; month: number; plant_code: string; upload_day?: string }
+): Promise<PronosticoDetalleResponse> {
+  const p: Record<string, string> = {
+    year: String(params.year),
+    month: String(params.month),
+    plant_code: params.plant_code,
+  };
+  if (params.upload_day) p.upload_day = params.upload_day;
+  return apiFetch<PronosticoDetalleResponse>("/api/dashboard/pronostico-detalle", {
+    token,
+    params: p,
+    cache: "no-store",
+  });
+}
+
+export function postPronosticoDias(
+  token: string,
+  body: {
+    year: number;
+    month: number;
+    plant_code: string;
+    upload_day?: string;
+    days: { fecha: string; selected: boolean }[];
+  }
+): Promise<{ ok: boolean; year: number; month: number; plant_code: string; corte_day: string }> {
+  return apiFetch("/api/dashboard/pronostico-dias", {
+    token,
+    method: "POST",
+    body: JSON.stringify(body),
+  });
 }
 
 export function fetchIgfFoliosDetalle(

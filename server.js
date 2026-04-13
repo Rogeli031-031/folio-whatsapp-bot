@@ -2323,6 +2323,22 @@ async function ensureArrSchema(client) {
       ON arr.pronostico_dias_seleccion (year, month, corte_day, plant_code);
   `).catch(() => {});
   await client.query(`
+    CREATE TABLE IF NOT EXISTS arr.pronostico_mini_snapshot (
+      year SMALLINT NOT NULL,
+      month SMALLINT NOT NULL,
+      corte_day DATE NOT NULL,
+      plant_code VARCHAR(40) NOT NULL,
+      proy_venta_ton NUMERIC(18, 4) NOT NULL,
+      proy_desc_kg NUMERIC(18, 6),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (year, month, corte_day, plant_code)
+    );
+  `).catch(() => {});
+  await client.query(`
+    CREATE INDEX IF NOT EXISTS idx_pronostico_mini_snap_ym
+      ON arr.pronostico_mini_snapshot (year, month, corte_day);
+  `).catch(() => {});
+  await client.query(`
     CREATE TABLE IF NOT EXISTS arr.delta_ingreso_forecast_cliente (
       plant_code VARCHAR(20) NOT NULL,
       year SMALLINT NOT NULL,
@@ -6422,7 +6438,21 @@ app.get("/api/dashboard/igf-forecast-mini", dashboardAuthMiddleware, async (req,
   const client = await pool.connect();
   try {
     const igf = await buildIgfForecastPayload(client, year, month, uploadDay ? { upload_day: uploadDay } : undefined);
-    const proyByPlant = await dashboardArrForecast.computePronosticoProyByPlant(client, year, month, { fechaCorte: uploadDay || "" });
+    const fechaCorteStr = uploadDay || "";
+    const ctxProno = await dashboardArrForecast.buildPronosticoVentaDescMaps(client, year, month, fechaCorteStr);
+    let proyByPlant = await dashboardArrForecast.computePronosticoProyByPlant(client, year, month, { fechaCorte: fechaCorteStr });
+    const snapMini = await dashboardArrForecast.loadPronosticoMiniSnapshot(client, year, month, ctxProno.corteYmdStr);
+    if (snapMini && snapMini.size > 0) {
+      proyByPlant = new Map(proyByPlant);
+      for (const [k, v] of snapMini.entries()) {
+        if (v && Number.isFinite(Number(v.proy_venta_ton))) {
+          proyByPlant.set(k, {
+            proy_venta_ton: Number(v.proy_venta_ton),
+            proy_desc_kg: v.proy_desc_kg != null && Number.isFinite(Number(v.proy_desc_kg)) ? Number(v.proy_desc_kg) : 0,
+          });
+        }
+      }
+    }
 
     const norm = (s) =>
       String(s || "")
@@ -6524,6 +6554,7 @@ app.get("/api/dashboard/igf-forecast-mini", dashboardAuthMiddleware, async (req,
 
       plantRows.push({
         empresa: label,
+        plant_code: String(plantCode).trim(),
         ventaTon: B,
         margen: C,
         comDesc: D,
@@ -6541,6 +6572,7 @@ app.get("/api/dashboard/igf-forecast-mini", dashboardAuthMiddleware, async (req,
 
     const zona = {
       empresa: "Zona Provincia",
+      plant_code: null,
       ventaTon: 0,
       margen: 0,
       comDesc: 0,
@@ -6559,6 +6591,97 @@ app.get("/api/dashboard/igf-forecast-mini", dashboardAuthMiddleware, async (req,
     res.json({ ok: true, year, month, upload_day: uploadDay, rows, zona });
   } catch (e) {
     console.error("[Dashboard IGF Forecast mini]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/** Detalle hoja Pronóstico (lookback + días seleccionables) para una planta provincia. */
+app.get("/api/dashboard/pronostico-detalle", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGAFinancialKpis(req, res)) return;
+  if (dashboardBlockGVForbidden(req, res)) return;
+  const year = req.query.year != null ? parseInt(String(req.query.year), 10) : NaN;
+  const month = req.query.month != null ? parseInt(String(req.query.month), 10) : NaN;
+  const uploadDay = (req.query.upload_day || "").toString().trim().slice(0, 10) || null;
+  const plantCode = (req.query.plant_code || "").toString().trim();
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
+    return res.status(400).json({ error: "year y month inválidos" });
+  }
+  if (!plantCode) {
+    return res.status(400).json({ error: "plant_code es obligatorio" });
+  }
+  if (uploadDay && !/^\d{4}-\d{2}-\d{2}$/.test(uploadDay)) {
+    return res.status(400).json({ error: "upload_day debe ser YYYY-MM-DD" });
+  }
+  const client = await pool.connect();
+  try {
+    const detail = await dashboardArrForecast.getPronosticoPlantDetail(client, year, month, plantCode, uploadDay || "");
+    if (!detail) {
+      return res.status(404).json({ error: "Planta no encontrada o sin datos de pronóstico" });
+    }
+    res.json({ ok: true, ...detail });
+  } catch (e) {
+    console.error("[Dashboard pronostico-detalle]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/** Guarda qué días del lookback entran en el PROM (misma lógica que hoja Pronostico) y actualiza snapshot mini + BD. */
+app.post("/api/dashboard/pronostico-dias", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGAFinancialKpis(req, res)) return;
+  if (dashboardBlockGVForbidden(req, res)) return;
+  const year = req.body?.year != null ? parseInt(String(req.body.year), 10) : NaN;
+  const month = req.body?.month != null ? parseInt(String(req.body.month), 10) : NaN;
+  const uploadDay = (req.body?.upload_day || "").toString().trim().slice(0, 10) || null;
+  const plantCode = (req.body?.plant_code || "").toString().trim();
+  const days = Array.isArray(req.body?.days) ? req.body.days : [];
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
+    return res.status(400).json({ error: "year y month inválidos" });
+  }
+  if (!plantCode) {
+    return res.status(400).json({ error: "plant_code es obligatorio" });
+  }
+  if (uploadDay && !/^\d{4}-\d{2}-\d{2}$/.test(uploadDay)) {
+    return res.status(400).json({ error: "upload_day debe ser YYYY-MM-DD" });
+  }
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const ctxMaps = await dashboardArrForecast.buildPronosticoVentaDescMaps(client, year, month, uploadDay || "");
+    const corteYmd = ctxMaps.corteYmdStr;
+    let resolvedPlant = plantCode;
+    const plants = ctxMaps.plants || [];
+    const pNorm = plantCode.toLowerCase();
+    if (!plants.some((p) => String(p).trim() === plantCode)) {
+      const hit = plants.find((p) => String(p).toLowerCase() === pNorm);
+      if (hit) resolvedPlant = String(hit).trim();
+    }
+    for (const d of days) {
+      const fecha = (d && d.fecha ? String(d.fecha) : "").trim().slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) continue;
+      const selected = d && d.selected !== false;
+      await client.query(
+        `INSERT INTO arr.pronostico_dias_seleccion (plant_code, year, month, corte_day, fecha, selected, updated_at)
+         VALUES ($1, $2::int, $3::int, $4::date, $5::date, $6, now())
+         ON CONFLICT (plant_code, year, month, corte_day, fecha)
+         DO UPDATE SET selected = EXCLUDED.selected, updated_at = now()`,
+        [resolvedPlant, year, month, corteYmd, fecha, selected]
+      );
+    }
+    const proyByPlant = await dashboardArrForecast.computePronosticoProyByPlant(client, year, month, { fechaCorte: uploadDay || "" });
+    await dashboardArrForecast.savePronosticoMiniSnapshot(client, year, month, corteYmd, proyByPlant);
+    await client.query("COMMIT");
+    res.json({ ok: true, year, month, upload_day: uploadDay, plant_code: resolvedPlant, corte_day: corteYmd });
+  } catch (e) {
+    try {
+      await client.query("ROLLBACK");
+    } catch {
+      /* */
+    }
+    console.error("[Dashboard pronostico-dias]", e);
     res.status(500).json({ error: e.message });
   } finally {
     client.release();
@@ -8711,6 +8834,14 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
       // Si no viene, se usa la fecha del servidor como fallback.
       fechaCorte: uploadDay || proyeccionHasta || null,
     });
+    try {
+      const fechaCorteStr = (uploadDay || proyeccionHasta || "").toString().trim().slice(0, 10);
+      const ctxMini = await dashboardArrForecast.buildPronosticoVentaDescMaps(client, year, month, fechaCorteStr);
+      const proySnap = await dashboardArrForecast.computePronosticoProyByPlant(client, year, month, { fechaCorte: fechaCorteStr });
+      await dashboardArrForecast.savePronosticoMiniSnapshot(client, year, month, ctxMini.corteYmdStr, proySnap);
+    } catch (snapErr) {
+      console.error("[ARR dashboard-excel] pronostico_mini_snapshot", snapErr);
+    }
     const filename = `Dashboard_ARR_Forecast_${year}_${month}.xlsx`;
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);

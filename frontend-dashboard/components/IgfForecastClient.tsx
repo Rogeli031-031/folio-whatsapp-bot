@@ -18,9 +18,13 @@ import {
   getDashboardExcelDownloadUrl,
   fetchPresupuestoDetalle,
   fetchIgfFoliosDetalle,
+  fetchPronosticoDetalle,
+  postPronosticoDias,
   type IgfForecastResponse,
   type IgfForecastRow,
   type IgfForecastMiniResponse,
+  type IgfForecastMiniRow,
+  type PronosticoDetalleResponse,
   type IgfFolioDetalleItem,
   type IgfFolioDetalleTipo,
   type PresupuestoDetalleItem,
@@ -152,6 +156,11 @@ export function IgfForecastContent() {
   const [igfMesAnteriorLoading, setIgfMesAnteriorLoading] = useState(false);
   const [forecastRecalcLoading, setForecastRecalcLoading] = useState(false);
   const [forecastRecalcMsg, setForecastRecalcMsg] = useState<string | null>(null);
+  const [pronosticoModal, setPronosticoModal] = useState<{ empresa: string; plant_code: string } | null>(null);
+  const [pronosticoDetail, setPronosticoDetail] = useState<PronosticoDetalleResponse | null>(null);
+  const [pronosticoLoading, setPronosticoLoading] = useState(false);
+  const [pronosticoError, setPronosticoError] = useState<string | null>(null);
+  const [pronosticoSaving, setPronosticoSaving] = useState(false);
 
   const isGAPageBlocked = token ? getRoleFromDashboardToken(token) === "GA" : false;
   const isGVPageBlocked = token ? getRoleFromDashboardToken(token) === "GV" : false;
@@ -399,6 +408,62 @@ export function IgfForecastContent() {
     }
   };
 
+  const openPronosticoMiniRow = async (row: IgfForecastMiniRow) => {
+    const pc = (row.plant_code || "").trim();
+    if (!pc || !token || !igfForecast) return;
+    setPronosticoModal({ empresa: row.empresa || "", plant_code: pc });
+    setPronosticoDetail(null);
+    setPronosticoError(null);
+    setPronosticoLoading(true);
+    try {
+      const up = uploadDay.trim();
+      const data = await fetchPronosticoDetalle(token, {
+        year: igfForecast.year,
+        month: igfForecast.month,
+        plant_code: pc,
+        ...(up && /^\d{4}-\d{2}-\d{2}$/.test(up) ? { upload_day: up } : {}),
+      });
+      setPronosticoDetail(data);
+    } catch (e: unknown) {
+      setPronosticoError(e instanceof Error ? e.message : "Error al cargar pronóstico");
+    } finally {
+      setPronosticoLoading(false);
+    }
+  };
+
+  const savePronosticoMiniDays = async () => {
+    if (!pronosticoDetail || !token || !igfForecast) return;
+    setPronosticoSaving(true);
+    setPronosticoError(null);
+    try {
+      const up = uploadDay.trim();
+      await postPronosticoDias(token, {
+        year: igfForecast.year,
+        month: igfForecast.month,
+        plant_code: pronosticoDetail.plant_code,
+        ...(up && /^\d{4}-\d{2}-\d{2}$/.test(up) ? { upload_day: up } : {}),
+        days: pronosticoDetail.days.map((d) => ({ fecha: d.fecha, selected: d.selected })),
+      });
+      const miniParams =
+        up && /^\d{4}-\d{2}-\d{2}$/.test(up)
+          ? { year: igfForecast.year, month: igfForecast.month, upload_day: up }
+          : { year: igfForecast.year, month: igfForecast.month };
+      const mini = await fetchIgfForecastMini(token, miniParams);
+      setIgfMini(mini);
+      const refreshed = await fetchPronosticoDetalle(token, {
+        year: igfForecast.year,
+        month: igfForecast.month,
+        plant_code: pronosticoDetail.plant_code,
+        ...(up && /^\d{4}-\d{2}-\d{2}$/.test(up) ? { upload_day: up } : {}),
+      });
+      setPronosticoDetail(refreshed);
+    } catch (e: unknown) {
+      setPronosticoError(e instanceof Error ? e.message : "Error al guardar");
+    } finally {
+      setPronosticoSaving(false);
+    }
+  };
+
   return (
     <div className="min-h-screen flex flex-col">
       <div className="border-b border-slate-700 bg-slate-900/50 px-4 py-3 flex flex-wrap items-center justify-between gap-2">
@@ -530,6 +595,12 @@ export function IgfForecastContent() {
                         : c.key === "resultadoFinalImporte"
                           ? "bg-slate-900/80 text-amber-300"
                           : "";
+                    const miniRow = r as IgfForecastMiniRow;
+                    const ventaBtn =
+                      c.key === "ventaTon" &&
+                      !isZona &&
+                      miniRow.plant_code &&
+                      typeof v === "number";
                     return (
                       <td
                         key={c.key}
@@ -541,7 +612,18 @@ export function IgfForecastContent() {
                               : `text-slate-300 ${moneyHighlight}`
                         }`}
                       >
-                        {c.fmt(v)}
+                        {ventaBtn ? (
+                          <button
+                            type="button"
+                            title="Pronóstico (misma lógica que hoja Pronostico del Excel)"
+                            className="w-full text-right underline decoration-dotted decoration-cyan-500/80 text-cyan-300 hover:text-cyan-200"
+                            onClick={() => void openPronosticoMiniRow(miniRow)}
+                          >
+                            {c.fmt(v)}
+                          </button>
+                        ) : (
+                          c.fmt(v as number)
+                        )}
                       </td>
                     );
                   })}
@@ -1294,6 +1376,107 @@ export function IgfForecastContent() {
                 )}
               </div>
             </div>
+          </div>
+        </div>
+      )}
+      {pronosticoModal && (
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4"
+          onClick={() => {
+            setPronosticoModal(null);
+            setPronosticoDetail(null);
+            setPronosticoError(null);
+          }}
+        >
+          <div
+            className="w-full max-w-lg max-h-[85vh] overflow-hidden flex flex-col rounded-lg border border-slate-700 bg-slate-900 p-5 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 flex flex-shrink-0 items-center justify-between border-b border-slate-700 pb-2">
+              <div>
+                <h3 className="text-base font-semibold text-slate-200">Pronóstico — días del promedio</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {pronosticoModal.empresa} ({pronosticoModal.plant_code})
+                  {igfForecast ? ` · ${MESES[igfForecast.month - 1]} ${igfForecast.year}` : ""}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setPronosticoModal(null);
+                  setPronosticoDetail(null);
+                  setPronosticoError(null);
+                }}
+                className="rounded p-1 text-slate-400 hover:bg-slate-700 hover:text-white"
+              >
+                ×
+              </button>
+            </div>
+            {pronosticoLoading && <p className="text-sm text-slate-400">Cargando…</p>}
+            {pronosticoError && <p className="text-sm text-red-400">{pronosticoError}</p>}
+            {!pronosticoLoading && !pronosticoError && pronosticoDetail && (
+              <>
+                <p className="text-xs text-slate-400 mb-2">
+                  Ventana: {pronosticoDetail.lookback_start || "—"} → {pronosticoDetail.lookback_end || "—"} · Corte:{" "}
+                  {pronosticoDetail.corte_day}
+                </p>
+                {pronosticoDetail.days.length === 0 ? (
+                  <p className="text-sm text-slate-500">
+                    No hay ventana de 28 días (defina la fecha de corte del mes para habilitar el lookback).
+                  </p>
+                ) : (
+                  <div className="overflow-y-auto flex-1 min-h-0 max-h-[45vh] -mx-1 px-1 space-y-1">
+                    {pronosticoDetail.days.map((d) => (
+                      <label
+                        key={d.fecha}
+                        className="flex items-center justify-between gap-2 rounded border border-slate-700/80 bg-slate-800/50 px-2 py-1.5 text-xs text-slate-200"
+                      >
+                        <span className="font-mono text-slate-300">{d.fecha}</span>
+                        <span className="text-slate-500">
+                          {d.venta_ton != null ? `${fmtNum(d.venta_ton, 2)} t` : "—"}
+                        </span>
+                        <input
+                          type="checkbox"
+                          checked={d.selected}
+                          onChange={() =>
+                            setPronosticoDetail((prev) =>
+                              prev
+                                ? {
+                                    ...prev,
+                                    days: prev.days.map((x) =>
+                                      x.fecha === d.fecha ? { ...x, selected: !x.selected } : x
+                                    ),
+                                  }
+                                : prev
+                            )
+                          }
+                          className="rounded border-slate-600"
+                        />
+                      </label>
+                    ))}
+                  </div>
+                )}
+                <div className="mt-3 pt-3 border-t border-slate-700 text-sm text-slate-300">
+                  PROY venta:{" "}
+                  <span className="font-mono text-cyan-300">
+                    {pronosticoDetail.proy_venta_ton != null ? fmtNum(pronosticoDetail.proy_venta_ton, 2) : "—"}
+                  </span>{" "}
+                  ton · Desc. PROY:{" "}
+                  <span className="font-mono">{pronosticoDetail.proy_desc_kg != null ? fmtNum(pronosticoDetail.proy_desc_kg) : "—"}</span>{" "}
+                  $/kg
+                </div>
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={pronosticoSaving || pronosticoDetail.days.length === 0}
+                    onClick={() => void savePronosticoMiniDays()}
+                    className="rounded bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-600 disabled:opacity-50"
+                  >
+                    {pronosticoSaving ? "Guardando…" : "Guardar y actualizar mini-resumen"}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
