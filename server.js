@@ -6547,6 +6547,7 @@ app.get("/api/dashboard/igf-forecast-mini", dashboardAuthMiddleware, async (req,
       const D = proy && Number.isFinite(Number(proy.proy_desc_kg)) ? Number(proy.proy_desc_kg) : (igfRow ? n(igfRow.com_desc_kg) : 0);
       const F = igfRow ? n(igfRow.impuesto_kg) : 0;
       const G = igfRow ? n(igfRow.hg_pct) : 0;
+      /** HG $/kg (misma columna que mini Excel F y fórmula INGRESO). */
       const H = igfRow ? n(igfRow.hg_kg) : 0;
 
       // Regla de tres (E,I,J,M,N,O,P): valor_igf * venta_igf / venta_proy
@@ -6564,8 +6565,8 @@ app.get("/api/dashboard/igf-forecast-mini", dashboardAuthMiddleware, async (req,
       const Q = r2(K - M - N - O - P);
       const R = Math.round(Q * B * 1000);
 
-      // Mini-resumen (tabla verde)
-      const ingreso = Math.round((C + H + D) * B * 1000);
+      // Mini-resumen (tabla verde): INGRESO G = (Margen − HG $/kg + Com/Desc) × Venta(ton) × 1000 (como Excel fila mini).
+      const ingreso = Math.round((C + D - H) * B * 1000);
       const operativos = Math.round((E + I + J + F) * B * 1000);
       const corporativos = Math.round((M + N + O + P) * B * 1000);
       const gasto = operativos + corporativos;
@@ -6590,14 +6591,22 @@ app.get("/api/dashboard/igf-forecast-mini", dashboardAuthMiddleware, async (req,
       });
     }
 
+    const sumB = plantRows.reduce((s, r) => s + (Number(r.ventaTon) || 0), 0);
+    const wAvg = (getter) =>
+      sumB > 0
+        ? Math.round(
+            (plantRows.reduce((s, r) => s + getter(r) * (Number(r.ventaTon) || 0), 0) / sumB) * 10000
+          ) / 10000
+        : 0;
+
     const zona = {
       empresa: "Zona Provincia",
       plant_code: null,
-      ventaTon: 0,
-      margen: 0,
-      comDesc: 0,
-      impuestos: 0,
-      hgKg: 0,
+      ventaTon: Math.round(sumB * 100) / 100,
+      margen: wAvg((r) => Number(r.margen) || 0),
+      comDesc: wAvg((r) => Number(r.comDesc) || 0),
+      impuestos: wAvg((r) => Number(r.impuestos) || 0),
+      hgKg: wAvg((r) => Number(r.hgKg) || 0),
       ingreso: plantRows.reduce((s, r) => s + (Number(r.ingreso) || 0), 0),
       operativos: plantRows.reduce((s, r) => s + (Number(r.operativos) || 0), 0),
       corporativos: plantRows.reduce((s, r) => s + (Number(r.corporativos) || 0), 0),

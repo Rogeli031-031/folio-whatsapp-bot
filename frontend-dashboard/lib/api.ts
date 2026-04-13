@@ -256,6 +256,28 @@ export interface PronosticoDetalleDay {
   selected: boolean;
 }
 
+/** Misma forma que la tabla «venta (ton)» de la hoja Pronostico en Excel. */
+export interface PronosticoVentaSheetWeek {
+  label: string;
+  dow: (number | string | null)[];
+  total_semana: number | string | null;
+}
+
+export interface PronosticoVentaSheet {
+  title: string;
+  year_month: string;
+  columns: string[];
+  weeks: PronosticoVentaSheetWeek[];
+  prom_mes_dow: (number | string)[];
+  prom_mes_total: number;
+  total_mes_dow: number[];
+  total_mes_sum: number;
+  por_comprar_dow: (number | string)[];
+  por_comprar_sum: number;
+  proy_dow: number[];
+  proy_total_ton: number;
+}
+
 export interface PronosticoDetalleResponse {
   ok: boolean;
   plant_code: string;
@@ -265,6 +287,7 @@ export interface PronosticoDetalleResponse {
   lookback_start: string | null;
   lookback_end: string | null;
   days: PronosticoDetalleDay[];
+  venta_sheet?: PronosticoVentaSheet;
   proy_venta_ton: number | null;
   proy_desc_kg: number | null;
   dow_headers?: string[];

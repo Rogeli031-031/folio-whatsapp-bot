@@ -1404,12 +1404,12 @@ export function IgfForecastContent() {
           }}
         >
           <div
-            className="w-full max-w-lg max-h-[85vh] overflow-hidden flex flex-col rounded-lg border border-slate-700 bg-slate-900 p-5 shadow-xl"
+            className="w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col rounded-lg border border-slate-700 bg-slate-900 p-5 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-3 flex flex-shrink-0 items-center justify-between border-b border-slate-700 pb-2">
               <div>
-                <h3 className="text-base font-semibold text-slate-200">Pronóstico — días del promedio</h3>
+                <h3 className="text-base font-semibold text-slate-200">Pronóstico (como hoja Pronostico)</h3>
                 <p className="text-xs text-slate-500 mt-0.5">
                   {pronosticoModal.empresa} ({pronosticoModal.plant_code})
                   {igfForecast ? ` · ${MESES[igfForecast.month - 1]} ${igfForecast.year}` : ""}
@@ -1432,52 +1432,144 @@ export function IgfForecastContent() {
             {!pronosticoLoading && !pronosticoError && pronosticoDetail && (
               <>
                 <p className="text-xs text-slate-400 mb-2">
-                  Ventana: {pronosticoDetail.lookback_start || "—"} → {pronosticoDetail.lookback_end || "—"} · Corte:{" "}
+                  Ventana PROM: {pronosticoDetail.lookback_start || "—"} → {pronosticoDetail.lookback_end || "—"} · Corte:{" "}
                   {pronosticoDetail.corte_day}
                 </p>
-                {pronosticoDetail.days.length === 0 ? (
-                  <p className="text-sm text-slate-500">
-                    No hay ventana de 28 días (defina la fecha de corte del mes para habilitar el lookback).
-                  </p>
-                ) : (
-                  <div className="overflow-y-auto flex-1 min-h-0 max-h-[45vh] -mx-1 px-1 space-y-1">
-                    {pronosticoDetail.days.map((d) => (
-                      <label
-                        key={d.fecha}
-                        className="flex items-center justify-between gap-2 rounded border border-slate-700/80 bg-slate-800/50 px-2 py-1.5 text-xs text-slate-200"
-                      >
-                        <span className="font-mono text-slate-300">{d.fecha}</span>
-                        <span className="text-slate-500">
-                          {d.venta_ton != null ? `${fmtNum(d.venta_ton, 2)} t` : "—"}
-                        </span>
-                        <input
-                          type="checkbox"
-                          checked={d.selected}
-                          onChange={() =>
-                            setPronosticoDetail((prev) =>
-                              prev
-                                ? {
-                                    ...prev,
-                                    days: prev.days.map((x) =>
-                                      x.fecha === d.fecha ? { ...x, selected: !x.selected } : x
-                                    ),
-                                  }
-                                : prev
-                            )
-                          }
-                          className="rounded border-slate-600"
-                        />
-                      </label>
-                    ))}
+                {pronosticoDetail.venta_sheet && (
+                  <div className="overflow-x-auto mb-4 rounded border border-slate-700">
+                    <p className="text-[0.7rem] text-amber-200/90 px-2 py-1 bg-slate-800/80 border-b border-slate-700">
+                      {pronosticoDetail.venta_sheet.title} · {pronosticoDetail.venta_sheet.year_month}
+                    </p>
+                    <table className="w-full min-w-[720px] text-[0.65rem] border-collapse">
+                      <thead>
+                        <tr className="bg-slate-800 text-slate-200">
+                          {pronosticoDetail.venta_sheet.columns.map((h) => (
+                            <th
+                              key={h}
+                              className="border border-slate-600 px-1 py-1 text-center font-semibold whitespace-nowrap"
+                            >
+                              {h}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="text-slate-100">
+                        {pronosticoDetail.venta_sheet.weeks.map((w) => (
+                          <tr key={w.label} className="border-b border-slate-700/80">
+                            <td className="border border-slate-700/80 px-1 py-0.5 text-left whitespace-nowrap bg-slate-900/40">
+                              {w.label}
+                            </td>
+                            {w.dow.map((v, i) => (
+                              <td key={i} className="border border-slate-700/80 px-1 py-0.5 text-right tabular-nums">
+                                {v === "" || v == null ? "" : fmtNum(Number(v), 2)}
+                              </td>
+                            ))}
+                            <td className="border border-slate-700/80 px-1 py-0.5 text-right font-medium tabular-nums">
+                              {w.total_semana === "" || w.total_semana == null ? "" : fmtNum(Number(w.total_semana), 2)}
+                            </td>
+                          </tr>
+                        ))}
+                        <tr className="bg-slate-800/90 font-medium">
+                          <td className="border border-slate-600 px-1 py-1">PROM mes (por día de semana)</td>
+                          {pronosticoDetail.venta_sheet.prom_mes_dow.map((v, i) => (
+                            <td key={i} className="border border-slate-600 px-1 py-1 text-right tabular-nums">
+                              {v === "" ? "" : fmtNum(Number(v), 2)}
+                            </td>
+                          ))}
+                          <td className="border border-slate-600 px-1 py-1 text-right tabular-nums">
+                            {fmtNum(pronosticoDetail.venta_sheet.prom_mes_total, 2)}
+                          </td>
+                        </tr>
+                        <tr className="bg-slate-800/70">
+                          <td className="border border-slate-600 px-1 py-1">TOTAL mes (por día de semana)</td>
+                          {pronosticoDetail.venta_sheet.total_mes_dow.map((v, i) => (
+                            <td key={i} className="border border-slate-600 px-1 py-1 text-right tabular-nums">
+                              {fmtNum(v, 2)}
+                            </td>
+                          ))}
+                          <td className="border border-slate-600 px-1 py-1 text-right tabular-nums">
+                            {fmtNum(pronosticoDetail.venta_sheet.total_mes_sum, 2)}
+                          </td>
+                        </tr>
+                        <tr className="h-2">
+                          <td colSpan={pronosticoDetail.venta_sheet.columns.length} />
+                        </tr>
+                        <tr className="bg-slate-800/70">
+                          <td className="border border-slate-600 px-1 py-1">POR COMPRAR</td>
+                          {pronosticoDetail.venta_sheet.por_comprar_dow.map((v, i) => (
+                            <td key={i} className="border border-slate-600 px-1 py-1 text-right tabular-nums">
+                              {v === "" ? "" : fmtNum(Number(v), 2)}
+                            </td>
+                          ))}
+                          <td className="border border-slate-600 px-1 py-1 text-right tabular-nums">
+                            {fmtNum(pronosticoDetail.venta_sheet.por_comprar_sum, 2)}
+                          </td>
+                        </tr>
+                        <tr className="bg-blue-950/60 font-semibold text-cyan-100">
+                          <td className="border border-slate-600 px-1 py-1">PROY</td>
+                          {pronosticoDetail.venta_sheet.proy_dow.map((v, i) => (
+                            <td key={i} className="border border-slate-600 px-1 py-1 text-right tabular-nums">
+                              {fmtNum(v, 2)}
+                            </td>
+                          ))}
+                          <td className="border border-slate-600 px-1 py-1 text-right tabular-nums">
+                            {fmtNum(pronosticoDetail.venta_sheet.proy_total_ton, 2)}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
                   </div>
                 )}
+                <details className="mb-3 rounded border border-slate-700 bg-slate-800/40">
+                  <summary className="cursor-pointer px-2 py-2 text-xs text-slate-300">
+                    Días del lookback incluidos en el PROM (marcar / desmarcar)
+                  </summary>
+                  {pronosticoDetail.days.length === 0 ? (
+                    <p className="text-sm text-slate-500 px-2 pb-2">
+                      No hay ventana de 28 días (defina la fecha de corte del mes para habilitar el lookback).
+                    </p>
+                  ) : (
+                    <div className="overflow-y-auto max-h-[28vh] px-2 pb-2 space-y-1">
+                      {pronosticoDetail.days.map((d) => (
+                        <label
+                          key={d.fecha}
+                          className="flex items-center justify-between gap-2 rounded border border-slate-700/80 bg-slate-800/50 px-2 py-1.5 text-xs text-slate-200"
+                        >
+                          <span className="font-mono text-slate-300">{d.fecha}</span>
+                          <span className="text-slate-500">
+                            {d.venta_ton != null ? `${fmtNum(d.venta_ton, 2)} t` : "—"}
+                          </span>
+                          <input
+                            type="checkbox"
+                            checked={d.selected}
+                            onChange={() =>
+                              setPronosticoDetail((prev) =>
+                                prev
+                                  ? {
+                                      ...prev,
+                                      days: prev.days.map((x) =>
+                                        x.fecha === d.fecha ? { ...x, selected: !x.selected } : x
+                                      ),
+                                    }
+                                  : prev
+                              )
+                            }
+                            className="rounded border-slate-600"
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </details>
                 <div className="mt-3 pt-3 border-t border-slate-700 text-sm text-slate-300">
-                  PROY venta:{" "}
+                  PROY venta (API):{" "}
                   <span className="font-mono text-cyan-300">
                     {pronosticoDetail.proy_venta_ton != null ? fmtNum(pronosticoDetail.proy_venta_ton, 2) : "—"}
                   </span>{" "}
                   ton · Desc. PROY:{" "}
-                  <span className="font-mono">{pronosticoDetail.proy_desc_kg != null ? fmtNum(pronosticoDetail.proy_desc_kg) : "—"}</span>{" "}
+                  <span className="font-mono">
+                    {pronosticoDetail.proy_desc_kg != null ? fmtNum(pronosticoDetail.proy_desc_kg) : "—"}
+                  </span>{" "}
                   $/kg
                 </div>
                 <div className="mt-4 flex flex-wrap items-center gap-2">
