@@ -111,18 +111,20 @@ export type IgfMiniResumenRow = {
 };
 
 /**
- * Mini-resumen IGF (misma lógica que Excel `applyIgfMiniResumenFormulas` sobre filas forecast).
+ * Mini-resumen IGF (web): columnas $/kg y Venta como la tabla principal; INGRESO = (Margen+HG+Com)×Venta×1000;
+ * Util. Operación y Resultado Final en importe = mismos valores que la API (tabla de abajo).
+ * OPERATIVOS/CORPORATIVOS/GASTO se derivan con las mismas identidades que Excel: H=G−K, I=K−L, J=H+I.
  */
 export function computeIgfMiniResumenRows(
   rows: IgfForecastRow[],
   opts?: {
-    gastoKg?: (row: IgfForecastRow) => number;
-    inversionesKg?: (row: IgfForecastRow) => number | null;
+    utilOperImporte?: (row: IgfForecastRow) => number;
+    resultadoFinalImporte?: (row: IgfForecastRow) => number;
   }
 ): { plantRows: IgfMiniResumenRow[]; zona: IgfMiniResumenRow } {
   const n = (v: number | null | undefined) => (v != null && !Number.isNaN(Number(v)) ? Number(v) : 0);
-  const gastoKg = opts?.gastoKg ?? gastoKgFromFour;
-  const invKg = opts?.inversionesKg ?? ((r: IgfForecastRow) => r.inversiones_kg ?? null);
+  const utilFn = opts?.utilOperImporte ?? ((r: IgfForecastRow) => n(r.util_oper_importe));
+  const resFn = opts?.resultadoFinalImporte ?? ((r: IgfForecastRow) => n(r.resultado_final_importe));
 
   const plantRows: IgfMiniResumenRow[] = [];
   for (const label of IGF_MINI_RESUMEN_LABELS) {
@@ -133,16 +135,12 @@ export function computeIgfMiniResumenRows(
     const d = n(row.com_desc_kg);
     const eImp = n(row.impuesto_kg);
     const fHg = n(row.hg_kg);
-    const gOp = gastoKg(row);
-    const iBancos = n(row.bancos_planta_kg);
-    const jProv = n(row.provision_planta_kg);
-    const mCorp = n(row.gtos_apoyos_corp_kg) + n(row.bancos_corp_kg) + n(row.otros_programas_kg) + n(invKg(row));
     const ingreso = (c + fHg + d) * bTon * 1000;
-    const operativos = (gOp + iBancos + jProv + eImp) * bTon * 1000;
-    const corporativos = mCorp * bTon * 1000;
+    const utilOperImporte = utilFn(row);
+    const resultadoFinalImporte = resFn(row);
+    const operativos = ingreso - utilOperImporte;
+    const corporativos = utilOperImporte - resultadoFinalImporte;
     const gasto = operativos + corporativos;
-    const utilOperImporte = ingreso - operativos;
-    const resultadoFinalImporte = utilOperImporte - corporativos;
     plantRows.push({
       empresa: row.empresa || label,
       ventaTon: bTon,

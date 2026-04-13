@@ -460,8 +460,11 @@ export function IgfForecastContent() {
             <>
             {(() => {
               const { plantRows, zona } = computeIgfMiniResumenRows(igfForecast.rows, {
-                gastoKg: (r) => gastoKgFromFour(r),
-                inversionesKg: (r) => getInversionesKgWithCdjz(r),
+                utilOperImporte: (r) => {
+                  const x = r.util_oper_importe_igf ?? r.util_oper_importe;
+                  return x != null && !Number.isNaN(Number(x)) ? Number(x) : 0;
+                },
+                resultadoFinalImporte: (r) => getResultadoFinalImporteWithCdjz(r),
               });
               if (plantRows.length === 0) return null;
               const miniCols = [
@@ -482,13 +485,13 @@ export function IgfForecastContent() {
                   key={r.empresa}
                   className={
                     isZona
-                      ? "border-t border-black bg-[#7F7F7F] text-white"
-                      : "border-b border-slate-600/80 bg-slate-800/30"
+                      ? "border-t-2 border-slate-600 bg-slate-700/50"
+                      : "border-b border-slate-700/80"
                   }
                 >
                   <td
-                    className={`py-2 px-2 text-left text-[0.65em] font-semibold border-r border-black ${
-                      isZona ? "text-white" : "bg-[#D9D9D9] text-slate-900"
+                    className={`py-2 px-2 text-left text-[0.6em] font-semibold text-slate-100 border-r border-slate-600 ${
+                      isZona ? "text-base font-bold" : ""
                     }`}
                   >
                     {r.empresa}
@@ -496,11 +499,21 @@ export function IgfForecastContent() {
                   {miniCols.map((c) => {
                     const v = r[c.key];
                     const neg = c.money && typeof v === "number" && v < 0;
+                    const moneyHighlight =
+                      c.key === "utilOperImporte"
+                        ? "bg-slate-900/80 text-emerald-300"
+                        : c.key === "resultadoFinalImporte"
+                          ? "bg-slate-900/80 text-amber-300"
+                          : "";
                     return (
                       <td
                         key={c.key}
-                        className={`py-2 px-2 text-right tabular-nums text-[0.65em] border-r border-black last:border-r-0 ${
-                          isZona ? "text-white font-semibold" : neg ? "text-red-400" : "text-slate-200"
+                        className={`py-2 px-2 text-right tabular-nums text-[0.6em] border-r border-slate-600 last:border-r-0 ${
+                          isZona
+                            ? `text-base font-bold text-slate-100 ${moneyHighlight}`
+                            : neg
+                              ? "text-red-400"
+                              : `text-slate-300 ${moneyHighlight}`
                         }`}
                       >
                         {c.fmt(v)}
@@ -510,15 +523,21 @@ export function IgfForecastContent() {
                 </tr>
               );
               return (
-                <div className="mb-6 overflow-x-auto rounded border border-black">
+                <div className="mb-6 overflow-x-auto rounded border border-slate-700">
                   <table className="w-full min-w-[1100px] border-collapse text-sm">
                     <thead>
-                      <tr className="bg-[#1F4E78] text-white">
-                        <th className="text-center py-2 px-2 text-[0.65em] font-semibold border border-black">Empresa</th>
+                      <tr className="border-b border-slate-600 bg-slate-800/80 text-[0.6em]">
+                        <th className="text-left py-2.5 px-2 font-semibold text-slate-300 border-r border-slate-600">Empresa</th>
                         {miniCols.map((c) => (
                           <th
                             key={c.key}
-                            className="text-center py-2 px-2 text-[0.65em] font-semibold border border-black whitespace-normal"
+                            className={`text-center py-2.5 px-2 font-semibold border-r border-slate-600 last:border-r-0 whitespace-normal ${
+                              c.key === "utilOperImporte"
+                                ? "text-emerald-300 bg-slate-900/80"
+                                : c.key === "resultadoFinalImporte"
+                                  ? "text-amber-300 bg-slate-900/80"
+                                  : "text-slate-300"
+                            }`}
                           >
                             {c.label}
                           </th>
