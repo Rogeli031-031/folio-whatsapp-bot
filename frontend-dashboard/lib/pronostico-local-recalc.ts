@@ -37,15 +37,16 @@ export function recomputeVentaSheetFromDays(detail: PronosticoDetalleResponse): 
     return c;
   };
 
-  const lookbackStart = detail.lookback_start ? new Date(detail.lookback_start + "T12:00:00") : null;
+  const visStart = detail.lookback_visual_start || detail.lookback_start;
+  const lookbackVisualStart = visStart ? new Date(visStart + "T12:00:00") : null;
   const lookbackEnd = detail.lookback_end ? new Date(detail.lookback_end + "T12:00:00") : null;
-  if (!lookbackStart || !lookbackEnd) return vs;
+  if (!lookbackVisualStart || !lookbackEnd) return vs;
 
   const valsByDow: number[][] = [[], [], [], [], [], [], []];
   for (const d of detail.days) {
     if (d.selected === false) continue;
     const dt = new Date(d.fecha + "T12:00:00");
-    if (dt < lookbackStart || dt > lookbackEnd) continue;
+    if (dt < lookbackVisualStart || dt > lookbackEnd) continue;
     const v = d.venta_ton;
     if (v == null || !Number.isFinite(Number(v))) continue;
     valsByDow[isoDow(dt) - 1].push(Number(v));
@@ -81,4 +82,24 @@ export function recomputeVentaSheetFromDays(detail: PronosticoDetalleResponse): 
     proy_dow: proyVenta,
     proy_total_ton: proyVentaTon,
   };
+}
+
+/** Actualiza bordes rojos (PROM) según `days[].selected` tras recalcular filas resumen. */
+export function mergeVentaSheetHighlights(
+  sheet: PronosticoVentaSheet,
+  detail: PronosticoDetalleResponse
+): PronosticoVentaSheet {
+  const dayMap = new Map(detail.days.map((x) => [x.fecha, x]));
+  const weeks = sheet.weeks.map((w) => ({
+    ...w,
+    prom_highlight: w.cell_fecha
+      ? w.cell_fecha.map((fecha) => {
+          if (!fecha) return false;
+          const row = dayMap.get(fecha);
+          if (!row || row.venta_ton == null || !Number.isFinite(Number(row.venta_ton))) return false;
+          return row.selected !== false;
+        })
+      : w.prom_highlight,
+  }));
+  return { ...sheet, weeks };
 }

@@ -267,6 +267,8 @@ export interface PronosticoVentaSheetWeek {
   cell_bg?: ("hist" | "lookback" | "pending" | "")[];
   /** Días que entran en el cálculo del PROM (borde rojo). */
   prom_highlight?: boolean[];
+  /** YYYY-MM-DD por columna (para clic = alternar inclusión en PROM). */
+  cell_fecha?: (string | "")[];
 }
 
 export interface PronosticoVentaSheet {
@@ -292,6 +294,8 @@ export interface PronosticoDetalleResponse {
   corte_day: string;
   lookback_start: string | null;
   lookback_end: string | null;
+  /** Lunes ISO de la semana del inicio del lookback (celdas amarillas desde aquí hasta lookback_end). */
+  lookback_visual_start?: string | null;
   days: PronosticoDetalleDay[];
   venta_sheet?: PronosticoVentaSheet;
   proy_venta_ton: number | null;

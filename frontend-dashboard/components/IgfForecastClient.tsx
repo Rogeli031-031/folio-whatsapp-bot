@@ -40,7 +40,7 @@ import {
   PRESUPUESTO_GEND_STORAGE_KEY,
   INVERSION_CDJZ_STORAGE_KEY,
 } from "@/lib/igf-kpi-ui";
-import { recomputeVentaSheetFromDays } from "@/lib/pronostico-local-recalc";
+import { mergeVentaSheetHighlights, recomputeVentaSheetFromDays } from "@/lib/pronostico-local-recalc";
 
 export function IgfForecastContent() {
   const searchParams = useSearchParams();
@@ -165,7 +165,9 @@ export function IgfForecastContent() {
 
   const pronosticoSheetDisplay = useMemo(() => {
     if (!pronosticoDetail?.venta_sheet) return null;
-    return recomputeVentaSheetFromDays(pronosticoDetail) ?? pronosticoDetail.venta_sheet;
+    const rec = recomputeVentaSheetFromDays(pronosticoDetail);
+    const base = rec ?? pronosticoDetail.venta_sheet;
+    return mergeVentaSheetHighlights(base, pronosticoDetail);
   }, [pronosticoDetail]);
 
   const isGAPageBlocked = token ? getRoleFromDashboardToken(token) === "GA" : false;
@@ -470,6 +472,17 @@ export function IgfForecastContent() {
     } finally {
       setPronosticoLoading(false);
     }
+  };
+
+  const togglePronosticoDayByFecha = (fecha: string) => {
+    if (!fecha) return;
+    setPronosticoDetail((prev) => {
+      if (!prev?.days?.length) return prev;
+      const days = prev.days.map((d) =>
+        d.fecha === fecha ? { ...d, selected: !(d.selected !== false) } : d
+      );
+      return { ...prev, days };
+    });
   };
 
   const savePronosticoMiniDays = async () => {
@@ -1474,9 +1487,9 @@ export function IgfForecastContent() {
                       {pronosticoSheetDisplay.title} · {pronosticoSheetDisplay.year_month}
                     </p>
                     <p className="text-[0.65rem] text-slate-500 px-2 py-1 border-b border-slate-700/80">
-                      Amarillo: histórico (lookback o mes antes del corte). Azul: días del mes pendientes. Borde rojo: día
-                      incluido en el PROM. Marque días abajo para ver el PROY actualizado; guarde para fijar descuento y
-                      mini-resumen.
+                      Amarillo: histórico (desde el lunes de la semana del lookback hasta el corte). Azul: mes pendiente.
+                      Borde rojo: día incluido en el PROM — pulse la celda para quitarlo o añadirlo (o use la lista
+                      abajo). Guarde para persistir y actualizar descuento / mini-resumen.
                     </p>
                     <table className="w-full min-w-[720px] text-[0.65rem] border-collapse">
                       <thead>
@@ -1500,6 +1513,8 @@ export function IgfForecastContent() {
                             {w.dow.map((v, i) => {
                               const bg = w.cell_bg?.[i] ?? "";
                               const ph = w.prom_highlight?.[i];
+                              const fe = (w.cell_fecha && w.cell_fecha[i]) || "";
+                              const canClick = Boolean(fe);
                               const bgCls =
                                 bg === "hist" || bg === "lookback"
                                   ? "bg-amber-400/15"
@@ -1510,7 +1525,23 @@ export function IgfForecastContent() {
                               return (
                                 <td
                                   key={i}
-                                  className={`border border-slate-700/80 px-1 py-0.5 text-right tabular-nums ${bgCls} ${ringCls}`}
+                                  role={canClick ? "button" : undefined}
+                                  tabIndex={canClick ? 0 : undefined}
+                                  title={canClick ? "Clic: incluir o excluir este día del PROM" : undefined}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (fe) togglePronosticoDayByFecha(fe);
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (!canClick) return;
+                                    if (e.key === "Enter" || e.key === " ") {
+                                      e.preventDefault();
+                                      togglePronosticoDayByFecha(fe);
+                                    }
+                                  }}
+                                  className={`border border-slate-700/80 px-1 py-0.5 text-right tabular-nums ${bgCls} ${ringCls} ${
+                                    canClick ? "cursor-pointer hover:brightness-125" : ""
+                                  }`}
                                 >
                                   {v === "" || v == null ? "" : fmtNum(Number(v), 2)}
                                 </td>
