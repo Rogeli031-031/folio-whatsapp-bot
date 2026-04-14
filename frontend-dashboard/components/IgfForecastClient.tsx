@@ -1225,11 +1225,12 @@ export function IgfForecastContent() {
                 if (c.key === "impuesto_kg") return delta(toCostoNeg(vF as number | null | undefined), vA);
                 if (c.key === "com_desc_kg") return delta(toCostoNeg(vF as number | null | undefined), vA);
                 if (c.key === "inversiones_kg") return delta(toCostoNeg(vF as number | null | undefined), vA);
+                if (c.key === "otros_programas_kg") return -delta(vF, vA);
                 return c.isPct ? (n(vF) - n(vA)) * 100 : delta(vF, vA);
               };
               const ventaKgA = rowA ? n((rowA as Record<string, unknown>).venta_ton as number | null | undefined) * 1000 : 0;
               const ventaKgF = n((rowF as Record<string, unknown>).venta_ton as number | null | undefined) * 1000;
-              // Impacto (Importe): fórmula Excel (COL_fila2*$B$2)-(COL_fila3*$B$3) = (valor_forecast*venta_kg_forecast) - (valor_mes_anterior*venta_kg_mes_anterior) para Gtos/Apoyos Corp, Bancos Corp., Otros Programas, Inversiones.
+              // Impacto (Importe): (valor_F*venta_F)-(valor_A*venta_A) para Gtos/Apoyos y Bancos Corp.; Otros Programas con signo invertido respecto a esa fórmula.
               const cellImpacto = (c: Col): number | null => {
                 if (c.key === "empresa" || !rowA) return null;
                 if (c.key === "hg_pct") return null;
@@ -1256,8 +1257,11 @@ export function IgfForecastContent() {
                 if (c.key === "bancos_planta_kg") return (n(vF) - n(vA)) * ventaKgA;
                 if (c.key === "provision_planta_kg") return (n(vF) - n(vA)) * ventaKgA;
                 // Fórmula imagen: (valor_forecast * venta_kg_forecast) - (valor_mes_anterior * venta_kg_mes_anterior)
-                if (c.key === "gtos_apoyos_corp_kg" || c.key === "bancos_corp_kg" || c.key === "otros_programas_kg") {
+                if (c.key === "gtos_apoyos_corp_kg" || c.key === "bancos_corp_kg") {
                   return (n(vF) * ventaKgF) - (n(vA) * ventaKgA);
+                }
+                if (c.key === "otros_programas_kg") {
+                  return -((n(vF) * ventaKgF) - (n(vA) * ventaKgA));
                 }
                 if (c.key === "inversiones_kg") {
                   return (toCostoNeg(vF as number | null | undefined) * ventaKgF) - (toCostoNeg(vA) * ventaKgA);
