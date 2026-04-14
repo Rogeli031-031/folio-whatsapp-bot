@@ -111,7 +111,7 @@ export type IgfMiniResumenRow = {
 };
 
 /**
- * Mini-resumen IGF (web): columnas $/kg y Venta como la tabla principal; INGRESO = (Margen+HG+Com)×Venta×1000;
+ * Mini-resumen IGF (web): columnas $/kg y Venta como la tabla principal; INGRESO = (Margen + Com − HG)×Venta×1000 (como Excel);
  * Util. Operación y Resultado Final en importe = mismos valores que la API (tabla de abajo).
  * OPERATIVOS/CORPORATIVOS/GASTO se derivan con las mismas identidades que Excel: H=G−K, I=K−L, J=H+I.
  */
@@ -135,7 +135,7 @@ export function computeIgfMiniResumenRows(
     const d = n(row.com_desc_kg);
     const eImp = n(row.impuesto_kg);
     const fHg = n(row.hg_kg);
-    const ingreso = (c + fHg + d) * bTon * 1000;
+    const ingreso = (c + d - fHg) * bTon * 1000;
     const utilOperImporte = utilFn(row);
     const resultadoFinalImporte = resFn(row);
     const operativos = ingreso - utilOperImporte;

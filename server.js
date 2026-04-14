@@ -6358,32 +6358,13 @@ async function buildIgfForecastPayload(client, year, month, opts = {}) {
 }
 
 /**
- * Fecha de corte para Pronóstico (PROY / desc PROY) alineada con buildIgfForecastPayload:
- * - upload_day explícito en el mes consultado → ese día;
- * - mes corriente sin upload_day → "hoy" negocio (igual que getVentaForecastProvinciaDesdeArr);
- * - mes cerrado → último día del mes (corte típico al revisar histórico).
- */
-function fechaCortePronosticoForIgfMini(year, month, uploadDay) {
-  const u = (uploadDay || "").toString().trim().slice(0, 10);
-  if (/^\d{4}-\d{2}-\d{2}$/.test(u)) {
-    const uy = parseInt(u.slice(0, 4), 10);
-    const um = parseInt(u.slice(5, 7), 10);
-    if (uy === year && um === month) return u;
-  }
-  const now = new Date();
-  if (year === now.getFullYear() && month === now.getMonth() + 1) {
-    return getForecastBusinessTodayYmd();
-  }
-  const ld = new Date(year, month, 0).getDate();
-  return `${year}-${String(month).padStart(2, "0")}-${String(ld).padStart(2, "0")}`;
-}
-
-/**
- * Mini-resumen IGF (PROY + regla de tres). Reutiliza `igf` de buildIgfForecastPayload (no volver a armar el payload).
- * PROY y desc PROY deben coincidir con la hoja Pronóstico del Excel (no priorizar snapshot sobre el cálculo en vivo).
+ * Mini-resumen IGF: mismas celdas “base” que la tabla principal del forecast (`buildIgfForecastPayload`) y mismas
+ * fórmulas que `applyIgfMiniResumenFormulas` en Excel (B_res y B_igf = columna Venta de esa fila IGF; regla de tres).
+ * No usar otro PROY (p. ej. solo hoja Pronóstico) para B/D si la fila IGF ya trae venta_ton/com_desc_kg del ARR:
+ * si B_res ≠ venta_ton del payload, INGRESO y el resto no coinciden con lo que el usuario ve en la primera fila.
  */
 async function computeIgfForecastMiniPayload(client, igf, year, month, uploadDay) {
-  const fechaCorteStr = fechaCortePronosticoForIgfMini(year, month, uploadDay);
+  void client;
   const miniLabels = ["GT Puebla", "Tehuacan", "Acapulco", "GTM Queretaro", "GTM San Luis", "Morelos"];
   const labelToPlantCode = new Map();
   try {
@@ -6402,28 +6383,6 @@ async function computeIgfForecastMiniPayload(client, igf, year, month, uploadDay
     }
   } catch {
     /* ignore */
-  }
-  const needPlantCodes = miniLabels.map((label) => String(labelToPlantCode.get(label) || label).trim());
-  const corteYmdFast = dashboardArrForecast.getPronosticoCorteYmdStr(year, month, fechaCorteStr);
-  const ctxProno = await dashboardArrForecast.buildPronosticoVentaDescMaps(client, year, month, fechaCorteStr);
-  let proyByPlant = await dashboardArrForecast.computePronosticoProyByPlant(client, year, month, {
-    fechaCorte: fechaCorteStr,
-    prebuiltVentaDescCtx: ctxProno,
-  });
-  const snapMini = await dashboardArrForecast.loadPronosticoMiniSnapshot(client, year, month, corteYmdFast);
-  if (snapMini && snapMini.size > 0) {
-    proyByPlant = new Map(proyByPlant);
-    for (const code of needPlantCodes) {
-      const cur = dashboardArrForecast.resolveProyFromPlantMap(proyByPlant, code);
-      if (cur && Number.isFinite(Number(cur.proy_venta_ton))) continue;
-      const fb = dashboardArrForecast.resolveProyFromPlantMap(snapMini, code);
-      if (fb && Number.isFinite(Number(fb.proy_venta_ton))) {
-        proyByPlant.set(String(code).trim(), {
-          proy_venta_ton: Number(fb.proy_venta_ton),
-          proy_desc_kg: fb.proy_desc_kg != null && Number.isFinite(Number(fb.proy_desc_kg)) ? Number(fb.proy_desc_kg) : 0,
-        });
-      }
-    }
   }
 
   const norm = (s) =>
@@ -6468,19 +6427,19 @@ async function computeIgfForecastMiniPayload(client, igf, year, month, uploadDay
   for (const label of miniLabels) {
     const igfRow = findIgfRowForLabel(label);
     const plantCode = labelToPlantCode.get(label) || label;
-    const proy = dashboardArrForecast.resolveProyFromPlantMap(proyByPlant, plantCode);
-    const B = proy && Number.isFinite(Number(proy.proy_venta_ton)) ? Number(proy.proy_venta_ton) : 0;
-    const igfVenta = igfRow ? n(igfRow.venta_ton) : 0;
-    const scale = B > 0 ? igfVenta / B : 0;
+    const bIgf = igfRow ? n(igfRow.venta_ton) : 0;
+    /** B en fila resumen/mini = misma Venta (ton) que la tabla IGF del payload (Excel: columna B IGF = B provincia cuando coinciden). */
+    const bRes = bIgf;
+    const scale = bRes > 0 ? bIgf / bRes : 0;
 
     const C = igfRow ? n(igfRow.margen_kg) : 0;
-    const D = proy && Number.isFinite(Number(proy.proy_desc_kg)) ? Number(proy.proy_desc_kg) : igfRow ? n(igfRow.com_desc_kg) : 0;
+    const D = igfRow ? n(igfRow.com_desc_kg) : 0;
     const F = igfRow ? n(igfRow.impuesto_kg) : 0;
     const G = igfRow ? n(igfRow.hg_pct) : 0;
     /** HG $/kg (misma columna que mini Excel F y fórmula INGRESO). */
     const H = igfRow ? n(igfRow.hg_kg) : 0;
 
-    // Regla de tres como Excel (sin redondear cada $/kg a 2 dec antes del × B × 1000).
+    // Regla de tres: E_igf * B_igf / B_res; aquí B_igf === B_res ⇒ escala 1 (mismos $/kg que la fila IGF).
     const E = igfRow ? n(igfRow.gasto_kg) * scale : 0;
     const I = igfRow ? n(igfRow.bancos_planta_kg) * scale : 0;
     const J = igfRow ? n(igfRow.provision_planta_kg) * scale : 0;
@@ -6490,13 +6449,13 @@ async function computeIgfForecastMiniPayload(client, igf, year, month, uploadDay
     const P = igfRow ? n(igfRow.inversiones_kg) * scale : 0;
 
     const K = r2(C + D - E - F + H - I - J);
-    const L = Math.round(K * B * 1000);
+    const L = Math.round(K * bRes * 1000);
     const Q = r2(K - M - N - O - P);
-    const R = Math.round(Q * B * 1000);
+    const R = Math.round(Q * bRes * 1000);
 
-    const ingreso = Math.round((C + D - H) * B * 1000);
-    const operativos = Math.round((E + I + J + F) * B * 1000);
-    const corporativos = Math.round((M + N + O + P) * B * 1000);
+    const ingreso = Math.round((C + D - H) * bRes * 1000);
+    const operativos = Math.round((E + I + J + F) * bRes * 1000);
+    const corporativos = Math.round((M + N + O + P) * bRes * 1000);
     const gasto = operativos + corporativos;
     const utilOperImporte = ingreso - operativos;
     const resultadoFinalImporte = utilOperImporte - corporativos;
@@ -6504,7 +6463,7 @@ async function computeIgfForecastMiniPayload(client, igf, year, month, uploadDay
     plantRows.push({
       empresa: label,
       plant_code: String(plantCode).trim(),
-      ventaTon: B,
+      ventaTon: bRes,
       margen: C,
       comDesc: D,
       impuestos: F,
@@ -6515,7 +6474,7 @@ async function computeIgfForecastMiniPayload(client, igf, year, month, uploadDay
       gasto,
       utilOperImporte,
       resultadoFinalImporte,
-      _debug: { igfVenta, hgPct: G, K, L, Q, R },
+      _debug: { igfVenta: bIgf, hgPct: G, K, L, Q, R },
     });
   }
 
@@ -6586,8 +6545,8 @@ app.get("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, res)
 });
 
 /**
- * IGF Forecast — mini-resumen (igual al bloque superior del Excel "IGF Forecast", hoja Compromiso 18 col).
- * IMPORTANTE: NO se deriva de la tabla web de abajo; se calcula con la misma lógica de "Pronostico" (PROY) + regla de tres.
+ * IGF Forecast — mini-resumen (mismas fórmulas que `applyIgfMiniResumenFormulas`, hoja Compromiso 18 col).
+ * Venta y $/kg salen de la misma fila que GET IGF Forecast (`buildIgfForecastPayload`), no de un PROY paralelo.
  */
 app.get("/api/dashboard/igf-forecast-mini", dashboardAuthMiddleware, async (req, res) => {
   if (dashboardBlockGAFinancialKpis(req, res)) return;
