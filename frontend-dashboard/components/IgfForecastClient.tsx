@@ -1076,15 +1076,34 @@ export function IgfForecastContent() {
                 row: IgfForecastRow,
                 opts?: { useRawGastoIgf?: boolean }
               ): number => {
-                void opts;
-                return getUtilOperKgFromDisplayedValues(row);
+                const r = row as Record<string, unknown>;
+                const margen = n(r.margen_kg as number | null | undefined);
+                const comDesc = toCostoNeg(r.com_desc_kg as number | null | undefined);
+                const gastoNum = opts?.useRawGastoIgf
+                  ? ((r.gasto_kg_igf as number | null | undefined) ?? (r.gasto_kg as number | null | undefined))
+                  : gastoKgFromFour(row);
+                const gasto = toCostoNeg(gastoNum as number | null | undefined);
+                const impuesto = toCostoNeg(r.impuesto_kg as number | null | undefined);
+                const hg = n(r.hg_kg as number | null | undefined);
+                const bancosPlanta = n(r.bancos_planta_kg as number | null | undefined);
+                const provPlanta = n(r.provision_planta_kg as number | null | undefined);
+                // Misma tabla por planta: verdes (Margen, Com.Desc, Gasto, Impuesto) − rojos (HG, Bancos, Prov.) con signos de celda.
+                return margen + comDesc + gasto + impuesto - hg - bancosPlanta - provPlanta;
               };
               const comparisonResultadoKg = (
                 row: IgfForecastRow,
                 opts?: { useRawGastoIgf?: boolean; useAdjustedInversiones?: boolean }
               ): number => {
-                void opts;
-                return getResultadoFinalKgFromDisplayedValues(row);
+                void opts?.useAdjustedInversiones;
+                const r = row as Record<string, unknown>;
+                const u = comparisonUtilOperKg(row, { useRawGastoIgf: opts?.useRawGastoIgf });
+                return (
+                  u +
+                  n(getInversionesKgWithCdjz(row)) -
+                  n(r.gtos_apoyos_corp_kg as number | null | undefined) -
+                  n(r.bancos_corp_kg as number | null | undefined) -
+                  n(r.otros_programas_kg as number | null | undefined)
+                );
               };
               const adjustedForecastValue = (row: IgfForecastRow, key: string): number => {
                 const r = row as Record<string, unknown>;
