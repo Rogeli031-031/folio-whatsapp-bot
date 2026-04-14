@@ -1058,6 +1058,12 @@ export function IgfForecastContent() {
                   }
                   return fmtNum(gastoKgFromFour(row));
                 }
+                if (c.key === "impuesto_kg") {
+                  return fmtNum(toCostoNeg(n((row as Record<string, unknown>).impuesto_kg as number | null | undefined)));
+                }
+                if (c.key === "com_desc_kg") {
+                  return fmtNum(toCostoNeg(n((row as Record<string, unknown>).com_desc_kg as number | null | undefined)));
+                }
                 if (
                   row === rowA &&
                   (c.key === "util_oper_kg" ||
@@ -1073,10 +1079,13 @@ export function IgfForecastContent() {
                 }
                 if (row === rowF && (c.key === "inversiones_kg" || c.key === "resultado_final_kg" || c.key === "resultado_final_importe")) {
                   const vAdj = adjustedForecastValue(row, c.key);
-                  return fmtNum(vAdj, c.key.includes("importe") ? 0 : 2);
+                  return fmtNum(c.key === "inversiones_kg" ? toCostoNeg(vAdj) : vAdj, c.key.includes("importe") ? 0 : 2);
                 }
                 const v = (row as Record<string, unknown>)[c.key];
                 if (c.isPct && v != null) return (Number(v) * 100).toFixed(1);
+                if (c.key === "inversiones_kg") {
+                  return fmtNum(toCostoNeg(v as number | null | undefined));
+                }
                 return fmtNum(v as number | null ?? null, c.key.includes("importe") || c.key === "util_oper_importe" || c.key === "resultado_final_importe" ? 0 : 2);
               };
               const rA = rowA ? (rowA as Record<string, unknown>) : null;
@@ -1100,7 +1109,16 @@ export function IgfForecastContent() {
                     ? n(rA!.resultado_final_importe_igf ?? rA!.resultado_final_importe)
                     : c.key === "gasto_kg"
                     ? toCostoNeg((rA!.gasto_kg_igf as number | null | undefined) ?? (rA!.gasto_kg as number | null | undefined))
+                    : c.key === "impuesto_kg"
+                    ? toCostoNeg(rA!.impuesto_kg as number | null | undefined)
+                    : c.key === "com_desc_kg"
+                    ? toCostoNeg(rA!.com_desc_kg as number | null | undefined)
+                    : c.key === "inversiones_kg"
+                    ? toCostoNeg(rA!.inversiones_kg as number | null | undefined)
                     : (rA![c.key] as number | null | undefined);
+                if (c.key === "impuesto_kg") return delta(toCostoNeg(vF as number | null | undefined), vA);
+                if (c.key === "com_desc_kg") return delta(toCostoNeg(vF as number | null | undefined), vA);
+                if (c.key === "inversiones_kg") return delta(toCostoNeg(vF as number | null | undefined), vA);
                 return c.isPct ? (n(vF) - n(vA)) * 100 : delta(vF, vA);
               };
               const ventaKgA = rowA ? n((rowA as Record<string, unknown>).venta_ton as number | null | undefined) * 1000 : 0;
@@ -1123,17 +1141,20 @@ export function IgfForecastContent() {
                   const utilOperF = n((rowF as Record<string, unknown>).util_oper_kg as number | null | undefined);
                   return (ventaKgF - ventaKgA) * utilOperF;
                 }
-                if (c.key === "com_desc_kg") return (n(vF) - n(vA)) * ventaKgA;
+                if (c.key === "com_desc_kg") return (toCostoNeg(vF as number | null | undefined) - toCostoNeg(vA)) * ventaKgA;
                 if (c.key === "gasto_kg") {
                   const gastoA = ((rowA as Record<string, unknown>).gasto_kg_igf as number | null | undefined) ?? ((rowA as Record<string, unknown>).gasto_kg as number | null | undefined);
                   return (gastoKgFromFour(rowF) - toCostoNeg(gastoA)) * ventaKgA;
                 }
-                if (c.key === "impuesto_kg") return (n(vF) - n(vA)) * ventaKgA;
+                if (c.key === "impuesto_kg") return (toCostoNeg(vF as number | null | undefined) - toCostoNeg(vA)) * ventaKgA;
                 if (c.key === "bancos_planta_kg") return (n(vF) - n(vA)) * ventaKgA;
                 if (c.key === "provision_planta_kg") return (n(vF) - n(vA)) * ventaKgA;
                 // Fórmula imagen: (valor_forecast * venta_kg_forecast) - (valor_mes_anterior * venta_kg_mes_anterior)
-                if (c.key === "gtos_apoyos_corp_kg" || c.key === "bancos_corp_kg" || c.key === "otros_programas_kg" || c.key === "inversiones_kg") {
+                if (c.key === "gtos_apoyos_corp_kg" || c.key === "bancos_corp_kg" || c.key === "otros_programas_kg") {
                   return (n(vF) * ventaKgF) - (n(vA) * ventaKgA);
+                }
+                if (c.key === "inversiones_kg") {
+                  return (toCostoNeg(vF as number | null | undefined) * ventaKgF) - (toCostoNeg(vA) * ventaKgA);
                 }
                 if (c.key === "util_oper_importe") return n((rowF as Record<string, unknown>).util_oper_importe as number | null | undefined) - utilOperImporteA;
                 if (c.key === "resultado_final_importe") return delta(vF, vA);
