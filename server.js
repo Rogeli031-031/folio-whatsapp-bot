@@ -6824,7 +6824,7 @@ app.get("/api/dashboard/igf-folios-detalle", dashboardAuthMiddleware, async (req
 
 /**
  * Recalcula Util. Oper. y Resultado final.
- * Util. Oper. ($/kg) = suma de los 9 conceptos: Margen, Com.Desc, Presupuesto, Folios ZP, Folios carro, Impuesto, HG $/kg, Bancos Planta, Prov. Planta.
+ * Util. Oper. ($/kg): parte de Margen y resta cada costo respetando el signo visible en la tabla.
  * Resultado = Util. Oper. - Gtos/Apoyos Corp - Bancos Corp - Otros Programas - Inversiones.
  */
 function recalcularUtilYResultado(row) {
@@ -6846,8 +6846,17 @@ function recalcularUtilYResultado(row) {
   const otrosProg = n(row.otros_programas_kg);
   const inversiones = n(row.inversiones_kg);
 
-  const hgContribucion = Math.abs(hgKg);
-  const util_oper_kg = margen - comDesc - impuesto + hgContribucion - bancosPlanta - provisionPlanta - presupuesto - foliosZP - foliosCarro + depositoCierreKg;
+  const util_oper_kg =
+    margen -
+    comDesc -
+    presupuesto -
+    foliosZP -
+    foliosCarro -
+    depositoCierreKg -
+    impuesto -
+    hgKg -
+    bancosPlanta -
+    provisionPlanta;
   const util_oper_importe = ventaKg > 0 ? util_oper_kg * ventaKg : 0;
   const resultado_final_kg = util_oper_kg - gtosCorp - bancosCorp - otrosProg - inversiones;
   const resultado_final_importe = ventaKg > 0 ? resultado_final_kg * ventaKg : 0;
