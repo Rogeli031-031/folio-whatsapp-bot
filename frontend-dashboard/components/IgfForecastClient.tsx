@@ -1009,6 +1009,23 @@ export function IgfForecastContent() {
                 const x = n(v);
                 return x > 0 ? -x : x;
               };
+              const comparisonUtilOperKg = (
+                row: IgfForecastRow,
+                opts?: { useRawGastoIgf?: boolean }
+              ): number => {
+                const r = row as Record<string, unknown>;
+                const margen = n(r.margen_kg as number | null | undefined);
+                const comDesc = toCostoNeg(r.com_desc_kg as number | null | undefined);
+                const gasto = opts?.useRawGastoIgf
+                  ? toCostoNeg((r.gasto_kg_igf as number | null | undefined) ?? (r.gasto_kg as number | null | undefined))
+                  : toCostoNeg(gastoKgFromFour(row));
+                const impuesto = toCostoNeg(r.impuesto_kg as number | null | undefined);
+                const hg = n(r.hg_kg as number | null | undefined);
+                const bancosPlanta = n(r.bancos_planta_kg as number | null | undefined);
+                const provPlanta = n(r.provision_planta_kg as number | null | undefined);
+                // Regla visual pedida: verdes suman y rojos restan, respetando el signo mostrado.
+                return margen + comDesc - gasto - impuesto - hg - bancosPlanta - provPlanta;
+              };
               const adjustedForecastValue = (row: IgfForecastRow, key: string): number => {
                 const r = row as Record<string, unknown>;
                 const ventaKg = n(r.venta_ton as number | null | undefined) * 1000;
@@ -1072,10 +1089,13 @@ export function IgfForecastContent() {
                     c.key === "resultado_final_importe")
                 ) {
                   const r = row as Record<string, unknown>;
-                  if (c.key === "util_oper_kg") return fmtNum(n(r.util_oper_kg_igf ?? r.util_oper_kg));
+                  if (c.key === "util_oper_kg") return fmtNum(comparisonUtilOperKg(row, { useRawGastoIgf: true }));
                   if (c.key === "util_oper_importe") return fmtNum(n(r.util_oper_importe_igf ?? r.util_oper_importe), 0);
                   if (c.key === "resultado_final_kg") return fmtNum(n(r.resultado_final_kg_igf ?? r.resultado_final_kg));
                   if (c.key === "resultado_final_importe") return fmtNum(n(r.resultado_final_importe_igf ?? r.resultado_final_importe), 0);
+                }
+                if (c.key === "util_oper_kg") {
+                  return fmtNum(comparisonUtilOperKg(row));
                 }
                 if (row === rowF && (c.key === "inversiones_kg" || c.key === "resultado_final_kg" || c.key === "resultado_final_importe")) {
                   const vAdj = adjustedForecastValue(row, c.key);
@@ -1089,18 +1109,20 @@ export function IgfForecastContent() {
                 return fmtNum(v as number | null ?? null, c.key.includes("importe") || c.key === "util_oper_importe" || c.key === "resultado_final_importe" ? 0 : 2);
               };
               const rA = rowA ? (rowA as Record<string, unknown>) : null;
-              const utilOperKgA = rowA ? n(rA!.util_oper_kg_igf ?? rA!.util_oper_kg) : 0;
+              const utilOperKgA = rowA ? comparisonUtilOperKg(rowA, { useRawGastoIgf: true }) : 0;
               const utilOperImporteA = rowA ? n(rA!.util_oper_importe_igf ?? rA!.util_oper_importe) : 0;
               const cellDeltaNum = (c: Col): number | null => {
                 if (c.key === "empresa" || !rowA) return null;
                 const vF = c.key === "gasto_kg"
                   ? toCostoNeg(gastoKgFromFour(rowF))
+                  : c.key === "util_oper_kg"
+                  ? comparisonUtilOperKg(rowF)
                   : (c.key === "inversiones_kg" || c.key === "resultado_final_kg" || c.key === "resultado_final_importe")
                   ? adjustedForecastValue(rowF, c.key)
                   : (rowF as Record<string, unknown>)[c.key] as number | null | undefined;
                 const vA =
                   c.key === "util_oper_kg"
-                    ? n(rA!.util_oper_kg_igf ?? rA!.util_oper_kg)
+                    ? comparisonUtilOperKg(rowA, { useRawGastoIgf: true })
                     : c.key === "util_oper_importe"
                     ? n(rA!.util_oper_importe_igf ?? rA!.util_oper_importe)
                     : c.key === "resultado_final_kg"
