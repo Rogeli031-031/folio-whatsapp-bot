@@ -1235,7 +1235,8 @@ export function IgfForecastContent() {
                 if (c.key === "empresa" || !rowA) return null;
                 if (c.key === "hg_pct") return null;
                 if (c.key === "util_oper_kg") return null;
-                const vF = (c.key === "inversiones_kg" || c.key === "resultado_final_kg" || c.key === "resultado_final_importe")
+                if (c.key === "resultado_final_kg") return null;
+                const vF = (c.key === "inversiones_kg" || c.key === "resultado_final_importe")
                   ? adjustedForecastValue(rowF, c.key)
                   : (rowF as Record<string, unknown>)[c.key] as number | null | undefined;
                 const vA =
@@ -1372,7 +1373,7 @@ export function IgfForecastContent() {
                               key={c.key}
                               className={`py-2 px-2 text-right tabular-nums ${hasImp && imp! > 0 ? "text-green-400" : hasImp && imp! < 0 ? "text-red-400" : "text-slate-400"} ${highlightColClass}`}
                             >
-                              {hasImp ? (imp! >= 0 ? "+" : "") + fmtNum(imp!, 0) : "—"}
+                              {hasImp ? (imp! >= 0 ? "+" : "") + fmtNum(imp!, 0) : "-"}
                             </td>
                           );
                         })}
