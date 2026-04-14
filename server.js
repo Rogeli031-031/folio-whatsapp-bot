@@ -6363,12 +6363,10 @@ async function buildIgfForecastPayload(client, year, month, opts = {}) {
 
 /**
  * Mini-resumen IGF:
- * - Venta y Com. y Desc. salen del mismo payload que el dashboard (`buildIgfForecastPayload`: forecast ARR); el Excel
- *   los toma del export y solo recalcula a partir de ahí.
- * - INGRESO … Resultado Final: mismas fórmulas que `applyIgfMiniResumenFormulas` (regla de tres con venta_ton de la fila).
+ * - Venta y Com. y Desc. salen de Pronóstico (mismas PROY que ve el usuario al abrir el detalle "como hoja Pronostico").
+ * - INGRESO .. Resultado Final replican exactamente G..L de `applyIgfMiniResumenFormulas`.
  */
 async function computeIgfForecastMiniPayload(client, igf, year, month, uploadDay) {
-  void client;
   const miniLabels = ["GT Puebla", "Tehuacan", "Acapulco", "GTM Queretaro", "GTM San Luis", "Morelos"];
   const labelToPlantCode = new Map();
   try {
@@ -6425,25 +6423,62 @@ async function computeIgfForecastMiniPayload(client, igf, year, month, uploadDay
   };
 
   const n = (x) => (x != null && Number.isFinite(Number(x)) ? Number(x) : 0);
-  const r2 = (x) => Math.round(Number(x || 0) * 100) / 100;
+  const fechaCorteStr = (uploadDay || "").toString().trim().slice(0, 10);
+  const needPlantCodes = miniLabels.map((label) => String(labelToPlantCode.get(label) || label).trim());
+  const corteYmdFast = dashboardArrForecast.getPronosticoCorteYmdStr(year, month, fechaCorteStr);
+  const snapMini = await dashboardArrForecast.loadPronosticoMiniSnapshot(client, year, month, corteYmdFast);
+  const snapHasAllMini = needPlantCodes.every((code) => {
+    const v = dashboardArrForecast.resolveProyFromPlantMap(snapMini, code);
+    return v && Number.isFinite(Number(v.proy_venta_ton));
+  });
+
+  let proyByPlant;
+  if (snapHasAllMini) {
+    proyByPlant = new Map();
+    for (const code of needPlantCodes) {
+      const v = dashboardArrForecast.resolveProyFromPlantMap(snapMini, code);
+      proyByPlant.set(code, {
+        proy_venta_ton: Number(v.proy_venta_ton),
+        proy_desc_kg: v.proy_desc_kg != null && Number.isFinite(Number(v.proy_desc_kg)) ? Number(v.proy_desc_kg) : 0,
+      });
+    }
+  } else {
+    const ctxProno = await dashboardArrForecast.buildPronosticoVentaDescMaps(client, year, month, fechaCorteStr);
+    let computed = await dashboardArrForecast.computePronosticoProyByPlant(client, year, month, {
+      fechaCorte: fechaCorteStr,
+      prebuiltVentaDescCtx: ctxProno,
+    });
+    if (snapMini && snapMini.size > 0) {
+      computed = new Map(computed);
+      for (const [k, v] of snapMini.entries()) {
+        if (v && Number.isFinite(Number(v.proy_venta_ton))) {
+          computed.set(k, {
+            proy_venta_ton: Number(v.proy_venta_ton),
+            proy_desc_kg: v.proy_desc_kg != null && Number.isFinite(Number(v.proy_desc_kg)) ? Number(v.proy_desc_kg) : 0,
+          });
+        }
+      }
+    }
+    proyByPlant = computed;
+  }
 
   const plantRows = [];
   for (const label of miniLabels) {
     const igfRow = findIgfRowForLabel(label);
     const plantCode = labelToPlantCode.get(label) || label;
+    const proy = dashboardArrForecast.resolveProyFromPlantMap(proyByPlant, plantCode);
+    const bRes = proy && Number.isFinite(Number(proy.proy_venta_ton)) ? Number(proy.proy_venta_ton) : 0;
     const bIgf = igfRow ? n(igfRow.venta_ton) : 0;
-    /** B en fila resumen/mini = misma Venta (ton) que la tabla IGF del payload (Excel: columna B IGF = B provincia cuando coinciden). */
-    const bRes = bIgf;
     const scale = bRes > 0 ? bIgf / bRes : 0;
 
     const C = igfRow ? n(igfRow.margen_kg) : 0;
-    const D = igfRow ? n(igfRow.com_desc_kg) : 0;
+    const D = proy && Number.isFinite(Number(proy.proy_desc_kg)) ? Number(proy.proy_desc_kg) : igfRow ? n(igfRow.com_desc_kg) : 0;
     const F = igfRow ? n(igfRow.impuesto_kg) : 0;
     const G = igfRow ? n(igfRow.hg_pct) : 0;
     /** HG $/kg (misma columna que mini Excel F y fórmula INGRESO). */
     const H = igfRow ? n(igfRow.hg_kg) : 0;
 
-    // Regla de tres: E_igf * B_igf / B_res; aquí B_igf === B_res ⇒ escala 1 (mismos $/kg que la fila IGF).
+    // Regla de tres exacta del bloque superior: E/I/J/M:N:O:P de la fila IGF escalados por B_igf / B_res.
     const E = igfRow ? n(igfRow.gasto_kg) * scale : 0;
     const I = igfRow ? n(igfRow.bancos_planta_kg) * scale : 0;
     const J = igfRow ? n(igfRow.provision_planta_kg) * scale : 0;
@@ -6451,11 +6486,6 @@ async function computeIgfForecastMiniPayload(client, igf, year, month, uploadDay
     const N = igfRow ? n(igfRow.bancos_corp_kg) * scale : 0;
     const O = igfRow ? n(igfRow.otros_programas_kg) * scale : 0;
     const P = igfRow ? n(igfRow.inversiones_kg) * scale : 0;
-
-    const K = r2(C + D - E - F + H - I - J);
-    const L = Math.round(K * bRes * 1000);
-    const Q = r2(K - M - N - O - P);
-    const R = Math.round(Q * bRes * 1000);
 
     const ingreso = Math.round((C + D - H) * bRes * 1000);
     const operativos = Math.round((E + I + J + F) * bRes * 1000);
@@ -6478,7 +6508,7 @@ async function computeIgfForecastMiniPayload(client, igf, year, month, uploadDay
       gasto,
       utilOperImporte,
       resultadoFinalImporte,
-      _debug: { igfVenta: bIgf, hgPct: G, K, L, Q, R },
+      _debug: { igfVenta: bIgf, hgPct: G, scale },
     });
   }
 
