@@ -417,10 +417,39 @@ export function IgfForecastContent() {
   const getResultadoFinalImporteWithCdjz = (row: IgfForecastRow): number => {
     const n = (x: unknown): number => (x != null && !Number.isNaN(Number(x)) ? Number(x) : 0);
     const ventaKg = n(row.venta_ton) * 1000;
-    const baseInvKg = n(row.inversiones_kg);
-    const adjInvKg = n(getInversionesKgWithCdjz(row));
-    const deltaInvCostKg = Math.abs(adjInvKg) - Math.abs(baseInvKg);
-    return n(row.resultado_final_importe) - (deltaInvCostKg * ventaKg);
+    return getResultadoFinalKgFromDisplayedValues(row) * ventaKg;
+  };
+
+  const getUtilOperKgFromDisplayedValues = (row: IgfForecastRow): number => {
+    const n = (x: unknown): number => (x != null && !Number.isNaN(Number(x)) ? Number(x) : 0);
+    return (
+      n(row.margen_kg) +
+      n(row.com_desc_kg) -
+      n(getPresupuestoKgWithGend(row)) -
+      n(row.folios_aprob_zp_kg) -
+      n(row.folios_carro_kg) -
+      n(row.deposito_cierre_kg) -
+      n(row.impuesto_kg) -
+      n(row.hg_kg) -
+      n(row.bancos_planta_kg) -
+      n(row.provision_planta_kg)
+    );
+  };
+
+  const getUtilOperImporteFromDisplayedValues = (row: IgfForecastRow): number => {
+    const n = (x: unknown): number => (x != null && !Number.isNaN(Number(x)) ? Number(x) : 0);
+    return getUtilOperKgFromDisplayedValues(row) * (n(row.venta_ton) * 1000);
+  };
+
+  const getResultadoFinalKgFromDisplayedValues = (row: IgfForecastRow): number => {
+    const n = (x: unknown): number => (x != null && !Number.isNaN(Number(x)) ? Number(x) : 0);
+    return (
+      getUtilOperKgFromDisplayedValues(row) -
+      n(row.gtos_apoyos_corp_kg) -
+      n(row.bancos_corp_kg) -
+      n(row.otros_programas_kg) -
+      n(getInversionesKgWithCdjz(row))
+    );
   };
 
   const handleRecalcForecastProvincia = async () => {
@@ -931,19 +960,20 @@ export function IgfForecastContent() {
                         {COLS_EXTRA.map((c) => {
                           const n = (x: unknown): number => (x != null && !Number.isNaN(Number(x)) ? Number(x) : 0);
                           const ventaKgRow = n(row.venta_ton) * 1000;
-                          const baseInvKg = n(row.inversiones_kg);
-                          const adjInvKg = n(getInversionesKgWithCdjz(row));
-                          const deltaInvCostKg = Math.abs(adjInvKg) - Math.abs(baseInvKg);
                           const rawVal = (row as Record<string, unknown>)[c.key] as number | null | undefined;
                           const isImporte = c.key === "resultado_final_importe" || c.key === "util_oper_importe";
                           const isInversionesKg = c.key === "inversiones_kg";
                           const val =
-                            c.key === "inversiones_kg"
+                            c.key === "util_oper_kg"
+                              ? getUtilOperKgFromDisplayedValues(row)
+                              : c.key === "util_oper_importe"
+                              ? getUtilOperImporteFromDisplayedValues(row)
+                              : c.key === "inversiones_kg"
                               ? getInversionesKgWithCdjz(row)
                               : c.key === "resultado_final_kg"
-                              ? n(rawVal) - deltaInvCostKg
+                              ? getResultadoFinalKgFromDisplayedValues(row)
                               : c.key === "resultado_final_importe"
-                              ? n(rawVal) - (deltaInvCostKg * ventaKgRow)
+                              ? getResultadoFinalImporteWithCdjz(row)
                               : rawVal;
                           const invIsNeg = !isImporte && val != null && Number(val) < 0;
                           const highlightClass =
@@ -989,7 +1019,12 @@ export function IgfForecastContent() {
                       <td colSpan={11} className="py-3 px-2" />
                       <td className="py-3 px-2 border-r border-slate-600" />
                       <td className="py-3 px-2 text-right tabular-nums text-base font-bold text-slate-100">
-                        {fmtNum(igfForecast.totales.util_oper_importe ?? null, 0)}
+                        {fmtNum(
+                          igfForecast.rows
+                            .filter((r) => !/^TOTALES?$/i.test(r.empresa?.trim() || ""))
+                            .reduce((sum, r) => sum + getUtilOperImporteFromDisplayedValues(r), 0),
+                          0
+                        )}
                       </td>
                       <td colSpan={4} className="py-3 px-2" />
                       <td className="py-3 px-2" />
