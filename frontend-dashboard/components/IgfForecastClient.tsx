@@ -403,15 +403,23 @@ export function IgfForecastContent() {
     return (base ?? 0) + deltaKg;
   };
 
+  /** Folios/API suelen traer inversión como magnitud positiva ($/kg); en UI es costo → mismo criterio que el modal (valor negativo). */
+  const inversionesKgParaVista = (raw: number | null | undefined): number | null => {
+    if (raw == null || Number.isNaN(Number(raw))) return null;
+    const x = Number(raw);
+    if (x === 0) return 0;
+    return x > 0 ? -x : x;
+  };
+
   const getInversionesKgWithCdjz = (row: IgfForecastRow): number | null => {
     const base = row.inversiones_kg != null && !Number.isNaN(Number(row.inversiones_kg)) ? Number(row.inversiones_kg) : null;
     const extraMxn = inversionCdjzByEmpresa[presupuestoGendKey(row.empresa || "")] ?? 0;
     const ventaTon = row.venta_ton != null && !Number.isNaN(Number(row.venta_ton)) ? Number(row.venta_ton) : 0;
     const ventaKg = ventaTon * 1000;
-    if (!ventaKg || !extraMxn) return base;
+    if (!ventaKg || !extraMxn) return inversionesKgParaVista(base);
     const baseMxn = Math.abs(base ?? 0) * ventaKg;
     const totalMxn = baseMxn + Math.abs(extraMxn);
-    return totalMxn > 0 ? -(Math.round((totalMxn / ventaKg) * 100) / 100) : base;
+    return totalMxn > 0 ? -(Math.round((totalMxn / ventaKg) * 100) / 100) : inversionesKgParaVista(base);
   };
 
   const getResultadoFinalImporteWithCdjz = (row: IgfForecastRow): number => {
