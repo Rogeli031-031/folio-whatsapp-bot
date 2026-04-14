@@ -6423,6 +6423,22 @@ async function computeIgfForecastMiniPayload(client, igf, year, month, uploadDay
   };
 
   const n = (x) => (x != null && Number.isFinite(Number(x)) ? Number(x) : 0);
+  const rawVersionId = igf && igf.version_id != null ? Number(igf.version_id) : null;
+  let rawRows = [];
+  if (rawVersionId != null) {
+    const rawRes = await client.query(
+      `SELECT * FROM igf.compromiso_lines WHERE version_id = $1::int ORDER BY empresa`,
+      [rawVersionId]
+    );
+    rawRows = (rawRes.rows || []).map((row) => {
+      const obj = { empresa: (row.empresa || "").trim() };
+      for (const [k, v] of Object.entries(row)) {
+        if (k === "empresa" || k === "version_id" || k === "id") continue;
+        obj[k] = v != null && Number.isFinite(Number(v)) ? Number(v) : v;
+      }
+      return obj;
+    });
+  }
   const fechaCorteStr = (uploadDay || "").toString().trim().slice(0, 10);
   const needPlantCodes = miniLabels.map((label) => String(labelToPlantCode.get(label) || label).trim());
   const corteYmdFast = dashboardArrForecast.getPronosticoCorteYmdStr(year, month, fechaCorteStr);
@@ -6465,27 +6481,55 @@ async function computeIgfForecastMiniPayload(client, igf, year, month, uploadDay
   const plantRows = [];
   for (const label of miniLabels) {
     const igfRow = findIgfRowForLabel(label);
+    const rawIgfRow =
+      rawRows && rawRows.length
+        ? (() => {
+            const want = norm(label);
+            let best = null;
+            let bestScore = -1;
+            for (const r of rawRows) {
+              const emp = (r.empresa || "").trim();
+              if (!emp) continue;
+              const en = norm(emp);
+              if (!en) continue;
+              let score = -1;
+              if (en === want) score = 10000;
+              else if (en.includes(want) || want.includes(en)) score = 5000 - Math.abs(en.length - want.length);
+              else {
+                const strip = (x) => x.replace(/^(gtm|gt)\s+/i, "").trim();
+                const a = strip(en);
+                const b = strip(want);
+                if (a && b && (a === b || a.includes(b) || b.includes(a))) score = 4000;
+              }
+              if (score > bestScore) {
+                bestScore = score;
+                best = r;
+              }
+            }
+            return bestScore >= 500 ? best : null;
+          })()
+        : igfRow;
     const plantCode = labelToPlantCode.get(label) || label;
     const proy = dashboardArrForecast.resolveProyFromPlantMap(proyByPlant, plantCode);
     const bRes = proy && Number.isFinite(Number(proy.proy_venta_ton)) ? Number(proy.proy_venta_ton) : 0;
-    const bIgf = igfRow ? n(igfRow.venta_ton) : 0;
+    const bIgf = rawIgfRow ? n(rawIgfRow.venta_ton) : igfRow ? n(igfRow.venta_ton) : 0;
     const scale = bRes > 0 ? bIgf / bRes : 0;
 
-    const C = igfRow ? n(igfRow.margen_kg) : 0;
+    const C = rawIgfRow ? n(rawIgfRow.margen_kg) : igfRow ? n(igfRow.margen_kg) : 0;
     const D = proy && Number.isFinite(Number(proy.proy_desc_kg)) ? Number(proy.proy_desc_kg) : igfRow ? n(igfRow.com_desc_kg) : 0;
-    const F = igfRow ? n(igfRow.impuesto_kg) : 0;
-    const G = igfRow ? n(igfRow.hg_pct) : 0;
+    const F = rawIgfRow ? n(rawIgfRow.impuesto_kg) : igfRow ? n(igfRow.impuesto_kg) : 0;
+    const G = rawIgfRow ? n(rawIgfRow.hg_pct) : igfRow ? n(igfRow.hg_pct) : 0;
     /** HG $/kg (misma columna que mini Excel F y fórmula INGRESO). */
-    const H = igfRow ? n(igfRow.hg_kg) : 0;
+    const H = rawIgfRow ? n(rawIgfRow.hg_kg) : igfRow ? n(igfRow.hg_kg) : 0;
 
     // Regla de tres exacta del bloque superior: E/I/J/M:N:O:P de la fila IGF escalados por B_igf / B_res.
-    const E = igfRow ? n(igfRow.gasto_kg) * scale : 0;
-    const I = igfRow ? n(igfRow.bancos_planta_kg) * scale : 0;
-    const J = igfRow ? n(igfRow.provision_planta_kg) * scale : 0;
-    const M = igfRow ? n(igfRow.gtos_apoyos_corp_kg) * scale : 0;
-    const N = igfRow ? n(igfRow.bancos_corp_kg) * scale : 0;
-    const O = igfRow ? n(igfRow.otros_programas_kg) * scale : 0;
-    const P = igfRow ? n(igfRow.inversiones_kg) * scale : 0;
+    const E = rawIgfRow ? n(rawIgfRow.gasto_kg) * scale : igfRow ? n(igfRow.gasto_kg) * scale : 0;
+    const I = rawIgfRow ? n(rawIgfRow.bancos_planta_kg) * scale : igfRow ? n(igfRow.bancos_planta_kg) * scale : 0;
+    const J = rawIgfRow ? n(rawIgfRow.provision_planta_kg) * scale : igfRow ? n(igfRow.provision_planta_kg) * scale : 0;
+    const M = rawIgfRow ? n(rawIgfRow.gtos_apoyos_corp_kg) * scale : igfRow ? n(igfRow.gtos_apoyos_corp_kg) * scale : 0;
+    const N = rawIgfRow ? n(rawIgfRow.bancos_corp_kg) * scale : igfRow ? n(igfRow.bancos_corp_kg) * scale : 0;
+    const O = rawIgfRow ? n(rawIgfRow.otros_programas_kg) * scale : igfRow ? n(igfRow.otros_programas_kg) * scale : 0;
+    const P = rawIgfRow ? n(rawIgfRow.inversiones_kg) * scale : igfRow ? n(igfRow.inversiones_kg) * scale : 0;
 
     const ingreso = Math.round((C + D - H) * bRes * 1000);
     const operativos = Math.round((E + I + J + F) * bRes * 1000);
