@@ -422,13 +422,15 @@ export function IgfForecastContent() {
 
   const getUtilOperKgFromDisplayedValues = (row: IgfForecastRow): number => {
     const n = (x: unknown): number => (x != null && !Number.isNaN(Number(x)) ? Number(x) : 0);
+    // Verdes: Margen + Com.Desc + Depósito y cierre (tal cual el signo en pantalla).
+    // Rojos: Presupuesto, Folios ZP, Folios carro, Impuesto, HG, Bancos, Prov. (tal cual).
     return (
       n(row.margen_kg) +
-      n(row.com_desc_kg) -
+      n(row.com_desc_kg) +
+      n(row.deposito_cierre_kg) -
       n(getPresupuestoKgWithGend(row)) -
       n(row.folios_aprob_zp_kg) -
       n(row.folios_carro_kg) -
-      n(row.deposito_cierre_kg) -
       n(row.impuesto_kg) -
       n(row.hg_kg) -
       n(row.bancos_planta_kg) -
@@ -958,8 +960,6 @@ export function IgfForecastContent() {
                         </td>
                         <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(row.hg_kg ?? null)}</td>
                         {COLS_EXTRA.map((c) => {
-                          const n = (x: unknown): number => (x != null && !Number.isNaN(Number(x)) ? Number(x) : 0);
-                          const ventaKgRow = n(row.venta_ton) * 1000;
                           const rawVal = (row as Record<string, unknown>)[c.key] as number | null | undefined;
                           const isImporte = c.key === "resultado_final_importe" || c.key === "util_oper_importe";
                           const isInversionesKg = c.key === "inversiones_kg";
@@ -1067,18 +1067,8 @@ export function IgfForecastContent() {
                 row: IgfForecastRow,
                 opts?: { useRawGastoIgf?: boolean }
               ): number => {
-                const r = row as Record<string, unknown>;
-                const margen = n(r.margen_kg as number | null | undefined);
-                const comDesc = toCostoNeg(r.com_desc_kg as number | null | undefined);
-                const gasto = opts?.useRawGastoIgf
-                  ? toCostoNeg((r.gasto_kg_igf as number | null | undefined) ?? (r.gasto_kg as number | null | undefined))
-                  : toCostoNeg(gastoKgFromFour(row));
-                const impuesto = toCostoNeg(r.impuesto_kg as number | null | undefined);
-                const hg = n(r.hg_kg as number | null | undefined);
-                const bancosPlanta = n(r.bancos_planta_kg as number | null | undefined);
-                const provPlanta = n(r.provision_planta_kg as number | null | undefined);
-                // Regla visual pedida: verdes suman y rojos restan, respetando el signo mostrado.
-                return margen + comDesc - gasto - impuesto - hg - bancosPlanta - provPlanta;
+                void opts;
+                return getUtilOperKgFromDisplayedValues(row);
               };
               const comparisonResultadoKg = (
                 row: IgfForecastRow,

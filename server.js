@@ -6847,12 +6847,12 @@ function recalcularUtilYResultado(row) {
   const inversiones = n(row.inversiones_kg);
 
   const util_oper_kg =
-    margen -
-    comDesc -
+    margen +
+    comDesc +
+    depositoCierreKg -
     presupuesto -
     foliosZP -
     foliosCarro -
-    depositoCierreKg -
     impuesto -
     hgKg -
     bancosPlanta -
