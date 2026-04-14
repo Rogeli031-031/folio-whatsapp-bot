@@ -445,12 +445,13 @@ export function IgfForecastContent() {
 
   const getResultadoFinalKgFromDisplayedValues = (row: IgfForecastRow): number => {
     const n = (x: unknown): number => (x != null && !Number.isNaN(Number(x)) ? Number(x) : 0);
+    // Util. Oper. + Inversiones (verde, con signo) − Gtos/Apoyos Corp − Bancos Corp. − Otros Programas (rojos).
     return (
-      getUtilOperKgFromDisplayedValues(row) -
+      getUtilOperKgFromDisplayedValues(row) +
+      n(getInversionesKgWithCdjz(row)) -
       n(row.gtos_apoyos_corp_kg) -
       n(row.bancos_corp_kg) -
-      n(row.otros_programas_kg) -
-      n(getInversionesKgWithCdjz(row))
+      n(row.otros_programas_kg)
     );
   };
 
@@ -1074,17 +1075,8 @@ export function IgfForecastContent() {
                 row: IgfForecastRow,
                 opts?: { useRawGastoIgf?: boolean; useAdjustedInversiones?: boolean }
               ): number => {
-                const r = row as Record<string, unknown>;
-                const utilOper = comparisonUtilOperKg(row, { useRawGastoIgf: opts?.useRawGastoIgf });
-                const gtosApoyos = n(r.gtos_apoyos_corp_kg as number | null | undefined);
-                const bancosCorp = n(r.bancos_corp_kg as number | null | undefined);
-                const otrosProgramas = n(r.otros_programas_kg as number | null | undefined);
-                const invBase = opts?.useAdjustedInversiones
-                  ? adjustedForecastValue(row, "inversiones_kg")
-                  : n(r.inversiones_kg as number | null | undefined);
-                const inversionesCosto = Math.abs(invBase);
-                // Regla visual pedida: util operación (verde) suma; corporativos (rojo) restan.
-                return utilOper - gtosApoyos - bancosCorp - otrosProgramas - inversionesCosto;
+                void opts;
+                return getResultadoFinalKgFromDisplayedValues(row);
               };
               const adjustedForecastValue = (row: IgfForecastRow, key: string): number => {
                 const r = row as Record<string, unknown>;

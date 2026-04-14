@@ -6826,6 +6826,7 @@ app.get("/api/dashboard/igf-folios-detalle", dashboardAuthMiddleware, async (req
  * Recalcula Util. Oper. y Resultado final.
  * Util. Oper. ($/kg): parte de Margen y resta cada costo respetando el signo visible en la tabla.
  * Resultado = Util. Oper. - Gtos/Apoyos Corp - Bancos Corp - Otros Programas - Inversiones.
+ * (Inversiones en fila API se guardan como magnitud positiva de costo; en pantalla suelen verse negativas.)
  */
 function recalcularUtilYResultado(row) {
   const n = (v) => (v != null && Number.isFinite(Number(v)) ? Number(v) : 0);
