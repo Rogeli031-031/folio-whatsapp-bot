@@ -1026,6 +1026,22 @@ export function IgfForecastContent() {
                 // Regla visual pedida: verdes suman y rojos restan, respetando el signo mostrado.
                 return margen + comDesc - gasto - impuesto - hg - bancosPlanta - provPlanta;
               };
+              const comparisonResultadoKg = (
+                row: IgfForecastRow,
+                opts?: { useRawGastoIgf?: boolean; useAdjustedInversiones?: boolean }
+              ): number => {
+                const r = row as Record<string, unknown>;
+                const utilOper = comparisonUtilOperKg(row, { useRawGastoIgf: opts?.useRawGastoIgf });
+                const gtosApoyos = n(r.gtos_apoyos_corp_kg as number | null | undefined);
+                const bancosCorp = n(r.bancos_corp_kg as number | null | undefined);
+                const otrosProgramas = n(r.otros_programas_kg as number | null | undefined);
+                const invBase = opts?.useAdjustedInversiones
+                  ? adjustedForecastValue(row, "inversiones_kg")
+                  : n(r.inversiones_kg as number | null | undefined);
+                const inversionesCosto = Math.abs(invBase);
+                // Regla visual pedida: util operación (verde) suma; corporativos (rojo) restan.
+                return utilOper - gtosApoyos - bancosCorp - otrosProgramas - inversionesCosto;
+              };
               const adjustedForecastValue = (row: IgfForecastRow, key: string): number => {
                 const r = row as Record<string, unknown>;
                 const ventaKg = n(r.venta_ton as number | null | undefined) * 1000;
@@ -1091,11 +1107,14 @@ export function IgfForecastContent() {
                   const r = row as Record<string, unknown>;
                   if (c.key === "util_oper_kg") return fmtNum(comparisonUtilOperKg(row, { useRawGastoIgf: true }));
                   if (c.key === "util_oper_importe") return fmtNum(n(r.util_oper_importe_igf ?? r.util_oper_importe), 0);
-                  if (c.key === "resultado_final_kg") return fmtNum(n(r.resultado_final_kg_igf ?? r.resultado_final_kg));
+                  if (c.key === "resultado_final_kg") return fmtNum(comparisonResultadoKg(row, { useRawGastoIgf: true }));
                   if (c.key === "resultado_final_importe") return fmtNum(n(r.resultado_final_importe_igf ?? r.resultado_final_importe), 0);
                 }
                 if (c.key === "util_oper_kg") {
                   return fmtNum(comparisonUtilOperKg(row));
+                }
+                if (c.key === "resultado_final_kg") {
+                  return fmtNum(comparisonResultadoKg(row, { useAdjustedInversiones: true }));
                 }
                 if (row === rowF && (c.key === "inversiones_kg" || c.key === "resultado_final_kg" || c.key === "resultado_final_importe")) {
                   const vAdj = adjustedForecastValue(row, c.key);
@@ -1117,6 +1136,8 @@ export function IgfForecastContent() {
                   ? toCostoNeg(gastoKgFromFour(rowF))
                   : c.key === "util_oper_kg"
                   ? comparisonUtilOperKg(rowF)
+                  : c.key === "resultado_final_kg"
+                  ? comparisonResultadoKg(rowF, { useAdjustedInversiones: true })
                   : (c.key === "inversiones_kg" || c.key === "resultado_final_kg" || c.key === "resultado_final_importe")
                   ? adjustedForecastValue(rowF, c.key)
                   : (rowF as Record<string, unknown>)[c.key] as number | null | undefined;
@@ -1126,7 +1147,7 @@ export function IgfForecastContent() {
                     : c.key === "util_oper_importe"
                     ? n(rA!.util_oper_importe_igf ?? rA!.util_oper_importe)
                     : c.key === "resultado_final_kg"
-                    ? n(rA!.resultado_final_kg_igf ?? rA!.resultado_final_kg)
+                    ? comparisonResultadoKg(rowA, { useRawGastoIgf: true })
                     : c.key === "resultado_final_importe"
                     ? n(rA!.resultado_final_importe_igf ?? rA!.resultado_final_importe)
                     : c.key === "gasto_kg"
