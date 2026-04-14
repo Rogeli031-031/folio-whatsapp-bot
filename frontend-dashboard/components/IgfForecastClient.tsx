@@ -34,6 +34,7 @@ import {
   ORDEN_PROVINCIA,
   COLS_EXTRA,
   fmtNum,
+  normalizeEmpresa,
   presupuestoGendKey,
   gastoKgFromFour,
   findRowByPlanta,
@@ -777,11 +778,25 @@ export function IgfForecastContent() {
                 </thead>
                 <tbody>
                   {(() => {
+                    const miniRows = igfMini?.rows || [];
+                    const miniOrder = new Map<string, number>();
+                    const miniByEmpresa = new Map<string, IgfForecastMiniRow>();
+                    miniRows.forEach((r, idx) => {
+                      const key = normalizeEmpresa(r.empresa || "");
+                      if (!key) return;
+                      if (!miniOrder.has(key)) miniOrder.set(key, idx);
+                      if (!miniByEmpresa.has(key)) miniByEmpresa.set(key, r);
+                    });
                     const filtered = plantaFilter
                       ? igfForecast.rows.filter((r) => (r.empresa?.trim() || "") === plantaFilter)
                       : igfForecast.rows.filter((r) => !/^TOTALES?$/i.test(r.empresa?.trim() || ""));
                     const sorted = [...filtered]
                       .sort((a, b) => {
+                        const miniA = miniOrder.get(normalizeEmpresa(a.empresa || ""));
+                        const miniB = miniOrder.get(normalizeEmpresa(b.empresa || ""));
+                        if (miniA != null && miniB != null) return miniA - miniB;
+                        if (miniA != null) return -1;
+                        if (miniB != null) return 1;
                         const iA = ORDEN_PROVINCIA.indexOf(a.empresa?.trim() || "");
                         const iB = ORDEN_PROVINCIA.indexOf(b.empresa?.trim() || "");
                         if (iA === -1 && iB === -1) return (a.empresa || "").localeCompare(b.empresa || "");
@@ -789,15 +804,19 @@ export function IgfForecastContent() {
                         if (iB === -1) return -1;
                         return iA - iB;
                       });
-                    return sorted.map((row: IgfForecastRow, i: number) => (
+                    return sorted.map((row: IgfForecastRow, i: number) => {
+                      const miniRow = miniByEmpresa.get(normalizeEmpresa(row.empresa || ""));
+                      const ventaTonTabla1 = miniRow?.ventaTon ?? row.venta_ton;
+                      const comDescTabla1 = miniRow?.comDesc ?? row.com_desc_kg;
+                      return (
                       <tr
                         key={row.empresa ? row.empresa : `row-${i}`}
                         className="border-b border-slate-700/80"
                       >
                         <td className="py-2 px-2 text-[0.6em] font-semibold text-slate-100 border-r border-slate-600">{row.empresa || "—"}</td>
-                        <td className="py-2 px-2 text-right tabular-nums text-slate-300 border-r border-slate-600">{fmtNum(row.venta_ton, 2)}</td>
+                        <td className="py-2 px-2 text-right tabular-nums text-slate-300 border-r border-slate-600">{fmtNum(ventaTonTabla1 ?? null, 2)}</td>
                         <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(row.margen_kg)}</td>
-                        <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(row.com_desc_kg)}</td>
+                        <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtNum(comDescTabla1 ?? null)}</td>
                         {plantaFilter ? (
                           <td className={`py-2 px-2 text-right tabular-nums ${gastoKgFromFour(row) < 0 ? "text-red-400" : "text-slate-300"}`}>
                             {fmtNum(gastoKgFromFour(row))}
@@ -957,7 +976,7 @@ export function IgfForecastContent() {
                           );
                         })}
                       </tr>
-                    ));
+                    )});
                   })()}
                 </tbody>
                 {igfForecast.totales && !plantaFilter && (
