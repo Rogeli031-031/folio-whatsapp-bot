@@ -1056,7 +1056,7 @@ export function IgfForecastContent() {
                     const fallback = (row as Record<string, unknown>).gasto_kg as number | null | undefined;
                     return fmtNum(toCostoNeg((rawIgf ?? fallback) ?? null));
                   }
-                  return fmtNum(gastoKgFromFour(row));
+                  return fmtNum(toCostoNeg(gastoKgFromFour(row)));
                 }
                 if (c.key === "impuesto_kg") {
                   return fmtNum(toCostoNeg(n((row as Record<string, unknown>).impuesto_kg as number | null | undefined)));
@@ -1094,7 +1094,7 @@ export function IgfForecastContent() {
               const cellDeltaNum = (c: Col): number | null => {
                 if (c.key === "empresa" || !rowA) return null;
                 const vF = c.key === "gasto_kg"
-                  ? gastoKgFromFour(rowF)
+                  ? toCostoNeg(gastoKgFromFour(rowF))
                   : (c.key === "inversiones_kg" || c.key === "resultado_final_kg" || c.key === "resultado_final_importe")
                   ? adjustedForecastValue(rowF, c.key)
                   : (rowF as Record<string, unknown>)[c.key] as number | null | undefined;
@@ -1144,7 +1144,7 @@ export function IgfForecastContent() {
                 if (c.key === "com_desc_kg") return (toCostoNeg(vF as number | null | undefined) - toCostoNeg(vA)) * ventaKgA;
                 if (c.key === "gasto_kg") {
                   const gastoA = ((rowA as Record<string, unknown>).gasto_kg_igf as number | null | undefined) ?? ((rowA as Record<string, unknown>).gasto_kg as number | null | undefined);
-                  return (gastoKgFromFour(rowF) - toCostoNeg(gastoA)) * ventaKgA;
+                  return (toCostoNeg(gastoKgFromFour(rowF)) - toCostoNeg(gastoA)) * ventaKgA;
                 }
                 if (c.key === "impuesto_kg") return (toCostoNeg(vF as number | null | undefined) - toCostoNeg(vA)) * ventaKgA;
                 if (c.key === "bancos_planta_kg") return (n(vF) - n(vA)) * ventaKgA;
