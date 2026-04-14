@@ -6358,10 +6358,32 @@ async function buildIgfForecastPayload(client, year, month, opts = {}) {
 }
 
 /**
+ * Fecha de corte para Pronóstico (PROY / desc PROY) alineada con buildIgfForecastPayload:
+ * - upload_day explícito en el mes consultado → ese día;
+ * - mes corriente sin upload_day → "hoy" negocio (igual que getVentaForecastProvinciaDesdeArr);
+ * - mes cerrado → último día del mes (corte típico al revisar histórico).
+ */
+function fechaCortePronosticoForIgfMini(year, month, uploadDay) {
+  const u = (uploadDay || "").toString().trim().slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(u)) {
+    const uy = parseInt(u.slice(0, 4), 10);
+    const um = parseInt(u.slice(5, 7), 10);
+    if (uy === year && um === month) return u;
+  }
+  const now = new Date();
+  if (year === now.getFullYear() && month === now.getMonth() + 1) {
+    return getForecastBusinessTodayYmd();
+  }
+  const ld = new Date(year, month, 0).getDate();
+  return `${year}-${String(month).padStart(2, "0")}-${String(ld).padStart(2, "0")}`;
+}
+
+/**
  * Mini-resumen IGF (PROY + regla de tres). Reutiliza `igf` de buildIgfForecastPayload (no volver a armar el payload).
+ * PROY y desc PROY deben coincidir con la hoja Pronóstico del Excel (no priorizar snapshot sobre el cálculo en vivo).
  */
 async function computeIgfForecastMiniPayload(client, igf, year, month, uploadDay) {
-  const fechaCorteStr = uploadDay || "";
+  const fechaCorteStr = fechaCortePronosticoForIgfMini(year, month, uploadDay);
   const miniLabels = ["GT Puebla", "Tehuacan", "Acapulco", "GTM Queretaro", "GTM San Luis", "Morelos"];
   const labelToPlantCode = new Map();
   try {
@@ -6383,40 +6405,25 @@ async function computeIgfForecastMiniPayload(client, igf, year, month, uploadDay
   }
   const needPlantCodes = miniLabels.map((label) => String(labelToPlantCode.get(label) || label).trim());
   const corteYmdFast = dashboardArrForecast.getPronosticoCorteYmdStr(year, month, fechaCorteStr);
-  const snapMini = await dashboardArrForecast.loadPronosticoMiniSnapshot(client, year, month, corteYmdFast);
-  const snapHasAllMini = needPlantCodes.every((code) => {
-    const v = dashboardArrForecast.resolveProyFromPlantMap(snapMini, code);
-    return v && Number.isFinite(Number(v.proy_venta_ton));
+  const ctxProno = await dashboardArrForecast.buildPronosticoVentaDescMaps(client, year, month, fechaCorteStr);
+  let proyByPlant = await dashboardArrForecast.computePronosticoProyByPlant(client, year, month, {
+    fechaCorte: fechaCorteStr,
+    prebuiltVentaDescCtx: ctxProno,
   });
-
-  let proyByPlant;
-  if (snapHasAllMini) {
-    proyByPlant = new Map();
+  const snapMini = await dashboardArrForecast.loadPronosticoMiniSnapshot(client, year, month, corteYmdFast);
+  if (snapMini && snapMini.size > 0) {
+    proyByPlant = new Map(proyByPlant);
     for (const code of needPlantCodes) {
-      const v = dashboardArrForecast.resolveProyFromPlantMap(snapMini, code);
-      proyByPlant.set(code, {
-        proy_venta_ton: Number(v.proy_venta_ton),
-        proy_desc_kg: v.proy_desc_kg != null && Number.isFinite(Number(v.proy_desc_kg)) ? Number(v.proy_desc_kg) : 0,
-      });
-    }
-  } else {
-    const ctxProno = await dashboardArrForecast.buildPronosticoVentaDescMaps(client, year, month, fechaCorteStr);
-    let computed = await dashboardArrForecast.computePronosticoProyByPlant(client, year, month, {
-      fechaCorte: fechaCorteStr,
-      prebuiltVentaDescCtx: ctxProno,
-    });
-    if (snapMini && snapMini.size > 0) {
-      computed = new Map(computed);
-      for (const [k, v] of snapMini.entries()) {
-        if (v && Number.isFinite(Number(v.proy_venta_ton))) {
-          computed.set(k, {
-            proy_venta_ton: Number(v.proy_venta_ton),
-            proy_desc_kg: v.proy_desc_kg != null && Number.isFinite(Number(v.proy_desc_kg)) ? Number(v.proy_desc_kg) : 0,
-          });
-        }
+      const cur = dashboardArrForecast.resolveProyFromPlantMap(proyByPlant, code);
+      if (cur && Number.isFinite(Number(cur.proy_venta_ton))) continue;
+      const fb = dashboardArrForecast.resolveProyFromPlantMap(snapMini, code);
+      if (fb && Number.isFinite(Number(fb.proy_venta_ton))) {
+        proyByPlant.set(String(code).trim(), {
+          proy_venta_ton: Number(fb.proy_venta_ton),
+          proy_desc_kg: fb.proy_desc_kg != null && Number.isFinite(Number(fb.proy_desc_kg)) ? Number(fb.proy_desc_kg) : 0,
+        });
       }
     }
-    proyByPlant = computed;
   }
 
   const norm = (s) =>
@@ -6473,13 +6480,14 @@ async function computeIgfForecastMiniPayload(client, igf, year, month, uploadDay
     /** HG $/kg (misma columna que mini Excel F y fórmula INGRESO). */
     const H = igfRow ? n(igfRow.hg_kg) : 0;
 
-    const E = igfRow ? r2(n(igfRow.gasto_kg) * scale) : 0;
-    const I = igfRow ? r2(n(igfRow.bancos_planta_kg) * scale) : 0;
-    const J = igfRow ? r2(n(igfRow.provision_planta_kg) * scale) : 0;
-    const M = igfRow ? r2(n(igfRow.gtos_apoyos_corp_kg) * scale) : 0;
-    const N = igfRow ? r2(n(igfRow.bancos_corp_kg) * scale) : 0;
-    const O = igfRow ? r2(n(igfRow.otros_programas_kg) * scale) : 0;
-    const P = igfRow ? r2(n(igfRow.inversiones_kg) * scale) : 0;
+    // Regla de tres como Excel (sin redondear cada $/kg a 2 dec antes del × B × 1000).
+    const E = igfRow ? n(igfRow.gasto_kg) * scale : 0;
+    const I = igfRow ? n(igfRow.bancos_planta_kg) * scale : 0;
+    const J = igfRow ? n(igfRow.provision_planta_kg) * scale : 0;
+    const M = igfRow ? n(igfRow.gtos_apoyos_corp_kg) * scale : 0;
+    const N = igfRow ? n(igfRow.bancos_corp_kg) * scale : 0;
+    const O = igfRow ? n(igfRow.otros_programas_kg) * scale : 0;
+    const P = igfRow ? n(igfRow.inversiones_kg) * scale : 0;
 
     const K = r2(C + D - E - F + H - I - J);
     const L = Math.round(K * B * 1000);
