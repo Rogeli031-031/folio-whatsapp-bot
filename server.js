@@ -6184,7 +6184,11 @@ async function buildIgfForecastPayload(client, year, month, opts = {}) {
         const ventaForecastKg = (venta_ton || 0) * 1000;
         const descMonto = descuentoForecastByPlant.get(best);
         if (ventaForecastKg > 0 && descMonto != null) {
-          com_desc_kg = Math.round((Math.abs(descMonto) / ventaForecastKg) * 100) / 100;
+          const dm = Number(descMonto);
+          if (Number.isFinite(dm)) {
+            // Convención IGF / Excel: Com. y Desc. en $/kg como reducción de margen (valor negativo, p. ej. -4.63).
+            com_desc_kg = -Math.round((Math.abs(dm) / ventaForecastKg) * 100) / 100;
+          }
         }
       }
       return { ...row, venta_ton, com_desc_kg, gasto_kg_igf: row.gasto_kg != null ? Number(row.gasto_kg) : null };
@@ -6358,10 +6362,10 @@ async function buildIgfForecastPayload(client, year, month, opts = {}) {
 }
 
 /**
- * Mini-resumen IGF: mismas celdas “base” que la tabla principal del forecast (`buildIgfForecastPayload`) y mismas
- * fórmulas que `applyIgfMiniResumenFormulas` en Excel (B_res y B_igf = columna Venta de esa fila IGF; regla de tres).
- * No usar otro PROY (p. ej. solo hoja Pronóstico) para B/D si la fila IGF ya trae venta_ton/com_desc_kg del ARR:
- * si B_res ≠ venta_ton del payload, INGRESO y el resto no coinciden con lo que el usuario ve en la primera fila.
+ * Mini-resumen IGF:
+ * - Venta y Com. y Desc. salen del mismo payload que el dashboard (`buildIgfForecastPayload`: forecast ARR); el Excel
+ *   los toma del export y solo recalcula a partir de ahí.
+ * - INGRESO … Resultado Final: mismas fórmulas que `applyIgfMiniResumenFormulas` (regla de tres con venta_ton de la fila).
  */
 async function computeIgfForecastMiniPayload(client, igf, year, month, uploadDay) {
   void client;

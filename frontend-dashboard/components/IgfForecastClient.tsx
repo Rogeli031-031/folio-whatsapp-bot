@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -45,6 +45,7 @@ import { mergeVentaSheetHighlights, recomputeVentaSheetFromDays } from "@/lib/pr
 export function IgfForecastContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const lastIgfFetchKeyRef = useRef<string>("");
   const UPLOAD_DAY_STORAGE_KEY = "Diana";
   const [token, setToken] = useState<string | null>(null);
   const [unauthorized, setUnauthorized] = useState(false);
@@ -197,6 +198,10 @@ export function IgfForecastContent() {
   }, [searchParams]);
 
   useEffect(() => {
+    lastIgfFetchKeyRef.current = "";
+  }, [token]);
+
+  useEffect(() => {
     if (!token || isGAPageBlocked || isGVPageBlocked) return;
 
     let cancelled = false;
@@ -208,11 +213,29 @@ export function IgfForecastContent() {
       if (!igfForecast) setIgfLoading(true);
       setIgfError(null);
       try {
-        const up = uploadDay.trim();
+        let up = uploadDay.trim();
+        // Una sola petición coherente con el corte ARR: si el usuario no eligió fecha, usar última carga del mes en curso (evita parpadeo venta/desc vs segunda petición).
+        if (!up) {
+          try {
+            const now = new Date();
+            const r = await fetchArrLastUploadDay(token, { year: now.getFullYear(), month: now.getMonth() + 1 });
+            if (r?.upload_day && /^\d{4}-\d{2}-\d{2}$/.test(r.upload_day)) {
+              up = r.upload_day;
+            }
+          } catch {
+            /* ignore */
+          }
+        }
         const params =
           up && /^\d{4}-\d{2}-\d{2}$/.test(up)
             ? { year: Number(up.slice(0, 4)), month: Number(up.slice(5, 7)), upload_day: up, include_mini: true }
             : { include_mini: true };
+        const fetchKey = `${token}|${JSON.stringify(params)}`;
+        if (lastIgfFetchKeyRef.current === fetchKey) {
+          fetching = false;
+          return;
+        }
+        lastIgfFetchKeyRef.current = fetchKey;
         const data = await fetchIgfForecast(token, params);
         if (!cancelled) {
           setIgfForecast(data);
@@ -220,6 +243,10 @@ export function IgfForecastContent() {
             setIgfMini(data.mini);
             setIgfMiniLoading(false);
             setIgfMiniError(null);
+          }
+          if (!uploadDay.trim() && up && /^\d{4}-\d{2}-\d{2}$/.test(up)) {
+            setUploadDay(up);
+            setUploadDayHint(`Última carga detectada: ${up}`);
           }
         }
       } catch (e: any) {
@@ -234,14 +261,15 @@ export function IgfForecastContent() {
       }
     };
 
-    load();
-    const id = setInterval(load, 60000);
+    void load();
+    const id = setInterval(() => void load(), 60000);
 
     return () => {
       cancelled = true;
       clearInterval(id);
     };
-  }, [token, isGAPageBlocked, isGVPageBlocked, uploadDay, igfForecast]);
+    // No incluir igfForecast: cada setState del forecast re-disparaba el efecto y una segunda petición (parpadeo entre dos tablas).
+  }, [token, isGAPageBlocked, isGVPageBlocked, uploadDay]);
 
   useEffect(() => {
     if (!token || isGAPageBlocked || isGVPageBlocked || !igfForecast) return;
@@ -297,7 +325,6 @@ export function IgfForecastContent() {
       .then((r) => {
         if (cancelled) return;
         if (r?.upload_day) {
-          setUploadDay(r.upload_day);
           setUploadDayHint(`Última carga detectada: ${r.upload_day}`);
         } else {
           setUploadDayHint("No hay fecha de carga registrada (se usa la fecha de hoy).");
