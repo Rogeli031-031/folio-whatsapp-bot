@@ -948,10 +948,14 @@ export function IgfForecastContent() {
                                   empresa: row.empresa || "",
                                   hg_pct: newPct,
                                 });
+                                // Misma petición que «Recalcular venta forecast» / carga inicial: sin upload_day el
+                                // backend usa el corte por defecto y venta/comisión no coinciden con la fecha de carga.
+                                const upHg = uploadDay.trim();
                                 const updated = await fetchIgfForecast(token, {
                                   year: igfForecast.year,
                                   month: igfForecast.month,
                                   include_mini: true,
+                                  ...(upHg && /^\d{4}-\d{2}-\d{2}$/.test(upHg) ? { upload_day: upHg } : {}),
                                 });
                                 setIgfForecast(updated);
                                 if (updated.mini) {
