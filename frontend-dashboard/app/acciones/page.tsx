@@ -15,6 +15,7 @@ import {
   createActionRegisterItem,
   addActionRegisterEntry,
   patchActionRegisterItem,
+  getActionRegisterExportUrl,
   type ActionRegisterBoardResponse,
   type ActionRegisterItem,
   type ActionRegisterTema,
@@ -28,8 +29,25 @@ function ymdToday(): string {
   return `${y}-${m}-${day}`;
 }
 
-function fmtDMY(ymd: string): string {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return ymd;
+function toYmd(value: string | null | undefined): string {
+  if (!value) return "";
+  const s = String(value);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const m = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (m) return m[1];
+  const d = new Date(s);
+  if (!Number.isNaN(d.getTime())) {
+    const y = d.getUTCFullYear();
+    const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+    const dd = String(d.getUTCDate()).padStart(2, "0");
+    return `${y}-${mm}-${dd}`;
+  }
+  return s;
+}
+
+function fmtDMY(value: string | null | undefined): string {
+  const ymd = toYmd(value);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return ymd || "";
   const [y, m, d] = ymd.split("-");
   return `${d}/${m}/${y}`;
 }
@@ -86,8 +104,18 @@ function ActionRegisterContent() {
     if (!token) return;
     try {
       const r = await fetchPlantas(token);
-      setPlantas(r.plantas || []);
-      if (!plantaId && (r.plantas || []).length) setPlantaId(r.plantas[0].id);
+      const CLAVES_CODIGO_PLANTA = ["E7", "E8", "E9", "E10", "E11", "E12", "E13", "E15"];
+      const filtered = (r.plantas || []).filter((p) => {
+        const nombre = (p.nombre || "").trim();
+        const upper = nombre.toUpperCase();
+        if (CLAVES_CODIGO_PLANTA.includes(upper)) return false;
+        if (/^E\d+$/.test(nombre)) return false;
+        const norm = nombre.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+        if (norm === "MEXICO") return false;
+        return true;
+      });
+      setPlantas(filtered);
+      if (!plantaId && filtered.length) setPlantaId(filtered[0].id);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Error";
       if (msg.includes("401") || msg.toLowerCase().includes("token")) setUnauthorized(true);
@@ -303,6 +331,17 @@ function ActionRegisterContent() {
             Crear columna (fecha)
           </button>
         </div>
+
+        {plantaId && (
+          <a
+            href={getActionRegisterExportUrl(token, plantaId)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-600"
+          >
+            Exportar historial a Excel
+          </a>
+        )}
 
         {loading && <span className="text-sm text-slate-400">Cargando…</span>}
         {error && <span className="text-sm text-red-400">{error}</span>}

@@ -81,6 +81,11 @@ export interface ActionRegisterBoardResponse {
   cells: Record<string, Record<string, ActionRegisterItem[]>>;
 }
 
+export function getActionRegisterExportUrl(token: string, planta_id: number): string {
+  const base = getApiUrl("/api/action-register/export");
+  return `${base}?planta_id=${encodeURIComponent(String(planta_id))}&t=${encodeURIComponent(token)}`;
+}
+
 export function fetchActionRegisterBoard(token: string, planta_id: number): Promise<ActionRegisterBoardResponse> {
   return apiFetch<ActionRegisterBoardResponse>("/api/action-register/board", { token, params: { planta_id: String(planta_id) } });
 }

@@ -5751,6 +5751,203 @@ app.patch("/api/action-register/items/:id", dashboardAuthMiddleware, async (req,
   }
 });
 
+/** Exporta a Excel el historial completo del Action Register de una planta. */
+app.get("/api/action-register/export", dashboardAuthMiddleware, async (req, res) => {
+  const planta_id = req.query.planta_id != null ? parseInt(String(req.query.planta_id), 10) : null;
+  if (!planta_id || !Number.isFinite(planta_id)) return res.status(400).json({ error: "planta_id requerido" });
+  if (!assertDashboardPlantaAccessForActionRegister(req, planta_id)) return res.status(403).json({ error: "Sin acceso a esta planta" });
+  const client = await pool.connect();
+  try {
+    await ensureActionRegisterTables(client);
+    const ExcelJS = require("exceljs");
+
+    const plantaRow = await client.query(`SELECT id, nombre FROM public.plantas WHERE id = $1`, [planta_id]);
+    const plantaNombre = (plantaRow.rows[0] && plantaRow.rows[0].nombre) || `Planta ${planta_id}`;
+
+    const rev = await client.query(
+      `SELECT id, revision_date
+       FROM arr.action_register_revisions
+       WHERE planta_id = $1
+       ORDER BY revision_date DESC`,
+      [planta_id]
+    );
+    const revisions = rev.rows || [];
+
+    const r = await client.query(
+      `SELECT e.revision_id, e.position,
+              i.id, i.tema, i.parent_id, i.title, i.responsable, i.due_date, i.closed,
+              i.created_at, i.updated_at
+       FROM arr.action_register_entries e
+       JOIN arr.action_register_items i ON i.id = e.item_id
+       JOIN arr.action_register_revisions rv ON rv.id = e.revision_id
+       WHERE rv.planta_id = $1
+       ORDER BY rv.revision_date DESC, i.tema ASC, e.position ASC, i.id ASC`,
+      [planta_id]
+    );
+
+    const wb = new ExcelJS.Workbook();
+    wb.creator = "Folio WhatsApp Bot";
+    wb.created = new Date();
+
+    function fmtDate(d) {
+      if (!d) return "";
+      if (d instanceof Date) {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+        return `${y}-${m}-${day}`;
+      }
+      const s = String(d);
+      const m = s.match(/^(\d{4}-\d{2}-\d{2})/);
+      return m ? m[1] : s;
+    }
+
+    function fmtDMY(value) {
+      const ymd = fmtDate(value);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return ymd || "";
+      const [y, m, d] = ymd.split("-");
+      return `${d}/${m}/${y}`;
+    }
+
+    // Hoja 1: Historial detallado (una fila por (revisión, item))
+    const ws = wb.addWorksheet("Historial");
+    ws.columns = [
+      { header: "Fecha revisión", key: "rev", width: 14 },
+      { header: "Tema", key: "tema", width: 18 },
+      { header: "#", key: "num", width: 10 },
+      { header: "Tipo", key: "tipo", width: 14 },
+      { header: "Acción", key: "title", width: 70 },
+      { header: "Responsable", key: "resp", width: 22 },
+      { header: "Fecha compromiso", key: "due", width: 18 },
+      { header: "Estatus", key: "estatus", width: 12 },
+      { header: "Creada", key: "creada", width: 12 },
+      { header: "Actualizada", key: "actualizada", width: 12 },
+    ];
+    ws.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+    ws.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1F2937" } };
+    ws.getRow(1).alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+    ws.views = [{ state: "frozen", ySplit: 1 }];
+
+    // Numeración por (revision, tema): 1, 2, 3 para roots; 1.1, 1.2 para subacciones
+    function buildNumeration(items) {
+      const byParent = new Map();
+      const sorted = [...items].sort((a, b) => (a.position ?? 0) - (b.position ?? 0) || a.id - b.id);
+      for (const it of sorted) {
+        const k = it.parent_id == null ? "root" : String(it.parent_id);
+        if (!byParent.has(k)) byParent.set(k, []);
+        byParent.get(k).push(it);
+      }
+      const numById = new Map();
+      const roots = byParent.get("root") || [];
+      function assign(parentKey, prefix) {
+        const list = byParent.get(parentKey) || [];
+        list.forEach((it, idx) => {
+          const num = prefix ? `${prefix}.${idx + 1}` : String(idx + 1);
+          numById.set(it.id, num);
+          assign(String(it.id), num);
+        });
+      }
+      assign("root", "");
+      return numById;
+    }
+
+    // Agrupa por (revision_date, tema)
+    const groups = new Map();
+    for (const row of r.rows || []) {
+      const revDate = fmtDate(row.revision_id ? (revisions.find((x) => x.id === row.revision_id) || {}).revision_date : null);
+      const key = `${revDate}|${row.tema}`;
+      if (!groups.has(key)) groups.set(key, { revDate, tema: row.tema, items: [] });
+      groups.get(key).items.push(row);
+    }
+
+    // Recorre en orden: por revisión más reciente primero, luego por tema en orden definido
+    const TEMAS_ORDER = ACTION_REGISTER_TEMAS;
+    const sortedGroups = Array.from(groups.values()).sort((a, b) => {
+      if (a.revDate < b.revDate) return 1;
+      if (a.revDate > b.revDate) return -1;
+      return TEMAS_ORDER.indexOf(a.tema) - TEMAS_ORDER.indexOf(b.tema);
+    });
+
+    for (const g of sortedGroups) {
+      const numById = buildNumeration(g.items);
+      const sorted = [...g.items].sort((a, b) => {
+        const na = numById.get(a.id) || "";
+        const nb = numById.get(b.id) || "";
+        return na.localeCompare(nb, undefined, { numeric: true });
+      });
+      for (const it of sorted) {
+        const isSub = it.parent_id != null;
+        const row = ws.addRow({
+          rev: fmtDMY(g.revDate),
+          tema: g.tema,
+          num: numById.get(it.id) || "",
+          tipo: isSub ? "Subacción" : "Acción",
+          title: it.title || "",
+          resp: it.responsable || "",
+          due: it.due_date ? fmtDMY(it.due_date) : "",
+          estatus: it.closed ? "Cerrada" : "Abierta",
+          creada: it.created_at ? fmtDMY(it.created_at) : "",
+          actualizada: it.updated_at ? fmtDMY(it.updated_at) : "",
+        });
+        if (it.closed) {
+          row.font = { strike: true, color: { argb: "FF6B7280" } };
+        }
+        if (isSub) {
+          row.getCell("title").alignment = { indent: 2, wrapText: true };
+        } else {
+          row.getCell("title").alignment = { wrapText: true };
+          row.getCell("num").font = { bold: true };
+        }
+      }
+    }
+
+    // Hoja 2: Resumen pivote — Tema (filas) x Fecha (columnas), conteo abiertas/cerradas
+    const wsR = wb.addWorksheet("Resumen");
+    const headerCols = [{ header: "Tema", key: "tema", width: 20 }];
+    for (const rv of revisions) {
+      headerCols.push({ header: fmtDMY(rv.revision_date), key: `rv_${rv.id}`, width: 20 });
+    }
+    wsR.columns = headerCols;
+    wsR.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+    wsR.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1F2937" } };
+    wsR.getRow(1).alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+    wsR.views = [{ state: "frozen", xSplit: 1, ySplit: 1 }];
+
+    const counts = new Map(); // key: tema|revisionId -> {abiertas, cerradas}
+    for (const row of r.rows || []) {
+      const key = `${row.tema}|${row.revision_id}`;
+      if (!counts.has(key)) counts.set(key, { abiertas: 0, cerradas: 0 });
+      const slot = counts.get(key);
+      if (row.closed) slot.cerradas += 1;
+      else slot.abiertas += 1;
+    }
+    for (const tema of TEMAS_ORDER) {
+      const data = { tema };
+      for (const rv of revisions) {
+        const c = counts.get(`${tema}|${rv.id}`) || { abiertas: 0, cerradas: 0 };
+        data[`rv_${rv.id}`] = c.abiertas + c.cerradas === 0 ? "" : `Abiertas: ${c.abiertas} · Cerradas: ${c.cerradas}`;
+      }
+      wsR.addRow(data);
+    }
+
+    const buf = await wb.xlsx.writeBuffer();
+    const safe = String(plantaNombre).replace(/[^A-Za-z0-9_-]+/g, "_");
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, "0");
+    const dd = String(today.getDate()).padStart(2, "0");
+    const filename = `ActionRegister_${safe}_${yyyy}${mm}${dd}.xlsx`;
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(Buffer.from(buf));
+  } catch (e) {
+    console.error("[ActionRegister export]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
 /** Proyectos EN_CURSO de una planta (o equivalentes) para selector en crear folio. */
 app.get("/api/dashboard/proyectos", dashboardAuthMiddleware, async (req, res) => {
   if (dashboardBlockGVForbidden(req, res)) return;
