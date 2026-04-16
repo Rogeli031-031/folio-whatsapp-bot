@@ -6285,6 +6285,11 @@ async function buildIgfForecastPayload(client, year, month, opts = {}) {
       }
     }
     for (const row of rows) {
+      // HG $/kg: en provincia el costo va en negativo (Excel / dashboard). Valores positivos suelen ser
+      // restos del PATCH antiguo (|hg_kg|); al leer el forecast se normalizan para que util/mini cuadren.
+      if (row.hg_kg != null && Number.isFinite(Number(row.hg_kg)) && Number(row.hg_kg) > 0) {
+        row.hg_kg = -Math.abs(Number(row.hg_kg));
+      }
       // Valores tal como vienen del último IGF cargado (compromiso_lines), antes de recalcular con folios/presupuesto/forecast.
       // La comparación "IGF mes anterior" en KPI usa estos campos para util. oper. y resultado.
       row.util_oper_kg_igf = row.util_oper_kg != null ? Number(row.util_oper_kg) : null;
@@ -6920,40 +6925,21 @@ app.patch("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, re
       derivedHgKgFromPct = false;
     }
 
-    // Filas tocadas con el bug antiguo (|hg_kg|) quedaron con HG $/kg positivo mientras el resto de
-    // provincia sigue en negativo: al reescalar por % se mantenía el signo erróneo. Alineamos con la
-    // mayoría de plantas provincia en la misma versión (solo cuando el $/kg lo dedujimos del %).
-    if (derivedHgKgFromPct && Number.isFinite(newHgKg) && newHgKg !== 0) {
+    // Convención IGF Forecast (provincia): HG $/kg como costo en valor negativo (misma columna que Excel).
+    // El bug viejo del PATCH guardaba magnitudes positivas; si además varias plantas quedaron positivas,
+    // contar "mayoría" ya no corregía. Siempre forzamos signo negativo al derivar desde % en esta hoja.
+    if (derivedHgKgFromPct && Number.isFinite(newHgKg) && newHgKg > 0) {
       const provRes = await client.query("SELECT plant_code FROM arr.provincia_plants ORDER BY plant_code");
-      const provinciaPlantCodes = (provRes.rows || []).map((r) => (r.plant_code || "").trim()).filter(Boolean);
-      const empresaEsProvinciaPatch = (emp) => {
+      const provinciaPlantCodesPatch = (provRes.rows || []).map((r) => (r.plant_code || "").trim()).filter(Boolean);
+      const esProvinciaPatch = (emp) => {
         if (!emp || /^TOTALES?$/i.test(String(emp).trim())) return false;
         const empNorm = normalizeAccents(emp);
-        return provinciaPlantCodes.some((p) => {
+        return provinciaPlantCodesPatch.some((p) => {
           const pNorm = normalizeAccents(p);
           return empNorm === pNorm || empNorm.includes(pNorm) || pNorm.includes(empNorm);
         });
       };
-      if (empresaEsProvinciaPatch(empresa)) {
-        const allHg = await client.query(
-          `SELECT empresa, hg_kg FROM igf.compromiso_lines WHERE version_id = $1`,
-          [versionId]
-        );
-        let neg = 0;
-        let pos = 0;
-        for (const z of allHg.rows || []) {
-          const em = (z.empresa || "").trim();
-          if (!empresaEsProvinciaPatch(em) || em === empresa) continue;
-          const v = z.hg_kg != null ? Number(z.hg_kg) : 0;
-          if (!Number.isFinite(v) || v === 0) continue;
-          if (v < 0) neg += 1;
-          else pos += 1;
-        }
-        if (neg + pos > 0) {
-          if (neg >= pos && newHgKg > 0) newHgKg = -Math.abs(newHgKg);
-          else if (pos > neg && newHgKg < 0) newHgKg = Math.abs(newHgKg);
-        }
-      }
+      if (esProvinciaPatch(empresa)) newHgKg = -Math.abs(newHgKg);
     }
 
     const updatedRow = {
