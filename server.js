@@ -5440,6 +5440,317 @@ app.get("/api/dashboard/plantas", dashboardAuthMiddleware, async (req, res) => {
   }
 });
 
+// ===========================
+// Action Register (Acciones)
+// ===========================
+
+const ACTION_REGISTER_TEMAS = ["Contrataciones", "Mantenimiento", "General", "Clientes", "Apoyos", "Licencias"];
+
+async function ensureActionRegisterTables(client) {
+  await client.query(`CREATE SCHEMA IF NOT EXISTS arr;`).catch(() => {});
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS arr.action_register_revisions (
+      id SERIAL PRIMARY KEY,
+      planta_id INT NOT NULL REFERENCES public.plantas(id),
+      revision_date DATE NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      created_by_usuario_id INT NULL REFERENCES public.usuarios(id),
+      UNIQUE(planta_id, revision_date)
+    );
+  `).catch(() => {});
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS arr.action_register_items (
+      id SERIAL PRIMARY KEY,
+      planta_id INT NOT NULL REFERENCES public.plantas(id),
+      tema TEXT NOT NULL,
+      parent_id INT NULL REFERENCES arr.action_register_items(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      responsable TEXT NOT NULL DEFAULT '',
+      due_date DATE NULL,
+      closed BOOLEAN NOT NULL DEFAULT false,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `).catch(() => {});
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS arr.action_register_entries (
+      id SERIAL PRIMARY KEY,
+      revision_id INT NOT NULL REFERENCES arr.action_register_revisions(id) ON DELETE CASCADE,
+      item_id INT NOT NULL REFERENCES arr.action_register_items(id) ON DELETE CASCADE,
+      position INT NOT NULL DEFAULT 0,
+      UNIQUE(revision_id, item_id)
+    );
+  `).catch(() => {});
+  await client.query(`CREATE INDEX IF NOT EXISTS idx_ar_revisions_planta_date ON arr.action_register_revisions(planta_id, revision_date);`).catch(() => {});
+  await client.query(`CREATE INDEX IF NOT EXISTS idx_ar_items_planta_tema ON arr.action_register_items(planta_id, tema);`).catch(() => {});
+  await client.query(`CREATE INDEX IF NOT EXISTS idx_ar_entries_revision_pos ON arr.action_register_entries(revision_id, position);`).catch(() => {});
+}
+
+function assertDashboardPlantaAccessForActionRegister(req, plantaId) {
+  // Reglas alineadas con dashboard: GV solo sus plantas; ZP/AD/CF_CDMX normalmente vienen con todas; resto con equivalentes.
+  if (!isDashboardGV(req)) return true;
+  const allowed = new Set((req.dashboardAuth.plantas_permitidas || []).map((x) => Number(x)).filter(Number.isFinite));
+  return allowed.has(Number(plantaId));
+}
+
+app.get("/api/action-register/temas", dashboardAuthMiddleware, async (req, res) => {
+  res.json({ temas: ACTION_REGISTER_TEMAS });
+});
+
+app.get("/api/action-register/revisions", dashboardAuthMiddleware, async (req, res) => {
+  const planta_id = req.query.planta_id != null ? parseInt(String(req.query.planta_id), 10) : null;
+  if (!planta_id || !Number.isFinite(planta_id)) return res.status(400).json({ error: "planta_id requerido" });
+  if (!assertDashboardPlantaAccessForActionRegister(req, planta_id)) return res.status(403).json({ error: "Sin acceso a esta planta" });
+  const client = await pool.connect();
+  try {
+    await ensureActionRegisterTables(client);
+    const r = await client.query(
+      `SELECT id, revision_date
+       FROM arr.action_register_revisions
+       WHERE planta_id = $1
+       ORDER BY revision_date DESC`,
+      [planta_id]
+    );
+    res.json({ revisions: (r.rows || []).map((x) => ({ id: x.id, revision_date: x.revision_date })) });
+  } catch (e) {
+    console.error("[ActionRegister revisions]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+app.post("/api/action-register/revisions", dashboardAuthMiddleware, async (req, res) => {
+  const body = req.body || {};
+  const planta_id = body.planta_id != null ? parseInt(body.planta_id, 10) : null;
+  const revision_date = body.revision_date != null ? String(body.revision_date).trim() : null;
+  if (!planta_id || !Number.isFinite(planta_id)) return res.status(400).json({ error: "planta_id requerido" });
+  if (!revision_date || !/^\d{4}-\d{2}-\d{2}$/.test(revision_date)) return res.status(400).json({ error: "revision_date inválida (YYYY-MM-DD)" });
+  if (!assertDashboardPlantaAccessForActionRegister(req, planta_id)) return res.status(403).json({ error: "Sin acceso a esta planta" });
+  const client = await pool.connect();
+  try {
+    await ensureActionRegisterTables(client);
+    const ins = await client.query(
+      `INSERT INTO arr.action_register_revisions (planta_id, revision_date, created_by_usuario_id)
+       VALUES ($1, $2::DATE, $3)
+       ON CONFLICT (planta_id, revision_date) DO UPDATE SET revision_date = EXCLUDED.revision_date
+       RETURNING id, revision_date`,
+      [planta_id, revision_date, req.dashboardAuth.actor_id || null]
+    );
+    res.status(201).json({ revision: ins.rows[0] });
+  } catch (e) {
+    console.error("[ActionRegister POST revisions]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+app.get("/api/action-register/board", dashboardAuthMiddleware, async (req, res) => {
+  const planta_id = req.query.planta_id != null ? parseInt(String(req.query.planta_id), 10) : null;
+  if (!planta_id || !Number.isFinite(planta_id)) return res.status(400).json({ error: "planta_id requerido" });
+  if (!assertDashboardPlantaAccessForActionRegister(req, planta_id)) return res.status(403).json({ error: "Sin acceso a esta planta" });
+  const client = await pool.connect();
+  try {
+    await ensureActionRegisterTables(client);
+    const rev = await client.query(
+      `SELECT id, revision_date
+       FROM arr.action_register_revisions
+       WHERE planta_id = $1
+       ORDER BY revision_date DESC`,
+      [planta_id]
+    );
+    const revisions = (rev.rows || []).map((x) => ({ id: x.id, revision_date: x.revision_date }));
+    const r = await client.query(
+      `SELECT e.revision_id, e.position,
+              i.id, i.tema, i.parent_id, i.title, i.responsable, i.due_date, i.closed
+       FROM arr.action_register_entries e
+       JOIN arr.action_register_items i ON i.id = e.item_id
+       JOIN arr.action_register_revisions rv ON rv.id = e.revision_id
+       WHERE rv.planta_id = $1
+       ORDER BY rv.revision_date DESC, i.tema ASC, e.position ASC, i.id ASC`,
+      [planta_id]
+    );
+    const byRevisionTema = {};
+    for (const row of r.rows || []) {
+      const rid = String(row.revision_id);
+      const tema = String(row.tema || "");
+      if (!byRevisionTema[rid]) byRevisionTema[rid] = {};
+      if (!byRevisionTema[rid][tema]) byRevisionTema[rid][tema] = [];
+      byRevisionTema[rid][tema].push({
+        id: row.id,
+        tema,
+        parent_id: row.parent_id,
+        title: row.title,
+        responsable: row.responsable,
+        due_date: row.due_date,
+        closed: row.closed === true,
+        position: row.position,
+      });
+    }
+    res.json({ temas: ACTION_REGISTER_TEMAS, revisions, cells: byRevisionTema });
+  } catch (e) {
+    console.error("[ActionRegister board]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+app.post("/api/action-register/items", dashboardAuthMiddleware, async (req, res) => {
+  const body = req.body || {};
+  const revision_id = body.revision_id != null ? parseInt(body.revision_id, 10) : null;
+  const planta_id = body.planta_id != null ? parseInt(body.planta_id, 10) : null;
+  const tema = body.tema != null ? String(body.tema).trim() : "";
+  const parent_id = body.parent_id != null && body.parent_id !== "" ? parseInt(body.parent_id, 10) : null;
+  const title = body.title != null ? String(body.title).trim() : "";
+  const responsable = body.responsable != null ? String(body.responsable).trim() : "";
+  const due_date = body.due_date != null && String(body.due_date).trim() !== "" ? String(body.due_date).trim() : null;
+  if (!revision_id || !Number.isFinite(revision_id)) return res.status(400).json({ error: "revision_id requerido" });
+  if (!planta_id || !Number.isFinite(planta_id)) return res.status(400).json({ error: "planta_id requerido" });
+  if (!tema || !ACTION_REGISTER_TEMAS.includes(tema)) return res.status(400).json({ error: "tema inválido" });
+  if (!title || title.length < 2) return res.status(400).json({ error: "title es obligatorio (mín. 2 caracteres)" });
+  if (!assertDashboardPlantaAccessForActionRegister(req, planta_id)) return res.status(403).json({ error: "Sin acceso a esta planta" });
+  if (due_date && !/^\d{4}-\d{2}-\d{2}$/.test(due_date)) return res.status(400).json({ error: "due_date inválida (YYYY-MM-DD)" });
+  const client = await pool.connect();
+  try {
+    await ensureActionRegisterTables(client);
+    const rv = await client.query(`SELECT id, planta_id FROM arr.action_register_revisions WHERE id = $1`, [revision_id]);
+    if (!rv.rows[0]) return res.status(404).json({ error: "revision no encontrada" });
+    if (Number(rv.rows[0].planta_id) !== Number(planta_id)) return res.status(400).json({ error: "planta_id no coincide con la revision" });
+
+    if (parent_id && Number.isFinite(parent_id)) {
+      const pr = await client.query(`SELECT id, planta_id, tema FROM arr.action_register_items WHERE id = $1`, [parent_id]);
+      if (!pr.rows[0]) return res.status(400).json({ error: "parent_id no existe" });
+      if (Number(pr.rows[0].planta_id) !== Number(planta_id)) return res.status(400).json({ error: "parent_id es de otra planta" });
+      if (String(pr.rows[0].tema) !== tema) return res.status(400).json({ error: "parent_id es de otro tema" });
+    }
+
+    const pos = await client.query(
+      `SELECT COALESCE(MAX(e.position), -1)::INT AS maxpos
+       FROM arr.action_register_entries e
+       JOIN arr.action_register_items i ON i.id = e.item_id
+       WHERE e.revision_id = $1 AND i.tema = $2`,
+      [revision_id, tema]
+    );
+    const position = (pos.rows[0] && parseInt(pos.rows[0].maxpos, 10)) >= 0 ? parseInt(pos.rows[0].maxpos, 10) + 1 : 0;
+
+    const ins = await client.query(
+      `INSERT INTO arr.action_register_items (planta_id, tema, parent_id, title, responsable, due_date)
+       VALUES ($1, $2, $3, $4, $5, $6::DATE)
+       RETURNING id, planta_id, tema, parent_id, title, responsable, due_date, closed`,
+      [planta_id, tema, parent_id || null, title, responsable || "", due_date]
+    );
+    const item = ins.rows[0];
+    await client.query(
+      `INSERT INTO arr.action_register_entries (revision_id, item_id, position)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (revision_id, item_id) DO NOTHING`,
+      [revision_id, item.id, position]
+    );
+    res.status(201).json({ item: { ...item, position } });
+  } catch (e) {
+    console.error("[ActionRegister POST items]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+app.post("/api/action-register/entries", dashboardAuthMiddleware, async (req, res) => {
+  const body = req.body || {};
+  const revision_id = body.revision_id != null ? parseInt(body.revision_id, 10) : null;
+  const item_id = body.item_id != null ? parseInt(body.item_id, 10) : null;
+  if (!revision_id || !Number.isFinite(revision_id)) return res.status(400).json({ error: "revision_id requerido" });
+  if (!item_id || !Number.isFinite(item_id)) return res.status(400).json({ error: "item_id requerido" });
+  const client = await pool.connect();
+  try {
+    await ensureActionRegisterTables(client);
+    const rv = await client.query(`SELECT id, planta_id FROM arr.action_register_revisions WHERE id = $1`, [revision_id]);
+    if (!rv.rows[0]) return res.status(404).json({ error: "revision no encontrada" });
+    const it = await client.query(`SELECT id, planta_id, tema FROM arr.action_register_items WHERE id = $1`, [item_id]);
+    if (!it.rows[0]) return res.status(404).json({ error: "item no encontrado" });
+    if (Number(it.rows[0].planta_id) !== Number(rv.rows[0].planta_id)) return res.status(400).json({ error: "item no pertenece a la planta de la revisión" });
+    if (!assertDashboardPlantaAccessForActionRegister(req, Number(rv.rows[0].planta_id))) return res.status(403).json({ error: "Sin acceso a esta planta" });
+    const tema = String(it.rows[0].tema || "");
+
+    const pos = await client.query(
+      `SELECT COALESCE(MAX(e.position), -1)::INT AS maxpos
+       FROM arr.action_register_entries e
+       JOIN arr.action_register_items i ON i.id = e.item_id
+       WHERE e.revision_id = $1 AND i.tema = $2`,
+      [revision_id, tema]
+    );
+    const position = (pos.rows[0] && parseInt(pos.rows[0].maxpos, 10)) >= 0 ? parseInt(pos.rows[0].maxpos, 10) + 1 : 0;
+
+    await client.query(
+      `INSERT INTO arr.action_register_entries (revision_id, item_id, position)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (revision_id, item_id) DO NOTHING`,
+      [revision_id, item_id, position]
+    );
+    res.status(201).json({ ok: true, position });
+  } catch (e) {
+    console.error("[ActionRegister POST entries]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+app.patch("/api/action-register/items/:id", dashboardAuthMiddleware, async (req, res) => {
+  const id = req.params.id != null ? parseInt(String(req.params.id), 10) : null;
+  if (!id || !Number.isFinite(id)) return res.status(400).json({ error: "id inválido" });
+  const body = req.body || {};
+  const fields = {};
+  if (body.title != null) fields.title = String(body.title).trim();
+  if (body.responsable != null) fields.responsable = String(body.responsable).trim();
+  if (body.due_date !== undefined) fields.due_date = body.due_date ? String(body.due_date).trim() : null;
+  if (body.closed !== undefined) fields.closed = body.closed === true || body.closed === "true";
+
+  const client = await pool.connect();
+  try {
+    await ensureActionRegisterTables(client);
+    const it = await client.query(`SELECT id, planta_id FROM arr.action_register_items WHERE id = $1`, [id]);
+    if (!it.rows[0]) return res.status(404).json({ error: "item no encontrado" });
+    const planta_id = Number(it.rows[0].planta_id);
+    if (!assertDashboardPlantaAccessForActionRegister(req, planta_id)) return res.status(403).json({ error: "Sin acceso a esta planta" });
+
+    const sets = [];
+    const params = [];
+    let idx = 1;
+    if (fields.title != null) {
+      if (!fields.title || fields.title.length < 2) return res.status(400).json({ error: "title inválido" });
+      sets.push(`title = $${idx++}`);
+      params.push(fields.title);
+    }
+    if (fields.responsable != null) {
+      sets.push(`responsable = $${idx++}`);
+      params.push(fields.responsable);
+    }
+    if (fields.due_date !== undefined) {
+      if (fields.due_date && !/^\d{4}-\d{2}-\d{2}$/.test(fields.due_date)) return res.status(400).json({ error: "due_date inválida (YYYY-MM-DD)" });
+      sets.push(`due_date = $${idx++}::DATE`);
+      params.push(fields.due_date);
+    }
+    if (fields.closed !== undefined) {
+      sets.push(`closed = $${idx++}`);
+      params.push(fields.closed);
+    }
+    if (!sets.length) return res.json({ ok: true });
+    sets.push(`updated_at = now()`);
+    params.push(id);
+    const q = `UPDATE arr.action_register_items SET ${sets.join(", ")} WHERE id = $${idx} RETURNING id, planta_id, tema, parent_id, title, responsable, due_date, closed`;
+    const up = await client.query(q, params);
+    res.json({ item: up.rows[0] });
+  } catch (e) {
+    console.error("[ActionRegister PATCH item]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
 /** Proyectos EN_CURSO de una planta (o equivalentes) para selector en crear folio. */
 app.get("/api/dashboard/proyectos", dashboardAuthMiddleware, async (req, res) => {
   if (dashboardBlockGVForbidden(req, res)) return;

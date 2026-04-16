@@ -52,6 +52,90 @@ export async function apiFetch<T>(
   return res.json() as Promise<T>;
 }
 
+// ===========================
+// Action Register (Acciones)
+// ===========================
+
+export type ActionRegisterTema = "Contrataciones" | "Mantenimiento" | "General" | "Clientes" | "Apoyos" | "Licencias";
+
+export interface ActionRegisterRevision {
+  id: number;
+  revision_date: string; // YYYY-MM-DD
+}
+
+export interface ActionRegisterItem {
+  id: number;
+  tema: ActionRegisterTema;
+  parent_id: number | null;
+  title: string;
+  responsable: string;
+  due_date: string | null; // YYYY-MM-DD
+  closed: boolean;
+  position: number;
+}
+
+export interface ActionRegisterBoardResponse {
+  temas: ActionRegisterTema[];
+  revisions: ActionRegisterRevision[];
+  /** cells[revisionId][tema] = items (incluye subacciones con parent_id) */
+  cells: Record<string, Record<string, ActionRegisterItem[]>>;
+}
+
+export function fetchActionRegisterBoard(token: string, planta_id: number): Promise<ActionRegisterBoardResponse> {
+  return apiFetch<ActionRegisterBoardResponse>("/api/action-register/board", { token, params: { planta_id: String(planta_id) } });
+}
+
+export function fetchActionRegisterRevisions(token: string, planta_id: number): Promise<{ revisions: ActionRegisterRevision[] }> {
+  return apiFetch<{ revisions: ActionRegisterRevision[] }>("/api/action-register/revisions", { token, params: { planta_id: String(planta_id) } });
+}
+
+export function createActionRegisterRevision(token: string, planta_id: number, revision_date: string): Promise<{ revision: ActionRegisterRevision }> {
+  return apiFetch<{ revision: ActionRegisterRevision }>("/api/action-register/revisions", {
+    token,
+    method: "POST",
+    body: JSON.stringify({ planta_id, revision_date }),
+  });
+}
+
+export function createActionRegisterItem(
+  token: string,
+  input: {
+    planta_id: number;
+    revision_id: number;
+    tema: ActionRegisterTema;
+    parent_id?: number | null;
+    title: string;
+    responsable?: string;
+    due_date?: string | null;
+  }
+): Promise<{ item: ActionRegisterItem }> {
+  return apiFetch<{ item: ActionRegisterItem }>("/api/action-register/items", {
+    token,
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function addActionRegisterEntry(token: string, revision_id: number, item_id: number): Promise<{ ok: true; position: number }> {
+  return apiFetch<{ ok: true; position: number }>("/api/action-register/entries", {
+    token,
+    method: "POST",
+    body: JSON.stringify({ revision_id, item_id }),
+  });
+}
+
+export function patchActionRegisterItem(
+  token: string,
+  id: number,
+  patch: Partial<Pick<ActionRegisterItem, "title" | "responsable" | "due_date" | "closed">>
+): Promise<{ item: Omit<ActionRegisterItem, "position"> & { position?: number } }> {
+  return apiFetch<{ item: Omit<ActionRegisterItem, "position"> & { position?: number } }>(`/api/action-register/items/${id}`, {
+    token,
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
+}
+
 export interface KanbanBoard {
   meta: { filters: unknown; role: string };
   etapas: string[];

@@ -641,6 +641,12 @@ export function IgfForecastContent() {
         >
           Ver dashboard de folios
         </Link>
+        <Link
+          href={token ? `/acciones?t=${encodeURIComponent(token)}` : "/acciones"}
+          className="inline-flex items-center gap-2 rounded bg-slate-700 px-4 py-2 text-sm font-medium text-white hover:bg-slate-600"
+        >
+          Acciones
+        </Link>
       </div>
       <main className={plantaFilter ? "flex-1 p-4 flex flex-col" : "flex-1 p-4"}>
         <section className={`rounded-lg border border-slate-700 bg-slate-800/60 p-4 ${plantaFilter ? "flex-shrink-0" : ""}`}>
