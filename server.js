@@ -6523,9 +6523,11 @@ async function computeIgfForecastMiniPayload(client, igf, year, month, uploadDay
     const C = rawIgfRow ? n(rawIgfRow.margen_kg) : igfRow ? n(igfRow.margen_kg) : 0;
     const D = proy && Number.isFinite(Number(proy.proy_desc_kg)) ? Number(proy.proy_desc_kg) : igfRow ? n(igfRow.com_desc_kg) : 0;
     const F = rawIgfRow ? n(rawIgfRow.impuesto_kg) : igfRow ? n(igfRow.impuesto_kg) : 0;
-    const G = rawIgfRow ? n(rawIgfRow.hg_pct) : igfRow ? n(igfRow.hg_pct) : 0;
+    // HG % y HG $/kg deben coincidir con la tabla principal (igf.rows = GET con forecast/corte). rawIgfRow
+    // viene directo de BD y puede traer signos viejos distintos al forecast.
+    const G = igfRow ? n(igfRow.hg_pct) : rawIgfRow ? n(rawIgfRow.hg_pct) : 0;
     /** HG $/kg (misma columna que mini Excel F y fórmula INGRESO). */
-    const H = rawIgfRow ? n(rawIgfRow.hg_kg) : igfRow ? n(igfRow.hg_kg) : 0;
+    const H = igfRow ? n(igfRow.hg_kg) : rawIgfRow ? n(rawIgfRow.hg_kg) : 0;
 
     // Regla de tres exacta del bloque superior: E/I/J/M:N:O:P de la fila IGF escalados por B_igf / B_res.
     const E = rawIgfRow ? n(rawIgfRow.gasto_kg) * scale : igfRow ? n(igfRow.gasto_kg) * scale : 0;
@@ -6878,41 +6880,45 @@ app.patch("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, re
   const empresa = req.body?.empresa != null ? String(req.body.empresa).trim() : "";
   const hg_pct = req.body?.hg_pct != null && req.body.hg_pct !== "" ? Number(req.body.hg_pct) : null;
   const hg_kg = req.body?.hg_kg != null && req.body.hg_kg !== "" ? Number(req.body.hg_kg) : null;
+  const uploadDayBody = (req.body?.upload_day != null ? String(req.body.upload_day).trim().slice(0, 10) : "") || "";
   if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12 || !empresa) {
     return res.status(400).json({ error: "Faltan year, month o empresa" });
   }
+  if (uploadDayBody && !/^\d{4}-\d{2}-\d{2}$/.test(uploadDayBody)) {
+    return res.status(400).json({ error: "upload_day debe ser YYYY-MM-DD" });
+  }
+  if (uploadDayBody) {
+    const uy = parseInt(uploadDayBody.slice(0, 4), 10);
+    const um = parseInt(uploadDayBody.slice(5, 7), 10);
+    if (!Number.isFinite(uy) || !Number.isFinite(um) || uy !== year || um !== month) {
+      return res.status(400).json({ error: "upload_day debe pertenecer al mismo year/month" });
+    }
+  }
   const client = await pool.connect();
   try {
-    const ver = await client.query(
-      `SELECT id, version_number FROM igf.versions WHERE plant_code = 'GLOBAL' AND year = $1 AND month = $2 ORDER BY version_number DESC LIMIT 1`,
-      [year, month]
-    );
-    const versionId = ver.rows && ver.rows[0] && ver.rows[0].id;
-    const versionNumber = ver.rows && ver.rows[0] && ver.rows[0].version_number != null ? Number(ver.rows[0].version_number) : 1;
+    const uploadOpts =
+      uploadDayBody && /^\d{4}-\d{2}-\d{2}$/.test(uploadDayBody) ? { upload_day: uploadDayBody } : undefined;
+    /** Misma fila que ve el GET (venta forecast, presupuesto/folios en $/kg, HG ya normalizado). */
+    const payload = await buildIgfForecastPayload(client, year, month, uploadOpts);
+    const versionId = payload.version_id != null ? Number(payload.version_id) : null;
     if (versionId == null) return res.status(404).json({ error: "No hay versión IGF para ese mes" });
 
-    const row = await client.query(
-      `SELECT margen_kg, com_desc_kg, gasto_kg, impuesto_kg, venta_ton, hg_kg, hg_pct,
-              bancos_planta_kg, provision_planta_kg, gtos_apoyos_corp_kg, bancos_corp_kg, otros_programas_kg, inversiones_kg
-       FROM igf.compromiso_lines WHERE version_id = $1 AND empresa = $2`,
-      [versionId, empresa]
-    );
-    const current = row.rows && row.rows[0];
-    if (!current) return res.status(404).json({ error: "Empresa no encontrada en esta versión" });
+    const empNorm = normalizeAccents(empresa);
+    const matchRow =
+      (payload.rows || []).find((r) => (r.empresa || "").trim() === empresa) ||
+      (payload.rows || []).find((r) => normalizeAccents((r.empresa || "").trim()) === empNorm);
+    if (!matchRow) return res.status(404).json({ error: "Empresa no encontrada en forecast provincia" });
 
-    let newHgPct = current.hg_pct;
-    let newHgKg = current.hg_kg != null ? Number(current.hg_kg) : 0;
+    let newHgPct = matchRow.hg_pct;
+    let newHgKg = matchRow.hg_kg != null ? Number(matchRow.hg_kg) : 0;
     /** true solo si hg $/kg se derivó de hg % (no vino hg_kg explícito en el body). */
     let derivedHgKgFromPct = false;
     if (hg_pct != null && Number.isFinite(hg_pct)) {
       newHgPct = hg_pct >= 0 && hg_pct <= 1 ? hg_pct : hg_pct / 100;
       if (hg_kg == null || !Number.isFinite(hg_kg)) {
         derivedHgKgFromPct = true;
-        // Misma pendiente que Excel: al mover solo HG %, HG $/kg escala linealmente con el %.
-        // Importante: NO usar |hg_kg| aquí — en IGF el costo suele ir negativo y Math.abs() lo volvía
-        // positivo al guardar, haciendo que el signo “saltara” entre refrescos / filas.
-        const curHgPct = current.hg_pct != null ? Number(current.hg_pct) : null;
-        const curHgKg = current.hg_kg != null ? Number(current.hg_kg) : 0;
+        const curHgPct = matchRow.hg_pct != null ? Number(matchRow.hg_pct) : null;
+        const curHgKg = matchRow.hg_kg != null ? Number(matchRow.hg_kg) : 0;
         if (curHgPct != null && Number.isFinite(curHgPct) && curHgPct !== 0 && Number.isFinite(curHgKg)) {
           newHgKg = (curHgKg / curHgPct) * newHgPct;
         } else {
@@ -6925,29 +6931,22 @@ app.patch("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, re
       derivedHgKgFromPct = false;
     }
 
-    // Convención IGF Forecast (provincia): HG $/kg como costo en valor negativo (misma columna que Excel).
-    // El bug viejo del PATCH guardaba magnitudes positivas; si además varias plantas quedaron positivas,
-    // contar "mayoría" ya no corregía. Siempre forzamos signo negativo al derivar desde % en esta hoja.
     if (derivedHgKgFromPct && Number.isFinite(newHgKg) && newHgKg > 0) {
       const provRes = await client.query("SELECT plant_code FROM arr.provincia_plants ORDER BY plant_code");
       const provinciaPlantCodesPatch = (provRes.rows || []).map((r) => (r.plant_code || "").trim()).filter(Boolean);
       const esProvinciaPatch = (emp) => {
         if (!emp || /^TOTALES?$/i.test(String(emp).trim())) return false;
-        const empNorm = normalizeAccents(emp);
+        const en = normalizeAccents(emp);
         return provinciaPlantCodesPatch.some((p) => {
           const pNorm = normalizeAccents(p);
-          return empNorm === pNorm || empNorm.includes(pNorm) || pNorm.includes(empNorm);
+          return en === pNorm || en.includes(pNorm) || pNorm.includes(en);
         });
       };
-      if (esProvinciaPatch(empresa)) newHgKg = -Math.abs(newHgKg);
+      if (esProvinciaPatch(matchRow.empresa || empresa)) newHgKg = -Math.abs(newHgKg);
     }
 
-    const updatedRow = {
-      ...current,
-      hg_pct: newHgPct,
-      hg_kg: newHgKg,
-    };
-    const { util_oper_kg, util_oper_importe, resultado_final_kg, resultado_final_importe } = recalcularUtilYResultado(updatedRow);
+    const merged = { ...matchRow, hg_pct: newHgPct, hg_kg: newHgKg };
+    const { util_oper_kg, util_oper_importe, resultado_final_kg, resultado_final_importe } = recalcularUtilYResultado(merged);
 
     await client.query(
       `UPDATE igf.compromiso_lines SET
@@ -6955,9 +6954,18 @@ app.patch("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, re
          util_oper_kg = $3, util_oper_importe = $4,
          resultado_final_kg = $5, resultado_final_importe = $6
        WHERE version_id = $7 AND empresa = $8`,
-      [newHgPct, newHgKg, util_oper_kg, util_oper_importe, resultado_final_kg, resultado_final_importe, versionId, empresa]
+      [
+        newHgPct,
+        newHgKg,
+        util_oper_kg,
+        util_oper_importe,
+        resultado_final_kg,
+        resultado_final_importe,
+        versionId,
+        (matchRow.empresa || "").trim(),
+      ]
     );
-    res.json({ ok: true, empresa, year, month, util_oper_importe, resultado_final_importe });
+    res.json({ ok: true, empresa: (matchRow.empresa || "").trim(), year, month, util_oper_importe, resultado_final_importe });
   } catch (e) {
     console.error("[Dashboard IGF Forecast PATCH]", e);
     res.status(500).json({ error: e.message });

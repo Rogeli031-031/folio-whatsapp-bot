@@ -417,7 +417,15 @@ export function postForecastProvincia(
 
 export function patchIgfForecastHg(
   token: string,
-  payload: { year: number; month: number; empresa: string; hg_pct?: number | null; hg_kg?: number | null }
+  payload: {
+    year: number;
+    month: number;
+    empresa: string;
+    hg_pct?: number | null;
+    hg_kg?: number | null;
+    /** Mismo corte que GET / recalcular ARR; sin esto el servidor recalcula util con otro contexto de venta. */
+    upload_day?: string | null;
+  }
 ): Promise<{ ok: boolean; empresa: string; year: number; month: number }> {
   return apiFetch<{ ok: boolean; empresa: string; year: number; month: number }>("/api/dashboard/igf-forecast", {
     token,

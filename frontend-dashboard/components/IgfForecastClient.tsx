@@ -942,11 +942,13 @@ export function IgfForecastContent() {
                               if (currentPct !== null && Math.abs(newPct - currentPct) < 1e-9) return;
                               setHgSaving(row.empresa || null);
                               try {
+                                const upPatch = uploadDay.trim();
                                 await patchIgfForecastHg(token, {
                                   year: igfForecast.year,
                                   month: igfForecast.month,
                                   empresa: row.empresa || "",
                                   hg_pct: newPct,
+                                  ...(upPatch && /^\d{4}-\d{2}-\d{2}$/.test(upPatch) ? { upload_day: upPatch } : {}),
                                 });
                                 // Misma petición que «Recalcular venta forecast» / carga inicial: sin upload_day el
                                 // backend usa el corte por defecto y venta/comisión no coinciden con la fecha de carga.
