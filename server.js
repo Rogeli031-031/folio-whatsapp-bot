@@ -5444,7 +5444,7 @@ app.get("/api/dashboard/plantas", dashboardAuthMiddleware, async (req, res) => {
 // Action Register (Acciones)
 // ===========================
 
-const ACTION_REGISTER_TEMAS = ["Contrataciones", "Mantenimiento", "General", "Clientes", "Apoyos", "Licencias"];
+const ACTION_REGISTER_TEMAS = ["Contrataciones", "Mantenimiento", "General", "Clientes", "Apoyos", "Licencias", "Taller"];
 
 async function ensureActionRegisterTables(client) {
   await client.query(`CREATE SCHEMA IF NOT EXISTS arr;`).catch(() => {});

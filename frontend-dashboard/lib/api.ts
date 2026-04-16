@@ -56,7 +56,7 @@ export async function apiFetch<T>(
 // Action Register (Acciones)
 // ===========================
 
-export type ActionRegisterTema = "Contrataciones" | "Mantenimiento" | "General" | "Clientes" | "Apoyos" | "Licencias";
+export type ActionRegisterTema = "Contrataciones" | "Mantenimiento" | "General" | "Clientes" | "Apoyos" | "Licencias" | "Taller";
 
 export interface ActionRegisterRevision {
   id: number;

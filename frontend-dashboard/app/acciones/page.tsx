@@ -146,7 +146,7 @@ function ActionRegisterContent() {
     void loadBoard();
   }, [loadBoard]);
 
-  const temas = board?.temas || (["Contrataciones", "Mantenimiento", "General", "Clientes", "Apoyos", "Licencias"] as ActionRegisterTema[]);
+  const temas = board?.temas || (["Contrataciones", "Mantenimiento", "General", "Clientes", "Apoyos", "Licencias", "Taller"] as ActionRegisterTema[]);
   const revisions = board?.revisions || [];
   const cells = board?.cells || {};
 
