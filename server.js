@@ -6900,12 +6900,16 @@ app.patch("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, re
     if (hg_pct != null && Number.isFinite(hg_pct)) {
       newHgPct = hg_pct >= 0 && hg_pct <= 1 ? hg_pct : hg_pct / 100;
       if (hg_kg == null || !Number.isFinite(hg_kg)) {
-        // Costo de compra del IGF de la versión actual (máxima subida desde Excel):
-        // costo_compra = |HG $/kg| / HG % ; HG $/kg forecast = costo_compra * (HG % forecast)
-        const curHgPct = current.hg_pct != null && Number(current.hg_pct) !== 0 ? Number(current.hg_pct) : null;
+        // Misma pendiente que Excel: al mover solo HG %, HG $/kg escala linealmente con el %.
+        // Importante: NO usar |hg_kg| aquí — en IGF el costo suele ir negativo y Math.abs() lo volvía
+        // positivo al guardar, haciendo que el signo “saltara” entre refrescos / filas.
+        const curHgPct = current.hg_pct != null ? Number(current.hg_pct) : null;
         const curHgKg = current.hg_kg != null ? Number(current.hg_kg) : 0;
-        const costoCompra = curHgPct != null ? Math.abs(curHgKg) / curHgPct : 0;
-        newHgKg = costoCompra * newHgPct;
+        if (curHgPct != null && Number.isFinite(curHgPct) && curHgPct !== 0 && Number.isFinite(curHgKg)) {
+          newHgKg = (curHgKg / curHgPct) * newHgPct;
+        } else {
+          newHgKg = curHgKg;
+        }
       }
     }
     if (hg_kg != null && Number.isFinite(hg_kg)) newHgKg = hg_kg;
