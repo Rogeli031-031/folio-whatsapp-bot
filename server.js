@@ -6091,6 +6091,31 @@ app.get("/api/action-register/export", dashboardAuthMiddleware, async (req, res)
       attachmentsByItem.get(a.item_id).push(a);
     }
 
+    // Acciones DICF (Delta Ingreso Cliente Forecast) — se exportan como filas adicionales
+    // en la sección "Clientes" de la revisión más reciente, marcadas como tipo "DICF".
+    let dicfAccionesRows = [];
+    try {
+      await dicfAccionesLib.ensureDicfAccionesTables(client);
+      const equivPlantas = dicfAccionesLib.getPlantaIdsEquivalentes(planta_id);
+      if (equivPlantas.length > 0) {
+        const dq = await client.query(
+          `SELECT a.id, a.public_code, a.planta_id, a.planta_label, a.grupo_tipo, a.canal, a.subcanal,
+                  a.cliente_nombre, a.descripcion, a.estado, a.fecha_compromiso, a.compromiso_tarde,
+                  a.cerrado_at, a.resultado_cierre, a.created_at, a.updated_at,
+                  COALESCE(NULLIF(TRIM(COALESCE(rp.nombre_persona,'')), ''), rp.nombre) AS responsable_nombre
+           FROM arr.dicf_acciones a
+           LEFT JOIN public.usuarios rp ON rp.id = a.responsable_usuario_id
+           WHERE a.planta_id = ANY($1::int[])
+           ORDER BY a.cerrado_at NULLS FIRST, a.created_at DESC`,
+          [equivPlantas]
+        );
+        dicfAccionesRows = dq.rows || [];
+      }
+    } catch (e) {
+      console.error("[ActionRegister export DICF]", e);
+      dicfAccionesRows = [];
+    }
+
     const wb = new ExcelJS.Workbook();
     wb.creator = "Folio WhatsApp Bot";
     wb.created = new Date();
@@ -6167,6 +6192,14 @@ app.get("/api/action-register/export", dashboardAuthMiddleware, async (req, res)
       groups.get(key).items.push(row);
     }
 
+    // Asegura un grupo vacío para (última revisión, Clientes) si hay DICF pero no items
+    // normales en esa celda. Así las DICF se imprimen aunque Clientes esté vacío.
+    if (revisions.length > 0 && dicfAccionesRows.length > 0) {
+      const latestRevDateTmp = fmtDate(revisions[0].revision_date);
+      const key = `${latestRevDateTmp}|Clientes`;
+      if (!groups.has(key)) groups.set(key, { revDate: latestRevDateTmp, tema: "Clientes", items: [] });
+    }
+
     // Recorre en orden: por revisión más reciente primero, luego por tema en orden definido
     const TEMAS_ORDER = ACTION_REGISTER_TEMAS;
     const sortedGroups = Array.from(groups.values()).sort((a, b) => {
@@ -6174,6 +6207,18 @@ app.get("/api/action-register/export", dashboardAuthMiddleware, async (req, res)
       if (a.revDate > b.revDate) return -1;
       return TEMAS_ORDER.indexOf(a.tema) - TEMAS_ORDER.indexOf(b.tema);
     });
+
+    function dicfEstadoLabel(estado, cerradoAt) {
+      if (cerradoAt || estado === "hecho") return "Cerrada";
+      if (estado === "vencido") return "Vencida";
+      if (estado === "compromiso_atrasado") return "Compromiso atrasado";
+      if (estado === "pendiente") return "Pendiente";
+      if (estado === "sin_compromiso") return "Sin compromiso";
+      return estado || "—";
+    }
+
+    const latestRevDate = revisions.length > 0 ? fmtDate(revisions[0].revision_date) : null;
+    const DICF_ROW_FILL = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEFF6FF" } };
 
     for (const g of sortedGroups) {
       const numById = buildNumeration(g.items);
@@ -6214,6 +6259,47 @@ app.get("/api/action-register/export", dashboardAuthMiddleware, async (req, res)
           row.getCell("num").font = { bold: true };
         }
       }
+
+      // Al cerrar el bloque de "Clientes" de la revisión más reciente,
+      // agregamos las acciones DICF (si hay) como filas con tipo "DICF".
+      if (g.tema === "Clientes" && g.revDate === latestRevDate && dicfAccionesRows.length > 0) {
+        dicfAccionesRows.forEach((a, idx) => {
+          const cerrada = !!a.cerrado_at || a.estado === "hecho";
+          const canalSub = [a.canal, a.subcanal].filter((x) => String(x || "").trim() !== "").join(" · ");
+          const cliente = String(a.cliente_nombre || "").trim();
+          const descr = String(a.descripcion || "").trim();
+          const titleParts = [];
+          if (a.public_code) titleParts.push(`[${a.public_code}]`);
+          if (cliente) titleParts.push(cliente);
+          titleParts.push(descr || "(sin descripción)");
+          const title = titleParts.join(" — ");
+          const row = ws.addRow({
+            rev: fmtDMY(g.revDate),
+            tema: "Clientes",
+            num: `D${idx + 1}`,
+            tipo: canalSub ? `DICF (${canalSub})` : "DICF",
+            title,
+            resp: a.responsable_nombre || "",
+            due: a.fecha_compromiso ? fmtDMY(a.fecha_compromiso) : "",
+            estatus: dicfEstadoLabel(String(a.estado || "").toLowerCase(), a.cerrado_at),
+            evidencia: "—",
+            creada: a.created_at ? fmtDMY(a.created_at) : "",
+            actualizada: a.updated_at ? fmtDMY(a.updated_at) : "",
+          });
+          row.eachCell({ includeEmpty: true }, (cell) => { cell.fill = DICF_ROW_FILL; });
+          row.getCell("num").font = { bold: true, color: { argb: "FF1D4ED8" } };
+          row.getCell("tipo").font = { bold: true, color: { argb: "FF1D4ED8" } };
+          row.getCell("title").alignment = { wrapText: true };
+          const est = String(a.estado || "").toLowerCase();
+          if (cerrada) {
+            row.font = { strike: true, color: { argb: "FF6B7280" } };
+          } else if (est === "vencido" || est === "compromiso_atrasado") {
+            row.getCell("estatus").font = { bold: true, color: { argb: "FFB91C1C" } };
+          } else if (est === "pendiente") {
+            row.getCell("estatus").font = { bold: true, color: { argb: "FFB45309" } };
+          }
+        });
+      }
     }
 
     // Hoja 2: Resumen pivote — Tema (filas) x Fecha (columnas), conteo abiertas/cerradas
@@ -6235,6 +6321,18 @@ app.get("/api/action-register/export", dashboardAuthMiddleware, async (req, res)
       const slot = counts.get(key);
       if (row.closed) slot.cerradas += 1;
       else slot.abiertas += 1;
+    }
+    // Sumar acciones DICF al contador de "Clientes" de la revisión más reciente.
+    if (revisions.length > 0 && dicfAccionesRows.length > 0) {
+      const latestRid = revisions[0].id;
+      const keyD = `Clientes|${latestRid}`;
+      if (!counts.has(keyD)) counts.set(keyD, { abiertas: 0, cerradas: 0 });
+      const slot = counts.get(keyD);
+      for (const a of dicfAccionesRows) {
+        const cerrada = !!a.cerrado_at || a.estado === "hecho";
+        if (cerrada) slot.cerradas += 1;
+        else slot.abiertas += 1;
+      }
     }
     for (const tema of TEMAS_ORDER) {
       const data = { tema };
