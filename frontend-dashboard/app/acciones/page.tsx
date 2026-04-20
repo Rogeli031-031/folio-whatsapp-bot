@@ -169,6 +169,9 @@ function ActionRegisterContent() {
         const t = tema as ActionRegisterTema;
         if (!map.has(t)) map.set(t, new Map());
         for (const it of (byTema[tema] || []) as ActionRegisterItem[]) {
+          // Los items DICF son virtuales y solo lectura: no se deben poder
+          // reutilizar como "acciones de fecha anterior" en otras columnas.
+          if (it.dicf) continue;
           map.get(t)!.set(it.id, it);
         }
       }
@@ -554,6 +557,90 @@ function ActionRegisterContent() {
                     const uploading = photoUploadingByItem[it.id] === true;
                     const countFromBoard = it.attachments_count || 0;
                     const photoCount = photosList.length > 0 ? photosList.length : countFromBoard;
+
+                    // --- Render especial para acciones DICF (solo lectura) ---
+                    if (it.dicf) {
+                      const estado = (it.dicf_estado || "").toLowerCase();
+                      const estadoLabel =
+                        estado === "hecho"
+                          ? "Cerrada"
+                          : estado === "vencido"
+                          ? "Vencida"
+                          : estado === "compromiso_atrasado"
+                          ? "Compromiso atrasado"
+                          : estado === "pendiente"
+                          ? "Pendiente"
+                          : estado === "sin_compromiso"
+                          ? "Sin compromiso"
+                          : estado || "—";
+                      const estadoCls =
+                        estado === "hecho"
+                          ? "bg-emerald-900/40 text-emerald-200 border-emerald-700/60"
+                          : estado === "vencido" || estado === "compromiso_atrasado"
+                          ? "bg-red-900/40 text-red-200 border-red-700/60"
+                          : estado === "pendiente"
+                          ? "bg-amber-900/40 text-amber-200 border-amber-700/60"
+                          : "bg-slate-800/60 text-slate-300 border-slate-600";
+                      const dicfHref =
+                        token && it.dicf_public_code
+                          ? `/dicf-accion?codigo=${encodeURIComponent(it.dicf_public_code)}&t=${encodeURIComponent(token)}`
+                          : token
+                          ? `/igf-forecast?t=${encodeURIComponent(token)}`
+                          : "#";
+                      return (
+                        <div
+                          key={it.id}
+                          className={`rounded border border-blue-800/60 bg-blue-950/30 p-2 ${depth ? "ml-4" : ""}`}
+                          title={it.dicf_resultado_cierre ? `Cierre: ${it.dicf_resultado_cierre}` : undefined}
+                        >
+                          <div className="flex items-start gap-2">
+                            <div className="text-xs text-blue-300 mt-0.5 w-10 flex-shrink-0">{n}</div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex flex-wrap items-center gap-1 mb-1">
+                                <span className="rounded bg-blue-700/70 px-1.5 py-0.5 text-[10px] font-semibold text-white">DICF</span>
+                                {it.dicf_public_code && (
+                                  <span className="rounded bg-slate-800 px-1.5 py-0.5 text-[10px] text-slate-300 font-mono">
+                                    {it.dicf_public_code}
+                                  </span>
+                                )}
+                                <span className={`rounded border px-1.5 py-0.5 text-[10px] ${estadoCls}`}>
+                                  {estadoLabel}
+                                </span>
+                                {it.dicf_compromiso_tarde && (
+                                  <span className="rounded bg-red-900/40 border border-red-700/60 px-1.5 py-0.5 text-[10px] text-red-200">
+                                    Compromiso tardío
+                                  </span>
+                                )}
+                                {(it.dicf_canal || it.dicf_subcanal) && (
+                                  <span className="rounded bg-slate-800 px-1.5 py-0.5 text-[10px] text-slate-300">
+                                    {[it.dicf_canal, it.dicf_subcanal].filter(Boolean).join(" · ")}
+                                  </span>
+                                )}
+                              </div>
+                              <div className={`text-sm ${closedCls}`}>{it.title}</div>
+                              <div className="mt-1 flex flex-wrap gap-2 text-[11px]">
+                                <span className="rounded bg-slate-800 px-2 py-0.5 text-slate-200">
+                                  Resp: <span className="text-amber-200">{it.responsable || "—"}</span>
+                                </span>
+                                <span className="rounded bg-slate-800 px-2 py-0.5 text-slate-200">
+                                  Compromiso: <span className="text-emerald-200">{it.due_date ? fmtDMY(it.due_date) : "—"}</span>
+                                </span>
+                              </div>
+                            </div>
+                            <a
+                              href={dicfHref}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs rounded px-2 py-1 border border-blue-700 text-blue-200 hover:bg-blue-900/20 whitespace-nowrap"
+                              title="Abrir panel DICF para editar compromiso, cerrar acción, etc."
+                            >
+                              Ver en DICF ↗
+                            </a>
+                          </div>
+                        </div>
+                      );
+                    }
+
                     return (
                       <div key={it.id} className={`rounded border border-slate-700 bg-slate-900/50 p-2 ${depth ? "ml-4" : ""}`}>
                         <div className="flex items-start gap-2">

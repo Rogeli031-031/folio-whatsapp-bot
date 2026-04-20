@@ -73,6 +73,19 @@ export interface ActionRegisterItem {
   closed: boolean;
   position: number;
   attachments_count?: number;
+  /** Indica que este item es una acción DICF inyectada (solo lectura). */
+  dicf?: boolean;
+  dicf_id?: number;
+  dicf_public_code?: string;
+  /** sin_compromiso | pendiente | vencido | compromiso_atrasado | hecho */
+  dicf_estado?: string;
+  dicf_grupo_tipo?: string;
+  dicf_canal?: string;
+  dicf_subcanal?: string;
+  dicf_cliente_nombre?: string;
+  dicf_planta_label?: string;
+  dicf_compromiso_tarde?: boolean;
+  dicf_resultado_cierre?: string | null;
 }
 
 export interface ActionRegisterAttachment {

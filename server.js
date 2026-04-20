@@ -5636,6 +5636,72 @@ app.get("/api/action-register/board", dashboardAuthMiddleware, async (req, res) 
         attachments_count: Number(row.attachments_count) || 0,
       });
     }
+
+    // Inyectar acciones DICF (Delta Ingreso Cliente Forecast) como items virtuales de
+    // solo lectura en la sección "Clientes" de la revisión más reciente. Se muestran
+    // por planta (equivalentes canónicos) para que el usuario vea las acciones abiertas
+    // con su cliente y responsable sin duplicarlas entre columnas.
+    try {
+      if (revisions.length > 0) {
+        await dicfAccionesLib.ensureDicfAccionesTables(client);
+        const equivPlantas = dicfAccionesLib.getPlantaIdsEquivalentes(planta_id);
+        if (equivPlantas.length > 0) {
+          const dicfRows = await client.query(
+            `SELECT a.id, a.public_code, a.planta_id, a.planta_label, a.grupo_tipo, a.canal, a.subcanal,
+                    a.cliente_nombre, a.descripcion, a.estado, a.fecha_compromiso, a.compromiso_tarde,
+                    a.cerrado_at, a.resultado_cierre, a.created_at,
+                    COALESCE(NULLIF(TRIM(COALESCE(rp.nombre_persona,'')), ''), rp.nombre) AS responsable_nombre
+             FROM arr.dicf_acciones a
+             LEFT JOIN public.usuarios rp ON rp.id = a.responsable_usuario_id
+             WHERE a.planta_id = ANY($1::int[])
+             ORDER BY a.cerrado_at NULLS FIRST, a.created_at DESC`,
+            [equivPlantas]
+          );
+          const latestRev = revisions[0]; // ya ordenadas DESC por revision_date
+          const rid = String(latestRev.id);
+          if (!byRevisionTema[rid]) byRevisionTema[rid] = {};
+          if (!byRevisionTema[rid]["Clientes"]) byRevisionTema[rid]["Clientes"] = [];
+          const existing = byRevisionTema[rid]["Clientes"];
+          const basePos = existing.reduce((mx, it) => Math.max(mx, it.position ?? 0), -1) + 1;
+          (dicfRows.rows || []).forEach((a, idx) => {
+            const estado = String(a.estado || "").toLowerCase();
+            const cerrada = !!a.cerrado_at || estado === "hecho";
+            const clienteLabel = String(a.cliente_nombre || "").trim();
+            const descr = String(a.descripcion || "").trim();
+            const title = clienteLabel
+              ? `${clienteLabel} — ${descr}`
+              : descr || `(sin descripción)`;
+            existing.push({
+              // Id negativo para no colisionar con items reales.
+              id: -1000000 - Number(a.id || 0),
+              tema: "Clientes",
+              parent_id: null,
+              title,
+              responsable: a.responsable_nombre || "",
+              due_date: a.fecha_compromiso || null,
+              closed: cerrada,
+              position: basePos + idx,
+              attachments_count: 0,
+              dicf: true,
+              dicf_id: a.id,
+              dicf_public_code: a.public_code,
+              dicf_estado: estado,
+              dicf_grupo_tipo: a.grupo_tipo,
+              dicf_canal: a.canal,
+              dicf_subcanal: a.subcanal,
+              dicf_cliente_nombre: clienteLabel,
+              dicf_planta_label: a.planta_label,
+              dicf_compromiso_tarde: a.compromiso_tarde === true,
+              dicf_resultado_cierre: a.resultado_cierre || null,
+            });
+          });
+        }
+      }
+    } catch (e) {
+      console.error("[ActionRegister board DICF inject]", e);
+      // No romper el board si falla la carga de DICF.
+    }
+
     res.json({ temas: ACTION_REGISTER_TEMAS, revisions, cells: byRevisionTema });
   } catch (e) {
     console.error("[ActionRegister board]", e);
