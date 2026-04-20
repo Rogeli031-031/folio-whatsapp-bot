@@ -5638,9 +5638,10 @@ app.get("/api/action-register/board", dashboardAuthMiddleware, async (req, res) 
     }
 
     // Inyectar acciones DICF (Delta Ingreso Cliente Forecast) como items virtuales de
-    // solo lectura en la sección "Clientes" de la revisión más reciente. Se muestran
-    // por planta (equivalentes canónicos) para que el usuario vea las acciones abiertas
-    // con su cliente y responsable sin duplicarlas entre columnas.
+    // solo lectura en la sección "Clientes". Cada acción DICF se asigna a la columna
+    // (revisión) cuya fecha sea la más reciente <= fecha de creación de la acción
+    // (en tz CDMX). Así la acción queda "anclada" a su fecha de creación y no se
+    // mueve cuando se crea una nueva columna de revisión posterior.
     try {
       if (revisions.length > 0) {
         await dicfAccionesLib.ensureDicfAccionesTables(client);
@@ -5650,6 +5651,7 @@ app.get("/api/action-register/board", dashboardAuthMiddleware, async (req, res) 
             `SELECT a.id, a.public_code, a.planta_id, a.planta_label, a.grupo_tipo, a.canal, a.subcanal,
                     a.cliente_nombre, a.descripcion, a.estado, a.fecha_compromiso, a.compromiso_tarde,
                     a.cerrado_at, a.resultado_cierre, a.created_at,
+                    to_char((a.created_at AT TIME ZONE 'America/Mexico_City')::date, 'YYYY-MM-DD') AS creada_ymd,
                     COALESCE(NULLIF(TRIM(COALESCE(rp.nombre_persona,'')), ''), rp.nombre) AS responsable_nombre
              FROM arr.dicf_acciones a
              LEFT JOIN public.usuarios rp ON rp.id = a.responsable_usuario_id
@@ -5657,13 +5659,47 @@ app.get("/api/action-register/board", dashboardAuthMiddleware, async (req, res) 
              ORDER BY a.cerrado_at NULLS FIRST, a.created_at DESC`,
             [equivPlantas]
           );
-          const latestRev = revisions[0]; // ya ordenadas DESC por revision_date
-          const rid = String(latestRev.id);
-          if (!byRevisionTema[rid]) byRevisionTema[rid] = {};
-          if (!byRevisionTema[rid]["Clientes"]) byRevisionTema[rid]["Clientes"] = [];
-          const existing = byRevisionTema[rid]["Clientes"];
-          const basePos = existing.reduce((mx, it) => Math.max(mx, it.position ?? 0), -1) + 1;
-          (dicfRows.rows || []).forEach((a, idx) => {
+
+          // Normaliza las fechas de revisión a "YYYY-MM-DD" y ordena ASC para el picker.
+          function normalizeYmd(v) {
+            if (!v) return "";
+            if (v instanceof Date) {
+              const y = v.getFullYear();
+              const m = String(v.getMonth() + 1).padStart(2, "0");
+              const d = String(v.getDate()).padStart(2, "0");
+              return `${y}-${m}-${d}`;
+            }
+            const s = String(v);
+            const m = s.match(/^(\d{4}-\d{2}-\d{2})/);
+            return m ? m[1] : s;
+          }
+          const revWithYmd = revisions.map((rv) => ({ id: rv.id, ymd: normalizeYmd(rv.revision_date) }));
+          const revAsc = [...revWithYmd].sort((a, b) => (a.ymd < b.ymd ? -1 : a.ymd > b.ymd ? 1 : 0));
+          // Para una fecha YYYY-MM-DD, devuelve la revisión más reciente cuya fecha <= createdYmd.
+          // Si ninguna es <= (el DICF es anterior a la primera revisión), usa la primera revisión disponible.
+          function pickRevisionIdForDate(createdYmd) {
+            let pick = null;
+            for (const rv of revAsc) {
+              if (rv.ymd <= createdYmd) pick = rv;
+              else break;
+            }
+            return pick ? pick.id : (revAsc[0] ? revAsc[0].id : null);
+          }
+
+          const posCounterByRev = new Map();
+          for (const a of dicfRows.rows || []) {
+            const ridNum = pickRevisionIdForDate(String(a.creada_ymd || ""));
+            if (!ridNum) continue;
+            const rid = String(ridNum);
+            if (!byRevisionTema[rid]) byRevisionTema[rid] = {};
+            if (!byRevisionTema[rid]["Clientes"]) byRevisionTema[rid]["Clientes"] = [];
+            const existing = byRevisionTema[rid]["Clientes"];
+            if (!posCounterByRev.has(rid)) {
+              posCounterByRev.set(rid, existing.reduce((mx, it) => Math.max(mx, it.position ?? 0), -1) + 1);
+            }
+            const position = posCounterByRev.get(rid);
+            posCounterByRev.set(rid, position + 1);
+
             const estado = String(a.estado || "").toLowerCase();
             const cerrada = !!a.cerrado_at || estado === "hecho";
             const clienteLabel = String(a.cliente_nombre || "").trim();
@@ -5672,7 +5708,6 @@ app.get("/api/action-register/board", dashboardAuthMiddleware, async (req, res) 
               ? `${clienteLabel} — ${descr}`
               : descr || `(sin descripción)`;
             existing.push({
-              // Id negativo para no colisionar con items reales.
               id: -1000000 - Number(a.id || 0),
               tema: "Clientes",
               parent_id: null,
@@ -5680,7 +5715,7 @@ app.get("/api/action-register/board", dashboardAuthMiddleware, async (req, res) 
               responsable: a.responsable_nombre || "",
               due_date: a.fecha_compromiso || null,
               closed: cerrada,
-              position: basePos + idx,
+              position,
               attachments_count: 0,
               dicf: true,
               dicf_id: a.id,
@@ -5694,7 +5729,7 @@ app.get("/api/action-register/board", dashboardAuthMiddleware, async (req, res) 
               dicf_compromiso_tarde: a.compromiso_tarde === true,
               dicf_resultado_cierre: a.resultado_cierre || null,
             });
-          });
+          }
         }
       }
     } catch (e) {
@@ -6102,6 +6137,7 @@ app.get("/api/action-register/export", dashboardAuthMiddleware, async (req, res)
           `SELECT a.id, a.public_code, a.planta_id, a.planta_label, a.grupo_tipo, a.canal, a.subcanal,
                   a.cliente_nombre, a.descripcion, a.estado, a.fecha_compromiso, a.compromiso_tarde,
                   a.cerrado_at, a.resultado_cierre, a.created_at, a.updated_at,
+                  to_char((a.created_at AT TIME ZONE 'America/Mexico_City')::date, 'YYYY-MM-DD') AS creada_ymd,
                   COALESCE(NULLIF(TRIM(COALESCE(rp.nombre_persona,'')), ''), rp.nombre) AS responsable_nombre
            FROM arr.dicf_acciones a
            LEFT JOIN public.usuarios rp ON rp.id = a.responsable_usuario_id
@@ -6192,12 +6228,34 @@ app.get("/api/action-register/export", dashboardAuthMiddleware, async (req, res)
       groups.get(key).items.push(row);
     }
 
-    // Asegura un grupo vacío para (última revisión, Clientes) si hay DICF pero no items
-    // normales en esa celda. Así las DICF se imprimen aunque Clientes esté vacío.
+    // Asigna cada acción DICF a la revisión cuya fecha sea la más reciente <= fecha
+    // de creación del DICF (en tz CDMX). Si no hay ninguna revisión <= (DICF es
+    // anterior a la primera revisión), se asigna a la primera revisión disponible.
+    // Así las DICF quedan ancladas a la columna que corresponde y no se mueven al
+    // crear una nueva revisión posterior.
+    const dicfByRevDate = new Map(); // revDate (YYYY-MM-DD) -> acciones DICF[]
     if (revisions.length > 0 && dicfAccionesRows.length > 0) {
-      const latestRevDateTmp = fmtDate(revisions[0].revision_date);
-      const key = `${latestRevDateTmp}|Clientes`;
-      if (!groups.has(key)) groups.set(key, { revDate: latestRevDateTmp, tema: "Clientes", items: [] });
+      const revsAscForDicf = [...revisions]
+        .map((rv) => ({ id: rv.id, ymd: fmtDate(rv.revision_date) }))
+        .sort((a, b) => (a.ymd < b.ymd ? -1 : a.ymd > b.ymd ? 1 : 0));
+      function pickRevYmdForCreated(createdYmd) {
+        let pick = null;
+        for (const rv of revsAscForDicf) {
+          if (rv.ymd <= createdYmd) pick = rv;
+          else break;
+        }
+        return pick ? pick.ymd : (revsAscForDicf[0] ? revsAscForDicf[0].ymd : null);
+      }
+      for (const a of dicfAccionesRows) {
+        const createdYmd = String(a.creada_ymd || "");
+        const revYmd = pickRevYmdForCreated(createdYmd);
+        if (!revYmd) continue;
+        if (!dicfByRevDate.has(revYmd)) dicfByRevDate.set(revYmd, []);
+        dicfByRevDate.get(revYmd).push(a);
+        // Asegura que exista el grupo (revDate, Clientes) aunque no haya items normales.
+        const key = `${revYmd}|Clientes`;
+        if (!groups.has(key)) groups.set(key, { revDate: revYmd, tema: "Clientes", items: [] });
+      }
     }
 
     // Recorre en orden: por revisión más reciente primero, luego por tema en orden definido
@@ -6217,7 +6275,6 @@ app.get("/api/action-register/export", dashboardAuthMiddleware, async (req, res)
       return estado || "—";
     }
 
-    const latestRevDate = revisions.length > 0 ? fmtDate(revisions[0].revision_date) : null;
     const DICF_ROW_FILL = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEFF6FF" } };
 
     for (const g of sortedGroups) {
@@ -6260,10 +6317,12 @@ app.get("/api/action-register/export", dashboardAuthMiddleware, async (req, res)
         }
       }
 
-      // Al cerrar el bloque de "Clientes" de la revisión más reciente,
-      // agregamos las acciones DICF (si hay) como filas con tipo "DICF".
-      if (g.tema === "Clientes" && g.revDate === latestRevDate && dicfAccionesRows.length > 0) {
-        dicfAccionesRows.forEach((a, idx) => {
+      // Al cerrar el bloque de "Clientes" de cada revisión, agregamos las acciones
+      // DICF que quedaron ancladas a esa fecha (según su fecha de creación) como
+      // filas con tipo "DICF".
+      const dicfOfThisRev = (g.tema === "Clientes" ? (dicfByRevDate.get(g.revDate) || []) : []);
+      if (dicfOfThisRev.length > 0) {
+        dicfOfThisRev.forEach((a, idx) => {
           const cerrada = !!a.cerrado_at || a.estado === "hecho";
           const canalSub = [a.canal, a.subcanal].filter((x) => String(x || "").trim() !== "").join(" · ");
           const cliente = String(a.cliente_nombre || "").trim();
@@ -6322,16 +6381,21 @@ app.get("/api/action-register/export", dashboardAuthMiddleware, async (req, res)
       if (row.closed) slot.cerradas += 1;
       else slot.abiertas += 1;
     }
-    // Sumar acciones DICF al contador de "Clientes" de la revisión más reciente.
-    if (revisions.length > 0 && dicfAccionesRows.length > 0) {
-      const latestRid = revisions[0].id;
-      const keyD = `Clientes|${latestRid}`;
-      if (!counts.has(keyD)) counts.set(keyD, { abiertas: 0, cerradas: 0 });
-      const slot = counts.get(keyD);
-      for (const a of dicfAccionesRows) {
-        const cerrada = !!a.cerrado_at || a.estado === "hecho";
-        if (cerrada) slot.cerradas += 1;
-        else slot.abiertas += 1;
+    // Sumar acciones DICF al contador de "Clientes" en la revisión que les corresponde
+    // según su fecha de creación (coherente con el agrupado de más arriba).
+    if (revisions.length > 0 && dicfByRevDate.size > 0) {
+      const revIdByYmd = new Map(revisions.map((rv) => [fmtDate(rv.revision_date), rv.id]));
+      for (const [revYmd, arr] of dicfByRevDate.entries()) {
+        const rid = revIdByYmd.get(revYmd);
+        if (!rid) continue;
+        const keyD = `Clientes|${rid}`;
+        if (!counts.has(keyD)) counts.set(keyD, { abiertas: 0, cerradas: 0 });
+        const slot = counts.get(keyD);
+        for (const a of arr) {
+          const cerrada = !!a.cerrado_at || a.estado === "hecho";
+          if (cerrada) slot.cerradas += 1;
+          else slot.abiertas += 1;
+        }
       }
     }
     for (const tema of TEMAS_ORDER) {
