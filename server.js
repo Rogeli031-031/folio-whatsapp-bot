@@ -64,7 +64,7 @@ function corsMiddleware(req, res, next) {
   const origin = req.headers.origin;
   const allow = origin && corsOrigins.some(o => origin === o || origin.startsWith(o.replace(/\/$/, ""))) ? origin : corsOrigins[0];
   res.setHeader("Access-Control-Allow-Origin", allow);
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, PUT, DELETE, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type");
   res.setHeader("Access-Control-Max-Age", "86400");
   if (req.method === "OPTIONS") {
