@@ -11751,7 +11751,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
             default_filters: {},
           });
           const baseUrl = (process.env.DASHBOARD_URL || process.env.FRONTEND_URL || "").trim().replace(/\/$/, "") || "https://dashboard.example.com";
-          const link = `${baseUrl}/acciones?t=${encodeURIComponent(tokenAR)}&noback=1`;
+          const link = `${baseUrl}/acciones?t=${encodeURIComponent(tokenAR)}`;
           return safeReply(`📋 Action Register\n\n🔗 Acceso directo (válido 20 horas):\n${link}`);
         } catch (arErr) {
           console.error("[AR command error]", arErr);

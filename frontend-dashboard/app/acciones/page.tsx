@@ -386,7 +386,7 @@ function ActionRegisterContent() {
           <h1 className="text-xl font-semibold text-white">Action Register</h1>
           <span className="text-xs text-slate-400">(seguimiento de acciones)</span>
         </div>
-        {searchParams.get("noback") !== "1" && (
+        {searchParams.get("back") === "1" && (
           <Link href={`/igf-forecast?t=${encodeURIComponent(token)}`} className="text-sm text-amber-300 hover:text-amber-200 underline">
             ← IGF Forecast
           </Link>
