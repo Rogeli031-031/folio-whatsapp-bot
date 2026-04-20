@@ -386,9 +386,11 @@ function ActionRegisterContent() {
           <h1 className="text-xl font-semibold text-white">Action Register</h1>
           <span className="text-xs text-slate-400">(seguimiento de acciones)</span>
         </div>
-        <Link href={`/igf-forecast?t=${encodeURIComponent(token)}`} className="text-sm text-amber-300 hover:text-amber-200 underline">
-          ← IGF Forecast
-        </Link>
+        {searchParams.get("noback") !== "1" && (
+          <Link href={`/igf-forecast?t=${encodeURIComponent(token)}`} className="text-sm text-amber-300 hover:text-amber-200 underline">
+            ← IGF Forecast
+          </Link>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-slate-700/80 bg-slate-800/30">

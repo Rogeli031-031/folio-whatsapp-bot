@@ -11720,6 +11720,45 @@ app.post("/twilio/whatsapp", async (req, res) => {
         }
       }
 
+      /* Comando "AR" → abre Action Register directo, sin el link "← IGF Forecast". */
+      if (/^ar$/i.test(bodyForCmd)) {
+        try {
+          if (!actor) {
+            return safeReply("No estás dado de alta. Contacta al administrador para registrar tu número.");
+          }
+          const rolClave = (actor.rol_clave && String(actor.rol_clave).toUpperCase()) || "";
+          const rolNom = (actor.rol_nombre && String(actor.rol_nombre)) || "";
+          const esZP = isDirectorZPForDashboard(rolClave, rolNom);
+          const normalizarParaAD = (s) => (s || "").toLowerCase().normalize("NFD").replace(/\p{M}/gu, "").replace(/[\s\u00a0]+/g, " ").trim();
+          const rolNormNombre = normalizarParaAD(rolNom);
+          const nombreUsuarioNorm = normalizarParaAD(actor.nombre);
+          const esAD = rolClave === "AD" || (/asistente/.test(rolNormNombre) && /direccion/.test(rolNormNombre)) || (/asistente/.test(nombreUsuarioNorm) && /direccion/.test(nombreUsuarioNorm));
+          const esCFCDMX = rolClave === "CF_CDMX" || (/contralor/.test(rolNormNombre) && /cdmx/.test(rolNormNombre)) || (/contralor/.test(nombreUsuarioNorm) && /cdmx/.test(nombreUsuarioNorm));
+          const esGA = rolClave === "GA";
+          const esGV = rolClave === "GV";
+          const role = esZP ? "ZP" : esAD ? "AD" : esCFCDMX ? "CF_CDMX" : esGA ? "GA" : esGV ? "GV" : "GG";
+          let plantasPermitidas = [];
+          if (esZP || esAD || esCFCDMX) {
+            const plantas = await getPlantas(client);
+            plantasPermitidas = (plantas || []).map((p) => p.id).filter(Number.isFinite);
+          } else if (actor.planta_id != null) {
+            plantasPermitidas = getPlantaIdsEquivalentesForPendientes(actor.planta_id);
+          }
+          const tokenAR = createDashboardToken({
+            role,
+            actor_id: actor.id,
+            plantas_permitidas: plantasPermitidas,
+            default_filters: {},
+          });
+          const baseUrl = (process.env.DASHBOARD_URL || process.env.FRONTEND_URL || "").trim().replace(/\/$/, "") || "https://dashboard.example.com";
+          const link = `${baseUrl}/acciones?t=${encodeURIComponent(tokenAR)}&noback=1`;
+          return safeReply(`📋 Action Register\n\n🔗 Acceso directo (válido 20 horas):\n${link}`);
+        } catch (arErr) {
+          console.error("[AR command error]", arErr);
+          return safeReply("Error al generar el enlace del Action Register. Revisa los logs o contacta al administrador.");
+        }
+      }
+
       const matchPendientesEarly = bodyForCmd.match(/^(mis\s+pendientes|pendientes)(\s+(\d+))?$/i);
       if (matchPendientesEarly) {
         if (!actor) {
