@@ -16,6 +16,11 @@ import {
   addActionRegisterEntry,
   patchActionRegisterItem,
   getActionRegisterExportUrl,
+  fetchActionRegisterAttachments,
+  uploadActionRegisterAttachment,
+  deleteActionRegisterAttachment,
+  getActionRegisterAttachmentUrl,
+  type ActionRegisterAttachment,
   type ActionRegisterBoardResponse,
   type ActionRegisterItem,
   type ActionRegisterTema,
@@ -87,6 +92,11 @@ function ActionRegisterContent() {
   const [draftByCell, setDraftByCell] = useState<Record<string, { title: string; responsable: string; due_date: string }>>({});
   const [draftSubByItem, setDraftSubByItem] = useState<Record<string, { title: string; responsable: string; due_date: string }>>({});
   const [pickExistingByCell, setPickExistingByCell] = useState<Record<string, number | "">>({});
+
+  const [photosByItem, setPhotosByItem] = useState<Record<number, ActionRegisterAttachment[]>>({});
+  const [photosOpenByItem, setPhotosOpenByItem] = useState<Record<number, boolean>>({});
+  const [photoUploadingByItem, setPhotoUploadingByItem] = useState<Record<number, boolean>>({});
+  const [photoPreview, setPhotoPreview] = useState<{ itemId: number; index: number } | null>(null);
 
   useEffect(() => {
     const t = parseTokenFromQuery(searchParams) || getTokenFromStorage();
@@ -248,6 +258,87 @@ function ActionRegisterContent() {
     [token, loadBoard]
   );
 
+  const loadPhotos = useCallback(
+    async (itemId: number) => {
+      if (!token) return;
+      try {
+        const r = await fetchActionRegisterAttachments(token, itemId);
+        setPhotosByItem((prev) => ({ ...prev, [itemId]: r.attachments || [] }));
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : "Error";
+        if (msg.includes("401") || msg.toLowerCase().includes("token")) setUnauthorized(true);
+        setError(msg);
+      }
+    },
+    [token]
+  );
+
+  const togglePhotos = useCallback(
+    async (itemId: number) => {
+      const wasOpen = photosOpenByItem[itemId] === true;
+      setPhotosOpenByItem((p) => ({ ...p, [itemId]: !wasOpen }));
+      if (!wasOpen && !photosByItem[itemId]) {
+        await loadPhotos(itemId);
+      }
+    },
+    [photosOpenByItem, photosByItem, loadPhotos]
+  );
+
+  const handleUploadPhoto = useCallback(
+    async (itemId: number, file: File) => {
+      if (!token) return;
+      if (!file.type.startsWith("image/")) {
+        setError("Solo se admiten imágenes (JPG, PNG, WEBP, GIF).");
+        return;
+      }
+      const MAX_BYTES = 8 * 1024 * 1024;
+      if (file.size > MAX_BYTES) {
+        setError(`La imagen es demasiado grande (máx ${Math.floor(MAX_BYTES / 1024 / 1024)}MB).`);
+        return;
+      }
+      setPhotoUploadingByItem((p) => ({ ...p, [itemId]: true }));
+      setError(null);
+      try {
+        const dataUrl: string = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result || ""));
+          reader.onerror = () => reject(new Error("No se pudo leer el archivo"));
+          reader.readAsDataURL(file);
+        });
+        const base64 = dataUrl.includes(",") ? dataUrl.split(",")[1] : dataUrl;
+        await uploadActionRegisterAttachment(token, itemId, {
+          fileBase64: base64,
+          fileName: file.name || "foto.jpg",
+          contentType: file.type || "image/jpeg",
+        });
+        setPhotosOpenByItem((p) => ({ ...p, [itemId]: true }));
+        await loadPhotos(itemId);
+        await loadBoard();
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : "Error");
+      } finally {
+        setPhotoUploadingByItem((p) => ({ ...p, [itemId]: false }));
+      }
+    },
+    [token, loadPhotos, loadBoard]
+  );
+
+  const handleDeletePhoto = useCallback(
+    async (itemId: number, attachmentId: number) => {
+      if (!token) return;
+      if (!window.confirm("¿Eliminar esta foto de evidencia?")) return;
+      setError(null);
+      try {
+        await deleteActionRegisterAttachment(token, attachmentId);
+        await loadPhotos(itemId);
+        await loadBoard();
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : "Error");
+      }
+    },
+    [token, loadPhotos, loadBoard]
+  );
+
   const handleAddExisting = useCallback(
     async (revision_id: number, tema: ActionRegisterTema) => {
       if (!token) return;
@@ -348,6 +439,66 @@ function ActionRegisterContent() {
         {!loading && revisions.length === 0 && <span className="text-sm text-slate-400">Aún no hay fechas de revisión para esta planta.</span>}
       </div>
 
+      {photoPreview && token && (() => {
+        const list = photosByItem[photoPreview.itemId] || [];
+        const att = list[photoPreview.index];
+        if (!att) return null;
+        const url = getActionRegisterAttachmentUrl(token, att.id);
+        const canPrev = photoPreview.index > 0;
+        const canNext = photoPreview.index < list.length - 1;
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+            onClick={() => setPhotoPreview(null)}
+          >
+            <div className="relative max-h-full max-w-5xl" onClick={(e) => e.stopPropagation()}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={url} alt={att.file_name} className="max-h-[85vh] max-w-full rounded border border-slate-600" />
+              <div className="mt-2 flex items-center justify-between gap-2 text-sm text-slate-200">
+                <span className="truncate">
+                  {att.file_name}
+                  <span className="ml-2 text-xs text-slate-400">
+                    {photoPreview.index + 1} / {list.length}
+                  </span>
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={!canPrev}
+                    onClick={() => setPhotoPreview((p) => (p ? { ...p, index: Math.max(0, p.index - 1) } : p))}
+                    className="rounded border border-slate-600 px-3 py-1 text-xs text-slate-200 hover:bg-slate-800 disabled:opacity-40"
+                  >
+                    ← Anterior
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!canNext}
+                    onClick={() => setPhotoPreview((p) => (p ? { ...p, index: Math.min(list.length - 1, p.index + 1) } : p))}
+                    className="rounded border border-slate-600 px-3 py-1 text-xs text-slate-200 hover:bg-slate-800 disabled:opacity-40"
+                  >
+                    Siguiente →
+                  </button>
+                  <a
+                    href={url}
+                    download={att.file_name}
+                    className="rounded bg-emerald-700 px-3 py-1 text-xs text-white hover:bg-emerald-600"
+                  >
+                    Descargar
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => setPhotoPreview(null)}
+                    className="rounded bg-slate-700 px-3 py-1 text-xs text-white hover:bg-slate-600"
+                  >
+                    Cerrar
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       <main className="flex-1 p-4 overflow-auto">
         <div className="min-w-[900px]">
           <div
@@ -397,6 +548,12 @@ function ActionRegisterContent() {
                     const subDraftKey = `${rev.id}|${it.id}`;
                     const subDraft = draftSubByItem[subDraftKey] || { title: "", responsable: "", due_date: "" };
                     const closedCls = it.closed ? "line-through text-slate-500" : "text-slate-100";
+                    const photoInputId = `photo-input-${rev.id}-${it.id}`;
+                    const photosOpen = photosOpenByItem[it.id] === true;
+                    const photosList = photosByItem[it.id] || [];
+                    const uploading = photoUploadingByItem[it.id] === true;
+                    const countFromBoard = it.attachments_count || 0;
+                    const photoCount = photosList.length > 0 ? photosList.length : countFromBoard;
                     return (
                       <div key={it.id} className={`rounded border border-slate-700 bg-slate-900/50 p-2 ${depth ? "ml-4" : ""}`}>
                         <div className="flex items-start gap-2">
@@ -410,18 +567,82 @@ function ActionRegisterContent() {
                               <span className="rounded bg-slate-800 px-2 py-0.5 text-slate-200">
                                 Compromiso: <span className="text-emerald-200">{it.due_date ? fmtDMY(it.due_date) : "—"}</span>
                               </span>
+                              {photoCount > 0 && (
+                                <span className="rounded bg-blue-900/40 px-2 py-0.5 text-blue-200 border border-blue-700/50">
+                                  📷 {photoCount} foto{photoCount === 1 ? "" : "s"}
+                                </span>
+                              )}
                             </div>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => void handleToggleClosed(it.id, !it.closed)}
-                            className={`text-xs rounded px-2 py-1 border ${
-                              it.closed ? "border-slate-600 text-slate-300 hover:bg-slate-800" : "border-emerald-700 text-emerald-200 hover:bg-emerald-900/20"
-                            }`}
-                          >
-                            {it.closed ? "Reabrir" : "Cerrar"}
-                          </button>
+                          <div className="flex flex-col gap-1">
+                            <label
+                              htmlFor={photoInputId}
+                              className={`cursor-pointer text-xs rounded px-2 py-1 border border-blue-700 text-blue-200 hover:bg-blue-900/20 text-center ${uploading ? "opacity-50 pointer-events-none" : ""}`}
+                              title="Adjuntar foto como evidencia"
+                            >
+                              {uploading ? "Subiendo…" : "+ Foto"}
+                            </label>
+                            <input
+                              id={photoInputId}
+                              type="file"
+                              accept="image/*"
+                              capture="environment"
+                              className="hidden"
+                              onChange={(e) => {
+                                const f = e.target.files && e.target.files[0];
+                                if (f) void handleUploadPhoto(it.id, f);
+                                e.currentTarget.value = "";
+                              }}
+                            />
+                            {photoCount > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => void togglePhotos(it.id)}
+                                className="text-xs rounded px-2 py-1 border border-slate-600 text-slate-200 hover:bg-slate-800"
+                              >
+                                {photosOpen ? "Ocultar" : "Ver fotos"}
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => void handleToggleClosed(it.id, !it.closed)}
+                              className={`text-xs rounded px-2 py-1 border ${
+                                it.closed ? "border-slate-600 text-slate-300 hover:bg-slate-800" : "border-emerald-700 text-emerald-200 hover:bg-emerald-900/20"
+                              }`}
+                            >
+                              {it.closed ? "Reabrir" : "Cerrar"}
+                            </button>
+                          </div>
                         </div>
+
+                        {photosOpen && photosList.length > 0 && token && (
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {photosList.map((att, idx) => {
+                              const url = getActionRegisterAttachmentUrl(token, att.id);
+                              return (
+                                <div key={att.id} className="relative group">
+                                  <button
+                                    type="button"
+                                    onClick={() => setPhotoPreview({ itemId: it.id, index: idx })}
+                                    className="block h-20 w-20 overflow-hidden rounded border border-slate-600 bg-slate-950 hover:border-blue-400"
+                                    title={att.file_name}
+                                  >
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img src={url} alt={att.file_name} className="h-full w-full object-cover" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => void handleDeletePhoto(it.id, att.id)}
+                                    className="absolute -top-1 -right-1 hidden group-hover:flex h-5 w-5 items-center justify-center rounded-full bg-red-700 text-white text-[10px] border border-red-900"
+                                    title="Eliminar foto"
+                                  >
+                                    ×
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
 
                         <div className="mt-2">
                           <div className="flex flex-wrap gap-2">

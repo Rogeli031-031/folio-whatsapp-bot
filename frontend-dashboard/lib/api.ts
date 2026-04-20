@@ -72,6 +72,16 @@ export interface ActionRegisterItem {
   due_date: string | null; // YYYY-MM-DD
   closed: boolean;
   position: number;
+  attachments_count?: number;
+}
+
+export interface ActionRegisterAttachment {
+  id: number;
+  item_id: number;
+  file_name: string;
+  content_type: string;
+  file_size_bytes: number;
+  created_at: string;
 }
 
 export interface ActionRegisterBoardResponse {
@@ -139,6 +149,40 @@ export function patchActionRegisterItem(
     method: "PATCH",
     body: JSON.stringify(patch),
   });
+}
+
+export function fetchActionRegisterAttachments(
+  token: string,
+  itemId: number
+): Promise<{ attachments: ActionRegisterAttachment[] }> {
+  return apiFetch<{ attachments: ActionRegisterAttachment[] }>(`/api/action-register/items/${itemId}/attachments`, { token });
+}
+
+export function uploadActionRegisterAttachment(
+  token: string,
+  itemId: number,
+  body: { fileBase64: string; fileName: string; contentType: string }
+): Promise<{ attachment: ActionRegisterAttachment }> {
+  return apiFetch<{ attachment: ActionRegisterAttachment }>(`/api/action-register/items/${itemId}/attachments`, {
+    token,
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteActionRegisterAttachment(
+  token: string,
+  attachmentId: number
+): Promise<{ ok: true }> {
+  return apiFetch<{ ok: true }>(`/api/action-register/attachments/${attachmentId}`, {
+    token,
+    method: "DELETE",
+  });
+}
+
+export function getActionRegisterAttachmentUrl(token: string, attachmentId: number): string {
+  const base = getApiUrl(`/api/action-register/attachments/${attachmentId}`);
+  return `${base}?t=${encodeURIComponent(token)}`;
 }
 
 export interface KanbanBoard {

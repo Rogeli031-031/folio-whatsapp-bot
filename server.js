@@ -5481,9 +5481,55 @@ async function ensureActionRegisterTables(client) {
       UNIQUE(revision_id, item_id)
     );
   `).catch(() => {});
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS arr.action_register_attachments (
+      id SERIAL PRIMARY KEY,
+      item_id INT NOT NULL REFERENCES arr.action_register_items(id) ON DELETE CASCADE,
+      file_name TEXT NOT NULL DEFAULT '',
+      content_type TEXT NOT NULL DEFAULT 'image/jpeg',
+      file_size_bytes INT NOT NULL DEFAULT 0,
+      s3_key TEXT NULL,
+      s3_url TEXT NULL,
+      data BYTEA NULL,
+      uploaded_by_usuario_id INT NULL REFERENCES public.usuarios(id),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `).catch(() => {});
   await client.query(`CREATE INDEX IF NOT EXISTS idx_ar_revisions_planta_date ON arr.action_register_revisions(planta_id, revision_date);`).catch(() => {});
   await client.query(`CREATE INDEX IF NOT EXISTS idx_ar_items_planta_tema ON arr.action_register_items(planta_id, tema);`).catch(() => {});
   await client.query(`CREATE INDEX IF NOT EXISTS idx_ar_entries_revision_pos ON arr.action_register_entries(revision_id, position);`).catch(() => {});
+  await client.query(`CREATE INDEX IF NOT EXISTS idx_ar_attachments_item ON arr.action_register_attachments(item_id);`).catch(() => {});
+}
+
+/** Sube una imagen al bucket S3 con su content-type correcto. Devuelve publicUrl. */
+async function uploadImageToS3(buffer, key, contentType) {
+  if (!s3Enabled) throw new Error("S3 no configurado");
+  const bucket = s3BucketName;
+  const region = process.env.AWS_REGION;
+  await s3.send(new PutObjectCommand({
+    Bucket: bucket,
+    Key: key,
+    Body: buffer,
+    ContentType: contentType || "image/jpeg",
+  }));
+  return buildS3PublicUrl(bucket, region, key);
+}
+
+/** Devuelve el buffer binario de una foto del Action Register (desde S3 o bytea). */
+async function getActionRegisterAttachmentBuffer(client, attachmentRow) {
+  if (!attachmentRow) return null;
+  if (attachmentRow.s3_key && s3Enabled) {
+    try { return await getBufferFromS3(attachmentRow.s3_key); } catch (e) {}
+  }
+  if (attachmentRow.data) {
+    return Buffer.isBuffer(attachmentRow.data) ? attachmentRow.data : Buffer.from(attachmentRow.data);
+  }
+  // Último intento: si no se trajo data en el SELECT original, leerla ahora.
+  try {
+    const r = await client.query(`SELECT data FROM arr.action_register_attachments WHERE id = $1`, [attachmentRow.id]);
+    if (r.rows[0] && r.rows[0].data) return Buffer.from(r.rows[0].data);
+  } catch (e) {}
+  return null;
 }
 
 function assertDashboardPlantaAccessForActionRegister(req, plantaId) {
@@ -5563,7 +5609,8 @@ app.get("/api/action-register/board", dashboardAuthMiddleware, async (req, res) 
     const revisions = (rev.rows || []).map((x) => ({ id: x.id, revision_date: x.revision_date }));
     const r = await client.query(
       `SELECT e.revision_id, e.position,
-              i.id, i.tema, i.parent_id, i.title, i.responsable, i.due_date, i.closed
+              i.id, i.tema, i.parent_id, i.title, i.responsable, i.due_date, i.closed,
+              COALESCE((SELECT COUNT(*)::INT FROM arr.action_register_attachments a WHERE a.item_id = i.id), 0) AS attachments_count
        FROM arr.action_register_entries e
        JOIN arr.action_register_items i ON i.id = e.item_id
        JOIN arr.action_register_revisions rv ON rv.id = e.revision_id
@@ -5586,6 +5633,7 @@ app.get("/api/action-register/board", dashboardAuthMiddleware, async (req, res) 
         due_date: row.due_date,
         closed: row.closed === true,
         position: row.position,
+        attachments_count: Number(row.attachments_count) || 0,
       });
     }
     res.json({ temas: ACTION_REGISTER_TEMAS, revisions, cells: byRevisionTema });
@@ -5751,6 +5799,183 @@ app.patch("/api/action-register/items/:id", dashboardAuthMiddleware, async (req,
   }
 });
 
+/** Content-types aceptados para evidencia fotográfica del Action Register. */
+const ACTION_REGISTER_IMAGE_MIME = new Set([
+  "image/jpeg",
+  "image/jpg",
+  "image/pjpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+]);
+
+function actionRegisterMimeToExt(mime) {
+  const m = String(mime || "").toLowerCase();
+  if (m === "image/png") return "png";
+  if (m === "image/webp") return "webp";
+  if (m === "image/gif") return "gif";
+  return "jpg";
+}
+
+/** Sube una foto (base64) como evidencia de una acción/subacción. */
+app.post("/api/action-register/items/:id/attachments", dashboardAuthMiddleware, async (req, res) => {
+  const itemId = parseInt(String(req.params.id), 10);
+  if (!itemId || !Number.isFinite(itemId)) return res.status(400).json({ error: "id inválido" });
+  const body = req.body || {};
+  const fileBase64 = typeof body.fileBase64 === "string" ? body.fileBase64 : "";
+  const fileName = body.fileName != null && String(body.fileName).trim() !== "" ? String(body.fileName).trim().slice(0, 200) : "foto.jpg";
+  let contentType = (body.contentType != null ? String(body.contentType).trim().toLowerCase() : "image/jpeg") || "image/jpeg";
+  if (!ACTION_REGISTER_IMAGE_MIME.has(contentType)) {
+    const lowerName = fileName.toLowerCase();
+    if (lowerName.endsWith(".png")) contentType = "image/png";
+    else if (lowerName.endsWith(".webp")) contentType = "image/webp";
+    else if (lowerName.endsWith(".gif")) contentType = "image/gif";
+    else contentType = "image/jpeg";
+  }
+  if (!fileBase64) return res.status(400).json({ error: "Envía fileBase64 (imagen)" });
+  let buffer;
+  try { buffer = Buffer.from(fileBase64, "base64"); } catch (e) { return res.status(400).json({ error: "fileBase64 inválido" }); }
+  if (!buffer || buffer.length === 0) return res.status(400).json({ error: "Archivo vacío" });
+  const MAX_BYTES = 8 * 1024 * 1024; // 8MB
+  if (buffer.length > MAX_BYTES) return res.status(413).json({ error: `La imagen excede el tamaño máximo de ${Math.floor(MAX_BYTES / 1024 / 1024)}MB` });
+
+  const client = await pool.connect();
+  try {
+    await ensureActionRegisterTables(client);
+    const it = await client.query(`SELECT id, planta_id FROM arr.action_register_items WHERE id = $1`, [itemId]);
+    if (!it.rows[0]) return res.status(404).json({ error: "Acción no encontrada" });
+    const plantaId = Number(it.rows[0].planta_id);
+    if (!assertDashboardPlantaAccessForActionRegister(req, plantaId)) return res.status(403).json({ error: "Sin acceso a esta planta" });
+
+    let s3Key = null;
+    let s3Url = null;
+    let bytea = null;
+    if (s3Enabled) {
+      const ext = actionRegisterMimeToExt(contentType);
+      s3Key = `action-register/${plantaId}/${itemId}/${Date.now()}-${crypto.randomBytes(4).toString("hex")}.${ext}`;
+      try {
+        s3Url = await uploadImageToS3(buffer, s3Key, contentType);
+      } catch (e) {
+        console.error("[ActionRegister attachments S3]", e);
+        s3Key = null;
+        s3Url = null;
+        bytea = buffer;
+      }
+    } else {
+      bytea = buffer;
+    }
+
+    const ins = await client.query(
+      `INSERT INTO arr.action_register_attachments (item_id, file_name, content_type, file_size_bytes, s3_key, s3_url, data, uploaded_by_usuario_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id, item_id, file_name, content_type, file_size_bytes, s3_key, s3_url, created_at`,
+      [itemId, fileName, contentType, buffer.length, s3Key, s3Url, bytea, req.dashboardAuth.actor_id || null]
+    );
+    const row = ins.rows[0];
+    res.status(201).json({
+      attachment: {
+        id: row.id,
+        item_id: row.item_id,
+        file_name: row.file_name,
+        content_type: row.content_type,
+        file_size_bytes: row.file_size_bytes,
+        created_at: row.created_at,
+      },
+    });
+  } catch (e) {
+    console.error("[ActionRegister POST attachment]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/** Lista fotos adjuntas de una acción/subacción (metadatos, sin binario). */
+app.get("/api/action-register/items/:id/attachments", dashboardAuthMiddleware, async (req, res) => {
+  const itemId = parseInt(String(req.params.id), 10);
+  if (!itemId || !Number.isFinite(itemId)) return res.status(400).json({ error: "id inválido" });
+  const client = await pool.connect();
+  try {
+    await ensureActionRegisterTables(client);
+    const it = await client.query(`SELECT id, planta_id FROM arr.action_register_items WHERE id = $1`, [itemId]);
+    if (!it.rows[0]) return res.status(404).json({ error: "Acción no encontrada" });
+    if (!assertDashboardPlantaAccessForActionRegister(req, Number(it.rows[0].planta_id))) return res.status(403).json({ error: "Sin acceso a esta planta" });
+
+    const r = await client.query(
+      `SELECT id, item_id, file_name, content_type, file_size_bytes, created_at
+       FROM arr.action_register_attachments
+       WHERE item_id = $1
+       ORDER BY created_at ASC, id ASC`,
+      [itemId]
+    );
+    res.json({ attachments: r.rows || [] });
+  } catch (e) {
+    console.error("[ActionRegister GET attachments]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/** Sirve el binario de una foto del Action Register (inline). Soporta ?t=<token> para usar en <img src>. */
+app.get("/api/action-register/attachments/:id", dashboardAuthMiddleware, async (req, res) => {
+  const attId = parseInt(String(req.params.id), 10);
+  if (!attId || !Number.isFinite(attId)) return res.status(400).json({ error: "id inválido" });
+  const client = await pool.connect();
+  try {
+    await ensureActionRegisterTables(client);
+    const r = await client.query(
+      `SELECT a.id, a.item_id, a.file_name, a.content_type, a.s3_key, a.s3_url, a.data, i.planta_id
+       FROM arr.action_register_attachments a
+       JOIN arr.action_register_items i ON i.id = a.item_id
+       WHERE a.id = $1`,
+      [attId]
+    );
+    const row = r.rows[0];
+    if (!row) return res.status(404).json({ error: "Adjunto no encontrado" });
+    if (!assertDashboardPlantaAccessForActionRegister(req, Number(row.planta_id))) return res.status(403).json({ error: "Sin acceso a esta planta" });
+
+    const buf = await getActionRegisterAttachmentBuffer(client, row);
+    if (!buf) return res.status(404).json({ error: "Archivo no disponible" });
+    res.setHeader("Content-Type", row.content_type || "image/jpeg");
+    res.setHeader("Cache-Control", "private, max-age=300");
+    res.setHeader("Content-Disposition", `inline; filename="${(row.file_name || "foto.jpg").replace(/[^\w.\- ]+/g, "_")}"`);
+    res.send(buf);
+  } catch (e) {
+    console.error("[ActionRegister GET attachment bin]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/** Elimina una foto adjunta del Action Register. */
+app.delete("/api/action-register/attachments/:id", dashboardAuthMiddleware, async (req, res) => {
+  const attId = parseInt(String(req.params.id), 10);
+  if (!attId || !Number.isFinite(attId)) return res.status(400).json({ error: "id inválido" });
+  const client = await pool.connect();
+  try {
+    await ensureActionRegisterTables(client);
+    const r = await client.query(
+      `SELECT a.id, i.planta_id
+       FROM arr.action_register_attachments a
+       JOIN arr.action_register_items i ON i.id = a.item_id
+       WHERE a.id = $1`,
+      [attId]
+    );
+    const row = r.rows[0];
+    if (!row) return res.status(404).json({ error: "Adjunto no encontrado" });
+    if (!assertDashboardPlantaAccessForActionRegister(req, Number(row.planta_id))) return res.status(403).json({ error: "Sin acceso a esta planta" });
+    await client.query(`DELETE FROM arr.action_register_attachments WHERE id = $1`, [attId]);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("[ActionRegister DELETE attachment]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
 /** Exporta a Excel el historial completo del Action Register de una planta. */
 app.get("/api/action-register/export", dashboardAuthMiddleware, async (req, res) => {
   const planta_id = req.query.planta_id != null ? parseInt(String(req.query.planta_id), 10) : null;
@@ -5776,7 +6001,8 @@ app.get("/api/action-register/export", dashboardAuthMiddleware, async (req, res)
     const r = await client.query(
       `SELECT e.revision_id, e.position,
               i.id, i.tema, i.parent_id, i.title, i.responsable, i.due_date, i.closed,
-              i.created_at, i.updated_at
+              i.created_at, i.updated_at,
+              COALESCE((SELECT COUNT(*)::INT FROM arr.action_register_attachments a WHERE a.item_id = i.id), 0) AS attachments_count
        FROM arr.action_register_entries e
        JOIN arr.action_register_items i ON i.id = e.item_id
        JOIN arr.action_register_revisions rv ON rv.id = e.revision_id
@@ -5784,6 +6010,20 @@ app.get("/api/action-register/export", dashboardAuthMiddleware, async (req, res)
        ORDER BY rv.revision_date DESC, i.tema ASC, e.position ASC, i.id ASC`,
       [planta_id]
     );
+
+    const attRes = await client.query(
+      `SELECT a.id, a.item_id, a.file_name, a.content_type, a.s3_key, a.s3_url, a.data
+       FROM arr.action_register_attachments a
+       JOIN arr.action_register_items i ON i.id = a.item_id
+       WHERE i.planta_id = $1
+       ORDER BY a.item_id ASC, a.created_at ASC, a.id ASC`,
+      [planta_id]
+    );
+    const attachmentsByItem = new Map();
+    for (const a of attRes.rows || []) {
+      if (!attachmentsByItem.has(a.item_id)) attachmentsByItem.set(a.item_id, []);
+      attachmentsByItem.get(a.item_id).push(a);
+    }
 
     const wb = new ExcelJS.Workbook();
     wb.creator = "Folio WhatsApp Bot";
@@ -5820,6 +6060,7 @@ app.get("/api/action-register/export", dashboardAuthMiddleware, async (req, res)
       { header: "Responsable", key: "resp", width: 22 },
       { header: "Fecha compromiso", key: "due", width: 18 },
       { header: "Estatus", key: "estatus", width: 12 },
+      { header: "Evidencia", key: "evidencia", width: 12 },
       { header: "Creada", key: "creada", width: 12 },
       { header: "Actualizada", key: "actualizada", width: 12 },
     ];
@@ -5877,6 +6118,7 @@ app.get("/api/action-register/export", dashboardAuthMiddleware, async (req, res)
       });
       for (const it of sorted) {
         const isSub = it.parent_id != null;
+        const attCount = Number(it.attachments_count) || 0;
         const row = ws.addRow({
           rev: fmtDMY(g.revDate),
           tema: g.tema,
@@ -5886,9 +6128,16 @@ app.get("/api/action-register/export", dashboardAuthMiddleware, async (req, res)
           resp: it.responsable || "",
           due: it.due_date ? fmtDMY(it.due_date) : "",
           estatus: it.closed ? "Cerrada" : "Abierta",
+          evidencia: attCount > 0 ? `${attCount} foto${attCount === 1 ? "" : "s"}` : "—",
           creada: it.created_at ? fmtDMY(it.created_at) : "",
           actualizada: it.updated_at ? fmtDMY(it.updated_at) : "",
         });
+        if (attCount > 0) {
+          row.getCell("evidencia").font = { bold: true, color: { argb: "FF2563EB" } };
+          row.getCell("evidencia").alignment = { horizontal: "center" };
+          // Hyperlink a la hoja "Evidencias" con ancla por id de item.
+          row.getCell("evidencia").value = { text: `${attCount} foto${attCount === 1 ? "" : "s"} ▸ ver`, hyperlink: `#Evidencias!A1` };
+        }
         if (it.closed) {
           row.font = { strike: true, color: { argb: "FF6B7280" } };
         }
@@ -5928,6 +6177,81 @@ app.get("/api/action-register/export", dashboardAuthMiddleware, async (req, res)
         data[`rv_${rv.id}`] = c.abiertas + c.cerradas === 0 ? "" : `Abiertas: ${c.abiertas} · Cerradas: ${c.cerradas}`;
       }
       wsR.addRow(data);
+    }
+
+    // Hoja 3: Evidencias (imágenes embebidas). Una sección por acción/subacción con fotos.
+    if (attachmentsByItem.size > 0) {
+      const wsE = wb.addWorksheet("Evidencias");
+      wsE.columns = [
+        { header: "#", key: "num", width: 10 },
+        { header: "Tema", key: "tema", width: 18 },
+        { header: "Acción", key: "title", width: 60 },
+        { header: "Foto", key: "foto", width: 40 },
+        { header: "Archivo", key: "file", width: 30 },
+        { header: "Revisión", key: "rev", width: 14 },
+      ];
+      wsE.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+      wsE.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1F2937" } };
+      wsE.getRow(1).alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+      wsE.views = [{ state: "frozen", ySplit: 1 }];
+
+      // Construye un índice plano con el mejor número/tema/revisión por item_id.
+      const bestLabelByItem = new Map();
+      for (const g of sortedGroups) {
+        const numById = buildNumeration(g.items);
+        for (const it of g.items) {
+          const prev = bestLabelByItem.get(it.id);
+          // Preferimos la primera aparición (revisión más reciente por el sort de sortedGroups).
+          if (!prev) {
+            bestLabelByItem.set(it.id, {
+              num: numById.get(it.id) || "",
+              tema: g.tema,
+              title: it.title || "",
+              revDate: g.revDate,
+            });
+          }
+        }
+      }
+
+      // Itera items con attachments, cada foto en una fila con imagen embebida.
+      const itemIds = Array.from(attachmentsByItem.keys()).sort((a, b) => a - b);
+      for (const itemId of itemIds) {
+        const atts = attachmentsByItem.get(itemId) || [];
+        const label = bestLabelByItem.get(itemId) || { num: "", tema: "", title: `Acción #${itemId}`, revDate: "" };
+        for (const a of atts) {
+          const row = wsE.addRow({
+            num: label.num,
+            tema: label.tema,
+            title: label.title,
+            foto: "",
+            file: a.file_name || "",
+            rev: label.revDate ? fmtDMY(label.revDate) : "",
+          });
+          row.height = 140;
+          row.alignment = { vertical: "middle", wrapText: true };
+
+          try {
+            const buf = await getActionRegisterAttachmentBuffer(client, a);
+            if (buf && buf.length > 0) {
+              const ct = String(a.content_type || "image/jpeg").toLowerCase();
+              const ext = ct === "image/png" ? "png" : ct === "image/gif" ? "gif" : "jpeg";
+              const imageId = wb.addImage({ buffer: buf, extension: ext });
+              // Columna "Foto" = índice 3 (0-based) -> col D.
+              const rowIdx = row.number; // 1-based
+              wsE.addImage(imageId, {
+                tl: { col: 3.05, row: rowIdx - 1 + 0.05 },
+                ext: { width: 220, height: 160 },
+                editAs: "oneCell",
+              });
+            } else {
+              row.getCell("foto").value = "(no disponible)";
+            }
+          } catch (e) {
+            console.error("[ActionRegister export image]", e);
+            row.getCell("foto").value = "(error al cargar)";
+          }
+        }
+      }
     }
 
     const buf = await wb.xlsx.writeBuffer();
