@@ -20,9 +20,12 @@ import {
   uploadActionRegisterAttachment,
   deleteActionRegisterAttachment,
   getActionRegisterAttachmentUrl,
+  createActionRegisterRevisionNote,
+  deleteActionRegisterRevisionNote,
   type ActionRegisterAttachment,
   type ActionRegisterBoardResponse,
   type ActionRegisterItem,
+  type ActionRegisterRevisionNote,
   type ActionRegisterTema,
 } from "@/lib/api";
 
@@ -98,6 +101,9 @@ function ActionRegisterContent() {
   const [photoUploadingByItem, setPhotoUploadingByItem] = useState<Record<number, boolean>>({});
   const [photoPreview, setPhotoPreview] = useState<{ itemId: number; index: number } | null>(null);
 
+  const [noteDraftByRev, setNoteDraftByRev] = useState<Record<number, string>>({});
+  const [noteSavingByRev, setNoteSavingByRev] = useState<Record<number, boolean>>({});
+
   useEffect(() => {
     const t = parseTokenFromQuery(searchParams) || getTokenFromStorage();
     if (t) {
@@ -156,9 +162,45 @@ function ActionRegisterContent() {
     void loadBoard();
   }, [loadBoard]);
 
+  const handleAddNote = useCallback(
+    async (revisionId: number) => {
+      if (!token) return;
+      const draft = (noteDraftByRev[revisionId] || "").trim();
+      if (!draft) return;
+      setNoteSavingByRev((s) => ({ ...s, [revisionId]: true }));
+      try {
+        await createActionRegisterRevisionNote(token, revisionId, draft);
+        setNoteDraftByRev((s) => ({ ...s, [revisionId]: "" }));
+        await loadBoard();
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : "Error";
+        alert("No se pudo guardar el comentario: " + msg);
+      } finally {
+        setNoteSavingByRev((s) => ({ ...s, [revisionId]: false }));
+      }
+    },
+    [token, noteDraftByRev, loadBoard]
+  );
+
+  const handleDeleteNote = useCallback(
+    async (noteId: number) => {
+      if (!token) return;
+      if (!confirm("¿Eliminar este comentario?")) return;
+      try {
+        await deleteActionRegisterRevisionNote(token, noteId);
+        await loadBoard();
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : "Error";
+        alert("No se pudo eliminar: " + msg);
+      }
+    },
+    [token, loadBoard]
+  );
+
   const temas = board?.temas || (["Contrataciones", "Mantenimiento", "General", "Clientes", "Apoyos", "Licencias", "Taller"] as ActionRegisterTema[]);
   const revisions = board?.revisions || [];
   const cells = board?.cells || {};
+  const notesByRev: Record<string, ActionRegisterRevisionNote[]> = board?.notes || {};
 
   const allItemsByTema = useMemo(() => {
     const map = new Map<ActionRegisterTema, Map<number, ActionRegisterItem>>();
@@ -528,6 +570,75 @@ function ActionRegisterContent() {
                 )}
               </div>
             ))}
+
+            {/* Fila de "Comentarios del día" — una celda por revisión, con lista + textarea para agregar. */}
+            <div className="sticky left-0 z-10 border border-slate-700 bg-amber-950/30 px-3 py-3 text-sm font-medium text-amber-200">
+              Comentarios del día
+              <div className="mt-1 text-[11px] font-normal text-amber-200/60">
+                Problemas, operativos, eventos
+              </div>
+            </div>
+            {(revisions.length ? revisions : [{ id: -1, revision_date: "—" } as any]).map((rev) => {
+              if (rev.id === -1) {
+                return (
+                  <div key={`notes-${rev.id}`} className="border border-slate-700 bg-amber-950/10 px-3 py-3 text-xs text-slate-500 italic">
+                    Crea una columna de fecha para registrar comentarios.
+                  </div>
+                );
+              }
+              const ridKey = String(rev.id);
+              const revNotes = notesByRev[ridKey] || [];
+              const draft = noteDraftByRev[rev.id] || "";
+              const saving = noteSavingByRev[rev.id] === true;
+              return (
+                <div key={`notes-${rev.id}`} className="border border-slate-700 bg-amber-950/10 px-3 py-3 space-y-2">
+                  {revNotes.length === 0 && (
+                    <div className="text-xs text-slate-500 italic">Sin comentarios.</div>
+                  )}
+                  {revNotes.map((n) => {
+                    const dt = n.created_at ? new Date(n.created_at) : null;
+                    const hora = dt && !isNaN(dt.getTime())
+                      ? dt.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit", hour12: false })
+                      : "";
+                    return (
+                      <div key={n.id} className="group relative rounded border border-amber-500/20 bg-amber-500/5 px-2 py-1.5 text-xs">
+                        <div className="whitespace-pre-wrap text-amber-50">{n.body}</div>
+                        <div className="mt-1 flex items-center justify-between text-[10px] text-amber-200/60">
+                          <span>
+                            {n.author_name || "—"}
+                            {hora ? ` · ${hora}` : ""}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => void handleDeleteNote(n.id)}
+                            className="opacity-0 group-hover:opacity-100 text-red-300 hover:text-red-200 transition-opacity"
+                            title="Eliminar comentario"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <textarea
+                    placeholder="Agregar comentario del día..."
+                    value={draft}
+                    onChange={(e) => setNoteDraftByRev((s) => ({ ...s, [rev.id]: e.target.value }))}
+                    rows={2}
+                    className="w-full rounded border border-slate-600 bg-slate-900/60 px-2 py-1 text-xs text-slate-100 placeholder:text-slate-500 focus:border-amber-400 focus:outline-none resize-y"
+                    disabled={saving}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void handleAddNote(rev.id)}
+                    disabled={saving || draft.trim().length === 0}
+                    className="text-xs rounded bg-amber-600 hover:bg-amber-500 disabled:bg-slate-700 disabled:text-slate-500 px-3 py-1 text-white font-medium"
+                  >
+                    {saving ? "Guardando..." : "Agregar comentario"}
+                  </button>
+                </div>
+              );
+            })}
 
             {temas.map((tema) => (
               <div key={tema} className="contents">

@@ -5495,10 +5495,21 @@ async function ensureActionRegisterTables(client) {
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
   `).catch(() => {});
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS arr.action_register_revision_notes (
+      id SERIAL PRIMARY KEY,
+      revision_id INT NOT NULL REFERENCES arr.action_register_revisions(id) ON DELETE CASCADE,
+      body TEXT NOT NULL,
+      author_name TEXT NOT NULL DEFAULT '',
+      created_by_usuario_id INT NULL REFERENCES public.usuarios(id),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `).catch(() => {});
   await client.query(`CREATE INDEX IF NOT EXISTS idx_ar_revisions_planta_date ON arr.action_register_revisions(planta_id, revision_date);`).catch(() => {});
   await client.query(`CREATE INDEX IF NOT EXISTS idx_ar_items_planta_tema ON arr.action_register_items(planta_id, tema);`).catch(() => {});
   await client.query(`CREATE INDEX IF NOT EXISTS idx_ar_entries_revision_pos ON arr.action_register_entries(revision_id, position);`).catch(() => {});
   await client.query(`CREATE INDEX IF NOT EXISTS idx_ar_attachments_item ON arr.action_register_attachments(item_id);`).catch(() => {});
+  await client.query(`CREATE INDEX IF NOT EXISTS idx_ar_notes_revision ON arr.action_register_revision_notes(revision_id, created_at);`).catch(() => {});
 }
 
 /** Sube una imagen al bucket S3 con su content-type correcto. Devuelve publicUrl. */
@@ -5586,6 +5597,110 @@ app.post("/api/action-register/revisions", dashboardAuthMiddleware, async (req, 
     res.status(201).json({ revision: ins.rows[0] });
   } catch (e) {
     console.error("[ActionRegister POST revisions]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/** Lista comentarios del día de una revisión. */
+app.get("/api/action-register/revisions/:id/notes", dashboardAuthMiddleware, async (req, res) => {
+  const revision_id = parseInt(String(req.params.id || ""), 10);
+  if (!revision_id || !Number.isFinite(revision_id)) return res.status(400).json({ error: "revision_id inválido" });
+  const client = await pool.connect();
+  try {
+    await ensureActionRegisterTables(client);
+    const rv = await client.query(`SELECT id, planta_id FROM arr.action_register_revisions WHERE id = $1`, [revision_id]);
+    if (!rv.rows[0]) return res.status(404).json({ error: "Revisión no encontrada" });
+    if (!assertDashboardPlantaAccessForActionRegister(req, rv.rows[0].planta_id)) return res.status(403).json({ error: "Sin acceso a esta planta" });
+    const r = await client.query(
+      `SELECT id, revision_id, body, author_name, created_at, created_by_usuario_id
+       FROM arr.action_register_revision_notes
+       WHERE revision_id = $1
+       ORDER BY created_at ASC, id ASC`,
+      [revision_id]
+    );
+    res.json({
+      notes: (r.rows || []).map((n) => ({
+        id: n.id,
+        revision_id: n.revision_id,
+        body: n.body,
+        author_name: n.author_name || "",
+        created_at: n.created_at,
+      })),
+    });
+  } catch (e) {
+    console.error("[ActionRegister GET notes]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/** Crea un comentario del día para una revisión. */
+app.post("/api/action-register/revisions/:id/notes", dashboardAuthMiddleware, async (req, res) => {
+  const revision_id = parseInt(String(req.params.id || ""), 10);
+  if (!revision_id || !Number.isFinite(revision_id)) return res.status(400).json({ error: "revision_id inválido" });
+  const body = req.body || {};
+  const texto = body.body != null ? String(body.body).trim() : "";
+  if (!texto) return res.status(400).json({ error: "El comentario no puede estar vacío" });
+  if (texto.length > 2000) return res.status(400).json({ error: "Comentario demasiado largo (máx 2000 caracteres)" });
+  const client = await pool.connect();
+  try {
+    await ensureActionRegisterTables(client);
+    const rv = await client.query(`SELECT id, planta_id FROM arr.action_register_revisions WHERE id = $1`, [revision_id]);
+    if (!rv.rows[0]) return res.status(404).json({ error: "Revisión no encontrada" });
+    if (!assertDashboardPlantaAccessForActionRegister(req, rv.rows[0].planta_id)) return res.status(403).json({ error: "Sin acceso a esta planta" });
+
+    // Autor: mejor esfuerzo a partir del usuario autenticado.
+    let authorName = "";
+    const actorId = req.dashboardAuth && req.dashboardAuth.actor_id ? Number(req.dashboardAuth.actor_id) : null;
+    if (Number.isFinite(actorId)) {
+      try {
+        const u = await client.query(
+          `SELECT COALESCE(NULLIF(TRIM(COALESCE(nombre_persona, '')), ''), nombre) AS display
+           FROM public.usuarios WHERE id = $1`,
+          [actorId]
+        );
+        authorName = String((u.rows[0] && u.rows[0].display) || "").trim();
+      } catch (_) {}
+    }
+
+    const ins = await client.query(
+      `INSERT INTO arr.action_register_revision_notes (revision_id, body, author_name, created_by_usuario_id)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, revision_id, body, author_name, created_at`,
+      [revision_id, texto, authorName, actorId]
+    );
+    res.status(201).json({ note: ins.rows[0] });
+  } catch (e) {
+    console.error("[ActionRegister POST notes]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/** Elimina un comentario del día. */
+app.delete("/api/action-register/notes/:id", dashboardAuthMiddleware, async (req, res) => {
+  const note_id = parseInt(String(req.params.id || ""), 10);
+  if (!note_id || !Number.isFinite(note_id)) return res.status(400).json({ error: "note_id inválido" });
+  const client = await pool.connect();
+  try {
+    await ensureActionRegisterTables(client);
+    const n = await client.query(
+      `SELECT n.id, rv.planta_id
+       FROM arr.action_register_revision_notes n
+       JOIN arr.action_register_revisions rv ON rv.id = n.revision_id
+       WHERE n.id = $1`,
+      [note_id]
+    );
+    if (!n.rows[0]) return res.status(404).json({ error: "Nota no encontrada" });
+    if (!assertDashboardPlantaAccessForActionRegister(req, n.rows[0].planta_id)) return res.status(403).json({ error: "Sin acceso a esta planta" });
+    await client.query(`DELETE FROM arr.action_register_revision_notes WHERE id = $1`, [note_id]);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("[ActionRegister DELETE notes]", e);
     res.status(500).json({ error: e.message });
   } finally {
     client.release();
@@ -5737,7 +5852,35 @@ app.get("/api/action-register/board", dashboardAuthMiddleware, async (req, res) 
       // No romper el board si falla la carga de DICF.
     }
 
-    res.json({ temas: ACTION_REGISTER_TEMAS, revisions, cells: byRevisionTema });
+    // Comentarios del día por revisión (operativos, paros, incidentes, etc.).
+    const notesByRevision = {};
+    try {
+      if (revisions.length > 0) {
+        const notesRes = await client.query(
+          `SELECT n.id, n.revision_id, n.body, n.author_name, n.created_at, n.created_by_usuario_id
+           FROM arr.action_register_revision_notes n
+           JOIN arr.action_register_revisions rv ON rv.id = n.revision_id
+           WHERE rv.planta_id = $1
+           ORDER BY n.revision_id ASC, n.created_at ASC, n.id ASC`,
+          [planta_id]
+        );
+        for (const n of notesRes.rows || []) {
+          const rid = String(n.revision_id);
+          if (!notesByRevision[rid]) notesByRevision[rid] = [];
+          notesByRevision[rid].push({
+            id: n.id,
+            revision_id: n.revision_id,
+            body: n.body,
+            author_name: n.author_name || "",
+            created_at: n.created_at,
+          });
+        }
+      }
+    } catch (e) {
+      console.error("[ActionRegister board notes]", e);
+    }
+
+    res.json({ temas: ACTION_REGISTER_TEMAS, revisions, cells: byRevisionTema, notes: notesByRevision });
   } catch (e) {
     console.error("[ActionRegister board]", e);
     res.status(500).json({ error: e.message });
@@ -6152,6 +6295,21 @@ app.get("/api/action-register/export", dashboardAuthMiddleware, async (req, res)
       dicfAccionesRows = [];
     }
 
+    // Comentarios del día por revisión (se exportan en hoja separada).
+    const notesRes = await client.query(
+      `SELECT n.id, n.revision_id, n.body, n.author_name, n.created_at
+       FROM arr.action_register_revision_notes n
+       JOIN arr.action_register_revisions rv ON rv.id = n.revision_id
+       WHERE rv.planta_id = $1
+       ORDER BY rv.revision_date DESC, n.created_at ASC, n.id ASC`,
+      [planta_id]
+    );
+    const notesByRevisionId = new Map();
+    for (const n of notesRes.rows || []) {
+      if (!notesByRevisionId.has(n.revision_id)) notesByRevisionId.set(n.revision_id, []);
+      notesByRevisionId.get(n.revision_id).push(n);
+    }
+
     const wb = new ExcelJS.Workbook();
     wb.creator = "Folio WhatsApp Bot";
     wb.created = new Date();
@@ -6405,6 +6563,56 @@ app.get("/api/action-register/export", dashboardAuthMiddleware, async (req, res)
         data[`rv_${rv.id}`] = c.abiertas + c.cerradas === 0 ? "" : `Abiertas: ${c.abiertas} · Cerradas: ${c.cerradas}`;
       }
       wsR.addRow(data);
+    }
+
+    // Hoja: Comentarios del día (problemas/eventos por revisión).
+    if (notesRes.rows.length > 0) {
+      const wsN = wb.addWorksheet("Comentarios del día");
+      wsN.columns = [
+        { header: "Fecha revisión", key: "rev", width: 16 },
+        { header: "Hora", key: "hora", width: 12 },
+        { header: "Autor", key: "autor", width: 24 },
+        { header: "Comentario", key: "comentario", width: 80 },
+      ];
+      wsN.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+      wsN.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1F2937" } };
+      wsN.getRow(1).alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+      wsN.views = [{ state: "frozen", ySplit: 1 }];
+
+      function fmtHora(d) {
+        if (!d) return "";
+        const dt = d instanceof Date ? d : new Date(d);
+        if (isNaN(dt.getTime())) return "";
+        try {
+          return dt.toLocaleTimeString("es-MX", {
+            timeZone: "America/Mexico_City",
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false,
+          });
+        } catch (_) {
+          const h = String(dt.getHours()).padStart(2, "0");
+          const m = String(dt.getMinutes()).padStart(2, "0");
+          return `${h}:${m}`;
+        }
+      }
+
+      // Itera en el mismo orden que los revisions (más recientes arriba).
+      for (const rv of revisions) {
+        const arr = notesByRevisionId.get(rv.id) || [];
+        for (const n of arr) {
+          const row = wsN.addRow({
+            rev: fmtDMY(rv.revision_date),
+            hora: fmtHora(n.created_at),
+            autor: n.author_name || "—",
+            comentario: n.body || "",
+          });
+          row.getCell("comentario").alignment = { wrapText: true, vertical: "top" };
+          row.getCell("autor").alignment = { vertical: "top" };
+          row.getCell("rev").alignment = { vertical: "top" };
+          row.getCell("hora").alignment = { vertical: "top" };
+        }
+      }
     }
 
     // Hoja 3: Evidencias (imágenes embebidas). Una sección por acción/subacción con fotos.

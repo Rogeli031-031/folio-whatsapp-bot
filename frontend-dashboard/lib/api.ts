@@ -97,11 +97,21 @@ export interface ActionRegisterAttachment {
   created_at: string;
 }
 
+export interface ActionRegisterRevisionNote {
+  id: number;
+  revision_id: number;
+  body: string;
+  author_name: string;
+  created_at: string;
+}
+
 export interface ActionRegisterBoardResponse {
   temas: ActionRegisterTema[];
   revisions: ActionRegisterRevision[];
   /** cells[revisionId][tema] = items (incluye subacciones con parent_id) */
   cells: Record<string, Record<string, ActionRegisterItem[]>>;
+  /** notes[revisionId] = comentarios del día de esa revisión */
+  notes?: Record<string, ActionRegisterRevisionNote[]>;
 }
 
 export function getActionRegisterExportUrl(token: string, planta_id: number): string {
@@ -196,6 +206,35 @@ export function deleteActionRegisterAttachment(
 export function getActionRegisterAttachmentUrl(token: string, attachmentId: number): string {
   const base = getApiUrl(`/api/action-register/attachments/${attachmentId}`);
   return `${base}?t=${encodeURIComponent(token)}`;
+}
+
+export function fetchActionRegisterRevisionNotes(
+  token: string,
+  revisionId: number
+): Promise<{ notes: ActionRegisterRevisionNote[] }> {
+  return apiFetch<{ notes: ActionRegisterRevisionNote[] }>(`/api/action-register/revisions/${revisionId}/notes`, { token });
+}
+
+export function createActionRegisterRevisionNote(
+  token: string,
+  revisionId: number,
+  body: string
+): Promise<{ note: ActionRegisterRevisionNote }> {
+  return apiFetch<{ note: ActionRegisterRevisionNote }>(`/api/action-register/revisions/${revisionId}/notes`, {
+    token,
+    method: "POST",
+    body: JSON.stringify({ body }),
+  });
+}
+
+export function deleteActionRegisterRevisionNote(
+  token: string,
+  noteId: number
+): Promise<{ ok: true }> {
+  return apiFetch<{ ok: true }>(`/api/action-register/notes/${noteId}`, {
+    token,
+    method: "DELETE",
+  });
 }
 
 export interface KanbanBoard {
