@@ -5505,11 +5505,27 @@ async function ensureActionRegisterTables(client) {
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
   `).catch(() => {});
+  // Fotos de evidencia para acciones DICF (Delta Ingreso Cliente Forecast).
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS arr.dicf_acciones_attachments (
+      id SERIAL PRIMARY KEY,
+      dicf_accion_id INT NOT NULL REFERENCES arr.dicf_acciones(id) ON DELETE CASCADE,
+      file_name TEXT NOT NULL DEFAULT '',
+      content_type TEXT NOT NULL DEFAULT 'image/jpeg',
+      file_size_bytes INT NOT NULL DEFAULT 0,
+      s3_key TEXT NULL,
+      s3_url TEXT NULL,
+      data BYTEA NULL,
+      uploaded_by_usuario_id INT NULL REFERENCES public.usuarios(id),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `).catch(() => {});
   await client.query(`CREATE INDEX IF NOT EXISTS idx_ar_revisions_planta_date ON arr.action_register_revisions(planta_id, revision_date);`).catch(() => {});
   await client.query(`CREATE INDEX IF NOT EXISTS idx_ar_items_planta_tema ON arr.action_register_items(planta_id, tema);`).catch(() => {});
   await client.query(`CREATE INDEX IF NOT EXISTS idx_ar_entries_revision_pos ON arr.action_register_entries(revision_id, position);`).catch(() => {});
   await client.query(`CREATE INDEX IF NOT EXISTS idx_ar_attachments_item ON arr.action_register_attachments(item_id);`).catch(() => {});
   await client.query(`CREATE INDEX IF NOT EXISTS idx_ar_notes_revision ON arr.action_register_revision_notes(revision_id, created_at);`).catch(() => {});
+  await client.query(`CREATE INDEX IF NOT EXISTS idx_dicf_attachments_accion ON arr.dicf_acciones_attachments(dicf_accion_id);`).catch(() => {});
 }
 
 /** Sube una imagen al bucket S3 con su content-type correcto. Devuelve publicUrl. */
@@ -5538,6 +5554,22 @@ async function getActionRegisterAttachmentBuffer(client, attachmentRow) {
   // Último intento: si no se trajo data en el SELECT original, leerla ahora.
   try {
     const r = await client.query(`SELECT data FROM arr.action_register_attachments WHERE id = $1`, [attachmentRow.id]);
+    if (r.rows[0] && r.rows[0].data) return Buffer.from(r.rows[0].data);
+  } catch (e) {}
+  return null;
+}
+
+/** Devuelve el buffer binario de una foto de DICF (desde S3 o bytea). */
+async function getDicfAttachmentBuffer(client, attachmentRow) {
+  if (!attachmentRow) return null;
+  if (attachmentRow.s3_key && s3Enabled) {
+    try { return await getBufferFromS3(attachmentRow.s3_key); } catch (e) {}
+  }
+  if (attachmentRow.data) {
+    return Buffer.isBuffer(attachmentRow.data) ? attachmentRow.data : Buffer.from(attachmentRow.data);
+  }
+  try {
+    const r = await client.query(`SELECT data FROM arr.dicf_acciones_attachments WHERE id = $1`, [attachmentRow.id]);
     if (r.rows[0] && r.rows[0].data) return Buffer.from(r.rows[0].data);
   } catch (e) {}
   return null;
@@ -5767,7 +5799,8 @@ app.get("/api/action-register/board", dashboardAuthMiddleware, async (req, res) 
                     a.cliente_nombre, a.descripcion, a.estado, a.fecha_compromiso, a.compromiso_tarde,
                     a.cerrado_at, a.resultado_cierre, a.created_at,
                     to_char((a.created_at AT TIME ZONE 'America/Mexico_City')::date, 'YYYY-MM-DD') AS creada_ymd,
-                    COALESCE(NULLIF(TRIM(COALESCE(rp.nombre_persona,'')), ''), rp.nombre) AS responsable_nombre
+                    COALESCE(NULLIF(TRIM(COALESCE(rp.nombre_persona,'')), ''), rp.nombre) AS responsable_nombre,
+                    COALESCE((SELECT COUNT(*)::INT FROM arr.dicf_acciones_attachments att WHERE att.dicf_accion_id = a.id), 0) AS attachments_count
              FROM arr.dicf_acciones a
              LEFT JOIN public.usuarios rp ON rp.id = a.responsable_usuario_id
              WHERE a.planta_id = ANY($1::int[])
@@ -5831,7 +5864,7 @@ app.get("/api/action-register/board", dashboardAuthMiddleware, async (req, res) 
               due_date: a.fecha_compromiso || null,
               closed: cerrada,
               position,
-              attachments_count: 0,
+              attachments_count: Number(a.attachments_count) || 0,
               dicf: true,
               dicf_id: a.id,
               dicf_public_code: a.public_code,
@@ -6220,6 +6253,174 @@ app.delete("/api/action-register/attachments/:id", dashboardAuthMiddleware, asyn
   }
 });
 
+/* ============================================================
+ * Fotos de evidencia para acciones DICF (Delta Ingreso Cliente Forecast).
+ * ============================================================ */
+
+function assertDashboardPlantaAccessForDicf(req, plantaId) {
+  // Misma regla que el Action Register: GV solo sus plantas; el resto, todas.
+  return assertDashboardPlantaAccessForActionRegister(req, plantaId);
+}
+
+/** Sube una foto (base64) a una acción DICF. */
+app.post("/api/dicf-acciones/:id/attachments", dashboardAuthMiddleware, async (req, res) => {
+  const accionId = parseInt(String(req.params.id), 10);
+  if (!accionId || !Number.isFinite(accionId)) return res.status(400).json({ error: "id inválido" });
+  const body = req.body || {};
+  const fileBase64 = typeof body.fileBase64 === "string" ? body.fileBase64 : "";
+  const fileName = body.fileName != null && String(body.fileName).trim() !== "" ? String(body.fileName).trim().slice(0, 200) : "foto.jpg";
+  let contentType = (body.contentType != null ? String(body.contentType).trim().toLowerCase() : "image/jpeg") || "image/jpeg";
+  if (!ACTION_REGISTER_IMAGE_MIME.has(contentType)) {
+    const lowerName = fileName.toLowerCase();
+    if (lowerName.endsWith(".png")) contentType = "image/png";
+    else if (lowerName.endsWith(".webp")) contentType = "image/webp";
+    else if (lowerName.endsWith(".gif")) contentType = "image/gif";
+    else contentType = "image/jpeg";
+  }
+  if (!fileBase64) return res.status(400).json({ error: "Envía fileBase64 (imagen)" });
+  let buffer;
+  try { buffer = Buffer.from(fileBase64, "base64"); } catch (e) { return res.status(400).json({ error: "fileBase64 inválido" }); }
+  if (!buffer || buffer.length === 0) return res.status(400).json({ error: "Archivo vacío" });
+  const MAX_BYTES = 8 * 1024 * 1024;
+  if (buffer.length > MAX_BYTES) return res.status(413).json({ error: `La imagen excede el tamaño máximo de ${Math.floor(MAX_BYTES / 1024 / 1024)}MB` });
+
+  const client = await pool.connect();
+  try {
+    await ensureActionRegisterTables(client);
+    const a = await client.query(`SELECT id, planta_id FROM arr.dicf_acciones WHERE id = $1`, [accionId]);
+    if (!a.rows[0]) return res.status(404).json({ error: "Acción DICF no encontrada" });
+    const plantaId = Number(a.rows[0].planta_id);
+    if (!assertDashboardPlantaAccessForDicf(req, plantaId)) return res.status(403).json({ error: "Sin acceso a esta planta" });
+
+    let s3Key = null;
+    let s3Url = null;
+    let bytea = null;
+    if (s3Enabled) {
+      const ext = actionRegisterMimeToExt(contentType);
+      s3Key = `dicf-acciones/${plantaId}/${accionId}/${Date.now()}-${crypto.randomBytes(4).toString("hex")}.${ext}`;
+      try {
+        s3Url = await uploadImageToS3(buffer, s3Key, contentType);
+      } catch (e) {
+        console.error("[DICF attachments S3]", e);
+        s3Key = null;
+        s3Url = null;
+        bytea = buffer;
+      }
+    } else {
+      bytea = buffer;
+    }
+
+    const ins = await client.query(
+      `INSERT INTO arr.dicf_acciones_attachments (dicf_accion_id, file_name, content_type, file_size_bytes, s3_key, s3_url, data, uploaded_by_usuario_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id, dicf_accion_id, file_name, content_type, file_size_bytes, s3_key, s3_url, created_at`,
+      [accionId, fileName, contentType, buffer.length, s3Key, s3Url, bytea, req.dashboardAuth.actor_id || null]
+    );
+    const row = ins.rows[0];
+    res.status(201).json({
+      attachment: {
+        id: row.id,
+        dicf_accion_id: row.dicf_accion_id,
+        file_name: row.file_name,
+        content_type: row.content_type,
+        file_size_bytes: row.file_size_bytes,
+        created_at: row.created_at,
+      },
+    });
+  } catch (e) {
+    console.error("[DICF POST attachment]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/** Lista fotos de una acción DICF. */
+app.get("/api/dicf-acciones/:id/attachments", dashboardAuthMiddleware, async (req, res) => {
+  const accionId = parseInt(String(req.params.id), 10);
+  if (!accionId || !Number.isFinite(accionId)) return res.status(400).json({ error: "id inválido" });
+  const client = await pool.connect();
+  try {
+    await ensureActionRegisterTables(client);
+    const a = await client.query(`SELECT id, planta_id FROM arr.dicf_acciones WHERE id = $1`, [accionId]);
+    if (!a.rows[0]) return res.status(404).json({ error: "Acción DICF no encontrada" });
+    if (!assertDashboardPlantaAccessForDicf(req, Number(a.rows[0].planta_id))) return res.status(403).json({ error: "Sin acceso a esta planta" });
+
+    const r = await client.query(
+      `SELECT id, dicf_accion_id, file_name, content_type, file_size_bytes, created_at
+       FROM arr.dicf_acciones_attachments
+       WHERE dicf_accion_id = $1
+       ORDER BY created_at ASC, id ASC`,
+      [accionId]
+    );
+    res.json({ attachments: r.rows || [] });
+  } catch (e) {
+    console.error("[DICF GET attachments]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/** Sirve el binario de una foto DICF. Soporta ?t=<token> para <img src>. */
+app.get("/api/dicf-attachments/:id", dashboardAuthMiddleware, async (req, res) => {
+  const attId = parseInt(String(req.params.id), 10);
+  if (!attId || !Number.isFinite(attId)) return res.status(400).json({ error: "id inválido" });
+  const client = await pool.connect();
+  try {
+    await ensureActionRegisterTables(client);
+    const r = await client.query(
+      `SELECT a.id, a.dicf_accion_id, a.file_name, a.content_type, a.s3_key, a.s3_url, a.data, da.planta_id
+       FROM arr.dicf_acciones_attachments a
+       JOIN arr.dicf_acciones da ON da.id = a.dicf_accion_id
+       WHERE a.id = $1`,
+      [attId]
+    );
+    const row = r.rows[0];
+    if (!row) return res.status(404).json({ error: "Adjunto no encontrado" });
+    if (!assertDashboardPlantaAccessForDicf(req, Number(row.planta_id))) return res.status(403).json({ error: "Sin acceso a esta planta" });
+
+    const buf = await getDicfAttachmentBuffer(client, row);
+    if (!buf) return res.status(404).json({ error: "Archivo no disponible" });
+    res.setHeader("Content-Type", row.content_type || "image/jpeg");
+    res.setHeader("Cache-Control", "private, max-age=300");
+    res.setHeader("Content-Disposition", `inline; filename="${(row.file_name || "foto.jpg").replace(/[^\w.\- ]+/g, "_")}"`);
+    res.send(buf);
+  } catch (e) {
+    console.error("[DICF GET attachment bin]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/** Elimina una foto DICF. */
+app.delete("/api/dicf-attachments/:id", dashboardAuthMiddleware, async (req, res) => {
+  const attId = parseInt(String(req.params.id), 10);
+  if (!attId || !Number.isFinite(attId)) return res.status(400).json({ error: "id inválido" });
+  const client = await pool.connect();
+  try {
+    await ensureActionRegisterTables(client);
+    const r = await client.query(
+      `SELECT a.id, da.planta_id
+       FROM arr.dicf_acciones_attachments a
+       JOIN arr.dicf_acciones da ON da.id = a.dicf_accion_id
+       WHERE a.id = $1`,
+      [attId]
+    );
+    const row = r.rows[0];
+    if (!row) return res.status(404).json({ error: "Adjunto no encontrado" });
+    if (!assertDashboardPlantaAccessForDicf(req, Number(row.planta_id))) return res.status(403).json({ error: "Sin acceso a esta planta" });
+    await client.query(`DELETE FROM arr.dicf_acciones_attachments WHERE id = $1`, [attId]);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("[DICF DELETE attachment]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
 /** Exporta a Excel el historial completo del Action Register de una planta. */
 app.get("/api/action-register/export", dashboardAuthMiddleware, async (req, res) => {
   const planta_id = req.query.planta_id != null ? parseInt(String(req.query.planta_id), 10) : null;
@@ -6293,6 +6494,28 @@ app.get("/api/action-register/export", dashboardAuthMiddleware, async (req, res)
     } catch (e) {
       console.error("[ActionRegister export DICF]", e);
       dicfAccionesRows = [];
+    }
+
+    // Fotos de acciones DICF para esta planta (y sus plantas equivalentes).
+    const dicfAttachmentsByAccion = new Map();
+    try {
+      const equivPlantas = dicfAccionesLib.getPlantaIdsEquivalentes(planta_id);
+      if (equivPlantas.length > 0) {
+        const dAttRes = await client.query(
+          `SELECT a.id, a.dicf_accion_id, a.file_name, a.content_type, a.s3_key, a.s3_url, a.data
+           FROM arr.dicf_acciones_attachments a
+           JOIN arr.dicf_acciones da ON da.id = a.dicf_accion_id
+           WHERE da.planta_id = ANY($1::int[])
+           ORDER BY a.dicf_accion_id ASC, a.created_at ASC, a.id ASC`,
+          [equivPlantas]
+        );
+        for (const a of dAttRes.rows || []) {
+          if (!dicfAttachmentsByAccion.has(a.dicf_accion_id)) dicfAttachmentsByAccion.set(a.dicf_accion_id, []);
+          dicfAttachmentsByAccion.get(a.dicf_accion_id).push(a);
+        }
+      }
+    } catch (e) {
+      console.error("[ActionRegister export DICF attachments]", e);
     }
 
     // Comentarios del día por revisión (se exportan en hoja separada).
@@ -6490,6 +6713,7 @@ app.get("/api/action-register/export", dashboardAuthMiddleware, async (req, res)
           if (cliente) titleParts.push(cliente);
           titleParts.push(descr || "(sin descripción)");
           const title = titleParts.join(" — ");
+          const dicfAttCount = (dicfAttachmentsByAccion.get(Number(a.id)) || []).length;
           const row = ws.addRow({
             rev: fmtDMY(g.revDate),
             tema: "Clientes",
@@ -6499,10 +6723,14 @@ app.get("/api/action-register/export", dashboardAuthMiddleware, async (req, res)
             resp: a.responsable_nombre || "",
             due: a.fecha_compromiso ? fmtDMY(a.fecha_compromiso) : "",
             estatus: dicfEstadoLabel(String(a.estado || "").toLowerCase(), a.cerrado_at),
-            evidencia: "—",
+            evidencia: dicfAttCount > 0 ? "" : "—",
             creada: a.created_at ? fmtDMY(a.created_at) : "",
             actualizada: a.updated_at ? fmtDMY(a.updated_at) : "",
           });
+          if (dicfAttCount > 0) {
+            row.getCell("evidencia").value = { text: `${dicfAttCount} foto${dicfAttCount === 1 ? "" : "s"} ▸ ver`, hyperlink: `#Evidencias!A1` };
+            row.getCell("evidencia").font = { color: { argb: "FF1D4ED8" }, underline: true };
+          }
           row.eachCell({ includeEmpty: true }, (cell) => { cell.fill = DICF_ROW_FILL; });
           row.getCell("num").font = { bold: true, color: { argb: "FF1D4ED8" } };
           row.getCell("tipo").font = { bold: true, color: { argb: "FF1D4ED8" } };
@@ -6616,7 +6844,7 @@ app.get("/api/action-register/export", dashboardAuthMiddleware, async (req, res)
     }
 
     // Hoja 3: Evidencias (imágenes embebidas). Una sección por acción/subacción con fotos.
-    if (attachmentsByItem.size > 0) {
+    if (attachmentsByItem.size > 0 || dicfAttachmentsByAccion.size > 0) {
       const wsE = wb.addWorksheet("Evidencias");
       wsE.columns = [
         { header: "#", key: "num", width: 10 },
@@ -6684,6 +6912,58 @@ app.get("/api/action-register/export", dashboardAuthMiddleware, async (req, res)
             }
           } catch (e) {
             console.error("[ActionRegister export image]", e);
+            row.getCell("foto").value = "(error al cargar)";
+          }
+        }
+      }
+
+      // Fotos de acciones DICF (tipo "Clientes").
+      const dicfInfoById = new Map();
+      for (const a of dicfAccionesRows || []) dicfInfoById.set(Number(a.id), a);
+      const dicfIds = Array.from(dicfAttachmentsByAccion.keys()).sort((a, b) => a - b);
+      for (const accionId of dicfIds) {
+        const atts = dicfAttachmentsByAccion.get(accionId) || [];
+        const info = dicfInfoById.get(Number(accionId));
+        const title = info
+          ? `${info.cliente_nombre || "(sin cliente)"} — ${info.descripcion || "(sin descripción)"}`
+          : `Acción DICF #${accionId}`;
+        const revDate = info && info.created_at
+          ? (() => { try { return String(info.created_at).slice(0, 10); } catch { return ""; } })()
+          : "";
+        for (const a of atts) {
+          const row = wsE.addRow({
+            num: info && info.public_code ? info.public_code : "",
+            tema: "Clientes (DICF)",
+            title,
+            foto: "",
+            file: a.file_name || "",
+            rev: revDate ? fmtDMY(revDate) : "",
+          });
+          row.height = 140;
+          row.alignment = { vertical: "middle", wrapText: true };
+          // Pinta la fila de azul claro para distinguir DICF.
+          row.eachCell((cell) => {
+            cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEFF6FF" } };
+            cell.font = { color: { argb: "FF1E3A8A" } };
+          });
+
+          try {
+            const buf2 = await getDicfAttachmentBuffer(client, a);
+            if (buf2 && buf2.length > 0) {
+              const ct = String(a.content_type || "image/jpeg").toLowerCase();
+              const ext = ct === "image/png" ? "png" : ct === "image/gif" ? "gif" : "jpeg";
+              const imageId = wb.addImage({ buffer: buf2, extension: ext });
+              const rowIdx = row.number;
+              wsE.addImage(imageId, {
+                tl: { col: 3.05, row: rowIdx - 1 + 0.05 },
+                ext: { width: 220, height: 160 },
+                editAs: "oneCell",
+              });
+            } else {
+              row.getCell("foto").value = "(no disponible)";
+            }
+          } catch (e) {
+            console.error("[ActionRegister export DICF image]", e);
             row.getCell("foto").value = "(error al cargar)";
           }
         }

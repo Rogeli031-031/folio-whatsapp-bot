@@ -22,11 +22,16 @@ import {
   getActionRegisterAttachmentUrl,
   createActionRegisterRevisionNote,
   deleteActionRegisterRevisionNote,
+  fetchDicfAttachments,
+  uploadDicfAttachment,
+  deleteDicfAttachment,
+  getDicfAttachmentUrl,
   type ActionRegisterAttachment,
   type ActionRegisterBoardResponse,
   type ActionRegisterItem,
   type ActionRegisterRevisionNote,
   type ActionRegisterTema,
+  type DicfAttachment,
 } from "@/lib/api";
 
 function ymdToday(): string {
@@ -96,7 +101,7 @@ function ActionRegisterContent() {
   const [draftSubByItem, setDraftSubByItem] = useState<Record<string, { title: string; responsable: string; due_date: string }>>({});
   const [pickExistingByCell, setPickExistingByCell] = useState<Record<string, number | "">>({});
 
-  const [photosByItem, setPhotosByItem] = useState<Record<number, ActionRegisterAttachment[]>>({});
+  const [photosByItem, setPhotosByItem] = useState<Record<number, (ActionRegisterAttachment | DicfAttachment)[]>>({});
   const [photosOpenByItem, setPhotosOpenByItem] = useState<Record<number, boolean>>({});
   const [photoUploadingByItem, setPhotoUploadingByItem] = useState<Record<number, boolean>>({});
   const [photoPreview, setPhotoPreview] = useState<{ itemId: number; index: number } | null>(null);
@@ -304,11 +309,13 @@ function ActionRegisterContent() {
   );
 
   const loadPhotos = useCallback(
-    async (itemId: number) => {
+    async (item: ActionRegisterItem) => {
       if (!token) return;
       try {
-        const r = await fetchActionRegisterAttachments(token, itemId);
-        setPhotosByItem((prev) => ({ ...prev, [itemId]: r.attachments || [] }));
+        const r = item.dicf && item.dicf_id
+          ? await fetchDicfAttachments(token, item.dicf_id)
+          : await fetchActionRegisterAttachments(token, item.id);
+        setPhotosByItem((prev) => ({ ...prev, [item.id]: r.attachments || [] }));
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : "Error";
         if (msg.includes("401") || msg.toLowerCase().includes("token")) setUnauthorized(true);
@@ -319,18 +326,18 @@ function ActionRegisterContent() {
   );
 
   const togglePhotos = useCallback(
-    async (itemId: number) => {
-      const wasOpen = photosOpenByItem[itemId] === true;
-      setPhotosOpenByItem((p) => ({ ...p, [itemId]: !wasOpen }));
-      if (!wasOpen && !photosByItem[itemId]) {
-        await loadPhotos(itemId);
+    async (item: ActionRegisterItem) => {
+      const wasOpen = photosOpenByItem[item.id] === true;
+      setPhotosOpenByItem((p) => ({ ...p, [item.id]: !wasOpen }));
+      if (!wasOpen && !photosByItem[item.id]) {
+        await loadPhotos(item);
       }
     },
     [photosOpenByItem, photosByItem, loadPhotos]
   );
 
   const handleUploadPhoto = useCallback(
-    async (itemId: number, file: File) => {
+    async (item: ActionRegisterItem, file: File) => {
       if (!token) return;
       if (!file.type.startsWith("image/")) {
         setError("Solo se admiten imágenes (JPG, PNG, WEBP, GIF).");
@@ -341,7 +348,7 @@ function ActionRegisterContent() {
         setError(`La imagen es demasiado grande (máx ${Math.floor(MAX_BYTES / 1024 / 1024)}MB).`);
         return;
       }
-      setPhotoUploadingByItem((p) => ({ ...p, [itemId]: true }));
+      setPhotoUploadingByItem((p) => ({ ...p, [item.id]: true }));
       setError(null);
       try {
         const dataUrl: string = await new Promise((resolve, reject) => {
@@ -351,31 +358,43 @@ function ActionRegisterContent() {
           reader.readAsDataURL(file);
         });
         const base64 = dataUrl.includes(",") ? dataUrl.split(",")[1] : dataUrl;
-        await uploadActionRegisterAttachment(token, itemId, {
-          fileBase64: base64,
-          fileName: file.name || "foto.jpg",
-          contentType: file.type || "image/jpeg",
-        });
-        setPhotosOpenByItem((p) => ({ ...p, [itemId]: true }));
-        await loadPhotos(itemId);
+        if (item.dicf && item.dicf_id) {
+          await uploadDicfAttachment(token, item.dicf_id, {
+            fileBase64: base64,
+            fileName: file.name || "foto.jpg",
+            contentType: file.type || "image/jpeg",
+          });
+        } else {
+          await uploadActionRegisterAttachment(token, item.id, {
+            fileBase64: base64,
+            fileName: file.name || "foto.jpg",
+            contentType: file.type || "image/jpeg",
+          });
+        }
+        setPhotosOpenByItem((p) => ({ ...p, [item.id]: true }));
+        await loadPhotos(item);
         await loadBoard();
       } catch (e: unknown) {
         setError(e instanceof Error ? e.message : "Error");
       } finally {
-        setPhotoUploadingByItem((p) => ({ ...p, [itemId]: false }));
+        setPhotoUploadingByItem((p) => ({ ...p, [item.id]: false }));
       }
     },
     [token, loadPhotos, loadBoard]
   );
 
   const handleDeletePhoto = useCallback(
-    async (itemId: number, attachmentId: number) => {
+    async (item: ActionRegisterItem, attachmentId: number) => {
       if (!token) return;
       if (!window.confirm("¿Eliminar esta foto de evidencia?")) return;
       setError(null);
       try {
-        await deleteActionRegisterAttachment(token, attachmentId);
-        await loadPhotos(itemId);
+        if (item.dicf) {
+          await deleteDicfAttachment(token, attachmentId);
+        } else {
+          await deleteActionRegisterAttachment(token, attachmentId);
+        }
+        await loadPhotos(item);
         await loadBoard();
       } catch (e: unknown) {
         setError(e instanceof Error ? e.message : "Error");
@@ -490,7 +509,10 @@ function ActionRegisterContent() {
         const list = photosByItem[photoPreview.itemId] || [];
         const att = list[photoPreview.index];
         if (!att) return null;
-        const url = getActionRegisterAttachmentUrl(token, att.id);
+        const isDicf = photoPreview.itemId < 0;
+        const url = isDicf
+          ? getDicfAttachmentUrl(token, att.id)
+          : getActionRegisterAttachmentUrl(token, att.id);
         const canPrev = photoPreview.index > 0;
         const canNext = photoPreview.index < list.length - 1;
         return (
@@ -740,16 +762,79 @@ function ActionRegisterContent() {
                                 </span>
                               </div>
                             </div>
-                            <a
-                              href={dicfHref}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-xs rounded px-2 py-1 border border-blue-700 text-blue-200 hover:bg-blue-900/20 whitespace-nowrap"
-                              title="Abrir panel DICF para editar compromiso, cerrar acción, etc."
-                            >
-                              Ver en DICF ↗
-                            </a>
+                            <div className="flex flex-col items-end gap-1">
+                              <a
+                                href={dicfHref}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs rounded px-2 py-1 border border-blue-700 text-blue-200 hover:bg-blue-900/20 whitespace-nowrap"
+                                title="Abrir panel DICF para editar compromiso, cerrar acción, etc."
+                              >
+                                Ver en DICF ↗
+                              </a>
+                              <div className="flex items-center gap-1">
+                                <label
+                                  htmlFor={photoInputId}
+                                  className={`text-xs rounded px-2 py-1 border border-blue-700 text-blue-200 hover:bg-blue-900/20 cursor-pointer ${
+                                    uploading ? "opacity-60 pointer-events-none" : ""
+                                  }`}
+                                  title="Agregar foto de evidencia"
+                                >
+                                  {uploading ? "Subiendo…" : "+ Foto"}
+                                </label>
+                                <input
+                                  id={photoInputId}
+                                  type="file"
+                                  accept="image/*"
+                                  capture="environment"
+                                  className="hidden"
+                                  onChange={(e) => {
+                                    const f = e.target.files && e.target.files[0];
+                                    if (f) void handleUploadPhoto(it, f);
+                                    e.currentTarget.value = "";
+                                  }}
+                                />
+                                {photoCount > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => void togglePhotos(it)}
+                                    className="text-xs rounded px-2 py-1 border border-slate-600 text-slate-200 hover:bg-slate-800 whitespace-nowrap"
+                                  >
+                                    {photosOpen ? "Ocultar" : `📷 ${photoCount}`}
+                                  </button>
+                                )}
+                              </div>
+                            </div>
                           </div>
+
+                          {photosOpen && photosList.length > 0 && token && (
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {photosList.map((att, idx) => {
+                                const url = getDicfAttachmentUrl(token, att.id);
+                                return (
+                                  <div key={att.id} className="relative group">
+                                    <button
+                                      type="button"
+                                      onClick={() => setPhotoPreview({ itemId: it.id, index: idx })}
+                                      className="block h-20 w-20 overflow-hidden rounded border border-blue-700 bg-slate-950 hover:border-blue-400"
+                                      title={att.file_name}
+                                    >
+                                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                                      <img src={url} alt={att.file_name} className="h-full w-full object-cover" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => void handleDeletePhoto(it, att.id)}
+                                      className="absolute -top-1 -right-1 hidden group-hover:flex h-5 w-5 items-center justify-center rounded-full bg-red-700 text-white text-[10px] border border-red-900"
+                                      title="Eliminar foto"
+                                    >
+                                      ×
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
                       );
                     }
@@ -790,14 +875,14 @@ function ActionRegisterContent() {
                               className="hidden"
                               onChange={(e) => {
                                 const f = e.target.files && e.target.files[0];
-                                if (f) void handleUploadPhoto(it.id, f);
+                                if (f) void handleUploadPhoto(it, f);
                                 e.currentTarget.value = "";
                               }}
                             />
                             {photoCount > 0 && (
                               <button
                                 type="button"
-                                onClick={() => void togglePhotos(it.id)}
+                                onClick={() => void togglePhotos(it)}
                                 className="text-xs rounded px-2 py-1 border border-slate-600 text-slate-200 hover:bg-slate-800"
                               >
                                 {photosOpen ? "Ocultar" : "Ver fotos"}
@@ -818,7 +903,9 @@ function ActionRegisterContent() {
                         {photosOpen && photosList.length > 0 && token && (
                           <div className="mt-2 flex flex-wrap gap-2">
                             {photosList.map((att, idx) => {
-                              const url = getActionRegisterAttachmentUrl(token, att.id);
+                              const url = it.dicf
+                                ? getDicfAttachmentUrl(token, att.id)
+                                : getActionRegisterAttachmentUrl(token, att.id);
                               return (
                                 <div key={att.id} className="relative group">
                                   <button
@@ -832,7 +919,7 @@ function ActionRegisterContent() {
                                   </button>
                                   <button
                                     type="button"
-                                    onClick={() => void handleDeletePhoto(it.id, att.id)}
+                                    onClick={() => void handleDeletePhoto(it, att.id)}
                                     className="absolute -top-1 -right-1 hidden group-hover:flex h-5 w-5 items-center justify-center rounded-full bg-red-700 text-white text-[10px] border border-red-900"
                                     title="Eliminar foto"
                                   >

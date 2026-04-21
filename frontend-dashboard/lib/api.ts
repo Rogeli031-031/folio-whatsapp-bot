@@ -237,6 +237,53 @@ export function deleteActionRegisterRevisionNote(
   });
 }
 
+// ===========================
+// Fotos de acciones DICF
+// ===========================
+
+export interface DicfAttachment {
+  id: number;
+  dicf_accion_id: number;
+  file_name: string;
+  content_type: string;
+  file_size_bytes: number;
+  created_at: string;
+}
+
+export function fetchDicfAttachments(
+  token: string,
+  dicfAccionId: number
+): Promise<{ attachments: DicfAttachment[] }> {
+  return apiFetch<{ attachments: DicfAttachment[] }>(`/api/dicf-acciones/${dicfAccionId}/attachments`, { token });
+}
+
+export function uploadDicfAttachment(
+  token: string,
+  dicfAccionId: number,
+  body: { fileBase64: string; fileName: string; contentType: string }
+): Promise<{ attachment: DicfAttachment }> {
+  return apiFetch<{ attachment: DicfAttachment }>(`/api/dicf-acciones/${dicfAccionId}/attachments`, {
+    token,
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteDicfAttachment(
+  token: string,
+  attachmentId: number
+): Promise<{ ok: true }> {
+  return apiFetch<{ ok: true }>(`/api/dicf-attachments/${attachmentId}`, {
+    token,
+    method: "DELETE",
+  });
+}
+
+export function getDicfAttachmentUrl(token: string, attachmentId: number): string {
+  const base = getApiUrl(`/api/dicf-attachments/${attachmentId}`);
+  return `${base}?t=${encodeURIComponent(token)}`;
+}
+
 export interface KanbanBoard {
   meta: { filters: unknown; role: string };
   etapas: string[];
