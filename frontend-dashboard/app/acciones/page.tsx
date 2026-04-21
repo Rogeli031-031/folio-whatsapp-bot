@@ -118,6 +118,8 @@ function ActionRegisterContent() {
   const [notePhotosOpenById, setNotePhotosOpenById] = useState<Record<number, boolean>>({});
   const [notePhotoUploadingById, setNotePhotoUploadingById] = useState<Record<number, boolean>>({});
   const [notePhotoPreview, setNotePhotoPreview] = useState<{ noteId: number; index: number } | null>(null);
+  // Archivos seleccionados antes de publicar el comentario (se suben al crearlo).
+  const [notePendingFilesByRev, setNotePendingFilesByRev] = useState<Record<number, File[]>>({});
 
   useEffect(() => {
     const t = parseTokenFromQuery(searchParams) || getTokenFromStorage();
@@ -181,11 +183,39 @@ function ActionRegisterContent() {
     async (revisionId: number) => {
       if (!token) return;
       const draft = (noteDraftByRev[revisionId] || "").trim();
-      if (!draft) return;
+      const pendingFiles = notePendingFilesByRev[revisionId] || [];
+      if (!draft && pendingFiles.length === 0) return;
+      // Si solo hay fotos sin texto, obliga a poner algo. Un comentario es requerido.
+      if (!draft) {
+        alert("Escribe un comentario antes de adjuntar fotos.");
+        return;
+      }
       setNoteSavingByRev((s) => ({ ...s, [revisionId]: true }));
       try {
-        await createActionRegisterRevisionNote(token, revisionId, draft);
+        const res = await createActionRegisterRevisionNote(token, revisionId, draft);
+        const newNoteId = res && res.note && res.note.id ? Number(res.note.id) : null;
+        if (newNoteId && pendingFiles.length > 0) {
+          for (const file of pendingFiles) {
+            try {
+              const dataUrl: string = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(String(reader.result || ""));
+                reader.onerror = () => reject(new Error("No se pudo leer el archivo"));
+                reader.readAsDataURL(file);
+              });
+              const base64 = dataUrl.includes(",") ? dataUrl.split(",")[1] : dataUrl;
+              await uploadActionRegisterNoteAttachment(token, newNoteId, {
+                fileBase64: base64,
+                fileName: file.name || "foto.jpg",
+                contentType: file.type || "image/jpeg",
+              });
+            } catch (upErr) {
+              console.error("[uploadActionRegisterNoteAttachment]", upErr);
+            }
+          }
+        }
         setNoteDraftByRev((s) => ({ ...s, [revisionId]: "" }));
+        setNotePendingFilesByRev((s) => ({ ...s, [revisionId]: [] }));
         await loadBoard();
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : "Error";
@@ -194,7 +224,7 @@ function ActionRegisterContent() {
         setNoteSavingByRev((s) => ({ ...s, [revisionId]: false }));
       }
     },
-    [token, noteDraftByRev, loadBoard]
+    [token, noteDraftByRev, notePendingFilesByRev, loadBoard]
   );
 
   const handleDeleteNote = useCallback(
@@ -866,14 +896,86 @@ function ActionRegisterContent() {
                     className="w-full rounded border border-slate-600 bg-slate-900/60 px-2 py-1 text-xs text-slate-100 placeholder:text-slate-500 focus:border-amber-400 focus:outline-none resize-y"
                     disabled={saving}
                   />
-                  <button
-                    type="button"
-                    onClick={() => void handleAddNote(rev.id)}
-                    disabled={saving || draft.trim().length === 0}
-                    className="text-xs rounded bg-amber-600 hover:bg-amber-500 disabled:bg-slate-700 disabled:text-slate-500 px-3 py-1 text-white font-medium"
-                  >
-                    {saving ? "Guardando..." : "Agregar comentario"}
-                  </button>
+                  {(() => {
+                    const pending = notePendingFilesByRev[rev.id] || [];
+                    const newNoteInputId = `new-note-photo-${rev.id}`;
+                    return (
+                      <>
+                        {pending.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5">
+                            {pending.map((f, idx) => {
+                              const url = URL.createObjectURL(f);
+                              return (
+                                <div key={`${f.name}-${idx}`} className="relative group/pend">
+                                  <div className="block h-14 w-14 overflow-hidden rounded border border-amber-500/40 bg-slate-950">
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img
+                                      src={url}
+                                      alt={f.name}
+                                      className="h-full w-full object-cover"
+                                      onLoad={() => { try { URL.revokeObjectURL(url); } catch {} }}
+                                    />
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setNotePendingFilesByRev((s) => ({
+                                        ...s,
+                                        [rev.id]: (s[rev.id] || []).filter((_, i) => i !== idx),
+                                      }))
+                                    }
+                                    className="absolute -top-1 -right-1 hidden group-hover/pend:flex h-4 w-4 items-center justify-center rounded-full bg-red-700 text-white text-[9px] border border-red-900"
+                                    title="Quitar"
+                                  >
+                                    ×
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                        <div className="flex items-center gap-2">
+                          <label
+                            htmlFor={newNoteInputId}
+                            className={`text-xs rounded border border-amber-500/40 px-2 py-1 text-amber-200 hover:bg-amber-500/10 cursor-pointer ${saving ? "opacity-60 pointer-events-none" : ""}`}
+                            title="Adjuntar foto al comentario"
+                          >
+                            + Foto
+                          </label>
+                          <input
+                            id={newNoteInputId}
+                            type="file"
+                            accept="image/*"
+                            capture="environment"
+                            multiple
+                            className="hidden"
+                            onChange={(e) => {
+                              const files = Array.from(e.target.files || []);
+                              if (files.length > 0) {
+                                setNotePendingFilesByRev((s) => ({
+                                  ...s,
+                                  [rev.id]: [...(s[rev.id] || []), ...files],
+                                }));
+                              }
+                              e.currentTarget.value = "";
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => void handleAddNote(rev.id)}
+                            disabled={saving || draft.trim().length === 0}
+                            className="text-xs rounded bg-amber-600 hover:bg-amber-500 disabled:bg-slate-700 disabled:text-slate-500 px-3 py-1 text-white font-medium"
+                          >
+                            {saving
+                              ? "Guardando..."
+                              : pending.length > 0
+                              ? `Agregar comentario + ${pending.length} foto${pending.length === 1 ? "" : "s"}`
+                              : "Agregar comentario"}
+                          </button>
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
               );
             })}
