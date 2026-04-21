@@ -26,9 +26,14 @@ import {
   uploadDicfAttachment,
   deleteDicfAttachment,
   getDicfAttachmentUrl,
+  fetchActionRegisterNoteAttachments,
+  uploadActionRegisterNoteAttachment,
+  deleteActionRegisterNoteAttachment,
+  getActionRegisterNoteAttachmentUrl,
   type ActionRegisterAttachment,
   type ActionRegisterBoardResponse,
   type ActionRegisterItem,
+  type ActionRegisterNoteAttachment,
   type ActionRegisterRevisionNote,
   type ActionRegisterTema,
   type DicfAttachment,
@@ -108,6 +113,11 @@ function ActionRegisterContent() {
 
   const [noteDraftByRev, setNoteDraftByRev] = useState<Record<number, string>>({});
   const [noteSavingByRev, setNoteSavingByRev] = useState<Record<number, boolean>>({});
+  // Fotos de comentarios del día (notas por revisión).
+  const [notePhotosById, setNotePhotosById] = useState<Record<number, ActionRegisterNoteAttachment[]>>({});
+  const [notePhotosOpenById, setNotePhotosOpenById] = useState<Record<number, boolean>>({});
+  const [notePhotoUploadingById, setNotePhotoUploadingById] = useState<Record<number, boolean>>({});
+  const [notePhotoPreview, setNotePhotoPreview] = useState<{ noteId: number; index: number } | null>(null);
 
   useEffect(() => {
     const t = parseTokenFromQuery(searchParams) || getTokenFromStorage();
@@ -200,6 +210,87 @@ function ActionRegisterContent() {
       }
     },
     [token, loadBoard]
+  );
+
+  const loadNotePhotos = useCallback(
+    async (noteId: number) => {
+      if (!token) return;
+      try {
+        const r = await fetchActionRegisterNoteAttachments(token, noteId);
+        setNotePhotosById((prev) => ({ ...prev, [noteId]: r.attachments || [] }));
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : "Error";
+        if (msg.includes("401") || msg.toLowerCase().includes("token")) setUnauthorized(true);
+        setError(msg);
+      }
+    },
+    [token]
+  );
+
+  const toggleNotePhotos = useCallback(
+    async (noteId: number) => {
+      const wasOpen = notePhotosOpenById[noteId] === true;
+      setNotePhotosOpenById((p) => ({ ...p, [noteId]: !wasOpen }));
+      if (!wasOpen && !notePhotosById[noteId]) {
+        await loadNotePhotos(noteId);
+      }
+    },
+    [notePhotosOpenById, notePhotosById, loadNotePhotos]
+  );
+
+  const handleUploadNotePhoto = useCallback(
+    async (noteId: number, file: File) => {
+      if (!token) return;
+      if (!file.type.startsWith("image/")) {
+        setError("Solo se admiten imágenes (JPG, PNG, WEBP, GIF).");
+        return;
+      }
+      const MAX_BYTES = 8 * 1024 * 1024;
+      if (file.size > MAX_BYTES) {
+        setError(`La imagen es demasiado grande (máx ${Math.floor(MAX_BYTES / 1024 / 1024)}MB).`);
+        return;
+      }
+      setNotePhotoUploadingById((p) => ({ ...p, [noteId]: true }));
+      setError(null);
+      try {
+        const dataUrl: string = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result || ""));
+          reader.onerror = () => reject(new Error("No se pudo leer el archivo"));
+          reader.readAsDataURL(file);
+        });
+        const base64 = dataUrl.includes(",") ? dataUrl.split(",")[1] : dataUrl;
+        await uploadActionRegisterNoteAttachment(token, noteId, {
+          fileBase64: base64,
+          fileName: file.name || "foto.jpg",
+          contentType: file.type || "image/jpeg",
+        });
+        setNotePhotosOpenById((p) => ({ ...p, [noteId]: true }));
+        await loadNotePhotos(noteId);
+        await loadBoard();
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : "Error");
+      } finally {
+        setNotePhotoUploadingById((p) => ({ ...p, [noteId]: false }));
+      }
+    },
+    [token, loadNotePhotos, loadBoard]
+  );
+
+  const handleDeleteNotePhoto = useCallback(
+    async (noteId: number, attachmentId: number) => {
+      if (!token) return;
+      if (!window.confirm("¿Eliminar esta foto?")) return;
+      setError(null);
+      try {
+        await deleteActionRegisterNoteAttachment(token, attachmentId);
+        await loadNotePhotos(noteId);
+        await loadBoard();
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : "Error");
+      }
+    },
+    [token, loadNotePhotos, loadBoard]
   );
 
   const temas = board?.temas || (["Contrataciones", "Mantenimiento", "General", "Clientes", "Apoyos", "Licencias", "Taller"] as ActionRegisterTema[]);
@@ -568,6 +659,66 @@ function ActionRegisterContent() {
         );
       })()}
 
+      {notePhotoPreview && token && (() => {
+        const list = notePhotosById[notePhotoPreview.noteId] || [];
+        const att = list[notePhotoPreview.index];
+        if (!att) return null;
+        const url = getActionRegisterNoteAttachmentUrl(token, att.id);
+        const canPrev = notePhotoPreview.index > 0;
+        const canNext = notePhotoPreview.index < list.length - 1;
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+            onClick={() => setNotePhotoPreview(null)}
+          >
+            <div className="relative max-h-full max-w-5xl" onClick={(e) => e.stopPropagation()}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={url} alt={att.file_name} className="max-h-[85vh] max-w-full rounded border border-amber-500/40" />
+              <div className="mt-2 flex items-center justify-between gap-2 text-sm text-slate-200">
+                <span className="truncate">
+                  {att.file_name}
+                  <span className="ml-2 text-xs text-slate-400">
+                    {notePhotoPreview.index + 1} / {list.length}
+                  </span>
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={!canPrev}
+                    onClick={() => setNotePhotoPreview((p) => (p ? { ...p, index: Math.max(0, p.index - 1) } : p))}
+                    className="rounded border border-slate-600 px-3 py-1 text-xs text-slate-200 hover:bg-slate-800 disabled:opacity-40"
+                  >
+                    ← Anterior
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!canNext}
+                    onClick={() => setNotePhotoPreview((p) => (p ? { ...p, index: Math.min(list.length - 1, p.index + 1) } : p))}
+                    className="rounded border border-slate-600 px-3 py-1 text-xs text-slate-200 hover:bg-slate-800 disabled:opacity-40"
+                  >
+                    Siguiente →
+                  </button>
+                  <a
+                    href={url}
+                    download={att.file_name}
+                    className="rounded bg-emerald-700 px-3 py-1 text-xs text-white hover:bg-emerald-600"
+                  >
+                    Descargar
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => setNotePhotoPreview(null)}
+                    className="rounded bg-slate-700 px-3 py-1 text-xs text-white hover:bg-slate-600"
+                  >
+                    Cerrar
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       <main className="flex-1 p-4 overflow-auto">
         <div className="min-w-[900px]">
           <div
@@ -622,6 +773,12 @@ function ActionRegisterContent() {
                     const hora = dt && !isNaN(dt.getTime())
                       ? dt.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit", hour12: false })
                       : "";
+                    const notePhotoInputId = `note-photo-input-${n.id}`;
+                    const notePhotosOpen = notePhotosOpenById[n.id] === true;
+                    const notePhotosList = notePhotosById[n.id] || [];
+                    const noteUploading = notePhotoUploadingById[n.id] === true;
+                    const noteCountFromBoard = n.attachments_count || 0;
+                    const notePhotoCount = notePhotosList.length > 0 ? notePhotosList.length : noteCountFromBoard;
                     return (
                       <div key={n.id} className="group relative rounded border border-amber-500/20 bg-amber-500/5 px-2 py-1.5 text-xs">
                         <div className="whitespace-pre-wrap text-amber-50">{n.body}</div>
@@ -630,15 +787,74 @@ function ActionRegisterContent() {
                             {n.author_name || "—"}
                             {hora ? ` · ${hora}` : ""}
                           </span>
-                          <button
-                            type="button"
-                            onClick={() => void handleDeleteNote(n.id)}
-                            className="opacity-0 group-hover:opacity-100 text-red-300 hover:text-red-200 transition-opacity"
-                            title="Eliminar comentario"
-                          >
-                            ✕
-                          </button>
+                          <div className="flex items-center gap-1.5">
+                            <label
+                              htmlFor={notePhotoInputId}
+                              className={`cursor-pointer text-amber-200 hover:text-amber-100 ${noteUploading ? "opacity-60 pointer-events-none" : ""}`}
+                              title="Agregar foto"
+                            >
+                              {noteUploading ? "Subiendo…" : "+ Foto"}
+                            </label>
+                            <input
+                              id={notePhotoInputId}
+                              type="file"
+                              accept="image/*"
+                              capture="environment"
+                              className="hidden"
+                              onChange={(e) => {
+                                const f = e.target.files && e.target.files[0];
+                                if (f) void handleUploadNotePhoto(n.id, f);
+                                e.currentTarget.value = "";
+                              }}
+                            />
+                            {notePhotoCount > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => void toggleNotePhotos(n.id)}
+                                className="text-amber-200 hover:text-amber-100"
+                                title={notePhotosOpen ? "Ocultar fotos" : "Ver fotos"}
+                              >
+                                {notePhotosOpen ? "Ocultar" : `📷 ${notePhotoCount}`}
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => void handleDeleteNote(n.id)}
+                              className="opacity-0 group-hover:opacity-100 text-red-300 hover:text-red-200 transition-opacity"
+                              title="Eliminar comentario"
+                            >
+                              ✕
+                            </button>
+                          </div>
                         </div>
+                        {notePhotosOpen && notePhotosList.length > 0 && token && (
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {notePhotosList.map((att, idx) => {
+                              const url = getActionRegisterNoteAttachmentUrl(token, att.id);
+                              return (
+                                <div key={att.id} className="relative group/photo">
+                                  <button
+                                    type="button"
+                                    onClick={() => setNotePhotoPreview({ noteId: n.id, index: idx })}
+                                    className="block h-16 w-16 overflow-hidden rounded border border-amber-500/40 bg-slate-950 hover:border-amber-300"
+                                    title={att.file_name}
+                                  >
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img src={url} alt={att.file_name} className="h-full w-full object-cover" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => void handleDeleteNotePhoto(n.id, att.id)}
+                                    className="absolute -top-1 -right-1 hidden group-hover/photo:flex h-4 w-4 items-center justify-center rounded-full bg-red-700 text-white text-[9px] border border-red-900"
+                                    title="Eliminar foto"
+                                  >
+                                    ×
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     );
                   })}

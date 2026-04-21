@@ -5520,12 +5520,28 @@ async function ensureActionRegisterTables(client) {
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
   `).catch(() => {});
+  // Fotos de evidencia para comentarios del día (notas por revisión).
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS arr.action_register_revision_note_attachments (
+      id SERIAL PRIMARY KEY,
+      note_id INT NOT NULL REFERENCES arr.action_register_revision_notes(id) ON DELETE CASCADE,
+      file_name TEXT NOT NULL DEFAULT '',
+      content_type TEXT NOT NULL DEFAULT 'image/jpeg',
+      file_size_bytes INT NOT NULL DEFAULT 0,
+      s3_key TEXT NULL,
+      s3_url TEXT NULL,
+      data BYTEA NULL,
+      uploaded_by_usuario_id INT NULL REFERENCES public.usuarios(id),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `).catch(() => {});
   await client.query(`CREATE INDEX IF NOT EXISTS idx_ar_revisions_planta_date ON arr.action_register_revisions(planta_id, revision_date);`).catch(() => {});
   await client.query(`CREATE INDEX IF NOT EXISTS idx_ar_items_planta_tema ON arr.action_register_items(planta_id, tema);`).catch(() => {});
   await client.query(`CREATE INDEX IF NOT EXISTS idx_ar_entries_revision_pos ON arr.action_register_entries(revision_id, position);`).catch(() => {});
   await client.query(`CREATE INDEX IF NOT EXISTS idx_ar_attachments_item ON arr.action_register_attachments(item_id);`).catch(() => {});
   await client.query(`CREATE INDEX IF NOT EXISTS idx_ar_notes_revision ON arr.action_register_revision_notes(revision_id, created_at);`).catch(() => {});
   await client.query(`CREATE INDEX IF NOT EXISTS idx_dicf_attachments_accion ON arr.dicf_acciones_attachments(dicf_accion_id);`).catch(() => {});
+  await client.query(`CREATE INDEX IF NOT EXISTS idx_ar_note_attachments_note ON arr.action_register_revision_note_attachments(note_id);`).catch(() => {});
 }
 
 /** Sube una imagen al bucket S3 con su content-type correcto. Devuelve publicUrl. */
@@ -5554,6 +5570,22 @@ async function getActionRegisterAttachmentBuffer(client, attachmentRow) {
   // Último intento: si no se trajo data en el SELECT original, leerla ahora.
   try {
     const r = await client.query(`SELECT data FROM arr.action_register_attachments WHERE id = $1`, [attachmentRow.id]);
+    if (r.rows[0] && r.rows[0].data) return Buffer.from(r.rows[0].data);
+  } catch (e) {}
+  return null;
+}
+
+/** Devuelve el buffer binario de una foto de nota (comentario del día). */
+async function getNoteAttachmentBuffer(client, attachmentRow) {
+  if (!attachmentRow) return null;
+  if (attachmentRow.s3_key && s3Enabled) {
+    try { return await getBufferFromS3(attachmentRow.s3_key); } catch (e) {}
+  }
+  if (attachmentRow.data) {
+    return Buffer.isBuffer(attachmentRow.data) ? attachmentRow.data : Buffer.from(attachmentRow.data);
+  }
+  try {
+    const r = await client.query(`SELECT data FROM arr.action_register_revision_note_attachments WHERE id = $1`, [attachmentRow.id]);
     if (r.rows[0] && r.rows[0].data) return Buffer.from(r.rows[0].data);
   } catch (e) {}
   return null;
@@ -5646,7 +5678,8 @@ app.get("/api/action-register/revisions/:id/notes", dashboardAuthMiddleware, asy
     if (!rv.rows[0]) return res.status(404).json({ error: "Revisión no encontrada" });
     if (!assertDashboardPlantaAccessForActionRegister(req, rv.rows[0].planta_id)) return res.status(403).json({ error: "Sin acceso a esta planta" });
     const r = await client.query(
-      `SELECT id, revision_id, body, author_name, created_at, created_by_usuario_id
+      `SELECT id, revision_id, body, author_name, created_at, created_by_usuario_id,
+              COALESCE((SELECT COUNT(*)::INT FROM arr.action_register_revision_note_attachments att WHERE att.note_id = action_register_revision_notes.id), 0) AS attachments_count
        FROM arr.action_register_revision_notes
        WHERE revision_id = $1
        ORDER BY created_at ASC, id ASC`,
@@ -5659,6 +5692,7 @@ app.get("/api/action-register/revisions/:id/notes", dashboardAuthMiddleware, asy
         body: n.body,
         author_name: n.author_name || "",
         created_at: n.created_at,
+        attachments_count: Number(n.attachments_count) || 0,
       })),
     });
   } catch (e) {
@@ -5890,7 +5924,8 @@ app.get("/api/action-register/board", dashboardAuthMiddleware, async (req, res) 
     try {
       if (revisions.length > 0) {
         const notesRes = await client.query(
-          `SELECT n.id, n.revision_id, n.body, n.author_name, n.created_at, n.created_by_usuario_id
+          `SELECT n.id, n.revision_id, n.body, n.author_name, n.created_at, n.created_by_usuario_id,
+                  COALESCE((SELECT COUNT(*)::INT FROM arr.action_register_revision_note_attachments att WHERE att.note_id = n.id), 0) AS attachments_count
            FROM arr.action_register_revision_notes n
            JOIN arr.action_register_revisions rv ON rv.id = n.revision_id
            WHERE rv.planta_id = $1
@@ -5906,6 +5941,7 @@ app.get("/api/action-register/board", dashboardAuthMiddleware, async (req, res) 
             body: n.body,
             author_name: n.author_name || "",
             created_at: n.created_at,
+            attachments_count: Number(n.attachments_count) || 0,
           });
         }
       }
@@ -6421,6 +6457,183 @@ app.delete("/api/dicf-attachments/:id", dashboardAuthMiddleware, async (req, res
   }
 });
 
+/* ============================================================
+ * Fotos de evidencia para comentarios del día (notas por revisión).
+ * ============================================================ */
+
+/** Sube una foto (base64) a un comentario del día. */
+app.post("/api/action-register/notes/:id/attachments", dashboardAuthMiddleware, async (req, res) => {
+  const noteId = parseInt(String(req.params.id), 10);
+  if (!noteId || !Number.isFinite(noteId)) return res.status(400).json({ error: "id inválido" });
+  const body = req.body || {};
+  const fileBase64 = typeof body.fileBase64 === "string" ? body.fileBase64 : "";
+  const fileName = body.fileName != null && String(body.fileName).trim() !== "" ? String(body.fileName).trim().slice(0, 200) : "foto.jpg";
+  let contentType = (body.contentType != null ? String(body.contentType).trim().toLowerCase() : "image/jpeg") || "image/jpeg";
+  if (!ACTION_REGISTER_IMAGE_MIME.has(contentType)) {
+    const lowerName = fileName.toLowerCase();
+    if (lowerName.endsWith(".png")) contentType = "image/png";
+    else if (lowerName.endsWith(".webp")) contentType = "image/webp";
+    else if (lowerName.endsWith(".gif")) contentType = "image/gif";
+    else contentType = "image/jpeg";
+  }
+  if (!fileBase64) return res.status(400).json({ error: "Envía fileBase64 (imagen)" });
+  let buffer;
+  try { buffer = Buffer.from(fileBase64, "base64"); } catch (e) { return res.status(400).json({ error: "fileBase64 inválido" }); }
+  if (!buffer || buffer.length === 0) return res.status(400).json({ error: "Archivo vacío" });
+  const MAX_BYTES = 8 * 1024 * 1024;
+  if (buffer.length > MAX_BYTES) return res.status(413).json({ error: `La imagen excede el tamaño máximo de ${Math.floor(MAX_BYTES / 1024 / 1024)}MB` });
+
+  const client = await pool.connect();
+  try {
+    await ensureActionRegisterTables(client);
+    const n = await client.query(
+      `SELECT n.id, n.revision_id, rv.planta_id
+       FROM arr.action_register_revision_notes n
+       JOIN arr.action_register_revisions rv ON rv.id = n.revision_id
+       WHERE n.id = $1`,
+      [noteId]
+    );
+    if (!n.rows[0]) return res.status(404).json({ error: "Comentario no encontrado" });
+    const plantaId = Number(n.rows[0].planta_id);
+    if (!assertDashboardPlantaAccessForActionRegister(req, plantaId)) return res.status(403).json({ error: "Sin acceso a esta planta" });
+
+    let s3Key = null;
+    let s3Url = null;
+    let bytea = null;
+    if (s3Enabled) {
+      const ext = actionRegisterMimeToExt(contentType);
+      s3Key = `action-register-notes/${plantaId}/${noteId}/${Date.now()}-${crypto.randomBytes(4).toString("hex")}.${ext}`;
+      try {
+        s3Url = await uploadImageToS3(buffer, s3Key, contentType);
+      } catch (e) {
+        console.error("[ActionRegister note attachments S3]", e);
+        s3Key = null;
+        s3Url = null;
+        bytea = buffer;
+      }
+    } else {
+      bytea = buffer;
+    }
+
+    const ins = await client.query(
+      `INSERT INTO arr.action_register_revision_note_attachments (note_id, file_name, content_type, file_size_bytes, s3_key, s3_url, data, uploaded_by_usuario_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id, note_id, file_name, content_type, file_size_bytes, s3_key, s3_url, created_at`,
+      [noteId, fileName, contentType, buffer.length, s3Key, s3Url, bytea, req.dashboardAuth.actor_id || null]
+    );
+    const row = ins.rows[0];
+    res.status(201).json({
+      attachment: {
+        id: row.id,
+        note_id: row.note_id,
+        file_name: row.file_name,
+        content_type: row.content_type,
+        file_size_bytes: row.file_size_bytes,
+        created_at: row.created_at,
+      },
+    });
+  } catch (e) {
+    console.error("[ActionRegister POST note attachment]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/** Lista fotos de un comentario del día. */
+app.get("/api/action-register/notes/:id/attachments", dashboardAuthMiddleware, async (req, res) => {
+  const noteId = parseInt(String(req.params.id), 10);
+  if (!noteId || !Number.isFinite(noteId)) return res.status(400).json({ error: "id inválido" });
+  const client = await pool.connect();
+  try {
+    await ensureActionRegisterTables(client);
+    const n = await client.query(
+      `SELECT n.id, rv.planta_id
+       FROM arr.action_register_revision_notes n
+       JOIN arr.action_register_revisions rv ON rv.id = n.revision_id
+       WHERE n.id = $1`,
+      [noteId]
+    );
+    if (!n.rows[0]) return res.status(404).json({ error: "Comentario no encontrado" });
+    if (!assertDashboardPlantaAccessForActionRegister(req, Number(n.rows[0].planta_id))) return res.status(403).json({ error: "Sin acceso a esta planta" });
+
+    const r = await client.query(
+      `SELECT id, note_id, file_name, content_type, file_size_bytes, created_at
+       FROM arr.action_register_revision_note_attachments
+       WHERE note_id = $1
+       ORDER BY created_at ASC, id ASC`,
+      [noteId]
+    );
+    res.json({ attachments: r.rows || [] });
+  } catch (e) {
+    console.error("[ActionRegister GET note attachments]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/** Sirve el binario de una foto de nota (inline). */
+app.get("/api/action-register/note-attachments/:id", dashboardAuthMiddleware, async (req, res) => {
+  const attId = parseInt(String(req.params.id), 10);
+  if (!attId || !Number.isFinite(attId)) return res.status(400).json({ error: "id inválido" });
+  const client = await pool.connect();
+  try {
+    await ensureActionRegisterTables(client);
+    const r = await client.query(
+      `SELECT a.id, a.note_id, a.file_name, a.content_type, a.s3_key, a.s3_url, a.data, rv.planta_id
+       FROM arr.action_register_revision_note_attachments a
+       JOIN arr.action_register_revision_notes n ON n.id = a.note_id
+       JOIN arr.action_register_revisions rv ON rv.id = n.revision_id
+       WHERE a.id = $1`,
+      [attId]
+    );
+    const row = r.rows[0];
+    if (!row) return res.status(404).json({ error: "Adjunto no encontrado" });
+    if (!assertDashboardPlantaAccessForActionRegister(req, Number(row.planta_id))) return res.status(403).json({ error: "Sin acceso a esta planta" });
+
+    const buf = await getNoteAttachmentBuffer(client, row);
+    if (!buf) return res.status(404).json({ error: "Archivo no disponible" });
+    res.setHeader("Content-Type", row.content_type || "image/jpeg");
+    res.setHeader("Cache-Control", "private, max-age=300");
+    res.setHeader("Content-Disposition", `inline; filename="${(row.file_name || "foto.jpg").replace(/[^\w.\- ]+/g, "_")}"`);
+    res.send(buf);
+  } catch (e) {
+    console.error("[ActionRegister GET note attachment bin]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/** Elimina una foto de un comentario del día. */
+app.delete("/api/action-register/note-attachments/:id", dashboardAuthMiddleware, async (req, res) => {
+  const attId = parseInt(String(req.params.id), 10);
+  if (!attId || !Number.isFinite(attId)) return res.status(400).json({ error: "id inválido" });
+  const client = await pool.connect();
+  try {
+    await ensureActionRegisterTables(client);
+    const r = await client.query(
+      `SELECT a.id, rv.planta_id
+       FROM arr.action_register_revision_note_attachments a
+       JOIN arr.action_register_revision_notes n ON n.id = a.note_id
+       JOIN arr.action_register_revisions rv ON rv.id = n.revision_id
+       WHERE a.id = $1`,
+      [attId]
+    );
+    const row = r.rows[0];
+    if (!row) return res.status(404).json({ error: "Adjunto no encontrado" });
+    if (!assertDashboardPlantaAccessForActionRegister(req, Number(row.planta_id))) return res.status(403).json({ error: "Sin acceso a esta planta" });
+    await client.query(`DELETE FROM arr.action_register_revision_note_attachments WHERE id = $1`, [attId]);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("[ActionRegister DELETE note attachment]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
 /** Exporta a Excel el historial completo del Action Register de una planta. */
 app.get("/api/action-register/export", dashboardAuthMiddleware, async (req, res) => {
   const planta_id = req.query.planta_id != null ? parseInt(String(req.query.planta_id), 10) : null;
@@ -6531,6 +6744,26 @@ app.get("/api/action-register/export", dashboardAuthMiddleware, async (req, res)
     for (const n of notesRes.rows || []) {
       if (!notesByRevisionId.has(n.revision_id)) notesByRevisionId.set(n.revision_id, []);
       notesByRevisionId.get(n.revision_id).push(n);
+    }
+
+    // Fotos de comentarios del día (notas por revisión) para esta planta.
+    const noteAttachmentsByNoteId = new Map();
+    try {
+      const nAttRes = await client.query(
+        `SELECT a.id, a.note_id, a.file_name, a.content_type, a.s3_key, a.s3_url, a.data
+         FROM arr.action_register_revision_note_attachments a
+         JOIN arr.action_register_revision_notes n ON n.id = a.note_id
+         JOIN arr.action_register_revisions rv ON rv.id = n.revision_id
+         WHERE rv.planta_id = $1
+         ORDER BY a.note_id ASC, a.created_at ASC, a.id ASC`,
+        [planta_id]
+      );
+      for (const a of nAttRes.rows || []) {
+        if (!noteAttachmentsByNoteId.has(a.note_id)) noteAttachmentsByNoteId.set(a.note_id, []);
+        noteAttachmentsByNoteId.get(a.note_id).push(a);
+      }
+    } catch (e) {
+      console.error("[ActionRegister export note attachments]", e);
     }
 
     const wb = new ExcelJS.Workbook();
@@ -6801,6 +7034,7 @@ app.get("/api/action-register/export", dashboardAuthMiddleware, async (req, res)
         { header: "Hora", key: "hora", width: 12 },
         { header: "Autor", key: "autor", width: 24 },
         { header: "Comentario", key: "comentario", width: 80 },
+        { header: "Fotos", key: "fotos", width: 14 },
       ];
       wsN.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
       wsN.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1F2937" } };
@@ -6829,22 +7063,29 @@ app.get("/api/action-register/export", dashboardAuthMiddleware, async (req, res)
       for (const rv of revisions) {
         const arr = notesByRevisionId.get(rv.id) || [];
         for (const n of arr) {
+          const notePhotoCount = (noteAttachmentsByNoteId.get(n.id) || []).length;
           const row = wsN.addRow({
             rev: fmtDMY(rv.revision_date),
             hora: fmtHora(n.created_at),
             autor: n.author_name || "—",
             comentario: n.body || "",
+            fotos: notePhotoCount > 0 ? "" : "—",
           });
           row.getCell("comentario").alignment = { wrapText: true, vertical: "top" };
           row.getCell("autor").alignment = { vertical: "top" };
           row.getCell("rev").alignment = { vertical: "top" };
           row.getCell("hora").alignment = { vertical: "top" };
+          row.getCell("fotos").alignment = { vertical: "top" };
+          if (notePhotoCount > 0) {
+            row.getCell("fotos").value = { text: `${notePhotoCount} foto${notePhotoCount === 1 ? "" : "s"} ▸ ver`, hyperlink: `#Evidencias!A1` };
+            row.getCell("fotos").font = { color: { argb: "FF1D4ED8" }, underline: true };
+          }
         }
       }
     }
 
     // Hoja 3: Evidencias (imágenes embebidas). Una sección por acción/subacción con fotos.
-    if (attachmentsByItem.size > 0 || dicfAttachmentsByAccion.size > 0) {
+    if (attachmentsByItem.size > 0 || dicfAttachmentsByAccion.size > 0 || noteAttachmentsByNoteId.size > 0) {
       const wsE = wb.addWorksheet("Evidencias");
       wsE.columns = [
         { header: "#", key: "num", width: 10 },
@@ -6965,6 +7206,72 @@ app.get("/api/action-register/export", dashboardAuthMiddleware, async (req, res)
           } catch (e) {
             console.error("[ActionRegister export DICF image]", e);
             row.getCell("foto").value = "(error al cargar)";
+          }
+        }
+      }
+
+      // Fotos de comentarios del día (notas por revisión).
+      if (noteAttachmentsByNoteId.size > 0) {
+        // Construye el índice noteId -> { revDate, body, author, hora }
+        const noteInfoById = new Map();
+        for (const rv of revisions) {
+          const arr = notesByRevisionId.get(rv.id) || [];
+          for (const n of arr) {
+            const dt = n.created_at instanceof Date ? n.created_at : new Date(n.created_at);
+            let hora = "";
+            try {
+              hora = isNaN(dt.getTime())
+                ? ""
+                : dt.toLocaleTimeString("es-MX", { timeZone: "America/Mexico_City", hour: "2-digit", minute: "2-digit", hour12: false });
+            } catch (_) {}
+            noteInfoById.set(Number(n.id), {
+              revDate: fmtDate(rv.revision_date),
+              body: String(n.body || "").trim(),
+              author: n.author_name || "—",
+              hora,
+            });
+          }
+        }
+        const noteIds = Array.from(noteAttachmentsByNoteId.keys()).sort((a, b) => a - b);
+        for (const noteId of noteIds) {
+          const atts = noteAttachmentsByNoteId.get(noteId) || [];
+          const info = noteInfoById.get(Number(noteId)) || { revDate: "", body: `Comentario #${noteId}`, author: "—", hora: "" };
+          const title = info.hora ? `[${info.hora}] ${info.body || "(sin texto)"}` : info.body || `Comentario #${noteId}`;
+          for (const a of atts) {
+            const row = wsE.addRow({
+              num: "",
+              tema: "Comentarios del día",
+              title: `${info.author} — ${title}`,
+              foto: "",
+              file: a.file_name || "",
+              rev: info.revDate ? fmtDMY(info.revDate) : "",
+            });
+            row.height = 140;
+            row.alignment = { vertical: "middle", wrapText: true };
+            row.eachCell((cell) => {
+              cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFEF3C7" } };
+              cell.font = { color: { argb: "FF78350F" } };
+            });
+
+            try {
+              const buf3 = await getNoteAttachmentBuffer(client, a);
+              if (buf3 && buf3.length > 0) {
+                const ct = String(a.content_type || "image/jpeg").toLowerCase();
+                const ext = ct === "image/png" ? "png" : ct === "image/gif" ? "gif" : "jpeg";
+                const imageId = wb.addImage({ buffer: buf3, extension: ext });
+                const rowIdx = row.number;
+                wsE.addImage(imageId, {
+                  tl: { col: 3.05, row: rowIdx - 1 + 0.05 },
+                  ext: { width: 220, height: 160 },
+                  editAs: "oneCell",
+                });
+              } else {
+                row.getCell("foto").value = "(no disponible)";
+              }
+            } catch (e) {
+              console.error("[ActionRegister export note image]", e);
+              row.getCell("foto").value = "(error al cargar)";
+            }
           }
         }
       }

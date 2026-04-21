@@ -103,6 +103,16 @@ export interface ActionRegisterRevisionNote {
   body: string;
   author_name: string;
   created_at: string;
+  attachments_count?: number;
+}
+
+export interface ActionRegisterNoteAttachment {
+  id: number;
+  note_id: number;
+  file_name: string;
+  content_type: string;
+  file_size_bytes: number;
+  created_at: string;
 }
 
 export interface ActionRegisterBoardResponse {
@@ -281,6 +291,44 @@ export function deleteDicfAttachment(
 
 export function getDicfAttachmentUrl(token: string, attachmentId: number): string {
   const base = getApiUrl(`/api/dicf-attachments/${attachmentId}`);
+  return `${base}?t=${encodeURIComponent(token)}`;
+}
+
+// ===========================
+// Fotos de comentarios del día (notas por revisión)
+// ===========================
+
+export function fetchActionRegisterNoteAttachments(
+  token: string,
+  noteId: number
+): Promise<{ attachments: ActionRegisterNoteAttachment[] }> {
+  return apiFetch<{ attachments: ActionRegisterNoteAttachment[] }>(`/api/action-register/notes/${noteId}/attachments`, { token });
+}
+
+export function uploadActionRegisterNoteAttachment(
+  token: string,
+  noteId: number,
+  body: { fileBase64: string; fileName: string; contentType: string }
+): Promise<{ attachment: ActionRegisterNoteAttachment }> {
+  return apiFetch<{ attachment: ActionRegisterNoteAttachment }>(`/api/action-register/notes/${noteId}/attachments`, {
+    token,
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteActionRegisterNoteAttachment(
+  token: string,
+  attachmentId: number
+): Promise<{ ok: true }> {
+  return apiFetch<{ ok: true }>(`/api/action-register/note-attachments/${attachmentId}`, {
+    token,
+    method: "DELETE",
+  });
+}
+
+export function getActionRegisterNoteAttachmentUrl(token: string, attachmentId: number): string {
+  const base = getApiUrl(`/api/action-register/note-attachments/${attachmentId}`);
   return `${base}?t=${encodeURIComponent(token)}`;
 }
 
