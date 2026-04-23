@@ -5622,8 +5622,9 @@ async function getDicfAttachmentBuffer(client, attachmentRow) {
 }
 
 function assertDashboardPlantaAccessForActionRegister(req, plantaId) {
-  // Reglas alineadas con dashboard: GV solo sus plantas; ZP/AD/CF_CDMX normalmente vienen con todas; resto con equivalentes.
-  if (!isDashboardGV(req)) return true;
+  // Action Register: ZP y AD pueden ver todas las plantas; cualquier otro rol solo sus plantas_permitidas.
+  const roleNorm = dashboardAuthRoleNorm(req.dashboardAuth);
+  if (roleNorm === "ZP" || roleNorm === "AD") return true;
   const allowed = new Set((req.dashboardAuth.plantas_permitidas || []).map((x) => Number(x)).filter(Number.isFinite));
   return allowed.has(Number(plantaId));
 }
@@ -12557,11 +12558,12 @@ app.post("/twilio/whatsapp", async (req, res) => {
           const esGV = rolClave === "GV";
           const role = esZP ? "ZP" : esAD ? "AD" : esCFCDMX ? "CF_CDMX" : esGA ? "GA" : esGV ? "GV" : "GG";
           let plantasPermitidas = [];
-          if (esZP || esAD || esCFCDMX) {
+          if (esZP || esAD) {
             const plantas = await getPlantas(client);
             plantasPermitidas = (plantas || []).map((p) => p.id).filter(Number.isFinite);
           } else if (actor.planta_id != null) {
-            plantasPermitidas = getPlantaIdsEquivalentesForPendientes(actor.planta_id);
+            const canon = getCanonicalPlantaId(actor.planta_id);
+            plantasPermitidas = [canon != null ? canon : actor.planta_id].filter(Number.isFinite);
           }
           const tokenAR = createDashboardToken({
             role,
