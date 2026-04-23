@@ -7836,6 +7836,57 @@ app.get("/api/action-register/export-day-pdf", dashboardAuthMiddleware, async (r
       }
     }
 
+    // Top clientes DICF (dejaron/disminuyeron/aumentaron/nuevos) para la planta del reporte.
+    y -= 8;
+    drawLine("Top 3 clientes (DICF)", 14, true);
+    try {
+      const plantCode = await getPlantCodeArrFromPlantaNombre(client, plantaNombre);
+      const dicfData = await dicf.computeDicf(client, plantCode, plantaNombre, getMargenKgPorPeriodo);
+      const pickTop = (grp, dir) => {
+        const arr = (grp && Array.isArray(grp.clientes) ? grp.clientes : []).slice();
+        arr.sort((a, b) => {
+          const da = Number(a && a.deltaIngreso != null ? a.deltaIngreso : 0) || 0;
+          const db = Number(b && b.deltaIngreso != null ? b.deltaIngreso : 0) || 0;
+          return dir === "desc" ? db - da : da - db;
+        });
+        return arr.slice(0, 3);
+      };
+      const fmtDelta = (c) => {
+        if (c && c.deltaIngresoStr != null && String(c.deltaIngresoStr).trim() !== "") return String(c.deltaIngresoStr).trim();
+        const v = c && c.deltaIngreso != null ? Number(c.deltaIngreso) : null;
+        if (v == null || Number.isNaN(v)) return "";
+        try { return v.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); } catch { return String(v); }
+      };
+
+      const grupos = [
+        { label: "Dejaron de comprar", top: pickTop(dicfData && dicfData.dejaron, "asc") },
+        { label: "Disminuyeron", top: pickTop(dicfData && dicfData.disminuyeron, "asc") },
+        { label: "Aumentaron", top: pickTop(dicfData && dicfData.aumentaron, "desc") },
+        { label: "Nuevos", top: pickTop(dicfData && dicfData.nuevos, "desc") },
+      ];
+
+      let any = false;
+      for (const g of grupos) {
+        if (!g.top || g.top.length === 0) continue;
+        any = true;
+        drawLine(g.label, 12, true);
+        g.top.forEach((c, idx) => {
+          const nombre = String(c && c.cliente != null ? c.cliente : "").trim() || "—";
+          const canalSub = [c && c.canal ? String(c.canal).trim() : "", c && c.subcanal ? String(c.subcanal).trim() : ""].filter(Boolean).join(" · ");
+          const delta = fmtDelta(c);
+          const lineA = `${idx + 1}. ${nombre}${delta ? ` · ${delta}` : ""}`;
+          drawWrapped(lineA, 10, false);
+          if (canalSub) drawWrapped(canalSub, 9, false, 12);
+          y -= 4;
+        });
+        y -= 6;
+      }
+      if (!any) drawLine("— Sin datos DICF.", 10, false);
+    } catch (e) {
+      console.error("[ActionRegister export-day-pdf top DICF]", e);
+      drawLine("— Sin datos DICF.", 10, false);
+    }
+
     const pdfBytes = await pdfDoc.save();
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="Action-Register-Resumen-${plantaNombre.replace(/[^\w\-]+/g, "-")}-${ymd}.pdf"`);
