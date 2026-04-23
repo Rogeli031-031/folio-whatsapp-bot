@@ -2425,6 +2425,20 @@ async function ensureSchema() {
     `);
     await client.query(`ALTER TABLE public.roles ADD COLUMN IF NOT EXISTS nivel INT DEFAULT 0;`);
     await client.query(`ALTER TABLE public.roles ADD COLUMN IF NOT EXISTS clave VARCHAR(50);`);
+    // Roles mínimos requeridos por el bot (idempotente).
+    await client.query(
+      `
+      INSERT INTO public.roles (nombre, clave, nivel)
+      VALUES
+        ('Gerente Operaciones', 'GO', 6),
+        ('Subgerente', 'SG', 6),
+        ('Seguridad e Higiene', 'SEH', 6)
+      ON CONFLICT (nombre)
+      DO UPDATE SET
+        clave = EXCLUDED.clave,
+        nivel = EXCLUDED.nivel;
+    `
+    ).catch(() => {});
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS public.usuarios (
@@ -12437,6 +12451,16 @@ app.post("/twilio/whatsapp", async (req, res) => {
       const bodyForCmd = String(body || "")
         .replace(/[\u200B-\u200D\uFEFF]/g, "")
         .trim();
+
+      // Restricción especial: roles nivel 6 (GO/SG/SEH) solo pueden usar el comando AR desde Twilio.
+      if (actor) {
+        const rolClaveRestr = (actor.rol_clave && String(actor.rol_clave).toUpperCase()) || "";
+        const rolNivelRestr = actor.rol_nivel != null ? Number(actor.rol_nivel) : null;
+        const esNivel6Especial = rolNivelRestr === 6 && ["GO", "SG", "SEH"].includes(rolClaveRestr);
+        if (esNivel6Especial && !/^ar$/i.test(bodyForCmd)) {
+          return safeReply('⛔ Tu rol (nivel 6: GO/SG/SEH) solo tiene acceso al comando "AR".');
+        }
+      }
 
       /* Dashboard y mis pendientes ANTES del formulario PRE: si no, "dashboard" se confunde con categoría/monto y puede lanzar error. */
       const matchDashboardEarly = bodyForCmd.match(/^dashboard(\s+(zp|gg|resumen|etapa|planta|categoria))?(\s+(.+))?$/i);
