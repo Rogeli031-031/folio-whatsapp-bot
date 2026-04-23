@@ -7756,6 +7756,44 @@ app.get("/api/action-register/export-day-pdf", dashboardAuthMiddleware, async (r
       }
     }
 
+    // Folios creados ese día (misma planta, por fecha de creado_en en tz CDMX).
+    y -= 8;
+    drawLine("Folios creados ese día", 14, true);
+    let foliosDia = [];
+    try {
+      const fol = await client.query(
+        `SELECT f.numero_folio, f.folio_codigo, f.importe,
+                COALESCE(NULLIF(TRIM(COALESCE(f.descripcion,'')), ''), f.concepto, '') AS descripcion,
+                f.creado_en
+         FROM public.folios f
+         WHERE f.planta_id = $1
+           AND to_char((f.creado_en AT TIME ZONE 'America/Mexico_City')::date, 'YYYY-MM-DD') = $2
+         ORDER BY f.creado_en ASC NULLS LAST, f.id ASC`,
+        [planta_id, ymd]
+      );
+      foliosDia = fol.rows || [];
+    } catch (e) {
+      console.error("[ActionRegister export-day-pdf foliosDia]", e);
+      foliosDia = [];
+    }
+    if (!foliosDia.length) {
+      drawLine("— Sin folios creados.", 10, false);
+    } else {
+      const fmtMxn = (n) => {
+        const v = n != null ? Number(n) : null;
+        if (v == null || Number.isNaN(v)) return "";
+        try { return v.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); } catch { return String(v); }
+      };
+      for (const f of foliosDia) {
+        const code = String(f.folio_codigo || f.numero_folio || "").trim();
+        const desc = String(f.descripcion || "").trim();
+        const imp = fmtMxn(f.importe);
+        drawWrapped(`${code}${imp ? ` · $${imp}` : ""}`, 10, true);
+        if (desc) drawWrapped(desc, 10, false, 12);
+        y -= 6;
+      }
+    }
+
     const pdfBytes = await pdfDoc.save();
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="Action-Register-Resumen-${plantaNombre.replace(/[^\w\-]+/g, "-")}-${ymd}.pdf"`);
