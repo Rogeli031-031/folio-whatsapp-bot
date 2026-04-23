@@ -5788,6 +5788,48 @@ app.delete("/api/action-register/notes/:id", dashboardAuthMiddleware, async (req
   }
 });
 
+/** Actualiza (edita) un comentario del día. */
+app.patch("/api/action-register/notes/:id", dashboardAuthMiddleware, async (req, res) => {
+  const note_id = parseInt(String(req.params.id || ""), 10);
+  if (!note_id || !Number.isFinite(note_id)) return res.status(400).json({ error: "note_id inválido" });
+  const body = req.body || {};
+  const texto = body.body != null ? String(body.body).trim() : null;
+  if (texto == null) return res.status(400).json({ error: "body requerido" });
+  if (!texto) return res.status(400).json({ error: "El comentario no puede estar vacío" });
+  if (texto.length > 2000) return res.status(400).json({ error: "Comentario demasiado largo (máx 2000 caracteres)" });
+  const client = await pool.connect();
+  try {
+    await ensureActionRegisterTables(client);
+    const n = await client.query(
+      `SELECT n.id, n.revision_id, rv.planta_id, n.author_name, n.created_at,
+              COALESCE((SELECT COUNT(*)::INT FROM arr.action_register_revision_note_attachments att WHERE att.note_id = n.id), 0) AS attachments_count
+       FROM arr.action_register_revision_notes n
+       JOIN arr.action_register_revisions rv ON rv.id = n.revision_id
+       WHERE n.id = $1`,
+      [note_id]
+    );
+    if (!n.rows[0]) return res.status(404).json({ error: "Nota no encontrada" });
+    if (!assertDashboardPlantaAccessForActionRegister(req, n.rows[0].planta_id)) return res.status(403).json({ error: "Sin acceso a esta planta" });
+
+    const up = await client.query(
+      `UPDATE arr.action_register_revision_notes
+       SET body = $1
+       WHERE id = $2
+       RETURNING id, revision_id, body, author_name, created_at`,
+      [texto, note_id]
+    );
+    const note = up.rows[0];
+    // Mantener attachments_count consistente con la respuesta usada por el frontend.
+    note.attachments_count = parseInt(n.rows[0].attachments_count, 10) || 0;
+    return res.json({ note });
+  } catch (e) {
+    console.error("[ActionRegister PATCH note]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
 app.get("/api/action-register/board", dashboardAuthMiddleware, async (req, res) => {
   const planta_id = req.query.planta_id != null ? parseInt(String(req.query.planta_id), 10) : null;
   if (!planta_id || !Number.isFinite(planta_id)) return res.status(400).json({ error: "planta_id requerido" });

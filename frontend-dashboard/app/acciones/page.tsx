@@ -21,6 +21,7 @@ import {
   deleteActionRegisterAttachment,
   getActionRegisterAttachmentUrl,
   createActionRegisterRevisionNote,
+  patchActionRegisterRevisionNote,
   deleteActionRegisterRevisionNote,
   fetchDicfAttachments,
   uploadDicfAttachment,
@@ -106,6 +107,8 @@ function ActionRegisterContent() {
   const [draftByCell, setDraftByCell] = useState<Record<string, { title: string; responsable: string; due_date: string }>>({});
   const [draftSubByItem, setDraftSubByItem] = useState<Record<string, { title: string; responsable: string; due_date: string }>>({});
   const [pickExistingByCell, setPickExistingByCell] = useState<Record<string, number | "">>({});
+  const [editItemById, setEditItemById] = useState<Record<number, { title: string; responsable: string; due_date: string }>>({});
+  const [itemSavingById, setItemSavingById] = useState<Record<number, boolean>>({});
 
   const [photosByItem, setPhotosByItem] = useState<Record<number, (ActionRegisterAttachment | DicfAttachment)[]>>({});
   const [photosOpenByItem, setPhotosOpenByItem] = useState<Record<number, boolean>>({});
@@ -114,6 +117,8 @@ function ActionRegisterContent() {
 
   const [noteDraftByRev, setNoteDraftByRev] = useState<Record<number, string>>({});
   const [noteSavingByRev, setNoteSavingByRev] = useState<Record<number, boolean>>({});
+  const [noteEditById, setNoteEditById] = useState<Record<number, { draft: string }>>({});
+  const [noteEditingById, setNoteEditingById] = useState<Record<number, boolean>>({});
   // Fotos de comentarios del día (notas por revisión).
   const [notePhotosById, setNotePhotosById] = useState<Record<number, ActionRegisterNoteAttachment[]>>({});
   const [notePhotosOpenById, setNotePhotosOpenById] = useState<Record<number, boolean>>({});
@@ -241,6 +246,38 @@ function ActionRegisterContent() {
       }
     },
     [token, loadBoard]
+  );
+
+  const handleStartEditNote = useCallback((noteId: number, currentBody: string) => {
+    setNoteEditById((s) => ({ ...s, [noteId]: { draft: String(currentBody || "") } }));
+  }, []);
+
+  const handleCancelEditNote = useCallback((noteId: number) => {
+    setNoteEditById((s) => {
+      const next = { ...s };
+      delete next[noteId];
+      return next;
+    });
+  }, []);
+
+  const handleSaveEditNote = useCallback(
+    async (noteId: number) => {
+      if (!token) return;
+      const draft = (noteEditById[noteId]?.draft || "").trim();
+      if (!draft) return;
+      setNoteEditingById((s) => ({ ...s, [noteId]: true }));
+      try {
+        await patchActionRegisterRevisionNote(token, noteId, draft);
+        handleCancelEditNote(noteId);
+        await loadBoard();
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : "Error";
+        alert("No se pudo actualizar el comentario: " + msg);
+      } finally {
+        setNoteEditingById((s) => ({ ...s, [noteId]: false }));
+      }
+    },
+    [token, noteEditById, loadBoard, handleCancelEditNote]
   );
 
   const loadNotePhotos = useCallback(
@@ -428,6 +465,52 @@ function ActionRegisterContent() {
       }
     },
     [token, loadBoard]
+  );
+
+  const handleStartEditItem = useCallback((it: ActionRegisterItem) => {
+    if (it.dicf) return; // DICF es solo lectura.
+    setEditItemById((s) => ({
+      ...s,
+      [it.id]: {
+        title: String(it.title || ""),
+        responsable: String(it.responsable || ""),
+        due_date: it.due_date ? String(it.due_date).slice(0, 10) : "",
+      },
+    }));
+  }, []);
+
+  const handleCancelEditItem = useCallback((itemId: number) => {
+    setEditItemById((s) => {
+      const next = { ...s };
+      delete next[itemId];
+      return next;
+    });
+  }, []);
+
+  const handleSaveEditItem = useCallback(
+    async (itemId: number) => {
+      if (!token) return;
+      const draft = editItemById[itemId];
+      if (!draft) return;
+      const title = (draft.title || "").trim();
+      if (title.length < 2) return;
+      setItemSavingById((s) => ({ ...s, [itemId]: true }));
+      try {
+        await patchActionRegisterItem(token, itemId, {
+          title,
+          responsable: (draft.responsable || "").trim(),
+          due_date: draft.due_date ? draft.due_date : null,
+        });
+        handleCancelEditItem(itemId);
+        await loadBoard();
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : "Error";
+        alert("No se pudo actualizar la acción: " + msg);
+      } finally {
+        setItemSavingById((s) => ({ ...s, [itemId]: false }));
+      }
+    },
+    [token, editItemById, loadBoard, handleCancelEditItem]
   );
 
   const loadPhotos = useCallback(
@@ -825,15 +908,61 @@ function ActionRegisterContent() {
                     const noteUploading = notePhotoUploadingById[n.id] === true;
                     const noteCountFromBoard = n.attachments_count || 0;
                     const notePhotoCount = notePhotosList.length > 0 ? notePhotosList.length : noteCountFromBoard;
+                    const edit = noteEditById[n.id];
+                    const isEditing = !!edit;
+                    const savingEdit = noteEditingById[n.id] === true;
                     return (
                       <div key={n.id} className="group relative rounded border border-amber-500/20 bg-amber-500/5 px-2 py-1.5 text-xs">
-                        <div className="whitespace-pre-wrap text-amber-50">{n.body}</div>
+                        {!isEditing ? (
+                          <div className="whitespace-pre-wrap text-amber-50">{n.body}</div>
+                        ) : (
+                          <textarea
+                            value={edit.draft}
+                            onChange={(e) =>
+                              setNoteEditById((s) => ({ ...s, [n.id]: { draft: e.target.value } }))
+                            }
+                            rows={3}
+                            className="w-full rounded border border-amber-500/30 bg-slate-950/60 px-2 py-1 text-xs text-slate-100 placeholder:text-slate-500 focus:border-amber-400 focus:outline-none resize-y"
+                            disabled={savingEdit}
+                          />
+                        )}
                         <div className="mt-1 flex items-center justify-between text-[10px] text-amber-200/60">
                           <span>
                             {n.author_name || "—"}
                             {hora ? ` · ${hora}` : ""}
                           </span>
                           <div className="flex items-center gap-1.5">
+                            {!isEditing ? (
+                              <button
+                                type="button"
+                                onClick={() => handleStartEditNote(n.id, n.body)}
+                                className="opacity-0 group-hover:opacity-100 text-amber-200 hover:text-amber-100 transition-opacity"
+                                title="Editar comentario"
+                              >
+                                Editar
+                              </button>
+                            ) : (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => void handleSaveEditNote(n.id)}
+                                  disabled={savingEdit || !edit.draft.trim()}
+                                  className="text-amber-200 hover:text-amber-100 disabled:opacity-40"
+                                  title="Guardar cambios"
+                                >
+                                  {savingEdit ? "Guardando…" : "Guardar"}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleCancelEditNote(n.id)}
+                                  disabled={savingEdit}
+                                  className="text-slate-300 hover:text-white disabled:opacity-40"
+                                  title="Cancelar"
+                                >
+                                  Cancelar
+                                </button>
+                              </>
+                            )}
                             <label
                               htmlFor={notePhotoInputId}
                               className={`cursor-pointer text-amber-200 hover:text-amber-100 ${noteUploading ? "opacity-60 pointer-events-none" : ""}`}
@@ -1026,6 +1155,9 @@ function ActionRegisterContent() {
                     const uploading = photoUploadingByItem[it.id] === true;
                     const countFromBoard = it.attachments_count || 0;
                     const photoCount = photosList.length > 0 ? photosList.length : countFromBoard;
+                    const edit = editItemById[it.id];
+                    const isEditing = !!edit;
+                    const savingEdit = itemSavingById[it.id] === true;
 
                     // --- Render especial para acciones DICF (solo lectura) ---
                     if (it.dicf) {
@@ -1178,14 +1310,49 @@ function ActionRegisterContent() {
                         <div className="flex items-start gap-2">
                           <div className="text-xs text-slate-400 mt-0.5 w-10 flex-shrink-0">{n}</div>
                           <div className="flex-1 min-w-0">
-                            <div className={`text-sm ${closedCls}`}>{it.title}</div>
+                            {!isEditing ? (
+                              <div className={`text-sm ${closedCls}`}>{it.title}</div>
+                            ) : (
+                              <input
+                                value={edit.title}
+                                onChange={(e) => setEditItemById((s) => ({ ...s, [it.id]: { ...edit, title: e.target.value } }))}
+                                className="w-full rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-slate-200 placeholder:text-slate-600"
+                                disabled={savingEdit}
+                              />
+                            )}
                             <div className="mt-1 flex flex-wrap gap-2 text-[11px]">
-                              <span className="rounded bg-slate-800 px-2 py-0.5 text-slate-200">
-                                Resp: <span className="text-amber-200">{it.responsable || "—"}</span>
-                              </span>
-                              <span className="rounded bg-slate-800 px-2 py-0.5 text-slate-200">
-                                Compromiso: <span className="text-emerald-200">{it.due_date ? fmtDMY(it.due_date) : "—"}</span>
-                              </span>
+                              {!isEditing ? (
+                                <>
+                                  <span className="rounded bg-slate-800 px-2 py-0.5 text-slate-200">
+                                    Resp: <span className="text-amber-200">{it.responsable || "—"}</span>
+                                  </span>
+                                  <span className="rounded bg-slate-800 px-2 py-0.5 text-slate-200">
+                                    Compromiso: <span className="text-emerald-200">{it.due_date ? fmtDMY(it.due_date) : "—"}</span>
+                                  </span>
+                                </>
+                              ) : (
+                                <>
+                                  <span className="rounded bg-slate-800 px-2 py-0.5 text-slate-200 inline-flex items-center gap-1">
+                                    Resp:
+                                    <input
+                                      value={edit.responsable}
+                                      onChange={(e) => setEditItemById((s) => ({ ...s, [it.id]: { ...edit, responsable: e.target.value } }))}
+                                      className="ml-1 w-40 rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-slate-200"
+                                      disabled={savingEdit}
+                                    />
+                                  </span>
+                                  <span className="rounded bg-slate-800 px-2 py-0.5 text-slate-200 inline-flex items-center gap-1">
+                                    Compromiso:
+                                    <input
+                                      type="date"
+                                      value={edit.due_date}
+                                      onChange={(e) => setEditItemById((s) => ({ ...s, [it.id]: { ...edit, due_date: e.target.value } }))}
+                                      className="ml-1 w-36 rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-slate-200"
+                                      disabled={savingEdit}
+                                    />
+                                  </span>
+                                </>
+                              )}
                               {photoCount > 0 && (
                                 <span className="rounded bg-blue-900/40 px-2 py-0.5 text-blue-200 border border-blue-700/50">
                                   📷 {photoCount} foto{photoCount === 1 ? "" : "s"}
@@ -1194,6 +1361,38 @@ function ActionRegisterContent() {
                             </div>
                           </div>
                           <div className="flex flex-col gap-1">
+                            {!it.dicf && !isEditing && (
+                              <button
+                                type="button"
+                                onClick={() => handleStartEditItem(it)}
+                                className="text-xs rounded px-2 py-1 border border-slate-600 text-slate-200 hover:bg-slate-800"
+                                title="Editar acción"
+                              >
+                                Editar
+                              </button>
+                            )}
+                            {!it.dicf && isEditing && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => void handleSaveEditItem(it.id)}
+                                  disabled={savingEdit || !edit.title.trim()}
+                                  className="text-xs rounded px-2 py-1 border border-emerald-700 text-emerald-200 hover:bg-emerald-900/20 disabled:opacity-40"
+                                  title="Guardar cambios"
+                                >
+                                  {savingEdit ? "Guardando…" : "Guardar"}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleCancelEditItem(it.id)}
+                                  disabled={savingEdit}
+                                  className="text-xs rounded px-2 py-1 border border-slate-600 text-slate-200 hover:bg-slate-800 disabled:opacity-40"
+                                  title="Cancelar"
+                                >
+                                  Cancelar
+                                </button>
+                              </>
+                            )}
                             <label
                               htmlFor={photoInputId}
                               className={`cursor-pointer text-xs rounded px-2 py-1 border border-blue-700 text-blue-200 hover:bg-blue-900/20 text-center ${uploading ? "opacity-50 pointer-events-none" : ""}`}

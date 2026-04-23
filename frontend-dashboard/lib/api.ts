@@ -252,6 +252,18 @@ export function deleteActionRegisterRevisionNote(
   });
 }
 
+export function patchActionRegisterRevisionNote(
+  token: string,
+  noteId: number,
+  body: string
+): Promise<{ note: ActionRegisterRevisionNote }> {
+  return apiFetch<{ note: ActionRegisterRevisionNote }>(`/api/action-register/notes/${noteId}`, {
+    token,
+    method: "PATCH",
+    body: JSON.stringify({ body }),
+  });
+}
+
 // ===========================
 // Fotos de acciones DICF
 // ===========================
