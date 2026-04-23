@@ -30,6 +30,7 @@ import {
   uploadActionRegisterNoteAttachment,
   deleteActionRegisterNoteAttachment,
   getActionRegisterNoteAttachmentUrl,
+  getActionRegisterDailyPdfUrl,
   type ActionRegisterAttachment,
   type ActionRegisterBoardResponse,
   type ActionRegisterItem,
@@ -765,12 +766,27 @@ function ActionRegisterContent() {
                 key={r.id}
                 className="border border-slate-700 bg-slate-900/40 px-3 py-2 text-sm font-semibold text-slate-200"
               >
-                {r.revision_date && r.revision_date !== "—" ? fmtDMY(r.revision_date) : "Fecha"}
-                {r.id !== -1 && (
-                  <div className="mt-1 text-[11px] text-slate-400">
-                    {revisionIdToDate.get(r.id) ? `Revisión: ${revisionIdToDate.get(r.id)}` : ""}
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    {r.revision_date && r.revision_date !== "—" ? fmtDMY(r.revision_date) : "Fecha"}
+                    {r.id !== -1 && (
+                      <div className="mt-1 text-[11px] text-slate-400">
+                        {revisionIdToDate.get(r.id) ? `Revisión: ${revisionIdToDate.get(r.id)}` : ""}
+                      </div>
+                    )}
                   </div>
-                )}
+                  {plantaId && r.id !== -1 && (
+                    <a
+                      href={getActionRegisterDailyPdfUrl(token, plantaId, r.id)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 rounded bg-slate-800 px-2 py-1 text-[11px] font-medium text-slate-200 hover:bg-slate-700 border border-slate-600"
+                      title="Generar PDF con Resumen del día (Resumen, Comentarios, Evidencias e Historial)"
+                    >
+                      PDF
+                    </a>
+                  )}
+                </div>
               </div>
             ))}
 

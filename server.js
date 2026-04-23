@@ -7310,6 +7310,464 @@ app.get("/api/action-register/export", dashboardAuthMiddleware, async (req, res)
   }
 });
 
+/** Exporta a PDF el resumen del día (una revisión) del Action Register de una planta. */
+app.get("/api/action-register/export-day-pdf", dashboardAuthMiddleware, async (req, res) => {
+  const planta_id = req.query.planta_id != null ? parseInt(String(req.query.planta_id), 10) : null;
+  const revision_id = req.query.revision_id != null ? parseInt(String(req.query.revision_id), 10) : null;
+  if (!planta_id || !Number.isFinite(planta_id)) return res.status(400).json({ error: "planta_id requerido" });
+  if (!revision_id || !Number.isFinite(revision_id)) return res.status(400).json({ error: "revision_id requerido" });
+  if (!assertDashboardPlantaAccessForActionRegister(req, planta_id)) return res.status(403).json({ error: "Sin acceso a esta planta" });
+  const client = await pool.connect();
+  try {
+    await ensureActionRegisterTables(client);
+
+    const plantaRow = await client.query(`SELECT id, nombre FROM public.plantas WHERE id = $1`, [planta_id]);
+    const plantaNombre = (plantaRow.rows[0] && plantaRow.rows[0].nombre) || `Planta ${planta_id}`;
+
+    const revRow = await client.query(
+      `SELECT id, planta_id, revision_date
+       FROM arr.action_register_revisions
+       WHERE id = $1 AND planta_id = $2`,
+      [revision_id, planta_id]
+    );
+    if (!revRow.rows[0]) return res.status(404).json({ error: "Revisión no encontrada" });
+    const revisionDate = revRow.rows[0].revision_date; // date
+    const ymd = (() => {
+      const d = revisionDate instanceof Date ? revisionDate : new Date(revisionDate);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${y}-${m}-${day}`;
+    })();
+    const dmy = (() => {
+      const [y, m, d] = ymd.split("-");
+      return `${d}/${m}/${y}`;
+    })();
+
+    // Revisions de la planta (para anclar acciones DICF a la columna correcta).
+    const revs = await client.query(
+      `SELECT id, revision_date
+       FROM arr.action_register_revisions
+       WHERE planta_id = $1
+       ORDER BY revision_date ASC`,
+      [planta_id]
+    );
+    const revisionsAsc = (revs.rows || []).map((r) => ({
+      id: Number(r.id),
+      ymd: (() => {
+        const dd = r.revision_date instanceof Date ? r.revision_date : new Date(r.revision_date);
+        const y = dd.getFullYear();
+        const m = String(dd.getMonth() + 1).padStart(2, "0");
+        const day = String(dd.getDate()).padStart(2, "0");
+        return `${y}-${m}-${day}`;
+      })(),
+    }));
+    function pickRevYmdForCreated(createdYmd) {
+      let pick = null;
+      for (const rv of revisionsAsc) {
+        if (rv.ymd <= createdYmd) pick = rv;
+        else break;
+      }
+      return pick ? pick.ymd : (revisionsAsc[0] ? revisionsAsc[0].ymd : null);
+    }
+
+    // Items del día (solo la revisión seleccionada).
+    const itemsRes = await client.query(
+      `SELECT e.revision_id, e.position,
+              i.id, i.tema, i.parent_id, i.title, i.responsable, i.due_date, i.closed,
+              i.created_at, i.updated_at,
+              COALESCE((SELECT COUNT(*)::INT FROM arr.action_register_attachments a WHERE a.item_id = i.id), 0) AS attachments_count
+       FROM arr.action_register_entries e
+       JOIN arr.action_register_items i ON i.id = e.item_id
+       WHERE e.revision_id = $1
+       ORDER BY i.tema ASC, e.position ASC, i.id ASC`,
+      [revision_id]
+    );
+    const items = itemsRes.rows || [];
+
+    // Adjuntos de items del día.
+    const attRes = await client.query(
+      `SELECT a.id, a.item_id, a.file_name, a.content_type, a.s3_key, a.s3_url, a.data, a.created_at
+       FROM arr.action_register_attachments a
+       JOIN arr.action_register_items i ON i.id = a.item_id
+       JOIN arr.action_register_entries e ON e.item_id = i.id
+       WHERE e.revision_id = $1
+       ORDER BY a.item_id ASC, a.created_at ASC, a.id ASC`,
+      [revision_id]
+    );
+    const attachmentsByItem = new Map();
+    for (const a of attRes.rows || []) {
+      if (!attachmentsByItem.has(a.item_id)) attachmentsByItem.set(a.item_id, []);
+      attachmentsByItem.get(a.item_id).push(a);
+    }
+
+    // Comentarios del día (notas) solo para la revisión seleccionada.
+    const notesRes = await client.query(
+      `SELECT n.id, n.revision_id, n.body, n.author_name, n.created_at
+       FROM arr.action_register_revision_notes n
+       WHERE n.revision_id = $1
+       ORDER BY n.created_at ASC, n.id ASC`,
+      [revision_id]
+    );
+    const notes = notesRes.rows || [];
+
+    // Fotos adjuntas a notas.
+    const noteAttRes = await client.query(
+      `SELECT a.id, a.note_id, a.file_name, a.content_type, a.s3_key, a.s3_url, a.data, a.created_at
+       FROM arr.action_register_revision_note_attachments a
+       JOIN arr.action_register_revision_notes n ON n.id = a.note_id
+       WHERE n.revision_id = $1
+       ORDER BY a.note_id ASC, a.created_at ASC, a.id ASC`,
+      [revision_id]
+    );
+    const noteAttachmentsByNoteId = new Map();
+    for (const a of noteAttRes.rows || []) {
+      if (!noteAttachmentsByNoteId.has(a.note_id)) noteAttachmentsByNoteId.set(a.note_id, []);
+      noteAttachmentsByNoteId.get(a.note_id).push(a);
+    }
+
+    // Acciones DICF ancladas a este día (según la misma regla del Excel).
+    let dicfAcciones = [];
+    const dicfAttachmentsByAccion = new Map();
+    try {
+      await dicfAccionesLib.ensureDicfAccionesTables(client);
+      const equivPlantas = dicfAccionesLib.getPlantaIdsEquivalentes(planta_id);
+      if (equivPlantas.length > 0) {
+        const dq = await client.query(
+          `SELECT a.id, a.public_code, a.planta_id, a.planta_label, a.grupo_tipo, a.canal, a.subcanal,
+                  a.cliente_nombre, a.descripcion, a.estado, a.fecha_compromiso, a.compromiso_tarde,
+                  a.cerrado_at, a.resultado_cierre, a.created_at, a.updated_at,
+                  to_char((a.created_at AT TIME ZONE 'America/Mexico_City')::date, 'YYYY-MM-DD') AS creada_ymd,
+                  COALESCE(NULLIF(TRIM(COALESCE(rp.nombre_persona,'')), ''), rp.nombre) AS responsable_nombre
+           FROM arr.dicf_acciones a
+           LEFT JOIN public.usuarios rp ON rp.id = a.responsable_usuario_id
+           WHERE a.planta_id = ANY($1::int[])
+           ORDER BY a.cerrado_at NULLS FIRST, a.created_at DESC`,
+          [equivPlantas]
+        );
+        const all = dq.rows || [];
+        dicfAcciones = all.filter((a) => pickRevYmdForCreated(String(a.creada_ymd || "")) === ymd);
+        if (dicfAcciones.length > 0) {
+          const ids = dicfAcciones.map((a) => Number(a.id)).filter(Number.isFinite);
+          if (ids.length > 0) {
+            const dAttRes = await client.query(
+              `SELECT a.id, a.dicf_accion_id, a.file_name, a.content_type, a.s3_key, a.s3_url, a.data, a.created_at
+               FROM arr.dicf_acciones_attachments a
+               WHERE a.dicf_accion_id = ANY($1::int[])
+               ORDER BY a.dicf_accion_id ASC, a.created_at ASC, a.id ASC`,
+              [ids]
+            );
+            for (const a of dAttRes.rows || []) {
+              if (!dicfAttachmentsByAccion.has(a.dicf_accion_id)) dicfAttachmentsByAccion.set(a.dicf_accion_id, []);
+              dicfAttachmentsByAccion.get(a.dicf_accion_id).push(a);
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.error("[ActionRegister export-day-pdf DICF]", e);
+      dicfAcciones = [];
+    }
+
+    // ===== PDF =====
+    const pdfDoc = await PDFDocument.create();
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+    const PAGE_W = 612;
+    const PAGE_H = 792;
+    const M = 48;
+    const LINE_GAP = 4;
+    let page = pdfDoc.addPage([PAGE_W, PAGE_H]);
+    let y = PAGE_H - M;
+
+    const newPage = () => {
+      page = pdfDoc.addPage([PAGE_W, PAGE_H]);
+      y = PAGE_H - M;
+    };
+    const ensureSpace = (need) => {
+      if (y - need < M) newPage();
+    };
+    const drawLine = (text, size = 10, bold = false) => {
+      ensureSpace(size + LINE_GAP);
+      const f = bold ? fontBold : font;
+      page.drawText(String(text || ""), { x: M, y, size, font: f });
+      y -= size + LINE_GAP;
+    };
+    const wrapText = (text, maxWidth, size, fnt) => {
+      const words = String(text || "").replace(/\s+/g, " ").trim().split(" ").filter(Boolean);
+      const lines = [];
+      let cur = "";
+      for (const w of words) {
+        const next = cur ? `${cur} ${w}` : w;
+        const width = fnt.widthOfTextAtSize(next, size);
+        if (width <= maxWidth) cur = next;
+        else {
+          if (cur) lines.push(cur);
+          cur = w;
+        }
+      }
+      if (cur) lines.push(cur);
+      return lines.length ? lines : [""];
+    };
+    const drawWrapped = (text, size = 10, bold = false, indent = 0) => {
+      const f = bold ? fontBold : font;
+      const maxW = PAGE_W - M - M - indent;
+      const lines = wrapText(text, maxW, size, f);
+      for (const ln of lines) {
+        ensureSpace(size + LINE_GAP);
+        page.drawText(ln, { x: M + indent, y, size, font: f });
+        y -= size + LINE_GAP;
+      }
+    };
+
+    function fmtHora(d) {
+      if (!d) return "";
+      const dt = d instanceof Date ? d : new Date(d);
+      if (isNaN(dt.getTime())) return "";
+      try {
+        return dt.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit", hour12: false });
+      } catch {
+        return "";
+      }
+    }
+
+    // Título
+    drawLine("El Resumen", 18, true);
+    drawLine(`${plantaNombre} · ${dmy}`, 12, false);
+    y -= 8;
+
+    // Resumen por tema (solo este día)
+    const TEMAS_ORDER = ACTION_REGISTER_TEMAS;
+    const counts = new Map(); // tema -> { abiertas, cerradas }
+    for (const t of TEMAS_ORDER) counts.set(t, { abiertas: 0, cerradas: 0 });
+    for (const it of items) {
+      const t = String(it.tema || "");
+      if (!counts.has(t)) counts.set(t, { abiertas: 0, cerradas: 0 });
+      if (it.closed) counts.get(t).cerradas += 1;
+      else counts.get(t).abiertas += 1;
+    }
+    // DICF suma a Clientes.
+    if (dicfAcciones.length > 0) {
+      if (!counts.has("Clientes")) counts.set("Clientes", { abiertas: 0, cerradas: 0 });
+      for (const a of dicfAcciones) {
+        const cerrada = !!a.cerrado_at || a.estado === "hecho";
+        if (cerrada) counts.get("Clientes").cerradas += 1;
+        else counts.get("Clientes").abiertas += 1;
+      }
+    }
+    drawLine("Resumen (por tema)", 12, true);
+    for (const tema of TEMAS_ORDER) {
+      const c = counts.get(tema) || { abiertas: 0, cerradas: 0 };
+      if ((c.abiertas + c.cerradas) === 0) continue;
+      drawLine(`${tema}: Abiertas ${c.abiertas} · Cerradas ${c.cerradas}`, 10, false);
+    }
+
+    // Comentarios del día
+    y -= 10;
+    drawLine("Comentarios del día", 14, true);
+    if (!notes.length) {
+      drawLine("— Sin comentarios.", 10, false);
+    } else {
+      for (const n of notes) {
+        const hora = fmtHora(n.created_at);
+        const autor = String(n.author_name || "—").trim() || "—";
+        drawWrapped(`${hora ? hora + " " : ""}${autor}`, 10, true);
+        drawWrapped(String(n.body || ""), 10, false, 12);
+        const photos = noteAttachmentsByNoteId.get(n.id) || [];
+        if (photos.length > 0) drawLine(`Fotos: ${photos.length}`, 9, false);
+        y -= 6;
+      }
+    }
+
+    // Evidencias
+    y -= 6;
+    drawLine("Evidencias", 14, true);
+
+    const isImageType = (ct, name) => {
+      const c = String(ct || "").toLowerCase();
+      if (c.startsWith("image/")) return true;
+      const n = String(name || "").toLowerCase();
+      return n.endsWith(".jpg") || n.endsWith(".jpeg") || n.endsWith(".png") || n.endsWith(".webp") || n.endsWith(".gif");
+    };
+    async function embedImage(buffer) {
+      if (!buffer) return null;
+      const b = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
+      // firma simple
+      if (b.length > 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) {
+        return pdfDoc.embedJpg(b);
+      }
+      if (b.length > 8 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) {
+        return pdfDoc.embedPng(b);
+      }
+      // fallback: intentar como jpg
+      try { return await pdfDoc.embedJpg(b); } catch {}
+      try { return await pdfDoc.embedPng(b); } catch {}
+      return null;
+    }
+    const drawImageBlock = async (title, buffer) => {
+      const img = await embedImage(buffer);
+      if (!img) {
+        drawWrapped(title, 10, false);
+        drawLine("(imagen no compatible)", 9, false);
+        y -= 8;
+        return;
+      }
+      const maxW = PAGE_W - M - M;
+      const maxH = 320;
+      const scale = Math.min(maxW / img.width, maxH / img.height, 1);
+      const w = img.width * scale;
+      const h = img.height * scale;
+      ensureSpace(14 + h + 18);
+      drawWrapped(title, 10, true);
+      const x = M;
+      page.drawImage(img, { x, y: y - h, width: w, height: h });
+      y -= h + 12;
+    };
+
+    // Evidencias por acciones (items)
+    // Numeración (como Excel) para el historial del día.
+    function buildNumeration(itemsList) {
+      const byParent = new Map();
+      const sorted = [...itemsList].sort((a, b) => (a.position ?? 0) - (b.position ?? 0) || a.id - b.id);
+      for (const it of sorted) {
+        const k = it.parent_id == null ? "root" : String(it.parent_id);
+        if (!byParent.has(k)) byParent.set(k, []);
+        byParent.get(k).push(it);
+      }
+      const numById = new Map();
+      function assign(parentKey, prefix) {
+        const list = byParent.get(parentKey) || [];
+        list.forEach((it, idx) => {
+          const num = prefix ? `${prefix}.${idx + 1}` : String(idx + 1);
+          numById.set(it.id, num);
+          assign(String(it.id), num);
+        });
+      }
+      assign("root", "");
+      return numById;
+    }
+    const numById = buildNumeration(items);
+
+    for (const it of items) {
+      const atts = attachmentsByItem.get(it.id) || [];
+      if (!atts.length) continue;
+      const num = numById.get(it.id) || "";
+      const tipo = it.parent_id != null ? "Subacción" : "Acción";
+      const head = `${it.tema || ""} ${num ? "#" + num + " " : ""}(${tipo}) — ${it.title || ""}`;
+      for (const a of atts) {
+        if (!isImageType(a.content_type, a.file_name)) continue;
+        const buf = await getActionRegisterAttachmentBuffer(client, a);
+        await drawImageBlock(`${head}\n${a.file_name || "foto"}`, buf);
+      }
+    }
+
+    // Evidencias de comentarios del día (notas)
+    for (const n of notes) {
+      const photos = noteAttachmentsByNoteId.get(n.id) || [];
+      if (!photos.length) continue;
+      const hora = fmtHora(n.created_at);
+      const autor = String(n.author_name || "—").trim() || "—";
+      const head = `Comentario (${hora ? hora + " " : ""}${autor}) — ${String(n.body || "").slice(0, 120)}`;
+      for (const a of photos) {
+        if (!isImageType(a.content_type, a.file_name)) continue;
+        const buf = await getNoteAttachmentBuffer(client, a);
+        await drawImageBlock(`${head}\n${a.file_name || "foto"}`, buf);
+      }
+    }
+
+    // Evidencias DICF (si aplica)
+    for (const a of dicfAcciones) {
+      const photos = dicfAttachmentsByAccion.get(Number(a.id)) || [];
+      if (!photos.length) continue;
+      const canalSub = [a.canal, a.subcanal].filter((x) => String(x || "").trim() !== "").join(" · ");
+      const head = `DICF${a.public_code ? ` [${a.public_code}]` : ""}${canalSub ? ` (${canalSub})` : ""} — ${String(a.cliente_nombre || "").trim()} — ${String(a.descripcion || "").trim()}`;
+      for (const ph of photos) {
+        if (!isImageType(ph.content_type, ph.file_name)) continue;
+        const buf = await getDicfAttachmentBuffer(client, ph);
+        await drawImageBlock(`${head}\n${ph.file_name || "foto"}`, buf);
+      }
+    }
+
+    // Historial (solo este día)
+    y -= 6;
+    drawLine("Historial", 14, true);
+    if (!items.length && !dicfAcciones.length) {
+      drawLine("— Sin acciones.", 10, false);
+    } else {
+      // Items
+      const itemsSorted = [...items].sort((a, b) => {
+        const ta = TEMAS_ORDER.indexOf(String(a.tema || ""));
+        const tb = TEMAS_ORDER.indexOf(String(b.tema || ""));
+        if (ta !== tb) return ta - tb;
+        const na = (numById.get(a.id) || "");
+        const nb = (numById.get(b.id) || "");
+        return na.localeCompare(nb, undefined, { numeric: true });
+      });
+      for (const it of itemsSorted) {
+        const num = numById.get(it.id) || "";
+        const estatus = it.closed ? "Cerrada" : "Abierta";
+        const tipo = it.parent_id != null ? "Subacción" : "Acción";
+        drawWrapped(`${it.tema || ""} #${num || "—"} · ${tipo} · ${estatus}`, 10, true);
+        drawWrapped(String(it.title || ""), 10, false, 12);
+        const resp = String(it.responsable || "").trim();
+        const due = it.due_date ? (() => {
+          const dd = it.due_date instanceof Date ? it.due_date : new Date(it.due_date);
+          if (isNaN(dd.getTime())) return "";
+          const y = dd.getFullYear();
+          const m = String(dd.getMonth() + 1).padStart(2, "0");
+          const d = String(dd.getDate()).padStart(2, "0");
+          return `${d}/${m}/${y}`;
+        })() : "";
+        const attCount = Number(it.attachments_count) || (attachmentsByItem.get(it.id) || []).length;
+        const meta = [
+          resp ? `Resp: ${resp}` : null,
+          due ? `Compromiso: ${due}` : null,
+          attCount ? `Evidencias: ${attCount}` : null,
+        ].filter(Boolean).join(" · ");
+        if (meta) drawWrapped(meta, 9, false, 12);
+        y -= 6;
+      }
+      // DICF
+      if (dicfAcciones.length > 0) {
+        drawLine("DICF (Clientes)", 12, true);
+        dicfAcciones.forEach((a, idx) => {
+          const cerrada = !!a.cerrado_at || a.estado === "hecho";
+          const est = cerrada ? "Cerrada" : "Abierta";
+          const canalSub = [a.canal, a.subcanal].filter((x) => String(x || "").trim() !== "").join(" · ");
+          const titleParts = [];
+          if (a.public_code) titleParts.push(`[${a.public_code}]`);
+          if (a.cliente_nombre) titleParts.push(String(a.cliente_nombre).trim());
+          titleParts.push(String(a.descripcion || "").trim() || "(sin descripción)");
+          const title = titleParts.join(" — ");
+          drawWrapped(`D${idx + 1} · ${canalSub || "DICF"} · ${est}`, 10, true);
+          drawWrapped(title, 10, false, 12);
+          const resp = String(a.responsable_nombre || "").trim();
+          const due = a.fecha_compromiso ? String(a.fecha_compromiso).slice(0, 10) : "";
+          const attCount = (dicfAttachmentsByAccion.get(Number(a.id)) || []).length;
+          const meta = [
+            resp ? `Resp: ${resp}` : null,
+            due ? `Compromiso: ${due.split("-").reverse().join("/")}` : null,
+            attCount ? `Evidencias: ${attCount}` : null,
+          ].filter(Boolean).join(" · ");
+          if (meta) drawWrapped(meta, 9, false, 12);
+          y -= 6;
+        });
+      }
+    }
+
+    const pdfBytes = await pdfDoc.save();
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="Action-Register-Resumen-${plantaNombre.replace(/[^\w\-]+/g, "-")}-${ymd}.pdf"`);
+    return res.send(Buffer.from(pdfBytes));
+  } catch (e) {
+    console.error("[ActionRegister export-day-pdf]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
 /** Proyectos EN_CURSO de una planta (o equivalentes) para selector en crear folio. */
 app.get("/api/dashboard/proyectos", dashboardAuthMiddleware, async (req, res) => {
   if (dashboardBlockGVForbidden(req, res)) return;
