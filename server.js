@@ -7798,20 +7798,21 @@ app.get("/api/action-register/export-day-pdf", dashboardAuthMiddleware, async (r
       }
     }
 
-    // Folios creados ese día (misma planta, por fecha de creado_en en tz CDMX).
+    // Folios creados ese día (planta de ubicación + planta código E9/E10/E15… ver getPlantaIdsEquivalentesForPendientes).
     y -= 8;
     drawLine("Folios creados ese día", 14, true);
     let foliosDia = [];
     try {
+      const folioPlantaIds = getPlantaIdsEquivalentesForPendientes(planta_id);
       const fol = await client.query(
         `SELECT f.numero_folio, f.folio_codigo, f.importe,
                 COALESCE(NULLIF(TRIM(COALESCE(f.descripcion,'')), ''), f.concepto, '') AS descripcion,
                 f.creado_en
          FROM public.folios f
-         WHERE f.planta_id = $1
+         WHERE f.planta_id = ANY($1::int[])
            AND to_char((f.creado_en AT TIME ZONE 'America/Mexico_City')::date, 'YYYY-MM-DD') = $2
          ORDER BY f.creado_en ASC NULLS LAST, f.id ASC`,
-        [planta_id, ymd]
+        [folioPlantaIds, ymd]
       );
       foliosDia = fol.rows || [];
     } catch (e) {
