@@ -2895,6 +2895,28 @@ function dateToPg(date) {
 }
 
 /**
+ * Fecha calendario YYYY-MM-DD desde DATE/string de PostgreSQL (node-pg),
+ * sin getFullYear/getDate en huso local (evita desfase de un día, p. ej. CDMX vs UTC).
+ */
+function pgCalendarDateToYmd(v) {
+  if (v == null || v === "") return "";
+  if (typeof v === "string") {
+    const m = v.trim().match(/^(\d{4}-\d{2}-\d{2})/);
+    return m ? m[1] : "";
+  }
+  if (v instanceof Date && !isNaN(v.getTime())) {
+    try {
+      return v.toISOString().slice(0, 10);
+    } catch {
+      return "";
+    }
+  }
+  const s = String(v).trim();
+  const m2 = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  return m2 ? m2[1] : "";
+}
+
+/**
  * Normaliza un token a número de folio completo "F-YYYYMM-XXX".
  * - Si token es "F-YYYYMM-XXX" → se devuelve tal cual (normalizado).
  * - Si token es 1-3 dígitos → se rellena a 3 y se usa yyyymmFallback → "F-YYYYMM-XXX".
@@ -5901,16 +5923,10 @@ app.get("/api/action-register/board", dashboardAuthMiddleware, async (req, res) 
 
           // Normaliza las fechas de revisión a "YYYY-MM-DD" y ordena ASC para el picker.
           function normalizeYmd(v) {
+            const y = pgCalendarDateToYmd(v);
+            if (y) return y;
             if (!v) return "";
-            if (v instanceof Date) {
-              const y = v.getFullYear();
-              const m = String(v.getMonth() + 1).padStart(2, "0");
-              const d = String(v.getDate()).padStart(2, "0");
-              return `${y}-${m}-${d}`;
-            }
-            const s = String(v);
-            const m = s.match(/^(\d{4}-\d{2}-\d{2})/);
-            return m ? m[1] : s;
+            return String(v).trim();
           }
           const revWithYmd = revisions.map((rv) => ({ id: rv.id, ymd: normalizeYmd(rv.revision_date) }));
           const revAsc = [...revWithYmd].sort((a, b) => (a.ymd < b.ymd ? -1 : a.ymd > b.ymd ? 1 : 0));
@@ -7367,20 +7383,16 @@ app.get("/api/action-register/export-day-pdf", dashboardAuthMiddleware, async (r
     const plantaNombre = (plantaRow.rows[0] && plantaRow.rows[0].nombre) || `Planta ${planta_id}`;
 
     const revRow = await client.query(
-      `SELECT id, planta_id, revision_date
+      `SELECT id, planta_id, revision_date,
+              to_char(revision_date::date, 'YYYY-MM-DD') AS revision_ymd
        FROM arr.action_register_revisions
        WHERE id = $1 AND planta_id = $2`,
       [revision_id, planta_id]
     );
     if (!revRow.rows[0]) return res.status(404).json({ error: "Revisión no encontrada" });
-    const revisionDate = revRow.rows[0].revision_date; // date
-    const ymd = (() => {
-      const d = revisionDate instanceof Date ? revisionDate : new Date(revisionDate);
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, "0");
-      const day = String(d.getDate()).padStart(2, "0");
-      return `${y}-${m}-${day}`;
-    })();
+    const ymd =
+      String(revRow.rows[0].revision_ymd || "").trim() ||
+      pgCalendarDateToYmd(revRow.rows[0].revision_date);
     const dmy = (() => {
       const [y, m, d] = ymd.split("-");
       return `${d}/${m}/${y}`;
@@ -7388,7 +7400,8 @@ app.get("/api/action-register/export-day-pdf", dashboardAuthMiddleware, async (r
 
     // Revisions de la planta (para anclar acciones DICF a la columna correcta).
     const revs = await client.query(
-      `SELECT id, revision_date
+      `SELECT id, revision_date,
+              to_char(revision_date::date, 'YYYY-MM-DD') AS revision_ymd
        FROM arr.action_register_revisions
        WHERE planta_id = $1
        ORDER BY revision_date ASC`,
@@ -7396,13 +7409,7 @@ app.get("/api/action-register/export-day-pdf", dashboardAuthMiddleware, async (r
     );
     const revisionsAsc = (revs.rows || []).map((r) => ({
       id: Number(r.id),
-      ymd: (() => {
-        const dd = r.revision_date instanceof Date ? r.revision_date : new Date(r.revision_date);
-        const y = dd.getFullYear();
-        const m = String(dd.getMonth() + 1).padStart(2, "0");
-        const day = String(dd.getDate()).padStart(2, "0");
-        return `${y}-${m}-${day}`;
-      })(),
+      ymd: String(r.revision_ymd || "").trim() || pgCalendarDateToYmd(r.revision_date),
     }));
     function pickRevYmdForCreated(createdYmd) {
       let pick = null;
@@ -7810,9 +7817,13 @@ app.get("/api/action-register/export-day-pdf", dashboardAuthMiddleware, async (r
                 f.creado_en
          FROM public.folios f
          WHERE f.planta_id = ANY($1::int[])
-           AND to_char((f.creado_en AT TIME ZONE 'America/Mexico_City')::date, 'YYYY-MM-DD') = $2
+           AND (f.creado_en AT TIME ZONE 'America/Mexico_City')::date = (
+             SELECT r.revision_date::date
+             FROM arr.action_register_revisions r
+             WHERE r.id = $2 AND r.planta_id = $3
+           )
          ORDER BY f.creado_en ASC NULLS LAST, f.id ASC`,
-        [folioPlantaIds, ymd]
+        [folioPlantaIds, revision_id, planta_id]
       );
       foliosDia = fol.rows || [];
     } catch (e) {
