@@ -7807,7 +7807,7 @@ app.get("/api/action-register/export-day-pdf", dashboardAuthMiddleware, async (r
 
     // Folios creados ese día (planta de ubicación + planta código E9/E10/E15… ver getPlantaIdsEquivalentesForPendientes).
     y -= 8;
-    drawLine("Folios creados ese día", 14, true);
+    drawLine("Folios con actividad este día", 14, true);
     let foliosDia = [];
     try {
       const folioPlantaIds = getPlantaIdsEquivalentesForPendientes(planta_id);
@@ -7816,11 +7816,20 @@ app.get("/api/action-register/export-day-pdf", dashboardAuthMiddleware, async (r
                 COALESCE(NULLIF(TRIM(COALESCE(f.descripcion,'')), ''), f.concepto, '') AS descripcion,
                 f.creado_en
          FROM public.folios f
+         CROSS JOIN (
+           SELECT r.revision_date::date AS rev_dt
+           FROM arr.action_register_revisions r
+           WHERE r.id = $2 AND r.planta_id = $3
+         ) rev
          WHERE f.planta_id = ANY($1::int[])
-           AND (f.creado_en AT TIME ZONE 'America/Mexico_City')::date = (
-             SELECT r.revision_date::date
-             FROM arr.action_register_revisions r
-             WHERE r.id = $2 AND r.planta_id = $3
+           AND (
+             (f.creado_en AT TIME ZONE 'America/Mexico_City')::date = rev.rev_dt
+             OR EXISTS (
+               SELECT 1 FROM public.folio_historial h
+               WHERE (h.folio_id = f.id
+                 OR (h.folio_id IS NULL AND TRIM(COALESCE(h.numero_folio, '')) = TRIM(COALESCE(f.numero_folio, ''))))
+                 AND (h.creado_en AT TIME ZONE 'America/Mexico_City')::date = rev.rev_dt
+             )
            )
          ORDER BY f.creado_en ASC NULLS LAST, f.id ASC`,
         [folioPlantaIds, revision_id, planta_id]
@@ -7831,7 +7840,7 @@ app.get("/api/action-register/export-day-pdf", dashboardAuthMiddleware, async (r
       foliosDia = [];
     }
     if (!foliosDia.length) {
-      drawLine("— Sin folios creados.", 10, false);
+      drawLine("— Sin folios con actividad este día.", 10, false);
     } else {
       const fmtMxn = (n) => {
         const v = n != null ? Number(n) : null;
