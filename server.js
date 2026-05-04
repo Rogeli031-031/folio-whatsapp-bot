@@ -7805,55 +7805,95 @@ app.get("/api/action-register/export-day-pdf", dashboardAuthMiddleware, async (r
       }
     }
 
-    // Folios creados ese día (planta de ubicación + planta código E9/E10/E15… ver getPlantaIdsEquivalentesForPendientes).
+    // Folios con actividad este día. Acepta:
+    //  - cualquier evento en folio_historial con fecha (CDMX) = revision_date, o
+    //  - folios cuya creado_en (CDMX) = revision_date.
+    // Para evitar perder folios capturados con planta_id "código" (E9/E10/E15), se buscan los folios
+    // por evento del día y se filtran con la lista de plantas equivalentes (ubicación + código).
     y -= 8;
     drawLine("Folios con actividad este día", 14, true);
     let foliosDia = [];
+    let foliosOtraPlanta = [];
+    let folioPlantaIds = [];
     try {
-      const folioPlantaIds = getPlantaIdsEquivalentesForPendientes(planta_id);
+      folioPlantaIds = getPlantaIdsEquivalentesForPendientes(planta_id);
       const fol = await client.query(
-        `SELECT f.numero_folio, f.folio_codigo, f.importe,
-                COALESCE(NULLIF(TRIM(COALESCE(f.descripcion,'')), ''), f.concepto, '') AS descripcion,
-                f.creado_en
-         FROM public.folios f
-         CROSS JOIN (
+        `WITH rev AS (
            SELECT r.revision_date::date AS rev_dt
            FROM arr.action_register_revisions r
            WHERE r.id = $2 AND r.planta_id = $3
-         ) rev
-         WHERE f.planta_id = ANY($1::int[])
-           AND (
-             (f.creado_en AT TIME ZONE 'America/Mexico_City')::date = rev.rev_dt
-             OR EXISTS (
-               SELECT 1 FROM public.folio_historial h
-               WHERE (h.folio_id = f.id
-                 OR (h.folio_id IS NULL AND TRIM(COALESCE(h.numero_folio, '')) = TRIM(COALESCE(f.numero_folio, ''))))
-                 AND (h.creado_en AT TIME ZONE 'America/Mexico_City')::date = rev.rev_dt
-             )
-           )
-         ORDER BY f.creado_en ASC NULLS LAST, f.id ASC`,
+         ),
+         folios_dia AS (
+           SELECT f.id, f.numero_folio, f.folio_codigo, f.importe, f.planta_id,
+                  COALESCE(NULLIF(TRIM(COALESCE(f.descripcion,'')), ''), f.concepto, '') AS descripcion,
+                  f.creado_en
+           FROM public.folios f
+           CROSS JOIN rev
+           WHERE (f.creado_en AT TIME ZONE 'America/Mexico_City')::date = rev.rev_dt
+              OR EXISTS (
+                SELECT 1 FROM public.folio_historial h
+                WHERE (h.folio_id = f.id
+                       OR (h.folio_id IS NULL
+                           AND TRIM(COALESCE(h.numero_folio,'')) = TRIM(COALESCE(f.numero_folio,''))))
+                  AND (h.creado_en AT TIME ZONE 'America/Mexico_City')::date = rev.rev_dt
+              )
+         )
+         SELECT fd.numero_folio, fd.folio_codigo, fd.importe, fd.descripcion,
+                fd.creado_en, fd.planta_id,
+                p.nombre AS planta_nombre,
+                (fd.planta_id = ANY($1::int[])) AS match_planta
+         FROM folios_dia fd
+         LEFT JOIN public.plantas p ON p.id = fd.planta_id
+         ORDER BY fd.creado_en ASC NULLS LAST, fd.id ASC`,
         [folioPlantaIds, revision_id, planta_id]
       );
-      foliosDia = fol.rows || [];
+      const allRows = fol.rows || [];
+      foliosDia = allRows.filter((r) => r.match_planta === true || r.match_planta === "t");
+      foliosOtraPlanta = allRows.filter((r) => !(r.match_planta === true || r.match_planta === "t"));
+      console.log(
+        "[ActionRegister export-day-pdf foliosDia] revision_id=" + revision_id +
+        " planta_id=" + planta_id +
+        " plantas_equivalentes=[" + folioPlantaIds.join(",") + "]" +
+        " match=" + foliosDia.length +
+        " otra_planta=" + foliosOtraPlanta.length
+      );
     } catch (e) {
       console.error("[ActionRegister export-day-pdf foliosDia]", e);
       foliosDia = [];
+      foliosOtraPlanta = [];
     }
-    if (!foliosDia.length) {
+    const fmtMxn = (n) => {
+      const v = n != null ? Number(n) : null;
+      if (v == null || Number.isNaN(v)) return "";
+      try { return v.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); } catch { return String(v); }
+    };
+    if (!foliosDia.length && !foliosOtraPlanta.length) {
       drawLine("— Sin folios con actividad este día.", 10, false);
-    } else {
-      const fmtMxn = (n) => {
-        const v = n != null ? Number(n) : null;
-        if (v == null || Number.isNaN(v)) return "";
-        try { return v.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); } catch { return String(v); }
-      };
-      for (const f of foliosDia) {
+    }
+    for (const f of foliosDia) {
+      const code = String(f.folio_codigo || f.numero_folio || "").trim();
+      const desc = String(f.descripcion || "").trim();
+      const imp = fmtMxn(f.importe);
+      drawWrapped(`${code}${imp ? ` · $${imp}` : ""}`, 10, true);
+      if (desc) drawWrapped(desc, 10, false, 12);
+      y -= 6;
+    }
+    if (foliosOtraPlanta.length) {
+      y -= 4;
+      drawLine(
+        `Folios con actividad este día capturados en otra planta (revisar planta_id):`,
+        10, true
+      );
+      for (const f of foliosOtraPlanta) {
         const code = String(f.folio_codigo || f.numero_folio || "").trim();
         const desc = String(f.descripcion || "").trim();
         const imp = fmtMxn(f.importe);
-        drawWrapped(`${code}${imp ? ` · $${imp}` : ""}`, 10, true);
-        if (desc) drawWrapped(desc, 10, false, 12);
-        y -= 6;
+        const plantaTxt = f.planta_nombre
+          ? `${f.planta_nombre} (id ${f.planta_id})`
+          : (f.planta_id != null ? `planta_id ${f.planta_id}` : "sin planta");
+        drawWrapped(`${code}${imp ? ` · $${imp}` : ""} · ${plantaTxt}`, 10, false, 12);
+        if (desc) drawWrapped(desc, 10, false, 24);
+        y -= 4;
       }
     }
 
