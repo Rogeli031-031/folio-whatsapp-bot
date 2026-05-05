@@ -183,8 +183,8 @@ function mesHistoricoDesdeSelector(sel: string): boolean {
 }
 
 /**
- * Mes en curso o futuro (forecast/proyección): Rentabilidad = Resultado final − Importe IGF (tabla mini).
- * Mes cerrado: Σ ingreso clientes − Gasto (sin cambiar la lógica de meses terminados).
+ * Rentabilidad mostrada: Resultado Final − Importe (mini IGF / cierre), alineado al Excel IGF.
+ * Si no hay dato IGF, cae a Σ ingreso clientes − Gasto (ARR).
  */
 function rentabilidadResumenPorMes(
   sel: string,
@@ -196,9 +196,6 @@ function rentabilidadResumenPorMes(
   const y = parseInt(yStr, 10);
   const m = parseInt(mStr, 10);
   if (!Number.isFinite(y) || !Number.isFinite(m)) return null;
-  if (mesHistorico(y, m)) {
-    return rentabilidadArr ?? rentabilidadIgf;
-  }
   return rentabilidadIgf ?? rentabilidadArr;
 }
 
