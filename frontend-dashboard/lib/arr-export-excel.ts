@@ -108,8 +108,9 @@ function styleCompRow(row: ExcelJS.Row, lastCol: number) {
 }
 
 /**
- * ARR export: estilos (cabecera azul, filas resumen y clientes, comparación) y fórmulas en español
- * como plantilla arrastrable (REDONDEAR/SI.ERROR/SUMA).
+ * ARR export: estilos y fórmulas. Los nombres de función deben ir en inglés (ROUND/IFERROR/SUM):
+ * el .xlsx (OOXML) los evalúa así; si se escriben REDONDEAR/SI.ERROR/SUMA, Excel muestra #¿NOMBRE?
+ * hasta reconfirmar la celda. Excel en español sigue mostrando las fórmulas localizadas en la barra.
  */
 export async function downloadArrDashboardExcel(opts: ArrExportOptions): Promise<void> {
   const {
@@ -274,7 +275,7 @@ export async function downloadArrDashboardExcel(opts: ArrExportOptions): Promise
     rowX.getCell(3).value = cellNum(row.ventaB);
     rowX.getCell(3).numFmt = "#,##0";
     rowX.getCell(4).value = {
-      formula: `REDONDEAR(SI.ERROR(C${cur}-B${cur},0),0)`,
+      formula: `ROUND(IFERROR(C${cur}-B${cur},0),0)`,
     };
     rowX.getCell(4).numFmt = "#,##0";
     rowX.getCell(5).value = cellNum(row.descA);
@@ -282,19 +283,19 @@ export async function downloadArrDashboardExcel(opts: ArrExportOptions): Promise
     rowX.getCell(6).value = cellNum(row.descB);
     rowX.getCell(6).numFmt = "#,##0.00";
     rowX.getCell(7).value = {
-      formula: `REDONDEAR(SI.ERROR(F${cur}-E${cur},0),2)`,
+      formula: `ROUND(IFERROR(F${cur}-E${cur},0),2)`,
     };
     rowX.getCell(7).numFmt = "#,##0.00";
     rowX.getCell(8).value = {
-      formula: `REDONDEAR(SI.ERROR((B${cur}*($E$${MES_A_R}-E${cur}))+($F$${MES_A_R}*B${cur}*$G$${MES_A_R}/100),0),0)`,
+      formula: `ROUND(IFERROR((B${cur}*($E$${MES_A_R}-E${cur}))+($F$${MES_A_R}*B${cur}*$G$${MES_A_R}/100),0),0)`,
     };
     rowX.getCell(8).numFmt = '"$" #,##0';
     rowX.getCell(9).value = {
-      formula: `REDONDEAR(SI.ERROR((C${cur}*($E$${MES_B_R}-F${cur}))+($F$${MES_B_R}*C${cur}*$G$${MES_B_R}/100),0),0)`,
+      formula: `ROUND(IFERROR((C${cur}*($E$${MES_B_R}-F${cur}))+($F$${MES_B_R}*C${cur}*$G$${MES_B_R}/100),0),0)`,
     };
     rowX.getCell(9).numFmt = '"$" #,##0';
     rowX.getCell(10).value = {
-      formula: `REDONDEAR(SI.ERROR(I${cur}-H${cur},0),0)`,
+      formula: `ROUND(IFERROR(I${cur}-H${cur},0),0)`,
     };
     rowX.getCell(10).numFmt = '"$" #,##0';
     styleDataRow(rowX, 10, centerCli);
@@ -322,7 +323,7 @@ export async function downloadArrDashboardExcel(opts: ArrExportOptions): Promise
     rowX.getCell(3).value = cellNum(row.ventaB);
     rowX.getCell(3).numFmt = "#,##0";
     rowX.getCell(4).value = {
-      formula: `REDONDEAR(SI.ERROR(C${cur}-B${cur},0),0)`,
+      formula: `ROUND(IFERROR(C${cur}-B${cur},0),0)`,
     };
     rowX.getCell(4).numFmt = "#,##0";
     rowX.getCell(5).value = 0;
@@ -330,19 +331,19 @@ export async function downloadArrDashboardExcel(opts: ArrExportOptions): Promise
     rowX.getCell(6).value = cellNum(row.descB);
     rowX.getCell(6).numFmt = "#,##0.00";
     rowX.getCell(7).value = {
-      formula: `REDONDEAR(SI.ERROR(F${cur}-E${cur},0),2)`,
+      formula: `ROUND(IFERROR(F${cur}-E${cur},0),2)`,
     };
     rowX.getCell(7).numFmt = "#,##0.00";
     rowX.getCell(8).value = {
-      formula: `REDONDEAR(SI.ERROR((B${cur}*($E$${MES_A_R}-E${cur}))+($F$${MES_A_R}*B${cur}*$G$${MES_A_R}/100),0),0)`,
+      formula: `ROUND(IFERROR((B${cur}*($E$${MES_A_R}-E${cur}))+($F$${MES_A_R}*B${cur}*$G$${MES_A_R}/100),0),0)`,
     };
     rowX.getCell(8).numFmt = '"$" #,##0';
     rowX.getCell(9).value = {
-      formula: `REDONDEAR(SI.ERROR((C${cur}*($E$${MES_B_R}-F${cur}))+($F$${MES_B_R}*C${cur}*$G$${MES_B_R}/100),0),0)`,
+      formula: `ROUND(IFERROR((C${cur}*($E$${MES_B_R}-F${cur}))+($F$${MES_B_R}*C${cur}*$G$${MES_B_R}/100),0),0)`,
     };
     rowX.getCell(9).numFmt = '"$" #,##0';
     rowX.getCell(10).value = {
-      formula: `REDONDEAR(SI.ERROR(I${cur}-H${cur},0),0)`,
+      formula: `ROUND(IFERROR(I${cur}-H${cur},0),0)`,
     };
     rowX.getCell(10).numFmt = '"$" #,##0';
     styleDataRow(rowX, 10, centerCli);
@@ -353,8 +354,8 @@ export async function downloadArrDashboardExcel(opts: ArrExportOptions): Promise
   const celL5 = ws.getCell(`L${MES_A_R}`);
   const celL6 = ws.getCell(`L${MES_B_R}`);
   if (lastDataR >= CLI_FIRST_R) {
-    const sumH = `SUMA(H${CLI_FIRST_R}:H${lastDataR})`;
-    const sumI = `SUMA(I${CLI_FIRST_R}:I${lastDataR})`;
+    const sumH = `SUM(H${CLI_FIRST_R}:H${lastDataR})`;
+    const sumI = `SUM(I${CLI_FIRST_R}:I${lastDataR})`;
     celL5.value = { formula: `${sumH}-D${MES_A_R}` };
     celL6.value = { formula: `${sumI}-D${MES_B_R}` };
   } else {
