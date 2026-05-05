@@ -1,12 +1,30 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
+import { useCallback } from "react";
+import { IGF_MINI_RESUMEN_LABELS } from "@/lib/igf-kpi-ui";
 
 export default function ArrClient() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const token = searchParams?.get("t") ?? "";
+  const empresa = searchParams?.get("empresa") ?? "";
   const backHref = token ? `/igf-forecast?t=${encodeURIComponent(token)}` : "/igf-forecast";
+
+  const handleEmpresaChange = useCallback(
+    (next: string) => {
+      const params = new URLSearchParams(searchParams?.toString() ?? "");
+      if (next) {
+        params.set("empresa", next);
+      } else {
+        params.delete("empresa");
+      }
+      const qs = params.toString();
+      router.replace(qs ? `/arr?${qs}` : "/arr");
+    },
+    [router, searchParams]
+  );
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-950 text-slate-100">
@@ -20,6 +38,22 @@ export default function ArrClient() {
           </Link>
           <h1 className="text-lg font-semibold text-slate-100">ARR</h1>
         </div>
+
+        <label className="inline-flex items-center gap-2 rounded border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-200">
+          <span className="text-slate-400">Empresa:</span>
+          <select
+            value={empresa}
+            onChange={(e) => handleEmpresaChange(e.target.value)}
+            className="rounded border border-slate-600 bg-slate-900 px-2 py-1 text-slate-200 text-sm"
+          >
+            <option value="">Seleccionar…</option>
+            {IGF_MINI_RESUMEN_LABELS.map((emp) => (
+              <option key={emp} value={emp}>
+                {emp}
+              </option>
+            ))}
+          </select>
+        </label>
       </header>
 
       <main className="flex flex-1 items-center justify-center p-6">
@@ -34,7 +68,14 @@ export default function ArrClient() {
           </h2>
           <p className="text-sm text-slate-400">
             El módulo <span className="font-semibold text-amber-400">ARR</span> está en desarrollo.
-            Pronto estará disponible aquí.
+            {empresa ? (
+              <>
+                {" "}Empresa seleccionada:{" "}
+                <span className="font-semibold text-slate-100">{empresa}</span>.
+              </>
+            ) : (
+              <> Selecciona una empresa para continuar.</>
+            )}
           </p>
         </section>
       </main>
