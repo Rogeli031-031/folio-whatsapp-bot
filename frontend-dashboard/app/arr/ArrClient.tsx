@@ -6,9 +6,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   fetchIgfForecast,
   fetchIgfVersiones,
+  fetchArrClientesMes,
   type IgfForecastRow,
   type IgfForecastMiniRow,
   type IgfPeriodo,
+  type ArrClienteMesRow,
 } from "@/lib/api";
 import {
   IGF_MINI_RESUMEN_LABELS,
@@ -36,6 +38,11 @@ const NOMBRES_MES = [
 type IgfMonthData = {
   rows: IgfForecastRow[];
   miniRows: IgfForecastMiniRow[];
+};
+
+type ClientesMonthData = {
+  historico: boolean;
+  rows: ArrClienteMesRow[];
 };
 
 type RowValues = {
@@ -86,6 +93,25 @@ function computeRowValues(
   };
 }
 
+function periodoLabel(key: string): string {
+  if (!key) return "";
+  const [yStr, mStr] = key.split("-");
+  const m = parseInt(mStr, 10);
+  return `${NOMBRES_MES[m - 1] ?? MESES[m - 1] ?? ""} ${yStr}`;
+}
+
+function periodoMesNombre(key: string): string {
+  if (!key) return "";
+  const m = parseInt(key.split("-")[1] ?? "", 10);
+  return NOMBRES_MES[m - 1] ?? MESES[m - 1] ?? "";
+}
+
+/** Venta del cliente para el mes: kg proyectado (mes en curso) o kg real (mes histórico). */
+function clienteVenta(row: ArrClienteMesRow, historico: boolean): number {
+  if (!historico && row.kg_proyectado != null) return row.kg_proyectado;
+  return row.kg_real;
+}
+
 export default function ArrClient() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -100,6 +126,11 @@ export default function ArrClient() {
   const [dataByKey, setDataByKey] = useState<Record<string, IgfMonthData>>({});
   const [loadingKeys, setLoadingKeys] = useState<Set<string>>(new Set());
   const [errorByKey, setErrorByKey] = useState<Record<string, string>>({});
+
+  // Clientes por (empresa, mes) — clave: `${empresa}|${year-month}`
+  const [clientesByKey, setClientesByKey] = useState<Record<string, ClientesMonthData>>({});
+  const [clientesLoadingKeys, setClientesLoadingKeys] = useState<Set<string>>(new Set());
+  const [clientesErrorByKey, setClientesErrorByKey] = useState<Record<string, string>>({});
 
   const handleEmpresaChange = useCallback(
     (next: string) => {
@@ -128,7 +159,6 @@ export default function ArrClient() {
           return a.month - b.month;
         });
         setPeriodos(sorted);
-        // Pre-seleccionar los dos últimos periodos por defecto.
         if (sorted.length >= 2 && !selA && !selB) {
           setSelA(periodoKey(sorted[sorted.length - 2].year, sorted[sorted.length - 2].month));
           setSelB(periodoKey(sorted[sorted.length - 1].year, sorted[sorted.length - 1].month));
@@ -196,12 +226,107 @@ export default function ArrClient() {
     if (selB) void ensureMonthLoaded(selB);
   }, [selB, ensureMonthLoaded]);
 
+  // Carga lista de clientes para (empresa, mes) si aún no está cacheada.
+  const ensureClientesLoaded = useCallback(
+    async (empresaLabel: string, periodo: string) => {
+      if (!token || !empresaLabel || !periodo) return;
+      const cacheKey = `${empresaLabel}|${periodo}`;
+      if (clientesByKey[cacheKey] || clientesLoadingKeys.has(cacheKey)) return;
+      const [yStr, mStr] = periodo.split("-");
+      const year = parseInt(yStr, 10);
+      const month = parseInt(mStr, 10);
+      if (!Number.isFinite(year) || !Number.isFinite(month)) return;
+      setClientesLoadingKeys((prev) => {
+        const next = new Set(prev);
+        next.add(cacheKey);
+        return next;
+      });
+      try {
+        const resp = await fetchArrClientesMes(token, { year, month, empresa: empresaLabel });
+        setClientesByKey((prev) => ({
+          ...prev,
+          [cacheKey]: { historico: resp.historico, rows: resp.rows || [] },
+        }));
+        setClientesErrorByKey((prev) => {
+          if (!prev[cacheKey]) return prev;
+          const next = { ...prev };
+          delete next[cacheKey];
+          return next;
+        });
+      } catch (e) {
+        setClientesErrorByKey((prev) => ({
+          ...prev,
+          [cacheKey]: e instanceof Error ? e.message : String(e),
+        }));
+      } finally {
+        setClientesLoadingKeys((prev) => {
+          const next = new Set(prev);
+          next.delete(cacheKey);
+          return next;
+        });
+      }
+    },
+    [token, clientesByKey, clientesLoadingKeys]
+  );
+
+  useEffect(() => {
+    if (empresa && selA) void ensureClientesLoaded(empresa, selA);
+  }, [empresa, selA, ensureClientesLoaded]);
+  useEffect(() => {
+    if (empresa && selB) void ensureClientesLoaded(empresa, selB);
+  }, [empresa, selB, ensureClientesLoaded]);
+
   const rowA = useMemo(() => computeRowValues(dataByKey[selA], empresa), [dataByKey, selA, empresa]);
   const rowB = useMemo(() => computeRowValues(dataByKey[selB], empresa), [dataByKey, selB, empresa]);
 
+  const clientesKeyA = empresa && selA ? `${empresa}|${selA}` : "";
+  const clientesKeyB = empresa && selB ? `${empresa}|${selB}` : "";
+  const clientesA = clientesKeyA ? clientesByKey[clientesKeyA] : undefined;
+  const clientesB = clientesKeyB ? clientesByKey[clientesKeyB] : undefined;
+
+  // Une los clientes de los dos meses por nombre y produce filas unificadas.
+  const clientesUnificados = useMemo(() => {
+    if (!empresa || (!clientesA && !clientesB)) return [];
+    const map = new Map<string, { cliente: string; ventaA: number | null; ventaB: number | null }>();
+    if (clientesA) {
+      for (const r of clientesA.rows) {
+        const key = r.cliente.trim();
+        if (!key) continue;
+        const v = clienteVenta(r, clientesA.historico);
+        const existing = map.get(key) ?? { cliente: key, ventaA: null, ventaB: null };
+        existing.ventaA = v;
+        map.set(key, existing);
+      }
+    }
+    if (clientesB) {
+      for (const r of clientesB.rows) {
+        const key = r.cliente.trim();
+        if (!key) continue;
+        const v = clienteVenta(r, clientesB.historico);
+        const existing = map.get(key) ?? { cliente: key, ventaA: null, ventaB: null };
+        existing.ventaB = v;
+        map.set(key, existing);
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => {
+      const ta = (a.ventaA ?? 0) + (a.ventaB ?? 0);
+      const tb = (b.ventaA ?? 0) + (b.ventaB ?? 0);
+      if (tb !== ta) return tb - ta;
+      return a.cliente.localeCompare(b.cliente, "es");
+    });
+  }, [empresa, clientesA, clientesB]);
+
+  const clientesLoading =
+    (!!clientesKeyA && clientesLoadingKeys.has(clientesKeyA)) ||
+    (!!clientesKeyB && clientesLoadingKeys.has(clientesKeyB));
+  const clientesErrors = [
+    clientesKeyA ? clientesErrorByKey[clientesKeyA] : null,
+    clientesKeyB ? clientesErrorByKey[clientesKeyB] : null,
+  ].filter(Boolean) as string[];
+
   const renderMesOption = (p: IgfPeriodo) => {
     const key = periodoKey(p.year, p.month);
-    const label = `${NOMBRES_MES[p.month - 1] ?? MESES[p.month - 1]} ${p.year}`;
+    const label = periodoLabel(key);
     return (
       <option key={key} value={key}>
         {label}
@@ -231,6 +356,9 @@ export default function ArrClient() {
       </span>
     );
   };
+
+  const headerVentaA = selA ? `Venta ${periodoMesNombre(selA)}` : "Venta —";
+  const headerVentaB = selB ? `Venta ${periodoMesNombre(selB)}` : "Venta —";
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-950 text-slate-100">
@@ -280,6 +408,9 @@ export default function ArrClient() {
                 <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide">HG$</th>
                 <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide">Descuento</th>
                 <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide">Venta</th>
+                <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide">Nuevos</th>
+                <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide">Previos</th>
+                <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide">Rentabilidad</th>
               </tr>
             </thead>
             <tbody>
@@ -292,6 +423,9 @@ export default function ArrClient() {
                   vals.hgKg != null && vals.hgPct != null && vals.hgPct !== 0
                     ? Math.abs(vals.hgKg / vals.hgPct)
                     : null;
+                // Excel siempre muestra Com. y Desc. como reducción (signo negativo).
+                const descuentoSigned =
+                  vals.comDescKg != null ? -Math.abs(vals.comDescKg) : null;
                 return (
                   <tr key={key} className="border-t border-slate-700/80">
                     <td className="px-3 py-2">
@@ -317,11 +451,14 @@ export default function ArrClient() {
                       {renderValueCell(sel, hgDinero, (v) => fmtNum(v, 2), true)}
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums">
-                      {renderValueCell(sel, vals.comDescKg, (v) => fmtNum(v, 2), false)}
+                      {renderValueCell(sel, descuentoSigned, (v) => fmtNum(v, 2), false)}
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums">
                       {renderValueCell(sel, vals.ventaTon, (v) => fmtNum(v, 0), false)}
                     </td>
+                    <td className="px-3 py-2 text-right tabular-nums text-slate-500">—</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-slate-500">—</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-slate-500">—</td>
                   </tr>
                 );
               })}
@@ -334,6 +471,60 @@ export default function ArrClient() {
             Selecciona una empresa en la parte superior para ver los valores.
           </p>
         )}
+
+        {/* Tabla de clientes por mes */}
+        <section className="mt-8 overflow-x-auto rounded-lg border border-slate-700 bg-slate-800/60">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-700/80 px-4 py-2">
+            <h2 className="text-sm font-semibold text-slate-200">Clientes por mes</h2>
+            {empresa && (
+              <span className="text-xs text-slate-400">
+                {empresa}
+                {clientesLoading ? " · cargando…" : ""}
+              </span>
+            )}
+          </div>
+          {clientesErrors.length > 0 && (
+            <p className="px-4 py-2 text-xs text-red-400">
+              {clientesErrors.join(" · ")}
+            </p>
+          )}
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="bg-slate-700/60 text-slate-200">
+                <th className="px-3 py-2 text-left font-semibold uppercase tracking-wide">Cliente</th>
+                <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide">{headerVentaA}</th>
+                <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide">{headerVentaB}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {!empresa && (
+                <tr>
+                  <td colSpan={3} className="px-3 py-3 text-center text-xs text-slate-500">
+                    Selecciona una empresa para ver los clientes.
+                  </td>
+                </tr>
+              )}
+              {empresa && clientesUnificados.length === 0 && !clientesLoading && (
+                <tr>
+                  <td colSpan={3} className="px-3 py-3 text-center text-xs text-slate-500">
+                    Sin clientes para mostrar.
+                  </td>
+                </tr>
+              )}
+              {clientesUnificados.map((c) => (
+                <tr key={c.cliente} className="border-t border-slate-700/80">
+                  <td className="px-3 py-2 text-slate-100">{c.cliente}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    {c.ventaA != null ? fmtNum(c.ventaA, 0) : <span className="text-slate-500">—</span>}
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    {c.ventaB != null ? fmtNum(c.ventaB, 0) : <span className="text-slate-500">—</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
       </main>
     </div>
   );

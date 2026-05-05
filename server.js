@@ -11425,6 +11425,81 @@ app.get("/api/arr/last-upload-day", dashboardAuthMiddleware, async (req, res) =>
   }
 });
 
+/**
+ * Lista de clientes (con kg, descuento y estatus vs. mes anterior) para la planta y mes pedidos.
+ * Reutiliza la misma lógica que la hoja "Clientes desc mes" del Excel ARR Forecast.
+ * Para meses ya concluidos sólo devuelve `kg_real`; para el mes en curso devuelve también `kg_proyectado`.
+ */
+app.get("/api/dashboard/arr-clientes-mes", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGAFinancialKpis(req, res)) return;
+  if (dashboardBlockGVForbidden(req, res)) return;
+  const year = req.query.year != null ? parseInt(String(req.query.year), 10) : NaN;
+  const month = req.query.month != null ? parseInt(String(req.query.month), 10) : NaN;
+  const empresa = (req.query.empresa || "").toString().trim();
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
+    return res.status(400).json({ error: "year y month (1-12) son obligatorios" });
+  }
+  if (!empresa) {
+    return res.status(400).json({ error: "Falta empresa" });
+  }
+  const client = await pool.connect();
+  try {
+    const provRes = await client.query("SELECT plant_code FROM arr.provincia_plants ORDER BY plant_code");
+    const provinciaPlantCodes = (provRes.rows || []).map((r) => (r.plant_code || "").trim()).filter(Boolean);
+    const empNorm = normalizeAccents(empresa);
+    const matches = provinciaPlantCodes.filter((p) => {
+      const pNorm = normalizeAccents(p);
+      return empNorm === pNorm || empNorm.includes(pNorm) || pNorm.includes(empNorm);
+    });
+    const plantCode = matches.length
+      ? matches.reduce((a, b) => (a.length >= b.length ? a : b))
+      : null;
+    if (!plantCode) {
+      return res.status(404).json({ error: `No se encontró planta provincia para empresa "${empresa}"` });
+    }
+    const now = new Date();
+    const curYear = now.getFullYear();
+    const curMonth = now.getMonth() + 1;
+    const historico = year < curYear || (year === curYear && month < curMonth);
+    const resp = await dashboardArrForecast.computeClientesDescuentoMes(
+      client,
+      year,
+      month,
+      plantCode,
+      { historico }
+    );
+    const rows = (resp.rows || []).map((r) => ({
+      planta: r.planta,
+      cliente: r.cliente,
+      categoria: r.categoria,
+      subcategoria: r.subcategoria,
+      kg_real: Number.isFinite(r.kg) ? Math.round(r.kg * 100) / 100 : 0,
+      kg_proyectado: historico
+        ? null
+        : Number.isFinite(r.kgProy)
+          ? Math.round(r.kgProy * 100) / 100
+          : 0,
+      descuento_mxn: Number.isFinite(r.monto) ? Math.round(r.monto * 100) / 100 : 0,
+      descuento_kg: r.descKg != null && Number.isFinite(r.descKg) ? Math.round(r.descKg * 1e6) / 1e6 : null,
+      estatus: r.estatus || "",
+    }));
+    res.json({
+      ok: true,
+      year,
+      month,
+      empresa,
+      planta: plantCode,
+      historico,
+      rows,
+    });
+  } catch (e) {
+    console.error("[Dashboard arr-clientes-mes]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
 app.post("/api/arr/refresh-provincia", dashboardAuthMiddleware, async (req, res) => {
   if (dashboardBlockGAFinancialKpis(req, res)) return;
   if (dashboardBlockGVForbidden(req, res)) return;

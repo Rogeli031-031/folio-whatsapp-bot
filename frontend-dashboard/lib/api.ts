@@ -694,6 +694,46 @@ export function fetchArrLastUploadDay(
   });
 }
 
+export interface ArrClienteMesRow {
+  planta: string;
+  cliente: string;
+  categoria: string;
+  subcategoria: string;
+  kg_real: number;
+  kg_proyectado: number | null;
+  descuento_mxn: number;
+  descuento_kg: number | null;
+  estatus: string;
+}
+
+export interface ArrClientesMesResponse {
+  ok: boolean;
+  year: number;
+  month: number;
+  empresa: string;
+  planta: string;
+  historico: boolean;
+  rows: ArrClienteMesRow[];
+}
+
+/** Lista de clientes (kg, descuento, estatus) para una empresa/mes — fuente: hoja "Clientes desc mes" del Excel ARR Forecast. */
+export function fetchArrClientesMes(
+  token: string,
+  params: { year: number; month: number; empresa: string },
+  init?: { signal?: AbortSignal }
+): Promise<ArrClientesMesResponse> {
+  return apiFetch<ArrClientesMesResponse>("/api/dashboard/arr-clientes-mes", {
+    token,
+    params: {
+      year: String(params.year),
+      month: String(params.month),
+      empresa: params.empresa,
+    },
+    cache: "no-store",
+    signal: init?.signal,
+  });
+}
+
 /** Escribe arr.forecast_mensual para todas las plantas provincia (mismo mes). Luego vuelve a cargar IGF con fetchIgfForecast. */
 export function postForecastProvincia(
   token: string,
