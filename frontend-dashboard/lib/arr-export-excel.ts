@@ -9,6 +9,7 @@ export type ArrExportResumenMetrics = {
   hgDisplay: number | null;
   hgDinero: number | null;
   descuentoSigned: number | null;
+  impuestoKg: number | null;
   ventaTon: number | null;
   rentabilidadImporte: number | null;
 };
@@ -137,7 +138,7 @@ export async function downloadArrDashboardExcel(opts: ArrExportOptions): Promise
     views: [{ showGridLines: true }],
   });
 
-  const LAST_SUMMARY_COL = 12;
+  const LAST_SUMMARY_COL = 13;
   const MES_A_R = 5;
   const MES_B_R = 6;
   const CLI_FIRST_R = 12;
@@ -161,6 +162,7 @@ export async function downloadArrDashboardExcel(opts: ArrExportOptions): Promise
     "HG",
     "HG$",
     "Descuento",
+    "Impuestos",
     "Venta",
     "Nuevos",
     "Previos",
@@ -190,15 +192,17 @@ export async function downloadArrDashboardExcel(opts: ArrExportOptions): Promise
     row.getCell(7).numFmt = '"$" #,##0.00';
     row.getCell(8).value = cellNum(m.descuentoSigned);
     row.getCell(8).numFmt = "#,##0.00";
-    row.getCell(9).value = cellNum(m.ventaTon);
-    row.getCell(9).numFmt = "#,##0";
-    row.getCell(10).value = "";
+    row.getCell(9).value = cellNum(m.impuestoKg);
+    row.getCell(9).numFmt = "#,##0.00";
+    row.getCell(10).value = cellNum(m.ventaTon);
+    row.getCell(10).numFmt = "#,##0";
     row.getCell(11).value = "";
+    row.getCell(12).value = "";
     if (!skipRentab) {
-      row.getCell(12).value = cellNum(m.rentabilidadImporte);
-      row.getCell(12).numFmt = '"$" #,##0';
+      row.getCell(13).value = cellNum(m.rentabilidadImporte);
+      row.getCell(13).numFmt = '"$" #,##0';
     }
-    styleDataRow(row, LAST_SUMMARY_COL, [2, 3, 4, 5, 6, 7, 8, 9, 12]);
+    styleDataRow(row, LAST_SUMMARY_COL, [2, 3, 4, 5, 6, 7, 8, 9, 10, 13]);
   }
 
   fillMesRow(cur, labelMesA || "(Mes A)", mA, true);
@@ -212,13 +216,13 @@ export async function downloadArrDashboardExcel(opts: ArrExportOptions): Promise
     : "COMPARACION";
   if (usarFormulasComparacion) {
     for (let c = 2; c <= LAST_SUMMARY_COL; c++) {
-      if (c === 10 || c === 11) {
+      if (c === 11 || c === 12) {
         compRow.getCell(c).value = "";
         continue;
       }
-      if (c === 12) {
+      if (c === 13) {
         compRow.getCell(c).value = {
-          formula: `L${MES_B_R}-L${MES_A_R}`,
+          formula: `M${MES_B_R}-M${MES_A_R}`,
         };
         compRow.getCell(c).numFmt = '"$" #,##0';
         continue;
@@ -227,7 +231,7 @@ export async function downloadArrDashboardExcel(opts: ArrExportOptions): Promise
       compRow.getCell(c).value = { formula: `${letter}${MES_B_R}-${letter}${MES_A_R}` };
       if (c === 2 || c === 3) compRow.getCell(c).numFmt = '"$" #,##0';
       else if (c === 7) compRow.getCell(c).numFmt = '"$" #,##0.00';
-      else if (c === 4 || c === 9) compRow.getCell(c).numFmt = "#,##0";
+      else if (c === 4 || c === 10) compRow.getCell(c).numFmt = "#,##0";
       else compRow.getCell(c).numFmt = "#,##0.00";
     }
   } else {
@@ -351,8 +355,8 @@ export async function downloadArrDashboardExcel(opts: ArrExportOptions): Promise
   }
 
   const lastDataR = cur - 1;
-  const celL5 = ws.getCell(`L${MES_A_R}`);
-  const celL6 = ws.getCell(`L${MES_B_R}`);
+  const celL5 = ws.getCell(`M${MES_A_R}`);
+  const celL6 = ws.getCell(`M${MES_B_R}`);
   if (lastDataR >= CLI_FIRST_R) {
     const sumH = `SUM(H${CLI_FIRST_R}:H${lastDataR})`;
     const sumI = `SUM(I${CLI_FIRST_R}:I${lastDataR})`;
@@ -367,6 +371,7 @@ export async function downloadArrDashboardExcel(opts: ArrExportOptions): Promise
 
   ws.columns = [
     { width: 28 },
+    { width: 14 },
     { width: 14 },
     { width: 14 },
     { width: 14 },

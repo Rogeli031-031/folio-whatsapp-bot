@@ -54,6 +54,8 @@ type RowValues = {
   hgPct: number | null;
   hgKg: number | null;
   comDescKg: number | null;
+  /** Impuestos $/kg (IGF / mini resumen). */
+  impuestoKg: number | null;
   ventaTon: number | null;
   /** Resultado Final - Importe (Excel hoja IGF). */
   rentabilidadImporte: number | null;
@@ -85,6 +87,7 @@ function computeRowValues(
       hgPct: null,
       hgKg: null,
       comDescKg: null,
+      impuestoKg: null,
       ventaTon: null,
       rentabilidadImporte: null,
     };
@@ -99,6 +102,7 @@ function computeRowValues(
     hgPct: forecastRow?.hg_pct ?? null,
     hgKg: forecastRow?.hg_kg ?? null,
     comDescKg: forecastRow?.com_desc_kg ?? null,
+    impuestoKg: forecastRow?.impuesto_kg ?? miniRow?.impuestos ?? null,
     ventaTon: forecastRow?.venta_ton ?? miniRow?.ventaTon ?? null,
     rentabilidadImporte:
       forecastRow?.resultado_final_importe ?? miniRow?.resultadoFinalImporte ?? null,
@@ -127,6 +131,7 @@ type ResumenMesMetrics = {
   hgDisplay: number | null;
   hgDinero: number | null;
   descuentoSigned: number | null;
+  impuestoKg: number | null;
   ventaTon: number | null;
   rentabilidadImporte: number | null;
 };
@@ -147,6 +152,7 @@ function resumenMesMetrics(vals: RowValues): ResumenMesMetrics {
     hgDisplay,
     hgDinero,
     descuentoSigned,
+    impuestoKg: vals.impuestoKg,
     ventaTon: vals.ventaTon,
     rentabilidadImporte: vals.rentabilidadImporte,
   };
@@ -691,6 +697,7 @@ export default function ArrClient() {
     margen: "bg-fuchsia-950/25 border-l-2 border-fuchsia-400/45",
     hg: "bg-violet-950/30 border-l-2 border-violet-400/50",
     desc: "bg-sky-950/25 border-l-2 border-sky-500/45",
+    imp: "bg-teal-950/25 border-l-2 border-teal-400/45",
     venta: "bg-slate-600/25 border-l-2 border-slate-400/40",
     mov: "bg-amber-950/25 border-l-2 border-amber-500/45",
     rent: "bg-emerald-950/30 border-l-2 border-emerald-500/50",
@@ -781,6 +788,9 @@ export default function ArrClient() {
                 <th colSpan={1} className={`px-2 py-2 text-center ${G.desc}`}>
                   Desc.
                 </th>
+                <th colSpan={1} className={`px-2 py-2 text-center ${G.imp}`}>
+                  Impuestos
+                </th>
                 <th colSpan={1} className={`px-2 py-2 text-center ${G.venta}`}>
                   Venta
                 </th>
@@ -812,6 +822,9 @@ export default function ArrClient() {
                 </th>
                 <th className={`px-3 py-2 text-center font-semibold uppercase tracking-wide ${G.desc}`}>
                   Descuento
+                </th>
+                <th className={`px-3 py-2 text-center font-semibold uppercase tracking-wide ${G.imp}`}>
+                  Impuestos
                 </th>
                 <th className={`px-3 py-2 text-center font-semibold uppercase tracking-wide ${G.venta}`}>
                   Venta
@@ -870,6 +883,9 @@ export default function ArrClient() {
                     <td className={`px-3 py-2 text-center tabular-nums ${G.desc}`}>
                       {renderValueCell(sel, m.descuentoSigned, (v) => fmtNum(v, 2), false)}
                     </td>
+                    <td className={`px-3 py-2 text-center tabular-nums ${G.imp}`}>
+                      {renderValueCell(sel, m.impuestoKg, (v) => fmtNum(v, 2), false)}
+                    </td>
                     <td className={`px-3 py-2 text-center tabular-nums ${G.venta}`}>
                       {renderValueCell(sel, m.ventaTon, (v) => fmtNum(v, 0), false)}
                     </td>
@@ -913,6 +929,9 @@ export default function ArrClient() {
                     <td className={`px-3 py-2 text-center tabular-nums ${G.desc}`}>
                       {cellDeltaNum(metricA.descuentoSigned, metricB.descuentoSigned, 2)}
                     </td>
+                    <td className={`px-3 py-2 text-center tabular-nums ${G.imp}`}>
+                      {cellDeltaNum(metricA.impuestoKg, metricB.impuestoKg, 2)}
+                    </td>
                     <td className={`px-3 py-2 text-center tabular-nums ${G.venta}`}>
                       {cellDeltaNum(metricA.ventaTon, metricB.ventaTon, 0)}
                     </td>
@@ -928,7 +947,7 @@ export default function ArrClient() {
                   </>
                 ) : (
                   <>
-                    {Array.from({ length: 11 }).map((_, i) => (
+                    {Array.from({ length: 12 }).map((_, i) => (
                       <td
                         key={`comp-ph-${i}`}
                         className="px-3 py-2 text-center text-slate-500"
