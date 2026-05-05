@@ -705,6 +705,8 @@ export default function ArrClient() {
     deltaTh: "bg-yellow-500/25",
   } as const;
 
+  const deltaValorCajaRoja = "inline-block rounded-sm border-2 border-red-500 px-1.5 py-0.5";
+
   const totalFilasCliente =
     filasClientesMesPrimero.length + filasClientesSoloMesSegundo.length;
 
@@ -1004,7 +1006,7 @@ export default function ArrClient() {
                 <th className={`px-3 py-2 text-center text-[0.7rem] font-semibold uppercase tracking-wide ${GC.ingreso}`}>
                   {headerIngresoB}
                 </th>
-                <th className={`px-3 py-2 text-center text-[0.7rem] font-semibold uppercase tracking-wide ${GC.ingreso} ${GC.deltaTh}`}>
+                <th className={`px-3 py-2 text-center text-[0.7rem] font-semibold uppercase tracking-wide ${GC.desc} ${GC.deltaTh}`}>
                   Delta ingreso
                 </th>
               </tr>
@@ -1031,14 +1033,22 @@ export default function ArrClient() {
                   <td className={`px-3 py-2 text-center tabular-nums ${GC.venta}`}>
                     {row.ventaB != null ? fmtNum(row.ventaB, 0) : <span className="text-slate-500">—</span>}
                   </td>
-                  <td className={`px-3 py-2 text-center tabular-nums ${GC.venta} ${GC.deltaCell}`}>{fmtNum(row.deltaVenta, 0)}</td>
+                  <td className={`px-3 py-2 text-center tabular-nums ${GC.venta} ${GC.deltaCell}`}>
+                    <span className={row.deltaVenta < 0 ? deltaValorCajaRoja : undefined}>
+                      {fmtNum(row.deltaVenta, 0)}
+                    </span>
+                  </td>
                   <td className={`px-3 py-2 text-center tabular-nums ${GC.desc}`}>
                     {row.descA != null ? fmtNum(row.descA, 2) : <span className="text-slate-500">—</span>}
                   </td>
                   <td className={`px-3 py-2 text-center tabular-nums ${GC.desc}`}>
                     {row.descB != null ? fmtNum(row.descB, 2) : <span className="text-slate-500">—</span>}
                   </td>
-                  <td className={`px-3 py-2 text-center tabular-nums ${GC.desc} ${GC.deltaCell}`}>{fmtNum(row.deltaDesc, 2)}</td>
+                  <td className={`px-3 py-2 text-center tabular-nums ${GC.desc} ${GC.deltaCell}`}>
+                    <span className={row.deltaDesc > 0 ? deltaValorCajaRoja : undefined}>
+                      {fmtNum(row.deltaDesc, 2)}
+                    </span>
+                  </td>
                   <td className={`px-3 py-2 text-center tabular-nums ${GC.ingreso}`}>
                     {row.ingresoA != null ? `$${fmtNum(row.ingresoA, 0)}` : (
                       <span className="text-slate-500">—</span>
@@ -1049,7 +1059,11 @@ export default function ArrClient() {
                       <span className="text-slate-500">—</span>
                     )}
                   </td>
-                  <td className={`px-3 py-2 text-center tabular-nums ${GC.ingreso} ${GC.deltaCell}`}>${fmtNum(row.deltaIngreso, 0)}</td>
+                  <td className={`px-3 py-2 text-center tabular-nums ${GC.desc} ${GC.deltaCell}`}>
+                    <span className={row.deltaIngreso < 0 ? deltaValorCajaRoja : undefined}>
+                      ${fmtNum(row.deltaIngreso, 0)}
+                    </span>
+                  </td>
                 </tr>
               ))}
               {filasClientesSoloMesSegundo.length > 0 && (
@@ -1062,19 +1076,31 @@ export default function ArrClient() {
                   <td className="px-3 py-2 text-center text-slate-100">{row.cliente}</td>
                   <td className={`px-3 py-2 text-center tabular-nums text-slate-400 ${GC.venta}`}>{fmtNum(0, 0)}</td>
                   <td className={`px-3 py-2 text-center tabular-nums ${GC.venta}`}>{fmtNum(row.ventaB ?? 0, 0)}</td>
-                  <td className={`px-3 py-2 text-center tabular-nums ${GC.venta} ${GC.deltaCell}`}>{fmtNum(row.deltaVenta, 0)}</td>
+                  <td className={`px-3 py-2 text-center tabular-nums ${GC.venta} ${GC.deltaCell}`}>
+                    <span className={row.deltaVenta < 0 ? deltaValorCajaRoja : undefined}>
+                      {fmtNum(row.deltaVenta, 0)}
+                    </span>
+                  </td>
                   <td className={`px-3 py-2 text-center tabular-nums text-slate-400 ${GC.desc}`}>{fmtNum(0, 2)}</td>
                   <td className={`px-3 py-2 text-center tabular-nums ${GC.desc}`}>
                     {row.descB != null ? fmtNum(row.descB, 2) : <span className="text-slate-500">—</span>}
                   </td>
-                  <td className={`px-3 py-2 text-center tabular-nums ${GC.desc} ${GC.deltaCell}`}>{fmtNum(row.deltaDesc, 2)}</td>
+                  <td className={`px-3 py-2 text-center tabular-nums ${GC.desc} ${GC.deltaCell}`}>
+                    <span className={row.deltaDesc > 0 ? deltaValorCajaRoja : undefined}>
+                      {fmtNum(row.deltaDesc, 2)}
+                    </span>
+                  </td>
                   <td className={`px-3 py-2 text-center tabular-nums text-slate-400 ${GC.ingreso}`}>${fmtNum(0, 0)}</td>
                   <td className={`px-3 py-2 text-center tabular-nums ${GC.ingreso}`}>
                     {row.ingresoB != null ? `$${fmtNum(row.ingresoB, 0)}` : (
                       <span className="text-slate-500">—</span>
                     )}
                   </td>
-                  <td className={`px-3 py-2 text-center tabular-nums ${GC.ingreso} ${GC.deltaCell}`}>${fmtNum(row.deltaIngreso, 0)}</td>
+                  <td className={`px-3 py-2 text-center tabular-nums ${GC.desc} ${GC.deltaCell}`}>
+                    <span className={row.deltaIngreso < 0 ? deltaValorCajaRoja : undefined}>
+                      ${fmtNum(row.deltaIngreso, 0)}
+                    </span>
+                  </td>
                 </tr>
               ))}
             </tbody>
