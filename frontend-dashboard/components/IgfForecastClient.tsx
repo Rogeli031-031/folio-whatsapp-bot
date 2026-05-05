@@ -172,6 +172,16 @@ export function IgfForecastContent() {
     return mergeVentaSheetHighlights(base, pronosticoDetail);
   }, [pronosticoDetail]);
 
+  const arrPageHref = useMemo(() => {
+    if (!token) return "/arr";
+    const q = new URLSearchParams();
+    q.set("t", token);
+    q.set("back", "1");
+    const up = uploadDay.trim();
+    if (up && /^\d{4}-\d{2}-\d{2}$/.test(up)) q.set("upload_day", up);
+    return `/arr?${q.toString()}`;
+  }, [token, uploadDay]);
+
   const isGAPageBlocked = token ? getRoleFromDashboardToken(token) === "GA" : false;
   const isGVPageBlocked = token ? getRoleFromDashboardToken(token) === "GV" : false;
 
@@ -648,7 +658,7 @@ export function IgfForecastContent() {
           Acciones
         </Link>
         <Link
-          href={token ? `/arr?t=${encodeURIComponent(token)}&back=1` : "/arr"}
+          href={arrPageHref}
           className="inline-flex items-center gap-2 rounded bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-500"
         >
           ARR

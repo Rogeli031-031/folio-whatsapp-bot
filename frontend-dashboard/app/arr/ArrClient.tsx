@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   fetchIgfForecast,
   fetchIgfVersiones,
   fetchArrClientesMes,
+  fetchArrLastUploadDay,
   type IgfForecastRow,
   type IgfForecastMiniRow,
   type IgfPeriodo,
@@ -103,7 +104,8 @@ function computeRowValues(
     hgKg: forecastRow?.hg_kg ?? null,
     comDescKg: forecastRow?.com_desc_kg ?? null,
     impuestoKg: forecastRow?.impuesto_kg ?? miniRow?.impuestos ?? null,
-    ventaTon: forecastRow?.venta_ton ?? miniRow?.ventaTon ?? null,
+    /** Misma «Venta» que la tabla mini IGF (pronóstico PROY), no solo venta_ton del compromiso. */
+    ventaTon: miniRow?.ventaTon ?? forecastRow?.venta_ton ?? null,
     rentabilidadImporte:
       forecastRow?.resultado_final_importe ?? miniRow?.resultadoFinalImporte ?? null,
   };
@@ -255,7 +257,10 @@ export default function ArrClient() {
   const router = useRouter();
   const token = searchParams?.get("t") ?? "";
   const empresa = searchParams?.get("empresa") ?? "";
+  const uploadDayFromUrl = (searchParams?.get("upload_day") ?? "").trim().slice(0, 10);
   const backHref = token ? `/igf-forecast?t=${encodeURIComponent(token)}` : "/igf-forecast";
+
+  const lastUploadByYmRef = useRef<Record<string, string>>({});
 
   const [periodos, setPeriodos] = useState<IgfPeriodo[]>([]);
   const [periodosError, setPeriodosError] = useState<string | null>(null);
@@ -283,6 +288,43 @@ export default function ArrClient() {
     },
     [router, searchParams]
   );
+
+  /** Misma fecha de corte que IGF: query opcional o última carga del mes (fetchArrLastUploadDay). */
+  const resolveUploadDayForMonth = useCallback(
+    async (year: number, month: number): Promise<string | undefined> => {
+      if (uploadDayFromUrl && /^\d{4}-\d{2}-\d{2}$/.test(uploadDayFromUrl)) {
+        const uy = parseInt(uploadDayFromUrl.slice(0, 4), 10);
+        const um = parseInt(uploadDayFromUrl.slice(5, 7), 10);
+        if (uy === year && um === month) return uploadDayFromUrl;
+      }
+      const ym = `${year}-${String(month).padStart(2, "0")}`;
+      const cached = lastUploadByYmRef.current[ym];
+      if (cached && /^\d{4}-\d{2}-\d{2}$/.test(cached)) return cached;
+      try {
+        const r = await fetchArrLastUploadDay(token, { year, month });
+        const u = (r?.upload_day ?? "").trim().slice(0, 10);
+        if (u && /^\d{4}-\d{2}-\d{2}$/.test(u)) {
+          lastUploadByYmRef.current[ym] = u;
+          return u;
+        }
+      } catch {
+        /* vacío: el backend usa fin de mes como corte */
+      }
+      return undefined;
+    },
+    [token, uploadDayFromUrl]
+  );
+
+  useEffect(() => {
+    if (!token) return;
+    setDataByKey({});
+    setErrorByKey({});
+    setLoadingKeys(new Set());
+    setClientesByKey({});
+    setClientesErrorByKey({});
+    setClientesLoadingKeys(new Set());
+    lastUploadByYmRef.current = {};
+  }, [token, uploadDayFromUrl]);
 
   // Cargar periodos disponibles para los selectores de mes.
   useEffect(() => {
@@ -329,7 +371,13 @@ export default function ArrClient() {
         return next;
       });
       try {
-        const resp = await fetchIgfForecast(token, { year, month, include_mini: true });
+        const uploadDay = await resolveUploadDayForMonth(year, month);
+        const resp = await fetchIgfForecast(token, {
+          year,
+          month,
+          include_mini: true,
+          ...(uploadDay ? { upload_day: uploadDay } : {}),
+        });
         const miniRows = resp.mini?.rows ?? [];
         setDataByKey((prev) => ({
           ...prev,
@@ -354,7 +402,7 @@ export default function ArrClient() {
         });
       }
     },
-    [token, dataByKey, loadingKeys]
+    [token, dataByKey, loadingKeys, resolveUploadDayForMonth]
   );
 
   useEffect(() => {
