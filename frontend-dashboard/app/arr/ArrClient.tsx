@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { getRoleFromDashboardToken } from "@/lib/auth";
+import DeltaIngresoClienteForecastModal from "@/components/DeltaIngresoClienteForecastModal";
 import {
   fetchIgfForecast,
   fetchIgfVersiones,
@@ -284,6 +286,12 @@ export default function ArrClient() {
   const router = useRouter();
   const token = searchParams?.get("t") ?? "";
   const empresa = searchParams?.get("empresa") ?? "";
+  const dashboardRole = useMemo(() => (token ? getRoleFromDashboardToken(token) : null), [token]);
+  const canDicfAcciones =
+    dashboardRole === "ZP" ||
+    dashboardRole === "GG" ||
+    dashboardRole === "GV" ||
+    dashboardRole === "AD";
   const uploadDayFromUrl = (searchParams?.get("upload_day") ?? "").trim().slice(0, 10);
   const backHref = token ? `/igf-forecast?t=${encodeURIComponent(token)}` : "/igf-forecast";
 
@@ -301,6 +309,7 @@ export default function ArrClient() {
   const [clientesByKey, setClientesByKey] = useState<Record<string, ClientesMonthData>>({});
   const [clientesLoadingKeys, setClientesLoadingKeys] = useState<Set<string>>(new Set());
   const [clientesErrorByKey, setClientesErrorByKey] = useState<Record<string, string>>({});
+  const [dicfModalCliente, setDicfModalCliente] = useState<string | null>(null);
 
   const handleEmpresaChange = useCallback(
     (next: string) => {
@@ -1133,7 +1142,17 @@ export default function ArrClient() {
               )}
               {filasClientesMesPrimero.map((row) => (
                 <tr key={row.cliente} className="border-t border-slate-700/80">
-                  <td className="px-3 py-2 text-center text-slate-100">{row.cliente}</td>
+                  <td className="px-3 py-2 text-center text-slate-100">
+                    <button
+                      type="button"
+                      onClick={() => empresa && setDicfModalCliente(row.cliente)}
+                      className="mx-auto block max-w-full cursor-pointer text-center text-sky-300 hover:text-sky-200 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={!empresa || !token}
+                      title="Ver Delta Ingreso Cliente Forecast"
+                    >
+                      {row.cliente}
+                    </button>
+                  </td>
                   <td className={`px-3 py-2 text-center tabular-nums ${GC.venta}`}>{fmtNum(row.ventaA ?? 0, 0)}</td>
                   <td className={`px-3 py-2 text-center tabular-nums ${GC.venta}`}>
                     {row.ventaB != null ? fmtNum(row.ventaB, 0) : <span className="text-slate-500">—</span>}
@@ -1178,7 +1197,17 @@ export default function ArrClient() {
               )}
               {filasClientesSoloMesSegundo.map((row) => (
                 <tr key={`nuevo-${row.cliente}`} className="border-t border-slate-700/80 bg-slate-900/25">
-                  <td className="px-3 py-2 text-center text-slate-100">{row.cliente}</td>
+                  <td className="px-3 py-2 text-center text-slate-100">
+                    <button
+                      type="button"
+                      onClick={() => empresa && setDicfModalCliente(row.cliente)}
+                      className="mx-auto block max-w-full cursor-pointer text-center text-sky-300 hover:text-sky-200 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={!empresa || !token}
+                      title="Ver Delta Ingreso Cliente Forecast"
+                    >
+                      {row.cliente}
+                    </button>
+                  </td>
                   <td className={`px-3 py-2 text-center tabular-nums text-slate-400 ${GC.venta}`}>{fmtNum(0, 0)}</td>
                   <td className={`px-3 py-2 text-center tabular-nums ${GC.venta}`}>{fmtNum(row.ventaB ?? 0, 0)}</td>
                   <td className={`px-3 py-2 text-center tabular-nums ${GC.venta} ${GC.deltaCell}`}>
@@ -1212,6 +1241,13 @@ export default function ArrClient() {
           </table>
         </section>
       </main>
+      <DeltaIngresoClienteForecastModal
+        token={token}
+        planta={empresa}
+        clienteNombre={dicfModalCliente}
+        onClose={() => setDicfModalCliente(null)}
+        canDicfAcciones={canDicfAcciones}
+      />
     </div>
   );
 }
