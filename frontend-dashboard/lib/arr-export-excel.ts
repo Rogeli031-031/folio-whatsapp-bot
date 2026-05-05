@@ -1,4 +1,4 @@
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 
 /** Métricas del resumen ARR (mismos campos que en pantalla). */
 export type ArrExportResumenMetrics = {
@@ -21,25 +21,14 @@ export type ArrExportClienteRow = {
   descB: number | null;
 };
 
-function enc(r: number, c: number): string {
-  return XLSX.utils.encode_cell({ r, c });
-}
-
-/** Referencias absolutas tipo $L$7 para copiar fórmulas en Excel. */
-function absRef(r: number, c: number): string {
-  const addr = enc(r, c);
-  const m = addr.match(/^([A-Z]+)(\d+)$/);
-  if (!m) return addr;
-  return `$${m[1]}$${m[2]}`;
-}
-
-function numOrBlank(v: number | null | undefined): number | string {
-  if (v == null || Number.isNaN(v)) return "";
-  return v;
-}
-
 function safeFilePart(s: string): string {
   return s.replace(/[/\\?*[\]:'"]/g, "_").trim().replace(/\s+/g, "_");
+}
+
+/** Convierte número o vacío en valor de celda (sin escribir 0 fantasma). */
+function cellNum(v: number | null | undefined): number | null {
+  if (v == null || Number.isNaN(v)) return null;
+  return v;
 }
 
 export type ArrExportOptions = {
@@ -51,7 +40,6 @@ export type ArrExportOptions = {
   comparacionLabel: string;
   mA: ArrExportResumenMetrics;
   mB: ArrExportResumenMetrics;
-  /** Una fila de encabezado para la tabla de clientes (como en UI). */
   headerVentaA: string;
   headerVentaB: string;
   headerDescA: string;
@@ -60,20 +48,70 @@ export type ArrExportOptions = {
   headerIngresoB: string;
   filasClientesMesPrimero: ArrExportClienteRow[];
   filasClientesSoloMesSegundo: ArrExportClienteRow[];
-  /** Si ambos meses tienen filas de resumen, la fila COMPARACION usa fórmulas (mes B − mes A). */
   usarFormulasComparacion: boolean;
-  /** Mini IGF ingreso planta y ∑kg clientes (misma lógica que la pantalla ARR). Fila en columnas L–O. */
-  ingresoPlantaMesA: number | null;
-  sumKgClientesMesA: number;
-  ingresoPlantaMesB: number | null;
-  sumKgClientesMesB: number;
 };
 
+const F_HEADER = "FF1F3864";
+const FONT_HEADER = "FFFFFFFF";
+const F_DATA = "FFF7E7D7";
+const F_COMP = "FFDEC8A0";
+const F_SEP = "FFEEE6DD";
+
+function styleHeaderRow(row: ExcelJS.Row, lastCol: number) {
+  row.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+  row.height = 22;
+  row.eachCell({ includeEmpty: true }, (cell, col) => {
+    if (col > lastCol) return;
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: F_HEADER } };
+    cell.font = { bold: true, color: { argb: FONT_HEADER }, size: 10 };
+    cell.border = {
+      top: { style: "thin", color: { argb: "FF000000" } },
+      left: { style: "thin", color: { argb: "FF000000" } },
+      bottom: { style: "thin", color: { argb: "FF000000" } },
+      right: { style: "thin", color: { argb: "FF000000" } },
+    };
+  });
+}
+
+function styleDataRow(row: ExcelJS.Row, lastCol: number, centerCols: number[]) {
+  row.alignment = { vertical: "middle", horizontal: "center" };
+  row.eachCell({ includeEmpty: true }, (cell, col) => {
+    if (col > lastCol) return;
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: F_DATA } };
+    cell.border = {
+      top: { style: "thin", color: { argb: "FFC8C8C8" } },
+      left: { style: "thin", color: { argb: "FFC8C8C8" } },
+      bottom: { style: "thin", color: { argb: "FFC8C8C8" } },
+      right: { style: "thin", color: { argb: "FFC8C8C8" } },
+    };
+    if (col === 1) {
+      cell.alignment = { vertical: "middle", horizontal: "left" };
+    } else if (centerCols.includes(col)) {
+      cell.alignment = { vertical: "middle", horizontal: "center" };
+    }
+  });
+}
+
+function styleCompRow(row: ExcelJS.Row, lastCol: number) {
+  row.alignment = { vertical: "middle", horizontal: "center" };
+  row.font = { bold: true };
+  row.eachCell({ includeEmpty: true }, (cell, col) => {
+    if (col > lastCol) return;
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: F_COMP } };
+    cell.border = {
+      top: { style: "medium", color: { argb: "FFB8860B" } },
+      left: { style: "thin", color: { argb: "FF000000" } },
+      bottom: { style: "thin", color: { argb: "FF000000" } },
+      right: { style: "thin", color: { argb: "FF000000" } },
+    };
+  });
+}
+
 /**
- * Genera un .xlsx con resumen ARR y clientes por mes.
- * Deltas del resumen y por cliente son fórmulas de Excel cuando aplica.
+ * ARR export: estilos (cabecera azul, filas resumen y clientes, comparación) y fórmulas en español
+ * como plantilla arrastrable (REDONDEAR/SI.ERROR/SUMA).
  */
-export function downloadArrDashboardExcel(opts: ArrExportOptions): void {
+export async function downloadArrDashboardExcel(opts: ArrExportOptions): Promise<void> {
   const {
     empresa,
     labelMesA,
@@ -90,13 +128,30 @@ export function downloadArrDashboardExcel(opts: ArrExportOptions): void {
     filasClientesMesPrimero,
     filasClientesSoloMesSegundo,
     usarFormulasComparacion,
-    ingresoPlantaMesA,
-    sumKgClientesMesA,
-    ingresoPlantaMesB,
-    sumKgClientesMesB,
   } = opts;
 
-  const resumenHeader = [
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet("ARR", {
+    properties: { defaultRowHeight: 18 },
+    views: [{ showGridLines: true }],
+  });
+
+  const LAST_SUMMARY_COL = 12;
+  const MES_A_R = 5;
+  const MES_B_R = 6;
+  const CLI_FIRST_R = 12;
+
+  let cur = 1;
+  ws.getRow(cur).getCell(1).value = "ARR · IGF Forecast · exportación";
+  cur++;
+  ws.getRow(cur).getCell(1).value = "Empresa";
+  ws.getRow(cur).getCell(2).value = empresa;
+  cur++;
+  ws.getRow(cur).getCell(1).value = "Comparación";
+  ws.getRow(cur).getCell(2).value = comparacionLabel || "";
+  cur++;
+
+  const headerLabels = [
     "Mes",
     "Operativos",
     "Corporativos",
@@ -110,67 +165,87 @@ export function downloadArrDashboardExcel(opts: ArrExportOptions): void {
     "Previos",
     "Rentabilidad",
   ];
+  const hRow = ws.getRow(cur);
+  headerLabels.forEach((t, i) => {
+    hRow.getCell(i + 1).value = t;
+  });
+  styleHeaderRow(hRow, LAST_SUMMARY_COL);
+  cur++;
 
-  function resumenDataRow(label: string, m: ArrExportResumenMetrics): (string | number)[] {
-    return [
-      label,
-      numOrBlank(m.operativos),
-      numOrBlank(m.corporativos),
-      numOrBlank(m.gastoImporte),
-      numOrBlank(m.margenKg),
-      numOrBlank(m.hgDisplay),
-      numOrBlank(m.hgDinero),
-      numOrBlank(m.descuentoSigned),
-      numOrBlank(m.ventaTon),
-      "",
-      "",
-      numOrBlank(m.rentabilidadImporte),
-    ];
+  function fillMesRow(rowNum: number, label: string, m: ArrExportResumenMetrics, skipRentab: boolean) {
+    const row = ws.getRow(rowNum);
+    row.getCell(1).value = label;
+    row.getCell(2).value = cellNum(m.operativos);
+    row.getCell(2).numFmt = '"$" #,##0';
+    row.getCell(3).value = cellNum(m.corporativos);
+    row.getCell(3).numFmt = '"$" #,##0';
+    row.getCell(4).value = cellNum(m.gastoImporte);
+    row.getCell(4).numFmt = "#,##0";
+    row.getCell(5).value = cellNum(m.margenKg);
+    row.getCell(5).numFmt = "#,##0.00";
+    row.getCell(6).value = cellNum(m.hgDisplay);
+    row.getCell(6).numFmt = "#,##0.00";
+    row.getCell(7).value = cellNum(m.hgDinero);
+    row.getCell(7).numFmt = '"$" #,##0.00';
+    row.getCell(8).value = cellNum(m.descuentoSigned);
+    row.getCell(8).numFmt = "#,##0.00";
+    row.getCell(9).value = cellNum(m.ventaTon);
+    row.getCell(9).numFmt = "#,##0";
+    row.getCell(10).value = "";
+    row.getCell(11).value = "";
+    if (!skipRentab) {
+      row.getCell(12).value = cellNum(m.rentabilidadImporte);
+      row.getCell(12).numFmt = '"$" #,##0';
+    }
+    styleDataRow(row, LAST_SUMMARY_COL, [2, 3, 4, 5, 6, 7, 8, 9, 12]);
   }
 
-  const aoa: (string | number)[][] = [];
-  aoa.push(["ARR · IGF Forecast · exportación"]);
-  aoa.push(["Empresa", empresa]);
-  aoa.push(["Comparación", comparacionLabel || ""]);
-  aoa.push(resumenHeader);
+  fillMesRow(cur, labelMesA || "(Mes A)", mA, true);
+  cur++;
+  fillMesRow(cur, labelMesB || "(Mes B)", mB, true);
+  cur++;
 
-  const idxMesA = aoa.length;
-  aoa.push(resumenDataRow(labelMesA || "(Mes A)", mA));
-  const idxMesB = aoa.length;
-  aoa.push(resumenDataRow(labelMesB || "(Mes B)", mB));
-  const idxComparacion = aoa.length;
-  const filaComparBase: (string | number)[] = [
-    "COMPARACION",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-  ];
-  aoa.push(filaComparBase);
+  const compRow = ws.getRow(cur);
+  compRow.getCell(1).value = comparacionLabel
+    ? `COMPARACION (${comparacionLabel})`
+    : "COMPARACION";
+  if (usarFormulasComparacion) {
+    for (let c = 2; c <= LAST_SUMMARY_COL; c++) {
+      if (c === 10 || c === 11) {
+        compRow.getCell(c).value = "";
+        continue;
+      }
+      if (c === 12) {
+        compRow.getCell(c).value = {
+          formula: `L${MES_B_R}-L${MES_A_R}`,
+        };
+        compRow.getCell(c).numFmt = '"$" #,##0';
+        continue;
+      }
+      const letter = ws.getColumn(c).letter;
+      compRow.getCell(c).value = { formula: `${letter}${MES_B_R}-${letter}${MES_A_R}` };
+      if (c === 2 || c === 3) compRow.getCell(c).numFmt = '"$" #,##0';
+      else if (c === 7) compRow.getCell(c).numFmt = '"$" #,##0.00';
+      else if (c === 4 || c === 9) compRow.getCell(c).numFmt = "#,##0";
+      else compRow.getCell(c).numFmt = "#,##0.00";
+    }
+  } else {
+    for (let c = 2; c <= LAST_SUMMARY_COL; c++) {
+      compRow.getCell(c).value = "";
+    }
+  }
+  styleCompRow(compRow, LAST_SUMMARY_COL);
+  cur++;
 
-  aoa.push([]);
-  aoa.push(["Clientes por mes"]);
-  /** L–O: anclas para =ROUND(ingreso_planta*kg_col/sum_kg,0) (misma prorrata que el dashboard). */
-  const idxProrrataParams = aoa.length;
-  const filaParams = new Array<string | number>(15).fill("");
-  filaParams[0] =
-    "Prorrata ingreso mini IGF: L = ingreso planta mes A, M = ∑kg clientes mes A, N = ingreso planta mes B, O = ∑kg clientes mes B";
-  filaParams[11] =
-    ingresoPlantaMesA != null && Number.isFinite(ingresoPlantaMesA) ? ingresoPlantaMesA : "";
-  filaParams[12] = sumKgClientesMesA > 0 ? sumKgClientesMesA : "";
-  filaParams[13] =
-    ingresoPlantaMesB != null && Number.isFinite(ingresoPlantaMesB) ? ingresoPlantaMesB : "";
-  filaParams[14] = sumKgClientesMesB > 0 ? sumKgClientesMesB : "";
-  aoa.push(filaParams);
+  ws.getRow(cur).getCell(1).value = "";
+  cur++;
+  ws.getRow(cur).getCell(1).value = "Clientes por mes";
+  ws.getRow(cur).font = { bold: true, size: 11 };
+  cur++;
+  ws.getRow(cur).getCell(1).value = "";
+  cur++;
 
-  aoa.push([
+  const cliHeaders = [
     "Cliente",
     headerVentaA,
     headerVentaB,
@@ -181,100 +256,139 @@ export function downloadArrDashboardExcel(opts: ArrExportOptions): void {
     headerIngresoA,
     headerIngresoB,
     "Delta ingreso",
-  ]);
+  ];
+  const cliHdr = ws.getRow(cur);
+  cliHeaders.forEach((t, i) => {
+    cliHdr.getCell(i + 1).value = t;
+  });
+  styleHeaderRow(cliHdr, 10);
+  cur++;
 
-  const idxFirstCliente = aoa.length;
+  const centerCli = [2, 3, 4, 5, 6, 7, 8, 9, 10];
 
   for (const row of filasClientesMesPrimero) {
-    aoa.push([
-      row.cliente,
-      numOrBlank(row.ventaA),
-      numOrBlank(row.ventaB),
-      "",
-      numOrBlank(row.descA),
-      numOrBlank(row.descB),
-      "",
-      "",
-      "",
-      "",
-    ]);
+    const rowX = ws.getRow(cur);
+    rowX.getCell(1).value = row.cliente;
+    rowX.getCell(2).value = cellNum(row.ventaA);
+    rowX.getCell(2).numFmt = "#,##0";
+    rowX.getCell(3).value = cellNum(row.ventaB);
+    rowX.getCell(3).numFmt = "#,##0";
+    rowX.getCell(4).value = {
+      formula: `REDONDEAR(SI.ERROR(C${cur}-B${cur},0),0)`,
+    };
+    rowX.getCell(4).numFmt = "#,##0";
+    rowX.getCell(5).value = cellNum(row.descA);
+    rowX.getCell(5).numFmt = "#,##0.00";
+    rowX.getCell(6).value = cellNum(row.descB);
+    rowX.getCell(6).numFmt = "#,##0.00";
+    rowX.getCell(7).value = {
+      formula: `REDONDEAR(SI.ERROR(F${cur}-E${cur},0),2)`,
+    };
+    rowX.getCell(7).numFmt = "#,##0.00";
+    rowX.getCell(8).value = {
+      formula: `REDONDEAR(SI.ERROR((B${cur}*($E$${MES_A_R}-E${cur}))+($F$${MES_A_R}*B${cur}*$G$${MES_A_R}/100),0),0)`,
+    };
+    rowX.getCell(8).numFmt = '"$" #,##0';
+    rowX.getCell(9).value = {
+      formula: `REDONDEAR(SI.ERROR((C${cur}*($E$${MES_B_R}-F${cur}))+($F$${MES_B_R}*C${cur}*$G$${MES_B_R}/100),0),0)`,
+    };
+    rowX.getCell(9).numFmt = '"$" #,##0';
+    rowX.getCell(10).value = {
+      formula: `REDONDEAR(SI.ERROR(I${cur}-H${cur},0),0)`,
+    };
+    rowX.getCell(10).numFmt = '"$" #,##0';
+    styleDataRow(rowX, 10, centerCli);
+    cur++;
   }
 
   if (filasClientesSoloMesSegundo.length > 0 && filasClientesMesPrimero.length > 0) {
-    aoa.push([]);
+    const sep = ws.getRow(cur);
+    for (let c = 1; c <= 10; c++) {
+      sep.getCell(c).value = "";
+      sep.getCell(c).fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: F_SEP },
+      };
+    }
+    cur++;
   }
 
   for (const row of filasClientesSoloMesSegundo) {
-    aoa.push([
-      row.cliente,
-      0,
-      numOrBlank(row.ventaB),
-      "",
-      0,
-      numOrBlank(row.descB),
-      "",
-      "",
-      "",
-      "",
-    ]);
-  }
-
-  const ws = XLSX.utils.aoa_to_sheet(aoa);
-
-  const rA = idxMesA;
-  const rB = idxMesB;
-  const rC = idxComparacion;
-
-  if (usarFormulasComparacion) {
-    ws[enc(rC, 0)] = {
-      t: "s",
-      v: comparacionLabel
-        ? `COMPARACION (${comparacionLabel})`
-        : "COMPARACION",
+    const rowX = ws.getRow(cur);
+    rowX.getCell(1).value = row.cliente;
+    rowX.getCell(2).value = 0;
+    rowX.getCell(2).numFmt = "#,##0";
+    rowX.getCell(3).value = cellNum(row.ventaB);
+    rowX.getCell(3).numFmt = "#,##0";
+    rowX.getCell(4).value = {
+      formula: `REDONDEAR(SI.ERROR(C${cur}-B${cur},0),0)`,
     };
-    for (let c = 1; c <= 11; c++) {
-      if (c === 9 || c === 10) {
-        ws[enc(rC, c)] = { t: "s", v: "" };
-        continue;
-      }
-      ws[enc(rC, c)] = {
-        f: `${enc(rB, c)}-${enc(rA, c)}`,
-        t: "n",
-      };
-    }
+    rowX.getCell(4).numFmt = "#,##0";
+    rowX.getCell(5).value = 0;
+    rowX.getCell(5).numFmt = "#,##0.00";
+    rowX.getCell(6).value = cellNum(row.descB);
+    rowX.getCell(6).numFmt = "#,##0.00";
+    rowX.getCell(7).value = {
+      formula: `REDONDEAR(SI.ERROR(F${cur}-E${cur},0),2)`,
+    };
+    rowX.getCell(7).numFmt = "#,##0.00";
+    rowX.getCell(8).value = {
+      formula: `REDONDEAR(SI.ERROR((B${cur}*($E$${MES_A_R}-E${cur}))+($F$${MES_A_R}*B${cur}*$G$${MES_A_R}/100),0),0)`,
+    };
+    rowX.getCell(8).numFmt = '"$" #,##0';
+    rowX.getCell(9).value = {
+      formula: `REDONDEAR(SI.ERROR((C${cur}*($E$${MES_B_R}-F${cur}))+($F$${MES_B_R}*C${cur}*$G$${MES_B_R}/100),0),0)`,
+    };
+    rowX.getCell(9).numFmt = '"$" #,##0';
+    rowX.getCell(10).value = {
+      formula: `REDONDEAR(SI.ERROR(I${cur}-H${cur},0),0)`,
+    };
+    rowX.getCell(10).numFmt = '"$" #,##0';
+    styleDataRow(rowX, 10, centerCli);
+    cur++;
+  }
+
+  const lastDataR = cur - 1;
+  const celL5 = ws.getCell(`L${MES_A_R}`);
+  const celL6 = ws.getCell(`L${MES_B_R}`);
+  if (lastDataR >= CLI_FIRST_R) {
+    const sumH = `SUMA(H${CLI_FIRST_R}:H${lastDataR})`;
+    const sumI = `SUMA(I${CLI_FIRST_R}:I${lastDataR})`;
+    celL5.value = { formula: `${sumH}-D${MES_A_R}` };
+    celL6.value = { formula: `${sumI}-D${MES_B_R}` };
   } else {
-    ws[enc(rC, 0)] = { t: "s", v: "COMPARACION (selecciona dos meses con datos para fórmulas)" };
+    celL5.value = cellNum(mA.rentabilidadImporte);
+    celL6.value = cellNum(mB.rentabilidadImporte);
   }
+  celL5.numFmt = '"$" #,##0';
+  celL6.numFmt = '"$" #,##0';
 
-  const spacer =
-    filasClientesSoloMesSegundo.length > 0 && filasClientesMesPrimero.length > 0 ? 1 : 0;
-  const lastClienteIdx = idxFirstCliente + filasClientesMesPrimero.length + spacer + filasClientesSoloMesSegundo.length - 1;
+  ws.columns = [
+    { width: 28 },
+    { width: 14 },
+    { width: 14 },
+    { width: 14 },
+    { width: 14 },
+    { width: 14 },
+    { width: 14 },
+    { width: 14 },
+    { width: 14 },
+    { width: 12 },
+    { width: 12 },
+    { width: 16 },
+  ];
 
-  const absLA = absRef(idxProrrataParams, 11);
-  const absMA = absRef(idxProrrataParams, 12);
-  const absNB = absRef(idxProrrataParams, 13);
-  const absOB = absRef(idxProrrataParams, 14);
-
-  const fIngresoA = (r: number) =>
-    `IF(OR(ISBLANK(${absLA}),ISBLANK(${absMA}),${absMA}=0),"",ROUND(${absLA}*${enc(r, 1)}/${absMA},0))`;
-  const fIngresoB = (r: number) =>
-    `IF(OR(ISBLANK(${absNB}),ISBLANK(${absOB}),${absOB}=0),"",ROUND(${absNB}*${enc(r, 2)}/${absOB},0))`;
-
-  for (let r = idxFirstCliente; r <= lastClienteIdx; r++) {
-    const row = aoa[r];
-    if (!row || row.length === 0) continue;
-    if (typeof row[0] !== "string" || !row[0]) continue;
-
-    ws[enc(r, 3)] = { f: `${enc(r, 2)}-${enc(r, 1)}`, t: "n" };
-    ws[enc(r, 6)] = { f: `${enc(r, 5)}-${enc(r, 4)}`, t: "n" };
-    ws[enc(r, 7)] = { f: fIngresoA(r), t: "n" };
-    ws[enc(r, 8)] = { f: fIngresoB(r), t: "n" };
-    ws[enc(r, 9)] = { f: `${enc(r, 8)}-${enc(r, 7)}`, t: "n" };
-  }
-
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "ARR");
-
-  const name = `ARR_${safeFilePart(empresa || "export")}_${safeFilePart(opts.selA)}_${safeFilePart(opts.selB)}.xlsx`;
-  XLSX.writeFile(wb, name);
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `ARR_${safeFilePart(empresa || "export")}_${safeFilePart(opts.selA)}_${safeFilePart(opts.selB)}.xlsx`;
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(a.href);
 }

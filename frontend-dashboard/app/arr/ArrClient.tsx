@@ -157,31 +157,51 @@ function fmtDeltaMoney(d: number, decimals = 0): string {
   return `${sign}$${fmtNum(Math.abs(d), decimals)}`;
 }
 
-function sumKgClientesMes(monthData: ClientesMonthData | undefined): number {
-  if (!monthData) return 0;
-  return monthData.rows.reduce((s, r) => s + clienteVenta(r, monthData.historico), 0);
+function mesHistorico(year: number, month: number): boolean {
+  const now = new Date();
+  const cy = now.getFullYear();
+  const cm = now.getMonth() + 1;
+  return year < cy || (year === cy && month < cm);
 }
 
-function plantIngresoMini(
-  periodoSel: string,
-  empresa_: string,
-  byKey: Record<string, IgfMonthData>
-): number | null {
-  const d = byKey[periodoSel];
-  if (!d || !empresa_) return null;
-  const m = findMiniRow(d.miniRows, empresa_);
-  return m?.ingreso != null ? Number(m.ingreso) : null;
+function targetKgDesdeIgfTon(
+  data: IgfMonthData | undefined,
+  empresaLabel: string,
+  historico: boolean
+): number | undefined {
+  if (historico || !data || !empresaLabel) return undefined;
+  const rv = computeRowValues(data, empresaLabel);
+  const ton = rv.ventaTon;
+  if (ton == null || !Number.isFinite(ton) || ton <= 0) return undefined;
+  return Math.round(ton * 1000 * 100) / 100;
 }
 
-/** Prorrata INGRESO de planta (mini IGF) según kg del cliente en el mes. */
-function ingresoClienteProporcional(
-  kgCliente: number,
-  ingresoPlanta: number | null,
-  sumKgPlantaMes: number
+function clientesCacheKey(
+  empresaLabel: string,
+  periodo: string,
+  data: IgfMonthData | undefined
+): string {
+  const [y, m] = periodo.split("-").map((s) => parseInt(s, 10));
+  const hist = mesHistorico(y, m);
+  const tg = targetKgDesdeIgfTon(data, empresaLabel, hist);
+  const part = tg != null && tg > 0 ? String(Math.round(tg)) : "db";
+  return `${empresaLabel}|${periodo}|tg:${part}`;
+}
+
+/** Ingreso cliente (pesos): misma expresión que el Excel exportado (margen y HG del mes). */
+function ingresoClienteMarginal(
+  kg: number,
+  descKg: number | null,
+  m: ResumenMesMetrics
 ): number | null {
-  if (ingresoPlanta == null || !Number.isFinite(ingresoPlanta)) return null;
-  if (sumKgPlantaMes <= 0 || kgCliente <= 0) return null;
-  return Math.round(ingresoPlanta * (kgCliente / sumKgPlantaMes));
+  if (kg <= 0) return null;
+  const margen = m.margenKg;
+  const hg = m.hgDisplay;
+  const hgDin = m.hgDinero;
+  if (margen == null || hg == null || hgDin == null) return null;
+  const d = descKg ?? 0;
+  const raw = kg * (margen - d) + (hg * kg * hgDin) / 100;
+  return Math.round(raw);
 }
 
 /** Venta del cliente para el mes: kg proyectado (mes en curso) o kg real (mes histórico). */
@@ -321,21 +341,28 @@ export default function ArrClient() {
 
   // Carga lista de clientes para (empresa, mes) si aún no está cacheada.
   const ensureClientesLoaded = useCallback(
-    async (empresaLabel: string, periodo: string) => {
+    async (empresaLabel: string, periodo: string, data: IgfMonthData | undefined) => {
       if (!token || !empresaLabel || !periodo) return;
-      const cacheKey = `${empresaLabel}|${periodo}`;
+      const cacheKey = clientesCacheKey(empresaLabel, periodo, data);
       if (clientesByKey[cacheKey] || clientesLoadingKeys.has(cacheKey)) return;
       const [yStr, mStr] = periodo.split("-");
       const year = parseInt(yStr, 10);
       const month = parseInt(mStr, 10);
       if (!Number.isFinite(year) || !Number.isFinite(month)) return;
+      const hist = mesHistorico(year, month);
+      const targetKg = targetKgDesdeIgfTon(data, empresaLabel, hist);
       setClientesLoadingKeys((prev) => {
         const next = new Set(prev);
         next.add(cacheKey);
         return next;
       });
       try {
-        const resp = await fetchArrClientesMes(token, { year, month, empresa: empresaLabel });
+        const resp = await fetchArrClientesMes(token, {
+          year,
+          month,
+          empresa: empresaLabel,
+          ...(targetKg != null && targetKg > 0 ? { target_kg: targetKg } : {}),
+        });
         setClientesByKey((prev) => ({
           ...prev,
           [cacheKey]: { historico: resp.historico, rows: resp.rows || [] },
@@ -363,17 +390,19 @@ export default function ArrClient() {
   );
 
   useEffect(() => {
-    if (empresa && selA) void ensureClientesLoaded(empresa, selA);
-  }, [empresa, selA, ensureClientesLoaded]);
+    if (empresa && selA) void ensureClientesLoaded(empresa, selA, dataByKey[selA]);
+  }, [empresa, selA, dataByKey[selA], ensureClientesLoaded]);
   useEffect(() => {
-    if (empresa && selB) void ensureClientesLoaded(empresa, selB);
-  }, [empresa, selB, ensureClientesLoaded]);
+    if (empresa && selB) void ensureClientesLoaded(empresa, selB, dataByKey[selB]);
+  }, [empresa, selB, dataByKey[selB], ensureClientesLoaded]);
 
   const rowA = useMemo(() => computeRowValues(dataByKey[selA], empresa), [dataByKey, selA, empresa]);
   const rowB = useMemo(() => computeRowValues(dataByKey[selB], empresa), [dataByKey, selB, empresa]);
 
-  const clientesKeyA = empresa && selA ? `${empresa}|${selA}` : "";
-  const clientesKeyB = empresa && selB ? `${empresa}|${selB}` : "";
+  const clientesKeyA =
+    empresa && selA ? clientesCacheKey(empresa, selA, dataByKey[selA]) : "";
+  const clientesKeyB =
+    empresa && selB ? clientesCacheKey(empresa, selB, dataByKey[selB]) : "";
   const clientesA = clientesKeyA ? clientesByKey[clientesKeyA] : undefined;
   const clientesB = clientesKeyB ? clientesByKey[clientesKeyB] : undefined;
 
@@ -382,10 +411,8 @@ export default function ArrClient() {
     const vacío = { filasClientesMesPrimero: [] as ClienteTablaRow[], filasClientesSoloMesSegundo: [] as ClienteTablaRow[] };
     if (!empresa || !clientesA) return vacío;
 
-    const piA = plantIngresoMini(selA, empresa, dataByKey);
-    const piB = plantIngresoMini(selB, empresa, dataByKey);
-    const sumKgA = sumKgClientesMes(clientesA);
-    const sumKgB = sumKgClientesMes(clientesB);
+    const metA = resumenMesMetrics(computeRowValues(dataByKey[selA], empresa));
+    const metB = resumenMesMetrics(computeRowValues(dataByKey[selB], empresa));
 
     const mapA = new Map<string, ArrClienteMesRow>();
     for (const r of clientesA.rows) {
@@ -418,9 +445,9 @@ export default function ArrClient() {
       const vBNum = ventaB ?? 0;
       const dANum = descA ?? 0;
       const dBNum = descB ?? 0;
-      const ingresoAAlloc = ingresoClienteProporcional(ventaA, piA, sumKgA);
+      const ingresoAAlloc = ingresoClienteMarginal(ventaA, descA, metA);
       const ingresoBAlloc =
-        ventaB != null ? ingresoClienteProporcional(ventaB, piB, sumKgB) : null;
+        ventaB != null ? ingresoClienteMarginal(ventaB, descB, metB) : null;
       primero.push({
         cliente,
         ventaA,
@@ -443,7 +470,7 @@ export default function ArrClient() {
         const rB = mapB.get(cliente)!;
         const ventaB = clienteVenta(rB, clientesB.historico);
         const descB = rB.descuento_kg;
-        const ingresoBCliente = ingresoClienteProporcional(ventaB, piB, sumKgB);
+        const ingresoBCliente = ingresoClienteMarginal(ventaB, descB, metB);
         soloSegundo.push({
           cliente,
           ventaA: 0,
@@ -551,49 +578,43 @@ export default function ArrClient() {
 
   const handleExportExcel = useCallback(() => {
     if (!puedeExportar || !empresa) return;
-    const ckA = `${empresa}|${selA}`;
-    const ckB = `${empresa}|${selB}`;
-    const ca = clientesByKey[ckA];
-    const cb = clientesByKey[ckB];
-    const piA = plantIngresoMini(selA, empresa, dataByKey);
-    const piB = plantIngresoMini(selB, empresa, dataByKey);
-    const sumKgA = ca ? sumKgClientesMes(ca) : 0;
-    const sumKgB = cb ? sumKgClientesMes(cb) : 0;
-    downloadArrDashboardExcel({
-      empresa,
-      selA,
-      selB,
-      labelMesA: periodoLabel(selA),
-      labelMesB: periodoLabel(selB),
-      comparacionLabel,
-      mA: metricA,
-      mB: metricB,
-      headerVentaA,
-      headerVentaB,
-      headerDescA,
-      headerDescB,
-      headerIngresoA,
-      headerIngresoB,
-      filasClientesMesPrimero: filasClientesMesPrimero.map((r) => ({
-        cliente: r.cliente,
-        ventaA: r.ventaA,
-        ventaB: r.ventaB,
-        descA: r.descA,
-        descB: r.descB,
-      })),
-      filasClientesSoloMesSegundo: filasClientesSoloMesSegundo.map((r) => ({
-        cliente: r.cliente,
-        ventaA: r.ventaA,
-        ventaB: r.ventaB,
-        descA: r.descA,
-        descB: r.descB,
-      })),
-      usarFormulasComparacion: puedeComparar,
-      ingresoPlantaMesA: piA,
-      sumKgClientesMesA: sumKgA,
-      ingresoPlantaMesB: piB,
-      sumKgClientesMesB: sumKgB,
-    });
+    void (async () => {
+      try {
+        await downloadArrDashboardExcel({
+          empresa,
+          selA,
+          selB,
+          labelMesA: periodoLabel(selA),
+          labelMesB: periodoLabel(selB),
+          comparacionLabel,
+          mA: metricA,
+          mB: metricB,
+          headerVentaA,
+          headerVentaB,
+          headerDescA,
+          headerDescB,
+          headerIngresoA,
+          headerIngresoB,
+          filasClientesMesPrimero: filasClientesMesPrimero.map((r) => ({
+            cliente: r.cliente,
+            ventaA: r.ventaA,
+            ventaB: r.ventaB,
+            descA: r.descA,
+            descB: r.descB,
+          })),
+          filasClientesSoloMesSegundo: filasClientesSoloMesSegundo.map((r) => ({
+            cliente: r.cliente,
+            ventaA: r.ventaA,
+            ventaB: r.ventaB,
+            descA: r.descA,
+            descB: r.descB,
+          })),
+          usarFormulasComparacion: puedeComparar,
+        });
+      } catch (e) {
+        console.error("Export ARR Excel:", e);
+      }
+    })();
   }, [
     puedeExportar,
     puedeComparar,
@@ -611,8 +632,6 @@ export default function ArrClient() {
     headerIngresoB,
     filasClientesMesPrimero,
     filasClientesSoloMesSegundo,
-    clientesByKey,
-    dataByKey,
   ]);
 
   const G = {

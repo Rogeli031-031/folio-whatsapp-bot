@@ -11461,12 +11461,16 @@ app.get("/api/dashboard/arr-clientes-mes", dashboardAuthMiddleware, async (req, 
     const curYear = now.getFullYear();
     const curMonth = now.getMonth() + 1;
     const historico = year < curYear || (year === curYear && month < curMonth);
+    const targetKgRaw =
+      req.query.target_kg != null ? parseFloat(String(req.query.target_kg).replace(/,/g, "")) : NaN;
+    const targetKgOverride =
+      !historico && Number.isFinite(targetKgRaw) && targetKgRaw > 0 ? targetKgRaw : null;
     const resp = await dashboardArrForecast.computeClientesDescuentoMes(
       client,
       year,
       month,
       plantCode,
-      { historico }
+      { historico, targetKgOverride }
     );
     const rows = (resp.rows || []).map((r) => ({
       planta: r.planta,

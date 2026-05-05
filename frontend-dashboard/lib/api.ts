@@ -719,16 +719,20 @@ export interface ArrClientesMesResponse {
 /** Lista de clientes (kg, descuento, estatus) para una empresa/mes — fuente: hoja "Clientes desc mes" del Excel ARR Forecast. */
 export function fetchArrClientesMes(
   token: string,
-  params: { year: number; month: number; empresa: string },
+  params: { year: number; month: number; empresa: string; target_kg?: number },
   init?: { signal?: AbortSignal }
 ): Promise<ArrClientesMesResponse> {
+  const q: Record<string, string> = {
+    year: String(params.year),
+    month: String(params.month),
+    empresa: params.empresa,
+  };
+  if (params.target_kg != null && Number.isFinite(params.target_kg) && params.target_kg > 0) {
+    q.target_kg = String(params.target_kg);
+  }
   return apiFetch<ArrClientesMesResponse>("/api/dashboard/arr-clientes-mes", {
     token,
-    params: {
-      year: String(params.year),
-      month: String(params.month),
-      empresa: params.empresa,
-    },
+    params: q,
     cache: "no-store",
     signal: init?.signal,
   });
