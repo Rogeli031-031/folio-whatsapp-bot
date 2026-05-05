@@ -42,6 +42,9 @@ type RowValues = {
   gastoImporte: number | null;
   margenKg: number | null;
   hgPct: number | null;
+  hgKg: number | null;
+  comDescKg: number | null;
+  ventaTon: number | null;
 };
 
 function periodoKey(year: number, month: number): string {
@@ -62,7 +65,14 @@ function computeRowValues(
   empresaLabel: string
 ): RowValues {
   if (!data || !empresaLabel) {
-    return { gastoImporte: null, margenKg: null, hgPct: null };
+    return {
+      gastoImporte: null,
+      margenKg: null,
+      hgPct: null,
+      hgKg: null,
+      comDescKg: null,
+      ventaTon: null,
+    };
   }
   const forecastRow = findRowByPlanta(data.rows, empresaLabel);
   const miniRow = findMiniRow(data.miniRows, empresaLabel);
@@ -70,6 +80,9 @@ function computeRowValues(
     gastoImporte: miniRow?.gasto ?? null,
     margenKg: forecastRow?.margen_kg ?? null,
     hgPct: forecastRow?.hg_pct ?? null,
+    hgKg: forecastRow?.hg_kg ?? null,
+    comDescKg: forecastRow?.com_desc_kg ?? null,
+    ventaTon: forecastRow?.venta_ton ?? miniRow?.ventaTon ?? null,
   };
 }
 
@@ -264,35 +277,54 @@ export default function ArrClient() {
                 <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide">Gasto</th>
                 <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide">Margen</th>
                 <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide">HG</th>
+                <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide">HG$</th>
+                <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide">Descuento</th>
+                <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide">Venta</th>
               </tr>
             </thead>
             <tbody>
               {[
                 { sel: selA, set: setSelA, vals: rowA, key: "A" as const },
                 { sel: selB, set: setSelB, vals: rowB, key: "B" as const },
-              ].map(({ sel, set, vals, key }) => (
-                <tr key={key} className="border-t border-slate-700/80">
-                  <td className="px-3 py-2">
-                    <select
-                      value={sel}
-                      onChange={(e) => set(e.target.value)}
-                      className="rounded border border-slate-600 bg-slate-900 px-2 py-1 text-slate-200 text-sm"
-                    >
-                      <option value="">Seleccionar mes…</option>
-                      {periodos.map(renderMesOption)}
-                    </select>
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums">
-                    {renderValueCell(sel, vals.gastoImporte, (v) => fmtNum(v, 0), true)}
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums">
-                    {renderValueCell(sel, vals.margenKg, (v) => fmtNum(v, 2), false)}
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums">
-                    {renderValueCell(sel, vals.hgPct, (v) => fmtNum(v, 2), false)}
-                  </td>
-                </tr>
-              ))}
+              ].map(({ sel, set, vals, key }) => {
+                const hgDisplay = vals.hgPct != null ? vals.hgPct * 100 : null;
+                const hgDinero =
+                  vals.hgKg != null && vals.hgPct != null && vals.hgPct !== 0
+                    ? Math.abs(vals.hgKg / vals.hgPct)
+                    : null;
+                return (
+                  <tr key={key} className="border-t border-slate-700/80">
+                    <td className="px-3 py-2">
+                      <select
+                        value={sel}
+                        onChange={(e) => set(e.target.value)}
+                        className="rounded border border-slate-600 bg-slate-900 px-2 py-1 text-slate-200 text-sm"
+                      >
+                        <option value="">Seleccionar mes…</option>
+                        {periodos.map(renderMesOption)}
+                      </select>
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums">
+                      {renderValueCell(sel, vals.gastoImporte, (v) => fmtNum(v, 0), true)}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums">
+                      {renderValueCell(sel, vals.margenKg, (v) => fmtNum(v, 2), false)}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums">
+                      {renderValueCell(sel, hgDisplay, (v) => fmtNum(v, 2), false)}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums">
+                      {renderValueCell(sel, hgDinero, (v) => fmtNum(v, 2), true)}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums">
+                      {renderValueCell(sel, vals.comDescKg, (v) => fmtNum(v, 2), false)}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums">
+                      {renderValueCell(sel, vals.ventaTon, (v) => fmtNum(v, 0), false)}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </section>
