@@ -19,12 +19,18 @@ export type ArrExportClienteRow = {
   ventaB: number | null;
   descA: number | null;
   descB: number | null;
-  ingresoA: number | null;
-  ingresoB: number | null;
 };
 
 function enc(r: number, c: number): string {
   return XLSX.utils.encode_cell({ r, c });
+}
+
+/** Referencias absolutas tipo $L$7 para copiar fórmulas en Excel. */
+function absRef(r: number, c: number): string {
+  const addr = enc(r, c);
+  const m = addr.match(/^([A-Z]+)(\d+)$/);
+  if (!m) return addr;
+  return `$${m[1]}$${m[2]}`;
 }
 
 function numOrBlank(v: number | null | undefined): number | string {
@@ -56,6 +62,11 @@ export type ArrExportOptions = {
   filasClientesSoloMesSegundo: ArrExportClienteRow[];
   /** Si ambos meses tienen filas de resumen, la fila COMPARACION usa fórmulas (mes B − mes A). */
   usarFormulasComparacion: boolean;
+  /** Mini IGF ingreso planta y ∑kg clientes (misma lógica que la pantalla ARR). Fila en columnas L–O. */
+  ingresoPlantaMesA: number | null;
+  sumKgClientesMesA: number;
+  ingresoPlantaMesB: number | null;
+  sumKgClientesMesB: number;
 };
 
 /**
@@ -79,6 +90,10 @@ export function downloadArrDashboardExcel(opts: ArrExportOptions): void {
     filasClientesMesPrimero,
     filasClientesSoloMesSegundo,
     usarFormulasComparacion,
+    ingresoPlantaMesA,
+    sumKgClientesMesA,
+    ingresoPlantaMesB,
+    sumKgClientesMesB,
   } = opts;
 
   const resumenHeader = [
@@ -142,6 +157,19 @@ export function downloadArrDashboardExcel(opts: ArrExportOptions): void {
 
   aoa.push([]);
   aoa.push(["Clientes por mes"]);
+  /** L–O: anclas para =ROUND(ingreso_planta*kg_col/sum_kg,0) (misma prorrata que el dashboard). */
+  const idxProrrataParams = aoa.length;
+  const filaParams = new Array<string | number>(15).fill("");
+  filaParams[0] =
+    "Prorrata ingreso mini IGF: L = ingreso planta mes A, M = ∑kg clientes mes A, N = ingreso planta mes B, O = ∑kg clientes mes B";
+  filaParams[11] =
+    ingresoPlantaMesA != null && Number.isFinite(ingresoPlantaMesA) ? ingresoPlantaMesA : "";
+  filaParams[12] = sumKgClientesMesA > 0 ? sumKgClientesMesA : "";
+  filaParams[13] =
+    ingresoPlantaMesB != null && Number.isFinite(ingresoPlantaMesB) ? ingresoPlantaMesB : "";
+  filaParams[14] = sumKgClientesMesB > 0 ? sumKgClientesMesB : "";
+  aoa.push(filaParams);
+
   aoa.push([
     "Cliente",
     headerVentaA,
@@ -166,8 +194,8 @@ export function downloadArrDashboardExcel(opts: ArrExportOptions): void {
       numOrBlank(row.descA),
       numOrBlank(row.descB),
       "",
-      numOrBlank(row.ingresoA),
-      numOrBlank(row.ingresoB),
+      "",
+      "",
       "",
     ]);
   }
@@ -185,8 +213,8 @@ export function downloadArrDashboardExcel(opts: ArrExportOptions): void {
       0,
       numOrBlank(row.descB),
       "",
-      0,
-      numOrBlank(row.ingresoB),
+      "",
+      "",
       "",
     ]);
   }
@@ -222,14 +250,25 @@ export function downloadArrDashboardExcel(opts: ArrExportOptions): void {
     filasClientesSoloMesSegundo.length > 0 && filasClientesMesPrimero.length > 0 ? 1 : 0;
   const lastClienteIdx = idxFirstCliente + filasClientesMesPrimero.length + spacer + filasClientesSoloMesSegundo.length - 1;
 
+  const absLA = absRef(idxProrrataParams, 11);
+  const absMA = absRef(idxProrrataParams, 12);
+  const absNB = absRef(idxProrrataParams, 13);
+  const absOB = absRef(idxProrrataParams, 14);
+
+  const fIngresoA = (r: number) =>
+    `IF(OR(ISBLANK(${absLA}),ISBLANK(${absMA}),${absMA}=0),"",ROUND(${absLA}*${enc(r, 1)}/${absMA},0))`;
+  const fIngresoB = (r: number) =>
+    `IF(OR(ISBLANK(${absNB}),ISBLANK(${absOB}),${absOB}=0),"",ROUND(${absNB}*${enc(r, 2)}/${absOB},0))`;
+
   for (let r = idxFirstCliente; r <= lastClienteIdx; r++) {
     const row = aoa[r];
     if (!row || row.length === 0) continue;
-    const excelRow = r + 1;
     if (typeof row[0] !== "string" || !row[0]) continue;
 
     ws[enc(r, 3)] = { f: `${enc(r, 2)}-${enc(r, 1)}`, t: "n" };
     ws[enc(r, 6)] = { f: `${enc(r, 5)}-${enc(r, 4)}`, t: "n" };
+    ws[enc(r, 7)] = { f: fIngresoA(r), t: "n" };
+    ws[enc(r, 8)] = { f: fIngresoB(r), t: "n" };
     ws[enc(r, 9)] = { f: `${enc(r, 8)}-${enc(r, 7)}`, t: "n" };
   }
 

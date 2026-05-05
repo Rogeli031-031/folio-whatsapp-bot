@@ -551,6 +551,14 @@ export default function ArrClient() {
 
   const handleExportExcel = useCallback(() => {
     if (!puedeExportar || !empresa) return;
+    const ckA = `${empresa}|${selA}`;
+    const ckB = `${empresa}|${selB}`;
+    const ca = clientesByKey[ckA];
+    const cb = clientesByKey[ckB];
+    const piA = plantIngresoMini(selA, empresa, dataByKey);
+    const piB = plantIngresoMini(selB, empresa, dataByKey);
+    const sumKgA = ca ? sumKgClientesMes(ca) : 0;
+    const sumKgB = cb ? sumKgClientesMes(cb) : 0;
     downloadArrDashboardExcel({
       empresa,
       selA,
@@ -572,8 +580,6 @@ export default function ArrClient() {
         ventaB: r.ventaB,
         descA: r.descA,
         descB: r.descB,
-        ingresoA: r.ingresoA,
-        ingresoB: r.ingresoB,
       })),
       filasClientesSoloMesSegundo: filasClientesSoloMesSegundo.map((r) => ({
         cliente: r.cliente,
@@ -581,10 +587,12 @@ export default function ArrClient() {
         ventaB: r.ventaB,
         descA: r.descA,
         descB: r.descB,
-        ingresoA: r.ingresoA,
-        ingresoB: r.ingresoB,
       })),
       usarFormulasComparacion: puedeComparar,
+      ingresoPlantaMesA: piA,
+      sumKgClientesMesA: sumKgA,
+      ingresoPlantaMesB: piB,
+      sumKgClientesMesB: sumKgB,
     });
   }, [
     puedeExportar,
@@ -603,6 +611,8 @@ export default function ArrClient() {
     headerIngresoB,
     filasClientesMesPrimero,
     filasClientesSoloMesSegundo,
+    clientesByKey,
+    dataByKey,
   ]);
 
   const G = {
