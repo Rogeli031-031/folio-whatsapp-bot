@@ -112,6 +112,18 @@ function clienteVenta(row: ArrClienteMesRow, historico: boolean): number {
   return row.kg_real;
 }
 
+type ClienteTablaRow = {
+  cliente: string;
+  ventaA: number | null;
+  ventaB: number | null;
+  descA: number | null;
+  descB: number | null;
+  deltaVenta: number;
+  deltaDesc: number;
+  /** Solo aparecen abajo: están en mes B y no en mes A */
+  soloNuevo: boolean;
+};
+
 export default function ArrClient() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -284,36 +296,81 @@ export default function ArrClient() {
   const clientesA = clientesKeyA ? clientesByKey[clientesKeyA] : undefined;
   const clientesB = clientesKeyB ? clientesByKey[clientesKeyB] : undefined;
 
-  // Une los clientes de los dos meses por nombre y produce filas unificadas.
-  const clientesUnificados = useMemo(() => {
-    if (!empresa || (!clientesA && !clientesB)) return [];
-    const map = new Map<string, { cliente: string; ventaA: number | null; ventaB: number | null }>();
-    if (clientesA) {
-      for (const r of clientesA.rows) {
-        const key = r.cliente.trim();
-        if (!key) continue;
-        const v = clienteVenta(r, clientesA.historico);
-        const existing = map.get(key) ?? { cliente: key, ventaA: null, ventaB: null };
-        existing.ventaA = v;
-        map.set(key, existing);
-      }
+  /** Primero: clientes del mes A; después (con separador): solo mes B sin estar en A. */
+  const { filasClientesMesPrimero, filasClientesSoloMesSegundo } = useMemo(() => {
+    const vacío = { filasClientesMesPrimero: [] as ClienteTablaRow[], filasClientesSoloMesSegundo: [] as ClienteTablaRow[] };
+    if (!empresa || !clientesA) return vacío;
+
+    const mapA = new Map<string, ArrClienteMesRow>();
+    for (const r of clientesA.rows) {
+      const k = r.cliente.trim();
+      if (k) mapA.set(k, r);
     }
+    const mapB = new Map<string, ArrClienteMesRow>();
     if (clientesB) {
       for (const r of clientesB.rows) {
-        const key = r.cliente.trim();
-        if (!key) continue;
-        const v = clienteVenta(r, clientesB.historico);
-        const existing = map.get(key) ?? { cliente: key, ventaA: null, ventaB: null };
-        existing.ventaB = v;
-        map.set(key, existing);
+        const k = r.cliente.trim();
+        if (k) mapB.set(k, r);
       }
     }
-    return Array.from(map.values()).sort((a, b) => {
-      const ta = (a.ventaA ?? 0) + (a.ventaB ?? 0);
-      const tb = (b.ventaA ?? 0) + (b.ventaB ?? 0);
-      if (tb !== ta) return tb - ta;
-      return a.cliente.localeCompare(b.cliente, "es");
+
+    const primero: ClienteTablaRow[] = [];
+    const clientesMesPrimero = [...mapA.keys()].sort((a, b) => {
+      const va = clienteVenta(mapA.get(a)!, clientesA.historico);
+      const vb = clienteVenta(mapA.get(b)!, clientesA.historico);
+      if (vb !== va) return vb - va;
+      return a.localeCompare(b, "es");
     });
+
+    for (const cliente of clientesMesPrimero) {
+      const rA = mapA.get(cliente)!;
+      const rB = mapB.get(cliente);
+      const ventaA = clienteVenta(rA, clientesA.historico);
+      const ventaB = rB != null && clientesB ? clienteVenta(rB, clientesB.historico) : null;
+      const descA = rA.descuento_kg;
+      const descB = rB?.descuento_kg ?? null;
+      const vBNum = ventaB ?? 0;
+      const dANum = descA ?? 0;
+      const dBNum = descB ?? 0;
+      primero.push({
+        cliente,
+        ventaA,
+        ventaB,
+        descA,
+        descB,
+        deltaVenta: vBNum - ventaA,
+        deltaDesc: dBNum - dANum,
+        soloNuevo: false,
+      });
+    }
+
+    const soloSegundo: ClienteTablaRow[] = [];
+    if (clientesB) {
+      for (const cliente of mapB.keys()) {
+        if (mapA.has(cliente)) continue;
+        const rB = mapB.get(cliente)!;
+        const ventaB = clienteVenta(rB, clientesB.historico);
+        const descB = rB.descuento_kg;
+        soloSegundo.push({
+          cliente,
+          ventaA: 0,
+          ventaB,
+          descA: 0,
+          descB,
+          deltaVenta: ventaB,
+          deltaDesc: (descB ?? 0) - 0,
+          soloNuevo: true,
+        });
+      }
+      soloSegundo.sort((x, y) => {
+        const vb = x.ventaB ?? 0;
+        const vy = y.ventaB ?? 0;
+        if (vy !== vb) return vy - vb;
+        return x.cliente.localeCompare(y.cliente, "es");
+      });
+    }
+
+    return { filasClientesMesPrimero: primero, filasClientesSoloMesSegundo: soloSegundo };
   }, [empresa, clientesA, clientesB]);
 
   const clientesLoading =
@@ -359,6 +416,11 @@ export default function ArrClient() {
 
   const headerVentaA = selA ? `Venta ${periodoMesNombre(selA)}` : "Venta —";
   const headerVentaB = selB ? `Venta ${periodoMesNombre(selB)}` : "Venta —";
+  const headerDescA = selA ? `Descuento ${periodoMesNombre(selA)}` : "Descuento —";
+  const headerDescB = selB ? `Descuento ${periodoMesNombre(selB)}` : "Descuento —";
+
+  const totalFilasCliente =
+    filasClientesMesPrimero.length + filasClientesSoloMesSegundo.length;
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-950 text-slate-100">
@@ -494,32 +556,60 @@ export default function ArrClient() {
                 <th className="px-3 py-2 text-left font-semibold uppercase tracking-wide">Cliente</th>
                 <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide">{headerVentaA}</th>
                 <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide">{headerVentaB}</th>
+                <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide">Delta venta</th>
+                <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide">{headerDescA}</th>
+                <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide">{headerDescB}</th>
+                <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide">Delta descuento</th>
               </tr>
             </thead>
             <tbody>
               {!empresa && (
                 <tr>
-                  <td colSpan={3} className="px-3 py-3 text-center text-xs text-slate-500">
+                  <td colSpan={7} className="px-3 py-3 text-center text-xs text-slate-500">
                     Selecciona una empresa para ver los clientes.
                   </td>
                 </tr>
               )}
-              {empresa && clientesUnificados.length === 0 && !clientesLoading && (
+              {empresa && totalFilasCliente === 0 && !clientesLoading && (
                 <tr>
-                  <td colSpan={3} className="px-3 py-3 text-center text-xs text-slate-500">
+                  <td colSpan={7} className="px-3 py-3 text-center text-xs text-slate-500">
                     Sin clientes para mostrar.
                   </td>
                 </tr>
               )}
-              {clientesUnificados.map((c) => (
-                <tr key={c.cliente} className="border-t border-slate-700/80">
-                  <td className="px-3 py-2 text-slate-100">{c.cliente}</td>
+              {filasClientesMesPrimero.map((row) => (
+                <tr key={row.cliente} className="border-t border-slate-700/80">
+                  <td className="px-3 py-2 text-slate-100">{row.cliente}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{fmtNum(row.ventaA ?? 0, 0)}</td>
                   <td className="px-3 py-2 text-right tabular-nums">
-                    {c.ventaA != null ? fmtNum(c.ventaA, 0) : <span className="text-slate-500">—</span>}
+                    {row.ventaB != null ? fmtNum(row.ventaB, 0) : <span className="text-slate-500">—</span>}
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums">{fmtNum(row.deltaVenta, 0)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    {row.descA != null ? fmtNum(row.descA, 4) : <span className="text-slate-500">—</span>}
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums">
-                    {c.ventaB != null ? fmtNum(c.ventaB, 0) : <span className="text-slate-500">—</span>}
+                    {row.descB != null ? fmtNum(row.descB, 4) : <span className="text-slate-500">—</span>}
                   </td>
+                  <td className="px-3 py-2 text-right tabular-nums">{fmtNum(row.deltaDesc, 4)}</td>
+                </tr>
+              ))}
+              {filasClientesSoloMesSegundo.length > 0 && (
+                <tr aria-hidden className="border-t border-slate-700/80">
+                  <td colSpan={7} className="h-4 bg-slate-950/40 py-2" />
+                </tr>
+              )}
+              {filasClientesSoloMesSegundo.map((row) => (
+                <tr key={`nuevo-${row.cliente}`} className="border-t border-slate-700/80 bg-slate-900/25">
+                  <td className="px-3 py-2 text-slate-100">{row.cliente}</td>
+                  <td className="px-3 py-2 text-right tabular-nums text-slate-400">{fmtNum(0, 0)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{fmtNum(row.ventaB ?? 0, 0)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{fmtNum(row.deltaVenta, 0)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums text-slate-400">{fmtNum(0, 4)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    {row.descB != null ? fmtNum(row.descB, 4) : <span className="text-slate-500">—</span>}
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums">{fmtNum(row.deltaDesc, 4)}</td>
                 </tr>
               ))}
             </tbody>
