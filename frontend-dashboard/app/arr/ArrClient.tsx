@@ -225,6 +225,25 @@ type ClienteTablaRow = {
   soloNuevo: boolean;
 };
 
+/** Rentabilidad ARR (como Excel L5/L6): Σ ingreso por cliente − Gasto (mini). */
+function rentabilidadArrDesdeFilas(
+  filasPrimero: ClienteTablaRow[],
+  filasSoloMesB: ClienteTablaRow[],
+  gastoImporte: number | null,
+  mes: "A" | "B"
+): number | null {
+  if (gastoImporte == null || !Number.isFinite(gastoImporte)) return null;
+  let sumIng = 0;
+  if (mes === "A") {
+    for (const r of filasPrimero) sumIng += r.ingresoA ?? 0;
+    for (const r of filasSoloMesB) sumIng += r.ingresoA ?? 0;
+  } else {
+    for (const r of filasPrimero) sumIng += r.ingresoB ?? 0;
+    for (const r of filasSoloMesB) sumIng += r.ingresoB ?? 0;
+  }
+  return Math.round(sumIng - gastoImporte);
+}
+
 export default function ArrClient() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -552,6 +571,37 @@ export default function ArrClient() {
   const metricA = useMemo(() => resumenMesMetrics(rowA), [rowA]);
   const metricB = useMemo(() => resumenMesMetrics(rowB), [rowB]);
 
+  /** Misma definición que Excel L5/L6: SUM(ingresos clientes) − Gasto. */
+  const rentabilidadArrA = useMemo(() => {
+    if (!clientesA) return null;
+    return rentabilidadArrDesdeFilas(
+      filasClientesMesPrimero,
+      filasClientesSoloMesSegundo,
+      metricA.gastoImporte,
+      "A"
+    );
+  }, [
+    clientesA,
+    filasClientesMesPrimero,
+    filasClientesSoloMesSegundo,
+    metricA.gastoImporte,
+  ]);
+
+  const rentabilidadArrB = useMemo(() => {
+    if (!clientesB) return null;
+    return rentabilidadArrDesdeFilas(
+      filasClientesMesPrimero,
+      filasClientesSoloMesSegundo,
+      metricB.gastoImporte,
+      "B"
+    );
+  }, [
+    clientesB,
+    filasClientesMesPrimero,
+    filasClientesSoloMesSegundo,
+    metricB.gastoImporte,
+  ]);
+
   const dClass = (d: number) =>
     d > 0 ? "text-emerald-400" : d < 0 ? "text-red-400" : "text-slate-300";
 
@@ -587,8 +637,8 @@ export default function ArrClient() {
           labelMesA: periodoLabel(selA),
           labelMesB: periodoLabel(selB),
           comparacionLabel,
-          mA: metricA,
-          mB: metricB,
+          mA: { ...metricA, rentabilidadImporte: rentabilidadArrA ?? metricA.rentabilidadImporte },
+          mB: { ...metricB, rentabilidadImporte: rentabilidadArrB ?? metricB.rentabilidadImporte },
           headerVentaA,
           headerVentaB,
           headerDescA,
@@ -632,6 +682,8 @@ export default function ArrClient() {
     headerIngresoB,
     filasClientesMesPrimero,
     filasClientesSoloMesSegundo,
+    rentabilidadArrA,
+    rentabilidadArrB,
   ]);
 
   const G = {
@@ -779,6 +831,8 @@ export default function ArrClient() {
                 { sel: selB, set: setSelB, vals: rowB, key: "B" as const },
               ].map(({ sel, set, vals, key }) => {
                 const m = resumenMesMetrics(vals);
+                const rentabUi =
+                  key === "A" ? rentabilidadArrA : rentabilidadArrB;
                 return (
                   <tr key={key} className="border-t border-slate-700/80">
                     <td className="px-3 py-2 bg-slate-800/40 text-center">
@@ -820,7 +874,7 @@ export default function ArrClient() {
                     <td className={`px-3 py-2 text-center tabular-nums text-slate-500 ${G.mov}`}>—</td>
                     <td className={`px-3 py-2 text-center tabular-nums text-slate-500 ${G.mov}`}>—</td>
                     <td className={`px-3 py-2 text-center tabular-nums ${G.rent}`}>
-                      {renderValueCell(sel, m.rentabilidadImporte, (v) => fmtNum(v, 0), true)}
+                      {renderValueCell(sel, rentabUi, (v) => fmtNum(v, 0), true)}
                     </td>
                   </tr>
                 );
@@ -863,7 +917,11 @@ export default function ArrClient() {
                     <td className={`px-3 py-2 text-center tabular-nums text-slate-500 ${G.mov}`}>—</td>
                     <td className={`px-3 py-2 text-center tabular-nums text-slate-500 ${G.mov}`}>—</td>
                     <td className={`px-3 py-2 text-center tabular-nums ${G.rent}`}>
-                      {cellDeltaMoney(metricA.rentabilidadImporte, metricB.rentabilidadImporte)}
+                      {rentabilidadArrA != null && rentabilidadArrB != null ? (
+                        cellDeltaMoney(rentabilidadArrA, rentabilidadArrB)
+                      ) : (
+                        <span className="text-slate-500">—</span>
+                      )}
                     </td>
                   </>
                 ) : (
