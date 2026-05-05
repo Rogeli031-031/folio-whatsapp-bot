@@ -112,6 +112,43 @@ function periodoMesNombre(key: string): string {
   return NOMBRES_MES[m - 1] ?? MESES[m - 1] ?? "";
 }
 
+/** Métricas mostradas en la tabla resumen (una fila por mes). */
+type ResumenMesMetrics = {
+  operativos: number | null;
+  corporativos: number | null;
+  gastoImporte: number | null;
+  margenKg: number | null;
+  hgDisplay: number | null;
+  hgDinero: number | null;
+  descuentoSigned: number | null;
+  ventaTon: number | null;
+};
+
+function resumenMesMetrics(vals: RowValues): ResumenMesMetrics {
+  const hgDisplay = vals.hgPct != null ? vals.hgPct * 100 : null;
+  const hgDinero =
+    vals.hgKg != null && vals.hgPct != null && vals.hgPct !== 0
+      ? Math.abs(vals.hgKg / vals.hgPct)
+      : null;
+  const descuentoSigned =
+    vals.comDescKg != null ? -Math.abs(vals.comDescKg) : null;
+  return {
+    operativos: vals.operativos,
+    corporativos: vals.corporativos,
+    gastoImporte: vals.gastoImporte,
+    margenKg: vals.margenKg,
+    hgDisplay,
+    hgDinero,
+    descuentoSigned,
+    ventaTon: vals.ventaTon,
+  };
+}
+
+function fmtDeltaMoney(d: number, decimals = 0): string {
+  const sign = d < 0 ? "-" : "";
+  return `${sign}$${fmtNum(Math.abs(d), decimals)}`;
+}
+
 function sumKgClientesMes(monthData: ClientesMonthData | undefined): number {
   if (!monthData) return 0;
   return monthData.rows.reduce((s, r) => s + clienteVenta(r, monthData.historico), 0);
@@ -472,6 +509,46 @@ export default function ArrClient() {
   const headerIngresoA = selA ? `Ingreso ${periodoMesNombre(selA)}` : "Ingreso —";
   const headerIngresoB = selB ? `Ingreso ${periodoMesNombre(selB)}` : "Ingreso —";
 
+  const comparacionLabel =
+    selA && selB
+      ? `${periodoMesNombre(selB)} − ${periodoMesNombre(selA)}`
+      : "";
+
+  const metricA = useMemo(() => resumenMesMetrics(rowA), [rowA]);
+  const metricB = useMemo(() => resumenMesMetrics(rowB), [rowB]);
+
+  const dClass = (d: number) =>
+    d > 0 ? "text-emerald-400" : d < 0 ? "text-red-400" : "text-slate-300";
+
+  const cellDeltaMoney = (a: number | null, b: number | null, decimals = 0) => {
+    if (a == null && b == null) return <span className="text-slate-500">—</span>;
+    const d = (b ?? 0) - (a ?? 0);
+    return <span className={dClass(d)}>{fmtDeltaMoney(d, decimals)}</span>;
+  };
+  const cellDeltaNum = (a: number | null, b: number | null, decimals: number) => {
+    if (a == null && b == null) return <span className="text-slate-500">—</span>;
+    const d = (b ?? 0) - (a ?? 0);
+    return <span className={dClass(d)}>{fmtNum(d, decimals)}</span>;
+  };
+
+  const puedeComparar =
+    Boolean(empresa && selA && selB) &&
+    Boolean(dataByKey[selA] && dataByKey[selB]) &&
+    !errorByKey[selA] &&
+    !errorByKey[selB] &&
+    !loadingKeys.has(selA) &&
+    !loadingKeys.has(selB);
+
+  const G = {
+    costos: "bg-rose-950/30 border-l-2 border-rose-500/50",
+    margen: "bg-fuchsia-950/25 border-l-2 border-fuchsia-400/45",
+    hg: "bg-violet-950/30 border-l-2 border-violet-400/50",
+    desc: "bg-sky-950/25 border-l-2 border-sky-500/45",
+    venta: "bg-slate-600/25 border-l-2 border-slate-400/40",
+    mov: "bg-amber-950/25 border-l-2 border-amber-500/45",
+    rent: "bg-emerald-950/30 border-l-2 border-emerald-500/50",
+  } as const;
+
   const totalFilasCliente =
     filasClientesMesPrimero.length + filasClientesSoloMesSegundo.length;
 
@@ -515,19 +592,66 @@ export default function ArrClient() {
         <section className="overflow-x-auto rounded-lg border border-slate-700 bg-slate-800/60">
           <table className="min-w-full text-sm">
             <thead>
+              <tr className="bg-slate-700/50 text-[0.65rem] font-semibold uppercase tracking-wide text-slate-300">
+                <th rowSpan={2} className="align-bottom px-3 py-2 text-left text-slate-200">
+                  Mes
+                </th>
+                <th colSpan={3} className={`px-2 py-2 text-center ${G.costos}`}>
+                  Operación
+                </th>
+                <th colSpan={1} className={`px-2 py-2 text-center ${G.margen}`}>
+                  Margen
+                </th>
+                <th colSpan={2} className={`px-2 py-2 text-center ${G.hg}`}>
+                  HG
+                </th>
+                <th colSpan={1} className={`px-2 py-2 text-center ${G.desc}`}>
+                  Desc.
+                </th>
+                <th colSpan={1} className={`px-2 py-2 text-center ${G.venta}`}>
+                  Venta
+                </th>
+                <th colSpan={2} className={`px-2 py-2 text-center ${G.mov}`}>
+                  Clientes
+                </th>
+                <th colSpan={1} className={`px-2 py-2 text-center ${G.rent}`}>
+                  Rentab.
+                </th>
+              </tr>
               <tr className="bg-slate-700/60 text-slate-200">
-                <th className="px-3 py-2 text-left font-semibold uppercase tracking-wide">Mes</th>
-                <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide">Operativos</th>
-                <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide">Corporativos</th>
-                <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide">Gasto</th>
-                <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide">Margen</th>
-                <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide">HG</th>
-                <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide">HG$</th>
-                <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide">Descuento</th>
-                <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide">Venta</th>
-                <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide">Nuevos</th>
-                <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide">Previos</th>
-                <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide">Rentabilidad</th>
+                <th className={`px-3 py-2 text-right font-semibold uppercase tracking-wide ${G.costos}`}>
+                  Operativos
+                </th>
+                <th className={`px-3 py-2 text-right font-semibold uppercase tracking-wide ${G.costos}`}>
+                  Corporativos
+                </th>
+                <th className={`px-3 py-2 text-right font-semibold uppercase tracking-wide ${G.costos}`}>
+                  Gasto
+                </th>
+                <th className={`px-3 py-2 text-right font-semibold uppercase tracking-wide ${G.margen}`}>
+                  Margen
+                </th>
+                <th className={`px-3 py-2 text-right font-semibold uppercase tracking-wide ${G.hg}`}>
+                  HG
+                </th>
+                <th className={`px-3 py-2 text-right font-semibold uppercase tracking-wide ${G.hg}`}>
+                  HG$
+                </th>
+                <th className={`px-3 py-2 text-right font-semibold uppercase tracking-wide ${G.desc}`}>
+                  Descuento
+                </th>
+                <th className={`px-3 py-2 text-right font-semibold uppercase tracking-wide ${G.venta}`}>
+                  Venta
+                </th>
+                <th className={`px-3 py-2 text-right font-semibold uppercase tracking-wide ${G.mov}`}>
+                  Nuevos
+                </th>
+                <th className={`px-3 py-2 text-right font-semibold uppercase tracking-wide ${G.mov}`}>
+                  Previos
+                </th>
+                <th className={`px-3 py-2 text-right font-semibold uppercase tracking-wide ${G.rent}`}>
+                  Rentabilidad
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -535,17 +659,10 @@ export default function ArrClient() {
                 { sel: selA, set: setSelA, vals: rowA, key: "A" as const },
                 { sel: selB, set: setSelB, vals: rowB, key: "B" as const },
               ].map(({ sel, set, vals, key }) => {
-                const hgDisplay = vals.hgPct != null ? vals.hgPct * 100 : null;
-                const hgDinero =
-                  vals.hgKg != null && vals.hgPct != null && vals.hgPct !== 0
-                    ? Math.abs(vals.hgKg / vals.hgPct)
-                    : null;
-                // Excel siempre muestra Com. y Desc. como reducción (signo negativo).
-                const descuentoSigned =
-                  vals.comDescKg != null ? -Math.abs(vals.comDescKg) : null;
+                const m = resumenMesMetrics(vals);
                 return (
                   <tr key={key} className="border-t border-slate-700/80">
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2 bg-slate-800/40">
                       <select
                         value={sel}
                         onChange={(e) => set(e.target.value)}
@@ -555,36 +672,88 @@ export default function ArrClient() {
                         {periodos.map(renderMesOption)}
                       </select>
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums">
-                      {renderValueCell(sel, vals.operativos, (v) => fmtNum(v, 0), true)}
+                    <td className={`px-3 py-2 text-right tabular-nums ${G.costos}`}>
+                      {renderValueCell(sel, m.operativos, (v) => fmtNum(v, 0), true)}
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums">
-                      {renderValueCell(sel, vals.corporativos, (v) => fmtNum(v, 0), true)}
+                    <td className={`px-3 py-2 text-right tabular-nums ${G.costos}`}>
+                      {renderValueCell(sel, m.corporativos, (v) => fmtNum(v, 0), true)}
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums">
-                      {renderValueCell(sel, vals.gastoImporte, (v) => fmtNum(v, 0), true)}
+                    <td className={`px-3 py-2 text-right tabular-nums ${G.costos}`}>
+                      {renderValueCell(sel, m.gastoImporte, (v) => fmtNum(v, 0), true)}
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums">
-                      {renderValueCell(sel, vals.margenKg, (v) => fmtNum(v, 2), false)}
+                    <td className={`px-3 py-2 text-right tabular-nums ${G.margen}`}>
+                      {renderValueCell(sel, m.margenKg, (v) => fmtNum(v, 2), false)}
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums">
-                      {renderValueCell(sel, hgDisplay, (v) => fmtNum(v, 2), false)}
+                    <td className={`px-3 py-2 text-right tabular-nums ${G.hg}`}>
+                      {renderValueCell(sel, m.hgDisplay, (v) => fmtNum(v, 2), false)}
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums">
-                      {renderValueCell(sel, hgDinero, (v) => fmtNum(v, 2), true)}
+                    <td className={`px-3 py-2 text-right tabular-nums ${G.hg}`}>
+                      {renderValueCell(sel, m.hgDinero, (v) => fmtNum(v, 2), true)}
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums">
-                      {renderValueCell(sel, descuentoSigned, (v) => fmtNum(v, 2), false)}
+                    <td className={`px-3 py-2 text-right tabular-nums ${G.desc}`}>
+                      {renderValueCell(sel, m.descuentoSigned, (v) => fmtNum(v, 2), false)}
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums">
-                      {renderValueCell(sel, vals.ventaTon, (v) => fmtNum(v, 0), false)}
+                    <td className={`px-3 py-2 text-right tabular-nums ${G.venta}`}>
+                      {renderValueCell(sel, m.ventaTon, (v) => fmtNum(v, 0), false)}
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums text-slate-500">—</td>
-                    <td className="px-3 py-2 text-right tabular-nums text-slate-500">—</td>
-                    <td className="px-3 py-2 text-right tabular-nums text-slate-500">—</td>
+                    <td className={`px-3 py-2 text-right tabular-nums text-slate-500 ${G.mov}`}>—</td>
+                    <td className={`px-3 py-2 text-right tabular-nums text-slate-500 ${G.mov}`}>—</td>
+                    <td className={`px-3 py-2 text-right tabular-nums text-slate-500 ${G.rent}`}>—</td>
                   </tr>
                 );
               })}
+              <tr className="border-t-2 border-amber-500/45 bg-amber-950/20">
+                <td className="px-3 py-2 align-top font-semibold text-amber-100">
+                  <div className="tracking-wide">COMPARACION</div>
+                  {comparacionLabel ? (
+                    <div className="mt-0.5 text-[0.65rem] font-normal text-amber-200/75 normal-case">
+                      {comparacionLabel}
+                    </div>
+                  ) : null}
+                </td>
+                {puedeComparar ? (
+                  <>
+                    <td className={`px-3 py-2 text-right tabular-nums ${G.costos}`}>
+                      {cellDeltaMoney(metricA.operativos, metricB.operativos)}
+                    </td>
+                    <td className={`px-3 py-2 text-right tabular-nums ${G.costos}`}>
+                      {cellDeltaMoney(metricA.corporativos, metricB.corporativos)}
+                    </td>
+                    <td className={`px-3 py-2 text-right tabular-nums ${G.costos}`}>
+                      {cellDeltaMoney(metricA.gastoImporte, metricB.gastoImporte)}
+                    </td>
+                    <td className={`px-3 py-2 text-right tabular-nums ${G.margen}`}>
+                      {cellDeltaNum(metricA.margenKg, metricB.margenKg, 2)}
+                    </td>
+                    <td className={`px-3 py-2 text-right tabular-nums ${G.hg}`}>
+                      {cellDeltaNum(metricA.hgDisplay, metricB.hgDisplay, 2)}
+                    </td>
+                    <td className={`px-3 py-2 text-right tabular-nums ${G.hg}`}>
+                      {cellDeltaMoney(metricA.hgDinero, metricB.hgDinero, 2)}
+                    </td>
+                    <td className={`px-3 py-2 text-right tabular-nums ${G.desc}`}>
+                      {cellDeltaNum(metricA.descuentoSigned, metricB.descuentoSigned, 2)}
+                    </td>
+                    <td className={`px-3 py-2 text-right tabular-nums ${G.venta}`}>
+                      {cellDeltaNum(metricA.ventaTon, metricB.ventaTon, 0)}
+                    </td>
+                    <td className={`px-3 py-2 text-right tabular-nums text-slate-500 ${G.mov}`}>—</td>
+                    <td className={`px-3 py-2 text-right tabular-nums text-slate-500 ${G.mov}`}>—</td>
+                    <td className={`px-3 py-2 text-right tabular-nums text-slate-500 ${G.rent}`}>—</td>
+                  </>
+                ) : (
+                  <>
+                    {Array.from({ length: 11 }).map((_, i) => (
+                      <td
+                        key={`comp-ph-${i}`}
+                        className="px-3 py-2 text-right text-slate-500"
+                      >
+                        —
+                      </td>
+                    ))}
+                  </>
+                )}
+              </tr>
             </tbody>
           </table>
         </section>
