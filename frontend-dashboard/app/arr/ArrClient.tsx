@@ -46,6 +46,8 @@ type ClientesMonthData = {
 };
 
 type RowValues = {
+  operativos: number | null;
+  corporativos: number | null;
   gastoImporte: number | null;
   margenKg: number | null;
   hgPct: number | null;
@@ -73,6 +75,8 @@ function computeRowValues(
 ): RowValues {
   if (!data || !empresaLabel) {
     return {
+      operativos: null,
+      corporativos: null,
       gastoImporte: null,
       margenKg: null,
       hgPct: null,
@@ -84,6 +88,8 @@ function computeRowValues(
   const forecastRow = findRowByPlanta(data.rows, empresaLabel);
   const miniRow = findMiniRow(data.miniRows, empresaLabel);
   return {
+    operativos: miniRow?.operativos ?? null,
+    corporativos: miniRow?.corporativos ?? null,
     gastoImporte: miniRow?.gasto ?? null,
     margenKg: forecastRow?.margen_kg ?? null,
     hgPct: forecastRow?.hg_pct ?? null,
@@ -106,6 +112,33 @@ function periodoMesNombre(key: string): string {
   return NOMBRES_MES[m - 1] ?? MESES[m - 1] ?? "";
 }
 
+function sumKgClientesMes(monthData: ClientesMonthData | undefined): number {
+  if (!monthData) return 0;
+  return monthData.rows.reduce((s, r) => s + clienteVenta(r, monthData.historico), 0);
+}
+
+function plantIngresoMini(
+  periodoSel: string,
+  empresa_: string,
+  byKey: Record<string, IgfMonthData>
+): number | null {
+  const d = byKey[periodoSel];
+  if (!d || !empresa_) return null;
+  const m = findMiniRow(d.miniRows, empresa_);
+  return m?.ingreso != null ? Number(m.ingreso) : null;
+}
+
+/** Prorrata INGRESO de planta (mini IGF) según kg del cliente en el mes. */
+function ingresoClienteProporcional(
+  kgCliente: number,
+  ingresoPlanta: number | null,
+  sumKgPlantaMes: number
+): number | null {
+  if (ingresoPlanta == null || !Number.isFinite(ingresoPlanta)) return null;
+  if (sumKgPlantaMes <= 0 || kgCliente <= 0) return null;
+  return Math.round(ingresoPlanta * (kgCliente / sumKgPlantaMes));
+}
+
 /** Venta del cliente para el mes: kg proyectado (mes en curso) o kg real (mes histórico). */
 function clienteVenta(row: ArrClienteMesRow, historico: boolean): number {
   if (!historico && row.kg_proyectado != null) return row.kg_proyectado;
@@ -120,6 +153,9 @@ type ClienteTablaRow = {
   descB: number | null;
   deltaVenta: number;
   deltaDesc: number;
+  ingresoA: number | null;
+  ingresoB: number | null;
+  deltaIngreso: number;
   /** Solo aparecen abajo: están en mes B y no en mes A */
   soloNuevo: boolean;
 };
@@ -301,6 +337,11 @@ export default function ArrClient() {
     const vacío = { filasClientesMesPrimero: [] as ClienteTablaRow[], filasClientesSoloMesSegundo: [] as ClienteTablaRow[] };
     if (!empresa || !clientesA) return vacío;
 
+    const piA = plantIngresoMini(selA, empresa, dataByKey);
+    const piB = plantIngresoMini(selB, empresa, dataByKey);
+    const sumKgA = sumKgClientesMes(clientesA);
+    const sumKgB = sumKgClientesMes(clientesB);
+
     const mapA = new Map<string, ArrClienteMesRow>();
     for (const r of clientesA.rows) {
       const k = r.cliente.trim();
@@ -332,6 +373,9 @@ export default function ArrClient() {
       const vBNum = ventaB ?? 0;
       const dANum = descA ?? 0;
       const dBNum = descB ?? 0;
+      const ingresoAAlloc = ingresoClienteProporcional(ventaA, piA, sumKgA);
+      const ingresoBAlloc =
+        ventaB != null ? ingresoClienteProporcional(ventaB, piB, sumKgB) : null;
       primero.push({
         cliente,
         ventaA,
@@ -340,6 +384,9 @@ export default function ArrClient() {
         descB,
         deltaVenta: vBNum - ventaA,
         deltaDesc: dBNum - dANum,
+        ingresoA: ingresoAAlloc,
+        ingresoB: ingresoBAlloc,
+        deltaIngreso: (ingresoBAlloc ?? 0) - (ingresoAAlloc ?? 0),
         soloNuevo: false,
       });
     }
@@ -351,6 +398,7 @@ export default function ArrClient() {
         const rB = mapB.get(cliente)!;
         const ventaB = clienteVenta(rB, clientesB.historico);
         const descB = rB.descuento_kg;
+        const ingresoBCliente = ingresoClienteProporcional(ventaB, piB, sumKgB);
         soloSegundo.push({
           cliente,
           ventaA: 0,
@@ -359,6 +407,9 @@ export default function ArrClient() {
           descB,
           deltaVenta: ventaB,
           deltaDesc: (descB ?? 0) - 0,
+          ingresoA: 0,
+          ingresoB: ingresoBCliente,
+          deltaIngreso: (ingresoBCliente ?? 0) - 0,
           soloNuevo: true,
         });
       }
@@ -371,7 +422,7 @@ export default function ArrClient() {
     }
 
     return { filasClientesMesPrimero: primero, filasClientesSoloMesSegundo: soloSegundo };
-  }, [empresa, clientesA, clientesB]);
+  }, [empresa, clientesA, clientesB, selA, selB, dataByKey]);
 
   const clientesLoading =
     (!!clientesKeyA && clientesLoadingKeys.has(clientesKeyA)) ||
@@ -418,6 +469,8 @@ export default function ArrClient() {
   const headerVentaB = selB ? `Venta ${periodoMesNombre(selB)}` : "Venta —";
   const headerDescA = selA ? `Descuento ${periodoMesNombre(selA)}` : "Descuento —";
   const headerDescB = selB ? `Descuento ${periodoMesNombre(selB)}` : "Descuento —";
+  const headerIngresoA = selA ? `Ingreso ${periodoMesNombre(selA)}` : "Ingreso —";
+  const headerIngresoB = selB ? `Ingreso ${periodoMesNombre(selB)}` : "Ingreso —";
 
   const totalFilasCliente =
     filasClientesMesPrimero.length + filasClientesSoloMesSegundo.length;
@@ -464,6 +517,8 @@ export default function ArrClient() {
             <thead>
               <tr className="bg-slate-700/60 text-slate-200">
                 <th className="px-3 py-2 text-left font-semibold uppercase tracking-wide">Mes</th>
+                <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide">Operativos</th>
+                <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide">Corporativos</th>
                 <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide">Gasto</th>
                 <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide">Margen</th>
                 <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide">HG</th>
@@ -499,6 +554,12 @@ export default function ArrClient() {
                         <option value="">Seleccionar mes…</option>
                         {periodos.map(renderMesOption)}
                       </select>
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums">
+                      {renderValueCell(sel, vals.operativos, (v) => fmtNum(v, 0), true)}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums">
+                      {renderValueCell(sel, vals.corporativos, (v) => fmtNum(v, 0), true)}
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums">
                       {renderValueCell(sel, vals.gastoImporte, (v) => fmtNum(v, 0), true)}
@@ -560,19 +621,22 @@ export default function ArrClient() {
                 <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide">{headerDescA}</th>
                 <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide">{headerDescB}</th>
                 <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide">Delta descuento</th>
+                <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide">{headerIngresoA}</th>
+                <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide">{headerIngresoB}</th>
+                <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide">Delta ingreso</th>
               </tr>
             </thead>
             <tbody>
               {!empresa && (
                 <tr>
-                  <td colSpan={7} className="px-3 py-3 text-center text-xs text-slate-500">
+                  <td colSpan={10} className="px-3 py-3 text-center text-xs text-slate-500">
                     Selecciona una empresa para ver los clientes.
                   </td>
                 </tr>
               )}
               {empresa && totalFilasCliente === 0 && !clientesLoading && (
                 <tr>
-                  <td colSpan={7} className="px-3 py-3 text-center text-xs text-slate-500">
+                  <td colSpan={10} className="px-3 py-3 text-center text-xs text-slate-500">
                     Sin clientes para mostrar.
                   </td>
                 </tr>
@@ -592,11 +656,22 @@ export default function ArrClient() {
                     {row.descB != null ? fmtNum(row.descB, 4) : <span className="text-slate-500">—</span>}
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums">{fmtNum(row.deltaDesc, 4)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    {row.ingresoA != null ? `$${fmtNum(row.ingresoA, 0)}` : (
+                      <span className="text-slate-500">—</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    {row.ingresoB != null ? `$${fmtNum(row.ingresoB, 0)}` : (
+                      <span className="text-slate-500">—</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums">${fmtNum(row.deltaIngreso, 0)}</td>
                 </tr>
               ))}
               {filasClientesSoloMesSegundo.length > 0 && (
                 <tr aria-hidden className="border-t border-slate-700/80">
-                  <td colSpan={7} className="h-4 bg-slate-950/40 py-2" />
+                  <td colSpan={10} className="h-4 bg-slate-950/40 py-2" />
                 </tr>
               )}
               {filasClientesSoloMesSegundo.map((row) => (
@@ -610,6 +685,13 @@ export default function ArrClient() {
                     {row.descB != null ? fmtNum(row.descB, 4) : <span className="text-slate-500">—</span>}
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums">{fmtNum(row.deltaDesc, 4)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums text-slate-400">${fmtNum(0, 0)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    {row.ingresoB != null ? `$${fmtNum(row.ingresoB, 0)}` : (
+                      <span className="text-slate-500">—</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums">${fmtNum(row.deltaIngreso, 0)}</td>
                 </tr>
               ))}
             </tbody>
