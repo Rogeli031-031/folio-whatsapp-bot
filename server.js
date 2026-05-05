@@ -7385,6 +7385,92 @@ app.get("/api/action-register/export", dashboardAuthMiddleware, async (req, res)
       }
     }
 
+    // Hoja: Folios creados (de la planta y sus equivalentes E9/E10/E15…)
+    try {
+      // Forzar sesión a UTC para que value::timestamptz interprete TIMESTAMP sin TZ como UTC.
+      await client.query(`SET TIME ZONE 'UTC'`).catch(() => {});
+      const folioPlantaIds = getPlantaIdsEquivalentesForPendientes(planta_id);
+      const folRes = await client.query(
+        `SELECT f.id, f.numero_folio, f.folio_codigo, f.importe, f.estatus, f.prioridad,
+                f.beneficiario, f.categoria, f.subcategoria,
+                COALESCE(NULLIF(TRIM(COALESCE(f.descripcion,'')), ''), f.concepto, '') AS descripcion,
+                f.creado_en,
+                f.planta_id, p.nombre AS planta_nombre,
+                to_char((f.creado_en::timestamptz AT TIME ZONE 'America/Mexico_City'), 'YYYY-MM-DD') AS dia_cdmx,
+                to_char((f.creado_en::timestamptz AT TIME ZONE 'America/Mexico_City'), 'HH24:MI') AS hora_cdmx
+         FROM public.folios f
+         LEFT JOIN public.plantas p ON p.id = f.planta_id
+         WHERE f.planta_id = ANY($1::int[])
+         ORDER BY f.creado_en DESC NULLS LAST, f.id DESC`,
+        [folioPlantaIds]
+      );
+      const folios = folRes.rows || [];
+
+      const wsF = wb.addWorksheet("Folios creados");
+      wsF.columns = [
+        { header: "Fecha (CDMX)", key: "fecha", width: 14 },
+        { header: "Hora", key: "hora", width: 8 },
+        { header: "Folio", key: "folio", width: 18 },
+        { header: "Planta", key: "planta", width: 22 },
+        { header: "Importe (MXN)", key: "importe", width: 16 },
+        { header: "Estatus", key: "estatus", width: 26 },
+        { header: "Prioridad", key: "prioridad", width: 18 },
+        { header: "Categoría", key: "categoria", width: 18 },
+        { header: "Subcategoría", key: "subcategoria", width: 22 },
+        { header: "Beneficiario", key: "beneficiario", width: 30 },
+        { header: "Concepto / Descripción", key: "descripcion", width: 80 },
+      ];
+      wsF.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+      wsF.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1F2937" } };
+      wsF.getRow(1).alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+      wsF.views = [{ state: "frozen", ySplit: 1 }];
+
+      const ymdToDmy = (ymd) => {
+        if (!ymd || !/^\d{4}-\d{2}-\d{2}/.test(String(ymd))) return ymd || "";
+        const [y, m, d] = String(ymd).slice(0, 10).split("-");
+        return `${d}/${m}/${y}`;
+      };
+
+      if (folios.length === 0) {
+        const row = wsF.addRow({ fecha: "", hora: "", folio: "Sin folios para esta planta.", planta: "", importe: "", estatus: "", prioridad: "", categoria: "", subcategoria: "", beneficiario: "", descripcion: "" });
+        row.getCell("folio").font = { italic: true, color: { argb: "FF6B7280" } };
+      } else {
+        for (const f of folios) {
+          const importe = f.importe != null ? Number(f.importe) : null;
+          const row = wsF.addRow({
+            fecha: ymdToDmy(f.dia_cdmx),
+            hora: f.hora_cdmx || "",
+            folio: f.folio_codigo || f.numero_folio || "",
+            planta: f.planta_nombre || (f.planta_id != null ? `planta_id ${f.planta_id}` : ""),
+            importe: importe != null && !Number.isNaN(importe) ? importe : "",
+            estatus: f.estatus || "",
+            prioridad: f.prioridad || "",
+            categoria: f.categoria || "",
+            subcategoria: f.subcategoria || "",
+            beneficiario: f.beneficiario || "",
+            descripcion: f.descripcion || "",
+          });
+          row.getCell("descripcion").alignment = { wrapText: true, vertical: "top" };
+          row.getCell("importe").numFmt = '"$"#,##0.00;[Red]-"$"#,##0.00';
+          if (f.prioridad && /urgente/i.test(String(f.prioridad))) {
+            row.getCell("prioridad").font = { bold: true, color: { argb: "FFB91C1C" } };
+          }
+          const est = String(f.estatus || "").toUpperCase();
+          if (est === "CANCELADO") {
+            row.eachCell((cell) => { cell.font = { color: { argb: "FF991B1B" } }; });
+          } else if (est === "PAGADO" || est === "CERRADO") {
+            row.getCell("estatus").font = { color: { argb: "FF15803D" } };
+          }
+        }
+        wsF.autoFilter = {
+          from: { row: 1, column: 1 },
+          to: { row: 1, column: wsF.columns.length },
+        };
+      }
+    } catch (e) {
+      console.error("[ActionRegister export folios]", e);
+    }
+
     const buf = await wb.xlsx.writeBuffer();
     const safe = String(plantaNombre).replace(/[^A-Za-z0-9_-]+/g, "_");
     const today = new Date();
