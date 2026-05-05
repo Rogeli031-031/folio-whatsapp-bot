@@ -172,32 +172,16 @@ function mesHistorico(year: number, month: number): boolean {
   return year < cy || (year === cy && month < cm);
 }
 
-/** true si el selector "YYYY-MM" es un mes ya cerrado (rentabilidad = fórmula clientes). */
-function mesHistoricoDesdeSelector(sel: string): boolean {
-  const [yStr, mStr] = sel.split("-");
-  const y = parseInt(yStr, 10);
-  const m = parseInt(mStr, 10);
-  if (!Number.isFinite(y) || !Number.isFinite(m)) return true;
-  return mesHistorico(y, m);
-}
-
 /**
- * Mes cerrado: rentabilidad del resumen = Σ ingreso clientes − Gasto (ARR).
- * Mes en curso o futuro (forecast): Resultado final − Importe del IGF para la empresa (tabla mini).
+ * Rentabilidad del resumen = Resultado final − Importe del IGF (misma definición que la hoja IGF del Excel Forecast),
+ * con respaldo a Σ ingreso clientes − Gasto si no hay dato IGF.
  */
 function rentabilidadResumenPorMes(
-  sel: string,
+  _sel: string,
   rentabilidadArr: number | null,
   rentabilidadIgf: number | null
 ): number | null {
-  if (!sel) return null;
-  const [yStr, mStr] = sel.split("-");
-  const y = parseInt(yStr, 10);
-  const m = parseInt(mStr, 10);
-  if (!Number.isFinite(y) || !Number.isFinite(m)) return null;
-  if (mesHistorico(y, m)) {
-    return rentabilidadArr ?? rentabilidadIgf;
-  }
+  if (!_sel) return null;
   return rentabilidadIgf ?? rentabilidadArr;
 }
 
@@ -731,8 +715,8 @@ export default function ArrClient() {
           comparacionLabel,
           mA: { ...metricA, rentabilidadImporte: rentabilidadMostradaA },
           mB: { ...metricB, rentabilidadImporte: rentabilidadMostradaB },
-          rentabilidadMesAFormulaClientes: selA ? mesHistoricoDesdeSelector(selA) : true,
-          rentabilidadMesBFormulaClientes: selB ? mesHistoricoDesdeSelector(selB) : true,
+          rentabilidadMesAFormulaClientes: false,
+          rentabilidadMesBFormulaClientes: false,
           headerVentaA,
           headerVentaB,
           headerDescA,
