@@ -106,8 +106,9 @@ function computeRowValues(
     impuestoKg: forecastRow?.impuesto_kg ?? miniRow?.impuestos ?? null,
     /** Misma «Venta» que la tabla mini IGF (pronóstico PROY), no solo venta_ton del compromiso. */
     ventaTon: miniRow?.ventaTon ?? forecastRow?.venta_ton ?? null,
+    /** Misma columna «Resultado Final − Importe» que la tabla mini IGF (no solo fila compromiso). */
     rentabilidadImporte:
-      forecastRow?.resultado_final_importe ?? miniRow?.resultadoFinalImporte ?? null,
+      miniRow?.resultadoFinalImporte ?? forecastRow?.resultado_final_importe ?? null,
   };
 }
 
@@ -172,16 +173,32 @@ function mesHistorico(year: number, month: number): boolean {
   return year < cy || (year === cy && month < cm);
 }
 
+/** true si el mes del selector YYYY-MM ya terminó (rentabilidad = Σ clientes − Gasto). */
+function mesHistoricoDesdeSelector(sel: string): boolean {
+  const [yStr, mStr] = sel.split("-");
+  const y = parseInt(yStr, 10);
+  const m = parseInt(mStr, 10);
+  if (!Number.isFinite(y) || !Number.isFinite(m)) return true;
+  return mesHistorico(y, m);
+}
+
 /**
- * Rentabilidad del resumen = Resultado final − Importe del IGF (misma definición que la hoja IGF del Excel Forecast),
- * con respaldo a Σ ingreso clientes − Gasto si no hay dato IGF.
+ * Mes en curso o futuro (forecast/proyección): Rentabilidad = Resultado final − Importe IGF (tabla mini).
+ * Mes cerrado: Σ ingreso clientes − Gasto (sin cambiar la lógica de meses terminados).
  */
 function rentabilidadResumenPorMes(
-  _sel: string,
+  sel: string,
   rentabilidadArr: number | null,
   rentabilidadIgf: number | null
 ): number | null {
-  if (!_sel) return null;
+  if (!sel) return null;
+  const [yStr, mStr] = sel.split("-");
+  const y = parseInt(yStr, 10);
+  const m = parseInt(mStr, 10);
+  if (!Number.isFinite(y) || !Number.isFinite(m)) return null;
+  if (mesHistorico(y, m)) {
+    return rentabilidadArr ?? rentabilidadIgf;
+  }
   return rentabilidadIgf ?? rentabilidadArr;
 }
 
@@ -715,8 +732,8 @@ export default function ArrClient() {
           comparacionLabel,
           mA: { ...metricA, rentabilidadImporte: rentabilidadMostradaA },
           mB: { ...metricB, rentabilidadImporte: rentabilidadMostradaB },
-          rentabilidadMesAFormulaClientes: false,
-          rentabilidadMesBFormulaClientes: false,
+          rentabilidadMesAFormulaClientes: selA ? mesHistoricoDesdeSelector(selA) : true,
+          rentabilidadMesBFormulaClientes: selB ? mesHistoricoDesdeSelector(selB) : true,
           headerVentaA,
           headerVentaB,
           headerDescA,
