@@ -2539,6 +2539,41 @@ async function ensureSchema() {
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS descripcion TEXT;`);
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;`);
 
+    /**
+     * Migración idempotente: si folios.creado_en o folio_historial.creado_en
+     * quedaron en producción como TIMESTAMP WITHOUT TIME ZONE (instalaciones
+     * antiguas), conviértelos a TIMESTAMPTZ tratando los valores existentes
+     * como UTC (que es como NOW() los guardó originalmente). Sin esto, el
+     * cálculo de "día CDMX" suma 6 h y se brinca de día.
+     */
+    try {
+      await client.query(
+        `DO $$
+         BEGIN
+           IF EXISTS (
+             SELECT 1 FROM information_schema.columns
+             WHERE table_schema = 'public' AND table_name = 'folios'
+               AND column_name = 'creado_en' AND data_type = 'timestamp without time zone'
+           ) THEN
+             EXECUTE 'ALTER TABLE public.folios
+                      ALTER COLUMN creado_en TYPE TIMESTAMPTZ
+                      USING creado_en AT TIME ZONE ''UTC''';
+           END IF;
+           IF EXISTS (
+             SELECT 1 FROM information_schema.columns
+             WHERE table_schema = 'public' AND table_name = 'folio_historial'
+               AND column_name = 'creado_en' AND data_type = 'timestamp without time zone'
+           ) THEN
+             EXECUTE 'ALTER TABLE public.folio_historial
+                      ALTER COLUMN creado_en TYPE TIMESTAMPTZ
+                      USING creado_en AT TIME ZONE ''UTC''';
+           END IF;
+         END $$;`
+      );
+    } catch (e) {
+      console.warn("[migracion creado_en TIMESTAMPTZ]", e.message);
+    }
+
     await client.query(`
       CREATE TABLE IF NOT EXISTS public.comentarios (
         id SERIAL PRIMARY KEY,
@@ -7378,6 +7413,9 @@ app.get("/api/action-register/export-day-pdf", dashboardAuthMiddleware, async (r
   const client = await pool.connect();
   try {
     await ensureActionRegisterTables(client);
+    // Forzar la sesión de PostgreSQL a UTC para que `value::timestamptz` interprete los
+    // TIMESTAMP sin TZ (datos legacy en producción) como UTC, igual que NOW() los guardó.
+    await client.query(`SET TIME ZONE 'UTC'`).catch(() => {});
 
     const plantaRow = await client.query(`SELECT id, nombre FROM public.plantas WHERE id = $1`, [planta_id]);
     const plantaNombre = (plantaRow.rows[0] && plantaRow.rows[0].nombre) || `Planta ${planta_id}`;
@@ -7829,13 +7867,13 @@ app.get("/api/action-register/export-day-pdf", dashboardAuthMiddleware, async (r
                   f.creado_en
            FROM public.folios f
            CROSS JOIN rev
-           WHERE (f.creado_en AT TIME ZONE 'America/Mexico_City')::date = rev.rev_dt
+           WHERE (f.creado_en::timestamptz AT TIME ZONE 'America/Mexico_City')::date = rev.rev_dt
               OR EXISTS (
                 SELECT 1 FROM public.folio_historial h
                 WHERE (h.folio_id = f.id
                        OR (h.folio_id IS NULL
                            AND TRIM(COALESCE(h.numero_folio,'')) = TRIM(COALESCE(f.numero_folio,''))))
-                  AND (h.creado_en AT TIME ZONE 'America/Mexico_City')::date = rev.rev_dt
+                  AND (h.creado_en::timestamptz AT TIME ZONE 'America/Mexico_City')::date = rev.rev_dt
               )
          )
          SELECT fd.numero_folio, fd.folio_codigo, fd.importe, fd.descripcion,
