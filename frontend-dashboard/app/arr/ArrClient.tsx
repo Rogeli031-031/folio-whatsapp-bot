@@ -549,6 +549,15 @@ export default function ArrClient() {
     rent: "bg-emerald-950/30 border-l-2 border-emerald-500/50",
   } as const;
 
+  /** Tabla clientes: grupos + resaltado columnas Delta (como Excel). */
+  const GC = {
+    venta: "bg-amber-950/35 border-l-2 border-amber-500/50",
+    desc: "bg-orange-950/30 border-l-2 border-orange-500/45",
+    ingreso: "bg-yellow-950/25 border-l-2 border-yellow-500/40",
+    deltaCell: "bg-yellow-500/20",
+    deltaTh: "bg-yellow-500/25",
+  } as const;
+
   const totalFilasCliente =
     filasClientesMesPrimero.length + filasClientesSoloMesSegundo.length;
 
@@ -593,7 +602,7 @@ export default function ArrClient() {
           <table className="min-w-full text-sm">
             <thead>
               <tr className="bg-slate-700/50 text-[0.65rem] font-semibold uppercase tracking-wide text-slate-300">
-                <th rowSpan={2} className="align-bottom px-3 py-2 text-left text-slate-200">
+                <th rowSpan={2} className="align-bottom px-3 py-2 text-center text-slate-200">
                   Mes
                 </th>
                 <th colSpan={3} className={`px-2 py-2 text-center ${G.costos}`}>
@@ -619,37 +628,37 @@ export default function ArrClient() {
                 </th>
               </tr>
               <tr className="bg-slate-700/60 text-slate-200">
-                <th className={`px-3 py-2 text-right font-semibold uppercase tracking-wide ${G.costos}`}>
+                <th className={`px-3 py-2 text-center font-semibold uppercase tracking-wide ${G.costos}`}>
                   Operativos
                 </th>
-                <th className={`px-3 py-2 text-right font-semibold uppercase tracking-wide ${G.costos}`}>
+                <th className={`px-3 py-2 text-center font-semibold uppercase tracking-wide ${G.costos}`}>
                   Corporativos
                 </th>
-                <th className={`px-3 py-2 text-right font-semibold uppercase tracking-wide ${G.costos}`}>
+                <th className={`px-3 py-2 text-center font-semibold uppercase tracking-wide ${G.costos}`}>
                   Gasto
                 </th>
-                <th className={`px-3 py-2 text-right font-semibold uppercase tracking-wide ${G.margen}`}>
+                <th className={`px-3 py-2 text-center font-semibold uppercase tracking-wide ${G.margen}`}>
                   Margen
                 </th>
-                <th className={`px-3 py-2 text-right font-semibold uppercase tracking-wide ${G.hg}`}>
+                <th className={`px-3 py-2 text-center font-semibold uppercase tracking-wide ${G.hg}`}>
                   HG
                 </th>
-                <th className={`px-3 py-2 text-right font-semibold uppercase tracking-wide ${G.hg}`}>
+                <th className={`px-3 py-2 text-center font-semibold uppercase tracking-wide ${G.hg}`}>
                   HG$
                 </th>
-                <th className={`px-3 py-2 text-right font-semibold uppercase tracking-wide ${G.desc}`}>
+                <th className={`px-3 py-2 text-center font-semibold uppercase tracking-wide ${G.desc}`}>
                   Descuento
                 </th>
-                <th className={`px-3 py-2 text-right font-semibold uppercase tracking-wide ${G.venta}`}>
+                <th className={`px-3 py-2 text-center font-semibold uppercase tracking-wide ${G.venta}`}>
                   Venta
                 </th>
-                <th className={`px-3 py-2 text-right font-semibold uppercase tracking-wide ${G.mov}`}>
+                <th className={`px-3 py-2 text-center font-semibold uppercase tracking-wide ${G.mov}`}>
                   Nuevos
                 </th>
-                <th className={`px-3 py-2 text-right font-semibold uppercase tracking-wide ${G.mov}`}>
+                <th className={`px-3 py-2 text-center font-semibold uppercase tracking-wide ${G.mov}`}>
                   Previos
                 </th>
-                <th className={`px-3 py-2 text-right font-semibold uppercase tracking-wide ${G.rent}`}>
+                <th className={`px-3 py-2 text-center font-semibold uppercase tracking-wide ${G.rent}`}>
                   Rentabilidad
                 </th>
               </tr>
@@ -662,48 +671,50 @@ export default function ArrClient() {
                 const m = resumenMesMetrics(vals);
                 return (
                   <tr key={key} className="border-t border-slate-700/80">
-                    <td className="px-3 py-2 bg-slate-800/40">
-                      <select
-                        value={sel}
-                        onChange={(e) => set(e.target.value)}
-                        className="rounded border border-slate-600 bg-slate-900 px-2 py-1 text-slate-200 text-sm"
-                      >
-                        <option value="">Seleccionar mes…</option>
-                        {periodos.map(renderMesOption)}
-                      </select>
+                    <td className="px-3 py-2 bg-slate-800/40 text-center">
+                      <div className="flex justify-center">
+                        <select
+                          value={sel}
+                          onChange={(e) => set(e.target.value)}
+                          className="rounded border border-slate-600 bg-slate-900 px-2 py-1 text-slate-200 text-sm"
+                        >
+                          <option value="">Seleccionar mes…</option>
+                          {periodos.map(renderMesOption)}
+                        </select>
+                      </div>
                     </td>
-                    <td className={`px-3 py-2 text-right tabular-nums ${G.costos}`}>
+                    <td className={`px-3 py-2 text-center tabular-nums ${G.costos}`}>
                       {renderValueCell(sel, m.operativos, (v) => fmtNum(v, 0), true)}
                     </td>
-                    <td className={`px-3 py-2 text-right tabular-nums ${G.costos}`}>
+                    <td className={`px-3 py-2 text-center tabular-nums ${G.costos}`}>
                       {renderValueCell(sel, m.corporativos, (v) => fmtNum(v, 0), true)}
                     </td>
-                    <td className={`px-3 py-2 text-right tabular-nums ${G.costos}`}>
+                    <td className={`px-3 py-2 text-center tabular-nums ${G.costos}`}>
                       {renderValueCell(sel, m.gastoImporte, (v) => fmtNum(v, 0), true)}
                     </td>
-                    <td className={`px-3 py-2 text-right tabular-nums ${G.margen}`}>
+                    <td className={`px-3 py-2 text-center tabular-nums ${G.margen}`}>
                       {renderValueCell(sel, m.margenKg, (v) => fmtNum(v, 2), false)}
                     </td>
-                    <td className={`px-3 py-2 text-right tabular-nums ${G.hg}`}>
+                    <td className={`px-3 py-2 text-center tabular-nums ${G.hg}`}>
                       {renderValueCell(sel, m.hgDisplay, (v) => fmtNum(v, 2), false)}
                     </td>
-                    <td className={`px-3 py-2 text-right tabular-nums ${G.hg}`}>
+                    <td className={`px-3 py-2 text-center tabular-nums ${G.hg}`}>
                       {renderValueCell(sel, m.hgDinero, (v) => fmtNum(v, 2), true)}
                     </td>
-                    <td className={`px-3 py-2 text-right tabular-nums ${G.desc}`}>
+                    <td className={`px-3 py-2 text-center tabular-nums ${G.desc}`}>
                       {renderValueCell(sel, m.descuentoSigned, (v) => fmtNum(v, 2), false)}
                     </td>
-                    <td className={`px-3 py-2 text-right tabular-nums ${G.venta}`}>
+                    <td className={`px-3 py-2 text-center tabular-nums ${G.venta}`}>
                       {renderValueCell(sel, m.ventaTon, (v) => fmtNum(v, 0), false)}
                     </td>
-                    <td className={`px-3 py-2 text-right tabular-nums text-slate-500 ${G.mov}`}>—</td>
-                    <td className={`px-3 py-2 text-right tabular-nums text-slate-500 ${G.mov}`}>—</td>
-                    <td className={`px-3 py-2 text-right tabular-nums text-slate-500 ${G.rent}`}>—</td>
+                    <td className={`px-3 py-2 text-center tabular-nums text-slate-500 ${G.mov}`}>—</td>
+                    <td className={`px-3 py-2 text-center tabular-nums text-slate-500 ${G.mov}`}>—</td>
+                    <td className={`px-3 py-2 text-center tabular-nums text-slate-500 ${G.rent}`}>—</td>
                   </tr>
                 );
               })}
               <tr className="border-t-2 border-amber-500/45 bg-amber-950/20">
-                <td className="px-3 py-2 align-top font-semibold text-amber-100">
+                <td className="px-3 py-2 align-top text-center font-semibold text-amber-100">
                   <div className="tracking-wide">COMPARACION</div>
                   {comparacionLabel ? (
                     <div className="mt-0.5 text-[0.65rem] font-normal text-amber-200/75 normal-case">
@@ -713,40 +724,40 @@ export default function ArrClient() {
                 </td>
                 {puedeComparar ? (
                   <>
-                    <td className={`px-3 py-2 text-right tabular-nums ${G.costos}`}>
+                    <td className={`px-3 py-2 text-center tabular-nums ${G.costos}`}>
                       {cellDeltaMoney(metricA.operativos, metricB.operativos)}
                     </td>
-                    <td className={`px-3 py-2 text-right tabular-nums ${G.costos}`}>
+                    <td className={`px-3 py-2 text-center tabular-nums ${G.costos}`}>
                       {cellDeltaMoney(metricA.corporativos, metricB.corporativos)}
                     </td>
-                    <td className={`px-3 py-2 text-right tabular-nums ${G.costos}`}>
+                    <td className={`px-3 py-2 text-center tabular-nums ${G.costos}`}>
                       {cellDeltaMoney(metricA.gastoImporte, metricB.gastoImporte)}
                     </td>
-                    <td className={`px-3 py-2 text-right tabular-nums ${G.margen}`}>
+                    <td className={`px-3 py-2 text-center tabular-nums ${G.margen}`}>
                       {cellDeltaNum(metricA.margenKg, metricB.margenKg, 2)}
                     </td>
-                    <td className={`px-3 py-2 text-right tabular-nums ${G.hg}`}>
+                    <td className={`px-3 py-2 text-center tabular-nums ${G.hg}`}>
                       {cellDeltaNum(metricA.hgDisplay, metricB.hgDisplay, 2)}
                     </td>
-                    <td className={`px-3 py-2 text-right tabular-nums ${G.hg}`}>
+                    <td className={`px-3 py-2 text-center tabular-nums ${G.hg}`}>
                       {cellDeltaMoney(metricA.hgDinero, metricB.hgDinero, 2)}
                     </td>
-                    <td className={`px-3 py-2 text-right tabular-nums ${G.desc}`}>
+                    <td className={`px-3 py-2 text-center tabular-nums ${G.desc}`}>
                       {cellDeltaNum(metricA.descuentoSigned, metricB.descuentoSigned, 2)}
                     </td>
-                    <td className={`px-3 py-2 text-right tabular-nums ${G.venta}`}>
+                    <td className={`px-3 py-2 text-center tabular-nums ${G.venta}`}>
                       {cellDeltaNum(metricA.ventaTon, metricB.ventaTon, 0)}
                     </td>
-                    <td className={`px-3 py-2 text-right tabular-nums text-slate-500 ${G.mov}`}>—</td>
-                    <td className={`px-3 py-2 text-right tabular-nums text-slate-500 ${G.mov}`}>—</td>
-                    <td className={`px-3 py-2 text-right tabular-nums text-slate-500 ${G.rent}`}>—</td>
+                    <td className={`px-3 py-2 text-center tabular-nums text-slate-500 ${G.mov}`}>—</td>
+                    <td className={`px-3 py-2 text-center tabular-nums text-slate-500 ${G.mov}`}>—</td>
+                    <td className={`px-3 py-2 text-center tabular-nums text-slate-500 ${G.rent}`}>—</td>
                   </>
                 ) : (
                   <>
                     {Array.from({ length: 11 }).map((_, i) => (
                       <td
                         key={`comp-ph-${i}`}
-                        className="px-3 py-2 text-right text-slate-500"
+                        className="px-3 py-2 text-center text-slate-500"
                       >
                         —
                       </td>
@@ -782,17 +793,48 @@ export default function ArrClient() {
           )}
           <table className="min-w-full text-sm">
             <thead>
+              <tr className="bg-slate-700/50 text-[0.65rem] font-semibold uppercase tracking-wide text-slate-300">
+                <th rowSpan={2} className="align-bottom px-3 py-2 text-center text-slate-200">
+                  Cliente
+                </th>
+                <th colSpan={3} className={`px-2 py-2 text-center ${GC.venta}`}>
+                  Venta
+                </th>
+                <th colSpan={3} className={`px-2 py-2 text-center ${GC.desc}`}>
+                  Descuento
+                </th>
+                <th colSpan={3} className={`px-2 py-2 text-center ${GC.ingreso}`}>
+                  Ingreso
+                </th>
+              </tr>
               <tr className="bg-slate-700/60 text-slate-200">
-                <th className="px-3 py-2 text-left font-semibold uppercase tracking-wide">Cliente</th>
-                <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide">{headerVentaA}</th>
-                <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide">{headerVentaB}</th>
-                <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide">Delta venta</th>
-                <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide">{headerDescA}</th>
-                <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide">{headerDescB}</th>
-                <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide">Delta descuento</th>
-                <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide">{headerIngresoA}</th>
-                <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide">{headerIngresoB}</th>
-                <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide">Delta ingreso</th>
+                <th className={`px-3 py-2 text-center text-[0.7rem] font-semibold uppercase tracking-wide ${GC.venta}`}>
+                  {headerVentaA}
+                </th>
+                <th className={`px-3 py-2 text-center text-[0.7rem] font-semibold uppercase tracking-wide ${GC.venta}`}>
+                  {headerVentaB}
+                </th>
+                <th className={`px-3 py-2 text-center text-[0.7rem] font-semibold uppercase tracking-wide ${GC.venta} ${GC.deltaTh}`}>
+                  Delta venta
+                </th>
+                <th className={`px-3 py-2 text-center text-[0.7rem] font-semibold uppercase tracking-wide ${GC.desc}`}>
+                  {headerDescA}
+                </th>
+                <th className={`px-3 py-2 text-center text-[0.7rem] font-semibold uppercase tracking-wide ${GC.desc}`}>
+                  {headerDescB}
+                </th>
+                <th className={`px-3 py-2 text-center text-[0.7rem] font-semibold uppercase tracking-wide ${GC.desc} ${GC.deltaTh}`}>
+                  Delta descuento
+                </th>
+                <th className={`px-3 py-2 text-center text-[0.7rem] font-semibold uppercase tracking-wide ${GC.ingreso}`}>
+                  {headerIngresoA}
+                </th>
+                <th className={`px-3 py-2 text-center text-[0.7rem] font-semibold uppercase tracking-wide ${GC.ingreso}`}>
+                  {headerIngresoB}
+                </th>
+                <th className={`px-3 py-2 text-center text-[0.7rem] font-semibold uppercase tracking-wide ${GC.ingreso} ${GC.deltaTh}`}>
+                  Delta ingreso
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -812,30 +854,30 @@ export default function ArrClient() {
               )}
               {filasClientesMesPrimero.map((row) => (
                 <tr key={row.cliente} className="border-t border-slate-700/80">
-                  <td className="px-3 py-2 text-slate-100">{row.cliente}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{fmtNum(row.ventaA ?? 0, 0)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">
+                  <td className="px-3 py-2 text-center text-slate-100">{row.cliente}</td>
+                  <td className={`px-3 py-2 text-center tabular-nums ${GC.venta}`}>{fmtNum(row.ventaA ?? 0, 0)}</td>
+                  <td className={`px-3 py-2 text-center tabular-nums ${GC.venta}`}>
                     {row.ventaB != null ? fmtNum(row.ventaB, 0) : <span className="text-slate-500">—</span>}
                   </td>
-                  <td className="px-3 py-2 text-right tabular-nums">{fmtNum(row.deltaVenta, 0)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">
-                    {row.descA != null ? fmtNum(row.descA, 4) : <span className="text-slate-500">—</span>}
+                  <td className={`px-3 py-2 text-center tabular-nums ${GC.venta} ${GC.deltaCell}`}>{fmtNum(row.deltaVenta, 0)}</td>
+                  <td className={`px-3 py-2 text-center tabular-nums ${GC.desc}`}>
+                    {row.descA != null ? fmtNum(row.descA, 2) : <span className="text-slate-500">—</span>}
                   </td>
-                  <td className="px-3 py-2 text-right tabular-nums">
-                    {row.descB != null ? fmtNum(row.descB, 4) : <span className="text-slate-500">—</span>}
+                  <td className={`px-3 py-2 text-center tabular-nums ${GC.desc}`}>
+                    {row.descB != null ? fmtNum(row.descB, 2) : <span className="text-slate-500">—</span>}
                   </td>
-                  <td className="px-3 py-2 text-right tabular-nums">{fmtNum(row.deltaDesc, 4)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">
+                  <td className={`px-3 py-2 text-center tabular-nums ${GC.desc} ${GC.deltaCell}`}>{fmtNum(row.deltaDesc, 2)}</td>
+                  <td className={`px-3 py-2 text-center tabular-nums ${GC.ingreso}`}>
                     {row.ingresoA != null ? `$${fmtNum(row.ingresoA, 0)}` : (
                       <span className="text-slate-500">—</span>
                     )}
                   </td>
-                  <td className="px-3 py-2 text-right tabular-nums">
+                  <td className={`px-3 py-2 text-center tabular-nums ${GC.ingreso}`}>
                     {row.ingresoB != null ? `$${fmtNum(row.ingresoB, 0)}` : (
                       <span className="text-slate-500">—</span>
                     )}
                   </td>
-                  <td className="px-3 py-2 text-right tabular-nums">${fmtNum(row.deltaIngreso, 0)}</td>
+                  <td className={`px-3 py-2 text-center tabular-nums ${GC.ingreso} ${GC.deltaCell}`}>${fmtNum(row.deltaIngreso, 0)}</td>
                 </tr>
               ))}
               {filasClientesSoloMesSegundo.length > 0 && (
@@ -845,22 +887,22 @@ export default function ArrClient() {
               )}
               {filasClientesSoloMesSegundo.map((row) => (
                 <tr key={`nuevo-${row.cliente}`} className="border-t border-slate-700/80 bg-slate-900/25">
-                  <td className="px-3 py-2 text-slate-100">{row.cliente}</td>
-                  <td className="px-3 py-2 text-right tabular-nums text-slate-400">{fmtNum(0, 0)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{fmtNum(row.ventaB ?? 0, 0)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{fmtNum(row.deltaVenta, 0)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums text-slate-400">{fmtNum(0, 4)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">
-                    {row.descB != null ? fmtNum(row.descB, 4) : <span className="text-slate-500">—</span>}
+                  <td className="px-3 py-2 text-center text-slate-100">{row.cliente}</td>
+                  <td className={`px-3 py-2 text-center tabular-nums text-slate-400 ${GC.venta}`}>{fmtNum(0, 0)}</td>
+                  <td className={`px-3 py-2 text-center tabular-nums ${GC.venta}`}>{fmtNum(row.ventaB ?? 0, 0)}</td>
+                  <td className={`px-3 py-2 text-center tabular-nums ${GC.venta} ${GC.deltaCell}`}>{fmtNum(row.deltaVenta, 0)}</td>
+                  <td className={`px-3 py-2 text-center tabular-nums text-slate-400 ${GC.desc}`}>{fmtNum(0, 2)}</td>
+                  <td className={`px-3 py-2 text-center tabular-nums ${GC.desc}`}>
+                    {row.descB != null ? fmtNum(row.descB, 2) : <span className="text-slate-500">—</span>}
                   </td>
-                  <td className="px-3 py-2 text-right tabular-nums">{fmtNum(row.deltaDesc, 4)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums text-slate-400">${fmtNum(0, 0)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">
+                  <td className={`px-3 py-2 text-center tabular-nums ${GC.desc} ${GC.deltaCell}`}>{fmtNum(row.deltaDesc, 2)}</td>
+                  <td className={`px-3 py-2 text-center tabular-nums text-slate-400 ${GC.ingreso}`}>${fmtNum(0, 0)}</td>
+                  <td className={`px-3 py-2 text-center tabular-nums ${GC.ingreso}`}>
                     {row.ingresoB != null ? `$${fmtNum(row.ingresoB, 0)}` : (
                       <span className="text-slate-500">—</span>
                     )}
                   </td>
-                  <td className="px-3 py-2 text-right tabular-nums">${fmtNum(row.deltaIngreso, 0)}</td>
+                  <td className={`px-3 py-2 text-center tabular-nums ${GC.ingreso} ${GC.deltaCell}`}>${fmtNum(row.deltaIngreso, 0)}</td>
                 </tr>
               ))}
             </tbody>
