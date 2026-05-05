@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getRoleFromDashboardToken } from "@/lib/auth";
 import DeltaIngresoClienteForecastModal from "@/components/DeltaIngresoClienteForecastModal";
+import ArrSimularIngresoModal from "@/components/ArrSimularIngresoModal";
 import {
   fetchIgfForecast,
   fetchIgfVersiones,
@@ -310,6 +311,7 @@ export default function ArrClient() {
   const [clientesLoadingKeys, setClientesLoadingKeys] = useState<Set<string>>(new Set());
   const [clientesErrorByKey, setClientesErrorByKey] = useState<Record<string, string>>({});
   const [dicfModalCliente, setDicfModalCliente] = useState<string | null>(null);
+  const [showSimular, setShowSimular] = useState(false);
 
   const handleEmpresaChange = useCallback(
     (next: string) => {
@@ -701,6 +703,36 @@ export default function ArrClient() {
     [selB, rentabilidadArrB, metricB.rentabilidadImporte]
   );
 
+  const simularClientesOpciones = useMemo(() => {
+    const out: {
+      cliente: string;
+      ventaKg: number;
+      descKg: number | null;
+      ingresoTabla: number | null;
+      soloNuevo: boolean;
+    }[] = [];
+    for (const r of filasClientesMesPrimero) {
+      out.push({
+        cliente: r.cliente,
+        ventaKg: r.ventaB ?? 0,
+        descKg: r.descB,
+        ingresoTabla: r.ingresoB,
+        soloNuevo: false,
+      });
+    }
+    for (const r of filasClientesSoloMesSegundo) {
+      out.push({
+        cliente: r.cliente,
+        ventaKg: r.ventaB ?? 0,
+        descKg: r.descB,
+        ingresoTabla: r.ingresoB,
+        soloNuevo: true,
+      });
+    }
+    return out;
+  }, [filasClientesMesPrimero, filasClientesSoloMesSegundo]);
+
+  const puedeSimular = Boolean(empresa && selB);
   const dClass = (d: number) =>
     d > 0 ? "text-emerald-400" : d < 0 ? "text-red-400" : "text-slate-300";
 
@@ -822,10 +854,23 @@ export default function ArrClient() {
           >
             ← IGF Forecast
           </Link>
-          <h1 className="text-lg font-semibold text-slate-100">ARR</h1>
+          <h1 className="text-lg font-semibold text-slate-100">IGF Forecast ARR</h1>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setShowSimular(true)}
+            disabled={!puedeSimular}
+            title={
+              puedeSimular
+                ? "Simular ingreso en el mes forecast (margen / HG del IGF de ese mes)"
+                : "Selecciona empresa y el mes forecast (columna B)"
+            }
+            className="rounded border border-sky-600/90 bg-sky-950/50 px-3 py-2 text-sm font-medium text-sky-100 shadow-sm hover:bg-sky-900/45 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            SIMULAR
+          </button>
           <button
             type="button"
             onClick={handleExportExcel}
@@ -1248,6 +1293,19 @@ export default function ArrClient() {
         onClose={() => setDicfModalCliente(null)}
         canDicfAcciones={canDicfAcciones}
       />
+      {showSimular && (
+        <ArrSimularIngresoModal
+          onClose={() => setShowSimular(false)}
+          empresa={empresa}
+          mesForecastLabel={selB ? periodoLabel(selB) : ""}
+          metricas={{
+            margenKg: metricB.margenKg,
+            hgDisplay: metricB.hgDisplay,
+            hgDinero: metricB.hgDinero,
+          }}
+          clientes={simularClientesOpciones}
+        />
+      )}
     </div>
   );
 }
