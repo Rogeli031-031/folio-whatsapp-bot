@@ -647,6 +647,12 @@ export function IgfForecastContent() {
         >
           Acciones
         </Link>
+        <Link
+          href={token ? `/arr?t=${encodeURIComponent(token)}&back=1` : "/arr"}
+          className="inline-flex items-center gap-2 rounded bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-500"
+        >
+          ARR
+        </Link>
       </div>
       <main className={plantaFilter ? "flex-1 p-4 flex flex-col" : "flex-1 p-4"}>
         <section className={`rounded-lg border border-slate-700 bg-slate-800/60 p-4 ${plantaFilter ? "flex-shrink-0" : ""}`}>
