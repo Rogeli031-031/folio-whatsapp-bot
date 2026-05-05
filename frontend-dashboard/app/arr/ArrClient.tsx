@@ -19,6 +19,7 @@ import {
   findRowByPlanta,
   normalizeEmpresa,
 } from "@/lib/igf-kpi-ui";
+import { downloadArrDashboardExcel } from "@/lib/arr-export-excel";
 
 const NOMBRES_MES = [
   "Enero",
@@ -546,6 +547,64 @@ export default function ArrClient() {
     !loadingKeys.has(selA) &&
     !loadingKeys.has(selB);
 
+  const puedeExportar = puedeComparar;
+
+  const handleExportExcel = useCallback(() => {
+    if (!puedeExportar || !empresa) return;
+    downloadArrDashboardExcel({
+      empresa,
+      selA,
+      selB,
+      labelMesA: periodoLabel(selA),
+      labelMesB: periodoLabel(selB),
+      comparacionLabel,
+      mA: metricA,
+      mB: metricB,
+      headerVentaA,
+      headerVentaB,
+      headerDescA,
+      headerDescB,
+      headerIngresoA,
+      headerIngresoB,
+      filasClientesMesPrimero: filasClientesMesPrimero.map((r) => ({
+        cliente: r.cliente,
+        ventaA: r.ventaA,
+        ventaB: r.ventaB,
+        descA: r.descA,
+        descB: r.descB,
+        ingresoA: r.ingresoA,
+        ingresoB: r.ingresoB,
+      })),
+      filasClientesSoloMesSegundo: filasClientesSoloMesSegundo.map((r) => ({
+        cliente: r.cliente,
+        ventaA: r.ventaA,
+        ventaB: r.ventaB,
+        descA: r.descA,
+        descB: r.descB,
+        ingresoA: r.ingresoA,
+        ingresoB: r.ingresoB,
+      })),
+      usarFormulasComparacion: puedeComparar,
+    });
+  }, [
+    puedeExportar,
+    puedeComparar,
+    empresa,
+    selA,
+    selB,
+    comparacionLabel,
+    metricA,
+    metricB,
+    headerVentaA,
+    headerVentaB,
+    headerDescA,
+    headerDescB,
+    headerIngresoA,
+    headerIngresoB,
+    filasClientesMesPrimero,
+    filasClientesSoloMesSegundo,
+  ]);
+
   const G = {
     costos: "bg-rose-950/30 border-l-2 border-rose-500/50",
     margen: "bg-fuchsia-950/25 border-l-2 border-fuchsia-400/45",
@@ -581,21 +640,36 @@ export default function ArrClient() {
           <h1 className="text-lg font-semibold text-slate-100">ARR</h1>
         </div>
 
-        <label className="inline-flex items-center gap-2 rounded border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-200">
-          <span className="text-slate-400">Empresa:</span>
-          <select
-            value={empresa}
-            onChange={(e) => handleEmpresaChange(e.target.value)}
-            className="rounded border border-slate-600 bg-slate-900 px-2 py-1 text-slate-200 text-sm"
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={handleExportExcel}
+            disabled={!puedeExportar}
+            title={
+              puedeExportar
+                ? "Descargar resumen y clientes en .xlsx (deltas como fórmulas)"
+                : "Selecciona empresa y dos meses con datos cargados"
+            }
+            className="rounded border border-emerald-700/90 bg-emerald-950/55 px-3 py-2 text-sm font-medium text-emerald-100 shadow-sm hover:bg-emerald-900/45 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            <option value="">Seleccionar…</option>
-            {IGF_MINI_RESUMEN_LABELS.map((emp) => (
-              <option key={emp} value={emp}>
-                {emp}
-              </option>
-            ))}
-          </select>
-        </label>
+            Exportar Excel
+          </button>
+          <label className="inline-flex items-center gap-2 rounded border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-200">
+            <span className="text-slate-400">Empresa:</span>
+            <select
+              value={empresa}
+              onChange={(e) => handleEmpresaChange(e.target.value)}
+              className="rounded border border-slate-600 bg-slate-900 px-2 py-1 text-slate-200 text-sm"
+            >
+              <option value="">Seleccionar…</option>
+              {IGF_MINI_RESUMEN_LABELS.map((emp) => (
+                <option key={emp} value={emp}>
+                  {emp}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
       </header>
 
       <main className="flex-1 p-6">
