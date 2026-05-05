@@ -315,7 +315,7 @@ export default function ArrClient() {
     }
 
     const primero: ClienteTablaRow[] = [];
-    const clientesMesPrimero = [...mapA.keys()].sort((a, b) => {
+    const clientesMesPrimero = Array.from(mapA.keys()).sort((a, b) => {
       const va = clienteVenta(mapA.get(a)!, clientesA.historico);
       const vb = clienteVenta(mapA.get(b)!, clientesA.historico);
       if (vb !== va) return vb - va;
@@ -346,7 +346,7 @@ export default function ArrClient() {
 
     const soloSegundo: ClienteTablaRow[] = [];
     if (clientesB) {
-      for (const cliente of mapB.keys()) {
+      for (const cliente of Array.from(mapB.keys())) {
         if (mapA.has(cliente)) continue;
         const rB = mapB.get(cliente)!;
         const ventaB = clienteVenta(rB, clientesB.historico);
