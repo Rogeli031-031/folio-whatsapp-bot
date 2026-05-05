@@ -54,6 +54,8 @@ type RowValues = {
   hgKg: number | null;
   comDescKg: number | null;
   ventaTon: number | null;
+  /** Resultado Final - Importe (Excel hoja IGF). */
+  rentabilidadImporte: number | null;
 };
 
 function periodoKey(year: number, month: number): string {
@@ -83,6 +85,7 @@ function computeRowValues(
       hgKg: null,
       comDescKg: null,
       ventaTon: null,
+      rentabilidadImporte: null,
     };
   }
   const forecastRow = findRowByPlanta(data.rows, empresaLabel);
@@ -96,6 +99,8 @@ function computeRowValues(
     hgKg: forecastRow?.hg_kg ?? null,
     comDescKg: forecastRow?.com_desc_kg ?? null,
     ventaTon: forecastRow?.venta_ton ?? miniRow?.ventaTon ?? null,
+    rentabilidadImporte:
+      forecastRow?.resultado_final_importe ?? miniRow?.resultadoFinalImporte ?? null,
   };
 }
 
@@ -122,6 +127,7 @@ type ResumenMesMetrics = {
   hgDinero: number | null;
   descuentoSigned: number | null;
   ventaTon: number | null;
+  rentabilidadImporte: number | null;
 };
 
 function resumenMesMetrics(vals: RowValues): ResumenMesMetrics {
@@ -141,6 +147,7 @@ function resumenMesMetrics(vals: RowValues): ResumenMesMetrics {
     hgDinero,
     descuentoSigned,
     ventaTon: vals.ventaTon,
+    rentabilidadImporte: vals.rentabilidadImporte,
   };
 }
 
@@ -709,7 +716,9 @@ export default function ArrClient() {
                     </td>
                     <td className={`px-3 py-2 text-center tabular-nums text-slate-500 ${G.mov}`}>—</td>
                     <td className={`px-3 py-2 text-center tabular-nums text-slate-500 ${G.mov}`}>—</td>
-                    <td className={`px-3 py-2 text-center tabular-nums text-slate-500 ${G.rent}`}>—</td>
+                    <td className={`px-3 py-2 text-center tabular-nums ${G.rent}`}>
+                      {renderValueCell(sel, m.rentabilidadImporte, (v) => fmtNum(v, 0), true)}
+                    </td>
                   </tr>
                 );
               })}
@@ -750,7 +759,9 @@ export default function ArrClient() {
                     </td>
                     <td className={`px-3 py-2 text-center tabular-nums text-slate-500 ${G.mov}`}>—</td>
                     <td className={`px-3 py-2 text-center tabular-nums text-slate-500 ${G.mov}`}>—</td>
-                    <td className={`px-3 py-2 text-center tabular-nums text-slate-500 ${G.rent}`}>—</td>
+                    <td className={`px-3 py-2 text-center tabular-nums ${G.rent}`}>
+                      {cellDeltaMoney(metricA.rentabilidadImporte, metricB.rentabilidadImporte)}
+                    </td>
                   </>
                 ) : (
                   <>
