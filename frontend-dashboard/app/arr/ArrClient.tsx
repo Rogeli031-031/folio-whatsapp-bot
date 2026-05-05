@@ -172,6 +172,35 @@ function mesHistorico(year: number, month: number): boolean {
   return year < cy || (year === cy && month < cm);
 }
 
+/** true si el selector "YYYY-MM" es un mes ya cerrado (rentabilidad = fórmula clientes). */
+function mesHistoricoDesdeSelector(sel: string): boolean {
+  const [yStr, mStr] = sel.split("-");
+  const y = parseInt(yStr, 10);
+  const m = parseInt(mStr, 10);
+  if (!Number.isFinite(y) || !Number.isFinite(m)) return true;
+  return mesHistorico(y, m);
+}
+
+/**
+ * Mes cerrado: rentabilidad del resumen = Σ ingreso clientes − Gasto (ARR).
+ * Mes en curso o futuro (forecast): Resultado final − Importe del IGF para la empresa (tabla mini).
+ */
+function rentabilidadResumenPorMes(
+  sel: string,
+  rentabilidadArr: number | null,
+  rentabilidadIgf: number | null
+): number | null {
+  if (!sel) return null;
+  const [yStr, mStr] = sel.split("-");
+  const y = parseInt(yStr, 10);
+  const m = parseInt(mStr, 10);
+  if (!Number.isFinite(y) || !Number.isFinite(m)) return null;
+  if (mesHistorico(y, m)) {
+    return rentabilidadArr ?? rentabilidadIgf;
+  }
+  return rentabilidadIgf ?? rentabilidadArr;
+}
+
 function targetKgDesdeIgfTon(
   data: IgfMonthData | undefined,
   empresaLabel: string,
@@ -656,6 +685,15 @@ export default function ArrClient() {
     metricB.gastoImporte,
   ]);
 
+  const rentabilidadMostradaA = useMemo(
+    () => rentabilidadResumenPorMes(selA, rentabilidadArrA, metricA.rentabilidadImporte),
+    [selA, rentabilidadArrA, metricA.rentabilidadImporte]
+  );
+  const rentabilidadMostradaB = useMemo(
+    () => rentabilidadResumenPorMes(selB, rentabilidadArrB, metricB.rentabilidadImporte),
+    [selB, rentabilidadArrB, metricB.rentabilidadImporte]
+  );
+
   const dClass = (d: number) =>
     d > 0 ? "text-emerald-400" : d < 0 ? "text-red-400" : "text-slate-300";
 
@@ -691,8 +729,10 @@ export default function ArrClient() {
           labelMesA: periodoLabel(selA),
           labelMesB: periodoLabel(selB),
           comparacionLabel,
-          mA: { ...metricA, rentabilidadImporte: rentabilidadArrA ?? metricA.rentabilidadImporte },
-          mB: { ...metricB, rentabilidadImporte: rentabilidadArrB ?? metricB.rentabilidadImporte },
+          mA: { ...metricA, rentabilidadImporte: rentabilidadMostradaA },
+          mB: { ...metricB, rentabilidadImporte: rentabilidadMostradaB },
+          rentabilidadMesAFormulaClientes: selA ? mesHistoricoDesdeSelector(selA) : true,
+          rentabilidadMesBFormulaClientes: selB ? mesHistoricoDesdeSelector(selB) : true,
           headerVentaA,
           headerVentaB,
           headerDescA,
@@ -736,8 +776,8 @@ export default function ArrClient() {
     headerIngresoB,
     filasClientesMesPrimero,
     filasClientesSoloMesSegundo,
-    rentabilidadArrA,
-    rentabilidadArrB,
+    rentabilidadMostradaA,
+    rentabilidadMostradaB,
   ]);
 
   const G = {
@@ -895,7 +935,7 @@ export default function ArrClient() {
               ].map(({ sel, set, vals, key }) => {
                 const m = resumenMesMetrics(vals);
                 const rentabUi =
-                  key === "A" ? rentabilidadArrA : rentabilidadArrB;
+                  key === "A" ? rentabilidadMostradaA : rentabilidadMostradaB;
                 return (
                   <tr key={key} className="border-t border-slate-700/80">
                     <td className="px-3 py-2 bg-slate-800/40 text-center">
@@ -986,8 +1026,8 @@ export default function ArrClient() {
                     <td className={`px-3 py-2 text-center tabular-nums text-slate-500 ${G.mov}`}>—</td>
                     <td className={`px-3 py-2 text-center tabular-nums text-slate-500 ${G.mov}`}>—</td>
                     <td className={`px-3 py-2 text-center tabular-nums ${G.rent}`}>
-                      {rentabilidadArrA != null && rentabilidadArrB != null ? (
-                        cellDeltaMoney(rentabilidadArrA, rentabilidadArrB)
+                      {rentabilidadMostradaA != null && rentabilidadMostradaB != null ? (
+                        cellDeltaMoney(rentabilidadMostradaA, rentabilidadMostradaB)
                       ) : (
                         <span className="text-slate-500">—</span>
                       )}

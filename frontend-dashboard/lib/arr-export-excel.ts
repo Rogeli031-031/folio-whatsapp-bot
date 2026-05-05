@@ -50,6 +50,13 @@ export type ArrExportOptions = {
   filasClientesMesPrimero: ArrExportClienteRow[];
   filasClientesSoloMesSegundo: ArrExportClienteRow[];
   usarFormulasComparacion: boolean;
+  /**
+   * Si true (mes cerrado), M5/M6 de rentabilidad = SUM(ingresos clientes)−Gasto cuando hay filas.
+   * Si false (mes forecast), se usa siempre mA/mB.rentabilidadImporte (IGF).
+   * Por defecto true para no cambiar exportaciones antiguas.
+   */
+  rentabilidadMesAFormulaClientes?: boolean;
+  rentabilidadMesBFormulaClientes?: boolean;
 };
 
 const F_HEADER = "FF1F3864";
@@ -130,6 +137,8 @@ export async function downloadArrDashboardExcel(opts: ArrExportOptions): Promise
     filasClientesMesPrimero,
     filasClientesSoloMesSegundo,
     usarFormulasComparacion,
+    rentabilidadMesAFormulaClientes = true,
+    rentabilidadMesBFormulaClientes = true,
   } = opts;
 
   const wb = new ExcelJS.Workbook();
@@ -357,16 +366,20 @@ export async function downloadArrDashboardExcel(opts: ArrExportOptions): Promise
   const lastDataR = cur - 1;
   const celL5 = ws.getCell(`M${MES_A_R}`);
   const celL6 = ws.getCell(`M${MES_B_R}`);
-  if (lastDataR >= CLI_FIRST_R) {
+  if (lastDataR >= CLI_FIRST_R && rentabilidadMesAFormulaClientes) {
     const sumH = `SUM(H${CLI_FIRST_R}:H${lastDataR})`;
-    const sumI = `SUM(I${CLI_FIRST_R}:I${lastDataR})`;
     celL5.value = { formula: `${sumH}-D${MES_A_R}` };
-    celL6.value = { formula: `${sumI}-D${MES_B_R}` };
   } else {
     celL5.value = cellNum(mA.rentabilidadImporte);
-    celL6.value = cellNum(mB.rentabilidadImporte);
   }
   celL5.numFmt = '"$" #,##0';
+
+  if (lastDataR >= CLI_FIRST_R && rentabilidadMesBFormulaClientes) {
+    const sumI = `SUM(I${CLI_FIRST_R}:I${lastDataR})`;
+    celL6.value = { formula: `${sumI}-D${MES_B_R}` };
+  } else {
+    celL6.value = cellNum(mB.rentabilidadImporte);
+  }
   celL6.numFmt = '"$" #,##0';
 
   ws.columns = [
