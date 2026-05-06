@@ -3,8 +3,8 @@
   "/acciones/page": "app/acciones/page.js",
   "/arr/page": "app/arr/page.js",
   "/dashboard/page": "app/dashboard/page.js",
-  "/igf-forecast/page": "app/igf-forecast/page.js",
   "/dicf-accion/page": "app/dicf-accion/page.js",
+  "/igf-forecast/page": "app/igf-forecast/page.js",
   "/page": "app/page.js",
   "/health/route": "app/health/route.js"
 }

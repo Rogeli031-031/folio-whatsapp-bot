@@ -841,8 +841,35 @@ export default function ArrClient() {
 
   const deltaValorCajaRoja = "inline-block rounded-sm border-2 border-red-500 px-1.5 py-0.5";
 
+  const [clienteFiltro, setClienteFiltro] = useState("");
+  const norm = (s: string) =>
+    s
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .trim();
+
+  const { filasClientesMesPrimeroFiltradas, filasClientesSoloMesSegundoFiltradas } =
+    useMemo(() => {
+      const q = norm(clienteFiltro);
+      if (!q) {
+        return {
+          filasClientesMesPrimeroFiltradas: filasClientesMesPrimero,
+          filasClientesSoloMesSegundoFiltradas: filasClientesSoloMesSegundo,
+        };
+      }
+      return {
+        filasClientesMesPrimeroFiltradas: filasClientesMesPrimero.filter((r) =>
+          norm(r.cliente).includes(q)
+        ),
+        filasClientesSoloMesSegundoFiltradas: filasClientesSoloMesSegundo.filter((r) =>
+          norm(r.cliente).includes(q)
+        ),
+      };
+    }, [clienteFiltro, filasClientesMesPrimero, filasClientesSoloMesSegundo]);
+
   const totalFilasCliente =
-    filasClientesMesPrimero.length + filasClientesSoloMesSegundo.length;
+    filasClientesMesPrimeroFiltradas.length + filasClientesSoloMesSegundoFiltradas.length;
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-950 text-slate-100">
@@ -1128,7 +1155,16 @@ export default function ArrClient() {
             <thead>
               <tr className="bg-slate-700/50 text-[0.65rem] font-semibold uppercase tracking-wide text-slate-300">
                 <th rowSpan={2} className="align-bottom px-3 py-2 text-center text-slate-200">
-                  Cliente
+                  <div className="flex flex-col items-center gap-1">
+                    <span>Cliente</span>
+                    <input
+                      value={clienteFiltro}
+                      onChange={(e) => setClienteFiltro(e.target.value)}
+                      placeholder="Buscar…"
+                      disabled={!empresa}
+                      className="w-44 rounded border border-slate-600 bg-slate-900 px-2 py-1 text-[0.7rem] font-normal normal-case text-slate-200 placeholder:text-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
+                    />
+                  </div>
                 </th>
                 <th colSpan={3} className={`px-2 py-2 text-center ${GC.venta}`}>
                   Venta
@@ -1185,7 +1221,7 @@ export default function ArrClient() {
                   </td>
                 </tr>
               )}
-              {filasClientesMesPrimero.map((row) => (
+              {filasClientesMesPrimeroFiltradas.map((row) => (
                 <tr key={row.cliente} className="border-t border-slate-700/80">
                   <td className="px-3 py-2 text-center text-slate-100">
                     <button
@@ -1235,12 +1271,12 @@ export default function ArrClient() {
                   </td>
                 </tr>
               ))}
-              {filasClientesSoloMesSegundo.length > 0 && (
+              {filasClientesSoloMesSegundoFiltradas.length > 0 && (
                 <tr aria-hidden className="border-t border-slate-700/80">
                   <td colSpan={10} className="h-4 bg-slate-950/40 py-2" />
                 </tr>
               )}
-              {filasClientesSoloMesSegundo.map((row) => (
+              {filasClientesSoloMesSegundoFiltradas.map((row) => (
                 <tr key={`nuevo-${row.cliente}`} className="border-t border-slate-700/80 bg-slate-900/25">
                   <td className="px-3 py-2 text-center text-slate-100">
                     <button
