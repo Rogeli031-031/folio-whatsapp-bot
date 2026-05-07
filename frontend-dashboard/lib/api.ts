@@ -69,6 +69,7 @@ export interface ActionRegisterItem {
   parent_id: number | null;
   title: string;
   responsable: string;
+  responsable_usuario_id?: number | null;
   due_date: string | null; // YYYY-MM-DD
   closed: boolean;
   position: number;
@@ -124,6 +125,13 @@ export interface ActionRegisterBoardResponse {
   notes?: Record<string, ActionRegisterRevisionNote[]>;
 }
 
+export function fetchActionRegisterResponsables(
+  token: string,
+  planta_id: number
+): Promise<{ usuarios: { id: number; nombre: string; puesto_nombre?: string | null; nombre_persona?: string | null; telefono?: string | null; rol_clave?: string; planta_id?: number | null }[] }> {
+  return apiFetch("/api/action-register/responsables", { token, params: { planta_id: String(planta_id) } });
+}
+
 export function getActionRegisterExportUrl(token: string, planta_id: number): string {
   const base = getApiUrl("/api/action-register/export");
   return `${base}?planta_id=${encodeURIComponent(String(planta_id))}&t=${encodeURIComponent(token)}`;
@@ -159,10 +167,11 @@ export function createActionRegisterItem(
     parent_id?: number | null;
     title: string;
     responsable?: string;
+    responsable_usuario_id?: number | null;
     due_date?: string | null;
   }
-): Promise<{ item: ActionRegisterItem }> {
-  return apiFetch<{ item: ActionRegisterItem }>("/api/action-register/items", {
+): Promise<{ item: ActionRegisterItem; notificacion?: { ok: boolean; error?: string } | null }> {
+  return apiFetch<{ item: ActionRegisterItem; notificacion?: { ok: boolean; error?: string } | null }>("/api/action-register/items", {
     token,
     method: "POST",
     body: JSON.stringify(input),
@@ -180,7 +189,7 @@ export function addActionRegisterEntry(token: string, revision_id: number, item_
 export function patchActionRegisterItem(
   token: string,
   id: number,
-  patch: Partial<Pick<ActionRegisterItem, "title" | "responsable" | "due_date" | "closed">>
+  patch: Partial<Pick<ActionRegisterItem, "title" | "responsable" | "responsable_usuario_id" | "due_date" | "closed">>
 ): Promise<{ item: Omit<ActionRegisterItem, "position"> & { position?: number } }> {
   return apiFetch<{ item: Omit<ActionRegisterItem, "position"> & { position?: number } }>(`/api/action-register/items/${id}`, {
     token,

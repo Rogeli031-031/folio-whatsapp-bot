@@ -1,7 +1,7 @@
 {
   "/_not-found/page": "app/_not-found/page.js",
-  "/acciones/page": "app/acciones/page.js",
   "/arr/page": "app/arr/page.js",
+  "/acciones/page": "app/acciones/page.js",
   "/dashboard/page": "app/dashboard/page.js",
   "/dicf-accion/page": "app/dicf-accion/page.js",
   "/igf-forecast/page": "app/igf-forecast/page.js",

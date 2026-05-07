@@ -5543,6 +5543,13 @@ async function ensureActionRegisterTables(client) {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
   `).catch(() => {});
+  // Responsable normalizado a usuario (para dropdown y notificaciones).
+  await client
+    .query(`ALTER TABLE arr.action_register_items ADD COLUMN IF NOT EXISTS responsable_usuario_id INT NULL REFERENCES public.usuarios(id);`)
+    .catch(() => {});
+  // Tracking de notificación (Twilio).
+  await client.query(`ALTER TABLE arr.action_register_items ADD COLUMN IF NOT EXISTS twilio_sid_1 TEXT NULL;`).catch(() => {});
+  await client.query(`ALTER TABLE arr.action_register_items ADD COLUMN IF NOT EXISTS notify_error TEXT NULL;`).catch(() => {});
   await client.query(`
     CREATE TABLE IF NOT EXISTS arr.action_register_entries (
       id SERIAL PRIMARY KEY,
@@ -6066,6 +6073,75 @@ app.get("/api/action-register/board", dashboardAuthMiddleware, async (req, res) 
   }
 });
 
+/** Responsables disponibles para Action Register (solo usuarios activos asignados a la planta). */
+app.get("/api/action-register/responsables", dashboardAuthMiddleware, async (req, res) => {
+  const planta_id = req.query.planta_id != null ? parseInt(String(req.query.planta_id), 10) : null;
+  if (!planta_id || !Number.isFinite(planta_id)) return res.status(400).json({ error: "planta_id requerido" });
+  if (!assertDashboardPlantaAccessForActionRegister(req, planta_id)) return res.status(403).json({ error: "Sin acceso a esta planta" });
+  const client = await pool.connect();
+  try {
+    const equiv = dicfAccionesLib.getPlantaIdsEquivalentes(planta_id);
+    const r = await client.query(
+      `SELECT u.id,
+              COALESCE(NULLIF(TRIM(COALESCE(u.nombre_persona,'')), ''), u.nombre) AS nombre,
+              u.nombre AS puesto_nombre,
+              u.nombre_persona,
+              u.telefono,
+              u.planta_id,
+              COALESCE(NULLIF(TRIM(COALESCE(r.clave,'')), ''), '') AS rol_clave
+       FROM public.usuarios u
+       LEFT JOIN public.roles r ON r.id = u.rol_id
+       WHERE (u.activo IS NULL OR u.activo = true)
+         AND u.planta_id = ANY($1::int[])
+       ORDER BY COALESCE(NULLIF(TRIM(COALESCE(u.nombre_persona,'')), ''), u.nombre)`,
+      [equiv]
+    );
+    res.json({ usuarios: r.rows || [] });
+  } catch (e) {
+    console.error("[ActionRegister responsables]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+async function buildActionRegisterUrl(client, usuarioRow) {
+  if (!usuarioRow || usuarioRow.id == null) return "";
+  const rolClave = (usuarioRow.rol_clave && String(usuarioRow.rol_clave).toUpperCase()) || "";
+  const rolNom = (usuarioRow.rol_nombre && String(usuarioRow.rol_nombre)) || "";
+  const esZP = isDirectorZPForDashboard(rolClave, rolNom);
+  const normalizarParaAD = (s) => (s || "").toLowerCase().normalize("NFD").replace(/\p{M}/gu, "").replace(/[\s\u00a0]+/g, " ").trim();
+  const rolNormNombre = normalizarParaAD(rolNom);
+  const nombreUsuarioNorm = normalizarParaAD(usuarioRow.nombre || "");
+  const esAD =
+    rolClave === "AD" ||
+    (/asistente/.test(rolNormNombre) && /direccion/.test(rolNormNombre)) ||
+    (/asistente/.test(nombreUsuarioNorm) && /direccion/.test(nombreUsuarioNorm));
+  const esCFCDMX =
+    rolClave === "CF_CDMX" ||
+    (/contralor/.test(rolNormNombre) && /cdmx/.test(rolNormNombre)) ||
+    (/contralor/.test(nombreUsuarioNorm) && /cdmx/.test(nombreUsuarioNorm));
+  const esGA = rolClave === "GA";
+  const esGV = rolClave === "GV";
+  const role = esZP ? "ZP" : esAD ? "AD" : esCFCDMX ? "CF_CDMX" : esGA ? "GA" : esGV ? "GV" : "GG";
+  let plantasPermitidas = [];
+  if (esZP || esAD || esCFCDMX) {
+    const plantas = await getPlantas(client);
+    plantasPermitidas = (plantas || []).map((p) => p.id).filter(Number.isFinite);
+  } else if (usuarioRow.planta_id != null) {
+    plantasPermitidas = dicfAccionesLib.getPlantaIdsEquivalentes(usuarioRow.planta_id);
+  }
+  const tokenAR = createDashboardToken({
+    role,
+    actor_id: usuarioRow.id,
+    plantas_permitidas: plantasPermitidas,
+    default_filters: {},
+  });
+  const baseUrl = (process.env.DASHBOARD_URL || process.env.FRONTEND_URL || "").trim().replace(/\/$/, "");
+  if (!baseUrl) return "";
+  return `${baseUrl}/acciones?t=${encodeURIComponent(tokenAR)}`;
+}
+
 app.post("/api/action-register/items", dashboardAuthMiddleware, async (req, res) => {
   const body = req.body || {};
   const revision_id = body.revision_id != null ? parseInt(body.revision_id, 10) : null;
@@ -6073,7 +6149,11 @@ app.post("/api/action-register/items", dashboardAuthMiddleware, async (req, res)
   const tema = body.tema != null ? String(body.tema).trim() : "";
   const parent_id = body.parent_id != null && body.parent_id !== "" ? parseInt(body.parent_id, 10) : null;
   const title = body.title != null ? String(body.title).trim() : "";
-  const responsable = body.responsable != null ? String(body.responsable).trim() : "";
+  const responsable_usuario_id =
+    body.responsable_usuario_id != null && body.responsable_usuario_id !== ""
+      ? parseInt(body.responsable_usuario_id, 10)
+      : null;
+  let responsable = body.responsable != null ? String(body.responsable).trim() : "";
   const due_date = body.due_date != null && String(body.due_date).trim() !== "" ? String(body.due_date).trim() : null;
   if (!revision_id || !Number.isFinite(revision_id)) return res.status(400).json({ error: "revision_id requerido" });
   if (!planta_id || !Number.isFinite(planta_id)) return res.status(400).json({ error: "planta_id requerido" });
@@ -6087,6 +6167,26 @@ app.post("/api/action-register/items", dashboardAuthMiddleware, async (req, res)
     const rv = await client.query(`SELECT id, planta_id FROM arr.action_register_revisions WHERE id = $1`, [revision_id]);
     if (!rv.rows[0]) return res.status(404).json({ error: "revision no encontrada" });
     if (Number(rv.rows[0].planta_id) !== Number(planta_id)) return res.status(400).json({ error: "planta_id no coincide con la revision" });
+
+    let responsableUser = null;
+    if (responsable_usuario_id != null && Number.isFinite(responsable_usuario_id)) {
+      const equivPlantas = dicfAccionesLib.getPlantaIdsEquivalentes(planta_id);
+      const ru = await client.query(
+        `SELECT u.id, u.planta_id, u.telefono, u.nombre, u.nombre_persona,
+                COALESCE(NULLIF(TRIM(COALESCE(u.nombre_persona,'')), ''), u.nombre) AS nombre_mostrar,
+                r.clave AS rol_clave, r.nombre AS rol_nombre
+         FROM public.usuarios u
+         LEFT JOIN public.roles r ON r.id = u.rol_id
+         WHERE u.id = $1 AND (u.activo IS NULL OR u.activo = true)`,
+        [responsable_usuario_id]
+      );
+      responsableUser = ru.rows[0] || null;
+      if (!responsableUser) return res.status(400).json({ error: "Responsable no encontrado" });
+      if (responsableUser.planta_id == null || !equivPlantas.includes(Number(responsableUser.planta_id))) {
+        return res.status(400).json({ error: "El responsable no está asignado a esta planta" });
+      }
+      responsable = String(responsableUser.nombre_mostrar || "").trim();
+    }
 
     if (parent_id && Number.isFinite(parent_id)) {
       const pr = await client.query(`SELECT id, planta_id, tema FROM arr.action_register_items WHERE id = $1`, [parent_id]);
@@ -6105,10 +6205,10 @@ app.post("/api/action-register/items", dashboardAuthMiddleware, async (req, res)
     const position = (pos.rows[0] && parseInt(pos.rows[0].maxpos, 10)) >= 0 ? parseInt(pos.rows[0].maxpos, 10) + 1 : 0;
 
     const ins = await client.query(
-      `INSERT INTO arr.action_register_items (planta_id, tema, parent_id, title, responsable, due_date)
-       VALUES ($1, $2, $3, $4, $5, $6::DATE)
-       RETURNING id, planta_id, tema, parent_id, title, responsable, due_date, closed`,
-      [planta_id, tema, parent_id || null, title, responsable || "", due_date]
+      `INSERT INTO arr.action_register_items (planta_id, tema, parent_id, title, responsable, responsable_usuario_id, due_date)
+       VALUES ($1, $2, $3, $4, $5, $6, $7::DATE)
+       RETURNING id, planta_id, tema, parent_id, title, responsable, responsable_usuario_id, due_date, closed`,
+      [planta_id, tema, parent_id || null, title, responsable || "", responsableUser ? responsableUser.id : null, due_date]
     );
     const item = ins.rows[0];
     await client.query(
@@ -6117,7 +6217,24 @@ app.post("/api/action-register/items", dashboardAuthMiddleware, async (req, res)
        ON CONFLICT (revision_id, item_id) DO NOTHING`,
       [revision_id, item.id, position]
     );
-    res.status(201).json({ item: { ...item, position } });
+    let notif = null;
+    if (responsableUser && responsableUser.telefono) {
+      const link = await buildActionRegisterUrl(client, responsableUser);
+      const msg =
+        `📌 Nueva acción (Action Register)\n` +
+        `Planta: ${planta_id}\n` +
+        `Tema: ${tema}\n` +
+        `Acción: ${title}\n` +
+        (due_date ? `Compromiso: ${due_date}\n` : "") +
+        (link ? `\n🔗 Abrir Action Register (válido 20 h):\n${link}\n` : "");
+      const rSend = await sendWhatsApp(responsableUser.telefono, msg, { event: "action_register_new" });
+      notif = rSend.ok ? { ok: true } : { ok: false, error: rSend.error };
+      await client.query(
+        `UPDATE arr.action_register_items SET twilio_sid_1 = $2, notify_error = $3, updated_at = now() WHERE id = $1`,
+        [item.id, rSend.sid || null, rSend.ok ? null : String(rSend.error || "")]
+      );
+    }
+    res.status(201).json({ item: { ...item, position }, notificacion: notif });
   } catch (e) {
     console.error("[ActionRegister POST items]", e);
     res.status(500).json({ error: e.message });
@@ -6174,6 +6291,10 @@ app.patch("/api/action-register/items/:id", dashboardAuthMiddleware, async (req,
   const fields = {};
   if (body.title != null) fields.title = String(body.title).trim();
   if (body.responsable != null) fields.responsable = String(body.responsable).trim();
+  if (body.responsable_usuario_id !== undefined) {
+    fields.responsable_usuario_id =
+      body.responsable_usuario_id == null || body.responsable_usuario_id === "" ? null : parseInt(body.responsable_usuario_id, 10);
+  }
   if (body.due_date !== undefined) fields.due_date = body.due_date ? String(body.due_date).trim() : null;
   if (body.closed !== undefined) fields.closed = body.closed === true || body.closed === "true";
 
@@ -6197,6 +6318,34 @@ app.patch("/api/action-register/items/:id", dashboardAuthMiddleware, async (req,
       sets.push(`responsable = $${idx++}`);
       params.push(fields.responsable);
     }
+    if (fields.responsable_usuario_id !== undefined) {
+      // Valida que el responsable pertenezca a la planta del item.
+      if (fields.responsable_usuario_id == null) {
+        sets.push(`responsable_usuario_id = NULL`);
+      } else {
+        if (!Number.isFinite(fields.responsable_usuario_id)) return res.status(400).json({ error: "responsable_usuario_id inválido" });
+        const equivPlantas = dicfAccionesLib.getPlantaIdsEquivalentes(planta_id);
+        const ru = await client.query(
+          `SELECT u.id, u.planta_id,
+                  COALESCE(NULLIF(TRIM(COALESCE(u.nombre_persona,'')), ''), u.nombre) AS nombre_mostrar
+           FROM public.usuarios u
+           WHERE u.id = $1 AND (u.activo IS NULL OR u.activo = true)`,
+          [fields.responsable_usuario_id]
+        );
+        const responsableUser = ru.rows[0] || null;
+        if (!responsableUser) return res.status(400).json({ error: "Responsable no encontrado" });
+        if (responsableUser.planta_id == null || !equivPlantas.includes(Number(responsableUser.planta_id))) {
+          return res.status(400).json({ error: "El responsable no está asignado a esta planta" });
+        }
+        sets.push(`responsable_usuario_id = $${idx++}`);
+        params.push(responsableUser.id);
+        // Si no mandaron string, normaliza el display al nombre de usuario.
+        if (fields.responsable == null) {
+          sets.push(`responsable = $${idx++}`);
+          params.push(String(responsableUser.nombre_mostrar || "").trim());
+        }
+      }
+    }
     if (fields.due_date !== undefined) {
       if (fields.due_date && !/^\d{4}-\d{2}-\d{2}$/.test(fields.due_date)) return res.status(400).json({ error: "due_date inválida (YYYY-MM-DD)" });
       sets.push(`due_date = $${idx++}::DATE`);
@@ -6209,7 +6358,7 @@ app.patch("/api/action-register/items/:id", dashboardAuthMiddleware, async (req,
     if (!sets.length) return res.json({ ok: true });
     sets.push(`updated_at = now()`);
     params.push(id);
-    const q = `UPDATE arr.action_register_items SET ${sets.join(", ")} WHERE id = $${idx} RETURNING id, planta_id, tema, parent_id, title, responsable, due_date, closed`;
+    const q = `UPDATE arr.action_register_items SET ${sets.join(", ")} WHERE id = $${idx} RETURNING id, planta_id, tema, parent_id, title, responsable, responsable_usuario_id, due_date, closed`;
     const up = await client.query(q, params);
     res.json({ item: up.rows[0] });
   } catch (e) {

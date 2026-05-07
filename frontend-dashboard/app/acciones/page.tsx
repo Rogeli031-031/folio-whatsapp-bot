@@ -11,6 +11,7 @@ import {
 import {
   fetchPlantas,
   fetchActionRegisterBoard,
+  fetchActionRegisterResponsables,
   createActionRegisterRevision,
   createActionRegisterItem,
   addActionRegisterEntry,
@@ -97,6 +98,7 @@ function ActionRegisterContent() {
 
   const [plantas, setPlantas] = useState<{ id: number; nombre: string }[]>([]);
   const [plantaId, setPlantaId] = useState<number | null>(null);
+  const [responsables, setResponsables] = useState<Array<{ id: number; nombre: string; rol_clave?: string }>>([]);
 
   const [board, setBoard] = useState<ActionRegisterBoardResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -104,10 +106,10 @@ function ActionRegisterContent() {
 
   const [newRevisionDate, setNewRevisionDate] = useState<string>(ymdToday());
 
-  const [draftByCell, setDraftByCell] = useState<Record<string, { title: string; responsable: string; due_date: string }>>({});
-  const [draftSubByItem, setDraftSubByItem] = useState<Record<string, { title: string; responsable: string; due_date: string }>>({});
+  const [draftByCell, setDraftByCell] = useState<Record<string, { title: string; responsable_id: number | ""; due_date: string }>>({});
+  const [draftSubByItem, setDraftSubByItem] = useState<Record<string, { title: string; responsable_id: number | ""; due_date: string }>>({});
   const [pickExistingByCell, setPickExistingByCell] = useState<Record<string, number | "">>({});
-  const [editItemById, setEditItemById] = useState<Record<number, { title: string; responsable: string; due_date: string }>>({});
+  const [editItemById, setEditItemById] = useState<Record<number, { title: string; responsable_id: number | ""; due_date: string }>>({});
   const [itemSavingById, setItemSavingById] = useState<Record<number, boolean>>({});
 
   const [photosByItem, setPhotosByItem] = useState<Record<number, (ActionRegisterAttachment | DicfAttachment)[]>>({});
@@ -184,6 +186,20 @@ function ActionRegisterContent() {
   useEffect(() => {
     void loadBoard();
   }, [loadBoard]);
+
+  const loadResponsables = useCallback(async () => {
+    if (!token || !plantaId) return;
+    try {
+      const r = await fetchActionRegisterResponsables(token, plantaId);
+      setResponsables((r.usuarios || []).map((u) => ({ id: u.id, nombre: u.nombre, rol_clave: u.rol_clave })));
+    } catch {
+      setResponsables([]);
+    }
+  }, [token, plantaId]);
+
+  useEffect(() => {
+    void loadResponsables();
+  }, [loadResponsables]);
 
   const handleAddNote = useCallback(
     async (revisionId: number) => {
@@ -406,8 +422,8 @@ function ActionRegisterContent() {
     async (revision_id: number, tema: ActionRegisterTema) => {
       if (!token || !plantaId) return;
       const key = `${revision_id}|${tema}`;
-      const d = draftByCell[key] || { title: "", responsable: "", due_date: "" };
-      if (!d.title.trim()) return;
+      const d = draftByCell[key] || { title: "", responsable_id: "", due_date: "" };
+      if (!d.title.trim() || d.responsable_id === "") return;
       setError(null);
       try {
         await createActionRegisterItem(token, {
@@ -415,10 +431,10 @@ function ActionRegisterContent() {
           revision_id,
           tema,
           title: d.title,
-          responsable: d.responsable,
+          responsable_usuario_id: Number(d.responsable_id),
           due_date: d.due_date || null,
         });
-        setDraftByCell((prev) => ({ ...prev, [key]: { title: "", responsable: "", due_date: "" } }));
+        setDraftByCell((prev) => ({ ...prev, [key]: { title: "", responsable_id: "", due_date: "" } }));
         await loadBoard();
       } catch (e: unknown) {
         setError(e instanceof Error ? e.message : "Error");
@@ -431,8 +447,8 @@ function ActionRegisterContent() {
     async (revision_id: number, tema: ActionRegisterTema, parent_id: number) => {
       if (!token || !plantaId) return;
       const key = `${revision_id}|${parent_id}`;
-      const d = draftSubByItem[key] || { title: "", responsable: "", due_date: "" };
-      if (!d.title.trim()) return;
+      const d = draftSubByItem[key] || { title: "", responsable_id: "", due_date: "" };
+      if (!d.title.trim() || d.responsable_id === "") return;
       setError(null);
       try {
         await createActionRegisterItem(token, {
@@ -441,10 +457,10 @@ function ActionRegisterContent() {
           tema,
           parent_id,
           title: d.title,
-          responsable: d.responsable,
+          responsable_usuario_id: Number(d.responsable_id),
           due_date: d.due_date || null,
         });
-        setDraftSubByItem((prev) => ({ ...prev, [key]: { title: "", responsable: "", due_date: "" } }));
+        setDraftSubByItem((prev) => ({ ...prev, [key]: { title: "", responsable_id: "", due_date: "" } }));
         await loadBoard();
       } catch (e: unknown) {
         setError(e instanceof Error ? e.message : "Error");
@@ -473,7 +489,7 @@ function ActionRegisterContent() {
       ...s,
       [it.id]: {
         title: String(it.title || ""),
-        responsable: String(it.responsable || ""),
+        responsable_id: it.responsable_usuario_id != null ? Number(it.responsable_usuario_id) : "",
         due_date: it.due_date ? String(it.due_date).slice(0, 10) : "",
       },
     }));
@@ -494,11 +510,12 @@ function ActionRegisterContent() {
       if (!draft) return;
       const title = (draft.title || "").trim();
       if (title.length < 2) return;
+      if (draft.responsable_id === "") return;
       setItemSavingById((s) => ({ ...s, [itemId]: true }));
       try {
         await patchActionRegisterItem(token, itemId, {
           title,
-          responsable: (draft.responsable || "").trim(),
+          responsable_usuario_id: Number(draft.responsable_id),
           due_date: draft.due_date ? draft.due_date : null,
         });
         handleCancelEditItem(itemId);
@@ -1136,7 +1153,7 @@ function ActionRegisterContent() {
                   const items = (cells[rid] && (cells[rid][tema] as ActionRegisterItem[])) || [];
                   const { roots, children } = buildTree(items);
                   const cellKey = `${rev.id}|${tema}`;
-                  const draft = draftByCell[cellKey] || { title: "", responsable: "", due_date: "" };
+                  const draft = draftByCell[cellKey] || { title: "", responsable_id: "", due_date: "" };
                   const existingKey = cellKey;
                   const chosenExisting = pickExistingByCell[existingKey] ?? "";
                   const currentIds = new Set(items.map((x) => x.id));
@@ -1147,7 +1164,7 @@ function ActionRegisterContent() {
                   const renderItem = (it: ActionRegisterItem, n: string, depth: number) => {
                     const sub = (children[it.id] || []).sort((a, b) => (a.position ?? 0) - (b.position ?? 0) || a.id - b.id);
                     const subDraftKey = `${rev.id}|${it.id}`;
-                    const subDraft = draftSubByItem[subDraftKey] || { title: "", responsable: "", due_date: "" };
+                    const subDraft = draftSubByItem[subDraftKey] || { title: "", responsable_id: "", due_date: "" };
                     const closedCls = it.closed ? "line-through text-slate-500" : "text-slate-100";
                     const photoInputId = `photo-input-${rev.id}-${it.id}`;
                     const photosOpen = photosOpenByItem[it.id] === true;
@@ -1334,12 +1351,25 @@ function ActionRegisterContent() {
                                 <>
                                   <span className="rounded bg-slate-800 px-2 py-0.5 text-slate-200 inline-flex items-center gap-1">
                                     Resp:
-                                    <input
-                                      value={edit.responsable}
-                                      onChange={(e) => setEditItemById((s) => ({ ...s, [it.id]: { ...edit, responsable: e.target.value } }))}
-                                      className="ml-1 w-40 rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-slate-200"
+                                    <select
+                                      value={edit.responsable_id}
+                                      onChange={(e) =>
+                                        setEditItemById((s) => ({
+                                          ...s,
+                                          [it.id]: { ...edit, responsable_id: e.target.value ? Number(e.target.value) : "" },
+                                        }))
+                                      }
+                                      className="ml-1 w-44 rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-slate-200"
                                       disabled={savingEdit}
-                                    />
+                                    >
+                                      <option value="">— Elegir —</option>
+                                      {responsables.map((u) => (
+                                        <option key={u.id} value={u.id}>
+                                          {u.nombre}
+                                          {u.rol_clave ? ` (${u.rol_clave})` : ""}
+                                        </option>
+                                      ))}
+                                    </select>
                                   </span>
                                   <span className="rounded bg-slate-800 px-2 py-0.5 text-slate-200 inline-flex items-center gap-1">
                                     Compromiso:
@@ -1474,14 +1504,24 @@ function ActionRegisterContent() {
                               placeholder="Subacción…"
                               className="flex-1 min-w-[180px] rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-slate-200 placeholder:text-slate-600"
                             />
-                            <input
-                              value={subDraft.responsable}
+                            <select
+                              value={subDraft.responsable_id}
                               onChange={(e) =>
-                                setDraftSubByItem((p) => ({ ...p, [subDraftKey]: { ...subDraft, responsable: e.target.value } }))
+                                setDraftSubByItem((p) => ({
+                                  ...p,
+                                  [subDraftKey]: { ...subDraft, responsable_id: e.target.value ? Number(e.target.value) : "" },
+                                }))
                               }
-                              placeholder="Responsable"
-                              className="w-36 rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-slate-200 placeholder:text-slate-600"
-                            />
+                              className="w-44 rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-slate-200"
+                            >
+                              <option value="">Responsable…</option>
+                              {responsables.map((u) => (
+                                <option key={u.id} value={u.id}>
+                                  {u.nombre}
+                                  {u.rol_clave ? ` (${u.rol_clave})` : ""}
+                                </option>
+                              ))}
+                            </select>
                             <input
                               type="date"
                               value={subDraft.due_date}
@@ -1522,14 +1562,24 @@ function ActionRegisterContent() {
                               placeholder="Acción principal…"
                               className="flex-1 min-w-[200px] rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-slate-200 placeholder:text-slate-600"
                             />
-                            <input
-                              value={draft.responsable}
+                            <select
+                              value={draft.responsable_id}
                               onChange={(e) =>
-                                setDraftByCell((p) => ({ ...p, [cellKey]: { ...draft, responsable: e.target.value } }))
+                                setDraftByCell((p) => ({
+                                  ...p,
+                                  [cellKey]: { ...draft, responsable_id: e.target.value ? Number(e.target.value) : "" },
+                                }))
                               }
-                              placeholder="Responsable"
-                              className="w-36 rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-slate-200 placeholder:text-slate-600"
-                            />
+                              className="w-44 rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-slate-200"
+                            >
+                              <option value="">Responsable…</option>
+                              {responsables.map((u) => (
+                                <option key={u.id} value={u.id}>
+                                  {u.nombre}
+                                  {u.rol_clave ? ` (${u.rol_clave})` : ""}
+                                </option>
+                              ))}
+                            </select>
                             <input
                               type="date"
                               value={draft.due_date}
