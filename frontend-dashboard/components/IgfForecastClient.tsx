@@ -182,6 +182,13 @@ export function IgfForecastContent() {
     return `/arr?${q.toString()}`;
   }, [token, uploadDay]);
 
+  /** Consola Gas Uber (HTML estático en backend-api). Sobrescribir con NEXT_PUBLIC_GAS_UBER_CONSOLA_URL si cambia el host. */
+  const gasUberConsolaUrl =
+    typeof process.env.NEXT_PUBLIC_GAS_UBER_CONSOLA_URL === "string" &&
+    process.env.NEXT_PUBLIC_GAS_UBER_CONSOLA_URL.trim()
+      ? process.env.NEXT_PUBLIC_GAS_UBER_CONSOLA_URL.trim()
+      : "https://gasuber-backend-api.onrender.com/consola/";
+
   const isGAPageBlocked = token ? getRoleFromDashboardToken(token) === "GA" : false;
   const isGVPageBlocked = token ? getRoleFromDashboardToken(token) === "GV" : false;
 
@@ -663,6 +670,14 @@ export function IgfForecastContent() {
         >
           ARR
         </Link>
+        <a
+          href={gasUberConsolaUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 rounded border border-cyan-600/80 bg-slate-900 px-4 py-2 text-sm font-medium text-cyan-200 hover:bg-slate-800 hover:border-cyan-500"
+        >
+          Consola Gas Uber
+        </a>
       </div>
       <main className={plantaFilter ? "flex-1 p-4 flex flex-col" : "flex-1 p-4"}>
         <section className={`rounded-lg border border-slate-700 bg-slate-800/60 p-4 ${plantaFilter ? "flex-shrink-0" : ""}`}>
