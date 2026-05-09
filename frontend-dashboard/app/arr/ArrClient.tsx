@@ -50,6 +50,53 @@ type ClientesMonthData = {
   rows: ArrClienteMesRow[];
 };
 
+/** Query `?arr_plan=1`: misma UI que ARR con caches independientes para escenarios manuales. */
+const ARR_PLAN_QUERY = "arr_plan";
+
+type ArrWorkspaceId = "base" | "plan";
+
+type ArrWorkspaceSlice = {
+  selA: string;
+  selB: string;
+  dataByKey: Record<string, IgfMonthData>;
+  loadingKeys: Set<string>;
+  errorByKey: Record<string, string>;
+  clientesByKey: Record<string, ClientesMonthData>;
+  clientesLoadingKeys: Set<string>;
+  clientesErrorByKey: Record<string, string>;
+};
+
+function emptyArrWorkspaceSlice(): ArrWorkspaceSlice {
+  return {
+    selA: "",
+    selB: "",
+    dataByKey: {},
+    loadingKeys: new Set(),
+    errorByKey: {},
+    clientesByKey: {},
+    clientesLoadingKeys: new Set(),
+    clientesErrorByKey: {},
+  };
+}
+
+/** Inicializa selectores de mes cuando aún no hay selección (ARR y ARR Plan por separado). */
+function pickInitialSels(
+  sorted: IgfPeriodo[],
+  selA: string,
+  selB: string
+): { selA: string; selB: string } | null {
+  if (sorted.length >= 2 && !selA && !selB) {
+    return {
+      selA: periodoKey(sorted[sorted.length - 2].year, sorted[sorted.length - 2].month),
+      selB: periodoKey(sorted[sorted.length - 1].year, sorted[sorted.length - 1].month),
+    };
+  }
+  if (sorted.length === 1 && !selA) {
+    return { selA: periodoKey(sorted[0].year, sorted[0].month), selB };
+  }
+  return null;
+}
+
 type RowValues = {
   operativos: number | null;
   corporativos: number | null;
@@ -295,23 +342,49 @@ export default function ArrClient() {
     dashboardRole === "AD";
   const uploadDayFromUrl = (searchParams?.get("upload_day") ?? "").trim().slice(0, 10);
   const backHref = token ? `/igf-forecast?t=${encodeURIComponent(token)}` : "/igf-forecast";
+  const isArrPlanRoute = (searchParams?.get(ARR_PLAN_QUERY) ?? "") === "1";
 
   const lastUploadByYmRef = useRef<Record<string, string>>({});
 
   const [periodos, setPeriodos] = useState<IgfPeriodo[]>([]);
   const [periodosError, setPeriodosError] = useState<string | null>(null);
-  const [selA, setSelA] = useState<string>("");
-  const [selB, setSelB] = useState<string>("");
-  const [dataByKey, setDataByKey] = useState<Record<string, IgfMonthData>>({});
-  const [loadingKeys, setLoadingKeys] = useState<Set<string>>(new Set());
-  const [errorByKey, setErrorByKey] = useState<Record<string, string>>({});
-
-  // Clientes por (empresa, mes) — clave: `${empresa}|${year-month}`
-  const [clientesByKey, setClientesByKey] = useState<Record<string, ClientesMonthData>>({});
-  const [clientesLoadingKeys, setClientesLoadingKeys] = useState<Set<string>>(new Set());
-  const [clientesErrorByKey, setClientesErrorByKey] = useState<Record<string, string>>({});
+  const [wsBase, setWsBase] = useState<ArrWorkspaceSlice>(() => emptyArrWorkspaceSlice());
+  const [wsPlan, setWsPlan] = useState<ArrWorkspaceSlice>(() => emptyArrWorkspaceSlice());
   const [dicfModalCliente, setDicfModalCliente] = useState<string | null>(null);
   const [showSimular, setShowSimular] = useState(false);
+
+  const ws = isArrPlanRoute ? wsPlan : wsBase;
+  const dataByKey = ws.dataByKey;
+  const loadingKeys = ws.loadingKeys;
+  const errorByKey = ws.errorByKey;
+  const selA = ws.selA;
+  const selB = ws.selB;
+  const clientesByKey = ws.clientesByKey;
+  const clientesLoadingKeys = ws.clientesLoadingKeys;
+  const clientesErrorByKey = ws.clientesErrorByKey;
+
+  const setSelAUi = useCallback(
+    (v: string) => {
+      if (isArrPlanRoute) setWsPlan((s) => ({ ...s, selA: v }));
+      else setWsBase((s) => ({ ...s, selA: v }));
+    },
+    [isArrPlanRoute]
+  );
+  const setSelBUi = useCallback(
+    (v: string) => {
+      if (isArrPlanRoute) setWsPlan((s) => ({ ...s, selB: v }));
+      else setWsBase((s) => ({ ...s, selB: v }));
+    },
+    [isArrPlanRoute]
+  );
+
+  const toggleArrPlanHref = useMemo(() => {
+    const params = new URLSearchParams(searchParams?.toString() ?? "");
+    if (isArrPlanRoute) params.delete(ARR_PLAN_QUERY);
+    else params.set(ARR_PLAN_QUERY, "1");
+    const qs = params.toString();
+    return qs ? `/arr?${qs}` : "/arr";
+  }, [searchParams, isArrPlanRoute]);
 
   const handleEmpresaChange = useCallback(
     (next: string) => {
@@ -355,12 +428,8 @@ export default function ArrClient() {
 
   useEffect(() => {
     if (!token) return;
-    setDataByKey({});
-    setErrorByKey({});
-    setLoadingKeys(new Set());
-    setClientesByKey({});
-    setClientesErrorByKey({});
-    setClientesLoadingKeys(new Set());
+    setWsBase(emptyArrWorkspaceSlice());
+    setWsPlan(emptyArrWorkspaceSlice());
     lastUploadByYmRef.current = {};
   }, [token, uploadDayFromUrl]);
 
@@ -377,12 +446,14 @@ export default function ArrClient() {
           return a.month - b.month;
         });
         setPeriodos(sorted);
-        if (sorted.length >= 2 && !selA && !selB) {
-          setSelA(periodoKey(sorted[sorted.length - 2].year, sorted[sorted.length - 2].month));
-          setSelB(periodoKey(sorted[sorted.length - 1].year, sorted[sorted.length - 1].month));
-        } else if (sorted.length === 1 && !selA) {
-          setSelA(periodoKey(sorted[0].year, sorted[0].month));
-        }
+        setWsBase((s) => {
+          const n = pickInitialSels(sorted, s.selA, s.selB);
+          return n ? { ...s, ...n } : s;
+        });
+        setWsPlan((s) => {
+          const n = pickInitialSels(sorted, s.selA, s.selB);
+          return n ? { ...s, ...n } : s;
+        });
       } catch (e) {
         if (cancelled) return;
         setPeriodosError(e instanceof Error ? e.message : String(e));
@@ -394,19 +465,21 @@ export default function ArrClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
-  // Carga IGF Forecast (con mini) para una clave year-month si aún no está cacheada.
+  // Carga IGF Forecast (con mini) para una clave year-month si aún no está cacheada (por espacio ARR / ARR Plan).
   const ensureMonthLoaded = useCallback(
-    async (key: string) => {
+    async (key: string, target: ArrWorkspaceId) => {
       if (!token || !key) return;
-      if (dataByKey[key] || loadingKeys.has(key)) return;
+      const slice = target === "plan" ? wsPlan : wsBase;
+      if (slice.dataByKey[key] || slice.loadingKeys.has(key)) return;
+      const setSlice = target === "plan" ? setWsPlan : setWsBase;
       const [yStr, mStr] = key.split("-");
       const year = parseInt(yStr, 10);
       const month = parseInt(mStr, 10);
       if (!Number.isFinite(year) || !Number.isFinite(month)) return;
-      setLoadingKeys((prev) => {
-        const next = new Set(prev);
+      setSlice((prev) => {
+        const next = new Set(prev.loadingKeys);
         next.add(key);
-        return next;
+        return { ...prev, loadingKeys: next };
       });
       try {
         const uploadDay = await resolveUploadDayForMonth(year, month);
@@ -417,55 +490,74 @@ export default function ArrClient() {
           ...(uploadDay ? { upload_day: uploadDay } : {}),
         });
         const miniRows = resp.mini?.rows ?? [];
-        setDataByKey((prev) => ({
+        setSlice((prev) => ({
           ...prev,
-          [key]: { rows: resp.rows ?? [], miniRows },
+          dataByKey: {
+            ...prev.dataByKey,
+            [key]: { rows: resp.rows ?? [], miniRows },
+          },
+          errorByKey: (() => {
+            if (!prev.errorByKey[key]) return prev.errorByKey;
+            const next = { ...prev.errorByKey };
+            delete next[key];
+            return next;
+          })(),
         }));
-        setErrorByKey((prev) => {
-          if (!prev[key]) return prev;
-          const next = { ...prev };
-          delete next[key];
-          return next;
-        });
       } catch (e) {
-        setErrorByKey((prev) => ({
+        setSlice((prev) => ({
           ...prev,
-          [key]: e instanceof Error ? e.message : String(e),
+          errorByKey: {
+            ...prev.errorByKey,
+            [key]: e instanceof Error ? e.message : String(e),
+          },
         }));
       } finally {
-        setLoadingKeys((prev) => {
-          const next = new Set(prev);
+        setSlice((prev) => {
+          const next = new Set(prev.loadingKeys);
           next.delete(key);
-          return next;
+          return { ...prev, loadingKeys: next };
         });
       }
     },
-    [token, dataByKey, loadingKeys, resolveUploadDayForMonth]
+    [token, wsBase, wsPlan, resolveUploadDayForMonth]
   );
 
   useEffect(() => {
-    if (selA) void ensureMonthLoaded(selA);
-  }, [selA, ensureMonthLoaded]);
+    if (wsBase.selA) void ensureMonthLoaded(wsBase.selA, "base");
+  }, [wsBase.selA, ensureMonthLoaded]);
   useEffect(() => {
-    if (selB) void ensureMonthLoaded(selB);
-  }, [selB, ensureMonthLoaded]);
+    if (wsBase.selB) void ensureMonthLoaded(wsBase.selB, "base");
+  }, [wsBase.selB, ensureMonthLoaded]);
+  useEffect(() => {
+    if (wsPlan.selA) void ensureMonthLoaded(wsPlan.selA, "plan");
+  }, [wsPlan.selA, ensureMonthLoaded]);
+  useEffect(() => {
+    if (wsPlan.selB) void ensureMonthLoaded(wsPlan.selB, "plan");
+  }, [wsPlan.selB, ensureMonthLoaded]);
 
-  // Carga lista de clientes para (empresa, mes) si aún no está cacheada.
+  // Carga lista de clientes para (empresa, mes) si aún no está cacheada (por espacio ARR / ARR Plan).
   const ensureClientesLoaded = useCallback(
-    async (empresaLabel: string, periodo: string, data: IgfMonthData | undefined) => {
+    async (
+      empresaLabel: string,
+      periodo: string,
+      data: IgfMonthData | undefined,
+      target: ArrWorkspaceId
+    ) => {
       if (!token || !empresaLabel || !periodo) return;
+      const slice = target === "plan" ? wsPlan : wsBase;
       const cacheKey = clientesCacheKey(empresaLabel, periodo, data);
-      if (clientesByKey[cacheKey] || clientesLoadingKeys.has(cacheKey)) return;
+      if (slice.clientesByKey[cacheKey] || slice.clientesLoadingKeys.has(cacheKey)) return;
+      const setSlice = target === "plan" ? setWsPlan : setWsBase;
       const [yStr, mStr] = periodo.split("-");
       const year = parseInt(yStr, 10);
       const month = parseInt(mStr, 10);
       if (!Number.isFinite(year) || !Number.isFinite(month)) return;
       const hist = mesHistorico(year, month);
       const targetKg = targetKgDesdeIgfTon(data, empresaLabel, hist);
-      setClientesLoadingKeys((prev) => {
-        const next = new Set(prev);
+      setSlice((prev) => {
+        const next = new Set(prev.clientesLoadingKeys);
         next.add(cacheKey);
-        return next;
+        return { ...prev, clientesLoadingKeys: next };
       });
       try {
         const resp = await fetchArrClientesMes(token, {
@@ -474,38 +566,54 @@ export default function ArrClient() {
           empresa: empresaLabel,
           ...(targetKg != null && targetKg > 0 ? { target_kg: targetKg } : {}),
         });
-        setClientesByKey((prev) => ({
+        setSlice((prev) => ({
           ...prev,
-          [cacheKey]: { historico: resp.historico, rows: resp.rows || [] },
+          clientesByKey: {
+            ...prev.clientesByKey,
+            [cacheKey]: { historico: resp.historico, rows: resp.rows || [] },
+          },
+          clientesErrorByKey: (() => {
+            if (!prev.clientesErrorByKey[cacheKey]) return prev.clientesErrorByKey;
+            const next = { ...prev.clientesErrorByKey };
+            delete next[cacheKey];
+            return next;
+          })(),
         }));
-        setClientesErrorByKey((prev) => {
-          if (!prev[cacheKey]) return prev;
-          const next = { ...prev };
-          delete next[cacheKey];
-          return next;
-        });
       } catch (e) {
-        setClientesErrorByKey((prev) => ({
+        setSlice((prev) => ({
           ...prev,
-          [cacheKey]: e instanceof Error ? e.message : String(e),
+          clientesErrorByKey: {
+            ...prev.clientesErrorByKey,
+            [cacheKey]: e instanceof Error ? e.message : String(e),
+          },
         }));
       } finally {
-        setClientesLoadingKeys((prev) => {
-          const next = new Set(prev);
+        setSlice((prev) => {
+          const next = new Set(prev.clientesLoadingKeys);
           next.delete(cacheKey);
-          return next;
+          return { ...prev, clientesLoadingKeys: next };
         });
       }
     },
-    [token, clientesByKey, clientesLoadingKeys]
+    [token, wsBase, wsPlan]
   );
 
   useEffect(() => {
-    if (empresa && selA) void ensureClientesLoaded(empresa, selA, dataByKey[selA]);
-  }, [empresa, selA, dataByKey[selA], ensureClientesLoaded]);
+    if (empresa && wsBase.selA)
+      void ensureClientesLoaded(empresa, wsBase.selA, wsBase.dataByKey[wsBase.selA], "base");
+  }, [empresa, wsBase.selA, wsBase.dataByKey[wsBase.selA], ensureClientesLoaded]);
   useEffect(() => {
-    if (empresa && selB) void ensureClientesLoaded(empresa, selB, dataByKey[selB]);
-  }, [empresa, selB, dataByKey[selB], ensureClientesLoaded]);
+    if (empresa && wsBase.selB)
+      void ensureClientesLoaded(empresa, wsBase.selB, wsBase.dataByKey[wsBase.selB], "base");
+  }, [empresa, wsBase.selB, wsBase.dataByKey[wsBase.selB], ensureClientesLoaded]);
+  useEffect(() => {
+    if (empresa && wsPlan.selA)
+      void ensureClientesLoaded(empresa, wsPlan.selA, wsPlan.dataByKey[wsPlan.selA], "plan");
+  }, [empresa, wsPlan.selA, wsPlan.dataByKey[wsPlan.selA], ensureClientesLoaded]);
+  useEffect(() => {
+    if (empresa && wsPlan.selB)
+      void ensureClientesLoaded(empresa, wsPlan.selB, wsPlan.dataByKey[wsPlan.selB], "plan");
+  }, [empresa, wsPlan.selB, wsPlan.dataByKey[wsPlan.selB], ensureClientesLoaded]);
 
   const rowA = useMemo(() => computeRowValues(dataByKey[selA], empresa), [dataByKey, selA, empresa]);
   const rowB = useMemo(() => computeRowValues(dataByKey[selB], empresa), [dataByKey, selB, empresa]);
@@ -881,7 +989,19 @@ export default function ArrClient() {
           >
             ← IGF Forecast
           </Link>
-          <h1 className="text-lg font-semibold text-slate-100">IGF Forecast ARR</h1>
+          <h1 className="text-lg font-semibold text-slate-100">
+            IGF Forecast ARR{isArrPlanRoute ? " · Plan" : ""}
+          </h1>
+          <Link
+            href={toggleArrPlanHref}
+            className={`rounded border px-3 py-1.5 text-xs font-medium ${
+              isArrPlanRoute
+                ? "border-amber-500/70 bg-amber-950/40 text-amber-100 hover:bg-amber-900/35"
+                : "border-violet-500/60 bg-violet-950/35 text-violet-100 hover:bg-violet-900/35"
+            }`}
+          >
+            {isArrPlanRoute ? "Volver a ARR" : "ARR Plan"}
+          </Link>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
@@ -1009,8 +1129,8 @@ export default function ArrClient() {
             </thead>
             <tbody>
               {[
-                { sel: selA, set: setSelA, vals: rowA, key: "A" as const },
-                { sel: selB, set: setSelB, vals: rowB, key: "B" as const },
+                { sel: selA, set: setSelAUi, vals: rowA, key: "A" as const },
+                { sel: selB, set: setSelBUi, vals: rowB, key: "B" as const },
               ].map(({ sel, set, vals, key }) => {
                 const m = resumenMesMetrics(vals);
                 const rentabUi =

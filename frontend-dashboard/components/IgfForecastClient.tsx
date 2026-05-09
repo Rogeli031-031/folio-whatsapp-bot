@@ -182,6 +182,18 @@ export function IgfForecastContent() {
     return `/arr?${q.toString()}`;
   }, [token, uploadDay]);
 
+  /** Misma vista ARR con caches React separados (`wsPlan` en ArrClient) para escenarios manuales. */
+  const arrPlanPageHref = useMemo(() => {
+    if (!token) return "/arr?arr_plan=1";
+    const q = new URLSearchParams();
+    q.set("t", token);
+    q.set("back", "1");
+    q.set("arr_plan", "1");
+    const up = uploadDay.trim();
+    if (up && /^\d{4}-\d{2}-\d{2}$/.test(up)) q.set("upload_day", up);
+    return `/arr?${q.toString()}`;
+  }, [token, uploadDay]);
+
   /** Consola Gas Uber (HTML estático en backend-api). Sobrescribir con NEXT_PUBLIC_GAS_UBER_CONSOLA_URL si cambia el host. */
   const gasUberConsolaUrl =
     typeof process.env.NEXT_PUBLIC_GAS_UBER_CONSOLA_URL === "string" &&
@@ -669,6 +681,12 @@ export function IgfForecastContent() {
           className="inline-flex items-center gap-2 rounded bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-500"
         >
           ARR
+        </Link>
+        <Link
+          href={arrPlanPageHref}
+          className="inline-flex items-center gap-2 rounded border border-violet-500/70 bg-violet-950/50 px-4 py-2 text-sm font-medium text-violet-100 hover:bg-violet-900/45"
+        >
+          ARR Plan
         </Link>
         <a
           href={gasUberConsolaUrl}
