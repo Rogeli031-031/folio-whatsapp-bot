@@ -165,11 +165,11 @@ export async function downloadArrDashboardExcel(opts: ArrExportOptions): Promise
   const headerLabels = [
     "Mes",
     "Venta",
+    "Margen",
     "Descuento",
     "Operativos",
     "Corporativos",
     "Gasto",
-    "Margen",
     "HG",
     "HG$",
     "Impuestos",
@@ -189,16 +189,16 @@ export async function downloadArrDashboardExcel(opts: ArrExportOptions): Promise
     row.getCell(1).value = label;
     row.getCell(2).value = cellNum(m.ventaTon);
     row.getCell(2).numFmt = "#,##0";
-    row.getCell(3).value = cellNum(m.descuentoSigned);
+    row.getCell(3).value = cellNum(m.margenKg);
     row.getCell(3).numFmt = "#,##0.00";
-    row.getCell(4).value = cellNum(m.operativos);
-    row.getCell(4).numFmt = '"$" #,##0';
-    row.getCell(5).value = cellNum(m.corporativos);
+    row.getCell(4).value = cellNum(m.descuentoSigned);
+    row.getCell(4).numFmt = "#,##0.00";
+    row.getCell(5).value = cellNum(m.operativos);
     row.getCell(5).numFmt = '"$" #,##0';
-    row.getCell(6).value = cellNum(m.gastoImporte);
-    row.getCell(6).numFmt = "#,##0";
-    row.getCell(7).value = cellNum(m.margenKg);
-    row.getCell(7).numFmt = "#,##0.00";
+    row.getCell(6).value = cellNum(m.corporativos);
+    row.getCell(6).numFmt = '"$" #,##0';
+    row.getCell(7).value = cellNum(m.gastoImporte);
+    row.getCell(7).numFmt = "#,##0";
     row.getCell(8).value = cellNum(m.hgDisplay);
     row.getCell(8).numFmt = "#,##0.00";
     row.getCell(9).value = cellNum(m.hgDinero);
@@ -238,8 +238,8 @@ export async function downloadArrDashboardExcel(opts: ArrExportOptions): Promise
       }
       const letter = ws.getColumn(c).letter;
       compRow.getCell(c).value = { formula: `${letter}${MES_B_R}-${letter}${MES_A_R}` };
-      if (c === 2 || c === 6) compRow.getCell(c).numFmt = "#,##0";
-      else if (c === 4 || c === 5) compRow.getCell(c).numFmt = '"$" #,##0';
+      if (c === 2 || c === 7) compRow.getCell(c).numFmt = "#,##0";
+      else if (c === 5 || c === 6) compRow.getCell(c).numFmt = '"$" #,##0';
       else if (c === 9) compRow.getCell(c).numFmt = '"$" #,##0.00';
       else compRow.getCell(c).numFmt = "#,##0.00";
     }
@@ -300,11 +300,11 @@ export async function downloadArrDashboardExcel(opts: ArrExportOptions): Promise
     };
     rowX.getCell(7).numFmt = "#,##0.00";
     rowX.getCell(8).value = {
-      formula: `ROUND(IFERROR((B${cur}*($G$${MES_A_R}-E${cur}))+($H$${MES_A_R}*B${cur}*$I$${MES_A_R}/100),0),0)`,
+      formula: `ROUND(IFERROR((B${cur}*($C$${MES_A_R}-E${cur}))+($H$${MES_A_R}*B${cur}*$I$${MES_A_R}/100),0),0)`,
     };
     rowX.getCell(8).numFmt = '"$" #,##0';
     rowX.getCell(9).value = {
-      formula: `ROUND(IFERROR((C${cur}*($G$${MES_B_R}-F${cur}))+($H$${MES_B_R}*C${cur}*$I$${MES_B_R}/100),0),0)`,
+      formula: `ROUND(IFERROR((C${cur}*($C$${MES_B_R}-F${cur}))+($H$${MES_B_R}*C${cur}*$I$${MES_B_R}/100),0),0)`,
     };
     rowX.getCell(9).numFmt = '"$" #,##0';
     rowX.getCell(10).value = {
@@ -348,11 +348,11 @@ export async function downloadArrDashboardExcel(opts: ArrExportOptions): Promise
     };
     rowX.getCell(7).numFmt = "#,##0.00";
     rowX.getCell(8).value = {
-      formula: `ROUND(IFERROR((B${cur}*($G$${MES_A_R}-E${cur}))+($H$${MES_A_R}*B${cur}*$I$${MES_A_R}/100),0),0)`,
+      formula: `ROUND(IFERROR((B${cur}*($C$${MES_A_R}-E${cur}))+($H$${MES_A_R}*B${cur}*$I$${MES_A_R}/100),0),0)`,
     };
     rowX.getCell(8).numFmt = '"$" #,##0';
     rowX.getCell(9).value = {
-      formula: `ROUND(IFERROR((C${cur}*($G$${MES_B_R}-F${cur}))+($H$${MES_B_R}*C${cur}*$I$${MES_B_R}/100),0),0)`,
+      formula: `ROUND(IFERROR((C${cur}*($C$${MES_B_R}-F${cur}))+($H$${MES_B_R}*C${cur}*$I$${MES_B_R}/100),0),0)`,
     };
     rowX.getCell(9).numFmt = '"$" #,##0';
     rowX.getCell(10).value = {
@@ -368,7 +368,7 @@ export async function downloadArrDashboardExcel(opts: ArrExportOptions): Promise
   const celL6 = ws.getCell(`M${MES_B_R}`);
   if (lastDataR >= CLI_FIRST_R && rentabilidadMesAFormulaClientes) {
     const sumH = `SUM(H${CLI_FIRST_R}:H${lastDataR})`;
-    celL5.value = { formula: `${sumH}-F${MES_A_R}` };
+    celL5.value = { formula: `${sumH}-G${MES_A_R}` };
   } else {
     celL5.value = cellNum(mA.rentabilidadImporte);
   }
@@ -376,7 +376,7 @@ export async function downloadArrDashboardExcel(opts: ArrExportOptions): Promise
 
   if (lastDataR >= CLI_FIRST_R && rentabilidadMesBFormulaClientes) {
     const sumI = `SUM(I${CLI_FIRST_R}:I${lastDataR})`;
-    celL6.value = { formula: `${sumI}-F${MES_B_R}` };
+    celL6.value = { formula: `${sumI}-G${MES_B_R}` };
   } else {
     celL6.value = cellNum(mB.rentabilidadImporte);
   }
