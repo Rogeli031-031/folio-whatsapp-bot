@@ -64,6 +64,8 @@ type ArrWorkspaceSlice = {
   clientesByKey: Record<string, ClientesMonthData>;
   clientesLoadingKeys: Set<string>;
   clientesErrorByKey: Record<string, string>;
+  /** Clientes marcados: sin venta en el mes forecast (columna B); restan kg al total y recalculan desc. ponderado. */
+  clientesExcluirVentaForecast: Record<string, true>;
 };
 
 function emptyArrWorkspaceSlice(): ArrWorkspaceSlice {
@@ -76,6 +78,7 @@ function emptyArrWorkspaceSlice(): ArrWorkspaceSlice {
     clientesByKey: {},
     clientesLoadingKeys: new Set(),
     clientesErrorByKey: {},
+    clientesExcluirVentaForecast: {},
   };
 }
 
@@ -310,6 +313,45 @@ type ClienteTablaRow = {
   soloNuevo: boolean;
 };
 
+/** Ajuste venta (t) y descuento $/kg del mes forecast al excluir clientes (ponderado por kg). */
+function applyExclusionsToMetricB(
+  metricB: ResumenMesMetrics,
+  clientesB: ClientesMonthData | undefined,
+  filasPrimero: ClienteTablaRow[],
+  filasSolo: ClienteTablaRow[],
+  excluir: Record<string, true> | undefined
+): ResumenMesMetrics {
+  if (!clientesB || clientesB.historico || !excluir || Object.keys(excluir).length === 0) {
+    return metricB;
+  }
+  const ton = metricB.ventaTon;
+  const descSigned = metricB.descuentoSigned;
+  if (ton == null || !Number.isFinite(ton) || descSigned == null || !Number.isFinite(descSigned)) {
+    return metricB;
+  }
+  let sumKg = 0;
+  let sumDescKg = 0;
+  for (const row of [...filasPrimero, ...filasSolo]) {
+    if (!excluir[row.cliente]) continue;
+    const kg = row.ventaB;
+    if (kg == null || !Number.isFinite(kg) || kg <= 0) continue;
+    sumKg += kg;
+    const d = row.descB;
+    if (d != null && Number.isFinite(d)) sumDescKg += d * kg;
+  }
+  if (sumKg <= 0) return metricB;
+  const totalKg0 = ton * 1000;
+  const newKg = totalKg0 - sumKg;
+  if (!Number.isFinite(newKg) || newKg <= 0) return metricB;
+  const numer = descSigned * totalKg0 + sumDescKg;
+  const newDesc = numer / newKg;
+  return {
+    ...metricB,
+    ventaTon: newKg / 1000,
+    descuentoSigned: newDesc,
+  };
+}
+
 /** Rentabilidad ARR (como Excel L5/L6): Σ ingreso por cliente − Gasto (mini). */
 function rentabilidadArrDesdeFilas(
   filasPrimero: ClienteTablaRow[],
@@ -362,6 +404,7 @@ export default function ArrClient() {
   const clientesByKey = ws.clientesByKey;
   const clientesLoadingKeys = ws.clientesLoadingKeys;
   const clientesErrorByKey = ws.clientesErrorByKey;
+  const clientesExcluirVentaForecast = ws.clientesExcluirVentaForecast;
 
   const setSelAUi = useCallback(
     (v: string) => {
@@ -372,8 +415,29 @@ export default function ArrClient() {
   );
   const setSelBUi = useCallback(
     (v: string) => {
-      if (isArrPlanRoute) setWsPlan((s) => ({ ...s, selB: v }));
-      else setWsBase((s) => ({ ...s, selB: v }));
+      const patch = (s: ArrWorkspaceSlice) => ({
+        ...s,
+        selB: v,
+        ...(v !== s.selB ? { clientesExcluirVentaForecast: {} } : {}),
+      });
+      if (isArrPlanRoute) setWsPlan(patch);
+      else setWsBase(patch);
+    },
+    [isArrPlanRoute]
+  );
+
+  const toggleClienteExcluirForecast = useCallback(
+    (clienteNombre: string) => {
+      const k = clienteNombre.trim();
+      if (!k) return;
+      const patch = (s: ArrWorkspaceSlice) => {
+        const next = { ...s.clientesExcluirVentaForecast };
+        if (next[k]) delete next[k];
+        else next[k] = true;
+        return { ...s, clientesExcluirVentaForecast: next };
+      };
+      if (isArrPlanRoute) setWsPlan(patch);
+      else setWsBase(patch);
     },
     [isArrPlanRoute]
   );
@@ -394,10 +458,12 @@ export default function ArrClient() {
       } else {
         params.delete("empresa");
       }
+      if (isArrPlanRoute) setWsPlan((s) => ({ ...s, clientesExcluirVentaForecast: {} }));
+      else setWsBase((s) => ({ ...s, clientesExcluirVentaForecast: {} }));
       const qs = params.toString();
       router.replace(qs ? `/arr?${qs}` : "/arr");
     },
-    [router, searchParams]
+    [router, searchParams, isArrPlanRoute]
   );
 
   /** Misma fecha de corte que IGF: query opcional o última carga del mes (fetchArrLastUploadDay). */
@@ -771,6 +837,26 @@ export default function ArrClient() {
   const metricA = useMemo(() => resumenMesMetrics(rowA), [rowA]);
   const metricB = useMemo(() => resumenMesMetrics(rowB), [rowB]);
 
+  const metricBResumen = useMemo(
+    () =>
+      applyExclusionsToMetricB(
+        metricB,
+        clientesB,
+        filasClientesMesPrimero,
+        filasClientesSoloMesSegundo,
+        clientesExcluirVentaForecast
+      ),
+    [
+      metricB,
+      clientesB,
+      filasClientesMesPrimero,
+      filasClientesSoloMesSegundo,
+      clientesExcluirVentaForecast,
+    ]
+  );
+
+  const showExcluirForecastCheckbox = Boolean(empresa && clientesB && !clientesB.historico);
+
   /** Misma definición que Excel L5/L6: SUM(ingresos clientes) − Gasto. */
   const rentabilidadArrA = useMemo(() => {
     if (!clientesA) return null;
@@ -877,7 +963,7 @@ export default function ArrClient() {
           labelMesB: periodoLabel(selB),
           comparacionLabel,
           mA: { ...metricA, rentabilidadImporte: rentabilidadMostradaA },
-          mB: { ...metricB, rentabilidadImporte: rentabilidadMostradaB },
+          mB: { ...metricBResumen, rentabilidadImporte: rentabilidadMostradaB },
           rentabilidadMesAFormulaClientes: selA ? mesHistoricoDesdeSelector(selA) : true,
           rentabilidadMesBFormulaClientes: selB ? mesHistoricoDesdeSelector(selB) : true,
           headerVentaA,
@@ -914,7 +1000,7 @@ export default function ArrClient() {
     selB,
     comparacionLabel,
     metricA,
-    metricB,
+    metricBResumen,
     headerVentaA,
     headerVentaB,
     headerDescA,
@@ -1132,7 +1218,15 @@ export default function ArrClient() {
                 { sel: selA, set: setSelAUi, vals: rowA, key: "A" as const },
                 { sel: selB, set: setSelBUi, vals: rowB, key: "B" as const },
               ].map(({ sel, set, vals, key }) => {
-                const m = resumenMesMetrics(vals);
+                const mRaw = resumenMesMetrics(vals);
+                const m =
+                  key === "B"
+                    ? {
+                        ...mRaw,
+                        ventaTon: metricBResumen.ventaTon,
+                        descuentoSigned: metricBResumen.descuentoSigned,
+                      }
+                    : mRaw;
                 const rentabUi =
                   key === "A" ? rentabilidadMostradaA : rentabilidadMostradaB;
                 return (
@@ -1196,10 +1290,10 @@ export default function ArrClient() {
                 {puedeComparar ? (
                   <>
                     <td className={`px-3 py-2 text-center tabular-nums ${G.venta}`}>
-                      {cellDeltaNum(metricA.ventaTon, metricB.ventaTon, 0)}
+                      {cellDeltaNum(metricA.ventaTon, metricBResumen.ventaTon, 0)}
                     </td>
                     <td className={`px-3 py-2 text-center tabular-nums ${G.desc}`}>
-                      {cellDeltaNum(metricA.descuentoSigned, metricB.descuentoSigned, 2)}
+                      {cellDeltaNum(metricA.descuentoSigned, metricBResumen.descuentoSigned, 2)}
                     </td>
                     <td className={`px-3 py-2 text-center tabular-nums ${G.costos}`}>
                       {cellDeltaMoney(metricA.operativos, metricB.operativos)}
@@ -1274,6 +1368,13 @@ export default function ArrClient() {
           <table className="min-w-full text-sm">
             <thead>
               <tr className="bg-slate-700/50 text-[0.65rem] font-semibold uppercase tracking-wide text-slate-300">
+                <th
+                  rowSpan={2}
+                  className="align-middle w-11 min-w-[2.75rem] px-1 py-2 text-center text-slate-400 text-[0.6rem] font-normal normal-case border-r border-slate-600/80"
+                  title="Marcar clientes sin venta en el mes forecast: restan su volumen (kg) del total en toneladas y recalculan el descuento $/kg ponderado en el resumen superior."
+                >
+                  Sin venta
+                </th>
                 <th rowSpan={2} className="align-bottom px-3 py-2 text-center text-slate-200">
                   <div className="flex flex-col items-center gap-1">
                     <span>Cliente</span>
@@ -1329,20 +1430,35 @@ export default function ArrClient() {
             <tbody>
               {!empresa && (
                 <tr>
-                  <td colSpan={10} className="px-3 py-3 text-center text-xs text-slate-500">
+                  <td colSpan={11} className="px-3 py-3 text-center text-xs text-slate-500">
                     Selecciona una empresa para ver los clientes.
                   </td>
                 </tr>
               )}
               {empresa && totalFilasCliente === 0 && !clientesLoading && (
                 <tr>
-                  <td colSpan={10} className="px-3 py-3 text-center text-xs text-slate-500">
+                  <td colSpan={11} className="px-3 py-3 text-center text-xs text-slate-500">
                     Sin clientes para mostrar.
                   </td>
                 </tr>
               )}
               {filasClientesMesPrimeroFiltradas.map((row) => (
                 <tr key={row.cliente} className="border-t border-slate-700/80">
+                  <td className="px-1 py-2 text-center align-middle border-r border-slate-600/60">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(clientesExcluirVentaForecast[row.cliente])}
+                      disabled={!showExcluirForecastCheckbox || row.ventaB == null || row.ventaB <= 0}
+                      onChange={() => toggleClienteExcluirForecast(row.cliente)}
+                      title={
+                        showExcluirForecastCheckbox
+                          ? "Sin venta en forecast: resta este volumen del total superior y recalcula descuento"
+                          : "Solo aplica al mes forecast (columna de venta proyectada)"
+                      }
+                      className="h-4 w-4 cursor-pointer accent-rose-500 disabled:cursor-not-allowed disabled:opacity-35"
+                      aria-label={`Sin venta forecast ${row.cliente}`}
+                    />
+                  </td>
                   <td className="px-3 py-2 text-center text-slate-100">
                     <button
                       type="button"
@@ -1393,11 +1509,26 @@ export default function ArrClient() {
               ))}
               {filasClientesSoloMesSegundoFiltradas.length > 0 && (
                 <tr aria-hidden className="border-t border-slate-700/80">
-                  <td colSpan={10} className="h-4 bg-slate-950/40 py-2" />
+                  <td colSpan={11} className="h-4 bg-slate-950/40 py-2" />
                 </tr>
               )}
               {filasClientesSoloMesSegundoFiltradas.map((row) => (
                 <tr key={`nuevo-${row.cliente}`} className="border-t border-slate-700/80 bg-slate-900/25">
+                  <td className="px-1 py-2 text-center align-middle border-r border-slate-600/60">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(clientesExcluirVentaForecast[row.cliente])}
+                      disabled={!showExcluirForecastCheckbox || row.ventaB == null || row.ventaB <= 0}
+                      onChange={() => toggleClienteExcluirForecast(row.cliente)}
+                      title={
+                        showExcluirForecastCheckbox
+                          ? "Sin venta en forecast: resta este volumen del total superior y recalcula descuento"
+                          : "Solo aplica al mes forecast (columna de venta proyectada)"
+                      }
+                      className="h-4 w-4 cursor-pointer accent-rose-500 disabled:cursor-not-allowed disabled:opacity-35"
+                      aria-label={`Sin venta forecast ${row.cliente}`}
+                    />
+                  </td>
                   <td className="px-3 py-2 text-center text-slate-100">
                     <button
                       type="button"
