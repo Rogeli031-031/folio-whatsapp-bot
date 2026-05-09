@@ -1063,6 +1063,12 @@ export default function ArrClient() {
                 <th rowSpan={2} className="align-bottom px-3 py-2 text-center text-slate-200">
                   Mes
                 </th>
+                <th colSpan={1} className={`px-2 py-2 text-center ${G.venta}`}>
+                  Venta
+                </th>
+                <th colSpan={1} className={`px-2 py-2 text-center ${G.desc}`}>
+                  Desc.
+                </th>
                 <th colSpan={3} className={`px-2 py-2 text-center ${G.costos}`}>
                   Operación
                 </th>
@@ -1072,14 +1078,8 @@ export default function ArrClient() {
                 <th colSpan={2} className={`px-2 py-2 text-center ${G.hg}`}>
                   HG
                 </th>
-                <th colSpan={1} className={`px-2 py-2 text-center ${G.desc}`}>
-                  Desc.
-                </th>
                 <th colSpan={1} className={`px-2 py-2 text-center ${G.imp}`}>
                   Impuestos
-                </th>
-                <th colSpan={1} className={`px-2 py-2 text-center ${G.venta}`}>
-                  Venta
                 </th>
                 <th colSpan={2} className={`px-2 py-2 text-center ${G.mov}`}>
                   Clientes
@@ -1089,6 +1089,12 @@ export default function ArrClient() {
                 </th>
               </tr>
               <tr className="bg-slate-700/60 text-slate-200">
+                <th className={`px-3 py-2 text-center font-semibold uppercase tracking-wide ${G.venta}`}>
+                  Venta
+                </th>
+                <th className={`px-3 py-2 text-center font-semibold uppercase tracking-wide ${G.desc}`}>
+                  Descuento
+                </th>
                 <th className={`px-3 py-2 text-center font-semibold uppercase tracking-wide ${G.costos}`}>
                   Operativos
                 </th>
@@ -1107,14 +1113,8 @@ export default function ArrClient() {
                 <th className={`px-3 py-2 text-center font-semibold uppercase tracking-wide ${G.hg}`}>
                   HG$
                 </th>
-                <th className={`px-3 py-2 text-center font-semibold uppercase tracking-wide ${G.desc}`}>
-                  Descuento
-                </th>
                 <th className={`px-3 py-2 text-center font-semibold uppercase tracking-wide ${G.imp}`}>
                   Impuestos
-                </th>
-                <th className={`px-3 py-2 text-center font-semibold uppercase tracking-wide ${G.venta}`}>
-                  Venta
                 </th>
                 <th className={`px-3 py-2 text-center font-semibold uppercase tracking-wide ${G.mov}`}>
                   Nuevos
@@ -1149,6 +1149,12 @@ export default function ArrClient() {
                         </select>
                       </div>
                     </td>
+                    <td className={`px-3 py-2 text-center tabular-nums ${G.venta}`}>
+                      {renderValueCell(sel, m.ventaTon, (v) => fmtNum(v, 0), false)}
+                    </td>
+                    <td className={`px-3 py-2 text-center tabular-nums ${G.desc}`}>
+                      {renderValueCell(sel, m.descuentoSigned, (v) => fmtNum(v, 2), false)}
+                    </td>
                     <td className={`px-3 py-2 text-center tabular-nums ${G.costos}`}>
                       {renderValueCell(sel, m.operativos, (v) => fmtNum(v, 0), true)}
                     </td>
@@ -1167,14 +1173,8 @@ export default function ArrClient() {
                     <td className={`px-3 py-2 text-center tabular-nums ${G.hg}`}>
                       {renderValueCell(sel, m.hgDinero, (v) => fmtNum(v, 2), true)}
                     </td>
-                    <td className={`px-3 py-2 text-center tabular-nums ${G.desc}`}>
-                      {renderValueCell(sel, m.descuentoSigned, (v) => fmtNum(v, 2), false)}
-                    </td>
                     <td className={`px-3 py-2 text-center tabular-nums ${G.imp}`}>
                       {renderValueCell(sel, m.impuestoKg, (v) => fmtNum(v, 2), false)}
-                    </td>
-                    <td className={`px-3 py-2 text-center tabular-nums ${G.venta}`}>
-                      {renderValueCell(sel, m.ventaTon, (v) => fmtNum(v, 0), false)}
                     </td>
                     <td className={`px-3 py-2 text-center tabular-nums text-slate-500 ${G.mov}`}>—</td>
                     <td className={`px-3 py-2 text-center tabular-nums text-slate-500 ${G.mov}`}>—</td>
@@ -1195,6 +1195,12 @@ export default function ArrClient() {
                 </td>
                 {puedeComparar ? (
                   <>
+                    <td className={`px-3 py-2 text-center tabular-nums ${G.venta}`}>
+                      {cellDeltaNum(metricA.ventaTon, metricB.ventaTon, 0)}
+                    </td>
+                    <td className={`px-3 py-2 text-center tabular-nums ${G.desc}`}>
+                      {cellDeltaNum(metricA.descuentoSigned, metricB.descuentoSigned, 2)}
+                    </td>
                     <td className={`px-3 py-2 text-center tabular-nums ${G.costos}`}>
                       {cellDeltaMoney(metricA.operativos, metricB.operativos)}
                     </td>
@@ -1213,14 +1219,8 @@ export default function ArrClient() {
                     <td className={`px-3 py-2 text-center tabular-nums ${G.hg}`}>
                       {cellDeltaMoney(metricA.hgDinero, metricB.hgDinero, 2)}
                     </td>
-                    <td className={`px-3 py-2 text-center tabular-nums ${G.desc}`}>
-                      {cellDeltaNum(metricA.descuentoSigned, metricB.descuentoSigned, 2)}
-                    </td>
                     <td className={`px-3 py-2 text-center tabular-nums ${G.imp}`}>
                       {cellDeltaNum(metricA.impuestoKg, metricB.impuestoKg, 2)}
-                    </td>
-                    <td className={`px-3 py-2 text-center tabular-nums ${G.venta}`}>
-                      {cellDeltaNum(metricA.ventaTon, metricB.ventaTon, 0)}
                     </td>
                     <td className={`px-3 py-2 text-center tabular-nums text-slate-500 ${G.mov}`}>—</td>
                     <td className={`px-3 py-2 text-center tabular-nums text-slate-500 ${G.mov}`}>—</td>
