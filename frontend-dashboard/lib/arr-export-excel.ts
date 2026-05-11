@@ -32,10 +32,8 @@ function cellNum(v: number | null | undefined): number | null {
   return v;
 }
 
-/** Toneladas desde clientes ARR (real / forecast y por categoría). */
-export type ArrExportResumenVentaCategoria = {
-  ventaRealTon: number | null;
-  ventaForecastTon: number | null;
+/** Toneladas CASA / COMISIONISTA (misma fuente que el dashboard). */
+export type ArrExportResumenCategoriaTon = {
   casaTon: number | null;
   comisionistaTon: number | null;
 };
@@ -49,8 +47,8 @@ export type ArrExportOptions = {
   comparacionLabel: string;
   mA: ArrExportResumenMetrics;
   mB: ArrExportResumenMetrics;
-  resumenExtrasA: ArrExportResumenVentaCategoria;
-  resumenExtrasB: ArrExportResumenVentaCategoria;
+  resumenExtrasA: ArrExportResumenCategoriaTon;
+  resumenExtrasB: ArrExportResumenCategoriaTon;
   headerVentaA: string;
   headerVentaB: string;
   headerDescA: string;
@@ -159,7 +157,7 @@ export async function downloadArrDashboardExcel(opts: ArrExportOptions): Promise
     views: [{ showGridLines: true }],
   });
 
-  const LAST_SUMMARY_COL = 14;
+  const LAST_SUMMARY_COL = 13;
   const MES_A_R = 5;
   const MES_B_R = 6;
   const CLI_FIRST_R = 12;
@@ -176,8 +174,7 @@ export async function downloadArrDashboardExcel(opts: ArrExportOptions): Promise
 
   const headerLabels = [
     "Mes",
-    "Venta real (t)",
-    "Venta forecast (t)",
+    "Venta",
     "Margen",
     "Descuento",
     "Operativos",
@@ -201,40 +198,38 @@ export async function downloadArrDashboardExcel(opts: ArrExportOptions): Promise
     rowNum: number,
     label: string,
     m: ArrExportResumenMetrics,
-    ex: ArrExportResumenVentaCategoria,
+    ex: ArrExportResumenCategoriaTon,
     skipRentab: boolean
   ) {
     const row = ws.getRow(rowNum);
     row.getCell(1).value = label;
-    row.getCell(2).value = cellNum(ex.ventaRealTon);
-    row.getCell(2).numFmt = "#,##0.00";
-    row.getCell(3).value = cellNum(ex.ventaForecastTon);
+    row.getCell(2).value = cellNum(m.ventaTon);
+    row.getCell(2).numFmt = "#,##0";
+    row.getCell(3).value = cellNum(m.margenKg);
     row.getCell(3).numFmt = "#,##0.00";
-    row.getCell(4).value = cellNum(m.margenKg);
+    row.getCell(4).value = cellNum(m.descuentoSigned);
     row.getCell(4).numFmt = "#,##0.00";
-    row.getCell(5).value = cellNum(m.descuentoSigned);
-    row.getCell(5).numFmt = "#,##0.00";
-    row.getCell(6).value = cellNum(m.operativos);
+    row.getCell(5).value = cellNum(m.operativos);
+    row.getCell(5).numFmt = '"$" #,##0';
+    row.getCell(6).value = cellNum(m.corporativos);
     row.getCell(6).numFmt = '"$" #,##0';
-    row.getCell(7).value = cellNum(m.corporativos);
-    row.getCell(7).numFmt = '"$" #,##0';
-    row.getCell(8).value = cellNum(m.gastoImporte);
-    row.getCell(8).numFmt = "#,##0";
-    row.getCell(9).value = cellNum(m.hgDisplay);
-    row.getCell(9).numFmt = "#,##0.00";
-    row.getCell(10).value = cellNum(m.hgDinero);
-    row.getCell(10).numFmt = '"$" #,##0.00';
-    row.getCell(11).value = cellNum(m.impuestoKg);
+    row.getCell(7).value = cellNum(m.gastoImporte);
+    row.getCell(7).numFmt = "#,##0";
+    row.getCell(8).value = cellNum(m.hgDisplay);
+    row.getCell(8).numFmt = "#,##0.00";
+    row.getCell(9).value = cellNum(m.hgDinero);
+    row.getCell(9).numFmt = '"$" #,##0.00';
+    row.getCell(10).value = cellNum(m.impuestoKg);
+    row.getCell(10).numFmt = "#,##0.00";
+    row.getCell(11).value = cellNum(ex.casaTon);
     row.getCell(11).numFmt = "#,##0.00";
-    row.getCell(12).value = cellNum(ex.casaTon);
+    row.getCell(12).value = cellNum(ex.comisionistaTon);
     row.getCell(12).numFmt = "#,##0.00";
-    row.getCell(13).value = cellNum(ex.comisionistaTon);
-    row.getCell(13).numFmt = "#,##0.00";
     if (!skipRentab) {
-      row.getCell(14).value = cellNum(m.rentabilidadImporte);
-      row.getCell(14).numFmt = '"$" #,##0';
+      row.getCell(13).value = cellNum(m.rentabilidadImporte);
+      row.getCell(13).numFmt = '"$" #,##0';
     }
-    styleDataRow(row, LAST_SUMMARY_COL, [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]);
+    styleDataRow(row, LAST_SUMMARY_COL, [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]);
   }
 
   fillMesRow(cur, labelMesA || "(Mes A)", mA, resumenExtrasA, true);
@@ -248,19 +243,19 @@ export async function downloadArrDashboardExcel(opts: ArrExportOptions): Promise
     : "COMPARACION";
   if (usarFormulasComparacion) {
     for (let c = 2; c <= LAST_SUMMARY_COL; c++) {
-      if (c === 14) {
+      if (c === 13) {
         compRow.getCell(c).value = {
-          formula: `N${MES_B_R}-N${MES_A_R}`,
+          formula: `M${MES_B_R}-M${MES_A_R}`,
         };
         compRow.getCell(c).numFmt = '"$" #,##0';
         continue;
       }
       const letter = ws.getColumn(c).letter;
       compRow.getCell(c).value = { formula: `${letter}${MES_B_R}-${letter}${MES_A_R}` };
-      if (c === 2 || c === 3 || c === 12 || c === 13) compRow.getCell(c).numFmt = "#,##0.00";
-      else if (c === 8) compRow.getCell(c).numFmt = "#,##0";
-      else if (c === 6 || c === 7) compRow.getCell(c).numFmt = '"$" #,##0';
-      else if (c === 10) compRow.getCell(c).numFmt = '"$" #,##0.00';
+      if (c === 2 || c === 7) compRow.getCell(c).numFmt = "#,##0";
+      else if (c === 5 || c === 6) compRow.getCell(c).numFmt = '"$" #,##0';
+      else if (c === 9) compRow.getCell(c).numFmt = '"$" #,##0.00';
+      else if (c === 11 || c === 12) compRow.getCell(c).numFmt = "#,##0.00";
       else compRow.getCell(c).numFmt = "#,##0.00";
     }
   } else {
@@ -320,11 +315,11 @@ export async function downloadArrDashboardExcel(opts: ArrExportOptions): Promise
     };
     rowX.getCell(7).numFmt = "#,##0.00";
     rowX.getCell(8).value = {
-      formula: `ROUND(IFERROR((B${cur}*($D$${MES_A_R}-E${cur}))+($I$${MES_A_R}*B${cur}*$J$${MES_A_R}/100),0),0)`,
+      formula: `ROUND(IFERROR((B${cur}*($C$${MES_A_R}-E${cur}))+($H$${MES_A_R}*B${cur}*$I$${MES_A_R}/100),0),0)`,
     };
     rowX.getCell(8).numFmt = '"$" #,##0';
     rowX.getCell(9).value = {
-      formula: `ROUND(IFERROR((C${cur}*($D$${MES_B_R}-F${cur}))+($I$${MES_B_R}*C${cur}*$J$${MES_B_R}/100),0),0)`,
+      formula: `ROUND(IFERROR((C${cur}*($C$${MES_B_R}-F${cur}))+($H$${MES_B_R}*C${cur}*$I$${MES_B_R}/100),0),0)`,
     };
     rowX.getCell(9).numFmt = '"$" #,##0';
     rowX.getCell(10).value = {
@@ -368,11 +363,11 @@ export async function downloadArrDashboardExcel(opts: ArrExportOptions): Promise
     };
     rowX.getCell(7).numFmt = "#,##0.00";
     rowX.getCell(8).value = {
-      formula: `ROUND(IFERROR((B${cur}*($D$${MES_A_R}-E${cur}))+($I$${MES_A_R}*B${cur}*$J$${MES_A_R}/100),0),0)`,
+      formula: `ROUND(IFERROR((B${cur}*($C$${MES_A_R}-E${cur}))+($H$${MES_A_R}*B${cur}*$I$${MES_A_R}/100),0),0)`,
     };
     rowX.getCell(8).numFmt = '"$" #,##0';
     rowX.getCell(9).value = {
-      formula: `ROUND(IFERROR((C${cur}*($D$${MES_B_R}-F${cur}))+($I$${MES_B_R}*C${cur}*$J$${MES_B_R}/100),0),0)`,
+      formula: `ROUND(IFERROR((C${cur}*($C$${MES_B_R}-F${cur}))+($H$${MES_B_R}*C${cur}*$I$${MES_B_R}/100),0),0)`,
     };
     rowX.getCell(9).numFmt = '"$" #,##0';
     rowX.getCell(10).value = {
@@ -384,11 +379,11 @@ export async function downloadArrDashboardExcel(opts: ArrExportOptions): Promise
   }
 
   const lastDataR = cur - 1;
-  const celL5 = ws.getCell(`N${MES_A_R}`);
-  const celL6 = ws.getCell(`N${MES_B_R}`);
+  const celL5 = ws.getCell(`M${MES_A_R}`);
+  const celL6 = ws.getCell(`M${MES_B_R}`);
   if (lastDataR >= CLI_FIRST_R && rentabilidadMesAFormulaClientes) {
     const sumH = `SUM(H${CLI_FIRST_R}:H${lastDataR})`;
-    celL5.value = { formula: `${sumH}-H${MES_A_R}` };
+    celL5.value = { formula: `${sumH}-G${MES_A_R}` };
   } else {
     celL5.value = cellNum(mA.rentabilidadImporte);
   }
@@ -396,7 +391,7 @@ export async function downloadArrDashboardExcel(opts: ArrExportOptions): Promise
 
   if (lastDataR >= CLI_FIRST_R && rentabilidadMesBFormulaClientes) {
     const sumI = `SUM(I${CLI_FIRST_R}:I${lastDataR})`;
-    celL6.value = { formula: `${sumI}-H${MES_B_R}` };
+    celL6.value = { formula: `${sumI}-G${MES_B_R}` };
   } else {
     celL6.value = cellNum(mB.rentabilidadImporte);
   }
@@ -413,10 +408,8 @@ export async function downloadArrDashboardExcel(opts: ArrExportOptions): Promise
     { width: 14 },
     { width: 14 },
     { width: 14 },
-    { width: 14 },
     { width: 12 },
-    { width: 14 },
-    { width: 14 },
+    { width: 12 },
     { width: 16 },
   ];
 

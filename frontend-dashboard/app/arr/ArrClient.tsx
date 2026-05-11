@@ -308,27 +308,6 @@ function categoriaEsComisionista(categoria: string): boolean {
   return n.includes("comisionista");
 }
 
-/** Toneladas reales y proyectadas (planta) desde filas `/arr-clientes-mes`. */
-function ventaTonRealYProyectadaDesdeClientes(
-  clientes: ClientesMonthData | undefined,
-  excluirForecast: Record<string, true> | undefined
-): { realTon: number | null; proyTon: number | null } {
-  if (!clientes?.rows?.length) return { realTon: null, proyTon: null };
-  let realKg = 0;
-  let proyKg = 0;
-  for (const r of clientes.rows) {
-    realKg += Number(r.kg_real) || 0;
-    if (!clientes.historico) {
-      const ex = excluirForecast?.[r.cliente.trim()];
-      if (!ex && r.kg_proyectado != null) proyKg += Number(r.kg_proyectado) || 0;
-    }
-  }
-  return {
-    realTon: Math.round((realKg / 1000) * 100) / 100,
-    proyTon: clientes.historico ? null : Math.round((proyKg / 1000) * 100) / 100,
-  };
-}
-
 /** Toneladas por categoría: mes cerrado = real; mes forecast = proyectado (respeta exclusiones). */
 function toneladasCategoriaDesdeClientes(
   clientes: ClientesMonthData | undefined,
@@ -852,14 +831,6 @@ export default function ArrClient() {
     empresa && selB && clientesKeyB && clientesLoadingKeys.has(clientesKeyB)
   );
 
-  const ventaClienteA = useMemo(
-    () => ventaTonRealYProyectadaDesdeClientes(clientesA, undefined),
-    [clientesA]
-  );
-  const ventaClienteB = useMemo(
-    () => ventaTonRealYProyectadaDesdeClientes(clientesB, clientesExcluirVentaForecast),
-    [clientesB, clientesExcluirVentaForecast]
-  );
   const catTonA = useMemo(
     () => toneladasCategoriaDesdeClientes(clientesA, undefined),
     [clientesA]
@@ -1069,14 +1040,10 @@ export default function ArrClient() {
           mA: { ...metricA, rentabilidadImporte: rentabilidadMostradaA },
           mB: { ...metricBResumen, rentabilidadImporte: rentabilidadMostradaB },
           resumenExtrasA: {
-            ventaRealTon: ventaClienteA.realTon,
-            ventaForecastTon: ventaClienteA.proyTon,
             casaTon: catTonA.casa,
             comisionistaTon: catTonA.comisionista,
           },
           resumenExtrasB: {
-            ventaRealTon: ventaClienteB.realTon,
-            ventaForecastTon: ventaClienteB.proyTon,
             casaTon: catTonB.casa,
             comisionistaTon: catTonB.comisionista,
           },
@@ -1127,8 +1094,6 @@ export default function ArrClient() {
     filasClientesSoloMesSegundo,
     rentabilidadMostradaA,
     rentabilidadMostradaB,
-    ventaClienteA,
-    ventaClienteB,
     catTonA,
     catTonB,
   ]);
@@ -1269,7 +1234,7 @@ export default function ArrClient() {
                 <th rowSpan={2} className="align-bottom px-3 py-2 text-center text-slate-200">
                   Mes
                 </th>
-                <th colSpan={2} className={`px-2 py-2 text-center ${G.venta}`}>
+                <th colSpan={1} className={`px-2 py-2 text-center ${G.venta}`}>
                   Venta
                 </th>
                 <th colSpan={1} className={`px-2 py-2 text-center ${G.margen}`}>
@@ -1296,10 +1261,7 @@ export default function ArrClient() {
               </tr>
               <tr className="bg-slate-700/60 text-slate-200">
                 <th className={`px-3 py-2 text-center font-semibold uppercase tracking-wide ${G.venta}`}>
-                  Real (t)
-                </th>
-                <th className={`px-3 py-2 text-center font-semibold uppercase tracking-wide ${G.venta}`}>
-                  Forecast (t)
+                  Venta
                 </th>
                 <th className={`px-3 py-2 text-center font-semibold uppercase tracking-wide ${G.margen}`}>
                   Margen
@@ -1352,7 +1314,6 @@ export default function ArrClient() {
                     : mRaw;
                 const rentabUi =
                   key === "A" ? rentabilidadMostradaA : rentabilidadMostradaB;
-                const ventaCli = key === "A" ? ventaClienteA : ventaClienteB;
                 const catTon = key === "A" ? catTonA : catTonB;
                 const loadingCli = key === "A" ? loadingClientesParaA : loadingClientesParaB;
                 return (
@@ -1370,10 +1331,7 @@ export default function ArrClient() {
                       </div>
                     </td>
                     <td className={`px-3 py-2 text-center tabular-nums ${G.venta}`}>
-                      {tonResumenCell(sel, ventaCli.realTon, loadingCli, 2)}
-                    </td>
-                    <td className={`px-3 py-2 text-center tabular-nums ${G.venta}`}>
-                      {tonResumenCell(sel, ventaCli.proyTon, loadingCli, 2)}
+                      {renderValueCell(sel, m.ventaTon, (v) => fmtNum(v, 0), false)}
                     </td>
                     <td className={`px-3 py-2 text-center tabular-nums ${G.margen}`}>
                       {renderValueCell(sel, m.margenKg, (v) => fmtNum(v, 2), false)}
@@ -1423,10 +1381,7 @@ export default function ArrClient() {
                 {puedeComparar ? (
                   <>
                     <td className={`px-3 py-2 text-center tabular-nums ${G.venta}`}>
-                      {cellDeltaTonNullable(ventaClienteA.realTon, ventaClienteB.realTon, 2)}
-                    </td>
-                    <td className={`px-3 py-2 text-center tabular-nums ${G.venta}`}>
-                      {cellDeltaTonNullable(ventaClienteA.proyTon, ventaClienteB.proyTon, 2)}
+                      {cellDeltaNum(metricA.ventaTon, metricBResumen.ventaTon, 0)}
                     </td>
                     <td className={`px-3 py-2 text-center tabular-nums ${G.margen}`}>
                       {cellDeltaNum(metricA.margenKg, metricB.margenKg, 2)}
@@ -1468,7 +1423,7 @@ export default function ArrClient() {
                   </>
                 ) : (
                   <>
-                    {Array.from({ length: 13 }).map((_, i) => (
+                    {Array.from({ length: 12 }).map((_, i) => (
                       <td
                         key={`comp-ph-${i}`}
                         className="px-3 py-2 text-center text-slate-500"
