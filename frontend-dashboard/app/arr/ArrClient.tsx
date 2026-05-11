@@ -425,6 +425,74 @@ function ventaBMesBConSimMap(
   return row.ventaB;
 }
 
+/** $/kg efectivo mes B (tabla + «Con venta»), para Σ(kg×desc). */
+function descKgMesBConSimPlan(
+  row: ClienteTablaRow,
+  conVenta: Record<string, { kg: number; descKg: number | null }>,
+  descFallback: number | null
+): number {
+  const s = conVenta[row.cliente];
+  if (s && s.kg > 0) {
+    if (s.descKg != null && Number.isFinite(s.descKg)) return s.descKg;
+    if (row.descB != null && Number.isFinite(row.descB)) return row.descB;
+    return descFallback != null && Number.isFinite(descFallback) ? descFallback : 0;
+  }
+  if (row.descB != null && Number.isFinite(row.descB)) return row.descB;
+  return descFallback != null && Number.isFinite(descFallback) ? descFallback : 0;
+}
+
+/** Kg mes B en ARR Plan forecast: respeta «Sin venta» y «Con venta». */
+function kgMesBPlanRow(
+  row: ClienteTablaRow,
+  mesBForecast: boolean,
+  excluir: Record<string, true> | undefined,
+  conVenta: Record<string, { kg: number; descKg: number | null }>
+): number {
+  if (!mesBForecast) {
+    const v = row.ventaB;
+    return v != null && Number.isFinite(v) && v > 0 ? v : 0;
+  }
+  if (excluir?.[row.cliente]) return 0;
+  const v = ventaBMesBConSimMap(row, conVenta);
+  return v != null && Number.isFinite(v) && v > 0 ? v : 0;
+}
+
+/**
+ * Descuento $/kg ponderado (solo concepto Plan): Σ(venta kg × desc $/kg) + nuevos, todo / Σ kg.
+ * Alineado a la tabla «Clientes por mes» + filas nuevos (plan).
+ */
+function descuentoSignedPonderadoPlanDesdeTabla(
+  filasPrimero: ClienteTablaRow[],
+  filasSolo: ClienteTablaRow[],
+  excluir: Record<string, true> | undefined,
+  conVenta: Record<string, { kg: number; descKg: number | null }>,
+  nuevos: Array<{ kg: number; descKg: number }>,
+  mesBForecast: boolean,
+  descFallback: number | null
+): number | null {
+  if (!mesBForecast) return null;
+  let num = 0;
+  let den = 0;
+  const step = (row: ClienteTablaRow) => {
+    const kg = kgMesBPlanRow(row, mesBForecast, excluir, conVenta);
+    if (kg <= 0) return;
+    const d = descKgMesBConSimPlan(row, conVenta, descFallback);
+    num += kg * d;
+    den += kg;
+  };
+  for (const r of filasPrimero) step(r);
+  for (const r of filasSolo) step(r);
+  for (const n of nuevos) {
+    const kg = Number(n.kg);
+    if (!Number.isFinite(kg) || kg <= 0) continue;
+    const d = Number.isFinite(n.descKg) ? n.descKg : 0;
+    num += kg * d;
+    den += kg;
+  }
+  if (den <= 0) return null;
+  return num / den;
+}
+
 function ingresoBMesBConSimMap(
   row: ClienteTablaRow,
   conVenta: Record<string, { kg: number; descKg: number | null }>,
@@ -1448,6 +1516,28 @@ export default function ArrClient() {
     [metricBTrasConVenta, nuevosClientesPlan]
   );
 
+  const descuentoSignedPlanPonderado = useMemo(
+    () =>
+      descuentoSignedPonderadoPlanDesdeTabla(
+        filasClientesMesPrimero,
+        filasClientesSoloMesSegundo,
+        clientesExcluirVentaForecast,
+        clientesConVentaForecastSim,
+        nuevosClientesPlan,
+        Boolean(clientesB && !clientesB.historico),
+        metricBTrasConVenta.descuentoSigned
+      ),
+    [
+      filasClientesMesPrimero,
+      filasClientesSoloMesSegundo,
+      clientesExcluirVentaForecast,
+      clientesConVentaForecastSim,
+      nuevosClientesPlan,
+      clientesB,
+      metricBTrasConVenta.descuentoSigned,
+    ]
+  );
+
   const metricBResumen = useMemo(() => {
     const extraGasto = nuevosClientesPlan.reduce(
       (s, n) => s + (Number.isFinite(n.gastoMxn) ? n.gastoMxn : 0),
@@ -1463,12 +1553,22 @@ export default function ArrClient() {
     const op0 = metricBTrasVolNuevosPlan.operativos;
     const operativos =
       op0 != null && Number.isFinite(op0) ? op0 + extraOp : op0;
+    const descSigned =
+      isArrPlanRoute && descuentoSignedPlanPonderado != null
+        ? descuentoSignedPlanPonderado
+        : metricBTrasVolNuevosPlan.descuentoSigned;
     return {
       ...metricBTrasVolNuevosPlan,
+      descuentoSigned: descSigned,
       gastoImporte,
       operativos,
     };
-  }, [metricBTrasVolNuevosPlan, nuevosClientesPlan]);
+  }, [
+    metricBTrasVolNuevosPlan,
+    nuevosClientesPlan,
+    isArrPlanRoute,
+    descuentoSignedPlanPonderado,
+  ]);
 
   const showExcluirForecastCheckbox = Boolean(empresa && clientesB && !clientesB.historico);
 
@@ -1814,6 +1914,20 @@ export default function ArrClient() {
         operativos: operativos0,
       };
 
+      const descPlanExport = descuentoSignedPonderadoPlanDesdeTabla(
+        filasPrimero,
+        filasSolo,
+        sExcluir,
+        sConVenta,
+        sNuevos.map((n) => ({ kg: n.kg, descKg: n.descKg })),
+        Boolean(clientesB0 && !clientesB0.historico),
+        metricBTrasCV.descuentoSigned
+      );
+      const metricBResumenFinal: ResumenMesMetrics =
+        slice === wsPlan && descPlanExport != null
+          ? { ...metricBResumen0, descuentoSigned: descPlanExport }
+          : metricBResumen0;
+
       const rentArrA0 =
         clientesA0 ? rentabilidadArrDesdeFilas(filasPrimero, filasSolo, metA.gastoImporte, "A") : null;
       const rentArrB0 =
@@ -1824,8 +1938,8 @@ export default function ArrClient() {
           : rentabilidadForecastMesBAjustada(
               filasPrimero,
               filasSolo,
-              metricBResumen0.gastoImporte,
-              metricBResumen0,
+              metricBResumenFinal.gastoImporte,
+              metricBResumenFinal,
               sExcluir,
               sConVenta,
               sNuevos.map((n) => ({
@@ -1867,7 +1981,7 @@ export default function ArrClient() {
         labelMesB: periodoLabel(sSelB),
         comparacionLabel: comparacionLabel0,
         mA: { ...metA, rentabilidadImporte: rentMostA0 },
-        mB: { ...metricBResumen0, rentabilidadImporte: rentMostB0 },
+        mB: { ...metricBResumenFinal, rentabilidadImporte: rentMostB0 },
         resumenExtrasA: { casaTon: catA0.casa, comisionistaTon: catA0.comisionista },
         resumenExtrasB: { casaTon: catB0.casa, comisionistaTon: catB0.comisionista },
         rentabilidadMesAFormulaClientes: sSelA ? mesHistoricoDesdeSelector(sSelA) : true,
