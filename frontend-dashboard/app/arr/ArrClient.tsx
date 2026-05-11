@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getRoleFromDashboardToken } from "@/lib/auth";
 import DeltaIngresoClienteForecastModal from "@/components/DeltaIngresoClienteForecastModal";
 import ArrSimularIngresoModal from "@/components/ArrSimularIngresoModal";
+import ArrNuevoClientePlanModal from "@/components/ArrNuevoClientePlanModal";
 import {
   fetchIgfForecast,
   fetchIgfVersiones,
@@ -55,6 +56,15 @@ const ARR_PLAN_QUERY = "arr_plan";
 
 type ArrWorkspaceId = "base" | "plan";
 
+export type NuevoClientePlanRow = {
+  id: string;
+  nombre: string;
+  kg: number;
+  /** Mismo convenio que `descuentoSigned` (típicamente negativo). */
+  descKg: number;
+  gastoMxn: number;
+};
+
 type ArrWorkspaceSlice = {
   selA: string;
   selB: string;
@@ -71,6 +81,8 @@ type ArrWorkspaceSlice = {
    * (inverso lógico de excluir volumen con «Sin venta»).
    */
   clientesConVentaForecastSim: Record<string, { kg: number; descKg: number | null }>;
+  /** Solo en ARR Plan: clientes sintéticos (kg, desc $/kg, gasto) que ajustan resumen mes B. */
+  nuevosClientesPlan: NuevoClientePlanRow[];
 };
 
 function emptyArrWorkspaceSlice(): ArrWorkspaceSlice {
@@ -85,6 +97,7 @@ function emptyArrWorkspaceSlice(): ArrWorkspaceSlice {
     clientesErrorByKey: {},
     clientesExcluirVentaForecast: {},
     clientesConVentaForecastSim: {},
+    nuevosClientesPlan: [],
   };
 }
 
@@ -347,11 +360,17 @@ function categoriaEsComisionista(categoria: string): boolean {
 function toneladasCategoriaDesdeClientes(
   clientes: ClientesMonthData | undefined,
   excluirForecast: Record<string, true> | undefined,
-  conVentaSim?: Record<string, { kg: number; descKg: number | null }>
+  conVentaSim?: Record<string, { kg: number; descKg: number | null }>,
+  /** Kg adicionales contados como categoría Casa (clientes plan sin fila en API). */
+  extraCasaKg = 0
 ): { casa: number | null; comisionista: number | null } {
-  if (!clientes?.rows?.length) return { casa: null, comisionista: null };
-  let casaKg = 0;
+  if (!clientes?.rows?.length && !(extraCasaKg > 0)) return { casa: null, comisionista: null };
+  let casaKg = extraCasaKg > 0 ? extraCasaKg : 0;
   let comiKg = 0;
+  if (!clientes?.rows?.length) {
+    const toT = (kg: number) => Math.round((kg / 1000) * 100) / 100;
+    return { casa: toT(casaKg), comisionista: toT(0) };
+  }
   const hist = clientes.historico;
   for (const r of clientes.rows) {
     const comi = categoriaEsComisionista(r.categoria);
@@ -371,6 +390,38 @@ function toneladasCategoriaDesdeClientes(
   }
   const toT = (kg: number) => Math.round((kg / 1000) * 100) / 100;
   return { casa: toT(casaKg), comisionista: toT(comiKg) };
+}
+
+/** Suma kg al total forecast y recalcula descuento $/kg ponderado (misma lógica que «Con venta»). */
+function applyExtraKgDescChunksToMetricB(
+  base: ResumenMesMetrics,
+  chunks: Array<{ kg: number; descKg: number | null }>
+): ResumenMesMetrics {
+  const valid = chunks.filter((c) => Number.isFinite(c.kg) && c.kg > 0);
+  if (!valid.length) return base;
+  const ton = base.ventaTon;
+  const descSigned = base.descuentoSigned;
+  if (ton == null || !Number.isFinite(ton) || descSigned == null || !Number.isFinite(descSigned)) {
+    return base;
+  }
+  let sumKg = 0;
+  let sumDescKg = 0;
+  for (const s of valid) {
+    sumKg += s.kg;
+    const d =
+      s.descKg != null && Number.isFinite(s.descKg) ? s.descKg : descSigned;
+    sumDescKg += d * s.kg;
+  }
+  if (sumKg <= 0) return base;
+  const totalKg0 = ton * 1000;
+  const newKg = totalKg0 + sumKg;
+  const numer = descSigned * totalKg0 + sumDescKg;
+  const newDesc = numer / newKg;
+  return {
+    ...base,
+    ventaTon: newKg / 1000,
+    descuentoSigned: newDesc,
+  };
 }
 
 type ClienteTablaRow = {
@@ -433,31 +484,7 @@ function applyConVentaSimuladaToMetricB(
   conVenta: Record<string, { kg: number; descKg: number | null }> | undefined
 ): ResumenMesMetrics {
   if (!conVenta || Object.keys(conVenta).length === 0) return base;
-  const ton = base.ventaTon;
-  const descSigned = base.descuentoSigned;
-  if (ton == null || !Number.isFinite(ton) || descSigned == null || !Number.isFinite(descSigned)) {
-    return base;
-  }
-  let sumKg = 0;
-  let sumDescKg = 0;
-  for (const s of Object.values(conVenta)) {
-    const kg = s.kg;
-    if (!Number.isFinite(kg) || kg <= 0) continue;
-    sumKg += kg;
-    const d =
-      s.descKg != null && Number.isFinite(s.descKg) ? s.descKg : descSigned;
-    sumDescKg += d * kg;
-  }
-  if (sumKg <= 0) return base;
-  const totalKg0 = ton * 1000;
-  const newKg = totalKg0 + sumKg;
-  const numer = descSigned * totalKg0 + sumDescKg;
-  const newDesc = numer / newKg;
-  return {
-    ...base,
-    ventaTon: newKg / 1000,
-    descuentoSigned: newDesc,
-  };
+  return applyExtraKgDescChunksToMetricB(base, Object.values(conVenta));
 }
 
 /** Rentabilidad ARR (como Excel L5/L6): Σ ingreso por cliente − Gasto (mini). */
@@ -489,12 +516,14 @@ function rentabilidadForecastMesBAjustada(
   gastoImporte: number | null,
   metricBResumen: ResumenMesMetrics,
   excluir: Record<string, true> | undefined,
-  conVenta: Record<string, { kg: number; descKg: number | null }> | undefined
+  conVenta: Record<string, { kg: number; descKg: number | null }> | undefined,
+  nuevosPlan: Array<{ kg: number; descKg: number }>
 ): number | null {
   if (gastoImporte == null || !Number.isFinite(gastoImporte)) return null;
   const hasEx = excluir && Object.keys(excluir).length > 0;
   const hasSim = conVenta && Object.keys(conVenta).length > 0;
-  if (!hasEx && !hasSim) return null;
+  const hasNuevo = nuevosPlan.some((n) => Number.isFinite(n.kg) && n.kg > 0);
+  if (!hasEx && !hasSim && !hasNuevo) return null;
   const cv = conVenta ?? {};
   const ingresoFila = (r: ClienteTablaRow): number => {
     if (excluir?.[r.cliente]) return 0;
@@ -503,6 +532,10 @@ function rentabilidadForecastMesBAjustada(
   let sumIng = 0;
   for (const r of filasPrimero) sumIng += ingresoFila(r);
   for (const r of filasSoloMesB) sumIng += ingresoFila(r);
+  for (const n of nuevosPlan) {
+    if (!Number.isFinite(n.kg) || n.kg <= 0) continue;
+    sumIng += ingresoClienteMarginal(n.kg, n.descKg, metricBResumen) ?? 0;
+  }
   return Math.round(sumIng - gastoImporte);
 }
 
@@ -529,6 +562,7 @@ export default function ArrClient() {
   const [wsPlan, setWsPlan] = useState<ArrWorkspaceSlice>(() => emptyArrWorkspaceSlice());
   const [dicfModalCliente, setDicfModalCliente] = useState<string | null>(null);
   const [showSimular, setShowSimular] = useState(false);
+  const [showNuevoClientePlan, setShowNuevoClientePlan] = useState(false);
 
   const ws = isArrPlanRoute ? wsPlan : wsBase;
   const dataByKey = ws.dataByKey;
@@ -541,6 +575,7 @@ export default function ArrClient() {
   const clientesErrorByKey = ws.clientesErrorByKey;
   const clientesExcluirVentaForecast = ws.clientesExcluirVentaForecast;
   const clientesConVentaForecastSim = ws.clientesConVentaForecastSim;
+  const nuevosClientesPlan = ws.nuevosClientesPlan;
 
   const setSelAUi = useCallback(
     (v: string) => {
@@ -555,7 +590,11 @@ export default function ArrClient() {
         ...s,
         selB: v,
         ...(v !== s.selB
-          ? { clientesExcluirVentaForecast: {}, clientesConVentaForecastSim: {} }
+          ? {
+              clientesExcluirVentaForecast: {},
+              clientesConVentaForecastSim: {},
+              nuevosClientesPlan: [],
+            }
           : {}),
       });
       if (isArrPlanRoute) setWsPlan(patch);
@@ -609,6 +648,28 @@ export default function ArrClient() {
     [isArrPlanRoute, clienteInactivoForecastB]
   );
 
+  const agregarNuevoClientePlan = useCallback(
+    (payload: { nombre: string; kg: number; descKg: number; gastoMxn: number }) => {
+      if (!isArrPlanRoute) return;
+      const id =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `nuevo-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+      setWsPlan((s) => ({
+        ...s,
+        nuevosClientesPlan: [...s.nuevosClientesPlan, { id, ...payload }],
+      }));
+    },
+    [isArrPlanRoute]
+  );
+
+  const quitarNuevoClientePlan = useCallback((id: string) => {
+    setWsPlan((s) => ({
+      ...s,
+      nuevosClientesPlan: s.nuevosClientesPlan.filter((n) => n.id !== id),
+    }));
+  }, []);
+
   const toggleArrPlanHref = useMemo(() => {
     const params = new URLSearchParams(searchParams?.toString() ?? "");
     if (isArrPlanRoute) params.delete(ARR_PLAN_QUERY);
@@ -630,6 +691,7 @@ export default function ArrClient() {
           ...s,
           clientesExcluirVentaForecast: {},
           clientesConVentaForecastSim: {},
+          nuevosClientesPlan: [],
         }));
       else
         setWsBase((s) => ({
@@ -974,17 +1036,26 @@ export default function ArrClient() {
   );
 
   const catTonA = useMemo(
-    () => toneladasCategoriaDesdeClientes(clientesA, undefined),
+    () => toneladasCategoriaDesdeClientes(clientesA, undefined, undefined, 0),
     [clientesA]
+  );
+  const kgNuevosPlanCasa = useMemo(
+    () =>
+      nuevosClientesPlan.reduce(
+        (s, n) => s + (Number.isFinite(n.kg) && n.kg > 0 ? n.kg : 0),
+        0
+      ),
+    [nuevosClientesPlan]
   );
   const catTonB = useMemo(
     () =>
       toneladasCategoriaDesdeClientes(
         clientesB,
         clientesExcluirVentaForecast,
-        clientesConVentaForecastSim
+        clientesConVentaForecastSim,
+        kgNuevosPlanCasa
       ),
-    [clientesB, clientesExcluirVentaForecast, clientesConVentaForecastSim]
+    [clientesB, clientesExcluirVentaForecast, clientesConVentaForecastSim, kgNuevosPlanCasa]
   );
 
   const renderMesOption = (p: IgfPeriodo) => {
@@ -1053,10 +1124,33 @@ export default function ArrClient() {
     ]
   );
 
-  const metricBResumen = useMemo(
+  const metricBTrasConVenta = useMemo(
     () => applyConVentaSimuladaToMetricB(metricBTrasExclusiones, clientesConVentaForecastSim),
     [metricBTrasExclusiones, clientesConVentaForecastSim]
   );
+
+  const metricBTrasVolNuevosPlan = useMemo(
+    () =>
+      applyExtraKgDescChunksToMetricB(
+        metricBTrasConVenta,
+        nuevosClientesPlan.map((n) => ({ kg: n.kg, descKg: n.descKg }))
+      ),
+    [metricBTrasConVenta, nuevosClientesPlan]
+  );
+
+  const metricBResumen = useMemo(() => {
+    const extraGasto = nuevosClientesPlan.reduce(
+      (s, n) => s + (Number.isFinite(n.gastoMxn) ? n.gastoMxn : 0),
+      0
+    );
+    const baseG = metricBTrasVolNuevosPlan.gastoImporte;
+    const gastoImporte =
+      baseG != null && Number.isFinite(baseG) ? baseG + extraGasto : null;
+    return {
+      ...metricBTrasVolNuevosPlan,
+      gastoImporte,
+    };
+  }, [metricBTrasVolNuevosPlan, nuevosClientesPlan]);
 
   const showExcluirForecastCheckbox = Boolean(empresa && clientesB && !clientesB.historico);
 
@@ -1092,23 +1186,24 @@ export default function ArrClient() {
   ]);
 
   const rentabilidadArrBAjustadaForecast = useMemo(() => {
-    if (!clientesB || clientesB.historico) return null;
+    if (clientesB?.historico === true) return null;
     return rentabilidadForecastMesBAjustada(
       filasClientesMesPrimero,
       filasClientesSoloMesSegundo,
-      metricB.gastoImporte,
+      metricBResumen.gastoImporte,
       metricBResumen,
       clientesExcluirVentaForecast,
-      clientesConVentaForecastSim
+      clientesConVentaForecastSim,
+      nuevosClientesPlan.map((n) => ({ kg: n.kg, descKg: n.descKg }))
     );
   }, [
-    clientesB,
+    clientesB?.historico,
     filasClientesMesPrimero,
     filasClientesSoloMesSegundo,
-    metricB.gastoImporte,
     metricBResumen,
     clientesExcluirVentaForecast,
     clientesConVentaForecastSim,
+    nuevosClientesPlan,
   ]);
 
   const rentabilidadMostradaA = useMemo(
@@ -1118,12 +1213,12 @@ export default function ArrClient() {
   const rentabilidadMostradaB = useMemo(() => {
     if (!selB) return null;
     const hist = mesHistoricoDesdeSelector(selB);
+    const mesBForecastUI = !hist && (clientesB ? !clientesB.historico : true);
     const hayAjusteForecast =
-      !hist &&
-      clientesB &&
-      !clientesB.historico &&
+      mesBForecastUI &&
       (Object.keys(clientesExcluirVentaForecast).length > 0 ||
-        Object.keys(clientesConVentaForecastSim).length > 0);
+        Object.keys(clientesConVentaForecastSim).length > 0 ||
+        nuevosClientesPlan.length > 0);
     if (hayAjusteForecast && rentabilidadArrBAjustadaForecast != null) {
       return rentabilidadArrBAjustadaForecast;
     }
@@ -1133,6 +1228,7 @@ export default function ArrClient() {
     clientesB,
     clientesExcluirVentaForecast,
     clientesConVentaForecastSim,
+    nuevosClientesPlan,
     rentabilidadArrBAjustadaForecast,
     rentabilidadArrB,
     metricB.rentabilidadImporte,
@@ -1177,6 +1273,14 @@ export default function ArrClient() {
   ]);
 
   const puedeSimular = Boolean(empresa && selB);
+
+  const nombresExistentesPlanModal = useMemo(() => {
+    const s = new Set<string>();
+    for (const r of filasClientesMesPrimero) s.add(r.cliente.trim());
+    for (const r of filasClientesSoloMesSegundo) s.add(r.cliente.trim());
+    for (const n of nuevosClientesPlan) s.add(n.nombre.trim());
+    return Array.from(s);
+  }, [filasClientesMesPrimero, filasClientesSoloMesSegundo, nuevosClientesPlan]);
   const dClass = (d: number) =>
     d > 0 ? "text-emerald-400" : d < 0 ? "text-red-400" : "text-slate-300";
 
@@ -1386,16 +1490,20 @@ export default function ArrClient() {
         <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
-            onClick={() => setShowSimular(true)}
+            onClick={() =>
+              isArrPlanRoute ? setShowNuevoClientePlan(true) : setShowSimular(true)
+            }
             disabled={!puedeSimular}
             title={
               puedeSimular
-                ? "Simular ingreso en el mes forecast (margen / HG del IGF de ese mes)"
+                ? isArrPlanRoute
+                  ? "Agregar un cliente sintético: volumen, descuento $/kg y gasto en el mes forecast"
+                  : "Simular ingreso en el mes forecast (margen / HG del IGF de ese mes)"
                 : "Selecciona empresa y el mes forecast (columna B)"
             }
             className="rounded border border-sky-600/90 bg-sky-950/50 px-3 py-2 text-sm font-medium text-sky-100 shadow-sm hover:bg-sky-900/45 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            SIMULAR
+            {isArrPlanRoute ? "NUEVO CLIENTE" : "SIMULAR"}
           </button>
           <button
             type="button"
@@ -1518,6 +1626,7 @@ export default function ArrClient() {
                         ...mRaw,
                         ventaTon: metricBResumen.ventaTon,
                         descuentoSigned: metricBResumen.descuentoSigned,
+                        gastoImporte: metricBResumen.gastoImporte,
                       }
                     : mRaw;
                 const rentabUi =
@@ -1604,7 +1713,7 @@ export default function ArrClient() {
                       {cellDeltaMoney(metricA.corporativos, metricB.corporativos)}
                     </td>
                     <td className={`px-3 py-2 text-center tabular-nums ${G.costos}`}>
-                      {cellDeltaMoney(metricA.gastoImporte, metricB.gastoImporte)}
+                      {cellDeltaMoney(metricA.gastoImporte, metricBResumen.gastoImporte)}
                     </td>
                     <td className={`px-3 py-2 text-center tabular-nums ${G.hg}`}>
                       {cellDeltaNum(metricA.hgDisplay, metricB.hgDisplay, 2)}
@@ -1645,6 +1754,54 @@ export default function ArrClient() {
             </tbody>
           </table>
         </section>
+
+        {isArrPlanRoute && nuevosClientesPlan.length > 0 && (
+          <section className="mt-6 overflow-x-auto rounded-lg border border-sky-800/50 bg-sky-950/20">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-sky-800/40 px-4 py-2">
+              <h2 className="text-sm font-semibold text-sky-100">Nuevos clientes (plan)</h2>
+              <span className="text-xs text-sky-200/80">
+                Incluidos en venta, descuento ponderado, gasto y rentabilidad del mes forecast
+              </span>
+            </div>
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="bg-slate-800/80 text-[0.65rem] font-semibold uppercase tracking-wide text-slate-300">
+                  <th className="px-3 py-2 text-left">Cliente</th>
+                  <th className="px-3 py-2 text-center">Kg</th>
+                  <th className="px-3 py-2 text-center">Desc. $/kg</th>
+                  <th className="px-3 py-2 text-center">Gasto</th>
+                  <th className="px-3 py-2 text-center">Ingreso marginal</th>
+                  <th className="px-3 py-2 text-center w-24" />
+                </tr>
+              </thead>
+              <tbody>
+                {nuevosClientesPlan.map((n) => {
+                  const ing = ingresoClienteMarginal(n.kg, n.descKg, metricBResumen);
+                  return (
+                    <tr key={n.id} className="border-t border-slate-700/70">
+                      <td className="px-3 py-2 text-slate-100">{n.nombre}</td>
+                      <td className="px-3 py-2 text-center tabular-nums">{fmtNum(n.kg, 0)}</td>
+                      <td className="px-3 py-2 text-center tabular-nums">{fmtNum(n.descKg, 2)}</td>
+                      <td className="px-3 py-2 text-center tabular-nums">${fmtNum(n.gastoMxn, 0)}</td>
+                      <td className="px-3 py-2 text-center tabular-nums text-emerald-200/90">
+                        {ing != null ? `$${fmtNum(ing, 0)}` : "—"}
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        <button
+                          type="button"
+                          onClick={() => quitarNuevoClientePlan(n.id)}
+                          className="rounded border border-slate-600 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800"
+                        >
+                          Quitar
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </section>
+        )}
 
         {!empresa && (
           <p className="mt-3 text-xs text-slate-400">
@@ -1976,7 +2133,7 @@ export default function ArrClient() {
         onClose={() => setDicfModalCliente(null)}
         canDicfAcciones={canDicfAcciones}
       />
-      {showSimular && (
+      {showSimular && !isArrPlanRoute && (
         <ArrSimularIngresoModal
           onClose={() => setShowSimular(false)}
           empresa={empresa}
@@ -1987,6 +2144,14 @@ export default function ArrClient() {
             hgDinero: metricB.hgDinero,
           }}
           clientes={simularClientesOpciones}
+        />
+      )}
+      {showNuevoClientePlan && isArrPlanRoute && (
+        <ArrNuevoClientePlanModal
+          onClose={() => setShowNuevoClientePlan(false)}
+          mesForecastLabel={selB ? periodoLabel(selB) : ""}
+          nombresExistentes={nombresExistentesPlanModal}
+          onSave={agregarNuevoClientePlan}
         />
       )}
     </div>
