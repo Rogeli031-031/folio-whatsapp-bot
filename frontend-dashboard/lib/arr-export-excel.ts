@@ -67,6 +67,13 @@ export type ArrExportOptions = {
   rentabilidadMesBFormulaClientes?: boolean;
 };
 
+type ArrExportBuildOptions = {
+  workbook?: ExcelJS.Workbook;
+  sheetName?: string;
+  skipDownload?: boolean;
+  filename?: string;
+};
+
 const F_HEADER = "FF1F3864";
 const FONT_HEADER = "FFFFFFFF";
 const F_DATA = "FFF7E7D7";
@@ -129,6 +136,13 @@ function styleCompRow(row: ExcelJS.Row, lastCol: number) {
  * hasta reconfirmar la celda. Excel en español sigue mostrando las fórmulas localizadas en la barra.
  */
 export async function downloadArrDashboardExcel(opts: ArrExportOptions): Promise<void> {
+  return downloadArrDashboardExcelInternal(opts, {});
+}
+
+async function downloadArrDashboardExcelInternal(
+  opts: ArrExportOptions,
+  build: ArrExportBuildOptions
+): Promise<void> {
   const {
     empresa,
     labelMesA,
@@ -151,8 +165,9 @@ export async function downloadArrDashboardExcel(opts: ArrExportOptions): Promise
     rentabilidadMesBFormulaClientes = true,
   } = opts;
 
-  const wb = new ExcelJS.Workbook();
-  const ws = wb.addWorksheet("ARR", {
+  const wb = build.workbook ?? new ExcelJS.Workbook();
+  const wsName = build.sheetName || "ARR";
+  const ws = wb.addWorksheet(wsName, {
     properties: { defaultRowHeight: 18 },
     views: [{ showGridLines: true }],
   });
@@ -163,7 +178,7 @@ export async function downloadArrDashboardExcel(opts: ArrExportOptions): Promise
   const CLI_FIRST_R = 12;
 
   let cur = 1;
-  ws.getRow(cur).getCell(1).value = "ARR · IGF Forecast · exportación";
+  ws.getRow(cur).getCell(1).value = `${wsName} · IGF Forecast · exportación`;
   cur++;
   ws.getRow(cur).getCell(1).value = "Empresa";
   ws.getRow(cur).getCell(2).value = empresa;
@@ -413,13 +428,45 @@ export async function downloadArrDashboardExcel(opts: ArrExportOptions): Promise
     { width: 16 },
   ];
 
+  if (build.skipDownload) return;
   const buf = await wb.xlsx.writeBuffer();
   const blob = new Blob([buf], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = `ARR_${safeFilePart(empresa || "export")}_${safeFilePart(opts.selA)}_${safeFilePart(opts.selB)}.xlsx`;
+  a.download =
+    build.filename ??
+    `ARR_${safeFilePart(empresa || "export")}_${safeFilePart(opts.selA)}_${safeFilePart(opts.selB)}.xlsx`;
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(a.href);
+}
+
+export async function downloadArrDashboardExcelDual(opts: {
+  arr: ArrExportOptions;
+  plan: ArrExportOptions;
+}): Promise<void> {
+  const wb = new ExcelJS.Workbook();
+  await downloadArrDashboardExcelInternal(opts.arr, {
+    workbook: wb,
+    sheetName: "ARR",
+    skipDownload: true,
+  });
+  await downloadArrDashboardExcelInternal(opts.plan, {
+    workbook: wb,
+    sheetName: "ARR Plan",
+    skipDownload: true,
+  });
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `ARR_${safeFilePart(opts.arr.empresa || "export")}_${safeFilePart(opts.arr.selA)}_${safeFilePart(opts.arr.selB)}.xlsx`;
   a.rel = "noopener";
   document.body.appendChild(a);
   a.click();

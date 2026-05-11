@@ -7,6 +7,7 @@ export type ArrNuevoClientePlanPayload = {
   kg: number;
   descKg: number;
   gastoMxn: number;
+  responsable: string;
 };
 
 export type ArrNuevoClientePlanSavePayload = ArrNuevoClientePlanPayload & {
@@ -20,6 +21,7 @@ export type ArrNuevoClientePlanEdicion = {
   kg: number;
   descKg: number;
   gastoMxn: number;
+  responsable: string;
 };
 
 type Props = {
@@ -45,6 +47,7 @@ export default function ArrNuevoClientePlanModal({
   const [kgStr, setKgStr] = useState("");
   const [descStr, setDescStr] = useState("");
   const [gastoStr, setGastoStr] = useState("");
+  const [responsable, setResponsable] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const nombresBloqueados = useMemo(() => {
@@ -65,11 +68,13 @@ export default function ArrNuevoClientePlanModal({
       setKgStr(String(Math.round(clienteEditar.kg)));
       setDescStr(String(clienteEditar.descKg));
       setGastoStr(String(clienteEditar.gastoMxn));
+      setResponsable(clienteEditar.responsable ?? "");
     } else {
       setNombre("");
       setKgStr("");
       setDescStr("");
       setGastoStr("");
+      setResponsable("");
     }
   }, [abierto, clienteEditar]);
 
@@ -107,11 +112,17 @@ export default function ArrNuevoClientePlanModal({
       setError("Indica el gasto (MXN, mayor o igual a cero).");
       return;
     }
+    const resp = responsable.trim();
+    if (!resp) {
+      setError("Indica el responsable.");
+      return;
+    }
     const base: ArrNuevoClientePlanSavePayload = {
       nombre: nom,
       kg,
       descKg,
       gastoMxn: gasto,
+      responsable: resp,
     };
     if (clienteEditar) base.id = clienteEditar.id;
     onSave(base);
@@ -177,6 +188,16 @@ export default function ArrNuevoClientePlanModal({
               className="mt-1 w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100"
               placeholder="Ej. 50000"
               inputMode="decimal"
+            />
+          </label>
+          <label className="block text-sm">
+            <span className="text-slate-300">Responsable</span>
+            <input
+              value={responsable}
+              onChange={(e) => setResponsable(e.target.value)}
+              className="mt-1 w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+              placeholder="Ej. Juan Pérez"
+              autoComplete="off"
             />
           </label>
         </div>

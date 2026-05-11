@@ -24,7 +24,20 @@ import {
   findRowByPlanta,
   normalizeEmpresa,
 } from "@/lib/igf-kpi-ui";
-import { downloadArrDashboardExcel } from "@/lib/arr-export-excel";
+import { downloadArrDashboardExcelDual } from "@/lib/arr-export-excel";
+
+function planPersistKey(token: string, empresa: string, selB: string): string {
+  return `arrPlanPersist:v1:${token.slice(0, 12)}:${empresa}:${selB}`;
+}
+
+function safeJsonParse<T>(raw: string | null): T | null {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+}
 
 const NOMBRES_MES = [
   "Enero",
@@ -63,6 +76,7 @@ export type NuevoClientePlanRow = {
   /** Mismo convenio que `descuentoSigned` (típicamente negativo). */
   descKg: number;
   gastoMxn: number;
+  responsable: string;
 };
 
 type ArrWorkspaceSlice = {
@@ -555,6 +569,7 @@ export default function ArrClient() {
   const isArrPlanRoute = (searchParams?.get(ARR_PLAN_QUERY) ?? "") === "1";
 
   const lastUploadByYmRef = useRef<Record<string, string>>({});
+  const lastPlanPersistKeyLoadedRef = useRef<string>("");
 
   const [periodos, setPeriodos] = useState<IgfPeriodo[]>([]);
   const [periodosError, setPeriodosError] = useState<string | null>(null);
@@ -590,13 +605,6 @@ export default function ArrClient() {
       const patch = (s: ArrWorkspaceSlice) => ({
         ...s,
         selB: v,
-        ...(v !== s.selB
-          ? {
-              clientesExcluirVentaForecast: {},
-              clientesConVentaForecastSim: {},
-              nuevosClientesPlan: [],
-            }
-          : {}),
       });
       if (isArrPlanRoute) setWsPlan(patch);
       else setWsBase(patch);
@@ -656,14 +664,15 @@ export default function ArrClient() {
       kg: number;
       descKg: number;
       gastoMxn: number;
+      responsable: string;
     }) => {
       if (!isArrPlanRoute) return;
       if (payload.id) {
-        const { id, nombre, kg, descKg, gastoMxn } = payload;
+        const { id, nombre, kg, descKg, gastoMxn, responsable } = payload;
         setWsPlan((s) => ({
           ...s,
           nuevosClientesPlan: s.nuevosClientesPlan.map((n) =>
-            n.id === id ? { id, nombre, kg, descKg, gastoMxn } : n
+            n.id === id ? { id, nombre, kg, descKg, gastoMxn, responsable } : n
           ),
         }));
         return;
@@ -672,10 +681,13 @@ export default function ArrClient() {
         typeof crypto !== "undefined" && "randomUUID" in crypto
           ? crypto.randomUUID()
           : `nuevo-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-      const { nombre, kg, descKg, gastoMxn } = payload;
+      const { nombre, kg, descKg, gastoMxn, responsable } = payload;
       setWsPlan((s) => ({
         ...s,
-        nuevosClientesPlan: [...s.nuevosClientesPlan, { id, nombre, kg, descKg, gastoMxn }],
+        nuevosClientesPlan: [
+          ...s.nuevosClientesPlan,
+          { id, nombre, kg, descKg, gastoMxn, responsable },
+        ],
       }));
     },
     [isArrPlanRoute]
@@ -704,14 +716,7 @@ export default function ArrClient() {
       } else {
         params.delete("empresa");
       }
-      if (isArrPlanRoute)
-        setWsPlan((s) => ({
-          ...s,
-          clientesExcluirVentaForecast: {},
-          clientesConVentaForecastSim: {},
-          nuevosClientesPlan: [],
-        }));
-      else
+      if (!isArrPlanRoute)
         setWsBase((s) => ({
           ...s,
           clientesExcluirVentaForecast: {},
@@ -754,7 +759,59 @@ export default function ArrClient() {
     setWsBase(emptyArrWorkspaceSlice());
     setWsPlan(emptyArrWorkspaceSlice());
     lastUploadByYmRef.current = {};
+    lastPlanPersistKeyLoadedRef.current = "";
   }, [token, uploadDayFromUrl]);
+
+  // Persistencia local (solo ARR Plan): guarda/recupera Sin venta, Con venta y Nuevos clientes por (empresa, mes B).
+  useEffect(() => {
+    if (!token || !empresa || !wsPlan.selB) return;
+    const key = planPersistKey(token, empresa, wsPlan.selB);
+    if (lastPlanPersistKeyLoadedRef.current === key) return;
+    lastPlanPersistKeyLoadedRef.current = key;
+    type Persist = {
+      excluir: Record<string, true>;
+      conVenta: Record<string, { kg: number; descKg: number | null }>;
+      nuevos: NuevoClientePlanRow[];
+    };
+    const parsed = safeJsonParse<Persist>(typeof window !== "undefined" ? window.localStorage.getItem(key) : null);
+    if (!parsed) {
+      setWsPlan((s) => ({
+        ...s,
+        clientesExcluirVentaForecast: {},
+        clientesConVentaForecastSim: {},
+        nuevosClientesPlan: [],
+      }));
+      return;
+    }
+    setWsPlan((s) => ({
+      ...s,
+      clientesExcluirVentaForecast: parsed.excluir ?? {},
+      clientesConVentaForecastSim: parsed.conVenta ?? {},
+      nuevosClientesPlan: parsed.nuevos ?? [],
+    }));
+  }, [token, empresa, wsPlan.selB]);
+
+  useEffect(() => {
+    if (!token || !empresa || !wsPlan.selB) return;
+    const key = planPersistKey(token, empresa, wsPlan.selB);
+    const payload = {
+      excluir: wsPlan.clientesExcluirVentaForecast ?? {},
+      conVenta: wsPlan.clientesConVentaForecastSim ?? {},
+      nuevos: wsPlan.nuevosClientesPlan ?? [],
+    };
+    try {
+      window.localStorage.setItem(key, JSON.stringify(payload));
+    } catch {
+      // si el storage está lleno o bloqueado, no interrumpimos la UI
+    }
+  }, [
+    token,
+    empresa,
+    wsPlan.selB,
+    wsPlan.clientesExcluirVentaForecast,
+    wsPlan.clientesConVentaForecastSim,
+    wsPlan.nuevosClientesPlan,
+  ]);
 
   // Cargar periodos disponibles para los selectores de mes.
   useEffect(() => {
@@ -1347,78 +1404,212 @@ export default function ArrClient() {
 
   const puedeExportar = puedeComparar;
 
+  const buildExportOptsFromSlice = useCallback(
+    (slice: ArrWorkspaceSlice) => {
+      const sSelA = slice.selA;
+      const sSelB = slice.selB;
+      const sDataByKey = slice.dataByKey;
+      const sClientesByKey = slice.clientesByKey;
+      const sExcluir = slice.clientesExcluirVentaForecast;
+      const sConVenta = slice.clientesConVentaForecastSim;
+      const sNuevos = slice.nuevosClientesPlan;
+
+      const headerVentaA0 = sSelA ? `Venta ${periodoMesNombre(sSelA)}` : "Venta —";
+      const headerVentaB0 = sSelB ? `Venta ${periodoMesNombre(sSelB)}` : "Venta —";
+      const headerDescA0 = sSelA ? `Descuento ${periodoMesNombre(sSelA)}` : "Descuento —";
+      const headerDescB0 = sSelB ? `Descuento ${periodoMesNombre(sSelB)}` : "Descuento —";
+      const headerIngresoA0 = sSelA ? `Ingreso ${periodoMesNombre(sSelA)}` : "Ingreso —";
+      const headerIngresoB0 = sSelB ? `Ingreso ${periodoMesNombre(sSelB)}` : "Ingreso —";
+      const comparacionLabel0 =
+        sSelA && sSelB ? `${periodoMesNombre(sSelB)} − ${periodoMesNombre(sSelA)}` : "";
+
+      const metA = resumenMesMetrics(computeRowValues(sDataByKey[sSelA], empresa));
+      const metB = resumenMesMetrics(computeRowValues(sDataByKey[sSelB], empresa));
+
+      const clientesKeyA0 =
+        empresa && sSelA ? clientesCacheKey(empresa, sSelA, sDataByKey[sSelA]) : "";
+      const clientesKeyB0 =
+        empresa && sSelB ? clientesCacheKey(empresa, sSelB, sDataByKey[sSelB]) : "";
+      const clientesA0 = clientesKeyA0 ? sClientesByKey[clientesKeyA0] : undefined;
+      const clientesB0 = clientesKeyB0 ? sClientesByKey[clientesKeyB0] : undefined;
+
+      // Filas de clientes (mismo criterio que la tabla).
+      const mapA = new Map<string, ArrClienteMesRow>();
+      if (clientesA0) {
+        for (const r of clientesA0.rows) {
+          const k = r.cliente.trim();
+          if (k) mapA.set(k, r);
+        }
+      }
+      const mapB = new Map<string, ArrClienteMesRow>();
+      if (clientesB0) {
+        for (const r of clientesB0.rows) {
+          const k = r.cliente.trim();
+          if (k) mapB.set(k, r);
+        }
+      }
+
+      const filasPrimero: ClienteTablaRow[] = [];
+      const clientesMesPrimero = Array.from(mapA.keys()).sort((a, b) => {
+        const va = clientesA0 ? clienteVenta(mapA.get(a)!, clientesA0.historico) : 0;
+        const vb = clientesA0 ? clienteVenta(mapA.get(b)!, clientesA0.historico) : 0;
+        if (vb !== va) return vb - va;
+        return a.localeCompare(b, "es");
+      });
+      for (const cliente of clientesMesPrimero) {
+        const rA = mapA.get(cliente)!;
+        const rB = mapB.get(cliente);
+        const ventaA0 = clientesA0 ? clienteVenta(rA, clientesA0.historico) : 0;
+        const ventaB0 = rB != null && clientesB0 ? clienteVenta(rB, clientesB0.historico) : null;
+        const descA0 = rA.descuento_kg;
+        const descB0 = rB?.descuento_kg ?? null;
+        const vBNum = ventaB0 ?? 0;
+        const dANum = descA0 ?? 0;
+        const dBNum = descB0 ?? 0;
+        const ingresoAAlloc = ingresoClienteMarginal(ventaA0, descA0, metA);
+        const ingresoBAlloc = ventaB0 != null ? ingresoClienteMarginal(ventaB0, descB0, metB) : null;
+        filasPrimero.push({
+          cliente,
+          ventaA: ventaA0,
+          ventaB: ventaB0,
+          descA: descA0,
+          descB: descB0,
+          deltaVenta: vBNum - ventaA0,
+          deltaDesc: dBNum - dANum,
+          ingresoA: ingresoAAlloc,
+          ingresoB: ingresoBAlloc,
+          deltaIngreso: (ingresoBAlloc ?? 0) - (ingresoAAlloc ?? 0),
+          soloNuevo: false,
+        });
+      }
+
+      const filasSolo: ClienteTablaRow[] = [];
+      if (clientesB0) {
+        for (const cliente of Array.from(mapB.keys())) {
+          if (mapA.has(cliente)) continue;
+          const rB = mapB.get(cliente)!;
+          const ventaB0 = clienteVenta(rB, clientesB0.historico);
+          const descB0 = rB.descuento_kg;
+          const ingresoBCliente = ingresoClienteMarginal(ventaB0, descB0, metB);
+          filasSolo.push({
+            cliente,
+            ventaA: 0,
+            ventaB: ventaB0,
+            descA: 0,
+            descB: descB0,
+            deltaVenta: ventaB0,
+            deltaDesc: (descB0 ?? 0) - 0,
+            ingresoA: 0,
+            ingresoB: ingresoBCliente,
+            deltaIngreso: (ingresoBCliente ?? 0) - 0,
+            soloNuevo: true,
+          });
+        }
+        filasSolo.sort((x, y) => {
+          const vb = x.ventaB ?? 0;
+          const vy = y.ventaB ?? 0;
+          if (vy !== vb) return vy - vb;
+          return x.cliente.localeCompare(y.cliente, "es");
+        });
+      }
+
+      const metricBTrasEx = applyExclusionsToMetricB(metB, clientesB0, filasPrimero, filasSolo, sExcluir);
+      const metricBTrasCV = applyConVentaSimuladaToMetricB(metricBTrasEx, sConVenta);
+      const metricBTrasNuevos = applyExtraKgDescChunksToMetricB(
+        metricBTrasCV,
+        sNuevos.map((n) => ({ kg: n.kg, descKg: n.descKg }))
+      );
+      const extraGasto = sNuevos.reduce((sum, n) => sum + (Number.isFinite(n.gastoMxn) ? n.gastoMxn : 0), 0);
+      const gastoImporteFinal =
+        metricBTrasNuevos.gastoImporte != null && Number.isFinite(metricBTrasNuevos.gastoImporte)
+          ? metricBTrasNuevos.gastoImporte + extraGasto
+          : null;
+      const metricBResumen0: ResumenMesMetrics = { ...metricBTrasNuevos, gastoImporte: gastoImporteFinal };
+
+      const rentArrA0 =
+        clientesA0 ? rentabilidadArrDesdeFilas(filasPrimero, filasSolo, metA.gastoImporte, "A") : null;
+      const rentArrB0 =
+        clientesB0 ? rentabilidadArrDesdeFilas(filasPrimero, filasSolo, metB.gastoImporte, "B") : null;
+      const rentAdjB0 =
+        clientesB0?.historico === true
+          ? null
+          : rentabilidadForecastMesBAjustada(
+              filasPrimero,
+              filasSolo,
+              metricBResumen0.gastoImporte,
+              metricBResumen0,
+              sExcluir,
+              sConVenta,
+              sNuevos.map((n) => ({ kg: n.kg, descKg: n.descKg }))
+            );
+
+      const rentMostA0 = rentabilidadResumenPorMes(sSelA, rentArrA0, metA.rentabilidadImporte);
+      const rentMostB0 = (() => {
+        if (!sSelB) return null;
+        const hist = mesHistoricoDesdeSelector(sSelB);
+        const mesBForecastUI = !hist && (clientesB0 ? !clientesB0.historico : true);
+        const hayAjusteForecast =
+          mesBForecastUI &&
+          (Object.keys(sExcluir).length > 0 || Object.keys(sConVenta).length > 0 || sNuevos.length > 0);
+        if (hayAjusteForecast && rentAdjB0 != null) return rentAdjB0;
+        return rentabilidadResumenPorMes(sSelB, rentArrB0, metB.rentabilidadImporte);
+      })();
+
+      const kgNuevosCasa = sNuevos.reduce((sum, n) => sum + (Number.isFinite(n.kg) && n.kg > 0 ? n.kg : 0), 0);
+      const catA0 = toneladasCategoriaDesdeClientes(clientesA0, undefined, undefined, 0);
+      const catB0 = toneladasCategoriaDesdeClientes(clientesB0, sExcluir, sConVenta, kgNuevosCasa);
+
+      return {
+        empresa,
+        selA: sSelA,
+        selB: sSelB,
+        labelMesA: periodoLabel(sSelA),
+        labelMesB: periodoLabel(sSelB),
+        comparacionLabel: comparacionLabel0,
+        mA: { ...metA, rentabilidadImporte: rentMostA0 },
+        mB: { ...metricBResumen0, rentabilidadImporte: rentMostB0 },
+        resumenExtrasA: { casaTon: catA0.casa, comisionistaTon: catA0.comisionista },
+        resumenExtrasB: { casaTon: catB0.casa, comisionistaTon: catB0.comisionista },
+        rentabilidadMesAFormulaClientes: sSelA ? mesHistoricoDesdeSelector(sSelA) : true,
+        rentabilidadMesBFormulaClientes: sSelB ? mesHistoricoDesdeSelector(sSelB) : true,
+        headerVentaA: headerVentaA0,
+        headerVentaB: headerVentaB0,
+        headerDescA: headerDescA0,
+        headerDescB: headerDescB0,
+        headerIngresoA: headerIngresoA0,
+        headerIngresoB: headerIngresoB0,
+        filasClientesMesPrimero: filasPrimero.map((r) => ({
+          cliente: r.cliente,
+          ventaA: r.ventaA,
+          ventaB: ventaBMesBConSimMap(r, sConVenta),
+          descA: r.descA,
+          descB: r.descB,
+        })),
+        filasClientesSoloMesSegundo: filasSolo.map((r) => ({
+          cliente: r.cliente,
+          ventaA: r.ventaA,
+          ventaB: ventaBMesBConSimMap(r, sConVenta),
+          descA: r.descA,
+          descB: r.descB,
+        })),
+        usarFormulasComparacion: true,
+      };
+    },
+    [empresa]
+  );
+
   const handleExportExcel = useCallback(() => {
     if (!puedeExportar || !empresa) return;
     void (async () => {
       try {
-        await downloadArrDashboardExcel({
-          empresa,
-          selA,
-          selB,
-          labelMesA: periodoLabel(selA),
-          labelMesB: periodoLabel(selB),
-          comparacionLabel,
-          mA: { ...metricA, rentabilidadImporte: rentabilidadMostradaA },
-          mB: { ...metricBResumen, rentabilidadImporte: rentabilidadMostradaB },
-          resumenExtrasA: {
-            casaTon: catTonA.casa,
-            comisionistaTon: catTonA.comisionista,
-          },
-          resumenExtrasB: {
-            casaTon: catTonB.casa,
-            comisionistaTon: catTonB.comisionista,
-          },
-          rentabilidadMesAFormulaClientes: selA ? mesHistoricoDesdeSelector(selA) : true,
-          rentabilidadMesBFormulaClientes: selB ? mesHistoricoDesdeSelector(selB) : true,
-          headerVentaA,
-          headerVentaB,
-          headerDescA,
-          headerDescB,
-          headerIngresoA,
-          headerIngresoB,
-          filasClientesMesPrimero: filasClientesMesPrimero.map((r) => ({
-            cliente: r.cliente,
-            ventaA: r.ventaA,
-            ventaB: ventaBMesBConSimMap(r, clientesConVentaForecastSim),
-            descA: r.descA,
-            descB: r.descB,
-          })),
-          filasClientesSoloMesSegundo: filasClientesSoloMesSegundo.map((r) => ({
-            cliente: r.cliente,
-            ventaA: r.ventaA,
-            ventaB: ventaBMesBConSimMap(r, clientesConVentaForecastSim),
-            descA: r.descA,
-            descB: r.descB,
-          })),
-          usarFormulasComparacion: puedeComparar,
-        });
+        const arr = buildExportOptsFromSlice(wsBase);
+        const plan = buildExportOptsFromSlice(wsPlan);
+        await downloadArrDashboardExcelDual({ arr, plan });
       } catch (e) {
         console.error("Export ARR Excel:", e);
       }
     })();
-  }, [
-    puedeExportar,
-    puedeComparar,
-    empresa,
-    selA,
-    selB,
-    comparacionLabel,
-    metricA,
-    metricBResumen,
-    headerVentaA,
-    headerVentaB,
-    headerDescA,
-    headerDescB,
-    headerIngresoA,
-    headerIngresoB,
-    filasClientesMesPrimero,
-    filasClientesSoloMesSegundo,
-    rentabilidadMostradaA,
-    rentabilidadMostradaB,
-    catTonA,
-    catTonB,
-    clientesConVentaForecastSim,
-  ]);
+  }, [puedeExportar, empresa, wsBase, wsPlan, buildExportOptsFromSlice]);
 
   const G = {
     costos: "bg-rose-950/30 border-l-2 border-rose-500/50",
@@ -1793,6 +1984,7 @@ export default function ArrClient() {
                   <th className="px-3 py-2 text-center">Kg</th>
                   <th className="px-3 py-2 text-center">Desc. $/kg</th>
                   <th className="px-3 py-2 text-center">Gasto</th>
+                  <th className="px-3 py-2 text-center">Responsable</th>
                   <th className="px-3 py-2 text-center">Ingreso marginal</th>
                   <th className="px-3 py-2 text-center min-w-[9.5rem]">Acciones</th>
                 </tr>
@@ -1806,6 +1998,7 @@ export default function ArrClient() {
                       <td className="px-3 py-2 text-center tabular-nums">{fmtNum(n.kg, 0)}</td>
                       <td className="px-3 py-2 text-center tabular-nums">{fmtNum(n.descKg, 2)}</td>
                       <td className="px-3 py-2 text-center tabular-nums">${fmtNum(n.gastoMxn, 0)}</td>
+                      <td className="px-3 py-2 text-center text-slate-200">{n.responsable || "—"}</td>
                       <td className="px-3 py-2 text-center tabular-nums text-emerald-200/90">
                         {ing != null ? `$${fmtNum(ing, 0)}` : "—"}
                       </td>
