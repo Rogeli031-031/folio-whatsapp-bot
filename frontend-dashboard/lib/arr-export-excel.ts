@@ -93,6 +93,7 @@ export type ArrExportOptions = {
     hgCliente?: number | null;
     /** null/undefined: fórmula usa HG$ del mes resumen. */
     hgCompra?: number | null;
+    comentarios?: string;
   }[];
   /** Columnas «Sin venta» / «Con venta» en clientes (solo ARR Plan). */
   marcasForecastEnClientes?: boolean;
@@ -335,12 +336,13 @@ async function downloadArrDashboardExcelInternal(
       "Gasto",
       "HG cliente",
       "HG compra",
+      "Comentarios",
       "Ingreso marginal",
     ];
     labels.forEach((t, i) => (hdr.getCell(i + 1).value = t));
-    styleHeaderRow(hdr, 10);
+    styleHeaderRow(hdr, 11);
     cur++;
-    const centerCols = [2, 3, 4, 5, 6, 7, 8, 9, 10];
+    const centerCols = [2, 3, 4, 5, 6, 7, 8, 9, 11];
     for (const n of nuevosClientesPlan) {
       const r = ws.getRow(cur);
       r.getCell(1).value = n.nombre;
@@ -367,11 +369,14 @@ async function downloadArrDashboardExcelInternal(
       } else {
         r.getCell(9).value = null;
       }
-      r.getCell(10).value = {
+      r.getCell(10).value = (n.comentarios ?? "").trim() || null;
+      r.getCell(10).alignment = { vertical: "top", horizontal: "left", wrapText: true };
+      r.getCell(11).value = {
         formula: `ROUND(IFERROR((E${cur}*($C$${MES_B_R}-ABS(F${cur})))+(IF(ISBLANK(H${cur}),$H$${MES_B_R},H${cur})*E${cur}*IF(ISBLANK(I${cur}),$I$${MES_B_R},I${cur})/100),0),0)`,
       };
-      r.getCell(10).numFmt = '"$" #,##0';
-      styleDataRow(r, 10, centerCols);
+      r.getCell(11).numFmt = '"$" #,##0';
+      styleDataRow(r, 11, centerCols);
+      r.getCell(10).alignment = { vertical: "top", horizontal: "left", wrapText: true };
       cur++;
     }
   }

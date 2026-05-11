@@ -92,6 +92,7 @@ function normalizeNuevoClientePlanRow(raw: unknown): NuevoClientePlanRow | null 
     typeof hgCompraRaw === "number" && Number.isFinite(hgCompraRaw)
       ? hgCompraRaw
       : null;
+  const comentarios = String(o.comentarios ?? "").trim().slice(0, 2000);
   return {
     id,
     nombre,
@@ -104,6 +105,7 @@ function normalizeNuevoClientePlanRow(raw: unknown): NuevoClientePlanRow | null 
     subcategoria,
     hgCliente,
     hgCompra,
+    comentarios,
   };
 }
 
@@ -154,6 +156,8 @@ export type NuevoClientePlanRow = {
   hgCliente: number | null;
   /** Si no es null, sustituye a HG$ (dinero) del mes en el mismo término. */
   hgCompra: number | null;
+  /** Notas libres (persistencia local ARR Plan). */
+  comentarios: string;
 };
 
 type ArrWorkspaceSlice = {
@@ -789,6 +793,7 @@ export default function ArrClient() {
       subcategoria: string;
       hgCliente: number | null;
       hgCompra: number | null;
+      comentarios: string;
     }) => {
       if (!isArrPlanRoute) return;
       if (payload.id) {
@@ -804,6 +809,7 @@ export default function ArrClient() {
           subcategoria,
           hgCliente,
           hgCompra,
+          comentarios,
         } = payload;
         setWsPlan((s) => ({
           ...s,
@@ -821,6 +827,7 @@ export default function ArrClient() {
                   subcategoria,
                   hgCliente,
                   hgCompra,
+                  comentarios,
                 }
               : n
           ),
@@ -842,6 +849,7 @@ export default function ArrClient() {
         subcategoria,
         hgCliente,
         hgCompra,
+        comentarios,
       } = payload;
       setWsPlan((s) => ({
         ...s,
@@ -859,6 +867,7 @@ export default function ArrClient() {
             subcategoria,
             hgCliente,
             hgCompra,
+            comentarios,
           },
         ],
       }));
@@ -1909,6 +1918,7 @@ export default function ArrClient() {
                 subcategoria: n.subcategoria,
                 hgCliente: n.hgCliente,
                 hgCompra: n.hgCompra,
+                comentarios: n.comentarios,
               })),
             }
           : {}),
@@ -2309,6 +2319,7 @@ export default function ArrClient() {
                   <th className="px-3 py-2 text-center">Gasto</th>
                   <th className="px-3 py-2 text-center">HG cliente</th>
                   <th className="px-3 py-2 text-center">HG compra</th>
+                  <th className="px-3 py-2 text-left min-w-[10rem]">Comentarios</th>
                   <th className="px-3 py-2 text-center">Ingreso marginal</th>
                   <th className="px-3 py-2 text-center min-w-[9.5rem]">Acciones</th>
                 </tr>
@@ -2340,6 +2351,9 @@ export default function ArrClient() {
                         {n.hgCompra != null && Number.isFinite(n.hgCompra)
                           ? fmtNum(n.hgCompra, 2)
                           : "—"}
+                      </td>
+                      <td className="max-w-[14rem] px-3 py-2 text-left text-xs text-slate-300 whitespace-pre-wrap break-words">
+                        {n.comentarios?.trim() ? n.comentarios.trim() : "—"}
                       </td>
                       <td className="px-3 py-2 text-center tabular-nums text-emerald-200/90">
                         {ing != null ? `$${fmtNum(ing, 0)}` : "—"}

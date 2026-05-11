@@ -15,6 +15,7 @@ export type ArrNuevoClientePlanPayload = {
   responsableId: number;
   categoria: "CASA" | "COMISIONISTA";
   subcategoria: string;
+  comentarios: string;
 };
 
 export type ArrNuevoClientePlanSavePayload = ArrNuevoClientePlanPayload & {
@@ -34,6 +35,7 @@ export type ArrNuevoClientePlanEdicion = {
   subcategoria: string;
   hgCliente?: number | null;
   hgCompra?: number | null;
+  comentarios?: string;
 };
 
 type Props = {
@@ -68,6 +70,7 @@ export default function ArrNuevoClientePlanModal({
   const [responsableIdStr, setResponsableIdStr] = useState("");
   const [categoria, setCategoria] = useState<"CASA" | "COMISIONISTA">("CASA");
   const [subcategoria, setSubcategoria] = useState("");
+  const [comentarios, setComentarios] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const nombresBloqueados = useMemo(() => {
@@ -98,6 +101,7 @@ export default function ArrNuevoClientePlanModal({
       );
       setCategoria(clienteEditar.categoria ?? "CASA");
       setSubcategoria(clienteEditar.subcategoria ?? "");
+      setComentarios((clienteEditar.comentarios ?? "").slice(0, 2000));
       const rid = clienteEditar.responsableId;
       if (rid != null && Number.isFinite(rid) && rid > 0) {
         setResponsableIdStr(String(rid));
@@ -116,6 +120,7 @@ export default function ArrNuevoClientePlanModal({
       setResponsableIdStr("");
       setCategoria("CASA");
       setSubcategoria("");
+      setComentarios("");
     }
   }, [abierto, clienteEditar, responsables]);
 
@@ -201,6 +206,7 @@ export default function ArrNuevoClientePlanModal({
       responsableId: rid,
       categoria,
       subcategoria: sub,
+      comentarios: comentarios.trim().slice(0, 2000),
     };
     if (clienteEditar) base.id = clienteEditar.id;
     onSave(base);
@@ -343,6 +349,20 @@ export default function ArrNuevoClientePlanModal({
                 </option>
               ))}
             </select>
+          </label>
+          <label className="block text-sm">
+            <span className="text-slate-300">Comentarios</span>
+            <textarea
+              value={comentarios}
+              onChange={(e) => setComentarios(e.target.value.slice(0, 2000))}
+              rows={3}
+              className="mt-1 w-full resize-y rounded border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+              placeholder="Opcional"
+              maxLength={2000}
+            />
+            <span className="mt-0.5 block text-[0.65rem] text-slate-500">
+              {comentarios.length}/2000
+            </span>
           </label>
         </div>
 
