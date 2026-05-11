@@ -87,6 +87,11 @@ function normalizeNuevoClientePlanRow(raw: unknown): NuevoClientePlanRow | null 
   const hgRaw = o.hgCliente;
   const hgCliente =
     typeof hgRaw === "number" && Number.isFinite(hgRaw) ? hgRaw : null;
+  const hgCompraRaw = o.hgCompra;
+  const hgCompra =
+    typeof hgCompraRaw === "number" && Number.isFinite(hgCompraRaw)
+      ? hgCompraRaw
+      : null;
   return {
     id,
     nombre,
@@ -98,6 +103,7 @@ function normalizeNuevoClientePlanRow(raw: unknown): NuevoClientePlanRow | null 
     categoria,
     subcategoria,
     hgCliente,
+    hgCompra,
   };
 }
 
@@ -146,6 +152,8 @@ export type NuevoClientePlanRow = {
   subcategoria: string;
   /** Si no es null, sustituye al HG del mes en `kg × HG × HG$ / 100`. */
   hgCliente: number | null;
+  /** Si no es null, sustituye a HG$ (dinero) del mes en el mismo término. */
+  hgCompra: number | null;
 };
 
 type ArrWorkspaceSlice = {
@@ -384,15 +392,20 @@ function ingresoClienteMarginal(
   descKg: number | null,
   m: ResumenMesMetrics,
   /** Opcional: reemplaza solo el factor HG del mes en el término `kg×HG×HG$/100`. */
-  hgCliente?: number | null
+  hgCliente?: number | null,
+  /** Opcional: reemplaza HG$ (dinero) del mes en el mismo término. */
+  hgCompra?: number | null
 ): number | null {
   if (kg <= 0) return null;
   const margen = m.margenKg;
   const hgMes = m.hgDisplay;
-  const hgDin = m.hgDinero;
-  if (margen == null || hgMes == null || hgDin == null) return null;
+  const hgDinMes = m.hgDinero;
+  if (margen == null) return null;
   const hg =
     hgCliente != null && Number.isFinite(hgCliente) ? hgCliente : hgMes;
+  const hgDin =
+    hgCompra != null && Number.isFinite(hgCompra) ? hgCompra : hgDinMes;
+  if (hg == null || hgDin == null) return null;
   const d = descKg ?? 0;
   const dMag = Number.isFinite(d) ? Math.abs(d) : 0;
   const raw = kg * (margen - dMag) + (hg * kg * hgDin) / 100;
@@ -578,6 +591,21 @@ function applyConVentaSimuladaToMetricB(
   return applyExtraKgDescChunksToMetricB(base, Object.values(conVenta));
 }
 
+/** Impuestos en operativos ($) por kg nuevo cliente: Σ kg × impuesto $/kg del mes (misma J del resumen). */
+function sumOperativosExtraImpuestosNuevosKg(
+  nuevos: Array<{ kg: number }>,
+  impuestoKg: number | null
+): number {
+  if (impuestoKg == null || !Number.isFinite(impuestoKg)) return 0;
+  let s = 0;
+  for (const n of nuevos) {
+    const kg = Number(n.kg);
+    if (!Number.isFinite(kg) || kg <= 0) continue;
+    s += kg * impuestoKg;
+  }
+  return s;
+}
+
 /** Rentabilidad ARR (como Excel L5/L6): Σ ingreso por cliente − Gasto (mini). */
 function rentabilidadArrDesdeFilas(
   filasPrimero: ClienteTablaRow[],
@@ -608,7 +636,12 @@ function rentabilidadForecastMesBAjustada(
   metricBResumen: ResumenMesMetrics,
   excluir: Record<string, true> | undefined,
   conVenta: Record<string, { kg: number; descKg: number | null }> | undefined,
-  nuevosPlan: Array<{ kg: number; descKg: number; hgCliente?: number | null }>
+  nuevosPlan: Array<{
+    kg: number;
+    descKg: number;
+    hgCliente?: number | null;
+    hgCompra?: number | null;
+  }>
 ): number | null {
   if (gastoImporte == null || !Number.isFinite(gastoImporte)) return null;
   const hasEx = excluir && Object.keys(excluir).length > 0;
@@ -626,7 +659,13 @@ function rentabilidadForecastMesBAjustada(
   for (const n of nuevosPlan) {
     if (!Number.isFinite(n.kg) || n.kg <= 0) continue;
     sumIng +=
-      ingresoClienteMarginal(n.kg, n.descKg, metricBResumen, n.hgCliente) ?? 0;
+      ingresoClienteMarginal(
+        n.kg,
+        n.descKg,
+        metricBResumen,
+        n.hgCliente,
+        n.hgCompra
+      ) ?? 0;
   }
   return Math.round(sumIng - gastoImporte);
 }
@@ -749,6 +788,7 @@ export default function ArrClient() {
       categoria: "CASA" | "COMISIONISTA";
       subcategoria: string;
       hgCliente: number | null;
+      hgCompra: number | null;
     }) => {
       if (!isArrPlanRoute) return;
       if (payload.id) {
@@ -763,6 +803,7 @@ export default function ArrClient() {
           categoria,
           subcategoria,
           hgCliente,
+          hgCompra,
         } = payload;
         setWsPlan((s) => ({
           ...s,
@@ -779,6 +820,7 @@ export default function ArrClient() {
                   categoria,
                   subcategoria,
                   hgCliente,
+                  hgCompra,
                 }
               : n
           ),
@@ -799,6 +841,7 @@ export default function ArrClient() {
         categoria,
         subcategoria,
         hgCliente,
+        hgCompra,
       } = payload;
       setWsPlan((s) => ({
         ...s,
@@ -815,6 +858,7 @@ export default function ArrClient() {
             categoria,
             subcategoria,
             hgCliente,
+            hgCompra,
           },
         ],
       }));
@@ -1403,9 +1447,17 @@ export default function ArrClient() {
     const baseG = metricBTrasVolNuevosPlan.gastoImporte;
     const gastoImporte =
       baseG != null && Number.isFinite(baseG) ? baseG + extraGasto : null;
+    const extraOp = sumOperativosExtraImpuestosNuevosKg(
+      nuevosClientesPlan,
+      metricBTrasVolNuevosPlan.impuestoKg
+    );
+    const op0 = metricBTrasVolNuevosPlan.operativos;
+    const operativos =
+      op0 != null && Number.isFinite(op0) ? op0 + extraOp : op0;
     return {
       ...metricBTrasVolNuevosPlan,
       gastoImporte,
+      operativos,
     };
   }, [metricBTrasVolNuevosPlan, nuevosClientesPlan]);
 
@@ -1455,6 +1507,7 @@ export default function ArrClient() {
         kg: n.kg,
         descKg: n.descKg,
         hgCliente: n.hgCliente,
+        hgCompra: n.hgCompra,
       }))
     );
   }, [
@@ -1739,7 +1792,18 @@ export default function ArrClient() {
         metricBTrasNuevos.gastoImporte != null && Number.isFinite(metricBTrasNuevos.gastoImporte)
           ? metricBTrasNuevos.gastoImporte + extraGasto
           : null;
-      const metricBResumen0: ResumenMesMetrics = { ...metricBTrasNuevos, gastoImporte: gastoImporteFinal };
+      const extraOp0 = sumOperativosExtraImpuestosNuevosKg(
+        sNuevos,
+        metricBTrasNuevos.impuestoKg
+      );
+      const opB0 = metricBTrasNuevos.operativos;
+      const operativos0 =
+        opB0 != null && Number.isFinite(opB0) ? opB0 + extraOp0 : opB0;
+      const metricBResumen0: ResumenMesMetrics = {
+        ...metricBTrasNuevos,
+        gastoImporte: gastoImporteFinal,
+        operativos: operativos0,
+      };
 
       const rentArrA0 =
         clientesA0 ? rentabilidadArrDesdeFilas(filasPrimero, filasSolo, metA.gastoImporte, "A") : null;
@@ -1759,6 +1823,7 @@ export default function ArrClient() {
                 kg: n.kg,
                 descKg: n.descKg,
                 hgCliente: n.hgCliente,
+                hgCompra: n.hgCompra,
               }))
             );
 
@@ -1810,6 +1875,12 @@ export default function ArrClient() {
           ventaB: ventaBMesBConSimMap(r, sConVenta),
           descA: r.descA,
           descB: r.descB,
+          ...(slice === wsPlan
+            ? {
+                sinVentaForecast: Boolean(sExcluir[r.cliente]),
+                conVentaForecastSim: Boolean(sConVenta[r.cliente]),
+              }
+            : {}),
         })),
         filasClientesSoloMesSegundo: filasSolo.map((r) => ({
           cliente: r.cliente,
@@ -1817,7 +1888,14 @@ export default function ArrClient() {
           ventaB: ventaBMesBConSimMap(r, sConVenta),
           descA: r.descA,
           descB: r.descB,
+          ...(slice === wsPlan
+            ? {
+                sinVentaForecast: Boolean(sExcluir[r.cliente]),
+                conVentaForecastSim: Boolean(sConVenta[r.cliente]),
+              }
+            : {}),
         })),
+        marcasForecastEnClientes: slice === wsPlan,
         usarFormulasComparacion: true,
         ...(slice === wsPlan
           ? {
@@ -1830,6 +1908,7 @@ export default function ArrClient() {
                 categoria: n.categoria,
                 subcategoria: n.subcategoria,
                 hgCliente: n.hgCliente,
+                hgCompra: n.hgCompra,
               })),
             }
           : {}),
@@ -2081,6 +2160,7 @@ export default function ArrClient() {
                         ventaTon: metricBResumen.ventaTon,
                         descuentoSigned: metricBResumen.descuentoSigned,
                         gastoImporte: metricBResumen.gastoImporte,
+                        operativos: metricBResumen.operativos,
                       }
                     : mRaw;
                 const rentabUi =
@@ -2161,7 +2241,7 @@ export default function ArrClient() {
                       {cellDeltaNum(metricA.descuentoSigned, metricBResumen.descuentoSigned, 2)}
                     </td>
                     <td className={`px-3 py-2 text-center tabular-nums ${G.costos}`}>
-                      {cellDeltaMoney(metricA.operativos, metricB.operativos)}
+                      {cellDeltaMoney(metricA.operativos, metricBResumen.operativos)}
                     </td>
                     <td className={`px-3 py-2 text-center tabular-nums ${G.costos}`}>
                       {cellDeltaMoney(metricA.corporativos, metricB.corporativos)}
@@ -2228,6 +2308,7 @@ export default function ArrClient() {
                   <th className="px-3 py-2 text-center">Desc. $/kg</th>
                   <th className="px-3 py-2 text-center">Gasto</th>
                   <th className="px-3 py-2 text-center">HG cliente</th>
+                  <th className="px-3 py-2 text-center">HG compra</th>
                   <th className="px-3 py-2 text-center">Ingreso marginal</th>
                   <th className="px-3 py-2 text-center min-w-[9.5rem]">Acciones</th>
                 </tr>
@@ -2238,7 +2319,8 @@ export default function ArrClient() {
                     n.kg,
                     n.descKg,
                     metricBResumen,
-                    n.hgCliente
+                    n.hgCliente,
+                    n.hgCompra
                   );
                   return (
                     <tr key={n.id} className="border-t border-slate-700/70">
@@ -2252,6 +2334,11 @@ export default function ArrClient() {
                       <td className="px-3 py-2 text-center tabular-nums text-slate-200">
                         {n.hgCliente != null && Number.isFinite(n.hgCliente)
                           ? fmtNum(n.hgCliente, 2)
+                          : "—"}
+                      </td>
+                      <td className="px-3 py-2 text-center tabular-nums text-slate-200">
+                        {n.hgCompra != null && Number.isFinite(n.hgCompra)
+                          ? fmtNum(n.hgCompra, 2)
                           : "—"}
                       </td>
                       <td className="px-3 py-2 text-center tabular-nums text-emerald-200/90">

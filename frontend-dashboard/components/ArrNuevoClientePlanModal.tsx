@@ -9,6 +9,8 @@ export type ArrNuevoClientePlanPayload = {
   gastoMxn: number;
   /** null = usar HG del mes forecast en el ingreso marginal. */
   hgCliente: number | null;
+  /** null = usar HG$ del mes forecast en el mismo término. */
+  hgCompra: number | null;
   responsable: string;
   responsableId: number;
   categoria: "CASA" | "COMISIONISTA";
@@ -31,6 +33,7 @@ export type ArrNuevoClientePlanEdicion = {
   categoria: "CASA" | "COMISIONISTA";
   subcategoria: string;
   hgCliente?: number | null;
+  hgCompra?: number | null;
 };
 
 type Props = {
@@ -61,6 +64,7 @@ export default function ArrNuevoClientePlanModal({
   const [descStr, setDescStr] = useState("");
   const [gastoStr, setGastoStr] = useState("");
   const [hgClienteStr, setHgClienteStr] = useState("");
+  const [hgCompraStr, setHgCompraStr] = useState("");
   const [responsableIdStr, setResponsableIdStr] = useState("");
   const [categoria, setCategoria] = useState<"CASA" | "COMISIONISTA">("CASA");
   const [subcategoria, setSubcategoria] = useState("");
@@ -88,6 +92,10 @@ export default function ArrNuevoClientePlanModal({
       setHgClienteStr(
         hg != null && Number.isFinite(hg) ? String(hg) : ""
       );
+      const hgCp = clienteEditar.hgCompra;
+      setHgCompraStr(
+        hgCp != null && Number.isFinite(hgCp) ? String(hgCp) : ""
+      );
       setCategoria(clienteEditar.categoria ?? "CASA");
       setSubcategoria(clienteEditar.subcategoria ?? "");
       const rid = clienteEditar.responsableId;
@@ -104,6 +112,7 @@ export default function ArrNuevoClientePlanModal({
       setDescStr("");
       setGastoStr("");
       setHgClienteStr("");
+      setHgCompraStr("");
       setResponsableIdStr("");
       setCategoria("CASA");
       setSubcategoria("");
@@ -154,6 +163,18 @@ export default function ArrNuevoClientePlanModal({
       }
       hgCliente = hgParsed;
     }
+    const hgCompraTrim = hgCompraStr.trim();
+    let hgCompra: number | null = null;
+    if (hgCompraTrim !== "") {
+      const hcp = parseNum(hgCompraTrim);
+      if (hcp == null || !Number.isFinite(hcp)) {
+        setError(
+          "HG compra debe ser un número válido o déjalo vacío para usar HG$ del mes."
+        );
+        return;
+      }
+      hgCompra = hcp;
+    }
     const sub = subcategoria.trim();
     if (!sub) {
       setError("Indica la subcategoría.");
@@ -175,6 +196,7 @@ export default function ArrNuevoClientePlanModal({
       descKg,
       gastoMxn: gasto,
       hgCliente,
+      hgCompra,
       responsable: u.nombre,
       responsableId: rid,
       categoria,
@@ -257,6 +279,20 @@ export default function ArrNuevoClientePlanModal({
             />
             <span className="mt-1 block text-[0.65rem] text-slate-500">
               Mismo concepto que HG del resumen; sustituye solo ese factor en{" "}
+              <span className="font-mono text-slate-400">kg×HG×HG$/100</span>.
+            </span>
+          </label>
+          <label className="block text-sm">
+            <span className="text-slate-300">HG compra</span>
+            <input
+              value={hgCompraStr}
+              onChange={(e) => setHgCompraStr(e.target.value)}
+              className="mt-1 w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+              placeholder="Vacío = HG$ del mes forecast"
+              inputMode="decimal"
+            />
+            <span className="mt-1 block text-[0.65rem] text-slate-500">
+              Mismo concepto que HG$ del resumen; sustituye solo ese factor en{" "}
               <span className="font-mono text-slate-400">kg×HG×HG$/100</span>.
             </span>
           </label>

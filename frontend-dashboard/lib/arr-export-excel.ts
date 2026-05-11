@@ -20,6 +20,9 @@ export type ArrExportClienteRow = {
   ventaB: number | null;
   descA: number | null;
   descB: number | null;
+  /** Solo hoja ARR Plan (export). */
+  sinVentaForecast?: boolean;
+  conVentaForecastSim?: boolean;
 };
 
 function safeFilePart(s: string): string {
@@ -30,6 +33,18 @@ function safeFilePart(s: string): string {
 function cellNum(v: number | null | undefined): number | null {
   if (v == null || Number.isNaN(v)) return null;
   return v;
+}
+
+/** Índice de columna 1-based → letra Excel (A, B, …, Z, AA…). */
+function excelColLetter(colIndex: number): string {
+  let n = colIndex;
+  let s = "";
+  while (n > 0) {
+    const r = (n - 1) % 26;
+    s = String.fromCharCode(65 + r) + s;
+    n = Math.floor((n - 1) / 26);
+  }
+  return s;
 }
 
 /** Toneladas CASA / COMISIONISTA (misma fuente que el dashboard). */
@@ -76,7 +91,11 @@ export type ArrExportOptions = {
     subcategoria: string;
     /** null/undefined: fórmula usa HG del mes resumen. */
     hgCliente?: number | null;
+    /** null/undefined: fórmula usa HG$ del mes resumen. */
+    hgCompra?: number | null;
   }[];
+  /** Columnas «Sin venta» / «Con venta» en clientes (solo ARR Plan). */
+  marcasForecastEnClientes?: boolean;
 };
 
 type ArrExportBuildOptions = {
@@ -108,7 +127,12 @@ function styleHeaderRow(row: ExcelJS.Row, lastCol: number) {
   });
 }
 
-function styleDataRow(row: ExcelJS.Row, lastCol: number, centerCols: number[]) {
+function styleDataRow(
+  row: ExcelJS.Row,
+  lastCol: number,
+  centerCols: number[],
+  clienteCol = 1
+) {
   row.alignment = { vertical: "middle", horizontal: "center" };
   row.eachCell({ includeEmpty: true }, (cell, col) => {
     if (col > lastCol) return;
@@ -119,7 +143,7 @@ function styleDataRow(row: ExcelJS.Row, lastCol: number, centerCols: number[]) {
       bottom: { style: "thin", color: { argb: "FFC8C8C8" } },
       right: { style: "thin", color: { argb: "FFC8C8C8" } },
     };
-    if (col === 1) {
+    if (col === clienteCol) {
       cell.alignment = { vertical: "middle", horizontal: "left" };
     } else if (centerCols.includes(col)) {
       cell.alignment = { vertical: "middle", horizontal: "center" };
@@ -176,6 +200,7 @@ async function downloadArrDashboardExcelInternal(
     rentabilidadMesAFormulaClientes = true,
     rentabilidadMesBFormulaClientes = true,
     nuevosClientesPlan = [],
+    marcasForecastEnClientes = false,
   } = opts;
 
   const wb = build.workbook ?? new ExcelJS.Workbook();
@@ -188,7 +213,6 @@ async function downloadArrDashboardExcelInternal(
   const LAST_SUMMARY_COL = 13;
   const MES_A_R = 5;
   const MES_B_R = 6;
-  const CLI_FIRST_R = 12;
 
   let cur = 1;
   ws.getRow(cur).getCell(1).value = `${wsName} · IGF Forecast · exportación`;
@@ -310,12 +334,13 @@ async function downloadArrDashboardExcelInternal(
       "Desc. $/kg",
       "Gasto",
       "HG cliente",
+      "HG compra",
       "Ingreso marginal",
     ];
     labels.forEach((t, i) => (hdr.getCell(i + 1).value = t));
-    styleHeaderRow(hdr, 9);
+    styleHeaderRow(hdr, 10);
     cur++;
-    const centerCols = [2, 3, 4, 5, 6, 7, 8, 9];
+    const centerCols = [2, 3, 4, 5, 6, 7, 8, 9, 10];
     for (const n of nuevosClientesPlan) {
       const r = ws.getRow(cur);
       r.getCell(1).value = n.nombre;
@@ -335,11 +360,18 @@ async function downloadArrDashboardExcelInternal(
       } else {
         r.getCell(8).value = null;
       }
-      r.getCell(9).value = {
-        formula: `ROUND(IFERROR((E${cur}*($C$${MES_B_R}-ABS(F${cur})))+(IF(ISBLANK(H${cur}),$H$${MES_B_R},H${cur})*E${cur}*$I$${MES_B_R}/100),0),0)`,
+      const hgCp = n.hgCompra;
+      if (hgCp != null && Number.isFinite(hgCp)) {
+        r.getCell(9).value = cellNum(hgCp);
+        r.getCell(9).numFmt = "#,##0.00";
+      } else {
+        r.getCell(9).value = null;
+      }
+      r.getCell(10).value = {
+        formula: `ROUND(IFERROR((E${cur}*($C$${MES_B_R}-ABS(F${cur})))+(IF(ISBLANK(H${cur}),$H$${MES_B_R},H${cur})*E${cur}*IF(ISBLANK(I${cur}),$I$${MES_B_R},I${cur})/100),0),0)`,
       };
-      r.getCell(9).numFmt = '"$" #,##0';
-      styleDataRow(r, 9, centerCols);
+      r.getCell(10).numFmt = '"$" #,##0';
+      styleDataRow(r, 10, centerCols);
       cur++;
     }
   }
@@ -352,65 +384,123 @@ async function downloadArrDashboardExcelInternal(
   ws.getRow(cur).getCell(1).value = "";
   cur++;
 
-  const cliHeaders = [
-    "Cliente",
-    headerVentaA,
-    headerVentaB,
-    "Delta venta",
-    headerDescA,
-    headerDescB,
-    "Delta descuento",
-    headerIngresoA,
-    headerIngresoB,
-    "Delta ingreso",
-  ];
+  const MF = marcasForecastEnClientes;
+  const C = MF
+    ? {
+        sinV: 1,
+        conV: 2,
+        cli: 3,
+        vA: 4,
+        vB: 5,
+        dV: 6,
+        dA: 7,
+        dB: 8,
+        dDesc: 9,
+        ingA: 10,
+        ingB: 11,
+        dIng: 12,
+        last: 12,
+      }
+    : {
+        sinV: 0,
+        conV: 0,
+        cli: 1,
+        vA: 2,
+        vB: 3,
+        dV: 4,
+        dA: 5,
+        dB: 6,
+        dDesc: 7,
+        ingA: 8,
+        ingB: 9,
+        dIng: 10,
+        last: 10,
+      };
+  const Lc = (i: number) => excelColLetter(i);
+
+  const cliHeaders = MF
+    ? [
+        "Sin venta",
+        "Con venta",
+        "Cliente",
+        headerVentaA,
+        headerVentaB,
+        "Delta venta",
+        headerDescA,
+        headerDescB,
+        "Delta descuento",
+        headerIngresoA,
+        headerIngresoB,
+        "Delta ingreso",
+      ]
+    : [
+        "Cliente",
+        headerVentaA,
+        headerVentaB,
+        "Delta venta",
+        headerDescA,
+        headerDescB,
+        "Delta descuento",
+        headerIngresoA,
+        headerIngresoB,
+        "Delta ingreso",
+      ];
   const cliHdr = ws.getRow(cur);
   cliHeaders.forEach((t, i) => {
     cliHdr.getCell(i + 1).value = t;
   });
-  styleHeaderRow(cliHdr, 10);
+  styleHeaderRow(cliHdr, C.last);
   cur++;
 
-  const centerCli = [2, 3, 4, 5, 6, 7, 8, 9, 10];
+  const centerCli = MF
+    ? [1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+    : [2, 3, 4, 5, 6, 7, 8, 9, 10];
+  const clienteColStyle = MF ? C.cli : 1;
+
+  const firstClienteDataRow = cur;
 
   for (const row of filasClientesMesPrimero) {
     const rowX = ws.getRow(cur);
-    rowX.getCell(1).value = row.cliente;
-    rowX.getCell(2).value = cellNum(row.ventaA);
-    rowX.getCell(2).numFmt = "#,##0";
-    rowX.getCell(3).value = cellNum(row.ventaB);
-    rowX.getCell(3).numFmt = "#,##0";
-    rowX.getCell(4).value = {
-      formula: `ROUND(IFERROR(C${cur}-B${cur},0),0)`,
+    if (MF) {
+      rowX.getCell(C.sinV).value = row.sinVentaForecast ? "Sí" : "";
+      rowX.getCell(C.conV).value = row.conVentaForecastSim ? "Sí" : "";
+    }
+    rowX.getCell(C.cli).value = row.cliente;
+    rowX.getCell(C.vA).value = cellNum(row.ventaA);
+    rowX.getCell(C.vA).numFmt = "#,##0";
+    rowX.getCell(C.vB).value = cellNum(row.ventaB);
+    rowX.getCell(C.vB).numFmt = "#,##0";
+    rowX.getCell(C.dV).value = {
+      formula: `ROUND(IFERROR(${Lc(C.vB)}${cur}-${Lc(C.vA)}${cur},0),0)`,
     };
-    rowX.getCell(4).numFmt = "#,##0";
-    rowX.getCell(5).value = cellNum(row.descA);
-    rowX.getCell(5).numFmt = "#,##0.00";
-    rowX.getCell(6).value = cellNum(row.descB);
-    rowX.getCell(6).numFmt = "#,##0.00";
-    rowX.getCell(7).value = {
-      formula: `ROUND(IFERROR(F${cur}-E${cur},0),2)`,
+    rowX.getCell(C.dV).numFmt = "#,##0";
+    rowX.getCell(C.dA).value = cellNum(row.descA);
+    rowX.getCell(C.dA).numFmt = "#,##0.00";
+    rowX.getCell(C.dB).value = cellNum(row.descB);
+    rowX.getCell(C.dB).numFmt = "#,##0.00";
+    rowX.getCell(C.dDesc).value = {
+      formula: `ROUND(IFERROR(${Lc(C.dB)}${cur}-${Lc(C.dA)}${cur},0),2)`,
     };
-    rowX.getCell(7).numFmt = "#,##0.00";
-    rowX.getCell(8).value = {
-      formula: `ROUND(IFERROR((B${cur}*($C$${MES_A_R}-ABS(E${cur})))+($H$${MES_A_R}*B${cur}*$I$${MES_A_R}/100),0),0)`,
+    rowX.getCell(C.dDesc).numFmt = "#,##0.00";
+    rowX.getCell(C.ingA).value = {
+      formula: `ROUND(IFERROR((${Lc(C.vA)}${cur}*($C$${MES_A_R}-ABS(${Lc(C.dA)}${cur})))+($H$${MES_A_R}*${Lc(C.vA)}${cur}*$I$${MES_A_R}/100),0),0)`,
     };
-    rowX.getCell(8).numFmt = '"$" #,##0';
-    rowX.getCell(9).value = {
-      formula: `ROUND(IFERROR((C${cur}*($C$${MES_B_R}-ABS(F${cur})))+($H$${MES_B_R}*C${cur}*$I$${MES_B_R}/100),0),0)`,
+    rowX.getCell(C.ingA).numFmt = '"$" #,##0';
+    rowX.getCell(C.ingB).value = {
+      formula: `ROUND(IFERROR((${Lc(C.vB)}${cur}*($C$${MES_B_R}-ABS(${Lc(C.dB)}${cur})))+($H$${MES_B_R}*${Lc(C.vB)}${cur}*$I$${MES_B_R}/100),0),0)`,
     };
-    rowX.getCell(9).numFmt = '"$" #,##0';
-    rowX.getCell(10).value = {
-      formula: `ROUND(IFERROR(I${cur}-H${cur},0),0)`,
+    rowX.getCell(C.ingB).numFmt = '"$" #,##0';
+    rowX.getCell(C.dIng).value = {
+      formula: `ROUND(IFERROR(${Lc(C.ingB)}${cur}-${Lc(C.ingA)}${cur},0),0)`,
     };
-    rowX.getCell(10).numFmt = '"$" #,##0';
-    styleDataRow(rowX, 10, centerCli);
+    rowX.getCell(C.dIng).numFmt = '"$" #,##0';
+    styleDataRow(rowX, C.last, centerCli, clienteColStyle);
     cur++;
   }
 
   if (filasClientesSoloMesSegundo.length > 0 && filasClientesMesPrimero.length > 0) {
     const sep = ws.getRow(cur);
-    for (let c = 1; c <= 10; c++) {
+    for (let c = 1; c <= C.last; c++) {
       sep.getCell(c).value = "";
       sep.getCell(c).fill = {
         type: "pattern",
@@ -423,73 +513,97 @@ async function downloadArrDashboardExcelInternal(
 
   for (const row of filasClientesSoloMesSegundo) {
     const rowX = ws.getRow(cur);
-    rowX.getCell(1).value = row.cliente;
-    rowX.getCell(2).value = 0;
-    rowX.getCell(2).numFmt = "#,##0";
-    rowX.getCell(3).value = cellNum(row.ventaB);
-    rowX.getCell(3).numFmt = "#,##0";
-    rowX.getCell(4).value = {
-      formula: `ROUND(IFERROR(C${cur}-B${cur},0),0)`,
+    if (MF) {
+      rowX.getCell(C.sinV).value = row.sinVentaForecast ? "Sí" : "";
+      rowX.getCell(C.conV).value = row.conVentaForecastSim ? "Sí" : "";
+    }
+    rowX.getCell(C.cli).value = row.cliente;
+    rowX.getCell(C.vA).value = 0;
+    rowX.getCell(C.vA).numFmt = "#,##0";
+    rowX.getCell(C.vB).value = cellNum(row.ventaB);
+    rowX.getCell(C.vB).numFmt = "#,##0";
+    rowX.getCell(C.dV).value = {
+      formula: `ROUND(IFERROR(${Lc(C.vB)}${cur}-${Lc(C.vA)}${cur},0),0)`,
     };
-    rowX.getCell(4).numFmt = "#,##0";
-    rowX.getCell(5).value = 0;
-    rowX.getCell(5).numFmt = "#,##0.00";
-    rowX.getCell(6).value = cellNum(row.descB);
-    rowX.getCell(6).numFmt = "#,##0.00";
-    rowX.getCell(7).value = {
-      formula: `ROUND(IFERROR(F${cur}-E${cur},0),2)`,
+    rowX.getCell(C.dV).numFmt = "#,##0";
+    rowX.getCell(C.dA).value = 0;
+    rowX.getCell(C.dA).numFmt = "#,##0.00";
+    rowX.getCell(C.dB).value = cellNum(row.descB);
+    rowX.getCell(C.dB).numFmt = "#,##0.00";
+    rowX.getCell(C.dDesc).value = {
+      formula: `ROUND(IFERROR(${Lc(C.dB)}${cur}-${Lc(C.dA)}${cur},0),2)`,
     };
-    rowX.getCell(7).numFmt = "#,##0.00";
-    rowX.getCell(8).value = {
-      formula: `ROUND(IFERROR((B${cur}*($C$${MES_A_R}-ABS(E${cur})))+($H$${MES_A_R}*B${cur}*$I$${MES_A_R}/100),0),0)`,
+    rowX.getCell(C.dDesc).numFmt = "#,##0.00";
+    rowX.getCell(C.ingA).value = {
+      formula: `ROUND(IFERROR((${Lc(C.vA)}${cur}*($C$${MES_A_R}-ABS(${Lc(C.dA)}${cur})))+($H$${MES_A_R}*${Lc(C.vA)}${cur}*$I$${MES_A_R}/100),0),0)`,
     };
-    rowX.getCell(8).numFmt = '"$" #,##0';
-    rowX.getCell(9).value = {
-      formula: `ROUND(IFERROR((C${cur}*($C$${MES_B_R}-ABS(F${cur})))+($H$${MES_B_R}*C${cur}*$I$${MES_B_R}/100),0),0)`,
+    rowX.getCell(C.ingA).numFmt = '"$" #,##0';
+    rowX.getCell(C.ingB).value = {
+      formula: `ROUND(IFERROR((${Lc(C.vB)}${cur}*($C$${MES_B_R}-ABS(${Lc(C.dB)}${cur})))+($H$${MES_B_R}*${Lc(C.vB)}${cur}*$I$${MES_B_R}/100),0),0)`,
     };
-    rowX.getCell(9).numFmt = '"$" #,##0';
-    rowX.getCell(10).value = {
-      formula: `ROUND(IFERROR(I${cur}-H${cur},0),0)`,
+    rowX.getCell(C.ingB).numFmt = '"$" #,##0';
+    rowX.getCell(C.dIng).value = {
+      formula: `ROUND(IFERROR(${Lc(C.ingB)}${cur}-${Lc(C.ingA)}${cur},0),0)`,
     };
-    rowX.getCell(10).numFmt = '"$" #,##0';
-    styleDataRow(rowX, 10, centerCli);
+    rowX.getCell(C.dIng).numFmt = '"$" #,##0';
+    styleDataRow(rowX, C.last, centerCli, clienteColStyle);
     cur++;
   }
 
   const lastDataR = cur - 1;
   const celL5 = ws.getCell(`M${MES_A_R}`);
   const celL6 = ws.getCell(`M${MES_B_R}`);
-  if (lastDataR >= CLI_FIRST_R && rentabilidadMesAFormulaClientes) {
-    const sumH = `SUM(H${CLI_FIRST_R}:H${lastDataR})`;
-    celL5.value = { formula: `${sumH}-G${MES_A_R}` };
+  const colIngA = Lc(C.ingA);
+  const colIngB = Lc(C.ingB);
+  if (lastDataR >= firstClienteDataRow && rentabilidadMesAFormulaClientes) {
+    const sumIngA = `SUM(${colIngA}${firstClienteDataRow}:${colIngA}${lastDataR})`;
+    celL5.value = { formula: `${sumIngA}-G${MES_A_R}` };
   } else {
     celL5.value = cellNum(mA.rentabilidadImporte);
   }
   celL5.numFmt = '"$" #,##0';
 
-  if (lastDataR >= CLI_FIRST_R && rentabilidadMesBFormulaClientes) {
-    const sumI = `SUM(I${CLI_FIRST_R}:I${lastDataR})`;
-    celL6.value = { formula: `${sumI}-G${MES_B_R}` };
+  if (lastDataR >= firstClienteDataRow && rentabilidadMesBFormulaClientes) {
+    const sumIngB = `SUM(${colIngB}${firstClienteDataRow}:${colIngB}${lastDataR})`;
+    celL6.value = { formula: `${sumIngB}-G${MES_B_R}` };
   } else {
     celL6.value = cellNum(mB.rentabilidadImporte);
   }
   celL6.numFmt = '"$" #,##0';
 
-  ws.columns = [
-    { width: 28 },
-    { width: 14 },
-    { width: 14 },
-    { width: 14 },
-    { width: 14 },
-    { width: 14 },
-    { width: 14 },
-    { width: 14 },
-    { width: 14 },
-    { width: 14 },
-    { width: 12 },
-    { width: 12 },
-    { width: 16 },
-  ];
+  ws.columns = MF
+    ? [
+        { width: 10 },
+        { width: 10 },
+        { width: 28 },
+        { width: 14 },
+        { width: 14 },
+        { width: 14 },
+        { width: 14 },
+        { width: 14 },
+        { width: 14 },
+        { width: 14 },
+        { width: 14 },
+        { width: 14 },
+        { width: 12 },
+        { width: 12 },
+        { width: 16 },
+      ]
+    : [
+        { width: 28 },
+        { width: 14 },
+        { width: 14 },
+        { width: 14 },
+        { width: 14 },
+        { width: 14 },
+        { width: 14 },
+        { width: 14 },
+        { width: 14 },
+        { width: 14 },
+        { width: 12 },
+        { width: 12 },
+        { width: 16 },
+      ];
 
   if (build.skipDownload) return;
   const buf = await wb.xlsx.writeBuffer();
