@@ -406,6 +406,35 @@ function rentabilidadArrDesdeFilas(
   return Math.round(sumIng - gastoImporte);
 }
 
+/**
+ * Mes B forecast con «Sin venta»: Σ ingreso (margen/HG del resumen ajustado, desc por fila)
+ * solo clientes no excluidos − Gasto. Alineado a venta/desc superior tras `applyExclusionsToMetricB`.
+ */
+function rentabilidadForecastMesBConExclusionSinVenta(
+  filasPrimero: ClienteTablaRow[],
+  filasSoloMesB: ClienteTablaRow[],
+  gastoImporte: number | null,
+  metricBResumen: ResumenMesMetrics,
+  excluir: Record<string, true> | undefined
+): number | null {
+  if (gastoImporte == null || !Number.isFinite(gastoImporte)) return null;
+  if (!excluir || Object.keys(excluir).length === 0) return null;
+  let sumIng = 0;
+  for (const r of filasPrimero) {
+    if (excluir[r.cliente]) continue;
+    const kg = r.ventaB;
+    if (kg == null || !Number.isFinite(kg) || kg <= 0) continue;
+    sumIng += ingresoClienteMarginal(kg, r.descB, metricBResumen) ?? 0;
+  }
+  for (const r of filasSoloMesB) {
+    if (excluir[r.cliente]) continue;
+    const kg = r.ventaB;
+    if (kg == null || !Number.isFinite(kg) || kg <= 0) continue;
+    sumIng += ingresoClienteMarginal(kg, r.descB, metricBResumen) ?? 0;
+  }
+  return Math.round(sumIng - gastoImporte);
+}
+
 export default function ArrClient() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -939,14 +968,48 @@ export default function ArrClient() {
     metricB.gastoImporte,
   ]);
 
+  const rentabilidadArrBExclSinVenta = useMemo(() => {
+    if (!clientesB || clientesB.historico) return null;
+    return rentabilidadForecastMesBConExclusionSinVenta(
+      filasClientesMesPrimero,
+      filasClientesSoloMesSegundo,
+      metricB.gastoImporte,
+      metricBResumen,
+      clientesExcluirVentaForecast
+    );
+  }, [
+    clientesB,
+    filasClientesMesPrimero,
+    filasClientesSoloMesSegundo,
+    metricB.gastoImporte,
+    metricBResumen,
+    clientesExcluirVentaForecast,
+  ]);
+
   const rentabilidadMostradaA = useMemo(
     () => rentabilidadResumenPorMes(selA, rentabilidadArrA, metricA.rentabilidadImporte),
     [selA, rentabilidadArrA, metricA.rentabilidadImporte]
   );
-  const rentabilidadMostradaB = useMemo(
-    () => rentabilidadResumenPorMes(selB, rentabilidadArrB, metricB.rentabilidadImporte),
-    [selB, rentabilidadArrB, metricB.rentabilidadImporte]
-  );
+  const rentabilidadMostradaB = useMemo(() => {
+    if (!selB) return null;
+    const hist = mesHistoricoDesdeSelector(selB);
+    const hayExclusionForecast =
+      !hist &&
+      clientesB &&
+      !clientesB.historico &&
+      Object.keys(clientesExcluirVentaForecast).length > 0;
+    if (hayExclusionForecast && rentabilidadArrBExclSinVenta != null) {
+      return rentabilidadArrBExclSinVenta;
+    }
+    return rentabilidadResumenPorMes(selB, rentabilidadArrB, metricB.rentabilidadImporte);
+  }, [
+    selB,
+    clientesB,
+    clientesExcluirVentaForecast,
+    rentabilidadArrBExclSinVenta,
+    rentabilidadArrB,
+    metricB.rentabilidadImporte,
+  ]);
 
   const simularClientesOpciones = useMemo(() => {
     const out: {
