@@ -9,6 +9,11 @@ import {
   type DeltaIngresoForecastCliente,
 } from "@/lib/api";
 import { DicfAccionesClientePanel } from "@/components/DicfAccionesClientePanel";
+import {
+  DICF_HISTORY_WEEK_OPTIONS,
+  type DicfHistoryWeeks,
+  filterDicfClienteHistoryByWeeks,
+} from "@/lib/dicf-cliente-history-weeks";
 
 function normalizeClienteNombre(s: string): string {
   return String(s || "")
@@ -79,6 +84,11 @@ export default function DeltaIngresoClienteForecastModal({
     cliente: DeltaIngresoForecastCliente;
   } | null>(null);
   const [dicfMesRowsByCliente, setDicfMesRowsByCliente] = useState<Record<string, MesRowState>>({});
+  const [historialSemanas, setHistorialSemanas] = useState<DicfHistoryWeeks>(4);
+
+  useEffect(() => {
+    if (clienteNombre?.trim()) setHistorialSemanas(4);
+  }, [clienteNombre, planta]);
 
   useEffect(() => {
     if (!open || !clienteNombre || !planta || !token) {
@@ -390,30 +400,60 @@ export default function DeltaIngresoClienteForecastModal({
                 )}
               </p>
               <div className="mt-2">
-                <h4 className="mb-2 text-base font-semibold text-slate-400">Compras últimas 4 semanas</h4>
-                {deltaClienteSel.cliente.historyLast4Weeks &&
-                deltaClienteSel.cliente.historyLast4Weeks.length > 0 ? (
-                  <table className="w-full border-collapse text-sm">
-                    <thead>
-                      <tr className="border-b border-slate-700 text-slate-400">
-                        <th className="py-1 pr-2 text-left">Fecha</th>
-                        <th className="py-1 text-right">Volumen (kg)</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {deltaClienteSel.cliente.historyLast4Weeks.map((h, idx) => (
-                        <tr key={idx} className="border-b border-slate-800">
-                          <td className="py-1 pr-2">{h.fecha}</td>
-                          <td className="py-1 text-right tabular-nums">
-                            {h.kg.toLocaleString("es-MX", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                          </td>
-                        </tr>
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <h4 className="text-base font-semibold text-slate-400">
+                    Compras últimas {historialSemanas} semanas
+                  </h4>
+                  <label className="flex items-center gap-2 text-xs text-slate-400">
+                    <span>Ventana</span>
+                    <select
+                      value={historialSemanas}
+                      onChange={(e) =>
+                        setHistorialSemanas(Number(e.target.value) as DicfHistoryWeeks)
+                      }
+                      className="rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm text-slate-100"
+                    >
+                      {DICF_HISTORY_WEEK_OPTIONS.map((w) => (
+                        <option key={w} value={w}>
+                          {w} sem.
+                        </option>
                       ))}
-                    </tbody>
-                  </table>
-                ) : (
-                  <p className="text-sm text-slate-500">Sin compras en las últimas 4 semanas.</p>
-                )}
+                    </select>
+                  </label>
+                </div>
+                {(() => {
+                  const hist = filterDicfClienteHistoryByWeeks(
+                    deltaClienteSel.cliente.historyLast4Weeks,
+                    historialSemanas
+                  );
+                  return hist.length > 0 ? (
+                    <table className="w-full border-collapse text-sm">
+                      <thead>
+                        <tr className="border-b border-slate-700 text-slate-400">
+                          <th className="py-1 pr-2 text-left">Fecha</th>
+                          <th className="py-1 text-right">Volumen (kg)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {hist.map((h, idx) => (
+                          <tr key={`${h.fecha}-${idx}`} className="border-b border-slate-800">
+                            <td className="py-1 pr-2">{h.fecha}</td>
+                            <td className="py-1 text-right tabular-nums">
+                              {h.kg.toLocaleString("es-MX", {
+                                minimumFractionDigits: 0,
+                                maximumFractionDigits: 0,
+                              })}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <p className="text-sm text-slate-500">
+                      Sin compras en las últimas {historialSemanas} semanas.
+                    </p>
+                  );
+                })()}
               </div>
             </>
           )}

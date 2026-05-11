@@ -1153,6 +1153,7 @@ export interface DeltaIngresoForecastCliente extends DeltaIngresoCliente {
   daysSinceLast?: number;
   lastPurchaseDate?: string | null;
   daysSinceLastReal?: number | null;
+  /** Compras diarias con kg > 0; backend envía hasta 56 días (8 semanas). */
   historyLast4Weeks?: { fecha: string; kg: number }[];
   kgAStr?: string;
   kgBStr?: string;
