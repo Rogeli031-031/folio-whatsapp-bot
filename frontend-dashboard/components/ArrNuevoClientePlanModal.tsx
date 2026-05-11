@@ -8,6 +8,8 @@ export type ArrNuevoClientePlanPayload = {
   descKg: number;
   gastoMxn: number;
   responsable: string;
+  categoria: "CASA" | "COMISIONISTA";
+  subcategoria: string;
 };
 
 export type ArrNuevoClientePlanSavePayload = ArrNuevoClientePlanPayload & {
@@ -22,6 +24,8 @@ export type ArrNuevoClientePlanEdicion = {
   descKg: number;
   gastoMxn: number;
   responsable: string;
+  categoria: "CASA" | "COMISIONISTA";
+  subcategoria: string;
 };
 
 type Props = {
@@ -31,6 +35,8 @@ type Props = {
   mesForecastLabel: string;
   /** Nombres ya usados (comparación sin distinguir mayúsculas). */
   nombresExistentes: string[];
+  responsables: { id: number; nombre: string }[];
+  subcategorias: { categoria: "CASA" | "COMISIONISTA"; subcategoria: string }[];
   /** Si viene definido, el modal abre en modo edición con esos valores. */
   clienteEditar?: ArrNuevoClientePlanEdicion | null;
 };
@@ -41,6 +47,8 @@ export default function ArrNuevoClientePlanModal({
   onSave,
   mesForecastLabel,
   nombresExistentes,
+  responsables,
+  subcategorias,
   clienteEditar,
 }: Props) {
   const [nombre, setNombre] = useState("");
@@ -48,6 +56,8 @@ export default function ArrNuevoClientePlanModal({
   const [descStr, setDescStr] = useState("");
   const [gastoStr, setGastoStr] = useState("");
   const [responsable, setResponsable] = useState("");
+  const [categoria, setCategoria] = useState<"CASA" | "COMISIONISTA">("CASA");
+  const [subcategoria, setSubcategoria] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const nombresBloqueados = useMemo(() => {
@@ -69,12 +79,16 @@ export default function ArrNuevoClientePlanModal({
       setDescStr(String(clienteEditar.descKg));
       setGastoStr(String(clienteEditar.gastoMxn));
       setResponsable(clienteEditar.responsable ?? "");
+      setCategoria(clienteEditar.categoria ?? "CASA");
+      setSubcategoria(clienteEditar.subcategoria ?? "");
     } else {
       setNombre("");
       setKgStr("");
       setDescStr("");
       setGastoStr("");
       setResponsable("");
+      setCategoria("CASA");
+      setSubcategoria("");
     }
   }, [abierto, clienteEditar]);
 
@@ -117,12 +131,19 @@ export default function ArrNuevoClientePlanModal({
       setError("Indica el responsable.");
       return;
     }
+    const sub = subcategoria.trim();
+    if (!sub) {
+      setError("Indica la subcategoría.");
+      return;
+    }
     const base: ArrNuevoClientePlanSavePayload = {
       nombre: nom,
       kg,
       descKg,
       gastoMxn: gasto,
       responsable: resp,
+      categoria,
+      subcategoria: sub,
     };
     if (clienteEditar) base.id = clienteEditar.id;
     onSave(base);
@@ -190,15 +211,50 @@ export default function ArrNuevoClientePlanModal({
               inputMode="decimal"
             />
           </label>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block text-sm">
+              <span className="text-slate-300">Categoría</span>
+              <select
+                value={categoria}
+                onChange={(e) => setCategoria(e.target.value as "CASA" | "COMISIONISTA")}
+                className="mt-1 w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+              >
+                <option value="CASA">CASA</option>
+                <option value="COMISIONISTA">COMISIONISTA</option>
+              </select>
+            </label>
+            <label className="block text-sm">
+              <span className="text-slate-300">Subcategoría</span>
+              <select
+                value={subcategoria}
+                onChange={(e) => setSubcategoria(e.target.value)}
+                className="mt-1 w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+              >
+                <option value="">Seleccionar…</option>
+                {subcategorias
+                  .filter((s) => s.categoria === categoria)
+                  .map((s) => (
+                    <option key={`${s.categoria}::${s.subcategoria}`} value={s.subcategoria}>
+                      {s.subcategoria}
+                    </option>
+                  ))}
+              </select>
+            </label>
+          </div>
           <label className="block text-sm">
             <span className="text-slate-300">Responsable</span>
-            <input
+            <select
               value={responsable}
               onChange={(e) => setResponsable(e.target.value)}
               className="mt-1 w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100"
-              placeholder="Ej. Juan Pérez"
-              autoComplete="off"
-            />
+            >
+              <option value="">Seleccionar…</option>
+              {responsables.map((u) => (
+                <option key={u.id} value={u.nombre}>
+                  {u.nombre}
+                </option>
+              ))}
+            </select>
           </label>
         </div>
 

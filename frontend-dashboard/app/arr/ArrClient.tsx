@@ -12,6 +12,8 @@ import {
   fetchIgfVersiones,
   fetchArrClientesMes,
   fetchArrLastUploadDay,
+  fetchPlantas,
+  fetchActionRegisterResponsables,
   type IgfForecastRow,
   type IgfForecastMiniRow,
   type IgfPeriodo,
@@ -77,6 +79,8 @@ export type NuevoClientePlanRow = {
   descKg: number;
   gastoMxn: number;
   responsable: string;
+  categoria: "CASA" | "COMISIONISTA";
+  subcategoria: string;
 };
 
 type ArrWorkspaceSlice = {
@@ -376,14 +380,17 @@ function toneladasCategoriaDesdeClientes(
   excluirForecast: Record<string, true> | undefined,
   conVentaSim?: Record<string, { kg: number; descKg: number | null }>,
   /** Kg adicionales contados como categoría Casa (clientes plan sin fila en API). */
-  extraCasaKg = 0
+  extraCasaKg = 0,
+  /** Kg adicionales contados como categoría Comisionista (clientes plan sin fila en API). */
+  extraComiKg = 0
 ): { casa: number | null; comisionista: number | null } {
-  if (!clientes?.rows?.length && !(extraCasaKg > 0)) return { casa: null, comisionista: null };
+  if (!clientes?.rows?.length && !(extraCasaKg > 0) && !(extraComiKg > 0))
+    return { casa: null, comisionista: null };
   let casaKg = extraCasaKg > 0 ? extraCasaKg : 0;
-  let comiKg = 0;
+  let comiKg = extraComiKg > 0 ? extraComiKg : 0;
   if (!clientes?.rows?.length) {
     const toT = (kg: number) => Math.round((kg / 1000) * 100) / 100;
-    return { casa: toT(casaKg), comisionista: toT(0) };
+    return { casa: toT(casaKg), comisionista: toT(comiKg) };
   }
   const hist = clientes.historico;
   for (const r of clientes.rows) {
@@ -579,6 +586,8 @@ export default function ArrClient() {
   const [showSimular, setShowSimular] = useState(false);
   const [showNuevoClientePlan, setShowNuevoClientePlan] = useState(false);
   const [clientePlanEditando, setClientePlanEditando] = useState<NuevoClientePlanRow | null>(null);
+  const [responsablesPlan, setResponsablesPlan] = useState<{ id: number; nombre: string }[]>([]);
+  const [plantaIdPlan, setPlantaIdPlan] = useState<number | null>(null);
 
   const ws = isArrPlanRoute ? wsPlan : wsBase;
   const dataByKey = ws.dataByKey;
@@ -665,14 +674,16 @@ export default function ArrClient() {
       descKg: number;
       gastoMxn: number;
       responsable: string;
+      categoria: "CASA" | "COMISIONISTA";
+      subcategoria: string;
     }) => {
       if (!isArrPlanRoute) return;
       if (payload.id) {
-        const { id, nombre, kg, descKg, gastoMxn, responsable } = payload;
+        const { id, nombre, kg, descKg, gastoMxn, responsable, categoria, subcategoria } = payload;
         setWsPlan((s) => ({
           ...s,
           nuevosClientesPlan: s.nuevosClientesPlan.map((n) =>
-            n.id === id ? { id, nombre, kg, descKg, gastoMxn, responsable } : n
+            n.id === id ? { id, nombre, kg, descKg, gastoMxn, responsable, categoria, subcategoria } : n
           ),
         }));
         return;
@@ -681,12 +692,12 @@ export default function ArrClient() {
         typeof crypto !== "undefined" && "randomUUID" in crypto
           ? crypto.randomUUID()
           : `nuevo-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-      const { nombre, kg, descKg, gastoMxn, responsable } = payload;
+      const { nombre, kg, descKg, gastoMxn, responsable, categoria, subcategoria } = payload;
       setWsPlan((s) => ({
         ...s,
         nuevosClientesPlan: [
           ...s.nuevosClientesPlan,
-          { id, nombre, kg, descKg, gastoMxn, responsable },
+          { id, nombre, kg, descKg, gastoMxn, responsable, categoria, subcategoria },
         ],
       }));
     },
@@ -760,7 +771,54 @@ export default function ArrClient() {
     setWsPlan(emptyArrWorkspaceSlice());
     lastUploadByYmRef.current = {};
     lastPlanPersistKeyLoadedRef.current = "";
+    setResponsablesPlan([]);
+    setPlantaIdPlan(null);
   }, [token, uploadDayFromUrl]);
+
+  // Resolver planta_id desde el nombre de empresa (para responsables tipo Action Register).
+  useEffect(() => {
+    if (!token || !empresa) {
+      setPlantaIdPlan(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetchPlantas(token);
+        if (cancelled) return;
+        const target = normalizeEmpresa(empresa);
+        const hit = (r.plantas || []).find((p) => normalizeEmpresa(p.nombre || "") === target) || null;
+        setPlantaIdPlan(hit ? Number(hit.id) : null);
+      } catch {
+        if (cancelled) return;
+        setPlantaIdPlan(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token, empresa]);
+
+  useEffect(() => {
+    if (!token || !plantaIdPlan) {
+      setResponsablesPlan([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetchActionRegisterResponsables(token, plantaIdPlan);
+        if (cancelled) return;
+        setResponsablesPlan((r.usuarios || []).map((u) => ({ id: u.id, nombre: u.nombre })));
+      } catch {
+        if (cancelled) return;
+        setResponsablesPlan([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token, plantaIdPlan]);
 
   // Persistencia local (solo ARR Plan): guarda/recupera Sin venta, Con venta y Nuevos clientes por (empresa, mes B).
   useEffect(() => {
@@ -1111,26 +1169,30 @@ export default function ArrClient() {
   );
 
   const catTonA = useMemo(
-    () => toneladasCategoriaDesdeClientes(clientesA, undefined, undefined, 0),
+    () => toneladasCategoriaDesdeClientes(clientesA, undefined, undefined, 0, 0),
     [clientesA]
   );
-  const kgNuevosPlanCasa = useMemo(
-    () =>
-      nuevosClientesPlan.reduce(
-        (s, n) => s + (Number.isFinite(n.kg) && n.kg > 0 ? n.kg : 0),
-        0
-      ),
-    [nuevosClientesPlan]
-  );
+  const { kgNuevosPlanCasa, kgNuevosPlanComi } = useMemo(() => {
+    let casa = 0;
+    let comi = 0;
+    for (const n of nuevosClientesPlan) {
+      const kg = Number(n.kg);
+      if (!Number.isFinite(kg) || kg <= 0) continue;
+      if (n.categoria === "COMISIONISTA") comi += kg;
+      else casa += kg;
+    }
+    return { kgNuevosPlanCasa: casa, kgNuevosPlanComi: comi };
+  }, [nuevosClientesPlan]);
   const catTonB = useMemo(
     () =>
       toneladasCategoriaDesdeClientes(
         clientesB,
         clientesExcluirVentaForecast,
         clientesConVentaForecastSim,
-        kgNuevosPlanCasa
+        kgNuevosPlanCasa,
+        kgNuevosPlanComi
       ),
-    [clientesB, clientesExcluirVentaForecast, clientesConVentaForecastSim, kgNuevosPlanCasa]
+    [clientesB, clientesExcluirVentaForecast, clientesConVentaForecastSim, kgNuevosPlanCasa, kgNuevosPlanComi]
   );
 
   const renderMesOption = (p: IgfPeriodo) => {
@@ -1356,6 +1418,35 @@ export default function ArrClient() {
     for (const n of nuevosClientesPlan) s.add(n.nombre.trim());
     return Array.from(s);
   }, [filasClientesMesPrimero, filasClientesSoloMesSegundo, nuevosClientesPlan]);
+
+  const subcategoriasPlanModal = useMemo(() => {
+    const out: { categoria: "CASA" | "COMISIONISTA"; subcategoria: string }[] = [];
+    const seen = new Set<string>();
+    const add = (cat: "CASA" | "COMISIONISTA", sub: string | null | undefined) => {
+      const s = String(sub || "").trim();
+      if (!s) return;
+      const key = `${cat}::${s.toLowerCase()}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      out.push({ categoria: cat, subcategoria: s });
+    };
+    const scan = (c: ClientesMonthData | undefined) => {
+      if (!c?.rows?.length) return;
+      for (const r of c.rows) {
+        const cat: "CASA" | "COMISIONISTA" = categoriaEsComisionista(r.categoria)
+          ? "COMISIONISTA"
+          : "CASA";
+        add(cat, r.subcategoria);
+      }
+    };
+    scan(clientesA);
+    scan(clientesB);
+    out.sort((a, b) => {
+      if (a.categoria !== b.categoria) return a.categoria.localeCompare(b.categoria, "es");
+      return a.subcategoria.localeCompare(b.subcategoria, "es");
+    });
+    return out;
+  }, [clientesA, clientesB]);
   const dClass = (d: number) =>
     d > 0 ? "text-emerald-400" : d < 0 ? "text-red-400" : "text-slate-300";
 
@@ -1555,9 +1646,16 @@ export default function ArrClient() {
         return rentabilidadResumenPorMes(sSelB, rentArrB0, metB.rentabilidadImporte);
       })();
 
-      const kgNuevosCasa = sNuevos.reduce((sum, n) => sum + (Number.isFinite(n.kg) && n.kg > 0 ? n.kg : 0), 0);
-      const catA0 = toneladasCategoriaDesdeClientes(clientesA0, undefined, undefined, 0);
-      const catB0 = toneladasCategoriaDesdeClientes(clientesB0, sExcluir, sConVenta, kgNuevosCasa);
+      let kgNuevosCasa = 0;
+      let kgNuevosComi = 0;
+      for (const n of sNuevos) {
+        const kg = Number(n.kg);
+        if (!Number.isFinite(kg) || kg <= 0) continue;
+        if (n.categoria === "COMISIONISTA") kgNuevosComi += kg;
+        else kgNuevosCasa += kg;
+      }
+      const catA0 = toneladasCategoriaDesdeClientes(clientesA0, undefined, undefined, 0, 0);
+      const catB0 = toneladasCategoriaDesdeClientes(clientesB0, sExcluir, sConVenta, kgNuevosCasa, kgNuevosComi);
 
       return {
         empresa,
@@ -1593,9 +1691,22 @@ export default function ArrClient() {
           descB: r.descB,
         })),
         usarFormulasComparacion: true,
+        ...(slice === wsPlan
+          ? {
+              nuevosClientesPlan: sNuevos.map((n) => ({
+                nombre: n.nombre,
+                kg: n.kg,
+                descKg: n.descKg,
+                gastoMxn: n.gastoMxn,
+                responsable: n.responsable,
+                categoria: n.categoria,
+                subcategoria: n.subcategoria,
+              })),
+            }
+          : {}),
       };
     },
-    [empresa]
+    [empresa, wsPlan]
   );
 
   const handleExportExcel = useCallback(() => {
@@ -1981,10 +2092,12 @@ export default function ArrClient() {
               <thead>
                 <tr className="bg-slate-800/80 text-[0.65rem] font-semibold uppercase tracking-wide text-slate-300">
                   <th className="px-3 py-2 text-left">Cliente</th>
+                  <th className="px-3 py-2 text-center">Categoría</th>
+                  <th className="px-3 py-2 text-center">Subcategoría</th>
+                  <th className="px-3 py-2 text-center">Responsable</th>
                   <th className="px-3 py-2 text-center">Kg</th>
                   <th className="px-3 py-2 text-center">Desc. $/kg</th>
                   <th className="px-3 py-2 text-center">Gasto</th>
-                  <th className="px-3 py-2 text-center">Responsable</th>
                   <th className="px-3 py-2 text-center">Ingreso marginal</th>
                   <th className="px-3 py-2 text-center min-w-[9.5rem]">Acciones</th>
                 </tr>
@@ -1995,10 +2108,12 @@ export default function ArrClient() {
                   return (
                     <tr key={n.id} className="border-t border-slate-700/70">
                       <td className="px-3 py-2 text-slate-100">{n.nombre}</td>
+                      <td className="px-3 py-2 text-center text-slate-200">{n.categoria || "—"}</td>
+                      <td className="px-3 py-2 text-center text-slate-200">{n.subcategoria || "—"}</td>
+                      <td className="px-3 py-2 text-center text-slate-200">{n.responsable || "—"}</td>
                       <td className="px-3 py-2 text-center tabular-nums">{fmtNum(n.kg, 0)}</td>
                       <td className="px-3 py-2 text-center tabular-nums">{fmtNum(n.descKg, 2)}</td>
                       <td className="px-3 py-2 text-center tabular-nums">${fmtNum(n.gastoMxn, 0)}</td>
-                      <td className="px-3 py-2 text-center text-slate-200">{n.responsable || "—"}</td>
                       <td className="px-3 py-2 text-center tabular-nums text-emerald-200/90">
                         {ing != null ? `$${fmtNum(ing, 0)}` : "—"}
                       </td>
@@ -2383,6 +2498,8 @@ export default function ArrClient() {
           }}
           mesForecastLabel={selB ? periodoLabel(selB) : ""}
           nombresExistentes={nombresExistentesPlanModal}
+          responsables={responsablesPlan}
+          subcategorias={subcategoriasPlanModal}
           clienteEditar={clientePlanEditando}
           onSave={guardarNuevoClientePlanModal}
         />

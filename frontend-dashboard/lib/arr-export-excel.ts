@@ -65,6 +65,16 @@ export type ArrExportOptions = {
    */
   rentabilidadMesAFormulaClientes?: boolean;
   rentabilidadMesBFormulaClientes?: boolean;
+  /** Solo para la hoja ARR Plan. */
+  nuevosClientesPlan?: {
+    nombre: string;
+    kg: number;
+    descKg: number;
+    gastoMxn: number;
+    responsable: string;
+    categoria: "CASA" | "COMISIONISTA";
+    subcategoria: string;
+  }[];
 };
 
 type ArrExportBuildOptions = {
@@ -163,6 +173,7 @@ async function downloadArrDashboardExcelInternal(
     usarFormulasComparacion,
     rentabilidadMesAFormulaClientes = true,
     rentabilidadMesBFormulaClientes = true,
+    nuevosClientesPlan = [],
   } = opts;
 
   const wb = build.workbook ?? new ExcelJS.Workbook();
@@ -280,6 +291,48 @@ async function downloadArrDashboardExcelInternal(
   }
   styleCompRow(compRow, LAST_SUMMARY_COL);
   cur++;
+
+  if ((build.sheetName || "ARR") === "ARR Plan" && nuevosClientesPlan.length > 0) {
+    ws.getRow(cur).getCell(1).value = "";
+    cur++;
+    ws.getRow(cur).getCell(1).value = "Nuevos clientes (plan)";
+    ws.getRow(cur).font = { bold: true, size: 11 };
+    cur++;
+    const hdr = ws.getRow(cur);
+    const labels = [
+      "Cliente",
+      "Categoría",
+      "Subcategoría",
+      "Responsable",
+      "Kg",
+      "Desc. $/kg",
+      "Gasto",
+      "Ingreso marginal",
+    ];
+    labels.forEach((t, i) => (hdr.getCell(i + 1).value = t));
+    styleHeaderRow(hdr, 8);
+    cur++;
+    const centerCols = [2, 3, 4, 5, 6, 7, 8];
+    for (const n of nuevosClientesPlan) {
+      const r = ws.getRow(cur);
+      r.getCell(1).value = n.nombre;
+      r.getCell(2).value = n.categoria;
+      r.getCell(3).value = n.subcategoria;
+      r.getCell(4).value = n.responsable;
+      r.getCell(5).value = cellNum(n.kg);
+      r.getCell(5).numFmt = "#,##0";
+      r.getCell(6).value = cellNum(n.descKg);
+      r.getCell(6).numFmt = "#,##0.00";
+      r.getCell(7).value = cellNum(n.gastoMxn);
+      r.getCell(7).numFmt = "#,##0";
+      r.getCell(8).value = {
+        formula: `ROUND(IFERROR((E${cur}*($C$${MES_B_R}-F${cur}))+($H$${MES_B_R}*E${cur}*$I$${MES_B_R}/100),0),0)`,
+      };
+      r.getCell(8).numFmt = '"$" #,##0';
+      styleDataRow(r, 8, centerCols);
+      cur++;
+    }
+  }
 
   ws.getRow(cur).getCell(1).value = "";
   cur++;
