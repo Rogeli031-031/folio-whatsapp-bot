@@ -74,6 +74,8 @@ export type ArrExportOptions = {
     responsable: string;
     categoria: "CASA" | "COMISIONISTA";
     subcategoria: string;
+    /** null/undefined: fórmula usa HG del mes resumen. */
+    hgCliente?: number | null;
   }[];
 };
 
@@ -307,12 +309,13 @@ async function downloadArrDashboardExcelInternal(
       "Kg",
       "Desc. $/kg",
       "Gasto",
+      "HG cliente",
       "Ingreso marginal",
     ];
     labels.forEach((t, i) => (hdr.getCell(i + 1).value = t));
-    styleHeaderRow(hdr, 8);
+    styleHeaderRow(hdr, 9);
     cur++;
-    const centerCols = [2, 3, 4, 5, 6, 7, 8];
+    const centerCols = [2, 3, 4, 5, 6, 7, 8, 9];
     for (const n of nuevosClientesPlan) {
       const r = ws.getRow(cur);
       r.getCell(1).value = n.nombre;
@@ -325,11 +328,18 @@ async function downloadArrDashboardExcelInternal(
       r.getCell(6).numFmt = "#,##0.00";
       r.getCell(7).value = cellNum(n.gastoMxn);
       r.getCell(7).numFmt = "#,##0";
-      r.getCell(8).value = {
-        formula: `ROUND(IFERROR((E${cur}*($C$${MES_B_R}-ABS(F${cur})))+($H$${MES_B_R}*E${cur}*$I$${MES_B_R}/100),0),0)`,
+      const hgC = n.hgCliente;
+      if (hgC != null && Number.isFinite(hgC)) {
+        r.getCell(8).value = cellNum(hgC);
+        r.getCell(8).numFmt = "#,##0.00";
+      } else {
+        r.getCell(8).value = null;
+      }
+      r.getCell(9).value = {
+        formula: `ROUND(IFERROR((E${cur}*($C$${MES_B_R}-ABS(F${cur})))+(IF(ISBLANK(H${cur}),$H$${MES_B_R},H${cur})*E${cur}*$I$${MES_B_R}/100),0),0)`,
       };
-      r.getCell(8).numFmt = '"$" #,##0';
-      styleDataRow(r, 8, centerCols);
+      r.getCell(9).numFmt = '"$" #,##0';
+      styleDataRow(r, 9, centerCols);
       cur++;
     }
   }
