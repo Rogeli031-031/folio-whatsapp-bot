@@ -563,6 +563,7 @@ export default function ArrClient() {
   const [dicfModalCliente, setDicfModalCliente] = useState<string | null>(null);
   const [showSimular, setShowSimular] = useState(false);
   const [showNuevoClientePlan, setShowNuevoClientePlan] = useState(false);
+  const [clientePlanEditando, setClientePlanEditando] = useState<NuevoClientePlanRow | null>(null);
 
   const ws = isArrPlanRoute ? wsPlan : wsBase;
   const dataByKey = ws.dataByKey;
@@ -648,16 +649,33 @@ export default function ArrClient() {
     [isArrPlanRoute, clienteInactivoForecastB]
   );
 
-  const agregarNuevoClientePlan = useCallback(
-    (payload: { nombre: string; kg: number; descKg: number; gastoMxn: number }) => {
+  const guardarNuevoClientePlanModal = useCallback(
+    (payload: {
+      id?: string;
+      nombre: string;
+      kg: number;
+      descKg: number;
+      gastoMxn: number;
+    }) => {
       if (!isArrPlanRoute) return;
+      if (payload.id) {
+        const { id, nombre, kg, descKg, gastoMxn } = payload;
+        setWsPlan((s) => ({
+          ...s,
+          nuevosClientesPlan: s.nuevosClientesPlan.map((n) =>
+            n.id === id ? { id, nombre, kg, descKg, gastoMxn } : n
+          ),
+        }));
+        return;
+      }
       const id =
         typeof crypto !== "undefined" && "randomUUID" in crypto
           ? crypto.randomUUID()
           : `nuevo-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+      const { nombre, kg, descKg, gastoMxn } = payload;
       setWsPlan((s) => ({
         ...s,
-        nuevosClientesPlan: [...s.nuevosClientesPlan, { id, ...payload }],
+        nuevosClientesPlan: [...s.nuevosClientesPlan, { id, nombre, kg, descKg, gastoMxn }],
       }));
     },
     [isArrPlanRoute]
@@ -1490,9 +1508,14 @@ export default function ArrClient() {
         <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
-            onClick={() =>
-              isArrPlanRoute ? setShowNuevoClientePlan(true) : setShowSimular(true)
-            }
+            onClick={() => {
+              if (isArrPlanRoute) {
+                setClientePlanEditando(null);
+                setShowNuevoClientePlan(true);
+              } else {
+                setShowSimular(true);
+              }
+            }}
             disabled={!puedeSimular}
             title={
               puedeSimular
@@ -1771,7 +1794,7 @@ export default function ArrClient() {
                   <th className="px-3 py-2 text-center">Desc. $/kg</th>
                   <th className="px-3 py-2 text-center">Gasto</th>
                   <th className="px-3 py-2 text-center">Ingreso marginal</th>
-                  <th className="px-3 py-2 text-center w-24" />
+                  <th className="px-3 py-2 text-center min-w-[9.5rem]">Acciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -1787,13 +1810,25 @@ export default function ArrClient() {
                         {ing != null ? `$${fmtNum(ing, 0)}` : "—"}
                       </td>
                       <td className="px-3 py-2 text-center">
-                        <button
-                          type="button"
-                          onClick={() => quitarNuevoClientePlan(n.id)}
-                          className="rounded border border-slate-600 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800"
-                        >
-                          Quitar
-                        </button>
+                        <div className="flex flex-wrap items-center justify-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setClientePlanEditando(n);
+                              setShowNuevoClientePlan(true);
+                            }}
+                            className="rounded border border-sky-600/80 bg-sky-950/40 px-2 py-1 text-xs text-sky-100 hover:bg-sky-900/45"
+                          >
+                            Editar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => quitarNuevoClientePlan(n.id)}
+                            className="rounded border border-slate-600 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800"
+                          >
+                            Quitar
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -2148,10 +2183,15 @@ export default function ArrClient() {
       )}
       {showNuevoClientePlan && isArrPlanRoute && (
         <ArrNuevoClientePlanModal
-          onClose={() => setShowNuevoClientePlan(false)}
+          abierto={showNuevoClientePlan}
+          onClose={() => {
+            setShowNuevoClientePlan(false);
+            setClientePlanEditando(null);
+          }}
           mesForecastLabel={selB ? periodoLabel(selB) : ""}
           nombresExistentes={nombresExistentesPlanModal}
-          onSave={agregarNuevoClientePlan}
+          clienteEditar={clientePlanEditando}
+          onSave={guardarNuevoClientePlanModal}
         />
       )}
     </div>

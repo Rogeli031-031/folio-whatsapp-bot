@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 export type ArrNuevoClientePlanPayload = {
   nombre: string;
@@ -9,19 +9,37 @@ export type ArrNuevoClientePlanPayload = {
   gastoMxn: number;
 };
 
+export type ArrNuevoClientePlanSavePayload = ArrNuevoClientePlanPayload & {
+  id?: string;
+};
+
+/** Misma forma que la fila en workspace (evita importar desde la página). */
+export type ArrNuevoClientePlanEdicion = {
+  id: string;
+  nombre: string;
+  kg: number;
+  descKg: number;
+  gastoMxn: number;
+};
+
 type Props = {
+  abierto: boolean;
   onClose: () => void;
-  onSave: (p: ArrNuevoClientePlanPayload) => void;
+  onSave: (p: ArrNuevoClientePlanSavePayload) => void;
   mesForecastLabel: string;
   /** Nombres ya usados (comparación sin distinguir mayúsculas). */
   nombresExistentes: string[];
+  /** Si viene definido, el modal abre en modo edición con esos valores. */
+  clienteEditar?: ArrNuevoClientePlanEdicion | null;
 };
 
 export default function ArrNuevoClientePlanModal({
+  abierto,
   onClose,
   onSave,
   mesForecastLabel,
   nombresExistentes,
+  clienteEditar,
 }: Props) {
   const [nombre, setNombre] = useState("");
   const [kgStr, setKgStr] = useState("");
@@ -29,10 +47,31 @@ export default function ArrNuevoClientePlanModal({
   const [gastoStr, setGastoStr] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  const existSet = useMemo(
-    () => new Set(nombresExistentes.map((n) => n.trim().toLowerCase()).filter(Boolean)),
-    [nombresExistentes]
-  );
+  const nombresBloqueados = useMemo(() => {
+    const set = new Set(
+      nombresExistentes.map((n) => n.trim().toLowerCase()).filter(Boolean)
+    );
+    if (clienteEditar) {
+      set.delete(clienteEditar.nombre.trim().toLowerCase());
+    }
+    return set;
+  }, [nombresExistentes, clienteEditar]);
+
+  useEffect(() => {
+    if (!abierto) return;
+    setError(null);
+    if (clienteEditar) {
+      setNombre(clienteEditar.nombre);
+      setKgStr(String(Math.round(clienteEditar.kg)));
+      setDescStr(String(clienteEditar.descKg));
+      setGastoStr(String(clienteEditar.gastoMxn));
+    } else {
+      setNombre("");
+      setKgStr("");
+      setDescStr("");
+      setGastoStr("");
+    }
+  }, [abierto, clienteEditar]);
 
   function parseNum(s: string): number | null {
     const t = String(s).trim().replace(",", ".");
@@ -48,8 +87,8 @@ export default function ArrNuevoClientePlanModal({
       setError("Indica el nombre del cliente.");
       return;
     }
-    if (existSet.has(nom.toLowerCase())) {
-      setError("Ya existe un cliente plan con ese nombre.");
+    if (nombresBloqueados.has(nom.toLowerCase())) {
+      setError("Ya existe otro cliente con ese nombre.");
       return;
     }
     const kg = parseNum(kgStr);
@@ -68,9 +107,18 @@ export default function ArrNuevoClientePlanModal({
       setError("Indica el gasto (MXN, mayor o igual a cero).");
       return;
     }
-    onSave({ nombre: nom, kg, descKg, gastoMxn: gasto });
+    const base: ArrNuevoClientePlanSavePayload = {
+      nombre: nom,
+      kg,
+      descKg,
+      gastoMxn: gasto,
+    };
+    if (clienteEditar) base.id = clienteEditar.id;
+    onSave(base);
     onClose();
   }
+
+  const modoEdicion = Boolean(clienteEditar);
 
   return (
     <div
@@ -81,12 +129,13 @@ export default function ArrNuevoClientePlanModal({
     >
       <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-lg border border-slate-600 bg-slate-900 p-5 text-slate-100 shadow-xl">
         <h2 id="nuevo-cliente-plan-title" className="text-lg font-semibold text-slate-50">
-          Nuevo cliente (plan)
+          {modoEdicion ? "Editar cliente (plan)" : "Nuevo cliente (plan)"}
         </h2>
         <p className="mt-1 text-xs text-slate-400">
-          Mes forecast: <span className="text-slate-300">{mesForecastLabel}</span>. Se sumará el
-          volumen al resumen, se recalculará el descuento ponderado, el gasto y la rentabilidad del
-          mes proyectado.
+          Mes forecast: <span className="text-slate-300">{mesForecastLabel}</span>.
+          {modoEdicion
+            ? " Los cambios actualizan de inmediato el resumen (venta, descuento ponderado, gasto y rentabilidad)."
+            : " Se sumará el volumen al resumen, se recalculará el descuento ponderado, el gasto y la rentabilidad del mes proyectado."}
         </p>
 
         <div className="mt-4 space-y-3">
@@ -147,7 +196,7 @@ export default function ArrNuevoClientePlanModal({
             onClick={handleGuardar}
             className="rounded border border-sky-600 bg-sky-950/60 px-4 py-2 text-sm font-medium text-sky-100 hover:bg-sky-900/50"
           >
-            Guardar
+            {modoEdicion ? "Guardar cambios" : "Guardar"}
           </button>
         </div>
       </div>
