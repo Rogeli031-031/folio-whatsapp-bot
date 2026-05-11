@@ -326,7 +326,7 @@ async function downloadArrDashboardExcelInternal(
       r.getCell(7).value = cellNum(n.gastoMxn);
       r.getCell(7).numFmt = "#,##0";
       r.getCell(8).value = {
-        formula: `ROUND(IFERROR((E${cur}*($C$${MES_B_R}-F${cur}))+($H$${MES_B_R}*E${cur}*$I$${MES_B_R}/100),0),0)`,
+        formula: `ROUND(IFERROR((E${cur}*($C$${MES_B_R}-ABS(F${cur})))+($H$${MES_B_R}*E${cur}*$I$${MES_B_R}/100),0),0)`,
       };
       r.getCell(8).numFmt = '"$" #,##0';
       styleDataRow(r, 8, centerCols);
@@ -383,11 +383,11 @@ async function downloadArrDashboardExcelInternal(
     };
     rowX.getCell(7).numFmt = "#,##0.00";
     rowX.getCell(8).value = {
-      formula: `ROUND(IFERROR((B${cur}*($C$${MES_A_R}-E${cur}))+($H$${MES_A_R}*B${cur}*$I$${MES_A_R}/100),0),0)`,
+      formula: `ROUND(IFERROR((B${cur}*($C$${MES_A_R}-ABS(E${cur})))+($H$${MES_A_R}*B${cur}*$I$${MES_A_R}/100),0),0)`,
     };
     rowX.getCell(8).numFmt = '"$" #,##0';
     rowX.getCell(9).value = {
-      formula: `ROUND(IFERROR((C${cur}*($C$${MES_B_R}-F${cur}))+($H$${MES_B_R}*C${cur}*$I$${MES_B_R}/100),0),0)`,
+      formula: `ROUND(IFERROR((C${cur}*($C$${MES_B_R}-ABS(F${cur})))+($H$${MES_B_R}*C${cur}*$I$${MES_B_R}/100),0),0)`,
     };
     rowX.getCell(9).numFmt = '"$" #,##0';
     rowX.getCell(10).value = {
@@ -431,11 +431,11 @@ async function downloadArrDashboardExcelInternal(
     };
     rowX.getCell(7).numFmt = "#,##0.00";
     rowX.getCell(8).value = {
-      formula: `ROUND(IFERROR((B${cur}*($C$${MES_A_R}-E${cur}))+($H$${MES_A_R}*B${cur}*$I$${MES_A_R}/100),0),0)`,
+      formula: `ROUND(IFERROR((B${cur}*($C$${MES_A_R}-ABS(E${cur})))+($H$${MES_A_R}*B${cur}*$I$${MES_A_R}/100),0),0)`,
     };
     rowX.getCell(8).numFmt = '"$" #,##0';
     rowX.getCell(9).value = {
-      formula: `ROUND(IFERROR((C${cur}*($C$${MES_B_R}-F${cur}))+($H$${MES_B_R}*C${cur}*$I$${MES_B_R}/100),0),0)`,
+      formula: `ROUND(IFERROR((C${cur}*($C$${MES_B_R}-ABS(F${cur})))+($H$${MES_B_R}*C${cur}*$I$${MES_B_R}/100),0),0)`,
     };
     rowX.getCell(9).numFmt = '"$" #,##0';
     rowX.getCell(10).value = {

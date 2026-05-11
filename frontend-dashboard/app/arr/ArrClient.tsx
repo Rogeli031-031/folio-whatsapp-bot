@@ -25,6 +25,7 @@ import {
   fmtNum,
   findRowByPlanta,
   normalizeEmpresa,
+  presupuestoGendKey,
 } from "@/lib/igf-kpi-ui";
 import { downloadArrDashboardExcelDual } from "@/lib/arr-export-excel";
 
@@ -39,6 +40,61 @@ function safeJsonParse<T>(raw: string | null): T | null {
   } catch {
     return null;
   }
+}
+
+/** Empresa IGF (ej. "GTM San Luis") → id de `plantas` (ej. "San Luis"). */
+function resolvePlantaIdFromEmpresaLabel(
+  empresaLabel: string,
+  plantas: { id: number; nombre: string }[]
+): number | null {
+  const list = plantas || [];
+  if (!empresaLabel || !list.length) return null;
+  const norm = normalizeEmpresa(empresaLabel);
+  const direct = list.find((p) => normalizeEmpresa(p.nombre) === norm);
+  if (direct) return Number(direct.id);
+  const gkey = presupuestoGendKey(empresaLabel);
+  if (gkey) {
+    const byKey = list.find((p) => {
+      const pn = normalizeEmpresa(p.nombre);
+      return pn.includes(gkey) || gkey.includes(pn);
+    });
+    if (byKey) return Number(byKey.id);
+  }
+  for (const p of list) {
+    const pn = normalizeEmpresa(p.nombre);
+    if (norm.includes(pn) || pn.includes(norm)) return Number(p.id);
+  }
+  return null;
+}
+
+function normalizeNuevoClientePlanRow(raw: unknown): NuevoClientePlanRow | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  const id = String(o.id ?? "").trim();
+  const nombre = String(o.nombre ?? "").trim();
+  if (!id || !nombre) return null;
+  const kg = Number(o.kg);
+  if (!Number.isFinite(kg) || kg <= 0) return null;
+  const descKg = Number(o.descKg);
+  const gastoMxn = Number(o.gastoMxn);
+  const categoria: "CASA" | "COMISIONISTA" =
+    o.categoria === "COMISIONISTA" ? "COMISIONISTA" : "CASA";
+  const subcategoria = String(o.subcategoria ?? "").trim();
+  const responsable = String(o.responsable ?? "").trim();
+  const rid = o.responsableId;
+  const responsableId =
+    typeof rid === "number" && Number.isFinite(rid) ? rid : null;
+  return {
+    id,
+    nombre,
+    kg: Math.round(kg),
+    descKg: Number.isFinite(descKg) ? descKg : 0,
+    gastoMxn: Number.isFinite(gastoMxn) ? gastoMxn : 0,
+    responsable,
+    responsableId,
+    categoria,
+    subcategoria,
+  };
 }
 
 const NOMBRES_MES = [
@@ -78,7 +134,10 @@ export type NuevoClientePlanRow = {
   /** Mismo convenio que `descuentoSigned` (típicamente negativo). */
   descKg: number;
   gastoMxn: number;
+  /** Nombre mostrado (p. ej. `nombre_persona` desde `usuarios`). */
   responsable: string;
+  /** Id de `usuarios` cuando se elige del listado por planta. */
+  responsableId?: number | null;
   categoria: "CASA" | "COMISIONISTA";
   subcategoria: string;
 };
@@ -325,7 +384,8 @@ function ingresoClienteMarginal(
   const hgDin = m.hgDinero;
   if (margen == null || hg == null || hgDin == null) return null;
   const d = descKg ?? 0;
-  const raw = kg * (margen - d) + (hg * kg * hgDin) / 100;
+  const dMag = Number.isFinite(d) ? Math.abs(d) : 0;
+  const raw = kg * (margen - dMag) + (hg * kg * hgDin) / 100;
   return Math.round(raw);
 }
 
@@ -674,16 +734,39 @@ export default function ArrClient() {
       descKg: number;
       gastoMxn: number;
       responsable: string;
+      responsableId: number;
       categoria: "CASA" | "COMISIONISTA";
       subcategoria: string;
     }) => {
       if (!isArrPlanRoute) return;
       if (payload.id) {
-        const { id, nombre, kg, descKg, gastoMxn, responsable, categoria, subcategoria } = payload;
+        const {
+          id,
+          nombre,
+          kg,
+          descKg,
+          gastoMxn,
+          responsable,
+          responsableId,
+          categoria,
+          subcategoria,
+        } = payload;
         setWsPlan((s) => ({
           ...s,
           nuevosClientesPlan: s.nuevosClientesPlan.map((n) =>
-            n.id === id ? { id, nombre, kg, descKg, gastoMxn, responsable, categoria, subcategoria } : n
+            n.id === id
+              ? {
+                  id,
+                  nombre,
+                  kg,
+                  descKg,
+                  gastoMxn,
+                  responsable,
+                  responsableId,
+                  categoria,
+                  subcategoria,
+                }
+              : n
           ),
         }));
         return;
@@ -692,12 +775,31 @@ export default function ArrClient() {
         typeof crypto !== "undefined" && "randomUUID" in crypto
           ? crypto.randomUUID()
           : `nuevo-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-      const { nombre, kg, descKg, gastoMxn, responsable, categoria, subcategoria } = payload;
+      const {
+        nombre,
+        kg,
+        descKg,
+        gastoMxn,
+        responsable,
+        responsableId,
+        categoria,
+        subcategoria,
+      } = payload;
       setWsPlan((s) => ({
         ...s,
         nuevosClientesPlan: [
           ...s.nuevosClientesPlan,
-          { id, nombre, kg, descKg, gastoMxn, responsable, categoria, subcategoria },
+          {
+            id,
+            nombre,
+            kg,
+            descKg,
+            gastoMxn,
+            responsable,
+            responsableId,
+            categoria,
+            subcategoria,
+          },
         ],
       }));
     },
@@ -786,9 +888,8 @@ export default function ArrClient() {
       try {
         const r = await fetchPlantas(token);
         if (cancelled) return;
-        const target = normalizeEmpresa(empresa);
-        const hit = (r.plantas || []).find((p) => normalizeEmpresa(p.nombre || "") === target) || null;
-        setPlantaIdPlan(hit ? Number(hit.id) : null);
+        const pid = resolvePlantaIdFromEmpresaLabel(empresa, r.plantas || []);
+        setPlantaIdPlan(pid);
       } catch {
         if (cancelled) return;
         setPlantaIdPlan(null);
@@ -841,11 +942,14 @@ export default function ArrClient() {
       }));
       return;
     }
+    const nuevos = (parsed.nuevos ?? [])
+      .map((x) => normalizeNuevoClientePlanRow(x))
+      .filter((x): x is NuevoClientePlanRow => Boolean(x));
     setWsPlan((s) => ({
       ...s,
       clientesExcluirVentaForecast: parsed.excluir ?? {},
       clientesConVentaForecastSim: parsed.conVenta ?? {},
-      nuevosClientesPlan: parsed.nuevos ?? [],
+      nuevosClientesPlan: nuevos,
     }));
   }, [token, empresa, wsPlan.selB]);
 

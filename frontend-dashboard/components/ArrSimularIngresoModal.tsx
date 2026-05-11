@@ -22,7 +22,8 @@ function ingresoSimuladoKg(
   const hgDin = m.hgDinero;
   if (margen == null || hg == null || hgDin == null) return null;
   const d = descKg ?? 0;
-  const raw = kg * (margen - d) + (hg * kg * hgDin) / 100;
+  const dMag = Number.isFinite(d) ? Math.abs(d) : 0;
+  const raw = kg * (margen - dMag) + (hg * kg * hgDin) / 100;
   return Math.round(raw);
 }
 

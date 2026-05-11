@@ -8,6 +8,7 @@ export type ArrNuevoClientePlanPayload = {
   descKg: number;
   gastoMxn: number;
   responsable: string;
+  responsableId: number;
   categoria: "CASA" | "COMISIONISTA";
   subcategoria: string;
 };
@@ -24,6 +25,7 @@ export type ArrNuevoClientePlanEdicion = {
   descKg: number;
   gastoMxn: number;
   responsable: string;
+  responsableId?: number | null;
   categoria: "CASA" | "COMISIONISTA";
   subcategoria: string;
 };
@@ -55,7 +57,7 @@ export default function ArrNuevoClientePlanModal({
   const [kgStr, setKgStr] = useState("");
   const [descStr, setDescStr] = useState("");
   const [gastoStr, setGastoStr] = useState("");
-  const [responsable, setResponsable] = useState("");
+  const [responsableIdStr, setResponsableIdStr] = useState("");
   const [categoria, setCategoria] = useState<"CASA" | "COMISIONISTA">("CASA");
   const [subcategoria, setSubcategoria] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -78,19 +80,26 @@ export default function ArrNuevoClientePlanModal({
       setKgStr(String(Math.round(clienteEditar.kg)));
       setDescStr(String(clienteEditar.descKg));
       setGastoStr(String(clienteEditar.gastoMxn));
-      setResponsable(clienteEditar.responsable ?? "");
       setCategoria(clienteEditar.categoria ?? "CASA");
       setSubcategoria(clienteEditar.subcategoria ?? "");
+      const rid = clienteEditar.responsableId;
+      if (rid != null && Number.isFinite(rid) && rid > 0) {
+        setResponsableIdStr(String(rid));
+      } else {
+        const nm = (clienteEditar.responsable || "").trim().toLowerCase();
+        const hit = responsables.find((u) => u.nombre.trim().toLowerCase() === nm);
+        setResponsableIdStr(hit ? String(hit.id) : "");
+      }
     } else {
       setNombre("");
       setKgStr("");
       setDescStr("");
       setGastoStr("");
-      setResponsable("");
+      setResponsableIdStr("");
       setCategoria("CASA");
       setSubcategoria("");
     }
-  }, [abierto, clienteEditar]);
+  }, [abierto, clienteEditar, responsables]);
 
   function parseNum(s: string): number | null {
     const t = String(s).trim().replace(",", ".");
@@ -126,14 +135,19 @@ export default function ArrNuevoClientePlanModal({
       setError("Indica el gasto (MXN, mayor o igual a cero).");
       return;
     }
-    const resp = responsable.trim();
-    if (!resp) {
-      setError("Indica el responsable.");
-      return;
-    }
     const sub = subcategoria.trim();
     if (!sub) {
       setError("Indica la subcategoría.");
+      return;
+    }
+    const rid = parseInt(String(responsableIdStr).trim(), 10);
+    if (!Number.isFinite(rid) || rid <= 0) {
+      setError("Selecciona un responsable de la lista.");
+      return;
+    }
+    const u = responsables.find((x) => x.id === rid);
+    if (!u) {
+      setError("Responsable inválido o no pertenece a la planta.");
       return;
     }
     const base: ArrNuevoClientePlanSavePayload = {
@@ -141,7 +155,8 @@ export default function ArrNuevoClientePlanModal({
       kg,
       descKg,
       gastoMxn: gasto,
-      responsable: resp,
+      responsable: u.nombre,
+      responsableId: rid,
       categoria,
       subcategoria: sub,
     };
@@ -244,13 +259,16 @@ export default function ArrNuevoClientePlanModal({
           <label className="block text-sm">
             <span className="text-slate-300">Responsable</span>
             <select
-              value={responsable}
-              onChange={(e) => setResponsable(e.target.value)}
-              className="mt-1 w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+              value={responsableIdStr}
+              onChange={(e) => setResponsableIdStr(e.target.value)}
+              disabled={responsables.length === 0}
+              className="mt-1 w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <option value="">Seleccionar…</option>
+              <option value="">
+                {responsables.length === 0 ? "Sin usuarios (revisa planta / permisos)…" : "Seleccionar…"}
+              </option>
               {responsables.map((u) => (
-                <option key={u.id} value={u.nombre}>
+                <option key={u.id} value={String(u.id)}>
                   {u.nombre}
                 </option>
               ))}
