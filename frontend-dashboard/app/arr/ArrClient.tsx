@@ -601,6 +601,59 @@ function rentabilidadPlanForecastDesdeCeldasPlan(
   return Math.round((C + D) * B * 1000 + ((H * B * 1000) / 100) * I - G);
 }
 
+/**
+ * Rentabilidad ARR Plan (forecast): Σ ingreso cliente (misma lógica que columnas Ingreso del Excel)
+ * + Σ ingreso marginal «Nuevos clientes» (`ingresoMarginalPlanNuevoRow`) − Gasto.
+ * Coincide con lo que se obtiene sumando filas en la hoja; la fórmula cerrada M6 puede desviarse.
+ */
+function rentabilidadPlanForecastDesdeSumaFilas(
+  filasPrimero: ClienteTablaRow[],
+  filasSoloMesB: ClienteTablaRow[],
+  gastoImporte: number | null,
+  metricBResumen: ResumenMesMetrics,
+  metricBarr: ResumenMesMetrics,
+  excluir: Record<string, true> | undefined,
+  conVenta: Record<string, { kg: number; descKg: number | null }> | undefined,
+  nuevosPlan: NuevoClientePlanRow[]
+): number | null {
+  const hasFilas = filasPrimero.length + filasSoloMesB.length > 0;
+  const hasNuevosKg = nuevosPlan.some((n) => Number.isFinite(n.kg) && n.kg > 0);
+  if (!hasFilas && !hasNuevosKg) return null;
+  if (gastoImporte == null || !Number.isFinite(gastoImporte)) return null;
+
+  const cv = conVenta ?? {};
+  let sumIng = 0;
+  const ingresoCli = (r: ClienteTablaRow) => {
+    if (excluir?.[r.cliente]) return 0;
+    return ingresoBMesBConSimMap(r, cv, metricBResumen) ?? 0;
+  };
+  for (const r of filasPrimero) sumIng += ingresoCli(r);
+  for (const r of filasSoloMesB) sumIng += ingresoCli(r);
+
+  const margen = metricBResumen.margenKg;
+  const i6 = metricBarr.hgDinero;
+  const arrH = metricBarr.hgDisplay;
+  const arrHgDin = metricBarr.hgDinero;
+  for (const n of nuevosPlan) {
+    const kg = Number(n.kg);
+    if (!Number.isFinite(kg) || kg <= 0) continue;
+    const part = ingresoMarginalPlanNuevoRow(
+      kg,
+      n.descKg,
+      margen,
+      i6,
+      n.hgCliente,
+      n.hgCompra,
+      arrH,
+      arrHgDin,
+      n.origen
+    );
+    if (part == null || !Number.isFinite(part)) return null;
+    sumIng += part;
+  }
+  return Math.round(sumIng - gastoImporte);
+}
+
 function ingresoBMesBConSimMap(
   row: ClienteTablaRow,
   conVenta: Record<string, { kg: number; descKg: number | null }>,
@@ -1980,6 +2033,17 @@ export default function ArrClient() {
     const mesBForecastUi = !hist && (clientesB ? !clientesB.historico : true);
 
     if (isArrPlanRoute && mesBForecastUi) {
+      const rs = rentabilidadPlanForecastDesdeSumaFilas(
+        filasClientesMesPrimero,
+        filasClientesSoloMesSegundo,
+        metricBResumen.gastoImporte,
+        metricBResumen,
+        metricBComoHojaArr,
+        clientesExcluirVentaForecast,
+        clientesConVentaForecastSim,
+        nuevosClientesPlan
+      );
+      if (rs != null && Number.isFinite(rs)) return rs;
       const rf = rentabilidadPlanForecastDesdeCeldasPlan(
         metricBResumen,
         metricBComoHojaArr,
@@ -2016,7 +2080,8 @@ export default function ArrClient() {
     isArrPlanRoute,
     metricBResumen,
     metricBComoHojaArr,
-    nuevosFilasFormulasPlan,
+    filasClientesMesPrimero,
+    filasClientesSoloMesSegundo,
   ]);
 
   const simularClientesOpciones = useMemo(() => {
@@ -2341,6 +2406,17 @@ export default function ArrClient() {
         const hist = mesHistoricoDesdeSelector(sSelB);
         const mesBForecastUI = !hist && (clientesB0 ? !clientesB0.historico : true);
         if (slice === wsPlan && mesBForecastUI) {
+          const rs = rentabilidadPlanForecastDesdeSumaFilas(
+            filasPrimero,
+            filasSolo,
+            metricBResumenFinal.gastoImporte,
+            metricBResumenFinal,
+            metricBarrExport,
+            sExcluir,
+            sConVenta,
+            sNuevos
+          );
+          if (rs != null && Number.isFinite(rs)) return rs;
           const rf = rentabilidadPlanForecastDesdeCeldasPlan(
             metricBResumenFinal,
             metricBarrExport,

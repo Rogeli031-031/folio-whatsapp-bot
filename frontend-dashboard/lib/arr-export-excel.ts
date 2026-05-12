@@ -322,6 +322,8 @@ async function downloadArrDashboardExcelInternal(
   cur++;
 
   const isArrPlanSheet = (build.sheetName || "ARR") === "ARR Plan";
+  /** Rango columna K (ingreso marginal) en «Nuevos clientes», para L6 = Σ ingresos − G en Plan forecast. */
+  let planL6NuevoIngSumRange: string | null = null;
 
   if (isArrPlanSheet && nuevosClientesPlan.length > 0) {
     ws.getRow(cur).getCell(1).value = "";
@@ -400,6 +402,7 @@ async function downloadArrDashboardExcelInternal(
       r.getCell(10).alignment = { vertical: "top", horizontal: "left", wrapText: true };
       cur++;
     }
+    planL6NuevoIngSumRange = `K${firstNuevoDataRow}:K${cur - 1}`;
     const mesBRow = ws.getRow(MES_B_R);
     const dNumer = `(ARR!D${MES_B_R}*ARR!B${MES_B_R})${partsD6.join("")}`;
     mesBRow.getCell(4).value = { formula: `(${dNumer})/B${MES_B_R}` };
@@ -609,13 +612,21 @@ async function downloadArrDashboardExcelInternal(
   if (lastDataR >= firstClienteDataRow && rentabilidadMesBFormulaClientes) {
     const sumIngB = `SUM(${colIngB}${firstClienteDataRow}:${colIngB}${lastDataR})`;
     celL6.value = { formula: `${sumIngB}-G${MES_B_R}` };
-  } else if (
-    !rentabilidadMesBFormulaClientes &&
-    (build.sheetName || "ARR") === "ARR Plan"
-  ) {
-    celL6.value = {
-      formula: `((C${MES_B_R}+D${MES_B_R})*B${MES_B_R}*1000)+((H${MES_B_R}*B${MES_B_R}*1000/100)*I${MES_B_R})-G${MES_B_R}`,
-    };
+  } else if (!rentabilidadMesBFormulaClientes && (build.sheetName || "ARR") === "ARR Plan") {
+    const sumPartes: string[] = [];
+    if (lastDataR >= firstClienteDataRow) {
+      sumPartes.push(`SUM(${colIngB}${firstClienteDataRow}:${colIngB}${lastDataR})`);
+    }
+    if (planL6NuevoIngSumRange) {
+      sumPartes.push(`SUM(${planL6NuevoIngSumRange})`);
+    }
+    if (sumPartes.length > 0) {
+      celL6.value = { formula: `${sumPartes.join("+")}-G${MES_B_R}` };
+    } else {
+      celL6.value = {
+        formula: `((C${MES_B_R}+D${MES_B_R})*B${MES_B_R}*1000)+((H${MES_B_R}*B${MES_B_R}*1000/100)*I${MES_B_R})-G${MES_B_R}`,
+      };
+    }
   } else {
     celL6.value = cellNum(mB.rentabilidadImporte);
   }
