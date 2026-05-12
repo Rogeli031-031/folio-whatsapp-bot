@@ -14,6 +14,10 @@ import {
   type DicfHistoryWeeks,
   filterDicfClienteHistoryByWeeks,
 } from "@/lib/dicf-cliente-history-weeks";
+import { parseDicfVentaSheetForClienteFallback } from "@/lib/dicf-excel-fallback-cliente";
+
+/** Cliente cargado desde Excel completo (p. ej. estado «Otros»), no desde listas DICF. */
+const GRUPO_DICF_EXCEL_FALLBACK = "Historial (fuera de buckets DICF)";
 
 function normalizeClienteNombre(s: string): string {
   return String(s || "")
@@ -113,13 +117,42 @@ export default function DeltaIngresoClienteForecastModal({
         if (cancelled) return;
         setDicfData(data);
         const found = findClienteEnDicf(data, clienteNombre);
-        if (!found) {
-          setLoadError(
-            "Este cliente no aparece en las listas de Delta Ingreso Cliente Forecast para esta planta (solo clientes en Dejaron / − Ingreso / + Ingreso / Nuevos)."
-          );
-          setDeltaClienteSel(null);
-        } else {
+        if (found) {
+          setLoadError(null);
           setDeltaClienteSel(found);
+        } else {
+          try {
+            const url = getDicfExcelUrl(token, planta.trim(), null);
+            const resp = await fetch(url);
+            if (!resp.ok) throw new Error(`Excel (${resp.status})`);
+            const buf = await resp.arrayBuffer();
+            const wb = XLSX.read(buf, { type: "array" });
+            const ws = wb.Sheets["Venta (Ton)"] || wb.Sheets[wb.SheetNames?.[0] || ""];
+            if (!ws) throw new Error("Sin hoja Venta (Ton)");
+            const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true }) as unknown[][];
+            const parsed = parseDicfVentaSheetForClienteFallback(aoa, clienteNombre, data.last_date);
+            if (parsed) {
+              const cn = (parsed.cliente.cliente || "").trim();
+              const canal = (parsed.cliente.canal || "").trim();
+              const subcanal = (parsed.cliente.subcanal || "").trim();
+              const cacheKey = `${planta}||?||${canal}||${subcanal}||${cn}`.toLowerCase();
+              setDicfMesRowsByCliente({
+                [cacheKey]: { loading: false, error: null, rows: parsed.mesRows },
+              });
+              setDeltaClienteSel({ grupo: GRUPO_DICF_EXCEL_FALLBACK, cliente: parsed.cliente });
+              setLoadError(null);
+            } else {
+              setLoadError(
+                "Este cliente no aparece en las listas de Delta Ingreso Cliente Forecast para esta planta (solo clientes en Dejaron / − Ingreso / + Ingreso / Nuevos), ni en el Excel completo de ventas de la planta."
+              );
+              setDeltaClienteSel(null);
+            }
+          } catch {
+            setLoadError(
+              "Este cliente no aparece en las listas de Delta Ingreso Cliente Forecast para esta planta (solo clientes en Dejaron / − Ingreso / + Ingreso / Nuevos). No se pudo cargar el Excel completo para mostrar historial alternativo."
+            );
+            setDeltaClienteSel(null);
+          }
         }
       } catch (e: unknown) {
         if (!cancelled) {
@@ -275,18 +308,28 @@ export default function DeltaIngresoClienteForecastModal({
                 <span className="font-semibold">{deltaClienteSel.cliente.cliente}</span>{" "}
                 <span className="text-slate-400">· {deltaClienteSel.grupo}</span>
               </p>
-              <p>
-                Ingreso A:{" "}
-                <span className="font-mono">{deltaClienteSel.cliente.ingresoAStr ?? "$0"}</span> · Ingreso B
-                forecast: <span className="font-mono">{deltaClienteSel.cliente.ingresoBStr ?? "$0"}</span> · Delta:{" "}
-                <span className="font-mono">{deltaClienteSel.cliente.deltaIngresoStr ?? "$0"}</span>
-              </p>
-              <p className="text-xs text-slate-500 max-w-3xl">
-                <strong>Ingreso A</strong> = ingreso del <strong>mes calendario anterior completo</strong> (kg del mes ×
-                margen IGF de ese mes − descuentos del mes). <strong>Ingreso B</strong> = proyección a cierre del{" "}
-                <strong>mes en curso</strong>, usando margen IGF del mes actual y el descuento $/kg calculado sobre la
-                ventana de historial (p. ej. 60 días). <strong>Delta</strong> = B − A.
-              </p>
+              {deltaClienteSel.grupo === GRUPO_DICF_EXCEL_FALLBACK ? (
+                <p className="rounded border border-sky-800/60 bg-sky-950/40 px-3 py-2 text-sm text-sky-100/95">
+                  Este cliente no entra en las categorías Dejaron / − Ingreso / + Ingreso / Nuevos del periodo DICF
+                  actual (p. ej. inactivo o sin delta en forecast). Se muestran la tabla mensual y las compras diarias a
+                  partir del Excel completo de la planta.
+                </p>
+              ) : (
+                <>
+                  <p>
+                    Ingreso A:{" "}
+                    <span className="font-mono">{deltaClienteSel.cliente.ingresoAStr ?? "$0"}</span> · Ingreso B
+                    forecast: <span className="font-mono">{deltaClienteSel.cliente.ingresoBStr ?? "$0"}</span> · Delta:{" "}
+                    <span className="font-mono">{deltaClienteSel.cliente.deltaIngresoStr ?? "$0"}</span>
+                  </p>
+                  <p className="text-xs text-slate-500 max-w-3xl">
+                    <strong>Ingreso A</strong> = ingreso del <strong>mes calendario anterior completo</strong> (kg del
+                    mes × margen IGF de ese mes − descuentos del mes). <strong>Ingreso B</strong> = proyección a cierre
+                    del <strong>mes en curso</strong>, usando margen IGF del mes actual y el descuento $/kg calculado
+                    sobre la ventana de historial (p. ej. 60 días). <strong>Delta</strong> = B − A.
+                  </p>
+                </>
+              )}
               {(() => {
                 const clienteNombreSel = (deltaClienteSel.cliente?.cliente || "").trim();
                 const grupo = (deltaClienteSel.grupo || "").toLowerCase();
