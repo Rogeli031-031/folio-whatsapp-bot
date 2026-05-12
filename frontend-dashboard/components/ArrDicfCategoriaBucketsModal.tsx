@@ -290,7 +290,8 @@ export default function ArrDicfCategoriaBucketsModal({
                 Resumen por subcategoría · {categoria}
               </h3>
               <p className="mt-1 text-[0.65rem] leading-snug text-slate-500">
-                Venta en toneladas y comisión proyectada del mes (kg × desc. $/kg), alineado al forecast del tablero:
+                Venta en toneladas y comisión proyectada del mes (kg × $/kg desc. en magnitud positiva; en plan el
+                descuento firmado se invierte para alinear con clientes), alineado al forecast del tablero:
                 exclusiones «Sin venta», simulación «Con venta» y clientes nuevos del plan manual que suman al mes.
               </p>
               <div className="mt-2 overflow-x-auto">

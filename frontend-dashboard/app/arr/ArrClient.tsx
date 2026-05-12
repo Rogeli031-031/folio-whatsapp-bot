@@ -714,6 +714,27 @@ function mapSubcatAggToRows(map: Map<string, SubcatAggDicf>): ArrForecastSubcate
  * Agrega venta (kg → t) y comisión proyectada (kg × desc. $/kg) por subcategoría,
  * misma lógica de kg que `toneladasCategoriaDesdeClientes` + filas plan manual en forecast.
  */
+/**
+ * kg × $/kg para el resumen «Comisión proyectada» del modal DICF:
+ * - Clientes API: el descuento $/kg se trata como magnitud positiva (igual que en `ingresoClienteMarginal`).
+ * - Plan manual: el valor se guarda firmado (típico negativo); se invierte el signo para usar la misma magnitud que clientes.
+ * - Fallback mes: valor firmado del resumen → se usa magnitud.
+ * No altera el descuento ponderado del mes (`descuentoSigned` / Excel -5.10).
+ */
+function descKgParaComisionProyectadaModal(
+  descKg: number | null,
+  origen: "cliente" | "plan",
+  descFallback: number | null
+): number {
+  if (descKg != null && Number.isFinite(descKg)) {
+    return origen === "plan" ? -descKg : Math.abs(descKg);
+  }
+  if (descFallback != null && Number.isFinite(descFallback)) {
+    return Math.abs(descFallback);
+  }
+  return 0;
+}
+
 function buildForecastSubcategoriaResumenDicf(
   clientesB: ClientesMonthData | undefined,
   excluirForecast: Record<string, true> | undefined,
@@ -731,10 +752,9 @@ function buildForecastSubcategoriaResumenDicf(
   const fb =
     descFallback != null && Number.isFinite(descFallback) ? descFallback : null;
 
-  const bump = (comi: boolean, subRaw: string, kg: number, descKg: number | null) => {
+  const bump = (comi: boolean, subRaw: string, kg: number, descKg: number | null, origen: "cliente" | "plan") => {
     if (!Number.isFinite(kg) || kg <= 0) return;
-    const d =
-      descKg != null && Number.isFinite(descKg) ? descKg : fb != null ? fb : 0;
+    const d = descKgParaComisionProyectadaModal(descKg, origen, fb);
     const mxn = kg * d;
     const sub = (subRaw || "").trim() || "Sin subcategoría";
     const map = comi ? mapaComi : mapaCasa;
@@ -766,14 +786,20 @@ function buildForecastSubcategoriaResumenDicf(
         : r.descuento_kg != null && Number.isFinite(r.descuento_kg)
           ? r.descuento_kg
           : null;
-    bump(comi, String(r.subcategoria ?? ""), kg, descKg);
+    bump(comi, String(r.subcategoria ?? ""), kg, descKg, "cliente");
   }
 
   if (!hist) {
     for (const n of planManualNuevosRows) {
       if (!nuevaFilaCuentaEnForecastMes(n) || !esNuevoKgPlanManual(n)) continue;
       const kg = Number(n.kg);
-      bump(n.categoria === "COMISIONISTA", n.subcategoria, kg, n.descKg);
+      bump(
+        n.categoria === "COMISIONISTA",
+        n.subcategoria,
+        kg,
+        Number.isFinite(n.descKg) ? n.descKg : null,
+        "plan"
+      );
     }
   }
 
