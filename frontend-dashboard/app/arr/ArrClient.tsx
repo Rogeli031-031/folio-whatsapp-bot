@@ -2564,34 +2564,124 @@ export default function ArrClient() {
         headerDescB: headerDescB0,
         headerIngresoA: headerIngresoA0,
         headerIngresoB: headerIngresoB0,
-        filasClientesMesPrimero: filasPrimero.map((r) => ({
-          cliente: r.cliente,
-          ventaA: r.ventaA,
-          ventaB: ventaBMesBConSimMap(r, sConVenta),
-          descA: r.descA,
-          descB: r.descB,
-          acciones_abiertas: r.acciones_abiertas,
-          ...(slice === wsPlan
-            ? {
-                sinVentaForecast: Boolean(sExcluir[r.cliente]),
-                conVentaForecastSim: Boolean(sConVenta[r.cliente]),
-              }
-            : {}),
-        })),
-        filasClientesSoloMesSegundo: filasSolo.map((r) => ({
-          cliente: r.cliente,
-          ventaA: r.ventaA,
-          ventaB: ventaBMesBConSimMap(r, sConVenta),
-          descA: r.descA,
-          descB: r.descB,
-          acciones_abiertas: r.acciones_abiertas,
-          ...(slice === wsPlan
-            ? {
-                sinVentaForecast: Boolean(sExcluir[r.cliente]),
-                conVentaForecastSim: Boolean(sConVenta[r.cliente]),
-              }
-            : {}),
-        })),
+        filasClientesMesPrimero: filasPrimero.map((r) => {
+          const base = {
+            cliente: r.cliente,
+            ventaA: r.ventaA,
+            ventaB: ventaBMesBConSimMap(r, sConVenta),
+            descA: r.descA,
+            descB: r.descB,
+            ...(slice === wsPlan
+              ? {
+                  sinVentaForecast: Boolean(sExcluir[r.cliente]),
+                  conVentaForecastSim: Boolean(sConVenta[r.cliente]),
+                }
+              : {}),
+          };
+          if (slice !== wsPlan) return base;
+          const rB = mapB.get(r.cliente.trim());
+          if (!rB || !clientesB0) {
+            return {
+              ...base,
+              exportPlanCategoria: "",
+              exportPlanSubcategoria: "",
+              exportPlanVentaForecastKg: null,
+              exportPlanDescKg: null,
+            };
+          }
+          const hist = clientesB0.historico === true;
+          const cli = r.cliente.trim();
+          const cat = categoriaEsComisionista(rB.categoria) ? "COMISIONISTA" : "CASA";
+          const sub = String(rB.subcategoria ?? "").trim();
+          let vKg: number | null;
+          let descKg: number | null;
+          if (hist) {
+            vKg = Number(rB.kg_real) || 0;
+            descKg =
+              rB.descuento_kg != null && Number.isFinite(rB.descuento_kg) ? rB.descuento_kg : null;
+          } else {
+            vKg = sExcluir[cli]
+              ? 0
+              : (rB.kg_proyectado != null ? Number(rB.kg_proyectado) || 0 : 0) +
+                (() => {
+                  const sim = sConVenta[cli];
+                  return sim != null && Number.isFinite(sim.kg) && sim.kg > 0 ? sim.kg : 0;
+                })();
+            const sim = sConVenta[cli];
+            descKg =
+              sim != null && sim.descKg != null && Number.isFinite(sim.descKg)
+                ? sim.descKg
+                : rB.descuento_kg != null && Number.isFinite(rB.descuento_kg)
+                  ? rB.descuento_kg
+                  : null;
+          }
+          return {
+            ...base,
+            exportPlanCategoria: cat,
+            exportPlanSubcategoria: sub,
+            exportPlanVentaForecastKg: vKg,
+            exportPlanDescKg: descKg,
+          };
+        }),
+        filasClientesSoloMesSegundo: filasSolo.map((r) => {
+          const base = {
+            cliente: r.cliente,
+            ventaA: r.ventaA,
+            ventaB: ventaBMesBConSimMap(r, sConVenta),
+            descA: r.descA,
+            descB: r.descB,
+            ...(slice === wsPlan
+              ? {
+                  sinVentaForecast: Boolean(sExcluir[r.cliente]),
+                  conVentaForecastSim: Boolean(sConVenta[r.cliente]),
+                }
+              : {}),
+          };
+          if (slice !== wsPlan) return base;
+          const rB = mapB.get(r.cliente.trim());
+          if (!rB || !clientesB0) {
+            return {
+              ...base,
+              exportPlanCategoria: "",
+              exportPlanSubcategoria: "",
+              exportPlanVentaForecastKg: null,
+              exportPlanDescKg: null,
+            };
+          }
+          const hist = clientesB0.historico === true;
+          const cli = r.cliente.trim();
+          const cat = categoriaEsComisionista(rB.categoria) ? "COMISIONISTA" : "CASA";
+          const sub = String(rB.subcategoria ?? "").trim();
+          let vKg: number | null;
+          let descKg: number | null;
+          if (hist) {
+            vKg = Number(rB.kg_real) || 0;
+            descKg =
+              rB.descuento_kg != null && Number.isFinite(rB.descuento_kg) ? rB.descuento_kg : null;
+          } else {
+            vKg = sExcluir[cli]
+              ? 0
+              : (rB.kg_proyectado != null ? Number(rB.kg_proyectado) || 0 : 0) +
+                (() => {
+                  const sim = sConVenta[cli];
+                  return sim != null && Number.isFinite(sim.kg) && sim.kg > 0 ? sim.kg : 0;
+                })();
+            const sim = sConVenta[cli];
+            descKg =
+              sim != null && sim.descKg != null && Number.isFinite(sim.descKg)
+                ? sim.descKg
+                : rB.descuento_kg != null && Number.isFinite(rB.descuento_kg)
+                  ? rB.descuento_kg
+                  : null;
+          }
+          return {
+            ...base,
+            exportPlanCategoria: cat,
+            exportPlanSubcategoria: sub,
+            exportPlanVentaForecastKg: vKg,
+            exportPlanDescKg: descKg,
+          };
+        }),
         marcasForecastEnClientes: slice === wsPlan,
         usarFormulasComparacion: true,
         ...(slice === wsPlan

@@ -23,6 +23,14 @@ export type ArrExportClienteRow = {
   /** Solo hoja ARR Plan (export). */
   sinVentaForecast?: boolean;
   conVentaForecastSim?: boolean;
+  /**
+   * Solo hoja ARR Plan: columnas N–Q en «Clientes por mes» (CASA/COMISIONISTA, subcategoría API,
+   * kg forecast mes B con exclusiones/simulación, descuento $/kg mes B).
+   */
+  exportPlanCategoria?: string;
+  exportPlanSubcategoria?: string;
+  exportPlanVentaForecastKg?: number | null;
+  exportPlanDescKg?: number | null;
 };
 
 function safeFilePart(s: string): string {
@@ -432,6 +440,13 @@ async function downloadArrDashboardExcelInternal(
   cur++;
 
   const MF = marcasForecastEnClientes;
+  /** Columnas N–Q: categoría, subcategoría, venta forecast (kg), desc. $/kg (solo hoja ARR Plan). */
+  const COL_PLAN_CAT = 14;
+  const COL_PLAN_SUB = 15;
+  const COL_PLAN_KG = 16;
+  const COL_PLAN_DESC = 17;
+  const lastClientCol = isArrPlanSheet && MF ? COL_PLAN_DESC : MF ? 12 : 10;
+
   const C = MF
     ? {
         sinV: 1,
@@ -496,11 +511,17 @@ async function downloadArrDashboardExcelInternal(
   cliHeaders.forEach((t, i) => {
     cliHdr.getCell(i + 1).value = t;
   });
-  styleHeaderRow(cliHdr, C.last);
+  if (isArrPlanSheet && MF) {
+    cliHdr.getCell(COL_PLAN_CAT).value = "Categoría";
+    cliHdr.getCell(COL_PLAN_SUB).value = "Subcategoría";
+    cliHdr.getCell(COL_PLAN_KG).value = "Venta proyectada/forecast (kg)";
+    cliHdr.getCell(COL_PLAN_DESC).value = "Descuento ($/kg)";
+  }
+  styleHeaderRow(cliHdr, lastClientCol);
   cur++;
 
   const centerCli = MF
-    ? [1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+    ? [1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, COL_PLAN_KG, COL_PLAN_DESC]
     : [2, 3, 4, 5, 6, 7, 8, 9, 10];
   const clienteColStyle = MF ? C.cli : 1;
 
@@ -541,13 +562,21 @@ async function downloadArrDashboardExcelInternal(
       formula: `ROUND(IFERROR(${Lc(C.ingB)}${cur}-${Lc(C.ingA)}${cur},0),0)`,
     };
     rowX.getCell(C.dIng).numFmt = '"$" #,##0';
-    styleDataRow(rowX, C.last, centerCli, clienteColStyle);
+    if (isArrPlanSheet && MF) {
+      rowX.getCell(COL_PLAN_CAT).value = (row.exportPlanCategoria ?? "").trim() || null;
+      rowX.getCell(COL_PLAN_SUB).value = (row.exportPlanSubcategoria ?? "").trim() || null;
+      rowX.getCell(COL_PLAN_KG).value = cellNum(row.exportPlanVentaForecastKg ?? null);
+      rowX.getCell(COL_PLAN_KG).numFmt = "#,##0";
+      rowX.getCell(COL_PLAN_DESC).value = cellNum(row.exportPlanDescKg ?? null);
+      rowX.getCell(COL_PLAN_DESC).numFmt = "#,##0.00";
+    }
+    styleDataRow(rowX, lastClientCol, centerCli, clienteColStyle);
     cur++;
   }
 
   if (filasClientesSoloMesSegundo.length > 0 && filasClientesMesPrimero.length > 0) {
     const sep = ws.getRow(cur);
-    for (let c = 1; c <= C.last; c++) {
+    for (let c = 1; c <= lastClientCol; c++) {
       sep.getCell(c).value = "";
       sep.getCell(c).fill = {
         type: "pattern",
@@ -593,7 +622,15 @@ async function downloadArrDashboardExcelInternal(
       formula: `ROUND(IFERROR(${Lc(C.ingB)}${cur}-${Lc(C.ingA)}${cur},0),0)`,
     };
     rowX.getCell(C.dIng).numFmt = '"$" #,##0';
-    styleDataRow(rowX, C.last, centerCli, clienteColStyle);
+    if (isArrPlanSheet && MF) {
+      rowX.getCell(COL_PLAN_CAT).value = (row.exportPlanCategoria ?? "").trim() || null;
+      rowX.getCell(COL_PLAN_SUB).value = (row.exportPlanSubcategoria ?? "").trim() || null;
+      rowX.getCell(COL_PLAN_KG).value = cellNum(row.exportPlanVentaForecastKg ?? null);
+      rowX.getCell(COL_PLAN_KG).numFmt = "#,##0";
+      rowX.getCell(COL_PLAN_DESC).value = cellNum(row.exportPlanDescKg ?? null);
+      rowX.getCell(COL_PLAN_DESC).numFmt = "#,##0.00";
+    }
+    styleDataRow(rowX, lastClientCol, centerCli, clienteColStyle);
     cur++;
   }
 
@@ -625,24 +662,36 @@ async function downloadArrDashboardExcelInternal(
   }
   celL6.numFmt = '"$" #,##0';
 
+  const widthsMfBase = [
+    { width: 10 },
+    { width: 10 },
+    { width: 28 },
+    { width: 14 },
+    { width: 14 },
+    { width: 14 },
+    { width: 14 },
+    { width: 14 },
+    { width: 14 },
+    { width: 14 },
+    { width: 14 },
+    { width: 14 },
+  ];
   ws.columns = MF
-    ? [
-        { width: 10 },
-        { width: 10 },
-        { width: 28 },
-        { width: 14 },
-        { width: 14 },
-        { width: 14 },
-        { width: 14 },
-        { width: 14 },
-        { width: 14 },
-        { width: 14 },
-        { width: 14 },
-        { width: 14 },
-        { width: 12 },
-        { width: 12 },
-        { width: 16 },
-      ]
+    ? isArrPlanSheet
+      ? [
+          ...widthsMfBase,
+          { width: 14 },
+          { width: 22 },
+          { width: 20 },
+          { width: 14 },
+          { width: 14 },
+        ]
+      : [
+          ...widthsMfBase,
+          { width: 12 },
+          { width: 12 },
+          { width: 16 },
+        ]
     : [
         { width: 28 },
         { width: 14 },
