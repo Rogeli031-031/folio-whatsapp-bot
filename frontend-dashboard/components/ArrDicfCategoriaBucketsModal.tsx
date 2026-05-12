@@ -63,6 +63,18 @@ function fmtMxn(v: number): string {
   });
 }
 
+/** Comisión proyectada ($) ÷ (venta t × 1000) = $/kg. */
+function fmtComisionProyectadaPorKg(ventaTon: number, comisionMxn: number): string {
+  const kg = ventaTon * 1000;
+  if (!Number.isFinite(kg) || kg <= 0) return "—";
+  const porKg = comisionMxn / kg;
+  if (!Number.isFinite(porKg)) return "—";
+  return porKg.toLocaleString("es-MX", {
+    minimumFractionDigits: 3,
+    maximumFractionDigits: 3,
+  });
+}
+
 export default function ArrDicfCategoriaBucketsModal({
   open,
   onClose,
@@ -282,12 +294,13 @@ export default function ArrDicfCategoriaBucketsModal({
                 exclusiones «Sin venta», simulación «Con venta» y clientes nuevos del plan manual que suman al mes.
               </p>
               <div className="mt-2 overflow-x-auto">
-                <table className="w-full min-w-[260px] border-collapse text-left text-xs text-slate-200">
+                <table className="w-full min-w-[320px] border-collapse text-left text-xs text-slate-200">
                   <thead>
                     <tr className="border-b border-slate-600/80 text-[0.65rem] uppercase text-slate-400">
                       <th className="py-1.5 pr-2 font-medium">Subcategoría</th>
                       <th className="py-1.5 pr-2 text-right font-medium">Venta (t)</th>
-                      <th className="py-1.5 text-right font-medium">Comisión proyectada ($)</th>
+                      <th className="py-1.5 pr-2 text-right font-medium">Comisión proyectada ($)</th>
+                      <th className="py-1.5 text-right font-medium">Comisión proyectada $/kg</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -305,7 +318,18 @@ export default function ArrDicfCategoriaBucketsModal({
                             maximumFractionDigits: 2,
                           })}
                         </td>
-                        <td className="py-1.5 text-right tabular-nums">${fmtMxn(row.comisionProyectadaMxn)}</td>
+                        <td className="py-1.5 pr-2 text-right tabular-nums">
+                          ${fmtMxn(row.comisionProyectadaMxn)}
+                        </td>
+                        <td className="py-1.5 text-right tabular-nums">
+                          {(() => {
+                            const s = fmtComisionProyectadaPorKg(
+                              row.ventaTon,
+                              row.comisionProyectadaMxn
+                            );
+                            return s === "—" ? "—" : `$${s}`;
+                          })()}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
