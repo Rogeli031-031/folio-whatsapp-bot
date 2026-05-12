@@ -727,7 +727,14 @@ type ClienteTablaRow = {
   deltaIngreso: number;
   /** Solo aparecen abajo: están en mes B y no en mes A */
   soloNuevo: boolean;
+  /** Acciones DICF abiertas (mes B si existe, si no mes A). */
+  acciones_abiertas?: number;
 };
+
+function clienteTieneAccionDicfAbierta(row: ClienteTablaRow): boolean {
+  const n = row.acciones_abiertas;
+  return n != null && Number.isFinite(n) && n > 0;
+}
 
 function findClienteTablaRowInFilas(
   cliente: string,
@@ -1628,6 +1635,7 @@ export default function ArrClient() {
         ingresoB: ingresoBAlloc,
         deltaIngreso: (ingresoBAlloc ?? 0) - (ingresoAAlloc ?? 0),
         soloNuevo: false,
+        acciones_abiertas: rB?.acciones_abiertas ?? rA?.acciones_abiertas ?? 0,
       });
     }
 
@@ -1651,6 +1659,7 @@ export default function ArrClient() {
           ingresoB: ingresoBCliente,
           deltaIngreso: (ingresoBCliente ?? 0) - 0,
           soloNuevo: true,
+          acciones_abiertas: rB.acciones_abiertas ?? 0,
         });
       }
       soloSegundo.sort((x, y) => {
@@ -2442,6 +2451,7 @@ export default function ArrClient() {
           ventaB: ventaBMesBConSimMap(r, sConVenta),
           descA: r.descA,
           descB: r.descB,
+          acciones_abiertas: r.acciones_abiertas,
           ...(slice === wsPlan
             ? {
                 sinVentaForecast: Boolean(sExcluir[r.cliente]),
@@ -2455,6 +2465,7 @@ export default function ArrClient() {
           ventaB: ventaBMesBConSimMap(r, sConVenta),
           descA: r.descA,
           descB: r.descB,
+          acciones_abiertas: r.acciones_abiertas,
           ...(slice === wsPlan
             ? {
                 sinVentaForecast: Boolean(sExcluir[r.cliente]),
@@ -3157,9 +3168,17 @@ export default function ArrClient() {
                     <button
                       type="button"
                       onClick={() => empresa && setDicfModalCliente(row.cliente)}
-                      className="mx-auto block max-w-full cursor-pointer text-center text-sky-300 hover:text-sky-200 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                      className={`mx-auto block max-w-full cursor-pointer text-center hover:underline disabled:cursor-not-allowed disabled:opacity-50 ${
+                        clienteTieneAccionDicfAbierta(row)
+                          ? "text-amber-300 hover:text-amber-200"
+                          : "text-sky-300 hover:text-sky-200"
+                      }`}
                       disabled={!empresa || !token}
-                      title="Ver Delta Ingreso Cliente Forecast"
+                      title={
+                        clienteTieneAccionDicfAbierta(row)
+                          ? `${row.acciones_abiertas} acción(es) DICF abierta(s). Ver Delta Ingreso Cliente Forecast`
+                          : "Ver Delta Ingreso Cliente Forecast"
+                      }
                     >
                       {row.cliente}
                     </button>
@@ -3272,9 +3291,17 @@ export default function ArrClient() {
                     <button
                       type="button"
                       onClick={() => empresa && setDicfModalCliente(row.cliente)}
-                      className="mx-auto block max-w-full cursor-pointer text-center text-sky-300 hover:text-sky-200 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                      className={`mx-auto block max-w-full cursor-pointer text-center hover:underline disabled:cursor-not-allowed disabled:opacity-50 ${
+                        clienteTieneAccionDicfAbierta(row)
+                          ? "text-amber-300 hover:text-amber-200"
+                          : "text-sky-300 hover:text-sky-200"
+                      }`}
                       disabled={!empresa || !token}
-                      title="Ver Delta Ingreso Cliente Forecast"
+                      title={
+                        clienteTieneAccionDicfAbierta(row)
+                          ? `${row.acciones_abiertas} acción(es) DICF abierta(s). Ver Delta Ingreso Cliente Forecast`
+                          : "Ver Delta Ingreso Cliente Forecast"
+                      }
                     >
                       {row.cliente}
                     </button>

@@ -713,6 +713,8 @@ export interface ArrClienteMesRow {
   descuento_mxn: number;
   descuento_kg: number | null;
   estatus: string;
+  /** Acciones DICF abiertas (no cerradas / no hecho) asociadas al cliente. */
+  acciones_abiertas?: number;
 }
 
 export interface ArrClientesMesResponse {

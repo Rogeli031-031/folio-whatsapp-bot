@@ -11621,7 +11621,7 @@ app.get("/api/dashboard/arr-clientes-mes", dashboardAuthMiddleware, async (req, 
       plantCode,
       { historico, targetKgOverride }
     );
-    const rows = (resp.rows || []).map((r) => ({
+    const rowsBase = (resp.rows || []).map((r) => ({
       planta: r.planta,
       cliente: r.cliente,
       categoria: r.categoria,
@@ -11636,6 +11636,65 @@ app.get("/api/dashboard/arr-clientes-mes", dashboardAuthMiddleware, async (req, 
       descuento_kg: r.descKg != null && Number.isFinite(r.descKg) ? Math.round(r.descKg * 1e6) / 1e6 : null,
       estatus: r.estatus || "",
     }));
+    let rows = rowsBase;
+    try {
+      const plantaIdRaw = await dicfAccionesLib.resolvePlantaId(client, empresa);
+      const canonPlantaId = Number.isFinite(plantaIdRaw) ? dicfAccionesLib.getCanonicalPlantaId(plantaIdRaw) : null;
+      const plantaIdsEquiv =
+        Number.isFinite(canonPlantaId) && canonPlantaId != null
+          ? dicfAccionesLib.getPlantaIdsEquivalentes(canonPlantaId)
+          : [];
+      const accionesAbiertasByKey = new Map();
+      const accionesAbiertasByNombre = new Map();
+      if (plantaIdsEquiv.length) {
+        const arKey = await client.query(
+          `SELECT cliente_key, COUNT(*)::int AS c
+             FROM arr.dicf_acciones
+            WHERE planta_id = ANY($1::int[])
+              AND (cerrado_at IS NULL)
+              AND (estado IS NULL OR estado <> 'hecho')
+            GROUP BY cliente_key`,
+          [plantaIdsEquiv]
+        );
+        for (const row of arKey.rows || []) {
+          if (row.cliente_key) accionesAbiertasByKey.set(String(row.cliente_key), Number(row.c) || 0);
+        }
+        const arNom = await client.query(
+          `SELECT cliente_nombre, COUNT(*)::int AS c
+             FROM arr.dicf_acciones
+            WHERE planta_id = ANY($1::int[])
+              AND (cerrado_at IS NULL)
+              AND (estado IS NULL OR estado <> 'hecho')
+            GROUP BY cliente_nombre`,
+          [plantaIdsEquiv]
+        );
+        for (const row of arNom.rows || []) {
+          const k = dicfAccionesLib.normalizeKeyPart(row.cliente_nombre);
+          accionesAbiertasByNombre.set(k, (accionesAbiertasByNombre.get(k) || 0) + (Number(row.c) || 0));
+        }
+      }
+      rows = rowsBase.map((c) => {
+        const canal = (c.categoria != null && String(c.categoria).trim()) || "";
+        const subcanal = (c.subcategoria != null && String(c.subcategoria).trim()) || "";
+        const cli = (c.cliente != null && String(c.cliente).trim()) || "";
+        const est = String(c.estatus || "").trim();
+        const gruposTry = new Set([est].filter((x) => x && x.length));
+        let n = 0;
+        if (canonPlantaId != null && Number.isFinite(canonPlantaId)) {
+          for (const g of gruposTry) {
+            const ck = dicfAccionesLib.buildClienteKey(canonPlantaId, g, canal, subcanal, cli);
+            n = Math.max(n, accionesAbiertasByKey.get(ck) || 0);
+          }
+        }
+        if (!n) {
+          const nk = dicfAccionesLib.normalizeKeyPart(cli);
+          n = accionesAbiertasByNombre.get(nk) || 0;
+        }
+        return { ...c, acciones_abiertas: n };
+      });
+    } catch (_accErr) {
+      rows = rowsBase.map((c) => ({ ...c, acciones_abiertas: 0 }));
+    }
     res.json({
       ok: true,
       year,
