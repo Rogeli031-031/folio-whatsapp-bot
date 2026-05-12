@@ -2260,6 +2260,7 @@ export default function ArrClient() {
                 hgCliente: n.hgCliente,
                 hgCompra: n.hgCompra,
                 comentarios: n.comentarios,
+                origen: n.origen,
               })),
             }
           : {}),

@@ -94,6 +94,8 @@ export type ArrExportOptions = {
     /** null/undefined: fórmula usa HG$ del mes resumen. */
     hgCompra?: number | null;
     comentarios?: string;
+    /** `sin_venta`: resta en fórmulas D6/I6/B8; resto suma (manual / con_venta). */
+    origen?: "manual" | "sin_venta" | "con_venta";
   }[];
   /** Columnas «Sin venta» / «Con venta» en clientes (solo ARR Plan). */
   marcasForecastEnClientes?: boolean;
@@ -319,9 +321,33 @@ async function downloadArrDashboardExcelInternal(
   styleCompRow(compRow, LAST_SUMMARY_COL);
   cur++;
 
-  if ((build.sheetName || "ARR") === "ARR Plan" && nuevosClientesPlan.length > 0) {
-    ws.getRow(cur).getCell(1).value = "";
+  const isArrPlanSheet = (build.sheetName || "ARR") === "ARR Plan";
+  /** Fila 8: divisor venta plan (t); primera fila datos «Nuevos clientes» = cur+3 desde aquí. */
+  const rowAfterComp = cur;
+
+  if (isArrPlanSheet && nuevosClientesPlan.length > 0) {
+    const rTot = ws.getRow(rowAfterComp);
+    rTot.getCell(1).value = "";
+    const firstNuevoDataRow = rowAfterComp + 3;
+    const partsB8: string[] = [];
+    const partsD6: string[] = [];
+    const partsI6: string[] = [];
+    for (let i = 0; i < nuevosClientesPlan.length; i++) {
+      const r = firstNuevoDataRow + i;
+      const sign = nuevosClientesPlan[i].origen === "sin_venta" ? "-" : "+";
+      partsB8.push(`${sign}E${r}/1000`);
+      partsD6.push(`${sign}(F${r}*E${r}/1000)`);
+      partsI6.push(
+        `${sign}((IF(ISBLANK(H${r}),ARR!H$${MES_B_R},H${r})+IF(ISBLANK(I${r}),ARR!I$${MES_B_R},I${r}))*E${r}/100)`
+      );
+    }
+    rTot.getCell(2).value = {
+      formula: `B${MES_B_R}${partsB8.join("")}`,
+    };
+    rTot.getCell(2).numFmt = "#,##0.00";
+    styleDataRow(rTot, LAST_SUMMARY_COL, [2]);
     cur++;
+
     ws.getRow(cur).getCell(1).value = "Nuevos clientes (plan)";
     ws.getRow(cur).font = { bold: true, size: 11 };
     cur++;
@@ -372,13 +398,20 @@ async function downloadArrDashboardExcelInternal(
       r.getCell(10).value = (n.comentarios ?? "").trim() || null;
       r.getCell(10).alignment = { vertical: "top", horizontal: "left", wrapText: true };
       r.getCell(11).value = {
-        formula: `ROUND(IFERROR((E${cur}*($C$${MES_B_R}-ABS(F${cur})))+(IF(ISBLANK(H${cur}),$H$${MES_B_R},H${cur})*E${cur}*IF(ISBLANK(I${cur}),$I$${MES_B_R},I${cur})/100),0),0)`,
+        formula: `ROUND(IFERROR((E${cur}*($C$${MES_B_R}-ABS(F${cur})))+(IF(ISBLANK(H${cur}),ARR!H$${MES_B_R},H${cur})*E${cur}*IF(ISBLANK(I${cur}),ARR!I$${MES_B_R},I${cur})/100),0),0)`,
       };
       r.getCell(11).numFmt = '"$" #,##0';
       styleDataRow(r, 11, centerCols);
       r.getCell(10).alignment = { vertical: "top", horizontal: "left", wrapText: true };
       cur++;
     }
+    const mesBRow = ws.getRow(MES_B_R);
+    const dNumer = `(ARR!D${MES_B_R}*ARR!B${MES_B_R})${partsD6.join("")}`;
+    mesBRow.getCell(4).value = { formula: `(${dNumer})/B${rowAfterComp}` };
+    mesBRow.getCell(4).numFmt = "#,##0.00";
+    const iNumer = `((ARR!H${MES_B_R}*ARR!B${MES_B_R}*1000/100))${partsI6.join("")}`;
+    mesBRow.getCell(9).value = { formula: `(${iNumer})/(B${MES_B_R}*10)` };
+    mesBRow.getCell(9).numFmt = '"$" #,##0.00';
   }
 
   ws.getRow(cur).getCell(1).value = "";
@@ -571,6 +604,10 @@ async function downloadArrDashboardExcelInternal(
   if (lastDataR >= firstClienteDataRow && rentabilidadMesBFormulaClientes) {
     const sumIngB = `SUM(${colIngB}${firstClienteDataRow}:${colIngB}${lastDataR})`;
     celL6.value = { formula: `${sumIngB}-G${MES_B_R}` };
+  } else if (!rentabilidadMesBFormulaClientes) {
+    celL6.value = {
+      formula: `((C${MES_B_R}+D${MES_B_R})*B${MES_B_R}*1000)+((H${MES_B_R}*B${MES_B_R}*1000/100)*I${MES_B_R})-G${MES_B_R}`,
+    };
   } else {
     celL6.value = cellNum(mB.rentabilidadImporte);
   }
