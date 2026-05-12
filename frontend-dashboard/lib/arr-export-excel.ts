@@ -328,12 +328,12 @@ async function downloadArrDashboardExcelInternal(
     cur++;
     const firstNuevoDataRow = cur + 2;
     const partsD6: string[] = [];
-    const partsI6: string[] = [];
+    const partsH6Terms: string[] = [];
     for (let i = 0; i < nuevosClientesPlan.length; i++) {
       const r = firstNuevoDataRow + i;
       const sign = nuevosClientesPlan[i].origen === "sin_venta" ? "-" : "+";
       partsD6.push(`${sign}(F${r}*E${r}/1000)`);
-      partsI6.push(
+      partsH6Terms.push(
         `${sign}((IF(ISBLANK(H${r}),ARR!H$${MES_B_R},H${r})+IF(ISBLANK(I${r}),ARR!I$${MES_B_R},I${r}))*E${r}/100)`
       );
     }
@@ -387,8 +387,13 @@ async function downloadArrDashboardExcelInternal(
       }
       r.getCell(10).value = (n.comentarios ?? "").trim() || null;
       r.getCell(10).alignment = { vertical: "top", horizontal: "left", wrapText: true };
+      const hp = `(IF(ISBLANK(H${cur}),ARR!H$${MES_B_R},H${cur})+IF(ISBLANK(I${cur}),ARR!I$${MES_B_R},I${cur}))`;
+      const coreIng = `((E${cur}*($C$${MES_B_R}+F${cur}))+((${hp})*E${cur}*$I$${MES_B_R}/100))`;
+      const signNeg = n.origen === "sin_venta";
       r.getCell(11).value = {
-        formula: `ROUND(IFERROR((E${cur}*($C$${MES_B_R}-ABS(F${cur})))+(IF(ISBLANK(H${cur}),ARR!H$${MES_B_R},H${cur})*E${cur}*IF(ISBLANK(I${cur}),ARR!I$${MES_B_R},I${cur})/100),0),0)`,
+        formula: signNeg
+          ? `ROUND(IFERROR(-(${coreIng}),0),0)`
+          : `ROUND(IFERROR(${coreIng},0),0)`,
       };
       r.getCell(11).numFmt = '"$" #,##0';
       styleDataRow(r, 11, centerCols);
@@ -399,9 +404,19 @@ async function downloadArrDashboardExcelInternal(
     const dNumer = `(ARR!D${MES_B_R}*ARR!B${MES_B_R})${partsD6.join("")}`;
     mesBRow.getCell(4).value = { formula: `(${dNumer})/B${MES_B_R}` };
     mesBRow.getCell(4).numFmt = "#,##0.00";
-    const iNumer = `((ARR!H${MES_B_R}*ARR!B${MES_B_R}*1000/100))${partsI6.join("")}`;
-    mesBRow.getCell(9).value = { formula: `(${iNumer})/(B${MES_B_R}*10)` };
-    mesBRow.getCell(9).numFmt = '"$" #,##0.00';
+    if (!rentabilidadMesBFormulaClientes) {
+      mesBRow.getCell(9).value = { formula: `ARR!I${MES_B_R}` };
+      mesBRow.getCell(9).numFmt = '"$" #,##0.00';
+      const hNumer = `((ARR!H${MES_B_R}*ARR!B${MES_B_R}*1000/100))${partsH6Terms.join("")}`;
+      mesBRow.getCell(8).value = { formula: `(${hNumer})/(B${MES_B_R}*10)` };
+      mesBRow.getCell(8).numFmt = "#,##0.00";
+    }
+  }
+
+  if (isArrPlanSheet && !rentabilidadMesBFormulaClientes && nuevosClientesPlan.length === 0) {
+    const mb = ws.getRow(MES_B_R);
+    mb.getCell(9).value = { formula: `ARR!I${MES_B_R}` };
+    mb.getCell(9).numFmt = '"$" #,##0.00';
   }
 
   ws.getRow(cur).getCell(1).value = "";

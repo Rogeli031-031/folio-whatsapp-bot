@@ -456,6 +456,80 @@ function ingresoClienteMarginal(
   return Math.round(raw);
 }
 
+/** Ingreso marginal fila «Nuevos clientes» (ARR Plan): (E×(C6+F))+((H+I)×E×I6/100); «Sin venta» invierte signo. I6 = HG$ hoja ARR. */
+function ingresoMarginalPlanNuevoRow(
+  kg: number,
+  descKg: number,
+  margenMes: number | null,
+  i6Arr: number | null,
+  hgCliente: number | null,
+  hgCompra: number | null,
+  arrHDisplay: number | null,
+  arrHgDinero: number | null,
+  origen?: PlanRowOrigen
+): number | null {
+  if (kg <= 0 || margenMes == null || i6Arr == null || !Number.isFinite(i6Arr)) return null;
+  const h =
+    hgCliente != null && Number.isFinite(hgCliente) ? hgCliente : arrHDisplay;
+  const ip =
+    hgCompra != null && Number.isFinite(hgCompra) ? hgCompra : arrHgDinero;
+  if (h == null || !Number.isFinite(h) || ip == null || !Number.isFinite(ip)) return null;
+  const d = Number.isFinite(descKg) ? descKg : 0;
+  const raw = kg * (margenMes + d) + (h + ip) * kg * (i6Arr / 100);
+  const sign = origen === "sin_venta" ? -1 : 1;
+  return Math.round(sign * raw);
+}
+
+/** HG / HG$ resumen mes B en ARR Plan (forecast): I = ARR; H con fórmula tipo Excel solo si hay nuevos manuales. */
+function hgPlanForecastMesBRuta(
+  metricBarr: ResumenMesMetrics,
+  metricPlanB: ResumenMesMetrics,
+  nuevosMan: Array<{
+    kg: number;
+    descKg: number;
+    origen?: PlanRowOrigen;
+    hgCliente: number | null;
+    hgCompra: number | null;
+  }>,
+  aplicarReglasPlanForecast: boolean
+): Pick<ResumenMesMetrics, "hgDisplay" | "hgDinero"> {
+  const arrI = metricBarr.hgDinero;
+  const arrH = metricBarr.hgDisplay;
+  const arrB = metricBarr.ventaTon;
+  const planB = metricPlanB.ventaTon;
+  if (!aplicarReglasPlanForecast) {
+    return { hgDisplay: metricPlanB.hgDisplay, hgDinero: metricPlanB.hgDinero };
+  }
+  const hgDinero =
+    arrI != null && Number.isFinite(arrI) ? arrI : metricPlanB.hgDinero;
+  if (
+    nuevosMan.length === 0 ||
+    arrH == null ||
+    !Number.isFinite(arrH) ||
+    arrB == null ||
+    !Number.isFinite(arrB) ||
+    arrI == null ||
+    !Number.isFinite(arrI) ||
+    planB == null ||
+    !Number.isFinite(planB) ||
+    planB <= 0
+  ) {
+    return { hgDisplay: metricPlanB.hgDisplay, hgDinero };
+  }
+  let extra = 0;
+  for (const n of nuevosMan) {
+    const kg = Number(n.kg);
+    if (!Number.isFinite(kg) || kg <= 0) continue;
+    const h = n.hgCliente != null && Number.isFinite(n.hgCliente) ? n.hgCliente : arrH;
+    const ip = n.hgCompra != null && Number.isFinite(n.hgCompra) ? n.hgCompra : arrI;
+    const sign = n.origen === "sin_venta" ? -1 : 1;
+    extra += sign * ((h + ip) * kg) / 100;
+  }
+  const baseNum = (arrH * arrB * 1000) / 100;
+  const hgDisplay = (baseNum + extra) / (planB * 10);
+  return { hgDisplay, hgDinero };
+}
+
 function ventaBMesBConSimMap(
   row: ClienteTablaRow,
   conVenta: Record<string, { kg: number; descKg: number | null }>
@@ -1736,6 +1810,29 @@ export default function ArrClient() {
     ]
   );
 
+  const hgPlanResumenMesB = useMemo(
+    () =>
+      hgPlanForecastMesBRuta(
+        metricBComoHojaArr,
+        metricBTrasVolNuevosPlan,
+        nuevosKgPlanManuales.map((n) => ({
+          kg: n.kg,
+          descKg: n.descKg,
+          origen: n.origen,
+          hgCliente: n.hgCliente,
+          hgCompra: n.hgCompra,
+        })),
+        Boolean(isArrPlanRoute && clientesB && !clientesB.historico)
+      ),
+    [
+      isArrPlanRoute,
+      metricBComoHojaArr,
+      metricBTrasVolNuevosPlan,
+      nuevosKgPlanManuales,
+      clientesB,
+    ]
+  );
+
   const metricBResumen = useMemo(() => {
     const extraGasto = nuevosClientesPlan.reduce(
       (s, n) => s + (Number.isFinite(n.gastoMxn) ? n.gastoMxn : 0),
@@ -1760,6 +1857,8 @@ export default function ArrClient() {
       descuentoSigned: descSigned,
       gastoImporte,
       operativos,
+      hgDisplay: hgPlanResumenMesB.hgDisplay,
+      hgDinero: hgPlanResumenMesB.hgDinero,
     };
   }, [
     metricBTrasVolNuevosPlan,
@@ -1767,6 +1866,8 @@ export default function ArrClient() {
     nuevosKgPlanManuales,
     isArrPlanRoute,
     descuentoSignedPlanPonderado,
+    hgPlanResumenMesB.hgDisplay,
+    hgPlanResumenMesB.hgDinero,
   ]);
 
   const showExcluirForecastCheckbox = Boolean(empresa && clientesB && !clientesB.historico);
@@ -2124,10 +2225,25 @@ export default function ArrClient() {
         sNuevosMan.map((n) => ({ kg: n.kg, descKg: n.descKg, origen: n.origen })),
         Boolean(clientesB0 && !clientesB0.historico)
       );
-      const metricBResumenFinal: ResumenMesMetrics =
-        slice === wsPlan && descPlanExport != null
-          ? { ...metricBResumen0, descuentoSigned: descPlanExport }
-          : metricBResumen0;
+      let metricBResumenFinal: ResumenMesMetrics = metricBResumen0;
+      if (slice === wsPlan && descPlanExport != null) {
+        metricBResumenFinal = { ...metricBResumenFinal, descuentoSigned: descPlanExport };
+      }
+      if (slice === wsPlan && clientesB0 && !clientesB0.historico) {
+        const hgPlan = hgPlanForecastMesBRuta(
+          metricBarrExport,
+          metricBTrasNuevos,
+          sNuevosMan.map((n) => ({
+            kg: n.kg,
+            descKg: n.descKg,
+            origen: n.origen,
+            hgCliente: n.hgCliente,
+            hgCompra: n.hgCompra,
+          })),
+          true
+        );
+        metricBResumenFinal = { ...metricBResumenFinal, ...hgPlan };
+      }
 
       const rentArrA0 =
         clientesA0 ? rentabilidadArrDesdeFilas(filasPrimero, filasSolo, metA.gastoImporte, "A") : null;
@@ -2487,6 +2603,8 @@ export default function ArrClient() {
                         descuentoSigned: metricBResumen.descuentoSigned,
                         gastoImporte: metricBResumen.gastoImporte,
                         operativos: metricBResumen.operativos,
+                        hgDisplay: metricBResumen.hgDisplay,
+                        hgDinero: metricBResumen.hgDinero,
                       }
                     : mRaw;
                 const rentabUi =
@@ -2576,10 +2694,10 @@ export default function ArrClient() {
                       {cellDeltaMoney(metricA.gastoImporte, metricBResumen.gastoImporte)}
                     </td>
                     <td className={`px-3 py-2 text-center tabular-nums ${G.hg}`}>
-                      {cellDeltaNum(metricA.hgDisplay, metricB.hgDisplay, 2)}
+                      {cellDeltaNum(metricA.hgDisplay, metricBResumen.hgDisplay, 2)}
                     </td>
                     <td className={`px-3 py-2 text-center tabular-nums ${G.hg}`}>
-                      {cellDeltaMoney(metricA.hgDinero, metricB.hgDinero, 2)}
+                      {cellDeltaMoney(metricA.hgDinero, metricBResumen.hgDinero, 2)}
                     </td>
                     <td className={`px-3 py-2 text-center tabular-nums ${G.imp}`}>
                       {cellDeltaNum(metricA.impuestoKg, metricB.impuestoKg, 2)}
@@ -2670,12 +2788,16 @@ export default function ArrClient() {
               <tbody>
                 {nuevosClientesPlan.map((n) => {
                   const ing = esNuevoKgPlanManual(n)
-                    ? ingresoClienteMarginal(
+                    ? ingresoMarginalPlanNuevoRow(
                         n.kg,
                         n.descKg,
-                        metricBResumen,
+                        metricBResumen.margenKg,
+                        metricBComoHojaArr.hgDinero,
                         n.hgCliente,
-                        n.hgCompra
+                        n.hgCompra,
+                        metricBComoHojaArr.hgDisplay,
+                        metricBComoHojaArr.hgDinero,
+                        n.origen
                       )
                     : null;
                   const origenLabel =
