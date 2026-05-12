@@ -5,8 +5,10 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getRoleFromDashboardToken } from "@/lib/auth";
 import DeltaIngresoClienteForecastModal from "@/components/DeltaIngresoClienteForecastModal";
+import ArrDicfCategoriaBucketsModal from "@/components/ArrDicfCategoriaBucketsModal";
 import ArrSimularIngresoModal from "@/components/ArrSimularIngresoModal";
 import ArrNuevoClientePlanModal from "@/components/ArrNuevoClientePlanModal";
+import { categoriaEsComisionista } from "@/lib/arr-categoria";
 import {
   fetchIgfForecast,
   fetchIgfVersiones,
@@ -93,6 +95,12 @@ function normalizeNuevoClientePlanRow(raw: unknown): NuevoClientePlanRow | null 
       ? hgCompraRaw
       : null;
   const comentarios = String(o.comentarios ?? "").trim().slice(0, 2000);
+  const idStr = String(id);
+  let origen: PlanRowOrigen | undefined;
+  const or = o.origen;
+  if (or === "sin_venta" || or === "con_venta" || or === "manual") origen = or;
+  else if (idStr.startsWith("plan-sin-venta:")) origen = "sin_venta";
+  else if (idStr.startsWith("plan-con-venta:")) origen = "con_venta";
   return {
     id,
     nombre,
@@ -106,6 +114,7 @@ function normalizeNuevoClientePlanRow(raw: unknown): NuevoClientePlanRow | null 
     hgCliente,
     hgCompra,
     comentarios,
+    origen,
   };
 }
 
@@ -139,6 +148,8 @@ const ARR_PLAN_QUERY = "arr_plan";
 
 type ArrWorkspaceId = "base" | "plan";
 
+export type PlanRowOrigen = "manual" | "sin_venta" | "con_venta";
+
 export type NuevoClientePlanRow = {
   id: string;
   nombre: string;
@@ -158,7 +169,36 @@ export type NuevoClientePlanRow = {
   hgCompra: number | null;
   /** Notas libres (persistencia local ARR Plan). */
   comentarios: string;
+  /**
+   * `manual`: alta en plan (suma kg al forecast).
+   * `sin_venta` / `con_venta`: listado vinculado a casillas de la tabla (no duplicar kg en totales).
+   */
+  origen?: PlanRowOrigen;
 };
+
+const PLAN_ID_SIN_VENTA = "plan-sin-venta:";
+const PLAN_ID_CON_VENTA = "plan-con-venta:";
+
+function esNuevoKgPlanManual(n: Pick<NuevoClientePlanRow, "origen">): boolean {
+  return !n.origen || n.origen === "manual";
+}
+
+function idPlanRowSinVenta(cliente: string): string {
+  return `${PLAN_ID_SIN_VENTA}${encodeURIComponent(cliente.trim())}`;
+}
+
+function idPlanRowConVenta(cliente: string): string {
+  return `${PLAN_ID_CON_VENTA}${encodeURIComponent(cliente.trim())}`;
+}
+
+function clienteDesdePlanForecastId(id: string, prefix: string): string | null {
+  if (!id.startsWith(prefix)) return null;
+  try {
+    return decodeURIComponent(id.slice(prefix.length));
+  } catch {
+    return null;
+  }
+}
 
 type ArrWorkspaceSlice = {
   selA: string;
@@ -519,16 +559,6 @@ function clienteVenta(row: ArrClienteMesRow, historico: boolean): number {
   return row.kg_real;
 }
 
-/** Clasifica categoría ARR (Casa vs Comisionista), sin acentos. */
-function categoriaEsComisionista(categoria: string): boolean {
-  const n = String(categoria || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim();
-  return n.includes("comisionista");
-}
-
 /** Toneladas por categoría: mes cerrado = real; mes forecast = proyectado (respeta exclusiones y «Con venta»). */
 function toneladasCategoriaDesdeClientes(
   clientes: ClientesMonthData | undefined,
@@ -614,6 +644,87 @@ type ClienteTablaRow = {
   /** Solo aparecen abajo: están en mes B y no en mes A */
   soloNuevo: boolean;
 };
+
+function findClienteTablaRowInFilas(
+  cliente: string,
+  primero: ClienteTablaRow[],
+  solo: ClienteTablaRow[]
+): ClienteTablaRow | null {
+  const k = cliente.trim();
+  const hit =
+    primero.find((r) => r.cliente.trim() === k) || solo.find((r) => r.cliente.trim() === k);
+  return hit ?? null;
+}
+
+function findArrClienteMesRow(
+  clientesB: ClientesMonthData | undefined,
+  cliente: string
+): ArrClienteMesRow | null {
+  if (!clientesB?.rows?.length) return null;
+  const k = cliente.trim();
+  return clientesB.rows.find((r) => r.cliente.trim() === k) ?? null;
+}
+
+function buildPlanRowSinVenta(
+  row: ClienteTablaRow,
+  arr: ArrClienteMesRow | null
+): NuevoClientePlanRow | null {
+  const kg =
+    row.ventaB != null && Number.isFinite(row.ventaB) && row.ventaB > 0
+      ? Math.round(row.ventaB)
+      : 0;
+  if (kg <= 0) return null;
+  const descKg =
+    row.descB != null && Number.isFinite(row.descB) ? row.descB : 0;
+  const categoria: "CASA" | "COMISIONISTA" =
+    arr && categoriaEsComisionista(arr.categoria) ? "COMISIONISTA" : "CASA";
+  return {
+    id: idPlanRowSinVenta(row.cliente),
+    nombre: row.cliente.trim(),
+    kg,
+    descKg,
+    gastoMxn: 0,
+    responsable: "",
+    responsableId: null,
+    categoria,
+    subcategoria: String(arr?.subcategoria ?? "").trim(),
+    hgCliente: null,
+    hgCompra: null,
+    comentarios: "",
+    origen: "sin_venta",
+  };
+}
+
+function buildPlanRowConVenta(
+  row: ClienteTablaRow,
+  sim: { kg: number; descKg: number | null },
+  arr: ArrClienteMesRow | null
+): NuevoClientePlanRow {
+  const kg = Math.round(Number(sim.kg) || 0);
+  const descKg =
+    sim.descKg != null && Number.isFinite(sim.descKg)
+      ? sim.descKg
+      : row.descA != null && Number.isFinite(row.descA)
+        ? row.descA
+        : 0;
+  const categoria: "CASA" | "COMISIONISTA" =
+    arr && categoriaEsComisionista(arr.categoria) ? "COMISIONISTA" : "CASA";
+  return {
+    id: idPlanRowConVenta(row.cliente),
+    nombre: row.cliente.trim(),
+    kg: kg > 0 ? kg : 1000,
+    descKg,
+    gastoMxn: 0,
+    responsable: "",
+    responsableId: null,
+    categoria,
+    subcategoria: String(arr?.subcategoria ?? "").trim(),
+    hgCliente: null,
+    hgCompra: null,
+    comentarios: "",
+    origen: "con_venta",
+  };
+}
 
 /** Ajuste venta (t) y descuento $/kg del mes forecast al excluir clientes (ponderado por kg). */
 function applyExclusionsToMetricB(
@@ -765,6 +876,9 @@ export default function ArrClient() {
   const [wsBase, setWsBase] = useState<ArrWorkspaceSlice>(() => emptyArrWorkspaceSlice());
   const [wsPlan, setWsPlan] = useState<ArrWorkspaceSlice>(() => emptyArrWorkspaceSlice());
   const [dicfModalCliente, setDicfModalCliente] = useState<string | null>(null);
+  const [dicfCategoriaModal, setDicfCategoriaModal] = useState<"CASA" | "COMISIONISTA" | null>(
+    null
+  );
   const [showSimular, setShowSimular] = useState(false);
   const [showNuevoClientePlan, setShowNuevoClientePlan] = useState(false);
   const [clientePlanEditando, setClientePlanEditando] = useState<NuevoClientePlanRow | null>(null);
@@ -804,14 +918,28 @@ export default function ArrClient() {
   );
 
   const toggleClienteExcluirForecast = useCallback(
-    (clienteNombre: string) => {
-      const k = clienteNombre.trim();
+    (row: ClienteTablaRow) => {
+      const k = row.cliente.trim();
       if (!k) return;
       const patch = (s: ArrWorkspaceSlice) => {
         const next = { ...s.clientesExcluirVentaForecast };
-        if (next[k]) delete next[k];
+        const was = !!next[k];
+        if (was) delete next[k];
         else next[k] = true;
-        return { ...s, clientesExcluirVentaForecast: next };
+        let nuevos = s.nuevosClientesPlan;
+        if (isArrPlanRoute) {
+          const idSv = idPlanRowSinVenta(k);
+          if (was) {
+            nuevos = nuevos.filter((n) => n.id !== idSv);
+          } else {
+            const planRow = buildPlanRowSinVenta(
+              row,
+              findArrClienteMesRow(s.clientesByKey[s.selB], k)
+            );
+            if (planRow) nuevos = [...nuevos.filter((n) => n.id !== idSv), planRow];
+          }
+        }
+        return { ...s, clientesExcluirVentaForecast: next, nuevosClientesPlan: nuevos };
       };
       if (isArrPlanRoute) setWsPlan(patch);
       else setWsBase(patch);
@@ -830,8 +958,11 @@ export default function ArrClient() {
       if (!k || !clienteInactivoForecastB(row)) return;
       const patch = (s: ArrWorkspaceSlice) => {
         const next = { ...s.clientesConVentaForecastSim };
+        let nuevos = s.nuevosClientesPlan;
+        const idCv = idPlanRowConVenta(k);
         if (next[k]) {
           delete next[k];
+          if (isArrPlanRoute) nuevos = nuevos.filter((n) => n.id !== idCv);
         } else {
           const va = row.ventaA;
           const kg =
@@ -839,8 +970,16 @@ export default function ArrClient() {
           const descKg =
             row.descA != null && Number.isFinite(row.descA) ? row.descA : null;
           next[k] = { kg, descKg };
+          if (isArrPlanRoute) {
+            const planRow = buildPlanRowConVenta(
+              row,
+              next[k],
+              findArrClienteMesRow(s.clientesByKey[s.selB], k)
+            );
+            nuevos = [...nuevos.filter((n) => n.id !== idCv), planRow];
+          }
         }
-        return { ...s, clientesConVentaForecastSim: next };
+        return { ...s, clientesConVentaForecastSim: next, nuevosClientesPlan: nuevos };
       };
       if (isArrPlanRoute) setWsPlan(patch);
       else setWsBase(patch);
@@ -879,9 +1018,10 @@ export default function ArrClient() {
           hgCompra,
           comentarios,
         } = payload;
-        setWsPlan((s) => ({
-          ...s,
-          nuevosClientesPlan: s.nuevosClientesPlan.map((n) =>
+        setWsPlan((s) => {
+          const prev = s.nuevosClientesPlan.find((x) => x.id === id);
+          const origen = prev?.origen;
+          const nuevos = s.nuevosClientesPlan.map((n) =>
             n.id === id
               ? {
                   id,
@@ -896,10 +1036,23 @@ export default function ArrClient() {
                   hgCliente,
                   hgCompra,
                   comentarios,
+                  origen: origen ?? "manual",
                 }
               : n
-          ),
-        }));
+          );
+          let cv = s.clientesConVentaForecastSim;
+          if (origen === "con_venta") {
+            const key = nombre.trim();
+            cv = {
+              ...cv,
+              [key]: {
+                kg: Math.round(kg),
+                descKg: Number.isFinite(descKg) ? descKg : null,
+              },
+            };
+          }
+          return { ...s, nuevosClientesPlan: nuevos, clientesConVentaForecastSim: cv };
+        });
         return;
       }
       const id =
@@ -944,10 +1097,28 @@ export default function ArrClient() {
   );
 
   const quitarNuevoClientePlan = useCallback((id: string) => {
-    setWsPlan((s) => ({
-      ...s,
-      nuevosClientesPlan: s.nuevosClientesPlan.filter((n) => n.id !== id),
-    }));
+    setWsPlan((s) => {
+      let ex = s.clientesExcluirVentaForecast;
+      let cv = s.clientesConVentaForecastSim;
+      const cliSv = clienteDesdePlanForecastId(id, PLAN_ID_SIN_VENTA);
+      if (cliSv) {
+        const nx = { ...ex };
+        delete nx[cliSv];
+        ex = nx;
+      }
+      const cliCv = clienteDesdePlanForecastId(id, PLAN_ID_CON_VENTA);
+      if (cliCv) {
+        const nx = { ...cv };
+        delete nx[cliCv];
+        cv = nx;
+      }
+      return {
+        ...s,
+        clientesExcluirVentaForecast: ex,
+        clientesConVentaForecastSim: cv,
+        nuevosClientesPlan: s.nuevosClientesPlan.filter((n) => n.id !== id),
+      };
+    });
   }, []);
 
   const toggleArrPlanHref = useMemo(() => {
@@ -1394,6 +1565,45 @@ export default function ArrClient() {
     return { filasClientesMesPrimero: primero, filasClientesSoloMesSegundo: soloSegundo };
   }, [empresa, clientesA, clientesB, selA, selB, dataByKey]);
 
+  /** Si hay casillas Sin/Con venta guardadas sin fila en `nuevosClientesPlan` (p. ej. datos viejos), rehidratar. */
+  useEffect(() => {
+    if (!isArrPlanRoute) return;
+    if (!clientesB || clientesB.historico) return;
+    setWsPlan((s) => {
+      const primero = filasClientesMesPrimero;
+      const solo = filasClientesSoloMesSegundo;
+      let nuevos = s.nuevosClientesPlan;
+      let changed = false;
+      const ensure = (cliente: string, tipo: "sin_venta" | "con_venta") => {
+        const id = tipo === "sin_venta" ? idPlanRowSinVenta(cliente) : idPlanRowConVenta(cliente);
+        if (nuevos.some((n) => n.id === id)) return;
+        const rowT = findClienteTablaRowInFilas(cliente, primero, solo);
+        if (!rowT) return;
+        const ar = findArrClienteMesRow(clientesB, cliente);
+        if (tipo === "sin_venta") {
+          const built = buildPlanRowSinVenta(rowT, ar);
+          if (!built) return;
+          nuevos = [...nuevos, built];
+        } else {
+          const sim = s.clientesConVentaForecastSim[cliente];
+          if (!sim) return;
+          nuevos = [...nuevos, buildPlanRowConVenta(rowT, sim, ar)];
+        }
+        changed = true;
+      };
+      for (const k of Object.keys(s.clientesExcluirVentaForecast)) ensure(k, "sin_venta");
+      for (const k of Object.keys(s.clientesConVentaForecastSim)) ensure(k, "con_venta");
+      return changed ? { ...s, nuevosClientesPlan: nuevos } : s;
+    });
+  }, [
+    isArrPlanRoute,
+    clientesB,
+    filasClientesMesPrimero,
+    filasClientesSoloMesSegundo,
+    clientesExcluirVentaForecast,
+    clientesConVentaForecastSim,
+  ]);
+
   const clientesLoading =
     (!!clientesKeyA && clientesLoadingKeys.has(clientesKeyA)) ||
     (!!clientesKeyB && clientesLoadingKeys.has(clientesKeyB));
@@ -1413,17 +1623,22 @@ export default function ArrClient() {
     () => toneladasCategoriaDesdeClientes(clientesA, undefined, undefined, 0, 0),
     [clientesA]
   );
+  const nuevosKgPlanManuales = useMemo(
+    () => nuevosClientesPlan.filter(esNuevoKgPlanManual),
+    [nuevosClientesPlan]
+  );
+
   const { kgNuevosPlanCasa, kgNuevosPlanComi } = useMemo(() => {
     let casa = 0;
     let comi = 0;
-    for (const n of nuevosClientesPlan) {
+    for (const n of nuevosKgPlanManuales) {
       const kg = Number(n.kg);
       if (!Number.isFinite(kg) || kg <= 0) continue;
       if (n.categoria === "COMISIONISTA") comi += kg;
       else casa += kg;
     }
     return { kgNuevosPlanCasa: casa, kgNuevosPlanComi: comi };
-  }, [nuevosClientesPlan]);
+  }, [nuevosKgPlanManuales]);
   const catTonB = useMemo(
     () =>
       toneladasCategoriaDesdeClientes(
@@ -1434,6 +1649,16 @@ export default function ArrClient() {
         kgNuevosPlanComi
       ),
     [clientesB, clientesExcluirVentaForecast, clientesConVentaForecastSim, kgNuevosPlanCasa, kgNuevosPlanComi]
+  );
+
+  const planNuevosDicfModal = useMemo(
+    () =>
+      nuevosKgPlanManuales.map((n) => ({
+        nombre: n.nombre,
+        categoria: n.categoria,
+        kg: n.kg,
+      })),
+    [nuevosKgPlanManuales]
   );
 
   const renderMesOption = (p: IgfPeriodo) => {
@@ -1511,9 +1736,9 @@ export default function ArrClient() {
     () =>
       applyExtraKgDescChunksToMetricB(
         metricBTrasConVenta,
-        nuevosClientesPlan.map((n) => ({ kg: n.kg, descKg: n.descKg }))
+        nuevosKgPlanManuales.map((n) => ({ kg: n.kg, descKg: n.descKg }))
       ),
-    [metricBTrasConVenta, nuevosClientesPlan]
+    [metricBTrasConVenta, nuevosKgPlanManuales]
   );
 
   const descuentoSignedPlanPonderado = useMemo(
@@ -1523,7 +1748,7 @@ export default function ArrClient() {
         filasClientesSoloMesSegundo,
         clientesExcluirVentaForecast,
         clientesConVentaForecastSim,
-        nuevosClientesPlan,
+        nuevosKgPlanManuales,
         Boolean(clientesB && !clientesB.historico),
         metricBTrasConVenta.descuentoSigned
       ),
@@ -1532,7 +1757,7 @@ export default function ArrClient() {
       filasClientesSoloMesSegundo,
       clientesExcluirVentaForecast,
       clientesConVentaForecastSim,
-      nuevosClientesPlan,
+      nuevosKgPlanManuales,
       clientesB,
       metricBTrasConVenta.descuentoSigned,
     ]
@@ -1547,7 +1772,7 @@ export default function ArrClient() {
     const gastoImporte =
       baseG != null && Number.isFinite(baseG) ? baseG + extraGasto : null;
     const extraOp = sumOperativosExtraImpuestosNuevosKg(
-      nuevosClientesPlan,
+      nuevosKgPlanManuales,
       metricBTrasVolNuevosPlan.impuestoKg
     );
     const op0 = metricBTrasVolNuevosPlan.operativos;
@@ -1566,6 +1791,7 @@ export default function ArrClient() {
   }, [
     metricBTrasVolNuevosPlan,
     nuevosClientesPlan,
+    nuevosKgPlanManuales,
     isArrPlanRoute,
     descuentoSignedPlanPonderado,
   ]);
@@ -1612,7 +1838,7 @@ export default function ArrClient() {
       metricBResumen,
       clientesExcluirVentaForecast,
       clientesConVentaForecastSim,
-      nuevosClientesPlan.map((n) => ({
+      nuevosKgPlanManuales.map((n) => ({
         kg: n.kg,
         descKg: n.descKg,
         hgCliente: n.hgCliente,
@@ -1626,7 +1852,7 @@ export default function ArrClient() {
     metricBResumen,
     clientesExcluirVentaForecast,
     clientesConVentaForecastSim,
-    nuevosClientesPlan,
+    nuevosKgPlanManuales,
   ]);
 
   const rentabilidadMostradaA = useMemo(
@@ -1790,6 +2016,7 @@ export default function ArrClient() {
       const sExcluir = slice.clientesExcluirVentaForecast;
       const sConVenta = slice.clientesConVentaForecastSim;
       const sNuevos = slice.nuevosClientesPlan;
+      const sNuevosMan = sNuevos.filter(esNuevoKgPlanManual);
 
       const headerVentaA0 = sSelA ? `Venta ${periodoMesNombre(sSelA)}` : "Venta —";
       const headerVentaB0 = sSelB ? `Venta ${periodoMesNombre(sSelB)}` : "Venta —";
@@ -1894,7 +2121,7 @@ export default function ArrClient() {
       const metricBTrasCV = applyConVentaSimuladaToMetricB(metricBTrasEx, sConVenta);
       const metricBTrasNuevos = applyExtraKgDescChunksToMetricB(
         metricBTrasCV,
-        sNuevos.map((n) => ({ kg: n.kg, descKg: n.descKg }))
+        sNuevosMan.map((n) => ({ kg: n.kg, descKg: n.descKg }))
       );
       const extraGasto = sNuevos.reduce((sum, n) => sum + (Number.isFinite(n.gastoMxn) ? n.gastoMxn : 0), 0);
       const gastoImporteFinal =
@@ -1902,7 +2129,7 @@ export default function ArrClient() {
           ? metricBTrasNuevos.gastoImporte + extraGasto
           : null;
       const extraOp0 = sumOperativosExtraImpuestosNuevosKg(
-        sNuevos,
+        sNuevosMan,
         metricBTrasNuevos.impuestoKg
       );
       const opB0 = metricBTrasNuevos.operativos;
@@ -1919,7 +2146,7 @@ export default function ArrClient() {
         filasSolo,
         sExcluir,
         sConVenta,
-        sNuevos.map((n) => ({ kg: n.kg, descKg: n.descKg })),
+        sNuevosMan.map((n) => ({ kg: n.kg, descKg: n.descKg })),
         Boolean(clientesB0 && !clientesB0.historico),
         metricBTrasCV.descuentoSigned
       );
@@ -1942,7 +2169,7 @@ export default function ArrClient() {
               metricBResumenFinal,
               sExcluir,
               sConVenta,
-              sNuevos.map((n) => ({
+              sNuevosMan.map((n) => ({
                 kg: n.kg,
                 descKg: n.descKg,
                 hgCliente: n.hgCliente,
@@ -1964,7 +2191,7 @@ export default function ArrClient() {
 
       let kgNuevosCasa = 0;
       let kgNuevosComi = 0;
-      for (const n of sNuevos) {
+      for (const n of sNuevosMan) {
         const kg = Number(n.kg);
         if (!Number.isFinite(kg) || kg <= 0) continue;
         if (n.categoria === "COMISIONISTA") kgNuevosComi += kg;
@@ -2383,10 +2610,32 @@ export default function ArrClient() {
                       {cellDeltaNum(metricA.impuestoKg, metricB.impuestoKg, 2)}
                     </td>
                     <td className={`px-3 py-2 text-center tabular-nums ${G.mov}`}>
-                      {cellDeltaTonNullable(catTonA.casa, catTonB.casa, 2)}
+                      {token ? (
+                        <button
+                          type="button"
+                          title="Ver clientes Casa: dejaron, disminuyeron, aumentaron, nuevos (DICF)"
+                          onClick={() => setDicfCategoriaModal("CASA")}
+                          className="mx-auto block w-full max-w-[8rem] cursor-pointer rounded border border-transparent px-1 py-0.5 text-center hover:border-sky-600/50 hover:bg-slate-800/60 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                        >
+                          {cellDeltaTonNullable(catTonA.casa, catTonB.casa, 2)}
+                        </button>
+                      ) : (
+                        cellDeltaTonNullable(catTonA.casa, catTonB.casa, 2)
+                      )}
                     </td>
                     <td className={`px-3 py-2 text-center tabular-nums ${G.mov}`}>
-                      {cellDeltaTonNullable(catTonA.comisionista, catTonB.comisionista, 2)}
+                      {token ? (
+                        <button
+                          type="button"
+                          title="Ver clientes Comisionista: dejaron, disminuyeron, aumentaron, nuevos (DICF)"
+                          onClick={() => setDicfCategoriaModal("COMISIONISTA")}
+                          className="mx-auto block w-full max-w-[8rem] cursor-pointer rounded border border-transparent px-1 py-0.5 text-center hover:border-violet-600/50 hover:bg-slate-800/60 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                        >
+                          {cellDeltaTonNullable(catTonA.comisionista, catTonB.comisionista, 2)}
+                        </button>
+                      ) : (
+                        cellDeltaTonNullable(catTonA.comisionista, catTonB.comisionista, 2)
+                      )}
                     </td>
                     <td className={`px-3 py-2 text-center tabular-nums ${G.rent}`}>
                       {rentabilidadMostradaA != null && rentabilidadMostradaB != null ? (
@@ -2413,18 +2662,23 @@ export default function ArrClient() {
           </table>
         </section>
 
-        {isArrPlanRoute && nuevosClientesPlan.length > 0 && (
+        {isArrPlanRoute &&
+          (nuevosClientesPlan.length > 0 ||
+            Object.keys(clientesExcluirVentaForecast).length > 0 ||
+            Object.keys(clientesConVentaForecastSim).length > 0) && (
           <section className="mt-6 overflow-x-auto rounded-lg border border-sky-800/50 bg-sky-950/20">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-sky-800/40 px-4 py-2">
               <h2 className="text-sm font-semibold text-sky-100">Nuevos clientes (plan)</h2>
               <span className="text-xs text-sky-200/80">
-                Incluidos en venta, descuento ponderado, gasto y rentabilidad del mes forecast
+                Incluye altas manuales y clientes marcados Sin venta / Con venta en la tabla (comentarios y
+                responsable editables como en el alta manual).
               </span>
             </div>
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="bg-slate-800/80 text-[0.65rem] font-semibold uppercase tracking-wide text-slate-300">
                   <th className="px-3 py-2 text-left">Cliente</th>
+                  <th className="px-3 py-2 text-center">Origen</th>
                   <th className="px-3 py-2 text-center">Categoría</th>
                   <th className="px-3 py-2 text-center">Subcategoría</th>
                   <th className="px-3 py-2 text-center">Responsable</th>
@@ -2440,16 +2694,25 @@ export default function ArrClient() {
               </thead>
               <tbody>
                 {nuevosClientesPlan.map((n) => {
-                  const ing = ingresoClienteMarginal(
-                    n.kg,
-                    n.descKg,
-                    metricBResumen,
-                    n.hgCliente,
-                    n.hgCompra
-                  );
+                  const ing = esNuevoKgPlanManual(n)
+                    ? ingresoClienteMarginal(
+                        n.kg,
+                        n.descKg,
+                        metricBResumen,
+                        n.hgCliente,
+                        n.hgCompra
+                      )
+                    : null;
+                  const origenLabel =
+                    n.origen === "sin_venta"
+                      ? "Sin venta"
+                      : n.origen === "con_venta"
+                        ? "Con venta"
+                        : "Manual";
                   return (
                     <tr key={n.id} className="border-t border-slate-700/70">
                       <td className="px-3 py-2 text-slate-100">{n.nombre}</td>
+                      <td className="px-3 py-2 text-center text-xs text-slate-300">{origenLabel}</td>
                       <td className="px-3 py-2 text-center text-slate-200">{n.categoria || "—"}</td>
                       <td className="px-3 py-2 text-center text-slate-200">{n.subcategoria || "—"}</td>
                       <td className="px-3 py-2 text-center text-slate-200">{n.responsable || "—"}</td>
@@ -2614,7 +2877,7 @@ export default function ArrClient() {
                       type="checkbox"
                       checked={Boolean(clientesExcluirVentaForecast[row.cliente])}
                       disabled={!showExcluirForecastCheckbox || row.ventaB == null || row.ventaB <= 0}
-                      onChange={() => toggleClienteExcluirForecast(row.cliente)}
+                      onChange={() => toggleClienteExcluirForecast(row)}
                       title={
                         showExcluirForecastCheckbox
                           ? "Sin venta en forecast: resta este volumen del total superior y recalcula descuento"
@@ -2729,7 +2992,7 @@ export default function ArrClient() {
                       type="checkbox"
                       checked={Boolean(clientesExcluirVentaForecast[row.cliente])}
                       disabled={!showExcluirForecastCheckbox || row.ventaB == null || row.ventaB <= 0}
-                      onChange={() => toggleClienteExcluirForecast(row.cliente)}
+                      onChange={() => toggleClienteExcluirForecast(row)}
                       title={
                         showExcluirForecastCheckbox
                           ? "Sin venta en forecast: resta este volumen del total superior y recalcula descuento"
@@ -2830,6 +3093,18 @@ export default function ArrClient() {
         clienteNombre={dicfModalCliente}
         onClose={() => setDicfModalCliente(null)}
         canDicfAcciones={canDicfAcciones}
+      />
+      <ArrDicfCategoriaBucketsModal
+        open={dicfCategoriaModal != null && Boolean(empresa.trim()) && Boolean(token.trim())}
+        onClose={() => setDicfCategoriaModal(null)}
+        token={token}
+        planta={empresa.trim()}
+        initialCategoria={dicfCategoriaModal ?? "CASA"}
+        planNuevos={isArrPlanRoute ? planNuevosDicfModal : undefined}
+        onClienteDicfClick={(nombre) => {
+          const k = nombre.trim();
+          if (k) setDicfModalCliente(k);
+        }}
       />
       {showSimular && !isArrPlanRoute && (
         <ArrSimularIngresoModal

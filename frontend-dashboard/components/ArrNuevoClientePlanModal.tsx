@@ -36,6 +36,8 @@ export type ArrNuevoClientePlanEdicion = {
   hgCliente?: number | null;
   hgCompra?: number | null;
   comentarios?: string;
+  /** Fila vinculada a casillas Sin venta / Con venta (campos de volumen acotados). */
+  origen?: "manual" | "sin_venta" | "con_venta";
 };
 
 type Props = {
@@ -87,31 +89,40 @@ export default function ArrNuevoClientePlanModal({
     if (!abierto) return;
     setError(null);
     if (clienteEditar) {
-      setNombre(clienteEditar.nombre);
-      setKgStr(String(Math.round(clienteEditar.kg)));
-      setDescStr(String(clienteEditar.descKg));
-      setGastoStr(String(clienteEditar.gastoMxn));
-      const hg = clienteEditar.hgCliente;
-      setHgClienteStr(
-        hg != null && Number.isFinite(hg) ? String(hg) : ""
-      );
-      const hgCp = clienteEditar.hgCompra;
-      setHgCompraStr(
-        hgCp != null && Number.isFinite(hgCp) ? String(hgCp) : ""
-      );
-      setCategoria(clienteEditar.categoria ?? "CASA");
-      setSubcategoria(clienteEditar.subcategoria ?? "");
-      setComentarios((clienteEditar.comentarios ?? "").slice(0, 2000));
-      const rid = clienteEditar.responsableId;
-      if (rid != null && Number.isFinite(rid) && rid > 0) {
-        setResponsableIdStr(String(rid));
+        setNombre(clienteEditar.nombre);
+        setKgStr(String(Math.round(clienteEditar.kg)));
+        setDescStr(String(clienteEditar.descKg));
+        setGastoStr(String(clienteEditar.gastoMxn));
+        const hg = clienteEditar.hgCliente;
+        setHgClienteStr(
+          hg != null && Number.isFinite(hg) ? String(hg) : ""
+        );
+        const hgCp = clienteEditar.hgCompra;
+        setHgCompraStr(
+          hgCp != null && Number.isFinite(hgCp) ? String(hgCp) : ""
+        );
+        setCategoria(clienteEditar.categoria ?? "CASA");
+        setSubcategoria(clienteEditar.subcategoria ?? "");
+        setComentarios((clienteEditar.comentarios ?? "").slice(0, 2000));
+        const rid = clienteEditar.responsableId;
+        if (rid != null && Number.isFinite(rid) && rid > 0) {
+          setResponsableIdStr(String(rid));
+        } else {
+          const nm = (clienteEditar.responsable || "").trim().toLowerCase();
+          const hit = responsables.find((u) => u.nombre.trim().toLowerCase() === nm);
+          if (hit) {
+            setResponsableIdStr(String(hit.id));
+          } else if (
+            (clienteEditar.origen === "sin_venta" || clienteEditar.origen === "con_venta") &&
+            responsables.length > 0
+          ) {
+            setResponsableIdStr(String(responsables[0].id));
+          } else {
+            setResponsableIdStr("");
+          }
+        }
       } else {
-        const nm = (clienteEditar.responsable || "").trim().toLowerCase();
-        const hit = responsables.find((u) => u.nombre.trim().toLowerCase() === nm);
-        setResponsableIdStr(hit ? String(hit.id) : "");
-      }
-    } else {
-      setNombre("");
+        setNombre("");
       setKgStr("");
       setDescStr("");
       setGastoStr("");
@@ -138,39 +149,59 @@ export default function ArrNuevoClientePlanModal({
       setError("Indica el nombre del cliente.");
       return;
     }
-    if (nombresBloqueados.has(nom.toLowerCase())) {
+    const origen = clienteEditar?.origen;
+    const esSinVentaRow = origen === "sin_venta";
+    const esConVentaRow = origen === "con_venta";
+    const esForecastMeta = esSinVentaRow || esConVentaRow;
+    if (!esForecastMeta && nombresBloqueados.has(nom.toLowerCase())) {
       setError("Ya existe otro cliente con ese nombre.");
       return;
     }
-    const kg = parseNum(kgStr);
+
+    let kg = parseNum(kgStr);
     if (kg == null || kg <= 0) {
-      setError("La venta en kg debe ser mayor que cero.");
-      return;
+      if (esSinVentaRow && clienteEditar) kg = clienteEditar.kg;
+      else {
+        setError("La venta en kg debe ser mayor que cero.");
+        return;
+      }
     }
-    const descRaw = parseNum(descStr);
+
+    let descRaw = parseNum(descStr);
     if (descRaw == null) {
-      setError("Indica el descuento por kilo ($/kg).");
-      return;
+      if (esSinVentaRow && clienteEditar) descRaw = clienteEditar.descKg;
+      else {
+        setError("Indica el descuento por kilo ($/kg).");
+        return;
+      }
     }
     const descKg = descRaw > 0 ? -Math.abs(descRaw) : descRaw;
-    const gasto = parseNum(gastoStr);
+
+    let gasto = parseNum(gastoStr);
     if (gasto == null || !Number.isFinite(gasto) || gasto < 0) {
-      setError("Indica el gasto (MXN, mayor o igual a cero).");
-      return;
+      if (esSinVentaRow) gasto = 0;
+      else {
+        setError("Indica el gasto (MXN, mayor o igual a cero).");
+        return;
+      }
     }
+
     const hgClienteTrim = hgClienteStr.trim();
     let hgCliente: number | null = null;
-    if (hgClienteTrim !== "") {
+    if (!esSinVentaRow && hgClienteTrim !== "") {
       const hgParsed = parseNum(hgClienteTrim);
       if (hgParsed == null || !Number.isFinite(hgParsed)) {
         setError("HG cliente debe ser un número válido o déjalo vacío para usar el HG del mes.");
         return;
       }
       hgCliente = hgParsed;
+    } else if (!esSinVentaRow && hgClienteTrim === "") {
+      hgCliente = null;
     }
+
     const hgCompraTrim = hgCompraStr.trim();
     let hgCompra: number | null = null;
-    if (hgCompraTrim !== "") {
+    if (!esSinVentaRow && hgCompraTrim !== "") {
       const hcp = parseNum(hgCompraTrim);
       if (hcp == null || !Number.isFinite(hcp)) {
         setError(
@@ -179,12 +210,16 @@ export default function ArrNuevoClientePlanModal({
         return;
       }
       hgCompra = hcp;
+    } else if (!esSinVentaRow && hgCompraTrim === "") {
+      hgCompra = null;
     }
-    const sub = subcategoria.trim();
+
+    const sub = subcategoria.trim() || (esSinVentaRow ? (clienteEditar?.subcategoria ?? "").trim() : "");
     if (!sub) {
       setError("Indica la subcategoría.");
       return;
     }
+
     const rid = parseInt(String(responsableIdStr).trim(), 10);
     if (!Number.isFinite(rid) || rid <= 0) {
       setError("Selecciona un responsable de la lista.");
@@ -214,6 +249,11 @@ export default function ArrNuevoClientePlanModal({
   }
 
   const modoEdicion = Boolean(clienteEditar);
+  const roOrigen = clienteEditar?.origen;
+  const readOnlyNombreForecast =
+    roOrigen === "sin_venta" || roOrigen === "con_venta";
+  const readOnlyVolumenSinVenta = roOrigen === "sin_venta";
+  const clsRo = (locked: boolean) => (locked ? "cursor-not-allowed bg-slate-900/70 text-slate-300" : "");
 
   return (
     <div
@@ -226,12 +266,20 @@ export default function ArrNuevoClientePlanModal({
         <h2 id="nuevo-cliente-plan-title" className="text-lg font-semibold text-slate-50">
           {modoEdicion ? "Editar cliente (plan)" : "Nuevo cliente (plan)"}
         </h2>
-        <p className="mt-1 text-xs text-slate-400">
-          Mes forecast: <span className="text-slate-300">{mesForecastLabel}</span>.
-          {modoEdicion
-            ? " Los cambios actualizan de inmediato el resumen (venta, descuento ponderado, gasto y rentabilidad)."
-            : " Se sumará el volumen al resumen, se recalculará el descuento ponderado, el gasto y la rentabilidad del mes proyectado."}
-        </p>
+        <div className="mt-1 space-y-1 text-xs text-slate-400">
+          <p>
+            Mes forecast: <span className="text-slate-300">{mesForecastLabel}</span>.
+            {modoEdicion
+              ? " Los cambios actualizan de inmediato el resumen (venta, descuento ponderado, gasto y rentabilidad)."
+              : " Se sumará el volumen al resumen, se recalculará el descuento ponderado, el gasto y la rentabilidad del mes proyectado."}
+          </p>
+          {readOnlyNombreForecast ? (
+            <p className="text-sky-300/90">
+              Casilla «Sin venta» o «Con venta» en la tabla de clientes. Puedes editar comentarios,
+              responsable y categorías; el volumen de «Sin venta» sigue al pronóstico de la tabla.
+            </p>
+          ) : null}
+        </div>
 
         <div className="mt-4 space-y-3">
           <label className="block text-sm">
@@ -239,7 +287,8 @@ export default function ArrNuevoClientePlanModal({
             <input
               value={nombre}
               onChange={(e) => setNombre(e.target.value)}
-              className="mt-1 w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+              readOnly={readOnlyNombreForecast}
+              className={`mt-1 w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100 ${clsRo(readOnlyNombreForecast)}`}
               placeholder="Ej. Cliente demo"
               autoComplete="off"
             />
@@ -249,7 +298,8 @@ export default function ArrNuevoClientePlanModal({
             <input
               value={kgStr}
               onChange={(e) => setKgStr(e.target.value)}
-              className="mt-1 w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+              readOnly={readOnlyVolumenSinVenta}
+              className={`mt-1 w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100 ${clsRo(readOnlyVolumenSinVenta)}`}
               placeholder="Ej. 15000"
               inputMode="decimal"
             />
@@ -259,7 +309,8 @@ export default function ArrNuevoClientePlanModal({
             <input
               value={descStr}
               onChange={(e) => setDescStr(e.target.value)}
-              className="mt-1 w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+              readOnly={readOnlyVolumenSinVenta}
+              className={`mt-1 w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100 ${clsRo(readOnlyVolumenSinVenta)}`}
               placeholder="Positivo = descuento; negativo = mismo signo que la tabla"
               inputMode="decimal"
             />
@@ -269,7 +320,8 @@ export default function ArrNuevoClientePlanModal({
             <input
               value={gastoStr}
               onChange={(e) => setGastoStr(e.target.value)}
-              className="mt-1 w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+              readOnly={readOnlyVolumenSinVenta}
+              className={`mt-1 w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100 ${clsRo(readOnlyVolumenSinVenta)}`}
               placeholder="Ej. 50000"
               inputMode="decimal"
             />
@@ -279,7 +331,8 @@ export default function ArrNuevoClientePlanModal({
             <input
               value={hgClienteStr}
               onChange={(e) => setHgClienteStr(e.target.value)}
-              className="mt-1 w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+              readOnly={readOnlyVolumenSinVenta}
+              className={`mt-1 w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100 ${clsRo(readOnlyVolumenSinVenta)}`}
               placeholder="Vacío = HG del mes forecast"
               inputMode="decimal"
             />
@@ -293,7 +346,8 @@ export default function ArrNuevoClientePlanModal({
             <input
               value={hgCompraStr}
               onChange={(e) => setHgCompraStr(e.target.value)}
-              className="mt-1 w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+              readOnly={readOnlyVolumenSinVenta}
+              className={`mt-1 w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100 ${clsRo(readOnlyVolumenSinVenta)}`}
               placeholder="Vacío = HG$ del mes forecast"
               inputMode="decimal"
             />
@@ -308,7 +362,8 @@ export default function ArrNuevoClientePlanModal({
               <select
                 value={categoria}
                 onChange={(e) => setCategoria(e.target.value as "CASA" | "COMISIONISTA")}
-                className="mt-1 w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                disabled={readOnlyVolumenSinVenta}
+                className={`mt-1 w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100 ${clsRo(readOnlyVolumenSinVenta)}`}
               >
                 <option value="CASA">CASA</option>
                 <option value="COMISIONISTA">COMISIONISTA</option>
