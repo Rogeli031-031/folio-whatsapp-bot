@@ -5,7 +5,9 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getRoleFromDashboardToken } from "@/lib/auth";
 import DeltaIngresoClienteForecastModal from "@/components/DeltaIngresoClienteForecastModal";
-import ArrDicfCategoriaBucketsModal from "@/components/ArrDicfCategoriaBucketsModal";
+import ArrDicfCategoriaBucketsModal, {
+  type ArrForecastSubcategoriaResumenRow,
+} from "@/components/ArrDicfCategoriaBucketsModal";
 import ArrSimularIngresoModal from "@/components/ArrSimularIngresoModal";
 import ArrNuevoClientePlanModal from "@/components/ArrNuevoClientePlanModal";
 import { categoriaEsComisionista } from "@/lib/arr-categoria";
@@ -680,6 +682,105 @@ function toneladasCategoriaDesdeClientes(
   }
   const toT = (kg: number) => Math.round((kg / 1000) * 100) / 100;
   return { casa: toT(casaKg), comisionista: toT(comiKg) };
+}
+
+type SubcatAggDicf = { kg: number; comisionMxn: number };
+
+function mapSubcatAggToRows(map: Map<string, SubcatAggDicf>): ArrForecastSubcategoriaResumenRow[] {
+  const pairs = Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0], "es"));
+  if (!pairs.length) return [];
+  let sumKg = 0;
+  let sumMxn = 0;
+  const body: ArrForecastSubcategoriaResumenRow[] = [];
+  for (const [sub, a] of pairs) {
+    sumKg += a.kg;
+    sumMxn += a.comisionMxn;
+    body.push({
+      subcategoria: sub,
+      ventaTon: Math.round((a.kg / 1000) * 100) / 100,
+      comisionProyectadaMxn: Math.round(a.comisionMxn * 100) / 100,
+    });
+  }
+  body.push({
+    subcategoria: "TOTAL",
+    ventaTon: Math.round((sumKg / 1000) * 100) / 100,
+    comisionProyectadaMxn: Math.round(sumMxn * 100) / 100,
+    esTotal: true,
+  });
+  return body;
+}
+
+/**
+ * Agrega venta (kg → t) y comisión proyectada (kg × desc. $/kg) por subcategoría,
+ * misma lógica de kg que `toneladasCategoriaDesdeClientes` + filas plan manual en forecast.
+ */
+function buildForecastSubcategoriaResumenDicf(
+  clientesB: ClientesMonthData | undefined,
+  excluirForecast: Record<string, true> | undefined,
+  conVentaSim: Record<string, { kg: number; descKg: number | null }> | undefined,
+  planManualNuevosRows: NuevoClientePlanRow[],
+  descFallback: number | null
+): {
+  casa: ArrForecastSubcategoriaResumenRow[];
+  comisionista: ArrForecastSubcategoriaResumenRow[];
+} {
+  const empty = { casa: [] as ArrForecastSubcategoriaResumenRow[], comisionista: [] as ArrForecastSubcategoriaResumenRow[] };
+  if (!clientesB?.rows?.length && !planManualNuevosRows.length) return empty;
+  const mapaCasa = new Map<string, SubcatAggDicf>();
+  const mapaComi = new Map<string, SubcatAggDicf>();
+  const fb =
+    descFallback != null && Number.isFinite(descFallback) ? descFallback : null;
+
+  const bump = (comi: boolean, subRaw: string, kg: number, descKg: number | null) => {
+    if (!Number.isFinite(kg) || kg <= 0) return;
+    const d =
+      descKg != null && Number.isFinite(descKg) ? descKg : fb != null ? fb : 0;
+    const mxn = kg * d;
+    const sub = (subRaw || "").trim() || "Sin subcategoría";
+    const map = comi ? mapaComi : mapaCasa;
+    const cur = map.get(sub) || { kg: 0, comisionMxn: 0 };
+    cur.kg += kg;
+    cur.comisionMxn += mxn;
+    map.set(sub, cur);
+  };
+
+  const hist = clientesB?.historico === true;
+  for (const r of clientesB?.rows || []) {
+    const comi = categoriaEsComisionista(r.categoria);
+    const cli = r.cliente.trim();
+    const sim = conVentaSim?.[cli];
+    const kg = hist
+      ? Number(r.kg_real) || 0
+      : (() => {
+          if (excluirForecast?.[cli]) return 0;
+          const base = r.kg_proyectado != null ? Number(r.kg_proyectado) || 0 : 0;
+          const add = sim != null && Number.isFinite(sim.kg) && sim.kg > 0 ? sim.kg : 0;
+          return base + add;
+        })();
+    const descKg = hist
+      ? r.descuento_kg != null && Number.isFinite(r.descuento_kg)
+        ? r.descuento_kg
+        : null
+      : sim != null && sim.descKg != null && Number.isFinite(sim.descKg)
+        ? sim.descKg
+        : r.descuento_kg != null && Number.isFinite(r.descuento_kg)
+          ? r.descuento_kg
+          : null;
+    bump(comi, String(r.subcategoria ?? ""), kg, descKg);
+  }
+
+  if (!hist) {
+    for (const n of planManualNuevosRows) {
+      if (!nuevaFilaCuentaEnForecastMes(n) || !esNuevoKgPlanManual(n)) continue;
+      const kg = Number(n.kg);
+      bump(n.categoria === "COMISIONISTA", n.subcategoria, kg, n.descKg);
+    }
+  }
+
+  return {
+    casa: mapSubcatAggToRows(mapaCasa),
+    comisionista: mapSubcatAggToRows(mapaComi),
+  };
 }
 
 /** Suma kg al total forecast y recalcula descuento $/kg ponderado (misma lógica que «Con venta»). */
@@ -1955,6 +2056,24 @@ export default function ArrClient() {
     hgPlanResumenMesB.hgDisplay,
     hgPlanResumenMesB.hgDinero,
   ]);
+
+  const resumenSubcategoriaForecastDicf = useMemo(
+    () =>
+      buildForecastSubcategoriaResumenDicf(
+        clientesB,
+        clientesExcluirVentaForecast,
+        clientesConVentaForecastSim,
+        nuevosKgPlanManuales,
+        metricBResumen.descuentoSigned
+      ),
+    [
+      clientesB,
+      clientesExcluirVentaForecast,
+      clientesConVentaForecastSim,
+      nuevosKgPlanManuales,
+      metricBResumen.descuentoSigned,
+    ]
+  );
 
   const showExcluirForecastCheckbox = Boolean(empresa && clientesB && !clientesB.historico);
 
@@ -3379,6 +3498,8 @@ export default function ArrClient() {
         planta={empresa.trim()}
         initialCategoria={dicfCategoriaModal ?? "CASA"}
         planNuevos={isArrPlanRoute ? planNuevosDicfModal : undefined}
+        mesForecastLabel={selB ? periodoLabel(selB) : undefined}
+        resumenSubcategoriaForecast={resumenSubcategoriaForecastDicf}
         onClienteDicfClick={(nombre) => {
           const k = nombre.trim();
           if (k) setDicfModalCliente(k);

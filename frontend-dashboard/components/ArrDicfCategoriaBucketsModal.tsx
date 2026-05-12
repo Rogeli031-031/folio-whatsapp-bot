@@ -14,6 +14,14 @@ export type ArrDicfPlanNuevoRow = {
   kg: number;
 };
 
+/** Una fila del resumen forecast (subcategoría + totales). */
+export type ArrForecastSubcategoriaResumenRow = {
+  subcategoria: string;
+  ventaTon: number;
+  comisionProyectadaMxn: number;
+  esTotal?: boolean;
+};
+
 export type ArrDicfCategoriaBucketsModalProps = {
   open: boolean;
   onClose: () => void;
@@ -24,6 +32,16 @@ export type ArrDicfCategoriaBucketsModalProps = {
   /** Clientes nuevos solo plan ARR (no suelen aparecer en DICF). */
   planNuevos?: ArrDicfPlanNuevoRow[];
   onClienteDicfClick?: (nombre: string) => void;
+  /** Mes B (forecast) al que aplica el resumen, ej. «Mayo 2026». */
+  mesForecastLabel?: string;
+  /**
+   * Resumen por subcategoría: venta (t) y comisión proyectada (kg × $/kg desc.),
+   * alineado al forecast del mes B (exclusiones, «Con venta» simulada, plan manual).
+   */
+  resumenSubcategoriaForecast?: {
+    casa: ArrForecastSubcategoriaResumenRow[];
+    comisionista: ArrForecastSubcategoriaResumenRow[];
+  } | null;
 };
 
 function filtraPorCategoria(
@@ -38,6 +56,13 @@ function filtraPorCategoria(
 /**
  * Movimiento DICF (Dejaron / Disminuyeron / Aumentaron / Nuevos) filtrado por Casa vs Comisionista.
  */
+function fmtMxn(v: number): string {
+  return v.toLocaleString("es-MX", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  });
+}
+
 export default function ArrDicfCategoriaBucketsModal({
   open,
   onClose,
@@ -46,6 +71,8 @@ export default function ArrDicfCategoriaBucketsModal({
   initialCategoria,
   planNuevos = [],
   onClienteDicfClick,
+  mesForecastLabel,
+  resumenSubcategoriaForecast,
 }: ArrDicfCategoriaBucketsModalProps) {
   const [categoria, setCategoria] = useState<"CASA" | "COMISIONISTA">(initialCategoria);
   const [loading, setLoading] = useState(false);
@@ -181,6 +208,9 @@ export default function ArrDicfCategoriaBucketsModal({
     : [];
   const nuevos = dicf ? filtraPorCategoria(dicf.nuevos?.clientes ?? [], categoria) : [];
 
+  const filasResumenSubcat =
+    resumenSubcategoriaForecast?.[categoria === "COMISIONISTA" ? "comisionista" : "casa"] ?? [];
+
   return (
     <div
       className="fixed inset-0 z-[70] flex items-center justify-center bg-black/55 p-4"
@@ -199,6 +229,9 @@ export default function ArrDicfCategoriaBucketsModal({
               Movimiento por categoría
             </h2>
             <p className="mt-0.5 text-xs text-slate-400">{planta}</p>
+            {mesForecastLabel ? (
+              <p className="mt-0.5 text-[0.65rem] text-slate-500">Forecast: {mesForecastLabel}</p>
+            ) : null}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex rounded border border-slate-600 bg-slate-950/80 p-0.5 text-xs font-medium">
@@ -236,6 +269,50 @@ export default function ArrDicfCategoriaBucketsModal({
         </div>
 
         <div className="max-h-[calc(92vh-5rem)] overflow-y-auto p-4">
+          {filasResumenSubcat.length > 0 && (
+            <section
+              className="mb-4 rounded-md border border-slate-600/70 bg-slate-950/50 p-3"
+              aria-label="Resumen por subcategoría"
+            >
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-200">
+                Resumen por subcategoría · {categoria}
+              </h3>
+              <p className="mt-1 text-[0.65rem] leading-snug text-slate-500">
+                Venta en toneladas y comisión proyectada del mes (kg × desc. $/kg), alineado al forecast del tablero:
+                exclusiones «Sin venta», simulación «Con venta» y clientes nuevos del plan manual que suman al mes.
+              </p>
+              <div className="mt-2 overflow-x-auto">
+                <table className="w-full min-w-[260px] border-collapse text-left text-xs text-slate-200">
+                  <thead>
+                    <tr className="border-b border-slate-600/80 text-[0.65rem] uppercase text-slate-400">
+                      <th className="py-1.5 pr-2 font-medium">Subcategoría</th>
+                      <th className="py-1.5 pr-2 text-right font-medium">Venta (t)</th>
+                      <th className="py-1.5 text-right font-medium">Comisión proyectada ($)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filasResumenSubcat.map((row, idx) => (
+                      <tr
+                        key={`${row.subcategoria}-${idx}`}
+                        className={`border-b border-slate-800/80 ${
+                          row.esTotal ? "bg-slate-800/40 font-semibold text-slate-100" : ""
+                        }`}
+                      >
+                        <td className="py-1.5 pr-2">{row.subcategoria}</td>
+                        <td className="py-1.5 pr-2 text-right tabular-nums">
+                          {row.ventaTon.toLocaleString("es-MX", {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}
+                        </td>
+                        <td className="py-1.5 text-right tabular-nums">${fmtMxn(row.comisionProyectadaMxn)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
           {loading && <p className="text-sm text-slate-400">Cargando clientes…</p>}
           {error && <p className="text-sm text-red-400">{error}</p>}
           {!loading && !error && dicf && (
