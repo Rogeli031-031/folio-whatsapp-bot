@@ -322,31 +322,21 @@ async function downloadArrDashboardExcelInternal(
   cur++;
 
   const isArrPlanSheet = (build.sheetName || "ARR") === "ARR Plan";
-  /** Fila 8: divisor venta plan (t); primera fila datos «Nuevos clientes» = cur+3 desde aquí. */
-  const rowAfterComp = cur;
 
   if (isArrPlanSheet && nuevosClientesPlan.length > 0) {
-    const rTot = ws.getRow(rowAfterComp);
-    rTot.getCell(1).value = "";
-    const firstNuevoDataRow = rowAfterComp + 3;
-    const partsB8: string[] = [];
+    ws.getRow(cur).getCell(1).value = "";
+    cur++;
+    const firstNuevoDataRow = cur + 2;
     const partsD6: string[] = [];
     const partsI6: string[] = [];
     for (let i = 0; i < nuevosClientesPlan.length; i++) {
       const r = firstNuevoDataRow + i;
       const sign = nuevosClientesPlan[i].origen === "sin_venta" ? "-" : "+";
-      partsB8.push(`${sign}E${r}/1000`);
       partsD6.push(`${sign}(F${r}*E${r}/1000)`);
       partsI6.push(
         `${sign}((IF(ISBLANK(H${r}),ARR!H$${MES_B_R},H${r})+IF(ISBLANK(I${r}),ARR!I$${MES_B_R},I${r}))*E${r}/100)`
       );
     }
-    rTot.getCell(2).value = {
-      formula: `B${MES_B_R}${partsB8.join("")}`,
-    };
-    rTot.getCell(2).numFmt = "#,##0.00";
-    styleDataRow(rTot, LAST_SUMMARY_COL, [2]);
-    cur++;
 
     ws.getRow(cur).getCell(1).value = "Nuevos clientes (plan)";
     ws.getRow(cur).font = { bold: true, size: 11 };
@@ -407,7 +397,7 @@ async function downloadArrDashboardExcelInternal(
     }
     const mesBRow = ws.getRow(MES_B_R);
     const dNumer = `(ARR!D${MES_B_R}*ARR!B${MES_B_R})${partsD6.join("")}`;
-    mesBRow.getCell(4).value = { formula: `(${dNumer})/B${rowAfterComp}` };
+    mesBRow.getCell(4).value = { formula: `(${dNumer})/B${MES_B_R}` };
     mesBRow.getCell(4).numFmt = "#,##0.00";
     const iNumer = `((ARR!H${MES_B_R}*ARR!B${MES_B_R}*1000/100))${partsI6.join("")}`;
     mesBRow.getCell(9).value = { formula: `(${iNumer})/(B${MES_B_R}*10)` };

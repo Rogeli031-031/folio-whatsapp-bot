@@ -465,72 +465,31 @@ function ventaBMesBConSimMap(
   return row.ventaB;
 }
 
-/** $/kg efectivo mes B (tabla + «Con venta»), para Σ(kg×desc). */
-function descKgMesBConSimPlan(
-  row: ClienteTablaRow,
-  conVenta: Record<string, { kg: number; descKg: number | null }>,
-  descFallback: number | null
-): number {
-  const s = conVenta[row.cliente];
-  if (s && s.kg > 0) {
-    if (s.descKg != null && Number.isFinite(s.descKg)) return s.descKg;
-    if (row.descB != null && Number.isFinite(row.descB)) return row.descB;
-    return descFallback != null && Number.isFinite(descFallback) ? descFallback : 0;
-  }
-  if (row.descB != null && Number.isFinite(row.descB)) return row.descB;
-  return descFallback != null && Number.isFinite(descFallback) ? descFallback : 0;
-}
-
-/** Kg mes B en ARR Plan forecast: respeta «Sin venta» y «Con venta». */
-function kgMesBPlanRow(
-  row: ClienteTablaRow,
-  mesBForecast: boolean,
-  excluir: Record<string, true> | undefined,
-  conVenta: Record<string, { kg: number; descKg: number | null }>
-): number {
-  if (!mesBForecast) {
-    const v = row.ventaB;
-    return v != null && Number.isFinite(v) && v > 0 ? v : 0;
-  }
-  if (excluir?.[row.cliente]) return 0;
-  const v = ventaBMesBConSimMap(row, conVenta);
-  return v != null && Number.isFinite(v) && v > 0 ? v : 0;
-}
-
 /**
- * Descuento $/kg ponderado (solo concepto Plan): Σ(venta kg × desc $/kg) + nuevos, todo / Σ kg.
- * Alineado a la tabla «Clientes por mes» + filas nuevos (plan).
+ * Descuento mes B en ARR Plan (forecast), misma lógica que Excel:
+ * ((ARR!D6*ARR!B6)+Σ(sign×F×E/1000))/B6 — ARR = métricas sin exclusiones/simulación del plan; B6 = venta (t) plan.
  */
-function descuentoSignedPonderadoPlanDesdeTabla(
-  filasPrimero: ClienteTablaRow[],
-  filasSolo: ClienteTablaRow[],
-  excluir: Record<string, true> | undefined,
-  conVenta: Record<string, { kg: number; descKg: number | null }>,
-  nuevos: Array<{ kg: number; descKg: number }>,
-  mesBForecast: boolean,
-  descFallback: number | null
+function descuentoPlanForecastSegunArrYB6(
+  metricBarr: ResumenMesMetrics,
+  ventaTonPlanB: number | null,
+  nuevosMan: Array<{ kg: number; descKg: number; origen?: PlanRowOrigen }>,
+  mesBForecast: boolean
 ): number | null {
   if (!mesBForecast) return null;
-  let num = 0;
-  let den = 0;
-  const step = (row: ClienteTablaRow) => {
-    const kg = kgMesBPlanRow(row, mesBForecast, excluir, conVenta);
-    if (kg <= 0) return;
-    const d = descKgMesBConSimPlan(row, conVenta, descFallback);
-    num += kg * d;
-    den += kg;
-  };
-  for (const r of filasPrimero) step(r);
-  for (const r of filasSolo) step(r);
-  for (const n of nuevos) {
+  const arrB = metricBarr.ventaTon;
+  const arrD = metricBarr.descuentoSigned;
+  const planB = ventaTonPlanB;
+  if (arrB == null || !Number.isFinite(arrB) || arrD == null || !Number.isFinite(arrD)) return null;
+  if (planB == null || !Number.isFinite(planB) || planB <= 0) return null;
+  let extra = 0;
+  for (const n of nuevosMan) {
     const kg = Number(n.kg);
     if (!Number.isFinite(kg) || kg <= 0) continue;
     const d = Number.isFinite(n.descKg) ? n.descKg : 0;
-    num += kg * d;
-    den += kg;
+    const sign = n.origen === "sin_venta" ? -1 : 1;
+    extra += sign * ((d * kg) / 1000);
   }
-  if (den <= 0) return null;
-  return num / den;
+  return (arrD * arrB + extra) / planB;
 }
 
 function ingresoBMesBConSimMap(
@@ -1741,25 +1700,39 @@ export default function ArrClient() {
     [metricBTrasConVenta, nuevosKgPlanManuales]
   );
 
+  /** Misma fila «ARR» export (mes B sin marcas del plan). */
+  const metricBComoHojaArr = useMemo(
+    () =>
+      applyConVentaSimuladaToMetricB(
+        applyExclusionsToMetricB(
+          metricB,
+          clientesB,
+          filasClientesMesPrimero,
+          filasClientesSoloMesSegundo,
+          {}
+        ),
+        {}
+      ),
+    [metricB, clientesB, filasClientesMesPrimero, filasClientesSoloMesSegundo]
+  );
+
   const descuentoSignedPlanPonderado = useMemo(
     () =>
-      descuentoSignedPonderadoPlanDesdeTabla(
-        filasClientesMesPrimero,
-        filasClientesSoloMesSegundo,
-        clientesExcluirVentaForecast,
-        clientesConVentaForecastSim,
-        nuevosKgPlanManuales,
-        Boolean(clientesB && !clientesB.historico),
-        metricBTrasConVenta.descuentoSigned
+      descuentoPlanForecastSegunArrYB6(
+        metricBComoHojaArr,
+        metricBTrasVolNuevosPlan.ventaTon,
+        nuevosKgPlanManuales.map((n) => ({
+          kg: n.kg,
+          descKg: n.descKg,
+          origen: n.origen,
+        })),
+        Boolean(clientesB && !clientesB.historico)
       ),
     [
-      filasClientesMesPrimero,
-      filasClientesSoloMesSegundo,
-      clientesExcluirVentaForecast,
-      clientesConVentaForecastSim,
+      metricBComoHojaArr,
+      metricBTrasVolNuevosPlan.ventaTon,
       nuevosKgPlanManuales,
       clientesB,
-      metricBTrasConVenta.descuentoSigned,
     ]
   );
 
@@ -2141,14 +2114,15 @@ export default function ArrClient() {
         operativos: operativos0,
       };
 
-      const descPlanExport = descuentoSignedPonderadoPlanDesdeTabla(
-        filasPrimero,
-        filasSolo,
-        sExcluir,
-        sConVenta,
-        sNuevosMan.map((n) => ({ kg: n.kg, descKg: n.descKg })),
-        Boolean(clientesB0 && !clientesB0.historico),
-        metricBTrasCV.descuentoSigned
+      const metricBarrExport = applyConVentaSimuladaToMetricB(
+        applyExclusionsToMetricB(metB, clientesB0, filasPrimero, filasSolo, {}),
+        {}
+      );
+      const descPlanExport = descuentoPlanForecastSegunArrYB6(
+        metricBarrExport,
+        metricBTrasNuevos.ventaTon,
+        sNuevosMan.map((n) => ({ kg: n.kg, descKg: n.descKg, origen: n.origen })),
+        Boolean(clientesB0 && !clientesB0.historico)
       );
       const metricBResumenFinal: ResumenMesMetrics =
         slice === wsPlan && descPlanExport != null
