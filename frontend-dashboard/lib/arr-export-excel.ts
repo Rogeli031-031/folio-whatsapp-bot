@@ -609,7 +609,10 @@ async function downloadArrDashboardExcelInternal(
   if (lastDataR >= firstClienteDataRow && rentabilidadMesBFormulaClientes) {
     const sumIngB = `SUM(${colIngB}${firstClienteDataRow}:${colIngB}${lastDataR})`;
     celL6.value = { formula: `${sumIngB}-G${MES_B_R}` };
-  } else if (!rentabilidadMesBFormulaClientes) {
+  } else if (
+    !rentabilidadMesBFormulaClientes &&
+    (build.sheetName || "ARR") === "ARR Plan"
+  ) {
     celL6.value = {
       formula: `((C${MES_B_R}+D${MES_B_R})*B${MES_B_R}*1000)+((H${MES_B_R}*B${MES_B_R}*1000/100)*I${MES_B_R})-G${MES_B_R}`,
     };

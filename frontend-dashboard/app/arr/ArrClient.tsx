@@ -566,6 +566,41 @@ function descuentoPlanForecastSegunArrYB6(
   return (arrD * arrB + extra) / planB;
 }
 
+/** Rentabilidad mes B forecast ARR Plan (celda M6 Excel): ((C+D)×B×1000)+((H×B×1000/100)×I)−G. H e I deben coincidir con Excel: I=ARR; H=hgPlanForecastMesBRuta(...). */
+function rentabilidadPlanForecastDesdeCeldasPlan(
+  plan: ResumenMesMetrics,
+  metricBarr: ResumenMesMetrics,
+  nuevosConKg: Array<{
+    kg: number;
+    descKg: number;
+    origen?: PlanRowOrigen;
+    hgCliente: number | null;
+    hgCompra: number | null;
+  }>
+): number | null {
+  const B = plan.ventaTon;
+  const C = plan.margenKg;
+  const D = plan.descuentoSigned;
+  const G = plan.gastoImporte;
+  if (
+    B == null ||
+    C == null ||
+    D == null ||
+    G == null ||
+    !Number.isFinite(B) ||
+    !Number.isFinite(C) ||
+    !Number.isFinite(D) ||
+    !Number.isFinite(G)
+  ) {
+    return null;
+  }
+  const I = metricBarr.hgDinero;
+  if (I == null || !Number.isFinite(I)) return null;
+  const { hgDisplay: H } = hgPlanForecastMesBRuta(metricBarr, plan, nuevosConKg, true);
+  if (H == null || !Number.isFinite(H)) return null;
+  return Math.round((C + D) * B * 1000 + ((H * B * 1000) / 100) * I - G);
+}
+
 function ingresoBMesBConSimMap(
   row: ClienteTablaRow,
   conVenta: Record<string, { kg: number; descKg: number | null }>,
@@ -1942,9 +1977,25 @@ export default function ArrClient() {
   const rentabilidadMostradaB = useMemo(() => {
     if (!selB) return null;
     const hist = mesHistoricoDesdeSelector(selB);
-    const mesBForecastUI = !hist && (clientesB ? !clientesB.historico : true);
+    const mesBForecastUi = !hist && (clientesB ? !clientesB.historico : true);
+
+    if (isArrPlanRoute && mesBForecastUi) {
+      const rf = rentabilidadPlanForecastDesdeCeldasPlan(
+        metricBResumen,
+        metricBComoHojaArr,
+        nuevosFilasFormulasPlan.map((n) => ({
+          kg: n.kg,
+          descKg: n.descKg,
+          origen: n.origen,
+          hgCliente: n.hgCliente,
+          hgCompra: n.hgCompra,
+        }))
+      );
+      if (rf != null && Number.isFinite(rf)) return rf;
+    }
+
     const hayAjusteForecast =
-      mesBForecastUI &&
+      mesBForecastUi &&
       (Object.keys(clientesExcluirVentaForecast).length > 0 ||
         Object.keys(clientesConVentaForecastSim).length > 0 ||
         nuevosClientesPlan.length > 0);
@@ -1958,9 +2009,14 @@ export default function ArrClient() {
     clientesExcluirVentaForecast,
     clientesConVentaForecastSim,
     nuevosClientesPlan,
+    nuevosFilasFormulasPlan,
     rentabilidadArrBAjustadaForecast,
     rentabilidadArrB,
     metricB.rentabilidadImporte,
+    isArrPlanRoute,
+    metricBResumen,
+    metricBComoHojaArr,
+    nuevosFilasFormulasPlan,
   ]);
 
   const simularClientesOpciones = useMemo(() => {
@@ -2284,6 +2340,22 @@ export default function ArrClient() {
         if (!sSelB) return null;
         const hist = mesHistoricoDesdeSelector(sSelB);
         const mesBForecastUI = !hist && (clientesB0 ? !clientesB0.historico : true);
+        if (slice === wsPlan && mesBForecastUI) {
+          const rf = rentabilidadPlanForecastDesdeCeldasPlan(
+            metricBResumenFinal,
+            metricBarrExport,
+            sNuevos
+              .filter((n) => Number.isFinite(n.kg) && n.kg > 0)
+              .map((n) => ({
+                kg: n.kg,
+                descKg: n.descKg,
+                origen: n.origen,
+                hgCliente: n.hgCliente,
+                hgCompra: n.hgCompra,
+              }))
+          );
+          if (rf != null && Number.isFinite(rf)) return rf;
+        }
         const hayAjusteForecast =
           mesBForecastUI &&
           (Object.keys(sExcluir).length > 0 || Object.keys(sConVenta).length > 0 || sNuevos.length > 0);
