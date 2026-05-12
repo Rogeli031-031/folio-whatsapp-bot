@@ -101,6 +101,7 @@ function normalizeNuevoClientePlanRow(raw: unknown): NuevoClientePlanRow | null 
   if (or === "sin_venta" || or === "con_venta" || or === "manual") origen = or;
   else if (idStr.startsWith("plan-sin-venta:")) origen = "sin_venta";
   else if (idStr.startsWith("plan-con-venta:")) origen = "con_venta";
+  const incluirEnForecastMes = o.incluirEnForecastMes === false ? false : true;
   return {
     id,
     nombre,
@@ -115,6 +116,7 @@ function normalizeNuevoClientePlanRow(raw: unknown): NuevoClientePlanRow | null 
     hgCompra,
     comentarios,
     origen,
+    incluirEnForecastMes,
   };
 }
 
@@ -174,7 +176,17 @@ export type NuevoClientePlanRow = {
    * `sin_venta` / `con_venta`: listado vinculado a casillas de la tabla (no duplicar kg en totales).
    */
   origen?: PlanRowOrigen;
+  /**
+   * Si `false`, el registro queda solo como plan futuro (no suma kg/desc/gasto/HG/renta al mes B forecast actual).
+   * Omisión o `true` = cuenta en la proyección del mes seleccionado.
+   */
+  incluirEnForecastMes?: boolean;
 };
+
+/** Filas de plan que entran en toneladas, descuento ponderado, HG y rentabilidad del mes B forecast. */
+function nuevaFilaCuentaEnForecastMes(n: Pick<NuevoClientePlanRow, "incluirEnForecastMes">): boolean {
+  return n.incluirEnForecastMes !== false;
+}
 
 const PLAN_ID_SIN_VENTA = "plan-sin-venta:";
 const PLAN_ID_CON_VENTA = "plan-con-venta:";
@@ -764,6 +776,7 @@ function buildPlanRowSinVenta(
     hgCompra: null,
     comentarios: "",
     origen: "sin_venta",
+    incluirEnForecastMes: true,
   };
 }
 
@@ -795,6 +808,7 @@ function buildPlanRowConVenta(
     hgCompra: null,
     comentarios: "",
     origen: "con_venta",
+    incluirEnForecastMes: true,
   };
 }
 
@@ -1073,8 +1087,10 @@ export default function ArrClient() {
       hgCliente: number | null;
       hgCompra: number | null;
       comentarios: string;
+      incluirEnForecastMes?: boolean;
     }) => {
       if (!isArrPlanRoute) return;
+      const incluirMes = payload.incluirEnForecastMes !== false;
       if (payload.id) {
         const {
           id,
@@ -1109,6 +1125,7 @@ export default function ArrClient() {
                   hgCompra,
                   comentarios,
                   origen: origen ?? "manual",
+                  incluirEnForecastMes: incluirMes,
                 }
               : n
           );
@@ -1161,12 +1178,22 @@ export default function ArrClient() {
             hgCliente,
             hgCompra,
             comentarios,
+            incluirEnForecastMes: incluirMes,
           },
         ],
       }));
     },
     [isArrPlanRoute]
   );
+
+  const setNuevoPlanIncluirEnForecastMes = useCallback((id: string, incluir: boolean) => {
+    setWsPlan((s) => ({
+      ...s,
+      nuevosClientesPlan: s.nuevosClientesPlan.map((n) =>
+        n.id === id ? { ...n, incluirEnForecastMes: incluir } : n
+      ),
+    }));
+  }, []);
 
   const quitarNuevoClientePlan = useCallback((id: string) => {
     setWsPlan((s) => {
@@ -1696,13 +1723,19 @@ export default function ArrClient() {
     [clientesA]
   );
   const nuevosKgPlanManuales = useMemo(
-    () => nuevosClientesPlan.filter(esNuevoKgPlanManual),
+    () =>
+      nuevosClientesPlan.filter(
+        (n) => esNuevoKgPlanManual(n) && nuevaFilaCuentaEnForecastMes(n)
+      ),
     [nuevosClientesPlan]
   );
 
-  /** Con kg > 0: mismas filas que en Excel ARR Plan (H6, D6, K11…) — incluye manual y filas Sin/Con venta vinculadas. */
+  /** Con kg > 0 y que cuenten en forecast: mismas filas que Excel ARR Plan (H6, D6, K11…). */
   const nuevosFilasFormulasPlan = useMemo(
-    () => nuevosClientesPlan.filter((n) => Number.isFinite(n.kg) && n.kg > 0),
+    () =>
+      nuevosClientesPlan.filter(
+        (n) => Number.isFinite(n.kg) && n.kg > 0 && nuevaFilaCuentaEnForecastMes(n)
+      ),
     [nuevosClientesPlan]
   );
 
@@ -1879,10 +1912,9 @@ export default function ArrClient() {
   );
 
   const metricBResumen = useMemo(() => {
-    const extraGasto = nuevosClientesPlan.reduce(
-      (s, n) => s + (Number.isFinite(n.gastoMxn) ? n.gastoMxn : 0),
-      0
-    );
+    const extraGasto = nuevosClientesPlan
+      .filter(nuevaFilaCuentaEnForecastMes)
+      .reduce((s, n) => s + (Number.isFinite(n.gastoMxn) ? n.gastoMxn : 0), 0);
     const baseG = metricBTrasVolNuevosPlan.gastoImporte;
     const gastoImporte =
       baseG != null && Number.isFinite(baseG) ? baseG + extraGasto : null;
@@ -2002,7 +2034,7 @@ export default function ArrClient() {
       mesBForecastUi &&
       (Object.keys(clientesExcluirVentaForecast).length > 0 ||
         Object.keys(clientesConVentaForecastSim).length > 0 ||
-        nuevosClientesPlan.length > 0);
+        nuevosClientesPlan.some(nuevaFilaCuentaEnForecastMes));
     if (hayAjusteForecast && rentabilidadArrBAjustadaForecast != null) {
       return rentabilidadArrBAjustadaForecast;
     }
@@ -2155,7 +2187,9 @@ export default function ArrClient() {
       const sExcluir = slice.clientesExcluirVentaForecast;
       const sConVenta = slice.clientesConVentaForecastSim;
       const sNuevos = slice.nuevosClientesPlan;
-      const sNuevosMan = sNuevos.filter(esNuevoKgPlanManual);
+      const sNuevosMan = sNuevos.filter(
+        (n) => esNuevoKgPlanManual(n) && nuevaFilaCuentaEnForecastMes(n)
+      );
 
       const headerVentaA0 = sSelA ? `Venta ${periodoMesNombre(sSelA)}` : "Venta —";
       const headerVentaB0 = sSelB ? `Venta ${periodoMesNombre(sSelB)}` : "Venta —";
@@ -2262,7 +2296,9 @@ export default function ArrClient() {
         metricBTrasCV,
         sNuevosMan.map((n) => ({ kg: n.kg, descKg: n.descKg }))
       );
-      const extraGasto = sNuevos.reduce((sum, n) => sum + (Number.isFinite(n.gastoMxn) ? n.gastoMxn : 0), 0);
+      const extraGasto = sNuevos
+        .filter(nuevaFilaCuentaEnForecastMes)
+        .reduce((sum, n) => sum + (Number.isFinite(n.gastoMxn) ? n.gastoMxn : 0), 0);
       const gastoImporteFinal =
         metricBTrasNuevos.gastoImporte != null && Number.isFinite(metricBTrasNuevos.gastoImporte)
           ? metricBTrasNuevos.gastoImporte + extraGasto
@@ -2287,11 +2323,13 @@ export default function ArrClient() {
       const descPlanExport = descuentoPlanForecastSegunArrYB6(
         metricBarrExport,
         metricBTrasNuevos.ventaTon,
-        sNuevos.filter((n) => Number.isFinite(n.kg) && n.kg > 0).map((n) => ({
-          kg: n.kg,
-          descKg: n.descKg,
-          origen: n.origen,
-        })),
+        sNuevos
+          .filter((n) => Number.isFinite(n.kg) && n.kg > 0 && nuevaFilaCuentaEnForecastMes(n))
+          .map((n) => ({
+            kg: n.kg,
+            descKg: n.descKg,
+            origen: n.origen,
+          })),
         Boolean(clientesB0 && !clientesB0.historico)
       );
       let metricBResumenFinal: ResumenMesMetrics = metricBResumen0;
@@ -2303,7 +2341,7 @@ export default function ArrClient() {
           metricBarrExport,
           metricBTrasNuevos,
           sNuevos
-            .filter((n) => Number.isFinite(n.kg) && n.kg > 0)
+            .filter((n) => Number.isFinite(n.kg) && n.kg > 0 && nuevaFilaCuentaEnForecastMes(n))
             .map((n) => ({
               kg: n.kg,
               descKg: n.descKg,
@@ -2348,7 +2386,7 @@ export default function ArrClient() {
             metricBResumenFinal,
             metricBarrExport,
             sNuevos
-              .filter((n) => Number.isFinite(n.kg) && n.kg > 0)
+              .filter((n) => Number.isFinite(n.kg) && n.kg > 0 && nuevaFilaCuentaEnForecastMes(n))
               .map((n) => ({
                 kg: n.kg,
                 descKg: n.descKg,
@@ -2361,7 +2399,9 @@ export default function ArrClient() {
         }
         const hayAjusteForecast =
           mesBForecastUI &&
-          (Object.keys(sExcluir).length > 0 || Object.keys(sConVenta).length > 0 || sNuevos.length > 0);
+          (Object.keys(sExcluir).length > 0 ||
+            Object.keys(sConVenta).length > 0 ||
+            sNuevos.some(nuevaFilaCuentaEnForecastMes));
         if (hayAjusteForecast && rentAdjB0 != null) return rentAdjB0;
         return rentabilidadResumenPorMes(sSelB, rentArrB0, metB.rentabilidadImporte);
       })();
@@ -2438,6 +2478,7 @@ export default function ArrClient() {
                 hgCompra: n.hgCompra,
                 comentarios: n.comentarios,
                 origen: n.origen,
+                incluirEnForecastMes: n.incluirEnForecastMes !== false,
               })),
             }
           : {}),
@@ -2850,8 +2891,9 @@ export default function ArrClient() {
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-sky-800/40 px-4 py-2">
               <h2 className="text-sm font-semibold text-sky-100">Nuevos clientes (plan)</h2>
               <span className="text-xs text-sky-200/80">
-                Incluye altas manuales y clientes marcados Sin venta / Con venta en la tabla (comentarios y
-                responsable editables como en el alta manual).
+                Incluye altas manuales y clientes marcados Sin venta / Con venta. Por fila: «Mes actual» suma kg al
+                forecast del mes; «Solo plan (futuro)» deja el registro sin afectar venta, descuento, HG ni renta del
+                mes proyectado.
               </span>
             </div>
             <table className="min-w-full text-sm">
@@ -2867,6 +2909,7 @@ export default function ArrClient() {
                   <th className="px-3 py-2 text-center">Gasto</th>
                   <th className="px-3 py-2 text-center">HG cliente</th>
                   <th className="px-3 py-2 text-center">HG compra</th>
+                  <th className="px-3 py-2 text-center min-w-[9rem]">Proyección</th>
                   <th className="px-3 py-2 text-left min-w-[10rem]">Comentarios</th>
                   <th className="px-3 py-2 text-center">Ingreso marginal</th>
                   <th className="px-3 py-2 text-center min-w-[9.5rem]">Acciones</th>
@@ -2913,10 +2956,34 @@ export default function ArrClient() {
                           ? fmtNum(n.hgCompra, 2)
                           : "—"}
                       </td>
+                      <td className="px-3 py-2 text-center">
+                        <select
+                          value={nuevaFilaCuentaEnForecastMes(n) ? "mes" : "futuro"}
+                          onChange={(e) =>
+                            setNuevoPlanIncluirEnForecastMes(n.id, e.target.value === "mes")
+                          }
+                          title="Mes actual: suma al forecast del mes B. Solo plan (futuro): registro sin impacto en la proyección actual."
+                          className="max-w-[9.5rem] cursor-pointer rounded border border-sky-700/60 bg-slate-900 px-1.5 py-1 text-[0.7rem] text-sky-100"
+                        >
+                          <option value="mes">Mes actual</option>
+                          <option value="futuro">Solo plan (futuro)</option>
+                        </select>
+                      </td>
                       <td className="max-w-[14rem] px-3 py-2 text-left text-xs text-slate-300 whitespace-pre-wrap break-words">
                         {n.comentarios?.trim() ? n.comentarios.trim() : "—"}
                       </td>
-                      <td className="px-3 py-2 text-center tabular-nums text-emerald-200/90">
+                      <td
+                        className={`px-3 py-2 text-center tabular-nums ${
+                          nuevaFilaCuentaEnForecastMes(n)
+                            ? "text-emerald-200/90"
+                            : "text-slate-400"
+                        }`}
+                        title={
+                          nuevaFilaCuentaEnForecastMes(n)
+                            ? undefined
+                            : "Referencial: no entra en el resumen del mes (solo plan futuro)."
+                        }
+                      >
                         {ing != null ? `$${fmtNum(ing, 0)}` : "—"}
                       </td>
                       <td className="px-3 py-2 text-center">

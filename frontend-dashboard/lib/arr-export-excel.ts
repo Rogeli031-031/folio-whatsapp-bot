@@ -96,6 +96,8 @@ export type ArrExportOptions = {
     comentarios?: string;
     /** `sin_venta`: resta en fórmulas D6/I6/B8; resto suma (manual / con_venta). */
     origen?: "manual" | "sin_venta" | "con_venta";
+    /** Si false, la fila no entra en D6/H6 del forecast (solo plan futuro). */
+    incluirEnForecastMes?: boolean;
   }[];
   /** Columnas «Sin venta» / «Con venta» en clientes (solo ARR Plan). */
   marcasForecastEnClientes?: boolean;
@@ -330,8 +332,10 @@ async function downloadArrDashboardExcelInternal(
     const partsD6: string[] = [];
     const partsH6Terms: string[] = [];
     for (let i = 0; i < nuevosClientesPlan.length; i++) {
+      const nv = nuevosClientesPlan[i];
+      if (nv.incluirEnForecastMes === false) continue;
       const r = firstNuevoDataRow + i;
-      const sign = nuevosClientesPlan[i].origen === "sin_venta" ? "-" : "+";
+      const sign = nv.origen === "sin_venta" ? "-" : "+";
       partsD6.push(`${sign}(F${r}*E${r}/1000)`);
       partsH6Terms.push(
         `${sign}((IF(ISBLANK(H${r}),ARR!H$${MES_B_R},H${r})+IF(ISBLANK(I${r}),ARR!I$${MES_B_R},I${r}))*E${r}/100)`

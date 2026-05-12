@@ -16,6 +16,8 @@ export type ArrNuevoClientePlanPayload = {
   categoria: "CASA" | "COMISIONISTA";
   subcategoria: string;
   comentarios: string;
+  /** Si false, el volumen no suma al forecast del mes B (solo plan futuro). Por defecto true. */
+  incluirEnForecastMes?: boolean;
 };
 
 export type ArrNuevoClientePlanSavePayload = ArrNuevoClientePlanPayload & {
@@ -38,6 +40,8 @@ export type ArrNuevoClientePlanEdicion = {
   comentarios?: string;
   /** Fila vinculada a casillas Sin venta / Con venta (campos de volumen acotados). */
   origen?: "manual" | "sin_venta" | "con_venta";
+  /** Si false, no suma al forecast del mes B. */
+  incluirEnForecastMes?: boolean;
 };
 
 type Props = {
@@ -73,6 +77,7 @@ export default function ArrNuevoClientePlanModal({
   const [categoria, setCategoria] = useState<"CASA" | "COMISIONISTA">("CASA");
   const [subcategoria, setSubcategoria] = useState("");
   const [comentarios, setComentarios] = useState("");
+  const [incluirEnForecastMes, setIncluirEnForecastMes] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const nombresBloqueados = useMemo(() => {
@@ -104,6 +109,7 @@ export default function ArrNuevoClientePlanModal({
         setCategoria(clienteEditar.categoria ?? "CASA");
         setSubcategoria(clienteEditar.subcategoria ?? "");
         setComentarios((clienteEditar.comentarios ?? "").slice(0, 2000));
+        setIncluirEnForecastMes(clienteEditar.incluirEnForecastMes !== false);
         const rid = clienteEditar.responsableId;
         if (rid != null && Number.isFinite(rid) && rid > 0) {
           setResponsableIdStr(String(rid));
@@ -132,6 +138,7 @@ export default function ArrNuevoClientePlanModal({
       setCategoria("CASA");
       setSubcategoria("");
       setComentarios("");
+      setIncluirEnForecastMes(true);
     }
   }, [abierto, clienteEditar, responsables]);
 
@@ -242,6 +249,7 @@ export default function ArrNuevoClientePlanModal({
       categoria,
       subcategoria: sub,
       comentarios: comentarios.trim().slice(0, 2000),
+      incluirEnForecastMes,
     };
     if (clienteEditar) base.id = clienteEditar.id;
     onSave(base);
@@ -404,6 +412,20 @@ export default function ArrNuevoClientePlanModal({
                 </option>
               ))}
             </select>
+          </label>
+          <label className="block text-sm">
+            <span className="text-slate-300">Proyección del mes</span>
+            <select
+              value={incluirEnForecastMes ? "mes" : "futuro"}
+              onChange={(e) => setIncluirEnForecastMes(e.target.value === "mes")}
+              className="mt-1 w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+            >
+              <option value="mes">Suma al forecast del mes seleccionado</option>
+              <option value="futuro">Solo plan (compra en meses futuros)</option>
+            </select>
+            <span className="mt-1 block text-[0.65rem] text-slate-500">
+              «Solo plan» no afecta venta, descuento, HG, gasto ni renta del mes B en el resumen superior.
+            </span>
           </label>
           <label className="block text-sm">
             <span className="text-slate-300">Comentarios</span>
