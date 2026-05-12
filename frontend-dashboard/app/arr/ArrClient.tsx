@@ -480,7 +480,7 @@ function ingresoMarginalPlanNuevoRow(
   return Math.round(sign * raw);
 }
 
-/** HG / HG$ resumen mes B en ARR Plan (forecast): I = ARR; H con fórmula tipo Excel solo si hay nuevos manuales. */
+/** HG / HG$ resumen mes B en ARR Plan (forecast): HG$ = hoja ARR (I6); HG = fórmula Excel con filas nuevos (kg > 0). */
 function hgPlanForecastMesBRuta(
   metricBarr: ResumenMesMetrics,
   metricPlanB: ResumenMesMetrics,
@@ -1661,6 +1661,12 @@ export default function ArrClient() {
     [nuevosClientesPlan]
   );
 
+  /** Con kg > 0: mismas filas que en Excel ARR Plan (H6, D6, K11…) — incluye manual y filas Sin/Con venta vinculadas. */
+  const nuevosFilasFormulasPlan = useMemo(
+    () => nuevosClientesPlan.filter((n) => Number.isFinite(n.kg) && n.kg > 0),
+    [nuevosClientesPlan]
+  );
+
   const { kgNuevosPlanCasa, kgNuevosPlanComi } = useMemo(() => {
     let casa = 0;
     let comi = 0;
@@ -1795,7 +1801,7 @@ export default function ArrClient() {
       descuentoPlanForecastSegunArrYB6(
         metricBComoHojaArr,
         metricBTrasVolNuevosPlan.ventaTon,
-        nuevosKgPlanManuales.map((n) => ({
+        nuevosFilasFormulasPlan.map((n) => ({
           kg: n.kg,
           descKg: n.descKg,
           origen: n.origen,
@@ -1805,7 +1811,7 @@ export default function ArrClient() {
     [
       metricBComoHojaArr,
       metricBTrasVolNuevosPlan.ventaTon,
-      nuevosKgPlanManuales,
+      nuevosFilasFormulasPlan,
       clientesB,
     ]
   );
@@ -1815,7 +1821,7 @@ export default function ArrClient() {
       hgPlanForecastMesBRuta(
         metricBComoHojaArr,
         metricBTrasVolNuevosPlan,
-        nuevosKgPlanManuales.map((n) => ({
+        nuevosFilasFormulasPlan.map((n) => ({
           kg: n.kg,
           descKg: n.descKg,
           origen: n.origen,
@@ -1828,7 +1834,7 @@ export default function ArrClient() {
       isArrPlanRoute,
       metricBComoHojaArr,
       metricBTrasVolNuevosPlan,
-      nuevosKgPlanManuales,
+      nuevosFilasFormulasPlan,
       clientesB,
     ]
   );
@@ -2222,7 +2228,11 @@ export default function ArrClient() {
       const descPlanExport = descuentoPlanForecastSegunArrYB6(
         metricBarrExport,
         metricBTrasNuevos.ventaTon,
-        sNuevosMan.map((n) => ({ kg: n.kg, descKg: n.descKg, origen: n.origen })),
+        sNuevos.filter((n) => Number.isFinite(n.kg) && n.kg > 0).map((n) => ({
+          kg: n.kg,
+          descKg: n.descKg,
+          origen: n.origen,
+        })),
         Boolean(clientesB0 && !clientesB0.historico)
       );
       let metricBResumenFinal: ResumenMesMetrics = metricBResumen0;
@@ -2233,13 +2243,15 @@ export default function ArrClient() {
         const hgPlan = hgPlanForecastMesBRuta(
           metricBarrExport,
           metricBTrasNuevos,
-          sNuevosMan.map((n) => ({
-            kg: n.kg,
-            descKg: n.descKg,
-            origen: n.origen,
-            hgCliente: n.hgCliente,
-            hgCompra: n.hgCompra,
-          })),
+          sNuevos
+            .filter((n) => Number.isFinite(n.kg) && n.kg > 0)
+            .map((n) => ({
+              kg: n.kg,
+              descKg: n.descKg,
+              origen: n.origen,
+              hgCliente: n.hgCliente,
+              hgCompra: n.hgCompra,
+            })),
           true
         );
         metricBResumenFinal = { ...metricBResumenFinal, ...hgPlan };
