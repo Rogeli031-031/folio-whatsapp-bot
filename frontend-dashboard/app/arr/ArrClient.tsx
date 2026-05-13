@@ -230,6 +230,11 @@ type ArrWorkspaceSlice = {
    * (inverso lógico de excluir volumen con «Sin venta»).
    */
   clientesConVentaForecastSim: Record<string, { kg: number; descKg: number | null }>;
+  /**
+   * Simulación de descuento $/kg en mes forecast por cliente (override del valor proyectado).
+   * Permite ver afectación financiera (ingreso, descuento ponderado y rentabilidad) al cambiar el desc. forecast.
+   */
+  clientesDescForecastSim: Record<string, number>;
   /** Solo en ARR Plan: clientes sintéticos (kg, desc $/kg, gasto) que ajustan resumen mes B. */
   nuevosClientesPlan: NuevoClientePlanRow[];
 };
@@ -246,6 +251,7 @@ function emptyArrWorkspaceSlice(): ArrWorkspaceSlice {
     clientesErrorByKey: {},
     clientesExcluirVentaForecast: {},
     clientesConVentaForecastSim: {},
+    clientesDescForecastSim: {},
     nuevosClientesPlan: [],
   };
 }
@@ -622,21 +628,28 @@ function rentabilidadPlanForecastDesdeCeldasPlan(
 function ingresoBMesBConSimMap(
   row: ClienteTablaRow,
   conVenta: Record<string, { kg: number; descKg: number | null }>,
-  metricBResumen: ResumenMesMetrics
+  metricBResumen: ResumenMesMetrics,
+  /** Override del descuento $/kg del cliente (mes forecast). Tiene prioridad sobre `row.descB`. */
+  descSim?: Record<string, number>
 ): number | null {
+  const sim = descSim?.[row.cliente];
+  const simDesc = sim != null && Number.isFinite(sim) ? sim : null;
   const s = conVenta[row.cliente];
   if (s && s.kg > 0) {
     const d =
-      s.descKg != null && Number.isFinite(s.descKg)
-        ? s.descKg
-        : row.descB != null && Number.isFinite(row.descB)
-          ? row.descB
-          : metricBResumen.descuentoSigned;
+      simDesc != null
+        ? simDesc
+        : s.descKg != null && Number.isFinite(s.descKg)
+          ? s.descKg
+          : row.descB != null && Number.isFinite(row.descB)
+            ? row.descB
+            : metricBResumen.descuentoSigned;
     return ingresoClienteMarginal(s.kg, d, metricBResumen);
   }
   const kg = row.ventaB;
   if (kg == null || !Number.isFinite(kg) || kg <= 0) return null;
-  return ingresoClienteMarginal(kg, row.descB, metricBResumen);
+  const descParaCalc = simDesc != null ? simDesc : row.descB;
+  return ingresoClienteMarginal(kg, descParaCalc, metricBResumen);
 }
 
 /** Venta del cliente para el mes: kg proyectado (mes en curso) o kg real (mes histórico). */
@@ -863,6 +876,109 @@ function clienteTieneAccionDicfAbierta(row: ClienteTablaRow): boolean {
   return n != null && Number.isFinite(n) && n > 0;
 }
 
+/**
+ * Celda editable de Desc. mes B (forecast). Permite simular un cambio en el descuento
+ * para ver afectación financiera (ingreso, descuento ponderado, rentabilidad).
+ */
+function DescBEditableCell({
+  cliente,
+  orig,
+  sim,
+  editable,
+  onCommit,
+}: {
+  cliente: string;
+  orig: number | null;
+  sim: number | null;
+  editable: boolean;
+  onCommit: (cliente: string, valor: number | null) => void;
+}) {
+  const display = sim != null ? sim : orig;
+  const valor = display != null && Number.isFinite(display) ? fmtNum(display, 2) : "";
+  const [draft, setDraft] = useState<string>(valor);
+  const [focused, setFocused] = useState(false);
+  useEffect(() => {
+    if (!focused) setDraft(valor);
+  }, [valor, focused]);
+
+  if (!editable) {
+    return display != null && Number.isFinite(display) ? (
+      <span className={sim != null ? "text-amber-300" : undefined}>{fmtNum(display, 2)}</span>
+    ) : (
+      <span className="text-slate-500">—</span>
+    );
+  }
+
+  const commit = (rawTxt: string) => {
+    const txt = rawTxt.trim().replace(/,/g, "");
+    if (txt === "") {
+      onCommit(cliente, null);
+      return;
+    }
+    const n = Number(txt);
+    if (!Number.isFinite(n)) {
+      setDraft(valor);
+      return;
+    }
+    if (orig != null && Number.isFinite(orig) && Math.abs(n - orig) < 1e-9) {
+      onCommit(cliente, null);
+      return;
+    }
+    onCommit(cliente, n);
+  };
+
+  return (
+    <div className="flex items-center justify-center gap-1">
+      <input
+        type="text"
+        inputMode="decimal"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onFocus={(e) => {
+          setFocused(true);
+          e.currentTarget.select();
+        }}
+        onBlur={(e) => {
+          setFocused(false);
+          commit(e.currentTarget.value);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            (e.currentTarget as HTMLInputElement).blur();
+          } else if (e.key === "Escape") {
+            e.preventDefault();
+            setDraft(valor);
+            (e.currentTarget as HTMLInputElement).blur();
+          }
+        }}
+        placeholder={orig != null && Number.isFinite(orig) ? fmtNum(orig, 2) : "—"}
+        title={
+          sim != null
+            ? `Simulado: ${fmtNum(sim, 2)} (original: ${
+                orig != null && Number.isFinite(orig) ? fmtNum(orig, 2) : "—"
+              }). Pulsa ↺ para restablecer.`
+            : "Edita para simular un cambio en el descuento $/kg y ver la afectación financiera."
+        }
+        className={`w-20 rounded border bg-slate-900 px-1.5 py-0.5 text-center text-[0.75rem] tabular-nums ${
+          sim != null ? "border-amber-500/70 text-amber-200" : "border-slate-600 text-slate-200"
+        }`}
+      />
+      {sim != null && (
+        <button
+          type="button"
+          onClick={() => onCommit(cliente, null)}
+          title="Restablecer al valor original"
+          aria-label={`Restablecer descuento forecast ${cliente}`}
+          className="rounded border border-slate-600 px-1 text-[0.65rem] text-slate-300 hover:bg-slate-800"
+        >
+          ↺
+        </button>
+      )}
+    </div>
+  );
+}
+
 function findClienteTablaRowInFilas(
   cliente: string,
   primero: ClienteTablaRow[],
@@ -985,6 +1101,43 @@ function applyExclusionsToMetricB(
   };
 }
 
+/**
+ * Ajusta `descuentoSigned` por simulación de descuento $/kg de clientes activos en forecast.
+ * El descSigned ponderado cumple aprox. `descSigned * totalKg = -Σ(descB_i × kg_i)`. Para cada
+ * cliente con override `descSim`: delta_numerador = (descB_orig − descSim) × kg.
+ * Aplicar después de `applyExclusionsToMetricB` (los clientes excluidos se ignoran).
+ */
+function applyDescuentoSimToMetricB(
+  metricB: ResumenMesMetrics,
+  clientesB: ClientesMonthData | undefined,
+  filasPrimero: ClienteTablaRow[],
+  filasSolo: ClienteTablaRow[],
+  excluir: Record<string, true> | undefined,
+  descSim: Record<string, number> | undefined
+): ResumenMesMetrics {
+  if (!clientesB || clientesB.historico) return metricB;
+  if (!descSim || Object.keys(descSim).length === 0) return metricB;
+  const ton = metricB.ventaTon;
+  const descSigned = metricB.descuentoSigned;
+  if (ton == null || !Number.isFinite(ton) || descSigned == null || !Number.isFinite(descSigned)) {
+    return metricB;
+  }
+  const totalKg = ton * 1000;
+  if (!Number.isFinite(totalKg) || totalKg <= 0) return metricB;
+  let deltaNum = 0;
+  for (const row of [...filasPrimero, ...filasSolo]) {
+    if (excluir?.[row.cliente]) continue;
+    const sim = descSim[row.cliente];
+    if (sim == null || !Number.isFinite(sim)) continue;
+    const kg = row.ventaB;
+    if (kg == null || !Number.isFinite(kg) || kg <= 0) continue;
+    const orig = row.descB != null && Number.isFinite(row.descB) ? row.descB : 0;
+    deltaNum += (orig - sim) * kg;
+  }
+  if (deltaNum === 0) return metricB;
+  return { ...metricB, descuentoSigned: descSigned + deltaNum / totalKg };
+}
+
 /** Suma kg simulados al total forecast y recalcula descuento $/kg ponderado (inverso de excluir). */
 function applyConVentaSimuladaToMetricB(
   base: ResumenMesMetrics,
@@ -1044,17 +1197,20 @@ function rentabilidadForecastMesBAjustada(
     descKg: number;
     hgCliente?: number | null;
     hgCompra?: number | null;
-  }>
+  }>,
+  /** Override del descuento $/kg en forecast por cliente (simulación). */
+  descSim?: Record<string, number>
 ): number | null {
   if (gastoImporte == null || !Number.isFinite(gastoImporte)) return null;
   const hasEx = excluir && Object.keys(excluir).length > 0;
   const hasSim = conVenta && Object.keys(conVenta).length > 0;
   const hasNuevo = nuevosPlan.some((n) => Number.isFinite(n.kg) && n.kg > 0);
-  if (!hasEx && !hasSim && !hasNuevo) return null;
+  const hasDescSim = descSim != null && Object.keys(descSim).length > 0;
+  if (!hasEx && !hasSim && !hasNuevo && !hasDescSim) return null;
   const cv = conVenta ?? {};
   const ingresoFila = (r: ClienteTablaRow): number => {
     if (excluir?.[r.cliente]) return 0;
-    return ingresoBMesBConSimMap(r, cv, metricBResumen) ?? 0;
+    return ingresoBMesBConSimMap(r, cv, metricBResumen, descSim) ?? 0;
   };
   let sumIng = 0;
   for (const r of filasPrimero) sumIng += ingresoFila(r);
@@ -1116,6 +1272,7 @@ export default function ArrClient() {
   const clientesErrorByKey = ws.clientesErrorByKey;
   const clientesExcluirVentaForecast = ws.clientesExcluirVentaForecast;
   const clientesConVentaForecastSim = ws.clientesConVentaForecastSim;
+  const clientesDescForecastSim = ws.clientesDescForecastSim;
   const nuevosClientesPlan = ws.nuevosClientesPlan;
 
   const setSelAUi = useCallback(
@@ -1205,6 +1362,31 @@ export default function ArrClient() {
       else setWsBase(patch);
     },
     [isArrPlanRoute, clienteInactivoForecastB]
+  );
+
+  /**
+   * Setea (o limpia) el descuento simulado para un cliente en el mes forecast.
+   * `valor` se interpreta como magnitud positiva (igual que `row.descB`). `null` limpia.
+   */
+  const setClienteDescForecastSim = useCallback(
+    (cliente: string, valor: number | null) => {
+      const k = cliente.trim();
+      if (!k) return;
+      const patch = (s: ArrWorkspaceSlice) => {
+        const next = { ...s.clientesDescForecastSim };
+        if (valor == null || !Number.isFinite(valor)) {
+          if (!(k in next)) return s;
+          delete next[k];
+        } else {
+          if (next[k] === valor) return s;
+          next[k] = valor;
+        }
+        return { ...s, clientesDescForecastSim: next };
+      };
+      if (isArrPlanRoute) setWsPlan(patch);
+      else setWsBase(patch);
+    },
+    [isArrPlanRoute]
   );
 
   const guardarNuevoClientePlanModal = useCallback(
@@ -1471,6 +1653,7 @@ export default function ArrClient() {
     type Persist = {
       excluir: Record<string, true>;
       conVenta: Record<string, { kg: number; descKg: number | null }>;
+      descSim?: Record<string, number>;
       nuevos: NuevoClientePlanRow[];
     };
     const parsed = safeJsonParse<Persist>(typeof window !== "undefined" ? window.localStorage.getItem(key) : null);
@@ -1479,6 +1662,7 @@ export default function ArrClient() {
         ...s,
         clientesExcluirVentaForecast: {},
         clientesConVentaForecastSim: {},
+        clientesDescForecastSim: {},
         nuevosClientesPlan: [],
       }));
       return;
@@ -1486,10 +1670,21 @@ export default function ArrClient() {
     const nuevos = (parsed.nuevos ?? [])
       .map((x) => normalizeNuevoClientePlanRow(x))
       .filter((x): x is NuevoClientePlanRow => Boolean(x));
+    const descSim = (() => {
+      const raw = parsed.descSim;
+      if (!raw || typeof raw !== "object") return {};
+      const out: Record<string, number> = {};
+      for (const [k, v] of Object.entries(raw)) {
+        const n = Number(v);
+        if (Number.isFinite(n)) out[k] = n;
+      }
+      return out;
+    })();
     setWsPlan((s) => ({
       ...s,
       clientesExcluirVentaForecast: parsed.excluir ?? {},
       clientesConVentaForecastSim: parsed.conVenta ?? {},
+      clientesDescForecastSim: descSim,
       nuevosClientesPlan: nuevos,
     }));
   }, [token, empresa, wsPlan.selB]);
@@ -1500,6 +1695,7 @@ export default function ArrClient() {
     const payload = {
       excluir: wsPlan.clientesExcluirVentaForecast ?? {},
       conVenta: wsPlan.clientesConVentaForecastSim ?? {},
+      descSim: wsPlan.clientesDescForecastSim ?? {},
       nuevos: wsPlan.nuevosClientesPlan ?? [],
     };
     try {
@@ -1513,6 +1709,7 @@ export default function ArrClient() {
     wsPlan.selB,
     wsPlan.clientesExcluirVentaForecast,
     wsPlan.clientesConVentaForecastSim,
+    wsPlan.clientesDescForecastSim,
     wsPlan.nuevosClientesPlan,
   ]);
 
@@ -1974,9 +2171,29 @@ export default function ArrClient() {
     ]
   );
 
+  const metricBTrasDescSim = useMemo(
+    () =>
+      applyDescuentoSimToMetricB(
+        metricBTrasExclusiones,
+        clientesB,
+        filasClientesMesPrimero,
+        filasClientesSoloMesSegundo,
+        clientesExcluirVentaForecast,
+        clientesDescForecastSim
+      ),
+    [
+      metricBTrasExclusiones,
+      clientesB,
+      filasClientesMesPrimero,
+      filasClientesSoloMesSegundo,
+      clientesExcluirVentaForecast,
+      clientesDescForecastSim,
+    ]
+  );
+
   const metricBTrasConVenta = useMemo(
-    () => applyConVentaSimuladaToMetricB(metricBTrasExclusiones, clientesConVentaForecastSim),
-    [metricBTrasExclusiones, clientesConVentaForecastSim]
+    () => applyConVentaSimuladaToMetricB(metricBTrasDescSim, clientesConVentaForecastSim),
+    [metricBTrasDescSim, clientesConVentaForecastSim]
   );
 
   const metricBTrasVolNuevosPlan = useMemo(
@@ -2047,6 +2264,39 @@ export default function ArrClient() {
     ]
   );
 
+  /**
+   * Ajuste del descuento ponderado por la simulación de descuento $/kg en mes forecast (modo Plan).
+   * `descuentoSignedPlanPonderado` se calcula a partir de `metricBComoHojaArr` (ARR puro, sin sims),
+   * por lo que su delta `Σ(orig-sim)·kg / (planB·1000)` se suma aparte aquí.
+   */
+  const descSimDeltaParaPlan = useMemo(() => {
+    if (!isArrPlanRoute) return 0;
+    if (!clientesB || clientesB.historico) return 0;
+    const keys = Object.keys(clientesDescForecastSim);
+    if (keys.length === 0) return 0;
+    const planB = metricBTrasVolNuevosPlan.ventaTon;
+    if (planB == null || !Number.isFinite(planB) || planB <= 0) return 0;
+    let numer = 0;
+    for (const row of [...filasClientesMesPrimero, ...filasClientesSoloMesSegundo]) {
+      if (clientesExcluirVentaForecast[row.cliente]) continue;
+      const sim = clientesDescForecastSim[row.cliente];
+      if (sim == null || !Number.isFinite(sim)) continue;
+      const kg = row.ventaB;
+      if (kg == null || !Number.isFinite(kg) || kg <= 0) continue;
+      const orig = row.descB != null && Number.isFinite(row.descB) ? row.descB : 0;
+      numer += (orig - sim) * kg;
+    }
+    return numer / (planB * 1000);
+  }, [
+    isArrPlanRoute,
+    clientesB,
+    clientesDescForecastSim,
+    clientesExcluirVentaForecast,
+    filasClientesMesPrimero,
+    filasClientesSoloMesSegundo,
+    metricBTrasVolNuevosPlan.ventaTon,
+  ]);
+
   const metricBResumen = useMemo(() => {
     const extraGasto = nuevosClientesPlan
       .filter(nuevaFilaCuentaEnForecastMes)
@@ -2063,7 +2313,7 @@ export default function ArrClient() {
       op0 != null && Number.isFinite(op0) ? op0 + extraOp : op0;
     const descSigned =
       isArrPlanRoute && descuentoSignedPlanPonderado != null
-        ? descuentoSignedPlanPonderado
+        ? descuentoSignedPlanPonderado + descSimDeltaParaPlan
         : metricBTrasVolNuevosPlan.descuentoSigned;
     return {
       ...metricBTrasVolNuevosPlan,
@@ -2079,6 +2329,7 @@ export default function ArrClient() {
     nuevosKgPlanManuales,
     isArrPlanRoute,
     descuentoSignedPlanPonderado,
+    descSimDeltaParaPlan,
     hgPlanResumenMesB.hgDisplay,
     hgPlanResumenMesB.hgDinero,
   ]);
@@ -2148,7 +2399,8 @@ export default function ArrClient() {
         descKg: n.descKg,
         hgCliente: n.hgCliente,
         hgCompra: n.hgCompra,
-      }))
+      })),
+      clientesDescForecastSim
     );
   }, [
     clientesB?.historico,
@@ -2157,6 +2409,7 @@ export default function ArrClient() {
     metricBResumen,
     clientesExcluirVentaForecast,
     clientesConVentaForecastSim,
+    clientesDescForecastSim,
     nuevosKgPlanManuales,
   ]);
 
@@ -2188,6 +2441,7 @@ export default function ArrClient() {
       mesBForecastUi &&
       (Object.keys(clientesExcluirVentaForecast).length > 0 ||
         Object.keys(clientesConVentaForecastSim).length > 0 ||
+        Object.keys(clientesDescForecastSim).length > 0 ||
         nuevosClientesPlan.some(nuevaFilaCuentaEnForecastMes));
     if (hayAjusteForecast && rentabilidadArrBAjustadaForecast != null) {
       return rentabilidadArrBAjustadaForecast;
@@ -2198,6 +2452,7 @@ export default function ArrClient() {
     clientesB,
     clientesExcluirVentaForecast,
     clientesConVentaForecastSim,
+    clientesDescForecastSim,
     nuevosClientesPlan,
     nuevosFilasFormulasPlan,
     rentabilidadArrBAjustadaForecast,
@@ -2216,25 +2471,41 @@ export default function ArrClient() {
       ingresoTabla: number | null;
       soloNuevo: boolean;
     }[] = [];
+    const descOverride = (cli: string, base: number | null): number | null => {
+      const v = clientesDescForecastSim[cli];
+      return v != null && Number.isFinite(v) ? v : base;
+    };
     for (const r of filasClientesMesPrimero) {
       const vb = ventaBMesBConSimMap(r, clientesConVentaForecastSim);
       const sim = clientesConVentaForecastSim[r.cliente];
+      const descBase = sim ? (sim.descKg ?? r.descB) : r.descB;
       out.push({
         cliente: r.cliente,
         ventaKg: vb ?? 0,
-        descKg: sim ? (sim.descKg ?? r.descB) : r.descB,
-        ingresoTabla: ingresoBMesBConSimMap(r, clientesConVentaForecastSim, metricBResumen),
+        descKg: descOverride(r.cliente, descBase),
+        ingresoTabla: ingresoBMesBConSimMap(
+          r,
+          clientesConVentaForecastSim,
+          metricBResumen,
+          clientesDescForecastSim
+        ),
         soloNuevo: false,
       });
     }
     for (const r of filasClientesSoloMesSegundo) {
       const vb = ventaBMesBConSimMap(r, clientesConVentaForecastSim);
       const sim = clientesConVentaForecastSim[r.cliente];
+      const descBase = sim ? (sim.descKg ?? r.descB) : r.descB;
       out.push({
         cliente: r.cliente,
         ventaKg: vb ?? 0,
-        descKg: sim ? (sim.descKg ?? r.descB) : r.descB,
-        ingresoTabla: ingresoBMesBConSimMap(r, clientesConVentaForecastSim, metricBResumen),
+        descKg: descOverride(r.cliente, descBase),
+        ingresoTabla: ingresoBMesBConSimMap(
+          r,
+          clientesConVentaForecastSim,
+          metricBResumen,
+          clientesDescForecastSim
+        ),
         soloNuevo: true,
       });
     }
@@ -2243,6 +2514,7 @@ export default function ArrClient() {
     filasClientesMesPrimero,
     filasClientesSoloMesSegundo,
     clientesConVentaForecastSim,
+    clientesDescForecastSim,
     metricBResumen,
   ]);
 
@@ -2340,6 +2612,7 @@ export default function ArrClient() {
       const sClientesByKey = slice.clientesByKey;
       const sExcluir = slice.clientesExcluirVentaForecast;
       const sConVenta = slice.clientesConVentaForecastSim;
+      const sDescSim = slice.clientesDescForecastSim;
       const sNuevos = slice.nuevosClientesPlan;
       const sNuevosMan = sNuevos.filter(
         (n) => esNuevoKgPlanManual(n) && nuevaFilaCuentaEnForecastMes(n)
@@ -2445,7 +2718,15 @@ export default function ArrClient() {
       }
 
       const metricBTrasEx = applyExclusionsToMetricB(metB, clientesB0, filasPrimero, filasSolo, sExcluir);
-      const metricBTrasCV = applyConVentaSimuladaToMetricB(metricBTrasEx, sConVenta);
+      const metricBTrasDescSimExport = applyDescuentoSimToMetricB(
+        metricBTrasEx,
+        clientesB0,
+        filasPrimero,
+        filasSolo,
+        sExcluir,
+        sDescSim
+      );
+      const metricBTrasCV = applyConVentaSimuladaToMetricB(metricBTrasDescSimExport, sConVenta);
       const metricBTrasNuevos = applyExtraKgDescChunksToMetricB(
         metricBTrasCV,
         sNuevosMan.map((n) => ({ kg: n.kg, descKg: n.descKg }))
@@ -2488,7 +2769,27 @@ export default function ArrClient() {
       );
       let metricBResumenFinal: ResumenMesMetrics = metricBResumen0;
       if (slice === wsPlan && descPlanExport != null) {
-        metricBResumenFinal = { ...metricBResumenFinal, descuentoSigned: descPlanExport };
+        // En ruta Plan, la fórmula de descuento ponderado parte de `metricBarrExport` (ARR puro),
+        // por lo que añadimos manualmente el delta de la simulación de descuento por cliente.
+        let descSimDelta = 0;
+        const planB = metricBTrasNuevos.ventaTon;
+        if (planB != null && Number.isFinite(planB) && planB > 0 && sDescSim) {
+          let numer = 0;
+          for (const row of [...filasPrimero, ...filasSolo]) {
+            if (sExcluir[row.cliente]) continue;
+            const sim = sDescSim[row.cliente];
+            if (sim == null || !Number.isFinite(sim)) continue;
+            const kg = row.ventaB;
+            if (kg == null || !Number.isFinite(kg) || kg <= 0) continue;
+            const orig = row.descB != null && Number.isFinite(row.descB) ? row.descB : 0;
+            numer += (orig - sim) * kg;
+          }
+          descSimDelta = numer / (planB * 1000);
+        }
+        metricBResumenFinal = {
+          ...metricBResumenFinal,
+          descuentoSigned: descPlanExport + descSimDelta,
+        };
       }
       if (slice === wsPlan && clientesB0 && !clientesB0.historico) {
         const hgPlan = hgPlanForecastMesBRuta(
@@ -2527,7 +2828,8 @@ export default function ArrClient() {
                 descKg: n.descKg,
                 hgCliente: n.hgCliente,
                 hgCompra: n.hgCompra,
-              }))
+              })),
+              sDescSim
             );
 
       const rentMostA0 = rentabilidadResumenPorMes(sSelA, rentArrA0, metA.rentabilidadImporte);
@@ -2555,6 +2857,7 @@ export default function ArrClient() {
           mesBForecastUI &&
           (Object.keys(sExcluir).length > 0 ||
             Object.keys(sConVenta).length > 0 ||
+            Object.keys(sDescSim).length > 0 ||
             sNuevos.some(nuevaFilaCuentaEnForecastMes));
         if (hayAjusteForecast && rentAdjB0 != null) return rentAdjB0;
         return rentabilidadResumenPorMes(sSelB, rentArrB0, metB.rentabilidadImporte);
@@ -2591,12 +2894,15 @@ export default function ArrClient() {
         headerIngresoA: headerIngresoA0,
         headerIngresoB: headerIngresoB0,
         filasClientesMesPrimero: filasPrimero.map((r) => {
+          const simDescVal = sDescSim?.[r.cliente];
+          const descBExport =
+            simDescVal != null && Number.isFinite(simDescVal) ? simDescVal : r.descB;
           const base = {
             cliente: r.cliente,
             ventaA: r.ventaA,
             ventaB: ventaBMesBConSimMap(r, sConVenta),
             descA: r.descA,
-            descB: r.descB,
+            descB: descBExport,
             ...(slice === wsPlan
               ? {
                   sinVentaForecast: Boolean(sExcluir[r.cliente]),
@@ -2633,13 +2939,16 @@ export default function ArrClient() {
                   const sim = sConVenta[cli];
                   return sim != null && Number.isFinite(sim.kg) && sim.kg > 0 ? sim.kg : 0;
                 })();
-            const sim = sConVenta[cli];
+            const simCV = sConVenta[cli];
+            const simDesc = sDescSim?.[cli];
             descKg =
-              sim != null && sim.descKg != null && Number.isFinite(sim.descKg)
-                ? sim.descKg
-                : rB.descuento_kg != null && Number.isFinite(rB.descuento_kg)
-                  ? rB.descuento_kg
-                  : null;
+              simDesc != null && Number.isFinite(simDesc)
+                ? simDesc
+                : simCV != null && simCV.descKg != null && Number.isFinite(simCV.descKg)
+                  ? simCV.descKg
+                  : rB.descuento_kg != null && Number.isFinite(rB.descuento_kg)
+                    ? rB.descuento_kg
+                    : null;
           }
           return {
             ...base,
@@ -2650,12 +2959,15 @@ export default function ArrClient() {
           };
         }),
         filasClientesSoloMesSegundo: filasSolo.map((r) => {
+          const simDescVal = sDescSim?.[r.cliente];
+          const descBExport =
+            simDescVal != null && Number.isFinite(simDescVal) ? simDescVal : r.descB;
           const base = {
             cliente: r.cliente,
             ventaA: r.ventaA,
             ventaB: ventaBMesBConSimMap(r, sConVenta),
             descA: r.descA,
-            descB: r.descB,
+            descB: descBExport,
             ...(slice === wsPlan
               ? {
                   sinVentaForecast: Boolean(sExcluir[r.cliente]),
@@ -2692,13 +3004,16 @@ export default function ArrClient() {
                   const sim = sConVenta[cli];
                   return sim != null && Number.isFinite(sim.kg) && sim.kg > 0 ? sim.kg : 0;
                 })();
-            const sim = sConVenta[cli];
+            const simCV = sConVenta[cli];
+            const simDesc = sDescSim?.[cli];
             descKg =
-              sim != null && sim.descKg != null && Number.isFinite(sim.descKg)
-                ? sim.descKg
-                : rB.descuento_kg != null && Number.isFinite(rB.descuento_kg)
-                  ? rB.descuento_kg
-                  : null;
+              simDesc != null && Number.isFinite(simDesc)
+                ? simDesc
+                : simCV != null && simCV.descKg != null && Number.isFinite(simCV.descKg)
+                  ? simCV.descKg
+                  : rB.descuento_kg != null && Number.isFinite(rB.descuento_kg)
+                    ? rB.descuento_kg
+                    : null;
           }
           return {
             ...base,
@@ -2803,8 +3118,22 @@ export default function ArrClient() {
   }
 
   function ingresoBMesBConSim(row: ClienteTablaRow): number | null {
-    return ingresoBMesBConSimMap(row, clientesConVentaForecastSim, metricBResumen);
+    return ingresoBMesBConSimMap(
+      row,
+      clientesConVentaForecastSim,
+      metricBResumen,
+      clientesDescForecastSim
+    );
   }
+
+  /** Descuento $/kg del mes B aplicando la simulación del usuario (o el valor original). */
+  function descBConSim(row: ClienteTablaRow): number | null {
+    const k = row.cliente;
+    const v = clientesDescForecastSim[k];
+    if (v != null && Number.isFinite(v)) return v;
+    return row.descB;
+  }
+
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-950 text-slate-100">
@@ -3190,7 +3519,14 @@ export default function ArrClient() {
                       <td className="px-3 py-2 text-center text-slate-200">{n.subcategoria || "—"}</td>
                       <td className="px-3 py-2 text-center text-slate-200">{n.responsable || "—"}</td>
                       <td className="px-3 py-2 text-center tabular-nums">{fmtNum(n.kg, 0)}</td>
-                      <td className="px-3 py-2 text-center tabular-nums">{fmtNum(n.descKg, 2)}</td>
+                      <td className="px-3 py-2 text-center tabular-nums">
+                        {fmtNum(
+                          n.origen === "sin_venta"
+                            ? -Math.abs(n.descKg)
+                            : n.descKg,
+                          2
+                        )}
+                      </td>
                       <td className="px-3 py-2 text-center tabular-nums">${fmtNum(n.gastoMxn, 0)}</td>
                       <td className="px-3 py-2 text-center tabular-nums text-slate-200">
                         {n.hgCliente != null && Number.isFinite(n.hgCliente)
@@ -3335,7 +3671,14 @@ export default function ArrClient() {
                 <th className={`px-3 py-2 text-center text-[0.7rem] font-semibold uppercase tracking-wide ${GC.desc}`}>
                   {headerDescA}
                 </th>
-                <th className={`px-3 py-2 text-center text-[0.7rem] font-semibold uppercase tracking-wide ${GC.desc}`}>
+                <th
+                  className={`px-3 py-2 text-center text-[0.7rem] font-semibold uppercase tracking-wide ${GC.desc}`}
+                  title={
+                    showExcluirForecastCheckbox
+                      ? "Descuento $/kg proyectado. Edita cada celda para simular un cambio y ver afectación financiera (ingreso, descuento ponderado y rentabilidad)."
+                      : undefined
+                  }
+                >
                   {headerDescB}
                 </th>
                 <th className={`px-3 py-2 text-center text-[0.7rem] font-semibold uppercase tracking-wide ${GC.desc} ${GC.deltaTh}`}>
@@ -3446,12 +3789,40 @@ export default function ArrClient() {
                     {row.descA != null ? fmtNum(row.descA, 2) : <span className="text-slate-500">—</span>}
                   </td>
                   <td className={`px-3 py-2 text-center tabular-nums ${GC.desc}`}>
-                    {row.descB != null ? fmtNum(row.descB, 2) : <span className="text-slate-500">—</span>}
+                    <DescBEditableCell
+                      cliente={row.cliente}
+                      orig={row.descB}
+                      sim={
+                        clientesDescForecastSim[row.cliente] != null &&
+                        Number.isFinite(clientesDescForecastSim[row.cliente])
+                          ? clientesDescForecastSim[row.cliente]
+                          : null
+                      }
+                      editable={
+                        showExcluirForecastCheckbox &&
+                        !clientesExcluirVentaForecast[row.cliente] &&
+                        row.ventaB != null &&
+                        row.ventaB > 0
+                      }
+                      onCommit={setClienteDescForecastSim}
+                    />
                   </td>
                   <td className={`px-3 py-2 text-center tabular-nums ${GC.desc} ${GC.deltaCell}`}>
-                    <span className={row.deltaDesc > 0 ? deltaValorCajaRoja : undefined}>
-                      {fmtNum(row.deltaDesc, 2)}
-                    </span>
+                    {(() => {
+                      const dB = descBConSim(row);
+                      const dA = row.descA;
+                      const delta = (dB ?? 0) - (dA ?? 0);
+                      const simOn = clientesDescForecastSim[row.cliente] != null;
+                      return (
+                        <span
+                          className={`${delta > 0 ? deltaValorCajaRoja : ""} ${
+                            simOn ? "text-amber-300" : ""
+                          }`}
+                        >
+                          {fmtNum(delta, 2)}
+                        </span>
+                      );
+                    })()}
                   </td>
                   <td className={`px-3 py-2 text-center tabular-nums ${GC.ingreso}`}>
                     {row.ingresoA != null ? `$${fmtNum(row.ingresoA, 0)}` : (
@@ -3461,12 +3832,15 @@ export default function ArrClient() {
                   <td className={`px-3 py-2 text-center tabular-nums ${GC.ingreso}`}>
                     {(() => {
                       const ib = ingresoBMesBConSim(row);
+                      const simDesc = clientesDescForecastSim[row.cliente] != null;
+                      const simCv = clientesConVentaForecastSim[row.cliente];
+                      const cls = simDesc
+                        ? "text-amber-300"
+                        : simCv
+                          ? "text-emerald-200"
+                          : undefined;
                       return ib != null ? (
-                        <span
-                          className={clientesConVentaForecastSim[row.cliente] ? "text-emerald-200" : undefined}
-                        >
-                          ${fmtNum(ib, 0)}
-                        </span>
+                        <span className={cls}>${fmtNum(ib, 0)}</span>
                       ) : (
                         <span className="text-slate-500">—</span>
                       );
@@ -3565,23 +3939,48 @@ export default function ArrClient() {
                   </td>
                   <td className={`px-3 py-2 text-center tabular-nums text-slate-400 ${GC.desc}`}>{fmtNum(0, 2)}</td>
                   <td className={`px-3 py-2 text-center tabular-nums ${GC.desc}`}>
-                    {row.descB != null ? fmtNum(row.descB, 2) : <span className="text-slate-500">—</span>}
+                    <DescBEditableCell
+                      cliente={row.cliente}
+                      orig={row.descB}
+                      sim={
+                        clientesDescForecastSim[row.cliente] != null &&
+                        Number.isFinite(clientesDescForecastSim[row.cliente])
+                          ? clientesDescForecastSim[row.cliente]
+                          : null
+                      }
+                      editable={showExcluirForecastCheckbox && !clientesExcluirVentaForecast[row.cliente]}
+                      onCommit={setClienteDescForecastSim}
+                    />
                   </td>
                   <td className={`px-3 py-2 text-center tabular-nums ${GC.desc} ${GC.deltaCell}`}>
-                    <span className={row.deltaDesc > 0 ? deltaValorCajaRoja : undefined}>
-                      {fmtNum(row.deltaDesc, 2)}
-                    </span>
+                    {(() => {
+                      const dB = descBConSim(row);
+                      const delta = (dB ?? 0) - 0;
+                      const simOn = clientesDescForecastSim[row.cliente] != null;
+                      return (
+                        <span
+                          className={`${delta > 0 ? deltaValorCajaRoja : ""} ${
+                            simOn ? "text-amber-300" : ""
+                          }`}
+                        >
+                          {fmtNum(delta, 2)}
+                        </span>
+                      );
+                    })()}
                   </td>
                   <td className={`px-3 py-2 text-center tabular-nums text-slate-400 ${GC.ingreso}`}>${fmtNum(0, 0)}</td>
                   <td className={`px-3 py-2 text-center tabular-nums ${GC.ingreso}`}>
                     {(() => {
                       const ib = ingresoBMesBConSim(row);
+                      const simDesc = clientesDescForecastSim[row.cliente] != null;
+                      const simCv = clientesConVentaForecastSim[row.cliente];
+                      const cls = simDesc
+                        ? "text-amber-300"
+                        : simCv
+                          ? "text-emerald-200"
+                          : undefined;
                       return ib != null ? (
-                        <span
-                          className={clientesConVentaForecastSim[row.cliente] ? "text-emerald-200" : undefined}
-                        >
-                          ${fmtNum(ib, 0)}
-                        </span>
+                        <span className={cls}>${fmtNum(ib, 0)}</span>
                       ) : (
                         <span className="text-slate-500">—</span>
                       );
