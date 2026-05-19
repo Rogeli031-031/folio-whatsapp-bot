@@ -579,8 +579,10 @@ function descuentoPlanForecastSegunArrYB6(
   for (const n of nuevosMan) {
     const kg = Number(n.kg);
     if (!Number.isFinite(kg) || kg <= 0) continue;
-    const d = descKgPlanConSigno(n.descKg, n.origen);
-    extra += (d * kg) / 1000;
+    const F = descKgPlanConSigno(n.descKg, n.origen);
+    const term = (F * kg) / 1000;
+    // Excel D6: sin venta `-(F*E/1000)`; manual `+(F*E/1000)` (F con signo real en celda).
+    extra += n.origen === "sin_venta" ? -term : term;
   }
   return (arrD * arrB + extra) / planB;
 }
@@ -2570,6 +2572,7 @@ export default function ArrClient() {
         }))
       );
       if (rf != null && Number.isFinite(rf)) return rf;
+      return rentabilidadResumenPorMes(selB, rentabilidadArrB, metricB.rentabilidadImporte);
     }
 
     const hayAjusteForecast =
@@ -2985,6 +2988,7 @@ export default function ArrClient() {
               }))
           );
           if (rf != null && Number.isFinite(rf)) return rf;
+          return rentabilidadResumenPorMes(sSelB, rentArrB0, metB.rentabilidadImporte);
         }
         const hayAjusteForecast =
           mesBForecastUI &&
