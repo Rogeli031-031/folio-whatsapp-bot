@@ -46,12 +46,20 @@ function cellNum(v: number | null | undefined): number | null {
 const NUM_FMT_DESC_KG = "#,##0.00";
 
 /** Desc. $/kg con signo algebraico (C+F, ingreso, D6): sin venta y magnitudes positivas → negativo. */
+export type ArrPlanRowOrigenExport =
+  | "manual"
+  | "sin_venta"
+  | "con_venta"
+  | "arr_quita"
+  | "edicion_forecast"
+  | "venta_editada";
+
 export function descKgPlanConSigno(
   descKg: number,
-  origen?: "manual" | "sin_venta" | "con_venta" | "venta_editada"
+  origen?: ArrPlanRowOrigenExport
 ): number {
   const d = Number.isFinite(descKg) ? descKg : 0;
-  if (origen === "sin_venta") return -Math.abs(d);
+  if (origen === "sin_venta" || origen === "arr_quita") return -Math.abs(d);
   if (d > 0) return -Math.abs(d);
   return d;
 }
@@ -59,7 +67,7 @@ export function descKgPlanConSigno(
 /** Valor y formato de Desc. $/kg en «Nuevos clientes (plan)». */
 function descKgNuevoClienteCell(
   descKg: number,
-  origen?: "manual" | "sin_venta" | "con_venta" | "venta_editada"
+  origen?: ArrPlanRowOrigenExport
 ): { value: number | null; numFmt: string } {
   if (descKg == null || Number.isNaN(descKg)) {
     return { value: null, numFmt: NUM_FMT_DESC_KG };
@@ -127,7 +135,7 @@ export type ArrExportOptions = {
     hgCompra?: number | null;
     comentarios?: string;
     /** `sin_venta`: resta en fórmulas D6/I6/B8; resto suma (manual / con_venta). */
-    origen?: "manual" | "sin_venta" | "con_venta" | "venta_editada";
+    origen?: ArrPlanRowOrigenExport;
     /** Si false, la fila no entra en D6/H6 del forecast (solo plan futuro). */
     incluirEnForecastMes?: boolean;
   }[];
@@ -367,9 +375,11 @@ async function downloadArrDashboardExcelInternal(
       const nv = nuevosClientesPlan[i];
       if (nv.incluirEnForecastMes === false) continue;
       const r = firstNuevoDataRow + i;
-      const signD6 = nv.origen === "sin_venta" ? "-" : "+";
+      const signD6 =
+        nv.origen === "sin_venta" || nv.origen === "arr_quita" ? "-" : "+";
       partsD6.push(`${signD6}(F${r}*E${r}/1000)`);
-      const signHg = nv.origen === "sin_venta" ? "-" : "+";
+      const signHg =
+        nv.origen === "sin_venta" || nv.origen === "arr_quita" ? "-" : "+";
       partsH6Terms.push(
         `${signHg}((IF(ISBLANK(H${r}),ARR!H$${MES_B_R},H${r})+IF(ISBLANK(I${r}),ARR!I$${MES_B_R},I${r}))*E${r}/100)`
       );

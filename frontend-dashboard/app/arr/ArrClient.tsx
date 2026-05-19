@@ -100,11 +100,19 @@ function normalizeNuevoClientePlanRow(raw: unknown): NuevoClientePlanRow | null 
   const idStr = String(id);
   let origen: PlanRowOrigen | undefined;
   const or = o.origen;
-  if (or === "sin_venta" || or === "con_venta" || or === "manual" || or === "venta_editada")
-    origen = or;
+  if (
+    or === "sin_venta" ||
+    or === "con_venta" ||
+    or === "manual" ||
+    or === "arr_quita" ||
+    or === "edicion_forecast" ||
+    or === "venta_editada"
+  )
+    origen = or === "venta_editada" ? "edicion_forecast" : or;
   else if (idStr.startsWith("plan-sin-venta:")) origen = "sin_venta";
   else if (idStr.startsWith("plan-con-venta:")) origen = "con_venta";
-  else if (idStr.startsWith("plan-venta-editada:")) origen = "venta_editada";
+  else if (idStr.startsWith("plan-arr-quita:")) origen = "arr_quita";
+  else if (idStr.startsWith("plan-venta-editada:")) origen = "edicion_forecast";
   const incluirEnForecastMes = o.incluirEnForecastMes === false ? false : true;
   return {
     id,
@@ -154,7 +162,14 @@ const ARR_PLAN_QUERY = "arr_plan";
 
 type ArrWorkspaceId = "base" | "plan";
 
-export type PlanRowOrigen = "manual" | "sin_venta" | "con_venta" | "venta_editada";
+export type PlanRowOrigen =
+  | "manual"
+  | "sin_venta"
+  | "con_venta"
+  /** Resta en D6 el kg/desc ARR del cliente (como Sin venta), sin casilla «Sin venta». */
+  | "arr_quita"
+  /** Suma en D6 los kg/desc editados (como Nuevo cliente manual), sin duplicar kg en totales. */
+  | "edicion_forecast";
 
 export type NuevoClientePlanRow = {
   id: string;
@@ -177,7 +192,8 @@ export type NuevoClientePlanRow = {
   comentarios: string;
   /**
    * `manual`: alta en plan (suma kg al forecast).
-   * `sin_venta` / `con_venta` / `venta_editada`: listado vinculado a la tabla (no duplicar kg en totales).
+   * `sin_venta` / `con_venta`: listado vinculado a casillas de la tabla.
+   * `arr_quita` + `edicion_forecast`: par al editar venta/desc. forecast (D6 sin venta + nuevo).
    */
   origen?: PlanRowOrigen;
   /**
@@ -194,7 +210,8 @@ function nuevaFilaCuentaEnForecastMes(n: Pick<NuevoClientePlanRow, "incluirEnFor
 
 const PLAN_ID_SIN_VENTA = "plan-sin-venta:";
 const PLAN_ID_CON_VENTA = "plan-con-venta:";
-const PLAN_ID_VENTA_EDITADA = "plan-venta-editada:";
+const PLAN_ID_ARR_QUITA = "plan-arr-quita:";
+const PLAN_ID_EDICION_FORECAST = "plan-venta-editada:";
 
 function esNuevoKgPlanManual(n: Pick<NuevoClientePlanRow, "origen">): boolean {
   return !n.origen || n.origen === "manual";
@@ -208,13 +225,45 @@ function idPlanRowConVenta(cliente: string): string {
   return `${PLAN_ID_CON_VENTA}${encodeURIComponent(cliente.trim())}`;
 }
 
-function idPlanRowVentaEditada(cliente: string): string {
-  return `${PLAN_ID_VENTA_EDITADA}${encodeURIComponent(cliente.trim())}`;
+function idPlanRowArrQuita(cliente: string): string {
+  return `${PLAN_ID_ARR_QUITA}${encodeURIComponent(cliente.trim())}`;
 }
 
-/** Filas de plan que entran en fórmulas Excel D6/H6 (excluye venta editada: el delta ya está en el resumen). */
+function idPlanRowEdicionForecast(cliente: string): string {
+  return `${PLAN_ID_EDICION_FORECAST}${encodeURIComponent(cliente.trim())}`;
+}
+
+/** Filas que entran en fórmulas Excel D6/H6 (incluye arr_quita y edicion_forecast). */
 function filaPlanEntraEnFormulaD6(n: Pick<NuevoClientePlanRow, "origen" | "incluirEnForecastMes">): boolean {
-  return nuevaFilaCuentaEnForecastMes(n) && n.origen !== "venta_editada";
+  if (!nuevaFilaCuentaEnForecastMes(n)) return false;
+  const o = n.origen;
+  return (
+    o === "manual" ||
+    o === "sin_venta" ||
+    o === "con_venta" ||
+    o === "arr_quita" ||
+    o === "edicion_forecast"
+  );
+}
+
+function clienteConEdicionForecastEnPlan(
+  nuevos: NuevoClientePlanRow[],
+  cliente: string
+): boolean {
+  const k = cliente.trim();
+  return nuevos.some(
+    (n) => n.id === idPlanRowEdicionForecast(k) || n.id === idPlanRowArrQuita(k)
+  );
+}
+
+function quitarFilasEdicionForecastDePlan(
+  nuevos: NuevoClientePlanRow[],
+  cliente: string
+): NuevoClientePlanRow[] {
+  const k = cliente.trim();
+  return nuevos.filter(
+    (n) => n.id !== idPlanRowEdicionForecast(k) && n.id !== idPlanRowArrQuita(k)
+  );
 }
 
 function clienteDesdePlanForecastId(id: string, prefix: string): string | null {
@@ -511,7 +560,8 @@ function ingresoMarginalPlanNuevoRow(
   if (h == null || !Number.isFinite(h) || ip == null || !Number.isFinite(ip)) return null;
   const d = descKgPlanConSigno(descKg, origen);
   const raw = kg * (margenMes + d) + (h + ip) * kg * (i6Arr / 100);
-  const sign = origen === "sin_venta" ? -1 : 1;
+  const sign =
+    origen === "sin_venta" || origen === "arr_quita" ? -1 : 1;
   return Math.round(sign * raw);
 }
 
@@ -597,10 +647,14 @@ function descuentoPlanForecastSegunArrYB6(
   for (const n of nuevosMan) {
     const kg = Number(n.kg);
     if (!Number.isFinite(kg) || kg <= 0) continue;
-    const F = descKgPlanConSigno(n.descKg, n.origen);
+    const origenD6 =
+      n.origen === "arr_quita" ? ("sin_venta" as const) : n.origen;
+    const F = descKgPlanConSigno(n.descKg, origenD6);
     const term = (F * kg) / 1000;
-    // Excel D6: sin venta `-(F*E/1000)`; manual `+(F*E/1000)` (F con signo real en celda).
-    extra += n.origen === "sin_venta" ? -term : term;
+    // D6: sin venta / arr_quita `-(F*E/1000)`; manual / con venta / edicion_forecast `+(F*E/1000)`.
+    const resta =
+      n.origen === "sin_venta" || n.origen === "arr_quita";
+    extra += resta ? -term : term;
   }
   return (arrD * arrB + extra) / planB;
 }
@@ -1188,7 +1242,39 @@ function buildPlanRowSinVenta(
   };
 }
 
-function buildPlanRowVentaEditada(
+/** Resta en D6 el kg/desc del cliente tal como en ARR (misma lógica que Sin venta, sin excluir volumen). */
+function buildPlanRowArrQuita(
+  row: ClienteTablaRow,
+  arr: ArrClienteMesRow | null
+): NuevoClientePlanRow | null {
+  const kg =
+    row.ventaB != null && Number.isFinite(row.ventaB) && row.ventaB > 0
+      ? Math.round(row.ventaB)
+      : 0;
+  if (kg <= 0) return null;
+  const descKg =
+    row.descB != null && Number.isFinite(row.descB) ? row.descB : 0;
+  const { categoria, subcategoria } = planCategoriaFromArr(arr);
+  return {
+    id: idPlanRowArrQuita(row.cliente),
+    nombre: row.cliente.trim(),
+    kg,
+    descKg,
+    gastoMxn: 0,
+    responsable: "",
+    responsableId: null,
+    categoria,
+    subcategoria,
+    hgCliente: null,
+    hgCompra: null,
+    comentarios: "",
+    origen: "arr_quita",
+    incluirEnForecastMes: true,
+  };
+}
+
+/** Suma en D6 los kg/desc editados (misma lógica que Nuevo cliente manual en D6). */
+function buildPlanRowEdicionForecast(
   row: ClienteTablaRow,
   newKg: number,
   arr: ArrClienteMesRow | null,
@@ -1203,7 +1289,7 @@ function buildPlanRowVentaEditada(
         : 0;
   const { categoria, subcategoria } = planCategoriaFromArr(arr);
   return {
-    id: idPlanRowVentaEditada(row.cliente),
+    id: idPlanRowEdicionForecast(row.cliente),
     nombre: row.cliente.trim(),
     kg: kg > 0 ? kg : 1,
     descKg,
@@ -1215,9 +1301,24 @@ function buildPlanRowVentaEditada(
     hgCliente: null,
     hgCompra: null,
     comentarios: "",
-    origen: "venta_editada",
+    origen: "edicion_forecast",
     incluirEnForecastMes: true,
   };
+}
+
+function upsertFilasEdicionForecastEnPlan(
+  nuevos: NuevoClientePlanRow[],
+  rowT: ClienteTablaRow,
+  arr: ArrClienteMesRow | null,
+  newKg: number,
+  newDesc: number
+): NuevoClientePlanRow[] {
+  const k = rowT.cliente.trim();
+  let out = quitarFilasEdicionForecastDePlan(nuevos, k);
+  const quita = buildPlanRowArrQuita(rowT, arr);
+  if (quita) out = [...out, quita];
+  out = [...out, buildPlanRowEdicionForecast(rowT, newKg, arr, newDesc)];
+  return out;
 }
 
 function buildPlanRowConVenta(
@@ -1367,7 +1468,9 @@ function applyDescuentoSimToMetricB(
   filasSolo: ClienteTablaRow[],
   excluir: Record<string, true> | undefined,
   descSim: Record<string, number> | undefined,
-  ventaSim?: Record<string, number>
+  ventaSim?: Record<string, number>,
+  /** Clientes con par arr_quita+edicion_forecast: el desc. ponderado va por D6, no por este delta. */
+  nuevosPlan?: NuevoClientePlanRow[]
 ): ResumenMesMetrics {
   if (!clientesB || clientesB.historico) return metricB;
   if (!descSim || Object.keys(descSim).length === 0) return metricB;
@@ -1381,6 +1484,7 @@ function applyDescuentoSimToMetricB(
   let deltaNum = 0;
   for (const row of [...filasPrimero, ...filasSolo]) {
     if (excluir?.[row.cliente]) continue;
+    if (nuevosPlan && clienteConEdicionForecastEnPlan(nuevosPlan, row.cliente)) continue;
     const sim = descSim[row.cliente];
     if (sim == null || !Number.isFinite(sim)) continue;
     const vs = ventaSim?.[row.cliente];
@@ -1659,38 +1763,6 @@ export default function ArrClient() {
     [isArrPlanRoute, clienteInactivoForecastB, empresa]
   );
 
-  /**
-   * Setea (o limpia) el descuento simulado para un cliente en el mes forecast.
-   * `valor` se interpreta como magnitud positiva (igual que `row.descB`). `null` limpia.
-   */
-  const setClienteDescForecastSim = useCallback(
-    (cliente: string, valor: number | null) => {
-      const k = cliente.trim();
-      if (!k) return;
-      const patch = (s: ArrWorkspaceSlice) => {
-        const next = { ...s.clientesDescForecastSim };
-        if (valor == null || !Number.isFinite(valor)) {
-          if (!(k in next)) return s;
-          delete next[k];
-        } else {
-          if (next[k] === valor) return s;
-          next[k] = valor;
-        }
-        let nuevos = s.nuevosClientesPlan;
-        if (isArrPlanRoute && s.clientesVentaForecastSim[k] != null && valor != null) {
-          const idVe = idPlanRowVentaEditada(k);
-          nuevos = nuevos.map((n) =>
-            n.id === idVe ? { ...n, descKg: valor } : n
-          );
-        }
-        return { ...s, clientesDescForecastSim: next, nuevosClientesPlan: nuevos };
-      };
-      if (isArrPlanRoute) setWsPlan(patch);
-      else setWsBase(patch);
-    },
-    [isArrPlanRoute]
-  );
-
   const cerrarModalPlanTrasGuardar = useCallback(() => {
     setShowNuevoClientePlan(false);
     setClientePlanEditando(null);
@@ -1894,6 +1966,7 @@ export default function ArrClient() {
 
   const quitarNuevoClientePlan = useCallback((id: string) => {
     setWsPlan((s) => {
+      let nuevos = s.nuevosClientesPlan;
       let ex = s.clientesExcluirVentaForecast;
       let cv = s.clientesConVentaForecastSim;
       let ventaSim = s.clientesVentaForecastSim;
@@ -1909,18 +1982,21 @@ export default function ArrClient() {
         delete nx[cliCv];
         cv = nx;
       }
-      const cliVe = clienteDesdePlanForecastId(id, PLAN_ID_VENTA_EDITADA);
-      if (cliVe) {
+      const cliEq =
+        clienteDesdePlanForecastId(id, PLAN_ID_EDICION_FORECAST) ??
+        clienteDesdePlanForecastId(id, PLAN_ID_ARR_QUITA);
+      if (cliEq) {
         const nx = { ...ventaSim };
-        delete nx[cliVe];
+        delete nx[cliEq];
         ventaSim = nx;
+        nuevos = quitarFilasEdicionForecastDePlan(s.nuevosClientesPlan, cliEq);
       }
       return {
         ...s,
         clientesExcluirVentaForecast: ex,
         clientesConVentaForecastSim: cv,
         clientesVentaForecastSim: ventaSim,
-        nuevosClientesPlan: s.nuevosClientesPlan.filter((n) => n.id !== id),
+        nuevosClientesPlan: nuevos.filter((n) => n.id !== id),
       };
     });
   }, []);
@@ -2401,7 +2477,61 @@ export default function ArrClient() {
     return { filasClientesMesPrimero: primero, filasClientesSoloMesSegundo: soloSegundo };
   }, [empresa, clientesA, clientesB, selA, selB, dataByKey]);
 
-  /** Override de kg proyectados en mes forecast (solo ARR Plan); crea fila en «Nuevos clientes (plan)». */
+  /**
+   * Setea (o limpia) el descuento simulado para un cliente en el mes forecast.
+   * En ARR Plan crea/actualiza el par arr_quita + edicion_forecast (D6: sin venta + nuevo cliente).
+   */
+  const setClienteDescForecastSim = useCallback(
+    (cliente: string, valor: number | null) => {
+      const k = cliente.trim();
+      if (!k) return;
+      const patch = (s: ArrWorkspaceSlice) => {
+        const next = { ...s.clientesDescForecastSim };
+        let nuevos = s.nuevosClientesPlan;
+        if (valor == null || !Number.isFinite(valor)) {
+          if (!(k in next)) {
+            if (!isArrPlanRoute || s.clientesVentaForecastSim[k] != null) return s;
+          } else {
+            delete next[k];
+          }
+          if (isArrPlanRoute && s.clientesVentaForecastSim[k] == null) {
+            nuevos = quitarFilasEdicionForecastDePlan(nuevos, k);
+          }
+        } else {
+          if (next[k] === valor && clienteConEdicionForecastEnPlan(nuevos, k)) return s;
+          next[k] = valor;
+          if (isArrPlanRoute) {
+            const rowT = findClienteTablaRowInFilas(
+              k,
+              filasClientesMesPrimero,
+              filasClientesSoloMesSegundo
+            );
+            if (rowT && rowT.ventaB != null && rowT.ventaB > 0) {
+              const ar = resolveArrClienteForPlan(clientesA, clientesB, k);
+              const kg =
+                s.clientesVentaForecastSim[k] != null &&
+                Number.isFinite(s.clientesVentaForecastSim[k])
+                  ? Math.round(s.clientesVentaForecastSim[k])
+                  : Math.round(rowT.ventaB);
+              nuevos = upsertFilasEdicionForecastEnPlan(nuevos, rowT, ar, kg, valor);
+            }
+          }
+        }
+        return { ...s, clientesDescForecastSim: next, nuevosClientesPlan: nuevos };
+      };
+      if (isArrPlanRoute) setWsPlan(patch);
+      else setWsBase(patch);
+    },
+    [
+      isArrPlanRoute,
+      filasClientesMesPrimero,
+      filasClientesSoloMesSegundo,
+      clientesA,
+      clientesB,
+    ]
+  );
+
+  /** Override de kg proyectados en mes forecast (solo ARR Plan); par arr_quita + edicion_forecast. */
   const setClienteVentaForecastSim = useCallback(
     (cliente: string, valor: number | null) => {
       const k = cliente.trim();
@@ -2409,7 +2539,6 @@ export default function ArrClient() {
       setWsPlan((s) => {
         const nextVenta = { ...s.clientesVentaForecastSim };
         let nuevos = s.nuevosClientesPlan;
-        const id = idPlanRowVentaEditada(k);
         const rowT = findClienteTablaRowInFilas(
           k,
           filasClientesMesPrimero,
@@ -2417,7 +2546,7 @@ export default function ArrClient() {
         );
         const clear = () => {
           delete nextVenta[k];
-          nuevos = nuevos.filter((n) => n.id !== id);
+          nuevos = quitarFilasEdicionForecastDePlan(nuevos, k);
         };
         if (valor == null || !Number.isFinite(valor) || valor <= 0) {
           if (!(k in s.clientesVentaForecastSim)) return s;
@@ -2430,19 +2559,25 @@ export default function ArrClient() {
           orig != null &&
           Number.isFinite(orig) &&
           orig > 0 &&
-          rounded === Math.round(orig)
+          rounded === Math.round(orig) &&
+          s.clientesDescForecastSim[k] == null
         ) {
           if (!(k in s.clientesVentaForecastSim)) return s;
           clear();
           return { ...s, clientesVentaForecastSim: nextVenta, nuevosClientesPlan: nuevos };
         }
-        if (nextVenta[k] === rounded) return s;
+        if (nextVenta[k] === rounded && clienteConEdicionForecastEnPlan(nuevos, k)) return s;
         nextVenta[k] = rounded;
         if (rowT) {
           const ar = resolveArrClienteForPlan(clientesA, clientesB, k);
-          const descOv = s.clientesDescForecastSim[k];
-          const planRow = buildPlanRowVentaEditada(rowT, rounded, ar, descOv);
-          nuevos = [...nuevos.filter((n) => n.id !== id), planRow];
+          const descOv =
+            s.clientesDescForecastSim[k] != null &&
+            Number.isFinite(s.clientesDescForecastSim[k])
+              ? s.clientesDescForecastSim[k]
+              : rowT.descB != null && Number.isFinite(rowT.descB)
+                ? rowT.descB
+                : 0;
+          nuevos = upsertFilasEdicionForecastEnPlan(nuevos, rowT, ar, rounded, descOv);
         }
         return { ...s, clientesVentaForecastSim: nextVenta, nuevosClientesPlan: nuevos };
       });
@@ -2482,23 +2617,45 @@ export default function ArrClient() {
         }
         changed = true;
       };
-      const ensureVenta = (cliente: string) => {
-        const id = idPlanRowVentaEditada(cliente);
-        if (nuevos.some((n) => n.id === id)) return;
+      const ensureEdicionForecast = (cliente: string) => {
+        if (clienteConEdicionForecastEnPlan(nuevos, cliente)) return;
         const rowT = findClienteTablaRowInFilas(cliente, primero, solo);
-        const kg = s.clientesVentaForecastSim[cliente];
-        if (!rowT || kg == null || !Number.isFinite(kg) || kg <= 0) return;
+        if (!rowT) return;
+        const kgSim = s.clientesVentaForecastSim[cliente];
+        const kg =
+          kgSim != null && Number.isFinite(kgSim) && kgSim > 0
+            ? Math.round(kgSim)
+            : rowT.ventaB != null && Number.isFinite(rowT.ventaB) && rowT.ventaB > 0
+              ? Math.round(rowT.ventaB)
+              : 0;
+        if (kg <= 0) return;
+        const hasVenta = Object.prototype.hasOwnProperty.call(
+          s.clientesVentaForecastSim,
+          cliente
+        );
+        const hasDesc = Object.prototype.hasOwnProperty.call(
+          s.clientesDescForecastSim,
+          cliente
+        );
+        if (!hasVenta && !hasDesc) return;
         const ar = resolveArrClienteForPlan(clientesA, clientesB, cliente);
-        const descOv = s.clientesDescForecastSim[cliente];
-        nuevos = [
-          ...nuevos,
-          buildPlanRowVentaEditada(rowT, kg, ar, descOv),
-        ];
+        const descOv =
+          s.clientesDescForecastSim[cliente] != null &&
+          Number.isFinite(s.clientesDescForecastSim[cliente])
+            ? s.clientesDescForecastSim[cliente]
+            : rowT.descB != null && Number.isFinite(rowT.descB)
+              ? rowT.descB
+              : 0;
+        nuevos = upsertFilasEdicionForecastEnPlan(nuevos, rowT, ar, kg, descOv);
         changed = true;
       };
       for (const k of Object.keys(s.clientesExcluirVentaForecast)) ensure(k, "sin_venta");
       for (const k of Object.keys(s.clientesConVentaForecastSim)) ensure(k, "con_venta");
-      for (const k of Object.keys(s.clientesVentaForecastSim)) ensureVenta(k);
+      const clientesEdicionForecast = [
+        ...Object.keys(s.clientesVentaForecastSim),
+        ...Object.keys(s.clientesDescForecastSim),
+      ].filter((c, i, a) => a.indexOf(c) === i);
+      for (const k of clientesEdicionForecast) ensureEdicionForecast(k);
       return changed ? { ...s, nuevosClientesPlan: nuevos } : s;
     });
   }, [
@@ -2685,8 +2842,9 @@ export default function ArrClient() {
         filasClientesMesPrimero,
         filasClientesSoloMesSegundo,
         clientesExcluirVentaForecast,
-        clientesDescForecastSim,
-        clientesVentaForecastSim
+        isArrPlanRoute ? {} : clientesDescForecastSim,
+        clientesVentaForecastSim,
+        isArrPlanRoute ? nuevosClientesPlan : undefined
       ),
     [
       metricBTrasVentaSim,
@@ -2696,6 +2854,8 @@ export default function ArrClient() {
       clientesExcluirVentaForecast,
       clientesDescForecastSim,
       clientesVentaForecastSim,
+      isArrPlanRoute,
+      nuevosClientesPlan,
     ]
   );
 
@@ -2787,6 +2947,7 @@ export default function ArrClient() {
     let numer = 0;
     for (const row of [...filasClientesMesPrimero, ...filasClientesSoloMesSegundo]) {
       if (clientesExcluirVentaForecast[row.cliente]) continue;
+      if (clienteConEdicionForecastEnPlan(nuevosClientesPlan, row.cliente)) continue;
       const sim = clientesDescForecastSim[row.cliente];
       if (sim == null || !Number.isFinite(sim)) continue;
       const vs = clientesVentaForecastSim[row.cliente];
@@ -2805,6 +2966,7 @@ export default function ArrClient() {
     clientesDescForecastSim,
     clientesVentaForecastSim,
     clientesExcluirVentaForecast,
+    nuevosClientesPlan,
     filasClientesMesPrimero,
     filasClientesSoloMesSegundo,
     metricBTrasVolNuevosPlan.ventaTon,
@@ -3250,8 +3412,9 @@ export default function ArrClient() {
         filasPrimero,
         filasSolo,
         sExcluir,
-        sDescSim,
-        sVentaSim
+        slice === wsPlan ? {} : sDescSim,
+        sVentaSim,
+        slice === wsPlan ? sNuevos : undefined
       );
       const metricBTrasCV = applyConVentaSimuladaToMetricB(metricBTrasDescSimExport, sConVenta);
       const metricBTrasNuevos = applyExtraKgDescChunksToMetricB(
@@ -3304,6 +3467,7 @@ export default function ArrClient() {
           let numer = 0;
           for (const row of [...filasPrimero, ...filasSolo]) {
             if (sExcluir[row.cliente]) continue;
+            if (clienteConEdicionForecastEnPlan(sNuevos, row.cliente)) continue;
             const sim = sDescSim[row.cliente];
             if (sim == null || !Number.isFinite(sim)) continue;
             const vs = sVentaSim?.[row.cliente];
@@ -4056,7 +4220,9 @@ export default function ArrClient() {
                 </tr>
               </thead>
               <tbody>
-                {nuevosClientesPlan.map((n) => {
+                {nuevosClientesPlan
+                  .filter((n) => n.origen !== "arr_quita")
+                  .map((n) => {
                   const ing = esNuevoKgPlanManual(n)
                     ? ingresoMarginalPlanNuevoRow(
                         n.kg,
@@ -4075,7 +4241,7 @@ export default function ArrClient() {
                       ? "Sin venta"
                       : n.origen === "con_venta"
                         ? "Con venta"
-                        : n.origen === "venta_editada"
+                        : n.origen === "edicion_forecast"
                           ? "Venta editada"
                           : "Manual";
                   return (
@@ -4088,7 +4254,7 @@ export default function ArrClient() {
                       <td className="px-3 py-2 text-center tabular-nums">{fmtNum(n.kg, 0)}</td>
                       <td className="px-3 py-2 text-center tabular-nums">
                         {fmtNum(
-                          n.origen === "sin_venta"
+                          n.origen === "sin_venta" || n.origen === "arr_quita"
                             ? -Math.abs(n.descKg)
                             : n.descKg,
                           2

@@ -39,7 +39,7 @@ export type ArrNuevoClientePlanEdicion = {
   hgCompra?: number | null;
   comentarios?: string;
   /** Fila vinculada a casillas Sin venta / Con venta (campos de volumen acotados). */
-  origen?: "manual" | "sin_venta" | "con_venta" | "venta_editada";
+  origen?: "manual" | "sin_venta" | "con_venta" | "arr_quita" | "edicion_forecast";
   /** Si false, no suma al forecast del mes B. */
   incluirEnForecastMes?: boolean;
 };
