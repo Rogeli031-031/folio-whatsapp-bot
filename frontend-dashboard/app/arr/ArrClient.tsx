@@ -1283,6 +1283,10 @@ export default function ArrClient() {
   const [clientePlanEditando, setClientePlanEditando] = useState<NuevoClientePlanRow | null>(null);
   /** Al marcar «Sin venta», se abre el modal HG antes de confirmar la exclusión. */
   const [sinVentaSetupRow, setSinVentaSetupRow] = useState<ClienteTablaRow | null>(null);
+  const sinVentaSetupRowRef = useRef<ClienteTablaRow | null>(null);
+  useEffect(() => {
+    sinVentaSetupRowRef.current = sinVentaSetupRow;
+  }, [sinVentaSetupRow]);
   const [responsablesPlan, setResponsablesPlan] = useState<{ id: number; nombre: string }[]>([]);
   const [plantaIdPlan, setPlantaIdPlan] = useState<number | null>(null);
 
@@ -1442,6 +1446,29 @@ export default function ArrClient() {
     [isArrPlanRoute]
   );
 
+  const cerrarModalPlanTrasGuardar = useCallback(() => {
+    setShowNuevoClientePlan(false);
+    setClientePlanEditando(null);
+    setSinVentaSetupRow(null);
+  }, []);
+
+  const cancelarModalPlan = useCallback(() => {
+    if (sinVentaSetupRow) {
+      const k = sinVentaSetupRow.cliente.trim();
+      setWsPlan((s) => {
+        const next = { ...s.clientesExcluirVentaForecast };
+        delete next[k];
+        const idSv = idPlanRowSinVenta(k);
+        return {
+          ...s,
+          clientesExcluirVentaForecast: next,
+          nuevosClientesPlan: s.nuevosClientesPlan.filter((n) => n.id !== idSv),
+        };
+      });
+    }
+    cerrarModalPlanTrasGuardar();
+  }, [sinVentaSetupRow, cerrarModalPlanTrasGuardar]);
+
   const guardarNuevoClientePlanModal = useCallback(
     (payload: {
       id?: string;
@@ -1461,8 +1488,9 @@ export default function ArrClient() {
       if (!isArrPlanRoute) return;
       const incluirMes = payload.incluirEnForecastMes !== false;
 
-      if (sinVentaSetupRow) {
-        const k = sinVentaSetupRow.cliente.trim();
+      const pendingSinVenta = sinVentaSetupRowRef.current;
+      if (pendingSinVenta) {
+        const k = pendingSinVenta.cliente.trim();
         const idSv = idPlanRowSinVenta(k);
         const {
           kg,
@@ -1499,7 +1527,7 @@ export default function ArrClient() {
             },
           ],
         }));
-        setSinVentaSetupRow(null);
+        cerrarModalPlanTrasGuardar();
         return;
       }
 
@@ -1542,6 +1570,7 @@ export default function ArrClient() {
               : n
           );
           let cv = s.clientesConVentaForecastSim;
+          let ex = s.clientesExcluirVentaForecast;
           if (origen === "con_venta") {
             const key = nombre.trim();
             cv = {
@@ -1552,8 +1581,18 @@ export default function ArrClient() {
               },
             };
           }
-          return { ...s, nuevosClientesPlan: nuevos, clientesConVentaForecastSim: cv };
+          if (origen === "sin_venta") {
+            const key = nombre.trim();
+            if (key) ex = { ...ex, [key]: true };
+          }
+          return {
+            ...s,
+            nuevosClientesPlan: nuevos,
+            clientesConVentaForecastSim: cv,
+            clientesExcluirVentaForecast: ex,
+          };
         });
+        cerrarModalPlanTrasGuardar();
         return;
       }
       const id =
@@ -1594,8 +1633,9 @@ export default function ArrClient() {
           },
         ],
       }));
+      cerrarModalPlanTrasGuardar();
     },
-    [isArrPlanRoute, sinVentaSetupRow]
+    [isArrPlanRoute, sinVentaSetupRow, cerrarModalPlanTrasGuardar]
   );
 
   const setNuevoPlanIncluirEnForecastMes = useCallback((id: string, incluir: boolean) => {
@@ -4128,24 +4168,7 @@ export default function ArrClient() {
       {showNuevoClientePlan && isArrPlanRoute && (
         <ArrNuevoClientePlanModal
           abierto={showNuevoClientePlan}
-          onClose={() => {
-            if (sinVentaSetupRow) {
-              const k = sinVentaSetupRow.cliente.trim();
-              setWsPlan((s) => {
-                const next = { ...s.clientesExcluirVentaForecast };
-                delete next[k];
-                const idSv = idPlanRowSinVenta(k);
-                return {
-                  ...s,
-                  clientesExcluirVentaForecast: next,
-                  nuevosClientesPlan: s.nuevosClientesPlan.filter((n) => n.id !== idSv),
-                };
-              });
-              setSinVentaSetupRow(null);
-            }
-            setShowNuevoClientePlan(false);
-            setClientePlanEditando(null);
-          }}
+          onClose={cancelarModalPlan}
           mesForecastLabel={selB ? periodoLabel(selB) : ""}
           nombresExistentes={nombresExistentesPlanModal}
           responsables={responsablesPlan}

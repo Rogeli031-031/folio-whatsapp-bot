@@ -263,7 +263,7 @@ export default function ArrNuevoClientePlanModal({
     };
     if (clienteEditar) base.id = clienteEditar.id;
     onSave(base);
-    onClose();
+    /** El padre cierra el modal tras aplicar el estado (evita que onClose revierta «Sin venta»). */
   }
 
   const modoEdicion = Boolean(clienteEditar);
