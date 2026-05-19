@@ -119,7 +119,9 @@ export default function ArrNuevoClientePlanModal({
           if (hit) {
             setResponsableIdStr(String(hit.id));
           } else if (
-            (clienteEditar.origen === "sin_venta" || clienteEditar.origen === "con_venta") &&
+            (clienteEditar.origen === "sin_venta" ||
+              clienteEditar.origen === "con_venta" ||
+              clienteEditar.origen === "edicion_forecast") &&
             responsables.length > 0
           ) {
             setResponsableIdStr(String(responsables[0].id));
@@ -158,8 +160,10 @@ export default function ArrNuevoClientePlanModal({
     }
     const origen = clienteEditar?.origen;
     const esSinVentaRow = origen === "sin_venta";
+    const esEdicionForecastRow = origen === "edicion_forecast";
     const esConVentaRow = origen === "con_venta";
-    const esForecastMeta = esSinVentaRow || esConVentaRow;
+    const esForecastMeta = esSinVentaRow || esConVentaRow || esEdicionForecastRow;
+    const esHgObligatorio = esSinVentaRow || esEdicionForecastRow;
     if (!esForecastMeta && nombresBloqueados.has(nom.toLowerCase())) {
       setError("Ya existe otro cliente con ese nombre.");
       return;
@@ -167,7 +171,7 @@ export default function ArrNuevoClientePlanModal({
 
     let kg = parseNum(kgStr);
     if (kg == null || kg <= 0) {
-      if (esSinVentaRow && clienteEditar) kg = clienteEditar.kg;
+      if ((esSinVentaRow || esEdicionForecastRow) && clienteEditar) kg = clienteEditar.kg;
       else {
         setError("La venta en kg debe ser mayor que cero.");
         return;
@@ -176,7 +180,7 @@ export default function ArrNuevoClientePlanModal({
 
     let descRaw = parseNum(descStr);
     if (descRaw == null) {
-      if (esSinVentaRow && clienteEditar) descRaw = clienteEditar.descKg;
+      if ((esSinVentaRow || esEdicionForecastRow) && clienteEditar) descRaw = clienteEditar.descKg;
       else {
         setError("Indica el descuento por kilo ($/kg).");
         return;
@@ -186,7 +190,7 @@ export default function ArrNuevoClientePlanModal({
 
     let gasto = parseNum(gastoStr);
     if (gasto == null || !Number.isFinite(gasto) || gasto < 0) {
-      if (esSinVentaRow) gasto = 0;
+      if (esSinVentaRow || esEdicionForecastRow) gasto = 0;
       else {
         setError("Indica el gasto (MXN, mayor o igual a cero).");
         return;
@@ -195,10 +199,14 @@ export default function ArrNuevoClientePlanModal({
 
     const hgClienteTrim = hgClienteStr.trim();
     let hgCliente: number | null = null;
-    if (esSinVentaRow) {
+    if (esHgObligatorio) {
       const hgParsed = parseNum(hgClienteTrim);
       if (hgClienteTrim === "" || hgParsed == null || !Number.isFinite(hgParsed)) {
-        setError("Indica HG cliente (obligatorio al marcar Sin venta).");
+        setError(
+          esEdicionForecastRow
+            ? "Indica HG cliente (obligatorio al editar venta o descuento en forecast)."
+            : "Indica HG cliente (obligatorio al marcar Sin venta)."
+        );
         return;
       }
       hgCliente = hgParsed;
@@ -213,10 +221,14 @@ export default function ArrNuevoClientePlanModal({
 
     const hgCompraTrim = hgCompraStr.trim();
     let hgCompra: number | null = null;
-    if (esSinVentaRow) {
+    if (esHgObligatorio) {
       const hcp = parseNum(hgCompraTrim);
       if (hgCompraTrim === "" || hcp == null || !Number.isFinite(hcp)) {
-        setError("Indica HG compra (obligatorio al marcar Sin venta).");
+        setError(
+          esEdicionForecastRow
+            ? "Indica HG compra (obligatorio al editar venta o descuento en forecast)."
+            : "Indica HG compra (obligatorio al marcar Sin venta)."
+        );
         return;
       }
       hgCompra = hcp;
@@ -231,7 +243,11 @@ export default function ArrNuevoClientePlanModal({
       hgCompra = hcp;
     }
 
-    const sub = subcategoria.trim() || (esSinVentaRow ? (clienteEditar?.subcategoria ?? "").trim() : "");
+    const sub =
+      subcategoria.trim() ||
+      (esSinVentaRow || esEdicionForecastRow
+        ? (clienteEditar?.subcategoria ?? "").trim()
+        : "");
     if (!sub) {
       setError("Indica la subcategoría.");
       return;
@@ -269,8 +285,9 @@ export default function ArrNuevoClientePlanModal({
   const modoEdicion = Boolean(clienteEditar);
   const roOrigen = clienteEditar?.origen;
   const readOnlyNombreForecast =
-    roOrigen === "sin_venta" || roOrigen === "con_venta";
-  const readOnlyVolumenSinVenta = roOrigen === "sin_venta";
+    roOrigen === "sin_venta" || roOrigen === "con_venta" || roOrigen === "edicion_forecast";
+  const readOnlyVolumenSinVenta =
+    roOrigen === "sin_venta" || roOrigen === "edicion_forecast";
   const readOnlyHg = roOrigen === "con_venta";
   const clsRo = (locked: boolean) => (locked ? "cursor-not-allowed bg-slate-900/70 text-slate-300" : "");
 
@@ -283,7 +300,11 @@ export default function ArrNuevoClientePlanModal({
     >
       <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-lg border border-slate-600 bg-slate-900 p-5 text-slate-100 shadow-xl">
         <h2 id="nuevo-cliente-plan-title" className="text-lg font-semibold text-slate-50">
-          {modoEdicion ? "Editar cliente (plan)" : "Nuevo cliente (plan)"}
+          {roOrigen === "edicion_forecast"
+            ? "HG — venta / descuento editados"
+            : modoEdicion
+              ? "Editar cliente (plan)"
+              : "Nuevo cliente (plan)"}
         </h2>
         <div className="mt-1 space-y-1 text-xs text-slate-400">
           <p>
@@ -296,6 +317,12 @@ export default function ArrNuevoClientePlanModal({
             <p className="text-sky-300/90">
               Cliente marcado como Sin venta. Indica HG cliente y HG compra (van a columnas H e I del
               Excel). Categoría y subcategoría se tomaron del listado ARR del cliente.
+            </p>
+          ) : roOrigen === "edicion_forecast" ? (
+            <p className="text-sky-300/90">
+              Venta o descuento editados en el mes forecast. Indica HG cliente y HG compra (columnas H
+              e I del Excel): se aplican a la quita del volumen ARR y al valor editado en el cálculo de
+              HG del mes proyectado.
             </p>
           ) : readOnlyNombreForecast ? (
             <p className="text-sky-300/90">
@@ -352,7 +379,7 @@ export default function ArrNuevoClientePlanModal({
           </label>
           <label className="block text-sm">
             <span className="text-slate-300">
-              HG cliente{roOrigen === "sin_venta" ? " *" : ""}
+              HG cliente{roOrigen === "sin_venta" || roOrigen === "edicion_forecast" ? " *" : ""}
             </span>
             <input
               value={hgClienteStr}
@@ -360,7 +387,9 @@ export default function ArrNuevoClientePlanModal({
               readOnly={readOnlyHg}
               className={`mt-1 w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100 ${clsRo(readOnlyHg)}`}
               placeholder={
-                roOrigen === "sin_venta" ? "Obligatorio (columna H en Excel)" : "Vacío = HG del mes forecast"
+                roOrigen === "sin_venta" || roOrigen === "edicion_forecast"
+                  ? "Obligatorio (columna H en Excel)"
+                  : "Vacío = HG del mes forecast"
               }
               inputMode="decimal"
             />
@@ -371,7 +400,7 @@ export default function ArrNuevoClientePlanModal({
           </label>
           <label className="block text-sm">
             <span className="text-slate-300">
-              HG compra{roOrigen === "sin_venta" ? " *" : ""}
+              HG compra{roOrigen === "sin_venta" || roOrigen === "edicion_forecast" ? " *" : ""}
             </span>
             <input
               value={hgCompraStr}
@@ -379,7 +408,9 @@ export default function ArrNuevoClientePlanModal({
               readOnly={readOnlyHg}
               className={`mt-1 w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100 ${clsRo(readOnlyHg)}`}
               placeholder={
-                roOrigen === "sin_venta" ? "Obligatorio (columna I en Excel)" : "Vacío = HG$ del mes forecast"
+                roOrigen === "sin_venta" || roOrigen === "edicion_forecast"
+                  ? "Obligatorio (columna I en Excel)"
+                  : "Vacío = HG$ del mes forecast"
               }
               inputMode="decimal"
             />

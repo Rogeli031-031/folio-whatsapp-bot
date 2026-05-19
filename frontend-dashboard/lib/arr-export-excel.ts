@@ -64,6 +64,14 @@ export function descKgPlanConSigno(
   return d;
 }
 
+/** HG en filas «Nuevos clientes (plan)»: celda vacía → 0 (no el HG del resumen ARR). */
+function hgPlanColH(fila: number): string {
+  return `IF(ISBLANK(H${fila}),0,H${fila})`;
+}
+function hgPlanColI(fila: number): string {
+  return `IF(ISBLANK(I${fila}),0,I${fila})`;
+}
+
 /** Valor y formato de Desc. $/kg en «Nuevos clientes (plan)». */
 function descKgNuevoClienteCell(
   descKg: number,
@@ -381,7 +389,7 @@ async function downloadArrDashboardExcelInternal(
       const signHg =
         nv.origen === "sin_venta" || nv.origen === "arr_quita" ? "-" : "+";
       partsH6Terms.push(
-        `${signHg}((IF(ISBLANK(H${r}),ARR!H$${MES_B_R},H${r})+IF(ISBLANK(I${r}),ARR!I$${MES_B_R},I${r}))*E${r}/100)`
+        `${signHg}((${hgPlanColH(r)}+${hgPlanColI(r)})*E${r}/100)`
       );
     }
 
@@ -440,7 +448,7 @@ async function downloadArrDashboardExcelInternal(
           formula: `ROUND(IFERROR(-1*((E${cur}*($C$${MES_B_R}+F${cur}))+(E${cur}*(H${cur}+I${cur})*$I$${MES_B_R}/100)),0),0)`,
         };
       } else {
-        const hp = `(IF(ISBLANK(H${cur}),ARR!H$${MES_B_R},H${cur})+IF(ISBLANK(I${cur}),ARR!I$${MES_B_R},I${cur}))`;
+        const hp = `(${hgPlanColH(cur)}+${hgPlanColI(cur)})`;
         const coreIng = `((E${cur}*($C$${MES_B_R}+F${cur}))+((${hp})*E${cur}*$I$${MES_B_R}/100))`;
         r.getCell(11).value = { formula: `ROUND(IFERROR(${coreIng},0),0)` };
       }

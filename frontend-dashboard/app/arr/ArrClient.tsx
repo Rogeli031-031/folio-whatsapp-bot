@@ -607,7 +607,8 @@ function hgPlanForecastMesBRuta(
     if (!Number.isFinite(kg) || kg <= 0) continue;
     const h = n.hgCliente != null && Number.isFinite(n.hgCliente) ? n.hgCliente : arrH;
     const ip = n.hgCompra != null && Number.isFinite(n.hgCompra) ? n.hgCompra : arrI;
-    const sign = n.origen === "sin_venta" ? -1 : 1;
+    const sign =
+      n.origen === "sin_venta" || n.origen === "arr_quita" ? -1 : 1;
     extra += sign * ((h + ip) * kg) / 100;
   }
   const baseNum = (arrH * arrB * 1000) / 100;
@@ -1245,7 +1246,8 @@ function buildPlanRowSinVenta(
 /** Resta en D6 el kg/desc del cliente tal como en ARR (misma lógica que Sin venta, sin excluir volumen). */
 function buildPlanRowArrQuita(
   row: ClienteTablaRow,
-  arr: ArrClienteMesRow | null
+  arr: ArrClienteMesRow | null,
+  hg?: { hgCliente: number | null; hgCompra: number | null }
 ): NuevoClientePlanRow | null {
   const kg =
     row.ventaB != null && Number.isFinite(row.ventaB) && row.ventaB > 0
@@ -1265,8 +1267,8 @@ function buildPlanRowArrQuita(
     responsableId: null,
     categoria,
     subcategoria,
-    hgCliente: null,
-    hgCompra: null,
+    hgCliente: hg?.hgCliente ?? null,
+    hgCompra: hg?.hgCompra ?? null,
     comentarios: "",
     origen: "arr_quita",
     incluirEnForecastMes: true,
@@ -1278,7 +1280,8 @@ function buildPlanRowEdicionForecast(
   row: ClienteTablaRow,
   newKg: number,
   arr: ArrClienteMesRow | null,
-  descOverride?: number
+  descOverride?: number,
+  hg?: { hgCliente: number | null; hgCompra: number | null }
 ): NuevoClientePlanRow {
   const kg = Math.round(Number(newKg) || 0);
   const descKg =
@@ -1298,8 +1301,8 @@ function buildPlanRowEdicionForecast(
     responsableId: null,
     categoria,
     subcategoria,
-    hgCliente: null,
-    hgCompra: null,
+    hgCliente: hg?.hgCliente ?? null,
+    hgCompra: hg?.hgCompra ?? null,
     comentarios: "",
     origen: "edicion_forecast",
     incluirEnForecastMes: true,
@@ -1311,14 +1314,78 @@ function upsertFilasEdicionForecastEnPlan(
   rowT: ClienteTablaRow,
   arr: ArrClienteMesRow | null,
   newKg: number,
-  newDesc: number
+  newDesc: number,
+  hg?: { hgCliente: number | null; hgCompra: number | null }
 ): NuevoClientePlanRow[] {
   const k = rowT.cliente.trim();
   let out = quitarFilasEdicionForecastDePlan(nuevos, k);
-  const quita = buildPlanRowArrQuita(rowT, arr);
+  const quita = buildPlanRowArrQuita(rowT, arr, hg);
   if (quita) out = [...out, quita];
-  out = [...out, buildPlanRowEdicionForecast(rowT, newKg, arr, newDesc)];
+  out = [...out, buildPlanRowEdicionForecast(rowT, newKg, arr, newDesc, hg)];
   return out;
+}
+
+function hgEdicionForecastExistente(
+  nuevos: NuevoClientePlanRow[],
+  cliente: string
+): { hgCliente: number | null; hgCompra: number | null } | undefined {
+  const k = cliente.trim();
+  const hit =
+    nuevos.find((n) => n.id === idPlanRowEdicionForecast(k)) ??
+    nuevos.find((n) => n.id === idPlanRowArrQuita(k));
+  if (!hit) return undefined;
+  return { hgCliente: hit.hgCliente, hgCompra: hit.hgCompra };
+}
+
+/** Persiste venta/desc. sim + par arr_quita/edicion_forecast con HG (tras modal). */
+function aplicarEdicionForecastEnSlice(
+  s: ArrWorkspaceSlice,
+  row: ClienteTablaRow,
+  newKg: number,
+  newDesc: number,
+  hgCliente: number,
+  hgCompra: number,
+  clientesA: ClientesMonthData | undefined,
+  clientesB: ClientesMonthData | undefined
+): ArrWorkspaceSlice {
+  const k = row.cliente.trim();
+  const nextVenta = { ...s.clientesVentaForecastSim };
+  const nextDesc = { ...s.clientesDescForecastSim };
+  let nuevos = s.nuevosClientesPlan;
+  const origKg = row.ventaB;
+  const origDesc = row.descB;
+  const kgR = Math.round(newKg);
+  const descR = newDesc;
+  if (
+    origKg != null &&
+    Number.isFinite(origKg) &&
+    origKg > 0 &&
+    kgR === Math.round(origKg)
+  ) {
+    delete nextVenta[k];
+  } else {
+    nextVenta[k] = kgR;
+  }
+  if (origDesc != null && Number.isFinite(origDesc) && origDesc === descR) {
+    delete nextDesc[k];
+  } else {
+    nextDesc[k] = descR;
+  }
+  if (!(k in nextVenta) && !(k in nextDesc)) {
+    nuevos = quitarFilasEdicionForecastDePlan(nuevos, k);
+  } else {
+    const ar = resolveArrClienteForPlan(clientesA, clientesB, k);
+    nuevos = upsertFilasEdicionForecastEnPlan(nuevos, row, ar, kgR, descR, {
+      hgCliente,
+      hgCompra,
+    });
+  }
+  return {
+    ...s,
+    clientesVentaForecastSim: nextVenta,
+    clientesDescForecastSim: nextDesc,
+    nuevosClientesPlan: nuevos,
+  };
 }
 
 function buildPlanRowConVenta(
@@ -1593,6 +1660,14 @@ function rentabilidadForecastMesBAjustada(
   return Math.round(sumIng - gastoImporte);
 }
 
+/** Pendiente al editar venta/desc. forecast: el modal HG confirma antes de persistir. */
+type EdicionForecastSetupPending = {
+  row: ClienteTablaRow;
+  tipo: "venta" | "desc";
+  newKg: number;
+  newDesc: number;
+};
+
 export default function ArrClient() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -1628,6 +1703,12 @@ export default function ArrClient() {
   useEffect(() => {
     sinVentaSetupRowRef.current = sinVentaSetupRow;
   }, [sinVentaSetupRow]);
+  const [edicionForecastSetup, setEdicionForecastSetup] =
+    useState<EdicionForecastSetupPending | null>(null);
+  const edicionForecastSetupRef = useRef<EdicionForecastSetupPending | null>(null);
+  useEffect(() => {
+    edicionForecastSetupRef.current = edicionForecastSetup;
+  }, [edicionForecastSetup]);
   const [responsablesPlan, setResponsablesPlan] = useState<{ id: number; nombre: string }[]>([]);
   const [plantaIdPlan, setPlantaIdPlan] = useState<number | null>(null);
 
@@ -1767,6 +1848,7 @@ export default function ArrClient() {
     setShowNuevoClientePlan(false);
     setClientePlanEditando(null);
     setSinVentaSetupRow(null);
+    setEdicionForecastSetup(null);
   }, []);
 
   const cancelarModalPlan = useCallback(() => {
@@ -1783,6 +1865,7 @@ export default function ArrClient() {
         };
       });
     }
+    setEdicionForecastSetup(null);
     cerrarModalPlanTrasGuardar();
   }, [sinVentaSetupRow, cerrarModalPlanTrasGuardar]);
 
@@ -1848,6 +1931,40 @@ export default function ArrClient() {
         return;
       }
 
+      const pendingEdicion = edicionForecastSetupRef.current;
+      if (pendingEdicion) {
+        const { row, newKg, newDesc } = pendingEdicion;
+        const hgC = payload.hgCliente;
+        const hgP = payload.hgCompra;
+        if (hgC == null || !Number.isFinite(hgC) || hgP == null || !Number.isFinite(hgP)) {
+          return;
+        }
+        setWsPlan((s) => {
+          const keyA =
+            empresa && s.selA && s.dataByKey[s.selA]
+              ? clientesCacheKey(empresa, s.selA, s.dataByKey[s.selA])
+              : "";
+          const keyB =
+            empresa && s.selB && s.dataByKey[s.selB]
+              ? clientesCacheKey(empresa, s.selB, s.dataByKey[s.selB])
+              : "";
+          const ca = keyA ? s.clientesByKey[keyA] : undefined;
+          const cb = keyB ? s.clientesByKey[keyB] : undefined;
+          return aplicarEdicionForecastEnSlice(
+            s,
+            row,
+            newKg,
+            newDesc,
+            hgC,
+            hgP,
+            ca,
+            cb
+          );
+        });
+        cerrarModalPlanTrasGuardar();
+        return;
+      }
+
       if (payload.id) {
         const {
           id,
@@ -1866,7 +1983,8 @@ export default function ArrClient() {
         setWsPlan((s) => {
           const prev = s.nuevosClientesPlan.find((x) => x.id === id);
           const origen = prev?.origen;
-          const nuevos = s.nuevosClientesPlan.map((n) =>
+          const key = nombre.trim();
+          let nuevos = s.nuevosClientesPlan.map((n) =>
             n.id === id
               ? {
                   id,
@@ -1886,10 +2004,27 @@ export default function ArrClient() {
                 }
               : n
           );
+          if (origen === "edicion_forecast" && key) {
+            nuevos = nuevos.map((n) =>
+              n.id === idPlanRowArrQuita(key) || n.id === idPlanRowEdicionForecast(key)
+                ? {
+                    ...n,
+                    hgCliente,
+                    hgCompra,
+                    comentarios,
+                    responsable,
+                    responsableId,
+                    categoria,
+                    subcategoria,
+                  }
+                : n
+            );
+          }
           let cv = s.clientesConVentaForecastSim;
           let ex = s.clientesExcluirVentaForecast;
+          let ventaSim = s.clientesVentaForecastSim;
+          let descSim = s.clientesDescForecastSim;
           if (origen === "con_venta") {
-            const key = nombre.trim();
             cv = {
               ...cv,
               [key]: {
@@ -1899,14 +2034,37 @@ export default function ArrClient() {
             };
           }
           if (origen === "sin_venta") {
-            const key = nombre.trim();
             if (key) ex = { ...ex, [key]: true };
+          }
+          if (origen === "edicion_forecast" && key) {
+            const kgR = Math.round(kg);
+            ventaSim = { ...ventaSim };
+            descSim = { ...descSim };
+            const edPrev = prev;
+            const origKgHint = edPrev?.kg;
+            if (
+              origKgHint != null &&
+              Number.isFinite(origKgHint) &&
+              kgR === Math.round(origKgHint) &&
+              s.clientesVentaForecastSim[key] == null
+            ) {
+              delete ventaSim[key];
+            } else {
+              ventaSim[key] = kgR;
+            }
+            if (edPrev && Number.isFinite(edPrev.descKg) && descKg === edPrev.descKg) {
+              if (!(key in s.clientesDescForecastSim)) delete descSim[key];
+            } else {
+              descSim[key] = descKg;
+            }
           }
           return {
             ...s,
             nuevosClientesPlan: nuevos,
             clientesConVentaForecastSim: cv,
             clientesExcluirVentaForecast: ex,
+            clientesVentaForecastSim: ventaSim,
+            clientesDescForecastSim: descSim,
           };
         });
         cerrarModalPlanTrasGuardar();
@@ -1952,7 +2110,7 @@ export default function ArrClient() {
       }));
       cerrarModalPlanTrasGuardar();
     },
-    [isArrPlanRoute, sinVentaSetupRow, cerrarModalPlanTrasGuardar]
+    [isArrPlanRoute, sinVentaSetupRow, cerrarModalPlanTrasGuardar, empresa]
   );
 
   const setNuevoPlanIncluirEnForecastMes = useCallback((id: string, incluir: boolean) => {
@@ -2477,117 +2635,160 @@ export default function ArrClient() {
     return { filasClientesMesPrimero: primero, filasClientesSoloMesSegundo: soloSegundo };
   }, [empresa, clientesA, clientesB, selA, selB, dataByKey]);
 
+  const abrirModalEdicionForecast = useCallback(
+    (row: ClienteTablaRow, pending: EdicionForecastSetupPending) => {
+      const k = row.cliente.trim();
+      const ar = resolveArrClienteForPlan(clientesA, clientesB, k);
+      const hgPrev = hgEdicionForecastExistente(nuevosClientesPlan, k);
+      const draft = buildPlanRowEdicionForecast(
+        row,
+        pending.newKg,
+        ar,
+        pending.newDesc,
+        hgPrev
+      );
+      setEdicionForecastSetup(pending);
+      setSinVentaSetupRow(null);
+      setClientePlanEditando(draft);
+      setShowNuevoClientePlan(true);
+    },
+    [clientesA, clientesB, nuevosClientesPlan]
+  );
+
   /**
    * Setea (o limpia) el descuento simulado para un cliente en el mes forecast.
-   * En ARR Plan crea/actualiza el par arr_quita + edicion_forecast (D6: sin venta + nuevo cliente).
+   * En ARR Plan abre el modal HG (como Sin venta) antes de crear arr_quita + edicion_forecast.
    */
   const setClienteDescForecastSim = useCallback(
     (cliente: string, valor: number | null) => {
       const k = cliente.trim();
       if (!k) return;
-      const patch = (s: ArrWorkspaceSlice) => {
+      if (!isArrPlanRoute) {
+        const patch = (s: ArrWorkspaceSlice) => {
+          const next = { ...s.clientesDescForecastSim };
+          if (valor == null || !Number.isFinite(valor)) delete next[k];
+          else next[k] = valor;
+          return { ...s, clientesDescForecastSim: next };
+        };
+        setWsBase(patch);
+        return;
+      }
+      const rowT = findClienteTablaRowInFilas(
+        k,
+        filasClientesMesPrimero,
+        filasClientesSoloMesSegundo
+      );
+      if (!rowT || rowT.ventaB == null || rowT.ventaB <= 0) return;
+      const patchClear = (s: ArrWorkspaceSlice) => {
         const next = { ...s.clientesDescForecastSim };
-        let nuevos = s.nuevosClientesPlan;
-        if (valor == null || !Number.isFinite(valor)) {
-          if (!(k in next)) {
-            if (!isArrPlanRoute || s.clientesVentaForecastSim[k] != null) return s;
-          } else {
-            delete next[k];
-          }
-          if (isArrPlanRoute && s.clientesVentaForecastSim[k] == null) {
-            nuevos = quitarFilasEdicionForecastDePlan(nuevos, k);
-          }
+        if (!(k in next)) {
+          if (s.clientesVentaForecastSim[k] != null) return s;
         } else {
-          if (next[k] === valor && clienteConEdicionForecastEnPlan(nuevos, k)) return s;
-          next[k] = valor;
-          if (isArrPlanRoute) {
-            const rowT = findClienteTablaRowInFilas(
-              k,
-              filasClientesMesPrimero,
-              filasClientesSoloMesSegundo
-            );
-            if (rowT && rowT.ventaB != null && rowT.ventaB > 0) {
-              const ar = resolveArrClienteForPlan(clientesA, clientesB, k);
-              const kg =
-                s.clientesVentaForecastSim[k] != null &&
-                Number.isFinite(s.clientesVentaForecastSim[k])
-                  ? Math.round(s.clientesVentaForecastSim[k])
-                  : Math.round(rowT.ventaB);
-              nuevos = upsertFilasEdicionForecastEnPlan(nuevos, rowT, ar, kg, valor);
-            }
-          }
+          delete next[k];
+        }
+        let nuevos = s.nuevosClientesPlan;
+        if (s.clientesVentaForecastSim[k] == null) {
+          nuevos = quitarFilasEdicionForecastDePlan(nuevos, k);
         }
         return { ...s, clientesDescForecastSim: next, nuevosClientesPlan: nuevos };
       };
-      if (isArrPlanRoute) setWsPlan(patch);
-      else setWsBase(patch);
-    },
-    [
-      isArrPlanRoute,
-      filasClientesMesPrimero,
-      filasClientesSoloMesSegundo,
-      clientesA,
-      clientesB,
-    ]
-  );
-
-  /** Override de kg proyectados en mes forecast (solo ARR Plan); par arr_quita + edicion_forecast. */
-  const setClienteVentaForecastSim = useCallback(
-    (cliente: string, valor: number | null) => {
-      const k = cliente.trim();
-      if (!k || !isArrPlanRoute) return;
-      setWsPlan((s) => {
-        const nextVenta = { ...s.clientesVentaForecastSim };
-        let nuevos = s.nuevosClientesPlan;
-        const rowT = findClienteTablaRowInFilas(
-          k,
-          filasClientesMesPrimero,
-          filasClientesSoloMesSegundo
-        );
-        const clear = () => {
-          delete nextVenta[k];
-          nuevos = quitarFilasEdicionForecastDePlan(nuevos, k);
-        };
-        if (valor == null || !Number.isFinite(valor) || valor <= 0) {
-          if (!(k in s.clientesVentaForecastSim)) return s;
-          clear();
-          return { ...s, clientesVentaForecastSim: nextVenta, nuevosClientesPlan: nuevos };
-        }
-        const rounded = Math.round(valor);
-        const orig = rowT?.ventaB;
-        if (
-          orig != null &&
-          Number.isFinite(orig) &&
-          orig > 0 &&
-          rounded === Math.round(orig) &&
-          s.clientesDescForecastSim[k] == null
-        ) {
-          if (!(k in s.clientesVentaForecastSim)) return s;
-          clear();
-          return { ...s, clientesVentaForecastSim: nextVenta, nuevosClientesPlan: nuevos };
-        }
-        if (nextVenta[k] === rounded && clienteConEdicionForecastEnPlan(nuevos, k)) return s;
-        nextVenta[k] = rounded;
-        if (rowT) {
-          const ar = resolveArrClienteForPlan(clientesA, clientesB, k);
-          const descOv =
-            s.clientesDescForecastSim[k] != null &&
-            Number.isFinite(s.clientesDescForecastSim[k])
-              ? s.clientesDescForecastSim[k]
-              : rowT.descB != null && Number.isFinite(rowT.descB)
-                ? rowT.descB
-                : 0;
-          nuevos = upsertFilasEdicionForecastEnPlan(nuevos, rowT, ar, rounded, descOv);
-        }
-        return { ...s, clientesVentaForecastSim: nextVenta, nuevosClientesPlan: nuevos };
+      if (valor == null || !Number.isFinite(valor)) {
+        setWsPlan(patchClear);
+        return;
+      }
+      const origDesc = rowT.descB;
+      if (
+        origDesc != null &&
+        Number.isFinite(origDesc) &&
+        valor === origDesc &&
+        clientesVentaForecastSim[k] == null
+      ) {
+        setWsPlan(patchClear);
+        return;
+      }
+      const kg =
+        clientesVentaForecastSim[k] != null &&
+        Number.isFinite(clientesVentaForecastSim[k])
+          ? Math.round(clientesVentaForecastSim[k])
+          : Math.round(rowT.ventaB);
+      abrirModalEdicionForecast(rowT, {
+        row: rowT,
+        tipo: "desc",
+        newKg: kg,
+        newDesc: valor,
       });
     },
     [
       isArrPlanRoute,
       filasClientesMesPrimero,
       filasClientesSoloMesSegundo,
-      clientesA,
-      clientesB,
+      clientesVentaForecastSim,
+      abrirModalEdicionForecast,
+    ]
+  );
+
+  /** Override de kg proyectados en mes forecast (solo ARR Plan); modal HG antes de persistir. */
+  const setClienteVentaForecastSim = useCallback(
+    (cliente: string, valor: number | null) => {
+      const k = cliente.trim();
+      if (!k || !isArrPlanRoute) return;
+      const rowT = findClienteTablaRowInFilas(
+        k,
+        filasClientesMesPrimero,
+        filasClientesSoloMesSegundo
+      );
+      if (!rowT) return;
+      if (valor == null || !Number.isFinite(valor) || valor <= 0) {
+        setWsPlan((s) => {
+          const nextVenta = { ...s.clientesVentaForecastSim };
+          if (!(k in s.clientesVentaForecastSim)) return s;
+          delete nextVenta[k];
+          let nuevos = s.nuevosClientesPlan;
+          if (s.clientesDescForecastSim[k] == null) {
+            nuevos = quitarFilasEdicionForecastDePlan(nuevos, k);
+          }
+          return { ...s, clientesVentaForecastSim: nextVenta, nuevosClientesPlan: nuevos };
+        });
+        return;
+      }
+      const rounded = Math.round(valor);
+      const orig = rowT.ventaB;
+      if (
+        orig != null &&
+        Number.isFinite(orig) &&
+        orig > 0 &&
+        rounded === Math.round(orig) &&
+        clientesDescForecastSim[k] == null
+      ) {
+        setWsPlan((s) => {
+          const nextVenta = { ...s.clientesVentaForecastSim };
+          if (!(k in s.clientesVentaForecastSim)) return s;
+          delete nextVenta[k];
+          const nuevos = quitarFilasEdicionForecastDePlan(s.nuevosClientesPlan, k);
+          return { ...s, clientesVentaForecastSim: nextVenta, nuevosClientesPlan: nuevos };
+        });
+        return;
+      }
+      const descOv =
+        clientesDescForecastSim[k] != null &&
+        Number.isFinite(clientesDescForecastSim[k])
+          ? clientesDescForecastSim[k]
+          : rowT.descB != null && Number.isFinite(rowT.descB)
+            ? rowT.descB
+            : 0;
+      abrirModalEdicionForecast(rowT, {
+        row: rowT,
+        tipo: "venta",
+        newKg: rounded,
+        newDesc: descOv,
+      });
+    },
+    [
+      isArrPlanRoute,
+      filasClientesMesPrimero,
+      filasClientesSoloMesSegundo,
+      clientesDescForecastSim,
+      abrirModalEdicionForecast,
     ]
   );
 
@@ -4504,7 +4705,10 @@ export default function ArrClient() {
                           clientesVentaForecastSim[row.cliente] != null &&
                           Number.isFinite(clientesVentaForecastSim[row.cliente])
                             ? clientesVentaForecastSim[row.cliente]
-                            : null
+                            : edicionForecastSetup?.row.cliente === row.cliente &&
+                                edicionForecastSetup.tipo === "venta"
+                              ? edicionForecastSetup.newKg
+                              : null
                         }
                         editable={
                           showExcluirForecastCheckbox &&
@@ -4551,7 +4755,10 @@ export default function ArrClient() {
                         clientesDescForecastSim[row.cliente] != null &&
                         Number.isFinite(clientesDescForecastSim[row.cliente])
                           ? clientesDescForecastSim[row.cliente]
-                          : null
+                          : edicionForecastSetup?.row.cliente === row.cliente &&
+                              edicionForecastSetup.tipo === "desc"
+                            ? edicionForecastSetup.newDesc
+                            : null
                       }
                       editable={
                         showExcluirForecastCheckbox &&
@@ -4704,7 +4911,10 @@ export default function ArrClient() {
                         clientesDescForecastSim[row.cliente] != null &&
                         Number.isFinite(clientesDescForecastSim[row.cliente])
                           ? clientesDescForecastSim[row.cliente]
-                          : null
+                          : edicionForecastSetup?.row.cliente === row.cliente &&
+                              edicionForecastSetup.tipo === "desc"
+                            ? edicionForecastSetup.newDesc
+                            : null
                       }
                       editable={showExcluirForecastCheckbox && !clientesExcluirVentaForecast[row.cliente]}
                       onCommit={setClienteDescForecastSim}
