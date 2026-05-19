@@ -31,7 +31,7 @@ import {
   normalizeEmpresa,
   presupuestoGendKey,
 } from "@/lib/igf-kpi-ui";
-import { downloadArrDashboardExcelDual } from "@/lib/arr-export-excel";
+import { descKgPlanConSigno, downloadArrDashboardExcelDual } from "@/lib/arr-export-excel";
 
 function planPersistKey(token: string, empresa: string, selB: string): string {
   return `arrPlanPersist:v1:${token.slice(0, 12)}:${empresa}:${selB}`;
@@ -494,7 +494,7 @@ function ingresoMarginalPlanNuevoRow(
   const ip =
     hgCompra != null && Number.isFinite(hgCompra) ? hgCompra : arrHgDinero;
   if (h == null || !Number.isFinite(h) || ip == null || !Number.isFinite(ip)) return null;
-  const d = Number.isFinite(descKg) ? descKg : 0;
+  const d = descKgPlanConSigno(descKg, origen);
   const raw = kg * (margenMes + d) + (h + ip) * kg * (i6Arr / 100);
   const sign = origen === "sin_venta" ? -1 : 1;
   return Math.round(sign * raw);
@@ -579,9 +579,8 @@ function descuentoPlanForecastSegunArrYB6(
   for (const n of nuevosMan) {
     const kg = Number(n.kg);
     if (!Number.isFinite(kg) || kg <= 0) continue;
-    const d = Number.isFinite(n.descKg) ? n.descKg : 0;
-    const sign = n.origen === "sin_venta" ? -1 : 1;
-    extra += sign * ((d * kg) / 1000);
+    const d = descKgPlanConSigno(n.descKg, n.origen);
+    extra += (d * kg) / 1000;
   }
   return (arrD * arrB + extra) / planB;
 }

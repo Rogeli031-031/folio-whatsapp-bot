@@ -44,8 +44,17 @@ function cellNum(v: number | null | undefined): number | null {
 }
 
 const NUM_FMT_DESC_KG = "#,##0.00";
-/** Positivos se muestran con «−»; el valor en celda sigue positivo para fórmulas tipo -(F*E/1000). */
-const NUM_FMT_DESC_KG_SIN_VENTA = "-#,##0.00;#,##0.00";
+
+/** Desc. $/kg con signo algebraico (C+F, ingreso, D6): sin venta y magnitudes positivas → negativo. */
+export function descKgPlanConSigno(
+  descKg: number,
+  origen?: "manual" | "sin_venta" | "con_venta"
+): number {
+  const d = Number.isFinite(descKg) ? descKg : 0;
+  if (origen === "sin_venta") return -Math.abs(d);
+  if (d > 0) return -Math.abs(d);
+  return d;
+}
 
 /** Valor y formato de Desc. $/kg en «Nuevos clientes (plan)». */
 function descKgNuevoClienteCell(
@@ -55,10 +64,7 @@ function descKgNuevoClienteCell(
   if (descKg == null || Number.isNaN(descKg)) {
     return { value: null, numFmt: NUM_FMT_DESC_KG };
   }
-  if (origen === "sin_venta") {
-    return { value: Math.abs(descKg), numFmt: NUM_FMT_DESC_KG_SIN_VENTA };
-  }
-  return { value: descKg, numFmt: NUM_FMT_DESC_KG };
+  return { value: descKgPlanConSigno(descKg, origen), numFmt: NUM_FMT_DESC_KG };
 }
 
 /** Índice de columna 1-based → letra Excel (A, B, …, Z, AA…). */
@@ -361,10 +367,11 @@ async function downloadArrDashboardExcelInternal(
       const nv = nuevosClientesPlan[i];
       if (nv.incluirEnForecastMes === false) continue;
       const r = firstNuevoDataRow + i;
-      const sign = nv.origen === "sin_venta" ? "-" : "+";
-      partsD6.push(`${sign}(F${r}*E${r}/1000)`);
+      /** F ya trae signo (p. ej. −5.37); +(F×E/1000) equivale al antiguo −(|F|×E/1000). */
+      partsD6.push(`+(F${r}*E${r}/1000)`);
+      const signHg = nv.origen === "sin_venta" ? "-" : "+";
       partsH6Terms.push(
-        `${sign}((IF(ISBLANK(H${r}),ARR!H$${MES_B_R},H${r})+IF(ISBLANK(I${r}),ARR!I$${MES_B_R},I${r}))*E${r}/100)`
+        `${signHg}((IF(ISBLANK(H${r}),ARR!H$${MES_B_R},H${r})+IF(ISBLANK(I${r}),ARR!I$${MES_B_R},I${r}))*E${r}/100)`
       );
     }
 
