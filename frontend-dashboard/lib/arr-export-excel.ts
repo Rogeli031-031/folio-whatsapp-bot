@@ -48,7 +48,7 @@ const NUM_FMT_DESC_KG = "#,##0.00";
 /** Desc. $/kg con signo algebraico (C+F, ingreso, D6): sin venta y magnitudes positivas → negativo. */
 export function descKgPlanConSigno(
   descKg: number,
-  origen?: "manual" | "sin_venta" | "con_venta"
+  origen?: "manual" | "sin_venta" | "con_venta" | "venta_editada"
 ): number {
   const d = Number.isFinite(descKg) ? descKg : 0;
   if (origen === "sin_venta") return -Math.abs(d);
@@ -59,7 +59,7 @@ export function descKgPlanConSigno(
 /** Valor y formato de Desc. $/kg en «Nuevos clientes (plan)». */
 function descKgNuevoClienteCell(
   descKg: number,
-  origen?: "manual" | "sin_venta" | "con_venta"
+  origen?: "manual" | "sin_venta" | "con_venta" | "venta_editada"
 ): { value: number | null; numFmt: string } {
   if (descKg == null || Number.isNaN(descKg)) {
     return { value: null, numFmt: NUM_FMT_DESC_KG };
@@ -127,7 +127,7 @@ export type ArrExportOptions = {
     hgCompra?: number | null;
     comentarios?: string;
     /** `sin_venta`: resta en fórmulas D6/I6/B8; resto suma (manual / con_venta). */
-    origen?: "manual" | "sin_venta" | "con_venta";
+    origen?: "manual" | "sin_venta" | "con_venta" | "venta_editada";
     /** Si false, la fila no entra en D6/H6 del forecast (solo plan futuro). */
     incluirEnForecastMes?: boolean;
   }[];
