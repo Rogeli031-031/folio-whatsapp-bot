@@ -367,8 +367,8 @@ async function downloadArrDashboardExcelInternal(
       const nv = nuevosClientesPlan[i];
       if (nv.incluirEnForecastMes === false) continue;
       const r = firstNuevoDataRow + i;
-      /** F ya trae signo (p. ej. −5.37); +(F×E/1000) equivale al antiguo −(|F|×E/1000). */
-      partsD6.push(`+(F${r}*E${r}/1000)`);
+      const signD6 = nv.origen === "sin_venta" ? "-" : "+";
+      partsD6.push(`${signD6}(F${r}*E${r}/1000)`);
       const signHg = nv.origen === "sin_venta" ? "-" : "+";
       partsH6Terms.push(
         `${signHg}((IF(ISBLANK(H${r}),ARR!H$${MES_B_R},H${r})+IF(ISBLANK(I${r}),ARR!I$${MES_B_R},I${r}))*E${r}/100)`
