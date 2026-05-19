@@ -43,13 +43,22 @@ function cellNum(v: number | null | undefined): number | null {
   return v;
 }
 
-/** Misma convención que la tabla ARR Plan en pantalla: «Sin venta» exporta desc. $/kg negativo. */
-function descKgNuevoClienteExport(
+const NUM_FMT_DESC_KG = "#,##0.00";
+/** Positivos se muestran con «−»; el valor en celda sigue positivo para fórmulas tipo -(F*E/1000). */
+const NUM_FMT_DESC_KG_SIN_VENTA = "-#,##0.00;#,##0.00";
+
+/** Valor y formato de Desc. $/kg en «Nuevos clientes (plan)». */
+function descKgNuevoClienteCell(
   descKg: number,
   origen?: "manual" | "sin_venta" | "con_venta"
-): number | null {
-  if (descKg == null || Number.isNaN(descKg)) return null;
-  return origen === "sin_venta" ? -Math.abs(descKg) : descKg;
+): { value: number | null; numFmt: string } {
+  if (descKg == null || Number.isNaN(descKg)) {
+    return { value: null, numFmt: NUM_FMT_DESC_KG };
+  }
+  if (origen === "sin_venta") {
+    return { value: Math.abs(descKg), numFmt: NUM_FMT_DESC_KG_SIN_VENTA };
+  }
+  return { value: descKg, numFmt: NUM_FMT_DESC_KG };
 }
 
 /** Índice de columna 1-based → letra Excel (A, B, …, Z, AA…). */
@@ -352,11 +361,10 @@ async function downloadArrDashboardExcelInternal(
       const nv = nuevosClientesPlan[i];
       if (nv.incluirEnForecastMes === false) continue;
       const r = firstNuevoDataRow + i;
-      /** F ya lleva signo en «Sin venta»; el prefijo + evita doble negación en D6. */
-      partsD6.push(`+(F${r}*E${r}/1000)`);
-      const signHg = nv.origen === "sin_venta" ? "-" : "+";
+      const sign = nv.origen === "sin_venta" ? "-" : "+";
+      partsD6.push(`${sign}(F${r}*E${r}/1000)`);
       partsH6Terms.push(
-        `${signHg}((IF(ISBLANK(H${r}),ARR!H$${MES_B_R},H${r})+IF(ISBLANK(I${r}),ARR!I$${MES_B_R},I${r}))*E${r}/100)`
+        `${sign}((IF(ISBLANK(H${r}),ARR!H$${MES_B_R},H${r})+IF(ISBLANK(I${r}),ARR!I$${MES_B_R},I${r}))*E${r}/100)`
       );
     }
 
@@ -389,8 +397,9 @@ async function downloadArrDashboardExcelInternal(
       r.getCell(4).value = n.responsable;
       r.getCell(5).value = cellNum(n.kg);
       r.getCell(5).numFmt = "#,##0";
-      r.getCell(6).value = descKgNuevoClienteExport(n.descKg, n.origen);
-      r.getCell(6).numFmt = "#,##0.00";
+      const descCell = descKgNuevoClienteCell(n.descKg, n.origen);
+      r.getCell(6).value = descCell.value;
+      r.getCell(6).numFmt = descCell.numFmt;
       r.getCell(7).value = cellNum(n.gastoMxn);
       r.getCell(7).numFmt = "#,##0";
       const hgC = n.hgCliente;
@@ -409,15 +418,15 @@ async function downloadArrDashboardExcelInternal(
       }
       r.getCell(10).value = (n.comentarios ?? "").trim() || null;
       r.getCell(10).alignment = { vertical: "top", horizontal: "left", wrapText: true };
-      const hp = `(IF(ISBLANK(H${cur}),ARR!H$${MES_B_R},H${cur})+IF(ISBLANK(I${cur}),ARR!I$${MES_B_R},I${cur}))`;
-      const fMargen = n.origen === "sin_venta" ? `ABS(F${cur})` : `F${cur}`;
-      const coreIng = `((E${cur}*($C$${MES_B_R}+${fMargen}))+((${hp})*E${cur}*$I$${MES_B_R}/100))`;
-      const signNeg = n.origen === "sin_venta";
-      r.getCell(11).value = {
-        formula: signNeg
-          ? `ROUND(IFERROR(-(${coreIng}),0),0)`
-          : `ROUND(IFERROR(${coreIng},0),0)`,
-      };
+      if (n.origen === "sin_venta") {
+        r.getCell(11).value = {
+          formula: `ROUND(IFERROR(-1*((E${cur}*($C$${MES_B_R}+F${cur}))+(E${cur}*(H${cur}+I${cur})*$I$${MES_B_R}/100)),0),0)`,
+        };
+      } else {
+        const hp = `(IF(ISBLANK(H${cur}),ARR!H$${MES_B_R},H${cur})+IF(ISBLANK(I${cur}),ARR!I$${MES_B_R},I${cur}))`;
+        const coreIng = `((E${cur}*($C$${MES_B_R}+F${cur}))+((${hp})*E${cur}*$I$${MES_B_R}/100))`;
+        r.getCell(11).value = { formula: `ROUND(IFERROR(${coreIng},0),0)` };
+      }
       r.getCell(11).numFmt = '"$" #,##0';
       styleDataRow(r, 11, centerCols);
       r.getCell(10).alignment = { vertical: "top", horizontal: "left", wrapText: true };

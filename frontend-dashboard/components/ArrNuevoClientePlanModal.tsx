@@ -195,20 +195,32 @@ export default function ArrNuevoClientePlanModal({
 
     const hgClienteTrim = hgClienteStr.trim();
     let hgCliente: number | null = null;
-    if (!esSinVentaRow && hgClienteTrim !== "") {
+    if (esSinVentaRow) {
+      const hgParsed = parseNum(hgClienteTrim);
+      if (hgClienteTrim === "" || hgParsed == null || !Number.isFinite(hgParsed)) {
+        setError("Indica HG cliente (obligatorio al marcar Sin venta).");
+        return;
+      }
+      hgCliente = hgParsed;
+    } else if (hgClienteTrim !== "") {
       const hgParsed = parseNum(hgClienteTrim);
       if (hgParsed == null || !Number.isFinite(hgParsed)) {
         setError("HG cliente debe ser un número válido o déjalo vacío para usar el HG del mes.");
         return;
       }
       hgCliente = hgParsed;
-    } else if (!esSinVentaRow && hgClienteTrim === "") {
-      hgCliente = null;
     }
 
     const hgCompraTrim = hgCompraStr.trim();
     let hgCompra: number | null = null;
-    if (!esSinVentaRow && hgCompraTrim !== "") {
+    if (esSinVentaRow) {
+      const hcp = parseNum(hgCompraTrim);
+      if (hgCompraTrim === "" || hcp == null || !Number.isFinite(hcp)) {
+        setError("Indica HG compra (obligatorio al marcar Sin venta).");
+        return;
+      }
+      hgCompra = hcp;
+    } else if (hgCompraTrim !== "") {
       const hcp = parseNum(hgCompraTrim);
       if (hcp == null || !Number.isFinite(hcp)) {
         setError(
@@ -217,8 +229,6 @@ export default function ArrNuevoClientePlanModal({
         return;
       }
       hgCompra = hcp;
-    } else if (!esSinVentaRow && hgCompraTrim === "") {
-      hgCompra = null;
     }
 
     const sub = subcategoria.trim() || (esSinVentaRow ? (clienteEditar?.subcategoria ?? "").trim() : "");
@@ -261,6 +271,7 @@ export default function ArrNuevoClientePlanModal({
   const readOnlyNombreForecast =
     roOrigen === "sin_venta" || roOrigen === "con_venta";
   const readOnlyVolumenSinVenta = roOrigen === "sin_venta";
+  const readOnlyHg = roOrigen === "con_venta";
   const clsRo = (locked: boolean) => (locked ? "cursor-not-allowed bg-slate-900/70 text-slate-300" : "");
 
   return (
@@ -281,10 +292,15 @@ export default function ArrNuevoClientePlanModal({
               ? " Los cambios actualizan de inmediato el resumen (venta, descuento ponderado, gasto y rentabilidad)."
               : " Se sumará el volumen al resumen, se recalculará el descuento ponderado, el gasto y la rentabilidad del mes proyectado."}
           </p>
-          {readOnlyNombreForecast ? (
+          {roOrigen === "sin_venta" ? (
             <p className="text-sky-300/90">
-              Casilla «Sin venta» o «Con venta» en la tabla de clientes. Puedes editar comentarios,
-              responsable y categorías; el volumen de «Sin venta» sigue al pronóstico de la tabla.
+              Cliente marcado como Sin venta. Indica HG cliente y HG compra (van a columnas H e I del
+              Excel). Categoría y subcategoría se tomaron del listado ARR del cliente.
+            </p>
+          ) : readOnlyNombreForecast ? (
+            <p className="text-sky-300/90">
+              Casilla «Con venta» en la tabla de clientes. Puedes editar comentarios, responsable y
+              categorías; el volumen sigue al pronóstico de la tabla.
             </p>
           ) : null}
         </div>
@@ -335,13 +351,17 @@ export default function ArrNuevoClientePlanModal({
             />
           </label>
           <label className="block text-sm">
-            <span className="text-slate-300">HG cliente</span>
+            <span className="text-slate-300">
+              HG cliente{roOrigen === "sin_venta" ? " *" : ""}
+            </span>
             <input
               value={hgClienteStr}
               onChange={(e) => setHgClienteStr(e.target.value)}
-              readOnly={readOnlyVolumenSinVenta}
-              className={`mt-1 w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100 ${clsRo(readOnlyVolumenSinVenta)}`}
-              placeholder="Vacío = HG del mes forecast"
+              readOnly={readOnlyHg}
+              className={`mt-1 w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100 ${clsRo(readOnlyHg)}`}
+              placeholder={
+                roOrigen === "sin_venta" ? "Obligatorio (columna H en Excel)" : "Vacío = HG del mes forecast"
+              }
               inputMode="decimal"
             />
             <span className="mt-1 block text-[0.65rem] text-slate-500">
@@ -350,13 +370,17 @@ export default function ArrNuevoClientePlanModal({
             </span>
           </label>
           <label className="block text-sm">
-            <span className="text-slate-300">HG compra</span>
+            <span className="text-slate-300">
+              HG compra{roOrigen === "sin_venta" ? " *" : ""}
+            </span>
             <input
               value={hgCompraStr}
               onChange={(e) => setHgCompraStr(e.target.value)}
-              readOnly={readOnlyVolumenSinVenta}
-              className={`mt-1 w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100 ${clsRo(readOnlyVolumenSinVenta)}`}
-              placeholder="Vacío = HG$ del mes forecast"
+              readOnly={readOnlyHg}
+              className={`mt-1 w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100 ${clsRo(readOnlyHg)}`}
+              placeholder={
+                roOrigen === "sin_venta" ? "Obligatorio (columna I en Excel)" : "Vacío = HG$ del mes forecast"
+              }
               inputMode="decimal"
             />
             <span className="mt-1 block text-[0.65rem] text-slate-500">

@@ -10,7 +10,7 @@ import ArrDicfCategoriaBucketsModal, {
 } from "@/components/ArrDicfCategoriaBucketsModal";
 import ArrSimularIngresoModal from "@/components/ArrSimularIngresoModal";
 import ArrNuevoClientePlanModal from "@/components/ArrNuevoClientePlanModal";
-import { categoriaEsComisionista } from "@/lib/arr-categoria";
+import { categoriaEsComisionista, dicfClienteEsComisionista } from "@/lib/arr-categoria";
 import {
   fetchIgfForecast,
   fetchIgfVersiones,
@@ -999,6 +999,31 @@ function findArrClienteMesRow(
   return clientesB.rows.find((r) => r.cliente.trim() === k) ?? null;
 }
 
+/** Mes B primero; si el cliente solo está en A, usa categoría/subcanal de ese mes. */
+function resolveArrClienteForPlan(
+  clientesA: ClientesMonthData | undefined,
+  clientesB: ClientesMonthData | undefined,
+  cliente: string
+): ArrClienteMesRow | null {
+  return (
+    findArrClienteMesRow(clientesB, cliente) ?? findArrClienteMesRow(clientesA, cliente)
+  );
+}
+
+function planCategoriaFromArr(arr: ArrClienteMesRow | null): {
+  categoria: "CASA" | "COMISIONISTA";
+  subcategoria: string;
+} {
+  if (!arr) return { categoria: "CASA", subcategoria: "" };
+  const comi =
+    categoriaEsComisionista(arr.categoria) ||
+    dicfClienteEsComisionista({ canal: arr.categoria, subcanal: arr.subcategoria });
+  return {
+    categoria: comi ? "COMISIONISTA" : "CASA",
+    subcategoria: String(arr.subcategoria ?? "").trim(),
+  };
+}
+
 function buildPlanRowSinVenta(
   row: ClienteTablaRow,
   arr: ArrClienteMesRow | null
@@ -1010,8 +1035,7 @@ function buildPlanRowSinVenta(
   if (kg <= 0) return null;
   const descKg =
     row.descB != null && Number.isFinite(row.descB) ? row.descB : 0;
-  const categoria: "CASA" | "COMISIONISTA" =
-    arr && categoriaEsComisionista(arr.categoria) ? "COMISIONISTA" : "CASA";
+  const { categoria, subcategoria } = planCategoriaFromArr(arr);
   return {
     id: idPlanRowSinVenta(row.cliente),
     nombre: row.cliente.trim(),
@@ -1021,7 +1045,7 @@ function buildPlanRowSinVenta(
     responsable: "",
     responsableId: null,
     categoria,
-    subcategoria: String(arr?.subcategoria ?? "").trim(),
+    subcategoria,
     hgCliente: null,
     hgCompra: null,
     comentarios: "",
@@ -1042,8 +1066,7 @@ function buildPlanRowConVenta(
       : row.descA != null && Number.isFinite(row.descA)
         ? row.descA
         : 0;
-  const categoria: "CASA" | "COMISIONISTA" =
-    arr && categoriaEsComisionista(arr.categoria) ? "COMISIONISTA" : "CASA";
+  const { categoria, subcategoria } = planCategoriaFromArr(arr);
   return {
     id: idPlanRowConVenta(row.cliente),
     nombre: row.cliente.trim(),
@@ -1053,7 +1076,7 @@ function buildPlanRowConVenta(
     responsable: "",
     responsableId: null,
     categoria,
-    subcategoria: String(arr?.subcategoria ?? "").trim(),
+    subcategoria,
     hgCliente: null,
     hgCompra: null,
     comentarios: "",
@@ -1258,6 +1281,8 @@ export default function ArrClient() {
   const [showSimular, setShowSimular] = useState(false);
   const [showNuevoClientePlan, setShowNuevoClientePlan] = useState(false);
   const [clientePlanEditando, setClientePlanEditando] = useState<NuevoClientePlanRow | null>(null);
+  /** Al marcar «Sin venta», se abre el modal HG antes de confirmar la exclusión. */
+  const [sinVentaSetupRow, setSinVentaSetupRow] = useState<ClienteTablaRow | null>(null);
   const [responsablesPlan, setResponsablesPlan] = useState<{ id: number; nombre: string }[]>([]);
   const [plantaIdPlan, setPlantaIdPlan] = useState<number | null>(null);
 
@@ -1298,30 +1323,54 @@ export default function ArrClient() {
     (row: ClienteTablaRow) => {
       const k = row.cliente.trim();
       if (!k) return;
+      if (isArrPlanRoute) {
+        const keyB = empresa && selB ? clientesCacheKey(empresa, selB, dataByKey[selB]) : "";
+        const keyA = empresa && selA ? clientesCacheKey(empresa, selA, dataByKey[selA]) : "";
+        const was = !!clientesExcluirVentaForecast[k];
+        if (was) {
+          setSinVentaSetupRow(null);
+          setWsPlan((s) => {
+            const next = { ...s.clientesExcluirVentaForecast };
+            delete next[k];
+            const idSv = idPlanRowSinVenta(k);
+            return {
+              ...s,
+              clientesExcluirVentaForecast: next,
+              nuevosClientesPlan: s.nuevosClientesPlan.filter((n) => n.id !== idSv),
+            };
+          });
+          return;
+        }
+        const ar = resolveArrClienteForPlan(
+          keyA ? clientesByKey[keyA] : undefined,
+          keyB ? clientesByKey[keyB] : undefined,
+          k
+        );
+        const planRow = buildPlanRowSinVenta(row, ar);
+        if (!planRow) return;
+        setSinVentaSetupRow(row);
+        setClientePlanEditando(planRow);
+        setShowNuevoClientePlan(true);
+        return;
+      }
       const patch = (s: ArrWorkspaceSlice) => {
         const next = { ...s.clientesExcluirVentaForecast };
         const was = !!next[k];
         if (was) delete next[k];
         else next[k] = true;
-        let nuevos = s.nuevosClientesPlan;
-        if (isArrPlanRoute) {
-          const idSv = idPlanRowSinVenta(k);
-          if (was) {
-            nuevos = nuevos.filter((n) => n.id !== idSv);
-          } else {
-            const planRow = buildPlanRowSinVenta(
-              row,
-              findArrClienteMesRow(s.clientesByKey[s.selB], k)
-            );
-            if (planRow) nuevos = [...nuevos.filter((n) => n.id !== idSv), planRow];
-          }
-        }
-        return { ...s, clientesExcluirVentaForecast: next, nuevosClientesPlan: nuevos };
+        return { ...s, clientesExcluirVentaForecast: next };
       };
-      if (isArrPlanRoute) setWsPlan(patch);
-      else setWsBase(patch);
+      setWsBase(patch);
     },
-    [isArrPlanRoute]
+    [
+      isArrPlanRoute,
+      empresa,
+      selA,
+      selB,
+      dataByKey,
+      clientesByKey,
+      clientesExcluirVentaForecast,
+    ]
   );
 
   /** Cliente inactivo en forecast: sin kg proyectado en mes B (casilla Sin venta deshabilitada). */
@@ -1347,12 +1396,16 @@ export default function ArrClient() {
           const descKg =
             row.descA != null && Number.isFinite(row.descA) ? row.descA : null;
           next[k] = { kg, descKg };
-          if (isArrPlanRoute) {
-            const planRow = buildPlanRowConVenta(
-              row,
-              next[k],
-              findArrClienteMesRow(s.clientesByKey[s.selB], k)
-            );
+          if (isArrPlanRoute && empresa) {
+            const ca =
+              s.selA && s.dataByKey[s.selA]
+                ? s.clientesByKey[clientesCacheKey(empresa, s.selA, s.dataByKey[s.selA])]
+                : undefined;
+            const cb =
+              s.selB && s.dataByKey[s.selB]
+                ? s.clientesByKey[clientesCacheKey(empresa, s.selB, s.dataByKey[s.selB])]
+                : undefined;
+            const planRow = buildPlanRowConVenta(row, next[k], resolveArrClienteForPlan(ca, cb, k));
             nuevos = [...nuevos.filter((n) => n.id !== idCv), planRow];
           }
         }
@@ -1361,7 +1414,7 @@ export default function ArrClient() {
       if (isArrPlanRoute) setWsPlan(patch);
       else setWsBase(patch);
     },
-    [isArrPlanRoute, clienteInactivoForecastB]
+    [isArrPlanRoute, clienteInactivoForecastB, empresa]
   );
 
   /**
@@ -1407,6 +1460,49 @@ export default function ArrClient() {
     }) => {
       if (!isArrPlanRoute) return;
       const incluirMes = payload.incluirEnForecastMes !== false;
+
+      if (sinVentaSetupRow) {
+        const k = sinVentaSetupRow.cliente.trim();
+        const idSv = idPlanRowSinVenta(k);
+        const {
+          kg,
+          descKg,
+          gastoMxn,
+          responsable,
+          responsableId,
+          categoria,
+          subcategoria,
+          hgCliente,
+          hgCompra,
+          comentarios,
+        } = payload;
+        setWsPlan((s) => ({
+          ...s,
+          clientesExcluirVentaForecast: { ...s.clientesExcluirVentaForecast, [k]: true },
+          nuevosClientesPlan: [
+            ...s.nuevosClientesPlan.filter((n) => n.id !== idSv),
+            {
+              id: idSv,
+              nombre: k,
+              kg,
+              descKg,
+              gastoMxn,
+              responsable,
+              responsableId,
+              categoria,
+              subcategoria,
+              hgCliente,
+              hgCompra,
+              comentarios,
+              origen: "sin_venta",
+              incluirEnForecastMes: incluirMes,
+            },
+          ],
+        }));
+        setSinVentaSetupRow(null);
+        return;
+      }
+
       if (payload.id) {
         const {
           id,
@@ -1499,7 +1595,7 @@ export default function ArrClient() {
         ],
       }));
     },
-    [isArrPlanRoute]
+    [isArrPlanRoute, sinVentaSetupRow]
   );
 
   const setNuevoPlanIncluirEnForecastMes = useCallback((id: string, incluir: boolean) => {
@@ -2011,7 +2107,7 @@ export default function ArrClient() {
         if (nuevos.some((n) => n.id === id)) return;
         const rowT = findClienteTablaRowInFilas(cliente, primero, solo);
         if (!rowT) return;
-        const ar = findArrClienteMesRow(clientesB, cliente);
+        const ar = resolveArrClienteForPlan(clientesA, clientesB, cliente);
         if (tipo === "sin_venta") {
           const built = buildPlanRowSinVenta(rowT, ar);
           if (!built) return;
@@ -2542,10 +2638,8 @@ export default function ArrClient() {
     const scan = (c: ClientesMonthData | undefined) => {
       if (!c?.rows?.length) return;
       for (const r of c.rows) {
-        const cat: "CASA" | "COMISIONISTA" = categoriaEsComisionista(r.categoria)
-          ? "COMISIONISTA"
-          : "CASA";
-        add(cat, r.subcategoria);
+        const { categoria: cat, subcategoria: sub } = planCategoriaFromArr(r);
+        add(cat, sub);
       }
     };
     scan(clientesA);
@@ -2923,8 +3017,7 @@ export default function ArrClient() {
           }
           const hist = clientesB0.historico === true;
           const cli = r.cliente.trim();
-          const cat = categoriaEsComisionista(rB.categoria) ? "COMISIONISTA" : "CASA";
-          const sub = String(rB.subcategoria ?? "").trim();
+          const { categoria: cat, subcategoria: sub } = planCategoriaFromArr(rB);
           let vKg: number | null;
           let descKg: number | null;
           if (hist) {
@@ -2988,8 +3081,7 @@ export default function ArrClient() {
           }
           const hist = clientesB0.historico === true;
           const cli = r.cliente.trim();
-          const cat = categoriaEsComisionista(rB.categoria) ? "COMISIONISTA" : "CASA";
-          const sub = String(rB.subcategoria ?? "").trim();
+          const { categoria: cat, subcategoria: sub } = planCategoriaFromArr(rB);
           let vKg: number | null;
           let descKg: number | null;
           if (hist) {
@@ -4037,6 +4129,20 @@ export default function ArrClient() {
         <ArrNuevoClientePlanModal
           abierto={showNuevoClientePlan}
           onClose={() => {
+            if (sinVentaSetupRow) {
+              const k = sinVentaSetupRow.cliente.trim();
+              setWsPlan((s) => {
+                const next = { ...s.clientesExcluirVentaForecast };
+                delete next[k];
+                const idSv = idPlanRowSinVenta(k);
+                return {
+                  ...s,
+                  clientesExcluirVentaForecast: next,
+                  nuevosClientesPlan: s.nuevosClientesPlan.filter((n) => n.id !== idSv),
+                };
+              });
+              setSinVentaSetupRow(null);
+            }
             setShowNuevoClientePlan(false);
             setClientePlanEditando(null);
           }}
