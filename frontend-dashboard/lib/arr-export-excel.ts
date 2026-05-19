@@ -43,6 +43,15 @@ function cellNum(v: number | null | undefined): number | null {
   return v;
 }
 
+/** Misma convención que la tabla ARR Plan en pantalla: «Sin venta» exporta desc. $/kg negativo. */
+function descKgNuevoClienteExport(
+  descKg: number,
+  origen?: "manual" | "sin_venta" | "con_venta"
+): number | null {
+  if (descKg == null || Number.isNaN(descKg)) return null;
+  return origen === "sin_venta" ? -Math.abs(descKg) : descKg;
+}
+
 /** Índice de columna 1-based → letra Excel (A, B, …, Z, AA…). */
 function excelColLetter(colIndex: number): string {
   let n = colIndex;
@@ -343,10 +352,11 @@ async function downloadArrDashboardExcelInternal(
       const nv = nuevosClientesPlan[i];
       if (nv.incluirEnForecastMes === false) continue;
       const r = firstNuevoDataRow + i;
-      const sign = nv.origen === "sin_venta" ? "-" : "+";
-      partsD6.push(`${sign}(F${r}*E${r}/1000)`);
+      /** F ya lleva signo en «Sin venta»; el prefijo + evita doble negación en D6. */
+      partsD6.push(`+(F${r}*E${r}/1000)`);
+      const signHg = nv.origen === "sin_venta" ? "-" : "+";
       partsH6Terms.push(
-        `${sign}((IF(ISBLANK(H${r}),ARR!H$${MES_B_R},H${r})+IF(ISBLANK(I${r}),ARR!I$${MES_B_R},I${r}))*E${r}/100)`
+        `${signHg}((IF(ISBLANK(H${r}),ARR!H$${MES_B_R},H${r})+IF(ISBLANK(I${r}),ARR!I$${MES_B_R},I${r}))*E${r}/100)`
       );
     }
 
@@ -379,7 +389,7 @@ async function downloadArrDashboardExcelInternal(
       r.getCell(4).value = n.responsable;
       r.getCell(5).value = cellNum(n.kg);
       r.getCell(5).numFmt = "#,##0";
-      r.getCell(6).value = cellNum(n.descKg);
+      r.getCell(6).value = descKgNuevoClienteExport(n.descKg, n.origen);
       r.getCell(6).numFmt = "#,##0.00";
       r.getCell(7).value = cellNum(n.gastoMxn);
       r.getCell(7).numFmt = "#,##0";
@@ -400,7 +410,8 @@ async function downloadArrDashboardExcelInternal(
       r.getCell(10).value = (n.comentarios ?? "").trim() || null;
       r.getCell(10).alignment = { vertical: "top", horizontal: "left", wrapText: true };
       const hp = `(IF(ISBLANK(H${cur}),ARR!H$${MES_B_R},H${cur})+IF(ISBLANK(I${cur}),ARR!I$${MES_B_R},I${cur}))`;
-      const coreIng = `((E${cur}*($C$${MES_B_R}+F${cur}))+((${hp})*E${cur}*$I$${MES_B_R}/100))`;
+      const fMargen = n.origen === "sin_venta" ? `ABS(F${cur})` : `F${cur}`;
+      const coreIng = `((E${cur}*($C$${MES_B_R}+${fMargen}))+((${hp})*E${cur}*$I$${MES_B_R}/100))`;
       const signNeg = n.origen === "sin_venta";
       r.getCell(11).value = {
         formula: signNeg
