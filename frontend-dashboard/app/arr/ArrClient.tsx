@@ -19,6 +19,9 @@ import {
   fetchPlantas,
   fetchActionRegisterResponsables,
   postDicfDatos,
+  fetchIgfMetaVersions,
+  fetchIgfMetaExcelBuffer,
+  pickIgfMetaVersionNumber,
   type IgfForecastRow,
   type IgfForecastMiniRow,
   type IgfPeriodo,
@@ -3980,6 +3983,7 @@ export default function ArrClient() {
       try {
         const arr = buildExportOptsFromSlice(wsBase);
         const plan = buildExportOptsFromSlice(wsPlan);
+        let metaEvaluacionBuffer: ArrayBuffer | undefined;
         let movimientoCategoria:
           | {
               resumenSubcategoria: typeof resumenSubcategoriaForecastDicf;
@@ -3990,6 +3994,32 @@ export default function ArrClient() {
               mesForecastLabel?: string;
             }
           | undefined;
+
+        if (token.trim() && wsPlan.selB) {
+          const [yStr, mStr] = wsPlan.selB.split("-");
+          const metaYear = parseInt(yStr, 10);
+          const metaMonth = parseInt(mStr, 10);
+          if (Number.isFinite(metaYear) && Number.isFinite(metaMonth) && metaMonth >= 1 && metaMonth <= 12) {
+            try {
+              const { versions } = await fetchIgfMetaVersions(token, metaYear, metaMonth);
+              const vn = pickIgfMetaVersionNumber(versions);
+              if (vn != null) {
+                metaEvaluacionBuffer = await fetchIgfMetaExcelBuffer(
+                  token,
+                  metaYear,
+                  metaMonth,
+                  vn
+                );
+              }
+            } catch (metaErr) {
+              console.warn(
+                "Export ARR: META/EVALUACION no incluidas (sin versión o esquema igf_meta)",
+                metaErr
+              );
+            }
+          }
+        }
+
         if (token.trim() && empresa.trim()) {
           try {
             const dicf = await postDicfDatos(token, { planta: empresa.trim() });
@@ -4022,6 +4052,7 @@ export default function ArrClient() {
         await downloadArrDashboardExcelDual({
           arr,
           plan,
+          metaEvaluacionBuffer,
           movimientoCategoria,
         });
       } catch (e) {
@@ -4034,6 +4065,7 @@ export default function ArrClient() {
     token,
     wsBase,
     wsPlan,
+    wsPlan.selB,
     buildExportOptsFromSlice,
     resumenSubcategoriaForecastDicf,
     nuevosKgPlanManuales,

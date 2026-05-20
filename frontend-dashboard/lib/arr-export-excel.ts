@@ -788,9 +788,14 @@ export type ArrExportMovimientoCategoriaSheets = {
 export async function downloadArrDashboardExcelDual(opts: {
   arr: ArrExportOptions;
   plan: ArrExportOptions;
+  /** Buffer del Excel IGF META (hojas META + EVALUACION), antes de ARR. */
+  metaEvaluacionBuffer?: ArrayBuffer | null;
   movimientoCategoria?: ArrExportMovimientoCategoriaSheets | null;
 }): Promise<void> {
   const wb = new ExcelJS.Workbook();
+  if (opts.metaEvaluacionBuffer?.byteLength) {
+    await wb.xlsx.load(opts.metaEvaluacionBuffer);
+  }
   await downloadArrDashboardExcelInternal(opts.arr, {
     workbook: wb,
     sheetName: "ARR",

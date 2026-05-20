@@ -61,6 +61,34 @@ export function getIgfMetaExcelDownloadUrl(
   return `${base}?year=${year}&month=${month}&version_number=${versionNumber}&t=${encodeURIComponent(token)}`;
 }
 
+/** Buffer .xlsx IGF META + EVALUACION (mismo archivo que el botón Evaluacion). */
+export async function fetchIgfMetaExcelBuffer(
+  token: string,
+  year: number,
+  month: number,
+  versionNumber: number
+): Promise<ArrayBuffer> {
+  const url = getIgfMetaExcelDownloadUrl(token, year, month, versionNumber);
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+  });
+  const ct = (res.headers.get("content-type") || "").toLowerCase();
+  if (!res.ok || ct.includes("application/json")) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as { error?: string }).error || res.statusText || "Error META Excel");
+  }
+  return res.arrayBuffer();
+}
+
+/** Versión META a usar en export combinado: actual o la más reciente. */
+export function pickIgfMetaVersionNumber(versions: IgfMetaVersionItem[]): number | null {
+  if (!versions.length) return null;
+  const cur = versions.find((v) => v.is_current);
+  if (cur) return cur.version_number;
+  return versions.reduce((max, v) => Math.max(max, v.version_number), versions[0].version_number);
+}
+
 export async function apiFetch<T>(
   path: string,
   options: RequestInit & { token?: string; params?: Record<string, string> } = {}
