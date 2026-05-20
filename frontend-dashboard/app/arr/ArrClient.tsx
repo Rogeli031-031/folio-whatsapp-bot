@@ -18,6 +18,7 @@ import {
   fetchArrLastUploadDay,
   fetchPlantas,
   fetchActionRegisterResponsables,
+  postDicfDatos,
   type IgfForecastRow,
   type IgfForecastMiniRow,
   type IgfPeriodo,
@@ -32,6 +33,7 @@ import {
   presupuestoGendKey,
 } from "@/lib/igf-kpi-ui";
 import { descKgPlanConSigno, downloadArrDashboardExcelDual } from "@/lib/arr-export-excel";
+import { buildArrExportMovimientoClienteRows } from "@/lib/arr-export-movimiento-categoria";
 
 function planPersistKey(token: string, empresa: string, selB: string): string {
   return `arrPlanPersist:v1:${token.slice(0, 12)}:${empresa}:${selB}`;
@@ -3978,12 +3980,64 @@ export default function ArrClient() {
       try {
         const arr = buildExportOptsFromSlice(wsBase);
         const plan = buildExportOptsFromSlice(wsPlan);
-        await downloadArrDashboardExcelDual({ arr, plan });
+        let movimientoCategoria:
+          | {
+              resumenSubcategoria: typeof resumenSubcategoriaForecastDicf;
+              clientesCasa: ReturnType<typeof buildArrExportMovimientoClienteRows>["casa"];
+              clientesComisionista: ReturnType<
+                typeof buildArrExportMovimientoClienteRows
+              >["comisionista"];
+              mesForecastLabel?: string;
+            }
+          | undefined;
+        if (token.trim() && empresa.trim()) {
+          try {
+            const dicf = await postDicfDatos(token, { planta: empresa.trim() });
+            const planNuevosExport = nuevosKgPlanManuales.map((n) => ({
+              nombre: n.nombre,
+              categoria: n.categoria,
+              kg: n.kg,
+              subcategoria: n.subcategoria,
+            }));
+            const { casa, comisionista } = buildArrExportMovimientoClienteRows(
+              dicf,
+              planNuevosExport
+            );
+            movimientoCategoria = {
+              resumenSubcategoria: resumenSubcategoriaForecastDicf,
+              clientesCasa: casa,
+              clientesComisionista: comisionista,
+              mesForecastLabel: wsPlan.selB ? periodoLabel(wsPlan.selB) : undefined,
+            };
+          } catch (dicfErr) {
+            console.warn("Export ARR: DICF no disponible, hojas CASA/COMISIONISTA sin movimiento", dicfErr);
+            movimientoCategoria = {
+              resumenSubcategoria: resumenSubcategoriaForecastDicf,
+              clientesCasa: [],
+              clientesComisionista: [],
+              mesForecastLabel: wsPlan.selB ? periodoLabel(wsPlan.selB) : undefined,
+            };
+          }
+        }
+        await downloadArrDashboardExcelDual({
+          arr,
+          plan,
+          movimientoCategoria,
+        });
       } catch (e) {
         console.error("Export ARR Excel:", e);
       }
     })();
-  }, [puedeExportar, empresa, wsBase, wsPlan, buildExportOptsFromSlice]);
+  }, [
+    puedeExportar,
+    empresa,
+    token,
+    wsBase,
+    wsPlan,
+    buildExportOptsFromSlice,
+    resumenSubcategoriaForecastDicf,
+    nuevosKgPlanManuales,
+  ]);
 
   const G = {
     costos: "bg-rose-950/30 border-l-2 border-rose-500/50",

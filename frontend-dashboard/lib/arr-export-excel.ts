@@ -1,4 +1,9 @@
 import ExcelJS from "exceljs";
+import { appendCategoriaMovimientoSheets } from "@/lib/arr-export-categoria-sheets";
+import type {
+  ArrExportMovimientoClienteRow,
+  ArrExportSubcategoriaResumenRow,
+} from "@/lib/arr-export-movimiento-categoria";
 
 /** Métricas del resumen ARR (mismos campos que en pantalla). */
 export type ArrExportResumenMetrics = {
@@ -770,9 +775,20 @@ async function downloadArrDashboardExcelInternal(
   URL.revokeObjectURL(a.href);
 }
 
+export type ArrExportMovimientoCategoriaSheets = {
+  resumenSubcategoria: {
+    casa: ArrExportSubcategoriaResumenRow[];
+    comisionista: ArrExportSubcategoriaResumenRow[];
+  };
+  clientesCasa: ArrExportMovimientoClienteRow[];
+  clientesComisionista: ArrExportMovimientoClienteRow[];
+  mesForecastLabel?: string;
+};
+
 export async function downloadArrDashboardExcelDual(opts: {
   arr: ArrExportOptions;
   plan: ArrExportOptions;
+  movimientoCategoria?: ArrExportMovimientoCategoriaSheets | null;
 }): Promise<void> {
   const wb = new ExcelJS.Workbook();
   await downloadArrDashboardExcelInternal(opts.arr, {
@@ -785,6 +801,9 @@ export async function downloadArrDashboardExcelDual(opts: {
     sheetName: "ARR Plan",
     skipDownload: true,
   });
+  if (opts.movimientoCategoria) {
+    appendCategoriaMovimientoSheets(wb, opts.movimientoCategoria);
+  }
   const buf = await wb.xlsx.writeBuffer();
   const blob = new Blob([buf], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
