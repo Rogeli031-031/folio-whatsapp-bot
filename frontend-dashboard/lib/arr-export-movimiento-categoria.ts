@@ -1,6 +1,11 @@
 import type { DeltaIngresoForecastCliente, DicfResult } from "@/lib/api";
 import { dicfClienteEsComisionista } from "@/lib/arr-categoria";
 
+function sanitizeExcelText(v: unknown): string {
+  if (v == null) return "";
+  return String(v).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "");
+}
+
 export type ArrExportSubcategoriaResumenRow = {
   subcategoria: string;
   ventaTon: number;
@@ -64,13 +69,13 @@ function rowFromDicf(
       : "";
   return {
     movimiento,
-    cliente: String(c.cliente || "").trim(),
+    cliente: sanitizeExcelText(String(c.cliente || "").trim()),
     categoria,
-    subcategoria: (c.subcanal || "").trim(),
-    deltaTon,
-    deltaIngreso: ingreso ?? "",
-    ultimaCompra: fmtUltimaCompra(c),
-    estado: (c.estado || "").trim() || "—",
+    subcategoria: sanitizeExcelText((c.subcanal || "").trim()),
+    deltaTon: sanitizeExcelText(deltaTon),
+    deltaIngreso: sanitizeExcelText(ingreso ?? ""),
+    ultimaCompra: sanitizeExcelText(fmtUltimaCompra(c)),
+    estado: sanitizeExcelText((c.estado || "").trim() || "—"),
     frecuenciaDias: fmtFrecuencia(c),
     origen: "dicf",
   };
@@ -116,7 +121,7 @@ export function buildArrExportMovimientoClienteRows(
     const kg = Number(n.kg);
     const row: ArrExportMovimientoClienteRow = {
       movimiento: "Nuevos",
-      cliente: n.nombre,
+      cliente: sanitizeExcelText(n.nombre),
       categoria: n.categoria,
       subcategoria: (n.subcategoria || "").trim(),
       deltaTon: Number.isFinite(kg) && kg > 0 ? `${(kg / 1000).toFixed(2)} Ton` : "",

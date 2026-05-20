@@ -17,11 +17,24 @@ const F_TOTAL = "FFDDE4EC";
 const DESC_RESUMEN =
   "Venta en toneladas y comisión proyectada del mes (kg × $/kg desc. en magnitud positiva; en plan el descuento firmado se invierte para alinear con clientes), alineado al forecast del tablero: exclusiones «Sin venta», simulación «Con venta» y clientes nuevos del plan manual que suman al mes.";
 
-function fmtMxn(v: number): string {
-  return v.toLocaleString("es-MX", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  });
+/** Quita caracteres de control que invalidan el XML del .xlsx. */
+function sanitizeExcelText(v: unknown): string {
+  if (v == null) return "";
+  const s = String(v);
+  return s.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "");
+}
+
+function styleMergedTitleCell(
+  cell: ExcelJS.Cell,
+  value: string,
+  opts?: { font?: Partial<ExcelJS.Font>; fillArgb?: string }
+) {
+  cell.value = sanitizeExcelText(value);
+  cell.font = opts?.font ?? { bold: true, size: 11 };
+  if (opts?.fillArgb) {
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: opts.fillArgb } };
+  }
+  cell.alignment = { vertical: "middle", horizontal: "left", wrapText: true };
 }
 
 function fmtComisionPorKg(ventaTon: number, comisionMxn: number): number | null {
@@ -47,19 +60,18 @@ function styleHeaderRow(row: ExcelJS.Row, lastCol: number) {
   });
 }
 
-function styleSectionRow(row: ExcelJS.Row, lastCol: number, fillArgb: string) {
-  row.font = { bold: true, size: 10, color: { argb: "FFFFFFFF" } };
-  row.alignment = { vertical: "middle", horizontal: "left" };
-  row.eachCell({ includeEmpty: true }, (cell, col) => {
-    if (col > lastCol) return;
-    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: fillArgb } };
-    cell.border = {
-      top: { style: "thin", color: { argb: "FF000000" } },
-      left: { style: "thin", color: { argb: "FF000000" } },
-      bottom: { style: "thin", color: { argb: "FF000000" } },
-      right: { style: "thin", color: { argb: "FF000000" } },
-    };
-  });
+/** Estilo solo en la celda maestra de un rango ya combinado (evita corrupción en B:H). */
+function styleSectionMasterCell(cell: ExcelJS.Cell, fillArgb: string) {
+  cell.value = sanitizeExcelText(cell.value);
+  cell.font = { bold: true, size: 10, color: { argb: "FFFFFFFF" } };
+  cell.alignment = { vertical: "middle", horizontal: "left" };
+  cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: fillArgb } };
+  cell.border = {
+    top: { style: "thin", color: { argb: "FF000000" } },
+    left: { style: "thin", color: { argb: "FF000000" } },
+    bottom: { style: "thin", color: { argb: "FF000000" } },
+    right: { style: "thin", color: { argb: "FF000000" } },
+  };
 }
 
 function sectionFill(movimiento: string): string {
@@ -76,24 +88,24 @@ function writeResumenSubcategoria(
   mesForecastLabel?: string
 ): number {
   let r = 1;
-  ws.mergeCells(r, 1, r, 8);
-  const title = ws.getCell(r, 1);
-  title.value = `Resumen por subcategoría · ${categoriaLabel}`;
-  title.font = { bold: true, size: 12 };
-  title.fill = { type: "pattern", pattern: "solid", fgColor: { argb: F_TITLE } };
-  title.alignment = { vertical: "middle", horizontal: "left" };
+  ws.mergeCells(r, 1, r, 4);
+  styleMergedTitleCell(ws.getCell(r, 1), `Resumen por subcategoría · ${categoriaLabel}`, {
+    font: { bold: true, size: 12 },
+    fillArgb: F_TITLE,
+  });
   r += 1;
 
   if (mesForecastLabel) {
-    ws.mergeCells(r, 1, r, 8);
-    ws.getCell(r, 1).value = `Forecast: ${mesForecastLabel}`;
-    ws.getCell(r, 1).font = { size: 9, italic: true, color: { argb: "FF555555" } };
+    ws.mergeCells(r, 1, r, 4);
+    styleMergedTitleCell(ws.getCell(r, 1), `Forecast: ${mesForecastLabel}`, {
+      font: { size: 9, italic: true, color: { argb: "FF555555" } },
+    });
     r += 1;
   }
 
-  ws.mergeCells(r, 1, r + 1, 8);
+  ws.mergeCells(r, 1, r + 1, 4);
   const desc = ws.getCell(r, 1);
-  desc.value = DESC_RESUMEN;
+  desc.value = sanitizeExcelText(DESC_RESUMEN);
   desc.alignment = { wrapText: true, vertical: "top", horizontal: "left" };
   desc.font = { size: 9, color: { argb: "FF555555" } };
   ws.getRow(r).height = 28;
@@ -114,7 +126,7 @@ function writeResumenSubcategoria(
     const data = ws.getRow(r);
     const porKg = fmtComisionPorKg(row.ventaTon, row.comisionProyectadaMxn);
     data.values = [
-      row.subcategoria,
+      sanitizeExcelText(row.subcategoria),
       row.ventaTon,
       row.comisionProyectadaMxn,
       porKg,
@@ -167,8 +179,9 @@ function writeClientesMovimiento(
 ): number {
   let r = startRow;
   ws.mergeCells(r, 1, r, LAST_COL_CLIENTES);
-  ws.getCell(r, 1).value = "Movimiento de clientes";
-  ws.getCell(r, 1).font = { bold: true, size: 11 };
+  styleMergedTitleCell(ws.getCell(r, 1), "Movimiento de clientes", {
+    font: { bold: true, size: 11 },
+  });
   r += 2;
 
   const ordenMov = [
@@ -183,9 +196,9 @@ function writeClientesMovimiento(
     if (!grupo.length) continue;
 
     ws.mergeCells(r, 1, r, LAST_COL_CLIENTES);
-    const sec = ws.getRow(r);
-    sec.getCell(1).value = mov.toUpperCase();
-    styleSectionRow(sec, LAST_COL_CLIENTES, sectionFill(mov));
+    const secCell = ws.getCell(r, 1);
+    secCell.value = mov.toUpperCase();
+    styleSectionMasterCell(secCell, sectionFill(mov));
     r += 1;
 
     const hdr = ws.getRow(r);
@@ -197,14 +210,14 @@ function writeClientesMovimiento(
     for (const c of grupo) {
       const data = ws.getRow(r);
       data.values = [
-        c.cliente,
-        c.categoria,
-        c.subcategoria,
-        c.deltaTon,
-        c.deltaIngreso,
-        c.ultimaCompra,
-        c.estado,
-        c.frecuenciaDias,
+        sanitizeExcelText(c.cliente),
+        sanitizeExcelText(c.categoria),
+        sanitizeExcelText(c.subcategoria),
+        sanitizeExcelText(c.deltaTon),
+        sanitizeExcelText(c.deltaIngreso),
+        sanitizeExcelText(c.ultimaCompra),
+        sanitizeExcelText(c.estado),
+        sanitizeExcelText(c.frecuenciaDias),
       ];
       data.getCell(1).alignment = { horizontal: "left", vertical: "middle" };
       data.getCell(2).alignment = { horizontal: "center", vertical: "middle" };
@@ -229,8 +242,9 @@ function writeClientesMovimiento(
 
   if (!clientes.length) {
     ws.mergeCells(r, 1, r, LAST_COL_CLIENTES);
-    ws.getCell(r, 1).value = "Sin datos de movimiento (DICF no disponible).";
-    ws.getCell(r, 1).font = { italic: true, color: { argb: "FF888888" } };
+    styleMergedTitleCell(ws.getCell(r, 1), "Sin datos de movimiento (DICF no disponible).", {
+      font: { italic: true, color: { argb: "FF888888" } },
+    });
     r += 1;
   }
 
@@ -264,7 +278,8 @@ export function appendCategoriaMovimientoSheets(
 
   for (const { name, resumen, clientes } of pairs) {
     const ws = wb.addWorksheet(name, {
-      views: [{ state: "frozen", ySplit: 0 }],
+      properties: { defaultRowHeight: 18 },
+      views: [{ showGridLines: true }],
     });
     const afterResumen = writeResumenSubcategoria(ws, name, resumen, opts.mesForecastLabel);
     writeClientesMovimiento(ws, afterResumen + 1, clientes);
