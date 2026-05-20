@@ -16,6 +16,9 @@ import {
   postForecastProvincia,
   patchIgfForecastHg,
   getDashboardExcelDownloadUrl,
+  fetchIgfMetaVersions,
+  getIgfMetaExcelDownloadUrl,
+  type IgfMetaVersionItem,
   fetchPresupuestoDetalle,
   fetchIgfFoliosDetalle,
   fetchPronosticoDetalle,
@@ -159,6 +162,13 @@ export function IgfForecastContent() {
   const [igfMesAnteriorLoading, setIgfMesAnteriorLoading] = useState(false);
   const [forecastRecalcLoading, setForecastRecalcLoading] = useState(false);
   const [forecastRecalcMsg, setForecastRecalcMsg] = useState<string | null>(null);
+  const [evalModalOpen, setEvalModalOpen] = useState(false);
+  const [evalYear, setEvalYear] = useState(() => new Date().getFullYear());
+  const [evalMonth, setEvalMonth] = useState(() => new Date().getMonth() + 1);
+  const [evalVersion, setEvalVersion] = useState<number | "">("");
+  const [evalVersions, setEvalVersions] = useState<IgfMetaVersionItem[]>([]);
+  const [evalVersionsLoading, setEvalVersionsLoading] = useState(false);
+  const [evalError, setEvalError] = useState<string | null>(null);
   const [pronosticoModal, setPronosticoModal] = useState<{ empresa: string; plant_code: string } | null>(null);
   const [pronosticoDetail, setPronosticoDetail] = useState<PronosticoDetalleResponse | null>(null);
   const [pronosticoLoading, setPronosticoLoading] = useState(false);
@@ -230,6 +240,70 @@ export function IgfForecastContent() {
   useEffect(() => {
     lastIgfFetchKeyRef.current = "";
   }, [token]);
+
+  const MESES_EVALUACION = [
+    "Enero",
+    "Febrero",
+    "Marzo",
+    "Abril",
+    "Mayo",
+    "Junio",
+    "Julio",
+    "Agosto",
+    "Septiembre",
+    "Octubre",
+    "Noviembre",
+    "Diciembre",
+  ];
+
+  useEffect(() => {
+    if (!evalModalOpen || !token) return;
+    let cancelled = false;
+    setEvalVersionsLoading(true);
+    setEvalError(null);
+    fetchIgfMetaVersions(token, evalYear, evalMonth)
+      .then((r) => {
+        if (cancelled) return;
+        const list = r.versions || [];
+        setEvalVersions(list);
+        const first = list[0]?.version_number;
+        setEvalVersion((prev) => {
+          if (prev !== "" && list.some((v) => v.version_number === prev)) return prev;
+          return first ?? "";
+        });
+      })
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        setEvalVersions([]);
+        setEvalVersion("");
+        setEvalError(e instanceof Error ? e.message : "No se pudieron cargar las versiones META");
+      })
+      .finally(() => {
+        if (!cancelled) setEvalVersionsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [evalModalOpen, token, evalYear, evalMonth]);
+
+  const openEvaluacionModal = () => {
+    if (igfForecast) {
+      setEvalYear(igfForecast.year);
+      setEvalMonth(igfForecast.month);
+    }
+    setEvalError(null);
+    setEvalModalOpen(true);
+  };
+
+  const handleExportIgfMeta = () => {
+    if (!token || evalVersion === "" || !Number.isFinite(Number(evalVersion))) return;
+    window.open(
+      getIgfMetaExcelDownloadUrl(token, evalYear, evalMonth, Number(evalVersion)),
+      "_blank",
+      "noopener,noreferrer"
+    );
+    setEvalModalOpen(false);
+  };
 
   useEffect(() => {
     if (!token || isGAPageBlocked || isGVPageBlocked) return;
@@ -619,11 +693,22 @@ export function IgfForecastContent() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <div className="border-b border-slate-700 bg-slate-900/50 px-4 py-3 flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-xl font-semibold text-white">IGF Forecast</h1>
+      <div className="border-b border-slate-700 bg-slate-900/50 px-4 py-3 flex flex-wrap items-center gap-2">
+        <h1 className="text-xl font-semibold text-white shrink-0">IGF Forecast</h1>
+        <div className="flex flex-1 justify-center min-w-[10rem]">
+          {token && (
+            <button
+              type="button"
+              onClick={openEvaluacionModal}
+              className="inline-flex items-center gap-2 rounded border border-rose-500/80 bg-rose-950/60 px-5 py-2 text-sm font-semibold text-rose-100 hover:bg-rose-900/50 shadow-sm"
+            >
+              Evaluacion
+            </button>
+          )}
+        </div>
         <Link
           href={token ? `/?t=${encodeURIComponent(token)}` : "/"}
-          className="text-sm text-amber-300 hover:text-amber-200 underline"
+          className="text-sm text-amber-300 hover:text-amber-200 underline shrink-0"
         >
           ← KPI Financieros
         </Link>
@@ -2046,6 +2131,104 @@ export function IgfForecastContent() {
                 )}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {evalModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="igf-meta-eval-title"
+        >
+          <div className="w-full max-w-md rounded-lg border border-rose-800/60 bg-slate-900 p-5 text-slate-100 shadow-xl">
+            <h2 id="igf-meta-eval-title" className="text-lg font-semibold text-rose-100">
+              Exportar IGF META
+            </h2>
+            <p className="mt-1 text-xs text-slate-400">
+              Genera un Excel con la hoja META (misma plantilla que Compromiso) para la versión guardada en{" "}
+              <span className="font-mono text-slate-300">igf_meta</span>.
+            </p>
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <label className="block text-sm">
+                <span className="text-slate-300">Año</span>
+                <input
+                  type="number"
+                  min={2020}
+                  max={2100}
+                  value={evalYear}
+                  onChange={(e) => setEvalYear(parseInt(e.target.value, 10) || evalYear)}
+                  className="mt-1 w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-sm"
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="text-slate-300">Mes</span>
+                <select
+                  value={evalMonth}
+                  onChange={(e) => setEvalMonth(parseInt(e.target.value, 10))}
+                  className="mt-1 w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-sm"
+                >
+                  {MESES_EVALUACION.map((m, i) => (
+                    <option key={m} value={i + 1}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <label className="mt-3 block text-sm">
+              <span className="text-slate-300">Versión META</span>
+              <select
+                value={evalVersion === "" ? "" : String(evalVersion)}
+                onChange={(e) =>
+                  setEvalVersion(e.target.value === "" ? "" : parseInt(e.target.value, 10))
+                }
+                disabled={evalVersionsLoading || evalVersions.length === 0}
+                className="mt-1 w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-sm disabled:opacity-50"
+              >
+                {evalVersions.length === 0 ? (
+                  <option value="">—</option>
+                ) : (
+                  evalVersions.map((v) => (
+                    <option key={v.id} value={v.version_number}>
+                      v{v.version_number}
+                      {v.is_current ? " (actual)" : ""}
+                    </option>
+                  ))
+                )}
+              </select>
+            </label>
+            {evalVersionsLoading && (
+              <p className="mt-2 text-xs text-slate-400">Cargando versiones…</p>
+            )}
+            {evalError && <p className="mt-2 text-xs text-red-400">{evalError}</p>}
+            {!evalVersionsLoading && !evalError && evalVersions.length === 0 && (
+              <p className="mt-2 text-xs text-amber-300">
+                No hay versiones META para este mes. Sube datos con la macro Subir_IGF_META_Global en Excel.
+              </p>
+            )}
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setEvalModalOpen(false)}
+                className="rounded border border-slate-600 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleExportIgfMeta}
+                disabled={
+                  evalVersionsLoading ||
+                  evalVersion === "" ||
+                  evalVersions.length === 0
+                }
+                className="rounded bg-rose-700 px-4 py-2 text-sm font-medium text-white hover:bg-rose-600 disabled:opacity-50"
+              >
+                Descargar Excel META
+              </button>
+            </div>
           </div>
         </div>
       )}

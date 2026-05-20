@@ -31,6 +31,36 @@ export function getDashboardExcelDownloadUrl(token: string, year: number, month:
   return `${base}?year=${year}&month=${month}&proyeccion_anio=${next.y}&proyeccion_mes=${next.m}${hasta}${upload}&t=${encodeURIComponent(token)}`;
 }
 
+export type IgfMetaVersionItem = {
+  id: number;
+  version_number: number;
+  is_current: boolean;
+  created_at?: string;
+};
+
+export function fetchIgfMetaVersions(
+  token: string,
+  year: number,
+  month: number
+): Promise<{ ok: boolean; year: number; month: number; versions: IgfMetaVersionItem[] }> {
+  return apiFetch("/api/dashboard/igf-meta-versions", {
+    token,
+    params: { year: String(year), month: String(month) },
+    cache: "no-store",
+  });
+}
+
+/** Descarga Excel IGF META (hoja META) para año/mes/versión indicados. */
+export function getIgfMetaExcelDownloadUrl(
+  token: string,
+  year: number,
+  month: number,
+  versionNumber: number
+): string {
+  const base = getApiUrl("/api/dashboard/igf-meta-excel");
+  return `${base}?year=${year}&month=${month}&version_number=${versionNumber}&t=${encodeURIComponent(token)}`;
+}
+
 export async function apiFetch<T>(
   path: string,
   options: RequestInit & { token?: string; params?: Record<string, string> } = {}

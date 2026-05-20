@@ -37,6 +37,7 @@ const arrLoad = require("./lib/arr-load");
 const arrRefreshProvincia = require("./lib/arr-refresh-provincia");
 const forecastMensual = require("./lib/forecast-mensual");
 const dashboardArrForecast = require("./lib/dashboard-arr-forecast");
+const igfMetaExcel = require("./lib/igf-meta-excel");
 const deltaIngresoAi = require("./lib/delta-ingreso-ai");
 const deltaIngresoAiDb = require("./lib/delta-ingreso-ai-db");
 const deltaIngresoCommands = require("./lib/delta-ingreso-commands");
@@ -12904,6 +12905,72 @@ app.get("/api/dashboard/dicf-acciones-excel", dashboardAuthMiddleware, async (re
     res.send(buf);
   } catch (e) {
     console.error("[dicf-acciones excel]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/** Versiones IGF META (igf_meta.versions) por año/mes — para selector en exportación Evaluación. */
+app.get("/api/dashboard/igf-meta-versions", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGAFinancialKpis(req, res)) return;
+  if (dashboardBlockGVForbidden(req, res)) return;
+  const year = parseInt(String(req.query.year || ""), 10);
+  const month = parseInt(String(req.query.month || ""), 10);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
+    return res.status(400).json({ error: "Indica year y month válidos (1-12)" });
+  }
+  const client = await pool.connect();
+  try {
+    const ok = await igfMetaExcel.schemaMetaExists(client);
+    if (!ok) {
+      return res.status(503).json({
+        error: "Esquema igf_meta no instalado. Ejecute sql/012_igf_meta_global.sql en la base.",
+        versions: [],
+      });
+    }
+    const versions = await igfMetaExcel.listMetaVersions(client, year, month);
+    res.json({ ok: true, year, month, versions });
+  } catch (e) {
+    console.error("[igf-meta-versions]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/** Excel IGF META (hoja META, plantilla tipo Compromiso) para versión elegida. */
+app.get("/api/dashboard/igf-meta-excel", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGAFinancialKpis(req, res)) return;
+  if (dashboardBlockGVForbidden(req, res)) return;
+  const year = parseInt(String(req.query.year || ""), 10);
+  const month = parseInt(String(req.query.month || ""), 10);
+  const versionNumber = parseInt(String(req.query.version_number || req.query.version || ""), 10);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
+    return res.status(400).json({ error: "Indica year y month válidos" });
+  }
+  if (!Number.isFinite(versionNumber) || versionNumber < 1) {
+    return res.status(400).json({ error: "Indica version_number (entero >= 1)" });
+  }
+  const client = await pool.connect();
+  try {
+    const ok = await igfMetaExcel.schemaMetaExists(client);
+    if (!ok) {
+      return res.status(503).json({
+        error: "Esquema igf_meta no instalado. Ejecute sql/012_igf_meta_global.sql en la base.",
+      });
+    }
+    const buf = await igfMetaExcel.buildIgfMetaExcelBuffer(client, year, month, versionNumber);
+    const mesLabel = String(month).padStart(2, "0");
+    const filename = `IGF_META_${year}_${mesLabel}_v${versionNumber}.xlsx`;
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(buf);
+  } catch (e) {
+    if (e.statusCode === 404) {
+      return res.status(404).json({ error: e.message });
+    }
+    console.error("[igf-meta-excel]", e);
     res.status(500).json({ error: e.message });
   } finally {
     client.release();
