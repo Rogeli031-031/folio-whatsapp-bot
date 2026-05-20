@@ -21,6 +21,7 @@ import {
   postDicfDatos,
   fetchIgfMetaVersions,
   fetchIgfMetaExcelBuffer,
+  fetchIgfMetahg,
   pickIgfMetaVersionNumber,
   type IgfForecastRow,
   type IgfForecastMiniRow,
@@ -3984,6 +3985,23 @@ export default function ArrClient() {
         const arr = buildExportOptsFromSlice(wsBase);
         const plan = buildExportOptsFromSlice(wsPlan);
         let metaEvaluacionBuffer: ArrayBuffer | undefined;
+        let metahgForMetaSheet:
+          | {
+              empresa: string;
+              mesLabel?: string;
+              version_number?: number | null;
+              lines: {
+                categoria: string;
+                prom: number | null;
+                kilos: number | null;
+                comision: number | null;
+                total: number | null;
+                pct: number | null;
+                kilos_h: number | null;
+                is_total_row: boolean;
+              }[];
+            }
+          | undefined;
         let movimientoCategoria:
           | {
               resumenSubcategoria: typeof resumenSubcategoriaForecastDicf;
@@ -4016,6 +4034,19 @@ export default function ArrClient() {
                 "Export ARR: META/EVALUACION no incluidas (sin versión o esquema igf_meta)",
                 metaErr
               );
+            }
+            try {
+              const metahg = await fetchIgfMetahg(token, empresa.trim(), metaYear, metaMonth);
+              if (metahg.lines?.length) {
+                metahgForMetaSheet = {
+                  empresa: metahg.empresa_label || empresa.trim(),
+                  mesLabel: periodoLabel(wsPlan.selB),
+                  version_number: metahg.version_number,
+                  lines: metahg.lines,
+                };
+              }
+            } catch (metahgErr) {
+              console.warn("Export ARR: METAHG no incluido en hoja META", metahgErr);
             }
           }
         }
@@ -4053,6 +4084,7 @@ export default function ArrClient() {
           arr,
           plan,
           metaEvaluacionBuffer,
+          metahgForMetaSheet,
           movimientoCategoria,
         });
       } catch (e) {

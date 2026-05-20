@@ -1,5 +1,9 @@
 import ExcelJS from "exceljs";
 import { appendCategoriaMovimientoSheets } from "@/lib/arr-export-categoria-sheets";
+import {
+  appendMetahgToMetaSheet,
+  type ArrExportMetahgForMeta,
+} from "@/lib/arr-export-metahg-meta-sheet";
 import type {
   ArrExportMovimientoClienteRow,
   ArrExportSubcategoriaResumenRow,
@@ -790,11 +794,16 @@ export async function downloadArrDashboardExcelDual(opts: {
   plan: ArrExportOptions;
   /** Buffer del Excel IGF META (hojas META + EVALUACION), antes de ARR. */
   metaEvaluacionBuffer?: ArrayBuffer | null;
+  /** Bloque METAHG de la empresa seleccionada (se escribe en hoja META desde A30). */
+  metahgForMetaSheet?: ArrExportMetahgForMeta | null;
   movimientoCategoria?: ArrExportMovimientoCategoriaSheets | null;
 }): Promise<void> {
   const wb = new ExcelJS.Workbook();
   if (opts.metaEvaluacionBuffer?.byteLength) {
     await wb.xlsx.load(opts.metaEvaluacionBuffer);
+    if (opts.metahgForMetaSheet?.lines?.length) {
+      appendMetahgToMetaSheet(wb, opts.metahgForMetaSheet);
+    }
   }
   await downloadArrDashboardExcelInternal(opts.arr, {
     workbook: wb,

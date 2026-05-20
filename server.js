@@ -38,6 +38,7 @@ const arrRefreshProvincia = require("./lib/arr-refresh-provincia");
 const forecastMensual = require("./lib/forecast-mensual");
 const dashboardArrForecast = require("./lib/dashboard-arr-forecast");
 const igfMetaExcel = require("./lib/igf-meta-excel");
+const igfMetahg = require("./lib/igf-metahg");
 const deltaIngresoAi = require("./lib/delta-ingreso-ai");
 const deltaIngresoAiDb = require("./lib/delta-ingreso-ai-db");
 const deltaIngresoCommands = require("./lib/delta-ingreso-commands");
@@ -12971,6 +12972,38 @@ app.get("/api/dashboard/igf-meta-excel", dashboardAuthMiddleware, async (req, re
       return res.status(404).json({ error: e.message });
     }
     console.error("[igf-meta-excel]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/** Líneas METAHG vigentes por empresa/planta y año/mes (para export ARR en hoja META). */
+app.get("/api/dashboard/igf-metahg", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGAFinancialKpis(req, res)) return;
+  if (dashboardBlockGVForbidden(req, res)) return;
+  const empresa = (req.query.empresa || req.query.planta || "").toString().trim();
+  const year = parseInt(String(req.query.year || ""), 10);
+  const month = parseInt(String(req.query.month || ""), 10);
+  if (!empresa) {
+    return res.status(400).json({ error: "Indica empresa o planta" });
+  }
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
+    return res.status(400).json({ error: "Indica year y month válidos (1-12)" });
+  }
+  const client = await pool.connect();
+  try {
+    const ok = await igfMetahg.schemaMetahgExists(client);
+    if (!ok) {
+      return res.status(503).json({
+        error: "Esquema igf_metahg no instalado. Ejecute sql/013_igf_metahg en la base.",
+        lines: [],
+      });
+    }
+    const data = await igfMetahg.loadMetahgForEmpresa(client, empresa, year, month);
+    res.json(data);
+  } catch (e) {
+    console.error("[igf-metahg]", e);
     res.status(500).json({ error: e.message });
   } finally {
     client.release();

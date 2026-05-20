@@ -81,6 +81,44 @@ export async function fetchIgfMetaExcelBuffer(
   return res.arrayBuffer();
 }
 
+export type IgfMetahgLine = {
+  categoria: string;
+  prom: number | null;
+  kilos: number | null;
+  comision: number | null;
+  total: number | null;
+  pct: number | null;
+  kilos_h: number | null;
+  is_total_row: boolean;
+};
+
+export type IgfMetahgResponse = {
+  ok: boolean;
+  plant_code: string;
+  empresa_label: string | null;
+  year: number;
+  month: number;
+  version_number: number | null;
+  lines: IgfMetahgLine[];
+};
+
+export function fetchIgfMetahg(
+  token: string,
+  empresa: string,
+  year: number,
+  month: number
+): Promise<IgfMetahgResponse> {
+  return apiFetch<IgfMetahgResponse>("/api/dashboard/igf-metahg", {
+    token,
+    params: {
+      empresa,
+      year: String(year),
+      month: String(month),
+    },
+    cache: "no-store",
+  });
+}
+
 /** Versión META a usar en export combinado: actual o la más reciente. */
 export function pickIgfMetaVersionNumber(versions: IgfMetaVersionItem[]): number | null {
   if (!versions.length) return null;
