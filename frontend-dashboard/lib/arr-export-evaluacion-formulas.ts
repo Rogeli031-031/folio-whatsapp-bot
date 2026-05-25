@@ -73,7 +73,7 @@ export function applyEvaluacionFormulas(
   const isTehuacan = plant === "tehuacan";
 
   ws.getCell(1, 4).value = `Empresa: ${empresa}`;
-  setFormula(ws.getCell(2, 4), "SUMA(G6:G38)");
+  setFormula(ws.getCell(2, 4), "SUM(G6:G38)");
 
   if (isTehuacan) {
     setFormula(
@@ -86,7 +86,7 @@ export function applyEvaluacionFormulas(
       `${metaRef(m.pipasComisionista, "C")}+${metaRef(m.predieros, "C")}+${metaRef(m.recuperacion1, "C")}`
     );
     setFormula(ws.getCell(10, 5), metaRef(m.vtaAnioAnterior, "C"));
-    setFormula(ws.getCell(11, 5), `SUMA(${metaRef(m.pipasCasa, "C")}:${metaRef(m.vtaAnioAnterior, "C")})`);
+    setFormula(ws.getCell(11, 5), `SUM(${metaRef(m.pipasCasa, "C")}:${metaRef(m.vtaAnioAnterior, "C")})`);
 
     setFormula(
       ws.getCell(7, 6),
@@ -97,7 +97,7 @@ export function applyEvaluacionFormulas(
       ws.getCell(9, 6),
       `(${COMI_SHEET}!B7+${COMI_SHEET}!B8)*1000`
     );
-    setFormula(ws.getCell(11, 6), "SUMA(F7:F9)");
+    setFormula(ws.getCell(11, 6), "SUM(F7:F9)");
   }
 
   setFormula(ws.getCell(7, 7), `IF(F7>=E7,D7,0)`);

@@ -835,6 +835,7 @@ export async function downloadArrDashboardExcelDual(opts: {
   if (metaRowMap && opts.empresa) {
     applyEvaluacionFormulas(wb, opts.empresa, metaRowMap);
   }
+  wb.calcProperties.fullCalcOnLoad = true;
   const buf = await wb.xlsx.writeBuffer();
   const blob = new Blob([buf], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
