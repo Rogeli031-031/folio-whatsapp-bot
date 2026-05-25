@@ -64,15 +64,19 @@ function tonFromResumen(
   return 0;
 }
 
-/** B7–B9 en CASA / COMISIONISTA: venta (t) por subcategoría para fórmulas F7–F9. */
+/** B7–B10 en CASA / COMISIONISTA: venta (t) por subcategoría para fórmulas F7–F11. */
 export function writeCategoriaSheetEvalHelpers(
   wb: ExcelJS.Workbook,
   resumen: {
     casa: ArrExportSubcategoriaResumenRow[];
     comisionista: ArrExportSubcategoriaResumenRow[];
-  }
+  },
+  empresa: string
 ): void {
-  const write = (sheetName: string, rows: ArrExportSubcategoriaResumenRow[]) => {
+  const plant = empresaToPlantCode(empresa);
+  const isTehuacan = plant === "tehuacan";
+
+  const writeBase = (sheetName: string, rows: ArrExportSubcategoriaResumenRow[]) => {
     const ws = wb.getWorksheet(sheetName);
     if (!ws) return;
     ws.getCell(7, 2).value = tonFromResumen(rows, (s) => s.includes("autotanque"));
@@ -81,8 +85,18 @@ export function writeCategoriaSheetEvalHelpers(
       s.includes("portatil") || s.includes("portátil")
     );
   };
-  write(CASA_SHEET, resumen.casa);
-  write(COMI_SHEET, resumen.comisionista);
+
+  writeBase(CASA_SHEET, resumen.casa);
+  writeBase(COMI_SHEET, resumen.comisionista);
+
+  if (!isTehuacan) {
+    const wsCasa = wb.getWorksheet(CASA_SHEET);
+    if (wsCasa) {
+      wsCasa.getCell(10, 2).value = tonFromResumen(resumen.casa, (s) =>
+        s.includes("sin sub") || s.includes("predier")
+      );
+    }
+  }
 }
 
 /**
@@ -128,6 +142,26 @@ export function applyEvaluacionFormulas(
       `(${COMI_SHEET}!B7+${COMI_SHEET}!B8)*1000`
     );
     setFormula(ws.getCell(11, 6), "SUM(F7:F9)");
+  } else {
+    setFormula(
+      ws.getCell(7, 5),
+      `${metaRef(m.pipasCasa, "C")}+${metaRef(m.portatil, "C")}`
+    );
+    setFormula(ws.getCell(8, 5), metaRef(m.estacionesCarb, "C"));
+    setFormula(
+      ws.getCell(9, 5),
+      `SUM(${metaRef(m.pipasComisionista, "C")}:${metaRef(m.recuperacion2, "C")})`
+    );
+    setFormula(ws.getCell(10, 5), metaRef(m.vtaAnioAnterior, "C"));
+    setFormula(ws.getCell(11, 5), metaRef(m.total, "C"));
+
+    setFormula(
+      ws.getCell(7, 6),
+      `(${CASA_SHEET}!B7+${CASA_SHEET}!B9+${CASA_SHEET}!B10)*1000`
+    );
+    setFormula(ws.getCell(8, 6), `${CASA_SHEET}!B8*1000`);
+    setFormula(ws.getCell(9, 6), `SUM(${COMI_SHEET}!B7:B9)*1000`);
+    setFormula(ws.getCell(11, 6), metaRef(m.total, "C"));
   }
 
   setFormula(ws.getCell(7, 7), `IF(F7>=E7,D7,0)`);

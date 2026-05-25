@@ -826,10 +826,14 @@ export async function downloadArrDashboardExcelDual(opts: {
   if (opts.movimientoCategoria) {
     appendCategoriaMovimientoSheets(wb, opts.movimientoCategoria);
     if (metaRowMap) {
-      writeCategoriaSheetEvalHelpers(wb, {
-        casa: opts.movimientoCategoria.resumenSubcategoria.casa,
-        comisionista: opts.movimientoCategoria.resumenSubcategoria.comisionista,
-      });
+      writeCategoriaSheetEvalHelpers(
+        wb,
+        {
+          casa: opts.movimientoCategoria.resumenSubcategoria.casa,
+          comisionista: opts.movimientoCategoria.resumenSubcategoria.comisionista,
+        },
+        opts.empresa
+      );
     }
   }
   if (opts.metaEvaluacionBuffer?.byteLength && opts.empresa) {
