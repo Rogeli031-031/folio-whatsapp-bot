@@ -130,7 +130,7 @@ export function applyEvaluacionFormulas(
       `${metaRef(m.pipasComisionista, "C")}+${metaRef(m.predieros, "C")}+${metaRef(m.recuperacion1, "C")}`
     );
     setFormula(ws.getCell(10, 5), metaRef(m.vtaAnioAnterior, "C"));
-    setFormula(ws.getCell(11, 5), `SUM(${metaRef(m.pipasCasa, "C")}:${metaRef(m.vtaAnioAnterior, "C")})`);
+    setFormula(ws.getCell(11, 5), metaRef(m.total, "C"));
 
     setFormula(
       ws.getCell(7, 6),
