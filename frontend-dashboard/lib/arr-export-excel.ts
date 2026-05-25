@@ -1,9 +1,14 @@
 import ExcelJS from "exceljs";
 import { appendCategoriaMovimientoSheets } from "@/lib/arr-export-categoria-sheets";
 import {
+  applyEvaluacionFormulas,
+  writeCategoriaSheetEvalHelpers,
+} from "@/lib/arr-export-evaluacion-formulas";
+import {
   appendMetahgToMetaSheet,
   type ArrExportMetahgForMeta,
 } from "@/lib/arr-export-metahg-meta-sheet";
+import type { MetahgCanonicalRowKey } from "@/lib/metahg-canonical";
 import type {
   ArrExportMovimientoClienteRow,
   ArrExportSubcategoriaResumenRow,
@@ -792,6 +797,8 @@ export type ArrExportMovimientoCategoriaSheets = {
 export async function downloadArrDashboardExcelDual(opts: {
   arr: ArrExportOptions;
   plan: ArrExportOptions;
+  /** Empresa/planta seleccionada (EVALUACION D1 y fórmulas). */
+  empresa: string;
   /** Buffer del Excel IGF META (hojas META + EVALUACION), antes de ARR. */
   metaEvaluacionBuffer?: ArrayBuffer | null;
   /** Bloque METAHG de la empresa seleccionada (se escribe en hoja META desde A30). */
@@ -799,10 +806,11 @@ export async function downloadArrDashboardExcelDual(opts: {
   movimientoCategoria?: ArrExportMovimientoCategoriaSheets | null;
 }): Promise<void> {
   const wb = new ExcelJS.Workbook();
+  let metaRowMap: Record<MetahgCanonicalRowKey, number> | null = null;
   if (opts.metaEvaluacionBuffer?.byteLength) {
     await wb.xlsx.load(opts.metaEvaluacionBuffer);
     if (opts.metahgForMetaSheet?.lines?.length) {
-      appendMetahgToMetaSheet(wb, opts.metahgForMetaSheet);
+      metaRowMap = appendMetahgToMetaSheet(wb, opts.metahgForMetaSheet);
     }
   }
   await downloadArrDashboardExcelInternal(opts.arr, {
@@ -817,6 +825,15 @@ export async function downloadArrDashboardExcelDual(opts: {
   });
   if (opts.movimientoCategoria) {
     appendCategoriaMovimientoSheets(wb, opts.movimientoCategoria);
+    if (metaRowMap) {
+      writeCategoriaSheetEvalHelpers(wb, {
+        casa: opts.movimientoCategoria.resumenSubcategoria.casa,
+        comisionista: opts.movimientoCategoria.resumenSubcategoria.comisionista,
+      });
+    }
+  }
+  if (metaRowMap && opts.empresa) {
+    applyEvaluacionFormulas(wb, opts.empresa, metaRowMap);
   }
   const buf = await wb.xlsx.writeBuffer();
   const blob = new Blob([buf], {

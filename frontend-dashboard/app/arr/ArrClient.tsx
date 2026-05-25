@@ -4083,6 +4083,7 @@ export default function ArrClient() {
         await downloadArrDashboardExcelDual({
           arr,
           plan,
+          empresa: empresa.trim(),
           metaEvaluacionBuffer,
           metahgForMetaSheet,
           movimientoCategoria,

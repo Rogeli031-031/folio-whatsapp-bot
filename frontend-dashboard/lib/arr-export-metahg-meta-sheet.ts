@@ -1,4 +1,10 @@
 import ExcelJS from "exceljs";
+import {
+  buildCanonicalMetahgLines,
+  buildMetahgRowMap,
+  METAHG_FIRST_DATA_ROW,
+  type MetahgCanonicalRowKey,
+} from "@/lib/metahg-canonical";
 
 export type ArrExportMetahgLine = {
   categoria: string;
@@ -97,9 +103,11 @@ function pctDisplay(v: number | null): number | null {
 export function appendMetahgToMetaSheet(
   wb: ExcelJS.Workbook,
   block: ArrExportMetahgForMeta
-): void {
+): Record<MetahgCanonicalRowKey, number> | null {
   const ws = wb.getWorksheet(META_SHEET_NAME);
-  if (!ws || !block.lines.length) return;
+  if (!ws || !block.lines.length) return null;
+
+  const lines = buildCanonicalMetahgLines(block.lines);
 
   let r = START_ROW;
 
@@ -126,7 +134,7 @@ export function appendMetahgToMetaSheet(
   r += 1;
 
   let alt = 0;
-  for (const line of block.lines) {
+  for (const line of lines) {
     const row = ws.getRow(r);
     const isTotal = line.is_total_row || line.categoria.toUpperCase() === "TOTAL";
     const catCell = row.getCell(COL.categoria);
@@ -186,4 +194,6 @@ export function appendMetahgToMetaSheet(
   ws.getColumn(COL.total).width = 14;
   ws.getColumn(COL.pct).width = 8;
   ws.getColumn(COL.kilos_h).width = 12;
+
+  return buildMetahgRowMap(METAHG_FIRST_DATA_ROW);
 }
