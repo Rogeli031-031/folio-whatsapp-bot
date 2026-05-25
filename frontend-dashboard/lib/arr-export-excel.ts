@@ -8,7 +8,7 @@ import {
   appendMetahgToMetaSheet,
   type ArrExportMetahgForMeta,
 } from "@/lib/arr-export-metahg-meta-sheet";
-import type { MetahgCanonicalRowKey } from "@/lib/metahg-canonical";
+import { buildMetahgRowMap, type MetahgCanonicalRowKey } from "@/lib/metahg-canonical";
 import type {
   ArrExportMovimientoClienteRow,
   ArrExportSubcategoriaResumenRow,
@@ -832,8 +832,8 @@ export async function downloadArrDashboardExcelDual(opts: {
       });
     }
   }
-  if (metaRowMap && opts.empresa) {
-    applyEvaluacionFormulas(wb, opts.empresa, metaRowMap);
+  if (opts.metaEvaluacionBuffer?.byteLength && opts.empresa) {
+    applyEvaluacionFormulas(wb, opts.empresa, metaRowMap ?? buildMetahgRowMap());
   }
   wb.calcProperties.fullCalcOnLoad = true;
   const buf = await wb.xlsx.writeBuffer();

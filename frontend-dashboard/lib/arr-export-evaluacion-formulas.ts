@@ -12,8 +12,37 @@ const ARR_SHEET = "ARR";
 const CASA_SHEET = "CASA";
 const COMI_SHEET = "COMISIONISTA";
 
+const FILL_PUNTUACION_TOTAL = {
+  type: "pattern" as const,
+  pattern: "solid" as const,
+  fgColor: { argb: "FF4472C4" },
+};
+
 function setFormula(cell: ExcelJS.Cell, formula: string) {
   cell.value = { formula };
+}
+
+/** D2: SUM(G6:G38) — caja azul, fuente 48, fila ~99.6 pt (como plantilla Evaluacion). */
+function stylePuntuacionTotalD2(ws: ExcelJS.Worksheet) {
+  try {
+    ws.mergeCells(2, 4, 3, 6);
+  } catch {
+    /* ya fusionado */
+  }
+  ws.getRow(2).height = 99.6;
+  const cell = ws.getCell(2, 4);
+  cell.font = { bold: true, size: 48, color: { argb: "FFFFFFFF" } };
+  cell.fill = FILL_PUNTUACION_TOTAL;
+  cell.alignment = { vertical: "middle", horizontal: "center" };
+  cell.numFmt = "0";
+  for (const c of [5, 6]) {
+    const m = ws.getCell(2, c);
+    m.fill = FILL_PUNTUACION_TOTAL;
+  }
+  for (const c of [4, 5, 6]) {
+    const m = ws.getCell(3, c);
+    m.fill = FILL_PUNTUACION_TOTAL;
+  }
 }
 
 function metaRef(row: number, col: string): string {
@@ -74,6 +103,7 @@ export function applyEvaluacionFormulas(
 
   ws.getCell(1, 4).value = `Empresa: ${empresa}`;
   setFormula(ws.getCell(2, 4), "SUM(G6:G38)");
+  stylePuntuacionTotalD2(ws);
 
   if (isTehuacan) {
     setFormula(
