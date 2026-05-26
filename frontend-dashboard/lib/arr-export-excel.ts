@@ -8,6 +8,10 @@ import {
   appendMetahgToMetaSheet,
   type ArrExportMetahgForMeta,
 } from "@/lib/arr-export-metahg-meta-sheet";
+import {
+  appendWorkbookSheetFromBuffer,
+  moveWorksheetFirst,
+} from "@/lib/arr-export-merge-worksheet";
 import { buildMetahgRowMap, type MetahgCanonicalRowKey } from "@/lib/metahg-canonical";
 import type {
   ArrExportMovimientoClienteRow,
@@ -804,6 +808,8 @@ export async function downloadArrDashboardExcelDual(opts: {
   /** Bloque METAHG de la empresa seleccionada (se escribe en hoja META desde A30). */
   metahgForMetaSheet?: ArrExportMetahgForMeta | null;
   movimientoCategoria?: ArrExportMovimientoCategoriaSheets | null;
+  /** Buffer hoja EVIDENCIAS (Action Register, mes en curso). */
+  evidenciasBuffer?: ArrayBuffer | null;
 }): Promise<void> {
   const wb = new ExcelJS.Workbook();
   let metaRowMap: Record<MetahgCanonicalRowKey, number> | null = null;
@@ -838,6 +844,16 @@ export async function downloadArrDashboardExcelDual(opts: {
   }
   if (opts.metaEvaluacionBuffer?.byteLength && opts.empresa) {
     applyEvaluacionFormulas(wb, opts.empresa, metaRowMap ?? buildMetahgRowMap());
+  }
+  if (opts.evidenciasBuffer?.byteLength) {
+    try {
+      await appendWorkbookSheetFromBuffer(wb, opts.evidenciasBuffer, "EVIDENCIAS");
+    } catch (evErr) {
+      console.warn("Export ARR: no se pudo añadir hoja EVIDENCIAS", evErr);
+    }
+  }
+  if (opts.metaEvaluacionBuffer?.byteLength) {
+    moveWorksheetFirst(wb, "EVALUACION");
   }
   wb.calcProperties.fullCalcOnLoad = true;
   const buf = await wb.xlsx.writeBuffer();

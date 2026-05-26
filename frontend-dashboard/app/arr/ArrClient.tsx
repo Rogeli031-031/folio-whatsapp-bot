@@ -22,6 +22,7 @@ import {
   fetchIgfMetaVersions,
   fetchIgfMetaExcelBuffer,
   fetchIgfMetahg,
+  fetchActionRegisterEvidenciasBuffer,
   pickIgfMetaVersionNumber,
   type IgfForecastRow,
   type IgfForecastMiniRow,
@@ -4012,6 +4013,7 @@ export default function ArrClient() {
               mesForecastLabel?: string;
             }
           | undefined;
+        let evidenciasBuffer: ArrayBuffer | undefined;
 
         if (token.trim() && wsPlan.selB) {
           const [yStr, mStr] = wsPlan.selB.split("-");
@@ -4047,6 +4049,18 @@ export default function ArrClient() {
               }
             } catch (metahgErr) {
               console.warn("Export ARR: METAHG no incluido en hoja META", metahgErr);
+            }
+            if (plantaIdPlan != null) {
+              try {
+                evidenciasBuffer = await fetchActionRegisterEvidenciasBuffer(
+                  token,
+                  plantaIdPlan,
+                  metaYear,
+                  metaMonth
+                );
+              } catch (evidErr) {
+                console.warn("Export ARR: hoja EVIDENCIAS no incluida", evidErr);
+              }
             }
           }
         }
@@ -4087,6 +4101,7 @@ export default function ArrClient() {
           metaEvaluacionBuffer,
           metahgForMetaSheet,
           movimientoCategoria,
+          evidenciasBuffer,
         });
       } catch (e) {
         console.error("Export ARR Excel:", e);
@@ -4099,6 +4114,7 @@ export default function ArrClient() {
     wsBase,
     wsPlan,
     wsPlan.selB,
+    plantaIdPlan,
     buildExportOptsFromSlice,
     resumenSubcategoriaForecastDicf,
     nuevosKgPlanManuales,

@@ -49,6 +49,7 @@ const weeklyDiscountLdConfig = require("./lib/weekly-discount-ld-config");
 const weeklyDiscountLdScheduler = require("./lib/weekly-discount-ld-scheduler");
 const dicf = require("./lib/dicf");
 const dicfAccionesLib = require("./lib/dicf-acciones");
+const actionRegisterEvidenciasExport = require("./lib/action-register-evidencias-export");
 const { isDirectorZPForDashboard } = require("./lib/dashboard-es-zp");
 
 const app = express();
@@ -7634,6 +7635,50 @@ app.get("/api/action-register/export", dashboardAuthMiddleware, async (req, res)
     res.send(Buffer.from(buf));
   } catch (e) {
     console.error("[ActionRegister export]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/** Hoja EVIDENCIAS del Action Register (solo mes calendario indicado). */
+app.get("/api/action-register/export-evidencias", dashboardAuthMiddleware, async (req, res) => {
+  const planta_id = req.query.planta_id != null ? parseInt(String(req.query.planta_id), 10) : null;
+  const year = parseInt(String(req.query.year || ""), 10);
+  const month = parseInt(String(req.query.month || ""), 10);
+  if (!planta_id || !Number.isFinite(planta_id)) return res.status(400).json({ error: "planta_id requerido" });
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
+    return res.status(400).json({ error: "year y month requeridos (mes calendario 1–12)" });
+  }
+  if (!assertDashboardPlantaAccessForActionRegister(req, planta_id)) {
+    return res.status(403).json({ error: "Sin acceso a esta planta" });
+  }
+  const client = await pool.connect();
+  try {
+    const ExcelJS = require("exceljs");
+    const wb = await actionRegisterEvidenciasExport.buildActionRegisterEvidenciasWorkbook(client, {
+      planta_id,
+      year,
+      month,
+      sheetName: "EVIDENCIAS",
+      ExcelJS,
+      ensureActionRegisterTables,
+      dicfAccionesLib,
+      getActionRegisterAttachmentBuffer,
+      getDicfAttachmentBuffer,
+      getNoteAttachmentBuffer,
+    });
+    const plantaRow = await client.query(`SELECT nombre FROM public.plantas WHERE id = $1`, [planta_id]);
+    const plantaNombre = (plantaRow.rows[0] && plantaRow.rows[0].nombre) || `Planta_${planta_id}`;
+    const safe = String(plantaNombre).replace(/[^A-Za-z0-9_-]+/g, "_");
+    const mm = String(month).padStart(2, "0");
+    const buf = await wb.xlsx.writeBuffer();
+    const filename = `EVIDENCIAS_${safe}_${year}${mm}.xlsx`;
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(Buffer.from(buf));
+  } catch (e) {
+    console.error("[ActionRegister export-evidencias]", e);
     res.status(500).json({ error: e.message });
   } finally {
     client.release();

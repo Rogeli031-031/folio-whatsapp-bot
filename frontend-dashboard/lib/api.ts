@@ -233,6 +233,36 @@ export function getActionRegisterExportUrl(token: string, planta_id: number): st
   return `${base}?planta_id=${encodeURIComponent(String(planta_id))}&t=${encodeURIComponent(token)}`;
 }
 
+export function getActionRegisterEvidenciasExportUrl(
+  token: string,
+  planta_id: number,
+  year: number,
+  month: number
+): string {
+  const base = getApiUrl("/api/action-register/export-evidencias");
+  return `${base}?planta_id=${encodeURIComponent(String(planta_id))}&year=${year}&month=${month}&t=${encodeURIComponent(token)}`;
+}
+
+/** Buffer .xlsx con hoja EVIDENCIAS del Action Register (solo mes calendario). */
+export async function fetchActionRegisterEvidenciasBuffer(
+  token: string,
+  planta_id: number,
+  year: number,
+  month: number
+): Promise<ArrayBuffer> {
+  const url = getActionRegisterEvidenciasExportUrl(token, planta_id, year, month);
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+  });
+  const ct = (res.headers.get("content-type") || "").toLowerCase();
+  if (!res.ok || ct.includes("application/json")) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as { error?: string }).error || res.statusText || "Error EVIDENCIAS Excel");
+  }
+  return res.arrayBuffer();
+}
+
 export function getActionRegisterDailyPdfUrl(token: string, planta_id: number, revision_id: number): string {
   const base = getApiUrl("/api/action-register/export-day-pdf");
   return `${base}?planta_id=${encodeURIComponent(String(planta_id))}&revision_id=${encodeURIComponent(String(revision_id))}&t=${encodeURIComponent(token)}`;
