@@ -50,6 +50,7 @@ const weeklyDiscountLdScheduler = require("./lib/weekly-discount-ld-scheduler");
 const dicf = require("./lib/dicf");
 const dicfAccionesLib = require("./lib/dicf-acciones");
 const actionRegisterEvidenciasExport = require("./lib/action-register-evidencias-export");
+const { embedExcelEvidencePhoto } = require("./lib/excel-image-compress");
 const { isDirectorZPForDashboard } = require("./lib/dashboard-es-zp");
 
 const app = express();
@@ -7397,20 +7398,7 @@ app.get("/api/action-register/export", dashboardAuthMiddleware, async (req, res)
 
           try {
             const buf = await getActionRegisterAttachmentBuffer(client, a);
-            if (buf && buf.length > 0) {
-              const ct = String(a.content_type || "image/jpeg").toLowerCase();
-              const ext = ct === "image/png" ? "png" : ct === "image/gif" ? "gif" : "jpeg";
-              const imageId = wb.addImage({ buffer: buf, extension: ext });
-              // Columna "Foto" = índice 3 (0-based) -> col D.
-              const rowIdx = row.number; // 1-based
-              wsE.addImage(imageId, {
-                tl: { col: 3.05, row: rowIdx - 1 + 0.05 },
-                ext: { width: 220, height: 160 },
-                editAs: "oneCell",
-              });
-            } else {
-              row.getCell("foto").value = "(no disponible)";
-            }
+            await embedExcelEvidencePhoto(wb, wsE, row, buf, a.content_type);
           } catch (e) {
             console.error("[ActionRegister export image]", e);
             row.getCell("foto").value = "(error al cargar)";
@@ -7450,19 +7438,7 @@ app.get("/api/action-register/export", dashboardAuthMiddleware, async (req, res)
 
           try {
             const buf2 = await getDicfAttachmentBuffer(client, a);
-            if (buf2 && buf2.length > 0) {
-              const ct = String(a.content_type || "image/jpeg").toLowerCase();
-              const ext = ct === "image/png" ? "png" : ct === "image/gif" ? "gif" : "jpeg";
-              const imageId = wb.addImage({ buffer: buf2, extension: ext });
-              const rowIdx = row.number;
-              wsE.addImage(imageId, {
-                tl: { col: 3.05, row: rowIdx - 1 + 0.05 },
-                ext: { width: 220, height: 160 },
-                editAs: "oneCell",
-              });
-            } else {
-              row.getCell("foto").value = "(no disponible)";
-            }
+            await embedExcelEvidencePhoto(wb, wsE, row, buf2, a.content_type);
           } catch (e) {
             console.error("[ActionRegister export DICF image]", e);
             row.getCell("foto").value = "(error al cargar)";
@@ -7515,19 +7491,7 @@ app.get("/api/action-register/export", dashboardAuthMiddleware, async (req, res)
 
             try {
               const buf3 = await getNoteAttachmentBuffer(client, a);
-              if (buf3 && buf3.length > 0) {
-                const ct = String(a.content_type || "image/jpeg").toLowerCase();
-                const ext = ct === "image/png" ? "png" : ct === "image/gif" ? "gif" : "jpeg";
-                const imageId = wb.addImage({ buffer: buf3, extension: ext });
-                const rowIdx = row.number;
-                wsE.addImage(imageId, {
-                  tl: { col: 3.05, row: rowIdx - 1 + 0.05 },
-                  ext: { width: 220, height: 160 },
-                  editAs: "oneCell",
-                });
-              } else {
-                row.getCell("foto").value = "(no disponible)";
-              }
+              await embedExcelEvidencePhoto(wb, wsE, row, buf3, a.content_type);
             } catch (e) {
               console.error("[ActionRegister export note image]", e);
               row.getCell("foto").value = "(error al cargar)";
