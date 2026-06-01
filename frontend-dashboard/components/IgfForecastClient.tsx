@@ -16,9 +16,7 @@ import {
   postForecastProvincia,
   patchIgfForecastHg,
   getDashboardExcelDownloadUrl,
-  fetchIgfMetaVersions,
-  getIgfMetaExcelDownloadUrl,
-  type IgfMetaVersionItem,
+  fetchActionRegisterEvidenciasProvinciaBuffer,
   fetchPresupuestoDetalle,
   fetchIgfFoliosDetalle,
   fetchPronosticoDetalle,
@@ -162,13 +160,11 @@ export function IgfForecastContent() {
   const [igfMesAnteriorLoading, setIgfMesAnteriorLoading] = useState(false);
   const [forecastRecalcLoading, setForecastRecalcLoading] = useState(false);
   const [forecastRecalcMsg, setForecastRecalcMsg] = useState<string | null>(null);
-  const [evalModalOpen, setEvalModalOpen] = useState(false);
-  const [evalYear, setEvalYear] = useState(() => new Date().getFullYear());
-  const [evalMonth, setEvalMonth] = useState(() => new Date().getMonth() + 1);
-  const [evalVersion, setEvalVersion] = useState<number | "">("");
-  const [evalVersions, setEvalVersions] = useState<IgfMetaVersionItem[]>([]);
-  const [evalVersionsLoading, setEvalVersionsLoading] = useState(false);
-  const [evalError, setEvalError] = useState<string | null>(null);
+  const [evidenciasModalOpen, setEvidenciasModalOpen] = useState(false);
+  const [evidenciasFechaInicio, setEvidenciasFechaInicio] = useState("");
+  const [evidenciasFechaFin, setEvidenciasFechaFin] = useState("");
+  const [evidenciasExportLoading, setEvidenciasExportLoading] = useState(false);
+  const [evidenciasError, setEvidenciasError] = useState<string | null>(null);
   const [pronosticoModal, setPronosticoModal] = useState<{ empresa: string; plant_code: string } | null>(null);
   const [pronosticoDetail, setPronosticoDetail] = useState<PronosticoDetalleResponse | null>(null);
   const [pronosticoLoading, setPronosticoLoading] = useState(false);
@@ -241,68 +237,63 @@ export function IgfForecastContent() {
     lastIgfFetchKeyRef.current = "";
   }, [token]);
 
-  const MESES_EVALUACION = [
-    "Enero",
-    "Febrero",
-    "Marzo",
-    "Abril",
-    "Mayo",
-    "Junio",
-    "Julio",
-    "Agosto",
-    "Septiembre",
-    "Octubre",
-    "Noviembre",
-    "Diciembre",
-  ];
+  const pad2 = (n: number) => String(n).padStart(2, "0");
 
-  useEffect(() => {
-    if (!evalModalOpen || !token) return;
-    let cancelled = false;
-    setEvalVersionsLoading(true);
-    setEvalError(null);
-    fetchIgfMetaVersions(token, evalYear, evalMonth)
-      .then((r) => {
-        if (cancelled) return;
-        const list = r.versions || [];
-        setEvalVersions(list);
-        const first = list[0]?.version_number;
-        setEvalVersion((prev) => {
-          if (prev !== "" && list.some((v) => v.version_number === prev)) return prev;
-          return first ?? "";
-        });
-      })
-      .catch((e: unknown) => {
-        if (cancelled) return;
-        setEvalVersions([]);
-        setEvalVersion("");
-        setEvalError(e instanceof Error ? e.message : "No se pudieron cargar las versiones META");
-      })
-      .finally(() => {
-        if (!cancelled) setEvalVersionsLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [evalModalOpen, token, evalYear, evalMonth]);
-
-  const openEvaluacionModal = () => {
+  const openEvidenciasModal = () => {
     if (igfForecast) {
-      setEvalYear(igfForecast.year);
-      setEvalMonth(igfForecast.month);
+      const y = igfForecast.year;
+      const m = igfForecast.month;
+      const last = new Date(y, m, 0).getDate();
+      setEvidenciasFechaInicio(`${y}-${pad2(m)}-01`);
+      setEvidenciasFechaFin(`${y}-${pad2(m)}-${pad2(last)}`);
+    } else {
+      const now = new Date();
+      const y = now.getFullYear();
+      const m = now.getMonth() + 1;
+      const last = new Date(y, m, 0).getDate();
+      setEvidenciasFechaInicio(`${y}-${pad2(m)}-01`);
+      setEvidenciasFechaFin(`${y}-${pad2(m)}-${pad2(last)}`);
     }
-    setEvalError(null);
-    setEvalModalOpen(true);
+    setEvidenciasError(null);
+    setEvidenciasModalOpen(true);
   };
 
-  const handleExportIgfMeta = () => {
-    if (!token || evalVersion === "" || !Number.isFinite(Number(evalVersion))) return;
-    window.open(
-      getIgfMetaExcelDownloadUrl(token, evalYear, evalMonth, Number(evalVersion)),
-      "_blank",
-      "noopener,noreferrer"
-    );
-    setEvalModalOpen(false);
+  const handleExportEvidenciasProvincia = () => {
+    const t = token?.trim();
+    if (!t) return;
+    const ini = evidenciasFechaInicio.trim();
+    const fin = evidenciasFechaFin.trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(ini) || !/^\d{4}-\d{2}-\d{2}$/.test(fin)) {
+      setEvidenciasError("Indica fecha inicio y fecha fin válidas.");
+      return;
+    }
+    if (ini > fin) {
+      setEvidenciasError("La fecha inicio no puede ser posterior a la fecha fin.");
+      return;
+    }
+    setEvidenciasExportLoading(true);
+    setEvidenciasError(null);
+    void (async () => {
+      try {
+        const buf = await fetchActionRegisterEvidenciasProvinciaBuffer(t, ini, fin);
+        const blob = new Blob([buf], {
+          type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `EVIDENCIAS_Provincia_${ini}_${fin}.xlsx`;
+        a.rel = "noopener";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(a.href);
+        setEvidenciasModalOpen(false);
+      } catch (e: unknown) {
+        setEvidenciasError(e instanceof Error ? e.message : "No se pudo generar el Excel de evidencias");
+      } finally {
+        setEvidenciasExportLoading(false);
+      }
+    })();
   };
 
   useEffect(() => {
@@ -699,10 +690,10 @@ export function IgfForecastContent() {
           {token && (
             <button
               type="button"
-              onClick={openEvaluacionModal}
+              onClick={openEvidenciasModal}
               className="inline-flex items-center gap-2 rounded border border-rose-500/80 bg-rose-950/60 px-5 py-2 text-sm font-semibold text-rose-100 hover:bg-rose-900/50 shadow-sm"
             >
-              Evaluacion
+              EVIDENCIAS
             </button>
           )}
         </div>
@@ -2135,98 +2126,63 @@ export function IgfForecastContent() {
         </div>
       )}
 
-      {evalModalOpen && (
+      {evidenciasModalOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
           role="dialog"
           aria-modal="true"
-          aria-labelledby="igf-meta-eval-title"
+          aria-labelledby="igf-evidencias-title"
         >
           <div className="w-full max-w-md rounded-lg border border-rose-800/60 bg-slate-900 p-5 text-slate-100 shadow-xl">
-            <h2 id="igf-meta-eval-title" className="text-lg font-semibold text-rose-100">
-              Exportar IGF META
+            <h2 id="igf-evidencias-title" className="text-lg font-semibold text-rose-100">
+              Exportar evidencias (Action Register)
             </h2>
             <p className="mt-1 text-xs text-slate-400">
-              Genera un Excel con la hoja META (misma plantilla que Compromiso) para la versión guardada en{" "}
-              <span className="font-mono text-slate-300">igf_meta</span>.
+              Genera un Excel con una hoja por planta de Zona Provincia. Incluye fotos de acciones, DICF y
+              comentarios del día en el rango de fechas (mismo formato que la hoja EVIDENCIAS del export ARR).
             </p>
-            <div className="mt-4 grid grid-cols-2 gap-3">
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
               <label className="block text-sm">
-                <span className="text-slate-300">Año</span>
+                <span className="text-slate-300">Fecha inicio</span>
                 <input
-                  type="number"
-                  min={2020}
-                  max={2100}
-                  value={evalYear}
-                  onChange={(e) => setEvalYear(parseInt(e.target.value, 10) || evalYear)}
+                  type="date"
+                  value={evidenciasFechaInicio}
+                  onChange={(e) => setEvidenciasFechaInicio(e.target.value)}
                   className="mt-1 w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-sm"
                 />
               </label>
               <label className="block text-sm">
-                <span className="text-slate-300">Mes</span>
-                <select
-                  value={evalMonth}
-                  onChange={(e) => setEvalMonth(parseInt(e.target.value, 10))}
+                <span className="text-slate-300">Fecha final</span>
+                <input
+                  type="date"
+                  value={evidenciasFechaFin}
+                  onChange={(e) => setEvidenciasFechaFin(e.target.value)}
                   className="mt-1 w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-sm"
-                >
-                  {MESES_EVALUACION.map((m, i) => (
-                    <option key={m} value={i + 1}>
-                      {m}
-                    </option>
-                  ))}
-                </select>
+                />
               </label>
             </div>
-            <label className="mt-3 block text-sm">
-              <span className="text-slate-300">Versión META</span>
-              <select
-                value={evalVersion === "" ? "" : String(evalVersion)}
-                onChange={(e) =>
-                  setEvalVersion(e.target.value === "" ? "" : parseInt(e.target.value, 10))
-                }
-                disabled={evalVersionsLoading || evalVersions.length === 0}
-                className="mt-1 w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-sm disabled:opacity-50"
-              >
-                {evalVersions.length === 0 ? (
-                  <option value="">—</option>
-                ) : (
-                  evalVersions.map((v) => (
-                    <option key={v.id} value={v.version_number}>
-                      v{v.version_number}
-                      {v.is_current ? " (actual)" : ""}
-                    </option>
-                  ))
-                )}
-              </select>
-            </label>
-            {evalVersionsLoading && (
-              <p className="mt-2 text-xs text-slate-400">Cargando versiones…</p>
-            )}
-            {evalError && <p className="mt-2 text-xs text-red-400">{evalError}</p>}
-            {!evalVersionsLoading && !evalError && evalVersions.length === 0 && (
-              <p className="mt-2 text-xs text-amber-300">
-                No hay versiones META para este mes. Sube datos con la macro Subir_IGF_META_Global en Excel.
+            {evidenciasError && <p className="mt-2 text-xs text-red-400">{evidenciasError}</p>}
+            {evidenciasExportLoading && (
+              <p className="mt-2 text-xs text-slate-400">
+                Generando Excel (puede tardar si hay muchas fotos)…
               </p>
             )}
             <div className="mt-5 flex flex-wrap justify-end gap-2">
               <button
                 type="button"
-                onClick={() => setEvalModalOpen(false)}
-                className="rounded border border-slate-600 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800"
+                onClick={() => setEvidenciasModalOpen(false)}
+                disabled={evidenciasExportLoading}
+                className="rounded border border-slate-600 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800 disabled:opacity-50"
               >
                 Cancelar
               </button>
               <button
                 type="button"
-                onClick={handleExportIgfMeta}
-                disabled={
-                  evalVersionsLoading ||
-                  evalVersion === "" ||
-                  evalVersions.length === 0
-                }
+                onClick={handleExportEvidenciasProvincia}
+                disabled={evidenciasExportLoading || !evidenciasFechaInicio || !evidenciasFechaFin}
                 className="rounded bg-rose-700 px-4 py-2 text-sm font-medium text-white hover:bg-rose-600 disabled:opacity-50"
               >
-                Descargar Excel META
+                {evidenciasExportLoading ? "Generando…" : "Descargar Excel"}
               </button>
             </div>
           </div>

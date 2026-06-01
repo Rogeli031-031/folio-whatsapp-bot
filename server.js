@@ -7605,6 +7605,73 @@ app.get("/api/action-register/export", dashboardAuthMiddleware, async (req, res)
   }
 });
 
+/** Plantas Zona Provincia para export masivo de evidencias. */
+async function getProvinciaPlantasForEvidenciasExport(client, req) {
+  const r = await client.query(
+    `SELECT DISTINCT p.id, p.nombre
+     FROM public.plantas p
+     JOIN arr.provincia_plants ap
+       ON UPPER(TRIM(ap.plant_code)) = UPPER(TRIM(p.nombre))
+       OR (p.clave IS NOT NULL AND TRIM(p.clave) <> '' AND UPPER(TRIM(ap.plant_code)) = UPPER(TRIM(p.clave)))
+     WHERE UPPER(TRIM(COALESCE(p.nombre, ''))) != 'CORPORATIVO'
+     ORDER BY p.nombre`
+  );
+  let list = (r.rows || []).map((p) => ({ id: Number(p.id), nombre: p.nombre || `Planta ${p.id}` }));
+  if (isDashboardGV(req)) {
+    const allowed = new Set((req.dashboardAuth.plantas_permitidas || []).map((x) => Number(x)).filter(Number.isFinite));
+    list = list.filter((p) => allowed.has(p.id));
+  }
+  return list.filter((p) => assertDashboardPlantaAccessForActionRegister(req, p.id));
+}
+
+/** EVIDENCIAS Action Register: una hoja por planta (provincia), rango de fechas inclusivo. */
+app.get("/api/action-register/export-evidencias-provincia", dashboardAuthMiddleware, async (req, res) => {
+  const fechaInicio = String(req.query.fecha_inicio || "").trim();
+  const fechaFin = String(req.query.fecha_fin || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaInicio) || !/^\d{4}-\d{2}-\d{2}$/.test(fechaFin)) {
+    return res.status(400).json({ error: "fecha_inicio y fecha_fin requeridas (YYYY-MM-DD)" });
+  }
+  if (fechaInicio > fechaFin) {
+    return res.status(400).json({ error: "fecha_inicio no puede ser posterior a fecha_fin" });
+  }
+  const spanDays = Math.round((new Date(fechaFin) - new Date(fechaInicio)) / 86400000);
+  if (spanDays > 366) {
+    return res.status(400).json({ error: "El rango no puede exceder 366 días" });
+  }
+
+  const client = await pool.connect();
+  try {
+    await ensureActionRegisterTables(client);
+    const plantas = await getProvinciaPlantasForEvidenciasExport(client, req);
+    if (!plantas.length) {
+      return res.status(404).json({ error: "No hay plantas de provincia disponibles para exportar" });
+    }
+
+    const ExcelJS = require("exceljs");
+    const wb = await actionRegisterEvidenciasExport.buildActionRegisterEvidenciasMultiWorkbook(client, {
+      dateFrom: fechaInicio,
+      dateTo: fechaFin,
+      plantas,
+      ExcelJS,
+      ensureActionRegisterTables,
+      dicfAccionesLib,
+      getActionRegisterAttachmentBuffer,
+      getDicfAttachmentBuffer,
+      getNoteAttachmentBuffer,
+    });
+    const buf = await wb.xlsx.writeBuffer();
+    const filename = `EVIDENCIAS_Provincia_${fechaInicio}_${fechaFin}.xlsx`;
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(Buffer.from(buf));
+  } catch (e) {
+    console.error("[ActionRegister export-evidencias-provincia]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
 /** Hoja EVIDENCIAS del Action Register (solo mes calendario indicado). */
 app.get("/api/action-register/export-evidencias", dashboardAuthMiddleware, async (req, res) => {
   const planta_id = req.query.planta_id != null ? parseInt(String(req.query.planta_id), 10) : null;

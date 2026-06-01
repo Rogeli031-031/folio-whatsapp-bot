@@ -243,6 +243,34 @@ export function getActionRegisterEvidenciasExportUrl(
   return `${base}?planta_id=${encodeURIComponent(String(planta_id))}&year=${year}&month=${month}&t=${encodeURIComponent(token)}`;
 }
 
+export function getActionRegisterEvidenciasProvinciaExportUrl(
+  token: string,
+  fechaInicio: string,
+  fechaFin: string
+): string {
+  const base = getApiUrl("/api/action-register/export-evidencias-provincia");
+  return `${base}?fecha_inicio=${encodeURIComponent(fechaInicio)}&fecha_fin=${encodeURIComponent(fechaFin)}&t=${encodeURIComponent(token)}`;
+}
+
+/** Buffer .xlsx EVIDENCIAS: una hoja por planta (provincia), rango de fechas. */
+export async function fetchActionRegisterEvidenciasProvinciaBuffer(
+  token: string,
+  fechaInicio: string,
+  fechaFin: string
+): Promise<ArrayBuffer> {
+  const url = getActionRegisterEvidenciasProvinciaExportUrl(token, fechaInicio, fechaFin);
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+  });
+  const ct = (res.headers.get("content-type") || "").toLowerCase();
+  if (!res.ok || ct.includes("application/json")) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as { error?: string }).error || res.statusText || "Error EVIDENCIAS provincia");
+  }
+  return res.arrayBuffer();
+}
+
 /** Buffer .xlsx con hoja EVIDENCIAS del Action Register (solo mes calendario). */
 export async function fetchActionRegisterEvidenciasBuffer(
   token: string,
