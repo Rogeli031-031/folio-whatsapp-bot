@@ -121,6 +121,7 @@ function ContextResultPanel({
                       <thead className="bg-slate-800/80 text-slate-400 text-xs">
                         <tr>
                           <th className="px-3 py-2 font-medium">Responsable</th>
+                          <th className="px-3 py-2 font-medium">Rol</th>
                           <th className="px-3 py-2 font-medium text-right">Abiertas</th>
                           <th className="px-3 py-2 font-medium text-right">Vencidas</th>
                         </tr>
@@ -129,6 +130,9 @@ function ContextResultPanel({
                         {data.action_register.responsables.map((r) => (
                           <tr key={r.name} className="border-t border-slate-700/80">
                             <td className="px-3 py-2 text-slate-200">{r.name}</td>
+                            <td className="px-3 py-2 text-slate-400 text-xs">
+                              {r.role_name || r.role_key || "—"}
+                            </td>
                             <td className="px-3 py-2 text-right font-mono text-slate-200">{r.open_count}</td>
                             <td className="px-3 py-2 text-right font-mono text-amber-200">{r.overdue_count}</td>
                           </tr>

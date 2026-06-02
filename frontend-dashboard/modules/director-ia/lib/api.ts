@@ -9,6 +9,8 @@ export type DirectorIaContextSources = {
 
 export type DirectorIaActionRegisterResponsable = {
   name: string;
+  role_key: string | null;
+  role_name: string | null;
   open_count: number;
   overdue_count: number;
 };
