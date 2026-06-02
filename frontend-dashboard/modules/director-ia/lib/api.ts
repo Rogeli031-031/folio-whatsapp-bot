@@ -7,10 +7,17 @@ export type DirectorIaContextSources = {
   action_register: boolean;
 };
 
+export type DirectorIaActionRegisterResponsable = {
+  name: string;
+  open_count: number;
+  overdue_count: number;
+};
+
 export type DirectorIaActionRegisterBlock =
   | {
       ok: true;
       summary: { open: number; closed: number; overdue: number };
+      responsables: DirectorIaActionRegisterResponsable[];
     }
   | { ok: false; error: string };
 

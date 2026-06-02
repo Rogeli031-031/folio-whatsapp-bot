@@ -98,20 +98,49 @@ function ContextResultPanel({
         <div className="sm:col-span-2 space-y-2 border-t border-slate-700 pt-3 mt-1">
           <p className="text-slate-400 text-xs font-medium uppercase tracking-wide">action_register</p>
           {data.action_register.ok ? (
-            <dl className="grid gap-2 sm:grid-cols-3">
-              <div>
-                <dt className="text-slate-500 text-xs">open</dt>
-                <dd className="font-mono text-slate-200">{data.action_register.summary.open}</dd>
-              </div>
-              <div>
-                <dt className="text-slate-500 text-xs">closed</dt>
-                <dd className="font-mono text-slate-200">{data.action_register.summary.closed}</dd>
-              </div>
-              <div>
-                <dt className="text-slate-500 text-xs">overdue</dt>
-                <dd className="font-mono text-amber-200">{data.action_register.summary.overdue}</dd>
-              </div>
-            </dl>
+            <div className="space-y-4">
+              <dl className="grid gap-2 sm:grid-cols-3">
+                <div>
+                  <dt className="text-slate-500 text-xs">open</dt>
+                  <dd className="font-mono text-slate-200">{data.action_register.summary.open}</dd>
+                </div>
+                <div>
+                  <dt className="text-slate-500 text-xs">closed</dt>
+                  <dd className="font-mono text-slate-200">{data.action_register.summary.closed}</dd>
+                </div>
+                <div>
+                  <dt className="text-slate-500 text-xs">overdue</dt>
+                  <dd className="font-mono text-amber-200">{data.action_register.summary.overdue}</dd>
+                </div>
+              </dl>
+              {data.action_register.responsables.length > 0 ? (
+                <div>
+                  <p className="text-slate-500 text-xs font-medium mb-2">Responsables (top 10, abiertas)</p>
+                  <div className="overflow-x-auto rounded border border-slate-700">
+                    <table className="w-full text-sm text-left">
+                      <thead className="bg-slate-800/80 text-slate-400 text-xs">
+                        <tr>
+                          <th className="px-3 py-2 font-medium">Responsable</th>
+                          <th className="px-3 py-2 font-medium text-right">Abiertas</th>
+                          <th className="px-3 py-2 font-medium text-right">Vencidas</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {data.action_register.responsables.map((r) => (
+                          <tr key={r.name} className="border-t border-slate-700/80">
+                            <td className="px-3 py-2 text-slate-200">{r.name}</td>
+                            <td className="px-3 py-2 text-right font-mono text-slate-200">{r.open_count}</td>
+                            <td className="px-3 py-2 text-right font-mono text-amber-200">{r.overdue_count}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-slate-500">Sin acciones abiertas con responsable asignado.</p>
+              )}
+            </div>
           ) : (
             <p className="text-sm text-amber-300/90">{data.action_register.error}</p>
           )}
