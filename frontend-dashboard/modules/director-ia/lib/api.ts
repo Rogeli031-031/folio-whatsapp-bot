@@ -23,12 +23,30 @@ export type DirectorIaActionRegisterTema = {
   progress_percent: number;
 };
 
+export type DirectorIaTopOverdueAction = {
+  id: number;
+  titulo: string;
+  tema: string;
+  responsable: string | null;
+  role_key: string | null;
+  role_name: string | null;
+  dias_vencido: number;
+  prioridad: "CRITICA" | "ALTA" | "MEDIA" | "BAJA";
+};
+
+export type DirectorIaExecutiveSummary = {
+  risk_level: "ALTO" | "MEDIO" | "BAJO";
+  findings: string[];
+};
+
 export type DirectorIaActionRegisterBlock =
   | {
       ok: true;
       summary: { open: number; closed: number; overdue: number };
       responsables: DirectorIaActionRegisterResponsable[];
       temas: DirectorIaActionRegisterTema[];
+      top_overdue: DirectorIaTopOverdueAction[];
+      executive_summary: DirectorIaExecutiveSummary;
     }
   | { ok: false; error: string };
 

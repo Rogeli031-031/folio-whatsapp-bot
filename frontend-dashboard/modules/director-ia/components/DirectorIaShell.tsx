@@ -10,6 +10,7 @@ import {
 import {
   fetchDirectorIaContext,
   type DirectorIaContextResponse,
+  type DirectorIaTopOverdueAction,
 } from "@/modules/director-ia/lib/api";
 
 const MESES = [
@@ -26,6 +27,19 @@ const MESES = [
   { value: "11", label: "Noviembre" },
   { value: "12", label: "Diciembre" },
 ];
+
+const PRIORIDAD_BADGE: Record<DirectorIaTopOverdueAction["prioridad"], string> = {
+  CRITICA: "bg-red-950/60 text-red-200 border-red-700",
+  ALTA: "bg-orange-950/50 text-orange-200 border-orange-700",
+  MEDIA: "bg-amber-950/40 text-amber-200 border-amber-700",
+  BAJA: "bg-slate-800 text-slate-300 border-slate-600",
+};
+
+function riskBadgeClass(level: "ALTO" | "MEDIO" | "BAJO") {
+  if (level === "ALTO") return "text-red-300 border-red-600 bg-red-950/40";
+  if (level === "MEDIO") return "text-amber-200 border-amber-600 bg-amber-950/30";
+  return "text-emerald-300 border-emerald-700 bg-emerald-950/30";
+}
 
 function ContextResultPanel({
   data,
@@ -98,8 +112,72 @@ function ContextResultPanel({
         <div className="sm:col-span-2 space-y-2 border-t border-slate-700 pt-3 mt-1">
           <p className="text-slate-400 text-xs font-medium uppercase tracking-wide">action_register</p>
           {data.action_register.ok ? (
-            <div className="space-y-4">
-              <dl className="grid gap-2 sm:grid-cols-3">
+            <div className="space-y-6">
+              {data.action_register.executive_summary && (
+                <div className="rounded-lg border border-slate-600 bg-slate-900/60 p-4 space-y-3">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <p className="text-sm font-medium text-slate-200">Resumen ejecutivo</p>
+                    <span
+                      className={`inline-flex rounded border px-2 py-0.5 text-xs font-semibold ${riskBadgeClass(data.action_register.executive_summary.risk_level)}`}
+                    >
+                      Estado general: {data.action_register.executive_summary.risk_level}
+                    </span>
+                  </div>
+                  {data.action_register.executive_summary.findings.length > 0 ? (
+                    <ul className="list-disc list-inside space-y-1 text-sm text-slate-300">
+                      {data.action_register.executive_summary.findings.map((f, i) => (
+                        <li key={i}>{f}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-xs text-slate-500">Sin hallazgos.</p>
+                  )}
+                </div>
+              )}
+
+              {data.action_register.top_overdue.length > 0 ? (
+                <div>
+                  <p className="text-slate-500 text-xs font-medium mb-2">Top acciones críticas (vencidas)</p>
+                  <div className="overflow-x-auto rounded border border-slate-700">
+                    <table className="w-full text-sm text-left">
+                      <thead className="bg-slate-800/80 text-slate-400 text-xs">
+                        <tr>
+                          <th className="px-3 py-2 font-medium">Prioridad</th>
+                          <th className="px-3 py-2 font-medium text-right">Días vencido</th>
+                          <th className="px-3 py-2 font-medium">Tema</th>
+                          <th className="px-3 py-2 font-medium">Responsable</th>
+                          <th className="px-3 py-2 font-medium">Rol</th>
+                          <th className="px-3 py-2 font-medium">Título</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {data.action_register.top_overdue.map((a) => (
+                          <tr key={a.id} className="border-t border-slate-700/80">
+                            <td className="px-3 py-2">
+                              <span
+                                className={`inline-flex rounded border px-1.5 py-0.5 text-[10px] font-semibold ${PRIORIDAD_BADGE[a.prioridad]}`}
+                              >
+                                {a.prioridad}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2 text-right font-mono text-amber-200">{a.dias_vencido}</td>
+                            <td className="px-3 py-2 text-slate-200">{a.tema}</td>
+                            <td className="px-3 py-2 text-slate-300">{a.responsable || "—"}</td>
+                            <td className="px-3 py-2 text-slate-400 text-xs">{a.role_name || a.role_key || "—"}</td>
+                            <td className="px-3 py-2 text-slate-200 max-w-xs truncate" title={a.titulo}>
+                              {a.titulo}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-slate-500">Sin acciones vencidas abiertas.</p>
+              )}
+
+              <dl className="grid gap-2 sm:grid-cols-3 text-sm">
                 <div>
                   <dt className="text-slate-500 text-xs">open</dt>
                   <dd className="font-mono text-slate-200">{data.action_register.summary.open}</dd>
