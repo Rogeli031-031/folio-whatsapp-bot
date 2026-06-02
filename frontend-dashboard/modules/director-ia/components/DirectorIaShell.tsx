@@ -94,6 +94,29 @@ function ContextResultPanel({
         <dt className="text-slate-400">sources.action_register</dt>
         <dd className="font-mono text-slate-200">{String(sources.action_register)}</dd>
       </div>
+      {"action_register" in data && (
+        <div className="sm:col-span-2 space-y-2 border-t border-slate-700 pt-3 mt-1">
+          <p className="text-slate-400 text-xs font-medium uppercase tracking-wide">action_register</p>
+          {data.action_register.ok ? (
+            <dl className="grid gap-2 sm:grid-cols-3">
+              <div>
+                <dt className="text-slate-500 text-xs">open</dt>
+                <dd className="font-mono text-slate-200">{data.action_register.summary.open}</dd>
+              </div>
+              <div>
+                <dt className="text-slate-500 text-xs">closed</dt>
+                <dd className="font-mono text-slate-200">{data.action_register.summary.closed}</dd>
+              </div>
+              <div>
+                <dt className="text-slate-500 text-xs">overdue</dt>
+                <dd className="font-mono text-amber-200">{data.action_register.summary.overdue}</dd>
+              </div>
+            </dl>
+          ) : (
+            <p className="text-sm text-amber-300/90">{data.action_register.error}</p>
+          )}
+        </div>
+      )}
     </dl>
   );
 }
@@ -126,7 +149,7 @@ export function DirectorIaShell() {
     setContextError(null);
     setContextData(null);
     try {
-      const data = await fetchDirectorIaContext(token);
+      const data = await fetchDirectorIaContext(token, planta.trim() || undefined);
       setContextData(data);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Error al consultar contexto";
@@ -137,7 +160,7 @@ export function DirectorIaShell() {
     } finally {
       setContextLoading(false);
     }
-  }, [token]);
+  }, [token, planta]);
 
   if (unauthorized || !token) {
     return (
@@ -162,14 +185,15 @@ export function DirectorIaShell() {
           <div className="flex flex-wrap items-end gap-4">
             <label className="flex flex-col gap-1 min-w-[12rem]">
               <span className="text-xs text-slate-400">Planta</span>
-              <select
+              <input
+                type="number"
+                min={1}
                 value={planta}
                 onChange={(e) => setPlanta(e.target.value)}
-                className="rounded border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-200"
-                aria-label="Selector de planta"
-              >
-                <option value="">— Seleccionar planta (placeholder) —</option>
-              </select>
+                placeholder="ID planta (ej. 3)"
+                className="rounded border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-200 w-full"
+                aria-label="ID de planta para contexto"
+              />
             </label>
 
             <label className="flex flex-col gap-1 min-w-[10rem]">
