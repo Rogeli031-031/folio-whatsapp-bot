@@ -52,6 +52,7 @@ const dicfAccionesLib = require("./lib/dicf-acciones");
 const actionRegisterEvidenciasExport = require("./lib/action-register-evidencias-export");
 const { embedExcelEvidencePhoto } = require("./lib/excel-image-compress");
 const { isDirectorZPForDashboard } = require("./lib/dashboard-es-zp");
+const directorIaContext = require("./lib/director-ia-context");
 
 const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
@@ -7715,6 +7716,13 @@ app.get("/api/action-register/export-evidencias", dashboardAuthMiddleware, async
     client.release();
   }
 });
+
+// ===========================
+// Director IA (MVP)
+// ===========================
+
+/** Contexto agregado de solo lectura (fase 1: estructura sin datos de IGF/ARR/DICF/AR). */
+app.get("/api/director-ia/context", dashboardAuthMiddleware, directorIaContext.handleGetContext);
 
 /** Exporta a PDF el resumen del día (una revisión) del Action Register de una planta. */
 app.get("/api/action-register/export-day-pdf", dashboardAuthMiddleware, async (req, res) => {
