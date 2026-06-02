@@ -39,6 +39,20 @@ export type DirectorIaExecutiveSummary = {
   findings: string[];
 };
 
+export type DirectorIaInvalidOverdueExample = {
+  id: number;
+  titulo: string;
+  tema: string;
+  responsable: string | null;
+  due_date: string | null;
+  reason: string;
+};
+
+export type DirectorIaInvalidOverdue = {
+  count: number;
+  examples: DirectorIaInvalidOverdueExample[];
+};
+
 export type DirectorIaActionRegisterBlock =
   | {
       ok: true;
@@ -46,6 +60,7 @@ export type DirectorIaActionRegisterBlock =
       responsables: DirectorIaActionRegisterResponsable[];
       temas: DirectorIaActionRegisterTema[];
       top_overdue: DirectorIaTopOverdueAction[];
+      invalid_overdue: DirectorIaInvalidOverdue;
       executive_summary: DirectorIaExecutiveSummary;
     }
   | { ok: false; error: string };

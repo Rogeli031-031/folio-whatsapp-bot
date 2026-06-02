@@ -10,6 +10,7 @@ import {
 import {
   fetchDirectorIaContext,
   type DirectorIaContextResponse,
+  type DirectorIaInvalidOverdueExample,
   type DirectorIaTopOverdueAction,
 } from "@/modules/director-ia/lib/api";
 
@@ -39,6 +40,67 @@ function riskBadgeClass(level: "ALTO" | "MEDIO" | "BAJO") {
   if (level === "ALTO") return "text-red-300 border-red-600 bg-red-950/40";
   if (level === "MEDIO") return "text-amber-200 border-amber-600 bg-amber-950/30";
   return "text-emerald-300 border-emerald-700 bg-emerald-950/30";
+}
+
+function formatInvalidOverdueReason(reason: string) {
+  if (reason === "due_date_fuera_de_rango") return "Fecha fuera de rango operativo";
+  if (reason === "dias_vencido_excesivo") return "Días vencidos superiores a 10 años";
+  return reason;
+}
+
+function InvalidOverduePanel({
+  count,
+  examples,
+}: {
+  count: number;
+  examples: DirectorIaInvalidOverdueExample[];
+}) {
+  if (count <= 0) return null;
+
+  return (
+    <div className="rounded-lg border border-amber-700/50 bg-amber-950/20 p-4 space-y-3">
+      <p className="text-sm text-amber-100/95">
+        ⚠️ Calidad de datos: se excluyeron {count}{" "}
+        {count === 1 ? "acción vencida" : "acciones vencidas"} con fechas inválidas del análisis
+        ejecutivo.
+      </p>
+      <p className="text-xs text-slate-400">
+        Estas acciones siguen existiendo en Action Register; solo se excluyen del análisis ejecutivo
+        para evitar días vencidos irreales.
+      </p>
+      {examples.length > 0 ? (
+        <div>
+          <p className="text-slate-500 text-xs font-medium mb-2">Ejemplos (máx. 10)</p>
+          <div className="overflow-x-auto rounded border border-amber-800/40">
+            <table className="w-full text-sm text-left">
+              <thead className="bg-slate-800/80 text-slate-400 text-xs">
+                <tr>
+                  <th className="px-3 py-2 font-medium">ID</th>
+                  <th className="px-3 py-2 font-medium">Tema</th>
+                  <th className="px-3 py-2 font-medium">Responsable</th>
+                  <th className="px-3 py-2 font-medium">Fecha</th>
+                  <th className="px-3 py-2 font-medium">Motivo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {examples.map((row) => (
+                  <tr key={row.id} className="border-t border-slate-700/80">
+                    <td className="px-3 py-2 font-mono text-slate-300">{row.id}</td>
+                    <td className="px-3 py-2 text-slate-200">{row.tema}</td>
+                    <td className="px-3 py-2 text-slate-300">{row.responsable || "—"}</td>
+                    <td className="px-3 py-2 font-mono text-amber-200/90">{row.due_date || "—"}</td>
+                    <td className="px-3 py-2 text-slate-400 text-xs">
+                      {formatInvalidOverdueReason(row.reason)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function ContextResultPanel({
@@ -134,6 +196,14 @@ function ContextResultPanel({
                   )}
                 </div>
               )}
+
+              {data.action_register.invalid_overdue &&
+              data.action_register.invalid_overdue.count > 0 ? (
+                <InvalidOverduePanel
+                  count={data.action_register.invalid_overdue.count}
+                  examples={data.action_register.invalid_overdue.examples}
+                />
+              ) : null}
 
               {data.action_register.top_overdue.length > 0 ? (
                 <div>
