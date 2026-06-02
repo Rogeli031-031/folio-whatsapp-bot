@@ -13,11 +13,20 @@ export type DirectorIaActionRegisterResponsable = {
   overdue_count: number;
 };
 
+export type DirectorIaActionRegisterTema = {
+  name: string;
+  open_count: number;
+  closed_count: number;
+  overdue_count: number;
+  progress_percent: number;
+};
+
 export type DirectorIaActionRegisterBlock =
   | {
       ok: true;
       summary: { open: number; closed: number; overdue: number };
       responsables: DirectorIaActionRegisterResponsable[];
+      temas: DirectorIaActionRegisterTema[];
     }
   | { ok: false; error: string };
 

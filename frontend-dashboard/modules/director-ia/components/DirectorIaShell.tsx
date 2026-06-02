@@ -140,6 +140,37 @@ function ContextResultPanel({
               ) : (
                 <p className="text-xs text-slate-500">Sin acciones abiertas con responsable asignado.</p>
               )}
+              {data.action_register.temas.length > 0 ? (
+                <div>
+                  <p className="text-slate-500 text-xs font-medium mb-2">Temas</p>
+                  <div className="overflow-x-auto rounded border border-slate-700">
+                    <table className="w-full text-sm text-left">
+                      <thead className="bg-slate-800/80 text-slate-400 text-xs">
+                        <tr>
+                          <th className="px-3 py-2 font-medium">Tema</th>
+                          <th className="px-3 py-2 font-medium text-right">Abiertas</th>
+                          <th className="px-3 py-2 font-medium text-right">Cerradas</th>
+                          <th className="px-3 py-2 font-medium text-right">Vencidas</th>
+                          <th className="px-3 py-2 font-medium text-right">Avance %</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {data.action_register.temas.map((t) => (
+                          <tr key={t.name} className="border-t border-slate-700/80">
+                            <td className="px-3 py-2 text-slate-200">{t.name}</td>
+                            <td className="px-3 py-2 text-right font-mono text-slate-200">{t.open_count}</td>
+                            <td className="px-3 py-2 text-right font-mono text-slate-200">{t.closed_count}</td>
+                            <td className="px-3 py-2 text-right font-mono text-amber-200">{t.overdue_count}</td>
+                            <td className="px-3 py-2 text-right font-mono text-emerald-200/90">{t.progress_percent}%</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-slate-500">Sin acciones registradas por tema.</p>
+              )}
             </div>
           ) : (
             <p className="text-sm text-amber-300/90">{data.action_register.error}</p>
