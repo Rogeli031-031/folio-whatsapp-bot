@@ -53,6 +53,32 @@ export type DirectorIaInvalidOverdue = {
   examples: DirectorIaInvalidOverdueExample[];
 };
 
+export type DirectorIaTemaDetailResponsable = {
+  name: string;
+  role_key: string | null;
+  role_name: string | null;
+};
+
+export type DirectorIaTemaDetailOpenAction = {
+  id: number;
+  title: string;
+  responsable: string | null;
+  role_name: string | null;
+  created_at: string | null;
+  due_date: string | null;
+  dias_abierta: number | null;
+  dias_vencido: number;
+  prioridad: "CRITICA" | "ALTA" | "MEDIA" | "BAJA";
+};
+
+export type DirectorIaTemaDetail = {
+  tema: string;
+  open_count: number;
+  overdue_count: number;
+  responsables: DirectorIaTemaDetailResponsable[];
+  open_actions: DirectorIaTemaDetailOpenAction[];
+};
+
 export type DirectorIaActionRegisterBlock =
   | {
       ok: true;
@@ -61,6 +87,7 @@ export type DirectorIaActionRegisterBlock =
       temas: DirectorIaActionRegisterTema[];
       top_overdue: DirectorIaTopOverdueAction[];
       invalid_overdue: DirectorIaInvalidOverdue;
+      tema_details: DirectorIaTemaDetail[];
       executive_summary: DirectorIaExecutiveSummary;
     }
   | { ok: false; error: string };
