@@ -53,6 +53,7 @@ const actionRegisterEvidenciasExport = require("./lib/action-register-evidencias
 const { embedExcelEvidencePhoto } = require("./lib/excel-image-compress");
 const { isDirectorZPForDashboard } = require("./lib/dashboard-es-zp");
 const directorIaContext = require("./lib/director-ia-context");
+const directorIaChat = require("./lib/director-ia-chat");
 const { ACTION_REGISTER_TEMAS, buildActionRegisterBoardPayload } = require("./lib/action-register-board");
 
 const app = express();
@@ -7569,6 +7570,9 @@ directorIaContext.configureDirectorIaContext({
 
 /** Contexto agregado de solo lectura (Action Register: resumen por planta). */
 app.get("/api/director-ia/context", dashboardAuthMiddleware, directorIaContext.handleGetContext);
+
+/** Chat ejecutivo (Action Register); reutiliza contexto agregado + OpenAI en backend. */
+app.post("/api/director-ia/chat", dashboardAuthMiddleware, directorIaChat.handlePostChat);
 
 /** Exporta a PDF el resumen del día (una revisión) del Action Register de una planta. */
 app.get("/api/action-register/export-day-pdf", dashboardAuthMiddleware, async (req, res) => {

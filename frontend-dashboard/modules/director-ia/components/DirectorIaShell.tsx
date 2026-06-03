@@ -9,6 +9,7 @@ import {
 } from "@/lib/auth";
 import {
   fetchDirectorIaContext,
+  fetchDirectorIaChat,
   type DirectorIaContextResponse,
   type DirectorIaInvalidOverdueExample,
   type DirectorIaTopOverdueAction,
@@ -46,6 +47,113 @@ function formatInvalidOverdueReason(reason: string) {
   if (reason === "due_date_fuera_de_rango") return "Fecha fuera de rango operativo";
   if (reason === "dias_vencido_excesivo") return "Días vencidos superiores a 10 años";
   return reason;
+}
+
+function DirectorIaChatPanel({
+  token,
+  plantaId,
+}: {
+  token: string;
+  plantaId: string;
+}) {
+  const [question, setQuestion] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [lastQuestion, setLastQuestion] = useState<string | null>(null);
+  const [lastAnswer, setLastAnswer] = useState<string | null>(null);
+  const [lastSources, setLastSources] = useState<string[]>([]);
+
+  const consultar = useCallback(async () => {
+    const q = question.trim();
+    const pid = parseInt(plantaId.trim(), 10);
+    if (!q) {
+      setError("Escribe una pregunta.");
+      return;
+    }
+    if (!Number.isFinite(pid) || pid <= 0) {
+      setError("Indica un ID de planta válido arriba.");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetchDirectorIaChat(token, pid, q);
+      if ("enabled" in res && res.enabled === false) {
+        setError("Director IA deshabilitado en el servidor.");
+        return;
+      }
+      if (!("ok" in res) || !res.ok) {
+        setError("error" in res ? res.error : "Error al consultar");
+        return;
+      }
+      setLastQuestion(q);
+      setLastAnswer(res.answer);
+      setLastSources(res.sources || []);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Error al consultar");
+    } finally {
+      setLoading(false);
+    }
+  }, [token, plantaId, question]);
+
+  return (
+    <div className="rounded-lg border border-cyan-800/50 bg-slate-900/60 p-4 space-y-3">
+      <p className="text-sm font-medium text-slate-200">Chat Director IA</p>
+      <p className="text-xs text-slate-500">
+        Asistente ejecutivo basado en el contexto de Action Register de la planta seleccionada.
+      </p>
+      <div className="flex flex-col sm:flex-row gap-2">
+        <input
+          type="text"
+          value={question}
+          onChange={(e) => setQuestion(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !loading) void consultar();
+          }}
+          placeholder="Pregúntale al Director IA..."
+          className="flex-1 rounded border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-200"
+          aria-label="Pregunta al Director IA"
+          disabled={loading}
+        />
+        <button
+          type="button"
+          onClick={() => void consultar()}
+          disabled={loading}
+          className="rounded border border-cyan-600/80 bg-cyan-950/50 px-4 py-2 text-sm font-medium text-cyan-100 hover:bg-cyan-900/40 disabled:opacity-50 shrink-0"
+        >
+          {loading ? "Consultando…" : "Consultar"}
+        </button>
+      </div>
+      {error ? <p className="text-sm text-red-300/90">{error}</p> : null}
+      {lastQuestion && lastAnswer ? (
+        <div className="space-y-3 border-t border-slate-700 pt-3">
+          <div>
+            <p className="text-xs text-slate-500 font-medium uppercase tracking-wide mb-1">Pregunta</p>
+            <p className="text-sm text-slate-200">{lastQuestion}</p>
+          </div>
+          <div>
+            <p className="text-xs text-slate-500 font-medium uppercase tracking-wide mb-1">Respuesta</p>
+            <p className="text-sm text-slate-100 whitespace-pre-wrap leading-relaxed">{lastAnswer}</p>
+          </div>
+          {lastSources.length > 0 ? (
+            <div>
+              <p className="text-xs text-slate-500 font-medium uppercase tracking-wide mb-1">Fuentes</p>
+              <ul className="flex flex-wrap gap-1.5">
+                {lastSources.map((s) => (
+                  <li
+                    key={s}
+                    className="font-mono text-[10px] rounded border border-slate-600 bg-slate-800/80 px-2 py-0.5 text-slate-400"
+                  >
+                    {s}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function InvalidOverduePanel({
@@ -107,10 +215,14 @@ function ContextResultPanel({
   data,
   error,
   loading,
+  token,
+  plantaId,
 }: {
   data: DirectorIaContextResponse | null;
   error: string | null;
   loading: boolean;
+  token: string;
+  plantaId: string;
 }) {
   if (loading) {
     return <p className="text-sm text-slate-400">Consultando contexto…</p>;
@@ -196,6 +308,8 @@ function ContextResultPanel({
                   )}
                 </div>
               )}
+
+              <DirectorIaChatPanel token={token} plantaId={plantaId} />
 
               {data.action_register.invalid_overdue &&
               data.action_register.invalid_overdue.count > 0 ? (
@@ -450,7 +564,13 @@ export function DirectorIaShell() {
           aria-label="Área de resultados"
         >
           <h2 className="text-sm font-medium text-slate-300 mb-4">Respuesta GET /api/director-ia/context</h2>
-          <ContextResultPanel data={contextData} error={contextError} loading={contextLoading} />
+          <ContextResultPanel
+            data={contextData}
+            error={contextError}
+            loading={contextLoading}
+            token={token}
+            plantaId={planta}
+          />
         </section>
       </main>
     </div>

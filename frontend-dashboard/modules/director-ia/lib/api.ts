@@ -88,3 +88,27 @@ export function fetchDirectorIaContext(
     cache: "no-store",
   });
 }
+
+export type DirectorIaChatResponse =
+  | { enabled: false }
+  | {
+      ok: true;
+      answer: string;
+      sources: string[];
+      context_meta: { planta_id: number; timestamp: string };
+    }
+  | { ok: false; error: string };
+
+/** POST /api/director-ia/chat — asistente ejecutivo (backend → OpenAI). */
+export function fetchDirectorIaChat(
+  token: string,
+  plantaId: number,
+  question: string
+): Promise<DirectorIaChatResponse> {
+  return apiFetch<DirectorIaChatResponse>("/api/director-ia/chat", {
+    method: "POST",
+    token,
+    body: JSON.stringify({ planta_id: plantaId, question }),
+    cache: "no-store",
+  });
+}
