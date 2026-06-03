@@ -54,6 +54,7 @@ const { embedExcelEvidencePhoto } = require("./lib/excel-image-compress");
 const { isDirectorZPForDashboard } = require("./lib/dashboard-es-zp");
 const directorIaContext = require("./lib/director-ia-context");
 const directorIaChat = require("./lib/director-ia-chat");
+const directorIaMejoraContinua = require("./lib/director-ia-mejora-continua");
 const { buildActionRegisterBoardPayload } = require("./lib/action-register-board");
 const { ACTION_REGISTER_TEMAS, isActionRegisterTema } = require("./lib/action-register-temas");
 
@@ -7569,8 +7570,17 @@ directorIaContext.configureDirectorIaContext({
   ensureActionRegisterTables,
 });
 
+directorIaMejoraContinua.configureDirectorIaMejoraContinua({
+  pool,
+  assertPlantaAccess: assertDashboardPlantaAccessForActionRegister,
+  ensureActionRegisterTables,
+});
+
 /** Contexto agregado de solo lectura (Action Register: resumen por planta). */
 app.get("/api/director-ia/context", dashboardAuthMiddleware, directorIaContext.handleGetContext);
+
+/** Mejora Continua Presidencial v0.8 (Action Register + evidencias fotográficas). */
+app.get("/api/director-ia/mejora-continua", dashboardAuthMiddleware, directorIaMejoraContinua.handleGetMejoraContinua);
 
 /** Chat ejecutivo (Action Register); reutiliza contexto agregado + OpenAI en backend. */
 app.post("/api/director-ia/chat", dashboardAuthMiddleware, directorIaChat.handlePostChat);
