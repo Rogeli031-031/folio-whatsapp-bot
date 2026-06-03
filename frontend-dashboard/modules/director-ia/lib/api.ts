@@ -139,3 +139,64 @@ export function fetchDirectorIaChat(
     cache: "no-store",
   });
 }
+
+export type DirectorIaMejoraContinuaEstatus = "VERDE" | "AMARILLO" | "ROJO";
+
+export type DirectorIaMejoraContinuaAccionDestacada = {
+  id: number;
+  title: string;
+  responsable: string | null;
+  evidencias_mes: number;
+  ultima_evidencia: string | null;
+  vencida: boolean;
+};
+
+export type DirectorIaMejoraContinuaArea = {
+  area: string;
+  estatus: DirectorIaMejoraContinuaEstatus;
+  acciones_abiertas: number;
+  acciones_cerradas: number;
+  acciones_vencidas: number;
+  acciones_con_evidencia_mes: number;
+  evidencias_mes: number;
+  responsables: string[];
+  ultima_evidencia: string | null;
+  cumple_meta_mensual: boolean;
+  acciones_destacadas: DirectorIaMejoraContinuaAccionDestacada[];
+};
+
+export type DirectorIaMejoraContinuaResponse =
+  | { enabled: false }
+  | {
+      ok: true;
+      year: number;
+      month: number;
+      planta_id: number;
+      areas: DirectorIaMejoraContinuaArea[];
+      resumen: {
+        verdes: number;
+        amarillas: number;
+        rojas: number;
+        cumplimiento: string;
+        cumplimiento_pct: number;
+      };
+    }
+  | { ok: false; error: string };
+
+/** GET /api/director-ia/mejora-continua — Mejora Continua Presidencial v0.8. */
+export function fetchDirectorIaMejoraContinua(
+  token: string,
+  plantaId: number,
+  year: number,
+  month: number
+): Promise<DirectorIaMejoraContinuaResponse> {
+  const qs = new URLSearchParams({
+    planta_id: String(plantaId),
+    year: String(year),
+    month: String(month),
+  });
+  return apiFetch<DirectorIaMejoraContinuaResponse>(`/api/director-ia/mejora-continua?${qs}`, {
+    token,
+    cache: "no-store",
+  });
+}

@@ -10,10 +10,13 @@ import {
 import {
   fetchDirectorIaContext,
   fetchDirectorIaChat,
+  fetchDirectorIaMejoraContinua,
   type DirectorIaContextResponse,
   type DirectorIaInvalidOverdueExample,
+  type DirectorIaMejoraContinuaResponse,
   type DirectorIaTopOverdueAction,
 } from "@/modules/director-ia/lib/api";
+import { DirectorIaMejoraContinuaPanel } from "@/modules/director-ia/components/DirectorIaMejoraContinuaPanel";
 
 const MESES = [
   { value: "1", label: "Enero" },
@@ -29,6 +32,17 @@ const MESES = [
   { value: "11", label: "Noviembre" },
   { value: "12", label: "Diciembre" },
 ];
+
+function todayMexicoCityYearMonth() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Mexico_City",
+    year: "numeric",
+    month: "numeric",
+  }).formatToParts(new Date());
+  const year = parts.find((p) => p.type === "year")?.value ?? String(new Date().getFullYear());
+  const month = parts.find((p) => p.type === "month")?.value ?? "1";
+  return { year, month };
+}
 
 const PRIORIDAD_BADGE: Record<DirectorIaTopOverdueAction["prioridad"], string> = {
   CRITICA: "bg-red-950/60 text-red-200 border-red-700",
@@ -449,13 +463,18 @@ function ContextResultPanel({
 
 export function DirectorIaShell() {
   const searchParams = useSearchParams();
+  const cdmxDefault = todayMexicoCityYearMonth();
   const [token, setToken] = useState<string | null>(null);
   const [unauthorized, setUnauthorized] = useState(false);
   const [planta, setPlanta] = useState("");
-  const [mes, setMes] = useState("");
+  const [anio, setAnio] = useState(cdmxDefault.year);
+  const [mes, setMes] = useState(cdmxDefault.month);
   const [contextLoading, setContextLoading] = useState(false);
   const [contextError, setContextError] = useState<string | null>(null);
   const [contextData, setContextData] = useState<DirectorIaContextResponse | null>(null);
+  const [mejoraLoading, setMejoraLoading] = useState(false);
+  const [mejoraError, setMejoraError] = useState<string | null>(null);
+  const [mejoraData, setMejoraData] = useState<DirectorIaMejoraContinuaResponse | null>(null);
 
   useEffect(() => {
     const t = parseTokenFromQuery(searchParams) || getTokenFromStorage();
@@ -487,6 +506,51 @@ export function DirectorIaShell() {
       setContextLoading(false);
     }
   }, [token, planta]);
+
+  const cargarMejoraContinua = useCallback(async () => {
+    if (!token) return;
+    const pid = parseInt(planta.trim(), 10);
+    const year = parseInt(anio.trim(), 10);
+    const month = parseInt(mes.trim(), 10);
+    if (!Number.isFinite(pid) || pid <= 0) {
+      setMejoraError("Indica un ID de planta válido.");
+      setMejoraData(null);
+      return;
+    }
+    if (!Number.isFinite(year) || year < 2000 || year > 2100) {
+      setMejoraError("Indica un año válido.");
+      setMejoraData(null);
+      return;
+    }
+    if (!Number.isFinite(month) || month < 1 || month > 12) {
+      setMejoraError("Selecciona un mes válido.");
+      setMejoraData(null);
+      return;
+    }
+    setMejoraLoading(true);
+    setMejoraError(null);
+    setMejoraData(null);
+    try {
+      const data = await fetchDirectorIaMejoraContinua(token, pid, year, month);
+      if ("enabled" in data && data.enabled === false) {
+        setMejoraData(data);
+        return;
+      }
+      if ("ok" in data && !data.ok) {
+        setMejoraError(data.error || "Error al cargar mejora continua");
+        return;
+      }
+      setMejoraData(data);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Error al cargar mejora continua";
+      if (msg.includes("401") || msg.toLowerCase().includes("token")) {
+        setUnauthorized(true);
+      }
+      setMejoraError(msg);
+    } finally {
+      setMejoraLoading(false);
+    }
+  }, [token, planta, anio, mes]);
 
   if (unauthorized || !token) {
     return (
@@ -522,6 +586,19 @@ export function DirectorIaShell() {
               />
             </label>
 
+            <label className="flex flex-col gap-1 min-w-[8rem]">
+              <span className="text-xs text-slate-400">Año</span>
+              <input
+                type="number"
+                min={2000}
+                max={2100}
+                value={anio}
+                onChange={(e) => setAnio(e.target.value)}
+                className="rounded border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-200 w-full"
+                aria-label="Año para mejora continua"
+              />
+            </label>
+
             <label className="flex flex-col gap-1 min-w-[10rem]">
               <span className="text-xs text-slate-400">Mes</span>
               <select
@@ -530,10 +607,9 @@ export function DirectorIaShell() {
                 className="rounded border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-200"
                 aria-label="Selector de mes"
               >
-                <option value="">— Seleccionar mes —</option>
                 {MESES.map((m) => (
-                  <option key={m.value} value={m.value} disabled>
-                    {m.label} (placeholder)
+                  <option key={m.value} value={m.value}>
+                    {m.label}
                   </option>
                 ))}
               </select>
@@ -541,11 +617,11 @@ export function DirectorIaShell() {
 
             <button
               type="button"
-              disabled
-              className="rounded bg-violet-700 px-4 py-2 text-sm font-medium text-white opacity-60 cursor-not-allowed"
-              title="Próximamente"
+              onClick={() => void cargarMejoraContinua()}
+              disabled={mejoraLoading}
+              className="rounded bg-violet-700 px-4 py-2 text-sm font-medium text-white hover:bg-violet-600 disabled:opacity-50"
             >
-              Analizar planta
+              {mejoraLoading ? "Cargando…" : "Mejora continua"}
             </button>
 
             <button
@@ -557,6 +633,20 @@ export function DirectorIaShell() {
               {contextLoading ? "Probando…" : "Probar contexto"}
             </button>
           </div>
+        </section>
+
+        <section
+          className="rounded-lg border border-violet-800/40 bg-slate-900/50 p-6"
+          aria-label="Mejora continua presidencial"
+        >
+          <h2 className="text-sm font-medium text-violet-200 mb-4">
+            Mejora Continua Presidencial
+          </h2>
+          <DirectorIaMejoraContinuaPanel
+            data={mejoraData}
+            error={mejoraError}
+            loading={mejoraLoading}
+          />
         </section>
 
         <section
