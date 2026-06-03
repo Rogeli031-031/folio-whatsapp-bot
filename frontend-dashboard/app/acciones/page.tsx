@@ -39,6 +39,7 @@ import {
   type ActionRegisterNoteAttachment,
   type ActionRegisterRevisionNote,
   type ActionRegisterTema,
+  ACTION_REGISTER_TEMAS,
   type DicfAttachment,
 } from "@/lib/api";
 
@@ -377,7 +378,7 @@ function ActionRegisterContent() {
     [token, loadNotePhotos, loadBoard]
   );
 
-  const temas = board?.temas || (["Contrataciones", "Mantenimiento", "General", "Clientes", "Apoyos", "Licencias", "Taller"] as ActionRegisterTema[]);
+  const temas = board?.temas || [...ACTION_REGISTER_TEMAS];
   const revisions = board?.revisions || [];
   const cells = board?.cells || {};
   const notesByRev: Record<string, ActionRegisterRevisionNote[]> = board?.notes || {};

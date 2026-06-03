@@ -152,7 +152,33 @@ export async function apiFetch<T>(
 // Action Register (Acciones)
 // ===========================
 
-export type ActionRegisterTema = "Contrataciones" | "Mantenimiento" | "General" | "Clientes" | "Apoyos" | "Licencias" | "Taller";
+export type ActionRegisterTema =
+  | "Contrataciones"
+  | "Mantenimiento"
+  | "General"
+  | "Clientes"
+  | "Apoyos"
+  | "Licencias"
+  | "Taller"
+  | "Oficinas"
+  | "Sistema vs Incendio"
+  | "ERP"
+  | "Imagen Corporativa";
+
+/** Catálogo canónico (alineado con lib/action-register-temas.js). */
+export const ACTION_REGISTER_TEMAS: readonly ActionRegisterTema[] = [
+  "Contrataciones",
+  "Mantenimiento",
+  "General",
+  "Clientes",
+  "Apoyos",
+  "Licencias",
+  "Taller",
+  "Oficinas",
+  "Sistema vs Incendio",
+  "ERP",
+  "Imagen Corporativa",
+];
 
 export interface ActionRegisterRevision {
   id: number;

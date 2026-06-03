@@ -54,7 +54,8 @@ const { embedExcelEvidencePhoto } = require("./lib/excel-image-compress");
 const { isDirectorZPForDashboard } = require("./lib/dashboard-es-zp");
 const directorIaContext = require("./lib/director-ia-context");
 const directorIaChat = require("./lib/director-ia-chat");
-const { ACTION_REGISTER_TEMAS, buildActionRegisterBoardPayload } = require("./lib/action-register-board");
+const { buildActionRegisterBoardPayload } = require("./lib/action-register-board");
+const { ACTION_REGISTER_TEMAS, isActionRegisterTema } = require("./lib/action-register-temas");
 
 const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
@@ -6003,7 +6004,7 @@ app.post("/api/action-register/items", dashboardAuthMiddleware, async (req, res)
   const due_date = body.due_date != null && String(body.due_date).trim() !== "" ? String(body.due_date).trim() : null;
   if (!revision_id || !Number.isFinite(revision_id)) return res.status(400).json({ error: "revision_id requerido" });
   if (!planta_id || !Number.isFinite(planta_id)) return res.status(400).json({ error: "planta_id requerido" });
-  if (!tema || !ACTION_REGISTER_TEMAS.includes(tema)) return res.status(400).json({ error: "tema inválido" });
+  if (!tema || !isActionRegisterTema(tema)) return res.status(400).json({ error: "tema inválido" });
   if (!title || title.length < 2) return res.status(400).json({ error: "title es obligatorio (mín. 2 caracteres)" });
   if (!assertDashboardPlantaAccessForActionRegister(req, planta_id)) return res.status(403).json({ error: "Sin acceso a esta planta" });
   if (due_date && !/^\d{4}-\d{2}-\d{2}$/.test(due_date)) return res.status(400).json({ error: "due_date inválida (YYYY-MM-DD)" });
