@@ -56,6 +56,7 @@ const directorIaContext = require("./lib/director-ia-context");
 const directorIaChat = require("./lib/director-ia-chat");
 const directorIaMejoraContinua = require("./lib/director-ia-mejora-continua");
 const directorIaBitacora = require("./lib/director-ia-bitacora");
+const comercialEntidad = require("./lib/comercial-entidad");
 const { buildActionRegisterBoardPayload } = require("./lib/action-register-board");
 const { ACTION_REGISTER_TEMAS, isActionRegisterTema } = require("./lib/action-register-temas");
 
@@ -7582,6 +7583,13 @@ directorIaBitacora.configureDirectorIaBitacora({
   assertPlantaAccess: assertDashboardPlantaAccessForActionRegister,
 });
 
+comercialEntidad.configureComercialEntidad({
+  pool,
+  assertPlantaAccess: assertDashboardPlantaAccessForActionRegister,
+});
+
+directorIaChat.configureDirectorIaChat({ pool });
+
 /** Contexto agregado de solo lectura (Action Register: resumen por planta). */
 app.get("/api/director-ia/context", dashboardAuthMiddleware, directorIaContext.handleGetContext);
 
@@ -7593,6 +7601,33 @@ app.get("/api/director-ia/bitacora", dashboardAuthMiddleware, directorIaBitacora
 app.post("/api/director-ia/bitacora", dashboardAuthMiddleware, directorIaBitacora.handleCreateBitacora);
 app.get("/api/director-ia/bitacora/:id", dashboardAuthMiddleware, directorIaBitacora.handleGetBitacora);
 app.delete("/api/director-ia/bitacora/:id", dashboardAuthMiddleware, directorIaBitacora.handleDeleteBitacora);
+
+/** Entidades comerciales — alias / nombres canónicos (Sprint 2C; sin integración chat). */
+app.get(
+  "/api/director-ia/comercial-entidad-alias/search",
+  dashboardAuthMiddleware,
+  comercialEntidad.handleSearchAliases
+);
+app.get("/api/director-ia/comercial-entidades", dashboardAuthMiddleware, comercialEntidad.handleListEntidades);
+app.post("/api/director-ia/comercial-entidades", dashboardAuthMiddleware, comercialEntidad.handleCreateEntidad);
+app.get("/api/director-ia/comercial-entidades/:id", dashboardAuthMiddleware, comercialEntidad.handleGetEntidad);
+app.patch("/api/director-ia/comercial-entidades/:id", dashboardAuthMiddleware, comercialEntidad.handleUpdateEntidad);
+app.delete("/api/director-ia/comercial-entidades/:id", dashboardAuthMiddleware, comercialEntidad.handleDeleteEntidad);
+app.post(
+  "/api/director-ia/comercial-entidades/:id/aliases",
+  dashboardAuthMiddleware,
+  comercialEntidad.handleCreateAlias
+);
+app.patch(
+  "/api/director-ia/comercial-entidad-alias/:aliasId",
+  dashboardAuthMiddleware,
+  comercialEntidad.handleUpdateAlias
+);
+app.delete(
+  "/api/director-ia/comercial-entidad-alias/:aliasId",
+  dashboardAuthMiddleware,
+  comercialEntidad.handleDeleteAlias
+);
 
 /** Chat ejecutivo (Action Register); reutiliza contexto agregado + OpenAI en backend. */
 app.post("/api/director-ia/chat", dashboardAuthMiddleware, directorIaChat.handlePostChat);

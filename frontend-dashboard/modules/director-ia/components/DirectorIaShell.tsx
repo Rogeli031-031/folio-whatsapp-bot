@@ -18,6 +18,7 @@ import {
 import { DirectorIaChatPanel } from "@/modules/director-ia/components/DirectorIaChatPanel";
 import { DirectorIaMejoraContinuaPanel } from "@/modules/director-ia/components/DirectorIaMejoraContinuaPanel";
 import { DirectorIaBitacoraPanel } from "@/modules/director-ia/components/DirectorIaBitacoraPanel";
+import { DirectorIaComercialEntidadPanel } from "@/modules/director-ia/components/DirectorIaComercialEntidadPanel";
 
 const MESES = [
   { value: "1", label: "Enero" },
@@ -549,6 +550,14 @@ export function DirectorIaShell() {
         >
           <h2 className="text-sm font-medium text-emerald-200 mb-4">Bitácora IA</h2>
           <DirectorIaBitacoraPanel token={token} plantaId={planta} />
+        </section>
+
+        <section
+          className="rounded-lg border border-amber-800/40 bg-slate-900/50 p-6"
+          aria-label="Entidades comerciales"
+        >
+          <h2 className="text-sm font-medium text-amber-200 mb-4">Entidades Comerciales</h2>
+          <DirectorIaComercialEntidadPanel token={token} plantaId={planta} />
         </section>
 
         <section

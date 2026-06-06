@@ -302,3 +302,139 @@ export function deleteDirectorIaBitacoraEntry(
     cache: "no-store",
   });
 }
+
+export type ComercialEntidadAliasTipo = "operativo" | "contacto" | "razon_social" | "apodo";
+export type ComercialEntidadAliasFuente = "manual" | "bitacora" | "dicf" | "arr" | "ia_sugerido";
+
+export type ComercialEntidadAlias = {
+  id: number;
+  entidad_id: number;
+  alias_nombre: string;
+  alias_tipo: ComercialEntidadAliasTipo;
+  fuente: ComercialEntidadAliasFuente;
+  verificado: boolean;
+  created_at: string;
+};
+
+export type ComercialEntidad = {
+  id: number;
+  planta_id: number;
+  planta_nombre: string | null;
+  nombre_canonico: string;
+  notas: string | null;
+  created_at: string;
+  updated_at: string;
+  aliases: ComercialEntidadAlias[];
+};
+
+export type ComercialEntidadListResponse =
+  | { enabled: false }
+  | { ok: true; entidades: ComercialEntidad[]; search_matches?: ComercialEntidadAlias[] }
+  | { ok: false; error: string };
+
+export type ComercialEntidadSearchResponse =
+  | { enabled: false }
+  | { ok: true; matches: Array<ComercialEntidadAlias & { nombre_canonico: string; planta_id: number; planta_nombre: string | null }> }
+  | { ok: false; error: string };
+
+/** GET /api/director-ia/comercial-entidades */
+export function fetchComercialEntidades(
+  token: string,
+  plantaId: number,
+  q?: string
+): Promise<ComercialEntidadListResponse> {
+  const qs = new URLSearchParams({ planta_id: String(plantaId) });
+  if (q && q.trim()) qs.set("q", q.trim());
+  return apiFetch<ComercialEntidadListResponse>(`/api/director-ia/comercial-entidades?${qs}`, {
+    token,
+    cache: "no-store",
+  });
+}
+
+/** GET /api/director-ia/comercial-entidad-alias/search */
+export function searchComercialEntidadAliases(
+  token: string,
+  plantaId: number,
+  q: string
+): Promise<ComercialEntidadSearchResponse> {
+  const qs = new URLSearchParams({ planta_id: String(plantaId), q: q.trim() });
+  return apiFetch<ComercialEntidadSearchResponse>(`/api/director-ia/comercial-entidad-alias/search?${qs}`, {
+    token,
+    cache: "no-store",
+  });
+}
+
+/** POST /api/director-ia/comercial-entidades */
+export function createComercialEntidad(
+  token: string,
+  payload: { planta_id: number; nombre_canonico: string; notas?: string | null }
+): Promise<{ enabled?: false; ok: true; entidad: ComercialEntidad } | { ok: false; error: string }> {
+  return apiFetch("/api/director-ia/comercial-entidades", {
+    method: "POST",
+    token,
+    body: JSON.stringify(payload),
+    cache: "no-store",
+  });
+}
+
+/** POST /api/director-ia/comercial-entidades/:id/aliases */
+export function createComercialEntidadAlias(
+  token: string,
+  entidadId: number,
+  payload: {
+    alias_nombre: string;
+    alias_tipo: ComercialEntidadAliasTipo;
+    fuente?: ComercialEntidadAliasFuente;
+    verificado?: boolean;
+  }
+): Promise<{ enabled?: false; ok: true; alias: ComercialEntidadAlias } | { ok: false; error: string }> {
+  return apiFetch(`/api/director-ia/comercial-entidades/${entidadId}/aliases`, {
+    method: "POST",
+    token,
+    body: JSON.stringify(payload),
+    cache: "no-store",
+  });
+}
+
+/** PATCH /api/director-ia/comercial-entidad-alias/:aliasId */
+export function updateComercialEntidadAlias(
+  token: string,
+  aliasId: number,
+  payload: Partial<{
+    alias_nombre: string;
+    alias_tipo: ComercialEntidadAliasTipo;
+    fuente: ComercialEntidadAliasFuente;
+    verificado: boolean;
+  }>
+): Promise<{ enabled?: false; ok: true; alias: ComercialEntidadAlias } | { ok: false; error: string }> {
+  return apiFetch(`/api/director-ia/comercial-entidad-alias/${aliasId}`, {
+    method: "PATCH",
+    token,
+    body: JSON.stringify(payload),
+    cache: "no-store",
+  });
+}
+
+/** DELETE /api/director-ia/comercial-entidades/:id */
+export function deleteComercialEntidad(
+  token: string,
+  entidadId: number
+): Promise<{ enabled?: false; ok: true; id: number } | { ok: false; error: string }> {
+  return apiFetch(`/api/director-ia/comercial-entidades/${entidadId}`, {
+    method: "DELETE",
+    token,
+    cache: "no-store",
+  });
+}
+
+/** DELETE /api/director-ia/comercial-entidad-alias/:aliasId */
+export function deleteComercialEntidadAlias(
+  token: string,
+  aliasId: number
+): Promise<{ enabled?: false; ok: true; id: number } | { ok: false; error: string }> {
+  return apiFetch(`/api/director-ia/comercial-entidad-alias/${aliasId}`, {
+    method: "DELETE",
+    token,
+    cache: "no-store",
+  });
+}
