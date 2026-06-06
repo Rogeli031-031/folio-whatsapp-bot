@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { fetchPlantas } from "@/lib/api";
 import {
   createDirectorIaBitacoraEntry,
   deleteDirectorIaBitacoraEntry,
@@ -29,6 +30,20 @@ const FUENTES: { value: DirectorIaBitacoraFuente; label: string }[] = [
   { value: "otro", label: "Otro" },
 ];
 
+const CLAVES_CODIGO_PLANTA = ["E7", "E8", "E9", "E10", "E11", "E12", "E13", "E15"];
+
+function filterDashboardPlantas(plantas: { id: number; nombre: string }[]) {
+  return plantas.filter((p) => {
+    const nombre = (p.nombre || "").trim();
+    const upper = nombre.toUpperCase();
+    if (CLAVES_CODIGO_PLANTA.includes(upper)) return false;
+    if (/^E\d+$/.test(nombre)) return false;
+    const norm = nombre.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+    if (norm === "MEXICO") return false;
+    return true;
+  });
+}
+
 function todayYmdCdmx() {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/Mexico_City",
@@ -55,7 +70,8 @@ export function DirectorIaBitacoraPanel({
 }) {
   const [fecha, setFecha] = useState(todayYmdCdmx());
   const [tipo, setTipo] = useState<DirectorIaBitacoraTipo>("visita_planta");
-  const [empresa, setEmpresa] = useState("");
+  const [selectedPlantaId, setSelectedPlantaId] = useState("");
+  const [plantas, setPlantas] = useState<{ id: number; nombre: string }[]>([]);
   const [titulo, setTitulo] = useState("");
   const [fuente, setFuente] = useState<DirectorIaBitacoraFuente>("plaud");
   const [contenido, setContenido] = useState("");
@@ -67,16 +83,41 @@ export function DirectorIaBitacoraPanel({
   const [viewEntry, setViewEntry] = useState<DirectorIaBitacoraEntry | null>(null);
   const [viewLoading, setViewLoading] = useState(false);
 
-  const cargarListado = useCallback(async () => {
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetchPlantas(token);
+        if (cancelled) return;
+        const filtered = filterDashboardPlantas(r.plantas || []);
+        setPlantas(filtered);
+      } catch {
+        if (!cancelled) setPlantas([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
+  useEffect(() => {
     const pid = parseInt(plantaId.trim(), 10);
-    if (!Number.isFinite(pid) || pid <= 0) {
+    if (Number.isFinite(pid) && pid > 0) {
+      setSelectedPlantaId(String(pid));
+    }
+  }, [plantaId]);
+
+  const listPlantaId = parseInt(plantaId.trim(), 10);
+
+  const cargarListado = useCallback(async () => {
+    if (!Number.isFinite(listPlantaId) || listPlantaId <= 0) {
       setSessions([]);
       return;
     }
     setListLoading(true);
     setError(null);
     try {
-      const res = await fetchDirectorIaBitacoraList(token, pid);
+      const res = await fetchDirectorIaBitacoraList(token, listPlantaId);
       if ("enabled" in res && res.enabled === false) {
         setError("Director IA deshabilitado en el servidor.");
         setSessions([]);
@@ -94,16 +135,16 @@ export function DirectorIaBitacoraPanel({
     } finally {
       setListLoading(false);
     }
-  }, [token, plantaId]);
+  }, [token, listPlantaId]);
 
   useEffect(() => {
     void cargarListado();
   }, [cargarListado]);
 
   const guardar = useCallback(async () => {
-    const pid = parseInt(plantaId.trim(), 10);
+    const pid = parseInt(selectedPlantaId.trim(), 10);
     if (!Number.isFinite(pid) || pid <= 0) {
-      setError("Indica un ID de planta válido arriba.");
+      setError("Selecciona una planta.");
       return;
     }
     if (!contenido.trim()) {
@@ -116,7 +157,6 @@ export function DirectorIaBitacoraPanel({
     try {
       const res = await createDirectorIaBitacoraEntry(token, {
         planta_id: pid,
-        empresa: empresa.trim() || undefined,
         fecha,
         tipo,
         titulo: titulo.trim() || undefined,
@@ -140,7 +180,7 @@ export function DirectorIaBitacoraPanel({
     } finally {
       setSaveLoading(false);
     }
-  }, [token, plantaId, empresa, fecha, tipo, titulo, fuente, contenido, cargarListado]);
+  }, [token, selectedPlantaId, fecha, tipo, titulo, fuente, contenido, cargarListado]);
 
   const verDetalle = useCallback(
     async (id: number) => {
@@ -223,15 +263,20 @@ export function DirectorIaBitacoraPanel({
               ))}
             </select>
           </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-xs text-slate-400">Empresa</span>
-            <input
-              type="text"
-              value={empresa}
-              onChange={(e) => setEmpresa(e.target.value)}
-              placeholder="Ej. Tehuacán"
+          <label className="flex flex-col gap-1 sm:col-span-2">
+            <span className="text-xs text-slate-400">Planta</span>
+            <select
+              value={selectedPlantaId}
+              onChange={(e) => setSelectedPlantaId(e.target.value)}
               className="rounded border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-200"
-            />
+            >
+              <option value="">Selecciona planta…</option>
+              {plantas.map((p) => (
+                <option key={p.id} value={String(p.id)}>
+                  {p.nombre}
+                </option>
+              ))}
+            </select>
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-xs text-slate-400">Fuente</span>
@@ -271,7 +316,7 @@ export function DirectorIaBitacoraPanel({
         <button
           type="button"
           onClick={() => void guardar()}
-          disabled={saveLoading}
+          disabled={saveLoading || !selectedPlantaId}
           className="rounded bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-600 disabled:opacity-50"
         >
           {saveLoading ? "Guardando…" : "Guardar Bitácora"}
@@ -294,7 +339,9 @@ export function DirectorIaBitacoraPanel({
           </button>
         </div>
 
-        {listLoading && sessions.length === 0 ? (
+        {!Number.isFinite(listPlantaId) || listPlantaId <= 0 ? (
+          <p className="text-sm text-slate-500">Indica un ID de planta arriba para ver el listado.</p>
+        ) : listLoading && sessions.length === 0 ? (
           <p className="text-sm text-slate-400">Cargando bitácoras…</p>
         ) : sessions.length === 0 ? (
           <p className="text-sm text-slate-500">Sin bitácoras para esta planta.</p>
@@ -304,6 +351,7 @@ export function DirectorIaBitacoraPanel({
               <thead className="bg-slate-800/80 text-slate-400 text-xs">
                 <tr>
                   <th className="px-3 py-2 font-medium">Fecha</th>
+                  <th className="px-3 py-2 font-medium">Planta</th>
                   <th className="px-3 py-2 font-medium">Tipo</th>
                   <th className="px-3 py-2 font-medium">Título</th>
                   <th className="px-3 py-2 font-medium">Fuente</th>
@@ -315,6 +363,9 @@ export function DirectorIaBitacoraPanel({
                 {sessions.map((s) => (
                   <tr key={s.id} className="border-t border-slate-700/80">
                     <td className="px-3 py-2 font-mono text-slate-300 whitespace-nowrap">{s.fecha}</td>
+                    <td className="px-3 py-2 text-slate-200 whitespace-nowrap">
+                      {s.planta_nombre || "—"}
+                    </td>
                     <td className="px-3 py-2 text-slate-300 whitespace-nowrap">{formatTipoLabel(s.tipo)}</td>
                     <td className="px-3 py-2 text-slate-200 max-w-[12rem] truncate" title={s.titulo || ""}>
                       {s.titulo || "—"}
@@ -365,6 +416,10 @@ export function DirectorIaBitacoraPanel({
               <dd className="text-slate-200 font-mono">{viewEntry.fecha}</dd>
             </div>
             <div>
+              <dt className="text-slate-500">Planta</dt>
+              <dd className="text-slate-200">{viewEntry.planta_nombre || "—"}</dd>
+            </div>
+            <div>
               <dt className="text-slate-500">Tipo</dt>
               <dd className="text-slate-200">{formatTipoLabel(viewEntry.tipo)}</dd>
             </div>
@@ -372,12 +427,6 @@ export function DirectorIaBitacoraPanel({
               <dt className="text-slate-500">Fuente</dt>
               <dd className="text-slate-200">{formatFuenteLabel(viewEntry.fuente)}</dd>
             </div>
-            {viewEntry.empresa ? (
-              <div>
-                <dt className="text-slate-500">Empresa</dt>
-                <dd className="text-slate-200">{viewEntry.empresa}</dd>
-              </div>
-            ) : null}
           </dl>
           {viewEntry.resumen_ia ? (
             <div>

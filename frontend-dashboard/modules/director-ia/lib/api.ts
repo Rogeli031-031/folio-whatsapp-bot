@@ -215,6 +215,7 @@ export type DirectorIaBitacoraFuente = "plaud" | "texto_pegado" | "pdf" | "word"
 export type DirectorIaBitacoraEntry = {
   id: number;
   planta_id: number;
+  planta_nombre: string | null;
   empresa: string | null;
   fecha: string;
   tipo: DirectorIaBitacoraTipo;
@@ -241,7 +242,6 @@ export type DirectorIaBitacoraDetailResponse =
 
 export type DirectorIaBitacoraCreatePayload = {
   planta_id: number;
-  empresa?: string;
   fecha: string;
   tipo: DirectorIaBitacoraTipo;
   titulo?: string;
