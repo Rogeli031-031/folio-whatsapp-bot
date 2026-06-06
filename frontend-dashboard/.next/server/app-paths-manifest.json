@@ -4,6 +4,7 @@
   "/acciones/page": "app/acciones/page.js",
   "/dashboard/page": "app/dashboard/page.js",
   "/dicf-accion/page": "app/dicf-accion/page.js",
+  "/director-ia/page": "app/director-ia/page.js",
   "/igf-forecast/page": "app/igf-forecast/page.js",
   "/page": "app/page.js",
   "/health/route": "app/health/route.js"

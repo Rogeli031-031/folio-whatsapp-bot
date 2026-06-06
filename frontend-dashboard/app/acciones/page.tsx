@@ -734,7 +734,7 @@ function ActionRegisterContent() {
           <button
             type="button"
             onClick={() => setDirectorIaChatOpen(true)}
-            className="inline-flex items-center gap-2 rounded border border-cyan-600/80 bg-cyan-950/50 px-4 py-2 text-sm font-medium text-cyan-100 hover:bg-cyan-900/40"
+            className="inline-flex items-center gap-2 rounded bg-cyan-700 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-600 shrink-0"
             title="Preguntas ejecutivas sobre la planta seleccionada"
           >
             Chat Director IA
