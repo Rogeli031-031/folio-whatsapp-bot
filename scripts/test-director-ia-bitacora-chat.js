@@ -1,7 +1,7 @@
 "use strict";
 
 /**
- * Pruebas locales Sprint 2B — routing Bitácora IA en chat (sin OpenAI ni BD).
+ * Pruebas Sprint 2B.1 — Bitácora como anexo (sin OpenAI ni BD).
  * Ejecutar: node scripts/test-director-ia-bitacora-chat.js
  */
 
@@ -9,10 +9,6 @@ const {
   isBitacoraQuestion,
   isDicfContextQuestion,
   isMejoraContinuaQuestion,
-  isNarrativeQuestion,
-  buildFocusedBitacoraContext,
-  buildFocusedDicfContext,
-  combineBitacoraDicfContext,
   buildDirectorIaChatPrompt,
   extractChatContextFromPayload,
   resolveDirectorIaChatRouting,
@@ -28,13 +24,6 @@ const mockBitacora = [
       "Oportunidad en Coapan: ampliar autotanque. El gerente comentó riesgo de competencia en la zona sur.",
     planta_nombre: "Tehuacán",
   },
-  {
-    fecha: "2026-05-05",
-    tipo: "junta_consejo",
-    titulo: "Junta consejo Tehuacán",
-    resumen_ia: "Revisión de márgenes y plan comercial Q2.",
-    planta_nombre: "Tehuacán",
-  },
 ];
 
 const chatContext = extractChatContextFromPayload({
@@ -44,7 +33,7 @@ const chatContext = extractChatContextFromPayload({
     summary: { open: 5, closed: 2, overdue: 1 },
     executive_summary: { risk_level: "MEDIO", findings: ["Mantenimiento con retrasos"] },
     temas: [{ name: "Mantenimiento", open_count: 5, closed_count: 1, overdue_count: 1, progress_percent: 40 }],
-    responsables: [],
+    responsables: [{ name: "Juan", open_count: 3, overdue_count: 1, role_name: "Gerente" }],
     top_overdue: [],
     invalid_overdue: { count: 0, examples: [] },
     tema_details: [
@@ -74,97 +63,129 @@ function assert(cond, msg) {
 
 const cases = [
   {
-    q: "¿Qué oportunidades se identificaron en Tehuacán?",
-    expectMode: "bitacora_focused",
-    expectBitacora: true,
-    expectDicf: false,
+    name: "Riesgos Tehuacán",
+    q: "¿Qué riesgos se identificaron en Tehuacán?",
+    expectMode: "full",
+    expectAnnex: true,
+    expectPrimary: "action_register",
+    forbidOnlyBitacora: true,
   },
   {
-    q: "¿Qué comentó el gerente sobre Coapan?",
-    expectMode: "bitacora_focused",
-    expectBitacora: true,
-    expectDicf: false,
-  },
-  {
+    name: "Clientes dejaron de comprar",
     q: "¿Qué clientes dejaron de comprar?",
     expectMode: "dicf_focused",
-    expectBitacora: false,
-    expectDicf: true,
+    expectAnnex: false,
+    expectPrimary: "dicf",
   },
   {
-    q: "¿Cómo va mantenimiento?",
+    name: "Mantenimiento",
+    q: "¿Cómo vamos en mantenimiento?",
     expectMode: "focused",
-    expectBitacora: false,
-    expectDicf: false,
+    expectAnnex: false,
+    expectPrimary: "action_register",
   },
   {
-    q: "¿Qué riesgos se comentaron en la visita de Tehuacán?",
-    expectMode: "bitacora_focused",
-    expectBitacora: true,
-    expectDicf: false,
+    name: "Oportunidades Tehuacán",
+    q: "¿Qué oportunidades se identificaron en Tehuacán?",
+    expectMode: "full",
+    expectAnnex: true,
+    expectPrimary: "action_register",
+    forbidOnlyBitacora: true,
   },
   {
+    name: "Plan Maestro",
     q: "¿Cómo va el Plan Maestro?",
     expectMode: "mejora_continua",
-    expectBitacora: false,
-    expectDicf: false,
+    expectAnnex: false,
+    mejora: true,
   },
   {
+    name: "Combinado oportunidades + DICF",
     q: "¿Qué oportunidades vimos en Tehuacán y qué clientes dejaron de comprar?",
-    expectMode: "bitacora_focused",
-    expectBitacora: true,
-    expectDicf: true,
-    combined: true,
+    expectMode: "dicf_focused",
+    expectAnnex: true,
+    expectPrimary: "dicf",
   },
 ];
 
 for (const c of cases) {
-  const routing =
-    c.expectMode === "mejora_continua"
-      ? { promptMode: "mejora_continua" }
-      : resolveDirectorIaChatRouting(c.q, chatContext);
-
-  assert(routing.promptMode === c.expectMode, `${c.q} → mode ${routing.promptMode}, expected ${c.expectMode}`);
-
-  if (c.expectMode !== "mejora_continua") {
-    assert(isBitacoraQuestion(c.q) === c.expectBitacora, `isBitacoraQuestion: ${c.q}`);
-    assert(isDicfContextQuestion(c.q) === c.expectDicf, `isDicfContextQuestion: ${c.q}`);
+  if (c.mejora) {
+    const routing = resolveDirectorIaChatRouting(c.q, chatContext);
+    assert(routing.promptMode === "mejora_continua", `${c.name}: mode`);
+    continue;
   }
 
-  if (c.combined) {
-    assert(routing.combinedBitacoraDicf === true, `combined routing: ${c.q}`);
+  const routing = resolveDirectorIaChatRouting(c.q, chatContext);
+  assert(routing.promptMode === c.expectMode, `${c.name}: mode ${routing.promptMode} != ${c.expectMode}`);
+  assert(Boolean(routing.hasBitacoraAnnex) === c.expectAnnex, `${c.name}: annex flag`);
+
+  let promptOpts = { bitacoraAnnexText: null };
+  if (routing.promptMode === "dicf_focused") {
+    promptOpts = {
+      useFocused: true,
+      focusedText: "CONTEXTO DICF MOCK",
+      dicfFocused: true,
+      bitacoraAnnexText: c.expectAnnex ? "---\nANEXO — BITÁCORA IA (contexto de campo complementario)\nmock" : null,
+    };
+  } else if (routing.promptMode === "focused") {
+    promptOpts = {
+      useFocused: true,
+      focusedText: "CONTEXTO AR MOCK",
+      bitacoraAnnexText: null,
+    };
+  } else if (routing.promptMode === "full") {
+    promptOpts = {
+      bitacoraAnnexText: c.expectAnnex ? "---\nANEXO — BITÁCORA IA (contexto de campo complementario)\nmock" : null,
+    };
+  }
+
+  const prompt = buildDirectorIaChatPrompt(chatContext, c.q, promptOpts);
+  assert(prompt.promptMode === c.expectMode, `${c.name}: prompt mode`);
+
+  if (c.expectPrimary === "action_register") {
+    assert(
+      prompt.userContent.includes("Contexto operativo") || prompt.userContent.includes("Contexto focalizado"),
+      `${c.name}: debe incluir AR`
+    );
+  }
+  if (c.expectPrimary === "dicf") {
+    assert(prompt.userContent.includes("DICF"), `${c.name}: debe incluir DICF`);
+  }
+  if (c.expectAnnex) {
+    assert(prompt.userContent.includes("ANEXO — BITÁCORA IA"), `${c.name}: debe incluir anexo`);
+  }
+  if (c.forbidOnlyBitacora) {
+    assert(!prompt.userContent.startsWith("Nota: No se encontró contexto"), `${c.name}: no fallback exclusivo`);
+    assert(prompt.userContent.includes("Contexto operativo"), `${c.name}: AR en prompt`);
+  }
+
+  const sources = inferSourcesFromChat(chatContext, c.q, "mock", {
+    promptMode: prompt.promptMode,
+    hasBitacoraAnnex: prompt.hasBitacoraAnnex,
+  });
+  if (c.expectPrimary === "dicf") {
+    assert(sources.includes("action_register.dicf_details"), `${c.name}: source dicf`);
+  }
+  if (c.expectPrimary === "action_register" && c.expectMode === "full") {
+    assert(sources.includes("action_register.summary"), `${c.name}: source ar summary`);
+  }
+  if (c.expectAnnex) {
+    assert(sources.includes("bitacora_ia.context"), `${c.name}: source bitacora`);
+  }
+  if (c.expectAnnex === false && c.expectMode !== "mejora_continua") {
+    if (!c.q.includes("Plan Maestro")) {
+      assert(!sources.includes("bitacora_ia.context") || c.expectMode === "full", `${c.name}: sin bitacora source`);
+    }
   }
 }
 
-const bitacoraCtx = buildFocusedBitacoraContext(mockBitacora, cases[0].q);
-assert(bitacoraCtx.text.includes("Oportunidad en Coapan"), "bitacora context includes oportunidad");
-assert(bitacoraCtx.text.includes("Resumen:"), "bitacora context format");
-
-const combined = combineBitacoraDicfContext(
-  buildFocusedBitacoraContext(mockBitacora, cases[6].q),
-  buildFocusedDicfContext(chatContext, cases[6].q)
-);
-assert(combined.text.includes("BITÁCORA IA"), "combined has bitacora section");
-assert(combined.text.includes("CONTEXTO DICF"), "combined has dicf section");
-
-const prompt = buildDirectorIaChatPrompt(chatContext, cases[0].q, {
-  useFocused: true,
-  focusedText: bitacoraCtx.text,
-  bitacoraFocused: true,
+const q1 = cases[0].q;
+const prompt1 = buildDirectorIaChatPrompt(chatContext, q1, {
+  bitacoraAnnexText: `---\nANEXO — BITÁCORA IA (contexto de campo complementario)\nUsa Bitácora IA como contexto de campo complementario. No debe sustituir Action Register, DICF ni Mejora Continua.\nSolo resumen_ia.\n\nSESIONES RELEVANTES:\n\nFecha: 2026-05-10 | Tipo: visita_planta | Título: Visita Tehuacán\nPlanta: Tehuacán\nResumen: Riesgo de competencia en zona sur.`,
 });
-assert(prompt.promptMode === "bitacora_focused", "prompt mode bitacora_focused");
 
-const sources = inferSourcesFromChat(chatContext, cases[0].q, "mock answer", {
-  promptMode: "bitacora_focused",
-});
-assert(sources.includes("bitacora_ia.sessions"), "sources include bitacora_ia.sessions");
-assert(sources.includes("bitacora_ia.context"), "sources include bitacora_ia.context");
-
-const combinedSources = inferSourcesFromChat(chatContext, cases[6].q, "mock", {
-  promptMode: "bitacora_focused",
-  combinedDicf: true,
-});
-assert(combinedSources.includes("action_register.dicf_details"), "combined sources include dicf");
-
-console.log("OK Sprint 2B routing —", cases.length, "casos");
-console.log("bitacora_focused preview:\n", bitacoraCtx.text.slice(0, 400), "…");
+console.log("OK Sprint 2B.1 —", cases.length, "casos");
+console.log("\n=== userContent Caso 1 (extracto) ===\n");
+console.log(prompt1.userContent.slice(0, 900));
+console.log("\n… [JSON AR completo] …\n");
+console.log(prompt1.userContent.slice(-500));
