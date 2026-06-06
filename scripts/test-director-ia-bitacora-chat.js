@@ -13,6 +13,7 @@ const {
   extractChatContextFromPayload,
   resolveDirectorIaChatRouting,
   inferSourcesFromChat,
+  buildPlantDiagnosticUserPrefix,
 } = require("../lib/director-ia-chat");
 
 const mockBitacora = [
@@ -137,6 +138,10 @@ for (const c of cases) {
     promptOpts = {
       bitacoraAnnexText: c.expectAnnex ? "---\nANEXO — BITÁCORA IA (contexto de campo complementario)\nmock" : null,
     };
+    if (routing.plantDiagnostic) {
+      promptOpts.plantDiagnostic = true;
+      promptOpts.plantDiagnosticPrefix = buildPlantDiagnosticUserPrefix(chatContext);
+    }
   }
 
   const prompt = buildDirectorIaChatPrompt(chatContext, c.q, promptOpts);
