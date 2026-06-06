@@ -17,6 +17,7 @@ import {
   type DirectorIaTopOverdueAction,
 } from "@/modules/director-ia/lib/api";
 import { DirectorIaMejoraContinuaPanel } from "@/modules/director-ia/components/DirectorIaMejoraContinuaPanel";
+import { DirectorIaBitacoraPanel } from "@/modules/director-ia/components/DirectorIaBitacoraPanel";
 
 const MESES = [
   { value: "1", label: "Enero" },
@@ -647,6 +648,14 @@ export function DirectorIaShell() {
             error={mejoraError}
             loading={mejoraLoading}
           />
+        </section>
+
+        <section
+          className="rounded-lg border border-emerald-800/40 bg-slate-900/50 p-6"
+          aria-label="Bitácora IA"
+        >
+          <h2 className="text-sm font-medium text-emerald-200 mb-4">Bitácora IA</h2>
+          <DirectorIaBitacoraPanel token={token} plantaId={planta} />
         </section>
 
         <section

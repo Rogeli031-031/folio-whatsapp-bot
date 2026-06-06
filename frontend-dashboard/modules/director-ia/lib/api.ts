@@ -200,3 +200,105 @@ export function fetchDirectorIaMejoraContinua(
     cache: "no-store",
   });
 }
+
+export type DirectorIaBitacoraTipo =
+  | "junta_consejo"
+  | "seguimiento_gerente"
+  | "visita_planta"
+  | "comercial"
+  | "operaciones"
+  | "cliente"
+  | "otro";
+
+export type DirectorIaBitacoraFuente = "plaud" | "texto_pegado" | "pdf" | "word" | "otro";
+
+export type DirectorIaBitacoraEntry = {
+  id: number;
+  planta_id: number;
+  empresa: string | null;
+  fecha: string;
+  tipo: DirectorIaBitacoraTipo;
+  titulo: string | null;
+  fuente: DirectorIaBitacoraFuente;
+  resumen_ia: string;
+  preview: string;
+  metadata: unknown;
+  created_by_usuario_id: number | null;
+  created_at: string;
+  updated_at: string;
+  contenido?: string;
+};
+
+export type DirectorIaBitacoraListResponse =
+  | { enabled: false }
+  | { ok: true; sessions: DirectorIaBitacoraEntry[] }
+  | { ok: false; error: string };
+
+export type DirectorIaBitacoraDetailResponse =
+  | { enabled: false }
+  | { ok: true; entry: DirectorIaBitacoraEntry }
+  | { ok: false; error: string };
+
+export type DirectorIaBitacoraCreatePayload = {
+  planta_id: number;
+  empresa?: string;
+  fecha: string;
+  tipo: DirectorIaBitacoraTipo;
+  titulo?: string;
+  fuente: DirectorIaBitacoraFuente;
+  contenido: string;
+};
+
+export type DirectorIaBitacoraCreateResponse =
+  | { enabled: false }
+  | { ok: true; entry: DirectorIaBitacoraEntry }
+  | { ok: false; error: string };
+
+/** GET /api/director-ia/bitacora */
+export function fetchDirectorIaBitacoraList(
+  token: string,
+  plantaId: number,
+  limit = 30
+): Promise<DirectorIaBitacoraListResponse> {
+  const qs = new URLSearchParams({ planta_id: String(plantaId), limit: String(limit) });
+  return apiFetch<DirectorIaBitacoraListResponse>(`/api/director-ia/bitacora?${qs}`, {
+    token,
+    cache: "no-store",
+  });
+}
+
+/** GET /api/director-ia/bitacora/:id */
+export function fetchDirectorIaBitacoraDetail(
+  token: string,
+  id: number
+): Promise<DirectorIaBitacoraDetailResponse> {
+  return apiFetch<DirectorIaBitacoraDetailResponse>(`/api/director-ia/bitacora/${id}`, {
+    token,
+    cache: "no-store",
+  });
+}
+
+/** POST /api/director-ia/bitacora */
+export function createDirectorIaBitacoraEntry(
+  token: string,
+  payload: DirectorIaBitacoraCreatePayload
+): Promise<DirectorIaBitacoraCreateResponse> {
+  return apiFetch<DirectorIaBitacoraCreateResponse>("/api/director-ia/bitacora", {
+    method: "POST",
+    token,
+    body: JSON.stringify(payload),
+    cache: "no-store",
+  });
+}
+
+/** DELETE /api/director-ia/bitacora/:id (baja lógica) */
+export function deleteDirectorIaBitacoraEntry(
+  token: string,
+  id: number
+): Promise<{ enabled?: false; ok: true; id: number } | { ok: false; error: string }> {
+  return apiFetch(`/api/director-ia/bitacora/${id}`, {
+    method: "DELETE",
+    token,
+    cache: "no-store",
+  });
+}

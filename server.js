@@ -55,6 +55,7 @@ const { isDirectorZPForDashboard } = require("./lib/dashboard-es-zp");
 const directorIaContext = require("./lib/director-ia-context");
 const directorIaChat = require("./lib/director-ia-chat");
 const directorIaMejoraContinua = require("./lib/director-ia-mejora-continua");
+const directorIaBitacora = require("./lib/director-ia-bitacora");
 const { buildActionRegisterBoardPayload } = require("./lib/action-register-board");
 const { ACTION_REGISTER_TEMAS, isActionRegisterTema } = require("./lib/action-register-temas");
 
@@ -7576,11 +7577,22 @@ directorIaMejoraContinua.configureDirectorIaMejoraContinua({
   ensureActionRegisterTables,
 });
 
+directorIaBitacora.configureDirectorIaBitacora({
+  pool,
+  assertPlantaAccess: assertDashboardPlantaAccessForActionRegister,
+});
+
 /** Contexto agregado de solo lectura (Action Register: resumen por planta). */
 app.get("/api/director-ia/context", dashboardAuthMiddleware, directorIaContext.handleGetContext);
 
 /** Mejora Continua Presidencial v0.8 (Action Register + evidencias fotográficas). */
 app.get("/api/director-ia/mejora-continua", dashboardAuthMiddleware, directorIaMejoraContinua.handleGetMejoraContinua);
+
+/** Bitácora IA — contexto de campo (Plaud, visitas, juntas). Sprint 2A: persistencia only. */
+app.get("/api/director-ia/bitacora", dashboardAuthMiddleware, directorIaBitacora.handleListBitacora);
+app.post("/api/director-ia/bitacora", dashboardAuthMiddleware, directorIaBitacora.handleCreateBitacora);
+app.get("/api/director-ia/bitacora/:id", dashboardAuthMiddleware, directorIaBitacora.handleGetBitacora);
+app.delete("/api/director-ia/bitacora/:id", dashboardAuthMiddleware, directorIaBitacora.handleDeleteBitacora);
 
 /** Chat ejecutivo (Action Register); reutiliza contexto agregado + OpenAI en backend. */
 app.post("/api/director-ia/chat", dashboardAuthMiddleware, directorIaChat.handlePostChat);
