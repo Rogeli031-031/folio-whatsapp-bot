@@ -7,6 +7,9 @@
 
 const {
   isDicfContextQuestion,
+  isDicfActionQuestionForChat,
+  isCommercialStateListQuestion,
+  resolveDirectorIaChatRouting,
   buildFocusedDicfContext,
   extractChatContextFromPayload,
   buildDirectorIaChatPrompt,
@@ -115,7 +118,10 @@ const cases = [
 
 let failed = 0;
 for (const c of cases) {
-  const dicf = isDicfContextQuestion(c.q);
+  const dicfBroad = isDicfContextQuestion(c.q);
+  const dicfAction = isDicfActionQuestionForChat(c.q);
+  const commercialList = isCommercialStateListQuestion(c.q);
+  const routing = resolveDirectorIaChatRouting(c.q, chatContext);
   const filtered = filterDicfDetailsByQuestion(chatContext.dicf_details, c.q);
   const focused = buildFocusedDicfContext(chatContext, c.q);
   const prompt = buildDirectorIaChatPrompt(chatContext, c.q, {
@@ -123,9 +129,15 @@ for (const c of cases) {
     focusedText: focused.text,
     dicfFocused: true,
   });
-  const ok = dicf && c.assert(focused.text);
+  const ok =
+    dicfAction &&
+    !commercialList &&
+    routing.promptMode === "dicf_focused" &&
+    c.assert(focused.text);
   console.log(`${ok ? "OK" : "FAIL"} — ${c.name}`);
-  console.log(`  isDicfContextQuestion: ${dicf} | matched: ${filtered.length} | promptMode: ${prompt.promptMode}`);
+  console.log(
+    `  dicfAction: ${dicfAction} | dicfBroad: ${dicfBroad} | commercialList: ${commercialList} | routing: ${routing.promptMode} | matched: ${filtered.length} | promptMode: ${prompt.promptMode}`
+  );
   if (!ok) {
     failed += 1;
     console.log("  --- context excerpt ---\n" + focused.text.split("\n").slice(0, 12).join("\n"));

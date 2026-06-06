@@ -92,7 +92,8 @@ assert(isDicfContextQuestion("qué clientes dejaron de comprar"), "clientes comp
 const routingMaint = resolveDirectorIaChatRouting("cómo va mantenimiento", chatContext);
 assert(routingMaint.promptMode === "focused", "mantenimiento → focused AR");
 
-const routingDicf = resolveDirectorIaChatRouting("qué clientes dejaron de comprar", chatContext);
-assert(routingDicf.dicfFocused === true, "clientes comprar → DICF");
+const routingLista = resolveDirectorIaChatRouting("qué clientes dejaron de comprar", chatContext);
+assert(routingLista.commercialState === true, "clientes comprar → commercial_state");
+assert(routingLista.promptMode === "commercial_state", "clientes comprar → prompt commercial_state");
 
 console.log("OK — test-director-ia-smalltalk (" + cases.length + " casos conversacionales + regresión AR/DICF)");

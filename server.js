@@ -53,6 +53,7 @@ const actionRegisterEvidenciasExport = require("./lib/action-register-evidencias
 const { embedExcelEvidencePhoto } = require("./lib/excel-image-compress");
 const { isDirectorZPForDashboard } = require("./lib/dashboard-es-zp");
 const directorIaContext = require("./lib/director-ia-context");
+const directorIaCommercialState = require("./lib/director-ia-commercial-state");
 const directorIaChat = require("./lib/director-ia-chat");
 const directorIaMejoraContinua = require("./lib/director-ia-mejora-continua");
 const directorIaBitacora = require("./lib/director-ia-bitacora");
@@ -7570,6 +7571,12 @@ directorIaContext.configureDirectorIaContext({
   pool,
   assertPlantaAccess: assertDashboardPlantaAccessForActionRegister,
   ensureActionRegisterTables,
+});
+
+directorIaCommercialState.configureDirectorIaCommercialState({
+  getPlantCodeArrFromPlantaNombre,
+  getMargenKgPorPeriodo,
+  assertGVPlantaNombreAccess,
 });
 
 directorIaMejoraContinua.configureDirectorIaMejoraContinua({

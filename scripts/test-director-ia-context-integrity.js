@@ -117,9 +117,14 @@ assert(focused.text.includes("Acciones abiertas: 36"), "focused incluye 36");
 const focusGerente = resolveNarrativeFocus(qRiesgos, chatContext);
 assert(!(focusGerente && focusGerente.type === "tema" && focusGerente.tema === "General"), "gerente general no → tema General");
 
-const qDicf = "¿Qué clientes dejaron de comprar?";
-const routingDicf = resolveDirectorIaChatRouting(qDicf, chatContext);
-assert(routingDicf.promptMode === "dicf_focused", "DICF sigue funcionando");
+const qListaDejaron = "¿Qué clientes dejaron de comprar?";
+const routingListaDejaron = resolveDirectorIaChatRouting(qListaDejaron, chatContext);
+assert(routingListaDejaron.promptMode === "commercial_state", "lista dejaron → commercial_state");
+assert(routingListaDejaron.commercialCategory === "dejaron", "categoría dejaron");
+
+const qDicfAcciones = "¿Qué aprendimos de los clientes que dejaron de comprar?";
+const routingDicfAcciones = resolveDirectorIaChatRouting(qDicfAcciones, chatContext);
+assert(routingDicfAcciones.promptMode === "dicf_focused", "acciones/historial → dicf_focused");
 
 const qMc = "¿Cómo va el Plan Maestro?";
 assert(resolveDirectorIaChatRouting(qMc, chatContext).promptMode === "mejora_continua", "MC exclusiva");
