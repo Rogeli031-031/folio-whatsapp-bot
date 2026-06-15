@@ -57,6 +57,7 @@ const directorIaCommercialState = require("./lib/director-ia-commercial-state");
 const directorIaChat = require("./lib/director-ia-chat");
 const directorIaMejoraContinua = require("./lib/director-ia-mejora-continua");
 const directorIaBitacora = require("./lib/director-ia-bitacora");
+const { isDirectorIaEnabled } = require("./lib/director-ia");
 const comercialEntidad = require("./lib/comercial-entidad");
 const { buildActionRegisterBoardPayload } = require("./lib/action-register-board");
 const { ACTION_REGISTER_TEMAS, isActionRegisterTema } = require("./lib/action-register-temas");
@@ -5956,14 +5957,14 @@ app.get("/api/action-register/responsables", dashboardAuthMiddleware, async (req
   }
 });
 
-async function buildActionRegisterUrl(client, usuarioRow) {
+async function buildDashboardSignedUrlForUsuario(client, usuarioRow, dashboardPath) {
   if (!usuarioRow || usuarioRow.id == null) return "";
   const rolClave = (usuarioRow.rol_clave && String(usuarioRow.rol_clave).toUpperCase()) || "";
   const rolNom = (usuarioRow.rol_nombre && String(usuarioRow.rol_nombre)) || "";
   const esZP = isDirectorZPForDashboard(rolClave, rolNom);
   const normalizarParaAD = (s) => (s || "").toLowerCase().normalize("NFD").replace(/\p{M}/gu, "").replace(/[\s\u00a0]+/g, " ").trim();
   const rolNormNombre = normalizarParaAD(rolNom);
-  const nombreUsuarioNorm = normalizarParaAD(usuarioRow.nombre || "");
+  const nombreUsuarioNorm = normalizarParaAD(usuarioRow.nombre || usuarioRow.nombre_persona || "");
   const esAD =
     rolClave === "AD" ||
     (/asistente/.test(rolNormNombre) && /direccion/.test(rolNormNombre)) ||
@@ -5982,7 +5983,7 @@ async function buildActionRegisterUrl(client, usuarioRow) {
   } else if (usuarioRow.planta_id != null) {
     plantasPermitidas = dicfAccionesLib.getPlantaIdsEquivalentes(usuarioRow.planta_id);
   }
-  const tokenAR = createDashboardToken({
+  const token = createDashboardToken({
     role,
     actor_id: usuarioRow.id,
     plantas_permitidas: plantasPermitidas,
@@ -5990,7 +5991,12 @@ async function buildActionRegisterUrl(client, usuarioRow) {
   });
   const baseUrl = (process.env.DASHBOARD_URL || process.env.FRONTEND_URL || "").trim().replace(/\/$/, "");
   if (!baseUrl) return "";
-  return `${baseUrl}/acciones?t=${encodeURIComponent(tokenAR)}`;
+  const path = String(dashboardPath || "acciones").replace(/^\/+/, "");
+  return `${baseUrl}/${path}?t=${encodeURIComponent(token)}`;
+}
+
+async function buildActionRegisterUrl(client, usuarioRow) {
+  return buildDashboardSignedUrlForUsuario(client, usuarioRow, "acciones");
 }
 
 app.post("/api/action-register/items", dashboardAuthMiddleware, async (req, res) => {
@@ -13613,13 +13619,13 @@ app.post("/twilio/whatsapp", async (req, res) => {
         .replace(/[\u200B-\u200D\uFEFF]/g, "")
         .trim();
 
-      // Restricción especial: roles nivel 6 (GO/SG/SEH) solo pueden usar el comando AR desde Twilio.
+      // Restricción especial: roles nivel 6 (GO/SG/SEH) solo pueden usar AR y DirectorIA desde Twilio.
       if (actor) {
         const rolClaveRestr = (actor.rol_clave && String(actor.rol_clave).toUpperCase()) || "";
         const rolNivelRestr = actor.rol_nivel != null ? Number(actor.rol_nivel) : null;
         const esNivel6Especial = rolNivelRestr === 6 && ["GO", "SG", "SEH"].includes(rolClaveRestr);
-        if (esNivel6Especial && !/^ar$/i.test(bodyForCmd)) {
-          return safeReply('⛔ Tu rol (nivel 6: GO/SG/SEH) solo tiene acceso al comando "AR".');
+        if (esNivel6Especial && !/^(ar|director\s*ia|directoria)$/i.test(bodyForCmd)) {
+          return safeReply('⛔ Tu rol (nivel 6: GO/SG/SEH) solo tiene acceso a los comandos "AR" y "DirectorIA".');
         }
       }
 
@@ -13706,37 +13712,36 @@ app.post("/twilio/whatsapp", async (req, res) => {
           if (!actor) {
             return safeReply("No estás dado de alta. Contacta al administrador para registrar tu número.");
           }
-          const rolClave = (actor.rol_clave && String(actor.rol_clave).toUpperCase()) || "";
-          const rolNom = (actor.rol_nombre && String(actor.rol_nombre)) || "";
-          const esZP = isDirectorZPForDashboard(rolClave, rolNom);
-          const normalizarParaAD = (s) => (s || "").toLowerCase().normalize("NFD").replace(/\p{M}/gu, "").replace(/[\s\u00a0]+/g, " ").trim();
-          const rolNormNombre = normalizarParaAD(rolNom);
-          const nombreUsuarioNorm = normalizarParaAD(actor.nombre);
-          const esAD = rolClave === "AD" || (/asistente/.test(rolNormNombre) && /direccion/.test(rolNormNombre)) || (/asistente/.test(nombreUsuarioNorm) && /direccion/.test(nombreUsuarioNorm));
-          const esCFCDMX = rolClave === "CF_CDMX" || (/contralor/.test(rolNormNombre) && /cdmx/.test(rolNormNombre)) || (/contralor/.test(nombreUsuarioNorm) && /cdmx/.test(nombreUsuarioNorm));
-          const esGA = rolClave === "GA";
-          const esGV = rolClave === "GV";
-          const role = esZP ? "ZP" : esAD ? "AD" : esCFCDMX ? "CF_CDMX" : esGA ? "GA" : esGV ? "GV" : "GG";
-          let plantasPermitidas = [];
-          if (esZP || esAD) {
-            const plantas = await getPlantas(client);
-            plantasPermitidas = (plantas || []).map((p) => p.id).filter(Number.isFinite);
-          } else if (actor.planta_id != null) {
-            const canon = getCanonicalPlantaId(actor.planta_id);
-            plantasPermitidas = [canon != null ? canon : actor.planta_id].filter(Number.isFinite);
+          const link = await buildActionRegisterUrl(client, actor);
+          if (!link) {
+            return safeReply("Error al generar el enlace del Action Register. Revisa DASHBOARD_URL en el servidor.");
           }
-          const tokenAR = createDashboardToken({
-            role,
-            actor_id: actor.id,
-            plantas_permitidas: plantasPermitidas,
-            default_filters: {},
-          });
-          const baseUrl = (process.env.DASHBOARD_URL || process.env.FRONTEND_URL || "").trim().replace(/\/$/, "") || "https://dashboard.example.com";
-          const link = `${baseUrl}/acciones?t=${encodeURIComponent(tokenAR)}`;
           return safeReply(`📋 Action Register\n\n🔗 Acceso directo (válido 20 horas):\n${link}`);
         } catch (arErr) {
           console.error("[AR command error]", arErr);
           return safeReply("Error al generar el enlace del Action Register. Revisa los logs o contacta al administrador.");
+        }
+      }
+
+      /* Comando "DirectorIA" → página /director-ia (entidades, bitácora, mejora continua). */
+      if (/^director\s*ia$/i.test(bodyForCmd)) {
+        try {
+          if (!isDirectorIaEnabled()) {
+            return safeReply("Director IA no está habilitado en este servidor (ENABLE_DIRECTOR_IA).");
+          }
+          if (!actor) {
+            return safeReply("No estás dado de alta. Contacta al administrador para registrar tu número.");
+          }
+          const link = await buildDashboardSignedUrlForUsuario(client, actor, "director-ia");
+          if (!link) {
+            return safeReply("Error al generar el enlace de Director IA. Revisa DASHBOARD_URL en el servidor.");
+          }
+          return safeReply(
+            `🤖 Director IA\n\nGestión de entidades comerciales, bitácora y contexto ejecutivo.\n\n🔗 Acceso directo (válido 20 horas):\n${link}`
+          );
+        } catch (diErr) {
+          console.error("[DirectorIA command error]", diErr);
+          return safeReply("Error al generar el enlace de Director IA. Revisa los logs o contacta al administrador.");
         }
       }
 
