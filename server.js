@@ -52,6 +52,14 @@ const dicfAccionesLib = require("./lib/dicf-acciones");
 const actionRegisterEvidenciasExport = require("./lib/action-register-evidencias-export");
 const { embedExcelEvidencePhoto } = require("./lib/excel-image-compress");
 const { isDirectorZPForDashboard } = require("./lib/dashboard-es-zp");
+const directorIaContext = require("./lib/director-ia-context");
+const directorIaCommercialState = require("./lib/director-ia-commercial-state");
+const directorIaChat = require("./lib/director-ia-chat");
+const directorIaMejoraContinua = require("./lib/director-ia-mejora-continua");
+const directorIaBitacora = require("./lib/director-ia-bitacora");
+const comercialEntidad = require("./lib/comercial-entidad");
+const { buildActionRegisterBoardPayload } = require("./lib/action-register-board");
+const { ACTION_REGISTER_TEMAS, isActionRegisterTema } = require("./lib/action-register-temas");
 
 const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
@@ -5519,8 +5527,6 @@ app.get("/api/dashboard/plantas", dashboardAuthMiddleware, async (req, res) => {
 // Action Register (Acciones)
 // ===========================
 
-const ACTION_REGISTER_TEMAS = ["Contrataciones", "Mantenimiento", "General", "Clientes", "Apoyos", "Licencias", "Taller"];
-
 async function ensureActionRegisterTables(client) {
   await client.query(`CREATE SCHEMA IF NOT EXISTS arr;`).catch(() => {});
   await client.query(`
@@ -5904,171 +5910,12 @@ app.get("/api/action-register/board", dashboardAuthMiddleware, async (req, res) 
   if (!assertDashboardPlantaAccessForActionRegister(req, planta_id)) return res.status(403).json({ error: "Sin acceso a esta planta" });
   const client = await pool.connect();
   try {
-    await ensureActionRegisterTables(client);
-    const rev = await client.query(
-      `SELECT id, revision_date
-       FROM arr.action_register_revisions
-       WHERE planta_id = $1
-       ORDER BY revision_date DESC`,
-      [planta_id]
-    );
-    const revisions = (rev.rows || []).map((x) => ({ id: x.id, revision_date: x.revision_date }));
-    const r = await client.query(
-      `SELECT e.revision_id, e.position,
-              i.id, i.tema, i.parent_id, i.title, i.responsable, i.due_date, i.closed,
-              COALESCE((SELECT COUNT(*)::INT FROM arr.action_register_attachments a WHERE a.item_id = i.id), 0) AS attachments_count
-       FROM arr.action_register_entries e
-       JOIN arr.action_register_items i ON i.id = e.item_id
-       JOIN arr.action_register_revisions rv ON rv.id = e.revision_id
-       WHERE rv.planta_id = $1
-       ORDER BY rv.revision_date DESC, i.tema ASC, e.position ASC, i.id ASC`,
-      [planta_id]
-    );
-    const byRevisionTema = {};
-    for (const row of r.rows || []) {
-      const rid = String(row.revision_id);
-      const tema = String(row.tema || "");
-      if (!byRevisionTema[rid]) byRevisionTema[rid] = {};
-      if (!byRevisionTema[rid][tema]) byRevisionTema[rid][tema] = [];
-      byRevisionTema[rid][tema].push({
-        id: row.id,
-        tema,
-        parent_id: row.parent_id,
-        title: row.title,
-        responsable: row.responsable,
-        due_date: row.due_date,
-        closed: row.closed === true,
-        position: row.position,
-        attachments_count: Number(row.attachments_count) || 0,
-      });
-    }
-
-    // Inyectar acciones DICF (Delta Ingreso Cliente Forecast) como items virtuales de
-    // solo lectura en la sección "Clientes". Cada acción DICF se asigna a la columna
-    // (revisión) cuya fecha sea la más reciente <= fecha de creación de la acción
-    // (en tz CDMX). Así la acción queda "anclada" a su fecha de creación y no se
-    // mueve cuando se crea una nueva columna de revisión posterior.
-    try {
-      if (revisions.length > 0) {
-        await dicfAccionesLib.ensureDicfAccionesTables(client);
-        const equivPlantas = dicfAccionesLib.getPlantaIdsEquivalentes(planta_id);
-        if (equivPlantas.length > 0) {
-          const dicfRows = await client.query(
-            `SELECT a.id, a.public_code, a.planta_id, a.planta_label, a.grupo_tipo, a.canal, a.subcanal,
-                    a.cliente_nombre, a.descripcion, a.estado, a.fecha_compromiso, a.compromiso_tarde,
-                    a.cerrado_at, a.resultado_cierre, a.created_at,
-                    to_char((a.created_at AT TIME ZONE 'America/Mexico_City')::date, 'YYYY-MM-DD') AS creada_ymd,
-                    COALESCE(NULLIF(TRIM(COALESCE(rp.nombre_persona,'')), ''), rp.nombre) AS responsable_nombre,
-                    COALESCE((SELECT COUNT(*)::INT FROM arr.dicf_acciones_attachments att WHERE att.dicf_accion_id = a.id), 0) AS attachments_count
-             FROM arr.dicf_acciones a
-             LEFT JOIN public.usuarios rp ON rp.id = a.responsable_usuario_id
-             WHERE a.planta_id = ANY($1::int[])
-             ORDER BY a.cerrado_at NULLS FIRST, a.created_at DESC`,
-            [equivPlantas]
-          );
-
-          // Normaliza las fechas de revisión a "YYYY-MM-DD" y ordena ASC para el picker.
-          function normalizeYmd(v) {
-            const y = pgCalendarDateToYmd(v);
-            if (y) return y;
-            if (!v) return "";
-            return String(v).trim();
-          }
-          const revWithYmd = revisions.map((rv) => ({ id: rv.id, ymd: normalizeYmd(rv.revision_date) }));
-          const revAsc = [...revWithYmd].sort((a, b) => (a.ymd < b.ymd ? -1 : a.ymd > b.ymd ? 1 : 0));
-          // Para una fecha YYYY-MM-DD, devuelve la revisión más reciente cuya fecha <= createdYmd.
-          // Si ninguna es <= (el DICF es anterior a la primera revisión), usa la primera revisión disponible.
-          function pickRevisionIdForDate(createdYmd) {
-            let pick = null;
-            for (const rv of revAsc) {
-              if (rv.ymd <= createdYmd) pick = rv;
-              else break;
-            }
-            return pick ? pick.id : (revAsc[0] ? revAsc[0].id : null);
-          }
-
-          const posCounterByRev = new Map();
-          for (const a of dicfRows.rows || []) {
-            const ridNum = pickRevisionIdForDate(String(a.creada_ymd || ""));
-            if (!ridNum) continue;
-            const rid = String(ridNum);
-            if (!byRevisionTema[rid]) byRevisionTema[rid] = {};
-            if (!byRevisionTema[rid]["Clientes"]) byRevisionTema[rid]["Clientes"] = [];
-            const existing = byRevisionTema[rid]["Clientes"];
-            if (!posCounterByRev.has(rid)) {
-              posCounterByRev.set(rid, existing.reduce((mx, it) => Math.max(mx, it.position ?? 0), -1) + 1);
-            }
-            const position = posCounterByRev.get(rid);
-            posCounterByRev.set(rid, position + 1);
-
-            const estado = String(a.estado || "").toLowerCase();
-            const cerrada = !!a.cerrado_at || estado === "hecho";
-            const clienteLabel = String(a.cliente_nombre || "").trim();
-            const descr = String(a.descripcion || "").trim();
-            const title = clienteLabel
-              ? `${clienteLabel} — ${descr}`
-              : descr || `(sin descripción)`;
-            existing.push({
-              id: -1000000 - Number(a.id || 0),
-              tema: "Clientes",
-              parent_id: null,
-              title,
-              responsable: a.responsable_nombre || "",
-              due_date: a.fecha_compromiso || null,
-              closed: cerrada,
-              position,
-              attachments_count: Number(a.attachments_count) || 0,
-              dicf: true,
-              dicf_id: a.id,
-              dicf_public_code: a.public_code,
-              dicf_estado: estado,
-              dicf_grupo_tipo: a.grupo_tipo,
-              dicf_canal: a.canal,
-              dicf_subcanal: a.subcanal,
-              dicf_cliente_nombre: clienteLabel,
-              dicf_planta_label: a.planta_label,
-              dicf_compromiso_tarde: a.compromiso_tarde === true,
-              dicf_resultado_cierre: a.resultado_cierre || null,
-            });
-          }
-        }
-      }
-    } catch (e) {
-      console.error("[ActionRegister board DICF inject]", e);
-      // No romper el board si falla la carga de DICF.
-    }
-
-    // Comentarios del día por revisión (operativos, paros, incidentes, etc.).
-    const notesByRevision = {};
-    try {
-      if (revisions.length > 0) {
-        const notesRes = await client.query(
-          `SELECT n.id, n.revision_id, n.body, n.author_name, n.created_at, n.created_by_usuario_id,
-                  COALESCE((SELECT COUNT(*)::INT FROM arr.action_register_revision_note_attachments att WHERE att.note_id = n.id), 0) AS attachments_count
-           FROM arr.action_register_revision_notes n
-           JOIN arr.action_register_revisions rv ON rv.id = n.revision_id
-           WHERE rv.planta_id = $1
-           ORDER BY n.revision_id ASC, n.created_at ASC, n.id ASC`,
-          [planta_id]
-        );
-        for (const n of notesRes.rows || []) {
-          const rid = String(n.revision_id);
-          if (!notesByRevision[rid]) notesByRevision[rid] = [];
-          notesByRevision[rid].push({
-            id: n.id,
-            revision_id: n.revision_id,
-            body: n.body,
-            author_name: n.author_name || "",
-            created_at: n.created_at,
-            attachments_count: Number(n.attachments_count) || 0,
-          });
-        }
-      }
-    } catch (e) {
-      console.error("[ActionRegister board notes]", e);
-    }
-
-    res.json({ temas: ACTION_REGISTER_TEMAS, revisions, cells: byRevisionTema, notes: notesByRevision });
+    const payload = await buildActionRegisterBoardPayload(client, planta_id, {
+      ensureActionRegisterTables,
+      includeDicf: true,
+      includeNotes: true,
+    });
+    res.json(payload);
   } catch (e) {
     console.error("[ActionRegister board]", e);
     res.status(500).json({ error: e.message });
@@ -6161,7 +6008,7 @@ app.post("/api/action-register/items", dashboardAuthMiddleware, async (req, res)
   const due_date = body.due_date != null && String(body.due_date).trim() !== "" ? String(body.due_date).trim() : null;
   if (!revision_id || !Number.isFinite(revision_id)) return res.status(400).json({ error: "revision_id requerido" });
   if (!planta_id || !Number.isFinite(planta_id)) return res.status(400).json({ error: "planta_id requerido" });
-  if (!tema || !ACTION_REGISTER_TEMAS.includes(tema)) return res.status(400).json({ error: "tema inválido" });
+  if (!tema || !isActionRegisterTema(tema)) return res.status(400).json({ error: "tema inválido" });
   if (!title || title.length < 2) return res.status(400).json({ error: "title es obligatorio (mín. 2 caracteres)" });
   if (!assertDashboardPlantaAccessForActionRegister(req, planta_id)) return res.status(403).json({ error: "Sin acceso a esta planta" });
   if (due_date && !/^\d{4}-\d{2}-\d{2}$/.test(due_date)) return res.status(400).json({ error: "due_date inválida (YYYY-MM-DD)" });
@@ -7715,6 +7562,82 @@ app.get("/api/action-register/export-evidencias", dashboardAuthMiddleware, async
     client.release();
   }
 });
+
+// ===========================
+// Director IA (MVP)
+// ===========================
+
+directorIaContext.configureDirectorIaContext({
+  pool,
+  assertPlantaAccess: assertDashboardPlantaAccessForActionRegister,
+  ensureActionRegisterTables,
+});
+
+directorIaCommercialState.configureDirectorIaCommercialState({
+  getPlantCodeArrFromPlantaNombre,
+  getMargenKgPorPeriodo,
+  assertGVPlantaNombreAccess,
+});
+
+directorIaMejoraContinua.configureDirectorIaMejoraContinua({
+  pool,
+  assertPlantaAccess: assertDashboardPlantaAccessForActionRegister,
+  ensureActionRegisterTables,
+});
+
+directorIaBitacora.configureDirectorIaBitacora({
+  pool,
+  assertPlantaAccess: assertDashboardPlantaAccessForActionRegister,
+});
+
+comercialEntidad.configureComercialEntidad({
+  pool,
+  assertPlantaAccess: assertDashboardPlantaAccessForActionRegister,
+});
+
+directorIaChat.configureDirectorIaChat({ pool });
+
+/** Contexto agregado de solo lectura (Action Register: resumen por planta). */
+app.get("/api/director-ia/context", dashboardAuthMiddleware, directorIaContext.handleGetContext);
+
+/** Mejora Continua Presidencial v0.8 (Action Register + evidencias fotográficas). */
+app.get("/api/director-ia/mejora-continua", dashboardAuthMiddleware, directorIaMejoraContinua.handleGetMejoraContinua);
+
+/** Bitácora IA — contexto de campo (Plaud, visitas, juntas). Sprint 2A: persistencia only. */
+app.get("/api/director-ia/bitacora", dashboardAuthMiddleware, directorIaBitacora.handleListBitacora);
+app.post("/api/director-ia/bitacora", dashboardAuthMiddleware, directorIaBitacora.handleCreateBitacora);
+app.get("/api/director-ia/bitacora/:id", dashboardAuthMiddleware, directorIaBitacora.handleGetBitacora);
+app.delete("/api/director-ia/bitacora/:id", dashboardAuthMiddleware, directorIaBitacora.handleDeleteBitacora);
+
+/** Entidades comerciales — alias / nombres canónicos (Sprint 2C; sin integración chat). */
+app.get(
+  "/api/director-ia/comercial-entidad-alias/search",
+  dashboardAuthMiddleware,
+  comercialEntidad.handleSearchAliases
+);
+app.get("/api/director-ia/comercial-entidades", dashboardAuthMiddleware, comercialEntidad.handleListEntidades);
+app.post("/api/director-ia/comercial-entidades", dashboardAuthMiddleware, comercialEntidad.handleCreateEntidad);
+app.get("/api/director-ia/comercial-entidades/:id", dashboardAuthMiddleware, comercialEntidad.handleGetEntidad);
+app.patch("/api/director-ia/comercial-entidades/:id", dashboardAuthMiddleware, comercialEntidad.handleUpdateEntidad);
+app.delete("/api/director-ia/comercial-entidades/:id", dashboardAuthMiddleware, comercialEntidad.handleDeleteEntidad);
+app.post(
+  "/api/director-ia/comercial-entidades/:id/aliases",
+  dashboardAuthMiddleware,
+  comercialEntidad.handleCreateAlias
+);
+app.patch(
+  "/api/director-ia/comercial-entidad-alias/:aliasId",
+  dashboardAuthMiddleware,
+  comercialEntidad.handleUpdateAlias
+);
+app.delete(
+  "/api/director-ia/comercial-entidad-alias/:aliasId",
+  dashboardAuthMiddleware,
+  comercialEntidad.handleDeleteAlias
+);
+
+/** Chat ejecutivo (Action Register); reutiliza contexto agregado + OpenAI en backend. */
+app.post("/api/director-ia/chat", dashboardAuthMiddleware, directorIaChat.handlePostChat);
 
 /** Exporta a PDF el resumen del día (una revisión) del Action Register de una planta. */
 app.get("/api/action-register/export-day-pdf", dashboardAuthMiddleware, async (req, res) => {
@@ -13755,20 +13678,6 @@ app.post("/twilio/whatsapp", async (req, res) => {
             if (oldest) msg += `Más antiguo: ${oldest.folio} (${oldest.dias} días)\n`;
           }
           msg += `\n🔗 Acceso (válido 20 horas):\n${link}`;
-          const yyyymm = getCurrentYYYYMM();
-          const yF = parseInt(yyyymm.slice(0, 4), 10);
-          const mF = parseInt(yyyymm.slice(4, 6), 10);
-          const botBase = (process.env.BASE_URL || process.env.PUBLIC_URL || "").trim() || `${req.protocol}://${req.get("host") || "localhost"}`;
-          const nextYF = mF === 12 ? yF + 1 : yF;
-          const nextMF = mF === 12 ? 1 : mF + 1;
-          const linkForecast = `${botBase.replace(/\/$/, "")}/api/arr/dashboard-excel?year=${yF}&month=${mF}&proyeccion_anio=${nextYF}&proyeccion_mes=${nextMF}&t=${encodeURIComponent(token)}`;
-          msg += `\n\n📈 Forecast (Ventas/IGF ${yF}/${mF}):\n${linkForecast}`;
-          const mAnt = mF === 1 ? 12 : mF - 1;
-          const yAnt = mF === 1 ? yF - 1 : yF;
-          const nextYAnt = mAnt === 12 ? yAnt + 1 : yAnt;
-          const nextMAnt = mAnt === 12 ? 1 : mAnt + 1;
-          const linkForecastAnt = `${botBase.replace(/\/$/, "")}/api/arr/dashboard-excel?year=${yAnt}&month=${mAnt}&proyeccion_anio=${nextYAnt}&proyeccion_mes=${nextMAnt}&t=${encodeURIComponent(token)}`;
-          msg += `\n\n📈 Forecast mes anterior (${yAnt}/${mAnt}):\n${linkForecastAnt}`;
           if (msg.length > MAX_WHATSAPP_BODY) msg = msg.substring(0, MAX_WHATSAPP_BODY - 30) + "\n...(recortado)\n" + link;
           return safeReply(msg);
         } catch (dashboardErr) {

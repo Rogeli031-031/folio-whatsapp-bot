@@ -39,8 +39,10 @@ import {
   type ActionRegisterNoteAttachment,
   type ActionRegisterRevisionNote,
   type ActionRegisterTema,
+  ACTION_REGISTER_TEMAS,
   type DicfAttachment,
 } from "@/lib/api";
+import { DirectorIaChatModal } from "@/modules/director-ia/components/DirectorIaChatModal";
 
 function ymdToday(): string {
   const d = new Date();
@@ -116,6 +118,12 @@ function ActionRegisterContent() {
   const [photosOpenByItem, setPhotosOpenByItem] = useState<Record<number, boolean>>({});
   const [photoUploadingByItem, setPhotoUploadingByItem] = useState<Record<number, boolean>>({});
   const [photoPreview, setPhotoPreview] = useState<{ itemId: number; index: number } | null>(null);
+  const [directorIaChatOpen, setDirectorIaChatOpen] = useState(false);
+
+  const plantaNombre = useMemo(
+    () => plantas.find((p) => p.id === plantaId)?.nombre,
+    [plantas, plantaId]
+  );
 
   const [noteDraftByRev, setNoteDraftByRev] = useState<Record<number, string>>({});
   const [noteSavingByRev, setNoteSavingByRev] = useState<Record<number, boolean>>({});
@@ -377,7 +385,7 @@ function ActionRegisterContent() {
     [token, loadNotePhotos, loadBoard]
   );
 
-  const temas = board?.temas || (["Contrataciones", "Mantenimiento", "General", "Clientes", "Apoyos", "Licencias", "Taller"] as ActionRegisterTema[]);
+  const temas = board?.temas || [...ACTION_REGISTER_TEMAS];
   const revisions = board?.revisions || [];
   const cells = board?.cells || {};
   const notesByRev: Record<string, ActionRegisterRevisionNote[]> = board?.notes || {};
@@ -720,6 +728,17 @@ function ActionRegisterContent() {
           >
             Exportar historial a Excel
           </a>
+        )}
+
+        {plantaId && (
+          <button
+            type="button"
+            onClick={() => setDirectorIaChatOpen(true)}
+            className="inline-flex items-center gap-2 rounded bg-cyan-700 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-600 shrink-0"
+            title="Preguntas ejecutivas sobre la planta seleccionada"
+          >
+            Chat Director IA
+          </button>
         )}
 
         {loading && <span className="text-sm text-slate-400">Cargando…</span>}
@@ -1636,6 +1655,16 @@ function ActionRegisterContent() {
           </div>
         </div>
       </main>
+
+      {token && plantaId ? (
+        <DirectorIaChatModal
+          open={directorIaChatOpen}
+          onClose={() => setDirectorIaChatOpen(false)}
+          token={token}
+          plantaId={plantaId}
+          plantaNombre={plantaNombre}
+        />
+      ) : null}
     </div>
   );
 }
