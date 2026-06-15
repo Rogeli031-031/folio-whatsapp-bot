@@ -13678,6 +13678,20 @@ app.post("/twilio/whatsapp", async (req, res) => {
             if (oldest) msg += `Más antiguo: ${oldest.folio} (${oldest.dias} días)\n`;
           }
           msg += `\n🔗 Acceso (válido 20 horas):\n${link}`;
+          const yyyymm = getCurrentYYYYMM();
+          const yF = parseInt(yyyymm.slice(0, 4), 10);
+          const mF = parseInt(yyyymm.slice(4, 6), 10);
+          const botBase = (process.env.BASE_URL || process.env.PUBLIC_URL || "").trim() || `${req.protocol}://${req.get("host") || "localhost"}`;
+          const nextYF = mF === 12 ? yF + 1 : yF;
+          const nextMF = mF === 12 ? 1 : mF + 1;
+          const linkForecast = `${botBase.replace(/\/$/, "")}/api/arr/dashboard-excel?year=${yF}&month=${mF}&proyeccion_anio=${nextYF}&proyeccion_mes=${nextMF}&t=${encodeURIComponent(token)}`;
+          msg += `\n\n📈 Forecast (Ventas/IGF ${yF}/${mF}):\n${linkForecast}`;
+          const mAnt = mF === 1 ? 12 : mF - 1;
+          const yAnt = mF === 1 ? yF - 1 : yF;
+          const nextYAnt = mAnt === 12 ? yAnt + 1 : yAnt;
+          const nextMAnt = mAnt === 12 ? 1 : mAnt + 1;
+          const linkForecastAnt = `${botBase.replace(/\/$/, "")}/api/arr/dashboard-excel?year=${yAnt}&month=${mAnt}&proyeccion_anio=${nextYAnt}&proyeccion_mes=${nextMAnt}&t=${encodeURIComponent(token)}`;
+          msg += `\n\n📈 Forecast mes anterior (${yAnt}/${mAnt}):\n${linkForecastAnt}`;
           if (msg.length > MAX_WHATSAPP_BODY) msg = msg.substring(0, MAX_WHATSAPP_BODY - 30) + "\n...(recortado)\n" + link;
           return safeReply(msg);
         } catch (dashboardErr) {
