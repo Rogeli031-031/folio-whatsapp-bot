@@ -12,6 +12,31 @@ const ARR_SHEET = "ARR";
 const CASA_SHEET = "CASA";
 const COMI_SHEET = "COMISIONISTA";
 
+/** Columna D (VALOR) por fila — todas las plantas. */
+const EVALUACION_VALOR_D: Record<number, number> = {
+  7: 10,
+  8: 10,
+  9: 4,
+  10: 1,
+  11: 10,
+  18: 4,
+  19: 6,
+  22: 0,
+  23: 2,
+  24: 4,
+  25: 6,
+  26: 8,
+  29: 1,
+  30: 4,
+  31: 5,
+};
+
+function applyEvaluacionValorColumn(ws: ExcelJS.Worksheet) {
+  for (const [row, val] of Object.entries(EVALUACION_VALOR_D)) {
+    ws.getCell(Number(row), 4).value = val;
+  }
+}
+
 const FILL_PUNTUACION_TOTAL = {
   type: "pattern" as const,
   pattern: "solid" as const,
@@ -118,6 +143,7 @@ export function applyEvaluacionFormulas(
   ws.getCell(1, 4).value = `Empresa: ${empresa}`;
   setFormula(ws.getCell(2, 4), "SUM(G6:G38)");
   stylePuntuacionTotalD2(ws);
+  applyEvaluacionValorColumn(ws);
 
   if (isTehuacan) {
     setFormula(
@@ -141,7 +167,7 @@ export function applyEvaluacionFormulas(
       ws.getCell(9, 6),
       `(${COMI_SHEET}!B7+${COMI_SHEET}!B8)*1000`
     );
-    setFormula(ws.getCell(11, 6), "SUM(F7:F9)");
+    setFormula(ws.getCell(11, 6), `${ARR_SHEET}!B6*1000`);
   } else {
     setFormula(
       ws.getCell(7, 5),
@@ -161,7 +187,7 @@ export function applyEvaluacionFormulas(
     );
     setFormula(ws.getCell(8, 6), `${CASA_SHEET}!B8*1000`);
     setFormula(ws.getCell(9, 6), `SUM(${COMI_SHEET}!B7:B9)*1000`);
-    setFormula(ws.getCell(11, 6), metaRef(m.total, "C"));
+    setFormula(ws.getCell(11, 6), `${ARR_SHEET}!B6*1000`);
   }
 
   setFormula(ws.getCell(7, 7), `IF(F7>=E7,D7,0)`);
@@ -174,19 +200,19 @@ export function applyEvaluacionFormulas(
   setFormula(ws.getCell(15, 6), `${ARR_SHEET}!M6`);
   setFormula(ws.getCell(14, 7), `IF(F15>0,10,0)+IF(F14>0,10,0)`);
 
-  ws.getCell(17, 7).value = 8;
+  ws.getCell(17, 7).value = 10;
 
   setFormula(ws.getCell(21, 6), `${ARR_SHEET}!H6`);
   setFormula(
     ws.getCell(21, 7),
-    `IF(F21>10.04,20,IF(F21>=9.05,14,IF(F21>=8.05,8,IF(F21>=7.05,4,IF(F21>=6,2,0)))))`
+    `IF(F21>10.06,20,IF(F21>=10.05,12,IF(F21>=9.05,6,IF(F21>=8.05,2,IF(F21>=7,2,0)))))`
   );
 
   setFormula(ws.getCell(28, 5), metaRef(m.total, "D"));
   setFormula(ws.getCell(28, 6), `${ARR_SHEET}!D6*-1`);
   setFormula(
     ws.getCell(28, 7),
-    `IF(ROUND(F28,2)<=ROUND(E28,2)+0.04,12,IF(ROUND(F28,2)<=ROUND(E28,2)+0.1,8,IF(ROUND(F28,2)<=ROUND(E28,2)+0.15,4,0)))`
+    `IF(ROUND(F28,2)<=ROUND(E28,2)+0.04,10,IF(ROUND(F28,2)<=ROUND(E28,2)+0.1,5,IF(ROUND(F28,2)<=ROUND(E28,2)+0.15,1,0)))`
   );
 
   ws.getCell(33, 7).value = 20;
