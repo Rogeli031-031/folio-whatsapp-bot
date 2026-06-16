@@ -218,8 +218,9 @@ export function DirectorIaComercialEntidadPanel({
   return (
     <div className="space-y-4">
       <p className="text-xs text-slate-500">
-        Registra el nombre comercial canónico (p. ej. DICF) y alias operativos (p. ej. contacto en planta).
-        Aún no se usa en el chat.
+        Registra el nombre comercial canónico (como aparece en DICF) y agrega alias operativos abajo en cada
+        entidad. Solo los alias marcados como <strong className="text-emerald-400/90">verificado</strong> se usan
+        en el chat (las notas no sustituyen un alias).
       </p>
 
       <div className="flex flex-col sm:flex-row gap-2">
