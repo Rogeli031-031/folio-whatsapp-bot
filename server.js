@@ -8924,6 +8924,7 @@ async function fetchIgfFoliosDetalleList(client, year, month, empresa, tipo) {
 async function buildIgfForecastPayload(client, year, month, opts = {}) {
   const now = new Date();
   const isMesActual = year === now.getFullYear() && month === (now.getMonth() + 1);
+  const isMesHistorico = year < now.getFullYear() || (year === now.getFullYear() && month < now.getMonth() + 1);
   const provRes = await client.query("SELECT plant_code FROM arr.provincia_plants ORDER BY plant_code");
     const provinciaPlantCodes = (provRes.rows || []).map((r) => (r.plant_code || "").trim()).filter(Boolean);
 
@@ -8955,6 +8956,9 @@ async function buildIgfForecastPayload(client, year, month, opts = {}) {
     const uploadDayOverrideYmd = opts && typeof opts.upload_day === "string" ? opts.upload_day.trim().slice(0, 10) : null;
     const ventaForecastByPlant = await getVentaForecastProvinciaDesdeArr(client, year, month, uploadDayOverrideYmd);
     const descuentoForecastByPlant = await getDescuentoForecastProvinciaDesdeArr(client, year, month, uploadDayOverrideYmd);
+    const ventaRealByPlant = isMesHistorico
+      ? await dashboardArrForecast.getVentaRealTonProvinciaByPlant(client, year, month)
+      : new Map();
 
     function empresaEsProvincia(empresa) {
       if (!empresa || /^TOTALES?$/i.test(empresa)) return false;
@@ -8978,16 +8982,25 @@ async function buildIgfForecastPayload(client, year, month, opts = {}) {
       let venta_ton = row.venta_ton;
       let com_desc_kg = row.com_desc_kg;
       const best = bestPlantCodeForEmpresa(row.empresa);
-      if (best != null && ventaForecastByPlant.size > 0) {
-        const f = ventaForecastByPlant.get(best);
-        if (f != null) venta_ton = f;
-        const ventaForecastKg = (venta_ton || 0) * 1000;
-        const descMonto = descuentoForecastByPlant.get(best);
-        if (ventaForecastKg > 0 && descMonto != null) {
-          const dm = Number(descMonto);
-          if (Number.isFinite(dm)) {
-            // Convención IGF / Excel: Com. y Desc. en $/kg como reducción de margen (valor negativo, p. ej. -4.63).
-            com_desc_kg = -Math.round((Math.abs(dm) / ventaForecastKg) * 100) / 100;
+      if (best != null) {
+        if (isMesHistorico && ventaRealByPlant.size > 0) {
+          const realWrap = new Map();
+          for (const [k, v] of ventaRealByPlant.entries()) realWrap.set(k, { proy_venta_ton: v });
+          const real = dashboardArrForecast.resolveProyFromPlantMap(realWrap, best);
+          if (real != null && Number.isFinite(Number(real.proy_venta_ton))) {
+            venta_ton = Number(real.proy_venta_ton);
+          }
+        } else if (ventaForecastByPlant.size > 0) {
+          const f = ventaForecastByPlant.get(best);
+          if (f != null) venta_ton = f;
+          const ventaForecastKg = (venta_ton || 0) * 1000;
+          const descMonto = descuentoForecastByPlant.get(best);
+          if (ventaForecastKg > 0 && descMonto != null) {
+            const dm = Number(descMonto);
+            if (Number.isFinite(dm)) {
+              // Convención IGF / Excel: Com. y Desc. en $/kg como reducción de margen (valor negativo, p. ej. -4.63).
+              com_desc_kg = -Math.round((Math.abs(dm) / ventaForecastKg) * 100) / 100;
+            }
           }
         }
       }
@@ -9168,7 +9181,8 @@ async function buildIgfForecastPayload(client, year, month, opts = {}) {
 
 /**
  * Mini-resumen IGF:
- * - Venta y Com. y Desc. salen de Pronóstico (mismas PROY que ve el usuario al abrir el detalle "como hoja Pronostico").
+ * - Mes actual: venta y Com. y Desc. salen de Pronóstico (PROY).
+ * - Mes histórico (ya cerrado): venta = SUM(kg) real del mes calendario / 1000.
  * - INGRESO .. Resultado Final replican exactamente G..L de `applyIgfMiniResumenFormulas`.
  */
 async function computeIgfForecastMiniPayload(client, igf, year, month, uploadDay) {
@@ -9245,6 +9259,15 @@ async function computeIgfForecastMiniPayload(client, igf, year, month, uploadDay
     });
   }
   const fechaCorteStr = (uploadDay || "").toString().trim().slice(0, 10);
+  const nowMini = new Date();
+  const isMesHistorico =
+    year < nowMini.getFullYear() || (year === nowMini.getFullYear() && month < nowMini.getMonth() + 1);
+  let ventaRealWrap = null;
+  if (isMesHistorico) {
+    const ventaRealByPlant = await dashboardArrForecast.getVentaRealTonProvinciaByPlant(client, year, month);
+    ventaRealWrap = new Map();
+    for (const [k, v] of ventaRealByPlant.entries()) ventaRealWrap.set(k, { proy_venta_ton: v });
+  }
   const needPlantCodes = miniLabels.map((label) => String(labelToPlantCode.get(label) || label).trim());
   const corteYmdFast = dashboardArrForecast.getPronosticoCorteYmdStr(year, month, fechaCorteStr);
   const snapMini = await dashboardArrForecast.loadPronosticoMiniSnapshot(client, year, month, corteYmdFast);
@@ -9316,7 +9339,13 @@ async function computeIgfForecastMiniPayload(client, igf, year, month, uploadDay
         : igfRow;
     const plantCode = labelToPlantCode.get(label) || label;
     const proy = dashboardArrForecast.resolveProyFromPlantMap(proyByPlant, plantCode);
-    const bRes = proy && Number.isFinite(Number(proy.proy_venta_ton)) ? Number(proy.proy_venta_ton) : 0;
+    let bRes;
+    if (isMesHistorico && ventaRealWrap) {
+      const real = dashboardArrForecast.resolveProyFromPlantMap(ventaRealWrap, plantCode);
+      bRes = real && Number.isFinite(Number(real.proy_venta_ton)) ? Number(real.proy_venta_ton) : 0;
+    } else {
+      bRes = proy && Number.isFinite(Number(proy.proy_venta_ton)) ? Number(proy.proy_venta_ton) : 0;
+    }
     const bIgf = rawIgfRow ? n(rawIgfRow.venta_ton) : igfRow ? n(igfRow.venta_ton) : 0;
     const scale = bRes > 0 ? bIgf / bRes : 0;
 
