@@ -10769,7 +10769,16 @@ app.patch("/api/folios/:id/editar", dashboardAuthMiddleware, dashboardBlockGVFol
         return `${k}: ${p} → ${n}`;
       })
       .join("; ");
-    await insertHistorial(client, folioId, folio.numero_folio, folio.folio_codigo, null, `Edición AD: ${cambiosTxt}`, null, "AD");
+    await insertHistorial(
+      client,
+      folioId,
+      folio.numero_folio,
+      folio.folio_codigo,
+      folio.estatus || "",
+      `Edición AD: ${cambiosTxt}`,
+      null,
+      "AD"
+    );
 
     res.json({ ok: true, changed: true });
   } catch (e) {
