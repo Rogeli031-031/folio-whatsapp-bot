@@ -1623,6 +1623,17 @@ export function postFolioCotizacion(
   });
 }
 
+export function deleteFolioMedia(
+  token: string,
+  folioId: number,
+  mediaId: number
+): Promise<{ ok: boolean; tipo?: string; estatus?: string }> {
+  return apiFetch(`/api/folios/${folioId}/media/${mediaId}`, {
+    token,
+    method: "DELETE",
+  });
+}
+
 export function postFolioFactura(
   token: string,
   folioId: number,

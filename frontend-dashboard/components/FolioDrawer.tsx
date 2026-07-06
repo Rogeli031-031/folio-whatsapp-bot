@@ -16,6 +16,7 @@ import {
   postSolicitarPorRecuperar,
   postFolioCotizacion,
   postFolioFactura,
+  deleteFolioMedia,
   fetchIgfEmpresas,
   patchFolioPrestamoAPlanta,
 } from "@/lib/api";
@@ -77,6 +78,8 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
   const [facturaFile, setFacturaFile] = useState<File | null>(null);
   const [uploadingFactura, setUploadingFactura] = useState(false);
   const [facturaError, setFacturaError] = useState<string | null>(null);
+  const [deletingMediaId, setDeletingMediaId] = useState<number | null>(null);
+  const [adjuntoError, setAdjuntoError] = useState<string | null>(null);
   const [prestamoOpen, setPrestamoOpen] = useState(false);
   const [igfEmpresas, setIgfEmpresas] = useState<string[]>([]);
   const [prestamoSelect, setPrestamoSelect] = useState<string>("");
@@ -286,6 +289,34 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
       }
     };
     reader.readAsDataURL(f);
+  };
+
+  const refreshAdjuntos = async () => {
+    if (!token || !folioId) return;
+    const [fol, t, m] = await Promise.all([
+      fetchFolio(token, folioId),
+      fetchTimeline(token, folioId),
+      fetchMedia(token, folioId),
+    ]);
+    setFolio(fol as Record<string, unknown>);
+    setTimeline((t as { events: typeof timeline }).events || []);
+    setMedia((m as { items: typeof media }).items || []);
+    onApproved?.();
+  };
+
+  const handleEliminarAdjunto = async (mediaId: number, label: string) => {
+    if (!token || !folioId || !puedeEditar) return;
+    if (!window.confirm(`¿Eliminar ${label}? Podrás subir otro archivo después.`)) return;
+    setAdjuntoError(null);
+    setDeletingMediaId(mediaId);
+    try {
+      await deleteFolioMedia(token, folioId, mediaId);
+      await refreshAdjuntos();
+    } catch (err) {
+      setAdjuntoError((err as Error).message || `Error al eliminar ${label.toLowerCase()}`);
+    } finally {
+      setDeletingMediaId(null);
+    }
   };
 
   const onFacturaFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -628,24 +659,50 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
                         byTipo.FACTURA ? { label: "Factura", ...byTipo.FACTURA } : null,
                       ].filter(Boolean) as { label: string; id: number; file_name: string | null }[];
                       if (items.length === 0) {
-                        return media.map((m) => (
-                          <li key={m.id}>
-                            <button type="button" onClick={() => openMediaUrl(m.id)} className="text-sm text-blue-400 hover:underline">
-                              {m.tipo} {m.file_name || `#${m.id}`}
-                            </button>
-                          </li>
-                        ));
+                        return media.map((m) => {
+                          const tipoUp = (m.tipo || "").toUpperCase();
+                          const puedeBorrar =
+                            puedeEditar && (tipoUp === "COTIZACION" || tipoUp === "POLIZA");
+                          return (
+                            <li key={m.id} className="flex flex-wrap items-center gap-2">
+                              <button type="button" onClick={() => openMediaUrl(m.id)} className="text-sm text-blue-400 hover:underline">
+                                {m.tipo} {m.file_name || `#${m.id}`}
+                              </button>
+                              {puedeBorrar && (
+                                <button
+                                  type="button"
+                                  onClick={() => void handleEliminarAdjunto(m.id, m.tipo)}
+                                  disabled={deletingMediaId === m.id}
+                                  className="text-xs text-red-400 hover:text-red-300 disabled:opacity-50"
+                                >
+                                  {deletingMediaId === m.id ? "Eliminando…" : "Eliminar"}
+                                </button>
+                              )}
+                            </li>
+                          );
+                        });
                       }
                       return items.map((it) => (
-                        <li key={it.id}>
+                        <li key={it.id} className="flex flex-wrap items-center gap-2">
                           <button type="button" onClick={() => openMediaUrl(it.id)} className="text-sm text-blue-400 hover:underline">
                             {it.label}: {it.file_name || `#${it.id}`}
                           </button>
+                          {puedeEditar && (it.label === "Cotización" || it.label === "Póliza") && (
+                            <button
+                              type="button"
+                              onClick={() => void handleEliminarAdjunto(it.id, it.label)}
+                              disabled={deletingMediaId === it.id}
+                              className="text-xs text-red-400 hover:text-red-300 disabled:opacity-50"
+                            >
+                              {deletingMediaId === it.id ? "Eliminando…" : "Eliminar"}
+                            </button>
+                          )}
                         </li>
                       ));
                     })()}
                   </ul>
                 )}
+                {adjuntoError && <p className="mt-1 text-xs text-red-400">{adjuntoError}</p>}
                 <div className="mt-3">
                   <p className="text-xs text-slate-500 mb-1">Adjuntar factura (PDF).</p>
                   <input

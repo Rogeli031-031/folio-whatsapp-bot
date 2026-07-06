@@ -3679,7 +3679,8 @@ async function attachCotizacionUrlOnly(client, folioId, url, actorTelefono) {
 /** Busca archivo existente por folio_id y sha256 (anti-duplicado). Si tipoFilter se indica, solo considera filas de ese tipo (para que cotización y póliza puedan coexistir como dos ligas). */
 async function findFolioArchivoByHash(client, folioId, sha256, tipoFilter = null) {
   if (!sha256) return null;
-  let q = `SELECT id, status, subido_en, subido_por FROM public.folio_archivos WHERE folio_id = $1 AND sha256 = $2`;
+  let q = `SELECT id, status, subido_en, subido_por FROM public.folio_archivos
+           WHERE folio_id = $1 AND sha256 = $2 AND status NOT IN ('ELIMINADO', 'REEMPLAZADO')`;
   const params = [folioId, sha256];
   if (tipoFilter && String(tipoFilter).trim()) {
     q += ` AND tipo = $3`;
@@ -3726,12 +3727,94 @@ async function listFolioArchivosByFolioId(client, folioId, limit = 20) {
   const r = await client.query(
     `SELECT fa.id, fa.tipo, fa.status, fa.file_name, fa.s3_key, fa.file_size_bytes, fa.subido_por, fa.subido_en
      FROM public.folio_archivos fa
-     WHERE fa.folio_id = $1
+     WHERE fa.folio_id = $1 AND fa.status NOT IN ('ELIMINADO', 'REEMPLAZADO')
      ORDER BY (CASE WHEN fa.tipo = 'COTIZACION' THEN 0 WHEN fa.tipo = 'POLIZA' THEN 1 WHEN fa.tipo = 'FACTURA' THEN 2 ELSE 3 END), fa.subido_en DESC
      LIMIT $2`,
     [folioId, limit]
   );
   return r.rows || [];
+}
+
+/** Tras eliminar cotización: apunta folios.cotizacion_* a la última vigente o limpia. */
+async function syncFolioCotizacionRefs(client, folioId) {
+  const r = await client.query(
+    `SELECT id, s3_key, url FROM public.folio_archivos
+     WHERE folio_id = $1 AND tipo = 'COTIZACION' AND status NOT IN ('ELIMINADO', 'RECHAZADO', 'REEMPLAZADO')
+     ORDER BY COALESCE(aprobado_en, subido_en) DESC NULLS LAST, subido_en DESC
+     LIMIT 1`,
+    [folioId]
+  );
+  const next = r.rows[0];
+  if (next) {
+    let url = next.url || null;
+    if (!url && next.s3_key) {
+      try {
+        url = await getSignedDownloadUrl(next.s3_key, 60 * 60 * 24 * 7);
+      } catch {
+        url = null;
+      }
+    }
+    await client.query(
+      `UPDATE public.folios SET cotizacion_url = $1, cotizacion_s3key = $2, cotizacion_archivo_id = $3 WHERE id = $4`,
+      [url, next.s3_key || null, next.id, folioId]
+    );
+  } else {
+    await client.query(
+      `UPDATE public.folios SET cotizacion_url = NULL, cotizacion_s3key = NULL, cotizacion_archivo_id = NULL WHERE id = $1`,
+      [folioId]
+    );
+  }
+}
+
+/** Elimina (soft) cotización o póliza; solo AD. */
+async function eliminarFolioArchivoAd(client, folio, archivo, actorLabel) {
+  const tipo = String(archivo.tipo || "").toUpperCase();
+  if (tipo !== "COTIZACION" && tipo !== "POLIZA") {
+    const err = new Error("Solo se pueden eliminar adjuntos de cotización o póliza.");
+    err.statusCode = 400;
+    throw err;
+  }
+  if (["ELIMINADO", "REEMPLAZADO"].includes(String(archivo.status || "").toUpperCase())) {
+    const err = new Error("El archivo ya fue eliminado o reemplazado.");
+    err.statusCode = 400;
+    throw err;
+  }
+  await client.query(
+    `UPDATE public.folio_archivos SET status = 'ELIMINADO', sha256 = NULL WHERE id = $1`,
+    [archivo.id]
+  );
+  let nuevoEstatus = null;
+  if (tipo === "COTIZACION") {
+    await syncFolioCotizacionRefs(client, folio.id);
+  } else if (tipo === "POLIZA") {
+    const polRes = await client.query(
+      `SELECT 1 FROM public.folio_archivos
+       WHERE folio_id = $1 AND tipo = 'POLIZA' AND status NOT IN ('ELIMINADO', 'REEMPLAZADO')
+       LIMIT 1`,
+      [folio.id]
+    );
+    const est = String(folio.estatus || "").toUpperCase();
+    if (!polRes.rows.length && (est === ESTADOS.PAGADO || est === ESTADOS.CERRADO)) {
+      nuevoEstatus = ESTADOS.SOLICITANDO_PAGO;
+      await client.query(`UPDATE public.folios SET estatus = $1 WHERE id = $2`, [nuevoEstatus, folio.id]);
+    }
+  }
+  const label = tipo === "COTIZACION" ? "Cotización" : "Póliza";
+  const comentario =
+    tipo === "POLIZA" && nuevoEstatus
+      ? `${label} eliminada por AD (${archivo.file_name || `#${archivo.id}`}); folio regresado a carrito.`
+      : `${label} eliminada por AD (${archivo.file_name || `#${archivo.id}`}).`;
+  await insertHistorial(
+    client,
+    folio.id,
+    folio.numero_folio,
+    folio.folio_codigo,
+    nuevoEstatus || folio.estatus || "",
+    comentario,
+    null,
+    actorLabel || "AD"
+  );
+  return { tipo, nuevoEstatus };
 }
 
 /** Última cotización APROBADA del folio (por numero_folio). */
@@ -5397,7 +5480,7 @@ app.get("/api/dashboard/kanban", dashboardAuthMiddleware, async (req, res) => {
                  FROM public.folio_archivos fa
                  WHERE fa.folio_id = f.id
                    AND fa.tipo = 'COTIZACION'
-                   AND fa.status <> 'RECHAZADO'
+                   AND fa.status NOT IN ('RECHAZADO', 'ELIMINADO', 'REEMPLAZADO')
                )
                OR f.cotizacion_s3key IS NOT NULL
                OR f.cotizacion_url IS NOT NULL
@@ -9846,12 +9929,44 @@ app.get("/api/folios/:id/media/:mediaId/url", dashboardAuthMiddleware, dashboard
     }
     const arch = await getFolioArchivoById(client, mediaId);
     if (!arch || arch.folio_id !== folioId) return res.status(404).json({ error: "Archivo no encontrado" });
+    if (String(arch.status || "").toUpperCase() === "ELIMINADO") {
+      return res.status(404).json({ error: "Archivo eliminado" });
+    }
     const url = arch.s3_key ? await getSignedDownloadUrl(arch.s3_key, 600).catch(() => null) : (arch.url || null);
     if (!url) return res.status(404).json({ error: "URL no disponible" });
     res.json({ url, expires_in: 600 });
   } catch (e) {
     console.error("[Dashboard media url]", e);
     res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/** Eliminar adjunto de cotización o póliza (solo Asistente de Dirección). */
+app.delete("/api/folios/:id/media/:mediaId", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddleware, async (req, res) => {
+  const folioId = parseInt(req.params.id, 10);
+  const mediaId = parseInt(req.params.mediaId, 10);
+  if (!Number.isFinite(folioId) || !Number.isFinite(mediaId)) {
+    return res.status(400).json({ error: "id o mediaId inválido" });
+  }
+  const role = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) || "";
+  if (role !== "AD") {
+    return res.status(403).json({ error: "Solo Asistente de Dirección puede eliminar cotización o póliza." });
+  }
+  const client = await pool.connect();
+  try {
+    const folio = await getFolioById(client, folioId);
+    if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
+    const arch = await getFolioArchivoById(client, mediaId);
+    if (!arch || arch.folio_id !== folioId) return res.status(404).json({ error: "Archivo no encontrado" });
+    const actorLabel = req.dashboardAuth.actor_id != null ? `AD:${req.dashboardAuth.actor_id}` : "AD";
+    const result = await eliminarFolioArchivoAd(client, folio, arch, actorLabel);
+    res.json({ ok: true, tipo: result.tipo, estatus: result.nuevoEstatus || folio.estatus });
+  } catch (e) {
+    const code = e.statusCode && Number.isFinite(e.statusCode) ? e.statusCode : 500;
+    if (code >= 500) console.error("[Dashboard DELETE media]", e);
+    res.status(code).json({ error: e.message });
   } finally {
     client.release();
   }
