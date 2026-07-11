@@ -8,6 +8,7 @@
 const {
   buildBitacoraAnnex,
   buildFocusedDicfContext,
+  buildMonthlyIntegratedContext,
   buildDirectorIaChatPrompt,
   extractChatContextFromPayload,
   formatBitacoraMonthlyBlocks,
@@ -96,12 +97,17 @@ assert(dicf.text.includes("--- MAYO 2026 ---"), "dicf mayo");
 assert(dicf.text.includes("Cliente Julio"), "cliente julio en bloque");
 assert(!dicf.text.includes("Cliente Abril"), "sin clientes fuera de ventana");
 
+const integrated = buildMonthlyIntegratedContext(chatContext, "¿Cómo van los clientes?");
+assert(integrated.text.includes("BITÁCORA IA"), "integrado bitácora");
+assert(integrated.text.includes("DICF / CLIENTES"), "integrado dicf");
+assert(integrated.text.includes("Cliente Mayo"), "integrado mayo dicf");
+
 const prompt = buildDirectorIaChatPrompt(chatContext, "Resumen de clientes", {
-  bitacoraOnlyFallback: true,
-  bitacoraPrioritized: true,
-  bitacoraAnnexText: annex.text,
+  monthlyIntegrated: true,
+  useFocused: true,
+  focusedText: integrated.text,
 });
-assert(prompt.systemPrompt.includes("Resumen [Mes Año]"), "prompt mensual en system");
-assert(prompt.userContent.includes("Resumen [Mes Año]"), "prompt mensual en user");
+assert(prompt.promptMode === "monthly_integrated", "prompt integrado");
+assert(prompt.systemPrompt.includes("integra"), "system integrado");
 
 console.log("OK bitácora/DICF agrupados por mes (3 meses)");

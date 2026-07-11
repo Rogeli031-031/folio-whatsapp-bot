@@ -88,10 +88,10 @@ const cases = [
   {
     name: "Oportunidades Tehuacán",
     q: "¿Qué oportunidades se identificaron en Tehuacán?",
-    expectMode: "bitacora_focused",
+    expectMode: "monthly_integrated",
     expectAnnex: false,
-    expectPrimary: "bitacora",
-    bitacoraPrioritized: true,
+    expectPrimary: "integrated",
+    monthlyIntegrated: true,
   },
   {
     name: "Plan Maestro",
@@ -142,6 +142,12 @@ for (const c of cases) {
       focusedText: "CONTEXTO AR MOCK",
       bitacoraAnnexText: null,
     };
+  } else if (routing.promptMode === "monthly_integrated") {
+    promptOpts = {
+      useFocused: true,
+      focusedText: "CONTEXTO INTEGRADO MOCK — JULIO bitácora + MAYO DICF",
+      monthlyIntegrated: true,
+    };
   } else if (routing.promptMode === "bitacora_focused") {
     promptOpts = {
       bitacoraOnlyFallback: true,
@@ -173,6 +179,9 @@ for (const c of cases) {
   if (c.expectPrimary === "commercial_state") {
     assert(prompt.userContent.includes("ESTADO COMERCIAL"), `${c.name}: debe incluir estado comercial`);
   }
+  if (c.expectPrimary === "integrated") {
+    assert(prompt.userContent.includes("integrado"), `${c.name}: debe incluir contexto integrado`);
+  }
   if (c.expectPrimary === "bitacora") {
     assert(prompt.userContent.includes("BITÁCORA IA"), `${c.name}: debe incluir bitácora`);
   }
@@ -195,6 +204,10 @@ for (const c of cases) {
   if (c.expectPrimary === "commercial_state") {
     assert(sources.includes("commercial_state.dejaron") || sources.some((s) => s.startsWith("commercial_state.")), `${c.name}: source commercial_state`);
   }
+  if (c.expectPrimary === "integrated") {
+    assert(sources.includes("action_register.dicf_details"), `${c.name}: source dicf`);
+    assert(sources.includes("bitacora_ia.context"), `${c.name}: source bitacora`);
+  }
   if (c.expectPrimary === "bitacora") {
     assert(sources.includes("bitacora_ia.context"), `${c.name}: source bitacora`);
   }
@@ -204,7 +217,7 @@ for (const c of cases) {
   if (c.expectAnnex) {
     assert(sources.includes("bitacora_ia.context"), `${c.name}: source bitacora`);
   }
-  if (c.expectAnnex === false && c.expectMode !== "mejora_continua" && c.expectPrimary !== "bitacora") {
+  if (c.expectAnnex === false && c.expectMode !== "mejora_continua" && c.expectPrimary !== "bitacora" && c.expectPrimary !== "integrated") {
     if (!c.q.includes("Plan Maestro")) {
       assert(!sources.includes("bitacora_ia.context") || c.expectMode === "full", `${c.name}: sin bitacora source`);
     }
