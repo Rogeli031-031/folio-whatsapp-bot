@@ -7,6 +7,7 @@ import {
   getTokenFromStorage,
   setTokenInStorage,
 } from "@/lib/auth";
+import { fetchPlantas } from "@/lib/api";
 import {
   fetchDirectorIaContext,
   fetchDirectorIaMejoraContinua,
@@ -34,6 +35,20 @@ const MESES = [
   { value: "11", label: "Noviembre" },
   { value: "12", label: "Diciembre" },
 ];
+
+const CLAVES_CODIGO_PLANTA = ["E7", "E8", "E9", "E10", "E11", "E12", "E13", "E15"];
+
+function filterDashboardPlantas(plantas: { id: number; nombre: string }[]) {
+  return plantas.filter((p) => {
+    const nombre = (p.nombre || "").trim();
+    const upper = nombre.toUpperCase();
+    if (CLAVES_CODIGO_PLANTA.includes(upper)) return false;
+    if (/^E\d+$/.test(nombre)) return false;
+    const norm = nombre.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+    if (norm === "MEXICO") return false;
+    return true;
+  });
+}
 
 function todayMexicoCityYearMonth() {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -362,6 +377,7 @@ export function DirectorIaShell() {
   const [token, setToken] = useState<string | null>(null);
   const [unauthorized, setUnauthorized] = useState(false);
   const [planta, setPlanta] = useState("");
+  const [plantas, setPlantas] = useState<{ id: number; nombre: string }[]>([]);
   const [anio, setAnio] = useState(cdmxDefault.year);
   const [mes, setMes] = useState(cdmxDefault.month);
   const [contextLoading, setContextLoading] = useState(false);
@@ -386,6 +402,26 @@ export function DirectorIaShell() {
       setPlanta(pid);
     }
   }, [searchParams]);
+
+  useEffect(() => {
+    if (!token) {
+      setPlantas([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetchPlantas(token);
+        if (cancelled) return;
+        setPlantas(filterDashboardPlantas(r.plantas || []));
+      } catch {
+        if (!cancelled) setPlantas([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
 
   const probarContexto = useCallback(async () => {
     if (!token) return;
@@ -474,15 +510,19 @@ export function DirectorIaShell() {
           <div className="flex flex-wrap items-end gap-4">
             <label className="flex flex-col gap-1 min-w-[12rem]">
               <span className="text-xs text-slate-400">Planta</span>
-              <input
-                type="number"
-                min={1}
+              <select
                 value={planta}
                 onChange={(e) => setPlanta(e.target.value)}
-                placeholder="ID planta (ej. 3)"
                 className="rounded border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-200 w-full"
-                aria-label="ID de planta para contexto"
-              />
+                aria-label="Planta para contexto y mejora continua"
+              >
+                <option value="">— Selecciona planta —</option>
+                {plantas.map((p) => (
+                  <option key={p.id} value={String(p.id)}>
+                    {p.nombre}
+                  </option>
+                ))}
+              </select>
             </label>
 
             <label className="flex flex-col gap-1 min-w-[8rem]">
