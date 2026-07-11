@@ -741,6 +741,18 @@ function ActionRegisterContent() {
           </button>
         )}
 
+        {token && (
+          <a
+            href={`/director-ia?t=${encodeURIComponent(token)}${plantaId ? `&planta_id=${plantaId}` : ""}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded bg-violet-700 px-4 py-2 text-sm font-medium text-white hover:bg-violet-600 shrink-0"
+            title="Bitácora, entidades comerciales, mejora continua y contexto ejecutivo"
+          >
+            Director IA
+          </a>
+        )}
+
         {loading && <span className="text-sm text-slate-400">Cargando…</span>}
         {error && <span className="text-sm text-red-400">{error}</span>}
         {!loading && revisions.length === 0 && <span className="text-sm text-slate-400">Aún no hay fechas de revisión para esta planta.</span>}

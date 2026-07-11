@@ -381,6 +381,10 @@ export function DirectorIaShell() {
       setToken(null);
       setUnauthorized(true);
     }
+    const pid = (searchParams.get("planta_id") || "").trim();
+    if (pid && /^\d+$/.test(pid)) {
+      setPlanta(pid);
+    }
   }, [searchParams]);
 
   const probarContexto = useCallback(async () => {
