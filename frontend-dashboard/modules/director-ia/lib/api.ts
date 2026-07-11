@@ -127,15 +127,25 @@ export type DirectorIaChatResponse =
   | { ok: false; error: string };
 
 /** POST /api/director-ia/chat — asistente ejecutivo (backend → OpenAI). */
+export type DirectorIaChatHistoryMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
 export function fetchDirectorIaChat(
   token: string,
   plantaId: number,
-  question: string
+  question: string,
+  history?: DirectorIaChatHistoryMessage[]
 ): Promise<DirectorIaChatResponse> {
   return apiFetch<DirectorIaChatResponse>("/api/director-ia/chat", {
     method: "POST",
     token,
-    body: JSON.stringify({ planta_id: plantaId, question }),
+    body: JSON.stringify({
+      planta_id: plantaId,
+      question,
+      ...(history && history.length > 0 ? { history: history.slice(-8) } : {}),
+    }),
     cache: "no-store",
   });
 }

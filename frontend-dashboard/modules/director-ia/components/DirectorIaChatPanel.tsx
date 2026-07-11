@@ -57,6 +57,10 @@ export function DirectorIaChatPanel({
     }
 
     const userMsg: DirectorIaChatMessage = { id: newMessageId(), role: "user", content: q };
+    const historyForApi = [...messages, userMsg].map((m) => ({
+      role: m.role,
+      content: m.content,
+    }));
     setMessages((prev) => [...prev, userMsg]);
     setQuestion("");
     setLoading(true);
@@ -64,7 +68,7 @@ export function DirectorIaChatPanel({
     setLastSources([]);
 
     try {
-      const res = await fetchDirectorIaChat(token, pid, q);
+      const res = await fetchDirectorIaChat(token, pid, q, historyForApi);
       if ("enabled" in res && res.enabled === false) {
         setError("Director IA deshabilitado en el servidor.");
         return;
@@ -83,7 +87,7 @@ export function DirectorIaChatPanel({
     } finally {
       setLoading(false);
     }
-  }, [token, plantaId, question]);
+  }, [token, plantaId, question, messages]);
 
   const shellClass = chatMode
     ? `flex flex-col min-h-0 ${className}`
