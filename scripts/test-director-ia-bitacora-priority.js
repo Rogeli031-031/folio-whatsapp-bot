@@ -96,4 +96,11 @@ assert(prompt.userContent.includes("CLIENTE MAYO"), "DICF en prompt");
 const routingDicf = resolveDirectorIaChatRouting("¿Qué pasó con CLIENTE MAYO?", pueblaContext);
 assert(routingDicf.promptMode === "dicf_focused", `historial → dicf ${routingDicf.promptMode}`);
 
+assert(
+  shouldUseMonthlyIntegratedChat("SAUL JONATAN CARMONA HERNANDEZ", pueblaContext),
+  "nombre solo → integrado"
+);
+const routingSaul = resolveDirectorIaChatRouting("SAUL JONATAN CARMONA HERNANDEZ", pueblaContext);
+assert(routingSaul.promptMode === "monthly_integrated", `Saul routing ${routingSaul.promptMode}`);
+
 console.log("OK contexto integrado mensual — Puebla julio + mayo DICF");

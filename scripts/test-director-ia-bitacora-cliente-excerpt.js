@@ -11,6 +11,7 @@ const {
 } = require("../lib/director-ia-bitacora");
 const {
   buildMonthlyIntegratedContext,
+  buildDirectorIaChatPrompt,
   extractChatContextFromPayload,
   expandQuestionFromChatHistory,
   extractLikelyClientNameTokensFromQuestion,
@@ -68,6 +69,15 @@ const ctx = extractChatContextFromPayload({
 
 const integrated = buildMonthlyIntegratedContext(ctx, "SAUL JONATAN CARMONA HERNANDEZ");
 assert(integrated.text.includes("60 toneladas"), "contexto integrado menciona 60t Saul");
-assert(integrated.text.includes("Extracto transcripción") || integrated.text.includes("Saúl"), "incluye extracto o nombre");
+assert(integrated.text.includes("CONSULTA POR CLIENTE"), "encabezado cliente");
+assert(integrated.text.includes("PRIORIDAD"), "prioridad bitácora");
+
+const promptClient = buildDirectorIaChatPrompt(ctx, "SAUL JONATAN CARMONA HERNANDEZ", {
+  monthlyIntegrated: true,
+  clientNameLookup: true,
+  useFocused: true,
+  focusedText: integrated.text,
+});
+assert(promptClient.userContent.includes("situación ACTUAL"), "regla causa actual");
 
 console.log("OK bitácora — búsqueda cliente en transcripción completa");
