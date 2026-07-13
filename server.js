@@ -54,6 +54,7 @@ const { embedExcelEvidencePhoto } = require("./lib/excel-image-compress");
 const { isDirectorZPForDashboard } = require("./lib/dashboard-es-zp");
 const directorIaContext = require("./lib/director-ia-context");
 const directorIaCommercialState = require("./lib/director-ia-commercial-state");
+const directorIaIgfArr = require("./lib/director-ia-igf-arr");
 const directorIaChat = require("./lib/director-ia-chat");
 const directorIaMejoraContinua = require("./lib/director-ia-mejora-continua");
 const directorIaBitacora = require("./lib/director-ia-bitacora");
@@ -7663,6 +7664,12 @@ directorIaContext.configureDirectorIaContext({
 });
 
 directorIaCommercialState.configureDirectorIaCommercialState({
+  getPlantCodeArrFromPlantaNombre,
+  getMargenKgPorPeriodo,
+  assertGVPlantaNombreAccess,
+});
+
+directorIaIgfArr.configureDirectorIaIgfArr({
   getPlantCodeArrFromPlantaNombre,
   getMargenKgPorPeriodo,
   assertGVPlantaNombreAccess,
