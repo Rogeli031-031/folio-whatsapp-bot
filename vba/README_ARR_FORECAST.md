@@ -33,6 +33,7 @@ Módulo **ModArrForecastUpload.bas** para ejecutar **dentro** del archivo **ARR 
 - Borra en la base los datos del mes indicado en: `arr.ventas_diarias_cliente`, `arr.descuentos_diarios_cliente`, `arr.cliente_categoria_mes`.
 - Lee las hojas **Total**, **Notas**, **Factura**, **Comision Extra**, **Categoria**.
 - Aplica las mismas reglas que el script Node (cliente normalizado, descuento contado, Notas por fecha vencimiento, Factura × 1.16, etc.).
+- **Solo inserta filas cuya fecha cae en el mes elegido** (año/mes del diálogo). Filas de otros meses (p. ej. notas con vencimiento viejo) se omiten; así no se pisan descuentos/ventas históricos al subir un mes nuevo.
 - Inserta de nuevo ese mes en las tres tablas.
 
 Después de subir, puedes calcular el forecast desde Node (`POST /api/arr/forecast`) o desde el script `upload-arr-puebla.js`, y ver el dashboard desde WhatsApp (comando **dashboard** → link Forecast).

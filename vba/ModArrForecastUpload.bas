@@ -275,6 +275,8 @@ Private Sub CargarDesdeHojas(ByVal cnn As Object, ByVal plantCode As String, ByV
                 fecha = ArrParseDateSafe(ArrGetCell(arr, r, "Fecha", headers))
                 If IsNull(fecha) Then GoTo NextTotal
                 fechaStr = Format(CDate(fecha), "yyyy-mm-dd")
+                ' Solo mes objetivo: evita UPSERT que pise meses históricos
+                If Year(CDate(fecha)) <> yearNum Or Month(CDate(fecha)) <> monthNum Then GoTo NextTotal
                 cliente = NormalizeClient(ArrGetCell(arr, r, "Cliente", headers))
                 If cliente = "" Then cliente = NormalizeClient(ArrGetCell(arr, r, "cliente", headers))
                 If cliente = "" Then GoTo NextTotal
@@ -313,6 +315,7 @@ NextTotal:
                 fVenc = ArrParseDateSafe(ArrGetCell(arr, r, "Fecha de vencimiento", headers))
                 If IsNull(fVenc) Then GoTo NextNotas
                 fechaStr = Format(CDate(fVenc), "yyyy-mm-dd")
+                If Year(CDate(fVenc)) <> yearNum Or Month(CDate(fVenc)) <> monthNum Then GoTo NextNotas
                 If fechaStr = hoyStr Then GoTo NextNotas
                 cliente = NormalizeClient(ArrGetCell(arr, r, "Cliente", headers))
                 If cliente = "" Then GoTo NextNotas
@@ -339,6 +342,7 @@ NextNotas:
                 fecha = ArrParseDateSafe(ArrGetCell(arr, r, "Fecha", headers))
                 If IsNull(fecha) Then GoTo NextFactura
                 fechaStr = Format(CDate(fecha), "yyyy-mm-dd")
+                If Year(CDate(fecha)) <> yearNum Or Month(CDate(fecha)) <> monthNum Then GoTo NextFactura
                 If fechaStr = hoyStr Then GoTo NextFactura
                 cliente = NormalizeClient(ArrGetCell(arr, r, "Cliente", headers))
                 If cliente = "" Then GoTo NextFactura
@@ -364,6 +368,7 @@ NextFactura:
                 fecha = ArrParseDateSafe(ArrGetCell(arr, r, "Fecha", headers))
                 If IsNull(fecha) Then GoTo NextCE
                 fechaStr = Format(CDate(fecha), "yyyy-mm-dd")
+                If Year(CDate(fecha)) <> yearNum Or Month(CDate(fecha)) <> monthNum Then GoTo NextCE
                 If fechaStr = hoyStr Then GoTo NextCE
                 cliente = NormalizeClient(ArrGetCell(arr, r, "Cliente", headers))
                 If cliente = "" Then GoTo NextCE
@@ -389,6 +394,7 @@ NextCE:
                 fecha = ArrParseDateSafe(ArrGetCell(arr, r, "Fecha", headers))
                 If IsNull(fecha) Then GoTo NextCat
                 fechaStr = Format(CDate(fecha), "yyyy-mm-dd")
+                If Year(CDate(fecha)) <> yearNum Or Month(CDate(fecha)) <> monthNum Then GoTo NextCat
                 cliente = NormalizeClient(ArrGetCell(arr, r, "Cliente", headers))
                 If cliente = "" Then GoTo NextCat
                 comisionista = ArrGetCell(arr, r, "Comisionista", headers)
@@ -434,7 +440,7 @@ NextCat:
             canal = arrCat(0)
             subcanal = arrCat(1)
         End If
-        sql = "INSERT INTO arr.ventas_diarias_cliente (plant_code, fecha, cliente_norm, canal, subcanal, kg) VALUES ('" & plantS & "', '" & fechaStr & "', '" & ArrToSqlStr(cliente) & "', '" & ArrToSqlStr(canal) & "', '" & ArrToSqlStr(subcanal) & "', " & NumSql(dicVentas(k)) & ") ON CONFLICT (plant_code, fecha, cliente_norm, canal, subcanal) DO UPDATE SET kg = arr.ventas_diarias_cliente.kg + EXCLUDED.kg"
+        sql = "INSERT INTO arr.ventas_diarias_cliente (plant_code, fecha, cliente_norm, canal, subcanal, kg) VALUES ('" & plantS & "', '" & fechaStr & "', '" & ArrToSqlStr(cliente) & "', '" & ArrToSqlStr(canal) & "', '" & ArrToSqlStr(subcanal) & "', " & NumSql(dicVentas(k)) & ") ON CONFLICT (plant_code, fecha, cliente_norm, canal, subcanal) DO UPDATE SET kg = EXCLUDED.kg"
         modDb.ExecSQL cnn, sql
     Next k
     
