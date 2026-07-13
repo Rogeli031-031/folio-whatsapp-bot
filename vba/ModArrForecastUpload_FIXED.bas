@@ -353,6 +353,7 @@ Private Sub CargarDesdeHojas(ByVal cnn As Object, ByVal plantCode As String, ByV
                 fecha = ArrParseDateSafe(GetCellFecha(arr, r, headers))
                 If IsNull(fecha) Then GoTo NextTotal
                 fechaStr = Format$(CDate(fecha), "yyyy-mm-dd")
+                If Year(CDate(fecha)) <> yearNum Or Month(CDate(fecha)) <> monthNum Then GoTo NextTotal
 
                 cliente = NormalizeClient(GetCellByContains(arr, r, headers, "CLIENTE"))
                 If cliente = "" Then skipTotalCliente = skipTotalCliente + 1: GoTo NextTotal
@@ -386,6 +387,7 @@ NextTotal:
                 fVenc = ArrParseDateSafe(GetCellByContains(arr, r, headers, "VENC"))
                 If IsNull(fVenc) Then GoTo NextNotas
                 fechaStr = Format$(CDate(fVenc), "yyyy-mm-dd")
+                If Year(CDate(fVenc)) <> yearNum Or Month(CDate(fVenc)) <> monthNum Then GoTo NextNotas
                 If fechaStr = hoyStr Then GoTo NextNotas
 
                 cliente = NormalizeClient(GetCellByContains(arr, r, headers, "CLIENTE"))
@@ -417,6 +419,7 @@ NextNotas:
                 fecha = ArrParseDateSafe(GetCellFecha(arr, r, headers))
                 If IsNull(fecha) Then GoTo NextFactura
                 fechaStr = Format$(CDate(fecha), "yyyy-mm-dd")
+                If Year(CDate(fecha)) <> yearNum Or Month(CDate(fecha)) <> monthNum Then GoTo NextFactura
                 If fechaStr = hoyStr Then GoTo NextFactura
 
                 cliente = NormalizeClient(GetCellByContains(arr, r, headers, "CLIENTE"))
@@ -449,6 +452,7 @@ NextFactura:
                 fecha = ArrParseDateSafe(GetCellFecha(arr, r, headers))
                 If IsNull(fecha) Then GoTo NextCE
                 fechaStr = Format$(CDate(fecha), "yyyy-mm-dd")
+                If Year(CDate(fecha)) <> yearNum Or Month(CDate(fecha)) <> monthNum Then GoTo NextCE
                 If fechaStr = hoyStr Then GoTo NextCE
 
                 cliente = NormalizeClient(GetCellByContains(arr, r, headers, "CLIENTE"))
@@ -495,6 +499,7 @@ NextCE:
                 fecha = ArrParseDateSafe(GetCellFecha(arr, r, headers))
                 If IsNull(fecha) Then GoTo NextCat
                 fechaStr = Format$(CDate(fecha), "yyyy-mm-dd")
+                If Year(CDate(fecha)) <> yearNum Or Month(CDate(fecha)) <> monthNum Then GoTo NextCat
 
                 cliente = NormalizeClient(GetCellByContains(arr, r, headers, "CLIENTE"))
                 If cliente = "" Then skipCatCliente = skipCatCliente + 1: GoTo NextCat
@@ -587,7 +592,7 @@ NextCat:
 
         sql = "INSERT INTO arr.ventas_diarias_cliente (plant_code, fecha, cliente_norm, canal, subcanal, kg) " & _
               "VALUES ('" & plantS & "', '" & fechaStr & "', '" & ArrToSqlStr(cliente) & "', '" & ArrToSqlStr(canal) & "', '" & ArrToSqlStr(subcanal) & "', " & NumSql(dicVentas(k)) & ") " & _
-              "ON CONFLICT (plant_code, fecha, cliente_norm, canal, subcanal) DO UPDATE SET kg = arr.ventas_diarias_cliente.kg + EXCLUDED.kg"
+              "ON CONFLICT (plant_code, fecha, cliente_norm, canal, subcanal) DO UPDATE SET kg = EXCLUDED.kg"
         modDb.ExecSQL cnn, sql
     Next k
 
