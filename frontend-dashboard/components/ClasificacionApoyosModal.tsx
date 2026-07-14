@@ -487,7 +487,7 @@ export default function ClasificacionApoyosModal({ open, token, onClose, onOpenF
           }}
         >
           <div
-            className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-slate-700 bg-slate-900 p-4 shadow-xl"
+            className="flex max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-lg border border-slate-700 bg-slate-900 p-4 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-3 flex flex-shrink-0 items-center justify-between border-b border-slate-700 pb-2">
@@ -517,23 +517,26 @@ export default function ClasificacionApoyosModal({ open, token, onClose, onOpenF
                 {folios.length === 0 ? (
                   <p className="text-sm text-slate-500">No hay folios en este criterio.</p>
                 ) : (
-                  <div className="space-y-4">
+                  <div className="flex gap-3 overflow-x-auto pb-2 min-h-[40vh]">
                     {groupFoliosByEtapa(folios).map((g) => (
-                      <section key={g.etapa}>
-                        <div className="sticky top-0 z-[1] mb-2 flex flex-wrap items-center justify-between gap-2 rounded border border-slate-700 bg-slate-800/95 px-2.5 py-1.5 backdrop-blur-sm">
-                          <h4 className="text-sm font-medium text-slate-100">{g.label}</h4>
-                          <span className="text-[11px] text-slate-400">
+                      <section
+                        key={g.etapa}
+                        className="flex w-[17rem] flex-shrink-0 flex-col rounded-lg border border-slate-700 bg-slate-900/70"
+                      >
+                        <div className="sticky top-0 z-[1] border-b border-slate-700 bg-slate-800/95 px-2.5 py-2 backdrop-blur-sm">
+                          <h4 className="text-sm font-medium text-slate-100 leading-snug">{g.label}</h4>
+                          <p className="mt-1 text-[11px] text-slate-400">
                             {g.items.length} folio{g.items.length === 1 ? "" : "s"} ·{" "}
                             <span className="font-mono text-amber-300/90">{fmtMxn(g.total)}</span>
-                          </span>
+                          </p>
                         </div>
-                        <ul className="space-y-2">
+                        <ul className="flex-1 space-y-2 overflow-y-auto p-2 max-h-[calc(85vh-8rem)]">
                           {g.items.map((f) => (
                             <li key={f.id}>
                               <button
                                 type="button"
                                 onClick={() => onOpenFolio?.(f.id)}
-                                className="w-full rounded border border-slate-700 bg-slate-800/50 px-3 py-2 text-left hover:border-amber-600/50 hover:bg-slate-800"
+                                className="w-full rounded border border-slate-700 bg-slate-800/60 px-2.5 py-2 text-left hover:border-amber-600/50 hover:bg-slate-800"
                               >
                                 <div className="flex flex-wrap items-center justify-between gap-2">
                                   <span className="font-mono text-xs text-amber-300">
