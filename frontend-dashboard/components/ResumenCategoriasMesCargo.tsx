@@ -63,6 +63,10 @@ export default function ResumenCategoriasMesCargo({ data, selectedPlantaId, onOp
     () => cards.filter((c) => c.prestamo_a_planta),
     [cards]
   );
+  const prestamosSiguienteMesCards = useMemo(
+    () => cards.filter((c) => !!c.prestamo_siguiente_mes),
+    [cards]
+  );
 
   const { byMes, byMesCat, byMesCatSub, detalleList } = useMemo(() => {
     const byMes: Record<MesCargo, number> = {};
@@ -144,10 +148,15 @@ export default function ResumenCategoriasMesCargo({ data, selectedPlantaId, onOp
     for (const r of detalleList) {
       aoaResumen.push([formatMesCargo(r.mes_cargo), r.categoria, r.subcategoria, r.total]);
     }
-    const aoaDetalle: (string | number)[][] = [["Mes de cargo", "Categoría", "Subcategoría", "Etapa", "Número folio", "Importe", "Beneficiario", "Descripción"]];
+    const aoaDetalle: (string | number)[][] = [["Mes de cargo", "Categoría", "Subcategoría", "Etapa", "Número folio", "Importe", "Beneficiario", "Descripción", "Identificación"]];
     for (const r of detalleList) {
       for (const f of r.folios) {
         const ben = f.beneficiario ?? "";
+        const identificacion = f.prestamo_siguiente_mes
+          ? "préstamos siguiente mes"
+          : f.prestamo_a_planta
+            ? `préstamo a planta: ${f.prestamo_a_planta}`
+            : "";
         aoaDetalle.push([
           formatMesCargo(r.mes_cargo),
           r.categoria,
@@ -157,6 +166,7 @@ export default function ResumenCategoriasMesCargo({ data, selectedPlantaId, onOp
           f.importe ?? 0,
           ben,
           (f.descripcion || "").slice(0, 200),
+          identificacion,
         ]);
       }
     }
@@ -186,6 +196,27 @@ export default function ResumenCategoriasMesCargo({ data, selectedPlantaId, onOp
     XLSX.writeFile(wb, "prestamos_a_planta.xlsx");
   };
 
+  const handleExportPrestamosSiguienteMesExcel = () => {
+    const aoa: (string | number)[][] = [
+      ["Identificación", "Número folio", "Planta", "Mes cargo", "Importe (MXN)", "Etapa", "Beneficiario", "Concepto"],
+    ];
+    for (const f of prestamosSiguienteMesCards) {
+      aoa.push([
+        "préstamos siguiente mes",
+        f.numero_folio || f.folio_codigo || "",
+        (f.planta_nombre || "").trim() || "—",
+        formatMesCargo(String(f.mes_cargo || "").trim()) || "—",
+        f.importe ?? 0,
+        f.etapa_label ?? "—",
+        f.beneficiario ?? "",
+        (f.descripcion || "").slice(0, 500),
+      ]);
+    }
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), "Préstamos siguiente mes");
+    XLSX.writeFile(wb, "prestamos_siguiente_mes.xlsx");
+  };
+
   const showDetalle = selectedMes != null && selectedCategoria != null && selectedSubcategoria != null;
   const showSubcategorias = selectedMes != null && selectedCategoria != null && !showDetalle;
   const showCategorias = selectedMes != null && !selectedCategoria;
@@ -213,6 +244,19 @@ export default function ResumenCategoriasMesCargo({ data, selectedPlantaId, onOp
             className="rounded bg-sky-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Exportar préstamos A→B ({prestamosCards.length})
+          </button>
+          <button
+            type="button"
+            onClick={handleExportPrestamosSiguienteMesExcel}
+            disabled={prestamosSiguienteMesCards.length === 0}
+            title={
+              prestamosSiguienteMesCards.length === 0
+                ? "No hay folios marcados como préstamo siguiente mes"
+                : "Exportar folios identificados como préstamos siguiente mes"
+            }
+            className="rounded bg-indigo-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Exportar préstamo siguiente mes ({prestamosSiguienteMesCards.length})
           </button>
           <button
             type="button"
