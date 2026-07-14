@@ -20,8 +20,21 @@ import {
   fetchIgfEmpresas,
   patchFolioPrestamoAPlanta,
   patchFolioPrestamoSiguienteMes,
+  patchFolioNumeroCheque,
 } from "@/lib/api";
 import EditarFolioModal from "@/components/EditarFolioModal";
+
+function fmtMxn(n: number): string {
+  return `$${n.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function parseMontoMxn(raw: string): number | null {
+  const cleaned = String(raw || "").replace(/[$,\s]/g, "").replace(",", ".").trim();
+  if (!cleaned) return null;
+  const n = Number(cleaned);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return n;
+}
 
 /** Campana roja (misma idea que en FolioCard). */
 function IconAlarma({ className }: { className?: string }) {
@@ -63,7 +76,7 @@ const ESTADOS_MES_CARGO = [...ESTADOS_CARRO_COMPRA, "PENDIENTE_APROB_ZP"];
 export default function FolioDrawer({ folioId, token, role = "GG", onClose, onApproved }: Props) {
   const [folio, setFolio] = useState<Record<string, unknown> | null>(null);
   const [timeline, setTimeline] = useState<{ estatus: string; estatus_visible?: string; etapa_icon?: string; comentario: string; actor_rol: string | null; creado_en: string }[]>([]);
-  const [media, setMedia] = useState<{ id: number; tipo: string; file_name: string | null }[]>([]);
+  const [media, setMedia] = useState<{ id: number; tipo: string; file_name: string | null; monto?: number | null }[]>([]);
   const [finanzas, setFinanzas] = useState<{ status: string; monto_mxn?: number | null } | null>(null);
   const [loading, setLoading] = useState(false);
   const [approving, setApproving] = useState(false);
@@ -77,6 +90,8 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
   const [uploadingCotizacion, setUploadingCotizacion] = useState(false);
   const [cotizacionError, setCotizacionError] = useState<string | null>(null);
   const [facturaFile, setFacturaFile] = useState<File | null>(null);
+  const [facturaBase64, setFacturaBase64] = useState<string | null>(null);
+  const [facturaMonto, setFacturaMonto] = useState("");
   const [uploadingFactura, setUploadingFactura] = useState(false);
   const [facturaError, setFacturaError] = useState<string | null>(null);
   const [deletingMediaId, setDeletingMediaId] = useState<number | null>(null);
@@ -87,6 +102,8 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
   const [savingPrestamo, setSavingPrestamo] = useState(false);
   const [savingPrestamoSiguienteMes, setSavingPrestamoSiguienteMes] = useState(false);
   const [savingUrgente, setSavingUrgente] = useState(false);
+  const [numeroChequeEdit, setNumeroChequeEdit] = useState("");
+  const [savingNumeroCheque, setSavingNumeroCheque] = useState(false);
 
   useEffect(() => {
     if (!folioId || !token) {
@@ -107,6 +124,7 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
         const fol = f as Record<string, unknown>;
         setFolio(fol);
         setMesCargoEdit((fol.mes_cargo as string) || "");
+        setNumeroChequeEdit((fol.numero_cheque as string) || "");
         setTimeline((t as { events: typeof timeline }).events || []);
         setMedia((m as { items: typeof media }).items || []);
         setFinanzas(fin as { status: string; monto_mxn?: number | null });
@@ -323,46 +341,76 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
 
   const onFacturaFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
+    e.target.value = "";
     setFacturaError(null);
     setFacturaFile(null);
+    setFacturaBase64(null);
+    setFacturaMonto("");
     if (!f) return;
     if (!f.type.includes("pdf")) {
       setFacturaError("Solo se acepta PDF.");
       return;
     }
     setFacturaFile(f);
-    setUploadingFactura(true);
     const reader = new FileReader();
-    reader.onload = async () => {
+    reader.onload = () => {
       const data = reader.result as string;
       const base64 = data.indexOf(",") >= 0 ? data.split(",")[1] : data;
-      if (!token || !folioId || !base64) {
-        setUploadingFactura(false);
-        return;
-      }
-      setFacturaError(null);
-      try {
-        await postFolioFactura(token, folioId, {
-          fileBase64: base64,
-          fileName: f.name || "factura.pdf",
-        });
-        setFacturaFile(null);
-        const [fol, t, m] = await Promise.all([
-          fetchFolio(token, folioId),
-          fetchTimeline(token, folioId),
-          fetchMedia(token, folioId),
-        ]);
-        setFolio(fol as Record<string, unknown>);
-        setTimeline((t as { events: typeof timeline }).events || []);
-        setMedia((m as { items: typeof media }).items || []);
-        onApproved?.();
-      } catch (err) {
-        setFacturaError((err as Error).message || "Error al subir la factura");
-      } finally {
-        setUploadingFactura(false);
-      }
+      setFacturaBase64(base64 || null);
     };
+    reader.onerror = () => setFacturaError("No se pudo leer el archivo.");
     reader.readAsDataURL(f);
+  };
+
+  const handleSubirFacturaConMonto = async () => {
+    if (!token || !folioId || !facturaBase64 || !facturaFile) return;
+    const monto = parseMontoMxn(facturaMonto);
+    if (monto == null) {
+      setFacturaError("Indica el monto de la factura en pesos mexicanos (mayor a 0).");
+      return;
+    }
+    setUploadingFactura(true);
+    setFacturaError(null);
+    try {
+      await postFolioFactura(token, folioId, {
+        fileBase64: facturaBase64,
+        fileName: facturaFile.name || "factura.pdf",
+        monto,
+      });
+      setFacturaFile(null);
+      setFacturaBase64(null);
+      setFacturaMonto("");
+      const [fol, t, m] = await Promise.all([
+        fetchFolio(token, folioId),
+        fetchTimeline(token, folioId),
+        fetchMedia(token, folioId),
+      ]);
+      setFolio(fol as Record<string, unknown>);
+      setTimeline((t as { events: typeof timeline }).events || []);
+      setMedia((m as { items: typeof media }).items || []);
+      onApproved?.();
+    } catch (err) {
+      setFacturaError((err as Error).message || "Error al subir la factura");
+    } finally {
+      setUploadingFactura(false);
+    }
+  };
+
+  const handleSaveNumeroCheque = async () => {
+    if (!token || !folioId || soloLectura) return;
+    setApproveError(null);
+    setSavingNumeroCheque(true);
+    try {
+      const res = await patchFolioNumeroCheque(token, folioId, numeroChequeEdit.trim() || null);
+      const f = await fetchFolio(token, folioId);
+      setFolio(f as Record<string, unknown>);
+      setNumeroChequeEdit(res.numero_cheque || "");
+      onApproved?.();
+    } catch (e) {
+      setApproveError((e as Error).message || "Error al guardar número de cheque");
+    } finally {
+      setSavingNumeroCheque(false);
+    }
   };
 
   const handleSaveMesCargo = async () => {
@@ -406,7 +454,35 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
               <section>
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                   <h3 className="text-sm font-medium text-slate-400">Datos</h3>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {!soloLectura && (
+                      <div className="inline-flex items-center gap-1.5 rounded border border-slate-600 bg-slate-800/80 px-2 py-1">
+                        <label className="text-xs text-slate-400 whitespace-nowrap" htmlFor={`numero-cheque-${folioId}`}>
+                          Nº cheque
+                        </label>
+                        <input
+                          id={`numero-cheque-${folioId}`}
+                          type="text"
+                          value={numeroChequeEdit}
+                          onChange={(e) => setNumeroChequeEdit(e.target.value)}
+                          placeholder="Ej. 12345"
+                          className="w-24 rounded border border-slate-600 bg-slate-900 px-1.5 py-1 text-sm text-slate-200"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => void handleSaveNumeroCheque()}
+                          disabled={savingNumeroCheque}
+                          className="rounded bg-slate-600 px-2 py-1 text-xs font-medium text-white hover:bg-slate-500 disabled:opacity-50"
+                        >
+                          {savingNumeroCheque ? "…" : "Guardar"}
+                        </button>
+                      </div>
+                    )}
+                    {soloLectura && (folio as Record<string, unknown>).numero_cheque ? (
+                      <span className="rounded border border-slate-600 bg-slate-800/80 px-2 py-1 text-xs text-slate-300">
+                        Cheque: <strong>{String((folio as Record<string, unknown>).numero_cheque)}</strong>
+                      </span>
+                    ) : null}
                     {puedeMarcarUrgente ? (
                       <label className="inline-flex cursor-pointer items-center gap-2 rounded border border-slate-600 bg-slate-800/80 px-2 py-1.5 text-sm text-slate-200 hover:bg-slate-800">
                         <input
@@ -642,7 +718,54 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
                       </dd>
                     </div>
                   )}
-                  <div><dt className="text-slate-500">Importe</dt><dd className="text-slate-200">{folio.importe != null ? `$${Number(folio.importe).toLocaleString("es-MX")}` : "N/A"}</dd></div>
+                  <div className="flex flex-wrap items-start gap-6">
+                    <div>
+                      <dt className="text-slate-500">Importe</dt>
+                      <dd className="text-slate-200 text-lg">
+                        {folio.importe != null ? fmtMxn(Number(folio.importe)) : "N/A"}
+                      </dd>
+                    </div>
+                    {(() => {
+                      const facturas = media.filter((m) => (m.tipo || "").toUpperCase() === "FACTURA");
+                      const comprobado = facturas.reduce((s, f) => s + (Number(f.monto) || 0), 0);
+                      const importeNum = folio.importe != null ? Number(folio.importe) : null;
+                      const completo =
+                        importeNum != null &&
+                        Number.isFinite(importeNum) &&
+                        comprobado + 0.009 >= importeNum;
+                      const tieneFacturas = facturas.length > 0;
+                      return (
+                        <div>
+                          <dt className="text-slate-500 flex items-center gap-2">
+                            Comprobado
+                            <span
+                              className={`inline-block h-3 w-3 rounded-full ${
+                                !tieneFacturas || !completo ? "bg-red-500" : "bg-emerald-500"
+                              }`}
+                              title={
+                                !tieneFacturas
+                                  ? "Sin facturas"
+                                  : completo
+                                    ? "Monto comprobado"
+                                    : "Aún no cubre el importe"
+                              }
+                              aria-label={completo ? "Comprobado" : "No comprobado"}
+                            />
+                          </dt>
+                          <dd className="text-slate-200 text-lg">
+                            {fmtMxn(comprobado)}
+                            {importeNum != null && Number.isFinite(importeNum) && (
+                              <span className="ml-2 text-xs text-slate-500">
+                                {completo
+                                  ? "(cubierto)"
+                                  : `(faltan ${fmtMxn(Math.max(0, importeNum - comprobado))})`}
+                              </span>
+                            )}
+                          </dd>
+                        </div>
+                      );
+                    })()}
+                  </div>
                   <div><dt className="text-slate-500">Concepto</dt><dd className="text-slate-200">{String(folio.descripcion_display ?? folio.concepto ?? "—")}</dd></div>
                 </dl>
               </section>
@@ -691,59 +814,65 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
                       {media.length === 0 ? null : (
                   <ul className="space-y-1">
                     {(() => {
-                      const byTipo = {} as Record<string, { id: number; tipo: string; file_name: string | null }>;
+                      const byTipo = {} as Record<string, { id: number; tipo: string; file_name: string | null; monto?: number | null }>;
+                      const facturas: { id: number; tipo: string; file_name: string | null; monto?: number | null }[] = [];
                       media.forEach((m) => {
                         const t = (m.tipo || "").toUpperCase();
                         if (t === "COTIZACION" && !byTipo.COTIZACION) byTipo.COTIZACION = m;
                         if (t === "POLIZA" && !byTipo.POLIZA) byTipo.POLIZA = m;
-                        if (t === "FACTURA" && !byTipo.FACTURA) byTipo.FACTURA = m;
+                        if (t === "FACTURA") facturas.push(m);
                       });
                       const items = [
                         byTipo.COTIZACION ? { label: "Cotización", ...byTipo.COTIZACION } : null,
                         byTipo.POLIZA ? { label: "Póliza", ...byTipo.POLIZA } : null,
-                        byTipo.FACTURA ? { label: "Factura", ...byTipo.FACTURA } : null,
                       ].filter(Boolean) as { label: string; id: number; file_name: string | null }[];
-                      if (items.length === 0) {
-                        return media.map((m) => {
-                          const tipoUp = (m.tipo || "").toUpperCase();
-                          const puedeBorrar =
-                            puedeEditar && (tipoUp === "COTIZACION" || tipoUp === "POLIZA");
-                          return (
-                            <li key={m.id} className="flex flex-wrap items-center gap-2">
-                              <button type="button" onClick={() => openMediaUrl(m.id)} className="text-sm text-blue-400 hover:underline">
-                                {m.tipo} {m.file_name || `#${m.id}`}
+                      const sumaFacturas = facturas.reduce((s, f) => s + (Number(f.monto) || 0), 0);
+                      return (
+                        <>
+                          {items.map((it) => (
+                            <li key={it.id} className="flex flex-wrap items-center gap-2">
+                              <button type="button" onClick={() => openMediaUrl(it.id)} className="text-sm text-blue-400 hover:underline">
+                                {it.label}: {it.file_name || `#${it.id}`}
                               </button>
-                              {puedeBorrar && (
+                              {puedeEditar && (it.label === "Cotización" || it.label === "Póliza") && (
                                 <button
                                   type="button"
-                                  onClick={() => void handleEliminarAdjunto(m.id, m.tipo)}
-                                  disabled={deletingMediaId === m.id}
+                                  onClick={() => void handleEliminarAdjunto(it.id, it.label)}
+                                  disabled={deletingMediaId === it.id}
                                   className="text-xs text-red-400 hover:text-red-300 disabled:opacity-50"
                                 >
-                                  {deletingMediaId === m.id ? "Eliminando…" : "Eliminar"}
+                                  {deletingMediaId === it.id ? "Eliminando…" : "Eliminar"}
                                 </button>
                               )}
                             </li>
-                          );
-                        });
-                      }
-                      return items.map((it) => (
-                        <li key={it.id} className="flex flex-wrap items-center gap-2">
-                          <button type="button" onClick={() => openMediaUrl(it.id)} className="text-sm text-blue-400 hover:underline">
-                            {it.label}: {it.file_name || `#${it.id}`}
-                          </button>
-                          {puedeEditar && (it.label === "Cotización" || it.label === "Póliza") && (
-                            <button
-                              type="button"
-                              onClick={() => void handleEliminarAdjunto(it.id, it.label)}
-                              disabled={deletingMediaId === it.id}
-                              className="text-xs text-red-400 hover:text-red-300 disabled:opacity-50"
-                            >
-                              {deletingMediaId === it.id ? "Eliminando…" : "Eliminar"}
-                            </button>
+                          ))}
+                          {facturas.map((f, idx) => (
+                            <li key={f.id} className="flex flex-wrap items-center gap-2">
+                              <button type="button" onClick={() => openMediaUrl(f.id)} className="text-sm text-blue-400 hover:underline">
+                                Factura {idx + 1}: {f.file_name || `#${f.id}`}
+                              </button>
+                              <span className="text-sm text-slate-300">
+                                {f.monto != null ? fmtMxn(Number(f.monto)) : "sin monto"}
+                              </span>
+                              {puedeEditar && (
+                                <button
+                                  type="button"
+                                  onClick={() => void handleEliminarAdjunto(f.id, "Factura")}
+                                  disabled={deletingMediaId === f.id}
+                                  className="text-xs text-red-400 hover:text-red-300 disabled:opacity-50"
+                                >
+                                  {deletingMediaId === f.id ? "Eliminando…" : "Eliminar"}
+                                </button>
+                              )}
+                            </li>
+                          ))}
+                          {facturas.length > 0 && (
+                            <li className="pt-1 text-sm font-medium text-slate-200">
+                              Suma facturas: {fmtMxn(sumaFacturas)}
+                            </li>
                           )}
-                        </li>
-                      ));
+                        </>
+                      );
                     })()}
                   </ul>
                 )}
@@ -757,7 +886,45 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
                     disabled={uploadingFactura}
                     className="mt-1 w-full rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200 file:mr-2 file:rounded file:border-0 file:bg-amber-600 file:px-2 file:py-1 file:text-white file:hover:bg-amber-500 disabled:opacity-50"
                   />
-                  {facturaFile && <span className="mt-1 block text-xs text-slate-500">{uploadingFactura ? "Subiendo…" : facturaFile.name}</span>}
+                  {facturaFile && (
+                    <div className="mt-2 rounded border border-slate-600 bg-slate-800/70 p-2 space-y-2">
+                      <p className="text-xs text-slate-400">Archivo: {facturaFile.name}</p>
+                      <label className="block text-xs text-slate-400">
+                        Monto de la factura (MXN)
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={facturaMonto}
+                          onChange={(e) => setFacturaMonto(e.target.value)}
+                          placeholder="Ej. 15000.50"
+                          className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm text-slate-200"
+                        />
+                      </label>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void handleSubirFacturaConMonto()}
+                          disabled={uploadingFactura || !facturaBase64}
+                          className="rounded bg-amber-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-500 disabled:opacity-50"
+                        >
+                          {uploadingFactura ? "Subiendo…" : "Guardar factura"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFacturaFile(null);
+                            setFacturaBase64(null);
+                            setFacturaMonto("");
+                            setFacturaError(null);
+                          }}
+                          disabled={uploadingFactura}
+                          className="rounded border border-slate-600 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-700 disabled:opacity-50"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   {facturaError && <p className="mt-1 text-xs text-red-400">{facturaError}</p>}
                 </div>
               </section>

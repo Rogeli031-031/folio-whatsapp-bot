@@ -108,6 +108,13 @@ export default function EditarFolioModal({ open, token, folioId, folio, onClose,
                   const f = e.target.files?.[0];
                   e.target.value = "";
                   if (!f || !f.type.includes("pdf")) return;
+                  const montoRaw = window.prompt("Monto de la factura en pesos mexicanos (MXN):");
+                  if (montoRaw == null) return;
+                  const monto = Number(String(montoRaw).replace(/[$,\s]/g, "").replace(",", "."));
+                  if (!Number.isFinite(monto) || monto <= 0) {
+                    setError("Indica un monto válido mayor a 0.");
+                    return;
+                  }
                   setUploadingFactura(true);
                   setError(null);
                   try {
@@ -120,7 +127,11 @@ export default function EditarFolioModal({ open, token, folioId, folio, onClose,
                       reader.onerror = rej;
                       reader.readAsDataURL(f);
                     });
-                    await postFolioFactura(token, folioId, { fileBase64: base64, fileName: f.name || "factura.pdf" });
+                    await postFolioFactura(token, folioId, {
+                      fileBase64: base64,
+                      fileName: f.name || "factura.pdf",
+                      monto,
+                    });
                     onSaved();
                   } catch (err) {
                     setError((err as Error).message || "Error al subir la factura");
