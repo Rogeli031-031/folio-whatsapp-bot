@@ -22,6 +22,7 @@ const ETAPA_LABELS: Record<string, string> = {
   CARRO_COMPRA: "Carro de compra",
   DEPOSITO_CIERRE: "Depósito y cierre",
   COMPROBACIONES: "Comprobaciones",
+  EVIDENCIAS: "Evidencias",
   CANCELADO: "Cancelado",
 };
 
