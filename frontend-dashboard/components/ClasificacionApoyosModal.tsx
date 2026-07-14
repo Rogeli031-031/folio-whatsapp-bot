@@ -68,6 +68,80 @@ function fmtDiff(n: number): string {
   return s;
 }
 
+/** Misma mapa que el kanban del dashboard. */
+function estatusToEtapaVisual(estatus: string | null | undefined): string {
+  const s = (estatus || "").trim().toUpperCase();
+  if (!s) return "PENDIENTE_APROB_PLANTA";
+  if (s === "CANCELADO") return "CANCELADO";
+  if (s === "CANCELACION_SOLICITADA") return "APROB_DIRECTOR_ZP";
+  if (s === "EVIDENCIAS") return "EVIDENCIAS";
+  if (s === "COMPROBACIONES") return "COMPROBACIONES";
+  if (["PAGADO", "CERRADO"].includes(s)) return "DEPOSITO_CIERRE";
+  if (["CHEQUE_GENERADO", "SOLICITANDO_PAGO"].includes(s)) return "CHEQUE_GENERADO";
+  if (s === "CUENTA_FONDOS") return "CUENTA_FONDOS";
+  if (["APROBADO_ZP", "LISTO_PARA_PROGRAMACION", "SELECCIONADO_SEMANA"].includes(s)) return "CARRO_COMPRA";
+  if (s === "PENDIENTE_APROB_ZP" || /RECHAZADO_ZP/.test(s)) return "APROB_DIRECTOR_ZP";
+  return "PENDIENTE_APROB_PLANTA";
+}
+
+const ETAPA_ORDER = [
+  "PENDIENTE_APROB_PLANTA",
+  "APROB_DIRECTOR_ZP",
+  "CARRO_COMPRA",
+  "CUENTA_FONDOS",
+  "CHEQUE_GENERADO",
+  "DEPOSITO_CIERRE",
+  "COMPROBACIONES",
+  "EVIDENCIAS",
+  "CANCELADO",
+] as const;
+
+const ETAPA_LABELS: Record<string, string> = {
+  PENDIENTE_APROB_PLANTA: "Pendiente aprobación planta",
+  APROB_DIRECTOR_ZP: "Aprobación Director ZP",
+  CARRO_COMPRA: "Carro de compra",
+  CUENTA_FONDOS: "Cuenta de fondos",
+  CHEQUE_GENERADO: "Cheque Generado",
+  DEPOSITO_CIERRE: "Depósito y cierre",
+  COMPROBACIONES: "Comprobaciones",
+  EVIDENCIAS: "Evidencias",
+  CANCELADO: "Cancelado",
+};
+
+function groupFoliosByEtapa(folios: ClasificacionDetalleFolio[]): {
+  etapa: string;
+  label: string;
+  items: ClasificacionDetalleFolio[];
+  total: number;
+}[] {
+  const map = new Map<string, ClasificacionDetalleFolio[]>();
+  for (const f of folios) {
+    const etapa = estatusToEtapaVisual(f.estatus);
+    if (!map.has(etapa)) map.set(etapa, []);
+    map.get(etapa)!.push(f);
+  }
+  const groups = ETAPA_ORDER.filter((e) => map.has(e)).map((etapa) => {
+    const items = map.get(etapa) || [];
+    return {
+      etapa,
+      label: ETAPA_LABELS[etapa] || etapa,
+      items,
+      total: items.reduce((s, f) => s + (Number(f.importe) || 0), 0),
+    };
+  });
+  // Cualquier estatus raro no mapeado
+  for (const [etapa, items] of map) {
+    if (ETAPA_ORDER.includes(etapa as (typeof ETAPA_ORDER)[number])) continue;
+    groups.push({
+      etapa,
+      label: ETAPA_LABELS[etapa] || etapa,
+      items,
+      total: items.reduce((s, f) => s + (Number(f.importe) || 0), 0),
+    });
+  }
+  return groups;
+}
+
 export default function ClasificacionApoyosModal({ open, token, onClose, onOpenFolio }: Props) {
   const defaults = useMemo(() => mesActualYAnteriorMx(), []);
   const options = useMemo(() => buildMesOptions(), []);
@@ -430,26 +504,41 @@ export default function ClasificacionApoyosModal({ open, token, onClose, onOpenF
                 {folios.length === 0 ? (
                   <p className="text-sm text-slate-500">No hay folios en este criterio.</p>
                 ) : (
-                  <ul className="space-y-2">
-                    {folios.map((f) => (
-                      <li key={f.id}>
-                        <button
-                          type="button"
-                          onClick={() => onOpenFolio?.(f.id)}
-                          className="w-full rounded border border-slate-700 bg-slate-800/50 px-3 py-2 text-left hover:border-amber-600/50 hover:bg-slate-800"
-                        >
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <span className="font-mono text-xs text-amber-300">{f.numero_folio || f.folio_codigo}</span>
-                            <span className="font-mono text-xs text-slate-200">{fmtMxn(f.importe)}</span>
-                          </div>
-                          <p className="mt-1 line-clamp-2 text-xs text-slate-400">{f.concepto || "—"}</p>
-                          <div className="mt-1 text-[11px] text-slate-500">
-                            {[f.categoria, f.subcategoria, f.estatus, f.beneficiario].filter(Boolean).join(" · ")}
-                          </div>
-                        </button>
-                      </li>
+                  <div className="space-y-4">
+                    {groupFoliosByEtapa(folios).map((g) => (
+                      <section key={g.etapa}>
+                        <div className="sticky top-0 z-[1] mb-2 flex flex-wrap items-center justify-between gap-2 rounded border border-slate-700 bg-slate-800/95 px-2.5 py-1.5 backdrop-blur-sm">
+                          <h4 className="text-sm font-medium text-slate-100">{g.label}</h4>
+                          <span className="text-[11px] text-slate-400">
+                            {g.items.length} folio{g.items.length === 1 ? "" : "s"} ·{" "}
+                            <span className="font-mono text-amber-300/90">{fmtMxn(g.total)}</span>
+                          </span>
+                        </div>
+                        <ul className="space-y-2">
+                          {g.items.map((f) => (
+                            <li key={f.id}>
+                              <button
+                                type="button"
+                                onClick={() => onOpenFolio?.(f.id)}
+                                className="w-full rounded border border-slate-700 bg-slate-800/50 px-3 py-2 text-left hover:border-amber-600/50 hover:bg-slate-800"
+                              >
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <span className="font-mono text-xs text-amber-300">
+                                    {f.numero_folio || f.folio_codigo}
+                                  </span>
+                                  <span className="font-mono text-xs text-slate-200">{fmtMxn(f.importe)}</span>
+                                </div>
+                                <p className="mt-1 line-clamp-2 text-xs text-slate-400">{f.concepto || "—"}</p>
+                                <div className="mt-1 text-[11px] text-slate-500">
+                                  {[f.categoria, f.subcategoria, f.beneficiario].filter(Boolean).join(" · ")}
+                                </div>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </section>
                     ))}
-                  </ul>
+                  </div>
                 )}
               </div>
             )}
