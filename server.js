@@ -2688,6 +2688,8 @@ async function ensureSchema() {
     `).catch(() => {});
 
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS cotizacion_archivo_id INT REFERENCES public.folio_archivos(id);`).catch(() => {});
+    await client.query(`ALTER TABLE public.folio_archivos ADD COLUMN IF NOT EXISTS monto NUMERIC(18,2);`).catch(() => {});
+    await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS numero_cheque VARCHAR(100);`).catch(() => {});
 
     /* Presupuesto semanal por planta (CDMX asigna, GG selecciona folios, CDMX envía a cheques). */
     await client.query(`
@@ -3057,6 +3059,7 @@ async function getFolioById(client, id) {
             f.categoria, f.subcategoria, f.estacion, f.unidad, f.prioridad, f.estatus, f.cotizacion_url, f.cotizacion_s3key,
             f.aprobado_por, f.aprobado_en, f.creado_en, f.nivel_aprobado, f.estatus_anterior, f.override_planta, f.override_motivo, f.creado_por, f.creado_por_rol_clave,
             f.presupuesto_id, f.descripcion, f.mes_cargo, f.solo_zp_ad, f.prestamo_a_planta, f.proyecto_id, f.banco, f.cuenta_bancaria,
+            f.numero_cheque,
             COALESCE(f.por_recuperar, false) AS por_recuperar,
             COALESCE(f.solicitud_por_recuperar_pendiente, false) AS solicitud_por_recuperar_pendiente,
             COALESCE(f.prestamo_siguiente_mes, false) AS prestamo_siguiente_mes,
@@ -3701,13 +3704,14 @@ async function insertFolioArchivo(client, data) {
   const r = await client.query(
     `INSERT INTO public.folio_archivos (
       folio_id, numero_folio, tipo, s3_key, url, file_name, file_size_bytes, mime_type, sha256, status,
-      replace_of_id, subido_por
-    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'PENDIENTE',$10,$11)
-    RETURNING id, folio_id, numero_folio, tipo, status, subido_en, replace_of_id`,
+      replace_of_id, subido_por, monto
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'PENDIENTE',$10,$11,$12)
+    RETURNING id, folio_id, numero_folio, tipo, status, subido_en, replace_of_id, monto`,
     [
       data.folio_id, data.numero_folio, data.tipo, data.s3_key, data.url || null,
       data.file_name || null, data.file_size_bytes || null, data.mime_type || "application/pdf",
       data.sha256 || null, data.replace_of_id || null, data.subido_por || null,
+      data.monto != null && Number.isFinite(Number(data.monto)) ? Number(data.monto) : null,
     ]
   );
   return r.rows[0];
@@ -3728,12 +3732,12 @@ async function listFolioArchivos(client, numeroFolio, limit = 10) {
 }
 
 /** Lista archivos del folio por folio_id (para API dashboard: COTIZACION, POLIZA, FACTURA, etc.). Orden: Cotización, Póliza, Factura. */
-async function listFolioArchivosByFolioId(client, folioId, limit = 20) {
+async function listFolioArchivosByFolioId(client, folioId, limit = 50) {
   const r = await client.query(
-    `SELECT fa.id, fa.tipo, fa.status, fa.file_name, fa.s3_key, fa.file_size_bytes, fa.subido_por, fa.subido_en
+    `SELECT fa.id, fa.tipo, fa.status, fa.file_name, fa.s3_key, fa.file_size_bytes, fa.subido_por, fa.subido_en, fa.monto
      FROM public.folio_archivos fa
      WHERE fa.folio_id = $1 AND fa.status NOT IN ('ELIMINADO', 'REEMPLAZADO')
-     ORDER BY (CASE WHEN fa.tipo = 'COTIZACION' THEN 0 WHEN fa.tipo = 'POLIZA' THEN 1 WHEN fa.tipo = 'FACTURA' THEN 2 ELSE 3 END), fa.subido_en DESC
+     ORDER BY (CASE WHEN fa.tipo = 'COTIZACION' THEN 0 WHEN fa.tipo = 'POLIZA' THEN 1 WHEN fa.tipo = 'FACTURA' THEN 2 ELSE 3 END), fa.subido_en ASC NULLS LAST, fa.id ASC
      LIMIT $2`,
     [folioId, limit]
   );
@@ -9957,8 +9961,15 @@ app.get("/api/folios/:id/media", dashboardAuthMiddleware, dashboardBlockGVFolios
         return res.status(403).json({ error: "Sin permiso para este folio" });
       }
     }
-    const items = await listFolioArchivosByFolioId(client, folioId, 20);
-    res.json({ folio_id: folioId, numero_folio: folio.numero_folio, items });
+    const items = await listFolioArchivosByFolioId(client, folioId, 50);
+    res.json({
+      folio_id: folioId,
+      numero_folio: folio.numero_folio,
+      items: (items || []).map((it) => ({
+        ...it,
+        monto: it.monto != null ? Number(it.monto) : null,
+      })),
+    });
   } catch (e) {
     console.error("[Dashboard media]", e);
     res.status(500).json({ error: e.message });
@@ -11789,6 +11800,33 @@ app.post("/api/folios/:id/cotizacion", dashboardAuthMiddleware, dashboardBlockGV
   }
 });
 
+/** Guardar número de cheque del folio (identifica a qué cheque pertenece). */
+app.patch("/api/folios/:id/numero-cheque", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddleware, async (req, res) => {
+  if (req.dashboardAuth.role === "GA") return res.status(403).json({ error: "GA solo puede ver e imprimir en el dashboard." });
+  const folioId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
+  const numeroCheque = (req.body.numero_cheque != null && String(req.body.numero_cheque).trim() !== "")
+    ? String(req.body.numero_cheque).trim().slice(0, 100)
+    : null;
+  const client = await pool.connect();
+  try {
+    const folio = await getFolioById(client, folioId);
+    if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
+    if ((req.dashboardAuth.role === "GG" || req.dashboardAuth.role === "GA") && req.dashboardAuth.plantas_permitidas?.length > 0) {
+      if (!folio.planta_id || !req.dashboardAuth.plantas_permitidas.includes(folio.planta_id)) {
+        return res.status(403).json({ error: "Sin permiso para este folio" });
+      }
+    }
+    await client.query(`UPDATE public.folios SET numero_cheque = $1 WHERE id = $2`, [numeroCheque, folioId]);
+    res.json({ ok: true, numero_cheque: numeroCheque });
+  } catch (e) {
+    console.error("[Dashboard PATCH numero-cheque]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
 /** Subir factura PDF desde el dashboard (mismo procedimiento que cotización/póliza). Cualquier rol con acceso al folio puede subir. */
 app.post("/api/folios/:id/factura", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddleware, async (req, res) => {
   const folioId = parseInt(req.params.id, 10);
@@ -11798,6 +11836,11 @@ app.post("/api/folios/:id/factura", dashboardAuthMiddleware, dashboardBlockGVFol
     try { fileBuffer = Buffer.from(req.body.fileBase64, "base64"); } catch (e) { return res.status(400).json({ error: "fileBase64 inválido" }); }
   }
   if (!fileBuffer || fileBuffer.length === 0) return res.status(400).json({ error: "Envía fileBase64 (PDF)" });
+  const montoRaw = req.body.monto != null ? String(req.body.monto).replace(/[$,\s]/g, "").trim() : "";
+  const monto = montoRaw !== "" ? Number(montoRaw) : NaN;
+  if (!Number.isFinite(monto) || monto <= 0) {
+    return res.status(400).json({ error: "Indica el monto de la factura en pesos mexicanos (mayor a 0)." });
+  }
   const client = await pool.connect();
   try {
     const folio = await getFolioById(client, folioId);
@@ -11814,7 +11857,8 @@ app.post("/api/folios/:id/factura", dashboardAuthMiddleware, dashboardBlockGVFol
     const hash = crypto.createHash("sha256").update(fileBuffer).digest("hex");
     const existing = await findFolioArchivoByHash(client, folioId, hash, "FACTURA");
     if (existing && existing.id) {
-      return res.json({ ok: true, duplicate: true });
+      await client.query(`UPDATE public.folio_archivos SET monto = $1 WHERE id = $2`, [monto, existing.id]);
+      return res.json({ ok: true, duplicate: true, monto });
     }
     const row = await insertFolioArchivo(client, {
       folio_id: folioId,
@@ -11826,12 +11870,13 @@ app.post("/api/folios/:id/factura", dashboardAuthMiddleware, dashboardBlockGVFol
       file_size_bytes: fileBuffer.length,
       sha256: hash,
       subido_por: req.dashboardAuth.actor_id != null ? `Dashboard:${req.dashboardAuth.actor_id}` : "Dashboard",
+      monto,
     });
     await client.query(
-      `UPDATE public.folio_archivos SET status = 'APROBADO', aprobado_por = $1, aprobado_en = NOW() WHERE id = $2`,
-      [req.dashboardAuth.actor_id != null ? `Dashboard:${req.dashboardAuth.actor_id}` : "Dashboard", row.id]
+      `UPDATE public.folio_archivos SET status = 'APROBADO', aprobado_por = $1, aprobado_en = NOW(), monto = $2 WHERE id = $3`,
+      [req.dashboardAuth.actor_id != null ? `Dashboard:${req.dashboardAuth.actor_id}` : "Dashboard", monto, row.id]
     );
-    return res.json({ ok: true });
+    return res.json({ ok: true, monto, archivo_id: row.id });
   } catch (e) {
     console.error("[Dashboard folio factura]", e);
     res.status(500).json({ error: e.message || "Error al guardar la factura" });

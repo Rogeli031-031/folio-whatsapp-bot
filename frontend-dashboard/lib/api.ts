@@ -1041,7 +1041,7 @@ export function fetchTimeline(token: string, id: number): Promise<{ events: { es
   return apiFetch(`/api/folios/${id}/timeline`, { token });
 }
 
-export function fetchMedia(token: string, id: number): Promise<{ items: { id: number; tipo: string; status: string; file_name: string | null; subido_en: string }[] }> {
+export function fetchMedia(token: string, id: number): Promise<{ items: { id: number; tipo: string; status: string; file_name: string | null; subido_en: string; monto?: number | null }[] }> {
   return apiFetch(`/api/folios/${id}/media`, { token });
 }
 
@@ -1653,12 +1653,24 @@ export function deleteFolioMedia(
 export function postFolioFactura(
   token: string,
   folioId: number,
-  body: { fileBase64: string; fileName?: string }
-): Promise<{ ok: boolean }> {
+  body: { fileBase64: string; fileName?: string; monto: number | string }
+): Promise<{ ok: boolean; monto?: number; archivo_id?: number }> {
   return apiFetch(`/api/folios/${folioId}/factura`, {
     token,
     method: "POST",
     body: JSON.stringify(body),
+  });
+}
+
+export function patchFolioNumeroCheque(
+  token: string,
+  folioId: number,
+  numero_cheque: string | null
+): Promise<{ ok: boolean; numero_cheque: string | null }> {
+  return apiFetch(`/api/folios/${folioId}/numero-cheque`, {
+    token,
+    method: "PATCH",
+    body: JSON.stringify({ numero_cheque }),
   });
 }
 
