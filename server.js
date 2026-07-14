@@ -53,6 +53,7 @@ const actionRegisterEvidenciasExport = require("./lib/action-register-evidencias
 const { embedExcelEvidencePhoto } = require("./lib/excel-image-compress");
 const { isDirectorZPForDashboard } = require("./lib/dashboard-es-zp");
 const folioDuplicados = require("./lib/folio-duplicados");
+const clasificacionApoyosExcel = require("./lib/clasificacion-apoyos-excel");
 const directorIaContext = require("./lib/director-ia-context");
 const directorIaCommercialState = require("./lib/director-ia-commercial-state");
 const directorIaIgfArr = require("./lib/director-ia-igf-arr");
@@ -5808,6 +5809,46 @@ app.get("/api/dashboard/kanban", dashboardAuthMiddleware, async (req, res) => {
   } catch (e) {
     console.error("[Dashboard kanban]", e);
     res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/**
+ * Excel Clasificación de apoyos — hoja COMPARATIVOS.
+ * Query: mes_a=YYYY-MM (izq), mes_b=YYYY-MM (der). Incluye folios no cancelados con ese mes_cargo.
+ */
+app.get("/api/dashboard/clasificacion-apoyos-excel", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGVForbidden(req, res)) return;
+  const mesA = String(req.query.mes_a || "").trim();
+  const mesB = String(req.query.mes_b || "").trim();
+  if (!/^\d{4}-\d{2}$/.test(mesA) || !/^\d{4}-\d{2}$/.test(mesB)) {
+    return res.status(400).json({ error: "mes_a y mes_b son obligatorios (YYYY-MM)" });
+  }
+  if (mesA === mesB) {
+    return res.status(400).json({ error: "Los meses a comparar deben ser distintos" });
+  }
+  const client = await pool.connect();
+  try {
+    const r = await client.query(
+      `SELECT f.planta_id, f.categoria, f.importe, f.mes_cargo
+       FROM public.folios f
+       WHERE f.mes_cargo = ANY($1::text[])
+         AND UPPER(TRIM(COALESCE(f.estatus,''))) <> 'CANCELADO'
+         AND f.planta_id IS NOT NULL`,
+      [[mesA, mesB]]
+    );
+    const wb = await clasificacionApoyosExcel.buildClasificacionApoyosWorkbook(r.rows, mesA, mesB);
+    const buf = Buffer.from(await wb.xlsx.writeBuffer());
+    const safeA = clasificacionApoyosExcel.mesLabelEs(mesA).replace(/\s+/g, "_");
+    const safeB = clasificacionApoyosExcel.mesLabelEs(mesB).replace(/\s+/g, "_");
+    const filename = `Clasificacion_Apoyos_${safeA}_vs_${safeB}.xlsx`;
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    return res.send(buf);
+  } catch (e) {
+    console.error("[clasificacion-apoyos-excel]", e);
+    res.status(500).json({ error: e.message || "Error al generar Excel" });
   } finally {
     client.release();
   }

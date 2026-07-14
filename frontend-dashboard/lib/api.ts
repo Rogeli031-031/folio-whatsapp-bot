@@ -31,6 +31,33 @@ export function getDashboardExcelDownloadUrl(token: string, year: number, month:
   return `${base}?year=${year}&month=${month}&proyeccion_anio=${next.y}&proyeccion_mes=${next.m}${hasta}${upload}&t=${encodeURIComponent(token)}`;
 }
 
+/** Descarga Excel Clasificación de apoyos (hoja COMPARATIVOS). */
+export async function downloadClasificacionApoyosExcel(
+  token: string,
+  mesA: string,
+  mesB: string
+): Promise<void> {
+  const base = getApiUrl("/api/dashboard/clasificacion-apoyos-excel");
+  const url = `${base}?mes_a=${encodeURIComponent(mesA)}&mes_b=${encodeURIComponent(mesB)}`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as { error?: string }).error || `HTTP ${res.status}`);
+  }
+  const blob = await res.blob();
+  const cd = res.headers.get("Content-Disposition") || "";
+  const m = /filename="?([^"]+)"?/i.exec(cd);
+  const filename = m?.[1] || `Clasificacion_Apoyos_${mesA}_vs_${mesB}.xlsx`;
+  const a = document.createElement("a");
+  const href = URL.createObjectURL(blob);
+  a.href = href;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(href);
+}
+
 export type IgfMetaVersionItem = {
   id: number;
   version_number: number;

@@ -3,12 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 import type { KanbanBoard as KanbanBoardType, FolioCard, DashboardFilters } from "@/lib/api";
 import * as XLSX from "xlsx";
+import ClasificacionApoyosModal from "@/components/ClasificacionApoyosModal";
 
 interface Props {
   data: KanbanBoardType | null;
   selectedPlantaId?: number;
   filters?: DashboardFilters;
   onOpenFolio?: (id: number) => void;
+  token?: string | null;
 }
 
 type MesCargo = string;
@@ -106,6 +108,7 @@ export default function ResumenCategoriasMesCargo({
   selectedPlantaId,
   filters,
   onOpenFolio,
+  token,
 }: Props) {
   const { actual: mesActual, anterior: mesAnterior } = useMemo(() => mesActualYAnteriorMx(), []);
   const ventanaOn = filters?.ventana !== "0";
@@ -119,14 +122,7 @@ export default function ResumenCategoriasMesCargo({
     );
   }, [cardsAll, mesActual, mesAnterior, mesesExtra, ventanaOn]);
 
-  const prestamosCards = useMemo(
-    () => cards.filter((c) => c.prestamo_a_planta),
-    [cards]
-  );
-  const prestamosSiguienteMesCards = useMemo(
-    () => cards.filter((c) => !!c.prestamo_siguiente_mes),
-    [cards]
-  );
+  const [showClasificacion, setShowClasificacion] = useState(false);
 
   const { byMes, byMesCat, byMesCatSub, detalleList } = useMemo(() => {
     const byMes: Record<MesCargo, number> = {};
@@ -255,47 +251,6 @@ export default function ResumenCategoriasMesCargo({
     XLSX.writeFile(wb, "resumen_categorias_mes_cargo.xlsx");
   };
 
-  const handleExportPrestamosExcel = () => {
-    const aoa: (string | number)[][] = [
-      ["Número folio", "Planta origen (A)", "Cargado a planta (B)", "Mes cargo", "Importe (MXN)", "Concepto"],
-    ];
-    for (const f of prestamosCards) {
-      const prestamo = f.prestamo_a_planta || "";
-      aoa.push([
-        f.numero_folio || f.folio_codigo || "",
-        (f.planta_nombre || "").trim() || "—",
-        prestamo,
-        formatMesCargo(String(f.mes_cargo || "").trim()) || "—",
-        f.importe ?? 0,
-        (f.descripcion || "").slice(0, 500),
-      ]);
-    }
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), "Préstamos A a B");
-    XLSX.writeFile(wb, "prestamos_a_planta.xlsx");
-  };
-
-  const handleExportPrestamosSiguienteMesExcel = () => {
-    const aoa: (string | number)[][] = [
-      ["Identificación", "Número folio", "Planta", "Mes cargo", "Importe (MXN)", "Etapa", "Beneficiario", "Concepto"],
-    ];
-    for (const f of prestamosSiguienteMesCards) {
-      aoa.push([
-        "préstamos siguiente mes",
-        f.numero_folio || f.folio_codigo || "",
-        (f.planta_nombre || "").trim() || "—",
-        formatMesCargo(String(f.mes_cargo || "").trim()) || "—",
-        f.importe ?? 0,
-        f.etapa_label ?? "—",
-        f.beneficiario ?? "",
-        (f.descripcion || "").slice(0, 500),
-      ]);
-    }
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), "Préstamos siguiente mes");
-    XLSX.writeFile(wb, "prestamos_siguiente_mes.xlsx");
-  };
-
   const showDetalle = selectedMes != null && selectedCategoria != null && selectedSubcategoria != null;
   const showSubcategorias = selectedMes != null && selectedCategoria != null && !showDetalle;
   const showCategorias = selectedMes != null && !selectedCategoria;
@@ -317,25 +272,12 @@ export default function ResumenCategoriasMesCargo({
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            onClick={handleExportPrestamosExcel}
-            disabled={prestamosCards.length === 0}
-            title={prestamosCards.length === 0 ? "No hay folios marcados como préstamo a planta" : "Exportar folios que son préstamos de planta A a planta B"}
-            className="rounded bg-sky-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={() => setShowClasificacion(true)}
+            disabled={!token}
+            className="rounded bg-teal-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-600 disabled:opacity-50"
+            title="Genera Excel COMPARATIVOS por planta (Gastos / Inversiones / Taller)"
           >
-            Exportar préstamos A→B ({prestamosCards.length})
-          </button>
-          <button
-            type="button"
-            onClick={handleExportPrestamosSiguienteMesExcel}
-            disabled={prestamosSiguienteMesCards.length === 0}
-            title={
-              prestamosSiguienteMesCards.length === 0
-                ? "No hay folios marcados como préstamo siguiente mes"
-                : "Exportar folios identificados como préstamos siguiente mes"
-            }
-            className="rounded bg-indigo-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Exportar préstamo siguiente mes ({prestamosSiguienteMesCards.length})
+            Clasificación de apoyos
           </button>
           <button
             type="button"
@@ -346,6 +288,13 @@ export default function ResumenCategoriasMesCargo({
           </button>
         </div>
       </div>
+      {showClasificacion && token && (
+        <ClasificacionApoyosModal
+          open={true}
+          token={token}
+          onClose={() => setShowClasificacion(false)}
+        />
+      )}
       <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
         {(selectedMes || selectedCategoria || selectedSubcategoria) && (
           <button

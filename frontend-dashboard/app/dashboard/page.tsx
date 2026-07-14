@@ -225,6 +225,7 @@ function DashboardContent() {
           selectedPlantaId={selectedPlantaId}
           filters={filters}
           onOpenFolio={setDrawerFolioId}
+          token={token}
         />
         <KanbanBoard
           data={kanban}
