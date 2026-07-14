@@ -1031,6 +1031,61 @@ export function postCrearFolio(token: string, payload: CrearFolioPayload): Promi
   });
 }
 
+export type DuplicadoCandidate = {
+  id: number;
+  numero_folio: string;
+  folio_codigo: string;
+  concepto: string;
+  importe: number | null;
+  estatus: string | null;
+  mes_cargo: string | null;
+  creado_en: string | null;
+  score: number;
+};
+
+export type DuplicadoPair = {
+  score: number;
+  importe: number | null;
+  a: Omit<DuplicadoCandidate, "importe" | "score"> & { importe?: number | null };
+  b: Omit<DuplicadoCandidate, "importe" | "score"> & { importe?: number | null };
+};
+
+/** Alarma al crear: posibles duplicados mismo importe + concepto similar. */
+export function postCheckDuplicadosFolio(
+  token: string,
+  payload: { planta_id: number; concepto: string; importe: number; meses?: number; umbral?: number }
+): Promise<{ ok: boolean; alert: boolean; candidates: DuplicadoCandidate[]; umbral: number; meses: number; desde: string }> {
+  return apiFetch("/api/folios/duplicados/check", {
+    token,
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+/** Análisis de duplicados existentes por planta y rango de fechas de creación. */
+export function fetchAnalisisDuplicados(
+  token: string,
+  params: { planta_id: number; meses?: number; desde?: string; hasta?: string; umbral?: number }
+): Promise<{
+  ok: boolean;
+  planta_id: number;
+  planta_nombre: string;
+  desde: string;
+  hasta: string | null;
+  umbral: number;
+  scanned: number;
+  pairs_count: number;
+  truncated: boolean;
+  pairs: DuplicadoPair[];
+}> {
+  const q: Record<string, string> = { planta_id: String(params.planta_id) };
+  if (params.meses != null) q.meses = String(params.meses);
+  if (params.desde) q.desde = params.desde;
+  if (params.hasta) q.hasta = params.hasta;
+  if (params.umbral != null) q.umbral = String(params.umbral);
+  return apiFetch("/api/folios/duplicados/analisis", { token, params: q });
+}
+
 export function fetchKpis(token: string, filters: DashboardFilters = {}): Promise<Kpis> {
   const params: Record<string, string> = {};
   if (filters.plantas) params.planta_id = filters.plantas;

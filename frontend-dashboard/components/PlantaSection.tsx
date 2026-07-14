@@ -2,6 +2,7 @@
 
 import FolioCard from "./FolioCard";
 import type { FolioCard as FolioCardType } from "@/lib/api";
+import { textMatchesSearch } from "@/lib/texto-busqueda";
 
 interface Props {
   planta_id: number;
@@ -22,7 +23,7 @@ interface Props {
 const CAT_ORDER = ["GASTOS", "INVERSIONES", "DYO", "TALLER"];
 
 function matchesSearch(card: FolioCardType, term: string | undefined): boolean {
-  const q = (term || "").trim().toLowerCase();
+  const q = (term || "").trim();
   if (!q) return true;
   const importeStr =
     card.importe != null && !isNaN(card.importe)
@@ -40,7 +41,7 @@ function matchesSearch(card: FolioCardType, term: string | undefined): boolean {
     card.numero_cheque,
     importeStr,
   ];
-  return fields.some((f) => (f || "").toString().toLowerCase().includes(q));
+  return fields.some((f) => textMatchesSearch(f, q));
 }
 
 function isUrgente(card: FolioCardType): boolean {

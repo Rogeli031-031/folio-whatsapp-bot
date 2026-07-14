@@ -25,6 +25,7 @@ import PolizaModal from "@/components/PolizaModal";
 import ImprimirGastosModal from "@/components/ImprimirGastosModal";
 import CrearFolioModal from "@/components/CrearFolioModal";
 import CrearProyectoModal from "@/components/CrearProyectoModal";
+import AnalisisDuplicadosModal from "@/components/AnalisisDuplicadosModal";
 import ResumenCategoriasMesCargo from "@/components/ResumenCategoriasMesCargo";
 
 function DashboardContent() {
@@ -45,6 +46,7 @@ function DashboardContent() {
   const [crearFolio, setCrearFolio] = useState<{ planta_id: number; planta_nombre: string } | null>(null);
   const [crearFolioUrgente, setCrearFolioUrgente] = useState<{ planta_id: number; planta_nombre: string } | null>(null);
   const [crearProyecto, setCrearProyecto] = useState<{ planta_id: number; planta_nombre: string } | null>(null);
+  const [analisisDuplicados, setAnalisisDuplicados] = useState<{ planta_id: number; planta_nombre: string } | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
@@ -240,6 +242,9 @@ function DashboardContent() {
           onCrearFolio={(plantaId, plantaNombre) => setCrearFolio({ planta_id: plantaId, planta_nombre: plantaNombre })}
           onCrearFolioUrgente={(plantaId, plantaNombre) => setCrearFolioUrgente({ planta_id: plantaId, planta_nombre: plantaNombre })}
           onCrearProyecto={(plantaId, plantaNombre) => setCrearProyecto({ planta_id: plantaId, planta_nombre: plantaNombre })}
+          onAnalizarDuplicados={(plantaId, plantaNombre) =>
+            setAnalisisDuplicados({ planta_id: plantaId, planta_nombre: plantaNombre })
+          }
         />
       </main>
       <FolioDrawer
@@ -295,6 +300,19 @@ function DashboardContent() {
           plantaNombre={crearProyecto.planta_nombre}
           token={token}
           onCreated={loadData}
+        />
+      )}
+      {analisisDuplicados != null && token && (
+        <AnalisisDuplicadosModal
+          open={true}
+          token={token}
+          plantaId={analisisDuplicados.planta_id}
+          plantaNombre={analisisDuplicados.planta_nombre}
+          onClose={() => setAnalisisDuplicados(null)}
+          onOpenFolio={(id) => {
+            setAnalisisDuplicados(null);
+            setDrawerFolioId(id);
+          }}
         />
       )}
     </div>

@@ -1,7 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { fetchPlantas, fetchProyectosPorPlanta, postCrearFolio, type CrearFolioPayload } from "@/lib/api";
+import {
+  fetchPlantas,
+  fetchProyectosPorPlanta,
+  postCrearFolio,
+  postCheckDuplicadosFolio,
+  type CrearFolioPayload,
+  type DuplicadoCandidate,
+} from "@/lib/api";
 
 const CATEGORIAS = [
   { clave: "GASTOS", nombre: "Gastos" },
@@ -50,15 +57,24 @@ export default function CrearFolioModal({ open, onClose, plantaId, plantaNombre,
   const [proyectoId, setProyectoId] = useState<number | null>(null);
   const [proyectos, setProyectos] = useState<{ id: number; codigo: string; nombre: string }[]>([]);
   const [soloZpAd, setSoloZpAd] = useState(false);
+  const [dupCandidates, setDupCandidates] = useState<DuplicadoCandidate[]>([]);
+  const [dupIgnored, setDupIgnored] = useState(false);
 
   useEffect(() => {
     if (open) {
       setSelectedPlantaId(plantaId);
       setProyectoId(null);
       setPrioridad(urgente ? PRIORIDAD_URGENTE : "Media");
+      setDupCandidates([]);
+      setDupIgnored(false);
       if (token) fetchPlantas(token).then((r) => setPlantas(r.plantas || [])).catch(() => setPlantas([]));
     }
   }, [open, token, plantaId, urgente]);
+
+  useEffect(() => {
+    setDupCandidates([]);
+    setDupIgnored(false);
+  }, [concepto, importe, selectedPlantaId]);
 
   useEffect(() => {
     if (!open || !token || !selectedPlantaId) {
@@ -73,6 +89,38 @@ export default function CrearFolioModal({ open, onClose, plantaId, plantaNombre,
   const subs = SUBCATEGORIAS[categoria] || [];
   const showUnidad = categoria === "TALLER";
   const showEstacion = subcategoria.trim().toLowerCase() === "estaciones";
+
+  const createFolio = async (conceptoTrim: string, importeNum: number) => {
+    const payload: CrearFolioPayload = {
+      planta_id: selectedPlantaId,
+      proyecto_id: proyectoId && proyectoId > 0 ? proyectoId : undefined,
+      beneficiario: beneficiario.trim() || undefined,
+      concepto: conceptoTrim,
+      importe: importeNum,
+      categoria,
+      subcategoria: subcategoria.trim() || undefined,
+      prioridad,
+      unidad: unidad.trim() || undefined,
+      estacion: estacion.trim() || undefined,
+      banco: banco.trim() || undefined,
+      cuenta_bancaria: cuenta_bancaria.trim() || undefined,
+      solo_zp_ad: soloZpAd || undefined,
+    };
+    await postCrearFolio(token, payload);
+    onCreated();
+    onClose();
+    setConcepto("");
+    setImporte("");
+    setBeneficiario("");
+    setSubcategoria("");
+    setUnidad("");
+    setEstacion("");
+    setBanco("");
+    setCuentaBancaria("");
+    setSoloZpAd(false);
+    setDupCandidates([]);
+    setDupIgnored(false);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,33 +137,25 @@ export default function CrearFolioModal({ open, onClose, plantaId, plantaNombre,
     }
     setSaving(true);
     try {
-      const payload: CrearFolioPayload = {
-        planta_id: selectedPlantaId,
-        proyecto_id: proyectoId && proyectoId > 0 ? proyectoId : undefined,
-        beneficiario: beneficiario.trim() || undefined,
-        concepto: conceptoTrim,
-        importe: importeNum,
-        categoria,
-        subcategoria: subcategoria.trim() || undefined,
-        prioridad,
-        unidad: unidad.trim() || undefined,
-        estacion: estacion.trim() || undefined,
-        banco: banco.trim() || undefined,
-        cuenta_bancaria: cuenta_bancaria.trim() || undefined,
-        solo_zp_ad: soloZpAd || undefined,
-      };
-      await postCrearFolio(token, payload);
-      onCreated();
-      onClose();
-      setConcepto("");
-      setImporte("");
-      setBeneficiario("");
-      setSubcategoria("");
-      setUnidad("");
-      setEstacion("");
-      setBanco("");
-      setCuentaBancaria("");
-      setSoloZpAd(false);
+      if (!dupIgnored) {
+        try {
+          const check = await postCheckDuplicadosFolio(token, {
+            planta_id: selectedPlantaId,
+            concepto: conceptoTrim,
+            importe: importeNum,
+            meses: 12,
+            umbral: 0.72,
+          });
+          if (check.alert && check.candidates?.length) {
+            setDupCandidates(check.candidates);
+            setSaving(false);
+            return;
+          }
+        } catch {
+          // Si el chequeo falla, no bloquear la creación
+        }
+      }
+      await createFolio(conceptoTrim, importeNum);
     } catch (err) {
       setError((err as Error).message || "Error al guardar el folio.");
     } finally {
@@ -142,6 +182,56 @@ export default function CrearFolioModal({ open, onClose, plantaId, plantaNombre,
         </div>
         <form onSubmit={handleSubmit} className="p-4 space-y-2">
           {error && <p className="rounded bg-red-900/50 px-2 py-1 text-sm text-red-300">{error}</p>}
+          {dupCandidates.length > 0 && (
+            <div className="rounded border border-amber-700/60 bg-amber-950/40 px-3 py-2 space-y-2">
+              <p className="text-sm font-medium text-amber-200">
+                Posible duplicado: mismo importe y concepto similar a {dupCandidates.length} folio(s) en los últimos 12 meses.
+              </p>
+              <ul className="max-h-36 space-y-1.5 overflow-y-auto text-xs text-slate-300">
+                {dupCandidates.map((c) => (
+                  <li key={c.id} className="rounded bg-slate-900/50 px-2 py-1.5">
+                    <span className="font-mono text-amber-300">{c.numero_folio || c.folio_codigo}</span>
+                    <span className="ml-2 text-amber-200/80">{Math.round(c.score * 100)}%</span>
+                    <p className="mt-0.5 line-clamp-2 text-slate-400">{c.concepto}</p>
+                  </li>
+                ))}
+              </ul>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={async () => {
+                    setDupIgnored(true);
+                    setSaving(true);
+                    setError(null);
+                    try {
+                      const conceptoTrim = concepto.trim();
+                      const importeNum = parseFloat(importe.replace(/,/g, "."));
+                      await createFolio(conceptoTrim, importeNum);
+                    } catch (err) {
+                      setError((err as Error).message || "Error al guardar el folio.");
+                      setDupIgnored(false);
+                    } finally {
+                      setSaving(false);
+                    }
+                  }}
+                  className="rounded bg-amber-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-600 disabled:opacity-50"
+                >
+                  Crear de todos modos
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDupCandidates([]);
+                    setDupIgnored(false);
+                  }}
+                  className="rounded bg-slate-700 px-3 py-1.5 text-xs text-slate-200 hover:bg-slate-600"
+                >
+                  Revisar datos
+                </button>
+              </div>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-x-4 gap-y-2">
             <div>
               <label className="block text-xs font-medium text-slate-500 mb-0.5">Planta</label>

@@ -52,6 +52,7 @@ const dicfAccionesLib = require("./lib/dicf-acciones");
 const actionRegisterEvidenciasExport = require("./lib/action-register-evidencias-export");
 const { embedExcelEvidencePhoto } = require("./lib/excel-image-compress");
 const { isDirectorZPForDashboard } = require("./lib/dashboard-es-zp");
+const folioDuplicados = require("./lib/folio-duplicados");
 const directorIaContext = require("./lib/director-ia-context");
 const directorIaCommercialState = require("./lib/director-ia-commercial-state");
 const directorIaIgfArr = require("./lib/director-ia-igf-arr");
@@ -5638,7 +5639,8 @@ function cardFromFolioRow(row) {
     unidad: row.unidad || null,
     importe: row.importe != null ? Number(row.importe) : null,
     estatus: row.estatus || null,
-    descripcion: (row.descripcion_display || row.concepto || "").toString().slice(0, 120),
+    // Texto completo para búsqueda; la card recorta visualmente con line-clamp.
+    descripcion: (row.descripcion_display || row.concepto || "").toString(),
     creado_en: row.creado_en,
     aging,
     tiene_cotizacion: !!row.tiene_cotizacion,
@@ -8607,6 +8609,124 @@ app.post("/api/proyectos", dashboardAuthMiddleware, async (req, res) => {
   } catch (e) {
     console.error("[Dashboard POST proyectos]", e);
     res.status(500).json({ error: e.message || "Error al crear proyecto" });
+  } finally {
+    client.release();
+  }
+});
+
+/** Carga folios de una planta en rango de fechas (creación) para análisis de duplicados. */
+async function loadFoliosParaDuplicados(client, plantaId, desde, hasta) {
+  const params = [plantaId];
+  let where = `f.planta_id = $1 AND UPPER(TRIM(COALESCE(f.estatus,''))) <> 'CANCELADO'`;
+  if (desde) {
+    params.push(desde);
+    where += ` AND f.creado_en >= $${params.length}::date`;
+  }
+  if (hasta) {
+    params.push(hasta);
+    where += ` AND f.creado_en < ($${params.length}::date + INTERVAL '1 day')`;
+  }
+  const r = await client.query(
+    `SELECT f.id, f.numero_folio, f.folio_codigo, f.importe, f.estatus, f.mes_cargo, f.creado_en,
+            COALESCE(f.descripcion, f.concepto) AS concepto
+     FROM public.folios f
+     WHERE ${where}
+     ORDER BY f.creado_en DESC NULLS LAST
+     LIMIT 3000`,
+    params
+  );
+  return r.rows;
+}
+
+function assertPlantaPermitidaDashboard(req, plantaId) {
+  const role = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) || "";
+  if (["GG", "GA", "AD"].includes(role) && req.dashboardAuth.plantas_permitidas?.length > 0) {
+    if (!plantaId || !req.dashboardAuth.plantas_permitidas.includes(plantaId)) {
+      return "Sin permiso para esta planta";
+    }
+  }
+  return null;
+}
+
+/** Chequeo preventivo al crear: mismo importe + concepto similar en la planta. */
+app.post("/api/folios/duplicados/check", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddleware, async (req, res) => {
+  const body = req.body || {};
+  const plantaId = body.planta_id != null ? parseInt(body.planta_id, 10) : null;
+  const concepto = (body.concepto != null ? String(body.concepto) : "").trim();
+  const importe = body.importe != null ? parseFloat(body.importe) : null;
+  const umbral = body.umbral != null ? parseFloat(body.umbral) : 0.72;
+  const meses = body.meses != null ? parseInt(body.meses, 10) : 12;
+  if (!plantaId || !Number.isFinite(plantaId)) return res.status(400).json({ error: "planta_id es obligatorio" });
+  if (!concepto || concepto.length < 2) return res.status(400).json({ error: "concepto es obligatorio" });
+  if (importe == null || !Number.isFinite(importe)) return res.status(400).json({ error: "importe inválido" });
+  const denied = assertPlantaPermitidaDashboard(req, plantaId);
+  if (denied) return res.status(403).json({ error: denied });
+  const client = await pool.connect();
+  try {
+    const mesesSafe = Number.isFinite(meses) && meses > 0 ? Math.min(meses, 36) : 12;
+    const desdeDate = new Date();
+    desdeDate.setMonth(desdeDate.getMonth() - mesesSafe);
+    const desde = desdeDate.toISOString().slice(0, 10);
+    const rows = await loadFoliosParaDuplicados(client, plantaId, desde, null);
+    const matches = folioDuplicados.findSimilarTo(rows, { concepto, importe }, { umbral, limit: 10 });
+    return res.json({
+      ok: true,
+      umbral,
+      meses: mesesSafe,
+      desde,
+      candidates: matches,
+      alert: matches.length > 0,
+    });
+  } catch (e) {
+    console.error("[folios duplicados check]", e);
+    res.status(500).json({ error: e.message || "Error al buscar duplicados" });
+  } finally {
+    client.release();
+  }
+});
+
+/**
+ * Análisis de posibles duplicados por planta + umbral de fechas de creación.
+ * Query: planta_id, desde (YYYY-MM-DD), hasta (YYYY-MM-DD opcional), umbral (0-1), meses (atajo si no hay desde).
+ */
+app.get("/api/folios/duplicados/analisis", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddleware, async (req, res) => {
+  const plantaId = req.query.planta_id != null ? parseInt(req.query.planta_id, 10) : null;
+  if (!plantaId || !Number.isFinite(plantaId)) return res.status(400).json({ error: "planta_id es obligatorio" });
+  const denied = assertPlantaPermitidaDashboard(req, plantaId);
+  if (denied) return res.status(403).json({ error: denied });
+  let umbral = req.query.umbral != null ? parseFloat(req.query.umbral) : 0.72;
+  if (!Number.isFinite(umbral) || umbral < 0.4 || umbral > 0.99) umbral = 0.72;
+  let desde = (req.query.desde || "").toString().trim();
+  let hasta = (req.query.hasta || "").toString().trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(desde)) {
+    const meses = parseInt(req.query.meses, 10);
+    const mesesSafe = Number.isFinite(meses) && meses > 0 ? Math.min(meses, 36) : 6;
+    const d = new Date();
+    d.setMonth(d.getMonth() - mesesSafe);
+    desde = d.toISOString().slice(0, 10);
+  }
+  if (hasta && !/^\d{4}-\d{2}-\d{2}$/.test(hasta)) hasta = "";
+  const client = await pool.connect();
+  try {
+    const plantaRow = await client.query(`SELECT id, nombre FROM public.plantas WHERE id = $1`, [plantaId]);
+    if (!plantaRow.rows.length) return res.status(404).json({ error: "Planta no encontrada" });
+    const rows = await loadFoliosParaDuplicados(client, plantaId, desde, hasta || null);
+    const result = folioDuplicados.findDuplicatePairs(rows, { umbral, maxPairs: 200 });
+    return res.json({
+      ok: true,
+      planta_id: plantaId,
+      planta_nombre: plantaRow.rows[0].nombre,
+      desde,
+      hasta: hasta || null,
+      umbral,
+      scanned: result.scanned,
+      pairs_count: result.pairs.length,
+      truncated: !!result.truncated,
+      pairs: result.pairs,
+    });
+  } catch (e) {
+    console.error("[folios duplicados analisis]", e);
+    res.status(500).json({ error: e.message || "Error en análisis de duplicados" });
   } finally {
     client.release();
   }

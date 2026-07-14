@@ -2,6 +2,7 @@
 
 import FolioCard from "./FolioCard";
 import type { FolioCard as FolioCardType, KanbanBoard as KanbanBoardType } from "@/lib/api";
+import { textMatchesSearch } from "@/lib/texto-busqueda";
 
 interface Props {
   data: KanbanBoardType | null;
@@ -14,6 +15,7 @@ interface Props {
   onCrearFolio?: (plantaId: number, plantaNombre: string) => void;
   onCrearFolioUrgente?: (plantaId: number, plantaNombre: string) => void;
   onCrearProyecto?: (plantaId: number, plantaNombre: string) => void;
+  onAnalizarDuplicados?: (plantaId: number, plantaNombre: string) => void;
 }
 
 const CAT_ORDER = ["GASTOS", "INVERSIONES", "DYO", "TALLER"];
@@ -41,7 +43,7 @@ function IconCarrito({ className }: { className?: string }) {
 }
 
 function matchesSearch(card: FolioCardType, term: string | undefined): boolean {
-  const q = (term || "").trim().toLowerCase();
+  const q = (term || "").trim();
   if (!q) return true;
   const importeStr =
     card.importe != null && !isNaN(card.importe)
@@ -60,7 +62,7 @@ function matchesSearch(card: FolioCardType, term: string | undefined): boolean {
     card.numero_cheque,
     importeStr,
   ];
-  return fields.some((f) => (f || "").toString().toLowerCase().includes(q));
+  return fields.some((f) => textMatchesSearch(f, q));
 }
 
 function isUrgente(card: FolioCardType): boolean {
@@ -109,6 +111,7 @@ export default function KanbanBoard({
   onImprimirGastos,
   onCrearFolio,
   onCrearFolioUrgente,
+  onAnalizarDuplicados,
   onCrearProyecto,
 }: Props) {
   if (!data) {
@@ -217,6 +220,16 @@ export default function KanbanBoard({
                 className="rounded bg-blue-600 px-2.5 py-1.5 text-[11px] font-medium text-white hover:bg-blue-500"
               >
                 Crear proyecto
+              </button>
+            )}
+            {onAnalizarDuplicados && (
+              <button
+                type="button"
+                onClick={() => onAnalizarDuplicados(activePlanta.planta_id, activePlanta.planta_nombre)}
+                className="rounded bg-slate-600 px-2.5 py-1.5 text-[11px] font-medium text-white hover:bg-slate-500"
+                title="Busca folios con mismo importe y concepto similar"
+              >
+                Análisis duplicados
               </button>
             )}
           </div>
