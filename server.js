@@ -3608,6 +3608,53 @@ async function insertHistorial(client, folioId, numeroFolio, folioCodigo, estatu
   );
 }
 
+/** Suma montos de facturas vigentes del folio (comprobado). */
+async function getMontoComprobadoFolio(client, folioId) {
+  const r = await client.query(
+    `SELECT COALESCE(SUM(fa.monto), 0) AS total
+     FROM public.folio_archivos fa
+     WHERE fa.folio_id = $1
+       AND UPPER(TRIM(fa.tipo)) = 'FACTURA'
+       AND fa.status NOT IN ('ELIMINADO', 'REEMPLAZADO', 'RECHAZADO')`,
+    [folioId]
+  );
+  return Number(r.rows[0]?.total) || 0;
+}
+
+/**
+ * Si el folio está en Depósito (PAGADO/CERRADO) y lo comprobado cubre el importe,
+ * avanza a etapa COMPROBACIONES (espera revisión/aprobación).
+ * @returns {Promise<{ moved: boolean, estatus: string, monto_comprobado: number }>}
+ */
+async function maybeAdvanceFolioToComprobaciones(client, folio, actorRol) {
+  const folioId = folio && folio.id != null ? folio.id : null;
+  if (!folioId) return { moved: false, estatus: null, monto_comprobado: 0 };
+  const estatus = String(folio.estatus || "").trim().toUpperCase();
+  const montoComprobado = await getMontoComprobadoFolio(client, folioId);
+  if (estatus !== ESTADOS.PAGADO && estatus !== ESTADOS.CERRADO) {
+    return { moved: false, estatus, monto_comprobado: montoComprobado };
+  }
+  const importe = folio.importe != null ? Number(folio.importe) : null;
+  if (importe == null || !Number.isFinite(importe) || importe < 0) {
+    return { moved: false, estatus, monto_comprobado: montoComprobado };
+  }
+  if (montoComprobado + 0.009 < importe) {
+    return { moved: false, estatus, monto_comprobado: montoComprobado };
+  }
+  await client.query(`UPDATE public.folios SET estatus = $1 WHERE id = $2`, [ESTADOS.COMPROBACIONES, folioId]);
+  await insertHistorial(
+    client,
+    folioId,
+    folio.numero_folio,
+    folio.folio_codigo,
+    ESTADOS.COMPROBACIONES,
+    `Comprobado (${montoComprobado}) cubre importe (${importe}). Avanza a Comprobaciones.`,
+    null,
+    actorRol || "Dashboard"
+  );
+  return { moved: true, estatus: ESTADOS.COMPROBACIONES, monto_comprobado: montoComprobado };
+}
+
 async function updateFolioEstatus(client, folioId, estatus, extra = {}) {
   const parts = ["estatus = $1"];
   const params = [estatus];
@@ -5478,6 +5525,7 @@ function cardFromFolioRow(row) {
     proyecto_nombre: row.proyecto_nombre || null,
     prestamo_a_planta: row.prestamo_a_planta != null && String(row.prestamo_a_planta).trim() !== "" ? String(row.prestamo_a_planta).trim() : null,
     prestamo_siguiente_mes: !!row.prestamo_siguiente_mes,
+    monto_comprobado: row.monto_comprobado != null ? Number(row.monto_comprobado) : 0,
   };
 }
 
@@ -5507,7 +5555,14 @@ app.get("/api/dashboard/kanban", dashboardAuthMiddleware, async (req, res) => {
                )
                OR f.cotizacion_s3key IS NOT NULL
                OR f.cotizacion_url IS NOT NULL
-             ) AS tiene_cotizacion
+             ) AS tiene_cotizacion,
+             (
+               SELECT COALESCE(SUM(fa2.monto), 0)
+               FROM public.folio_archivos fa2
+               WHERE fa2.folio_id = f.id
+                 AND UPPER(TRIM(fa2.tipo)) = 'FACTURA'
+                 AND fa2.status NOT IN ('RECHAZADO', 'ELIMINADO', 'REEMPLAZADO')
+             ) AS monto_comprobado
       FROM public.folios f
       LEFT JOIN public.plantas p ON p.id = f.planta_id
       LEFT JOIN public.proyectos pr ON pr.id = f.proyecto_id
@@ -5515,6 +5570,22 @@ app.get("/api/dashboard/kanban", dashboardAuthMiddleware, async (req, res) => {
       ORDER BY f.creado_en ASC NULLS LAST
     `;
     const r = await client.query(q, params);
+    // Auto-avance: Depósito con comprobado >= importe → Comprobaciones (antes de armar tablero)
+    for (const row of r.rows || []) {
+      const est = String(row.estatus || "").trim().toUpperCase();
+      if (est !== ESTADOS.PAGADO && est !== ESTADOS.CERRADO) continue;
+      const importe = row.importe != null ? Number(row.importe) : null;
+      const comprobado = row.monto_comprobado != null ? Number(row.monto_comprobado) : 0;
+      if (importe == null || !Number.isFinite(importe) || comprobado + 0.009 < importe) continue;
+      try {
+        const moved = await maybeAdvanceFolioToComprobaciones(client, row, "Dashboard");
+        if (moved.moved) {
+          row.estatus = ESTADOS.COMPROBACIONES;
+        }
+      } catch (e) {
+        console.warn("[kanban] auto COMPROBACIONES", row.id, e && e.message);
+      }
+    }
     const rows = r.rows || [];
     const byEtapa = {};
     ETAPAS_VISUAL_ORDER.forEach((e) => { byEtapa[e] = []; });
@@ -10118,12 +10189,16 @@ app.get("/api/folios/:id", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddle
         return res.status(403).json({ error: "Sin permiso" });
       }
     }
+    const adv = await maybeAdvanceFolioToComprobaciones(client, folio, req.dashboardAuth.role || "Dashboard");
+    if (adv.moved) folio.estatus = ESTADOS.COMPROBACIONES;
+    const montoComprobado = adv.monto_comprobado;
     const creado = folio.creado_en ? new Date(folio.creado_en) : null;
     const aging = creado ? Math.floor((Date.now() - creado.getTime()) / (24 * 60 * 60 * 1000)) : null;
     res.json({
       ...folio,
       descripcion_display: folio.descripcion_display || folio.concepto,
       aging,
+      monto_comprobado: montoComprobado,
       estatus_visible: getEtapaVisibleLabel(folio.estatus),
       etapa_icon: (ETAPA_VISIBLE[estatusToEtapaVisual(folio.estatus)] || {}).icon || "",
     });
@@ -11227,6 +11302,53 @@ app.post("/api/folios/:id/aprobar", dashboardAuthMiddleware, dashboardBlockGVFol
   }
 });
 
+/** Aprobar etapa Comprobaciones → Evidencias. Solo si el folio está en COMPROBACIONES. */
+app.post("/api/folios/:id/aprobar-comprobaciones", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddleware, async (req, res) => {
+  if (req.dashboardAuth.role === "CF_CDMX") return res.status(403).json({ error: "Contralor financiero CDMX solo puede ver el dashboard, no autorizar." });
+  if (req.dashboardAuth.role === "GA") return res.status(403).json({ error: "GA solo puede ver e imprimir en el dashboard, no aprobar." });
+  const folioId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
+  const client = await pool.connect();
+  try {
+    const folio = await getFolioById(client, folioId);
+    if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
+    if ((req.dashboardAuth.role === "GG" || req.dashboardAuth.role === "GA" || req.dashboardAuth.role === "AD") && req.dashboardAuth.plantas_permitidas?.length > 0) {
+      if (!folio.planta_id || !req.dashboardAuth.plantas_permitidas.includes(folio.planta_id)) {
+        return res.status(403).json({ error: "Sin permiso para aprobar folios de esta planta" });
+      }
+    }
+    const estatus = (folio.estatus || "").trim().toUpperCase();
+    if (estatus !== ESTADOS.COMPROBACIONES) {
+      return res.status(400).json({ error: "Solo se puede aprobar la etapa de Comprobaciones cuando el folio está en esa columna." });
+    }
+    const importe = folio.importe != null ? Number(folio.importe) : null;
+    const montoComprobado = await getMontoComprobadoFolio(client, folioId);
+    if (importe == null || !Number.isFinite(importe) || montoComprobado + 0.009 < importe) {
+      return res.status(400).json({
+        error: `Aún no está cubierto el importe. Comprobado ${montoComprobado}, importe ${importe != null ? importe : "N/A"}.`,
+      });
+    }
+    const rol = req.dashboardAuth.role || "Dashboard";
+    await client.query(`UPDATE public.folios SET estatus = $1 WHERE id = $2`, [ESTADOS.EVIDENCIAS, folioId]);
+    await insertHistorial(
+      client,
+      folioId,
+      folio.numero_folio,
+      folio.folio_codigo,
+      ESTADOS.EVIDENCIAS,
+      "Comprobaciones aprobadas desde dashboard. Avanza a Evidencias.",
+      null,
+      rol
+    );
+    return res.json({ ok: true, estatus: ESTADOS.EVIDENCIAS });
+  } catch (e) {
+    console.error("[Dashboard folio aprobar-comprobaciones]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
 /** Regresa un folio desde Carro de compra a Aprobación Director ZP. */
 app.post("/api/folios/:id/regresar-zp", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddleware, async (req, res) => {
   if (req.dashboardAuth.role === "CF_CDMX") return res.status(403).json({ error: "Contralor financiero CDMX solo puede ver el dashboard, no autorizar." });
@@ -11858,7 +11980,8 @@ app.post("/api/folios/:id/factura", dashboardAuthMiddleware, dashboardBlockGVFol
     const existing = await findFolioArchivoByHash(client, folioId, hash, "FACTURA");
     if (existing && existing.id) {
       await client.query(`UPDATE public.folio_archivos SET monto = $1 WHERE id = $2`, [monto, existing.id]);
-      return res.json({ ok: true, duplicate: true, monto });
+      const adv = await maybeAdvanceFolioToComprobaciones(client, folio, req.dashboardAuth.role || "Dashboard");
+      return res.json({ ok: true, duplicate: true, monto, estatus: adv.estatus, moved_to_comprobaciones: adv.moved });
     }
     const row = await insertFolioArchivo(client, {
       folio_id: folioId,
@@ -11876,7 +11999,8 @@ app.post("/api/folios/:id/factura", dashboardAuthMiddleware, dashboardBlockGVFol
       `UPDATE public.folio_archivos SET status = 'APROBADO', aprobado_por = $1, aprobado_en = NOW(), monto = $2 WHERE id = $3`,
       [req.dashboardAuth.actor_id != null ? `Dashboard:${req.dashboardAuth.actor_id}` : "Dashboard", monto, row.id]
     );
-    return res.json({ ok: true, monto, archivo_id: row.id });
+    const adv = await maybeAdvanceFolioToComprobaciones(client, folio, req.dashboardAuth.role || "Dashboard");
+    return res.json({ ok: true, monto, archivo_id: row.id, estatus: adv.estatus, moved_to_comprobaciones: adv.moved });
   } catch (e) {
     console.error("[Dashboard folio factura]", e);
     res.status(500).json({ error: e.message || "Error al guardar la factura" });

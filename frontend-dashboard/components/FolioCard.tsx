@@ -44,6 +44,24 @@ function IconAlarma({ className }: { className?: string }) {
   );
 }
 
+function IconCheckVerde({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <title>Comprobado</title>
+      <path d="M20 6L9 17l-5-5" />
+    </svg>
+  );
+}
+
+function IconXRoja({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <title>Pendiente de comprobar</title>
+      <path d="M18 6L6 18M6 6l12 12" />
+    </svg>
+  );
+}
+
 /** Color del borde por etapa visual. Carro = neutro; preparado para modoColorCarrito "por_igf" en el futuro. */
 const MODO_COLOR_CARRITO = "default" as const;
 
@@ -74,6 +92,11 @@ function formatMesCargo(mesCargo: string | null | undefined): string | null {
   return `${MESES[monthIdx]} ${m[1]}`;
 }
 
+function isComprobadoCompleto(importe: number | null | undefined, comprobado: number | null | undefined): boolean {
+  if (importe == null || !Number.isFinite(Number(importe))) return false;
+  return Number(comprobado || 0) + 0.009 >= Number(importe);
+}
+
 export default function FolioCard({ card, onOpen, role, onSubirPoliza, onImprimirGastos }: Props) {
   const mxn = card.importe != null && !isNaN(card.importe)
     ? `$${card.importe.toLocaleString("es-MX", { maximumFractionDigits: 0 })}`
@@ -90,17 +113,27 @@ export default function FolioCard({ card, onOpen, role, onSubirPoliza, onImprimi
   const etapa = estatusToEtapaVisual(card.estatus);
   const showPolizaBtn = role === "AD" && etapa === "CARRO_COMPRA" && onSubirPoliza;
   const showImprimirBtn = card.tiene_cotizacion !== false && onImprimirGastos;
+  const showComprobadoMark = etapa === "DEPOSITO_CIERRE" || etapa === "COMPROBACIONES" || etapa === "EVIDENCIAS";
+  const completo = isComprobadoCompleto(card.importe, card.monto_comprobado);
 
   return (
     <div
-      className={`rounded border border-slate-700 bg-slate-800/80 p-2.5 border-l-4 ${bordeClase} cursor-pointer hover:bg-slate-700/80 transition-colors`}
+      className={`relative rounded border border-slate-700 bg-slate-800/80 p-2.5 border-l-4 ${bordeClase} cursor-pointer hover:bg-slate-700/80 transition-colors`}
       onClick={() => onOpen(card.id)}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => e.key === "Enter" && onOpen(card.id)}
     >
+      {showComprobadoMark && (
+        <span
+          className={`absolute right-2 top-2 ${completo ? "text-emerald-400" : "text-red-500"}`}
+          aria-label={completo ? "Comprobado completo" : "Importe mayor a lo comprobado"}
+        >
+          {completo ? <IconCheckVerde className="h-6 w-6" /> : <IconXRoja className="h-6 w-6" />}
+        </span>
+      )}
       {mesCargo && (
-        <div className="text-base font-semibold text-amber-400 tracking-wide mb-1.5">{mesCargo}</div>
+        <div className="text-base font-semibold text-amber-400 tracking-wide mb-1.5 pr-8">{mesCargo}</div>
       )}
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-1.5 min-w-0">
@@ -112,7 +145,7 @@ export default function FolioCard({ card, onOpen, role, onSubirPoliza, onImprimi
             <IconFantasma className="h-4 w-4 flex-shrink-0 text-purple-400" aria-hidden />
           )}
         </div>
-        {mxn && <span className="text-xs text-slate-400 flex-shrink-0">{mxn}</span>}
+        {mxn && <span className={`text-xs text-slate-400 flex-shrink-0 ${showComprobadoMark ? "pr-7" : ""}`}>{mxn}</span>}
       </div>
       <p className="mt-1 line-clamp-2 text-xs text-slate-400">{card.descripcion || "—"}</p>
       <div className="mt-2 flex flex-wrap gap-1 items-center">

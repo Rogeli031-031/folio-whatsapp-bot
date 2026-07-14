@@ -8,6 +8,7 @@ import {
   fetchFinanzas,
   fetchMediaUrl,
   postAprobarFolio,
+  postAprobarComprobaciones,
   postRegresarFolioAZp,
   patchFolioMesCargo,
   patchFolioSoloZpAd,
@@ -42,6 +43,24 @@ function IconAlarma({ className }: { className?: string }) {
     <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
       <title>Urgente</title>
       <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.89 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z" />
+    </svg>
+  );
+}
+
+function IconCheckVerde({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <title>Comprobado</title>
+      <path d="M20 6L9 17l-5-5" />
+    </svg>
+  );
+}
+
+function IconXRoja({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <title>Pendiente de comprobar</title>
+      <path d="M18 6L6 18M6 6l12 12" />
     </svg>
   );
 }
@@ -157,6 +176,7 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
     !soloLectura &&
     ESTADOS_APROBABLES.includes(estatusUpper) &&
     !(roleUpper === "GG" && estatusUpper === "PENDIENTE_APROB_ZP");
+  const puedeAprobarComprobaciones = !soloLectura && estatusUpper === "COMPROBACIONES";
   const puedeRegresarZp = !soloLectura && ESTADOS_CARRO_COMPRA.includes(estatusUpper);
   const puedeAsignarMesCargo =
     (roleUpper === "GG" || roleUpper === "AD" || roleUpper === "ZP") && ESTADOS_MES_CARGO.includes(estatusUpper);
@@ -184,6 +204,23 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
       onApproved?.();
     } catch (e) {
       setApproveError((e as Error).message || "Error al aprobar");
+    } finally {
+      setApproving(false);
+    }
+  };
+
+  const handleAprobarComprobaciones = async () => {
+    if (!token || !folioId || !puedeAprobarComprobaciones) return;
+    setApproveError(null);
+    setApproving(true);
+    try {
+      await postAprobarComprobaciones(token, folioId);
+      const [f, t] = await Promise.all([fetchFolio(token, folioId), fetchTimeline(token, folioId)]);
+      setFolio(f as Record<string, unknown>);
+      setTimeline((t as { events: typeof timeline }).events || []);
+      onApproved?.();
+    } catch (e) {
+      setApproveError((e as Error).message || "Error al aprobar comprobaciones");
     } finally {
       setApproving(false);
     }
@@ -733,35 +770,52 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
                         importeNum != null &&
                         Number.isFinite(importeNum) &&
                         comprobado + 0.009 >= importeNum;
-                      const tieneFacturas = facturas.length > 0;
                       return (
                         <div>
                           <dt className="text-slate-500 flex items-center gap-2">
                             Comprobado
                             <span
-                              className={`inline-block h-3 w-3 rounded-full ${
-                                !tieneFacturas || !completo ? "bg-red-500" : "bg-emerald-500"
-                              }`}
+                              className={`inline-flex ${completo ? "text-emerald-400" : "text-red-500"}`}
                               title={
-                                !tieneFacturas
-                                  ? "Sin facturas"
-                                  : completo
-                                    ? "Monto comprobado"
-                                    : "Aún no cubre el importe"
+                                completo
+                                  ? "Monto comprobado cubre el importe"
+                                  : "Importe mayor a lo comprobado"
                               }
                               aria-label={completo ? "Comprobado" : "No comprobado"}
-                            />
+                            >
+                              {completo ? (
+                                <IconCheckVerde className="h-5 w-5" />
+                              ) : (
+                                <IconXRoja className="h-5 w-5" />
+                              )}
+                            </span>
+                            {puedeAprobarComprobaciones && (
+                              <button
+                                type="button"
+                                onClick={handleAprobarComprobaciones}
+                                disabled={approving || !completo}
+                                className="rounded bg-teal-700 px-2.5 py-1 text-xs font-medium text-white hover:bg-teal-600 disabled:opacity-50"
+                                title={!completo ? "Aún no cubre el importe" : "Aprobar etapa de Comprobaciones"}
+                              >
+                                {approving ? "…" : "Aprobar comprobaciones"}
+                              </button>
+                            )}
                           </dt>
-                          <dd className="text-slate-200 text-lg">
+                          <dd className="text-slate-200 text-lg flex flex-wrap items-center gap-2">
                             {fmtMxn(comprobado)}
                             {importeNum != null && Number.isFinite(importeNum) && (
-                              <span className="ml-2 text-xs text-slate-500">
+                              <span className="text-xs text-slate-500">
                                 {completo
                                   ? "(cubierto)"
                                   : `(faltan ${fmtMxn(Math.max(0, importeNum - comprobado))})`}
                               </span>
                             )}
                           </dd>
+                          {estatusUpper === "COMPROBACIONES" && (
+                            <p className="mt-1 text-xs text-teal-300/80">
+                              En revisión: al aprobar, el folio pasa a Evidencias.
+                            </p>
+                          )}
                         </div>
                       );
                     })()}

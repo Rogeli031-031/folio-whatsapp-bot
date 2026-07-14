@@ -581,6 +581,8 @@ export interface FolioCard {
   proyecto_nombre?: string | null;
   prestamo_a_planta?: string | null;
   prestamo_siguiente_mes?: boolean;
+  /** Suma de montos de facturas adjuntas (comprobado). */
+  monto_comprobado?: number | null;
   /** Etapa visual del kanban (ej. "Pendiente aprobación planta"). Solo en datos aplanados del resumen. */
   etapa_label?: string | null;
 }
@@ -1031,6 +1033,17 @@ export function fetchFolio(token: string, id: number): Promise<Record<string, un
 
 export function postAprobarFolio(token: string, id: number): Promise<{ ok: boolean; estatus: string }> {
   return apiFetch<{ ok: boolean; estatus: string }>(`/api/folios/${id}/aprobar`, { token, method: "POST" });
+}
+
+/** Aprobar etapa Comprobaciones → Evidencias. */
+export function postAprobarComprobaciones(
+  token: string,
+  id: number
+): Promise<{ ok: boolean; estatus: string }> {
+  return apiFetch<{ ok: boolean; estatus: string }>(`/api/folios/${id}/aprobar-comprobaciones`, {
+    token,
+    method: "POST",
+  });
 }
 
 export function postRegresarFolioAZp(token: string, id: number): Promise<{ ok: boolean; estatus: string }> {
