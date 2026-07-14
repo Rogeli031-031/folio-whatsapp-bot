@@ -1,9 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { fetchCotizacionPdf, fetchDocumentoFolioPdf, fetchDocumentoPolizaPdf } from "@/lib/api";
+import {
+  fetchCotizacionPdf,
+  fetchDocumentoFolioPdf,
+  fetchDocumentoPolizaPdf,
+  fetchFacturasPdf,
+} from "@/lib/api";
 
-type ModoImpresion = "cotizacion" | "folio" | "poliza";
+type ModoImpresion = "cotizacion" | "folio" | "poliza" | "facturas";
 
 interface Props {
   folioId: number;
@@ -27,15 +32,19 @@ export default function ImprimirGastosModal({ folioId, numeroFolio, token, etapa
       const blob = await fetchDocumentoFolioPdf(token, folioId);
       return { blob, filename: `Formato-Folio-${numeroFolio.replace(/\s/g, "-")}.pdf` };
     }
-    const blob = await fetchDocumentoPolizaPdf(token, folioId);
-    return { blob, filename: `Poliza-${numeroFolio.replace(/\s/g, "-")}.pdf` };
+    if (modo === "poliza") {
+      const blob = await fetchDocumentoPolizaPdf(token, folioId);
+      return { blob, filename: `Poliza-${numeroFolio.replace(/\s/g, "-")}.pdf` };
+    }
+    const blob = await fetchFacturasPdf(token, folioId);
+    return { blob, filename: `Facturas-${numeroFolio.replace(/\s/g, "-")}.pdf` };
   };
 
   const handleImprimir = async () => {
     setError(null);
     setLoading(true);
     try {
-      const { blob, filename } = await getBlobAndFilename();
+      const { blob } = await getBlobAndFilename();
       const url = URL.createObjectURL(blob);
       const w = window.open(url, "_blank");
       if (w) w.focus();
@@ -116,6 +125,16 @@ export default function ImprimirGastosModal({ folioId, numeroFolio, token, etapa
               className="rounded border-slate-600"
             />
             <span className="text-sm text-slate-300">Póliza</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="radio"
+              name="incluir"
+              checked={modo === "facturas"}
+              onChange={() => setModo("facturas")}
+              className="rounded border-slate-600"
+            />
+            <span className="text-sm text-slate-300">Facturas</span>
           </label>
         </div>
         <div className="flex gap-2">
