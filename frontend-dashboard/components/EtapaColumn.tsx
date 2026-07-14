@@ -21,6 +21,7 @@ const ETAPA_LABELS: Record<string, string> = {
   APROB_DIRECTOR_ZP: "Aprobación Director ZP",
   CARRO_COMPRA: "Carro de compra",
   DEPOSITO_CIERRE: "Depósito y cierre",
+  COMPROBACIONES: "Comprobaciones",
   CANCELADO: "Cancelado",
 };
 
