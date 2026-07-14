@@ -58,6 +58,84 @@ export async function downloadClasificacionApoyosExcel(
   URL.revokeObjectURL(href);
 }
 
+export type ClasificacionCatKey = "gastos" | "inversiones" | "taller" | "total";
+
+export type ClasificacionPlantaRow = {
+  key: string;
+  label: string;
+  ids: number[];
+  a: { gastos: number; inversiones: number; taller: number; total: number };
+  b: { gastos: number; inversiones: number; taller: number; total: number };
+  diff: number;
+};
+
+export type ClasificacionApoyosData = {
+  ok: boolean;
+  mes_a: string;
+  mes_b: string;
+  mes_a_label: string;
+  mes_b_label: string;
+  vs_label: string;
+  plantas: ClasificacionPlantaRow[];
+  totales: {
+    a: { gastos: number; inversiones: number; taller: number; total: number };
+    b: { gastos: number; inversiones: number; taller: number; total: number };
+    diff: number;
+  };
+  diffs_categoria: { gastos: number; inversiones: number; taller: number; total: number };
+};
+
+export function fetchClasificacionApoyos(
+  token: string,
+  mesA: string,
+  mesB: string
+): Promise<ClasificacionApoyosData> {
+  return apiFetch("/api/dashboard/clasificacion-apoyos", {
+    token,
+    params: { mes_a: mesA, mes_b: mesB },
+    cache: "no-store",
+  });
+}
+
+export type ClasificacionDetalleFolio = {
+  id: number;
+  numero_folio: string;
+  folio_codigo: string;
+  importe: number | null;
+  estatus: string | null;
+  mes_cargo: string | null;
+  categoria: string | null;
+  categoria_norm: string | null;
+  subcategoria: string | null;
+  beneficiario: string | null;
+  concepto: string | null;
+  planta_nombre: string | null;
+};
+
+export function fetchClasificacionApoyosDetalle(
+  token: string,
+  params: { mes: string; planta: string; categoria: "GASTOS" | "INVERSIONES" | "TALLER" | "TOTAL" }
+): Promise<{
+  ok: boolean;
+  mes: string;
+  mes_label: string;
+  planta: string;
+  categoria: string;
+  count: number;
+  total: number;
+  folios: ClasificacionDetalleFolio[];
+}> {
+  return apiFetch("/api/dashboard/clasificacion-apoyos/detalle", {
+    token,
+    params: {
+      mes: params.mes,
+      planta: params.planta,
+      categoria: params.categoria,
+    },
+    cache: "no-store",
+  });
+}
+
 export type IgfMetaVersionItem = {
   id: number;
   version_number: number;

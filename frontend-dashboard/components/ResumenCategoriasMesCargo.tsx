@@ -293,6 +293,10 @@ export default function ResumenCategoriasMesCargo({
           open={true}
           token={token}
           onClose={() => setShowClasificacion(false)}
+          onOpenFolio={(id) => {
+            setShowClasificacion(false);
+            onOpenFolio?.(id);
+          }}
         />
       )}
       <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">

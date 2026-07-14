@@ -5854,6 +5854,112 @@ app.get("/api/dashboard/clasificacion-apoyos-excel", dashboardAuthMiddleware, as
   }
 });
 
+/** Vista digital COMPARATIVOS (misma data que el Excel). */
+app.get("/api/dashboard/clasificacion-apoyos", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGVForbidden(req, res)) return;
+  const mesA = String(req.query.mes_a || "").trim();
+  const mesB = String(req.query.mes_b || "").trim();
+  if (!/^\d{4}-\d{2}$/.test(mesA) || !/^\d{4}-\d{2}$/.test(mesB)) {
+    return res.status(400).json({ error: "mes_a y mes_b son obligatorios (YYYY-MM)" });
+  }
+  if (mesA === mesB) {
+    return res.status(400).json({ error: "Los meses a comparar deben ser distintos" });
+  }
+  const client = await pool.connect();
+  try {
+    const r = await client.query(
+      `SELECT f.planta_id, f.categoria, f.importe, f.mes_cargo
+       FROM public.folios f
+       WHERE f.mes_cargo = ANY($1::text[])
+         AND UPPER(TRIM(COALESCE(f.estatus,''))) <> 'CANCELADO'
+         AND f.planta_id IS NOT NULL`,
+      [[mesA, mesB]]
+    );
+    const matrix = clasificacionApoyosExcel.buildClasificacionMatrix(r.rows, mesA, mesB);
+    return res.json({ ok: true, ...matrix });
+  } catch (e) {
+    console.error("[clasificacion-apoyos]", e);
+    res.status(500).json({ error: e.message || "Error al cargar comparativo" });
+  } finally {
+    client.release();
+  }
+});
+
+/**
+ * Desglose de una celda: planta + categoría + mes.
+ * Query: mes=YYYY-MM, planta=Puebla|..., categoria=GASTOS|INVERSIONES|TALLER|TOTAL
+ */
+app.get("/api/dashboard/clasificacion-apoyos/detalle", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGVForbidden(req, res)) return;
+  const mes = String(req.query.mes || "").trim();
+  const plantaLabel = String(req.query.planta || "").trim();
+  const categoriaRaw = String(req.query.categoria || "").trim().toUpperCase();
+  if (!/^\d{4}-\d{2}$/.test(mes)) return res.status(400).json({ error: "mes debe ser YYYY-MM" });
+  const plantaDef = clasificacionApoyosExcel.PLANTAS_COMPARATIVO.find(
+    (p) => p.label.toLowerCase() === plantaLabel.toLowerCase()
+  );
+  if (!plantaDef) return res.status(400).json({ error: "planta no válida" });
+  const catNorm =
+    categoriaRaw === "TOTAL"
+      ? "TOTAL"
+      : clasificacionApoyosExcel.normalizeCat(categoriaRaw);
+  if (!catNorm) return res.status(400).json({ error: "categoria debe ser GASTOS, INVERSIONES, TALLER o TOTAL" });
+
+  const client = await pool.connect();
+  try {
+    const r = await client.query(
+      `SELECT f.id, f.numero_folio, f.folio_codigo, f.importe, f.estatus, f.mes_cargo,
+              f.categoria, f.subcategoria, f.beneficiario,
+              COALESCE(f.descripcion, f.concepto) AS concepto,
+              p.nombre AS planta_nombre
+       FROM public.folios f
+       LEFT JOIN public.plantas p ON p.id = f.planta_id
+       WHERE f.mes_cargo = $1
+         AND f.planta_id = ANY($2::int[])
+         AND UPPER(TRIM(COALESCE(f.estatus,''))) <> 'CANCELADO'
+       ORDER BY f.numero_folio NULLS LAST, f.id`,
+      [mes, plantaDef.ids]
+    );
+    const folios = (r.rows || [])
+      .map((row) => {
+        const cat = clasificacionApoyosExcel.normalizeCat(row.categoria);
+        if (catNorm !== "TOTAL" && cat !== catNorm) return null;
+        if (catNorm === "TOTAL" && !cat) return null;
+        return {
+          id: row.id,
+          numero_folio: row.numero_folio || row.folio_codigo,
+          folio_codigo: row.folio_codigo || row.numero_folio,
+          importe: row.importe != null ? Number(row.importe) : null,
+          estatus: row.estatus || null,
+          mes_cargo: row.mes_cargo || null,
+          categoria: row.categoria || null,
+          categoria_norm: cat,
+          subcategoria: row.subcategoria || null,
+          beneficiario: row.beneficiario || null,
+          concepto: row.concepto || null,
+          planta_nombre: row.planta_nombre || null,
+        };
+      })
+      .filter(Boolean);
+    const total = folios.reduce((s, f) => s + (Number(f.importe) || 0), 0);
+    return res.json({
+      ok: true,
+      mes,
+      mes_label: clasificacionApoyosExcel.mesLabelEs(mes),
+      planta: plantaDef.label,
+      categoria: catNorm,
+      count: folios.length,
+      total: Math.round(total),
+      folios,
+    });
+  } catch (e) {
+    console.error("[clasificacion-apoyos detalle]", e);
+    res.status(500).json({ error: e.message || "Error al cargar desglose" });
+  } finally {
+    client.release();
+  }
+});
+
 app.get("/api/dashboard/plantas", dashboardAuthMiddleware, async (req, res) => {
   const client = await pool.connect();
   try {
