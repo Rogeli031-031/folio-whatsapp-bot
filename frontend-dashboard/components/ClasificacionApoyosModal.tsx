@@ -115,31 +115,43 @@ function groupFoliosByEtapa(folios: ClasificacionDetalleFolio[]): {
   total: number;
 }[] {
   const map = new Map<string, ClasificacionDetalleFolio[]>();
-  for (const f of folios) {
+  for (let i = 0; i < folios.length; i++) {
+    const f = folios[i];
     const etapa = estatusToEtapaVisual(f.estatus);
-    if (!map.has(etapa)) map.set(etapa, []);
-    map.get(etapa)!.push(f);
+    const list = map.get(etapa);
+    if (list) list.push(f);
+    else map.set(etapa, [f]);
   }
-  const groups = ETAPA_ORDER.filter((e) => map.has(e)).map((etapa) => {
-    const items = map.get(etapa) || [];
-    return {
-      etapa,
-      label: ETAPA_LABELS[etapa] || etapa,
-      items,
-      total: items.reduce((s, f) => s + (Number(f.importe) || 0), 0),
-    };
-  });
-  // Cualquier estatus raro no mapeado
-  const known = new Set<string>(ETAPA_ORDER as unknown as string[]);
-  Array.from(map.entries()).forEach(([etapa, items]) => {
-    if (known.has(etapa)) return;
+  const groups: {
+    etapa: string;
+    label: string;
+    items: ClasificacionDetalleFolio[];
+    total: number;
+  }[] = [];
+  for (let i = 0; i < ETAPA_ORDER.length; i++) {
+    const etapa = ETAPA_ORDER[i];
+    const items = map.get(etapa);
+    if (!items || items.length === 0) continue;
     groups.push({
       etapa,
       label: ETAPA_LABELS[etapa] || etapa,
       items,
       total: items.reduce((s, f) => s + (Number(f.importe) || 0), 0),
     });
-  });
+  }
+  const known = new Set<string>(Array.from(ETAPA_ORDER));
+  const extraKeys = Array.from(map.keys());
+  for (let i = 0; i < extraKeys.length; i++) {
+    const etapa = extraKeys[i];
+    if (known.has(etapa)) continue;
+    const items = map.get(etapa) || [];
+    groups.push({
+      etapa,
+      label: ETAPA_LABELS[etapa] || etapa,
+      items,
+      total: items.reduce((s, f) => s + (Number(f.importe) || 0), 0),
+    });
+  }
   return groups;
 }
 
