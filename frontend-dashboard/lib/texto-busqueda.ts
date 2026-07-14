@@ -12,7 +12,8 @@ const STOPWORDS = new Set([
 export function normalizeForSearch(text: string | null | undefined): string {
   return stripAccents(String(text || ""))
     .toLowerCase()
-    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    // Sin \p{L}/\p{N} (requieren target ES2018+); tras quitar acentos basta a-z0-9.
+    .replace(/[^a-z0-9\s]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
