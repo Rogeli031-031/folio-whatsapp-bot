@@ -1775,6 +1775,31 @@ export async function fetchCotizacionPdf(token: string, folioId: number): Promis
   return res.blob();
 }
 
+/** Descarga todas las facturas adjuntas del folio unidas en un PDF. */
+export async function fetchFacturasPdf(token: string, folioId: number): Promise<Blob> {
+  const url = getApiUrl(`/api/folios/${folioId}/facturas`);
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    let msg = res.statusText;
+    try {
+      const t = await res.text();
+      try {
+        const j = JSON.parse(t);
+        if (j && j.error) msg = j.error;
+        else if (t) msg = t;
+      } catch {
+        if (t) msg = t;
+      }
+    } catch {
+      /* ignore */
+    }
+    throw new Error(msg);
+  }
+  return res.blob();
+}
+
 /** Descarga el PDF "Solo formato del folio" (usa plantilla S3 FOLIO_TEMPLATE_S3_KEY si está configurada). */
 export async function fetchDocumentoFolioPdf(token: string, folioId: number): Promise<Blob> {
   const url = getApiUrl(`/api/folios/${folioId}/documento-folio`);

@@ -10220,6 +10220,78 @@ app.get("/api/folios/:id/cotizacion", dashboardAuthMiddleware, dashboardBlockGVF
   }
 });
 
+/** Descarga todas las facturas adjuntas del folio en un solo PDF (varias páginas/documentos unidos). */
+app.get("/api/folios/:id/facturas", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddleware, async (req, res) => {
+  const folioId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
+  const client = await pool.connect();
+  try {
+    const r = await client.query(
+      `SELECT f.id, f.planta_id, f.solo_zp_ad, f.numero_folio FROM public.folios f WHERE f.id = $1`,
+      [folioId]
+    );
+    const folio = r.rows[0] || null;
+    if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
+    const esZPDoc = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) === "ZP";
+    const esADDoc = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) === "AD";
+    if (folio.solo_zp_ad && !esZPDoc && !esADDoc) return res.status(404).json({ error: "Folio no encontrado" });
+    if ((req.dashboardAuth.role === "GG" || req.dashboardAuth.role === "GA") && req.dashboardAuth.plantas_permitidas?.length > 0) {
+      const folioPlantaId = folio.planta_id != null ? folio.planta_id : null;
+      if (folioPlantaId == null || !req.dashboardAuth.plantas_permitidas.includes(folioPlantaId)) {
+        return res.status(403).json({ error: "Sin permiso para este folio" });
+      }
+    }
+    const facturasRes = await client.query(
+      `SELECT fa.id, fa.file_name, fa.s3_key, fa.subido_en
+       FROM public.folio_archivos fa
+       WHERE fa.folio_id = $1
+         AND UPPER(TRIM(fa.tipo)) = 'FACTURA'
+         AND fa.status NOT IN ('ELIMINADO', 'REEMPLAZADO')
+         AND fa.s3_key IS NOT NULL AND TRIM(fa.s3_key) <> ''
+       ORDER BY fa.subido_en ASC NULLS LAST, fa.id ASC`,
+      [folioId]
+    );
+    const facturas = facturasRes.rows || [];
+    if (facturas.length === 0) {
+      return res.status(400).json({ error: "El folio no tiene facturas adjuntas." });
+    }
+    if (!s3Enabled) return res.status(503).json({ error: "Almacenamiento no configurado" });
+
+    const mergedDoc = await PDFDocument.create();
+    let paginasAgregadas = 0;
+    const errores = [];
+    for (const fa of facturas) {
+      try {
+        const buf = await getBufferFromS3(fa.s3_key);
+        const src = await PDFDocument.load(buf, { ignoreEncryption: true });
+        const pages = await mergedDoc.copyPages(src, src.getPageIndices());
+        pages.forEach((p) => mergedDoc.addPage(p));
+        paginasAgregadas += pages.length;
+      } catch (e) {
+        errores.push(`${fa.file_name || fa.id}: ${(e && e.message) || "no se pudo leer"}`);
+        console.warn("[folios facturas] No se pudo unir factura", fa.id, e && e.message);
+      }
+    }
+    if (paginasAgregadas === 0) {
+      return res.status(400).json({
+        error: errores.length
+          ? `No se pudieron leer las facturas adjuntas. ${errores.join("; ")}`
+          : "No se pudieron generar las facturas.",
+      });
+    }
+    const pdfBytes = await mergedDoc.save();
+    const safeFolio = String(folio.numero_folio || folioId).replace(/\s/g, "-");
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="Facturas-${safeFolio}.pdf"`);
+    return res.send(Buffer.from(pdfBytes));
+  } catch (e) {
+    console.error("[folios facturas]", e);
+    res.status(500).json({ error: e.message || "Error al obtener facturas" });
+  } finally {
+    client.release();
+  }
+});
+
 /** Documento Gastos Extraordinarios (imprimir/descargar). Requiere folio con cotización. */
 app.get("/api/folios/:id/documento-gastos", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddleware, async (req, res) => {
   const folioId = parseInt(req.params.id, 10);
