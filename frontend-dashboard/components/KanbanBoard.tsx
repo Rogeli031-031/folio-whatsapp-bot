@@ -22,6 +22,8 @@ const ETAPA_SHORT: Record<string, string> = {
   PENDIENTE_APROB_PLANTA: "Pendiente planta",
   APROB_DIRECTOR_ZP: "Director ZP",
   CARRO_COMPRA: "Carro",
+  CUENTA_FONDOS: "Cuenta de fondos",
+  CHEQUE_GENERADO: "Cheque Generado",
   DEPOSITO_CIERRE: "Depósito",
   COMPROBACIONES: "Comprobaciones",
   EVIDENCIAS: "Evidencias",

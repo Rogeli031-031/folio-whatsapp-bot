@@ -1066,6 +1066,19 @@ export function postAprobarComprobaciones(
   });
 }
 
+/** Avanzar folio: Carro → Cuenta de fondos → Cheque Generado. */
+export function postAvanzarEtapaFolio(
+  token: string,
+  id: number,
+  destino: "CUENTA_FONDOS" | "CHEQUE_GENERADO"
+): Promise<{ ok: boolean; estatus: string }> {
+  return apiFetch<{ ok: boolean; estatus: string }>(`/api/folios/${id}/avanzar-etapa`, {
+    token,
+    method: "POST",
+    body: JSON.stringify({ destino }),
+  });
+}
+
 export function postRegresarFolioAZp(token: string, id: number): Promise<{ ok: boolean; estatus: string }> {
   return apiFetch<{ ok: boolean; estatus: string }>(`/api/folios/${id}/regresar-zp`, { token, method: "POST" });
 }

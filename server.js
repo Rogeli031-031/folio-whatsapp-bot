@@ -116,6 +116,8 @@ const ESTADOS = {
   LISTO_PARA_PROGRAMACION: "LISTO_PARA_PROGRAMACION",
   SELECCIONADO_SEMANA: "SELECCIONADO_SEMANA",
   SOLICITANDO_PAGO: "SOLICITANDO_PAGO",
+  CUENTA_FONDOS: "CUENTA_FONDOS",
+  CHEQUE_GENERADO: "CHEQUE_GENERADO",
   PAGADO: "PAGADO",
   CERRADO: "CERRADO",
   COMPROBACIONES: "COMPROBACIONES",
@@ -123,6 +125,21 @@ const ESTADOS = {
   CANCELACION_SOLICITADA: "CANCELACION_SOLICITADA",
   CANCELADO: "CANCELADO",
 };
+
+/** Carro de compra (antes de Cuenta de fondos). */
+const ESTADOS_CARRO_COMPRA = [
+  ESTADOS.APROBADO_ZP,
+  ESTADOS.LISTO_PARA_PROGRAMACION,
+  ESTADOS.SELECCIONADO_SEMANA,
+];
+/** Cheque Generado (incluye legacy SOLICITANDO_PAGO de "enviar a cheques"). */
+const ESTADOS_CHEQUE_GENERADO = [ESTADOS.CHEQUE_GENERADO, ESTADOS.SOLICITANDO_PAGO];
+/** Folios entre carro y depósito (IGF / mes de cargo). */
+const ESTADOS_HASTA_CHEQUE = [
+  ...ESTADOS_CARRO_COMPRA,
+  ESTADOS.CUENTA_FONDOS,
+  ...ESTADOS_CHEQUE_GENERADO,
+];
 
 /** Estados de proyecto (tabla proyectos.estatus). */
 const ESTADOS_PROYECTO = {
@@ -3851,14 +3868,14 @@ async function eliminarFolioArchivoAd(client, folio, archivo, actorLabel) {
     );
     const est = String(folio.estatus || "").toUpperCase();
     if (!polRes.rows.length && (est === ESTADOS.PAGADO || est === ESTADOS.CERRADO || est === ESTADOS.COMPROBACIONES || est === ESTADOS.EVIDENCIAS)) {
-      nuevoEstatus = ESTADOS.SOLICITANDO_PAGO;
+      nuevoEstatus = ESTADOS.CHEQUE_GENERADO;
       await client.query(`UPDATE public.folios SET estatus = $1 WHERE id = $2`, [nuevoEstatus, folio.id]);
     }
   }
   const label = tipo === "COTIZACION" ? "Cotización" : "Póliza";
   const comentario =
     tipo === "POLIZA" && nuevoEstatus
-      ? `${label} eliminada por AD (${archivo.file_name || `#${archivo.id}`}); folio regresado a carrito.`
+      ? `${label} eliminada por AD (${archivo.file_name || `#${archivo.id}`}); folio regresado a Cheque Generado.`
       : `${label} eliminada por AD (${archivo.file_name || `#${archivo.id}`}).`;
   await insertHistorial(
     client,
@@ -4006,7 +4023,7 @@ function normalizeStageKey(evento) {
   if (/(CONTRALOR|CDMX).*(PENDIENTE|APROBADO|RECHAZADO)|(PENDIENTE|APROBADO|RECHAZADO).*(CONTRALOR|CDMX)/.test(s)) return "CONTRALOR_CDMX";
   if (/PENDIENTE_TESORERIA|PAGADO_TESORERIA|RECHAZADO_TESORERIA/.test(s)) return "TESORERIA";
   if (/PENDIENTE_APROB_PLANTA|APROB_PLANTA|APROBADO_PLANTA/.test(s)) return "PLANTA";
-  if (/LISTO_PARA_PROGRAMACION|SELECCIONADO_SEMANA|SOLICITANDO_PAGO|PAGADO|CERRADO|COMPROBACIONES|EVIDENCIAS/.test(s)) return "PROGRAMACION";
+  if (/LISTO_PARA_PROGRAMACION|SELECCIONADO_SEMANA|SOLICITANDO_PAGO|CUENTA_FONDOS|CHEQUE_GENERADO|PAGADO|CERRADO|COMPROBACIONES|EVIDENCIAS/.test(s)) return "PROGRAMACION";
   if (/GENERADO|CREADO|REGISTRADO|CAPTURADO/.test(s)) return "CREACION";
   return s;
 }
@@ -5301,6 +5318,8 @@ const ETAPA_VISUAL = {
   PENDIENTE_APROB_PLANTA: "PENDIENTE_APROB_PLANTA",
   APROB_DIRECTOR_ZP: "APROB_DIRECTOR_ZP",
   CARRO_COMPRA: "CARRO_COMPRA",
+  CUENTA_FONDOS: "CUENTA_FONDOS",
+  CHEQUE_GENERADO: "CHEQUE_GENERADO",
   DEPOSITO_CIERRE: "DEPOSITO_CIERRE",
   COMPROBACIONES: "COMPROBACIONES",
   EVIDENCIAS: "EVIDENCIAS",
@@ -5312,6 +5331,8 @@ const ETAPAS_VISUAL_ORDER = [
   ETAPA_VISUAL.PENDIENTE_APROB_PLANTA,
   ETAPA_VISUAL.APROB_DIRECTOR_ZP,
   ETAPA_VISUAL.CARRO_COMPRA,
+  ETAPA_VISUAL.CUENTA_FONDOS,
+  ETAPA_VISUAL.CHEQUE_GENERADO,
   ETAPA_VISUAL.DEPOSITO_CIERRE,
   ETAPA_VISUAL.COMPROBACIONES,
   ETAPA_VISUAL.EVIDENCIAS,
@@ -5327,7 +5348,9 @@ function estatusToEtapaVisual(estatus) {
   if (s === ESTADOS.EVIDENCIAS) return ETAPA_VISUAL.EVIDENCIAS;
   if (s === ESTADOS.COMPROBACIONES) return ETAPA_VISUAL.COMPROBACIONES;
   if ([ESTADOS.PAGADO, ESTADOS.CERRADO].includes(s)) return ETAPA_VISUAL.DEPOSITO_CIERRE;
-  if ([ESTADOS.APROBADO_ZP, ESTADOS.LISTO_PARA_PROGRAMACION, ESTADOS.SELECCIONADO_SEMANA, ESTADOS.SOLICITANDO_PAGO].includes(s)) return ETAPA_VISUAL.CARRO_COMPRA;
+  if (ESTADOS_CHEQUE_GENERADO.includes(s)) return ETAPA_VISUAL.CHEQUE_GENERADO;
+  if (s === ESTADOS.CUENTA_FONDOS) return ETAPA_VISUAL.CUENTA_FONDOS;
+  if (ESTADOS_CARRO_COMPRA.includes(s)) return ETAPA_VISUAL.CARRO_COMPRA;
   if ([ESTADOS.PENDIENTE_APROB_ZP].includes(s) || /RECHAZADO_ZP/.test(s)) return ETAPA_VISUAL.APROB_DIRECTOR_ZP;
   return ETAPA_VISUAL.PENDIENTE_APROB_PLANTA;
 }
@@ -5337,6 +5360,8 @@ const ETAPA_VISIBLE = {
   [ETAPA_VISUAL.PENDIENTE_APROB_PLANTA]: { label: "Pendiente aprobación planta", icon: "🕒" },
   [ETAPA_VISUAL.APROB_DIRECTOR_ZP]: { label: "Aprobación Director ZP", icon: "🧾" },
   [ETAPA_VISUAL.CARRO_COMPRA]: { label: "Carro de compra", icon: "🛒" },
+  [ETAPA_VISUAL.CUENTA_FONDOS]: { label: "Cuenta de fondos", icon: "💰" },
+  [ETAPA_VISUAL.CHEQUE_GENERADO]: { label: "Cheque Generado", icon: "📄" },
   [ETAPA_VISUAL.DEPOSITO_CIERRE]: { label: "Depósito y cierre", icon: "🏦" },
   [ETAPA_VISUAL.COMPROBACIONES]: { label: "Comprobaciones", icon: "✅" },
   [ETAPA_VISUAL.EVIDENCIAS]: { label: "Evidencias", icon: "📎" },
@@ -5353,7 +5378,9 @@ function etapaVisualToEstatusTecnicos(etapaVisual) {
   const ev = String(etapaVisual || "").trim().toUpperCase();
   if (ev === ETAPA_VISUAL.PENDIENTE_APROB_PLANTA) return [ESTADOS.GENERADO, ESTADOS.PENDIENTE_APROB_PLANTA, ESTADOS.APROB_PLANTA];
   if (ev === ETAPA_VISUAL.APROB_DIRECTOR_ZP) return [ESTADOS.PENDIENTE_APROB_ZP, ESTADOS.CANCELACION_SOLICITADA];
-  if (ev === ETAPA_VISUAL.CARRO_COMPRA) return [ESTADOS.APROBADO_ZP, ESTADOS.LISTO_PARA_PROGRAMACION, ESTADOS.SELECCIONADO_SEMANA, ESTADOS.SOLICITANDO_PAGO];
+  if (ev === ETAPA_VISUAL.CARRO_COMPRA) return [...ESTADOS_CARRO_COMPRA];
+  if (ev === ETAPA_VISUAL.CUENTA_FONDOS) return [ESTADOS.CUENTA_FONDOS];
+  if (ev === ETAPA_VISUAL.CHEQUE_GENERADO) return [...ESTADOS_CHEQUE_GENERADO];
   if (ev === ETAPA_VISUAL.DEPOSITO_CIERRE) return [ESTADOS.PAGADO, ESTADOS.CERRADO];
   if (ev === ETAPA_VISUAL.COMPROBACIONES) return [ESTADOS.COMPROBACIONES];
   if (ev === ETAPA_VISUAL.EVIDENCIAS) return [ESTADOS.EVIDENCIAS];
@@ -5377,6 +5404,8 @@ const ETAPAS_ORDER = [
   ESTADOS.LISTO_PARA_PROGRAMACION,
   ESTADOS.SELECCIONADO_SEMANA,
   ESTADOS.SOLICITANDO_PAGO,
+  ESTADOS.CUENTA_FONDOS,
+  ESTADOS.CHEQUE_GENERADO,
   ESTADOS.PAGADO,
   ESTADOS.CERRADO,
   ESTADOS.COMPROBACIONES,
@@ -9144,7 +9173,7 @@ async function fetchIgfFoliosDetalleList(client, year, month, empresa, tipo) {
     return { empresa: (empresa || "").trim(), periodo: periodoStr, tipo, folios: [] };
   }
   const estAprobZp = [ESTADOS.PENDIENTE_APROB_ZP, ESTADOS.CANCELACION_SOLICITADA];
-  const estCarro = [ESTADOS.APROBADO_ZP, ESTADOS.LISTO_PARA_PROGRAMACION, ESTADOS.SELECCIONADO_SEMANA, ESTADOS.SOLICITANDO_PAGO];
+  const estCarro = ESTADOS_HASTA_CHEQUE;
   let sql;
   let params;
   if (tipo === "aprob_zp") {
@@ -9331,7 +9360,7 @@ async function buildIgfForecastPayload(client, year, month, opts = {}) {
     let foliosInversionesByPlanta = new Map();
     if (plantaIds.length > 0) {
       const estAprobZp = [ESTADOS.PENDIENTE_APROB_ZP, ESTADOS.CANCELACION_SOLICITADA];
-      const estCarro = [ESTADOS.APROBADO_ZP, ESTADOS.LISTO_PARA_PROGRAMACION, ESTADOS.SELECCIONADO_SEMANA, ESTADOS.SOLICITANDO_PAGO];
+      const estCarro = ESTADOS_HASTA_CHEQUE;
       const folAprob = await client.query(
         `SELECT planta_id, COALESCE(SUM(COALESCE(importe, 0)), 0) AS total FROM public.folios
              WHERE mes_cargo = $1
@@ -11036,10 +11065,10 @@ app.patch("/api/folios/:id", dashboardAuthMiddleware, dashboardBlockGVFoliosMidd
     const folio = await getFolioById(client, folioId);
     if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
     const est = String(folio.estatus || "").toUpperCase();
-    const enCarrito = [ESTADOS.APROBADO_ZP, ESTADOS.LISTO_PARA_PROGRAMACION, ESTADOS.SELECCIONADO_SEMANA, ESTADOS.SOLICITANDO_PAGO].includes(est);
+    const enCarritoOCheque = ESTADOS_HASTA_CHEQUE.includes(est);
     const enAprobacionZp = est === ESTADOS.PENDIENTE_APROB_ZP;
-    if (!enCarrito && !enAprobacionZp) {
-      return res.status(400).json({ error: "Solo se puede editar el mes de cargo en Aprobación Director ZP o en el carrito de compra." });
+    if (!enCarritoOCheque && !enAprobacionZp) {
+      return res.status(400).json({ error: "Solo se puede editar el mes de cargo en Aprobación Director ZP, Carro, Cuenta de fondos o Cheque Generado." });
     }
     await client.query(`UPDATE public.folios SET mes_cargo = $1 WHERE id = $2`, [mesCargo, folioId]);
     res.json({ ok: true, mes_cargo: mesCargo });
@@ -11465,8 +11494,7 @@ app.post("/api/folios/:id/regresar-zp", dashboardAuthMiddleware, dashboardBlockG
     }
     const estatus = (folio.estatus || "").trim().toUpperCase();
     const rol = req.dashboardAuth.role || "Dashboard";
-    const estadosCarro = [ESTADOS.APROBADO_ZP, ESTADOS.LISTO_PARA_PROGRAMACION, ESTADOS.SELECCIONADO_SEMANA, ESTADOS.SOLICITANDO_PAGO];
-    if (!estadosCarro.includes(estatus)) {
+    if (!ESTADOS_CARRO_COMPRA.includes(estatus)) {
       return res.status(400).json({ error: "Solo se pueden regresar folios desde Carro de compra" });
     }
     await updateFolioEstatus(client, folioId, ESTADOS.PENDIENTE_APROB_ZP, { estatus_anterior: estatus });
@@ -11480,7 +11508,58 @@ app.post("/api/folios/:id/regresar-zp", dashboardAuthMiddleware, dashboardBlockG
   }
 });
 
-/** Asistente de dirección: subir póliza (comprobante de depósito) para folio en carrito; pasa a Depósito y cierre. */
+/** Avanzar folio: Carro → Cuenta de fondos → Cheque Generado. */
+app.post("/api/folios/:id/avanzar-etapa", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddleware, async (req, res) => {
+  if (req.dashboardAuth.role === "CF_CDMX") return res.status(403).json({ error: "Contralor financiero CDMX solo puede ver el dashboard, no autorizar." });
+  if (req.dashboardAuth.role === "GA") return res.status(403).json({ error: "GA solo puede ver e imprimir en el dashboard, no autorizar." });
+  const folioId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
+  const destino = String(req.body.destino || "").trim().toUpperCase();
+  if (![ESTADOS.CUENTA_FONDOS, ESTADOS.CHEQUE_GENERADO].includes(destino)) {
+    return res.status(400).json({ error: "destino debe ser CUENTA_FONDOS o CHEQUE_GENERADO" });
+  }
+  const client = await pool.connect();
+  try {
+    const folio = await getFolioById(client, folioId);
+    if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
+    if ((req.dashboardAuth.role === "GG" || req.dashboardAuth.role === "GA" || req.dashboardAuth.role === "AD") && req.dashboardAuth.plantas_permitidas?.length > 0) {
+      if (!folio.planta_id || !req.dashboardAuth.plantas_permitidas.includes(folio.planta_id)) {
+        return res.status(403).json({ error: "Sin permiso para modificar folios de esta planta" });
+      }
+    }
+    const estatus = (folio.estatus || "").trim().toUpperCase();
+    const rol = req.dashboardAuth.role || "Dashboard";
+    if (destino === ESTADOS.CUENTA_FONDOS) {
+      if (!ESTADOS_CARRO_COMPRA.includes(estatus)) {
+        return res.status(400).json({ error: "Solo se puede pasar a Cuenta de fondos desde Carro de compra." });
+      }
+    } else if (destino === ESTADOS.CHEQUE_GENERADO) {
+      if (estatus !== ESTADOS.CUENTA_FONDOS) {
+        return res.status(400).json({ error: "Solo se puede pasar a Cheque Generado desde Cuenta de fondos." });
+      }
+    }
+    const labelDestino = getEtapaVisibleLabel(destino);
+    await updateFolioEstatus(client, folioId, destino, { estatus_anterior: estatus });
+    await insertHistorial(
+      client,
+      folioId,
+      folio.numero_folio,
+      folio.folio_codigo,
+      destino,
+      `Avanzado a ${labelDestino} desde dashboard.`,
+      null,
+      rol
+    );
+    return res.json({ ok: true, estatus: destino });
+  } catch (e) {
+    console.error("[Dashboard folio avanzar-etapa]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/** Asistente de dirección: subir póliza (comprobante) en Cheque Generado; pasa a Depósito y cierre. */
 app.post("/api/folios/:id/poliza", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddleware, async (req, res) => {
   const folioId = parseInt(req.params.id, 10);
   if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
@@ -11503,8 +11582,8 @@ app.post("/api/folios/:id/poliza", dashboardAuthMiddleware, dashboardBlockGVFoli
     }
     const est = String(folio.estatus || "").toUpperCase();
     const etapaVisual = estatusToEtapaVisual(est);
-    if (etapaVisual !== ETAPA_VISUAL.CARRO_COMPRA) {
-      return res.status(400).json({ error: "Solo se puede subir la póliza cuando el folio está en el carrito (Carro de compra)." });
+    if (etapaVisual !== ETAPA_VISUAL.CHEQUE_GENERADO) {
+      return res.status(400).json({ error: "Solo se puede subir la póliza cuando el folio está en Cheque Generado." });
     }
     if (!s3Enabled) return res.status(503).json({ error: "Almacenamiento no configurado" });
     const s3Key = `polizas/${folio.numero_folio}/${Date.now()}.pdf`;
@@ -17842,13 +17921,13 @@ app.post("/twilio/whatsapp", async (req, res) => {
       if (esADBar && /^(adjuntar\s+)?pol[ií]za\s+\S+/.test(body.trim())) {
         const numero = body.trim().replace(/^(adjuntar\s+)?pol[ií]za\s+/i, "").trim().toUpperCase();
         if (!/^F-\d{6}-\d{3}$/.test(numero)) {
-          return safeReply("Formato: adjuntar poliza F-YYYYMM-XXX (o poliza F-YYYYMM-XXX). El folio debe estar en el carrito.");
+          return safeReply("Formato: adjuntar poliza F-YYYYMM-XXX (o poliza F-YYYYMM-XXX). El folio debe estar en Cheque Generado.");
         }
         const folio = await getFolioByNumero(client, numero);
         if (!folio) return safeReply(`No encuentro el folio ${numero}.`);
         const est = String(folio.estatus || "").toUpperCase();
-        if (est !== ESTADOS.SELECCIONADO_SEMANA) {
-          return safeReply(`El folio ${numero} no está en el carrito (está en ${est}). Solo puedes adjuntar la póliza cuando el folio está en el carrito.`);
+        if (!ESTADOS_CHEQUE_GENERADO.includes(est)) {
+          return safeReply(`El folio ${numero} no está en Cheque Generado (está en ${getEtapaVisibleLabel(est)}). Solo puedes adjuntar la póliza en esa etapa.`);
         }
         sess.adPoliza = { folio_id: folio.id, numero_folio: folio.numero_folio, folio_codigo: folio.folio_codigo };
         return safeReply("Envía el PDF del comprobante de depósito (póliza) para el folio " + numero + ".");

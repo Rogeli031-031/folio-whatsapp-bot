@@ -19,7 +19,9 @@ function estatusToEtapaVisual(estatus: string | null): string {
   if (s === "EVIDENCIAS") return "EVIDENCIAS";
   if (s === "COMPROBACIONES") return "COMPROBACIONES";
   if (["PAGADO", "CERRADO"].includes(s)) return "DEPOSITO_CIERRE";
-  if (["APROBADO_ZP", "LISTO_PARA_PROGRAMACION", "SELECCIONADO_SEMANA", "SOLICITANDO_PAGO"].includes(s)) return "CARRO_COMPRA";
+  if (["CHEQUE_GENERADO", "SOLICITANDO_PAGO"].includes(s)) return "CHEQUE_GENERADO";
+  if (s === "CUENTA_FONDOS") return "CUENTA_FONDOS";
+  if (["APROBADO_ZP", "LISTO_PARA_PROGRAMACION", "SELECCIONADO_SEMANA"].includes(s)) return "CARRO_COMPRA";
   if (s === "PENDIENTE_APROB_ZP" || /RECHAZADO_ZP/.test(s)) return "APROB_DIRECTOR_ZP";
   return "PENDIENTE_APROB_PLANTA";
 }
@@ -72,6 +74,8 @@ function etapaColor(estatus: string | null): string {
   if (etapa === "EVIDENCIAS") return "border-l-sky-600";
   if (etapa === "COMPROBACIONES") return "border-l-teal-600";
   if (etapa === "DEPOSITO_CIERRE") return "border-l-green-600";
+  if (etapa === "CHEQUE_GENERADO") return "border-l-yellow-600";
+  if (etapa === "CUENTA_FONDOS") return "border-l-orange-500";
   if (etapa === "CARRO_COMPRA") {
     return MODO_COLOR_CARRITO === "default" ? "border-l-slate-400" : "border-l-slate-400";
   }
@@ -111,7 +115,7 @@ export default function FolioCard({ card, onOpen, role, onSubirPoliza, onImprimi
     : etapaColor(card.estatus);
 
   const etapa = estatusToEtapaVisual(card.estatus);
-  const showPolizaBtn = role === "AD" && etapa === "CARRO_COMPRA" && onSubirPoliza;
+  const showPolizaBtn = role === "AD" && etapa === "CHEQUE_GENERADO" && onSubirPoliza;
   const showImprimirBtn = card.tiene_cotizacion !== false && onImprimirGastos;
   const showComprobadoMark = etapa === "DEPOSITO_CIERRE" || etapa === "COMPROBACIONES" || etapa === "EVIDENCIAS";
   const completo = isComprobadoCompleto(card.importe, card.monto_comprobado);

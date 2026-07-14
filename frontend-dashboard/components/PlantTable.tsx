@@ -10,6 +10,8 @@ const ETAPA_LABELS: Record<string, string> = {
   PENDIENTE_APROB_PLANTA: "Pendiente aprobación planta",
   APROB_DIRECTOR_ZP: "Aprobación Director ZP",
   CARRO_COMPRA: "Carro de compra",
+  CUENTA_FONDOS: "Cuenta de fondos",
+  CHEQUE_GENERADO: "Cheque Generado",
   DEPOSITO_CIERRE: "Depósito y cierre",
   COMPROBACIONES: "Comprobaciones",
   EVIDENCIAS: "Evidencias",

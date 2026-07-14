@@ -9,6 +9,7 @@ import {
   fetchMediaUrl,
   postAprobarFolio,
   postAprobarComprobaciones,
+  postAvanzarEtapaFolio,
   postRegresarFolioAZp,
   patchFolioMesCargo,
   patchFolioSoloZpAd,
@@ -88,9 +89,16 @@ interface Props {
 }
 
 const ESTADOS_APROBABLES = ["PENDIENTE_APROB_PLANTA", "APROB_PLANTA", "PENDIENTE_APROB_ZP"];
-const ESTADOS_CARRO_COMPRA = ["APROBADO_ZP", "LISTO_PARA_PROGRAMACION", "SELECCIONADO_SEMANA", "SOLICITANDO_PAGO"];
-/** Mes de cargo: carrito o Aprobación Director ZP (misma edición en API). */
-const ESTADOS_MES_CARGO = [...ESTADOS_CARRO_COMPRA, "PENDIENTE_APROB_ZP"];
+const ESTADOS_CARRO_COMPRA = ["APROBADO_ZP", "LISTO_PARA_PROGRAMACION", "SELECCIONADO_SEMANA"];
+const ESTADOS_CUENTA_FONDOS = ["CUENTA_FONDOS"];
+const ESTADOS_CHEQUE_GENERADO = ["CHEQUE_GENERADO", "SOLICITANDO_PAGO"];
+/** Mes de cargo: carrito / cuenta / cheque o Aprobación Director ZP. */
+const ESTADOS_MES_CARGO = [
+  ...ESTADOS_CARRO_COMPRA,
+  ...ESTADOS_CUENTA_FONDOS,
+  ...ESTADOS_CHEQUE_GENERADO,
+  "PENDIENTE_APROB_ZP",
+];
 
 export default function FolioDrawer({ folioId, token, role = "GG", onClose, onApproved }: Props) {
   const [folio, setFolio] = useState<Record<string, unknown> | null>(null);
@@ -177,6 +185,8 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
     ESTADOS_APROBABLES.includes(estatusUpper) &&
     !(roleUpper === "GG" && estatusUpper === "PENDIENTE_APROB_ZP");
   const puedeAprobarComprobaciones = !soloLectura && estatusUpper === "COMPROBACIONES";
+  const puedePasarCuentaFondos = !soloLectura && ESTADOS_CARRO_COMPRA.includes(estatusUpper);
+  const puedePasarChequeGenerado = !soloLectura && ESTADOS_CUENTA_FONDOS.includes(estatusUpper);
   const puedeRegresarZp = !soloLectura && ESTADOS_CARRO_COMPRA.includes(estatusUpper);
   const puedeAsignarMesCargo =
     (roleUpper === "GG" || roleUpper === "AD" || roleUpper === "ZP") && ESTADOS_MES_CARGO.includes(estatusUpper);
@@ -221,6 +231,25 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
       onApproved?.();
     } catch (e) {
       setApproveError((e as Error).message || "Error al aprobar comprobaciones");
+    } finally {
+      setApproving(false);
+    }
+  };
+
+  const handleAvanzarEtapa = async (destino: "CUENTA_FONDOS" | "CHEQUE_GENERADO") => {
+    if (!token || !folioId) return;
+    if (destino === "CUENTA_FONDOS" && !puedePasarCuentaFondos) return;
+    if (destino === "CHEQUE_GENERADO" && !puedePasarChequeGenerado) return;
+    setApproveError(null);
+    setApproving(true);
+    try {
+      await postAvanzarEtapaFolio(token, folioId, destino);
+      const [f, t] = await Promise.all([fetchFolio(token, folioId), fetchTimeline(token, folioId)]);
+      setFolio(f as Record<string, unknown>);
+      setTimeline((t as { events: typeof timeline }).events || []);
+      onApproved?.();
+    } catch (e) {
+      setApproveError((e as Error).message || "Error al avanzar etapa");
     } finally {
       setApproving(false);
     }
@@ -575,6 +604,26 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
                           className="rounded bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
                         >
                           {approving ? "…" : "Aprobar folio"}
+                        </button>
+                      )}
+                      {puedePasarCuentaFondos && (
+                        <button
+                          type="button"
+                          onClick={() => handleAvanzarEtapa("CUENTA_FONDOS")}
+                          disabled={approving}
+                          className="rounded bg-orange-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-50"
+                        >
+                          {approving ? "…" : "Pasar a Cuenta de fondos"}
+                        </button>
+                      )}
+                      {puedePasarChequeGenerado && (
+                        <button
+                          type="button"
+                          onClick={() => handleAvanzarEtapa("CHEQUE_GENERADO")}
+                          disabled={approving}
+                          className="rounded bg-yellow-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-yellow-600 disabled:opacity-50"
+                        >
+                          {approving ? "…" : "Pasar a Cheque Generado"}
                         </button>
                       )}
                       {puedeRegresarZp && (
