@@ -228,6 +228,12 @@ function DashboardContent() {
           selectedPlantaId={selectedPlantaId}
           searchTerm={searchTerm}
           onOpenFolio={setDrawerFolioId}
+          onSelectPlanta={(id) =>
+            setFilters((prev) => ({
+              ...prev,
+              plantas: id != null ? String(id) : undefined,
+            }))
+          }
           onSubirPoliza={setPolizaFolioId}
           onImprimirGastos={(id, numeroFolio, etapa) => setImprimirGastos({ id, numeroFolio, etapa })}
           onCrearFolio={(plantaId, plantaNombre) => setCrearFolio({ planta_id: plantaId, planta_nombre: plantaNombre })}
