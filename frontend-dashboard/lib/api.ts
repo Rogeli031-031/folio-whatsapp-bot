@@ -1062,6 +1062,19 @@ export function postCheckDuplicadosFolio(
   });
 }
 
+/** Cancelar folio → CANCELADO (p.ej. desde análisis de duplicados). */
+export function postCancelarFolio(
+  token: string,
+  id: number,
+  motivo?: string
+): Promise<{ ok: boolean; estatus: string; already?: boolean }> {
+  return apiFetch<{ ok: boolean; estatus: string; already?: boolean }>(`/api/folios/${id}/cancelar`, {
+    token,
+    method: "POST",
+    body: JSON.stringify({ motivo: motivo || "Cancelado desde análisis de duplicados (dashboard)" }),
+  });
+}
+
 /** Análisis de duplicados existentes por planta y rango de fechas de creación. */
 export function fetchAnalisisDuplicados(
   token: string,

@@ -8732,6 +8732,65 @@ app.get("/api/folios/duplicados/analisis", dashboardAuthMiddleware, dashboardBlo
   }
 });
 
+/**
+ * Cancelar folio directo a CANCELADO (p.ej. limpieza de duplicados desde dashboard).
+ * Roles: GA, GG, AD, ZP. No aplica a pagados/cerrados/comprobaciones/evidencias.
+ */
+app.post("/api/folios/:id/cancelar", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddleware, async (req, res) => {
+  const role = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) || "";
+  if (!["GA", "GG", "AD", "ZP"].includes(role)) {
+    return res.status(403).json({ error: "Solo GA, GG, AD o Director ZP pueden cancelar folios desde el dashboard." });
+  }
+  if (req.dashboardAuth.role === "CF_CDMX") {
+    return res.status(403).json({ error: "Sin permiso para cancelar." });
+  }
+  const folioId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
+  const motivo = (req.body && req.body.motivo != null && String(req.body.motivo).trim() !== "")
+    ? String(req.body.motivo).trim().slice(0, 500)
+    : "Cancelado desde análisis de duplicados (dashboard)";
+  const client = await pool.connect();
+  try {
+    const folio = await getFolioById(client, folioId);
+    if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
+    const denied = assertPlantaPermitidaDashboard(req, folio.planta_id);
+    if (denied) return res.status(403).json({ error: denied });
+    const estatus = String(folio.estatus || "").trim().toUpperCase();
+    if (estatus === ESTADOS.CANCELADO) {
+      return res.json({ ok: true, estatus: ESTADOS.CANCELADO, already: true });
+    }
+    if ([ESTADOS.PAGADO, ESTADOS.CERRADO, ESTADOS.COMPROBACIONES, ESTADOS.EVIDENCIAS].includes(estatus)) {
+      return res.status(400).json({
+        error: "No se puede cancelar un folio pagado, cerrado, en comprobaciones o evidencias.",
+      });
+    }
+    await updateFolioEstatus(client, folioId, ESTADOS.CANCELADO, { estatus_anterior: estatus });
+    await insertHistorial(
+      client,
+      folioId,
+      folio.numero_folio,
+      folio.folio_codigo,
+      ESTADOS.CANCELADO,
+      motivo,
+      null,
+      role
+    );
+    if (!folio.solo_zp_ad) {
+      try {
+        await notifyPlantByFolio(pool, folio.numero_folio, "CANCELADO", { roles: ["GG", "GA"], motivo });
+      } catch (notifErr) {
+        console.warn("[Dashboard folio cancelar] Notificación:", notifErr.message);
+      }
+    }
+    return res.json({ ok: true, estatus: ESTADOS.CANCELADO });
+  } catch (e) {
+    console.error("[Dashboard folio cancelar]", e);
+    res.status(500).json({ error: e.message || "Error al cancelar folio" });
+  } finally {
+    client.release();
+  }
+});
+
 /** Crear folio desde dashboard (formulario). Solo GA, GG, AD, ZP. */
 app.post("/api/folios", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddleware, async (req, res) => {
   const role = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) || "";

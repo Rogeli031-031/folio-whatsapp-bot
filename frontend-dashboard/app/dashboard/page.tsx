@@ -313,6 +313,7 @@ function DashboardContent() {
             setAnalisisDuplicados(null);
             setDrawerFolioId(id);
           }}
+          onCancelled={loadData}
         />
       )}
     </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { fetchAnalisisDuplicados, type DuplicadoPair } from "@/lib/api";
+import { fetchAnalisisDuplicados, postCancelarFolio, type DuplicadoPair } from "@/lib/api";
 
 interface Props {
   open: boolean;
@@ -10,6 +10,8 @@ interface Props {
   plantaNombre: string;
   onClose: () => void;
   onOpenFolio?: (id: number) => void;
+  /** Tras cancelar un folio (para refrescar kanban). */
+  onCancelled?: () => void;
 }
 
 function fmtMxn(n: number | null | undefined): string {
@@ -21,6 +23,8 @@ function pct(score: number): string {
   return `${Math.round(score * 100)}%`;
 }
 
+type FolioMini = DuplicadoPair["a"];
+
 export default function AnalisisDuplicadosModal({
   open,
   token,
@@ -28,6 +32,7 @@ export default function AnalisisDuplicadosModal({
   plantaNombre,
   onClose,
   onOpenFolio,
+  onCancelled,
 }: Props) {
   const [meses, setMeses] = useState(6);
   const [umbral, setUmbral] = useState(0.72);
@@ -35,6 +40,8 @@ export default function AnalisisDuplicadosModal({
   const [error, setError] = useState<string | null>(null);
   const [pairs, setPairs] = useState<DuplicadoPair[]>([]);
   const [meta, setMeta] = useState<{ desde: string; scanned: number; truncated: boolean } | null>(null);
+  const [confirmFolio, setConfirmFolio] = useState<FolioMini | null>(null);
+  const [cancelling, setCancelling] = useState(false);
 
   const run = async () => {
     setLoading(true);
@@ -61,9 +68,39 @@ export default function AnalisisDuplicadosModal({
     setPairs([]);
     setMeta(null);
     setError(null);
+    setConfirmFolio(null);
     void run();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- solo al abrir / cambiar planta
   }, [open, plantaId, token]);
+
+  const handleConfirmCancel = async () => {
+    if (!confirmFolio) return;
+    setCancelling(true);
+    setError(null);
+    try {
+      const numero = confirmFolio.numero_folio || confirmFolio.folio_codigo;
+      await postCancelarFolio(
+        token,
+        confirmFolio.id,
+        `Cancelado desde análisis de duplicados (${numero})`
+      );
+      const cancelledId = confirmFolio.id;
+      setConfirmFolio(null);
+      setPairs((prev) =>
+        prev
+          .map((p) => {
+            if (p.a.id === cancelledId || p.b.id === cancelledId) return null;
+            return p;
+          })
+          .filter((p): p is DuplicadoPair => p != null)
+      );
+      onCancelled?.();
+    } catch (e) {
+      setError((e as Error).message || "Error al cancelar");
+    } finally {
+      setCancelling(false);
+    }
+  };
 
   if (!open) return null;
 
@@ -143,19 +180,37 @@ export default function AnalisisDuplicadosModal({
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2">
                   {[p.a, p.b].map((f) => (
-                    <button
+                    <div
                       key={f.id}
-                      type="button"
-                      onClick={() => onOpenFolio?.(f.id)}
-                      className="rounded border border-slate-600/80 bg-slate-900/50 p-2 text-left hover:border-amber-600/50"
+                      className="relative rounded border border-slate-600/80 bg-slate-900/50 p-2 pr-8 text-left"
                     >
-                      <div className="font-mono text-xs text-amber-300">{f.numero_folio || f.folio_codigo}</div>
-                      <p className="mt-1 line-clamp-3 text-xs text-slate-300">{f.concepto || "—"}</p>
-                      <div className="mt-1 text-[11px] text-slate-500">
-                        {f.estatus || "—"}
-                        {f.mes_cargo ? ` · cargo ${f.mes_cargo}` : ""}
-                      </div>
-                    </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setConfirmFolio(f);
+                        }}
+                        className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded text-red-500 hover:bg-red-950/60 hover:text-red-400"
+                        title="Cancelar folio"
+                        aria-label={`Cancelar folio ${f.numero_folio || f.folio_codigo}`}
+                      >
+                        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                          <path d="M18 6L6 18M6 6l12 12" />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onOpenFolio?.(f.id)}
+                        className="w-full text-left hover:opacity-90"
+                      >
+                        <div className="font-mono text-xs text-amber-300">{f.numero_folio || f.folio_codigo}</div>
+                        <p className="mt-1 line-clamp-3 text-xs text-slate-300">{f.concepto || "—"}</p>
+                        <div className="mt-1 text-[11px] text-slate-500">
+                          {f.estatus || "—"}
+                          {f.mes_cargo ? ` · cargo ${f.mes_cargo}` : ""}
+                        </div>
+                      </button>
+                    </div>
                   ))}
                 </div>
               </li>
@@ -163,6 +218,40 @@ export default function AnalisisDuplicadosModal({
           </ul>
         </div>
       </div>
+
+      {confirmFolio && (
+        <div className="absolute inset-0 z-[60] flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-md rounded-lg border border-slate-600 bg-slate-900 p-4 shadow-xl">
+            <h3 className="text-base font-semibold text-white">¿Cancelar folio?</h3>
+            <p className="mt-2 text-sm text-slate-300">
+              El folio{" "}
+              <span className="font-mono text-amber-300">
+                {confirmFolio.numero_folio || confirmFolio.folio_codigo}
+              </span>{" "}
+              pasará a <strong className="text-red-300">Cancelado</strong>. Esta acción no se puede deshacer desde aquí.
+            </p>
+            <p className="mt-2 line-clamp-3 text-xs text-slate-500">{confirmFolio.concepto || ""}</p>
+            <div className="mt-4 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                disabled={cancelling}
+                onClick={() => setConfirmFolio(null)}
+                className="rounded bg-slate-700 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-600 disabled:opacity-50"
+              >
+                No, volver
+              </button>
+              <button
+                type="button"
+                disabled={cancelling}
+                onClick={() => void handleConfirmCancel()}
+                className="rounded bg-red-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {cancelling ? "Cancelando…" : "Sí, cancelar folio"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
