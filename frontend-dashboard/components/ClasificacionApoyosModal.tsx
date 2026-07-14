@@ -130,15 +130,16 @@ function groupFoliosByEtapa(folios: ClasificacionDetalleFolio[]): {
     };
   });
   // Cualquier estatus raro no mapeado
-  for (const [etapa, items] of map) {
-    if (ETAPA_ORDER.includes(etapa as (typeof ETAPA_ORDER)[number])) continue;
+  const known = new Set<string>(ETAPA_ORDER as unknown as string[]);
+  Array.from(map.entries()).forEach(([etapa, items]) => {
+    if (known.has(etapa)) return;
     groups.push({
       etapa,
       label: ETAPA_LABELS[etapa] || etapa,
       items,
       total: items.reduce((s, f) => s + (Number(f.importe) || 0), 0),
     });
-  }
+  });
   return groups;
 }
 
