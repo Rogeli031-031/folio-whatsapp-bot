@@ -583,6 +583,8 @@ export interface FolioCard {
   prestamo_siguiente_mes?: boolean;
   /** Suma de montos de facturas adjuntas (comprobado). */
   monto_comprobado?: number | null;
+  /** Número de cheque (póliza / pago). */
+  numero_cheque?: string | null;
   /** Etapa visual del kanban (ej. "Pendiente aprobación planta"). Solo en datos aplanados del resumen. */
   etapa_label?: string | null;
 }

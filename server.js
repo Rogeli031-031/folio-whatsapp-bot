@@ -5624,6 +5624,7 @@ function cardFromFolioRow(row) {
     prestamo_a_planta: row.prestamo_a_planta != null && String(row.prestamo_a_planta).trim() !== "" ? String(row.prestamo_a_planta).trim() : null,
     prestamo_siguiente_mes: !!row.prestamo_siguiente_mes,
     monto_comprobado: row.monto_comprobado != null ? Number(row.monto_comprobado) : 0,
+    numero_cheque: row.numero_cheque != null && String(row.numero_cheque).trim() !== "" ? String(row.numero_cheque).trim() : null,
   };
 }
 
@@ -5636,7 +5637,7 @@ app.get("/api/dashboard/kanban", dashboardAuthMiddleware, async (req, res) => {
     const q = `
       SELECT f.id, f.numero_folio, f.folio_codigo, f.planta_id, f.categoria, f.subcategoria, f.unidad,
              f.importe, f.estatus, f.creado_en, f.prioridad, f.mes_cargo, f.beneficiario, f.proyecto_id,
-             f.prestamo_a_planta,
+             f.prestamo_a_planta, f.numero_cheque,
              COALESCE(f.solo_zp_ad, false) AS solo_zp_ad, COALESCE(f.por_recuperar, false) AS por_recuperar,
              COALESCE(f.solicitud_por_recuperar_pendiente, false) AS solicitud_por_recuperar_pendiente,
              COALESCE(f.prestamo_siguiente_mes, false) AS prestamo_siguiente_mes,

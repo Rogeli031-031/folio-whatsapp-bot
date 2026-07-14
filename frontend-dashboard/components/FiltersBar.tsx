@@ -138,7 +138,7 @@ export default function FiltersBar({ filters, onFiltersChange, plantas = [], sea
               type="search"
               value={searchTerm}
               onChange={(e) => onSearchTermChange(e.target.value)}
-              placeholder="Beneficiario, descripción, importe…"
+              placeholder="Beneficiario, cheque, descripción, importe…"
               className="w-64 rounded border border-slate-600 bg-slate-900 px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500"
             />
           </div>

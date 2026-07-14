@@ -55,6 +55,7 @@ function matchesSearch(card: FolioCardType, term: string | undefined): boolean {
     card.proyecto_codigo,
     card.proyecto_nombre,
     card.planta_nombre,
+    card.numero_cheque,
     importeStr,
   ];
   return fields.some((f) => (f || "").toString().toLowerCase().includes(q));
