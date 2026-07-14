@@ -34,7 +34,7 @@ function DashboardContent() {
   const [unauthorized, setUnauthorized] = useState(false);
   const [roleHint, setRoleHint] = useState<string | null>(null);
   const [kanban, setKanban] = useState<KanbanBoardData | null>(null);
-  const [filters, setFilters] = useState<DashboardFilters>({ solo_activos: "1" });
+  const [filters, setFilters] = useState<DashboardFilters>({ solo_activos: "1", ventana: "1" });
   const [drawerFolioId, setDrawerFolioId] = useState<number | null>(null);
   const [showComoCambioModal, setShowComoCambioModal] = useState(false);
   const [showDeltaVentaModal, setShowDeltaVentaModal] = useState(false);

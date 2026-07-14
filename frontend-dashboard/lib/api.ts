@@ -605,7 +605,14 @@ export interface DashboardFilters {
   mi_semana?: string;
   fecha_desde?: string;
   fecha_hasta?: string;
+  /** Rango sobre folios.aprobado_en */
+  fecha_aprob_desde?: string;
+  fecha_aprob_hasta?: string;
   mes?: string;
+  /** Meses YYYY-MM extra (csv) para ampliar ventana reciente (mes_cargo o creados). */
+  meses_extra?: string;
+  /** "1" = ventana reciente on (default); "0" = desactivada */
+  ventana?: string;
 }
 
 export function fetchKanban(token: string, filters: DashboardFilters = {}): Promise<KanbanBoard> {
@@ -617,7 +624,12 @@ export function fetchKanban(token: string, filters: DashboardFilters = {}): Prom
   if (filters.mi_semana === "1") params.mi_semana = "true";
   if (filters.fecha_desde) params.fecha_desde = filters.fecha_desde;
   if (filters.fecha_hasta) params.fecha_hasta = filters.fecha_hasta;
+  if (filters.fecha_aprob_desde) params.fecha_aprob_desde = filters.fecha_aprob_desde;
+  if (filters.fecha_aprob_hasta) params.fecha_aprob_hasta = filters.fecha_aprob_hasta;
   if (filters.mes) params.mes = filters.mes;
+  if (filters.meses_extra) params.meses_extra = filters.meses_extra;
+  if (filters.ventana === "0") params.ventana = "0";
+  else params.ventana = "1";
   return apiFetch<KanbanBoard>("/api/dashboard/kanban", { token, params });
 }
 
@@ -1024,6 +1036,12 @@ export function fetchKpis(token: string, filters: DashboardFilters = {}): Promis
   if (filters.mi_semana === "1") params.mi_semana = "true";
   if (filters.fecha_desde) params.fecha_desde = filters.fecha_desde;
   if (filters.fecha_hasta) params.fecha_hasta = filters.fecha_hasta;
+  if (filters.fecha_aprob_desde) params.fecha_aprob_desde = filters.fecha_aprob_desde;
+  if (filters.fecha_aprob_hasta) params.fecha_aprob_hasta = filters.fecha_aprob_hasta;
+  if (filters.mes) params.mes = filters.mes;
+  if (filters.meses_extra) params.meses_extra = filters.meses_extra;
+  if (filters.ventana === "0") params.ventana = "0";
+  else params.ventana = "1";
   return apiFetch<Kpis>("/api/dashboard/kpis", { token, params });
 }
 

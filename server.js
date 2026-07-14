@@ -5406,10 +5406,58 @@ function parseDashboardFilters(q) {
   const miSemana = q.mi_semana === "true" || q.mi_semana === "1";
   let fechaDesde = q.fecha_desde || q.desde || null;
   let fechaHasta = q.fecha_hasta || q.hasta || null;
+  let fechaAprobDesde = q.fecha_aprob_desde || null;
+  let fechaAprobHasta = q.fecha_aprob_hasta || null;
   const mes = (q.mes && /^\d{4}-\d{2}$/.test(String(q.mes).trim())) ? String(q.mes).trim() : null;
+  const mesesExtra = (q.meses_extra || q.meses || "")
+    .toString()
+    .split(",")
+    .map((s) => String(s).trim())
+    .filter((s) => /^\d{4}-\d{2}$/.test(s));
+  // Ventana por defecto: mes_cargo actual + creados mes actual y mes pasado (on por defecto).
+  const ventanaDefault =
+    q.ventana === "0" || q.ventana === "false" || q.sin_ventana === "1" || q.sin_ventana === "true"
+      ? false
+      : true;
   if (fechaDesde && !/^\d{4}-\d{2}-\d{2}$/.test(fechaDesde)) fechaDesde = null;
   if (fechaHasta && !/^\d{4}-\d{2}-\d{2}$/.test(fechaHasta)) fechaHasta = null;
-  return { plantas, categorias, etapas, soloActivos, miSemana, fechaDesde, fechaHasta, mes };
+  if (fechaAprobDesde && !/^\d{4}-\d{2}-\d{2}$/.test(fechaAprobDesde)) fechaAprobDesde = null;
+  if (fechaAprobHasta && !/^\d{4}-\d{2}-\d{2}$/.test(fechaAprobHasta)) fechaAprobHasta = null;
+  return {
+    plantas,
+    categorias,
+    etapas,
+    soloActivos,
+    miSemana,
+    fechaDesde,
+    fechaHasta,
+    fechaAprobDesde,
+    fechaAprobHasta,
+    mes,
+    mesesExtra,
+    ventanaDefault,
+  };
+}
+
+/** Meses YYYY-MM actuales en America/Mexico_City: [mesActual, mesAnterior]. */
+function getMesActualYAnteriorMx() {
+  const fmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Mexico_City",
+    year: "numeric",
+    month: "2-digit",
+  });
+  const parts = fmt.formatToParts(new Date());
+  const y = Number(parts.find((p) => p.type === "year")?.value);
+  const m = Number(parts.find((p) => p.type === "month")?.value);
+  const mesActual = `${y}-${String(m).padStart(2, "0")}`;
+  let py = y;
+  let pm = m - 1;
+  if (pm < 1) {
+    pm = 12;
+    py -= 1;
+  }
+  const mesAnterior = `${py}-${String(pm).padStart(2, "0")}`;
+  return { mesActual, mesAnterior };
 }
 
 function buildDashboardWhere(auth, filters) {
@@ -5477,19 +5525,59 @@ function buildDashboardWhere(auth, filters) {
   if (filters.miSemana) {
     conditions.push(`UPPER(TRIM(COALESCE(f.estatus,''))) = 'SELECCIONADO_SEMANA'`);
   }
+  // Filtro legacy: un solo mes_cargo exacto
   if (filters.mes) {
     conditions.push(`(f.mes_cargo = $${n}::TEXT)`);
     params.push(filters.mes);
     n++;
   }
+  // Ventana por defecto (+ meses extra): mes_cargo actual/extras OR creado en mes actual, anterior o extras
+  if (filters.ventanaDefault !== false && !filters.mes) {
+    const { mesActual, mesAnterior } = getMesActualYAnteriorMx();
+    const extras = Array.isArray(filters.mesesExtra) ? filters.mesesExtra : [];
+    const mesesCargo = [...new Set([mesActual, ...extras])];
+    const mesesCreado = [...new Set([mesActual, mesAnterior, ...extras])];
+    conditions.push(
+      `(
+        (f.mes_cargo IS NOT NULL AND TRIM(f.mes_cargo) <> '' AND f.mes_cargo = ANY($${n}::TEXT[]))
+        OR to_char((f.creado_en AT TIME ZONE 'America/Mexico_City'), 'YYYY-MM') = ANY($${n + 1}::TEXT[])
+      )`
+    );
+    params.push(mesesCargo);
+    params.push(mesesCreado);
+    n += 2;
+  } else if (filters.mesesExtra && filters.mesesExtra.length > 0 && !filters.mes) {
+    // Sin ventana default pero con meses extra explícitos
+    const extras = filters.mesesExtra;
+    conditions.push(
+      `(
+        (f.mes_cargo IS NOT NULL AND TRIM(f.mes_cargo) <> '' AND f.mes_cargo = ANY($${n}::TEXT[]))
+        OR to_char((f.creado_en AT TIME ZONE 'America/Mexico_City'), 'YYYY-MM') = ANY($${n}::TEXT[])
+      )`
+    );
+    params.push(extras);
+    n++;
+  }
+  // Fecha de creación
   if (filters.fechaDesde) {
-    conditions.push(`(f.creado_en::DATE >= $${n}::DATE)`);
+    conditions.push(`((f.creado_en AT TIME ZONE 'America/Mexico_City')::DATE >= $${n}::DATE)`);
     params.push(filters.fechaDesde);
     n++;
   }
   if (filters.fechaHasta) {
-    conditions.push(`(f.creado_en::DATE <= $${n}::DATE)`);
+    conditions.push(`((f.creado_en AT TIME ZONE 'America/Mexico_City')::DATE <= $${n}::DATE)`);
     params.push(filters.fechaHasta);
+    n++;
+  }
+  // Fecha de aprobación (aprobado_en)
+  if (filters.fechaAprobDesde) {
+    conditions.push(`(f.aprobado_en IS NOT NULL AND (f.aprobado_en AT TIME ZONE 'America/Mexico_City')::DATE >= $${n}::DATE)`);
+    params.push(filters.fechaAprobDesde);
+    n++;
+  }
+  if (filters.fechaAprobHasta) {
+    conditions.push(`(f.aprobado_en IS NOT NULL AND (f.aprobado_en AT TIME ZONE 'America/Mexico_City')::DATE <= $${n}::DATE)`);
+    params.push(filters.fechaAprobHasta);
     n++;
   }
   const where = conditions.length ? " AND " + conditions.join(" AND ") : "";
