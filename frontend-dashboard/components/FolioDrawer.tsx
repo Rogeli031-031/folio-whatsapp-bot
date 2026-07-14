@@ -146,7 +146,7 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
   const solicitudPorRecuperarPendiente = !!folio?.solicitud_por_recuperar_pendiente;
   const esUrgente = (folio?.prioridad ?? "").toString().toLowerCase().includes("urgente");
   const puedeMarcarUrgente = !soloLectura && (roleUpper === "GG" || roleUpper === "AD" || roleUpper === "ZP");
-  const puedeSolicitarCancelacion = (roleUpper === "GA" || roleUpper === "GG" || roleUpper === "CF_CDMX") && !["CANCELADO", "PAGADO", "CERRADO", "CANCELACION_SOLICITADA"].includes(estatusUpper);
+  const puedeSolicitarCancelacion = (roleUpper === "GA" || roleUpper === "GG" || roleUpper === "CF_CDMX") && !["CANCELADO", "PAGADO", "CERRADO", "COMPROBACIONES", "CANCELACION_SOLICITADA"].includes(estatusUpper);
   const whatsappNumber = (process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "").trim().replace(/\D/g, "");
   const numeroFolio = (folio?.numero_folio as string) || (folio?.folio_codigo as string) || "";
   const cmdCancelacion = numeroFolio ? `cancelar ${numeroFolio} motivo: ` : "cancelar F-YYYYMM-XXX motivo: ";
