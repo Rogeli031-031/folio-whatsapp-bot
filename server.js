@@ -119,6 +119,7 @@ const ESTADOS = {
   PAGADO: "PAGADO",
   CERRADO: "CERRADO",
   COMPROBACIONES: "COMPROBACIONES",
+  EVIDENCIAS: "EVIDENCIAS",
   CANCELACION_SOLICITADA: "CANCELACION_SOLICITADA",
   CANCELADO: "CANCELADO",
 };
@@ -3796,7 +3797,7 @@ async function eliminarFolioArchivoAd(client, folio, archivo, actorLabel) {
       [folio.id]
     );
     const est = String(folio.estatus || "").toUpperCase();
-    if (!polRes.rows.length && (est === ESTADOS.PAGADO || est === ESTADOS.CERRADO || est === ESTADOS.COMPROBACIONES)) {
+    if (!polRes.rows.length && (est === ESTADOS.PAGADO || est === ESTADOS.CERRADO || est === ESTADOS.COMPROBACIONES || est === ESTADOS.EVIDENCIAS)) {
       nuevoEstatus = ESTADOS.SOLICITANDO_PAGO;
       await client.query(`UPDATE public.folios SET estatus = $1 WHERE id = $2`, [nuevoEstatus, folio.id]);
     }
@@ -3952,15 +3953,15 @@ function normalizeStageKey(evento) {
   if (/(CONTRALOR|CDMX).*(PENDIENTE|APROBADO|RECHAZADO)|(PENDIENTE|APROBADO|RECHAZADO).*(CONTRALOR|CDMX)/.test(s)) return "CONTRALOR_CDMX";
   if (/PENDIENTE_TESORERIA|PAGADO_TESORERIA|RECHAZADO_TESORERIA/.test(s)) return "TESORERIA";
   if (/PENDIENTE_APROB_PLANTA|APROB_PLANTA|APROBADO_PLANTA/.test(s)) return "PLANTA";
-  if (/LISTO_PARA_PROGRAMACION|SELECCIONADO_SEMANA|SOLICITANDO_PAGO|PAGADO|CERRADO|COMPROBACIONES/.test(s)) return "PROGRAMACION";
+  if (/LISTO_PARA_PROGRAMACION|SELECCIONADO_SEMANA|SOLICITANDO_PAGO|PAGADO|CERRADO|COMPROBACIONES|EVIDENCIAS/.test(s)) return "PROGRAMACION";
   if (/GENERADO|CREADO|REGISTRADO|CAPTURADO/.test(s)) return "CREACION";
   return s;
 }
 
-/** true si el estado es final (aprobado/rechazado/cancelado/pagado/cerrado/comprobaciones). */
+/** true si el estado es final (aprobado/rechazado/cancelado/pagado/cerrado/comprobaciones/evidencias). */
 function isFinalStatus(estatus) {
   const s = String(estatus || "").trim().toUpperCase();
-  return /^APROBADO_|^APROB_|^RECHAZADO_|^CANCELADO|^PAGADO|^CERRADO|^COMPROBACIONES|^COMPLETADO|^FINALIZADO|^LIBERADO|^ENVIADO/.test(s) || s === "PAGADO" || s === "CERRADO" || s === "COMPROBACIONES" || s === "CANCELADO";
+  return /^APROBADO_|^APROB_|^RECHAZADO_|^CANCELADO|^PAGADO|^CERRADO|^COMPROBACIONES|^EVIDENCIAS|^COMPLETADO|^FINALIZADO|^LIBERADO|^ENVIADO/.test(s) || s === "PAGADO" || s === "CERRADO" || s === "COMPROBACIONES" || s === "EVIDENCIAS" || s === "CANCELADO";
 }
 
 /** Prioridad para desempate: mayor = más definitivo. Transitorios 0, aprobados 1, rechazados 2, cancelado 3. */
@@ -3968,7 +3969,7 @@ function statusPriority(estatus) {
   const s = String(estatus || "").trim().toUpperCase();
   if (/^CANCELADO/.test(s)) return 3;
   if (/^RECHAZADO/.test(s)) return 2;
-  if (/^APROBADO|^APROB_|^PAGADO|^CERRADO|^COMPROBACIONES|^COMPLETADO|^FINALIZADO/.test(s) || s === "PAGADO" || s === "CERRADO" || s === "COMPROBACIONES") return 1;
+  if (/^APROBADO|^APROB_|^PAGADO|^CERRADO|^COMPROBACIONES|^EVIDENCIAS|^COMPLETADO|^FINALIZADO/.test(s) || s === "PAGADO" || s === "CERRADO" || s === "COMPROBACIONES" || s === "EVIDENCIAS") return 1;
   return 0;
 }
 
@@ -4192,8 +4193,8 @@ async function getFoliosByUnidad(client, unidad, opts = {}) {
   return { rows: (r && r.rows) || [] };
 }
 
-/** En proceso = no cancelado, no pagado, no cerrado, no comprobaciones. */
-const ESTACIONES_ESTATUS_EXCLUIDOS = [ESTADOS.CANCELADO, ESTADOS.PAGADO, ESTADOS.CERRADO, ESTADOS.COMPROBACIONES];
+/** En proceso = no cancelado, no pagado, no cerrado, no comprobaciones, no evidencias. */
+const ESTACIONES_ESTATUS_EXCLUIDOS = [ESTADOS.CANCELADO, ESTADOS.PAGADO, ESTADOS.CERRADO, ESTADOS.COMPROBACIONES, ESTADOS.EVIDENCIAS];
 
 /**
  * Agregados por estación (folios Gastos/Estaciones en proceso).
@@ -4202,7 +4203,7 @@ const ESTACIONES_ESTATUS_EXCLUIDOS = [ESTADOS.CANCELADO, ESTADOS.PAGADO, ESTADOS
 async function queryStationAggregates(client, plantaId, opts = {}) {
   const soloUrgentes = !!opts.soloUrgentes;
   const whereUrg = soloUrgentes ? " AND (f.prioridad ILIKE '%urgente%' OR f.prioridad ILIKE '%alta%')" : "";
-  const params = [plantaId, ESTADOS.CANCELADO, ESTADOS.PAGADO, ESTADOS.CERRADO, ESTADOS.COMPROBACIONES];
+  const excl = ESTACIONES_ESTATUS_EXCLUIDOS;
   let r;
   try {
     r = await client.query(
@@ -4214,11 +4215,11 @@ async function queryStationAggregates(client, plantaId, opts = {}) {
          AND UPPER(TRIM(COALESCE(f.subcategoria,''))) = 'ESTACIONES'
          AND (f.categoria IS NULL OR UPPER(TRIM(f.categoria)) LIKE '%GASTOS%')
          AND f.estacion IS NOT NULL AND TRIM(f.estacion) <> ''
-         AND (f.estatus IS NULL OR (UPPER(TRIM(f.estatus)) <> $2 AND UPPER(TRIM(f.estatus)) <> $3 AND UPPER(TRIM(f.estatus)) <> $4 AND UPPER(TRIM(f.estatus)) <> $5))
+         AND (f.estatus IS NULL OR UPPER(TRIM(f.estatus)) <> ALL($2::text[]))
          ${whereUrg}
        GROUP BY UPPER(TRIM(f.estacion))
        ORDER BY total_mxn DESC`,
-      params
+      [plantaId, excl]
     );
   } catch (e) {
     if (e.message && /column/.test(e.message)) return { rows: [], totalFolios: 0, totalMxn: 0 };
@@ -4238,7 +4239,7 @@ async function queryStationAggregates(client, plantaId, opts = {}) {
  * Folios FIFO por estación (en proceso). estacionNorm = 'TODAS' o nombre normalizado.
  */
 async function queryFoliosFIFOByEstacion(client, plantaId, estacionNorm, limit = 10, offset = 0) {
-  const excl = [ESTADOS.CANCELADO, ESTADOS.PAGADO, ESTADOS.CERRADO, ESTADOS.COMPROBACIONES];
+  const excl = [ESTADOS.CANCELADO, ESTADOS.PAGADO, ESTADOS.CERRADO, ESTADOS.COMPROBACIONES, ESTADOS.EVIDENCIAS];
   let res;
   try {
     if (estacionNorm === "TODAS") {
@@ -5242,13 +5243,14 @@ if (DEBUG) {
 
 /* ==================== DASHBOARD API ==================== */
 
-/** Etapas visuales (5 + cancelado). Solo presentación; no cambian estados en DB. */
+/** Etapas visuales (flujo + cancelado). Solo presentación; no cambian estados en DB. */
 const ETAPA_VISUAL = {
   PENDIENTE_APROB_PLANTA: "PENDIENTE_APROB_PLANTA",
   APROB_DIRECTOR_ZP: "APROB_DIRECTOR_ZP",
   CARRO_COMPRA: "CARRO_COMPRA",
   DEPOSITO_CIERRE: "DEPOSITO_CIERRE",
   COMPROBACIONES: "COMPROBACIONES",
+  EVIDENCIAS: "EVIDENCIAS",
   CANCELADO: "CANCELADO",
 };
 
@@ -5259,6 +5261,7 @@ const ETAPAS_VISUAL_ORDER = [
   ETAPA_VISUAL.CARRO_COMPRA,
   ETAPA_VISUAL.DEPOSITO_CIERRE,
   ETAPA_VISUAL.COMPROBACIONES,
+  ETAPA_VISUAL.EVIDENCIAS,
   ETAPA_VISUAL.CANCELADO,
 ];
 
@@ -5268,6 +5271,7 @@ function estatusToEtapaVisual(estatus) {
   if (!s) return ETAPA_VISUAL.PENDIENTE_APROB_PLANTA;
   if (s === ESTADOS.CANCELADO) return ETAPA_VISUAL.CANCELADO;
   if (s === ESTADOS.CANCELACION_SOLICITADA) return ETAPA_VISUAL.APROB_DIRECTOR_ZP;
+  if (s === ESTADOS.EVIDENCIAS) return ETAPA_VISUAL.EVIDENCIAS;
   if (s === ESTADOS.COMPROBACIONES) return ETAPA_VISUAL.COMPROBACIONES;
   if ([ESTADOS.PAGADO, ESTADOS.CERRADO].includes(s)) return ETAPA_VISUAL.DEPOSITO_CIERRE;
   if ([ESTADOS.APROBADO_ZP, ESTADOS.LISTO_PARA_PROGRAMACION, ESTADOS.SELECCIONADO_SEMANA, ESTADOS.SOLICITANDO_PAGO].includes(s)) return ETAPA_VISUAL.CARRO_COMPRA;
@@ -5282,6 +5286,7 @@ const ETAPA_VISIBLE = {
   [ETAPA_VISUAL.CARRO_COMPRA]: { label: "Carro de compra", icon: "🛒" },
   [ETAPA_VISUAL.DEPOSITO_CIERRE]: { label: "Depósito y cierre", icon: "🏦" },
   [ETAPA_VISUAL.COMPROBACIONES]: { label: "Comprobaciones", icon: "✅" },
+  [ETAPA_VISUAL.EVIDENCIAS]: { label: "Evidencias", icon: "📎" },
   [ETAPA_VISUAL.CANCELADO]: { label: "Cancelado", icon: "🔴" },
 };
 
@@ -5298,6 +5303,7 @@ function etapaVisualToEstatusTecnicos(etapaVisual) {
   if (ev === ETAPA_VISUAL.CARRO_COMPRA) return [ESTADOS.APROBADO_ZP, ESTADOS.LISTO_PARA_PROGRAMACION, ESTADOS.SELECCIONADO_SEMANA, ESTADOS.SOLICITANDO_PAGO];
   if (ev === ETAPA_VISUAL.DEPOSITO_CIERRE) return [ESTADOS.PAGADO, ESTADOS.CERRADO];
   if (ev === ETAPA_VISUAL.COMPROBACIONES) return [ESTADOS.COMPROBACIONES];
+  if (ev === ETAPA_VISUAL.EVIDENCIAS) return [ESTADOS.EVIDENCIAS];
   if (ev === ETAPA_VISUAL.CANCELADO) return [ESTADOS.CANCELADO];
   return [ev];
 }
@@ -5321,6 +5327,7 @@ const ETAPAS_ORDER = [
   ESTADOS.PAGADO,
   ESTADOS.CERRADO,
   ESTADOS.COMPROBACIONES,
+  ESTADOS.EVIDENCIAS,
   ESTADOS.CANCELACION_SOLICITADA,
   ESTADOS.CANCELADO,
 ];
@@ -7518,7 +7525,7 @@ app.get("/api/action-register/export", dashboardAuthMiddleware, async (req, res)
           const est = String(f.estatus || "").toUpperCase();
           if (est === "CANCELADO") {
             row.eachCell((cell) => { cell.font = { color: { argb: "FF991B1B" } }; });
-          } else if (est === "PAGADO" || est === "CERRADO" || est === "COMPROBACIONES") {
+          } else if (est === "PAGADO" || est === "CERRADO" || est === "COMPROBACIONES" || est === "EVIDENCIAS") {
             row.getCell("estatus").font = { color: { argb: "FF15803D" } };
           }
         }
@@ -8985,7 +8992,7 @@ async function fetchIgfFoliosDetalleList(client, year, month, empresa, tipo) {
         AND f.estatus = ANY($3::text[])
       ${SQL_WHERE_IGF_EXCLUYE_FOLIOS_CATEGORIA_F}
       ORDER BY f.estatus, f.numero_folio NULLS LAST, f.id`;
-    params = [periodoStr, plantaIdsRow, [ESTADOS.PAGADO, ESTADOS.CERRADO, ESTADOS.COMPROBACIONES]];
+    params = [periodoStr, plantaIdsRow, [ESTADOS.PAGADO, ESTADOS.CERRADO, ESTADOS.COMPROBACIONES, ESTADOS.EVIDENCIAS]];
   } else if (tipo === "inversiones") {
     sql = `
       SELECT f.id, f.numero_folio, f.folio_codigo, f.planta_id, f.importe, f.estatus, f.categoria, f.subcategoria,
@@ -9135,6 +9142,7 @@ async function buildIgfForecastPayload(client, year, month, opts = {}) {
     let foliosDepositoByPlanta = new Map();
     let foliosCierreByPlanta = new Map();
     let foliosComprobacionesByPlanta = new Map();
+    let foliosEvidenciasByPlanta = new Map();
     let foliosInversionesByPlanta = new Map();
     if (plantaIds.length > 0) {
       const estAprobZp = [ESTADOS.PENDIENTE_APROB_ZP, ESTADOS.CANCELACION_SOLICITADA];
@@ -9189,6 +9197,16 @@ async function buildIgfForecastPayload(client, year, month, opts = {}) {
         [periodoStr, ESTADOS.COMPROBACIONES, plantaIds]
       );
       foliosComprobacionesByPlanta = new Map((folComprobaciones.rows || []).map((r) => [Number(r.planta_id), Number(r.total) || 0]));
+      const folEvidencias = await client.query(
+        `SELECT planta_id, COALESCE(SUM(COALESCE(importe, 0)), 0) AS total FROM public.folios
+             WHERE mes_cargo = $1
+               AND estatus = $2
+               AND planta_id = ANY($3::int[])
+               ${SQL_WHERE_IGF_EXCLUYE_FOLIOS_CATEGORIA}
+             GROUP BY planta_id`,
+        [periodoStr, ESTADOS.EVIDENCIAS, plantaIds]
+      );
+      foliosEvidenciasByPlanta = new Map((folEvidencias.rows || []).map((r) => [Number(r.planta_id), Number(r.total) || 0]));
 
       // Inversiones: sumar por planta todos los folios categoría INVERSIONES con mes_cargo (excluye cancelados).
       if (isMesActual) {
@@ -9226,6 +9244,7 @@ async function buildIgfForecastPayload(client, year, month, opts = {}) {
       const totalDeposito = plantaIdsRow.reduce((s, id) => s + (foliosDepositoByPlanta.get(id) || 0), 0);
       const totalCierre = plantaIdsRow.reduce((s, id) => s + (foliosCierreByPlanta.get(id) || 0), 0);
       const totalComprobaciones = plantaIdsRow.reduce((s, id) => s + (foliosComprobacionesByPlanta.get(id) || 0), 0);
+      const totalEvidencias = plantaIdsRow.reduce((s, id) => s + (foliosEvidenciasByPlanta.get(id) || 0), 0);
       const totalInversiones = plantaIdsRow.reduce((s, id) => s + (foliosInversionesByPlanta.get(id) || 0), 0);
       row.presupuesto_kg = ventaKg > 0 && plantaIdsRow.length > 0
         ? Math.round((totalPresupuesto / ventaKg) * 100) / 100
@@ -9236,7 +9255,7 @@ async function buildIgfForecastPayload(client, year, month, opts = {}) {
       row.folios_carro_kg = ventaKg > 0 && plantaIdsRow.length > 0
         ? Math.round((totalFoliosCarro / ventaKg) * 100) / 100
         : null;
-      const totalDepositoCierre = totalDeposito + totalCierre + totalComprobaciones;
+      const totalDepositoCierre = totalDeposito + totalCierre + totalComprobaciones + totalEvidencias;
       row.deposito_cierre_kg = ventaKg > 0 && totalDepositoCierre > 0
         ? Math.round((-totalDepositoCierre / ventaKg) * 100) / 100
         : null;
@@ -11113,7 +11132,7 @@ app.post("/api/folios/:id/poliza", dashboardAuthMiddleware, dashboardBlockGVFoli
     const existing = await findFolioArchivoByHash(client, folioId, hash, "POLIZA");
     if (existing && existing.id) {
       // Si ya estaba en carrito, de todas formas avanzar a PAGADO (idempotente)
-      if (![ESTADOS.PAGADO, ESTADOS.CERRADO, ESTADOS.COMPROBACIONES].includes(est)) {
+      if (![ESTADOS.PAGADO, ESTADOS.CERRADO, ESTADOS.COMPROBACIONES, ESTADOS.EVIDENCIAS].includes(est)) {
         await client.query(
           `UPDATE public.folios SET estatus = $1, mes_cargo = $2 WHERE id = $3`,
           [ESTADOS.PAGADO, mesCargo, folioId]
@@ -15846,13 +15865,13 @@ app.post("/twilio/whatsapp", async (req, res) => {
         if (proy.estatus !== ESTADOS_PROYECTO.EN_CURSO) return safeReply("Solo se pueden cerrar proyectos EN_CURSO.");
         const totales = await getTotalesFoliosProyecto(client, proy.id);
         const foliosNoFinales = await client.query(
-          `SELECT COUNT(*) AS c FROM public.folios WHERE proyecto_id = $1 AND (estatus IS NULL OR (UPPER(TRIM(estatus)) NOT IN ('PAGADO','CERRADO','COMPROBACIONES','CANCELADO')))`,
+          `SELECT COUNT(*) AS c FROM public.folios WHERE proyecto_id = $1 AND (estatus IS NULL OR (UPPER(TRIM(estatus)) NOT IN ('PAGADO','CERRADO','COMPROBACIONES','EVIDENCIAS','CANCELADO')))`,
           [proy.id]
         );
         const noFinal = parseInt(foliosNoFinales.rows[0].c, 10) || 0;
         if (noFinal > 0) {
           sess.dd.pendingCierreProyecto = { codigo: codigoNorm, proyecto_id: proy.id, proyecto_nombre: proy.nombre };
-          return safeReply(`El proyecto tiene ${noFinal} folio(s) que no están PAGADO/CERRADO/COMPROBACIONES. ¿Cerrar de todos modos? Responde SÍ o NO.`);
+          return safeReply(`El proyecto tiene ${noFinal} folio(s) que no están PAGADO/CERRADO/COMPROBACIONES/EVIDENCIAS. ¿Cerrar de todos modos? Responde SÍ o NO.`);
         }
         await updateProyectoCerrado(client, proy.id);
         await insertProyectoHistorial(client, proy.id, "CERRADO", "Proyecto cerrado por ZP", fromNorm, actor ? actor.rol_nombre : null);
@@ -16255,7 +16274,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
 
           let gastado = 0;
           let porGastarse = 0;
-          const PAGADO_CERRADO = [ESTADOS.PAGADO, ESTADOS.CERRADO, ESTADOS.COMPROBACIONES];
+          const PAGADO_CERRADO = [ESTADOS.PAGADO, ESTADOS.CERRADO, ESTADOS.COMPROBACIONES, ESTADOS.EVIDENCIAS];
           rows.forEach((f) => {
             const m = Number(f.importe) || 0;
             const est = (f.estatus || "").toUpperCase().trim();
@@ -16783,7 +16802,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
               cancelados.push(numero);
               continue;
             }
-            if ([ESTADOS.APROBADO_ZP, ESTADOS.LISTO_PARA_PROGRAMACION, ESTADOS.SELECCIONADO_SEMANA, ESTADOS.PAGADO, ESTADOS.CERRADO, ESTADOS.COMPROBACIONES].includes(estatus)) {
+            if ([ESTADOS.APROBADO_ZP, ESTADOS.LISTO_PARA_PROGRAMACION, ESTADOS.SELECCIONADO_SEMANA, ESTADOS.PAGADO, ESTADOS.CERRADO, ESTADOS.COMPROBACIONES, ESTADOS.EVIDENCIAS].includes(estatus)) {
               yaAprobados.push(numero);
               continue;
             }
@@ -16879,7 +16898,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
               cancelados.push(numero);
               continue;
             }
-            if ([ESTADOS.APROBADO_ZP, ESTADOS.LISTO_PARA_PROGRAMACION, ESTADOS.SELECCIONADO_SEMANA, ESTADOS.PAGADO, ESTADOS.CERRADO, ESTADOS.COMPROBACIONES].includes(estatus)) {
+            if ([ESTADOS.APROBADO_ZP, ESTADOS.LISTO_PARA_PROGRAMACION, ESTADOS.SELECCIONADO_SEMANA, ESTADOS.PAGADO, ESTADOS.CERRADO, ESTADOS.COMPROBACIONES, ESTADOS.EVIDENCIAS].includes(estatus)) {
               yaAprobados.push(numero);
               continue;
             }
@@ -17013,7 +17032,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
           if (!folio) { noEncontrados.push(numero); continue; }
           if (folio.planta_id != null && folio.planta_id !== plantaId) { otraPlanta.push(numero); continue; }
           const est = String(folio.estatus || "").toUpperCase();
-          if (est === ESTADOS.CANCELADO || est === ESTADOS.PAGADO || est === ESTADOS.CERRADO || est === ESTADOS.COMPROBACIONES) { malEstatus.push(numero); continue; }
+          if (est === ESTADOS.CANCELADO || est === ESTADOS.PAGADO || est === ESTADOS.CERRADO || est === ESTADOS.COMPROBACIONES || est === ESTADOS.EVIDENCIAS) { malEstatus.push(numero); continue; }
           if (est !== ESTADOS.LISTO_PARA_PROGRAMACION) { malEstatus.push(numero); continue; }
           const imp = Number(folio.importe);
           if (imp == null || isNaN(imp) || imp <= 0) { malEstatus.push(numero); continue; }
@@ -17110,8 +17129,8 @@ app.post("/twilio/whatsapp", async (req, res) => {
           if (!folio) return safeReply(`No existe el folio ${numero}.`);
           const estatus = String(folio.estatus || "").toUpperCase();
           if (estatus === ESTADOS.CANCELADO) return safeReply("Ese folio ya está cancelado.");
-          if (estatus === ESTADOS.PAGADO || estatus === ESTADOS.CERRADO || estatus === ESTADOS.COMPROBACIONES) {
-            return safeReply("No se puede cancelar folios PAGADOS, CERRADOS o en COMPROBACIONES. Solicita ajuste por dirección.");
+          if (estatus === ESTADOS.PAGADO || estatus === ESTADOS.CERRADO || estatus === ESTADOS.COMPROBACIONES || estatus === ESTADOS.EVIDENCIAS) {
+            return safeReply("No se puede cancelar folios PAGADOS, CERRADOS, en COMPROBACIONES o en EVIDENCIAS. Solicita ajuste por dirección.");
           }
           if (estatus === ESTADOS.CANCELACION_SOLICITADA) return safeReply("Ya hay una solicitud de cancelación pendiente. ZP debe autorizar o rechazar.");
           if (!motivo) return safeReply("Indica el motivo. Formato: cancelar " + numero + " motivo: <razón>");

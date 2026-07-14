@@ -16,6 +16,7 @@ function estatusToEtapaVisual(estatus: string | null): string {
   if (!s) return "PENDIENTE_APROB_PLANTA";
   if (s === "CANCELADO") return "CANCELADO";
   if (s === "CANCELACION_SOLICITADA") return "APROB_DIRECTOR_ZP";
+  if (s === "EVIDENCIAS") return "EVIDENCIAS";
   if (s === "COMPROBACIONES") return "COMPROBACIONES";
   if (["PAGADO", "CERRADO"].includes(s)) return "DEPOSITO_CIERRE";
   if (["APROBADO_ZP", "LISTO_PARA_PROGRAMACION", "SELECCIONADO_SEMANA", "SOLICITANDO_PAGO"].includes(s)) return "CARRO_COMPRA";
@@ -50,6 +51,7 @@ function etapaColor(estatus: string | null): string {
   if (!estatus) return "border-l-slate-500";
   const etapa = estatusToEtapaVisual(estatus);
   if (etapa === "CANCELADO") return "border-l-red-900";
+  if (etapa === "EVIDENCIAS") return "border-l-sky-600";
   if (etapa === "COMPROBACIONES") return "border-l-teal-600";
   if (etapa === "DEPOSITO_CIERRE") return "border-l-green-600";
   if (etapa === "CARRO_COMPRA") {
