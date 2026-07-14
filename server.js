@@ -5531,21 +5531,31 @@ function buildDashboardWhere(auth, filters) {
     params.push(filters.mes);
     n++;
   }
-  // Ventana por defecto (+ meses extra): mes_cargo actual/extras OR creado en mes actual, anterior o extras
+  // Ventana por defecto (+ meses extra):
+  // - mes_cargo = mes anterior OR >= mes actual (incluye futuros Ago/Sep/…) OR en extras
+  // - OR creado en mes actual / anterior / extras
   if (filters.ventanaDefault !== false && !filters.mes) {
     const { mesActual, mesAnterior } = getMesActualYAnteriorMx();
     const extras = Array.isArray(filters.mesesExtra) ? filters.mesesExtra : [];
-    const mesesCargo = [...new Set([mesActual, ...extras])];
     const mesesCreado = [...new Set([mesActual, mesAnterior, ...extras])];
     conditions.push(
       `(
-        (f.mes_cargo IS NOT NULL AND TRIM(f.mes_cargo) <> '' AND f.mes_cargo = ANY($${n}::TEXT[]))
-        OR to_char((f.creado_en AT TIME ZONE 'America/Mexico_City'), 'YYYY-MM') = ANY($${n + 1}::TEXT[])
+        (
+          f.mes_cargo IS NOT NULL AND TRIM(f.mes_cargo) <> ''
+          AND (
+            f.mes_cargo = $${n}::TEXT
+            OR f.mes_cargo >= $${n + 1}::TEXT
+            OR (cardinality($${n + 2}::TEXT[]) > 0 AND f.mes_cargo = ANY($${n + 2}::TEXT[]))
+          )
+        )
+        OR to_char((f.creado_en AT TIME ZONE 'America/Mexico_City'), 'YYYY-MM') = ANY($${n + 3}::TEXT[])
       )`
     );
-    params.push(mesesCargo);
+    params.push(mesAnterior);
+    params.push(mesActual);
+    params.push(extras);
     params.push(mesesCreado);
-    n += 2;
+    n += 4;
   } else if (filters.mesesExtra && filters.mesesExtra.length > 0 && !filters.mes) {
     // Sin ventana default pero con meses extra explícitos
     const extras = filters.mesesExtra;

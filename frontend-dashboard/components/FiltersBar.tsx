@@ -148,8 +148,9 @@ export default function FiltersBar({ filters, onFiltersChange, plantas = [], sea
       {ventanaOn && (
         <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
           <span>
-            Muestra: mes cargo <strong className="text-slate-300">{mesLabel(mesActual)}</strong> + creados{" "}
-            <strong className="text-slate-300">{mesLabel(mesAnterior)}</strong> y{" "}
+            Muestra: mes cargo <strong className="text-slate-300">{mesLabel(mesAnterior)}</strong>–
+            <strong className="text-slate-300">{mesLabel(mesActual)}</strong> + futuros con folios + creados{" "}
+            <strong className="text-slate-300">{mesLabel(mesAnterior)}</strong>/
             <strong className="text-slate-300">{mesLabel(mesActual)}</strong>
           </span>
           {mesesExtra.map((ym) => (

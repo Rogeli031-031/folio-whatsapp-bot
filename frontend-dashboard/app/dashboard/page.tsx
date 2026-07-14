@@ -221,6 +221,7 @@ function DashboardContent() {
         <ResumenCategoriasMesCargo
           data={kanban}
           selectedPlantaId={selectedPlantaId}
+          filters={filters}
           onOpenFolio={setDrawerFolioId}
         />
         <KanbanBoard

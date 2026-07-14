@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import type { KanbanBoard as KanbanBoardType, FolioCard } from "@/lib/api";
+import { useEffect, useMemo, useState } from "react";
+import type { KanbanBoard as KanbanBoardType, FolioCard, DashboardFilters } from "@/lib/api";
 import * as XLSX from "xlsx";
 
 interface Props {
   data: KanbanBoardType | null;
   selectedPlantaId?: number;
+  filters?: DashboardFilters;
   onOpenFolio?: (id: number) => void;
 }
 
@@ -20,6 +21,49 @@ interface AggRow {
   subcategoria: Subcategoria;
   total: number;
   folios: FolioCard[];
+}
+
+function mesActualYAnteriorMx(): { actual: string; anterior: string } {
+  const fmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Mexico_City",
+    year: "numeric",
+    month: "2-digit",
+  });
+  const parts = fmt.formatToParts(new Date());
+  const y = Number(parts.find((p) => p.type === "year")?.value);
+  const m = Number(parts.find((p) => p.type === "month")?.value);
+  const actual = `${y}-${String(m).padStart(2, "0")}`;
+  let py = y;
+  let pm = m - 1;
+  if (pm < 1) {
+    pm = 12;
+    py -= 1;
+  }
+  return { actual, anterior: `${py}-${String(pm).padStart(2, "0")}` };
+}
+
+function parseMesesExtra(raw?: string): string[] {
+  if (!raw) return [];
+  return raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => /^\d{4}-\d{2}$/.test(s));
+}
+
+/** Ventana resumen: mes anterior + actual + futuros con datos + meses_extra. */
+function mesVisibleEnResumen(
+  mes: string,
+  mesActual: string,
+  mesAnterior: string,
+  extras: string[],
+  ventanaOn: boolean
+): boolean {
+  if (!mes || !/^\d{4}-\d{2}$/.test(mes)) return false;
+  if (!ventanaOn) return true;
+  if (extras.includes(mes)) return true;
+  if (mes === mesAnterior) return true;
+  if (mes >= mesActual) return true; // actual + futuros (Ago, Sep, …)
+  return false;
 }
 
 function flattenCardsFromKanban(data: KanbanBoardType | null, selectedPlantaId?: number): FolioCard[] {
@@ -57,8 +101,24 @@ function fmtMxn(n: number): string {
   return `$${n.toLocaleString("es-MX", { maximumFractionDigits: 0 })}`;
 }
 
-export default function ResumenCategoriasMesCargo({ data, selectedPlantaId, onOpenFolio }: Props) {
-  const cards = useMemo(() => flattenCardsFromKanban(data, selectedPlantaId), [data, selectedPlantaId]);
+export default function ResumenCategoriasMesCargo({
+  data,
+  selectedPlantaId,
+  filters,
+  onOpenFolio,
+}: Props) {
+  const { actual: mesActual, anterior: mesAnterior } = useMemo(() => mesActualYAnteriorMx(), []);
+  const ventanaOn = filters?.ventana !== "0";
+  const mesesExtra = useMemo(() => parseMesesExtra(filters?.meses_extra), [filters?.meses_extra]);
+
+  const cardsAll = useMemo(() => flattenCardsFromKanban(data, selectedPlantaId), [data, selectedPlantaId]);
+
+  const cards = useMemo(() => {
+    return cardsAll.filter((c) =>
+      mesVisibleEnResumen(String(c.mes_cargo || "").trim(), mesActual, mesAnterior, mesesExtra, ventanaOn)
+    );
+  }, [cardsAll, mesActual, mesAnterior, mesesExtra, ventanaOn]);
+
   const prestamosCards = useMemo(
     () => cards.filter((c) => c.prestamo_a_planta),
     [cards]
@@ -111,7 +171,20 @@ export default function ResumenCategoriasMesCargo({ data, selectedPlantaId, onOp
   const [selectedCategoria, setSelectedCategoria] = useState<Categoria | null>(null);
   const [selectedSubcategoria, setSelectedSubcategoria] = useState<Subcategoria | null>(null);
 
-  const mesesOrdenados = useMemo(() => Object.keys(byMes).sort(), [byMes]);
+  const mesesOrdenados = useMemo(
+    () => Object.keys(byMes).filter((m) => (byMes[m] || 0) !== 0).sort(),
+    [byMes]
+  );
+
+  // Si el mes seleccionado desapareció de la ventana, volver al listado de meses.
+  useEffect(() => {
+    if (selectedMes && !mesesOrdenados.includes(selectedMes)) {
+      setSelectedMes(null);
+      setSelectedCategoria(null);
+      setSelectedSubcategoria(null);
+    }
+  }, [selectedMes, mesesOrdenados]);
+
   const categoriasEnMes = useMemo(() => {
     if (!selectedMes) return [];
     const out: { categoria: string; total: number }[] = [];
@@ -139,8 +212,14 @@ export default function ResumenCategoriasMesCargo({ data, selectedPlantaId, onOp
   }, [selectedMes, selectedCategoria, byMesCatSub]);
   const foliosEnSub = useMemo(() => {
     if (!selectedMes || !selectedCategoria || !selectedSubcategoria) return [];
-    const key = `${selectedMes}\t${selectedCategoria}\t${selectedSubcategoria}`;
-    return detalleList.filter((r) => r.mes_cargo === selectedMes && r.categoria === selectedCategoria && r.subcategoria === selectedSubcategoria).flatMap((r) => r.folios);
+    return detalleList
+      .filter(
+        (r) =>
+          r.mes_cargo === selectedMes &&
+          r.categoria === selectedCategoria &&
+          r.subcategoria === selectedSubcategoria
+      )
+      .flatMap((r) => r.folios);
   }, [selectedMes, selectedCategoria, selectedSubcategoria, detalleList]);
 
   const handleExportExcel = () => {
