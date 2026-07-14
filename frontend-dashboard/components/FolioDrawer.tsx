@@ -19,6 +19,7 @@ import {
   deleteFolioMedia,
   fetchIgfEmpresas,
   patchFolioPrestamoAPlanta,
+  patchFolioPrestamoSiguienteMes,
 } from "@/lib/api";
 import EditarFolioModal from "@/components/EditarFolioModal";
 
@@ -84,6 +85,7 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
   const [igfEmpresas, setIgfEmpresas] = useState<string[]>([]);
   const [prestamoSelect, setPrestamoSelect] = useState<string>("");
   const [savingPrestamo, setSavingPrestamo] = useState(false);
+  const [savingPrestamoSiguienteMes, setSavingPrestamoSiguienteMes] = useState(false);
   const [savingUrgente, setSavingUrgente] = useState(false);
 
   useEffect(() => {
@@ -505,11 +507,20 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
                     <div className="pt-2 border-t border-slate-700">
                       <dt className="text-slate-500 mb-1">Préstamos a planta</dt>
                       <dd>
-{(folio as Record<string, unknown>).prestamo_a_planta ? (
+                        {(folio as Record<string, unknown>).prestamo_a_planta ? (
                             <p className="text-sm text-slate-300 mb-1">
                               Cargado a: <strong>{(folio as Record<string, unknown>).prestamo_a_planta as string}</strong>
                             </p>
                         ) : null}
+                        {!!(folio as Record<string, unknown>).prestamo_siguiente_mes && (
+                          <p className="text-sm text-sky-300 mb-1">
+                            Identificado como <strong>préstamos siguiente mes</strong>
+                            {(folio as Record<string, unknown>).mes_cargo
+                              ? ` (mes de cargo: ${(folio as Record<string, unknown>).mes_cargo as string})`
+                              : ""}
+                          </p>
+                        )}
+                        <div className="flex flex-wrap items-center gap-2">
                         {!prestamoOpen ? (
                           <button
                             type="button"
@@ -569,6 +580,40 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
                             </button>
                           </div>
                         )}
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (!token || folioId == null) return;
+                              const activo = !!(folio as Record<string, unknown>).prestamo_siguiente_mes;
+                              setSavingPrestamoSiguienteMes(true);
+                              setApproveError(null);
+                              try {
+                                const res = await patchFolioPrestamoSiguienteMes(token, folioId, !activo);
+                                const f = await fetchFolio(token, folioId);
+                                setFolio(f as Record<string, unknown>);
+                                if (res.mes_cargo) setMesCargoEdit(res.mes_cargo);
+                                onApproved?.();
+                              } catch (e) {
+                                setApproveError((e as Error).message || "Error al marcar préstamo siguiente mes");
+                              } finally {
+                                setSavingPrestamoSiguienteMes(false);
+                              }
+                            }}
+                            disabled={savingPrestamoSiguienteMes}
+                            className={`rounded px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50 ${
+                              (folio as Record<string, unknown>).prestamo_siguiente_mes
+                                ? "bg-sky-700 hover:bg-sky-600"
+                                : "bg-slate-600 hover:bg-slate-500"
+                            }`}
+                            title="Asigna el mes de cargo al mes siguiente e identifica el folio como préstamos siguiente mes en Excel"
+                          >
+                            {savingPrestamoSiguienteMes
+                              ? "…"
+                              : (folio as Record<string, unknown>).prestamo_siguiente_mes
+                                ? "Quitar préstamo siguiente mes"
+                                : "Préstamo siguiente mes"}
+                          </button>
+                        </div>
                       </dd>
                     </div>
                   )}

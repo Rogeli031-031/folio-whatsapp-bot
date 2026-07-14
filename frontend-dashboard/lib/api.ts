@@ -580,6 +580,7 @@ export interface FolioCard {
   proyecto_codigo?: string | null;
   proyecto_nombre?: string | null;
   prestamo_a_planta?: string | null;
+  prestamo_siguiente_mes?: boolean;
   /** Etapa visual del kanban (ej. "Pendiente aprobación planta"). Solo en datos aplanados del resumen. */
   etapa_label?: string | null;
 }
@@ -1076,6 +1077,21 @@ export function patchFolioPrestamoAPlanta(
     method: "PATCH",
     body: JSON.stringify({ prestamo_a_planta: prestamoAPlanta }),
   });
+}
+
+export function patchFolioPrestamoSiguienteMes(
+  token: string,
+  folioId: number,
+  prestamoSiguienteMes: boolean
+): Promise<{ ok: boolean; prestamo_siguiente_mes: boolean; mes_cargo: string | null }> {
+  return apiFetch<{ ok: boolean; prestamo_siguiente_mes: boolean; mes_cargo: string | null }>(
+    `/api/folios/${folioId}/prestamo-siguiente-mes`,
+    {
+      token,
+      method: "PATCH",
+      body: JSON.stringify({ prestamo_siguiente_mes: prestamoSiguienteMes }),
+    }
+  );
 }
 
 export function postIgfComoCambioToken(

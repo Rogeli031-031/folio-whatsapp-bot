@@ -2551,6 +2551,7 @@ async function ensureSchema() {
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS solicitud_por_recuperar_pendiente BOOLEAN DEFAULT false;`);
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS mes_cargo VARCHAR(7);`);
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS prestamo_a_planta VARCHAR(255);`);
+    await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS prestamo_siguiente_mes BOOLEAN DEFAULT false;`);
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS descripcion TEXT;`);
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;`);
 
@@ -3057,6 +3058,7 @@ async function getFolioById(client, id) {
             f.presupuesto_id, f.descripcion, f.mes_cargo, f.solo_zp_ad, f.prestamo_a_planta, f.proyecto_id, f.banco, f.cuenta_bancaria,
             COALESCE(f.por_recuperar, false) AS por_recuperar,
             COALESCE(f.solicitud_por_recuperar_pendiente, false) AS solicitud_por_recuperar_pendiente,
+            COALESCE(f.prestamo_siguiente_mes, false) AS prestamo_siguiente_mes,
             COALESCE(f.descripcion, f.concepto) AS descripcion_display,
             p.nombre AS planta_nombre
      FROM public.folios f
@@ -5464,6 +5466,7 @@ function cardFromFolioRow(row) {
     proyecto_codigo: row.proyecto_codigo || null,
     proyecto_nombre: row.proyecto_nombre || null,
     prestamo_a_planta: row.prestamo_a_planta != null && String(row.prestamo_a_planta).trim() !== "" ? String(row.prestamo_a_planta).trim() : null,
+    prestamo_siguiente_mes: !!row.prestamo_siguiente_mes,
   };
 }
 
@@ -5479,6 +5482,7 @@ app.get("/api/dashboard/kanban", dashboardAuthMiddleware, async (req, res) => {
              f.prestamo_a_planta,
              COALESCE(f.solo_zp_ad, false) AS solo_zp_ad, COALESCE(f.por_recuperar, false) AS por_recuperar,
              COALESCE(f.solicitud_por_recuperar_pendiente, false) AS solicitud_por_recuperar_pendiente,
+             COALESCE(f.prestamo_siguiente_mes, false) AS prestamo_siguiente_mes,
              COALESCE(f.descripcion, f.concepto) AS descripcion_display,
              p.nombre AS planta_nombre,
              pr.codigo AS proyecto_codigo, pr.nombre AS proyecto_nombre,
@@ -7456,6 +7460,8 @@ app.get("/api/action-register/export", dashboardAuthMiddleware, async (req, res)
                 COALESCE(NULLIF(TRIM(COALESCE(f.descripcion,'')), ''), f.concepto, '') AS descripcion,
                 f.creado_en,
                 f.planta_id, p.nombre AS planta_nombre,
+                COALESCE(f.prestamo_siguiente_mes, false) AS prestamo_siguiente_mes,
+                f.prestamo_a_planta,
                 to_char((f.creado_en::timestamptz AT TIME ZONE 'America/Mexico_City'), 'YYYY-MM-DD') AS dia_cdmx,
                 to_char((f.creado_en::timestamptz AT TIME ZONE 'America/Mexico_City'), 'HH24:MI') AS hora_cdmx
          FROM public.folios f
@@ -7478,6 +7484,7 @@ app.get("/api/action-register/export", dashboardAuthMiddleware, async (req, res)
         { header: "Categoría", key: "categoria", width: 18 },
         { header: "Subcategoría", key: "subcategoria", width: 22 },
         { header: "Beneficiario", key: "beneficiario", width: 30 },
+        { header: "Identificación", key: "identificacion", width: 28 },
         { header: "Concepto / Descripción", key: "descripcion", width: 80 },
       ];
       wsF.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
@@ -7492,11 +7499,14 @@ app.get("/api/action-register/export", dashboardAuthMiddleware, async (req, res)
       };
 
       if (folios.length === 0) {
-        const row = wsF.addRow({ fecha: "", hora: "", folio: "Sin folios para esta planta.", planta: "", importe: "", estatus: "", prioridad: "", categoria: "", subcategoria: "", beneficiario: "", descripcion: "" });
+        const row = wsF.addRow({ fecha: "", hora: "", folio: "Sin folios para esta planta.", planta: "", importe: "", estatus: "", prioridad: "", categoria: "", subcategoria: "", beneficiario: "", identificacion: "", descripcion: "" });
         row.getCell("folio").font = { italic: true, color: { argb: "FF6B7280" } };
       } else {
         for (const f of folios) {
           const importe = f.importe != null ? Number(f.importe) : null;
+          let identificacion = "";
+          if (f.prestamo_siguiente_mes) identificacion = "préstamos siguiente mes";
+          else if (f.prestamo_a_planta) identificacion = `préstamo a planta: ${String(f.prestamo_a_planta).trim()}`;
           const row = wsF.addRow({
             fecha: ymdToDmy(f.dia_cdmx),
             hora: f.hora_cdmx || "",
@@ -7508,6 +7518,7 @@ app.get("/api/action-register/export", dashboardAuthMiddleware, async (req, res)
             categoria: f.categoria || "",
             subcategoria: f.subcategoria || "",
             beneficiario: f.beneficiario || "",
+            identificacion,
             descripcion: f.descripcion || "",
           });
           row.getCell("descripcion").alignment = { wrapText: true, vertical: "top" };
@@ -10758,6 +10769,74 @@ app.patch("/api/folios/:id", dashboardAuthMiddleware, dashboardBlockGVFoliosMidd
     res.json({ ok: true, mes_cargo: mesCargo });
   } catch (e) {
     console.error("[Dashboard PATCH folio]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/** Mes de cargo siguiente (YYYY-MM) respecto a hoy en America/Mexico_City. */
+function getNextMesCargoYyyyMm(now = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Mexico_City",
+    year: "numeric",
+    month: "2-digit",
+  }).formatToParts(now);
+  const y = parseInt((parts.find((p) => p.type === "year") || {}).value, 10);
+  const m = parseInt((parts.find((p) => p.type === "month") || {}).value, 10);
+  if (!Number.isFinite(y) || !Number.isFinite(m) || m < 1 || m > 12) {
+    const d = new Date();
+    const nm = d.getUTCMonth() + 2;
+    const ny = d.getUTCFullYear() + (nm > 12 ? 1 : 0);
+    const month = nm > 12 ? nm - 12 : nm;
+    return `${ny}-${String(month).padStart(2, "0")}`;
+  }
+  const nextM = m === 12 ? 1 : m + 1;
+  const nextY = m === 12 ? y + 1 : y;
+  return `${nextY}-${String(nextM).padStart(2, "0")}`;
+}
+
+/** Marcar folio como préstamo del mes siguiente: activa el flag y fija mes_cargo al mes siguiente. */
+app.patch("/api/folios/:id/prestamo-siguiente-mes", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddleware, async (req, res) => {
+  if (req.dashboardAuth.role === "GA") return res.status(403).json({ error: "GA solo puede ver e imprimir en el dashboard." });
+  const folioId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
+  const desactivar = req.body.prestamo_siguiente_mes === false || req.body.prestamo_siguiente_mes === "false";
+  const client = await pool.connect();
+  try {
+    const folio = await getFolioById(client, folioId);
+    if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
+    if ((req.dashboardAuth.role === "GG" || req.dashboardAuth.role === "GA") && req.dashboardAuth.plantas_permitidas?.length > 0) {
+      if (!folio.planta_id || !req.dashboardAuth.plantas_permitidas.includes(folio.planta_id)) {
+        return res.status(403).json({ error: "Sin permiso para este folio" });
+      }
+    }
+    if (desactivar) {
+      await client.query(`UPDATE public.folios SET prestamo_siguiente_mes = FALSE WHERE id = $1`, [folioId]);
+      return res.json({
+        ok: true,
+        prestamo_siguiente_mes: false,
+        mes_cargo: folio.mes_cargo || null,
+      });
+    }
+    const mesCargo = getNextMesCargoYyyyMm();
+    await client.query(
+      `UPDATE public.folios SET prestamo_siguiente_mes = TRUE, mes_cargo = $1 WHERE id = $2`,
+      [mesCargo, folioId]
+    );
+    await insertHistorial(
+      client,
+      folioId,
+      folio.numero_folio,
+      folio.folio_codigo,
+      folio.estatus || "",
+      `Marcado como préstamos siguiente mes. Mes de cargo: ${mesCargo}.`,
+      null,
+      req.dashboardAuth.role || null
+    ).catch(() => {});
+    res.json({ ok: true, prestamo_siguiente_mes: true, mes_cargo: mesCargo });
+  } catch (e) {
+    console.error("[Dashboard PATCH prestamo-siguiente-mes]", e);
     res.status(500).json({ error: e.message });
   } finally {
     client.release();
