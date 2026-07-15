@@ -5846,7 +5846,7 @@ app.get("/api/dashboard/clasificacion-apoyos-excel", dashboardAuthMiddleware, as
   const client = await pool.connect();
   try {
     const r = await client.query(
-      `SELECT f.planta_id, f.categoria, f.importe, f.mes_cargo
+      `SELECT f.planta_id, f.categoria, f.subcategoria, f.importe, f.mes_cargo
        FROM public.folios f
        WHERE f.mes_cargo = ANY($1::text[])
          AND UPPER(TRIM(COALESCE(f.estatus,''))) <> 'CANCELADO'
