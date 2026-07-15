@@ -1,13 +1,16 @@
 "use client";
 
+import { useState } from "react";
 import FolioCard from "./FolioCard";
 import type { FolioCard as FolioCardType, KanbanBoard as KanbanBoardType } from "@/lib/api";
+import { postMoverEtapaFolio } from "@/lib/api";
 import { textMatchesSearch } from "@/lib/texto-busqueda";
 
 interface Props {
   data: KanbanBoardType | null;
   selectedPlantaId?: number;
   searchTerm?: string;
+  token?: string | null;
   onOpenFolio: (id: number) => void;
   onSelectPlanta?: (plantaId: number | undefined) => void;
   onSubirPoliza?: (id: number) => void;
@@ -16,6 +19,8 @@ interface Props {
   onCrearFolioUrgente?: (plantaId: number, plantaNombre: string) => void;
   onCrearProyecto?: (plantaId: number, plantaNombre: string) => void;
   onAnalizarDuplicados?: (plantaId: number, plantaNombre: string) => void;
+  /** Tras mover etapa por arrastre. */
+  onMovedEtapa?: () => void;
 }
 
 const CAT_ORDER = ["GASTOS", "INVERSIONES", "DYO", "TALLER"];
@@ -105,6 +110,7 @@ export default function KanbanBoard({
   data,
   selectedPlantaId,
   searchTerm,
+  token,
   onOpenFolio,
   onSelectPlanta,
   onSubirPoliza,
@@ -113,7 +119,12 @@ export default function KanbanBoard({
   onCrearFolioUrgente,
   onAnalizarDuplicados,
   onCrearProyecto,
+  onMovedEtapa,
 }: Props) {
+  const [dragOverEtapa, setDragOverEtapa] = useState<string | null>(null);
+  const [moving, setMoving] = useState(false);
+  const [moveError, setMoveError] = useState<string | null>(null);
+
   if (!data) {
     return (
       <div className="flex items-center justify-center p-8 text-slate-400">Cargando tablero…</div>
@@ -121,45 +132,63 @@ export default function KanbanBoard({
   }
 
   const role = data.meta?.role || "GG";
+  const roleUpper = String(role).toUpperCase();
+  const canDrag = roleUpper === "AD" || roleUpper === "ZP";
   const fmtMxn = (n: number | null | undefined) =>
     n != null && !isNaN(n) ? `$${n.toLocaleString("es-MX", { maximumFractionDigits: 0 })}` : "—";
 
-  const plantsRaw = data.board[0]?.plantas ?? [];
-  const plants = plantsRaw.filter((p) => isPlantaVisible(p.planta_nombre || ""));
-
+  const plantsMap = new Map<number, { planta_id: number; planta_nombre: string }>();
+  for (const col of data.board || []) {
+    for (const p of col.plantas || []) {
+      if (!isPlantaVisible(p.planta_nombre || "")) continue;
+      if (!plantsMap.has(p.planta_id)) {
+        plantsMap.set(p.planta_id, { planta_id: p.planta_id, planta_nombre: p.planta_nombre });
+      }
+    }
+  }
+  const plants = Array.from(plantsMap.values()).sort((a, b) =>
+    (a.planta_nombre || "").localeCompare(b.planta_nombre || "", "es")
+  );
   const activePlanta =
-    selectedPlantaId != null
-      ? plants.find((p) => p.planta_id === selectedPlantaId) || null
-      : null;
+    selectedPlantaId != null ? plants.find((p) => p.planta_id === selectedPlantaId) : null;
 
-  const columns = data.board.map((col) => {
-    const plantasSrc = selectedPlantaId
-      ? col.plantas.filter((p) => p.planta_id === selectedPlantaId)
-      : col.plantas.filter((p) => isPlantaVisible(p.planta_nombre || ""));
-
-    const cards = sortCards(
-      plantasSrc
-        .flatMap((p) =>
-          cardsFromPorCategoria(p.porCategoria).map((c) => ({
-            ...c,
-            planta_id: c.planta_id ?? p.planta_id,
-            planta_nombre: c.planta_nombre || p.planta_nombre,
-          }))
-        )
-        .filter((c) => matchesSearch(c, searchTerm))
-    );
-
-    const totalMxn = cards.reduce((s, c) => s + (Number(c.importe) || 0), 0);
-
+  const columns = (data.board || []).map((col) => {
+    let cards: FolioCardType[] = [];
+    for (const p of col.plantas || []) {
+      if (selectedPlantaId != null && p.planta_id !== selectedPlantaId) continue;
+      if (!isPlantaVisible(p.planta_nombre || "")) continue;
+      const list = sortCards(cardsFromPorCategoria(p.porCategoria).filter((c) => matchesSearch(c, searchTerm)));
+      cards = cards.concat(list.map((c) => ({ ...c, planta_nombre: c.planta_nombre || p.planta_nombre })));
+    }
+    const total_mxn = cards.reduce((s, c) => s + (Number(c.importe) || 0), 0);
     return {
       etapa: col.etapa,
       etapa_label: col.etapa_label ?? ETAPA_SHORT[col.etapa] ?? col.etapa,
       etapa_icon: col.etapa_icon,
-      cards,
       count: cards.length,
-      total_mxn: totalMxn,
+      total_mxn,
+      cards,
     };
   });
+
+  const handleDrop = async (etapaDestino: string, e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOverEtapa(null);
+    if (!canDrag || !token || moving) return;
+    const raw = e.dataTransfer.getData("application/x-folio-id") || e.dataTransfer.getData("text/plain");
+    const folioId = parseInt(raw, 10);
+    if (!Number.isFinite(folioId)) return;
+    setMoving(true);
+    setMoveError(null);
+    try {
+      await postMoverEtapaFolio(token, folioId, etapaDestino);
+      onMovedEtapa?.();
+    } catch (err) {
+      setMoveError((err as Error).message || "No se pudo mover el folio");
+    } finally {
+      setMoving(false);
+    }
+  };
 
   return (
     <div className="flex flex-col gap-3 p-4">
@@ -236,12 +265,32 @@ export default function KanbanBoard({
         )}
       </div>
 
+      {canDrag && (
+        <p className="text-[11px] text-slate-500">
+          Puedes arrastrar folios entre columnas para cambiar etapa (sin validar condiciones).
+          {moving ? " Moviendo…" : ""}
+        </p>
+      )}
+      {moveError && <p className="text-xs text-red-400">{moveError}</p>}
+
       {/* Columnas por etapa */}
       <div className="flex gap-3 overflow-x-auto pb-2 min-h-[60vh]">
         {columns.map((col) => (
           <div
             key={col.etapa}
-            className="flex w-[17.5rem] flex-shrink-0 flex-col rounded-lg border border-slate-700 bg-slate-900/55"
+            className={`flex w-[17.5rem] flex-shrink-0 flex-col rounded-lg border bg-slate-900/55 transition-colors ${
+              dragOverEtapa === col.etapa ? "border-amber-500 bg-amber-950/20" : "border-slate-700"
+            }`}
+            onDragOver={(e) => {
+              if (!canDrag) return;
+              e.preventDefault();
+              e.dataTransfer.dropEffect = "move";
+              setDragOverEtapa(col.etapa);
+            }}
+            onDragLeave={() => {
+              setDragOverEtapa((prev) => (prev === col.etapa ? null : prev));
+            }}
+            onDrop={(e) => void handleDrop(col.etapa, e)}
           >
             <div className="sticky top-0 z-[1] border-b border-slate-700 bg-slate-900/95 px-2.5 py-2 backdrop-blur-sm">
               <div className="flex items-center gap-1.5 font-medium text-slate-100">
@@ -262,7 +311,9 @@ export default function KanbanBoard({
 
             <div className="flex-1 space-y-2 overflow-y-auto p-2 max-h-[calc(100vh-14rem)]">
               {col.cards.length === 0 ? (
-                <p className="px-1 py-6 text-center text-xs text-slate-500">Sin folios</p>
+                <p className="px-1 py-6 text-center text-xs text-slate-500">
+                  {canDrag ? "Suelta aquí un folio" : "Sin folios"}
+                </p>
               ) : (
                 col.cards.map((c) => (
                   <div key={c.id} className="space-y-0.5">
@@ -277,6 +328,7 @@ export default function KanbanBoard({
                       role={role}
                       onSubirPoliza={onSubirPoliza}
                       onImprimirGastos={onImprimirGastos}
+                      draggableCard={canDrag}
                     />
                   </div>
                 ))

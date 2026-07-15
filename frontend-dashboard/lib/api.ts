@@ -1252,6 +1252,22 @@ export function postAvanzarEtapaFolio(
   });
 }
 
+/** Arrastrar folio a cualquier etapa visual (solo AD / ZP). */
+export function postMoverEtapaFolio(
+  token: string,
+  id: number,
+  etapa: string
+): Promise<{ ok: boolean; estatus: string; etapa: string; unchanged?: boolean }> {
+  return apiFetch<{ ok: boolean; estatus: string; etapa: string; unchanged?: boolean }>(
+    `/api/folios/${id}/mover-etapa`,
+    {
+      token,
+      method: "POST",
+      body: JSON.stringify({ etapa }),
+    }
+  );
+}
+
 export function postRegresarFolioAZp(token: string, id: number): Promise<{ ok: boolean; estatus: string }> {
   return apiFetch<{ ok: boolean; estatus: string }>(`/api/folios/${id}/regresar-zp`, { token, method: "POST" });
 }

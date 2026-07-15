@@ -5390,6 +5390,21 @@ function etapaVisualToEstatusTecnicos(etapaVisual) {
   return [ev];
 }
 
+/** Estatus técnico canónico al soltar un folio en una etapa visual (drag & drop AD/ZP). */
+function etapaVisualToEstatusDestino(etapaVisual) {
+  const ev = String(etapaVisual || "").trim().toUpperCase();
+  if (ev === ETAPA_VISUAL.PENDIENTE_APROB_PLANTA) return ESTADOS.PENDIENTE_APROB_PLANTA;
+  if (ev === ETAPA_VISUAL.APROB_DIRECTOR_ZP) return ESTADOS.PENDIENTE_APROB_ZP;
+  if (ev === ETAPA_VISUAL.CARRO_COMPRA) return ESTADOS.APROBADO_ZP;
+  if (ev === ETAPA_VISUAL.CUENTA_FONDOS) return ESTADOS.CUENTA_FONDOS;
+  if (ev === ETAPA_VISUAL.CHEQUE_GENERADO) return ESTADOS.CHEQUE_GENERADO;
+  if (ev === ETAPA_VISUAL.DEPOSITO_CIERRE) return ESTADOS.PAGADO;
+  if (ev === ETAPA_VISUAL.COMPROBACIONES) return ESTADOS.COMPROBACIONES;
+  if (ev === ETAPA_VISUAL.EVIDENCIAS) return ESTADOS.EVIDENCIAS;
+  if (ev === ETAPA_VISUAL.CANCELADO) return ESTADOS.CANCELADO;
+  return null;
+}
+
 function getEtapaVisibleForWhatsApp(estatus) {
   const ev = estatusToEtapaVisual(estatus);
   const o = ETAPA_VISIBLE[ev];
@@ -11879,6 +11894,62 @@ app.post("/api/folios/:id/avanzar-etapa", dashboardAuthMiddleware, dashboardBloc
     return res.json({ ok: true, estatus: destino });
   } catch (e) {
     console.error("[Dashboard folio avanzar-etapa]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/**
+ * Mover folio a cualquier etapa visual (drag & drop). Solo AD y Director ZP.
+ * Sin validar documentos/condiciones: fuerza el estatus canónico de la columna destino.
+ */
+app.post("/api/folios/:id/mover-etapa", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddleware, async (req, res) => {
+  const role = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) || "";
+  const rolNombre = (req.dashboardAuth.rol_nombre && String(req.dashboardAuth.rol_nombre)) || "";
+  const esAD = role === "AD";
+  const esZP = role === "ZP" || isDirectorZPForDashboard(role, rolNombre);
+  if (!esAD && !esZP) {
+    return res.status(403).json({ error: "Solo Asistente de dirección o Director ZP pueden arrastrar folios entre etapas." });
+  }
+  const folioId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
+  const etapa = String(req.body.etapa || "").trim().toUpperCase();
+  if (!ETAPAS_VISUAL_ORDER.includes(etapa)) {
+    return res.status(400).json({ error: "etapa no válida" });
+  }
+  const nuevoEstatus = etapaVisualToEstatusDestino(etapa);
+  if (!nuevoEstatus) return res.status(400).json({ error: "No se pudo mapear la etapa destino" });
+
+  const client = await pool.connect();
+  try {
+    const folio = await getFolioById(client, folioId);
+    if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
+    if (esAD && req.dashboardAuth.plantas_permitidas?.length > 0) {
+      if (!folio.planta_id || !req.dashboardAuth.plantas_permitidas.includes(folio.planta_id)) {
+        return res.status(403).json({ error: "Sin permiso para modificar folios de esta planta" });
+      }
+    }
+    const estatus = (folio.estatus || "").trim().toUpperCase();
+    const etapaActual = estatusToEtapaVisual(estatus);
+    if (etapaActual === etapa && estatus === nuevoEstatus) {
+      return res.json({ ok: true, estatus, etapa, unchanged: true });
+    }
+    const labelDestino = (ETAPA_VISIBLE[etapa] && ETAPA_VISIBLE[etapa].label) || etapa;
+    await updateFolioEstatus(client, folioId, nuevoEstatus, { estatus_anterior: estatus });
+    await insertHistorial(
+      client,
+      folioId,
+      folio.numero_folio,
+      folio.folio_codigo,
+      nuevoEstatus,
+      `Movido manualmente a «${labelDestino}» (arrastre dashboard). Sin validar condiciones.`,
+      null,
+      role || "Dashboard"
+    );
+    return res.json({ ok: true, estatus: nuevoEstatus, etapa });
+  } catch (e) {
+    console.error("[Dashboard folio mover-etapa]", e);
     res.status(500).json({ error: e.message });
   } finally {
     client.release();

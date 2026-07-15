@@ -231,6 +231,7 @@ function DashboardContent() {
           data={kanban}
           selectedPlantaId={selectedPlantaId}
           searchTerm={searchTerm}
+          token={token}
           onOpenFolio={setDrawerFolioId}
           onSelectPlanta={(id) =>
             setFilters((prev) => ({
@@ -246,6 +247,7 @@ function DashboardContent() {
           onAnalizarDuplicados={(plantaId, plantaNombre) =>
             setAnalisisDuplicados({ planta_id: plantaId, planta_nombre: plantaNombre })
           }
+          onMovedEtapa={loadData}
         />
       </main>
       <FolioDrawer

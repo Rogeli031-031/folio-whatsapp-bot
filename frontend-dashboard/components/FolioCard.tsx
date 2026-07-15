@@ -8,6 +8,8 @@ interface Props {
   role: string;
   onSubirPoliza?: (id: number) => void;
   onImprimirGastos?: (id: number, numeroFolio: string, etapa?: string) => void;
+  /** Permite arrastrar la card (AD / ZP). */
+  draggableCard?: boolean;
 }
 
 /** Estatus técnico → etapa visual (alineado con backend). */
@@ -101,7 +103,7 @@ function isComprobadoCompleto(importe: number | null | undefined, comprobado: nu
   return Number(comprobado || 0) + 0.009 >= Number(importe);
 }
 
-export default function FolioCard({ card, onOpen, role, onSubirPoliza, onImprimirGastos }: Props) {
+export default function FolioCard({ card, onOpen, role, onSubirPoliza, onImprimirGastos, draggableCard = false }: Props) {
   const mxn = card.importe != null && !isNaN(card.importe)
     ? `$${card.importe.toLocaleString("es-MX", { maximumFractionDigits: 0 })}`
     : null;
@@ -122,11 +124,21 @@ export default function FolioCard({ card, onOpen, role, onSubirPoliza, onImprimi
 
   return (
     <div
-      className={`relative rounded border border-slate-700 bg-slate-800/80 p-2.5 border-l-4 ${bordeClase} cursor-pointer hover:bg-slate-700/80 transition-colors`}
+      className={`relative rounded border border-slate-700 bg-slate-800/80 p-2.5 border-l-4 ${bordeClase} cursor-pointer hover:bg-slate-700/80 transition-colors ${
+        draggableCard ? "cursor-grab active:cursor-grabbing" : ""
+      }`}
       onClick={() => onOpen(card.id)}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => e.key === "Enter" && onOpen(card.id)}
+      draggable={draggableCard}
+      onDragStart={(e) => {
+        if (!draggableCard) return;
+        e.dataTransfer.setData("application/x-folio-id", String(card.id));
+        e.dataTransfer.setData("text/plain", String(card.id));
+        e.dataTransfer.effectAllowed = "move";
+      }}
+      title={draggableCard ? "Arrastra a otra columna para cambiar etapa" : undefined}
     >
       {showComprobadoMark && (
         <span
