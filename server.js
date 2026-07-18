@@ -5942,7 +5942,35 @@ app.get("/api/dashboard/clasificacion-apoyos-excel", dashboardAuthMiddleware, as
          AND f.planta_id IS NOT NULL`,
       [[mesA, mesB]]
     );
-    const wb = await clasificacionApoyosExcel.buildClasificacionApoyosWorkbook(r.rows, mesA, mesB);
+    // Detalle GASTOS planta Puebla (E7) para hoja "E7 G": concepto + fecha llegada a Depósito y cierre.
+    const pueblaIds = (clasificacionApoyosExcel.PLANTAS_COMPARATIVO.find((p) => p.label === "Puebla") || { ids: [2, 14] }).ids;
+    let detalleE7G = [];
+    try {
+      const d = await client.query(
+        `SELECT f.id, f.planta_id, f.categoria, f.subcategoria, f.concepto, f.importe, f.mes_cargo, f.estatus,
+                f.detalle_lineas, f.numero_folio,
+                (
+                  SELECT MIN(h.creado_en)
+                    FROM public.folio_historial h
+                   WHERE (h.folio_id = f.id OR (f.numero_folio IS NOT NULL AND h.numero_folio = f.numero_folio))
+                     AND UPPER(TRIM(COALESCE(h.estatus,''))) IN ('PAGADO','CERRADO')
+                ) AS fecha_envio
+           FROM public.folios f
+          WHERE f.mes_cargo = $1
+            AND f.planta_id = ANY($2::int[])
+            AND UPPER(TRIM(COALESCE(f.estatus,''))) <> 'CANCELADO'
+            AND (
+              UPPER(TRIM(COALESCE(f.categoria,''))) = 'GASTOS'
+              OR UPPER(TRIM(COALESCE(f.categoria,''))) LIKE '%GASTO%'
+            )
+          ORDER BY f.subcategoria NULLS LAST, f.id`,
+        [mesA, pueblaIds]
+      );
+      detalleE7G = d.rows || [];
+    } catch (eDet) {
+      console.warn("[clasificacion-apoyos-excel] detalle E7 G:", eDet.message);
+    }
+    const wb = await clasificacionApoyosExcel.buildClasificacionApoyosWorkbook(r.rows, mesA, mesB, { detalleE7G });
     const buf = Buffer.from(await wb.xlsx.writeBuffer());
     const safeA = clasificacionApoyosExcel.mesLabelEs(mesA).replace(/\s+/g, "_");
     const safeB = clasificacionApoyosExcel.mesLabelEs(mesB).replace(/\s+/g, "_");
