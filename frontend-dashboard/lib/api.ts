@@ -1088,12 +1088,20 @@ export function patchIgfForecastHg(
   });
 }
 
-export interface CrearFolioPayload {
-  planta_id: number;
-  proyecto_id?: number | null;
+export interface FolioLineaPayload {
   beneficiario?: string;
   concepto: string;
   importe: number;
+}
+
+export interface CrearFolioPayload {
+  planta_id: number;
+  proyecto_id?: number | null;
+  /** Preferido: varias solicitudes; el importe del folio = suma. */
+  lineas?: FolioLineaPayload[];
+  beneficiario?: string;
+  concepto?: string;
+  importe?: number;
   categoria: string;
   subcategoria?: string;
   prioridad?: string;

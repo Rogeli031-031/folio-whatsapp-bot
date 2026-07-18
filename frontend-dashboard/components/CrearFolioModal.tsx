@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   fetchPlantas,
   fetchProyectosPorPlanta,
@@ -25,6 +25,17 @@ const SUBCATEGORIAS: Record<string, string[]> = {
 };
 
 const PRIORIDADES = ["Urgente no programado", "Alta", "Media", "Baja"];
+const MAX_LINEAS = 8;
+
+type LineaForm = { beneficiario: string; concepto: string; importe: string };
+
+function emptyLinea(): LineaForm {
+  return { beneficiario: "", concepto: "", importe: "" };
+}
+
+function parseImporte(raw: string): number {
+  return parseFloat(String(raw || "").replace(/,/g, "."));
+}
 
 interface Props {
   open: boolean;
@@ -41,9 +52,7 @@ const PRIORIDAD_URGENTE = "Urgente no programado";
 
 export default function CrearFolioModal({ open, onClose, plantaId, plantaNombre, token, onCreated, urgente = false }: Props) {
   const [plantas, setPlantas] = useState<{ id: number; nombre: string }[]>([]);
-  const [beneficiario, setBeneficiario] = useState("");
-  const [concepto, setConcepto] = useState("");
-  const [importe, setImporte] = useState("");
+  const [lineas, setLineas] = useState<LineaForm[]>([emptyLinea()]);
   const [categoria, setCategoria] = useState("GASTOS");
   const [subcategoria, setSubcategoria] = useState("");
   const [prioridad, setPrioridad] = useState(urgente ? PRIORIDAD_URGENTE : "Media");
@@ -65,6 +74,7 @@ export default function CrearFolioModal({ open, onClose, plantaId, plantaNombre,
       setSelectedPlantaId(plantaId);
       setProyectoId(null);
       setPrioridad(urgente ? PRIORIDAD_URGENTE : "Media");
+      setLineas([emptyLinea()]);
       setDupCandidates([]);
       setDupIgnored(false);
       if (token) fetchPlantas(token).then((r) => setPlantas(r.plantas || [])).catch(() => setPlantas([]));
@@ -74,7 +84,7 @@ export default function CrearFolioModal({ open, onClose, plantaId, plantaNombre,
   useEffect(() => {
     setDupCandidates([]);
     setDupIgnored(false);
-  }, [concepto, importe, selectedPlantaId]);
+  }, [lineas, selectedPlantaId]);
 
   useEffect(() => {
     if (!open || !token || !selectedPlantaId) {
@@ -90,13 +100,58 @@ export default function CrearFolioModal({ open, onClose, plantaId, plantaNombre,
   const showUnidad = categoria === "TALLER";
   const showEstacion = subcategoria.trim().toLowerCase() === "estaciones";
 
-  const createFolio = async (conceptoTrim: string, importeNum: number) => {
+  const totalImporte = useMemo(() => {
+    return lineas.reduce((s, L) => {
+      const n = parseImporte(L.importe);
+      return s + (Number.isFinite(n) && n >= 0 ? n : 0);
+    }, 0);
+  }, [lineas]);
+
+  const updateLinea = (idx: number, patch: Partial<LineaForm>) => {
+    setLineas((prev) => prev.map((L, i) => (i === idx ? { ...L, ...patch } : L)));
+  };
+
+  const addLinea = () => {
+    setLineas((prev) => (prev.length >= MAX_LINEAS ? prev : [...prev, emptyLinea()]));
+  };
+
+  const removeLinea = (idx: number) => {
+    setLineas((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx)));
+  };
+
+  const buildValidLineas = () => {
+    const out: { beneficiario?: string; concepto: string; importe: number }[] = [];
+    for (const L of lineas) {
+      const concepto = L.concepto.trim();
+      const importeNum = parseImporte(L.importe);
+      if (!concepto && !L.importe.trim() && !L.beneficiario.trim()) continue;
+      if (!concepto || concepto.length < 2) {
+        return { error: "Cada solicitud llena necesita concepto (mín. 2 caracteres)." as string | null, lineas: out };
+      }
+      if (!Number.isFinite(importeNum) || importeNum < 0) {
+        return { error: "Cada solicitud necesita un importe válido (≥ 0)." as string | null, lineas: out };
+      }
+      out.push({
+        beneficiario: L.beneficiario.trim() || undefined,
+        concepto,
+        importe: importeNum,
+      });
+    }
+    if (!out.length) {
+      return { error: "Agrega al menos una solicitud con concepto e importe." as string | null, lineas: out };
+    }
+    return { error: null as string | null, lineas: out };
+  };
+
+  const createFolio = async (validLineas: { beneficiario?: string; concepto: string; importe: number }[]) => {
+    const total = validLineas.reduce((s, L) => s + L.importe, 0);
     const payload: CrearFolioPayload = {
       planta_id: selectedPlantaId,
       proyecto_id: proyectoId && proyectoId > 0 ? proyectoId : undefined,
-      beneficiario: beneficiario.trim() || undefined,
-      concepto: conceptoTrim,
-      importe: importeNum,
+      lineas: validLineas,
+      beneficiario: validLineas[0]?.beneficiario,
+      concepto: validLineas[0]?.concepto,
+      importe: total,
       categoria,
       subcategoria: subcategoria.trim() || undefined,
       prioridad,
@@ -109,9 +164,7 @@ export default function CrearFolioModal({ open, onClose, plantaId, plantaNombre,
     await postCrearFolio(token, payload);
     onCreated();
     onClose();
-    setConcepto("");
-    setImporte("");
-    setBeneficiario("");
+    setLineas([emptyLinea()]);
     setSubcategoria("");
     setUnidad("");
     setEstacion("");
@@ -125,24 +178,20 @@ export default function CrearFolioModal({ open, onClose, plantaId, plantaNombre,
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    const conceptoTrim = concepto.trim();
-    const importeNum = parseFloat(importe.replace(/,/g, "."));
-    if (!conceptoTrim || conceptoTrim.length < 2) {
-      setError("El concepto es obligatorio (mín. 2 caracteres).");
-      return;
-    }
-    if (!Number.isFinite(importeNum) || importeNum < 0) {
-      setError("El importe debe ser un número mayor o igual a 0.");
+    const built = buildValidLineas();
+    if (built.error) {
+      setError(built.error);
       return;
     }
     setSaving(true);
     try {
       if (!dupIgnored) {
         try {
+          const first = built.lineas[0];
           const check = await postCheckDuplicadosFolio(token, {
             planta_id: selectedPlantaId,
-            concepto: conceptoTrim,
-            importe: importeNum,
+            concepto: first.concepto,
+            importe: built.lineas.reduce((s, L) => s + L.importe, 0),
             meses: 12,
             umbral: 0.72,
           });
@@ -155,7 +204,7 @@ export default function CrearFolioModal({ open, onClose, plantaId, plantaNombre,
           // Si el chequeo falla, no bloquear la creación
         }
       }
-      await createFolio(conceptoTrim, importeNum);
+      await createFolio(built.lineas);
     } catch (err) {
       setError((err as Error).message || "Error al guardar el folio.");
     } finally {
@@ -171,10 +220,12 @@ export default function CrearFolioModal({ open, onClose, plantaId, plantaNombre,
       : [{ id: plantaId, nombre: plantaNombre }, ...plantas]
     : [{ id: plantaId, nombre: plantaNombre }];
 
+  const totalFmt = totalImporte.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
-      <div className="w-full max-w-3xl rounded-lg border border-slate-600 bg-slate-900 shadow-xl" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between border-b border-slate-700 px-4 py-2">
+      <div className="w-full max-w-3xl max-h-[92vh] overflow-y-auto rounded-lg border border-slate-600 bg-slate-900 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between border-b border-slate-700 px-4 py-2 sticky top-0 bg-slate-900 z-10">
           <h2 className="text-lg font-medium text-slate-200">{urgente ? "Crear folio urgente" : "Crear folio"}</h2>
           <button type="button" onClick={onClose} className="rounded p-1 text-slate-400 hover:bg-slate-700 hover:text-white">
             ✕
@@ -205,9 +256,13 @@ export default function CrearFolioModal({ open, onClose, plantaId, plantaNombre,
                     setSaving(true);
                     setError(null);
                     try {
-                      const conceptoTrim = concepto.trim();
-                      const importeNum = parseFloat(importe.replace(/,/g, "."));
-                      await createFolio(conceptoTrim, importeNum);
+                      const built = buildValidLineas();
+                      if (built.error) {
+                        setError(built.error);
+                        setDupIgnored(false);
+                        return;
+                      }
+                      await createFolio(built.lineas);
                     } catch (err) {
                       setError((err as Error).message || "Error al guardar el folio.");
                       setDupIgnored(false);
@@ -260,40 +315,79 @@ export default function CrearFolioModal({ open, onClose, plantaId, plantaNombre,
               </select>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-0.5">Beneficiario</label>
-              <input
-                type="text"
-                value={beneficiario}
-                onChange={(e) => setBeneficiario(e.target.value)}
-                className="w-full rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
-                placeholder="Nombre o razón social"
-              />
+
+          <div className="rounded border border-slate-700 bg-slate-950/40 p-2 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-medium text-slate-400">
+                Solicitudes (beneficiario / concepto / importe) — máx. {MAX_LINEAS}
+              </p>
+              <button
+                type="button"
+                onClick={addLinea}
+                disabled={lineas.length >= MAX_LINEAS}
+                className="rounded bg-slate-700 px-2 py-1 text-xs text-slate-100 hover:bg-slate-600 disabled:opacity-40"
+              >
+                + Agregar renglón
+              </button>
             </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-0.5">Importe (MXN) *</label>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={importe}
-                onChange={(e) => setImporte(e.target.value)}
-                className="w-full rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
-                placeholder="Ej: 1500 o 1,500.50"
-                required
-              />
+            {lineas.map((L, idx) => (
+              <div key={idx} className="rounded border border-slate-700/80 bg-slate-900/60 p-2 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-medium text-slate-500">Solicitud {idx + 1}</span>
+                  {lineas.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeLinea(idx)}
+                      className="text-[11px] text-red-400 hover:text-red-300"
+                    >
+                      Quitar
+                    </button>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 gap-x-3 gap-y-1.5 sm:grid-cols-3">
+                  <div className="sm:col-span-1">
+                    <label className="block text-xs font-medium text-slate-500 mb-0.5">Beneficiario</label>
+                    <input
+                      type="text"
+                      value={L.beneficiario}
+                      onChange={(e) => updateLinea(idx, { beneficiario: e.target.value })}
+                      className="w-full rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
+                      placeholder="Nombre o razón social"
+                    />
+                  </div>
+                  <div className="sm:col-span-1">
+                    <label className="block text-xs font-medium text-slate-500 mb-0.5">Importe (MXN) *</label>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={L.importe}
+                      onChange={(e) => updateLinea(idx, { importe: e.target.value })}
+                      className="w-full rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
+                      placeholder="Ej: 1500 o 1,500.50"
+                      required={idx === 0}
+                    />
+                  </div>
+                  <div className="sm:col-span-3">
+                    <label className="block text-xs font-medium text-slate-500 mb-0.5">Concepto *</label>
+                    <textarea
+                      value={L.concepto}
+                      onChange={(e) => updateLinea(idx, { concepto: e.target.value })}
+                      className="w-full rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200 min-h-[44px]"
+                      placeholder="Descripción del gasto"
+                      required={idx === 0}
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+            <div className="flex items-center justify-end gap-2 border-t border-slate-700 pt-2">
+              <span className="text-xs font-medium uppercase tracking-wide text-slate-400">Total folio</span>
+              <span className="rounded bg-emerald-900/40 px-2.5 py-1 text-sm font-semibold text-emerald-300">
+                $ {totalFmt}
+              </span>
             </div>
           </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-500 mb-0.5">Concepto (razón del pago) *</label>
-            <textarea
-              value={concepto}
-              onChange={(e) => setConcepto(e.target.value)}
-              className="w-full rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200 min-h-[56px]"
-              placeholder="Descripción del gasto"
-              required
-            />
-          </div>
+
           <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
             <div>
               <label className="block text-xs font-medium text-slate-500 mb-0.5">Categoría *</label>

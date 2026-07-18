@@ -2574,6 +2574,8 @@ async function ensureSchema() {
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS prestamo_siguiente_mes BOOLEAN DEFAULT false;`);
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS descripcion TEXT;`);
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;`);
+    /** Varias solicitudes (beneficiario/concepto/importe) en un folio; importe del folio = suma. */
+    await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS detalle_lineas JSONB;`);
 
     /**
      * Migración idempotente: si folios.creado_en o folio_historial.creado_en
@@ -3531,6 +3533,86 @@ async function resolveProyectoCodigo(client, input) {
   return null;
 }
 
+/** Máx. renglones en formato impreso (solicitud de folio). */
+const FOLIO_LINEAS_MAX = 8;
+
+/**
+ * Normaliza body.lineas o campos sueltos a [{beneficiario, concepto, importe}].
+ * @returns {{ lineas: Array<{beneficiario:string|null,concepto:string,importe:number}>, total: number, beneficiario: string|null, concepto: string }}
+ */
+function resolveFolioDetalleLineas(input) {
+  const rawList = Array.isArray(input && input.lineas) ? input.lineas : null;
+  let lineas = [];
+  if (rawList && rawList.length) {
+    for (const item of rawList) {
+      if (!item || typeof item !== "object") continue;
+      const concepto = String(item.concepto != null ? item.concepto : "").trim();
+      const importe = item.importe != null ? parseFloat(String(item.importe).replace(/,/g, "")) : NaN;
+      if (!concepto || concepto.length < 2) continue;
+      if (!Number.isFinite(importe) || importe < 0) continue;
+      const beneficiario = String(item.beneficiario != null ? item.beneficiario : "").trim() || null;
+      lineas.push({ beneficiario, concepto, importe: Math.round(importe * 100) / 100 });
+      if (lineas.length >= FOLIO_LINEAS_MAX) break;
+    }
+  }
+  if (!lineas.length) {
+    const concepto = String((input && input.concepto) != null ? input.concepto : "").trim();
+    const importe = input && input.importe != null ? parseFloat(String(input.importe).replace(/,/g, "")) : NaN;
+    if (concepto && concepto.length >= 2 && Number.isFinite(importe) && importe >= 0) {
+      lineas = [{
+        beneficiario: String((input && input.beneficiario) != null ? input.beneficiario : "").trim() || null,
+        concepto,
+        importe: Math.round(importe * 100) / 100,
+      }];
+    }
+  }
+  const total = Math.round(lineas.reduce((s, l) => s + l.importe, 0) * 100) / 100;
+  const first = lineas[0] || null;
+  const conceptoAgg = lineas.length <= 1
+    ? (first ? first.concepto : "")
+    : lineas.map((l, i) => `${i + 1}) ${l.concepto}`).join(" | ");
+  return {
+    lineas,
+    total,
+    beneficiario: first ? first.beneficiario : null,
+    concepto: conceptoAgg || (first && first.concepto) || "",
+  };
+}
+
+/** Lee detalle_lineas del folio o cae a beneficiario/concepto/importe únicos. */
+function getFolioLineasFromRow(folio) {
+  let parsed = null;
+  const raw = folio && folio.detalle_lineas;
+  if (raw != null) {
+    try {
+      parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+    } catch (_) {
+      parsed = null;
+    }
+  }
+  if (Array.isArray(parsed) && parsed.length) {
+    const lineas = parsed
+      .map((item) => {
+        if (!item || typeof item !== "object") return null;
+        const concepto = String(item.concepto != null ? item.concepto : "").trim();
+        const importe = item.importe != null ? Number(item.importe) : NaN;
+        if (!concepto || !Number.isFinite(importe)) return null;
+        return {
+          beneficiario: String(item.beneficiario != null ? item.beneficiario : "").trim() || null,
+          concepto,
+          importe,
+        };
+      })
+      .filter(Boolean);
+    if (lineas.length) return lineas;
+  }
+  return [{
+    beneficiario: (folio && folio.beneficiario) || null,
+    concepto: (folio && folio.concepto) || "",
+    importe: folio && folio.importe != null ? Number(folio.importe) : 0,
+  }];
+}
+
 async function insertFolio(client, dd) {
   const numero_folio = await nextFolioNumber(client);
   const folio_codigo = numero_folio;
@@ -3545,20 +3627,27 @@ async function insertFolio(client, dd) {
   const estatusInicial = esZP ? ESTADOS.LISTO_PARA_PROGRAMACION : (esAD ? ESTADOS.PENDIENTE_APROB_ZP : ESTADOS.PENDIENTE_APROB_PLANTA);
 
   const soloZpAd = dd.solo_zp_ad === true || dd.solo_zp_ad === "true";
+  const detalle = resolveFolioDetalleLineas(dd);
+  const beneficiarioIns = detalle.beneficiario;
+  const conceptoIns = detalle.concepto || dd.concepto || null;
+  const importeIns = detalle.lineas.length ? detalle.total : (dd.importe || null);
+  const detalleJson = detalle.lineas.length ? JSON.stringify(detalle.lineas) : null;
+
   const ins = await client.query(
     `INSERT INTO public.folios (
       folio_codigo, numero_folio, planta_id, proyecto_id, beneficiario, concepto, importe,
       categoria, subcategoria, estacion, unidad, prioridad, estatus, creado_en, nivel_aprobado, creado_por, creado_por_rol_clave,
-      banco, cuenta_bancaria, solo_zp_ad
-    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW(),$14,$15,$16,$17,$18,$19)
+      banco, cuenta_bancaria, solo_zp_ad, detalle_lineas
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW(),$14,$15,$16,$17,$18,$19,$20::jsonb)
     RETURNING id, numero_folio, folio_codigo, planta_id`,
     [
-      folio_codigo, numero_folio, plantaId, dd.proyecto_id || null, dd.beneficiario || null, dd.concepto || null,
-      dd.importe || null, dd.categoria_nombre || null, dd.subcategoria_nombre || null,
+      folio_codigo, numero_folio, plantaId, dd.proyecto_id || null, beneficiarioIns, conceptoIns,
+      importeIns, dd.categoria_nombre || null, dd.subcategoria_nombre || null,
       dd.estacion || null, dd.unidad || null, prioridad, estatusInicial, esZP ? 3 : 1, dd.actor_telefono || null,
       rolClave || null,
       dd.banco || null, dd.cuenta_bancaria || null,
       soloZpAd,
+      detalleJson,
     ]
   );
   const row = ins.rows[0];
@@ -8962,9 +9051,13 @@ app.post("/api/folios", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddlewar
   const planta_id = body.planta_id != null ? parseInt(body.planta_id, 10) : null;
   if (!planta_id || !Number.isFinite(planta_id)) return res.status(400).json({ error: "planta_id es obligatorio" });
   const proyecto_id = body.proyecto_id != null && body.proyecto_id !== "" ? parseInt(body.proyecto_id, 10) : null;
-  const beneficiario = (body.beneficiario != null && body.beneficiario !== "") ? String(body.beneficiario).trim() : null;
-  const concepto = (body.concepto != null && body.concepto !== "") ? String(body.concepto).trim() : null;
-  const importe = body.importe != null ? parseFloat(body.importe) : null;
+  const detalle = resolveFolioDetalleLineas(body);
+  if (!detalle.lineas.length) {
+    return res.status(400).json({ error: "Agrega al menos una solicitud con concepto (mín. 2 caracteres) e importe válido." });
+  }
+  const beneficiario = detalle.beneficiario;
+  const concepto = detalle.concepto;
+  const importe = detalle.total;
   const categoria = (body.categoria != null && body.categoria !== "") ? String(body.categoria).trim().toUpperCase() : null;
   const subcategoria = (body.subcategoria != null && body.subcategoria !== "") ? String(body.subcategoria).trim() : null;
   const prioridad = (body.prioridad != null && body.prioridad !== "") ? String(body.prioridad).trim() : null;
@@ -8973,8 +9066,6 @@ app.post("/api/folios", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddlewar
   const banco = (body.banco != null && body.banco !== "") ? String(body.banco).trim() : null;
   const cuenta_bancaria = (body.cuenta_bancaria != null && body.cuenta_bancaria !== "") ? String(body.cuenta_bancaria).trim() : null;
   const solo_zp_ad = body.solo_zp_ad === true || body.solo_zp_ad === "true";
-  if (!concepto || concepto.length < 2) return res.status(400).json({ error: "concepto es obligatorio (mín. 2 caracteres)" });
-  if (importe == null || !Number.isFinite(importe) || importe < 0) return res.status(400).json({ error: "importe debe ser un número mayor o igual a 0" });
   const client = await pool.connect();
   try {
     const plantaRow = await client.query("SELECT id, nombre FROM public.plantas WHERE id = $1", [planta_id]);
@@ -8987,6 +9078,7 @@ app.post("/api/folios", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddlewar
       beneficiario: beneficiario || null,
       concepto,
       importe,
+      lineas: detalle.lineas,
       categoria_nombre: categoriaNombre,
       subcategoria_nombre: subcategoria || null,
       prioridad: prioridad || "Media",
@@ -9002,7 +9094,7 @@ app.post("/api/folios", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddlewar
       origen: "dashboard",
     };
     const row = await insertFolio(client, dd);
-    res.status(201).json({ id: row.id, numero_folio: row.numero_folio, folio_codigo: row.folio_codigo, planta_id: row.planta_id });
+    res.status(201).json({ id: row.id, numero_folio: row.numero_folio, folio_codigo: row.folio_codigo, planta_id: row.planta_id, importe });
   } catch (e) {
     console.error("[Dashboard POST folios]", e);
     res.status(500).json({ error: e.message || "Error al crear folio" });
@@ -10856,7 +10948,7 @@ app.get("/api/folios/:id/documento-gastos", dashboardAuthMiddleware, dashboardBl
   const client = await pool.connect();
   try {
     const r = await client.query(
-      `SELECT f.id, f.planta_id, f.solo_zp_ad, f.numero_folio, f.folio_codigo, f.beneficiario, f.concepto, f.importe, f.creado_en, f.mes_cargo,
+      `SELECT f.id, f.planta_id, f.solo_zp_ad, f.numero_folio, f.folio_codigo, f.beneficiario, f.concepto, f.importe, f.detalle_lineas, f.creado_en, f.mes_cargo,
               p.nombre AS planta_nombre, p.clave AS planta_clave
        FROM public.folios f
        LEFT JOIN public.plantas p ON p.id = f.planta_id
@@ -10883,7 +10975,17 @@ app.get("/api/folios/:id/documento-gastos", dashboardAuthMiddleware, dashboardBl
       ? new Date(folio.creado_en).toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric" })
       : "—";
     const plantaDisplay = [folio.planta_clave, folio.planta_nombre].filter(Boolean).join(" - ") || "—";
-    const importeStr = folio.importe != null ? Number(folio.importe).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00";
+    const lineasDoc = getFolioLineasFromRow(folio);
+    const totalNum = lineasDoc.reduce((s, l) => s + (Number(l.importe) || 0), 0);
+    const importeStr = totalNum.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const esc = (s) => String(s || "").replace(/</g, "&lt;");
+    const minRows = Math.max(3, lineasDoc.length);
+    const rowsHtml = Array.from({ length: minRows }, (_, i) => {
+      const L = lineasDoc[i];
+      if (!L) return `<tr><td>${i + 1}</td><td></td><td></td><td></td></tr>`;
+      const impL = Number(L.importe).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      return `<tr><td>${i + 1}</td><td>${esc(L.beneficiario)}</td><td>${esc(L.concepto)}</td><td>$ ${impL}</td></tr>`;
+    }).join("\n            ");
 
     if (format === "html") {
       const html = `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>Gastos Extraordinarios - ${folio.numero_folio}</title><style>
@@ -10908,9 +11010,7 @@ app.get("/api/folios/:id/documento-gastos", dashboardAuthMiddleware, dashboardBl
         <table>
           <thead><tr><th>SOLICITUD</th><th>BENEFICIARIO</th><th>CONCEPTO</th><th>IMPORTE</th></tr></thead>
           <tbody>
-            <tr><td>1</td><td>${(folio.beneficiario || "").replace(/</g, "&lt;")}</td><td>${(folio.concepto || "").replace(/</g, "&lt;")}</td><td>$ ${importeStr}</td></tr>
-            <tr><td>2</td><td></td><td></td><td></td></tr>
-            <tr><td>3</td><td></td><td></td><td></td></tr>
+            ${rowsHtml}
           </tbody>
         </table>
         <div class="total">TOTAL &nbsp; $ ${importeStr}</div>
@@ -10943,9 +11043,12 @@ app.get("/api/folios/:id/documento-gastos", dashboardAuthMiddleware, dashboardBl
       page.drawText(`${plantaDisplay}  |  FOLIO - ${folio.numero_folio}`, { x: 350, y: y + 24, size: 10, font: fontBold });
       y -= 20;
       line("SOLICITUD   BENEFICIARIO   CONCEPTO   IMPORTE", 9, true);
-      const ben = (folio.beneficiario || "").substring(0, 35);
-      const con = (folio.concepto || "").substring(0, 50);
-      line(`1   ${ben}   ${con}   $ ${importeStr}`, 9);
+      lineasDoc.forEach((L, i) => {
+        const ben = String(L.beneficiario || "").substring(0, 28);
+        const con = String(L.concepto || "").substring(0, 40);
+        const impL = Number(L.importe || 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        line(`${i + 1}   ${ben}   ${con}   $ ${impL}`, 9);
+      });
       y -= 12;
       line(`TOTAL   $ ${importeStr}`, 10, true);
       y -= 30;
@@ -10989,7 +11092,7 @@ app.get("/api/folios/:id/documento-folio", dashboardAuthMiddleware, dashboardBlo
   const client = await pool.connect();
   try {
     const r = await client.query(
-      `SELECT f.id, f.planta_id, f.solo_zp_ad, f.numero_folio, f.folio_codigo, f.beneficiario, f.concepto, f.importe, f.creado_en, f.mes_cargo,
+      `SELECT f.id, f.planta_id, f.solo_zp_ad, f.numero_folio, f.folio_codigo, f.beneficiario, f.concepto, f.importe, f.detalle_lineas, f.creado_en, f.mes_cargo,
               f.categoria, f.subcategoria,
               p.nombre AS planta_nombre, p.clave AS planta_clave,
               pr.codigo AS proyecto_codigo, pr.nombre AS proyecto_nombre
@@ -11012,9 +11115,11 @@ app.get("/api/folios/:id/documento-folio", dashboardAuthMiddleware, dashboardBlo
     }
 
     const numeroFolio = (folio.numero_folio || folio.folio_codigo || `F-${folioId}`).toString().trim();
-    const beneficiario = (folio.beneficiario || "").toString().trim() || "—";
-    const concepto = (folio.concepto || "").toString().trim() || "—";
-    const importeNum = folio.importe != null ? Number(folio.importe) : 0;
+    const lineasFolio = getFolioLineasFromRow(folio).slice(0, FOLIO_LINEAS_MAX);
+    const beneficiario = (lineasFolio[0] && lineasFolio[0].beneficiario) || (folio.beneficiario || "").toString().trim() || "—";
+    const concepto = (lineasFolio[0] && lineasFolio[0].concepto) || (folio.concepto || "").toString().trim() || "—";
+    const totalNum = lineasFolio.reduce((s, l) => s + (Number(l.importe) || 0), 0);
+    const importeNum = totalNum || (folio.importe != null ? Number(folio.importe) : 0);
     const importeStr = Number(importeNum).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const PLANTA_CODIGO_A_NOMBRE = { E7: "PUEBLA", E8: "TEHUACAN", E9: "ACAPULCO", E10: "ACAPULCO", E12: "QUERETARO", E13: "SAN LUIS", E15: "MORELOS" };
     const PLANTA_NOMBRE_A_CODIGO = { PUEBLA: "E7", TEHUACAN: "E8", ACAPULCO: "E9", QUERETARO: "E12", SANLUIS: "E13", "SAN LUIS": "E13", MORELOS: "E15" };
@@ -11239,17 +11344,34 @@ app.get("/api/folios/:id/documento-folio", dashboardAuthMiddleware, dashboardBlo
           };
 
           draw(`FOLIO - ${numeroFolio}`, POS.folio.x, POS.folio.y, POS.folio.size, true);
-          const beneficiarioLines = wrapBeneficiario(beneficiario, POS.beneficiario.size);
-          beneficiarioLines.forEach((line, i) => {
-            draw(line, POS.beneficiario.x, POS.beneficiario.y - i * POS.beneficiario.size * 1.2, POS.beneficiario.size, false, 500);
+          const ROW_H = 21.5;
+          const multi = lineasFolio.length > 1;
+          lineasFolio.forEach((L, idx) => {
+            const yRow = POS.beneficiario.y - idx * ROW_H;
+            const benTxt = String(L.beneficiario || "").trim() || "—";
+            const conTxt = String(L.concepto || "").trim() || "—";
+            const impTxt = Number(L.importe || 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            if (multi) {
+              draw(benTxt, POS.beneficiario.x, yRow, POS.beneficiario.size, false, 40);
+              draw(conTxt, POS.concepto.x, yRow, POS.concepto.size, false, 55);
+              draw(`$ ${impTxt}`, POS.importe.x, yRow, POS.importe.size);
+            } else {
+              const beneficiarioLines = wrapBeneficiario(benTxt, POS.beneficiario.size);
+              beneficiarioLines.forEach((line, i) => {
+                draw(line, POS.beneficiario.x, yRow - i * POS.beneficiario.size * 1.2, POS.beneficiario.size, false, 500);
+              });
+              const conceptoLines = wrapConcepto(conTxt, POS.concepto.size);
+              let conceptoY = yRow;
+              conceptoLines.forEach((line) => {
+                draw(line, POS.concepto.x, conceptoY, POS.concepto.size, false, 500);
+                conceptoY -= POS.concepto.size * 1.2;
+              });
+              draw(`$ ${impTxt}`, POS.importe.x, yRow, POS.importe.size);
+            }
           });
-          const conceptoLines = wrapConcepto(concepto, POS.concepto.size);
-          let conceptoY = POS.concepto.y;
-          conceptoLines.forEach((line) => {
-            draw(line, POS.concepto.x, conceptoY, POS.concepto.size, false, 500);
-            conceptoY -= POS.concepto.size * 1.2;
-          });
-          draw(`$ ${importeStr}`, POS.importe.x, POS.importe.y, POS.importe.size);
+          // TOTAL (caja inferior del formato): suma de importes
+          const totalY = POS.importe.y - FOLIO_LINEAS_MAX * ROW_H - 6;
+          draw(`$ ${importeStr}`, POS.importe.x, totalY, POS.importe.size, true);
           draw(plantaDisplay, POS.planta.x, POS.planta.y, POS.planta.size);
           draw(fechaSolicitud, POS.fecha.x, POS.fecha.y, POS.fecha.size);
           draw(categoriaDisplay, POS.categoria.x, POS.categoria.y, POS.categoria.size);
@@ -11279,9 +11401,12 @@ app.get("/api/folios/:id/documento-folio", dashboardAuthMiddleware, dashboardBlo
       line(`Planta: ${plantaDisplay}`, 10);
       line(`Fechas del: ${fechasDelAl}  |  Fecha solicitud: ${fechaSolicitud}`, 9);
       y -= 8;
-      line(`Beneficiario: ${beneficiario}`, 10);
-      line(`Concepto: ${concepto}`, 10);
-      line(`Importe: $ ${importeStr}`, 10, true);
+      lineasFolio.forEach((L, i) => {
+        const impL = Number(L.importe || 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        line(`${i + 1}. ${(L.beneficiario || "—").substring(0, 40)}`, 10);
+        line(`   ${(L.concepto || "—").substring(0, 80)}  $ ${impL}`, 9);
+      });
+      line(`TOTAL: $ ${importeStr}`, 10, true);
       line(`Categoría: ${categoriaDisplay}  |  Subcategoría: ${subcategoriaDisplay}  |  Proyecto: ${proyectoDisplay}`, 9);
       pdfBytes = await pdfDoc.save();
     }
@@ -11306,7 +11431,7 @@ app.get("/api/folios/:id/documento-completo", dashboardAuthMiddleware, dashboard
   const client = await pool.connect();
   try {
     const r = await client.query(
-      `SELECT f.id, f.planta_id, f.solo_zp_ad, f.numero_folio, f.folio_codigo, f.beneficiario, f.concepto, f.importe, f.creado_en, f.mes_cargo, f.banco, f.cuenta_bancaria,
+      `SELECT f.id, f.planta_id, f.solo_zp_ad, f.numero_folio, f.folio_codigo, f.beneficiario, f.concepto, f.importe, f.detalle_lineas, f.creado_en, f.mes_cargo, f.banco, f.cuenta_bancaria,
               p.nombre AS planta_nombre, p.clave AS planta_clave
        FROM public.folios f
        LEFT JOIN public.plantas p ON p.id = f.planta_id
@@ -11333,7 +11458,9 @@ app.get("/api/folios/:id/documento-completo", dashboardAuthMiddleware, dashboard
       ? new Date(folio.creado_en).toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric" })
       : "—";
     const plantaDisplay = [folio.planta_clave, folio.planta_nombre].filter(Boolean).join(" - ") || "—";
-    const importeStr = folio.importe != null ? Number(folio.importe).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00";
+    const lineasDoc = getFolioLineasFromRow(folio);
+    const totalNum = lineasDoc.reduce((s, l) => s + (Number(l.importe) || 0), 0);
+    const importeStr = totalNum.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
     // 1) Generar PDF Póliza (cuenta y numero_cheque opcionales por query, para impresión desde Director ZP)
     const cuentaPoliza = (req.query.cuenta != null && String(req.query.cuenta).trim() !== "") ? String(req.query.cuenta).trim() : null;
@@ -11351,9 +11478,13 @@ app.get("/api/folios/:id/documento-completo", dashboardAuthMiddleware, dashboard
     lineG(`FECHAS DEL: ${fechasDelAl}`, 10); lineG(`FECHA DE SOLICITUD: ${fechaSolicitud}`, 10);
     pageG.drawText(`${plantaDisplay}  |  FOLIO - ${folio.numero_folio}`, { x: 350, y: yG + 24, size: 10, font: fontBoldG }); yG -= 20;
     lineG("SOLICITUD   BENEFICIARIO   CONCEPTO   IMPORTE", 9, true);
-    const ben = (folio.beneficiario || "").substring(0, 35);
-    const con = (folio.concepto || "").substring(0, 50);
-    lineG(`1   ${ben}   ${con}   $ ${importeStr}`, 9); yG -= 12;
+    lineasDoc.forEach((L, i) => {
+      const ben = String(L.beneficiario || "").substring(0, 28);
+      const con = String(L.concepto || "").substring(0, 40);
+      const impL = Number(L.importe || 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      lineG(`${i + 1}   ${ben}   ${con}   $ ${impL}`, 9);
+    });
+    yG -= 12;
     lineG(`TOTAL   $ ${importeStr}`, 10, true); yG -= 30;
     lineG("CF. DAMIAN DIAZ LOPEZ.  COORD. ADMON Y FINANZAS ZONA PROVINCIA", 8);
     lineG("LIC. ALFREDO GONZÁLEZ R.  DIRECTOR DE ZONA", 8);
