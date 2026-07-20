@@ -21,7 +21,7 @@ const SUBCATEGORIAS: Record<string, string[]> = {
   GASTOS: ["Contractuales", "Equipo planta", "Estaciones", "Jurídicos", "Liquidaciones laborales", "Pasivos meses anteriores", "Rentas", "Trámites vehiculares", "Viáticos", "Varios"],
   INVERSIONES: ["Equipo para la planta", "Instalaciones a clientes", "Publicidad", "Tanques y cilindros", "Estaciones"],
   DYO: [],
-  TALLER: [],
+  TALLER: ["REPARACIÓN MAYOR", "PASIVO/RECUPERACIÓN", "PREVENTIVO"],
 };
 
 const PRIORIDADES = ["Urgente no programado", "Alta", "Media", "Baja"];
@@ -98,6 +98,7 @@ export default function CrearFolioModal({ open, onClose, plantaId, plantaNombre,
 
   const subs = SUBCATEGORIAS[categoria] || [];
   const showUnidad = categoria === "TALLER";
+  const tallerTipoRequerido = categoria === "TALLER";
   const showEstacion = subcategoria.trim().toLowerCase() === "estaciones";
 
   const totalImporte = useMemo(() => {
@@ -178,6 +179,10 @@ export default function CrearFolioModal({ open, onClose, plantaId, plantaNombre,
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    if (tallerTipoRequerido && !subcategoria.trim()) {
+      setError("Para Taller debes seleccionar el tipo de solicitud (Reparación mayor, Pasivo/Recuperación o Preventivo).");
+      return;
+    }
     const built = buildValidLineas();
     if (built.error) {
       setError(built.error);
@@ -404,13 +409,16 @@ export default function CrearFolioModal({ open, onClose, plantaId, plantaNombre,
             </div>
             {subs.length > 0 && (
               <div>
-                <label className="block text-xs font-medium text-slate-500 mb-0.5">Subcategoría</label>
+                <label className="block text-xs font-medium text-slate-500 mb-0.5">
+                  {tallerTipoRequerido ? "Tipo de solicitud *" : "Subcategoría"}
+                </label>
                 <select
                   value={subcategoria}
                   onChange={(e) => setSubcategoria(e.target.value)}
                   className="w-full rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
+                  required={tallerTipoRequerido}
                 >
-                  <option value="">— Opcional —</option>
+                  <option value="">{tallerTipoRequerido ? "— Selecciona —" : "— Opcional —"}</option>
                   {subs.map((s) => (
                     <option key={s} value={s}>{s}</option>
                   ))}

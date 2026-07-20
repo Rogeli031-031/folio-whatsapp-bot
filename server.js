@@ -5103,7 +5103,7 @@ const SUBCATEGORIAS = {
   GASTOS: ["Contractuales", "Equipo planta", "Estaciones", "Jurídicos", "Liquidaciones laborales", "Pasivos meses anteriores", "Rentas", "Trámites vehiculares", "Varios"],
   INVERSIONES: ["Equipo para la planta", "Instalaciones a clientes", "Publicidad", "Tanques y cilindros", "Estaciones"],
   DYO: [],
-  TALLER: [],
+  TALLER: ["REPARACIÓN MAYOR", "PASIVO/RECUPERACIÓN", "PREVENTIVO"],
 };
 
 const PRIORIDADES = ["Alta", "Media", "Baja"];
@@ -5942,21 +5942,23 @@ app.get("/api/dashboard/clasificacion-apoyos-excel", dashboardAuthMiddleware, as
          AND f.planta_id IS NOT NULL`,
       [[mesA, mesB]]
     );
-    // Detalle GASTOS e INVERSIONES por planta (hojas E7 G / E7 I … E15): concepto + fecha Depósito y cierre.
+    // Detalle GASTOS / INVERSIONES / TALLER por planta (E7 G → E7 I → E7 T …).
     const hojasPlanta = clasificacionApoyosExcel.PLANTAS_DETALLE_SHEETS || clasificacionApoyosExcel.PLANTAS_GASTOS_SHEETS || [];
     const allPlantIds = [...new Set(hojasPlanta.flatMap((p) => p.ids || []))];
     const idToClave = new Map();
     hojasPlanta.forEach((p) => (p.ids || []).forEach((id) => idToClave.set(Number(id), p.clave)));
     const detalleGastosByPlanta = {};
     const detalleInversionesByPlanta = {};
+    const detalleTallerByPlanta = {};
     hojasPlanta.forEach((p) => {
       detalleGastosByPlanta[p.clave] = [];
       detalleInversionesByPlanta[p.clave] = [];
+      detalleTallerByPlanta[p.clave] = [];
     });
     try {
       if (allPlantIds.length) {
         const d = await client.query(
-          `SELECT f.id, f.planta_id, f.categoria, f.subcategoria, f.concepto, f.importe, f.mes_cargo, f.estatus,
+          `SELECT f.id, f.planta_id, f.categoria, f.subcategoria, f.unidad, f.concepto, f.importe, f.mes_cargo, f.estatus,
                   f.detalle_lineas, f.numero_folio,
                   (
                     SELECT MIN(h.creado_en)
@@ -5973,6 +5975,8 @@ app.get("/api/dashboard/clasificacion-apoyos-excel", dashboardAuthMiddleware, as
                 OR UPPER(TRIM(COALESCE(f.categoria,''))) LIKE '%GASTO%'
                 OR UPPER(TRIM(COALESCE(f.categoria,''))) = 'INVERSIONES'
                 OR UPPER(TRIM(COALESCE(f.categoria,''))) LIKE '%INVERSION%'
+                OR UPPER(TRIM(COALESCE(f.categoria,''))) = 'TALLER'
+                OR UPPER(TRIM(COALESCE(f.categoria,''))) LIKE '%TALLER%'
               )
             ORDER BY f.planta_id, f.subcategoria NULLS LAST, f.id`,
           [mesA, allPlantIds]
@@ -5981,7 +5985,9 @@ app.get("/api/dashboard/clasificacion-apoyos-excel", dashboardAuthMiddleware, as
           const clave = idToClave.get(Number(row.planta_id));
           if (!clave) continue;
           const cat = String(row.categoria || "").trim().toUpperCase();
-          if (cat === "INVERSIONES" || cat.includes("INVERSION")) {
+          if (cat === "TALLER" || cat.includes("TALLER")) {
+            detalleTallerByPlanta[clave].push(row);
+          } else if (cat === "INVERSIONES" || cat.includes("INVERSION")) {
             detalleInversionesByPlanta[clave].push(row);
           } else {
             detalleGastosByPlanta[clave].push(row);
@@ -5989,11 +5995,12 @@ app.get("/api/dashboard/clasificacion-apoyos-excel", dashboardAuthMiddleware, as
         }
       }
     } catch (eDet) {
-      console.warn("[clasificacion-apoyos-excel] detalle gastos/inversiones por planta:", eDet.message);
+      console.warn("[clasificacion-apoyos-excel] detalle gastos/inversiones/taller por planta:", eDet.message);
     }
     const wb = await clasificacionApoyosExcel.buildClasificacionApoyosWorkbook(r.rows, mesA, mesB, {
       detalleGastosByPlanta,
       detalleInversionesByPlanta,
+      detalleTallerByPlanta,
     });
     const buf = Buffer.from(await wb.xlsx.writeBuffer());
     const safeA = clasificacionApoyosExcel.mesLabelEs(mesA).replace(/\s+/g, "_");
@@ -9118,6 +9125,19 @@ app.post("/api/folios", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddlewar
   const banco = (body.banco != null && body.banco !== "") ? String(body.banco).trim() : null;
   const cuenta_bancaria = (body.cuenta_bancaria != null && body.cuenta_bancaria !== "") ? String(body.cuenta_bancaria).trim() : null;
   const solo_zp_ad = body.solo_zp_ad === true || body.solo_zp_ad === "true";
+  if (categoria === "TALLER") {
+    const tiposTaller = (SUBCATEGORIAS.TALLER || []).map((s) => String(s).trim().toUpperCase());
+    const subNorm = String(subcategoria || "").trim().toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const okTipo = tiposTaller.some((t) => {
+      const tn = t.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      return tn === subNorm;
+    });
+    if (!subcategoria || !okTipo) {
+      return res.status(400).json({
+        error: "Para Taller debes seleccionar el tipo de solicitud: REPARACIÓN MAYOR, PASIVO/RECUPERACIÓN o PREVENTIVO.",
+      });
+    }
+  }
   const client = await pool.connect();
   try {
     const plantaRow = await client.query("SELECT id, nombre FROM public.plantas WHERE id = $1", [planta_id]);
