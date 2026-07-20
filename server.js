@@ -5968,6 +5968,17 @@ app.get("/api/dashboard/clasificacion-apoyos-excel", dashboardAuthMiddleware, as
     });
     try {
       if (allPlantIds.length) {
+        const mesSiguiente = (() => {
+          const m = mesA.match(/^(\d{4})-(\d{2})$/);
+          if (!m) return null;
+          let y = parseInt(m[1], 10);
+          let mo = parseInt(m[2], 10) + 1;
+          if (mo > 12) {
+            mo = 1;
+            y += 1;
+          }
+          return `${y}-${String(mo).padStart(2, "0")}`;
+        })();
         const d = await client.query(
           `SELECT f.id, f.planta_id, f.categoria, f.subcategoria, f.unidad, f.concepto, f.importe, f.mes_cargo, f.estatus,
                   f.detalle_lineas, f.numero_folio, f.numero_cheque, f.prestamo_a_planta,
@@ -5980,9 +5991,16 @@ app.get("/api/dashboard/clasificacion-apoyos-excel", dashboardAuthMiddleware, as
                        AND UPPER(TRIM(COALESCE(h.estatus,''))) IN ('PAGADO','CERRADO')
                   ) AS fecha_envio
              FROM public.folios f
-            WHERE f.mes_cargo = $1
-              AND f.planta_id = ANY($2::int[])
+            WHERE f.planta_id = ANY($2::int[])
               AND UPPER(TRIM(COALESCE(f.estatus,''))) <> 'CANCELADO'
+              AND (
+                f.mes_cargo = $1
+                OR (
+                  $3::text IS NOT NULL
+                  AND f.mes_cargo = $3
+                  AND COALESCE(f.prestamo_siguiente_mes, false) = TRUE
+                )
+              )
               AND (
                 UPPER(TRIM(COALESCE(f.categoria,''))) = 'GASTOS'
                 OR UPPER(TRIM(COALESCE(f.categoria,''))) LIKE '%GASTO%'
@@ -5992,7 +6010,7 @@ app.get("/api/dashboard/clasificacion-apoyos-excel", dashboardAuthMiddleware, as
                 OR UPPER(TRIM(COALESCE(f.categoria,''))) LIKE '%TALLER%'
               )
             ORDER BY f.planta_id, f.subcategoria NULLS LAST, f.id`,
-          [mesA, allPlantIds]
+          [mesA, allPlantIds, mesSiguiente]
         );
         for (const row of d.rows || []) {
           const clave = idToClave.get(Number(row.planta_id));
