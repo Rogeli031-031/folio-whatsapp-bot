@@ -125,9 +125,9 @@ export default function ResumenCategoriasMesCargo({
   const [showClasificacion, setShowClasificacion] = useState(false);
 
   const selectedPlantaNombre = useMemo(() => {
-    if (selectedPlantaId == null || !data?.etapas) return null;
-    for (const et of data.etapas) {
-      for (const p of et.plantas || []) {
+    if (selectedPlantaId == null || !data?.board) return null;
+    for (const col of data.board) {
+      for (const p of col.plantas || []) {
         if (p.planta_id === selectedPlantaId) return p.planta_nombre || null;
       }
     }

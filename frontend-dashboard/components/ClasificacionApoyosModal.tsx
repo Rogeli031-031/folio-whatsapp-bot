@@ -125,14 +125,15 @@ function groupFoliosByEtapa(folios: ClasificacionDetalleFolio[]): {
     if (list) list.push(f);
     else map.set(etapa, [f]);
   }
-  const groups: {
+  type GrupoEtapa = {
     etapa: string;
     label: string;
     items: ClasificacionDetalleFolio[];
     total: number;
-  }[] = [];
+  };
+  const groups: GrupoEtapa[] = [];
   for (let i = 0; i < ETAPA_ORDER.length; i++) {
-    const etapa = ETAPA_ORDER[i];
+    const etapa: string = ETAPA_ORDER[i];
     const items = map.get(etapa);
     if (!items || items.length === 0) continue;
     groups.push({
@@ -142,11 +143,11 @@ function groupFoliosByEtapa(folios: ClasificacionDetalleFolio[]): {
       total: items.reduce((s, f) => s + (Number(f.importe) || 0), 0),
     });
   }
-  const known = new Set<string>(Array.from(ETAPA_ORDER));
+  const known = new Set<string>(Array.from(ETAPA_ORDER as readonly string[]));
   const extraKeys = Array.from(map.keys());
   for (let i = 0; i < extraKeys.length; i++) {
-    const etapa = extraKeys[i];
-    if (known.has(etapa)) continue;
+    const etapa = String(extraKeys[i] || "");
+    if (!etapa || known.has(etapa)) continue;
     const items = map.get(etapa) || [];
     groups.push({
       etapa,
