@@ -5942,13 +5942,17 @@ app.get("/api/dashboard/clasificacion-apoyos-excel", dashboardAuthMiddleware, as
          AND f.planta_id IS NOT NULL`,
       [[mesA, mesB]]
     );
-    // Detalle GASTOS por planta (hojas E7 G … E15 G): concepto + fecha Depósito y cierre.
-    const hojasGastos = clasificacionApoyosExcel.PLANTAS_GASTOS_SHEETS || [];
-    const allPlantIds = [...new Set(hojasGastos.flatMap((p) => p.ids || []))];
+    // Detalle GASTOS e INVERSIONES por planta (hojas E7 G / E7 I … E15): concepto + fecha Depósito y cierre.
+    const hojasPlanta = clasificacionApoyosExcel.PLANTAS_DETALLE_SHEETS || clasificacionApoyosExcel.PLANTAS_GASTOS_SHEETS || [];
+    const allPlantIds = [...new Set(hojasPlanta.flatMap((p) => p.ids || []))];
     const idToClave = new Map();
-    hojasGastos.forEach((p) => (p.ids || []).forEach((id) => idToClave.set(Number(id), p.clave)));
+    hojasPlanta.forEach((p) => (p.ids || []).forEach((id) => idToClave.set(Number(id), p.clave)));
     const detalleGastosByPlanta = {};
-    hojasGastos.forEach((p) => { detalleGastosByPlanta[p.clave] = []; });
+    const detalleInversionesByPlanta = {};
+    hojasPlanta.forEach((p) => {
+      detalleGastosByPlanta[p.clave] = [];
+      detalleInversionesByPlanta[p.clave] = [];
+    });
     try {
       if (allPlantIds.length) {
         const d = await client.query(
@@ -5967,6 +5971,8 @@ app.get("/api/dashboard/clasificacion-apoyos-excel", dashboardAuthMiddleware, as
               AND (
                 UPPER(TRIM(COALESCE(f.categoria,''))) = 'GASTOS'
                 OR UPPER(TRIM(COALESCE(f.categoria,''))) LIKE '%GASTO%'
+                OR UPPER(TRIM(COALESCE(f.categoria,''))) = 'INVERSIONES'
+                OR UPPER(TRIM(COALESCE(f.categoria,''))) LIKE '%INVERSION%'
               )
             ORDER BY f.planta_id, f.subcategoria NULLS LAST, f.id`,
           [mesA, allPlantIds]
@@ -5974,13 +5980,21 @@ app.get("/api/dashboard/clasificacion-apoyos-excel", dashboardAuthMiddleware, as
         for (const row of d.rows || []) {
           const clave = idToClave.get(Number(row.planta_id));
           if (!clave) continue;
-          detalleGastosByPlanta[clave].push(row);
+          const cat = String(row.categoria || "").trim().toUpperCase();
+          if (cat === "INVERSIONES" || cat.includes("INVERSION")) {
+            detalleInversionesByPlanta[clave].push(row);
+          } else {
+            detalleGastosByPlanta[clave].push(row);
+          }
         }
       }
     } catch (eDet) {
-      console.warn("[clasificacion-apoyos-excel] detalle gastos por planta:", eDet.message);
+      console.warn("[clasificacion-apoyos-excel] detalle gastos/inversiones por planta:", eDet.message);
     }
-    const wb = await clasificacionApoyosExcel.buildClasificacionApoyosWorkbook(r.rows, mesA, mesB, { detalleGastosByPlanta });
+    const wb = await clasificacionApoyosExcel.buildClasificacionApoyosWorkbook(r.rows, mesA, mesB, {
+      detalleGastosByPlanta,
+      detalleInversionesByPlanta,
+    });
     const buf = Buffer.from(await wb.xlsx.writeBuffer());
     const safeA = clasificacionApoyosExcel.mesLabelEs(mesA).replace(/\s+/g, "_");
     const safeB = clasificacionApoyosExcel.mesLabelEs(mesB).replace(/\s+/g, "_");
