@@ -45,9 +45,14 @@ function buildMesOptions(): { value: string; label: string }[] {
   const { actual } = mesActualYAnteriorMx();
   const [y0, m0] = actual.split("-").map(Number);
   const out: { value: string; label: string }[] = [];
-  for (let i = 0; i < 24; i++) {
+  // 6 meses futuros + mes actual + 23 meses anteriores (para préstamos siguiente mes, etc.)
+  for (let i = 6; i >= -23; i--) {
     let y = y0;
-    let m = m0 - i;
+    let m = m0 + i;
+    while (m > 12) {
+      m -= 12;
+      y += 1;
+    }
     while (m < 1) {
       m += 12;
       y -= 1;
