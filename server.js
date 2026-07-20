@@ -5926,12 +5926,18 @@ app.get("/api/dashboard/clasificacion-apoyos-excel", dashboardAuthMiddleware, as
   if (dashboardBlockGVForbidden(req, res)) return;
   const mesA = String(req.query.mes_a || "").trim();
   const mesB = String(req.query.mes_b || "").trim();
+  const plantaIdRaw = req.query.planta_id != null && String(req.query.planta_id).trim() !== ""
+    ? Number(req.query.planta_id)
+    : null;
+  const plantaId = Number.isFinite(plantaIdRaw) ? plantaIdRaw : null;
   if (!/^\d{4}-\d{2}$/.test(mesA) || !/^\d{4}-\d{2}$/.test(mesB)) {
     return res.status(400).json({ error: "mes_a y mes_b son obligatorios (YYYY-MM)" });
   }
   if (mesA === mesB) {
     return res.status(400).json({ error: "Los meses a comparar deben ser distintos" });
   }
+  const plantasFiltro = clasificacionApoyosExcel.resolvePlantasComparativo(plantaId);
+  const idsFiltro = [...new Set(plantasFiltro.flatMap((p) => p.ids || []))];
   const client = await pool.connect();
   try {
     const r = await client.query(
@@ -5939,18 +5945,23 @@ app.get("/api/dashboard/clasificacion-apoyos-excel", dashboardAuthMiddleware, as
        FROM public.folios f
        WHERE f.mes_cargo = ANY($1::text[])
          AND UPPER(TRIM(COALESCE(f.estatus,''))) <> 'CANCELADO'
-         AND f.planta_id IS NOT NULL`,
-      [[mesA, mesB]]
+         AND f.planta_id IS NOT NULL
+         AND f.planta_id = ANY($2::int[])`,
+      [[mesA, mesB], idsFiltro]
     );
     // Detalle GASTOS / INVERSIONES / TALLER por planta (E7 G → E7 I → E7 T …).
-    const hojasPlanta = clasificacionApoyosExcel.PLANTAS_DETALLE_SHEETS || clasificacionApoyosExcel.PLANTAS_GASTOS_SHEETS || [];
-    const allPlantIds = [...new Set(hojasPlanta.flatMap((p) => p.ids || []))];
+    const hojasPlantaAll = clasificacionApoyosExcel.PLANTAS_DETALLE_SHEETS || clasificacionApoyosExcel.PLANTAS_GASTOS_SHEETS || [];
+    const hojasPlanta = plantaId != null
+      ? hojasPlantaAll.filter((p) => (p.ids || []).includes(plantaId))
+      : hojasPlantaAll;
+    const hojasUsar = hojasPlanta.length ? hojasPlanta : hojasPlantaAll;
+    const allPlantIds = [...new Set(hojasUsar.flatMap((p) => p.ids || []))];
     const idToClave = new Map();
-    hojasPlanta.forEach((p) => (p.ids || []).forEach((id) => idToClave.set(Number(id), p.clave)));
+    hojasUsar.forEach((p) => (p.ids || []).forEach((id) => idToClave.set(Number(id), p.clave)));
     const detalleGastosByPlanta = {};
     const detalleInversionesByPlanta = {};
     const detalleTallerByPlanta = {};
-    hojasPlanta.forEach((p) => {
+    hojasUsar.forEach((p) => {
       detalleGastosByPlanta[p.clave] = [];
       detalleInversionesByPlanta[p.clave] = [];
       detalleTallerByPlanta[p.clave] = [];
@@ -5959,7 +5970,9 @@ app.get("/api/dashboard/clasificacion-apoyos-excel", dashboardAuthMiddleware, as
       if (allPlantIds.length) {
         const d = await client.query(
           `SELECT f.id, f.planta_id, f.categoria, f.subcategoria, f.unidad, f.concepto, f.importe, f.mes_cargo, f.estatus,
-                  f.detalle_lineas, f.numero_folio,
+                  f.detalle_lineas, f.numero_folio, f.numero_cheque, f.prestamo_a_planta,
+                  COALESCE(f.prestamo_siguiente_mes, false) AS prestamo_siguiente_mes,
+                  COALESCE(f.por_recuperar, false) AS por_recuperar,
                   (
                     SELECT MIN(h.creado_en)
                       FROM public.folio_historial h
@@ -6001,11 +6014,15 @@ app.get("/api/dashboard/clasificacion-apoyos-excel", dashboardAuthMiddleware, as
       detalleGastosByPlanta,
       detalleInversionesByPlanta,
       detalleTallerByPlanta,
+      plantaId,
     });
     const buf = Buffer.from(await wb.xlsx.writeBuffer());
     const safeA = clasificacionApoyosExcel.mesLabelEs(mesA).replace(/\s+/g, "_");
     const safeB = clasificacionApoyosExcel.mesLabelEs(mesB).replace(/\s+/g, "_");
-    const filename = `Clasificacion_Apoyos_${safeA}_vs_${safeB}.xlsx`;
+    const plantaSuffix = plantasFiltro.length === 1
+      ? `_${plantasFiltro[0].label.replace(/\s+/g, "_")}`
+      : "";
+    const filename = `Clasificacion_Apoyos_${safeA}_vs_${safeB}${plantaSuffix}.xlsx`;
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
     return res.send(buf);
@@ -6022,12 +6039,18 @@ app.get("/api/dashboard/clasificacion-apoyos", dashboardAuthMiddleware, async (r
   if (dashboardBlockGVForbidden(req, res)) return;
   const mesA = String(req.query.mes_a || "").trim();
   const mesB = String(req.query.mes_b || "").trim();
+  const plantaIdRaw = req.query.planta_id != null && String(req.query.planta_id).trim() !== ""
+    ? Number(req.query.planta_id)
+    : null;
+  const plantaId = Number.isFinite(plantaIdRaw) ? plantaIdRaw : null;
   if (!/^\d{4}-\d{2}$/.test(mesA) || !/^\d{4}-\d{2}$/.test(mesB)) {
     return res.status(400).json({ error: "mes_a y mes_b son obligatorios (YYYY-MM)" });
   }
   if (mesA === mesB) {
     return res.status(400).json({ error: "Los meses a comparar deben ser distintos" });
   }
+  const plantasFiltro = clasificacionApoyosExcel.resolvePlantasComparativo(plantaId);
+  const idsFiltro = [...new Set(plantasFiltro.flatMap((p) => p.ids || []))];
   const client = await pool.connect();
   try {
     const r = await client.query(
@@ -6035,10 +6058,11 @@ app.get("/api/dashboard/clasificacion-apoyos", dashboardAuthMiddleware, async (r
        FROM public.folios f
        WHERE f.mes_cargo = ANY($1::text[])
          AND UPPER(TRIM(COALESCE(f.estatus,''))) <> 'CANCELADO'
-         AND f.planta_id IS NOT NULL`,
-      [[mesA, mesB]]
+         AND f.planta_id IS NOT NULL
+         AND f.planta_id = ANY($2::int[])`,
+      [[mesA, mesB], idsFiltro]
     );
-    const matrix = clasificacionApoyosExcel.buildClasificacionMatrix(r.rows, mesA, mesB);
+    const matrix = clasificacionApoyosExcel.buildClasificacionMatrix(r.rows, mesA, mesB, { plantaId });
     return res.json({ ok: true, ...matrix });
   } catch (e) {
     console.error("[clasificacion-apoyos]", e);

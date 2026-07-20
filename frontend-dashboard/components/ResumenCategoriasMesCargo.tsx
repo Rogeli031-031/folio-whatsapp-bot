@@ -124,6 +124,16 @@ export default function ResumenCategoriasMesCargo({
 
   const [showClasificacion, setShowClasificacion] = useState(false);
 
+  const selectedPlantaNombre = useMemo(() => {
+    if (selectedPlantaId == null || !data?.etapas) return null;
+    for (const et of data.etapas) {
+      for (const p of et.plantas || []) {
+        if (p.planta_id === selectedPlantaId) return p.planta_nombre || null;
+      }
+    }
+    return null;
+  }, [data, selectedPlantaId]);
+
   const { byMes, byMesCat, byMesCatSub, detalleList } = useMemo(() => {
     const byMes: Record<MesCargo, number> = {};
     const byMesCat: Record<string, number> = {};
@@ -292,6 +302,8 @@ export default function ResumenCategoriasMesCargo({
         <ClasificacionApoyosModal
           open={true}
           token={token}
+          selectedPlantaId={selectedPlantaId ?? null}
+          selectedPlantaNombre={selectedPlantaNombre}
           onClose={() => setShowClasificacion(false)}
           onOpenFolio={(id) => {
             setShowClasificacion(false);

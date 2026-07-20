@@ -14,6 +14,9 @@ interface Props {
   token: string;
   onClose: () => void;
   onOpenFolio?: (id: number) => void;
+  /** Si el kanban tiene planta seleccionada, filtra comparativo y Excel a esa planta. */
+  selectedPlantaId?: number | null;
+  selectedPlantaNombre?: string | null;
 }
 
 type CatApi = "GASTOS" | "INVERSIONES" | "TALLER" | "TOTAL";
@@ -155,7 +158,14 @@ function groupFoliosByEtapa(folios: ClasificacionDetalleFolio[]): {
   return groups;
 }
 
-export default function ClasificacionApoyosModal({ open, token, onClose, onOpenFolio }: Props) {
+export default function ClasificacionApoyosModal({
+  open,
+  token,
+  onClose,
+  onOpenFolio,
+  selectedPlantaId = null,
+  selectedPlantaNombre = null,
+}: Props) {
   const defaults = useMemo(() => mesActualYAnteriorMx(), []);
   const options = useMemo(() => buildMesOptions(), []);
   const [mesA, setMesA] = useState(defaults.actual);
@@ -177,6 +187,8 @@ export default function ClasificacionApoyosModal({ open, token, onClose, onOpenF
   const [folios, setFolios] = useState<ClasificacionDetalleFolio[] | null>(null);
   const [detalleTotal, setDetalleTotal] = useState(0);
 
+  const plantaFiltroLabel = selectedPlantaNombre || (selectedPlantaId != null ? `Planta #${selectedPlantaId}` : null);
+
   if (!open) return null;
 
   const handleVer = async () => {
@@ -187,7 +199,7 @@ export default function ClasificacionApoyosModal({ open, token, onClose, onOpenF
     }
     setLoading(true);
     try {
-      const res = await fetchClasificacionApoyos(token, mesA, mesB);
+      const res = await fetchClasificacionApoyos(token, mesA, mesB, selectedPlantaId);
       setData(res);
       setStep("view");
       setDetalle(null);
@@ -204,7 +216,7 @@ export default function ClasificacionApoyosModal({ open, token, onClose, onOpenF
     setExporting(true);
     setError(null);
     try {
-      await downloadClasificacionApoyosExcel(token, data.mes_a, data.mes_b);
+      await downloadClasificacionApoyosExcel(token, data.mes_a, data.mes_b, selectedPlantaId);
     } catch (e) {
       setError((e as Error).message || "Error al exportar Excel");
     } finally {
@@ -274,6 +286,11 @@ export default function ClasificacionApoyosModal({ open, token, onClose, onOpenF
                 <h2 className="text-lg font-semibold text-white">Clasificación de apoyos</h2>
                 <p className="mt-1 text-xs text-slate-400">
                   Elige el mes principal y el mes a comparar. Luego verás el comparativo digital (como en IGF).
+                  {plantaFiltroLabel ? (
+                    <span className="mt-1 block text-amber-300/90">
+                      Filtrado por planta: <strong>{plantaFiltroLabel}</strong>
+                    </span>
+                  ) : null}
                 </p>
               </div>
               <button type="button" onClick={onClose} className="rounded px-2 py-1 text-slate-400 hover:bg-slate-800 hover:text-white">
@@ -327,7 +344,8 @@ export default function ClasificacionApoyosModal({ open, token, onClose, onOpenF
               <div>
                 <h2 className="text-lg font-semibold text-white">Clasificación de apoyos</h2>
                 <p className="mt-0.5 text-xs text-slate-400">
-                  {data?.vs_label} · clic en un monto para ver el desglose
+                  {data?.vs_label}
+                  {plantaFiltroLabel ? ` · ${plantaFiltroLabel}` : ""} · clic en un monto para ver el desglose
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">

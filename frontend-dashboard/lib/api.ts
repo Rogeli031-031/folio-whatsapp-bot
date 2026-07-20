@@ -35,10 +35,13 @@ export function getDashboardExcelDownloadUrl(token: string, year: number, month:
 export async function downloadClasificacionApoyosExcel(
   token: string,
   mesA: string,
-  mesB: string
+  mesB: string,
+  plantaId?: number | null
 ): Promise<void> {
   const base = getApiUrl("/api/dashboard/clasificacion-apoyos-excel");
-  const url = `${base}?mes_a=${encodeURIComponent(mesA)}&mes_b=${encodeURIComponent(mesB)}`;
+  const plantaQ =
+    plantaId != null && Number.isFinite(plantaId) ? `&planta_id=${encodeURIComponent(String(plantaId))}` : "";
+  const url = `${base}?mes_a=${encodeURIComponent(mesA)}&mes_b=${encodeURIComponent(mesB)}${plantaQ}`;
   const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
@@ -88,11 +91,14 @@ export type ClasificacionApoyosData = {
 export function fetchClasificacionApoyos(
   token: string,
   mesA: string,
-  mesB: string
+  mesB: string,
+  plantaId?: number | null
 ): Promise<ClasificacionApoyosData> {
+  const params: Record<string, string> = { mes_a: mesA, mes_b: mesB };
+  if (plantaId != null && Number.isFinite(plantaId)) params.planta_id = String(plantaId);
   return apiFetch("/api/dashboard/clasificacion-apoyos", {
     token,
-    params: { mes_a: mesA, mes_b: mesB },
+    params,
     cache: "no-store",
   });
 }
