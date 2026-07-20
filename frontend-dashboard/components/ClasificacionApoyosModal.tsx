@@ -40,27 +40,84 @@ function mesActualYAnteriorMx(): { actual: string; anterior: string } {
   return { actual, anterior: `${py}-${String(pm).padStart(2, "0")}` };
 }
 
-function buildMesOptions(): { value: string; label: string }[] {
-  const meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
-  const { actual } = mesActualYAnteriorMx();
-  const [y0, m0] = actual.split("-").map(Number);
-  const out: { value: string; label: string }[] = [];
-  // 6 meses futuros + mes actual + 23 meses anteriores (para préstamos siguiente mes, etc.)
-  for (let i = 6; i >= -23; i--) {
-    let y = y0;
-    let m = m0 + i;
-    while (m > 12) {
-      m -= 12;
-      y += 1;
-    }
-    while (m < 1) {
-      m += 12;
-      y -= 1;
-    }
-    const value = `${y}-${String(m).padStart(2, "0")}`;
-    out.push({ value, label: `${meses[m - 1]} ${y}` });
+const MESES_CORTOS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+
+function splitYyyyMm(value: string): { year: number; month: number } {
+  const m = /^(\d{4})-(\d{2})$/.exec(String(value || "").trim());
+  if (!m) {
+    const d = mesActualYAnteriorMx().actual;
+    const [y, mo] = d.split("-").map(Number);
+    return { year: y, month: mo };
   }
+  return { year: Number(m[1]), month: Number(m[2]) };
+}
+
+function joinYyyyMm(year: number, month: number): string {
+  return `${year}-${String(month).padStart(2, "0")}`;
+}
+
+function yearOptionsAround(currentYear: number): number[] {
+  const out: number[] = [];
+  for (let y = currentYear + 1; y >= currentYear - 2; y--) out.push(y);
   return out;
+}
+
+function MesPicker({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (yyyyMm: string) => void;
+}) {
+  const { year, month } = splitYyyyMm(value);
+  const { actual } = mesActualYAnteriorMx();
+  const currentYear = splitYyyyMm(actual).year;
+  const years = yearOptionsAround(currentYear);
+
+  return (
+    <div className="rounded border border-slate-700 bg-slate-800/40 p-2.5">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <span className="text-xs text-slate-400">{label}</span>
+        <select
+          value={year}
+          onChange={(e) => onChange(joinYyyyMm(Number(e.target.value), month))}
+          className="rounded border border-slate-600 bg-slate-800 px-2 py-1 text-xs text-slate-100"
+          aria-label={`${label} año`}
+        >
+          {years.map((y) => (
+            <option key={y} value={y}>
+              {y}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="grid grid-cols-4 gap-1.5">
+        {MESES_CORTOS.map((nombre, idx) => {
+          const m = idx + 1;
+          const selected = m === month;
+          return (
+            <button
+              key={nombre}
+              type="button"
+              onClick={() => onChange(joinYyyyMm(year, m))}
+              className={`rounded px-1.5 py-1.5 text-xs font-medium transition ${
+                selected
+                  ? "bg-teal-600 text-white"
+                  : "bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white"
+              }`}
+            >
+              {nombre}
+            </button>
+          );
+        })}
+      </div>
+      <p className="mt-2 text-center text-[11px] text-slate-500">
+        {MESES_CORTOS[month - 1]} {year}
+      </p>
+    </div>
+  );
 }
 
 function fmtMxn(n: number | null | undefined): string {
@@ -173,7 +230,6 @@ export default function ClasificacionApoyosModal({
   selectedPlantaNombre = null,
 }: Props) {
   const defaults = useMemo(() => mesActualYAnteriorMx(), []);
-  const options = useMemo(() => buildMesOptions(), []);
   const [mesA, setMesA] = useState(defaults.actual);
   const [mesB, setMesB] = useState(defaults.anterior);
   const [step, setStep] = useState<"pick" | "view">("pick");
@@ -303,31 +359,9 @@ export default function ClasificacionApoyosModal({
                 Cerrar
               </button>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <label className="text-xs text-slate-400">
-                Mes principal
-                <select
-                  value={mesA}
-                  onChange={(e) => setMesA(e.target.value)}
-                  className="mt-1 block w-full rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-100"
-                >
-                  {options.map((o) => (
-                    <option key={`a-${o.value}`} value={o.value}>{o.label}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="text-xs text-slate-400">
-                Mes a comparar
-                <select
-                  value={mesB}
-                  onChange={(e) => setMesB(e.target.value)}
-                  className="mt-1 block w-full rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-100"
-                >
-                  {options.map((o) => (
-                    <option key={`b-${o.value}`} value={o.value}>{o.label}</option>
-                  ))}
-                </select>
-              </label>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <MesPicker label="Mes principal" value={mesA} onChange={setMesA} />
+              <MesPicker label="Mes a comparar" value={mesB} onChange={setMesB} />
             </div>
             {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
             <div className="mt-4 flex justify-end gap-2">
