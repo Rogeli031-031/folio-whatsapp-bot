@@ -5918,9 +5918,16 @@ app.get("/api/dashboard/kanban", dashboardAuthMiddleware, async (req, res) => {
   }
 });
 
+/** Clave para incluir folios solo_zp_ad en Clasificación de apoyos / Excel. */
+const CLASIFICACION_PRIV_CLAVE = "Tomza-Priv";
+function clasificacionIncluyePrivados(req) {
+  return String(req.query.priv_clave || "").trim() === CLASIFICACION_PRIV_CLAVE;
+}
+
 /**
  * Excel Clasificación de apoyos — hoja COMPARATIVOS.
  * Query: mes_a=YYYY-MM (izq), mes_b=YYYY-MM (der). Incluye folios no cancelados con ese mes_cargo.
+ * priv_clave=Tomza-Priv → incluye también folios Solo ZP/AD (privados).
  */
 app.get("/api/dashboard/clasificacion-apoyos-excel", dashboardAuthMiddleware, async (req, res) => {
   if (dashboardBlockGVForbidden(req, res)) return;
@@ -5930,6 +5937,7 @@ app.get("/api/dashboard/clasificacion-apoyos-excel", dashboardAuthMiddleware, as
     ? Number(req.query.planta_id)
     : null;
   const plantaId = Number.isFinite(plantaIdRaw) ? plantaIdRaw : null;
+  const includePrivados = clasificacionIncluyePrivados(req);
   if (!/^\d{4}-\d{2}$/.test(mesA) || !/^\d{4}-\d{2}$/.test(mesB)) {
     return res.status(400).json({ error: "mes_a y mes_b son obligatorios (YYYY-MM)" });
   }
@@ -5938,6 +5946,7 @@ app.get("/api/dashboard/clasificacion-apoyos-excel", dashboardAuthMiddleware, as
   }
   const plantasFiltro = clasificacionApoyosExcel.resolvePlantasComparativo(plantaId);
   const idsFiltro = [...new Set(plantasFiltro.flatMap((p) => p.ids || []))];
+  const privSql = includePrivados ? "" : " AND COALESCE(f.solo_zp_ad, false) = false";
   const client = await pool.connect();
   try {
     const r = await client.query(
@@ -5946,7 +5955,8 @@ app.get("/api/dashboard/clasificacion-apoyos-excel", dashboardAuthMiddleware, as
        WHERE f.mes_cargo = ANY($1::text[])
          AND UPPER(TRIM(COALESCE(f.estatus,''))) <> 'CANCELADO'
          AND f.planta_id IS NOT NULL
-         AND f.planta_id = ANY($2::int[])`,
+         AND f.planta_id = ANY($2::int[])
+         ${privSql}`,
       [[mesA, mesB], idsFiltro]
     );
     // Detalle GASTOS / INVERSIONES / TALLER por planta (E7 G → E7 I → E7 T …).
@@ -6001,6 +6011,7 @@ app.get("/api/dashboard/clasificacion-apoyos-excel", dashboardAuthMiddleware, as
                   AND COALESCE(f.prestamo_siguiente_mes, false) = TRUE
                 )
               )
+              ${privSql}
               AND (
                 UPPER(TRIM(COALESCE(f.categoria,''))) = 'GASTOS'
                 OR UPPER(TRIM(COALESCE(f.categoria,''))) LIKE '%GASTO%'
@@ -6061,6 +6072,7 @@ app.get("/api/dashboard/clasificacion-apoyos", dashboardAuthMiddleware, async (r
     ? Number(req.query.planta_id)
     : null;
   const plantaId = Number.isFinite(plantaIdRaw) ? plantaIdRaw : null;
+  const includePrivados = clasificacionIncluyePrivados(req);
   if (!/^\d{4}-\d{2}$/.test(mesA) || !/^\d{4}-\d{2}$/.test(mesB)) {
     return res.status(400).json({ error: "mes_a y mes_b son obligatorios (YYYY-MM)" });
   }
@@ -6069,6 +6081,7 @@ app.get("/api/dashboard/clasificacion-apoyos", dashboardAuthMiddleware, async (r
   }
   const plantasFiltro = clasificacionApoyosExcel.resolvePlantasComparativo(plantaId);
   const idsFiltro = [...new Set(plantasFiltro.flatMap((p) => p.ids || []))];
+  const privSql = includePrivados ? "" : " AND COALESCE(f.solo_zp_ad, false) = false";
   const client = await pool.connect();
   try {
     const r = await client.query(
@@ -6077,7 +6090,8 @@ app.get("/api/dashboard/clasificacion-apoyos", dashboardAuthMiddleware, async (r
        WHERE f.mes_cargo = ANY($1::text[])
          AND UPPER(TRIM(COALESCE(f.estatus,''))) <> 'CANCELADO'
          AND f.planta_id IS NOT NULL
-         AND f.planta_id = ANY($2::int[])`,
+         AND f.planta_id = ANY($2::int[])
+         ${privSql}`,
       [[mesA, mesB], idsFiltro]
     );
     const matrix = clasificacionApoyosExcel.buildClasificacionMatrix(r.rows, mesA, mesB, { plantaId });
@@ -6110,6 +6124,8 @@ app.get("/api/dashboard/clasificacion-apoyos/detalle", dashboardAuthMiddleware, 
       : clasificacionApoyosExcel.normalizeCat(categoriaRaw);
   if (!catNorm) return res.status(400).json({ error: "categoria debe ser GASTOS, INVERSIONES, TALLER o TOTAL" });
 
+  const includePrivados = clasificacionIncluyePrivados(req);
+  const privSql = includePrivados ? "" : " AND COALESCE(f.solo_zp_ad, false) = false";
   const client = await pool.connect();
   try {
     const r = await client.query(
@@ -6122,6 +6138,7 @@ app.get("/api/dashboard/clasificacion-apoyos/detalle", dashboardAuthMiddleware, 
        WHERE f.mes_cargo = $1
          AND f.planta_id = ANY($2::int[])
          AND UPPER(TRIM(COALESCE(f.estatus,''))) <> 'CANCELADO'
+         ${privSql}
        ORDER BY f.numero_folio NULLS LAST, f.id`,
       [mes, plantaDef.ids]
     );

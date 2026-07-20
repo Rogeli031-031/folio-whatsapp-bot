@@ -232,6 +232,7 @@ export default function ClasificacionApoyosModal({
   const defaults = useMemo(() => mesActualYAnteriorMx(), []);
   const [mesA, setMesA] = useState(defaults.actual);
   const [mesB, setMesB] = useState(defaults.anterior);
+  const [privClave, setPrivClave] = useState("");
   const [step, setStep] = useState<"pick" | "view">("pick");
   const [data, setData] = useState<ClasificacionApoyosData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -261,7 +262,7 @@ export default function ClasificacionApoyosModal({
     }
     setLoading(true);
     try {
-      const res = await fetchClasificacionApoyos(token, mesA, mesB, selectedPlantaId);
+      const res = await fetchClasificacionApoyos(token, mesA, mesB, selectedPlantaId, privClave);
       setData(res);
       setStep("view");
       setDetalle(null);
@@ -278,7 +279,7 @@ export default function ClasificacionApoyosModal({
     setExporting(true);
     setError(null);
     try {
-      await downloadClasificacionApoyosExcel(token, data.mes_a, data.mes_b, selectedPlantaId);
+      await downloadClasificacionApoyosExcel(token, data.mes_a, data.mes_b, selectedPlantaId, privClave);
     } catch (e) {
       setError((e as Error).message || "Error al exportar Excel");
     } finally {
@@ -292,7 +293,12 @@ export default function ClasificacionApoyosModal({
     setDetalleError(null);
     setFolios(null);
     try {
-      const res = await fetchClasificacionApoyosDetalle(token, { mes, planta, categoria });
+      const res = await fetchClasificacionApoyosDetalle(token, {
+        mes,
+        planta,
+        categoria,
+        privClave,
+      });
       setFolios(res.folios || []);
       setDetalleTotal(res.total || 0);
     } catch (e) {
@@ -363,6 +369,20 @@ export default function ClasificacionApoyosModal({
               <MesPicker label="Mes principal" value={mesA} onChange={setMesA} />
               <MesPicker label="Mes a comparar" value={mesB} onChange={setMesB} />
             </div>
+            <label className="mt-3 block text-xs text-slate-400">
+              Clave folios privados (Solo ZP / AD)
+              <input
+                type="password"
+                value={privClave}
+                onChange={(e) => setPrivClave(e.target.value)}
+                autoComplete="off"
+                placeholder="Vacío = sin privados"
+                className="mt-1 block w-full rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-100 placeholder:text-slate-500"
+              />
+              <span className="mt-1 block text-[11px] text-slate-500">
+                Vacío: Excel sin folios privados. Con clave: incluye Solo ZP y AD.
+              </span>
+            </label>
             {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
             <div className="mt-4 flex justify-end gap-2">
               <button type="button" onClick={onClose} className="rounded bg-slate-700 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-600">
@@ -389,6 +409,18 @@ export default function ClasificacionApoyosModal({
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
+                <label className="flex items-center gap-1.5 text-[11px] text-slate-400">
+                  <span className="whitespace-nowrap">Privados</span>
+                  <input
+                    type="password"
+                    value={privClave}
+                    onChange={(e) => setPrivClave(e.target.value)}
+                    autoComplete="off"
+                    placeholder="clave"
+                    title="Vacío = sin folios Solo ZP/AD. Clave correcta = incluir privados."
+                    className="w-28 rounded border border-slate-600 bg-slate-800 px-2 py-1 text-xs text-slate-100 placeholder:text-slate-500"
+                  />
+                </label>
                 <button
                   type="button"
                   onClick={() => {

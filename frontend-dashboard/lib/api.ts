@@ -36,12 +36,17 @@ export async function downloadClasificacionApoyosExcel(
   token: string,
   mesA: string,
   mesB: string,
-  plantaId?: number | null
+  plantaId?: number | null,
+  privClave?: string | null
 ): Promise<void> {
   const base = getApiUrl("/api/dashboard/clasificacion-apoyos-excel");
   const plantaQ =
     plantaId != null && Number.isFinite(plantaId) ? `&planta_id=${encodeURIComponent(String(plantaId))}` : "";
-  const url = `${base}?mes_a=${encodeURIComponent(mesA)}&mes_b=${encodeURIComponent(mesB)}${plantaQ}`;
+  const privQ =
+    privClave && String(privClave).trim() !== ""
+      ? `&priv_clave=${encodeURIComponent(String(privClave).trim())}`
+      : "";
+  const url = `${base}?mes_a=${encodeURIComponent(mesA)}&mes_b=${encodeURIComponent(mesB)}${plantaQ}${privQ}`;
   const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
@@ -92,10 +97,12 @@ export function fetchClasificacionApoyos(
   token: string,
   mesA: string,
   mesB: string,
-  plantaId?: number | null
+  plantaId?: number | null,
+  privClave?: string | null
 ): Promise<ClasificacionApoyosData> {
   const params: Record<string, string> = { mes_a: mesA, mes_b: mesB };
   if (plantaId != null && Number.isFinite(plantaId)) params.planta_id = String(plantaId);
+  if (privClave && String(privClave).trim() !== "") params.priv_clave = String(privClave).trim();
   return apiFetch("/api/dashboard/clasificacion-apoyos", {
     token,
     params,
@@ -120,7 +127,12 @@ export type ClasificacionDetalleFolio = {
 
 export function fetchClasificacionApoyosDetalle(
   token: string,
-  params: { mes: string; planta: string; categoria: "GASTOS" | "INVERSIONES" | "TALLER" | "TOTAL" }
+  params: {
+    mes: string;
+    planta: string;
+    categoria: "GASTOS" | "INVERSIONES" | "TALLER" | "TOTAL";
+    privClave?: string | null;
+  }
 ): Promise<{
   ok: boolean;
   mes: string;
@@ -131,13 +143,17 @@ export function fetchClasificacionApoyosDetalle(
   total: number;
   folios: ClasificacionDetalleFolio[];
 }> {
+  const q: Record<string, string> = {
+    mes: params.mes,
+    planta: params.planta,
+    categoria: params.categoria,
+  };
+  if (params.privClave && String(params.privClave).trim() !== "") {
+    q.priv_clave = String(params.privClave).trim();
+  }
   return apiFetch("/api/dashboard/clasificacion-apoyos/detalle", {
     token,
-    params: {
-      mes: params.mes,
-      planta: params.planta,
-      categoria: params.categoria,
-    },
+    params: q,
     cache: "no-store",
   });
 }
