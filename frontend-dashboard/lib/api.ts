@@ -1929,6 +1929,17 @@ export function patchFolioMesCargo(
   });
 }
 
+export function patchFolioRechazoCdjz(
+  token: string,
+  folioId: number
+): Promise<{ ok: boolean; mes_cargo: null; rechazo_cdjz: boolean }> {
+  return apiFetch(`/api/folios/${folioId}/rechazo-cdjz`, {
+    token,
+    method: "PATCH",
+    body: JSON.stringify({}),
+  });
+}
+
 export function patchFolioSoloZpAd(
   token: string,
   folioId: number,

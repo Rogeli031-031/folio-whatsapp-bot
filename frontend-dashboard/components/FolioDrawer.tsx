@@ -12,6 +12,7 @@ import {
   postAvanzarEtapaFolio,
   postRegresarFolioAZp,
   patchFolioMesCargo,
+  patchFolioRechazoCdjz,
   patchFolioSoloZpAd,
   patchFolioPorRecuperar,
   patchFolioPrioridad,
@@ -110,6 +111,7 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
   const [approveError, setApproveError] = useState<string | null>(null);
   const [mesCargoEdit, setMesCargoEdit] = useState<string>("");
   const [savingMesCargo, setSavingMesCargo] = useState(false);
+  const [savingRechazoCdjz, setSavingRechazoCdjz] = useState(false);
   const [savingSoloZpAd, setSavingSoloZpAd] = useState(false);
   const [savingPorRecuperar, setSavingPorRecuperar] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -485,15 +487,38 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
     setSavingMesCargo(true);
     try {
       await patchFolioMesCargo(token, folioId, mesCargoEdit && /^\d{4}-\d{2}$/.test(mesCargoEdit) ? mesCargoEdit : null);
-      const f = await fetchFolio(token, folioId);
+      const [f, t] = await Promise.all([fetchFolio(token, folioId), fetchTimeline(token, folioId)]);
       setFolio(f as Record<string, unknown>);
       setMesCargoEdit((f as Record<string, unknown>).mes_cargo as string || "");
+      setTimeline((t as { events: typeof timeline }).events || []);
       onApproved?.();
       onClose();
     } catch (e) {
       setApproveError((e as Error).message || "Error al guardar mes de cargo");
     } finally {
       setSavingMesCargo(false);
+    }
+  };
+
+  const handleRechazoCdjz = async () => {
+    if (!token || !folioId || !puedeAsignarMesCargo) return;
+    const ok = window.confirm(
+      "¿Registrar RECHAZO CDJZ y quitar el mes de cargo? Podrás asignar otro mes después."
+    );
+    if (!ok) return;
+    setApproveError(null);
+    setSavingRechazoCdjz(true);
+    try {
+      await patchFolioRechazoCdjz(token, folioId);
+      const [f, t] = await Promise.all([fetchFolio(token, folioId), fetchTimeline(token, folioId)]);
+      setFolio(f as Record<string, unknown>);
+      setMesCargoEdit("");
+      setTimeline((t as { events: typeof timeline }).events || []);
+      onApproved?.();
+    } catch (e) {
+      setApproveError((e as Error).message || "Error al registrar RECHAZO CDJZ");
+    } finally {
+      setSavingRechazoCdjz(false);
     }
   };
 
@@ -796,10 +821,19 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
                         <button
                           type="button"
                           onClick={handleSaveMesCargo}
-                          disabled={savingMesCargo}
+                          disabled={savingMesCargo || savingRechazoCdjz}
                           className="rounded bg-slate-600 px-2 py-1.5 text-sm text-white hover:bg-slate-500 disabled:opacity-50"
                         >
                           {savingMesCargo ? "…" : "Guardar"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleRechazoCdjz}
+                          disabled={savingMesCargo || savingRechazoCdjz}
+                          className="rounded bg-rose-700 px-2 py-1.5 text-sm font-medium text-white hover:bg-rose-600 disabled:opacity-50"
+                          title="Quita el mes de cargo y registra RECHAZO CDJZ en el timeline"
+                        >
+                          {savingRechazoCdjz ? "…" : "RECHAZO CDJZ"}
                         </button>
                       </dd>
                     </div>

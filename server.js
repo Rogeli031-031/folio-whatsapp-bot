@@ -11615,9 +11615,66 @@ app.patch("/api/folios/:id", dashboardAuthMiddleware, dashboardBlockGVFoliosMidd
       return res.status(400).json({ error: "Solo se puede editar el mes de cargo en Aprobación Director ZP, Carro, Cuenta de fondos o Cheque Generado." });
     }
     await client.query(`UPDATE public.folios SET mes_cargo = $1 WHERE id = $2`, [mesCargo, folioId]);
+    const prevMes = folio.mes_cargo ? String(folio.mes_cargo).trim() : null;
+    if (mesCargo !== prevMes) {
+      const comentario = mesCargo
+        ? `Mes de cargo ${prevMes ? `cambiado de ${prevMes} a` : "asignado:"} ${mesCargo}.`
+        : `Mes de cargo eliminado${prevMes ? ` (antes: ${prevMes})` : ""}.`;
+      await insertHistorial(
+        client,
+        folioId,
+        folio.numero_folio,
+        folio.folio_codigo,
+        folio.estatus || "",
+        comentario,
+        null,
+        req.dashboardAuth.role || null
+      ).catch(() => {});
+    }
     res.json({ ok: true, mes_cargo: mesCargo });
   } catch (e) {
     console.error("[Dashboard PATCH folio]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/** RECHAZO CDJZ: quita mes de cargo y registra el evento en el timeline (sin cambiar estatus). */
+app.patch("/api/folios/:id/rechazo-cdjz", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddleware, async (req, res) => {
+  if (req.dashboardAuth.role === "GA") return res.status(403).json({ error: "GA solo puede ver e imprimir en el dashboard." });
+  const folioId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
+  const client = await pool.connect();
+  try {
+    const folio = await getFolioById(client, folioId);
+    if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
+    const est = String(folio.estatus || "").toUpperCase();
+    const enCarritoOCheque = ESTADOS_HASTA_CHEQUE.includes(est);
+    const enAprobacionZp = est === ESTADOS.PENDIENTE_APROB_ZP;
+    if (!enCarritoOCheque && !enAprobacionZp) {
+      return res.status(400).json({
+        error: "Solo se puede registrar RECHAZO CDJZ en Aprobación Director ZP, Carro, Cuenta de fondos o Cheque Generado.",
+      });
+    }
+    const prevMes = folio.mes_cargo ? String(folio.mes_cargo).trim() : null;
+    await client.query(`UPDATE public.folios SET mes_cargo = NULL WHERE id = $1`, [folioId]);
+    const comentario = prevMes
+      ? `RECHAZO CDJZ. Se quitó el mes de cargo ${prevMes}. Pendiente reasignar mes de cargo.`
+      : "RECHAZO CDJZ. Sin mes de cargo asignado. Pendiente reasignar mes de cargo.";
+    await insertHistorial(
+      client,
+      folioId,
+      folio.numero_folio,
+      folio.folio_codigo,
+      folio.estatus || "",
+      comentario,
+      null,
+      req.dashboardAuth.role || null
+    ).catch(() => {});
+    res.json({ ok: true, mes_cargo: null, rechazo_cdjz: true });
+  } catch (e) {
+    console.error("[Dashboard PATCH rechazo-cdjz]", e);
     res.status(500).json({ error: e.message });
   } finally {
     client.release();
