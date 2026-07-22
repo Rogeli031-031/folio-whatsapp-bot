@@ -1306,6 +1306,35 @@ export function fetchTimeline(token: string, id: number): Promise<{ events: { es
   return apiFetch(`/api/folios/${id}/timeline`, { token });
 }
 
+export type FolioComentario = {
+  id: number;
+  folio_id: number;
+  numero_folio: string;
+  body: string;
+  actor_telefono: string;
+  actor_rol: string;
+  created_at: string;
+};
+
+export function fetchFolioComentarios(
+  token: string,
+  id: number
+): Promise<{ folio_id: number; numero_folio: string; comentarios: FolioComentario[] }> {
+  return apiFetch(`/api/folios/${id}/comentarios`, { token });
+}
+
+export function postFolioComentario(
+  token: string,
+  id: number,
+  body: string
+): Promise<{ ok: boolean; folio_id: number; numero_folio: string; body: string }> {
+  return apiFetch(`/api/folios/${id}/comentarios`, {
+    token,
+    method: "POST",
+    body: JSON.stringify({ body }),
+  });
+}
+
 export function fetchMedia(token: string, id: number): Promise<{ items: { id: number; tipo: string; status: string; file_name: string | null; subido_en: string; monto?: number | null }[] }> {
   return apiFetch(`/api/folios/${id}/media`, { token });
 }
@@ -1878,6 +1907,56 @@ export function getDicfAccionesExcelUrl(token: string, planta?: string): string 
   let url = `${base}?t=${encodeURIComponent(token)}`;
   if (planta) url += `&planta=${encodeURIComponent(planta)}`;
   return url;
+}
+
+export type ClienteComentario = {
+  id: number;
+  planta_id: number | null;
+  cliente_key: string | null;
+  cliente_nombre: string;
+  canal: string;
+  subcanal: string;
+  body: string;
+  author_name: string;
+  created_by_usuario_id: number | null;
+  created_at: string;
+};
+
+export function fetchClienteComentarios(
+  token: string,
+  params: {
+    planta: string;
+    cliente_key?: string;
+    cliente_nombre?: string;
+    canal?: string;
+    subcanal?: string;
+  }
+): Promise<{ comentarios: ClienteComentario[] }> {
+  const p: Record<string, string> = { planta: params.planta };
+  if (params.cliente_key) p.cliente_key = params.cliente_key;
+  if (params.cliente_nombre) p.cliente_nombre = params.cliente_nombre;
+  if (params.canal) p.canal = params.canal;
+  if (params.subcanal) p.subcanal = params.subcanal;
+  return apiFetch("/api/dashboard/cliente-comentarios", { token, params: p });
+}
+
+export function postClienteComentario(
+  token: string,
+  body: {
+    planta: string;
+    body: string;
+    cliente_nombre: string;
+    cliente_key?: string | null;
+    grupo_tipo?: string;
+    canal?: string;
+    subcanal?: string;
+  }
+): Promise<{ comentario: ClienteComentario }> {
+  return apiFetch("/api/dashboard/cliente-comentarios", {
+    token,
+    method: "POST",
+    body: JSON.stringify(body),
+  });
 }
 
 export function postFolioPoliza(

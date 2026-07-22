@@ -24,6 +24,7 @@ import {
   patchFolioPrestamoAPlanta,
   patchFolioPrestamoSiguienteMes,
   patchFolioNumeroCheque,
+  postFolioComentario,
 } from "@/lib/api";
 import EditarFolioModal from "@/components/EditarFolioModal";
 import { tokenHasPermiso } from "@/lib/auth";
@@ -134,6 +135,9 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
   const [savingUrgente, setSavingUrgente] = useState(false);
   const [numeroChequeEdit, setNumeroChequeEdit] = useState("");
   const [savingNumeroCheque, setSavingNumeroCheque] = useState(false);
+  const [comentarioDraft, setComentarioDraft] = useState("");
+  const [savingComentario, setSavingComentario] = useState(false);
+  const [comentarioError, setComentarioError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!folioId || !token) {
@@ -141,6 +145,8 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
       setTimeline([]);
       setMedia([]);
       setFinanzas(null);
+      setComentarioDraft("");
+      setComentarioError(null);
       return;
     }
     setLoading(true);
@@ -222,6 +228,25 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
     !["CANCELADO", "PAGADO", "CERRADO", "COMPROBACIONES", "EVIDENCIAS", "CANCELACION_SOLICITADA"].includes(
       estatusUpper
     );
+  const handlePostComentario = async () => {
+    if (!token || !folioId) return;
+    const body = comentarioDraft.trim();
+    if (!body) return;
+    setSavingComentario(true);
+    setComentarioError(null);
+    try {
+      await postFolioComentario(token, folioId, body);
+      setComentarioDraft("");
+      const [f, t] = await Promise.all([fetchFolio(token, folioId), fetchTimeline(token, folioId)]);
+      setFolio(f as Record<string, unknown>);
+      setTimeline((t as { events: typeof timeline }).events || []);
+    } catch (e) {
+      setComentarioError((e as Error).message || "Error al guardar comentario");
+    } finally {
+      setSavingComentario(false);
+    }
+  };
+
   const whatsappNumber = (process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "").trim().replace(/\D/g, "");
   const numeroFolio = (folio?.numero_folio as string) || (folio?.folio_codigo as string) || "";
   const cmdCancelacion = numeroFolio ? `cancelar ${numeroFolio} motivo: ` : "cancelar F-YYYYMM-XXX motivo: ";
@@ -934,6 +959,31 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
                   </div>
                   <div><dt className="text-slate-500">Concepto</dt><dd className="text-slate-200">{String(folio.descripcion_display ?? folio.concepto ?? "—")}</dd></div>
                 </dl>
+              </section>
+              <section>
+                <h3 className="mb-2 text-sm font-medium text-slate-400">Comentarios</h3>
+                <p className="mb-2 text-xs text-slate-500">
+                  Quedan en el timeline y también los consulta el Director IA (adicionales al resto del contexto).
+                </p>
+                <textarea
+                  value={comentarioDraft}
+                  onChange={(e) => setComentarioDraft(e.target.value)}
+                  rows={3}
+                  maxLength={4000}
+                  placeholder="Escribe un comentario del folio…"
+                  className="w-full rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-100"
+                />
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void handlePostComentario()}
+                    disabled={savingComentario || !comentarioDraft.trim()}
+                    className="rounded bg-sky-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-600 disabled:opacity-50"
+                  >
+                    {savingComentario ? "Guardando…" : "Agregar comentario"}
+                  </button>
+                </div>
+                {comentarioError && <p className="mt-1 text-xs text-red-400">{comentarioError}</p>}
               </section>
               <section>
                 <h3 className="mb-2 text-sm font-medium text-slate-400">Timeline</h3>

@@ -65,6 +65,7 @@ const comercialEntidad = require("./lib/comercial-entidad");
 const { buildActionRegisterBoardPayload } = require("./lib/action-register-board");
 const { ACTION_REGISTER_TEMAS, isActionRegisterTema } = require("./lib/action-register-temas");
 const usuarioPermisos = require("./lib/usuario-permisos");
+const clienteComentariosLib = require("./lib/cliente-comentarios");
 
 const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
@@ -11220,6 +11221,89 @@ app.get("/api/folios/:id/timeline", dashboardAuthMiddleware, dashboardBlockGVFol
   }
 });
 
+/** Lista comentarios del folio (public.comentarios). */
+app.get("/api/folios/:id/comentarios", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddleware, async (req, res) => {
+  const folioId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
+  const client = await pool.connect();
+  try {
+    const folio = await getFolioById(client, folioId);
+    if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
+    if (folio.solo_zp_ad && !authCanVerFoliosSoloZpAd(req.dashboardAuth)) {
+      return res.status(404).json({ error: "Folio no encontrado" });
+    }
+    if ((req.dashboardAuth.role === "GG" || req.dashboardAuth.role === "GA") && req.dashboardAuth.plantas_permitidas?.length > 0) {
+      if (!folio.planta_id || !req.dashboardAuth.plantas_permitidas.includes(folio.planta_id)) {
+        return res.status(403).json({ error: "Sin permiso" });
+      }
+    }
+    const r = await client.query(
+      `SELECT id, folio_id, numero_folio, comentario, actor_telefono, actor_rol, creado_en
+       FROM public.comentarios
+       WHERE folio_id = $1
+       ORDER BY creado_en DESC NULLS LAST, id DESC
+       LIMIT 100`,
+      [folioId]
+    );
+    res.json({
+      folio_id: folioId,
+      numero_folio: folio.numero_folio,
+      comentarios: (r.rows || []).map((row) => ({
+        id: row.id,
+        folio_id: row.folio_id,
+        numero_folio: row.numero_folio,
+        body: row.comentario || "",
+        actor_telefono: row.actor_telefono || "",
+        actor_rol: row.actor_rol || "",
+        created_at: row.creado_en,
+      })),
+    });
+  } catch (e) {
+    console.error("[Dashboard GET folio comentarios]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/** Agrega comentario al folio desde el dashboard (también queda en timeline). */
+app.post("/api/folios/:id/comentarios", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddleware, async (req, res) => {
+  const folioId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
+  const texto = req.body && req.body.body != null ? String(req.body.body).trim() : "";
+  if (!texto) return res.status(400).json({ error: "El comentario no puede estar vacío" });
+  if (texto.length > 4000) return res.status(400).json({ error: "Comentario demasiado largo (máx 4000 caracteres)" });
+  const client = await pool.connect();
+  try {
+    const folio = await getFolioById(client, folioId);
+    if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
+    if (folio.solo_zp_ad && !authCanVerFoliosSoloZpAd(req.dashboardAuth)) {
+      return res.status(404).json({ error: "Folio no encontrado" });
+    }
+    if ((req.dashboardAuth.role === "GG" || req.dashboardAuth.role === "GA") && req.dashboardAuth.plantas_permitidas?.length > 0) {
+      if (!folio.planta_id || !req.dashboardAuth.plantas_permitidas.includes(folio.planta_id)) {
+        return res.status(403).json({ error: "Sin permiso" });
+      }
+    }
+    const role = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) || "Dashboard";
+    const actorId = req.dashboardAuth.actor_id != null ? Number(req.dashboardAuth.actor_id) : null;
+    const actorTelefono = Number.isFinite(actorId) ? `Dashboard:${actorId}` : "Dashboard";
+    const updated = await insertComentario(client, folio.numero_folio, texto, actorTelefono, role);
+    if (!updated) return res.status(404).json({ error: "Folio no encontrado" });
+    res.status(201).json({
+      ok: true,
+      folio_id: folioId,
+      numero_folio: folio.numero_folio,
+      body: texto,
+    });
+  } catch (e) {
+    console.error("[Dashboard POST folio comentarios]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
 app.get("/api/folios/:id/finanzas", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddleware, async (req, res) => {
   const folioId = parseInt(req.params.id, 10);
   if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
@@ -14529,6 +14613,93 @@ app.post("/api/dashboard/dicf-acciones/cliente-key", dashboardAuthMiddleware, as
     res.json({ cliente_key: key });
   } catch (e) {
     console.error("[dicf-acciones cliente-key]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/** Comentarios libres por cliente (ARR / Delta Ingreso). */
+app.get("/api/dashboard/cliente-comentarios", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockDicfAccionesRole(req, res)) return;
+  const planta = String(req.query.planta || "").trim();
+  if (!planta) return res.status(400).json({ error: "Falta planta" });
+  const client = await pool.connect();
+  try {
+    const raw = await dicfAccionesLib.resolvePlantaId(client, planta);
+    if (!raw) return res.status(400).json({ error: "Planta no encontrada" });
+    const canon = dicfAccionesLib.getCanonicalPlantaId(raw);
+    if (!dicfAccionesLib.assertPlantaAcceso(req.dashboardAuth, canon)) {
+      return res.status(403).json({ error: "Sin acceso a esta planta" });
+    }
+    const out = await clienteComentariosLib.listClienteComentarios(client, {
+      planta_id: canon,
+      cliente_key: req.query.cliente_key,
+      cliente_nombre: req.query.cliente_nombre,
+      canal: req.query.canal,
+      subcanal: req.query.subcanal,
+      limit: req.query.limit,
+    });
+    if (out.error) return res.status(400).json({ error: out.error });
+    res.json(out);
+  } catch (e) {
+    console.error("[cliente-comentarios list]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+app.post("/api/dashboard/cliente-comentarios", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockDicfAccionesRole(req, res)) return;
+  const body = req.body || {};
+  const planta = String(body.planta || "").trim();
+  if (!planta) return res.status(400).json({ error: "Falta planta" });
+  const client = await pool.connect();
+  try {
+    const raw = await dicfAccionesLib.resolvePlantaId(client, planta);
+    if (!raw) return res.status(400).json({ error: "Planta no encontrada" });
+    const canon = dicfAccionesLib.getCanonicalPlantaId(raw);
+    if (!dicfAccionesLib.assertPlantaAcceso(req.dashboardAuth, canon)) {
+      return res.status(403).json({ error: "Sin acceso a esta planta" });
+    }
+
+    let clienteKey = body.cliente_key != null ? String(body.cliente_key).trim() : "";
+    const grupoTipo = body.grupo_tipo != null ? String(body.grupo_tipo).trim() : "";
+    const canal = body.canal != null ? String(body.canal).trim() : "";
+    const subcanal = body.subcanal != null ? String(body.subcanal).trim() : "";
+    const clienteNombre = body.cliente_nombre != null ? String(body.cliente_nombre).trim() : "";
+    if (!clienteKey && grupoTipo && clienteNombre) {
+      clienteKey = dicfAccionesLib.buildClienteKey(canon, grupoTipo, canal, subcanal, clienteNombre);
+    }
+
+    let authorName = body.author_name != null ? String(body.author_name).trim() : "";
+    const actorId = req.dashboardAuth && req.dashboardAuth.actor_id ? Number(req.dashboardAuth.actor_id) : null;
+    if (!authorName && Number.isFinite(actorId)) {
+      try {
+        const u = await client.query(
+          `SELECT COALESCE(NULLIF(TRIM(COALESCE(nombre_persona, '')), ''), nombre) AS display
+           FROM public.usuarios WHERE id = $1`,
+          [actorId]
+        );
+        authorName = String((u.rows[0] && u.rows[0].display) || "").trim();
+      } catch (_) {}
+    }
+
+    const out = await clienteComentariosLib.createClienteComentario(client, {
+      planta_id: canon,
+      cliente_key: clienteKey || null,
+      cliente_nombre: clienteNombre,
+      canal,
+      subcanal,
+      body: body.body,
+      author_name: authorName,
+      created_by_usuario_id: actorId,
+    });
+    if (out.error) return res.status(400).json({ error: out.error });
+    res.status(201).json(out);
+  } catch (e) {
+    console.error("[cliente-comentarios create]", e);
     res.status(500).json({ error: e.message });
   } finally {
     client.release();

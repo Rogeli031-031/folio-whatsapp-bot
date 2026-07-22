@@ -9,6 +9,7 @@ import {
   type DeltaIngresoForecastCliente,
 } from "@/lib/api";
 import { DicfAccionesClientePanel } from "@/components/DicfAccionesClientePanel";
+import { ClienteComentariosPanel } from "@/components/ClienteComentariosPanel";
 import {
   DICF_HISTORY_WEEK_OPTIONS,
   type DicfHistoryWeeks,
@@ -410,13 +411,22 @@ export default function DeltaIngresoClienteForecastModal({
                 );
               })()}
               {token && planta && (
-                <DicfAccionesClientePanel
-                  token={token}
-                  planta={planta}
-                  grupoLabel={deltaClienteSel.grupo}
-                  cliente={deltaClienteSel.cliente}
-                  canUse={canDicfAcciones}
-                />
+                <>
+                  <ClienteComentariosPanel
+                    token={token}
+                    planta={planta}
+                    grupoLabel={deltaClienteSel.grupo}
+                    cliente={deltaClienteSel.cliente}
+                    canUse={canDicfAcciones}
+                  />
+                  <DicfAccionesClientePanel
+                    token={token}
+                    planta={planta}
+                    grupoLabel={deltaClienteSel.grupo}
+                    cliente={deltaClienteSel.cliente}
+                    canUse={canDicfAcciones}
+                  />
+                </>
               )}
               <p>
                 Frecuencia estimada:{" "}
