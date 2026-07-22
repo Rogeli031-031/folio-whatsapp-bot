@@ -9,6 +9,7 @@ import {
   type CrearFolioPayload,
   type DuplicadoCandidate,
 } from "@/lib/api";
+import { tokenHasPermiso, getRoleFromDashboardToken } from "@/lib/auth";
 
 const CATEGORIAS = [
   { clave: "GASTOS", nombre: "Gastos" },
@@ -486,16 +487,30 @@ export default function CrearFolioModal({ open, onClose, plantaId, plantaNombre,
             </div>
           </div>
           <div className="pt-2">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={soloZpAd}
-                onChange={(e) => setSoloZpAd(e.target.checked)}
-                className="rounded border-slate-600 bg-slate-800 text-amber-500 focus:ring-amber-500"
-              />
-              <span className="text-sm text-slate-300">Solo ZP y AD (hacer privado)</span>
-            </label>
-            <p className="mt-0.5 text-xs text-slate-500">El folio solo lo verán Director ZP y Asistente de Dirección. No se enviarán notificaciones por WhatsApp excepto a ZP.</p>
+            {(() => {
+              const roleUpper = (getRoleFromDashboardToken(token) || "").toUpperCase();
+              const fromToken = tokenHasPermiso(token, "acceso_marcar_solo_zp_ad");
+              const puedeMarcarPrivado =
+                fromToken == null ? roleUpper === "ZP" || roleUpper === "AD" : fromToken;
+              if (!puedeMarcarPrivado) return null;
+              return (
+                <>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={soloZpAd}
+                      onChange={(e) => setSoloZpAd(e.target.checked)}
+                      className="rounded border-slate-600 bg-slate-800 text-amber-500 focus:ring-amber-500"
+                    />
+                    <span className="text-sm text-slate-300">Solo ZP y AD (hacer privado)</span>
+                  </label>
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    El folio solo lo verán usuarios con permiso de ver folios Solo ZP y AD (privados). No se
+                    enviarán notificaciones por WhatsApp excepto a ZP.
+                  </p>
+                </>
+              );
+            })()}
           </div>
           <div className="flex gap-2 pt-2">
             <button type="button" onClick={onClose} className="rounded border border-slate-600 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-700">

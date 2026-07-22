@@ -208,6 +208,7 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
     perm("acceso_asignar_mes_cargo", roleUpper === "GG" || roleUpper === "AD" || roleUpper === "ZP") &&
     ESTADOS_MES_CARGO.includes(estatusUpper);
   const puedeSoloZpAd = perm("acceso_marcar_solo_zp_ad", roleUpper === "ZP" || roleUpper === "AD");
+  const puedeVerSoloZpAd = perm("acceso_ver_folios_solo_zp_ad", roleUpper === "ZP" || roleUpper === "AD");
   const soloZpAd = !!folio?.solo_zp_ad;
   const porRecuperar = !!folio?.por_recuperar;
   const solicitudPorRecuperarPendiente = !!folio?.solicitud_por_recuperar_pendiente;
@@ -696,7 +697,13 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
                       >
                         {savingSoloZpAd ? "…" : soloZpAd ? "Quitar privado (visible para todos)" : "Solo ZP y AD (hacer privado)"}
                       </button>
-                      {soloZpAd && <p className="text-xs text-slate-500 mt-1">Solo Director ZP y Asistente de Dirección pueden ver este folio.</p>}
+                      {soloZpAd && (
+                        <p className="text-xs text-slate-500 mt-1">
+                          {puedeVerSoloZpAd
+                            ? "Folio privado: visible solo para usuarios con permiso de ver Solo ZP y AD."
+                            : "Solo Director ZP y Asistente de Dirección pueden ver este folio."}
+                        </p>
+                      )}
                     </div>
                   )}
                   <div className="pt-2 border-t border-slate-700">
