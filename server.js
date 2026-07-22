@@ -64,6 +64,7 @@ const { isDirectorIaEnabled } = require("./lib/director-ia");
 const comercialEntidad = require("./lib/comercial-entidad");
 const { buildActionRegisterBoardPayload } = require("./lib/action-register-board");
 const { ACTION_REGISTER_TEMAS, isActionRegisterTema } = require("./lib/action-register-temas");
+const usuarioPermisos = require("./lib/usuario-permisos");
 
 const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
@@ -81,7 +82,7 @@ function corsMiddleware(req, res, next) {
   const allow = origin && corsOrigins.some(o => origin === o || origin.startsWith(o.replace(/\/$/, ""))) ? origin : corsOrigins[0];
   res.setHeader("Access-Control-Allow-Origin", allow);
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, PUT, DELETE, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type");
+  res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Usuarios-Admin-Clave");
   res.setHeader("Access-Control-Max-Age", "86400");
   if (req.method === "OPTIONS") {
     return res.status(204).end();
@@ -2487,6 +2488,7 @@ async function ensureSchema() {
     await client.query(`ALTER TABLE public.usuarios ADD COLUMN IF NOT EXISTS nombre VARCHAR(100);`);
     await client.query(`ALTER TABLE public.usuarios ADD COLUMN IF NOT EXISTS nombre_persona VARCHAR(150);`);
     await client.query(`ALTER TABLE public.usuarios ADD COLUMN IF NOT EXISTS activo BOOLEAN DEFAULT true;`);
+    await client.query(`ALTER TABLE public.usuarios ADD COLUMN IF NOT EXISTS permisos_json JSONB;`);
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS public.folio_counters (
@@ -2857,14 +2859,14 @@ async function ensureSchema() {
 
 /* ==================== REPOS / DB ==================== */
 
-/** Devuelve actor { id, telefono, nombre, rol_nombre, rol_nivel, rol_clave, planta_id, planta_nombre } o null. */
+/** Devuelve actor { id, telefono, nombre, rol_nombre, rol_nivel, rol_clave, planta_id, planta_nombre, permisos_json } o null. */
 async function getActorByPhone(client, phone) {
   const norm = normalizePhone(phone);
   const alt = phoneAltForDb(norm);
   const last10 = phoneLast10(phone) || phoneLast10(norm);
 
   const q = `
-    SELECT u.id, u.telefono, u.nombre, u.planta_id, r.nombre AS rol_nombre, r.nivel AS rol_nivel, r.clave AS rol_clave, p.nombre AS planta_nombre
+    SELECT u.id, u.telefono, u.nombre, u.planta_id, u.permisos_json, r.nombre AS rol_nombre, r.nivel AS rol_nivel, r.clave AS rol_clave, p.nombre AS planta_nombre
     FROM public.usuarios u
     LEFT JOIN public.roles r ON r.id = u.rol_id
     LEFT JOIN public.plantas p ON p.id = u.planta_id
@@ -2876,7 +2878,7 @@ async function getActorByPhone(client, phone) {
 
   if (!row && last10) {
     const qLast10 = `
-      SELECT u.id, u.telefono, u.nombre, u.planta_id, r.nombre AS rol_nombre, r.nivel AS rol_nivel, r.clave AS rol_clave, p.nombre AS planta_nombre
+      SELECT u.id, u.telefono, u.nombre, u.planta_id, u.permisos_json, r.nombre AS rol_nombre, r.nivel AS rol_nivel, r.clave AS rol_clave, p.nombre AS planta_nombre
       FROM public.usuarios u
       LEFT JOIN public.roles r ON r.id = u.rol_id
       LEFT JOIN public.plantas p ON p.id = u.planta_id
@@ -5265,6 +5267,7 @@ async function buildDicfNotifDashboardUrls(client, usuarioRow, accionMeta) {
     actor_id: usuarioRow.id,
     plantas_permitidas: plantasPermitidas,
     default_filters: {},
+    permisos: permisosForDashboardToken(role, usuarioRow),
   });
   const base = (process.env.DASHBOARD_URL || process.env.FRONTEND_URL || "").trim().replace(/\/$/, "");
   if (!base) return { kpi: "", folios: "", accion: "" };
@@ -5920,8 +5923,41 @@ app.get("/api/dashboard/kanban", dashboardAuthMiddleware, async (req, res) => {
 
 /** Clave para incluir folios solo_zp_ad en Clasificación de apoyos / Excel. */
 const CLASIFICACION_PRIV_CLAVE = "Tomza-Priv";
+/** Misma clave para el panel de administración de usuarios (IGF Forecast). */
+const USUARIOS_ADMIN_CLAVE = CLASIFICACION_PRIV_CLAVE;
 function clasificacionIncluyePrivados(req) {
   return String(req.query.priv_clave || "").trim() === CLASIFICACION_PRIV_CLAVE;
+}
+
+function assertUsuariosAdminClave(req) {
+  const fromBody = req.body && req.body.clave != null ? String(req.body.clave) : "";
+  const fromQuery = req.query && req.query.clave != null ? String(req.query.clave) : "";
+  const fromHeader = req.headers["x-usuarios-admin-clave"] != null ? String(req.headers["x-usuarios-admin-clave"]) : "";
+  return [fromBody, fromQuery, fromHeader].some((c) => String(c || "").trim() === USUARIOS_ADMIN_CLAVE);
+}
+
+function permisosForDashboardToken(role, usuarioRow) {
+  return usuarioPermisos.permisosEfectivos(role, usuarioRow && usuarioRow.permisos_json);
+}
+
+function mapUsuarioAdminRow(row) {
+  const rolClave = (row.rol_clave && String(row.rol_clave).toUpperCase()) || "";
+  const permisos = usuarioPermisos.permisosEfectivos(rolClave, row.permisos_json);
+  return {
+    id: row.id,
+    telefono: row.telefono || "",
+    email: row.email || "",
+    nombre: row.nombre || "",
+    nombre_persona: row.nombre_persona || "",
+    activo: row.activo !== false,
+    planta_id: row.planta_id != null ? Number(row.planta_id) : null,
+    planta_nombre: row.planta_nombre || (row.planta_id == null ? "Sin planta" : `Planta ${row.planta_id}`),
+    rol_id: row.rol_id != null ? Number(row.rol_id) : null,
+    rol_nombre: row.rol_nombre || "",
+    rol_clave: rolClave,
+    permisos_personalizados: row.permisos_json != null,
+    permisos,
+  };
 }
 
 /**
@@ -6195,6 +6231,341 @@ app.get("/api/dashboard/plantas", dashboardAuthMiddleware, async (req, res) => {
   } catch (e) {
     console.error("[Dashboard plantas]", e);
     res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+// ===========================
+// Admin Usuarios (clave Tomza-Priv)
+// ===========================
+
+app.post("/api/usuarios-admin/unlock", dashboardAuthMiddleware, async (req, res) => {
+  if (!assertUsuariosAdminClave(req)) {
+    return res.status(403).json({ error: "Clave de acceso incorrecta" });
+  }
+  res.json({
+    ok: true,
+    catalogo_permisos: usuarioPermisos.PERMISOS_CATALOGO,
+  });
+});
+
+app.get("/api/usuarios-admin/meta", dashboardAuthMiddleware, async (req, res) => {
+  if (!assertUsuariosAdminClave(req)) {
+    return res.status(403).json({ error: "Clave de acceso incorrecta" });
+  }
+  const client = await pool.connect();
+  try {
+    await client.query(`ALTER TABLE public.usuarios ADD COLUMN IF NOT EXISTS permisos_json JSONB;`).catch(() => {});
+    const [plantasR, rolesR] = await Promise.all([
+      client.query(`SELECT id, nombre FROM public.plantas ORDER BY nombre`),
+      client.query(
+        `SELECT id, nombre, COALESCE(NULLIF(TRIM(clave), ''), '') AS clave, COALESCE(nivel, 0) AS nivel
+         FROM public.roles
+         ORDER BY COALESCE(nivel, 0) DESC, nombre`
+      ),
+    ]);
+    res.json({
+      plantas: (plantasR.rows || []).map((p) => ({ id: p.id, nombre: p.nombre || `Planta ${p.id}` })),
+      roles: (rolesR.rows || []).map((r) => ({
+        id: r.id,
+        nombre: r.nombre,
+        clave: String(r.clave || "").toUpperCase(),
+        nivel: r.nivel,
+        permisos_default: usuarioPermisos.permisosPorRol(r.clave),
+      })),
+      catalogo_permisos: usuarioPermisos.PERMISOS_CATALOGO,
+    });
+  } catch (e) {
+    console.error("[usuarios-admin meta]", e);
+    res.status(500).json({ error: e.message || "Error al cargar catálogos" });
+  } finally {
+    client.release();
+  }
+});
+
+app.get("/api/usuarios-admin", dashboardAuthMiddleware, async (req, res) => {
+  if (!assertUsuariosAdminClave(req)) {
+    return res.status(403).json({ error: "Clave de acceso incorrecta" });
+  }
+  const includeInactivos = String(req.query.include_inactivos || "") === "1" || String(req.query.include_inactivos || "").toLowerCase() === "true";
+  const client = await pool.connect();
+  try {
+    await client.query(`ALTER TABLE public.usuarios ADD COLUMN IF NOT EXISTS permisos_json JSONB;`).catch(() => {});
+    const r = await client.query(
+      `SELECT u.id, u.telefono, u.email, u.nombre, u.nombre_persona, u.activo, u.planta_id, u.rol_id, u.permisos_json,
+              p.nombre AS planta_nombre,
+              r.nombre AS rol_nombre,
+              COALESCE(NULLIF(TRIM(r.clave), ''), '') AS rol_clave
+       FROM public.usuarios u
+       LEFT JOIN public.plantas p ON p.id = u.planta_id
+       LEFT JOIN public.roles r ON r.id = u.rol_id
+       WHERE ($1::boolean = true OR u.activo IS NULL OR u.activo = true)
+       ORDER BY COALESCE(p.nombre, 'zzz'), COALESCE(NULLIF(TRIM(COALESCE(u.nombre_persona,'')), ''), u.nombre, u.telefono)`
+      ,
+      [includeInactivos]
+    );
+    const usuarios = (r.rows || []).map(mapUsuarioAdminRow);
+    const porPlantaMap = new Map();
+    for (const u of usuarios) {
+      const key = u.planta_id != null ? String(u.planta_id) : "sin_planta";
+      if (!porPlantaMap.has(key)) {
+        porPlantaMap.set(key, {
+          planta_id: u.planta_id,
+          planta_nombre: u.planta_nombre,
+          usuarios: [],
+        });
+      }
+      porPlantaMap.get(key).usuarios.push(u);
+    }
+    res.json({
+      usuarios,
+      por_planta: Array.from(porPlantaMap.values()),
+      catalogo_permisos: usuarioPermisos.PERMISOS_CATALOGO,
+      total: usuarios.length,
+    });
+  } catch (e) {
+    console.error("[usuarios-admin list]", e);
+    res.status(500).json({ error: e.message || "Error al listar usuarios" });
+  } finally {
+    client.release();
+  }
+});
+
+app.get("/api/usuarios-admin/excel", dashboardAuthMiddleware, async (req, res) => {
+  if (!assertUsuariosAdminClave(req)) {
+    return res.status(403).json({ error: "Clave de acceso incorrecta" });
+  }
+  const includeInactivos = String(req.query.include_inactivos || "") === "1" || String(req.query.include_inactivos || "").toLowerCase() === "true";
+  const client = await pool.connect();
+  try {
+    await client.query(`ALTER TABLE public.usuarios ADD COLUMN IF NOT EXISTS permisos_json JSONB;`).catch(() => {});
+    const r = await client.query(
+      `SELECT u.id, u.telefono, u.email, u.nombre, u.nombre_persona, u.activo, u.planta_id, u.rol_id, u.permisos_json,
+              p.nombre AS planta_nombre,
+              r.nombre AS rol_nombre,
+              COALESCE(NULLIF(TRIM(r.clave), ''), '') AS rol_clave
+       FROM public.usuarios u
+       LEFT JOIN public.plantas p ON p.id = u.planta_id
+       LEFT JOIN public.roles r ON r.id = u.rol_id
+       WHERE ($1::boolean = true OR u.activo IS NULL OR u.activo = true)
+       ORDER BY COALESCE(p.nombre, 'zzz'), COALESCE(NULLIF(TRIM(COALESCE(u.nombre_persona,'')), ''), u.nombre, u.telefono)`,
+      [includeInactivos]
+    );
+    const ExcelJS = require("exceljs");
+    const wb = new ExcelJS.Workbook();
+    wb.creator = "IGF Forecast";
+    const ws = wb.addWorksheet("Usuarios por planta");
+    const permCols = usuarioPermisos.permisosParaExcelColumns();
+    const headers = [
+      "Planta",
+      "ID",
+      "Nombre persona",
+      "Nombre / puesto",
+      "Teléfono",
+      "Email",
+      "Rol",
+      "Clave rol",
+      "Activo",
+      "Permisos personalizados",
+      ...permCols.map((c) => c.header),
+    ];
+    ws.addRow(headers);
+    const headerRow = ws.getRow(1);
+    headerRow.font = { bold: true, color: { argb: "FFFFFFFF" } };
+    headerRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1E293B" } };
+    for (const row of r.rows || []) {
+      const mapped = mapUsuarioAdminRow(row);
+      ws.addRow([
+        mapped.planta_nombre,
+        mapped.id,
+        mapped.nombre_persona,
+        mapped.nombre,
+        mapped.telefono,
+        mapped.email,
+        mapped.rol_nombre,
+        mapped.rol_clave,
+        mapped.activo ? "Sí" : "No",
+        mapped.permisos_personalizados ? "Sí" : "No",
+        ...permCols.map((c) => (mapped.permisos[c.key] ? "Sí" : "No")),
+      ]);
+    }
+    ws.columns.forEach((col, idx) => {
+      col.width = idx === 0 ? 22 : idx >= 10 ? 28 : 16;
+    });
+    const buf = Buffer.from(await wb.xlsx.writeBuffer());
+    const stamp = new Date().toISOString().slice(0, 10);
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename="Usuarios_Permisos_${stamp}.xlsx"`);
+    res.send(buf);
+  } catch (e) {
+    console.error("[usuarios-admin excel]", e);
+    res.status(500).json({ error: e.message || "Error al generar Excel" });
+  } finally {
+    client.release();
+  }
+});
+
+app.post("/api/usuarios-admin", dashboardAuthMiddleware, async (req, res) => {
+  if (!assertUsuariosAdminClave(req)) {
+    return res.status(403).json({ error: "Clave de acceso incorrecta" });
+  }
+  const body = req.body || {};
+  const telefono = String(body.telefono || "").trim();
+  if (!telefono) return res.status(400).json({ error: "telefono es obligatorio" });
+  const nombre = body.nombre != null ? String(body.nombre).trim() : "";
+  const nombre_persona = body.nombre_persona != null ? String(body.nombre_persona).trim() : "";
+  const email = body.email != null ? String(body.email).trim() : "";
+  const planta_id = body.planta_id != null && body.planta_id !== "" ? parseInt(body.planta_id, 10) : null;
+  const rol_id = body.rol_id != null && body.rol_id !== "" ? parseInt(body.rol_id, 10) : null;
+  if (planta_id != null && !Number.isFinite(planta_id)) return res.status(400).json({ error: "planta_id inválido" });
+  if (rol_id != null && !Number.isFinite(rol_id)) return res.status(400).json({ error: "rol_id inválido" });
+  let permisosJson = null;
+  if (body.permisos != null && typeof body.permisos === "object") {
+    permisosJson = usuarioPermisos.normalizePermisosInput(body.permisos);
+  }
+  const client = await pool.connect();
+  try {
+    await client.query(`ALTER TABLE public.usuarios ADD COLUMN IF NOT EXISTS permisos_json JSONB;`).catch(() => {});
+    const dup = await client.query(`SELECT id FROM public.usuarios WHERE telefono = $1 LIMIT 1`, [telefono]);
+    if (dup.rows[0]) return res.status(409).json({ error: `Ya existe un usuario con teléfono ${telefono} (id ${dup.rows[0].id})` });
+    const ins = await client.query(
+      `INSERT INTO public.usuarios (telefono, email, nombre, nombre_persona, planta_id, rol_id, activo, permisos_json)
+       VALUES ($1, $2, $3, $4, $5, $6, true, $7::jsonb)
+       RETURNING id`,
+      [telefono, email || null, nombre || null, nombre_persona || null, planta_id, rol_id, permisosJson ? JSON.stringify(permisosJson) : null]
+    );
+    const id = ins.rows[0].id;
+    const full = await client.query(
+      `SELECT u.id, u.telefono, u.email, u.nombre, u.nombre_persona, u.activo, u.planta_id, u.rol_id, u.permisos_json,
+              p.nombre AS planta_nombre,
+              r.nombre AS rol_nombre,
+              COALESCE(NULLIF(TRIM(r.clave), ''), '') AS rol_clave
+       FROM public.usuarios u
+       LEFT JOIN public.plantas p ON p.id = u.planta_id
+       LEFT JOIN public.roles r ON r.id = u.rol_id
+       WHERE u.id = $1`,
+      [id]
+    );
+    res.status(201).json({ usuario: mapUsuarioAdminRow(full.rows[0]) });
+  } catch (e) {
+    console.error("[usuarios-admin create]", e);
+    res.status(500).json({ error: e.message || "Error al crear usuario" });
+  } finally {
+    client.release();
+  }
+});
+
+app.patch("/api/usuarios-admin/:id", dashboardAuthMiddleware, async (req, res) => {
+  if (!assertUsuariosAdminClave(req)) {
+    return res.status(403).json({ error: "Clave de acceso incorrecta" });
+  }
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: "id inválido" });
+  const body = req.body || {};
+  const client = await pool.connect();
+  try {
+    await client.query(`ALTER TABLE public.usuarios ADD COLUMN IF NOT EXISTS permisos_json JSONB;`).catch(() => {});
+    const cur = await client.query(`SELECT id FROM public.usuarios WHERE id = $1`, [id]);
+    if (!cur.rows[0]) return res.status(404).json({ error: "Usuario no encontrado" });
+
+    const sets = [];
+    const params = [];
+    const push = (sql, val) => {
+      params.push(val);
+      sets.push(`${sql} = $${params.length}`);
+    };
+
+    if (Object.prototype.hasOwnProperty.call(body, "telefono")) {
+      const telefono = String(body.telefono || "").trim();
+      if (!telefono) return res.status(400).json({ error: "telefono no puede quedar vacío" });
+      const dup = await client.query(`SELECT id FROM public.usuarios WHERE telefono = $1 AND id <> $2 LIMIT 1`, [telefono, id]);
+      if (dup.rows[0]) return res.status(409).json({ error: `Teléfono ya usado por usuario id ${dup.rows[0].id}` });
+      push("telefono", telefono);
+    }
+    if (Object.prototype.hasOwnProperty.call(body, "email")) push("email", body.email != null ? String(body.email).trim() || null : null);
+    if (Object.prototype.hasOwnProperty.call(body, "nombre")) push("nombre", body.nombre != null ? String(body.nombre).trim() || null : null);
+    if (Object.prototype.hasOwnProperty.call(body, "nombre_persona")) {
+      push("nombre_persona", body.nombre_persona != null ? String(body.nombre_persona).trim() || null : null);
+    }
+    if (Object.prototype.hasOwnProperty.call(body, "planta_id")) {
+      const planta_id = body.planta_id != null && body.planta_id !== "" ? parseInt(body.planta_id, 10) : null;
+      if (planta_id != null && !Number.isFinite(planta_id)) return res.status(400).json({ error: "planta_id inválido" });
+      push("planta_id", planta_id);
+    }
+    if (Object.prototype.hasOwnProperty.call(body, "rol_id")) {
+      const rol_id = body.rol_id != null && body.rol_id !== "" ? parseInt(body.rol_id, 10) : null;
+      if (rol_id != null && !Number.isFinite(rol_id)) return res.status(400).json({ error: "rol_id inválido" });
+      push("rol_id", rol_id);
+      // Al cambiar rol, si no mandan permisos explícitos, se limpian overrides para usar defaults del rol.
+      if (!Object.prototype.hasOwnProperty.call(body, "permisos") && !Object.prototype.hasOwnProperty.call(body, "reset_permisos")) {
+        params.push(null);
+        sets.push(`permisos_json = $${params.length}`);
+      }
+    }
+    if (Object.prototype.hasOwnProperty.call(body, "activo")) {
+      push("activo", body.activo === true || body.activo === "true" || body.activo === 1 || body.activo === "1");
+    }
+    if (body.reset_permisos === true || body.reset_permisos === "true") {
+      params.push(null);
+      sets.push(`permisos_json = $${params.length}`);
+    } else if (Object.prototype.hasOwnProperty.call(body, "permisos")) {
+      if (body.permisos == null) {
+        params.push(null);
+        sets.push(`permisos_json = $${params.length}`);
+      } else if (typeof body.permisos === "object") {
+        const normalized = usuarioPermisos.normalizePermisosInput(body.permisos);
+        params.push(JSON.stringify(normalized));
+        sets.push(`permisos_json = $${params.length}::jsonb`);
+      } else {
+        return res.status(400).json({ error: "permisos debe ser un objeto" });
+      }
+    }
+
+    if (!sets.length) return res.status(400).json({ error: "Sin campos para actualizar" });
+    params.push(id);
+    await client.query(`UPDATE public.usuarios SET ${sets.join(", ")} WHERE id = $${params.length}`, params);
+
+    const full = await client.query(
+      `SELECT u.id, u.telefono, u.email, u.nombre, u.nombre_persona, u.activo, u.planta_id, u.rol_id, u.permisos_json,
+              p.nombre AS planta_nombre,
+              r.nombre AS rol_nombre,
+              COALESCE(NULLIF(TRIM(r.clave), ''), '') AS rol_clave
+       FROM public.usuarios u
+       LEFT JOIN public.plantas p ON p.id = u.planta_id
+       LEFT JOIN public.roles r ON r.id = u.rol_id
+       WHERE u.id = $1`,
+      [id]
+    );
+    res.json({ usuario: mapUsuarioAdminRow(full.rows[0]) });
+  } catch (e) {
+    console.error("[usuarios-admin patch]", e);
+    res.status(500).json({ error: e.message || "Error al actualizar usuario" });
+  } finally {
+    client.release();
+  }
+});
+
+app.delete("/api/usuarios-admin/:id", dashboardAuthMiddleware, async (req, res) => {
+  if (!assertUsuariosAdminClave(req)) {
+    return res.status(403).json({ error: "Clave de acceso incorrecta" });
+  }
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: "id inválido" });
+  const hard = String(req.query.hard || "") === "1" || String(req.query.hard || "").toLowerCase() === "true";
+  const client = await pool.connect();
+  try {
+    const cur = await client.query(`SELECT id FROM public.usuarios WHERE id = $1`, [id]);
+    if (!cur.rows[0]) return res.status(404).json({ error: "Usuario no encontrado" });
+    if (hard) {
+      await client.query(`DELETE FROM public.usuarios WHERE id = $1`, [id]);
+      return res.json({ ok: true, deleted: true, id });
+    }
+    await client.query(`UPDATE public.usuarios SET activo = false WHERE id = $1`, [id]);
+    res.json({ ok: true, activo: false, id });
+  } catch (e) {
+    console.error("[usuarios-admin delete]", e);
+    res.status(500).json({ error: e.message || "Error al eliminar usuario" });
   } finally {
     client.release();
   }
@@ -6664,6 +7035,7 @@ async function buildDashboardSignedUrlForUsuario(client, usuarioRow, dashboardPa
     actor_id: usuarioRow.id,
     plantas_permitidas: plantasPermitidas,
     default_filters: {},
+    permisos: permisosForDashboardToken(role, usuarioRow),
   });
   const baseUrl = (process.env.DASHBOARD_URL || process.env.FRONTEND_URL || "").trim().replace(/\/$/, "");
   if (!baseUrl) return "";
@@ -9107,10 +9479,14 @@ app.get("/api/folios/duplicados/analisis", dashboardAuthMiddleware, dashboardBlo
  */
 app.post("/api/folios/:id/cancelar", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddleware, async (req, res) => {
   const role = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) || "";
-  if (!["GA", "GG", "AD", "ZP"].includes(role)) {
+  const puedeCancelar =
+    req.dashboardAuth.permisos && typeof req.dashboardAuth.permisos === "object"
+      ? usuarioPermisos.authHasPermiso(req.dashboardAuth, "acceso_cancelar_folio_dashboard")
+      : ["GA", "GG", "AD", "ZP"].includes(role);
+  if (!puedeCancelar) {
     return res.status(403).json({ error: "Solo GA, GG, AD o Director ZP pueden cancelar folios desde el dashboard." });
   }
-  if (req.dashboardAuth.role === "CF_CDMX") {
+  if (req.dashboardAuth.role === "CF_CDMX" && !(req.dashboardAuth.permisos && typeof req.dashboardAuth.permisos === "object")) {
     return res.status(403).json({ error: "Sin permiso para cancelar." });
   }
   const folioId = parseInt(req.params.id, 10);
@@ -9160,11 +9536,12 @@ app.post("/api/folios/:id/cancelar", dashboardAuthMiddleware, dashboardBlockGVFo
   }
 });
 
-/** Crear folio desde dashboard (formulario). Solo GA, GG, AD, ZP. */
+/** Crear folio desde dashboard (formulario). Solo GA, GG, AD, ZP (o permiso acceso_crear_folios). */
 app.post("/api/folios", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddleware, async (req, res) => {
   const role = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) || "";
-  const puedeCrear = ["GA", "GG", "AD", "ZP"].includes(role);
-  if (!puedeCrear) return res.status(403).json({ error: "Solo GA, GG, Asistente de Dirección y Director ZP pueden crear folios desde el dashboard." });
+  if (!usuarioPermisos.authHasPermiso(req.dashboardAuth, "acceso_crear_folios")) {
+    return res.status(403).json({ error: "Solo GA, GG, Asistente de Dirección y Director ZP pueden crear folios desde el dashboard." });
+  }
   const body = req.body || {};
   const planta_id = body.planta_id != null ? parseInt(body.planta_id, 10) : null;
   if (!planta_id || !Number.isFinite(planta_id)) return res.status(400).json({ error: "planta_id es obligatorio" });
@@ -11882,10 +12259,14 @@ app.patch("/api/folios/:id/prioridad", dashboardAuthMiddleware, dashboardBlockGV
   }
 });
 
-/** Editar campos base del folio (solo Asistente de Dirección). */
+/** Editar campos base del folio (solo Asistente de Dirección o permiso acceso_editar_folio). */
 app.patch("/api/folios/:id/editar", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddleware, async (req, res) => {
   const role = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) || "";
-  if (role !== "AD") return res.status(403).json({ error: "Solo Asistente de Dirección puede editar folios." });
+  const puedeEditar =
+    req.dashboardAuth.permisos && typeof req.dashboardAuth.permisos === "object"
+      ? usuarioPermisos.authHasPermiso(req.dashboardAuth, "acceso_editar_folio")
+      : role === "AD";
+  if (!puedeEditar) return res.status(403).json({ error: "Solo Asistente de Dirección puede editar folios." });
   const folioId = parseInt(req.params.id, 10);
   if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
 
@@ -12047,8 +12428,14 @@ app.patch("/api/folios/:id/por-recuperar", dashboardAuthMiddleware, dashboardBlo
 
 /** Aprobar folio desde dashboard: Pendiente aprobación planta → ZP; Aprobación Director ZP → Carro de compra. */
 app.post("/api/folios/:id/aprobar", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddleware, async (req, res) => {
-  if (req.dashboardAuth.role === "CF_CDMX") return res.status(403).json({ error: "Contralor financiero CDMX solo puede ver el dashboard, no autorizar." });
-  if (req.dashboardAuth.role === "GA") return res.status(403).json({ error: "GA solo puede ver e imprimir en el dashboard, no aprobar." });
+  if (req.dashboardAuth.permisos && typeof req.dashboardAuth.permisos === "object") {
+    if (!usuarioPermisos.authHasPermiso(req.dashboardAuth, "acceso_aprobar_folios")) {
+      return res.status(403).json({ error: "Sin permiso para aprobar folios." });
+    }
+  } else {
+    if (req.dashboardAuth.role === "CF_CDMX") return res.status(403).json({ error: "Contralor financiero CDMX solo puede ver el dashboard, no autorizar." });
+    if (req.dashboardAuth.role === "GA") return res.status(403).json({ error: "GA solo puede ver e imprimir en el dashboard, no aprobar." });
+  }
   const folioId = parseInt(req.params.id, 10);
   if (!Number.isFinite(folioId)) return res.status(400).json({ error: "id inválido" });
   const client = await pool.connect();
@@ -12228,7 +12615,11 @@ app.post("/api/folios/:id/mover-etapa", dashboardAuthMiddleware, dashboardBlockG
   const rolNombre = (req.dashboardAuth.rol_nombre && String(req.dashboardAuth.rol_nombre)) || "";
   const esAD = role === "AD";
   const esZP = role === "ZP" || isDirectorZPForDashboard(role, rolNombre);
-  if (!esAD && !esZP) {
+  const puedeMover =
+    req.dashboardAuth.permisos && typeof req.dashboardAuth.permisos === "object"
+      ? usuarioPermisos.authHasPermiso(req.dashboardAuth, "acceso_mover_folio_arrastre")
+      : esAD || esZP;
+  if (!puedeMover) {
     return res.status(403).json({ error: "Solo Asistente de dirección o Director ZP pueden arrastrar folios entre etapas." });
   }
   const folioId = parseInt(req.params.id, 10);
@@ -15072,6 +15463,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
             actor_id: actor.id,
             plantas_permitidas: plantasPermitidas,
             default_filters: {},
+            permisos: permisosForDashboardToken(role, actor),
           });
           const baseUrl = (process.env.DASHBOARD_URL || process.env.FRONTEND_URL || "").trim() || "https://dashboard.example.com";
           const link = `${baseUrl.replace(/\/$/, "")}/dashboard?t=${encodeURIComponent(token)}`;
@@ -16584,6 +16976,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
             actor_id: actor.id,
             plantas_permitidas: actor.planta_id != null ? [actor.planta_id] : [],
             default_filters: {},
+            permisos: permisosForDashboardToken("GG", actor),
           });
           const link = `${baseUrl.replace(/\/$/, "")}/dashboard?t=${encodeURIComponent(token)}&mi_semana=1`;
           return safeReply("🛒 Carrito (presupuesto semanal)\n\nEn el dashboard GG puedes seleccionar folios para la semana.\n\nComandos:\n• carrito → ver link\n• carrito agregar F-XXX → (en dashboard)\n• carrito quitar F-XXX → (en dashboard)\n\nO usa: seleccionar folios 001 002 010\n\n🔗 " + link);

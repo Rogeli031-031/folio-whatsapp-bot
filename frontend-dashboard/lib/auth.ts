@@ -48,3 +48,22 @@ export function getRoleFromDashboardToken(token: string): string | null {
   const role = payload?.role;
   return typeof role === "string" && role.trim() ? role.trim().toUpperCase() : null;
 }
+
+/** Permisos explícitos embebidos en el JWT (si existen). */
+export function getPermisosFromDashboardToken(token: string): Record<string, boolean> | null {
+  const payload = decodeDashboardTokenPayload(token);
+  const p = payload?.permisos;
+  if (!p || typeof p !== "object" || Array.isArray(p)) return null;
+  const out: Record<string, boolean> = {};
+  for (const [k, v] of Object.entries(p as Record<string, unknown>)) {
+    out[k] = !!v;
+  }
+  return out;
+}
+
+export function tokenHasPermiso(token: string | null | undefined, permisoClave: string): boolean | null {
+  if (!token) return null;
+  const permisos = getPermisosFromDashboardToken(token);
+  if (!permisos || !Object.prototype.hasOwnProperty.call(permisos, permisoClave)) return null;
+  return !!permisos[permisoClave];
+}

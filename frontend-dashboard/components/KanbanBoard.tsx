@@ -5,6 +5,7 @@ import FolioCard from "./FolioCard";
 import type { FolioCard as FolioCardType, KanbanBoard as KanbanBoardType } from "@/lib/api";
 import { postMoverEtapaFolio } from "@/lib/api";
 import { textMatchesSearch } from "@/lib/texto-busqueda";
+import { tokenHasPermiso } from "@/lib/auth";
 
 interface Props {
   data: KanbanBoardType | null;
@@ -133,7 +134,8 @@ export default function KanbanBoard({
 
   const role = data.meta?.role || "GG";
   const roleUpper = String(role).toUpperCase();
-  const canDrag = roleUpper === "AD" || roleUpper === "ZP";
+  const dragFromToken = token ? tokenHasPermiso(token, "acceso_mover_folio_arrastre") : null;
+  const canDrag = dragFromToken == null ? roleUpper === "AD" || roleUpper === "ZP" : dragFromToken;
   const fmtMxn = (n: number | null | undefined) =>
     n != null && !isNaN(n) ? `$${n.toLocaleString("es-MX", { maximumFractionDigits: 0 })}` : "—";
 

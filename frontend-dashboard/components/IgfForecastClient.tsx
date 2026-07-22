@@ -43,6 +43,7 @@ import {
   INVERSION_CDJZ_STORAGE_KEY,
 } from "@/lib/igf-kpi-ui";
 import { mergeVentaSheetHighlights, recomputeVentaSheetFromDays } from "@/lib/pronostico-local-recalc";
+import { UsuariosAdminModal } from "@/components/UsuariosAdminModal";
 
 export function IgfForecastContent() {
   const searchParams = useSearchParams();
@@ -161,6 +162,7 @@ export function IgfForecastContent() {
   const [forecastRecalcLoading, setForecastRecalcLoading] = useState(false);
   const [forecastRecalcMsg, setForecastRecalcMsg] = useState<string | null>(null);
   const [evidenciasModalOpen, setEvidenciasModalOpen] = useState(false);
+  const [usuariosModalOpen, setUsuariosModalOpen] = useState(false);
   const [evidenciasFechaInicio, setEvidenciasFechaInicio] = useState("");
   const [evidenciasFechaFin, setEvidenciasFechaFin] = useState("");
   const [evidenciasExportLoading, setEvidenciasExportLoading] = useState(false);
@@ -772,6 +774,15 @@ export function IgfForecastContent() {
         >
           Consola Gas Uber
         </a>
+        {token && (
+          <button
+            type="button"
+            onClick={() => setUsuariosModalOpen(true)}
+            className="inline-flex items-center gap-2 rounded bg-slate-700 px-4 py-2 text-sm font-medium text-white hover:bg-slate-600"
+          >
+            Usuarios
+          </button>
+        )}
       </div>
       <main className={plantaFilter ? "flex-1 p-4 flex flex-col" : "flex-1 p-4"}>
         <section className={`rounded-lg border border-slate-700 bg-slate-800/60 p-4 ${plantaFilter ? "flex-shrink-0" : ""}`}>
@@ -2187,6 +2198,14 @@ export function IgfForecastContent() {
             </div>
           </div>
         </div>
+      )}
+
+      {token && (
+        <UsuariosAdminModal
+          open={usuariosModalOpen}
+          token={token}
+          onClose={() => setUsuariosModalOpen(false)}
+        />
       )}
     </div>
   );
