@@ -26,6 +26,7 @@ import {
   patchFolioNumeroCheque,
 } from "@/lib/api";
 import EditarFolioModal from "@/components/EditarFolioModal";
+import { tokenHasPermiso } from "@/lib/auth";
 
 function fmtMxn(n: number): string {
   return `$${n.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -179,26 +180,47 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
   const estatus = (folio?.estatus as string) || "";
   const estatusUpper = estatus.trim().toUpperCase();
   const roleUpper = role && String(role).toUpperCase();
-  const soloLectura = roleUpper === "CF_CDMX" || roleUpper === "GA"; // Contralor CDMX y GA solo ven e imprimen, no aprueban
-  const puedeEditar = roleUpper === "AD";
-  /** GG no aprueba el paso a carrito (solo Director ZP / AD); sí puede asignar mes de cargo. */
+  const perm = (clave: string, fallback: boolean) => {
+    const fromToken = tokenHasPermiso(token, clave);
+    return fromToken == null ? fallback : fromToken;
+  };
+  const soloLecturaBase = roleUpper === "CF_CDMX" || roleUpper === "GA";
+  const soloLectura = soloLecturaBase && !perm("acceso_aprobar_folios", false) && !perm("acceso_editar_folio", false);
+  const puedeEditar = perm("acceso_editar_folio", roleUpper === "AD");
+  /** GG no aprueba el paso a carrito (solo Director ZP / AD) salvo override explícito en el token. */
   const puedeAprobar =
-    !soloLectura &&
+    perm("acceso_aprobar_folios", !soloLecturaBase) &&
     ESTADOS_APROBABLES.includes(estatusUpper) &&
-    !(roleUpper === "GG" && estatusUpper === "PENDIENTE_APROB_ZP");
-  const puedeAprobarComprobaciones = !soloLectura && estatusUpper === "COMPROBACIONES";
-  const puedePasarCuentaFondos = !soloLectura && ESTADOS_CARRO_COMPRA.includes(estatusUpper);
-  const puedePasarChequeGenerado = !soloLectura && ESTADOS_CUENTA_FONDOS.includes(estatusUpper);
-  const puedeRegresarZp = !soloLectura && ESTADOS_CARRO_COMPRA.includes(estatusUpper);
+    !(
+      roleUpper === "GG" &&
+      estatusUpper === "PENDIENTE_APROB_ZP" &&
+      tokenHasPermiso(token, "acceso_aprobar_folios") == null
+    );
+  const puedeAprobarComprobaciones =
+    perm("acceso_aprobar_comprobaciones", !soloLecturaBase) && estatusUpper === "COMPROBACIONES";
+  const puedePasarCuentaFondos =
+    perm("acceso_avanzar_etapa", !soloLecturaBase) && ESTADOS_CARRO_COMPRA.includes(estatusUpper);
+  const puedePasarChequeGenerado =
+    perm("acceso_avanzar_etapa", !soloLecturaBase) && ESTADOS_CUENTA_FONDOS.includes(estatusUpper);
+  const puedeRegresarZp =
+    perm("acceso_avanzar_etapa", !soloLecturaBase) && ESTADOS_CARRO_COMPRA.includes(estatusUpper);
   const puedeAsignarMesCargo =
-    (roleUpper === "GG" || roleUpper === "AD" || roleUpper === "ZP") && ESTADOS_MES_CARGO.includes(estatusUpper);
-  const puedeSoloZpAd = roleUpper === "ZP" || roleUpper === "AD";
+    perm("acceso_asignar_mes_cargo", roleUpper === "GG" || roleUpper === "AD" || roleUpper === "ZP") &&
+    ESTADOS_MES_CARGO.includes(estatusUpper);
+  const puedeSoloZpAd = perm("acceso_marcar_solo_zp_ad", roleUpper === "ZP" || roleUpper === "AD");
   const soloZpAd = !!folio?.solo_zp_ad;
   const porRecuperar = !!folio?.por_recuperar;
   const solicitudPorRecuperarPendiente = !!folio?.solicitud_por_recuperar_pendiente;
   const esUrgente = (folio?.prioridad ?? "").toString().toLowerCase().includes("urgente");
-  const puedeMarcarUrgente = !soloLectura && (roleUpper === "GG" || roleUpper === "AD" || roleUpper === "ZP");
-  const puedeSolicitarCancelacion = (roleUpper === "GA" || roleUpper === "GG" || roleUpper === "CF_CDMX") && !["CANCELADO", "PAGADO", "CERRADO", "COMPROBACIONES", "EVIDENCIAS", "CANCELACION_SOLICITADA"].includes(estatusUpper);
+  const puedeMarcarUrgente = perm(
+    "acceso_marcar_urgente",
+    !soloLecturaBase && (roleUpper === "GG" || roleUpper === "AD" || roleUpper === "ZP")
+  );
+  const puedeSolicitarCancelacion =
+    perm("acceso_solicitar_cancelacion", roleUpper === "GA" || roleUpper === "GG" || roleUpper === "CF_CDMX") &&
+    !["CANCELADO", "PAGADO", "CERRADO", "COMPROBACIONES", "EVIDENCIAS", "CANCELACION_SOLICITADA"].includes(
+      estatusUpper
+    );
   const whatsappNumber = (process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "").trim().replace(/\D/g, "");
   const numeroFolio = (folio?.numero_folio as string) || (folio?.folio_codigo as string) || "";
   const cmdCancelacion = numeroFolio ? `cancelar ${numeroFolio} motivo: ` : "cancelar F-YYYYMM-XXX motivo: ";

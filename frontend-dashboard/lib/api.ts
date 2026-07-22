@@ -2123,3 +2123,200 @@ export async function fetchDocumentoCompletoPdf(
   if (!res.ok) throw new Error(await res.text().catch(() => res.statusText));
   return res.blob();
 }
+
+// ===========================
+// Admin Usuarios (IGF · clave Tomza-Priv)
+// ===========================
+
+export type UsuarioPermisoDef = { clave: string; etiqueta: string };
+
+export type UsuarioAdmin = {
+  id: number;
+  telefono: string;
+  email: string;
+  nombre: string;
+  nombre_persona: string;
+  activo: boolean;
+  planta_id: number | null;
+  planta_nombre: string;
+  rol_id: number | null;
+  rol_nombre: string;
+  rol_clave: string;
+  permisos_personalizados: boolean;
+  permisos: Record<string, boolean>;
+};
+
+export type UsuariosAdminPorPlanta = {
+  planta_id: number | null;
+  planta_nombre: string;
+  usuarios: UsuarioAdmin[];
+};
+
+export type UsuarioAdminMeta = {
+  plantas: { id: number; nombre: string }[];
+  roles: {
+    id: number;
+    nombre: string;
+    clave: string;
+    nivel: number;
+    permisos_default: Record<string, boolean>;
+  }[];
+  catalogo_permisos: UsuarioPermisoDef[];
+};
+
+function usuariosAdminHeaders(token: string, clave: string): HeadersInit {
+  return {
+    Authorization: `Bearer ${token}`,
+    "Content-Type": "application/json",
+    "X-Usuarios-Admin-Clave": clave,
+  };
+}
+
+export async function unlockUsuariosAdmin(
+  token: string,
+  clave: string
+): Promise<{ ok: boolean; catalogo_permisos: UsuarioPermisoDef[] }> {
+  return apiFetch("/api/usuarios-admin/unlock", {
+    method: "POST",
+    token,
+    body: JSON.stringify({ clave }),
+  });
+}
+
+export async function fetchUsuariosAdminMeta(token: string, clave: string): Promise<UsuarioAdminMeta> {
+  const url = getApiUrl("/api/usuarios-admin/meta");
+  const res = await fetch(`${url}?clave=${encodeURIComponent(clave)}`, {
+    headers: usuariosAdminHeaders(token, clave),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as { error?: string }).error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function fetchUsuariosAdmin(
+  token: string,
+  clave: string,
+  includeInactivos = false
+): Promise<{
+  usuarios: UsuarioAdmin[];
+  por_planta: UsuariosAdminPorPlanta[];
+  catalogo_permisos: UsuarioPermisoDef[];
+  total: number;
+}> {
+  const url = getApiUrl("/api/usuarios-admin");
+  const q = new URLSearchParams({
+    clave,
+    include_inactivos: includeInactivos ? "1" : "0",
+  });
+  const res = await fetch(`${url}?${q}`, { headers: usuariosAdminHeaders(token, clave) });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as { error?: string }).error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function downloadUsuariosAdminExcel(
+  token: string,
+  clave: string,
+  includeInactivos = false
+): Promise<void> {
+  const url = getApiUrl("/api/usuarios-admin/excel");
+  const q = new URLSearchParams({
+    clave,
+    include_inactivos: includeInactivos ? "1" : "0",
+  });
+  const res = await fetch(`${url}?${q}`, { headers: usuariosAdminHeaders(token, clave) });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as { error?: string }).error || `HTTP ${res.status}`);
+  }
+  const blob = await res.blob();
+  const cd = res.headers.get("Content-Disposition") || "";
+  const m = /filename="?([^"]+)"?/i.exec(cd);
+  const filename = m?.[1] || `Usuarios_Permisos.xlsx`;
+  const a = document.createElement("a");
+  const href = URL.createObjectURL(blob);
+  a.href = href;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(href);
+}
+
+export async function createUsuariosAdmin(
+  token: string,
+  clave: string,
+  body: {
+    telefono: string;
+    email?: string;
+    nombre?: string;
+    nombre_persona?: string;
+    planta_id?: number | null;
+    rol_id?: number | null;
+    permisos?: Record<string, boolean>;
+  }
+): Promise<{ usuario: UsuarioAdmin }> {
+  const url = getApiUrl("/api/usuarios-admin");
+  const res = await fetch(url, {
+    method: "POST",
+    headers: usuariosAdminHeaders(token, clave),
+    body: JSON.stringify({ ...body, clave }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as { error?: string }).error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function patchUsuariosAdmin(
+  token: string,
+  clave: string,
+  id: number,
+  body: {
+    telefono?: string;
+    email?: string;
+    nombre?: string;
+    nombre_persona?: string;
+    planta_id?: number | null;
+    rol_id?: number | null;
+    activo?: boolean;
+    permisos?: Record<string, boolean> | null;
+    reset_permisos?: boolean;
+  }
+): Promise<{ usuario: UsuarioAdmin }> {
+  const url = getApiUrl(`/api/usuarios-admin/${id}`);
+  const res = await fetch(url, {
+    method: "PATCH",
+    headers: usuariosAdminHeaders(token, clave),
+    body: JSON.stringify({ ...body, clave }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as { error?: string }).error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function deleteUsuariosAdmin(
+  token: string,
+  clave: string,
+  id: number,
+  hard = false
+): Promise<{ ok: boolean }> {
+  const url = getApiUrl(`/api/usuarios-admin/${id}`);
+  const q = new URLSearchParams({ clave, hard: hard ? "1" : "0" });
+  const res = await fetch(`${url}?${q}`, {
+    method: "DELETE",
+    headers: usuariosAdminHeaders(token, clave),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as { error?: string }).error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
