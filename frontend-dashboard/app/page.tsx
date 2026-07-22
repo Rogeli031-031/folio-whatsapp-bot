@@ -29,6 +29,7 @@ import {
   type DicfConfig,
 } from "@/lib/api";
 import { DicfAccionesClientePanel } from "@/components/DicfAccionesClientePanel";
+import { ClienteComentariosPanel } from "@/components/ClienteComentariosPanel";
 import {
   DICF_HISTORY_WEEK_OPTIONS,
   type DicfHistoryWeeks,
@@ -1006,13 +1007,22 @@ function KpiContent() {
                   );
                 })()}
                 {token && deltaForecastPlanta && (
-                  <DicfAccionesClientePanel
-                    token={token}
-                    planta={deltaForecastPlanta}
-                    grupoLabel={deltaClienteSel.grupo}
-                    cliente={deltaClienteSel.cliente}
-                    canUse={!!canDicfAcciones}
-                  />
+                  <>
+                    <ClienteComentariosPanel
+                      token={token}
+                      planta={deltaForecastPlanta}
+                      grupoLabel={deltaClienteSel.grupo}
+                      cliente={deltaClienteSel.cliente}
+                      canUse={!!canDicfAcciones}
+                    />
+                    <DicfAccionesClientePanel
+                      token={token}
+                      planta={deltaForecastPlanta}
+                      grupoLabel={deltaClienteSel.grupo}
+                      cliente={deltaClienteSel.cliente}
+                      canUse={!!canDicfAcciones}
+                    />
+                  </>
                 )}
                 <p>
                   Frecuencia estimada:{" "}
