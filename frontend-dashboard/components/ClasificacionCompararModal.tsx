@@ -597,35 +597,71 @@ export default function ClasificacionCompararModal({
                           </div>
 
                           <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-slate-500">
-                            Mapeo de columnas (letra Excel)
+                            Mapeo de columnas (ajustable)
+                          </p>
+                          <p className="mb-2 text-[11px] text-slate-500">
+                            Las letras son sugerencias. Puedes cambiarlas a mano (A, B, C…): lo que
+                            escribas es lo que se usa al analizar, aunque el encabezado del Excel diga
+                            otra cosa.
                           </p>
                           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                            {FIELD_LABELS.map((f) => (
-                              <label key={f.key} className="text-xs text-slate-400">
-                                {f.label}
-                                {f.hint ? <span className="text-slate-600"> · {f.hint}</span> : null}
-                                <div className="mt-1 flex gap-1">
-                                  <input
-                                    value={cfg.columns[f.key] || ""}
-                                    onChange={(e) => updateColumn(idx, f.key, e.target.value)}
-                                    placeholder="ej. C"
-                                    className="w-16 rounded border border-slate-600 bg-slate-900 px-2 py-1 text-sm uppercase text-slate-100"
-                                  />
-                                  <select
-                                    value={cfg.columns[f.key] || ""}
-                                    onChange={(e) => updateColumn(idx, f.key, e.target.value)}
-                                    className="min-w-0 flex-1 rounded border border-slate-600 bg-slate-900 px-1 py-1 text-[11px] text-slate-200"
-                                  >
-                                    <option value="">—</option>
-                                    {headerOpts.map((h) => (
-                                      <option key={`${h.col}-${h.label}`} value={h.col}>
-                                        {h.col}: {h.label}
-                                      </option>
-                                    ))}
-                                  </select>
+                            {FIELD_LABELS.map((f) => {
+                              const letter = (cfg.columns[f.key] || "").toUpperCase();
+                              const hdrAt =
+                                letter &&
+                                headerOpts.find((h) => String(h.col).toUpperCase() === letter);
+                              return (
+                                <div
+                                  key={f.key}
+                                  className="rounded border border-slate-700/80 bg-slate-900/40 p-2"
+                                >
+                                  <div className="mb-1 text-xs text-slate-300">
+                                    {f.label}
+                                    {f.hint ? (
+                                      <span className="text-slate-600"> · {f.hint}</span>
+                                    ) : null}
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <input
+                                      value={letter}
+                                      onChange={(e) =>
+                                        updateColumn(
+                                          idx,
+                                          f.key,
+                                          e.target.value.replace(/[^a-zA-Z]/g, "").slice(0, 2)
+                                        )
+                                      }
+                                      placeholder="—"
+                                      maxLength={2}
+                                      className="w-14 rounded border border-violet-700/50 bg-slate-950 px-2 py-1.5 text-center text-sm font-semibold uppercase text-violet-200"
+                                      title="Letra de columna en Excel (editable)"
+                                    />
+                                    <select
+                                      value=""
+                                      onChange={(e) => {
+                                        if (e.target.value) updateColumn(idx, f.key, e.target.value);
+                                      }}
+                                      className="min-w-0 flex-1 rounded border border-slate-600 bg-slate-900 px-1 py-1.5 text-[11px] text-slate-300"
+                                      title="Atajo: elegir por encabezado detectado"
+                                    >
+                                      <option value="">Atajo por encabezado…</option>
+                                      {headerOpts.map((h) => (
+                                        <option key={`${f.key}-${h.col}-${h.label}`} value={h.col}>
+                                          {h.col}: {h.label}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                  <p className="mt-1 text-[10px] text-slate-500">
+                                    {letter
+                                      ? hdrAt
+                                        ? `Columna ${letter} en Excel ≈ “${hdrAt.label}”`
+                                        : `Columna ${letter} (sin encabezado detectado; se usará igual)`
+                                      : "Vacío = no se lee este campo"}
+                                  </p>
                                 </div>
-                              </label>
-                            ))}
+                              );
+                            })}
                           </div>
                         </>
                       )}
