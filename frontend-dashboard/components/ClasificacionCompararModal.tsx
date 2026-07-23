@@ -674,9 +674,8 @@ export default function ClasificacionCompararModal({
                             Mapeo de columnas (ajustable)
                           </p>
                           <p className="mb-2 text-[11px] text-slate-500">
-                            Las letras son sugerencias. Puedes cambiarlas a mano (A, B, C…): lo que
-                            escribas es lo que se usa al analizar, aunque el encabezado del Excel diga
-                            otra cosa.
+                            Elige la columna en el menú o escribe la letra (A, B, C…). El valor
+                            elegido se guarda de inmediato y es el que se usa al analizar.
                           </p>
                           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
                             {FIELD_LABELS.map((f) => {
@@ -684,6 +683,10 @@ export default function ClasificacionCompararModal({
                               const hdrAt =
                                 letter &&
                                 headerOpts.find((h) => String(h.col).toUpperCase() === letter);
+                              const selectValue = letter || "";
+                              const knownCols = new Set(
+                                headerOpts.map((h) => String(h.col).toUpperCase())
+                              );
                               return (
                                 <div
                                   key={f.key}
@@ -711,26 +714,32 @@ export default function ClasificacionCompararModal({
                                       title="Letra de columna en Excel (editable)"
                                     />
                                     <select
-                                      value=""
-                                      onChange={(e) => {
-                                        if (e.target.value) updateColumn(idx, f.key, e.target.value);
-                                      }}
-                                      className="min-w-0 flex-1 rounded border border-slate-600 bg-slate-900 px-1 py-1.5 text-[11px] text-slate-300"
-                                      title="Atajo: elegir por encabezado detectado"
+                                      value={selectValue}
+                                      onChange={(e) => updateColumn(idx, f.key, e.target.value)}
+                                      className="min-w-0 flex-1 rounded border border-slate-600 bg-slate-900 px-1 py-1.5 text-[11px] text-slate-200"
+                                      title="Elegir columna por encabezado detectado"
                                     >
-                                      <option value="">Atajo por encabezado…</option>
+                                      <option value="">— sin columna —</option>
                                       {headerOpts.map((h) => (
-                                        <option key={`${f.key}-${h.col}-${h.label}`} value={h.col}>
-                                          {h.col}: {h.label}
+                                        <option
+                                          key={`${f.key}-${h.col}-${h.label}`}
+                                          value={String(h.col).toUpperCase()}
+                                        >
+                                          {String(h.col).toUpperCase()}: {h.label}
                                         </option>
                                       ))}
+                                      {letter && !knownCols.has(letter) ? (
+                                        <option value={letter}>
+                                          {letter}: (letra manual)
+                                        </option>
+                                      ) : null}
                                     </select>
                                   </div>
                                   <p className="mt-1 text-[10px] text-slate-500">
                                     {letter
                                       ? hdrAt
-                                        ? `Columna ${letter} en Excel ≈ “${hdrAt.label}”`
-                                        : `Columna ${letter} (sin encabezado detectado; se usará igual)`
+                                        ? `Guardado: columna ${letter} (“${hdrAt.label}”)`
+                                        : `Guardado: columna ${letter}`
                                       : "Vacío = no se lee este campo"}
                                   </p>
                                 </div>
