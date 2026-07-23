@@ -3,8 +3,10 @@
 import { useMemo, useRef, useState } from "react";
 import {
   postClasificacionComparar,
+  postClasificacionCompararConfirmarMismo,
   postClasificacionCompararInspeccionar,
   postClasificacionCompararRechazar,
+  postClasificacionCompararSonDistintos,
   type ClasificacionColumnMap,
   type ClasificacionCompararItem,
   type ClasificacionCompararResult,
@@ -205,6 +207,7 @@ export default function ClasificacionCompararModal({
   const [crearPrefill, setCrearPrefill] = useState<CrearFolioInitialValues | null>(null);
   const [crearPlanta, setCrearPlanta] = useState<{ id: number; nombre: string } | null>(null);
   const [pendingAddIdx, setPendingAddIdx] = useState<number | null>(null);
+  const [dupBusyIdx, setDupBusyIdx] = useState<number | null>(null);
 
   const missingDash = useMemo(() => result?.missing_in_dashboard || [], [result]);
   const missingExcel = useMemo(() => result?.missing_in_excel || [], [result]);
@@ -236,6 +239,7 @@ export default function ClasificacionCompararModal({
     setCrearPrefill(null);
     setCrearPlanta(null);
     setPendingAddIdx(null);
+    setDupBusyIdx(null);
     if (fileRef.current) fileRef.current.value = "";
   };
 
@@ -393,19 +397,38 @@ export default function ClasificacionCompararModal({
     onChanged?.();
   };
 
-  const confirmarMismoFolio = (idx: number) => {
-    setResult((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        posibles_duplicados: prev.posibles_duplicados.filter((_, i) => i !== idx),
-        matched_count: prev.matched_count + 1,
-      };
-    });
+  const confirmarMismoFolio = async (idx: number) => {
+    if (!result || dupBusyIdx != null) return;
+    const pair = result.posibles_duplicados[idx];
+    if (!pair?.folio_id) {
+      setError("No hay folio de dashboard para confirmar.");
+      return;
+    }
+    setError(null);
+    setDupBusyIdx(idx);
+    try {
+      await postClasificacionCompararConfirmarMismo(token, {
+        folio_id: Number(pair.folio_id),
+        mes_cargo: mesCargo,
+      });
+      setResult((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          posibles_duplicados: prev.posibles_duplicados.filter((_, i) => i !== idx),
+          matched_count: prev.matched_count + 1,
+        };
+      });
+      onChanged?.();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Error al confirmar mismo folio");
+    } finally {
+      setDupBusyIdx(null);
+    }
   };
 
-  const rechazarMismoFolio = (idx: number) => {
-    if (!result) return;
+  const rechazarMismoFolio = async (idx: number) => {
+    if (!result || dupBusyIdx != null) return;
     const pair = result.posibles_duplicados[idx];
     if (!pair) return;
     const excelItem: ClasificacionCompararItem = {
@@ -424,30 +447,36 @@ export default function ClasificacionCompararModal({
       cuenta_bancaria: pair.cuenta_bancaria,
       row_excel: pair.row_excel,
     };
-    const dashItem: ClasificacionCompararItem = {
-      ...(pair.dashboard || {}),
-      source: "dashboard",
-      folio_id: pair.folio_id,
-      numero_folio: pair.numero_folio,
-      categoria: pair.categoria,
-      planta_clave: pair.planta_clave,
-      planta_id: pair.planta_id,
-      concepto: pair.concepto_dashboard,
-      importe: pair.importe_dashboard,
-      unidad: pair.unidad,
-      estatus: pair.estatus,
-    };
-    const nextMissExcel = [...result.missing_in_excel, dashItem];
-    setResult({
-      ...result,
-      posibles_duplicados: result.posibles_duplicados.filter((_, i) => i !== idx),
-      missing_in_dashboard: [...result.missing_in_dashboard, excelItem],
-      missing_in_excel: nextMissExcel,
-    });
-    setSelMissingExcel((sel) => ({
-      ...sel,
-      [nextMissExcel.length - 1]: dashItem.folio_id != null,
-    }));
+    if (excelItem.planta_id == null) {
+      setError("El renglón Excel no tiene planta; no se puede crear el folio.");
+      return;
+    }
+    if (excelItem.importe == null || !Number.isFinite(Number(excelItem.importe))) {
+      setError("El renglón Excel no tiene importe válido para crear el folio.");
+      return;
+    }
+    setError(null);
+    setDupBusyIdx(idx);
+    try {
+      await postClasificacionCompararSonDistintos(token, {
+        mes_cargo: mesCargo,
+        item: excelItem,
+      });
+      setResult((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          posibles_duplicados: prev.posibles_duplicados.filter((_, i) => i !== idx),
+          matched_count: prev.matched_count + 1,
+          dashboard_count: prev.dashboard_count + 1,
+        };
+      });
+      onChanged?.();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Error al crear folio distinto");
+    } finally {
+      setDupBusyIdx(null);
+    }
   };
 
   const handleAceptarCambios = async () => {
@@ -822,7 +851,8 @@ export default function ClasificacionCompararModal({
                       ¿Es el mismo folio? ({posiblesDup.length})
                     </h3>
                     <p className="text-[11px] text-slate-500">
-                      Concepto similar (análisis de duplicados); el importe puede diferir un poco.
+                      Mismo: fija mes de cargo y, si está antes de Depósito y cierre, lo mueve a Carro.
+                      Distintos: crea folio nuevo en Carro (no toca el existente).
                     </p>
                   </div>
                   <ul className="max-h-80 space-y-2 overflow-y-auto p-3">
@@ -835,6 +865,7 @@ export default function ClasificacionCompararModal({
                           <span>Similitud {(Number(pair.score) * 100).toFixed(0)}%</span>
                           <span>· {pair.numero_folio || `ID ${pair.folio_id}`}</span>
                           <span>· [{pair.categoria}]</span>
+                          {pair.estatus ? <span>· {pair.estatus}</span> : null}
                         </div>
                         <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
                           <div className="rounded bg-slate-950/50 p-2">
@@ -858,19 +889,19 @@ export default function ClasificacionCompararModal({
                         <div className="mt-2 flex flex-wrap gap-2">
                           <button
                             type="button"
-                            disabled={applying}
+                            disabled={applying || dupBusyIdx != null}
                             onClick={() => confirmarMismoFolio(idx)}
                             className="rounded bg-sky-700 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-sky-600 disabled:opacity-50"
                           >
-                            Sí, es el mismo
+                            {dupBusyIdx === idx ? "Aplicando…" : "Sí, es el mismo"}
                           </button>
                           <button
                             type="button"
-                            disabled={applying}
+                            disabled={applying || dupBusyIdx != null}
                             onClick={() => rechazarMismoFolio(idx)}
                             className="rounded border border-slate-600 px-2.5 py-1 text-[11px] text-slate-300 hover:bg-slate-800 disabled:opacity-50"
                           >
-                            No, son distintos
+                            {dupBusyIdx === idx ? "Creando…" : "No, son distintos"}
                           </button>
                         </div>
                       </li>
