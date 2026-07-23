@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { KanbanBoard as KanbanBoardType, FolioCard, DashboardFilters } from "@/lib/api";
 import * as XLSX from "xlsx";
 import ClasificacionApoyosModal from "@/components/ClasificacionApoyosModal";
+import TallerAtExportModal from "@/components/TallerAtExportModal";
 
 interface Props {
   data: KanbanBoardType | null;
@@ -123,6 +124,7 @@ export default function ResumenCategoriasMesCargo({
   }, [cardsAll, mesActual, mesAnterior, mesesExtra, ventanaOn]);
 
   const [showClasificacion, setShowClasificacion] = useState(false);
+  const [showTallerAt, setShowTallerAt] = useState(false);
 
   const selectedPlantaNombre = useMemo(() => {
     if (selectedPlantaId == null || !data?.board) return null;
@@ -282,6 +284,15 @@ export default function ResumenCategoriasMesCargo({
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
+            onClick={() => setShowTallerAt(true)}
+            disabled={!token}
+            className="rounded bg-amber-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-600 disabled:opacity-50"
+            title="Exporta gasto de taller por unidad (AT) y mes"
+          >
+            Taller por AT
+          </button>
+          <button
+            type="button"
             onClick={() => setShowClasificacion(true)}
             disabled={!token}
             className="rounded bg-teal-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-600 disabled:opacity-50"
@@ -298,6 +309,15 @@ export default function ResumenCategoriasMesCargo({
           </button>
         </div>
       </div>
+      {showTallerAt && token && (
+        <TallerAtExportModal
+          open={true}
+          token={token}
+          selectedPlantaId={selectedPlantaId ?? null}
+          selectedPlantaNombre={selectedPlantaNombre}
+          onClose={() => setShowTallerAt(false)}
+        />
+      )}
       {showClasificacion && token && (
         <ClasificacionApoyosModal
           open={true}

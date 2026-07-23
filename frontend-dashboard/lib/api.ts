@@ -66,6 +66,36 @@ export async function downloadClasificacionApoyosExcel(
   URL.revokeObjectURL(href);
 }
 
+/** Descarga Excel Taller por AT (Resumen + detalle por mes). */
+export async function downloadTallerAtExcel(
+  token: string,
+  mesDesde: string,
+  mesHasta: string,
+  plantaId?: number | null
+): Promise<void> {
+  const base = getApiUrl("/api/dashboard/taller-at-excel");
+  const plantaQ =
+    plantaId != null && Number.isFinite(plantaId) ? `&planta_id=${encodeURIComponent(String(plantaId))}` : "";
+  const url = `${base}?mes_desde=${encodeURIComponent(mesDesde)}&mes_hasta=${encodeURIComponent(mesHasta)}${plantaQ}`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as { error?: string }).error || `HTTP ${res.status}`);
+  }
+  const blob = await res.blob();
+  const cd = res.headers.get("Content-Disposition") || "";
+  const m = /filename="?([^"]+)"?/i.exec(cd);
+  const filename = m?.[1] || `Taller_AT_${mesDesde}_${mesHasta}.xlsx`;
+  const a = document.createElement("a");
+  const href = URL.createObjectURL(blob);
+  a.href = href;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(href);
+}
+
 export type ClasificacionCatKey = "gastos" | "inversiones" | "taller" | "total";
 
 export type ClasificacionPlantaRow = {

@@ -60,6 +60,7 @@ const { embedExcelEvidencePhoto } = require("./lib/excel-image-compress");
 const { isDirectorZPForDashboard } = require("./lib/dashboard-es-zp");
 const folioDuplicados = require("./lib/folio-duplicados");
 const clasificacionApoyosExcel = require("./lib/clasificacion-apoyos-excel");
+const tallerAtExcel = require("./lib/taller-at-excel");
 const directorIaContext = require("./lib/director-ia-context");
 const directorIaCommercialState = require("./lib/director-ia-commercial-state");
 const directorIaIgfArr = require("./lib/director-ia-igf-arr");
@@ -6127,6 +6128,99 @@ app.get("/api/dashboard/clasificacion-apoyos-excel", dashboardAuthMiddleware, as
   } catch (e) {
     console.error("[clasificacion-apoyos-excel]", e);
     res.status(500).json({ error: e.message || "Error al generar Excel" });
+  } finally {
+    client.release();
+  }
+});
+
+/**
+ * Excel Taller por AT: Resumen (unidad × meses) + detalle por mes.
+ * Solo TALLER con póliza o en Depósito y cierre / Comprobaciones / Evidencias.
+ * Query: mes_desde, mes_hasta (YYYY-MM), planta_id opcional.
+ */
+app.get("/api/dashboard/taller-at-excel", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGVForbidden(req, res)) return;
+  let mesDesde = String(req.query.mes_desde || "").trim();
+  let mesHasta = String(req.query.mes_hasta || "").trim();
+  if (!/^\d{4}-\d{2}$/.test(mesDesde) || !/^\d{4}-\d{2}$/.test(mesHasta)) {
+    return res.status(400).json({ error: "mes_desde y mes_hasta son obligatorios (YYYY-MM)" });
+  }
+  if (mesDesde > mesHasta) {
+    const t = mesDesde;
+    mesDesde = mesHasta;
+    mesHasta = t;
+  }
+  const plantaIdRaw =
+    req.query.planta_id != null && String(req.query.planta_id).trim() !== ""
+      ? Number(req.query.planta_id)
+      : null;
+  const plantaId = Number.isFinite(plantaIdRaw) ? plantaIdRaw : null;
+
+  const client = await pool.connect();
+  try {
+    const filters = parseDashboardFilters({});
+    const { where, params } = buildDashboardWhere(req.dashboardAuth, {
+      ...filters,
+      soloActivos: false,
+      ventanaDefault: false,
+    });
+    let n = params.length;
+    const extra = [];
+    n += 1;
+    extra.push(`f.mes_cargo >= $${n}::text`);
+    params.push(mesDesde);
+    n += 1;
+    extra.push(`f.mes_cargo <= $${n}::text`);
+    params.push(mesHasta);
+    extra.push(`UPPER(TRIM(COALESCE(f.categoria,''))) LIKE '%TALLER%'`);
+    extra.push(`UPPER(TRIM(COALESCE(f.estatus,''))) <> 'CANCELADO'`);
+    extra.push(`(
+      UPPER(TRIM(COALESCE(f.estatus,''))) IN ('PAGADO','CERRADO','COMPROBACIONES','EVIDENCIAS')
+      OR EXISTS (
+        SELECT 1 FROM public.folio_archivos fa
+         WHERE fa.folio_id = f.id
+           AND UPPER(TRIM(fa.tipo)) = 'POLIZA'
+           AND fa.status NOT IN ('RECHAZADO','ELIMINADO','REEMPLAZADO')
+      )
+    )`);
+    if (plantaId != null) {
+      const ids = getPlantaIdsEquivalentesForPendientes(plantaId);
+      n += 1;
+      extra.push(`f.planta_id = ANY($${n}::int[])`);
+      params.push(ids.length ? ids : [plantaId]);
+    }
+    const q = `
+      SELECT f.unidad,
+             COALESCE(NULLIF(TRIM(f.descripcion), ''), NULLIF(TRIM(f.concepto), ''), '') AS concepto,
+             f.importe,
+             f.mes_cargo
+        FROM public.folios f
+       WHERE 1=1 ${where}
+         AND ${extra.join(" AND ")}
+       ORDER BY f.mes_cargo DESC, f.unidad NULLS LAST, f.id
+    `;
+    const r = await client.query(q, params);
+    let plantaNombre = null;
+    if (plantaId != null) {
+      const pr = await client.query(`SELECT nombre FROM public.plantas WHERE id = $1`, [plantaId]);
+      plantaNombre = pr.rows[0] && pr.rows[0].nombre ? String(pr.rows[0].nombre) : null;
+    }
+    const wb = await tallerAtExcel.buildTallerAtWorkbook(r.rows || [], {
+      mesDesde,
+      mesHasta,
+      plantaNombre,
+    });
+    const buf = Buffer.from(await wb.xlsx.writeBuffer());
+    const safeA = tallerAtExcel.formatMesLabel(mesDesde).replace(/\s+/g, "_");
+    const safeB = tallerAtExcel.formatMesLabel(mesHasta).replace(/\s+/g, "_");
+    const plantaSuffix = plantaNombre ? `_${plantaNombre.replace(/\s+/g, "_")}` : "";
+    const filename = `Taller_AT_${safeA}_${safeB}${plantaSuffix}.xlsx`;
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    return res.send(buf);
+  } catch (e) {
+    console.error("[taller-at-excel]", e);
+    res.status(500).json({ error: e.message || "Error al generar Excel de taller por AT" });
   } finally {
     client.release();
   }
