@@ -96,6 +96,156 @@ export async function downloadTallerAtExcel(
   URL.revokeObjectURL(href);
 }
 
+export type ClasificacionColumnMap = {
+  concepto: string;
+  importe: string;
+  unidad: string;
+  beneficiario: string;
+  mayor: string;
+  preventivo: string;
+  pasivo: string;
+  fecha: string;
+  banco: string;
+  cuenta_bancaria: string;
+};
+
+export type ClasificacionSheetInspect = {
+  sheetName: string;
+  titleHint: string | null;
+  listadoHint: string | null;
+  suggestedCategoria: string | null;
+  suggestedPlantaId: number | null;
+  suggestedPlantaClave: string | null;
+  suggestedPlantaTitle: string | null;
+  headerRow: number | null;
+  headers: Array<{ col: string; index: number; label: string; field: string | null }>;
+  suggestedColumns: ClasificacionColumnMap;
+};
+
+export type ClasificacionPlantaOption = {
+  clave: string;
+  title: string;
+  id: number;
+  ids: number[];
+};
+
+export type ClasificacionInspectResult = {
+  ok: boolean;
+  sheets: ClasificacionSheetInspect[];
+  plantas: ClasificacionPlantaOption[];
+};
+
+export type ClasificacionSheetConfig = {
+  sheetName: string;
+  enabled: boolean;
+  planta_id: number | null;
+  categoria: string;
+  columns: ClasificacionColumnMap;
+};
+
+export type ClasificacionCompararItem = {
+  source?: string;
+  sheet?: string;
+  categoria?: string;
+  planta_clave?: string | null;
+  planta_title?: string | null;
+  planta_id?: number | null;
+  planta_ids?: number[];
+  concepto?: string;
+  importe?: number | null;
+  unidad?: string | null;
+  beneficiario?: string | null;
+  subcategoria?: string | null;
+  folio_id?: number | null;
+  numero_folio?: string | null;
+  estatus?: string | null;
+  match_key?: string;
+  row_excel?: number;
+  motivo?: string;
+  importe_dashboard?: number | null;
+  ambiguous?: boolean;
+};
+
+export type ClasificacionCompararResult = {
+  ok: boolean;
+  mes_cargo: string;
+  sheets: string[];
+  excel_count: number;
+  excel_rechazos_count?: number;
+  dashboard_count: number;
+  matched_count: number;
+  missing_in_dashboard: ClasificacionCompararItem[];
+  missing_in_excel: ClasificacionCompararItem[];
+  rechazos_cdjz: ClasificacionCompararItem[];
+  warnings?: string[];
+};
+
+/** Inspecciona hojas del Excel y sugiere planta / categoría / columnas. */
+export async function postClasificacionCompararInspeccionar(
+  token: string,
+  params: { fileBase64: string }
+): Promise<ClasificacionInspectResult> {
+  return apiFetch("/api/dashboard/clasificacion-comparar/inspeccionar", {
+    method: "POST",
+    token,
+    body: JSON.stringify({ fileBase64: params.fileBase64 }),
+  });
+}
+
+/** Analiza Excel vs dashboard del mes usando configuración explícita por hoja. */
+export async function postClasificacionComparar(
+  token: string,
+  params: {
+    fileBase64: string;
+    mes_cargo: string;
+    sheetConfigs: ClasificacionSheetConfig[];
+  }
+): Promise<ClasificacionCompararResult> {
+  return apiFetch("/api/dashboard/clasificacion-comparar", {
+    method: "POST",
+    token,
+    body: JSON.stringify({
+      fileBase64: params.fileBase64,
+      mes_cargo: params.mes_cargo,
+      sheetConfigs: params.sheetConfigs,
+    }),
+  });
+}
+
+export async function postClasificacionCompararAgregar(
+  token: string,
+  params: { mes_cargo: string; item: ClasificacionCompararItem }
+): Promise<{ ok: boolean; id: number; numero_folio: string; mes_cargo: string }> {
+  return apiFetch("/api/dashboard/clasificacion-comparar/agregar", {
+    method: "POST",
+    token,
+    body: JSON.stringify({
+      mes_cargo: params.mes_cargo,
+      item: {
+        planta_id: params.item.planta_id,
+        categoria: params.item.categoria,
+        concepto: params.item.concepto,
+        importe: params.item.importe,
+        unidad: params.item.unidad,
+        subcategoria: params.item.subcategoria,
+        beneficiario: params.item.beneficiario,
+      },
+    }),
+  });
+}
+
+export async function postClasificacionCompararRechazar(
+  token: string,
+  folioId: number,
+  motivo?: string | null
+): Promise<{ ok: boolean; folio_id: number; mes_cargo: null }> {
+  return apiFetch("/api/dashboard/clasificacion-comparar/rechazar", {
+    method: "POST",
+    token,
+    body: JSON.stringify({ folio_id: folioId, motivo: motivo || null }),
+  });
+}
+
 export type ClasificacionCatKey = "gastos" | "inversiones" | "taller" | "total";
 
 export type ClasificacionPlantaRow = {

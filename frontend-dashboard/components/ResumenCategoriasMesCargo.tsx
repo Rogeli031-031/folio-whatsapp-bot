@@ -5,6 +5,7 @@ import type { KanbanBoard as KanbanBoardType, FolioCard, DashboardFilters } from
 import * as XLSX from "xlsx";
 import ClasificacionApoyosModal from "@/components/ClasificacionApoyosModal";
 import TallerAtExportModal from "@/components/TallerAtExportModal";
+import ClasificacionCompararModal from "@/components/ClasificacionCompararModal";
 
 interface Props {
   data: KanbanBoardType | null;
@@ -12,6 +13,7 @@ interface Props {
   filters?: DashboardFilters;
   onOpenFolio?: (id: number) => void;
   token?: string | null;
+  onRefresh?: () => void;
 }
 
 type MesCargo = string;
@@ -110,6 +112,7 @@ export default function ResumenCategoriasMesCargo({
   filters,
   onOpenFolio,
   token,
+  onRefresh,
 }: Props) {
   const { actual: mesActual, anterior: mesAnterior } = useMemo(() => mesActualYAnteriorMx(), []);
   const ventanaOn = filters?.ventana !== "0";
@@ -125,6 +128,7 @@ export default function ResumenCategoriasMesCargo({
 
   const [showClasificacion, setShowClasificacion] = useState(false);
   const [showTallerAt, setShowTallerAt] = useState(false);
+  const [showComparar, setShowComparar] = useState(false);
 
   const selectedPlantaNombre = useMemo(() => {
     if (selectedPlantaId == null || !data?.board) return null;
@@ -284,6 +288,15 @@ export default function ResumenCategoriasMesCargo({
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
+            onClick={() => setShowComparar(true)}
+            disabled={!token}
+            className="rounded bg-violet-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-violet-600 disabled:opacity-50"
+            title="Compara un Excel de clasificación (E# G/I/T) con el dashboard y permite agregar o rechazar"
+          >
+            COMPARAR/ACTUALIZAR
+          </button>
+          <button
+            type="button"
             onClick={() => setShowTallerAt(true)}
             disabled={!token}
             className="rounded bg-amber-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-600 disabled:opacity-50"
@@ -309,6 +322,16 @@ export default function ResumenCategoriasMesCargo({
           </button>
         </div>
       </div>
+      {showComparar && token && (
+        <ClasificacionCompararModal
+          open={true}
+          token={token}
+          selectedPlantaId={selectedPlantaId ?? null}
+          selectedPlantaNombre={selectedPlantaNombre}
+          onClose={() => setShowComparar(false)}
+          onChanged={() => onRefresh?.()}
+        />
+      )}
       {showTallerAt && token && (
         <TallerAtExportModal
           open={true}

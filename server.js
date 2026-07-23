@@ -61,6 +61,7 @@ const { isDirectorZPForDashboard } = require("./lib/dashboard-es-zp");
 const folioDuplicados = require("./lib/folio-duplicados");
 const clasificacionApoyosExcel = require("./lib/clasificacion-apoyos-excel");
 const tallerAtExcel = require("./lib/taller-at-excel");
+const clasificacionComparar = require("./lib/clasificacion-comparar");
 const directorIaContext = require("./lib/director-ia-context");
 const directorIaCommercialState = require("./lib/director-ia-commercial-state");
 const directorIaIgfArr = require("./lib/director-ia-igf-arr");
@@ -6221,6 +6222,294 @@ app.get("/api/dashboard/taller-at-excel", dashboardAuthMiddleware, async (req, r
   } catch (e) {
     console.error("[taller-at-excel]", e);
     res.status(500).json({ error: e.message || "Error al generar Excel de taller por AT" });
+  } finally {
+    client.release();
+  }
+});
+
+/**
+ * COMPARAR/ACTUALIZAR — inspección previa (hojas + sugerencias de columnas/planta/categoría).
+ * Body: { fileBase64 }
+ */
+app.post("/api/dashboard/clasificacion-comparar/inspeccionar", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGVForbidden(req, res)) return;
+  if (req.dashboardAuth.role === "GA") {
+    return res.status(403).json({ error: "GA no puede usar COMPARAR/ACTUALIZAR." });
+  }
+  let fileBuffer = null;
+  if (typeof req.body.fileBase64 === "string" && req.body.fileBase64.trim()) {
+    try {
+      const raw = req.body.fileBase64.includes(",")
+        ? req.body.fileBase64.split(",").pop()
+        : req.body.fileBase64;
+      fileBuffer = Buffer.from(raw, "base64");
+    } catch (e) {
+      return res.status(400).json({ error: "fileBase64 inválido" });
+    }
+  }
+  if (!fileBuffer || fileBuffer.length === 0) {
+    return res.status(400).json({ error: "Envía fileBase64 del Excel" });
+  }
+  try {
+    const info = clasificacionComparar.inspectClasificacionWorkbook(fileBuffer);
+    return res.json({ ok: true, ...info });
+  } catch (e) {
+    console.error("[clasificacion-comparar inspeccionar]", e);
+    res.status(500).json({ error: e.message || "Error al inspeccionar Excel" });
+  }
+});
+
+/**
+ * COMPARAR/ACTUALIZAR: analiza Excel vs folios del mes.
+ * Body: { fileBase64, mes_cargo, sheetConfigs: [{ sheetName, enabled, planta_id, categoria, columns }] }
+ */
+app.post("/api/dashboard/clasificacion-comparar", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGVForbidden(req, res)) return;
+  if (req.dashboardAuth.role === "GA") {
+    return res.status(403).json({ error: "GA no puede usar COMPARAR/ACTUALIZAR." });
+  }
+  const mesCargo = String(req.body.mes_cargo || "").trim();
+  if (!/^\d{4}-\d{2}$/.test(mesCargo)) {
+    return res.status(400).json({ error: "mes_cargo es obligatorio (YYYY-MM)" });
+  }
+  let fileBuffer = null;
+  if (Buffer.isBuffer(req.body.file)) fileBuffer = req.body.file;
+  else if (typeof req.body.fileBase64 === "string" && req.body.fileBase64.trim()) {
+    try {
+      const raw = req.body.fileBase64.includes(",")
+        ? req.body.fileBase64.split(",").pop()
+        : req.body.fileBase64;
+      fileBuffer = Buffer.from(raw, "base64");
+    } catch (e) {
+      return res.status(400).json({ error: "fileBase64 inválido" });
+    }
+  }
+  if (!fileBuffer || fileBuffer.length === 0) {
+    return res.status(400).json({ error: "Envía fileBase64 del Excel" });
+  }
+  const sheetConfigs = Array.isArray(req.body.sheetConfigs) ? req.body.sheetConfigs : null;
+  if (!sheetConfigs || !sheetConfigs.length) {
+    return res.status(400).json({
+      error: "Debes configurar cada hoja (planta, categoría y columnas). Usa /inspeccionar primero.",
+    });
+  }
+
+  const client = await pool.connect();
+  try {
+    const parsed = clasificacionComparar.parseClasificacionExcelWithConfigs(fileBuffer, sheetConfigs);
+    if (!parsed.sheets.length) {
+      return res.status(400).json({
+        error: "Ninguna hoja configurada pudo leerse. Revisa planta, categoría y mapeo de columnas.",
+      });
+    }
+
+    const filters = parseDashboardFilters({});
+    const { where, params } = buildDashboardWhere(req.dashboardAuth, {
+      ...filters,
+      soloActivos: false,
+      ventanaDefault: false,
+    });
+    let n = params.length;
+    const extra = [];
+    n += 1;
+    extra.push(`f.mes_cargo = $${n}::text`);
+    params.push(mesCargo);
+    extra.push(`UPPER(TRIM(COALESCE(f.estatus,''))) <> 'CANCELADO'`);
+    extra.push(`(
+      UPPER(TRIM(COALESCE(f.categoria,''))) LIKE '%GASTO%'
+      OR UPPER(TRIM(COALESCE(f.categoria,''))) LIKE '%INVERSION%'
+      OR UPPER(TRIM(COALESCE(f.categoria,''))) LIKE '%TALLER%'
+    )`);
+
+    // Si todas las hojas activas tienen la misma planta, filtrar dashboard a esa planta
+    const activeCfgs = sheetConfigs.filter((c) => c.enabled !== false && c.planta_id != null);
+    const uniquePlantas = [...new Set(activeCfgs.map((c) => Number(c.planta_id)).filter(Number.isFinite))];
+    if (uniquePlantas.length === 1) {
+      const ids = getPlantaIdsEquivalentesForPendientes(uniquePlantas[0]);
+      n += 1;
+      extra.push(`f.planta_id = ANY($${n}::int[])`);
+      params.push(ids.length ? ids : uniquePlantas);
+    }
+
+    const q = `
+      SELECT f.id, f.numero_folio, f.folio_codigo, f.planta_id, f.categoria, f.subcategoria, f.unidad,
+             f.importe, f.estatus, f.mes_cargo, f.beneficiario,
+             COALESCE(f.descripcion, f.concepto) AS concepto
+        FROM public.folios f
+       WHERE 1=1 ${where}
+         AND ${extra.join(" AND ")}
+    `;
+    const r = await client.query(q, params);
+    const dashRows = (r.rows || []).map((row) => clasificacionComparar.folioToCompareRow(row));
+    const result = clasificacionComparar.compareExcelVsDashboard(
+      parsed.rows,
+      parsed.rechazos,
+      dashRows
+    );
+
+    return res.json({
+      ok: true,
+      mes_cargo: mesCargo,
+      sheets: parsed.sheets,
+      excel_count: parsed.rows.length,
+      excel_rechazos_count: (parsed.rechazos || []).length,
+      dashboard_count: dashRows.length,
+      matched_count: result.matched_count,
+      missing_in_dashboard: result.missing_in_dashboard,
+      missing_in_excel: result.missing_in_excel,
+      rechazos_cdjz: result.rechazos_cdjz,
+      warnings: parsed.warnings || [],
+    });
+  } catch (e) {
+    console.error("[clasificacion-comparar]", e);
+    res.status(500).json({ error: e.message || "Error al comparar" });
+  } finally {
+    client.release();
+  }
+});
+
+/**
+ * Agrega al dashboard un renglón que existía en Excel y no en dashboard
+ * (crea folio + asigna mes_cargo).
+ * Body: { mes_cargo, item: { planta_id, categoria, concepto, importe, unidad?, subcategoria? } }
+ */
+app.post("/api/dashboard/clasificacion-comparar/agregar", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGVForbidden(req, res)) return;
+  if (req.dashboardAuth.role === "GA") {
+    return res.status(403).json({ error: "GA no puede agregar folios desde COMPARAR/ACTUALIZAR." });
+  }
+  if (!usuarioPermisos.authHasPermiso(req.dashboardAuth, "acceso_crear_folios")) {
+    return res.status(403).json({ error: "Sin permiso para crear folios." });
+  }
+  const mesCargo = String(req.body.mes_cargo || "").trim();
+  if (!/^\d{4}-\d{2}$/.test(mesCargo)) {
+    return res.status(400).json({ error: "mes_cargo es obligatorio (YYYY-MM)" });
+  }
+  const item = req.body.item || {};
+  const planta_id = item.planta_id != null ? parseInt(item.planta_id, 10) : null;
+  if (!planta_id || !Number.isFinite(planta_id)) {
+    return res.status(400).json({ error: "item.planta_id es obligatorio" });
+  }
+  const concepto = String(item.concepto || "").trim();
+  const importe = Number(item.importe);
+  if (concepto.length < 2) return res.status(400).json({ error: "concepto inválido" });
+  if (!Number.isFinite(importe) || importe < 0) return res.status(400).json({ error: "importe inválido" });
+  const catNorm = clasificacionComparar.normalizeCategoriaDb(item.categoria);
+  if (!["GASTOS", "INVERSIONES", "TALLER"].includes(catNorm)) {
+    return res.status(400).json({ error: "categoria debe ser GASTOS, INVERSIONES o TALLER" });
+  }
+  let subcategoria = item.subcategoria != null ? String(item.subcategoria).trim() : null;
+  if (catNorm === "TALLER") {
+    const tipos = (SUBCATEGORIAS.TALLER || []).map((s) => String(s).trim().toUpperCase());
+    const subNorm = String(subcategoria || "")
+      .trim()
+      .toUpperCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+    const ok = tipos.some((t) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "") === subNorm);
+    if (!ok) subcategoria = "PREVENTIVO";
+  }
+  const unidad = item.unidad != null ? String(item.unidad).trim() : null;
+  const role = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) || "";
+
+  const client = await pool.connect();
+  try {
+    const plantaRow = await client.query("SELECT id, nombre FROM public.plantas WHERE id = $1", [planta_id]);
+    if (!plantaRow.rows[0]) return res.status(400).json({ error: "planta_id no existe" });
+    const planta_nombre = plantaRow.rows[0].nombre || null;
+    const beneficiario =
+      item.beneficiario != null && String(item.beneficiario).trim()
+        ? String(item.beneficiario).trim()
+        : null;
+    const dd = {
+      planta_id,
+      planta_nombre,
+      beneficiario,
+      concepto,
+      importe,
+      lineas: [{ beneficiario, concepto, importe }],
+      categoria_nombre: clasificacionComparar.categoriaNombreForInsert(catNorm),
+      subcategoria_nombre: subcategoria || null,
+      prioridad: "Media",
+      unidad: unidad || null,
+      actor_telefono: req.dashboardAuth.actor_id != null ? `Dashboard:${req.dashboardAuth.actor_id}` : "Dashboard",
+      actor_rol: role,
+      actor_clave: role,
+      origen: "dashboard",
+    };
+    const row = await insertFolio(client, dd);
+    await client.query(`UPDATE public.folios SET mes_cargo = $1 WHERE id = $2`, [mesCargo, row.id]);
+    await insertHistorial(
+      client,
+      row.id,
+      row.numero_folio,
+      row.folio_codigo,
+      null,
+      `COMPARAR/ACTUALIZAR: folio creado desde Excel de referencia. Mes cargo ${mesCargo}.`,
+      null,
+      role
+    ).catch(() => {});
+    res.status(201).json({
+      ok: true,
+      id: row.id,
+      numero_folio: row.numero_folio,
+      folio_codigo: row.folio_codigo,
+      mes_cargo: mesCargo,
+    });
+  } catch (e) {
+    console.error("[clasificacion-comparar agregar]", e);
+    res.status(500).json({ error: e.message || "Error al agregar" });
+  } finally {
+    client.release();
+  }
+});
+
+/**
+ * Quita mes de cargo (RECHAZO CDJZ / igualar con Excel) para un folio que no está en el Excel.
+ * Permite cualquier estatus excepto cancelado (herramienta de conciliación).
+ */
+app.post("/api/dashboard/clasificacion-comparar/rechazar", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGVForbidden(req, res)) return;
+  if (req.dashboardAuth.role === "GA") {
+    return res.status(403).json({ error: "GA no puede rechazar desde COMPARAR/ACTUALIZAR." });
+  }
+  const folioId = req.body.folio_id != null ? parseInt(req.body.folio_id, 10) : NaN;
+  if (!Number.isFinite(folioId)) return res.status(400).json({ error: "folio_id inválido" });
+  const client = await pool.connect();
+  try {
+    const folio = await getFolioById(client, folioId);
+    if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
+    if (String(folio.estatus || "").toUpperCase() === "CANCELADO") {
+      return res.status(400).json({ error: "No se puede operar un folio cancelado." });
+    }
+    if ((req.dashboardAuth.role === "GG" || req.dashboardAuth.role === "GA") && req.dashboardAuth.plantas_permitidas?.length > 0) {
+      if (!folio.planta_id || !req.dashboardAuth.plantas_permitidas.includes(folio.planta_id)) {
+        return res.status(403).json({ error: "Sin permiso para este folio" });
+      }
+    }
+    const prevMes = folio.mes_cargo ? String(folio.mes_cargo).trim() : null;
+    await client.query(`UPDATE public.folios SET mes_cargo = NULL WHERE id = $1`, [folioId]);
+    const motivoCustom =
+      typeof req.body.motivo === "string" && req.body.motivo.trim() ? req.body.motivo.trim() : null;
+    const comentario = motivoCustom
+      ? `RECHAZO CDJZ (COMPARAR/ACTUALIZAR). ${motivoCustom}${prevMes ? ` (mes cargo quitado: ${prevMes})` : ""}`
+      : prevMes
+        ? `RECHAZO CDJZ (COMPARAR/ACTUALIZAR). Se quitó el mes de cargo ${prevMes}: no aparece en Excel de referencia.`
+        : "RECHAZO CDJZ (COMPARAR/ACTUALIZAR). Sin mes de cargo. No aparece en Excel de referencia.";
+    await insertHistorial(
+      client,
+      folioId,
+      folio.numero_folio,
+      folio.folio_codigo,
+      folio.estatus || "",
+      comentario,
+      null,
+      req.dashboardAuth.role || null
+    ).catch(() => {});
+    res.json({ ok: true, folio_id: folioId, mes_cargo: null, rechazo_cdjz: true });
+  } catch (e) {
+    console.error("[clasificacion-comparar rechazar]", e);
+    res.status(500).json({ error: e.message || "Error al rechazar" });
   } finally {
     client.release();
   }

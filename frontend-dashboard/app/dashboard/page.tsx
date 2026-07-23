@@ -226,6 +226,7 @@ function DashboardContent() {
           filters={filters}
           onOpenFolio={setDrawerFolioId}
           token={token}
+          onRefresh={loadData}
         />
         <KanbanBoard
           data={kanban}
