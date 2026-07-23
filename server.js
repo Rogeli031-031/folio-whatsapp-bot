@@ -15649,6 +15649,9 @@ app.post("/twilio/whatsapp", async (req, res) => {
           });
           const baseUrl = (process.env.DASHBOARD_URL || process.env.FRONTEND_URL || "").trim() || "https://dashboard.example.com";
           const link = `${baseUrl.replace(/\/$/, "")}/dashboard?t=${encodeURIComponent(token)}`;
+          // Un solo enlace en la respuesta TwiML (como AR). Meter dashboard + 2 forecast
+          // con el mismo JWT supera el límite de WhatsApp (~1600) y Twilio no entrega el mensaje
+          // (el usuario ve silencio; el comando "AR" sí responde porque solo lleva 1 URL).
           let msg = "📊 Dashboard de Folios\n\n";
           if (subcmd === "resumen") {
             const filters = parseDashboardFilters({});
@@ -15669,7 +15672,15 @@ app.post("/twilio/whatsapp", async (req, res) => {
             msg += `Pend. aprob. ZP: ${pendZp}\n`;
             if (oldest) msg += `Más antiguo: ${oldest.folio} (${oldest.dias} días)\n`;
           }
-          msg += `\n🔗 Acceso (válido 20 horas):\n${link}`;
+          msg += `🔗 Acceso (válido 20 horas):\n${link}`;
+          if (msg.length > MAX_WHATSAPP_BODY) {
+            const suffix = `\n...(recortado)\n${link}`;
+            const budget = Math.max(0, MAX_WHATSAPP_BODY - suffix.length);
+            msg = (budget > 0 ? msg.substring(0, budget) : "") + suffix;
+            if (msg.length > MAX_WHATSAPP_BODY) msg = link.substring(0, MAX_WHATSAPP_BODY);
+          }
+
+          // Forecast en mensajes aparte (outbound), cada uno bajo el límite de WhatsApp.
           const yyyymm = getCurrentYYYYMM();
           const yF = parseInt(yyyymm.slice(0, 4), 10);
           const mF = parseInt(yyyymm.slice(4, 6), 10);
@@ -15677,14 +15688,21 @@ app.post("/twilio/whatsapp", async (req, res) => {
           const nextYF = mF === 12 ? yF + 1 : yF;
           const nextMF = mF === 12 ? 1 : mF + 1;
           const linkForecast = `${botBase.replace(/\/$/, "")}/api/arr/dashboard-excel?year=${yF}&month=${mF}&proyeccion_anio=${nextYF}&proyeccion_mes=${nextMF}&t=${encodeURIComponent(token)}`;
-          msg += `\n\n📈 Forecast (Ventas/IGF ${yF}/${mF}):\n${linkForecast}`;
           const mAnt = mF === 1 ? 12 : mF - 1;
           const yAnt = mF === 1 ? yF - 1 : yF;
           const nextYAnt = mAnt === 12 ? yAnt + 1 : yAnt;
           const nextMAnt = mAnt === 12 ? 1 : mAnt + 1;
           const linkForecastAnt = `${botBase.replace(/\/$/, "")}/api/arr/dashboard-excel?year=${yAnt}&month=${mAnt}&proyeccion_anio=${nextYAnt}&proyeccion_mes=${nextMAnt}&t=${encodeURIComponent(token)}`;
-          msg += `\n\n📈 Forecast mes anterior (${yAnt}/${mAnt}):\n${linkForecastAnt}`;
-          if (msg.length > MAX_WHATSAPP_BODY) msg = msg.substring(0, MAX_WHATSAPP_BODY - 30) + "\n...(recortado)\n" + link;
+          const toPhone = actor.telefono || fromNorm;
+          setImmediate(() => {
+            Promise.resolve()
+              .then(async () => {
+                await sendWhatsApp(toPhone, `📈 Forecast (Ventas/IGF ${yF}/${mF}):\n${linkForecast}`, { event: "dashboard_forecast" });
+                await sendWhatsApp(toPhone, `📈 Forecast mes anterior (${yAnt}/${mAnt}):\n${linkForecastAnt}`, { event: "dashboard_forecast_prev" });
+              })
+              .catch((e) => console.warn("[Dashboard forecast follow-up]", e && e.message));
+          });
+
           return safeReply(msg);
         } catch (dashboardErr) {
           console.error("[Dashboard command error]", dashboardErr);
