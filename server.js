@@ -5256,11 +5256,10 @@ async function buildDicfNotifDashboardUrls(client, usuarioRow, accionMeta) {
   const esGA = rolClave === "GA";
   const esGV = rolClave === "GV";
   const role = esZP ? "ZP" : esAD ? "AD" : esCFCDMX ? "CF_CDMX" : esGA ? "GA" : esGV ? "GV" : "GG";
+  // ZP/AD/CF_CDMX: acceso global por role — no embeber todas las plantas (JWT enorme;
+  // WhatsApp parte la URL y el enlace deja de ser clicable / llega truncado → 401).
   let plantasPermitidas = [];
-  if (esZP || esAD || esCFCDMX) {
-    const plantas = await getPlantas(client);
-    plantasPermitidas = (plantas || []).map((p) => p.id).filter(Number.isFinite);
-  } else if (usuarioRow.planta_id != null) {
+  if (!(esZP || esAD || esCFCDMX) && usuarioRow.planta_id != null) {
     plantasPermitidas = getPlantaIdsEquivalentesForPendientes(usuarioRow.planta_id);
   }
   const token = createDashboardToken({
@@ -6755,9 +6754,9 @@ async function getDicfAttachmentBuffer(client, attachmentRow) {
 }
 
 function assertDashboardPlantaAccessForActionRegister(req, plantaId) {
-  // Action Register: ZP y AD pueden ver todas las plantas; cualquier otro rol solo sus plantas_permitidas.
+  // Action Register: ZP/AD/CF_CDMX acceso global por role (sin lista de plantas en el JWT).
   const roleNorm = dashboardAuthRoleNorm(req.dashboardAuth);
-  if (roleNorm === "ZP" || roleNorm === "AD") return true;
+  if (roleNorm === "ZP" || roleNorm === "AD" || roleNorm === "CF_CDMX") return true;
   const allowed = new Set((req.dashboardAuth.plantas_permitidas || []).map((x) => Number(x)).filter(Number.isFinite));
   return allowed.has(Number(plantaId));
 }
@@ -7034,11 +7033,9 @@ async function buildDashboardSignedUrlForUsuario(client, usuarioRow, dashboardPa
   const esGA = rolClave === "GA";
   const esGV = rolClave === "GV";
   const role = esZP ? "ZP" : esAD ? "AD" : esCFCDMX ? "CF_CDMX" : esGA ? "GA" : esGV ? "GV" : "GG";
+  // ZP/AD/CF_CDMX: no listar plantas en el JWT (evita URLs que WhatsApp parte).
   let plantasPermitidas = [];
-  if (esZP || esAD || esCFCDMX) {
-    const plantas = await getPlantas(client);
-    plantasPermitidas = (plantas || []).map((p) => p.id).filter(Number.isFinite);
-  } else if (usuarioRow.planta_id != null) {
+  if (!(esZP || esAD || esCFCDMX) && usuarioRow.planta_id != null) {
     plantasPermitidas = dicfAccionesLib.getPlantaIdsEquivalentes(usuarioRow.planta_id);
   }
   const token = createDashboardToken({
@@ -15633,11 +15630,9 @@ app.post("/twilio/whatsapp", async (req, res) => {
           const esGA = rolClave === "GA";
           const esGV = rolClave === "GV";
           const role = esZP ? "ZP" : esAD ? "AD" : esCFCDMX ? "CF_CDMX" : esGA ? "GA" : esGV ? "GV" : "GG";
+          // ZP/AD/CF_CDMX: JWT corto (sin todas las plantas) para que WhatsApp no rompa el enlace.
           let plantasPermitidas = [];
-          if (esZP || esAD || esCFCDMX) {
-            const plantas = await getPlantas(client);
-            plantasPermitidas = (plantas || []).map((p) => p.id).filter(Number.isFinite);
-          } else if (actor.planta_id != null) {
+          if (!(esZP || esAD || esCFCDMX) && actor.planta_id != null) {
             plantasPermitidas = getPlantaIdsEquivalentesForPendientes(actor.planta_id);
           }
           const token = createDashboardToken({
