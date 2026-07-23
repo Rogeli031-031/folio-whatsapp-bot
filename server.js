@@ -6516,6 +6516,213 @@ app.post("/api/dashboard/clasificacion-comparar/rechazar", dashboardAuthMiddlewa
   }
 });
 
+/**
+ * COMPARAR/ACTUALIZAR — «Sí, es el mismo»:
+ * - Asegura mes_cargo = mes seleccionado.
+ * - Si la etapa es anterior a Depósito y cierre → mueve a Carro de compra (APROBADO_ZP).
+ * - Si ya está en Depósito y cierre o más adelante → solo mes_cargo, sin mover etapa.
+ */
+app.post("/api/dashboard/clasificacion-comparar/confirmar-mismo", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGVForbidden(req, res)) return;
+  if (req.dashboardAuth.role === "GA") {
+    return res.status(403).json({ error: "GA no puede confirmar duplicados desde COMPARAR/ACTUALIZAR." });
+  }
+  const folioId = req.body.folio_id != null ? parseInt(req.body.folio_id, 10) : NaN;
+  const mesCargo = String(req.body.mes_cargo || "").trim();
+  if (!Number.isFinite(folioId)) return res.status(400).json({ error: "folio_id inválido" });
+  if (!/^\d{4}-\d{2}$/.test(mesCargo)) {
+    return res.status(400).json({ error: "mes_cargo es obligatorio (YYYY-MM)" });
+  }
+  const client = await pool.connect();
+  try {
+    const folio = await getFolioById(client, folioId);
+    if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
+    const estatus = String(folio.estatus || "").trim().toUpperCase();
+    if (estatus === ESTADOS.CANCELADO) {
+      return res.status(400).json({ error: "No se puede operar un folio cancelado." });
+    }
+    if ((req.dashboardAuth.role === "GG" || req.dashboardAuth.role === "GA") && req.dashboardAuth.plantas_permitidas?.length > 0) {
+      if (!folio.planta_id || !req.dashboardAuth.plantas_permitidas.includes(folio.planta_id)) {
+        return res.status(403).json({ error: "Sin permiso para este folio" });
+      }
+    }
+
+    const etapaActual = estatusToEtapaVisual(estatus);
+    const idxEtapa = ETAPAS_VISUAL_ORDER.indexOf(etapaActual);
+    const idxDep = ETAPAS_VISUAL_ORDER.indexOf(ETAPA_VISUAL.DEPOSITO_CIERRE);
+    const antesDeDeposito = idxEtapa >= 0 && idxDep >= 0 && idxEtapa < idxDep;
+    const yaEnCarro = etapaActual === ETAPA_VISUAL.CARRO_COMPRA;
+    const moverACarro = antesDeDeposito && !yaEnCarro;
+    const estatusDestino = moverACarro ? ESTADOS.APROBADO_ZP : estatus;
+    const prevMes = folio.mes_cargo ? String(folio.mes_cargo).trim() : null;
+
+    if (moverACarro) {
+      await client.query(`UPDATE public.folios SET mes_cargo = $1, estatus = $2 WHERE id = $3`, [
+        mesCargo,
+        estatusDestino,
+        folioId,
+      ]);
+    } else {
+      await client.query(`UPDATE public.folios SET mes_cargo = $1 WHERE id = $2`, [mesCargo, folioId]);
+    }
+
+    const partes = [];
+    if (prevMes !== mesCargo) {
+      partes.push(
+        prevMes
+          ? `Mes de cargo ${prevMes} → ${mesCargo}`
+          : `Mes de cargo asignado: ${mesCargo}`
+      );
+    } else {
+      partes.push(`Mes de cargo confirmado: ${mesCargo}`);
+    }
+    if (moverACarro) {
+      partes.push(`Movido a Carro de compra (antes: ${getEtapaVisibleLabel(estatus)}).`);
+    } else if (antesDeDeposito && yaEnCarro) {
+      partes.push("Ya estaba en Carro de compra; no se movió de etapa.");
+    } else {
+      partes.push(`Etapa conservada: ${getEtapaVisibleLabel(estatus)} (Depósito y cierre o posterior).`);
+    }
+
+    await insertHistorial(
+      client,
+      folioId,
+      folio.numero_folio,
+      folio.folio_codigo,
+      estatusDestino,
+      `COMPARAR/ACTUALIZAR: confirmado mismo folio. ${partes.join(" ")}`,
+      null,
+      req.dashboardAuth.role || null
+    ).catch(() => {});
+
+    res.json({
+      ok: true,
+      folio_id: folioId,
+      numero_folio: folio.numero_folio,
+      mes_cargo: mesCargo,
+      estatus: estatusDestino,
+      movido_a_carro: moverACarro,
+      etapa: estatusToEtapaVisual(estatusDestino),
+    });
+  } catch (e) {
+    console.error("[clasificacion-comparar confirmar-mismo]", e);
+    res.status(500).json({ error: e.message || "Error al confirmar mismo folio" });
+  } finally {
+    client.release();
+  }
+});
+
+/**
+ * COMPARAR/ACTUALIZAR — «No, son distintos»:
+ * Crea folio nuevo con datos del Excel, mes_cargo seleccionado y etapa Carro de compra.
+ * No modifica el folio existente del soft-match.
+ */
+app.post("/api/dashboard/clasificacion-comparar/son-distintos", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGVForbidden(req, res)) return;
+  if (req.dashboardAuth.role === "GA") {
+    return res.status(403).json({ error: "GA no puede crear folios desde COMPARAR/ACTUALIZAR." });
+  }
+  if (!usuarioPermisos.authHasPermiso(req.dashboardAuth, "acceso_crear_folios")) {
+    return res.status(403).json({ error: "Sin permiso para crear folios." });
+  }
+  const mesCargo = String(req.body.mes_cargo || "").trim();
+  if (!/^\d{4}-\d{2}$/.test(mesCargo)) {
+    return res.status(400).json({ error: "mes_cargo es obligatorio (YYYY-MM)" });
+  }
+  const item = req.body.item || {};
+  const planta_id = item.planta_id != null ? parseInt(item.planta_id, 10) : null;
+  if (!planta_id || !Number.isFinite(planta_id)) {
+    return res.status(400).json({ error: "item.planta_id es obligatorio" });
+  }
+  const concepto = String(item.concepto || "").trim();
+  const importe = Number(item.importe);
+  if (concepto.length < 2) return res.status(400).json({ error: "concepto inválido" });
+  if (!Number.isFinite(importe) || importe < 0) return res.status(400).json({ error: "importe inválido" });
+  const catNorm = clasificacionComparar.normalizeCategoriaDb(item.categoria);
+  if (!["GASTOS", "INVERSIONES", "TALLER"].includes(catNorm)) {
+    return res.status(400).json({ error: "categoria debe ser GASTOS, INVERSIONES o TALLER" });
+  }
+  let subcategoria = item.subcategoria != null ? String(item.subcategoria).trim() : null;
+  if (catNorm === "TALLER") {
+    const tipos = (SUBCATEGORIAS.TALLER || []).map((s) => String(s).trim().toUpperCase());
+    const subNorm = String(subcategoria || "")
+      .trim()
+      .toUpperCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+    const ok = tipos.some((t) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "") === subNorm);
+    if (!ok) subcategoria = "PREVENTIVO";
+  }
+  const unidad = item.unidad != null ? String(item.unidad).trim() : null;
+  const role = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) || "";
+
+  const client = await pool.connect();
+  try {
+    if ((role === "GG" || role === "GA") && req.dashboardAuth.plantas_permitidas?.length > 0) {
+      if (!req.dashboardAuth.plantas_permitidas.includes(planta_id)) {
+        return res.status(403).json({ error: "Sin permiso para esta planta" });
+      }
+    }
+    const plantaRow = await client.query("SELECT id, nombre FROM public.plantas WHERE id = $1", [planta_id]);
+    if (!plantaRow.rows[0]) return res.status(400).json({ error: "planta_id no existe" });
+    const planta_nombre = plantaRow.rows[0].nombre || null;
+    const beneficiario =
+      item.beneficiario != null && String(item.beneficiario).trim()
+        ? String(item.beneficiario).trim()
+        : null;
+    const dd = {
+      planta_id,
+      planta_nombre,
+      beneficiario,
+      concepto,
+      importe,
+      lineas: [{ beneficiario, concepto, importe }],
+      categoria_nombre: clasificacionComparar.categoriaNombreForInsert(catNorm),
+      subcategoria_nombre: subcategoria || null,
+      prioridad: "Media",
+      unidad: unidad || null,
+      banco: item.banco != null && String(item.banco).trim() ? String(item.banco).trim() : null,
+      cuenta_bancaria:
+        item.cuenta_bancaria != null && String(item.cuenta_bancaria).trim()
+          ? String(item.cuenta_bancaria).trim()
+          : null,
+      actor_telefono: req.dashboardAuth.actor_id != null ? `Dashboard:${req.dashboardAuth.actor_id}` : "Dashboard",
+      actor_rol: role,
+      actor_clave: role,
+      origen: "dashboard",
+    };
+    const row = await insertFolio(client, dd);
+    await client.query(`UPDATE public.folios SET mes_cargo = $1, estatus = $2 WHERE id = $3`, [
+      mesCargo,
+      ESTADOS.APROBADO_ZP,
+      row.id,
+    ]);
+    await insertHistorial(
+      client,
+      row.id,
+      row.numero_folio,
+      row.folio_codigo,
+      ESTADOS.APROBADO_ZP,
+      `COMPARAR/ACTUALIZAR: folio nuevo (son distintos). Mes cargo ${mesCargo}. Colocado en Carro de compra.`,
+      null,
+      role
+    ).catch(() => {});
+    res.status(201).json({
+      ok: true,
+      id: row.id,
+      numero_folio: row.numero_folio,
+      folio_codigo: row.folio_codigo,
+      mes_cargo: mesCargo,
+      estatus: ESTADOS.APROBADO_ZP,
+    });
+  } catch (e) {
+    console.error("[clasificacion-comparar son-distintos]", e);
+    res.status(500).json({ error: e.message || "Error al crear folio distinto" });
+  } finally {
+    client.release();
+  }
+});
+
 /** Vista digital COMPARATIVOS (misma data que el Excel). */
 app.get("/api/dashboard/clasificacion-apoyos", dashboardAuthMiddleware, async (req, res) => {
   if (dashboardBlockGVForbidden(req, res)) return;

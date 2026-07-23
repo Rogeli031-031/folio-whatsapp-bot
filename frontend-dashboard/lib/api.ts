@@ -273,6 +273,60 @@ export async function postClasificacionCompararRechazar(
   });
 }
 
+/** Confirma «es el mismo»: asegura mes_cargo y mueve a Carro si está antes de Depósito y cierre. */
+export async function postClasificacionCompararConfirmarMismo(
+  token: string,
+  params: { folio_id: number; mes_cargo: string }
+): Promise<{
+  ok: boolean;
+  folio_id: number;
+  numero_folio?: string;
+  mes_cargo: string;
+  estatus: string;
+  movido_a_carro: boolean;
+  etapa?: string;
+}> {
+  return apiFetch("/api/dashboard/clasificacion-comparar/confirmar-mismo", {
+    method: "POST",
+    token,
+    body: JSON.stringify({
+      folio_id: params.folio_id,
+      mes_cargo: params.mes_cargo,
+    }),
+  });
+}
+
+/** «Son distintos»: crea folio nuevo en Carro de compra con datos del Excel. */
+export async function postClasificacionCompararSonDistintos(
+  token: string,
+  params: { mes_cargo: string; item: ClasificacionCompararItem }
+): Promise<{
+  ok: boolean;
+  id: number;
+  numero_folio: string;
+  mes_cargo: string;
+  estatus: string;
+}> {
+  return apiFetch("/api/dashboard/clasificacion-comparar/son-distintos", {
+    method: "POST",
+    token,
+    body: JSON.stringify({
+      mes_cargo: params.mes_cargo,
+      item: {
+        planta_id: params.item.planta_id,
+        categoria: params.item.categoria,
+        concepto: params.item.concepto,
+        importe: params.item.importe,
+        unidad: params.item.unidad,
+        subcategoria: params.item.subcategoria,
+        beneficiario: params.item.beneficiario,
+        banco: params.item.banco,
+        cuenta_bancaria: params.item.cuenta_bancaria,
+      },
+    }),
+  });
+}
+
 export type ClasificacionCatKey = "gastos" | "inversiones" | "taller" | "total";
 
 export type ClasificacionPlantaRow = {
