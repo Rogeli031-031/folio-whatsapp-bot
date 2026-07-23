@@ -3,15 +3,18 @@
 import { useMemo, useRef, useState } from "react";
 import {
   postClasificacionComparar,
-  postClasificacionCompararAgregar,
   postClasificacionCompararInspeccionar,
   postClasificacionCompararRechazar,
   type ClasificacionColumnMap,
+  type ClasificacionCompararItem,
   type ClasificacionCompararResult,
   type ClasificacionPlantaOption,
+  type ClasificacionPosibleDuplicado,
   type ClasificacionSheetConfig,
   type ClasificacionSheetInspect,
+  type CrearFolioInitialValues,
 } from "@/lib/api";
+import CrearFolioModal from "@/components/CrearFolioModal";
 
 interface Props {
   open: boolean;
@@ -192,7 +195,6 @@ export default function ClasificacionCompararModal({
   const [applying, setApplying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ClasificacionCompararResult | null>(null);
-  const [selAdd, setSelAdd] = useState<Record<number, boolean>>({});
   const [selMissingExcel, setSelMissingExcel] = useState<Record<number, boolean>>({});
   const [selBlank, setSelBlank] = useState<Record<number, boolean>>({});
   const [applyReport, setApplyReport] = useState<{
@@ -200,18 +202,21 @@ export default function ClasificacionCompararModal({
     rechazos: number;
     fallos: string[];
   } | null>(null);
+  const [crearPrefill, setCrearPrefill] = useState<CrearFolioInitialValues | null>(null);
+  const [crearPlanta, setCrearPlanta] = useState<{ id: number; nombre: string } | null>(null);
+  const [pendingAddIdx, setPendingAddIdx] = useState<number | null>(null);
 
   const missingDash = useMemo(() => result?.missing_in_dashboard || [], [result]);
   const missingExcel = useMemo(() => result?.missing_in_excel || [], [result]);
   const rechazosCdjz = useMemo(() => result?.rechazos_cdjz || [], [result]);
+  const posiblesDup = useMemo(() => result?.posibles_duplicados || [], [result]);
   const enabledCount = configs.filter((c) => c.enabled).length;
 
   const countSelected = useMemo(() => {
-    const nAdd = Object.values(selAdd).filter(Boolean).length;
     const nMiss = Object.values(selMissingExcel).filter(Boolean).length;
     const nBlank = Object.values(selBlank).filter(Boolean).length;
-    return nAdd + nMiss + nBlank;
-  }, [selAdd, selMissingExcel, selBlank]);
+    return nMiss + nBlank;
+  }, [selMissingExcel, selBlank]);
 
   if (!open) return null;
 
@@ -224,19 +229,17 @@ export default function ClasificacionCompararModal({
     setPlantas([]);
     setResult(null);
     setError(null);
-    setSelAdd({});
     setSelMissingExcel({});
     setSelBlank({});
     setApplyReport(null);
     setApplying(false);
+    setCrearPrefill(null);
+    setCrearPlanta(null);
+    setPendingAddIdx(null);
     if (fileRef.current) fileRef.current.value = "";
   };
 
   const initSelections = (data: ClasificacionCompararResult) => {
-    const add: Record<number, boolean> = {};
-    (data.missing_in_dashboard || []).forEach((_, i) => {
-      add[i] = true;
-    });
     const miss: Record<number, boolean> = {};
     (data.missing_in_excel || []).forEach((item, i) => {
       miss[i] = item.folio_id != null;
@@ -245,7 +248,6 @@ export default function ClasificacionCompararModal({
     (data.rechazos_cdjz || []).forEach((item, i) => {
       blank[i] = item.folio_id != null;
     });
-    setSelAdd(add);
     setSelMissingExcel(miss);
     setSelBlank(blank);
     setApplyReport(null);
@@ -331,14 +333,8 @@ export default function ClasificacionCompararModal({
     }
   };
 
-  const toggleAll = (kind: "add" | "miss" | "blank", value: boolean) => {
-    if (kind === "add") {
-      const next: Record<number, boolean> = {};
-      missingDash.forEach((_, i) => {
-        next[i] = value;
-      });
-      setSelAdd(next);
-    } else if (kind === "miss") {
+  const toggleAll = (kind: "miss" | "blank", value: boolean) => {
+    if (kind === "miss") {
       const next: Record<number, boolean> = {};
       missingExcel.forEach((item, i) => {
         next[i] = value && item.folio_id != null;
@@ -353,39 +349,121 @@ export default function ClasificacionCompararModal({
     }
   };
 
+  const openCrearFromItem = (item: ClasificacionCompararItem, idx: number) => {
+    if (item.planta_id == null) {
+      setError("El renglón no tiene planta; corrige el mapeo de la hoja.");
+      return;
+    }
+    const plantaOpt = plantas.find((p) => p.id === item.planta_id || (p.ids || []).includes(Number(item.planta_id)));
+    setPendingAddIdx(idx);
+    setCrearPlanta({
+      id: Number(item.planta_id),
+      nombre: item.planta_title || plantaOpt?.title || selectedPlantaNombre || `Planta ${item.planta_id}`,
+    });
+    setCrearPrefill({
+      planta_id: Number(item.planta_id),
+      planta_nombre: item.planta_title || plantaOpt?.title || null,
+      concepto: item.concepto || "",
+      importe: item.importe ?? "",
+      beneficiario: item.beneficiario || "",
+      categoria: item.categoria || "GASTOS",
+      subcategoria: item.subcategoria || "",
+      unidad: item.unidad || "",
+      banco: item.banco || "",
+      cuenta_bancaria: item.cuenta_bancaria || "",
+      mes_cargo: mesCargo,
+    });
+  };
+
+  const handleCrearCreated = () => {
+    if (pendingAddIdx != null) {
+      setResult((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          missing_in_dashboard: prev.missing_in_dashboard.filter((_, i) => i !== pendingAddIdx),
+          matched_count: prev.matched_count + 1,
+          dashboard_count: prev.dashboard_count + 1,
+        };
+      });
+    }
+    setPendingAddIdx(null);
+    setCrearPrefill(null);
+    setCrearPlanta(null);
+    onChanged?.();
+  };
+
+  const confirmarMismoFolio = (idx: number) => {
+    setResult((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        posibles_duplicados: prev.posibles_duplicados.filter((_, i) => i !== idx),
+        matched_count: prev.matched_count + 1,
+      };
+    });
+  };
+
+  const rechazarMismoFolio = (idx: number) => {
+    if (!result) return;
+    const pair = result.posibles_duplicados[idx];
+    if (!pair) return;
+    const excelItem: ClasificacionCompararItem = {
+      ...(pair.excel || {}),
+      source: "excel",
+      sheet: pair.sheet,
+      categoria: pair.categoria,
+      planta_clave: pair.planta_clave,
+      planta_id: pair.planta_id,
+      concepto: pair.concepto_excel,
+      importe: pair.importe_excel,
+      unidad: pair.unidad,
+      beneficiario: pair.beneficiario,
+      subcategoria: pair.subcategoria,
+      banco: pair.banco,
+      cuenta_bancaria: pair.cuenta_bancaria,
+      row_excel: pair.row_excel,
+    };
+    const dashItem: ClasificacionCompararItem = {
+      ...(pair.dashboard || {}),
+      source: "dashboard",
+      folio_id: pair.folio_id,
+      numero_folio: pair.numero_folio,
+      categoria: pair.categoria,
+      planta_clave: pair.planta_clave,
+      planta_id: pair.planta_id,
+      concepto: pair.concepto_dashboard,
+      importe: pair.importe_dashboard,
+      unidad: pair.unidad,
+      estatus: pair.estatus,
+    };
+    const nextMissExcel = [...result.missing_in_excel, dashItem];
+    setResult({
+      ...result,
+      posibles_duplicados: result.posibles_duplicados.filter((_, i) => i !== idx),
+      missing_in_dashboard: [...result.missing_in_dashboard, excelItem],
+      missing_in_excel: nextMissExcel,
+    });
+    setSelMissingExcel((sel) => ({
+      ...sel,
+      [nextMissExcel.length - 1]: dashItem.folio_id != null,
+    }));
+  };
+
   const handleAceptarCambios = async () => {
     if (!result || countSelected === 0) {
-      setError("Selecciona al menos un cambio para aplicar");
+      setError("Selecciona al menos un rechazo CDJZ para aplicar");
       return;
     }
     setError(null);
     setApplying(true);
     setApplyReport(null);
-    let agregados = 0;
     let rechazos = 0;
     const fallos: string[] = [];
-
-    const addDone = new Set<number>();
     const missDone = new Set<number>();
     const blankDone = new Set<number>();
 
     try {
-      for (let i = 0; i < missingDash.length; i++) {
-        if (!selAdd[i]) continue;
-        const item = missingDash[i];
-        try {
-          await postClasificacionCompararAgregar(token, { mes_cargo: mesCargo, item });
-          agregados += 1;
-          addDone.add(i);
-        } catch (e) {
-          fallos.push(
-            `Agregar: ${(item.concepto || "").slice(0, 60)} — ${
-              e instanceof Error ? e.message : "error"
-            }`
-          );
-        }
-      }
-
       for (let i = 0; i < missingExcel.length; i++) {
         if (!selMissingExcel[i]) continue;
         const item = missingExcel[i];
@@ -426,19 +504,15 @@ export default function ClasificacionCompararModal({
 
       const nextResult: ClasificacionCompararResult = {
         ...result,
-        missing_in_dashboard: result.missing_in_dashboard.filter((_, i) => !addDone.has(i)),
         missing_in_excel: result.missing_in_excel.filter((_, i) => !missDone.has(i)),
         rechazos_cdjz: result.rechazos_cdjz.filter((_, i) => !blankDone.has(i)),
-        matched_count: result.matched_count + addDone.size,
-        dashboard_count: Math.max(
-          0,
-          result.dashboard_count + addDone.size - missDone.size - blankDone.size
-        ),
+        dashboard_count: Math.max(0, result.dashboard_count - missDone.size - blankDone.size),
+        posibles_duplicados: result.posibles_duplicados || [],
       };
       setResult(nextResult);
       initSelections(nextResult);
-      setApplyReport({ agregados, rechazos, fallos });
-      if (agregados + rechazos > 0) onChanged?.();
+      setApplyReport({ agregados: 0, rechazos, fallos });
+      if (rechazos > 0) onChanged?.();
     } finally {
       setApplying(false);
     }
@@ -693,15 +767,15 @@ export default function ClasificacionCompararModal({
                   ← Ajustar mapeo
                 </button>
                 <span className="text-xs text-slate-400">
-                  Hojas: {result.sheets.join(", ")} · Excel {result.excel_count} · Rechazos Excel{" "}
-                  {result.excel_rechazos_count ?? 0} · Dashboard {result.dashboard_count} · Coinciden{" "}
-                  {result.matched_count}
+                  Hojas: {result.sheets.join(", ")} · Excel {result.excel_count} · Dashboard{" "}
+                  {result.dashboard_count} · Coinciden {result.matched_count} · Posibles dup.{" "}
+                  {posiblesDup.length}
                 </span>
               </div>
 
               <p className="rounded border border-slate-700 bg-slate-800/50 px-3 py-2 text-xs text-slate-300">
-                Revisa las diferencias y marca qué aplicar.{" "}
-                <span className="font-medium text-white">Ningún cambio se guarda</span> hasta pulsar{" "}
+                Primero confirma posibles duplicados. Para generar nuevos, abre el formulario (editable).
+                Los rechazos CDJZ se aplican solo con{" "}
                 <span className="font-medium text-emerald-300">Aceptar cambios</span>.
               </p>
 
@@ -721,8 +795,7 @@ export default function ClasificacionCompararModal({
                       : "border-emerald-800 bg-emerald-950/30 text-emerald-200"
                   }`}
                 >
-                  Aplicado: {applyReport.agregados} agregado(s), {applyReport.rechazos} rechazo(s)
-                  CDJZ.
+                  Aplicado: {applyReport.rechazos} rechazo(s) CDJZ.
                   {applyReport.fallos.length > 0 && (
                     <ul className="mt-1 list-disc pl-4 text-amber-300">
                       {applyReport.fallos.map((f, i) => (
@@ -733,63 +806,105 @@ export default function ClasificacionCompararModal({
                 </div>
               )}
 
+              {posiblesDup.length > 0 && (
+                <section className="rounded border border-sky-800/50 bg-sky-950/20">
+                  <div className="border-b border-sky-900/40 px-3 py-2">
+                    <h3 className="text-sm font-semibold text-sky-300">
+                      ¿Es el mismo folio? ({posiblesDup.length})
+                    </h3>
+                    <p className="text-[11px] text-slate-500">
+                      Concepto similar (análisis de duplicados); el importe puede diferir un poco.
+                    </p>
+                  </div>
+                  <ul className="max-h-80 space-y-2 overflow-y-auto p-3">
+                    {posiblesDup.map((pair: ClasificacionPosibleDuplicado, idx: number) => (
+                      <li
+                        key={`dup-${pair.folio_id}-${idx}`}
+                        className="rounded border border-sky-800/40 bg-slate-900/60 p-2.5 text-xs"
+                      >
+                        <div className="mb-1 flex flex-wrap items-center gap-2 text-[11px] text-sky-200/80">
+                          <span>Similitud {(Number(pair.score) * 100).toFixed(0)}%</span>
+                          <span>· {pair.numero_folio || `ID ${pair.folio_id}`}</span>
+                          <span>· [{pair.categoria}]</span>
+                        </div>
+                        <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                          <div className="rounded bg-slate-950/50 p-2">
+                            <div className="text-[10px] uppercase text-amber-400/80">Excel</div>
+                            <div className="mt-0.5 text-slate-300">{pair.concepto_excel}</div>
+                            <div className="mt-1 tabular-nums text-slate-200">
+                              {fmtMxn(pair.importe_excel)}
+                            </div>
+                          </div>
+                          <div className="rounded bg-slate-950/50 p-2">
+                            <div className="text-[10px] uppercase text-emerald-400/80">Dashboard</div>
+                            <div className="mt-0.5 text-slate-300">{pair.concepto_dashboard}</div>
+                            <div className="mt-1 tabular-nums text-slate-200">
+                              {fmtMxn(pair.importe_dashboard)}
+                            </div>
+                          </div>
+                        </div>
+                        {pair.motivo && (
+                          <p className="mt-1 text-[11px] text-slate-500">{pair.motivo}</p>
+                        )}
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            disabled={applying}
+                            onClick={() => confirmarMismoFolio(idx)}
+                            className="rounded bg-sky-700 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-sky-600 disabled:opacity-50"
+                          >
+                            Sí, es el mismo
+                          </button>
+                          <button
+                            type="button"
+                            disabled={applying}
+                            onClick={() => rechazarMismoFolio(idx)}
+                            className="rounded border border-slate-600 px-2.5 py-1 text-[11px] text-slate-300 hover:bg-slate-800 disabled:opacity-50"
+                          >
+                            No, son distintos
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
                 <section className="rounded border border-slate-700 bg-slate-800/30">
                   <div className="border-b border-slate-700 px-3 py-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <h3 className="text-sm font-semibold text-amber-300">
-                        1. Agregar al dashboard ({missingDash.length})
-                      </h3>
-                      {missingDash.length > 0 && (
-                        <button
-                          type="button"
-                          className="text-[10px] text-slate-400 hover:text-white"
-                          onClick={() =>
-                            toggleAll("add", !missingDash.every((_, i) => selAdd[i]))
-                          }
-                        >
-                          {missingDash.every((_, i) => selAdd[i]) ? "Ninguno" : "Todos"}
-                        </button>
-                      )}
-                    </div>
-                    <p className="text-[11px] text-slate-500">Están en el Excel y no en el dashboard.</p>
+                    <h3 className="text-sm font-semibold text-amber-300">
+                      1. Generar en dashboard ({missingDash.length})
+                    </h3>
+                    <p className="text-[11px] text-slate-500">
+                      Clic abre el formulario de creación con datos del Excel (editable).
+                    </p>
                   </div>
                   <ul className="max-h-72 space-y-2 overflow-y-auto p-3">
                     {missingDash.length === 0 && <li className="text-xs text-slate-500">Ninguno.</li>}
                     {missingDash.map((item, idx) => (
                       <li
                         key={`md-${idx}-${item.match_key || item.concepto}`}
-                        className={`rounded border p-2 text-xs ${
-                          selAdd[idx]
-                            ? "border-amber-700/60 bg-slate-900/70"
-                            : "border-slate-700 bg-slate-900/40"
-                        }`}
+                        className="rounded border border-amber-700/40 bg-slate-900/50 p-2 text-xs"
                       >
-                        <label className="flex cursor-pointer gap-2">
-                          <input
-                            type="checkbox"
-                            className="mt-0.5"
-                            checked={Boolean(selAdd[idx])}
-                            disabled={applying}
-                            onChange={(e) =>
-                              setSelAdd((prev) => ({ ...prev, [idx]: e.target.checked }))
-                            }
-                          />
-                          <span className="min-w-0 flex-1">
-                            <div className="font-medium text-slate-200">
-                              [{item.categoria}] {item.planta_clave || "—"} · {item.unidad || "—"}
-                            </div>
-                            {item.beneficiario && (
-                              <div className="text-[11px] text-slate-500">
-                                Benef.: {item.beneficiario}
-                              </div>
-                            )}
-                            <div className="mt-0.5 text-slate-400">{item.concepto}</div>
-                            <div className="mt-1 tabular-nums text-slate-300">
-                              {fmtMxn(item.importe)}
-                            </div>
-                          </span>
-                        </label>
+                        <div className="font-medium text-slate-200">
+                          [{item.categoria}] {item.planta_clave || "—"} · {item.unidad || "—"}
+                        </div>
+                        {item.beneficiario && (
+                          <div className="text-[11px] text-slate-500">Benef.: {item.beneficiario}</div>
+                        )}
+                        <div className="mt-0.5 text-slate-400">{item.concepto}</div>
+                        <div className="mt-1 flex items-center justify-between gap-2">
+                          <span className="tabular-nums text-slate-300">{fmtMxn(item.importe)}</span>
+                          <button
+                            type="button"
+                            disabled={applying || item.planta_id == null}
+                            onClick={() => openCrearFromItem(item, idx)}
+                            className="rounded bg-amber-700 px-2 py-1 text-[11px] font-medium text-white hover:bg-amber-600 disabled:opacity-50"
+                          >
+                            Abrir para crear
+                          </button>
+                        </div>
                       </li>
                     ))}
                   </ul>
@@ -929,7 +1044,7 @@ export default function ClasificacionCompararModal({
 
               <div className="flex flex-wrap items-center justify-between gap-3 rounded border border-emerald-900/40 bg-emerald-950/20 px-3 py-3">
                 <p className="text-xs text-slate-300">
-                  {countSelected} cambio(s) seleccionado(s) listos para aplicar.
+                  {countSelected} rechazo(s) CDJZ seleccionado(s) para aplicar.
                 </p>
                 <button
                   type="button"
@@ -968,6 +1083,22 @@ export default function ClasificacionCompararModal({
           </button>
         </div>
       </div>
+
+      {crearPrefill && crearPlanta && (
+        <CrearFolioModal
+          open={true}
+          token={token}
+          plantaId={crearPlanta.id}
+          plantaNombre={crearPlanta.nombre}
+          initialValues={crearPrefill}
+          onClose={() => {
+            setCrearPrefill(null);
+            setCrearPlanta(null);
+            setPendingAddIdx(null);
+          }}
+          onCreated={handleCrearCreated}
+        />
+      )}
     </div>
   );
 }

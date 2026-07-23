@@ -155,6 +155,8 @@ export type ClasificacionCompararItem = {
   importe?: number | null;
   unidad?: string | null;
   beneficiario?: string | null;
+  banco?: string | null;
+  cuenta_bancaria?: string | null;
   subcategoria?: string | null;
   folio_id?: number | null;
   numero_folio?: string | null;
@@ -164,6 +166,30 @@ export type ClasificacionCompararItem = {
   motivo?: string;
   importe_dashboard?: number | null;
   ambiguous?: boolean;
+};
+
+export type ClasificacionPosibleDuplicado = {
+  score: number;
+  categoria?: string;
+  planta_clave?: string | null;
+  planta_id?: number | null;
+  unidad?: string | null;
+  concepto_excel?: string;
+  concepto_dashboard?: string;
+  importe_excel?: number | null;
+  importe_dashboard?: number | null;
+  folio_id?: number | null;
+  numero_folio?: string | null;
+  estatus?: string | null;
+  sheet?: string;
+  row_excel?: number;
+  subcategoria?: string | null;
+  beneficiario?: string | null;
+  banco?: string | null;
+  cuenta_bancaria?: string | null;
+  motivo?: string;
+  excel?: ClasificacionCompararItem;
+  dashboard?: ClasificacionCompararItem;
 };
 
 export type ClasificacionCompararResult = {
@@ -176,6 +202,7 @@ export type ClasificacionCompararResult = {
   matched_count: number;
   missing_in_dashboard: ClasificacionCompararItem[];
   missing_in_excel: ClasificacionCompararItem[];
+  posibles_duplicados: ClasificacionPosibleDuplicado[];
   rechazos_cdjz: ClasificacionCompararItem[];
   warnings?: string[];
 };
@@ -1313,7 +1340,23 @@ export interface CrearFolioPayload {
   cuenta_bancaria?: string;
   /** Si true, el folio solo es visible para Director ZP y Asistente de Dirección; no se envían notificaciones Twilio excepto a ZP. */
   solo_zp_ad?: boolean;
+  /** Opcional: asignar mes de cargo al crear (p. ej. desde COMPARAR/ACTUALIZAR). */
+  mes_cargo?: string | null;
 }
+
+export type CrearFolioInitialValues = {
+  beneficiario?: string | null;
+  concepto?: string | null;
+  importe?: number | string | null;
+  categoria?: string | null;
+  subcategoria?: string | null;
+  unidad?: string | null;
+  banco?: string | null;
+  cuenta_bancaria?: string | null;
+  mes_cargo?: string | null;
+  planta_id?: number | null;
+  planta_nombre?: string | null;
+};
 
 export function fetchProyectosPorPlanta(token: string, plantaId: number): Promise<{ proyectos: { id: number; codigo: string; nombre: string }[] }> {
   return apiFetch<{ proyectos: { id: number; codigo: string; nombre: string }[] }>("/api/dashboard/proyectos", {

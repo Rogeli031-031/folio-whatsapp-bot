@@ -6357,6 +6357,7 @@ app.post("/api/dashboard/clasificacion-comparar", dashboardAuthMiddleware, async
       matched_count: result.matched_count,
       missing_in_dashboard: result.missing_in_dashboard,
       missing_in_excel: result.missing_in_excel,
+      posibles_duplicados: result.posibles_duplicados || [],
       rechazos_cdjz: result.rechazos_cdjz,
       warnings: parsed.warnings || [],
     });
@@ -10016,7 +10017,21 @@ app.post("/api/folios", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddlewar
       origen: "dashboard",
     };
     const row = await insertFolio(client, dd);
-    res.status(201).json({ id: row.id, numero_folio: row.numero_folio, folio_codigo: row.folio_codigo, planta_id: row.planta_id, importe });
+    const mesCargoBody =
+      typeof body.mes_cargo === "string" && /^\d{4}-\d{2}$/.test(body.mes_cargo.trim())
+        ? body.mes_cargo.trim()
+        : null;
+    if (mesCargoBody) {
+      await client.query(`UPDATE public.folios SET mes_cargo = $1 WHERE id = $2`, [mesCargoBody, row.id]);
+    }
+    res.status(201).json({
+      id: row.id,
+      numero_folio: row.numero_folio,
+      folio_codigo: row.folio_codigo,
+      planta_id: row.planta_id,
+      importe,
+      mes_cargo: mesCargoBody,
+    });
   } catch (e) {
     console.error("[Dashboard POST folios]", e);
     res.status(500).json({ error: e.message || "Error al crear folio" });
