@@ -5943,8 +5943,24 @@ function assertUsuariosAdminClave(req) {
   return [fromBody, fromQuery, fromHeader].some((c) => String(c || "").trim() === USUARIOS_ADMIN_CLAVE);
 }
 
+/**
+ * Solo overrides respecto al default del rol.
+ * Embeber el mapa completo hincha el JWT (~1000+ chars) y WhatsApp deja de
+ * hipervincular la URL entera → "Acceso no autorizado". Sin overrides el
+ * backend/frontend usan los permisos del rol.
+ */
 function permisosForDashboardToken(role, usuarioRow) {
-  return usuarioPermisos.permisosEfectivos(role, usuarioRow && usuarioRow.permisos_json);
+  const effective = usuarioPermisos.permisosEfectivos(role, usuarioRow && usuarioRow.permisos_json);
+  const base = usuarioPermisos.permisosPorRol(role);
+  const overrides = {};
+  let any = false;
+  for (const k of usuarioPermisos.PERMISO_CLAVES) {
+    if (!!effective[k] !== !!base[k]) {
+      overrides[k] = !!effective[k];
+      any = true;
+    }
+  }
+  return any ? overrides : undefined;
 }
 
 /** ¿Puede ver folios marcados Solo ZP/AD (privados)? */

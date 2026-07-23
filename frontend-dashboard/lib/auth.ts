@@ -1,11 +1,27 @@
 /**
- * Parsea el token JWT del query ?t= y devuelve el payload o null.
+ * WhatsApp corta enlaces en "."; el bot envía "~" (a veces "%2E") en su lugar.
+ * Devuelve el JWT estándar con puntos para verify/decode.
+ */
+export function normalizeDashboardToken(token: string): string {
+  let t = String(token || "").trim();
+  if (!t) return "";
+  try {
+    if (/%2E/i.test(t) || /%7E/i.test(t)) t = decodeURIComponent(t);
+  } catch {
+    /* ignore */
+  }
+  return t.replace(/~/g, ".");
+}
+
+/**
+ * Parsea el token JWT del query ?t= y devuelve el JWT normalizado o null.
  * No verifica firma aquí (el backend valida); solo decodifica base64 para leer role/plantas.
  */
 export function parseTokenFromQuery(searchParams: URLSearchParams): string | null {
   const t = searchParams.get("t");
   if (!t || typeof t !== "string") return null;
-  return t.trim() || null;
+  const normalized = normalizeDashboardToken(t);
+  return normalized || null;
 }
 
 export function getTokenFromStorage(): string | null {
@@ -31,7 +47,8 @@ function base64UrlDecodeToString(input: string): string {
 
 export function decodeDashboardTokenPayload(token: string): Record<string, unknown> | null {
   if (!token || typeof token !== "string") return null;
-  const parts = token.split(".");
+  const normalized = normalizeDashboardToken(token);
+  const parts = normalized.split(".");
   if (parts.length < 2) return null;
   try {
     const json = base64UrlDecodeToString(parts[1]);
