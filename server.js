@@ -30,7 +30,13 @@ const { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command } = r
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const twilioNotify = require("./notifications/twilioClient");
 const igfHandler = require("./igf-handler");
-const { createDashboardToken, dashboardAuthMiddleware, createIgfComoCambioToken, verifyIgfComoCambioToken } = require("./lib/dashboard-auth");
+const {
+  createDashboardToken,
+  encodeDashboardTokenForWhatsAppUrl,
+  dashboardAuthMiddleware,
+  createIgfComoCambioToken,
+  verifyIgfComoCambioToken,
+} = require("./lib/dashboard-auth");
 const XLSX = require("xlsx");
 const { PDFDocument, StandardFonts } = require("pdf-lib");
 const arrLoad = require("./lib/arr-load");
@@ -5271,7 +5277,8 @@ async function buildDicfNotifDashboardUrls(client, usuarioRow, accionMeta) {
   });
   const base = (process.env.DASHBOARD_URL || process.env.FRONTEND_URL || "").trim().replace(/\/$/, "");
   if (!base) return { kpi: "", folios: "", accion: "" };
-  const enc = encodeURIComponent(token);
+  // WhatsApp corta el enlace en el primer "." del JWT; usar %2E.
+  const enc = encodeDashboardTokenForWhatsAppUrl(token);
   const codigo =
     accionMeta && accionMeta.public_code != null ? String(accionMeta.public_code).trim() : "";
   const accion =
@@ -7048,7 +7055,7 @@ async function buildDashboardSignedUrlForUsuario(client, usuarioRow, dashboardPa
   const baseUrl = (process.env.DASHBOARD_URL || process.env.FRONTEND_URL || "").trim().replace(/\/$/, "");
   if (!baseUrl) return "";
   const path = String(dashboardPath || "acciones").replace(/^\/+/, "");
-  return `${baseUrl}/${path}?t=${encodeURIComponent(token)}`;
+  return `${baseUrl}/${path}?t=${encodeDashboardTokenForWhatsAppUrl(token)}`;
 }
 
 async function buildActionRegisterUrl(client, usuarioRow) {
@@ -15643,7 +15650,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
             permisos: permisosForDashboardToken(role, actor),
           });
           const baseUrl = (process.env.DASHBOARD_URL || process.env.FRONTEND_URL || "").trim() || "https://dashboard.example.com";
-          const link = `${baseUrl.replace(/\/$/, "")}/dashboard?t=${encodeURIComponent(token)}`;
+          const link = `${baseUrl.replace(/\/$/, "")}/dashboard?t=${encodeDashboardTokenForWhatsAppUrl(token)}`;
           let msg = "📊 Dashboard de Folios\n\n";
           if (subcmd === "resumen") {
             const filters = parseDashboardFilters({});
@@ -16907,7 +16914,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
             let txt = resultado.length > MAX_WHATSAPP_BODY ? resultado.substring(0, MAX_WHATSAPP_BODY - 20) + "\n...(recortado)" : resultado;
             const excelToken = createIgfComoCambioToken({ planta, yearA, monthA, versionA, yearB, monthB, versionB });
             const botBase = (process.env.BASE_URL || process.env.PUBLIC_URL || "").trim() || `${req.protocol}://${req.get("host") || "localhost"}`;
-            const excelLink = `${botBase.replace(/\/$/, "")}/api/igf/como-cambio-excel?t=${encodeURIComponent(excelToken)}`;
+            const excelLink = `${botBase.replace(/\/$/, "")}/api/igf/como-cambio-excel?t=${encodeDashboardTokenForWhatsAppUrl(excelToken)}`;
             txt += `\n\n📥 Descarga Excel:\n${excelLink}`;
             return safeReply(txt);
           }
@@ -17141,7 +17148,7 @@ app.post("/twilio/whatsapp", async (req, res) => {
             default_filters: {},
             permisos: permisosForDashboardToken("GG", actor),
           });
-          const link = `${baseUrl.replace(/\/$/, "")}/dashboard?t=${encodeURIComponent(token)}&mi_semana=1`;
+          const link = `${baseUrl.replace(/\/$/, "")}/dashboard?t=${encodeDashboardTokenForWhatsAppUrl(token)}&mi_semana=1`;
           return safeReply("🛒 Carrito (presupuesto semanal)\n\nEn el dashboard GG puedes seleccionar folios para la semana.\n\nComandos:\n• carrito → ver link\n• carrito agregar F-XXX → (en dashboard)\n• carrito quitar F-XXX → (en dashboard)\n\nO usa: seleccionar folios 001 002 010\n\n🔗 " + link);
         }
         const numero = normalizeFolioToken(tokenFolio.trim(), getCurrentYYYYMM());
