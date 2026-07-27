@@ -6110,10 +6110,83 @@ app.get("/api/dashboard/clasificacion-apoyos-excel", dashboardAuthMiddleware, as
     } catch (eDet) {
       console.warn("[clasificacion-apoyos-excel] detalle gastos/inversiones/taller por planta:", eDet.message);
     }
+
+    let detalleMovimientos = [];
+    try {
+      if (allPlantIds.length) {
+        const mesSiguienteMov = (() => {
+          const m = mesA.match(/^(\d{4})-(\d{2})$/);
+          if (!m) return null;
+          let y = parseInt(m[1], 10);
+          let mo = parseInt(m[2], 10) + 1;
+          if (mo > 12) {
+            mo = 1;
+            y += 1;
+          }
+          return `${y}-${String(mo).padStart(2, "0")}`;
+        })();
+        const mov = await client.query(
+          `WITH rechazos AS (
+             SELECT COALESCE(h.folio_id, f.id) AS folio_id,
+                    MIN(h.creado_en) AS fecha_rechazo
+               FROM public.folio_historial h
+               LEFT JOIN public.folios f
+                 ON f.id = h.folio_id
+                 OR (
+                   h.folio_id IS NULL
+                   AND f.numero_folio IS NOT NULL
+                   AND TRIM(f.numero_folio) <> ''
+                   AND f.numero_folio = h.numero_folio
+                 )
+              WHERE h.comentario ILIKE '%RECHAZO CDJZ%'
+                AND h.comentario ILIKE ('%' || $1::text || '%')
+                AND COALESCE(h.folio_id, f.id) IS NOT NULL
+              GROUP BY COALESCE(h.folio_id, f.id)
+           )
+           SELECT f.id, f.planta_id, f.categoria, f.subcategoria, f.unidad, f.concepto, f.importe,
+                  f.mes_cargo, f.estatus, f.detalle_lineas, f.numero_folio, f.folio_codigo, f.numero_cheque,
+                  f.prestamo_a_planta,
+                  COALESCE(f.prestamo_siguiente_mes, false) AS prestamo_siguiente_mes,
+                  COALESCE(f.por_recuperar, false) AS por_recuperar,
+                  r.fecha_rechazo,
+                  (
+                    SELECT MIN(h2.creado_en)
+                      FROM public.folio_historial h2
+                     WHERE (h2.folio_id = f.id
+                            OR (f.numero_folio IS NOT NULL AND h2.numero_folio = f.numero_folio))
+                       AND h2.creado_en > r.fecha_rechazo
+                       AND $3::text IS NOT NULL
+                       AND (
+                         (h2.comentario ILIKE '%Mes de cargo%' AND h2.comentario ILIKE ('%' || $3::text || '%'))
+                         OR (h2.comentario ILIKE '%siguiente mes%' AND h2.comentario ILIKE ('%' || $3::text || '%'))
+                       )
+                  ) AS fecha_reagendada,
+                  (
+                    SELECT MIN(h3.creado_en)
+                      FROM public.folio_historial h3
+                     WHERE (h3.folio_id = f.id
+                            OR (f.numero_folio IS NOT NULL AND h3.numero_folio = f.numero_folio))
+                       AND UPPER(TRIM(COALESCE(h3.estatus,''))) IN ('PAGADO','CERRADO')
+                  ) AS fecha_envio
+             FROM rechazos r
+             JOIN public.folios f ON f.id = r.folio_id
+            WHERE f.planta_id = ANY($2::int[])
+              AND UPPER(TRIM(COALESCE(f.estatus,''))) <> 'CANCELADO'
+              ${privSql}
+            ORDER BY f.planta_id, f.categoria NULLS LAST, f.id`,
+          [mesA, allPlantIds, mesSiguienteMov]
+        );
+        detalleMovimientos = mov.rows || [];
+      }
+    } catch (eMov) {
+      console.warn("[clasificacion-apoyos-excel] hoja Movimientos:", eMov.message);
+    }
+
     const wb = await clasificacionApoyosExcel.buildClasificacionApoyosWorkbook(r.rows, mesA, mesB, {
       detalleGastosByPlanta,
       detalleInversionesByPlanta,
       detalleTallerByPlanta,
+      detalleMovimientos,
       plantaId,
     });
     const buf = Buffer.from(await wb.xlsx.writeBuffer());
