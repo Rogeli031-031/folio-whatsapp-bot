@@ -6214,9 +6214,13 @@ app.get("/api/dashboard/clasificacion-apoyos-excel", dashboardAuthMiddleware, as
  * El importe efectivo es f.importe o la suma de detalle_lineas; la subcategoría
  * (MAYOR / PASIVO / PREVENTIVO / OTROS) solo clasifica ese mismo monto.
  * Query: mes_desde, mes_hasta (YYYY-MM), planta_id opcional.
+ * priv_clave=Tomza-Priv obligatorio → incluye folios Solo ZP/AD (privados).
  */
 app.get("/api/dashboard/taller-at-excel", dashboardAuthMiddleware, async (req, res) => {
   if (dashboardBlockGVForbidden(req, res)) return;
+  if (!clasificacionIncluyePrivados(req)) {
+    return res.status(403).json({ error: "Clave de acceso a privados incorrecta o faltante" });
+  }
   let mesDesde = String(req.query.mes_desde || "").trim();
   let mesHasta = String(req.query.mes_hasta || "").trim();
   if (!/^\d{4}-\d{2}$/.test(mesDesde) || !/^\d{4}-\d{2}$/.test(mesHasta)) {
@@ -6236,7 +6240,14 @@ app.get("/api/dashboard/taller-at-excel", dashboardAuthMiddleware, async (req, r
   const client = await pool.connect();
   try {
     const filters = parseDashboardFilters({});
-    const { where, params } = buildDashboardWhere(req.dashboardAuth, {
+    const authForQuery = {
+      ...req.dashboardAuth,
+      permisos: {
+        ...(req.dashboardAuth && req.dashboardAuth.permisos ? req.dashboardAuth.permisos : {}),
+        acceso_ver_folios_solo_zp_ad: true,
+      },
+    };
+    const { where, params } = buildDashboardWhere(authForQuery, {
       ...filters,
       soloActivos: false,
       ventanaDefault: false,
@@ -6302,9 +6313,13 @@ app.get("/api/dashboard/taller-at-excel", dashboardAuthMiddleware, async (req, r
 /**
  * Excel GASTOS o INVERSIONES por rango de meses (misma dinámica que Taller por AT).
  * Query: categoria=GASTOS|INVERSIONES, mes_desde, mes_hasta (YYYY-MM), planta_id opcional.
+ * priv_clave=Tomza-Priv obligatorio → incluye folios Solo ZP/AD (privados).
  */
 app.get("/api/dashboard/categoria-rango-excel", dashboardAuthMiddleware, async (req, res) => {
   if (dashboardBlockGVForbidden(req, res)) return;
+  if (!clasificacionIncluyePrivados(req)) {
+    return res.status(403).json({ error: "Clave de acceso a privados incorrecta o faltante" });
+  }
   const catRaw = String(req.query.categoria || "").trim().toUpperCase();
   const categoria = catRaw === "INVERSIONES" ? "INVERSIONES" : catRaw === "GASTOS" ? "GASTOS" : null;
   if (!categoria) {
@@ -6329,7 +6344,14 @@ app.get("/api/dashboard/categoria-rango-excel", dashboardAuthMiddleware, async (
   const client = await pool.connect();
   try {
     const filters = parseDashboardFilters({});
-    const { where, params } = buildDashboardWhere(req.dashboardAuth, {
+    const authForQuery = {
+      ...req.dashboardAuth,
+      permisos: {
+        ...(req.dashboardAuth && req.dashboardAuth.permisos ? req.dashboardAuth.permisos : {}),
+        acceso_ver_folios_solo_zp_ad: true,
+      },
+    };
+    const { where, params } = buildDashboardWhere(authForQuery, {
       ...filters,
       soloActivos: false,
       ventanaDefault: false,

@@ -120,6 +120,7 @@ export default function TallerAtExportModal({
   const defaults = useMemo(() => mesActualYAnteriorMx(), []);
   const [mesDesde, setMesDesde] = useState(defaults.anterior);
   const [mesHasta, setMesHasta] = useState(defaults.actual);
+  const [privClave, setPrivClave] = useState("");
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -127,9 +128,13 @@ export default function TallerAtExportModal({
 
   const handleExport = async () => {
     setError(null);
+    if (!String(privClave || "").trim()) {
+      setError("Ingresa la clave de acceso a privados.");
+      return;
+    }
     setExporting(true);
     try {
-      await downloadTallerAtExcel(token, mesDesde, mesHasta, selectedPlantaId ?? null);
+      await downloadTallerAtExcel(token, mesDesde, mesHasta, selectedPlantaId ?? null, privClave);
       onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error al exportar");
@@ -166,6 +171,20 @@ export default function TallerAtExportModal({
             <MesPicker label="Desde" value={mesDesde} onChange={setMesDesde} />
             <MesPicker label="Hasta" value={mesHasta} onChange={setMesHasta} />
           </div>
+          <label className="block text-xs text-slate-400">
+            Clave folios privados (Solo ZP / AD)
+            <input
+              type="password"
+              value={privClave}
+              onChange={(e) => setPrivClave(e.target.value)}
+              autoComplete="off"
+              placeholder="Requerida para exportar"
+              className="mt-1 block w-full rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-100 placeholder:text-slate-500"
+            />
+            <span className="mt-1 block text-[11px] text-slate-500">
+              Misma clave que Clasificación de apoyos. Incluye folios Solo ZP y AD.
+            </span>
+          </label>
           {error && (
             <p className="rounded border border-red-800 bg-red-950/40 px-3 py-2 text-sm text-red-300">{error}</p>
           )}

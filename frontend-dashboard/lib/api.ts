@@ -73,17 +73,22 @@ export async function downloadClasificacionApoyosExcel(
   URL.revokeObjectURL(href);
 }
 
-/** Descarga Excel Taller por AT (Resumen + detalle por mes). */
+/** Descarga Excel Taller por AT (Resumen + detalle por mes). Requiere priv_clave (Tomza-Priv). */
 export async function downloadTallerAtExcel(
   token: string,
   mesDesde: string,
   mesHasta: string,
-  plantaId?: number | null
+  plantaId?: number | null,
+  privClave?: string | null
 ): Promise<void> {
   const base = getApiUrl("/api/dashboard/taller-at-excel");
   const plantaQ =
     plantaId != null && Number.isFinite(plantaId) ? `&planta_id=${encodeURIComponent(String(plantaId))}` : "";
-  const url = `${base}?mes_desde=${encodeURIComponent(mesDesde)}&mes_hasta=${encodeURIComponent(mesHasta)}${plantaQ}`;
+  const privQ =
+    privClave && String(privClave).trim() !== ""
+      ? `&priv_clave=${encodeURIComponent(String(privClave).trim())}`
+      : "";
+  const url = `${base}?mes_desde=${encodeURIComponent(mesDesde)}&mes_hasta=${encodeURIComponent(mesHasta)}${plantaQ}${privQ}`;
   const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
@@ -105,18 +110,23 @@ export async function downloadTallerAtExcel(
 
 export type CategoriaRangoExcel = "GASTOS" | "INVERSIONES";
 
-/** Descarga Excel GASTOS o INVERSIONES por rango de meses (Resumen + detalle + duplicados). */
+/** Descarga Excel GASTOS o INVERSIONES por rango de meses. Requiere priv_clave (Tomza-Priv). */
 export async function downloadCategoriaRangoExcel(
   token: string,
   categoria: CategoriaRangoExcel,
   mesDesde: string,
   mesHasta: string,
-  plantaId?: number | null
+  plantaId?: number | null,
+  privClave?: string | null
 ): Promise<void> {
   const base = getApiUrl("/api/dashboard/categoria-rango-excel");
   const plantaQ =
     plantaId != null && Number.isFinite(plantaId) ? `&planta_id=${encodeURIComponent(String(plantaId))}` : "";
-  const url = `${base}?categoria=${encodeURIComponent(categoria)}&mes_desde=${encodeURIComponent(mesDesde)}&mes_hasta=${encodeURIComponent(mesHasta)}${plantaQ}`;
+  const privQ =
+    privClave && String(privClave).trim() !== ""
+      ? `&priv_clave=${encodeURIComponent(String(privClave).trim())}`
+      : "";
+  const url = `${base}?categoria=${encodeURIComponent(categoria)}&mes_desde=${encodeURIComponent(mesDesde)}&mes_hasta=${encodeURIComponent(mesHasta)}${plantaQ}${privQ}`;
   const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
