@@ -21,14 +21,21 @@ function nextCalendarMonth(year: number, month: number): { y: number; m: number 
  * URL para descargar el Excel del Forecast (Provincia Venta/Comisiones + IGF + proyección siguiente mes por cat/sub).
  * Incluye proyeccion_anio/mes = mes siguiente al seleccionado (ej. marzo 2026 → abril 2026).
  */
-export function getDashboardExcelDownloadUrl(token: string, year: number, month: number, uploadDay?: string | null): string {
+export function getDashboardExcelDownloadUrl(
+  token: string,
+  year: number,
+  month: number,
+  uploadDay?: string | null,
+  versionAsOfCorte?: boolean
+): string {
   const base = getApiUrl("/api/arr/dashboard-excel");
   const next = nextCalendarMonth(year, month);
   const up = (uploadDay || "").trim();
   const isYmd = up && /^\d{4}-\d{2}-\d{2}$/.test(up);
   const hasta = isYmd ? `&proyeccion_hasta=${encodeURIComponent(up)}` : "";
   const upload = isYmd ? `&upload_day=${encodeURIComponent(up)}` : "";
-  return `${base}?year=${year}&month=${month}&proyeccion_anio=${next.y}&proyeccion_mes=${next.m}${hasta}${upload}&t=${encodeURIComponent(token)}`;
+  const asOf = versionAsOfCorte && isYmd ? `&version_as_of_corte=1` : "";
+  return `${base}?year=${year}&month=${month}&proyeccion_anio=${next.y}&proyeccion_mes=${next.m}${hasta}${upload}${asOf}&t=${encodeURIComponent(token)}`;
 }
 
 /** Descarga Excel Clasificación de apoyos (hoja COMPARATIVOS). */
@@ -1064,6 +1071,10 @@ export interface IgfForecastResponse {
   month: number;
   version_id: number | null;
   version_number: number | null;
+  /** true si se resolvió la versión con created_at ≤ fecha de corte. */
+  version_as_of_corte?: boolean;
+  /** Fecha (CDMX) de creación/carga de la versión usada. */
+  version_created_at?: string | null;
   rows: IgfForecastRow[];
   totales: Record<string, number | null> | null;
   /** Si se pidió `include_mini=1` en GET /api/dashboard/igf-forecast (evita segunda petición al mini). */
@@ -1246,13 +1257,20 @@ export function fetchIgfFoliosDetalle(
 
 export function fetchIgfForecast(
   token: string,
-  params?: { year?: number; month?: number; upload_day?: string; include_mini?: boolean }
+  params?: {
+    year?: number;
+    month?: number;
+    upload_day?: string;
+    include_mini?: boolean;
+    version_as_of_corte?: boolean;
+  }
 ): Promise<IgfForecastResponse> {
   const p: Record<string, string> = {};
   if (params?.year != null) p.year = String(params.year);
   if (params?.month != null) p.month = String(params.month);
   if (params?.upload_day) p.upload_day = params.upload_day;
   if (params?.include_mini) p.include_mini = "1";
+  if (params?.version_as_of_corte) p.version_as_of_corte = "1";
   return apiFetch<IgfForecastResponse>("/api/dashboard/igf-forecast", {
     token,
     params: Object.keys(p).length ? p : undefined,
@@ -1262,13 +1280,14 @@ export function fetchIgfForecast(
 
 export function fetchIgfForecastMini(
   token: string,
-  params?: { year?: number; month?: number; upload_day?: string },
+  params?: { year?: number; month?: number; upload_day?: string; version_as_of_corte?: boolean },
   init?: { signal?: AbortSignal }
 ): Promise<IgfForecastMiniResponse> {
   const p: Record<string, string> = {};
   if (params?.year != null) p.year = String(params.year);
   if (params?.month != null) p.month = String(params.month);
   if (params?.upload_day) p.upload_day = params.upload_day;
+  if (params?.version_as_of_corte) p.version_as_of_corte = "1";
   return apiFetch<IgfForecastMiniResponse>("/api/dashboard/igf-forecast-mini", {
     token,
     params: Object.keys(p).length ? p : undefined,
@@ -1362,6 +1381,8 @@ export function patchIgfForecastHg(
     hg_kg?: number | null;
     /** Mismo corte que GET / recalcular ARR; sin esto el servidor recalcula util con otro contexto de venta. */
     upload_day?: string | null;
+    /** Usar última versión IGF con created_at ≤ upload_day. */
+    version_as_of_corte?: boolean;
   }
 ): Promise<{ ok: boolean; empresa: string; year: number; month: number }> {
   return apiFetch<{ ok: boolean; empresa: string; year: number; month: number }>("/api/dashboard/igf-forecast", {

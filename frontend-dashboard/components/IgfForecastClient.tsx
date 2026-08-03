@@ -88,6 +88,7 @@ export function IgfForecastContent() {
   const igfForecastRef = useRef<IgfForecastResponse | null>(null);
   const prevUploadDayRef = useRef<string>("");
   const UPLOAD_DAY_STORAGE_KEY = "Diana";
+  const VERSION_AS_OF_CORTE_KEY = "igf-forecast-version-as-of-corte";
   const [token, setToken] = useState<string | null>(null);
   const [unauthorized, setUnauthorized] = useState(false);
   const [igfForecast, setIgfForecast] = useState<IgfForecastResponse | null>(null);
@@ -107,6 +108,14 @@ export function IgfForecastContent() {
       return "";
     }
   }); // YYYY-MM-DD (corte real/proyección)
+  const [versionAsOfCorte, setVersionAsOfCorte] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return localStorage.getItem(VERSION_AS_OF_CORTE_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
   const [uploadDayHint, setUploadDayHint] = useState<string | null>(null);
   const [presupuestoGendByEmpresa, setPresupuestoGendByEmpresa] = useState<Record<string, number>>(() => {
     if (typeof window === "undefined") return {};
@@ -172,6 +181,15 @@ export function IgfForecastContent() {
       // ignore
     }
   }, [uploadDay]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem(VERSION_AS_OF_CORTE_KEY, versionAsOfCorte ? "1" : "0");
+    } catch {
+      // ignore
+    }
+  }, [versionAsOfCorte]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -365,7 +383,13 @@ export function IgfForecastContent() {
             /* ignore */
           }
         }
-        let params: { year?: number; month?: number; upload_day?: string; include_mini?: boolean };
+        let params: {
+          year?: number;
+          month?: number;
+          upload_day?: string;
+          include_mini?: boolean;
+          version_as_of_corte?: boolean;
+        };
         if (up && /^\d{4}-\d{2}-\d{2}$/.test(up)) {
           const prev = igfForecastRef.current;
           const resolved = resolveIgfYearMonthFromCorte(
@@ -378,6 +402,7 @@ export function IgfForecastContent() {
             month: resolved.month,
             upload_day: up,
             include_mini: true,
+            ...(versionAsOfCorte ? { version_as_of_corte: true } : {}),
           };
           if (resolved.closed) {
             setUploadDayHint(
@@ -430,7 +455,7 @@ export function IgfForecastContent() {
       clearInterval(id);
     };
     // No incluir igfForecast: cada setState del forecast re-disparaba el efecto y una segunda petición (parpadeo entre dos tablas).
-  }, [token, isGAPageBlocked, isGVPageBlocked, uploadDay]);
+  }, [token, isGAPageBlocked, isGVPageBlocked, uploadDay, versionAsOfCorte]);
 
   useEffect(() => {
     if (!token || isGAPageBlocked || isGVPageBlocked || !igfForecast) return;
@@ -449,7 +474,12 @@ export function IgfForecastContent() {
     const up = uploadDay.trim();
     const params =
       up && /^\d{4}-\d{2}-\d{2}$/.test(up)
-        ? { year: Number(up.slice(0, 4)), month: Number(up.slice(5, 7)), upload_day: up }
+        ? {
+            year: igfForecast.year,
+            month: igfForecast.month,
+            upload_day: up,
+            ...(versionAsOfCorte ? { version_as_of_corte: true } : {}),
+          }
         : { year: igfForecast.year, month: igfForecast.month };
     fetchIgfForecastMini(token, params, { signal: ac.signal })
       .then((data) => {
@@ -476,7 +506,7 @@ export function IgfForecastContent() {
       clearTimeout(tid);
       ac.abort();
     };
-  }, [token, isGAPageBlocked, isGVPageBlocked, igfForecast, uploadDay]);
+  }, [token, isGAPageBlocked, isGVPageBlocked, igfForecast, uploadDay, versionAsOfCorte]);
 
   useEffect(() => {
     if (!token || isGAPageBlocked || isGVPageBlocked || !igfForecast) return;
@@ -630,15 +660,13 @@ export function IgfForecastContent() {
     try {
       await postForecastProvincia(token, { year: igfForecast.year, month: igfForecast.month });
       const up = uploadDay.trim();
-      const data =
-        up && /^\d{4}-\d{2}-\d{2}$/.test(up)
-          ? await fetchIgfForecast(token, {
-              year: igfForecast.year,
-              month: igfForecast.month,
-              upload_day: up,
-              include_mini: true,
-            })
-          : await fetchIgfForecast(token, { year: igfForecast.year, month: igfForecast.month, include_mini: true });
+      const data = await fetchIgfForecast(token, {
+        year: igfForecast.year,
+        month: igfForecast.month,
+        include_mini: true,
+        ...(up && /^\d{4}-\d{2}-\d{2}$/.test(up) ? { upload_day: up } : {}),
+        ...(versionAsOfCorte && up && /^\d{4}-\d{2}-\d{2}$/.test(up) ? { version_as_of_corte: true } : {}),
+      });
       setIgfForecast(data);
       if (data.mini) {
         setIgfMini(data.mini);
@@ -730,6 +758,7 @@ export function IgfForecastContent() {
         year: igfForecast.year,
         month: igfForecast.month,
         ...(up && /^\d{4}-\d{2}-\d{2}$/.test(up) ? { upload_day: up } : {}),
+        ...(versionAsOfCorte && up && /^\d{4}-\d{2}-\d{2}$/.test(up) ? { version_as_of_corte: true } : {}),
         include_mini: true,
       });
       setIgfForecast(data);
@@ -773,7 +802,13 @@ export function IgfForecastContent() {
       <div className="flex flex-wrap gap-3 px-4 py-3 border-b border-slate-700/80 bg-slate-800/30 items-center">
         {igfForecast && token && (
           <a
-            href={getDashboardExcelDownloadUrl(token, igfForecast.year, igfForecast.month, uploadDay)}
+            href={getDashboardExcelDownloadUrl(
+              token,
+              igfForecast.year,
+              igfForecast.month,
+              uploadDay,
+              versionAsOfCorte
+            )}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 rounded bg-slate-600 px-4 py-2 text-sm font-medium text-white hover:bg-slate-500"
@@ -789,6 +824,19 @@ export function IgfForecastContent() {
             onChange={(e) => setUploadDay(e.target.value)}
             className="rounded border border-slate-600 bg-slate-900 px-2 py-1 text-slate-200 text-sm"
           />
+        </label>
+        <label
+          className="inline-flex items-center gap-2 rounded border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-200"
+          title="Si está activo, usa la última versión IGF cargada hasta la fecha de corte (no la última del mes)."
+        >
+          <input
+            type="checkbox"
+            checked={versionAsOfCorte}
+            disabled={!uploadDay.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(uploadDay.trim())}
+            onChange={(e) => setVersionAsOfCorte(e.target.checked)}
+            className="rounded border-slate-600"
+          />
+          <span className="text-slate-300 whitespace-nowrap">Versión ≤ corte</span>
         </label>
         {uploadDayHint && <span className="text-xs text-slate-400">{uploadDayHint}</span>}
         {igfForecast && token && (
@@ -871,6 +919,9 @@ export function IgfForecastContent() {
                   <span className="text-xs text-slate-500">
                     {MESES[igfForecast.month - 1]} {igfForecast.year}
                     {igfForecast.version_number != null && ` · v${igfForecast.version_number}`}
+                    {igfForecast.version_as_of_corte && igfForecast.version_created_at
+                      ? ` (≤ ${igfForecast.version_created_at})`
+                      : ""}
                   </span>
                 </>
               )}
@@ -1157,6 +1208,9 @@ export function IgfForecastContent() {
                                   empresa: row.empresa || "",
                                   hg_pct: newPct,
                                   ...(upPatch && /^\d{4}-\d{2}-\d{2}$/.test(upPatch) ? { upload_day: upPatch } : {}),
+                                  ...(versionAsOfCorte && upPatch && /^\d{4}-\d{2}-\d{2}$/.test(upPatch)
+                                    ? { version_as_of_corte: true }
+                                    : {}),
                                 });
                                 // Misma petición que «Recalcular venta forecast» / carga inicial: sin upload_day el
                                 // backend usa el corte por defecto y venta/comisión no coinciden con la fecha de carga.
@@ -1166,6 +1220,9 @@ export function IgfForecastContent() {
                                   month: igfForecast.month,
                                   include_mini: true,
                                   ...(upHg && /^\d{4}-\d{2}-\d{2}$/.test(upHg) ? { upload_day: upHg } : {}),
+                                  ...(versionAsOfCorte && upHg && /^\d{4}-\d{2}-\d{2}$/.test(upHg)
+                                    ? { version_as_of_corte: true }
+                                    : {}),
                                 });
                                 setIgfForecast(updated);
                                 if (updated.mini) {

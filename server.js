@@ -10946,27 +10946,89 @@ async function loadProyVentaDescByPlantForIgf(client, year, month, uploadDay) {
   return computed;
 }
 
+/**
+ * Versión GLOBAL de igf.versions para un mes.
+ * - Default: mayor version_number (compromiso / última).
+ * - version_as_of_corte + upload_day: la más nueva con created_at (CDMX) ≤ corte.
+ */
+async function resolveIgfGlobalVersion(client, year, month, opts = {}) {
+  const uploadDay = opts && typeof opts.upload_day === "string" ? opts.upload_day.trim().slice(0, 10) : "";
+  const versionAsOfCorte = Boolean(opts && opts.version_as_of_corte) && /^\d{4}-\d{2}-\d{2}$/.test(uploadDay);
+  try {
+    await client.query(
+      `ALTER TABLE igf.versions ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now()`
+    );
+  } catch {
+    /* ignore */
+  }
+  const ver = versionAsOfCorte
+    ? await client.query(
+        `SELECT id, version_number, created_at
+           FROM igf.versions
+          WHERE plant_code = 'GLOBAL' AND year = $1::int AND month = $2::int
+            AND (created_at AT TIME ZONE 'America/Mexico_City')::date <= $3::date
+          ORDER BY version_number DESC
+          LIMIT 1`,
+        [year, month, uploadDay]
+      )
+    : await client.query(
+        `SELECT id, version_number, created_at
+           FROM igf.versions
+          WHERE plant_code = 'GLOBAL' AND year = $1::int AND month = $2::int
+          ORDER BY version_number DESC
+          LIMIT 1`,
+        [year, month]
+      );
+  const row = ver.rows && ver.rows[0] ? ver.rows[0] : null;
+  if (!row || row.id == null) return null;
+  let createdYmd = null;
+  if (row.created_at) {
+    try {
+      const d = row.created_at instanceof Date ? row.created_at : new Date(row.created_at);
+      if (!Number.isNaN(d.getTime())) {
+        createdYmd = d.toLocaleDateString("en-CA", { timeZone: "America/Mexico_City" });
+      }
+    } catch {
+      createdYmd = String(row.created_at).slice(0, 10);
+    }
+  }
+  return {
+    id: Number(row.id),
+    version_number: row.version_number != null ? Number(row.version_number) : null,
+    created_at: createdYmd,
+    version_as_of_corte: versionAsOfCorte,
+  };
+}
+
 /** Construye payload IGF Forecast (misma lógica que GET /api/dashboard/igf-forecast). Para API y Excel. */
 async function buildIgfForecastPayload(client, year, month, opts = {}) {
   const now = new Date();
   const isMesActual = year === now.getFullYear() && month === (now.getMonth() + 1);
   const uploadDayOverrideYmd = opts && typeof opts.upload_day === "string" ? opts.upload_day.trim().slice(0, 10) : null;
+  const versionAsOfCorte = Boolean(opts && opts.version_as_of_corte);
   // Abierto/cerrado por fecha de corte (31/07 sigue abierto; 02/08 cierra julio). No por reloj del servidor.
   const isMesHistorico = isIgfMesCerradoPorCorte(year, month, uploadDayOverrideYmd);
   const provRes = await client.query("SELECT plant_code FROM arr.provincia_plants ORDER BY plant_code");
     const provinciaPlantCodes = (provRes.rows || []).map((r) => (r.plant_code || "").trim()).filter(Boolean);
 
-    const ver = await client.query(
-      `SELECT id, version_number FROM igf.versions
-       WHERE plant_code = 'GLOBAL' AND year = $1::int AND month = $2::int
-       ORDER BY version_number DESC LIMIT 1`,
-      [year, month]
-    );
-  const versionId = ver.rows && ver.rows[0] && ver.rows[0].id != null ? Number(ver.rows[0].id) : null;
+  const resolvedVer = await resolveIgfGlobalVersion(client, year, month, {
+    upload_day: uploadDayOverrideYmd,
+    version_as_of_corte: versionAsOfCorte,
+  });
+  const versionId = resolvedVer && resolvedVer.id != null ? Number(resolvedVer.id) : null;
   if (versionId == null) {
-    return { year, month, version_id: null, version_number: null, rows: [], totales: null };
+    return {
+      year,
+      month,
+      version_id: null,
+      version_number: null,
+      version_as_of_corte: versionAsOfCorte && Boolean(uploadDayOverrideYmd),
+      version_created_at: null,
+      rows: [],
+      totales: null,
+    };
   }
-    const versionNumber = ver.rows[0].version_number;
+    const versionNumber = resolvedVer.version_number;
     const r = await client.query(
       `SELECT * FROM igf.compromiso_lines WHERE version_id = $1::int ORDER BY empresa`,
       [versionId]
@@ -11226,7 +11288,16 @@ async function buildIgfForecastPayload(client, year, month, opts = {}) {
         if (vals.length) totales[key] = key.endsWith("_importe") ? vals.reduce((a, b) => a + b, 0) : vals.reduce((a, b) => a + b, 0) / vals.length;
       }
     }
-  return { year, month, version_id: versionId, version_number: versionNumber, rows, totales };
+  return {
+    year,
+    month,
+    version_id: versionId,
+    version_number: versionNumber,
+    version_as_of_corte: Boolean(resolvedVer && resolvedVer.version_as_of_corte),
+    version_created_at: resolvedVer && resolvedVer.created_at ? resolvedVer.created_at : null,
+    rows,
+    totales,
+  };
 }
 
 /**
@@ -11439,6 +11510,7 @@ app.get("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, res)
   const year = req.query.year != null ? parseInt(String(req.query.year), 10) : new Date().getFullYear();
   const month = req.query.month != null ? parseInt(String(req.query.month), 10) : new Date().getMonth() + 1;
   const uploadDay = (req.query.upload_day || "").toString().trim().slice(0, 10) || null;
+  const versionAsOfCorte = /^(1|true|yes)$/i.test(String(req.query.version_as_of_corte || "").trim());
   if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
     return res.status(400).json({ error: "year y month inválidos" });
   }
@@ -11452,10 +11524,21 @@ app.get("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, res)
       });
     }
   }
+  if (versionAsOfCorte && !uploadDay) {
+    return res.status(400).json({ error: "version_as_of_corte requiere upload_day" });
+  }
   const wantMini = /^(1|true|yes)$/i.test(String(req.query.include_mini || "").trim());
   const client = await pool.connect();
   try {
-    const payload = await buildIgfForecastPayload(client, year, month, uploadDay ? { upload_day: uploadDay } : undefined);
+    const buildOpts = {};
+    if (uploadDay) buildOpts.upload_day = uploadDay;
+    if (versionAsOfCorte) buildOpts.version_as_of_corte = true;
+    const payload = await buildIgfForecastPayload(
+      client,
+      year,
+      month,
+      Object.keys(buildOpts).length ? buildOpts : undefined
+    );
     if (wantMini) {
       try {
         payload.mini = await computeIgfForecastMiniPayload(client, payload, year, month, uploadDay);
@@ -11482,6 +11565,7 @@ app.get("/api/dashboard/igf-forecast-mini", dashboardAuthMiddleware, async (req,
   const year = req.query.year != null ? parseInt(String(req.query.year), 10) : new Date().getFullYear();
   const month = req.query.month != null ? parseInt(String(req.query.month), 10) : new Date().getMonth() + 1;
   const uploadDay = (req.query.upload_day || "").toString().trim().slice(0, 10) || null;
+  const versionAsOfCorte = /^(1|true|yes)$/i.test(String(req.query.version_as_of_corte || "").trim());
   if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
     return res.status(400).json({ error: "year y month inválidos" });
   }
@@ -11495,10 +11579,21 @@ app.get("/api/dashboard/igf-forecast-mini", dashboardAuthMiddleware, async (req,
       });
     }
   }
+  if (versionAsOfCorte && !uploadDay) {
+    return res.status(400).json({ error: "version_as_of_corte requiere upload_day" });
+  }
 
   const client = await pool.connect();
   try {
-    const igf = await buildIgfForecastPayload(client, year, month, uploadDay ? { upload_day: uploadDay } : undefined);
+    const buildOpts = {};
+    if (uploadDay) buildOpts.upload_day = uploadDay;
+    if (versionAsOfCorte) buildOpts.version_as_of_corte = true;
+    const igf = await buildIgfForecastPayload(
+      client,
+      year,
+      month,
+      Object.keys(buildOpts).length ? buildOpts : undefined
+    );
     const mini = await computeIgfForecastMiniPayload(client, igf, year, month, uploadDay);
     res.json(mini);
   } catch (e) {
@@ -11724,6 +11819,7 @@ app.patch("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, re
   const hg_pct = req.body?.hg_pct != null && req.body.hg_pct !== "" ? Number(req.body.hg_pct) : null;
   const hg_kg = req.body?.hg_kg != null && req.body.hg_kg !== "" ? Number(req.body.hg_kg) : null;
   const uploadDayBody = (req.body?.upload_day != null ? String(req.body.upload_day).trim().slice(0, 10) : "") || "";
+  const versionAsOfCorteBody = /^(1|true|yes)$/i.test(String(req.body?.version_as_of_corte ?? "").trim());
   if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12 || !empresa) {
     return res.status(400).json({ error: "Faltan year, month o empresa" });
   }
@@ -11737,12 +11833,21 @@ app.patch("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, re
       });
     }
   }
+  if (versionAsOfCorteBody && !uploadDayBody) {
+    return res.status(400).json({ error: "version_as_of_corte requiere upload_day" });
+  }
   const client = await pool.connect();
   try {
-    const uploadOpts =
-      uploadDayBody && /^\d{4}-\d{2}-\d{2}$/.test(uploadDayBody) ? { upload_day: uploadDayBody } : undefined;
+    const uploadOpts = {};
+    if (uploadDayBody && /^\d{4}-\d{2}-\d{2}$/.test(uploadDayBody)) uploadOpts.upload_day = uploadDayBody;
+    if (versionAsOfCorteBody) uploadOpts.version_as_of_corte = true;
     /** Misma fila que ve el GET (venta forecast, presupuesto/folios en $/kg, HG ya normalizado). */
-    const payload = await buildIgfForecastPayload(client, year, month, uploadOpts);
+    const payload = await buildIgfForecastPayload(
+      client,
+      year,
+      month,
+      Object.keys(uploadOpts).length ? uploadOpts : undefined
+    );
     const versionId = payload.version_id != null ? Number(payload.version_id) : null;
     if (versionId == null) return res.status(404).json({ error: "No hay versión IGF para ese mes" });
 
@@ -14428,6 +14533,7 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
     ((req.query.upload_day || "").toString().trim().slice(0, 10)) ||
     proyeccionHasta ||
     null;
+  const versionAsOfCorteExcel = /^(1|true|yes)$/i.test(String(req.query.version_as_of_corte || "").trim());
   let proyeccionCatSub = null;
   if (req.query.proyeccion_mes != null && req.query.proyeccion_anio != null) {
     const proyeccionMes = parseInt(String(req.query.proyeccion_mes), 10);
@@ -14457,7 +14563,15 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
   };
   const client = await pool.connect();
   try {
-    const igfForecast = await buildIgfForecastPayload(client, year, month, uploadDay ? { upload_day: uploadDay } : undefined);
+    const excelIgfOpts = {};
+    if (uploadDay) excelIgfOpts.upload_day = uploadDay;
+    if (versionAsOfCorteExcel) excelIgfOpts.version_as_of_corte = true;
+    const igfForecast = await buildIgfForecastPayload(
+      client,
+      year,
+      month,
+      Object.keys(excelIgfOpts).length ? excelIgfOpts : undefined
+    );
     // Mapear "empresa" IGF → plant_code provincia (nombres no siempre coinciden exacto: "GTM Puebla" vs "Puebla").
     const forecastKgByPlant = {};
     const igfRows = (igfForecast?.rows || [])
