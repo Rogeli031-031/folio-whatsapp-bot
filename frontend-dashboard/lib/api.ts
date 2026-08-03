@@ -103,6 +103,39 @@ export async function downloadTallerAtExcel(
   URL.revokeObjectURL(href);
 }
 
+export type CategoriaRangoExcel = "GASTOS" | "INVERSIONES";
+
+/** Descarga Excel GASTOS o INVERSIONES por rango de meses (Resumen + detalle + duplicados). */
+export async function downloadCategoriaRangoExcel(
+  token: string,
+  categoria: CategoriaRangoExcel,
+  mesDesde: string,
+  mesHasta: string,
+  plantaId?: number | null
+): Promise<void> {
+  const base = getApiUrl("/api/dashboard/categoria-rango-excel");
+  const plantaQ =
+    plantaId != null && Number.isFinite(plantaId) ? `&planta_id=${encodeURIComponent(String(plantaId))}` : "";
+  const url = `${base}?categoria=${encodeURIComponent(categoria)}&mes_desde=${encodeURIComponent(mesDesde)}&mes_hasta=${encodeURIComponent(mesHasta)}${plantaQ}`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as { error?: string }).error || `HTTP ${res.status}`);
+  }
+  const blob = await res.blob();
+  const cd = res.headers.get("Content-Disposition") || "";
+  const m = /filename="?([^"]+)"?/i.exec(cd);
+  const filename = m?.[1] || `${categoria}_${mesDesde}_${mesHasta}.xlsx`;
+  const a = document.createElement("a");
+  const href = URL.createObjectURL(blob);
+  a.href = href;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(href);
+}
+
 export type ClasificacionColumnMap = {
   concepto: string;
   importe: string;

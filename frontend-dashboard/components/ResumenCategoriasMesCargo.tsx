@@ -5,6 +5,8 @@ import type { KanbanBoard as KanbanBoardType, FolioCard, DashboardFilters } from
 import * as XLSX from "xlsx";
 import ClasificacionApoyosModal from "@/components/ClasificacionApoyosModal";
 import TallerAtExportModal from "@/components/TallerAtExportModal";
+import CategoriaRangoExportModal from "@/components/CategoriaRangoExportModal";
+import type { CategoriaRangoExcel } from "@/lib/api";
 import ClasificacionCompararModal from "@/components/ClasificacionCompararModal";
 
 interface Props {
@@ -128,6 +130,7 @@ export default function ResumenCategoriasMesCargo({
 
   const [showClasificacion, setShowClasificacion] = useState(false);
   const [showTallerAt, setShowTallerAt] = useState(false);
+  const [showCategoriaRango, setShowCategoriaRango] = useState<CategoriaRangoExcel | null>(null);
   const [showComparar, setShowComparar] = useState(false);
 
   const selectedPlantaNombre = useMemo(() => {
@@ -306,6 +309,24 @@ export default function ResumenCategoriasMesCargo({
           </button>
           <button
             type="button"
+            onClick={() => setShowCategoriaRango("GASTOS")}
+            disabled={!token}
+            className="rounded bg-blue-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            title="Exporta GASTOS por subcategoría en un rango de meses"
+          >
+            GASTOS
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowCategoriaRango("INVERSIONES")}
+            disabled={!token}
+            className="rounded bg-red-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-600 disabled:opacity-50"
+            title="Exporta INVERSIONES por subcategoría en un rango de meses"
+          >
+            INVERSIONES
+          </button>
+          <button
+            type="button"
             onClick={() => setShowClasificacion(true)}
             disabled={!token}
             className="rounded bg-teal-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-600 disabled:opacity-50"
@@ -339,6 +360,16 @@ export default function ResumenCategoriasMesCargo({
           selectedPlantaId={selectedPlantaId ?? null}
           selectedPlantaNombre={selectedPlantaNombre}
           onClose={() => setShowTallerAt(false)}
+        />
+      )}
+      {showCategoriaRango && token && (
+        <CategoriaRangoExportModal
+          open={true}
+          token={token}
+          categoria={showCategoriaRango}
+          selectedPlantaId={selectedPlantaId ?? null}
+          selectedPlantaNombre={selectedPlantaNombre}
+          onClose={() => setShowCategoriaRango(null)}
         />
       )}
       {showClasificacion && token && (

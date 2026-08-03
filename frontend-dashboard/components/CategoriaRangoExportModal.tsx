@@ -1,17 +1,36 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { downloadTallerAtExcel } from "@/lib/api";
+import { downloadCategoriaRangoExcel, type CategoriaRangoExcel } from "@/lib/api";
 
 interface Props {
   open: boolean;
   token: string;
+  categoria: CategoriaRangoExcel;
   selectedPlantaId?: number | null;
   selectedPlantaNombre?: string | null;
   onClose: () => void;
 }
 
 const MESES_CORTOS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+
+const THEME: Record<
+  CategoriaRangoExcel,
+  { title: string; accentBtn: string; accentSelected: string; blurb: string }
+> = {
+  GASTOS: {
+    title: "GASTOS",
+    accentBtn: "bg-blue-800 hover:bg-blue-700",
+    accentSelected: "bg-blue-600 text-white",
+    blurb: "Exporta gastos por subcategoría en la ventana de meses (Resumen + detalle + duplicados).",
+  },
+  INVERSIONES: {
+    title: "INVERSIONES",
+    accentBtn: "bg-red-700 hover:bg-red-600",
+    accentSelected: "bg-red-600 text-white",
+    blurb: "Exporta inversiones por subcategoría en la ventana de meses (Resumen + detalle + duplicados).",
+  },
+};
 
 function mesActualYAnteriorMx(): { actual: string; anterior: string } {
   const fmt = new Intl.DateTimeFormat("en-CA", {
@@ -56,10 +75,12 @@ function MesPicker({
   label,
   value,
   onChange,
+  selectedClass,
 }: {
   label: string;
   value: string;
   onChange: (yyyyMm: string) => void;
+  selectedClass: string;
 }) {
   const { year, month } = splitYyyyMm(value);
   const { actual } = mesActualYAnteriorMx();
@@ -93,9 +114,7 @@ function MesPicker({
               type="button"
               onClick={() => onChange(joinYyyyMm(year, m))}
               className={`rounded px-1.5 py-1.5 text-xs font-medium transition ${
-                selected
-                  ? "bg-amber-600 text-white"
-                  : "bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white"
+                selected ? selectedClass : "bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white"
               }`}
             >
               {nombre}
@@ -110,13 +129,15 @@ function MesPicker({
   );
 }
 
-export default function TallerAtExportModal({
+export default function CategoriaRangoExportModal({
   open,
   token,
+  categoria,
   selectedPlantaId,
   selectedPlantaNombre,
   onClose,
 }: Props) {
+  const theme = THEME[categoria];
   const defaults = useMemo(() => mesActualYAnteriorMx(), []);
   const [mesDesde, setMesDesde] = useState(defaults.anterior);
   const [mesHasta, setMesHasta] = useState(defaults.actual);
@@ -129,7 +150,7 @@ export default function TallerAtExportModal({
     setError(null);
     setExporting(true);
     try {
-      await downloadTallerAtExcel(token, mesDesde, mesHasta, selectedPlantaId ?? null);
+      await downloadCategoriaRangoExcel(token, categoria, mesDesde, mesHasta, selectedPlantaId ?? null);
       onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error al exportar");
@@ -143,9 +164,9 @@ export default function TallerAtExportModal({
       <div className="w-full max-w-lg rounded-lg border border-slate-600 bg-slate-900 shadow-xl">
         <div className="flex items-center justify-between border-b border-slate-700 px-4 py-3">
           <div>
-            <h2 className="text-lg font-semibold text-white">Taller por AT</h2>
+            <h2 className="text-lg font-semibold text-white">{theme.title}</h2>
             <p className="mt-0.5 text-xs text-slate-400">
-              Exporta gasto de taller por unidad (AT) en la ventana de meses.
+              {theme.blurb}
               {selectedPlantaNombre ? ` Planta: ${selectedPlantaNombre}.` : " Todas las plantas visibles."}
             </p>
           </div>
@@ -160,11 +181,21 @@ export default function TallerAtExportModal({
         </div>
         <div className="space-y-3 px-4 py-4">
           <p className="text-xs text-slate-500">
-            Folios TALLER no cancelados. MAYOR / PASIVO / PREVENTIVO / OTROS cuentan como importe.
+            Folios {theme.title} no cancelados. Elige el rango de mes de cargo.
           </p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <MesPicker label="Desde" value={mesDesde} onChange={setMesDesde} />
-            <MesPicker label="Hasta" value={mesHasta} onChange={setMesHasta} />
+            <MesPicker
+              label="Desde"
+              value={mesDesde}
+              onChange={setMesDesde}
+              selectedClass={theme.accentSelected}
+            />
+            <MesPicker
+              label="Hasta"
+              value={mesHasta}
+              onChange={setMesHasta}
+              selectedClass={theme.accentSelected}
+            />
           </div>
           {error && (
             <p className="rounded border border-red-800 bg-red-950/40 px-3 py-2 text-sm text-red-300">{error}</p>
@@ -182,7 +213,7 @@ export default function TallerAtExportModal({
             type="button"
             onClick={handleExport}
             disabled={exporting}
-            className="rounded bg-amber-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-600 disabled:opacity-50"
+            className={`rounded px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50 ${theme.accentBtn}`}
           >
             {exporting ? "Exportando…" : "Aceptar y exportar"}
           </button>

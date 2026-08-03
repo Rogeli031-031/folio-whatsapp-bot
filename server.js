@@ -61,6 +61,7 @@ const { isDirectorZPForDashboard } = require("./lib/dashboard-es-zp");
 const folioDuplicados = require("./lib/folio-duplicados");
 const clasificacionApoyosExcel = require("./lib/clasificacion-apoyos-excel");
 const tallerAtExcel = require("./lib/taller-at-excel");
+const categoriaRangoExcel = require("./lib/categoria-rango-excel");
 const clasificacionComparar = require("./lib/clasificacion-comparar");
 const directorIaContext = require("./lib/director-ia-context");
 const directorIaCommercialState = require("./lib/director-ia-commercial-state");
@@ -6293,6 +6294,112 @@ app.get("/api/dashboard/taller-at-excel", dashboardAuthMiddleware, async (req, r
   } catch (e) {
     console.error("[taller-at-excel]", e);
     res.status(500).json({ error: e.message || "Error al generar Excel de taller por AT" });
+  } finally {
+    client.release();
+  }
+});
+
+/**
+ * Excel GASTOS o INVERSIONES por rango de meses (misma dinámica que Taller por AT).
+ * Query: categoria=GASTOS|INVERSIONES, mes_desde, mes_hasta (YYYY-MM), planta_id opcional.
+ */
+app.get("/api/dashboard/categoria-rango-excel", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGVForbidden(req, res)) return;
+  const catRaw = String(req.query.categoria || "").trim().toUpperCase();
+  const categoria = catRaw === "INVERSIONES" ? "INVERSIONES" : catRaw === "GASTOS" ? "GASTOS" : null;
+  if (!categoria) {
+    return res.status(400).json({ error: "categoria debe ser GASTOS o INVERSIONES" });
+  }
+  let mesDesde = String(req.query.mes_desde || "").trim();
+  let mesHasta = String(req.query.mes_hasta || "").trim();
+  if (!/^\d{4}-\d{2}$/.test(mesDesde) || !/^\d{4}-\d{2}$/.test(mesHasta)) {
+    return res.status(400).json({ error: "mes_desde y mes_hasta son obligatorios (YYYY-MM)" });
+  }
+  if (mesDesde > mesHasta) {
+    const t = mesDesde;
+    mesDesde = mesHasta;
+    mesHasta = t;
+  }
+  const plantaIdRaw =
+    req.query.planta_id != null && String(req.query.planta_id).trim() !== ""
+      ? Number(req.query.planta_id)
+      : null;
+  const plantaId = Number.isFinite(plantaIdRaw) ? plantaIdRaw : null;
+
+  const client = await pool.connect();
+  try {
+    const filters = parseDashboardFilters({});
+    const { where, params } = buildDashboardWhere(req.dashboardAuth, {
+      ...filters,
+      soloActivos: false,
+      ventanaDefault: false,
+    });
+    let n = params.length;
+    const extra = [];
+    n += 1;
+    extra.push(`f.mes_cargo >= $${n}::text`);
+    params.push(mesDesde);
+    n += 1;
+    extra.push(`f.mes_cargo <= $${n}::text`);
+    params.push(mesHasta);
+    if (categoria === "INVERSIONES") {
+      extra.push(`(
+        UPPER(TRIM(COALESCE(f.categoria,''))) = 'INVERSIONES'
+        OR UPPER(TRIM(COALESCE(f.categoria,''))) LIKE '%INVERSION%'
+      )`);
+    } else {
+      extra.push(`(
+        UPPER(TRIM(COALESCE(f.categoria,''))) = 'GASTOS'
+        OR UPPER(TRIM(COALESCE(f.categoria,''))) LIKE '%GASTO%'
+      )`);
+      // Evitar que "GASTOS DE TALLER" u otras mezclas caigan aquí si ya están en Taller.
+      extra.push(`UPPER(TRIM(COALESCE(f.categoria,''))) NOT LIKE '%TALLER%'`);
+      extra.push(`UPPER(TRIM(COALESCE(f.categoria,''))) NOT LIKE '%INVERSION%'`);
+    }
+    extra.push(`UPPER(TRIM(COALESCE(f.estatus,''))) <> 'CANCELADO'`);
+    if (plantaId != null) {
+      const ids = getPlantaIdsEquivalentesForPendientes(plantaId);
+      n += 1;
+      extra.push(`f.planta_id = ANY($${n}::int[])`);
+      params.push(ids.length ? ids : [plantaId]);
+    }
+    const q = `
+      SELECT f.id,
+             f.numero_folio,
+             f.beneficiario,
+             f.subcategoria,
+             COALESCE(NULLIF(TRIM(f.descripcion), ''), NULLIF(TRIM(f.concepto), ''), '') AS concepto,
+             f.importe,
+             f.detalle_lineas,
+             f.mes_cargo,
+             f.estatus
+        FROM public.folios f
+       WHERE 1=1 ${where}
+         AND ${extra.join(" AND ")}
+       ORDER BY f.mes_cargo DESC, f.subcategoria NULLS LAST, f.id
+    `;
+    const r = await client.query(q, params);
+    let plantaNombre = null;
+    if (plantaId != null) {
+      const pr = await client.query(`SELECT nombre FROM public.plantas WHERE id = $1`, [plantaId]);
+      plantaNombre = pr.rows[0] && pr.rows[0].nombre ? String(pr.rows[0].nombre) : null;
+    }
+    const wb = await categoriaRangoExcel.buildCategoriaRangoWorkbook(categoria, r.rows || [], {
+      mesDesde,
+      mesHasta,
+      plantaNombre,
+    });
+    const buf = Buffer.from(await wb.xlsx.writeBuffer());
+    const safeA = categoriaRangoExcel.formatMesLabel(mesDesde).replace(/\s+/g, "_");
+    const safeB = categoriaRangoExcel.formatMesLabel(mesHasta).replace(/\s+/g, "_");
+    const plantaSuffix = plantaNombre ? `_${plantaNombre.replace(/\s+/g, "_")}` : "";
+    const filename = `${categoria}_${safeA}_${safeB}${plantaSuffix}.xlsx`;
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    return res.send(buf);
+  } catch (e) {
+    console.error("[categoria-rango-excel]", e);
+    res.status(500).json({ error: e.message || `Error al generar Excel de ${categoria}` });
   } finally {
     client.release();
   }
