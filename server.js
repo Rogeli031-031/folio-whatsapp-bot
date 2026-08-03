@@ -6208,8 +6208,10 @@ app.get("/api/dashboard/clasificacion-apoyos-excel", dashboardAuthMiddleware, as
 });
 
 /**
- * Excel Taller por AT: Resumen (unidad × meses) + detalle por mes.
- * Solo TALLER con póliza o en Depósito y cierre / Comprobaciones / Evidencias.
+ * Excel Taller por AT: Resumen (unidad × meses) + detalle por mes + duplicados.
+ * Incluye todos los TALLER no cancelados (mismo criterio que Clasificación listado T).
+ * El importe efectivo es f.importe o la suma de detalle_lineas; la subcategoría
+ * (MAYOR / PASIVO / PREVENTIVO / OTROS) solo clasifica ese mismo monto.
  * Query: mes_desde, mes_hasta (YYYY-MM), planta_id opcional.
  */
 app.get("/api/dashboard/taller-at-excel", dashboardAuthMiddleware, async (req, res) => {
@@ -6248,15 +6250,6 @@ app.get("/api/dashboard/taller-at-excel", dashboardAuthMiddleware, async (req, r
     params.push(mesHasta);
     extra.push(`UPPER(TRIM(COALESCE(f.categoria,''))) LIKE '%TALLER%'`);
     extra.push(`UPPER(TRIM(COALESCE(f.estatus,''))) <> 'CANCELADO'`);
-    extra.push(`(
-      UPPER(TRIM(COALESCE(f.estatus,''))) IN ('PAGADO','CERRADO','COMPROBACIONES','EVIDENCIAS')
-      OR EXISTS (
-        SELECT 1 FROM public.folio_archivos fa
-         WHERE fa.folio_id = f.id
-           AND UPPER(TRIM(fa.tipo)) = 'POLIZA'
-           AND fa.status NOT IN ('RECHAZADO','ELIMINADO','REEMPLAZADO')
-      )
-    )`);
     if (plantaId != null) {
       const ids = getPlantaIdsEquivalentesForPendientes(plantaId);
       n += 1;
@@ -6264,10 +6257,15 @@ app.get("/api/dashboard/taller-at-excel", dashboardAuthMiddleware, async (req, r
       params.push(ids.length ? ids : [plantaId]);
     }
     const q = `
-      SELECT f.unidad,
+      SELECT f.id,
+             f.numero_folio,
+             f.unidad,
+             f.subcategoria,
              COALESCE(NULLIF(TRIM(f.descripcion), ''), NULLIF(TRIM(f.concepto), ''), '') AS concepto,
              f.importe,
-             f.mes_cargo
+             f.detalle_lineas,
+             f.mes_cargo,
+             f.estatus
         FROM public.folios f
        WHERE 1=1 ${where}
          AND ${extra.join(" AND ")}
