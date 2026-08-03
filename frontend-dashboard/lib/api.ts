@@ -73,7 +73,7 @@ export async function downloadClasificacionApoyosExcel(
   URL.revokeObjectURL(href);
 }
 
-/** Descarga Excel Taller por AT (Resumen + detalle por mes). Requiere priv_clave (Tomza-Priv). */
+/** Descarga Excel Taller por AT. priv_clave opcional (Tomza-Priv) → incluye privados. */
 export async function downloadTallerAtExcel(
   token: string,
   mesDesde: string,
@@ -110,7 +110,7 @@ export async function downloadTallerAtExcel(
 
 export type CategoriaRangoExcel = "GASTOS" | "INVERSIONES";
 
-/** Descarga Excel GASTOS o INVERSIONES por rango de meses. Requiere priv_clave (Tomza-Priv). */
+/** Descarga Excel GASTOS/INVERSIONES. priv_clave opcional (Tomza-Priv) → incluye privados. */
 export async function downloadCategoriaRangoExcel(
   token: string,
   categoria: CategoriaRangoExcel,

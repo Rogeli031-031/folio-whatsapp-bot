@@ -128,10 +128,6 @@ export default function TallerAtExportModal({
 
   const handleExport = async () => {
     setError(null);
-    if (!String(privClave || "").trim()) {
-      setError("Ingresa la clave de acceso a privados.");
-      return;
-    }
     setExporting(true);
     try {
       await downloadTallerAtExcel(token, mesDesde, mesHasta, selectedPlantaId ?? null, privClave);
@@ -178,11 +174,11 @@ export default function TallerAtExportModal({
               value={privClave}
               onChange={(e) => setPrivClave(e.target.value)}
               autoComplete="off"
-              placeholder="Requerida para exportar"
+              placeholder="Vacío = sin privados"
               className="mt-1 block w-full rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-100 placeholder:text-slate-500"
             />
             <span className="mt-1 block text-[11px] text-slate-500">
-              Misma clave que Clasificación de apoyos. Incluye folios Solo ZP y AD.
+              Vacío: Excel sin folios privados. Con clave: incluye Solo ZP y AD.
             </span>
           </label>
           {error && (
