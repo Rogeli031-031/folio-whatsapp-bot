@@ -10888,6 +10888,34 @@ async function fetchIgfFoliosDetalleList(client, year, month, empresa, tipo) {
   return { empresa: (empresa || "").trim(), periodo: periodoStr, tipo, folios };
 }
 
+/**
+ * PROY venta/desc por planta (snapshot guardado + computePronosticoProyByPlant).
+ * Misma fuente para tabla IGF Forecast y mini-resumen / Pronóstico.
+ * @returns {Promise<Map<string,{proy_venta_ton:number,proy_desc_kg:number}>>}
+ */
+async function loadProyVentaDescByPlantForIgf(client, year, month, uploadDay) {
+  const fechaCorteStr = (uploadDay || "").toString().trim().slice(0, 10);
+  const corteYmdFast = dashboardArrForecast.getPronosticoCorteYmdStr(year, month, fechaCorteStr);
+  const snapMini = await dashboardArrForecast.loadPronosticoMiniSnapshot(client, year, month, corteYmdFast);
+  const ctxProno = await dashboardArrForecast.buildPronosticoVentaDescMaps(client, year, month, fechaCorteStr);
+  let computed = await dashboardArrForecast.computePronosticoProyByPlant(client, year, month, {
+    fechaCorte: fechaCorteStr,
+    prebuiltVentaDescCtx: ctxProno,
+  });
+  if (snapMini && snapMini.size > 0) {
+    computed = new Map(computed);
+    for (const [k, v] of snapMini.entries()) {
+      if (v && Number.isFinite(Number(v.proy_venta_ton))) {
+        computed.set(k, {
+          proy_venta_ton: Number(v.proy_venta_ton),
+          proy_desc_kg: v.proy_desc_kg != null && Number.isFinite(Number(v.proy_desc_kg)) ? Number(v.proy_desc_kg) : 0,
+        });
+      }
+    }
+  }
+  return computed;
+}
+
 /** Construye payload IGF Forecast (misma lógica que GET /api/dashboard/igf-forecast). Para API y Excel. */
 async function buildIgfForecastPayload(client, year, month, opts = {}) {
   const now = new Date();
@@ -10922,8 +10950,11 @@ async function buildIgfForecastPayload(client, year, month, opts = {}) {
     });
     const totalRow = allRows.find((x) => /^TOTALES?$/i.test(x.empresa));
     const uploadDayOverrideYmd = opts && typeof opts.upload_day === "string" ? opts.upload_day.trim().slice(0, 10) : null;
-    const ventaForecastByPlant = await getVentaForecastProvinciaDesdeArr(client, year, month, uploadDayOverrideYmd);
-    const descuentoForecastByPlant = await getDescuentoForecastProvinciaDesdeArr(client, year, month, uploadDayOverrideYmd);
+    // Mes abierto: Venta y Com. y Desc. = PROY del Pronóstico (unificado con mini-resumen).
+    // Mes histórico: venta real del mes. Ya no se usa el forecast ARR de 14 días.
+    const proyByPlant = !isMesHistorico
+      ? await loadProyVentaDescByPlantForIgf(client, year, month, uploadDayOverrideYmd)
+      : new Map();
     const ventaRealByPlant = isMesHistorico
       ? await dashboardArrForecast.getVentaRealTonProvinciaByPlant(client, year, month)
       : new Map();
@@ -10958,16 +10989,12 @@ async function buildIgfForecastPayload(client, year, month, opts = {}) {
           if (real != null && Number.isFinite(Number(real.proy_venta_ton))) {
             venta_ton = Number(real.proy_venta_ton);
           }
-        } else if (ventaForecastByPlant.size > 0) {
-          const f = ventaForecastByPlant.get(best);
-          if (f != null) venta_ton = f;
-          const ventaForecastKg = (venta_ton || 0) * 1000;
-          const descMonto = descuentoForecastByPlant.get(best);
-          if (ventaForecastKg > 0 && descMonto != null) {
-            const dm = Number(descMonto);
-            if (Number.isFinite(dm)) {
-              // Convención IGF / Excel: Com. y Desc. en $/kg como reducción de margen (valor negativo, p. ej. -4.63).
-              com_desc_kg = -Math.round((Math.abs(dm) / ventaForecastKg) * 100) / 100;
+        } else if (proyByPlant.size > 0) {
+          const proy = dashboardArrForecast.resolveProyFromPlantMap(proyByPlant, best);
+          if (proy != null && Number.isFinite(Number(proy.proy_venta_ton))) {
+            venta_ton = Number(proy.proy_venta_ton);
+            if (proy.proy_desc_kg != null && Number.isFinite(Number(proy.proy_desc_kg))) {
+              com_desc_kg = Number(proy.proy_desc_kg);
             }
           }
         }
@@ -11260,43 +11287,9 @@ async function computeIgfForecastMiniPayload(client, igf, year, month, uploadDay
     ventaRealWrap = new Map();
     for (const [k, v] of ventaRealByPlant.entries()) ventaRealWrap.set(k, { proy_venta_ton: v });
   }
-  const needPlantCodes = miniLabels.map((label) => String(labelToPlantCode.get(label) || label).trim());
-  const corteYmdFast = dashboardArrForecast.getPronosticoCorteYmdStr(year, month, fechaCorteStr);
-  const snapMini = await dashboardArrForecast.loadPronosticoMiniSnapshot(client, year, month, corteYmdFast);
-  const snapHasAllMini = needPlantCodes.every((code) => {
-    const v = dashboardArrForecast.resolveProyFromPlantMap(snapMini, code);
-    return v && Number.isFinite(Number(v.proy_venta_ton));
-  });
-
-  let proyByPlant;
-  if (snapHasAllMini) {
-    proyByPlant = new Map();
-    for (const code of needPlantCodes) {
-      const v = dashboardArrForecast.resolveProyFromPlantMap(snapMini, code);
-      proyByPlant.set(code, {
-        proy_venta_ton: Number(v.proy_venta_ton),
-        proy_desc_kg: v.proy_desc_kg != null && Number.isFinite(Number(v.proy_desc_kg)) ? Number(v.proy_desc_kg) : 0,
-      });
-    }
-  } else {
-    const ctxProno = await dashboardArrForecast.buildPronosticoVentaDescMaps(client, year, month, fechaCorteStr);
-    let computed = await dashboardArrForecast.computePronosticoProyByPlant(client, year, month, {
-      fechaCorte: fechaCorteStr,
-      prebuiltVentaDescCtx: ctxProno,
-    });
-    if (snapMini && snapMini.size > 0) {
-      computed = new Map(computed);
-      for (const [k, v] of snapMini.entries()) {
-        if (v && Number.isFinite(Number(v.proy_venta_ton))) {
-          computed.set(k, {
-            proy_venta_ton: Number(v.proy_venta_ton),
-            proy_desc_kg: v.proy_desc_kg != null && Number.isFinite(Number(v.proy_desc_kg)) ? Number(v.proy_desc_kg) : 0,
-          });
-        }
-      }
-    }
-    proyByPlant = computed;
-  }
+  // Misma fuente PROY que buildIgfForecastPayload (snapshot + días seleccionados).
+  // En histórico la venta sale de real; el PROY sigue sirviendo para Com. y Desc. del mini.
+  const proyByPlant = await loadProyVentaDescByPlantForIgf(client, year, month, fechaCorteStr);
 
   const plantRows = [];
   for (const label of miniLabels) {
@@ -11410,7 +11403,7 @@ async function computeIgfForecastMiniPayload(client, igf, year, month, uploadDay
   return { ok: true, year, month, upload_day: uploadDay, rows, zona };
 }
 
-/** IGF Forecast: última versión del mes; solo plantas provincia; venta y com_desc = forecast desde ARR (mes actual). */
+/** IGF Forecast: última versión del mes; solo plantas provincia; venta y com_desc = PROY Pronóstico (mes abierto). */
 app.get("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, res) => {
   if (dashboardBlockGAFinancialKpis(req, res)) return;
   if (dashboardBlockGVForbidden(req, res)) return;
@@ -11452,7 +11445,7 @@ app.get("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, res)
 
 /**
  * IGF Forecast — mini-resumen (mismas fórmulas que `applyIgfMiniResumenFormulas`, hoja Compromiso 18 col).
- * Venta y $/kg salen de la misma fila que GET IGF Forecast (`buildIgfForecastPayload`), no de un PROY paralelo.
+ * Venta y Com. y Desc. = mismo PROY que la tabla IGF (`loadProyVentaDescByPlantForIgf`).
  */
 app.get("/api/dashboard/igf-forecast-mini", dashboardAuthMiddleware, async (req, res) => {
   if (dashboardBlockGAFinancialKpis(req, res)) return;
