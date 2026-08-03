@@ -10889,6 +10889,36 @@ async function fetchIgfFoliosDetalleList(client, year, month, empresa, tipo) {
 }
 
 /**
+ * Mes IGF cerrado según fecha de corte (no según el calendario del servidor).
+ * - Corte dentro del mes (p. ej. 31/07): el mes sigue abierto → se proyecta el día de corte (PROY).
+ * - Corte posterior al mes (p. ej. 02/08 viendo julio): mes cerrado → venta real.
+ * Sin corte: se usa el calendario (mes anterior al actual ⇒ cerrado).
+ */
+function isIgfMesCerradoPorCorte(year, month, uploadDayYmd) {
+  const y = Number(year);
+  const m = Number(month);
+  if (!Number.isFinite(y) || !Number.isFinite(m) || m < 1 || m > 12) return false;
+  const pad2 = (n) => String(n).padStart(2, "0");
+  const lastDay = new Date(y, m, 0).getDate();
+  const lastYmd = `${y}-${pad2(m)}-${pad2(lastDay)}`;
+  const corte = (uploadDayYmd || "").toString().trim().slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(corte)) {
+    return corte > lastYmd;
+  }
+  const now = new Date();
+  return y < now.getFullYear() || (y === now.getFullYear() && m < now.getMonth() + 1);
+}
+
+/** upload_day válido para IGF: mismo mes, o posterior (cierra el mes). No anterior al mes. */
+function isIgfUploadDayAllowedForMonth(year, month, uploadDayYmd) {
+  const corte = (uploadDayYmd || "").toString().trim().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(corte)) return false;
+  const pad2 = (n) => String(n).padStart(2, "0");
+  const firstYmd = `${Number(year)}-${pad2(Number(month))}-01`;
+  return corte >= firstYmd;
+}
+
+/**
  * PROY venta/desc por planta (snapshot guardado + computePronosticoProyByPlant).
  * Misma fuente para tabla IGF Forecast y mini-resumen / Pronóstico.
  * @returns {Promise<Map<string,{proy_venta_ton:number,proy_desc_kg:number}>>}
@@ -10920,7 +10950,9 @@ async function loadProyVentaDescByPlantForIgf(client, year, month, uploadDay) {
 async function buildIgfForecastPayload(client, year, month, opts = {}) {
   const now = new Date();
   const isMesActual = year === now.getFullYear() && month === (now.getMonth() + 1);
-  const isMesHistorico = year < now.getFullYear() || (year === now.getFullYear() && month < now.getMonth() + 1);
+  const uploadDayOverrideYmd = opts && typeof opts.upload_day === "string" ? opts.upload_day.trim().slice(0, 10) : null;
+  // Abierto/cerrado por fecha de corte (31/07 sigue abierto; 02/08 cierra julio). No por reloj del servidor.
+  const isMesHistorico = isIgfMesCerradoPorCorte(year, month, uploadDayOverrideYmd);
   const provRes = await client.query("SELECT plant_code FROM arr.provincia_plants ORDER BY plant_code");
     const provinciaPlantCodes = (provRes.rows || []).map((r) => (r.plant_code || "").trim()).filter(Boolean);
 
@@ -10949,9 +10981,8 @@ async function buildIgfForecastPayload(client, year, month, opts = {}) {
       return obj;
     });
     const totalRow = allRows.find((x) => /^TOTALES?$/i.test(x.empresa));
-    const uploadDayOverrideYmd = opts && typeof opts.upload_day === "string" ? opts.upload_day.trim().slice(0, 10) : null;
     // Mes abierto: Venta y Com. y Desc. = PROY del Pronóstico (unificado con mini-resumen).
-    // Mes histórico: venta real del mes. Ya no se usa el forecast ARR de 14 días.
+    // Mes cerrado (corte > último día del mes): venta real.
     const proyByPlant = !isMesHistorico
       ? await loadProyVentaDescByPlantForIgf(client, year, month, uploadDayOverrideYmd)
       : new Map();
@@ -11200,8 +11231,8 @@ async function buildIgfForecastPayload(client, year, month, opts = {}) {
 
 /**
  * Mini-resumen IGF:
- * - Mes actual: venta y Com. y Desc. salen de Pronóstico (PROY).
- * - Mes histórico (ya cerrado): venta = SUM(kg) real del mes calendario / 1000.
+ * - Mes abierto (corte dentro del mes, incl. último día): venta y Com. y Desc. = PROY.
+ * - Mes cerrado (corte > último día del mes, p. ej. 02/08 viendo julio): venta = real del mes.
  * - INGRESO .. Resultado Final replican exactamente G..L de `applyIgfMiniResumenFormulas`.
  */
 async function computeIgfForecastMiniPayload(client, igf, year, month, uploadDay) {
@@ -11278,9 +11309,7 @@ async function computeIgfForecastMiniPayload(client, igf, year, month, uploadDay
     });
   }
   const fechaCorteStr = (uploadDay || "").toString().trim().slice(0, 10);
-  const nowMini = new Date();
-  const isMesHistorico =
-    year < nowMini.getFullYear() || (year === nowMini.getFullYear() && month < nowMini.getMonth() + 1);
+  const isMesHistorico = isIgfMesCerradoPorCorte(year, month, fechaCorteStr);
   let ventaRealWrap = null;
   if (isMesHistorico) {
     const ventaRealByPlant = await dashboardArrForecast.getVentaRealTonProvinciaByPlant(client, year, month);
@@ -11417,10 +11446,10 @@ app.get("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, res)
     return res.status(400).json({ error: "upload_day debe ser YYYY-MM-DD" });
   }
   if (uploadDay) {
-    const uy = parseInt(uploadDay.slice(0, 4), 10);
-    const um = parseInt(uploadDay.slice(5, 7), 10);
-    if (!Number.isFinite(uy) || !Number.isFinite(um) || uy !== year || um !== month) {
-      return res.status(400).json({ error: "upload_day debe pertenecer al mismo year/month" });
+    if (!isIgfUploadDayAllowedForMonth(year, month, uploadDay)) {
+      return res.status(400).json({
+        error: "upload_day debe ser >= el primer día del mes (mismo mes = abierto; fecha posterior = mes cerrado)",
+      });
     }
   }
   const wantMini = /^(1|true|yes)$/i.test(String(req.query.include_mini || "").trim());
@@ -11460,10 +11489,10 @@ app.get("/api/dashboard/igf-forecast-mini", dashboardAuthMiddleware, async (req,
     return res.status(400).json({ error: "upload_day debe ser YYYY-MM-DD" });
   }
   if (uploadDay) {
-    const uy = parseInt(uploadDay.slice(0, 4), 10);
-    const um = parseInt(uploadDay.slice(5, 7), 10);
-    if (!Number.isFinite(uy) || !Number.isFinite(um) || uy !== year || um !== month) {
-      return res.status(400).json({ error: "upload_day debe pertenecer al mismo year/month" });
+    if (!isIgfUploadDayAllowedForMonth(year, month, uploadDay)) {
+      return res.status(400).json({
+        error: "upload_day debe ser >= el primer día del mes (mismo mes = abierto; fecha posterior = mes cerrado)",
+      });
     }
   }
 
@@ -11702,10 +11731,10 @@ app.patch("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, re
     return res.status(400).json({ error: "upload_day debe ser YYYY-MM-DD" });
   }
   if (uploadDayBody) {
-    const uy = parseInt(uploadDayBody.slice(0, 4), 10);
-    const um = parseInt(uploadDayBody.slice(5, 7), 10);
-    if (!Number.isFinite(uy) || !Number.isFinite(um) || uy !== year || um !== month) {
-      return res.status(400).json({ error: "upload_day debe pertenecer al mismo year/month" });
+    if (!isIgfUploadDayAllowedForMonth(year, month, uploadDayBody)) {
+      return res.status(400).json({
+        error: "upload_day debe ser >= el primer día del mes (mismo mes = abierto; fecha posterior = mes cerrado)",
+      });
     }
   }
   const client = await pool.connect();

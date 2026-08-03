@@ -43,12 +43,50 @@ import {
   INVERSION_CDJZ_STORAGE_KEY,
 } from "@/lib/igf-kpi-ui";
 import { mergeVentaSheetHighlights, recomputeVentaSheetFromDays } from "@/lib/pronostico-local-recalc";
+
+function lastYmdOfMonth(year: number, month: number): string {
+  const last = new Date(year, month, 0).getDate();
+  return `${year}-${String(month).padStart(2, "0")}-${String(last).padStart(2, "0")}`;
+}
+
+function isImmediateNextMonth(y: number, m: number, y2: number, m2: number): boolean {
+  if (m === 12) return y2 === y + 1 && m2 === 1;
+  return y2 === y && m2 === m + 1;
+}
+
+/**
+ * Resuelve year/month del IGF según la fecha de corte:
+ * - Corte dentro del mes → ese mes (abierto, se proyecta el día de corte).
+ * - Primera vez que el corte pasa al mes siguiente → se queda en el mes anterior (cerrado).
+ * - Si el mes ya estaba cerrado y el corte sigue en el siguiente → avanza a ese mes.
+ */
+function resolveIgfYearMonthFromCorte(
+  uploadYmd: string,
+  prev: { year: number; month: number } | null,
+  prevUploadYmd: string
+): { year: number; month: number; closed: boolean } {
+  const uy = Number(uploadYmd.slice(0, 4));
+  const um = Number(uploadYmd.slice(5, 7));
+  if (!prev?.year || !prev?.month) {
+    return { year: uy, month: um, closed: false };
+  }
+  const last = lastYmdOfMonth(prev.year, prev.month);
+  if (uploadYmd > last && isImmediateNextMonth(prev.year, prev.month, uy, um)) {
+    const alreadyClosed = Boolean(prevUploadYmd && /^\d{4}-\d{2}-\d{2}$/.test(prevUploadYmd) && prevUploadYmd > last);
+    if (!alreadyClosed) {
+      return { year: prev.year, month: prev.month, closed: true };
+    }
+  }
+  return { year: uy, month: um, closed: uploadYmd > lastYmdOfMonth(uy, um) };
+}
 import { UsuariosAdminModal } from "@/components/UsuariosAdminModal";
 
 export function IgfForecastContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const lastIgfFetchKeyRef = useRef<string>("");
+  const igfForecastRef = useRef<IgfForecastResponse | null>(null);
+  const prevUploadDayRef = useRef<string>("");
   const UPLOAD_DAY_STORAGE_KEY = "Diana";
   const [token, setToken] = useState<string | null>(null);
   const [unauthorized, setUnauthorized] = useState(false);
@@ -299,6 +337,10 @@ export function IgfForecastContent() {
   };
 
   useEffect(() => {
+    igfForecastRef.current = igfForecast;
+  }, [igfForecast]);
+
+  useEffect(() => {
     if (!token || isGAPageBlocked || isGVPageBlocked) return;
 
     let cancelled = false;
@@ -307,7 +349,7 @@ export function IgfForecastContent() {
     const load = async () => {
       if (fetching || !token || cancelled) return;
       fetching = true;
-      if (!igfForecast) setIgfLoading(true);
+      if (!igfForecastRef.current) setIgfLoading(true);
       setIgfError(null);
       try {
         let up = uploadDay.trim();
@@ -323,10 +365,30 @@ export function IgfForecastContent() {
             /* ignore */
           }
         }
-        const params =
-          up && /^\d{4}-\d{2}-\d{2}$/.test(up)
-            ? { year: Number(up.slice(0, 4)), month: Number(up.slice(5, 7)), upload_day: up, include_mini: true }
-            : { include_mini: true };
+        let params: { year?: number; month?: number; upload_day?: string; include_mini?: boolean };
+        if (up && /^\d{4}-\d{2}-\d{2}$/.test(up)) {
+          const prev = igfForecastRef.current;
+          const resolved = resolveIgfYearMonthFromCorte(
+            up,
+            prev?.year && prev?.month ? { year: prev.year, month: prev.month } : null,
+            prevUploadDayRef.current
+          );
+          params = {
+            year: resolved.year,
+            month: resolved.month,
+            upload_day: up,
+            include_mini: true,
+          };
+          if (resolved.closed) {
+            setUploadDayHint(
+              `Mes cerrado (corte ${up} posterior a ${lastYmdOfMonth(resolved.year, resolved.month)}): venta real`
+            );
+          } else {
+            setUploadDayHint((h) => (h && h.startsWith("Mes cerrado") ? null : h));
+          }
+        } else {
+          params = { include_mini: true };
+        }
         const fetchKey = `${token}|${JSON.stringify(params)}`;
         if (lastIgfFetchKeyRef.current === fetchKey) {
           fetching = false;
@@ -336,6 +398,8 @@ export function IgfForecastContent() {
         const data = await fetchIgfForecast(token, params);
         if (!cancelled) {
           setIgfForecast(data);
+          igfForecastRef.current = data;
+          if (up && /^\d{4}-\d{2}-\d{2}$/.test(up)) prevUploadDayRef.current = up;
           if (data.mini) {
             setIgfMini(data.mini);
             setIgfMiniLoading(false);
@@ -964,7 +1028,7 @@ export function IgfForecastContent() {
                     const miniOrder = new Map<string, number>();
                     const miniByEmpresa = new Map<string, IgfForecastMiniRow>();
                     miniRows.forEach((r, idx) => {
-                      const key = normalizeEmpresa(r.empresa || "");
+                      const key = presupuestoGendKey(r.empresa || "") || normalizeEmpresa(r.empresa || "");
                       if (!key) return;
                       if (!miniOrder.has(key)) miniOrder.set(key, idx);
                       if (!miniByEmpresa.has(key)) miniByEmpresa.set(key, r);
@@ -974,8 +1038,8 @@ export function IgfForecastContent() {
                       : igfForecast.rows.filter((r) => !/^TOTALES?$/i.test(r.empresa?.trim() || ""));
                     const sorted = [...filtered]
                       .sort((a, b) => {
-                        const miniA = miniOrder.get(normalizeEmpresa(a.empresa || ""));
-                        const miniB = miniOrder.get(normalizeEmpresa(b.empresa || ""));
+                        const miniA = miniOrder.get(presupuestoGendKey(a.empresa || "") || normalizeEmpresa(a.empresa || ""));
+                        const miniB = miniOrder.get(presupuestoGendKey(b.empresa || "") || normalizeEmpresa(b.empresa || ""));
                         if (miniA != null && miniB != null) return miniA - miniB;
                         if (miniA != null) return -1;
                         if (miniB != null) return 1;
@@ -987,7 +1051,9 @@ export function IgfForecastContent() {
                         return iA - iB;
                       });
                     return sorted.map((row: IgfForecastRow, i: number) => {
-                      const miniRow = miniByEmpresa.get(normalizeEmpresa(row.empresa || ""));
+                      const miniRow = miniByEmpresa.get(
+                        presupuestoGendKey(row.empresa || "") || normalizeEmpresa(row.empresa || "")
+                      );
                       const ventaTonTabla1 = miniRow?.ventaTon ?? row.venta_ton;
                       const comDescTabla1 = miniRow?.comDesc ?? row.com_desc_kg;
                       return (
