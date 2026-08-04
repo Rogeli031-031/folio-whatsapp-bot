@@ -6278,6 +6278,8 @@ app.get("/api/dashboard/taller-at-excel", dashboardAuthMiddleware, async (req, r
     const q = `
       SELECT f.id,
              f.numero_folio,
+             f.planta_id,
+             p.nombre AS planta_nombre,
              f.unidad,
              f.subcategoria,
              COALESCE(NULLIF(TRIM(f.descripcion), ''), NULLIF(TRIM(f.concepto), ''), '') AS concepto,
@@ -6286,9 +6288,10 @@ app.get("/api/dashboard/taller-at-excel", dashboardAuthMiddleware, async (req, r
              f.mes_cargo,
              f.estatus
         FROM public.folios f
+        LEFT JOIN public.plantas p ON p.id = f.planta_id
        WHERE 1=1 ${where}
          AND ${extra.join(" AND ")}
-       ORDER BY f.mes_cargo DESC, f.unidad NULLS LAST, f.id
+       ORDER BY COALESCE(p.nombre, ''), f.mes_cargo DESC, f.unidad NULLS LAST, f.id
     `;
     const r = await client.query(q, params);
     let plantaNombre = null;
