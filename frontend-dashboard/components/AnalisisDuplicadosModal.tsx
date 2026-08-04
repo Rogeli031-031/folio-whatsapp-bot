@@ -34,7 +34,7 @@ export default function AnalisisDuplicadosModal({
   onOpenFolio,
   onCancelled,
 }: Props) {
-  const [meses, setMeses] = useState(6);
+  const [meses, setMeses] = useState(3);
   const [umbral, setUmbral] = useState(0.72);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -57,7 +57,15 @@ export default function AnalisisDuplicadosModal({
     } catch (e) {
       setPairs([]);
       setMeta(null);
-      setError((e as Error).message || "Error al analizar");
+      const msg = (e as Error).message || "Error al analizar";
+      // fetch() lanza esto si el servidor no responde, CORS, o timeout (análisis pesado).
+      if (/failed to fetch|networkerror|load failed/i.test(msg)) {
+        setError(
+          "No se pudo conectar con el servidor (timeout o red). Prueba «Últimos 3 meses» o espera a que el API termine de reiniciar y vuelve a Analizar."
+        );
+      } else {
+        setError(msg);
+      }
     } finally {
       setLoading(false);
     }

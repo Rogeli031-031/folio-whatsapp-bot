@@ -10190,10 +10190,12 @@ app.post("/api/proyectos", dashboardAuthMiddleware, async (req, res) => {
   }
 });
 
-/** Carga folios de una planta en rango de fechas (creación) para análisis de duplicados. */
+/** Carga folios de una planta (y equivalentes) en rango de fechas (creación) para análisis de duplicados. */
 async function loadFoliosParaDuplicados(client, plantaId, desde, hasta) {
-  const params = [plantaId];
-  let where = `f.planta_id = $1 AND UPPER(TRIM(COALESCE(f.estatus,''))) <> 'CANCELADO'`;
+  const ids = getPlantaIdsEquivalentesForPendientes(plantaId);
+  const plantaIds = ids.length ? ids : [plantaId];
+  const params = [plantaIds];
+  let where = `f.planta_id = ANY($1::int[]) AND UPPER(TRIM(COALESCE(f.estatus,''))) <> 'CANCELADO'`;
   if (desde) {
     params.push(desde);
     where += ` AND f.creado_en >= $${params.length}::date`;
@@ -10208,7 +10210,7 @@ async function loadFoliosParaDuplicados(client, plantaId, desde, hasta) {
      FROM public.folios f
      WHERE ${where}
      ORDER BY f.creado_en DESC NULLS LAST
-     LIMIT 3000`,
+     LIMIT 1500`,
     params
   );
   return r.rows;
