@@ -61,6 +61,7 @@ const { isDirectorZPForDashboard } = require("./lib/dashboard-es-zp");
 const folioDuplicados = require("./lib/folio-duplicados");
 const clasificacionApoyosExcel = require("./lib/clasificacion-apoyos-excel");
 const tallerAtExcel = require("./lib/taller-at-excel");
+const unidadTaller = require("./lib/unidad-taller");
 const categoriaRangoExcel = require("./lib/categoria-rango-excel");
 const clasificacionComparar = require("./lib/clasificacion-comparar");
 const directorIaContext = require("./lib/director-ia-context");
@@ -288,21 +289,22 @@ function parseMoney(text) {
   return Number.isFinite(v) ? Math.round(v * 100) / 100 : null;
 }
 
+/** Homologa unidad Taller (AT/PT/S/C); ver lib/unidad-taller.js. */
 function normalizeUnidad(input) {
-  const raw = String(input || "").trim().toUpperCase().replace(/\s+/g, "");
-  if (!raw) return null;
-  // Solo dígitos => AT-{num} por defecto
-  if (/^\d{1,4}$/.test(raw)) {
-    const num = parseInt(raw, 10);
-    if (!Number.isFinite(num) || num < 1 || num > 1000) return null;
-    return `AT-${num}`;
+  return unidadTaller.normalizeUnidad(input);
+}
+
+/** Normaliza unidad al guardar folio Taller (soporta listas → "AT-11, AT-12"). */
+function resolveUnidadForSave(categoria, unidadRaw) {
+  const cat = String(categoria || "").trim().toUpperCase();
+  const raw = unidadRaw != null ? String(unidadRaw).trim() : "";
+  if (!raw) return { ok: true, unidad: null };
+  if (cat !== "TALLER" && !/TALLER/.test(cat)) {
+    return { ok: true, unidad: raw };
   }
-  // AT o C + guión/espacio (cualquier tipo de guión) + dígitos 1-1000; se conserva el número tal cual (ej. AT-03)
-  const m = raw.match(/^(AT|C)[\-\s\u2010-\u2015\u2212\uFF0D]*(\d{1,4})$/);
-  if (!m) return null;
-  const num = parseInt(m[2], 10);
-  if (!Number.isFinite(num) || num < 1 || num > 1000) return null;
-  return `${m[1]}-${m[2]}`;
+  const resolved = unidadTaller.resolveUnidadTaller(raw);
+  if (!resolved.ok) return { ok: false, error: resolved.error || "Unidad inválida", unidad: null };
+  return { ok: true, unidad: resolved.stored };
 }
 
 /** Parsea "crear folio <concepto> [urgente]" -> { concepto, urgente }. */
@@ -4337,8 +4339,9 @@ async function getFoliosByUnidad(client, unidad, opts = {}) {
   const plantaId = opts.plantaId != null ? opts.plantaId : null;
   const soloCancelados = !!opts.soloCancelados;
   const limit = Math.min(Math.max(1, opts.limit || 50), 100);
-  const unidadNorm = String(unidad || "").trim().toUpperCase().replace(/\s+/g, "");
-  if (!unidadNorm) return { rows: [] };
+  const target = normalizeUnidad(unidad);
+  if (!target) return { rows: [] };
+  const digits = String(target).replace(/\D/g, "");
 
   let r;
   try {
@@ -4348,7 +4351,8 @@ async function getFoliosByUnidad(client, unidad, opts = {}) {
               f.creado_en, f.updated_at
        FROM public.folios f
        LEFT JOIN public.plantas p ON p.id = f.planta_id
-       WHERE UPPER(REPLACE(REPLACE(COALESCE(f.unidad,''),' ',''),'-','')) = UPPER(REPLACE(REPLACE($1,' ',''),'-',''))
+       WHERE COALESCE(f.unidad, '') <> ''
+         AND UPPER(COALESCE(f.unidad, '')) LIKE '%' || $1 || '%'
          AND ($2::INT IS NULL OR f.planta_id = $2)
          AND (
            ($3::BOOL = TRUE  AND UPPER(TRIM(COALESCE(f.estatus,''))) = 'CANCELADO')
@@ -4357,13 +4361,17 @@ async function getFoliosByUnidad(client, unidad, opts = {}) {
          )
        ORDER BY COALESCE(f.updated_at, f.creado_en) DESC NULLS LAST, f.id DESC
        LIMIT $4`,
-      [unidadNorm, plantaId, soloCancelados, limit]
+      [digits, plantaId, soloCancelados, Math.min(limit * 8, 400)]
     );
   } catch (e) {
     if (e.message && /unidad|column/.test(e.message)) return { rows: [] };
     throw e;
   }
-  return { rows: (r && r.rows) || [] };
+  const rows = ((r && r.rows) || []).filter((row) => {
+    const list = unidadTaller.parseUnidadesList(row.unidad);
+    return list.includes(target);
+  }).slice(0, limit);
+  return { rows };
 }
 
 /** En proceso = no cancelado, no pagado, no cerrado, no comprobaciones, no evidencias. */
@@ -6608,7 +6616,9 @@ app.post("/api/dashboard/clasificacion-comparar/agregar", dashboardAuthMiddlewar
     const ok = tipos.some((t) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "") === subNorm);
     if (!ok) subcategoria = "PREVENTIVO";
   }
-  const unidad = item.unidad != null ? String(item.unidad).trim() : null;
+  const unidadRes = resolveUnidadForSave(catNorm, item.unidad != null ? String(item.unidad).trim() : "");
+  if (!unidadRes.ok) return res.status(400).json({ error: unidadRes.error });
+  const unidad = unidadRes.unidad;
   const role = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) || "";
 
   const client = await pool.connect();
@@ -6851,7 +6861,9 @@ app.post("/api/dashboard/clasificacion-comparar/son-distintos", dashboardAuthMid
     const ok = tipos.some((t) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "") === subNorm);
     if (!ok) subcategoria = "PREVENTIVO";
   }
-  const unidad = item.unidad != null ? String(item.unidad).trim() : null;
+  const unidadRes = resolveUnidadForSave(catNorm, item.unidad != null ? String(item.unidad).trim() : "");
+  if (!unidadRes.ok) return res.status(400).json({ error: unidadRes.error });
+  const unidad = unidadRes.unidad;
   const role = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) || "";
 
   const client = await pool.connect();
@@ -10376,7 +10388,12 @@ app.post("/api/folios", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddlewar
   const categoria = (body.categoria != null && body.categoria !== "") ? String(body.categoria).trim().toUpperCase() : null;
   const subcategoria = (body.subcategoria != null && body.subcategoria !== "") ? String(body.subcategoria).trim() : null;
   const prioridad = (body.prioridad != null && body.prioridad !== "") ? String(body.prioridad).trim() : null;
-  const unidad = (body.unidad != null && body.unidad !== "") ? String(body.unidad).trim() : null;
+  const unidadResolved = resolveUnidadForSave(
+    categoria,
+    body.unidad != null && body.unidad !== "" ? String(body.unidad).trim() : ""
+  );
+  if (!unidadResolved.ok) return res.status(400).json({ error: unidadResolved.error });
+  const unidad = unidadResolved.unidad;
   const estacion = (body.estacion != null && body.estacion !== "") ? String(body.estacion).trim() : null;
   const banco = (body.banco != null && body.banco !== "") ? String(body.banco).trim() : null;
   const cuenta_bancaria = (body.cuenta_bancaria != null && body.cuenta_bancaria !== "") ? String(body.cuenta_bancaria).trim() : null;
@@ -13335,6 +13352,13 @@ app.patch("/api/folios/:id/editar", dashboardAuthMiddleware, dashboardBlockGVFol
       proyecto_id: (req.body.proyecto_id != null && String(req.body.proyecto_id).trim() !== "") ? parseInt(req.body.proyecto_id, 10) : null,
       importe: (req.body.importe != null && String(req.body.importe).trim() !== "") ? Number(req.body.importe) : null,
     };
+
+    const catForUnidad = next.categoria != null ? next.categoria : folio.categoria;
+    if (next.unidad != null) {
+      const ur = resolveUnidadForSave(catForUnidad, next.unidad);
+      if (!ur.ok) return res.status(400).json({ error: ur.error });
+      next.unidad = ur.unidad;
+    }
 
     if (next.mes_cargo !== null && !/^\d{4}-\d{2}$/.test(next.mes_cargo)) return res.status(400).json({ error: "mes_cargo debe ser YYYY-MM" });
     if (next.proyecto_id != null && !Number.isFinite(next.proyecto_id)) return res.status(400).json({ error: "proyecto_id inválido" });

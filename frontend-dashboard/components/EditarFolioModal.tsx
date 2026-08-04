@@ -198,8 +198,13 @@ export default function EditarFolioModal({ open, token, folioId, folio, onClose,
               </label>
 
               <label className="text-sm text-slate-300">
-                <span className="mb-1 block text-xs text-slate-500">Unidad</span>
-                <input value={unidad} onChange={(e) => setUnidad(e.target.value)} className="w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200" />
+                <span className="mb-1 block text-xs text-slate-500">Unidad (Taller: AT-15 o 11,12,13)</span>
+                <input
+                  value={unidad}
+                  onChange={(e) => setUnidad(e.target.value)}
+                  className="w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200"
+                  placeholder="AT-15 o varias: 11,12,13"
+                />
               </label>
 
               <label className="text-sm text-slate-300">

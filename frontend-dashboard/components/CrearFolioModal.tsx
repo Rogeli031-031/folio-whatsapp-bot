@@ -545,8 +545,11 @@ export default function CrearFolioModal({
                   value={unidad}
                   onChange={(e) => setUnidad(e.target.value)}
                   className="w-full rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
-                  placeholder="AT-15"
+                  placeholder="AT-15 o varias: 11,12,13"
                 />
+                <p className="mt-0.5 text-[11px] text-slate-500">
+                  Se homologa a AT-XX. Varias pipas: el importe se reparte en partes iguales en reportes.
+                </p>
               </div>
             )}
             {showEstacion && (
