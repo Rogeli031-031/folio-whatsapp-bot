@@ -6,10 +6,20 @@ import {
   type DeltaIngresoForecastCliente,
   type DicfResult,
 } from "@/lib/api";
-import {
-  claseColorNombreClientePorCategoria,
-  dicfClienteEsComisionista,
-} from "@/lib/arr-categoria";
+import { categoriaEsComisionista, dicfClienteEsComisionista } from "@/lib/arr-categoria";
+
+/** Literales Tailwind en este archivo (content: components/) para no purgar el color. */
+function claseNombreClienteDicf(canal: string | undefined): string {
+  return categoriaEsComisionista(canal || "")
+    ? "text-blue-400 hover:text-blue-300"
+    : "text-yellow-300 hover:text-yellow-200";
+}
+
+function claseNombreClientePlan(cat: "CASA" | "COMISIONISTA"): string {
+  return cat === "COMISIONISTA"
+    ? "text-blue-400 hover:text-blue-300"
+    : "text-yellow-300 hover:text-yellow-200";
+}
 
 export type ArrDicfPlanNuevoRow = {
   nombre: string;
@@ -158,9 +168,7 @@ export default function ArrDicfCategoriaBucketsModal({
                     onClick={() => onClienteDicfClick(String(c.cliente || "").trim())}
                     className="w-full text-left"
                   >
-                    <span
-                      className={`font-medium ${claseColorNombreClientePorCategoria(c.canal || "")}`}
-                    >
+                    <span className={`font-medium ${claseNombreClienteDicf(c.canal)}`}>
                       {c.cliente}
                     </span>
                     {(c.acciones_abiertas || 0) > 0 && (
@@ -175,9 +183,7 @@ export default function ArrDicfCategoriaBucketsModal({
                   </button>
                 ) : (
                   <div>
-                    <span
-                      className={`font-medium ${claseColorNombreClientePorCategoria(c.canal || "")}`}
-                    >
+                    <span className={`font-medium ${claseNombreClienteDicf(c.canal)}`}>
                       {c.cliente}
                     </span>
                     <span className="text-slate-300">
@@ -207,9 +213,7 @@ export default function ArrDicfCategoriaBucketsModal({
                   key={`plan-${n.nombre}`}
                   className="border-b border-slate-800/60 pb-1.5 text-slate-400"
                 >
-                  <span
-                    className={`font-medium ${claseColorNombreClientePorCategoria(n.categoria)}`}
-                  >
+                  <span className={`font-medium ${claseNombreClientePlan(n.categoria)}`}>
                     {n.nombre}
                   </span>
                   <span className="ml-1 text-[0.65rem] text-slate-400">(plan)</span>

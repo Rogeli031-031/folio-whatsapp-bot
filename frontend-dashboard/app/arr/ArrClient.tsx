@@ -10,10 +10,7 @@ import ArrDicfCategoriaBucketsModal, {
 } from "@/components/ArrDicfCategoriaBucketsModal";
 import ArrSimularIngresoModal from "@/components/ArrSimularIngresoModal";
 import ArrNuevoClientePlanModal from "@/components/ArrNuevoClientePlanModal";
-import {
-  categoriaEsComisionista,
-  claseColorNombreClientePorCategoria,
-} from "@/lib/arr-categoria";
+import { categoriaEsComisionista } from "@/lib/arr-categoria";
 import {
   fetchIgfForecast,
   fetchIgfVersiones,
@@ -970,10 +967,17 @@ function clienteTieneAccionDicfAbierta(row: ClienteTablaRow): boolean {
   return n != null && Number.isFinite(n) && n > 0;
 }
 
-/** Color del nombre: amarillo = Casa (también si falta categoría), azul = Comisionista. */
+/**
+ * Color del nombre: amarillo = Casa, azul = Comisionista.
+ * Las clases Tailwind deben aparecer como literales aquí (content de Tailwind
+ * incluye app/; si solo viven en lib/ se purgan y Casa queda sin color).
+ */
 function claseNombreClienteTabla(row: ClienteTablaRow): string {
-  const color = claseColorNombreClientePorCategoria(row.categoria || "");
-  // DICF abierto: resalta sin pisar el código Casa/Comisionista
+  const comi = categoriaEsComisionista(row.categoria || "");
+  // literales completos para el JIT de Tailwind
+  const color = comi
+    ? "text-blue-400 hover:text-blue-300"
+    : "text-yellow-300 hover:text-yellow-200";
   return clienteTieneAccionDicfAbierta(row)
     ? `${color} font-semibold underline decoration-amber-400/80`
     : color;
@@ -4372,10 +4376,14 @@ export default function ArrClient() {
                 <th className={`px-3 py-2 text-center font-semibold uppercase tracking-wide ${G.imp}`}>
                   Impuestos
                 </th>
-                <th className={`px-3 py-2 text-center font-semibold uppercase tracking-wide ${G.mov}`}>
+                <th
+                  className={`px-3 py-2 text-center font-semibold uppercase tracking-wide text-yellow-300 ${G.mov}`}
+                >
                   CASA
                 </th>
-                <th className={`px-3 py-2 text-center font-semibold uppercase tracking-wide ${G.mov}`}>
+                <th
+                  className={`px-3 py-2 text-center font-semibold uppercase tracking-wide text-blue-400 ${G.mov}`}
+                >
                   COMISIONISTA
                 </th>
                 <th className={`px-3 py-2 text-center font-semibold uppercase tracking-wide ${G.rent}`}>
@@ -4845,9 +4853,15 @@ export default function ArrClient() {
                       className={`mx-auto block max-w-full cursor-pointer text-center hover:underline disabled:cursor-not-allowed disabled:opacity-50 ${claseNombreClienteTabla(row)}`}
                       disabled={!empresa || !token}
                       title={
-                        clienteTieneAccionDicfAbierta(row)
-                          ? `${row.acciones_abiertas} acción(es) DICF abierta(s). Ver Delta Ingreso Cliente Forecast`
-                          : "Ver Delta Ingreso Cliente Forecast"
+                        (() => {
+                          const cat = categoriaEsComisionista(row.categoria || "")
+                            ? "Comisionista"
+                            : "Casa";
+                          const dicf = clienteTieneAccionDicfAbierta(row)
+                            ? ` · ${row.acciones_abiertas} acción(es) DICF abierta(s)`
+                            : "";
+                          return `${cat}${dicf}. Ver Delta Ingreso Cliente Forecast`;
+                        })()
                       }
                     >
                       {row.cliente}
@@ -5026,9 +5040,15 @@ export default function ArrClient() {
                       className={`mx-auto block max-w-full cursor-pointer text-center hover:underline disabled:cursor-not-allowed disabled:opacity-50 ${claseNombreClienteTabla(row)}`}
                       disabled={!empresa || !token}
                       title={
-                        clienteTieneAccionDicfAbierta(row)
-                          ? `${row.acciones_abiertas} acción(es) DICF abierta(s). Ver Delta Ingreso Cliente Forecast`
-                          : "Ver Delta Ingreso Cliente Forecast"
+                        (() => {
+                          const cat = categoriaEsComisionista(row.categoria || "")
+                            ? "Comisionista"
+                            : "Casa";
+                          const dicf = clienteTieneAccionDicfAbierta(row)
+                            ? ` · ${row.acciones_abiertas} acción(es) DICF abierta(s)`
+                            : "";
+                          return `${cat}${dicf}. Ver Delta Ingreso Cliente Forecast`;
+                        })()
                       }
                     >
                       {row.cliente}
