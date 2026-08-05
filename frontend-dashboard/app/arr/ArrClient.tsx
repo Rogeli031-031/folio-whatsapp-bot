@@ -10,7 +10,10 @@ import ArrDicfCategoriaBucketsModal, {
 } from "@/components/ArrDicfCategoriaBucketsModal";
 import ArrSimularIngresoModal from "@/components/ArrSimularIngresoModal";
 import ArrNuevoClientePlanModal from "@/components/ArrNuevoClientePlanModal";
-import { categoriaEsComisionista, dicfClienteEsComisionista } from "@/lib/arr-categoria";
+import {
+  categoriaEsComisionista,
+  claseColorNombreClientePorCategoria,
+} from "@/lib/arr-categoria";
 import {
   fetchIgfForecast,
   fetchIgfVersiones,
@@ -967,23 +970,24 @@ function clienteTieneAccionDicfAbierta(row: ClienteTablaRow): boolean {
   return n != null && Number.isFinite(n) && n > 0;
 }
 
-/** Color del nombre: amarillo = Casa, azul = Comisionista (código visual del resumen). */
-function claseNombreClientePorCategoria(row: ClienteTablaRow): string {
-  if (categoriaEsComisionista(row.categoria || "")) {
-    return "text-blue-400 hover:text-blue-300";
-  }
-  if (String(row.categoria || "").trim()) {
-    return "text-yellow-300 hover:text-yellow-200";
-  }
-  return "text-slate-300 hover:text-slate-200";
-}
-
+/** Color del nombre: amarillo = Casa (también si falta categoría), azul = Comisionista. */
 function claseNombreClienteTabla(row: ClienteTablaRow): string {
-  const color = claseNombreClientePorCategoria(row);
+  const color = claseColorNombreClientePorCategoria(row.categoria || "");
   // DICF abierto: resalta sin pisar el código Casa/Comisionista
   return clienteTieneAccionDicfAbierta(row)
     ? `${color} font-semibold underline decoration-amber-400/80`
     : color;
+}
+
+/** Preferir categoría explícita del mes B; si falta, la del A (vacío ≡ Casa en color/API). */
+function categoriaClienteDesdeMeses(
+  rA: { categoria?: string } | null | undefined,
+  rB: { categoria?: string } | null | undefined
+): string {
+  const b = String(rB?.categoria || "").trim();
+  if (b) return b;
+  const a = String(rA?.categoria || "").trim();
+  return a || "Casa";
 }
 
 /**
@@ -1232,9 +1236,7 @@ function planCategoriaFromArr(arr: ArrClienteMesRow | null): {
   subcategoria: string;
 } {
   if (!arr) return { categoria: "CASA", subcategoria: "" };
-  const comi =
-    categoriaEsComisionista(arr.categoria) ||
-    dicfClienteEsComisionista({ canal: arr.categoria, subcanal: arr.subcategoria });
+  const comi = categoriaEsComisionista(arr.categoria);
   return {
     categoria: comi ? "COMISIONISTA" : "CASA",
     subcategoria: String(arr.subcategoria ?? "").trim(),
@@ -2626,7 +2628,7 @@ export default function ArrClient() {
         deltaIngreso: (ingresoBAlloc ?? 0) - (ingresoAAlloc ?? 0),
         soloNuevo: false,
         acciones_abiertas: rB?.acciones_abiertas ?? rA?.acciones_abiertas ?? 0,
-        categoria: (rB?.categoria || rA.categoria || "").trim(),
+        categoria: categoriaClienteDesdeMeses(rA, rB),
       });
     }
 
@@ -2651,7 +2653,7 @@ export default function ArrClient() {
           deltaIngreso: (ingresoBCliente ?? 0) - 0,
           soloNuevo: true,
           acciones_abiertas: rB.acciones_abiertas ?? 0,
-          categoria: (rB.categoria || "").trim(),
+          categoria: categoriaClienteDesdeMeses(null, rB),
         });
       }
       soloSegundo.sort((x, y) => {
@@ -3594,7 +3596,7 @@ export default function ArrClient() {
           ingresoB: ingresoBAlloc,
           deltaIngreso: (ingresoBAlloc ?? 0) - (ingresoAAlloc ?? 0),
           soloNuevo: false,
-          categoria: (rB?.categoria || rA.categoria || "").trim(),
+          categoria: categoriaClienteDesdeMeses(rA, rB),
         });
       }
 
@@ -3618,7 +3620,7 @@ export default function ArrClient() {
             ingresoB: ingresoBCliente,
             deltaIngreso: (ingresoBCliente ?? 0) - 0,
             soloNuevo: true,
-            categoria: (rB.categoria || "").trim(),
+            categoria: categoriaClienteDesdeMeses(null, rB),
           });
         }
         filasSolo.sort((x, y) => {

@@ -6,7 +6,10 @@ import {
   type DeltaIngresoForecastCliente,
   type DicfResult,
 } from "@/lib/api";
-import { dicfClienteEsComisionista } from "@/lib/arr-categoria";
+import {
+  claseColorNombreClientePorCategoria,
+  dicfClienteEsComisionista,
+} from "@/lib/arr-categoria";
 
 export type ArrDicfPlanNuevoRow = {
   nombre: string;
@@ -153,22 +156,34 @@ export default function ArrDicfCategoriaBucketsModal({
                   <button
                     type="button"
                     onClick={() => onClienteDicfClick(String(c.cliente || "").trim())}
-                    className="w-full text-left hover:text-amber-200"
+                    className="w-full text-left"
                   >
-                    <span className="font-medium text-slate-100">{c.cliente}</span>
+                    <span
+                      className={`font-medium ${claseColorNombreClientePorCategoria(c.canal || "")}`}
+                    >
+                      {c.cliente}
+                    </span>
                     {(c.acciones_abiertas || 0) > 0 && (
                       <span className="ml-1 inline-flex items-center rounded border border-amber-700/50 bg-amber-900/25 px-1 py-0.5 text-[0.6rem] text-amber-200">
                         Acc.: {c.acciones_abiertas}
                       </span>
                     )}
-                    : {c.deltaKgStr != null ? `${c.deltaKgStr} Ton · ` : ""}
-                    {ingresoStr(c) ?? "—"}
+                    <span className="text-slate-300">
+                      : {c.deltaKgStr != null ? `${c.deltaKgStr} Ton · ` : ""}
+                      {ingresoStr(c) ?? "—"}
+                    </span>
                   </button>
                 ) : (
                   <div>
-                    <span className="font-medium text-slate-100">{c.cliente}</span>
-                    : {c.deltaKgStr != null ? `${c.deltaKgStr} Ton · ` : ""}
-                    {ingresoStr(c) ?? "—"}
+                    <span
+                      className={`font-medium ${claseColorNombreClientePorCategoria(c.canal || "")}`}
+                    >
+                      {c.cliente}
+                    </span>
+                    <span className="text-slate-300">
+                      : {c.deltaKgStr != null ? `${c.deltaKgStr} Ton · ` : ""}
+                      {ingresoStr(c) ?? "—"}
+                    </span>
                   </div>
                 )}
                 <p className="mt-0.5 pl-0.5 text-[0.65rem] text-slate-500">
@@ -192,8 +207,12 @@ export default function ArrDicfCategoriaBucketsModal({
                   key={`plan-${n.nombre}`}
                   className="border-b border-slate-800/60 pb-1.5 text-slate-400"
                 >
-                  <span className="font-medium text-slate-200">{n.nombre}</span>
-                  <span className="ml-1 text-[0.65rem] text-sky-300/90">(plan)</span>
+                  <span
+                    className={`font-medium ${claseColorNombreClientePorCategoria(n.categoria)}`}
+                  >
+                    {n.nombre}
+                  </span>
+                  <span className="ml-1 text-[0.65rem] text-slate-400">(plan)</span>
                   <span className="text-slate-400">
                     : {`${(n.kg / 1000).toFixed(2)} Ton`}
                   </span>
