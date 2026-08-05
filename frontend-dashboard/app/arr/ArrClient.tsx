@@ -967,20 +967,20 @@ function clienteTieneAccionDicfAbierta(row: ClienteTablaRow): boolean {
   return n != null && Number.isFinite(n) && n > 0;
 }
 
-/**
- * Color del nombre: amarillo = Casa, azul = Comisionista.
- * Las clases Tailwind deben aparecer como literales aquí (content de Tailwind
- * incluye app/; si solo viven en lib/ se purgan y Casa queda sin color).
- */
+/** Amarillo Casa / azul Comisionista — inline para no depender del purge de Tailwind. */
+const COLOR_CLIENTE_CASA = "#facc15";
+const COLOR_CLIENTE_COMISIONISTA = "#38bdf8";
+
+function colorHexNombreCliente(row: ClienteTablaRow): string {
+  return categoriaEsComisionista(row.categoria || "")
+    ? COLOR_CLIENTE_COMISIONISTA
+    : COLOR_CLIENTE_CASA;
+}
+
 function claseNombreClienteTabla(row: ClienteTablaRow): string {
-  const comi = categoriaEsComisionista(row.categoria || "");
-  // literales completos para el JIT de Tailwind
-  const color = comi
-    ? "text-blue-400 hover:text-blue-300"
-    : "text-yellow-300 hover:text-yellow-200";
   return clienteTieneAccionDicfAbierta(row)
-    ? `${color} font-semibold underline decoration-amber-400/80`
-    : color;
+    ? "font-semibold underline decoration-amber-400/80"
+    : "";
 }
 
 /** Preferir categoría explícita del mes B; si falta, la del A (vacío ≡ Casa en color/API). */
@@ -4377,12 +4377,14 @@ export default function ArrClient() {
                   Impuestos
                 </th>
                 <th
-                  className={`px-3 py-2 text-center font-semibold uppercase tracking-wide text-yellow-300 ${G.mov}`}
+                  className={`px-3 py-2 text-center font-semibold uppercase tracking-wide ${G.mov}`}
+                  style={{ color: COLOR_CLIENTE_CASA }}
                 >
                   CASA
                 </th>
                 <th
-                  className={`px-3 py-2 text-center font-semibold uppercase tracking-wide text-blue-400 ${G.mov}`}
+                  className={`px-3 py-2 text-center font-semibold uppercase tracking-wide ${G.mov}`}
+                  style={{ color: COLOR_CLIENTE_COMISIONISTA }}
                 >
                   COMISIONISTA
                 </th>
@@ -4851,6 +4853,7 @@ export default function ArrClient() {
                       type="button"
                       onClick={() => empresa && setDicfModalCliente(row.cliente)}
                       className={`mx-auto block max-w-full cursor-pointer text-center hover:underline disabled:cursor-not-allowed disabled:opacity-50 ${claseNombreClienteTabla(row)}`}
+                      style={{ color: colorHexNombreCliente(row) }}
                       disabled={!empresa || !token}
                       title={
                         (() => {
@@ -5038,6 +5041,7 @@ export default function ArrClient() {
                       type="button"
                       onClick={() => empresa && setDicfModalCliente(row.cliente)}
                       className={`mx-auto block max-w-full cursor-pointer text-center hover:underline disabled:cursor-not-allowed disabled:opacity-50 ${claseNombreClienteTabla(row)}`}
+                      style={{ color: colorHexNombreCliente(row) }}
                       disabled={!empresa || !token}
                       title={
                         (() => {
