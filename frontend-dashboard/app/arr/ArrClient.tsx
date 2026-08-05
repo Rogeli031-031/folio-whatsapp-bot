@@ -958,11 +958,32 @@ type ClienteTablaRow = {
   soloNuevo: boolean;
   /** Acciones DICF abiertas (mes B si existe, si no mes A). */
   acciones_abiertas?: number;
+  /** Canal ARR (Casa / Comisionista); misma regla que el resumen CATEGORIA. */
+  categoria?: string;
 };
 
 function clienteTieneAccionDicfAbierta(row: ClienteTablaRow): boolean {
   const n = row.acciones_abiertas;
   return n != null && Number.isFinite(n) && n > 0;
+}
+
+/** Color del nombre: amarillo = Casa, azul = Comisionista (código visual del resumen). */
+function claseNombreClientePorCategoria(row: ClienteTablaRow): string {
+  if (categoriaEsComisionista(row.categoria || "")) {
+    return "text-blue-400 hover:text-blue-300";
+  }
+  if (String(row.categoria || "").trim()) {
+    return "text-yellow-300 hover:text-yellow-200";
+  }
+  return "text-slate-300 hover:text-slate-200";
+}
+
+function claseNombreClienteTabla(row: ClienteTablaRow): string {
+  const color = claseNombreClientePorCategoria(row);
+  // DICF abierto: resalta sin pisar el código Casa/Comisionista
+  return clienteTieneAccionDicfAbierta(row)
+    ? `${color} font-semibold underline decoration-amber-400/80`
+    : color;
 }
 
 /**
@@ -2605,6 +2626,7 @@ export default function ArrClient() {
         deltaIngreso: (ingresoBAlloc ?? 0) - (ingresoAAlloc ?? 0),
         soloNuevo: false,
         acciones_abiertas: rB?.acciones_abiertas ?? rA?.acciones_abiertas ?? 0,
+        categoria: (rB?.categoria || rA.categoria || "").trim(),
       });
     }
 
@@ -2629,6 +2651,7 @@ export default function ArrClient() {
           deltaIngreso: (ingresoBCliente ?? 0) - 0,
           soloNuevo: true,
           acciones_abiertas: rB.acciones_abiertas ?? 0,
+          categoria: (rB.categoria || "").trim(),
         });
       }
       soloSegundo.sort((x, y) => {
@@ -3571,6 +3594,7 @@ export default function ArrClient() {
           ingresoB: ingresoBAlloc,
           deltaIngreso: (ingresoBAlloc ?? 0) - (ingresoAAlloc ?? 0),
           soloNuevo: false,
+          categoria: (rB?.categoria || rA.categoria || "").trim(),
         });
       }
 
@@ -3594,6 +3618,7 @@ export default function ArrClient() {
             ingresoB: ingresoBCliente,
             deltaIngreso: (ingresoBCliente ?? 0) - 0,
             soloNuevo: true,
+            categoria: (rB.categoria || "").trim(),
           });
         }
         filasSolo.sort((x, y) => {
@@ -4815,11 +4840,7 @@ export default function ArrClient() {
                     <button
                       type="button"
                       onClick={() => empresa && setDicfModalCliente(row.cliente)}
-                      className={`mx-auto block max-w-full cursor-pointer text-center hover:underline disabled:cursor-not-allowed disabled:opacity-50 ${
-                        clienteTieneAccionDicfAbierta(row)
-                          ? "text-amber-300 hover:text-amber-200"
-                          : "text-sky-300 hover:text-sky-200"
-                      }`}
+                      className={`mx-auto block max-w-full cursor-pointer text-center hover:underline disabled:cursor-not-allowed disabled:opacity-50 ${claseNombreClienteTabla(row)}`}
                       disabled={!empresa || !token}
                       title={
                         clienteTieneAccionDicfAbierta(row)
@@ -5000,11 +5021,7 @@ export default function ArrClient() {
                     <button
                       type="button"
                       onClick={() => empresa && setDicfModalCliente(row.cliente)}
-                      className={`mx-auto block max-w-full cursor-pointer text-center hover:underline disabled:cursor-not-allowed disabled:opacity-50 ${
-                        clienteTieneAccionDicfAbierta(row)
-                          ? "text-amber-300 hover:text-amber-200"
-                          : "text-sky-300 hover:text-sky-200"
-                      }`}
+                      className={`mx-auto block max-w-full cursor-pointer text-center hover:underline disabled:cursor-not-allowed disabled:opacity-50 ${claseNombreClienteTabla(row)}`}
                       disabled={!empresa || !token}
                       title={
                         clienteTieneAccionDicfAbierta(row)
