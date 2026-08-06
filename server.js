@@ -13183,28 +13183,40 @@ app.patch("/api/folios/:id/rechazo-cdjz", dashboardAuthMiddleware, dashboardBloc
   }
 });
 
-/** Mes de cargo siguiente (YYYY-MM) respecto a hoy en America/Mexico_City. */
-function getNextMesCargoYyyyMm(now = new Date()) {
+/**
+ * Mes de cargo siguiente (YYYY-MM) respecto al mes calendario actual en America/Mexico_City.
+ * Ej.: si hoy es agosto → "2026-09". Nunca devuelve el mes actual.
+ */
+function getNextMesCargoYyyyMm() {
+  const { mesActual } = getMesActualYAnteriorMx();
+  const m = String(mesActual || "").match(/^(\d{4})-(\d{2})$/);
+  if (m) {
+    const y = parseInt(m[1], 10);
+    const month = parseInt(m[2], 10);
+    if (Number.isFinite(y) && Number.isFinite(month) && month >= 1 && month <= 12) {
+      const nextM = month === 12 ? 1 : month + 1;
+      const nextY = month === 12 ? y + 1 : y;
+      return `${nextY}-${String(nextM).padStart(2, "0")}`;
+    }
+  }
+  const d = new Date();
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/Mexico_City",
     year: "numeric",
     month: "2-digit",
-  }).formatToParts(now);
-  const y = parseInt((parts.find((p) => p.type === "year") || {}).value, 10);
-  const m = parseInt((parts.find((p) => p.type === "month") || {}).value, 10);
-  if (!Number.isFinite(y) || !Number.isFinite(m) || m < 1 || m > 12) {
-    const d = new Date();
-    const nm = d.getUTCMonth() + 2;
-    const ny = d.getUTCFullYear() + (nm > 12 ? 1 : 0);
-    const month = nm > 12 ? nm - 12 : nm;
-    return `${ny}-${String(month).padStart(2, "0")}`;
+  }).formatToParts(d);
+  let y = parseInt((parts.find((p) => p.type === "year") || {}).value, 10);
+  let month = parseInt((parts.find((p) => p.type === "month") || {}).value, 10);
+  if (!Number.isFinite(y) || !Number.isFinite(month) || month < 1 || month > 12) {
+    y = d.getUTCFullYear();
+    month = d.getUTCMonth() + 1;
   }
-  const nextM = m === 12 ? 1 : m + 1;
-  const nextY = m === 12 ? y + 1 : y;
+  const nextM = month === 12 ? 1 : month + 1;
+  const nextY = month === 12 ? y + 1 : y;
   return `${nextY}-${String(nextM).padStart(2, "0")}`;
 }
 
-/** Marcar folio como préstamo del mes siguiente: activa el flag y fija mes_cargo al mes siguiente. */
+/** Marcar folio como préstamo del mes siguiente: activa el flag y fija mes_cargo al mes siguiente (nunca el mes actual). */
 app.patch("/api/folios/:id/prestamo-siguiente-mes", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddleware, async (req, res) => {
   if (req.dashboardAuth.role === "GA") return res.status(403).json({ error: "GA solo puede ver e imprimir en el dashboard." });
   const folioId = parseInt(req.params.id, 10);
@@ -13227,7 +13239,14 @@ app.patch("/api/folios/:id/prestamo-siguiente-mes", dashboardAuthMiddleware, das
         mes_cargo: folio.mes_cargo || null,
       });
     }
+    const { mesActual } = getMesActualYAnteriorMx();
     const mesCargo = getNextMesCargoYyyyMm();
+    // Invariante: préstamo siguiente mes no puede quedar con mes_cargo = mes calendario actual.
+    if (!mesCargo || mesCargo === mesActual) {
+      return res.status(500).json({
+        error: "No se pudo calcular el mes de cargo siguiente (debe ser distinto al mes actual).",
+      });
+    }
     await client.query(
       `UPDATE public.folios SET prestamo_siguiente_mes = TRUE, mes_cargo = $1 WHERE id = $2`,
       [mesCargo, folioId]
@@ -13238,7 +13257,7 @@ app.patch("/api/folios/:id/prestamo-siguiente-mes", dashboardAuthMiddleware, das
       folio.numero_folio,
       folio.folio_codigo,
       folio.estatus || "",
-      `Marcado como préstamos siguiente mes. Mes de cargo: ${mesCargo}.`,
+      `Marcado como préstamos siguiente mes. Mes de cargo: ${mesCargo} (mes actual ${mesActual} no aplica).`,
       null,
       req.dashboardAuth.role || null
     ).catch(() => {});

@@ -757,7 +757,7 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
                           <p className="text-sm text-sky-300 mb-1">
                             Identificado como <strong>préstamos siguiente mes</strong>
                             {(folio as Record<string, unknown>).mes_cargo
-                              ? ` (mes de cargo: ${(folio as Record<string, unknown>).mes_cargo as string})`
+                              ? ` — mes de cargo: ${(folio as Record<string, unknown>).mes_cargo as string} (no el mes actual)`
                               : ""}
                           </p>
                         )}
@@ -830,9 +830,20 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
                               setApproveError(null);
                               try {
                                 const res = await patchFolioPrestamoSiguienteMes(token, folioId, !activo);
-                                const f = await fetchFolio(token, folioId);
-                                setFolio(f as Record<string, unknown>);
-                                if (res.mes_cargo) setMesCargoEdit(res.mes_cargo);
+                                const f = (await fetchFolio(token, folioId)) as Record<string, unknown>;
+                                // Forzar UI con la respuesta del API: mes_cargo = mes calendario siguiente (nunca el actual).
+                                const mesCargoRes =
+                                  res.prestamo_siguiente_mes && res.mes_cargo
+                                    ? res.mes_cargo
+                                    : ((f.mes_cargo as string) || "");
+                                setFolio({
+                                  ...f,
+                                  prestamo_siguiente_mes: res.prestamo_siguiente_mes,
+                                  mes_cargo: res.prestamo_siguiente_mes
+                                    ? res.mes_cargo ?? f.mes_cargo
+                                    : f.mes_cargo,
+                                });
+                                if (mesCargoRes) setMesCargoEdit(mesCargoRes);
                                 onApproved?.();
                               } catch (e) {
                                 setApproveError((e as Error).message || "Error al marcar préstamo siguiente mes");
@@ -846,7 +857,7 @@ export default function FolioDrawer({ folioId, token, role = "GG", onClose, onAp
                                 ? "bg-sky-700 hover:bg-sky-600"
                                 : "bg-slate-600 hover:bg-slate-500"
                             }`}
-                            title="Asigna el mes de cargo al mes siguiente e identifica el folio como préstamos siguiente mes en Excel"
+                            title="Asigna el mes de cargo al mes calendario siguiente (ej. en agosto → septiembre), no al mes actual"
                           >
                             {savingPrestamoSiguienteMes
                               ? "…"
