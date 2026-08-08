@@ -1077,6 +1077,48 @@ export function fetchPlantas(token: string): Promise<{ plantas: { id: number; no
   return apiFetch<{ plantas: { id: number; nombre: string }[] }>("/api/dashboard/plantas", { token });
 }
 
+export type SehCategoria =
+  | "EXTINTOR"
+  | "VALVULAS PLANTA"
+  | "VALVULAS ESTACIONES"
+  | "VALVULAS PIPAS"
+  | "SISTEMA CONTRA INCENDIO";
+
+export interface SehItem {
+  id?: number;
+  planta_id?: number;
+  categoria: SehCategoria | string;
+  nombre: string;
+  vence: string | null;
+  sort_order: number;
+}
+
+export interface SehBoardResponse {
+  planta_id: number;
+  categorias: string[];
+  items: SehItem[];
+  ok?: boolean;
+}
+
+export function fetchSehBoard(token: string, plantaId: number): Promise<SehBoardResponse> {
+  return apiFetch<SehBoardResponse>("/api/seh", {
+    token,
+    params: { planta_id: String(plantaId) },
+  });
+}
+
+export function putSehBoard(
+  token: string,
+  plantaId: number,
+  items: SehItem[]
+): Promise<SehBoardResponse> {
+  return apiFetch<SehBoardResponse>("/api/seh", {
+    token,
+    method: "PUT",
+    body: JSON.stringify({ planta_id: plantaId, items }),
+  });
+}
+
 export interface IgfForecastRow {
   empresa: string;
   venta_ton: number | null;

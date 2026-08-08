@@ -2726,6 +2726,24 @@ async function ensureSchema() {
     await client.query(`ALTER TABLE public.folio_archivos ADD COLUMN IF NOT EXISTS monto NUMERIC(18,2);`).catch(() => {});
     await client.query(`ALTER TABLE public.folios ADD COLUMN IF NOT EXISTS numero_cheque VARCHAR(100);`).catch(() => {});
 
+    /** SEH: listado manual de equipos/componentes por planta con fecha de vencimiento. */
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS public.seh_equipos (
+        id SERIAL PRIMARY KEY,
+        planta_id INT NOT NULL REFERENCES public.plantas(id) ON DELETE CASCADE,
+        categoria VARCHAR(60) NOT NULL,
+        nombre VARCHAR(255) NOT NULL DEFAULT '',
+        vence DATE,
+        sort_order INT NOT NULL DEFAULT 0,
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_by TEXT
+      );
+    `).catch(() => {});
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_seh_equipos_planta_cat
+      ON public.seh_equipos(planta_id, categoria, sort_order, id);
+    `).catch(() => {});
+
     /* Presupuesto semanal por planta (CDMX asigna, GG selecciona folios, CDMX envía a cheques). */
     await client.query(`
       CREATE TABLE IF NOT EXISTS public.presupuestos_semanales (
@@ -7067,6 +7085,155 @@ app.get("/api/dashboard/plantas", dashboardAuthMiddleware, async (req, res) => {
     res.json({ plantas: list });
   } catch (e) {
     console.error("[Dashboard plantas]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/** Categorías fijas del módulo SEH (Seguridad e Higiene). */
+const SEH_CATEGORIAS = [
+  "EXTINTOR",
+  "VALVULAS PLANTA",
+  "VALVULAS ESTACIONES",
+  "VALVULAS PIPAS",
+  "SISTEMA CONTRA INCENDIO",
+];
+
+function sehParseVence(raw) {
+  if (raw == null || raw === "") return null;
+  const s = String(raw).trim();
+  if (!s) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const mdy = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (mdy) {
+    const mm = String(parseInt(mdy[1], 10)).padStart(2, "0");
+    const dd = String(parseInt(mdy[2], 10)).padStart(2, "0");
+    return `${mdy[3]}-${mm}-${dd}`;
+  }
+  const dmy = s.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+  if (dmy) {
+    const dd = String(parseInt(dmy[1], 10)).padStart(2, "0");
+    const mm = String(parseInt(dmy[2], 10)).padStart(2, "0");
+    return `${dmy[3]}-${mm}-${dd}`;
+  }
+  return null;
+}
+
+/** GET /api/seh?planta_id= — listado de equipos SEH de una planta. */
+app.get("/api/seh", dashboardAuthMiddleware, async (req, res) => {
+  const plantaId = parseInt(String(req.query.planta_id || ""), 10);
+  if (!Number.isFinite(plantaId)) {
+    return res.status(400).json({ error: "planta_id es obligatorio" });
+  }
+  if (
+    (req.dashboardAuth.role === "GG" || req.dashboardAuth.role === "GA" || req.dashboardAuth.role === "GV") &&
+    req.dashboardAuth.plantas_permitidas?.length > 0 &&
+    !req.dashboardAuth.plantas_permitidas.includes(plantaId)
+  ) {
+    return res.status(403).json({ error: "Sin permiso para esta planta" });
+  }
+  const client = await pool.connect();
+  try {
+    const r = await client.query(
+      `SELECT id, planta_id, categoria, nombre, to_char(vence, 'YYYY-MM-DD') AS vence, sort_order
+       FROM public.seh_equipos
+       WHERE planta_id = $1
+       ORDER BY categoria, sort_order, id`,
+      [plantaId]
+    );
+    res.json({
+      planta_id: plantaId,
+      categorias: SEH_CATEGORIAS,
+      items: (r.rows || []).map((row) => ({
+        id: row.id,
+        planta_id: row.planta_id,
+        categoria: row.categoria,
+        nombre: row.nombre || "",
+        vence: row.vence || null,
+        sort_order: row.sort_order,
+      })),
+    });
+  } catch (e) {
+    console.error("[SEH GET]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/**
+ * PUT /api/seh
+ * Body: { planta_id, items: [{ categoria, nombre, vence, sort_order }] }
+ * Reemplaza el listado completo de la planta (solo filas con nombre o fecha).
+ */
+app.put("/api/seh", dashboardAuthMiddleware, async (req, res) => {
+  if (req.dashboardAuth.role === "GA") {
+    return res.status(403).json({ error: "GA solo puede ver e imprimir en el dashboard." });
+  }
+  const plantaId = parseInt(String(req.body?.planta_id || ""), 10);
+  if (!Number.isFinite(plantaId)) {
+    return res.status(400).json({ error: "planta_id es obligatorio" });
+  }
+  if (
+    (req.dashboardAuth.role === "GG" || req.dashboardAuth.role === "GV") &&
+    req.dashboardAuth.plantas_permitidas?.length > 0 &&
+    !req.dashboardAuth.plantas_permitidas.includes(plantaId)
+  ) {
+    return res.status(403).json({ error: "Sin permiso para esta planta" });
+  }
+  const rawItems = Array.isArray(req.body?.items) ? req.body.items : [];
+  const cleaned = [];
+  for (const it of rawItems) {
+    const categoria = String(it?.categoria || "").trim().toUpperCase();
+    if (!SEH_CATEGORIAS.includes(categoria)) continue;
+    const nombre = String(it?.nombre || "").trim();
+    const vence = sehParseVence(it?.vence);
+    if (!nombre && !vence) continue;
+    const sortOrder = Number.isFinite(Number(it?.sort_order)) ? Math.max(0, Math.floor(Number(it.sort_order))) : cleaned.length;
+    cleaned.push({ categoria, nombre, vence, sort_order: sortOrder });
+  }
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(`DELETE FROM public.seh_equipos WHERE planta_id = $1`, [plantaId]);
+    const actor =
+      req.dashboardAuth.actor_id != null
+        ? `Dashboard:${req.dashboardAuth.actor_id}`
+        : String(req.dashboardAuth.role || "Dashboard");
+    for (const it of cleaned) {
+      await client.query(
+        `INSERT INTO public.seh_equipos (planta_id, categoria, nombre, vence, sort_order, updated_at, updated_by)
+         VALUES ($1, $2, $3, $4::date, $5, NOW(), $6)`,
+        [plantaId, it.categoria, it.nombre, it.vence, it.sort_order, actor]
+      );
+    }
+    await client.query("COMMIT");
+    const r = await client.query(
+      `SELECT id, planta_id, categoria, nombre, to_char(vence, 'YYYY-MM-DD') AS vence, sort_order
+       FROM public.seh_equipos
+       WHERE planta_id = $1
+       ORDER BY categoria, sort_order, id`,
+      [plantaId]
+    );
+    res.json({
+      ok: true,
+      planta_id: plantaId,
+      categorias: SEH_CATEGORIAS,
+      items: (r.rows || []).map((row) => ({
+        id: row.id,
+        planta_id: row.planta_id,
+        categoria: row.categoria,
+        nombre: row.nombre || "",
+        vence: row.vence || null,
+        sort_order: row.sort_order,
+      })),
+    });
+  } catch (e) {
+    try {
+      await client.query("ROLLBACK");
+    } catch (_) {}
+    console.error("[SEH PUT]", e);
     res.status(500).json({ error: e.message });
   } finally {
     client.release();
