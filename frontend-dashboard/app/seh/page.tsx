@@ -26,12 +26,14 @@ const SEH_CATEGORIAS = [
 
 const CLAVES_CODIGO_PLANTA = ["E7", "E8", "E9", "E10", "E11", "E12", "E13", "E15"];
 const ROWS_MIN = 12;
+const CAT_PIPAS = "VALVULAS PIPAS";
 
-type DraftRow = { key: string; nombre: string; vence: string };
+type DraftRow = { key: string; autotanque: string; nombre: string; vence: string };
 
 function emptyRows(n: number): DraftRow[] {
   return Array.from({ length: n }, (_, i) => ({
     key: `new-${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${i}`,
+    autotanque: "",
     nombre: "",
     vence: "",
   }));
@@ -43,6 +45,7 @@ function itemsToDraft(items: SehItem[], categoria: string): DraftRow[] {
     .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0) || (a.id || 0) - (b.id || 0))
     .map((it, i) => ({
       key: `id-${it.id ?? i}`,
+      autotanque: it.autotanque || "",
       nombre: it.nombre || "",
       vence: it.vence || "",
     }));
@@ -137,7 +140,12 @@ function SehContent() {
     loadBoard(selectedPlantaId);
   }, [selectedPlantaId, loadBoard]);
 
-  const updateCell = (categoria: string, rowKey: string, field: "nombre" | "vence", value: string) => {
+  const updateCell = (
+    categoria: string,
+    rowKey: string,
+    field: "autotanque" | "nombre" | "vence",
+    value: string
+  ) => {
     setDraftByCat((prev) => {
       const rows = [...(prev[categoria] || [])];
       const idx = rows.findIndex((r) => r.key === rowKey);
@@ -168,9 +176,11 @@ function SehContent() {
         rows.forEach((row, i) => {
           const nombre = row.nombre.trim();
           const vence = row.vence.trim();
-          if (!nombre && !vence) return;
+          const autotanque = cat === CAT_PIPAS ? row.autotanque.trim() : "";
+          if (!nombre && !vence && !autotanque) return;
           items.push({
             categoria: cat,
+            autotanque,
             nombre,
             vence: vence || null,
             sort_order: i,
@@ -297,21 +307,46 @@ function SehContent() {
               <div className="flex gap-3 overflow-x-auto pb-2 min-h-[60vh]">
                 {SEH_CATEGORIAS.map((cat) => {
                   const rows = draftByCat[cat] || emptyRows(ROWS_MIN);
+                  const isPipas = cat === CAT_PIPAS;
                   return (
                     <div
                       key={cat}
-                      className="flex w-[17.5rem] flex-shrink-0 flex-col rounded-lg border border-slate-700 bg-slate-900/55"
+                      className={`flex flex-shrink-0 flex-col rounded-lg border border-slate-700 bg-slate-900/55 ${
+                        isPipas ? "w-[24rem]" : "w-[17.5rem]"
+                      }`}
                     >
                       <div className="border-b border-slate-700 bg-amber-950/30 px-2 py-2 text-center">
                         <div className="text-xs font-semibold tracking-wide text-amber-100">{cat}</div>
                       </div>
-                      <div className="grid grid-cols-2 border-b border-slate-700 text-[10px] font-medium uppercase tracking-wide text-slate-400">
+                      <div
+                        className={`grid border-b border-slate-700 text-[10px] font-medium uppercase tracking-wide text-slate-400 ${
+                          isPipas ? "grid-cols-3" : "grid-cols-2"
+                        }`}
+                      >
+                        {isPipas && (
+                          <div className="border-r border-slate-700 px-1.5 py-1.5 text-center">Autotanque</div>
+                        )}
                         <div className="border-r border-slate-700 px-2 py-1.5 text-center">Nombre</div>
                         <div className="px-2 py-1.5 text-center">Vence</div>
                       </div>
                       <div className="max-h-[70vh] overflow-y-auto">
                         {rows.map((row) => (
-                          <div key={row.key} className="grid grid-cols-2 border-b border-slate-800/80">
+                          <div
+                            key={row.key}
+                            className={`grid border-b border-slate-800/80 ${
+                              isPipas ? "grid-cols-3" : "grid-cols-2"
+                            }`}
+                          >
+                            {isPipas && (
+                              <input
+                                type="text"
+                                value={row.autotanque}
+                                disabled={!canEdit}
+                                onChange={(e) => updateCell(cat, row.key, "autotanque", e.target.value)}
+                                placeholder="Autotanque"
+                                className="border-r border-slate-800 bg-transparent px-1.5 py-1.5 text-xs text-slate-200 placeholder:text-slate-600 focus:bg-slate-800/60 focus:outline-none disabled:opacity-60"
+                              />
+                            )}
                             <input
                               type="text"
                               value={row.nombre}

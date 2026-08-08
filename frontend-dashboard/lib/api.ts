@@ -1088,6 +1088,8 @@ export interface SehItem {
   id?: number;
   planta_id?: number;
   categoria: SehCategoria | string;
+  /** Solo aplica a VALVULAS PIPAS. */
+  autotanque?: string;
   nombre: string;
   vence: string | null;
   sort_order: number;

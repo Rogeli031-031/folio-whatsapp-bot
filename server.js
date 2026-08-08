@@ -2743,6 +2743,7 @@ async function ensureSchema() {
       CREATE INDEX IF NOT EXISTS idx_seh_equipos_planta_cat
       ON public.seh_equipos(planta_id, categoria, sort_order, id);
     `).catch(() => {});
+    await client.query(`ALTER TABLE public.seh_equipos ADD COLUMN IF NOT EXISTS autotanque VARCHAR(255) NOT NULL DEFAULT '';`).catch(() => {});
 
     /* Presupuesto semanal por planta (CDMX asigna, GG selecciona folios, CDMX envía a cheques). */
     await client.query(`
@@ -7136,7 +7137,8 @@ app.get("/api/seh", dashboardAuthMiddleware, async (req, res) => {
   const client = await pool.connect();
   try {
     const r = await client.query(
-      `SELECT id, planta_id, categoria, nombre, to_char(vence, 'YYYY-MM-DD') AS vence, sort_order
+      `SELECT id, planta_id, categoria, COALESCE(autotanque, '') AS autotanque, nombre,
+              to_char(vence, 'YYYY-MM-DD') AS vence, sort_order
        FROM public.seh_equipos
        WHERE planta_id = $1
        ORDER BY categoria, sort_order, id`,
@@ -7149,6 +7151,7 @@ app.get("/api/seh", dashboardAuthMiddleware, async (req, res) => {
         id: row.id,
         planta_id: row.planta_id,
         categoria: row.categoria,
+        autotanque: row.autotanque || "",
         nombre: row.nombre || "",
         vence: row.vence || null,
         sort_order: row.sort_order,
@@ -7164,8 +7167,9 @@ app.get("/api/seh", dashboardAuthMiddleware, async (req, res) => {
 
 /**
  * PUT /api/seh
- * Body: { planta_id, items: [{ categoria, nombre, vence, sort_order }] }
- * Reemplaza el listado completo de la planta (solo filas con nombre o fecha).
+ * Body: { planta_id, items: [{ categoria, autotanque?, nombre, vence, sort_order }] }
+ * Reemplaza el listado completo de la planta (solo filas con dato).
+ * `autotanque` aplica solo a VALVULAS PIPAS.
  */
 app.put("/api/seh", dashboardAuthMiddleware, async (req, res) => {
   if (req.dashboardAuth.role === "GA") {
@@ -7189,9 +7193,11 @@ app.put("/api/seh", dashboardAuthMiddleware, async (req, res) => {
     if (!SEH_CATEGORIAS.includes(categoria)) continue;
     const nombre = String(it?.nombre || "").trim();
     const vence = sehParseVence(it?.vence);
-    if (!nombre && !vence) continue;
+    const autotanque =
+      categoria === "VALVULAS PIPAS" ? String(it?.autotanque || "").trim() : "";
+    if (!nombre && !vence && !autotanque) continue;
     const sortOrder = Number.isFinite(Number(it?.sort_order)) ? Math.max(0, Math.floor(Number(it.sort_order))) : cleaned.length;
-    cleaned.push({ categoria, nombre, vence, sort_order: sortOrder });
+    cleaned.push({ categoria, autotanque, nombre, vence, sort_order: sortOrder });
   }
   const client = await pool.connect();
   try {
@@ -7203,14 +7209,15 @@ app.put("/api/seh", dashboardAuthMiddleware, async (req, res) => {
         : String(req.dashboardAuth.role || "Dashboard");
     for (const it of cleaned) {
       await client.query(
-        `INSERT INTO public.seh_equipos (planta_id, categoria, nombre, vence, sort_order, updated_at, updated_by)
-         VALUES ($1, $2, $3, $4::date, $5, NOW(), $6)`,
-        [plantaId, it.categoria, it.nombre, it.vence, it.sort_order, actor]
+        `INSERT INTO public.seh_equipos (planta_id, categoria, autotanque, nombre, vence, sort_order, updated_at, updated_by)
+         VALUES ($1, $2, $3, $4, $5::date, $6, NOW(), $7)`,
+        [plantaId, it.categoria, it.autotanque, it.nombre, it.vence, it.sort_order, actor]
       );
     }
     await client.query("COMMIT");
     const r = await client.query(
-      `SELECT id, planta_id, categoria, nombre, to_char(vence, 'YYYY-MM-DD') AS vence, sort_order
+      `SELECT id, planta_id, categoria, COALESCE(autotanque, '') AS autotanque, nombre,
+              to_char(vence, 'YYYY-MM-DD') AS vence, sort_order
        FROM public.seh_equipos
        WHERE planta_id = $1
        ORDER BY categoria, sort_order, id`,
@@ -7224,6 +7231,7 @@ app.put("/api/seh", dashboardAuthMiddleware, async (req, res) => {
         id: row.id,
         planta_id: row.planta_id,
         categoria: row.categoria,
+        autotanque: row.autotanque || "",
         nombre: row.nombre || "",
         vence: row.vence || null,
         sort_order: row.sort_order,
