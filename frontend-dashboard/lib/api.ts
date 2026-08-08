@@ -1121,12 +1121,17 @@ export function fetchSehBoard(token: string, plantaId: number): Promise<SehBoard
 export function putSehBoard(
   token: string,
   plantaId: number,
-  items: SehItem[]
+  items: SehItem[],
+  categorias?: string[]
 ): Promise<SehBoardResponse> {
   return apiFetch<SehBoardResponse>("/api/seh", {
     token,
     method: "PUT",
-    body: JSON.stringify({ planta_id: plantaId, items }),
+    body: JSON.stringify({
+      planta_id: plantaId,
+      items,
+      ...(categorias && categorias.length > 0 ? { categorias } : {}),
+    }),
   });
 }
 

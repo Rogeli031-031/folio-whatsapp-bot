@@ -30,17 +30,27 @@ function CarpetasLegalesContent() {
     }
   }, [searchParams]);
 
-  const backHref = token ? `/seh?t=${encodeURIComponent(token)}` : "/seh";
+  const plantaId = searchParams.get("planta_id");
+  const backParts = [
+    token ? `t=${encodeURIComponent(token)}` : "",
+    plantaId ? `planta_id=${encodeURIComponent(plantaId)}` : "",
+  ].filter(Boolean);
+  const backHref = `/seh${backParts.length ? `?${backParts.join("&")}` : ""}`;
 
   return (
     <div className="min-h-screen bg-[#f3f6fb] text-slate-900">
       <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-2 border-b border-slate-300 bg-white px-4 py-2 shadow-sm">
-        <Link
-          href={backHref}
-          className="rounded border border-slate-400 bg-slate-100 px-2.5 py-1.5 text-sm text-slate-800 hover:bg-slate-200"
-        >
-          ← Volver a SEH
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href={backHref}
+            className="rounded border border-slate-400 bg-slate-100 px-2.5 py-1.5 text-sm text-slate-800 hover:bg-slate-200"
+          >
+            ← Volver a SEH
+          </Link>
+          <span className="rounded border border-sky-300 bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-900">
+            REGULACIÓN · PLANTA
+          </span>
+        </div>
         <span className="text-xs text-slate-500">Índice de carpetas legales por planta</span>
       </div>
 

@@ -7256,7 +7256,11 @@ app.get("/api/seh", dashboardAuthMiddleware, async (req, res) => {
 
 /**
  * PUT /api/seh
- * Body: { planta_id, items: [{ categoria, locacion?, descripcion?, componente?, nombre?, vence, sort_order }] }
+ * Body: {
+ *   planta_id,
+ *   items: [...],
+ *   categorias?: string[]  // si se envía, solo reemplaza esas categorías (no borra el resto)
+ * }
  * PLANTA/PIPAS/ESTACIONES: LOCACION, DESCRIPCION, COMPONENTE, VENCE.
  * SISTEMA CONTRA INCENDIO: NOMBRE, VENCE (como antes).
  */
@@ -7271,11 +7275,20 @@ app.put("/api/seh", dashboardAuthMiddleware, async (req, res) => {
   if (!assertSehPlantaAccess(req, plantaId)) {
     return res.status(403).json({ error: "Sin permiso para esta planta" });
   }
+  const scopeCats = Array.isArray(req.body?.categorias)
+    ? [...new Set(
+        req.body.categorias
+          .map((c) => String(c || "").trim().toUpperCase())
+          .filter((c) => SEH_CATEGORIAS.includes(c))
+      )]
+    : [];
+  const hasScope = scopeCats.length > 0;
   const rawItems = Array.isArray(req.body?.items) ? req.body.items : [];
   const cleaned = [];
   for (const it of rawItems) {
     const categoria = String(it?.categoria || "").trim().toUpperCase();
     if (!SEH_CATEGORIAS.includes(categoria)) continue;
+    if (hasScope && !scopeCats.includes(categoria)) continue;
     const vence = sehParseVence(it?.vence);
     const sortOrder = Number.isFinite(Number(it?.sort_order)) ? Math.max(0, Math.floor(Number(it.sort_order))) : cleaned.length;
     if (sehIsSci(categoria)) {
@@ -7309,7 +7322,14 @@ app.put("/api/seh", dashboardAuthMiddleware, async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    await client.query(`DELETE FROM public.seh_equipos WHERE planta_id = $1`, [plantaId]);
+    if (hasScope) {
+      await client.query(`DELETE FROM public.seh_equipos WHERE planta_id = $1 AND categoria = ANY($2::text[])`, [
+        plantaId,
+        scopeCats,
+      ]);
+    } else {
+      await client.query(`DELETE FROM public.seh_equipos WHERE planta_id = $1`, [plantaId]);
+    }
     const actorLabel = sehActorLabel(req.dashboardAuth);
     const actorId = req.dashboardAuth.actor_id != null ? Number(req.dashboardAuth.actor_id) : null;
     for (const it of cleaned) {
