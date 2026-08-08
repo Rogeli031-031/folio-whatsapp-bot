@@ -34,6 +34,7 @@ const {
   createDashboardToken,
   encodeDashboardTokenForWhatsAppUrl,
   dashboardAuthMiddleware,
+  isSehOnlyAuth,
   createIgfComoCambioToken,
   verifyIgfComoCambioToken,
 } = require("./lib/dashboard-auth");
@@ -2744,6 +2745,15 @@ async function ensureSchema() {
       ON public.seh_equipos(planta_id, categoria, sort_order, id);
     `).catch(() => {});
     await client.query(`ALTER TABLE public.seh_equipos ADD COLUMN IF NOT EXISTS autotanque VARCHAR(255) NOT NULL DEFAULT '';`).catch(() => {});
+    /** Última persona que editó el tablero SEH de cada planta (persiste aunque se borren filas). */
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS public.seh_ultima_edicion (
+        planta_id INT PRIMARY KEY REFERENCES public.plantas(id) ON DELETE CASCADE,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_by TEXT NOT NULL,
+        actor_id INT
+      );
+    `).catch(() => {});
 
     /* Presupuesto semanal por planta (CDMX asigna, GG selecciona folios, CDMX envía a cheques). */
     await client.query(`
@@ -5003,6 +5013,7 @@ function buildHelpFolios(actor) {
   lines.push("folios por estación");
   lines.push("mis pendientes");
   lines.push("dashboard");
+  lines.push("seh  (enlace solo a Seguridad e Higiene)");
   lines.push("comentario F-YYYYMM-XXX: texto");
   lines.push("adjuntar F-YYYYMM-XXX");
   lines.push("archivos 045");
@@ -7079,8 +7090,10 @@ app.get("/api/dashboard/plantas", dashboardAuthMiddleware, async (req, res) => {
   try {
     const plantas = await getPlantas(client);
     let list = (plantas || []).map((p) => ({ id: p.id, nombre: p.nombre || p.clave || `Planta ${p.id}` }));
-    if (isDashboardGV(req)) {
-      const allowed = new Set((req.dashboardAuth.plantas_permitidas || []).map((x) => Number(x)).filter(Number.isFinite));
+    const roleNorm = String(req.dashboardAuth?.role || "").toUpperCase();
+    const isGlobalPlantas = roleNorm === "ZP" || roleNorm === "AD" || roleNorm === "CF_CDMX";
+    const allowed = new Set((req.dashboardAuth.plantas_permitidas || []).map((x) => Number(x)).filter(Number.isFinite));
+    if (allowed.size > 0 && (isDashboardGV(req) || isSehOnlyAuth(req.dashboardAuth) || !isGlobalPlantas)) {
       list = list.filter((p) => allowed.has(Number(p.id)));
     }
     res.json({ plantas: list });
@@ -7121,17 +7134,64 @@ function sehParseVence(raw) {
   return null;
 }
 
+function assertSehPlantaAccess(req, plantaId) {
+  const auth = req.dashboardAuth || {};
+  const role = String(auth.role || "").toUpperCase();
+  if (role === "ZP" || role === "AD" || role === "CF_CDMX") return true;
+  const allowed = (auth.plantas_permitidas || []).map((x) => Number(x)).filter(Number.isFinite);
+  if (allowed.length === 0) return true;
+  return allowed.includes(Number(plantaId));
+}
+
+function sehActorLabel(auth) {
+  const a = auth || {};
+  const nombre = String(a.actor_nombre || "").trim();
+  const tel = String(a.actor_telefono || "").trim();
+  if (nombre && tel) return `${nombre} (${tel})`;
+  if (nombre) return nombre;
+  if (tel) return tel;
+  if (a.actor_id != null) return `Usuario #${a.actor_id}`;
+  return String(a.role || "Dashboard");
+}
+
+async function fetchSehUltimaEdicion(client, plantaId) {
+  const u = await client.query(
+    `SELECT planta_id, updated_by, actor_id,
+            to_char(updated_at AT TIME ZONE 'America/Mexico_City', 'YYYY-MM-DD HH24:MI') AS updated_at_local,
+            updated_at
+     FROM public.seh_ultima_edicion
+     WHERE planta_id = $1`,
+    [plantaId]
+  );
+  const row = u.rows[0];
+  if (!row) return null;
+  return {
+    updated_at: row.updated_at,
+    updated_at_local: row.updated_at_local || null,
+    updated_by: row.updated_by || "",
+    actor_id: row.actor_id != null ? Number(row.actor_id) : null,
+  };
+}
+
+function mapSehItems(rows) {
+  return (rows || []).map((row) => ({
+    id: row.id,
+    planta_id: row.planta_id,
+    categoria: row.categoria,
+    autotanque: row.autotanque || "",
+    nombre: row.nombre || "",
+    vence: row.vence || null,
+    sort_order: row.sort_order,
+  }));
+}
+
 /** GET /api/seh?planta_id= — listado de equipos SEH de una planta. */
 app.get("/api/seh", dashboardAuthMiddleware, async (req, res) => {
   const plantaId = parseInt(String(req.query.planta_id || ""), 10);
   if (!Number.isFinite(plantaId)) {
     return res.status(400).json({ error: "planta_id es obligatorio" });
   }
-  if (
-    (req.dashboardAuth.role === "GG" || req.dashboardAuth.role === "GA" || req.dashboardAuth.role === "GV") &&
-    req.dashboardAuth.plantas_permitidas?.length > 0 &&
-    !req.dashboardAuth.plantas_permitidas.includes(plantaId)
-  ) {
+  if (!assertSehPlantaAccess(req, plantaId)) {
     return res.status(403).json({ error: "Sin permiso para esta planta" });
   }
   const client = await pool.connect();
@@ -7144,18 +7204,12 @@ app.get("/api/seh", dashboardAuthMiddleware, async (req, res) => {
        ORDER BY categoria, sort_order, id`,
       [plantaId]
     );
+    const ultima_edicion = await fetchSehUltimaEdicion(client, plantaId);
     res.json({
       planta_id: plantaId,
       categorias: SEH_CATEGORIAS,
-      items: (r.rows || []).map((row) => ({
-        id: row.id,
-        planta_id: row.planta_id,
-        categoria: row.categoria,
-        autotanque: row.autotanque || "",
-        nombre: row.nombre || "",
-        vence: row.vence || null,
-        sort_order: row.sort_order,
-      })),
+      items: mapSehItems(r.rows),
+      ultima_edicion,
     });
   } catch (e) {
     console.error("[SEH GET]", e);
@@ -7179,11 +7233,7 @@ app.put("/api/seh", dashboardAuthMiddleware, async (req, res) => {
   if (!Number.isFinite(plantaId)) {
     return res.status(400).json({ error: "planta_id es obligatorio" });
   }
-  if (
-    (req.dashboardAuth.role === "GG" || req.dashboardAuth.role === "GV") &&
-    req.dashboardAuth.plantas_permitidas?.length > 0 &&
-    !req.dashboardAuth.plantas_permitidas.includes(plantaId)
-  ) {
+  if (!assertSehPlantaAccess(req, plantaId)) {
     return res.status(403).json({ error: "Sin permiso para esta planta" });
   }
   const rawItems = Array.isArray(req.body?.items) ? req.body.items : [];
@@ -7203,17 +7253,24 @@ app.put("/api/seh", dashboardAuthMiddleware, async (req, res) => {
   try {
     await client.query("BEGIN");
     await client.query(`DELETE FROM public.seh_equipos WHERE planta_id = $1`, [plantaId]);
-    const actor =
-      req.dashboardAuth.actor_id != null
-        ? `Dashboard:${req.dashboardAuth.actor_id}`
-        : String(req.dashboardAuth.role || "Dashboard");
+    const actorLabel = sehActorLabel(req.dashboardAuth);
+    const actorId = req.dashboardAuth.actor_id != null ? Number(req.dashboardAuth.actor_id) : null;
     for (const it of cleaned) {
       await client.query(
         `INSERT INTO public.seh_equipos (planta_id, categoria, autotanque, nombre, vence, sort_order, updated_at, updated_by)
          VALUES ($1, $2, $3, $4, $5::date, $6, NOW(), $7)`,
-        [plantaId, it.categoria, it.autotanque, it.nombre, it.vence, it.sort_order, actor]
+        [plantaId, it.categoria, it.autotanque, it.nombre, it.vence, it.sort_order, actorLabel]
       );
     }
+    await client.query(
+      `INSERT INTO public.seh_ultima_edicion (planta_id, updated_at, updated_by, actor_id)
+       VALUES ($1, NOW(), $2, $3)
+       ON CONFLICT (planta_id) DO UPDATE SET
+         updated_at = EXCLUDED.updated_at,
+         updated_by = EXCLUDED.updated_by,
+         actor_id = EXCLUDED.actor_id`,
+      [plantaId, actorLabel, Number.isFinite(actorId) ? actorId : null]
+    );
     await client.query("COMMIT");
     const r = await client.query(
       `SELECT id, planta_id, categoria, COALESCE(autotanque, '') AS autotanque, nombre,
@@ -7223,19 +7280,13 @@ app.put("/api/seh", dashboardAuthMiddleware, async (req, res) => {
        ORDER BY categoria, sort_order, id`,
       [plantaId]
     );
+    const ultima_edicion = await fetchSehUltimaEdicion(client, plantaId);
     res.json({
       ok: true,
       planta_id: plantaId,
       categorias: SEH_CATEGORIAS,
-      items: (r.rows || []).map((row) => ({
-        id: row.id,
-        planta_id: row.planta_id,
-        categoria: row.categoria,
-        autotanque: row.autotanque || "",
-        nombre: row.nombre || "",
-        vence: row.vence || null,
-        sort_order: row.sort_order,
-      })),
+      items: mapSehItems(r.rows),
+      ultima_edicion,
     });
   } catch (e) {
     try {
@@ -8016,8 +8067,9 @@ app.get("/api/action-register/responsables", dashboardAuthMiddleware, async (req
   }
 });
 
-async function buildDashboardSignedUrlForUsuario(client, usuarioRow, dashboardPath) {
+async function buildDashboardSignedUrlForUsuario(client, usuarioRow, dashboardPath, options) {
   if (!usuarioRow || usuarioRow.id == null) return "";
+  const opts = options && typeof options === "object" ? options : {};
   const rolClave = (usuarioRow.rol_clave && String(usuarioRow.rol_clave).toUpperCase()) || "";
   const rolNom = (usuarioRow.rol_nombre && String(usuarioRow.rol_nombre)) || "";
   const esZP = isDirectorZPForDashboard(rolClave, rolNom);
@@ -8040,13 +8092,19 @@ async function buildDashboardSignedUrlForUsuario(client, usuarioRow, dashboardPa
   if (!(esZP || esAD || esCFCDMX) && usuarioRow.planta_id != null) {
     plantasPermitidas = dicfAccionesLib.getPlantaIdsEquivalentes(usuarioRow.planta_id);
   }
-  const token = createDashboardToken({
+  const tokenPayload = {
     role,
     actor_id: usuarioRow.id,
     plantas_permitidas: plantasPermitidas,
     default_filters: {},
     permisos: permisosForDashboardToken(role, usuarioRow),
-  });
+  };
+  if (opts.scope) tokenPayload.scope = opts.scope;
+  if (opts.scope === "seh" || opts.includeActorProfile) {
+    tokenPayload.actor_nombre = usuarioRow.nombre || usuarioRow.nombre_persona || "";
+    tokenPayload.actor_telefono = usuarioRow.telefono || "";
+  }
+  const token = createDashboardToken(tokenPayload);
   const baseUrl = (process.env.DASHBOARD_URL || process.env.FRONTEND_URL || "").trim().replace(/\/$/, "");
   if (!baseUrl) return "";
   const path = String(dashboardPath || "acciones").replace(/^\/+/, "");
@@ -8055,6 +8113,11 @@ async function buildDashboardSignedUrlForUsuario(client, usuarioRow, dashboardPa
 
 async function buildActionRegisterUrl(client, usuarioRow) {
   return buildDashboardSignedUrlForUsuario(client, usuarioRow, "acciones");
+}
+
+/** Enlace SEH con token de acceso exclusivo (solo /seh y APIs SEH). */
+async function buildSehSignedUrlForUsuario(client, usuarioRow) {
+  return buildDashboardSignedUrlForUsuario(client, usuarioRow, "seh", { scope: "seh" });
 }
 
 app.post("/api/action-register/items", dashboardAuthMiddleware, async (req, res) => {
@@ -16786,13 +16849,13 @@ app.post("/twilio/whatsapp", async (req, res) => {
         .replace(/[\u200B-\u200D\uFEFF]/g, "")
         .trim();
 
-      // Restricción especial: roles nivel 6 (GO/SG/SEH) solo pueden usar AR y DirectorIA desde Twilio.
+      // Restricción especial: roles nivel 6 (GO/SG/SEH) solo pueden usar AR, DirectorIA y SEH desde Twilio.
       if (actor) {
         const rolClaveRestr = (actor.rol_clave && String(actor.rol_clave).toUpperCase()) || "";
         const rolNivelRestr = actor.rol_nivel != null ? Number(actor.rol_nivel) : null;
         const esNivel6Especial = rolNivelRestr === 6 && ["GO", "SG", "SEH"].includes(rolClaveRestr);
-        if (esNivel6Especial && !/^(ar|director\s*ia|directoria)$/i.test(bodyForCmd)) {
-          return safeReply('⛔ Tu rol (nivel 6: GO/SG/SEH) solo tiene acceso a los comandos "AR" y "DirectorIA".');
+        if (esNivel6Especial && !/^(ar|director\s*ia|directoria|seh)$/i.test(bodyForCmd)) {
+          return safeReply('⛔ Tu rol (nivel 6: GO/SG/SEH) solo tiene acceso a los comandos "AR", "DirectorIA" y "SEH".');
         }
       }
 
@@ -16894,6 +16957,25 @@ app.post("/twilio/whatsapp", async (req, res) => {
         } catch (diErr) {
           console.error("[DirectorIA command error]", diErr);
           return safeReply("Error al generar el enlace de Director IA. Revisa los logs o contacta al administrador.");
+        }
+      }
+
+      /* Comando "SEH" → página /seh con token de acceso exclusivo (solo esa página). */
+      if (/^seh$/i.test(bodyForCmd)) {
+        try {
+          if (!actor) {
+            return safeReply("No estás dado de alta. Contacta al administrador para registrar tu número.");
+          }
+          const link = await buildSehSignedUrlForUsuario(client, actor);
+          if (!link) {
+            return safeReply("Error al generar el enlace de SEH. Revisa DASHBOARD_URL en el servidor.");
+          }
+          return safeReply(
+            `🧯 SEH · Seguridad e Higiene\n\nEste enlace solo abre la página SEH (no da acceso al resto del dashboard).\n\n🔗 Acceso (válido 20 horas):\n${link}`
+          );
+        } catch (sehErr) {
+          console.error("[SEH command error]", sehErr);
+          return safeReply("Error al generar el enlace de SEH. Revisa los logs o contacta al administrador.");
         }
       }
 

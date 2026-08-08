@@ -8,12 +8,14 @@ import {
   getTokenFromStorage,
   setTokenInStorage,
   getRoleFromDashboardToken,
+  isSehOnlyToken,
 } from "@/lib/auth";
 import {
   fetchPlantas,
   fetchSehBoard,
   putSehBoard,
   type SehItem,
+  type SehUltimaEdicion,
 } from "@/lib/api";
 
 const SEH_CATEGORIAS = [
@@ -79,6 +81,7 @@ function SehContent() {
   const [error, setError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
+  const [ultimaEdicion, setUltimaEdicion] = useState<SehUltimaEdicion | null>(null);
 
   useEffect(() => {
     const t = parseTokenFromQuery(searchParams) || getTokenFromStorage();
@@ -122,10 +125,12 @@ function SehContent() {
         next[cat] = itemsToDraft(data.items || [], cat);
       }
       setDraftByCat(next);
+      setUltimaEdicion(data.ultima_edicion || null);
       setDirty(false);
     } catch (e) {
       setError((e as Error).message || "Error al cargar SEH");
       setDraftByCat({});
+      setUltimaEdicion(null);
     } finally {
       setLoading(false);
     }
@@ -193,6 +198,7 @@ function SehContent() {
         next[cat] = itemsToDraft(data.items || [], cat);
       }
       setDraftByCat(next);
+      setUltimaEdicion(data.ultima_edicion || null);
       setDirty(false);
       setSavedAt(new Date().toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" }));
     } catch (e) {
@@ -209,6 +215,7 @@ function SehContent() {
 
   const role = token ? getRoleFromDashboardToken(token) : null;
   const canEdit = role !== "GA";
+  const sehOnly = token ? isSehOnlyToken(token) : false;
 
   if (unauthorized) {
     return (
@@ -216,7 +223,7 @@ function SehContent() {
         <div className="rounded-lg border border-slate-700 bg-slate-800 p-6 text-center">
           <h1 className="text-lg font-semibold text-white">Acceso no autorizado</h1>
           <p className="mt-2 text-sm text-slate-400">
-            Abre el enlace del dashboard (WhatsApp) o escribe &quot;dashboard&quot; en el bot.
+            Escribe &quot;SEH&quot; en WhatsApp para obtener un enlace de acceso.
           </p>
         </div>
       </div>
@@ -235,13 +242,20 @@ function SehContent() {
     <div className="min-h-screen flex flex-col">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-700 bg-slate-900/50 px-4 py-2">
         <div className="flex items-center gap-2">
-          <Link
-            href={token ? `/dashboard?t=${encodeURIComponent(token)}` : "/dashboard"}
-            className="rounded border border-slate-600 bg-slate-700 px-2.5 py-1.5 text-sm text-slate-200 hover:bg-slate-600"
-          >
-            Folios
-          </Link>
+          {!sehOnly && (
+            <Link
+              href={token ? `/dashboard?t=${encodeURIComponent(token)}` : "/dashboard"}
+              className="rounded border border-slate-600 bg-slate-700 px-2.5 py-1.5 text-sm text-slate-200 hover:bg-slate-600"
+            >
+              Folios
+            </Link>
+          )}
           <h1 className="text-base font-semibold text-white">SEH · Seguridad e Higiene</h1>
+          {sehOnly && (
+            <span className="rounded border border-amber-700/60 bg-amber-950/40 px-2 py-0.5 text-[11px] text-amber-200">
+              Acceso exclusivo SEH
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {dirty && <span className="text-xs text-amber-300">Cambios sin guardar</span>}
@@ -301,6 +315,17 @@ function SehContent() {
               {" · "}
               Captura manual por casilla. Rojo = vencido · Ámbar = vence en ≤ 30 días.
             </p>
+            {ultimaEdicion?.updated_by ? (
+              <p className="text-xs text-slate-400">
+                Última edición:{" "}
+                <span className="text-slate-200">{ultimaEdicion.updated_by}</span>
+                {ultimaEdicion.updated_at_local
+                  ? ` · ${ultimaEdicion.updated_at_local}`
+                  : ""}
+              </p>
+            ) : (
+              <p className="text-xs text-slate-500">Aún no hay ediciones registradas en esta planta.</p>
+            )}
             {loading ? (
               <p className="text-sm text-slate-400">Cargando…</p>
             ) : (

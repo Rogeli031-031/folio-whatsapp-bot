@@ -84,3 +84,11 @@ export function tokenHasPermiso(token: string | null | undefined, permisoClave: 
   if (!permisos || !Object.prototype.hasOwnProperty.call(permisos, permisoClave)) return null;
   return !!permisos[permisoClave];
 }
+
+/** Token del comando WhatsApp "SEH": solo permite la página /seh. */
+export function isSehOnlyToken(token: string | null | undefined): boolean {
+  if (!token) return false;
+  const payload = decodeDashboardTokenPayload(token);
+  if (!payload) return false;
+  return payload.scope === "seh" || payload.seh_only === true;
+}

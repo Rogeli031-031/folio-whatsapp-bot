@@ -1095,11 +1095,19 @@ export interface SehItem {
   sort_order: number;
 }
 
+export interface SehUltimaEdicion {
+  updated_at?: string | null;
+  updated_at_local?: string | null;
+  updated_by: string;
+  actor_id?: number | null;
+}
+
 export interface SehBoardResponse {
   planta_id: number;
   categorias: string[];
   items: SehItem[];
   ok?: boolean;
+  ultima_edicion?: SehUltimaEdicion | null;
 }
 
 export function fetchSehBoard(token: string, plantaId: number): Promise<SehBoardResponse> {
