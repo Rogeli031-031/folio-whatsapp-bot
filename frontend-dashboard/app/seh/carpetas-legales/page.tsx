@@ -407,7 +407,7 @@ function CarpetasLegalesContent() {
                             style={{ color: tone.color }}
                             title="Clic para estatus y comentarios"
                           >
-                            {estatusLabel(st.estatus) || (canEdit ? "Sin estado" : "")}
+                            {estatusLabel(st.estatus) || "Sin estado"}
                           </button>
                         </td>
                         <td className="px-2 py-1.5" style={{ border: `1px solid ${GRID}` }}>
@@ -446,9 +446,7 @@ function CarpetasLegalesContent() {
                               ? "N/A"
                               : st.vencimiento
                                 ? st.vencimiento
-                                : canEdit
-                                  ? "Elegir fecha"
-                                  : ""}
+                                : "Elegir fecha"}
                           </button>
                         </td>
                       </tr>
