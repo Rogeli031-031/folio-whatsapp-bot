@@ -318,6 +318,13 @@ function SehContent() {
               </button>
             ))}
           </div>
+          <Link
+            href={token ? `/seh/carpetas-legales?t=${encodeURIComponent(token)}` : "/seh/carpetas-legales"}
+            className="rounded border border-sky-600/70 bg-[#1F4E79] px-3 py-1.5 text-xs font-semibold tracking-wide text-white hover:bg-[#163a5a]"
+            title="Índice de carpetas legales de plantas"
+          >
+            ÍNDICE - CARPETAS LEGALES PLANTAS
+          </Link>
         </div>
 
         {error && <p className="text-sm text-red-400">{error}</p>}
