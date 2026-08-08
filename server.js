@@ -77,10 +77,11 @@ const { buildActionRegisterBoardPayload } = require("./lib/action-register-board
 const { ACTION_REGISTER_TEMAS, isActionRegisterTema } = require("./lib/action-register-temas");
 const usuarioPermisos = require("./lib/usuario-permisos");
 const clienteComentariosLib = require("./lib/cliente-comentarios");
+const sehCarpetasLegales = require("./lib/seh-carpetas-legales");
 
 const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
-app.use(bodyParser.json({ limit: "8mb" }));
+app.use(bodyParser.json({ limit: "16mb" }));
 
 /* ==================== CORS (Dashboard) ==================== */
 const dashboardOrigin = process.env.DASHBOARD_URL || process.env.CORS_ORIGIN || "https://folio-dashboard.onrender.com";
@@ -2778,6 +2779,11 @@ async function ensureSchema() {
         actor_id INT
       );
     `).catch(() => {});
+
+    /** SEH · Carpetas legales: estatus, comentarios, archivo y vencimiento por documento/planta. */
+    await sehCarpetasLegales.ensureSehCarpetasLegalesTables(client).catch((e) => {
+      console.warn("[seh_carpetas_legales schema]", e.message);
+    });
 
     /* Presupuesto semanal por planta (CDMX asigna, GG selecciona folios, CDMX envía a cheques). */
     await client.query(`
@@ -7375,6 +7381,251 @@ app.put("/api/seh", dashboardAuthMiddleware, async (req, res) => {
       await client.query("ROLLBACK");
     } catch (_) {}
     console.error("[SEH PUT]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+// ===========================
+// SEH · Carpetas legales (Regulación)
+// ===========================
+
+/** GET /api/seh/carpetas-legales?planta_id= */
+app.get("/api/seh/carpetas-legales", dashboardAuthMiddleware, async (req, res) => {
+  const plantaId = parseInt(String(req.query.planta_id || ""), 10);
+  if (!Number.isFinite(plantaId)) {
+    return res.status(400).json({ error: "planta_id es obligatorio" });
+  }
+  if (!assertSehPlantaAccess(req, plantaId)) {
+    return res.status(403).json({ error: "Sin permiso para esta planta" });
+  }
+  const client = await pool.connect();
+  try {
+    await sehCarpetasLegales.ensureSehCarpetasLegalesTables(client);
+    const rows = await sehCarpetasLegales.listByPlanta(client, plantaId);
+    res.json({ planta_id: plantaId, rows });
+  } catch (e) {
+    console.error("[SEH carpetas-legales GET]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/**
+ * PUT /api/seh/carpetas-legales/estatus
+ * Body: { planta_id, doc_no, estatus?, comentario? }
+ * estatus: vigente | en_tramite | na | null (limpiar)
+ */
+app.put("/api/seh/carpetas-legales/estatus", dashboardAuthMiddleware, async (req, res) => {
+  if (req.dashboardAuth.role === "GA") {
+    return res.status(403).json({ error: "GA solo puede ver e imprimir en el dashboard." });
+  }
+  const plantaId = parseInt(String(req.body?.planta_id || ""), 10);
+  const docNo = sehCarpetasLegales.normalizeDocNo(req.body?.doc_no);
+  if (!Number.isFinite(plantaId)) return res.status(400).json({ error: "planta_id es obligatorio" });
+  if (!docNo) return res.status(400).json({ error: "doc_no inválido" });
+  if (!assertSehPlantaAccess(req, plantaId)) {
+    return res.status(403).json({ error: "Sin permiso para esta planta" });
+  }
+  const touchEstatus = Object.prototype.hasOwnProperty.call(req.body || {}, "estatus");
+  const touchComentario = Object.prototype.hasOwnProperty.call(req.body || {}, "comentario");
+  if (!touchEstatus && !touchComentario) {
+    return res.status(400).json({ error: "Envía estatus y/o comentario" });
+  }
+  let estatus = null;
+  if (touchEstatus) {
+    if (req.body.estatus == null || req.body.estatus === "") {
+      estatus = null;
+    } else {
+      const n = sehCarpetasLegales.normalizeEstatus(req.body.estatus);
+      if (n === undefined) return res.status(400).json({ error: "estatus inválido" });
+      estatus = n;
+    }
+  }
+  const comentario = touchComentario ? String(req.body.comentario ?? "") : null;
+  const client = await pool.connect();
+  try {
+    await sehCarpetasLegales.ensureSehCarpetasLegalesTables(client);
+    const row = await sehCarpetasLegales.upsertEstatusComentario(client, {
+      plantaId,
+      docNo,
+      estatus,
+      comentario,
+      actorLabel: sehActorLabel(req.dashboardAuth),
+      touchEstatus,
+      touchComentario,
+    });
+    res.json({ ok: true, row });
+  } catch (e) {
+    console.error("[SEH carpetas-legales PUT estatus]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/**
+ * PUT /api/seh/carpetas-legales/vencimiento
+ * Body: { planta_id, doc_no, vencimiento?: YYYY-MM-DD|null, vencimiento_na?: boolean }
+ */
+app.put("/api/seh/carpetas-legales/vencimiento", dashboardAuthMiddleware, async (req, res) => {
+  if (req.dashboardAuth.role === "GA") {
+    return res.status(403).json({ error: "GA solo puede ver e imprimir en el dashboard." });
+  }
+  const plantaId = parseInt(String(req.body?.planta_id || ""), 10);
+  const docNo = sehCarpetasLegales.normalizeDocNo(req.body?.doc_no);
+  if (!Number.isFinite(plantaId)) return res.status(400).json({ error: "planta_id es obligatorio" });
+  if (!docNo) return res.status(400).json({ error: "doc_no inválido" });
+  if (!assertSehPlantaAccess(req, plantaId)) {
+    return res.status(403).json({ error: "Sin permiso para esta planta" });
+  }
+  const vencimientoNa = Boolean(req.body?.vencimiento_na);
+  let vencimiento = null;
+  if (!vencimientoNa) {
+    if (req.body?.vencimiento == null || req.body?.vencimiento === "") {
+      return res.status(400).json({ error: "Indica vencimiento o vencimiento_na" });
+    }
+    vencimiento = sehCarpetasLegales.parseVencimientoDate(req.body.vencimiento);
+    if (!vencimiento) return res.status(400).json({ error: "vencimiento inválido (usa YYYY-MM-DD)" });
+  }
+  const client = await pool.connect();
+  try {
+    await sehCarpetasLegales.ensureSehCarpetasLegalesTables(client);
+    const row = await sehCarpetasLegales.upsertVencimiento(client, {
+      plantaId,
+      docNo,
+      vencimiento,
+      vencimientoNa,
+      actorLabel: sehActorLabel(req.dashboardAuth),
+    });
+    res.json({ ok: true, row });
+  } catch (e) {
+    console.error("[SEH carpetas-legales PUT vencimiento]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/**
+ * POST /api/seh/carpetas-legales/archivo
+ * Body: { planta_id, doc_no, fileBase64, fileName, contentType? }
+ */
+app.post("/api/seh/carpetas-legales/archivo", dashboardAuthMiddleware, async (req, res) => {
+  if (req.dashboardAuth.role === "GA") {
+    return res.status(403).json({ error: "GA solo puede ver e imprimir en el dashboard." });
+  }
+  const plantaId = parseInt(String(req.body?.planta_id || ""), 10);
+  const docNo = sehCarpetasLegales.normalizeDocNo(req.body?.doc_no);
+  if (!Number.isFinite(plantaId)) return res.status(400).json({ error: "planta_id es obligatorio" });
+  if (!docNo) return res.status(400).json({ error: "doc_no inválido" });
+  if (!assertSehPlantaAccess(req, plantaId)) {
+    return res.status(403).json({ error: "Sin permiso para esta planta" });
+  }
+  const fileBase64 = typeof req.body?.fileBase64 === "string" ? req.body.fileBase64 : "";
+  const fileName =
+    req.body?.fileName != null && String(req.body.fileName).trim() !== ""
+      ? String(req.body.fileName).trim().slice(0, 200)
+      : "documento.pdf";
+  let contentType =
+    (req.body?.contentType != null ? String(req.body.contentType).trim() : "") || "application/octet-stream";
+  if (!fileBase64) return res.status(400).json({ error: "Envía fileBase64" });
+  let buffer;
+  try {
+    buffer = Buffer.from(fileBase64, "base64");
+  } catch (_) {
+    return res.status(400).json({ error: "fileBase64 inválido" });
+  }
+  if (!buffer || buffer.length === 0) return res.status(400).json({ error: "Archivo vacío" });
+  const MAX_BYTES = 10 * 1024 * 1024;
+  if (buffer.length > MAX_BYTES) {
+    return res.status(413).json({ error: `El archivo excede el máximo de ${Math.floor(MAX_BYTES / 1024 / 1024)}MB` });
+  }
+
+  const client = await pool.connect();
+  try {
+    await sehCarpetasLegales.ensureSehCarpetasLegalesTables(client);
+    let s3Key = null;
+    let s3Url = null;
+    let storeBuffer = buffer;
+    if (s3Enabled) {
+      s3Key = sehCarpetasLegales.buildArchivoS3Key(plantaId, docNo, fileName);
+      try {
+        const bucket = s3BucketName;
+        const region = process.env.AWS_REGION;
+        await s3.send(
+          new PutObjectCommand({
+            Bucket: bucket,
+            Key: s3Key,
+            Body: buffer,
+            ContentType: contentType,
+          })
+        );
+        s3Url = buildS3PublicUrl(bucket, region, s3Key);
+        storeBuffer = null;
+      } catch (e) {
+        console.error("[SEH carpetas-legales S3]", e);
+        s3Key = null;
+        s3Url = null;
+        storeBuffer = buffer;
+      }
+    }
+    const row = await sehCarpetasLegales.saveArchivo(client, {
+      plantaId,
+      docNo,
+      fileName,
+      contentType,
+      buffer: storeBuffer || buffer,
+      s3Key,
+      s3Url,
+      actorLabel: sehActorLabel(req.dashboardAuth),
+    });
+    res.status(201).json({ ok: true, row });
+  } catch (e) {
+    console.error("[SEH carpetas-legales POST archivo]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/** GET /api/seh/carpetas-legales/archivo?planta_id=&doc_no= — descarga el archivo. */
+app.get("/api/seh/carpetas-legales/archivo", dashboardAuthMiddleware, async (req, res) => {
+  const plantaId = parseInt(String(req.query.planta_id || ""), 10);
+  const docNo = sehCarpetasLegales.normalizeDocNo(req.query.doc_no);
+  if (!Number.isFinite(plantaId)) return res.status(400).json({ error: "planta_id es obligatorio" });
+  if (!docNo) return res.status(400).json({ error: "doc_no inválido" });
+  if (!assertSehPlantaAccess(req, plantaId)) {
+    return res.status(403).json({ error: "Sin permiso para esta planta" });
+  }
+  const client = await pool.connect();
+  try {
+    await sehCarpetasLegales.ensureSehCarpetasLegalesTables(client);
+    const row = await sehCarpetasLegales.getArchivoRow(client, plantaId, docNo);
+    if (!row || !row.file_name) return res.status(404).json({ error: "No hay archivo para este documento" });
+
+    let buffer = null;
+    if (row.s3_key && s3Enabled) {
+      try {
+        buffer = await getBufferFromS3(row.s3_key);
+      } catch (e) {
+        console.warn("[SEH carpetas-legales download S3]", e.message);
+      }
+    }
+    if (!buffer && row.data) {
+      buffer = Buffer.isBuffer(row.data) ? row.data : Buffer.from(row.data);
+    }
+    if (!buffer || !buffer.length) return res.status(404).json({ error: "Archivo no disponible" });
+
+    const safeName = String(row.file_name || "documento").replace(/[\r\n"]/g, "_");
+    res.setHeader("Content-Type", row.content_type || "application/octet-stream");
+    res.setHeader("Content-Disposition", `attachment; filename="${safeName}"`);
+    res.setHeader("Content-Length", String(buffer.length));
+    res.send(buffer);
+  } catch (e) {
+    console.error("[SEH carpetas-legales GET archivo]", e);
     res.status(500).json({ error: e.message });
   } finally {
     client.release();

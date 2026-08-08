@@ -1135,6 +1135,95 @@ export function putSehBoard(
   });
 }
 
+// ===========================
+// SEH · Carpetas legales
+// ===========================
+
+export type SehCarpetasLegalesEstatus = "vigente" | "en_tramite" | "na";
+
+export interface SehCarpetasLegalesRowState {
+  planta_id: number;
+  doc_no: string;
+  estatus: SehCarpetasLegalesEstatus | null;
+  comentario: string;
+  vencimiento: string | null;
+  vencimiento_na: boolean;
+  has_archivo: boolean;
+  file_name: string | null;
+  content_type: string | null;
+  file_size_bytes: number | null;
+  updated_at?: string | null;
+  updated_by?: string | null;
+}
+
+export function fetchSehCarpetasLegales(
+  token: string,
+  plantaId: number
+): Promise<{ planta_id: number; rows: SehCarpetasLegalesRowState[] }> {
+  return apiFetch("/api/seh/carpetas-legales", {
+    token,
+    params: { planta_id: String(plantaId) },
+  });
+}
+
+export function putSehCarpetasLegalesEstatus(
+  token: string,
+  body: {
+    planta_id: number;
+    doc_no: string;
+    estatus?: SehCarpetasLegalesEstatus | null;
+    comentario?: string;
+  }
+): Promise<{ ok: boolean; row: SehCarpetasLegalesRowState }> {
+  return apiFetch("/api/seh/carpetas-legales/estatus", {
+    token,
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+}
+
+export function putSehCarpetasLegalesVencimiento(
+  token: string,
+  body: {
+    planta_id: number;
+    doc_no: string;
+    vencimiento?: string | null;
+    vencimiento_na?: boolean;
+  }
+): Promise<{ ok: boolean; row: SehCarpetasLegalesRowState }> {
+  return apiFetch("/api/seh/carpetas-legales/vencimiento", {
+    token,
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+}
+
+export function uploadSehCarpetasLegalesArchivo(
+  token: string,
+  body: {
+    planta_id: number;
+    doc_no: string;
+    fileBase64: string;
+    fileName: string;
+    contentType?: string;
+  }
+): Promise<{ ok: boolean; row: SehCarpetasLegalesRowState }> {
+  return apiFetch("/api/seh/carpetas-legales/archivo", {
+    token,
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function getSehCarpetasLegalesArchivoUrl(
+  token: string,
+  plantaId: number,
+  docNo: string
+): string {
+  const base = getApiUrl("/api/seh/carpetas-legales/archivo");
+  return `${base}?planta_id=${encodeURIComponent(String(plantaId))}&doc_no=${encodeURIComponent(docNo)}&t=${encodeURIComponent(token)}`;
+}
+
 export interface IgfForecastRow {
   empresa: string;
   venta_ton: number | null;
