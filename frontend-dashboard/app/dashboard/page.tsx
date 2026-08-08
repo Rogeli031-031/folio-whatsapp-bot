@@ -146,7 +146,7 @@ function DashboardContent() {
           <Link
             href={token ? `/seh?t=${encodeURIComponent(token)}` : "/seh"}
             className="flex items-center gap-1.5 rounded border border-emerald-700/70 bg-emerald-800/80 px-2.5 py-1.5 text-sm font-medium text-emerald-50 hover:bg-emerald-700"
-            title="SEH: vencimientos de extintores, válvulas y sistema contra incendio por planta"
+            title="SEH: PLANTA, PIPAS, ESTACIONES y sistema contra incendio por planta"
           >
             SEH
           </Link>

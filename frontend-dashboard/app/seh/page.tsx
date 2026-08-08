@@ -18,24 +18,34 @@ import {
   type SehUltimaEdicion,
 } from "@/lib/api";
 
-const SEH_CATEGORIAS = [
-  "EXTINTOR",
-  "VALVULAS PLANTA",
-  "VALVULAS ESTACIONES",
-  "VALVULAS PIPAS",
-  "SISTEMA CONTRA INCENDIO",
-] as const;
+const SEH_CATEGORIAS = ["PLANTA", "PIPAS", "ESTACIONES", "SISTEMA CONTRA INCENDIO"] as const;
+const SEH_COMPONENTES = ["EXTINTOR", "VALVULA", "MANGUERA"] as const;
+const CAT_SCI = "SISTEMA CONTRA INCENDIO";
 
 const CLAVES_CODIGO_PLANTA = ["E7", "E8", "E9", "E10", "E11", "E12", "E13", "E15"];
 const ROWS_MIN = 12;
-const CAT_PIPAS = "VALVULAS PIPAS";
 
-type DraftRow = { key: string; autotanque: string; nombre: string; vence: string };
+type DraftRow = {
+  key: string;
+  locacion: string;
+  descripcion: string;
+  componente: string;
+  nombre: string;
+  vence: string;
+};
+
+type DraftField = "locacion" | "descripcion" | "componente" | "nombre" | "vence";
+
+function isSci(categoria: string): boolean {
+  return categoria === CAT_SCI;
+}
 
 function emptyRows(n: number): DraftRow[] {
   return Array.from({ length: n }, (_, i) => ({
     key: `new-${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${i}`,
-    autotanque: "",
+    locacion: "",
+    descripcion: "",
+    componente: "",
     nombre: "",
     vence: "",
   }));
@@ -47,7 +57,9 @@ function itemsToDraft(items: SehItem[], categoria: string): DraftRow[] {
     .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0) || (a.id || 0) - (b.id || 0))
     .map((it, i) => ({
       key: `id-${it.id ?? i}`,
-      autotanque: it.autotanque || "",
+      locacion: it.locacion || "",
+      descripcion: it.descripcion || "",
+      componente: it.componente || "",
       nombre: it.nombre || "",
       vence: it.vence || "",
     }));
@@ -145,12 +157,7 @@ function SehContent() {
     loadBoard(selectedPlantaId);
   }, [selectedPlantaId, loadBoard]);
 
-  const updateCell = (
-    categoria: string,
-    rowKey: string,
-    field: "autotanque" | "nombre" | "vence",
-    value: string
-  ) => {
+  const updateCell = (categoria: string, rowKey: string, field: DraftField, value: string) => {
     setDraftByCat((prev) => {
       const rows = [...(prev[categoria] || [])];
       const idx = rows.findIndex((r) => r.key === rowKey);
@@ -179,14 +186,27 @@ function SehContent() {
       for (const cat of SEH_CATEGORIAS) {
         const rows = draftByCat[cat] || [];
         rows.forEach((row, i) => {
-          const nombre = row.nombre.trim();
           const vence = row.vence.trim();
-          const autotanque = cat === CAT_PIPAS ? row.autotanque.trim() : "";
-          if (!nombre && !vence && !autotanque) return;
+          if (isSci(cat)) {
+            const nombre = row.nombre.trim();
+            if (!nombre && !vence) return;
+            items.push({
+              categoria: cat,
+              nombre,
+              vence: vence || null,
+              sort_order: i,
+            });
+            return;
+          }
+          const locacion = row.locacion.trim();
+          const descripcion = row.descripcion.trim();
+          const componente = row.componente.trim().toUpperCase();
+          if (!locacion && !descripcion && !componente && !vence) return;
           items.push({
             categoria: cat,
-            autotanque,
-            nombre,
+            locacion,
+            descripcion,
+            componente,
             vence: vence || null,
             sort_order: i,
           });
@@ -304,7 +324,7 @@ function SehContent() {
 
         {selectedPlantaId == null && (
           <p className="text-sm text-slate-400">
-            Selecciona una planta para capturar nombres y fechas de vencimiento de equipos SEH.
+            Selecciona una planta para capturar locación, descripción, componente y vencimientos SEH.
           </p>
         )}
 
@@ -319,9 +339,7 @@ function SehContent() {
               <p className="text-xs text-slate-400">
                 Última edición:{" "}
                 <span className="text-slate-200">{ultimaEdicion.updated_by}</span>
-                {ultimaEdicion.updated_at_local
-                  ? ` · ${ultimaEdicion.updated_at_local}`
-                  : ""}
+                {ultimaEdicion.updated_at_local ? ` · ${ultimaEdicion.updated_at_local}` : ""}
               </p>
             ) : (
               <p className="text-xs text-slate-500">Aún no hay ediciones registradas en esta planta.</p>
@@ -332,12 +350,12 @@ function SehContent() {
               <div className="flex gap-3 overflow-x-auto pb-2 min-h-[60vh]">
                 {SEH_CATEGORIAS.map((cat) => {
                   const rows = draftByCat[cat] || emptyRows(ROWS_MIN);
-                  const isPipas = cat === CAT_PIPAS;
+                  const sci = isSci(cat);
                   return (
                     <div
                       key={cat}
                       className={`flex flex-shrink-0 flex-col rounded-lg border border-slate-700 bg-slate-900/55 ${
-                        isPipas ? "w-[24rem]" : "w-[17.5rem]"
+                        sci ? "w-[17.5rem]" : "w-[32rem]"
                       }`}
                     >
                       <div className="border-b border-slate-700 bg-amber-950/30 px-2 py-2 text-center">
@@ -345,48 +363,87 @@ function SehContent() {
                       </div>
                       <div
                         className={`grid border-b border-slate-700 text-[10px] font-medium uppercase tracking-wide text-slate-400 ${
-                          isPipas ? "grid-cols-3" : "grid-cols-2"
+                          sci ? "grid-cols-2" : "grid-cols-4"
                         }`}
                       >
-                        {isPipas && (
-                          <div className="border-r border-slate-700 px-1.5 py-1.5 text-center">Autotanque</div>
+                        {sci ? (
+                          <>
+                            <div className="border-r border-slate-700 px-2 py-1.5 text-center">Nombre</div>
+                            <div className="px-2 py-1.5 text-center">Vence</div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="border-r border-slate-700 px-1.5 py-1.5 text-center">Locación</div>
+                            <div className="border-r border-slate-700 px-1.5 py-1.5 text-center">Descripción</div>
+                            <div className="border-r border-slate-700 px-1.5 py-1.5 text-center">Componente</div>
+                            <div className="px-1.5 py-1.5 text-center">Vence</div>
+                          </>
                         )}
-                        <div className="border-r border-slate-700 px-2 py-1.5 text-center">Nombre</div>
-                        <div className="px-2 py-1.5 text-center">Vence</div>
                       </div>
                       <div className="max-h-[70vh] overflow-y-auto">
                         {rows.map((row) => (
                           <div
                             key={row.key}
-                            className={`grid border-b border-slate-800/80 ${
-                              isPipas ? "grid-cols-3" : "grid-cols-2"
-                            }`}
+                            className={`grid border-b border-slate-800/80 ${sci ? "grid-cols-2" : "grid-cols-4"}`}
                           >
-                            {isPipas && (
-                              <input
-                                type="text"
-                                value={row.autotanque}
-                                disabled={!canEdit}
-                                onChange={(e) => updateCell(cat, row.key, "autotanque", e.target.value)}
-                                placeholder="Autotanque"
-                                className="border-r border-slate-800 bg-transparent px-1.5 py-1.5 text-xs text-slate-200 placeholder:text-slate-600 focus:bg-slate-800/60 focus:outline-none disabled:opacity-60"
-                              />
+                            {sci ? (
+                              <>
+                                <input
+                                  type="text"
+                                  value={row.nombre}
+                                  disabled={!canEdit}
+                                  onChange={(e) => updateCell(cat, row.key, "nombre", e.target.value)}
+                                  placeholder="Ej. BOMBA 1"
+                                  className="border-r border-slate-800 bg-transparent px-1.5 py-1.5 text-xs text-slate-200 placeholder:text-slate-600 focus:bg-slate-800/60 focus:outline-none disabled:opacity-60"
+                                />
+                                <input
+                                  type="date"
+                                  value={row.vence}
+                                  disabled={!canEdit}
+                                  onChange={(e) => updateCell(cat, row.key, "vence", e.target.value)}
+                                  className={`px-1 py-1.5 text-[11px] focus:outline-none disabled:opacity-60 ${venceTone(row.vence)}`}
+                                />
+                              </>
+                            ) : (
+                              <>
+                                <input
+                                  type="text"
+                                  value={row.locacion}
+                                  disabled={!canEdit}
+                                  onChange={(e) => updateCell(cat, row.key, "locacion", e.target.value)}
+                                  placeholder="Locación"
+                                  className="border-r border-slate-800 bg-transparent px-1.5 py-1.5 text-xs text-slate-200 placeholder:text-slate-600 focus:bg-slate-800/60 focus:outline-none disabled:opacity-60"
+                                />
+                                <input
+                                  type="text"
+                                  value={row.descripcion}
+                                  disabled={!canEdit}
+                                  onChange={(e) => updateCell(cat, row.key, "descripcion", e.target.value)}
+                                  placeholder="Descripción"
+                                  className="border-r border-slate-800 bg-transparent px-1.5 py-1.5 text-xs text-slate-200 placeholder:text-slate-600 focus:bg-slate-800/60 focus:outline-none disabled:opacity-60"
+                                />
+                                <select
+                                  value={row.componente}
+                                  disabled={!canEdit}
+                                  onChange={(e) => updateCell(cat, row.key, "componente", e.target.value)}
+                                  className="border-r border-slate-800 bg-slate-900 px-1 py-1.5 text-[11px] text-slate-200 focus:bg-slate-800 focus:outline-none disabled:opacity-60"
+                                >
+                                  <option value="">—</option>
+                                  {SEH_COMPONENTES.map((c) => (
+                                    <option key={c} value={c}>
+                                      {c}
+                                    </option>
+                                  ))}
+                                </select>
+                                <input
+                                  type="date"
+                                  value={row.vence}
+                                  disabled={!canEdit}
+                                  onChange={(e) => updateCell(cat, row.key, "vence", e.target.value)}
+                                  className={`px-1 py-1.5 text-[11px] focus:outline-none disabled:opacity-60 ${venceTone(row.vence)}`}
+                                />
+                              </>
                             )}
-                            <input
-                              type="text"
-                              value={row.nombre}
-                              disabled={!canEdit}
-                              onChange={(e) => updateCell(cat, row.key, "nombre", e.target.value)}
-                              placeholder="Ej. ANDEN 1"
-                              className="border-r border-slate-800 bg-transparent px-1.5 py-1.5 text-xs text-slate-200 placeholder:text-slate-600 focus:bg-slate-800/60 focus:outline-none disabled:opacity-60"
-                            />
-                            <input
-                              type="date"
-                              value={row.vence}
-                              disabled={!canEdit}
-                              onChange={(e) => updateCell(cat, row.key, "vence", e.target.value)}
-                              className={`px-1 py-1.5 text-[11px] focus:outline-none disabled:opacity-60 ${venceTone(row.vence)}`}
-                            />
                           </div>
                         ))}
                       </div>

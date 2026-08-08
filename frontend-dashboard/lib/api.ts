@@ -1077,20 +1077,20 @@ export function fetchPlantas(token: string): Promise<{ plantas: { id: number; no
   return apiFetch<{ plantas: { id: number; nombre: string }[] }>("/api/dashboard/plantas", { token });
 }
 
-export type SehCategoria =
-  | "EXTINTOR"
-  | "VALVULAS PLANTA"
-  | "VALVULAS ESTACIONES"
-  | "VALVULAS PIPAS"
-  | "SISTEMA CONTRA INCENDIO";
+export type SehCategoria = "PLANTA" | "PIPAS" | "ESTACIONES" | "SISTEMA CONTRA INCENDIO";
+
+export type SehComponente = "EXTINTOR" | "VALVULA" | "MANGUERA";
 
 export interface SehItem {
   id?: number;
   planta_id?: number;
   categoria: SehCategoria | string;
-  /** Solo aplica a VALVULAS PIPAS. */
-  autotanque?: string;
-  nombre: string;
+  /** PLANTA / PIPAS / ESTACIONES */
+  locacion?: string;
+  descripcion?: string;
+  componente?: SehComponente | string;
+  /** Solo SISTEMA CONTRA INCENDIO */
+  nombre?: string;
   vence: string | null;
   sort_order: number;
 }
@@ -1105,6 +1105,7 @@ export interface SehUltimaEdicion {
 export interface SehBoardResponse {
   planta_id: number;
   categorias: string[];
+  componentes?: string[];
   items: SehItem[];
   ok?: boolean;
   ultima_edicion?: SehUltimaEdicion | null;

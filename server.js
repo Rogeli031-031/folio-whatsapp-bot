@@ -2745,6 +2745,30 @@ async function ensureSchema() {
       ON public.seh_equipos(planta_id, categoria, sort_order, id);
     `).catch(() => {});
     await client.query(`ALTER TABLE public.seh_equipos ADD COLUMN IF NOT EXISTS autotanque VARCHAR(255) NOT NULL DEFAULT '';`).catch(() => {});
+    await client.query(`ALTER TABLE public.seh_equipos ADD COLUMN IF NOT EXISTS locacion VARCHAR(255) NOT NULL DEFAULT '';`).catch(() => {});
+    await client.query(`ALTER TABLE public.seh_equipos ADD COLUMN IF NOT EXISTS descripcion VARCHAR(255) NOT NULL DEFAULT '';`).catch(() => {});
+    await client.query(`ALTER TABLE public.seh_equipos ADD COLUMN IF NOT EXISTS componente VARCHAR(40) NOT NULL DEFAULT '';`).catch(() => {});
+    /** Migración de categorías antiguas → PLANTA / PIPAS / ESTACIONES. */
+    await client.query(`
+      UPDATE public.seh_equipos
+      SET locacion = CASE
+            WHEN TRIM(COALESCE(locacion,'')) <> '' THEN locacion
+            WHEN TRIM(COALESCE(autotanque,'')) <> '' THEN autotanque
+            ELSE COALESCE(nombre, '')
+          END,
+          componente = CASE
+            WHEN UPPER(TRIM(categoria)) = 'EXTINTOR' AND TRIM(COALESCE(componente,'')) = '' THEN 'EXTINTOR'
+            ELSE componente
+          END,
+          categoria = CASE UPPER(TRIM(categoria))
+            WHEN 'EXTINTOR' THEN 'PLANTA'
+            WHEN 'VALVULAS PLANTA' THEN 'PLANTA'
+            WHEN 'VALVULAS ESTACIONES' THEN 'ESTACIONES'
+            WHEN 'VALVULAS PIPAS' THEN 'PIPAS'
+            ELSE categoria
+          END
+      WHERE UPPER(TRIM(categoria)) IN ('EXTINTOR', 'VALVULAS PLANTA', 'VALVULAS ESTACIONES', 'VALVULAS PIPAS')
+    `).catch(() => {});
     /** Última persona que editó el tablero SEH de cada planta (persiste aunque se borren filas). */
     await client.query(`
       CREATE TABLE IF NOT EXISTS public.seh_ultima_edicion (
@@ -7106,13 +7130,18 @@ app.get("/api/dashboard/plantas", dashboardAuthMiddleware, async (req, res) => {
 });
 
 /** Categorías fijas del módulo SEH (Seguridad e Higiene). */
-const SEH_CATEGORIAS = [
-  "EXTINTOR",
-  "VALVULAS PLANTA",
-  "VALVULAS ESTACIONES",
-  "VALVULAS PIPAS",
-  "SISTEMA CONTRA INCENDIO",
-];
+const SEH_CATEGORIAS = ["PLANTA", "PIPAS", "ESTACIONES", "SISTEMA CONTRA INCENDIO"];
+const SEH_CAT_SCI = "SISTEMA CONTRA INCENDIO";
+const SEH_COMPONENTES = ["EXTINTOR", "VALVULA", "MANGUERA"];
+
+function sehIsSci(categoria) {
+  return String(categoria || "").trim().toUpperCase() === SEH_CAT_SCI;
+}
+
+function sehNormalizeComponente(raw) {
+  const c = String(raw || "").trim().toUpperCase();
+  return SEH_COMPONENTES.includes(c) ? c : "";
+}
 
 function sehParseVence(raw) {
   if (raw == null || raw === "") return null;
@@ -7178,12 +7207,24 @@ function mapSehItems(rows) {
     id: row.id,
     planta_id: row.planta_id,
     categoria: row.categoria,
-    autotanque: row.autotanque || "",
+    locacion: row.locacion || "",
+    descripcion: row.descripcion || "",
+    componente: row.componente || "",
     nombre: row.nombre || "",
     vence: row.vence || null,
     sort_order: row.sort_order,
   }));
 }
+
+const SEH_SELECT_SQL = `SELECT id, planta_id, categoria,
+       COALESCE(locacion, '') AS locacion,
+       COALESCE(descripcion, '') AS descripcion,
+       COALESCE(componente, '') AS componente,
+       COALESCE(nombre, '') AS nombre,
+       to_char(vence, 'YYYY-MM-DD') AS vence, sort_order
+ FROM public.seh_equipos
+ WHERE planta_id = $1
+ ORDER BY categoria, sort_order, id`;
 
 /** GET /api/seh?planta_id= — listado de equipos SEH de una planta. */
 app.get("/api/seh", dashboardAuthMiddleware, async (req, res) => {
@@ -7196,18 +7237,12 @@ app.get("/api/seh", dashboardAuthMiddleware, async (req, res) => {
   }
   const client = await pool.connect();
   try {
-    const r = await client.query(
-      `SELECT id, planta_id, categoria, COALESCE(autotanque, '') AS autotanque, nombre,
-              to_char(vence, 'YYYY-MM-DD') AS vence, sort_order
-       FROM public.seh_equipos
-       WHERE planta_id = $1
-       ORDER BY categoria, sort_order, id`,
-      [plantaId]
-    );
+    const r = await client.query(SEH_SELECT_SQL, [plantaId]);
     const ultima_edicion = await fetchSehUltimaEdicion(client, plantaId);
     res.json({
       planta_id: plantaId,
       categorias: SEH_CATEGORIAS,
+      componentes: SEH_COMPONENTES,
       items: mapSehItems(r.rows),
       ultima_edicion,
     });
@@ -7221,9 +7256,9 @@ app.get("/api/seh", dashboardAuthMiddleware, async (req, res) => {
 
 /**
  * PUT /api/seh
- * Body: { planta_id, items: [{ categoria, autotanque?, nombre, vence, sort_order }] }
- * Reemplaza el listado completo de la planta (solo filas con dato).
- * `autotanque` aplica solo a VALVULAS PIPAS.
+ * Body: { planta_id, items: [{ categoria, locacion?, descripcion?, componente?, nombre?, vence, sort_order }] }
+ * PLANTA/PIPAS/ESTACIONES: LOCACION, DESCRIPCION, COMPONENTE, VENCE.
+ * SISTEMA CONTRA INCENDIO: NOMBRE, VENCE (como antes).
  */
 app.put("/api/seh", dashboardAuthMiddleware, async (req, res) => {
   if (req.dashboardAuth.role === "GA") {
@@ -7241,13 +7276,35 @@ app.put("/api/seh", dashboardAuthMiddleware, async (req, res) => {
   for (const it of rawItems) {
     const categoria = String(it?.categoria || "").trim().toUpperCase();
     if (!SEH_CATEGORIAS.includes(categoria)) continue;
-    const nombre = String(it?.nombre || "").trim();
     const vence = sehParseVence(it?.vence);
-    const autotanque =
-      categoria === "VALVULAS PIPAS" ? String(it?.autotanque || "").trim() : "";
-    if (!nombre && !vence && !autotanque) continue;
     const sortOrder = Number.isFinite(Number(it?.sort_order)) ? Math.max(0, Math.floor(Number(it.sort_order))) : cleaned.length;
-    cleaned.push({ categoria, autotanque, nombre, vence, sort_order: sortOrder });
+    if (sehIsSci(categoria)) {
+      const nombre = String(it?.nombre || "").trim();
+      if (!nombre && !vence) continue;
+      cleaned.push({
+        categoria,
+        locacion: "",
+        descripcion: "",
+        componente: "",
+        nombre,
+        vence,
+        sort_order: sortOrder,
+      });
+      continue;
+    }
+    const locacion = String(it?.locacion || "").trim();
+    const descripcion = String(it?.descripcion || "").trim();
+    const componente = sehNormalizeComponente(it?.componente);
+    if (!locacion && !descripcion && !componente && !vence) continue;
+    cleaned.push({
+      categoria,
+      locacion,
+      descripcion,
+      componente,
+      nombre: "",
+      vence,
+      sort_order: sortOrder,
+    });
   }
   const client = await pool.connect();
   try {
@@ -7257,9 +7314,20 @@ app.put("/api/seh", dashboardAuthMiddleware, async (req, res) => {
     const actorId = req.dashboardAuth.actor_id != null ? Number(req.dashboardAuth.actor_id) : null;
     for (const it of cleaned) {
       await client.query(
-        `INSERT INTO public.seh_equipos (planta_id, categoria, autotanque, nombre, vence, sort_order, updated_at, updated_by)
-         VALUES ($1, $2, $3, $4, $5::date, $6, NOW(), $7)`,
-        [plantaId, it.categoria, it.autotanque, it.nombre, it.vence, it.sort_order, actorLabel]
+        `INSERT INTO public.seh_equipos
+           (planta_id, categoria, locacion, descripcion, componente, nombre, vence, sort_order, updated_at, updated_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7::date, $8, NOW(), $9)`,
+        [
+          plantaId,
+          it.categoria,
+          it.locacion,
+          it.descripcion,
+          it.componente,
+          it.nombre,
+          it.vence,
+          it.sort_order,
+          actorLabel,
+        ]
       );
     }
     await client.query(
@@ -7272,19 +7340,13 @@ app.put("/api/seh", dashboardAuthMiddleware, async (req, res) => {
       [plantaId, actorLabel, Number.isFinite(actorId) ? actorId : null]
     );
     await client.query("COMMIT");
-    const r = await client.query(
-      `SELECT id, planta_id, categoria, COALESCE(autotanque, '') AS autotanque, nombre,
-              to_char(vence, 'YYYY-MM-DD') AS vence, sort_order
-       FROM public.seh_equipos
-       WHERE planta_id = $1
-       ORDER BY categoria, sort_order, id`,
-      [plantaId]
-    );
+    const r = await client.query(SEH_SELECT_SQL, [plantaId]);
     const ultima_edicion = await fetchSehUltimaEdicion(client, plantaId);
     res.json({
       ok: true,
       planta_id: plantaId,
       categorias: SEH_CATEGORIAS,
+      componentes: SEH_COMPONENTES,
       items: mapSehItems(r.rows),
       ultima_edicion,
     });
