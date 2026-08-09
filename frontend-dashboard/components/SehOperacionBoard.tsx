@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
@@ -13,6 +13,7 @@ import {
 import {
   fetchPlantas,
   fetchSehBoard,
+  getSehEquipoFotoUrl,
   putSehBoard,
   type SehItem,
   type SehUltimaEdicion,
@@ -21,14 +22,23 @@ import { SEH_COMPONENTES, filterPlantasSeh, type SehAmbitoConfig } from "@/lib/s
 
 const CAT_SCI = "SISTEMA CONTRA INCENDIO";
 const ROWS_MIN = 12;
+const FOTO_MAX_BYTES = 3 * 1024 * 1024;
 
 type DraftRow = {
   key: string;
+  id?: number;
   locacion: string;
   descripcion: string;
   componente: string;
   nombre: string;
   vence: string;
+  venceOriginal: string;
+  hasFoto: boolean;
+  fotoFileName: string | null;
+  pendingFotoBase64: string | null;
+  pendingFotoName: string | null;
+  pendingFotoType: string | null;
+  pendingFotoPreview: string | null;
 };
 
 type DraftField = "locacion" | "descripcion" | "componente" | "nombre" | "vence";
@@ -45,6 +55,13 @@ function emptyRows(n: number): DraftRow[] {
     componente: "",
     nombre: "",
     vence: "",
+    venceOriginal: "",
+    hasFoto: false,
+    fotoFileName: null,
+    pendingFotoBase64: null,
+    pendingFotoName: null,
+    pendingFotoType: null,
+    pendingFotoPreview: null,
   }));
 }
 
@@ -54,11 +71,19 @@ function itemsToDraft(items: SehItem[], categoria: string): DraftRow[] {
     .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0) || (a.id || 0) - (b.id || 0))
     .map((it, i) => ({
       key: `id-${it.id ?? i}`,
+      id: it.id,
       locacion: it.locacion || "",
       descripcion: it.descripcion || "",
       componente: it.componente || "",
       nombre: it.nombre || "",
       vence: it.vence || "",
+      venceOriginal: it.vence || "",
+      hasFoto: Boolean(it.has_foto),
+      fotoFileName: it.foto_file_name || null,
+      pendingFotoBase64: null,
+      pendingFotoName: null,
+      pendingFotoType: null,
+      pendingFotoPreview: null,
     }));
   if (rows.length < ROWS_MIN) {
     return [...rows, ...emptyRows(ROWS_MIN - rows.length)];
@@ -78,9 +103,37 @@ function venceTone(vence: string): string {
   return "border-slate-600 bg-slate-900 text-slate-200";
 }
 
+function rowNeedsFoto(row: DraftRow): boolean {
+  const vence = row.vence.trim();
+  if (!vence) return false;
+  if (vence !== (row.venceOriginal || "").trim()) return true;
+  if (!row.id) return true;
+  return false;
+}
+
+function rowHasFotoReady(row: DraftRow): boolean {
+  if (row.pendingFotoBase64) return true;
+  if (!rowNeedsFoto(row) && row.hasFoto) return true;
+  return false;
+}
+
+function readFileAsBase64(file: File): Promise<{ base64: string; preview: string }> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result || "");
+      const base64 = result.includes(",") ? result.split(",")[1] : result;
+      resolve({ base64, preview: result });
+    };
+    reader.onerror = () => reject(new Error("No se pudo leer la imagen"));
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function SehOperacionBoard({ ambito }: { ambito: SehAmbitoConfig }) {
   const searchParams = useSearchParams();
   const categorias = ambito.categorias;
+  const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const [token, setToken] = useState<string | null>(null);
   const [unauthorized, setUnauthorized] = useState(false);
   const [plantas, setPlantas] = useState<{ id: number; nombre: string }[]>([]);
@@ -165,6 +218,39 @@ export default function SehOperacionBoard({ ambito }: { ambito: SehAmbitoConfig 
     setSavedAt(null);
   };
 
+  const setPendingFoto = async (categoria: string, rowKey: string, file: File | null) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setError("Solo se permiten imágenes en FOTO.");
+      return;
+    }
+    if (file.size > FOTO_MAX_BYTES) {
+      setError(`La foto no debe superar ${Math.floor(FOTO_MAX_BYTES / 1024 / 1024)}MB.`);
+      return;
+    }
+    try {
+      const { base64, preview } = await readFileAsBase64(file);
+      setDraftByCat((prev) => {
+        const rows = [...(prev[categoria] || [])];
+        const idx = rows.findIndex((r) => r.key === rowKey);
+        if (idx < 0) return prev;
+        rows[idx] = {
+          ...rows[idx],
+          pendingFotoBase64: base64,
+          pendingFotoName: file.name,
+          pendingFotoType: file.type || "image/jpeg",
+          pendingFotoPreview: preview,
+        };
+        return { ...prev, [categoria]: rows };
+      });
+      setDirty(true);
+      setSavedAt(null);
+      setError(null);
+    } catch (e) {
+      setError((e as Error).message || "Error al leer la foto");
+    }
+  };
+
   const addRow = (categoria: string) => {
     setDraftByCat((prev) => ({
       ...prev,
@@ -179,29 +265,54 @@ export default function SehOperacionBoard({ ambito }: { ambito: SehAmbitoConfig 
     setError(null);
     try {
       const items: SehItem[] = [];
+      const missingFoto: string[] = [];
       for (const cat of categorias) {
         const rows = draftByCat[cat] || [];
         rows.forEach((row, i) => {
           const vence = row.vence.trim();
-          if (isSci(cat)) {
-            const nombre = row.nombre.trim();
-            if (!nombre && !vence) return;
-            items.push({ categoria: cat, nombre, vence: vence || null, sort_order: i });
-            return;
+          const filledSci = Boolean(row.nombre.trim() || vence);
+          const filledStd = Boolean(
+            row.locacion.trim() || row.descripcion.trim() || row.componente.trim() || vence
+          );
+          if (isSci(cat) ? !filledSci : !filledStd) return;
+          if (rowNeedsFoto(row) && !row.pendingFotoBase64) {
+            missingFoto.push(
+              isSci(cat) ? row.nombre.trim() || cat : row.locacion.trim() || row.descripcion.trim() || cat
+            );
           }
-          const locacion = row.locacion.trim();
-          const descripcion = row.descripcion.trim();
-          const componente = row.componente.trim().toUpperCase();
-          if (!locacion && !descripcion && !componente && !vence) return;
-          items.push({
+          const base: SehItem = {
+            id: row.id,
             categoria: cat,
-            locacion,
-            descripcion,
-            componente,
             vence: vence || null,
             sort_order: i,
-          });
+            ...(row.pendingFotoBase64
+              ? {
+                  foto_base64: row.pendingFotoBase64,
+                  foto_file_name_upload: row.pendingFotoName || "foto.jpg",
+                  foto_content_type: row.pendingFotoType || "image/jpeg",
+                }
+              : {}),
+          };
+          if (isSci(cat)) {
+            items.push({ ...base, nombre: row.nombre.trim() });
+          } else {
+            items.push({
+              ...base,
+              locacion: row.locacion.trim(),
+              descripcion: row.descripcion.trim(),
+              componente: row.componente.trim().toUpperCase(),
+            });
+          }
         });
+      }
+      if (missingFoto.length) {
+        setError(
+          "Para capturar o actualizar VENCE debes subir una foto: " +
+            missingFoto.slice(0, 6).join(", ") +
+            (missingFoto.length > 6 ? "…" : "")
+        );
+        setSaving(false);
+        return;
       }
       const data = await putSehBoard(token, selectedPlantaId, items, [...categorias]);
       const next: Record<string, DraftRow[]> = {};
@@ -326,7 +437,7 @@ export default function SehOperacionBoard({ ambito }: { ambito: SehAmbitoConfig 
             <p className="text-sm text-slate-300">
               Planta: <strong className="text-white">{selectedNombre}</strong>
               {" · "}
-              Captura manual por casilla. Rojo = vencido · Ámbar = vence en ≤ 30 días.
+              Rojo = vencido · Ámbar = ≤ 30 días · Al cambiar VENCE es obligatoria una foto nueva.
             </p>
             {ultimaEdicion?.updated_by ? (
               <p className="text-xs text-slate-400">
@@ -347,7 +458,7 @@ export default function SehOperacionBoard({ ambito }: { ambito: SehAmbitoConfig 
                     <div
                       key={cat}
                       className={`flex flex-shrink-0 flex-col rounded-lg border border-slate-700 bg-slate-900/55 ${
-                        sci ? "w-[17.5rem]" : "w-[32rem]"
+                        sci ? "w-[24rem]" : "w-[40rem]"
                       }`}
                     >
                       <div className="border-b border-slate-700 bg-amber-950/30 px-2 py-2 text-center">
@@ -355,89 +466,149 @@ export default function SehOperacionBoard({ ambito }: { ambito: SehAmbitoConfig 
                       </div>
                       <div
                         className={`grid border-b border-slate-700 text-[10px] font-medium uppercase tracking-wide text-slate-400 ${
-                          sci ? "grid-cols-2" : "grid-cols-4"
+                          sci ? "grid-cols-[1.2fr_1fr_0.9fr]" : "grid-cols-[1.1fr_1.1fr_0.9fr_0.95fr_0.85fr]"
                         }`}
                       >
                         {sci ? (
                           <>
                             <div className="border-r border-slate-700 px-2 py-1.5 text-center">Nombre</div>
-                            <div className="px-2 py-1.5 text-center">Vence</div>
+                            <div className="border-r border-slate-700 px-2 py-1.5 text-center">Vence</div>
+                            <div className="px-2 py-1.5 text-center">Foto</div>
                           </>
                         ) : (
                           <>
                             <div className="border-r border-slate-700 px-1.5 py-1.5 text-center">Locación</div>
                             <div className="border-r border-slate-700 px-1.5 py-1.5 text-center">Descripción</div>
                             <div className="border-r border-slate-700 px-1.5 py-1.5 text-center">Componente</div>
-                            <div className="px-1.5 py-1.5 text-center">Vence</div>
+                            <div className="border-r border-slate-700 px-1.5 py-1.5 text-center">Vence</div>
+                            <div className="px-1.5 py-1.5 text-center">Foto</div>
                           </>
                         )}
                       </div>
                       <div className="max-h-[70vh] overflow-y-auto">
-                        {rows.map((row) => (
-                          <div
-                            key={row.key}
-                            className={`grid border-b border-slate-800/80 ${sci ? "grid-cols-2" : "grid-cols-4"}`}
-                          >
-                            {sci ? (
-                              <>
+                        {rows.map((row) => {
+                          const needsFoto = rowNeedsFoto(row);
+                          const fotoOk = rowHasFotoReady(row);
+                          const inputKey = `${cat}:${row.key}`;
+                          return (
+                            <div
+                              key={row.key}
+                              className={`grid border-b border-slate-800/80 ${
+                                sci ? "grid-cols-[1.2fr_1fr_0.9fr]" : "grid-cols-[1.1fr_1.1fr_0.9fr_0.95fr_0.85fr]"
+                              }`}
+                            >
+                              {sci ? (
+                                <>
+                                  <input
+                                    type="text"
+                                    value={row.nombre}
+                                    disabled={!canEdit}
+                                    onChange={(e) => updateCell(cat, row.key, "nombre", e.target.value)}
+                                    placeholder="Ej. BOMBA 1"
+                                    className="border-r border-slate-800 bg-transparent px-1.5 py-1.5 text-xs text-slate-200 placeholder:text-slate-600 focus:bg-slate-800/60 focus:outline-none disabled:opacity-60"
+                                  />
+                                  <input
+                                    type="date"
+                                    value={row.vence}
+                                    disabled={!canEdit}
+                                    onChange={(e) => updateCell(cat, row.key, "vence", e.target.value)}
+                                    className={`border-r border-slate-800 px-1 py-1.5 text-[11px] focus:outline-none disabled:opacity-60 ${venceTone(row.vence)}`}
+                                  />
+                                </>
+                              ) : (
+                                <>
+                                  <input
+                                    type="text"
+                                    value={row.locacion}
+                                    disabled={!canEdit}
+                                    onChange={(e) => updateCell(cat, row.key, "locacion", e.target.value)}
+                                    placeholder="Locación"
+                                    className="border-r border-slate-800 bg-transparent px-1.5 py-1.5 text-xs text-slate-200 placeholder:text-slate-600 focus:bg-slate-800/60 focus:outline-none disabled:opacity-60"
+                                  />
+                                  <input
+                                    type="text"
+                                    value={row.descripcion}
+                                    disabled={!canEdit}
+                                    onChange={(e) => updateCell(cat, row.key, "descripcion", e.target.value)}
+                                    placeholder="Descripción"
+                                    className="border-r border-slate-800 bg-transparent px-1.5 py-1.5 text-xs text-slate-200 placeholder:text-slate-600 focus:bg-slate-800/60 focus:outline-none disabled:opacity-60"
+                                  />
+                                  <select
+                                    value={row.componente}
+                                    disabled={!canEdit}
+                                    onChange={(e) => updateCell(cat, row.key, "componente", e.target.value)}
+                                    className="border-r border-slate-800 bg-slate-900 px-1 py-1.5 text-[11px] text-slate-200 focus:bg-slate-800 focus:outline-none disabled:opacity-60"
+                                  >
+                                    <option value="">—</option>
+                                    {SEH_COMPONENTES.map((c) => (
+                                      <option key={c} value={c}>
+                                        {c}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  <input
+                                    type="date"
+                                    value={row.vence}
+                                    disabled={!canEdit}
+                                    onChange={(e) => updateCell(cat, row.key, "vence", e.target.value)}
+                                    className={`border-r border-slate-800 px-1 py-1.5 text-[11px] focus:outline-none disabled:opacity-60 ${venceTone(row.vence)}`}
+                                  />
+                                </>
+                              )}
+                              <div
+                                className={`flex flex-col items-center justify-center gap-0.5 px-1 py-1 ${
+                                  needsFoto && !fotoOk ? "bg-red-950/40" : ""
+                                }`}
+                              >
                                 <input
-                                  type="text"
-                                  value={row.nombre}
+                                  ref={(el) => {
+                                    fileInputRefs.current[inputKey] = el;
+                                  }}
+                                  type="file"
+                                  accept="image/*"
+                                  className="hidden"
                                   disabled={!canEdit}
-                                  onChange={(e) => updateCell(cat, row.key, "nombre", e.target.value)}
-                                  placeholder="Ej. BOMBA 1"
-                                  className="border-r border-slate-800 bg-transparent px-1.5 py-1.5 text-xs text-slate-200 placeholder:text-slate-600 focus:bg-slate-800/60 focus:outline-none disabled:opacity-60"
+                                  onChange={(e) => {
+                                    const f = e.target.files?.[0] || null;
+                                    void setPendingFoto(cat, row.key, f);
+                                    e.target.value = "";
+                                  }}
                                 />
-                                <input
-                                  type="date"
-                                  value={row.vence}
-                                  disabled={!canEdit}
-                                  onChange={(e) => updateCell(cat, row.key, "vence", e.target.value)}
-                                  className={`px-1 py-1.5 text-[11px] focus:outline-none disabled:opacity-60 ${venceTone(row.vence)}`}
-                                />
-                              </>
-                            ) : (
-                              <>
-                                <input
-                                  type="text"
-                                  value={row.locacion}
-                                  disabled={!canEdit}
-                                  onChange={(e) => updateCell(cat, row.key, "locacion", e.target.value)}
-                                  placeholder="Locación"
-                                  className="border-r border-slate-800 bg-transparent px-1.5 py-1.5 text-xs text-slate-200 placeholder:text-slate-600 focus:bg-slate-800/60 focus:outline-none disabled:opacity-60"
-                                />
-                                <input
-                                  type="text"
-                                  value={row.descripcion}
-                                  disabled={!canEdit}
-                                  onChange={(e) => updateCell(cat, row.key, "descripcion", e.target.value)}
-                                  placeholder="Descripción"
-                                  className="border-r border-slate-800 bg-transparent px-1.5 py-1.5 text-xs text-slate-200 placeholder:text-slate-600 focus:bg-slate-800/60 focus:outline-none disabled:opacity-60"
-                                />
-                                <select
-                                  value={row.componente}
-                                  disabled={!canEdit}
-                                  onChange={(e) => updateCell(cat, row.key, "componente", e.target.value)}
-                                  className="border-r border-slate-800 bg-slate-900 px-1 py-1.5 text-[11px] text-slate-200 focus:bg-slate-800 focus:outline-none disabled:opacity-60"
-                                >
-                                  <option value="">—</option>
-                                  {SEH_COMPONENTES.map((c) => (
-                                    <option key={c} value={c}>
-                                      {c}
-                                    </option>
-                                  ))}
-                                </select>
-                                <input
-                                  type="date"
-                                  value={row.vence}
-                                  disabled={!canEdit}
-                                  onChange={(e) => updateCell(cat, row.key, "vence", e.target.value)}
-                                  className={`px-1 py-1.5 text-[11px] focus:outline-none disabled:opacity-60 ${venceTone(row.vence)}`}
-                                />
-                              </>
-                            )}
-                          </div>
-                        ))}
+                                {row.pendingFotoPreview ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img
+                                    src={row.pendingFotoPreview}
+                                    alt="Nueva foto"
+                                    className="h-8 w-8 rounded object-cover border border-emerald-600"
+                                  />
+                                ) : row.id && row.hasFoto && token ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img
+                                    src={getSehEquipoFotoUrl(token, row.id)}
+                                    alt={row.fotoFileName || "Foto"}
+                                    className="h-8 w-8 rounded object-cover border border-slate-600"
+                                  />
+                                ) : null}
+                                {canEdit && (
+                                  <button
+                                    type="button"
+                                    onClick={() => fileInputRefs.current[inputKey]?.click()}
+                                    className={`text-[10px] ${
+                                      needsFoto && !fotoOk
+                                        ? "font-semibold text-red-300"
+                                        : "text-sky-300 hover:text-sky-200"
+                                    }`}
+                                  >
+                                    {row.pendingFotoBase64 || row.hasFoto ? "Cambiar" : "Subir"}
+                                  </button>
+                                )}
+                                {needsFoto && !fotoOk && (
+                                  <span className="text-[9px] text-red-300">Requerida</span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                       {canEdit && (
                         <button

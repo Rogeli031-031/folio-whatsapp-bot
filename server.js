@@ -2749,6 +2749,13 @@ async function ensureSchema() {
     await client.query(`ALTER TABLE public.seh_equipos ADD COLUMN IF NOT EXISTS locacion VARCHAR(255) NOT NULL DEFAULT '';`).catch(() => {});
     await client.query(`ALTER TABLE public.seh_equipos ADD COLUMN IF NOT EXISTS descripcion VARCHAR(255) NOT NULL DEFAULT '';`).catch(() => {});
     await client.query(`ALTER TABLE public.seh_equipos ADD COLUMN IF NOT EXISTS componente VARCHAR(40) NOT NULL DEFAULT '';`).catch(() => {});
+    await client.query(`ALTER TABLE public.seh_equipos ADD COLUMN IF NOT EXISTS foto_file_name VARCHAR(255);`).catch(() => {});
+    await client.query(`ALTER TABLE public.seh_equipos ADD COLUMN IF NOT EXISTS foto_content_type VARCHAR(120);`).catch(() => {});
+    await client.query(`ALTER TABLE public.seh_equipos ADD COLUMN IF NOT EXISTS foto_file_size_bytes INT;`).catch(() => {});
+    await client.query(`ALTER TABLE public.seh_equipos ADD COLUMN IF NOT EXISTS foto_s3_key TEXT;`).catch(() => {});
+    await client.query(`ALTER TABLE public.seh_equipos ADD COLUMN IF NOT EXISTS foto_s3_url TEXT;`).catch(() => {});
+    await client.query(`ALTER TABLE public.seh_equipos ADD COLUMN IF NOT EXISTS foto_data BYTEA;`).catch(() => {});
+    await client.query(`ALTER TABLE public.seh_equipos ADD COLUMN IF NOT EXISTS foto_updated_at TIMESTAMPTZ;`).catch(() => {});
     /** Migración de categorías antiguas → PLANTA / PIPAS / ESTACIONES. */
     await client.query(`
       UPDATE public.seh_equipos
@@ -7219,7 +7226,29 @@ function mapSehItems(rows) {
     nombre: row.nombre || "",
     vence: row.vence || null,
     sort_order: row.sort_order,
+    has_foto: Boolean(row.foto_file_name || row.foto_s3_key || row.has_foto),
+    foto_file_name: row.foto_file_name || null,
   }));
+}
+
+function sehDecodeFotoBase64(raw) {
+  if (typeof raw !== "string" || !raw.trim()) return null;
+  try {
+    const b64 = raw.includes(",") ? raw.split(",").pop() : raw;
+    const buffer = Buffer.from(String(b64 || ""), "base64");
+    if (!buffer.length) return null;
+    return buffer;
+  } catch (_) {
+    return null;
+  }
+}
+
+function sehBuildEquipoFotoS3Key(plantaId, equipoId, fileName) {
+  const safe = String(fileName || "foto")
+    .replace(/[^a-zA-Z0-9._-]+/g, "_")
+    .slice(0, 80);
+  const ext = safe.includes(".") ? safe.split(".").pop() : "jpg";
+  return `seh-equipos/${plantaId}/${equipoId || "new"}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
 }
 
 const SEH_SELECT_SQL = `SELECT id, planta_id, categoria,
@@ -7227,10 +7256,15 @@ const SEH_SELECT_SQL = `SELECT id, planta_id, categoria,
        COALESCE(descripcion, '') AS descripcion,
        COALESCE(componente, '') AS componente,
        COALESCE(nombre, '') AS nombre,
-       to_char(vence, 'YYYY-MM-DD') AS vence, sort_order
+       to_char(vence, 'YYYY-MM-DD') AS vence, sort_order,
+       foto_file_name, foto_content_type, foto_file_size_bytes,
+       foto_s3_key, foto_s3_url,
+       (foto_file_name IS NOT NULL OR foto_s3_key IS NOT NULL OR foto_data IS NOT NULL) AS has_foto
  FROM public.seh_equipos
  WHERE planta_id = $1
  ORDER BY categoria, sort_order, id`;
+
+const SEH_FOTO_MAX_BYTES = 3 * 1024 * 1024;
 
 /** GET /api/seh?planta_id= — listado de equipos SEH de una planta. */
 app.get("/api/seh", dashboardAuthMiddleware, async (req, res) => {
@@ -7264,11 +7298,10 @@ app.get("/api/seh", dashboardAuthMiddleware, async (req, res) => {
  * PUT /api/seh
  * Body: {
  *   planta_id,
- *   items: [...],
- *   categorias?: string[]  // si se envía, solo reemplaza esas categorías (no borra el resto)
+ *   items: [{ id?, categoria, ..., vence, foto_base64?, foto_file_name?, foto_content_type? }],
+ *   categorias?: string[]  // si se envía, solo toca esas categorías
  * }
- * PLANTA/PIPAS/ESTACIONES: LOCACION, DESCRIPCION, COMPONENTE, VENCE.
- * SISTEMA CONTRA INCENDIO: NOMBRE, VENCE (como antes).
+ * Si cambia VENCE (o se captura fecha nueva), exige foto_base64 en ese renglón.
  */
 app.put("/api/seh", dashboardAuthMiddleware, async (req, res) => {
   if (req.dashboardAuth.role === "GA") {
@@ -7297,10 +7330,28 @@ app.put("/api/seh", dashboardAuthMiddleware, async (req, res) => {
     if (hasScope && !scopeCats.includes(categoria)) continue;
     const vence = sehParseVence(it?.vence);
     const sortOrder = Number.isFinite(Number(it?.sort_order)) ? Math.max(0, Math.floor(Number(it.sort_order))) : cleaned.length;
+    const idRaw = it?.id != null ? parseInt(String(it.id), 10) : null;
+    const id = Number.isFinite(idRaw) ? idRaw : null;
+    const fotoBuffer = sehDecodeFotoBase64(it?.foto_base64);
+    const fotoFileName =
+      it?.foto_file_name != null && String(it.foto_file_name).trim()
+        ? String(it.foto_file_name).trim().slice(0, 200)
+        : fotoBuffer
+          ? "foto.jpg"
+          : null;
+    const fotoContentType =
+      (it?.foto_content_type != null ? String(it.foto_content_type).trim() : "") ||
+      (fotoBuffer ? "image/jpeg" : null);
+    if (fotoBuffer && fotoBuffer.length > SEH_FOTO_MAX_BYTES) {
+      return res.status(413).json({
+        error: `La foto excede el máximo de ${Math.floor(SEH_FOTO_MAX_BYTES / 1024 / 1024)}MB`,
+      });
+    }
     if (sehIsSci(categoria)) {
       const nombre = String(it?.nombre || "").trim();
-      if (!nombre && !vence) continue;
+      if (!nombre && !vence && !fotoBuffer) continue;
       cleaned.push({
+        id,
         categoria,
         locacion: "",
         descripcion: "",
@@ -7308,14 +7359,18 @@ app.put("/api/seh", dashboardAuthMiddleware, async (req, res) => {
         nombre,
         vence,
         sort_order: sortOrder,
+        fotoBuffer,
+        fotoFileName,
+        fotoContentType,
       });
       continue;
     }
     const locacion = String(it?.locacion || "").trim();
     const descripcion = String(it?.descripcion || "").trim();
     const componente = sehNormalizeComponente(it?.componente);
-    if (!locacion && !descripcion && !componente && !vence) continue;
+    if (!locacion && !descripcion && !componente && !vence && !fotoBuffer) continue;
     cleaned.push({
+      id,
       categoria,
       locacion,
       descripcion,
@@ -7323,39 +7378,180 @@ app.put("/api/seh", dashboardAuthMiddleware, async (req, res) => {
       nombre: "",
       vence,
       sort_order: sortOrder,
+      fotoBuffer,
+      fotoFileName,
+      fotoContentType,
     });
   }
+
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    const existingQ = hasScope
+      ? await client.query(
+          `SELECT id, categoria, to_char(vence, 'YYYY-MM-DD') AS vence,
+                  foto_file_name, foto_s3_key, foto_s3_url, foto_content_type, foto_file_size_bytes, foto_data
+           FROM public.seh_equipos
+           WHERE planta_id = $1 AND categoria = ANY($2::text[])`,
+          [plantaId, scopeCats]
+        )
+      : await client.query(
+          `SELECT id, categoria, to_char(vence, 'YYYY-MM-DD') AS vence,
+                  foto_file_name, foto_s3_key, foto_s3_url, foto_content_type, foto_file_size_bytes, foto_data
+           FROM public.seh_equipos WHERE planta_id = $1`,
+          [plantaId]
+        );
+    const existingById = new Map();
+    for (const row of existingQ.rows || []) {
+      existingById.set(Number(row.id), row);
+    }
+
+    const fotoErrors = [];
+    for (const it of cleaned) {
+      const prev = it.id != null ? existingById.get(Number(it.id)) : null;
+      const prevVence = prev && prev.vence ? String(prev.vence).slice(0, 10) : "";
+      const nextVence = it.vence ? String(it.vence).slice(0, 10) : "";
+      const venceChanged = nextVence !== prevVence;
+      const requiresFoto = Boolean(nextVence) && (venceChanged || !prev);
+      if (requiresFoto && !it.fotoBuffer) {
+        const label = sehIsSci(it.categoria)
+          ? it.nombre || it.categoria
+          : it.locacion || it.descripcion || it.categoria;
+        fotoErrors.push(label);
+      }
+    }
+    if (fotoErrors.length) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({
+        error:
+          "Para capturar o actualizar la fecha de vencimiento debes subir una foto en la columna FOTO: " +
+          fotoErrors.slice(0, 8).join(", ") +
+          (fotoErrors.length > 8 ? "…" : ""),
+      });
+    }
+
+    const keepIds = [];
+    const actorLabel = sehActorLabel(req.dashboardAuth);
+    const actorId = req.dashboardAuth.actor_id != null ? Number(req.dashboardAuth.actor_id) : null;
+
+    for (const it of cleaned) {
+      const prev = it.id != null ? existingById.get(Number(it.id)) : null;
+      let equipoId = prev ? Number(prev.id) : null;
+
+      if (prev) {
+        await client.query(
+          `UPDATE public.seh_equipos SET
+             categoria = $2, locacion = $3, descripcion = $4, componente = $5, nombre = $6,
+             vence = $7::date, sort_order = $8, updated_at = NOW(), updated_by = $9
+           WHERE id = $1 AND planta_id = $10`,
+          [
+            prev.id,
+            it.categoria,
+            it.locacion,
+            it.descripcion,
+            it.componente,
+            it.nombre,
+            it.vence,
+            it.sort_order,
+            actorLabel,
+            plantaId,
+          ]
+        );
+        keepIds.push(Number(prev.id));
+      } else {
+        const ins = await client.query(
+          `INSERT INTO public.seh_equipos
+             (planta_id, categoria, locacion, descripcion, componente, nombre, vence, sort_order, updated_at, updated_by)
+           VALUES ($1, $2, $3, $4, $5, $6, $7::date, $8, NOW(), $9)
+           RETURNING id`,
+          [
+            plantaId,
+            it.categoria,
+            it.locacion,
+            it.descripcion,
+            it.componente,
+            it.nombre,
+            it.vence,
+            it.sort_order,
+            actorLabel,
+          ]
+        );
+        equipoId = Number(ins.rows[0].id);
+        keepIds.push(equipoId);
+      }
+
+      if (it.fotoBuffer && equipoId != null) {
+        let s3Key = null;
+        let s3Url = null;
+        let storeBuffer = it.fotoBuffer;
+        if (s3Enabled && s3) {
+          s3Key = sehBuildEquipoFotoS3Key(plantaId, equipoId, it.fotoFileName);
+          try {
+            const bucket = s3BucketName;
+            const region = process.env.AWS_REGION;
+            await s3.send(
+              new PutObjectCommand({
+                Bucket: bucket,
+                Key: s3Key,
+                Body: it.fotoBuffer,
+                ContentType: it.fotoContentType || "image/jpeg",
+              })
+            );
+            s3Url = buildS3PublicUrl(bucket, region, s3Key);
+            storeBuffer = null;
+          } catch (e) {
+            console.error("[SEH equipo foto S3]", e);
+            s3Key = null;
+            s3Url = null;
+            storeBuffer = it.fotoBuffer;
+          }
+        }
+        await client.query(
+          `UPDATE public.seh_equipos SET
+             foto_file_name = $2,
+             foto_content_type = $3,
+             foto_file_size_bytes = $4,
+             foto_s3_key = $5,
+             foto_s3_url = $6,
+             foto_data = $7,
+             foto_updated_at = NOW()
+           WHERE id = $1 AND planta_id = $8`,
+          [
+            equipoId,
+            it.fotoFileName,
+            it.fotoContentType,
+            it.fotoBuffer.length,
+            s3Key,
+            s3Url,
+            storeBuffer,
+            plantaId,
+          ]
+        );
+      }
+    }
+
     if (hasScope) {
-      await client.query(`DELETE FROM public.seh_equipos WHERE planta_id = $1 AND categoria = ANY($2::text[])`, [
+      if (keepIds.length) {
+        await client.query(
+          `DELETE FROM public.seh_equipos
+           WHERE planta_id = $1 AND categoria = ANY($2::text[]) AND NOT (id = ANY($3::int[]))`,
+          [plantaId, scopeCats, keepIds]
+        );
+      } else {
+        await client.query(`DELETE FROM public.seh_equipos WHERE planta_id = $1 AND categoria = ANY($2::text[])`, [
+          plantaId,
+          scopeCats,
+        ]);
+      }
+    } else if (keepIds.length) {
+      await client.query(`DELETE FROM public.seh_equipos WHERE planta_id = $1 AND NOT (id = ANY($2::int[]))`, [
         plantaId,
-        scopeCats,
+        keepIds,
       ]);
     } else {
       await client.query(`DELETE FROM public.seh_equipos WHERE planta_id = $1`, [plantaId]);
     }
-    const actorLabel = sehActorLabel(req.dashboardAuth);
-    const actorId = req.dashboardAuth.actor_id != null ? Number(req.dashboardAuth.actor_id) : null;
-    for (const it of cleaned) {
-      await client.query(
-        `INSERT INTO public.seh_equipos
-           (planta_id, categoria, locacion, descripcion, componente, nombre, vence, sort_order, updated_at, updated_by)
-         VALUES ($1, $2, $3, $4, $5, $6, $7::date, $8, NOW(), $9)`,
-        [
-          plantaId,
-          it.categoria,
-          it.locacion,
-          it.descripcion,
-          it.componente,
-          it.nombre,
-          it.vence,
-          it.sort_order,
-          actorLabel,
-        ]
-      );
-    }
+
     await client.query(
       `INSERT INTO public.seh_ultima_edicion (planta_id, updated_at, updated_by, actor_id)
        VALUES ($1, NOW(), $2, $3)
@@ -7381,6 +7577,47 @@ app.put("/api/seh", dashboardAuthMiddleware, async (req, res) => {
       await client.query("ROLLBACK");
     } catch (_) {}
     console.error("[SEH PUT]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/** GET /api/seh/foto?id= — descarga/visualiza foto del equipo. */
+app.get("/api/seh/foto", dashboardAuthMiddleware, async (req, res) => {
+  const id = parseInt(String(req.query.id || ""), 10);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: "id es obligatorio" });
+  const client = await pool.connect();
+  try {
+    const r = await client.query(
+      `SELECT id, planta_id, foto_file_name, foto_content_type, foto_s3_key, foto_s3_url, foto_data
+       FROM public.seh_equipos WHERE id = $1`,
+      [id]
+    );
+    const row = r.rows[0];
+    if (!row) return res.status(404).json({ error: "Equipo no encontrado" });
+    if (!assertSehPlantaAccess(req, Number(row.planta_id))) {
+      return res.status(403).json({ error: "Sin permiso para esta planta" });
+    }
+    let buffer = row.foto_data || null;
+    if ((!buffer || !buffer.length) && row.foto_s3_key && s3Enabled && s3) {
+      try {
+        buffer = await getBufferFromS3(row.foto_s3_key);
+      } catch (e) {
+        console.warn("[SEH foto S3]", e.message);
+      }
+    }
+    if ((!buffer || !buffer.length) && row.foto_s3_url) {
+      return res.redirect(row.foto_s3_url);
+    }
+    if (!buffer || !buffer.length) return res.status(404).json({ error: "Foto no disponible" });
+    const safeName = String(row.foto_file_name || "foto.jpg").replace(/[\r\n"]/g, "_");
+    res.setHeader("Content-Type", row.foto_content_type || "image/jpeg");
+    res.setHeader("Content-Disposition", `inline; filename="${safeName}"`);
+    res.setHeader("Content-Length", String(buffer.length));
+    res.send(buffer);
+  } catch (e) {
+    console.error("[SEH foto GET]", e);
     res.status(500).json({ error: e.message });
   } finally {
     client.release();

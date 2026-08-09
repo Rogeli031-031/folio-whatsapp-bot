@@ -1093,6 +1093,12 @@ export interface SehItem {
   nombre?: string;
   vence: string | null;
   sort_order: number;
+  has_foto?: boolean;
+  foto_file_name?: string | null;
+  /** Solo en PUT: imagen nueva en base64 (sin data: prefix o con él). */
+  foto_base64?: string;
+  foto_file_name_upload?: string;
+  foto_content_type?: string;
 }
 
 export interface SehUltimaEdicion {
@@ -1129,10 +1135,31 @@ export function putSehBoard(
     method: "PUT",
     body: JSON.stringify({
       planta_id: plantaId,
-      items,
+      items: items.map((it) => ({
+        id: it.id,
+        categoria: it.categoria,
+        locacion: it.locacion,
+        descripcion: it.descripcion,
+        componente: it.componente,
+        nombre: it.nombre,
+        vence: it.vence,
+        sort_order: it.sort_order,
+        ...(it.foto_base64
+          ? {
+              foto_base64: it.foto_base64,
+              foto_file_name: it.foto_file_name_upload || it.foto_file_name || "foto.jpg",
+              foto_content_type: it.foto_content_type || "image/jpeg",
+            }
+          : {}),
+      })),
       ...(categorias && categorias.length > 0 ? { categorias } : {}),
     }),
   });
+}
+
+export function getSehEquipoFotoUrl(token: string, equipoId: number): string {
+  const base = getApiUrl("/api/seh/foto");
+  return `${base}?id=${encodeURIComponent(String(equipoId))}&t=${encodeURIComponent(token)}`;
 }
 
 // ===========================
