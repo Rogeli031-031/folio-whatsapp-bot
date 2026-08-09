@@ -7632,6 +7632,130 @@ app.get("/api/seh/carpetas-legales/archivo", dashboardAuthMiddleware, async (req
   }
 });
 
+const SEH_AMBITO_CATEGORIAS = {
+  planta: ["PLANTA", "SISTEMA CONTRA INCENDIO"],
+  estacion: ["ESTACIONES"],
+  autotanque: ["PIPAS"],
+};
+
+function sehOperacionRowFilled(row) {
+  if (sehIsSci(row.categoria)) {
+    return !!(String(row.nombre || "").trim() || row.vence);
+  }
+  return !!(
+    String(row.locacion || "").trim() ||
+    String(row.descripcion || "").trim() ||
+    String(row.componente || "").trim() ||
+    row.vence
+  );
+}
+
+function sehOperacionRowCumple(row, todayYmd) {
+  if (!sehOperacionRowFilled(row)) return false;
+  const vence = row.vence ? String(row.vence).slice(0, 10) : "";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(vence)) return false;
+  return vence >= todayYmd;
+}
+
+function scoreSehOperacion(rows, categorias, todayYmd) {
+  const cats = new Set((categorias || []).map((c) => String(c).toUpperCase()));
+  let total = 0;
+  let complying = 0;
+  for (const row of rows || []) {
+    if (!cats.has(String(row.categoria || "").toUpperCase())) continue;
+    if (!sehOperacionRowFilled(row)) continue;
+    total += 1;
+    if (sehOperacionRowCumple(row, todayYmd)) complying += 1;
+  }
+  return { total, complying };
+}
+
+async function resolveSehPlantasForCumplimiento(client, req, plantaIdOpt) {
+  if (plantaIdOpt != null && Number.isFinite(plantaIdOpt)) {
+    if (!assertSehPlantaAccess(req, plantaIdOpt)) return null;
+    return [plantaIdOpt];
+  }
+  const plantas = await getPlantas(client);
+  let ids = (plantas || []).map((p) => Number(p.id)).filter(Number.isFinite);
+  const role = String(req.dashboardAuth?.role || "").toUpperCase();
+  const isGlobal = role === "ZP" || role === "AD" || role === "CF_CDMX";
+  const allowed = (req.dashboardAuth.plantas_permitidas || []).map((x) => Number(x)).filter(Number.isFinite);
+  if (allowed.length > 0 && (isSehOnlyAuth(req.dashboardAuth) || !isGlobal || isDashboardGV(req))) {
+    const set = new Set(allowed);
+    ids = ids.filter((id) => set.has(id));
+  }
+  return ids;
+}
+
+/** GET /api/seh/cumplimiento?planta_id= (opcional) */
+app.get("/api/seh/cumplimiento", dashboardAuthMiddleware, async (req, res) => {
+  const plantaIdOpt =
+    req.query.planta_id != null && String(req.query.planta_id).trim() !== ""
+      ? parseInt(String(req.query.planta_id), 10)
+      : null;
+  if (plantaIdOpt != null && !Number.isFinite(plantaIdOpt)) {
+    return res.status(400).json({ error: "planta_id inválido" });
+  }
+  const client = await pool.connect();
+  try {
+    await sehCarpetasLegales.ensureSehCarpetasLegalesTables(client);
+    const plantaIds = await resolveSehPlantasForCumplimiento(client, req, plantaIdOpt);
+    if (plantaIds == null) {
+      return res.status(403).json({ error: "Sin permiso para esta planta" });
+    }
+    const today = sehCarpetasLegales.todayYmdMexico();
+    const amb = {
+      planta: { total: 0, complying: 0 },
+      estacion: { total: 0, complying: 0 },
+      autotanque: { total: 0, complying: 0 },
+    };
+    for (const pid of plantaIds) {
+      const eq = await client.query(
+        `SELECT categoria, COALESCE(locacion,'') AS locacion, COALESCE(descripcion,'') AS descripcion,
+                COALESCE(componente,'') AS componente, COALESCE(nombre,'') AS nombre,
+                to_char(vence, 'YYYY-MM-DD') AS vence
+         FROM public.seh_equipos WHERE planta_id = $1`,
+        [pid]
+      );
+      const rows = eq.rows || [];
+      for (const [key, cats] of Object.entries(SEH_AMBITO_CATEGORIAS)) {
+        const s = scoreSehOperacion(rows, cats, today);
+        amb[key].total += s.total;
+        amb[key].complying += s.complying;
+      }
+      const carpetasRows = await sehCarpetasLegales.listByPlanta(client, pid);
+      const reg = sehCarpetasLegales.scoreRegulacion(carpetasRows, today);
+      amb.planta.total += reg.total;
+      amb.planta.complying += reg.complying;
+    }
+    const build = (key) => {
+      const t = amb[key].total;
+      const c = amb[key].complying;
+      return {
+        ambito: key,
+        complying: c,
+        total: t,
+        pct: t > 0 ? Math.round((100 * c) / t) : 0,
+      };
+    };
+    res.json({
+      planta_id: plantaIdOpt != null && Number.isFinite(plantaIdOpt) ? plantaIdOpt : null,
+      plantas_count: plantaIds.length,
+      regulacion_catalog_total: sehCarpetasLegales.CATALOG_TOTAL,
+      ambitos: {
+        planta: build("planta"),
+        estacion: build("estacion"),
+        autotanque: build("autotanque"),
+      },
+    });
+  } catch (e) {
+    console.error("[SEH cumplimiento]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
 // ===========================
 // Admin Usuarios (clave Tomza-Priv)
 // ===========================

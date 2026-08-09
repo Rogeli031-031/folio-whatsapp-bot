@@ -1224,6 +1224,33 @@ export function getSehCarpetasLegalesArchivoUrl(
   return `${base}?planta_id=${encodeURIComponent(String(plantaId))}&doc_no=${encodeURIComponent(docNo)}&t=${encodeURIComponent(token)}`;
 }
 
+export interface SehCumplimientoAmbito {
+  ambito: string;
+  complying: number;
+  total: number;
+  pct: number;
+}
+
+export interface SehCumplimientoResponse {
+  planta_id: number | null;
+  plantas_count: number;
+  regulacion_catalog_total: number;
+  ambitos: {
+    planta: SehCumplimientoAmbito;
+    estacion: SehCumplimientoAmbito;
+    autotanque: SehCumplimientoAmbito;
+  };
+}
+
+export function fetchSehCumplimiento(
+  token: string,
+  plantaId?: number
+): Promise<SehCumplimientoResponse> {
+  const params: Record<string, string> = {};
+  if (plantaId != null) params.planta_id = String(plantaId);
+  return apiFetch<SehCumplimientoResponse>("/api/seh/cumplimiento", { token, params });
+}
+
 export interface IgfForecastRow {
   empresa: string;
   venta_ton: number | null;

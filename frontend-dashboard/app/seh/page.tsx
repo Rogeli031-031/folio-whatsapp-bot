@@ -9,8 +9,9 @@ import {
   setTokenInStorage,
   isSehOnlyToken,
 } from "@/lib/auth";
-import { fetchPlantas } from "@/lib/api";
-import { SEH_AMBITOS, filterPlantasSeh } from "@/lib/seh-ambitos";
+import { fetchPlantas, fetchSehCumplimiento, type SehCumplimientoResponse } from "@/lib/api";
+import { SEH_AMBITOS, filterPlantasSeh, type SehAmbitoKey } from "@/lib/seh-ambitos";
+import SehCumplimientoMeter from "@/components/SehCumplimientoMeter";
 
 function SehHomeContent() {
   const searchParams = useSearchParams();
@@ -18,6 +19,8 @@ function SehHomeContent() {
   const [unauthorized, setUnauthorized] = useState(false);
   const [plantas, setPlantas] = useState<{ id: number; nombre: string }[]>([]);
   const [selectedPlantaId, setSelectedPlantaId] = useState<number | undefined>(undefined);
+  const [cumplimiento, setCumplimiento] = useState<SehCumplimientoResponse | null>(null);
+  const [cumplimientoLoading, setCumplimientoLoading] = useState(false);
 
   useEffect(() => {
     const t = parseTokenFromQuery(searchParams) || getTokenFromStorage();
@@ -44,6 +47,15 @@ function SehHomeContent() {
       });
   }, [token]);
 
+  useEffect(() => {
+    if (!token) return;
+    setCumplimientoLoading(true);
+    fetchSehCumplimiento(token, selectedPlantaId)
+      .then(setCumplimiento)
+      .catch(() => setCumplimiento(null))
+      .finally(() => setCumplimientoLoading(false));
+  }, [token, selectedPlantaId]);
+
   const sehOnly = token ? isSehOnlyToken(token) : false;
   const q = useMemo(() => {
     const parts: string[] = [];
@@ -51,6 +63,15 @@ function SehHomeContent() {
     if (selectedPlantaId != null) parts.push(`planta_id=${selectedPlantaId}`);
     return parts.length ? `?${parts.join("&")}` : "";
   }, [token, selectedPlantaId]);
+
+  const meterFor = (key: SehAmbitoKey) => {
+    const a = cumplimiento?.ambitos?.[key];
+    return {
+      pct: a?.pct ?? 0,
+      complying: a?.complying ?? 0,
+      total: a?.total ?? 0,
+    };
+  };
 
   if (unauthorized) {
     return (
@@ -94,7 +115,7 @@ function SehHomeContent() {
         </div>
       </div>
 
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 p-4">
+      <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 p-4">
         <div className="flex flex-wrap gap-1 rounded-lg border border-slate-700 bg-slate-900/60 p-1">
           <button
             type="button"
@@ -119,42 +140,54 @@ function SehHomeContent() {
           ))}
         </div>
 
+        <p className="text-xs text-slate-500">
+          Indicador = puntos en cumplimiento / puntos aplicables.
+          PLANTA: REGULACIÓN (índice 69; Vigente y no vencido; N/A no cuenta) + OPERACIÓN vigente.
+          ESTACIÓN y AUTOTANQUE: solo OPERACIÓN con vencimiento vigente.
+        </p>
+
         <div className="flex flex-col gap-3">
           {SEH_AMBITOS.map((ambito) => {
             const operacionHref = `/seh/operacion/${ambito.key}${q}`;
             const regulacionHref =
               ambito.regulacionHref === "carpetas-legales" ? `/seh/carpetas-legales${q}` : null;
+            const meter = meterFor(ambito.key);
             return (
-              <div
-                key={ambito.key}
-                className="overflow-hidden rounded-xl border border-slate-600 bg-slate-900/70 shadow-sm"
-              >
-                <div className="border-b border-slate-700 bg-amber-950/25 px-4 py-5 text-center">
-                  <h2 className="text-lg font-semibold tracking-wide text-amber-100">{ambito.cardTitle}</h2>
-                </div>
-                <div className="grid grid-cols-2 gap-0">
-                  <Link
-                    href={operacionHref}
-                    className="border-r border-slate-700 px-4 py-4 text-center text-sm font-semibold tracking-wide text-emerald-200 hover:bg-emerald-950/40"
-                  >
-                    OPERACIÓN
-                  </Link>
-                  {regulacionHref ? (
+              <div key={ambito.key} className="flex items-stretch gap-3">
+                <div className="min-w-0 flex-1 overflow-hidden rounded-xl border border-slate-600 bg-slate-900/70 shadow-sm">
+                  <div className="border-b border-slate-700 bg-amber-950/25 px-4 py-5 text-center">
+                    <h2 className="text-lg font-semibold tracking-wide text-amber-100">{ambito.cardTitle}</h2>
+                  </div>
+                  <div className="grid grid-cols-2 gap-0">
                     <Link
-                      href={regulacionHref}
-                      className="px-4 py-4 text-center text-sm font-semibold tracking-wide text-sky-200 hover:bg-sky-950/40"
+                      href={operacionHref}
+                      className="border-r border-slate-700 px-4 py-4 text-center text-sm font-semibold tracking-wide text-emerald-200 hover:bg-emerald-950/40"
                     >
-                      REGULACIÓN
+                      OPERACIÓN
                     </Link>
-                  ) : (
-                    <span
-                      className="px-4 py-4 text-center text-sm font-semibold tracking-wide text-slate-600"
-                      title="Próximamente"
-                    >
-                      REGULACIÓN
-                    </span>
-                  )}
+                    {regulacionHref ? (
+                      <Link
+                        href={regulacionHref}
+                        className="px-4 py-4 text-center text-sm font-semibold tracking-wide text-sky-200 hover:bg-sky-950/40"
+                      >
+                        REGULACIÓN
+                      </Link>
+                    ) : (
+                      <span
+                        className="px-4 py-4 text-center text-sm font-semibold tracking-wide text-slate-600"
+                        title="Próximamente"
+                      >
+                        REGULACIÓN
+                      </span>
+                    )}
+                  </div>
                 </div>
+                <SehCumplimientoMeter
+                  pct={meter.pct}
+                  complying={meter.complying}
+                  total={meter.total}
+                  loading={cumplimientoLoading}
+                />
               </div>
             );
           })}
