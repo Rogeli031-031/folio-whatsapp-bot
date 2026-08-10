@@ -150,6 +150,7 @@ export default function SehOperacionBoard({ ambito }: { ambito: SehAmbitoConfig 
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
   const [ultimaEdicion, setUltimaEdicion] = useState<SehUltimaEdicion | null>(null);
+  const [fotoGrande, setFotoGrande] = useState<{ src: string; title: string } | null>(null);
 
   useEffect(() => {
     const t = parseTokenFromQuery(searchParams) || getTokenFromStorage();
@@ -210,6 +211,15 @@ export default function SehOperacionBoard({ ambito }: { ambito: SehAmbitoConfig 
     }
     loadBoard(selectedPlantaId);
   }, [selectedPlantaId, loadBoard]);
+
+  useEffect(() => {
+    if (!fotoGrande) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setFotoGrande(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [fotoGrande]);
 
   useEffect(() => {
     if (!dirty) return;
@@ -507,8 +517,8 @@ export default function SehOperacionBoard({ ambito }: { ambito: SehAmbitoConfig 
             <p className="text-sm text-slate-300">
               Planta: <strong className="text-white">{selectedNombre}</strong>
               {" · "}
-              Rojo = vencido · Ámbar = ≤ 30 días · Foto opcional (puedes <strong className="text-white">Borrar</strong>{" "}
-              una foto guardada por error).
+              Rojo = vencido · Ámbar = ≤ 30 días · Clic en la foto para verla en grande · Foto opcional (puedes{" "}
+              <strong className="text-white">Borrar</strong> una foto guardada por error).
               {" · "}
               Usa <strong className="text-white">Guardar</strong> para que quede grabado y lo vean los demás.
             </p>
@@ -664,19 +674,43 @@ export default function SehOperacionBoard({ ambito }: { ambito: SehAmbitoConfig 
                                   }}
                                 />
                                 {row.pendingFotoPreview ? (
-                                  // eslint-disable-next-line @next/next/no-img-element
-                                  <img
-                                    src={row.pendingFotoPreview}
-                                    alt="Nueva foto"
-                                    className="h-8 w-8 rounded object-cover border border-emerald-600"
-                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setFotoGrande({
+                                        src: row.pendingFotoPreview!,
+                                        title: row.pendingFotoName || row.descripcion || row.nombre || "Nueva foto",
+                                      })
+                                    }
+                                    className="rounded focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                                    title="Ver en grande"
+                                  >
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img
+                                      src={row.pendingFotoPreview}
+                                      alt="Nueva foto"
+                                      className="h-8 w-8 cursor-zoom-in rounded border border-emerald-600 object-cover hover:opacity-90"
+                                    />
+                                  </button>
                                 ) : row.id && row.hasFoto && !row.clearFoto && token ? (
-                                  // eslint-disable-next-line @next/next/no-img-element
-                                  <img
-                                    src={getSehEquipoFotoUrl(token, row.id)}
-                                    alt={row.fotoFileName || "Foto"}
-                                    className="h-8 w-8 rounded object-cover border border-slate-600"
-                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setFotoGrande({
+                                        src: getSehEquipoFotoUrl(token, row.id!),
+                                        title: row.fotoFileName || row.descripcion || row.nombre || "Foto",
+                                      })
+                                    }
+                                    className="rounded focus:outline-none focus:ring-1 focus:ring-sky-400"
+                                    title="Ver en grande"
+                                  >
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img
+                                      src={getSehEquipoFotoUrl(token, row.id)}
+                                      alt={row.fotoFileName || "Foto"}
+                                      className="h-8 w-8 cursor-zoom-in rounded border border-slate-600 object-cover hover:opacity-90"
+                                    />
+                                  </button>
                                 ) : null}
                                 {canEdit && (
                                   <div className="flex flex-wrap items-center justify-center gap-x-1.5">
@@ -742,6 +776,38 @@ export default function SehOperacionBoard({ ambito }: { ambito: SehAmbitoConfig 
           </>
         )}
       </div>
+
+      {fotoGrande && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label={fotoGrande.title}
+          onClick={() => setFotoGrande(null)}
+        >
+          <div
+            className="relative flex max-h-[90vh] max-w-[95vw] flex-col items-center gap-2"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex w-full items-center justify-between gap-3">
+              <p className="truncate text-sm text-slate-200">{fotoGrande.title}</p>
+              <button
+                type="button"
+                onClick={() => setFotoGrande(null)}
+                className="shrink-0 rounded border border-slate-600 bg-slate-900 px-2 py-1 text-xs text-slate-200 hover:bg-slate-800"
+              >
+                Cerrar
+              </button>
+            </div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={fotoGrande.src}
+              alt={fotoGrande.title}
+              className="max-h-[85vh] max-w-[95vw] rounded object-contain shadow-lg"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
