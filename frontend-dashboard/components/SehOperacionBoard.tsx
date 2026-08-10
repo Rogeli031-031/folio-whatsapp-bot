@@ -531,7 +531,7 @@ export default function SehOperacionBoard({ ambito }: { ambito: SehAmbitoConfig 
                     <div
                       key={cat}
                       className={`flex flex-shrink-0 flex-col rounded-lg border border-slate-700 bg-slate-900/55 ${
-                        sci ? "w-[24rem]" : "w-[40rem]"
+                        sci ? "w-[27rem]" : "w-[44rem]"
                       }`}
                     >
                       <div className="border-b border-slate-700 bg-amber-950/30 px-2 py-2 text-center">
