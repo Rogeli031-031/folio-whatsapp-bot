@@ -39,6 +39,8 @@ type DraftRow = {
   pendingFotoName: string | null;
   pendingFotoType: string | null;
   pendingFotoPreview: string | null;
+  /** Marca para eliminar la foto ya guardada al pulsar Guardar. */
+  clearFoto: boolean;
 };
 
 type DraftField = "locacion" | "descripcion" | "componente" | "nombre" | "vence";
@@ -62,6 +64,7 @@ function emptyRows(n: number): DraftRow[] {
     pendingFotoName: null,
     pendingFotoType: null,
     pendingFotoPreview: null,
+    clearFoto: false,
   }));
 }
 
@@ -84,6 +87,7 @@ function itemsToDraft(items: SehItem[], categoria: string): DraftRow[] {
       pendingFotoName: null,
       pendingFotoType: null,
       pendingFotoPreview: null,
+      clearFoto: false,
     }));
   if (rows.length < ROWS_MIN) {
     return [...rows, ...emptyRows(ROWS_MIN - rows.length)];
@@ -114,7 +118,7 @@ function rowFotoRecommended(row: DraftRow): boolean {
 
 function rowHasFotoReady(row: DraftRow): boolean {
   if (row.pendingFotoBase64) return true;
-  if (row.hasFoto) return true;
+  if (row.hasFoto && !row.clearFoto) return true;
   return false;
 }
 
@@ -251,6 +255,7 @@ export default function SehOperacionBoard({ ambito }: { ambito: SehAmbitoConfig 
           pendingFotoName: file.name,
           pendingFotoType: file.type || "image/jpeg",
           pendingFotoPreview: preview,
+          clearFoto: false,
         };
         return { ...prev, [categoria]: rows };
       });
@@ -260,6 +265,57 @@ export default function SehOperacionBoard({ ambito }: { ambito: SehAmbitoConfig 
     } catch (e) {
       setError((e as Error).message || "Error al leer la foto");
     }
+  };
+
+  const removeFoto = (categoria: string, rowKey: string) => {
+    setDraftByCat((prev) => {
+      const rows = [...(prev[categoria] || [])];
+      const idx = rows.findIndex((r) => r.key === rowKey);
+      if (idx < 0) return prev;
+      const row = rows[idx];
+      rows[idx] = {
+        ...row,
+        pendingFotoBase64: null,
+        pendingFotoName: null,
+        pendingFotoType: null,
+        pendingFotoPreview: null,
+        hasFoto: false,
+        fotoFileName: null,
+        clearFoto: Boolean(row.id && (row.hasFoto || row.clearFoto)),
+      };
+      return { ...prev, [categoria]: rows };
+    });
+    setDirty(true);
+    setSavedAt(null);
+    setError(null);
+  };
+
+  const clearRow = (categoria: string, rowKey: string) => {
+    setDraftByCat((prev) => {
+      const rows = [...(prev[categoria] || [])];
+      const idx = rows.findIndex((r) => r.key === rowKey);
+      if (idx < 0) return prev;
+      const row = rows[idx];
+      rows[idx] = {
+        ...row,
+        locacion: "",
+        descripcion: "",
+        componente: "",
+        nombre: "",
+        vence: "",
+        pendingFotoBase64: null,
+        pendingFotoName: null,
+        pendingFotoType: null,
+        pendingFotoPreview: null,
+        hasFoto: false,
+        fotoFileName: null,
+        // Si tenía id, al guardar vacío el renglón se elimina del tablero.
+        clearFoto: false,
+      };
+      return { ...prev, [categoria]: rows };
+    });
+    setDirty(true);
+    setSavedAt(null);
   };
 
   const addRow = (categoria: string) => {
@@ -286,7 +342,7 @@ export default function SehOperacionBoard({ ambito }: { ambito: SehAmbitoConfig 
             row.locacion.trim() || row.descripcion.trim() || row.componente.trim() || vence
           );
           if (isSci(cat) ? !filledSci : !filledStd) return;
-          if (rowFotoRecommended(row) && !row.pendingFotoBase64 && !row.hasFoto) {
+          if (rowFotoRecommended(row) && !row.pendingFotoBase64 && !(row.hasFoto && !row.clearFoto)) {
             missingFotoCount += 1;
           }
           const base: SehItem = {
@@ -300,7 +356,9 @@ export default function SehOperacionBoard({ ambito }: { ambito: SehAmbitoConfig 
                   foto_file_name_upload: row.pendingFotoName || "foto.jpg",
                   foto_content_type: row.pendingFotoType || "image/jpeg",
                 }
-              : {}),
+              : row.clearFoto
+                ? { clear_foto: true }
+                : {}),
           };
           if (isSci(cat)) {
             items.push({ ...base, nombre: row.nombre.trim() });
@@ -449,7 +507,8 @@ export default function SehOperacionBoard({ ambito }: { ambito: SehAmbitoConfig 
             <p className="text-sm text-slate-300">
               Planta: <strong className="text-white">{selectedNombre}</strong>
               {" · "}
-              Rojo = vencido · Ámbar = ≤ 30 días · La foto es opcional (recomendable al capturar VENCE).
+              Rojo = vencido · Ámbar = ≤ 30 días · Foto opcional (puedes <strong className="text-white">Borrar</strong>{" "}
+              una foto guardada por error).
               {" · "}
               Usa <strong className="text-white">Guardar</strong> para que quede grabado y lo vean los demás.
             </p>
@@ -472,7 +531,7 @@ export default function SehOperacionBoard({ ambito }: { ambito: SehAmbitoConfig 
                     <div
                       key={cat}
                       className={`flex flex-shrink-0 flex-col rounded-lg border border-slate-700 bg-slate-900/55 ${
-                        sci ? "w-[24rem]" : "w-[40rem]"
+                        sci ? "w-[27rem]" : "w-[44rem]"
                       }`}
                     >
                       <div className="border-b border-slate-700 bg-amber-950/30 px-2 py-2 text-center">
@@ -480,14 +539,17 @@ export default function SehOperacionBoard({ ambito }: { ambito: SehAmbitoConfig 
                       </div>
                       <div
                         className={`grid border-b border-slate-700 text-[10px] font-medium uppercase tracking-wide text-slate-400 ${
-                          sci ? "grid-cols-[1.2fr_1fr_0.9fr]" : "grid-cols-[1.1fr_1.1fr_0.9fr_0.95fr_0.85fr]"
+                          sci
+                            ? "grid-cols-[1.2fr_1fr_0.9fr_0.55fr]"
+                            : "grid-cols-[1.1fr_1.1fr_0.9fr_0.95fr_0.85fr_0.55fr]"
                         }`}
                       >
                         {sci ? (
                           <>
                             <div className="border-r border-slate-700 px-2 py-1.5 text-center">Nombre</div>
                             <div className="border-r border-slate-700 px-2 py-1.5 text-center">Vence</div>
-                            <div className="px-2 py-1.5 text-center">Foto</div>
+                            <div className="border-r border-slate-700 px-2 py-1.5 text-center">Foto</div>
+                            <div className="px-1 py-1.5 text-center"> </div>
                           </>
                         ) : (
                           <>
@@ -495,7 +557,8 @@ export default function SehOperacionBoard({ ambito }: { ambito: SehAmbitoConfig 
                             <div className="border-r border-slate-700 px-1.5 py-1.5 text-center">Descripción</div>
                             <div className="border-r border-slate-700 px-1.5 py-1.5 text-center">Componente</div>
                             <div className="border-r border-slate-700 px-1.5 py-1.5 text-center">Vence</div>
-                            <div className="px-1.5 py-1.5 text-center">Foto</div>
+                            <div className="border-r border-slate-700 px-1.5 py-1.5 text-center">Foto</div>
+                            <div className="px-1 py-1.5 text-center"> </div>
                           </>
                         )}
                       </div>
@@ -503,12 +566,24 @@ export default function SehOperacionBoard({ ambito }: { ambito: SehAmbitoConfig 
                         {rows.map((row) => {
                           const fotoRecommended = rowFotoRecommended(row);
                           const fotoOk = rowHasFotoReady(row);
+                          const canRemoveFoto = Boolean(row.pendingFotoBase64 || (row.hasFoto && !row.clearFoto));
+                          const rowHasContent = isSci(cat)
+                            ? Boolean(row.nombre.trim() || row.vence.trim() || canRemoveFoto)
+                            : Boolean(
+                                row.locacion.trim() ||
+                                  row.descripcion.trim() ||
+                                  row.componente.trim() ||
+                                  row.vence.trim() ||
+                                  canRemoveFoto
+                              );
                           const inputKey = `${cat}:${row.key}`;
                           return (
                             <div
                               key={row.key}
                               className={`grid border-b border-slate-800/80 ${
-                                sci ? "grid-cols-[1.2fr_1fr_0.9fr]" : "grid-cols-[1.1fr_1.1fr_0.9fr_0.95fr_0.85fr]"
+                                sci
+                                  ? "grid-cols-[1.2fr_1fr_0.9fr_0.55fr]"
+                                  : "grid-cols-[1.1fr_1.1fr_0.9fr_0.95fr_0.85fr_0.55fr]"
                               }`}
                             >
                               {sci ? (
@@ -570,7 +645,7 @@ export default function SehOperacionBoard({ ambito }: { ambito: SehAmbitoConfig 
                                 </>
                               )}
                               <div
-                                className={`flex flex-col items-center justify-center gap-0.5 px-1 py-1 ${
+                                className={`flex flex-col items-center justify-center gap-0.5 border-r border-slate-800 px-1 py-1 ${
                                   fotoRecommended && !fotoOk ? "bg-amber-950/30" : ""
                                 }`}
                               >
@@ -595,7 +670,7 @@ export default function SehOperacionBoard({ ambito }: { ambito: SehAmbitoConfig 
                                     alt="Nueva foto"
                                     className="h-8 w-8 rounded object-cover border border-emerald-600"
                                   />
-                                ) : row.id && row.hasFoto && token ? (
+                                ) : row.id && row.hasFoto && !row.clearFoto && token ? (
                                   // eslint-disable-next-line @next/next/no-img-element
                                   <img
                                     src={getSehEquipoFotoUrl(token, row.id)}
@@ -604,20 +679,46 @@ export default function SehOperacionBoard({ ambito }: { ambito: SehAmbitoConfig 
                                   />
                                 ) : null}
                                 {canEdit && (
-                                  <button
-                                    type="button"
-                                    onClick={() => fileInputRefs.current[inputKey]?.click()}
-                                    className={`text-[10px] ${
-                                      fotoRecommended && !fotoOk
-                                        ? "font-semibold text-amber-300"
-                                        : "text-sky-300 hover:text-sky-200"
-                                    }`}
-                                  >
-                                    {row.pendingFotoBase64 || row.hasFoto ? "Cambiar" : "Subir"}
-                                  </button>
+                                  <div className="flex flex-wrap items-center justify-center gap-x-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => fileInputRefs.current[inputKey]?.click()}
+                                      className={`text-[10px] ${
+                                        fotoRecommended && !fotoOk
+                                          ? "font-semibold text-amber-300"
+                                          : "text-sky-300 hover:text-sky-200"
+                                      }`}
+                                    >
+                                      {canRemoveFoto ? "Cambiar" : "Subir"}
+                                    </button>
+                                    {canRemoveFoto && (
+                                      <button
+                                        type="button"
+                                        onClick={() => removeFoto(cat, row.key)}
+                                        className="text-[10px] font-medium text-red-300 hover:text-red-200"
+                                        title="Quitar foto"
+                                      >
+                                        Borrar
+                                      </button>
+                                    )}
+                                  </div>
                                 )}
                                 {fotoRecommended && !fotoOk && (
                                   <span className="text-[9px] text-amber-300">Opcional</span>
+                                )}
+                              </div>
+                              <div className="flex items-center justify-center px-0.5 py-1">
+                                {canEdit && rowHasContent ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => clearRow(cat, row.key)}
+                                    className="text-[10px] text-slate-400 hover:text-red-300"
+                                    title="Vaciar renglón (se elimina al Guardar)"
+                                  >
+                                    ✕
+                                  </button>
+                                ) : (
+                                  <span className="text-[10px] text-slate-700">·</span>
                                 )}
                               </div>
                             </div>

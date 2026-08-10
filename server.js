@@ -26,7 +26,7 @@ const bodyParser = require("body-parser");
 const { Pool } = require("pg");
 const twilio = require("twilio");
 const axios = require("axios");
-const { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command } = require("@aws-sdk/client-s3");
+const { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command, DeleteObjectCommand } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const twilioNotify = require("./notifications/twilioClient");
 const igfHandler = require("./igf-handler");
@@ -7313,6 +7313,7 @@ app.put("/api/seh", dashboardAuthMiddleware, async (req, res) => {
       vence: meta.vence,
       sort_order: meta.sort_order,
       fotoBuffer,
+      clearFoto: Boolean(meta.clear_foto),
       fotoFileName: meta.foto_file_name || (fotoBuffer ? "foto.jpg" : null),
       fotoContentType: meta.foto_content_type || (fotoBuffer ? "image/jpeg" : null),
     });
@@ -7436,6 +7437,33 @@ app.put("/api/seh", dashboardAuthMiddleware, async (req, res) => {
             storeBuffer,
             plantaId,
           ]
+        );
+      } else if (it.clearFoto && equipoId != null) {
+        const prevFoto = prev || existingById.get(Number(equipoId));
+        const oldKey = prevFoto && prevFoto.foto_s3_key ? String(prevFoto.foto_s3_key) : null;
+        if (oldKey && s3Enabled && s3) {
+          try {
+            await s3.send(
+              new DeleteObjectCommand({
+                Bucket: s3BucketName,
+                Key: oldKey,
+              })
+            );
+          } catch (e) {
+            console.warn("[SEH equipo foto S3 delete]", e.message || e);
+          }
+        }
+        await client.query(
+          `UPDATE public.seh_equipos SET
+             foto_file_name = NULL,
+             foto_content_type = NULL,
+             foto_file_size_bytes = NULL,
+             foto_s3_key = NULL,
+             foto_s3_url = NULL,
+             foto_data = NULL,
+             foto_updated_at = NOW()
+           WHERE id = $1 AND planta_id = $2`,
+          [equipoId, plantaId]
         );
       }
     }
