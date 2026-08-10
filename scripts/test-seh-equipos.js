@@ -86,4 +86,36 @@ assert.strictEqual(withFoto.length, 1);
 assert.strictEqual(withFoto[0].foto_base64, "aaaa");
 assert.strictEqual(withFoto[0].foto_file_name, "e.jpg");
 
+const cleared = m.sehCleanPutItems([
+  {
+    id: 42,
+    categoria: "PLANTA",
+    descripcion: "Extintor 1",
+    componente: "EXTINTOR",
+    vence: "2026-09-09",
+    sort_order: 0,
+    clear_foto: true,
+  },
+]);
+assert.strictEqual(cleared.length, 1);
+assert.strictEqual(cleared[0].clear_foto, true);
+assert.strictEqual(cleared[0].foto_base64, null);
+assert.strictEqual(cleared[0].id, 42);
+
+const clearWinsOverBase64 = m.sehCleanPutItems([
+  {
+    categoria: "PLANTA",
+    descripcion: "X",
+    componente: "EXTINTOR",
+    vence: "2026-01-01",
+    sort_order: 0,
+    clear_foto: true,
+    foto_base64: "bbbb",
+    foto_file_name: "n.jpg",
+  },
+]);
+assert.strictEqual(clearWinsOverBase64[0].clear_foto, false);
+assert.strictEqual(clearWinsOverBase64[0].foto_base64, "bbbb");
+assert.strictEqual(clearWinsOverBase64[0].foto_file_name, "n.jpg");
+
 console.log("OK seh-equipos helpers");

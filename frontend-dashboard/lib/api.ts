@@ -1099,6 +1099,8 @@ export interface SehItem {
   foto_base64?: string;
   foto_file_name_upload?: string;
   foto_content_type?: string;
+  /** Solo en PUT: elimina la foto guardada del renglón. */
+  clear_foto?: boolean;
 }
 
 export interface SehUltimaEdicion {
@@ -1150,7 +1152,9 @@ export function putSehBoard(
               foto_file_name: it.foto_file_name_upload || it.foto_file_name || "foto.jpg",
               foto_content_type: it.foto_content_type || "image/jpeg",
             }
-          : {}),
+          : it.clear_foto
+            ? { clear_foto: true }
+            : {}),
       })),
       ...(categorias && categorias.length > 0 ? { categorias } : {}),
     }),
