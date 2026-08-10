@@ -518,7 +518,27 @@ export default function SehOperacionBoard({ ambito }: { ambito: SehAmbitoConfig 
                 {ultimaEdicion.updated_at_local ? ` · ${ultimaEdicion.updated_at_local}` : ""}
               </p>
             ) : (
-              <p className="text-xs text-slate-500">Aún no hay ediciones registradas en esta planta.</p>
+              <p className="text-xs text-slate-500">
+                Aún no hay ediciones de <span className="text-slate-300">OPERACIÓN</span> en esta planta.
+                {ambito.key === "planta" ? (
+                  <>
+                    {" "}
+                    El % del inicio puede venir de{" "}
+                    <Link
+                      href={`/seh/carpetas-legales?${[
+                        qToken,
+                        selectedPlantaId != null ? `planta_id=${selectedPlantaId}` : "",
+                      ]
+                        .filter(Boolean)
+                        .join("&")}`}
+                      className="text-sky-300 underline-offset-2 hover:underline"
+                    >
+                      REGULACIÓN
+                    </Link>
+                    .
+                  </>
+                ) : null}
+              </p>
             )}
             {loading ? (
               <p className="text-sm text-slate-400">Cargando…</p>
