@@ -82,7 +82,8 @@ const sehEquipos = require("./lib/seh-equipos");
 
 const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
-app.use(bodyParser.json({ limit: "16mb" }));
+/** 120mb: SEH carpetas legales admite hasta 80,000 KB en base64 (~4/3 del binario). */
+app.use(bodyParser.json({ limit: "120mb" }));
 
 /* ==================== CORS (Dashboard) ==================== */
 const dashboardOrigin = process.env.DASHBOARD_URL || process.env.CORS_ORIGIN || "https://folio-dashboard.onrender.com";
@@ -7714,9 +7715,9 @@ app.post("/api/seh/carpetas-legales/archivo", dashboardAuthMiddleware, async (re
     return res.status(400).json({ error: "fileBase64 inválido" });
   }
   if (!buffer || buffer.length === 0) return res.status(400).json({ error: "Archivo vacío" });
-  const MAX_BYTES = 10 * 1024 * 1024;
+  const MAX_BYTES = 80000 * 1024; // 80,000 KB
   if (buffer.length > MAX_BYTES) {
-    return res.status(413).json({ error: `El archivo excede el máximo de ${Math.floor(MAX_BYTES / 1024 / 1024)}MB` });
+    return res.status(413).json({ error: `El archivo excede el máximo de ${Math.floor(MAX_BYTES / 1024)}KB` });
   }
 
   const client = await pool.connect();

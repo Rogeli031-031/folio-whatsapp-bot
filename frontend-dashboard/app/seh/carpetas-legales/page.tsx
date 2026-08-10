@@ -25,6 +25,8 @@ const SECTION_TEXT = "#1F4E79";
 const BORDER = "#8FAADC";
 const GRID = "#B4C6E7";
 const DOC_WITH_FILE = "#0B6E4F";
+/** Máximo de subida en botones «Subir» (debe coincidir con server.js). */
+const ARCHIVO_MAX_BYTES = 80000 * 1024; // 80,000 KB
 
 const ESTATUS_OPTIONS: { value: SehCarpetasLegalesEstatus; label: string }[] = [
   { value: "vigente", label: "Vigente" },
@@ -225,6 +227,11 @@ function CarpetasLegalesContent() {
 
   const onFileSelected = async (file: File | null) => {
     if (!file || !token || plantaId == null || !uploadDocNo) return;
+    if (file.size > ARCHIVO_MAX_BYTES) {
+      setError(`El archivo excede el máximo de ${Math.floor(ARCHIVO_MAX_BYTES / 1024)}KB`);
+      setUploadDocNo(null);
+      return;
+    }
     setBusyDoc(uploadDocNo);
     setError(null);
     try {
