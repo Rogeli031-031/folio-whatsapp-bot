@@ -78,6 +78,7 @@ const { ACTION_REGISTER_TEMAS, isActionRegisterTema } = require("./lib/action-re
 const usuarioPermisos = require("./lib/usuario-permisos");
 const clienteComentariosLib = require("./lib/cliente-comentarios");
 const sehCarpetasLegales = require("./lib/seh-carpetas-legales");
+const sehEquipos = require("./lib/seh-equipos");
 
 const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
@@ -7143,38 +7144,9 @@ app.get("/api/dashboard/plantas", dashboardAuthMiddleware, async (req, res) => {
 });
 
 /** Categorías fijas del módulo SEH (Seguridad e Higiene). */
-const SEH_CATEGORIAS = ["PLANTA", "PIPAS", "ESTACIONES", "SISTEMA CONTRA INCENDIO"];
-const SEH_CAT_SCI = "SISTEMA CONTRA INCENDIO";
-const SEH_COMPONENTES = ["EXTINTOR", "VALVULA", "MANGUERA"];
-
-function sehIsSci(categoria) {
-  return String(categoria || "").trim().toUpperCase() === SEH_CAT_SCI;
-}
-
-function sehNormalizeComponente(raw) {
-  const c = String(raw || "").trim().toUpperCase();
-  return SEH_COMPONENTES.includes(c) ? c : "";
-}
-
-function sehParseVence(raw) {
-  if (raw == null || raw === "") return null;
-  const s = String(raw).trim();
-  if (!s) return null;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-  const mdy = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (mdy) {
-    const mm = String(parseInt(mdy[1], 10)).padStart(2, "0");
-    const dd = String(parseInt(mdy[2], 10)).padStart(2, "0");
-    return `${mdy[3]}-${mm}-${dd}`;
-  }
-  const dmy = s.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
-  if (dmy) {
-    const dd = String(parseInt(dmy[1], 10)).padStart(2, "0");
-    const mm = String(parseInt(dmy[2], 10)).padStart(2, "0");
-    return `${dmy[3]}-${mm}-${dd}`;
-  }
-  return null;
-}
+const SEH_CATEGORIAS = sehEquipos.SEH_CATEGORIAS;
+const SEH_COMPONENTES = sehEquipos.SEH_COMPONENTES;
+const sehIsSci = sehEquipos.sehIsSci;
 
 function assertSehPlantaAccess(req, plantaId) {
   const auth = req.dashboardAuth || {};
@@ -7301,7 +7273,7 @@ app.get("/api/seh", dashboardAuthMiddleware, async (req, res) => {
  *   items: [{ id?, categoria, ..., vence, foto_base64?, foto_file_name?, foto_content_type? }],
  *   categorias?: string[]  // si se envía, solo toca esas categorías
  * }
- * Si cambia VENCE (o se captura fecha nueva), exige foto_base64 en ese renglón.
+ * Persiste texto/fecha aunque no haya foto. La foto es opcional (evidencia).
  */
 app.put("/api/seh", dashboardAuthMiddleware, async (req, res) => {
   if (req.dashboardAuth.role === "GA") {
@@ -7324,63 +7296,25 @@ app.put("/api/seh", dashboardAuthMiddleware, async (req, res) => {
   const hasScope = scopeCats.length > 0;
   const rawItems = Array.isArray(req.body?.items) ? req.body.items : [];
   const cleaned = [];
-  for (const it of rawItems) {
-    const categoria = String(it?.categoria || "").trim().toUpperCase();
-    if (!SEH_CATEGORIAS.includes(categoria)) continue;
-    if (hasScope && !scopeCats.includes(categoria)) continue;
-    const vence = sehParseVence(it?.vence);
-    const sortOrder = Number.isFinite(Number(it?.sort_order)) ? Math.max(0, Math.floor(Number(it.sort_order))) : cleaned.length;
-    const idRaw = it?.id != null ? parseInt(String(it.id), 10) : null;
-    const id = Number.isFinite(idRaw) ? idRaw : null;
-    const fotoBuffer = sehDecodeFotoBase64(it?.foto_base64);
-    const fotoFileName =
-      it?.foto_file_name != null && String(it.foto_file_name).trim()
-        ? String(it.foto_file_name).trim().slice(0, 200)
-        : fotoBuffer
-          ? "foto.jpg"
-          : null;
-    const fotoContentType =
-      (it?.foto_content_type != null ? String(it.foto_content_type).trim() : "") ||
-      (fotoBuffer ? "image/jpeg" : null);
+  for (const meta of sehEquipos.sehCleanPutItems(rawItems, scopeCats)) {
+    const fotoBuffer = sehDecodeFotoBase64(meta.foto_base64);
     if (fotoBuffer && fotoBuffer.length > SEH_FOTO_MAX_BYTES) {
       return res.status(413).json({
         error: `La foto excede el máximo de ${Math.floor(SEH_FOTO_MAX_BYTES / 1024 / 1024)}MB`,
       });
     }
-    if (sehIsSci(categoria)) {
-      const nombre = String(it?.nombre || "").trim();
-      if (!nombre && !vence && !fotoBuffer) continue;
-      cleaned.push({
-        id,
-        categoria,
-        locacion: "",
-        descripcion: "",
-        componente: "",
-        nombre,
-        vence,
-        sort_order: sortOrder,
-        fotoBuffer,
-        fotoFileName,
-        fotoContentType,
-      });
-      continue;
-    }
-    const locacion = String(it?.locacion || "").trim();
-    const descripcion = String(it?.descripcion || "").trim();
-    const componente = sehNormalizeComponente(it?.componente);
-    if (!locacion && !descripcion && !componente && !vence && !fotoBuffer) continue;
     cleaned.push({
-      id,
-      categoria,
-      locacion,
-      descripcion,
-      componente,
-      nombre: "",
-      vence,
-      sort_order: sortOrder,
+      id: meta.id,
+      categoria: meta.categoria,
+      locacion: meta.locacion,
+      descripcion: meta.descripcion,
+      componente: meta.componente,
+      nombre: meta.nombre,
+      vence: meta.vence,
+      sort_order: meta.sort_order,
       fotoBuffer,
-      fotoFileName,
-      fotoContentType,
+      fotoFileName: meta.foto_file_name || (fotoBuffer ? "foto.jpg" : null),
+      fotoContentType: meta.foto_content_type || (fotoBuffer ? "image/jpeg" : null),
     });
   }
 
@@ -7404,30 +7338,6 @@ app.put("/api/seh", dashboardAuthMiddleware, async (req, res) => {
     const existingById = new Map();
     for (const row of existingQ.rows || []) {
       existingById.set(Number(row.id), row);
-    }
-
-    const fotoErrors = [];
-    for (const it of cleaned) {
-      const prev = it.id != null ? existingById.get(Number(it.id)) : null;
-      const prevVence = prev && prev.vence ? String(prev.vence).slice(0, 10) : "";
-      const nextVence = it.vence ? String(it.vence).slice(0, 10) : "";
-      const venceChanged = nextVence !== prevVence;
-      const requiresFoto = Boolean(nextVence) && (venceChanged || !prev);
-      if (requiresFoto && !it.fotoBuffer) {
-        const label = sehIsSci(it.categoria)
-          ? it.nombre || it.categoria
-          : it.locacion || it.descripcion || it.categoria;
-        fotoErrors.push(label);
-      }
-    }
-    if (fotoErrors.length) {
-      await client.query("ROLLBACK");
-      return res.status(400).json({
-        error:
-          "Para capturar o actualizar la fecha de vencimiento debes subir una foto en la columna FOTO: " +
-          fotoErrors.slice(0, 8).join(", ") +
-          (fotoErrors.length > 8 ? "…" : ""),
-      });
     }
 
     const keepIds = [];

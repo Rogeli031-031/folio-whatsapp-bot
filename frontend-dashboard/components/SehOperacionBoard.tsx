@@ -103,7 +103,8 @@ function venceTone(vence: string): string {
   return "border-slate-600 bg-slate-900 text-slate-200";
 }
 
-function rowNeedsFoto(row: DraftRow): boolean {
+/** Foto recomendada (no bloquea el guardado) cuando hay VENCE nuevo/cambiado. */
+function rowFotoRecommended(row: DraftRow): boolean {
   const vence = row.vence.trim();
   if (!vence) return false;
   if (vence !== (row.venceOriginal || "").trim()) return true;
@@ -113,7 +114,7 @@ function rowNeedsFoto(row: DraftRow): boolean {
 
 function rowHasFotoReady(row: DraftRow): boolean {
   if (row.pendingFotoBase64) return true;
-  if (!rowNeedsFoto(row) && row.hasFoto) return true;
+  if (row.hasFoto) return true;
   return false;
 }
 
@@ -206,6 +207,16 @@ export default function SehOperacionBoard({ ambito }: { ambito: SehAmbitoConfig 
     loadBoard(selectedPlantaId);
   }, [selectedPlantaId, loadBoard]);
 
+  useEffect(() => {
+    if (!dirty) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [dirty]);
+
   const updateCell = (categoria: string, rowKey: string, field: DraftField, value: string) => {
     setDraftByCat((prev) => {
       const rows = [...(prev[categoria] || [])];
@@ -265,7 +276,7 @@ export default function SehOperacionBoard({ ambito }: { ambito: SehAmbitoConfig 
     setError(null);
     try {
       const items: SehItem[] = [];
-      const missingFoto: string[] = [];
+      let missingFotoCount = 0;
       for (const cat of categorias) {
         const rows = draftByCat[cat] || [];
         rows.forEach((row, i) => {
@@ -275,10 +286,8 @@ export default function SehOperacionBoard({ ambito }: { ambito: SehAmbitoConfig 
             row.locacion.trim() || row.descripcion.trim() || row.componente.trim() || vence
           );
           if (isSci(cat) ? !filledSci : !filledStd) return;
-          if (rowNeedsFoto(row) && !row.pendingFotoBase64) {
-            missingFoto.push(
-              isSci(cat) ? row.nombre.trim() || cat : row.locacion.trim() || row.descripcion.trim() || cat
-            );
+          if (rowFotoRecommended(row) && !row.pendingFotoBase64 && !row.hasFoto) {
+            missingFotoCount += 1;
           }
           const base: SehItem = {
             id: row.id,
@@ -305,12 +314,8 @@ export default function SehOperacionBoard({ ambito }: { ambito: SehAmbitoConfig 
           }
         });
       }
-      if (missingFoto.length) {
-        setError(
-          "Para capturar o actualizar VENCE debes subir una foto: " +
-            missingFoto.slice(0, 6).join(", ") +
-            (missingFoto.length > 6 ? "…" : "")
-        );
+      if (!items.length) {
+        setError("No hay filas con datos para guardar.");
         setSaving(false);
         return;
       }
@@ -322,7 +327,12 @@ export default function SehOperacionBoard({ ambito }: { ambito: SehAmbitoConfig 
       setDraftByCat(next);
       setUltimaEdicion(data.ultima_edicion || null);
       setDirty(false);
-      setSavedAt(new Date().toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" }));
+      const time = new Date().toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
+      const fotoNote =
+        missingFotoCount > 0
+          ? ` · ${missingFotoCount} fila(s) sin foto (opcional)`
+          : "";
+      setSavedAt(`${time}${fotoNote}`);
     } catch (e) {
       setError((e as Error).message || "Error al guardar");
     } finally {
@@ -386,8 +396,10 @@ export default function SehOperacionBoard({ ambito }: { ambito: SehAmbitoConfig 
           </span>
         </div>
         <div className="flex items-center gap-2">
-          {dirty && <span className="text-xs text-amber-300">Cambios sin guardar</span>}
-          {savedAt && !dirty && <span className="text-xs text-emerald-400">Guardado {savedAt}</span>}
+          {dirty && <span className="text-xs text-amber-300">Cambios sin guardar — pulsa Guardar</span>}
+          {savedAt && !dirty && (
+            <span className="text-xs text-emerald-400">Guardado {savedAt} · visible para todos</span>
+          )}
           {canEdit && (
             <button
               type="button"
@@ -437,7 +449,9 @@ export default function SehOperacionBoard({ ambito }: { ambito: SehAmbitoConfig 
             <p className="text-sm text-slate-300">
               Planta: <strong className="text-white">{selectedNombre}</strong>
               {" · "}
-              Rojo = vencido · Ámbar = ≤ 30 días · Al cambiar VENCE es obligatoria una foto nueva.
+              Rojo = vencido · Ámbar = ≤ 30 días · La foto es opcional (recomendable al capturar VENCE).
+              {" · "}
+              Usa <strong className="text-white">Guardar</strong> para que quede grabado y lo vean los demás.
             </p>
             {ultimaEdicion?.updated_by ? (
               <p className="text-xs text-slate-400">
@@ -487,7 +501,7 @@ export default function SehOperacionBoard({ ambito }: { ambito: SehAmbitoConfig 
                       </div>
                       <div className="max-h-[70vh] overflow-y-auto">
                         {rows.map((row) => {
-                          const needsFoto = rowNeedsFoto(row);
+                          const fotoRecommended = rowFotoRecommended(row);
                           const fotoOk = rowHasFotoReady(row);
                           const inputKey = `${cat}:${row.key}`;
                           return (
@@ -530,7 +544,7 @@ export default function SehOperacionBoard({ ambito }: { ambito: SehAmbitoConfig 
                                     value={row.descripcion}
                                     disabled={!canEdit}
                                     onChange={(e) => updateCell(cat, row.key, "descripcion", e.target.value)}
-                                    placeholder="Descripción"
+                                    placeholder="Ej. Extintor 1"
                                     className="border-r border-slate-800 bg-transparent px-1.5 py-1.5 text-xs text-slate-200 placeholder:text-slate-600 focus:bg-slate-800/60 focus:outline-none disabled:opacity-60"
                                   />
                                   <select
@@ -557,7 +571,7 @@ export default function SehOperacionBoard({ ambito }: { ambito: SehAmbitoConfig 
                               )}
                               <div
                                 className={`flex flex-col items-center justify-center gap-0.5 px-1 py-1 ${
-                                  needsFoto && !fotoOk ? "bg-red-950/40" : ""
+                                  fotoRecommended && !fotoOk ? "bg-amber-950/30" : ""
                                 }`}
                               >
                                 <input
@@ -594,16 +608,16 @@ export default function SehOperacionBoard({ ambito }: { ambito: SehAmbitoConfig 
                                     type="button"
                                     onClick={() => fileInputRefs.current[inputKey]?.click()}
                                     className={`text-[10px] ${
-                                      needsFoto && !fotoOk
-                                        ? "font-semibold text-red-300"
+                                      fotoRecommended && !fotoOk
+                                        ? "font-semibold text-amber-300"
                                         : "text-sky-300 hover:text-sky-200"
                                     }`}
                                   >
                                     {row.pendingFotoBase64 || row.hasFoto ? "Cambiar" : "Subir"}
                                   </button>
                                 )}
-                                {needsFoto && !fotoOk && (
-                                  <span className="text-[9px] text-red-300">Requerida</span>
+                                {fotoRecommended && !fotoOk && (
+                                  <span className="text-[9px] text-amber-300">Opcional</span>
                                 )}
                               </div>
                             </div>
