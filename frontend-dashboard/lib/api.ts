@@ -1570,12 +1570,19 @@ export interface ArrVentaSeriePoint {
 
 export type ArrVentaClienteTopTipo = "nuevo" | "perdido" | "aumento" | "disminucion";
 
+export interface ArrVentaClienteComentario {
+  body: string;
+  author_name?: string;
+  created_at?: string;
+}
+
 export interface ArrVentaClienteTop {
   cliente: string;
   venta_ton_actual: number;
   venta_ton_prev: number;
   delta_ton: number;
   tipo: ArrVentaClienteTopTipo | string;
+  comentarios?: ArrVentaClienteComentario[];
 }
 
 export interface ArrVentaSerieResponse {

@@ -15852,6 +15852,74 @@ app.get("/api/arr/venta-serie", dashboardAuthMiddleware, async (req, res) => {
     clientesDelta.sort((a, b) => Math.abs(b.delta_ton) - Math.abs(a.delta_ton));
     const clientes_top = clientesDelta.slice(0, 6);
 
+    // Últimos 2 comentarios DICF (arr.cliente_comentarios) por cliente del top 6.
+    try {
+      await clienteComentariosLib.ensureClienteComentariosTable(client);
+      let plantaIds = [];
+      const rawPid = await dicfAccionesLib.resolvePlantaId(client, empresa);
+      if (Number.isFinite(rawPid)) {
+        const canon = dicfAccionesLib.getCanonicalPlantaId(rawPid);
+        plantaIds = dicfAccionesLib.getPlantaIdsEquivalentes(canon);
+      }
+      if (!plantaIds.length && plantCode) {
+        const raw2 = await dicfAccionesLib.resolvePlantaId(client, plantCode);
+        if (Number.isFinite(raw2)) {
+          const canon2 = dicfAccionesLib.getCanonicalPlantaId(raw2);
+          plantaIds = dicfAccionesLib.getPlantaIdsEquivalentes(canon2);
+        }
+      }
+      const nombres = clientes_top.map((c) => String(c.cliente || "").trim()).filter(Boolean);
+      const byNombre = new Map();
+      if (plantaIds.length && nombres.length) {
+        const namesLower = nombres.map((n) => n.toLowerCase());
+        const cr = await client.query(
+          `WITH ranked AS (
+             SELECT lower(trim(cliente_nombre)) AS nombre_key,
+                    body,
+                    author_name,
+                    created_at,
+                    ROW_NUMBER() OVER (
+                      PARTITION BY lower(trim(cliente_nombre))
+                      ORDER BY created_at DESC, id DESC
+                    ) AS rn
+               FROM arr.cliente_comentarios
+              WHERE planta_id = ANY($1::int[])
+                AND is_active = true
+                AND lower(trim(cliente_nombre)) = ANY($2::text[])
+           )
+           SELECT nombre_key, body, author_name, created_at
+             FROM ranked
+            WHERE rn <= 2
+            ORDER BY nombre_key ASC, created_at DESC`,
+          [plantaIds, namesLower]
+        );
+        for (const row of cr.rows || []) {
+          const k = String(row.nombre_key || "").trim();
+          if (!k) continue;
+          if (!byNombre.has(k)) byNombre.set(k, []);
+          byNombre.get(k).push({
+            body: String(row.body || "").trim(),
+            author_name: String(row.author_name || "").trim(),
+            created_at: row.created_at
+              ? String(row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at).slice(
+                  0,
+                  10
+                )
+              : "",
+          });
+        }
+      }
+      for (const c of clientes_top) {
+        const k = String(c.cliente || "")
+          .trim()
+          .toLowerCase();
+        c.comentarios = byNombre.get(k) || [];
+      }
+    } catch (eCom) {
+      console.warn("[ARR venta-serie] comentarios top:", eCom && eCom.message ? eCom.message : eCom);
+      for (const c of clientes_top) c.comentarios = [];
+    }
+
     res.json({
       ok: true,
       empresa,

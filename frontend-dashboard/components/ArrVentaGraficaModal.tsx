@@ -258,7 +258,7 @@ export default function ArrVentaGraficaModal({ token, empresa, onClose }: Props)
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-3 sm:p-4">
-      <div className="flex max-h-[96vh] w-full max-w-7xl flex-col overflow-hidden rounded-xl border border-slate-600 bg-slate-900 shadow-2xl">
+      <div className="flex max-h-[96vh] w-full max-w-[1600px] flex-col overflow-hidden rounded-xl border border-slate-600 bg-slate-900 shadow-2xl">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-700 px-4 py-3">
           <div>
             <h2 className="text-base font-semibold text-white">Gráfica · Toneladas de venta</h2>
@@ -449,7 +449,7 @@ export default function ArrVentaGraficaModal({ token, empresa, onClose }: Props)
                 )}
               </div>
 
-              <aside className="w-full shrink-0 rounded-lg border border-slate-200 bg-white p-3 lg:w-[320px]">
+              <aside className="w-full shrink-0 rounded-lg border border-slate-200 bg-white p-3 lg:w-[300px]">
                 <h3 className="text-sm font-semibold text-slate-800">Top 6 clientes · Δ venta</h3>
                 <p className="mt-0.5 text-[11px] leading-snug text-slate-500">
                   Vs periodo previo del mismo largo · {canal === "casa" ? "CASA" : "COMISIONISTA"}
@@ -491,6 +491,48 @@ export default function ArrVentaGraficaModal({ token, empresa, onClose }: Props)
                         </div>
                       </li>
                     ))}
+                  </ol>
+                )}
+              </aside>
+
+              <aside className="w-full shrink-0 rounded-lg border border-slate-200 bg-white p-3 lg:w-[340px]">
+                <h3 className="text-sm font-semibold text-slate-800">Últimos comentarios</h3>
+                <p className="mt-0.5 text-[11px] leading-snug text-slate-500">
+                  Delta Ingreso Cliente Forecast · 2 más recientes por cliente
+                </p>
+                {clientesTop.length === 0 ? (
+                  <p className="mt-3 text-xs text-slate-500">Sin clientes en el top.</p>
+                ) : (
+                  <ol className="mt-3 space-y-2">
+                    {clientesTop.map((c, idx) => {
+                      const comments = Array.isArray(c.comentarios) ? c.comentarios : [];
+                      return (
+                        <li
+                          key={`com-${c.cliente}-${idx}`}
+                          className="rounded-md border border-slate-100 bg-slate-50 px-2.5 py-2"
+                        >
+                          <div className="truncate text-[11px] font-semibold text-slate-700" title={c.cliente}>
+                            {idx + 1}. {c.cliente}
+                          </div>
+                          {comments.length === 0 ? (
+                            <p className="mt-1 text-[11px] italic text-slate-400">Sin comentarios</p>
+                          ) : (
+                            <ul className="mt-1.5 space-y-1.5">
+                              {comments.slice(0, 2).map((com, j) => (
+                                <li key={`c-${idx}-${j}`} className="border-l-2 border-sky-300 pl-2">
+                                  <p className="text-[11px] leading-snug text-slate-700">
+                                    {String(com.body || "").trim() || "—"}
+                                  </p>
+                                  <p className="mt-0.5 text-[10px] text-slate-400">
+                                    {[com.created_at, com.author_name].filter(Boolean).join(" · ") || "—"}
+                                  </p>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </li>
+                      );
+                    })}
                   </ol>
                 )}
               </aside>
