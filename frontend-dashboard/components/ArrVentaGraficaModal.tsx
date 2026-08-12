@@ -449,87 +449,87 @@ export default function ArrVentaGraficaModal({ token, empresa, onClose }: Props)
                 )}
               </div>
 
-              <aside className="w-full shrink-0 rounded-lg border border-slate-200 bg-white p-3 lg:w-[300px]">
-                <h3 className="text-sm font-semibold text-slate-800">Top 6 clientes · Δ venta</h3>
-                <p className="mt-0.5 text-[11px] leading-snug text-slate-500">
-                  Vs periodo previo del mismo largo · {canal === "casa" ? "CASA" : "COMISIONISTA"}
-                </p>
+              <aside className="w-full shrink-0 rounded-lg border border-slate-200 bg-white p-3 lg:w-[640px]">
+                <div className="grid grid-cols-1 gap-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] sm:gap-3">
+                  <div>
+                    <h3 className="text-sm font-semibold text-slate-800">Top 6 clientes · Δ venta</h3>
+                    <p className="mt-0.5 text-[11px] leading-snug text-slate-500">
+                      Vs periodo previo · {canal === "casa" ? "CASA" : "COMISIONISTA"}
+                    </p>
+                  </div>
+                  <div className="hidden sm:block">
+                    <h3 className="text-sm font-semibold text-slate-800">Últimos comentarios</h3>
+                    <p className="mt-0.5 text-[11px] leading-snug text-slate-500">
+                      Delta Ingreso Cliente Forecast · 2 más recientes
+                    </p>
+                  </div>
+                </div>
+
                 {clientesTop.length === 0 ? (
                   <p className="mt-3 text-xs text-slate-500">Sin cambios relevantes en el rango.</p>
                 ) : (
                   <ol className="mt-3 space-y-2">
-                    {clientesTop.map((c, idx) => (
-                      <li
-                        key={`${c.cliente}-${idx}`}
-                        className="rounded-md border border-slate-100 bg-slate-50 px-2.5 py-2"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <div className="truncate text-xs font-semibold text-slate-800" title={c.cliente}>
-                              {idx + 1}. {c.cliente}
-                            </div>
-                            <span
-                              className={`mt-1 inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold ${tipoClass(
-                                String(c.tipo)
-                              )}`}
-                            >
-                              {tipoLabel(String(c.tipo))}
-                            </span>
-                          </div>
-                          <div
-                            className={`shrink-0 text-right text-sm font-bold tabular-nums ${
-                              c.delta_ton < 0 ? "text-rose-600" : "text-emerald-600"
-                            }`}
-                          >
-                            {fmtTonSigned(c.delta_ton)}
-                            <div className="text-[10px] font-medium text-slate-500">ton</div>
-                          </div>
-                        </div>
-                        <div className="mt-1.5 flex justify-between text-[10px] text-slate-500">
-                          <span>Prev: {fmtTon(c.venta_ton_prev)}</span>
-                          <span>Actual: {fmtTon(c.venta_ton_actual)}</span>
-                        </div>
-                      </li>
-                    ))}
-                  </ol>
-                )}
-              </aside>
-
-              <aside className="w-full shrink-0 rounded-lg border border-slate-200 bg-white p-3 lg:w-[340px]">
-                <h3 className="text-sm font-semibold text-slate-800">Últimos comentarios</h3>
-                <p className="mt-0.5 text-[11px] leading-snug text-slate-500">
-                  Delta Ingreso Cliente Forecast · 2 más recientes por cliente
-                </p>
-                {clientesTop.length === 0 ? (
-                  <p className="mt-3 text-xs text-slate-500">Sin clientes en el top.</p>
-                ) : (
-                  <ol className="mt-3 space-y-2">
                     {clientesTop.map((c, idx) => {
-                      const comments = Array.isArray(c.comentarios) ? c.comentarios : [];
+                      const comments = Array.isArray(c.comentarios) ? c.comentarios.slice(0, 2) : [];
                       return (
                         <li
-                          key={`com-${c.cliente}-${idx}`}
-                          className="rounded-md border border-slate-100 bg-slate-50 px-2.5 py-2"
+                          key={`${c.cliente}-${idx}`}
+                          className="grid grid-cols-1 items-stretch gap-2 rounded-md border border-slate-100 bg-slate-50 p-2.5 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] sm:gap-3"
                         >
-                          <div className="truncate text-[11px] font-semibold text-slate-700" title={c.cliente}>
-                            {idx + 1}. {c.cliente}
+                          <div className="min-w-0">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <div
+                                  className="truncate text-xs font-semibold text-slate-800"
+                                  title={c.cliente}
+                                >
+                                  {idx + 1}. {c.cliente}
+                                </div>
+                                <span
+                                  className={`mt-1 inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold ${tipoClass(
+                                    String(c.tipo)
+                                  )}`}
+                                >
+                                  {tipoLabel(String(c.tipo))}
+                                </span>
+                              </div>
+                              <div
+                                className={`shrink-0 text-right text-sm font-bold tabular-nums ${
+                                  c.delta_ton < 0 ? "text-rose-600" : "text-emerald-600"
+                                }`}
+                              >
+                                {fmtTonSigned(c.delta_ton)}
+                                <div className="text-[10px] font-medium text-slate-500">ton</div>
+                              </div>
+                            </div>
+                            <div className="mt-1.5 flex justify-between text-[10px] text-slate-500">
+                              <span>Prev: {fmtTon(c.venta_ton_prev)}</span>
+                              <span>Actual: {fmtTon(c.venta_ton_actual)}</span>
+                            </div>
                           </div>
-                          {comments.length === 0 ? (
-                            <p className="mt-1 text-[11px] italic text-slate-400">Sin comentarios</p>
-                          ) : (
-                            <ul className="mt-1.5 space-y-1.5">
-                              {comments.slice(0, 2).map((com, j) => (
-                                <li key={`c-${idx}-${j}`} className="border-l-2 border-sky-300 pl-2">
-                                  <p className="text-[11px] leading-snug text-slate-700">
-                                    {String(com.body || "").trim() || "—"}
-                                  </p>
-                                  <p className="mt-0.5 text-[10px] text-slate-400">
-                                    {[com.created_at, com.author_name].filter(Boolean).join(" · ") || "—"}
-                                  </p>
-                                </li>
-                              ))}
-                            </ul>
-                          )}
+
+                          <div className="min-w-0 border-t border-slate-200 pt-2 sm:border-l sm:border-t-0 sm:pl-3 sm:pt-0">
+                            <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 sm:hidden">
+                              Comentarios
+                            </div>
+                            {comments.length === 0 ? (
+                              <p className="text-[11px] italic text-slate-400">Sin comentarios</p>
+                            ) : (
+                              <ul className="space-y-1.5">
+                                {comments.map((com, j) => (
+                                  <li key={`c-${idx}-${j}`} className="border-l-2 border-sky-300 pl-2">
+                                    <p className="text-[11px] leading-snug text-slate-700">
+                                      {String(com.body || "").trim() || "—"}
+                                    </p>
+                                    <p className="mt-0.5 text-[10px] text-slate-400">
+                                      {[com.created_at, com.author_name].filter(Boolean).join(" · ") ||
+                                        "—"}
+                                    </p>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
                         </li>
                       );
                     })}
