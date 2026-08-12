@@ -15508,6 +15508,218 @@ app.post("/api/arr/refresh-provincia", dashboardAuthMiddleware, async (req, res)
   }
 });
 
+/**
+ * GET /api/arr/venta-serie
+ * Serie diaria de toneladas de venta por canal (CASA / COMISIONISTA) para gráfica ARR.
+ * Query: empresa, range=1d|5d|1m|3m|ytd|1a|5a|todo, canal=casa|comisionista|ambos (opcional, default ambos)
+ */
+app.get("/api/arr/venta-serie", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGAFinancialKpis(req, res)) return;
+  if (dashboardBlockGVForbidden(req, res)) return;
+  const empresa = (req.query.empresa || "").toString().trim();
+  if (!empresa) return res.status(400).json({ error: "Falta empresa" });
+  const rangeRaw = String(req.query.range || "1m").trim().toLowerCase();
+  const rangeOk = ["1d", "5d", "1m", "3m", "ytd", "1a", "5a", "todo"].includes(rangeRaw)
+    ? rangeRaw
+    : "1m";
+  const canalRaw = String(req.query.canal || "ambos").trim().toLowerCase();
+  const canalFilter =
+    canalRaw === "casa" || canalRaw === "comisionista" ? canalRaw : "ambos";
+
+  const client = await pool.connect();
+  try {
+    const provRes = await client.query("SELECT plant_code FROM arr.provincia_plants ORDER BY plant_code");
+    const provinciaPlantCodes = (provRes.rows || []).map((r) => (r.plant_code || "").trim()).filter(Boolean);
+    const empNorm = normalizeAccents(empresa);
+    const matches = provinciaPlantCodes.filter((p) => {
+      const pNorm = normalizeAccents(p);
+      return empNorm === pNorm || empNorm.includes(pNorm) || pNorm.includes(empNorm);
+    });
+    const plantCode = matches.length
+      ? matches.reduce((a, b) => (a.length >= b.length ? a : b))
+      : null;
+    if (!plantCode) {
+      return res.status(404).json({ error: `No se encontró planta provincia para empresa "${empresa}"` });
+    }
+
+    const bounds = await client.query(
+      `SELECT MIN(fecha)::date AS min_f, MAX(fecha)::date AS max_f
+         FROM arr.ventas_diarias_cliente
+        WHERE UPPER(TRIM(plant_code)) = UPPER(TRIM($1))`,
+      [plantCode]
+    );
+    const minF = bounds.rows[0]?.min_f ? String(bounds.rows[0].min_f).slice(0, 10) : null;
+    const maxF = bounds.rows[0]?.max_f ? String(bounds.rows[0].max_f).slice(0, 10) : null;
+    if (!minF || !maxF) {
+      return res.json({
+        ok: true,
+        empresa,
+        plant_code: plantCode,
+        range: rangeOk,
+        canal: canalFilter,
+        points: [],
+      });
+    }
+
+    const end = new Date(`${maxF}T12:00:00`);
+    const start = new Date(end);
+    if (rangeOk === "1d") start.setDate(end.getDate());
+    else if (rangeOk === "5d") start.setDate(end.getDate() - 4);
+    else if (rangeOk === "1m") start.setDate(end.getDate() - 29);
+    else if (rangeOk === "3m") start.setDate(end.getDate() - 89);
+    else if (rangeOk === "ytd") {
+      start.setFullYear(end.getFullYear(), 0, 1);
+    } else if (rangeOk === "1a") start.setDate(end.getDate() - 364);
+    else if (rangeOk === "5a") start.setFullYear(end.getFullYear() - 5);
+    else {
+      // todo
+      const [y, m, d] = minF.split("-").map(Number);
+      start.setFullYear(y, m - 1, d);
+    }
+    const startStr = start.toISOString().slice(0, 10);
+    const endStr = maxF;
+
+    // Misma regla que el tablero ARR: categoría por cliente_categoria_mes del mes;
+    // si no hay fila, cae a canal de la venta (default Casa).
+    const r = await client.query(
+      `SELECT v.fecha::date AS fecha,
+              CASE
+                WHEN LOWER(TRIM(COALESCE(cat.canal, v.canal, 'Casa'))) LIKE '%comisionista%'
+                  THEN 'COMISIONISTA'
+                ELSE 'CASA'
+              END AS canal_grp,
+              ROUND((SUM(v.kg) / 1000.0)::numeric, 3) AS venta_ton
+         FROM arr.ventas_diarias_cliente v
+         LEFT JOIN arr.cliente_categoria_mes cat
+           ON UPPER(TRIM(cat.plant_code)) = UPPER(TRIM(v.plant_code))
+          AND cat.year = EXTRACT(YEAR FROM v.fecha)::int
+          AND cat.month = EXTRACT(MONTH FROM v.fecha)::int
+          AND cat.cliente_norm = v.cliente_norm
+        WHERE UPPER(TRIM(v.plant_code)) = UPPER(TRIM($1))
+          AND v.fecha >= $2::date
+          AND v.fecha <= $3::date
+        GROUP BY v.fecha::date,
+                 CASE
+                   WHEN LOWER(TRIM(COALESCE(cat.canal, v.canal, 'Casa'))) LIKE '%comisionista%'
+                     THEN 'COMISIONISTA'
+                   ELSE 'CASA'
+                 END
+        ORDER BY fecha ASC, canal_grp ASC`,
+      [plantCode, startStr, endStr]
+    );
+
+    // Descuento diario por canal (cliente_categoria_mes; sin fila ≡ Casa).
+    const d = await client.query(
+      `SELECT d.fecha::date AS fecha,
+              CASE
+                WHEN LOWER(TRIM(COALESCE(cat.canal, 'Casa'))) LIKE '%comisionista%'
+                  THEN 'COMISIONISTA'
+                ELSE 'CASA'
+              END AS canal_grp,
+              ROUND(SUM(d.monto)::numeric, 2) AS descuento_mxn
+         FROM arr.descuentos_diarios_cliente d
+         LEFT JOIN arr.cliente_categoria_mes cat
+           ON UPPER(TRIM(cat.plant_code)) = UPPER(TRIM(d.plant_code))
+          AND cat.year = EXTRACT(YEAR FROM d.fecha)::int
+          AND cat.month = EXTRACT(MONTH FROM d.fecha)::int
+          AND cat.cliente_norm = d.cliente_norm
+        WHERE UPPER(TRIM(d.plant_code)) = UPPER(TRIM($1))
+          AND d.fecha >= $2::date
+          AND d.fecha <= $3::date
+        GROUP BY d.fecha::date,
+                 CASE
+                   WHEN LOWER(TRIM(COALESCE(cat.canal, 'Casa'))) LIKE '%comisionista%'
+                     THEN 'COMISIONISTA'
+                   ELSE 'CASA'
+                 END
+        ORDER BY fecha ASC, canal_grp ASC`,
+      [plantCode, startStr, endStr]
+    );
+
+    const byFecha = new Map();
+    for (const row of r.rows || []) {
+      const f = String(row.fecha).slice(0, 10);
+      if (!byFecha.has(f)) {
+        byFecha.set(f, {
+          fecha: f,
+          casa_ton: 0,
+          comisionista_ton: 0,
+          casa_descuento: 0,
+          comisionista_descuento: 0,
+        });
+      }
+      const rec = byFecha.get(f);
+      const ton = row.venta_ton != null ? Number(row.venta_ton) : 0;
+      if (row.canal_grp === "COMISIONISTA") rec.comisionista_ton += ton;
+      else rec.casa_ton += ton;
+    }
+    for (const row of d.rows || []) {
+      const f = String(row.fecha).slice(0, 10);
+      if (!byFecha.has(f)) {
+        byFecha.set(f, {
+          fecha: f,
+          casa_ton: 0,
+          comisionista_ton: 0,
+          casa_descuento: 0,
+          comisionista_descuento: 0,
+        });
+      }
+      const rec = byFecha.get(f);
+      const monto = row.descuento_mxn != null ? Number(row.descuento_mxn) : 0;
+      if (row.canal_grp === "COMISIONISTA") rec.comisionista_descuento += monto;
+      else rec.casa_descuento += monto;
+    }
+
+    const round3 = (n) => Math.round(Number(n || 0) * 1000) / 1000;
+    const round2 = (n) => Math.round(Number(n || 0) * 100) / 100;
+
+    let points = [...byFecha.values()].sort((a, b) => a.fecha.localeCompare(b.fecha));
+    if (canalFilter === "casa") {
+      points = points
+        .filter((p) => p.casa_ton !== 0 || p.casa_descuento !== 0)
+        .map((p) => ({
+          fecha: p.fecha,
+          venta_ton: round3(p.casa_ton),
+          descuento_mxn: round2(p.casa_descuento),
+        }));
+    } else if (canalFilter === "comisionista") {
+      points = points
+        .filter((p) => p.comisionista_ton !== 0 || p.comisionista_descuento !== 0)
+        .map((p) => ({
+          fecha: p.fecha,
+          venta_ton: round3(p.comisionista_ton),
+          descuento_mxn: round2(p.comisionista_descuento),
+        }));
+    } else {
+      points = points.map((p) => ({
+        fecha: p.fecha,
+        casa_ton: round3(p.casa_ton),
+        comisionista_ton: round3(p.comisionista_ton),
+        venta_ton: round3(p.casa_ton + p.comisionista_ton),
+        casa_descuento: round2(p.casa_descuento),
+        comisionista_descuento: round2(p.comisionista_descuento),
+        descuento_mxn: round2(p.casa_descuento + p.comisionista_descuento),
+      }));
+    }
+
+    res.json({
+      ok: true,
+      empresa,
+      plant_code: plantCode,
+      range: rangeOk,
+      canal: canalFilter,
+      fecha_desde: startStr,
+      fecha_hasta: endStr,
+      points,
+    });
+  } catch (e) {
+    console.error("[ARR venta-serie]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
 app.post("/api/arr/forecast", dashboardAuthMiddleware, async (req, res) => {
   if (dashboardBlockGAFinancialKpis(req, res)) return;
   if (dashboardBlockGVForbidden(req, res)) return;

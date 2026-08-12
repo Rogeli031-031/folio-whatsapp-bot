@@ -10,6 +10,7 @@ import ArrDicfCategoriaBucketsModal, {
 } from "@/components/ArrDicfCategoriaBucketsModal";
 import ArrSimularIngresoModal from "@/components/ArrSimularIngresoModal";
 import ArrNuevoClientePlanModal from "@/components/ArrNuevoClientePlanModal";
+import ArrVentaGraficaModal from "@/components/ArrVentaGraficaModal";
 import { categoriaEsComisionista } from "@/lib/arr-categoria";
 import {
   fetchIgfForecast,
@@ -1729,6 +1730,7 @@ export default function ArrClient() {
     null
   );
   const [showSimular, setShowSimular] = useState(false);
+  const [showGrafica, setShowGrafica] = useState(false);
   const [showNuevoClientePlan, setShowNuevoClientePlan] = useState(false);
   const [clientePlanEditando, setClientePlanEditando] = useState<NuevoClientePlanRow | null>(null);
   /** Al marcar «Sin venta», se abre el modal HG antes de confirmar la exclusión. */
@@ -4256,6 +4258,21 @@ export default function ArrClient() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
+          {!isArrPlanRoute && (
+            <button
+              type="button"
+              onClick={() => setShowGrafica(true)}
+              disabled={!empresa.trim()}
+              title={
+                empresa.trim()
+                  ? "Ver gráfica de toneladas de venta en el tiempo (CASA / COMISIONISTA)"
+                  : "Selecciona una empresa"
+              }
+              className="rounded border border-fuchsia-600/80 bg-fuchsia-950/45 px-3 py-2 text-sm font-medium text-fuchsia-100 shadow-sm hover:bg-fuchsia-900/40 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Grafica
+            </button>
+          )}
           <button
             type="button"
             onClick={() => {
@@ -5177,6 +5194,13 @@ export default function ArrClient() {
             hgDinero: metricB.hgDinero,
           }}
           clientes={simularClientesOpciones}
+        />
+      )}
+      {showGrafica && !isArrPlanRoute && empresa.trim() && (
+        <ArrVentaGraficaModal
+          token={token}
+          empresa={empresa.trim()}
+          onClose={() => setShowGrafica(false)}
         />
       )}
       {showNuevoClientePlan && isArrPlanRoute && (

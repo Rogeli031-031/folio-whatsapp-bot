@@ -1555,6 +1555,45 @@ export function fetchArrLastUploadDay(
   });
 }
 
+export type ArrVentaSerieRange = "1d" | "5d" | "1m" | "3m" | "ytd" | "1a" | "5a" | "todo";
+export type ArrVentaSerieCanal = "casa" | "comisionista" | "ambos";
+
+export interface ArrVentaSeriePoint {
+  fecha: string;
+  venta_ton: number;
+  descuento_mxn?: number;
+  casa_ton?: number;
+  comisionista_ton?: number;
+  casa_descuento?: number;
+  comisionista_descuento?: number;
+}
+
+export interface ArrVentaSerieResponse {
+  ok: boolean;
+  empresa: string;
+  plant_code: string;
+  range: ArrVentaSerieRange | string;
+  canal: ArrVentaSerieCanal | string;
+  fecha_desde?: string;
+  fecha_hasta?: string;
+  points: ArrVentaSeriePoint[];
+}
+
+export function fetchArrVentaSerie(
+  token: string,
+  params: { empresa: string; range: ArrVentaSerieRange; canal?: ArrVentaSerieCanal }
+): Promise<ArrVentaSerieResponse> {
+  return apiFetch<ArrVentaSerieResponse>("/api/arr/venta-serie", {
+    token,
+    params: {
+      empresa: params.empresa,
+      range: params.range,
+      canal: params.canal || "ambos",
+    },
+    cache: "no-store",
+  });
+}
+
 export interface ArrClienteMesRow {
   planta: string;
   cliente: string;
