@@ -15543,14 +15543,15 @@ app.get("/api/arr/venta-serie", dashboardAuthMiddleware, async (req, res) => {
     }
 
     const bounds = await client.query(
-      `SELECT MIN(fecha)::date AS min_f, MAX(fecha)::date AS max_f
+      `SELECT to_char(MIN(fecha), 'YYYY-MM-DD') AS min_f,
+              to_char(MAX(fecha), 'YYYY-MM-DD') AS max_f
          FROM arr.ventas_diarias_cliente
         WHERE UPPER(TRIM(plant_code)) = UPPER(TRIM($1))`,
       [plantCode]
     );
-    const minF = bounds.rows[0]?.min_f ? String(bounds.rows[0].min_f).slice(0, 10) : null;
-    const maxF = bounds.rows[0]?.max_f ? String(bounds.rows[0].max_f).slice(0, 10) : null;
-    if (!minF || !maxF) {
+    const minF = pgCalendarDateToYmd(bounds.rows[0]?.min_f);
+    const maxF = pgCalendarDateToYmd(bounds.rows[0]?.max_f);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(minF) || !/^\d{4}-\d{2}-\d{2}$/.test(maxF)) {
       return res.json({
         ok: true,
         empresa,
@@ -15561,28 +15562,31 @@ app.get("/api/arr/venta-serie", dashboardAuthMiddleware, async (req, res) => {
       });
     }
 
-    const end = new Date(`${maxF}T12:00:00`);
+    const end = new Date(`${maxF}T12:00:00Z`);
     const start = new Date(end);
-    if (rangeOk === "1d") start.setDate(end.getDate());
-    else if (rangeOk === "5d") start.setDate(end.getDate() - 4);
-    else if (rangeOk === "1m") start.setDate(end.getDate() - 29);
-    else if (rangeOk === "3m") start.setDate(end.getDate() - 89);
+    if (Number.isNaN(end.getTime())) {
+      return res.status(500).json({ error: "Fecha máxima inválida en ventas diarias" });
+    }
+    if (rangeOk === "1d") start.setUTCDate(end.getUTCDate());
+    else if (rangeOk === "5d") start.setUTCDate(end.getUTCDate() - 4);
+    else if (rangeOk === "1m") start.setUTCDate(end.getUTCDate() - 29);
+    else if (rangeOk === "3m") start.setUTCDate(end.getUTCDate() - 89);
     else if (rangeOk === "ytd") {
-      start.setFullYear(end.getFullYear(), 0, 1);
-    } else if (rangeOk === "1a") start.setDate(end.getDate() - 364);
-    else if (rangeOk === "5a") start.setFullYear(end.getFullYear() - 5);
+      start.setUTCFullYear(end.getUTCFullYear(), 0, 1);
+    } else if (rangeOk === "1a") start.setUTCDate(end.getUTCDate() - 364);
+    else if (rangeOk === "5a") start.setUTCFullYear(end.getUTCFullYear() - 5);
     else {
       // todo
       const [y, m, d] = minF.split("-").map(Number);
-      start.setFullYear(y, m - 1, d);
+      start.setUTCFullYear(y, m - 1, d);
     }
-    const startStr = start.toISOString().slice(0, 10);
+    const startStr = dateToPg(start);
     const endStr = maxF;
 
     // Misma regla que el tablero ARR: categoría por cliente_categoria_mes del mes;
     // si no hay fila, cae a canal de la venta (default Casa).
     const r = await client.query(
-      `SELECT v.fecha::date AS fecha,
+      `SELECT to_char(v.fecha::date, 'YYYY-MM-DD') AS fecha,
               CASE
                 WHEN LOWER(TRIM(COALESCE(cat.canal, v.canal, 'Casa'))) LIKE '%comisionista%'
                   THEN 'COMISIONISTA'
@@ -15610,7 +15614,7 @@ app.get("/api/arr/venta-serie", dashboardAuthMiddleware, async (req, res) => {
 
     // Descuento diario por canal (cliente_categoria_mes; sin fila ≡ Casa).
     const d = await client.query(
-      `SELECT d.fecha::date AS fecha,
+      `SELECT to_char(d.fecha::date, 'YYYY-MM-DD') AS fecha,
               CASE
                 WHEN LOWER(TRIM(COALESCE(cat.canal, 'Casa'))) LIKE '%comisionista%'
                   THEN 'COMISIONISTA'
@@ -15638,7 +15642,8 @@ app.get("/api/arr/venta-serie", dashboardAuthMiddleware, async (req, res) => {
 
     const byFecha = new Map();
     for (const row of r.rows || []) {
-      const f = String(row.fecha).slice(0, 10);
+      const f = pgCalendarDateToYmd(row.fecha);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(f)) continue;
       if (!byFecha.has(f)) {
         byFecha.set(f, {
           fecha: f,
@@ -15654,7 +15659,8 @@ app.get("/api/arr/venta-serie", dashboardAuthMiddleware, async (req, res) => {
       else rec.casa_ton += ton;
     }
     for (const row of d.rows || []) {
-      const f = String(row.fecha).slice(0, 10);
+      const f = pgCalendarDateToYmd(row.fecha);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(f)) continue;
       if (!byFecha.has(f)) {
         byFecha.set(f, {
           fecha: f,

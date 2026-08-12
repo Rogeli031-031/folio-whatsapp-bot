@@ -38,9 +38,13 @@ function fmtMoney(n: number): string {
 }
 
 function fmtFechaLarga(fecha: string): string {
-  const [y, m, d] = fecha.split("-").map(Number);
-  if (!y || !m || !d) return fecha;
-  const dt = new Date(y, m - 1, d);
+  const m = String(fecha || "").trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return fecha || "";
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const d = Number(m[3]);
+  const dt = new Date(y, mo - 1, d);
+  if (Number.isNaN(dt.getTime())) return fecha;
   return dt.toLocaleDateString("es-MX", {
     day: "numeric",
     month: "short",
@@ -49,15 +53,18 @@ function fmtFechaLarga(fecha: string): string {
 }
 
 function fmtLabelFecha(fecha: string, range: ArrVentaSerieRange): string {
-  const [y, m, d] = fecha.split("-").map(Number);
-  if (!y || !m || !d) return fecha;
+  const m = String(fecha || "").trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return fecha || "";
+  const y = m[1];
+  const mo = m[2];
+  const d = m[3];
   if (range === "1d" || range === "5d" || range === "1m") {
-    return `${String(d).padStart(2, "0")}/${String(m).padStart(2, "0")}`;
+    return `${d}/${mo}`;
   }
   if (range === "3m" || range === "ytd" || range === "1a") {
-    return `${String(m).padStart(2, "0")}/${String(y).slice(2)}`;
+    return `${mo}/${y.slice(2)}`;
   }
-  return `${m}/${String(y).slice(2)}`;
+  return `${Number(mo)}/${y.slice(2)}`;
 }
 
 function buildPath(
