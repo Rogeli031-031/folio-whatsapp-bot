@@ -15510,8 +15510,8 @@ app.post("/api/arr/refresh-provincia", dashboardAuthMiddleware, async (req, res)
 
 /**
  * GET /api/arr/venta-serie
- * Serie diaria de toneladas de venta por canal (CASA / COMISIONISTA) para gráfica ARR.
- * Query: empresa, range=1d|5d|1m|3m|ytd|1a|5a|todo, canal=casa|comisionista|ambos (opcional, default ambos)
+ * Serie diaria de toneladas + top clientes por delta vs periodo previo.
+ * Query: empresa, range=1d|5d|1m|3m|ytd|1a|5a|todo, canal=casa|comisionista|ambos
  */
 app.get("/api/arr/venta-serie", dashboardAuthMiddleware, async (req, res) => {
   if (dashboardBlockGAFinancialKpis(req, res)) return;
@@ -15526,107 +15526,129 @@ app.get("/api/arr/venta-serie", dashboardAuthMiddleware, async (req, res) => {
   const canalFilter =
     canalRaw === "casa" || canalRaw === "comisionista" ? canalRaw : "ambos";
 
-  /** Mismo mapeo nombre/clave que ARR clientes-mes / delta venta. */
-  const SQL_PROV_MAP = `
-    SELECT DISTINCT p.nombre AS prov_name,
-           UPPER(TRIM(p.nombre)) AS key_nombre,
-           UPPER(TRIM(COALESCE(p.clave, ''))) AS key_clave,
-           TRIM(ap.plant_code) AS ap_plant_code
-      FROM public.plantas p
-      JOIN arr.provincia_plants ap
-        ON UPPER(TRIM(ap.plant_code)) = UPPER(TRIM(p.nombre))
-        OR (p.clave IS NOT NULL AND TRIM(p.clave) <> '' AND UPPER(TRIM(ap.plant_code)) = UPPER(TRIM(p.clave)))
-     WHERE UPPER(TRIM(COALESCE(p.nombre, ''))) != 'CORPORATIVO'
-       AND UPPER(TRIM(COALESCE(p.clave, ''))) != 'CORPORATIVO'
-  `;
+  const stripEmpresa = (s) =>
+    normalizeAccents(s)
+      .replace(/^GTM\s*-?\s*/, "")
+      .replace(/^GT\s*-?\s*/, "")
+      .trim();
 
   const client = await pool.connect();
   try {
-    const mapRes = await client.query(SQL_PROV_MAP);
+    // Resolver códigos reales usados en ventas (rápido: DISTINCT + match en JS).
+    const [mapRes, codesRes] = await Promise.all([
+      client.query(
+        `SELECT DISTINCT p.nombre AS prov_name,
+                TRIM(COALESCE(p.clave, '')) AS clave,
+                TRIM(ap.plant_code) AS ap_plant_code
+           FROM public.plantas p
+           JOIN arr.provincia_plants ap
+             ON UPPER(TRIM(ap.plant_code)) = UPPER(TRIM(p.nombre))
+             OR (p.clave IS NOT NULL AND TRIM(p.clave) <> '' AND UPPER(TRIM(ap.plant_code)) = UPPER(TRIM(p.clave)))
+          WHERE UPPER(TRIM(COALESCE(p.nombre, ''))) != 'CORPORATIVO'
+            AND UPPER(TRIM(COALESCE(p.clave, ''))) != 'CORPORATIVO'`
+      ),
+      client.query(`SELECT DISTINCT TRIM(plant_code) AS plant_code FROM arr.ventas_diarias_cliente`),
+    ]);
+
     const empNorm = normalizeAccents(empresa);
-    const matchedRows = (mapRes.rows || []).filter((row) => {
-      const names = [row.prov_name, row.ap_plant_code, row.key_clave]
+    const empCore = stripEmpresa(empresa);
+    const matchedMeta = (mapRes.rows || []).filter((row) => {
+      const names = [row.prov_name, row.ap_plant_code, row.clave]
         .map((x) => normalizeAccents(x || ""))
         .filter(Boolean);
-      return names.some(
-        (n) => empNorm === n || empNorm.includes(n) || n.includes(empNorm)
-      );
-    });
-    // Preferir el match más largo (evita falsos positivos cortos).
-    matchedRows.sort((a, b) => {
-      const score = (r) =>
-        Math.max(
-          normalizeAccents(r.prov_name || "").length,
-          normalizeAccents(r.ap_plant_code || "").length
+      return names.some((n) => {
+        const core = stripEmpresa(n);
+        return (
+          empNorm === n ||
+          empNorm.includes(n) ||
+          n.includes(empNorm) ||
+          (empCore && (empCore === core || empCore.includes(core) || core.includes(empCore)))
         );
+      });
+    });
+    matchedMeta.sort((a, b) => {
+      const score = (r) => Math.max(String(r.prov_name || "").length, String(r.ap_plant_code || "").length);
       return score(b) - score(a);
     });
-    if (!matchedRows.length) {
-      // Fallback: solo provincia_plants (como arr-clientes-mes).
-      const provRes = await client.query("SELECT plant_code FROM arr.provincia_plants ORDER BY plant_code");
-      const provinciaPlantCodes = (provRes.rows || []).map((r) => (r.plant_code || "").trim()).filter(Boolean);
-      const matches = provinciaPlantCodes.filter((p) => {
-        const pNorm = normalizeAccents(p);
-        return empNorm === pNorm || empNorm.includes(pNorm) || pNorm.includes(empNorm);
-      });
-      if (!matches.length) {
-        return res.status(404).json({ error: `No se encontró planta provincia para empresa "${empresa}"` });
-      }
-      const plantCodeFb = matches.reduce((a, b) => (a.length >= b.length ? a : b));
-      matchedRows.push({
-        prov_name: plantCodeFb,
-        ap_plant_code: plantCodeFb,
-        key_nombre: normalizeAccents(plantCodeFb),
-        key_clave: "",
-      });
-    }
 
-    const best = matchedRows[0];
-    const plantCode = String(best.ap_plant_code || best.prov_name || "").trim();
-    const plantAliases = [
-      ...new Set(
-        matchedRows
-          .flatMap((r) => [r.ap_plant_code, r.prov_name, r.key_clave])
-          .map((x) => String(x || "").trim())
-          .filter(Boolean)
-      ),
-    ];
-    if (!plantCode || !plantAliases.length) {
+    const aliasSet = new Set();
+    for (const row of matchedMeta) {
+      for (const x of [row.prov_name, row.ap_plant_code, row.clave]) {
+        const t = String(x || "").trim();
+        if (!t) continue;
+        aliasSet.add(normalizeAccents(t));
+        aliasSet.add(stripEmpresa(t));
+      }
+    }
+    if (!aliasSet.size) {
+      const provRes = await client.query("SELECT plant_code FROM arr.provincia_plants");
+      for (const r of provRes.rows || []) {
+        const p = String(r.plant_code || "").trim();
+        const pNorm = normalizeAccents(p);
+        const pCore = stripEmpresa(p);
+        if (
+          empNorm === pNorm ||
+          empNorm.includes(pNorm) ||
+          pNorm.includes(empNorm) ||
+          (empCore && (empCore === pCore || empCore.includes(pCore) || pCore.includes(empCore)))
+        ) {
+          aliasSet.add(pNorm);
+          aliasSet.add(pCore);
+        }
+      }
+    }
+    if (!aliasSet.size) {
       return res.status(404).json({ error: `No se encontró planta provincia para empresa "${empresa}"` });
     }
 
-    const aliasUpper = [
-      ...new Set(
-        plantAliases.flatMap((a) => {
-          const u = String(a).toUpperCase();
-          const n = normalizeAccents(a);
-          return [u, n].filter(Boolean);
-        })
-      ),
-    ];
-    const aliasNames = [
-      ...new Set(matchedRows.flatMap((r) => [r.prov_name, r.ap_plant_code]).filter(Boolean)),
-    ];
-    /** Comparación sin tildes en SQL (Tehuacán ≡ Tehuacan). */
-    const SQL_STRIP = `translate(upper(trim(%COL%)), 'ÁÉÍÓÚÄËÏÖÜÑáéíóúäëïöüñ', 'AEIOUAEIOUNAEIOUAEIOUN')`;
+    const plantCodes = [];
+    for (const row of codesRes.rows || []) {
+      const pc = String(row.plant_code || "").trim();
+      if (!pc) continue;
+      const n = normalizeAccents(pc);
+      const c = stripEmpresa(pc);
+      if (aliasSet.has(n) || aliasSet.has(c)) {
+        plantCodes.push(pc);
+        continue;
+      }
+      // Solo includes con alias suficientemente específicos (evita falsos positivos).
+      const hit = [...aliasSet].some(
+        (a) => a && a.length >= 5 && (n === a || c === a || n.includes(a) || a.includes(n))
+      );
+      if (hit) plantCodes.push(pc);
+    }
+    // Si no hay códigos en ventas, usar alias de metadata (puede devolver vacío luego).
+    if (!plantCodes.length) {
+      for (const row of matchedMeta) {
+        for (const x of [row.ap_plant_code, row.prov_name, row.clave]) {
+          const t = String(x || "").trim();
+          if (t) plantCodes.push(t);
+        }
+      }
+    }
+    const uniqueCodes = [...new Set(plantCodes.map((c) => c.trim()).filter(Boolean))];
+    if (!uniqueCodes.length) {
+      return res.json({
+        ok: true,
+        empresa,
+        plant_code: "",
+        range: rangeOk,
+        canal: canalFilter,
+        points: [],
+        clientes_top: [],
+      });
+    }
+    const plantCode = String(
+      (matchedMeta[0] && (matchedMeta[0].ap_plant_code || matchedMeta[0].prov_name)) || uniqueCodes[0]
+    ).trim();
+    const codesUpper = uniqueCodes.map((c) => c.toUpperCase());
 
     const bounds = await client.query(
-      `WITH prov_map AS (${SQL_PROV_MAP})
-       SELECT to_char(MIN(v.fecha), 'YYYY-MM-DD') AS min_f,
-              to_char(MAX(v.fecha), 'YYYY-MM-DD') AS max_f
-         FROM arr.ventas_diarias_cliente v
-         LEFT JOIN prov_map pm
-           ON UPPER(TRIM(v.plant_code)) = pm.key_nombre
-           OR (pm.key_clave <> '' AND UPPER(TRIM(v.plant_code)) = pm.key_clave)
-           OR ${SQL_STRIP.replace("%COL%", "v.plant_code")} = ${SQL_STRIP.replace("%COL%", "pm.prov_name")}
-           OR (pm.key_clave <> '' AND ${SQL_STRIP.replace("%COL%", "v.plant_code")} = ${SQL_STRIP.replace("%COL%", "pm.key_clave")})
-        WHERE UPPER(TRIM(v.plant_code)) = ANY($1::text[])
-           OR ${SQL_STRIP.replace("%COL%", "v.plant_code")} = ANY($1::text[])
-           OR COALESCE(pm.prov_name, '') = ANY($2::text[])
-           OR COALESCE(pm.ap_plant_code, '') = ANY($2::text[])
-           OR ${SQL_STRIP.replace("%COL%", "COALESCE(pm.prov_name, '')")} = ANY($1::text[])
-           OR ${SQL_STRIP.replace("%COL%", "COALESCE(pm.ap_plant_code, '')")} = ANY($1::text[])`,
-      [aliasUpper, aliasNames]
+      `SELECT to_char(MIN(fecha), 'YYYY-MM-DD') AS min_f,
+              to_char(MAX(fecha), 'YYYY-MM-DD') AS max_f
+         FROM arr.ventas_diarias_cliente
+        WHERE UPPER(TRIM(plant_code)) = ANY($1::text[])`,
+      [codesUpper]
     );
     const minF = pgCalendarDateToYmd(bounds.rows[0]?.min_f);
     const maxF = pgCalendarDateToYmd(bounds.rows[0]?.max_f);
@@ -15638,6 +15660,7 @@ app.get("/api/arr/venta-serie", dashboardAuthMiddleware, async (req, res) => {
         range: rangeOk,
         canal: canalFilter,
         points: [],
+        clientes_top: [],
       });
     }
 
@@ -15650,9 +15673,8 @@ app.get("/api/arr/venta-serie", dashboardAuthMiddleware, async (req, res) => {
     else if (rangeOk === "5d") start.setUTCDate(end.getUTCDate() - 4);
     else if (rangeOk === "1m") start.setUTCDate(end.getUTCDate() - 29);
     else if (rangeOk === "3m") start.setUTCDate(end.getUTCDate() - 89);
-    else if (rangeOk === "ytd") {
-      start.setUTCFullYear(end.getUTCFullYear(), 0, 1);
-    } else if (rangeOk === "1a") start.setUTCDate(end.getUTCDate() - 364);
+    else if (rangeOk === "ytd") start.setUTCFullYear(end.getUTCFullYear(), 0, 1);
+    else if (rangeOk === "1a") start.setUTCDate(end.getUTCDate() - 364);
     else if (rangeOk === "5a") start.setUTCFullYear(end.getUTCFullYear() - 5);
     else {
       const [y, m, d] = minF.split("-").map(Number);
@@ -15661,26 +15683,25 @@ app.get("/api/arr/venta-serie", dashboardAuthMiddleware, async (req, res) => {
     const startStr = dateToPg(start);
     const endStr = maxF;
 
-    const plantMatchSql = (aliasCol) => `
-      UPPER(TRIM(${aliasCol})) = ANY($1::text[])
-      OR ${SQL_STRIP.replace("%COL%", aliasCol)} = ANY($1::text[])
-      OR COALESCE(pm.prov_name, '') = ANY($2::text[])
-      OR COALESCE(pm.ap_plant_code, '') = ANY($2::text[])
-      OR ${SQL_STRIP.replace("%COL%", "COALESCE(pm.prov_name, '')")} = ANY($1::text[])
-      OR ${SQL_STRIP.replace("%COL%", "COALESCE(pm.ap_plant_code, '')")} = ANY($1::text[])
-    `;
-    const provJoinSql = (aliasCol) => `
-      UPPER(TRIM(${aliasCol})) = pm.key_nombre
-      OR (pm.key_clave <> '' AND UPPER(TRIM(${aliasCol})) = pm.key_clave)
-      OR ${SQL_STRIP.replace("%COL%", aliasCol)} = ${SQL_STRIP.replace("%COL%", "pm.prov_name")}
-      OR (pm.key_clave <> '' AND ${SQL_STRIP.replace("%COL%", aliasCol)} = ${SQL_STRIP.replace("%COL%", "pm.key_clave")})
-    `;
+    // Periodo previo de igual duración (para delta de clientes).
+    const dayMs = 24 * 60 * 60 * 1000;
+    const spanDays = Math.max(1, Math.round((end.getTime() - start.getTime()) / dayMs) + 1);
+    const prevEnd = new Date(start);
+    prevEnd.setUTCDate(prevEnd.getUTCDate() - 1);
+    const prevStart = new Date(prevEnd);
+    prevStart.setUTCDate(prevStart.getUTCDate() - (spanDays - 1));
+    const prevStartStr = dateToPg(prevStart);
+    const prevEndStr = dateToPg(prevEnd);
 
-    // Misma regla que el tablero ARR: categoría por cliente_categoria_mes del mes;
-    // ventas/descuentos vía prov_map (nombre o clave), no solo plant_code exacto.
+    const canalSql =
+      canalFilter === "casa"
+        ? `AND LOWER(TRIM(COALESCE(cat.canal, v.canal, 'Casa'))) NOT LIKE '%comisionista%'`
+        : canalFilter === "comisionista"
+          ? `AND LOWER(TRIM(COALESCE(cat.canal, v.canal, 'Casa'))) LIKE '%comisionista%'`
+          : "";
+
     const r = await client.query(
-      `WITH prov_map AS (${SQL_PROV_MAP})
-       SELECT to_char(v.fecha::date, 'YYYY-MM-DD') AS fecha,
+      `SELECT to_char(v.fecha::date, 'YYYY-MM-DD') AS fecha,
               CASE
                 WHEN LOWER(TRIM(COALESCE(cat.canal, v.canal, 'Casa'))) LIKE '%comisionista%'
                   THEN 'COMISIONISTA'
@@ -15688,36 +15709,27 @@ app.get("/api/arr/venta-serie", dashboardAuthMiddleware, async (req, res) => {
               END AS canal_grp,
               ROUND((SUM(v.kg) / 1000.0)::numeric, 3) AS venta_ton
          FROM arr.ventas_diarias_cliente v
-         LEFT JOIN prov_map pm
-           ON ${provJoinSql("v.plant_code")}
          LEFT JOIN arr.cliente_categoria_mes cat
-           ON (
-                UPPER(TRIM(cat.plant_code)) = UPPER(TRIM(v.plant_code))
-                OR UPPER(TRIM(cat.plant_code)) = UPPER(TRIM(COALESCE(pm.ap_plant_code, '')))
-                OR UPPER(TRIM(cat.plant_code)) = UPPER(TRIM(COALESCE(pm.prov_name, '')))
-                OR ${SQL_STRIP.replace("%COL%", "cat.plant_code")} = ${SQL_STRIP.replace("%COL%", "v.plant_code")}
-                OR ${SQL_STRIP.replace("%COL%", "cat.plant_code")} = ${SQL_STRIP.replace("%COL%", "COALESCE(pm.ap_plant_code, '')")}
-                OR ${SQL_STRIP.replace("%COL%", "cat.plant_code")} = ${SQL_STRIP.replace("%COL%", "COALESCE(pm.prov_name, '')")}
-              )
+           ON UPPER(TRIM(cat.plant_code)) = UPPER(TRIM(v.plant_code))
           AND cat.year = EXTRACT(YEAR FROM v.fecha)::int
           AND cat.month = EXTRACT(MONTH FROM v.fecha)::int
           AND cat.cliente_norm = v.cliente_norm
-        WHERE v.fecha >= $3::date
-          AND v.fecha <= $4::date
-          AND (${plantMatchSql("v.plant_code")})
+        WHERE UPPER(TRIM(v.plant_code)) = ANY($1::text[])
+          AND v.fecha >= $2::date
+          AND v.fecha <= $3::date
+          ${canalSql}
         GROUP BY v.fecha::date,
                  CASE
                    WHEN LOWER(TRIM(COALESCE(cat.canal, v.canal, 'Casa'))) LIKE '%comisionista%'
                      THEN 'COMISIONISTA'
                    ELSE 'CASA'
                  END
-        ORDER BY fecha ASC, canal_grp ASC`,
-      [aliasUpper, aliasNames, startStr, endStr]
+        ORDER BY fecha ASC`,
+      [codesUpper, startStr, endStr]
     );
 
     const d = await client.query(
-      `WITH prov_map AS (${SQL_PROV_MAP})
-       SELECT to_char(d.fecha::date, 'YYYY-MM-DD') AS fecha,
+      `SELECT to_char(d.fecha::date, 'YYYY-MM-DD') AS fecha,
               CASE
                 WHEN LOWER(TRIM(COALESCE(cat.canal, 'Casa'))) LIKE '%comisionista%'
                   THEN 'COMISIONISTA'
@@ -15725,100 +15737,120 @@ app.get("/api/arr/venta-serie", dashboardAuthMiddleware, async (req, res) => {
               END AS canal_grp,
               ROUND(SUM(d.monto)::numeric, 2) AS descuento_mxn
          FROM arr.descuentos_diarios_cliente d
-         LEFT JOIN prov_map pm
-           ON ${provJoinSql("d.plant_code")}
          LEFT JOIN arr.cliente_categoria_mes cat
-           ON (
-                UPPER(TRIM(cat.plant_code)) = UPPER(TRIM(d.plant_code))
-                OR UPPER(TRIM(cat.plant_code)) = UPPER(TRIM(COALESCE(pm.ap_plant_code, '')))
-                OR UPPER(TRIM(cat.plant_code)) = UPPER(TRIM(COALESCE(pm.prov_name, '')))
-                OR ${SQL_STRIP.replace("%COL%", "cat.plant_code")} = ${SQL_STRIP.replace("%COL%", "d.plant_code")}
-                OR ${SQL_STRIP.replace("%COL%", "cat.plant_code")} = ${SQL_STRIP.replace("%COL%", "COALESCE(pm.ap_plant_code, '')")}
-                OR ${SQL_STRIP.replace("%COL%", "cat.plant_code")} = ${SQL_STRIP.replace("%COL%", "COALESCE(pm.prov_name, '')")}
-              )
+           ON UPPER(TRIM(cat.plant_code)) = UPPER(TRIM(d.plant_code))
           AND cat.year = EXTRACT(YEAR FROM d.fecha)::int
           AND cat.month = EXTRACT(MONTH FROM d.fecha)::int
           AND cat.cliente_norm = d.cliente_norm
-        WHERE d.fecha >= $3::date
-          AND d.fecha <= $4::date
-          AND (${plantMatchSql("d.plant_code")})
+        WHERE UPPER(TRIM(d.plant_code)) = ANY($1::text[])
+          AND d.fecha >= $2::date
+          AND d.fecha <= $3::date
+          ${
+            canalFilter === "casa"
+              ? `AND LOWER(TRIM(COALESCE(cat.canal, 'Casa'))) NOT LIKE '%comisionista%'`
+              : canalFilter === "comisionista"
+                ? `AND LOWER(TRIM(COALESCE(cat.canal, 'Casa'))) LIKE '%comisionista%'`
+                : ""
+          }
         GROUP BY d.fecha::date,
                  CASE
                    WHEN LOWER(TRIM(COALESCE(cat.canal, 'Casa'))) LIKE '%comisionista%'
                      THEN 'COMISIONISTA'
                    ELSE 'CASA'
                  END
-        ORDER BY fecha ASC, canal_grp ASC`,
-      [aliasUpper, aliasNames, startStr, endStr]
+        ORDER BY fecha ASC`,
+      [codesUpper, startStr, endStr]
     );
 
     const byFecha = new Map();
     for (const row of r.rows || []) {
       const f = pgCalendarDateToYmd(row.fecha);
       if (!/^\d{4}-\d{2}-\d{2}$/.test(f)) continue;
-      if (!byFecha.has(f)) {
-        byFecha.set(f, {
-          fecha: f,
-          casa_ton: 0,
-          comisionista_ton: 0,
-          casa_descuento: 0,
-          comisionista_descuento: 0,
-        });
-      }
-      const rec = byFecha.get(f);
-      const ton = row.venta_ton != null ? Number(row.venta_ton) : 0;
-      if (row.canal_grp === "COMISIONISTA") rec.comisionista_ton += ton;
-      else rec.casa_ton += ton;
+      if (!byFecha.has(f)) byFecha.set(f, { fecha: f, venta_ton: 0, descuento_mxn: 0 });
+      byFecha.get(f).venta_ton += row.venta_ton != null ? Number(row.venta_ton) : 0;
     }
     for (const row of d.rows || []) {
       const f = pgCalendarDateToYmd(row.fecha);
       if (!/^\d{4}-\d{2}-\d{2}$/.test(f)) continue;
-      if (!byFecha.has(f)) {
-        byFecha.set(f, {
-          fecha: f,
-          casa_ton: 0,
-          comisionista_ton: 0,
-          casa_descuento: 0,
-          comisionista_descuento: 0,
-        });
-      }
-      const rec = byFecha.get(f);
-      const monto = row.descuento_mxn != null ? Number(row.descuento_mxn) : 0;
-      if (row.canal_grp === "COMISIONISTA") rec.comisionista_descuento += monto;
-      else rec.casa_descuento += monto;
+      if (!byFecha.has(f)) byFecha.set(f, { fecha: f, venta_ton: 0, descuento_mxn: 0 });
+      byFecha.get(f).descuento_mxn += row.descuento_mxn != null ? Number(row.descuento_mxn) : 0;
     }
 
     const round3 = (n) => Math.round(Number(n || 0) * 1000) / 1000;
     const round2 = (n) => Math.round(Number(n || 0) * 100) / 100;
-
-    let points = [...byFecha.values()].sort((a, b) => a.fecha.localeCompare(b.fecha));
-    if (canalFilter === "casa") {
-      points = points
-        .filter((p) => p.casa_ton !== 0 || p.casa_descuento !== 0)
-        .map((p) => ({
-          fecha: p.fecha,
-          venta_ton: round3(p.casa_ton),
-          descuento_mxn: round2(p.casa_descuento),
-        }));
-    } else if (canalFilter === "comisionista") {
-      points = points
-        .filter((p) => p.comisionista_ton !== 0 || p.comisionista_descuento !== 0)
-        .map((p) => ({
-          fecha: p.fecha,
-          venta_ton: round3(p.comisionista_ton),
-          descuento_mxn: round2(p.comisionista_descuento),
-        }));
-    } else {
-      points = points.map((p) => ({
+    const points = [...byFecha.values()]
+      .sort((a, b) => a.fecha.localeCompare(b.fecha))
+      .filter((p) => p.venta_ton !== 0 || p.descuento_mxn !== 0)
+      .map((p) => ({
         fecha: p.fecha,
-        casa_ton: round3(p.casa_ton),
-        comisionista_ton: round3(p.comisionista_ton),
-        venta_ton: round3(p.casa_ton + p.comisionista_ton),
-        casa_descuento: round2(p.casa_descuento),
-        comisionista_descuento: round2(p.comisionista_descuento),
-        descuento_mxn: round2(p.casa_descuento + p.comisionista_descuento),
+        venta_ton: round3(p.venta_ton),
+        descuento_mxn: round2(p.descuento_mxn),
       }));
+
+    // Top clientes: delta vs periodo previo del mismo largo.
+    const cliCur = await client.query(
+      `SELECT TRIM(v.cliente_norm) AS cliente,
+              ROUND((SUM(v.kg) / 1000.0)::numeric, 3) AS venta_ton
+         FROM arr.ventas_diarias_cliente v
+         LEFT JOIN arr.cliente_categoria_mes cat
+           ON UPPER(TRIM(cat.plant_code)) = UPPER(TRIM(v.plant_code))
+          AND cat.year = EXTRACT(YEAR FROM v.fecha)::int
+          AND cat.month = EXTRACT(MONTH FROM v.fecha)::int
+          AND cat.cliente_norm = v.cliente_norm
+        WHERE UPPER(TRIM(v.plant_code)) = ANY($1::text[])
+          AND v.fecha >= $2::date AND v.fecha <= $3::date
+          ${canalSql}
+        GROUP BY TRIM(v.cliente_norm)`,
+      [codesUpper, startStr, endStr]
+    );
+    const cliPrev = await client.query(
+      `SELECT TRIM(v.cliente_norm) AS cliente,
+              ROUND((SUM(v.kg) / 1000.0)::numeric, 3) AS venta_ton
+         FROM arr.ventas_diarias_cliente v
+         LEFT JOIN arr.cliente_categoria_mes cat
+           ON UPPER(TRIM(cat.plant_code)) = UPPER(TRIM(v.plant_code))
+          AND cat.year = EXTRACT(YEAR FROM v.fecha)::int
+          AND cat.month = EXTRACT(MONTH FROM v.fecha)::int
+          AND cat.cliente_norm = v.cliente_norm
+        WHERE UPPER(TRIM(v.plant_code)) = ANY($1::text[])
+          AND v.fecha >= $2::date AND v.fecha <= $3::date
+          ${canalSql}
+        GROUP BY TRIM(v.cliente_norm)`,
+      [codesUpper, prevStartStr, prevEndStr]
+    );
+
+    const curMap = new Map();
+    for (const row of cliCur.rows || []) {
+      const name = String(row.cliente || "").trim();
+      if (name) curMap.set(name, Number(row.venta_ton) || 0);
     }
+    const prevMap = new Map();
+    for (const row of cliPrev.rows || []) {
+      const name = String(row.cliente || "").trim();
+      if (name) prevMap.set(name, Number(row.venta_ton) || 0);
+    }
+    const allClientes = new Set([...curMap.keys(), ...prevMap.keys()]);
+    const clientesDelta = [];
+    for (const nombre of allClientes) {
+      const actual = curMap.get(nombre) || 0;
+      const previo = prevMap.get(nombre) || 0;
+      const delta = round3(actual - previo);
+      if (Math.abs(delta) < 0.001) continue;
+      let tipo = "aumento";
+      if (previo <= 0 && actual > 0) tipo = "nuevo";
+      else if (previo > 0 && actual <= 0) tipo = "perdido";
+      else if (delta < 0) tipo = "disminucion";
+      else tipo = "aumento";
+      clientesDelta.push({
+        cliente: nombre,
+        venta_ton_actual: round3(actual),
+        venta_ton_prev: round3(previo),
+        delta_ton: delta,
+        tipo,
+      });
+    }
+    clientesDelta.sort((a, b) => Math.abs(b.delta_ton) - Math.abs(a.delta_ton));
+    const clientes_top = clientesDelta.slice(0, 6);
 
     res.json({
       ok: true,
@@ -15828,7 +15860,10 @@ app.get("/api/arr/venta-serie", dashboardAuthMiddleware, async (req, res) => {
       canal: canalFilter,
       fecha_desde: startStr,
       fecha_hasta: endStr,
+      fecha_prev_desde: prevStartStr,
+      fecha_prev_hasta: prevEndStr,
       points,
+      clientes_top,
     });
   } catch (e) {
     console.error("[ARR venta-serie]", e);

@@ -1568,6 +1568,16 @@ export interface ArrVentaSeriePoint {
   comisionista_descuento?: number;
 }
 
+export type ArrVentaClienteTopTipo = "nuevo" | "perdido" | "aumento" | "disminucion";
+
+export interface ArrVentaClienteTop {
+  cliente: string;
+  venta_ton_actual: number;
+  venta_ton_prev: number;
+  delta_ton: number;
+  tipo: ArrVentaClienteTopTipo | string;
+}
+
 export interface ArrVentaSerieResponse {
   ok: boolean;
   empresa: string;
@@ -1576,7 +1586,10 @@ export interface ArrVentaSerieResponse {
   canal: ArrVentaSerieCanal | string;
   fecha_desde?: string;
   fecha_hasta?: string;
+  fecha_prev_desde?: string;
+  fecha_prev_hasta?: string;
   points: ArrVentaSeriePoint[];
+  clientes_top?: ArrVentaClienteTop[];
 }
 
 export function fetchArrVentaSerie(
