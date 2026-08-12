@@ -259,17 +259,29 @@ export default function ArrVentaGraficaModal({ token, empresa, onClose }: Props)
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-3 sm:p-4">
       <div className="flex max-h-[96vh] w-full max-w-[1600px] flex-col overflow-hidden rounded-xl border border-slate-600 bg-slate-900 shadow-2xl">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-700 px-4 py-3">
+        <div className="relative flex flex-wrap items-center justify-between gap-2 border-b border-slate-700 px-4 py-3">
           <div>
             <h2 className="text-base font-semibold text-white">Gráfica · Toneladas de venta</h2>
             <p className="text-xs text-slate-400">
               {empresa} · eje Y: toneladas · eje X: tiempo
             </p>
           </div>
+          <div
+            className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 text-center"
+            aria-hidden
+          >
+            <div
+              className={`text-4xl font-black tracking-[0.12em] sm:text-5xl ${
+                canal === "casa" ? "text-yellow-400" : "text-sky-400"
+              }`}
+            >
+              {canal === "casa" ? "CASA" : "COMISIONISTA"}
+            </div>
+          </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700"
+            className="relative z-10 rounded border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700"
           >
             Cerrar
           </button>
