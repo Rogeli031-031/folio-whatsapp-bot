@@ -101,7 +101,7 @@ El Motor de Conocimiento Ejecutivo convierte resultados de herramientas (y estad
 ## Mapa de responsabilidades (este documento)
 
 **Posee:** propósito del Motor; contrato conceptual de entrada/salida; modelos mentales; política de cobertura; producto IES oficial/alternativo; política de preguntas abiertas; principios de fallo de conocimiento; criterios de aceptación del Motor.  
-**No posee:** definiciones constitucionales; contratos de ensamblaje del Evidence Builder; esquema de producto IES detallado (documento IES futuro); Reasoning Engine; Interfaces; implementación.
+**No posee:** definiciones constitucionales; contratos de ensamblaje del Evidence Builder; esquema de producto IES detallado (propiedad de `04-IES-STANDARD.md`; IES v1.0 **APROBADO PARA CONGELAMIENTO**; runtime del IES **PENDIENTE**); Reasoning Engine; Interfaces; implementación.
 
 ---
 
@@ -134,11 +134,12 @@ El Motor de Conocimiento Ejecutivo convierte resultados de herramientas (y estad
 | Situación | Tratamiento en el Motor |
 |-----------|-------------------------|
 | **Entrada inválida** | Plan o tool plan mal formado; planta ausente; intent vacío → no se generan hechos; cobertura `NO_CONOZCO` o fallo de contrato. |
-| **Fuente no integrada** | Tool con `declared_not_integrated` (Fase 3) / dominio `coverage: none` (Fase 1) → observación de *no disponibilidad*, no de valor de negocio. |
-| **Herramienta fallida** | Error, tiempo de espera agotado, acceso denegado → observación `TOOL_ERROR` (u homólogo tipificado); no se inventa el dato. |
-| **Resultado vacío** | Tool OK pero sin filas → observación `DATA_NOT_FOUND` / `empty`; distinto de “cero” y distinto de afirmación de ausencia (ver Evidence Builder: solo `ABSENCE_CONFIRMED`). |
+| **Fuente no integrada** | Tool con `declared_not_integrated` (Fase 3) / dominio `coverage: none` (Fase 1) → `AcquisitionStatus = SOURCE_NOT_INTEGRATED` (OP); **no** ObservationRecord de negocio; **≠** “dato inexistente en la empresa”. |
+| **Fuente restringida** | Sin permiso / inaccesible → `AcquisitionStatus = SOURCE_RESTRICTED`; **no** ObservationRecord de negocio; **≠** `TOOL_ERROR`; **≠** ausencia empresarial. |
+| **Herramienta fallida** | Error o tiempo de espera agotado → `AcquisitionStatus = TOOL_ERROR`; **no** ObservationRecord de negocio; **≠** `DATA_NOT_FOUND` **≠** `ABSENCE_CONFIRMED`. |
+| **Resultado vacío** | Tool OK sin filas → `AcquisitionStatus = ACQUIRED_EMPTY` (OP) / tipificación `DATA_NOT_FOUND` (EB); distinto de “cero”; **≠** afirmación de ausencia salvo elevación EB a `ABSENCE_CONFIRMED`. |
 | **Clarificación pendiente** | `requires_clarification=true` → el Motor no fuerza diagnóstico fuerte; genera preguntas abiertas. |
-| **Ejecución parcial** | `can_execute=true` y `can_execute_all=false` → se procesan solo tools listas; el resto queda como cobertura parcial o no conocimiento. |
+| **Ejecución parcial** | `can_execute=true` y `can_execute_all=false` → se procesan solo tools listas; cada tool conserva su estado **sin colapsar** estados distintos. |
 
 ---
 
@@ -287,6 +288,55 @@ Un hecho `accion_vencida` puede proyectarse al modelo Operativo (ejecución) y a
 
 ---
 
+# 7A. Materialidad ejecutiva (política del Motor)
+
+**Propiedad de política y catálogo:** este documento (Executive Knowledge Engine / Motor).  
+**Propiedad de mecánica de asignación (cuando exista ruleset calibrado):** Evidence Builder.  
+**IES:** solo proyecta. **EKS:** solo persiste. **Reasoning Engine / Channel Projection:** solo consumen; **prohibido** crear, elevar, reducir o reinterpretar materialidad.
+
+## Significado (separación obligatoria)
+
+| Concepto | Significado | No es |
+|----------|-------------|-------|
+| `confidence` | Qué tan sustentada está una afirmación | Materialidad ni severidad |
+| `materiality` | Qué tan relevante es el **impacto ejecutivo** de un objeto de conocimiento | Confianza ni severidad |
+| `severity` | Gravedad de un conflicto/diagnóstico según su taxonomía | Materialidad |
+| `priority` | Orden de atención (p. ej. preguntas abiertas) | Materialidad |
+
+El **impacto** constitucional de conflictos (Constitución IV: tipo → severidad e impacto) **no** es el catálogo `MAT_*`. `MAT_*` es política del Motor sobre relevancia ejecutiva de hechos/evidencias/diagnósticos; no sustituye ni se deriva automáticamente del impacto/severidad del conflicto.
+
+**Prohibido** tratarlos como sinónimos o derivarlos automáticamente unos de otros **sin** regla explícita versionada del Motor.
+
+## Catálogo `MAT_*` (propiedad del Motor)
+
+| Token | Significado |
+|-------|-------------|
+| `MAT_LOW` | Impacto ejecutivo bajo |
+| `MAT_MEDIUM` | Impacto ejecutivo medio |
+| `MAT_HIGH` | Impacto ejecutivo alto |
+| `MAT_CRITICAL` | Impacto ejecutivo crítico |
+
+## Estado de no evaluación (propiedad del Motor)
+
+| Token | Significado |
+|-------|-------------|
+| `MATERIALITY_NOT_ASSESSED` | Materialidad **aún no evaluada** por falta de ruleset/calibración o por cobertura insuficiente para aplicar regla |
+
+**`MATERIALITY_NOT_ASSESSED` ≠ `MAT_LOW`.**  
+**`NO_CONOZCO`** no produce materialidad ficticia: si no hay hechos/evidencias evaluables, no se inventan tokens `MAT_*`.
+
+## Calibración
+
+Este Motor **no fija** umbrales económicos, porcentajes, pesos, `k`, `wi` ni reglas de negocio numéricas aquí.  
+Hasta existir **ruleset de materialidad calibrado y versionado** (`materiality_ruleset_version`), el ensamblaje debe emitir `MATERIALITY_NOT_ASSESSED` (no inventar `MAT_*`).  
+Ejemplos ilustrativos con `MAT_*` **no** son reglas productivas.
+
+## Impugnación
+
+Una reevaluación / IES alternativo **no reescribe** materialidad histórica del Snapshot/oficial en silencio (Constitución VI). Toda reevaluación de materialidad requiere nuevo ciclo trazado (usuario, parámetro, valores, motivo, impacto, vínculo al oficial).
+
+---
+
 # 8. Conflictos
 
 ## Taxonomía constitucional (Tipos A–E) — referencia; no redefinición
@@ -359,19 +409,49 @@ Todos los dominios pedidos cubiertos + sin conflicto bloqueante
   → CONOZCO
 ```
 
+## Separación AcquisitionStatus vs Knowledge Coverage
+
+| Capa | Qué es | Propietario |
+|------|--------|-------------|
+| **AcquisitionStatus** | Resultado técnico de adquisición por tool/dominio (`ACQUIRED_OK`, `ACQUIRED_EMPTY`, `SOURCE_*`, `TOOL_ERROR`, `QUERY_SCOPE_INCOMPLETE`, `ENTITY_UNRESOLVED`) | Observation Pipeline (`03A`) |
+| **Tipificación de ausencia / vacío** | Interpretación normativa del vacío hacia hecho (`DATA_NOT_FOUND` → posible `ABSENCE_CONFIRMED`) | Evidence Builder (`02` §10) |
+| **Knowledge Coverage** | Estado constitucional del alcance de consulta (`CONOZCO`…`NO_CONOZCO`) | Constitución (estados) + **este Motor** (política de transición); EB aplica; IES proyecta vía `COV_*` |
+
+El OP **reporta** adquisición; **no** determina verdad empresarial ni `ABSENCE_CONFIRMED`.  
+`ABSENCE_CONFIRMED` **no** es un `AcquisitionStatus`.
+
+## Agregación multi-fuente (obligatoria)
+
+Cuando varias tools tienen estados distintos, **cada estado se conserva en `source_health`**. Prohibido fusionarlos en un único estado silencioso.
+
+| Precedencia de cobertura del ciclo (política) | Condición |
+|-----------------------------------------------|-----------|
+| `EXISTE_CONFLICTO` | Hay conflicto abierto material (A–E) sobre hechos presentes → **no se oculta** aunque falte otra fuente |
+| `NO_CONOZCO` | El alcance **requerido** del intent depende de fuente inexistente/no integrada/inaccesible **y** no hay hechos útiles suficientes en ese alcance |
+| `CONOZCO_PARCIALMENTE` | Hay al menos un dominio con hechos útiles **y** otros faltantes, vacíos no afirmados, errores tipificados, alcance incompleto o no integración parcial |
+| `CONOZCO` | Todos los dominios pedidos cubiertos con hechos útiles y sin conflicto bloqueante |
+
+Ejemplo normativo (ilustrativo): ARR = `ACQUIRED_OK`; Action Register = `ACQUIRED_EMPTY`/`DATA_NOT_FOUND`; Folios = `SOURCE_NOT_INTEGRATED` → cobertura típica `CONOZCO_PARCIALMENTE`: puede afirmar hechos ARR; **no** afirma inexistencia en Action Register salvo elevación a `ABSENCE_CONFIRMED`; declara desconocimiento controlado en alcance Folios (confianza 0.00 ahí).
+
 ## Distinciones (no colapsar)
 
 | Situación | No es |
 |-----------|--------|
-| Fuente no integrada (`SOURCE_NOT_INTEGRATED`) | No es “dato no encontrado” (`DATA_NOT_FOUND`) |
-| Fuente restringida | No es “no existe el fenómeno” |
-| Herramienta fallida | No es vacío de negocio |
-| Dato no encontrado (empty ok) | No es cero |
-| Periodo incompleto | No es tendencia fiable |
-| Entidad ambigua | No es cliente resuelto |
-| Información contradictoria | No es promedio |
+| Fuente no integrada (`SOURCE_NOT_INTEGRATED`) | No es “dato no encontrado” (`DATA_NOT_FOUND`); no es ausencia empresarial |
+| Fuente restringida | No es “no existe el fenómeno”; no es `TOOL_ERROR` |
+| Herramienta fallida (`TOOL_ERROR`, incl. timeout) | No es vacío de negocio; no es `ABSENCE_CONFIRMED` |
+| Dato no encontrado (`DATA_NOT_FOUND` / `ACQUIRED_EMPTY`) | No es cero; no es automáticamente `ABSENCE_CONFIRMED` |
+| Periodo / alcance incompleto | No es tendencia fiable; no autoriza concluir el alcance faltante |
+| Entidad ambigua / no resuelta | No es entidad canónica; no genera hechos sobre entidad inferida |
+| Información contradictoria | No es promedio; no se oculta porque falte otra fuente |
+| `NO_CONOZCO` | No es error arquitectónico; no es `TOOL_ERROR` cuando la fuente falló técnicamente |
 
-Alineación conceptual de tipificación (catálogo de capacidades / Evidence Builder): `SOURCE_NOT_INTEGRATED`, `SOURCE_RESTRICTED`, `TOOL_ERROR`, `DATA_NOT_FOUND`, `ABSENCE_CONFIRMED`, `QUERY_SCOPE_INCOMPLETE`, `ENTITY_UNRESOLVED`, y estados de disponibilidad parcial/disponible según catálogo.
+Alineación de tipificación: AcquisitionStatus (`03A`) + tipificación EB (`DATA_NOT_FOUND`, `ABSENCE_CONFIRMED`, …) + cobertura constitucional / `COV_*` (IES proyecta, no redefine).
+
+### Reasoning Engine / Channel Projection (política)
+
+- El Reasoning Engine **no** convierte `NO_CONOZCO`, bancos vacíos, `TOOL_ERROR` ni `SOURCE_NOT_INTEGRATED` en hipótesis sustantivas de negocio.
+- Channel Projection **no** suaviza ni omite `NO_CONOZCO` / `COV_NO_KNOWLEDGE`.
 
 ---
 
@@ -463,16 +543,16 @@ Debe registrar:
 
 | Situación | Comportamiento del Motor |
 |-----------|---------------------------|
-| Herramienta no integrada | Observación tipificada `SOURCE_NOT_INTEGRATED`; ausencia no comprobable; pregunta abierta si el intent la exigía; sin inventar valor |
-| Herramienta restringida | `SOURCE_RESTRICTED`; no elevar a “no existe” |
-| Tiempo de espera agotado / error de herramienta | Observación `TOOL_ERROR`; cobertura degradada; no reintentar infinitamente dentro del Motor |
-| Resultado vacío | Observación `DATA_NOT_FOUND` / `empty`; **no** afirmación de ausencia salvo elevación a `ABSENCE_CONFIRMED` por regla de la tool |
+| Herramienta no integrada | `AcquisitionStatus = SOURCE_NOT_INTEGRATED`; ausencia no comprobable; pregunta abierta si el intent la exigía; sin inventar valor; **≠** inexistencia empresarial |
+| Herramienta restringida | `AcquisitionStatus = SOURCE_RESTRICTED`; no elevar a “no existe”; puede activar `NO_CONOZCO` en ese alcance |
+| Tiempo de espera agotado / error de herramienta | `AcquisitionStatus = TOOL_ERROR`; cobertura degradada; **≠** `DATA_NOT_FOUND`; **≠** `ABSENCE_CONFIRMED` |
+| Resultado vacío | `ACQUIRED_EMPTY` / `DATA_NOT_FOUND`; **no** afirmación de ausencia salvo elevación EB a `ABSENCE_CONFIRMED` bajo contrato de la tool |
 | Datos inválidos | Rechazo de la observación o calidad degradada; no “limpiar” en silencio |
-| Periodo ausente | `QUERY_SCOPE_INCOMPLETE` / pregunta abierta; no asumir periodo |
-| Planta ausente | Fallo de contrato; `NO_CONOZCO` |
-| Entidad ambigua | `ENTITY_UNRESOLVED`; no afirmar hechos sobre entidad canónica |
-| Conflicto irresoluble | Estado `EXISTE_CONFLICTO`; diagnóstico `conflicto no resuelto` |
-| Ausencia total de evidencia | `NO_CONOZCO` o `información insuficiente`; IES declara límites |
+| Periodo ausente | `QUERY_SCOPE_INCOMPLETE` / pregunta abierta; no asumir periodo; no concluir el alcance faltante |
+| Planta ausente | Fallo de contrato; `NO_CONOZCO` o `QUERY_SCOPE_INCOMPLETE` según contrato de entrada |
+| Entidad ambigua | `ENTITY_UNRESOLVED`; no afirmar hechos sobre entidad canónica inferida |
+| Conflicto irresoluble | Estado `EXISTE_CONFLICTO` (aunque falte otra fuente); diagnóstico `conflicto no resuelto` |
+| Ausencia total de evidencia en alcance requerido | `NO_CONOZCO`; IES declara límites; confianza 0.00 en ese alcance |
 
 ---
 
@@ -710,7 +790,7 @@ Las Fases 1–3 son **productores de entrada** al Motor; no son el Motor ni el E
 | Fecha de revisión | 2026-08-04 |
 | Documento auditado | `docs/director-ia/DIRECTOR_IA_EXECUTIVE_KNOWLEDGE_ENGINE.md` |
 | Resultado | **Conforme tras auditoría empresarial** (jerarquía Constitución→Motor→Evidence Builder→IES→Reasoning Engine→Interfaces; ausencia tipificada; sin redefinición constitucional; sin implementación; propiedad de contratos en Evidence Builder). |
-| Excepciones pendientes | (1) Calibración numérica Fs/R/Cb/Cs/Cb_ov — diferida. (2) Documento de producto IES detallado — pendiente de creación. (3) Documento del Reasoning Engine — pendiente. (4) Ejecución real de tools e integración de dominios no integrados — fuera de este diseño. |
+| Excepciones pendientes | (1) Calibración numérica Fs/R/Cb/Cs/Cb_ov — diferida. (2) Esquema de producto IES: `04-IES-STANDARD.md` existe; IES v1.0 **APROBADO PARA CONGELAMIENTO**; **runtime del IES PENDIENTE**. (3) Documento del Reasoning Engine — pendiente. (4) Ejecución real de tools e integración de dominios no integrados — fuera de este diseño. |
 | Prohibición de implementación | Queda **prohibido implementar** el Motor si reaparecen no conformidades críticas (Reasoning Engine antes del Nivel 5; Motor/Evidence Builder generando hipótesis; IES mutable; suavización de Tipo E; ausencia como cero; colapso `SOURCE_NOT_INTEGRATED`/`DATA_NOT_FOUND`; IES alternativo sin auditoría; Evidence Builder tomando decisiones de política). |
 
 ---

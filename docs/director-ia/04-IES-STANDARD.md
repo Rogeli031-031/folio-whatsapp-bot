@@ -4,7 +4,7 @@
 
 **Documento:** `docs/director-ia/04-IES-STANDARD.md`  
 **Versión:** 1.0  
-**Estado:** APROBADO PARA CONGELAMIENTO CANDIDATO v1.0  
+**Estado:** IES v1.0 APROBADO PARA CONGELAMIENTO  
 **Tipo:** Esquema y reglas del IES (sin implementación; sin Reasoning Engine; sin Channel Projection detallada)
 
 ### Dependencia normativa
@@ -17,7 +17,7 @@
 | `docs/director-ia/03-EXECUTIVE-KNOWLEDGE-STORE.md` | Knowledge Bundle; Knowledge Snapshot (entrada del IES) |
 | `docs/director-ia/03A-OBSERVATION-PIPELINE.md` | ObservationRecord; AcquisitionStatus |
 | `docs/director-ia/03B-END-TO-END-REFERENCE-FLOWS.md` | Flujos de referencia A/B |
-| `docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md` | Índice maestro (actualización de estado: pendiente; no modificada aquí) |
+| `docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md` | Índice maestro de propiedad documental (vigente) |
 
 En conflicto, prevalece la Constitución.  
 Este documento **posee** el esquema y versión de producto IES. **No redefine** niveles, cobertura constitucional, tipos de conflicto ni la epistemología.  
@@ -25,16 +25,10 @@ Este documento **posee** el esquema y versión de producto IES. **No redefine** 
 
 ### Congelamiento
 
-**ESTADO: APROBADO PARA CONGELAMIENTO CANDIDATO v1.0**
+**ESTADO: IES v1.0 APROBADO PARA CONGELAMIENTO**
 
-El congelamiento definitivo de v1.0 requiere:
-
-1. auditoría contractual;  
-2. ejemplo `CONOZCO_PARCIALMENTE`;  
-3. ejemplo `NO_CONOZCO`;  
-4. validación de referencias internas;  
-5. ausencia de no conformidades críticas.
-
+Congelamiento del **esquema** v1.0 tras auditoría contractual (ejemplos A/B, referencias internas, sin no conformidades críticas de contrato).  
+**Runtime del IES:** PENDIENTE.  
 No se declara “100% madurez”.
 
 ---
@@ -270,12 +264,14 @@ No incluir JWT, secretos, API keys, cookies, connection strings ni tokens de ses
 | `COV_DATA_CONFLICT` | `EXISTE_CONFLICTO` |
 | `COV_NO_KNOWLEDGE` | `NO_CONOZCO` |
 
-**Prohibido:** `COV_TOTAL_IGNORANCE` (no existe en este estándar).
+**Prohibido:** `COV_TOTAL_IGNORANCE` (no existe en este estándar).  
+**Prohibido:** crear un quinto estado constitucional o cambiar la semántica de los cuatro estados de Constitución IV.  
+Los tokens `COV_*` son **proyección 1:1**; el IES no redefine cobertura.
 
 En el IES:
 
 - `coverage_token` = token institucional;  
-- `coverage_state` = estado constitucional mapeado.
+- `coverage_state` = estado constitucional mapeado (producido por política Motor + aplicación EB sobre el Snapshot; IES solo proyecta).
 
 ## Objeto `knowledge_coverage`
 
@@ -292,11 +288,13 @@ En el IES:
 | `unresolved_entities` | Sí | Entidades `AMBIGUOUS` / `UNRESOLVED` |
 | `incomplete_scopes` | Sí | Alcances incompletos |
 | `blocking_limitations` | Sí | Limitaciones que bloquean razonamiento sustantivo |
+| `highest_materiality_detected` | Sí | Proyección determinista: máximo entre `MAT_*` **ya evaluados** en `facts[]`/`evidence[]`/`diagnoses[]` del mismo IES; si ninguno evaluado → `MATERIALITY_NOT_ASSESSED`. **Nunca** evaluación nueva del IES. |
 
 ### Regla
 
 La cobertura **no** se calcula por simple conteo de fuentes.  
-`available_on_demand` / adquisición parcial **no** equivale a `COV_FULL_KNOWLEDGE` / `CONOZCO`.
+`available_on_demand` / adquisición parcial **no** equivale a `COV_FULL_KNOWLEDGE` / `CONOZCO`.  
+`highest_materiality_detected` ignora `MATERIALITY_NOT_ASSESSED` al tomar el máximo; si solo hay no evaluados o bancos vacíos (`NO_CONOZCO`), el valor es `MATERIALITY_NOT_ASSESSED` (sin inventar `MAT_LOW`).
 
 ---
 
@@ -320,7 +318,7 @@ Cada ítem del resumen usa únicamente:
 
 ## Debe incluir referencias a
 
-- hechos prioritarios (según `materiality` / `priority` proyectados);  
+- hechos prioritarios (según `materiality` / `priority` **ya proyectados** en hechos/diagnósticos; el resumen **no** calcula materialidad);  
 - diagnósticos deterministas principales;  
 - desviaciones verificadas;  
 - conflictos críticos (incluye todo `CONF_TYPE_E_GOVERNANCE`);  
@@ -332,7 +330,8 @@ Cada ítem del resumen usa únicamente:
 - recomendaciones;  
 - lenguaje causal no aprobado;  
 - suavizar u omitir `CONF_TYPE_E_GOVERNANCE`;  
-- presentar cifras ilustrativas como datos institucionales.
+- presentar cifras ilustrativas como datos institucionales;  
+- calcular, elevar o reinterpretar `materiality` en el resumen.
 
 ---
 
@@ -353,23 +352,37 @@ Cada elemento de `facts[]`:
 | `supporting_observation_ids` | Sí | ≥1 salvo régimen de ausencia tipificada con soporte |
 | `absence_state` | Condicional | Solo tipificación de ausencia |
 | `validity` | Sí | Vigencia del hecho en el IES |
-| `priority` | Sí | Ordinal proyectado |
-| `materiality` | Sí | Materialidad **proyectada** (calculada antes del IES) |
-| `applied_materiality_rule_id` | Sí | Regla determinista aplicada en EB/diagnóstico |
-| `materiality_ruleset_version` | Sí | Versión del ruleset de materialidad |
-| `traceability` | Sí | Encadenamiento a Bundle/Snapshot/reglas |
+| `priority` | Sí | Ordinal proyectado (orden de atención; **≠** materiality) |
+| `materiality` | Sí | Proyectada: `MAT_*` o `MATERIALITY_NOT_ASSESSED` |
+| `applied_materiality_rule_id` | Condicional | Obligatoria si `MAT_*`; null si `MATERIALITY_NOT_ASSESSED` |
+| `materiality_ruleset_version` | Condicional | Versión si evaluada; null si no evaluada |
+| `traceability` | Sí | Encadenamiento a Bundle/Snapshot/reglas **y** a observaciones de soporte (sin inventar identidad) |
 | `model_projections` | No | Modelos mentales que lo referencian |
+
+### Trazabilidad de procedencia (proyección; no redefinición)
+
+El IES **no inventa** autoría. Para trazar una afirmación hasta su origen usa `supporting_observation_ids` → Snapshot EKS → ObservationRecords, donde nacen:
+
+- `content_author_id` (nullable),
+- `extracted_by`,
+- `triggered_by`,
+- `source.system`.
+
+El IES puede **referenciar** esas identidades vía observaciones/linaje del Snapshot; **no** las sustituye entre sí ni rellena `content_author_id` cuando es `null`.
 
 ### Materiality
 
-`materiality` se **calcula antes del IES**, mediante reglas deterministas del Evidence Builder / diagnóstico.  
-El IES **únicamente proyecta**:
+**Política/catálogo:** Motor §7A. **Cálculo/asignación:** Evidence Builder §11B (si hay ruleset calibrado).  
+El IES **únicamente proyecta** (nunca calcula, eleva, reduce ni reinterpreta):
 
-- `materiality`  
-- `applied_materiality_rule_id`  
-- `materiality_ruleset_version`
+- `materiality` ∈ {`MAT_LOW`,`MAT_MEDIUM`,`MAT_HIGH`,`MAT_CRITICAL`,`MATERIALITY_NOT_ASSESSED`}  
+- `applied_materiality_rule_id` (null si no evaluada)  
+- `materiality_ruleset_version` (null si no evaluada)
 
-El IES no recalcula materialidad.
+`MATERIALITY_NOT_ASSESSED` ≠ `MAT_LOW`.  
+`confidence` alta ≠ `MAT_HIGH`.  
+`severity` crítica ≠ automáticamente `MAT_CRITICAL`.  
+Ejemplos con `MAT_*` o etiquetas libres (`HIGH`) son **FICTICIO / ILUSTRATIVO** y no reglas productivas.
 
 ### Regla de ausencia
 
@@ -395,9 +408,9 @@ Cada elemento de `evidence[]`:
 | `explained_variance_pct` | No | Si aplica y está cuantificado por regla |
 | `scope` | Sí | Alcance |
 | `causal_status` | Sí | Ver abajo |
-| `materiality` | Sí | Proyectada (no recalculada) |
-| `applied_materiality_rule_id` | Sí | Regla previa |
-| `materiality_ruleset_version` | Sí | Versión |
+| `materiality` | Sí | Proyectada: `MAT_*` o `MATERIALITY_NOT_ASSESSED` (no recalculada) |
+| `applied_materiality_rule_id` | Condicional | Null si no evaluada |
+| `materiality_ruleset_version` | Condicional | Null si no evaluada |
 | `traceability` | Sí | Encadenamiento |
 
 ### `causal_status`
@@ -433,9 +446,9 @@ Cada elemento de `diagnoses[]`:
 | `validity` | Sí | Vigencia |
 | `coverage_token` | Sí | Token de cobertura bajo el cual se emite |
 | `coverage_state` | Sí | Estado constitucional mapeado |
-| `materiality` | Sí | Proyectada |
-| `applied_materiality_rule_id` | Sí | Regla previa |
-| `materiality_ruleset_version` | Sí | Versión |
+| `materiality` | Sí | Proyectada: `MAT_*` o `MATERIALITY_NOT_ASSESSED` |
+| `applied_materiality_rule_id` | Condicional | Null si no evaluada |
+| `materiality_ruleset_version` | Condicional | Null si no evaluada |
 | `related_conflict_ids` | No | Conflictos asociados |
 
 ### Taxonomía de diagnóstico (referencia; no redefinición)
@@ -468,6 +481,8 @@ No explicar causas probables. No recomendaciones. No hipótesis. No narrativa li
 
 ## Objeto `conflicts[]`
 
+> **Proyección:** el IES **no posee** ni muta `resolution_status`. El enum y las transiciones son propiedad del Evidence Builder (`02-EVIDENCE-BUILDER.md` §11). Aquí solo se proyectan desde el Knowledge Snapshot.
+
 | Campo | Obligatorio | Descripción |
 |-------|-------------|-------------|
 | `conflict_id` | Sí | Identificador |
@@ -478,24 +493,35 @@ No explicar causas probables. No recomendaciones. No hipótesis. No narrativa li
 | `severity` | Sí | Severidad independiente del tipo |
 | `impact` | Sí | Impacto |
 | `confidence` | Sí | Confianza de la tipificación |
-| `weight_assessment` | No | Informativo; **no resuelve** |
-| `resolution_status` | Sí | Ver abajo |
+| `weight_assessment` | No | Informativo; **nunca resuelve** ni autoriza cierre |
+| `resolution_status` | Sí | Exactamente: `OPEN` \| `UNDER_REVIEW` \| `RESOLVED` \| `SUPERSEDED` (proyectado desde Bundle/Snapshot) |
+| `applied_resolution_rule_id` | Condicional | Obligatorio en proyección si `RESOLVED` |
+| `resolution_supporting_fact_ids` | Condicional | Hechos que justifican cierre (`RESOLVED`) |
+| `resolution_supporting_evidence_ids` | Condicional | Evidencias que justifican cierre (`RESOLVED`) |
 | `interpretation_constraint` | Sí | Restricción de uso |
 | `governance_escalation` | Condicional | Obligatoria si hay `CONF_TYPE_E_GOVERNANCE` |
 | `governance_reason` | Condicional | Motivo tipificado de escalamiento |
 | `missing_resolution_evidence` | Condicional | Qué falta para resolver |
 
-### Estados de resolución (`resolution_status`)
+> **Nota C4:** los conflictos usan `severity` (gravedad). **No** llevan `materiality` como sustituto de severidad. La relevancia ejecutiva de hechos en tensión se traza vía esos `fact_id`, no inventando `MAT_*` desde el tipo de conflicto.
 
-| Estado | Significado |
-|--------|-------------|
-| `OPEN` | Abierto |
-| `UNDER_REVIEW` | En revisión institucional |
-| `RESOLVED` | Resuelto con evidencia suficiente |
-| `SUPERSEDED` | Superado por evidencia/ciclo posterior |
+### Estados de resolución (`resolution_status`) — proyección IES
 
-**Conflicto ponderado ≠ resuelto.**  
-**`CONF_TYPE_E_GOVERNANCE` jamás puede omitirse** de `executive_summary_facts` ni suavizarse.
+Enum exacto (propiedad EB; el IES no redefine ni cambia estados):
+
+| Estado | `meaning` (proyección) | Notas de proyección |
+|--------|------------------------|---------------------|
+| `OPEN` | Abierto | Visible; no ocultable |
+| `UNDER_REVIEW` | En revisión institucional | **No** reduce `severity`; **no** oculta Tipo E |
+| `RESOLVED` | Resuelto con evidencia suficiente | Requiere en Snapshot/Bundle: evidencia de cierre + `applied_resolution_rule_id` + refs a hechos/evidencias |
+| `SUPERSEDED` | Superado por evidencia/ciclo posterior | **No equivale** a `RESOLVED` |
+
+**Conflicto ponderado ≠ resuelto** (`weight_assessment` no cierra).  
+**`SUPERSEDED` ≠ `RESOLVED`.**  
+`conflicts[].resolution_status = SUPERSEDED` **≠** `status = SUPERSEDED` del ciclo de vida del IES (§15); namespaces distintos, no intercambiables.  
+**`CONF_TYPE_E_GOVERNANCE` jamás puede omitirse** de `executive_summary_facts` ni suavizarse.  
+Conflictos Tipo E en `OPEN` o `UNDER_REVIEW` **permanecen obligatoriamente visibles** en el IES y en sus proyecciones de canal (§17).  
+El IES Builder **no** efectúa transiciones `OPEN`→`RESOLVED`, `UNDER_REVIEW`→`RESOLVED` ni `OPEN`→`SUPERSEDED`.
 
 ---
 
@@ -512,12 +538,14 @@ Cada elemento de `open_questions[]`:
 | `required_data` | Sí | Dato requerido |
 | `expected_source` | Condicional | Dominio/tool esperado si existe en catálogo |
 | `impact_token` | Sí | Impacto tipificado (sin narrativa causal) |
-| `priority` | Sí | Ordinal |
+| `priority` | Sí | Ordinal (orden de atención; **≠** materiality) |
 | `status` | Sí | `OPEN` \| `ANSWERED` \| `DISCARDED` |
 | `blocks_hypothesis` | Sí | Si bloquea hipótesis en RE |
 | `related_fact_ids` | No | Solo `fact_id` existentes |
 | `related_evidence_ids` | No | Solo `evidence_id` existentes |
 | `related_diagnosis_ids` | No | Solo `diagnosis_id` existentes |
+
+> **Nota C4:** preguntas abiertas usan `priority`, no `materiality`.
 
 ### Prohibiciones
 
@@ -546,20 +574,20 @@ Cada elemento de `source_health[]`:
 | `restrictions` | Condicional | Restricciones de permiso |
 | `raw_payload_reference` | Condicional | Referencia auditável; **no** payload completo en el IES |
 
-### Estados a distinguir (no colapsar)
+### `execution_status` = proyección de AcquisitionStatus (no tipificación de ausencia)
 
-| Estado | Significado breve |
-|--------|-------------------|
-| `DATA_AVAILABLE` | Datos de negocio disponibles/transportados |
-| `DATA_NOT_FOUND` | Búsqueda OK; sin filas; ≠ ausencia afirmada |
-| `SOURCE_NOT_INTEGRATED` | No integrado |
-| `SOURCE_RESTRICTED` | Inaccesible por permiso |
-| `TOOL_ERROR` | Fallo / timeout |
-| `QUERY_SCOPE_INCOMPLETE` | Faltan inputs de alcance |
-| `ENTITY_UNRESOLVED` | Entidad no canónica |
-| `ABSENCE_CONFIRMED` | Ausencia confirmada por regla (EB) |
+| Estado en IES | Origen OP | Significado breve |
+|---------------|-----------|-------------------|
+| `DATA_AVAILABLE` | `ACQUIRED_OK` | Datos de negocio disponibles/transportados |
+| `DATA_NOT_FOUND` | `ACQUIRED_EMPTY` | Búsqueda OK; sin filas; **≠** ausencia afirmada |
+| `SOURCE_NOT_INTEGRATED` | igual | No integrado; **≠** inexistencia empresarial |
+| `SOURCE_RESTRICTED` | igual | Inaccesible por permiso; **≠** “no existe” |
+| `TOOL_ERROR` | igual | Fallo / timeout; **≠** vacío; **≠** ausencia |
+| `QUERY_SCOPE_INCOMPLETE` | igual | Faltan inputs de alcance |
+| `ENTITY_UNRESOLVED` | igual | Entidad no canónica |
 
-El IES **declara** la salud resultante; no reejecuta tools.
+`ABSENCE_CONFIRMED` **no** es `execution_status`: vive en `absence_state` del hecho/observación tipificada por el EB y el IES solo lo proyecta ahí.  
+El IES **declara** la salud resultante; no reejecuta tools; no recalcula cobertura constitucional (proyecta `COV_*` del Snapshot/Motor-EB).
 
 ---
 
@@ -616,7 +644,8 @@ Limitaciones usan `statement_token` + `statement_reference` + alcance tipificado
 | `comparison_with_official` | Sí |
 
 **Nunca reemplaza silenciosamente al oficial.**  
-El histórico real de las fuentes no se modifica por reevaluación.
+El histórico real de las fuentes no se modifica por reevaluación (Constitución VI).  
+Una impugnación / IES `ALTERNATIVE` **no cambia** la autoría ni la procedencia histórica (`content_author_id`, `extracted_by`, `triggered_by`, `source.system`) de las observaciones/hechos del Snapshot de origen; solo registra overrides y vínculo al oficial.
 
 ---
 
@@ -632,8 +661,10 @@ El histórico real de las fuentes no se modifica por reevaluación.
 | `CONFLICTED` | Emisión válida con `COV_DATA_CONFLICT` |
 | `NO_KNOWLEDGE` | Emisión válida con `COV_NO_KNOWLEDGE` |
 | `EXPIRED` | Fuera de vigencia |
-| `SUPERSEDED` | Reemplazado por versión posterior |
+| `SUPERSEDED` | Reemplazado por versión posterior del **IES** (`status` de ciclo de vida) |
 | `INVALID` | Falló validación estructural/integridad |
+
+> **Namespaces distintos:** `status = SUPERSEDED` (ciclo de vida del IES, este §15) **≠** `conflicts[].resolution_status = SUPERSEDED` (§9, propiedad Evidence Builder). Son conceptos no intercambiables; no usar uno para inferir el otro.
 
 ## Transiciones permitidas
 
@@ -698,7 +729,10 @@ INVALID → terminal (nueva generación = nuevo ies_id)
 
 - La proyección **no modifica** el IES.  
 - **No** crea `ies_version` nueva.  
-- Todos los canales consumen el **mismo** `ies_id`.
+- Todos los canales consumen el **mismo** `ies_id`.  
+- **No** crea, eleva, reduce ni reinterpreta `materiality` (solo consume proyección).  
+- **No** suaviza ni omite `COV_NO_KNOWLEDGE` / `NO_CONOZCO`.  
+- **No** colapsa `TOOL_ERROR`, `DATA_NOT_FOUND` o `SOURCE_*` entre sí.
 
 | Canal | Puede resumir por referencias controladas | Debe conservar siempre |
 |-------|-------------------------------------------|------------------------|
@@ -739,6 +773,18 @@ SQL; payloads crudos completos; secretos; herramientas; conexiones; fuentes oper
 
 Toda hipótesis futura debe citar IDs del IES.  
 El IES no contiene hipótesis.
+
+## Desconocimiento (C5)
+
+El Reasoning Engine **no** convierte `COV_NO_KNOWLEDGE` / `NO_CONOZCO`, bancos vacíos, `TOOL_ERROR`, `SOURCE_NOT_INTEGRATED`, `SOURCE_RESTRICTED` ni `DATA_NOT_FOUND` en hipótesis sustantivas de negocio.  
+Hipótesis solo sobre evidencias/hechos **ya presentes** en el IES, con soporte citado.  
+`CONOZCO_PARCIALMENTE` **no** autoriza completar vacíos.
+
+## Materialidad (C4)
+
+El Reasoning Engine **solo consume** `materiality` / `highest_materiality_detected` proyectados.  
+**Prohibido** crear, elevar, reducir o reinterpretar materialidad.  
+Confidence alta, severity crítica o priority no autorizan reasignar `MAT_*`.
 
 ---
 
@@ -824,7 +870,8 @@ Pregunta ilustrativa: «¿Por qué cayó Puebla?» (el IES no responde causalmen
     "failed_tools": [],
     "unresolved_entities": [],
     "incomplete_scopes": [],
-    "blocking_limitations": ["lim_deltas"]
+    "blocking_limitations": ["lim_deltas"],
+    "highest_materiality_detected": "MATERIALITY_NOT_ASSESSED"
   },
 
   "executive_summary_facts": [
@@ -874,9 +921,9 @@ Pregunta ilustrativa: «¿Por qué cayó Puebla?» (el IES no responde causalmen
       "absence_state": null,
       "validity": "valid_in_snapshot",
       "priority": 1,
-      "materiality": "HIGH",
-      "applied_materiality_rule_id": "mat_rule_financial_deviation_v1_ilustrativa",
-      "materiality_ruleset_version": "mat_rs_ilustrativo_1",
+      "materiality": "MATERIALITY_NOT_ASSESSED",
+      "applied_materiality_rule_id": null,
+      "materiality_ruleset_version": null,
       "traceability": {
         "snapshot_id": "snap_caseA_v1",
         "bundle_id": "kb_caseA_ilustrativo"
@@ -885,7 +932,7 @@ Pregunta ilustrativa: «¿Por qué cayó Puebla?» (el IES no responde causalmen
       "illustrative_values": {
         "venta_mes_A_t": 120.0,
         "venta_mes_B_t": 95.0,
-        "note": "FICTICIO / ILUSTRATIVO"
+        "note": "FICTICIO / ILUSTRATIVO — materiality no evaluada (sin ruleset calibrado)"
       }
     },
     {
@@ -907,9 +954,9 @@ Pregunta ilustrativa: «¿Por qué cayó Puebla?» (el IES no responde causalmen
       "absence_state": null,
       "validity": "valid_in_snapshot",
       "priority": 2,
-      "materiality": "HIGH",
-      "applied_materiality_rule_id": "mat_rule_financial_deviation_v1_ilustrativa",
-      "materiality_ruleset_version": "mat_rs_ilustrativo_1",
+      "materiality": "MATERIALITY_NOT_ASSESSED",
+      "applied_materiality_rule_id": null,
+      "materiality_ruleset_version": null,
       "traceability": { "snapshot_id": "snap_caseA_v1" },
       "model_projections": ["financiero"],
       "illustrative_values": { "note": "FICTICIO / ILUSTRATIVO" }
@@ -929,9 +976,9 @@ Pregunta ilustrativa: «¿Por qué cayó Puebla?» (el IES no responde causalmen
       "explained_variance_pct": null,
       "scope": { "plant": "Puebla", "domain": "arr" },
       "causal_status": "NON_CAUSAL",
-      "materiality": "HIGH",
-      "applied_materiality_rule_id": "mat_rule_financial_deviation_v1_ilustrativa",
-      "materiality_ruleset_version": "mat_rs_ilustrativo_1",
+      "materiality": "MATERIALITY_NOT_ASSESSED",
+      "applied_materiality_rule_id": null,
+      "materiality_ruleset_version": null,
       "traceability": { "snapshot_id": "snap_caseA_v1" }
     },
     {
@@ -946,9 +993,9 @@ Pregunta ilustrativa: «¿Por qué cayó Puebla?» (el IES no responde causalmen
       "explained_variance_pct": null,
       "scope": { "plant": "Puebla", "domain": "igf" },
       "causal_status": "NON_CAUSAL",
-      "materiality": "HIGH",
-      "applied_materiality_rule_id": "mat_rule_financial_deviation_v1_ilustrativa",
-      "materiality_ruleset_version": "mat_rs_ilustrativo_1",
+      "materiality": "MATERIALITY_NOT_ASSESSED",
+      "applied_materiality_rule_id": null,
+      "materiality_ruleset_version": null,
       "traceability": { "snapshot_id": "snap_caseA_v1" }
     }
   ],
@@ -968,9 +1015,9 @@ Pregunta ilustrativa: «¿Por qué cayó Puebla?» (el IES no responde causalmen
       "validity": "valid_in_snapshot",
       "coverage_token": "COV_PARTIAL_KNOWLEDGE",
       "coverage_state": "CONOZCO_PARCIALMENTE",
-      "materiality": "HIGH",
-      "applied_materiality_rule_id": "mat_rule_financial_deviation_v1_ilustrativa",
-      "materiality_ruleset_version": "mat_rs_ilustrativo_1",
+      "materiality": "MATERIALITY_NOT_ASSESSED",
+      "applied_materiality_rule_id": null,
+      "materiality_ruleset_version": null,
       "related_conflict_ids": []
     }
   ],
@@ -1126,7 +1173,8 @@ Pregunta: «¿En qué etapa está el folio 421?»
     "failed_tools": [],
     "unresolved_entities": ["folio:421"],
     "incomplete_scopes": [],
-    "blocking_limitations": ["lim_folio_status"]
+    "blocking_limitations": ["lim_folio_status"],
+    "highest_materiality_detected": "MATERIALITY_NOT_ASSESSED"
   },
 
   "executive_summary_facts": [
@@ -1234,15 +1282,16 @@ Pregunta: «¿En qué etapa está el folio 421?»
 7. Los hechos apuntan a observaciones (vía Snapshot/Bundle).  
 8. Las evidencias apuntan a hechos existentes.  
 9. Los diagnósticos apuntan a reglas y a evidence/facts existentes.  
-10. Los conflictos abiertos permanecen visibles.  
-11. La proyección de canal no modifica ni versiona el IES.  
+10. Los conflictos `OPEN` / `UNDER_REVIEW` permanecen visibles; Tipo E en esos estados no se omite.  
+11. La proyección de canal no modifica ni versiona el IES.
 12. Ausencia no se infiere de un vacío.  
 13. Correlación no se presenta como causalidad.  
 14. Confianza alta no elimina trazabilidad.  
+14b. El IES no inventa `content_author_id`; `extracted_by` ≠ autor; `triggered_by` ≠ fuente; impugnación no altera autoría histórica.
 15. `COV_NO_KNOWLEDGE` / `NO_CONOZCO` es resultado válido.  
 16. `CONF_TYPE_E_GOVERNANCE` nunca se suaviza ni se omite del resumen.  
 17. Severidad ≠ tipo de conflicto.  
-18. Materiality se proyecta; no se recalcula en el IES.  
+18. Materiality se proyecta (`MAT_*` \| `MATERIALITY_NOT_ASSESSED`); no se recalcula en el IES; `highest_materiality_detected` es max determinista de `MAT_*` ya evaluados.  
 19. Sin LLM en la construcción del IES.  
 20. Repetibilidad verificable bajo mismo Snapshot, esquema y rulesets (no absoluta).  
 21. `signature` v1.0 = `null`; huella ≠ firma digital.
@@ -1257,13 +1306,45 @@ Pregunta: «¿En qué etapa está el folio 421?»
 4. `knowledge_snapshot_version` presente.  
 5. Separación `executive_query_id` / `query_fingerprint` / `trace_id`.  
 6. Canal no crea nueva versión.  
-7. Materiality solo proyectada con `applied_materiality_rule_id` + `materiality_ruleset_version`.  
+7. Materiality solo proyectada (`MAT_*` o `MATERIALITY_NOT_ASSESSED`); `applied_materiality_rule_id` + `materiality_ruleset_version` solo si evaluada; IES/RE no calculan.  
 8. Resumen y statements vía tokens/referencias controladas; sin prosa causal libre.  
 9. Integridad: `signature: null`, `signature_status: NOT_IMPLEMENTED`.  
 10. Ejemplos A (`CONOZCO_PARCIALMENTE`) y B (`NO_CONOZCO`) con referencias internas válidas.  
 11. Banco de hechos presente en JSON ilustrativo A.  
 12. Sin declaración de madurez 100% ni firma digital implementada.  
-13. Estado documental: **APROBADO PARA CONGELAMIENTO CANDIDATO v1.0**.
+13. Estado documental: **IES v1.0 APROBADO PARA CONGELAMIENTO** (runtime pendiente).
+
+---
+
+# 23. Declaración de conformidad
+
+Este estándar se declara conforme a:
+
+- `DIRECTOR_IA_CONSTITUTION.md`  
+- `DIRECTOR_IA_EXECUTIVE_KNOWLEDGE_ENGINE.md`  
+- `02-EVIDENCE-BUILDER.md`  
+- `03-EXECUTIVE-KNOWLEDGE-STORE.md`  
+- `03A-OBSERVATION-PIPELINE.md`  
+- `03B-END-TO-END-REFERENCE-FLOWS.md`
+
+### Pendientes reportados (fuera del cierre normativo de propiedad/proyección C2–C5)
+
+1. Ruleset de materialidad calibrado (`materiality_ruleset_version` productivo) — **diferido**; hasta entonces `MATERIALITY_NOT_ASSESSED`.  
+2. Calibración `k`/`wi` — diferida.  
+3. Firma criptográfica final — diferida (`NOT_IMPLEMENTED`).  
+4. Diseño de Reasoning Engine y Channel Projection — fuera de alcance.  
+5. Canonicalización exacta — diferida.  
+6. **Runtime** del IES / pipeline N1–N4→Snapshot→IES — **PENDIENTE**.
+
+### Resultado de auditoría
+
+No conformidades críticas de la lista obligatoria: **corregidas en este documento**.  
+Ejemplos `CONOZCO_PARCIALMENTE` y `NO_CONOZCO`: presentes.  
+Referencias internas de ejemplos: validadas.  
+Auditorías C2–C5: reflejadas; higiene post-congelamiento aplicada.
+
+**IES v1.0 APROBADO PARA CONGELAMIENTO**  
+(**Runtime:** PENDIENTE.)
 
 ---
 
@@ -1292,6 +1373,18 @@ Prohibido: `COV_TOTAL_IGNORANCE`.
 
 Prohibido: usar severidad (`GRAVE`, etc.) como tipo.
 
+## Materialidad (catálogo del Motor §7A; IES solo proyecta)
+
+| Token | Uso |
+|-------|-----|
+| `MAT_LOW` | Impacto ejecutivo bajo (solo si ruleset calibrado) |
+| `MAT_MEDIUM` | Impacto ejecutivo medio (solo si ruleset calibrado) |
+| `MAT_HIGH` | Impacto ejecutivo alto (solo si ruleset calibrado) |
+| `MAT_CRITICAL` | Impacto ejecutivo crítico (solo si ruleset calibrado) |
+| `MATERIALITY_NOT_ASSESSED` | No evaluada (estado vigente sin ruleset calibrado) |
+
+Prohibido: tratar `HIGH` u otras etiquetas libres como tokens productivos; `MATERIALITY_NOT_ASSESSED` ≠ `MAT_LOW`.
+
 ## Integridad
 
 | Token / campo | Valor v1.0 |
@@ -1302,49 +1395,19 @@ Prohibido: usar severidad (`GRAVE`, etc.) como tipo.
 
 ---
 
-# Declaración de conformidad
-
-Este estándar se declara conforme a:
-
-- `DIRECTOR_IA_CONSTITUTION.md`  
-- `DIRECTOR_IA_EXECUTIVE_KNOWLEDGE_ENGINE.md`  
-- `02-EVIDENCE-BUILDER.md`  
-- `03-EXECUTIVE-KNOWLEDGE-STORE.md`  
-- `03A-OBSERVATION-PIPELINE.md`  
-- `03B-END-TO-END-REFERENCE-FLOWS.md`
-
-### Pendientes reportados (sin modificación fuera de alcance)
-
-1. **Architecture Index:** aún puede declarar `04-IES-STANDARD` como pendiente/no creado. **No se tocó** (esta auditoría solo permite modificar `04-IES-STANDARD.md`). Actualización del índice: **pendiente**.  
-2. Calibración `k`/`wi` — diferida.  
-3. Firma criptográfica final — diferida (`NOT_IMPLEMENTED`).  
-4. Diseño de Reasoning Engine y Channel Projection — fuera de alcance.  
-5. Canonicalización exacta — pendiente de congelamiento definitivo.
-
-### Resultado de auditoría
-
-No conformidades críticas de la lista obligatoria: **corregidas en este documento**.  
-Ejemplos `CONOZCO_PARCIALMENTE` y `NO_CONOZCO`: presentes.  
-Referencias internas de ejemplos: validadas.
-
-**APROBADO PARA CONGELAMIENTO CANDIDATO v1.0**
-
-(El congelamiento **definitivo** v1.0 queda sujeto a la lista de requisitos del encabezado.)
-
----
-
 # Control documental
 
 | Campo | Valor |
 |-------|--------|
 | Documento | `04-IES-STANDARD.md` |
 | Versión | 1.0 |
-| Estado | APROBADO PARA CONGELAMIENTO CANDIDATO v1.0 |
+| Estado | IES v1.0 APROBADO PARA CONGELAMIENTO |
 | Productor | IES Builder (diseño) |
 | Entrada | Knowledge Snapshot |
 | Hipótesis | Excluidas |
 | Firma digital | `signature: null` / `NOT_IMPLEMENTED` |
 | Calibración k/wi | Diferida |
-| Architecture Index | Pendiente de actualización (no modificado) |
-| Implementación | PENDIENTE |
+| Auditorías alineadas | C2 (`resolution_status`); C3 (identidad/procedencia); C4 (materiality); C5 (cobertura/adquisición) |
+| Architecture Index | v1.4+ (estado IES v1.0 APROBADO PARA CONGELAMIENTO) |
+| Runtime / implementación | PENDIENTE |
 | Commit | No realizado |

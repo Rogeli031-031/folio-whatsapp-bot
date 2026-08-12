@@ -37,12 +37,16 @@ Un **Knowledge Snapshot** versionado, inmutable una vez persistido, apto para pr
 
 - No calcula hechos, evidencias ni diagnósticos.
 - No clasifica conflictos ni tipifica ausencias de negocio.
+- No muta `conflicts[].resolution_status` ni ningún campo de resolución del Bundle (solo persiste lo emitido por el Evidence Builder).
 - No transforma, reinterpreta ni “mejora” el Knowledge Bundle.
+- No altera identidades de procedencia del Bundle (`content_author_id`, `extracted_by`, `triggered_by`, `source.system` / linaje).
+- No calcula, eleva, reduce ni reinterpreta `materiality` / `applied_materiality_rule_id` / `materiality_ruleset_version` (solo persiste lo recibido del Evidence Builder; Motor §7A / EB §11B).
+- No reinterpreta `knowledge_coverage`, `source_health` / AcquisitionStatus, tipificaciones de ausencia (`DATA_NOT_FOUND`, `ABSENCE_CONFIRMED`, `TOOL_ERROR`, `SOURCE_*`, etc.) ni las colapsa entre sí.
 - No llama al LLM.
 - No lee fuentes operacionales para inventar conocimiento.
 - No sustituye al Evidence Builder ni al IES.
 
-**Rol único:** validar integridad estructural del Bundle, versionar y persistir (append-only).
+**Rol único:** validar integridad estructural del Bundle, versionar y persistir (append-only). El linaje de autoría/procedencia se conserva bit-a-bit respecto al Bundle.
 
 ---
 
@@ -151,7 +155,8 @@ Esto **no** es un error arquitectónico: es el camino válido de desconocimiento
 2. El EKS no calcula, clasifica ni transforma.  
 3. Append-only.  
 4. Snapshot sin diagnósticos permitido bajo `NO_CONOZCO` / fuente no integrada / restringida / error de tool.  
-5. El Bundle persistido es bit-a-bit el producido por el EB (más metadatos de almacén).  
+5. El Bundle persistido es bit-a-bit el producido por el EB (más metadatos de almacén).
+6. Campos de materialidad se preservan sin mutación; `MATERIALITY_NOT_ASSESSED` no se “corrige” a `MAT_LOW` en almacén.  
 6. Sin LLM.  
 7. Trazabilidad completa vía `trace_id`.
 

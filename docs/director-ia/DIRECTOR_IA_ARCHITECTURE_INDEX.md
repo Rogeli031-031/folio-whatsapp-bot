@@ -4,7 +4,7 @@
 
 **Tipo:** Índice de navegación y propiedad documental  
 **Estado:** NORMATIVO (índice)  
-**Fecha:** 2026-08-05
+**Fecha:** 2026-08-12
 
 Este índice no redefine la Constitución. En conflicto, prevalece `docs/director-ia/DIRECTOR_IA_CONSTITUTION.md`.
 
@@ -19,7 +19,7 @@ Executive Knowledge Engine
         ↓
 Evidence Builder
         ↓
-IES                         ← pendiente (04-IES-STANDARD)
+IES Standard                ← Esquema v1.0 (Implementación pipeline pendiente)
         ↓
 Reasoning Engine            ← pendiente
         ↓
@@ -38,7 +38,7 @@ Question Request
   → Observation Records (si hay resultado de negocio)
   → Evidence Builder → Knowledge Bundle
   → Executive Knowledge Store (03) → Knowledge Snapshot
-  → [Futuro] proyección IES desde Snapshot
+  → Proyección IES desde Snapshot (Esquema definido; runtime pendiente)
 ```
 
 Ningún bypass de capas. Ningún dato crudo llega al IES directamente. Ningún LLM en Niveles 1–4.
@@ -50,12 +50,12 @@ Ningún bypass de capas. Ningún dato crudo llega al IES directamente. Ningún L
 | Orden | Documento | Propietario de | Estado |
 |------:|-----------|----------------|--------|
 | 0 | `DIRECTOR_IA_CONSTITUTION.md` | Identidad, niveles, cobertura, conflictos A–E, derechos, naturaleza IES, jerarquía | APROBADA |
-| 1 | `DIRECTOR_IA_EXECUTIVE_KNOWLEDGE_ENGINE.md` | Gobernanza del Motor; política de cobertura/IES; modelos mentales | Diseño normativo |
-| 2 | `02-EVIDENCE-BUILDER.md` | Ensamblaje N1–N4; ausencia afirmable; confianza mecánica; conflictos compuestos | APROBADO PARA DISEÑO DEL IES |
-| 2a | `03A-OBSERVATION-PIPELINE.md` | ObservationRecord unificado; AcquisitionStatus; pipeline de adquisición; resolución de entidades | Contrato operativo |
+| 1 | `DIRECTOR_IA_EXECUTIVE_KNOWLEDGE_ENGINE.md` | Gobernanza del Motor; política de cobertura/IES; modelos mentales; **política/catálogo materiality (`MAT_*`, `MATERIALITY_NOT_ASSESSED`)** | Diseño normativo |
+| 2 | `02-EVIDENCE-BUILDER.md` | Ensamblaje N1–N4; ausencia afirmable; confianza mecánica; conflictos compuestos; **mecánica de materiality** (si ruleset calibrado) | APROBADO PARA DISEÑO DEL IES |
+| 2a | `03A-OBSERVATION-PIPELINE.md` | ObservationRecord unificado; AcquisitionStatus (técnico; ≠ verdad empresarial / ≠ `ABSENCE_CONFIRMED`); pipeline de adquisición; resolución de entidades | Contrato operativo |
 | 3 | `03-EXECUTIVE-KNOWLEDGE-STORE.md` | Persistencia append-only del Knowledge Bundle; Knowledge Snapshot | Contrato de almacén |
 | 3b | `03B-END-TO-END-REFERENCE-FLOWS.md` | Flujos de referencia end-to-end (Casos A/B) | Validación contractual |
-| 4 | `04-IES-STANDARD` *(pendiente)* | Esquema de producto IES | No creado |
+| 4 | `04-IES-STANDARD.md` | Esquema de producto IES | IES v1.0 APROBADO PARA CONGELAMIENTO |
 | — | `DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md` | Inventario de fuentes | Complemento |
 | F1 | `DIRECTOR_IA_V2_FASE_1_VERACIDAD.md` | Catálogo/veracidad (entrada) | Código soporte parcial |
 | F2 | `DIRECTOR_IA_V2_FASE_2_PLANNER.md` | Plan de intents/dominios (entrada) | Código soporte parcial |
@@ -72,7 +72,7 @@ Ningún bypass de capas. Ningún dato crudo llega al IES directamente. Ningún L
 | Evidence Builder | Ninguno (runtime pendiente) | **No** — solo especificación |
 | Observation Pipeline (03A) | Ninguno (runtime pendiente) | **No** |
 | Executive Knowledge Store (03) | Ninguno (runtime pendiente) | **No** |
-| IES Standard | Ninguno | **No** — no diseñado aún |
+| IES Standard | Ninguno (runtime pendiente) | **No** — especificación escrita; runtime pendiente |
 | Reasoning Engine | OpenAI solo en chat legado (fuera de N1–N4 oficiales) | **No** como capa constitucional |
 | Capabilities (Fase 1) | `lib/director-ia-capabilities.js` + early-return en chat | **No** implementa Constitución, EKE ni Evidence Builder. Solo soporte parcial de veracidad/catálogo. |
 | Planner (Fase 2) | `lib/director-ia-planner.js` (debug en chat) | **No** implementa Constitución, EKE ni Evidence Builder. Solo produce Plan. |
@@ -82,7 +82,7 @@ Ningún bypass de capas. Ningún dato crudo llega al IES directamente. Ningún L
 ### Declaración explícita (obligatoria)
 
 **Capabilities, Planner y Tool Orchestrator no implementan todavía la Constitución, el Executive Knowledge Engine ni el Evidence Builder.**  
-Son productores de *entrada* (catálogo, Plan, Tool Plan). El ensamblaje N1–N4, el Knowledge Bundle y el IES permanecen pendientes de implementación conforme a los documentos propietarios.
+Son productores de *entrada* (catálogo, Plan, Tool Plan). El ensamblaje N1–N4, el Knowledge Bundle y el runtime del IES permanecen pendientes de implementación conforme a los documentos propietarios.
 
 La columna anterior se denomina **“Código relacionado / soporte parcial”** (no “Implementación en código”), para evitar sugerir conformidad constitucional completa.
 
@@ -93,22 +93,25 @@ La columna anterior se denomina **“Código relacionado / soporte parcial”** 
 | Contrato | Documento propietario |
 |----------|------------------------|
 | ObservationRecord (campos unificados) | `03A-OBSERVATION-PIPELINE.md` |
-| AcquisitionStatus | `03A-OBSERVATION-PIPELINE.md` |
-| Regla de afirmación de ausencia (`ABSENCE_CONFIRMED`) | `02-EVIDENCE-BUILDER.md` (EB aplica; OP no determina) |
+| AcquisitionStatus | `03A-OBSERVATION-PIPELINE.md` (técnico; no determina verdad empresarial) |
+| Regla de afirmación de ausencia (`ABSENCE_CONFIRMED`) | `02-EVIDENCE-BUILDER.md` (EB aplica; OP no determina; **≠** AcquisitionStatus) |
+| Tipificación `DATA_NOT_FOUND` / elevación a ausencia | `02-EVIDENCE-BUILDER.md` §10 |
+| Knowledge Coverage (`CONOZCO`…`NO_CONOZCO`) | Constitución (estados) + Motor §9 (política/agregación); EB aplica; EKS persiste; IES proyecta `COV_*` |
+| Tokens `COV_*` | `04-IES-STANDARD.md` (proyección 1:1 de los cuatro estados constitucionales; sin quinto estado) |
 | Knowledge Bundle | `03-EXECUTIVE-KNOWLEDGE-STORE.md` (forma persistida); producido por Evidence Builder |
 | Knowledge Snapshot | `03-EXECUTIVE-KNOWLEDGE-STORE.md` |
 | Confianza Fs/R/Cb/Cs/Cb_ov | Constitución (epistemología) + Evidence Builder (mecánica; `k`/`wi` pendientes) |
-| Cobertura CONOZCO… | Constitución + Motor |
-| Producto IES | Futuro `04-IES-STANDARD` bajo Constitución IX |
+| Materiality (`MAT_*` / `MATERIALITY_NOT_ASSESSED`) | Motor §7A (política/catálogo); Evidence Builder §11B (asignación mecánica si ruleset); EKS solo persiste; IES solo proyecta; RE/canal solo consumen |
+| Producto IES | `04-IES-STANDARD.md` bajo Constitución IX |
 
 ---
 
 # 5. Invariantes del índice
 
-1. No hay implementación del Motor/Evidence Builder/EKS/OP en código productivo de ensamblaje.
+1. No hay implementación del Motor/Evidence Builder/EKS/OP/IES en código productivo de ensamblaje.
 2. Fases 1–3 = soporte parcial de entrada, no sustitutos del pipeline.
 3. El EKS recibe Knowledge Bundle N1–N4 (no solo observaciones).
-4. El IES futuro consume Knowledge Snapshot, no fuentes operacionales.
+4. El IES consume Knowledge Snapshot, no fuentes operacionales.
 5. `NO_CONOZCO` es resultado válido, no error arquitectónico.
 
 ---
@@ -118,7 +121,7 @@ La columna anterior se denomina **“Código relacionado / soporte parcial”** 
 | Campo | Valor |
 |-------|--------|
 | Documento | `DIRECTOR_IA_ARCHITECTURE_INDEX.md` |
-| Versión | 1.1 |
-| Estado | APROBADO COMO ÍNDICE TRAS AUDITORÍA E2E |
-| Dependencia | Constitución; EKE; Evidence Builder; 03; 03A; 03B |
+| Versión | 1.4 |
+| Estado | APROBADO COMO ÍNDICE (incluye propiedad cobertura/adquisición C5) |
+| Dependencia | Constitución; EKE; Evidence Builder; 03; 03A; 03B; 04 |
 | Implementación del pipeline completo | PENDIENTE |

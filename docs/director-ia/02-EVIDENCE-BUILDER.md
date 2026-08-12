@@ -113,16 +113,26 @@ Una **Observación** es el registro atómico de lo que una herramienta devolvió
 | `lineage` | Sí | Linaje para independencia (§14) |
 | `traceability` | Sí | Encadenamiento a plan + tool_plan + pregunta |
 
-## Objeto `source` (ampliado)
+## Objeto `source` (ampliado; identidades poseídas por OP)
+
+El Evidence Builder **consume** ObservationRecords de `03A` y **preserva** las identidades de procedencia **sin reinterpretarlas ni inventarlas**.
 
 | Campo | Obligatorio | Descripción |
 |-------|-------------|-------------|
 | `tool_id` | Sí | Identificador de herramienta del registry |
 | `domain` | Sí | Dominio asociado |
-| `system` | Sí | Sistema emisor |
-| `author_id` | Sí | Identificador del autor o productor del dato cuando la fuente lo aporta; si la tool no expone autor, se registra el identificador técnico de producción declarado por la tool; nunca se omite el campo |
-| `author_role` | **No (opcional)** | Rol del autor cuando exista |
+| `system` | Sí | Sistema/repositorio de origen (`source.system`) |
+| `content_author_id` | Condicional / nullable | Autor/emisor original del contenido; `null` = no aplicable o no resoluble (**nunca** “autor inexistente”) |
+| `author_role` | **No (opcional)** | Rol del autor del contenido cuando exista |
+| `author_id` | No (compatibilidad) | Ambiguo históricamente; si aparece, debe alinearse a `content_author_id` y **nunca** a `extracted_by` |
 | `channel` | No | Canal de captura si aplica |
+
+Identidades de ciclo (nivel ObservationRecord; no sustituyen a `source.system` ni a `content_author_id`):
+
+| Campo | Obligatorio | Descripción |
+|-------|-------------|-------------|
+| `extracted_by` | Sí | Componente/tool que realizó la adquisición técnica; **nunca** autor del contenido |
+| `triggered_by` | Sí | Actor/proceso que originó la ejecución/consulta; **nunca** fuente de la afirmación |
 
 ## Reglas de Nivel 1 (aplicación)
 
@@ -130,8 +140,11 @@ Una **Observación** es el registro atómico de lo que una herramienta devolvió
 2. No combinar semánticamente.  
 3. No inferir.  
 4. No corregir silenciosamente.  
-5. Conservar origen y linaje.  
-6. Tipificar calidad y ausencia sin convertirlas en valor de negocio.
+5. Conservar origen y linaje (incl. `content_author_id`, `extracted_by`, `triggered_by`, `source.system`).  
+6. Tipificar calidad y ausencia sin convertirlas en valor de negocio.  
+7. No presentar `extracted_by` como autor.  
+8. No convertir `triggered_by` en fuente de la afirmación.  
+9. No inventar `content_author_id` cuando sea `null`.
 
 ---
 
@@ -194,7 +207,7 @@ La dimensión **Cb** no cuenta menciones: cuenta **linajes independientes** que 
 
 ### Independencia de linaje
 
-Dos observaciones son independientes para corroboración solo si sus `lineage` difieren en origen productivo relevante (sistema, tool, autor/`author_id`, o cadena de captura), no por mera repetición del mismo payload.
+Dos observaciones son independientes para corroboración solo si sus `lineage` difieren en origen productivo relevante (`source.system`, `extracted_by`, `content_author_id` cuando exista, o cadena de captura), no por mera repetición del mismo payload. `triggered_by` no define por sí solo un linaje de contenido.
 
 ### Saturación
 
@@ -268,35 +281,71 @@ Las evidencias se ensamblan con `applied_rule` identificable.
 
 ---
 
-# 10. Estados de ausencia
+# 10. Estados de ausencia y tipificación de no-valor
 
-Los estados de ausencia tipifican **por qué no hay valor de negocio**, sin colapsarlos.  
+Los estados tipifican **por qué no hay valor de negocio**, sin colapsarlos.  
 **Propietario de esta tipificación operativa:** este documento.  
-**Política de cobertura CONOZCO…:** Motor / Constitución (no se redefine aquí).
+**AcquisitionStatus (transporte técnico):** Observation Pipeline (`03A`) — el EB **consume**, no redefine.  
+**Política de cobertura CONOZCO…:** Motor / Constitución (el EB **aplica**, no redefine).
 
-| Estado | Significado | ¿Puede generar afirmación de ausencia en Nivel 2? |
-|--------|-------------|-----------------------------------------------------|
-| `ABSENCE_CONFIRMED` | La fuente integrada respondió de forma válida que el fenómeno no está presente (vacío comprobado bajo contrato de la tool) | **Sí — único estado que puede generar hecho de ausencia** |
-| `DATA_NOT_FOUND` | Búsqueda ejecutada; no hay filas/coincidencias; no se afirma “no existe el fenómeno” como hecho negativo genérico | No como hecho negativo; puede mapear a observación `empty`; solo pasa a afirmación de ausencia si la regla de la tool eleva el caso a `ABSENCE_CONFIRMED` |
-| `SOURCE_NOT_INTEGRATED` | Dominio/tool no integrado | No — ausencia **no comprobable**; confianza 0.00 en ese alcance (cláusula NO_CONOZCO) |
-| `SOURCE_RESTRICTED` | Fuente inaccesible por permiso/rol | No — inaccesible; puede activar NO_CONOZCO en ese alcance |
-| `TOOL_ERROR` | Error, fallo de herramienta o **tiempo de espera agotado** | No — fallo tipificado |
-| `QUERY_SCOPE_INCOMPLETE` | Faltan inputs de alcance (periodo, planta, filtros) | No — pregunta abierta / cobertura parcial |
-| `ENTITY_UNRESOLVED` | Entidad ambigua o no resuelta | No — no afirmar hechos sobre entidad canónica |
+## 10.1 Mapa AcquisitionStatus → tipificación EB
+
+| AcquisitionStatus (OP) | Tipificación / uso en EB | ¿Afirma ausencia? |
+|------------------------|--------------------------|-------------------|
+| `ACQUIRED_OK` | Observaciones de negocio; hechos positivos posibles | No (afirmación positiva, no ausencia) |
+| `ACQUIRED_EMPTY` | Tipificación `DATA_NOT_FOUND` (vacío técnico) | **No** automáticamente; solo si se eleva a `ABSENCE_CONFIRMED` |
+| `SOURCE_NOT_INTEGRATED` | Ausencia no comprobable; límite / pregunta abierta | No |
+| `SOURCE_RESTRICTED` | Inaccesible; puede activar `NO_CONOZCO` en alcance | No |
+| `TOOL_ERROR` | Fallo tipificado (incl. timeout) | No |
+| `QUERY_SCOPE_INCOMPLETE` | Pregunta abierta; no concluir alcance faltante | No |
+| `ENTITY_UNRESOLVED` | Sin hechos sobre entidad canónica inferida | No |
+
+`ABSENCE_CONFIRMED` **no** es AcquisitionStatus: es tipificación del EB sobre un vacío ya adquirido.
+
+## 10.2 Catálogo de tipificación (ausencia / no-valor)
+
+| Estado | Significado | ¿Puede generar afirmación de ausencia en Nivel 2? | ¿Hecho sustantivo positivo? |
+|--------|-------------|-----------------------------------------------------|-----------------------------|
+| `ABSENCE_CONFIRMED` | Fenómeno no presente, vacío comprobado bajo contrato de la tool | **Sí — único** | Solo hecho **negativo** de ausencia autorizado |
+| `DATA_NOT_FOUND` | Búsqueda OK; sin filas/coincidencias | No (salvo elevación explícita) | No |
+| `SOURCE_NOT_INTEGRATED` | Dominio/tool no integrado | No | No |
+| `SOURCE_RESTRICTED` | Inaccesible por permiso/rol | No | No |
+| `TOOL_ERROR` | Error / timeout | No | No |
+| `QUERY_SCOPE_INCOMPLETE` | Faltan inputs de alcance | No | No |
+| `ENTITY_UNRESOLVED` | Entidad ambigua o no resuelta | No | No |
+
+## 10.3 Elevación `DATA_NOT_FOUND` / `ACQUIRED_EMPTY` → `ABSENCE_CONFIRMED`
+
+Todas las condiciones siguientes son **necesarias** (política Motor + mecánica EB; sin umbrales de negocio nuevos aquí):
+
+1. Tool/dominio **integrado** (no `SOURCE_NOT_INTEGRATED`).  
+2. Adquisición técnica exitosa con vacío (`ACQUIRED_EMPTY` / `DATA_NOT_FOUND`), **no** `TOOL_ERROR` ni `SOURCE_RESTRICTED`.  
+3. Alcance de consulta **completo** para la afirmación (planta, periodo, entidad/filtros exigidos por el contrato de la tool).  
+4. Entidad en `RESOLVED` cuando el contrato de la tool lo exige.  
+5. El **contrato de la tool** declara que ese vacío, bajo ese alcance, **prueba inexistencia** del fenómeno consultado (consulta exhaustiva en el sentido del contrato).  
+6. Existe regla versionada del EB (`applied_absence_rule_id`) que eleva el caso a `ABSENCE_CONFIRMED`.
+
+Si falta cualquiera → permanece `DATA_NOT_FOUND` (o el AcquisitionStatus original).  
+**`DATA_NOT_FOUND` ≠ `ABSENCE_CONFIRMED`.**  
+**`TOOL_ERROR` ≠ `DATA_NOT_FOUND` ≠ `ABSENCE_CONFIRMED`.**
 
 ### Reglas
 
 1. **Solo `ABSENCE_CONFIRMED` puede generar una afirmación de ausencia** en Nivel 2.  
 2. En Nivel 2 **no** se usa “registro no encontrado” como hecho negativo.  
-3. `DATA_NOT_FOUND` ≠ `SOURCE_NOT_INTEGRATED` ≠ cero.  
-4. `TOOL_ERROR` incluye tiempo de espera agotado; no se interpreta como vacío de negocio.
+3. `DATA_NOT_FOUND` ≠ `SOURCE_NOT_INTEGRATED` ≠ cero ≠ ausencia empresarial.  
+4. `TOOL_ERROR` incluye tiempo de espera agotado; no se interpreta como vacío de negocio.  
+5. Cobertura del Bundle: aplicar política Motor §9 (agregación multi-fuente); conflictos abiertos **no** se ocultan porque falte otra fuente.  
+6. `CONOZCO_PARCIALMENTE` **no** autoriza completar vacíos con LLM ni con inferencia del Builder.
 
 ---
 
 # 11. Conflictos compuestos
 
 **Tipos A–E (referencia constitucional; no redefinición).**  
-Primero el tipo; después severidad e impacto. No promediar ni conciliar arbitrariamente. Un conflicto permanece abierto hasta evidencia suficiente; **no se declara resuelto por simple ponderación**.
+Primero el tipo; después severidad e impacto. No promediar ni conciliar arbitrariamente. Un conflicto permanece `OPEN` (o `UNDER_REVIEW`) hasta evidencia suficiente; **no se declara `RESOLVED` por simple ponderación**.
+
+**Propiedad del estado de resolución:** este documento (Evidence Builder) es el **único propietario** de `resolution_status` y de las transiciones válidas. El EKS solo persiste el valor emitido en el Knowledge Bundle. El IES solo proyecta ese valor; **no** cambia estados de resolución.
 
 ## Objeto de conflicto compuesto (propiedad de este documento)
 
@@ -305,15 +354,89 @@ Primero el tipo; después severidad e impacto. No promediar ni conciliar arbitra
 | `conflict_id` | Identificador |
 | `primary_type` | Tipo A \| B \| C \| D \| E (clasificación principal constitucional) |
 | `secondary_types` | Lista opcional de tipos concurrentes |
-| `weight_assessment` | Evaluación ponderada de severidad/impacto (**informativa**; no resuelve el conflicto) |
-| `resolution_status` | `abierto` \| `resuelto` (resuelto solo con evidencia suficiente; nunca por ponderación sola) |
+| `weight_assessment` | Evaluación ponderada de severidad/impacto (**informativa**; **nunca** resuelve ni autoriza transición) |
+| `resolution_status` | Exactamente uno de: `OPEN` \| `UNDER_REVIEW` \| `RESOLVED` \| `SUPERSEDED` |
+| `applied_resolution_rule_id` | Condicional: **obligatorio** si `resolution_status=RESOLVED` |
+| `resolution_supporting_fact_ids` | Condicional: hechos que justifican el cierre (`RESOLVED`) |
+| `resolution_supporting_evidence_ids` | Condicional: evidencias nuevas/suficientes que justifican el cierre (`RESOLVED`) |
 | `interpretation_constraint` | Restricción de lenguaje/uso para el IES y el Reasoning Engine |
 | `governance_escalation` | Obligatoria/contundente cuando `primary_type` o `secondary_types` incluye **E** |
 
+### Estados de `resolution_status` (enum exacto; propietario: Evidence Builder)
+
+| Estado | `meaning` | `allowed_transition_from` | `required_evidence` | `required_rule` | `audit_fields` |
+|--------|-----------|---------------------------|---------------------|-----------------|----------------|
+| `OPEN` | Conflicto tipificado y vigente; no cerrado | *(estado inicial al tipificar)*; también desde `UNDER_REVIEW` si la revisión no cierra | Tipificación A–E con hechos/fuentes en tensión | Regla de tipificación del Builder (no regla de cierre) | `conflict_id`, `primary_type`, `severity`, `facts_in_tension` / equivalentes Bundle |
+| `UNDER_REVIEW` | En revisión institucional; **no** reduce severidad; **no** oculta Tipo E | `OPEN` | Registro de apertura de revisión (trazable); sin exigir cierre | Regla/gobernanza de revisión (no de resolución) | `conflict_id`, motivo/trazabilidad de revisión; conserva `severity` y Tipo E |
+| `RESOLVED` | Cerrado con evidencia **nueva/suficiente** que justifica el cierre | `OPEN`, `UNDER_REVIEW` | Evidencia nueva/suficiente + referencias a hechos y evidencias que justifican el cierre | `applied_resolution_rule_id` **obligatorio** | `applied_resolution_rule_id`, `resolution_supporting_fact_ids`, `resolution_supporting_evidence_ids`, `conflict_id` |
+| `SUPERSEDED` | Superado por evidencia o ciclo posterior; **no equivale** a `RESOLVED` | `OPEN`, `UNDER_REVIEW`, `RESOLVED` | Referencia al conflicto/ciclo/evidencia que lo sustituye | Regla de supersesión (distinta de regla de resolución) | `conflict_id` supersesor o referencia de ciclo; estado previo |
+
+### Prohibiciones de transición (inválidas)
+
+1. `OPEN` → `RESOLVED` **solo** por `weight_assessment` / peso de fuente.  
+2. `OPEN` → `SUPERSEDED` para **esconder** un conflicto (sin evidencia/ciclo sucesor trazable).  
+3. `UNDER_REVIEW` → `RESOLVED` **sin** evidencia nueva/suficiente y sin `applied_resolution_rule_id`.  
+4. Cualquier cambio de `resolution_status` efectuado por **IES** o **EKS** (solo EB emite el estado en el Bundle).  
+5. Tratar `SUPERSEDED` como si fuera `RESOLVED`.  
+6. Usar `UNDER_REVIEW` para bajar severidad u omitir Tipo E.
+
 ### Tipo E
 
-Si hay Tipo E: no minimizar; conservar en estructuras del IES los elementos exigidos por Constitución V (el Builder no inventa exigencias adicionales ni las suaviza).
+Si hay Tipo E: no minimizar; no suavizar.  
+Conflictos Tipo E en `OPEN` o `UNDER_REVIEW` **permanecen obligatoriamente visibles** en el Bundle, en el Snapshot EKS y en toda proyección IES (incluidas proyecciones de canal futuras).  
+Conservar en estructuras del IES los elementos exigidos por Constitución V (el Builder no inventa exigencias adicionales ni las suaviza).
 
+### `weight_assessment`
+
+Informativo. Nunca autoriza `RESOLVED`. Nunca oculta ni archiva conflictos.
+
+---
+
+# 11B. Materialidad (mecánica de ensamblaje)
+
+**Política y catálogo `MAT_*` / `MATERIALITY_NOT_ASSESSED`:** Motor (`DIRECTOR_IA_EXECUTIVE_KNOWLEDGE_ENGINE.md` §7A).  
+**Este documento** aplica la mecánica cuando exista ruleset calibrado; **no** redefine el catálogo ni fija umbrales/`k`/`wi`.
+
+## Separación
+
+- `confidence` ≠ `materiality` ≠ `severity` ≠ `priority`.  
+- Prohibido derivar `MAT_*` solo desde confianza alta, severidad crítica o priority sin **regla explícita** del ruleset de materialidad.
+
+## Dónde nace / se asigna
+
+| Objeto | Rol de materiality |
+|--------|--------------------|
+| N2 Hecho | **Locus primario de evaluación** (si hay ruleset) o `MATERIALITY_NOT_ASSESSED` |
+| N3 Evidencia | **Deriva/preserva** desde hechos soporte (p. ej. máximo determinista de `MAT_*` evaluados) o `MATERIALITY_NOT_ASSESSED`; no evaluación libre |
+| N4 Diagnóstico | **Deriva** desde facts/evidence soporte bajo regla de rollup del ruleset, o `MATERIALITY_NOT_ASSESSED` |
+| Conflicto compuesto | **No** sustituye `severity`; no asignar `MAT_*` por ser Tipo E/`GRAVE` sin regla; puede referenciar materiality de hechos en tensión |
+| Pregunta abierta | Usa `priority` (orden); **no** requiere `materiality` |
+| Knowledge Bundle | **Preserva** valores emitidos por N2–N4 |
+| IES | **Solo proyecta** (ver `04`) |
+| EKS | **Solo persiste** |
+| Reasoning Engine / Channel Projection | **Solo consumen**; prohibido modificar |
+
+## Campos (cuando el objeto lleva materiality)
+
+| Campo | Obligatorio | Descripción |
+|-------|-------------|-------------|
+| `materiality` | Sí (si el objeto declara el campo) | Uno de `MAT_LOW` \| `MAT_MEDIUM` \| `MAT_HIGH` \| `MAT_CRITICAL` \| `MATERIALITY_NOT_ASSESSED` |
+| `applied_materiality_rule_id` | Condicional | Obligatorio si `materiality` ∈ `MAT_*`; **null** si `MATERIALITY_NOT_ASSESSED` |
+| `materiality_ruleset_version` | Condicional | Versión del ruleset si evaluado; **null** / omitido si no evaluado |
+
+## Sin ruleset calibrado
+
+Emitir `MATERIALITY_NOT_ASSESSED`.  
+No usar ejemplos ilustrativos como regla productiva.  
+No degradar a `MAT_LOW`.
+
+## `NO_CONOZCO`
+
+Sin hechos/evidencias evaluables: no inventar `MAT_*`. Bancos vacíos sin materialidad ficticia.
+
+## Impugnación
+
+No mutar materialidad histórica del Bundle/Snapshot persistido; nueva evaluación = nuevo ensamblaje versionado trazable (Constitución VI / Motor §7A).
 ---
 
 # 12. Preguntas abiertas neutrales
@@ -356,17 +479,22 @@ Cada observación declara `lineage` suficiente para decidir independencia **seg�
 ### Elementos mínimos de linaje
 
 - `tool_id`;
-- `system`;
-- `author_id` (dentro de `source`);
+- `system` (`source.system`);
+- `content_author_id` (nullable; no inventar);
+- `extracted_by`;
+- `triggered_by`;
 - `author_role` (opcional);
 - identificadores de captura/periodo;
 - referencia a `raw_result_ref`.
 
 ### Reglas
 
-- Mismo `author_id` + misma tool + mismo payload → un solo linaje (repetición/propagación).  
+- Mismo `content_author_id` + mismo `extracted_by` + mismo payload → un solo linaje (repetición/propagación), salvo independencia demostrable de `source.system`/cadena.  
+- `extracted_by` no cuenta como autor del contenido.  
+- `triggered_by` no cuenta como fuente de la afirmación.  
 - Confirmación transaccional de sistema distinto puede ser linaje independiente.  
-- Consenso humano sin independencia de captura no multiplica Cb.
+- Consenso humano sin independencia de captura no multiplica Cb.  
+- `content_author_id = null` se preserva tal cual (sistema sin autor humano, o humano no resoluble).
 
 ---
 
@@ -390,16 +518,19 @@ Cada observación declara `lineage` suficiente para decidir independencia **seg�
 3. Ningún diagnóstico sin regla y soporte.  
 4. El Evidence Builder no genera hipótesis.  
 5. Solo `ABSENCE_CONFIRMED` afirma ausencia.  
-6. `DATA_NOT_FOUND` ≠ `SOURCE_NOT_INTEGRATED` ≠ cero.  
+6. `DATA_NOT_FOUND` ≠ `SOURCE_NOT_INTEGRATED` ≠ cero ≠ `ABSENCE_CONFIRMED`; `TOOL_ERROR` ≠ vacío.  
 7. Conflictos compuestos no se resuelven por `weight_assessment` solo.  
-8. Tipo E no se omite ni se suaviza.  
+8. Tipo E no se omite ni se suaviza; Tipo E `OPEN`/`UNDER_REVIEW` permanece visible.  
 9. Preguntas abiertas neutrales ≠ hipótesis.  
 10. Estructuras del IES sin hipótesis; IES inmutable para el Reasoning Engine.  
 11. No inventar fuentes no integradas.  
-12. `author_id` siempre presente en `source`; `author_role` opcional.  
+12. Identidades de procedencia: `content_author_id` (nullable), `extracted_by`, `triggered_by`, `source.system` — distintas; EB las preserva sin reinterpretar.  
 13. Tiempo de espera agotado tipificado como `TOOL_ERROR`, no como vacío.  
 14. Conformidad arquitectónica con Constitución y Motor.  
-15. Sin decisiones de política propias; sin redefinir conceptos constitucionales.
+15. Sin decisiones de política propias; sin redefinir conceptos constitucionales.  
+16. `resolution_status` ∈ {`OPEN`,`UNDER_REVIEW`,`RESOLVED`,`SUPERSEDED`}; único propietario = Evidence Builder.  
+17. `RESOLVED` exige evidencia + `applied_resolution_rule_id` + refs a hechos/evidencias; `SUPERSEDED` ≠ `RESOLVED`.  
+18. EKS/IES no cambian `resolution_status`.
 
 ---
 

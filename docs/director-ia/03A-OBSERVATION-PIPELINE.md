@@ -56,7 +56,7 @@ El Observation Pipeline (OP) convierte resultados de ejecución de tools (y esta
 | Estado | Significado | ¿Genera ObservationRecord de negocio? |
 |--------|-------------|----------------------------------------|
 | `ACQUIRED_OK` | Tool respondió con payload usable | Sí (si hay filas/métricas/eventos transportables) |
-| `ACQUIRED_EMPTY` | Tool OK; resultado vacío / sin filas (`DATA_NOT_FOUND` técnico) | Opcional: registro de transporte vacío tipificado **sin** afirmar ausencia de fenómeno; el EB decide `ABSENCE_CONFIRMED` |
+| `ACQUIRED_EMPTY` | Tool OK; resultado vacío / sin filas (candidato a tipificación EB `DATA_NOT_FOUND`) | Opcional: registro de transporte vacío tipificado **sin** afirmar ausencia de fenómeno; el EB decide si eleva a `ABSENCE_CONFIRMED` |
 | `SOURCE_NOT_INTEGRATED` | Dominio/tool no integrado | **No** |
 | `SOURCE_RESTRICTED` | Sin permiso / inaccesible | **No** |
 | `TOOL_ERROR` | Error, fallo o tiempo de espera agotado | **No** |
@@ -64,6 +64,29 @@ El Observation Pipeline (OP) convierte resultados de ejecución de tools (y esta
 | `ENTITY_UNRESOLVED` | Sujeto no resoluble de forma canónica | **No** ObservationRecord sobre entidad canónica inventada |
 
 `TOOL_ERROR`, `SOURCE_RESTRICTED` y `SOURCE_NOT_INTEGRATED` **no son observaciones de negocio**.
+
+### Lo que AcquisitionStatus no es
+
+| Prohibición | Norma |
+|-------------|--------|
+| `ABSENCE_CONFIRMED` como AcquisitionStatus | **Prohibido** — tipificación exclusiva del Evidence Builder |
+| Determinar Knowledge Coverage constitucional | **Prohibido** — política Motor; aplicación EB; proyección IES |
+| Determinar verdad empresarial (“no existe”) | **Prohibido** — solo EB bajo §10 de `02` |
+| Colapsar timeout en vacío | `TOOL_ERROR` ≠ `ACQUIRED_EMPTY` |
+
+### Proyección hacia IES `source_health.execution_status` (nombres)
+
+| AcquisitionStatus (OP) | Proyección habitual en IES |
+|------------------------|----------------------------|
+| `ACQUIRED_OK` | `DATA_AVAILABLE` |
+| `ACQUIRED_EMPTY` | `DATA_NOT_FOUND` |
+| `SOURCE_NOT_INTEGRATED` | `SOURCE_NOT_INTEGRATED` |
+| `SOURCE_RESTRICTED` | `SOURCE_RESTRICTED` |
+| `TOOL_ERROR` | `TOOL_ERROR` |
+| `QUERY_SCOPE_INCOMPLETE` | `QUERY_SCOPE_INCOMPLETE` |
+| `ENTITY_UNRESOLVED` | `ENTITY_UNRESOLVED` |
+
+`ABSENCE_CONFIRMED` se proyecta en el **hecho/observación tipificada** (`absence_state`), **no** como `execution_status` de adquisición.
 
 ---
 
@@ -84,22 +107,41 @@ Campos aprobados (obligatorios salvo indicación):
 |-------|-------------|-------------|
 | `source.tool_id` | Sí | Tool del registry |
 | `source.domain` | Sí | Dominio del catálogo |
-| `source.system` | Sí | Sistema emisor |
+| `source.system` | Sí | Sistema/repositorio de origen del contenido. **No** es autor, ni extractor, ni disparador. |
 | `source.source_instance_id` | Sí | Instancia concreta de origen (p. ej. plant+mes+extractor) |
 | `source.source_family` | Sí | Familia de linaje para independencia (corroboración) |
 | `source.origin_event_id` | Condicional | Evento/origen primario si aplica |
-| `source.author_id` | Sí | Autor o productor del **dato**; si la tool no expone autor humano, id técnico de producción; nunca omitir |
-| `source.author_role` | No (opcional) | Rol del autor cuando exista |
+| `source.content_author_id` | Condicional (nullable) | Identidad del **autor/emisor original del contenido** cuando exista y sea resoluble. Ver semántica de `null` abajo. |
+| `source.author_role` | No (opcional) | Rol del autor del contenido cuando exista |
+| `source.author_id` | No (compatibilidad) | Nombre histórico **ambiguo**. No es `extracted_by` ni `triggered_by`. Si se emite, **debe** coincidir con `content_author_id` cuando este no es `null`. **Prohibido** rellenarlo con `extracted_by` o id técnico de tool para “no omitir autor”. |
 | `source.derived_from` | No | Referencias a otros observation_id / origin si es derivado técnico sin reinterpretar |
 
-## Disparo vs autoría
+## Identidades de procedencia (no sustituibles entre sí)
 
 | Campo | Obligatorio | Descripción |
 |-------|-------------|-------------|
-| `triggered_by` | Sí | Quién/qué **disparó** la adquisición en este ciclo (usuario, sistema, reevaluación). **Distinto** de `source.author_id`. |
+| `content_author_id` | Condicional / `null` permitido | Autor/emisor original del **contenido** (humano u orgánico atribuible). Vive en `source.content_author_id`. |
+| `extracted_by` | Sí | Herramienta/componente que realizó la **adquisición técnica** (p. ej. tool/extractor). **Nunca** se presenta como autor del contenido. |
+| `triggered_by` | Sí | Actor o proceso que **originó** la ejecución/consulta de este ciclo. **Distinto** de autor y de extractor. |
+| `source.system` | Sí | Sistema/repositorio de origen. |
 
-- `author_id` = productor del dato en la fuente.  
-- `triggered_by` = actor del request/ciclo.  
+### Semántica de `content_author_id = null`
+
+| Situación | Representación |
+|-----------|----------------|
+| Contenido generado por sistema sin autor humano | `content_author_id = null`; `extracted_by` = componente; `source.system` = sistema emisor |
+| Contenido humano cuyo autor **no pudo resolverse** | `content_author_id = null` + declaración de no resolución en linaje/metadatos; **no** inventar id |
+| Autor humano resoluble | `content_author_id` = id del autor |
+
+**`content_author_id = null` nunca significa** “afirmar que el autor no existió” ni “contenido sin origen”. Significa **autor no aplicable o no resoluble** en este registro.  
+**Prohibido:** usar `extracted_by`, `triggered_by` o `source.tool_id` como sustituto de `content_author_id`.
+
+### Disparo vs autoría vs extracción
+
+- `content_author_id` = autor del contenido (si resoluble).  
+- `extracted_by` = quién extrajo/adquirió técnicamente.  
+- `triggered_by` = quién disparó el ciclo.  
+- `source.system` = de qué sistema proviene.  
 No se colapsan.
 
 ## Sujeto
@@ -138,7 +180,8 @@ Auditoría → `raw_payload_reference`.
 
 ### Lineage
 
-El linaje (`lineage`) se deriva/conserva a partir de `source.*`, `triggered_by`, `trace_id` y referencias `derived_from` para independencia de corroboración en el Evidence Builder. Ortografía: **lineage**.
+El linaje (`lineage`) se deriva/conserva a partir de `source.system`, `source.content_author_id`, `extracted_by`, `triggered_by`, `trace_id`, `source.tool_id` y referencias `derived_from` para independencia de corroboración en el Evidence Builder. Ortografía: **lineage**.  
+El OP **normaliza y conserva** estas identidades; **no** las reinterpreta ni las inventa.
 
 ---
 
@@ -198,15 +241,17 @@ Estas salidas alimentan al Evidence Builder; **no** al EKS directamente.
 
 # 7. Invariantes
 
-1. Separación AcquisitionStatus / ObservationRecord.  
+1. Separación AcquisitionStatus / ObservationRecord / Knowledge Coverage.  
 2. Sin ObservationRecord de negocio para `TOOL_ERROR`, `SOURCE_RESTRICTED`, `SOURCE_NOT_INTEGRATED`.  
-3. OP no determina `ABSENCE_CONFIRMED`.  
-4. `author_id` ≠ `triggered_by`.  
-5. Payload original inmutable; `normalized_payload` + `raw_payload_reference`.  
-6. Entidades: `RESOLVED` \| `AMBIGUOUS` \| `UNRESOLVED` con original, candidatos, regla y confianza.  
-7. Ortografía **lineage**.  
-8. Sin LLM.  
-9. Sin escritura al EKS.
+3. OP no determina `ABSENCE_CONFIRMED` ni estados constitucionales `CONOZCO…`.  
+3b. `TOOL_ERROR` ≠ `ACQUIRED_EMPTY` ≠ `ABSENCE_CONFIRMED`.  
+4. `content_author_id`, `extracted_by`, `triggered_by` y `source.system` son conceptos distintos; ninguno sustituye a otro.  
+5. `content_author_id = null` ≠ “autor inexistente”; no rellenar con `extracted_by`.  
+6. Payload original inmutable; `normalized_payload` + `raw_payload_reference`.  
+7. Entidades: `RESOLVED` \| `AMBIGUOUS` \| `UNRESOLVED` con original, candidatos, regla y confianza.  
+8. Ortografía **lineage**.  
+9. Sin LLM.  
+10. Sin escritura al EKS.
 
 ---
 
@@ -215,7 +260,7 @@ Estas salidas alimentan al Evidence Builder; **no** al EKS directamente.
 | Campo | Valor |
 |-------|--------|
 | Documento | `03A-OBSERVATION-PIPELINE.md` |
-| Versión | 1.1 |
-| Estado | CONTRATO APROBADO TRAS AUDITORÍA E2E |
+| Versión | 1.3 |
+| Estado | CONTRATO APROBADO TRAS AUDITORÍA E2E + ALINEACIÓN C3/C5 |
 | Implementación | PENDIENTE |
-| Nota | Este contrato unifica ObservationRecord; el EB consume estos registros y aplica ausencia/ensamblaje |
+| Nota | AcquisitionStatus ≠ Knowledge Coverage ≠ `ABSENCE_CONFIRMED`; identidades de procedencia preservadas sin reinterpretar |

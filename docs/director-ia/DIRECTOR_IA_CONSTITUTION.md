@@ -253,7 +253,7 @@ Todo concepto normativo tiene **un único documento propietario**. Los documento
 | Identidad, líneas rojas, niveles 1–5 (nombres y reglas), cobertura CONOZCO…, conflictos A–E, derechos del usuario, regla de oro, naturaleza del IES, Reasoning Engine (Nivel 5) | Esta Constitución |
 | Propósito del Motor, contrato de entrada/salida, modelos mentales, política de cobertura, IES oficial/alternativo, preguntas abiertas (política), fallos de conocimiento, criterios de aceptación del Motor | Executive Knowledge Engine |
 | Contratos de ensamblaje (Observación ampliada, linaje, ausencia tipificada, confianza calibrable, corroboración, conflictos compuestos, lenguaje por nivel de ensamblaje) | Evidence Builder |
-| Esquema y versión de producto IES | Documento de IES (futuro; gobernado por Motor + Constitución IX) |
+| Esquema y versión de producto IES | `04-IES-STANDARD.md` (IES v1.0 APROBADO PARA CONGELAMIENTO; gobernado por Motor + Constitución IX; runtime pendiente) |
 | Hipótesis y razonamiento subordinado | Reasoning Engine (bajo capítulo V) |
 | Presentación multiinterfaz | Interfaces (bajo VI.4 y IX) |
 

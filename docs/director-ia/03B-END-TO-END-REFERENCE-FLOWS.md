@@ -38,7 +38,7 @@
 6. No se transforma error técnico en hecho.  
 7. Cada ID conserva trazabilidad (`trace_id`, ids de capa).  
 8. El EKS no modifica el Knowledge Bundle.  
-9. El IES futuro consume un Snapshot, no las fuentes operacionales.  
+9. El IES consume un Snapshot, no las fuentes operacionales (esquema en `04-IES-STANDARD.md`; runtime pendiente).  
 10. El camino `NO_CONOZCO` es un resultado válido, no un error arquitectónico.
 
 ---
@@ -344,7 +344,7 @@ traceability: { question, plan, tool_plan, acquisition: SOURCE_NOT_INTEGRATED }
 
 No se detectaron nuevas no conformidades críticas tras las correcciones de esta versión 1.1.
 
-**Resultado:** APROBADO PARA DISEÑAR EL IES (`04-IES-STANDARD`).
+**Resultado:** Flujos de referencia vigentes. `04-IES-STANDARD.md` existe; IES v1.0 **APROBADO PARA CONGELAMIENTO**; runtime del IES **PENDIENTE**.
 
 ---
 
@@ -354,9 +354,9 @@ No se detectaron nuevas no conformidades críticas tras las correcciones de esta
 |-------|--------|
 | Documento | `03B-END-TO-END-REFERENCE-FLOWS.md` |
 | Versión | 1.1 |
-| Estado | APROBADO PARA DISEÑAR EL IES |
+| Estado | APROBADO COMO FLUJOS DE REFERENCIA (IES v1.0 congelado; runtime pendiente) |
 | Cifras | Solo ILUSTRATIVAS / FICTICIAS |
 | Integración ARR/IGF | Parcial / on-demand (no completa) |
 | Elementos futuros ficticios | `SAP_S4`, `get_sales_metrics`, `get_ledger_status`, inventario ERP — excluidos / etiquetados |
 | Hipótesis N5 | Excluidas |
-| Siguiente | Diseño de `04-IES-STANDARD` |
+| Estado de `04-IES-STANDARD.md` | IES v1.0 APROBADO PARA CONGELAMIENTO (runtime PENDIENTE) |
