@@ -112,7 +112,7 @@ En esos casos:
 - `diagnoses` puede ser `[]`;
 - no se exige evidencia ni hechos sustantivos de negocio;
 - el Snapshot permanece auditable y declara fuente faltante, restringida o fallida;
-- el futuro IES puede proyectarse desde este Snapshot **sin diagnósticos**, declarando el límite.
+- el IES puede proyectarse desde este Snapshot **sin diagnósticos**, declarando el límite.
 
 Esto **no** es un error arquitectónico: es el camino válido de desconocimiento controlado (Constitución IV).
 
@@ -144,7 +144,7 @@ Esto **no** es un error arquitectónico: es el camino válido de desconocimiento
 | Observation Pipeline | No escribe en EKS; produce ObservationRecords / AcquisitionStatus hacia EB |
 | Evidence Builder | **Único productor** del Knowledge Bundle |
 | EKS | Valida, versiona, persiste |
-| IES (futuro) | Consume **Snapshot**, no fuentes operacionales ni Tool Results crudos |
+| IES | Consume **Snapshot**, no fuentes operacionales ni Tool Results crudos (`04-IES-STANDARD.md` v1.0 APROBADO PARA CONGELAMIENTO; runtime pendiente) |
 | Reasoning Engine | No escribe en EKS; lee IES derivado del Snapshot |
 
 ---
