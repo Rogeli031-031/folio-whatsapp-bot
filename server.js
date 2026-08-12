@@ -15526,28 +15526,107 @@ app.get("/api/arr/venta-serie", dashboardAuthMiddleware, async (req, res) => {
   const canalFilter =
     canalRaw === "casa" || canalRaw === "comisionista" ? canalRaw : "ambos";
 
+  /** Mismo mapeo nombre/clave que ARR clientes-mes / delta venta. */
+  const SQL_PROV_MAP = `
+    SELECT DISTINCT p.nombre AS prov_name,
+           UPPER(TRIM(p.nombre)) AS key_nombre,
+           UPPER(TRIM(COALESCE(p.clave, ''))) AS key_clave,
+           TRIM(ap.plant_code) AS ap_plant_code
+      FROM public.plantas p
+      JOIN arr.provincia_plants ap
+        ON UPPER(TRIM(ap.plant_code)) = UPPER(TRIM(p.nombre))
+        OR (p.clave IS NOT NULL AND TRIM(p.clave) <> '' AND UPPER(TRIM(ap.plant_code)) = UPPER(TRIM(p.clave)))
+     WHERE UPPER(TRIM(COALESCE(p.nombre, ''))) != 'CORPORATIVO'
+       AND UPPER(TRIM(COALESCE(p.clave, ''))) != 'CORPORATIVO'
+  `;
+
   const client = await pool.connect();
   try {
-    const provRes = await client.query("SELECT plant_code FROM arr.provincia_plants ORDER BY plant_code");
-    const provinciaPlantCodes = (provRes.rows || []).map((r) => (r.plant_code || "").trim()).filter(Boolean);
+    const mapRes = await client.query(SQL_PROV_MAP);
     const empNorm = normalizeAccents(empresa);
-    const matches = provinciaPlantCodes.filter((p) => {
-      const pNorm = normalizeAccents(p);
-      return empNorm === pNorm || empNorm.includes(pNorm) || pNorm.includes(empNorm);
+    const matchedRows = (mapRes.rows || []).filter((row) => {
+      const names = [row.prov_name, row.ap_plant_code, row.key_clave]
+        .map((x) => normalizeAccents(x || ""))
+        .filter(Boolean);
+      return names.some(
+        (n) => empNorm === n || empNorm.includes(n) || n.includes(empNorm)
+      );
     });
-    const plantCode = matches.length
-      ? matches.reduce((a, b) => (a.length >= b.length ? a : b))
-      : null;
-    if (!plantCode) {
+    // Preferir el match más largo (evita falsos positivos cortos).
+    matchedRows.sort((a, b) => {
+      const score = (r) =>
+        Math.max(
+          normalizeAccents(r.prov_name || "").length,
+          normalizeAccents(r.ap_plant_code || "").length
+        );
+      return score(b) - score(a);
+    });
+    if (!matchedRows.length) {
+      // Fallback: solo provincia_plants (como arr-clientes-mes).
+      const provRes = await client.query("SELECT plant_code FROM arr.provincia_plants ORDER BY plant_code");
+      const provinciaPlantCodes = (provRes.rows || []).map((r) => (r.plant_code || "").trim()).filter(Boolean);
+      const matches = provinciaPlantCodes.filter((p) => {
+        const pNorm = normalizeAccents(p);
+        return empNorm === pNorm || empNorm.includes(pNorm) || pNorm.includes(empNorm);
+      });
+      if (!matches.length) {
+        return res.status(404).json({ error: `No se encontró planta provincia para empresa "${empresa}"` });
+      }
+      const plantCodeFb = matches.reduce((a, b) => (a.length >= b.length ? a : b));
+      matchedRows.push({
+        prov_name: plantCodeFb,
+        ap_plant_code: plantCodeFb,
+        key_nombre: normalizeAccents(plantCodeFb),
+        key_clave: "",
+      });
+    }
+
+    const best = matchedRows[0];
+    const plantCode = String(best.ap_plant_code || best.prov_name || "").trim();
+    const plantAliases = [
+      ...new Set(
+        matchedRows
+          .flatMap((r) => [r.ap_plant_code, r.prov_name, r.key_clave])
+          .map((x) => String(x || "").trim())
+          .filter(Boolean)
+      ),
+    ];
+    if (!plantCode || !plantAliases.length) {
       return res.status(404).json({ error: `No se encontró planta provincia para empresa "${empresa}"` });
     }
 
+    const aliasUpper = [
+      ...new Set(
+        plantAliases.flatMap((a) => {
+          const u = String(a).toUpperCase();
+          const n = normalizeAccents(a);
+          return [u, n].filter(Boolean);
+        })
+      ),
+    ];
+    const aliasNames = [
+      ...new Set(matchedRows.flatMap((r) => [r.prov_name, r.ap_plant_code]).filter(Boolean)),
+    ];
+    /** Comparación sin tildes en SQL (Tehuacán ≡ Tehuacan). */
+    const SQL_STRIP = `translate(upper(trim(%COL%)), 'ÁÉÍÓÚÄËÏÖÜÑáéíóúäëïöüñ', 'AEIOUAEIOUNAEIOUAEIOUN')`;
+
     const bounds = await client.query(
-      `SELECT to_char(MIN(fecha), 'YYYY-MM-DD') AS min_f,
-              to_char(MAX(fecha), 'YYYY-MM-DD') AS max_f
-         FROM arr.ventas_diarias_cliente
-        WHERE UPPER(TRIM(plant_code)) = UPPER(TRIM($1))`,
-      [plantCode]
+      `WITH prov_map AS (${SQL_PROV_MAP})
+       SELECT to_char(MIN(v.fecha), 'YYYY-MM-DD') AS min_f,
+              to_char(MAX(v.fecha), 'YYYY-MM-DD') AS max_f
+         FROM arr.ventas_diarias_cliente v
+         LEFT JOIN prov_map pm
+           ON UPPER(TRIM(v.plant_code)) = pm.key_nombre
+           OR (pm.key_clave <> '' AND UPPER(TRIM(v.plant_code)) = pm.key_clave)
+           OR ${SQL_STRIP.replace("%COL%", "v.plant_code")} = ${SQL_STRIP.replace("%COL%", "pm.prov_name")}
+           OR (pm.key_clave <> '' AND ${SQL_STRIP.replace("%COL%", "v.plant_code")} = ${SQL_STRIP.replace("%COL%", "pm.key_clave")})
+        WHERE UPPER(TRIM(v.plant_code)) = ANY($1::text[])
+           OR ${SQL_STRIP.replace("%COL%", "v.plant_code")} = ANY($1::text[])
+           OR COALESCE(pm.prov_name, '') = ANY($2::text[])
+           OR COALESCE(pm.ap_plant_code, '') = ANY($2::text[])
+           OR ${SQL_STRIP.replace("%COL%", "COALESCE(pm.prov_name, '')")} = ANY($1::text[])
+           OR ${SQL_STRIP.replace("%COL%", "COALESCE(pm.ap_plant_code, '')")} = ANY($1::text[])`,
+      [aliasUpper, aliasNames]
     );
     const minF = pgCalendarDateToYmd(bounds.rows[0]?.min_f);
     const maxF = pgCalendarDateToYmd(bounds.rows[0]?.max_f);
@@ -15576,17 +15655,32 @@ app.get("/api/arr/venta-serie", dashboardAuthMiddleware, async (req, res) => {
     } else if (rangeOk === "1a") start.setUTCDate(end.getUTCDate() - 364);
     else if (rangeOk === "5a") start.setUTCFullYear(end.getUTCFullYear() - 5);
     else {
-      // todo
       const [y, m, d] = minF.split("-").map(Number);
       start.setUTCFullYear(y, m - 1, d);
     }
     const startStr = dateToPg(start);
     const endStr = maxF;
 
+    const plantMatchSql = (aliasCol) => `
+      UPPER(TRIM(${aliasCol})) = ANY($1::text[])
+      OR ${SQL_STRIP.replace("%COL%", aliasCol)} = ANY($1::text[])
+      OR COALESCE(pm.prov_name, '') = ANY($2::text[])
+      OR COALESCE(pm.ap_plant_code, '') = ANY($2::text[])
+      OR ${SQL_STRIP.replace("%COL%", "COALESCE(pm.prov_name, '')")} = ANY($1::text[])
+      OR ${SQL_STRIP.replace("%COL%", "COALESCE(pm.ap_plant_code, '')")} = ANY($1::text[])
+    `;
+    const provJoinSql = (aliasCol) => `
+      UPPER(TRIM(${aliasCol})) = pm.key_nombre
+      OR (pm.key_clave <> '' AND UPPER(TRIM(${aliasCol})) = pm.key_clave)
+      OR ${SQL_STRIP.replace("%COL%", aliasCol)} = ${SQL_STRIP.replace("%COL%", "pm.prov_name")}
+      OR (pm.key_clave <> '' AND ${SQL_STRIP.replace("%COL%", aliasCol)} = ${SQL_STRIP.replace("%COL%", "pm.key_clave")})
+    `;
+
     // Misma regla que el tablero ARR: categoría por cliente_categoria_mes del mes;
-    // si no hay fila, cae a canal de la venta (default Casa).
+    // ventas/descuentos vía prov_map (nombre o clave), no solo plant_code exacto.
     const r = await client.query(
-      `SELECT to_char(v.fecha::date, 'YYYY-MM-DD') AS fecha,
+      `WITH prov_map AS (${SQL_PROV_MAP})
+       SELECT to_char(v.fecha::date, 'YYYY-MM-DD') AS fecha,
               CASE
                 WHEN LOWER(TRIM(COALESCE(cat.canal, v.canal, 'Casa'))) LIKE '%comisionista%'
                   THEN 'COMISIONISTA'
@@ -15594,14 +15688,23 @@ app.get("/api/arr/venta-serie", dashboardAuthMiddleware, async (req, res) => {
               END AS canal_grp,
               ROUND((SUM(v.kg) / 1000.0)::numeric, 3) AS venta_ton
          FROM arr.ventas_diarias_cliente v
+         LEFT JOIN prov_map pm
+           ON ${provJoinSql("v.plant_code")}
          LEFT JOIN arr.cliente_categoria_mes cat
-           ON UPPER(TRIM(cat.plant_code)) = UPPER(TRIM(v.plant_code))
+           ON (
+                UPPER(TRIM(cat.plant_code)) = UPPER(TRIM(v.plant_code))
+                OR UPPER(TRIM(cat.plant_code)) = UPPER(TRIM(COALESCE(pm.ap_plant_code, '')))
+                OR UPPER(TRIM(cat.plant_code)) = UPPER(TRIM(COALESCE(pm.prov_name, '')))
+                OR ${SQL_STRIP.replace("%COL%", "cat.plant_code")} = ${SQL_STRIP.replace("%COL%", "v.plant_code")}
+                OR ${SQL_STRIP.replace("%COL%", "cat.plant_code")} = ${SQL_STRIP.replace("%COL%", "COALESCE(pm.ap_plant_code, '')")}
+                OR ${SQL_STRIP.replace("%COL%", "cat.plant_code")} = ${SQL_STRIP.replace("%COL%", "COALESCE(pm.prov_name, '')")}
+              )
           AND cat.year = EXTRACT(YEAR FROM v.fecha)::int
           AND cat.month = EXTRACT(MONTH FROM v.fecha)::int
           AND cat.cliente_norm = v.cliente_norm
-        WHERE UPPER(TRIM(v.plant_code)) = UPPER(TRIM($1))
-          AND v.fecha >= $2::date
-          AND v.fecha <= $3::date
+        WHERE v.fecha >= $3::date
+          AND v.fecha <= $4::date
+          AND (${plantMatchSql("v.plant_code")})
         GROUP BY v.fecha::date,
                  CASE
                    WHEN LOWER(TRIM(COALESCE(cat.canal, v.canal, 'Casa'))) LIKE '%comisionista%'
@@ -15609,12 +15712,12 @@ app.get("/api/arr/venta-serie", dashboardAuthMiddleware, async (req, res) => {
                    ELSE 'CASA'
                  END
         ORDER BY fecha ASC, canal_grp ASC`,
-      [plantCode, startStr, endStr]
+      [aliasUpper, aliasNames, startStr, endStr]
     );
 
-    // Descuento diario por canal (cliente_categoria_mes; sin fila ≡ Casa).
     const d = await client.query(
-      `SELECT to_char(d.fecha::date, 'YYYY-MM-DD') AS fecha,
+      `WITH prov_map AS (${SQL_PROV_MAP})
+       SELECT to_char(d.fecha::date, 'YYYY-MM-DD') AS fecha,
               CASE
                 WHEN LOWER(TRIM(COALESCE(cat.canal, 'Casa'))) LIKE '%comisionista%'
                   THEN 'COMISIONISTA'
@@ -15622,14 +15725,23 @@ app.get("/api/arr/venta-serie", dashboardAuthMiddleware, async (req, res) => {
               END AS canal_grp,
               ROUND(SUM(d.monto)::numeric, 2) AS descuento_mxn
          FROM arr.descuentos_diarios_cliente d
+         LEFT JOIN prov_map pm
+           ON ${provJoinSql("d.plant_code")}
          LEFT JOIN arr.cliente_categoria_mes cat
-           ON UPPER(TRIM(cat.plant_code)) = UPPER(TRIM(d.plant_code))
+           ON (
+                UPPER(TRIM(cat.plant_code)) = UPPER(TRIM(d.plant_code))
+                OR UPPER(TRIM(cat.plant_code)) = UPPER(TRIM(COALESCE(pm.ap_plant_code, '')))
+                OR UPPER(TRIM(cat.plant_code)) = UPPER(TRIM(COALESCE(pm.prov_name, '')))
+                OR ${SQL_STRIP.replace("%COL%", "cat.plant_code")} = ${SQL_STRIP.replace("%COL%", "d.plant_code")}
+                OR ${SQL_STRIP.replace("%COL%", "cat.plant_code")} = ${SQL_STRIP.replace("%COL%", "COALESCE(pm.ap_plant_code, '')")}
+                OR ${SQL_STRIP.replace("%COL%", "cat.plant_code")} = ${SQL_STRIP.replace("%COL%", "COALESCE(pm.prov_name, '')")}
+              )
           AND cat.year = EXTRACT(YEAR FROM d.fecha)::int
           AND cat.month = EXTRACT(MONTH FROM d.fecha)::int
           AND cat.cliente_norm = d.cliente_norm
-        WHERE UPPER(TRIM(d.plant_code)) = UPPER(TRIM($1))
-          AND d.fecha >= $2::date
-          AND d.fecha <= $3::date
+        WHERE d.fecha >= $3::date
+          AND d.fecha <= $4::date
+          AND (${plantMatchSql("d.plant_code")})
         GROUP BY d.fecha::date,
                  CASE
                    WHEN LOWER(TRIM(COALESCE(cat.canal, 'Casa'))) LIKE '%comisionista%'
@@ -15637,7 +15749,7 @@ app.get("/api/arr/venta-serie", dashboardAuthMiddleware, async (req, res) => {
                    ELSE 'CASA'
                  END
         ORDER BY fecha ASC, canal_grp ASC`,
-      [plantCode, startStr, endStr]
+      [aliasUpper, aliasNames, startStr, endStr]
     );
 
     const byFecha = new Map();
