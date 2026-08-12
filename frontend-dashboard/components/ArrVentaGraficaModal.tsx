@@ -87,6 +87,30 @@ function buildPath(
   return d;
 }
 
+/** Regresión lineal y = a + b·x sobre índices 0..n-1. */
+function linearTrend(values: number[]): { a: number; b: number } | null {
+  const n = values.length;
+  if (n < 2) return null;
+  let sumX = 0;
+  let sumY = 0;
+  let sumXY = 0;
+  let sumXX = 0;
+  for (let i = 0; i < n; i++) {
+    const x = i;
+    const y = values[i];
+    sumX += x;
+    sumY += y;
+    sumXY += x * y;
+    sumXX += x * x;
+  }
+  const denom = n * sumXX - sumX * sumX;
+  if (Math.abs(denom) < 1e-12) return null;
+  const b = (n * sumXY - sumX * sumY) / denom;
+  const a = (sumY - b * sumX) / n;
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+  return { a, b };
+}
+
 export default function ArrVentaGraficaModal({ token, empresa, onClose }: Props) {
   const [range, setRange] = useState<ArrVentaSerieRange>("1m");
   const [canal, setCanal] = useState<"casa" | "comisionista">("casa");
@@ -140,25 +164,39 @@ export default function ArrVentaGraficaModal({ token, empresa, onClose }: Props)
     const padT = 24;
     const padB = 44;
     const vals = series.map((s) => s.ton);
-    const minV = vals.length ? Math.min(...vals) : 0;
-    const maxV = vals.length ? Math.max(...vals) : 1;
+    const trend = linearTrend(vals);
+    const trendVals =
+      trend && vals.length >= 2
+        ? [trend.a, trend.a + trend.b * (vals.length - 1)]
+        : [];
+    const allForScale = [...vals, ...trendVals];
+    const minV = allForScale.length ? Math.min(...allForScale) : 0;
+    const maxV = allForScale.length ? Math.max(...allForScale) : 1;
     const span = Math.max(maxV - minV, 0.01);
     const yMin = Math.max(0, minV - span * 0.08);
     const yMax = maxV + span * 0.08;
     const ySpan = Math.max(yMax - yMin, 0.01);
     const innerW = W - padL - padR;
     const innerH = H - padT - padB;
+    const yOf = (ton: number) => padT + (1 - (ton - yMin) / ySpan) * innerH;
     const pts = series.map((s, i) => {
       const x =
         series.length <= 1 ? padL + innerW / 2 : padL + (i / (series.length - 1)) * innerW;
-      const y = padT + (1 - (s.ton - yMin) / ySpan) * innerH;
-      return { x, y, ...s };
+      return { x, y: yOf(s.ton), ...s };
     });
+    let trendLine: { x1: number; y1: number; x2: number; y2: number } | null = null;
+    if (trend && pts.length >= 2) {
+      trendLine = {
+        x1: pts[0].x,
+        y1: yOf(trend.a),
+        x2: pts[pts.length - 1].x,
+        y2: yOf(trend.a + trend.b * (pts.length - 1)),
+      };
+    }
     const ticks = 5;
     const yTicks = Array.from({ length: ticks }, (_, i) => {
       const v = yMin + (ySpan * i) / (ticks - 1);
-      const y = padT + (1 - (v - yMin) / ySpan) * innerH;
-      return { v, y };
+      return { v, y: yOf(v) };
     });
     const xLabelCount = Math.min(8, series.length);
     const xLabels: { i: number; label: string; x: number }[] = [];
@@ -173,7 +211,7 @@ export default function ArrVentaGraficaModal({ token, empresa, onClose }: Props)
         });
       }
     }
-    return { W, H, padL, padR, padT, padB, pts, yTicks, xLabels, yMin, yMax };
+    return { W, H, padL, padR, padT, padB, pts, yTicks, xLabels, yMin, yMax, trendLine };
   }, [series, range]);
 
   const lineColor = canal === "casa" ? "#ca8a04" : "#38bdf8";
@@ -238,6 +276,10 @@ export default function ArrVentaGraficaModal({ token, empresa, onClose }: Props)
           >
             Venta COMISIONISTA
           </button>
+          <span className="ml-auto inline-flex items-center gap-1.5 text-[11px] text-slate-400">
+            <span className="inline-block h-0.5 w-4 rounded bg-emerald-500" />
+            Línea de tendencia
+          </span>
         </div>
 
         <div className="min-h-0 flex-1 overflow-auto bg-[#f8fafc] p-3">
@@ -285,6 +327,29 @@ export default function ArrVentaGraficaModal({ token, empresa, onClose }: Props)
                 {areaPath && <path d={areaPath} fill={`url(#${fillId})`} />}
                 {linePath && (
                   <path d={linePath} fill="none" stroke={lineColor} strokeWidth="2.5" />
+                )}
+                {chart.trendLine && (
+                  <g>
+                    <line
+                      x1={chart.trendLine.x1}
+                      y1={chart.trendLine.y1}
+                      x2={chart.trendLine.x2}
+                      y2={chart.trendLine.y2}
+                      stroke="#16a34a"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                    />
+                    <text
+                      x={chart.trendLine.x2}
+                      y={chart.trendLine.y2 - 8}
+                      textAnchor="end"
+                      fontSize="11"
+                      fontWeight="600"
+                      fill="#15803d"
+                    >
+                      Tendencia
+                    </text>
+                  </g>
                 )}
                 {chart.pts.length > 0 && (
                   <circle
