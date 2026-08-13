@@ -101,7 +101,7 @@ El Motor de Conocimiento Ejecutivo convierte resultados de herramientas (y estad
 ## Mapa de responsabilidades (este documento)
 
 **Posee:** propósito del Motor; contrato conceptual de entrada/salida; modelos mentales; política de cobertura; producto IES oficial/alternativo; política de preguntas abiertas; principios de fallo de conocimiento; criterios de aceptación del Motor.  
-**No posee:** definiciones constitucionales; contratos de ensamblaje del Evidence Builder; esquema de producto IES detallado (propiedad de `04-IES-STANDARD.md`; IES v1.0 **APROBADO PARA CONGELAMIENTO**; runtime del IES **PENDIENTE**); Reasoning Engine; Interfaces; implementación.
+**No posee:** definiciones constitucionales; contratos de ensamblaje del Evidence Builder; esquema de producto IES detallado (propiedad de `04-IES-STANDARD.md`; IES v1.0 **APROBADO PARA CONGELAMIENTO**; runtime del IES **PENDIENTE**); contrato de Nivel 5 (propiedad de `05-REASONING-ENGINE.md`; RE v1.0 **APROBADO PARA CONGELAMIENTO**; runtime del RE **PENDIENTE**); Interfaces; implementación.
 
 ---
 
@@ -790,7 +790,7 @@ Las Fases 1–3 son **productores de entrada** al Motor; no son el Motor ni el E
 | Fecha de revisión | 2026-08-04 |
 | Documento auditado | `docs/director-ia/DIRECTOR_IA_EXECUTIVE_KNOWLEDGE_ENGINE.md` |
 | Resultado | **Conforme tras auditoría empresarial** (jerarquía Constitución→Motor→Evidence Builder→IES→Reasoning Engine→Interfaces; ausencia tipificada; sin redefinición constitucional; sin implementación; propiedad de contratos en Evidence Builder). |
-| Excepciones pendientes | (1) Calibración numérica Fs/R/Cb/Cs/Cb_ov — diferida. (2) Esquema de producto IES: `04-IES-STANDARD.md` existe; IES v1.0 **APROBADO PARA CONGELAMIENTO**; **runtime del IES PENDIENTE**. (3) Documento del Reasoning Engine — pendiente. (4) Ejecución real de tools e integración de dominios no integrados — fuera de este diseño. |
+| Excepciones pendientes | (1) Calibración numérica Fs/R/Cb/Cs/Cb_ov — diferida. (2) Esquema de producto IES: `04-IES-STANDARD.md` existe; IES v1.0 **APROBADO PARA CONGELAMIENTO**; **runtime del IES PENDIENTE**. (3) Contrato Reasoning Engine: `05-REASONING-ENGINE.md` v1.0 **APROBADO PARA CONGELAMIENTO**; **runtime del RE PENDIENTE**. (4) Ejecución real de tools e integración de dominios no integrados — fuera de este diseño. |
 | Prohibición de implementación | Queda **prohibido implementar** el Motor si reaparecen no conformidades críticas (Reasoning Engine antes del Nivel 5; Motor/Evidence Builder generando hipótesis; IES mutable; suavización de Tipo E; ausencia como cero; colapso `SOURCE_NOT_INTEGRATED`/`DATA_NOT_FOUND`; IES alternativo sin auditoría; Evidence Builder tomando decisiones de política). |
 
 ---

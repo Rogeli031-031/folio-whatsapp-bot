@@ -19,11 +19,11 @@ Executive Knowledge Engine
         ↓
 Evidence Builder
         ↓
-IES Standard                ← Esquema v1.0 (Implementación pipeline pendiente)
+IES Standard                ← Esquema v1.0 APROBADO PARA CONGELAMIENTO (runtime pendiente)
         ↓
-Reasoning Engine            ← pendiente
+Reasoning Engine            ← 05 v1.0 APROBADO PARA CONGELAMIENTO (runtime pendiente)
         ↓
-Interfaces                  ← pendiente
+Interfaces / Channel Projection ← pendiente (06)
 ```
 
 ### Cadena operativa de entrada (antes del Evidence Builder)
@@ -56,6 +56,7 @@ Ningún bypass de capas. Ningún dato crudo llega al IES directamente. Ningún L
 | 3 | `03-EXECUTIVE-KNOWLEDGE-STORE.md` | Persistencia append-only del Knowledge Bundle; Knowledge Snapshot | Contrato de almacén |
 | 3b | `03B-END-TO-END-REFERENCE-FLOWS.md` | Flujos de referencia end-to-end (Casos A/B) | Validación contractual |
 | 4 | `04-IES-STANDARD.md` | Esquema de producto IES | IES v1.0 APROBADO PARA CONGELAMIENTO |
+| 5 | `05-REASONING-ENGINE.md` | Nivel 5 — hipótesis/inferencia subordinada al IES; Reasoning Result / Run | **v1.0** — REASONING ENGINE v1.0 APROBADO PARA CONGELAMIENTO; **runtime PENDIENTE** |
 | — | `DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md` | Inventario de fuentes | Complemento |
 | F1 | `DIRECTOR_IA_V2_FASE_1_VERACIDAD.md` | Catálogo/veracidad (entrada) | Código soporte parcial |
 | F2 | `DIRECTOR_IA_V2_FASE_2_PLANNER.md` | Plan de intents/dominios (entrada) | Código soporte parcial |
@@ -73,7 +74,7 @@ Ningún bypass de capas. Ningún dato crudo llega al IES directamente. Ningún L
 | Observation Pipeline (03A) | Ninguno (runtime pendiente) | **No** |
 | Executive Knowledge Store (03) | Ninguno (runtime pendiente) | **No** |
 | IES Standard | Ninguno (runtime pendiente) | **No** — especificación escrita; runtime pendiente |
-| Reasoning Engine | OpenAI solo en chat legado (fuera de N1–N4 oficiales) | **No** como capa constitucional |
+| Reasoning Engine (`05`) | Chat legado (fuera del contrato N5 oficial; proveedor no normativo) | **No** — contrato congelado; runtime pendiente |
 | Capabilities (Fase 1) | `lib/director-ia-capabilities.js` + early-return en chat | **No** implementa Constitución, EKE ni Evidence Builder. Solo soporte parcial de veracidad/catálogo. |
 | Planner (Fase 2) | `lib/director-ia-planner.js` (debug en chat) | **No** implementa Constitución, EKE ni Evidence Builder. Solo produce Plan. |
 | Tool Orchestrator (Fase 3) | `lib/director-ia-tools.js`, `lib/director-ia-tool-orchestrator.js` (debug) | **No** implementa Constitución, EKE ni Evidence Builder. Solo declara Tool Plan; no ejecuta. |
@@ -103,16 +104,19 @@ La columna anterior se denomina **“Código relacionado / soporte parcial”** 
 | Confianza Fs/R/Cb/Cs/Cb_ov | Constitución (epistemología) + Evidence Builder (mecánica; `k`/`wi` pendientes) |
 | Materiality (`MAT_*` / `MATERIALITY_NOT_ASSESSED`) | Motor §7A (política/catálogo); Evidence Builder §11B (asignación mecánica si ruleset); EKS solo persiste; IES solo proyecta; RE/canal solo consumen |
 | Producto IES | `04-IES-STANDARD.md` bajo Constitución IX |
+| Reasoning Engine (N5) / Reasoning Result / Reasoning Run | `05-REASONING-ENGINE.md` (v1.0 congelado; no escribe EKS/IES; almacén Run pendiente) |
+| Channel Projection | Futuro `06` (pendiente) |
 
 ---
 
 # 5. Invariantes del índice
 
-1. No hay implementación del Motor/Evidence Builder/EKS/OP/IES en código productivo de ensamblaje.
+1. No hay implementación del Motor/Evidence Builder/EKS/OP/IES/RE oficial en código productivo de ensamblaje.
 2. Fases 1–3 = soporte parcial de entrada, no sustitutos del pipeline.
 3. El EKS recibe Knowledge Bundle N1–N4 (no solo observaciones).
 4. El IES consume Knowledge Snapshot, no fuentes operacionales.
 5. `NO_CONOZCO` es resultado válido, no error arquitectónico.
+6. El Reasoning Engine consume IES; no modifica IES/Bundle/Snapshot; no es fuente de verdad.
 
 ---
 
@@ -121,7 +125,7 @@ La columna anterior se denomina **“Código relacionado / soporte parcial”** 
 | Campo | Valor |
 |-------|--------|
 | Documento | `DIRECTOR_IA_ARCHITECTURE_INDEX.md` |
-| Versión | 1.4 |
-| Estado | APROBADO COMO ÍNDICE (incluye propiedad cobertura/adquisición C5) |
-| Dependencia | Constitución; EKE; Evidence Builder; 03; 03A; 03B; 04 |
+| Versión | 1.6 |
+| Estado | APROBADO COMO ÍNDICE (incluye `05` v1.0 congelado) |
+| Dependencia | Constitución; EKE; Evidence Builder; 03; 03A; 03B; 04; 05 |
 | Implementación del pipeline completo | PENDIENTE |
