@@ -2,10 +2,10 @@
 
 ## Almacén de conocimiento ejecutivo — contrato de persistencia
 
-**Documento:** `docs/director-ia/03-EXECUTIVE-KNOWLEDGE-STORE.md`  
-**Versión:** 1.1  
-**Estado:** CONTRATO APROBADO TRAS AUDITORÍA E2E  
-**Tipo:** Especificación de almacén (sin implementación)
+**Documento:** `docs/director-ia/03-EXECUTIVE-KNOWLEDGE-STORE.md`
+**Versión:** 1.2
+**Estado:** CONTRATO APROBADO TRAS AUDITORÍA E2E; realización física v1 registrada (D1–D9)
+**Tipo:** Especificación de almacén (realización física v1; sin runtime)
 
 ### Dependencia normativa
 
@@ -96,7 +96,7 @@ Tras validación estructural, el EKS materializa un **Knowledge Snapshot**:
 | `version` | Versión monotónica append-only |
 | `persisted_at` | Momento de persistencia |
 | `bundle` | Copia íntegra del Knowledge Bundle (sin mutación) |
-| `integrity` | Sello/hash o equivalente conceptual de integridad |
+| `integrity` | Digest criptográfico determinista sobre una representación canónica del Bundle persistido. El algoritmo específico **no** se congela en este contrato. **No** es firma digital del IES (`04` §16: huella ≠ firma). |
 
 ### Snapshot sin diagnósticos (permitido)
 
@@ -123,9 +123,9 @@ Esto **no** es un error arquitectónico: es el camino válido de desconocimiento
 | Operación | Comportamiento |
 |-----------|----------------|
 | `validate_structure` | Comprueba presencia de campos del Bundle; tipos; `trace_id`; no vacío conceptual del contenedor |
-| `append_snapshot` | Persiste nueva versión; no sobrescribe snapshots previos |
-| `get_snapshot` | Lectura por `snapshot_id` / `trace_id` |
-| `list_versions` | Historial append-only del ciclo o entidad de consulta |
+| `append_snapshot` | Persiste una **nueva** versión; no sobrescribe snapshots previos. El EKS asigna `version = max(version)+1` por `trace_id` en transacción con bloqueo (V2). Existe restricción `UNIQUE(trace_id, version)`. `snapshot_id` es opaco e inmutable. |
+| `get_snapshot` | Por `snapshot_id`: el Snapshot exacto. Por `trace_id`: la versión monotónica **máxima** de ese ciclo (G_LATEST). No fusiona versiones. |
+| `list_versions` | Historial append-only agrupado **solo** por `trace_id` (L_TRACE), ordenado por `version`. |
 
 ### Prohibiciones operativas
 
@@ -162,12 +162,40 @@ Esto **no** es un error arquitectónico: es el camino válido de desconocimiento
 
 ---
 
+# 7. Realización física v1 (D1–D9)
+
+Esta sección **no** redefine N1–N5 ni la Constitución. No introduce epistemología. No autoriza runtime por sí sola. Registra las decisiones físicas aprobadas por HUMAN_APPROVER (tarea `ARCH-EKS-PHYSICAL-DECISIONS-002`, G2). Evidencia: `ARCH-EKS-PHYSICAL-DECISIONS-001`, `IMPL-EKS-READINESS-002`.
+
+Los identificadores P1, R3, V2, G_LATEST, L_TRACE, M1, I_DIGEST, POOL_DEDICATED y O_EKS_FIRST son los de esa aprobación. **Prohibido** sustituirlos en implementación.
+
+| ID | Decisión aprobada | Significado contractual |
+|----|-------------------|-------------------------|
+| D1 | **P1** | El EKS v1 persiste en el **mismo motor de persistencia ya usado por la aplicación**, en **esquema y/o tablas nuevas**. No reutiliza tablas operacionales (folios, ARR, IGF, `director_ia_bitacora`, Delta Ingreso AI). No eleva un motor a norma constitucional. |
+| D2 | **R3** | Snapshot físico = columnas de metadatos de almacén (`snapshot_id`, `bundle_id`, `trace_id`, `version`, `persisted_at`, `integrity`) + **Bundle opaco** (copia íntegra, sin descomponer N2–N4 en tablas de verdad). |
+| D3 | **V2 + UNIQUE(trace_id, version)** | El EKS asigna `version` monotónica por `trace_id` (`max+1` bajo bloqueo). Restricción de unicidad `(trace_id, version)`. INSERT only; prohibido UPDATE/DELETE del Snapshot persistido; prohibido upsert que sobrescriba. |
+| D4 | **G_LATEST** | `get_snapshot(snapshot_id)` = exacto. `get_snapshot(trace_id)` = versión monotónica máxima de ese `trace_id`. No fusionar. |
+| D5 | **L_TRACE** | `list_versions` agrupa solo por `trace_id`. Planta/periodo/pregunta no son clave de almacén v1; viven dentro del Bundle. |
+| D6 | **M1** | El esquema EKS se crea con el patrón existente `sql/` + script de aplicación (`CREATE IF NOT EXISTS`) sobre **objetos nuevos**. No ALTER de tablas de producto. No DDL de bootstrap mezclado en el módulo de canal. |
+| D7 | **I_DIGEST** | `integrity` exige un **digest criptográfico determinista** sobre una **representación canónica** del Bundle persistido. El **algoritmo criptográfico específico no se congela** en este contrato (decisión de implementación). No es firma digital IES (`04` §16). |
+| D8 | **POOL_DEDICATED** | El runtime EKS usa pool o cliente **propio**, no el pool del bot WhatsApp/dashboard. Si D1/P1, puede compartir URL de conexión; no comparte el pool del canal. |
+| D9 | **O_EKS_FIRST** | El primer runtime EKS se valida contra **fixtures ilustrativos de `03B`** (cifras ficticias; no cobertura institucional). El Evidence Builder sigue siendo el **único productor** de Bundles de producción. Los fixtures no sustituyen al EB. |
+
+### Límites de esta realización
+
+1. Runtime **PENDIENTE**. Esta sección no implementa EKS.
+2. No nombra algoritmo de digest (D7).
+3. No congela un encoding de documento (p. ej. un tipo JSON de motor) como epistemología.
+4. No autoriza IMPL-EKS-001 ni ninguna tarea posterior.
+
+---
+
 # Control documental
 
 | Campo | Valor |
 |-------|--------|
 | Documento | `03-EXECUTIVE-KNOWLEDGE-STORE.md` |
-| Versión | 1.1 |
-| Estado | CONTRATO APROBADO TRAS AUDITORÍA E2E |
+| Versión | 1.2 |
+| Estado | CONTRATO APROBADO TRAS AUDITORÍA E2E; realización física v1 registrada (D1–D9) |
 | Implementación | PENDIENTE |
 | Calibración k/wi | No aplica (fuera de alcance del EKS) |
+| Firma digital IES | Fuera de alcance (`04`; D7 = huella, no firma) |
