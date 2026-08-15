@@ -1,0 +1,36 @@
+{
+  "meta": {
+    "source": "docs/director-ia/03B-END-TO-END-REFERENCE-FLOWS.md",
+    "case": "B",
+    "figures": "ILUSTRATIVAS / FICTICIAS",
+    "not_institutional_coverage": true,
+    "note": "NO_CONOZCO. Snapshot sin diagnósticos. SOURCE_NOT_INTEGRATED no es hecho de etapa."
+  },
+  "bundle": {
+    "bundle_id": "kb_caseB_ilustrativo",
+    "trace_id": "tr_caseB_folio421_ilustrativo",
+    "produced_at": "2026-08-15T00:00:00.000Z",
+    "producer": "evidence_builder",
+    "observations": [],
+    "facts": [],
+    "evidence": [],
+    "diagnoses": [],
+    "conflicts": [],
+    "open_questions": [
+      "¿Fuente de estatus de folio integrada?"
+    ],
+    "knowledge_coverage": "NO_CONOZCO",
+    "source_health": {
+      "get_folio_status": "SOURCE_NOT_INTEGRATED"
+    },
+    "ruleset_versions": {
+      "evidence_builder": "2.0"
+    },
+    "traceability": {
+      "question": "¿En qué etapa está el folio 421?",
+      "plan": "folio_status",
+      "tool_plan": ["get_folio_status"],
+      "acquisition": "SOURCE_NOT_INTEGRATED"
+    }
+  }
+}

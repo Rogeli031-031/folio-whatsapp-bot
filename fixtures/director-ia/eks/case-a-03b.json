@@ -1,0 +1,71 @@
+{
+  "meta": {
+    "source": "docs/director-ia/03B-END-TO-END-REFERENCE-FLOWS.md",
+    "case": "A",
+    "figures": "ILUSTRATIVAS / FICTICIAS",
+    "not_institutional_coverage": true,
+    "note": "ARR/IGF on-demand parcial. No es cobertura real. No es hipótesis N5."
+  },
+  "bundle": {
+    "bundle_id": "kb_caseA_ilustrativo",
+    "trace_id": "tr_caseA_puebla_ilustrativo",
+    "produced_at": "2026-08-15T00:00:00.000Z",
+    "producer": "evidence_builder",
+    "observations": [
+      { "observation_id": "obs_arr_1", "domain": "arr", "note": "payload ilustrativo ARR" },
+      { "observation_id": "obs_igf_1", "domain": "igf", "note": "payload ilustrativo IGF" }
+    ],
+    "facts": [
+      {
+        "fact_id": "fact_venta_baja",
+        "statement": "Venta mes A 120.00 t; mes B 95.00 t (ILUSTRATIVO / FICTICIO)",
+        "materiality": "MATERIALITY_NOT_ASSESSED"
+      },
+      {
+        "fact_id": "fact_margen_desvio",
+        "statement": "Margen mes B menor que mes A (ILUSTRATIVO / FICTICIO)",
+        "materiality": "MATERIALITY_NOT_ASSESSED"
+      }
+    ],
+    "evidence": [
+      {
+        "evidence_id": "ev_desviacion_venta",
+        "type": "desviacion",
+        "applied_rule": "rule_desviacion_periodo_v1"
+      },
+      {
+        "evidence_id": "ev_cobertura_parcial_deltas",
+        "type": "limite",
+        "applied_rule": "dominio delta SOURCE_NOT_INTEGRATED"
+      }
+    ],
+    "diagnoses": [
+      {
+        "diagnosis_id": "dx_riesgo_fin",
+        "category": "riesgo financiero",
+        "criterion": "regla de clasificacion ilustrativa + soporte de hechos/evidencias"
+      }
+    ],
+    "conflicts": [],
+    "open_questions": [
+      "¿La variación es por venta o por descuento? (fuente delta no integrada)"
+    ],
+    "knowledge_coverage": "CONOZCO_PARCIALMENTE",
+    "source_health": {
+      "arr": "ACQUIRED_OK",
+      "igf": "ACQUIRED_OK",
+      "deltas": "SOURCE_NOT_INTEGRATED"
+    },
+    "ruleset_versions": {
+      "evidence_builder": "2.0",
+      "absence_rules": "pendiente-calibracion"
+    },
+    "traceability": {
+      "question": "¿Por qué cayó Puebla?",
+      "plan": "financial_diagnosis",
+      "tool_plan": ["get_arr_snapshot", "get_igf_snapshot"],
+      "acquisition": "partial_on_demand",
+      "observations": ["obs_arr_1", "obs_igf_1"]
+    }
+  }
+}
