@@ -4,7 +4,7 @@
 
 **Tipo:** Índice de navegación y propiedad documental  
 **Estado:** NORMATIVO (índice)  
-**Fecha:** 2026-08-12
+**Fecha:** 2026-08-15
 
 Este índice no redefine la Constitución. En conflicto, prevalece `docs/director-ia/DIRECTOR_IA_CONSTITUTION.md`.
 
@@ -23,7 +23,7 @@ IES Standard                ← Esquema v1.0 APROBADO PARA CONGELAMIENTO (runtim
         ↓
 Reasoning Engine            ← 05 v1.0 APROBADO PARA CONGELAMIENTO (runtime pendiente)
         ↓
-Interfaces / Channel Projection ← pendiente (06)
+Interfaces / Channel Projection ← 06 v1.0 PROPUESTO PARA REVISIÓN HUMANA (runtime pendiente)
 ```
 
 ### Cadena operativa de entrada (antes del Evidence Builder)
@@ -57,6 +57,7 @@ Ningún bypass de capas. Ningún dato crudo llega al IES directamente. Ningún L
 | 3b | `03B-END-TO-END-REFERENCE-FLOWS.md` | Flujos de referencia end-to-end (Casos A/B) | Validación contractual |
 | 4 | `04-IES-STANDARD.md` | Esquema de producto IES | IES v1.0 APROBADO PARA CONGELAMIENTO |
 | 5 | `05-REASONING-ENGINE.md` | Nivel 5 — hipótesis/inferencia subordinada al IES; Reasoning Result / Run | **v1.0** — REASONING ENGINE v1.0 APROBADO PARA CONGELAMIENTO; **runtime PENDIENTE** |
+| 6 | `06-CHANNEL-PROJECTION.md` | Interfaces; proyección semántica pura; Projection Model; `projection_depth` L0–L3 | **v1.0** — PROPUESTO PARA REVISIÓN HUMANA; **runtime PENDIENTE**; no congelado |
 | — | `DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md` | Inventario de fuentes | Complemento |
 | F1 | `DIRECTOR_IA_V2_FASE_1_VERACIDAD.md` | Catálogo/veracidad (entrada) | Código soporte parcial |
 | F2 | `DIRECTOR_IA_V2_FASE_2_PLANNER.md` | Plan de intents/dominios (entrada) | Código soporte parcial |
@@ -75,6 +76,7 @@ Ningún bypass de capas. Ningún dato crudo llega al IES directamente. Ningún L
 | Executive Knowledge Store (03) | Ninguno (runtime pendiente) | **No** |
 | IES Standard | Ninguno (runtime pendiente) | **No** — especificación escrita; runtime pendiente |
 | Reasoning Engine (`05`) | Chat legado (fuera del contrato N5 oficial; proveedor no normativo) | **No** — contrato congelado; runtime pendiente |
+| Channel Projection (`06`) | Ninguno (runtime pendiente) | **No** — contrato propuesto; runtime pendiente |
 | Capabilities (Fase 1) | `lib/director-ia-capabilities.js` + early-return en chat | **No** implementa Constitución, EKE ni Evidence Builder. Solo soporte parcial de veracidad/catálogo. |
 | Planner (Fase 2) | `lib/director-ia-planner.js` (debug en chat) | **No** implementa Constitución, EKE ni Evidence Builder. Solo produce Plan. |
 | Tool Orchestrator (Fase 3) | `lib/director-ia-tools.js`, `lib/director-ia-tool-orchestrator.js` (debug) | **No** implementa Constitución, EKE ni Evidence Builder. Solo declara Tool Plan; no ejecuta. |
@@ -105,7 +107,7 @@ La columna anterior se denomina **“Código relacionado / soporte parcial”** 
 | Materiality (`MAT_*` / `MATERIALITY_NOT_ASSESSED`) | Motor §7A (política/catálogo); Evidence Builder §11B (asignación mecánica si ruleset); EKS solo persiste; IES solo proyecta; RE/canal solo consumen |
 | Producto IES | `04-IES-STANDARD.md` bajo Constitución IX |
 | Reasoning Engine (N5) / Reasoning Result / Reasoning Run | `05-REASONING-ENGINE.md` (v1.0 congelado; no escribe EKS/IES; almacén Run pendiente) |
-| Channel Projection | Futuro `06` (pendiente) |
+| Channel Projection | `06-CHANNEL-PROJECTION.md` (v1.0 propuesto; no congelado; runtime pendiente; no escribe IES/RE; sin autoridad epistemológica) |
 
 ---
 
@@ -125,7 +127,7 @@ La columna anterior se denomina **“Código relacionado / soporte parcial”** 
 | Campo | Valor |
 |-------|--------|
 | Documento | `DIRECTOR_IA_ARCHITECTURE_INDEX.md` |
-| Versión | 1.6 |
-| Estado | APROBADO COMO ÍNDICE (incluye `05` v1.0 congelado) |
-| Dependencia | Constitución; EKE; Evidence Builder; 03; 03A; 03B; 04; 05 |
+| Versión | 1.7 |
+| Estado | APROBADO COMO ÍNDICE (incluye `05` v1.0 congelado; `06` v1.0 propuesto, no congelado) |
+| Dependencia | Constitución; EKE; Evidence Builder; 03; 03A; 03B; 04; 05; 06 |
 | Implementación del pipeline completo | PENDIENTE |
