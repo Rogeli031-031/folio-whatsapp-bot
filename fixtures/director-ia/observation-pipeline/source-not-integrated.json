@@ -1,0 +1,23 @@
+{
+  "meta": {
+    "figures": "ILUSTRATIVAS / FICTICIAS",
+    "not_institutional_coverage": true,
+    "note": "SOURCE_NOT_INTEGRATED. Caso B ilustrativo. Sin record de negocio."
+  },
+  "execution_results": [
+    {
+      "trace_id": "tr_op_not_integrated",
+      "tool_id": "get_folio_status",
+      "domain": "folios",
+      "status": "SOURCE_NOT_INTEGRATED",
+      "execution_id": "ex_ni_1",
+      "extracted_by": "get_folio_status",
+      "triggered_by": "usuario_ilustrativo",
+      "source": {
+        "system": "folios",
+        "source_family": "folio_status",
+        "source_instance_id": "folios:ex_ni_1"
+      }
+    }
+  ]
+}

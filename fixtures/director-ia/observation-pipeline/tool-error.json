@@ -1,0 +1,20 @@
+{
+  "meta": {
+    "figures": "ILUSTRATIVAS / FICTICIAS",
+    "not_institutional_coverage": true,
+    "note": "TOOL_ERROR. Sin ObservationRecord de negocio."
+  },
+  "execution_results": [
+    {
+      "trace_id": "tr_op_error",
+      "tool_id": "get_arr_snapshot",
+      "domain": "arr",
+      "status": "TOOL_ERROR",
+      "execution_id": "ex_err_1",
+      "extracted_by": "get_arr_snapshot",
+      "triggered_by": "usuario_ilustrativo",
+      "error": { "code": "TIMEOUT" },
+      "source": { "system": "arr", "source_family": "arr_snapshot", "source_instance_id": "arr:ex_err_1" }
+    }
+  ]
+}

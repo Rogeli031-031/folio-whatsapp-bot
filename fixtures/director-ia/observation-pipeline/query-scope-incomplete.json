@@ -1,0 +1,20 @@
+{
+  "meta": {
+    "figures": "ILUSTRATIVAS / FICTICIAS",
+    "not_institutional_coverage": true,
+    "note": "QUERY_SCOPE_INCOMPLETE. No afirma cobertura completa."
+  },
+  "execution_results": [
+    {
+      "trace_id": "tr_op_scope",
+      "tool_id": "get_arr_snapshot",
+      "domain": "arr",
+      "status": "QUERY_SCOPE_INCOMPLETE",
+      "execution_id": "ex_scope_1",
+      "extracted_by": "get_arr_snapshot",
+      "triggered_by": "usuario_ilustrativo",
+      "scope_complete": false,
+      "source": { "system": "arr", "source_family": "arr_snapshot", "source_instance_id": "arr:ex_scope_1" }
+    }
+  ]
+}
