@@ -2,10 +2,10 @@
 
 ## Pipeline de adquisición y contrato ObservationRecord
 
-**Documento:** `docs/director-ia/03A-OBSERVATION-PIPELINE.md`  
-**Versión:** 1.1  
-**Estado:** CONTRATO APROBADO TRAS AUDITORÍA E2E  
-**Tipo:** Especificación de pipeline de entrada a Evidence Builder (sin implementación)
+**Documento:** `docs/director-ia/03A-OBSERVATION-PIPELINE.md`
+**Versión:** 1.4
+**Estado:** CONTRATO APROBADO TRAS AUDITORÍA E2E; realización física v1 registrada (D1–D15)
+**Tipo:** Especificación de pipeline de entrada a Evidence Builder (realización física v1; sin runtime)
 
 ### Dependencia normativa
 
@@ -38,9 +38,11 @@ El Observation Pipeline (OP) convierte resultados de ejecución de tools (y esta
 - No interpreta vacío como ausencia de fenómeno.  
 - No inventa entidades.  
 - No transforma `TOOL_ERROR` / `SOURCE_RESTRICTED` / `SOURCE_NOT_INTEGRATED` en ObservationRecord de negocio.  
-- No modifica el payload original.  
-- No llama al LLM.  
+- No modifica el payload original.
+- No llama al LLM.
 - No escribe en el EKS.
+- No produce hechos N2, evidencias N3, diagnósticos N4 ni hipótesis N5.
+- No elimina silenciosamente ejecuciones ni ObservationRecords repetidos (v1).
 
 ---
 
@@ -87,6 +89,26 @@ El Observation Pipeline (OP) convierte resultados de ejecución de tools (y esta
 | `ENTITY_UNRESOLVED` | `ENTITY_UNRESOLVED` |
 
 `ABSENCE_CONFIRMED` se proyecta en el **hecho/observación tipificada** (`absence_state`), **no** como `execution_status` de adquisición.
+
+### Objeto `AcquisitionStatus` (realización física; D3 / D4)
+
+`AcquisitionStatus` es un **objeto técnico separado**. No se fusiona dentro del ObservationRecord. No es N1 ni verdad empresarial.
+
+Campos mínimos:
+
+| Campo | Obligatorio | Descripción |
+|-------|-------------|-------------|
+| `trace_id` | Sí | Ciclo de consulta |
+| `tool_id` | Sí | Tool intentada |
+| `domain` | Sí | Dominio intentado |
+| `status` | Sí | Exactamente uno del enum §2. **Prohibido** inventar estados. |
+| `execution_id` | Condicional | Identificador de ejecución o correlación equivalente |
+| `scope_complete` | Condicional | Cuando el alcance de query sea declarable |
+| `entity_resolution_state` | Condicional | `RESOLVED` \| `AMBIGUOUS` \| `UNRESOLVED` cuando aplique |
+| `error` | Condicional | Metadato de error **no sensible** si `TOOL_ERROR` u otro fallo técnico |
+| timestamps técnicos | Condicional | Los disponibles en el envelope de ejecución; no determinan semántica empresarial |
+
+**Prohibido** en este objeto: `facts`, `confidence`, `materiality`, Knowledge Coverage (`CONOZCO…`) y `ABSENCE_CONFIRMED`.
 
 ---
 
@@ -157,8 +179,8 @@ No se colapsan.
 | Campo | Obligatorio | Descripción |
 |-------|-------------|-------------|
 | `effective_period` | Condicional | Periodo de vigencia del dato |
-| `extracted_at` | Sí | Momento de extracción en origen/tool |
-| `pipeline_received_at` | Sí | Momento de recepción en el OP |
+| `extracted_at` | Sí | Momento de extracción en origen/tool. Se **preserva** desde upstream cuando exista (D13). |
+| `pipeline_received_at` | Sí | Momento de recepción en el OP. Se obtiene mediante **reloj inyectable/testeable**. **No** participa en decisiones semánticas (D13). |
 
 ## Payloads (inmutabilidad del original)
 
@@ -226,16 +248,16 @@ Vacío técnico ≠ ausencia de fenómeno ≠ cero.
 - Question / `trace_id`
 - Plan (Planner)
 - Tool Plan (Orchestrator)
-- Tool Execution Results (cuando existan)
+- Tool Execution Results (cuando existan), en la forma del **MINIMAL_EXECUTION_ENVELOPE** (§8)
 - Identidad / permisos / planta / periodo
 
 ## Salidas
 
-- Lista de `AcquisitionStatus` (una por tool/dominio intentado)
-- Lista de `ObservationRecord` (solo negocio transportable)
+- Lista de `AcquisitionStatus` (exactamente uno por tool/dominio intentado)
+- Lista de `ObservationRecord` (0..N; solo negocio transportable)
 - Metadatos de cobertura técnica para `source_health` del Bundle
 
-Estas salidas alimentan al Evidence Builder; **no** al EKS directamente.
+Estas salidas alimentan al Evidence Builder como **dos listas hermanas**; **no** al EKS directamente.
 
 ---
 
@@ -250,8 +272,65 @@ Estas salidas alimentan al Evidence Builder; **no** al EKS directamente.
 6. Payload original inmutable; `normalized_payload` + `raw_payload_reference`.  
 7. Entidades: `RESOLVED` \| `AMBIGUOUS` \| `UNRESOLVED` con original, candidatos, regla y confianza.  
 8. Ortografía **lineage**.  
-9. Sin LLM.  
+9. Sin LLM.
 10. Sin escritura al EKS.
+11. `status` ∈ enum §2 únicamente; no se crean estados nuevos.
+12. OP no posee autoridad epistemológica N2–N5.
+13. v1 no elimina silenciosamente ejecuciones ni ObservationRecords repetidos.
+14. `pipeline_received_at` no determina semántica.
+
+---
+
+# 8. Realización física v1 (D1–D15)
+
+Esta sección **no** redefine N1–N5 ni la Constitución. No introduce epistemología. No autoriza runtime por sí sola. No calibra materias G8. No redefine la separación AcquisitionStatus / ObservationRecord ni las propiedades de Evidence Builder o EKS. Registra las decisiones físicas aprobadas por HUMAN_APPROVER (tarea `ARCH-OP-PHYSICAL-DECISIONS-002`, G2). Evidencia: `ARCH-OP-PHYSICAL-DECISIONS-001`.
+
+Los identificadores PURE_FACTORY, MINIMAL_EXECUTION_ENVELOPE, EXPLICIT_STATUS_OBJECT, USE_03A_ENUM_ONLY, ONE_STATUS_ZERO_TO_MANY_RECORDS, TRANSPORTABLE_BUSINESS_RESULT_ONLY, ACQUIRED_EMPTY_FAIL_CLOSED, PRESERVE_UPSTREAM_GENERATE_OPAQUE_OBSERVATION_IDS, PRESERVE_WITHOUT_SUBSTITUTION, RAW_REFERENCE_PLUS_NORMALIZED_VIEW, FAIL_CLOSED_ENTITY_RESOLUTION, NO_SILENT_DEDUP_V1, INPUT_ORDER_STABLE_AND_CLOCK_INJECTABLE, STRUCTURAL_AND_TRANSPORT_VALIDATION_ONLY y FIXTURES_FIRST_THEN_OP_TO_EB son los de esa aprobación. **Prohibido** sustituirlos en implementación.
+
+| ID | Decisión aprobada | Significado contractual |
+|----|-------------------|-------------------------|
+| D1 | **PURE_FACTORY** | Módulo puro/factory inyectable, desacoplado de `server.js` y de fuentes productivas. Recibe Tool Execution Results ya ejecutados. Produce `acquisition_statuses[]` y `observation_records[]` como listas hermanas. |
+| D2 | **MINIMAL_EXECUTION_ENVELOPE** | Frontera física de entrada del OP (abajo). No es N1 ni verdad empresarial. |
+| D3 | **EXPLICIT_STATUS_OBJECT** | `AcquisitionStatus` es objeto técnico separado con los campos mínimos de §2. No contiene facts, confidence, materiality, coverage ni `ABSENCE_CONFIRMED`. |
+| D4 | **USE_03A_ENUM_ONLY** | `status` solo usa el enum §2. La implementación no crea estados nuevos. |
+| D5 | **ONE_STATUS_ZERO_TO_MANY_RECORDS** | Cada intento tool/dominio → exactamente un `AcquisitionStatus`. `ACQUIRED_OK` → 0..N ObservationRecords transportables. Estados puramente técnicos → normalmente 0 records. Correlación: `trace_id`, `tool_id`, `execution_id` (o equivalente). |
+| D6 | **TRANSPORTABLE_BUSINESS_RESULT_ONLY** | ObservationRecord solo para resultado de negocio transportable. `TOOL_ERROR`, `SOURCE_RESTRICTED`, `SOURCE_NOT_INTEGRATED`, `QUERY_SCOPE_INCOMPLETE` y `ENTITY_UNRESOLVED` no generan ObservationRecord de entidad canónica inventada. |
+| D7 | **ACQUIRED_EMPTY_FAIL_CLOSED** | `ACQUIRED_EMPTY` es status técnico. Puede emitir registro de transporte vacío solo cuando §2 lo permita. **Nunca** implica `ABSENCE_CONFIRMED`. La ausencia empresarial es exclusiva del Evidence Builder. |
+| D8 | **PRESERVE_UPSTREAM_GENERATE_OPAQUE_OBSERVATION_IDS** | Se preservan `trace_id`, `tool_id`, ids de ejecución/correlación y demás ids upstream. `observation_id` puede ser opaco, único y testeable. No se congela UUID/hash como obligación contractual. |
+| D9 | **PRESERVE_WITHOUT_SUBSTITUTION** | `source.system`, `source_family`, `source_instance_id`, `content_author_id`, `extracted_by` y `triggered_by` permanecen identidades distintas. `content_author_id = null` permanece `null`. Extractor y disparador no sustituyen autoría. |
+| D10 | **RAW_REFERENCE_PLUS_NORMALIZED_VIEW** | Payload original inmutable vía `raw_payload_reference`. `normalized_payload` es vista de procesamiento determinística; no elimina la referencia al original ni inventa semántica empresarial. |
+| D11 | **FAIL_CLOSED_ENTITY_RESOLUTION** | Solo `RESOLVED` permite `subject.entity_id` canónico. `AMBIGUOUS` / `UNRESOLVED` preservan `original_value` y candidatos/regla si existen; no eligen en silencio. `ENTITY_UNRESOLVED` es status técnico cuando no hay sujeto transportable. |
+| D12 | **NO_SILENT_DEDUP_V1** | OP v1 no elimina silenciosamente ejecuciones u ObservationRecords repetidos. Los retries conservan correlación y trazabilidad. La deduplicación semántica no pertenece al OP. Una idempotencia operacional futura deberá definirse explícitamente sin destruir lineage ni evidencia de repetición. |
+| D13 | **INPUT_ORDER_STABLE_AND_CLOCK_INJECTABLE** | La salida preserva orden determinístico derivado del input o de una clave técnica estable. `pipeline_received_at` = reloj inyectable/testeable; **no** determina semántica. `extracted_at` se preserva desde upstream cuando exista. |
+| D14 | **STRUCTURAL_AND_TRANSPORT_VALIDATION_ONLY** | OP valida estructura, procedencia mínima, transportabilidad, scope y resolución **declarada**. No valida verdad empresarial, confidence, materiality, Knowledge Coverage ni `ABSENCE_CONFIRMED`. |
+| D15 | **FIXTURES_FIRST_THEN_OP_TO_EB** | Una futura IMPL-OP-001 podrá implementarse primero contra fixtures sintéticos del envelope. Una tarea posterior verificará OP → EB. Tool Execution productivo, `server.js`, chat, dashboard y escritura EKS quedan fuera hasta autorización separada. Esta sección **no** autoriza IMPL-OP-001. |
+
+## MINIMAL_EXECUTION_ENVELOPE (D2)
+
+Frontera física de entrada del OP mientras no exista runtime productivo de Tool Execution. **No** es un nuevo nivel epistemológico. **No** es contrato de verdad empresarial. **No** es ObservationRecord ni AcquisitionStatus.
+
+Campos mínimos del envelope (por intento de tool/dominio):
+
+| Campo | Obligatorio | Descripción |
+|-------|-------------|-------------|
+| `trace_id` | Sí | Ciclo de consulta |
+| `tool_id` | Sí | Tool del registry / Tool Plan |
+| `domain` | Sí | Dominio del catálogo |
+| `execution_id` | Condicional | Identidad de esta ejecución o correlación equivalente |
+| `technical_state` | Sí | Señal técnica de la ejecución (éxito, vacío, error, no integrado, restringido, alcance incompleto, entidad no resuelta). El OP la **proyecta** al enum §2; no inventa un octavo `status`. |
+| `payload` o `payload_reference` | Condicional | Cuerpo o referencia al resultado técnico cuando exista |
+| timestamps de ejecución | Condicional | Los disponibles; no determinan semántica empresarial |
+| metadatos de alcance / entidad | Condicional | Inputs de alcance, sujeto original, candidatos, sin inventar canónico |
+
+El OP **no** ejecuta tools. Recibe envelopes ya formados (fixtures o, en el futuro, un runtime de Tool Execution autorizado por otra tarea).
+
+### Límites de esta realización
+
+1. Runtime **PENDIENTE**. Esta sección no implementa Observation Pipeline.
+2. No calibra materias G8.
+3. No autoriza IMPL-OP-001 ni Tool Execution productivo.
+4. No redefine `02`, `03`, Constitución ni el Motor.
+5. No otorga al OP autoridad N2–N5.
 
 ---
 
@@ -260,7 +339,9 @@ Estas salidas alimentan al Evidence Builder; **no** al EKS directamente.
 | Campo | Valor |
 |-------|--------|
 | Documento | `03A-OBSERVATION-PIPELINE.md` |
-| Versión | 1.3 |
-| Estado | CONTRATO APROBADO TRAS AUDITORÍA E2E + ALINEACIÓN C3/C5 |
+| Versión | 1.4 |
+| Estado | CONTRATO APROBADO TRAS AUDITORÍA E2E; realización física v1 registrada (D1–D15) |
 | Implementación | PENDIENTE |
-| Nota | AcquisitionStatus ≠ Knowledge Coverage ≠ `ABSENCE_CONFIRMED`; identidades de procedencia preservadas sin reinterpretar |
+| Calibración G8 | No aplica (fuera de alcance del OP) |
+| Nota | AcquisitionStatus ≠ Knowledge Coverage ≠ `ABSENCE_CONFIRMED`; identidades de procedencia preservadas; envelope de ejecución ≠ N1 |
+| Auditoría | 2026-08-15: realización física D1–D15 (`ARCH-OP-PHYSICAL-DECISIONS-002`); cabecera alineada a 1.4 |
