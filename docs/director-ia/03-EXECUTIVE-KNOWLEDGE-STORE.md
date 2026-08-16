@@ -3,8 +3,8 @@
 ## Almacén de conocimiento ejecutivo — contrato de persistencia
 
 **Documento:** `docs/director-ia/03-EXECUTIVE-KNOWLEDGE-STORE.md`
-**Versión:** 1.2
-**Estado:** CONTRATO APROBADO TRAS AUDITORÍA E2E; realización física v1 registrada (D1–D9)
+**Versión:** 1.3
+**Estado:** CONTRATO APROBADO TRAS AUDITORÍA E2E; realización física v1 registrada (D1–D9); `bundle.observations` aclarado (N1)
 **Tipo:** Especificación de almacén (realización física v1; sin runtime)
 
 ### Dependencia normativa
@@ -58,7 +58,7 @@ El Knowledge Bundle es la unidad de conocimiento ensamblada por el Evidence Buil
 
 | Campo | Contenido |
 |-------|-----------|
-| `observations` | ObservationRecords de negocio (pueden ser lista vacía) |
+| `observations` | Observaciones N1 emitidas por el Evidence Builder, derivadas determinísticamente de ObservationRecords transportables de `03A` (pueden ser lista vacía). No son AcquisitionStatus. |
 | `facts` | Hechos N2 (pueden ser lista vacía) |
 | `evidence` | Evidencias N3 (pueden ser lista vacía) |
 | `diagnoses` | Diagnósticos N4 (pueden ser lista vacía) |
@@ -77,6 +77,12 @@ El Knowledge Bundle es la unidad de conocimiento ensamblada por el Evidence Buil
 | `trace_id` | Identificador de traza del ciclo de consulta |
 | `produced_at` | Momento de producción por el Evidence Builder |
 | `producer` | Siempre `evidence_builder` |
+
+### `observations` (aclaración de frontera)
+
+`bundle.observations` contiene **Observaciones N1** emitidas por el Evidence Builder (`02`, decisión `N1_WRAPS_03A`). Cada elemento deriva de un ObservationRecord transportable de `03A`, con preservación de procedencia, lineage y referencia al payload original. No es una reinterpretación libre del payload 03A. `AcquisitionStatus` no vive en `observations`; se resume en `source_health`.
+
+El EKS **no** reinterpreta esos objetos: solo persiste el Bundle. Esta aclaración **no** redefine `validate_structure`, la realización física D1–D9 de este documento, ni el contrato `03A`.
 
 ### Regla de recepción
 
@@ -194,8 +200,8 @@ Los identificadores P1, R3, V2, G_LATEST, L_TRACE, M1, I_DIGEST, POOL_DEDICATED 
 | Campo | Valor |
 |-------|--------|
 | Documento | `03-EXECUTIVE-KNOWLEDGE-STORE.md` |
-| Versión | 1.2 |
-| Estado | CONTRATO APROBADO TRAS AUDITORÍA E2E; realización física v1 registrada (D1–D9) |
+| Versión | 1.3 |
+| Estado | CONTRATO APROBADO TRAS AUDITORÍA E2E; realización física v1 registrada (D1–D9); `bundle.observations` aclarado (N1) |
 | Implementación | PENDIENTE |
 | Calibración k/wi | No aplica (fuera de alcance del EKS) |
 | Firma digital IES | Fuera de alcance (`04`; D7 = huella, no firma) |
