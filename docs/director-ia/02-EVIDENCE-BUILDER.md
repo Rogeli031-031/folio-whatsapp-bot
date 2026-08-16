@@ -1,10 +1,10 @@
-# 02 — Evidence Builder v2.0
+# 02 — Evidence Builder v2.1
 
 ## Especificación arquitectónica del ensamblador de conocimiento (Niveles 1–4)
 
 **Documento:** `docs/director-ia/02-EVIDENCE-BUILDER.md`  
-**Versión:** 2.0  
-**Estado:** APROBADO PARA DISEÑO DEL IES
+**Versión:** 2.1
+**Estado:** APROBADO PARA DISEÑO DEL IES; realización física v1 registrada (D1–D15)
 
 ### Dependencia normativa (rutas reales)
 
@@ -16,6 +16,8 @@
 | `docs/director-ia/DIRECTOR_IA_V2_FASE_1_VERACIDAD.md` | Entrada de capacidades |
 | `docs/director-ia/DIRECTOR_IA_V2_FASE_2_PLANNER.md` | Entrada: Plan |
 | `docs/director-ia/DIRECTOR_IA_V2_FASE_3_TOOL_ORCHESTRATOR.md` | Entrada: Tool Plan |
+| `docs/director-ia/03A-OBSERVATION-PIPELINE.md` | ObservationRecord / AcquisitionStatus (entrada; no redefinidos) |
+| `docs/director-ia/03-EXECUTIVE-KNOWLEDGE-STORE.md` | Consumidor del Knowledge Bundle (no redefinido salvo aclaración de `bundle.observations`) |
 
 En caso de conflicto, prevalece la Constitución.  
 Este documento **no redefine** Observación, Hecho, Evidencia, Diagnóstico, IES, Hipótesis, Cobertura, Conflicto ni derechos constitucionales: los **aplica** bajo el Motor.  
@@ -82,6 +84,7 @@ El **Evidence Builder** es el ensamblador determinístico del Motor de Conocimie
 | Esquema de conflicto compuesto | Tipos A–E (Constitución) |
 | Lenguaje permitido/prohibido de ensamblaje por nivel | Reasoning Engine / Interfaces |
 | Estructuras de salida hacia el IES | Implementación en código |
+| Realización física v1 (D1–D15); frontera 03A → N1 → `bundle.observations` | Runtime; calibración G8 |
 
 ---
 
@@ -140,11 +143,27 @@ Identidades de ciclo (nivel ObservationRecord; no sustituyen a `source.system` n
 2. No combinar semánticamente.  
 3. No inferir.  
 4. No corregir silenciosamente.  
-5. Conservar origen y linaje (incl. `content_author_id`, `extracted_by`, `triggered_by`, `source.system`).  
+5. Conservar origen y linaje (incl. `content_author_id`, `extracted_by`, `triggered_by`, `source.system`, `source_family`, `source_instance_id`, `trace_id`, `observation_id`, `raw_payload_reference`).
 6. Tipificar calidad y ausencia sin convertirlas en valor de negocio.  
 7. No presentar `extracted_by` como autor.  
 8. No convertir `triggered_by` en fuente de la afirmación.  
 9. No inventar `content_author_id` cuando sea `null`.
+
+## Frontera 03A → Observación N1 → `bundle.observations`
+
+**Decisión registrada (D2):** `E1` + `N1_WRAPS_03A`.
+
+El input físico del Evidence Builder mantiene **dos listas hermanas e independientes**: `acquisition_statuses[]` y `observation_records[]`. `AcquisitionStatus` no se fusiona dentro del ObservationRecord ni se presenta como Observación N1.
+
+Cada ObservationRecord **transportable** de `03A` se transforma de forma **determinística** en una Observación N1. La Observación N1:
+
+- preserva identidad, procedencia, lineage y la referencia al payload original del ObservationRecord fuente;
+- añade **únicamente** semántica que pertenece contractualmente a este documento (p. ej. `quality`, `absence_state`);
+- no reinterpreta de forma libre el payload 03A.
+
+`bundle.observations` contiene estas Observaciones N1. No contiene `AcquisitionStatus`.
+
+**Regla de preservación (no pérdida / no invención / no reinterpretación):** `content_author_id`, `extracted_by`, `triggered_by`, `source.system`, `source_family`, `source_instance_id`, `trace_id`, `observation_id`, `raw_payload_reference` y demás elementos de linaje/procedencia del ObservationRecord fuente. `raw_result_ref` de N1 referencia el mismo payload original que `raw_payload_reference`; no se crea un original distinto.
 
 ---
 
@@ -484,8 +503,10 @@ Cada observación declara `lineage` suficiente para decidir independencia **seg�
 - `extracted_by`;
 - `triggered_by`;
 - `author_role` (opcional);
+- `source_family` y `source_instance_id` (preservados de `03A`; no inventar);
+- `trace_id` (preservado de `03A`);
 - identificadores de captura/periodo;
-- referencia a `raw_result_ref`.
+- `raw_payload_reference` del ObservationRecord fuente y `raw_result_ref` de N1 (mismo payload original).
 
 ### Reglas
 
@@ -531,6 +552,7 @@ Cada observación declara `lineage` suficiente para decidir independencia **seg�
 16. `resolution_status` ∈ {`OPEN`,`UNDER_REVIEW`,`RESOLVED`,`SUPERSEDED`}; único propietario = Evidence Builder.  
 17. `RESOLVED` exige evidencia + `applied_resolution_rule_id` + refs a hechos/evidencias; `SUPERSEDED` ≠ `RESOLVED`.  
 18. EKS/IES no cambian `resolution_status`.
+19. `bundle.observations` = Observaciones N1 (`N1_WRAPS_03A`); `AcquisitionStatus` permanece en lista hermana / `source_health`, no dentro de N1.
 
 ---
 
@@ -547,13 +569,15 @@ El Evidence Builder v2.0 se declara **preparado para el diseño del IES** cuando
 7. Existe **conformidad arquitectónica** con Constitución y Motor, bajo jerarquía Constitución → Motor → Evidence Builder → IES → Reasoning Engine → Interfaces.  
 8. El Builder no redefine el IES ni el Reasoning Engine.
 
-La implementación de código permanece **PENDIENTE**. Queda prohibido implementar si se violan invariantes críticas de la Constitución.
+v2.1 registra la realización física D1–D15; **no** altera esta declaración ni calibra §18.
+
+La implementación de código permanece **PENDIENTE**. Queda prohibido implementar si se violan invariantes críticas de la Constitución. Esta sección no autoriza IMPL-EB-001.
 
 ---
 
 # 18. Parámetros pendientes de calibración
 
-No fijados en v2.0; requieren calibración y auditoría (Constitución II y VII):
+No fijados en v2.1; requieren calibración y auditoría (Constitución II y VII). **G8** permanece pendiente; esta versión no calibra:
 
 | Parámetro | Descripción |
 |-----------|-------------|
@@ -568,20 +592,53 @@ Hasta calibrar: el Builder expone dimensiones y tipificaciones; no afirma precis
 
 ---
 
+# 19. Realización física v1 (D1–D15)
+
+Esta sección **no** redefine N1–N5 ni la Constitución. No introduce epistemología. No autoriza runtime por sí sola. No calibra materias reservadas a G8. Registra las decisiones físicas aprobadas por HUMAN_APPROVER (tarea `ARCH-EB-PHYSICAL-DECISIONS-003`, G2). Evidencia: `ARCH-EB-PHYSICAL-DECISIONS-002`.
+
+Los identificadores I2, E1, N1_WRAPS_03A, SEQUENTIAL_BARRIERS, R_MOD_EMPTY_GOVERNED_SETS, OPAQUE_TRACEABLE_IDS, PRESERVE_FULL_03A_LINEAGE_NO_K, DIMENSIONS_WITHOUT_FALSE_PRECISION, FAIL_CLOSED, LITERAL_STATE_MACHINE, NOT_ASSESSED_UNTIL_G8, PURE_NO_SIDE_EFFECTS, EB_SEMANTICS_PLUS_EKS_STRUCTURE, 03B_PLUS_MINIMAL_03A_FAIL_CLOSED_CASES, EB_FIXTURES_FIRST_OP_BEFORE_PRODUCTION y REGISTER_MINIMUM_PHYSICAL_BOUNDARY son los de esa aprobación. **Prohibido** sustituirlos en implementación.
+
+| ID | Decisión aprobada | Significado contractual |
+|----|-------------------|-------------------------|
+| D1 | **I2** | Módulo puro con etapas explícitas N1 → N2 → N3 → N4 → `emitBundle`, desacoplado de `server.js`. No llama `append_snapshot`. |
+| D2 | **E1** + **N1_WRAPS_03A** | Input: listas hermanas `acquisition_statuses[]` y `observation_records[]` (sin fusionar). Cada ObservationRecord transportable de `03A` se transforma determinísticamente en Observación N1. `bundle.observations` contiene esas Observaciones N1. Preservación de procedencia/linaje según §2. |
+| D3 | **SEQUENTIAL_BARRIERS** | N1 → N2 → N3 → N4 con barreras explícitas. Ningún hecho sin observación; ninguna evidencia sin hechos; ningún diagnóstico sin regla y soporte. Listas vacías son válidas y no equivalen a salto de nivel. |
+| D4 | **R_MOD_EMPTY_GOVERNED_SETS** | Registry versionado en implementación. Conjuntos de elevación de ausencia, resolución, causalidad y materiality **vacíos** mientras no exista gobernanza/calibración autorizada. No se inventan reglas para completar tests. |
+| D5 | **OPAQUE_TRACEABLE_IDS** | Se preservan `trace_id` y `observation_id` del OP. N2–N4, conflictos, preguntas y `bundle_id` usan identificadores opacos únicos y trazables. No se congela algoritmo UUID/hash como obligación arquitectónica. |
+| D6 | **PRESERVE_FULL_03A_LINEAGE_NO_K** | Se preserva el lineage de `03A` y los mínimos de este documento. Independencia por origen productivo/cadena de captura, no por repetición. No se aplica saturación `k` mientras G8 siga pendiente. |
+| D7 | **DIMENSIONS_WITHOUT_FALSE_PRECISION** | Se exponen Fs, R, Cb, Cs y Cb_ov sin producto numérico calibrado ni pesos `wi` inventados. `NO_CONOZCO` puede expresar 0.00 únicamente donde ya lo exija la autoridad contractual. |
+| D8 | **FAIL_CLOSED** | `DATA_NOT_FOUND` / `ACQUIRED_EMPTY` no se elevan a `ABSENCE_CONFIRMED` mientras falte cualquiera de las condiciones de §10.3, incluido contrato de tool y `applied_absence_rule_id` versionado. |
+| D9 | **LITERAL_STATE_MACHINE** | `resolution_status` aplica literalmente `OPEN`, `UNDER_REVIEW`, `RESOLVED` y `SUPERSEDED`. Sin ruleset de resolución no se emite `RESOLVED`. `weight_assessment` nunca cierra un conflicto. |
+| D10 | **NOT_ASSESSED_UNTIL_G8** | Sin ruleset calibrado, los objetos que declaran materiality emiten `MATERIALITY_NOT_ASSESSED` y `applied_materiality_rule_id` null. Nunca se degrada silenciosamente a `MAT_LOW`. |
+| D11 | **PURE_NO_SIDE_EFFECTS** | No muta inputs, no hace I/O operacional, no usa LLM, no escribe EKS y no llama Reasoning Engine. Misma entrada + mismos rulesets versionados → mismo resultado determinístico. |
+| D12 | **EB_SEMANTICS_PLUS_EKS_STRUCTURE** | El EB posee validación semántica N1–N4. El Bundle emitido debe además pasar `validate_structure` de EKS. Esta sección no amplía ni redefine `validate_structure`. |
+| D13 | **03B_PLUS_MINIMAL_03A_FAIL_CLOSED_CASES** | La implementación futura usará A/B de `03B` como referencia ilustrativa y podrá crear entradas 03A mínimas para `ACQUIRED_EMPTY`, `TOOL_ERROR`, `SOURCE_RESTRICTED`, `ENTITY_UNRESOLVED`, conflicto `OPEN` y `MATERIALITY_NOT_ASSESSED`, sin inventar reglas productivas. Esta sección no crea fixtures. |
+| D14 | **EB_FIXTURES_FIRST_OP_BEFORE_PRODUCTION** | El EB puede implementarse y probarse primero contra fixtures contractuales 03A/03B. El Observation Pipeline runtime debe existir antes de producir Bundles de producción o alimentar EKS con conocimiento no-fixture. Esta sección no autoriza esas implementaciones. |
+| D15 | **REGISTER_MINIMUM_PHYSICAL_BOUNDARY** | Este documento registra D1–D14. `03` registra únicamente que `bundle.observations` contiene Observaciones N1 derivadas de ObservationRecords 03A. No se reabre epistemología, coverage, EKS append-only ni otros contratos. |
+
+### Límites de esta realización
+
+1. Runtime **PENDIENTE**. Esta sección no implementa Evidence Builder.
+2. No calibra `wi`, `k`, Fs productivo, ventanas R, umbrales de severidad, ruleset productivo de materiality, reglas causales ni contratos de tool que prueben inexistencia (G8).
+3. No autoriza IMPL-EB-001 ni ninguna tarea posterior.
+4. No redefine `03A` ni `validate_structure` de `03`.
+
+---
+
 # Control documental
 
 | Campo | Valor |
 |-------|--------|
 | Documento | `02-EVIDENCE-BUILDER.md` |
-| Versión | 2.0 |
-| Estado | APROBADO PARA DISEÑO DEL IES |
+| Versión | 2.1 |
+| Estado | APROBADO PARA DISEÑO DEL IES; realización física v1 registrada (D1–D15) |
 | Tipo | Especificación arquitectónica (ensamblaje) |
 | Dependencia normativa | `docs/director-ia/DIRECTOR_IA_CONSTITUTION.md`; `docs/director-ia/DIRECTOR_IA_EXECUTIVE_KNOWLEDGE_ENGINE.md` |
-| Fuentes de apoyo | `docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md`; `docs/director-ia/DIRECTOR_IA_V2_FASE_1_VERACIDAD.md`; `docs/director-ia/DIRECTOR_IA_V2_FASE_2_PLANNER.md`; `docs/director-ia/DIRECTOR_IA_V2_FASE_3_TOOL_ORCHESTRATOR.md` |
+| Fuentes de apoyo | `docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md`; `docs/director-ia/DIRECTOR_IA_V2_FASE_1_VERACIDAD.md`; `docs/director-ia/DIRECTOR_IA_V2_FASE_2_PLANNER.md`; `docs/director-ia/DIRECTOR_IA_V2_FASE_3_TOOL_ORCHESTRATOR.md`; `docs/director-ia/03A-OBSERVATION-PIPELINE.md`; `docs/director-ia/03-EXECUTIVE-KNOWLEDGE-STORE.md` |
 | Implementación | PENDIENTE |
-| Parámetros de calibración | PENDIENTES |
-| Auditoría | Corregido 2026-08-04: unicidad de propiedad; sin redefinición constitucional; sin decisiones de política; alineación de ausencia y pipeline |
+| Parámetros de calibración | PENDIENTES (G8) |
+| Auditoría | 2026-08-15: realización física D1–D15 (`ARCH-EB-PHYSICAL-DECISIONS-003`); sin redefinición constitucional; sin calibración G8 |
 
 ---
 
-*Fin de `02-EVIDENCE-BUILDER.md` v2.0. No se modificó código.*
+*Fin de `02-EVIDENCE-BUILDER.md` v2.1. No se modificó código.*
