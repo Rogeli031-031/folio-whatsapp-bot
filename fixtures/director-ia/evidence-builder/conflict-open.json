@@ -1,0 +1,71 @@
+{
+  "meta": {
+    "figures": "ILUSTRATIVAS / FICTICIAS",
+    "not_institutional_coverage": true,
+    "note": "Dos valores distintos misma entidad/métrica/periodo. Tipo A OPEN. Sin RESOLVED."
+  },
+  "input": {
+    "trace_id": "tr_conflict_open_ilustrativo",
+    "produced_at": "unclocked",
+    "plan": { "intent": "conflict_check" },
+    "tool_plan": { "tools": ["tool_a", "tool_b"] },
+    "acquisition_statuses": [
+      { "tool_id": "tool_a", "domain": "dom_a", "status": "ACQUIRED_OK" },
+      { "tool_id": "tool_b", "domain": "dom_b", "status": "ACQUIRED_OK" }
+    ],
+    "observation_records": [
+      {
+        "observation_id": "obs_a_1",
+        "trace_id": "tr_conflict_open_ilustrativo",
+        "source": {
+          "tool_id": "tool_a",
+          "domain": "dom_a",
+          "system": "sys_a",
+          "source_family": "fam_a",
+          "source_instance_id": "a:1",
+          "content_author_id": "author_a"
+        },
+        "extracted_by": "tool_a",
+        "triggered_by": "usuario_ilustrativo",
+        "subject": { "entity_type": "planta", "entity_id": "puebla", "entity_label": "Puebla" },
+        "entity_resolution": { "state": "RESOLVED", "original_value": "Puebla", "candidates": [] },
+        "extracted_at": "2026-08-15T00:00:00.000Z",
+        "pipeline_received_at": "2026-08-15T00:00:00.000Z",
+        "normalized_payload": { "venta_t": 95.0 },
+        "raw_payload_reference": "raw://conflict/obs_a_1",
+        "scope_complete": true,
+        "validation_state": "VALID",
+        "metric_or_event": "venta_t",
+        "value": 95.0,
+        "period": "mes_B",
+        "timestamp": "2026-08-15T00:00:00.000Z"
+      },
+      {
+        "observation_id": "obs_b_1",
+        "trace_id": "tr_conflict_open_ilustrativo",
+        "source": {
+          "tool_id": "tool_b",
+          "domain": "dom_b",
+          "system": "sys_b",
+          "source_family": "fam_b",
+          "source_instance_id": "b:1",
+          "content_author_id": "author_b"
+        },
+        "extracted_by": "tool_b",
+        "triggered_by": "usuario_ilustrativo",
+        "subject": { "entity_type": "planta", "entity_id": "puebla", "entity_label": "Puebla" },
+        "entity_resolution": { "state": "RESOLVED", "original_value": "Puebla", "candidates": [] },
+        "extracted_at": "2026-08-15T00:00:00.000Z",
+        "pipeline_received_at": "2026-08-15T00:00:00.000Z",
+        "normalized_payload": { "venta_t": 120.0 },
+        "raw_payload_reference": "raw://conflict/obs_b_1",
+        "scope_complete": true,
+        "validation_state": "VALID",
+        "metric_or_event": "venta_t",
+        "value": 120.0,
+        "period": "mes_B",
+        "timestamp": "2026-08-15T00:00:00.000Z"
+      }
+    ]
+  }
+}

@@ -7,84 +7,100 @@ Sin `status: AUTHORIZED` y sin `AUTHORIZED_BY_HUMAN`, el implementador no edita 
 Schema: `docs/dev-loop/TASK_TEMPLATE.md`.
 Procedimiento: `docs/dev-loop/LOOP_PROTOCOL.md`.
 
+Esto **no** es G1. `DRAFT` no es ejecutable.
+
 ---
 
 ```yaml
-task_id: "ARCH-EB-PHYSICAL-DECISIONS-003"
+task_id: "IMPL-EB-001"
 status: CLOSED
 
 authorized_by: "HUMAN_APPROVER"
-authorized_at: "2026-08-15T20:58:00-06:00"
+authorized_at: "2026-08-15T21:34:26-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-15"
 
 gates:
   G1_task_authorization: AUTHORIZED
-  G2_architecture_change: AUTHORIZED
+  G2_architecture_change: N/A
   G3_new_architecture_contract: N/A
   G8_calibration_materiality_signature: N/A
 
 objective: >
-  Formalizar contractualmente las decisiones físicas necesarias para habilitar
-  una futura implementación determinística del Evidence Builder, utilizando
-  como evidencia ARCH-EB-PHYSICAL-DECISIONS-002 y resolviendo explícitamente
-  la frontera ObservationRecord 03A -> Observación N1 EB ->
-  bundle.observations, sin implementar runtime, sin calibrar parámetros G8 y
-  sin alterar la epistemología constitucional N1-N5.
+  Implementar el runtime mínimo, puro y determinístico del Evidence Builder
+  conforme a 02-EVIDENCE-BUILDER.md v2.1, consumiendo fixtures contractuales
+  compatibles con 03A, produciendo Knowledge Bundles compatibles con
+  03-EXECUTIVE-KNOWLEDGE-STORE.md v1.3 y respetando estrictamente las
+  decisiones físicas D1-D15 ya formalizadas, sin integrar todavía Observation
+  Pipeline productivo, server.js, chat, dashboard ni persistencia automática
+  en EKS.
 
 in_scope:
   - "docs/dev-loop/CURRENT_TASK.md"
-  - "docs/dev-loop/reports/ARCH-EB-PHYSICAL-DECISIONS-003.md"
-
-  - "docs/dev-loop/reports/ARCH-EB-PHYSICAL-DECISIONS-002.md (solo lectura)"
+  - "docs/dev-loop/reports/IMPL-EB-001.md"
 
   - "docs/director-ia/DIRECTOR_IA_CONSTITUTION.md (solo lectura)"
   - "docs/director-ia/DIRECTOR_IA_EXECUTIVE_KNOWLEDGE_ENGINE.md (solo lectura)"
-  - "docs/director-ia/02-EVIDENCE-BUILDER.md"
+  - "docs/director-ia/02-EVIDENCE-BUILDER.md (solo lectura)"
   - "docs/director-ia/03A-OBSERVATION-PIPELINE.md (solo lectura)"
-  - "docs/director-ia/03-EXECUTIVE-KNOWLEDGE-STORE.md"
+  - "docs/director-ia/03-EXECUTIVE-KNOWLEDGE-STORE.md (solo lectura)"
   - "docs/director-ia/03B-END-TO-END-REFERENCE-FLOWS.md (solo lectura)"
   - "docs/director-ia/04-IES-STANDARD.md (solo lectura)"
   - "docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md (solo lectura)"
 
+  - "lib/director-ia-evidence-builder.js"
+  - "test/director-ia-evidence-builder.test.js"
+  - "fixtures/director-ia/evidence-builder/"
+
+  - "lib/director-ia-eks.js (solo lectura; validate_structure puede usarse desde tests para validar la frontera)"
+  - "fixtures/director-ia/eks/case-a-03b.json (solo lectura)"
+  - "fixtures/director-ia/eks/case-b-03b.json (solo lectura)"
+
 out_of_scope:
-  - "implementar Evidence Builder"
-  - "implementar Observation Pipeline"
-  - "crear runtime JS/TS/SQL"
+  - "modificar cualquier archivo en docs/director-ia/"
+  - "modificar Constitución"
+  - "modificar Executive Knowledge Engine"
+  - "modificar Evidence Builder contract"
+  - "modificar Observation Pipeline contract"
+  - "modificar EKS contract"
+  - "modificar IES contract"
+
   - "modificar server.js"
   - "modificar package.json"
-  - "modificar lib/"
-  - "modificar test/"
-  - "modificar fixtures/"
+  - "modificar .env.example"
+  - "crear SQL o migraciones"
+  - "crear tablas"
+  - "usar PostgreSQL"
   - "persistir Knowledge Bundles"
-  - "integrar EB con EKS"
-  - "integrar EB con chat o dashboard"
+  - "llamar append_snapshot"
+  - "integrar EB con createEksRuntime"
+
+  - "implementar Observation Pipeline"
+  - "implementar Tool Execution"
+  - "integrar Fases 1-3 con EB"
+  - "integrar chat"
+  - "integrar dashboard"
   - "implementar IES"
   - "implementar Reasoning Engine"
   - "implementar Channel Projection"
 
-  - "modificar DIRECTOR_IA_CONSTITUTION.md"
-  - "modificar DIRECTOR_IA_EXECUTIVE_KNOWLEDGE_ENGINE.md"
-  - "modificar 03A-OBSERVATION-PIPELINE.md"
-  - "modificar 03B-END-TO-END-REFERENCE-FLOWS.md"
-  - "modificar 04-IES-STANDARD.md"
-  - "modificar 05-REASONING-ENGINE.md"
-  - "modificar 06-CHANNEL-PROJECTION.md"
-  - "modificar DIRECTOR_IA_ARCHITECTURE_INDEX.md"
+  - "leer datos productivos"
+  - "llamar tools"
+  - "llamar LLM"
+  - "generar hipótesis"
+  - "crear lenguaje causal no autorizado"
 
   - "calibrar wi"
   - "calibrar k"
-  - "definir Fs productivo"
-  - "definir ventanas R"
-  - "definir umbrales productivos de severidad"
+  - "fijar Fs productivo por tool/dominio"
+  - "fijar ventanas R"
+  - "fijar umbrales productivos de severidad"
   - "crear ruleset productivo de materiality"
   - "crear reglas causales"
   - "crear contratos de tool que prueben inexistencia"
-  - "aprobar cualquier materia reservada a G8"
 
   - "commit"
   - "push"
   - "merge"
-  - "crear o ejecutar IMPL-EB-001"
   - "encadenar siguiente tarea"
 
 contracts_in_force:
@@ -96,186 +112,240 @@ contracts_in_force:
   - "docs/director-ia/03B-END-TO-END-REFERENCE-FLOWS.md"
   - "docs/director-ia/04-IES-STANDARD.md"
 
-proposed_human_decisions:
-  D1_interface:
-    decision: "I2"
-    meaning: >
-      Evidence Builder se realiza como módulo puro con etapas explícitas
-      N1 -> N2 -> N3 -> N4 -> emitBundle, desacoplado de server.js y sin llamar
-      append_snapshot.
+approved_physical_decisions:
+  D1_interface: "I2"
+  D2_input: "E1"
+  D2_bundle_observations: "N1_WRAPS_03A"
+  D3_level_progression: "SEQUENTIAL_BARRIERS"
+  D4_rule_registry: "R_MOD_EMPTY_GOVERNED_SETS"
+  D5_ids_traceability: "OPAQUE_TRACEABLE_IDS"
+  D6_lineage_cb: "PRESERVE_FULL_03A_LINEAGE_NO_K"
+  D7_confidence: "DIMENSIONS_WITHOUT_FALSE_PRECISION"
+  D8_absence: "FAIL_CLOSED"
+  D9_conflict_resolution: "LITERAL_STATE_MACHINE"
+  D10_materiality: "NOT_ASSESSED_UNTIL_G8"
+  D11_purity: "PURE_NO_SIDE_EFFECTS"
+  D12_eks_boundary: "EB_SEMANTICS_PLUS_EKS_STRUCTURE"
+  D13_fixtures: "03B_PLUS_MINIMAL_03A_FAIL_CLOSED_CASES"
+  D14_order: "EB_FIXTURES_FIRST_OP_BEFORE_PRODUCTION"
+  D15_registration: "REGISTER_MINIMUM_PHYSICAL_BOUNDARY"
 
-  D2_input_and_bundle_observations:
-    input_decision: "E1"
-    meaning: >
-      El input físico mantiene dos listas hermanas e independientes:
-      acquisition_statuses[] y observation_records[]. AcquisitionStatus no se
-      fusiona dentro del ObservationRecord.
-
-    bundle_observations_decision: "N1_WRAPS_03A"
-    meaning: >
-      Cada ObservationRecord transportable de 03A es transformado
-      determinísticamente por EB en una Observación N1. La Observación N1
-      preserva identidad, procedencia, lineage y referencia al payload original
-      del ObservationRecord fuente y añade únicamente semántica que pertenece
-      contractualmente al EB. bundle.observations contiene estas Observaciones
-      N1 del Evidence Builder, no AcquisitionStatus y no una reinterpretación
-      libre del payload 03A.
-
-    preservation_rule: >
-      content_author_id, extracted_by, triggered_by, source.system,
-      source_family, source_instance_id, trace_id, observation_id,
-      raw_payload_reference y demás elementos de linaje/procedencia no pueden
-      perderse, inventarse ni reinterpretarse durante 03A -> N1.
-
-  D3_level_progression:
-    decision: "SEQUENTIAL_BARRIERS"
-    meaning: >
-      N1 -> N2 -> N3 -> N4 se ejecuta con barreras explícitas. Ningún hecho sin
-      observación; ninguna evidencia sin hechos; ningún diagnóstico sin regla y
-      soporte. Listas vacías son válidas y no equivalen a salto de nivel.
-
-  D4_rule_registry:
-    decision: "R_MOD_EMPTY_GOVERNED_SETS"
-    meaning: >
-      Registry versionado en implementación, con conjuntos de reglas de
-      elevación de ausencia, resolución, causalidad y materiality vacíos mientras
-      no exista gobernanza/calibración autorizada. No se inventan reglas para
-      completar tests.
-
-  D5_ids_traceability:
-    decision: "OPAQUE_TRACEABLE_IDS"
-    meaning: >
-      Se preservan trace_id y observation_id del OP. N2-N4, conflictos,
-      preguntas y bundle_id utilizan identificadores opacos únicos y trazables.
-      No se congela algoritmo UUID/hash como obligación arquitectónica.
-
-  D6_lineage_cb:
-    decision: "PRESERVE_FULL_03A_LINEAGE_NO_K"
-    meaning: >
-      Se preserva todo el lineage de 03A y los mínimos de 02. La independencia
-      se determina por origen productivo/cadena de captura, no por repetición.
-      No se aplica saturación k mientras siga pendiente G8.
-
-  D7_confidence:
-    decision: "DIMENSIONS_WITHOUT_FALSE_PRECISION"
-    meaning: >
-      Fs, R, Cb, Cs y Cb_ov se exponen como dimensiones conforme a contratos,
-      sin producto numérico calibrado ni pesos wi inventados. NO_CONOZCO puede
-      expresar 0.00 únicamente donde ya lo exija la autoridad contractual.
-
-  D8_absence:
-    decision: "FAIL_CLOSED"
-    meaning: >
-      DATA_NOT_FOUND/ACQUIRED_EMPTY no se elevan a ABSENCE_CONFIRMED mientras
-      falte cualquiera de las condiciones de 02 §10.3, incluyendo contrato de
-      tool y applied_absence_rule_id versionado.
-
-  D9_conflict_resolution:
-    decision: "LITERAL_STATE_MACHINE"
-    meaning: >
-      resolution_status aplica literalmente OPEN, UNDER_REVIEW, RESOLVED y
-      SUPERSEDED. Sin ruleset de resolución no se emite RESOLVED.
-      weight_assessment nunca cierra un conflicto.
-
-  D10_materiality:
-    decision: "NOT_ASSESSED_UNTIL_G8"
-    meaning: >
-      Sin ruleset calibrado, los objetos que declaran materiality emiten
-      MATERIALITY_NOT_ASSESSED y applied_materiality_rule_id null. Nunca se
-      degrada silenciosamente a MAT_LOW.
-
-  D11_purity:
-    decision: "PURE_NO_SIDE_EFFECTS"
-    meaning: >
-      EB no muta inputs, no hace I/O operacional, no usa LLM, no escribe EKS y
-      no llama Reasoning Engine. Misma entrada + mismos rulesets versionados
-      produce el mismo resultado determinístico.
-
-  D12_eks_boundary:
-    decision: "EB_SEMANTICS_PLUS_EKS_STRUCTURE"
-    meaning: >
-      EB posee validación semántica N1-N4 y el Bundle emitido debe además pasar
-      validate_structure de EKS. Esta tarea no amplía ni redefine
-      validate_structure.
-
-  D13_fixtures:
-    decision: "03B_PLUS_MINIMAL_03A_FAIL_CLOSED_CASES"
-    meaning: >
-      La implementación futura usará A/B de 03B como referencia ilustrativa y
-      podrá crear entradas 03A mínimas para ACQUIRED_EMPTY, TOOL_ERROR,
-      SOURCE_RESTRICTED, ENTITY_UNRESOLVED, conflicto OPEN y
-      MATERIALITY_NOT_ASSESSED, sin inventar reglas productivas.
-
-  D14_implementation_order:
-    decision: "EB_FIXTURES_FIRST_OP_BEFORE_PRODUCTION"
-    meaning: >
-      EB puede implementarse y probarse primero contra fixtures contractuales
-      03A/03B. Observation Pipeline runtime debe existir antes de producir
-      Bundles de producción o alimentar EKS con conocimiento no-fixture.
-
-  D15_contractual_registration:
-    decision: "REGISTER_MINIMUM_PHYSICAL_BOUNDARY"
-    meaning: >
-      Registrar en 02 la realización física mínima D1-D14 y registrar en 03
-      únicamente la aclaración necesaria de que bundle.observations contiene
-      Observaciones N1 emitidas por Evidence Builder, derivadas de
-      ObservationRecords 03A con preservación de procedencia y trazabilidad.
-      No reabrir epistemología, coverage, EKS append-only ni otros contratos.
-
-g8_reserved_and_unchanged:
+g8_reserved_and_unavailable:
   - "wi"
   - "k"
-  - "Fs productivo por tool/dominio"
-  - "ventanas de recencia R"
+  - "Fs productivo"
+  - "ventanas R"
   - "umbrales productivos de severidad"
   - "ruleset productivo de materiality"
   - "reglas causales"
   - "contratos de tool que prueban inexistencia"
 
+required_runtime_interfaces:
+  - "to_n1(input)"
+  - "to_n2(n1, context)"
+  - "to_n3(n2, context)"
+  - "to_n4(n3, context)"
+  - "emit_bundle(stages, context)"
+  - "assemble(input)"
+
+required_input_shape:
+  trace_id: "string no vacío"
+  plan: "objeto o referencia trazable"
+  tool_plan: "objeto o referencia trazable"
+  acquisition_statuses: "array separado; nunca fusionado dentro de ObservationRecord"
+  observation_records: "array de ObservationRecord 03A transportables"
+
+n1_rules:
+  - "cada ObservationRecord transportable produce como máximo una Observación N1 correspondiente"
+  - "AcquisitionStatus nunca se convierte por sí solo en Observación N1"
+  - "preservar observation_id y trace_id"
+  - "preservar source.system"
+  - "preservar source.content_author_id incluido null"
+  - "preservar source.source_family"
+  - "preservar source.source_instance_id"
+  - "preservar extracted_by"
+  - "preservar triggered_by"
+  - "preservar raw_payload_reference"
+  - "preservar lineage y procedencia sin reinterpretar"
+  - "normalized_payload puede usarse para procesamiento pero no sustituye referencia al original"
+  - "quality y absence_state solo pueden surgir conforme a reglas EB"
+  - "no inventar content_author_id"
+  - "no interpretar payload"
+  - "no generar hipótesis"
+
+n2_rules:
+  - "ningún hecho sin Observación N1 soporte"
+  - "DATA_NOT_FOUND no afirma ausencia"
+  - "ACQUIRED_EMPTY se trata fail-closed"
+  - "ABSENCE_CONFIRMED no puede emitirse sin cumplir las seis condiciones de 02 §10.3"
+  - "mientras no existan contratos de tool + applied_absence_rule_id, no emitir ABSENCE_CONFIRMED"
+  - "confidence pertenece al hecho"
+  - "exponer dimensiones Fs, R, Cb, Cs, Cb_ov sin producto calibrado"
+  - "no inventar wi"
+  - "no inventar k"
+  - "no inventar Fs ni ventanas R"
+  - "MATERIALITY_NOT_ASSESSED mientras no exista ruleset G8"
+
+n3_rules:
+  - "ninguna evidencia sin hechos soporte"
+  - "applied_rule obligatorio cuando exista evidencia"
+  - "registry causal vacío"
+  - "no producir causalidad informal"
+  - "no usar probablemente, quizá o inferencia"
+  - "sin reglas determinísticas autorizadas, evidence puede permanecer vacío"
+
+n4_rules:
+  - "ningún diagnóstico sin regla y soporte"
+  - "classification_criterion obligatorio"
+  - "sin reglas de diagnóstico autorizadas, diagnostics puede permanecer vacío"
+  - "no inventar severidad productiva"
+  - "no suavizar Tipo E"
+  - "no generar hipótesis"
+
+rule_registry_initial_state:
+  evidence_rules: "vacío salvo reglas explícitamente existentes en contratos"
+  absence_rules: "vacío"
+  resolution_rules: "vacío"
+  causal_rules: "vacío"
+  materiality_rules: "vacío"
+  ruleset_version: "evidence-builder-2.1-physical-v1"
+
+conflict_rules:
+  - "resolution_status enum exacto: OPEN | UNDER_REVIEW | RESOLVED | SUPERSEDED"
+  - "weight_assessment nunca resuelve"
+  - "sin applied_resolution_rule_id no emitir RESOLVED"
+  - "SUPERSEDED no equivale a RESOLVED"
+  - "Tipo E OPEN o UNDER_REVIEW nunca se oculta"
+  - "sin ruleset de resolución, conflicto tipificado permanece OPEN cuando corresponda"
+
+materiality_rules:
+  - "sin ruleset calibrado: MATERIALITY_NOT_ASSESSED"
+  - "applied_materiality_rule_id = null cuando no evaluado"
+  - "no convertir MATERIALITY_NOT_ASSESSED en MAT_LOW"
+  - "NO_CONOZCO con bancos vacíos no inventa materiality"
+
+bundle_rules:
+  - "producer debe ser evidence_builder"
+  - "bundle.observations contiene Observaciones N1 emitidas por EB"
+  - "bundle.observations nunca contiene AcquisitionStatus"
+  - "facts contiene únicamente N2"
+  - "evidence contiene únicamente N3"
+  - "diagnostics contiene únicamente N4"
+  - "conflicts preserva conflictos válidos"
+  - "open_questions usa estructura contractual de 02"
+  - "source_health deriva de AcquisitionStatus sin convertirlo en verdad empresarial"
+  - "coverage debe respetar contrato vigente; EB no inventa quinto estado"
+  - "Bundle debe pasar validate_structure de EKS"
+  - "EB no llama append_snapshot"
+
+purity_rules:
+  - "misma entrada + mismo registry versionado -> mismo resultado semántico"
+  - "no mutar input"
+  - "no usar reloj ambiental para decisiones semánticas"
+  - "no hacer I/O operacional"
+  - "no usar DB"
+  - "no usar red"
+  - "no usar LLM"
+  - "no usar tools"
+  - "no escribir EKS"
+  - "IDs pueden ser inyectables/testeables para preservar determinismo"
+
+fixtures_required:
+  - "case-a-input-03a.json"
+  - "case-b-input-03a.json"
+  - "acquired-empty.json"
+  - "tool-error.json"
+  - "source-restricted.json"
+  - "entity-unresolved.json"
+  - "conflict-open.json"
+
+fixture_rules:
+  - "todos los fixtures son sintéticos/ilustrativos"
+  - "no representan cobertura institucional real"
+  - "no inventar reglas productivas para hacerlos pasar"
+  - "03B A/B son referencia de forma esperada, no datos productivos"
+
+tests_required:
+  - "assemble conserva separación acquisition_statuses / observation_records"
+  - "03A ObservationRecord -> N1 preserva procedencia y lineage"
+  - "content_author_id null permanece null"
+  - "extracted_by nunca se convierte en autor"
+  - "triggered_by nunca se convierte en fuente de afirmación"
+  - "N1 no muta ObservationRecord de entrada"
+  - "ningún N2 sin N1"
+  - "ningún N3 sin N2"
+  - "ningún N4 sin regla y soporte"
+  - "ACQUIRED_EMPTY no produce ABSENCE_CONFIRMED"
+  - "TOOL_ERROR no se convierte en vacío de negocio"
+  - "SOURCE_RESTRICTED no produce hecho"
+  - "ENTITY_UNRESOLVED no inventa entidad canónica"
+  - "sin G8 se emite MATERIALITY_NOT_ASSESSED donde corresponda"
+  - "sin reglas de resolución no se emite RESOLVED"
+  - "Tipo E no se suaviza ni oculta"
+  - "Bundle producer = evidence_builder"
+  - "bundle.observations contiene N1 y no AcquisitionStatus"
+  - "Bundle emitido pasa EKS validate_structure"
+  - "EB no llama append_snapshot"
+  - "input original permanece sin mutación"
+
+acceptance_criteria:
+  - "git diff --check sin errores"
+  - "todos los tests de Evidence Builder pasan"
+  - "tests existentes de EKS continúan pasando"
+  - "ningún contrato en docs/director-ia/ modificado"
+  - "server.js no modificado"
+  - "package.json no modificado"
+  - "no hay SQL ni migraciones nuevas"
+  - "no hay integración productiva"
+  - "no se calibra G8"
+  - "no existe ABSENCE_CONFIRMED inventado"
+  - "no existe RESOLVED inventado"
+  - "no existe MAT_* inventado"
+  - "no existe causalidad no autorizada"
+  - "Bundle producido es estructuralmente aceptado por EKS"
+  - "reporte documenta cualquier gap que impida completar semántica N2-N4"
+
 allowed_actions:
   - "leer contracts_in_force"
-  - "leer ARCH-EB-PHYSICAL-DECISIONS-002.md"
-  - "comparar proposed_human_decisions con contratos vigentes"
-  - "modificar únicamente 02-EVIDENCE-BUILDER.md bajo G2"
-  - "modificar 03-EXECUTIVE-KNOWLEDGE-STORE.md únicamente para aclarar bundle.observations bajo G2"
-  - "crear docs/dev-loop/reports/ARCH-EB-PHYSICAL-DECISIONS-003.md"
+  - "crear lib/director-ia-evidence-builder.js"
+  - "crear test/director-ia-evidence-builder.test.js"
+  - "crear fixtures/director-ia/evidence-builder/"
+  - "leer lib/director-ia-eks.js"
+  - "leer fixtures EKS A/B"
+  - "ejecutar tests EB"
+  - "ejecutar tests EKS existentes"
   - "ejecutar git diff --check"
+  - "crear docs/dev-loop/reports/IMPL-EB-001.md"
   - "actualizar CURRENT_TASK mediante transiciones permitidas"
 
 forbidden_actions:
-  - "modificar contratos fuera de 02 y la aclaración mínima permitida en 03"
-  - "reinterpretar D1-D15"
-  - "introducir nuevas decisiones arquitectónicas"
-  - "calibrar parámetros G8"
-  - "crear reglas productivas"
-  - "modificar código productivo"
-  - "modificar tests"
-  - "crear runtime"
-  - "integrar EB"
-  - "crear IMPL-EB-001"
-  - "autoaprobar gates adicionales"
+  - "modificar docs/director-ia/"
+  - "modificar server.js"
+  - "modificar package.json"
+  - "modificar EKS runtime"
+  - "crear SQL"
+  - "crear migraciones"
+  - "usar base de datos"
+  - "llamar append_snapshot"
+  - "integrar OP"
+  - "integrar chat/dashboard"
+  - "calibrar G8"
+  - "inventar reglas productivas"
+  - "crear hipótesis"
+  - "usar LLM"
+  - "usar tools"
+  - "leer datos productivos"
   - "commit"
   - "push"
   - "merge"
-  - "encadenar otra tarea"
-
-acceptance_criteria:
-  - "solo 02 y la aclaración mínima de 03 pueden cambiar bajo G2"
-  - "D1-D15 quedan registrados sin reinterpretación"
-  - "bundle.observations queda inequívocamente definido"
-  - "AcquisitionStatus permanece separado de N1"
-  - "procedencia y lineage de 03A permanecen preservados"
-  - "no se calibra ningún parámetro G8"
-  - "no se crea runtime"
-  - "no se modifica código"
-  - "no se abre IMPL-EB-001"
-  - "git diff --check sin errores"
-  - "reporte obligatorio creado"
+  - "encadenar siguiente tarea"
+  - "autoaprobar gates"
 
 expected_terminal_state: >
-  DONE_PENDING_REVIEW si la formalización puede realizarse sin contradicción
-  contractual. BLOCKED o STOPPED si aparece una incompatibilidad que requiera
-  una decisión humana adicional.
+  DONE_PENDING_REVIEW si el runtime mínimo puede implementarse respetando
+  contratos y modo fail-closed. BLOCKED o STOPPED si para completar el runtime
+  mínimo resulta necesario inventar una regla, calibración G8 o modificar
+  contratos.
 
 max_attempts: 1
-result_report_path: "docs/dev-loop/reports/ARCH-EB-PHYSICAL-DECISIONS-003.md"
+result_report_path: "docs/dev-loop/reports/IMPL-EB-001.md"
