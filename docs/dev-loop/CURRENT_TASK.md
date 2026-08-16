@@ -7,197 +7,242 @@ Sin `status: AUTHORIZED` y sin `AUTHORIZED_BY_HUMAN`, el implementador no edita 
 Schema: `docs/dev-loop/TASK_TEMPLATE.md`.
 Procedimiento: `docs/dev-loop/LOOP_PROTOCOL.md`.
 
-Esto **no** es G1. `DRAFT` no es ejecutable.
-
 ---
 
 ```yaml
-task_id: "IMPL-EKS-INTEGRATION-001"
+task_id: "ARCH-EB-PHYSICAL-DECISIONS-002"
 status: CLOSED
 
 authorized_by: "HUMAN_APPROVER"
-authorized_at: "2026-08-15T19:57:00-06:00"
+authorized_at: "2026-08-15"
 human_authorization: "AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-15"
 
 gates:
   G1_task_authorization: AUTHORIZED
-  G2_architecture_change: N/A
+  G2_architecture_change: PENDING
   G3_new_architecture_contract: N/A
 
 objective: >
-  Integrar de forma mínima y controlada el runtime ya implementado del
-  Executive Knowledge Store (EKS) con la infraestructura de ejecución del
-  producto, conforme a docs/director-ia/03-EXECUTIVE-KNOWLEDGE-STORE.md v1.2,
-  sin conectar todavía productores de Knowledge Bundle, chat, dashboard,
-  Evidence Builder ni otros módulos de Director IA.
+  Auditar la preparación física y de runtime del Evidence Builder antes de
+  implementar código productivo. Identificar exclusivamente las decisiones
+  técnicas que todavía deben ser aprobadas por HUMAN_APPROVER para implementar
+  posteriormente un Evidence Builder determinístico que consuma las salidas
+  contractuales de 03A y produzca Knowledge Bundles compatibles con 03,
+  sin redefinir contratos, sin calibrar parámetros pendientes y sin implementar
+  runtime en esta tarea.
 
 in_scope:
   - "docs/dev-loop/CURRENT_TASK.md"
-  - "docs/dev-loop/reports/IMPL-EKS-INTEGRATION-001.md"
+  - "docs/dev-loop/reports/ARCH-EB-PHYSICAL-DECISIONS-001.md"
+  - "docs/dev-loop/reports/ARCH-EB-PHYSICAL-DECISIONS-002.md"
 
   - "docs/director-ia/DIRECTOR_IA_CONSTITUTION.md (solo lectura)"
+  - "docs/director-ia/DIRECTOR_IA_EXECUTIVE_KNOWLEDGE_ENGINE.md (solo lectura)"
+  - "docs/director-ia/02-EVIDENCE-BUILDER.md (solo lectura)"
+  - "docs/director-ia/03A-OBSERVATION-PIPELINE.md (solo lectura)"
   - "docs/director-ia/03-EXECUTIVE-KNOWLEDGE-STORE.md (solo lectura)"
   - "docs/director-ia/03B-END-TO-END-REFERENCE-FLOWS.md (solo lectura)"
+  - "docs/director-ia/04-IES-STANDARD.md (solo lectura)"
   - "docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md (solo lectura)"
 
-  - "lib/director-ia-eks.js"
-  - "server.js"
-  - "package.json"
-  - ".env.example"
+  - "docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md (solo lectura)"
+  - "docs/director-ia/DIRECTOR_IA_V2_FASE_1_VERACIDAD.md (solo lectura)"
+  - "docs/director-ia/DIRECTOR_IA_V2_FASE_2_PLANNER.md (solo lectura)"
+  - "docs/director-ia/DIRECTOR_IA_V2_FASE_3_TOOL_ORCHESTRATOR.md (solo lectura)"
 
-  - "sql/015_director_ia_eks.sql (solo lectura salvo corrección estrictamente necesaria para integración)"
-  - "scripts/apply-director-ia-eks-schema.js (solo lectura salvo corrección estrictamente necesaria para integración)"
-  - "test/director-ia-eks.test.js"
-  - "test/director-ia-eks-integration.test.js"
+  - "package.json (solo lectura)"
+  - "server.js (solo lectura)"
+  - "lib/ (solo lectura para inventario)"
+  - "test/ (solo lectura para inventario)"
 
 out_of_scope:
-  - "modificar cualquier contrato en docs/director-ia/"
-  - "modificar la Constitución"
-  - "modificar 03B"
-  - "modificar 04-IES-STANDARD.md"
-  - "modificar 05-REASONING-ENGINE.md"
-  - "modificar 06-CHANNEL-PROJECTION.md"
+  - "modificar cualquier archivo en docs/director-ia/"
+  - "modificar Constitución"
+  - "modificar Executive Knowledge Engine"
+  - "modificar Evidence Builder"
+  - "modificar Observation Pipeline"
+  - "modificar EKS"
+  - "modificar IES"
+  - "modificar Reasoning Engine"
+  - "modificar Channel Projection"
 
   - "implementar Evidence Builder"
   - "implementar Observation Pipeline"
-  - "implementar IES Builder"
-  - "implementar Reasoning Engine"
-  - "implementar Channel Projection"
+  - "implementar Tool Execution"
+  - "integrar EB con server.js"
+  - "integrar EB con EKS"
+  - "persistir Knowledge Bundles"
 
-  - "hacer que chat o dashboard escriban directamente en EKS"
-  - "crear endpoints públicos de EKS"
-  - "crear comandos WhatsApp para EKS"
-  - "leer ARR, IGF, folios, bitácora u otras tablas operacionales como conocimiento"
-  - "crear Knowledge Bundles desde fuentes productivas"
-  - "persistir datos productivos durante las pruebas"
+  - "crear runtime JS/TS/SQL"
+  - "modificar código productivo"
+  - "modificar tests"
 
-  - "añadir LLM o IA dentro de EKS"
-  - "recalcular confidence, materiality, coverage, facts, evidence o diagnosis"
-  - "mutar Knowledge Bundles"
-  - "usar UPDATE o DELETE sobre Knowledge Snapshots"
-  - "usar ON CONFLICT DO UPDATE sobre Knowledge Snapshots"
+  - "calibrar wi"
+  - "calibrar k"
+  - "definir umbrales productivos de severidad"
+  - "definir escalado productivo de Fs"
+  - "definir ventanas productivas de recencia"
+  - "crear reglas causales"
+  - "crear reglas de negocio no presentes en contratos"
 
-  - "cambiar las decisiones físicas D1-D9"
-  - "cambiar el algoritmo criptográfico a nivel contractual"
-  - "modificar meta-protocolo"
-
+  - "autoaprobar G2"
+  - "crear o ejecutar IMPL-EB-001"
   - "commit"
   - "push"
   - "merge"
+  - "cambiar de rama durante la ejecución"
   - "encadenar siguiente tarea"
 
 contracts_in_force:
   - "docs/director-ia/DIRECTOR_IA_CONSTITUTION.md"
+  - "docs/director-ia/DIRECTOR_IA_EXECUTIVE_KNOWLEDGE_ENGINE.md"
+  - "docs/director-ia/02-EVIDENCE-BUILDER.md"
+  - "docs/director-ia/03A-OBSERVATION-PIPELINE.md"
   - "docs/director-ia/03-EXECUTIVE-KNOWLEDGE-STORE.md"
   - "docs/director-ia/03B-END-TO-END-REFERENCE-FLOWS.md"
+  - "docs/director-ia/04-IES-STANDARD.md"
   - "docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md"
 
-approved_physical_decisions:
-  D1_persistence_engine_colocation: "P1"
-  D2_snapshot_representation: "R3"
-  D3_versioning_concurrency: "V2 + UNIQUE(trace_id, version)"
-  D4_get_snapshot_semantics: "G_LATEST"
-  D5_list_versions_grouping: "L_TRACE"
-  D6_migration_strategy: "M1"
-  D7_integrity: "I_DIGEST"
-  D8_connection_pool: "POOL_DEDICATED"
-  D9_implementation_order: "O_EKS_FIRST"
+contractual_boundaries:
+  observation_pipeline:
+    owns:
+      - "AcquisitionStatus"
+      - "ObservationRecord"
+      - "normalización técnica de payload"
+      - "resolución declarada de entidad"
+      - "preservación de source/content_author_id/extracted_by/triggered_by"
+    must_not:
+      - "determinar ABSENCE_CONFIRMED"
+      - "crear hechos"
+      - "crear evidencias"
+      - "crear diagnósticos"
+      - "determinar Knowledge Coverage"
+      - "escribir EKS"
 
-integration_goal:
-  - "hacer disponible EKS como servicio interno del runtime"
-  - "usar configuración existente de DATABASE_URL sin duplicar secretos"
-  - "mantener pool dedicado lógico para EKS"
-  - "permitir inicialización y cierre controlados del pool EKS"
-  - "no producir Knowledge Bundles en esta tarea"
-  - "no persistir Snapshots automáticamente desde ningún flujo de negocio"
-  - "no exponer EKS directamente a usuarios o canales"
+  evidence_builder:
+    consumes:
+      - "AcquisitionStatus"
+      - "ObservationRecord"
+      - "Plan/Tool Plan y trazabilidad contractual aplicable"
+    owns:
+      - "ensamblaje N1 -> N2 -> N3 -> N4"
+      - "tipificación EB de ausencia/no-valor"
+      - "elevación determinística a ABSENCE_CONFIRMED"
+      - "confidence dimensions sin falsa precisión mientras falte calibración"
+      - "conflictos compuestos"
+      - "resolution_status y transiciones válidas"
+      - "materiality mecánica cuando exista ruleset"
+      - "MATERIALITY_NOT_ASSESSED cuando no exista ruleset calibrado"
+      - "preguntas abiertas neutrales"
+      - "producción del Knowledge Bundle"
+    must_not:
+      - "inventar política"
+      - "inventar fuentes"
+      - "generar hipótesis"
+      - "usar LLM"
+      - "resolver conflictos por weight_assessment"
+      - "interpretar DATA_NOT_FOUND como ausencia"
+      - "inventar parámetros de calibración"
 
-required_behavior:
-  - "el runtime principal puede inicializar el servicio EKS de forma explícita"
-  - "la ausencia de configuración requerida debe fallar de forma controlada o dejar EKS deshabilitado según el patrón existente del producto"
-  - "el pool EKS debe ser independiente del pool operacional existente"
-  - "no debe abrirse un pool por request"
-  - "debe existir cierre limpio del pool al finalizar el proceso cuando corresponda"
-  - "la integración no altera validate_structure, append_snapshot, get_snapshot ni list_versions"
-  - "la integración no cambia semántica append-only"
-  - "la integración no escribe ningún Snapshot por sí sola"
-  - "la integración debe conservar compatibilidad con ENABLE_DIRECTOR_IA cuando corresponda al patrón existente"
-  - "ningún secreto debe quedar hardcodeado"
+  eks:
+    consumes:
+      - "Knowledge Bundle"
+    owns:
+      - "persistencia append-only"
+      - "Knowledge Snapshot"
+    must_not:
+      - "reinterpretar el Bundle"
+      - "cambiar resolution_status"
+      - "recalcular conocimiento"
 
-implementation_rules:
-  - "reutilizar patrones existentes solo cuando sean compatibles con contrato 03"
-  - "mantener EKS aislado de las tablas operacionales"
-  - "no introducir dependencias nuevas salvo necesidad técnica estricta y documentada"
-  - "no modificar el schema contractual del Knowledge Snapshot"
-  - "no modificar D1-D9"
-  - "no convertir EKS en singleton global mutable si eso rompe aislamiento o pruebas"
-  - "preferir inicialización explícita y testeable"
-  - "la integración debe ser reversible y de mínimo alcance"
-  - "si la integración requiere una nueva decisión arquitectónica no cubierta por 03 v1.2 o D1-D9: BLOCKED + reporte + STOP"
+known_unresolved_calibration:
+  - "wi"
+  - "k"
+  - "umbrales de severidad"
+  - "escalado Fs por tool/dominio"
+  - "ventanas de recencia R"
+  - "reglas causales aprobadas"
 
-tests_required:
-  - "mantener pasando test/director-ia-eks.test.js"
-  - "crear pruebas específicas de integración"
-  - "probar inicialización del servicio EKS sin conectar fuentes productivas"
-  - "probar que se utiliza un pool dedicado"
-  - "probar que no se crea un pool nuevo por operación"
-  - "probar cierre controlado del pool"
-  - "probar comportamiento cuando EKS está deshabilitado o falta configuración, según patrón real del runtime"
-  - "probar que integrar EKS no dispara append_snapshot automáticamente"
-  - "probar que chat/dashboard no quedan acoplados al EKS"
-  - "probar que server.js no altera Knowledge Bundles ni Snapshots"
-  - "mantener guards append-only existentes"
+audit_questions:
+  - "D1: interfaz física mínima del Evidence Builder"
+  - "D2: forma física exacta de entrada AcquisitionStatus + ObservationRecord"
+  - "D3: progresión interna N1 -> N2 -> N3 -> N4 sin saltos"
+  - "D4: registry/versionado de reglas determinísticas"
+  - "D5: estrategia de IDs y trazabilidad"
+  - "D6: preservación de lineage e independencia para Cb sin inventar k"
+  - "D7: representación de confidence sin falsa precisión"
+  - "D8: DATA_NOT_FOUND -> ABSENCE_CONFIRMED rule-driven y fail-closed"
+  - "D9: resolution_status y transiciones válidas"
+  - "D10: MATERIALITY_NOT_ASSESSED sin ruleset calibrado"
+  - "D11: pureza/inmutabilidad del Builder"
+  - "D12: validación de Knowledge Bundle contra frontera EKS"
+  - "D13: fixtures iniciales contractuales"
+  - "D14: orden de implementación OP vs EB"
+  - "D15: decisiones que requieren G2 antes de implementación"
+
+required_report:
+  - "estado real del repositorio relevante al EB/OP/EKS"
+  - "inventario de soporte existente reutilizable"
+  - "gaps entre contratos y runtime actual"
+  - "respuesta razonada a D1-D15"
+  - "alternativas técnicas"
+  - "recomendación técnica no vinculante"
+  - "riesgos"
+  - "decisiones exactas que requieren HUMAN_APPROVER"
+  - "identificación explícita de cualquier decisión que requiera G2"
+  - "evaluación GO / BLOCKED para futura IMPL-EB-001"
+  - "orden recomendado OP/EB sin ejecutarlo"
 
 acceptance_criteria:
+  - "rama de ejecución distinta de main"
+  - "no se modifica ningún contrato"
+  - "no se crea runtime"
+  - "no se modifica server.js"
+  - "no se modifica package.json"
+  - "no se modifica lib/"
+  - "no se modifica test/"
+  - "no se implementa OP"
+  - "no se implementa EB"
+  - "no se abre IMPL-EB-001"
+  - "no se inventan wi, k, Fs, recencia ni severidad"
+  - "no se inventan reglas causales"
+  - "D1-D15 respondidas o explícitamente BLOCKED"
+  - "reporte diferencia contrato existente de propuesta"
+  - "reporte identifica decisiones humanas"
   - "git diff --check sin errores"
-  - "tests existentes de EKS pasan"
-  - "tests nuevos de integración pasan"
-  - "ningún archivo en docs/director-ia/ modificado"
-  - "EKS queda disponible como servicio interno de infraestructura"
-  - "pool EKS dedicado implementado o reutilizado conforme D8"
-  - "no existe persistencia automática desde chat/dashboard/runtime operacional"
-  - "no existe conexión a Evidence Builder porque su runtime sigue fuera de alcance"
-  - "no existen nuevos endpoints públicos de EKS"
-  - "no existen nuevas llamadas LLM relacionadas con EKS"
-  - "no existen UPDATE/DELETE/ON CONFLICT DO UPDATE sobre Knowledge Snapshots"
-  - "ningún secreto o DATABASE_URL real se copia al repositorio"
-  - "reporte identifica exactamente dónde quedó integrado EKS y qué sigue deliberadamente desconectado"
+  - "únicos cambios permitidos: CURRENT_TASK y reporte"
 
 allowed_actions:
   - "leer contracts_in_force"
-  - "leer el runtime EKS existente"
-  - "leer server.js y patrones actuales de configuración/conexión"
-  - "modificar server.js únicamente para bootstrap/lifecycle interno del EKS"
-  - "modificar lib/director-ia-eks.js únicamente si la integración requiere lifecycle/configuración sin cambiar semántica contractual"
-  - "modificar .env.example únicamente para documentar variables no secretas estrictamente necesarias"
-  - "modificar package.json únicamente si es necesario para scripts de prueba/integración"
-  - "crear test/director-ia-eks-integration.test.js"
-  - "ajustar tests EKS existentes si es estrictamente necesario sin reducir cobertura"
-  - "ejecutar pruebas locales"
+  - "leer documentos de soporte indicados"
+  - "leer código y tests actuales para inventario sin modificar"
+  - "ejecutar búsquedas locales de texto"
+  - "ejecutar comandos git de inspección"
   - "ejecutar git diff --check"
-  - "crear el reporte obligatorio"
-  - "actualizar CURRENT_TASK mediante las transiciones permitidas por LOOP_PROTOCOL.md"
+  - "crear docs/dev-loop/reports/ARCH-EB-PHYSICAL-DECISIONS-002.md"
+  - "actualizar CURRENT_TASK mediante transiciones permitidas por LOOP_PROTOCOL.md"
 
 forbidden_actions:
-  - "modificar contratos"
-  - "crear arquitectura nueva"
-  - "cambiar D1-D9"
-  - "implementar productor de Knowledge Bundle"
-  - "integrar Evidence Builder"
-  - "integrar Observation Pipeline"
-  - "integrar IES o Reasoning Engine"
-  - "integrar EKS con chat"
-  - "integrar EKS con dashboard"
-  - "crear rutas HTTP públicas para EKS"
-  - "leer o escribir datos productivos durante tests"
-  - "copiar .env o credenciales"
-  - "hardcodear DATABASE_URL"
-  - "añadir LLM, tools operacionales o lógica epistemológica"
+  - "modificar docs/director-ia/"
+  - "modificar código productivo"
+  - "modificar tests"
+  - "crear runtime"
+  - "crear migraciones"
+  - "integrar componentes"
+  - "calibrar parámetros pendientes"
+  - "inventar reglas de negocio"
+  - "autoaprobar G2"
+  - "crear o ejecutar IMPL-EB-001"
   - "commit"
   - "push"
   - "merge"
-  - "encadenar otra tarea"
-  - "autoaprobar gates"
+  - "cambiar de rama"
+  - "encadenar siguiente tarea"
+
+expected_terminal_state: >
+  DONE_PENDING_REVIEW si la auditoría puede producir una recomendación completa
+  sin modificar contratos. BLOCKED si alguna decisión necesaria exige cambio
+  contractual o autorización G2 antes de continuar.
 
 max_attempts: 1
-result_report_path: "docs/dev-loop/reports/IMPL-EKS-INTEGRATION-001.md"
+result_report_path: "docs/dev-loop/reports/ARCH-EB-PHYSICAL-DECISIONS-002.md"
