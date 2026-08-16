@@ -12,99 +12,93 @@ Esto **no** es G1. `DRAFT` no es ejecutable.
 ---
 
 ```yaml
-task_id: "IMPL-OP-EB-EKS-INTEGRATION-001"
+task_id: "ARCH-IES-PHYSICAL-DECISIONS-001"
 status: CLOSED
 
 authorized_by: "HUMAN_APPROVER"
-authorized_at: "2026-08-16T11:05:51-06:00"
+authorized_at: "2026-08-16T11:33:39-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-16"
 
 gates:
   G1_task_authorization: AUTHORIZED
-  G2_architecture_change: N/A
+  G2_architecture_change: PENDING_IF_REQUIRED
   G3_new_architecture_contract: N/A
   G8_calibration_materiality_signature: N/A
 
 objective: >
-  Integrar y validar de forma controlada el flujo técnico completo
-  Observation Pipeline -> Evidence Builder -> Executive Knowledge Store,
-  utilizando únicamente fixtures sintéticos y runtimes ya aprobados,
-  demostrando que un MINIMAL_EXECUTION_ENVELOPE puede producir
-  AcquisitionStatus + ObservationRecord, transformarse en Knowledge Bundle
-  fail-closed y persistirse como Knowledge Snapshot sin pérdida de procedencia,
-  sin bypass de capas y sin integrar todavía Tool Execution productivo,
-  server.js, chat, dashboard ni fuentes reales.
+  Auditar la realizabilidad física del IES Builder definido por
+  docs/director-ia/04-IES-STANDARD.md v1.0 contra los contratos y runtimes
+  actualmente existentes, identificar qué decisiones físicas ya están
+  congeladas, cuáles permanecen UNKNOWN y cuáles requieren decisión humana
+  antes de autorizar IMPL-IES-001, sin implementar runtime, sin modificar
+  contratos y sin reinterpretar la epistemología vigente.
 
 in_scope:
   - "docs/dev-loop/CURRENT_TASK.md"
-  - "docs/dev-loop/reports/IMPL-OP-EB-EKS-INTEGRATION-001.md"
+  - "docs/dev-loop/reports/ARCH-IES-PHYSICAL-DECISIONS-001.md"
 
   - "docs/director-ia/DIRECTOR_IA_CONSTITUTION.md (solo lectura)"
   - "docs/director-ia/DIRECTOR_IA_EXECUTIVE_KNOWLEDGE_ENGINE.md (solo lectura)"
-  - "docs/director-ia/03A-OBSERVATION-PIPELINE.md (solo lectura)"
   - "docs/director-ia/02-EVIDENCE-BUILDER.md (solo lectura)"
   - "docs/director-ia/03-EXECUTIVE-KNOWLEDGE-STORE.md (solo lectura)"
+  - "docs/director-ia/03A-OBSERVATION-PIPELINE.md (solo lectura)"
   - "docs/director-ia/03B-END-TO-END-REFERENCE-FLOWS.md (solo lectura)"
   - "docs/director-ia/04-IES-STANDARD.md (solo lectura)"
+  - "docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md (solo lectura)"
 
-  - "lib/director-ia-observation-pipeline.js"
-  - "lib/director-ia-evidence-builder.js"
-  - "lib/director-ia-eks.js"
+  - "lib/director-ia-observation-pipeline.js (solo lectura)"
+  - "lib/director-ia-evidence-builder.js (solo lectura)"
+  - "lib/director-ia-eks.js (solo lectura)"
+  - "lib/director-ia-op-eb-eks-integration.js (solo lectura)"
 
-  - "test/director-ia-observation-pipeline.test.js"
-  - "test/director-ia-evidence-builder.test.js"
-  - "test/director-ia-eks.test.js"
-  - "test/director-ia-eks-integration.test.js"
-  - "test/director-ia-op-eb-eks-integration.test.js"
+  - "test/director-ia-observation-pipeline.test.js (solo lectura)"
+  - "test/director-ia-evidence-builder.test.js (solo lectura)"
+  - "test/director-ia-eks.test.js (solo lectura)"
+  - "test/director-ia-eks-integration.test.js (solo lectura)"
+  - "test/director-ia-op-eb-eks-integration.test.js (solo lectura)"
 
-  - "fixtures/director-ia/observation-pipeline/"
-  - "fixtures/director-ia/evidence-builder/"
-  - "fixtures/director-ia/eks/"
-  - "fixtures/director-ia/op-eb-eks-integration/"
+  - "fixtures/director-ia/eks/ (solo lectura)"
+  - "fixtures/director-ia/op-eb-eks-integration/ (solo lectura)"
 
 out_of_scope:
+  - "implementar IES Builder"
+  - "crear lib/director-ia-ies*.js"
+  - "crear runtime IES"
+  - "crear fixtures IES productivos"
+  - "crear tests de implementación IES"
   - "modificar cualquier archivo en docs/director-ia/"
-  - "modificar Constitución"
-  - "modificar Executive Knowledge Engine"
-  - "modificar 03A"
-  - "modificar 02"
-  - "modificar 03"
-  - "modificar 04"
-
+  - "modificar contratos congelados"
+  - "modificar OP"
+  - "modificar Evidence Builder"
+  - "modificar EKS"
+  - "modificar helper OP-EB-EKS"
   - "modificar server.js"
   - "modificar package.json"
   - "modificar .env"
   - "crear SQL"
   - "crear migraciones"
-  - "crear tablas nuevas"
-
-  - "implementar Tool Execution productivo"
-  - "ejecutar tools productivas"
-  - "leer fuentes productivas"
-  - "leer datos empresariales reales"
-
+  - "crear tablas"
+  - "persistir IES"
+  - "integrar IES con server.js"
   - "integrar chat"
-  - "integrar dashboard"
+  - "integrar voz"
   - "integrar WhatsApp"
-  - "crear endpoints públicos"
-
-  - "implementar IES runtime"
+  - "integrar dashboard"
   - "implementar Reasoning Engine"
   - "implementar Channel Projection"
-
+  - "generar hipótesis"
+  - "usar LLM"
+  - "consultar fuentes"
+  - "ejecutar tools productivas"
+  - "leer datos empresariales reales"
   - "calibrar wi"
   - "calibrar k"
   - "calibrar Fs"
   - "calibrar ventanas R"
-  - "calibrar severidad"
-  - "crear materiality productiva"
+  - "calibrar materiality"
   - "crear reglas causales"
-  - "crear reglas de ausencia productivas"
-
-  - "generar hipótesis"
-  - "añadir LLM"
-  - "usar tools operacionales"
-
+  - "implementar firma digital"
+  - "congelar canonicalización por inferencia"
   - "commit"
   - "push"
   - "merge"
@@ -113,251 +107,384 @@ out_of_scope:
 contracts_in_force:
   - "docs/director-ia/DIRECTOR_IA_CONSTITUTION.md"
   - "docs/director-ia/DIRECTOR_IA_EXECUTIVE_KNOWLEDGE_ENGINE.md"
-  - "docs/director-ia/03A-OBSERVATION-PIPELINE.md"
   - "docs/director-ia/02-EVIDENCE-BUILDER.md"
   - "docs/director-ia/03-EXECUTIVE-KNOWLEDGE-STORE.md"
+  - "docs/director-ia/03A-OBSERVATION-PIPELINE.md"
   - "docs/director-ia/03B-END-TO-END-REFERENCE-FLOWS.md"
   - "docs/director-ia/04-IES-STANDARD.md"
+  - "docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md"
 
-existing_runtime_contract:
-  observation_pipeline:
-    entry: "MINIMAL_EXECUTION_ENVELOPE[]"
-    output:
-      - "acquisition_statuses[]"
-      - "observation_records[]"
-    constraints:
-      - "no N2-N5"
-      - "no ABSENCE_CONFIRMED"
-      - "no silent dedup"
-      - "no EKS"
+known_runtime_chain:
+  flow:
+    - "MINIMAL_EXECUTION_ENVELOPE[]"
+    - "Observation Pipeline"
+    - "acquisition_statuses[] + observation_records[]"
+    - "Evidence Builder"
+    - "Knowledge Bundle"
+    - "EKS validate_structure()"
+    - "EKS append_snapshot()"
+    - "Knowledge Snapshot"
 
-  evidence_builder:
-    entry:
-      - "trace_id"
-      - "plan"
-      - "tool_plan"
-      - "acquisition_statuses[]"
-      - "observation_records[]"
-    output: "Knowledge Bundle"
-    constraints:
-      - "fail-closed"
-      - "N1 -> N2 -> N3 -> N4"
-      - "sin G8"
-      - "sin append_snapshot"
+  demonstrated:
+    - "OP -> EB -> EKS integración end-to-end con fixtures sintéticos"
+    - "procedencia preservada"
+    - "fail-closed preservado"
+    - "Knowledge Snapshot versionado"
+    - "Snapshot inmutable"
+    - "SOURCE_NOT_INTEGRATED puede terminar en NO_CONOZCO sin hechos"
+    - "ACQUIRED_EMPTY no se convierte en ABSENCE_CONFIRMED"
+    - "TOOL_ERROR no se convierte en hecho"
+    - "sin G8 materiality permanece MATERIALITY_NOT_ASSESSED"
 
-  eks:
-    entry: "Knowledge Bundle"
-    output: "Knowledge Snapshot"
-    constraints:
-      - "append-only"
-      - "Bundle opaco"
-      - "latest por trace_id"
-      - "versionado monotónico"
-      - "integrity digest"
+  missing:
+    - "IES Builder runtime"
+    - "Snapshot -> IES projection runtime"
+    - "persistencia IES si contractualmente fuera requerida"
+    - "Reasoning Engine"
+    - "Channel Projection"
 
-integration_flow:
-  - "MINIMAL_EXECUTION_ENVELOPE[]"
-  - "Observation Pipeline process()"
-  - "acquisition_statuses[] + observation_records[]"
-  - "Evidence Builder assemble()"
-  - "Knowledge Bundle"
-  - "EKS validate_structure()"
-  - "EKS append_snapshot()"
-  - "Knowledge Snapshot"
+ies_contract_frozen_facts:
+  - "IES v1.0 está APROBADO PARA CONGELAMIENTO"
+  - "runtime IES está PENDIENTE"
+  - "IES Builder es el productor"
+  - "entrada única = Knowledge Snapshot"
+  - "IES Builder no consulta fuentes"
+  - "IES Builder no ejecuta tools"
+  - "IES Builder no transforma Observaciones en Hechos"
+  - "IES Builder no crea Evidencias"
+  - "IES Builder no produce Hipótesis"
+  - "IES Builder no contiene interpretación LLM"
+  - "IES Builder no redacta explicaciones"
+  - "IES no contiene hipótesis"
+  - "IES es independiente del canal"
+  - "canal no crea nueva versión"
+  - "OFFICIAL y ALTERNATIVE son tipos distintos"
+  - "IES emitido es inmutable"
+  - "reproyección formal crea nueva versión / ies_id"
+  - "COV_* se proyecta 1:1 a estados constitucionales"
+  - "materiality solo se proyecta"
+  - "MATERIALITY_NOT_ASSESSED no equivale a MAT_LOW"
+  - "highest_materiality_detected solo usa MAT_* ya evaluados"
+  - "correlación no se presenta como causalidad"
+  - "ABSENCE_CONFIRMED es la única ausencia que permite hecho negativo"
+  - "Tipo E nunca se suaviza ni se omite"
+  - "resolution_status se proyecta; IES no lo muta"
+  - "signature debe ser null en v1.0"
+  - "signature_status debe ser NOT_IMPLEMENTED"
+  - "digest no es firma digital"
 
-integration_rules:
-  - "ningún bypass de OP -> EB -> EKS"
-  - "OP nunca llama EKS"
-  - "EB no obtiene datos operacionales"
-  - "EB no llama append_snapshot dentro de assemble"
-  - "la capa de integración puede orquestar llamadas secuenciales"
-  - "Bundle debe pasar validate_structure antes de persistirse"
-  - "EKS no reinterpreta Bundle"
-  - "procedencia de 03A debe sobrevivir hasta bundle.observations"
-  - "content_author_id null debe sobrevivir hasta Snapshot"
-  - "extracted_by y triggered_by no cambian de significado"
-  - "AcquisitionStatus nunca debe aparecer dentro de bundle.observations"
-  - "TOOL_ERROR no debe convertirse en hecho"
-  - "SOURCE_RESTRICTED no debe convertirse en hecho"
-  - "SOURCE_NOT_INTEGRATED debe poder terminar en NO_CONOZCO sin hechos"
-  - "ACQUIRED_EMPTY no debe convertirse en ABSENCE_CONFIRMED"
-  - "sin reglas G8, materiality sigue MATERIALITY_NOT_ASSESSED"
-  - "sin reglas de resolución, no emitir RESOLVED"
-  - "sin reglas N3/N4 autorizadas, evidence/diagnostics pueden permanecer vacíos"
+audit_questions:
+  D1_input_boundary:
+    question: >
+      ¿Cuál es la forma física exacta del Knowledge Snapshot que debe aceptar
+      el IES Builder y qué parte del runtime EKS vigente constituye esa entrada?
+    classify_as:
+      - CONTRACTUAL
+      - PHYSICAL_UNKNOWN
+      - RECOMMENDATION
 
-integration_runtime:
-  preferred_shape: "función/factory pura de orquestación para tests"
-  required_interface:
-    - "run_op_eb_eks(input, dependencies)"
-  dependencies:
-    - "observation_pipeline"
-    - "evidence_builder"
-    - "eks"
-  constraints:
-    - "dependencias inyectables"
-    - "sin server.js"
-    - "sin singleton global"
-    - "sin DB productiva en tests"
-    - "puede usar EKS in-memory/test implementation ya existente"
-    - "sin networking"
+  D2_builder_interface:
+    question: >
+      ¿Existe contrato suficiente para fijar una interfaz física mínima del
+      futuro IES Builder sin inventar arquitectura?
+    candidate_shape_for_audit_only:
+      - "createIesBuilder(dependencies)"
+      - "build(snapshot, options)"
+    rule: "la forma candidata no queda aprobada por esta auditoría"
 
-required_scenarios:
-  scenario_a:
-    name: "ACQUIRED_OK transportable"
-    expected:
-      - "OP produce status + ObservationRecord"
-      - "EB produce N1 y N2 permitido por runtime vigente"
-      - "Bundle válido"
-      - "EKS produce Snapshot v1"
-      - "procedencia preservada"
+  D3_snapshot_opacity:
+    question: >
+      ¿Debe IES Builder leer exclusivamente el Bundle contenido en el Snapshot
+      y metadatos EKS explícitos, sin reinterpretar ni consultar capas previas?
 
-  scenario_b:
-    name: "SOURCE_NOT_INTEGRATED"
-    expected:
-      - "OP produce AcquisitionStatus"
-      - "cero ObservationRecords de negocio"
-      - "EB produce NO_CONOZCO"
-      - "cero facts/evidence/diagnostics"
-      - "Bundle válido"
-      - "EKS persiste Snapshot válido"
+  D4_root_mapping:
+    question: >
+      Para cada campo raíz obligatorio del IES §2, identificar su fuente física:
+      Snapshot, Bundle, metadata EKS, dependencia inyectada, ruleset existente,
+      o UNKNOWN.
 
-  scenario_c:
-    name: "ACQUIRED_EMPTY"
-    expected:
-      - "no ABSENCE_CONFIRMED"
-      - "no hecho negativo inventado"
-      - "Bundle fail-closed"
-      - "Snapshot válido"
+  D5_query_context_mapping:
+    question: >
+      Determinar si executive_query_id, query_fingerprint, original_question,
+      intent, requesting_user_id, requesting_role, channel, plant_or_scope,
+      period, resolved_entities, permission_restrictions y
+      knowledge_effective_date existen realmente en el Snapshot/Bundle vigente
+      o requieren contrato/metadata adicional.
 
-  scenario_d:
-    name: "TOOL_ERROR"
-    expected:
-      - "no ObservationRecord empresarial"
-      - "no facts inventados"
-      - "source_health conserva fallo técnico"
-      - "Snapshot válido cuando el Bundle contractual sea emitible"
+  D6_ies_identity:
+    question: >
+      Determinar origen físico de ies_id, ies_version, generated_at, valid_at
+      y expires_at, incluyendo cuáles pueden ser dependencias inyectables y
+      cuáles requieren política institucional.
 
-  scenario_e:
-    name: "versionado"
-    expected:
-      - "dos ejecuciones con mismo trace_id pueden producir Snapshot v1 y v2"
-      - "v1 permanece inmutable"
-      - "get_snapshot(trace_id) devuelve latest"
-      - "list_versions conserva historial"
+  D7_status_projection:
+    question: >
+      Verificar si status puede derivarse determinísticamente del
+      coverage_token existente sin decisión nueva:
+      FULL->VALIDATED, PARTIAL->PARTIAL,
+      DATA_CONFLICT->CONFLICTED, NO_KNOWLEDGE->NO_KNOWLEDGE.
 
-fixtures_required:
-  - "happy-path.json"
-  - "source-not-integrated.json"
-  - "acquired-empty.json"
-  - "tool-error.json"
-  - "same-trace-v1.json"
-  - "same-trace-v2.json"
+  D8_summary_projection:
+    question: >
+      Determinar si executive_summary_facts puede construirse mecánicamente
+      desde facts/evidence/diagnoses/conflicts/limitations existentes sin
+      inventar reglas de prioridad, selección o materialidad.
 
-fixture_rules:
-  - "todos sintéticos"
-  - "sin datos institucionales reales"
-  - "sin cobertura institucional implícita"
-  - "sin reglas G8 inventadas"
-  - "sin causalidad"
-  - "sin hipótesis"
+  D9_source_health_projection:
+    question: >
+      Determinar si source_health del IES puede proyectarse completamente
+      desde el Snapshot/Bundle actual y cómo mapear AcquisitionStatus:
+      ACQUIRED_OK->DATA_AVAILABLE,
+      ACQUIRED_EMPTY->DATA_NOT_FOUND,
+      SOURCE_NOT_INTEGRATED->SOURCE_NOT_INTEGRATED,
+      SOURCE_RESTRICTED->SOURCE_RESTRICTED,
+      TOOL_ERROR->TOOL_ERROR,
+      QUERY_SCOPE_INCOMPLETE->QUERY_SCOPE_INCOMPLETE,
+      ENTITY_UNRESOLVED->ENTITY_UNRESOLVED.
 
-tests_required:
-  - "flujo OP -> EB -> EKS completo funciona con fixture happy-path"
-  - "procedencia 03A permanece en bundle.observations"
-  - "procedencia permanece después de persistencia EKS"
-  - "content_author_id null permanece null end-to-end"
-  - "AcquisitionStatus no aparece en bundle.observations"
-  - "SOURCE_NOT_INTEGRATED produce NO_CONOZCO sin facts"
-  - "TOOL_ERROR no produce facts"
-  - "ACQUIRED_EMPTY no produce ABSENCE_CONFIRMED"
-  - "sin G8 no aparece MAT_LOW/MAT_MEDIUM/MAT_HIGH/MAT_CRITICAL inventado"
-  - "sin ruleset no aparece RESOLVED inventado"
-  - "Bundle pasa validate_structure"
-  - "append_snapshot recibe exclusivamente Knowledge Bundle válido"
-  - "Snapshot preserva Bundle sin reinterpretación"
-  - "dos snapshots mismo trace_id incrementan version"
-  - "snapshot v1 permanece inmutable después de v2"
-  - "get_snapshot(trace_id) retorna latest"
-  - "list_versions retorna historial ordenado"
-  - "input original no se muta"
-  - "OP tests existentes continúan pasando"
-  - "EB tests existentes continúan pasando"
-  - "EKS tests existentes continúan pasando"
+  D10_internal_reference_validation:
+    question: >
+      Definir qué validaciones puramente estructurales puede realizar el
+      IES Builder sobre references internas sin crear conocimiento:
+      evidence->facts, diagnoses->facts/evidence, conflicts->facts,
+      summary->IDs existentes y traceability.
 
-acceptance_criteria:
-  - "test de integración OP-EB-EKS creado"
-  - "fixtures de integración sintéticos creados"
-  - "flujo técnico completo demostrado"
-  - "todos los tests OP pasan"
-  - "todos los tests EB pasan"
-  - "todos los tests EKS pasan"
-  - "todos los tests de integración pasan"
-  - "git diff --check sin errores"
+  D11_materiality_projection:
+    question: >
+      Confirmar que IES Builder únicamente copia materiality existente y
+      calcula highest_materiality_detected como máximo determinista de MAT_*
+      ya evaluados; si no existen, MATERIALITY_NOT_ASSESSED.
 
-  - "ningún docs/director-ia modificado"
-  - "server.js no modificado"
-  - "package.json no modificado"
-  - "sin Tool Execution productivo"
-  - "sin DB productiva"
-  - "sin LLM"
-  - "sin chat/dashboard"
-  - "sin IES/Reasoning/Projection"
+  D12_conflict_visibility:
+    question: >
+      Determinar mecanismo físico para garantizar que CONF_TYPE_E_GOVERNANCE
+      permanezca visible en conflicts y executive_summary_facts sin crear
+      narrativa ni reinterpretación.
 
-  - "sin bypass OP -> EKS"
-  - "sin AcquisitionStatus dentro de bundle.observations"
-  - "sin ABSENCE_CONFIRMED inventado"
-  - "sin RESOLVED inventado"
-  - "sin materiality productiva inventada"
-  - "sin hipótesis"
+  D13_official_alternative:
+    question: >
+      Determinar qué metadata física se requiere para OFFICIAL y ALTERNATIVE,
+      cómo se referencia alternative_of y qué parte no existe todavía en el
+      Snapshot/runtime vigente.
 
-  - "reporte documenta frontera end-to-end y gaps restantes"
+  D14_integrity:
+    question: >
+      Separar claramente content_fingerprint, canonical_representation y
+      firma. Determinar qué puede implementarse hoy sin inventar la
+      canonicalización pendiente. signature=null y
+      signature_status=NOT_IMPLEMENTED son obligatorios.
+
+  D15_versioning_lifecycle_persistence:
+    question: >
+      Determinar si el contrato vigente autoriza solo construcción en memoria,
+      exige persistencia/versionado físico de IES, o deja esa decisión abierta.
+      No inferir tabla, DB ni repositorio si no están contractualmente definidos.
+
+  D16_determinism:
+    question: >
+      Identificar todas las dependencias no deterministas que necesitarían ser
+      inyectables para repetibilidad verificable: clock, idFactory, reglas,
+      políticas de expiración u otras, sin aprobarlas automáticamente.
+
+  D17_no_knowledge:
+    question: >
+      Verificar que un Snapshot NO_CONOZCO pueda producir un IES
+      NO_KNOWLEDGE válido con facts/evidence/diagnoses vacíos y sin hipótesis.
+
+  D18_runtime_gap:
+    question: >
+      Emitir una lista exhaustiva de gaps que deben cerrarse antes de
+      IMPL-IES-001 y separar:
+      CONTRACTUAL / PHYSICAL_UNKNOWN / RECOMMENDATION / BLOCKER.
+
+mandatory_field_source_matrix:
+  root_fields:
+    - "ies_id"
+    - "ies_type"
+    - "schema_version"
+    - "ies_version"
+    - "status"
+    - "generated_at"
+    - "valid_at"
+    - "expires_at"
+    - "snapshot_reference"
+    - "knowledge_snapshot_version"
+    - "query_context"
+    - "executive_scope"
+    - "knowledge_coverage"
+    - "executive_summary_facts"
+    - "facts"
+    - "evidence"
+    - "diagnoses"
+    - "conflicts"
+    - "open_questions"
+    - "source_health"
+    - "limitations"
+    - "audit"
+    - "integrity"
+    - "alternative_context"
+
+  required_columns:
+    - "field"
+    - "contract_requirement"
+    - "physical_source_today"
+    - "available_today: YES|PARTIAL|NO"
+    - "transformation_allowed"
+    - "authority_owner"
+    - "classification"
+    - "notes"
+
+mandatory_runtime_gap_matrix:
+  required_columns:
+    - "gap_id"
+    - "description"
+    - "blocks_impl_ies_001: YES|NO"
+    - "requires_G2: YES|NO"
+    - "requires_G8: YES|NO"
+    - "recommended_resolution"
+    - "authority_owner"
+
+classification_rules:
+  CONTRACTUAL: >
+    Ya está definido por documentos vigentes y solo debe ser obedecido.
+  PHYSICAL_UNKNOWN: >
+    El contrato exige el resultado pero no existe una decisión física suficiente
+    para implementarlo sin elegir arquitectura/política adicional.
+  RECOMMENDATION: >
+    Opción técnica propuesta por la auditoría. No queda aprobada por aparecer
+    en el reporte.
+  BLOCKER: >
+    Falta que impide IMPL-IES-001 sin una decisión humana o contractual previa.
+
+audit_constraints:
+  - "no convertir recomendaciones en decisiones aprobadas"
+  - "no escribir contrato nuevo"
+  - "no modificar 04"
+  - "no asumir que ejemplos ilustrativos son reglas productivas"
+  - "no usar cifras ilustrativas como datos institucionales"
+  - "no inventar prioridad de executive_summary_facts"
+  - "no inventar canonicalización"
+  - "no inventar persistencia IES"
+  - "no inventar expiración"
+  - "no inventar versionado físico"
+  - "no inventar reglas ALTERNATIVE"
+  - "no inventar materiality"
+  - "no inventar causalidad"
+  - "no inventar ausencia"
+  - "no inventar resolución de conflictos"
+  - "no generar hipótesis"
+  - "no usar LLM"
+  - "no consultar fuentes"
+
+required_report_sections:
+  - "1. Executive result"
+  - "2. Documents and runtime inspected"
+  - "3. Current physical reality"
+  - "4. D1-D18 findings"
+  - "5. Mandatory field-source matrix"
+  - "6. Runtime gap matrix"
+  - "7. Determinism and injected-dependency analysis"
+  - "8. OFFICIAL / ALTERNATIVE physical readiness"
+  - "9. Integrity / canonicalization readiness"
+  - "10. Fail-closed and NO_KNOWLEDGE readiness"
+  - "11. Contractual facts"
+  - "12. Physical unknowns"
+  - "13. Recommendations requiring approval"
+  - "14. Blockers for IMPL-IES-001"
+  - "15. Gate assessment"
+  - "16. Proposed next task — informational only"
+  - "17. STOP"
+
+gate_rules:
+  G1:
+    current: PENDING
+    rule: >
+      Solo HUMAN_APPROVER puede cambiar esta tarea de DRAFT a AUTHORIZED.
+
+  G2:
+    current: PENDING_IF_REQUIRED
+    rule: >
+      Si cerrar un PHYSICAL_UNKNOWN exige modificar o ampliar
+      docs/director-ia/04-IES-STANDARD.md u otro contrato propietario,
+      la auditoría debe marcar G2 requerido y detenerse.
+      Esta tarea no autoriza G2.
+
+  G8:
+    current: N/A
+    rule: >
+      Esta auditoría no calibra materiality, k, wi, Fs, severidad,
+      reglas causales ni firma criptográfica.
+      Si una implementación mínima dependiera de ello, se reporta como gap;
+      no se calibra.
 
 allowed_actions:
   - "leer contracts_in_force"
-  - "leer runtimes OP/EB/EKS existentes"
-  - "crear test/director-ia-op-eb-eks-integration.test.js"
-  - "crear fixtures/director-ia/op-eb-eks-integration/"
-  - "crear un helper de integración solo si es estrictamente necesario dentro de un archivo nuevo explícitamente de integración"
-  - "usar implementaciones in-memory/test ya existentes"
-  - "ejecutar tests OP"
-  - "ejecutar tests EB"
-  - "ejecutar tests EKS"
-  - "ejecutar tests integración"
-  - "ejecutar git diff --check"
-  - "crear docs/dev-loop/reports/IMPL-OP-EB-EKS-INTEGRATION-001.md"
+  - "leer runtimes existentes indicados en in_scope"
+  - "leer tests y fixtures existentes indicados en in_scope"
+  - "comparar Snapshot real con contrato IES"
+  - "clasificar D1-D18"
+  - "construir matrices obligatorias"
+  - "crear docs/dev-loop/reports/ARCH-IES-PHYSICAL-DECISIONS-001.md"
   - "actualizar CURRENT_TASK mediante transiciones permitidas"
+  - "ejecutar tests existentes solo si ayudan a verificar realidad física"
+  - "ejecutar git diff --check"
 
 forbidden_actions:
   - "modificar docs/director-ia/"
+  - "crear runtime IES"
+  - "crear lib/director-ia-ies-builder.js"
+  - "crear tests de implementación IES"
+  - "crear fixtures de implementación IES"
+  - "modificar OP"
+  - "modificar EB"
+  - "modificar EKS"
+  - "modificar integración OP-EB-EKS"
   - "modificar server.js"
   - "modificar package.json"
-  - "modificar Planner"
-  - "modificar Tool Orchestrator"
-  - "implementar Tool Execution"
-  - "leer datos productivos"
+  - "crear SQL/migraciones/tablas"
   - "usar DB productiva"
   - "usar red"
-  - "usar LLM"
   - "usar tools productivas"
-  - "integrar chat/dashboard"
-  - "crear IES"
+  - "usar LLM"
+  - "generar hipótesis"
   - "crear Reasoning Engine"
   - "crear Channel Projection"
-  - "calibrar G8"
-  - "inventar reglas epistemológicas"
+  - "autoaprobar decisiones"
+  - "autoaprobar gates"
   - "commit"
   - "push"
   - "merge"
   - "encadenar siguiente tarea"
-  - "autoaprobar gates"
+
+acceptance_criteria:
+  - "D1-D18 auditados"
+  - "cada hallazgo clasificado"
+  - "matriz field-source completa"
+  - "matriz de runtime gaps completa"
+  - "realidad física del Knowledge Snapshot documentada"
+  - "campos IES disponibles/no disponibles identificados"
+  - "dependencias deterministas/no deterministas identificadas"
+  - "OFFICIAL/ALTERNATIVE auditados"
+  - "integrity/canonicalization auditados"
+  - "NO_KNOWLEDGE auditado"
+  - "ningún contrato modificado"
+  - "ningún runtime modificado"
+  - "ninguna recomendación autoaprobada"
+  - "ninguna calibración G8 realizada"
+  - "git diff --check sin errores"
+  - "reporte termina en STOP"
 
 expected_terminal_state: >
-  DONE_PENDING_REVIEW si la integración técnica OP -> EB -> EKS puede demostrarse
-  de extremo a extremo sin modificar contratos ni integrar fuentes productivas.
-  BLOCKED o STOPPED si completar la integración exige redefinir contratos,
-  introducir Tool Execution productivo, modificar server.js o inventar
-  decisiones epistemológicas.
+  DONE_PENDING_REVIEW si la auditoría puede identificar de forma completa
+  la frontera física Snapshot -> IES y separar decisiones contractuales,
+  unknowns, recomendaciones y blockers sin modificar contratos.
+  BLOCKED o STOPPED si la realidad física no puede determinarse con los
+  contratos/runtimes disponibles o si continuar exige una decisión G2/G8.
+
+implementation_followup_rule: >
+  IMPL-IES-001 no puede crearse ni autorizarse desde esta tarea.
+  Primero HUMAN_APPROVER debe revisar el reporte, resolver blockers y aprobar
+  explícitamente cualquier decisión física necesaria.
 
 max_attempts: 1
-result_report_path: "docs/dev-loop/reports/IMPL-OP-EB-EKS-INTEGRATION-001.md"
-```
+result_report_path: "docs/dev-loop/reports/ARCH-IES-PHYSICAL-DECISIONS-001.md"
