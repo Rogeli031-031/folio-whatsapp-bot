@@ -5,7 +5,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "start:dashboard": "node frontend-dashboard/.next/standalone/server.js"
+    "start:dashboard": "node frontend-dashboard/.next/standalone/server.js",
+    "test:eks": "node --test test/director-ia-eks.test.js test/director-ia-eks-integration.test.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.600.0",
