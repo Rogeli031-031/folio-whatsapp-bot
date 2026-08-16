@@ -1,0 +1,17 @@
+{
+  "meta": {
+    "figures": "ILUSTRATIVAS / FICTICIAS",
+    "not_institutional_coverage": true,
+    "note": "SOURCE_RESTRICTED. No hecho. Puede activar NO_CONOZCO en el alcance."
+  },
+  "input": {
+    "trace_id": "tr_source_restricted_ilustrativo",
+    "produced_at": "unclocked",
+    "plan": { "intent": "restricted_check" },
+    "tool_plan": { "tools": ["get_restricted"] },
+    "acquisition_statuses": [
+      { "tool_id": "get_restricted", "domain": "restricted_domain", "status": "SOURCE_RESTRICTED" }
+    ],
+    "observation_records": []
+  }
+}

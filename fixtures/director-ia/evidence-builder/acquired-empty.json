@@ -1,0 +1,42 @@
+{
+  "meta": {
+    "figures": "ILUSTRATIVAS / FICTICIAS",
+    "not_institutional_coverage": true,
+    "note": "ACQUIRED_EMPTY / DATA_NOT_FOUND. Fail-closed: no ABSENCE_CONFIRMED."
+  },
+  "input": {
+    "trace_id": "tr_acquired_empty_ilustrativo",
+    "produced_at": "unclocked",
+    "plan": { "intent": "empty_check" },
+    "tool_plan": { "tools": ["get_action_register"] },
+    "acquisition_statuses": [
+      { "tool_id": "get_action_register", "domain": "action_register", "status": "ACQUIRED_EMPTY" }
+    ],
+    "observation_records": [
+      {
+        "observation_id": "obs_empty_1",
+        "trace_id": "tr_acquired_empty_ilustrativo",
+        "source": {
+          "tool_id": "get_action_register",
+          "domain": "action_register",
+          "system": "action_register",
+          "source_family": "action_register",
+          "source_instance_id": "ar:empty:get_action_register",
+          "content_author_id": null
+        },
+        "extracted_by": "get_action_register",
+        "triggered_by": "usuario_ilustrativo",
+        "extracted_at": "2026-08-15T00:00:00.000Z",
+        "pipeline_received_at": "2026-08-15T00:00:00.000Z",
+        "normalized_payload": {},
+        "raw_payload_reference": "raw://empty/obs_empty_1",
+        "scope_complete": true,
+        "validation_state": "VALID",
+        "domain": "action_register",
+        "metric_or_event": "acciones",
+        "value": null,
+        "timestamp": "2026-08-15T00:00:00.000Z"
+      }
+    ]
+  }
+}

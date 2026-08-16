@@ -1,0 +1,17 @@
+{
+  "meta": {
+    "figures": "ILUSTRATIVAS / FICTICIAS",
+    "not_institutional_coverage": true,
+    "note": "TOOL_ERROR no es vacío de negocio ni ABSENCE_CONFIRMED."
+  },
+  "input": {
+    "trace_id": "tr_tool_error_ilustrativo",
+    "produced_at": "unclocked",
+    "plan": { "intent": "tool_error_check" },
+    "tool_plan": { "tools": ["get_arr_snapshot"] },
+    "acquisition_statuses": [
+      { "tool_id": "get_arr_snapshot", "domain": "arr", "status": "TOOL_ERROR" }
+    ],
+    "observation_records": []
+  }
+}

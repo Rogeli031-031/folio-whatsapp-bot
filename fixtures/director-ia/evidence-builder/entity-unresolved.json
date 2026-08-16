@@ -1,0 +1,17 @@
+{
+  "meta": {
+    "figures": "ILUSTRATIVAS / FICTICIAS",
+    "not_institutional_coverage": true,
+    "note": "ENTITY_UNRESOLVED. No se inventa entidad canónica ni ObservationRecord de negocio."
+  },
+  "input": {
+    "trace_id": "tr_entity_unresolved_ilustrativo",
+    "produced_at": "unclocked",
+    "plan": { "intent": "entity_check" },
+    "tool_plan": { "tools": ["get_entity"] },
+    "acquisition_statuses": [
+      { "tool_id": "get_entity", "domain": "entity", "status": "ENTITY_UNRESOLVED" }
+    ],
+    "observation_records": []
+  }
+}
