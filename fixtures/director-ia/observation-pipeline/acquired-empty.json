@@ -1,0 +1,28 @@
+{
+  "meta": {
+    "figures": "ILUSTRATIVAS / FICTICIAS",
+    "not_institutional_coverage": true,
+    "note": "ACQUIRED_EMPTY. No es ABSENCE_CONFIRMED."
+  },
+  "execution_results": [
+    {
+      "trace_id": "tr_op_empty",
+      "tool_id": "get_action_register",
+      "domain": "action_register",
+      "status": "ACQUIRED_EMPTY",
+      "execution_id": "ex_empty_1",
+      "extracted_by": "get_action_register",
+      "triggered_by": "usuario_ilustrativo",
+      "extracted_at": "2026-08-15T00:00:00.000Z",
+      "scope_complete": true,
+      "source": {
+        "system": "action_register",
+        "source_family": "action_register",
+        "source_instance_id": "ar:ex_empty_1",
+        "content_author_id": null
+      },
+      "raw_payload_reference": "raw://tr_op_empty/get_action_register/ex_empty_1/0",
+      "payload": {}
+    }
+  ]
+}

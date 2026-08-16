@@ -1,0 +1,25 @@
+{
+  "meta": {
+    "figures": "ILUSTRATIVAS / FICTICIAS",
+    "not_institutional_coverage": true,
+    "note": "ENTITY_UNRESOLVED. No inventa entity_id canónico."
+  },
+  "execution_results": [
+    {
+      "trace_id": "tr_op_unresolved",
+      "tool_id": "get_entity",
+      "domain": "entity",
+      "status": "ENTITY_UNRESOLVED",
+      "execution_id": "ex_unres_1",
+      "extracted_by": "get_entity",
+      "triggered_by": "usuario_ilustrativo",
+      "subject": { "entity_type": "planta", "entity_label": "Puebl" },
+      "entity_resolution": {
+        "state": "UNRESOLVED",
+        "original_value": "Puebl",
+        "candidates": []
+      },
+      "source": { "system": "entity", "source_family": "entity", "source_instance_id": "entity:ex_unres_1" }
+    }
+  ]
+}

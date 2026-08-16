@@ -1,0 +1,23 @@
+{
+  "meta": {
+    "figures": "ILUSTRATIVAS / FICTICIAS",
+    "not_institutional_coverage": true,
+    "note": "SOURCE_RESTRICTED. Sin ObservationRecord de negocio."
+  },
+  "execution_results": [
+    {
+      "trace_id": "tr_op_restricted",
+      "tool_id": "get_restricted",
+      "domain": "restricted_domain",
+      "status": "SOURCE_RESTRICTED",
+      "execution_id": "ex_rest_1",
+      "extracted_by": "get_restricted",
+      "triggered_by": "usuario_ilustrativo",
+      "source": {
+        "system": "restricted_domain",
+        "source_family": "restricted",
+        "source_instance_id": "rest:ex_rest_1"
+      }
+    }
+  ]
+}

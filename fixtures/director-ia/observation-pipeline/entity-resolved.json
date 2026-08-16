@@ -1,0 +1,35 @@
+{
+  "meta": {
+    "figures": "ILUSTRATIVAS / FICTICIAS",
+    "not_institutional_coverage": true,
+    "note": "RESOLVED preserva entity_id upstream. No inventa canónico."
+  },
+  "execution_results": [
+    {
+      "trace_id": "tr_op_resolved",
+      "tool_id": "get_arr_snapshot",
+      "domain": "arr",
+      "status": "ACQUIRED_OK",
+      "execution_id": "ex_res_1",
+      "extracted_by": "get_arr_snapshot",
+      "triggered_by": "usuario_ilustrativo",
+      "extracted_at": "2026-08-15T00:00:00.000Z",
+      "scope_complete": true,
+      "source": {
+        "system": "arr",
+        "source_family": "arr_snapshot",
+        "source_instance_id": "arr:puebla:ex_res_1",
+        "content_author_id": "arr_origin_ilustrativo"
+      },
+      "subject": { "entity_type": "planta", "entity_id": "puebla", "entity_label": "Puebla" },
+      "entity_resolution": {
+        "state": "RESOLVED",
+        "original_value": "Puebla",
+        "candidates": [],
+        "resolution_rule": "ilustrativa"
+      },
+      "raw_payload_reference": "raw://tr_op_resolved/get_arr_snapshot/ex_res_1/0",
+      "payload": { "metric_or_event": "venta_t", "value": 95.0 }
+    }
+  ]
+}
