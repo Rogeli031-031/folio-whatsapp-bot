@@ -12,102 +12,73 @@ Esto **no** es G1. `DRAFT` no es ejecutable.
 ---
 
 ```yaml
+task_id: "ARCH-OP-PHYSICAL-DECISIONS-002"
 status: CLOSED
 
 authorized_by: "HUMAN_APPROVER"
-authorized_at: "2026-08-15"
-human_authorization: "AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-15"
+authorized_at: "2026-08-15T21:59:00-06:00"
+human_authorization: "AUTHORIZED_BY_HUMAN: HUMAN_APPROVER — D1-D15 APPROVED; G1 + G2 AUTHORIZED"
 
 gates:
   G1_task_authorization: AUTHORIZED
-  G2_architecture_change: PENDING
+  G2_architecture_change: AUTHORIZED
   G3_new_architecture_contract: N/A
   G8_calibration_materiality_signature: N/A
+
 objective: >
-  Auditar la preparación física del Observation Pipeline (03A) para una futura
-  implementación determinística y mínima, identificando las decisiones de
-  realización necesarias entre Tool Execution Results, AcquisitionStatus,
-  ObservationRecord y Evidence Builder, sin implementar runtime, sin modificar
-  contratos y sin autoaprobar ninguna decisión arquitectónica.
+  Resolver y formalizar las decisiones físicas mínimas necesarias para una
+  futura implementación del Observation Pipeline (03A), cerrando los UNKNOWN
+  detectados por ARCH-OP-PHYSICAL-DECISIONS-001 sin implementar runtime,
+  sin introducir epistemología nueva y sin modificar componentes fuera de
+  los contratos expresamente autorizados por G2.
 
 in_scope:
   - "docs/dev-loop/CURRENT_TASK.md"
-  - "docs/dev-loop/reports/ARCH-OP-PHYSICAL-DECISIONS-001.md"
+  - "docs/dev-loop/reports/ARCH-OP-PHYSICAL-DECISIONS-001.md (solo lectura)"
+  - "docs/dev-loop/reports/ARCH-OP-PHYSICAL-DECISIONS-002.md"
 
   - "docs/director-ia/DIRECTOR_IA_CONSTITUTION.md (solo lectura)"
   - "docs/director-ia/DIRECTOR_IA_EXECUTIVE_KNOWLEDGE_ENGINE.md (solo lectura)"
+  - "docs/director-ia/03A-OBSERVATION-PIPELINE.md"
   - "docs/director-ia/02-EVIDENCE-BUILDER.md (solo lectura)"
-  - "docs/director-ia/03A-OBSERVATION-PIPELINE.md (solo lectura)"
   - "docs/director-ia/03-EXECUTIVE-KNOWLEDGE-STORE.md (solo lectura)"
   - "docs/director-ia/03B-END-TO-END-REFERENCE-FLOWS.md (solo lectura)"
-  - "docs/director-ia/04-IES-STANDARD.md (solo lectura)"
-  - "docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md (solo lectura)"
-  - "docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md (solo lectura)"
-  - "docs/director-ia/DIRECTOR_IA_V2_FASE_1_VERACIDAD.md (solo lectura)"
-  - "docs/director-ia/DIRECTOR_IA_V2_FASE_2_PLANNER.md (solo lectura)"
   - "docs/director-ia/DIRECTOR_IA_V2_FASE_3_TOOL_ORCHESTRATOR.md (solo lectura)"
-
-  - "lib/director-ia-capabilities.js (solo lectura)"
-  - "lib/director-ia-planner.js (solo lectura)"
-  - "lib/director-ia-tools.js (solo lectura)"
-  - "lib/director-ia-tool-orchestrator.js (solo lectura)"
-  - "lib/director-ia-evidence-builder.js (solo lectura)"
-  - "lib/director-ia-eks.js (solo lectura)"
-  - "server.js (solo lectura)"
-  - "package.json (solo lectura)"
-
-  - "test/director-ia-evidence-builder.test.js (solo lectura)"
-  - "test/director-ia-eks.test.js (solo lectura)"
-  - "test/director-ia-eks-integration.test.js (solo lectura)"
-  - "fixtures/director-ia/evidence-builder/ (solo lectura)"
-  - "fixtures/director-ia/eks/ (solo lectura)"
+  - "docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md (solo lectura)"
 
 out_of_scope:
-  - "modificar cualquier archivo en docs/director-ia/"
-  - "modificar Constitución"
-  - "modificar Executive Knowledge Engine"
-  - "modificar Evidence Builder"
-  - "modificar EKS"
-  - "modificar IES"
-
-  - "crear runtime de Observation Pipeline"
+  - "implementar Observation Pipeline"
   - "crear lib/director-ia-observation-pipeline.js"
-  - "crear tests de implementación OP"
-  - "crear fixtures nuevos de implementación OP"
-
-  - "modificar server.js"
-  - "modificar package.json"
-  - "modificar Fase 1"
-  - "modificar Planner"
-  - "modificar Tool Orchestrator"
+  - "crear tests OP"
+  - "crear fixtures OP"
+  - "implementar Tool Execution"
   - "modificar Evidence Builder runtime"
   - "modificar EKS runtime"
-
-  - "implementar Tool Execution productivo"
-  - "ejecutar tools productivas"
-  - "leer datos productivos"
-  - "integrar fuentes productivas"
+  - "modificar server.js"
+  - "modificar package.json"
+  - "modificar chat o dashboard"
   - "persistir Knowledge Bundles"
-  - "llamar append_snapshot"
-
-  - "integrar OP con chat"
-  - "integrar OP con dashboard"
-  - "integrar OP con server.js"
   - "integrar OP productivamente con EB"
-  - "integrar OP productivamente con EKS"
+  - "integrar OP con EKS"
+
+  - "modificar Constitución"
+  - "modificar Executive Knowledge Engine"
+  - "modificar 02-EVIDENCE-BUILDER.md"
+  - "modificar 03-EXECUTIVE-KNOWLEDGE-STORE.md"
+  - "modificar 03B-END-TO-END-REFERENCE-FLOWS.md"
+  - "modificar 04-IES-STANDARD.md"
+  - "modificar 05-REASONING-ENGINE.md"
+  - "modificar 06-CHANNEL-PROJECTION.md"
+  - "modificar DIRECTOR_IA_ARCHITECTURE_INDEX.md"
 
   - "calibrar wi"
   - "calibrar k"
   - "calibrar Fs"
   - "calibrar ventanas R"
   - "calibrar severidad"
-  - "crear ruleset productivo de materiality"
+  - "crear materiality productiva"
   - "crear reglas causales"
   - "crear contratos de tool que prueben inexistencia"
-
-  - "añadir LLM"
-  - "generar hipótesis"
-  - "interpretar semánticamente resultados con IA"
 
   - "commit"
   - "push"
@@ -118,304 +89,213 @@ out_of_scope:
 contracts_in_force:
   - "docs/director-ia/DIRECTOR_IA_CONSTITUTION.md"
   - "docs/director-ia/DIRECTOR_IA_EXECUTIVE_KNOWLEDGE_ENGINE.md"
-  - "docs/director-ia/02-EVIDENCE-BUILDER.md"
   - "docs/director-ia/03A-OBSERVATION-PIPELINE.md"
+  - "docs/director-ia/02-EVIDENCE-BUILDER.md"
   - "docs/director-ia/03-EXECUTIVE-KNOWLEDGE-STORE.md"
   - "docs/director-ia/03B-END-TO-END-REFERENCE-FLOWS.md"
-  - "docs/director-ia/04-IES-STANDARD.md"
-  - "docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md"
+  - "docs/director-ia/DIRECTOR_IA_V2_FASE_3_TOOL_ORCHESTRATOR.md"
 
-known_runtime_state:
-  capabilities: "soporte parcial existente"
-  planner: "soporte parcial existente"
-  tool_orchestrator: "plan declarativo existente; ejecución productiva no asumida"
-  observation_pipeline: "runtime pendiente"
-  evidence_builder: "runtime mínimo implementado; fail-closed"
-  eks: "runtime implementado e integrado como servicio interno"
-  ies: "runtime pendiente"
-  reasoning_engine: "runtime pendiente"
-  channel_projection: "runtime pendiente"
+proposed_human_decisions:
 
-audit_principles:
-  - "03A es propietario de ObservationRecord y AcquisitionStatus"
-  - "AcquisitionStatus es técnico y no equivale a verdad empresarial"
-  - "AcquisitionStatus nunca equivale por sí solo a ABSENCE_CONFIRMED"
-  - "ObservationRecord y AcquisitionStatus permanecen separados"
-  - "Evidence Builder consume ambas listas hermanas conforme a D2/E1"
-  - "EB transforma ObservationRecords transportables en N1"
-  - "OP no produce hechos N2"
-  - "OP no produce evidencia N3"
-  - "OP no produce diagnósticos N4"
-  - "OP no produce hipótesis N5"
-  - "OP no decide materiality"
-  - "OP no decide coverage constitucional"
-  - "OP no escribe EKS"
-  - "OP no muta Knowledge Bundles"
-  - "ningún LLM en OP"
-  - "ninguna decisión debe rellenarse por conveniencia de implementación"
-
-audit_questions:
   D1_runtime_interface:
-    question: >
-      ¿Cuál debe ser la interfaz física mínima del Observation Pipeline:
-      función pura, factory inyectable, servicio interno u otra forma ya
-      determinada por 03A?
-    must_determine:
-      - "inputs"
-      - "outputs"
-      - "dependencias inyectables"
-      - "si existe estado interno permitido"
-      - "frontera exacta con Tool Execution"
+    decision: "PURE_FACTORY"
+    meaning: >
+      Observation Pipeline se realiza como módulo puro/factory inyectable,
+      desacoplado de server.js y de cualquier fuente productiva. Recibe
+      Tool Execution Results ya ejecutados y produce dos listas hermanas:
+      acquisition_statuses[] y observation_records[].
 
-  D2_tool_execution_boundary:
-    question: >
-      ¿Cuál es la forma física exacta del objeto que OP recibe desde Tool
-      Execution sin inventar un nuevo contrato?
-    must_determine:
-      - "qué existe hoy"
-      - "qué define 03A"
-      - "qué falta"
-      - "si IMPL-OP puede usar fixtures antes de Tool Execution productivo"
+  D2_tool_execution_result_envelope:
+    decision: "MINIMAL_EXECUTION_ENVELOPE"
+    meaning: >
+      Mientras no exista runtime productivo de Tool Execution, OP consume un
+      envelope mínimo de realización física que contiene identidad de ejecución,
+      tool_id, domain, trace_id, estado técnico, payload o referencia al payload,
+      timestamps de ejecución disponibles y metadatos de alcance/entidad.
+      Este envelope no constituye N1 ni verdad empresarial.
 
-  D3_acquisition_status_creation:
-    question: >
-      ¿Cómo se construye AcquisitionStatus determinísticamente a partir del
-      resultado técnico de adquisición?
-    must_determine:
-      - "enum/status válidos"
-      - "campos obligatorios"
-      - "errores técnicos"
-      - "vacíos"
-      - "restricciones de fuente"
-      - "entidad no resuelta"
+  D3_acquisition_status_shape:
+    decision: "EXPLICIT_STATUS_OBJECT"
+    meaning: >
+      AcquisitionStatus es un objeto técnico separado con, como mínimo:
+      trace_id, tool_id, domain, status, execution_id o correlación equivalente,
+      scope_complete cuando corresponda, entity_resolution_state cuando
+      corresponda, error metadata no sensible cuando exista y timestamps
+      técnicos disponibles. No contiene facts, confidence, materiality,
+      coverage ni ABSENCE_CONFIRMED.
 
-  D4_observation_record_creation:
-    question: >
-      ¿Qué condiciones permiten crear un ObservationRecord y cuáles obligan a
-      producir únicamente AcquisitionStatus sin observación?
-    must_determine:
-      - "resultado de negocio transportable"
-      - "payload vacío"
-      - "tool error"
-      - "source restricted"
-      - "entity unresolved"
-      - "data not found"
+  D4_status_enum:
+    decision: "USE_03A_ENUM_ONLY"
+    meaning: >
+      status solo puede usar los estados definidos por 03A:
+      ACQUIRED_OK, ACQUIRED_EMPTY, SOURCE_NOT_INTEGRATED, SOURCE_RESTRICTED,
+      TOOL_ERROR, QUERY_SCOPE_INCOMPLETE y ENTITY_UNRESOLVED.
+      La implementación no crea estados nuevos silenciosamente.
 
   D5_status_record_cardinality:
-    question: >
-      ¿Cuál es la cardinalidad física entre ejecución/adquisición,
-      AcquisitionStatus y ObservationRecord?
-    must_determine:
-      - "1:1"
-      - "1:N"
-      - "N:1 si estuviera permitido"
-      - "cómo se preserva correlación"
+    decision: "ONE_STATUS_ZERO_TO_MANY_RECORDS"
+    meaning: >
+      Cada intento de tool/dominio produce exactamente un AcquisitionStatus.
+      Un ACQUIRED_OK puede producir cero, uno o múltiples ObservationRecords
+      transportables. Los estados puramente técnicos normalmente producen cero
+      ObservationRecords. La correlación se preserva mediante trace_id,
+      tool_id y execution/correlation id.
 
-  D6_identity_and_ids:
-    question: >
-      ¿Qué identificadores se preservan y cuáles puede generar OP sin congelar
-      un algoritmo no autorizado?
-    must_determine:
-      - "trace_id"
-      - "observation_id"
-      - "source_instance_id"
-      - "execution/tool identifiers"
-      - "correlation identifiers"
+  D6_observation_creation:
+    decision: "TRANSPORTABLE_BUSINESS_RESULT_ONLY"
+    meaning: >
+      ObservationRecord se crea únicamente para resultado de negocio
+      transportable conforme a 03A. TOOL_ERROR, SOURCE_RESTRICTED,
+      SOURCE_NOT_INTEGRATED, QUERY_SCOPE_INCOMPLETE y ENTITY_UNRESOLVED no
+      generan ObservationRecord de entidad canónica inventada.
 
-  D7_provenance:
-    question: >
-      ¿Cómo se preservan físicamente source.system, source_family,
-      source_instance_id, content_author_id, extracted_by, triggered_by y demás
-      procedencia sin reinterpretación?
-    must_determine:
-      - "nulls"
-      - "autor de contenido"
-      - "extractor"
-      - "actor disparador"
-      - "fuente técnica"
-      - "fuente de afirmación"
+  D7_empty_behavior:
+    decision: "ACQUIRED_EMPTY_FAIL_CLOSED"
+    meaning: >
+      ACQUIRED_EMPTY produce AcquisitionStatus técnico. Puede producir un
+      registro de transporte vacío solo cuando el contrato 03A lo permita y
+      nunca implica ABSENCE_CONFIRMED. La decisión empresarial de ausencia
+      pertenece exclusivamente al Evidence Builder.
 
-  D8_raw_and_normalized_payload:
-    question: >
-      ¿Qué puede normalizar OP y qué debe conservar como referencia al payload
-      original?
-    must_determine:
-      - "raw_payload_reference"
-      - "normalized_payload"
-      - "mutación prohibida"
-      - "pérdida de información"
-      - "serialización determinística"
+  D8_identity_generation:
+    decision: "PRESERVE_UPSTREAM_GENERATE_OPAQUE_OBSERVATION_IDS"
+    meaning: >
+      OP preserva trace_id, tool_id, execution/correlation identifiers y demás
+      ids upstream. Observation_id puede generarse como identificador opaco
+      único y testeable. No se congela UUID/hash como obligación contractual.
 
-  D9_entity_resolution_boundary:
-    question: >
-      ¿Hasta dónde llega la resolución de entidades dentro de 03A y cuándo debe
-      declararse ENTITY_UNRESOLVED sin inventar identidad canónica?
-    must_determine:
-      - "responsabilidad OP"
-      - "dependencia externa si existe"
-      - "fail-closed"
-      - "trazabilidad de candidatos si el contrato la contempla"
+  D9_provenance:
+    decision: "PRESERVE_WITHOUT_SUBSTITUTION"
+    meaning: >
+      source.system, source_family, source_instance_id, content_author_id,
+      extracted_by y triggered_by se preservan como identidades distintas.
+      content_author_id null permanece null. extracted_by y triggered_by nunca
+      sustituyen autoría.
 
-  D10_error_and_empty_semantics:
-    question: >
-      ¿Cómo deben representarse TOOL_ERROR, ACQUIRED_EMPTY, DATA_NOT_FOUND,
-      SOURCE_RESTRICTED y estados equivalentes sin convertirlos en afirmaciones
-      empresariales?
-    must_determine:
-      - "status técnico"
-      - "si existe ObservationRecord"
-      - "qué llega al EB"
-      - "qué jamás puede significar ABSENCE_CONFIRMED"
+  D10_raw_normalized_payload:
+    decision: "RAW_REFERENCE_PLUS_NORMALIZED_VIEW"
+    meaning: >
+      El payload original permanece inmutable y auditado mediante
+      raw_payload_reference. normalized_payload es una vista de procesamiento
+      determinística que no elimina la referencia al original ni inventa
+      semántica empresarial.
 
-  D11_deduplication_and_retries:
-    question: >
-      ¿03A autoriza deduplicación, idempotencia o tratamiento de retries y, si
-      lo hace, cuál es su realización física mínima?
-    must_determine:
-      - "duplicados técnicos"
-      - "reintentos"
-      - "misma observación recibida varias veces"
-      - "si hace falta estado o registry"
-      - "si la decisión está realmente cubierta por contrato"
+  D11_entity_resolution:
+    decision: "FAIL_CLOSED_ENTITY_RESOLUTION"
+    meaning: >
+      Solo RESOLVED permite emitir subject.entity_id canónico. AMBIGUOUS y
+      UNRESOLVED preservan original_value, candidatos/regla si existen y no
+      eligen silenciosamente una entidad. ENTITY_UNRESOLVED permanece status
+      técnico cuando no existe sujeto transportable.
 
-  D12_ordering_and_determinism:
-    question: >
-      ¿Qué garantías de orden y determinismo necesita OP para que la misma
-      entrada contractual produzca salida semánticamente equivalente?
-    must_determine:
-      - "orden de statuses"
-      - "orden de records"
-      - "timestamps"
-      - "IDs"
-      - "dependencia del reloj"
-      - "mutación de inputs"
+  D12_retries_and_deduplication:
+    decision: "NO_SILENT_DEDUP_V1"
+    meaning: >
+      OP v1 no elimina silenciosamente ejecuciones o ObservationRecords
+      repetidos. Retries deben conservar correlación y trazabilidad. La
+      deduplicación semántica no pertenece a OP. Si una capa futura necesita
+      idempotencia operacional, deberá definirse explícitamente sin destruir
+      lineage ni evidencia de repetición.
 
-  D13_validation_boundary:
-    question: >
-      ¿Qué valida OP sobre entradas y salidas, y qué validación pertenece
-      exclusivamente al EB?
-    must_determine:
-      - "estructura"
-      - "procedencia"
-      - "transportabilidad"
-      - "semántica empresarial"
-      - "ausencia"
-      - "confidence"
-      - "materiality"
-      - "coverage"
+  D13_ordering_and_time:
+    decision: "INPUT_ORDER_STABLE_AND_CLOCK_INJECTABLE"
+    meaning: >
+      La salida preserva un orden determinístico derivado del input o de una
+      clave técnica estable. pipeline_received_at se obtiene mediante reloj
+      inyectable/testeable; no participa en decisiones semánticas. extracted_at
+      se preserva desde upstream cuando exista.
 
-  D14_fixture_and_test_strategy:
-    question: >
-      ¿Qué fixtures mínimos permiten implementar OP sin Tool Execution
-      productivo y demostrar la frontera 03A -> EB?
-    must_determine:
-      - "resultado adquirido con negocio"
-      - "ACQUIRED_EMPTY"
-      - "TOOL_ERROR"
-      - "SOURCE_RESTRICTED"
-      - "ENTITY_UNRESOLVED"
-      - "DATA_NOT_FOUND si contractualmente distinto"
-      - "preservación de provenance"
-      - "compatibilidad con fixtures EB existentes"
+  D14_validation_boundary:
+    decision: "STRUCTURAL_AND_TRANSPORT_VALIDATION_ONLY"
+    meaning: >
+      OP valida estructura, procedencia mínima, transportabilidad, scope y
+      resolución declarada. No valida verdad empresarial, confidence,
+      materiality, Knowledge Coverage ni ABSENCE_CONFIRMED. Esas materias
+      permanecen fuera del OP.
 
-  D15_implementation_order_and_integration:
-    question: >
-      ¿Cuál debe ser el orden de implementación después de esta auditoría y qué
-      debe permanecer desconectado?
-    must_determine:
-      - "IMPL-OP-001"
-      - "fixtures primero"
-      - "integración OP -> EB posterior o incluida solo si contrato la permite"
-      - "Tool Execution productivo posterior"
-      - "EKS no recibe OP directamente"
-      - "server/chat/dashboard permanecen fuera hasta tarea autorizada"
+  D15_implementation_order:
+    decision: "FIXTURES_FIRST_THEN_OP_TO_EB"
+    meaning: >
+      IMPL-OP-001 podrá implementarse primero contra fixtures sintéticos de
+      Tool Execution Results. Una tarea posterior verificará OP -> EB. Tool
+      Execution productivo, server.js, chat, dashboard y escritura EKS quedan
+      fuera hasta autorización separada.
 
-required_audit_output:
-  - "responder D1-D15 individualmente"
-  - "citar contrato o evidencia de repo que soporte cada conclusión"
-  - "separar CONTRACTUAL de RECOMMENDATION"
-  - "marcar UNKNOWN cuando el repo no permita concluir"
-  - "no convertir recomendaciones en decisiones APPROVED"
-  - "identificar cualquier contradicción entre 03A, EB v2.1, EKS v1.3, 03B y runtime actual"
-  - "identificar decisiones que requieran G2"
-  - "identificar cualquier asunto reservado a G8"
-  - "evaluar GO / NO-GO para preparar una futura IMPL-OP-001"
-  - "no crear IMPL-OP-001"
+contractual_registration:
+  target_document:
+    - "docs/director-ia/03A-OBSERVATION-PIPELINE.md"
+  rule: >
+    Registrar únicamente la realización física mínima D1-D15 que sea necesaria
+    para eliminar UNKNOWN de implementación. No redefinir la separación
+    AcquisitionStatus / ObservationRecord ni ninguna propiedad de EB/EKS.
+  tool_execution_schema_rule: >
+    El MINIMAL_EXECUTION_ENVELOPE se registra como frontera física de entrada
+    del OP, no como nuevo nivel epistemológico ni como contrato de verdad
+    empresarial.
 
-required_repo_checks:
-  - "confirmar rama distinta de main antes de editar"
-  - "confirmar working tree inicial"
-  - "leer AGENTS.md"
-  - "leer LOOP_PROTOCOL.md"
-  - "leer TASK_TEMPLATE.md"
-  - "leer contratos en vigor relevantes"
-  - "auditar código Fases 1-3 relacionado"
-  - "auditar runtime EB existente"
-  - "auditar frontera EKS solo cuando sea relevante"
-  - "ejecutar git diff --check al finalizar"
-
-acceptance_criteria:
-  - "D1-D15 respondidas con evidencia"
-  - "ninguna recomendación presentada como APPROVED"
-  - "ningún contrato modificado"
-  - "ningún runtime modificado"
-  - "ningún test productivo modificado"
-  - "ningún fixture productivo modificado"
-  - "ningún asunto G8 calibrado"
-  - "reporte obligatorio creado"
-  - "git diff --check sin errores"
-  - "CURRENT_TASK transicionado solo conforme LOOP_PROTOCOL"
-  - "resultado termina en DONE_PENDING_REVIEW, BLOCKED o STOPPED"
-  - "sin commit"
-  - "sin push"
-  - "sin merge"
-  - "sin siguiente tarea"
+g8_reserved_and_unchanged:
+  - "wi"
+  - "k"
+  - "Fs"
+  - "ventanas R"
+  - "severidad"
+  - "materiality productiva"
+  - "reglas causales"
+  - "contratos de tool que prueban inexistencia"
 
 allowed_actions:
-  - "leer AGENTS.md"
-  - "leer LOOP_PROTOCOL.md"
-  - "leer TASK_TEMPLATE.md"
   - "leer contracts_in_force"
-  - "leer código y tests declarados en in_scope"
-  - "leer fixtures declarados en in_scope"
-  - "comparar contrato con realidad del repo"
-  - "formular recomendaciones D1-D15 no vinculantes"
-  - "crear docs/dev-loop/reports/ARCH-OP-PHYSICAL-DECISIONS-001.md"
-  - "actualizar CURRENT_TASK mediante transiciones permitidas"
-  - "ejecutar git status"
-  - "ejecutar git diff"
+  - "leer ARCH-OP-PHYSICAL-DECISIONS-001.md"
+  - "comparar proposed_human_decisions con 03A y contratos superiores"
+  - "si G1 y G2 son autorizados, modificar únicamente 03A-OBSERVATION-PIPELINE.md"
+  - "crear docs/dev-loop/reports/ARCH-OP-PHYSICAL-DECISIONS-002.md"
   - "ejecutar git diff --check"
+  - "actualizar CURRENT_TASK mediante transiciones permitidas"
 
 forbidden_actions:
-  - "modificar docs/director-ia/"
-  - "modificar lib/"
-  - "modificar test/"
-  - "modificar fixtures/"
+  - "modificar contratos fuera de 03A"
+  - "reinterpretar D1-D15"
+  - "introducir nuevas decisiones arquitectónicas"
+  - "calibrar G8"
+  - "implementar Observation Pipeline"
+  - "crear código"
+  - "crear tests"
+  - "crear fixtures"
   - "modificar server.js"
   - "modificar package.json"
-  - "crear runtime OP"
-  - "implementar Tool Execution"
-  - "integrar OP con EB productivamente"
-  - "integrar OP con EKS"
-  - "usar DB"
-  - "usar LLM"
-  - "usar tools productivas"
-  - "leer datos productivos"
-  - "calibrar G8"
-  - "autoaprobar D1-D15"
-  - "autoaprobar G2"
+  - "integrar componentes"
   - "crear IMPL-OP-001"
+  - "autoaprobar G1"
+  - "autoaprobar G2"
+  - "escribir AUTHORIZED_BY_HUMAN"
   - "commit"
   - "push"
   - "merge"
-  - "encadenar siguiente tarea"
+  - "encadenar otra tarea"
+
+acceptance_criteria:
+  - "D1-D15 quedan registrados sin reinterpretación"
+  - "los UNKNOWN de Tool Execution Results, AcquisitionStatus, retries y reloj quedan cerrados"
+  - "AcquisitionStatus y ObservationRecord permanecen separados"
+  - "OP sigue sin autoridad epistemológica N2-N5"
+  - "ACQUIRED_EMPTY sigue sin equivaler a ABSENCE_CONFIRMED"
+  - "content_author_id/extracted_by/triggered_by permanecen separados"
+  - "no existe deduplicación silenciosa"
+  - "pipeline_received_at no determina semántica"
+  - "solo 03A puede modificarse bajo G2"
+  - "no se crea runtime"
+  - "no se modifica código"
+  - "no se calibra G8"
+  - "no se crea IMPL-OP-001"
+  - "git diff --check sin errores"
+  - "reporte obligatorio creado"
 
 expected_terminal_state: >
-  DONE_PENDING_REVIEW si la auditoría puede responder D1-D15 sin modificar
-  contratos ni inventar decisiones. BLOCKED si una precondición del Loop impide
-  realizar la auditoría. STOPPED si aparece una contradicción contractual que
-  requiera intervención humana antes de continuar.
+  DONE_PENDING_REVIEW si HUMAN_APPROVER autoriza G1 + G2 y las decisiones pueden
+  formalizarse sin contradicción contractual. BLOCKED o STOPPED si alguna
+  decisión propuesta contradice los contratos superiores o requiere una nueva
+  decisión humana.
 
 max_attempts: 1
-result_report_path: "docs/dev-loop/reports/ARCH-OP-PHYSICAL-DECISIONS-001.md"
+result_report_path: "docs/dev-loop/reports/ARCH-OP-PHYSICAL-DECISIONS-002.md"
 ```
