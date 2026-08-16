@@ -11,6 +11,8 @@
  * - OPENAI_API_KEY (opcional)
  * - DEBUG (opcional; "true" o "1" habilita GET /debug/actor y log from normalizado)
  * - DATABASE_SSL (opcional; "false" desactiva SSL para pg)
+ * - ENABLE_DIRECTOR_IA (opcional; también habilita infra interna EKS, sin endpoints)
+ * - EKS_POOL_MAX (opcional; tamaño del pool dedicado EKS; default 5)
  *
  * Render: node server.js | Port: process.env.PORT
  */
@@ -72,6 +74,7 @@ const directorIaChat = require("./lib/director-ia-chat");
 const directorIaMejoraContinua = require("./lib/director-ia-mejora-continua");
 const directorIaBitacora = require("./lib/director-ia-bitacora");
 const { isDirectorIaEnabled } = require("./lib/director-ia");
+const directorIaEks = require("./lib/director-ia-eks");
 const comercialEntidad = require("./lib/comercial-entidad");
 const { buildActionRegisterBoardPayload } = require("./lib/action-register-board");
 const { ACTION_REGISTER_TEMAS, isActionRegisterTema } = require("./lib/action-register-temas");
@@ -181,6 +184,12 @@ const pool = new Pool({
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: Number.isFinite(_pgConnTimeout) && _pgConnTimeout > 0 ? _pgConnTimeout : 15000,
 });
+
+const eksRuntime = directorIaEks.createEksRuntime({
+  env: process.env,
+  operationalPool: pool,
+});
+eksRuntime.start();
 
 const twilioClient =
   process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN
@@ -22145,6 +22154,15 @@ app.post("/twilio/whatsapp", async (req, res) => {
 
 process.on("unhandledRejection", (r) => console.error("unhandledRejection:", r));
 process.on("uncaughtException", (e) => console.error("uncaughtException:", e));
+function stopEksInfra() {
+  return eksRuntime.stop().catch((e) => console.error("[EKS] stop:", e && e.message));
+}
+process.on("SIGTERM", () => {
+  stopEksInfra();
+});
+process.on("SIGINT", () => {
+  stopEksInfra();
+});
 
 // Enlazar puerto PRIMERO para que Render detecte el servicio (evita "Port scan timeout").
 // La inicialización de DB (ensureSchema, delta-ingreso-ai) se hace después en segundo plano.
