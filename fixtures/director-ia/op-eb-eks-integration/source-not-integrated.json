@@ -1,0 +1,31 @@
+{
+  "meta": {
+    "figures": "ILUSTRATIVAS / FICTICIAS",
+    "not_institutional_coverage": true,
+    "note": "SOURCE_NOT_INTEGRATED. Cero records de negocio. No es hecho."
+  },
+  "input": {
+    "trace_id": "tr_int_not_integrated",
+    "bundle_id": "kb_int_not_integrated",
+    "produced_at": "2026-08-16T00:00:00.000Z",
+    "question": "¿Cuál es el estatus de folio ilustrativo?",
+    "plan": { "intent": "folio_status" },
+    "tool_plan": { "tools": ["get_folio_status"] },
+    "execution_results": [
+      {
+        "trace_id": "tr_int_not_integrated",
+        "tool_id": "get_folio_status",
+        "domain": "folios",
+        "status": "SOURCE_NOT_INTEGRATED",
+        "execution_id": "ex_int_ni_1",
+        "extracted_by": "get_folio_status",
+        "triggered_by": "usuario_ilustrativo",
+        "source": {
+          "system": "folios",
+          "source_family": "folio_status",
+          "source_instance_id": "folios:ex_int_ni_1"
+        }
+      }
+    ]
+  }
+}

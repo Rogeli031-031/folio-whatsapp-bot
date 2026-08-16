@@ -12,12 +12,12 @@ Esto **no** es G1. `DRAFT` no es ejecutable.
 ---
 
 ```yaml
-task_id: "IMPL-OP-001"
+task_id: "IMPL-OP-EB-EKS-INTEGRATION-001"
 status: CLOSED
 
 authorized_by: "HUMAN_APPROVER"
-authorized_at: "2026-08-15T22:29:09-06:00"
-human_authorization: "AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-15"
+authorized_at: "2026-08-16T11:05:51-06:00"
+human_authorization: "AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-16"
 
 gates:
   G1_task_authorization: AUTHORIZED
@@ -26,17 +26,18 @@ gates:
   G8_calibration_materiality_signature: N/A
 
 objective: >
-  Implementar el runtime mínimo, puro, determinístico y fail-closed del
-  Observation Pipeline conforme a 03A-OBSERVATION-PIPELINE.md v1.4,
-  consumiendo fixtures sintéticos de MINIMAL_EXECUTION_ENVELOPE y produciendo
-  las dos listas hermanas acquisition_statuses[] y observation_records[].
-  Verificar estructuralmente la frontera OP -> Evidence Builder sin integrar
-  todavía Tool Execution productivo, server.js, chat, dashboard, base de datos
-  ni escritura en EKS.
+  Integrar y validar de forma controlada el flujo técnico completo
+  Observation Pipeline -> Evidence Builder -> Executive Knowledge Store,
+  utilizando únicamente fixtures sintéticos y runtimes ya aprobados,
+  demostrando que un MINIMAL_EXECUTION_ENVELOPE puede producir
+  AcquisitionStatus + ObservationRecord, transformarse en Knowledge Bundle
+  fail-closed y persistirse como Knowledge Snapshot sin pérdida de procedencia,
+  sin bypass de capas y sin integrar todavía Tool Execution productivo,
+  server.js, chat, dashboard ni fuentes reales.
 
 in_scope:
   - "docs/dev-loop/CURRENT_TASK.md"
-  - "docs/dev-loop/reports/IMPL-OP-001.md"
+  - "docs/dev-loop/reports/IMPL-OP-EB-EKS-INTEGRATION-001.md"
 
   - "docs/director-ia/DIRECTOR_IA_CONSTITUTION.md (solo lectura)"
   - "docs/director-ia/DIRECTOR_IA_EXECUTIVE_KNOWLEDGE_ENGINE.md (solo lectura)"
@@ -44,60 +45,52 @@ in_scope:
   - "docs/director-ia/02-EVIDENCE-BUILDER.md (solo lectura)"
   - "docs/director-ia/03-EXECUTIVE-KNOWLEDGE-STORE.md (solo lectura)"
   - "docs/director-ia/03B-END-TO-END-REFERENCE-FLOWS.md (solo lectura)"
-  - "docs/director-ia/DIRECTOR_IA_V2_FASE_3_TOOL_ORCHESTRATOR.md (solo lectura)"
+  - "docs/director-ia/04-IES-STANDARD.md (solo lectura)"
 
   - "lib/director-ia-observation-pipeline.js"
+  - "lib/director-ia-evidence-builder.js"
+  - "lib/director-ia-eks.js"
+
   - "test/director-ia-observation-pipeline.test.js"
+  - "test/director-ia-evidence-builder.test.js"
+  - "test/director-ia-eks.test.js"
+  - "test/director-ia-eks-integration.test.js"
+  - "test/director-ia-op-eb-eks-integration.test.js"
+
   - "fixtures/director-ia/observation-pipeline/"
-
-  - "lib/director-ia-evidence-builder.js (solo lectura)"
-  - "test/director-ia-evidence-builder.test.js (solo lectura)"
-  - "fixtures/director-ia/evidence-builder/ (solo lectura)"
-
-  - "lib/director-ia-eks.js (solo lectura)"
-  - "test/director-ia-eks.test.js (solo lectura)"
-  - "test/director-ia-eks-integration.test.js (solo lectura)"
+  - "fixtures/director-ia/evidence-builder/"
+  - "fixtures/director-ia/eks/"
+  - "fixtures/director-ia/op-eb-eks-integration/"
 
 out_of_scope:
-  - "modificar docs/director-ia/"
-  - "modificar contratos"
-  - "modificar Evidence Builder runtime"
-  - "modificar EKS runtime"
-  - "modificar Fase 1"
-  - "modificar Planner"
-  - "modificar Tool Orchestrator"
+  - "modificar cualquier archivo en docs/director-ia/"
+  - "modificar Constitución"
+  - "modificar Executive Knowledge Engine"
+  - "modificar 03A"
+  - "modificar 02"
+  - "modificar 03"
+  - "modificar 04"
 
   - "modificar server.js"
   - "modificar package.json"
   - "modificar .env"
   - "crear SQL"
   - "crear migraciones"
-  - "usar PostgreSQL"
+  - "crear tablas nuevas"
 
   - "implementar Tool Execution productivo"
   - "ejecutar tools productivas"
   - "leer fuentes productivas"
-  - "leer datos empresariales productivos"
+  - "leer datos empresariales reales"
 
-  - "integrar OP con server.js"
-  - "integrar OP con chat"
-  - "integrar OP con dashboard"
-  - "integrar OP con EKS"
-  - "llamar append_snapshot"
+  - "integrar chat"
+  - "integrar dashboard"
+  - "integrar WhatsApp"
+  - "crear endpoints públicos"
 
-  - "convertir OP en productor de N2"
-  - "convertir OP en productor de N3"
-  - "convertir OP en productor de N4"
-  - "convertir OP en productor de N5"
-  - "decidir Knowledge Coverage"
-  - "decidir confidence"
-  - "decidir materiality"
-  - "emitir ABSENCE_CONFIRMED"
-
-  - "deduplicación semántica"
-  - "deduplicación silenciosa"
-  - "inventar entidad canónica"
-  - "inventar autor de contenido"
+  - "implementar IES runtime"
+  - "implementar Reasoning Engine"
+  - "implementar Channel Projection"
 
   - "calibrar wi"
   - "calibrar k"
@@ -106,6 +99,11 @@ out_of_scope:
   - "calibrar severidad"
   - "crear materiality productiva"
   - "crear reglas causales"
+  - "crear reglas de ausencia productivas"
+
+  - "generar hipótesis"
+  - "añadir LLM"
+  - "usar tools operacionales"
 
   - "commit"
   - "push"
@@ -119,269 +117,234 @@ contracts_in_force:
   - "docs/director-ia/02-EVIDENCE-BUILDER.md"
   - "docs/director-ia/03-EXECUTIVE-KNOWLEDGE-STORE.md"
   - "docs/director-ia/03B-END-TO-END-REFERENCE-FLOWS.md"
-  - "docs/director-ia/DIRECTOR_IA_V2_FASE_3_TOOL_ORCHESTRATOR.md"
+  - "docs/director-ia/04-IES-STANDARD.md"
 
-approved_physical_decisions:
-  D1_runtime_interface: "PURE_FACTORY"
-  D2_tool_execution_result_envelope: "MINIMAL_EXECUTION_ENVELOPE"
-  D3_acquisition_status_shape: "EXPLICIT_STATUS_OBJECT"
-  D4_status_enum: "USE_03A_ENUM_ONLY"
-  D5_status_record_cardinality: "ONE_STATUS_ZERO_TO_MANY_RECORDS"
-  D6_observation_creation: "TRANSPORTABLE_BUSINESS_RESULT_ONLY"
-  D7_empty_behavior: "ACQUIRED_EMPTY_FAIL_CLOSED"
-  D8_identity_generation: "PRESERVE_UPSTREAM_GENERATE_OPAQUE_OBSERVATION_IDS"
-  D9_provenance: "PRESERVE_WITHOUT_SUBSTITUTION"
-  D10_raw_normalized_payload: "RAW_REFERENCE_PLUS_NORMALIZED_VIEW"
-  D11_entity_resolution: "FAIL_CLOSED_ENTITY_RESOLUTION"
-  D12_retries_and_deduplication: "NO_SILENT_DEDUP_V1"
-  D13_ordering_and_time: "INPUT_ORDER_STABLE_AND_CLOCK_INJECTABLE"
-  D14_validation_boundary: "STRUCTURAL_AND_TRANSPORT_VALIDATION_ONLY"
-  D15_implementation_order: "FIXTURES_FIRST_THEN_OP_TO_EB"
+existing_runtime_contract:
+  observation_pipeline:
+    entry: "MINIMAL_EXECUTION_ENVELOPE[]"
+    output:
+      - "acquisition_statuses[]"
+      - "observation_records[]"
+    constraints:
+      - "no N2-N5"
+      - "no ABSENCE_CONFIRMED"
+      - "no silent dedup"
+      - "no EKS"
 
-required_runtime_interface:
-  factory: "createObservationPipeline(options)"
-  primary_operation: "process(execution_results)"
-  output:
-    acquisition_statuses: "array"
-    observation_records: "array"
+  evidence_builder:
+    entry:
+      - "trace_id"
+      - "plan"
+      - "tool_plan"
+      - "acquisition_statuses[]"
+      - "observation_records[]"
+    output: "Knowledge Bundle"
+    constraints:
+      - "fail-closed"
+      - "N1 -> N2 -> N3 -> N4"
+      - "sin G8"
+      - "sin append_snapshot"
 
-runtime_rules:
-  - "runtime puro/factory inyectable"
-  - "sin I/O operacional"
-  - "sin DB"
-  - "sin red"
-  - "sin LLM"
-  - "sin tools"
-  - "sin escritura EKS"
-  - "sin dependencia de server.js"
-  - "no mutar inputs"
-  - "reloj inyectable/testeable"
-  - "generador observation_id inyectable/testeable"
-  - "misma entrada + mismas dependencias inyectadas -> salida semánticamente equivalente"
+  eks:
+    entry: "Knowledge Bundle"
+    output: "Knowledge Snapshot"
+    constraints:
+      - "append-only"
+      - "Bundle opaco"
+      - "latest por trace_id"
+      - "versionado monotónico"
+      - "integrity digest"
 
-minimal_execution_envelope:
-  required_or_supported_fields:
-    - "trace_id"
-    - "tool_id"
-    - "domain"
-    - "status"
-    - "execution_id o correlación equivalente"
-    - "payload y/o raw_payload_reference cuando exista"
-    - "timestamps técnicos disponibles"
-    - "source metadata disponible"
-    - "entity/scope metadata cuando corresponda"
-  invariants:
-    - "no es N1"
-    - "no es ObservationRecord"
-    - "no es hecho empresarial"
-    - "no expresa confidence"
-    - "no expresa materiality"
-    - "no expresa Knowledge Coverage"
-    - "no expresa ABSENCE_CONFIRMED"
+integration_flow:
+  - "MINIMAL_EXECUTION_ENVELOPE[]"
+  - "Observation Pipeline process()"
+  - "acquisition_statuses[] + observation_records[]"
+  - "Evidence Builder assemble()"
+  - "Knowledge Bundle"
+  - "EKS validate_structure()"
+  - "EKS append_snapshot()"
+  - "Knowledge Snapshot"
 
-allowed_statuses:
-  - "ACQUIRED_OK"
-  - "ACQUIRED_EMPTY"
-  - "SOURCE_NOT_INTEGRATED"
-  - "SOURCE_RESTRICTED"
-  - "TOOL_ERROR"
-  - "QUERY_SCOPE_INCOMPLETE"
-  - "ENTITY_UNRESOLVED"
+integration_rules:
+  - "ningún bypass de OP -> EB -> EKS"
+  - "OP nunca llama EKS"
+  - "EB no obtiene datos operacionales"
+  - "EB no llama append_snapshot dentro de assemble"
+  - "la capa de integración puede orquestar llamadas secuenciales"
+  - "Bundle debe pasar validate_structure antes de persistirse"
+  - "EKS no reinterpreta Bundle"
+  - "procedencia de 03A debe sobrevivir hasta bundle.observations"
+  - "content_author_id null debe sobrevivir hasta Snapshot"
+  - "extracted_by y triggered_by no cambian de significado"
+  - "AcquisitionStatus nunca debe aparecer dentro de bundle.observations"
+  - "TOOL_ERROR no debe convertirse en hecho"
+  - "SOURCE_RESTRICTED no debe convertirse en hecho"
+  - "SOURCE_NOT_INTEGRATED debe poder terminar en NO_CONOZCO sin hechos"
+  - "ACQUIRED_EMPTY no debe convertirse en ABSENCE_CONFIRMED"
+  - "sin reglas G8, materiality sigue MATERIALITY_NOT_ASSESSED"
+  - "sin reglas de resolución, no emitir RESOLVED"
+  - "sin reglas N3/N4 autorizadas, evidence/diagnostics pueden permanecer vacíos"
 
-acquisition_status_rules:
-  - "exactamente un AcquisitionStatus por intento/envelope procesado"
-  - "preservar trace_id"
-  - "preservar tool_id"
-  - "preservar domain"
-  - "preservar execution/correlation id"
-  - "preservar status del enum 03A"
-  - "scope_complete solo cuando corresponda"
-  - "entity_resolution_state solo cuando corresponda"
-  - "error metadata no sensible solo cuando exista"
-  - "timestamps técnicos disponibles pueden preservarse"
-  - "pipeline_received_at usa reloj inyectable"
-  - "no contiene facts"
-  - "no contiene confidence"
-  - "no contiene materiality"
-  - "no contiene coverage"
-  - "no contiene ABSENCE_CONFIRMED"
+integration_runtime:
+  preferred_shape: "función/factory pura de orquestación para tests"
+  required_interface:
+    - "run_op_eb_eks(input, dependencies)"
+  dependencies:
+    - "observation_pipeline"
+    - "evidence_builder"
+    - "eks"
+  constraints:
+    - "dependencias inyectables"
+    - "sin server.js"
+    - "sin singleton global"
+    - "sin DB productiva en tests"
+    - "puede usar EKS in-memory/test implementation ya existente"
+    - "sin networking"
 
-observation_record_rules:
-  - "solo resultado de negocio transportable produce ObservationRecord"
-  - "ACQUIRED_OK puede producir cero, uno o múltiples ObservationRecords"
-  - "ObservationRecord preserva trace_id y correlación upstream"
-  - "observation_id es opaco y generado mediante dependencia inyectable"
-  - "no congelar UUID/hash como algoritmo contractual"
-  - "preservar source.system"
-  - "preservar source.source_family"
-  - "preservar source.source_instance_id"
-  - "preservar source.content_author_id incluso null"
-  - "preservar extracted_by"
-  - "preservar triggered_by"
-  - "preservar raw_payload_reference"
-  - "normalized_payload es vista determinística de procesamiento"
-  - "no eliminar referencia al payload original"
-  - "no interpretar normalized_payload como hecho N2"
-  - "no generar confidence"
-  - "no generar materiality"
-  - "no generar coverage"
-  - "no generar hipótesis"
+required_scenarios:
+  scenario_a:
+    name: "ACQUIRED_OK transportable"
+    expected:
+      - "OP produce status + ObservationRecord"
+      - "EB produce N1 y N2 permitido por runtime vigente"
+      - "Bundle válido"
+      - "EKS produce Snapshot v1"
+      - "procedencia preservada"
 
-non_transport_rules:
-  - "TOOL_ERROR -> AcquisitionStatus; cero ObservationRecords de negocio"
-  - "SOURCE_RESTRICTED -> AcquisitionStatus; cero ObservationRecords de negocio"
-  - "SOURCE_NOT_INTEGRATED -> AcquisitionStatus; cero ObservationRecords de negocio"
-  - "QUERY_SCOPE_INCOMPLETE -> AcquisitionStatus; no afirmar cobertura completa"
-  - "ENTITY_UNRESOLVED -> no inventar subject.entity_id canónico"
-  - "ACQUIRED_EMPTY -> no emitir ABSENCE_CONFIRMED"
-  - "DATA_NOT_FOUND si aparece dentro de payload no se eleva automáticamente a ausencia empresarial"
+  scenario_b:
+    name: "SOURCE_NOT_INTEGRATED"
+    expected:
+      - "OP produce AcquisitionStatus"
+      - "cero ObservationRecords de negocio"
+      - "EB produce NO_CONOZCO"
+      - "cero facts/evidence/diagnostics"
+      - "Bundle válido"
+      - "EKS persiste Snapshot válido"
 
-entity_resolution_rules:
-  - "RESOLVED puede transportar entity_id canónico si upstream lo provee conforme a 03A"
-  - "AMBIGUOUS no elige silenciosamente candidato"
-  - "UNRESOLVED no inventa entity_id"
-  - "preservar original_value cuando exista"
-  - "preservar candidatos/regla aplicada cuando el contrato los contemple"
-  - "extracted_by no sustituye content_author_id"
-  - "triggered_by no sustituye content_author_id"
+  scenario_c:
+    name: "ACQUIRED_EMPTY"
+    expected:
+      - "no ABSENCE_CONFIRMED"
+      - "no hecho negativo inventado"
+      - "Bundle fail-closed"
+      - "Snapshot válido"
 
-retry_and_dedup_rules:
-  - "no silent dedup"
-  - "cada envelope representa un intento auditable"
-  - "retries conservan execution/correlation identifiers"
-  - "dos inputs repetidos no se eliminan por conveniencia"
-  - "OP no realiza deduplicación semántica"
-  - "lineage de repetición debe preservarse"
+  scenario_d:
+    name: "TOOL_ERROR"
+    expected:
+      - "no ObservationRecord empresarial"
+      - "no facts inventados"
+      - "source_health conserva fallo técnico"
+      - "Snapshot válido cuando el Bundle contractual sea emitible"
 
-ordering_and_time_rules:
-  - "preservar orden estable del input salvo obligación contractual distinta"
-  - "pipeline_received_at se obtiene de clock inyectable"
-  - "pipeline_received_at no determina verdad ni semántica"
-  - "extracted_at upstream se preserva cuando exista"
-  - "tests deben poder fijar clock e id generator"
-
-eb_boundary_rules:
-  - "output OP conserva dos listas hermanas"
-  - "acquisition_statuses[] se entrega separado"
-  - "observation_records[] se entrega separado"
-  - "no fusionar AcquisitionStatus dentro de ObservationRecord"
-  - "output debe poder alimentar assemble() del EB mínimo existente"
-  - "esta tarea puede verificar la frontera en tests"
-  - "esta tarea no modifica EB"
-  - "EB sigue siendo propietario de N1-N4"
-  - "OP no llama EKS"
+  scenario_e:
+    name: "versionado"
+    expected:
+      - "dos ejecuciones con mismo trace_id pueden producir Snapshot v1 y v2"
+      - "v1 permanece inmutable"
+      - "get_snapshot(trace_id) devuelve latest"
+      - "list_versions conserva historial"
 
 fixtures_required:
-  - "acquired-ok-single.json"
-  - "acquired-ok-multiple.json"
+  - "happy-path.json"
+  - "source-not-integrated.json"
   - "acquired-empty.json"
   - "tool-error.json"
-  - "source-restricted.json"
-  - "source-not-integrated.json"
-  - "query-scope-incomplete.json"
-  - "entity-unresolved.json"
-  - "entity-resolved.json"
-  - "retry-pair.json"
+  - "same-trace-v1.json"
+  - "same-trace-v2.json"
 
 fixture_rules:
   - "todos sintéticos"
-  - "ninguno representa datos institucionales reales"
-  - "ninguno prueba verdad empresarial"
-  - "ninguno autoriza ABSENCE_CONFIRMED"
-  - "ninguno calibra G8"
+  - "sin datos institucionales reales"
+  - "sin cobertura institucional implícita"
+  - "sin reglas G8 inventadas"
+  - "sin causalidad"
+  - "sin hipótesis"
 
 tests_required:
-  - "factory expone process"
-  - "process devuelve acquisition_statuses[] y observation_records[]"
-  - "un envelope produce exactamente un AcquisitionStatus"
-  - "solo enum 03A es aceptado"
-  - "status desconocido falla estructuralmente"
-  - "ACQUIRED_OK single produce ObservationRecord transportable"
-  - "ACQUIRED_OK multiple puede producir múltiples ObservationRecords"
+  - "flujo OP -> EB -> EKS completo funciona con fixture happy-path"
+  - "procedencia 03A permanece en bundle.observations"
+  - "procedencia permanece después de persistencia EKS"
+  - "content_author_id null permanece null end-to-end"
+  - "AcquisitionStatus no aparece en bundle.observations"
+  - "SOURCE_NOT_INTEGRATED produce NO_CONOZCO sin facts"
+  - "TOOL_ERROR no produce facts"
   - "ACQUIRED_EMPTY no produce ABSENCE_CONFIRMED"
-  - "TOOL_ERROR no produce ObservationRecord de negocio"
-  - "SOURCE_RESTRICTED no produce ObservationRecord de negocio"
-  - "SOURCE_NOT_INTEGRATED no produce ObservationRecord de negocio"
-  - "QUERY_SCOPE_INCOMPLETE no afirma cobertura completa"
-  - "ENTITY_UNRESOLVED no inventa entity_id"
-  - "RESOLVED preserva entity_id upstream"
-  - "content_author_id null permanece null"
-  - "extracted_by no se convierte en autor"
-  - "triggered_by no se convierte en autor"
-  - "raw_payload_reference se preserva"
-  - "normalized_payload no sustituye raw_payload_reference"
-  - "input no se muta"
-  - "clock es inyectable y determinístico"
-  - "observation id generator es inyectable"
-  - "retries no se deduplican silenciosamente"
-  - "orden de salida es estable"
-  - "OP no contiene append_snapshot"
-  - "OP no importa ni usa EKS"
-  - "output OP puede alimentar EB assemble sin modificar EB"
-  - "frontera OP -> EB conserva listas hermanas"
-  - "EB + EKS tests existentes continúan pasando"
+  - "sin G8 no aparece MAT_LOW/MAT_MEDIUM/MAT_HIGH/MAT_CRITICAL inventado"
+  - "sin ruleset no aparece RESOLVED inventado"
+  - "Bundle pasa validate_structure"
+  - "append_snapshot recibe exclusivamente Knowledge Bundle válido"
+  - "Snapshot preserva Bundle sin reinterpretación"
+  - "dos snapshots mismo trace_id incrementan version"
+  - "snapshot v1 permanece inmutable después de v2"
+  - "get_snapshot(trace_id) retorna latest"
+  - "list_versions retorna historial ordenado"
+  - "input original no se muta"
+  - "OP tests existentes continúan pasando"
+  - "EB tests existentes continúan pasando"
+  - "EKS tests existentes continúan pasando"
 
 acceptance_criteria:
-  - "runtime OP mínimo implementado"
-  - "fixtures sintéticos requeridos creados"
-  - "tests OP pasan"
-  - "tests EB existentes pasan"
-  - "tests EKS existentes pasan"
+  - "test de integración OP-EB-EKS creado"
+  - "fixtures de integración sintéticos creados"
+  - "flujo técnico completo demostrado"
+  - "todos los tests OP pasan"
+  - "todos los tests EB pasan"
+  - "todos los tests EKS pasan"
+  - "todos los tests de integración pasan"
   - "git diff --check sin errores"
+
   - "ningún docs/director-ia modificado"
   - "server.js no modificado"
   - "package.json no modificado"
-  - "EB runtime no modificado"
-  - "EKS runtime no modificado"
-  - "sin SQL ni migraciones"
-  - "sin DB"
   - "sin Tool Execution productivo"
-  - "sin datos productivos"
-  - "sin ABSENCE_CONFIRMED producido por OP"
-  - "sin N2-N5 producido por OP"
-  - "sin deduplicación silenciosa"
-  - "sin entidad canónica inventada"
-  - "sin G8"
-  - "reporte obligatorio creado"
+  - "sin DB productiva"
+  - "sin LLM"
+  - "sin chat/dashboard"
+  - "sin IES/Reasoning/Projection"
+
+  - "sin bypass OP -> EKS"
+  - "sin AcquisitionStatus dentro de bundle.observations"
+  - "sin ABSENCE_CONFIRMED inventado"
+  - "sin RESOLVED inventado"
+  - "sin materiality productiva inventada"
+  - "sin hipótesis"
+
+  - "reporte documenta frontera end-to-end y gaps restantes"
 
 allowed_actions:
   - "leer contracts_in_force"
-  - "leer runtime EB y tests EB"
-  - "leer runtime EKS y tests EKS"
-  - "crear lib/director-ia-observation-pipeline.js"
-  - "crear test/director-ia-observation-pipeline.test.js"
-  - "crear fixtures/director-ia/observation-pipeline/"
-  - "crear docs/dev-loop/reports/IMPL-OP-001.md"
+  - "leer runtimes OP/EB/EKS existentes"
+  - "crear test/director-ia-op-eb-eks-integration.test.js"
+  - "crear fixtures/director-ia/op-eb-eks-integration/"
+  - "crear un helper de integración solo si es estrictamente necesario dentro de un archivo nuevo explícitamente de integración"
+  - "usar implementaciones in-memory/test ya existentes"
   - "ejecutar tests OP"
-  - "ejecutar tests EB existentes"
-  - "ejecutar tests EKS existentes"
+  - "ejecutar tests EB"
+  - "ejecutar tests EKS"
+  - "ejecutar tests integración"
   - "ejecutar git diff --check"
+  - "crear docs/dev-loop/reports/IMPL-OP-EB-EKS-INTEGRATION-001.md"
   - "actualizar CURRENT_TASK mediante transiciones permitidas"
 
 forbidden_actions:
   - "modificar docs/director-ia/"
   - "modificar server.js"
   - "modificar package.json"
-  - "modificar Evidence Builder"
-  - "modificar EKS"
   - "modificar Planner"
   - "modificar Tool Orchestrator"
-  - "crear SQL"
-  - "crear migraciones"
-  - "usar DB"
+  - "implementar Tool Execution"
+  - "leer datos productivos"
+  - "usar DB productiva"
   - "usar red"
   - "usar LLM"
-  - "ejecutar tools productivas"
-  - "leer datos productivos"
-  - "llamar append_snapshot"
-  - "integrar server/chat/dashboard"
-  - "emitir N2-N5"
-  - "emitir ABSENCE_CONFIRMED"
-  - "decidir coverage"
-  - "decidir materiality"
+  - "usar tools productivas"
+  - "integrar chat/dashboard"
+  - "crear IES"
+  - "crear Reasoning Engine"
+  - "crear Channel Projection"
   - "calibrar G8"
-  - "deduplicar silenciosamente"
-  - "inventar identidad canónica"
+  - "inventar reglas epistemológicas"
   - "commit"
   - "push"
   - "merge"
@@ -389,11 +352,12 @@ forbidden_actions:
   - "autoaprobar gates"
 
 expected_terminal_state: >
-  DONE_PENDING_REVIEW si el runtime mínimo OP puede implementarse respetando
-  03A v1.4 y las decisiones D1-D15 aprobadas. BLOCKED o STOPPED si completar
-  el runtime exige modificar contratos, inventar semántica empresarial,
-  ampliar autoridad epistemológica o realizar una decisión no autorizada.
+  DONE_PENDING_REVIEW si la integración técnica OP -> EB -> EKS puede demostrarse
+  de extremo a extremo sin modificar contratos ni integrar fuentes productivas.
+  BLOCKED o STOPPED si completar la integración exige redefinir contratos,
+  introducir Tool Execution productivo, modificar server.js o inventar
+  decisiones epistemológicas.
 
 max_attempts: 1
-result_report_path: "docs/dev-loop/reports/IMPL-OP-001.md"
+result_report_path: "docs/dev-loop/reports/IMPL-OP-EB-EKS-INTEGRATION-001.md"
 ```

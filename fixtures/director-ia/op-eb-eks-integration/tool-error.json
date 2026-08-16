@@ -1,0 +1,32 @@
+{
+  "meta": {
+    "figures": "ILUSTRATIVAS / FICTICIAS",
+    "not_institutional_coverage": true,
+    "note": "TOOL_ERROR. Fallo técnico. No es vacío de negocio ni hecho."
+  },
+  "input": {
+    "trace_id": "tr_int_error",
+    "bundle_id": "kb_int_error",
+    "produced_at": "2026-08-16T00:00:00.000Z",
+    "question": "¿Cuál es la venta ilustrativa?",
+    "plan": { "intent": "tool_error_check" },
+    "tool_plan": { "tools": ["get_arr_snapshot"] },
+    "execution_results": [
+      {
+        "trace_id": "tr_int_error",
+        "tool_id": "get_arr_snapshot",
+        "domain": "arr",
+        "status": "TOOL_ERROR",
+        "execution_id": "ex_int_err_1",
+        "extracted_by": "get_arr_snapshot",
+        "triggered_by": "usuario_ilustrativo",
+        "error": { "code": "TIMEOUT" },
+        "source": {
+          "system": "arr",
+          "source_family": "arr_snapshot",
+          "source_instance_id": "arr:ex_int_err_1"
+        }
+      }
+    ]
+  }
+}

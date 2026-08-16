@@ -1,0 +1,36 @@
+{
+  "meta": {
+    "figures": "ILUSTRATIVAS / FICTICIAS",
+    "not_institutional_coverage": true,
+    "note": "ACQUIRED_EMPTY. content_author_id null. No es ABSENCE_CONFIRMED."
+  },
+  "input": {
+    "trace_id": "tr_int_empty",
+    "bundle_id": "kb_int_empty",
+    "produced_at": "2026-08-16T00:00:00.000Z",
+    "question": "¿Hay acciones ilustrativas registradas?",
+    "plan": { "intent": "empty_check" },
+    "tool_plan": { "tools": ["get_action_register"] },
+    "execution_results": [
+      {
+        "trace_id": "tr_int_empty",
+        "tool_id": "get_action_register",
+        "domain": "action_register",
+        "status": "ACQUIRED_EMPTY",
+        "execution_id": "ex_int_empty_1",
+        "extracted_by": "get_action_register",
+        "triggered_by": "usuario_ilustrativo",
+        "extracted_at": "2026-08-16T00:00:00.000Z",
+        "scope_complete": true,
+        "source": {
+          "system": "action_register",
+          "source_family": "action_register",
+          "source_instance_id": "ar:ex_int_empty_1",
+          "content_author_id": null
+        },
+        "raw_payload_reference": "raw://tr_int_empty/get_action_register/ex_int_empty_1/0",
+        "payload": {}
+      }
+    ]
+  }
+}
