@@ -12,38 +12,40 @@ Esto **no** es G1. `DRAFT` no es ejecutable.
 ---
 
 ```yaml
-task_id: "ARCH-IES-PHYSICAL-DECISIONS-001"
+task_id: "ARCH-IES-PHYSICAL-DECISIONS-002"
 status: CLOSED
 
 authorized_by: "HUMAN_APPROVER"
-authorized_at: "2026-08-16T11:33:39-06:00"
-human_authorization: "AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-16"
+authorized_at: "2026-08-17T08:43:20-06:00"
+human_authorization: "AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-17"
 
 gates:
   G1_task_authorization: AUTHORIZED
-  G2_architecture_change: PENDING_IF_REQUIRED
+  G2_architecture_change: AUTHORIZED
   G3_new_architecture_contract: N/A
   G8_calibration_materiality_signature: N/A
 
 objective: >
-  Auditar la realizabilidad física del IES Builder definido por
-  docs/director-ia/04-IES-STANDARD.md v1.0 contra los contratos y runtimes
-  actualmente existentes, identificar qué decisiones físicas ya están
-  congeladas, cuáles permanecen UNKNOWN y cuáles requieren decisión humana
-  antes de autorizar IMPL-IES-001, sin implementar runtime, sin modificar
-  contratos y sin reinterpretar la epistemología vigente.
+  Resolver y registrar contractualmente los blockers físicos detectados por
+  ARCH-IES-PHYSICAL-DECISIONS-001 que impiden abrir IMPL-IES-001:
+  D5, la disponibilidad de query_context bajo la regla de entrada única
+  Knowledge Snapshot; y D14, la canonicalización exacta requerida para
+  integrity/content_fingerprint. Cerrar únicamente estas fronteras y las
+  decisiones físicas estrictamente dependientes de ellas, sin implementar
+  IES Builder, sin persistencia IES, sin firma digital y sin calibrar G8.
 
 in_scope:
   - "docs/dev-loop/CURRENT_TASK.md"
-  - "docs/dev-loop/reports/ARCH-IES-PHYSICAL-DECISIONS-001.md"
+  - "docs/dev-loop/reports/ARCH-IES-PHYSICAL-DECISIONS-001.md (solo lectura)"
+  - "docs/dev-loop/reports/ARCH-IES-PHYSICAL-DECISIONS-002.md"
 
   - "docs/director-ia/DIRECTOR_IA_CONSTITUTION.md (solo lectura)"
   - "docs/director-ia/DIRECTOR_IA_EXECUTIVE_KNOWLEDGE_ENGINE.md (solo lectura)"
   - "docs/director-ia/02-EVIDENCE-BUILDER.md (solo lectura)"
-  - "docs/director-ia/03-EXECUTIVE-KNOWLEDGE-STORE.md (solo lectura)"
   - "docs/director-ia/03A-OBSERVATION-PIPELINE.md (solo lectura)"
+  - "docs/director-ia/03-EXECUTIVE-KNOWLEDGE-STORE.md"
   - "docs/director-ia/03B-END-TO-END-REFERENCE-FLOWS.md (solo lectura)"
-  - "docs/director-ia/04-IES-STANDARD.md (solo lectura)"
+  - "docs/director-ia/04-IES-STANDARD.md"
   - "docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md (solo lectura)"
 
   - "lib/director-ia-observation-pipeline.js (solo lectura)"
@@ -51,440 +53,408 @@ in_scope:
   - "lib/director-ia-eks.js (solo lectura)"
   - "lib/director-ia-op-eb-eks-integration.js (solo lectura)"
 
-  - "test/director-ia-observation-pipeline.test.js (solo lectura)"
-  - "test/director-ia-evidence-builder.test.js (solo lectura)"
-  - "test/director-ia-eks.test.js (solo lectura)"
-  - "test/director-ia-eks-integration.test.js (solo lectura)"
-  - "test/director-ia-op-eb-eks-integration.test.js (solo lectura)"
-
-  - "fixtures/director-ia/eks/ (solo lectura)"
-  - "fixtures/director-ia/op-eb-eks-integration/ (solo lectura)"
-
 out_of_scope:
   - "implementar IES Builder"
-  - "crear lib/director-ia-ies*.js"
   - "crear runtime IES"
-  - "crear fixtures IES productivos"
-  - "crear tests de implementación IES"
-  - "modificar cualquier archivo en docs/director-ia/"
-  - "modificar contratos congelados"
-  - "modificar OP"
-  - "modificar Evidence Builder"
-  - "modificar EKS"
+  - "crear lib/director-ia-ies-builder.js"
+  - "crear tests IES"
+  - "crear fixtures IES"
+
+  - "modificar Constitución"
+  - "modificar Executive Knowledge Engine"
+  - "modificar 02-EVIDENCE-BUILDER.md"
+  - "modificar 03A-OBSERVATION-PIPELINE.md"
+  - "modificar 03B-END-TO-END-REFERENCE-FLOWS.md"
+  - "modificar DIRECTOR_IA_ARCHITECTURE_INDEX.md"
+
+  - "modificar OP runtime"
+  - "modificar Evidence Builder runtime"
+  - "modificar EKS runtime"
   - "modificar helper OP-EB-EKS"
   - "modificar server.js"
   - "modificar package.json"
-  - "modificar .env"
-  - "crear SQL"
-  - "crear migraciones"
-  - "crear tablas"
-  - "persistir IES"
-  - "integrar IES con server.js"
-  - "integrar chat"
-  - "integrar voz"
-  - "integrar WhatsApp"
-  - "integrar dashboard"
-  - "implementar Reasoning Engine"
-  - "implementar Channel Projection"
-  - "generar hipótesis"
-  - "usar LLM"
-  - "consultar fuentes"
-  - "ejecutar tools productivas"
-  - "leer datos empresariales reales"
+
+  - "crear persistencia física del IES"
+  - "crear tablas IES"
+  - "crear SQL o migraciones"
+  - "definir repositorio IES"
+  - "definir retention"
+  - "definir política de expiración institucional"
+
+  - "implementar IES ALTERNATIVE"
+  - "resolver completamente política ALTERNATIVE"
+  - "implementar lifecycle físico de IES"
+  - "implementar supersesión física"
+
+  - "implementar firma digital"
+  - "elegir algoritmo de firma"
+  - "declarar signature distinta de null"
+  - "declarar signature_status distinto de NOT_IMPLEMENTED"
+
   - "calibrar wi"
   - "calibrar k"
   - "calibrar Fs"
   - "calibrar ventanas R"
-  - "calibrar materiality"
+  - "calibrar severity"
+  - "crear ruleset productivo de materiality"
   - "crear reglas causales"
-  - "implementar firma digital"
-  - "congelar canonicalización por inferencia"
+
+  - "implementar Reasoning Engine"
+  - "implementar Channel Projection"
+  - "integrar chat/dashboard/WhatsApp/voz"
+  - "usar LLM"
+  - "consultar fuentes"
+  - "ejecutar tools productivas"
+
   - "commit"
   - "push"
   - "merge"
+  - "crear o ejecutar IMPL-IES-001"
   - "encadenar siguiente tarea"
 
 contracts_in_force:
   - "docs/director-ia/DIRECTOR_IA_CONSTITUTION.md"
   - "docs/director-ia/DIRECTOR_IA_EXECUTIVE_KNOWLEDGE_ENGINE.md"
   - "docs/director-ia/02-EVIDENCE-BUILDER.md"
-  - "docs/director-ia/03-EXECUTIVE-KNOWLEDGE-STORE.md"
   - "docs/director-ia/03A-OBSERVATION-PIPELINE.md"
+  - "docs/director-ia/03-EXECUTIVE-KNOWLEDGE-STORE.md"
   - "docs/director-ia/03B-END-TO-END-REFERENCE-FLOWS.md"
   - "docs/director-ia/04-IES-STANDARD.md"
-  - "docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md"
 
-known_runtime_chain:
-  flow:
-    - "MINIMAL_EXECUTION_ENVELOPE[]"
-    - "Observation Pipeline"
-    - "acquisition_statuses[] + observation_records[]"
-    - "Evidence Builder"
-    - "Knowledge Bundle"
-    - "EKS validate_structure()"
-    - "EKS append_snapshot()"
-    - "Knowledge Snapshot"
+audit_result_in_force:
+  source: "docs/dev-loop/reports/ARCH-IES-PHYSICAL-DECISIONS-001.md"
+  implementation_status: "NO-GO"
+  blockers:
+    D5: >
+      El Knowledge Snapshot vigente no contiene físicamente todo el
+      query_context obligatorio de 04.
+    D14: >
+      04 exige canonical_representation y content_fingerprint pero declara
+      pendiente la canonicalización exacta.
+  confirmed_non_blocking:
+    - "COV_* puede proyectarse fail-closed"
+    - "status IES puede mapearse desde cobertura contractual"
+    - "facts/evidence/diagnoses/conflicts pueden proyectarse"
+    - "MATERIALITY_NOT_ASSESSED puede preservarse"
+    - "signature = null"
+    - "signature_status = NOT_IMPLEMENTED"
+    - "NO_CONOZCO puede producir NO_KNOWLEDGE válido"
 
-  demonstrated:
-    - "OP -> EB -> EKS integración end-to-end con fixtures sintéticos"
-    - "procedencia preservada"
-    - "fail-closed preservado"
-    - "Knowledge Snapshot versionado"
-    - "Snapshot inmutable"
-    - "SOURCE_NOT_INTEGRATED puede terminar en NO_CONOZCO sin hechos"
-    - "ACQUIRED_EMPTY no se convierte en ABSENCE_CONFIRMED"
-    - "TOOL_ERROR no se convierte en hecho"
-    - "sin G8 materiality permanece MATERIALITY_NOT_ASSESSED"
+proposed_human_decisions:
 
-  missing:
-    - "IES Builder runtime"
-    - "Snapshot -> IES projection runtime"
-    - "persistencia IES si contractualmente fuera requerida"
-    - "Reasoning Engine"
-    - "Channel Projection"
+  D5_query_context_snapshot_boundary:
+    decision: "SNAPSHOT_CARRIES_QUERY_CONTEXT_METADATA"
+    meaning: >
+      La regla 'entrada única = Knowledge Snapshot' permanece intacta.
+      El IES Builder no recibe una segunda entrada operacional para
+      query_context. En cambio, el Knowledge Snapshot debe exponer dentro de
+      su representación persistida/metadatos inmutables la metadata de consulta
+      ejecutiva necesaria para proyectar query_context del IES.
 
-ies_contract_frozen_facts:
-  - "IES v1.0 está APROBADO PARA CONGELAMIENTO"
-  - "runtime IES está PENDIENTE"
-  - "IES Builder es el productor"
-  - "entrada única = Knowledge Snapshot"
-  - "IES Builder no consulta fuentes"
-  - "IES Builder no ejecuta tools"
-  - "IES Builder no transforma Observaciones en Hechos"
-  - "IES Builder no crea Evidencias"
-  - "IES Builder no produce Hipótesis"
-  - "IES Builder no contiene interpretación LLM"
-  - "IES Builder no redacta explicaciones"
-  - "IES no contiene hipótesis"
-  - "IES es independiente del canal"
-  - "canal no crea nueva versión"
-  - "OFFICIAL y ALTERNATIVE son tipos distintos"
-  - "IES emitido es inmutable"
-  - "reproyección formal crea nueva versión / ies_id"
-  - "COV_* se proyecta 1:1 a estados constitucionales"
-  - "materiality solo se proyecta"
-  - "MATERIALITY_NOT_ASSESSED no equivale a MAT_LOW"
-  - "highest_materiality_detected solo usa MAT_* ya evaluados"
-  - "correlación no se presenta como causalidad"
-  - "ABSENCE_CONFIRMED es la única ausencia que permite hecho negativo"
-  - "Tipo E nunca se suaviza ni se omite"
-  - "resolution_status se proyecta; IES no lo muta"
-  - "signature debe ser null en v1.0"
-  - "signature_status debe ser NOT_IMPLEMENTED"
-  - "digest no es firma digital"
+    rationale: >
+      Esto preserva la entrada única del IES Builder y evita que el Builder
+      consulte Planner, request runtime, chat, usuario, permisos u otras capas
+      fuera del Snapshot.
 
-audit_questions:
-  D1_input_boundary:
-    question: >
-      ¿Cuál es la forma física exacta del Knowledge Snapshot que debe aceptar
-      el IES Builder y qué parte del runtime EKS vigente constituye esa entrada?
-    classify_as:
-      - CONTRACTUAL
-      - PHYSICAL_UNKNOWN
-      - RECOMMENDATION
+    minimum_query_context_metadata:
+      - "executive_query_id"
+      - "query_fingerprint (nullable/opcional)"
+      - "trace_id"
+      - "original_question"
+      - "intent"
+      - "requesting_user_id"
+      - "requesting_role"
+      - "channel"
+      - "plant_or_scope cuando aplique"
+      - "period cuando aplique"
+      - "resolved_entities[]"
+      - "permission_restrictions[]"
+      - "knowledge_effective_date"
 
-  D2_builder_interface:
-    question: >
-      ¿Existe contrato suficiente para fijar una interfaz física mínima del
-      futuro IES Builder sin inventar arquitectura?
-    candidate_shape_for_audit_only:
-      - "createIesBuilder(dependencies)"
-      - "build(snapshot, options)"
-    rule: "la forma candidata no queda aprobada por esta auditoría"
+    ownership_rule: >
+      La metadata se origina upstream conforme a sus propietarios contractuales,
+      atraviesa EB sin reinterpretación y queda persistida por EKS como metadata
+      inmutable del Snapshot. IES únicamente la proyecta.
 
-  D3_snapshot_opacity:
-    question: >
-      ¿Debe IES Builder leer exclusivamente el Bundle contenido en el Snapshot
-      y metadatos EKS explícitos, sin reinterpretar ni consultar capas previas?
+    prohibitions:
+      - "IES Builder no consulta Planner"
+      - "IES Builder no consulta chat/request runtime"
+      - "IES Builder no inventa usuario/rol/canal"
+      - "IES Builder no re-resuelve entidades"
+      - "IES Builder no recalcula permisos"
+      - "EKS no reinterpreta query_context"
 
-  D4_root_mapping:
-    question: >
-      Para cada campo raíz obligatorio del IES §2, identificar su fuente física:
-      Snapshot, Bundle, metadata EKS, dependencia inyectada, ruleset existente,
-      o UNKNOWN.
+  D5_snapshot_contract_extension:
+    decision: "MINIMAL_QUERY_METADATA_EXTENSION"
+    meaning: >
+      Registrar en 03 la extensión mínima necesaria del Knowledge Snapshot para
+      transportar query_context_metadata como metadata persistida, sin cambiar
+      el Bundle N1-N4 ni las decisiones append-only D1-D9.
 
-  D5_query_context_mapping:
-    question: >
-      Determinar si executive_query_id, query_fingerprint, original_question,
-      intent, requesting_user_id, requesting_role, channel, plant_or_scope,
-      period, resolved_entities, permission_restrictions y
-      knowledge_effective_date existen realmente en el Snapshot/Bundle vigente
-      o requieren contrato/metadata adicional.
+    compatibility:
+      - "Bundle permanece opaco"
+      - "Snapshot sigue inmutable"
+      - "append-only intacto"
+      - "versionado EKS intacto"
+      - "integrity EKS intacta"
+      - "no se mezclan AcquisitionStatus dentro de observations"
 
-  D6_ies_identity:
-    question: >
-      Determinar origen físico de ies_id, ies_version, generated_at, valid_at
-      y expires_at, incluyendo cuáles pueden ser dependencias inyectables y
-      cuáles requieren política institucional.
+  D14_canonicalization:
+    decision: "JCS_LIKE_DETERMINISTIC_CANONICAL_JSON_V1"
+    meaning: >
+      Congelar para IES v1 una representación canónica JSON determinística con:
+      claves de objeto ordenadas lexicográficamente, arrays preservando orden
+      contractual, serialización JSON UTF-8 sin espacios insignificantes,
+      null explícito cuando el contrato exige el campo, exclusión del propio
+      content_fingerprint del material a hashear y exclusión de signature
+      como fuente de circularidad.
 
-  D7_status_projection:
-    question: >
-      Verificar si status puede derivarse determinísticamente del
-      coverage_token existente sin decisión nueva:
-      FULL->VALIDATED, PARTIAL->PARTIAL,
-      DATA_CONFLICT->CONFLICTED, NO_KNOWLEDGE->NO_KNOWLEDGE.
+    canonical_scope:
+      include:
+        - "todo el contenido semántico raíz del IES"
+        - "audit"
+        - "integrity.snapshot_reference"
+        - "integrity.signature_status"
+      exclude:
+        - "integrity.content_fingerprint"
+        - "integrity.canonical_representation"
+        - "integrity.signature"
 
-  D8_summary_projection:
-    question: >
-      Determinar si executive_summary_facts puede construirse mecánicamente
-      desde facts/evidence/diagnoses/conflicts/limitations existentes sin
-      inventar reglas de prioridad, selección o materialidad.
+    canonical_representation_token:
+      decision: "CANONICAL_JSON_V1"
 
-  D9_source_health_projection:
-    question: >
-      Determinar si source_health del IES puede proyectarse completamente
-      desde el Snapshot/Bundle actual y cómo mapear AcquisitionStatus:
-      ACQUIRED_OK->DATA_AVAILABLE,
-      ACQUIRED_EMPTY->DATA_NOT_FOUND,
-      SOURCE_NOT_INTEGRATED->SOURCE_NOT_INTEGRATED,
-      SOURCE_RESTRICTED->SOURCE_RESTRICTED,
-      TOOL_ERROR->TOOL_ERROR,
-      QUERY_SCOPE_INCOMPLETE->QUERY_SCOPE_INCOMPLETE,
-      ENTITY_UNRESOLVED->ENTITY_UNRESOLVED.
+    rules:
+      - "objetos: claves lexicográficamente ordenadas"
+      - "arrays: orden preservado; no se reordenan para canonicalizar"
+      - "strings: serialización JSON estándar UTF-8"
+      - "numbers: representación JSON finita; NaN/Infinity prohibidos"
+      - "booleans: true/false"
+      - "null: explícito cuando forma parte del contrato"
+      - "undefined: prohibido"
+      - "campos inexistentes no se inventan"
+      - "no normalizar semánticamente strings"
+      - "no convertir números a strings"
+      - "no ordenar bancos por conveniencia dentro del canonicalizer"
 
-  D10_internal_reference_validation:
-    question: >
-      Definir qué validaciones puramente estructurales puede realizar el
-      IES Builder sobre references internas sin crear conocimiento:
-      evidence->facts, diagnoses->facts/evidence, conflicts->facts,
-      summary->IDs existentes y traceability.
+  D14_content_fingerprint:
+    decision: "DETERMINISTIC_DIGEST_IMPLEMENTATION_NOT_SIGNATURE"
+    meaning: >
+      content_fingerprint es digest criptográfico determinista de
+      CANONICAL_JSON_V1. El contrato congela la representación canónica y la
+      naturaleza digest, pero no debe presentar el digest como firma digital.
 
-  D11_materiality_projection:
-    question: >
-      Confirmar que IES Builder únicamente copia materiality existente y
-      calcula highest_materiality_detected como máximo determinista de MAT_*
-      ya evaluados; si no existen, MATERIALITY_NOT_ASSESSED.
+    algorithm_policy:
+      decision: "ALGORITHM_IMPLEMENTATION_LEVEL"
+      meaning: >
+        El algoritmo concreto puede ser una decisión de implementación mientras
+        mantenga propiedades criptográficas adecuadas y quede documentado en
+        reporte/runtime. No se congela algoritmo de firma digital.
 
-  D12_conflict_visibility:
-    question: >
-      Determinar mecanismo físico para garantizar que CONF_TYPE_E_GOVERNANCE
-      permanezca visible en conflicts y executive_summary_facts sin crear
-      narrativa ni reinterpretación.
+    invariant:
+      - "signature = null"
+      - "signature_status = NOT_IMPLEMENTED"
+      - "content_fingerprint != firma digital"
 
-  D13_official_alternative:
-    question: >
-      Determinar qué metadata física se requiere para OFFICIAL y ALTERNATIVE,
-      cómo se referencia alternative_of y qué parte no existe todavía en el
-      Snapshot/runtime vigente.
+  D14_integrity_verification:
+    decision: "RECOMPUTABLE_FINGERPRINT"
+    meaning: >
+      El mismo IES semántico bajo CANONICAL_JSON_V1 debe producir la misma
+      huella. Una mutación del contenido incluido debe cambiar la huella.
+      El runtime futuro debe poder recomputarla para verificar integridad.
 
-  D14_integrity:
-    question: >
-      Separar claramente content_fingerprint, canonical_representation y
-      firma. Determinar qué puede implementarse hoy sin inventar la
-      canonicalización pendiente. signature=null y
-      signature_status=NOT_IMPLEMENTED son obligatorios.
+  D14_generated_fields:
+    decision: "GENERATE_THEN_FINGERPRINT"
+    meaning: >
+      ies_id, ies_version, status, generated_at, valid_at y demás campos que
+      formen parte del objeto final se determinan antes de calcular
+      content_fingerprint. La huella corresponde al IES emitido final, no a un
+      borrador BUILDING parcial.
 
-  D15_versioning_lifecycle_persistence:
-    question: >
-      Determinar si el contrato vigente autoriza solo construcción en memoria,
-      exige persistencia/versionado físico de IES, o deja esa decisión abierta.
-      No inferir tabla, DB ni repositorio si no están contractualmente definidos.
+  implementation_readiness_decisions:
 
-  D16_determinism:
-    question: >
-      Identificar todas las dependencias no deterministas que necesitarían ser
-      inyectables para repetibilidad verificable: clock, idFactory, reglas,
-      políticas de expiración u otras, sin aprobarlas automáticamente.
+    builder_interface:
+      decision: "FACTORY_WITH_INJECTED_CLOCK_AND_ID_FACTORY"
+      meaning: >
+        Una futura IMPL-IES-001 puede realizar IES Builder mediante factory
+        testeable con clock e idFactory inyectables, sin que esta tarea cree
+        runtime.
 
-  D17_no_knowledge:
-    question: >
-      Verificar que un Snapshot NO_CONOZCO pueda producir un IES
-      NO_KNOWLEDGE válido con facts/evidence/diagnoses vacíos y sin hipótesis.
+    first_runtime_scope:
+      decision: "OFFICIAL_IN_MEMORY_PROJECTION_FIRST"
+      meaning: >
+        La primera implementación puede limitarse a construir IES OFFICIAL en
+        memoria desde un Snapshot, sin persistencia física IES y sin
+        ALTERNATIVE, siempre que el contrato raíz se complete y valide.
+        Persistencia/versionado durable de IES requerirá tarea separada.
 
-  D18_runtime_gap:
-    question: >
-      Emitir una lista exhaustiva de gaps que deben cerrarse antes de
-      IMPL-IES-001 y separar:
-      CONTRACTUAL / PHYSICAL_UNKNOWN / RECOMMENDATION / BLOCKER.
+    ies_version_initial:
+      decision: "INITIAL_VERSION_1"
+      meaning: >
+        Para un IES nuevo sin persistencia/historial IES, la primera proyección
+        OFFICIAL usa ies_version = 1. Cualquier regeneración/supersesión durable
+        queda fuera hasta definir el almacén IES.
 
-mandatory_field_source_matrix:
-  root_fields:
-    - "ies_id"
-    - "ies_type"
-    - "schema_version"
-    - "ies_version"
-    - "status"
-    - "generated_at"
-    - "valid_at"
-    - "expires_at"
-    - "snapshot_reference"
-    - "knowledge_snapshot_version"
-    - "query_context"
-    - "executive_scope"
-    - "knowledge_coverage"
-    - "executive_summary_facts"
-    - "facts"
-    - "evidence"
-    - "diagnoses"
-    - "conflicts"
-    - "open_questions"
-    - "source_health"
-    - "limitations"
-    - "audit"
-    - "integrity"
-    - "alternative_context"
+    expiration:
+      decision: "EXPIRES_AT_NULL_UNTIL_POLICY"
+      meaning: >
+        Mientras no exista política institucional de expiración, expires_at
+        permanece null, permitido por 04.
 
-  required_columns:
-    - "field"
-    - "contract_requirement"
-    - "physical_source_today"
-    - "available_today: YES|PARTIAL|NO"
-    - "transformation_allowed"
-    - "authority_owner"
-    - "classification"
-    - "notes"
+    alternative_context:
+      decision: "OFFICIAL_ONLY_V1"
+      meaning: >
+        IMPL-IES-001 inicial puede soportar únicamente ies_type=OFFICIAL con
+        alternative_context=null. ALTERNATIVE requiere una tarea posterior.
 
-mandatory_runtime_gap_matrix:
-  required_columns:
-    - "gap_id"
-    - "description"
-    - "blocks_impl_ies_001: YES|NO"
-    - "requires_G2: YES|NO"
-    - "requires_G8: YES|NO"
-    - "recommended_resolution"
-    - "authority_owner"
+    summary:
+      decision: "FAIL_CLOSED_CONTROLLED_REFERENCES"
+      meaning: >
+        La implementación inicial no inventa reglas de priorización. Solo emite
+        executive_summary_facts cuando exista una regla contractual inequívoca
+        para incluir una referencia, incluyendo límites bloqueantes y
+        CONF_TYPE_E_GOVERNANCE obligatorio. Si no existe criterio suficiente,
+        no inventa ranking narrativo.
 
-classification_rules:
-  CONTRACTUAL: >
-    Ya está definido por documentos vigentes y solo debe ser obedecido.
-  PHYSICAL_UNKNOWN: >
-    El contrato exige el resultado pero no existe una decisión física suficiente
-    para implementarlo sin elegir arquitectura/política adicional.
-  RECOMMENDATION: >
-    Opción técnica propuesta por la auditoría. No queda aprobada por aparecer
-    en el reporte.
-  BLOCKER: >
-    Falta que impide IMPL-IES-001 sin una decisión humana o contractual previa.
+    limitations:
+      decision: "PROJECT_ONLY_EXPLICIT_LIMITATIONS"
+      meaning: >
+        IES Builder proyecta únicamente limitaciones explícitas presentes o
+        derivables por mapeos contractuales exactos del Snapshot/source_health.
+        No redacta limitaciones libres.
 
-audit_constraints:
-  - "no convertir recomendaciones en decisiones aprobadas"
-  - "no escribir contrato nuevo"
-  - "no modificar 04"
-  - "no asumir que ejemplos ilustrativos son reglas productivas"
-  - "no usar cifras ilustrativas como datos institucionales"
-  - "no inventar prioridad de executive_summary_facts"
-  - "no inventar canonicalización"
-  - "no inventar persistencia IES"
-  - "no inventar expiración"
-  - "no inventar versionado físico"
-  - "no inventar reglas ALTERNATIVE"
-  - "no inventar materiality"
-  - "no inventar causalidad"
-  - "no inventar ausencia"
-  - "no inventar resolución de conflictos"
-  - "no generar hipótesis"
-  - "no usar LLM"
-  - "no consultar fuentes"
+    executive_scope:
+      decision: "PROJECT_FROM_QUERY_METADATA_AND_SNAPSHOT_SCOPE"
+      meaning: >
+        executive_scope se proyecta mecánicamente desde query_context_metadata
+        y alcance explícito del Snapshot; no se consulta runtime externo.
 
-required_report_sections:
-  - "1. Executive result"
-  - "2. Documents and runtime inspected"
-  - "3. Current physical reality"
-  - "4. D1-D18 findings"
-  - "5. Mandatory field-source matrix"
-  - "6. Runtime gap matrix"
-  - "7. Determinism and injected-dependency analysis"
-  - "8. OFFICIAL / ALTERNATIVE physical readiness"
-  - "9. Integrity / canonicalization readiness"
-  - "10. Fail-closed and NO_KNOWLEDGE readiness"
-  - "11. Contractual facts"
-  - "12. Physical unknowns"
-  - "13. Recommendations requiring approval"
-  - "14. Blockers for IMPL-IES-001"
-  - "15. Gate assessment"
-  - "16. Proposed next task — informational only"
-  - "17. STOP"
+human_approval_scope:
+  approve_exactly:
+    - "D5_query_context_snapshot_boundary"
+    - "D5_snapshot_contract_extension"
+    - "D14_canonicalization"
+    - "D14_content_fingerprint"
+    - "D14_integrity_verification"
+    - "D14_generated_fields"
+    - "implementation_readiness_decisions"
 
-gate_rules:
-  G1:
-    current: PENDING
-    rule: >
-      Solo HUMAN_APPROVER puede cambiar esta tarea de DRAFT a AUTHORIZED.
+g2_contract_changes_authorized_if_approved:
+  docs/director-ia/03-EXECUTIVE-KNOWLEDGE-STORE.md:
+    allowed:
+      - "añadir query_context_metadata al Knowledge Snapshot"
+      - "aclarar preservación inmutable de metadata ejecutiva"
+      - "aclarar que EKS persiste pero no interpreta esa metadata"
+    forbidden:
+      - "cambiar Bundle N1-N4"
+      - "cambiar D1-D9"
+      - "cambiar append-only"
+      - "cambiar semántica get/list/versioning"
+      - "cambiar integrity EKS salvo referencia mínima necesaria"
 
-  G2:
-    current: PENDING_IF_REQUIRED
-    rule: >
-      Si cerrar un PHYSICAL_UNKNOWN exige modificar o ampliar
-      docs/director-ia/04-IES-STANDARD.md u otro contrato propietario,
-      la auditoría debe marcar G2 requerido y detenerse.
-      Esta tarea no autoriza G2.
+  docs/director-ia/04-IES-STANDARD.md:
+    allowed:
+      - "congelar CANONICAL_JSON_V1"
+      - "definir alcance exacto del content_fingerprint"
+      - "aclarar digest != firma"
+      - "registrar readiness física mínima para runtime OFFICIAL inicial"
+      - "aclarar origen query_context desde Snapshot metadata"
+    forbidden:
+      - "cambiar esquema raíz v1.0"
+      - "crear nuevos estados coverage"
+      - "cambiar taxonomía de conflictos"
+      - "cambiar materiality"
+      - "implementar firma digital"
+      - "cambiar Reasoning Engine"
+      - "diseñar Channel Projection"
 
-  G8:
-    current: N/A
-    rule: >
-      Esta auditoría no calibra materiality, k, wi, Fs, severidad,
-      reglas causales ni firma criptográfica.
-      Si una implementación mínima dependiera de ello, se reporta como gap;
-      no se calibra.
+g8_reserved_and_unchanged:
+  - "wi"
+  - "k"
+  - "Fs"
+  - "ventanas R"
+  - "severity productiva"
+  - "materiality ruleset productivo"
+  - "reglas causales"
+  - "firma digital"
+
+required_report:
+  - "decisiones registradas"
+  - "diff contractual exacto"
+  - "confirmación de que schema raíz IES no cambió"
+  - "confirmación de que Bundle/EKS D1-D9 no cambiaron"
+  - "definición final de query_context_metadata"
+  - "definición final CANONICAL_JSON_V1"
+  - "alcance del fingerprint"
+  - "materias aún diferidas"
+  - "evaluación GO / NO-GO para IMPL-IES-001"
+  - "cualquier contradicción encontrada"
+
+acceptance_criteria:
+  - "D5 queda resuelto sin segunda entrada operacional al IES Builder"
+  - "Knowledge Snapshot queda capaz de transportar query_context_metadata"
+  - "EKS no interpreta query_context_metadata"
+  - "04 mantiene entrada única Knowledge Snapshot"
+  - "canonicalización exacta queda congelada"
+  - "content_fingerprint queda recomputable"
+  - "digest no se presenta como firma"
+  - "signature sigue null"
+  - "signature_status sigue NOT_IMPLEMENTED"
+  - "schema raíz IES v1.0 no cambia"
+  - "coverage no cambia"
+  - "conflictos no cambian"
+  - "materiality no cambia"
+  - "Bundle N1-N4 no cambia"
+  - "EKS append-only/D1-D9 no cambian"
+  - "sin runtime IES"
+  - "sin persistencia IES"
+  - "sin ALTERNATIVE runtime"
+  - "sin G8"
+  - "solo 03 y 04 pueden modificarse bajo G2"
+  - "git diff --check sin errores"
+  - "reporte obligatorio creado"
+  - "IMPL-IES-001 no se crea"
 
 allowed_actions:
   - "leer contracts_in_force"
-  - "leer runtimes existentes indicados en in_scope"
-  - "leer tests y fixtures existentes indicados en in_scope"
-  - "comparar Snapshot real con contrato IES"
-  - "clasificar D1-D18"
-  - "construir matrices obligatorias"
-  - "crear docs/dev-loop/reports/ARCH-IES-PHYSICAL-DECISIONS-001.md"
-  - "actualizar CURRENT_TASK mediante transiciones permitidas"
-  - "ejecutar tests existentes solo si ayudan a verificar realidad física"
+  - "leer ARCH-IES-PHYSICAL-DECISIONS-001.md"
+  - "comparar decisiones propuestas con contratos"
+  - "si G1+G2 son autorizados, modificar 03 únicamente dentro del scope permitido"
+  - "si G1+G2 son autorizados, modificar 04 únicamente dentro del scope permitido"
+  - "crear docs/dev-loop/reports/ARCH-IES-PHYSICAL-DECISIONS-002.md"
   - "ejecutar git diff --check"
+  - "actualizar CURRENT_TASK mediante transiciones permitidas"
 
 forbidden_actions:
-  - "modificar docs/director-ia/"
-  - "crear runtime IES"
-  - "crear lib/director-ia-ies-builder.js"
-  - "crear tests de implementación IES"
-  - "crear fixtures de implementación IES"
-  - "modificar OP"
-  - "modificar EB"
-  - "modificar EKS"
-  - "modificar integración OP-EB-EKS"
+  - "modificar contratos fuera de 03 y 04"
+  - "reinterpretar decisiones aprobadas"
+  - "introducir cambios epistemológicos"
+  - "implementar IES"
+  - "crear runtime"
+  - "crear tests"
+  - "crear fixtures"
+  - "crear SQL"
+  - "crear migraciones"
+  - "crear persistencia IES"
+  - "implementar ALTERNATIVE"
+  - "implementar firma digital"
+  - "calibrar G8"
+  - "modificar OP/EB/EKS runtime"
   - "modificar server.js"
   - "modificar package.json"
-  - "crear SQL/migraciones/tablas"
-  - "usar DB productiva"
-  - "usar red"
-  - "usar tools productivas"
-  - "usar LLM"
-  - "generar hipótesis"
-  - "crear Reasoning Engine"
-  - "crear Channel Projection"
-  - "autoaprobar decisiones"
-  - "autoaprobar gates"
+  - "crear IMPL-IES-001"
+  - "autoaprobar G1"
+  - "autoaprobar G2"
   - "commit"
   - "push"
   - "merge"
   - "encadenar siguiente tarea"
 
-acceptance_criteria:
-  - "D1-D18 auditados"
-  - "cada hallazgo clasificado"
-  - "matriz field-source completa"
-  - "matriz de runtime gaps completa"
-  - "realidad física del Knowledge Snapshot documentada"
-  - "campos IES disponibles/no disponibles identificados"
-  - "dependencias deterministas/no deterministas identificadas"
-  - "OFFICIAL/ALTERNATIVE auditados"
-  - "integrity/canonicalization auditados"
-  - "NO_KNOWLEDGE auditado"
-  - "ningún contrato modificado"
-  - "ningún runtime modificado"
-  - "ninguna recomendación autoaprobada"
-  - "ninguna calibración G8 realizada"
-  - "git diff --check sin errores"
-  - "reporte termina en STOP"
-
 expected_terminal_state: >
-  DONE_PENDING_REVIEW si la auditoría puede identificar de forma completa
-  la frontera física Snapshot -> IES y separar decisiones contractuales,
-  unknowns, recomendaciones y blockers sin modificar contratos.
-  BLOCKED o STOPPED si la realidad física no puede determinarse con los
-  contratos/runtimes disponibles o si continuar exige una decisión G2/G8.
-
-implementation_followup_rule: >
-  IMPL-IES-001 no puede crearse ni autorizarse desde esta tarea.
-  Primero HUMAN_APPROVER debe revisar el reporte, resolver blockers y aprobar
-  explícitamente cualquier decisión física necesaria.
+  DONE_PENDING_REVIEW si las decisiones humanas aprobadas pueden registrarse
+  en 03 y 04 sin contradicción con Constitución ni contratos superiores.
+  BLOCKED o STOPPED si alguna decisión propuesta exige alterar esquema raíz,
+  epistemología, D1-D9 del EKS o una materia reservada a G8.
 
 max_attempts: 1
-result_report_path: "docs/dev-loop/reports/ARCH-IES-PHYSICAL-DECISIONS-001.md"
+result_report_path: "docs/dev-loop/reports/ARCH-IES-PHYSICAL-DECISIONS-002.md"
+```
