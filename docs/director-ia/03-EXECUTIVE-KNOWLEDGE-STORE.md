@@ -3,8 +3,8 @@
 ## Almacén de conocimiento ejecutivo — contrato de persistencia
 
 **Documento:** `docs/director-ia/03-EXECUTIVE-KNOWLEDGE-STORE.md`
-**Versión:** 1.3
-**Estado:** CONTRATO APROBADO TRAS AUDITORÍA E2E; realización física v1 registrada (D1–D9); `bundle.observations` aclarado (N1)
+**Versión:** 1.4
+**Estado:** CONTRATO APROBADO TRAS AUDITORÍA E2E; realización física v1 registrada (D1–D9); `bundle.observations` aclarado (N1); `query_context_metadata` de Snapshot registrada (ARCH-IES-PHYSICAL-DECISIONS-002)
 **Tipo:** Especificación de almacén (realización física v1; sin runtime)
 
 ### Dependencia normativa
@@ -42,6 +42,7 @@ Un **Knowledge Snapshot** versionado, inmutable una vez persistido, apto para pr
 - No altera identidades de procedencia del Bundle (`content_author_id`, `extracted_by`, `triggered_by`, `source.system` / linaje).
 - No calcula, eleva, reduce ni reinterpreta `materiality` / `applied_materiality_rule_id` / `materiality_ruleset_version` (solo persiste lo recibido del Evidence Builder; Motor §7A / EB §11B).
 - No reinterpreta `knowledge_coverage`, `source_health` / AcquisitionStatus, tipificaciones de ausencia (`DATA_NOT_FOUND`, `ABSENCE_CONFIRMED`, `TOOL_ERROR`, `SOURCE_*`, etc.) ni las colapsa entre sí.
+- No reinterpreta `query_context_metadata` (solo la persiste inmutablemente como metadata de Snapshot; no es Bundle N1–N4).
 - No llama al LLM.
 - No lee fuentes operacionales para inventar conocimiento.
 - No sustituye al Evidence Builder ni al IES.
@@ -103,6 +104,7 @@ Tras validación estructural, el EKS materializa un **Knowledge Snapshot**:
 | `persisted_at` | Momento de persistencia |
 | `bundle` | Copia íntegra del Knowledge Bundle (sin mutación) |
 | `integrity` | Digest criptográfico determinista sobre una representación canónica del Bundle persistido. El algoritmo específico **no** se congela en este contrato. **No** es firma digital del IES (`04` §16: huella ≠ firma). |
+| `query_context_metadata` | Metadata inmutable de consulta ejecutiva transportada por el Snapshot para que el IES proyecte `query_context`. **No** forma parte del Bundle N1–N4. El EKS la persiste y **no** la interpreta. Ver §8. |
 
 ### Snapshot sin diagnósticos (permitido)
 
@@ -129,7 +131,7 @@ Esto **no** es un error arquitectónico: es el camino válido de desconocimiento
 | Operación | Comportamiento |
 |-----------|----------------|
 | `validate_structure` | Comprueba presencia de campos del Bundle; tipos; `trace_id`; no vacío conceptual del contenedor |
-| `append_snapshot` | Persiste una **nueva** versión; no sobrescribe snapshots previos. El EKS asigna `version = max(version)+1` por `trace_id` en transacción con bloqueo (V2). Existe restricción `UNIQUE(trace_id, version)`. `snapshot_id` es opaco e inmutable. |
+| `append_snapshot` | Persiste una **nueva** versión; no sobrescribe snapshots previos. El EKS asigna `version = max(version)+1` por `trace_id` en transacción con bloqueo (V2). Existe restricción `UNIQUE(trace_id, version)`. `snapshot_id` es opaco e inmutable. Persiste también `query_context_metadata` como metadata inmutable del Snapshot, **sin** interpretarla y **sin** incorporarla al Bundle. |
 | `get_snapshot` | Por `snapshot_id`: el Snapshot exacto. Por `trace_id`: la versión monotónica **máxima** de ese ciclo (G_LATEST). No fusiona versiones. |
 | `list_versions` | Historial append-only agrupado **solo** por `trace_id` (L_TRACE), ordenado por `version`. |
 
@@ -140,6 +142,7 @@ Esto **no** es un error arquitectónico: es el camino válido de desconocimiento
 3. No fusionar Bundles contradictorios en silencio.  
 4. No promover AcquisitionStatus a Hecho.  
 5. No inventar ObservationRecords.
+6. No reinterpretar `query_context_metadata`.
 
 ---
 
@@ -150,7 +153,7 @@ Esto **no** es un error arquitectónico: es el camino válido de desconocimiento
 | Observation Pipeline | No escribe en EKS; produce ObservationRecords / AcquisitionStatus hacia EB |
 | Evidence Builder | **Único productor** del Knowledge Bundle |
 | EKS | Valida, versiona, persiste |
-| IES | Consume **Snapshot**, no fuentes operacionales ni Tool Results crudos (`04-IES-STANDARD.md` v1.0 APROBADO PARA CONGELAMIENTO; runtime pendiente) |
+| IES | Consume **Snapshot** (Bundle opaco + metadatos de almacén + `query_context_metadata`), no fuentes operacionales ni Tool Results crudos (`04-IES-STANDARD.md` v1.0 APROBADO PARA CONGELAMIENTO; runtime pendiente). No recibe una segunda entrada operacional de consulta. |
 | Reasoning Engine | No escribe en EKS; lee IES derivado del Snapshot |
 
 ---
@@ -163,8 +166,9 @@ Esto **no** es un error arquitectónico: es el camino válido de desconocimiento
 4. Snapshot sin diagnósticos permitido bajo `NO_CONOZCO` / fuente no integrada / restringida / error de tool.  
 5. El Bundle persistido es bit-a-bit el producido por el EB (más metadatos de almacén).
 6. Campos de materialidad se preservan sin mutación; `MATERIALITY_NOT_ASSESSED` no se “corrige” a `MAT_LOW` en almacén.  
-6. Sin LLM.  
-7. Trazabilidad completa vía `trace_id`.
+7. Sin LLM.
+8. Trazabilidad completa vía `trace_id`.
+9. `query_context_metadata` es metadata inmutable de Snapshot; EKS la persiste y no la interpreta; no vive en `bundle.observations` ni cambia N1–N4.
 
 ---
 
@@ -195,13 +199,61 @@ Los identificadores P1, R3, V2, G_LATEST, L_TRACE, M1, I_DIGEST, POOL_DEDICATED 
 
 ---
 
+# 8. Extensión mínima de metadata ejecutiva (ARCH-IES-PHYSICAL-DECISIONS-002)
+
+Esta sección **no** redefine N1–N5, Constitución, Bundle N1–N4 ni las decisiones D1–D9 de §7. No introduce epistemología. No autoriza runtime IES ni persistencia IES. No cambia append-only, `get_snapshot`, `list_versions`, versionado EKS ni integrity EKS (D7 permanece digest del **Bundle**). Registra las decisiones físicas aprobadas por HUMAN_APPROVER (tarea `ARCH-IES-PHYSICAL-DECISIONS-002`, G2). Evidencia: `ARCH-IES-PHYSICAL-DECISIONS-001`.
+
+Los identificadores SNAPSHOT_CARRIES_QUERY_CONTEXT_METADATA y MINIMAL_QUERY_METADATA_EXTENSION son los de esa aprobación. **Prohibido** sustituirlos en implementación.
+
+| ID | Decisión aprobada | Significado contractual |
+|----|-------------------|-------------------------|
+| — | **SNAPSHOT_CARRIES_QUERY_CONTEXT_METADATA** | La regla «entrada única = Knowledge Snapshot» permanece intacta. El IES Builder **no** recibe una segunda entrada operacional para `query_context`. El Knowledge Snapshot expone, en su representación persistida, `query_context_metadata` inmutable necesaria para proyectar `query_context` del IES. |
+| — | **MINIMAL_QUERY_METADATA_EXTENSION** | Extensión mínima del Snapshot para transportar esa metadata. Bundle opaco intacto. Snapshot inmutable. Append-only intacto. Versionado EKS intacto. Integrity EKS (D7, Bundle) intacta. `AcquisitionStatus` no se mezcla dentro de `observations`. |
+
+### Propiedad y tránsito
+
+La metadata se origina upstream conforme a sus propietarios contractuales, atraviesa el Evidence Builder **sin reinterpretación** y queda persistida por el EKS como metadata inmutable del Snapshot. El IES **únicamente** la proyecta.
+
+### Campos mínimos de `query_context_metadata`
+
+| Campo | Obligatorio | Notas |
+|-------|-------------|-------|
+| `executive_query_id` | Sí | Identificador de la consulta ejecutiva concreta |
+| `query_fingerprint` | No | Nullable/opcional |
+| `trace_id` | Sí | Ejecución técnica del ciclo |
+| `original_question` | Sí | Pregunta tal como se formuló |
+| `intent` | Sí | Intent del Planner (o equivalente tipificado) |
+| `requesting_user_id` | Sí | Id interno; no secreto |
+| `requesting_role` | Sí | Rol ejecutivo / permiso |
+| `channel` | Sí | Canal de la consulta; **no** versiona el IES |
+| `plant_or_scope` | Condicional | Cuando aplique |
+| `period` | Condicional | Cuando aplique |
+| `resolved_entities` | Sí | Lista (puede vacía) |
+| `permission_restrictions` | Sí | Lista (puede vacía); sin tokens de sesión |
+| `knowledge_effective_date` | Sí | Fecha/hora efectiva del conocimiento |
+
+### Prohibiciones
+
+- El IES Builder no consulta Planner, chat ni request runtime para completar `query_context`.
+- El IES Builder no inventa usuario, rol ni canal.
+- El IES Builder no re-resuelve entidades ni recalcula permisos.
+- El EKS no reinterpreta `query_context_metadata`.
+- `query_context_metadata` no forma parte del Bundle N1–N4 ni de `bundle.observations`.
+- Esta sección **no** autoriza IMPL-IES-001.
+
+### Relación con D2 / R3
+
+D2 (**R3**) no se sustituye. `query_context_metadata` es metadata de Snapshot **adicional** e inmutable, persistida junto a las columnas de almacén; no descompone el Bundle; no entra en el digest D7 del Bundle.
+
+---
+
 # Control documental
 
 | Campo | Valor |
 |-------|--------|
 | Documento | `03-EXECUTIVE-KNOWLEDGE-STORE.md` |
-| Versión | 1.3 |
-| Estado | CONTRATO APROBADO TRAS AUDITORÍA E2E; realización física v1 registrada (D1–D9); `bundle.observations` aclarado (N1) |
+| Versión | 1.4 |
+| Estado | CONTRATO APROBADO TRAS AUDITORÍA E2E; realización física v1 registrada (D1–D9); `query_context_metadata` registrada (ARCH-IES-PHYSICAL-DECISIONS-002) |
 | Implementación | PENDIENTE |
 | Calibración k/wi | No aplica (fuera de alcance del EKS) |
 | Firma digital IES | Fuera de alcance (`04`; D7 = huella, no firma) |

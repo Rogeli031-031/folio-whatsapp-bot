@@ -3,8 +3,8 @@
 ## Informe Ejecutivo de Situación — estándar de producto
 
 **Documento:** `docs/director-ia/04-IES-STANDARD.md`  
-**Versión:** 1.0  
-**Estado:** IES v1.0 APROBADO PARA CONGELAMIENTO  
+**Versión:** 1.0
+**Estado:** IES v1.0 APROBADO PARA CONGELAMIENTO; realización física D5/D14 y readiness OFFICIAL registrada (ARCH-IES-PHYSICAL-DECISIONS-002)
 **Tipo:** Esquema y reglas del IES (sin implementación; sin Reasoning Engine; sin Channel Projection detallada)
 
 ### Dependencia normativa
@@ -59,6 +59,7 @@ No se declara “100% madurez”.
 22. [Criterios de aceptación](#22-criterios-de-aceptación)  
 23. [Declaración de conformidad](#declaración-de-conformidad)  
 24. [Catálogo de tokens institucionales](#24-catálogo-de-tokens-institucionales)
+25. [Realización física v1 (D5 / D14 / readiness)](#25-realización-física-v1-d5--d14--readiness)
 
 ---
 
@@ -87,7 +88,9 @@ No consulta fuentes. No ejecuta tools. No transforma Observaciones en Hechos. No
 
 ## Entrada única
 
-Un **Knowledge Snapshot** persistido por el Executive Knowledge Store (`03`).
+Un **Knowledge Snapshot** persistido por el Executive Knowledge Store (`03`), incluyendo su `query_context_metadata` inmutable.
+
+El IES Builder **no** recibe una segunda entrada operacional (Planner, chat, request runtime, usuario, permisos u otras capas) para completar `query_context`. Proyecta `query_context` **solo** desde `query_context_metadata` del Snapshot.
 
 ## Consumidores
 
@@ -101,7 +104,7 @@ Un **Knowledge Snapshot** persistido por el Executive Knowledge Store (`03`).
 | Artefacto | Rol |
 |-----------|-----|
 | **Knowledge Bundle** | Unidad ensamblada por el Evidence Builder (N1–N4 + estados) |
-| **Knowledge Snapshot** | Copia inmutable del Bundle + metadatos de almacén (EKS) |
+| **Knowledge Snapshot** | Copia inmutable del Bundle + metadatos de almacén EKS + `query_context_metadata` (no interpretada por EKS) |
 | **IES** | Proyección oficial de producto desde el Snapshot hacia consumidores |
 
 Cadena: `Evidence Builder → Bundle → EKS Snapshot → IES Builder → IES → Reasoning Engine / Interfaces`.
@@ -226,6 +229,10 @@ Objeto `query_context`:
 | `permission_restrictions` | Sí | Restricciones aplicadas (sin tokens) |
 | `knowledge_effective_date` | Sí | Fecha/hora efectiva del conocimiento proyectado |
 
+### Origen físico (`query_context_metadata`)
+
+`query_context` del IES se proyecta desde `query_context_metadata` persistida en el Knowledge Snapshot (`03` §8; decisión **SNAPSHOT_CARRIES_QUERY_CONTEXT_METADATA**). El IES no consulta Planner, chat ni request runtime; no inventa usuario, rol ni canal; no re-resuelve entidades ni recalcula permisos.
+
 ### Separación de IDs de consulta
 
 | ID | Qué identifica | No implica |
@@ -332,6 +339,10 @@ Cada ítem del resumen usa únicamente:
 - suavizar u omitir `CONF_TYPE_E_GOVERNANCE`;  
 - presentar cifras ilustrativas como datos institucionales;  
 - calcular, elevar o reinterpretar `materiality` en el resumen.
+
+### Readiness v1 (FAIL_CLOSED_CONTROLLED_REFERENCES)
+
+La implementación inicial **no** inventa reglas de priorización ni ranking narrativo. Solo emite ítems de `executive_summary_facts` cuando exista una regla contractual inequívoca para incluir una referencia, incluyendo límites bloqueantes y `CONF_TYPE_E_GOVERNANCE` obligatorio. Si no existe criterio suficiente, no inventa ranking. Los tokens `SUM_*` de §20 siguen siendo ilustrativos; no son catálogo productivo.
 
 ---
 
@@ -606,6 +617,10 @@ Un IES `COV_NO_KNOWLEDGE` **es válido** con `facts`/`evidence`/`diagnoses` vac�
 
 Limitaciones usan `statement_token` + `statement_reference` + alcance tipificado; no prosa libre.
 
+### Readiness v1 (PROJECT_ONLY_EXPLICIT_LIMITATIONS)
+
+El IES Builder proyecta únicamente limitaciones explícitas presentes o derivables por mapeos contractuales exactos del Snapshot / `source_health`. **No** redacta limitaciones libres. Los tokens `LIM_*` de §20 siguen siendo ilustrativos; no son catálogo productivo.
+
 ---
 
 # 13. IES oficial
@@ -708,17 +723,65 @@ INVALID → terminal (nueva generación = nuevo ies_id)
 
 | Campo | Obligatorio | Valor / regla v1.0 |
 |-------|-------------|--------------------|
-| `canonical_representation` | Sí | Forma canónica (especificación de canonicalización pendiente de congelar) |
-| `content_fingerprint` | Sí | Huella del contenido canónico |
+| `canonical_representation` | Sí | Token **`CANONICAL_JSON_V1`** (forma canónica congelada abajo). No se serializa el IES completo *dentro* de este campo como material a hashear. |
+| `content_fingerprint` | Sí | Digest criptográfico determinista de **CANONICAL_JSON_V1**. Huella recomputable. **No** es firma digital. |
 | `snapshot_reference` | Sí | Debe coincidir con la raíz |
 | `signature` | Sí | **`null`** en v1.0 |
 | `signature_status` | Sí | **`NOT_IMPLEMENTED`** |
 
+### CANONICAL_JSON_V1 (congelado — ARCH-IES-PHYSICAL-DECISIONS-002)
+
+Decisión aprobada: **JCS_LIKE_DETERMINISTIC_CANONICAL_JSON_V1**. Token: **`CANONICAL_JSON_V1`**.
+
+Reglas:
+
+- objetos: claves lexicográficamente ordenadas;
+- arrays: orden contractual preservado; **no** se reordenan para canonicalizar;
+- strings: serialización JSON estándar UTF-8;
+- numbers: representación JSON finita; `NaN` / `Infinity` prohibidos;
+- booleans: `true` / `false`;
+- `null`: explícito cuando forma parte del contrato;
+- `undefined`: prohibido;
+- campos inexistentes no se inventan;
+- no normalizar semánticamente strings;
+- no convertir números a strings;
+- no ordenar bancos por conveniencia dentro del canonicalizer;
+- serialización JSON UTF-8 sin espacios insignificantes.
+
+#### Alcance del material a hashear (`content_fingerprint`)
+
+**Incluye:**
+
+- todo el contenido semántico raíz del IES;
+- `audit`;
+- `integrity.snapshot_reference`;
+- `integrity.signature_status`.
+
+**Excluye:**
+
+- `integrity.content_fingerprint`;
+- `integrity.canonical_representation`;
+- `integrity.signature`.
+
+#### Naturaleza del digest (**DETERMINISTIC_DIGEST_IMPLEMENTATION_NOT_SIGNATURE**)
+
+`content_fingerprint` es digest criptográfico determinista de CANONICAL_JSON_V1. El contrato congela la representación canónica y la naturaleza digest. El algoritmo concreto es decisión de implementación (**ALGORITHM_IMPLEMENTATION_LEVEL**) mientras mantenga propiedades criptográficas adecuadas y quede documentado en reporte/runtime. **No** se congela algoritmo de firma digital.
+
+Invariantes: `signature = null`; `signature_status = NOT_IMPLEMENTED`; `content_fingerprint` ≠ firma digital.
+
+#### Verificación (**RECOMPUTABLE_FINGERPRINT**)
+
+El mismo IES semántico bajo CANONICAL_JSON_V1 debe producir la misma huella. Una mutación del contenido incluido debe cambiar la huella. El runtime futuro debe poder recomputarla para verificar integridad.
+
+#### Orden de generación (**GENERATE_THEN_FINGERPRINT**)
+
+`ies_id`, `ies_version`, `status`, `generated_at`, `valid_at` y demás campos que formen parte del objeto final se determinan **antes** de calcular `content_fingerprint`. La huella corresponde al IES emitido final, no a un borrador `BUILDING` parcial.
+
 ### Aclaraciones obligatorias
 
-1. En v1.0 **no** hay firma digital implementada.  
-2. Un digest tipo SHA-256 (si se usa para `content_fingerprint`) es una **huella**, **no** una firma digital.  
-3. El algoritmo criptográfico de firma **continúa diferido** hasta congelar el esquema canónico.  
+1. En v1.0 **no** hay firma digital implementada.
+2. Un digest (si se usa para `content_fingerprint`) es una **huella**, **no** una firma digital.
+3. El algoritmo criptográfico de **firma** permanece diferido (G8). La canonicalización **CANONICAL_JSON_V1** está congelada.
 4. Prohibido afirmar “firma digital implementada” en este estándar v1.0.
 
 ---
@@ -1295,6 +1358,8 @@ Pregunta: «¿En qué etapa está el folio 421?»
 19. Sin LLM en la construcción del IES.  
 20. Repetibilidad verificable bajo mismo Snapshot, esquema y rulesets (no absoluta).  
 21. `signature` v1.0 = `null`; huella ≠ firma digital.
+22. `query_context` se proyecta solo desde `query_context_metadata` del Snapshot; sin segunda entrada operacional.
+23. Canonicalización IES = **CANONICAL_JSON_V1**; `content_fingerprint` es digest recomputable, no firma.
 
 ---
 
@@ -1333,8 +1398,9 @@ Este estándar se declara conforme a:
 2. Calibración `k`/`wi` — diferida.  
 3. Firma criptográfica final — diferida (`NOT_IMPLEMENTED`).  
 4. Diseño de Reasoning Engine y Channel Projection — fuera de alcance.  
-5. Canonicalización exacta — diferida.  
+5. Canonicalización exacta — **congelada** como **CANONICAL_JSON_V1** (`ARCH-IES-PHYSICAL-DECISIONS-002`). Algoritmo de digest: nivel implementación; no es firma.
 6. **Runtime** del IES / pipeline N1–N4→Snapshot→IES — **PENDIENTE**.
+7. Persistencia física / almacén IES, `ALTERNATIVE` productivo y política institucional de expiración — diferidos.
 
 ### Resultado de auditoría
 
@@ -1389,9 +1455,48 @@ Prohibido: tratar `HIGH` u otras etiquetas libres como tokens productivos; `MATE
 
 | Token / campo | Valor v1.0 |
 |---------------|------------|
+| `canonical_representation` | `CANONICAL_JSON_V1` |
 | `signature` | `null` |
 | `signature_status` | `NOT_IMPLEMENTED` |
 | `content_fingerprint` | huella (digest ≠ firma) |
+
+---
+
+# 25. Realización física v1 (D5 / D14 / readiness)
+
+Esta sección **no** redefine N1–N5 ni la Constitución. No cambia el esquema raíz IES v1.0 (§2). No crea estados de cobertura. No cambia la taxonomía de conflictos ni materiality. No implementa firma digital. No diseña Reasoning Engine ni Channel Projection. No autoriza IMPL-IES-001 por sí sola. Registra las decisiones físicas aprobadas por HUMAN_APPROVER (tarea `ARCH-IES-PHYSICAL-DECISIONS-002`, G2). Evidencia: `ARCH-IES-PHYSICAL-DECISIONS-001`.
+
+Los identificadores SNAPSHOT_CARRIES_QUERY_CONTEXT_METADATA, MINIMAL_QUERY_METADATA_EXTENSION, JCS_LIKE_DETERMINISTIC_CANONICAL_JSON_V1, CANONICAL_JSON_V1, DETERMINISTIC_DIGEST_IMPLEMENTATION_NOT_SIGNATURE, ALGORITHM_IMPLEMENTATION_LEVEL, RECOMPUTABLE_FINGERPRINT, GENERATE_THEN_FINGERPRINT, FACTORY_WITH_INJECTED_CLOCK_AND_ID_FACTORY, OFFICIAL_IN_MEMORY_PROJECTION_FIRST, INITIAL_VERSION_1, EXPIRES_AT_NULL_UNTIL_POLICY, OFFICIAL_ONLY_V1, FAIL_CLOSED_CONTROLLED_REFERENCES, PROJECT_ONLY_EXPLICIT_LIMITATIONS y PROJECT_FROM_QUERY_METADATA_AND_SNAPSHOT_SCOPE son los de esa aprobación. **Prohibido** sustituirlos en implementación.
+
+| ID | Decisión aprobada | Significado contractual |
+|----|-------------------|-------------------------|
+| D5 | **SNAPSHOT_CARRIES_QUERY_CONTEXT_METADATA** | Entrada única = Knowledge Snapshot, intacta. `query_context` se proyecta desde `query_context_metadata` del Snapshot. Sin segunda entrada operacional. |
+| D5-ext | **MINIMAL_QUERY_METADATA_EXTENSION** | Extensión mínima en `03` (Snapshot). Bundle N1–N4 y EKS D1–D9 no se sustituyen. |
+| D14 | **JCS_LIKE_DETERMINISTIC_CANONICAL_JSON_V1** | Canonicalización congelada en §16. Token **`CANONICAL_JSON_V1`**. |
+| D14-fp | **DETERMINISTIC_DIGEST_IMPLEMENTATION_NOT_SIGNATURE** | `content_fingerprint` = digest de CANONICAL_JSON_V1. Algoritmo a nivel implementación. `signature=null`. `signature_status=NOT_IMPLEMENTED`. Digest ≠ firma. |
+| D14-ver | **RECOMPUTABLE_FINGERPRINT** | Misma semántica → misma huella; mutación del material incluido → huella distinta. |
+| D14-ord | **GENERATE_THEN_FINGERPRINT** | Identidad, `status`, `generated_at`, `valid_at` y campos finales se determinan antes de la huella. |
+
+### Readiness de implementación (no es runtime)
+
+| ID | Decisión aprobada | Significado contractual |
+|----|-------------------|-------------------------|
+| R1 | **FACTORY_WITH_INJECTED_CLOCK_AND_ID_FACTORY** | Una futura IMPL-IES-001 puede realizar IES Builder mediante factory testeable con `clock` e `idFactory` inyectables. Esta sección **no** crea runtime. |
+| R2 | **OFFICIAL_IN_MEMORY_PROJECTION_FIRST** | La primera implementación puede limitarse a IES `OFFICIAL` en memoria desde un Snapshot, sin persistencia física IES y sin `ALTERNATIVE`, siempre que el contrato raíz se complete y valide. Persistencia/versionado durable de IES requiere tarea separada. |
+| R3 | **INITIAL_VERSION_1** | Para un IES nuevo sin persistencia/historial IES, la primera proyección OFFICIAL usa `ies_version = 1`. Regeneración/supersesión durable queda fuera hasta definir el almacén IES. |
+| R4 | **EXPIRES_AT_NULL_UNTIL_POLICY** | Mientras no exista política institucional de expiración, `expires_at` permanece `null`, permitido por §2. |
+| R5 | **OFFICIAL_ONLY_V1** | IMPL-IES-001 inicial puede soportar únicamente `ies_type=OFFICIAL` con `alternative_context=null`. `ALTERNATIVE` requiere tarea posterior. |
+| R6 | **FAIL_CLOSED_CONTROLLED_REFERENCES** | Resumen inicial: solo referencias con regla contractual inequívoca (límites bloqueantes y `CONF_TYPE_E_GOVERNANCE` obligatorio). Sin ranking narrativo inventado. |
+| R7 | **PROJECT_ONLY_EXPLICIT_LIMITATIONS** | Solo limitaciones explícitas o mapeos contractuales exactos del Snapshot/`source_health`. Sin prosa libre. |
+| R8 | **PROJECT_FROM_QUERY_METADATA_AND_SNAPSHOT_SCOPE** | `executive_scope` se proyecta mecánicamente desde `query_context_metadata` y alcance explícito del Snapshot; no se consulta runtime externo. |
+
+### Límites de esta realización
+
+1. Runtime IES **PENDIENTE**. Esta sección no implementa IES Builder.
+2. No calibra materias G8 (`wi`, `k`, `Fs`, ventanas R, severity productiva, materiality ruleset, reglas causales, firma digital).
+3. No autoriza IMPL-IES-001.
+4. No redefine Constitución, Motor, `02`, `03A`, `03B` ni el índice.
+5. Schema raíz v1.0 (§2), coverage, conflictos y materiality **no** cambian.
 
 ---
 
@@ -1401,11 +1506,12 @@ Prohibido: tratar `HIGH` u otras etiquetas libres como tokens productivos; `MATE
 |-------|--------|
 | Documento | `04-IES-STANDARD.md` |
 | Versión | 1.0 |
-| Estado | IES v1.0 APROBADO PARA CONGELAMIENTO |
+| Estado | IES v1.0 APROBADO PARA CONGELAMIENTO; realización física D5/D14/readiness registrada (`ARCH-IES-PHYSICAL-DECISIONS-002`) |
 | Productor | IES Builder (diseño) |
-| Entrada | Knowledge Snapshot |
+| Entrada | Knowledge Snapshot (incluye `query_context_metadata`) |
 | Hipótesis | Excluidas |
 | Firma digital | `signature: null` / `NOT_IMPLEMENTED` |
+| Canonicalización | `CANONICAL_JSON_V1` (congelada); digest ≠ firma |
 | Calibración k/wi | Diferida |
 | Auditorías alineadas | C2 (`resolution_status`); C3 (identidad/procedencia); C4 (materiality); C5 (cobertura/adquisición) |
 | Architecture Index | v1.4+ (estado IES v1.0 APROBADO PARA CONGELAMIENTO) |
