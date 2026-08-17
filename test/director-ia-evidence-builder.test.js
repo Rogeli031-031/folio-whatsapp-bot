@@ -15,15 +15,51 @@ const {
   RULE_REGISTRY,
 } = require("../lib/director-ia-evidence-builder");
 const { validate_structure } = require("../lib/director-ia-eks");
+const { createIesBuilder } = require("../lib/director-ia-ies-builder");
+const { createReasoningEngine } = require("../lib/director-ia-reasoning-engine");
+const {
+  createChannelProjection,
+  createDefaultPolicyRegistry,
+} = require("../lib/director-ia-channel-projection");
 
 const FIX_DIR = path.join(__dirname, "..", "fixtures", "director-ia", "evidence-builder");
+const N3_DIR = path.join(__dirname, "..", "fixtures", "director-ia", "evidence-n3");
 const LIB_PATH = path.join(__dirname, "..", "lib", "director-ia-evidence-builder.js");
+
+const N3_RULE_ID = "N3_CONTRADICTION_SAME_SCOPE_DISTINCT_VALUE";
+const N3_RULE_VERSION = "1.0";
+const FORBIDDEN_STATEMENT = /caus[oó]|debido|provoca|probablemente|fraude|error humano|mala gesti[oó]n|valor verdadero|tiene raz[oó]n/i;
 
 function loadInput(name) {
   const raw = JSON.parse(fs.readFileSync(path.join(FIX_DIR, name), "utf8"));
   assert.equal(raw.meta.figures, "ILUSTRATIVAS / FICTICIAS");
   assert.equal(raw.meta.not_institutional_coverage, true);
   return raw.input;
+}
+
+function loadN3Input(name) {
+  const raw = JSON.parse(fs.readFileSync(path.join(N3_DIR, name), "utf8"));
+  assert.equal(raw.meta.figures, "ILUSTRATIVAS / FICTICIAS");
+  assert.equal(raw.meta.not_institutional_coverage, true);
+  return raw.input;
+}
+
+function assertEvidenceSchema(ev, traceId) {
+  assert.ok(ev.evidence_id);
+  assert.equal(ev.evidence_type, "CONTRADICTION");
+  assert.equal(typeof ev.statement, "string");
+  assert.ok(Array.isArray(ev.supporting_fact_ids));
+  assert.ok(ev.supporting_fact_ids.length >= 2);
+  assert.equal(ev.applied_rule.rule_id, N3_RULE_ID);
+  assert.equal(ev.applied_rule.rule_version, N3_RULE_VERSION);
+  assert.equal(ev.materiality, "MATERIALITY_NOT_ASSESSED");
+  assert.equal(ev.causal_status, "NON_CAUSAL");
+  assert.equal(ev.traceability.trace_id, traceId);
+  assert.equal(ev.traceability.rule_id, N3_RULE_ID);
+  assert.equal(ev.traceability.rule_version, N3_RULE_VERSION);
+  assert.equal(Object.prototype.hasOwnProperty.call(ev, "severity"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(ev, "probability"), false);
+  assert.equal(FORBIDDEN_STATEMENT.test(ev.statement), false);
 }
 
 describe("Evidence Builder — separación de entrada y N1", () => {
@@ -124,7 +160,6 @@ describe("Evidence Builder — barreras N2/N3/N4 y fail-closed", () => {
     const n2 = to_n2(to_n1(input), input);
     const n3 = to_n3(n2, input);
     assert.deepEqual(n3, []);
-    assert.equal(RULE_REGISTRY.evidence_rules.length, 0);
   });
 
   it("ningún N4 sin regla y soporte", () => {
@@ -329,5 +364,350 @@ describe("Evidence Builder — Bundle y frontera EKS", () => {
     assert.equal(typeof eb.to_n3, "function");
     assert.equal(typeof eb.to_n4, "function");
     assert.equal(typeof eb.emit_bundle, "function");
+  });
+});
+
+describe("Evidence Builder — registry N3 v1", () => {
+  it("registry contiene exactamente una evidence rule ACTIVE", () => {
+    assert.equal(RULE_REGISTRY.evidence_rules.length, 1);
+    const rule = RULE_REGISTRY.evidence_rules[0];
+    assert.equal(rule.rule_id, N3_RULE_ID);
+    assert.equal(rule.rule_version, N3_RULE_VERSION);
+    assert.equal(rule.rule_category, "CONTRADICTION");
+    assert.equal(rule.causal, false);
+    assert.equal(rule.status, "ACTIVE");
+    assert.equal(rule.input_contract, "FACT_COMPARABILITY_KEY_V1");
+    assert.equal(rule.output_contract, "EVIDENCE_N3_PHYSICAL_V1");
+  });
+
+  it("absence/resolution/causal/materiality permanecen vacíos", () => {
+    assert.equal(RULE_REGISTRY.absence_rules.length, 0);
+    assert.equal(RULE_REGISTRY.resolution_rules.length, 0);
+    assert.equal(RULE_REGISTRY.causal_rules.length, 0);
+    assert.equal(RULE_REGISTRY.materiality_rules.length, 0);
+  });
+});
+
+describe("Evidence Builder — N3 CONTRADICTION", () => {
+  it("dos facts comparables con values distintos -> exactamente una Evidence", () => {
+    const input = loadN3Input("contradiction-two-values.json");
+    const bundle = assemble(input);
+    assert.equal(bundle.evidence.length, 1);
+    assertEvidenceSchema(bundle.evidence[0], input.trace_id);
+    assert.deepEqual(bundle.evidence[0].supporting_fact_ids, ["fact_obs_n3_a", "fact_obs_n3_b"]);
+    assert.equal(validate_structure(bundle).ok, true);
+  });
+
+  it("tres facts comparables con values distintos -> support determinístico", () => {
+    const input = loadN3Input("contradiction-three-facts.json");
+    const bundle = assemble(input);
+    assert.equal(bundle.evidence.length, 1);
+    assertEvidenceSchema(bundle.evidence[0], input.trace_id);
+    assert.deepEqual(bundle.evidence[0].supporting_fact_ids, [
+      "fact_obs_n3_t1",
+      "fact_obs_n3_t2",
+      "fact_obs_n3_t3",
+    ]);
+  });
+
+  it("mismo value comparable -> cero Evidence", () => {
+    const bundle = assemble(loadN3Input("same-value-no-contradiction.json"));
+    assert.deepEqual(bundle.evidence, []);
+  });
+
+  it("menos de 2 facts -> cero Evidence", () => {
+    assert.deepEqual(to_n3([], {}), []);
+    assert.deepEqual(to_n3([{ fact_id: "fact_only", value: 1, metric_or_event: "venta_t", period: "p" }], {}), []);
+  });
+
+  it("periodo distinto -> cero CONTRADICTION", () => {
+    assert.deepEqual(assemble(loadN3Input("different-period-no-contradiction.json")).evidence, []);
+  });
+
+  it("métrica distinta -> cero CONTRADICTION", () => {
+    assert.deepEqual(assemble(loadN3Input("different-metric-no-contradiction.json")).evidence, []);
+  });
+
+  it("entidad distinta -> cero CONTRADICTION", () => {
+    assert.deepEqual(assemble(loadN3Input("different-entity-no-contradiction.json")).evidence, []);
+  });
+
+  it("AMBIGUOUS -> cero CONTRADICTION", () => {
+    const bundle = assemble(loadN3Input("ambiguous-entity-no-contradiction.json"));
+    assert.deepEqual(bundle.facts, []);
+    assert.deepEqual(bundle.evidence, []);
+  });
+
+  it("UNRESOLVED inyectado en to_n3 -> cero CONTRADICTION", () => {
+    const facts = [
+      {
+        fact_id: "fact_u1",
+        metric_or_event: "venta_t",
+        period: "mes_B_ilustrativo",
+        value: 95,
+        entity: { resolution: "UNRESOLVED", original_value: "Puebla" },
+      },
+      {
+        fact_id: "fact_u2",
+        metric_or_event: "venta_t",
+        period: "mes_B_ilustrativo",
+        value: 120,
+        entity: { resolution: "UNRESOLVED", original_value: "Puebla" },
+      },
+    ];
+    assert.deepEqual(to_n3(facts, { trace_id: "tr_unresolved" }), []);
+  });
+
+  it("AMBIGUOUS inyectado en to_n3 -> cero CONTRADICTION", () => {
+    const facts = [
+      {
+        fact_id: "fact_a1",
+        metric_or_event: "venta_t",
+        period: "mes_B_ilustrativo",
+        value: 95,
+        entity: { resolution: "AMBIGUOUS", original_value: "Puebla" },
+      },
+      {
+        fact_id: "fact_a2",
+        metric_or_event: "venta_t",
+        period: "mes_B_ilustrativo",
+        value: 120,
+        entity: { resolution: "AMBIGUOUS", original_value: "Puebla" },
+      },
+    ];
+    assert.deepEqual(to_n3(facts, { trace_id: "tr_amb_direct" }), []);
+  });
+
+  it("scope sin entidad válido produce CONTRADICTION", () => {
+    const facts = [
+      { fact_id: "fact_el_1", metric_or_event: "venta_t", period: "mes_B_ilustrativo", value: 10, entity: null },
+      { fact_id: "fact_el_2", metric_or_event: "venta_t", period: "mes_B_ilustrativo", value: 20, entity: null },
+    ];
+    const n3 = to_n3(facts, { trace_id: "tr_entityless" });
+    assert.equal(n3.length, 1);
+    assertEvidenceSchema(n3[0], "tr_entityless");
+  });
+
+  it("statement no causal y no selecciona valor verdadero ni fuentes", () => {
+    const ev = assemble(loadN3Input("contradiction-two-values.json")).evidence[0];
+    assert.equal(ev.statement, "facts report distinct values for the same comparison scope");
+    assert.equal(FORBIDDEN_STATEMENT.test(ev.statement), false);
+    assert.equal(ev.statement.includes("95"), false);
+    assert.equal(ev.statement.includes("120"), false);
+  });
+
+  it("orden invertido de facts produce la misma Evidence lógica", () => {
+    const input = loadN3Input("contradiction-two-values.json");
+    const n2 = to_n2(to_n1(input), input);
+    const reversed = n2.slice().reverse();
+    const a = to_n3(n2, { trace_id: input.trace_id });
+    const b = to_n3(reversed, { trace_id: input.trace_id });
+    assert.equal(a.length, 1);
+    assert.equal(b.length, 1);
+    assert.deepEqual(a[0].supporting_fact_ids, b[0].supporting_fact_ids);
+    assert.equal(a[0].statement, b[0].statement);
+    assert.deepEqual(a[0].applied_rule, b[0].applied_rule);
+    const sorted = a[0].supporting_fact_ids.slice().sort();
+    assert.deepEqual(a[0].supporting_fact_ids, sorted);
+  });
+
+  it("no muta facts ni observations de entrada", () => {
+    const input = loadN3Input("contradiction-two-values.json");
+    const beforeInput = structuredClone(input);
+    const n1 = to_n1(input);
+    const beforeN1 = structuredClone(n1);
+    const n2 = to_n2(n1, input);
+    const beforeN2 = structuredClone(n2);
+    to_n3(n2, input);
+    assemble(input);
+    assert.deepEqual(input, beforeInput);
+    assert.deepEqual(n1, beforeN1);
+    assert.deepEqual(n2, beforeN2);
+  });
+});
+
+describe("Evidence Builder — frontera conflicto y N4", () => {
+  it("contradicción simple permanece Tipo A OPEN", () => {
+    const bundle = assemble(loadN3Input("contradiction-two-values.json"));
+    assert.equal(bundle.evidence.length, 1);
+    assert.ok(bundle.conflicts.length > 0);
+    for (const c of bundle.conflicts) {
+      assert.equal(c.primary_type, "A");
+      assert.equal(c.resolution_status, "OPEN");
+      assert.deepEqual(c.secondary_types, []);
+      assert.equal(c.governance_escalation, false);
+      assert.equal(Object.prototype.hasOwnProperty.call(c, "severity"), false);
+      assert.notEqual(c.primary_type, "E");
+    }
+  });
+
+  it("N3 no crea Tipo E ni resuelve", () => {
+    const bundle = assemble(loadN3Input("contradiction-two-values.json"));
+    assert.equal(bundle.conflicts.some((c) => c.primary_type === "E"), false);
+    assert.equal(bundle.conflicts.some((c) => c.resolution_status === "RESOLVED"), false);
+    assert.equal(JSON.stringify(bundle).includes("CONF_TYPE_E"), false);
+  });
+
+  it("presencia de N3 no produce N4", () => {
+    const input = loadN3Input("contradiction-two-values.json");
+    const bundle = assemble(input);
+    assert.ok(bundle.evidence.length > 0);
+    assert.deepEqual(bundle.diagnoses, []);
+    const n2 = to_n2(to_n1(input), input);
+    const n3 = to_n3(n2, input);
+    assert.deepEqual(to_n4(n3, { facts: n2 }), []);
+  });
+});
+
+describe("Evidence Builder — N3 downstream EKS/IES/RE/CP", () => {
+  function snapshotFromBundle(bundle) {
+    return {
+      snapshot_id: "snap_n3_downstream",
+      bundle_id: bundle.bundle_id,
+      trace_id: bundle.trace_id,
+      version: 1,
+      persisted_at: "2026-08-17T16:25:13.000Z",
+      integrity: "sha256:n3_downstream",
+      query_context_metadata: {
+        executive_query_id: "eq_n3_downstream",
+        query_fingerprint: "qfp_n3_downstream",
+        trace_id: bundle.trace_id,
+        original_question: "¿Hay contradicción ilustrativa?",
+        intent: "n3_contradiction",
+        requesting_user_id: "user_ilustrativo",
+        requesting_role: "director",
+        channel: "dashboard",
+        resolved_entities: [],
+        permission_restrictions: [],
+        knowledge_effective_date: "2026-08-17T00:00:00.000Z",
+      },
+      bundle,
+    };
+  }
+
+  function emptyCandidate() {
+    return {
+      interpretation: {
+        what_is_known: { references: [] },
+        what_can_be_inferred: { references: [] },
+        what_cannot_be_concluded: { references: [] },
+      },
+      hypotheses: [],
+      recommendations: [],
+      next_verifications: [],
+      decision_options: [],
+      abstentions: [],
+      clarification_requests: [],
+      reasoning_limits: {},
+      references: [],
+    };
+  }
+
+  it("EKS validate_structure acepta Bundle con N3", () => {
+    const bundle = assemble(loadN3Input("contradiction-two-values.json"));
+    const check = validate_structure(bundle);
+    assert.equal(check.ok, true, check.errors.join(","));
+  });
+
+  it("IES preserva Evidence N3", () => {
+    const bundle = assemble(loadN3Input("contradiction-two-values.json"));
+    let n = 0;
+    const ies = createIesBuilder({
+      clock: () => "2026-08-17T16:25:13.000Z",
+      idFactory: (prefix) => `${prefix || "ies"}_${++n}`,
+    }).build(snapshotFromBundle(bundle));
+    assert.equal(ies.evidence.length, 1);
+    assert.equal(ies.evidence[0].evidence_id, bundle.evidence[0].evidence_id);
+    assert.equal(ies.evidence[0].evidence_type, "CONTRADICTION");
+    assert.deepEqual(ies.evidence[0].supporting_fact_ids, bundle.evidence[0].supporting_fact_ids);
+    const v = createIesBuilder({
+      clock: () => "2026-08-17T16:25:13.000Z",
+      idFactory: (prefix) => `${prefix || "ies"}_${++n}`,
+    }).validate(ies);
+    assert.equal(v.ok, true, v.errors.join(","));
+  });
+
+  it("RE consume IES con N3 sin bypass y conserva gates", () => {
+    const bundle = assemble(loadN3Input("contradiction-two-values.json"));
+    let n = 0;
+    const ies = createIesBuilder({
+      clock: () => "2026-08-17T16:25:13.000Z",
+      idFactory: (prefix) => `${prefix || "ies"}_${++n}`,
+    }).build(snapshotFromBundle(bundle));
+    assert.ok(ies.evidence.length > 0);
+
+    const emptyEngine = createReasoningEngine({
+      modelAdapter: {
+        infer() {
+          return {
+            candidate_reasoning_result: emptyCandidate(),
+            provider_metadata: { provider: "fake", model: "fake-v1", model_version: "1", request_id: "req_n3" },
+          };
+        },
+      },
+      clock: () => "2026-08-17T16:25:13.000Z",
+      idFactory: (prefix) => `${prefix || "id"}_${++n}`,
+      policy: { reasoning_policy_version: "05-v1.0-physical-d1-d16" },
+    });
+    const emptyOut = emptyEngine.reason(ies, {});
+    assert.notEqual(emptyOut.reasoning_run.status, "REJECT");
+    assert.equal(emptyOut.reasoning_result.hypotheses.length, 0);
+    assert.equal(emptyOut.reasoning_result.recommendations.length, 0);
+
+    const gatedEngine = createReasoningEngine({
+      modelAdapter: {
+        infer(request) {
+          const candidate = emptyCandidate();
+          candidate.hypotheses = [
+            {
+              hypothesis_id: "hyp_n3_missing_ev",
+              ies_id: request.reasoning_context.ies.ies_id,
+              ies_version: request.reasoning_context.ies.ies_version,
+              statement: "hipótesis ilustrativa",
+              statement_language: "es-MX",
+              supporting_fact_ids: [request.reasoning_context.ies.facts[0].fact_id],
+              supporting_evidence_ids: [],
+              limitations: [],
+              hypothesis_strength: "HYP_STRENGTH_MODERATE",
+            },
+          ];
+          return {
+            candidate_reasoning_result: candidate,
+            provider_metadata: { provider: "fake", model: "fake-v1", model_version: "1", request_id: "req_n3_gate" },
+          };
+        },
+      },
+      clock: () => "2026-08-17T16:25:13.000Z",
+      idFactory: (prefix) => `${prefix || "id"}_${++n}`,
+      policy: { reasoning_policy_version: "05-v1.0-physical-d1-d16" },
+    });
+    const gated = gatedEngine.reason(ies, {});
+    assert.equal(gated.reasoning_result.hypotheses.length, 0);
+    assert.ok(gated.reasoning_run);
+  });
+
+  it("Channel Projection separa Fact / Evidence / Hypothesis", () => {
+    const bundle = assemble(loadN3Input("contradiction-two-values.json"));
+    let n = 0;
+    const ies = createIesBuilder({
+      clock: () => "2026-08-17T16:25:13.000Z",
+      idFactory: (prefix) => `${prefix || "ies"}_${++n}`,
+    }).build(snapshotFromBundle(bundle));
+    const cp = createChannelProjection({
+      policyRegistry: createDefaultPolicyRegistry(),
+      clock: () => "2026-08-17T16:25:13.000Z",
+      idFactory: (prefix) => `${prefix || "cp"}_${++n}`,
+    });
+    const out = cp.project({
+      ies,
+      channel: "DASHBOARD",
+      projectionDepth: "L2_SUPPORT",
+    });
+    const types = out.projection_model.items
+      .concat(out.projection_model.deferred_items)
+      .map((item) => item.semantic_type);
+    assert.ok(types.includes("FACT"));
+    assert.ok(types.includes("EVIDENCE"));
+    assert.equal(types.includes("HYPOTHESIS"), false);
   });
 });

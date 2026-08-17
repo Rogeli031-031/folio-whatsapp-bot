@@ -1,0 +1,76 @@
+{
+  "meta": {
+    "figures": "ILUSTRATIVAS / FICTICIAS",
+    "not_institutional_coverage": true,
+    "note": "AMBIGUOUS no entra a N3. N3 no resuelve ambigüedad. Cero CONTRADICTION."
+  },
+  "input": {
+    "trace_id": "tr_n3_ambiguous",
+    "bundle_id": "kb_n3_ambiguous",
+    "produced_at": "unclocked",
+    "plan": { "intent": "n3_contradiction" },
+    "tool_plan": { "tools": ["tool_a", "tool_b"] },
+    "acquisition_statuses": [
+      { "tool_id": "tool_a", "domain": "dom_a", "status": "ACQUIRED_OK" },
+      { "tool_id": "tool_b", "domain": "dom_b", "status": "ACQUIRED_OK" }
+    ],
+    "observation_records": [
+      {
+        "observation_id": "obs_n3_amb_a",
+        "trace_id": "tr_n3_ambiguous",
+        "source": {
+          "tool_id": "tool_a",
+          "domain": "dom_a",
+          "system": "sys_a",
+          "source_family": "fam_a",
+          "source_instance_id": "a:amb",
+          "content_author_id": "author_a_ilustrativo"
+        },
+        "extracted_by": "tool_a",
+        "triggered_by": "usuario_ilustrativo",
+        "subject": { "entity_type": "planta", "entity_label": "Puebla" },
+        "entity_resolution": {
+          "state": "AMBIGUOUS",
+          "original_value": "Puebla",
+          "candidates": ["puebla", "puebla_norte"]
+        },
+        "extracted_at": "2026-08-17T00:00:00.000Z",
+        "raw_payload_reference": "raw://n3/obs_n3_amb_a",
+        "scope_complete": true,
+        "validation_state": "VALID",
+        "metric_or_event": "venta_t",
+        "value": 95.0,
+        "period": "mes_B_ilustrativo",
+        "timestamp": "2026-08-17T00:00:00.000Z"
+      },
+      {
+        "observation_id": "obs_n3_amb_b",
+        "trace_id": "tr_n3_ambiguous",
+        "source": {
+          "tool_id": "tool_b",
+          "domain": "dom_b",
+          "system": "sys_b",
+          "source_family": "fam_b",
+          "source_instance_id": "b:amb",
+          "content_author_id": "author_b_ilustrativo"
+        },
+        "extracted_by": "tool_b",
+        "triggered_by": "usuario_ilustrativo",
+        "subject": { "entity_type": "planta", "entity_label": "Puebla" },
+        "entity_resolution": {
+          "state": "AMBIGUOUS",
+          "original_value": "Puebla",
+          "candidates": ["puebla", "puebla_norte"]
+        },
+        "extracted_at": "2026-08-17T00:00:00.000Z",
+        "raw_payload_reference": "raw://n3/obs_n3_amb_b",
+        "scope_complete": true,
+        "validation_state": "VALID",
+        "metric_or_event": "venta_t",
+        "value": 120.0,
+        "period": "mes_B_ilustrativo",
+        "timestamp": "2026-08-17T00:00:00.000Z"
+      }
+    ]
+  }
+}
