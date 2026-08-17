@@ -1,0 +1,63 @@
+{
+  "meta": {
+    "figures": "ILUSTRATIVAS / FICTICIAS",
+    "not_institutional_coverage": true,
+    "note": "ACQUIRED_OK transportable. EB no produce evidence N3. No es cobertura institucional."
+  },
+  "channel": "CHAT",
+  "projectionDepth": "L1_EXECUTIVE",
+  "session": {},
+  "queryContextMetadata": {
+    "executive_query_id": "eq_e2e_happy",
+    "trace_id": "tr_e2e_happy",
+    "original_question": "¿Cuál es la venta ilustrativa de Puebla?",
+    "intent": "arr_snapshot",
+    "requesting_user_id": "user_ilustrativo",
+    "requesting_role": "director",
+    "channel": "chat",
+    "resolved_entities": [
+      {
+        "entity_type": "planta",
+        "original_value": "Puebla",
+        "resolution_state": "RESOLVED",
+        "entity_id": "puebla",
+        "candidates": []
+      }
+    ],
+    "permission_restrictions": [],
+    "knowledge_effective_date": "2026-08-17T00:00:00.000Z",
+    "plant_or_scope": "Puebla",
+    "period": "mes_B_ilustrativo"
+  },
+  "executionEnvelope": {
+    "trace_id": "tr_e2e_happy",
+    "bundle_id": "kb_e2e_happy",
+    "produced_at": "2026-08-17T13:43:53.000Z",
+    "question": "¿Cuál es la venta ilustrativa de Puebla?",
+    "plan": { "intent": "arr_snapshot", "domains": ["arr"] },
+    "tool_plan": { "tools": ["get_arr_snapshot"] },
+    "execution_results": [
+      {
+        "trace_id": "tr_e2e_happy",
+        "tool_id": "get_arr_snapshot",
+        "domain": "arr",
+        "status": "ACQUIRED_OK",
+        "execution_id": "ex_e2e_happy_1",
+        "extracted_by": "get_arr_snapshot",
+        "triggered_by": "usuario_ilustrativo",
+        "extracted_at": "2026-08-17T13:43:53.000Z",
+        "scope_complete": true,
+        "source": {
+          "system": "arr",
+          "source_family": "arr_snapshot",
+          "source_instance_id": "arr:puebla:ex_e2e_happy_1",
+          "content_author_id": null
+        },
+        "subject": { "entity_type": "planta", "entity_id": "puebla", "entity_label": "Puebla" },
+        "entity_resolution": { "state": "RESOLVED", "original_value": "Puebla", "candidates": [] },
+        "raw_payload_reference": "raw://tr_e2e_happy/get_arr_snapshot/ex_e2e_happy_1/0",
+        "payload": { "metric_or_event": "venta_t", "value": 95.0, "unit": "t", "period": "mes_B_ilustrativo" }
+      }
+    ]
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "meta": {
+    "figures": "ILUSTRATIVAS / FICTICIAS",
+    "not_institutional_coverage": true,
+    "note": "TOOL_ERROR. Fallo técnico. No es vacío empresarial ni hecho."
+  },
+  "channel": "VOICE",
+  "projectionDepth": "L1_EXECUTIVE",
+  "session": {},
+  "queryContextMetadata": {
+    "executive_query_id": "eq_e2e_toolerr",
+    "trace_id": "tr_e2e_toolerr",
+    "original_question": "¿Cuál es la venta ilustrativa?",
+    "intent": "tool_error_check",
+    "requesting_user_id": "user_ilustrativo",
+    "requesting_role": "director",
+    "channel": "voice",
+    "resolved_entities": [],
+    "permission_restrictions": [],
+    "knowledge_effective_date": "2026-08-17T00:00:00.000Z"
+  },
+  "executionEnvelope": {
+    "trace_id": "tr_e2e_toolerr",
+    "bundle_id": "kb_e2e_toolerr",
+    "produced_at": "2026-08-17T13:43:53.000Z",
+    "question": "¿Cuál es la venta ilustrativa?",
+    "plan": { "intent": "tool_error_check" },
+    "tool_plan": { "tools": ["get_arr_snapshot"] },
+    "execution_results": [
+      {
+        "trace_id": "tr_e2e_toolerr",
+        "tool_id": "get_arr_snapshot",
+        "domain": "arr",
+        "status": "TOOL_ERROR",
+        "execution_id": "ex_e2e_toolerr_1",
+        "extracted_by": "get_arr_snapshot",
+        "triggered_by": "usuario_ilustrativo",
+        "error": { "code": "TIMEOUT" },
+        "source": {
+          "system": "arr",
+          "source_family": "arr_snapshot",
+          "source_instance_id": "arr:ex_e2e_toolerr_1"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "meta": {
+    "figures": "ILUSTRATIVAS / FICTICIAS",
+    "not_institutional_coverage": true,
+    "note": "SOURCE_NOT_INTEGRATED → NO_CONOZCO / NO_KNOWLEDGE. No es permiso para completar."
+  },
+  "channel": "CHAT",
+  "projectionDepth": "L0_FLASH",
+  "session": {},
+  "queryContextMetadata": {
+    "executive_query_id": "eq_e2e_nok",
+    "trace_id": "tr_e2e_nok",
+    "original_question": "¿En qué etapa está el folio ilustrativo?",
+    "intent": "folio_status",
+    "requesting_user_id": "user_ilustrativo",
+    "requesting_role": "director",
+    "channel": "chat",
+    "resolved_entities": [],
+    "permission_restrictions": [],
+    "knowledge_effective_date": "2026-08-17T00:00:00.000Z"
+  },
+  "executionEnvelope": {
+    "trace_id": "tr_e2e_nok",
+    "bundle_id": "kb_e2e_nok",
+    "produced_at": "2026-08-17T13:43:53.000Z",
+    "question": "¿En qué etapa está el folio ilustrativo?",
+    "plan": { "intent": "folio_status" },
+    "tool_plan": { "tools": ["get_folio_status"] },
+    "execution_results": [
+      {
+        "trace_id": "tr_e2e_nok",
+        "tool_id": "get_folio_status",
+        "domain": "folios",
+        "status": "SOURCE_NOT_INTEGRATED",
+        "execution_id": "ex_e2e_nok_1",
+        "extracted_by": "get_folio_status",
+        "triggered_by": "usuario_ilustrativo",
+        "source": {
+          "system": "folios",
+          "source_family": "folio_status",
+          "source_instance_id": "folios:ex_e2e_nok_1"
+        }
+      }
+    ]
+  }
+}
