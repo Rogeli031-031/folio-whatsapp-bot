@@ -12,495 +12,465 @@ Esto **no** es G1. `DRAFT` no es ejecutable.
 ---
 
 ```yaml
-task_id: "IMPL-IES-001"
-status: CLOSE
+task_id: "ARCH-REASONING-PHYSICAL-DECISIONS-001"
+status: CLOSED
 
 authorized_by: "HUMAN_APPROVER"
-authorized_at: "2026-08-17T09:51:56-06:00"
+authorized_at: "2026-08-17T11:12:15-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-17"
 
 gates:
   G1_task_authorization: AUTHORIZED
-  G2_architecture_change: N/A
+  G2_architecture_change: PENDING_IF_REQUIRED
   G3_new_architecture_contract: N/A
   G8_calibration_materiality_signature: N/A
 
 objective: >
-  Implementar el runtime mínimo, puro, determinístico y fail-closed del IES
-  Builder conforme a docs/director-ia/04-IES-STANDARD.md v1.0 y a las decisiones
-  físicas registradas por ARCH-IES-PHYSICAL-DECISIONS-002. La primera
-  implementación soporta únicamente IES OFFICIAL en memoria desde un
-  Knowledge Snapshot completo, sin persistencia física IES, sin ALTERNATIVE,
-  sin Reasoning Engine y sin Channel Projection.
+  Auditar la realizabilidad física del Reasoning Engine v1.0 definido por
+  docs/director-ia/05-REASONING-ENGINE.md contra el IES Builder y runtimes
+  actualmente existentes. Identificar qué decisiones físicas ya están
+  congeladas, qué elementos siguen UNKNOWN y qué decisiones humanas deben
+  resolverse antes de autorizar IMPL-REASONING-001, sin implementar runtime N5,
+  sin modificar contratos y sin introducir conocimiento N1-N4.
 
 in_scope:
   - "docs/dev-loop/CURRENT_TASK.md"
-  - "docs/dev-loop/reports/IMPL-IES-001.md"
+  - "docs/dev-loop/reports/ARCH-REASONING-PHYSICAL-DECISIONS-001.md"
 
   - "docs/director-ia/DIRECTOR_IA_CONSTITUTION.md (solo lectura)"
   - "docs/director-ia/DIRECTOR_IA_EXECUTIVE_KNOWLEDGE_ENGINE.md (solo lectura)"
   - "docs/director-ia/02-EVIDENCE-BUILDER.md (solo lectura)"
-  - "docs/director-ia/03A-OBSERVATION-PIPELINE.md (solo lectura)"
   - "docs/director-ia/03-EXECUTIVE-KNOWLEDGE-STORE.md (solo lectura)"
-  - "docs/director-ia/03B-END-TO-END-REFERENCE-FLOWS.md (solo lectura)"
+  - "docs/director-ia/03A-OBSERVATION-PIPELINE.md (solo lectura)"
   - "docs/director-ia/04-IES-STANDARD.md (solo lectura)"
+  - "docs/director-ia/05-REASONING-ENGINE.md (solo lectura)"
+  - "docs/director-ia/06-CHANNEL-PROJECTION.md (solo lectura)"
+  - "docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md (solo lectura)"
 
-  - "lib/director-ia-ies-builder.js"
-  - "test/director-ia-ies-builder.test.js"
-  - "fixtures/director-ia/ies/"
+  - "lib/director-ia-ies-builder.js (solo lectura)"
+  - "test/director-ia-ies-builder.test.js (solo lectura)"
+  - "fixtures/director-ia/ies/ (solo lectura)"
 
-  - "lib/director-ia-eks.js (solo lectura)"
-  - "lib/director-ia-evidence-builder.js (solo lectura)"
   - "lib/director-ia-observation-pipeline.js (solo lectura)"
+  - "lib/director-ia-evidence-builder.js (solo lectura)"
+  - "lib/director-ia-eks.js (solo lectura)"
   - "lib/director-ia-op-eb-eks-integration.js (solo lectura)"
 
-  - "test/director-ia-eks.test.js (solo lectura)"
-  - "test/director-ia-eks-integration.test.js (solo lectura)"
-  - "test/director-ia-evidence-builder.test.js (solo lectura)"
-  - "test/director-ia-observation-pipeline.test.js (solo lectura)"
-  - "test/director-ia-op-eb-eks-integration.test.js (solo lectura)"
-
 out_of_scope:
-  - "modificar cualquier archivo en docs/director-ia/"
-  - "modificar contratos"
-  - "modificar EKS runtime"
-  - "modificar EB runtime"
-  - "modificar OP runtime"
-  - "modificar integración OP-EB-EKS"
+  - "implementar Reasoning Engine"
+  - "crear runtime N5"
+  - "crear lib/director-ia-reasoning*.js"
+  - "crear tests de implementación RE"
+  - "crear fixtures de implementación RE"
+
+  - "modificar docs/director-ia/"
+  - "modificar IES Builder"
+  - "modificar OP"
+  - "modificar EB"
+  - "modificar EKS"
   - "modificar server.js"
   - "modificar package.json"
-  - "modificar .env"
 
-  - "crear persistencia física IES"
-  - "crear tablas IES"
+  - "integrar proveedor LLM"
+  - "llamar OpenAI u otro proveedor"
+  - "crear prompts productivos"
+  - "crear tool-calling"
+  - "consultar fuentes"
+  - "ejecutar SQL"
+  - "leer datos productivos"
+
+  - "implementar Reasoning Run persistence"
+  - "crear tablas de Reasoning Run"
   - "crear SQL/migraciones"
-  - "implementar repositorio IES"
-  - "implementar supersesión durable"
-  - "implementar expiración institucional"
+  - "decidir retention"
 
-  - "implementar ies_type=ALTERNATIVE"
-  - "implementar alternative_context productivo"
-  - "implementar comparison_with_official"
-
-  - "implementar Reasoning Engine"
   - "implementar Channel Projection"
   - "integrar chat"
-  - "integrar dashboard"
-  - "integrar WhatsApp"
   - "integrar voz"
-
-  - "usar LLM"
-  - "consultar fuentes"
-  - "ejecutar tools productivas"
-  - "leer datos productivos"
+  - "integrar WhatsApp"
+  - "integrar dashboard"
 
   - "calibrar wi"
   - "calibrar k"
   - "calibrar Fs"
-  - "calibrar ventanas R"
-  - "calibrar severity"
-  - "crear materiality productiva"
-  - "crear reglas causales"
-  - "crear reglas de ausencia"
-
-  - "implementar firma digital"
-  - "cambiar signature=null"
-  - "cambiar signature_status=NOT_IMPLEMENTED"
-  - "congelar algoritmo de firma"
+  - "calibrar materiality"
+  - "recalcular confidence"
+  - "crear causalidad N1-N4"
+  - "crear hechos/evidencia/diagnósticos nuevos"
 
   - "commit"
   - "push"
   - "merge"
+  - "crear o ejecutar IMPL-REASONING-001"
   - "encadenar siguiente tarea"
 
 contracts_in_force:
   - "docs/director-ia/DIRECTOR_IA_CONSTITUTION.md"
   - "docs/director-ia/DIRECTOR_IA_EXECUTIVE_KNOWLEDGE_ENGINE.md"
   - "docs/director-ia/02-EVIDENCE-BUILDER.md"
-  - "docs/director-ia/03A-OBSERVATION-PIPELINE.md"
   - "docs/director-ia/03-EXECUTIVE-KNOWLEDGE-STORE.md"
-  - "docs/director-ia/03B-END-TO-END-REFERENCE-FLOWS.md"
+  - "docs/director-ia/03A-OBSERVATION-PIPELINE.md"
   - "docs/director-ia/04-IES-STANDARD.md"
+  - "docs/director-ia/05-REASONING-ENGINE.md"
+  - "docs/director-ia/06-CHANNEL-PROJECTION.md"
 
-approved_physical_decisions:
-  input_boundary: "SNAPSHOT_CARRIES_QUERY_CONTEXT_METADATA"
-  snapshot_extension: "MINIMAL_QUERY_METADATA_EXTENSION"
-  canonicalization: "JCS_LIKE_DETERMINISTIC_CANONICAL_JSON_V1"
-  canonical_token: "CANONICAL_JSON_V1"
-  fingerprint: "DETERMINISTIC_DIGEST_IMPLEMENTATION_NOT_SIGNATURE"
-  fingerprint_verification: "RECOMPUTABLE_FINGERPRINT"
-  fingerprint_order: "GENERATE_THEN_FINGERPRINT"
-  builder_interface: "FACTORY_WITH_INJECTED_CLOCK_AND_ID_FACTORY"
-  first_runtime_scope: "OFFICIAL_IN_MEMORY_PROJECTION_FIRST"
-  ies_version_initial: "INITIAL_VERSION_1"
-  expiration: "EXPIRES_AT_NULL_UNTIL_POLICY"
-  alternative: "OFFICIAL_ONLY_V1"
-  summary: "FAIL_CLOSED_CONTROLLED_REFERENCES"
-  limitations: "PROJECT_ONLY_EXPLICIT_LIMITATIONS"
-  executive_scope: "PROJECT_FROM_QUERY_METADATA_AND_SNAPSHOT_SCOPE"
+known_runtime_state:
+  observation_pipeline: "IMPLEMENTED"
+  evidence_builder: "IMPLEMENTED"
+  eks: "IMPLEMENTED + internal runtime integration"
+  op_eb_eks_flow: "IMPLEMENTED / tested"
+  ies_builder: "IMPLEMENTED OFFICIAL in-memory"
+  reasoning_engine: "PENDING"
+  reasoning_run_store: "PENDING"
+  channel_projection: "PENDING"
 
-required_runtime_interface:
-  factory: "createIesBuilder(options)"
-  primary_operation: "build(snapshot)"
-  optional_operation: "validate(ies)"
-  output: "IES OFFICIAL v1.0 completo"
+reasoning_contract_facts:
+  - "Reasoning Engine = Nivel 5"
+  - "RE es la única capa donde puede operar LLM analítico para hipótesis"
+  - "RE no es fuente de verdad empresarial"
+  - "RE no modifica IES, Snapshot ni Bundle"
+  - "RE no crea N1-N4"
+  - "RE no ejecuta tools"
+  - "RE no consulta bases operacionales"
+  - "entrada de conocimiento = un IES válido"
+  - "parámetros de sesión no alteran el IES"
+  - "BUILDING/EXPIRED/SUPERSEDED/INVALID no son consumibles para nuevo razonamiento vigente"
+  - "VALIDATED/PARTIAL/CONFLICTED/NO_KNOWLEDGE sí son consumibles"
+  - "NO_KNOWLEDGE no autoriza hipótesis sustantivas"
+  - "PARTIAL no autoriza completar vacíos"
+  - "hipótesis requiere IDs de hechos/evidencias del IES"
+  - "al menos un supporting_evidence_id existente"
+  - "hypothesis_strength != confidence"
+  - "hypothesis_strength != probability"
+  - "hypothesis_strength != materiality"
+  - "hypothesis_strength != severity"
+  - "sin porcentajes ficticios"
+  - "hipótesis rivales están permitidas"
+  - "sin ranking ficticio"
+  - "Recommendation != Next Verification != Decision Option"
+  - "ABSTENTION no crea segunda cobertura"
+  - "RE no recalcula materiality"
+  - "OFFICIAL y ALTERNATIVE no se fusionan silenciosamente"
+  - "canonical_reasoning_language vigente = es-MX"
+  - "RE produce Reasoning Result"
+  - "Reasoning Run es auditoría append-only de inferencia N5 fuera de EKS/IES"
+  - "Channel Projection posee presentación; RE posee semántica"
 
-builder_dependencies:
-  clock:
-    required: true
-    purpose: "generated_at / valid_at determinísticos y testeables"
-  idFactory:
-    required: true
-    purpose: "ies_id opaco y testeable"
-  digest:
-    required: false
-    rule: >
-      Puede usar una implementación criptográfica adecuada disponible en runtime
-      si no agrega dependencia nueva. El algoritmo concreto queda documentado
-      en reporte y no se presenta como firma digital.
+audit_questions:
 
-input_rules:
-  - "entrada única = Knowledge Snapshot"
-  - "snapshot debe contener bundle"
-  - "snapshot debe contener snapshot_id"
-  - "snapshot debe contener version"
-  - "snapshot debe contener query_context_metadata"
-  - "IES Builder no recibe Planner/chat/request runtime como segunda entrada"
-  - "IES Builder no consulta EKS por sí solo"
-  - "IES Builder no consulta OP/EB"
-  - "IES Builder no consulta fuentes"
-  - "IES Builder no muta Snapshot"
+  D1_runtime_interface:
+    question: >
+      ¿Cuál debe ser la interfaz física mínima del Reasoning Engine:
+      factory pura, servicio con adapter LLM inyectable, función pura o forma
+      equivalente, sin convertir proveedor/modelo en contrato?
+    classify:
+      - CONTRACTUAL
+      - PHYSICAL_UNKNOWN
+      - RECOMMENDATION
 
-query_context_rules:
-  - "proyectar únicamente desde snapshot.query_context_metadata"
-  - "preservar executive_query_id"
-  - "preservar query_fingerprint si existe"
-  - "preservar trace_id"
-  - "preservar original_question"
-  - "preservar intent"
-  - "preservar requesting_user_id"
-  - "preservar requesting_role"
-  - "preservar channel"
-  - "preservar plant_or_scope cuando aplique"
-  - "preservar period cuando aplique"
-  - "preservar resolved_entities[]"
-  - "preservar permission_restrictions[]"
-  - "preservar knowledge_effective_date"
-  - "no inventar campos faltantes obligatorios"
-  - "no re-resolver entidades"
-  - "no recalcular permisos"
+  D2_input_shape:
+    question: >
+      ¿Qué parte exacta del IES completo consume el RE y qué parámetros de
+      sesión deben ser una segunda entrada no epistemológica?
+    must_cover:
+      - "IES"
+      - "analysis_mode"
+      - "canonical_reasoning_language"
+      - "channel_hint"
+      - "maximum_semantic_depth"
 
-root_contract_rules:
-  ies_id:
-    source: "idFactory"
-  ies_type:
-    value: "OFFICIAL"
-  schema_version:
-    value: "1.0"
-  ies_version:
-    value: 1
-  status:
-    source: "mapeo determinístico coverage -> lifecycle"
-  generated_at:
-    source: "clock"
-  valid_at:
-    source: "clock o knowledge_effective_date conforme implementación documentada"
-  expires_at:
-    value: null
-  snapshot_reference:
-    source: "snapshot.snapshot_id"
-  knowledge_snapshot_version:
-    source: "snapshot.version"
-  query_context:
-    source: "snapshot.query_context_metadata"
-  executive_scope:
-    source: "query_context_metadata + scope explícito del Snapshot/Bundle"
-  knowledge_coverage:
-    source: "Bundle/Snapshot"
-  executive_summary_facts:
-    source: "proyección fail-closed de referencias controladas"
-  facts:
-    source: "Bundle facts"
-  evidence:
-    source: "Bundle evidence"
-  diagnoses:
-    source: "Bundle diagnoses"
-  conflicts:
-    source: "Bundle conflicts"
-  open_questions:
-    source: "Bundle open_questions"
-  source_health:
-    source: "Bundle source_health"
-  limitations:
-    source: "limitaciones explícitas / mapeos contractuales exactos"
-  audit:
-    source: "IES Builder + Snapshot"
-  integrity:
-    source: "CANONICAL_JSON_V1 + digest"
-  alternative_context:
-    value: null
+  D3_status_gate:
+    question: >
+      ¿Cómo debe implementarse físicamente el gate de lifecycle IES antes de
+      ejecutar cualquier razonamiento?
+    must_cover:
+      - "VALIDATED"
+      - "PARTIAL"
+      - "CONFLICTED"
+      - "NO_KNOWLEDGE"
+      - "BUILDING"
+      - "EXPIRED"
+      - "SUPERSEDED"
+      - "INVALID"
 
-coverage_status_mapping:
-  CONOZCO:
-    coverage_token: "COV_FULL_KNOWLEDGE"
-    status: "VALIDATED"
-  CONOZCO_PARCIALMENTE:
-    coverage_token: "COV_PARTIAL_KNOWLEDGE"
-    status: "PARTIAL"
-  EXISTE_CONFLICTO:
-    coverage_token: "COV_DATA_CONFLICT"
-    status: "CONFLICTED"
-  NO_CONOZCO:
-    coverage_token: "COV_NO_KNOWLEDGE"
-    status: "NO_KNOWLEDGE"
+  D4_llm_boundary:
+    question: >
+      ¿Qué contrato físico debe tener un adapter/model provider para permitir
+      inferencia N5 sin permitir tools, DB, fuentes o mutación del IES?
+    must_determine:
+      - "request shape"
+      - "response shape"
+      - "provider metadata"
+      - "timeout/error behavior"
+      - "no tool calls"
+      - "no hidden knowledge treated as enterprise truth"
 
-coverage_rules:
-  - "no crear quinto estado"
-  - "no usar COV_TOTAL_IGNORANCE"
-  - "coverage_score no se inventa"
-  - "highest_materiality_detected = máximo determinista de MAT_* ya evaluados"
-  - "ignorar MATERIALITY_NOT_ASSESSED al buscar máximo"
-  - "si no hay MAT_* evaluados -> MATERIALITY_NOT_ASSESSED"
-  - "NO_CONOZCO permite facts/evidence/diagnoses vacíos"
+  D5_reasoning_result_shape:
+    question: >
+      Verificar si 05 define suficientemente la forma física completa de
+      Reasoning Result para implementación directa.
+    fields:
+      - "interpretation"
+      - "hypotheses[]"
+      - "recommendations[]"
+      - "next_verifications[]"
+      - "decision_options[]"
+      - "abstentions[]"
+      - "clarification_requests[]"
+      - "reasoning_limits"
+      - "references"
 
-bank_projection_rules:
-  facts:
-    - "proyectar sin reinterpretación semántica"
-    - "supporting_observation_ids deben preservarse"
-    - "materiality solo se copia"
-  evidence:
-    - "supporting_fact_ids deben apuntar a facts existentes"
-    - "causal_status solo se copia"
-    - "IES no eleva causalidad"
-  diagnoses:
-    - "refs facts/evidence deben existir"
-    - "IES no crea diagnóstico"
-  conflicts:
-    - "resolution_status solo se proyecta"
-    - "IES no cambia OPEN/UNDER_REVIEW/RESOLVED/SUPERSEDED"
-    - "CONF_TYPE_E_GOVERNANCE nunca se omite"
-  open_questions:
-    - "priority se preserva"
-    - "no materiality inventada"
+  D6_interpretation:
+    question: >
+      ¿Qué forma estructural mínima debe tomar INTERPRETATION para mantener
+      separación LO QUE SÉ / PUEDO INFERIR / NO PUEDO CONCLUIR sin crear
+      narrativa que se confunda con N1-N4?
 
-source_health_mapping:
-  ACQUIRED_OK: "DATA_AVAILABLE"
-  ACQUIRED_EMPTY: "DATA_NOT_FOUND"
-  SOURCE_NOT_INTEGRATED: "SOURCE_NOT_INTEGRATED"
-  SOURCE_RESTRICTED: "SOURCE_RESTRICTED"
-  TOOL_ERROR: "TOOL_ERROR"
-  QUERY_SCOPE_INCOMPLETE: "QUERY_SCOPE_INCOMPLETE"
-  ENTITY_UNRESOLVED: "ENTITY_UNRESOLVED"
+  D7_hypothesis_validation:
+    question: >
+      ¿Qué validaciones determinísticas deben ejecutarse después del modelo
+      para aceptar/rechazar una Hypothesis?
+    must_cover:
+      - "supporting_fact_ids existentes"
+      - "supporting_evidence_ids existentes"
+      - "ies_id/version exactos"
+      - "validity_scope"
+      - "statement_language"
+      - "hypothesis_strength enum"
+      - "conflicts/limitations citados"
 
-source_health_rules:
-  - "no confundir DATA_NOT_FOUND con ABSENCE_CONFIRMED"
-  - "no confundir TOOL_ERROR con vacío"
-  - "no confundir SOURCE_NOT_INTEGRATED con inexistencia"
-  - "no recalcular coverage"
-  - "raw_payload_reference puede proyectarse; no incluir payload raw completo"
+  D8_hypothesis_strength:
+    question: >
+      ¿El contrato permite calcular WEAK/MODERATE/STRONG determinísticamente,
+      delegarlo al modelo sujeto a validación, o falta una decisión física?
+    prohibition: >
+      No crear score, probability, confidence proxy, materiality proxy ni
+      fórmula no autorizada.
 
-summary_rules:
-  - "no prosa narrativa libre"
-  - "no causalidad libre"
-  - "no ranking inventado"
-  - "solo statement_token + statement_reference + IDs soporte"
-  - "incluir CONF_TYPE_E_GOVERNANCE si existe"
-  - "incluir limitaciones bloqueantes cuando haya mapping contractual inequívoco"
-  - "si no existe criterio contractual suficiente para otro resumen, no inventarlo"
+  D9_rival_hypotheses:
+    question: >
+      ¿Qué mecanismo físico permite hipótesis rivales sin inventar ranking ni
+      primary candidate cuando no existe base contractual de orden?
 
-limitations_rules:
-  - "solo explícitas o derivables por mapping contractual exacto"
-  - "sin redacción libre"
-  - "SOURCE_NOT_INTEGRATED puede generar limitación tipificada"
-  - "SOURCE_RESTRICTED puede generar limitación tipificada"
-  - "TOOL_ERROR puede generar limitación tipificada"
-  - "ENTITY_UNRESOLVED puede generar limitación tipificada"
-  - "si no existe token/reference contractual suficiente, fail-closed"
+  D10_abstention:
+    question: >
+      ¿Cómo se genera una abstención anclada al IES y cuáles son las condiciones
+      determinísticas que deben impedir hipótesis?
+    must_cover:
+      - "NO_KNOWLEDGE"
+      - "falta de supporting_evidence"
+      - "limitación bloqueante"
+      - "entidad unresolved"
+      - "scope incompleto"
+      - "conflicto que impida claim"
 
-canonical_json_v1:
-  token: "CANONICAL_JSON_V1"
-  rules:
-    - "orden lexicográfico de claves de objeto"
-    - "arrays preservan orden contractual"
-    - "JSON UTF-8 determinístico"
-    - "sin espacios insignificantes"
-    - "null explícito cuando contrato lo exige"
-    - "undefined prohibido"
-    - "NaN/Infinity prohibidos"
-    - "no convertir números a strings"
-    - "no normalizar semánticamente strings"
-    - "no ordenar bancos dentro del canonicalizer"
+  D11_recommendation:
+    question: >
+      Determinar qué soporte/referencias exige una Recommendation y qué impide
+      que se convierta en mandato no soportado o hecho.
 
-fingerprint_scope:
-  include:
-    - "todo el contenido semántico raíz del IES"
-    - "audit"
-    - "integrity.snapshot_reference"
-    - "integrity.signature_status"
-  exclude:
-    - "integrity.content_fingerprint"
-    - "integrity.canonical_representation"
-    - "integrity.signature"
+  D12_next_verification:
+    question: >
+      Determinar cómo distinguir físicamente una acción epistémica futura de
+      una Recommendation de negocio, sin ejecutar la tool desde RE.
 
-integrity_rules:
-  - "canonical_representation = CANONICAL_JSON_V1"
-  - "content_fingerprint = digest criptográfico determinista"
-  - "signature = null"
-  - "signature_status = NOT_IMPLEMENTED"
-  - "digest != firma digital"
-  - "misma semántica -> misma huella"
-  - "mutación de contenido incluido -> huella distinta"
-  - "generar campos finales antes de fingerprint"
+  D13_decision_option:
+    question: >
+      Determinar la estructura y validación mínima de Decision Option y qué
+      impide presentarla como decisión tomada.
 
-audit_rules:
-  generated_by: "ies_builder"
-  source_snapshot_ids: "debe incluir snapshot.snapshot_id"
-  previous_ies_id: null
-  supersedes_ies_id: null
-  engine_version:
-    rule: >
-      Usar una constante explícita de implementación no presentada como versión
-      institucional si el contrato no la aporta.
-  ruleset_version:
-    rule: >
-      Proyectar la versión disponible en Snapshot/Bundle cuando exista; no
-      inventar ruleset productivo.
+  D14_clarification_request:
+    question: >
+      Determinar cuándo RE puede pedir aclaración y qué anclas del IES debe
+      citar sin inventar entidades ni alcance.
 
-validation_rules:
-  - "contrato raíz completo"
-  - "schema_version = 1.0"
-  - "ies_type = OFFICIAL"
-  - "alternative_context = null"
-  - "signature = null"
-  - "signature_status = NOT_IMPLEMENTED"
-  - "coverage_token/state mapping válido"
-  - "status compatible con coverage"
-  - "evidence refs -> facts existentes"
-  - "diagnosis refs -> facts/evidence existentes"
-  - "conflict facts_in_tension -> facts existentes"
-  - "executive_summary references -> IDs existentes o limitaciones existentes"
-  - "CONF_TYPE_E_GOVERNANCE visible si existe"
-  - "snapshot_reference coincide entre raíz e integrity"
-  - "content_fingerprint recomputable"
+  D15_materiality_and_conflicts:
+    question: >
+      Verificar mecanismos físicos para garantizar que RE solo consume
+      materiality y conflictos proyectados; no eleva MAT_* ni resuelve conflictos.
 
-fixtures_required:
-  - "official-no-knowledge.json"
-  - "official-partial.json"
-  - "official-conflicted-type-e.json"
-  - "official-full-minimal.json"
+  D16_official_alternative:
+    question: >
+      ¿Cómo debe recibir/razonar sobre OFFICIAL o ALTERNATIVE sin fusión
+      silenciosa y conservando provenance?
 
-fixture_rules:
-  - "todos sintéticos / ilustrativos"
-  - "sin datos institucionales reales"
-  - "sin calibraciones G8"
-  - "sin causalidad inventada"
-  - "sin firma digital"
-  - "Snapshot debe incluir query_context_metadata"
+  D17_reasoning_run:
+    question: >
+      Auditar si 05 define suficientemente Reasoning Run para una implementación
+      in-memory inicial y/o persistencia posterior.
+    must_determine:
+      - "run_id"
+      - "IES anchor"
+      - "Reasoning Result"
+      - "provider/model metadata"
+      - "prompt/template/version metadata si aplica"
+      - "timestamps"
+      - "append-only semantics"
+      - "persistence requirement"
+      - "integrity/audit fields"
 
-tests_required:
-  - "factory expone build"
-  - "build acepta únicamente Knowledge Snapshot"
-  - "Snapshot sin query_context_metadata obligatorio falla controladamente"
-  - "query_context se proyecta sin segunda entrada"
-  - "OFFICIAL + alternative_context null"
-  - "schema_version 1.0"
-  - "ies_version 1"
-  - "expires_at null"
-  - "coverage CONOZCO -> VALIDATED"
-  - "coverage CONOZCO_PARCIALMENTE -> PARTIAL"
-  - "coverage EXISTE_CONFLICTO -> CONFLICTED"
-  - "coverage NO_CONOZCO -> NO_KNOWLEDGE"
-  - "NO_KNOWLEDGE permite bancos vacíos"
-  - "source_health mapping exacto"
-  - "DATA_NOT_FOUND no se convierte en ABSENCE_CONFIRMED"
-  - "materiality no se recalcula"
-  - "highest_materiality_detected fail-closed"
-  - "Tipo E permanece visible"
-  - "resolution_status no cambia"
-  - "summary no inventa narrativa/ranking"
-  - "limitaciones no inventan prosa"
-  - "canonical JSON estable ante orden distinto de claves"
-  - "arrays conservan orden"
-  - "NaN/Infinity/undefined rechazados"
-  - "fingerprint estable para misma semántica"
-  - "fingerprint cambia al mutar contenido incluido"
-  - "fingerprint ignora sus campos excluidos según contrato"
-  - "signature null"
-  - "signature_status NOT_IMPLEMENTED"
-  - "digest no se etiqueta como firma"
-  - "input Snapshot no se muta"
-  - "tests existentes OP/EB/EKS/integración continúan pasando"
+  D18_determinism_and_replay:
+    question: >
+      Separar qué partes deben ser determinísticas y qué partes no pueden serlo
+      por naturaleza del LLM. Determinar qué necesita fijarse para
+      auditabilidad/replay verificable sin prometer repetibilidad absoluta.
+
+  D19_provider_independence:
+    question: >
+      Determinar la interfaz mínima para que OpenAI u otro proveedor sea
+      intercambiable sin cambiar el contrato semántico RE.
+
+  D20_runtime_readiness:
+    question: >
+      Emitir GO/NO-GO para IMPL-REASONING-001, identificando exactamente qué
+      decisiones físicas faltantes requieren G2 u otra autorización.
+
+mandatory_result_source_matrix:
+  required_columns:
+    - "Reasoning Result field/object"
+    - "contract authority"
+    - "source from IES"
+    - "LLM generated allowed: YES|NO|CONDITIONAL"
+    - "deterministic validation"
+    - "physical readiness"
+    - "classification"
+    - "notes"
+
+mandatory_gate_matrix:
+  required_columns:
+    - "condition"
+    - "may_reason: YES|NO|LIMITED"
+    - "may_emit_hypothesis: YES|NO"
+    - "must_abstain: YES|NO"
+    - "contract_reference"
+    - "notes"
+
+mandatory_runtime_gap_matrix:
+  required_columns:
+    - "gap_id"
+    - "description"
+    - "blocks_impl_reasoning_001: YES|NO"
+    - "requires_G2: YES|NO"
+    - "requires_provider_decision: YES|NO"
+    - "requires_G8: YES|NO"
+    - "authority_owner"
+    - "recommended_resolution"
+
+classification_rules:
+  CONTRACTUAL: >
+    Definido por 05 o contratos superiores. Implementación debe obedecerlo.
+  PHYSICAL_UNKNOWN: >
+    Resultado requerido pero sin realización física suficiente.
+  RECOMMENDATION: >
+    Propuesta técnica no vinculante; no queda aprobada por aparecer en reporte.
+  BLOCKER: >
+    Impide implementar sin decisión humana/contractual adicional.
+
+audit_constraints:
+  - "no implementar LLM"
+  - "no crear prompts productivos"
+  - "no simular proveedor como decisión final"
+  - "no inferir estructura faltante por conveniencia"
+  - "no convertir interpretación en hechos N1-N4"
+  - "no generar hipótesis durante la auditoría"
+  - "no inventar hypothesis_strength"
+  - "no inventar probabilities"
+  - "no inventar causalidad empresarial"
+  - "no reabrir coverage"
+  - "no recalcular materiality"
+  - "no resolver conflictos"
+  - "no ejecutar next_verification"
+  - "no transformar recommendations en acciones automáticas"
+  - "no diseñar Channel Projection"
+  - "no modificar 05"
+
+required_report_sections:
+  - "1. Executive result"
+  - "2. Contracts/runtime inspected"
+  - "3. Current physical reality"
+  - "4. D1-D20 findings"
+  - "5. Reasoning Result source matrix"
+  - "6. Lifecycle/abstention gate matrix"
+  - "7. LLM/provider boundary"
+  - "8. Deterministic post-validation"
+  - "9. Hypothesis strength/rivals readiness"
+  - "10. Recommendation/verification/decision-option separation"
+  - "11. Reasoning Run readiness"
+  - "12. Replay/auditability analysis"
+  - "13. Physical unknowns"
+  - "14. Recommendations requiring approval"
+  - "15. Blockers"
+  - "16. Gate assessment"
+  - "17. GO/NO-GO for IMPL-REASONING-001"
+  - "18. STOP"
 
 acceptance_criteria:
-  - "lib/director-ia-ies-builder.js creado"
-  - "test/director-ia-ies-builder.test.js creado"
-  - "fixtures IES sintéticos creados"
-  - "runtime únicamente OFFICIAL in-memory"
-  - "entrada única Snapshot"
-  - "query_context desde query_context_metadata"
-  - "sin segunda entrada operacional"
-  - "schema raíz completo"
-  - "CANONICAL_JSON_V1 implementado"
-  - "content_fingerprint recomputable"
-  - "signature null"
-  - "signature_status NOT_IMPLEMENTED"
-  - "NO_KNOWLEDGE válido"
-  - "Tipo E visible"
-  - "sin ALTERNATIVE"
-  - "sin persistencia IES"
-  - "sin Reasoning Engine"
-  - "sin Channel Projection"
-  - "sin LLM"
-  - "sin fuentes/tools"
+  - "D1-D20 auditados"
+  - "matriz Reasoning Result completa"
+  - "matriz lifecycle/abstention completa"
+  - "matriz runtime gaps completa"
+  - "frontera IES -> RE identificada"
+  - "frontera LLM/provider identificada"
+  - "validaciones post-model identificadas"
+  - "Reasoning Run readiness auditado"
+  - "NO_KNOWLEDGE/abstention auditado"
+  - "PARTIAL/CONFLICTED auditados"
+  - "materiality/conflicts preservados"
+  - "ningún contrato modificado"
+  - "ningún runtime modificado"
+  - "sin integración LLM"
+  - "sin prompts productivos"
   - "sin G8"
-  - "ningún docs/director-ia modificado"
-  - "server.js no modificado"
-  - "package.json no modificado"
-  - "tests IES pasan"
-  - "tests OP/EB/EKS/integración existentes pasan"
+  - "ninguna recomendación autoaprobada"
   - "git diff --check sin errores"
   - "reporte obligatorio creado"
 
 allowed_actions:
   - "leer contracts_in_force"
-  - "leer runtimes y tests existentes declarados in_scope"
-  - "crear lib/director-ia-ies-builder.js"
-  - "crear test/director-ia-ies-builder.test.js"
-  - "crear fixtures/director-ia/ies/"
-  - "crear docs/dev-loop/reports/IMPL-IES-001.md"
-  - "ejecutar tests IES"
-  - "ejecutar suites OP/EB/EKS/integración existentes"
-  - "ejecutar git diff --check"
+  - "leer runtimes/tests/fixtures declarados in_scope"
+  - "comparar 05 con IES Builder real"
+  - "clasificar D1-D20"
+  - "crear matrices obligatorias"
+  - "crear docs/dev-loop/reports/ARCH-REASONING-PHYSICAL-DECISIONS-001.md"
   - "actualizar CURRENT_TASK mediante transiciones permitidas"
+  - "ejecutar tests existentes solo si ayudan a verificar realidad"
+  - "ejecutar git diff --check"
 
 forbidden_actions:
   - "modificar docs/director-ia/"
-  - "modificar runtime OP/EB/EKS/integración"
+  - "crear runtime RE"
+  - "crear adapter LLM"
+  - "crear prompts"
+  - "crear tests RE"
+  - "crear fixtures RE"
+  - "modificar IES Builder"
+  - "modificar OP/EB/EKS"
   - "modificar server.js"
   - "modificar package.json"
   - "crear SQL/migraciones"
-  - "usar DB"
-  - "implementar persistencia IES"
-  - "implementar ALTERNATIVE"
-  - "implementar Reasoning Engine"
-  - "implementar Channel Projection"
-  - "usar LLM"
+  - "integrar proveedor LLM"
   - "usar tools productivas"
   - "leer datos productivos"
+  - "implementar Channel Projection"
   - "calibrar G8"
-  - "implementar firma digital"
+  - "autoaprobar decisiones"
+  - "autoaprobar gates"
+  - "crear IMPL-REASONING-001"
   - "commit"
   - "push"
   - "merge"
   - "encadenar siguiente tarea"
-  - "autoaprobar gates"
 
 expected_terminal_state: >
-  DONE_PENDING_REVIEW si el IES Builder OFFICIAL in-memory puede implementarse
-  completamente desde Knowledge Snapshot sin modificar contratos ni inventar
-  metadata, reglas epistemológicas, persistencia o calibraciones. BLOCKED o
-  STOPPED si completar el contrato raíz exige información no disponible en
-  Snapshot o una nueva decisión arquitectónica.
+  DONE_PENDING_REVIEW si la auditoría puede determinar de forma completa la
+  frontera física IES -> Reasoning Engine y separar contratos, unknowns,
+  recomendaciones y blockers sin modificar contratos.
+  BLOCKED o STOPPED si continuar exige G2 u otra decisión humana no autorizada.
+
+implementation_followup_rule: >
+  IMPL-REASONING-001 no puede crearse desde esta tarea. HUMAN_APPROVER debe
+  revisar primero el reporte y aprobar cualquier decisión física pendiente.
 
 max_attempts: 1
-result_report_path: "docs/dev-loop/reports/IMPL-IES-001.md"
+result_report_path: "docs/dev-loop/reports/ARCH-REASONING-PHYSICAL-DECISIONS-001.md"
+```
