@@ -1,0 +1,77 @@
+{
+  "meta": {
+    "figures": "ILUSTRATIVAS / FICTICIAS",
+    "not_institutional_coverage": true,
+    "note": "CONOZCO mínimo. Un hecho transportable. Cifras ficticias. TOOL_ERROR auxiliar no presente."
+  },
+  "snapshot": {
+    "snapshot_id": "snap_ies_full_1",
+    "bundle_id": "kb_ies_full_1",
+    "trace_id": "tr_ies_full",
+    "version": 2,
+    "persisted_at": "2026-08-17T00:00:00.000Z",
+    "integrity": "sha256:fixture",
+    "query_context_metadata": {
+      "executive_query_id": "eq_ies_full",
+      "query_fingerprint": "qfp_ies_full_ilustrativo",
+      "trace_id": "tr_ies_full",
+      "original_question": "¿Cuál es la venta ilustrativa?",
+      "intent": "arr_snapshot",
+      "requesting_user_id": "user_ilustrativo",
+      "requesting_role": "director",
+      "channel": "dashboard",
+      "plant_or_scope": "Puebla",
+      "period": "mes_B_ilustrativo",
+      "resolved_entities": [
+        {
+          "entity_type": "planta",
+          "original_value": "Puebla",
+          "resolution_state": "RESOLVED",
+          "entity_id": "puebla",
+          "candidates": []
+        }
+      ],
+      "permission_restrictions": [],
+      "knowledge_effective_date": "2026-08-17T00:00:00.000Z"
+    },
+    "bundle": {
+      "bundle_id": "kb_ies_full_1",
+      "trace_id": "tr_ies_full",
+      "produced_at": "2026-08-17T00:00:00.000Z",
+      "producer": "evidence_builder",
+      "observations": [],
+      "facts": [
+        {
+          "fact_id": "fact_full_1",
+          "statement": "restated_observation",
+          "metric_or_event": "venta_t",
+          "value": 120.0,
+          "unit": "t",
+          "period": "mes_B_ilustrativo",
+          "entity": { "entity_type": "planta", "entity_id": "puebla", "resolution": "RESOLVED" },
+          "supporting_observation_ids": ["obs_full_1"],
+          "absence_state": null,
+          "confidence": { "Fs": null, "R": null, "Cb": null, "Cs": null, "Cb_ov": null },
+          "materiality": "MATERIALITY_NOT_ASSESSED",
+          "applied_materiality_rule_id": null
+        }
+      ],
+      "evidence": [],
+      "diagnoses": [],
+      "conflicts": [],
+      "open_questions": [],
+      "knowledge_coverage": "CONOZCO",
+      "source_health": { "arr": "ACQUIRED_OK" },
+      "ruleset_versions": { "evidence_builder": "2.1", "physical": "evidence-builder-2.1-physical-v1" },
+      "traceability": {
+        "question": "¿Cuál es la venta ilustrativa?",
+        "plan": { "intent": "arr_snapshot", "domains": ["arr"] },
+        "tool_plan": { "tools": ["get_arr_snapshot"] },
+        "acquisition": [
+          { "tool_id": "get_arr_snapshot", "domain": "arr", "status": "ACQUIRED_OK" }
+        ],
+        "observations": ["obs_full_1"]
+      }
+    }
+  }
+}

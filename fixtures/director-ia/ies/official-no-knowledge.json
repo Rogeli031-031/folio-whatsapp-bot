@@ -1,0 +1,65 @@
+{
+  "meta": {
+    "figures": "ILUSTRATIVAS / FICTICIAS",
+    "not_institutional_coverage": true,
+    "note": "NO_CONOZCO / SOURCE_NOT_INTEGRATED. No es cobertura institucional."
+  },
+  "snapshot": {
+    "snapshot_id": "snap_ies_nok_1",
+    "bundle_id": "kb_ies_nok_1",
+    "trace_id": "tr_ies_nok",
+    "version": 1,
+    "persisted_at": "2026-08-17T00:00:00.000Z",
+    "integrity": "sha256:fixture",
+    "query_context_metadata": {
+      "executive_query_id": "eq_ies_nok",
+      "query_fingerprint": null,
+      "trace_id": "tr_ies_nok",
+      "original_question": "¿En qué etapa está el folio ilustrativo?",
+      "intent": "folio_status",
+      "requesting_user_id": "user_ilustrativo",
+      "requesting_role": "director",
+      "channel": "dashboard",
+      "plant_or_scope": null,
+      "period": null,
+      "resolved_entities": [],
+      "permission_restrictions": [],
+      "knowledge_effective_date": "2026-08-17T00:00:00.000Z"
+    },
+    "bundle": {
+      "bundle_id": "kb_ies_nok_1",
+      "trace_id": "tr_ies_nok",
+      "produced_at": "2026-08-17T00:00:00.000Z",
+      "producer": "evidence_builder",
+      "observations": [],
+      "facts": [],
+      "evidence": [],
+      "diagnoses": [],
+      "conflicts": [],
+      "open_questions": [
+        {
+          "open_question_id": "oq_ies_nok_1",
+          "question": "¿Fuente integrada para el dominio o tool requerido?",
+          "reason": "SOURCE_NOT_INTEGRATED",
+          "required_data": "folios",
+          "expected_source": "get_folio_status",
+          "impact": "0.00",
+          "priority": "undeclared",
+          "status": "OPEN"
+        }
+      ],
+      "knowledge_coverage": "NO_CONOZCO",
+      "source_health": { "folios": "SOURCE_NOT_INTEGRATED" },
+      "ruleset_versions": { "evidence_builder": "2.1", "physical": "evidence-builder-2.1-physical-v1" },
+      "traceability": {
+        "question": "¿En qué etapa está el folio ilustrativo?",
+        "plan": { "intent": "folio_status" },
+        "tool_plan": { "tools": ["get_folio_status"] },
+        "acquisition": [
+          { "tool_id": "get_folio_status", "domain": "folios", "status": "SOURCE_NOT_INTEGRATED" }
+        ],
+        "observations": []
+      }
+    }
+  }
+}
