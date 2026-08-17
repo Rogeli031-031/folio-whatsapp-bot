@@ -1,0 +1,76 @@
+{
+  "meta": {
+    "figures": "ILUSTRATIVAS / FICTICIAS",
+    "not_institutional_coverage": true,
+    "note": "EXISTE_CONFLICTO con Tipo E. No se suaviza. Cifras ficticias."
+  },
+  "snapshot": {
+    "snapshot_id": "snap_ies_typee_1",
+    "bundle_id": "kb_ies_typee_1",
+    "trace_id": "tr_ies_typee",
+    "version": 1,
+    "persisted_at": "2026-08-17T00:00:00.000Z",
+    "integrity": "sha256:fixture",
+    "query_context_metadata": {
+      "executive_query_id": "eq_ies_typee",
+      "trace_id": "tr_ies_typee",
+      "original_question": "¿Hay conflicto de gobernanza ilustrativo?",
+      "intent": "governance_check",
+      "requesting_user_id": "user_ilustrativo",
+      "requesting_role": "director",
+      "channel": "dashboard",
+      "resolved_entities": [],
+      "permission_restrictions": [],
+      "knowledge_effective_date": "2026-08-17T00:00:00.000Z"
+    },
+    "bundle": {
+      "bundle_id": "kb_ies_typee_1",
+      "trace_id": "tr_ies_typee",
+      "produced_at": "2026-08-17T00:00:00.000Z",
+      "producer": "evidence_builder",
+      "observations": [],
+      "facts": [
+        {
+          "fact_id": "fact_e_1",
+          "statement": "restated_observation",
+          "metric_or_event": "venta_t",
+          "value": 10,
+          "supporting_observation_ids": ["obs_e_1"],
+          "confidence": { "Fs": null, "R": null, "Cb": null, "Cs": null, "Cb_ov": null },
+          "materiality": "MATERIALITY_NOT_ASSESSED",
+          "applied_materiality_rule_id": null
+        }
+      ],
+      "evidence": [],
+      "diagnoses": [],
+      "conflicts": [
+        {
+          "conflict_id": "c_e_1",
+          "primary_type": "E",
+          "secondary_types": [],
+          "facts_in_tension": ["fact_e_1"],
+          "weight_assessment": null,
+          "resolution_status": "OPEN",
+          "applied_resolution_rule_id": null,
+          "resolution_supporting_fact_ids": [],
+          "resolution_supporting_evidence_ids": [],
+          "interpretation_constraint": "no_resolve_by_weight",
+          "governance_escalation": true
+        }
+      ],
+      "open_questions": [],
+      "knowledge_coverage": "EXISTE_CONFLICTO",
+      "source_health": { "arr": "ACQUIRED_OK" },
+      "ruleset_versions": { "evidence_builder": "2.1", "physical": "evidence-builder-2.1-physical-v1" },
+      "traceability": {
+        "question": "¿Hay conflicto de gobernanza ilustrativo?",
+        "plan": { "intent": "governance_check" },
+        "tool_plan": { "tools": ["get_arr_snapshot"] },
+        "acquisition": [
+          { "tool_id": "get_arr_snapshot", "domain": "arr", "status": "ACQUIRED_OK" }
+        ],
+        "observations": ["obs_e_1"]
+      }
+    }
+  }
+}

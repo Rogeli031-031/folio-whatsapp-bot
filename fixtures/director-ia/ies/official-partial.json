@@ -1,0 +1,88 @@
+{
+  "meta": {
+    "figures": "ILUSTRATIVAS / FICTICIAS",
+    "not_institutional_coverage": true,
+    "note": "CONOZCO_PARCIALMENTE. ARR OK + folios no integrado. Cifras ficticias."
+  },
+  "snapshot": {
+    "snapshot_id": "snap_ies_partial_1",
+    "bundle_id": "kb_ies_partial_1",
+    "trace_id": "tr_ies_partial",
+    "version": 1,
+    "persisted_at": "2026-08-17T00:00:00.000Z",
+    "integrity": "sha256:fixture",
+    "query_context_metadata": {
+      "executive_query_id": "eq_ies_partial",
+      "trace_id": "tr_ies_partial",
+      "original_question": "¿Cuál es la venta ilustrativa de Puebla?",
+      "intent": "financial_diagnosis",
+      "requesting_user_id": "user_ilustrativo",
+      "requesting_role": "director",
+      "channel": "dashboard",
+      "plant_or_scope": "Puebla",
+      "period": "mes_B_ilustrativo",
+      "resolved_entities": [
+        {
+          "entity_type": "planta",
+          "original_value": "Puebla",
+          "resolution_state": "RESOLVED",
+          "entity_id": "puebla",
+          "candidates": []
+        }
+      ],
+      "permission_restrictions": [],
+      "knowledge_effective_date": "2026-08-17T00:00:00.000Z"
+    },
+    "bundle": {
+      "bundle_id": "kb_ies_partial_1",
+      "trace_id": "tr_ies_partial",
+      "produced_at": "2026-08-17T00:00:00.000Z",
+      "producer": "evidence_builder",
+      "observations": [],
+      "facts": [
+        {
+          "fact_id": "fact_obs_partial_1",
+          "statement": "restated_observation",
+          "metric_or_event": "venta_t",
+          "value": 95.0,
+          "unit": "t",
+          "period": "mes_B_ilustrativo",
+          "entity": { "entity_type": "planta", "entity_id": "puebla", "entity_label": "Puebla", "resolution": "RESOLVED" },
+          "supporting_observation_ids": ["obs_partial_1"],
+          "absence_state": null,
+          "confidence": { "Fs": null, "R": null, "Cb": null, "Cs": null, "Cb_ov": null },
+          "materiality": "MATERIALITY_NOT_ASSESSED",
+          "applied_materiality_rule_id": null
+        }
+      ],
+      "evidence": [],
+      "diagnoses": [],
+      "conflicts": [],
+      "open_questions": [
+        {
+          "open_question_id": "oq_partial_folios",
+          "question": "¿Fuente integrada para el dominio o tool requerido?",
+          "reason": "SOURCE_NOT_INTEGRATED",
+          "required_data": "folios",
+          "expected_source": "get_folio_status",
+          "impact": "undeclared",
+          "priority": "undeclared",
+          "status": "OPEN"
+        }
+      ],
+      "knowledge_coverage": "CONOZCO_PARCIALMENTE",
+      "source_health": { "arr": "ACQUIRED_OK", "folios": "SOURCE_NOT_INTEGRATED" },
+      "ruleset_versions": { "evidence_builder": "2.1", "physical": "evidence-builder-2.1-physical-v1" },
+      "traceability": {
+        "question": "¿Cuál es la venta ilustrativa de Puebla?",
+        "plan": { "intent": "financial_diagnosis", "domains": ["arr", "folios"] },
+        "tool_plan": { "tools": ["get_arr_snapshot", "get_folio_status"] },
+        "acquisition": [
+          { "tool_id": "get_arr_snapshot", "domain": "arr", "status": "ACQUIRED_OK" },
+          { "tool_id": "get_folio_status", "domain": "folios", "status": "SOURCE_NOT_INTEGRATED" }
+        ],
+        "observations": ["obs_partial_1"]
+      }
+    }
+  }
+}
