@@ -1,0 +1,101 @@
+{
+  "meta": {
+    "figures": "ILUSTRATIVAS / FICTICIAS",
+    "not_institutional_coverage": true,
+    "note": "Fixture sintético REPORT L3_AUDIT. Conserva audit/reference y no elimina límites."
+  },
+  "channel": "REPORT",
+  "projectionDepth": "L3_AUDIT",
+  "reasoningResult": null,
+  "reasoningRunId": null,
+  "ies": {
+    "ies_id": "ies_cp_report",
+    "ies_type": "OFFICIAL",
+    "schema_version": "1.0",
+    "ies_version": 1,
+    "status": "PARTIAL",
+    "generated_at": "2026-08-17T12:00:00.000Z",
+    "valid_at": "2026-08-17T00:00:00.000Z",
+    "expires_at": null,
+    "snapshot_reference": { "snapshot_id": "snap_cp_report" },
+    "knowledge_snapshot_version": 1,
+    "query_context": {
+      "executive_query_id": "eq_cp_report",
+      "trace_id": "tr_cp_report",
+      "original_question": "¿Cuál es la venta ilustrativa de Puebla?",
+      "intent": "financial_diagnosis",
+      "requesting_user_id": "user_ilustrativo",
+      "requesting_role": "director",
+      "channel": "report",
+      "resolved_entities": [],
+      "permission_restrictions": [],
+      "knowledge_effective_date": "2026-08-17T00:00:00.000Z",
+      "plant_or_scope": "Puebla",
+      "period": "mes_B_ilustrativo"
+    },
+    "executive_scope": {
+      "plant_or_scope": "Puebla",
+      "period": "mes_B_ilustrativo",
+      "intent": "financial_diagnosis"
+    },
+    "knowledge_coverage": {
+      "coverage_token": "COV_PARTIAL_KNOWLEDGE",
+      "coverage_state": "CONOZCO_PARCIALMENTE",
+      "coverage_score": null,
+      "covered_domains": ["arr"],
+      "partial_domains": [],
+      "unavailable_domains": ["folios"],
+      "restricted_domains": [],
+      "failed_tools": [],
+      "unresolved_entities": [],
+      "incomplete_scopes": [],
+      "blocking_limitations": ["lim_cp_report_SOURCE_NOT_INTEGRATED"],
+      "highest_materiality_detected": "MATERIALITY_NOT_ASSESSED"
+    },
+    "executive_summary_facts": [],
+    "facts": [
+      {
+        "fact_id": "fact_cp_report_1",
+        "statement_token": "restated_observation",
+        "concept": "venta_t",
+        "value": 95,
+        "materiality": "MATERIALITY_NOT_ASSESSED"
+      }
+    ],
+    "evidence": [],
+    "diagnoses": [],
+    "conflicts": [],
+    "open_questions": [
+      {
+        "open_question_id": "oq_cp_report_folios",
+        "question_token": "¿Fuente integrada para el dominio o tool requerido?",
+        "reason_token": "SOURCE_NOT_INTEGRATED",
+        "status": "OPEN",
+        "blocks_hypothesis": false
+      }
+    ],
+    "source_health": [
+      { "tool_id": "get_arr_snapshot", "domain": "arr", "execution_status": "DATA_AVAILABLE" },
+      { "tool_id": "get_folio_status", "domain": "folios", "execution_status": "SOURCE_NOT_INTEGRATED" }
+    ],
+    "limitations": [
+      {
+        "limitation_id": "lim_cp_report_SOURCE_NOT_INTEGRATED",
+        "statement_token": "SOURCE_NOT_INTEGRATED",
+        "statement_reference": "get_folio_status",
+        "scope": "folios"
+      }
+    ],
+    "audit": {
+      "generated_by": "synthetic_fixture",
+      "engine_version": "channel-projection-fixture",
+      "source_snapshot_ids": ["snap_cp_report"]
+    },
+    "integrity": {
+      "canonical_representation": "CANONICAL_JSON_V1",
+      "signature": null,
+      "signature_status": "NOT_IMPLEMENTED"
+    },
+    "alternative_context": null
+  }
+}

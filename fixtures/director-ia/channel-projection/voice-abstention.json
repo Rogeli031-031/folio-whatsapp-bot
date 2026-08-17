@@ -1,0 +1,103 @@
+{
+  "meta": {
+    "figures": "ILUSTRATIVAS / FICTICIAS",
+    "not_institutional_coverage": true,
+    "note": "Fixture sintético VOICE + abstención RE. No fabrica hipótesis. Abstention visible."
+  },
+  "channel": "VOICE",
+  "projectionDepth": "L1_EXECUTIVE",
+  "reasoningRunId": "run_cp_voice_abs_ilustrativo",
+  "ies": {
+    "ies_id": "ies_cp_voice_abs",
+    "ies_type": "OFFICIAL",
+    "schema_version": "1.0",
+    "ies_version": 1,
+    "status": "NO_KNOWLEDGE",
+    "generated_at": "2026-08-17T12:00:00.000Z",
+    "valid_at": "2026-08-17T00:00:00.000Z",
+    "expires_at": null,
+    "snapshot_reference": { "snapshot_id": "snap_cp_voice_abs" },
+    "knowledge_snapshot_version": 1,
+    "query_context": {
+      "executive_query_id": "eq_cp_voice_abs",
+      "trace_id": "tr_cp_voice_abs",
+      "original_question": "¿En qué etapa está el folio ilustrativo?",
+      "intent": "folio_status",
+      "requesting_user_id": "user_ilustrativo",
+      "requesting_role": "director",
+      "channel": "voice",
+      "resolved_entities": [],
+      "permission_restrictions": [],
+      "knowledge_effective_date": "2026-08-17T00:00:00.000Z"
+    },
+    "executive_scope": { "intent": "folio_status" },
+    "knowledge_coverage": {
+      "coverage_token": "COV_NO_KNOWLEDGE",
+      "coverage_state": "NO_CONOZCO",
+      "coverage_score": null,
+      "covered_domains": [],
+      "partial_domains": [],
+      "unavailable_domains": ["folios"],
+      "restricted_domains": [],
+      "failed_tools": [],
+      "unresolved_entities": [],
+      "incomplete_scopes": [],
+      "blocking_limitations": ["lim_cp_voice_SOURCE_NOT_INTEGRATED"],
+      "highest_materiality_detected": "MATERIALITY_NOT_ASSESSED"
+    },
+    "executive_summary_facts": [],
+    "facts": [],
+    "evidence": [],
+    "diagnoses": [],
+    "conflicts": [],
+    "open_questions": [],
+    "source_health": [
+      { "tool_id": "get_folio_status", "domain": "folios", "execution_status": "SOURCE_NOT_INTEGRATED" }
+    ],
+    "limitations": [
+      {
+        "limitation_id": "lim_cp_voice_SOURCE_NOT_INTEGRATED",
+        "statement_token": "SOURCE_NOT_INTEGRATED",
+        "statement_reference": "get_folio_status",
+        "scope": "folios"
+      }
+    ],
+    "audit": { "generated_by": "synthetic_fixture", "engine_version": "channel-projection-fixture" },
+    "integrity": {
+      "canonical_representation": "CANONICAL_JSON_V1",
+      "signature": null,
+      "signature_status": "NOT_IMPLEMENTED"
+    },
+    "alternative_context": null
+  },
+  "reasoningResult": {
+    "interpretation": {
+      "what_is_known": { "references": [] },
+      "what_can_be_inferred": { "references": [] },
+      "what_cannot_be_concluded": {
+        "references": ["lim_cp_voice_SOURCE_NOT_INTEGRATED", "abs_cp_voice_1"]
+      }
+    },
+    "hypotheses": [],
+    "recommendations": [],
+    "next_verifications": [],
+    "decision_options": [],
+    "abstentions": [
+      {
+        "abstention_id": "abs_cp_voice_1",
+        "ies_id": "ies_cp_voice_abs",
+        "abstention_kind": "NO_KNOWLEDGE",
+        "primary_anchor_type": "coverage_token",
+        "primary_anchor_ref": "COV_NO_KNOWLEDGE",
+        "secondary_anchors": [],
+        "message_semantic": "NO_KNOWLEDGE: sin hipótesis sustantiva"
+      }
+    ],
+    "clarification_requests": [],
+    "reasoning_limits": {
+      "coverage_token": "COV_NO_KNOWLEDGE",
+      "status": "NO_KNOWLEDGE"
+    },
+    "references": ["lim_cp_voice_SOURCE_NOT_INTEGRATED"]
+  }
+}

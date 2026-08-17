@@ -12,39 +12,41 @@ Esto no es G1. `DRAFT` no es ejecutable.
 ---
 
 ```yaml
-task_id: "ARCH-CHANNEL-PROJECTION-PHYSICAL-DECISIONS-002"
+task_id: "IMPL-CHANNEL-PROJECTION-001"
 status: CLOSED
 
 authorized_by: "HUMAN_APPROVER"
-authorized_at: "2026-08-17T13:09:41-06:00"
+authorized_at: "2026-08-17T13:23:41-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-17"
 
 gates:
   G1_task_authorization: AUTHORIZED
-  G2_architecture_change: AUTHORIZED
+  G2_architecture_change: N/A
   G3_new_architecture_contract: N/A
   G8_calibration_materiality_signature: N/A
 
 objective: >
-  Resolver y registrar contractualmente las decisiones físicas mínimas que
-  bloquean IMPL-CHANNEL-PROJECTION-001: interfaz/factory del proyector,
-  schema serializado del Projection Model, catálogo de semantic_type,
-  reglas de priority, política física L0-L3, equivalencia crítica,
-  progressive disclosure y políticas iniciales de canal para Chat, Voice,
-  WhatsApp, Dashboard, Report y Presentation, sin implementar runtime ni
-  introducir autoridad epistemológica.
+  Implementar el runtime mínimo, determinístico, puro y fail-closed de
+  Channel Projection conforme a docs/director-ia/06-CHANNEL-PROJECTION.md
+  v1.0 y a las decisiones físicas D1-D20 registradas por
+  ARCH-CHANNEL-PROJECTION-PHYSICAL-DECISIONS-002. La primera implementación
+  debe construir un Projection Model serializado y una representación neutral
+  por canal, completamente in-memory, sin LLM renderer, sin integración real
+  de canal y sin autoridad epistemológica.
 
 in_scope:
   - "docs/dev-loop/CURRENT_TASK.md"
-  - "docs/dev-loop/reports/ARCH-CHANNEL-PROJECTION-PHYSICAL-DECISIONS-001.md (solo lectura)"
-  - "docs/dev-loop/reports/ARCH-CHANNEL-PROJECTION-PHYSICAL-DECISIONS-002.md"
+  - "docs/dev-loop/reports/IMPL-CHANNEL-PROJECTION-001.md"
 
   - "docs/director-ia/DIRECTOR_IA_CONSTITUTION.md (solo lectura)"
   - "docs/director-ia/DIRECTOR_IA_EXECUTIVE_KNOWLEDGE_ENGINE.md (solo lectura)"
   - "docs/director-ia/04-IES-STANDARD.md (solo lectura)"
   - "docs/director-ia/05-REASONING-ENGINE.md (solo lectura)"
-  - "docs/director-ia/06-CHANNEL-PROJECTION.md"
-  - "docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md (solo lectura)"
+  - "docs/director-ia/06-CHANNEL-PROJECTION.md (solo lectura)"
+
+  - "lib/director-ia-channel-projection.js"
+  - "test/director-ia-channel-projection.test.js"
+  - "fixtures/director-ia/channel-projection/"
 
   - "lib/director-ia-ies-builder.js (solo lectura)"
   - "lib/director-ia-reasoning-engine.js (solo lectura)"
@@ -53,47 +55,60 @@ in_scope:
   - "fixtures/director-ia/ies/ (solo lectura)"
   - "fixtures/director-ia/reasoning/ (solo lectura)"
 
+  - "lib/director-ia-observation-pipeline.js (solo lectura)"
+  - "lib/director-ia-evidence-builder.js (solo lectura)"
+  - "lib/director-ia-eks.js (solo lectura)"
+  - "lib/director-ia-op-eb-eks-integration.js (solo lectura)"
+
+  - "test/director-ia-observation-pipeline.test.js (solo lectura)"
+  - "test/director-ia-evidence-builder.test.js (solo lectura)"
+  - "test/director-ia-eks.test.js (solo lectura)"
+  - "test/director-ia-eks-integration.test.js (solo lectura)"
+  - "test/director-ia-op-eb-eks-integration.test.js (solo lectura)"
+
 out_of_scope:
-  - "implementar Channel Projection"
-  - "crear lib/director-ia-channel-projection.js"
-  - "crear tests Channel Projection"
-  - "crear fixtures Channel Projection"
-
-  - "modificar Constitución"
-  - "modificar Executive Knowledge Engine"
-  - "modificar 04-IES-STANDARD.md"
-  - "modificar 05-REASONING-ENGINE.md"
-  - "modificar Architecture Index"
-
+  - "modificar cualquier archivo en docs/director-ia/"
   - "modificar IES Builder"
   - "modificar Reasoning Engine"
-  - "modificar OP/EB/EKS"
+  - "modificar OP"
+  - "modificar EB"
+  - "modificar EKS"
+  - "modificar integración OP-EB-EKS"
   - "modificar server.js"
   - "modificar package.json"
+  - "modificar .env"
 
-  - "usar LLM de redacción"
+  - "usar LLM renderer"
   - "integrar proveedor real"
   - "usar networking"
   - "crear prompts productivos"
-  - "crear widgets"
+  - "crear templates productivos"
   - "crear SSML"
-  - "crear templates WhatsApp productivos"
+  - "crear widgets"
+  - "integrar WhatsApp real"
+  - "integrar voz real"
+  - "integrar chat real"
+  - "integrar dashboard real"
+  - "generar reportes/presentaciones reales"
 
   - "crear memoria conversacional"
   - "crear WhoAmI"
   - "crear small talk"
   - "crear conversational orchestrator"
 
+  - "crear N6"
+  - "crear semántica nueva"
+  - "crear/modificar N1-N5"
   - "recalcular coverage"
   - "recalcular materiality"
   - "recalcular confidence"
-  - "crear hechos/evidencias/diagnósticos/hipótesis"
+  - "recalcular severity"
+  - "recalcular hypothesis_strength"
   - "resolver conflictos"
 
   - "commit"
   - "push"
   - "merge"
-  - "crear o ejecutar IMPL-CHANNEL-PROJECTION-001"
   - "encadenar siguiente tarea"
 
 contracts_in_force:
@@ -103,428 +118,427 @@ contracts_in_force:
   - "docs/director-ia/05-REASONING-ENGINE.md"
   - "docs/director-ia/06-CHANNEL-PROJECTION.md"
 
-audit_result_in_force:
-  source: "docs/dev-loop/reports/ARCH-CHANNEL-PROJECTION-PHYSICAL-DECISIONS-001.md"
-  implementation_status: "NO-GO"
-  blockers:
-    - "factory/runtime interface"
-    - "Projection Model schema serializado"
-    - "catálogo de semantic_type"
-    - "reglas de priority"
-    - "política física L0-L3"
-    - "políticas implementables por canal"
-    - "validación de equivalencia crítica"
+approved_physical_decisions:
+  runtime_interface: "CHANNEL_PROJECTION_FACTORY_V1"
+  projection_model: "SERIALIZED_PROJECTION_MODEL_V1"
+  semantic_types: "SEMANTIC_TYPE_CATALOG_V1"
+  content_class_mapping: "DETERMINISTIC_CONTENT_CLASS_MAPPING_V1"
+  priority: "PRESENTATION_PRIORITY_V1"
+  depth: "PROJECTION_DEPTH_POLICY_V1"
+  critical_equivalence: "CRITICAL_EQUIVALENCE_VALIDATION_V1"
+  optional_reasoning: "OPTIONAL_REASONING_NO_FILL_V1"
+  progressive_disclosure: "SAFE_PROGRESSIVE_DISCLOSURE_V1"
+  channel_registry: "CHANNEL_POLICY_REGISTRY_V1"
+  chat: "CHAT_POLICY_V1"
+  voice: "VOICE_POLICY_V1"
+  whatsapp: "WHATSAPP_POLICY_V1"
+  dashboard: "DASHBOARD_POLICY_V1"
+  report: "REPORT_POLICY_V1"
+  presentation: "PRESENTATION_POLICY_V1"
+  rendering_boundary: "DETERMINISTIC_PROJECTION_FIRST_V1"
+  output_shape: "CHANNEL_OUTPUT_ENVELOPE_V1"
+  tone_boundary: "TONE_IS_PRESENTATION_ONLY_V1"
+  first_runtime_scope: "PROJECTION_MODEL_PLUS_NEUTRAL_RENDER_V1"
 
-proposed_human_decisions:
+required_runtime_interface:
+  factory: "createChannelProjection({ policyRegistry, clock, idFactory })"
+  primary_operation: >
+    project({ ies, reasoningResult?, reasoningRunId?, channel, projectionDepth })
+  output:
+    projection_model: "Serialized Projection Model v1"
+    channel_output: "Channel Output Envelope v1"
 
-  D1_runtime_interface:
-    decision: "CHANNEL_PROJECTION_FACTORY_V1"
-    meaning: >
-      Channel Projection se realiza como factory pura/testeable:
-      createChannelProjection({ policyRegistry, clock? })
-      y project({ ies, reasoningResult?, reasoningRunId?, channel, projectionDepth }).
-      IES es la entrada epistemológica primaria; Reasoning Result es opcional y
-      solo lectura.
+dependencies:
+  policyRegistry:
+    required: true
+    purpose: "políticas puras por canal"
+  clock:
+    required: true
+    purpose: "audit timestamps determinísticos"
+  idFactory:
+    required: true
+    purpose: "projection_id/item_id testeables"
 
-  D2_projection_model_schema:
-    decision: "SERIALIZED_PROJECTION_MODEL_V1"
-    meaning: >
-      El runtime construye primero un Projection Model neutral antes de render
-      específico de canal.
+input_rules:
+  - "IES es obligatorio"
+  - "Reasoning Result es opcional"
+  - "reasoningRunId es opcional"
+  - "channel es obligatorio"
+  - "projectionDepth es obligatorio"
+  - "no acepta Snapshot/Bundle/ObservationRecord como bypass"
+  - "no consulta EKS/OP/EB"
+  - "no ejecuta tools"
+  - "no muta IES ni Reasoning Result"
 
-    root_fields:
-      - "projection_id"
-      - "ies_id"
-      - "ies_version"
-      - "reasoning_run_id"
-      - "channel"
-      - "projection_depth"
-      - "items"
-      - "critical_invariants"
+supported_channels:
+  - "CHAT"
+  - "VOICE"
+  - "WHATSAPP"
+  - "DASHBOARD"
+  - "REPORT"
+  - "PRESENTATION"
+
+supported_depths:
+  - "L0_FLASH"
+  - "L1_EXECUTIVE"
+  - "L2_SUPPORT"
+  - "L3_AUDIT"
+
+semantic_type_enum:
+  - "COVERAGE"
+  - "FACT"
+  - "EVIDENCE"
+  - "DIAGNOSIS"
+  - "CONFLICT"
+  - "OPEN_QUESTION"
+  - "SOURCE_HEALTH"
+  - "LIMITATION"
+  - "ABSTENTION"
+  - "INTERPRETATION_KNOWN"
+  - "INTERPRETATION_INFERRED"
+  - "INTERPRETATION_NOT_CONCLUDED"
+  - "HYPOTHESIS"
+  - "RECOMMENDATION"
+  - "NEXT_VERIFICATION"
+  - "DECISION_OPTION"
+  - "CLARIFICATION_REQUEST"
+  - "AUDIT_REFERENCE"
+
+content_class_enum:
+  - "IRRENUNCIABLE"
+  - "OBLIGATORIO_RESUMIBLE"
+  - "DIFERIBLE_BAJO_DEMANDA"
+  - "ESPECIFICO_DE_CANAL"
+
+priority_enum:
+  - "P0_CRITICAL"
+  - "P1_HIGH"
+  - "P2_NORMAL"
+  - "P3_DETAIL"
+
+content_class_precedence:
+  - "IRRENUNCIABLE"
+  - "OBLIGATORIO_RESUMIBLE"
+  - "DIFERIBLE_BAJO_DEMANDA"
+  - "ESPECIFICO_DE_CANAL"
+
+projection_model_root:
+  required_fields:
+    - "projection_id"
+    - "ies_id"
+    - "ies_version"
+    - "reasoning_run_id"
+    - "channel"
+    - "projection_depth"
+    - "items"
+    - "critical_invariants"
+    - "deferred_items"
+    - "limitations"
+    - "audit"
+
+projection_item:
+  required_fields:
+    - "item_id"
+    - "source_type"
+    - "source_id"
+    - "semantic_type"
+    - "content_class"
+    - "priority"
+    - "statement_or_reference"
+    - "supporting_references"
+    - "must_preserve"
+    - "may_summarize"
+    - "may_defer"
+
+channel_output_root:
+  required_fields:
+    - "projection_id"
+    - "channel"
+    - "projection_depth"
+    - "ies_id"
+    - "reasoning_run_id"
+    - "content_blocks"
+    - "deferred_content"
+    - "critical_invariants"
+    - "limitations"
+    - "audit"
+
+deterministic_content_class_mapping:
+  NO_KNOWLEDGE: "IRRENUNCIABLE"
+  TYPE_E_CONFLICT: "IRRENUNCIABLE"
+  BLOCKING_LIMITATION: "IRRENUNCIABLE"
+  CRITICAL_CONTRADICTION: "IRRENUNCIABLE"
+  DIAGNOSIS: "OBLIGATORIO_RESUMIBLE"
+  PRIMARY_EVIDENCE: "OBLIGATORIO_RESUMIBLE"
+  LEGITIMATE_HYPOTHESIS: "OBLIGATORIO_RESUMIBLE"
+  RECOMMENDATION: "OBLIGATORIO_RESUMIBLE"
+  FACT_DETAIL: "DIFERIBLE_BAJO_DEMANDA"
+  EVIDENCE_DETAIL: "DIFERIBLE_BAJO_DEMANDA"
+  AUDIT_REFERENCE: "DIFERIBLE_BAJO_DEMANDA"
+  PRESENTATION_FORMAT: "ESPECIFICO_DE_CANAL"
+
+priority_rules:
+  - "IRRENUNCIABLE -> P0_CRITICAL"
+  - "OBLIGATORIO_RESUMIBLE -> P1_HIGH por defecto"
+  - "DIFERIBLE_BAJO_DEMANDA -> P3_DETAIL por defecto"
+  - "priority es exposición, no materiality"
+  - "priority no es severity"
+  - "priority no es confidence"
+  - "priority no es hypothesis_strength"
+  - "no inventar ranking empresarial"
+
+depth_policy:
+
+  L0_FLASH:
+    required:
+      - "todo IRRENUNCIABLE"
+      - "conclusión esencial disponible"
+    conditional:
+      - "máximo 1 recommendation legítima"
+    defer:
+      - "detalle técnico"
+      - "evidencia ampliada"
+      - "audit trail"
+
+  L1_EXECUTIVE:
+    required:
+      - "todo IRRENUNCIABLE"
+      - "OBLIGATORIO_RESUMIBLE"
+      - "recommendations legítimas"
+      - "abstentions relevantes"
+    defer:
+      - "detalle técnico/audit"
+
+  L2_SUPPORT:
+    required:
+      - "todo L1"
+      - "facts de soporte"
+      - "evidence de soporte"
+      - "open questions"
+      - "source health relevante"
+
+  L3_AUDIT:
+    required:
+      - "todo lo proyectable"
+      - "references"
+      - "audit"
       - "deferred_items"
-      - "limitations"
-      - "audit"
+      - "lineage permitido disponible"
 
-    item_fields:
-      - "item_id"
-      - "source_type"
-      - "source_id"
-      - "semantic_type"
-      - "content_class"
-      - "priority"
-      - "statement_or_reference"
-      - "supporting_references"
-      - "must_preserve"
-      - "may_summarize"
-      - "may_defer"
+critical_equivalence_checks:
+  - "NO_KNOWLEDGE preservado"
+  - "Tipo E preservado"
+  - "blocking limitations preservadas"
+  - "critical contradictions preservadas"
+  - "abstentions relevantes preservadas"
+  - "Recommendation no cambia a acción ejecutada"
+  - "Decision Option conserva NOT_EXECUTED"
+  - "IRRENUNCIABLE no puede quedar deferred"
 
-  D3_semantic_type_catalog:
-    decision: "SEMANTIC_TYPE_CATALOG_V1"
-    enum:
-      - "COVERAGE"
-      - "FACT"
-      - "EVIDENCE"
-      - "DIAGNOSIS"
-      - "CONFLICT"
-      - "OPEN_QUESTION"
-      - "SOURCE_HEALTH"
-      - "LIMITATION"
-      - "ABSTENTION"
-      - "INTERPRETATION_KNOWN"
-      - "INTERPRETATION_INFERRED"
-      - "INTERPRETATION_NOT_CONCLUDED"
-      - "HYPOTHESIS"
-      - "RECOMMENDATION"
-      - "NEXT_VERIFICATION"
-      - "DECISION_OPTION"
-      - "CLARIFICATION_REQUEST"
-      - "AUDIT_REFERENCE"
+optional_reasoning_rules:
+  - "sin Reasoning Result -> proyectar únicamente IES"
+  - "RE abstuvo -> proyectar abstention/limits si existen"
+  - "no fabricar hypotheses/recommendations"
+  - "ausencia de N5 no es error"
 
-    rule: >
-      semantic_type describe el tipo ya existente en IES/RE. No crea nivel
-      epistemológico ni nueva semántica.
+progressive_disclosure_rules:
+  - "solo DIFERIBLE_BAJO_DEMANDA puede ocultarse inicialmente"
+  - "IRRENUNCIABLE jamás detrás de drill-down/click/dime más/anexo"
+  - "contenido diferido debe permanecer referenciado"
+  - "canal sin mecanismo de disclosure declara limitación"
 
-  D4_content_class_mapping:
-    decision: "DETERMINISTIC_CONTENT_CLASS_MAPPING_V1"
-    mapping:
-      NO_KNOWLEDGE: "IRRENUNCIABLE"
-      TYPE_E_CONFLICT: "IRRENUNCIABLE"
-      BLOCKING_LIMITATION: "IRRENUNCIABLE"
-      CRITICAL_CONTRADICTION: "IRRENUNCIABLE"
-      DIAGNOSIS: "OBLIGATORIO_RESUMIBLE"
-      PRIMARY_EVIDENCE: "OBLIGATORIO_RESUMIBLE"
-      LEGITIMATE_HYPOTHESIS: "OBLIGATORIO_RESUMIBLE"
-      RECOMMENDATION: "OBLIGATORIO_RESUMIBLE"
-      FACT_DETAIL: "DIFERIBLE_BAJO_DEMANDA"
-      EVIDENCE_DETAIL: "DIFERIBLE_BAJO_DEMANDA"
-      AUDIT_REFERENCE: "DIFERIBLE_BAJO_DEMANDA"
-      PRESENTATION_FORMAT: "ESPECIFICO_DE_CANAL"
+channel_policies:
 
-    rule: >
-      Si un item cae en más de una categoría, prevalece la clase más estricta:
-      IRRENUNCIABLE > OBLIGATORIO_RESUMIBLE > DIFERIBLE_BAJO_DEMANDA >
-      ESPECIFICO_DE_CANAL.
+  CHAT:
+    - "tono natural y directo"
+    - "párrafos cortos permitidos"
+    - "puede ofrecer profundización"
+    - "IRRENUNCIABLE visible"
+    - "separación hecho/inferencia/límite"
+    - "no finge emociones ni experiencias"
 
-  D5_priority:
-    decision: "PRESENTATION_PRIORITY_V1"
-    enum:
-      - "P0_CRITICAL"
-      - "P1_HIGH"
-      - "P2_NORMAL"
-      - "P3_DETAIL"
+  VOICE:
+    - "secuencia lineal"
+    - "baja densidad"
+    - "IRRENUNCIABLE primero"
+    - "detalle diferible resumido"
+    - "si no puede expresarse fielmente -> limitación"
 
-    rules:
-      - "priority es solo de exposición"
-      - "no equivale a materiality"
-      - "no equivale a severity"
-      - "no equivale a confidence"
-      - "no equivale a hypothesis_strength"
-      - "IRRENUNCIABLE -> P0_CRITICAL"
-      - "OBLIGATORIO_RESUMIBLE -> P1_HIGH por defecto"
-      - "DIFERIBLE_BAJO_DEMANDA -> P3_DETAIL por defecto"
-      - "el runtime no inventa prioridad empresarial nueva"
+  WHATSAPP:
+    - "mensajes compactos"
+    - "IRRENUNCIABLE en primer bloque"
+    - "fragmentación permitida"
+    - "detalle diferible bajo demanda"
+    - "no prometer acciones no ejecutadas"
+    - "no ocultar abstention"
 
-  D6_projection_depth:
-    decision: "PROJECTION_DEPTH_POLICY_V1"
+  DASHBOARD:
+    - "alta densidad"
+    - "IRRENUNCIABLE visible sin drill-down"
+    - "detalle diferible puede ir a drill-down"
+    - "mismo ies_id/reasoning_run_id"
+    - "visualización no altera semántica"
 
-    L0_FLASH:
-      include:
-        - "todo IRRENUNCIABLE"
-        - "conclusión esencial disponible"
-        - "máximo 1 recommendation si existe legítimamente"
-      defer:
-        - "detalle técnico"
-        - "evidencia ampliada"
-        - "audit trail"
-      prohibition:
-        - "no omitir IRRENUNCIABLE"
+  REPORT:
+    - "representación persistente"
+    - "audit/reference suficiente"
+    - "L2/L3 preferentes"
+    - "no elimina contradicciones/límites"
 
-    L1_EXECUTIVE:
-      include:
-        - "todo IRRENUNCIABLE"
-        - "OBLIGATORIO_RESUMIBLE"
-        - "recommendations legítimas"
-        - "abstentions relevantes"
-      defer:
-        - "detalle auditivo/técnico"
+  PRESENTATION:
+    - "secuencia guiada"
+    - "IRRENUNCIABLE antes de recommendation"
+    - "Decision Option no se presenta como decisión tomada"
+    - "detalle técnico resumible"
 
-    L2_SUPPORT:
-      include:
-        - "todo L1"
-        - "hechos/evidencia de soporte"
-        - "open questions"
-        - "source health relevante"
+tone_rules:
+  allowed:
+    - "cortesía"
+    - "claridad"
+    - "naturalidad"
+    - "transiciones conversacionales"
+    - "preguntas de seguimiento"
+  forbidden:
+    - "simular certeza inexistente"
+    - "prometer resultados no soportados"
+    - "fingir emoción/experiencia propia"
+    - "convertir hypothesis en fact"
+    - "suavizar NO_KNOWLEDGE"
+    - "reformular abstention como seguridad"
 
-    L3_AUDIT:
-      include:
-        - "todo lo proyectable"
-        - "references"
-        - "audit"
-        - "deferred_items"
-        - "lineage disponible permitido"
+neutral_rendering_rules:
+  - "sin LLM"
+  - "sin templates provider-specific"
+  - "representación determinística"
+  - "content_blocks derivados de Projection Model"
+  - "no semántica nueva"
+  - "mismo input + misma policy -> misma estructura"
 
-  D7_critical_equivalence:
-    decision: "CRITICAL_EQUIVALENCE_VALIDATION_V1"
-    meaning: >
-      Antes de emitir una proyección, el runtime compara IES/Reasoning Result
-      con Projection Model y verifica que todos los elementos IRRENUNCIABLE
-      estén presentes y semánticamente intactos.
+fixture_requirements:
+  - "chat-no-knowledge.json"
+  - "whatsapp-type-e.json"
+  - "voice-abstention.json"
+  - "dashboard-supported-reasoning.json"
+  - "report-audit.json"
+  - "presentation-decision-option.json"
 
-    checks:
-      - "NO_KNOWLEDGE preservado"
-      - "Tipo E preservado"
-      - "blocking limitations preservadas"
-      - "critical contradictions preservadas"
-      - "abstentions relevantes preservadas"
-      - "recommendations no presentadas como decisiones ejecutadas"
-      - "Decision Option conserva NOT_EXECUTED"
+fixture_rules:
+  - "todos sintéticos"
+  - "sin datos institucionales"
+  - "sin LLM"
+  - "sin networking"
+  - "sin templates productivos"
+  - "pueden reutilizar IES/Reasoning fixtures como source"
+  - "no introducen N1-N5 nuevo"
 
-  D8_optional_reasoning:
-    decision: "OPTIONAL_REASONING_NO_FILL_V1"
-    meaning: >
-      Si Reasoning Result no existe, 06 proyecta solo IES.
-      Si RE se abstuvo, 06 puede proyectar abstention/limits, pero no fabrica N5.
-      Ausencia de N5 nunca se interpreta como error de Projection.
-
-  D9_progressive_disclosure:
-    decision: "SAFE_PROGRESSIVE_DISCLOSURE_V1"
-    meaning: >
-      Solo DIFERIBLE_BAJO_DEMANDA puede ocultarse inicialmente.
-      IRRENUNCIABLE nunca queda detrás de click, drill-down, 'dime más' o anexo.
-
-  D10_channel_policy_registry:
-    decision: "CHANNEL_POLICY_REGISTRY_V1"
-    meaning: >
-      Las seis superficies se implementan como políticas sobre el mismo
-      Projection Model. No son pipelines independientes.
-
-    channels:
-      - "CHAT"
-      - "VOICE"
-      - "WHATSAPP"
-      - "DASHBOARD"
-      - "REPORT"
-      - "PRESENTATION"
-
-  D11_chat_policy:
-    decision: "CHAT_POLICY_V1"
-    rules:
-      - "tono natural y directo"
-      - "puede usar párrafos cortos"
-      - "puede ofrecer profundización"
-      - "no omite IRRENUNCIABLE"
-      - "separación visible entre hecho/inferencia/límite"
-      - "no finge emociones ni experiencias propias"
-
-  D12_voice_policy:
-    decision: "VOICE_POLICY_V1"
-    rules:
-      - "secuencia lineal"
-      - "baja densidad"
-      - "IRRENUNCIABLE primero"
-      - "detalle diferible se resume y ofrece bajo demanda"
-      - "si algo no puede expresarse fielmente, declarar limitación"
-
-  D13_whatsapp_policy:
-    decision: "WHATSAPP_POLICY_V1"
-    rules:
-      - "mensajes compactos"
-      - "IRRENUNCIABLE visible en primer bloque"
-      - "puede fragmentar en varios mensajes"
-      - "detalle diferible se ofrece bajo demanda"
-      - "no prometer acciones no ejecutadas"
-      - "no ocultar abstention"
-
-  D14_dashboard_policy:
-    decision: "DASHBOARD_POLICY_V1"
-    rules:
-      - "alta densidad"
-      - "IRRENUNCIABLE visible sin drill-down"
-      - "detalle DIFERIBLE puede ir a drill-down"
-      - "mismo ies_id/reasoning_run_id"
-      - "visualización no altera semántica"
-
-  D15_report_policy:
-    decision: "REPORT_POLICY_V1"
-    rules:
-      - "representación persistente"
-      - "incluye audit/reference suficiente"
-      - "L2/L3 preferentes"
-      - "no elimina contradicciones o límites"
-
-  D16_presentation_policy:
-    decision: "PRESENTATION_POLICY_V1"
-    rules:
-      - "secuencia guiada"
-      - "IRRENUNCIABLE aparece antes de recomendación"
-      - "Decision Option no se presenta como decisión tomada"
-      - "puede resumir detalle técnico"
-
-  D17_rendering_boundary:
-    decision: "DETERMINISTIC_PROJECTION_FIRST_V1"
-    meaning: >
-      IMPL-CHANNEL-PROJECTION-001 inicial construye Projection Model y una
-      representación neutral/determinística por canal sin LLM de redacción.
-      Un renderer LLM conversacional puede evaluarse en tarea posterior,
-      subordinado al Projection Model y sin autoridad epistemológica.
-
-  D18_output_shape:
-    decision: "CHANNEL_OUTPUT_ENVELOPE_V1"
-    fields:
-      - "projection_id"
-      - "channel"
-      - "projection_depth"
-      - "ies_id"
-      - "reasoning_run_id"
-      - "content_blocks"
-      - "deferred_content"
-      - "critical_invariants"
-      - "limitations"
-      - "audit"
-
-    rule: >
-      content_blocks son representación de Projection Model. No contienen
-      semántica nueva.
-
-  D19_tone_boundary:
-    decision: "TONE_IS_PRESENTATION_ONLY_V1"
-    meaning: >
-      Tono puede ser claro, cálido, conversacional o ejecutivo según canal,
-      siempre que no cambie certeza, causalidad, límites, ausencia, conflictos,
-      recommendations o estado de ejecución.
-
-    allowed:
-      - "cortesía"
-      - "claridad"
-      - "naturalidad"
-      - "transiciones conversacionales"
-      - "preguntas de seguimiento"
-    forbidden:
-      - "simular certeza inexistente"
-      - "prometer resultados no soportados"
-      - "fingir emoción/experiencia propia"
-      - "convertir hypothesis en fact"
-      - "suavizar NO_KNOWLEDGE"
-
-  D20_first_runtime_scope:
-    decision: "PROJECTION_MODEL_PLUS_NEUTRAL_RENDER_V1"
-    meaning: >
-      Primera implementación puede ser totalmente in-memory y determinística,
-      con policies puras y fixtures sintéticos, sin integración real de canal.
-
-human_approval_scope:
-  approve_exactly:
-    - "D1_runtime_interface"
-    - "D2_projection_model_schema"
-    - "D3_semantic_type_catalog"
-    - "D4_content_class_mapping"
-    - "D5_priority"
-    - "D6_projection_depth"
-    - "D7_critical_equivalence"
-    - "D8_optional_reasoning"
-    - "D9_progressive_disclosure"
-    - "D10_channel_policy_registry"
-    - "D11_chat_policy"
-    - "D12_voice_policy"
-    - "D13_whatsapp_policy"
-    - "D14_dashboard_policy"
-    - "D15_report_policy"
-    - "D16_presentation_policy"
-    - "D17_rendering_boundary"
-    - "D18_output_shape"
-    - "D19_tone_boundary"
-    - "D20_first_runtime_scope"
-
-g2_contract_changes_authorized_if_approved:
-  docs/director-ia/06-CHANNEL-PROJECTION.md:
-    allowed:
-      - "registrar realización física D1-D20"
-      - "congelar Projection Model v1"
-      - "congelar semantic_type catalog"
-      - "congelar presentation priority"
-      - "congelar L0-L3 physical policy"
-      - "congelar channel policy registry"
-      - "congelar critical equivalence validation"
-      - "congelar neutral first-runtime scope"
-      - "aclarar tone boundary"
-
-    forbidden:
-      - "modificar IES"
-      - "modificar RE"
-      - "crear N6"
-      - "crear semántica nueva"
-      - "autorizar LLM renderer productivo"
-      - "crear memoria conversacional"
-      - "cambiar coverage/materiality/conflicts"
-      - "crear tool execution"
-
-required_report:
-  - "D1-D20 registradas"
-  - "diff contractual exacto"
-  - "confirmación N1-N5 intactos"
-  - "confirmación IES/RE intactos"
-  - "Projection Model final"
-  - "semantic_type final"
-  - "priority final"
-  - "L0-L3 final"
-  - "channel policies final"
-  - "critical equivalence checks"
-  - "tone boundary"
-  - "gaps diferidos"
-  - "GO/NO-GO para IMPL-CHANNEL-PROJECTION-001"
+tests_required:
+  - "factory expone project"
+  - "dependencias inyectadas obligatorias"
+  - "channel inválido falla"
+  - "projectionDepth inválido falla"
+  - "IES obligatorio"
+  - "Reasoning Result opcional"
+  - "sin Reasoning Result no se fabrica N5"
+  - "Projection Model root completo"
+  - "Projection Item shape completo"
+  - "semantic_type solo enum autorizado"
+  - "content_class solo enum autorizado"
+  - "priority solo enum autorizado"
+  - "NO_KNOWLEDGE -> IRRENUNCIABLE/P0"
+  - "Tipo E -> IRRENUNCIABLE/P0"
+  - "blocking limitation -> IRRENUNCIABLE/P0"
+  - "IRRENUNCIABLE prevalece sobre otras clases"
+  - "L0 conserva todo IRRENUNCIABLE"
+  - "L1 conserva OBLIGATORIO_RESUMIBLE"
+  - "L2 añade soporte"
+  - "L3 conserva audit/deferred"
+  - "IRRENUNCIABLE nunca deferred"
+  - "critical equivalence detecta omisión"
+  - "abstention de RE permanece visible"
+  - "Decision Option conserva NOT_EXECUTED"
+  - "Recommendation no se marca ejecutada"
+  - "CHAT policy determinística"
+  - "VOICE policy determinística"
+  - "WHATSAPP policy determinística"
+  - "DASHBOARD policy determinística"
+  - "REPORT policy determinística"
+  - "PRESENTATION policy determinística"
+  - "tone no altera statement/reference"
+  - "input IES no mutado"
+  - "input Reasoning Result no mutado"
+  - "runtime no importa LLM/provider SDK"
+  - "runtime no contiene networking/tool calls"
+  - "mismo input/policy produce misma estructura salvo IDs/timestamps inyectados"
+  - "tests IES/RE/OP/EB/EKS/integración continúan pasando"
 
 acceptance_criteria:
-  - "Projection Model queda serializable"
-  - "semantic_type queda cerrado"
-  - "priority queda de presentación, no epistemológica"
-  - "L0-L3 queda implementable"
-  - "IRRENUNCIABLE nunca omitible"
-  - "Reasoning opcional no se rellena"
+  - "lib/director-ia-channel-projection.js creado"
+  - "test/director-ia-channel-projection.test.js creado"
+  - "fixtures channel projection creados"
+  - "factory pura implementada"
+  - "Projection Model serializado implementado"
+  - "Channel Output Envelope implementado"
+  - "semantic_type cerrado"
+  - "content_class determinístico"
+  - "priority exclusivamente presentación"
+  - "L0-L3 implementados"
+  - "critical equivalence fail-closed"
+  - "Reasoning opcional sin relleno"
   - "progressive disclosure seguro"
-  - "seis políticas de canal definidas"
-  - "tone boundary definido"
-  - "first runtime determinístico sin LLM"
-  - "06 es único contrato modificable"
-  - "04/05 no se modifican"
-  - "N1-N5 no cambian"
-  - "sin runtime"
-  - "sin tests/fixtures"
-  - "sin memoria conversacional"
-  - "sin G8"
+  - "seis policies implementadas"
+  - "neutral renderer determinístico"
+  - "sin LLM"
+  - "sin networking"
+  - "sin integración real de canal"
+  - "sin memoria/WhoAmI/small talk"
+  - "N1-N5 intactos"
+  - "IES/RE no mutados"
+  - "ningún docs/director-ia modificado"
+  - "server.js no modificado"
+  - "package.json no modificado"
+  - "tests nuevos pasan"
+  - "tests existentes pasan"
   - "git diff --check sin errores"
   - "reporte obligatorio creado"
-  - "IMPL-CHANNEL-PROJECTION-001 no se crea"
 
 allowed_actions:
   - "leer contracts_in_force"
-  - "leer auditoría 001"
-  - "comparar D1-D20 con contratos superiores"
-  - "si G1+G2 autorizados, modificar únicamente 06-CHANNEL-PROJECTION.md"
-  - "crear docs/dev-loop/reports/ARCH-CHANNEL-PROJECTION-PHYSICAL-DECISIONS-002.md"
-  - "actualizar CURRENT_TASK mediante transiciones permitidas"
+  - "leer IES/RE runtimes, tests y fixtures"
+  - "crear lib/director-ia-channel-projection.js"
+  - "crear test/director-ia-channel-projection.test.js"
+  - "crear fixtures/director-ia/channel-projection/"
+  - "crear docs/dev-loop/reports/IMPL-CHANNEL-PROJECTION-001.md"
+  - "ejecutar tests nuevos"
+  - "ejecutar regresión IES/RE/OP/EB/EKS/integración"
   - "ejecutar git diff --check"
+  - "actualizar CURRENT_TASK mediante transiciones permitidas"
 
 forbidden_actions:
-  - "modificar contratos fuera de 06"
-  - "implementar runtime"
-  - "crear tests/fixtures"
-  - "crear renderer LLM"
-  - "crear memory/WhoAmI/small talk"
+  - "modificar docs/director-ia/"
   - "modificar IES/RE/OP/EB/EKS"
   - "modificar server.js"
   - "modificar package.json"
-  - "autoaprobar G1/G2"
-  - "crear IMPL-CHANNEL-PROJECTION-001"
+  - "usar LLM"
+  - "usar provider SDK"
+  - "usar network"
+  - "usar tools"
+  - "crear templates/SSML/widgets productivos"
+  - "integrar canales reales"
+  - "crear memory/WhoAmI/small talk"
+  - "crear N6"
+  - "recalcular epistemología"
   - "commit"
   - "push"
   - "merge"
   - "encadenar siguiente tarea"
+  - "autoaprobar gates"
 
 expected_terminal_state: >
-  DONE_PENDING_REVIEW si D1-D20 pueden registrarse en 06 sin contradicción
-  constitucional ni creación de autoridad epistemológica nueva.
-  BLOCKED o STOPPED si alguna decisión exige modificar 04/05/Constitución,
-  crear N6, introducir semántica nueva o autorizar LLM renderer productivo.
+  DONE_PENDING_REVIEW si Channel Projection v1 puede implementarse como
+  Projection Model + neutral render determinístico, manteniendo equivalencia
+  crítica y sin modificar contratos.
+  BLOCKED o STOPPED si completar el runtime exige LLM renderer, integración
+  real de canal, nueva semántica o cambio contractual.
 
 max_attempts: 1
-result_report_path: "docs/dev-loop/reports/ARCH-CHANNEL-PROJECTION-PHYSICAL-DECISIONS-002.md"
+result_report_path: "docs/dev-loop/reports/IMPL-CHANNEL-PROJECTION-001.md"
