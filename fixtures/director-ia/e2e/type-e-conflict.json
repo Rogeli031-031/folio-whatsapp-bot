@@ -1,0 +1,91 @@
+{
+  "meta": {
+    "figures": "ILUSTRATIVAS / FICTICIAS",
+    "not_institutional_coverage": true,
+    "note": "Dos observaciones ACQUIRED_OK con valores distintos. EB assemble vigente tipifica Tipo A OPEN, no Tipo E. Este E2E no fabrica Tipo E. Overlay tipo_e es solo para demostrar IES→RE→CP si el Bundle ya declara E; no es salida de assemble ni N3 productiva."
+  },
+  "channel": "DASHBOARD",
+  "projectionDepth": "L1_EXECUTIVE",
+  "session": {},
+  "queryContextMetadata": {
+    "executive_query_id": "eq_e2e_typee",
+    "trace_id": "tr_e2e_typee",
+    "original_question": "¿Hay conflicto ilustrativo de valores?",
+    "intent": "governance_check",
+    "requesting_user_id": "user_ilustrativo",
+    "requesting_role": "director",
+    "channel": "dashboard",
+    "resolved_entities": [],
+    "permission_restrictions": [],
+    "knowledge_effective_date": "2026-08-17T00:00:00.000Z"
+  },
+  "executionEnvelope": {
+    "trace_id": "tr_e2e_typee",
+    "bundle_id": "kb_e2e_typee",
+    "produced_at": "2026-08-17T13:43:53.000Z",
+    "question": "¿Hay conflicto ilustrativo de valores?",
+    "plan": { "intent": "governance_check" },
+    "tool_plan": { "tools": ["tool_a", "tool_b"] },
+    "execution_results": [
+      {
+        "trace_id": "tr_e2e_typee",
+        "tool_id": "tool_a",
+        "domain": "dom_a",
+        "status": "ACQUIRED_OK",
+        "execution_id": "ex_e2e_typee_a",
+        "extracted_by": "tool_a",
+        "triggered_by": "usuario_ilustrativo",
+        "extracted_at": "2026-08-17T13:43:53.000Z",
+        "scope_complete": true,
+        "source": {
+          "system": "sys_a",
+          "source_family": "fam_a",
+          "source_instance_id": "a:ex_e2e_typee_a",
+          "content_author_id": "author_a_ilustrativo"
+        },
+        "subject": { "entity_type": "planta", "entity_id": "puebla", "entity_label": "Puebla" },
+        "entity_resolution": { "state": "RESOLVED", "original_value": "Puebla", "candidates": [] },
+        "raw_payload_reference": "raw://tr_e2e_typee/tool_a/ex_e2e_typee_a/0",
+        "payload": { "metric_or_event": "venta_t", "value": 95.0, "unit": "t", "period": "mes_B_ilustrativo" }
+      },
+      {
+        "trace_id": "tr_e2e_typee",
+        "tool_id": "tool_b",
+        "domain": "dom_b",
+        "status": "ACQUIRED_OK",
+        "execution_id": "ex_e2e_typee_b",
+        "extracted_by": "tool_b",
+        "triggered_by": "usuario_ilustrativo",
+        "extracted_at": "2026-08-17T13:43:53.000Z",
+        "scope_complete": true,
+        "source": {
+          "system": "sys_b",
+          "source_family": "fam_b",
+          "source_instance_id": "b:ex_e2e_typee_b",
+          "content_author_id": "author_b_ilustrativo"
+        },
+        "subject": { "entity_type": "planta", "entity_id": "puebla", "entity_label": "Puebla" },
+        "entity_resolution": { "state": "RESOLVED", "original_value": "Puebla", "candidates": [] },
+        "raw_payload_reference": "raw://tr_e2e_typee/tool_b/ex_e2e_typee_b/0",
+        "payload": { "metric_or_event": "venta_t", "value": 120.0, "unit": "t", "period": "mes_B_ilustrativo" }
+      }
+    ]
+  },
+  "tipo_e_bundle_overlay": {
+    "not_from_assemble": true,
+    "not_productive_n3": true,
+    "conflict": {
+      "conflict_id": "c_e2e_tipo_e_overlay",
+      "primary_type": "E",
+      "secondary_types": [],
+      "facts_in_tension": [],
+      "weight_assessment": null,
+      "resolution_status": "OPEN",
+      "applied_resolution_rule_id": null,
+      "resolution_supporting_fact_ids": [],
+      "resolution_supporting_evidence_ids": [],
+      "interpretation_constraint": "no_resolve_by_weight",
+      "governance_escalation": true
+    }
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "meta": {
+    "figures": "ILUSTRATIVAS / FICTICIAS",
+    "not_institutional_coverage": true,
+    "note": "SOURCE_NOT_INTEGRATED. No afirma inexistencia de negocio. Limitación visible."
+  },
+  "channel": "WHATSAPP",
+  "projectionDepth": "L1_EXECUTIVE",
+  "session": {},
+  "queryContextMetadata": {
+    "executive_query_id": "eq_e2e_sni",
+    "trace_id": "tr_e2e_sni",
+    "original_question": "¿Cuál es el estatus de folio ilustrativo?",
+    "intent": "folio_status",
+    "requesting_user_id": "user_ilustrativo",
+    "requesting_role": "director",
+    "channel": "whatsapp",
+    "resolved_entities": [],
+    "permission_restrictions": [],
+    "knowledge_effective_date": "2026-08-17T00:00:00.000Z"
+  },
+  "executionEnvelope": {
+    "trace_id": "tr_e2e_sni",
+    "bundle_id": "kb_e2e_sni",
+    "produced_at": "2026-08-17T13:43:53.000Z",
+    "question": "¿Cuál es el estatus de folio ilustrativo?",
+    "plan": { "intent": "folio_status" },
+    "tool_plan": { "tools": ["get_folio_status"] },
+    "execution_results": [
+      {
+        "trace_id": "tr_e2e_sni",
+        "tool_id": "get_folio_status",
+        "domain": "folios",
+        "status": "SOURCE_NOT_INTEGRATED",
+        "execution_id": "ex_e2e_sni_1",
+        "extracted_by": "get_folio_status",
+        "triggered_by": "usuario_ilustrativo",
+        "source": {
+          "system": "folios",
+          "source_family": "folio_status",
+          "source_instance_id": "folios:ex_e2e_sni_1"
+        }
+      }
+    ]
+  }
+}

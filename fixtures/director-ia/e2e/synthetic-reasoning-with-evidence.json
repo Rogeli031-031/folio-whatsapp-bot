@@ -1,0 +1,74 @@
+{
+  "meta": {
+    "figures": "ILUSTRATIVAS / FICTICIAS",
+    "not_institutional_coverage": true,
+    "note": "Envelope ACQUIRED_OK real (evidence[] vacío vía EB). synthetic_evidence y synthetic_candidate SON SOLO para demostrar frontera RE/CP. No declaran N3 productiva del Evidence Builder."
+  },
+  "channel": "REPORT",
+  "projectionDepth": "L2_SUPPORT",
+  "session": {},
+  "queryContextMetadata": {
+    "executive_query_id": "eq_e2e_syn",
+    "trace_id": "tr_e2e_syn",
+    "original_question": "Pregunta ilustrativa con evidencia sintética de frontera",
+    "intent": "validator_only",
+    "requesting_user_id": "user_ilustrativo",
+    "requesting_role": "director",
+    "channel": "report",
+    "resolved_entities": [],
+    "permission_restrictions": [],
+    "knowledge_effective_date": "2026-08-17T00:00:00.000Z",
+    "plant_or_scope": "Puebla",
+    "period": "mes_B_ilustrativo"
+  },
+  "executionEnvelope": {
+    "trace_id": "tr_e2e_syn",
+    "bundle_id": "kb_e2e_syn",
+    "produced_at": "2026-08-17T13:43:53.000Z",
+    "question": "Pregunta ilustrativa con evidencia sintética de frontera",
+    "plan": { "intent": "validator_only", "domains": ["arr"] },
+    "tool_plan": { "tools": ["get_arr_snapshot"] },
+    "execution_results": [
+      {
+        "trace_id": "tr_e2e_syn",
+        "tool_id": "get_arr_snapshot",
+        "domain": "arr",
+        "status": "ACQUIRED_OK",
+        "execution_id": "ex_e2e_syn_1",
+        "extracted_by": "get_arr_snapshot",
+        "triggered_by": "usuario_ilustrativo",
+        "extracted_at": "2026-08-17T13:43:53.000Z",
+        "scope_complete": true,
+        "source": {
+          "system": "arr",
+          "source_family": "arr_snapshot",
+          "source_instance_id": "arr:puebla:ex_e2e_syn_1",
+          "content_author_id": null
+        },
+        "subject": { "entity_type": "planta", "entity_id": "puebla", "entity_label": "Puebla" },
+        "entity_resolution": { "state": "RESOLVED", "original_value": "Puebla", "candidates": [] },
+        "raw_payload_reference": "raw://tr_e2e_syn/get_arr_snapshot/ex_e2e_syn_1/0",
+        "payload": { "metric_or_event": "venta_t", "value": 50.0, "unit": "t", "period": "mes_B_ilustrativo" }
+      }
+    ]
+  },
+  "synthetic_evidence_not_productive": true,
+  "synthetic_evidence": [
+    {
+      "evidence_id": "ev_e2e_syn_1",
+      "supporting_fact_ids": ["PLACEHOLDER_FACT_ID"],
+      "statement_token": "synthetic_evidence_validator_only",
+      "causal_status": "NON_CAUSAL",
+      "materiality": "MATERIALITY_NOT_ASSESSED"
+    }
+  ],
+  "synthetic_candidate": {
+    "hypothesis_id": "hyp_e2e_syn_1",
+    "statement": "hipótesis ilustrativa subordinada",
+    "statement_language": "es-MX",
+    "hypothesis_strength": "HYP_STRENGTH_MODERATE",
+    "recommendation_id": "rec_e2e_syn_1",
+    "recommendation_statement": "recomendación ilustrativa condicionada",
+    "conditions": ["si_el_soporte_se_mantiene"]
+  }
+}
