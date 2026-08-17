@@ -12,73 +12,78 @@ Esto no es G1. `DRAFT` no es ejecutable.
 ---
 
 ```yaml
-task_id: "ARCH-EVIDENCE-N3-PHYSICAL-DECISIONS-001"
+task_id: "ARCH-EVIDENCE-N3-RULES-PHYSICAL-DECISIONS-002"
 status: CLOSED
 
 authorized_by: "HUMAN_APPROVER"
-authorized_at: "2026-08-17T16:00:34-06:00"
+authorized_at: "2026-08-17T16:17:33-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-17"
 
 gates:
   G1_task_authorization: AUTHORIZED
-  G2_architecture_change: PENDING_IF_REQUIRED
+  G2_architecture_change: AUTHORIZED
   G3_new_architecture_contract: N/A
-  G8_calibration_materiality_signature: PENDING_IF_REQUIRED
+  G8_calibration_materiality_signature: N/A
 
 objective: >
-  Auditar la realizabilidad física de Evidence N3 y de la tipificación
-  determinística de conflictos A-E en el Evidence Builder vigente.
-  Determinar qué reglas N3 pueden implementarse sin G8, cuáles requieren
-  calibración/gobernanza adicional, por qué el runtime actual produce N3 vacío
-  y conflicto Tipo A por defecto, y qué decisiones humanas deben resolverse
-  antes de autorizar un futuro IMPL-EVIDENCE-N3-001.
+  Resolver y registrar contractualmente la realización física mínima de
+  Evidence N3 no causal que puede implementarse sin G8, conforme a la auditoría
+  ARCH-EVIDENCE-N3-PHYSICAL-DECISIONS-001. Congelar interfaz de evidence rules,
+  identidad/versionado de reglas, contrato físico de Evidence N3, regla
+  determinística inicial de contradicción y frontera explícita respecto de
+  causalidad, thresholds, severity, materiality y clasificación B/C/D/E,
+  sin implementar runtime en esta tarea.
 
 in_scope:
   - "docs/dev-loop/CURRENT_TASK.md"
-  - "docs/dev-loop/reports/ARCH-EVIDENCE-N3-PHYSICAL-DECISIONS-001.md"
+  - "docs/dev-loop/reports/ARCH-EVIDENCE-N3-PHYSICAL-DECISIONS-001.md (solo lectura)"
+  - "docs/dev-loop/reports/ARCH-EVIDENCE-N3-RULES-PHYSICAL-DECISIONS-002.md"
 
   - "docs/director-ia/DIRECTOR_IA_CONSTITUTION.md (solo lectura)"
   - "docs/director-ia/DIRECTOR_IA_EXECUTIVE_KNOWLEDGE_ENGINE.md (solo lectura)"
-  - "docs/director-ia/02-EVIDENCE-BUILDER.md (solo lectura)"
+  - "docs/director-ia/02-EVIDENCE-BUILDER.md"
   - "docs/director-ia/03A-OBSERVATION-PIPELINE.md (solo lectura)"
   - "docs/director-ia/04-IES-STANDARD.md (solo lectura)"
   - "docs/director-ia/05-REASONING-ENGINE.md (solo lectura)"
 
   - "lib/director-ia-evidence-builder.js (solo lectura)"
   - "test/director-ia-evidence-builder.test.js (solo lectura)"
-  - "fixtures/director-ia/ (solo lectura)"
-
   - "lib/director-ia-e2e.js (solo lectura)"
   - "test/director-ia-e2e.test.js (solo lectura)"
-  - "docs/dev-loop/reports/IMPL-DIRECTOR-IA-E2E-001.md (solo lectura)"
 
 out_of_scope:
-  - "implementar N3"
-  - "modificar Evidence Builder runtime"
-  - "crear evidence rules"
-  - "crear causal rules"
-  - "crear materiality rules"
-  - "crear resolution rules"
-  - "crear tests/fixtures N3"
+  - "implementar Evidence N3"
+  - "modificar lib/director-ia-evidence-builder.js"
+  - "crear tests N3"
+  - "crear fixtures N3"
 
-  - "modificar docs/director-ia/"
-  - "modificar OP/EKS/IES/RE/CP"
-  - "modificar server.js"
-  - "modificar package.json"
+  - "definir reglas productivas de tendencia"
+  - "definir reglas productivas de desviación"
+  - "definir reglas productivas de deterioro"
+  - "definir reglas productivas de co-ocurrencia con thresholds"
+  - "crear causal rules"
+
+  - "clasificar B/C/D/E productivamente"
+  - "inventar criterio Tipo E"
+  - "forzar A -> E"
+  - "resolver conflictos"
 
   - "calibrar wi"
   - "calibrar k"
   - "calibrar Fs"
   - "calibrar materiality"
   - "calibrar severity"
-  - "fijar thresholds productivos"
+  - "definir thresholds"
+  - "activar G8"
 
-  - "inventar Tipo E"
-  - "forzar conflicto A -> E"
-  - "resolver conflictos por peso"
-  - "crear causalidad informal"
-  - "usar LLM"
-  - "usar DB/tools/fuentes"
+  - "modificar Constitución"
+  - "modificar Executive Knowledge Engine"
+  - "modificar 03A"
+  - "modificar 04"
+  - "modificar 05"
+  - "modificar otros runtimes"
+  - "modificar server.js"
+  - "modificar package.json"
 
   - "commit"
   - "push"
@@ -94,280 +99,415 @@ contracts_in_force:
   - "docs/director-ia/04-IES-STANDARD.md"
   - "docs/director-ia/05-REASONING-ENGINE.md"
 
-current_runtime_reality:
-  evidence_rule_registry: "EMPTY"
-  absence_rule_registry: "EMPTY"
-  resolution_rule_registry: "EMPTY"
-  causal_rule_registry: "EMPTY"
-  materiality_rule_registry: "EMPTY"
-  n3_runtime_behavior: "to_n3() returns [] when no evidence rules"
-  n4_runtime_behavior: "to_n4() returns [] when no evidence rules"
-  conflict_runtime_behavior: >
-    fact contradictions grouped by entity/metric/period are currently emitted
-    as primary_type=A, OPEN, governance_escalation=false.
-  end_to_end_effect:
-    - "real pipeline has no productive evidence[] N3"
-    - "Reasoning Engine therefore emits no substantive hypotheses/recommendations"
-    - "Type E only survives if already present upstream/synthetic; E2E does not fabricate it"
+audit_result_in_force:
+  source: "docs/dev-loop/reports/ARCH-EVIDENCE-N3-PHYSICAL-DECISIONS-001.md"
+  implementation_status: "NO-GO"
+  confirmed_facts:
+    - "RULE_REGISTRY.evidence_rules está vacío"
+    - "to_n3() devuelve [] de forma fail-closed"
+    - "to_n4() devuelve [] de forma fail-closed"
+    - "runtime actual tipifica contradicción simple como Tipo A"
+    - "no existen ramas físicas B/C/D/E"
+    - "Tipo E no puede inferirse de contradicción simple"
+    - "franja N3 no causal puede existir sin G8"
+    - "severity/materiality/wi/k/Fs/thresholds siguen fuera"
+    - "clasificación B/C/D/E sigue sin criterio físico congelado"
 
-contractual_constraints:
-  - "no N3 without N2"
-  - "N3 requires identifiable applied_rule"
-  - "N3 language is non-causal unless causal rule explicitly approved"
-  - "no informal probability in EB"
-  - "materiality at N3 derives/preserves from supporting facts; no free evaluation"
-  - "Type E cannot be softened or omitted"
-  - "conflict classification requires classification_criterion"
-  - "severity/impact occur after conflict typing"
-  - "RESOLVED requires new/sufficient evidence plus applied_resolution_rule_id"
-  - "weight_assessment alone never resolves"
-  - "G8 remains pending for calibrated confidence/materiality parameters"
+proposed_human_decisions:
 
-audit_questions:
+  D1_rule_registry:
+    decision: "EVIDENCE_RULE_REGISTRY_V1"
+    meaning: >
+      Evidence Builder mantiene un registry explícito, versionado y cerrado de
+      evidence rules. Una Evidence N3 solo puede existir como resultado de una
+      rule registrada.
 
-  D1_n3_rule_interface:
-    question: >
-      ¿Qué forma física mínima debe tener una evidence_rule para producir N3
-      sin inventar semántica ni causalidad?
+    minimum_rule_fields:
+      - "rule_id"
+      - "rule_version"
+      - "rule_category"
+      - "causal"
+      - "input_contract"
+      - "output_contract"
+      - "status"
 
-  D2_n3_rule_categories:
-    question: >
-      ¿Qué clases de relaciones N3 no causales están suficientemente definidas
-      por contrato para implementación determinística?
-    candidate_categories:
+    constraints:
+      - "causal=false para todas las rules de esta versión"
+      - "status debe ser ACTIVE para ejecutarse"
+      - "rule_id/version quedan persistidos en Evidence N3"
+      - "runtime no inventa rules dinámicamente"
+      - "ninguna rule depende de LLM"
+
+  D2_initial_rule_scope:
+    decision: "NON_CAUSAL_CONTRADICTION_RULE_V1_ONLY"
+    meaning: >
+      La primera implementación N3 autorizable contiene una única categoría
+      productiva: contradicción determinística entre facts comparables.
+      Tendencia, desviación, deterioro, co-ocurrencia y causalidad permanecen
+      diferidas.
+
+    allowed_category:
       - "CONTRADICTION"
+
+    deferred_categories:
       - "CO_OCCURRENCE"
       - "TREND"
       - "DEVIATION"
       - "DETERIORATION"
       - "CONSISTENCY_RELATION"
-    rule: >
-      Clasificar como CONTRACTUAL, PHYSICAL_UNKNOWN o REQUIRES_G8; no aprobar
-      categorías por mera conveniencia.
+      - "CAUSAL_RELATION"
 
-  D3_rule_input_shape:
-    question: >
-      ¿Qué campos de facts N2 puede leer una evidence_rule y qué campos debe
-      devolver obligatoriamente?
+  D3_fact_comparability:
+    decision: "FACT_COMPARABILITY_KEY_V1"
+    meaning: >
+      Dos o más facts pueden entrar a la rule de contradicción únicamente si
+      comparten el mismo scope lógico de comparación.
 
-  D4_support_requirements:
-    question: >
-      ¿Cuál es el mínimo determinístico de supporting_fact_ids y lineage para
-      emitir una Evidence N3 válida?
+    comparison_key:
+      - "entity canonical identity"
+      - "metric_or_event"
+      - "period"
 
-  D5_applied_rule_identity:
-    question: >
-      ¿Cómo versionar e identificar applied_rule sin convertir código interno
-      accidental en norma institucional?
+    required:
+      - "todos los facts tienen fact_id"
+      - "misma entidad canónica o mismo scope sin entidad cuando contractualmente permitido"
+      - "mismo metric_or_event"
+      - "mismo period"
+      - "valores comparables bajo representación existente"
 
-  D6_materiality_n3:
-    question: >
-      ¿Puede N3 simplemente propagar/derivar MATERIALITY_NOT_ASSESSED y MAT_*
-      ya evaluados sin G8, o alguna parte requiere calibración G8?
+    prohibited:
+      - "comparar periodos distintos como contradicción"
+      - "comparar métricas distintas"
+      - "comparar entidades distintas"
+      - "resolver entity ambiguity dentro de N3"
 
-  D7_confidence_n3:
-    question: >
-      ¿N3 necesita confidence propia o solo soporte/confianza de facts N2 según
-      contrato vigente?
+  D4_contradiction_condition:
+    decision: "DISTINCT_VALUE_CONTRADICTION_V1"
+    meaning: >
+      Para facts comparables, si existen dos o más valores distintos
+      representados de forma estable, se puede emitir Evidence N3 de
+      contradicción.
 
-  D8_causal_boundary:
-    question: >
-      ¿Qué evidencia N3 puede existir sin causal rules y qué debe permanecer
-      prohibido hasta aprobación explícita?
+    condition:
+      - "fact_count >= 2"
+      - "distinct_normalized_values >= 2"
 
-  D9_conflict_classifier_interface:
-    question: >
-      ¿Qué forma física mínima debe tener la tipificación A-E para reemplazar
-      el default Tipo A por clasificación determinística basada en criterio?
+    rules:
+      - "no threshold"
+      - "no probability"
+      - "no severity"
+      - "no causalidad"
+      - "no declara cuál fact es verdadero"
+      - "no resuelve el conflicto"
 
-  D10_type_a:
-    question: "¿Cuál es el criterio físico exacto para Tipo A?"
+  D5_evidence_n3_schema:
+    decision: "EVIDENCE_N3_PHYSICAL_V1"
+    required_fields:
+      - "evidence_id"
+      - "evidence_type"
+      - "statement"
+      - "supporting_fact_ids"
+      - "applied_rule"
+      - "materiality"
+      - "causal_status"
+      - "traceability"
 
-  D11_type_b:
-    question: "¿Cuál es el criterio físico exacto para Tipo B?"
+    evidence_type:
+      allowed:
+        - "CONTRADICTION"
 
-  D12_type_c:
-    question: "¿Cuál es el criterio físico exacto para Tipo C?"
+    applied_rule_fields:
+      - "rule_id"
+      - "rule_version"
 
-  D13_type_d:
-    question: "¿Cuál es el criterio físico exacto para Tipo D?"
+    causal_status:
+      value: "NON_CAUSAL"
 
-  D14_type_e:
-    question: >
-      ¿Cuál es el criterio físico exacto para Tipo E y qué señales contractuales
-      obligan governance_escalation=true sin depender de juicio libre?
+    materiality_rule:
+      default: "MATERIALITY_NOT_ASSESSED"
+      propagation: >
+        Si facts soporte ya contienen materiality evaluada por una regla
+        autorizada futura, N3 puede preservar/derivar según contrato vigente.
+        Esta tarea no define rollup MAT_*.
 
-  D15_secondary_types:
-    question: >
-      ¿Cuándo un conflicto puede tener secondary_types y cómo se determina
-      determinísticamente sin ranking ficticio?
+  D6_statement_semantics:
+    decision: "NON_CAUSAL_CONTRADICTION_STATEMENT_V1"
+    meaning: >
+      El statement de Evidence N3 describe únicamente que existen facts
+      incompatibles bajo el mismo scope de comparación.
 
-  D16_severity:
-    question: >
-      ¿Severity de conflictos está suficientemente definida para implementación
-      o requiere G8/política adicional?
+    allowed_semantics:
+      - "facts incompatibles"
+      - "valores en contradicción"
+      - "fuentes/facts reportan valores distintos"
 
-  D17_resolution:
-    question: >
-      ¿Qué parte de resolution_status puede implementarse ahora y qué requiere
-      resolution_rules futuras?
+    forbidden_semantics:
+      - "X causó Y"
+      - "X probablemente es incorrecto"
+      - "la fuente A tiene razón"
+      - "el valor verdadero es..."
+      - "hay fraude"
+      - "hay error humano"
+      - "hay mala gestión"
 
-  D18_n4_dependency:
-    question: >
-      ¿Qué mínimo N3 debe existir antes de que N4 pueda implementarse de forma
-      útil, sin abrir todavía IMPL-N4?
+  D7_support_and_lineage:
+    decision: "TRACEABLE_FACT_SUPPORT_V1"
+    meaning: >
+      Evidence N3 debe citar todos los facts utilizados y conservar referencias
+      suficientes a su linaje sin reescribir N1/N2.
 
-  D19_productive_readiness:
-    question: >
-      ¿Qué evidencia productiva real puede generarse hoy desde los facts N2
-      actuales sin datos adicionales, reglas de negocio específicas o G8?
+    rules:
+      - "supporting_fact_ids no vacío"
+      - "mínimo 2 facts para CONTRADICTION"
+      - "facts deben existir en el mismo Bundle"
+      - "N3 no duplica ObservationRecord"
+      - "N3 no altera content_author_id/extracted_by/triggered_by"
+      - "traceability referencia trace_id y rule identity"
 
-  D20_runtime_readiness:
-    question: >
-      Emitir GO/NO-GO para IMPL-EVIDENCE-N3-001 y separar explícitamente:
-      a) reglas implementables ya;
-      b) decisiones G2;
-      c) decisiones G8;
-      d) gaps de datos/tooling.
+  D8_rule_identity:
+    decision: "RULE_IDENTITY_STABLE_V1"
+    meaning: >
+      La identidad de una rule es una constante contractual estable, no el
+      nombre accidental de una función JS.
 
-mandatory_n3_rule_matrix:
-  columns:
-    - "rule_category"
-    - "contract authority"
-    - "required fact inputs"
-    - "output semantic"
-    - "causal: YES|NO"
-    - "requires threshold: YES|NO"
-    - "requires G8: YES|NO"
-    - "physical readiness"
-    - "classification"
-    - "notes"
+    initial_rule:
+      rule_id: "N3_CONTRADICTION_SAME_SCOPE_DISTINCT_VALUE"
+      rule_version: "1.0"
+      causal: false
+      status: "ACTIVE"
 
-mandatory_conflict_matrix:
-  rows:
-    - "TYPE_A"
-    - "TYPE_B"
-    - "TYPE_C"
-    - "TYPE_D"
-    - "TYPE_E"
-  columns:
-    - "type"
-    - "contractual meaning"
-    - "required signals"
-    - "classification_criterion"
-    - "governance_escalation"
-    - "severity dependency"
-    - "requires G8"
-    - "physical readiness"
-    - "notes"
+  D9_determinism:
+    decision: "N3_DETERMINISTIC_OUTPUT_V1"
+    meaning: >
+      Mismos facts ordenados semánticamente + misma rule version producen el
+      mismo conjunto lógico de Evidence N3, salvo IDs inyectados.
 
-mandatory_gate_matrix:
-  columns:
-    - "decision/gap"
-    - "blocks IMPL-EVIDENCE-N3-001"
-    - "requires G2"
-    - "requires G8"
-    - "requires source/tool change"
-    - "owner"
-    - "recommended next action"
+    rules:
+      - "orden de entrada no cambia semántica"
+      - "supporting_fact_ids en orden estable"
+      - "sin reloj ambiental"
+      - "sin random"
+      - "sin LLM"
+      - "sin IO"
 
-classification_rules:
-  CONTRACTUAL: >
-    Definido suficientemente por contratos vigentes para implementación sin
-    nueva decisión humana.
-  PHYSICAL_UNKNOWN: >
-    Semántica requerida pero realización física insuficiente.
-  REQUIRES_G2: >
-    Necesita decisión arquitectónica/contractual humana.
-  REQUIRES_G8: >
-    Necesita calibración/política reservada al gate G8.
-  DATA_GAP: >
-    Regla conceptualmente posible pero facts/source actuales no traen señales
-    suficientes.
-  BLOCKER: >
-    Impide implementación segura.
+  D10_conflict_relationship:
+    decision: "N3_CONTRADICTION_DOES_NOT_RETYPE_CONFLICT_V1"
+    meaning: >
+      La Evidence N3 de contradicción y el conflicto compuesto son artefactos
+      distintos. Emitir Evidence N3 no autoriza cambiar Tipo A a B/C/D/E.
 
-audit_constraints:
-  - "no diseñar rules productivas durante auditoría"
-  - "no usar thresholds arbitrarios"
-  - "no asignar Tipo E por intuición"
-  - "no convertir contradicción simple en Tipo E"
-  - "no usar materiality como severity"
-  - "no usar confidence como clasificación de conflicto"
-  - "no crear causalidad"
-  - "no resolver conflictos"
-  - "no modificar G8"
-  - "no fabricar evidence para desbloquear RE"
+    rules:
+      - "runtime actual puede seguir tipificando contradicción simple como A"
+      - "N3 CONTRADICTION puede soportar facts_in_tension"
+      - "clasificador A-E queda fuera de esta implementación"
+      - "Tipo E sigue bloqueado hasta criterio contractual futuro"
 
-required_report_sections:
-  - "1. Executive result"
-  - "2. Contracts/runtime inspected"
-  - "3. Why N3 is empty today"
-  - "4. D1-D20 findings"
-  - "5. N3 rule readiness matrix"
-  - "6. Conflict A-E readiness matrix"
-  - "7. Type E exact blocker analysis"
-  - "8. Materiality/confidence/G8 boundary"
-  - "9. Causal boundary"
-  - "10. Resolution boundary"
-  - "11. Data/source gaps"
-  - "12. Productive N3 feasibility"
-  - "13. G2 decisions required"
-  - "14. G8 decisions required"
-  - "15. Blockers"
-  - "16. GO/NO-GO for IMPL-EVIDENCE-N3-001"
-  - "17. STOP"
+  D11_conflict_type_a:
+    decision: "TYPE_A_DEFAULT_FOR_SIMPLE_VALUE_CONFLICT_V1"
+    meaning: >
+      Mientras no exista clasificador A-E completo, una contradicción simple
+      de valores dentro del mismo scope puede continuar siendo Tipo A OPEN.
+
+    constraints:
+      - "no secondary_types inventados"
+      - "governance_escalation=false"
+      - "severity no calibrada"
+      - "no resolución automática"
+
+  D12_resolution_boundary:
+    decision: "NO_RESOLUTION_RULES_IN_N3_V1"
+    meaning: >
+      Esta realización N3 no implementa resolution rules ni transiciones a
+      RESOLVED/SUPERSEDED.
+
+    allowed:
+      - "OPEN existente"
+      - "UNDER_REVIEW solo si upstream válido ya lo trae según contrato"
+
+    forbidden:
+      - "crear RESOLVED"
+      - "resolver por weight_assessment"
+      - "inferir cierre desde N3"
+
+  D13_g8_boundary:
+    decision: "N3_V1_G8_FREE_SUBSET"
+    meaning: >
+      La rule inicial no depende de G8 porque no usa thresholds, confidence
+      scoring, materiality scoring, severity, wi, k, Fs ni causalidad.
+
+    explicitly_deferred_to_g8:
+      - "thresholds"
+      - "trend thresholds"
+      - "deviation thresholds"
+      - "deterioration thresholds"
+      - "severity calibration"
+      - "materiality calibration"
+      - "confidence calibration"
+      - "wi"
+      - "k"
+      - "Fs"
+
+  D14_n4_boundary:
+    decision: "N4_REMAINS_OUT_OF_SCOPE_V1"
+    meaning: >
+      La existencia de Evidence N3 no autoriza crear diagnósticos N4 sin una
+      diagnostic rule y soporte explícitos.
+
+  D15_reasoning_unlock:
+    decision: "N3_MAY_ENABLE_N5_WITHOUT_GUARANTEE_V1"
+    meaning: >
+      Evidence N3 válida puede satisfacer la precondición estructural de
+      supporting_evidence_ids del Reasoning Engine, pero no obliga al RE a
+      emitir hipótesis ni recommendations.
+
+    rules:
+      - "RE conserva sus gates"
+      - "N3 no crea hypothesis"
+      - "N3 no cambia hypothesis_strength"
+      - "N3 no garantiza causal inference"
+
+  D16_first_implementation_scope:
+    decision: "IMPL_EVIDENCE_N3_CONTRADICTION_ONLY_V1"
+    meaning: >
+      Un futuro IMPL-EVIDENCE-N3-001 deberá implementar únicamente registry +
+      rule CONTRADICTION + Evidence N3 schema + tests/regresión asociados.
+
+    implementation_constraints:
+      - "sin G8"
+      - "sin B/C/D/E classifier nuevo"
+      - "sin N4"
+      - "sin causalidad"
+      - "sin thresholds"
+      - "sin provider/LLM"
+      - "sin nuevas fuentes"
+      - "sin cambios OP/EKS/IES/RE/CP"
+
+human_approval_scope:
+  approve_exactly:
+    - "D1_rule_registry"
+    - "D2_initial_rule_scope"
+    - "D3_fact_comparability"
+    - "D4_contradiction_condition"
+    - "D5_evidence_n3_schema"
+    - "D6_statement_semantics"
+    - "D7_support_and_lineage"
+    - "D8_rule_identity"
+    - "D9_determinism"
+    - "D10_conflict_relationship"
+    - "D11_conflict_type_a"
+    - "D12_resolution_boundary"
+    - "D13_g8_boundary"
+    - "D14_n4_boundary"
+    - "D15_reasoning_unlock"
+    - "D16_first_implementation_scope"
+
+g2_contract_changes_authorized_if_approved:
+  docs/director-ia/02-EVIDENCE-BUILDER.md:
+    allowed:
+      - "registrar realización física D1-D16"
+      - "registrar Evidence Rule Registry v1"
+      - "registrar rule identity inicial"
+      - "registrar schema físico Evidence N3 v1"
+      - "registrar comparación misma entidad/métrica/periodo"
+      - "registrar CONTRADICTION no causal"
+      - "registrar materiality NOT_ASSESSED en subset sin G8"
+      - "registrar frontera N3/conflict"
+      - "registrar scope futuro IMPL-EVIDENCE-N3-001"
+
+    forbidden:
+      - "calibrar G8"
+      - "crear thresholds"
+      - "crear causal rules"
+      - "crear B/C/D/E classifier"
+      - "inventar Type E"
+      - "crear N4 rules"
+      - "cambiar definición constitucional N1-N5"
+      - "modificar IES/RE"
+      - "resolver conflictos"
+
+g8_reserved_and_unchanged:
+  - "wi"
+  - "k"
+  - "Fs"
+  - "materiality"
+  - "severity"
+  - "thresholds"
+  - "causal rules"
+  - "trend/deviation/deterioration calibration"
+
+required_report:
+  - "D1-D16 registradas"
+  - "diff contractual exacto"
+  - "confirmación subset N3 sin G8"
+  - "confirmación causalidad no autorizada"
+  - "confirmación B/C/D/E diferidos"
+  - "rule registry final"
+  - "rule identity final"
+  - "Evidence N3 schema final"
+  - "fact comparability final"
+  - "conflict relationship final"
+  - "N4 boundary"
+  - "Reasoning unlock boundary"
+  - "GO/NO-GO para IMPL-EVIDENCE-N3-001"
 
 acceptance_criteria:
-  - "D1-D20 auditados"
-  - "N3 rule matrix completa"
-  - "conflict A-E matrix completa"
-  - "G2/G8 separados explícitamente"
-  - "causalidad prohibida preservada"
-  - "materiality/confidence no recalibradas"
-  - "Tipo E no inventado"
-  - "explicación exacta de por qué runtime actual produce Tipo A"
-  - "explicación exacta de por qué N3 está vacío"
-  - "ningún contrato modificado"
+  - "Evidence Rule Registry queda físicamente definido"
+  - "solo CONTRADICTION productiva inicial autorizada"
+  - "comparison key definido"
+  - "Evidence N3 schema definido"
+  - "rule identity estable"
+  - "statement no causal definido"
+  - "supporting_fact_ids obligatorios"
+  - "materiality queda NOT_ASSESSED sin G8"
+  - "N3 no re-tipifica conflictos"
+  - "Tipo A simple puede continuar"
+  - "Tipo E no se inventa"
+  - "resolution no se implementa"
+  - "N4 sigue fuera"
+  - "subset no requiere G8"
+  - "02 es único contrato modificable"
   - "ningún runtime modificado"
-  - "sin tests/fixtures nuevos"
+  - "sin tests/fixtures"
   - "git diff --check limpio"
   - "reporte obligatorio creado"
+  - "IMPL-EVIDENCE-N3-001 no se crea"
 
 allowed_actions:
   - "leer contracts_in_force"
+  - "leer auditoría 001"
   - "leer Evidence Builder runtime/tests"
-  - "leer E2E runtime/tests/report"
-  - "clasificar D1-D20"
-  - "crear matrices obligatorias"
-  - "crear docs/dev-loop/reports/ARCH-EVIDENCE-N3-PHYSICAL-DECISIONS-001.md"
+  - "comparar D1-D16 con contratos superiores"
+  - "si G1+G2 autorizados, modificar únicamente 02-EVIDENCE-BUILDER.md"
+  - "crear docs/dev-loop/reports/ARCH-EVIDENCE-N3-RULES-PHYSICAL-DECISIONS-002.md"
   - "actualizar CURRENT_TASK mediante transiciones permitidas"
-  - "ejecutar tests existentes solo para comprobar realidad"
   - "ejecutar git diff --check"
 
 forbidden_actions:
-  - "modificar docs/director-ia/"
-  - "modificar Evidence Builder"
-  - "crear evidence rules"
-  - "crear conflict classifier"
+  - "modificar contratos fuera de 02"
+  - "implementar N3"
+  - "modificar Evidence Builder runtime"
+  - "crear tests/fixtures"
   - "crear thresholds"
-  - "calibrar G8"
-  - "modificar otros runtimes"
+  - "usar G8"
+  - "crear causal rules"
+  - "crear clasificador B/C/D/E"
+  - "crear Tipo E"
+  - "crear N4"
+  - "modificar OP/EKS/IES/RE/CP"
+  - "modificar server.js"
+  - "modificar package.json"
+  - "autoaprobar gates"
   - "crear IMPL-EVIDENCE-N3-001"
   - "commit"
   - "push"
   - "merge"
-  - "autoaprobar G2/G8"
   - "encadenar siguiente tarea"
 
 expected_terminal_state: >
-  DONE_PENDING_REVIEW si la auditoría separa de forma completa qué N3/conflict
-  behavior es implementable hoy y qué requiere G2, G8 o datos adicionales.
-  BLOCKED o STOPPED si el análisis exige inventar reglas o calibraciones.
-
-implementation_followup_rule: >
-  IMPL-EVIDENCE-N3-001 no puede crearse desde esta tarea. HUMAN_APPROVER debe
-  revisar primero las decisiones G2/G8 y el veredicto de readiness.
+  DONE_PENDING_REVIEW si D1-D16 pueden registrarse en 02 sin contradicción
+  constitucional y sin usar G8.
+  BLOCKED o STOPPED si alguna decisión exige thresholds, calibración G8,
+  causalidad, Tipo E nuevo, N4 o modificación de otro contrato.
 
 max_attempts: 1
-result_report_path: "docs/dev-loop/reports/ARCH-EVIDENCE-N3-PHYSICAL-DECISIONS-001.md"
+result_report_path: "docs/dev-loop/reports/ARCH-EVIDENCE-N3-RULES-PHYSICAL-DECISIONS-002.md"
