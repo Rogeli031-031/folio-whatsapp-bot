@@ -1,0 +1,79 @@
+{
+  "meta": {
+    "figures": "ILUSTRATIVAS / FICTICIAS",
+    "not_institutional_coverage": true,
+    "note": "IES sintético con evidence[] SOLO para validar estructura RE. No declara que EB productivo produzca N3."
+  },
+  "ies": {
+    "ies_id": "ies_re_syn_ev",
+    "ies_type": "OFFICIAL",
+    "schema_version": "1.0",
+    "ies_version": 1,
+    "status": "VALIDATED",
+    "generated_at": "2026-08-17T12:00:00.000Z",
+    "valid_at": "2026-08-17T00:00:00.000Z",
+    "expires_at": null,
+    "snapshot_reference": { "snapshot_id": "snap_re_syn_ev" },
+    "knowledge_snapshot_version": 1,
+    "query_context": {
+      "executive_query_id": "eq_re_syn_ev",
+      "trace_id": "tr_re_syn_ev",
+      "original_question": "Pregunta ilustrativa con evidencia sintética",
+      "intent": "validator_only",
+      "requesting_user_id": "user_ilustrativo",
+      "requesting_role": "director",
+      "channel": "dashboard",
+      "resolved_entities": [],
+      "permission_restrictions": [],
+      "knowledge_effective_date": "2026-08-17T00:00:00.000Z",
+      "plant_or_scope": "Puebla",
+      "period": "mes_B_ilustrativo"
+    },
+    "executive_scope": {
+      "plant_or_scope": "Puebla",
+      "period": "mes_B_ilustrativo",
+      "intent": "validator_only"
+    },
+    "knowledge_coverage": {
+      "coverage_token": "COV_FULL_KNOWLEDGE",
+      "coverage_state": "CONOZCO",
+      "coverage_score": null,
+      "covered_domains": ["arr"],
+      "partial_domains": [],
+      "unavailable_domains": [],
+      "restricted_domains": [],
+      "failed_tools": [],
+      "unresolved_entities": [],
+      "incomplete_scopes": [],
+      "blocking_limitations": [],
+      "highest_materiality_detected": "MATERIALITY_NOT_ASSESSED"
+    },
+    "executive_summary_facts": [],
+    "facts": [
+      {
+        "fact_id": "fact_syn_1",
+        "statement_token": "restated_observation",
+        "concept": "venta_t",
+        "value": 50,
+        "materiality": "MATERIALITY_NOT_ASSESSED"
+      }
+    ],
+    "evidence": [
+      {
+        "evidence_id": "ev_syn_1",
+        "supporting_fact_ids": ["fact_syn_1"],
+        "statement_token": "synthetic_evidence_validator_only",
+        "causal_status": "NON_CAUSAL",
+        "materiality": "MATERIALITY_NOT_ASSESSED"
+      }
+    ],
+    "diagnoses": [],
+    "conflicts": [],
+    "open_questions": [],
+    "source_health": [{ "tool_id": "get_arr_snapshot", "domain": "arr", "execution_status": "DATA_AVAILABLE" }],
+    "limitations": [],
+    "audit": { "generated_by": "synthetic_fixture", "engine_version": "not_eb_productive" },
+    "integrity": { "canonical_representation": "CANONICAL_JSON_V1", "signature": null, "signature_status": "NOT_IMPLEMENTED" },
+    "alternative_context": null
+  }
+}
