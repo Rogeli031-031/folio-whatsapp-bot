@@ -4,7 +4,7 @@
 
 **Documento:** `docs/director-ia/02-EVIDENCE-BUILDER.md`  
 **Versión:** 2.1
-**Estado:** APROBADO PARA DISEÑO DEL IES; realización física v1 registrada (D1–D15)
+**Estado:** APROBADO PARA DISEÑO DEL IES; realización física v1 (D1–D15) intacta; realización física Evidence N3 Rules D1–D16 registrada (`ARCH-EVIDENCE-N3-RULES-PHYSICAL-DECISIONS-002`); runtime N3 pendiente
 
 ### Dependencia normativa (rutas reales)
 
@@ -282,6 +282,10 @@ Las evidencias se ensamblan con `applied_rule` identificable.
 - lenguaje probabilístico del Builder (“probablemente”, “quizá”);
 - inferencia del Reasoning Engine;
 - relación sin `applied_rule`.
+
+### Realización física — Evidence N3 Rules v1 (§20)
+
+La primera franja productiva autorizada es **únicamente** CONTRADICTION no causal (`N3_CONTRADICTION_SAME_SCOPE_DISTINCT_VALUE` versión `1.0`). Las demás categorías permitidas de este §8 permanecen diferidas. No se autorizan rules causales, thresholds ni clasificador B/C/D/E. Los identificadores D1–D16 de §20 **no** sustituyen D1–D15 de §19.
 
 ---
 
@@ -625,19 +629,117 @@ Los identificadores I2, E1, N1_WRAPS_03A, SEQUENTIAL_BARRIERS, R_MOD_EMPTY_GOVER
 
 ---
 
+# 20. Realización física Evidence N3 Rules v1 (D1–D16)
+
+Esta sección **no** redefine N1–N5 ni la Constitución. No redefine el Motor. No cambia `03A`, `04` ni `05`. No introduce epistemología. No calibra materias reservadas a G8. No implementa runtime. No crea tests ni fixtures. No autoriza por sí sola `IMPL-EVIDENCE-N3-001`.
+
+Registra las decisiones físicas aprobadas por HUMAN_APPROVER (tarea `ARCH-EVIDENCE-N3-RULES-PHYSICAL-DECISIONS-002`, G1+G2, `2026-08-17T16:17:33-06:00`). Evidencia previa: `ARCH-EVIDENCE-N3-PHYSICAL-DECISIONS-001`.
+
+Los identificadores D1–D16 de **esta sección** son los de `CURRENT_TASK` / `ARCH-EVIDENCE-N3-RULES-PHYSICAL-DECISIONS-002`. **No** sustituyen D1–D15 de §19 (I2, E1, `N1_WRAPS_03A`, `SEQUENTIAL_BARRIERS`, `R_MOD_EMPTY_GOVERNED_SETS`, `OPAQUE_TRACEABLE_IDS`, `PRESERVE_FULL_03A_LINEAGE_NO_K`, `DIMENSIONS_WITHOUT_FALSE_PRECISION`, `FAIL_CLOSED`, `LITERAL_STATE_MACHINE`, `NOT_ASSESSED_UNTIL_G8`, `PURE_NO_SIDE_EFFECTS`, `EB_SEMANTICS_PLUS_EKS_STRUCTURE`, `03B_PLUS_MINIMAL_03A_FAIL_CLOSED_CASES`, `EB_FIXTURES_FIRST_OP_BEFORE_PRODUCTION`, `REGISTER_MINIMUM_PHYSICAL_BOUNDARY`).
+
+Tokens: `EVIDENCE_RULE_REGISTRY_V1`, `NON_CAUSAL_CONTRADICTION_RULE_V1_ONLY`, `FACT_COMPARABILITY_KEY_V1`, `DISTINCT_VALUE_CONTRADICTION_V1`, `EVIDENCE_N3_PHYSICAL_V1`, `NON_CAUSAL_CONTRADICTION_STATEMENT_V1`, `TRACEABLE_FACT_SUPPORT_V1`, `RULE_IDENTITY_STABLE_V1`, `N3_DETERMINISTIC_OUTPUT_V1`, `N3_CONTRADICTION_DOES_NOT_RETYPE_CONFLICT_V1`, `TYPE_A_DEFAULT_FOR_SIMPLE_VALUE_CONFLICT_V1`, `NO_RESOLUTION_RULES_IN_N3_V1`, `N3_V1_G8_FREE_SUBSET`, `N4_REMAINS_OUT_OF_SCOPE_V1`, `N3_MAY_ENABLE_N5_WITHOUT_GUARANTEE_V1`, `IMPL_EVIDENCE_N3_CONTRADICTION_ONLY_V1`. **Prohibido** sustituirlos en implementación.
+
+Relación con §19 D4: `R_MOD_EMPTY_GOVERNED_SETS` permanece. Los conjuntos de elevación de ausencia, resolución, causalidad y materiality **siguen vacíos**. Esta sección autoriza únicamente el catálogo `evidence_rules` v1 con **una** rule no causal. No se inventan rules para tests. No se pueblan `absence_rules`, `resolution_rules`, `causal_rules` ni `materiality_rules`.
+
+| ID | Decisión aprobada | Significado contractual |
+|----|-------------------|-------------------------|
+| D1 | **EVIDENCE_RULE_REGISTRY_V1** | El Evidence Builder mantiene un registry explícito, versionado y cerrado de evidence rules. Una Evidence N3 solo puede existir como resultado de una rule registrada. Campos mínimos de cada rule: `rule_id`, `rule_version`, `rule_category`, `causal`, `input_contract`, `output_contract`, `status`. En esta versión: `causal=false` para todas las rules; `status` debe ser `ACTIVE` para ejecutarse; `rule_id`/`rule_version` quedan persistidos en Evidence N3; el runtime no inventa rules dinámicamente; ninguna rule depende de LLM. |
+| D2 | **NON_CAUSAL_CONTRADICTION_RULE_V1_ONLY** | La primera implementación N3 autorizable contiene una única categoría productiva: contradicción determinística entre facts comparables. Categoría permitida: `CONTRADICTION`. Diferidas: `CO_OCCURRENCE`, `TREND`, `DEVIATION`, `DETERIORATION`, `CONSISTENCY_RELATION`, `CAUSAL_RELATION`. |
+| D3 | **FACT_COMPARABILITY_KEY_V1** | Dos o más facts pueden entrar a la rule de contradicción únicamente si comparten el mismo scope lógico de comparación. Clave: identidad canónica de entidad (o el mismo scope sin entidad **solo** cuando ya esté contractualmente permitido), `metric_or_event`, `period`. Requerido: todos los facts tienen `fact_id`; mismo `metric_or_event`; mismo `period`; valores comparables bajo la representación existente. Prohibido: comparar periodos distintos como contradicción; comparar métricas distintas; comparar entidades distintas; resolver ambigüedad de entidad dentro de N3. |
+| D4 | **DISTINCT_VALUE_CONTRADICTION_V1** | Para facts comparables, si `fact_count >= 2` y existen dos o más valores distintos bajo representación estable existente, se puede emitir Evidence N3 de contradicción. Sin threshold, sin probability, sin severity, sin causalidad. No declara cuál fact es verdadero. No resuelve el conflicto. |
+| D5 | **EVIDENCE_N3_PHYSICAL_V1** | Schema físico del objeto Evidence en el Knowledge Bundle. Campos requeridos: `evidence_id`, `evidence_type`, `statement`, `supporting_fact_ids`, `applied_rule`, `materiality`, `causal_status`, `traceability`. `evidence_type` permitido en esta franja: `CONTRADICTION`. `applied_rule` contiene `rule_id` y `rule_version`. `causal_status` = `NON_CAUSAL`. `materiality` por defecto `MATERIALITY_NOT_ASSESSED`. Si facts soporte ya contienen materiality evaluada por un ruleset autorizado futuro, N3 puede preservar/derivar según §11B; **esta sección no define rollup `MAT_*` ni thresholds**. Este schema no redefine `04` §7. |
+| D6 | **NON_CAUSAL_CONTRADICTION_STATEMENT_V1** | El `statement` describe únicamente que existen facts incompatibles bajo el mismo scope de comparación. Semántica permitida: facts incompatibles; valores en contradicción; fuentes/facts reportan valores distintos. Semántica prohibida: “X causó Y”; “X probablemente es incorrecto”; “la fuente A tiene razón”; “el valor verdadero es…”; “hay fraude”; “hay error humano”; “hay mala gestión”; culpabilidad; prioridad entre fuentes. |
+| D7 | **TRACEABLE_FACT_SUPPORT_V1** | Evidence N3 cita todos los facts utilizados y conserva referencias suficientes a su linaje sin reescribir N1/N2. `supporting_fact_ids` no vacío; mínimo 2 facts para `CONTRADICTION`; los facts deben existir en el mismo Bundle; N3 no duplica ObservationRecord; N3 no altera `content_author_id` / `extracted_by` / `triggered_by`; `traceability` referencia `trace_id` e identity de la rule. |
+| D8 | **RULE_IDENTITY_STABLE_V1** | La identidad de una rule es constante contractual estable, no el nombre accidental de una función. Rule inicial: `rule_id` = `N3_CONTRADICTION_SAME_SCOPE_DISTINCT_VALUE`; `rule_version` = `1.0`; `causal` = `false`; `status` = `ACTIVE`. |
+| D9 | **N3_DETERMINISTIC_OUTPUT_V1** | Mismos facts ordenados semánticamente + misma rule version producen el mismo conjunto lógico de Evidence N3, salvo IDs inyectados. El orden de entrada no cambia la semántica. `supporting_fact_ids` en orden estable. Sin reloj ambiental, random, LLM ni I/O. |
+| D10 | **N3_CONTRADICTION_DOES_NOT_RETYPE_CONFLICT_V1** | Evidence N3 de contradicción y el conflicto compuesto son artefactos distintos. Emitir N3 no autoriza cambiar Tipo A a B/C/D/E. El runtime actual puede seguir tipificando contradicción simple como Tipo A. N3 CONTRADICTION puede soportar `facts_in_tension`. El clasificador A–E queda fuera de esta realización. Tipo E sigue bloqueado hasta criterio contractual futuro. |
+| D11 | **TYPE_A_DEFAULT_FOR_SIMPLE_VALUE_CONFLICT_V1** | Mientras no exista clasificador A–E completo, una contradicción simple de valores dentro del mismo scope puede continuar siendo Tipo A `OPEN`. Sin `secondary_types` inventados. `governance_escalation=false`. Severity no calibrada. Sin resolución automática. |
+| D12 | **NO_RESOLUTION_RULES_IN_N3_V1** | Esta realización N3 no implementa resolution rules ni transiciones a `RESOLVED` / `SUPERSEDED`. Permitido: `OPEN` existente; `UNDER_REVIEW` solo si upstream válido ya lo trae según §11. Prohibido: crear `RESOLVED`; resolver por `weight_assessment`; inferir cierre desde N3. |
+| D13 | **N3_V1_G8_FREE_SUBSET** | La rule inicial no depende de G8: no usa thresholds, confidence scoring, materiality scoring, severity, `wi`, `k`, Fs ni causalidad. Diferido a G8: thresholds (incl. tendencia, desviación, deterioro), calibración de severity, materiality, confidence, `wi`, `k`, Fs. G8 no se usa en esta sección. |
+| D14 | **N4_REMAINS_OUT_OF_SCOPE_V1** | La existencia de Evidence N3 no autoriza crear diagnósticos N4 sin diagnostic rule y soporte explícitos. N4 permanece fuera de esta realización y de un futuro `IMPL-EVIDENCE-N3-001`. |
+| D15 | **N3_MAY_ENABLE_N5_WITHOUT_GUARANTEE_V1** | Evidence N3 válida puede satisfacer la precondición estructural de `supporting_evidence_ids` del Reasoning Engine. No obliga al RE a emitir hipótesis ni recommendations. El RE conserva sus gates. N3 no crea hypothesis, no cambia `hypothesis_strength` y no garantiza inferencia causal. |
+| D16 | **IMPL_EVIDENCE_N3_CONTRADICTION_ONLY_V1** | Un futuro `IMPL-EVIDENCE-N3-001` deberá implementar únicamente registry + rule CONTRADICTION + schema Evidence N3 + tests/regresión asociados. Sin G8, sin clasificador B/C/D/E nuevo, sin N4, sin causalidad, sin thresholds, sin provider/LLM, sin nuevas fuentes, sin cambios OP/EKS/IES/RE/CP. Esta sección no crea esa tarea. |
+
+### Registry final v1
+
+| Campo del registry | Valor v1 |
+|--------------------|----------|
+| `evidence_rules` | Una rule: ver identity abajo |
+| `absence_rules` | Vacío (§19 D4 intacto) |
+| `resolution_rules` | Vacío (§19 D4 intacto) |
+| `causal_rules` | Vacío (§19 D4 intacto) |
+| `materiality_rules` | Vacío (§19 D4 intacto) |
+
+### Identity de la rule inicial
+
+| Campo | Valor |
+|-------|--------|
+| `rule_id` | `N3_CONTRADICTION_SAME_SCOPE_DISTINCT_VALUE` |
+| `rule_version` | `1.0` |
+| `rule_category` | `CONTRADICTION` |
+| `causal` | `false` |
+| `status` | `ACTIVE` |
+| `input_contract` | `FACT_COMPARABILITY_KEY_V1` |
+| `output_contract` | `EVIDENCE_N3_PHYSICAL_V1` |
+
+### Schema físico Evidence N3 v1 (Bundle)
+
+| Campo | Obligatorio | Valor / regla en esta franja |
+|-------|-------------|------------------------------|
+| `evidence_id` | Sí | Identificador opaco trazable (§19 D5) |
+| `evidence_type` | Sí | `CONTRADICTION` |
+| `statement` | Sí | Semántica D6; no causal |
+| `supporting_fact_ids` | Sí | ≥2; todos existentes en el mismo Bundle; orden estable |
+| `applied_rule.rule_id` | Sí | `N3_CONTRADICTION_SAME_SCOPE_DISTINCT_VALUE` |
+| `applied_rule.rule_version` | Sí | `1.0` |
+| `materiality` | Sí | `MATERIALITY_NOT_ASSESSED` en esta franja |
+| `causal_status` | Sí | `NON_CAUSAL` |
+| `traceability` | Sí | Incluye `trace_id` e identity de la rule |
+
+### Comparability key v1
+
+Comparables solo si coinciden:
+
+1. identidad canónica de entidad, o el mismo scope sin entidad cuando **ya** esté contractualmente permitido;
+2. `metric_or_event`;
+3. `period`.
+
+No comparar periodos, métricas ni entidades distintas. No resolver `UNRESOLVED` / `AMBIGUOUS` dentro de N3. La distinción de valores usa la representación estable existente del campo `value`; no hay tolerancia numérica ni umbral.
+
+### Frontera N3 vs clasificador de conflictos
+
+- N3 CONTRADICTION afirma incompatibilidad de facts bajo el mismo scope.
+- El conflicto compuesto permanece artefacto distinto (§11).
+- Tipo A simple `OPEN` permanece permitido (D11).
+- No se implementa clasificador B/C/D/E.
+- N3 CONTRADICTION no se convierte en Tipo E.
+- No se añaden `secondary_types`, `governance_escalation` ni severity desde N3.
+- No hay resolution automática desde N3.
+
+### Límites de esta realización
+
+1. Runtime N3 **PENDIENTE**. Esta sección no implementa `to_n3`, registry ejecutable, tests ni fixtures.
+2. G8 **no usado**. No se calibran `wi`, `k`, Fs, materiality, severity, thresholds ni reglas causales.
+3. No autoriza `IMPL-EVIDENCE-N3-001` por sí sola (requiere G5 humano).
+4. No redefine Constitución, Motor, `03A`, `04`, `05` ni el índice.
+5. N4, clasificador B/C/D/E, Tipo E productivo, resolution rules y categorías N3 distintas de CONTRADICTION permanecen diferidos.
+6. D1–D15 de §19 permanecen intactos.
+
+---
+
 # Control documental
 
 | Campo | Valor |
 |-------|--------|
 | Documento | `02-EVIDENCE-BUILDER.md` |
 | Versión | 2.1 |
-| Estado | APROBADO PARA DISEÑO DEL IES; realización física v1 registrada (D1–D15) |
+| Estado | APROBADO PARA DISEÑO DEL IES; realización física v1 (D1–D15) intacta; realización física Evidence N3 Rules D1–D16 registrada (`ARCH-EVIDENCE-N3-RULES-PHYSICAL-DECISIONS-002`) |
 | Tipo | Especificación arquitectónica (ensamblaje) |
 | Dependencia normativa | `docs/director-ia/DIRECTOR_IA_CONSTITUTION.md`; `docs/director-ia/DIRECTOR_IA_EXECUTIVE_KNOWLEDGE_ENGINE.md` |
 | Fuentes de apoyo | `docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md`; `docs/director-ia/DIRECTOR_IA_V2_FASE_1_VERACIDAD.md`; `docs/director-ia/DIRECTOR_IA_V2_FASE_2_PLANNER.md`; `docs/director-ia/DIRECTOR_IA_V2_FASE_3_TOOL_ORCHESTRATOR.md`; `docs/director-ia/03A-OBSERVATION-PIPELINE.md`; `docs/director-ia/03-EXECUTIVE-KNOWLEDGE-STORE.md` |
-| Implementación | PENDIENTE |
-| Parámetros de calibración | PENDIENTES (G8) |
-| Auditoría | 2026-08-15: realización física D1–D15 (`ARCH-EB-PHYSICAL-DECISIONS-003`); sin redefinición constitucional; sin calibración G8 |
+| Implementación | Runtime EB N1/N2/conflictos existente; runtime N3 PENDIENTE |
+| Parámetros de calibración | PENDIENTES (G8); subset N3 CONTRADICTION v1 no los usa |
+| Auditoría | 2026-08-15: realización física D1–D15 (`ARCH-EB-PHYSICAL-DECISIONS-003`); 2026-08-17: Evidence N3 Rules D1–D16 (`ARCH-EVIDENCE-N3-RULES-PHYSICAL-DECISIONS-002`); sin redefinición constitucional; sin calibración G8 |
 
 ---
 
