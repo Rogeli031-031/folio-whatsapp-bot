@@ -1,0 +1,81 @@
+{
+  "meta": {
+    "figures": "ILUSTRATIVAS / FICTICIAS",
+    "not_institutional_coverage": true,
+    "note": "IES sintético CONFLICTED sin evidence[]. Conflicto Tipo A ilustrativo."
+  },
+  "ies": {
+    "ies_id": "ies_re_conf_noev",
+    "ies_type": "OFFICIAL",
+    "schema_version": "1.0",
+    "ies_version": 1,
+    "status": "CONFLICTED",
+    "generated_at": "2026-08-17T12:00:00.000Z",
+    "valid_at": "2026-08-17T00:00:00.000Z",
+    "expires_at": null,
+    "snapshot_reference": { "snapshot_id": "snap_re_conf_noev" },
+    "knowledge_snapshot_version": 1,
+    "query_context": {
+      "executive_query_id": "eq_re_conf_noev",
+      "trace_id": "tr_re_conf_noev",
+      "original_question": "¿Hay conflicto ilustrativo de datos?",
+      "intent": "conflict_check",
+      "requesting_user_id": "user_ilustrativo",
+      "requesting_role": "director",
+      "channel": "dashboard",
+      "resolved_entities": [],
+      "permission_restrictions": [],
+      "knowledge_effective_date": "2026-08-17T00:00:00.000Z"
+    },
+    "executive_scope": { "intent": "conflict_check" },
+    "knowledge_coverage": {
+      "coverage_token": "COV_DATA_CONFLICT",
+      "coverage_state": "EXISTE_CONFLICTO",
+      "coverage_score": null,
+      "covered_domains": ["arr"],
+      "partial_domains": [],
+      "unavailable_domains": [],
+      "restricted_domains": [],
+      "failed_tools": [],
+      "unresolved_entities": [],
+      "incomplete_scopes": [],
+      "blocking_limitations": [],
+      "highest_materiality_detected": "MATERIALITY_NOT_ASSESSED"
+    },
+    "executive_summary_facts": [],
+    "facts": [
+      {
+        "fact_id": "fact_re_conf_a",
+        "statement_token": "restated_observation",
+        "concept": "venta_t",
+        "value": 10,
+        "materiality": "MATERIALITY_NOT_ASSESSED"
+      },
+      {
+        "fact_id": "fact_re_conf_b",
+        "statement_token": "restated_observation",
+        "concept": "venta_t",
+        "value": 20,
+        "materiality": "MATERIALITY_NOT_ASSESSED"
+      }
+    ],
+    "evidence": [],
+    "diagnoses": [],
+    "conflicts": [
+      {
+        "conflict_id": "c_re_conf_a",
+        "primary_type": "CONF_TYPE_A_DATA",
+        "facts_in_tension": ["fact_re_conf_a", "fact_re_conf_b"],
+        "resolution_status": "OPEN",
+        "interpretation_constraint": "no_resolve_by_weight",
+        "severity": "undeclared"
+      }
+    ],
+    "open_questions": [],
+    "source_health": [{ "tool_id": "get_arr_snapshot", "domain": "arr", "execution_status": "DATA_AVAILABLE" }],
+    "limitations": [],
+    "audit": { "generated_by": "ies_builder", "engine_version": "ies-builder-physical-v1" },
+    "integrity": { "canonical_representation": "CANONICAL_JSON_V1", "signature": null, "signature_status": "NOT_IMPLEMENTED" },
+    "alternative_context": null
+  }
+}

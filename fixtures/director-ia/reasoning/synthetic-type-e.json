@@ -1,0 +1,100 @@
+{
+  "meta": {
+    "figures": "ILUSTRATIVAS / FICTICIAS",
+    "not_institutional_coverage": true,
+    "note": "IES sintético Tipo E + evidence[] solo para validador RE (techos STRONG / visibilidad Tipo E). No es N3 productivo."
+  },
+  "ies": {
+    "ies_id": "ies_re_syn_e",
+    "ies_type": "OFFICIAL",
+    "schema_version": "1.0",
+    "ies_version": 1,
+    "status": "CONFLICTED",
+    "generated_at": "2026-08-17T12:00:00.000Z",
+    "valid_at": "2026-08-17T00:00:00.000Z",
+    "expires_at": null,
+    "snapshot_reference": { "snapshot_id": "snap_re_syn_e" },
+    "knowledge_snapshot_version": 1,
+    "query_context": {
+      "executive_query_id": "eq_re_syn_e",
+      "trace_id": "tr_re_syn_e",
+      "original_question": "¿Hay conflicto de gobernanza ilustrativo?",
+      "intent": "governance_check",
+      "requesting_user_id": "user_ilustrativo",
+      "requesting_role": "director",
+      "channel": "dashboard",
+      "resolved_entities": [],
+      "permission_restrictions": [],
+      "knowledge_effective_date": "2026-08-17T00:00:00.000Z"
+    },
+    "executive_scope": { "intent": "governance_check" },
+    "knowledge_coverage": {
+      "coverage_token": "COV_DATA_CONFLICT",
+      "coverage_state": "EXISTE_CONFLICTO",
+      "coverage_score": null,
+      "covered_domains": ["arr"],
+      "partial_domains": [],
+      "unavailable_domains": [],
+      "restricted_domains": ["restricted_dom"],
+      "failed_tools": [],
+      "unresolved_entities": [],
+      "incomplete_scopes": [],
+      "blocking_limitations": ["lim_restricted_SOURCE_RESTRICTED"],
+      "highest_materiality_detected": "MATERIALITY_NOT_ASSESSED"
+    },
+    "executive_summary_facts": [
+      {
+        "statement_token": "CONF_TYPE_E_GOVERNANCE",
+        "statement_reference": "c_re_syn_e",
+        "supporting_fact_ids": ["fact_syn_e_1"],
+        "supporting_evidence_ids": []
+      }
+    ],
+    "facts": [
+      {
+        "fact_id": "fact_syn_e_1",
+        "statement_token": "restated_observation",
+        "concept": "venta_t",
+        "value": 10,
+        "materiality": "MATERIALITY_NOT_ASSESSED"
+      }
+    ],
+    "evidence": [
+      {
+        "evidence_id": "ev_syn_e_1",
+        "supporting_fact_ids": ["fact_syn_e_1"],
+        "statement_token": "synthetic_evidence_type_e_validator_only",
+        "causal_status": "NON_CAUSAL",
+        "materiality": "MATERIALITY_NOT_ASSESSED"
+      }
+    ],
+    "diagnoses": [],
+    "conflicts": [
+      {
+        "conflict_id": "c_re_syn_e",
+        "primary_type": "CONF_TYPE_E_GOVERNANCE",
+        "facts_in_tension": ["fact_syn_e_1"],
+        "resolution_status": "OPEN",
+        "interpretation_constraint": "no_resolve_by_weight",
+        "governance_escalation": true,
+        "severity": "undeclared"
+      }
+    ],
+    "open_questions": [],
+    "source_health": [
+      { "tool_id": "get_arr_snapshot", "domain": "arr", "execution_status": "DATA_AVAILABLE" },
+      { "tool_id": "restricted_tool", "domain": "restricted_dom", "execution_status": "SOURCE_RESTRICTED" }
+    ],
+    "limitations": [
+      {
+        "limitation_id": "lim_restricted_SOURCE_RESTRICTED",
+        "statement_token": "SOURCE_RESTRICTED",
+        "statement_reference": "restricted_tool",
+        "scope": "restricted_dom"
+      }
+    ],
+    "audit": { "generated_by": "synthetic_fixture", "engine_version": "not_eb_productive" },
+    "integrity": { "canonical_representation": "CANONICAL_JSON_V1", "signature": null, "signature_status": "NOT_IMPLEMENTED" },
+    "alternative_context": null
+  }
+}
