@@ -4,7 +4,7 @@
 
 **Documento:** `docs/director-ia/05-REASONING-ENGINE.md`  
 **Versión:** 1.0  
-**Estado:** REASONING ENGINE v1.0 APROBADO PARA CONGELAMIENTO  
+**Estado:** REASONING ENGINE v1.0 APROBADO PARA CONGELAMIENTO; realización física D1–D16 registrada (`ARCH-REASONING-PHYSICAL-DECISIONS-002`)
 **Tipo:** Contrato arquitectónico de Nivel 5 (sin implementación; sin Channel Projection)
 
 ### Dependencia normativa
@@ -39,6 +39,9 @@ Este documento **no modifica** el esquema IES v1.0.
 | D9 | Canónico vigente `es-MX` + `statement_language`; no invariante universal |
 | D10 | Gate de status conforme `04` §15/§18 |
 
+Las decisiones semánticas D1–D10 de esta tabla **no se sustituyen**.
+La realización física D1–D16 de `ARCH-REASONING-PHYSICAL-DECISIONS-002` se registra en §26; no redefinen N1–N5 ni el esquema IES v1.0.
+
 ---
 
 # Índice
@@ -68,6 +71,7 @@ Este documento **no modifica** el esquema IES v1.0.
 23. [Criterios de aceptación](#23-criterios-de-aceptación)  
 24. [Riesgos pendientes](#24-riesgos-pendientes)  
 25. [Control documental](#25-control-documental)
+26. [Realización física v1 (D1–D16)](#26-realización-física-v1-d1d16)
 
 ---
 
@@ -110,6 +114,13 @@ Produce **inferencia semántica trazable** (hipótesis, reservas, recomendacione
 | **Entrada de sesión** | `analysis_mode`, `canonical_reasoning_language`, `channel_hint`, `maximum_semantic_depth` (no alteran el IES) |
 | **Salida** | Reasoning Result (§3) materializable en Reasoning Run (§18) |
 | **Consumidor de presentación** | Futuro `06-CHANNEL-PROJECTION` |
+
+### Realización física de interfaz (no es runtime)
+
+Token: **REASONING_ENGINE_FACTORY_V1** (§26 D1).
+Interfaz futura mínima: `createReasoningEngine({ modelAdapter, clock, idFactory, policy })` y `reason(ies, session)`.
+El IES es la única entrada de conocimiento. `session` contiene únicamente parámetros no epistemológicos permitidos por este documento.
+Esta subsección **no** implementa runtime.
 
 ## Relaciones
 
@@ -156,6 +167,12 @@ Un **IES** proyectado conforme a `04-IES-STANDARD.md` v1.0.
 **Valor institucional vigente** de `canonical_reasoning_language`: **`es-MX`**.  
 No es invariante universal: puede cambiarse por política institucional sin redefinir este contrato.
 
+### Realización física de sesión (§26 D1)
+
+Campos de `session`: `analysis_mode`, `canonical_reasoning_language`, `channel_hint`, `maximum_semantic_depth`.
+Default institucional de `canonical_reasoning_language`: `es-MX`.
+`session` no modifica el IES; no transporta hechos empresariales; no transporta fuentes/tools.
+
 ## Prohibido en entrada
 
 SQL; PostgreSQL directo; tools; loaders; raw payloads; APIs operacionales; ObservationRecords fuera del IES; secretos; JWT; tokens de sesión; Knowledge Bundle/Snapshot como bypass del IES.
@@ -192,6 +209,19 @@ Objeto conceptual de salida de un ciclo de razonamiento:
 | `reasoning_limits` | Límites declarados del razonamiento |
 | `references` | IDs del IES citados |
 
+### Realización física — STRUCTURED_REASONING_RESULT_V1 (§26 D3)
+
+La salida del RE es un objeto estructurado conforme a este documento, validable antes de exposición o materialización como Reasoning Run.
+Los arrays `hypotheses`, `recommendations`, `next_verifications`, `decision_options`, `abstentions` y `clarification_requests` están **siempre presentes** aunque vacíos.
+`references` solo contiene IDs existentes del IES.
+Ningún objeto de salida crea N1–N4 ni modifica IES.
+Sin campos `probability` / `confidence` / `materiality` N5 inventados.
+
+### Realización física — DETERMINISTIC_POST_VALIDATION_REQUIRED (§26 D5)
+
+Toda salida candidata del modelo debe pasar validación determinística antes de ser aceptada como Reasoning Result. Lista de validaciones y comportamiento `REJECT_OR_ABSTAIN`: §26 D5.
+Una salida candidata inválida no se corrige inventando soporte.
+
 ## 3.1 INTERPRETATION
 
 | Es | No es |
@@ -210,6 +240,18 @@ Cuando aplique `PARTIAL` o cobertura mixta, la interpretation (y el Result) debe
 1. **LO QUE SÉ** — proyección fiel del IES  
 2. **LO QUE PUEDO INFERIR** — hipótesis N5 con soporte  
 3. **LO QUE NO PUEDO CONCLUIR** — limitaciones/OQ/dominios faltantes — **sin relleno LLM**
+
+### Realización física — THREE_PART_INTERPRETATION_V1 (§26 D4)
+
+INTERPRETATION se representa de manera estructurada, no como bloque narrativo sin frontera.
+
+| Campo | Significado |
+|-------|-------------|
+| `what_is_known` | Referencias fieles a facts/evidence/diagnoses/conflicts del IES |
+| `what_can_be_inferred` | Referencias a `hypotheses[]` emitidas por el mismo Result |
+| `what_cannot_be_concluded` | Limitaciones, abstenciones y open questions ancladas al IES |
+
+Texto semántico permitido solo como explicación N5 claramente separada. No agrega hechos; no eleva materiality; no resuelve conflictos; no rellena `NO_KNOWLEDGE`.
 
 ---
 
@@ -285,6 +327,25 @@ Sin porcentajes. Sin `k`/`wi`.
 | `SOURCE_*` / `TOOL_ERROR` en el **dominio causal necesario** del claim | No `STRONG`; posible abstención |
 | `MATERIALITY_NOT_ASSESSED` | **No** reduce strength por sí; **prohíbe** lenguaje de materialidad |
 
+### Realización física — MODEL_PROPOSES_VALIDATOR_BOUNDS_V1 (§26 D6)
+
+El modelo puede proponer `WEAK`/`MODERATE`/`STRONG`, pero el runtime determinístico solo valida límites y puede degradar o rechazar cuando condiciones contractuales objetivas impiden el nivel propuesto.
+No existe score numérico ni fórmula probability/confidence/materiality.
+
+Hard bounds físicos:
+
+- sin `supporting_evidence_ids` → no hypothesis
+- sin `supporting_fact_ids` → no hypothesis
+- conflicto adverso material al claim impide `STRONG`
+- limitación bloqueante impide `STRONG`
+- scope incompleto relevante impide `STRONG`
+- `NO_KNOWLEDGE` → no hypothesis
+- strength nunca se transforma en porcentaje
+- strength nunca deriva de confidence/materiality/severity
+
+Estos hard bounds **no derogan** los techos de esta sección. El techo «máximo `WEAK` (o abstención)» por conflicto que tensiona el claim permanece.
+`strength` no ordena automáticamente hypotheses rivales. `is_primary_candidate=false` por defecto sin base contractual de orden.
+
 ---
 
 # 6. Hipótesis rivales
@@ -297,6 +358,10 @@ Sin porcentajes. Sin `k`/`wi`.
 6. `is_primary_candidate=true` **solo** si el IES permite ordenar (p. ej. asimetría clara de soporte **y** `interpretation_constraint` / ausencia de contradicción frontal).  
 7. Sin base suficiente → **todas rivales sin ranking**; ninguna primaria.  
 8. Prohibido: porcentajes ficticios; ganador arbitrario del LLM; fusionar rivales en un hecho.
+
+### Realización física — RIVAL_GROUP_WITHOUT_AUTORANK_V1 (§26 D7)
+
+Hipótesis rivales pueden compartir `rival_group_id`. El runtime no crea ranking automático ni selecciona primary candidate sin base explícita.
 
 ---
 
@@ -332,6 +397,11 @@ ABSTENTION **explica por qué** el RE no concluye.
 | `RESTRICTED_SOURCE` | `SOURCE_RESTRICTED` |
 | `CRITICAL_TOOL_FAILURE` | `TOOL_ERROR` en dominio necesario |
 | `BLOCKING_CONFLICT` | Conflicto que impide la conclusión pedida |
+
+### Realización física — DETERMINISTIC_ABSTENTION_GATE_V1 (§26 D8)
+
+Antes de invocar modelo y después de validar su resultado existe gate determinístico de abstención. Condiciones, rechazo de lifecycle y estados consumibles: §26 D8.
+ABSTENTION no crea segunda cobertura.
 
 ---
 
@@ -416,6 +486,15 @@ Una causa probable **nunca** se convierte en hecho N2, evidencia N3 ni diagnóst
 **Prohibido:** recomendaciones genéricas sin ancla IES (“dar seguimiento”, “mejorar comunicación” sin objeto).  
 Emitir `recommendations[]` exige **≥1** `supporting_diagnosis_id` o `supporting_evidence_id` existente en el IES.
 
+### Realización física — SUPPORTED_CONDITIONAL_RECOMMENDATION_V1 (§26 D9)
+
+Recommendation es acción de negocio condicionada, nunca hecho ni mandato automático. Debe citar soporte IES y las hipótesis/diagnósticos que la motivan cuando existan.
+
+Campos mínimos físicos: `recommendation_id`, `statement`, `statement_language`, `supporting_fact_ids`, `supporting_evidence_ids`, `supporting_hypothesis_ids`, `conditions`, `limitations`, `ies_id`, `ies_version`.
+
+Fail-closed: sin evidence suficiente → no recommendation sustantiva; `NO_KNOWLEDGE` → no recommendation sustantiva.
+Esto **no** autoriza fabricar evidencia. Los campos conceptuales de esta sección no se derogan.
+
 ---
 
 # 13. Next verification
@@ -435,6 +514,13 @@ Puede buscar: cerrar `open_question`; contrastar fuentes; resolver entidad; veri
 Ejemplo: “Validar con gerente el responsable del folio” → NEXT_VERIFICATION.  
 “Reducir descuento del cliente” → RECOMMENDATION (solo con ancla).
 
+### Realización física — EPISTEMIC_ACTION_ONLY_V1 (§26 D10)
+
+Next Verification describe qué información debe verificarse después. RE no ejecuta la acción ni invoca tools.
+
+Campos mínimos físicos: `verification_id`, `question_or_check`, `reason`, `required_data`, `expected_source_if_known`, `related_ies_ids`, `related_open_question_ids`, `priority`.
+No sustituyen los campos conceptuales de esta sección.
+
 ---
 
 # 14. Decision option
@@ -452,6 +538,13 @@ Ejemplo: “Validar con gerente el responsable del folio” → NEXT_VERIFICATIO
 
 **No crear** options si el IES no permite comparar alternativas con base factual.
 
+### Realización física — NON_EXECUTED_DECISION_OPTION_V1 (§26 D11)
+
+Decision Option es alternativa estructurada para decisión humana. Nunca indica que la decisión ya fue tomada.
+
+Campos mínimos físicos: `decision_option_id`, `statement`, `conditions`, `expected_tradeoffs`, `supporting_references`, `limitations`, `execution_status`.
+`execution_status` = `NOT_EXECUTED`.
+
 ---
 
 # 15. Clarification request
@@ -464,6 +557,12 @@ Pedir aclaración al usuario cuando el IES tipifica:
 - `open_question` resoluble con input del usuario.
 
 **Prohibido:** usar aclaración para ocultar Tipo E; delegar al usuario datos que el sistema debería tener integrados (`SOURCE_NOT_INTEGRATED` → NEXT_VERIFICATION de integración, no “pregúntele al usuario el estatus inventado”).
+
+### Realización física — IES_ANCHORED_CLARIFICATION_V1 (§26 D12)
+
+Clarification Request solo pide resolver ambigüedad/alcance que el IES declara. No inventa entidad ni hechos.
+
+Campos mínimos físicos: `clarification_id`, `question`, `reason`, `related_open_question_ids`, `related_limitation_ids`, `related_unresolved_entities`.
 
 ---
 
@@ -527,12 +626,43 @@ Si `MATERIALITY_NOT_ASSESSED`: puede interpretar hechos; **no** describir el asu
 **Propietario documental del contrato:** este `05`.  
 **Propietario de runtime/almacén físico:** pendiente de implementación (fuera de EKS e IES; no se crea un segundo Knowledge Store). Hasta existir runtime, el Run es solo contrato.
 
+### Realización física — IN_MEMORY_REASONING_RUN_FIRST (§26 D13)
+
+IMPL-REASONING-001 puede producir Reasoning Run in-memory como artefacto de auditoría de la inferencia, **sin persistencia durable**. Persistencia durable requiere tarea separada.
+
+Campos mínimos físicos: `run_id`, `ies_id`, `ies_version`, `started_at`, `completed_at`, `status`, `session`, `provider_metadata`, `reasoning_result`, `validation_result`, `audit`.
+
+Constraints: append-only conceptual; no escribe EKS; no escribe IES; provider/model metadata es auditoría, no epistemología.
+
+### Realización física — AUDITABLE_NOT_BITWISE_REPLAY_V1 (§26 D14)
+
+El runtime registra suficiente metadata para auditar qué IES, sesión, adapter/proveedor y resultado participaron. **No** promete que una segunda llamada LLM produzca bytes idénticos.
+
+Auditoría requerida: `ies_id`/`ies_version`; `session`; provider/model metadata; output schema version; timestamps; validation outcome; references utilizadas.
+
 ---
 
 # 19. Independencia de proveedor
 
 El contrato **no depende** de OpenAI, GPT, Anthropic, Gemini ni modelo concreto.  
 `model_reference` / `model_provider_reference` son solo auditoría del Run.
+
+### Realización física — PROVIDER_NEUTRAL_MODEL_ADAPTER_V1 (§26 D2)
+
+El runtime RE depende de un `modelAdapter` inyectado y neutral respecto del proveedor. El contrato semántico RE no menciona OpenAI, Anthropic u otro proveedor concreto.
+
+Operación: `infer(request)`.
+Input: `reasoning_context` derivado exclusivamente del IES; `session`; `output_schema_version`.
+Output: `candidate_reasoning_result`; `provider_metadata` (`provider`, `model`, `model_version` si está disponible, `request_id` si está disponible).
+Constraints: sin tool calls; sin DB; sin fuentes operacionales; sin mutación IES; la respuesta del modelo es candidata, nunca verdad automáticamente; errores/timeout producen abstention/error controlado, no hechos.
+
+### Realización física — PROVIDER_FAILURE_FAIL_CLOSED_V1 (§26 D15)
+
+Timeout/error/malformed output del provider produce Reasoning Result o Run controlado con abstention/error metadata, sin hipótesis ni recommendations inventadas.
+
+### Realización física — ABSTENTION_CAPABLE_PROVIDER_INJECTED_RUNTIME_V1 (§26 D16)
+
+IMPL-REASONING-001 inicial debe funcionar completamente con adapter fake inyectado en tests y ser capaz de ejecutar gates/validación/abstención. No requiere proveedor real productivo. Sin networking; sin API keys. Integration real con proveedor = tarea posterior. Esta sección **no** crea runtime.
 
 ---
 
@@ -726,6 +856,10 @@ Constitución V.15 define **orden semántico** de respuesta, no diseño visual n
 23. RE no crea cobertura, `confidence` ni `severity`.  
 24. RE no reinterpreta `ABSENCE_CONFIRMED` ni colapsa estados de adquisición.  
 25. Reasoning Run no es memoria institucional ni hecho de un ciclo futuro.
+26. Toda salida candidata del modelo pasa validación determinística (`DETERMINISTIC_POST_VALIDATION_REQUIRED`).
+27. Sin `supporting_evidence_ids` existentes no hay hipótesis sustantiva ni recommendation sustantiva; no se fabrica evidencia.
+28. Fallo de proveedor es fail-closed (`PROVIDER_FAILURE_FAIL_CLOSED_V1`).
+29. `hypothesis_strength` no auto-ordena rivales (`RIVAL_GROUP_WITHOUT_AUTORANK_V1`).
 
 ---
 
@@ -762,12 +896,14 @@ Checklist verificable antes de implementación productiva del RE:
 
 # 24. Riesgos pendientes
 
-1. Implementación de almacén del Reasoning Run (fuera de EKS) — diseño de persistencia física pendiente.  
-2. Contrato futuro de memoria conversacional vs Run (no tratar Run como verdad).  
-3. Redacción de `06-CHANNEL-PROJECTION.md`.  
-4. Runtime IES pendiente (RE no puede operarse en producción sin IES runtime).  
-5. Calibración futura de umbrales de “tensión material” del claim vs conflicto — cualitativa en v1.0; sin %.  
+1. Implementación de almacén durable del Reasoning Run (fuera de EKS) — persistencia física pendiente; in-memory first registrado en §26 D13.
+2. Contrato futuro de memoria conversacional vs Run (no tratar Run como verdad).
+3. Runtime de Channel Projection (`06`) — fuera de este documento.
+4. Persistencia IES y runtime RE: la proyección IES `OFFICIAL` in-memory existe fuera de este documento; este `05` **no** implementa RE.
+5. Calibración futura de umbrales de “tensión material” del claim vs conflicto — cualitativa en v1.0; sin %. Los hard bounds §26 D6 no son fórmula ni G8.
 6. NC menor de etiqueta EKS “IES (futuro)”: higiene documental (no contrato).
+7. Evidence Builder vigente puede emitir `evidence[]` vacío; RE fail-closed (cero hipótesis/recommendations sustantivas) hasta existir evidencias autorizadas. No se fabrica evidencia.
+8. Integración con proveedor LLM real — tarea posterior (§26 D16).
 
 ---
 
@@ -777,19 +913,66 @@ Checklist verificable antes de implementación productiva del RE:
 |-------|--------|
 | Documento | `05-REASONING-ENGINE.md` |
 | Versión | 1.0 |
-| Estado | **REASONING ENGINE v1.0 APROBADO PARA CONGELAMIENTO** |
+| Estado | **REASONING ENGINE v1.0 APROBADO PARA CONGELAMIENTO**; realización física D1–D16 registrada (`ARCH-REASONING-PHYSICAL-DECISIONS-002`) |
 | Dependencias | Constitución; EKE; IES v1.0 congelado; EB; EKS (límites) |
 | Entrada | IES emitido |
 | Salida | Reasoning Result + Reasoning Run |
 | Hipótesis en IES | Prohibidas |
-| Runtime | **PENDIENTE** |
+| Runtime | **PENDIENTE** (interfaz física registrada en §26; esta sección no implementa) |
 | Channel Projection | Fuera de alcance (`06`) |
 | Commit | No realizado |
 
 ### Resultado de auditoría contractual
 
-**REASONING ENGINE v1.0 APROBADO PARA CONGELAMIENTO**  
-(**Runtime:** PENDIENTE.)
+**REASONING ENGINE v1.0 APROBADO PARA CONGELAMIENTO**
+**Realización física D1–D16:** registrada.
+(**Runtime:** PENDIENTE. Esta sección no autoriza IMPL-REASONING-001 por sí sola.)
+
+---
+
+# 26. Realización física v1 (D1–D16)
+
+Esta sección **no** redefine N1–N5 ni la Constitución. No cambia el esquema IES v1.0. No crea Nivel 6. No convierte hipótesis en hechos. No permite tools, DB ni fuentes operacionales. No crea `materiality` / `confidence` / `probability` nuevas. No cambia taxonomía de conflictos ni coverage. No diseña Channel Projection. No autoriza un proveedor concreto como norma. No calibra G8. No implementa runtime. No autoriza IMPL-REASONING-001 por sí sola.
+
+Registra las decisiones físicas aprobadas por HUMAN_APPROVER (tarea `ARCH-REASONING-PHYSICAL-DECISIONS-002`, G1+G2). Evidencia: `ARCH-REASONING-PHYSICAL-DECISIONS-001`.
+
+Los identificadores D1–D16 de **esta sección** son los de `CURRENT_TASK` / `ARCH-REASONING-PHYSICAL-DECISIONS-002`. **No** sustituyen las decisiones semánticas D1–D10 de la cabecera de este documento.
+
+Tokens: `REASONING_ENGINE_FACTORY_V1`, `PROVIDER_NEUTRAL_MODEL_ADAPTER_V1`, `STRUCTURED_REASONING_RESULT_V1`, `THREE_PART_INTERPRETATION_V1`, `DETERMINISTIC_POST_VALIDATION_REQUIRED`, `REJECT_OR_ABSTAIN`, `MODEL_PROPOSES_VALIDATOR_BOUNDS_V1`, `RIVAL_GROUP_WITHOUT_AUTORANK_V1`, `DETERMINISTIC_ABSTENTION_GATE_V1`, `SUPPORTED_CONDITIONAL_RECOMMENDATION_V1`, `EPISTEMIC_ACTION_ONLY_V1`, `NON_EXECUTED_DECISION_OPTION_V1`, `IES_ANCHORED_CLARIFICATION_V1`, `IN_MEMORY_REASONING_RUN_FIRST`, `AUDITABLE_NOT_BITWISE_REPLAY_V1`, `PROVIDER_FAILURE_FAIL_CLOSED_V1`, `ABSTENTION_CAPABLE_PROVIDER_INJECTED_RUNTIME_V1`. **Prohibido** sustituirlos en implementación.
+
+| ID | Decisión aprobada | Significado contractual |
+|----|-------------------|-------------------------|
+| D1 | **REASONING_ENGINE_FACTORY_V1** | Factory inyectable y testeable. Interfaz futura mínima: `createReasoningEngine({ modelAdapter, clock, idFactory, policy })` y `reason(ies, session)`. El IES es la única entrada de conocimiento. `session` contiene únicamente parámetros no epistemológicos permitidos por este documento: `analysis_mode`, `canonical_reasoning_language`, `channel_hint`, `maximum_semantic_depth`. `session` no modifica el IES; no transporta hechos empresariales; no transporta fuentes/tools. Default institucional de `canonical_reasoning_language` = `es-MX`. |
+| D2 | **PROVIDER_NEUTRAL_MODEL_ADAPTER_V1** | El runtime RE depende de un `modelAdapter` inyectado y neutral respecto del proveedor. El contrato semántico RE no menciona OpenAI, Anthropic u otro proveedor concreto. Operación `infer(request)`. Input: `reasoning_context` derivado exclusivamente del IES; `session`; `output_schema_version`. Output: `candidate_reasoning_result`; `provider_metadata` (`provider`, `model`, `model_version` si está disponible, `request_id` si está disponible). Sin tool calls; sin DB; sin fuentes operacionales; sin mutación IES; la respuesta del modelo es candidata, nunca verdad automáticamente; errores/timeout producen abstention/error controlado, no hechos. |
+| D3 | **STRUCTURED_REASONING_RESULT_V1** | La salida del RE es un objeto estructurado conforme a este documento, validable antes de exposición o materialización como Reasoning Run. Campos raíz: `interpretation`, `hypotheses`, `recommendations`, `next_verifications`, `decision_options`, `abstentions`, `clarification_requests`, `reasoning_limits`, `references`. Arrays siempre presentes aunque vacíos. `references` solo contiene IDs existentes del IES. Ningún objeto de salida crea N1–N4 ni modifica IES. Sin campos `probability`/`confidence`/`materiality` N5 inventados. |
+| D4 | **THREE_PART_INTERPRETATION_V1** | INTERPRETATION estructurada, no bloque narrativo sin frontera. `what_is_known`: referencias fieles a facts/evidence/diagnoses/conflicts del IES. `what_can_be_inferred`: referencias a `hypotheses[]` emitidas por el mismo Result. `what_cannot_be_concluded`: limitaciones, abstenciones y open questions ancladas al IES. No agrega hechos; no eleva materiality; no resuelve conflictos; no rellena `NO_KNOWLEDGE`. Texto semántico permitido solo como explicación N5 claramente separada. |
+| D5 | **DETERMINISTIC_POST_VALIDATION_REQUIRED** | Toda salida candidata del modelo debe pasar validación determinística antes de ser aceptada como Reasoning Result. Validaciones: `ies_id` coincide con IES ancla donde aplique; `ies_version` coincide; todos `supporting_fact_ids` existen; todos `supporting_evidence_ids` existen; todos `supporting_diagnosis_ids` existen; todos `conflict_ids` existen; todos `open_question_ids` existen; `references` contiene únicamente IDs existentes; `hypothesis_strength` pertenece al enum autorizado; `statement_language` coincide con política/session; `validity_scope` no excede alcance IES; materiality no se crea ni modifica; `resolution_status` no se cambia; Tipo E no se omite cuando es relevante; `NO_KNOWLEDGE` no contiene hipótesis sustantivas; Recommendation no se acepta sin soporte; Decision Option no se presenta como decisión ejecutada. Candidato inválido: **REJECT_OR_ABSTAIN** — no se corrige inventando soporte; se rechaza o se convierte en resultado fail-closed de abstención controlada. |
+| D6 | **MODEL_PROPOSES_VALIDATOR_BOUNDS_V1** | El modelo puede proponer `HYP_STRENGTH_WEAK` / `HYP_STRENGTH_MODERATE` / `HYP_STRENGTH_STRONG`; el runtime determinístico solo valida límites y puede degradar o rechazar cuando condiciones contractuales objetivas impiden el nivel propuesto. No existe score numérico ni fórmula probability/confidence/materiality. Hard bounds: sin `supporting_evidence_ids` → no hypothesis; sin `supporting_fact_ids` → no hypothesis; conflicto adverso material al claim impide `STRONG`; limitación bloqueante impide `STRONG`; scope incompleto relevante impide `STRONG`; `NO_KNOWLEDGE` → no hypothesis; strength nunca se transforma en porcentaje; strength nunca deriva de confidence/materiality/severity. `strength` no ordena automáticamente hypotheses rivales. `is_primary_candidate=false` por defecto sin base contractual de orden. Los techos cualitativos del §5 (incluido máximo `WEAK` o abstención si el conflicto tensiona el claim) **permanecen**. |
+| D7 | **RIVAL_GROUP_WITHOUT_AUTORANK_V1** | Hipótesis rivales pueden compartir `rival_group_id`. El runtime no crea ranking automático ni selecciona primary candidate sin base explícita. |
+| D8 | **DETERMINISTIC_ABSTENTION_GATE_V1** | Gate determinístico de abstención antes de invocar modelo y después de validar su resultado. Abstención mandatoria: IES status `NO_KNOWLEDGE` para hipótesis sustantivas; no supporting evidence disponible para claim; limitación bloqueante incompatible con claim; `ENTITY_UNRESOLVED` cuando claim requiere entidad canónica; `QUERY_SCOPE_INCOMPLETE` cuando claim requiere alcance faltante; candidate output inválido sin corrección segura. Lifecycle rechazo: `BUILDING`, `EXPIRED`, `SUPERSEDED`, `INVALID`. Lifecycle consumible: `VALIDATED`, `PARTIAL`, `CONFLICTED`, `NO_KNOWLEDGE`. |
+| D9 | **SUPPORTED_CONDITIONAL_RECOMMENDATION_V1** | Recommendation es acción de negocio condicionada, nunca hecho ni mandato automático. Debe citar soporte IES y las hipótesis/diagnósticos que la motivan cuando existan. Campos mínimos: `recommendation_id`, `statement`, `statement_language`, `supporting_fact_ids`, `supporting_evidence_ids`, `supporting_hypothesis_ids`, `conditions`, `limitations`, `ies_id`, `ies_version`. Fail-closed: sin evidence suficiente → no recommendation sustantiva; `NO_KNOWLEDGE` → no recommendation sustantiva. |
+| D10 | **EPISTEMIC_ACTION_ONLY_V1** | Next Verification describe qué información debe verificarse después. RE no ejecuta la acción ni invoca tools. Campos mínimos: `verification_id`, `question_or_check`, `reason`, `required_data`, `expected_source_if_known`, `related_ies_ids`, `related_open_question_ids`, `priority`. |
+| D11 | **NON_EXECUTED_DECISION_OPTION_V1** | Decision Option es alternativa estructurada para decisión humana. Nunca indica que la decisión ya fue tomada. Campos mínimos: `decision_option_id`, `statement`, `conditions`, `expected_tradeoffs`, `supporting_references`, `limitations`, `execution_status`. `execution_status` = `NOT_EXECUTED`. |
+| D12 | **IES_ANCHORED_CLARIFICATION_V1** | Clarification Request solo pide resolver ambigüedad/alcance que el IES declara. No inventa entidad ni hechos. Campos mínimos: `clarification_id`, `question`, `reason`, `related_open_question_ids`, `related_limitation_ids`, `related_unresolved_entities`. |
+| D13 | **IN_MEMORY_REASONING_RUN_FIRST** | IMPL-REASONING-001 puede producir Reasoning Run in-memory como artefacto de auditoría de la inferencia, sin persistencia durable. Campos mínimos: `run_id`, `ies_id`, `ies_version`, `started_at`, `completed_at`, `status`, `session`, `provider_metadata`, `reasoning_result`, `validation_result`, `audit`. Append-only conceptual; no escribe EKS; no escribe IES; persistencia durable requiere tarea separada; provider/model metadata es auditoría, no epistemología. |
+| D14 | **AUDITABLE_NOT_BITWISE_REPLAY_V1** | El runtime registra suficiente metadata para auditar qué IES, sesión, adapter/proveedor y resultado participaron. No promete que una segunda llamada LLM produzca bytes idénticos. Auditoría requerida: `ies_id`/`version`; `session`; provider/model metadata; output schema version; timestamps; validation outcome; references utilizadas. |
+| D15 | **PROVIDER_FAILURE_FAIL_CLOSED_V1** | Timeout/error/malformed output del provider produce Reasoning Result o Run controlado con abstention/error metadata, sin hipótesis ni recommendations inventadas. |
+| D16 | **ABSTENTION_CAPABLE_PROVIDER_INJECTED_RUNTIME_V1** | IMPL-REASONING-001 inicial debe funcionar completamente con adapter fake inyectado en tests y ser capaz de ejecutar gates/validación/abstención. No requiere proveedor real productivo. Fixtures IES existentes pueden alimentar tests. Provider fake determinístico para tests. Sin networking. Sin API keys. Sin package dependency nueva si no es necesaria. Integration real con proveedor = tarea posterior. |
+
+### Restricción física vigente (evidence)
+
+Mientras el Evidence Builder real no produzca `evidence[]` con reglas autorizadas, un futuro IMPL-REASONING-001 debe demostrar que cero `supporting_evidence` implica cero hipótesis sustantivas y cero recommendations sustantivas.
+Esto no bloquea implementar gates, adapter, validación y abstention. **Bloquea** demostrar razonamiento N5 sustantivo con el flujo productivo actual. **No** es permiso para fabricar evidencia.
+
+### Límites de esta realización
+
+1. Runtime RE **PENDIENTE**. Esta sección no implementa Reasoning Engine, adapter, prompts, tests ni fixtures.
+2. No calibra materias G8 (`wi`, `k`, `Fs`, materiality ruleset, severity productiva, reglas causales N1–N4, probability scoring).
+3. No autoriza IMPL-REASONING-001.
+4. No redefine Constitución, Motor, `02`, `03`, `03A`, `03B`, `04`, `06` ni el índice.
+5. N1–N4, coverage, conflictos, materiality e IES v1.0 **no** cambian.
+6. Persistencia durable de Reasoning Run permanece diferida.
+7. Proveedor LLM real permanece fuera.
 
 ---
 
