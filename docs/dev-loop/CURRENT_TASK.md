@@ -12,38 +12,37 @@ Esto **no** es G1. `DRAFT` no es ejecutable.
 ---
 
 ```yaml
-task_id: "ARCH-REASONING-PHYSICAL-DECISIONS-001"
+task_id: "ARCH-REASONING-PHYSICAL-DECISIONS-002"
 status: CLOSED
 
 authorized_by: "HUMAN_APPROVER"
-authorized_at: "2026-08-17T11:12:15-06:00"
+authorized_at: "2026-08-17T11:28:14-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-17"
 
 gates:
   G1_task_authorization: AUTHORIZED
-  G2_architecture_change: PENDING_IF_REQUIRED
+  G2_architecture_change: AUTHORIZED
   G3_new_architecture_contract: N/A
   G8_calibration_materiality_signature: N/A
 
 objective: >
-  Auditar la realizabilidad física del Reasoning Engine v1.0 definido por
-  docs/director-ia/05-REASONING-ENGINE.md contra el IES Builder y runtimes
-  actualmente existentes. Identificar qué decisiones físicas ya están
-  congeladas, qué elementos siguen UNKNOWN y qué decisiones humanas deben
-  resolverse antes de autorizar IMPL-REASONING-001, sin implementar runtime N5,
-  sin modificar contratos y sin introducir conocimiento N1-N4.
+  Resolver y registrar las decisiones físicas mínimas que bloquean
+  IMPL-REASONING-001, detectadas por
+  ARCH-REASONING-PHYSICAL-DECISIONS-001: interfaz del Reasoning Engine,
+  frontera/adaptador de proveedor LLM, envolvente física del Reasoning Result,
+  validación determinística post-model y mecanismo fail-closed de
+  hypothesis_strength. Registrar únicamente las decisiones humanas aprobadas,
+  sin implementar runtime, sin integrar proveedor real y sin modificar N1-N4.
 
 in_scope:
   - "docs/dev-loop/CURRENT_TASK.md"
-  - "docs/dev-loop/reports/ARCH-REASONING-PHYSICAL-DECISIONS-001.md"
+  - "docs/dev-loop/reports/ARCH-REASONING-PHYSICAL-DECISIONS-001.md (solo lectura)"
+  - "docs/dev-loop/reports/ARCH-REASONING-PHYSICAL-DECISIONS-002.md"
 
   - "docs/director-ia/DIRECTOR_IA_CONSTITUTION.md (solo lectura)"
   - "docs/director-ia/DIRECTOR_IA_EXECUTIVE_KNOWLEDGE_ENGINE.md (solo lectura)"
-  - "docs/director-ia/02-EVIDENCE-BUILDER.md (solo lectura)"
-  - "docs/director-ia/03-EXECUTIVE-KNOWLEDGE-STORE.md (solo lectura)"
-  - "docs/director-ia/03A-OBSERVATION-PIPELINE.md (solo lectura)"
   - "docs/director-ia/04-IES-STANDARD.md (solo lectura)"
-  - "docs/director-ia/05-REASONING-ENGINE.md (solo lectura)"
+  - "docs/director-ia/05-REASONING-ENGINE.md"
   - "docs/director-ia/06-CHANNEL-PROJECTION.md (solo lectura)"
   - "docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md (solo lectura)"
 
@@ -51,52 +50,45 @@ in_scope:
   - "test/director-ia-ies-builder.test.js (solo lectura)"
   - "fixtures/director-ia/ies/ (solo lectura)"
 
-  - "lib/director-ia-observation-pipeline.js (solo lectura)"
-  - "lib/director-ia-evidence-builder.js (solo lectura)"
-  - "lib/director-ia-eks.js (solo lectura)"
-  - "lib/director-ia-op-eb-eks-integration.js (solo lectura)"
-
 out_of_scope:
   - "implementar Reasoning Engine"
-  - "crear runtime N5"
-  - "crear lib/director-ia-reasoning*.js"
-  - "crear tests de implementación RE"
-  - "crear fixtures de implementación RE"
+  - "crear lib/director-ia-reasoning-engine.js"
+  - "crear adapter LLM"
+  - "crear prompts productivos"
+  - "llamar OpenAI u otro proveedor"
+  - "crear tests RE"
+  - "crear fixtures RE"
 
-  - "modificar docs/director-ia/"
+  - "modificar Constitución"
+  - "modificar Executive Knowledge Engine"
+  - "modificar 04-IES-STANDARD.md"
+  - "modificar 06-CHANNEL-PROJECTION.md"
+  - "modificar Architecture Index"
+
   - "modificar IES Builder"
-  - "modificar OP"
-  - "modificar EB"
-  - "modificar EKS"
+  - "modificar OP/EB/EKS"
   - "modificar server.js"
   - "modificar package.json"
 
-  - "integrar proveedor LLM"
-  - "llamar OpenAI u otro proveedor"
-  - "crear prompts productivos"
-  - "crear tool-calling"
-  - "consultar fuentes"
-  - "ejecutar SQL"
-  - "leer datos productivos"
+  - "crear persistencia Reasoning Run"
+  - "crear SQL/migraciones/tablas"
+  - "definir retention"
 
-  - "implementar Reasoning Run persistence"
-  - "crear tablas de Reasoning Run"
-  - "crear SQL/migraciones"
-  - "decidir retention"
-
-  - "implementar Channel Projection"
-  - "integrar chat"
-  - "integrar voz"
-  - "integrar WhatsApp"
-  - "integrar dashboard"
+  - "crear tools"
+  - "permitir tool calls al modelo"
+  - "consultar DB/fuentes operacionales"
+  - "usar conocimiento externo del modelo como verdad empresarial"
 
   - "calibrar wi"
   - "calibrar k"
   - "calibrar Fs"
   - "calibrar materiality"
-  - "recalcular confidence"
+  - "crear probability scoring"
+  - "crear confidence scoring N5"
   - "crear causalidad N1-N4"
-  - "crear hechos/evidencia/diagnósticos nuevos"
+
+  - "implementar Channel Projection"
+  - "integrar chat/voz/WhatsApp/dashboard"
 
   - "commit"
   - "push"
@@ -107,354 +99,477 @@ out_of_scope:
 contracts_in_force:
   - "docs/director-ia/DIRECTOR_IA_CONSTITUTION.md"
   - "docs/director-ia/DIRECTOR_IA_EXECUTIVE_KNOWLEDGE_ENGINE.md"
-  - "docs/director-ia/02-EVIDENCE-BUILDER.md"
-  - "docs/director-ia/03-EXECUTIVE-KNOWLEDGE-STORE.md"
-  - "docs/director-ia/03A-OBSERVATION-PIPELINE.md"
   - "docs/director-ia/04-IES-STANDARD.md"
   - "docs/director-ia/05-REASONING-ENGINE.md"
   - "docs/director-ia/06-CHANNEL-PROJECTION.md"
 
-known_runtime_state:
-  observation_pipeline: "IMPLEMENTED"
-  evidence_builder: "IMPLEMENTED"
-  eks: "IMPLEMENTED + internal runtime integration"
-  op_eb_eks_flow: "IMPLEMENTED / tested"
-  ies_builder: "IMPLEMENTED OFFICIAL in-memory"
-  reasoning_engine: "PENDING"
-  reasoning_run_store: "PENDING"
-  channel_projection: "PENDING"
+audit_result_in_force:
+  source: "docs/dev-loop/reports/ARCH-REASONING-PHYSICAL-DECISIONS-001.md"
+  implementation_status: "NO-GO"
+  blockers:
+    - "interfaz física del Reasoning Engine"
+    - "adapter/proveedor LLM"
+    - "envolvente física del Reasoning Result"
+    - "validación determinística post-model"
+    - "mecanismo de hypothesis_strength"
+  runtime_reality:
+    - "IES Builder OFFICIAL in-memory existe"
+    - "IES runtime actual produce estados consumibles por RE"
+    - "EB actual mantiene evidence[] y diagnoses[] vacíos sin reglas autorizadas"
+    - "sin supporting_evidence_ids no pueden emitirse hipótesis sustantivas"
+    - "runtime inicial RE debe ser capaz de abstenerse completamente"
 
-reasoning_contract_facts:
-  - "Reasoning Engine = Nivel 5"
-  - "RE es la única capa donde puede operar LLM analítico para hipótesis"
-  - "RE no es fuente de verdad empresarial"
-  - "RE no modifica IES, Snapshot ni Bundle"
-  - "RE no crea N1-N4"
-  - "RE no ejecuta tools"
-  - "RE no consulta bases operacionales"
-  - "entrada de conocimiento = un IES válido"
-  - "parámetros de sesión no alteran el IES"
-  - "BUILDING/EXPIRED/SUPERSEDED/INVALID no son consumibles para nuevo razonamiento vigente"
-  - "VALIDATED/PARTIAL/CONFLICTED/NO_KNOWLEDGE sí son consumibles"
-  - "NO_KNOWLEDGE no autoriza hipótesis sustantivas"
-  - "PARTIAL no autoriza completar vacíos"
-  - "hipótesis requiere IDs de hechos/evidencias del IES"
-  - "al menos un supporting_evidence_id existente"
-  - "hypothesis_strength != confidence"
-  - "hypothesis_strength != probability"
-  - "hypothesis_strength != materiality"
-  - "hypothesis_strength != severity"
-  - "sin porcentajes ficticios"
-  - "hipótesis rivales están permitidas"
-  - "sin ranking ficticio"
-  - "Recommendation != Next Verification != Decision Option"
-  - "ABSTENTION no crea segunda cobertura"
-  - "RE no recalcula materiality"
-  - "OFFICIAL y ALTERNATIVE no se fusionan silenciosamente"
-  - "canonical_reasoning_language vigente = es-MX"
-  - "RE produce Reasoning Result"
-  - "Reasoning Run es auditoría append-only de inferencia N5 fuera de EKS/IES"
-  - "Channel Projection posee presentación; RE posee semántica"
-
-audit_questions:
+proposed_human_decisions:
 
   D1_runtime_interface:
-    question: >
-      ¿Cuál debe ser la interfaz física mínima del Reasoning Engine:
-      factory pura, servicio con adapter LLM inyectable, función pura o forma
-      equivalente, sin convertir proveedor/modelo en contrato?
-    classify:
-      - CONTRACTUAL
-      - PHYSICAL_UNKNOWN
-      - RECOMMENDATION
+    decision: "REASONING_ENGINE_FACTORY_V1"
+    meaning: >
+      Reasoning Engine se realiza como factory inyectable y testeable.
+      Interfaz futura mínima:
+      createReasoningEngine({ modelAdapter, clock, idFactory, policy })
+      y reason(ies, session).
+      El IES es la única entrada de conocimiento. session contiene únicamente
+      parámetros no epistemológicos permitidos por 05.
 
-  D2_input_shape:
-    question: >
-      ¿Qué parte exacta del IES completo consume el RE y qué parámetros de
-      sesión deben ser una segunda entrada no epistemológica?
-    must_cover:
-      - "IES"
-      - "analysis_mode"
-      - "canonical_reasoning_language"
-      - "channel_hint"
-      - "maximum_semantic_depth"
+    session_shape:
+      fields:
+        - "analysis_mode"
+        - "canonical_reasoning_language"
+        - "channel_hint"
+        - "maximum_semantic_depth"
+      rules:
+        - "session no modifica el IES"
+        - "session no transporta hechos empresariales"
+        - "session no transporta fuentes/tools"
+        - "canonical_reasoning_language default institucional = es-MX"
 
-  D3_status_gate:
-    question: >
-      ¿Cómo debe implementarse físicamente el gate de lifecycle IES antes de
-      ejecutar cualquier razonamiento?
-    must_cover:
-      - "VALIDATED"
-      - "PARTIAL"
-      - "CONFLICTED"
-      - "NO_KNOWLEDGE"
+  D2_model_adapter:
+    decision: "PROVIDER_NEUTRAL_MODEL_ADAPTER_V1"
+    meaning: >
+      El runtime RE depende de un modelAdapter inyectado y neutral respecto del
+      proveedor. El contrato semántico RE no menciona OpenAI, Anthropic u otro
+      proveedor concreto.
+
+    interface:
+      operation: "infer(request)"
+      input:
+        - "reasoning_context derivado exclusivamente del IES"
+        - "session"
+        - "output_schema_version"
+      output:
+        - "candidate_reasoning_result"
+        - "provider_metadata"
+      provider_metadata:
+        - "provider"
+        - "model"
+        - "model_version si está disponible"
+        - "request_id si está disponible"
+      constraints:
+        - "sin tool calls"
+        - "sin DB"
+        - "sin fuentes operacionales"
+        - "sin mutación IES"
+        - "respuesta del modelo es candidata, nunca verdad automáticamente"
+        - "errores/timeout producen abstention/error controlado, no hechos"
+
+  D3_reasoning_result_envelope:
+    decision: "STRUCTURED_REASONING_RESULT_V1"
+    meaning: >
+      La salida del RE es un objeto estructurado conforme a 05, validable antes
+      de exposición o materialización como Reasoning Run.
+
+    root_fields:
+      - "interpretation"
+      - "hypotheses"
+      - "recommendations"
+      - "next_verifications"
+      - "decision_options"
+      - "abstentions"
+      - "clarification_requests"
+      - "reasoning_limits"
+      - "references"
+
+    rules:
+      - "arrays siempre presentes aunque vacíos"
+      - "references solo contiene IDs existentes del IES"
+      - "ningún objeto de salida crea N1-N4"
+      - "ningún objeto de salida modifica IES"
+      - "sin campos probability/confidence/materiality N5 inventados"
+
+  D4_interpretation_shape:
+    decision: "THREE_PART_INTERPRETATION_V1"
+    meaning: >
+      INTERPRETATION se representa de manera estructurada, no como bloque
+      narrativo sin frontera.
+
+    fields:
+      what_is_known:
+        meaning: "referencias fieles a facts/evidence/diagnoses/conflicts del IES"
+      what_can_be_inferred:
+        meaning: "referencias a hypotheses[] emitidas por el mismo Result"
+      what_cannot_be_concluded:
+        meaning: "limitaciones, abstenciones y open questions ancladas al IES"
+
+    constraints:
+      - "no agrega hechos"
+      - "no eleva materiality"
+      - "no resuelve conflictos"
+      - "no rellena NO_KNOWLEDGE"
+      - "texto semántico permitido solo como explicación N5 claramente separada"
+
+  D5_post_model_validation:
+    decision: "DETERMINISTIC_POST_VALIDATION_REQUIRED"
+    meaning: >
+      Toda salida candidata del modelo debe pasar validación determinística
+      antes de ser aceptada como Reasoning Result.
+
+    validations:
+      - "ies_id coincide con IES ancla donde aplique"
+      - "ies_version coincide"
+      - "todos supporting_fact_ids existen"
+      - "todos supporting_evidence_ids existen"
+      - "todos supporting_diagnosis_ids existen"
+      - "todos conflict_ids existen"
+      - "todos open_question_ids existen"
+      - "references contiene únicamente IDs existentes"
+      - "hypothesis_strength pertenece al enum autorizado"
+      - "statement_language coincide con política/session"
+      - "validity_scope no excede alcance IES"
+      - "materiality no se crea ni modifica"
+      - "resolution_status no se cambia"
+      - "Tipo E no se omite cuando es relevante"
+      - "NO_KNOWLEDGE no contiene hipótesis sustantivas"
+      - "Recommendation no se acepta sin soporte"
+      - "Decision Option no se presenta como decisión ejecutada"
+
+    invalid_candidate_behavior:
+      decision: "REJECT_OR_ABSTAIN"
+      meaning: >
+        Una salida candidata inválida no se corrige inventando soporte.
+        Se rechaza o se convierte en resultado fail-closed de abstención
+        controlada.
+
+  D6_hypothesis_strength:
+    decision: "MODEL_PROPOSES_VALIDATOR_BOUNDS_V1"
+    meaning: >
+      El modelo puede proponer WEAK/MODERATE/STRONG, pero el runtime
+      determinístico solo valida límites y puede degradar o rechazar cuando
+      condiciones contractuales objetivas impiden el nivel propuesto.
+      No existe score numérico ni fórmula probability/confidence/materiality.
+
+    enum:
+      - "HYP_STRENGTH_WEAK"
+      - "HYP_STRENGTH_MODERATE"
+      - "HYP_STRENGTH_STRONG"
+
+    hard_bounds:
+      - "sin supporting_evidence_ids -> no hypothesis"
+      - "sin supporting_fact_ids -> no hypothesis"
+      - "conflicto adverso material al claim impide STRONG"
+      - "limitación bloqueante impide STRONG"
+      - "scope incompleto relevante impide STRONG"
+      - "NO_KNOWLEDGE -> no hypothesis"
+      - "strength nunca se transforma en porcentaje"
+      - "strength nunca deriva de confidence/materiality/severity"
+
+    no_ranking_rule:
+      - "strength no ordena automáticamente hypotheses rivales"
+      - "is_primary_candidate=false por defecto sin base contractual de orden"
+
+  D7_rival_hypotheses:
+    decision: "RIVAL_GROUP_WITHOUT_AUTORANK_V1"
+    meaning: >
+      Hipótesis rivales pueden compartir rival_group_id. El runtime no crea
+      ranking automático ni selecciona primary candidate sin base explícita.
+
+  D8_abstention:
+    decision: "DETERMINISTIC_ABSTENTION_GATE_V1"
+    meaning: >
+      Antes de invocar modelo y después de validar su resultado existe gate
+      determinístico de abstención.
+
+    mandatory_abstention_conditions:
+      - "IES status NO_KNOWLEDGE para hipótesis sustantivas"
+      - "no supporting evidence disponible para claim"
+      - "limitación bloqueante incompatible con claim"
+      - "ENTITY_UNRESOLVED cuando claim requiere entidad canónica"
+      - "QUERY_SCOPE_INCOMPLETE cuando claim requiere alcance faltante"
+      - "candidate output inválido sin corrección segura"
+
+    lifecycle_rejection:
       - "BUILDING"
       - "EXPIRED"
       - "SUPERSEDED"
       - "INVALID"
 
-  D4_llm_boundary:
-    question: >
-      ¿Qué contrato físico debe tener un adapter/model provider para permitir
-      inferencia N5 sin permitir tools, DB, fuentes o mutación del IES?
-    must_determine:
-      - "request shape"
-      - "response shape"
-      - "provider metadata"
-      - "timeout/error behavior"
-      - "no tool calls"
-      - "no hidden knowledge treated as enterprise truth"
-
-  D5_reasoning_result_shape:
-    question: >
-      Verificar si 05 define suficientemente la forma física completa de
-      Reasoning Result para implementación directa.
-    fields:
-      - "interpretation"
-      - "hypotheses[]"
-      - "recommendations[]"
-      - "next_verifications[]"
-      - "decision_options[]"
-      - "abstentions[]"
-      - "clarification_requests[]"
-      - "reasoning_limits"
-      - "references"
-
-  D6_interpretation:
-    question: >
-      ¿Qué forma estructural mínima debe tomar INTERPRETATION para mantener
-      separación LO QUE SÉ / PUEDO INFERIR / NO PUEDO CONCLUIR sin crear
-      narrativa que se confunda con N1-N4?
-
-  D7_hypothesis_validation:
-    question: >
-      ¿Qué validaciones determinísticas deben ejecutarse después del modelo
-      para aceptar/rechazar una Hypothesis?
-    must_cover:
-      - "supporting_fact_ids existentes"
-      - "supporting_evidence_ids existentes"
-      - "ies_id/version exactos"
-      - "validity_scope"
-      - "statement_language"
-      - "hypothesis_strength enum"
-      - "conflicts/limitations citados"
-
-  D8_hypothesis_strength:
-    question: >
-      ¿El contrato permite calcular WEAK/MODERATE/STRONG determinísticamente,
-      delegarlo al modelo sujeto a validación, o falta una decisión física?
-    prohibition: >
-      No crear score, probability, confidence proxy, materiality proxy ni
-      fórmula no autorizada.
-
-  D9_rival_hypotheses:
-    question: >
-      ¿Qué mecanismo físico permite hipótesis rivales sin inventar ranking ni
-      primary candidate cuando no existe base contractual de orden?
-
-  D10_abstention:
-    question: >
-      ¿Cómo se genera una abstención anclada al IES y cuáles son las condiciones
-      determinísticas que deben impedir hipótesis?
-    must_cover:
+    lifecycle_consumable:
+      - "VALIDATED"
+      - "PARTIAL"
+      - "CONFLICTED"
       - "NO_KNOWLEDGE"
-      - "falta de supporting_evidence"
-      - "limitación bloqueante"
-      - "entidad unresolved"
-      - "scope incompleto"
-      - "conflicto que impida claim"
 
-  D11_recommendation:
-    question: >
-      Determinar qué soporte/referencias exige una Recommendation y qué impide
-      que se convierta en mandato no soportado o hecho.
+  D9_recommendation:
+    decision: "SUPPORTED_CONDITIONAL_RECOMMENDATION_V1"
+    meaning: >
+      Recommendation es acción de negocio condicionada, nunca hecho ni mandato
+      automático. Debe citar soporte IES y las hipótesis/diagnósticos que la
+      motivan cuando existan.
 
-  D12_next_verification:
-    question: >
-      Determinar cómo distinguir físicamente una acción epistémica futura de
-      una Recommendation de negocio, sin ejecutar la tool desde RE.
+    minimum_fields:
+      - "recommendation_id"
+      - "statement"
+      - "statement_language"
+      - "supporting_fact_ids"
+      - "supporting_evidence_ids"
+      - "supporting_hypothesis_ids"
+      - "conditions"
+      - "limitations"
+      - "ies_id"
+      - "ies_version"
 
-  D13_decision_option:
-    question: >
-      Determinar la estructura y validación mínima de Decision Option y qué
-      impide presentarla como decisión tomada.
+    fail_closed:
+      - "sin evidence suficiente -> no recommendation sustantiva"
+      - "NO_KNOWLEDGE -> no recommendation sustantiva"
 
-  D14_clarification_request:
-    question: >
-      Determinar cuándo RE puede pedir aclaración y qué anclas del IES debe
-      citar sin inventar entidades ni alcance.
+  D10_next_verification:
+    decision: "EPISTEMIC_ACTION_ONLY_V1"
+    meaning: >
+      Next Verification describe qué información debe verificarse después.
+      RE no ejecuta la acción ni invoca tools.
 
-  D15_materiality_and_conflicts:
-    question: >
-      Verificar mecanismos físicos para garantizar que RE solo consume
-      materiality y conflictos proyectados; no eleva MAT_* ni resuelve conflictos.
+    minimum_fields:
+      - "verification_id"
+      - "question_or_check"
+      - "reason"
+      - "required_data"
+      - "expected_source_if_known"
+      - "related_ies_ids"
+      - "related_open_question_ids"
+      - "priority"
 
-  D16_official_alternative:
-    question: >
-      ¿Cómo debe recibir/razonar sobre OFFICIAL o ALTERNATIVE sin fusión
-      silenciosa y conservando provenance?
+  D11_decision_option:
+    decision: "NON_EXECUTED_DECISION_OPTION_V1"
+    meaning: >
+      Decision Option es alternativa estructurada para decisión humana.
+      Nunca indica que la decisión ya fue tomada.
 
-  D17_reasoning_run:
-    question: >
-      Auditar si 05 define suficientemente Reasoning Run para una implementación
-      in-memory inicial y/o persistencia posterior.
-    must_determine:
+    minimum_fields:
+      - "decision_option_id"
+      - "statement"
+      - "conditions"
+      - "expected_tradeoffs"
+      - "supporting_references"
+      - "limitations"
+      - "execution_status"
+
+    execution_status:
+      value: "NOT_EXECUTED"
+
+  D12_clarification_request:
+    decision: "IES_ANCHORED_CLARIFICATION_V1"
+    meaning: >
+      Clarification Request solo pide resolver ambigüedad/alcanze que el IES
+      declara. No inventa entidad ni hechos.
+
+    minimum_fields:
+      - "clarification_id"
+      - "question"
+      - "reason"
+      - "related_open_question_ids"
+      - "related_limitation_ids"
+      - "related_unresolved_entities"
+
+  D13_reasoning_run:
+    decision: "IN_MEMORY_REASONING_RUN_FIRST"
+    meaning: >
+      IMPL-REASONING-001 puede producir Reasoning Run in-memory como artefacto
+      de auditoría de la inferencia, sin persistencia durable.
+
+    minimum_fields:
       - "run_id"
-      - "IES anchor"
-      - "Reasoning Result"
+      - "ies_id"
+      - "ies_version"
+      - "started_at"
+      - "completed_at"
+      - "status"
+      - "session"
+      - "provider_metadata"
+      - "reasoning_result"
+      - "validation_result"
+      - "audit"
+
+    constraints:
+      - "append-only conceptual"
+      - "no escribe EKS"
+      - "no escribe IES"
+      - "persistencia durable requiere tarea separada"
+      - "provider/model metadata es auditoría, no epistemología"
+
+  D14_replay_auditability:
+    decision: "AUDITABLE_NOT_BITWISE_REPLAY_V1"
+    meaning: >
+      El runtime registra suficiente metadata para auditar qué IES, sesión,
+      adapter/proveedor y resultado participaron. No promete que una segunda
+      llamada LLM produzca bytes idénticos.
+
+    required_audit:
+      - "ies_id/version"
+      - "session"
       - "provider/model metadata"
-      - "prompt/template/version metadata si aplica"
+      - "output schema version"
       - "timestamps"
-      - "append-only semantics"
-      - "persistence requirement"
-      - "integrity/audit fields"
+      - "validation outcome"
+      - "references utilizadas"
 
-  D18_determinism_and_replay:
-    question: >
-      Separar qué partes deben ser determinísticas y qué partes no pueden serlo
-      por naturaleza del LLM. Determinar qué necesita fijarse para
-      auditabilidad/replay verificable sin prometer repetibilidad absoluta.
+  D15_provider_failure:
+    decision: "PROVIDER_FAILURE_FAIL_CLOSED_V1"
+    meaning: >
+      Timeout/error/malformed output del provider produce Reasoning Result o Run
+      controlado con abstention/error metadata, sin hipótesis ni recommendations
+      inventadas.
 
-  D19_provider_independence:
-    question: >
-      Determinar la interfaz mínima para que OpenAI u otro proveedor sea
-      intercambiable sin cambiar el contrato semántico RE.
+  D16_first_runtime_scope:
+    decision: "ABSTENTION_CAPABLE_PROVIDER_INJECTED_RUNTIME_V1"
+    meaning: >
+      IMPL-REASONING-001 inicial debe funcionar completamente con adapter fake
+      inyectado en tests y ser capaz de ejecutar gates/validación/abstención.
+      No requiere proveedor real productivo.
 
-  D20_runtime_readiness:
-    question: >
-      Emitir GO/NO-GO para IMPL-REASONING-001, identificando exactamente qué
-      decisiones físicas faltantes requieren G2 u otra autorización.
+    implementation_rule:
+      - "fixtures IES existentes pueden alimentar tests"
+      - "provider fake determinístico para tests"
+      - "sin networking"
+      - "sin API keys"
+      - "sin package dependency nueva si no es necesaria"
+      - "integration real con proveedor = tarea posterior"
 
-mandatory_result_source_matrix:
-  required_columns:
-    - "Reasoning Result field/object"
-    - "contract authority"
-    - "source from IES"
-    - "LLM generated allowed: YES|NO|CONDITIONAL"
-    - "deterministic validation"
-    - "physical readiness"
-    - "classification"
-    - "notes"
+important_current_runtime_constraint:
+  statement: >
+    Mientras el Evidence Builder real no produzca evidence[] con reglas
+    autorizadas, IMPL-REASONING-001 debe demostrar correctamente que cero
+    supporting_evidence implica cero hipótesis sustantivas y cero
+    recommendations sustantivas.
+  consequence: >
+    Esto no bloquea implementar el runtime de gates, adapter, validación y
+    abstention, pero bloquea demostrar razonamiento N5 sustantivo con el flujo
+    productivo actual.
 
-mandatory_gate_matrix:
-  required_columns:
-    - "condition"
-    - "may_reason: YES|NO|LIMITED"
-    - "may_emit_hypothesis: YES|NO"
-    - "must_abstain: YES|NO"
-    - "contract_reference"
-    - "notes"
+human_approval_scope:
+  approve_exactly:
+    - "D1_runtime_interface"
+    - "D2_model_adapter"
+    - "D3_reasoning_result_envelope"
+    - "D4_interpretation_shape"
+    - "D5_post_model_validation"
+    - "D6_hypothesis_strength"
+    - "D7_rival_hypotheses"
+    - "D8_abstention"
+    - "D9_recommendation"
+    - "D10_next_verification"
+    - "D11_decision_option"
+    - "D12_clarification_request"
+    - "D13_reasoning_run"
+    - "D14_replay_auditability"
+    - "D15_provider_failure"
+    - "D16_first_runtime_scope"
 
-mandatory_runtime_gap_matrix:
-  required_columns:
-    - "gap_id"
-    - "description"
-    - "blocks_impl_reasoning_001: YES|NO"
-    - "requires_G2: YES|NO"
-    - "requires_provider_decision: YES|NO"
-    - "requires_G8: YES|NO"
-    - "authority_owner"
-    - "recommended_resolution"
+g2_contract_changes_authorized_if_approved:
+  docs/director-ia/05-REASONING-ENGINE.md:
+    allowed:
+      - "registrar realización física D1-D16"
+      - "registrar interfaz futura del runtime"
+      - "registrar adapter neutral de provider"
+      - "registrar Reasoning Result envelope"
+      - "registrar deterministic post-validation"
+      - "registrar hypothesis_strength fail-closed"
+      - "registrar abstention gate"
+      - "registrar Reasoning Run in-memory readiness"
+      - "registrar auditability sin prometer replay absoluto"
 
-classification_rules:
-  CONTRACTUAL: >
-    Definido por 05 o contratos superiores. Implementación debe obedecerlo.
-  PHYSICAL_UNKNOWN: >
-    Resultado requerido pero sin realización física suficiente.
-  RECOMMENDATION: >
-    Propuesta técnica no vinculante; no queda aprobada por aparecer en reporte.
-  BLOCKER: >
-    Impide implementar sin decisión humana/contractual adicional.
+    forbidden:
+      - "cambiar cinco niveles constitucionales"
+      - "cambiar IES"
+      - "crear N6"
+      - "convertir hipótesis en hechos"
+      - "permitir tools/DB/fuentes"
+      - "crear materiality/confidence/probability nuevas"
+      - "cambiar taxonomía de conflictos"
+      - "cambiar coverage"
+      - "diseñar Channel Projection"
+      - "autorizar proveedor específico como norma"
 
-audit_constraints:
-  - "no implementar LLM"
-  - "no crear prompts productivos"
-  - "no simular proveedor como decisión final"
-  - "no inferir estructura faltante por conveniencia"
-  - "no convertir interpretación en hechos N1-N4"
-  - "no generar hipótesis durante la auditoría"
-  - "no inventar hypothesis_strength"
-  - "no inventar probabilities"
-  - "no inventar causalidad empresarial"
-  - "no reabrir coverage"
-  - "no recalcular materiality"
-  - "no resolver conflictos"
-  - "no ejecutar next_verification"
-  - "no transformar recommendations en acciones automáticas"
-  - "no diseñar Channel Projection"
-  - "no modificar 05"
+g8_reserved_and_unchanged:
+  - "wi"
+  - "k"
+  - "Fs"
+  - "materiality ruleset"
+  - "severity productiva"
+  - "causal rules N1-N4"
+  - "probability scoring"
 
-required_report_sections:
-  - "1. Executive result"
-  - "2. Contracts/runtime inspected"
-  - "3. Current physical reality"
-  - "4. D1-D20 findings"
-  - "5. Reasoning Result source matrix"
-  - "6. Lifecycle/abstention gate matrix"
-  - "7. LLM/provider boundary"
-  - "8. Deterministic post-validation"
-  - "9. Hypothesis strength/rivals readiness"
-  - "10. Recommendation/verification/decision-option separation"
-  - "11. Reasoning Run readiness"
-  - "12. Replay/auditability analysis"
-  - "13. Physical unknowns"
-  - "14. Recommendations requiring approval"
-  - "15. Blockers"
-  - "16. Gate assessment"
-  - "17. GO/NO-GO for IMPL-REASONING-001"
-  - "18. STOP"
+required_report:
+  - "decisiones D1-D16 registradas"
+  - "diff contractual exacto"
+  - "confirmación N1-N4 intactos"
+  - "confirmación IES intacto"
+  - "confirmación provider-neutral"
+  - "post-validation final"
+  - "abstention gates final"
+  - "hypothesis_strength bounds final"
+  - "Reasoning Run readiness"
+  - "gaps aún diferidos"
+  - "GO/NO-GO para IMPL-REASONING-001"
 
 acceptance_criteria:
-  - "D1-D20 auditados"
-  - "matriz Reasoning Result completa"
-  - "matriz lifecycle/abstention completa"
-  - "matriz runtime gaps completa"
-  - "frontera IES -> RE identificada"
-  - "frontera LLM/provider identificada"
-  - "validaciones post-model identificadas"
-  - "Reasoning Run readiness auditado"
-  - "NO_KNOWLEDGE/abstention auditado"
-  - "PARTIAL/CONFLICTED auditados"
-  - "materiality/conflicts preservados"
-  - "ningún contrato modificado"
-  - "ningún runtime modificado"
-  - "sin integración LLM"
-  - "sin prompts productivos"
+  - "interfaz RE queda físicamente definida"
+  - "adapter provider-neutral queda definido"
+  - "Reasoning Result queda físicamente definido"
+  - "post-validation queda obligatoria"
+  - "hypothesis_strength no usa scores/probabilities"
+  - "NO_KNOWLEDGE no genera hipótesis"
+  - "sin evidence no hay hypothesis sustantiva"
+  - "sin evidence no hay recommendation sustantiva"
+  - "rival hypotheses no se auto-rankean"
+  - "Recommendation/Verification/Decision Option permanecen separados"
+  - "Reasoning Run inicial puede ser in-memory"
+  - "persistencia Run permanece diferida"
+  - "provider failure es fail-closed"
+  - "provider real permanece fuera"
+  - "05 es el único contrato modificable"
+  - "04 no se modifica"
+  - "06 no se modifica"
+  - "N1-N4 no cambian"
   - "sin G8"
-  - "ninguna recomendación autoaprobada"
+  - "sin runtime RE"
+  - "sin tests/fixtures RE"
   - "git diff --check sin errores"
   - "reporte obligatorio creado"
+  - "IMPL-REASONING-001 no se crea"
 
 allowed_actions:
   - "leer contracts_in_force"
-  - "leer runtimes/tests/fixtures declarados in_scope"
-  - "comparar 05 con IES Builder real"
-  - "clasificar D1-D20"
-  - "crear matrices obligatorias"
-  - "crear docs/dev-loop/reports/ARCH-REASONING-PHYSICAL-DECISIONS-001.md"
+  - "leer ARCH-REASONING-PHYSICAL-DECISIONS-001.md"
+  - "comparar decisiones propuestas con contratos superiores"
+  - "si G1+G2 autorizados, modificar únicamente 05-REASONING-ENGINE.md"
+  - "crear docs/dev-loop/reports/ARCH-REASONING-PHYSICAL-DECISIONS-002.md"
   - "actualizar CURRENT_TASK mediante transiciones permitidas"
-  - "ejecutar tests existentes solo si ayudan a verificar realidad"
   - "ejecutar git diff --check"
 
 forbidden_actions:
-  - "modificar docs/director-ia/"
-  - "crear runtime RE"
-  - "crear adapter LLM"
+  - "modificar contratos fuera de 05"
+  - "implementar runtime RE"
+  - "crear adapter"
   - "crear prompts"
-  - "crear tests RE"
-  - "crear fixtures RE"
+  - "crear tests/fixtures RE"
+  - "integrar proveedor real"
+  - "usar network/API"
   - "modificar IES Builder"
   - "modificar OP/EB/EKS"
   - "modificar server.js"
   - "modificar package.json"
   - "crear SQL/migraciones"
-  - "integrar proveedor LLM"
-  - "usar tools productivas"
-  - "leer datos productivos"
-  - "implementar Channel Projection"
   - "calibrar G8"
-  - "autoaprobar decisiones"
-  - "autoaprobar gates"
+  - "autoaprobar G1/G2"
   - "crear IMPL-REASONING-001"
   - "commit"
   - "push"
@@ -462,15 +577,10 @@ forbidden_actions:
   - "encadenar siguiente tarea"
 
 expected_terminal_state: >
-  DONE_PENDING_REVIEW si la auditoría puede determinar de forma completa la
-  frontera física IES -> Reasoning Engine y separar contratos, unknowns,
-  recomendaciones y blockers sin modificar contratos.
-  BLOCKED o STOPPED si continuar exige G2 u otra decisión humana no autorizada.
-
-implementation_followup_rule: >
-  IMPL-REASONING-001 no puede crearse desde esta tarea. HUMAN_APPROVER debe
-  revisar primero el reporte y aprobar cualquier decisión física pendiente.
+  DONE_PENDING_REVIEW si las decisiones humanas D1-D16 pueden registrarse en
+  05 sin contradicción constitucional ni ampliación de N1-N4.
+  BLOCKED o STOPPED si alguna decisión exige cambiar Constitución, IES,
+  cobertura, materiality o Channel Projection.
 
 max_attempts: 1
-result_report_path: "docs/dev-loop/reports/ARCH-REASONING-PHYSICAL-DECISIONS-001.md"
-```
+result_report_path: "docs/dev-loop/reports/ARCH-REASONING-PHYSICAL-DECISIONS-002.md"
