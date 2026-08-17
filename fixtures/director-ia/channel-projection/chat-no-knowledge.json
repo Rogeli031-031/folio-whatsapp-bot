@@ -1,0 +1,82 @@
+{
+  "meta": {
+    "figures": "ILUSTRATIVAS / FICTICIAS",
+    "not_institutional_coverage": true,
+    "note": "Fixture sintético CHAT + NO_KNOWLEDGE. Reutiliza IES ilustrativo. No es cobertura institucional. No fabrica N5."
+  },
+  "channel": "CHAT",
+  "projectionDepth": "L0_FLASH",
+  "reasoningResult": null,
+  "reasoningRunId": null,
+  "ies": {
+    "ies_id": "ies_cp_chat_nok",
+    "ies_type": "OFFICIAL",
+    "schema_version": "1.0",
+    "ies_version": 1,
+    "status": "NO_KNOWLEDGE",
+    "generated_at": "2026-08-17T12:00:00.000Z",
+    "valid_at": "2026-08-17T00:00:00.000Z",
+    "expires_at": null,
+    "snapshot_reference": { "snapshot_id": "snap_cp_chat_nok" },
+    "knowledge_snapshot_version": 1,
+    "query_context": {
+      "executive_query_id": "eq_cp_chat_nok",
+      "trace_id": "tr_cp_chat_nok",
+      "original_question": "¿En qué etapa está el folio ilustrativo?",
+      "intent": "folio_status",
+      "requesting_user_id": "user_ilustrativo",
+      "requesting_role": "director",
+      "channel": "chat",
+      "resolved_entities": [],
+      "permission_restrictions": [],
+      "knowledge_effective_date": "2026-08-17T00:00:00.000Z"
+    },
+    "executive_scope": { "intent": "folio_status" },
+    "knowledge_coverage": {
+      "coverage_token": "COV_NO_KNOWLEDGE",
+      "coverage_state": "NO_CONOZCO",
+      "coverage_score": null,
+      "covered_domains": [],
+      "partial_domains": [],
+      "unavailable_domains": ["folios"],
+      "restricted_domains": [],
+      "failed_tools": [],
+      "unresolved_entities": [],
+      "incomplete_scopes": [],
+      "blocking_limitations": ["lim_cp_chat_SOURCE_NOT_INTEGRATED"],
+      "highest_materiality_detected": "MATERIALITY_NOT_ASSESSED"
+    },
+    "executive_summary_facts": [],
+    "facts": [],
+    "evidence": [],
+    "diagnoses": [],
+    "conflicts": [],
+    "open_questions": [
+      {
+        "open_question_id": "oq_cp_chat_nok_1",
+        "question_token": "¿Fuente integrada para el dominio o tool requerido?",
+        "reason_token": "SOURCE_NOT_INTEGRATED",
+        "status": "OPEN",
+        "blocks_hypothesis": true
+      }
+    ],
+    "source_health": [
+      { "tool_id": "get_folio_status", "domain": "folios", "execution_status": "SOURCE_NOT_INTEGRATED" }
+    ],
+    "limitations": [
+      {
+        "limitation_id": "lim_cp_chat_SOURCE_NOT_INTEGRATED",
+        "statement_token": "SOURCE_NOT_INTEGRATED",
+        "statement_reference": "get_folio_status",
+        "scope": "folios"
+      }
+    ],
+    "audit": { "generated_by": "synthetic_fixture", "engine_version": "channel-projection-fixture" },
+    "integrity": {
+      "canonical_representation": "CANONICAL_JSON_V1",
+      "signature": null,
+      "signature_status": "NOT_IMPLEMENTED"
+    },
+    "alternative_context": null
+  }
+}
