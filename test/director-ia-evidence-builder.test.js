@@ -24,11 +24,16 @@ const {
 
 const FIX_DIR = path.join(__dirname, "..", "fixtures", "director-ia", "evidence-builder");
 const N3_DIR = path.join(__dirname, "..", "fixtures", "director-ia", "evidence-n3");
+const N4_DIR = path.join(__dirname, "..", "fixtures", "director-ia", "evidence-n4");
 const LIB_PATH = path.join(__dirname, "..", "lib", "director-ia-evidence-builder.js");
 
 const N3_RULE_ID = "N3_CONTRADICTION_SAME_SCOPE_DISTINCT_VALUE";
 const N3_RULE_VERSION = "1.0";
+const N4_RULE_ID = "N4_UNRESOLVED_CONFLICT_FROM_N3_CONTRADICTION";
+const N4_RULE_VERSION = "1.0";
 const FORBIDDEN_STATEMENT = /caus[oó]|debido|provoca|probablemente|fraude|error humano|mala gesti[oó]n|valor verdadero|tiene raz[oó]n/i;
+const N4_FORBIDDEN_STATEMENT =
+  /caus[oó]|caused by|due to|root cause|probable cause|culpab|fraude|incumplimiento|deterioro|riesgo alto|high risk|valor verdadero|fuente .*equivocad|true value|noncompliance/i;
 
 function loadInput(name) {
   const raw = JSON.parse(fs.readFileSync(path.join(FIX_DIR, name), "utf8"));
@@ -42,6 +47,17 @@ function loadN3Input(name) {
   assert.equal(raw.meta.figures, "ILUSTRATIVAS / FICTICIAS");
   assert.equal(raw.meta.not_institutional_coverage, true);
   return raw.input;
+}
+
+function loadN4Input(name) {
+  const raw = JSON.parse(fs.readFileSync(path.join(N4_DIR, name), "utf8"));
+  assert.equal(raw.meta.figures, "ILUSTRATIVAS / FICTICIAS");
+  assert.equal(raw.meta.not_institutional_coverage, true);
+  return raw.input;
+}
+
+function cloneConflictWith(conflict, patch) {
+  return Object.assign({}, structuredClone(conflict), patch);
 }
 
 function assertEvidenceSchema(ev, traceId) {
@@ -60,6 +76,54 @@ function assertEvidenceSchema(ev, traceId) {
   assert.equal(Object.prototype.hasOwnProperty.call(ev, "severity"), false);
   assert.equal(Object.prototype.hasOwnProperty.call(ev, "probability"), false);
   assert.equal(FORBIDDEN_STATEMENT.test(ev.statement), false);
+}
+
+function assertDiagnosisSchema(dx, traceId) {
+  assert.ok(isNonEmptyString(dx.diagnosis_id));
+  assert.equal(dx.diagnostic_category, "UNRESOLVED_CONFLICT");
+  assert.equal(typeof dx.statement, "string");
+  assert.equal(dx.classification_criterion.rule_id, N4_RULE_ID);
+  assert.equal(dx.classification_criterion.rule_version, N4_RULE_VERSION);
+  assert.ok(Array.isArray(dx.supporting_fact_ids));
+  assert.ok(dx.supporting_fact_ids.length >= 2);
+  assert.ok(Array.isArray(dx.supporting_evidence_ids));
+  assert.ok(dx.supporting_evidence_ids.length >= 1);
+  assert.ok(Array.isArray(dx.supporting_conflict_ids));
+  assert.ok(dx.supporting_conflict_ids.length >= 1);
+  assert.equal(dx.severity, "SEVERITY_NOT_ASSESSED");
+  assert.equal(dx.impact, "IMPACT_NOT_ASSESSED");
+  assert.equal(dx.confidence, "CONFIDENCE_NOT_ASSESSED");
+  assert.equal(dx.materiality, "MATERIALITY_NOT_ASSESSED");
+  assert.equal(dx.causal_status, "NON_CAUSAL");
+  assert.equal(dx.applied_rule.rule_id, N4_RULE_ID);
+  assert.equal(dx.applied_rule.rule_version, N4_RULE_VERSION);
+  assert.equal(dx.traceability.trace_id, traceId);
+  assert.equal(dx.traceability.rule_id, N4_RULE_ID);
+  assert.equal(dx.traceability.rule_version, N4_RULE_VERSION);
+  assert.equal(N4_FORBIDDEN_STATEMENT.test(dx.statement), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(dx, "hypotheses"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(dx, "recommendations"), false);
+}
+
+function isNonEmptyString(v) {
+  return typeof v === "string" && v.trim().length > 0;
+}
+
+function logicalDiagnosis(dx) {
+  return {
+    diagnostic_category: dx.diagnostic_category,
+    statement: dx.statement,
+    classification_criterion: dx.classification_criterion,
+    supporting_fact_ids: dx.supporting_fact_ids,
+    supporting_evidence_ids: dx.supporting_evidence_ids,
+    supporting_conflict_ids: dx.supporting_conflict_ids,
+    severity: dx.severity,
+    impact: dx.impact,
+    confidence: dx.confidence,
+    materiality: dx.materiality,
+    causal_status: dx.causal_status,
+    applied_rule: dx.applied_rule,
+  };
 }
 
 describe("Evidence Builder — separación de entrada y N1", () => {
@@ -548,14 +612,13 @@ describe("Evidence Builder — frontera conflicto y N4", () => {
     assert.equal(JSON.stringify(bundle).includes("CONF_TYPE_E"), false);
   });
 
-  it("presencia de N3 no produce N4", () => {
+  it("N3 sola, sin conflicto en el contexto de to_n4, produce cero Diagnosis", () => {
     const input = loadN3Input("contradiction-two-values.json");
-    const bundle = assemble(input);
-    assert.ok(bundle.evidence.length > 0);
-    assert.deepEqual(bundle.diagnoses, []);
     const n2 = to_n2(to_n1(input), input);
     const n3 = to_n3(n2, input);
+    assert.ok(n3.length > 0);
     assert.deepEqual(to_n4(n3, { facts: n2 }), []);
+    assert.deepEqual(to_n4(n3, { facts: n2, conflicts: [] }), []);
   });
 });
 
@@ -709,5 +772,467 @@ describe("Evidence Builder — N3 downstream EKS/IES/RE/CP", () => {
     assert.ok(types.includes("FACT"));
     assert.ok(types.includes("EVIDENCE"));
     assert.equal(types.includes("HYPOTHESIS"), false);
+  });
+});
+
+describe("Evidence Builder — registry N4 v1", () => {
+  it("registry contiene exactamente una diagnostic rule ACTIVE", () => {
+    assert.ok(Array.isArray(RULE_REGISTRY.diagnostic_rules));
+    assert.equal(RULE_REGISTRY.diagnostic_rules.length, 1);
+    const rule = RULE_REGISTRY.diagnostic_rules[0];
+    assert.equal(rule.rule_id, N4_RULE_ID);
+    assert.equal(rule.rule_version, N4_RULE_VERSION);
+    assert.equal(rule.diagnostic_category, "UNRESOLVED_CONFLICT");
+    assert.equal(rule.causal, false);
+    assert.equal(rule.status, "ACTIVE");
+    assert.equal(rule.input_contract, "N4_UNRESOLVED_CONFLICT_INPUT_V1");
+    assert.equal(rule.output_contract, "DIAGNOSIS_N4_PHYSICAL_V1");
+  });
+
+  it("evidence_rules N3 y sets vacíos permanecen intactos", () => {
+    assert.equal(RULE_REGISTRY.evidence_rules.length, 1);
+    assert.equal(RULE_REGISTRY.evidence_rules[0].rule_id, N3_RULE_ID);
+    assert.equal(RULE_REGISTRY.absence_rules.length, 0);
+    assert.equal(RULE_REGISTRY.resolution_rules.length, 0);
+    assert.equal(RULE_REGISTRY.causal_rules.length, 0);
+    assert.equal(RULE_REGISTRY.materiality_rules.length, 0);
+  });
+});
+
+describe("Evidence Builder — N4 UNRESOLVED_CONFLICT", () => {
+  it("N3 CONTRADICTION + Tipo A OPEN + facts coincidentes -> exactamente un Diagnosis", () => {
+    const input = loadN4Input("unresolved-conflict-valid.json");
+    const bundle = assemble(input);
+    assert.equal(bundle.evidence.length, 1);
+    assert.equal(bundle.conflicts.length, 1);
+    assert.equal(bundle.diagnoses.length, 1);
+    assertDiagnosisSchema(bundle.diagnoses[0], input.trace_id);
+    assert.deepEqual(bundle.diagnoses[0].supporting_fact_ids, ["fact_obs_n4_a", "fact_obs_n4_b"]);
+    assert.deepEqual(bundle.diagnoses[0].supporting_evidence_ids, [bundle.evidence[0].evidence_id]);
+    assert.deepEqual(bundle.diagnoses[0].supporting_conflict_ids, [bundle.conflicts[0].conflict_id]);
+    assert.equal(validate_structure(bundle).ok, true);
+  });
+
+  it("N3 sin conflicto -> cero Diagnosis", () => {
+    const input = loadN4Input("n3-without-conflict-no-diagnosis.json");
+    const n2 = to_n2(to_n1(input), input);
+    const n3 = to_n3(n2, { trace_id: input.trace_id });
+    assert.equal(n3.length, 1);
+    assert.deepEqual(to_n4(n3, { trace_id: input.trace_id, facts: n2, conflicts: [] }), []);
+  });
+
+  it("conflicto sin N3 -> cero Diagnosis", () => {
+    const input = loadN4Input("conflict-without-n3-no-diagnosis.json");
+    const bundle = assemble(input);
+    assert.ok(bundle.conflicts.length > 0);
+    assert.deepEqual(
+      to_n4([], { trace_id: input.trace_id, facts: bundle.facts, conflicts: bundle.conflicts }),
+      []
+    );
+  });
+
+  it("conflicto RESOLVED -> cero Diagnosis", () => {
+    const input = loadN4Input("resolved-conflict-no-diagnosis.json");
+    const bundle = assemble(input);
+    const resolved = [
+      cloneConflictWith(bundle.conflicts[0], {
+        resolution_status: "RESOLVED",
+        applied_resolution_rule_id: "synthetic_not_executed",
+      }),
+    ];
+    assert.deepEqual(
+      to_n4(bundle.evidence, { trace_id: input.trace_id, facts: bundle.facts, conflicts: resolved }),
+      []
+    );
+  });
+
+  it("conflicto SUPERSEDED -> cero Diagnosis", () => {
+    const input = loadN4Input("resolved-conflict-no-diagnosis.json");
+    const bundle = assemble(input);
+    const superseded = [cloneConflictWith(bundle.conflicts[0], { resolution_status: "SUPERSEDED" })];
+    assert.deepEqual(
+      to_n4(bundle.evidence, { trace_id: input.trace_id, facts: bundle.facts, conflicts: superseded }),
+      []
+    );
+  });
+
+  it("support incompatible -> cero Diagnosis", () => {
+    const input = loadN4Input("mismatched-support-no-diagnosis.json");
+    const bundle = assemble(input);
+    const incomplete = [
+      cloneConflictWith(bundle.conflicts[0], {
+        facts_in_tension: bundle.conflicts[0].facts_in_tension.slice(0, 2),
+      }),
+    ];
+    const extra = [
+      cloneConflictWith(bundle.conflicts[0], {
+        facts_in_tension: bundle.conflicts[0].facts_in_tension.concat(["fact_unrelated_n4"]),
+      }),
+    ];
+    assert.deepEqual(
+      to_n4(bundle.evidence, { trace_id: input.trace_id, facts: bundle.facts, conflicts: incomplete }),
+      []
+    );
+    assert.deepEqual(
+      to_n4(bundle.evidence, { trace_id: input.trace_id, facts: bundle.facts, conflicts: extra }),
+      []
+    );
+  });
+
+  it("conflicto de tipo distinto de A -> cero Diagnosis", () => {
+    const input = loadN4Input("different-conflict-type-no-diagnosis.json");
+    const bundle = assemble(input);
+    const typedB = [cloneConflictWith(bundle.conflicts[0], { primary_type: "B" })];
+    const typedC = [cloneConflictWith(bundle.conflicts[0], { primary_type: "C" })];
+    assert.deepEqual(
+      to_n4(bundle.evidence, { trace_id: input.trace_id, facts: bundle.facts, conflicts: typedB }),
+      []
+    );
+    assert.deepEqual(
+      to_n4(bundle.evidence, { trace_id: input.trace_id, facts: bundle.facts, conflicts: typedC }),
+      []
+    );
+  });
+});
+
+describe("Evidence Builder — schema y placeholders N4", () => {
+  it("Diagnosis contiene exactamente los campos DIAGNOSIS_N4_PHYSICAL_V1", () => {
+    const input = loadN4Input("unresolved-conflict-valid.json");
+    const dx = assemble(input).diagnoses[0];
+    assertDiagnosisSchema(dx, input.trace_id);
+    const required = [
+      "diagnosis_id",
+      "diagnostic_category",
+      "statement",
+      "classification_criterion",
+      "supporting_fact_ids",
+      "supporting_evidence_ids",
+      "supporting_conflict_ids",
+      "severity",
+      "impact",
+      "confidence",
+      "materiality",
+      "causal_status",
+      "applied_rule",
+      "traceability",
+    ];
+    for (const key of required) {
+      assert.equal(Object.prototype.hasOwnProperty.call(dx, key), true, key);
+    }
+  });
+
+  it("placeholders NOT_ASSESSED no equivalen a LOW/NONE/cero y no puntúan", () => {
+    const dx = assemble(loadN4Input("unresolved-conflict-valid.json")).diagnoses[0];
+    assert.notEqual(dx.severity, "LOW");
+    assert.notEqual(dx.severity, "NONE");
+    assert.notEqual(dx.impact, "LOW");
+    assert.notEqual(dx.impact, "NONE");
+    assert.notEqual(dx.confidence, "LOW");
+    assert.notEqual(dx.confidence, 0);
+    assert.notEqual(dx.confidence, "0");
+    assert.notEqual(dx.materiality, "NONE");
+    assert.notEqual(dx.materiality, "IMMATERIAL");
+    assert.equal(typeof dx.severity, "string");
+    assert.equal(typeof dx.impact, "string");
+    assert.equal(typeof dx.confidence, "string");
+    assert.equal(typeof dx.materiality, "string");
+    assert.equal(Object.prototype.hasOwnProperty.call(dx, "score"), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(dx, "rank"), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(dx, "wi"), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(dx, "k"), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(dx, "Fs"), false);
+  });
+
+  it("statement no causal y no declara verdad, fuente incorrecta, fraude, incumplimiento, deterioro ni riesgo", () => {
+    const dx = assemble(loadN4Input("unresolved-conflict-valid.json")).diagnoses[0];
+    assert.equal(N4_FORBIDDEN_STATEMENT.test(dx.statement), false);
+    assert.match(dx.statement, /incompatible/);
+    assert.match(dx.statement, /OPEN/);
+    assert.equal(/true value|valor verdadero/i.test(dx.statement), false);
+  });
+});
+
+describe("Evidence Builder — support, traza y no mutación N4", () => {
+  it("support ids existen, no vacíos y ordenados de forma estable", () => {
+    const input = loadN4Input("unresolved-conflict-valid.json");
+    const bundle = assemble(input);
+    const dx = bundle.diagnoses[0];
+    const factIds = new Set(bundle.facts.map((f) => f.fact_id));
+    const evidenceIds = new Set(bundle.evidence.map((e) => e.evidence_id));
+    const conflictIds = new Set(bundle.conflicts.map((c) => c.conflict_id));
+    for (const id of dx.supporting_fact_ids) assert.ok(factIds.has(id));
+    for (const id of dx.supporting_evidence_ids) assert.ok(evidenceIds.has(id));
+    for (const id of dx.supporting_conflict_ids) assert.ok(conflictIds.has(id));
+    assert.deepEqual(dx.supporting_fact_ids, dx.supporting_fact_ids.slice().sort());
+    assert.deepEqual(dx.supporting_evidence_ids, dx.supporting_evidence_ids.slice().sort());
+    assert.deepEqual(dx.supporting_conflict_ids, dx.supporting_conflict_ids.slice().sort());
+  });
+
+  it("no muta facts, evidence ni conflicts de entrada", () => {
+    const input = loadN4Input("unresolved-conflict-valid.json");
+    const beforeInput = structuredClone(input);
+    const n1 = to_n1(input);
+    const n2 = to_n2(n1, input);
+    const n3 = to_n3(n2, { trace_id: input.trace_id });
+    const assembled = assemble(input);
+    const beforeN2 = structuredClone(n2);
+    const beforeN3 = structuredClone(n3);
+    const beforeConflicts = structuredClone(assembled.conflicts);
+    const out = to_n4(n3, {
+      trace_id: input.trace_id,
+      facts: n2,
+      conflicts: assembled.conflicts,
+    });
+    assert.ok(out.length > 0);
+    assert.deepEqual(input, beforeInput);
+    assert.deepEqual(n2, beforeN2);
+    assert.deepEqual(n3, beforeN3);
+    assert.deepEqual(assembled.conflicts, beforeConflicts);
+  });
+});
+
+describe("Evidence Builder — frontera Conflict / Tipo E / N5", () => {
+  it("Tipo A permanece A OPEN y Diagnosis no resuelve ni agrega secondary_types", () => {
+    const bundle = assemble(loadN4Input("unresolved-conflict-valid.json"));
+    assert.equal(bundle.diagnoses.length, 1);
+    for (const c of bundle.conflicts) {
+      assert.equal(c.primary_type, "A");
+      assert.equal(c.resolution_status, "OPEN");
+      assert.deepEqual(c.secondary_types, []);
+      assert.equal(c.governance_escalation, false);
+      assert.equal(Object.prototype.hasOwnProperty.call(c, "severity"), false);
+      assert.notEqual(c.resolution_status, "RESOLVED");
+      assert.notEqual(c.resolution_status, "SUPERSEDED");
+    }
+  });
+
+  it("N4 no fabrica Tipo E; un Tipo E upstream no dispara esta rule", () => {
+    const input = loadN4Input("type-e-no-fabrication.json");
+    const bundle = assemble(input);
+    assert.equal(bundle.conflicts.some((c) => c.primary_type === "E"), false);
+    assert.equal(bundle.conflicts[0].primary_type, "A");
+    const typeE = cloneConflictWith(bundle.conflicts[0], { primary_type: "E" });
+    const diagnoses = to_n4(bundle.evidence, {
+      trace_id: input.trace_id,
+      facts: bundle.facts,
+      conflicts: [typeE],
+    });
+    assert.deepEqual(diagnoses, []);
+    const preserved = emit_bundle(
+      { n1: bundle.observations, n2: bundle.facts, n3: bundle.evidence, n4: [], conflicts: [typeE] },
+      { trace_id: input.trace_id, bundle_id: input.bundle_id, produced_at: "unclocked" }
+    );
+    assert.equal(preserved.conflicts.some((c) => c.primary_type === "E"), true);
+    assert.equal(JSON.stringify(bundle.diagnoses).includes("CONF_TYPE_E"), false);
+  });
+
+  it("N4 no emite hypothesis, recommendation ni inferencia causal", () => {
+    const dx = assemble(loadN4Input("unresolved-conflict-valid.json")).diagnoses[0];
+    const blob = JSON.stringify(dx);
+    assert.equal(blob.includes("hypothesis"), false);
+    assert.equal(blob.includes("recommendation"), false);
+    assert.equal(dx.causal_status, "NON_CAUSAL");
+    assert.equal(N4_FORBIDDEN_STATEMENT.test(dx.statement), false);
+  });
+});
+
+describe("Evidence Builder — determinismo N4", () => {
+  it("reordenar support semánticamente equivalente no cambia el Diagnosis lógico", () => {
+    const input = loadN4Input("unresolved-conflict-valid.json");
+    const bundle = assemble(input);
+    const n3 = bundle.evidence.slice();
+    const conflicts = bundle.conflicts.slice();
+    const reversedEvidence = n3.map((ev) =>
+      Object.assign({}, ev, { supporting_fact_ids: ev.supporting_fact_ids.slice().reverse() })
+    );
+    const reversedConflicts = conflicts.map((c) =>
+      Object.assign({}, c, { facts_in_tension: c.facts_in_tension.slice().reverse() })
+    );
+    const a = to_n4(n3, { trace_id: input.trace_id, facts: bundle.facts, conflicts });
+    const b = to_n4(reversedEvidence.reverse(), {
+      trace_id: input.trace_id,
+      facts: bundle.facts.slice().reverse(),
+      conflicts: reversedConflicts.reverse(),
+    });
+    assert.equal(a.length, 1);
+    assert.equal(b.length, 1);
+    assert.deepEqual(logicalDiagnosis(a[0]), logicalDiagnosis(b[0]));
+  });
+
+  it("runtime no usa Date.now, Math.random, red, LLM ni IO", () => {
+    const src = fs.readFileSync(LIB_PATH, "utf8");
+    assert.equal(/\bDate\.now\b/.test(src), false);
+    assert.equal(/\bMath\.random\b/.test(src), false);
+    assert.equal(/\bfetch\s*\(/.test(src), false);
+    assert.equal(/\baxios\b/.test(src), false);
+    assert.equal(/\bopenai\b/i.test(src), false);
+    assert.equal(/\bpg\.Pool\b/.test(src), false);
+    assert.equal(/\brequire\(["']fs["']\)/.test(src), false);
+    assert.equal(/\brequire\(["']http["']\)/.test(src), false);
+  });
+});
+
+describe("Evidence Builder — N4 downstream EKS/IES/RE/CP", () => {
+  function snapshotFromBundle(bundle) {
+    return {
+      snapshot_id: "snap_n4_downstream",
+      bundle_id: bundle.bundle_id,
+      trace_id: bundle.trace_id,
+      version: 1,
+      persisted_at: "2026-08-17T18:05:50.000Z",
+      integrity: "sha256:n4_downstream",
+      query_context_metadata: {
+        executive_query_id: "eq_n4_downstream",
+        query_fingerprint: "qfp_n4_downstream",
+        trace_id: bundle.trace_id,
+        original_question: "¿Hay contradicción no resuelta ilustrativa?",
+        intent: "n4_unresolved_conflict",
+        requesting_user_id: "user_ilustrativo",
+        requesting_role: "director",
+        channel: "dashboard",
+        resolved_entities: [],
+        permission_restrictions: [],
+        knowledge_effective_date: "2026-08-17T00:00:00.000Z",
+      },
+      bundle,
+    };
+  }
+
+  function emptyCandidate() {
+    return {
+      interpretation: {
+        what_is_known: { references: [] },
+        what_can_be_inferred: { references: [] },
+        what_cannot_be_concluded: { references: [] },
+      },
+      hypotheses: [],
+      recommendations: [],
+      next_verifications: [],
+      decision_options: [],
+      abstentions: [],
+      clarification_requests: [],
+      reasoning_limits: {},
+      references: [],
+    };
+  }
+
+  it("EKS validate_structure acepta Bundle con Diagnosis N4", () => {
+    const bundle = assemble(loadN4Input("unresolved-conflict-valid.json"));
+    const check = validate_structure(bundle);
+    assert.equal(check.ok, true, check.errors.join(","));
+    assert.equal(bundle.diagnoses.length, 1);
+  });
+
+  it("IES preserva Diagnosis N4", () => {
+    const bundle = assemble(loadN4Input("unresolved-conflict-valid.json"));
+    let n = 0;
+    const ies = createIesBuilder({
+      clock: () => "2026-08-17T18:05:50.000Z",
+      idFactory: (prefix) => `${prefix || "ies"}_${++n}`,
+    }).build(snapshotFromBundle(bundle));
+    assert.equal(ies.diagnoses.length, 1);
+    assert.equal(ies.diagnoses[0].diagnosis_id, bundle.diagnoses[0].diagnosis_id);
+    assert.equal(ies.diagnoses[0].diagnostic_category, "UNRESOLVED_CONFLICT");
+    assert.deepEqual(ies.diagnoses[0].supporting_fact_ids, bundle.diagnoses[0].supporting_fact_ids);
+    assert.deepEqual(ies.diagnoses[0].supporting_evidence_ids, bundle.diagnoses[0].supporting_evidence_ids);
+    const v = createIesBuilder({
+      clock: () => "2026-08-17T18:05:50.000Z",
+      idFactory: (prefix) => `${prefix || "ies"}_${++n}`,
+    }).validate(ies);
+    assert.equal(v.ok, true, v.errors.join(","));
+  });
+
+  it("RE consume IES con N4 sin bypass y conserva gates", () => {
+    const bundle = assemble(loadN4Input("unresolved-conflict-valid.json"));
+    let n = 0;
+    const ies = createIesBuilder({
+      clock: () => "2026-08-17T18:05:50.000Z",
+      idFactory: (prefix) => `${prefix || "ies"}_${++n}`,
+    }).build(snapshotFromBundle(bundle));
+    assert.ok(ies.diagnoses.length > 0);
+
+    const emptyEngine = createReasoningEngine({
+      modelAdapter: {
+        infer() {
+          return {
+            candidate_reasoning_result: emptyCandidate(),
+            provider_metadata: { provider: "fake", model: "fake-v1", model_version: "1", request_id: "req_n4" },
+          };
+        },
+      },
+      clock: () => "2026-08-17T18:05:50.000Z",
+      idFactory: (prefix) => `${prefix || "id"}_${++n}`,
+      policy: { reasoning_policy_version: "05-v1.0-physical-d1-d16" },
+    });
+    const emptyOut = emptyEngine.reason(ies, {});
+    assert.notEqual(emptyOut.reasoning_run.status, "REJECT");
+    assert.equal(emptyOut.reasoning_result.hypotheses.length, 0);
+    assert.equal(emptyOut.reasoning_result.recommendations.length, 0);
+
+    const gatedEngine = createReasoningEngine({
+      modelAdapter: {
+        infer(request) {
+          const candidate = emptyCandidate();
+          candidate.hypotheses = [
+            {
+              hypothesis_id: "hyp_n4_missing_ev",
+              ies_id: request.reasoning_context.ies.ies_id,
+              ies_version: request.reasoning_context.ies.ies_version,
+              statement: "hipótesis ilustrativa",
+              statement_language: "es-MX",
+              supporting_fact_ids: [request.reasoning_context.ies.facts[0].fact_id],
+              supporting_evidence_ids: [],
+              limitations: [],
+              hypothesis_strength: "HYP_STRENGTH_MODERATE",
+            },
+          ];
+          return {
+            candidate_reasoning_result: candidate,
+            provider_metadata: { provider: "fake", model: "fake-v1", model_version: "1", request_id: "req_n4_gate" },
+          };
+        },
+      },
+      clock: () => "2026-08-17T18:05:50.000Z",
+      idFactory: (prefix) => `${prefix || "id"}_${++n}`,
+      policy: { reasoning_policy_version: "05-v1.0-physical-d1-d16" },
+    });
+    const gated = gatedEngine.reason(ies, {});
+    assert.equal(gated.reasoning_result.hypotheses.length, 0);
+    assert.ok(gated.reasoning_run);
+  });
+
+  it("Channel Projection distingue Diagnosis de Evidence y Hypothesis", () => {
+    const bundle = assemble(loadN4Input("unresolved-conflict-valid.json"));
+    let n = 0;
+    const ies = createIesBuilder({
+      clock: () => "2026-08-17T18:05:50.000Z",
+      idFactory: (prefix) => `${prefix || "ies"}_${++n}`,
+    }).build(snapshotFromBundle(bundle));
+    const cp = createChannelProjection({
+      policyRegistry: createDefaultPolicyRegistry(),
+      clock: () => "2026-08-17T18:05:50.000Z",
+      idFactory: (prefix) => `${prefix || "cp"}_${++n}`,
+    });
+    const out = cp.project({
+      ies,
+      channel: "DASHBOARD",
+      projectionDepth: "L2_SUPPORT",
+    });
+    const types = out.projection_model.items
+      .concat(out.projection_model.deferred_items)
+      .map((item) => item.semantic_type);
+    assert.ok(types.includes("FACT"));
+    assert.ok(types.includes("EVIDENCE"));
+    assert.ok(types.includes("DIAGNOSIS"));
+    assert.equal(types.includes("HYPOTHESIS"), false);
+    const diagnosisItem = out.projection_model.items
+      .concat(out.projection_model.deferred_items)
+      .find((item) => item.semantic_type === "DIAGNOSIS");
+    const evidenceItem = out.projection_model.items
+      .concat(out.projection_model.deferred_items)
+      .find((item) => item.semantic_type === "EVIDENCE");
+    assert.ok(diagnosisItem);
+    assert.ok(evidenceItem);
+    assert.notEqual(diagnosisItem.source_id, evidenceItem.source_id);
   });
 });
