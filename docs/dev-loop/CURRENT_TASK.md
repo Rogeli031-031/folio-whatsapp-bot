@@ -12,34 +12,36 @@ Esto no es G1. `DRAFT` no es ejecutable.
 ---
 
 ```yaml
-task_id: "ARCH-EVIDENCE-N4-PHYSICAL-DECISIONS-001"
+task_id: "ARCH-EVIDENCE-N4-RULES-PHYSICAL-DECISIONS-002"
 status: CLOSED
 
 authorized_by: "HUMAN_APPROVER"
-authorized_at: "2026-08-17T17:00:56-06:00"
+authorized_at: "2026-08-17T17:27:52-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-17"
 
 gates:
   G1_task_authorization: AUTHORIZED
-  G2_architecture_change: PENDING_IF_REQUIRED
+  G2_architecture_change: AUTHORIZED
   G3_new_architecture_contract: N/A
-  G8_calibration_materiality_signature: PENDING_IF_REQUIRED
+  G8_calibration_materiality_signature: N/A
 
 objective: >
-  Auditar la realizabilidad física de Diagnóstico N4 en el Evidence Builder
-  vigente después de la implementación productiva de Evidence N3 CONTRADICTION.
-  Determinar qué categorías diagnósticas y reglas N4 están suficientemente
-  definidas para implementación determinística, cuáles requieren G2, cuáles
-  requieren G8 y cuáles están bloqueadas por falta de señales N2/N3, sin
-  implementar runtime N4 ni inventar causalidad, severity o categorías.
+  Resolver y registrar contractualmente la primera realización física mínima
+  de Diagnosis N4 que pueda implementarse sin G8, tomando como base la auditoría
+  ARCH-EVIDENCE-N4-PHYSICAL-DECISIONS-001. Congelar registry de diagnostic
+  rules, schema físico de Diagnosis N4, identity/versionado, soporte,
+  classification_criterion y una primera categoría diagnóstica no causal
+  compatible con Evidence N3 CONTRADICTION + conflicto Tipo A OPEN, sin
+  implementar runtime ni calibrar severity/materiality/confidence.
 
 in_scope:
   - "docs/dev-loop/CURRENT_TASK.md"
-  - "docs/dev-loop/reports/ARCH-EVIDENCE-N4-PHYSICAL-DECISIONS-001.md"
+  - "docs/dev-loop/reports/ARCH-EVIDENCE-N4-PHYSICAL-DECISIONS-001.md (solo lectura)"
+  - "docs/dev-loop/reports/ARCH-EVIDENCE-N4-RULES-PHYSICAL-DECISIONS-002.md"
 
   - "docs/director-ia/DIRECTOR_IA_CONSTITUTION.md (solo lectura)"
   - "docs/director-ia/DIRECTOR_IA_EXECUTIVE_KNOWLEDGE_ENGINE.md (solo lectura)"
-  - "docs/director-ia/02-EVIDENCE-BUILDER.md (solo lectura)"
+  - "docs/director-ia/02-EVIDENCE-BUILDER.md"
   - "docs/director-ia/03A-OBSERVATION-PIPELINE.md (solo lectura)"
   - "docs/director-ia/03-EXECUTIVE-KNOWLEDGE-STORE.md (solo lectura)"
   - "docs/director-ia/04-IES-STANDARD.md (solo lectura)"
@@ -48,43 +50,47 @@ in_scope:
 
   - "lib/director-ia-evidence-builder.js (solo lectura)"
   - "test/director-ia-evidence-builder.test.js (solo lectura)"
-  - "fixtures/director-ia/evidence-n3/ (solo lectura)"
-
   - "lib/director-ia-ies-builder.js (solo lectura)"
   - "lib/director-ia-reasoning-engine.js (solo lectura)"
   - "lib/director-ia-channel-projection.js (solo lectura)"
   - "lib/director-ia-e2e.js (solo lectura)"
-  - "test/director-ia-e2e.test.js (solo lectura)"
 
 out_of_scope:
   - "implementar N4"
   - "modificar Evidence Builder runtime"
-  - "crear diagnostic rules"
   - "crear tests N4"
   - "crear fixtures N4"
 
-  - "definir causalidad"
   - "crear causal rules"
-  - "crear hipótesis"
+  - "crear hypotheses"
   - "crear recommendations"
+  - "resolver conflictos"
 
   - "calibrar severity"
-  - "calibrar materiality"
+  - "calibrar impact"
   - "calibrar confidence"
+  - "calibrar materiality"
   - "calibrar wi"
   - "calibrar k"
   - "calibrar Fs"
-  - "crear thresholds"
-  - "activar G8"
+  - "definir thresholds"
+  - "usar G8"
 
-  - "inventar categorías diagnósticas"
-  - "usar lenguaje de causa probable"
-  - "resolver conflictos"
-  - "retipificar A como B/C/D/E"
+  - "crear clasificador B/C/D/E"
   - "crear Tipo E"
+  - "retipificar Tipo A"
+  - "crear secondary_types"
+  - "activar governance_escalation"
 
-  - "modificar docs/director-ia/"
-  - "modificar OP/EKS/IES/RE/CP/E2E"
+  - "modificar Constitución"
+  - "modificar Executive Knowledge Engine"
+  - "modificar 03A"
+  - "modificar 03"
+  - "modificar 04"
+  - "modificar 05"
+  - "modificar 06"
+
+  - "modificar otros runtimes"
   - "modificar server.js"
   - "modificar package.json"
 
@@ -104,298 +110,390 @@ contracts_in_force:
   - "docs/director-ia/05-REASONING-ENGINE.md"
   - "docs/director-ia/06-CHANNEL-PROJECTION.md"
 
-current_runtime_reality:
-  n1: "implemented"
-  n2: "implemented"
-  n3:
-    status: "implemented subset"
-    active_rule: "N3_CONTRADICTION_SAME_SCOPE_DISTINCT_VALUE"
-    rule_version: "1.0"
-    evidence_type: "CONTRADICTION"
-    causal_status: "NON_CAUSAL"
-    materiality: "MATERIALITY_NOT_ASSESSED"
-  n4:
-    status: "EMPTY / FAIL-CLOSED"
-    current_behavior: >
-      to_n4() does not produce diagnoses merely because N3 exists.
-  conflict_classifier:
-    current_simple_behavior: "Type A OPEN"
-    b_c_d_e_classifier: "not implemented"
+audit_result_in_force:
+  source: "docs/dev-loop/reports/ARCH-EVIDENCE-N4-PHYSICAL-DECISIONS-001.md"
+  implementation_status: "NO-GO"
+  confirmed_findings:
+    - "to_n4() permanece vacío/fail-closed"
+    - "N3 CONTRADICTION no autoriza N4 por sí sola"
+    - "catálogo de nombres N4 existe contractualmente"
+    - "classification_criterion físico no está congelado"
+    - "severity/impact/confidence obligatorios downstream no tienen placeholder aprobado"
+    - "no existe franja N4 implementable sin G2"
+    - "G8 no debe mezclarse con G2"
+    - "conflict Type A OPEN debe permanecer separado de Diagnosis N4"
 
-contractual_constraints:
-  - "no N4 without rule and support"
-  - "N4 is deterministic classification, not hypothesis"
-  - "N4 must identify classification_criterion/rule"
-  - "N4 must be supported by facts and/or Evidence N3"
-  - "N4 must not use probable-cause language"
-  - "N4 must not soften Type E"
-  - "severity and impact are distinct from conflict typing"
-  - "materiality is not severity"
-  - "Reasoning Engine owns hypotheses N5"
-  - "Evidence Builder cannot jump N3 -> causal inference"
-  - "G8 parameters remain protected"
+proposed_human_decisions:
 
-audit_questions:
+  D1_diagnostic_rule_registry:
+    decision: "DIAGNOSTIC_RULE_REGISTRY_V1"
+    meaning: >
+      Evidence Builder mantiene un registry explícito, cerrado y versionado de
+      diagnostic rules. Ningún Diagnosis N4 puede existir si no proviene de una
+      rule ACTIVE registrada.
 
-  D1_n4_schema:
-    question: >
-      ¿Cuál es el schema físico mínimo de un Diagnosis N4 exigido por los
-      contratos vigentes?
+    minimum_rule_fields:
+      - "rule_id"
+      - "rule_version"
+      - "diagnostic_category"
+      - "causal"
+      - "input_contract"
+      - "output_contract"
+      - "status"
 
-  D2_diagnostic_rule_registry:
-    question: >
-      ¿N4 requiere un registry físico separado de diagnostic rules y qué
-      identidad/versionado mínimo necesita?
+    constraints:
+      - "causal=false en esta versión"
+      - "status=ACTIVE para ejecutarse"
+      - "rule identity queda persistida en Diagnosis"
+      - "sin rules dinámicas"
+      - "sin LLM"
 
-  D3_rule_input:
-    question: >
-      ¿Una diagnostic rule puede consumir Evidence N3 únicamente, facts N2
-      únicamente, o ambos? Determinarlo sin inventar semántica.
+  D2_initial_diagnostic_scope:
+    decision: "UNRESOLVED_CONFLICT_DIAGNOSIS_V1_ONLY"
+    meaning: >
+      La primera categoría diagnóstica implementable se limita a clasificar
+      determinísticamente una contradicción no resuelta ya soportada por
+      Evidence N3 CONTRADICTION y conflicto compuesto Tipo A OPEN.
 
-  D4_support:
-    question: >
-      ¿Qué soporte mínimo debe citar un Diagnosis N4:
-      supporting_fact_ids, supporting_evidence_ids o ambos?
+    allowed_category:
+      - "UNRESOLVED_CONFLICT"
+
+    prohibited_in_this_version:
+      - "DETERIORATION"
+      - "NONCOMPLIANCE"
+      - "RISK"
+      - "FRAUD"
+      - "ROOT_CAUSE"
+      - "OPERATIONAL_FAILURE"
+      - "SOURCE_FAILURE"
+      - "any causal category"
+
+  D3_input_contract:
+    decision: "N4_UNRESOLVED_CONFLICT_INPUT_V1"
+    required:
+      - "at least one Evidence N3 CONTRADICTION"
+      - "at least one compound Conflict Type A"
+      - "resolution_status == OPEN"
+      - "supporting facts exist"
+      - "same trace/bundle context"
+
+    prohibited:
+      - "derive N4 from N3 alone without conflict object"
+      - "derive N4 from conflict alone without supporting Evidence N3"
+      - "derive from Type E inference"
+      - "derive from CLOSED/RESOLVED conflict"
+
+  D4_support_contract:
+    decision: "N4_TRACEABLE_SUPPORT_V1"
+    required_fields:
+      - "supporting_fact_ids"
+      - "supporting_evidence_ids"
+      - "supporting_conflict_ids"
+
+    rules:
+      - "all references exist in same Bundle"
+      - "no support rewriting"
+      - "support arrays deterministically ordered"
+      - "N4 never duplicates N1/N2/N3 payloads"
 
   D5_classification_criterion:
-    question: >
-      ¿Qué forma física debe tener classification_criterion para que N4 sea
-      auditable y no una interpretación libre?
+    decision: "UNRESOLVED_CONFLICT_CRITERION_V1"
+    meaning: >
+      Diagnosis se emite únicamente cuando existe una Evidence N3
+      CONTRADICTION válida y un conflicto compuesto Type A OPEN asociado al
+      mismo conjunto de facts en tensión.
 
-  D6_diagnostic_categories:
-    question: >
-      Identificar el catálogo diagnóstico permitido por Constitución/Motor/02.
-      No crear categorías ausentes.
+    required_condition:
+      - "evidence_type == CONTRADICTION"
+      - "causal_status == NON_CAUSAL"
+      - "conflict.primary_type == A"
+      - "conflict.resolution_status == OPEN"
+      - "intersection of evidence.supporting_fact_ids and conflict.facts_in_tension is complete for the diagnostic support set"
 
-  D7_contradiction_diagnosis:
-    question: >
-      ¿Existe hoy una categoría N4 contractual que pueda derivarse
-      determinísticamente de Evidence N3 CONTRADICTION sin causalidad ni G8?
+    rules:
+      - "no truth selection"
+      - "no source ranking"
+      - "no root cause"
+      - "no severity inference"
+      - "no resolution inference"
 
-  D8_severity:
-    question: >
-      ¿Severity es obligatoria en todo Diagnosis N4? Si sí, determinar si existe
-      enum/default contractual utilizable sin G8 o si bloquea implementación.
+  D6_diagnosis_schema:
+    decision: "DIAGNOSIS_N4_PHYSICAL_V1"
+    required_fields:
+      - "diagnosis_id"
+      - "diagnostic_category"
+      - "statement"
+      - "classification_criterion"
+      - "supporting_fact_ids"
+      - "supporting_evidence_ids"
+      - "supporting_conflict_ids"
+      - "severity"
+      - "impact"
+      - "confidence"
+      - "materiality"
+      - "causal_status"
+      - "applied_rule"
+      - "traceability"
 
-  D9_impact:
-    question: >
-      ¿Impact es campo obligatorio, derivable o diferible? Separarlo de
-      severity y materiality.
+  D7_required_unassessed_values:
+    decision: "N4_UNASSESSED_DIMENSIONS_V1"
+    meaning: >
+      Para permitir una primera franja N4 sin G8, severity, impact y confidence
+      permanecen presentes pero explícitamente no evaluadas.
 
-  D10_materiality:
-    question: >
-      ¿Puede Diagnosis N4 preservar MATERIALITY_NOT_ASSESSED sin G8 o requiere
-      rollup/calibración antes de existir?
+    fixed_values:
+      severity: "SEVERITY_NOT_ASSESSED"
+      impact: "IMPACT_NOT_ASSESSED"
+      confidence: "CONFIDENCE_NOT_ASSESSED"
+      materiality: "MATERIALITY_NOT_ASSESSED"
 
-  D11_confidence:
-    question: >
-      ¿Diagnosis N4 tiene confidence propia o solo referencia la confianza de
-      facts/evidence soporte?
+    constraints:
+      - "NOT_ASSESSED != LOW"
+      - "NOT_ASSESSED != NONE"
+      - "NOT_ASSESSED no implica ausencia de riesgo/impacto"
+      - "no ordenamiento"
+      - "no scoring"
 
-  D12_causal_boundary:
-    question: >
-      Definir con precisión qué lenguaje diagnóstico no causal está permitido y
-      qué frases pertenecen exclusivamente a N5.
+  D8_causal_status:
+    decision: "N4_NON_CAUSAL_V1"
+    fixed_value: "NON_CAUSAL"
 
-  D13_conflict_boundary:
-    question: >
-      ¿N4 puede clasificar una situación derivada de conflicto Tipo A sin
-      modificar primary_type, resolution_status o governance_escalation?
+    forbidden:
+      - "probable cause"
+      - "caused by"
+      - "due to"
+      - "root cause"
+      - "culpability"
+
+  D9_statement_semantics:
+    decision: "UNRESOLVED_CONFLICT_STATEMENT_V1"
+    allowed_meaning:
+      - "Existe una contradicción no resuelta entre facts soportados"
+      - "Los facts permanecen incompatibles bajo la rule de contradicción"
+      - "El conflicto asociado permanece OPEN"
+
+    forbidden_meaning:
+      - "la causa es..."
+      - "la fuente A está equivocada"
+      - "el valor verdadero es..."
+      - "existe fraude"
+      - "existe incumplimiento"
+      - "hay deterioro"
+      - "hay riesgo alto"
+      - "el problema se debe a..."
+
+  D10_rule_identity:
+    decision: "DIAGNOSTIC_RULE_IDENTITY_STABLE_V1"
+    initial_rule:
+      rule_id: "N4_UNRESOLVED_CONFLICT_FROM_N3_CONTRADICTION"
+      rule_version: "1.0"
+      diagnostic_category: "UNRESOLVED_CONFLICT"
+      causal: false
+      status: "ACTIVE"
+      input_contract: "N4_UNRESOLVED_CONFLICT_INPUT_V1"
+      output_contract: "DIAGNOSIS_N4_PHYSICAL_V1"
+
+  D11_determinism:
+    decision: "N4_DETERMINISTIC_OUTPUT_V1"
+    rules:
+      - "same Bundle semantic content + same rule version -> same logical Diagnosis"
+      - "support ids ordered stably"
+      - "no ambient clock"
+      - "no random"
+      - "no LLM"
+      - "no IO"
+
+  D12_conflict_boundary:
+    decision: "N4_DOES_NOT_MUTATE_CONFLICT_V1"
+    rules:
+      - "Diagnosis does not change primary_type"
+      - "Diagnosis does not change resolution_status"
+      - "Diagnosis does not add secondary_types"
+      - "Diagnosis does not set governance_escalation"
+      - "Diagnosis does not calculate conflict severity"
+      - "Type A remains Type A OPEN"
+
+  D13_type_e_boundary:
+    decision: "N4_PRESERVES_TYPE_E_WITHOUT_CREATING_IT_V1"
+    meaning: >
+      Si un Tipo E ya existe contractualmente upstream, N4 no lo oculta ni
+      suaviza; esta primera rule N4 no se ejecuta para fabricar ni reinterpretar
+      Tipo E.
 
   D14_resolution_boundary:
-    question: >
-      Confirmar que un Diagnosis N4 nunca resuelve por sí mismo un conflicto.
+    decision: "N4_NO_RESOLUTION_AUTHORITY_V1"
+    rules:
+      - "Diagnosis never sets RESOLVED"
+      - "Diagnosis never sets SUPERSEDED"
+      - "Diagnosis never closes OPEN"
+      - "Diagnosis never resolves by weight_assessment"
 
-  D15_type_e_boundary:
-    question: >
-      ¿Cómo debe N4 preservar un Tipo E ya existente sin inventarlo ni
-      minimizarlo?
+  D15_n5_boundary:
+    decision: "N4_INFORMS_N5_WITHOUT_BECOMING_N5_V1"
+    rules:
+      - "Diagnosis may be included in IES"
+      - "RE may consume Diagnosis as structured support"
+      - "N4 does not emit hypothesis"
+      - "N4 does not emit recommendation"
+      - "N4 does not infer cause"
+      - "RE keeps all gates"
 
-  D16_n5_boundary:
-    question: >
-      ¿Qué información N4 puede aportar al Reasoning Engine y qué sigue
-      prohibido inferir automáticamente?
+  D16_g8_boundary:
+    decision: "N4_V1_G8_FREE_PLACEHOLDER_SUBSET"
+    meaning: >
+      La primera franja N4 no evalúa severity, impact, confidence ni
+      materiality; usa exclusivamente valores NOT_ASSESSED aprobados.
 
-  D17_productive_readiness:
-    question: >
-      Con N3 CONTRADICTION productiva actual, ¿hay al menos una diagnostic rule
-      N4 legítimamente implementable sin G8 ni nueva fuente?
+    g8_deferred:
+      - "severity ordinal"
+      - "impact ordinal"
+      - "confidence scoring"
+      - "materiality scoring"
+      - "thresholds"
+      - "wi"
+      - "k"
+      - "Fs"
 
-  D18_runtime_readiness:
-    question: >
-      Emitir GO/NO-GO para IMPL-EVIDENCE-N4-001 separando:
-      a) semántica contractual lista;
-      b) decisiones G2;
-      c) decisiones G8;
-      d) data gaps;
-      e) blockers absolutos.
+  D17_first_implementation_scope:
+    decision: "IMPL_EVIDENCE_N4_UNRESOLVED_CONFLICT_ONLY_V1"
+    meaning: >
+      Un futuro IMPL-EVIDENCE-N4-001 implementará únicamente registry +
+      rule UNRESOLVED_CONFLICT + schema N4 + placeholders NOT_ASSESSED +
+      tests/regresión.
 
-mandatory_diagnostic_category_matrix:
-  columns:
-    - "diagnostic_category"
-    - "contract authority"
-    - "required N2 inputs"
-    - "required N3 inputs"
-    - "classification_criterion"
-    - "causal: YES|NO"
-    - "severity required"
-    - "requires G8"
-    - "physical readiness"
-    - "notes"
+    forbidden_in_impl:
+      - "G8"
+      - "causal diagnostics"
+      - "additional diagnostic categories"
+      - "B/C/D/E classifier"
+      - "Type E creation"
+      - "resolution rules"
+      - "new sources"
+      - "changes to OP/EKS/IES/RE/CP"
 
-mandatory_schema_matrix:
-  columns:
-    - "field"
-    - "required"
-    - "contract owner"
-    - "source"
-    - "derivation allowed"
-    - "requires rule"
-    - "requires G8"
-    - "notes"
+human_approval_scope:
+  approve_exactly:
+    - "D1_diagnostic_rule_registry"
+    - "D2_initial_diagnostic_scope"
+    - "D3_input_contract"
+    - "D4_support_contract"
+    - "D5_classification_criterion"
+    - "D6_diagnosis_schema"
+    - "D7_required_unassessed_values"
+    - "D8_causal_status"
+    - "D9_statement_semantics"
+    - "D10_rule_identity"
+    - "D11_determinism"
+    - "D12_conflict_boundary"
+    - "D13_type_e_boundary"
+    - "D14_resolution_boundary"
+    - "D15_n5_boundary"
+    - "D16_g8_boundary"
+    - "D17_first_implementation_scope"
 
-mandatory_gate_matrix:
-  columns:
-    - "decision/gap"
-    - "blocks IMPL-EVIDENCE-N4-001"
-    - "requires G2"
-    - "requires G8"
-    - "requires source/tool change"
-    - "owner"
-    - "recommended next action"
+g2_contract_changes_authorized_if_approved:
+  docs/director-ia/02-EVIDENCE-BUILDER.md:
+    allowed:
+      - "registrar D1-D17"
+      - "registrar Diagnostic Rule Registry v1"
+      - "registrar rule identity N4"
+      - "registrar schema físico Diagnosis N4"
+      - "registrar UNRESOLVED_CONFLICT"
+      - "registrar classification criterion"
+      - "registrar placeholders NOT_ASSESSED"
+      - "registrar frontera N4/conflict/N5"
+      - "registrar futuro scope IMPL-EVIDENCE-N4-001"
 
-mandatory_language_matrix:
-  columns:
-    - "phrase/semantic"
-    - "allowed in N4"
-    - "reason"
-    - "belongs to N5"
-    - "notes"
+    forbidden:
+      - "calibrar G8"
+      - "crear severity ordinal"
+      - "crear impact ordinal"
+      - "crear confidence scoring"
+      - "crear materiality scoring"
+      - "crear thresholds"
+      - "crear causal rules"
+      - "crear categorías adicionales"
+      - "crear B/C/D/E classifier"
+      - "crear Tipo E"
+      - "crear resolution rules"
+      - "modificar N1-N3"
+      - "modificar IES/RE"
 
-  examples_to_classify:
-    - "Existe una contradicción operativa"
-    - "Los datos son inconsistentes bajo la regla X"
-    - "Hay deterioro"
-    - "La causa probable es..."
-    - "El problema se debe a..."
-    - "La fuente A es incorrecta"
-    - "Se requiere revisión"
-    - "Existe riesgo"
-    - "Existe incumplimiento"
-    - "Hay fraude"
-
-classification_rules:
-  CONTRACTUAL: >
-    Definido suficientemente por contratos vigentes para implementación sin
-    nueva decisión humana.
-
-  PHYSICAL_UNKNOWN: >
-    Semántica requerida pero realización física no congelada.
-
-  REQUIRES_G2: >
-    Necesita decisión arquitectónica/contractual humana.
-
-  REQUIRES_G8: >
-    Necesita calibración de severity/materiality/confidence/thresholds u otra
-    política reservada.
-
-  DATA_GAP: >
-    La regla podría existir, pero N2/N3 actual no trae señales suficientes.
-
-  BLOCKER: >
-    Impide implementación segura.
-
-audit_constraints:
-  - "no diseñar diagnostic rules productivas durante auditoría"
-  - "no inventar enum de severity"
-  - "no inventar categorías diagnósticas"
-  - "no inventar thresholds"
-  - "no usar materiality como severity"
-  - "no usar conflict type como diagnosis automático"
-  - "no convertir CONTRADICTION N3 en causalidad"
-  - "no generar hypothesis"
-  - "no resolver conflictos"
-  - "no usar G8"
-  - "no modificar contratos"
-
-required_report_sections:
-  - "1. Executive result"
-  - "2. Contracts/runtime inspected"
-  - "3. Current N4 physical reality"
-  - "4. D1-D18 findings"
-  - "5. Diagnosis schema readiness"
-  - "6. Diagnostic category readiness matrix"
-  - "7. Rule registry readiness"
-  - "8. Classification criterion boundary"
-  - "9. Severity / impact / materiality / G8 boundary"
-  - "10. Causal language boundary"
-  - "11. Conflict and Type E boundary"
-  - "12. N4 -> N5 boundary"
-  - "13. Data gaps"
-  - "14. Productive N4 feasibility with current N3"
-  - "15. G2 decisions required"
-  - "16. G8 decisions required"
-  - "17. Blockers"
-  - "18. GO/NO-GO for IMPL-EVIDENCE-N4-001"
-  - "19. STOP"
+required_report:
+  - "D1-D17 registradas"
+  - "diff contractual exacto"
+  - "registry final"
+  - "identity/version final"
+  - "schema N4 final"
+  - "classification criterion final"
+  - "support contract final"
+  - "NOT_ASSESSED semantics"
+  - "causal boundary"
+  - "conflict boundary"
+  - "Type E boundary"
+  - "N4 -> N5 boundary"
+  - "confirmación G8 no usado"
+  - "GO/NO-GO para IMPL-EVIDENCE-N4-001"
 
 acceptance_criteria:
-  - "D1-D18 auditados"
-  - "diagnostic category matrix completa"
-  - "schema matrix completa"
-  - "gate matrix completa"
-  - "language matrix completa"
-  - "severity/materiality/impact separados"
-  - "G2/G8 separados explícitamente"
-  - "N4 vs N5 claramente separado"
-  - "N4 no resuelve conflictos"
-  - "Type E no inventado"
-  - "causalidad no inventada"
-  - "ningún contrato modificado"
+  - "Diagnostic Rule Registry definido"
+  - "solo UNRESOLVED_CONFLICT inicial"
+  - "input exige N3 CONTRADICTION + Type A OPEN"
+  - "support incluye facts/evidence/conflict"
+  - "classification criterion determinístico"
+  - "Diagnosis schema definido"
+  - "severity/impact/confidence/materiality NOT_ASSESSED"
+  - "NON_CAUSAL"
+  - "rule identity estable"
+  - "N4 no muta conflicto"
+  - "N4 no crea Tipo E"
+  - "N4 no resuelve"
+  - "N4 no crea hypothesis/recommendation"
+  - "G8 no usado"
+  - "02 es único contrato modificable"
   - "ningún runtime modificado"
-  - "sin tests/fixtures nuevos"
+  - "sin tests/fixtures"
   - "git diff --check limpio"
   - "reporte obligatorio creado"
+  - "IMPL-EVIDENCE-N4-001 no creado"
 
 allowed_actions:
   - "leer contracts_in_force"
-  - "leer Evidence Builder runtime/tests"
-  - "leer fixtures N3"
-  - "leer IES/RE/CP/E2E solo para frontera downstream"
-  - "clasificar D1-D18"
-  - "crear matrices obligatorias"
-  - "crear docs/dev-loop/reports/ARCH-EVIDENCE-N4-PHYSICAL-DECISIONS-001.md"
+  - "leer auditoría N4 001"
+  - "leer runtime/tests EB"
+  - "comparar D1-D17 con contratos superiores"
+  - "si G1+G2 autorizados, modificar únicamente 02-EVIDENCE-BUILDER.md"
+  - "crear docs/dev-loop/reports/ARCH-EVIDENCE-N4-RULES-PHYSICAL-DECISIONS-002.md"
   - "actualizar CURRENT_TASK mediante transiciones permitidas"
-  - "ejecutar tests existentes solo para comprobar realidad"
   - "ejecutar git diff --check"
 
 forbidden_actions:
-  - "modificar docs/director-ia/"
-  - "modificar runtimes"
-  - "crear diagnostic rules"
-  - "crear N4"
+  - "modificar contratos fuera de 02"
+  - "implementar N4"
+  - "modificar runtime EB"
   - "crear tests/fixtures"
-  - "calibrar G8"
-  - "crear severity enum"
-  - "crear thresholds"
+  - "usar G8"
+  - "crear calibraciones"
   - "crear causalidad"
-  - "crear hypotheses/recommendations"
+  - "crear categorías adicionales"
+  - "crear B/C/D/E"
+  - "crear Tipo E"
+  - "crear resolution"
+  - "modificar OP/EKS/IES/RE/CP"
+  - "modificar server.js"
+  - "modificar package.json"
+  - "autoaprobar gates"
   - "crear IMPL-EVIDENCE-N4-001"
   - "commit"
   - "push"
   - "merge"
-  - "autoaprobar G2/G8"
   - "encadenar siguiente tarea"
 
 expected_terminal_state: >
-  DONE_PENDING_REVIEW si la auditoría determina con precisión qué N4 es
-  implementable hoy y qué requiere G2, G8 o señales adicionales.
-  BLOCKED o STOPPED si completar el análisis exige inventar categorías,
-  severity, thresholds, causalidad o calibraciones.
-
-implementation_followup_rule: >
-  IMPL-EVIDENCE-N4-001 no puede crearse desde esta tarea. HUMAN_APPROVER debe
-  revisar primero el veredicto y cualquier decisión G2/G8.
+  DONE_PENDING_REVIEW si D1-D17 pueden registrarse en 02 sin contradicción
+  constitucional y sin usar G8.
+  BLOCKED o STOPPED si alguna decisión exige calibración G8, causalidad,
+  modificación de otro contrato o semántica fuera del catálogo aprobado.
 
 max_attempts: 1
-result_report_path: "docs/dev-loop/reports/ARCH-EVIDENCE-N4-PHYSICAL-DECISIONS-001.md"
+result_report_path: "docs/dev-loop/reports/ARCH-EVIDENCE-N4-RULES-PHYSICAL-DECISIONS-002.md"
