@@ -4,7 +4,7 @@
 
 **Documento:** `docs/director-ia/02-EVIDENCE-BUILDER.md`  
 **Versión:** 2.1
-**Estado:** APROBADO PARA DISEÑO DEL IES; realización física v1 (D1–D15) intacta; realización física Evidence N3 Rules D1–D16 registrada (`ARCH-EVIDENCE-N3-RULES-PHYSICAL-DECISIONS-002`); runtime N3 pendiente
+**Estado:** APROBADO PARA DISEÑO DEL IES; realización física v1 (D1–D15) intacta; Evidence N3 Rules D1–D16 intactas; realización física Evidence N4 Rules D1–D17 registrada (`ARCH-EVIDENCE-N4-RULES-PHYSICAL-DECISIONS-002`); runtime N4 pendiente
 
 ### Dependencia normativa (rutas reales)
 
@@ -301,6 +301,10 @@ La primera franja productiva autorizada es **únicamente** CONTRADICTION no caus
 - severidad e impacto calculados **después** de tipificar conflictos;
 - sin hipótesis;
 - sin suavizar Tipo E.
+
+### Realización física — Evidence N4 Rules v1 (§21)
+
+La primera franja diagnóstica autorizada es **únicamente** `UNRESOLVED_CONFLICT` no causal (`N4_UNRESOLVED_CONFLICT_FROM_N3_CONTRADICTION` versión `1.0`), aplicación de la categoría Motor «conflicto no resuelto». Exige simultáneamente Evidence N3 CONTRADICTION y conflicto compuesto Tipo A `OPEN`. `severity`, `impact` y `confidence` se emiten como `*_NOT_ASSESSED` (no calibrados). Esta sección no redefine Motor §6 ni `04` §8. Los identificadores D1–D17 de §21 **no** sustituyen D1–D15 de §19 ni D1–D16 de §20.
 
 ---
 
@@ -727,19 +731,132 @@ No comparar periodos, métricas ni entidades distintas. No resolver `UNRESOLVED`
 
 ---
 
+# 21. Realización física Evidence N4 Rules v1 (D1–D17)
+
+Esta sección **no** redefine N1–N5 ni la Constitución. No redefine el Motor. No cambia `03A`, `03`, `04`, `05` ni `06`. No introduce epistemología. No calibra materias reservadas a G8. No implementa runtime. No crea tests ni fixtures. No autoriza por sí sola `IMPL-EVIDENCE-N4-001`.
+
+Registra las decisiones físicas aprobadas por HUMAN_APPROVER (tarea `ARCH-EVIDENCE-N4-RULES-PHYSICAL-DECISIONS-002`, G1+G2, `2026-08-17T17:27:52-06:00`). Evidencia previa: `ARCH-EVIDENCE-N4-PHYSICAL-DECISIONS-001`.
+
+Los identificadores D1–D17 de **esta sección** son los de `CURRENT_TASK` / `ARCH-EVIDENCE-N4-RULES-PHYSICAL-DECISIONS-002`. **No** sustituyen D1–D15 de §19 ni D1–D16 de §20. `N4_REMAINS_OUT_OF_SCOPE_V1` (§20 D14) permanece: la mera existencia de N3 no autoriza N4; esta sección añade **únicamente** la rule diagnóstica explícita aquí registrada.
+
+Tokens: `DIAGNOSTIC_RULE_REGISTRY_V1`, `UNRESOLVED_CONFLICT_DIAGNOSIS_V1_ONLY`, `N4_UNRESOLVED_CONFLICT_INPUT_V1`, `N4_TRACEABLE_SUPPORT_V1`, `UNRESOLVED_CONFLICT_CRITERION_V1`, `DIAGNOSIS_N4_PHYSICAL_V1`, `N4_UNASSESSED_DIMENSIONS_V1`, `N4_NON_CAUSAL_V1`, `UNRESOLVED_CONFLICT_STATEMENT_V1`, `DIAGNOSTIC_RULE_IDENTITY_STABLE_V1`, `N4_DETERMINISTIC_OUTPUT_V1`, `N4_DOES_NOT_MUTATE_CONFLICT_V1`, `N4_PRESERVES_TYPE_E_WITHOUT_CREATING_IT_V1`, `N4_NO_RESOLUTION_AUTHORITY_V1`, `N4_INFORMS_N5_WITHOUT_BECOMING_N5_V1`, `N4_V1_G8_FREE_PLACEHOLDER_SUBSET`, `IMPL_EVIDENCE_N4_UNRESOLVED_CONFLICT_ONLY_V1`. **Prohibido** sustituirlos en implementación.
+
+Relación con §19 D4: `R_MOD_EMPTY_GOVERNED_SETS` permanece para `absence_rules`, `resolution_rules`, `causal_rules` y `materiality_rules`. Esta sección autoriza únicamente el catálogo `diagnostic_rules` v1 con **una** rule no causal. No se inventan rules para tests. No se pueblan los sets vacíos de §19 D4. `evidence_rules` v1 (§20) permanece distinto e intacto.
+
+`diagnostic_category` físico `UNRESOLVED_CONFLICT` **aplica** la categoría Motor «conflicto no resuelto». No crea categoría nueva. No redefine Motor §6 ni `04` §8.
+
+| ID | Decisión aprobada | Significado contractual |
+|----|-------------------|-------------------------|
+| D1 | **DIAGNOSTIC_RULE_REGISTRY_V1** | El Evidence Builder mantiene un registry explícito, cerrado y versionado de diagnostic rules. Ningún Diagnosis N4 puede existir si no proviene de una rule `ACTIVE` registrada. Campos mínimos: `rule_id`, `rule_version`, `diagnostic_category`, `causal`, `input_contract`, `output_contract`, `status`. En esta versión: `causal=false`; `status` debe ser `ACTIVE` para ejecutarse; la identity queda persistida en el Diagnosis; sin rules dinámicas; sin LLM. |
+| D2 | **UNRESOLVED_CONFLICT_DIAGNOSIS_V1_ONLY** | La primera categoría diagnóstica implementable se limita a clasificar determinísticamente una contradicción no resuelta ya soportada por Evidence N3 CONTRADICTION y conflicto compuesto Tipo A `OPEN`. Categoría permitida: `UNRESOLVED_CONFLICT`. Prohibidas en esta versión: `DETERIORATION`, `NONCOMPLIANCE`, `RISK`, `FRAUD`, `ROOT_CAUSE`, `OPERATIONAL_FAILURE`, `SOURCE_FAILURE` y cualquier categoría causal. |
+| D3 | **N4_UNRESOLVED_CONFLICT_INPUT_V1** | Requerido simultáneamente: al menos una Evidence N3 CONTRADICTION; al menos un conflicto compuesto Tipo A; `resolution_status == OPEN`; facts soporte existentes; mismo contexto de trace/Bundle. Prohibido: derivar N4 solo de N3 sin objeto conflicto; derivar N4 solo del conflicto sin Evidence N3; derivar por inferencia de Tipo E; derivar de conflicto `RESOLVED` / cerrado. |
+| D4 | **N4_TRACEABLE_SUPPORT_V1** | Campos de soporte requeridos: `supporting_fact_ids`, `supporting_evidence_ids`, `supporting_conflict_ids`. Todas las referencias existen en el mismo Bundle. No se reescribe el soporte. Arrays en orden determinístico. N4 no duplica payloads N1/N2/N3. |
+| D5 | **UNRESOLVED_CONFLICT_CRITERION_V1** | El Diagnosis se emite únicamente cuando existe Evidence N3 CONTRADICTION válida y un conflicto compuesto Tipo A `OPEN` asociado al mismo conjunto de facts en tensión. Condición: `evidence_type == CONTRADICTION`; `causal_status == NON_CAUSAL`; `conflict.primary_type == A`; `conflict.resolution_status == OPEN`; la intersección de `evidence.supporting_fact_ids` y `conflict.facts_in_tension` es completa para el conjunto de soporte del diagnóstico. Sin selección de verdad, ranking de fuentes, root cause, inferencia de severity ni inferencia de resolution. |
+| D6 | **DIAGNOSIS_N4_PHYSICAL_V1** | Schema físico del objeto Diagnosis en el Knowledge Bundle. Campos requeridos: `diagnosis_id`, `diagnostic_category`, `statement`, `classification_criterion`, `supporting_fact_ids`, `supporting_evidence_ids`, `supporting_conflict_ids`, `severity`, `impact`, `confidence`, `materiality`, `causal_status`, `applied_rule`, `traceability`. Este schema no redefine `04` §8. |
+| D7 | **N4_UNASSESSED_DIMENSIONS_V1** | En esta franja, sin G8: `severity` = `SEVERITY_NOT_ASSESSED`; `impact` = `IMPACT_NOT_ASSESSED`; `confidence` = `CONFIDENCE_NOT_ASSESSED`; `materiality` = `MATERIALITY_NOT_ASSESSED`. `NOT_ASSESSED` ≠ `LOW`; ≠ `NONE`; no implica ausencia de riesgo ni de impacto; no ordena; no puntúa. |
+| D8 | **N4_NON_CAUSAL_V1** | `causal_status` = `NON_CAUSAL`. Prohibido: probable cause, caused by, due to, root cause, culpabilidad. |
+| D9 | **UNRESOLVED_CONFLICT_STATEMENT_V1** | Semántica permitida: existe una contradicción no resuelta entre facts soportados; los facts permanecen incompatibles bajo la rule de contradicción; el conflicto asociado permanece `OPEN`. Prohibida: “la causa es…”; “la fuente A está equivocada”; “el valor verdadero es…”; “existe fraude”; “existe incumplimiento”; “hay deterioro”; “hay riesgo alto”; “el problema se debe a…”. |
+| D10 | **DIAGNOSTIC_RULE_IDENTITY_STABLE_V1** | Identity estable, no nombre de función. Rule inicial: `rule_id` = `N4_UNRESOLVED_CONFLICT_FROM_N3_CONTRADICTION`; `rule_version` = `1.0`; `diagnostic_category` = `UNRESOLVED_CONFLICT`; `causal` = `false`; `status` = `ACTIVE`; `input_contract` = `N4_UNRESOLVED_CONFLICT_INPUT_V1`; `output_contract` = `DIAGNOSIS_N4_PHYSICAL_V1`. |
+| D11 | **N4_DETERMINISTIC_OUTPUT_V1** | Mismo contenido semántico de Bundle + misma rule version → mismo Diagnosis lógico, salvo IDs inyectados. Support IDs en orden estable. Sin reloj ambiental, random, LLM ni I/O. |
+| D12 | **N4_DOES_NOT_MUTATE_CONFLICT_V1** | El Diagnosis no cambia `primary_type`, `resolution_status`, `secondary_types`, `governance_escalation` ni severity del conflicto. Tipo A permanece Tipo A `OPEN`. |
+| D13 | **N4_PRESERVES_TYPE_E_WITHOUT_CREATING_IT_V1** | Si un Tipo E ya existe contractualmente upstream, N4 no lo oculta ni lo suaviza. Esta rule no se ejecuta para fabricar ni reinterpretar Tipo E. |
+| D14 | **N4_NO_RESOLUTION_AUTHORITY_V1** | El Diagnosis nunca pone `RESOLVED` ni `SUPERSEDED`, nunca cierra `OPEN` y nunca resuelve por `weight_assessment`. |
+| D15 | **N4_INFORMS_N5_WITHOUT_BECOMING_N5_V1** | El Diagnosis puede incluirse en el IES. El RE puede consumirlo como soporte estructurado. N4 no emite hypothesis ni recommendation y no infiere causa. El RE conserva todos sus gates. |
+| D16 | **N4_V1_G8_FREE_PLACEHOLDER_SUBSET** | Esta franja no evalúa severity, impact, confidence ni materiality; usa exclusivamente los valores `NOT_ASSESSED` de D7. Diferido a G8: severity ordinal, impact ordinal, confidence scoring, materiality scoring, thresholds, `wi`, `k`, Fs. G8 no se usa en esta sección. |
+| D17 | **IMPL_EVIDENCE_N4_UNRESOLVED_CONFLICT_ONLY_V1** | Un futuro `IMPL-EVIDENCE-N4-001` implementará únicamente registry + rule `UNRESOLVED_CONFLICT` + schema N4 + placeholders `NOT_ASSESSED` + tests/regresión. Prohibido en ese IMPL: G8, diagnósticos causales, categorías adicionales, clasificador B/C/D/E, creación de Tipo E, resolution rules, nuevas fuentes, cambios OP/EKS/IES/RE/CP. Esta sección no crea esa tarea. |
+
+### Registry final v1 (diagnostic)
+
+| Campo del registry | Valor v1 |
+|--------------------|----------|
+| `diagnostic_rules` | Una rule: ver identity abajo |
+| `evidence_rules` | Intactas (§20); distintas de diagnostic rules |
+| `absence_rules` | Vacío (§19 D4 intacto) |
+| `resolution_rules` | Vacío (§19 D4 intacto) |
+| `causal_rules` | Vacío (§19 D4 intacto) |
+| `materiality_rules` | Vacío (§19 D4 intacto) |
+
+### Identity de la rule inicial
+
+| Campo | Valor |
+|-------|--------|
+| `rule_id` | `N4_UNRESOLVED_CONFLICT_FROM_N3_CONTRADICTION` |
+| `rule_version` | `1.0` |
+| `diagnostic_category` | `UNRESOLVED_CONFLICT` |
+| `causal` | `false` |
+| `status` | `ACTIVE` |
+| `input_contract` | `N4_UNRESOLVED_CONFLICT_INPUT_V1` |
+| `output_contract` | `DIAGNOSIS_N4_PHYSICAL_V1` |
+
+`classification_criterion` de un Diagnosis emitido por esta rule es esa identity (`rule_id` + `rule_version`).
+
+### Schema físico Diagnosis N4 v1 (Bundle)
+
+| Campo | Obligatorio | Valor / regla en esta franja |
+|-------|-------------|------------------------------|
+| `diagnosis_id` | Sí | Identificador opaco trazable (§19 D5) |
+| `diagnostic_category` | Sí | `UNRESOLVED_CONFLICT` |
+| `statement` | Sí | Semántica D9; no causal |
+| `classification_criterion` | Sí | Identity de la rule D10 |
+| `supporting_fact_ids` | Sí | Facts existentes; orden estable; intersección completa con `facts_in_tension` usados |
+| `supporting_evidence_ids` | Sí | ≥1 Evidence N3 CONTRADICTION `NON_CAUSAL` |
+| `supporting_conflict_ids` | Sí | ≥1 conflicto Tipo A `OPEN` |
+| `severity` | Sí | `SEVERITY_NOT_ASSESSED` |
+| `impact` | Sí | `IMPACT_NOT_ASSESSED` |
+| `confidence` | Sí | `CONFIDENCE_NOT_ASSESSED` |
+| `materiality` | Sí | `MATERIALITY_NOT_ASSESSED` |
+| `causal_status` | Sí | `NON_CAUSAL` |
+| `applied_rule.rule_id` | Sí | `N4_UNRESOLVED_CONFLICT_FROM_N3_CONTRADICTION` |
+| `applied_rule.rule_version` | Sí | `1.0` |
+| `traceability` | Sí | Incluye `trace_id` e identity de la rule |
+
+### Semántica `NOT_ASSESSED` (D7)
+
+`SEVERITY_NOT_ASSESSED`, `IMPACT_NOT_ASSESSED`, `CONFIDENCE_NOT_ASSESSED` y `MATERIALITY_NOT_ASSESSED` significan **no evaluado**. No equivalen a `LOW`, `NONE`, ausencia de impacto ni ausencia de riesgo. No contienen scoring ni orden. No son umbrales G8.
+
+### Criterion v1
+
+La rule es válida solo si se cumplen **todas** estas condiciones en el mismo Bundle:
+
+1. Evidence N3 con `evidence_type == CONTRADICTION` y `causal_status == NON_CAUSAL`.
+2. Conflicto compuesto con `primary_type == A` y `resolution_status == OPEN`.
+3. Facts soporte existentes.
+4. Intersección completa entre `evidence.supporting_fact_ids` y `conflict.facts_in_tension` para el conjunto de soporte del diagnóstico.
+
+No se autoriza diagnóstico derivado únicamente de N3 ni únicamente del conflicto.
+
+### Fronteras
+
+- **Causal:** `NON_CAUSAL`. Sin causa, culpabilidad, valor verdadero, fraude, incumplimiento, deterioro ni riesgo alto.
+- **Conflicto:** N4 no muta el objeto conflicto. Tipo A sigue Tipo A `OPEN`.
+- **Tipo E:** no se crea. Si ya existe upstream, se preserva (no ocultar, no suavizar). Esta rule no se usa para fabricar E.
+- **Resolution:** sin autoridad `RESOLVED` / `SUPERSEDED`.
+- **N5:** N4 puede alimentar IES/RE; no crea hypothesis, recommendation ni inferencia causal.
+
+### Límites de esta realización
+
+1. Runtime N4 **PENDIENTE**. Esta sección no implementa `to_n4`, registry ejecutable, tests ni fixtures.
+2. G8 **no usado**. No se calibran severity/impact/confidence/materiality ordinales, `wi`, `k`, Fs ni thresholds.
+3. No autoriza `IMPL-EVIDENCE-N4-001` por sí sola (requiere G5 humano).
+4. No redefine Constitución, Motor, `03A`, `03`, `04`, `05`, `06` ni el índice.
+5. Categorías N4 distintas de `UNRESOLVED_CONFLICT`, clasificador B/C/D/E, Tipo E productivo y resolution rules permanecen diferidos.
+6. D1–D15 de §19 y D1–D16 de §20 permanecen intactos.
+
+---
+
 # Control documental
 
 | Campo | Valor |
 |-------|--------|
 | Documento | `02-EVIDENCE-BUILDER.md` |
 | Versión | 2.1 |
-| Estado | APROBADO PARA DISEÑO DEL IES; realización física v1 (D1–D15) intacta; realización física Evidence N3 Rules D1–D16 registrada (`ARCH-EVIDENCE-N3-RULES-PHYSICAL-DECISIONS-002`) |
+| Estado | APROBADO PARA DISEÑO DEL IES; realización física v1 (D1–D15) intacta; Evidence N3 Rules D1–D16 intactas; Evidence N4 Rules D1–D17 registradas (`ARCH-EVIDENCE-N4-RULES-PHYSICAL-DECISIONS-002`) |
 | Tipo | Especificación arquitectónica (ensamblaje) |
 | Dependencia normativa | `docs/director-ia/DIRECTOR_IA_CONSTITUTION.md`; `docs/director-ia/DIRECTOR_IA_EXECUTIVE_KNOWLEDGE_ENGINE.md` |
 | Fuentes de apoyo | `docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md`; `docs/director-ia/DIRECTOR_IA_V2_FASE_1_VERACIDAD.md`; `docs/director-ia/DIRECTOR_IA_V2_FASE_2_PLANNER.md`; `docs/director-ia/DIRECTOR_IA_V2_FASE_3_TOOL_ORCHESTRATOR.md`; `docs/director-ia/03A-OBSERVATION-PIPELINE.md`; `docs/director-ia/03-EXECUTIVE-KNOWLEDGE-STORE.md` |
-| Implementación | Runtime EB N1/N2/conflictos existente; runtime N3 PENDIENTE |
-| Parámetros de calibración | PENDIENTES (G8); subset N3 CONTRADICTION v1 no los usa |
-| Auditoría | 2026-08-15: realización física D1–D15 (`ARCH-EB-PHYSICAL-DECISIONS-003`); 2026-08-17: Evidence N3 Rules D1–D16 (`ARCH-EVIDENCE-N3-RULES-PHYSICAL-DECISIONS-002`); sin redefinición constitucional; sin calibración G8 |
+| Implementación | Runtime EB N1/N2/N3 CONTRADICTION/conflictos existente; runtime N4 PENDIENTE |
+| Parámetros de calibración | PENDIENTES (G8); subset N3 CONTRADICTION v1 y subset N4 `UNRESOLVED_CONFLICT` v1 no los usan |
+| Auditoría | 2026-08-15: realización física D1–D15 (`ARCH-EB-PHYSICAL-DECISIONS-003`); 2026-08-17: Evidence N3 Rules D1–D16 (`ARCH-EVIDENCE-N3-RULES-PHYSICAL-DECISIONS-002`); 2026-08-17: Evidence N4 Rules D1–D17 (`ARCH-EVIDENCE-N4-RULES-PHYSICAL-DECISIONS-002`); sin redefinición constitucional; sin calibración G8 |
 
 ---
 
