@@ -1,0 +1,17 @@
+{
+  "meta": {
+    "figures": "ILUSTRATIVAS / FICTICIAS",
+    "not_institutional_coverage": true,
+    "note": "planta_id presente sin plant_code canónico. ENTITY_UNRESOLVED. No hay resolución fuzzy. No se invoca ARR."
+  },
+  "input": {
+    "planta_id": 9001,
+    "year": 2026,
+    "month": 7,
+    "triggered_by": "dashboard_auth_ilustrativo",
+    "question": "venta_ton ilustrativa entidad no resuelta",
+    "plan": { "intent": "arr_venta_ton", "domains": ["arr"] },
+    "tool_plan": { "tools": ["get_arr_snapshot"] }
+  },
+  "expected_status": "ENTITY_UNRESOLVED"
+}
