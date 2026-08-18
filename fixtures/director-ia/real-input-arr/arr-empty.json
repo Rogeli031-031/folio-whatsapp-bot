@@ -1,0 +1,23 @@
+{
+  "meta": {
+    "figures": "ILUSTRATIVAS / FICTICIAS",
+    "not_institutional_coverage": true,
+    "note": "Éxito técnico de loadArrProyForPlant sin venta_ton transportable. ACQUIRED_EMPTY. No es ABSENCE_CONFIRMED ni venta_ton = 0."
+  },
+  "input": {
+    "planta_id": 9001,
+    "plant_code": "SYN-NTE",
+    "plant_label": "Planta Sintetica Norte",
+    "year": 2026,
+    "month": 7,
+    "triggered_by": "dashboard_auth_ilustrativo",
+    "question": "venta_ton ilustrativa vacia",
+    "plan": { "intent": "arr_venta_ton", "domains": ["arr"] },
+    "tool_plan": { "tools": ["get_arr_snapshot"] }
+  },
+  "arr_source_result": {
+    "venta_ton": null,
+    "desc_kg": null
+  },
+  "expected_status": "ACQUIRED_EMPTY"
+}

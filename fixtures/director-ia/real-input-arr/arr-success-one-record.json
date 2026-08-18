@@ -1,0 +1,23 @@
+{
+  "meta": {
+    "figures": "ILUSTRATIVAS / FICTICIAS",
+    "not_institutional_coverage": true,
+    "note": "Forma física de loadArrProyForPlant: { venta_ton, desc_kg }. Un registro transportable. No es cobertura institucional."
+  },
+  "input": {
+    "planta_id": 9001,
+    "plant_code": "SYN-NTE",
+    "plant_label": "Planta Sintetica Norte",
+    "year": 2026,
+    "month": 7,
+    "triggered_by": "dashboard_auth_ilustrativo",
+    "question": "venta_ton ilustrativa de planta sintetica norte",
+    "plan": { "intent": "arr_venta_ton", "domains": ["arr"] },
+    "tool_plan": { "tools": ["get_arr_snapshot"] }
+  },
+  "arr_source_result": {
+    "venta_ton": 95.0,
+    "desc_kg": 1.25
+  },
+  "expected_status": "ACQUIRED_OK"
+}

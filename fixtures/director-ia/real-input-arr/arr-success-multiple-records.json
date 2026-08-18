@@ -1,0 +1,25 @@
+{
+  "meta": {
+    "figures": "ILUSTRATIVAS / FICTICIAS",
+    "not_institutional_coverage": true,
+    "note": "Fuente inyectada con rows de venta_ton. No cambia loadArrProyForPlant (un objeto). No es capability nueva ni consulta ARR distinta."
+  },
+  "input": {
+    "planta_id": 9001,
+    "plant_code": "SYN-NTE",
+    "plant_label": "Planta Sintetica Norte",
+    "year": 2026,
+    "month": 7,
+    "triggered_by": "dashboard_auth_ilustrativo",
+    "question": "venta_ton ilustrativa multi-registro",
+    "plan": { "intent": "arr_venta_ton", "domains": ["arr"] },
+    "tool_plan": { "tools": ["get_arr_snapshot"] }
+  },
+  "arr_source_result": {
+    "rows": [
+      { "venta_ton": 95.0, "period": "2026-06" },
+      { "venta_ton": 120.0, "period": "2026-07" }
+    ]
+  },
+  "expected_status": "ACQUIRED_OK"
+}

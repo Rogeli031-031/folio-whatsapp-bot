@@ -1,0 +1,18 @@
+{
+  "meta": {
+    "figures": "ILUSTRATIVAS / FICTICIAS",
+    "not_institutional_coverage": true,
+    "note": "plant_code presente; year/month incompletos. loadArrProyForPlant exige year y month 1-12. QUERY_SCOPE_INCOMPLETE demostrable por firma física. No se invoca ARR. No se inventa periodo."
+  },
+  "input": {
+    "planta_id": 9001,
+    "plant_code": "SYN-NTE",
+    "plant_label": "Planta Sintetica Norte",
+    "year": 2026,
+    "triggered_by": "dashboard_auth_ilustrativo",
+    "question": "venta_ton ilustrativa alcance incompleto",
+    "plan": { "intent": "arr_venta_ton", "domains": ["arr"] },
+    "tool_plan": { "tools": ["get_arr_snapshot"] }
+  },
+  "expected_status": "QUERY_SCOPE_INCOMPLETE"
+}
