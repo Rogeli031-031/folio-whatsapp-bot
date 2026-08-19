@@ -1,0 +1,47 @@
+{
+  "meta": {
+    "figures": "ILUSTRATIVAS / FICTICIAS",
+    "not_institutional_coverage": true,
+    "note": "Ciclo completo ACQUIRED_EMPTY. No es ABSENCE_CONFIRMED ni venta_ton = 0."
+  },
+  "projectionDepth": "L1_EXECUTIVE",
+  "session": {},
+  "query_context_metadata": {
+    "executive_query_id": "eq_cycle_empty",
+    "trace_id": "replaced_by_arr_facade",
+    "original_question": "venta_ton ilustrativa vacia",
+    "intent": "arr_venta_ton",
+    "requesting_user_id": "user_ilustrativo",
+    "requesting_role": "director",
+    "channel": "dashboard",
+    "resolved_entities": [
+      {
+        "entity_type": "planta",
+        "original_value": "9001",
+        "resolution_state": "RESOLVED",
+        "entity_id": "SYN-NTE",
+        "candidates": []
+      }
+    ],
+    "permission_restrictions": [],
+    "knowledge_effective_date": "2026-08-19T13:06:59.000Z",
+    "plant_or_scope": "SYN-NTE",
+    "period": "2026-07"
+  },
+  "input": {
+    "planta_id": 9001,
+    "plant_code": "SYN-NTE",
+    "plant_label": "Planta Sintetica Norte",
+    "year": 2026,
+    "month": 7,
+    "triggered_by": "dashboard_auth_ilustrativo",
+    "question": "venta_ton ilustrativa vacia",
+    "plan": { "intent": "arr_venta_ton", "domains": ["arr"] },
+    "tool_plan": { "tools": ["get_arr_snapshot"] }
+  },
+  "arr_source_result": {
+    "venta_ton": null,
+    "desc_kg": null
+  },
+  "expected_status": "ACQUIRED_EMPTY"
+}
