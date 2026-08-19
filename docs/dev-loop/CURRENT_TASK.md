@@ -12,417 +12,460 @@ Esto no es G1. `DRAFT` no es ejecutable.
 ---
 
 ```yaml
-task_id: "ARCH-DIRECTOR-IA-REAL-CYCLE-COMPLETION-READINESS-001"
+task_id: "IMPL-DIRECTOR-IA-REAL-CYCLE-COMPOSITION-001"
 status: CLOSED
 
 authorized_by: "HUMAN_APPROVER"
-authorized_at: "2026-08-17T23:24:33-06:00"
-human_authorization: "AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-17"
+authorized_at: "2026-08-19T13:06:59-06:00"
+human_authorization: "AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-19"
 
 gates:
   G1_task_authorization: AUTHORIZED
-  G2_architecture_change: PENDING_IF_REQUIRED
-  G3_new_architecture_contract: PENDING_IF_REQUIRED
+  G2_architecture_change: N/A
+  G3_new_architecture_contract: N/A
   G8_calibration_materiality_signature: N/A
 
 objective: >
-  Auditar el estado físico del Director IA después de integrar el primer
-  vertical slice real ARR -> MINIMAL_EXECUTION_ENVELOPE -> OP -> EB -> EKS,
-  y determinar exactamente cuál es el siguiente incremento mínimo para
-  completar un ciclo productivo real sin inventar arquitectura ni mezclar
-  prematuramente persistencia, sesión, chat, WhatsApp o nueva epistemología.
-  Comparar explícitamente continuar desde EKS hacia IES -> RE -> CP contra
-  introducir antes persistencia/sesión u otra infraestructura, y emitir un
-  único NEXT_TASK recomendado.
+  Implementar la composición mínima del primer ciclo cognitivo real completo
+  del Director IA usando el vertical slice ARR ya integrado. Extender el ciclo
+  físico existente ARR -> MINIMAL_EXECUTION_ENVELOPE -> OP -> EB -> EKS para
+  continuar con IES -> Reasoning Engine -> Channel Projection DASHBOARD,
+  reutilizando exclusivamente contratos y runtimes ya aprobados. La tarea es
+  COMPOSITION_ONLY: no crea epistemología, persistencia, sesión, canal real,
+  nuevas fuentes ni reglas.
 
 in_scope:
   - "docs/dev-loop/CURRENT_TASK.md"
-  - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-REAL-CYCLE-COMPLETION-READINESS-001.md"
+  - "docs/dev-loop/reports/IMPL-DIRECTOR-IA-REAL-CYCLE-COMPOSITION-001.md"
 
-  - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-POST-N4-READINESS-001.md (solo lectura)"
-  - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-REAL-INPUT-INTEGRATION-001.md (solo lectura)"
+  - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-REAL-CYCLE-COMPLETION-READINESS-001.md (solo lectura)"
   - "docs/dev-loop/reports/IMPL-DIRECTOR-IA-REAL-INPUT-ARR-001.md (solo lectura)"
 
   - "docs/director-ia/* (solo lectura)"
 
-  - "lib/director-ia-real-input-arr.js (solo lectura)"
-  - "lib/director-ia-observation-pipeline.js (solo lectura)"
-  - "lib/director-ia-evidence-builder.js (solo lectura)"
-  - "lib/director-ia-op-eb-eks-integration.js (solo lectura, si existe)"
-  - "lib/director-ia-e2e.js (solo lectura)"
-  - "existing EKS runtime(s) (solo lectura)"
-  - "existing IES runtime(s) (solo lectura)"
-  - "existing Reasoning Engine runtime(s) (solo lectura)"
-  - "existing Channel Projection runtime(s) (solo lectura)"
-  - "existing Director IA factories/orchestrators (solo lectura)"
+  - "lib/director-ia-real-input-arr.js"
+  - "new Director IA full-cycle composition runtime"
 
-  - "test/director-ia-*.test.js (solo lectura)"
-  - "fixtures/director-ia/** (solo lectura)"
+  - "existing Observation Pipeline runtime (solo lectura)"
+  - "existing Evidence Builder runtime (solo lectura)"
+  - "existing EKS runtime (solo lectura)"
+  - "existing IES Builder runtime (solo lectura)"
+  - "existing Reasoning Engine runtime (solo lectura)"
+  - "existing Channel Projection runtime (solo lectura)"
+  - "lib/director-ia-e2e.js (solo lectura unless composition reuse requires no semantic change)"
+
+  - "new full-cycle composition tests"
+  - "new synthetic fixtures only if required for composition"
+
+  - "test/director-ia-real-input-arr.test.js (solo lectura)"
+  - "test/director-ia-e2e.test.js (solo lectura)"
+  - "test/director-ia-*.test.js (solo lectura for regression)"
 
   - "server.js (solo lectura)"
   - "package.json (solo lectura)"
-  - "existing dashboard/API runtime (solo lectura)"
-  - "existing persistence/session/runtime storage code (solo lectura)"
-  - "existing WhatsApp/Twilio/chat code (solo lectura)"
 
 out_of_scope:
-  - "implementar el siguiente ciclo"
   - "modificar contratos"
-  - "modificar runtimes"
-  - "modificar tests"
-  - "modificar fixtures"
-  - "modificar server.js"
-  - "modificar package.json"
+  - "modificar OP semantics"
+  - "modificar EB semantics"
+  - "modificar EKS semantics"
+  - "modificar IES semantics"
+  - "modificar RE semantics"
+  - "modificar CP semantics"
+
+  - "crear N1/N2/N3/N4/N5 rules"
+  - "crear B/C/D/E classifier"
+  - "crear Tipo E"
+  - "crear causalidad"
+  - "usar G8"
+
+  - "crear persistencia durable"
+  - "crear sesión"
+  - "crear memoria conversacional"
+  - "crear identidad conversacional"
+  - "crear WhoAmI"
 
   - "wire WhatsApp"
   - "wire Twilio"
   - "wire chat legado"
-  - "crear memoria conversacional"
-  - "crear WhoAmI"
-  - "crear small talk"
-
-  - "crear persistencia"
-  - "crear sesión"
-  - "crear DB schema"
-  - "crear endpoint productivo"
+  - "modificar server.js"
+  - "crear endpoint"
+  - "modificar package.json"
+  - "agregar dependencies"
 
   - "crear nueva fuente"
-  - "crear nueva tool"
   - "crear nueva métrica"
-
-  - "modificar N1-N5"
-  - "crear causalidad"
-  - "crear B/C/D/E"
-  - "usar G8"
+  - "cambiar ARR query semantics"
+  - "crear secrets"
+  - "modificar .env"
 
   - "commit"
   - "push"
   - "merge"
-  - "crear implementación"
-  - "encadenar siguiente tarea"
+  - "chain next task"
 
 baseline_in_force:
-  real_input:
-    status: IMPLEMENTED
-    path:
-      - "authenticated planta_id input"
-      - "Director IA ARR facade"
-      - "existing ARR source"
-      - "MINIMAL_EXECUTION_ENVELOPE"
-      - "Observation Pipeline"
-      - "Evidence Builder"
-      - "EKS"
-
   source:
     runtime: "get_arr_snapshot / loadArrProyForPlant"
     metric: "venta_ton"
 
-  verified_regression:
-    focused_tests: 24
-    director_ia_tests: 292
+  implemented_real_path:
+    - "validated planta_id"
+    - "Director IA ARR facade"
+    - "existing ARR source"
+    - "MINIMAL_EXECUTION_ENVELOPE"
+    - "Observation Pipeline"
+    - "Evidence Builder N2/N3/N4"
+    - "EKS"
+
+  verified_previous_tests:
+    focused_arr: 24
+    director_ia_regression: 292
     failures: 0
 
-  architectural_boundaries:
-    - "WhatsApp/chat remain outside N1-N5"
-    - "OP owns AcquisitionStatus/ObservationRecord"
-    - "EB consumes OP output"
-    - "RE consumes IES"
-    - "CP is presentation"
-    - "trace_id originates at real-cycle facade"
-    - "technical empty is not business absence"
+  readiness_audit:
+    verdict: "CONDITIONAL-GO"
+    selected_candidate: "A_FULL_CYCLE_COMPOSITION"
+    classification: "COMPOSITION_ONLY"
+    findings:
+      - "EKS -> IES is physically compatible"
+      - "IES -> RE is physically compatible"
+      - "RE -> CP is physically compatible"
+      - "durable persistence is not required for one cycle"
+      - "conversation session is not required for one cycle"
+      - "WhatsApp/chat are not required"
+      - "N4 IES projection debt is DEBT_NON_BLOCKING"
+      - "ARR snapshot requires query_context_metadata before valid IES construction"
 
-audit_questions:
-
-  D1_current_real_cycle:
-    question: >
-      ¿Cuál es exactamente el punto terminal del ciclo ARR real actualmente
-      implementado y qué objeto físico queda disponible allí?
-
-  D2_eks_to_ies:
-    question: >
-      ¿Puede el EKS producido por el ciclo ARR alimentar directamente el IES
-      existente sin adapter, reinterpretación ni contrato nuevo?
-
-  D3_ies_projection:
-    question: >
-      ¿Qué campos N2/N3/N4 realmente producidos por ARR sobreviven hoy a la
-      proyección EKS -> IES y cuáles se pierden?
-
-  D4_n4_debt:
-    question: >
-      Reevaluar el debt conocido donde IES clona Diagnosis sin proyectar todos
-      los campos adicionales de 04 §8. Determinar si bloquea un ciclo real o
-      sigue siendo follow-up no blocker.
-
-  D5_ies_to_re:
-    question: >
-      ¿Puede el IES resultante alimentar directamente al Reasoning Engine
-      existente con el output ARR real?
-
-  D6_reasoning_behavior:
-    question: >
-      ¿Qué puede producir RE físicamente con un ciclo ARR que solo tenga
-      N2/N3/N4 disponibles según los datos reales?
-
-  D7_re_to_cp:
-    question: >
-      ¿Puede el output de RE alimentar directamente Channel Projection sin
-      adapter contractual nuevo?
-
-  D8_cp_output:
-    question: >
-      ¿Qué objeto final produce CP y es suficiente como respuesta estructurada
-      para un caller productivo no conversacional?
-
-  D9_real_full_facade:
-    question: >
-      ¿Existe ya una fachada/orchestrator que pueda componer
-      ARR -> OP -> EB -> EKS -> IES -> RE -> CP, o falta únicamente composición?
-
-  D10_persistence_dependency:
-    question: >
-      ¿Alguna etapa EKS -> IES -> RE -> CP exige persistencia durable para
-      funcionar correctamente en un solo ciclo?
-
-  D11_session_dependency:
-    question: >
-      ¿Alguna etapa exige sesión conversacional o identidad de usuario para
-      ejecutar un ciclo dashboard stateless?
-
-  D12_historical_dependency:
-    question: >
-      ¿RE requiere conocimiento histórico entre ciclos o puede razonar sobre el
-      snapshot/Knowledge Bundle del ciclo actual?
-
-  D13_eks_semantics:
-    question: >
-      Determinar si EKS es store durable requerido, store lógico/in-memory o
-      boundary epistemológico independiente de persistencia física.
-
-  D14_dashboard_return:
-    question: >
-      ¿Puede un caller dashboard recibir directamente el resultado de CP sin
-      introducir chat/WhatsApp?
-
-  D15_server_wiring:
-    question: >
-      ¿Qué wiring mínimo futuro necesitaría server.js para invocar una fachada
-      full-cycle sin conocer internamente OP/EB/EKS/IES/RE/CP?
-
-  D16_error_propagation:
-    question: >
-      ¿Cómo deben propagarse ACQUIRED_EMPTY, TOOL_ERROR,
-      ENTITY_UNRESOLVED y QUERY_SCOPE_INCOMPLETE a través del ciclo completo
-      sin convertirse en conclusiones de negocio?
-
-  D17_trace_propagation:
-    question: >
-      ¿trace_id puede preservarse físicamente hasta RE/CP con los runtimes
-      actuales?
-
-  D18_mutation:
-    question: >
-      ¿La composición completa puede preservar no-mutación de envelopes,
-      observations, bundles, IES y outputs?
-
-  D19_candidate_next_increment:
-    question: >
-      Comparar como mínimo:
-      A) full-cycle composition EKS -> IES -> RE -> CP;
-      B) persistencia durable antes de RE;
-      C) sesión/identidad antes de RE;
-      D) wiring dashboard/server antes de completar pipeline.
-
-  D20_minimum_productive_completion:
-    question: >
-      ¿Cuál es el incremento mínimo que transforma el vertical slice ARR
-      existente en un ciclo cognitivo completo demostrable?
-
-  D21_gate_requirements:
-    question: >
-      Para cada candidato, determinar si requiere solo G1 o también G2/G3/G8.
-
-  D22_next_task:
-    question: >
-      Emitir exactamente un NEXT_TASK recomendado con scope físico cerrado.
-
-mandatory_pipeline_matrix:
-  rows:
+target_real_cycle:
+  path:
+    - "validated dashboard-style input"
+    - "ARR facade"
     - "ARR source"
     - "MINIMAL_EXECUTION_ENVELOPE"
     - "OP"
     - "EB"
     - "EKS"
+    - "query_context_metadata composition"
     - "IES"
-    - "RE"
-    - "CP"
-    - "caller"
+    - "Reasoning Engine"
+    - "Channel Projection DASHBOARD"
+    - "structured caller result"
 
-  columns:
-    - "stage"
-    - "runtime exists"
-    - "input physically compatible"
-    - "output physically compatible"
-    - "trace preserved"
-    - "persistence required"
-    - "session required"
-    - "adapter required"
-    - "blocker"
+  explicitly_not_in_cycle:
+    - "server HTTP route"
+    - "WhatsApp"
+    - "Twilio"
+    - "legacy chat"
+    - "durable persistence"
+    - "conversation session"
 
-mandatory_artifact_flow_matrix:
-  columns:
-    - "artifact"
-    - "producer"
-    - "consumer"
-    - "real ARR cycle currently produces it"
-    - "schema/contract"
-    - "fields preserved"
-    - "fields lost"
-    - "blocking loss"
+composition_runtime:
+  preferred_name: "lib/director-ia-real-cycle.js"
 
-mandatory_candidate_matrix:
-  rows:
-    - "A_FULL_CYCLE_COMPOSITION"
-    - "B_PERSISTENCE_FIRST"
-    - "C_SESSION_FIRST"
-    - "D_SERVER_WIRING_FIRST"
+  preferred_export: "createDirectorIaRealCycle"
 
-  columns:
-    - "candidate"
-    - "user/product value unlocked"
-    - "architectural prerequisite"
-    - "runtime prerequisite"
-    - "G2"
-    - "G3"
-    - "G8"
-    - "risk"
-    - "recommended"
+  expected_shape: >
+    createDirectorIaRealCycle({
+      arrInput,
+      iesBuilder,
+      reasoningEngine,
+      channelProjection,
+      clock,
+      idFactory
+    }).run(input)
 
-mandatory_gap_classification:
-  allowed_values:
-    - "READY"
-    - "COMPOSITION_ONLY"
-    - "ADAPTER_REQUIRED"
-    - "IMPLEMENTATION_REQUIRED"
-    - "DEBT_NON_BLOCKING"
-    - "CONFIG_REQUIRED"
-    - "REQUIRES_G2"
-    - "REQUIRES_G3"
-    - "REQUIRES_G8"
-    - "BLOCKER"
+  note: >
+    Exact dependency names may follow physical repository conventions.
+    Reuse existing factories rather than duplicate their internal logic.
 
-mandatory_decision_rules:
-  - >
-    No recomendar persistencia primero solo porque un componente se llame
-    Knowledge Store; probar dependencia física.
-  - >
-    No recomendar sesión primero salvo que el ciclo cognitivo actual la exija
-    físicamente.
-  - >
-    No recomendar WhatsApp/chat como mecanismo de validación del ciclo.
-  - >
-    Preferir el incremento más pequeño que demuestre el pipeline constitucional
-    completo con ARR real.
-  - >
-    Si EKS -> IES -> RE -> CP ya son físicamente compatibles, clasificar el gap
-    como COMPOSITION_ONLY.
-  - >
-    Un debt de proyección no es blocker salvo que cambie materialmente la
-    semántica que RE necesita para el caso ARR.
-  - >
-    No introducir G8 si el ciclo puede operar usando únicamente reglas ya
-    aprobadas.
-  - >
-    No crear nueva epistemología para obtener un GO.
+  responsibilities:
+    - "invoke existing ARR real-input cycle"
+    - "receive resulting valid EKS snapshot/bundle boundary"
+    - "construct only the query_context_metadata required by existing IES contract"
+    - "invoke existing IES Builder"
+    - "invoke existing Reasoning Engine with IES only"
+    - "invoke existing Channel Projection with DASHBOARD destination"
+    - "return structured full-cycle result"
+    - "preserve trace_id across the complete cycle"
 
-architectural_invariants:
-  - "N1 != N2 != N3 != N4 != N5"
-  - "N3 != N4 != conflict != severity != impact != materiality"
-  - "RE consumes IES only"
-  - "CP does not create truth"
-  - "technical status does not become business conclusion"
-  - "chat is not an epistemic source"
-  - "source provenance survives"
-  - "trace_id remains cycle-wide"
-  - "no credentials enter cognitive artifacts"
-  - "no causal claim without approved causal rule"
+  prohibited:
+    - "read raw ARR response after ARR facade boundary"
+    - "create ObservationRecord"
+    - "create Fact"
+    - "create Evidence"
+    - "create Diagnosis"
+    - "create Hypothesis directly"
+    - "create Recommendation directly"
+    - "interpret business meaning outside existing runtimes"
+    - "mutate intermediate artifacts"
 
-required_report_sections:
-  - "1. Executive verdict"
-  - "2. Baseline after ARR integration"
-  - "3. Physical pipeline inspection"
-  - "4. D1-D22 findings"
-  - "5. Pipeline readiness matrix"
-  - "6. Artifact flow matrix"
-  - "7. EKS -> IES compatibility"
-  - "8. IES -> RE compatibility"
-  - "9. RE -> CP compatibility"
-  - "10. N4 projection debt reassessment"
-  - "11. Failure/status propagation"
-  - "12. Trace propagation"
-  - "13. Persistence dependency"
-  - "14. Session dependency"
-  - "15. Dashboard/server boundary"
-  - "16. Candidate comparison"
-  - "17. Gate requirements"
-  - "18. Minimum productive completion"
-  - "19. Exactly one NEXT_TASK"
-  - "20. GO/CONDITIONAL-GO/NO-GO"
-  - "21. STOP"
+query_context_metadata:
+  requirement: >
+    The prior readiness audit proved that a raw ARR EKS snapshot cannot enter
+    IES without query_context_metadata and fails with
+    MISSING_QUERY_CONTEXT_METADATA.
+
+  rule: >
+    Reuse the exact semantic shape already accepted by the existing E2E/IES
+    contracts. Do not introduce new query metadata fields or meanings.
+
+  ownership: "full-cycle composition layer"
+
+  source:
+    - "validated cycle input"
+    - "existing ARR request scope"
+    - "existing trace/query context"
+
+  prohibited:
+    - "invent user intent"
+    - "invent requested domains"
+    - "invent unavailable scope"
+    - "derive business conclusions"
+    - "copy secrets"
+
+ies_boundary:
+  rules:
+    - "IES Builder receives supported EKS/Bundle artifact plus required query_context_metadata"
+    - "no raw ARR payload enters IES"
+    - "no credentials enter IES"
+    - "existing IES fail-closed behavior remains intact"
+    - "N4 projection debt is not fixed in this task"
+
+reasoning_boundary:
+  rules:
+    - "Reasoning Engine receives IES only"
+    - "no EKS direct bypass"
+    - "no raw ARR direct bypass"
+    - "no synthetic Evidence injected"
+    - "no synthetic Diagnosis injected"
+    - "RE may legitimately return zero hypotheses/recommendations"
+    - "zero hypotheses is not a failure when gates are not satisfied"
+
+channel_projection_boundary:
+  destination: "DASHBOARD"
+
+  rules:
+    - "CP receives only existing supported semantic inputs"
+    - "CP remains presentation, not truth"
+    - "CP does not manufacture N5"
+    - "NO_KNOWLEDGE/partial states remain visible when applicable"
+    - "IRRENUNCIABLE behavior remains governed by existing CP runtime"
+
+status_propagation:
+  ACQUIRED_EMPTY:
+    expected:
+      - "remains technical/data availability state"
+      - "may yield DATA_NOT_FOUND/PARTIAL according to existing contracts"
+    forbidden:
+      - "ABSENCE_CONFIRMED"
+      - "venta_ton = 0"
+      - "business absence"
+
+  TOOL_ERROR:
+    expected:
+      - "technical failure remains visible downstream according to existing contracts"
+    forbidden:
+      - "empty business result"
+      - "negative fact"
+
+  ENTITY_UNRESOLVED:
+    expected:
+      - "unresolved entity remains explicit/fail-closed"
+    forbidden:
+      - "canonical entity invention"
+
+  QUERY_SCOPE_INCOMPLETE:
+    expected:
+      - "partial/incomplete scope remains explicit"
+    forbidden:
+      - "full coverage claim"
+
+traceability:
+  rules:
+    - "trace_id originates in ARR cycle facade"
+    - "same trace_id survives ARR -> OP -> EB -> EKS -> IES -> RE -> CP"
+    - "composition layer does not regenerate trace_id"
+    - "all returned stage artifacts must be attributable to same execution cycle"
+
+non_mutation:
+  required:
+    - "caller input not mutated"
+    - "ARR cycle result not mutated"
+    - "EKS/Bundle not mutated by composition"
+    - "IES not mutated after construction"
+    - "Reasoning Result not mutated by CP"
+    - "dependency outputs remain independently inspectable in tests"
+
+structured_result:
+  minimum_fields:
+    - "trace_id"
+    - "arr_cycle"
+    - "ies"
+    - "reasoning_result"
+    - "channel_output"
+
+  rules:
+    - "return artifacts for testability/auditability"
+    - "do not expose secrets"
+    - "do not require serialization to HTTP"
+    - "do not require channel transport"
+
+required_fixtures:
+  preferred_directory: "fixtures/director-ia/real-cycle/"
+
+  cases:
+    - "arr-ok-full-cycle.json"
+    - "arr-empty-full-cycle.json"
+    - "arr-tool-error-full-cycle.json"
+    - "arr-entity-unresolved-full-cycle.json"
+    - "arr-scope-incomplete-full-cycle.json"
+
+  rules:
+    - "synthetic data only"
+    - "reuse semantic shapes proven by ARR and E2E fixtures"
+    - "no credentials"
+    - "no WhatsApp payload"
+    - "no fabricated hypotheses/evidence"
+
+tests_required:
+
+  factory:
+    - "factory exposes run"
+    - "dependencies are injected"
+    - "no server/chat/Twilio dependency"
+    - "input is not mutated"
+
+  composition:
+    - "existing ARR cycle invoked exactly once"
+    - "ARR output is not reinterpreted"
+    - "query_context_metadata is added using existing contract shape"
+    - "IES Builder receives compatible EKS/Bundle input"
+    - "RE receives IES only"
+    - "CP receives existing RE/IES-compatible input"
+    - "destination is DASHBOARD"
+
+  happy_path:
+    - "ARR ACQUIRED_OK completes through IES -> RE -> CP"
+    - "structured result includes all required artifacts"
+    - "trace_id is identical across stages"
+    - "zero hypotheses remains valid when RE gates do not justify N5"
+    - "Channel Projection produces valid DASHBOARD output"
+
+  fail_closed:
+    - "ARR empty completes without business absence invention"
+    - "ARR tool error remains technical failure"
+    - "entity unresolved remains explicit"
+    - "query scope incomplete remains partial/incomplete"
+    - "no failure path fabricates Evidence/Diagnosis/Hypothesis"
+
+  boundaries:
+    - "no raw ARR source response is passed directly to IES/RE/CP"
+    - "RE never receives EKS directly"
+    - "CP does not invoke RE"
+    - "composition runtime does not create N1-N5 artifacts"
+    - "N4 projection debt remains unchanged"
+
+  non_mutation:
+    - "input not mutated"
+    - "ARR cycle output not mutated"
+    - "IES output not mutated"
+    - "Reasoning output not mutated"
+
+  source_guards:
+    - "no Twilio import"
+    - "no WhatsApp/chat import"
+    - "no LLM provider import in composition runtime"
+    - "no DB query"
+    - "no credentials"
+    - "no server.js dependency"
+
+  regression:
+    - "real-input ARR focused tests remain green"
+    - "OP tests remain green"
+    - "EB tests remain green"
+    - "EKS tests remain green"
+    - "IES tests remain green"
+    - "RE tests remain green"
+    - "CP tests remain green"
+    - "E2E tests remain green"
+    - "full test/director-ia-*.test.js regression remains green"
 
 acceptance_criteria:
-  - "D1-D22 answered"
-  - "full ARR -> CP physical path audited"
-  - "EKS -> IES compatibility proven"
-  - "IES -> RE compatibility proven"
-  - "RE -> CP compatibility proven"
-  - "N4 projection debt classified blocker/non-blocker"
-  - "persistence dependency proven or disproven"
-  - "session dependency proven or disproven"
-  - "dashboard return boundary identified"
-  - "failure propagation audited"
-  - "trace propagation audited"
-  - "four candidate next increments compared"
-  - "G1/G2/G3/G8 requirements separated"
-  - "exactly one NEXT_TASK recommended"
-  - "no implementation created"
-  - "no contracts modified"
-  - "no runtime modified"
+  - "ARR real cycle reaches CP DASHBOARD"
+  - "composition only; no semantic runtime duplicated"
+  - "query_context_metadata supplied using existing approved shape"
+  - "EKS -> IES compatible"
+  - "IES -> RE compatible"
+  - "RE -> CP compatible"
+  - "RE consumes IES only"
+  - "trace_id preserved end-to-end"
+  - "fail-closed statuses preserved"
+  - "zero hypotheses accepted when justified"
+  - "no fabricated Evidence/Diagnosis/N5"
+  - "no persistence requirement introduced"
+  - "no session requirement introduced"
+  - "no WhatsApp/chat coupling"
+  - "no server.js modification"
+  - "no package.json modification"
+  - "no contract modification"
+  - "no G2"
+  - "no G3"
+  - "no G8"
+  - "no credentials"
+  - "N4 projection debt not expanded/fixed"
+  - "new focused tests pass"
+  - "full Director IA regression passes"
   - "git diff --check clean"
-  - "only CURRENT_TASK and report changed"
+  - "report created"
 
 allowed_actions:
-  - "read contracts"
-  - "read prior reports"
-  - "read runtimes/tests/fixtures"
-  - "inspect server/dashboard/session/persistence code"
-  - "run existing tests if useful"
-  - "create readiness report"
+  - "read contracts and prior reports"
+  - "read existing ARR/IES/RE/CP factories"
+  - "modify lib/director-ia-real-input-arr.js only if composition hook is strictly necessary and semantics remain unchanged"
+  - "create lib/director-ia-real-cycle.js"
+  - "create test/director-ia-real-cycle.test.js"
+  - "create fixtures/director-ia/real-cycle/"
+  - "create docs/dev-loop/reports/IMPL-DIRECTOR-IA-REAL-CYCLE-COMPOSITION-001.md"
   - "update CURRENT_TASK through permitted transitions"
+  - "run focused tests"
+  - "run full Director IA regression"
   - "run git diff --check"
 
 forbidden_actions:
   - "modify docs/director-ia/"
-  - "modify runtime"
-  - "modify tests"
-  - "modify fixtures"
+  - "modify OP semantics"
+  - "modify EB semantics"
+  - "modify EKS semantics"
+  - "modify IES semantics"
+  - "modify RE semantics"
+  - "modify CP semantics"
   - "modify server.js"
   - "modify package.json"
-  - "create persistence"
-  - "create session"
-  - "wire dashboard"
-  - "wire WhatsApp/chat"
-  - "create implementation task"
+  - "modify chat/Twilio/WhatsApp"
+  - "add persistence"
+  - "add session"
+  - "add endpoint"
+  - "add dependencies"
+  - "add secrets"
+  - "add source/tool"
+  - "add cognitive rules"
+  - "use G8"
   - "commit"
   - "push"
   - "merge"
-  - "autoapprove gates"
   - "chain next task"
+  - "autoapprove gates"
 
 expected_terminal_state: >
-  DONE_PENDING_REVIEW si puede identificarse un siguiente incremento físico
-  único y seguro. BLOCKED/STOPPED si completar el ciclo requiere decisiones
-  arquitectónicas no autorizadas que impidan siquiera cerrar el scope.
+  DONE_PENDING_REVIEW if the existing ARR real-input slice can be composed
+  through EKS -> IES -> RE -> CP DASHBOARD without contract changes,
+  architectural changes or new cognitive semantics, with all focused and
+  regression tests green.
+
+  BLOCKED or STOPPED if completion requires modifying IES/RE/CP semantics,
+  introducing persistence/session, changing contracts, server wiring, G2/G3,
+  G8, new epistemology or a new source.
 
 max_attempts: 1
-result_report_path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-REAL-CYCLE-COMPLETION-READINESS-001.md"
+result_report_path: "docs/dev-loop/reports/IMPL-DIRECTOR-IA-REAL-CYCLE-COMPOSITION-001.md"

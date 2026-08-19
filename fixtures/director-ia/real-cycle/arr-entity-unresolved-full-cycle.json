@@ -1,0 +1,38 @@
+{
+  "meta": {
+    "figures": "ILUSTRATIVAS / FICTICIAS",
+    "not_institutional_coverage": true,
+    "note": "Ciclo completo ENTITY_UNRESOLVED. Sin plant_code. No inventa entity_id canónico."
+  },
+  "projectionDepth": "L1_EXECUTIVE",
+  "session": {},
+  "query_context_metadata": {
+    "executive_query_id": "eq_cycle_unresolved",
+    "trace_id": "replaced_by_arr_facade",
+    "original_question": "venta_ton ilustrativa entidad no resuelta",
+    "intent": "arr_venta_ton",
+    "requesting_user_id": "user_ilustrativo",
+    "requesting_role": "director",
+    "channel": "dashboard",
+    "resolved_entities": [
+      {
+        "entity_type": "planta",
+        "original_value": "9001",
+        "resolution_state": "UNRESOLVED",
+        "candidates": []
+      }
+    ],
+    "permission_restrictions": [],
+    "knowledge_effective_date": "2026-08-19T13:06:59.000Z"
+  },
+  "input": {
+    "planta_id": 9001,
+    "year": 2026,
+    "month": 7,
+    "triggered_by": "dashboard_auth_ilustrativo",
+    "question": "venta_ton ilustrativa entidad no resuelta",
+    "plan": { "intent": "arr_venta_ton", "domains": ["arr"] },
+    "tool_plan": { "tools": ["get_arr_snapshot"] }
+  },
+  "expected_status": "ENTITY_UNRESOLVED"
+}
