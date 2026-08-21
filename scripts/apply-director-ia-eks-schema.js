@@ -34,7 +34,15 @@ async function main() {
       SELECT to_regclass('eks.snapshots') AS snapshots,
              to_regclass('eks.trace_locks') AS trace_locks
     `);
+    const col = await client.query(`
+      SELECT data_type, is_nullable
+        FROM information_schema.columns
+       WHERE table_schema = 'eks'
+         AND table_name = 'snapshots'
+         AND column_name = 'query_context_metadata'
+    `);
     console.log("OK — EKS:", check.rows[0]);
+    console.log("OK — query_context_metadata:", col.rows[0] || null);
   } finally {
     await client.end();
   }

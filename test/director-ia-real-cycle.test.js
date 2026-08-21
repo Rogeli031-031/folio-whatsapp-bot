@@ -176,6 +176,7 @@ function harness(arrSource) {
 
   return {
     cycle,
+    arrInput,
     arrCalls,
     buildCalls,
     reasonCalls,
@@ -258,7 +259,9 @@ describe("Director IA real cycle — composition", () => {
     assert.equal(meta.trace_id, result.trace_id);
     assert.equal(meta.trace_id, result.arr_cycle.trace_id);
     assert.notEqual(meta.trace_id, "replaced_by_arr_facade");
-    assert.equal(Object.prototype.hasOwnProperty.call(result.arr_cycle.snapshot, "query_context_metadata"), false);
+    assert.equal(result.arr_cycle.snapshot.query_context_metadata.trace_id, result.trace_id);
+    assert.deepEqual(result.arr_cycle.snapshot.query_context_metadata, meta);
+    assert.equal(Object.prototype.hasOwnProperty.call(result.arr_cycle.snapshot.bundle, "query_context_metadata"), false);
   });
 
   it("IES recibe snapshot EKS + metadata, no raw ARR", async () => {
@@ -374,6 +377,22 @@ describe("Director IA real cycle — fail-closed", () => {
     assert.deepEqual(result.ies.knowledge_coverage.incomplete_scopes, ["arr"]);
     assert.equal(result.ies.status, "PARTIAL");
     assert.equal(Object.prototype.hasOwnProperty.call(result.query_context_metadata, "period"), false);
+  });
+
+  it("snapshot persistido sin metadata no se reinyecta; IES/ciclo fail-closed", async () => {
+    const h = harness(async () => ({ venta_ton: 1, desc_kg: null }));
+    const origRun = h.arrInput.run.bind(h.arrInput);
+    h.arrInput.run = async (input) => {
+      const out = await origRun(input);
+      out.snapshot = clone(out.snapshot);
+      out.snapshot.query_context_metadata = null;
+      return out;
+    };
+    const fix = loadFix("arr-ok-full-cycle.json");
+    await assert.rejects(
+      () => h.cycle.run(cycleInput(fix)),
+      (err) => err && err.code === "MISSING_QUERY_CONTEXT_METADATA"
+    );
   });
 
   it("ninguna ruta fail-closed fabrica Evidence/Diagnosis/Hypothesis", async () => {

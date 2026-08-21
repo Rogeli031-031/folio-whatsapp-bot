@@ -138,4 +138,14 @@ describe("EKS integration source guards", () => {
     assert.equal(/ON CONFLICT DO UPDATE/i.test(src), false);
     assert.equal(/\bDELETE FROM eks\.snapshots\b/i.test(src), false);
   });
+
+  it("apply-director-ia-eks-schema verifica columna query_context_metadata", () => {
+    const apply = fs.readFileSync(
+      path.join(__dirname, "..", "scripts", "apply-director-ia-eks-schema.js"),
+      "utf8"
+    );
+    assert.match(apply, /query_context_metadata/);
+    assert.match(apply, /information_schema\.columns/);
+    assert.equal(/CREATE TABLE[\s\S]*1:1/.test(apply), false);
+  });
 });
