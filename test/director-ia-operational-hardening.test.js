@@ -145,6 +145,51 @@ function mount(app) {
   });
 }
 
+function snapshotSmokeEnv() {
+  return {
+    base: process.env.DIRECTOR_IA_SMOKE_BASE_URL,
+    token: process.env.DIRECTOR_IA_SMOKE_TOKEN,
+    planta: process.env.DIRECTOR_IA_SMOKE_PLANTA_ID,
+    year: process.env.DIRECTOR_IA_SMOKE_YEAR,
+    month: process.env.DIRECTOR_IA_SMOKE_MONTH,
+    timeout: process.env.DIRECTOR_IA_SMOKE_TIMEOUT_MS,
+  };
+}
+
+function restoreSmokeEnv(prev) {
+  if (prev.base === undefined) delete process.env.DIRECTOR_IA_SMOKE_BASE_URL;
+  else process.env.DIRECTOR_IA_SMOKE_BASE_URL = prev.base;
+  if (prev.token === undefined) delete process.env.DIRECTOR_IA_SMOKE_TOKEN;
+  else process.env.DIRECTOR_IA_SMOKE_TOKEN = prev.token;
+  if (prev.planta === undefined) delete process.env.DIRECTOR_IA_SMOKE_PLANTA_ID;
+  else process.env.DIRECTOR_IA_SMOKE_PLANTA_ID = prev.planta;
+  if (prev.year === undefined) delete process.env.DIRECTOR_IA_SMOKE_YEAR;
+  else process.env.DIRECTOR_IA_SMOKE_YEAR = prev.year;
+  if (prev.month === undefined) delete process.env.DIRECTOR_IA_SMOKE_MONTH;
+  else process.env.DIRECTOR_IA_SMOKE_MONTH = prev.month;
+  if (prev.timeout === undefined) delete process.env.DIRECTOR_IA_SMOKE_TIMEOUT_MS;
+  else process.env.DIRECTOR_IA_SMOKE_TIMEOUT_MS = prev.timeout;
+}
+
+function captureSmokeLogs() {
+  const logs = [];
+  const origLog = console.log;
+  const origErr = console.error;
+  console.log = (...args) => {
+    logs.push(args.map(String).join(" "));
+  };
+  console.error = (...args) => {
+    logs.push(args.map(String).join(" "));
+  };
+  return {
+    logs,
+    restore() {
+      console.log = origLog;
+      console.error = origErr;
+    },
+  };
+}
+
 describe("Director IA operational hardening — timeout config", () => {
   it("parseDirectorIaTimeoutMs usa default finito si el valor es inválido", () => {
     assert.equal(parseDirectorIaTimeoutMs(undefined, 60000), 60000);
@@ -637,12 +682,14 @@ describe("Director IA operational hardening — regression guards", () => {
 });
 
 describe("Director IA operational hardening — smoke", () => {
-  it("el script existe, falla si el endpoint no responde y captura trace_id cuando hay ciclo", async () => {
+  it("el script no usa process.exit y falla si el endpoint no responde; captura trace_id en ciclo", async () => {
     assert.equal(fs.existsSync(SMOKE_PATH), true);
     const src = fs.readFileSync(SMOKE_PATH, "utf8");
+    const srcNoComments = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
     assert.equal(src.includes("DIRECTOR_IA_SMOKE_TOKEN"), true);
     assert.equal(src.includes("trace_id"), true);
-    assert.equal(src.includes("process.exit(1)"), true);
+    assert.equal(/\bprocess\.exit\s*\(/.test(srcNoComments), false);
+    assert.equal(src.includes("process.exitCode"), true);
 
     await withServer(
       (app) => {
@@ -660,29 +707,9 @@ describe("Director IA operational hardening — smoke", () => {
       },
       async (base) => {
         const smoke = require(SMOKE_PATH);
-        const prev = {
-          base: process.env.DIRECTOR_IA_SMOKE_BASE_URL,
-          token: process.env.DIRECTOR_IA_SMOKE_TOKEN,
-          planta: process.env.DIRECTOR_IA_SMOKE_PLANTA_ID,
-          year: process.env.DIRECTOR_IA_SMOKE_YEAR,
-          month: process.env.DIRECTOR_IA_SMOKE_MONTH,
-          timeout: process.env.DIRECTOR_IA_SMOKE_TIMEOUT_MS,
-        };
-        const logs = [];
-        const origLog = console.log;
-        const origErr = console.error;
-        const origExit = process.exit;
-        let exitCode = 0;
-        console.log = (...args) => {
-          logs.push(args.map(String).join(" "));
-        };
-        console.error = (...args) => {
-          logs.push(args.map(String).join(" "));
-        };
-        process.exit = (code) => {
-          exitCode = code == null ? 0 : code;
-          throw new Error(`smoke_exit_${exitCode}`);
-        };
+        const prev = snapshotSmokeEnv();
+        const { logs, restore } = captureSmokeLogs();
+        const prevExit = process.exitCode;
         try {
           process.env.DIRECTOR_IA_SMOKE_BASE_URL = base;
           process.env.DIRECTOR_IA_SMOKE_TOKEN = "dummy";
@@ -690,46 +717,199 @@ describe("Director IA operational hardening — smoke", () => {
           process.env.DIRECTOR_IA_SMOKE_YEAR = "2026";
           process.env.DIRECTOR_IA_SMOKE_MONTH = "7";
           process.env.DIRECTOR_IA_SMOKE_TIMEOUT_MS = "3000";
-          try {
-            await smoke.main();
-          } catch (err) {
-            if (!String(err && err.message).startsWith("smoke_exit_")) throw err;
-          }
-          assert.equal(exitCode, 0, logs.join("\n"));
+          await smoke.main();
+          assert.equal(process.exitCode === 0 || process.exitCode == null, true, logs.join("\n"));
           const joined = logs.join("\n");
           assert.equal(joined.includes("trace_smoke_1"), true);
           assert.equal(joined.includes("dummy"), false);
 
-          exitCode = 0;
           logs.length = 0;
           process.env.DIRECTOR_IA_SMOKE_BASE_URL = "http://127.0.0.1:1";
           process.env.DIRECTOR_IA_SMOKE_TIMEOUT_MS = "250";
           delete process.env.DIRECTOR_IA_SMOKE_TOKEN;
           delete process.env.DIRECTOR_IA_SMOKE_PLANTA_ID;
-          try {
-            await smoke.main();
-          } catch (err) {
-            if (!String(err && err.message).startsWith("smoke_exit_")) throw err;
-          }
-          assert.equal(exitCode !== 0, true);
+          await smoke.main();
+          assert.equal(process.exitCode !== 0, true);
         } finally {
-          console.log = origLog;
-          console.error = origErr;
-          process.exit = origExit;
-          if (prev.base === undefined) delete process.env.DIRECTOR_IA_SMOKE_BASE_URL;
-          else process.env.DIRECTOR_IA_SMOKE_BASE_URL = prev.base;
-          if (prev.token === undefined) delete process.env.DIRECTOR_IA_SMOKE_TOKEN;
-          else process.env.DIRECTOR_IA_SMOKE_TOKEN = prev.token;
-          if (prev.planta === undefined) delete process.env.DIRECTOR_IA_SMOKE_PLANTA_ID;
-          else process.env.DIRECTOR_IA_SMOKE_PLANTA_ID = prev.planta;
-          if (prev.year === undefined) delete process.env.DIRECTOR_IA_SMOKE_YEAR;
-          else process.env.DIRECTOR_IA_SMOKE_YEAR = prev.year;
-          if (prev.month === undefined) delete process.env.DIRECTOR_IA_SMOKE_MONTH;
-          else process.env.DIRECTOR_IA_SMOKE_MONTH = prev.month;
-          if (prev.timeout === undefined) delete process.env.DIRECTOR_IA_SMOKE_TIMEOUT_MS;
-          else process.env.DIRECTOR_IA_SMOKE_TIMEOUT_MS = prev.timeout;
+          restore();
+          restoreSmokeEnv(prev);
+          process.exitCode = prevExit;
         }
       }
     );
+  });
+});
+
+describe("Director IA smoke Windows exit — códigos de salida", () => {
+  it("falta DIRECTOR_IA_SMOKE_BASE_URL → nonzero y no llama ciclo", async () => {
+    const smoke = require(SMOKE_PATH);
+    const prev = snapshotSmokeEnv();
+    const { logs, restore } = captureSmokeLogs();
+    const prevExit = process.exitCode;
+    let cycleHits = 0;
+    await withServer(
+      (app) => {
+        app.post(ROUTE_PATH, (_req, res) => {
+          cycleHits += 1;
+          res.status(200).json({ ok: true, trace_id: "should_not" });
+        });
+      },
+      async () => {
+        delete process.env.DIRECTOR_IA_SMOKE_BASE_URL;
+        delete process.env.DIRECTOR_IA_SMOKE_TOKEN;
+        delete process.env.DIRECTOR_IA_SMOKE_PLANTA_ID;
+        await smoke.main();
+        assert.equal(process.exitCode !== 0, true);
+        assert.equal(logs.join("\n").includes("falta DIRECTOR_IA_SMOKE_BASE_URL"), true);
+        assert.equal(cycleHits, 0);
+      }
+    ).finally(() => {
+      restore();
+      restoreSmokeEnv(prev);
+      process.exitCode = prevExit;
+    });
+  });
+
+  it("readiness fallida → nonzero y no POST del ciclo", async () => {
+    const smoke = require(SMOKE_PATH);
+    const prev = snapshotSmokeEnv();
+    const { restore } = captureSmokeLogs();
+    const prevExit = process.exitCode;
+    let cycleHits = 0;
+    await withServer(
+      (app) => {
+        app.get(READINESS_PATH, (_req, res) => {
+          res.status(404).json({ error: "no" });
+        });
+        app.post(ROUTE_PATH, (_req, res) => {
+          cycleHits += 1;
+          res.status(200).json({ ok: true, trace_id: "should_not" });
+        });
+      },
+      async (base) => {
+        process.env.DIRECTOR_IA_SMOKE_BASE_URL = base;
+        delete process.env.DIRECTOR_IA_SMOKE_TOKEN;
+        delete process.env.DIRECTOR_IA_SMOKE_PLANTA_ID;
+        process.env.DIRECTOR_IA_SMOKE_TIMEOUT_MS = "3000";
+        await smoke.main();
+        assert.equal(process.exitCode !== 0, true);
+        assert.equal(cycleHits, 0);
+      }
+    ).finally(() => {
+      restore();
+      restoreSmokeEnv(prev);
+      process.exitCode = prevExit;
+    });
+  });
+
+  it("readiness-only satisfactoria → exit 0 y no bypassa el ciclo autenticado (no POST)", async () => {
+    const smoke = require(SMOKE_PATH);
+    const prev = snapshotSmokeEnv();
+    const { logs, restore } = captureSmokeLogs();
+    const prevExit = process.exitCode;
+    let cycleHits = 0;
+    await withServer(
+      (app) => {
+        app.get(READINESS_PATH, (_req, res) => {
+          res.status(200).json({ ok: true, service: "director-ia", enabled: true, ready: true });
+        });
+        app.post(ROUTE_PATH, (_req, res) => {
+          cycleHits += 1;
+          res.status(200).json({ ok: true, trace_id: "should_not" });
+        });
+      },
+      async (base) => {
+        process.env.DIRECTOR_IA_SMOKE_BASE_URL = base;
+        delete process.env.DIRECTOR_IA_SMOKE_TOKEN;
+        delete process.env.DIRECTOR_IA_SMOKE_PLANTA_ID;
+        process.env.DIRECTOR_IA_SMOKE_TIMEOUT_MS = "3000";
+        await smoke.main();
+        assert.equal(process.exitCode === 0 || process.exitCode == null, true, logs.join("\n"));
+        assert.equal(logs.join("\n").includes('"enabled":true'), true);
+        assert.equal(logs.join("\n").includes('"ready":true'), true);
+        assert.equal(logs.join("\n").includes("step\":\"cycle"), false);
+        assert.equal(cycleHits, 0);
+      }
+    ).finally(() => {
+      restore();
+      restoreSmokeEnv(prev);
+      process.exitCode = prevExit;
+    });
+  });
+
+  it("smoke autenticado satisfactorio POST una vez, captura trace_id y exit 0", async () => {
+    const smoke = require(SMOKE_PATH);
+    const prev = snapshotSmokeEnv();
+    const { logs, restore } = captureSmokeLogs();
+    const prevExit = process.exitCode;
+    let cycleHits = 0;
+    let sawAuth = false;
+    await withServer(
+      (app) => {
+        app.get(READINESS_PATH, (_req, res) => {
+          res.status(200).json({ ok: true, service: "director-ia", enabled: true, ready: true });
+        });
+        app.post(ROUTE_PATH, (req, res) => {
+          cycleHits += 1;
+          sawAuth = String(req.headers.authorization || "").startsWith("Bearer ");
+          res.status(200).json({
+            ok: true,
+            enabled: true,
+            trace_id: "trace_auth_ok",
+            acquisition_status: "ACQUIRED_OK",
+          });
+        });
+      },
+      async (base) => {
+        process.env.DIRECTOR_IA_SMOKE_BASE_URL = base;
+        process.env.DIRECTOR_IA_SMOKE_TOKEN = "dummy-token";
+        process.env.DIRECTOR_IA_SMOKE_PLANTA_ID = "9001";
+        process.env.DIRECTOR_IA_SMOKE_YEAR = "2026";
+        process.env.DIRECTOR_IA_SMOKE_MONTH = "7";
+        process.env.DIRECTOR_IA_SMOKE_TIMEOUT_MS = "3000";
+        await smoke.main();
+        assert.equal(process.exitCode === 0 || process.exitCode == null, true, logs.join("\n"));
+        assert.equal(cycleHits, 1);
+        assert.equal(sawAuth, true);
+        assert.equal(logs.join("\n").includes("trace_auth_ok"), true);
+        assert.equal(logs.join("\n").includes("dummy-token"), false);
+      }
+    ).finally(() => {
+      restore();
+      restoreSmokeEnv(prev);
+      process.exitCode = prevExit;
+    });
+  });
+
+  it("smoke autenticado fallido (401) → nonzero y no se omite el POST", async () => {
+    const smoke = require(SMOKE_PATH);
+    const prev = snapshotSmokeEnv();
+    const { restore } = captureSmokeLogs();
+    const prevExit = process.exitCode;
+    let cycleHits = 0;
+    await withServer(
+      (app) => {
+        app.get(READINESS_PATH, (_req, res) => {
+          res.status(200).json({ ok: true, service: "director-ia", enabled: true, ready: true });
+        });
+        app.post(ROUTE_PATH, (_req, res) => {
+          cycleHits += 1;
+          res.status(401).json({ error: "Token inválido o expirado" });
+        });
+      },
+      async (base) => {
+        process.env.DIRECTOR_IA_SMOKE_BASE_URL = base;
+        process.env.DIRECTOR_IA_SMOKE_TOKEN = "dummy-token";
+        process.env.DIRECTOR_IA_SMOKE_PLANTA_ID = "9001";
+        process.env.DIRECTOR_IA_SMOKE_TIMEOUT_MS = "3000";
+        await smoke.main();
+        assert.equal(process.exitCode !== 0, true);
+        assert.equal(cycleHits, 1);
+      }
+    ).finally(() => {
+      restore();
+      restoreSmokeEnv(prev);
+      process.exitCode = prevExit;
+    });
   });
 });
