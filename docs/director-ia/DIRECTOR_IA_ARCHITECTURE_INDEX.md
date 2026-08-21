@@ -4,7 +4,7 @@
 
 **Tipo:** Índice de navegación y propiedad documental  
 **Estado:** NORMATIVO (índice)  
-**Fecha:** 2026-08-15
+**Fecha:** 2026-08-21
 
 Este índice no redefine la Constitución. En conflicto, prevalece `docs/director-ia/DIRECTOR_IA_CONSTITUTION.md`.
 
@@ -53,7 +53,7 @@ Ningún bypass de capas. Ningún dato crudo llega al IES directamente. Ningún L
 | 1 | `DIRECTOR_IA_EXECUTIVE_KNOWLEDGE_ENGINE.md` | Gobernanza del Motor; política de cobertura/IES; modelos mentales; **política/catálogo materiality (`MAT_*`, `MATERIALITY_NOT_ASSESSED`)** | Diseño normativo |
 | 2 | `02-EVIDENCE-BUILDER.md` | Ensamblaje N1–N4; ausencia afirmable; confianza mecánica; conflictos compuestos; **mecánica de materiality** (si ruleset calibrado) | APROBADO PARA DISEÑO DEL IES |
 | 2a | `03A-OBSERVATION-PIPELINE.md` | ObservationRecord unificado; AcquisitionStatus (técnico; ≠ verdad empresarial / ≠ `ABSENCE_CONFIRMED`); pipeline de adquisición; resolución de entidades | Contrato operativo |
-| 3 | `03-EXECUTIVE-KNOWLEDGE-STORE.md` | Persistencia append-only del Knowledge Bundle; Knowledge Snapshot | Contrato de almacén |
+| 3 | `03-EXECUTIVE-KNOWLEDGE-STORE.md` | Persistencia append-only del Knowledge Bundle; Knowledge Snapshot | Contrato de almacén; runtime mínimo integrado (no COMPLETE constitucional) |
 | 3b | `03B-END-TO-END-REFERENCE-FLOWS.md` | Flujos de referencia end-to-end (Casos A/B) | Validación contractual |
 | 4 | `04-IES-STANDARD.md` | Esquema de producto IES | IES v1.0 APROBADO PARA CONGELAMIENTO |
 | 5 | `05-REASONING-ENGINE.md` | Nivel 5 — hipótesis/inferencia subordinada al IES; Reasoning Result / Run | **v1.0** — REASONING ENGINE v1.0 APROBADO PARA CONGELAMIENTO; **runtime PENDIENTE** |
@@ -73,7 +73,7 @@ Ningún bypass de capas. Ningún dato crudo llega al IES directamente. Ningún L
 | Executive Knowledge Engine | Ninguno | **No** — solo diseño |
 | Evidence Builder | Ninguno (runtime pendiente) | **No** — solo especificación |
 | Observation Pipeline (03A) | Ninguno (runtime pendiente) | **No** |
-| Executive Knowledge Store (03) | Ninguno (runtime pendiente) | **No** |
+| Executive Knowledge Store (03) | `lib/director-ia-eks.js`; `sql/015_director_ia_eks.sql`; `createEksRuntime`; ciclo dashboard | Runtime mínimo integrado y validado en producción; **no** COMPLETE constitucional (`query_context_metadata` no persistido en PG); **no** implementa Constitución / EKE / Evidence Builder |
 | IES Standard | Ninguno (runtime pendiente) | **No** — especificación escrita; runtime pendiente |
 | Reasoning Engine (`05`) | Chat legado (fuera del contrato N5 oficial; proveedor no normativo) | **No** — contrato congelado; runtime pendiente |
 | Channel Projection (`06`) | Ninguno (runtime pendiente) | **No** — contrato propuesto; runtime pendiente |
@@ -113,7 +113,7 @@ La columna anterior se denomina **“Código relacionado / soporte parcial”** 
 
 # 5. Invariantes del índice
 
-1. No hay implementación del Motor/Evidence Builder/EKS/OP/IES/RE oficial en código productivo de ensamblaje.
+1. No hay implementación constitucionalmente completa del Motor/Evidence Builder/OP/IES/RE oficial en código productivo de ensamblaje. El EKS tiene runtime mínimo persistente integrado (`lib/director-ia-eks.js`, schema `015`, ciclo productivo); no se declara COMPLETE constitucional (deuda: `query_context_metadata` no persistido en PG). Esta fila no re-declara runtime de OP/EB/IES/RE/CP.
 2. Fases 1–3 = soporte parcial de entrada, no sustitutos del pipeline.
 3. El EKS recibe Knowledge Bundle N1–N4 (no solo observaciones).
 4. El IES consume Knowledge Snapshot, no fuentes operacionales.
@@ -127,7 +127,7 @@ La columna anterior se denomina **“Código relacionado / soporte parcial”** 
 | Campo | Valor |
 |-------|--------|
 | Documento | `DIRECTOR_IA_ARCHITECTURE_INDEX.md` |
-| Versión | 1.7 |
-| Estado | APROBADO COMO ÍNDICE (incluye `05` v1.0 congelado; `06` v1.0 propuesto, no congelado) |
+| Versión | 1.8 |
+| Estado | APROBADO COMO ÍNDICE (incluye `05` v1.0 congelado; `06` v1.0 propuesto, no congelado; EKS runtime mínimo sincronizado, no COMPLETE constitucional) |
 | Dependencia | Constitución; EKE; Evidence Builder; 03; 03A; 03B; 04; 05; 06 |
 | Implementación del pipeline completo | PENDIENTE |
