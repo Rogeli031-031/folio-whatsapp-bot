@@ -71,6 +71,7 @@ const directorIaContext = require("./lib/director-ia-context");
 const directorIaCommercialState = require("./lib/director-ia-commercial-state");
 const directorIaIgfArr = require("./lib/director-ia-igf-arr");
 const directorIaChat = require("./lib/director-ia-chat");
+const directorIaDashboardCycle = require("./lib/director-ia-dashboard-cycle-transport");
 const directorIaMejoraContinua = require("./lib/director-ia-mejora-continua");
 const directorIaBitacora = require("./lib/director-ia-bitacora");
 const { isDirectorIaEnabled } = require("./lib/director-ia");
@@ -10379,6 +10380,26 @@ comercialEntidad.configureComercialEntidad({
 
 directorIaChat.configureDirectorIaChat({ pool });
 
+async function loadArrProyForDirectorIaDashboardCycle(client, year, month, plant_code) {
+  const proyByPlant = await dashboardArrForecast.computePronosticoProyByPlant(client, year, month, {
+    fechaCorte: "",
+  });
+  const proy = dashboardArrForecast.resolveProyFromPlantMap(proyByPlant, plant_code);
+  return {
+    venta_ton: proy && Number.isFinite(Number(proy.proy_venta_ton)) ? Number(proy.proy_venta_ton) : null,
+    desc_kg: proy && Number.isFinite(Number(proy.proy_desc_kg)) ? Number(proy.proy_desc_kg) : null,
+  };
+}
+
+directorIaDashboardCycle.configureDirectorIaDashboardCycle({
+  pool,
+  assertPlantaAccess: assertDashboardPlantaAccessForActionRegister,
+  blockGAFinancialKpis: dashboardBlockGAFinancialKpis,
+  getPlantCodeArrFromPlantaNombre,
+  arrSource: loadArrProyForDirectorIaDashboardCycle,
+  eks: eksRuntime.getStatus().eks || undefined,
+});
+
 /** Contexto agregado de solo lectura (Action Register: resumen por planta). */
 app.get("/api/director-ia/context", dashboardAuthMiddleware, directorIaContext.handleGetContext);
 
@@ -10420,6 +10441,13 @@ app.delete(
 
 /** Chat ejecutivo (Action Register); reutiliza contexto agregado + OpenAI en backend. */
 app.post("/api/director-ia/chat", dashboardAuthMiddleware, directorIaChat.handlePostChat);
+
+/** Ciclo constitucional Director IA (ARR→CP DASHBOARD). No reutiliza /chat. */
+app.post(
+  "/api/director-ia/cycle",
+  dashboardAuthMiddleware,
+  directorIaDashboardCycle.handlePostDashboardCycle
+);
 
 /** Exporta a PDF el resumen del día (una revisión) del Action Register de una planta. */
 app.get("/api/action-register/export-day-pdf", dashboardAuthMiddleware, async (req, res) => {

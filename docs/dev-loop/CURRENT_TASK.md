@@ -12,438 +12,520 @@ Esto no es G1. `DRAFT` no es ejecutable.
 ---
 
 ```yaml
-task_id: "ARCH-DIRECTOR-IA-PRODUCTIZATION-READINESS-001"
+task_id: "IMPL-DIRECTOR-IA-DASHBOARD-CYCLE-ENDPOINT-001"
 status: DRAFT
 
-task_id: "ARCH-DIRECTOR-IA-PRODUCTIZATION-READINESS-001"
+task_id: "IMPL-DIRECTOR-IA-DASHBOARD-CYCLE-ENDPOINT-001"
 status: CLOSED
 
 authorized_by: "HUMAN_APPROVER"
-authorized_at: "2026-08-19T13:33:39-06:00"
-human_authorization: "AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-19"
+authorized_at: "2026-08-21T08:53:17-06:00"
+human_authorization: "AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-21"
 
 gates:
   G1_task_authorization: AUTHORIZED
-  G2_architecture_change: PENDING_IF_REQUIRED
-  G3_new_architecture_contract: PENDING_IF_REQUIRED
+  G2_architecture_change: N/A
+  G3_new_architecture_contract: N/A
   G8_calibration_materiality_signature: N/A
 
 objective: >
-  Auditar la readiness de productización del Director IA después de integrar el
-  primer ciclo real completo ARR -> OP -> EB -> EKS -> IES -> RE ->
-  Channel Projection DASHBOARD. Determinar cuál es el siguiente incremento
-  mínimo y seguro que permite consumir ese ciclo desde producto real,
-  separando endpoint/API, autenticación/autorización, observabilidad,
-  persistencia, idempotencia, concurrencia, timeouts y manejo operacional de
-  errores. Recomendar exactamente un NEXT_TASK sin implementar nada.
+  Exponer productivamente el ciclo real completo del Director IA mediante un
+  endpoint interno/autenticado de dashboard, reutilizando
+  createDirectorIaRealCycle sin introducir lógica cognitiva en server.js.
+  Implementar una capa de transporte no epistémica que realice autenticación,
+  autorización de planta, validación de request, mapping request -> cycle,
+  mapping cycle -> HTTP, observabilidad mínima por trace_id y manejo explícito
+  de errores. Preservar íntegramente los estados internos del Director IA.
+  Sin persistencia, sesión, WhatsApp, retries automáticos ni cambios de
+  contratos/runtimes cognitivos.
 
 in_scope:
   - "docs/dev-loop/CURRENT_TASK.md"
-  - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-PRODUCTIZATION-READINESS-001.md"
+  - "docs/dev-loop/reports/IMPL-DIRECTOR-IA-DASHBOARD-CYCLE-ENDPOINT-001.md"
 
-  - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-REAL-INPUT-INTEGRATION-001.md (solo lectura)"
-  - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-REAL-CYCLE-COMPLETION-READINESS-001.md (solo lectura)"
-  - "docs/dev-loop/reports/IMPL-DIRECTOR-IA-REAL-INPUT-ARR-001.md (solo lectura)"
+  - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-PRODUCTIZATION-READINESS-001.md (solo lectura)"
   - "docs/dev-loop/reports/IMPL-DIRECTOR-IA-REAL-CYCLE-COMPOSITION-001.md (solo lectura)"
 
   - "docs/director-ia/** (solo lectura)"
-  - "lib/director-ia-real-input-arr.js (solo lectura)"
-  - "lib/director-ia-real-cycle.js (solo lectura)"
-  - "lib/director-ia-*.js (solo lectura)"
-  - "test/director-ia-*.test.js (solo lectura)"
-  - "fixtures/director-ia/** (solo lectura)"
 
-  - "server.js (solo lectura)"
+  - "lib/director-ia-real-cycle.js (solo lectura)"
+  - "lib/director-ia-real-input-arr.js (solo lectura)"
+  - "lib/director-ia-*.js (solo lectura)"
+
+  - "existing dashboard authentication middleware"
+  - "existing dashboard planta authorization helpers"
+  - "assertDashboardPlantaAccessForActionRegister"
+  - "dashboardBlockGAFinancialKpis"
+
+  - "new Director IA dashboard transport/service adapter"
+  - "new Director IA dashboard route/controller if repository conventions require it"
+  - "server.js only for minimal route registration/dependency composition"
+  - "new focused endpoint/transport tests"
+  - "new synthetic transport fixtures if required"
+
   - "package.json (solo lectura)"
-  - "existing routes/controllers/middleware (solo lectura)"
-  - "existing dashboard API wiring (solo lectura)"
-  - "existing auth/authz middleware (solo lectura)"
-  - "existing logging/telemetry/error-handling code (solo lectura)"
-  - "existing persistence/session/storage code (solo lectura)"
-  - "existing Twilio/WhatsApp/chat code (solo lectura)"
+  - ".env references (solo lectura)"
+  - "existing logging/error helpers (reuse preferred)"
 
 out_of_scope:
-  - "implementar endpoint"
-  - "modificar server.js"
-  - "modificar routes/controllers"
-  - "modificar auth"
-  - "crear persistencia"
-  - "crear sesión"
-  - "crear observabilidad"
-  - "crear retry policy"
-  - "crear queue"
-  - "crear background jobs"
+  - "modificar docs/director-ia/"
+  - "modificar OP/EB/EKS/IES/RE/CP semantics"
+  - "modificar Director IA epistemology"
+  - "modificar ARR query semantics"
+
+  - "usar POST /api/director-ia/chat"
+  - "modificar askDirectorIa"
+  - "usar anexo de chat como N1"
   - "wire WhatsApp"
   - "wire Twilio"
-  - "wire chat"
+  - "wire chat legado"
 
-  - "modificar Director IA runtime"
-  - "modificar OP/EB/EKS/IES/RE/CP"
-  - "modificar contratos"
-  - "crear nuevas fuentes/tools"
-  - "modificar ARR"
+  - "crear persistencia"
+  - "crear sesión"
+  - "crear memoria conversacional"
+  - "crear WhoAmI"
 
-  - "usar G8"
+  - "crear retry automático"
+  - "crear queue"
+  - "crear background jobs"
+  - "crear idempotency storage"
+
+  - "crear nuevas fuentes"
+  - "crear nuevas métricas"
+  - "crear nuevas reglas N3/N4/N5"
   - "crear causalidad"
   - "crear B/C/D/E"
-  - "crear nuevas reglas N3/N4/N5"
+  - "usar G8"
 
-  - "modificar package.json"
   - "agregar dependencias"
-  - "modificar .env"
-  - "crear secrets"
+  - "modificar package.json"
+  - "agregar secrets"
+  - "modificar credenciales"
 
   - "commit"
   - "push"
   - "merge"
-  - "crear siguiente implementación"
-  - "encadenar siguiente tarea"
+  - "chain next task"
 
 baseline_in_force:
   real_cycle:
+    factory: "createDirectorIaRealCycle"
     status: "IMPLEMENTED"
     path:
-      - "validated dashboard-style ARR input"
-      - "ARR facade"
-      - "ARR source"
+      - "validated ARR input"
+      - "ARR"
       - "MINIMAL_EXECUTION_ENVELOPE"
       - "OP"
       - "EB"
       - "EKS"
       - "query_context_metadata"
       - "IES"
-      - "Reasoning Engine"
-      - "Channel Projection DASHBOARD"
+      - "RE"
+      - "CP DASHBOARD"
 
-  current_runtime:
-    entry: "in-memory factory invocation"
-    output: "structured DASHBOARD projection"
-    transport: "not yet product-wired"
-
-  last_verified_regression:
-    focused_real_cycle: 19
+  verified_regression:
     director_ia_total: 311
     failures: 0
 
-  known_non_blockers:
-    - "durable persistence not required for one cognitive cycle"
-    - "conversation session not required for one dashboard cycle"
-    - "N4 IES projection debt remains DEBT_NON_BLOCKING"
-    - "WhatsApp/chat not required for dashboard validation"
+  productization_audit:
+    verdict: "CONDITIONAL-GO"
+    selected_candidate: "A_DASHBOARD_ENDPOINT_WIRING"
+    findings:
+      - "no constitutional dashboard route exists yet"
+      - "POST /api/director-ia/chat is legacy and prohibited for this slice"
+      - "transport/service adapter required"
+      - "JWT dashboard authentication already exists"
+      - "planta authorization must run before Director IA cycle"
+      - "assertDashboardPlantaAccessForActionRegister is reusable"
+      - "dashboardBlockGAFinancialKpis is reusable"
+      - "empty/unresolved/incomplete/ABSTAIN remain successful transport responses with internal detail"
+      - "TOOL_ERROR maps to upstream/service failure family"
+      - "INVALID_INPUT maps to client error family"
+      - "automatic retry not authorized"
+      - "persistence/session not prerequisites"
+      - "OPENAI_API_KEY not required for this ARR slice"
 
-audit_questions:
+target_transport_slice:
+  request:
+    transport: "HTTP dashboard"
+    authentication: "existing dashboard JWT"
+    authorization:
+      - "assertDashboardPlantaAccessForActionRegister"
+      - "dashboardBlockGAFinancialKpis"
+    required_business_input:
+      - "planta_id"
+    optional_scope_input:
+      - "year"
+      - "month"
 
-  D1_product_entrypoint:
-    question: >
-      ¿Qué endpoint/route/controller existente es el candidato correcto para
-      invocar Director IA desde dashboard sin mezclar lógica cognitiva en
-      server.js?
+  processing:
+    - "authenticate"
+    - "authorize planta/action"
+    - "validate request shape"
+    - "map transport input to createDirectorIaRealCycle input"
+    - "invoke Director IA cycle exactly once"
+    - "emit minimum safe operational telemetry"
+    - "map structured cycle result to HTTP response"
 
-  D2_facade_boundary:
-    question: >
-      ¿Debe una ruta invocar directamente createDirectorIaRealCycle o hace
-      falta una service/facade productiva intermedia?
+  response:
+    source_of_truth: "existing CP DASHBOARD output + structured cycle status"
+    prohibited:
+      - "LLM rewriting"
+      - "transport-level epistemic reinterpretation"
+      - "business conclusion synthesis"
+      - "dropping internal status semantics"
 
-  D3_authentication:
-    question: >
-      ¿Existe autenticación productiva reutilizable para garantizar que la
-      petición de dashboard está autenticada antes de ejecutar ARR?
+transport_adapter:
+  preferred_name: "lib/director-ia-dashboard-cycle-transport.js"
 
-  D4_authorization:
-    question: >
-      ¿Existe autorización suficiente para validar que el caller puede consultar
-      el planta_id solicitado?
+  preferred_export: "createDirectorIaDashboardCycleTransport"
 
-  D5_input_validation:
-    question: >
-      ¿Dónde debe validarse físicamente planta_id/year/month y qué validación ya
-      existe?
+  expected_shape: >
+    createDirectorIaDashboardCycleTransport({
+      realCycle,
+      logger,
+      clock
+    }).handle(input)
 
-  D6_request_to_cycle_mapping:
-    question: >
-      ¿Qué campos HTTP/product input deben mapearse al input exacto de
-      createDirectorIaRealCycle sin inventar semántica?
+  responsibilities:
+    - "validate transport-level input"
+    - "map authorized dashboard request to realCycle.run input"
+    - "invoke real cycle exactly once"
+    - "map successful structured result to safe transport payload"
+    - "map known execution errors to transport status family"
+    - "preserve trace_id"
+    - "emit minimal structured logs/telemetry"
 
-  D7_cycle_to_http_mapping:
-    question: >
-      ¿Cómo debe transformarse el structured result del ciclo en una respuesta
-      de producto sin reinterpretar CP?
+  prohibited:
+    - "create or modify N1-N5 artifacts"
+    - "change CP output semantics"
+    - "interpret ARR values"
+    - "call ARR directly"
+    - "bypass createDirectorIaRealCycle"
+    - "call LLM"
+    - "call chat"
+    - "perform authorization itself if existing middleware/helper owns it"
 
-  D8_http_status_mapping:
-    question: >
-      ¿Cómo deben mapearse INVALID_INPUT, ENTITY_UNRESOLVED,
-      QUERY_SCOPE_INCOMPLETE, TOOL_ERROR y success a status HTTP/product sin
-      colapsar estados epistemológicos?
+route_boundary:
+  preferred_route: >
+    Use the repository's existing dashboard API naming conventions. Do not reuse
+    /api/director-ia/chat. Choose a dedicated Director IA dashboard cycle route
+    only if no equivalent route already exists.
 
-  D9_timeout_boundary:
-    question: >
-      ¿Qué timeouts existen hoy para ARR/source execution y para request HTTP?
-      ¿Falta policy física para evitar requests colgados?
+  rules:
+    - "route is dashboard-only"
+    - "JWT authentication occurs before cycle execution"
+    - "planta authorization occurs before cycle execution"
+    - "GA financial KPI restriction occurs before cycle execution"
+    - "route/controller contains no cognitive logic"
+    - "route/controller delegates to transport/service adapter"
+    - "server.js only registers/wires dependencies"
 
-  D10_retry_boundary:
-    question: >
-      ¿Puede haber retry automático sin riesgo de duplicación o semántica nueva?
-      Si no está definido, clasificar como debt/blocker según impacto.
+authorization_rules:
+  - "caller cannot choose arbitrary plant_code"
+  - "caller supplies planta_id only"
+  - "plant_code/source mapping remains owned by existing source/access layer"
+  - "unauthorized planta_id never invokes createDirectorIaRealCycle"
+  - "blocked GA financial KPI access never invokes createDirectorIaRealCycle"
+  - "authorization failure must not reveal ARR/source internals"
 
-  D11_idempotency:
-    question: >
-      ¿Un request repetido produce efectos secundarios? Determinar si
-      idempotency key o deduplicación es necesaria antes del primer wiring.
+request_mapping:
+  allowed_input:
+    - "planta_id"
+    - "year if supported by existing cycle input"
+    - "month if supported by existing cycle input"
+    - "existing authenticated user/context fields required by current helpers"
 
-  D12_concurrency:
-    question: >
-      ¿El ciclo real y sus dependencies son seguros bajo requests concurrentes
-      o dependen de state mutable/shared?
+  prohibited:
+    - "plant_code supplied by client"
+    - "source.system supplied by client"
+    - "trace_id supplied as authoritative cycle id unless existing infrastructure explicitly owns it"
+    - "raw_payload_reference supplied by client"
+    - "content_author_id supplied by client"
+    - "arbitrary query_context_metadata supplied by client"
+    - "internal IES/RE/CP fields supplied by client"
 
-  D13_persistence:
-    question: >
-      ¿Persistir cycle results es requisito para el primer endpoint o follow-up?
+http_status_mapping:
+  INVALID_INPUT:
+    family: 400
+    rule: "client request invalid before productive cycle"
 
-  D14_session:
-    question: >
-      ¿Existe alguna razón física para introducir sesión antes de exponer el
-      dashboard endpoint?
+  AUTHENTICATION_FAILURE:
+    family: 401
+    rule: "reuse existing auth behavior"
 
-  D15_observability:
-    question: >
-      ¿Qué logging/telemetry mínimo necesita una primera ruta productiva:
-      trace_id, duration, source status, final projection status, errors?
+  AUTHORIZATION_FAILURE:
+    family: 403
+    rule: "reuse existing authz behavior"
 
-  D16_sensitive_data:
-    question: >
-      ¿Qué artefactos no deben loguearse ni exponerse en respuesta por contener
-      provenance/raw refs/metadata interna?
+  ACQUIRED_OK:
+    family: 200
+    preserve_internal_detail: true
 
-  D17_error_boundary:
-    question: >
-      ¿Qué errores deben quedar internos y cuáles deben exponerse como errores
-      estructurados al caller?
+  ACQUIRED_EMPTY:
+    family: 200
+    preserve_internal_detail: true
+    prohibited:
+      - "404"
+      - "ABSENCE_CONFIRMED"
+      - "venta_ton = 0"
 
-  D18_security:
-    question: >
-      ¿Existen riesgos de inyección, planta_id tampering, credential leakage o
-      raw payload exposure en el wiring productivo?
+  ENTITY_UNRESOLVED:
+    family: 200
+    preserve_internal_detail: true
+    prohibited:
+      - "404 solely because entity unresolved"
 
-  D19_server_composition:
-    question: >
-      ¿server.js puede limitarse a route registration + dependency injection y
-      permanecer libre de lógica Director IA?
+  QUERY_SCOPE_INCOMPLETE:
+    family: 200
+    preserve_internal_detail: true
 
-  D20_dashboard_contract:
-    question: >
-      ¿El output actual CP DASHBOARD ya es suficiente como payload productivo o
-      requiere adapter de transporte no semántico?
+  NO_KNOWLEDGE_ABSTAIN:
+    family: 200
+    preserve_internal_detail: true
 
-  D21_operational_dependencies:
-    question: >
-      ¿Qué configuración/env/secrets existentes necesita el ciclo para
-      ejecutarse desde server real?
+  TOOL_ERROR:
+    family: "502_or_503"
+    rule: >
+      Select between 502/503 according to existing repository transport/error
+      conventions. Do not invent epistemic meaning from the HTTP code.
 
-  D22_health_readiness:
-    question: >
-      ¿Hace falta health/readiness check específico para dependencia ARR antes
-      del primer rollout?
+  unexpected_internal_error:
+    family: 500
+    rule: "safe generic error response; internal detail logged safely"
 
-  D23_rollout_safety:
-    question: >
-      ¿Puede exponerse detrás de feature flag, auth allowlist o ruta interna sin
-      modificar epistemología?
+response_payload:
+  required:
+    - "trace_id"
+    - "status or execution summary sufficient to preserve internal state"
+    - "channel_output DASHBOARD"
 
-  D24_candidate_next_step:
-    question: >
-      Comparar obligatoriamente:
-      A) dashboard endpoint wiring;
-      B) observability hardening first;
-      C) persistence first;
-      D) session first;
-      E) WhatsApp wiring first.
+  conditionally_safe:
+    - "selected structured diagnostics/status metadata if already product-safe"
 
-  D25_gate_requirements:
-    question: >
-      Determinar G1/G2/G3/config/security requirements de cada candidato.
+  prohibited:
+    - "credentials"
+    - "raw source payload"
+    - "raw_payload_reference if considered internal/sensitive"
+    - "internal stack trace"
+    - "DB error details"
+    - "JWT"
+    - "authorization internals"
 
-  D26_next_task:
-    question: >
-      Recomendar exactamente un NEXT_TASK con alcance mínimo cerrado.
+  rule: >
+    Do not expose every internal artifact merely because realCycle returns it.
+    Return the smallest product-safe representation that preserves Director IA
+    outcome semantics.
 
-mandatory_productization_matrix:
-  rows:
-    - "HTTP/dashboard entry"
-    - "authentication"
-    - "authorization"
-    - "validation"
-    - "Director IA facade"
-    - "ARR/source"
-    - "timeout"
-    - "retry"
-    - "idempotency"
-    - "concurrency"
-    - "observability"
-    - "error mapping"
-    - "response mapping"
-    - "persistence"
-    - "session"
-    - "feature flag/rollout"
+observability_minimum:
+  required_events:
+    - "cycle_request_started"
+    - "cycle_request_completed"
+    - "cycle_request_failed"
 
-  columns:
-    - "capability"
-    - "exists today"
-    - "physically reusable"
-    - "required for first release"
-    - "gap"
-    - "risk"
-    - "gate"
-    - "recommended action"
+  safe_fields:
+    - "trace_id"
+    - "duration_ms"
+    - "final transport status"
+    - "ARR/acquisition status at a coarse safe level"
+    - "final CP/knowledge state if already non-sensitive"
 
-mandatory_status_transport_matrix:
-  rows:
-    - "SUCCESS/VALIDATED"
-    - "ACQUIRED_EMPTY / DATA_NOT_FOUND"
-    - "TOOL_ERROR"
-    - "ENTITY_UNRESOLVED"
-    - "QUERY_SCOPE_INCOMPLETE"
-    - "INVALID_INPUT"
-    - "NO_KNOWLEDGE / ABSTAIN"
+  prohibited_log_fields:
+    - "JWT"
+    - "credentials"
+    - "raw ARR payload"
+    - "raw_payload_reference where sensitive"
+    - "full IES"
+    - "full Reasoning Result"
+    - "full provenance when unnecessary"
+    - "stack trace returned to client"
 
-  columns:
-    - "internal state"
-    - "safe product meaning"
-    - "HTTP family candidate"
-    - "must preserve detail"
-    - "must not expose"
-    - "requires G2"
-    - "notes"
+  rules:
+    - "use existing logger if available"
+    - "no new observability dependency"
+    - "logging failure must not mutate cognitive result"
+    - "trace_id correlates request to cycle"
 
-mandatory_candidate_matrix:
-  rows:
-    - "A_DASHBOARD_ENDPOINT_WIRING"
-    - "B_OBSERVABILITY_FIRST"
-    - "C_PERSISTENCE_FIRST"
-    - "D_SESSION_FIRST"
-    - "E_WHATSAPP_FIRST"
+timeout_retry_boundary:
+  retry:
+    automatic: false
 
-  columns:
-    - "candidate"
-    - "value unlocked"
-    - "prerequisites"
-    - "risk"
-    - "G2"
-    - "G3"
-    - "config/security"
-    - "recommended"
+  timeout:
+    rule: >
+      Reuse existing HTTP/source timeout behavior if already present. Do not
+      invent a new retry policy. If no safe finite timeout exists and this
+      makes route exposure operationally unsafe, report BLOCKED instead of
+      silently adding architectural policy.
 
-mandatory_gap_classification:
-  allowed_values:
-    - "READY"
-    - "WIRING_ONLY"
-    - "ADAPTER_REQUIRED"
-    - "IMPLEMENTATION_REQUIRED"
-    - "CONFIG_REQUIRED"
-    - "SECURITY_REQUIRED"
-    - "OBSERVABILITY_REQUIRED"
-    - "DEBT_NON_BLOCKING"
-    - "REQUIRES_G2"
-    - "REQUIRES_G3"
-    - "BLOCKER"
+idempotency_concurrency:
+  rules:
+    - "no persistence/idempotency store introduced"
+    - "prove endpoint invokes cycle once per request"
+    - "prove repeated requests do not mutate shared Director IA state"
+    - "dependencies should be reusable concurrently or instantiated according to existing server conventions"
+    - "do not introduce global mutable cycle state"
 
-decision_rules:
-  - "No recomendar persistencia first sin dependencia física demostrada."
-  - "No recomendar sesión first sin dependencia física demostrada."
-  - "No recomendar WhatsApp first; dashboard real ya es el slice elegido."
-  - "Preferir wiring mínimo que exponga el ciclo existente sin duplicar lógica."
-  - "server.js no debe contener lógica cognitiva."
-  - "Transport mapping no puede reinterpretar estados epistemológicos."
-  - "HTTP 200/4xx/5xx no sustituye AcquisitionStatus/IES/CP semantics."
-  - "No loggear secrets ni raw sensitive payloads."
-  - "trace_id debe ser visible para operación si es seguro."
-  - "No añadir retry automático si idempotency/side effects no están probados."
-  - "No introducir G8."
-  - "No crear nueva epistemología para facilitar API design."
+server_boundary:
+  allowed:
+    - "import/register dedicated route/controller/service"
+    - "inject existing dependencies"
+    - "minimal boot wiring"
 
-required_report_sections:
-  - "1. Executive verdict"
-  - "2. Baseline real cycle"
-  - "3. Existing server/product runtime"
-  - "4. D1-D26 findings"
-  - "5. Productization readiness matrix"
-  - "6. Request/input mapping"
-  - "7. Status/transport mapping"
-  - "8. Authentication and authorization"
-  - "9. Timeout/retry/idempotency"
-  - "10. Concurrency"
-  - "11. Observability"
-  - "12. Security/data exposure"
-  - "13. Persistence/session dependency"
-  - "14. server.js boundary"
-  - "15. Dashboard response compatibility"
-  - "16. Rollout strategy readiness"
-  - "17. Candidate comparison"
-  - "18. Gate map"
-  - "19. Minimum productization slice"
-  - "20. Exactly one NEXT_TASK"
-  - "21. GO/CONDITIONAL-GO/NO-GO"
-  - "22. STOP"
+  prohibited:
+    - "ARR execution logic in server.js"
+    - "query_context_metadata construction in server.js"
+    - "IES/RE/CP calls in server.js"
+    - "HTTP status epistemic interpretation in server.js"
+    - "Director IA business rules in server.js"
+
+required_tests:
+
+  transport_unit:
+    - "valid request invokes real cycle once"
+    - "planta_id mapped without client plant_code"
+    - "input not mutated"
+    - "trace_id preserved"
+    - "CP DASHBOARD output preserved"
+    - "transport does not synthesize N1-N5"
+    - "transport does not import/call LLM or chat"
+
+  authorization:
+    - "missing/invalid JWT rejected before cycle"
+    - "unauthorized planta rejected before cycle"
+    - "GA KPI blocked access rejected before cycle"
+    - "authorization failure does not leak source internals"
+
+  status_mapping:
+    - "ACQUIRED_OK -> 200"
+    - "ACQUIRED_EMPTY -> 200 with internal empty/data-not-found meaning preserved"
+    - "ENTITY_UNRESOLVED -> 200 with detail preserved"
+    - "QUERY_SCOPE_INCOMPLETE -> 200 with detail preserved"
+    - "ABSTAIN/NO_KNOWLEDGE -> 200"
+    - "INVALID_INPUT -> 400"
+    - "TOOL_ERROR -> chosen 502/503 convention"
+    - "unexpected error -> safe 500"
+
+  data_exposure:
+    - "no credentials in response"
+    - "no raw ARR payload in response"
+    - "no JWT in logs/response"
+    - "no internal stack returned"
+    - "response is minimal product-safe projection"
+
+  observability:
+    - "start/completion/error events contain trace_id"
+    - "duration recorded"
+    - "sensitive artifacts not logged"
+    - "logger failure does not alter epistemic output if existing conventions allow safe handling"
+
+  concurrency_idempotency:
+    - "one cycle invocation per request"
+    - "parallel requests do not share trace_id"
+    - "parallel requests do not mutate shared input/result"
+    - "no global mutable request state"
+
+  route_integration:
+    - "dedicated route reachable under existing app/server test harness"
+    - "legacy /api/director-ia/chat behavior unchanged"
+    - "route uses existing JWT middleware"
+    - "route uses existing planta authz helpers"
+    - "server.js contains wiring only"
+
+  regression:
+    - "real cycle focused tests remain green"
+    - "real ARR input tests remain green"
+    - "all test/director-ia-*.test.js remain green"
+    - "existing dashboard/auth tests remain green"
+    - "existing legacy chat tests remain green"
 
 acceptance_criteria:
-  - "D1-D26 answered"
-  - "dashboard entrypoint candidate identified"
-  - "auth/authz readiness proven"
-  - "request -> cycle mapping proven"
-  - "cycle -> response mapping proven"
-  - "status transport boundary defined without epistemic collapse"
-  - "timeout/retry/idempotency audited"
-  - "concurrency audited"
-  - "observability minimum identified"
-  - "security exposure audited"
-  - "persistence necessity proven/disproven"
-  - "session necessity proven/disproven"
-  - "five candidate directions compared"
-  - "gates separated"
-  - "exactly one NEXT_TASK recommended"
-  - "no implementation"
-  - "no runtime/contracts modified"
+  - "dedicated dashboard endpoint exists"
+  - "legacy Director IA chat endpoint unchanged"
+  - "JWT required"
+  - "planta authz required before cycle"
+  - "GA financial KPI restriction preserved"
+  - "client cannot supply plant_code"
+  - "createDirectorIaRealCycle invoked exactly once"
+  - "transport remains non-epistemic"
+  - "status semantics preserved"
+  - "empty is not 404"
+  - "TOOL_ERROR maps to safe upstream failure"
+  - "ABSTAIN is valid 200 response"
+  - "minimal product-safe payload returned"
+  - "trace_id exposed safely"
+  - "minimum observability present"
+  - "no sensitive data logged/exposed"
+  - "no retry automatic"
+  - "no persistence"
+  - "no session"
+  - "no WhatsApp/Twilio/chat wiring"
+  - "no cognitive runtime changes"
+  - "no contract changes"
+  - "no G2"
+  - "no G3"
+  - "no G8"
+  - "no dependency/package changes"
+  - "focused tests pass"
+  - "full relevant regression passes"
   - "git diff --check clean"
-  - "only CURRENT_TASK and report changed"
+  - "report created"
 
 allowed_actions:
-  - "read contracts/reports"
-  - "read server/routes/controllers/middleware"
-  - "read Director IA runtime/tests"
-  - "read auth/authz code"
-  - "read logging/telemetry code"
-  - "read persistence/session code"
-  - "read package/config references"
-  - "run existing tests if useful"
-  - "create report"
+  - "read contracts/reports/runtimes"
+  - "read existing server/routes/auth helpers"
+  - "create dedicated dashboard transport/service"
+  - "create dedicated route/controller according to repository conventions"
+  - "modify server.js only for minimal route/dependency wiring"
+  - "create focused endpoint/transport tests"
+  - "create synthetic transport fixtures if required"
+  - "create docs/dev-loop/reports/IMPL-DIRECTOR-IA-DASHBOARD-CYCLE-ENDPOINT-001.md"
   - "update CURRENT_TASK through permitted transitions"
+  - "run focused tests"
+  - "run relevant server/dashboard/auth regression"
+  - "run full Director IA regression"
   - "run git diff --check"
 
+conditional_stop_conditions:
+  - >
+    If existing JWT/authz helpers cannot secure this route without changing
+    their semantics, STOP.
+  - >
+    If exposing the route safely requires a new architectural contract, G2/G3,
+    persistence, session, queue, retry architecture or package dependency, STOP.
+  - >
+    If createDirectorIaRealCycle requires cognitive modifications for HTTP
+    transport, STOP.
+  - >
+    If server.js must contain cognitive logic to make the slice work, STOP.
+
 forbidden_actions:
-  - "modify runtime"
-  - "modify server.js"
-  - "modify routes/controllers"
-  - "modify auth/authz"
-  - "modify tests"
-  - "modify fixtures"
-  - "modify contracts"
+  - "modify docs/director-ia/"
+  - "modify OP/EB/EKS/IES/RE/CP semantics"
+  - "modify ARR semantics"
+  - "modify legacy chat epistemology"
+  - "use /api/director-ia/chat for this slice"
+  - "add persistence/session"
+  - "add retry"
+  - "add queue/background job"
+  - "wire WhatsApp/Twilio"
+  - "add dependency"
   - "modify package.json"
-  - "modify env/config"
-  - "create endpoint"
-  - "create persistence"
-  - "create session"
-  - "wire WhatsApp/chat"
-  - "create implementation task"
+  - "add secrets"
+  - "use G8"
   - "commit"
   - "push"
   - "merge"
-  - "autoapprove gates"
   - "chain next task"
+  - "autoapprove gates"
 
 expected_terminal_state: >
-  DONE_PENDING_REVIEW si puede definirse un primer slice de productización
-  seguro y cerrado con exactamente un NEXT_TASK. BLOCKED/STOPPED si el producto
-  no puede exponerse sin decisiones arquitectónicas o de seguridad que impidan
-  siquiera cerrar el scope.
+  DONE_PENDING_REVIEW if a dedicated authenticated/authorized dashboard
+  endpoint exposes createDirectorIaRealCycle with non-epistemic transport
+  mapping, minimum safe observability and all regressions green.
+
+  BLOCKED or STOPPED if safe exposure requires contract changes, auth semantic
+  changes, persistence/session, server-side cognitive logic, new dependencies,
+  G2/G3/G8 or modifications to Director IA cognition.
 
 max_attempts: 1
-result_report_path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-PRODUCTIZATION-READINESS-001.md"
+result_report_path: "docs/dev-loop/reports/IMPL-DIRECTOR-IA-DASHBOARD-CYCLE-ENDPOINT-001.md"
