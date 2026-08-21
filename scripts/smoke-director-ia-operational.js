@@ -15,6 +15,9 @@
  *
  * Exit 0: readiness alcanzable y, si se pidió ciclo, respuesta con finito HTTP.
  * Exit 1: indisponibilidad, timeout de smoke, o ciclo sin terminar.
+ *
+ * No llama process.exit: en Windows eso puede abortar con UV_HANDLE_CLOSING
+ * mientras fetch/undici cierra handles. Fallo = process.exitCode = 1 + return.
  */
 "use strict";
 
@@ -36,6 +39,12 @@ function readConfig() {
   };
 }
 
+function fail(message, extra) {
+  if (extra !== undefined) console.error(message, extra);
+  else console.error(message);
+  process.exitCode = 1;
+}
+
 async function fetchJson(url, init, timeoutMs) {
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), timeoutMs);
@@ -54,23 +63,24 @@ async function fetchJson(url, init, timeoutMs) {
 }
 
 async function main() {
+  process.exitCode = 0;
   const cfg = readConfig();
   if (!cfg.base) {
-    console.error("smoke: falta DIRECTOR_IA_SMOKE_BASE_URL");
-    process.exit(1);
+    fail("smoke: falta DIRECTOR_IA_SMOKE_BASE_URL");
+    return;
   }
 
   let readiness;
   try {
     readiness = await fetchJson(`${cfg.base}/health-director-ia`, {}, cfg.timeoutMs);
   } catch (_err) {
-    console.error("smoke: readiness inalcanzable");
-    process.exit(1);
+    fail("smoke: readiness inalcanzable");
+    return;
   }
 
   if (!readiness || (readiness.status !== 200 && readiness.status !== 503)) {
-    console.error("smoke: readiness HTTP inesperado", readiness && readiness.status);
-    process.exit(1);
+    fail("smoke: readiness HTTP inesperado", readiness && readiness.status);
+    return;
   }
 
   const body = readiness.json && typeof readiness.json === "object" ? readiness.json : {};
@@ -84,13 +94,14 @@ async function main() {
   );
 
   if (body.enabled === true && body.ready === false) {
-    console.error("smoke: Director IA enabled pero no ready");
-    process.exit(1);
+    fail("smoke: Director IA enabled pero no ready");
+    return;
   }
 
   if (!cfg.token || !Number.isFinite(cfg.plantaId) || cfg.plantaId <= 0) {
-    if (readiness.status === 200) process.exit(0);
-    process.exit(1);
+    if (readiness.status === 200) return;
+    fail("smoke: readiness no satisfactoria");
+    return;
   }
 
   const cycleBody = { planta_id: cfg.plantaId };
@@ -112,8 +123,8 @@ async function main() {
       cfg.timeoutMs
     );
   } catch (_err) {
-    console.error("smoke: ciclo inalcanzable o abortado");
-    process.exit(1);
+    fail("smoke: ciclo inalcanzable o abortado");
+    return;
   }
 
   const cycleJson = cycle.json && typeof cycle.json === "object" ? cycle.json : {};
@@ -129,20 +140,18 @@ async function main() {
   );
 
   if (cycle.status === 401 || cycle.status === 403) {
-    console.error("smoke: auth/authz rechazó el ciclo");
-    process.exit(1);
+    fail("smoke: auth/authz rechazó el ciclo");
+    return;
   }
   if (!(cycle.status >= 200 && cycle.status < 600)) {
-    console.error("smoke: ciclo sin HTTP finito");
-    process.exit(1);
+    fail("smoke: ciclo sin HTTP finito");
+    return;
   }
-  process.exit(0);
 }
 
 if (require.main === module) {
   main().catch(() => {
-    console.error("smoke: fallo inesperado");
-    process.exit(1);
+    fail("smoke: fallo inesperado");
   });
 }
 
