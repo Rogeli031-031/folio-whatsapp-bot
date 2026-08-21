@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchDirectorIaCycle } from "@/modules/director-ia/lib/api";
 import cycleCore from "@/modules/director-ia/lib/cycle-client-core";
 import type { DirectorIaCycleInterpreted } from "@/modules/director-ia/lib/cycle-client-core";
@@ -43,16 +43,32 @@ export function DirectorIaCyclePanel({
   onUnauthorized,
 }: DirectorIaCyclePanelProps) {
   const sessionRef = useRef(createDirectorIaCycleUiSession());
+  const abortRef = useRef<AbortController | null>(null);
+  const mountedRef = useRef(true);
   const [transportState, setTransportState] = useState<string>(TRANSPORT.idle);
   const [interpreted, setInterpreted] = useState<DirectorIaCycleInterpreted | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
 
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      abortRef.current?.abort();
+      sessionRef.current.invalidate();
+    };
+  }, []);
+
   const ejecutar = useCallback(async () => {
     const session = sessionRef.current;
     if (!session.beginRequest()) return;
+    const gen = session.generation();
     setTransportState(TRANSPORT.loading);
     setLocalError(null);
     setInterpreted(null);
+
+    abortRef.current?.abort();
+    const ac = new AbortController();
+    abortRef.current = ac;
 
     const pid = parseSelectedPlantaId(plantaId);
     if (pid == null) {
@@ -73,7 +89,8 @@ export function DirectorIaCyclePanel({
         code: "INVALID_INPUT",
         channel_output: null,
       } as DirectorIaCycleInterpreted;
-      session.finishRequest(invalid);
+      session.finishRequest(invalid, gen);
+      if (!mountedRef.current || session.isStale(gen)) return;
       setInterpreted(invalid);
       setTransportState(TRANSPORT.transport_error);
       setLocalError("Indica un ID de planta válido.");
@@ -87,12 +104,14 @@ export function DirectorIaCyclePanel({
     if (Number.isFinite(monthN) && monthN >= 1 && monthN <= 12) input.month = monthN;
 
     try {
-      const result = await fetchDirectorIaCycle(token, input);
-      session.finishRequest(result);
+      const result = await fetchDirectorIaCycle(token, input, undefined, { signal: ac.signal });
+      if (!mountedRef.current || session.isStale(gen)) return;
+      session.finishRequest(result, gen);
       setInterpreted(result);
       setTransportState(result.transportState);
       if (result.authFailure && onUnauthorized) onUnauthorized();
     } catch {
+      if (!mountedRef.current || session.isStale(gen)) return;
       const failed = {
         transportState: TRANSPORT.transport_error,
         httpStatus: 500,
@@ -110,7 +129,8 @@ export function DirectorIaCyclePanel({
         code: null,
         channel_output: null,
       } as DirectorIaCycleInterpreted;
-      session.finishRequest(failed);
+      session.finishRequest(failed, gen);
+      if (!mountedRef.current || session.isStale(gen)) return;
       setInterpreted(failed);
       setTransportState(TRANSPORT.transport_error);
     }

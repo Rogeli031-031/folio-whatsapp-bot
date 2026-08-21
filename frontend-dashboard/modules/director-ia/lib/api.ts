@@ -167,13 +167,18 @@ export type DirectorIaCycleRequest = {
 export function fetchDirectorIaCycle(
   token: string,
   input: DirectorIaCycleRequest,
-  fetchImpl?: typeof fetch
+  fetchImpl?: typeof fetch,
+  requestOptions?: { signal?: AbortSignal; timeoutMs?: number | null }
 ) {
   return cycleCore.executeDirectorIaCycleRequest({
     token,
     input,
     fetchImpl: fetchImpl || fetch,
     apiUrl: directorIaCycleApiUrl(),
+    signal: requestOptions && requestOptions.signal,
+    timeoutMs: requestOptions && Object.prototype.hasOwnProperty.call(requestOptions, "timeoutMs")
+      ? requestOptions.timeoutMs
+      : undefined,
   });
 }
 

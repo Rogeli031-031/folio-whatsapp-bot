@@ -60,6 +60,8 @@ export function executeDirectorIaCycleRequest(options: {
   input: DirectorIaCycleRequestInput;
   fetchImpl: typeof fetch;
   apiUrl?: string;
+  signal?: AbortSignal;
+  timeoutMs?: number | null;
 }): Promise<DirectorIaCycleInterpreted>;
 
 export function createDirectorIaCycleUiSession(): {
@@ -67,16 +69,21 @@ export function createDirectorIaCycleUiSession(): {
     transportState: string;
     inFlight: boolean;
     interpreted: DirectorIaCycleInterpreted | null;
+    generation: number;
   };
   canSubmit(): boolean;
   beginRequest(): boolean;
-  finishRequest(result: DirectorIaCycleInterpreted | null): void;
+  generation(): number;
+  isStale(gen: number): boolean;
+  invalidate(): void;
+  finishRequest(result: DirectorIaCycleInterpreted | null, gen?: number): void;
 };
 
 export function pickSafeChannelOutput(raw: unknown): DirectorIaCycleInterpreted["channel_output"];
 export function outcomeHeadline(kind: string | null): string;
 export function outcomeDetail(kind: string | null): string | null;
 export function classifyOutcome(body: Record<string, unknown>): string | null;
+export const CLIENT_FETCH_TIMEOUT_MS: number;
 
 declare const cycleClientCore: {
   CYCLE_PATH: typeof CYCLE_PATH;
@@ -92,5 +99,6 @@ declare const cycleClientCore: {
   outcomeHeadline: typeof outcomeHeadline;
   outcomeDetail: typeof outcomeDetail;
   classifyOutcome: typeof classifyOutcome;
+  CLIENT_FETCH_TIMEOUT_MS: number;
 };
 export default cycleClientCore;

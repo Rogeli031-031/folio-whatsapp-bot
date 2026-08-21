@@ -664,10 +664,15 @@ describe("Director IA dashboard cycle — server wiring", () => {
     const chatSrc = fs.readFileSync(CHAT_LIB, "utf8");
     assert.equal(serverSrc.includes("/api/director-ia/cycle"), true);
     assert.equal(serverSrc.includes("handlePostDashboardCycle"), true);
+    assert.equal(serverSrc.includes("/health-director-ia"), true);
+    assert.equal(serverSrc.includes("handleGetDirectorIaReadiness"), true);
+    assert.equal(serverSrc.includes("/health-db"), true);
+    assert.equal(serverSrc.includes("JSON.stringify(payload)"), true);
+    assert.equal(serverSrc.includes("DIRECTOR_IA_CYCLE_TIMEOUT_MS"), true);
+    assert.equal(serverSrc.includes("DIRECTOR_IA_ARR_STATEMENT_TIMEOUT_MS"), true);
     assert.equal(serverSrc.includes("dashboardAuthMiddleware"), true);
     assert.equal(serverSrc.includes("assertDashboardPlantaAccessForActionRegister"), true);
     assert.equal(serverSrc.includes("dashboardBlockGAFinancialKpis"), true);
-    assert.equal(serverSrc.includes("handlePostDashboardCycle"), true);
     assert.equal(serverSrc.includes('app.post("/api/director-ia/chat", dashboardAuthMiddleware, directorIaChat.handlePostChat)'), true);
     assert.equal(/iesBuilder\.build|reasoningEngine\.reason|channelProjection\.project/.test(serverSrc), false);
     assert.equal(chatSrc.includes("async function handlePostChat"), true);

@@ -39,6 +39,8 @@ const EMPTY_FORBIDDEN_PHRASES = Object.freeze([
   '"venta_ton":0',
 ]);
 
+const CLIENT_FETCH_TIMEOUT_MS = 65000;
+
 function parsePositiveInt(raw) {
   if (raw === undefined || raw === null || raw === "") return null;
   const n = typeof raw === "number" ? raw : parseInt(String(raw), 10);
@@ -117,6 +119,11 @@ function outcomeHeadline(kind) {
       return "Abstención / sin conocimiento (resultado válido)";
     case "TOOL_ERROR":
       return "Fallo de servicio o fuente";
+    case "ARR_TIMEOUT":
+    case "CYCLE_TIMEOUT":
+      return "Tiempo de espera agotado";
+    case "CLIENT_ABORT":
+      return "Consulta cancelada";
     case "INVALID_INPUT":
       return "La solicitud no es válida";
     case "AUTHORIZATION_FAILURE":
@@ -143,6 +150,11 @@ function outcomeDetail(kind) {
       return "El motor se abstuvo o no hay conocimiento suficiente. Es un resultado válido, no un error de red.";
     case "TOOL_ERROR":
       return "La fuente o un servicio upstream no respondió de forma usable.";
+    case "ARR_TIMEOUT":
+    case "CYCLE_TIMEOUT":
+      return "El ciclo no terminó a tiempo. No es una ausencia de negocio.";
+    case "CLIENT_ABORT":
+      return "La consulta se canceló antes de obtener un resultado.";
     default:
       return null;
   }
@@ -218,6 +230,17 @@ function interpretDirectorIaCycleResponse(httpStatus, json) {
       detail: typeof body.error === "string" ? body.error : "planta_id requerido",
     };
   }
+  if (httpStatus === 504 || body.code === "ARR_TIMEOUT" || body.code === "CYCLE_TIMEOUT") {
+    const timeoutKind = body.code === "ARR_TIMEOUT" ? "ARR_TIMEOUT" : "CYCLE_TIMEOUT";
+    return {
+      ...base,
+      transportState: TRANSPORT.transport_error,
+      outcomeKind: timeoutKind,
+      headline: outcomeHeadline(timeoutKind),
+      detail: outcomeDetail(timeoutKind),
+      acquisition_status: null,
+    };
+  }
   if (httpStatus === 502 || publicFields.acquisition_status === "TOOL_ERROR" || body.code === "TOOL_ERROR") {
     return {
       ...base,
@@ -256,42 +279,113 @@ async function executeDirectorIaCycleRequest(options) {
   const token = opts.token != null ? String(opts.token) : "";
   const body = buildDirectorIaCycleRequestBody(opts.input);
   const url = opts.apiUrl || CYCLE_PATH;
-  const res = await fetchImpl(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(body),
-    cache: "no-store",
-  });
-  let json = {};
-  try {
-    json = await res.json();
-  } catch (_err) {
-    json = {};
+  const timeoutMs =
+    opts.timeoutMs === null
+      ? null
+      : opts.timeoutMs !== undefined
+        ? opts.timeoutMs
+        : CLIENT_FETCH_TIMEOUT_MS;
+  const externalSignal = opts.signal && typeof opts.signal.aborted === "boolean" ? opts.signal : null;
+  const timeoutController = timeoutMs != null && timeoutMs > 0 ? new AbortController() : null;
+  let timer = null;
+  if (timeoutController) {
+    timer = setTimeout(() => timeoutController.abort(), timeoutMs);
   }
-  return interpretDirectorIaCycleResponse(res.status, json);
+  const composed = new AbortController();
+  const abortComposed = () => {
+    if (!composed.signal.aborted) composed.abort();
+  };
+  if (externalSignal) {
+    if (externalSignal.aborted) abortComposed();
+    else externalSignal.addEventListener("abort", abortComposed);
+  }
+  if (timeoutController) {
+    if (timeoutController.signal.aborted) abortComposed();
+    else timeoutController.signal.addEventListener("abort", abortComposed);
+  }
+  try {
+    const res = await fetchImpl(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(body),
+      cache: "no-store",
+      signal: composed.signal,
+    });
+    let json = {};
+    try {
+      json = await res.json();
+    } catch (_err) {
+      json = {};
+    }
+    return interpretDirectorIaCycleResponse(res.status, json);
+  } catch (err) {
+    const name = err && err.name ? String(err.name) : "";
+    const aborted =
+      name === "AbortError" ||
+      (err && err.code === "ABORT_ERR") ||
+      (composed.signal && composed.signal.aborted);
+    if (aborted) {
+      const timedOut = Boolean(timeoutController && timeoutController.signal.aborted && !(externalSignal && externalSignal.aborted));
+      const kind = timedOut ? "CYCLE_TIMEOUT" : "CLIENT_ABORT";
+      return {
+        transportState: TRANSPORT.transport_error,
+        httpStatus: timedOut ? 504 : 0,
+        outcomeKind: kind,
+        headline: outcomeHeadline(kind),
+        detail: outcomeDetail(kind),
+        trace_id: null,
+        authFailure: false,
+        authorizationFailure: false,
+        acquisition_status: null,
+        ies_status: null,
+        reasoning_status: null,
+        knowledge_coverage: null,
+        source_health: null,
+        code: kind,
+        channel_output: null,
+      };
+    }
+    throw err;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 function createDirectorIaCycleUiSession() {
   let transportState = TRANSPORT.idle;
   let inFlight = false;
   let interpreted = null;
+  let generation = 0;
   return {
     getSnapshot() {
-      return { transportState, inFlight, interpreted };
+      return { transportState, inFlight, interpreted, generation };
     },
     canSubmit() {
       return !inFlight;
     },
     beginRequest() {
       if (inFlight) return false;
+      generation += 1;
       inFlight = true;
       transportState = TRANSPORT.loading;
       return true;
     },
-    finishRequest(result) {
+    generation() {
+      return generation;
+    },
+    isStale(gen) {
+      return gen !== generation;
+    },
+    invalidate() {
+      generation += 1;
+      inFlight = false;
+      transportState = TRANSPORT.idle;
+    },
+    finishRequest(result, gen) {
+      if (gen != null && gen !== generation) return;
       inFlight = false;
       interpreted = result || null;
       transportState = result && result.transportState ? result.transportState : TRANSPORT.transport_error;
@@ -313,5 +407,6 @@ module.exports = {
   outcomeHeadline,
   outcomeDetail,
   classifyOutcome,
+  CLIENT_FETCH_TIMEOUT_MS,
 };
 module.exports.default = module.exports;
