@@ -1,14 +1,15 @@
 # CURRENT_TASK
 
 ```yaml
-task_id: "IMPL-DIRECTOR-IA-EKS-PERSIST-QUERY-CONTEXT-METADATA-001"
+task_id: "MIGR-DIRECTOR-IA-EKS-QUERY-CONTEXT-METADATA-PROD-001"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
-authorized_at: "2026-08-21T16:45:00-06:00"
+authorized_at: "2026-08-21T16:58:42-06:00"
 human_authorization: >
-  AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-21T16:45:00-06:00.
-  G1 autorizado.
+  AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-21T16:58:42-06:00.
+  G1 autorizado para aplicar sql/015_director_ia_eks.sql actualizado
+  en la PostgreSQL productiva de folio-whatsapp-bot.
 
 gates:
   G1_task_authorization: AUTHORIZED
@@ -17,223 +18,141 @@ gates:
   G8_calibration_materiality_signature: N/A
 
 objective: >
-  Persistir query_context_metadata como metadata sibling del Snapshot EKS
-  mediante una columna JSONB nullable en eks.snapshots, conforme a la decisión
-  arquitectónica cerrada en
-  ARCH-DIRECTOR-IA-EKS-QUERY-CONTEXT-STORAGE-DECISION-001. Mantener intactos
-  D1-D9, el digest D7 sobre bundle, la semántica append-only, el lifecycle del
-  snapshot y la compatibilidad con snapshots históricos sin metadata.
-
-architecture_decision_in_force:
-  storage_model: "A_column_jsonb_nullable"
-  table: "eks.snapshots"
-  column: "query_context_metadata"
-  type: "JSONB"
-  nullable: true
-  table_one_to_one: false
-  backfill_required: false
-  historical_null_allowed: true
-  digest_d7_includes_metadata: false
+  Aplicar en la PostgreSQL productiva de folio-whatsapp-bot el artefacto canónico
+  sql/015_director_ia_eks.sql ya integrado en main para materializar la columna
+  eks.snapshots.query_context_metadata JSONB nullable, verificarla de forma
+  independiente y ejecutar exactamente un smoke autenticado posterior.
 
 in_scope:
   - "docs/dev-loop/CURRENT_TASK.md"
-  - "docs/dev-loop/reports/IMPL-DIRECTOR-IA-EKS-PERSIST-QUERY-CONTEXT-METADATA-001.md"
-
-  - "lib/director-ia-eks.js"
-  - "lib/director-ia-real-input-arr.js"
-  - "lib/director-ia-real-cycle.js"
-  - "lib/director-ia-ies-builder.js (solo si hace falta preservar lectura/fail-closed sin cambio contractual)"
-
-  - "sql/015_director_ia_eks.sql"
-  - "scripts/apply-director-ia-eks-schema.js (solo si requiere verificación de nueva columna sin cambiar su propósito)"
-
-  - "tests EKS relevantes"
-  - "tests real-input-arr / real-cycle relevantes"
-  - "tests nuevos focales si son necesarios"
+  - "docs/dev-loop/reports/MIGR-DIRECTOR-IA-EKS-QUERY-CONTEXT-METADATA-PROD-001.md"
+  - "sql/015_director_ia_eks.sql (solo lectura)"
+  - "scripts/apply-director-ia-eks-schema.js (solo lectura)"
+  - "PostgreSQL productiva usada por folio-whatsapp-bot"
+  - "verificación read-only en information_schema.columns"
+  - "un único smoke autenticado posterior"
 
 out_of_scope:
-  - "tabla EKS 1:1"
-  - "persistir query_context_metadata dentro de bundle"
-  - "incluir query_context_metadata en D7/integrity"
-  - "modificar D1-D9"
-  - "crear contrato nuevo"
-  - "backfill de snapshots históricos"
-  - "reescribir snapshots existentes"
-  - "modificar semántica ARR/OP/EB/IES/RE/CP"
-  - "modificar frontend"
-  - "modificar endpoint HTTP salvo plumbing estrictamente necesario"
-  - "retry"
-  - "persistencia adicional"
-  - "nuevas dependencias"
-  - "package.json"
-  - "lockfiles"
+  - "modificar código"
+  - "modificar SQL"
+  - "modificar contratos"
+  - "modificar Render env"
+  - "modificar DATABASE_URL"
+  - "backfill"
+  - "UPDATE de snapshots históricos"
+  - "crear índices adicionales"
+  - "tabla 1:1"
   - "commit"
   - "push"
   - "merge"
-  - "chain next task"
+  - "más de un smoke"
 
-required_ddl:
-  canonical_change: >
-    ALTER TABLE eks.snapshots
-      ADD COLUMN IF NOT EXISTS query_context_metadata JSONB;
-  constraints:
-    - "nullable"
-    - "sin default materializado"
-    - "sin backfill"
-    - "sin index salvo necesidad demostrada y autorizada"
-    - "sin cambio en bundle"
-    - "sin cambio en integrity"
+migration_artifact:
+  canonical_file: "sql/015_director_ia_eks.sql"
+  official_runner: "node scripts/apply-director-ia-eks-schema.js"
+  expected_change:
+    table: "eks.snapshots"
+    column: "query_context_metadata"
+    data_type: "jsonb"
+    nullable: true
+    backfill: false
 
-required_runtime_behavior:
-  append_snapshot:
-    - "persistir query_context_metadata en la misma transacción del snapshot"
-    - "preservar locking/versionado actual"
-    - "metadata y snapshot deben compartir atomicidad"
-    - "si metadata no existe, persistir NULL"
-    - "no modificar bundle antes de calcular/persistir integrity"
+preconditions:
+  - "main integrado y desplegado con el cambio de sql/015"
+  - "eks.snapshots existe"
+  - "eks.trace_locks existe"
+  - "no ejecutar DDL manual distinto al artefacto canónico"
 
-  get_snapshot:
-    - "devolver query_context_metadata como sibling del snapshot"
-    - "snapshots históricos con NULL deben seguir siendo legibles"
-    - "no fabricar metadata"
+execution_procedure:
+  preferred:
+    location: "Render Shell del Web Service folio-whatsapp-bot"
+    command: "node scripts/apply-director-ia-eks-schema.js"
+  fallback:
+    location: "misma sesión pgAdmin de PostgreSQL productiva"
+    rule: >
+      abrir y ejecutar el archivo real sql/015_director_ia_eks.sql del repo,
+      no copiar DDL desde chat.
 
-  list_versions:
-    - "preservar comportamiento actual"
-    - "no requerir cargar metadata si hoy solo lista versiones"
-    - "no introducir N+1"
+post_migration_verification:
+  query: >
+    SELECT column_name, data_type, is_nullable
+    FROM information_schema.columns
+    WHERE table_schema = 'eks'
+      AND table_name = 'snapshots'
+      AND column_name = 'query_context_metadata';
+  required_result:
+    column_name: "query_context_metadata"
+    data_type: "jsonb"
+    is_nullable: "YES"
 
-  replay_ies:
-    - >
-      si query_context_metadata está presente, permitir que el consumidor use
-      la metadata persistida en lugar de depender exclusivamente de reinyección
-      en memoria.
-    - >
-      si un snapshot histórico tiene NULL y IES requiere esa metadata para una
-      conclusión segura, mantener comportamiento fail-closed.
-    - "no inferir ni reconstruir metadata ausente"
+smoke:
+  max_attempts: 1
+  base_url: "https://folio-whatsapp-bot.onrender.com"
+  planta_id: 2
+  year: 2026
+  month: 8
+  timeout_ms: 90000
+  required_result:
+    readiness_status: 200
+    cycle_status: 200
+    trace_id: "non-null"
 
-  integrity:
-    - "D7 se mantiene calculado exclusivamente sobre bundle"
-    - "query_context_metadata no cambia integrity existente"
-    - "persistir metadata no debe invalidar snapshots históricos"
+smoke_interpretation:
+  - "HTTP 200 del ciclo es obligatorio"
+  - "trace_id no nulo es obligatorio"
+  - "ABSTAIN es resultado válido"
+  - "ACQUIRED_OK no implica conclusión de negocio"
+  - "no repetir el smoke en esta tarea si falla"
 
-migration_rules:
-  - "actualizar sql/015_director_ia_eks.sql de forma idempotente"
-  - >
-    el SQL debe soportar tanto DB nueva como DB productiva donde eks.snapshots
-    ya existe.
-  - "no modificar datos existentes"
-  - "no DROP/TRUNCATE/DELETE/UPDATE"
-  - "no aplicar migración productiva desde Cursor"
-  - >
-    si hace falta acto humano posterior en producción, documentarlo en el
-    reporte y STOP antes de ejecutarlo.
-
-required_tests:
-  schema:
-    - "schema nuevo incluye query_context_metadata JSONB nullable"
-    - "aplicar SQL sobre tabla existente agrega columna sin backfill"
-    - "reaplicar SQL es idempotente"
-
-  append:
-    - "append con metadata la persiste"
-    - "append sin metadata persiste NULL"
-    - "bundle persistido no contiene query_context_metadata"
-    - "integrity no cambia por metadata"
-    - "metadata se escribe dentro de la misma transacción"
-
-  get_snapshot:
-    - "devuelve metadata presente"
-    - "devuelve NULL/ausencia explícita para histórico sin metadata"
-    - "no muta el bundle"
-
-  list_versions:
-    - "regresión sin cambio semántico"
-
-  real_cycle:
-    - >
-      el ciclo nuevo puede recuperar/propagar la metadata persistida sin
-      introducir una segunda fuente contradictoria.
-    - "ARR/OP/EB/EKS/IES/RE/CP sigue verde"
-    - "no cambia estados fail-closed"
-
-  backward_compatibility:
-    - "snapshot histórico sin columna/valor sigue legible tras migration"
-    - "sin backfill"
-
-  regression:
-    - "EKS suites verdes"
-    - "real-input-arr verdes"
-    - "real-cycle verdes"
-    - "test/director-ia-*.test.js verdes"
+stop_conditions:
+  - "si el script de migración falla, STOP"
+  - "si la columna no aparece como jsonb nullable, STOP"
+  - "si el smoke devuelve distinto de 200, STOP"
+  - "si trace_id es null, STOP"
+  - "no ejecutar segundo smoke"
 
 acceptance_criteria:
-  - "query_context_metadata persiste como columna sibling JSONB nullable"
-  - "no tabla 1:1"
-  - "no metadata dentro de bundle"
-  - "D7 intacto"
-  - "append snapshot + metadata atómico"
-  - "get_snapshot devuelve metadata"
-  - "históricos NULL compatibles"
+  - "artefacto canónico aplicado en producción"
+  - "query_context_metadata existe en eks.snapshots"
+  - "tipo jsonb"
+  - "nullable YES"
   - "sin backfill"
-  - "sql/015 idempotente"
-  - "sin código frontend"
-  - "sin cambio contractual"
-  - "sin nuevas dependencias"
-  - "G2/G3/G8 no usados"
-  - "focused tests verdes"
-  - "full Director IA regression verde"
-  - "git diff --check limpio"
+  - "sin cambios de código"
+  - "sin cambios de contratos"
+  - "sin cambios de Render env"
+  - "smoke autenticado HTTP 200"
+  - "trace_id no nulo"
   - "reporte creado"
 
-production_followup:
-  required_if_code_passes: true
-  actions:
-    - >
-      aplicar el artefacto SQL canónico actualizado a la PostgreSQL productiva
-      mediante acto humano separado y autorizado.
-    - >
-      verificar read-only que information_schema.columns contiene
-      eks.snapshots.query_context_metadata con data_type jsonb y nullable.
-    - >
-      ejecutar como máximo un smoke autenticado posterior si el loop humano lo
-      autoriza.
-  prohibited_during_this_task:
-    - "ejecutar ALTER TABLE en producción"
-    - "ejecutar smoke productivo"
-    - "modificar Render env"
-
-conditional_stop_conditions:
-  - >
-    si implementar la columna obliga a redefinir D1-D9 o el modelo de Snapshot,
-    STOP.
-  - >
-    si resulta necesaria tabla 1:1, STOP: contradice la decisión arquitectónica
-    cerrada.
-  - >
-    si metadata debe entrar en digest/integrity, STOP: requiere nueva decisión.
-  - >
-    si hace falta backfill para que el sistema funcione, STOP y reportar.
-  - >
-    si aparece necesidad de G2/G3/G8, STOP.
-
-forbidden_actions:
-  - "modificar contratos"
-  - "tabla 1:1"
-  - "backfill"
-  - "cambiar integrity"
-  - "migrar producción"
-  - "hacer smoke productivo"
-  - "add dependencies"
-  - "commit"
-  - "push"
-  - "merge"
-  - "chain next task"
-
 expected_terminal_state: >
-  DONE_PENDING_REVIEW si la persistencia sibling queda implementada y testeada
-  localmente, con SQL idempotente listo para un acto humano posterior en
-  producción.
+  DONE_PENDING_REVIEW si la migración productiva aplica correctamente,
+  la columna queda verificada como JSONB nullable y el único smoke autenticado
+  devuelve HTTP 200 con trace_id no nulo.
 
 max_attempts: 1
-result_report_path: "docs/dev-loop/reports/IMPL-DIRECTOR-IA-EKS-PERSIST-QUERY-CONTEXT-METADATA-001.md"
+result_report_path: "docs/dev-loop/reports/MIGR-DIRECTOR-IA-EKS-QUERY-CONTEXT-METADATA-PROD-001.md"
+
+documented_result:
+  canonical_artifact_applied: "sql/015_director_ia_eks.sql"
+  official_runner: "node scripts/apply-director-ia-eks-schema.js"
+  column_exists: true
+  table: "eks.snapshots"
+  column: "query_context_metadata"
+  data_type: "jsonb"
+  is_nullable: "YES"
+  backfill: false
+  additional_db_changes: false
+  independent_pgadmin_verification: "PASS"
+  smoke_attempts: "1/1"
+  smoke_readiness_status: 200
+  smoke_enabled: true
+  smoke_ready: true
+  smoke_cycle_status: 200
+  smoke_acquisition_status: "ACQUIRED_OK"
+  smoke_trace_id: "trace_23_1ec35dbd-3453-49eb-9d2e-c8fb12b8ab44"
+  smoke_trace_id_non_null: true
+  production_criteria_satisfied: true
+  note: >
+    ACQUIRED_OK documenta que el ciclo operacional completó correctamente.
+    No se interpreta como conclusión de negocio.
+```
