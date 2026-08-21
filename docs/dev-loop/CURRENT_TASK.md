@@ -12,14 +12,14 @@ Esto no es G1. `DRAFT` no es ejecutable.
 ---
 
 ```yaml
-task_id: "IMPL-DIRECTOR-IA-DASHBOARD-CYCLE-ENDPOINT-001"
+task_id: "IMPL-DIRECTOR-IA-DASHBOARD-CYCLE-CLIENT-001"
 status: DRAFT
 
-task_id: "IMPL-DIRECTOR-IA-DASHBOARD-CYCLE-ENDPOINT-001"
+task_id: "IMPL-DIRECTOR-IA-DASHBOARD-CYCLE-CLIENT-001"
 status: CLOSED
 
 authorized_by: "HUMAN_APPROVER"
-authorized_at: "2026-08-21T08:53:17-06:00"
+authorized_at: "2026-08-21T10:49:39-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-21"
 
 gates:
@@ -29,78 +29,70 @@ gates:
   G8_calibration_materiality_signature: N/A
 
 objective: >
-  Exponer productivamente el ciclo real completo del Director IA mediante un
-  endpoint interno/autenticado de dashboard, reutilizando
-  createDirectorIaRealCycle sin introducir lógica cognitiva en server.js.
-  Implementar una capa de transporte no epistémica que realice autenticación,
-  autorización de planta, validación de request, mapping request -> cycle,
-  mapping cycle -> HTTP, observabilidad mínima por trace_id y manejo explícito
-  de errores. Preservar íntegramente los estados internos del Director IA.
-  Sin persistencia, sesión, WhatsApp, retries automáticos ni cambios de
-  contratos/runtimes cognitivos.
+  Implementar el primer cliente UI/dashboard que consuma el endpoint productivo
+  POST /api/director-ia/cycle ya integrado en main. El cliente debe permitir
+  ejecutar el ciclo para una planta autorizada, enviar únicamente los campos
+  transportables permitidos, representar los estados internos sin colapsarlos
+  ni reinterpretarlos y mostrar la salida CP DASHBOARD de forma segura.
+  Sin cambios cognitivos, persistencia, sesión, WhatsApp, chat ni nuevas reglas.
 
 in_scope:
   - "docs/dev-loop/CURRENT_TASK.md"
-  - "docs/dev-loop/reports/IMPL-DIRECTOR-IA-DASHBOARD-CYCLE-ENDPOINT-001.md"
+  - "docs/dev-loop/reports/IMPL-DIRECTOR-IA-DASHBOARD-CYCLE-CLIENT-001.md"
 
+  - "docs/dev-loop/reports/IMPL-DIRECTOR-IA-DASHBOARD-CYCLE-ENDPOINT-001.md (solo lectura)"
   - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-PRODUCTIZATION-READINESS-001.md (solo lectura)"
-  - "docs/dev-loop/reports/IMPL-DIRECTOR-IA-REAL-CYCLE-COMPOSITION-001.md (solo lectura)"
 
-  - "docs/director-ia/** (solo lectura)"
-
+  - "server.js (solo lectura salvo que el frontend existente se sirva desde wiring ya presente y no requiera cambio)"
+  - "lib/director-ia-dashboard-cycle-transport.js (solo lectura)"
   - "lib/director-ia-real-cycle.js (solo lectura)"
-  - "lib/director-ia-real-input-arr.js (solo lectura)"
-  - "lib/director-ia-*.js (solo lectura)"
 
-  - "existing dashboard authentication middleware"
-  - "existing dashboard planta authorization helpers"
-  - "assertDashboardPlantaAccessForActionRegister"
-  - "dashboardBlockGAFinancialKpis"
+  - "existing dashboard frontend/client files"
+  - "existing dashboard API client/helpers"
+  - "existing dashboard auth/session token handling"
+  - "existing dashboard planta selector/state"
+  - "existing UI component/test conventions"
 
-  - "new Director IA dashboard transport/service adapter"
-  - "new Director IA dashboard route/controller if repository conventions require it"
-  - "server.js only for minimal route registration/dependency composition"
-  - "new focused endpoint/transport tests"
-  - "new synthetic transport fixtures if required"
+  - "new Director IA dashboard cycle client/helper"
+  - "new Director IA dashboard UI component/view/panel"
+  - "new focused frontend/client tests"
+  - "new synthetic UI fixtures/mocks if required"
 
   - "package.json (solo lectura)"
-  - ".env references (solo lectura)"
-  - "existing logging/error helpers (reuse preferred)"
 
 out_of_scope:
   - "modificar docs/director-ia/"
-  - "modificar OP/EB/EKS/IES/RE/CP semantics"
-  - "modificar Director IA epistemology"
-  - "modificar ARR query semantics"
+  - "modificar endpoint semantics"
+  - "modificar transport adapter semantics"
+  - "modificar OP/EB/EKS/IES/RE/CP"
+  - "modificar ARR"
 
-  - "usar POST /api/director-ia/chat"
+  - "crear endpoint nuevo"
+  - "crear segunda ruta Director IA"
+  - "usar /api/director-ia/chat"
   - "modificar askDirectorIa"
-  - "usar anexo de chat como N1"
-  - "wire WhatsApp"
-  - "wire Twilio"
-  - "wire chat legado"
+  - "wire WhatsApp/Twilio/chat"
 
   - "crear persistencia"
-  - "crear sesión"
+  - "crear sesión nueva"
   - "crear memoria conversacional"
   - "crear WhoAmI"
 
   - "crear retry automático"
+  - "crear polling/background jobs"
   - "crear queue"
-  - "crear background jobs"
-  - "crear idempotency storage"
 
   - "crear nuevas fuentes"
   - "crear nuevas métricas"
-  - "crear nuevas reglas N3/N4/N5"
-  - "crear causalidad"
+  - "crear N3/N4/N5 rules"
   - "crear B/C/D/E"
+  - "crear causalidad"
   - "usar G8"
 
-  - "agregar dependencias"
   - "modificar package.json"
+  - "agregar dependencias"
   - "agregar secrets"
-  - "modificar credenciales"
+  - "modificar .env"
 
   - "commit"
   - "push"
@@ -108,406 +100,331 @@ out_of_scope:
   - "chain next task"
 
 baseline_in_force:
-  real_cycle:
-    factory: "createDirectorIaRealCycle"
-    status: "IMPLEMENTED"
-    path:
-      - "validated ARR input"
-      - "ARR"
-      - "MINIMAL_EXECUTION_ENVELOPE"
-      - "OP"
-      - "EB"
-      - "EKS"
-      - "query_context_metadata"
-      - "IES"
-      - "RE"
-      - "CP DASHBOARD"
-
-  verified_regression:
-    director_ia_total: 311
-    failures: 0
-
-  productization_audit:
-    verdict: "CONDITIONAL-GO"
-    selected_candidate: "A_DASHBOARD_ENDPOINT_WIRING"
-    findings:
-      - "no constitutional dashboard route exists yet"
-      - "POST /api/director-ia/chat is legacy and prohibited for this slice"
-      - "transport/service adapter required"
-      - "JWT dashboard authentication already exists"
-      - "planta authorization must run before Director IA cycle"
-      - "assertDashboardPlantaAccessForActionRegister is reusable"
-      - "dashboardBlockGAFinancialKpis is reusable"
-      - "empty/unresolved/incomplete/ABSTAIN remain successful transport responses with internal detail"
-      - "TOOL_ERROR maps to upstream/service failure family"
-      - "INVALID_INPUT maps to client error family"
-      - "automatic retry not authorized"
-      - "persistence/session not prerequisites"
-      - "OPENAI_API_KEY not required for this ARR slice"
-
-target_transport_slice:
-  request:
-    transport: "HTTP dashboard"
+  endpoint:
+    method: "POST"
+    path: "/api/director-ia/cycle"
     authentication: "existing dashboard JWT"
     authorization:
       - "assertDashboardPlantaAccessForActionRegister"
       - "dashboardBlockGAFinancialKpis"
-    required_business_input:
+
+  request_contract:
+    allowed:
       - "planta_id"
-    optional_scope_input:
       - "year"
       - "month"
+    prohibited_client_control:
+      - "plant_code"
+      - "trace_id"
+      - "source.system"
+      - "raw_payload_reference"
+      - "query_context_metadata"
+      - "N1-N5 artifacts"
 
-  processing:
-    - "authenticate"
-    - "authorize planta/action"
-    - "validate request shape"
-    - "map transport input to createDirectorIaRealCycle input"
-    - "invoke Director IA cycle exactly once"
-    - "emit minimum safe operational telemetry"
-    - "map structured cycle result to HTTP response"
+  response_contract:
+    includes:
+      - "trace_id"
+      - "structured execution/outcome status"
+      - "channel_output DASHBOARD"
 
-  response:
-    source_of_truth: "existing CP DASHBOARD output + structured cycle status"
-    prohibited:
-      - "LLM rewriting"
-      - "transport-level epistemic reinterpretation"
-      - "business conclusion synthesis"
-      - "dropping internal status semantics"
+  http_semantics:
+    success_and_nonfatal:
+      - "ACQUIRED_OK -> 200"
+      - "ACQUIRED_EMPTY/DATA_NOT_FOUND -> 200"
+      - "ENTITY_UNRESOLVED -> 200"
+      - "QUERY_SCOPE_INCOMPLETE -> 200"
+      - "NO_KNOWLEDGE/ABSTAIN -> 200"
+    client_error:
+      - "INVALID_INPUT -> 400"
+    auth:
+      - "401 existing"
+      - "403 existing"
+    upstream:
+      - "TOOL_ERROR -> 502"
+    internal:
+      - "unexpected -> 500"
 
-transport_adapter:
-  preferred_name: "lib/director-ia-dashboard-cycle-transport.js"
+  verified_regression:
+    endpoint_focused: 24
+    real_cycle: 19
+    arr: 24
+    director_ia_total: 335
+    failures: 0
 
-  preferred_export: "createDirectorIaDashboardCycleTransport"
+ui_goal:
+  target_user: "authenticated dashboard user"
 
-  expected_shape: >
-    createDirectorIaDashboardCycleTransport({
-      realCycle,
-      logger,
-      clock
-    }).handle(input)
+  primary_action:
+    - "select/retain authorized planta_id from existing dashboard context"
+    - "optionally choose year/month if current UI conventions support them"
+    - "execute Director IA cycle"
+    - "render product-safe result"
+
+  prohibited:
+    - "free-text epistemic prompt"
+    - "client-supplied plant_code"
+    - "client-generated authoritative trace_id"
+    - "client-generated query_context_metadata"
+    - "display raw ARR payload"
+    - "display JWT"
+    - "display internal stack trace"
+    - "display secret/provenance internals"
+
+client_adapter:
+  preferred_name: >
+    Follow existing dashboard frontend conventions. If there is a dedicated API
+    client module, add a Director IA cycle method there; otherwise create the
+    smallest local helper consistent with the repository.
 
   responsibilities:
-    - "validate transport-level input"
-    - "map authorized dashboard request to realCycle.run input"
-    - "invoke real cycle exactly once"
-    - "map successful structured result to safe transport payload"
-    - "map known execution errors to transport status family"
-    - "preserve trace_id"
-    - "emit minimal structured logs/telemetry"
+    - "POST to /api/director-ia/cycle using existing authenticated request mechanism"
+    - "send only allowed request fields"
+    - "parse JSON response safely"
+    - "retain HTTP status and structured internal outcome separately"
+    - "never reinterpret 200 as business success"
+    - "return typed/structured result suitable for UI"
 
-  prohibited:
-    - "create or modify N1-N5 artifacts"
-    - "change CP output semantics"
-    - "interpret ARR values"
-    - "call ARR directly"
-    - "bypass createDirectorIaRealCycle"
-    - "call LLM"
-    - "call chat"
-    - "perform authorization itself if existing middleware/helper owns it"
+  forbidden:
+    - "convert 200 ACQUIRED_EMPTY into no-sales/zero"
+    - "convert ENTITY_UNRESOLVED into 404 semantics"
+    - "convert ABSTAIN into error"
+    - "call legacy chat endpoint"
+    - "retry automatically"
+    - "store raw Director IA artifacts in persistent browser storage"
 
-route_boundary:
-  preferred_route: >
-    Use the repository's existing dashboard API naming conventions. Do not reuse
-    /api/director-ia/chat. Choose a dedicated Director IA dashboard cycle route
-    only if no equivalent route already exists.
-
-  rules:
-    - "route is dashboard-only"
-    - "JWT authentication occurs before cycle execution"
-    - "planta authorization occurs before cycle execution"
-    - "GA financial KPI restriction occurs before cycle execution"
-    - "route/controller contains no cognitive logic"
-    - "route/controller delegates to transport/service adapter"
-    - "server.js only registers/wires dependencies"
-
-authorization_rules:
-  - "caller cannot choose arbitrary plant_code"
-  - "caller supplies planta_id only"
-  - "plant_code/source mapping remains owned by existing source/access layer"
-  - "unauthorized planta_id never invokes createDirectorIaRealCycle"
-  - "blocked GA financial KPI access never invokes createDirectorIaRealCycle"
-  - "authorization failure must not reveal ARR/source internals"
-
-request_mapping:
-  allowed_input:
-    - "planta_id"
-    - "year if supported by existing cycle input"
-    - "month if supported by existing cycle input"
-    - "existing authenticated user/context fields required by current helpers"
-
-  prohibited:
-    - "plant_code supplied by client"
-    - "source.system supplied by client"
-    - "trace_id supplied as authoritative cycle id unless existing infrastructure explicitly owns it"
-    - "raw_payload_reference supplied by client"
-    - "content_author_id supplied by client"
-    - "arbitrary query_context_metadata supplied by client"
-    - "internal IES/RE/CP fields supplied by client"
-
-http_status_mapping:
-  INVALID_INPUT:
-    family: 400
-    rule: "client request invalid before productive cycle"
-
-  AUTHENTICATION_FAILURE:
-    family: 401
-    rule: "reuse existing auth behavior"
-
-  AUTHORIZATION_FAILURE:
-    family: 403
-    rule: "reuse existing authz behavior"
-
-  ACQUIRED_OK:
-    family: 200
-    preserve_internal_detail: true
-
-  ACQUIRED_EMPTY:
-    family: 200
-    preserve_internal_detail: true
-    prohibited:
-      - "404"
-      - "ABSENCE_CONFIRMED"
-      - "venta_ton = 0"
-
-  ENTITY_UNRESOLVED:
-    family: 200
-    preserve_internal_detail: true
-    prohibited:
-      - "404 solely because entity unresolved"
-
-  QUERY_SCOPE_INCOMPLETE:
-    family: 200
-    preserve_internal_detail: true
-
-  NO_KNOWLEDGE_ABSTAIN:
-    family: 200
-    preserve_internal_detail: true
-
-  TOOL_ERROR:
-    family: "502_or_503"
-    rule: >
-      Select between 502/503 according to existing repository transport/error
-      conventions. Do not invent epistemic meaning from the HTTP code.
-
-  unexpected_internal_error:
-    family: 500
-    rule: "safe generic error response; internal detail logged safely"
-
-response_payload:
-  required:
-    - "trace_id"
-    - "status or execution summary sufficient to preserve internal state"
-    - "channel_output DASHBOARD"
-
-  conditionally_safe:
-    - "selected structured diagnostics/status metadata if already product-safe"
-
-  prohibited:
-    - "credentials"
-    - "raw source payload"
-    - "raw_payload_reference if considered internal/sensitive"
-    - "internal stack trace"
-    - "DB error details"
-    - "JWT"
-    - "authorization internals"
+ui_state_model:
+  minimum:
+    - "idle"
+    - "loading"
+    - "completed"
+    - "transport_error"
 
   rule: >
-    Do not expose every internal artifact merely because realCycle returns it.
-    Return the smallest product-safe representation that preserves Director IA
-    outcome semantics.
-
-observability_minimum:
-  required_events:
-    - "cycle_request_started"
-    - "cycle_request_completed"
-    - "cycle_request_failed"
-
-  safe_fields:
-    - "trace_id"
-    - "duration_ms"
-    - "final transport status"
-    - "ARR/acquisition status at a coarse safe level"
-    - "final CP/knowledge state if already non-sensitive"
-
-  prohibited_log_fields:
-    - "JWT"
-    - "credentials"
-    - "raw ARR payload"
-    - "raw_payload_reference where sensitive"
-    - "full IES"
-    - "full Reasoning Result"
-    - "full provenance when unnecessary"
-    - "stack trace returned to client"
-
-  rules:
-    - "use existing logger if available"
-    - "no new observability dependency"
-    - "logging failure must not mutate cognitive result"
-    - "trace_id correlates request to cycle"
-
-timeout_retry_boundary:
-  retry:
-    automatic: false
-
-  timeout:
-    rule: >
-      Reuse existing HTTP/source timeout behavior if already present. Do not
-      invent a new retry policy. If no safe finite timeout exists and this
-      makes route exposure operationally unsafe, report BLOCKED instead of
-      silently adding architectural policy.
-
-idempotency_concurrency:
-  rules:
-    - "no persistence/idempotency store introduced"
-    - "prove endpoint invokes cycle once per request"
-    - "prove repeated requests do not mutate shared Director IA state"
-    - "dependencies should be reusable concurrently or instantiated according to existing server conventions"
-    - "do not introduce global mutable cycle state"
-
-server_boundary:
-  allowed:
-    - "import/register dedicated route/controller/service"
-    - "inject existing dependencies"
-    - "minimal boot wiring"
+    UI transport state and Director IA internal state are separate dimensions.
+    completed may contain ACQUIRED_EMPTY, ENTITY_UNRESOLVED,
+    QUERY_SCOPE_INCOMPLETE or ABSTAIN.
 
   prohibited:
-    - "ARR execution logic in server.js"
-    - "query_context_metadata construction in server.js"
-    - "IES/RE/CP calls in server.js"
-    - "HTTP status epistemic interpretation in server.js"
-    - "Director IA business rules in server.js"
+    - "internal Director IA outcome == UI request error"
+    - "HTTP 200 == validated business conclusion"
+
+display_semantics:
+  ACQUIRED_OK:
+    ui: "render CP DASHBOARD output and structured outcome"
+
+  ACQUIRED_EMPTY:
+    ui: >
+      render a neutral data-not-found/empty-for-requested-scope state. Never
+      render '0 ventas', 'sin ventas' or confirmed absence unless CP itself
+      explicitly and legitimately says so.
+
+  ENTITY_UNRESOLVED:
+    ui: "show that the requested plant/entity could not be resolved"
+
+  QUERY_SCOPE_INCOMPLETE:
+    ui: "show partial/incomplete scope indication"
+
+  ABSTAIN_NO_KNOWLEDGE:
+    ui: >
+      show the CP DASHBOARD abstention/no-knowledge state as a valid completed
+      result, not a transport failure.
+
+  TOOL_ERROR:
+    ui: "show upstream/service unavailable/error state without source internals"
+
+  INVALID_INPUT:
+    ui: "show request validation feedback"
+
+  401:
+    ui: "reuse existing authentication/session handling"
+
+  403:
+    ui: "reuse existing authorization feedback"
+
+  unexpected_500:
+    ui: "generic safe failure with trace_id if response safely provides it"
+
+channel_output_boundary:
+  rules:
+    - "render the existing channel_output as product output"
+    - "do not regenerate or rewrite CP semantics with LLM"
+    - "do not infer hidden N1-N5 meaning"
+    - "do not expose internal artifacts merely for debugging"
+    - "preserve visible NO_KNOWLEDGE/ABSTAIN/partial states"
+
+traceability:
+  rules:
+    - "display/capture trace_id in a low-prominence diagnostic/reference location"
+    - "trace_id must not become editable input"
+    - "trace_id can be copied for support if current UI conventions permit"
+    - "do not expose provenance/raw refs alongside trace_id"
+
+auth_boundary:
+  rules:
+    - "reuse current dashboard JWT mechanism"
+    - "do not manually construct Authorization semantics if existing client helper owns it"
+    - "401 behavior remains owned by existing dashboard auth flow"
+    - "no JWT in visible UI/logging"
+
+planta_boundary:
+  rules:
+    - "reuse existing authorized planta selection/context if present"
+    - "client sends planta_id only"
+    - "do not derive or expose ARR plant_code"
+    - "do not allow arbitrary plant identifiers outside existing dashboard model"
+
+year_month_boundary:
+  rules:
+    - "reuse existing year/month selection when physically present"
+    - "do not invent calendar semantics"
+    - "omit optional fields when not selected according to API contract"
+
+observability_client:
+  minimum:
+    - "no console logging of JWT"
+    - "no console logging of full Director IA response in production path"
+    - "safe handling of trace_id"
+    - "existing frontend error reporter may receive safe transport metadata only"
+
+  prohibited:
+    - "raw payload logging"
+    - "full channel/internal artifact logging where unnecessary"
+
+accessibility_usability:
+  required:
+    - "loading state visible"
+    - "submit action disabled or guarded during current request if consistent with UI conventions"
+    - "error state distinguishable from completed-abstain/partial"
+    - "result area updates predictably"
+    - "no misleading success/error colors solely from HTTP 200"
 
 required_tests:
 
-  transport_unit:
-    - "valid request invokes real cycle once"
-    - "planta_id mapped without client plant_code"
-    - "input not mutated"
-    - "trace_id preserved"
-    - "CP DASHBOARD output preserved"
-    - "transport does not synthesize N1-N5"
-    - "transport does not import/call LLM or chat"
+  api_client:
+    - "calls POST /api/director-ia/cycle"
+    - "uses existing authenticated request mechanism"
+    - "sends planta_id"
+    - "sends optional year/month only when applicable"
+    - "does not send plant_code"
+    - "does not send trace_id"
+    - "does not send query_context_metadata"
+    - "does not call /api/director-ia/chat"
+    - "no automatic retry"
 
-  authorization:
-    - "missing/invalid JWT rejected before cycle"
-    - "unauthorized planta rejected before cycle"
-    - "GA KPI blocked access rejected before cycle"
-    - "authorization failure does not leak source internals"
+  ui_happy_path:
+    - "authorized plant request enters loading then completed"
+    - "CP DASHBOARD output is rendered"
+    - "trace_id is available as reference"
+    - "internal outcome remains visible"
 
-  status_mapping:
-    - "ACQUIRED_OK -> 200"
-    - "ACQUIRED_EMPTY -> 200 with internal empty/data-not-found meaning preserved"
-    - "ENTITY_UNRESOLVED -> 200 with detail preserved"
-    - "QUERY_SCOPE_INCOMPLETE -> 200 with detail preserved"
-    - "ABSTAIN/NO_KNOWLEDGE -> 200"
-    - "INVALID_INPUT -> 400"
-    - "TOOL_ERROR -> chosen 502/503 convention"
-    - "unexpected error -> safe 500"
+  ui_fail_closed:
+    - "ACQUIRED_EMPTY renders neutral empty/data-not-found state"
+    - "ACQUIRED_EMPTY does not render zero/confirmed absence"
+    - "ENTITY_UNRESOLVED renders completed unresolved state"
+    - "QUERY_SCOPE_INCOMPLETE renders completed partial state"
+    - "ABSTAIN/NO_KNOWLEDGE renders completed abstention state"
+    - "none of these are treated as network error"
 
-  data_exposure:
-    - "no credentials in response"
-    - "no raw ARR payload in response"
-    - "no JWT in logs/response"
-    - "no internal stack returned"
-    - "response is minimal product-safe projection"
+  transport_errors:
+    - "400 renders validation feedback"
+    - "401 follows existing auth handling"
+    - "403 renders/reuses authorization handling"
+    - "502 renders upstream/service failure"
+    - "500 renders generic safe failure"
+    - "no stack/source internals displayed"
 
-  observability:
-    - "start/completion/error events contain trace_id"
-    - "duration recorded"
-    - "sensitive artifacts not logged"
-    - "logger failure does not alter epistemic output if existing conventions allow safe handling"
+  request_integrity:
+    - "client cannot inject plant_code"
+    - "client cannot inject trace_id"
+    - "client cannot inject internal artifacts"
+    - "selected planta_id is the only plant identity sent"
 
-  concurrency_idempotency:
-    - "one cycle invocation per request"
-    - "parallel requests do not share trace_id"
-    - "parallel requests do not mutate shared input/result"
-    - "no global mutable request state"
+  concurrency:
+    - "double-submit is prevented or safely handled according to existing UI convention"
+    - "two independent mounted/request contexts do not share result/trace state"
 
-  route_integration:
-    - "dedicated route reachable under existing app/server test harness"
-    - "legacy /api/director-ia/chat behavior unchanged"
-    - "route uses existing JWT middleware"
-    - "route uses existing planta authz helpers"
-    - "server.js contains wiring only"
+  security:
+    - "JWT not rendered"
+    - "raw ARR payload not rendered"
+    - "raw_payload_reference not rendered"
+    - "full IES/RE artifacts not exposed"
+    - "no sensitive console logs in tested path"
 
   regression:
-    - "real cycle focused tests remain green"
-    - "real ARR input tests remain green"
+    - "endpoint focused tests remain green"
+    - "real-cycle tests remain green"
+    - "ARR tests remain green"
     - "all test/director-ia-*.test.js remain green"
-    - "existing dashboard/auth tests remain green"
-    - "existing legacy chat tests remain green"
+    - "existing dashboard frontend tests remain green"
+    - "legacy chat behavior remains untouched"
 
 acceptance_criteria:
-  - "dedicated dashboard endpoint exists"
-  - "legacy Director IA chat endpoint unchanged"
-  - "JWT required"
-  - "planta authz required before cycle"
-  - "GA financial KPI restriction preserved"
-  - "client cannot supply plant_code"
-  - "createDirectorIaRealCycle invoked exactly once"
-  - "transport remains non-epistemic"
-  - "status semantics preserved"
-  - "empty is not 404"
-  - "TOOL_ERROR maps to safe upstream failure"
-  - "ABSTAIN is valid 200 response"
-  - "minimal product-safe payload returned"
-  - "trace_id exposed safely"
-  - "minimum observability present"
-  - "no sensitive data logged/exposed"
-  - "no retry automatic"
-  - "no persistence"
-  - "no session"
-  - "no WhatsApp/Twilio/chat wiring"
-  - "no cognitive runtime changes"
-  - "no contract changes"
-  - "no G2"
-  - "no G3"
-  - "no G8"
-  - "no dependency/package changes"
+  - "dashboard UI can invoke POST /api/director-ia/cycle"
+  - "existing JWT flow reused"
+  - "authorized planta_id reused"
+  - "client sends no plant_code"
+  - "client sends no internal artifacts"
+  - "CP DASHBOARD result rendered"
+  - "trace_id available safely"
+  - "internal outcome preserved separately from transport state"
+  - "ACQUIRED_EMPTY not interpreted as zero/absence"
+  - "ENTITY_UNRESOLVED not treated as 404"
+  - "ABSTAIN rendered as valid result"
+  - "TOOL_ERROR rendered as upstream failure"
+  - "no LLM/chat call"
+  - "no persistence/session added"
+  - "no automatic retry"
+  - "no cognitive/runtime contract changes"
+  - "no endpoint semantic changes"
+  - "no package/dependency changes"
   - "focused tests pass"
-  - "full relevant regression passes"
+  - "relevant dashboard regression passes"
+  - "full Director IA regression passes"
   - "git diff --check clean"
   - "report created"
 
 allowed_actions:
-  - "read contracts/reports/runtimes"
-  - "read existing server/routes/auth helpers"
-  - "create dedicated dashboard transport/service"
-  - "create dedicated route/controller according to repository conventions"
-  - "modify server.js only for minimal route/dependency wiring"
-  - "create focused endpoint/transport tests"
-  - "create synthetic transport fixtures if required"
-  - "create docs/dev-loop/reports/IMPL-DIRECTOR-IA-DASHBOARD-CYCLE-ENDPOINT-001.md"
+  - "read endpoint/productization reports"
+  - "read existing dashboard frontend/client code"
+  - "read existing auth/planta UI state"
+  - "create/modify minimal dashboard API client helper"
+  - "create/modify minimal dashboard Director IA UI component/view"
+  - "create focused UI/client tests"
+  - "create synthetic mocks/fixtures"
+  - "create docs/dev-loop/reports/IMPL-DIRECTOR-IA-DASHBOARD-CYCLE-CLIENT-001.md"
   - "update CURRENT_TASK through permitted transitions"
-  - "run focused tests"
-  - "run relevant server/dashboard/auth regression"
-  - "run full Director IA regression"
+  - "run focused frontend/client tests"
+  - "run dashboard regression"
+  - "run Director IA regression"
   - "run git diff --check"
 
 conditional_stop_conditions:
   - >
-    If existing JWT/authz helpers cannot secure this route without changing
-    their semantics, STOP.
+    If the dashboard has no reusable authenticated request mechanism and a new
+    auth architecture is required, STOP.
   - >
-    If exposing the route safely requires a new architectural contract, G2/G3,
-    persistence, session, queue, retry architecture or package dependency, STOP.
+    If planta authorization cannot be represented through the existing
+    dashboard selection/context without changing backend contracts, STOP.
   - >
-    If createDirectorIaRealCycle requires cognitive modifications for HTTP
-    transport, STOP.
+    If rendering CP DASHBOARD requires changing Channel Projection semantics,
+    STOP.
   - >
-    If server.js must contain cognitive logic to make the slice work, STOP.
+    If implementing the UI requires a new dependency/package change, STOP
+    unless already explicitly allowed by the current task, which it is not.
+  - >
+    If the existing frontend architecture requires G2/G3 to create the slice,
+    STOP.
 
 forbidden_actions:
   - "modify docs/director-ia/"
-  - "modify OP/EB/EKS/IES/RE/CP semantics"
-  - "modify ARR semantics"
-  - "modify legacy chat epistemology"
-  - "use /api/director-ia/chat for this slice"
-  - "add persistence/session"
-  - "add retry"
-  - "add queue/background job"
+  - "modify Director IA cognitive runtimes"
+  - "modify server endpoint semantics"
+  - "modify ARR"
+  - "modify auth semantics"
+  - "use legacy chat endpoint"
   - "wire WhatsApp/Twilio"
+  - "add persistence/session"
+  - "add retry/polling"
   - "add dependency"
   - "modify package.json"
   - "add secrets"
@@ -519,13 +436,14 @@ forbidden_actions:
   - "autoapprove gates"
 
 expected_terminal_state: >
-  DONE_PENDING_REVIEW if a dedicated authenticated/authorized dashboard
-  endpoint exposes createDirectorIaRealCycle with non-epistemic transport
-  mapping, minimum safe observability and all regressions green.
+  DONE_PENDING_REVIEW if the existing dashboard can consume
+  POST /api/director-ia/cycle and render CP DASHBOARD safely while preserving
+  transport/internal-state separation, without backend cognitive changes,
+  dependency additions or architecture changes.
 
-  BLOCKED or STOPPED if safe exposure requires contract changes, auth semantic
-  changes, persistence/session, server-side cognitive logic, new dependencies,
-  G2/G3/G8 or modifications to Director IA cognition.
+  BLOCKED or STOPPED if the UI slice requires new auth architecture, backend
+  contract changes, CP semantic changes, package dependencies, persistence,
+  session, G2/G3/G8 or legacy chat coupling.
 
 max_attempts: 1
-result_report_path: "docs/dev-loop/reports/IMPL-DIRECTOR-IA-DASHBOARD-CYCLE-ENDPOINT-001.md"
+result_report_path: "docs/dev-loop/reports/IMPL-DIRECTOR-IA-DASHBOARD-CYCLE-CLIENT-001.md"

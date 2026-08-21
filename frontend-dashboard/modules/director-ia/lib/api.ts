@@ -1,4 +1,5 @@
 import { apiFetch } from "@/lib/api";
+import cycleCore from "./cycle-client-core";
 
 export type DirectorIaContextSources = {
   igf: boolean;
@@ -147,6 +148,32 @@ export function fetchDirectorIaChat(
       ...(history && history.length > 0 ? { history: history.slice(-8) } : {}),
     }),
     cache: "no-store",
+  });
+}
+
+function directorIaCycleApiUrl() {
+  const path = "/api/director-ia/cycle";
+  const base = process.env.NEXT_PUBLIC_API_URL || "";
+  if (base) return `${base.replace(/\/$/, "")}${path}`;
+  return `/api-backend${path}`;
+}
+
+export type DirectorIaCycleRequest = {
+  planta_id: number;
+  year?: number;
+  month?: number;
+};
+
+export function fetchDirectorIaCycle(
+  token: string,
+  input: DirectorIaCycleRequest,
+  fetchImpl?: typeof fetch
+) {
+  return cycleCore.executeDirectorIaCycleRequest({
+    token,
+    input,
+    fetchImpl: fetchImpl || fetch,
+    apiUrl: directorIaCycleApiUrl(),
   });
 }
 
