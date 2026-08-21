@@ -17,6 +17,7 @@ import {
   type DirectorIaTopOverdueAction,
 } from "@/modules/director-ia/lib/api";
 import { DirectorIaChatPanel } from "@/modules/director-ia/components/DirectorIaChatPanel";
+import { DirectorIaCyclePanel } from "@/modules/director-ia/components/DirectorIaCyclePanel";
 import { DirectorIaMejoraContinuaPanel } from "@/modules/director-ia/components/DirectorIaMejoraContinuaPanel";
 import { DirectorIaBitacoraPanel } from "@/modules/director-ia/components/DirectorIaBitacoraPanel";
 import { DirectorIaComercialEntidadPanel } from "@/modules/director-ia/components/DirectorIaComercialEntidadPanel";
@@ -514,7 +515,7 @@ export function DirectorIaShell() {
                 value={planta}
                 onChange={(e) => setPlanta(e.target.value)}
                 className="rounded border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-200 w-full"
-                aria-label="Planta para contexto y mejora continua"
+                aria-label="Planta para contexto, ciclo y mejora continua"
               >
                 <option value="">— Selecciona planta —</option>
                 {plantas.map((p) => (
@@ -572,6 +573,19 @@ export function DirectorIaShell() {
               {contextLoading ? "Probando…" : "Probar contexto"}
             </button>
           </div>
+        </section>
+
+        <section
+          className="rounded-lg border border-sky-800/40 bg-slate-900/50 p-6"
+          aria-label="Ciclo Director IA"
+        >
+          <DirectorIaCyclePanel
+            token={token}
+            plantaId={planta}
+            year={anio}
+            month={mes}
+            onUnauthorized={() => setUnauthorized(true)}
+          />
         </section>
 
         <section
