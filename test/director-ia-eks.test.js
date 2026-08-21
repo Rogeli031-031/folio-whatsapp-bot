@@ -123,6 +123,135 @@ describe("EKS append/get/list (memoria de prueba; P1 pg vía SQL M1 aparte)", ()
   });
 });
 
+describe("EKS query_context_metadata sibling (columna JSONB, no Bundle, no D7)", () => {
+  function sampleMeta(tag) {
+    return {
+      executive_query_id: "eq_test",
+      trace_id: "tr_meta_" + tag,
+      original_question: "venta_ton",
+      intent: "arr_venta_ton",
+      requesting_user_id: "user_1",
+      requesting_role: "ZP",
+      channel: "dashboard",
+      resolved_entities: [],
+      permission_restrictions: [],
+      knowledge_effective_date: "2026-08-21T00:00:00.000Z",
+    };
+  }
+
+  it("sql incluye columna JSONB nullable y ALTER idempotente; no tabla 1:1 ni backfill", () => {
+    const sql = fs.readFileSync(SQL_PATH, "utf8");
+    assert.match(sql, /query_context_metadata JSONB/);
+    assert.match(
+      sql,
+      /ALTER TABLE eks\.snapshots\s+ADD COLUMN IF NOT EXISTS query_context_metadata JSONB/
+    );
+    assert.equal(/query_context_metadata JSONB NOT NULL/.test(sql), false);
+    assert.equal(/CREATE TABLE IF NOT EXISTS eks\.snapshot_query/.test(sql), false);
+    assert.equal(/\bDEFAULT\b/i.test(sql), false);
+    assert.equal(/\bUPDATE\b/i.test(sql), false);
+    assert.equal(/\bDELETE\b/i.test(sql), false);
+    assert.equal(/\bDROP\b/i.test(sql), false);
+    assert.equal(/\bTRUNCATE\b/i.test(sql), false);
+    assert.equal(/CREATE INDEX IF NOT EXISTS eks_snapshots_query_context/.test(sql), false);
+  });
+
+  it("append con metadata la persiste como sibling; bundle no la contiene", async () => {
+    const eks = createEks();
+    const bundle = loadFixture(FIXTURE_A);
+    const meta = sampleMeta("a");
+    const snap = await eks.append_snapshot(bundle, meta);
+    assert.deepEqual(snap.query_context_metadata, meta);
+    assert.equal(Object.prototype.hasOwnProperty.call(snap.bundle, "query_context_metadata"), false);
+    const again = await eks.get_snapshot({ snapshot_id: snap.snapshot_id });
+    assert.deepEqual(again.query_context_metadata, meta);
+    assert.equal(Object.prototype.hasOwnProperty.call(again.bundle, "query_context_metadata"), false);
+  });
+
+  it("append sin metadata persiste NULL y get_snapshot histórico sigue legible", async () => {
+    const eks = createEks();
+    const bundle = loadFixture(FIXTURE_B);
+    const snap = await eks.append_snapshot(bundle);
+    assert.equal(snap.query_context_metadata, null);
+    const again = await eks.get_snapshot({ snapshot_id: snap.snapshot_id });
+    assert.equal(again.query_context_metadata, null);
+    assert.ok(again.bundle);
+    assert.equal(again.integrity, computeIntegrity(bundle));
+  });
+
+  it("mismo bundle con distinta metadata conserva el mismo integrity D7", async () => {
+    const eks = createEks();
+    const bundle = loadFixture(FIXTURE_A);
+    const s1 = await eks.append_snapshot(structuredClone(bundle), sampleMeta("one"));
+    const s2 = await eks.append_snapshot(structuredClone(bundle), sampleMeta("two"));
+    assert.equal(s1.integrity, s2.integrity);
+    assert.equal(s1.integrity, computeIntegrity(bundle));
+    assert.notDeepEqual(s1.query_context_metadata, s2.query_context_metadata);
+  });
+
+  it("list_versions no incluye query_context_metadata ni bundle", async () => {
+    const eks = createEks();
+    const bundle = loadFixture(FIXTURE_A);
+    const snap = await eks.append_snapshot(bundle, sampleMeta("list"));
+    const versions = await eks.list_versions(snap.trace_id);
+    assert.equal(versions.length, 1);
+    assert.equal(Object.prototype.hasOwnProperty.call(versions[0], "query_context_metadata"), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(versions[0], "bundle"), false);
+    assert.equal(versions[0].snapshot_id, snap.snapshot_id);
+    assert.equal(versions[0].integrity, snap.integrity);
+  });
+
+  it("PG insert escribe metadata en el mismo INSERT transaccional que bundle", async () => {
+    const inserts = [];
+    const pool = {
+      async connect() {
+        return {
+          async query(sql, params) {
+            const text = String(sql);
+            if (/^BEGIN/i.test(text) || /^COMMIT/i.test(text) || /^ROLLBACK/i.test(text)) return { rows: [] };
+            if (/INSERT INTO eks\.trace_locks/i.test(text)) return { rows: [] };
+            if (/FROM eks\.trace_locks/i.test(text)) return { rows: [{ trace_id: params[0] }] };
+            if (/MAX\(version\)/i.test(text)) return { rows: [{ max: 0 }] };
+            if (/INSERT INTO eks\.snapshots/i.test(text)) {
+              inserts.push({ text, params });
+              const meta =
+                params[7] == null ? null : typeof params[7] === "string" ? JSON.parse(params[7]) : params[7];
+              const bundle = typeof params[5] === "string" ? JSON.parse(params[5]) : params[5];
+              return {
+                rows: [
+                  {
+                    snapshot_id: params[0],
+                    bundle_id: params[1],
+                    trace_id: params[2],
+                    version: params[3],
+                    persisted_at: params[4],
+                    bundle,
+                    integrity: params[6],
+                    query_context_metadata: meta,
+                  },
+                ],
+              };
+            }
+            throw new Error("unexpected_sql");
+          },
+          release() {},
+        };
+      },
+    };
+    const eks = createEks({ pool });
+    const bundle = loadFixture(FIXTURE_A);
+    const meta = sampleMeta("pg");
+    const snap = await eks.append_snapshot(bundle, meta);
+    assert.equal(inserts.length, 1);
+    assert.match(inserts[0].text, /query_context_metadata/);
+    assert.equal(inserts[0].params.length, 8);
+    assert.deepEqual(JSON.parse(inserts[0].params[7]), meta);
+    assert.equal(Object.prototype.hasOwnProperty.call(JSON.parse(inserts[0].params[5]), "query_context_metadata"), false);
+    assert.equal(snap.integrity, computeIntegrity(bundle));
+    assert.deepEqual(snap.query_context_metadata, meta);
+  });
+});
+
 describe("EKS append-only source guards", () => {
   it("sql M1 no muta filas de snapshots", () => {
     const sql = fs.readFileSync(SQL_PATH, "utf8");

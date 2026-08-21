@@ -92,9 +92,9 @@ function harness(arrSource, extras) {
     validate_structure(bundle) {
       return eksInner.validate_structure(bundle);
     },
-    async append_snapshot(bundle) {
+    async append_snapshot(bundle, queryContextMetadata) {
       appendCalls.push(clone(bundle));
-      return eksInner.append_snapshot(bundle);
+      return eksInner.append_snapshot(bundle, queryContextMetadata);
     },
   };
 

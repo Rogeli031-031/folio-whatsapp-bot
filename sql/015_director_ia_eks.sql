@@ -17,8 +17,14 @@ CREATE TABLE IF NOT EXISTS eks.snapshots (
   persisted_at TIMESTAMPTZ NOT NULL,
   bundle JSONB NOT NULL,
   integrity TEXT NOT NULL,
+  query_context_metadata JSONB,
   CONSTRAINT eks_snapshots_trace_version_uid UNIQUE (trace_id, version)
 );
 
 CREATE INDEX IF NOT EXISTS eks_snapshots_trace_id_idx
   ON eks.snapshots (trace_id, version);
+
+-- DB existente (eks.snapshots ya creado sin la columna): extensión sibling §8.
+-- Nullable. Sin valor implícito. Sin backfill. No altera bundle ni integrity.
+ALTER TABLE eks.snapshots
+  ADD COLUMN IF NOT EXISTS query_context_metadata JSONB;
