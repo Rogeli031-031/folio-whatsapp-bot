@@ -1,13 +1,11 @@
 # CURRENT_TASK
 
-Tarea vigente del Loop v0.1.
-
 ```yaml
-task_id: "HOTFIX-DIRECTOR-IA-SMOKE-WINDOWS-EXIT-001"
+task_id: "MIGR-DIRECTOR-IA-EKS-PROD-SCHEMA-001"
 status: CLOSED
 
 authorized_by: "HUMAN_APPROVER"
-authorized_at: "2026-08-21T13:35:54-06:00"
+authorized_at: "2026-08-21"
 human_authorization: "AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-21"
 
 gates:
@@ -17,125 +15,158 @@ gates:
   G8_calibration_materiality_signature: N/A
 
 objective: >
-  Corregir exclusivamente la terminación del smoke operacional de Director IA
-  para evitar el assert de Node/libuv observado en Windows cuando process.exit()
-  interrumpe el cleanup de fetch/undici. Preservar exactamente la semántica,
-  validaciones, códigos de éxito/fallo y alcance del smoke.
-
-evidence:
-  local_runtime: "Node v24.14.0 / Windows"
-  production_base_url: "https://folio-whatsapp-bot.onrender.com"
-  readiness_observed:
-    status: 200
-    enabled: true
-    ready: true
-  observed_failure: >
-    Después de imprimir readiness verde, el proceso local aborta con
-    UV_HANDLE_CLOSING durante terminación.
-  suspected_physical_cause: >
-    scripts/smoke-director-ia-operational.js usa process.exit() mientras
-    fetch/undici todavía puede estar limpiando handles.
+  Aplicar en la PostgreSQL productiva usada por folio-whatsapp-bot el artefacto
+  canónico sql/015_director_ia_eks.sql ya versionado en main, verificar la
+  existencia de eks.snapshots y eks.trace_locks, y ejecutar exactamente un
+  smoke autenticado posterior solo si ambas tablas existen.
 
 in_scope:
   - "docs/dev-loop/CURRENT_TASK.md"
-  - "scripts/smoke-director-ia-operational.js"
-  - "test/director-ia-operational-hardening.test.js (solo si es el test focal existente adecuado)"
-  - "new focused smoke-exit test only if physically necessary"
-  - "docs/dev-loop/reports/HOTFIX-DIRECTOR-IA-SMOKE-WINDOWS-EXIT-001.md"
+  - "sql/015_director_ia_eks.sql (solo lectura)"
+  - "scripts/apply-director-ia-eks-schema.js (solo lectura)"
+  - "PostgreSQL productiva de folio-whatsapp-bot"
+  - "verificación read-only con to_regclass"
+  - "un único smoke autenticado post-migración"
 
 out_of_scope:
-  - "server.js"
-  - "lib/"
-  - "frontend-dashboard/"
-  - "Director IA cognitive semantics"
-  - "ARR"
-  - "endpoint behavior"
-  - "readiness behavior"
-  - "JWT/auth/authz"
-  - "timeout values"
-  - "retry"
-  - "dependencies"
-  - "package.json"
-  - "lockfiles"
-  - "Render configuration"
+  - "modificar código"
+  - "modificar sql/015_director_ia_eks.sql"
+  - "crear migrations nuevas"
+  - "modificar contratos"
+  - "modificar Render config/env"
+  - "modificar DATABASE_URL"
   - "commit"
   - "push"
   - "merge"
-  - "next task"
+  - "cualquier DDL distinto al artefacto canónico 015"
 
-required_change:
-  - >
-    Remove forced successful/expected termination through process.exit()
-    where it can race fetch/undici cleanup.
-  - >
-    Prefer return / natural async completion and set process.exitCode only
-    where a nonzero result must be communicated.
-  - >
-    main() rejection must still produce a deterministic nonzero exit.
-  - "Do not hide real smoke failures."
-  - "Do not add sleeps as the primary fix."
-  - "Do not swallow exceptions."
+execution_procedure:
+  preferred:
+    - "Render Shell del Web Service folio-whatsapp-bot"
+    - "ejecutar exactamente: node scripts/apply-director-ia-eks-schema.js"
+  fallback:
+    - "si no existe Shell, abrir el archivo real sql/015_director_ia_eks.sql en la misma sesión pgAdmin donde to_regclass devolvió NULL"
+    - "no copiar DDL desde chat"
+    - "envolver en BEGIN/COMMIT si se usa pgAdmin"
 
-required_behavior:
-  readiness_only_success:
-    condition: "readiness HTTP 200 and no token/planta supplied"
-    result: "clean natural exit 0"
+pre_migration_evidence:
+  database_check:
+    query: >
+      SELECT to_regclass('eks.snapshots') AS snapshots,
+      to_regclass('eks.trace_locks') AS trace_locks;
+    snapshots: null
+    trace_locks: null
+    result: "EKS_SCHEMA_MISSING"
 
-  readiness_failure:
-    result: "nonzero exit"
+  production_failure:
+    event: "cycle_request_failed"
+    request_id: "5838a0df-453d-49e7-8c0b-55818e5a9b93"
+    planta_id: 2
+    duration_ms: 740
+    http_status: 500
+    code: "INTERNAL_ERROR"
+    result: "PRE_MIGRATION_FAILURE"
 
-  authenticated_smoke_success:
-    result: "clean exit 0"
+migration_result:
+  executed_by: "HUMAN_OPERATOR"
+  mechanism: "Render Shell del Web Service folio-whatsapp-bot"
+  command: "node scripts/apply-director-ia-eks-schema.js"
+  result: PASS
+  script_output:
+    snapshots: "eks.snapshots"
+    trace_locks: "eks.trace_locks"
 
-  authenticated_smoke_failure:
-    result: "nonzero exit"
+post_migration_gate:
+  verification_method: "pgAdmin sobre la misma PostgreSQL productiva previamente inspeccionada"
+  query: >
+    SELECT to_regclass('eks.snapshots') AS snapshots,
+    to_regclass('eks.trace_locks') AS trace_locks;
+  required_result:
+    snapshots: "eks.snapshots"
+    trace_locks: "eks.trace_locks"
+  observed_result:
+    snapshots: "eks.snapshots"
+    trace_locks: "eks.trace_locks"
+  result: PASS
 
-  missing_base_url:
-    result: "nonzero exit"
+production_smoke:
+  base_url: "https://folio-whatsapp-bot.onrender.com"
+  planta_id: 2
+  year: 2026
+  month: 8
+  timeout_ms: 90000
+
+  readiness:
+    status: 200
+    enabled: true
+    ready: true
+    result: PASS
+
+  cycle:
+    http_status: 200
+    acquisition_status: "ACQUIRED_OK"
+    ies_status: "VALIDATED"
+    reasoning_status: "ABSTAIN"
+    trace_id: "trace_4_80881100-54c7-4fc2-8233-13687043119d"
+    duration_ms: 1136
+    result: PASS
+
+  production_log_confirmation:
+    event: "cycle_request_completed"
+    request_id: "38602d55-6b7f-4f99-a851-0748aa2f8581"
+    planta_id: 2
+    http_status: 200
+    acquisition_status: "ACQUIRED_OK"
+    ies_status: "VALIDATED"
+    reasoning_status: "ABSTAIN"
+    trace_id: "trace_4_80881100-54c7-4fc2-8233-13687043119d"
+    duration_ms: 1136
+    result: PASS
+
+production_evidence:
+  interpretation: >
+    El HTTP 500 observado antes de la migración ocurrió cuando eks.snapshots y
+    eks.trace_locks no existían en la PostgreSQL productiva. Después de aplicar
+    el artefacto canónico sql/015_director_ia_eks.sql y verificar ambas tablas
+    mediante to_regclass, el ciclo autenticado productivo completó con HTTP 200,
+    ACQUIRED_OK, IES VALIDATED y trace_id no nulo.
+
+  reasoning_status_note: >
+    reasoning_status ABSTAIN es un resultado fail-closed válido del Reasoning
+    Engine y no constituye fallo del smoke ni del ciclo.
 
 acceptance_criteria:
-  - "readiness-only run exits cleanly on Windows"
-  - "no UV_HANDLE_CLOSING assertion in reproduced readiness-only run"
-  - "readiness 200/enabled:true/ready:true remains unchanged"
-  - "failure paths remain nonzero"
-  - "authenticated cycle logic is not weakened or bypassed"
-  - "no retry introduced"
-  - "no production code changed"
-  - "no dependencies/package/lockfile changes"
-  - "focused tests green"
-  - "test/director-ia-*.test.js green"
-  - "git diff --check clean"
-  - "report created"
+  canonical_015_applied: PASS
+  eks_snapshots_exists: PASS
+  eks_trace_locks_exists: PASS
+  readiness_http_200: PASS
+  readiness_enabled: PASS
+  readiness_ready: PASS
+  authenticated_production_cycle_http_200: PASS
+  acquisition_ok: PASS
+  ies_validated: PASS
+  trace_id_non_null: PASS
+  production_log_completed_event: PASS
+  no_code_changes_required: PASS
+  no_contract_changes_required: PASS
+  no_render_env_changes_required: PASS
 
-production_revalidation_after_merge:
-  - >
-    Run readiness-only smoke against
-    https://folio-whatsapp-bot.onrender.com and require clean exit without
-    libuv assertion.
-  - >
-    Authenticated POST smoke remains a separate final production validation
-    requiring locally supplied DIRECTOR_IA_SMOKE_TOKEN and
-    DIRECTOR_IA_SMOKE_PLANTA_ID. Secrets must never be committed or copied
-    into the report.
+final_result: PASS
 
-conditional_stop_conditions:
-  - "If fixing this requires changing production endpoint/runtime behavior, STOP."
-  - "If a dependency/package change is required, STOP."
-  - "If G2/G3/G8 becomes necessary, STOP."
+review_note: >
+  MIGR-DIRECTOR-IA-EKS-PROD-SCHEMA-001 cumplió el objetivo autorizado:
+  el schema EKS productivo fue creado mediante el script oficial del repo,
+  verificado independientemente en PostgreSQL y validado con un ciclo real
+  autenticado de planta 2 / agosto 2026. No se requieren más smokes dentro
+  de esta tarea.
 
-forbidden_actions:
-  - "change production Director IA behavior"
-  - "change readiness semantics"
-  - "change timeout semantics"
-  - "add dependency"
-  - "commit"
-  - "push"
-  - "merge"
-  - "chain next task"
+next_action: >
+  Revisión humana para transición de DONE_PENDING_REVIEW a CLOSED.
+  No ejecutar más cambios productivos dentro de esta tarea.
 
 expected_terminal_state: >
-  DONE_PENDING_REVIEW when the smoke terminates naturally and preserves
-  deterministic exit semantics, tests are green, and git diff --check is clean.
+  DONE_PENDING_REVIEW si la migración canónica aplica correctamente,
+  ambas tablas existen y el smoke autenticado devuelve status 200
+  con trace_id no nulo.
 
 max_attempts: 1
-result_report_path: "docs/dev-loop/reports/HOTFIX-DIRECTOR-IA-SMOKE-WINDOWS-EXIT-001.md"
