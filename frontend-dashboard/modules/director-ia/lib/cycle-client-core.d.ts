@@ -77,17 +77,13 @@ export function pickSafeChannelOutput(raw: unknown): DirectorIaCycleInterpreted[
 export function outcomeHeadline(kind: string | null): string;
 export function outcomeDetail(kind: string | null): string | null;
 export function classifyOutcome(body: Record<string, unknown>): string | null;
-export default {
-  CYCLE_PATH: string;
-  CHAT_PATH: string;
-  TRANSPORT: {
-    idle: "idle";
-    loading: "loading";
-    completed: "completed";
-    transport_error: "transport_error";
-  };
-  FORBIDDEN_REQUEST_KEYS: readonly string[];
-  EMPTY_FORBIDDEN_PHRASES: readonly string[];
+
+declare const cycleClientCore: {
+  CYCLE_PATH: typeof CYCLE_PATH;
+  CHAT_PATH: typeof CHAT_PATH;
+  TRANSPORT: typeof TRANSPORT;
+  FORBIDDEN_REQUEST_KEYS: typeof FORBIDDEN_REQUEST_KEYS;
+  EMPTY_FORBIDDEN_PHRASES: typeof EMPTY_FORBIDDEN_PHRASES;
   buildDirectorIaCycleRequestBody: typeof buildDirectorIaCycleRequestBody;
   interpretDirectorIaCycleResponse: typeof interpretDirectorIaCycleResponse;
   executeDirectorIaCycleRequest: typeof executeDirectorIaCycleRequest;
@@ -97,3 +93,4 @@ export default {
   outcomeDetail: typeof outcomeDetail;
   classifyOutcome: typeof classifyOutcome;
 };
+export default cycleClientCore;
