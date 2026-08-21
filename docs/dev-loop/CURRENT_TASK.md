@@ -1,15 +1,14 @@
 # CURRENT_TASK
 
 ```yaml
-task_id: "MIGR-DIRECTOR-IA-EKS-QUERY-CONTEXT-METADATA-PROD-001"
+task_id: "ARCH-DIRECTOR-IA-M1-HEALTH-DASHBOARD-READINESS-001"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
-authorized_at: "2026-08-21T16:58:42-06:00"
+authorized_at: "2026-08-21T17:28:37-06:00"
 human_authorization: >
-  AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-21T16:58:42-06:00.
-  G1 autorizado para aplicar sql/015_director_ia_eks.sql actualizado
-  en la PostgreSQL productiva de folio-whatsapp-bot.
+  AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-21T17:28:37-06:00.
+  G1 autorizado.
 
 gates:
   G1_task_authorization: AUTHORIZED
@@ -18,141 +17,168 @@ gates:
   G8_calibration_materiality_signature: N/A
 
 objective: >
-  Aplicar en la PostgreSQL productiva de folio-whatsapp-bot el artefacto canónico
-  sql/015_director_ia_eks.sql ya integrado en main para materializar la columna
-  eks.snapshots.query_context_metadata JSONB nullable, verificarla de forma
-  independiente y ejecutar exactamente un smoke autenticado posterior.
+  Auditar exclusivamente M1 — Health dashboard — para definir qué significa
+  completarlo en Director IA, qué señal de health/readiness ya existe,
+  qué parte falta en el frontend, cómo debe mostrarse sin confundir readiness
+  técnica con conclusión de negocio, y cuál es el slice mínimo correcto para
+  pasar M1 de NOT_STARTED a COMPLETE.
 
 in_scope:
   - "docs/dev-loop/CURRENT_TASK.md"
-  - "docs/dev-loop/reports/MIGR-DIRECTOR-IA-EKS-QUERY-CONTEXT-METADATA-PROD-001.md"
-  - "sql/015_director_ia_eks.sql (solo lectura)"
-  - "scripts/apply-director-ia-eks-schema.js (solo lectura)"
-  - "PostgreSQL productiva usada por folio-whatsapp-bot"
-  - "verificación read-only en information_schema.columns"
-  - "un único smoke autenticado posterior"
+  - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M1-HEALTH-DASHBOARD-READINESS-001.md"
+
+  - "docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md (solo lectura)"
+  - "docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md (solo lectura)"
+
+  - "server.js (solo lectura)"
+  - "lib/director-ia-dashboard-cycle-transport.js (solo lectura)"
+  - "frontend-dashboard/modules/director-ia/components/DirectorIaShell.tsx (solo lectura)"
+  - "frontend-dashboard/modules/director-ia/components/DirectorIaCyclePanel.tsx (solo lectura)"
+  - "frontend-dashboard/modules/director-ia/lib/api.ts (solo lectura)"
+  - "frontend-dashboard/lib/auth.ts (solo lectura)"
+  - "tests Director IA relevantes (solo lectura)"
 
 out_of_scope:
-  - "modificar código"
-  - "modificar SQL"
+  - "implementar UI"
+  - "modificar backend"
+  - "modificar health endpoint"
   - "modificar contratos"
-  - "modificar Render env"
-  - "modificar DATABASE_URL"
-  - "backfill"
-  - "UPDATE de snapshots históricos"
-  - "crear índices adicionales"
-  - "tabla 1:1"
+  - "modificar auth/authz"
+  - "hacer smoke productivo"
   - "commit"
   - "push"
   - "merge"
-  - "más de un smoke"
+  - "abrir siguiente implementación"
 
-migration_artifact:
-  canonical_file: "sql/015_director_ia_eks.sql"
-  official_runner: "node scripts/apply-director-ia-eks-schema.js"
-  expected_change:
-    table: "eks.snapshots"
-    column: "query_context_metadata"
-    data_type: "jsonb"
-    nullable: true
-    backfill: false
+baseline_in_force:
+  roadmap:
+    module: "M1"
+    declared_state: "NO INTEGRADA / NOT_STARTED"
+    objective: "Health dashboard"
+  backend:
+    route: "GET /health-director-ia"
+    known_result:
+      status: 200
+      enabled: true
+      ready: true
+  semantic_rule:
+    - "readiness técnica no equivale a conclusión de negocio"
+    - "HTTP 200 readiness no implica ACQUIRED_OK"
+    - "UI no debe presentar health como KPI operativo"
 
-preconditions:
-  - "main integrado y desplegado con el cambio de sql/015"
-  - "eks.snapshots existe"
-  - "eks.trace_locks existe"
-  - "no ejecutar DDL manual distinto al artefacto canónico"
+audit_questions:
+  D1_m1_definition:
+    question: >
+      ¿Qué exige exactamente M1 en la matriz canónica para poder considerarlo
+      COMPLETE?
 
-execution_procedure:
-  preferred:
-    location: "Render Shell del Web Service folio-whatsapp-bot"
-    command: "node scripts/apply-director-ia-eks-schema.js"
-  fallback:
-    location: "misma sesión pgAdmin de PostgreSQL productiva"
-    rule: >
-      abrir y ejecutar el archivo real sql/015_director_ia_eks.sql del repo,
-      no copiar DDL desde chat.
+  D2_existing_backend:
+    question: >
+      ¿Qué devuelve hoy GET /health-director-ia y qué valida realmente?
 
-post_migration_verification:
-  query: >
-    SELECT column_name, data_type, is_nullable
-    FROM information_schema.columns
-    WHERE table_schema = 'eks'
-      AND table_name = 'snapshots'
-      AND column_name = 'query_context_metadata';
-  required_result:
-    column_name: "query_context_metadata"
-    data_type: "jsonb"
-    is_nullable: "YES"
+  D3_existing_frontend:
+    question: >
+      ¿El frontend Director IA consume actualmente health/readiness?
+      Si no, ¿dónde debería integrarse mínimamente?
 
-smoke:
-  max_attempts: 1
-  base_url: "https://folio-whatsapp-bot.onrender.com"
-  planta_id: 2
-  year: 2026
-  month: 8
-  timeout_ms: 90000
-  required_result:
-    readiness_status: 200
-    cycle_status: 200
-    trace_id: "non-null"
+  D4_auth:
+    question: >
+      ¿La readiness requiere JWT o es pública? ¿Debe el frontend reutilizar el
+      mismo token del módulo?
 
-smoke_interpretation:
-  - "HTTP 200 del ciclo es obligatorio"
-  - "trace_id no nulo es obligatorio"
-  - "ABSTAIN es resultado válido"
-  - "ACQUIRED_OK no implica conclusión de negocio"
-  - "no repetir el smoke en esta tarea si falla"
+  D5_transport:
+    question: >
+      ¿Debe reutilizar api.ts / fetch wrapper existente o crear una función
+      específica?
 
-stop_conditions:
-  - "si el script de migración falla, STOP"
-  - "si la columna no aparece como jsonb nullable, STOP"
-  - "si el smoke devuelve distinto de 200, STOP"
-  - "si trace_id es null, STOP"
-  - "no ejecutar segundo smoke"
+  D6_ui_state:
+    question: >
+      Definir estados mínimos de UI:
+      loading / ready / disabled / unavailable / transport_error
+      sin convertirlos en estados cognitivos.
+
+  D7_copy:
+    question: >
+      ¿Qué texto mínimo evita confundir "servicio listo" con "datos disponibles"
+      o "negocio sano"?
+
+  D8_refresh:
+    question: >
+      ¿Debe ser one-shot al cargar, manual refresh, o polling?
+      Preferir no polling salvo requisito físico.
+
+  D9_failure_semantics:
+    question: >
+      ¿Cómo representar 503/500/network error sin afectar el cycle panel?
+
+  D10_scope:
+    question: >
+      ¿M1 puede completarse sin tocar backend, contratos ni auth?
+
+  D11_tests:
+    question: >
+      ¿Qué tests mínimos hacen falta para considerar M1 COMPLETE?
+
+  D12_gate:
+    question: >
+      Determinar si el siguiente IMPL necesita solo G1 o también G2/G3.
+
+  D13_next_task:
+    question: >
+      Proponer exactamente un NEXT_TASK mínimo.
+
+decision_rules:
+  - "No polling automático salvo necesidad demostrada."
+  - "No retry automático."
+  - "No mezclar readiness técnica con estados ACQUIRED_* / ABSTAIN."
+  - "No introducir nueva arquitectura."
+  - "Preferir reutilizar fetch/auth existentes."
+  - "No tocar backend si /health-director-ia ya es suficiente."
+  - "No implementar en esta tarea."
+
+required_output:
+  - "definición operativa de M1 COMPLETE"
+  - "gap exacto frontend/backend"
+  - "estado auth"
+  - "shape de respuesta health"
+  - "estado UI mínimo"
+  - "copy recomendado"
+  - "estrategia refresh"
+  - "tests mínimos"
+  - "gates"
+  - "exactamente un NEXT_TASK"
 
 acceptance_criteria:
-  - "artefacto canónico aplicado en producción"
-  - "query_context_metadata existe en eks.snapshots"
-  - "tipo jsonb"
-  - "nullable YES"
-  - "sin backfill"
-  - "sin cambios de código"
-  - "sin cambios de contratos"
-  - "sin cambios de Render env"
-  - "smoke autenticado HTTP 200"
-  - "trace_id no nulo"
-  - "reporte creado"
+  - "M1 definido con evidencia"
+  - "se identifica si backend ya basta"
+  - "se identifica el mínimo cambio frontend"
+  - "sin ambigüedad health vs business"
+  - "sin implementación"
+  - "gates definidos"
+  - "exactamente un NEXT_TASK"
+  - "git diff --check limpio"
+  - "solo CURRENT_TASK y reporte modificados"
 
 expected_terminal_state: >
-  DONE_PENDING_REVIEW si la migración productiva aplica correctamente,
-  la columna queda verificada como JSONB nullable y el único smoke autenticado
-  devuelve HTTP 200 con trace_id no nulo.
+  DONE_PENDING_REVIEW si puede definirse un slice mínimo para completar M1.
+  BLOCKED/STOPPED si M1 requiere redefinición contractual o backend adicional.
 
 max_attempts: 1
-result_report_path: "docs/dev-loop/reports/MIGR-DIRECTOR-IA-EKS-QUERY-CONTEXT-METADATA-PROD-001.md"
+result_report_path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M1-HEALTH-DASHBOARD-READINESS-001.md"
 
 documented_result:
-  canonical_artifact_applied: "sql/015_director_ia_eks.sql"
-  official_runner: "node scripts/apply-director-ia-eks-schema.js"
-  column_exists: true
-  table: "eks.snapshots"
-  column: "query_context_metadata"
-  data_type: "jsonb"
-  is_nullable: "YES"
-  backfill: false
-  additional_db_changes: false
-  independent_pgadmin_verification: "PASS"
-  smoke_attempts: "1/1"
-  smoke_readiness_status: 200
-  smoke_enabled: true
-  smoke_ready: true
-  smoke_cycle_status: 200
-  smoke_acquisition_status: "ACQUIRED_OK"
-  smoke_trace_id: "trace_23_1ec35dbd-3453-49eb-9d2e-c8fb12b8ab44"
-  smoke_trace_id_non_null: true
-  production_criteria_satisfied: true
-  note: >
-    ACQUIRED_OK documenta que el ciclo operacional completó correctamente.
-    No se interpreta como conclusión de negocio.
+  outcome: "DONE_PENDING_REVIEW"
+  backend_sufficient: true
+  backend_change_required: false
+  frontend_consumes_health_today: false
+  indicator_location: "DirectorIaShell header, outside DirectorIaCyclePanel"
+  auth_on_health_endpoint: false
+  refresh: "one-shot_plus_manual"
+  polling: false
+  retry: false
+  blocks_cycle_panel: false
+  g2: N/A
+  g3: N/A
+  next_task_proposed: "IMPL-DIRECTOR-IA-M1-HEALTH-DASHBOARD-001"
+  next_task_authorized: false
 ```
