@@ -3,416 +3,351 @@
 Tarea vigente del Loop v0.1.
 
 ```yaml
-task_id: "ARCH-DIRECTOR-IA-OPERATIONAL-HARDENING-READINESS-001"
+task_id: "IMPL-DIRECTOR-IA-OPERATIONAL-HARDENING-001"
 status: CLOSED
 
 authorized_by: "HUMAN_APPROVER"
-authorized_at: "2026-08-21T11:54:47-06:00"
+authorized_at: "2026-08-21T12:50:19-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-21"
 
 gates:
   G1_task_authorization: AUTHORIZED
-  G2_architecture_change: PENDING_IF_REQUIRED
-  G3_new_architecture_contract: PENDING_IF_REQUIRED
+  G2_architecture_change: N/A
+  G3_new_architecture_contract: N/A
   G8_calibration_materiality_signature: N/A
 
 objective: >
-  Auditar la readiness operacional del Director IA ya expuesto en producción
-  vía dashboard, después del deploy live del hotfix de tipos. Determinar el
-  conjunto mínimo de hardening necesario antes de declarar el sistema
-  production-ready, separando health/readiness, timeouts, observabilidad,
-  seguridad, manejo de fallos ARR, rollout, smoke tests, configuración y
-  dependencias operacionales. Recomendar exactamente un NEXT_TASK sin
-  implementar nada.
+  Implementar el hardening operacional mínimo requerido para remover los
+  blockers físicos identificados por
+  ARCH-DIRECTOR-IA-OPERATIONAL-HARDENING-READINESS-001:
+  timeout finito efectivo para ARR/ciclo, abort/cancelación segura del cliente,
+  logger productivo a stdout para los eventos del endpoint, readiness ligera
+  sin ejecutar el grid ARR completo y smoke/post-deploy validation. Mantener
+  intacta la epistemología del Director IA, sin retries automáticos,
+  persistencia, sesión, nuevas dependencias ni cambios contractuales.
 
 in_scope:
   - "docs/dev-loop/CURRENT_TASK.md"
-  - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-OPERATIONAL-HARDENING-READINESS-001.md"
+  - "docs/dev-loop/reports/IMPL-DIRECTOR-IA-OPERATIONAL-HARDENING-001.md"
 
-  - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-PRODUCTIZATION-READINESS-001.md (solo lectura)"
-  - "docs/dev-loop/reports/IMPL-DIRECTOR-IA-DASHBOARD-CYCLE-ENDPOINT-001.md (solo lectura)"
-  - "docs/dev-loop/reports/IMPL-DIRECTOR-IA-DASHBOARD-CYCLE-CLIENT-001.md (solo lectura)"
-  - "docs/dev-loop/reports/HOTFIX-DIRECTOR-IA-DASHBOARD-CYCLE-CLIENT-TYPES-001.md (solo lectura)"
+  - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-OPERATIONAL-HARDENING-READINESS-001.md (solo lectura)"
 
-  - "server.js (solo lectura)"
-  - "lib/director-ia-dashboard-cycle-transport.js (solo lectura)"
-  - "lib/director-ia-real-cycle.js (solo lectura)"
-  - "lib/director-ia-real-input-arr.js (solo lectura)"
-  - "frontend-dashboard/modules/director-ia/** (solo lectura)"
-  - "test/director-ia-*.test.js (solo lectura)"
+  - "server.js"
+  - "lib/director-ia-dashboard-cycle-transport.js"
+  - "lib/director-ia-real-cycle.js (solo si hace falta propagar abort/timeout sin cambio semántico)"
+  - "lib/director-ia-real-input-arr.js (solo si hace falta propagar abort/timeout sin cambio semántico)"
+  - "existing ARR DB/source access runtime involved in computePronosticoProyByPlant/loadArrProyForPlant"
+  - "existing health/readiness helpers"
+  - "existing logger helpers"
 
-  - "existing health/readiness endpoints (solo lectura)"
-  - "existing logger/telemetry/error helpers (solo lectura)"
-  - "existing timeout config (solo lectura)"
-  - "existing auth/authz middleware (solo lectura)"
-  - "existing feature flags/rollout controls (solo lectura)"
-  - "existing Render/deploy config references (solo lectura)"
-  - "package.json / frontend-dashboard/package.json (solo lectura)"
+  - "frontend-dashboard/modules/director-ia/components/DirectorIaCyclePanel.tsx"
+  - "frontend-dashboard/modules/director-ia/lib/api.ts"
+  - "frontend-dashboard/modules/director-ia/lib/cycle-client-core.js"
+  - "frontend-dashboard/modules/director-ia/lib/cycle-client-core.d.ts"
+
+  - "new/modified focused operational hardening tests"
+  - "new smoke script/test if repository conventions permit without dependency changes"
+
+  - "package.json (solo lectura)"
+  - "frontend-dashboard/package.json (solo lectura)"
+  - ".env references (solo lectura)"
 
 out_of_scope:
-  - "implementar health endpoint"
-  - "implementar timeout"
-  - "implementar retries"
-  - "crear observabilidad"
-  - "crear feature flags"
-  - "modificar auth"
-  - "modificar endpoint"
-  - "modificar UI"
-  - "modificar Director IA cognition"
-  - "crear persistencia"
-  - "crear sesión"
-  - "wire WhatsApp/Twilio"
+  - "modificar docs/director-ia/"
+  - "modificar N1-N5 semantics"
+  - "modificar ARR business query meaning"
+  - "agregar retry automático"
+  - "agregar persistence/session"
+  - "agregar queue/background jobs"
+  - "agregar rate limiting"
+  - "agregar metrics backend sofisticadas"
+  - "agregar alerting provider"
+  - "wire WhatsApp/Twilio/chat"
+  - "agregar dependencia"
   - "modificar package.json"
-  - "agregar dependencias"
-  - "modificar .env"
+  - "modificar contracts"
+  - "usar G8"
+  - "crear G2/G3"
   - "commit"
   - "push"
   - "merge"
-  - "crear siguiente implementación"
-  - "encadenar siguiente tarea"
+  - "chain next task"
 
 baseline_in_force:
-  production_state:
-    backend_endpoint: "POST /api/director-ia/cycle"
-    ui_client: "integrated in /director-ia"
-    auth: "JWT dashboard"
-    authz:
-      - "assertDashboardPlantaAccessForActionRegister"
-      - "dashboardBlockGAFinancialKpis"
-    deploy:
-      commit: "5230146a"
-      render_status: "LIVE"
-    build:
-      command: "npm ci && npm run build"
-      result: "PASS"
-    director_ia_regression:
-      tests: 351
-      failures: 0
+  endpoint:
+    path: "POST /api/director-ia/cycle"
+    auth: "existing dashboard JWT"
+    authz: "existing planta/GA restrictions"
+    observability_events:
+      - "cycle_request_started"
+      - "cycle_request_completed"
+      - "cycle_request_failed"
+    current_gap: "server.js does not inject productive logger"
 
-  cognitive_path:
-    - "dashboard UI"
-    - "POST /api/director-ia/cycle"
-    - "ARR"
-    - "OP"
-    - "EB"
-    - "EKS"
-    - "IES"
-    - "RE"
-    - "CP DASHBOARD"
-    - "UI"
+  arr:
+    current_gap: >
+      computePronosticoProyByPlant / underlying query has no effective finite
+      statement timeout. connectionTimeoutMillis only bounds connection
+      acquisition, not query execution.
 
-audit_questions:
+  client:
+    current_gap: "no explicit AbortController/fetch timeout for cycle request"
 
-  D1_health:
-    question: >
-      ¿Existe health/readiness suficiente para saber si el servicio y la
-      dependencia ARR están operables antes de atender tráfico?
+  rollout:
+    kill_switch: "ENABLE_DIRECTOR_IA"
+    exposure: "JWT + dashboard + planta authorization"
 
-  D2_dependency_readiness:
-    question: >
-      ¿Puede detectarse una degradación de ARR/source sin ejecutar un ciclo
-      completo de usuario?
+  build_gate:
+    frontend_command: "npm ci && npm run build"
+    required_for_ui_changes: true
 
-  D3_timeout:
-    question: >
-      ¿Existe un timeout finito y efectivo para la llamada ARR y para el ciclo
-      HTTP completo? Si no existe, clasificar riesgo y blocker.
+hardening_scope:
 
-  D4_abort:
-    question: >
-      ¿Qué ocurre si el cliente desconecta o expira el request mientras ARR o
-      el ciclo siguen ejecutándose?
+  backend_timeout:
+    requirements:
+      - "finite timeout for the ARR/source query"
+      - "finite timeout for the complete Director IA HTTP cycle"
+      - "timeout must not become retry"
+      - "timeout must map to safe transport failure"
+      - "DB/source client must be released/cleaned up"
+      - "no indefinite pool client retention"
 
-  D5_retry:
-    question: >
-      Confirmar que no existe retry automático y evaluar si eso es correcto para
-      el primer release.
+    preferred_behavior:
+      arr_query_timeout: >
+        Use existing PostgreSQL/session/query timeout mechanisms if physically
+        available. Prefer a local statement_timeout scoped to this Director IA
+        query/cycle over global DB semantic changes.
+      http_cycle_timeout: >
+        Use AbortSignal/Promise deadline or existing repository convention.
+        Deadline must be finite and deterministic/configurable through existing
+        config pattern without introducing a new architecture.
 
-  D6_logging:
-    question: >
-      ¿Los eventos start/completion/failure realmente llegan a logs productivos
-      con trace_id y duración?
+    prohibited:
+      - "retry after timeout"
+      - "turn timeout into ACQUIRED_EMPTY"
+      - "turn timeout into business absence"
+      - "kill global DB pool"
 
-  D7_error_visibility:
-    question: >
-      ¿TOOL_ERROR, 500 y fallos auth quedan suficientemente visibles para
-      operación sin filtrar secretos?
+  cancellation:
+    backend:
+      - "propagate cancellation/abort where existing APIs support it"
+      - "client disconnect must not mutate epistemic state"
+      - "best-effort cancellation is acceptable if driver limitations are documented"
+    frontend:
+      - "use AbortController or existing authenticated request cancellation mechanism"
+      - "abort in-flight cycle on unmount/replacement when safe"
+      - "do not auto-retry aborted calls"
 
-  D8_metrics:
-    question: >
-      ¿Existen métricas mínimas sobre volumen, latencia, éxito/fallo y estados
-      Director IA, o solo logs?
+  productive_logger:
+    requirements:
+      - "server wiring injects a real logger to Director IA transport"
+      - "logger writes structured safe events to stdout/stderr or existing production logger"
+      - "start/completed/failed include trace_id when available"
+      - "duration_ms preserved"
+      - "no JWT/raw ARR/full IES/full RE/secrets"
+      - "logger failure must not change cognitive output"
 
-  D9_alerting:
-    question: >
-      ¿Existe alerting para fallos de deploy, 5xx sostenidos o degradación ARR?
+    preferred:
+      - "reuse existing logger"
+      - "if no logger abstraction exists, minimal console-based structured logger is allowed only if consistent with existing server conventions"
 
-  D10_trace:
-    question: >
-      ¿trace_id puede correlacionarse desde UI/request hasta logs backend y
-      source failure?
+  readiness:
+    requirements:
+      - "lightweight readiness endpoint/check for Director IA dependencies"
+      - "must not execute full ARR query/grid"
+      - "must not create EKS snapshot"
+      - "must not call RE/CP"
+      - "must distinguish service enabled/disabled"
+      - "must report unavailable dependency/config safely"
+      - "must not expose credentials or DB internals"
 
-  D11_sensitive_logging:
-    question: >
-      Auditar que JWT, raw ARR payload, raw_payload_reference, IES/RE completos y
-      stack traces no se registren de forma insegura.
+    preferred_route: >
+      Follow existing health/readiness naming conventions. If a general health
+      route exists, extend minimally only if the scope remains Director IA-safe;
+      otherwise add a dedicated lightweight readiness route.
 
-  D12_authz_operational:
-    question: >
-      ¿Los rechazos 401/403 son distinguibles operacionalmente de fallos del
-      Director IA?
+  smoke:
+    requirements:
+      - "safe post-deploy smoke for authenticated/restricted environment"
+      - "must verify endpoint reachable and fail-closed semantics"
+      - "must not mutate persistent business state beyond existing append behavior unless current cycle is already known safe/read-only"
+      - "must emit/capture trace_id for diagnosis"
+      - "must document required env/input but not commit secrets"
 
-  D13_rate_limiting:
-    question: >
-      ¿Existe rate limiting o protección equivalente para evitar abuso del
-      endpoint? Determinar si es prerequisite o follow-up.
+    acceptable_forms:
+      - "automated test harness"
+      - "script using injected/stubbed dependencies for CI"
+      - "documented production smoke command if real auth credentials cannot live in repo"
 
-  D14_concurrency:
-    question: >
-      ¿El endpoint puede operar bajo requests concurrentes sin state compartido
-      peligroso ni agotamiento obvio?
+  build_gate:
+    requirements:
+      - "frontend production build passes"
+      - "for any touched frontend file, run npm ci && npm run build in frontend-dashboard"
+      - "record command and exit code in report"
 
-  D15_resource_limits:
-    question: >
-      ¿Existen riesgos de CPU/memoria/connection exhaustion en el ciclo actual?
+failure_mapping:
+  ARR_TIMEOUT:
+    transport: 504
+    semantic_rule: "technical timeout only; never absence/empty"
 
-  D16_rollout:
-    question: >
-      ¿Existe una forma segura de rollout gradual: feature flag, allowlist,
-      internal-only, role gate o despliegue controlado?
+  CYCLE_TIMEOUT:
+    transport: 504
+    semantic_rule: "technical deadline exceeded"
 
-  D17_kill_switch:
-    question: >
-      ¿Existe mecanismo para deshabilitar el endpoint/feature sin revertir todo
-      el deploy?
+  CLIENT_ABORT:
+    transport: "no business conclusion"
+    semantic_rule: "request cancelled by client/transport"
 
-  D18_smoke_test:
-    question: >
-      Definir un smoke test productivo seguro de extremo a extremo que no
-      invente datos ni altere estado.
+  TOOL_ERROR:
+    transport: 502
+    semantic_rule: "existing behavior preserved"
 
-  D19_post_deploy_validation:
-    question: >
-      ¿Qué chequeos deben ejecutarse después de cada deploy antes de considerar
-      Director IA healthy?
+  UNEXPECTED:
+    transport: 500
+    semantic_rule: "generic product-safe failure"
 
-  D20_frontend_observability:
-    question: >
-      ¿El cliente captura de forma segura trace_id y errores sin exponer datos
-      internos ni depender de console logs?
+  note: >
+    If repository conventions require a different 5xx family for timeout,
+    preserve semantic distinction and document the physically selected code.
+    Do not change existing Director IA epistemic states.
 
-  D21_build_gate:
-    question: >
-      ¿El build real del frontend debería convertirse en gate obligatorio del
-      loop para cualquier cambio UI futuro?
+timeout_configuration:
+  rules:
+    - "no hardcoded magic values if repository already has config convention"
+    - "finite default allowed if consistent with existing codebase"
+    - "invalid config must fail safe"
+    - "do not require new package/dependency"
+    - "document chosen timeout values and rationale in report"
 
-  D22_ci_gate:
-    question: >
-      ¿Existe CI suficiente para ejecutar build + tests antes de merge o solo
-      validación manual/local?
+required_tests:
 
-  D23_security_headers:
-    question: >
-      ¿La superficie HTTP nueva hereda headers/CORS/CSRF/cookie policies
-      suficientes del server existente?
+  timeout:
+    - "ARR/source timeout returns technical timeout, not empty"
+    - "full cycle timeout returns safe 5xx"
+    - "timed-out DB/source client is released or cleanup path verified"
+    - "no retry after timeout"
+    - "timeout does not fabricate N1-N5"
 
-  D24_input_abuse:
-    question: >
-      ¿planta_id/year/month tienen límites y validación suficientes para evitar
-      inputs abusivos o costosos?
+  cancellation:
+    - "frontend request exposes abort/cancellation"
+    - "aborted request does not retry"
+    - "new request/unmount handling does not leak stale result"
+    - "independent requests keep independent trace/request state"
 
-  D25_operational_config:
-    question: >
-      ¿Qué env/config existentes son necesarios para operar el ciclo y cuáles
-      deben documentarse/readiness-checkearse?
+  logger:
+    - "server injects logger"
+    - "started/completed/failed reach logger"
+    - "trace_id/duration available where applicable"
+    - "sensitive fields absent"
+    - "logger throw/failure does not change successful cognitive result"
 
-  D26_arr_failure_modes:
-    question: >
-      ¿Qué fallos reales de ARR no están cubiertos todavía por tests o mapping?
+  readiness:
+    - "readiness does not execute ARR business query"
+    - "readiness does not call OP/EB/EKS/IES/RE/CP"
+    - "disabled feature reported safely"
+    - "missing required operational dependency/config reported safely"
+    - "healthy state returned when minimally operable"
 
-  D27_supportability:
-    question: >
-      ¿Con trace_id + logs actuales un operador puede diagnosticar un fallo sin
-      acceder a artifacts sensibles?
+  endpoint_regression:
+    - "existing 200/400/401/403/502/500 behavior preserved except explicit timeout mapping"
+    - "legacy chat unchanged"
+    - "auth/authz still precede cycle"
+    - "one cycle invocation per authorized request"
 
-  D28_slo_candidate:
-    question: >
-      Proponer, sin congelar contractualmente, candidatos operativos para
-      disponibilidad/latencia/error-rate que sirvan de referencia.
+  frontend:
+    - "AbortController/request cancellation covered"
+    - "existing UI internal-vs-transport semantics preserved"
+    - "no timeout shown as business empty"
+    - "no sensitive logging"
 
-  D29_candidate_next_step:
-    question: >
-      Comparar obligatoriamente:
-      A) health/readiness + timeout + smoke hardening;
-      B) observability/metrics/alerts first;
-      C) rollout/kill-switch first;
-      D) rate limiting/security hardening first;
-      E) persistence/session first.
+  smoke:
+    - "smoke mechanism documented/tested"
+    - "smoke fails nonzero or explicitly fails when endpoint/dependency unavailable"
+    - "smoke captures trace_id where response provides it"
 
-  D30_next_task:
-    question: >
-      Recomendar exactamente un NEXT_TASK mínimo para llegar a production-ready.
-
-mandatory_operational_matrix:
-  rows:
-    - "health/readiness"
-    - "ARR dependency readiness"
-    - "timeout"
-    - "abort/cancellation"
-    - "retry"
-    - "logging"
-    - "metrics"
-    - "alerting"
-    - "trace correlation"
-    - "rate limiting"
-    - "concurrency"
-    - "resource limits"
-    - "rollout"
-    - "kill switch"
-    - "smoke test"
-    - "post-deploy validation"
-    - "frontend build gate"
-    - "CI"
-    - "security headers"
-    - "input abuse"
-    - "supportability"
-
-  columns:
-    - "capability"
-    - "exists"
-    - "required before production-ready"
-    - "gap"
-    - "risk"
-    - "gate required"
-    - "recommended action"
-
-mandatory_failure_matrix:
-  rows:
-    - "ARR timeout"
-    - "ARR throw"
-    - "ARR empty"
-    - "entity unresolved"
-    - "scope incomplete"
-    - "auth 401"
-    - "authz 403"
-    - "unexpected 500"
-    - "frontend network failure"
-    - "frontend build failure"
-
-  columns:
-    - "failure"
-    - "current behavior"
-    - "observable"
-    - "safe for production"
-    - "gap"
-    - "action"
-
-mandatory_candidate_matrix:
-  rows:
-    - "A_HEALTH_TIMEOUT_SMOKE"
-    - "B_OBSERVABILITY_METRICS_ALERTS"
-    - "C_ROLLOUT_KILL_SWITCH"
-    - "D_RATE_LIMIT_SECURITY"
-    - "E_PERSISTENCE_SESSION"
-
-  columns:
-    - "candidate"
-    - "value unlocked"
-    - "production risk reduced"
-    - "prerequisites"
-    - "G2"
-    - "G3"
-    - "config"
-    - "recommended"
-
-gap_classification:
-  allowed:
-    - "READY"
-    - "REQUIRED_HARDENING"
-    - "DEBT_NON_BLOCKING"
-    - "CONFIG_REQUIRED"
-    - "SECURITY_REQUIRED"
-    - "OBSERVABILITY_REQUIRED"
-    - "REQUIRES_G2"
-    - "REQUIRES_G3"
-    - "BLOCKER"
-
-decision_rules:
-  - "No recomendar persistence/session first sin dependencia física."
-  - "No introducir retry automático sin idempotencia demostrada."
-  - "Health/readiness y timeout pesan más que métricas sofisticadas si el servicio puede colgarse."
-  - "Build frontend real debe considerarse gate si ya falló una vez en Render."
-  - "Un rollout sin kill switch puede ser aceptable solo si el endpoint está suficientemente restringido."
-  - "No inventar SLOs como contrato; solo proponer candidatos."
-  - "No introducir nueva epistemología."
-  - "No usar WhatsApp como validación operativa."
-
-required_report_sections:
-  - "1. Executive verdict"
-  - "2. Production baseline"
-  - "3. D1-D30 findings"
-  - "4. Operational readiness matrix"
-  - "5. Failure-mode matrix"
-  - "6. Health/readiness"
-  - "7. Timeout/abort/retry"
-  - "8. Logging/metrics/alerts"
-  - "9. Trace/supportability"
-  - "10. Security/rate limiting/input abuse"
-  - "11. Rollout/kill-switch"
-  - "12. Smoke/post-deploy validation"
-  - "13. Frontend build/CI gate"
-  - "14. Candidate comparison"
-  - "15. Gate requirements"
-  - "16. Minimum production-ready slice"
-  - "17. Exactly one NEXT_TASK"
-  - "18. GO/CONDITIONAL-GO/NO-GO"
-  - "19. STOP"
+  regression:
+    - "dashboard cycle client focused tests green"
+    - "dashboard cycle endpoint focused tests green"
+    - "real cycle tests green"
+    - "ARR tests green"
+    - "test/director-ia-*.test.js all green"
+    - "frontend production build green"
 
 acceptance_criteria:
-  - "D1-D30 answered"
-  - "all operational risks classified"
-  - "ARR timeout readiness proven"
-  - "health/readiness proven"
-  - "observability level proven"
-  - "rollout safety proven"
-  - "build gate recommendation explicit"
-  - "smoke test defined"
-  - "exactly one NEXT_TASK recommended"
-  - "no implementation"
-  - "no runtime/contracts modified"
+  - "finite ARR timeout exists"
+  - "finite full-cycle HTTP timeout exists"
+  - "no automatic retry"
+  - "timeouts remain technical failures"
+  - "DB/source cleanup verified"
+  - "client abort supported"
+  - "productive logger injected"
+  - "safe structured events observable"
+  - "lightweight Director IA readiness exists"
+  - "readiness avoids full cognitive/business execution"
+  - "smoke/post-deploy procedure exists"
+  - "ENABLE_DIRECTOR_IA kill switch preserved"
+  - "auth/authz unchanged"
+  - "frontend build gate passes"
+  - "no cognitive semantics changed"
+  - "no contract changes"
+  - "no dependencies added"
+  - "no G2/G3/G8"
+  - "focused tests pass"
+  - "full Director IA regression passes"
   - "git diff --check clean"
-  - "only CURRENT_TASK and report changed"
+  - "report created"
 
 allowed_actions:
-  - "read reports/runtime/server/frontend/config"
-  - "read deploy/build config"
-  - "read auth/logging/health code"
-  - "run existing tests/build if useful"
+  - "read operational audit"
+  - "modify minimal backend timeout/cancellation plumbing"
+  - "modify minimal frontend abort plumbing"
+  - "wire logger in server"
+  - "add lightweight readiness"
+  - "add tests/smoke tooling"
   - "create report"
   - "update CURRENT_TASK through permitted transitions"
+  - "run focused tests"
+  - "run full Director IA regression"
+  - "run frontend npm ci && npm run build"
   - "run git diff --check"
 
+conditional_stop_conditions:
+  - >
+    If safe finite ARR timeout requires changing business query semantics or a
+    new DB architecture, STOP.
+  - >
+    If cancellation requires new dependencies, STOP.
+  - >
+    If readiness requires executing actual business queries to be meaningful,
+    STOP and report the gap.
+  - >
+    If production logging requires an external dependency/package addition,
+    STOP unless an existing logger can be reused.
+  - >
+    If any change requires G2/G3/G8, STOP.
+
 forbidden_actions:
-  - "modify runtime"
-  - "modify server/frontend"
-  - "modify contracts"
-  - "add health endpoint"
-  - "add timeout"
-  - "add metrics/alerts"
+  - "modify docs/director-ia/"
+  - "modify cognitive semantics"
+  - "add retries"
+  - "add persistence/session"
+  - "add metrics provider"
+  - "add alerting provider"
   - "add rate limiting"
-  - "add rollout controls"
-  - "modify package.json"
-  - "modify config/env"
+  - "add dependency/package changes"
+  - "wire WhatsApp/Twilio/chat"
   - "commit"
   - "push"
   - "merge"
-  - "create implementation task"
-  - "autoapprove gates"
+  - "chain next task"
 
 expected_terminal_state: >
-  DONE_PENDING_REVIEW si puede definirse un último hardening slice cerrado y
-  seguro antes de declarar production-ready. BLOCKED/STOPPED si existen gaps
-  operacionales severos que requieren decisiones arquitectónicas no autorizadas.
+  DONE_PENDING_REVIEW if the physical operational blockers are removed with
+  finite timeout, safe cancellation, productive logging, lightweight readiness,
+  smoke validation and all builds/tests green.
+
+  BLOCKED or STOPPED if removing those blockers requires architectural,
+  contractual or dependency changes outside this task.
 
 max_attempts: 1
-result_report_path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-OPERATIONAL-HARDENING-READINESS-001.md"
+result_report_path: "docs/dev-loop/reports/IMPL-DIRECTOR-IA-OPERATIONAL-HARDENING-001.md"

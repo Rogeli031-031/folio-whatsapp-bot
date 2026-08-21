@@ -5472,6 +5472,8 @@ app.get("/health-db", async (req, res) => {
   }
 });
 
+app.get("/health-director-ia", directorIaDashboardCycle.handleGetDirectorIaReadiness);
+
 app.get("/health-proyectos", async (req, res) => {
   try {
     const r = await pool.query(
@@ -10398,6 +10400,21 @@ directorIaDashboardCycle.configureDirectorIaDashboardCycle({
   getPlantCodeArrFromPlantaNombre,
   arrSource: loadArrProyForDirectorIaDashboardCycle,
   eks: eksRuntime.getStatus().eks || undefined,
+  logger: function directorIaCycleStdoutLogger(payload) {
+    try {
+      console.log(JSON.stringify(payload));
+    } catch (_err) {
+      /* logger failure must not change cognitive output */
+    }
+  },
+  cycleTimeoutMs: directorIaDashboardCycle.parseDirectorIaTimeoutMs(
+    process.env.DIRECTOR_IA_CYCLE_TIMEOUT_MS,
+    directorIaDashboardCycle.DEFAULT_CYCLE_TIMEOUT_MS
+  ),
+  arrStatementTimeoutMs: directorIaDashboardCycle.parseDirectorIaTimeoutMs(
+    process.env.DIRECTOR_IA_ARR_STATEMENT_TIMEOUT_MS,
+    directorIaDashboardCycle.DEFAULT_ARR_STATEMENT_TIMEOUT_MS
+  ),
 });
 
 /** Contexto agregado de solo lectura (Action Register: resumen por planta). */
