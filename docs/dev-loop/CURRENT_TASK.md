@@ -1,172 +1,101 @@
 # CURRENT_TASK
 
 ```yaml
-task_id: "MIGR-DIRECTOR-IA-EKS-PROD-SCHEMA-001"
+task_id: "ARCH-DIRECTOR-IA-EKS-INDEX-RUNTIME-SYNC-001"
 status: CLOSED
 
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-08-21"
-human_authorization: "AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-21"
+human_authorization: >
+  AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-21.
+  G1 autorizado. G2 autorizado exclusivamente para sincronizar el estado
+  documental de implementación EKS en DIRECTOR_IA_ARCHITECTURE_INDEX.md y
+  03-EXECUTIVE-KNOWLEDGE-STORE.md, sin redefinir D1-D9 ni modificar runtime,
+  código o SQL.
 
 gates:
   G1_task_authorization: AUTHORIZED
-  G2_architecture_change: N/A
+  G2_architecture_change: AUTHORIZED_LIMITED
   G3_new_architecture_contract: N/A
   G8_calibration_materiality_signature: N/A
 
 objective: >
-  Aplicar en la PostgreSQL productiva usada por folio-whatsapp-bot el artefacto
-  canónico sql/015_director_ia_eks.sql ya versionado en main, verificar la
-  existencia de eks.snapshots y eks.trace_locks, y ejecutar exactamente un
-  smoke autenticado posterior solo si ambas tablas existen.
+  Sincronizar exclusivamente la autoridad documental de EKS con la realidad
+  física ya integrada y validada en producción. El índice arquitectónico y el
+  contrato 03 deben dejar de afirmar que EKS no tiene runtime o que su
+  implementación está pendiente, sin declarar COMPLETE constitucional,
+  redefinir D1-D9 ni ocultar deuda residual.
 
 in_scope:
   - "docs/dev-loop/CURRENT_TASK.md"
-  - "sql/015_director_ia_eks.sql (solo lectura)"
-  - "scripts/apply-director-ia-eks-schema.js (solo lectura)"
-  - "PostgreSQL productiva de folio-whatsapp-bot"
-  - "verificación read-only con to_regclass"
-  - "un único smoke autenticado post-migración"
+  - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-EKS-INDEX-RUNTIME-SYNC-001.md"
+  - "docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md"
+  - "docs/director-ia/03-EXECUTIVE-KNOWLEDGE-STORE.md"
+
+evidence_in_force:
+  runtime:
+    - "lib/director-ia-eks.js existe"
+    - "createEksRuntime está integrado"
+    - "EKS participa en el ciclo real ARR -> OP -> EB -> EKS -> IES -> RE -> CP"
+  schema:
+    - "sql/015_director_ia_eks.sql existe en main"
+    - "scripts/apply-director-ia-eks-schema.js existe"
+    - "eks.snapshots existe en PostgreSQL productiva"
+    - "eks.trace_locks existe en PostgreSQL productiva"
+  production:
+    - "ciclo autenticado productivo completó HTTP 200"
+    - "acquisition_status=ACQUIRED_OK"
+    - "ies_status=VALIDATED"
+    - "reasoning_status=ABSTAIN"
+    - "trace_id no nulo"
+  residual_debt:
+    - >
+      query_context_metadata no está persistido como parte del snapshot PG EKS;
+      no declarar por ello cumplimiento constitucional total de todos los
+      requisitos del contrato.
+
+required_changes:
+  architecture_index:
+    - "Eliminar o corregir afirmaciones EKS de 'runtime pendiente' / 'ninguno'."
+    - "Reflejar que existe runtime mínimo integrado y validado."
+    - "No generalizar el cambio a OP/EB/IES/RE/CP fuera de este scope."
+  contract_03:
+    - "Actualizar únicamente estado de implementación/runtime EKS."
+    - "Preservar D1-D9."
+    - "Preservar deuda residual relevante."
+    - "No declarar COMPLETE constitucional si el contrato exige más de lo implementado."
 
 out_of_scope:
-  - "modificar código"
-  - "modificar sql/015_director_ia_eks.sql"
-  - "crear migrations nuevas"
-  - "modificar contratos"
-  - "modificar Render config/env"
-  - "modificar DATABASE_URL"
+  - "modificar lib/"
+  - "modificar server.js"
+  - "modificar frontend"
+  - "modificar sql/"
+  - "modificar scripts/"
+  - "modificar PostgreSQL"
+  - "modificar D1-D9"
+  - "modificar 02/03A/04/05/06"
+  - "modificar DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md"
+  - "crear contrato nuevo"
+  - "hacer smoke"
   - "commit"
   - "push"
   - "merge"
-  - "cualquier DDL distinto al artefacto canónico 015"
-
-execution_procedure:
-  preferred:
-    - "Render Shell del Web Service folio-whatsapp-bot"
-    - "ejecutar exactamente: node scripts/apply-director-ia-eks-schema.js"
-  fallback:
-    - "si no existe Shell, abrir el archivo real sql/015_director_ia_eks.sql en la misma sesión pgAdmin donde to_regclass devolvió NULL"
-    - "no copiar DDL desde chat"
-    - "envolver en BEGIN/COMMIT si se usa pgAdmin"
-
-pre_migration_evidence:
-  database_check:
-    query: >
-      SELECT to_regclass('eks.snapshots') AS snapshots,
-      to_regclass('eks.trace_locks') AS trace_locks;
-    snapshots: null
-    trace_locks: null
-    result: "EKS_SCHEMA_MISSING"
-
-  production_failure:
-    event: "cycle_request_failed"
-    request_id: "5838a0df-453d-49e7-8c0b-55818e5a9b93"
-    planta_id: 2
-    duration_ms: 740
-    http_status: 500
-    code: "INTERNAL_ERROR"
-    result: "PRE_MIGRATION_FAILURE"
-
-migration_result:
-  executed_by: "HUMAN_OPERATOR"
-  mechanism: "Render Shell del Web Service folio-whatsapp-bot"
-  command: "node scripts/apply-director-ia-eks-schema.js"
-  result: PASS
-  script_output:
-    snapshots: "eks.snapshots"
-    trace_locks: "eks.trace_locks"
-
-post_migration_gate:
-  verification_method: "pgAdmin sobre la misma PostgreSQL productiva previamente inspeccionada"
-  query: >
-    SELECT to_regclass('eks.snapshots') AS snapshots,
-    to_regclass('eks.trace_locks') AS trace_locks;
-  required_result:
-    snapshots: "eks.snapshots"
-    trace_locks: "eks.trace_locks"
-  observed_result:
-    snapshots: "eks.snapshots"
-    trace_locks: "eks.trace_locks"
-  result: PASS
-
-production_smoke:
-  base_url: "https://folio-whatsapp-bot.onrender.com"
-  planta_id: 2
-  year: 2026
-  month: 8
-  timeout_ms: 90000
-
-  readiness:
-    status: 200
-    enabled: true
-    ready: true
-    result: PASS
-
-  cycle:
-    http_status: 200
-    acquisition_status: "ACQUIRED_OK"
-    ies_status: "VALIDATED"
-    reasoning_status: "ABSTAIN"
-    trace_id: "trace_4_80881100-54c7-4fc2-8233-13687043119d"
-    duration_ms: 1136
-    result: PASS
-
-  production_log_confirmation:
-    event: "cycle_request_completed"
-    request_id: "38602d55-6b7f-4f99-a851-0748aa2f8581"
-    planta_id: 2
-    http_status: 200
-    acquisition_status: "ACQUIRED_OK"
-    ies_status: "VALIDATED"
-    reasoning_status: "ABSTAIN"
-    trace_id: "trace_4_80881100-54c7-4fc2-8233-13687043119d"
-    duration_ms: 1136
-    result: PASS
-
-production_evidence:
-  interpretation: >
-    El HTTP 500 observado antes de la migración ocurrió cuando eks.snapshots y
-    eks.trace_locks no existían en la PostgreSQL productiva. Después de aplicar
-    el artefacto canónico sql/015_director_ia_eks.sql y verificar ambas tablas
-    mediante to_regclass, el ciclo autenticado productivo completó con HTTP 200,
-    ACQUIRED_OK, IES VALIDATED y trace_id no nulo.
-
-  reasoning_status_note: >
-    reasoning_status ABSTAIN es un resultado fail-closed válido del Reasoning
-    Engine y no constituye fallo del smoke ni del ciclo.
+  - "encadenar siguiente tarea"
 
 acceptance_criteria:
-  canonical_015_applied: PASS
-  eks_snapshots_exists: PASS
-  eks_trace_locks_exists: PASS
-  readiness_http_200: PASS
-  readiness_enabled: PASS
-  readiness_ready: PASS
-  authenticated_production_cycle_http_200: PASS
-  acquisition_ok: PASS
-  ies_validated: PASS
-  trace_id_non_null: PASS
-  production_log_completed_event: PASS
-  no_code_changes_required: PASS
-  no_contract_changes_required: PASS
-  no_render_env_changes_required: PASS
-
-final_result: PASS
-
-review_note: >
-  MIGR-DIRECTOR-IA-EKS-PROD-SCHEMA-001 cumplió el objetivo autorizado:
-  el schema EKS productivo fue creado mediante el script oficial del repo,
-  verificado independientemente en PostgreSQL y validado con un ciclo real
-  autenticado de planta 2 / agosto 2026. No se requieren más smokes dentro
-  de esta tarea.
-
-next_action: >
-  Revisión humana para transición de DONE_PENDING_REVIEW a CLOSED.
-  No ejecutar más cambios productivos dentro de esta tarea.
+  - "El índice ya no afirma que EKS carece de runtime."
+  - "03 ya no afirma Implementación PENDIENTE cuando existe runtime físico."
+  - "No se altera D1-D9."
+  - "No se declara EKS constitucionalmente COMPLETE sin soporte."
+  - "La deuda query_context_metadata queda visible si aplica."
+  - "No cambia código, SQL, runtime ni producción."
+  - "G2 se usa solo para los dos documentos autorizados."
+  - "git diff --check limpio."
+  - "Solo CURRENT_TASK, reporte, índice y 03 pueden cambiar."
 
 expected_terminal_state: >
-  DONE_PENDING_REVIEW si la migración canónica aplica correctamente,
-  ambas tablas existen y el smoke autenticado devuelve status 200
-  con trace_id no nulo.
+  DONE_PENDING_REVIEW si la documentación queda alineada con la realidad física
+  de EKS sin ampliar contratos ni ocultar deuda residual.
 
 max_attempts: 1
+result_report_path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-EKS-INDEX-RUNTIME-SYNC-001.md"

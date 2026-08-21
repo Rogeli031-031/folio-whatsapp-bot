@@ -3,9 +3,9 @@
 ## Almacén de conocimiento ejecutivo — contrato de persistencia
 
 **Documento:** `docs/director-ia/03-EXECUTIVE-KNOWLEDGE-STORE.md`
-**Versión:** 1.4
-**Estado:** CONTRATO APROBADO TRAS AUDITORÍA E2E; realización física v1 registrada (D1–D9); `bundle.observations` aclarado (N1); `query_context_metadata` de Snapshot registrada (ARCH-IES-PHYSICAL-DECISIONS-002)
-**Tipo:** Especificación de almacén (realización física v1; sin runtime)
+**Versión:** 1.5
+**Estado:** CONTRATO APROBADO TRAS AUDITORÍA E2E; realización física v1 registrada (D1–D9); `bundle.observations` aclarado (N1); `query_context_metadata` de Snapshot registrada (ARCH-IES-PHYSICAL-DECISIONS-002); runtime mínimo integrado (no COMPLETE constitucional)
+**Tipo:** Especificación de almacén (realización física v1; runtime mínimo integrado; no COMPLETE constitucional)
 
 ### Dependencia normativa
 
@@ -192,10 +192,11 @@ Los identificadores P1, R3, V2, G_LATEST, L_TRACE, M1, I_DIGEST, POOL_DEDICATED 
 
 ### Límites de esta realización
 
-1. Runtime **PENDIENTE**. Esta sección no implementa EKS.
+1. Runtime mínimo **existe** (`lib/director-ia-eks.js`, pool dedicado D8, `sql/015_director_ia_eks.sql` aplicado, participación en el ciclo productivo ARR). Esta sección contractual **no** es el runtime ni lo reimplementa.
 2. No nombra algoritmo de digest (D7).
 3. No congela un encoding de documento (p. ej. un tipo JSON de motor) como epistemología.
-4. No autoriza IMPL-EKS-001 ni ninguna tarea posterior.
+4. IMPL-EKS-001 y la aplicación productiva de `015` ya ocurrieron. Esta sección **no** autoriza trabajo posterior ni declara COMPLETE constitucional.
+5. Deuda residual: `query_context_metadata` (§8) **no** está persistido en las columnas PG de `eks.snapshots`; el ciclo la adjunta en memoria para el IES Builder. Impide declarar COMPLETE constitucional. D1–D9 no se redefinen.
 
 ---
 
@@ -245,6 +246,8 @@ La metadata se origina upstream conforme a sus propietarios contractuales, atrav
 
 D2 (**R3**) no se sustituye. `query_context_metadata` es metadata de Snapshot **adicional** e inmutable, persistida junto a las columnas de almacén; no descompone el Bundle; no entra en el digest D7 del Bundle.
 
+El runtime físico actual **no** persiste `query_context_metadata` en `eks.snapshots`. La exigencia §8 permanece. Esta deuda queda visible y **prohíbe** declarar COMPLETE constitucional.
+
 ---
 
 # Control documental
@@ -252,8 +255,8 @@ D2 (**R3**) no se sustituye. `query_context_metadata` es metadata de Snapshot **
 | Campo | Valor |
 |-------|--------|
 | Documento | `03-EXECUTIVE-KNOWLEDGE-STORE.md` |
-| Versión | 1.4 |
-| Estado | CONTRATO APROBADO TRAS AUDITORÍA E2E; realización física v1 registrada (D1–D9); `query_context_metadata` registrada (ARCH-IES-PHYSICAL-DECISIONS-002) |
-| Implementación | PENDIENTE |
+| Versión | 1.5 |
+| Estado | CONTRATO APROBADO TRAS AUDITORÍA E2E; realización física v1 registrada (D1–D9); `query_context_metadata` registrada (ARCH-IES-PHYSICAL-DECISIONS-002); runtime mínimo integrado (no COMPLETE constitucional) |
+| Implementación | Runtime mínimo integrado (D1–D9 / schema `015` / ciclo productivo). **No** COMPLETE constitucional. Deuda: `query_context_metadata` no persistido en PG. |
 | Calibración k/wi | No aplica (fuera de alcance del EKS) |
 | Firma digital IES | Fuera de alcance (`04`; D7 = huella, no firma) |
