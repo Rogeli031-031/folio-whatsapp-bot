@@ -1,24 +1,14 @@
 # CURRENT_TASK
 
 ```yaml
-task_id: "ARCH-DIRECTOR-IA-NEXT-MODULE-PRIORITIZATION-002"
+task_id: "ARCH-DIRECTOR-IA-M3-PLANTAS-KPIS-PROYECTOS-READINESS-001"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
-authorized_at: "2026-08-21T22:06:18-06:00"
+authorized_at: "2026-08-21T22:23:00-06:00"
 human_authorization: >
-  AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-21T22:06:18-06:00.
-  Apruebo ARCH-DIRECTOR-IA-NEXT-MODULE-PRIORITIZATION-002 y autorizo G1.
-
-result:
-  report: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-NEXT-MODULE-PRIORITIZATION-002.md"
-  baseline_percentage: 37.5
-  winner: "M3"
-  winner_state: "PARTIAL"
-  target_state: "COMPLETE"
-  potential_gain_pp: 2.5
-  next_task_proposed: "ARCH-DIRECTOR-IA-M3-PLANTAS-KPIS-PROYECTOS-READINESS-001"
-  next_task_authorized: false
+  AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-21.
+  Apruebo ARCH-DIRECTOR-IA-M3-PLANTAS-KPIS-PROYECTOS-READINESS-001 y autorizo G1.
 
 gates:
   G1_task_authorization: AUTHORIZED
@@ -27,288 +17,474 @@ gates:
   G8_calibration_materiality_signature: N/A
 
 objective: >
-  Priorizar el siguiente módulo funcional de Director IA después de completar
-  M16, usando evidencia física del repositorio y la capability matrix vigente.
-  El objetivo es elegir exactamente un módulo que maximice avance funcional y
-  probabilidad de COMPLETE, minimizando esfuerzo, dependencias, riesgo
-  productivo y cambio arquitectónico.
+  Auditar físicamente M3 — Plantas / KPIs / Proyectos — para determinar el
+  delta exacto necesario para llevar su cobertura canónica de PARTIAL a
+  COMPLETE dentro de Director IA, sin implementar todavía, sin redefinir
+  arquitectura y sin ampliar artificialmente el alcance definido por la
+  capability matrix vigente.
 
 baseline:
+  source_task: "ARCH-DIRECTOR-IA-NEXT-MODULE-PRIORITIZATION-002"
+  source_report: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-NEXT-MODULE-PRIORITIZATION-002.md"
   current_m0_m20_percentage: 37.5
-  numerator: 7.5
-  denominator: 20
-  formula:
-    COMPLETE: 1.0
-    PARTIAL: 0.5
-    NOT_STARTED: 0.0
-    N_A: "excluido del denominador"
-  completed_since_previous_prioritization:
-    - "M16 — análisis de posibles duplicados de folios"
-  note: >
-    No volver a priorizar M16. La capability matrix ya lo registra COMPLETE.
+  module: "M3"
+  module_name: "Plantas / KPIs / Proyectos"
+  current_state: "PARTIAL"
+  target_state: "COMPLETE"
+  potential_gain_pp: 2.5
+  projected_percentage_if_complete: 40.0
 
-scope_rule: >
-  Evaluar únicamente módulos que todavía no estén COMPLETE en
-  docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md. No asumir el estado
-  por memoria; leer físicamente la matriz vigente.
+canonical_scope:
+  source: "docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md"
+  business_purpose: >
+    Catálogo de plantas, KPIs de dashboard y proyectos por planta.
+  current_integrated_surface:
+    - "planta_id obligatorio como scope/filtro"
+    - "nombre/clave de planta en anexos IGF/ARR"
+    - "nombre/clave de planta en commercial_state"
+  currently_not_integrated:
+    - "GET /api/dashboard/kpis"
+    - "listado de proyectos por planta"
+  explicitly_not_required_for_read_only_complete_candidate:
+    - "POST /api/proyectos"
+    - "crear proyecto desde Director IA"
+    - "editar proyecto"
+    - "eliminar proyecto"
+    - "mutaciones de folios"
+    - "mutaciones de Action Register"
 
-primary_goal: >
-  Identificar el siguiente candidato con mejor combinación de:
-  1) ganancia potencial;
-  2) probabilidad real de alcanzar COMPLETE;
-  3) reutilización de infraestructura existente;
-  4) bajo número de dependencias;
-  5) bajo riesgo productivo;
-  6) bajo riesgo semántico.
+primary_question: >
+  ¿Puede M3 alcanzar legítimamente COMPLETE mediante un único slice read-only
+  que permita a Director IA consultar de forma consistente y autorizada las
+  tres familias canónicas del módulo — plantas, KPIs y proyectos — utilizando
+  infraestructura existente y sin modificar contratos arquitectónicos?
+
+secondary_questions:
+  - >
+    ¿Qué significa exactamente "catálogo de plantas" para COMPLETE: resolver la
+    planta actual/autorizada o exponer un listado completo de plantas?
+  - >
+    ¿Qué campos y semántica devuelve realmente GET /api/dashboard/kpis?
+  - >
+    ¿Qué permisos y restricciones GA/GV/planta aplica actualmente esa ruta?
+  - >
+    ¿La lectura de KPIs puede reutilizarse directamente mediante helper/service
+    o la lógica está acoplada al handler HTTP?
+  - >
+    ¿Qué campos y semántica devuelve realmente GET /api/proyectos?
+  - >
+    ¿Existen helpers reutilizables para proyectos por planta y totales?
+  - >
+    ¿Cuál es la relación semántica entre public.proyectos y Action Register?
+  - >
+    ¿El intent project_status y la tool get_project_status existentes
+    corresponden al dominio canónico de M3 o existe una colisión semántica?
+  - >
+    ¿Puede el wiring nuevo reutilizar Planner + Tool Orchestrator sin crear un
+    contrato arquitectónico nuevo?
+  - >
+    ¿Qué evidencia y tests serían suficientes para declarar M3 COMPLETE?
 
 in_scope:
-  - "docs/dev-loop/CURRENT_TASK.md"
-  - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-NEXT-MODULE-PRIORITIZATION-002.md"
-  - "docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md (solo lectura)"
-  - "código, tests, endpoints, servicios, tablas y frontend relevantes de candidatos (solo lectura)"
+  writable:
+    - "docs/dev-loop/CURRENT_TASK.md"
+    - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M3-PLANTAS-KPIS-PROYECTOS-READINESS-001.md"
+
+  read_only:
+    - "docs/dev-loop/LOOP_PROTOCOL.md"
+    - "docs/dev-loop/TASK_TEMPLATE.md"
+    - "docs/dev-loop/reports/README.md"
+    - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-NEXT-MODULE-PRIORITIZATION-002.md"
+    - "docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md"
+    - "docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md"
+    - "docs/director-ia/CONSTITUTION.md"
+    - "docs/director-ia/EXECUTIVE_KNOWLEDGE_ENGINE.md"
+    - "docs/director-ia/01-OBSERVATION-PIPELINE.md"
+    - "docs/director-ia/02-EVIDENCE-BUILDER.md"
+    - "docs/director-ia/03-EXECUTIVE-KNOWLEDGE-STORE.md"
+    - "docs/director-ia/04-IES-STANDARD.md"
+    - "docs/director-ia/05-REASONING-ENGINE.md"
+    - "lib/director-ia-capabilities.js"
+    - "lib/director-ia-planner.js"
+    - "lib/director-ia-tools.js"
+    - "lib/director-ia-tool-orchestrator.js"
+    - "lib/director-ia-chat.js"
+    - "lib/director-ia-context.js"
+    - "lib/director-ia-igf-arr.js"
+    - "lib/director-ia-commercial-state.js"
+    - "lib/director-ia*.js"
+    - "server.js"
+    - "frontend-dashboard/**"
+    - "test/**"
+    - "scripts/**"
+    - "sql/**"
+    - "package.json"
 
 out_of_scope:
-  - "implementar"
+  - "implementar M3"
   - "modificar runtime"
-  - "modificar frontend"
   - "modificar backend"
-  - "modificar capability matrix"
-  - "modificar contratos"
-  - "crear migration"
+  - "modificar frontend"
+  - "modificar tests"
   - "modificar SQL"
+  - "crear migrations"
+  - "modificar schema"
+  - "modificar capability matrix"
+  - "modificar contratos de docs/director-ia"
+  - "crear contratos arquitectónicos"
+  - "crear tools"
+  - "crear intents"
+  - "cambiar permisos"
+  - "crear endpoints"
+  - "crear proyecto"
+  - "editar proyecto"
+  - "eliminar proyecto"
+  - "mutar folios"
+  - "mutar Action Register"
   - "smoke productivo"
+  - "usar secretos o credenciales"
   - "commit"
   - "push"
   - "merge"
-  - "abrir siguiente task automáticamente"
+  - "abrir o ejecutar automáticamente la siguiente tarea"
 
-candidate_selection:
-  rule: >
-    Construir la lista de candidatos directamente desde la matriz vigente.
-    Excluir módulos COMPLETE y N_A.
-  include:
-    - "PARTIAL"
-    - "NOT_STARTED"
-    - "BLOCKED, únicamente para valorar si el blocker ya desapareció"
-  exclude:
-    - "COMPLETE"
-    - "N_A"
+contracts_in_force:
+  - "docs/dev-loop/LOOP_PROTOCOL.md"
+  - "docs/director-ia/CONSTITUTION.md"
+  - "docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md"
+  - "docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md"
+  - "docs/director-ia/EXECUTIVE_KNOWLEDGE_ENGINE.md"
+  - "docs/director-ia/01-OBSERVATION-PIPELINE.md"
+  - "docs/director-ia/02-EVIDENCE-BUILDER.md"
+  - "docs/director-ia/03-EXECUTIVE-KNOWLEDGE-STORE.md"
+  - "docs/director-ia/04-IES-STANDARD.md"
+  - "docs/director-ia/05-REASONING-ENGINE.md"
 
-evaluation_dimensions:
+allowed_actions:
+  - "leer físicamente archivos del repositorio"
+  - "buscar referencias de plantas, KPIs y proyectos"
+  - "trazar endpoints a handlers, helpers, queries y tablas"
+  - "trazar Planner -> intent -> tool -> executor actual"
+  - "examinar controles authz existentes"
+  - "examinar tests existentes"
+  - "determinar delta físico"
+  - "clasificar riesgos"
+  - "determinar gates necesarios para una eventual implementación"
+  - "proponer exactamente una NEXT_TASK"
+  - "escribir exclusivamente CURRENT_TASK y el reporte de esta auditoría"
+  - "ejecutar validaciones read-only y git diff --check"
+
+forbidden_actions:
+  - "implementar código"
+  - "modificar cualquier archivo fuera de los dos writable"
+  - "reinterpretar COMPLETE para facilitar el resultado"
+  - "declarar que crear proyecto forma parte de COMPLETE sin evidencia canónica"
+  - "convertir project_status en M3 sin verificar semántica"
+  - "bypassear authz existente"
+  - "introducir acceso cross-planta"
+  - "usar endpoint HTTP interno como sustituto automático de un helper reusable"
+  - "crear dependencias externas"
+  - "aprobar G2, G3, G4, G5, G6, G7 o G8"
+  - "commit"
+  - "push"
+  - "merge"
+  - "encadenar la implementación"
+
+audit_workstreams:
 
   canonical_definition:
-    question: >
-      ¿Qué exige exactamente el módulo según la capability matrix?
+    required:
+      - "confirmar definición exacta de M3 en capability matrix"
+      - "separar CONSULTAR de CREAR/EDITAR"
+      - "determinar condición mínima legítima de COMPLETE"
+      - "identificar cualquier ambigüedad contractual"
 
-  current_state:
-    question: >
-      ¿Está PARTIAL, NOT_STARTED o BLOCKED?
+  plantas:
+    inspect:
+      - "GET /api/dashboard/plantas"
+      - "public.plantas"
+      - "resolución planta_id"
+      - "nombre y clave"
+      - "assertPlantaAccess / assertPlantaPermitidaDashboard"
+      - "scoping del JWT"
+    determine:
+      - "si Director IA ya satisface la porción plantas"
+      - "si necesita catálogo adicional"
+      - "si un listado completo sería seguro o cross-scope"
+      - "contrato mínimo de evidencia necesario"
 
-  potential_gain:
-    question: >
-      ¿Cuántos puntos porcentuales ganaría el indicador si alcanza COMPLETE?
+  kpis:
+    inspect:
+      - "GET /api/dashboard/kpis"
+      - "handler y helpers llamados"
+      - "queries/tablas fuente"
+      - "campos JSON reales"
+      - "permisos GA/GV"
+      - "filtro planta"
+      - "posibles efectos secundarios"
+      - "frontend KPIHeader"
+      - "tests asociados"
+    determine:
+      - "qué KPIs son canónicos de M3"
+      - "si existe helper reusable fuera de HTTP"
+      - "si debe extraerse lógica para un executor read-only"
+      - "riesgo semántico de presentar agregados"
+      - "riesgo de exposición financiera"
 
-  backend_readiness:
-    question: >
-      ¿Ya existen endpoints, handlers, services, queries o loaders reutilizables?
+  proyectos:
+    inspect:
+      - "GET /api/proyectos"
+      - "POST /api/proyectos solo como contexto; no implementar"
+      - "public.proyectos"
+      - "proyecto_*"
+      - "listarProyectosPorPlantaOEquivalentes"
+      - "listarProyectosPorPlantaConTotales"
+      - "CrearProyectoModal"
+      - "tests asociados"
+    determine:
+      - "campos de lectura existentes"
+      - "scope por planta"
+      - "si proyecto puede consultarse por nombre/id"
+      - "si project_status corresponde realmente a este dominio"
+      - "diferencia entre proyectos y Action Register"
+      - "si el helper actual es seguro para reutilización"
 
-  frontend_readiness:
-    question: >
-      ¿Ya existe superficie/UI/patrón reutilizable o puede completarse sin UI nueva?
-
-  tool_readiness:
-    question: >
-      ¿Existe intent/tool/capability declarada pero no integrada, como ocurrió en M16?
-
-  data_source:
-    question: >
-      ¿La fuente real ya existe y es accesible con permisos conocidos?
+  planner_and_tools:
+    inspect:
+      - "project_status intent"
+      - "get_project_status tool"
+      - "capability project_status"
+      - "executor actual"
+      - "clarification logic"
+      - "evidence contract"
+    determine:
+      - "si el wiring existe pero está incompleto"
+      - "si requiere una tool nueva o puede completar la existente"
+      - "si KPIs necesitan tool propia"
+      - "si plantas necesitan tool propia"
+      - "si una tool agregadora M3 sería compatible con contratos existentes"
 
   authz:
-    question: >
-      ¿El scope y los permisos están resueltos o existe riesgo de exposición cross-scope?
+    required:
+      - "mapear autorización planta por planta"
+      - "mapear permisos de KPIs"
+      - "mapear permisos de proyectos"
+      - "confirmar que ningún path propuesto amplíe visibilidad"
+      - "identificar GA/GV y demás restricciones reales"
+      - "identificar cualquier riesgo cross-scope"
 
-  dependencies:
-    question: >
-      ¿Cuántas tareas previas o dependencias humanas/externas requiere?
+  data_contract:
+    required:
+      - "identificar fuente primaria de cada dato"
+      - "distinguir dato observado de dato derivado"
+      - "preservar null/unknown"
+      - "evitar convertir ausencia de proyecto/KPI en cero sin evidencia"
+      - "determinar freshness disponible"
+      - "determinar campos mínimos para evidencia estructurada"
 
-  db_migration:
-    question: >
-      ¿Requiere cambios de schema, backfill o migración productiva?
+  architecture_fit:
+    required:
+      - "determinar si M3 cabe en arquitectura existente"
+      - "determinar si necesita G2"
+      - "determinar si necesita G3"
+      - "determinar si toca OP/EB/EKS/IES/Reasoning contracts"
+      - "no solicitar gates preventivamente"
 
-  external_services:
-    question: >
-      ¿Depende de S3, Twilio, WhatsApp, proveedores externos, archivos manuales u otros sistemas?
+  implementation_slice:
+    required:
+      - "describir archivos probablemente afectados"
+      - "describir wiring mínimo"
+      - "describir executors/helpers necesarios"
+      - "describir tests mínimos"
+      - "determinar si el slice puede llevar M3 a COMPLETE"
+      - "determinar si puede ser una única IMPL task"
 
-  implementation_effort:
-    question: >
-      ¿El gap es wiring pequeño, integración media o capacidad nueva grande?
+completion_test:
+  question: >
+    Después de un eventual slice de implementación, ¿Director IA podría
+    consultar directamente y responder consistentemente, dentro del scope
+    autorizado del usuario, sobre plantas, KPIs del dashboard y proyectos por
+    planta, sin depender de datos inventados, de UI scraping ni de mutaciones?
 
-  testability:
-    question: >
-      ¿Puede probarse determinísticamente con la infraestructura existente?
+  required_answer: >
+    YES con evidencia física para proponer IMPL directa; de lo contrario
+    STOP/BLOCKED o readiness adicional.
 
-  semantic_risk:
-    question: >
-      ¿Existe riesgo de convertir correlación, heurística o fuente parcial en conclusión fuerte?
-
-  production_risk:
-    question: >
-      ¿Requiere escritura, acciones clase C, secretos, permisos elevados o rollout delicado?
-
-  completeness_feasibility:
-    question: >
-      ¿Puede alcanzar COMPLETE en un único slice razonable o solo PARTIAL?
-
-mandatory_candidate_table:
+mandatory_evidence_table:
   columns:
-    - "module"
-    - "canonical_purpose"
-    - "current_state"
-    - "potential_gain_pp"
-    - "existing_backend"
-    - "existing_frontend"
-    - "existing_tool_or_intent"
-    - "data_source"
-    - "authz_ready"
-    - "dependencies"
-    - "db_or_migration"
-    - "external_dependency"
-    - "estimated_effort"
-    - "semantic_risk"
-    - "production_risk"
-    - "can_reach_complete_in_one_slice"
+    - "surface"
+    - "canonical_requirement"
+    - "current_physical_state"
+    - "endpoint_or_helper"
+    - "source_table_or_view"
+    - "authz"
+    - "side_effects"
+    - "existing_director_ia_wiring"
+    - "missing_delta"
+    - "testability"
+    - "risk"
     - "evidence"
 
-ranking_rules:
-  - "Rankear todos los candidatos evaluados."
-  - "No elegir por número de módulo."
-  - "No elegir por facilidad si solo puede llegar a PARTIAL."
-  - "Preferir un +5 pp real frente a un +2.5 pp si esfuerzo/riesgo son comparables."
-  - "Preferir read-only sobre mutaciones cuando el valor sea comparable."
-  - "Preferir wiring de capacidades existentes sobre desarrollo de dominio desde cero."
-  - "Penalizar dependencias externas."
-  - "Penalizar clase C / acciones irreversibles."
-  - "Penalizar ambigüedad de authz."
-  - "Penalizar migrations si existe candidato igual de valioso sin ellas."
-  - "No usar una puntuación arbitraria sin justificar componentes."
+mandatory_gap_table:
+  columns:
+    - "gap_id"
+    - "domain"
+    - "missing_capability"
+    - "required_for_complete"
+    - "existing_reusable_component"
+    - "proposed_physical_change"
+    - "architecture_change"
+    - "contract_change"
+    - "authz_change"
+    - "estimated_complexity"
+    - "blocking"
 
-blocked_modules:
-  rule: >
-    Revalidar blockers anteriores en lugar de asumir que siguen vigentes.
-    Si un blocker desapareció por trabajo reciente, el módulo vuelve a competir.
-  note: >
-    No ejecutar nada para remover blockers; solo diagnosticar.
+semantic_invariants:
+  - "M3 es lectura empresarial; no autoriza creación de proyectos."
+  - "No confundir proyectos con Action Register."
+  - "No confundir KPI dashboard con IGF, ARR o commercial_state salvo evidencia."
+  - "No presentar datos financieros a roles que la ruta actual restringe."
+  - "No ampliar acceso a plantas."
+  - "No convertir null, ausencia o fallo de fuente en valor cero."
+  - "No declarar COMPLETE si una de las tres familias canónicas queda sin consulta directa."
+  - "No afirmar salud, desempeño o causalidad a partir de un KPI que no lo soporte."
+  - "Toda conclusión debe conservar trazabilidad a fuente real."
 
-partial_modules:
-  rule: >
-    Evaluar si llevar un PARTIAL a COMPLETE es más barato y seguro que llevar un
-    NOT_STARTED a COMPLETE. No excluirlos automáticamente.
-  gain_formula: >
-    PARTIAL -> COMPLETE = +2.5 pp bajo la fórmula vigente.
+decision_rules:
+  complete_ready:
+    all:
+      - "plantas canónicas cubiertas o con delta explícito implementable"
+      - "KPIs consultables read-only"
+      - "proyectos consultables read-only"
+      - "authz equivalente o más restrictiva que dashboard existente"
+      - "sin mutaciones"
+      - "sin dependencia externa nueva"
+      - "sin migration"
+      - "sin redefinición contractual"
+      - "tests determinísticos posibles"
+      - "un único slice razonable puede cerrar todos los gaps obligatorios"
+    then:
+      next_task: "IMPL-DIRECTOR-IA-M3-PLANTAS-KPIS-PROYECTOS-001"
 
-not_started_modules:
-  gain_formula: >
-    NOT_STARTED -> COMPLETE = +5.0 pp bajo la fórmula vigente.
-
-decision_target:
-  required: "exactamente un ganador"
-  winner_must:
-    - "tener evidencia física suficiente"
-    - "tener un path de implementación identificable"
-    - "tener gates determinables"
-    - "maximizar probabilidad de COMPLETE"
-    - "no depender de una reinterpretación artificial de la matriz"
-
-winner_analysis:
-  must_include:
-    - "por qué debe ir primero"
-    - "ganancia potencial"
-    - "delta físico faltante"
-    - "dependencias"
-    - "riesgos"
-    - "si necesita readiness adicional"
-    - "si puede ir directo a IMPL"
-    - "gates"
-
-next_task_policy:
-  exactly_one: true
-  rule:
-    - >
-      Si falta una auditoría específica del ganador:
-      proponer ARCH-DIRECTOR-IA-<MODULO>-READINESS-001.
-    - >
-      Si el gap está completamente determinado y puede implementarse sin
-      decisión adicional:
-      proponer IMPL-DIRECTOR-IA-<MODULO>-001.
-    - "No autorizar."
-    - "No ejecutar."
-    - "No proponer dos tareas alternativas."
+  architecture_decision_required:
+    when:
+      - "la definición de COMPLETE es ambigua"
+      - "hay que modificar contrato arquitectónico"
+      - "el modelo de authz no puede conservarse"
+      - "project_status contradice semántica canónica"
+      - "KPIs necesitan reinterpretación no documentada"
+    then:
+      outcome: "STOPPED o BLOCKED según corresponda"
+      next_task: "ninguna implementación hasta decisión humana"
 
 gate_rules:
-  G1: "requerido para cualquier NEXT_TASK"
+  G1:
+    required: true
+    scope: "esta auditoría únicamente"
+
   G2:
-    - "N/A si cabe en arquitectura existente"
-    - "REQUIRED si hay que redefinir arquitectura"
+    default: "N/A"
+    required_if: "se concluye que un contrato arquitectónico existente debe modificarse"
+
   G3:
-    - "N/A si contratos existentes bastan"
-    - "REQUIRED si hay que crear/modificar contrato arquitectónico"
+    default: "N/A"
+    required_if: "se concluye que debe crearse un contrato arquitectónico nuevo"
+
+  G4:
+    state: "NOT_AUTHORIZED"
+    note: "no commit/push/merge en esta auditoría"
+
+  G5:
+    state: "NOT_AUTHORIZED"
+    note: "NEXT_TASK solo se propone"
+
+  G6:
+    state: "N/A"
+
+  G7:
+    state: "N/A unless ambiguity_or_contradiction_found"
+
   G8:
-    - "N/A salvo evidencia material específica"
-  note: "No activar gates preventivamente."
+    state: "N/A unless materiality/calibration/signature becomes necessary"
 
 required_output:
-  - "baseline formal 37.5%"
-  - "lista de candidatos derivada de matriz vigente"
-  - "tabla comparativa completa"
-  - "ranking total"
-  - "ganador único"
-  - "ganancia potencial"
-  - "evidencia física del ganador"
-  - "por qué otros candidatos quedan detrás"
-  - "blockers revalidados"
-  - "NEXT_TASK único"
-  - "gates del NEXT_TASK"
+  - "resumen ejecutivo"
+  - "definición canónica verificada de M3"
+  - "estado físico de Plantas"
+  - "estado físico de KPIs"
+  - "estado físico de Proyectos"
+  - "traza Planner / tool / executor"
+  - "mapa authz"
+  - "tabla de evidencia"
+  - "tabla de gaps"
+  - "riesgos semánticos"
+  - "riesgos productivos"
+  - "dependencias"
+  - "arquitectura: G2 sí/no"
+  - "contratos: G3 sí/no"
+  - "determinación COMPLETE-feasibility"
+  - "delta físico mínimo"
+  - "archivos probables de implementación"
+  - "tests requeridos"
+  - "exactamente una NEXT_TASK o STOP/BLOCKED justificado"
+  - "gates de NEXT_TASK"
+  - "acciones expresamente no realizadas"
+  - "git diff --check"
+  - "git status"
 
 acceptance_criteria:
-  - "Se leyó la capability matrix vigente."
-  - "M16 no se vuelve a evaluar como candidato."
-  - "Todos los módulos no COMPLETE/N_A relevantes fueron considerados."
-  - "PARTIAL y NOT_STARTED fueron comparados bajo la fórmula correcta."
-  - "Los blockers fueron revalidados."
-  - "El ranking tiene evidencia física."
-  - "Hay exactamente un ganador."
-  - "Hay exactamente un NEXT_TASK."
+  - "Se verificó físicamente la definición canónica de M3."
+  - "Se verificó físicamente la implementación actual de plantas."
+  - "Se verificó físicamente GET /api/dashboard/kpis y su authz."
+  - "Se verificó físicamente GET /api/proyectos y su authz."
+  - "Se verificaron los helpers reutilizables de proyectos."
+  - "Se verificó project_status/get_project_status."
+  - "Se determinó si KPIs necesitan tool propia."
+  - "Se determinó si plantas necesitan tool propia o ya están cubiertas."
+  - "Se distinguieron proyectos de Action Register."
+  - "No se amplió el scope de permisos."
   - "No se implementó nada."
-  - "No se modificó la capability matrix."
-  - "git diff --check limpio."
-  - "Solo CURRENT_TASK y reporte modificados."
+  - "No se modificaron contratos."
+  - "No se modificó capability matrix."
+  - "No se modificó runtime/backend/frontend/tests."
+  - "Solo CURRENT_TASK y el reporte fueron modificados."
+  - "Hay una conclusión inequívoca sobre posibilidad de PARTIAL -> COMPLETE."
+  - "Hay exactamente una NEXT_TASK si procede."
+  - "NEXT_TASK permanece no autorizada."
+  - "git diff --check está limpio."
 
 report_requirements:
-  path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-NEXT-MODULE-PRIORITIZATION-002.md"
+  path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M3-PLANTAS-KPIS-PROYECTOS-READINESS-001.md"
   must_include:
+    - "metadata del task"
     - "resumen ejecutivo"
     - "baseline 37.5%"
-    - "estado actual de módulos"
-    - "tabla comparativa"
-    - "ranking"
-    - "ganador"
-    - "ganancia potencial"
-    - "evidencia física"
-    - "dependencias"
+    - "ganancia potencial +2.5 pp"
+    - "definición canónica"
+    - "evidencia plantas"
+    - "evidencia KPIs"
+    - "evidencia proyectos"
+    - "Planner/tools"
+    - "authz"
+    - "tabla de evidencia"
+    - "tabla de gaps"
     - "riesgos"
-    - "blockers revalidados"
+    - "dependencias"
+    - "fit arquitectónico"
+    - "feasibility COMPLETE"
     - "NEXT_TASK"
     - "gates"
     - "acciones no realizadas"
+    - "secrets_check"
     - "git diff --check"
     - "git status"
 
 expected_terminal_state: >
-  DONE_PENDING_REVIEW si existe un ganador claro y un siguiente slice
-  implementable. BLOCKED/STOPPED si no puede elegirse un ganador sin una
-  decisión arquitectónica previa.
+  DONE_PENDING_REVIEW si la auditoría determina con evidencia suficiente un
+  path inequívoco y acotado para llevar M3 a COMPLETE. STOPPED si encuentra
+  contradicción contractual o semántica que requiera decisión humana. BLOCKED
+  si falta un gate o dato humano indispensable.
 
 max_attempts: 1
-result_report_path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-NEXT-MODULE-PRIORITIZATION-002.md"
-```
+
+result_report_path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M3-PLANTAS-KPIS-PROYECTOS-READINESS-001.md"
