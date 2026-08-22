@@ -99,19 +99,19 @@
 | **ID** | M1 |
 | **Módulo** | Health |
 | **Propósito empresarial** | Monitoreo de servicio y DB. |
-| **Cobertura actual de Director IA** | NO INTEGRADA |
-| **Información exacta que sí consulta** | Ninguna. |
-| **Información que no consulta** | `/health`, `/health-db`, `/health-proyectos`. |
-| **Archivos actuales relacionados** | `server.js`, `frontend-dashboard/app/health/route.ts` |
-| **Endpoints actuales relacionados** | `GET /health`, `GET /health-db`, `GET /health-proyectos` |
+| **Cobertura actual de Director IA** | PARCIAL |
+| **Información exacta que sí consulta** | Readiness técnica de Director IA vía `GET /health-director-ia` (`enabled` / `ready`) en el header de `DirectorIaShell`. Estados UI: `loading`, `ready`, `disabled`, `unavailable`, `transport_error`. One-shot al entrar al módulo + refresh manual. Sin polling. Sin retry automático. Request sin `Authorization`. Desacoplado de `DirectorIaCyclePanel`. |
+| **Información que no consulta** | `GET /health`, `GET /health-db`, `GET /health-proyectos`. No hay herramienta de chat/LLM. `ready=true` no significa datos disponibles, operación saludable, `ACQUIRED_OK` ni conclusión de negocio. |
+| **Archivos actuales relacionados** | `server.js` (ruta existente), `lib/director-ia-dashboard-cycle-transport.js` (`handleGetDirectorIaReadiness`), `frontend-dashboard/modules/director-ia/lib/api.ts` (`fetchDirectorIaHealth`), `frontend-dashboard/modules/director-ia/lib/health-client-core.js`, `frontend-dashboard/modules/director-ia/components/DirectorIaShell.tsx`, `test/director-ia-dashboard-health-client.test.js`. `frontend-dashboard/app/health/route.ts` permanece ajeno (health del frontend Next). |
+| **Endpoints actuales relacionados** | Integrado: `GET /health-director-ia`. Existentes y no consultados por este slice: `GET /health`, `GET /health-db`, `GET /health-proyectos`. |
 | **Tablas o vistas relacionadas** | Ninguna propia. |
-| **Funciones existentes reutilizables** | Handlers health en `server.js` |
-| **Capacidades de lectura posibles** | CONSULTAR estado servicio — requeriría herramienta nueva que llame health (hoy no existe en Director IA). |
+| **Funciones existentes reutilizables** | `fetchDirectorIaHealth` / `interpretDirectorIaHealthResponse`; handler `handleGetDirectorIaReadiness`. Handlers `/health`, `/health-db`, `/health-proyectos` no usados por Director IA. |
+| **Capacidades de lectura posibles** | CONSULTAR readiness técnica del servicio Director IA en dashboard. No CONSULTAR liveness/DB/proyectos. No tool conversacional. |
 | **Capacidades de escritura posibles** | N/A |
-| **Permisos aplicables** | Sin auth en health. |
+| **Permisos aplicables** | Sin auth en `GET /health-director-ia`. El módulo de página sigue exigiendo token para ver el shell. |
 | **Nivel de riesgo** | BAJO |
 | **Dependencias** | Ninguna de negocio. |
-| **Observaciones verificadas** | Auditoría §M1: no referenciado por Director IA. |
+| **Observaciones verificadas** | `IMPL-DIRECTOR-IA-M1-HEALTH-DASHBOARD-001` (integrado en main). Tests focales 14/14; suite `test/director-ia-*.test.js` 399/399 según el reporte IMPL. No se declara COMPLETA: el dominio Health de producto (`/health`, `/health-db`, `/health-proyectos`) sigue fuera. |
 
 ### M2 — Kanban / Folios
 
@@ -1191,6 +1191,7 @@ Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Re
 ### 3. Dominios parciales (PARCIAL)
 
 - M0 Auth (gates, no catálogo)
+- M1 Health (readiness técnica `GET /health-director-ia` en header de DirectorIaShell; no `/health` `/health-db` `/health-proyectos`)
 - M2 Folios (solo comentarios)
 - M3 Plantas (filtro/nombre; no KPIs/proyectos)
 - M7 IGF (chat on-demand)
@@ -1207,7 +1208,6 @@ Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Re
 
 ### 5. Dominios no integrados (NO INTEGRADA)
 
-- M1 Health  
 - M4 Clasificación  
 - M5 Taller AT  
 - M6 Excel GASTOS/INVERSIONES  
