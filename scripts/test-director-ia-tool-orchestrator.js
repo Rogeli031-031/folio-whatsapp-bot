@@ -175,7 +175,9 @@ const cases = [
   () => {
     const { toolPlan } = planTools("¿Hay folios duplicados?", { planta_id: 1 });
     const t = getTool(toolPlan, "get_duplicate_folios");
-    assert(t && t.status === TOOL_STATUS.declared_not_integrated, "duplicados not integrated");
+    assert(t && t.status === TOOL_STATUS.available_on_demand, "duplicados on demand");
+    assert(t.executable === true, "duplicados executable");
+    assert(isDirectorIaToolExecutable("get_duplicate_folios") === true, "get_duplicate_folios exec");
   },
 
   // 13. Usuario permisos
