@@ -141,19 +141,19 @@
 | **ID** | M3 |
 | **Módulo** | Plantas / KPIs / Proyectos |
 | **Propósito empresarial** | Catálogo de plantas, KPIs de dashboard, proyectos por planta. |
-| **Cobertura actual de Director IA** | PARCIAL (planta como filtro); KPIs de `/api/dashboard/kpis` y proyectos: NO INTEGRADA. |
-| **Información exacta que sí consulta** | `planta_id` obligatorio; nombre/clave planta en anexos IGF/ARR y commercial_state (`SELECT nombre, clave FROM public.plantas`). |
-| **Información que no consulta** | `GET /api/dashboard/kpis`, listado proyectos, crear proyecto, KPIs agregados del kanban header. |
-| **Archivos actuales relacionados** | `public.plantas` vía varios libs; UI `CrearProyectoModal`, `KPIHeader` |
-| **Endpoints actuales relacionados** | `/api/dashboard/plantas`, `/kpis`, `/proyectos`, `POST /api/proyectos` |
-| **Tablas o vistas relacionadas** | `public.plantas`, `public.proyectos`, `proyecto_*` |
-| **Funciones existentes reutilizables** | Queries de planta en `director-ia-igf-arr.js` / `director-ia-commercial-state.js`; board Action Register ya filtra por planta. |
-| **Capacidades de lectura posibles** | CONSULTAR nombre planta; CONSULTAR proyectos vía endpoint existente (no cableado). |
-| **Capacidades de escritura posibles** | CREAR proyecto (`POST /api/proyectos`) — no en Director IA. |
-| **Permisos aplicables** | Acceso por planta en token; KPIs con bloqueos GA/GV. |
-| **Nivel de riesgo** | Lectura planta: BAJO. KPIs financieros: MEDIO. |
+| **Cobertura actual de Director IA** | COMPLETA (respecto a la consulta canónica de las tres familias: planta del scope, KPIs de dashboard y proyectos por planta; no implica catálogo global, estatus «retrasado» almacenado ni creación de proyectos). |
+| **Información exacta que sí consulta** | `planta_id` obligatorio + `nombre`/`clave` de la planta del scope; KPIs de folios vía `get_dashboard_kpis` / `loadDashboardKpisForChat` / `queryDashboardKpis` (misma semántica que `GET /api/dashboard/kpis`: `total_activos`, `total_mxn`, `pendientes_zp`, `avg_aging`, `oldest`, `top_planta`, `top_categoria`, ventana default); listado `public.proyectos` EN_CURSO vía `get_project_status` / `loadProyectosForChat`. |
+| **Información que no consulta** | Catálogo global de plantas; crear/editar/eliminar proyecto (`POST /api/proyectos`); estatus almacenado «retrasado»; IGF/ARR/commercial_state como sustituto de estos KPIs. |
+| **Archivos actuales relacionados** | `lib/director-ia-m3-plantas-kpis-proyectos.js`; wiring en `lib/director-ia-chat.js`, `lib/director-ia-tools.js`, `lib/director-ia-capabilities.js`, `lib/director-ia-planner.js`; `server.js` reutiliza helpers extraídos. UI `CrearProyectoModal` sigue fuera de Director IA. |
+| **Endpoints actuales relacionados** | Lectura integrada in-process (no HTTP interno): lógica de `GET /api/dashboard/kpis` y helpers de `GET /api/dashboard/proyectos`. Escritura existente y no integrada: `POST /api/proyectos`. `GET /api/proyectos` no existe. |
+| **Tablas o vistas relacionadas** | `public.plantas`, `public.folios` (KPIs), `public.proyectos`, `proyecto_*` (no requisito de COMPLETE) |
+| **Funciones existentes reutilizables** | `loadDashboardKpisForChat`, `queryDashboardKpis`, `parseDashboardFilters`, `buildDashboardWhere`, `loadProyectosForChat`, `listarProyectosPorPlantaOEquivalentes`; identidad de planta en anexos IGF/ARR / commercial_state. |
+| **Capacidades de lectura posibles** | CONSULTAR identidad de planta del scope; CONSULTAR KPIs dashboard; CONSULTAR proyectos por planta. |
+| **Capacidades de escritura posibles** | CREAR proyecto (`POST /api/proyectos`) — **no** en Director IA. |
+| **Permisos aplicables** | JWT + `planta_id`; `plantas_permitidas` (GG/GA/AD); GA bloqueado en KPIs; GV bloqueado en KPIs y proyectos. |
+| **Nivel de riesgo** | Lectura planta: BAJO. KPIs financieros (monto): MEDIO. |
 | **Dependencias** | Base de casi todos los módulos. |
-| **Observaciones verificadas** | Sin `planta_id` el context responde `action_register.ok: false`. |
+| **Observaciones verificadas** | `IMPL-DIRECTOR-IA-M3-PLANTAS-KPIS-PROYECTOS-001` (integrado en main, `b4761802`). Tests focales 20/20; suite `test/director-ia-*.test.js` 436/436; scripts capabilities 22/22, planner 30/30, orchestrator 21/21. COMPLETE = consulta autorizada de las tres familias; no catálogo global; no mutaciones; no cycle. Scoring M0–M20 del loop (COMPLETE=1.0, PARCIAL=0.5, INDIRECTA=0.5, NOT_STARTED=0.0): 7.5/20 = 37.5% → **8.0/20 = 40.0%**. |
 
 ### M4 — Clasificación de apoyos + COMPARAR
 
@@ -735,16 +735,27 @@
 - **Evidencia de integración actual:** No integrada
 - **Información que no puede concluirse con esta fuente:** Documentos faltantes, URLs firmadas
 
+### Fuente: KPIs de dashboard
+
+- **Dominio:** Agregados de folios del header/dashboard (M3)
+- **Cobertura actual:** COMPLETA (consulta on-demand; no IGF/ARR)
+- **Archivo de acceso:** `lib/director-ia-m3-plantas-kpis-proyectos.js`; `server.js` `GET /api/dashboard/kpis`
+- **Función de acceso:** `loadDashboardKpisForChat` → `queryDashboardKpis`
+- **Endpoint relacionado:** semántica de `GET /api/dashboard/kpis` (sin HTTP interno)
+- **Tablas consultadas:** `public.folios` ⋈ `public.plantas`
+- **Evidencia de integración actual:** Intent `dashboard_kpis` + tool `get_dashboard_kpis` + rama en `askDirectorIa`
+- **Información que no puede concluirse con esta fuente:** Salud, desempeño o causalidad; IGF/ARR; KPIs para roles GA/GV
+
 ### Fuente: Proyectos
 
 - **Dominio:** Proyectos por planta (M3)
-- **Cobertura actual:** NO INTEGRADA
-- **Archivo de acceso:** Handlers proyectos en `server.js`
-- **Función de acceso:** `GET /api/dashboard/proyectos`, `POST /api/proyectos`
-- **Endpoint relacionado:** citados
-- **Tablas consultadas:** `public.proyectos`, `proyecto_*`
-- **Evidencia de integración actual:** No integrada
-- **Información que no puede concluirse con esta fuente:** Retrasos de proyecto
+- **Cobertura actual:** COMPLETA (listado read-only EN_CURSO; no Action Register; no escritura)
+- **Archivo de acceso:** `lib/director-ia-m3-plantas-kpis-proyectos.js`; helpers reutilizados por `server.js`
+- **Función de acceso:** `loadProyectosForChat` → `listarProyectosPorPlantaOEquivalentes`
+- **Endpoint relacionado:** semántica de `GET /api/dashboard/proyectos` (campos de helper, no POST)
+- **Tablas consultadas:** `public.proyectos`
+- **Evidencia de integración actual:** Intent `project_status` + tool `get_project_status` + rama en `askDirectorIa`; clarificación si wording choca con Action Register
+- **Información que no puede concluirse con esta fuente:** Estatus almacenado «retrasado»; creación/edición/eliminación de proyecto
 
 ### Fuente: Presupuestos semanales
 
@@ -907,7 +918,7 @@
 
 | # | Pregunta | ¿Puede responderla hoy? | Cobertura | Fuente necesaria | Función/endpoint existente | Información faltante | Riesgo de respuesta incorrecta |
 |---|----------|-------------------------|-----------|------------------|----------------------------|----------------------|--------------------------------|
-| 1 | ¿Cómo va una planta? | Parcialmente | PARCIAL | AR + (opcional) IGF/ARR/MC según wording | `buildDirectorIaContextPayload`; `buildPlantSummaryBlock`; `loadIgfArrAnnexForChat` si regex financiero | KPIs kanban, presupuestos, proyectos, Excel gastos | Alto si se interpreta como KPI financiero sin activar anexo IGF/ARR |
+| 1 | ¿Cómo va una planta? | Parcialmente | PARCIAL | AR + (opcional) IGF/ARR/MC según wording | `buildDirectorIaContextPayload`; `buildPlantSummaryBlock`; `loadIgfArrAnnexForChat` si regex financiero | Presupuestos, Excel gastos; KPIs dashboard y proyectos existen on-demand con wording propio (no se activan solo con «cómo va la planta») | Alto si se interpreta como KPI financiero IGF/ARR o como KPI de folios sin el intent `dashboard_kpis` |
 | 2 | ¿Qué acciones están vencidas? | Sí (limitado) | PARCIAL | Action Register | `summarizeTopOverdueActions` / context | Acciones fuera del top 10; notas excluidas | Medio (omisión por límite) |
 | 3 | ¿Quién es responsable de una acción? | Sí (limitado) | PARCIAL | Action Register | `summarizeActionRegisterResponsables`, narrativa chat | Responsables fuera del top 10 | Medio |
 | 4 | ¿Por qué cayó el ingreso? | Parcialmente | PARCIAL / INDIRECTA | commercial_state + DICF + bitácora + IGF/ARR | `loadCommercialStateForChat`, `summarizeDicfContext`, anexo IGF/ARR | Modal Delta Ingreso exacto; causalidad no estructurada | Alto (hipótesis narrativa) |
@@ -924,7 +935,7 @@
 | 15 | ¿Qué gastos existen por planta? | No (Excel); confusión posible | NO INTEGRADA / INDIRECTA | Gastos Excel vs IGF «gasto» | `categoria-rango-excel` vs `PLANT_FINANCIAL_KPI_RE` | Listado folios GASTOS | Alto (ambigüedad semántica) |
 | 16 | ¿Qué inversiones están pendientes? | No | NO INTEGRADA | Inversiones Excel / folios | `categoria-rango-excel?categoria=INVERSIONES` | Toda la fuente | Alto |
 | 17 | ¿Cómo va el presupuesto semanal? | No | NO INTEGRADA | Presupuestos | Tablas `presupuesto_*` / bot carrito | Toda la fuente | Alto |
-| 18 | ¿Qué proyectos están retrasados? | No | NO INTEGRADA | Proyectos | `/api/dashboard/proyectos` | Criterio de retraso + datos | Alto |
+| 18 | ¿Qué proyectos están retrasados? | Sí (listado EN_CURSO; «retrasado» no es estatus almacenado) | COMPLETA (consulta del módulo; el retraso solo puede declararse como derivado de `fecha_cierre_estimada`) | Proyectos | `loadProyectosForChat` / `get_project_status` | Estatus oficial de retraso; crear/editar/eliminar | Alto si se lee como estatus almacenado o como Action Register |
 | 19 | ¿Qué usuario realizó un movimiento? | No (folios); parcial en AR/DICF | NO INTEGRADA / PARCIAL | Historial folio vs historial DICF/AR | `folio_historial` vs detalles DICF/AR summarizers | Movimientos de folio | Alto si se atribuye mal |
 | 20 | ¿Qué información no puede consultar Director IA? | Sí (meta) | COMPLETA (esta pregunta de catálogo) | Este documento + `EMPTY_SOURCES` | N/A | — | Bajo si se responde con catálogo |
 
@@ -1182,10 +1193,11 @@ Escala 1–5. Prioridad derivada de: valor ejecutivo × disponibilidad de funcio
 
 ### 1. Resumen de cobertura real actual
 
-Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Register**, **DICF**, **bitácora**, **comentarios** (cliente y folio) y **entidades comerciales**, con **anexos financieros on-demand** (IGF/ARR/margen/estado comercial) activados por **regex** en el chat, y con **análisis on-demand de posibles duplicados de folios** (M16: `findDuplicatePairs`, no confirmación). **No** opera el kanban, **no** lee documentos/pólizas/cheques/presupuestos/proyectos/clasificación/taller/Excel GASTOS-INVERSIONES ni los endpoints Delta UI. Las escrituras propias (bitácora/entidades) existen por **API UI**, no como tools autónomos del LLM. El GET `/api/director-ia/context` **subdeclara** IGF/ARR/commercial_state respecto al chat.
+Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Register**, **DICF**, **bitácora**, **comentarios** (cliente y folio) y **entidades comerciales**, con **anexos financieros on-demand** (IGF/ARR/margen/estado comercial) activados por **regex** en el chat, **análisis on-demand de posibles duplicados de folios** (M16: `findDuplicatePairs`, no confirmación), y **consulta on-demand de KPIs de dashboard y proyectos por planta** (M3: `get_dashboard_kpis` / `get_project_status`; no catálogo global; no creación de proyectos). **No** opera el kanban, **no** lee documentos/pólizas/cheques/presupuestos/clasificación/taller/Excel GASTOS-INVERSIONES ni los endpoints Delta UI. Las escrituras propias (bitácora/entidades) existen por **API UI**, no como tools autónomos del LLM. El GET `/api/director-ia/context` **subdeclara** IGF/ARR/commercial_state respecto al chat.
 
 ### 2. Dominios completos (COMPLETA)
 
+- **M3 Plantas / KPIs / Proyectos** (consulta canónica de la planta del scope, KPIs de `GET /api/dashboard/kpis` y `public.proyectos` por planta. COMPLETE no implica catálogo global, estatus «retrasado» almacenado ni `POST /api/proyectos`).
 - **M13 Director IA** (respecto a su propio módulo: bitácora, entidades, chat, mejora continua como parte del producto).
 - **M16 Duplicados** (consulta canónica de **posibles** pares vía `get_duplicate_folios` / `findDuplicatePairs`. COMPLETE significa integración de esa capacidad de análisis, no confirmación determinística de cada duplicado ni cancelación).
 
@@ -1194,7 +1206,6 @@ Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Re
 - M0 Auth (gates, no catálogo)
 - M1 Health (readiness técnica `GET /health-director-ia` en header de DirectorIaShell; no `/health` `/health-db` `/health-proyectos`)
 - M2 Folios (solo comentarios)
-- M3 Plantas (filtro/nombre; no KPIs/proyectos)
 - M7 IGF (chat on-demand)
 - M8 ARR (chat on-demand / motor DICF)
 - M11 DICF + comentarios cliente
@@ -1217,7 +1228,7 @@ Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Re
 - M15 Documentos/medios  
 - M18 Presupuestos semanales  
 - M19 Delta Ingreso AI test  
-- Kanban/estatus/timeline/cheque/póliza/proyectos (como fuentes de negocio)
+- Kanban/estatus/timeline/cheque/póliza (como fuentes de negocio; proyectos de `public.proyectos` ya están en COMPLETA M3)
 
 ### 6. Capacidades de lectura listas para reutilizar
 
@@ -1232,6 +1243,8 @@ Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Re
 | LISTAR estado comercial | `loadCommercialStateForChat` → `dicf.computeDicf` |
 | RESUMIR Mejora Continua | `buildMejoraContinuaPayload` / `GET /api/director-ia/mejora-continua` |
 | DETECTAR RIESGOS / CONSULTAR posibles duplicados de folios | `loadDuplicateFoliosForChat` → `findDuplicatePairs` |
+| CONSULTAR KPIs de dashboard (folios) | `loadDashboardKpisForChat` → `queryDashboardKpis` |
+| CONSULTAR proyectos por planta | `loadProyectosForChat` → `listarProyectosPorPlantaOEquivalentes` |
 
 ### 7. Capacidades que requieren herramientas nuevas (aunque exista API/lib)
 
@@ -1244,7 +1257,8 @@ Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Re
 | Excel/agregados Taller, GASTOS, INVERSIONES | Sí (libs Excel) | Tool de consulta (idealmente sin solo xlsx) |
 | Deltas UI | Sí (`delta-*`) | Tool o unificación con annex |
 | Presupuesto semanal | Tablas sí; API UI limitada | Queries/tool + mapeo bot |
-| Proyectos | Sí | Tool |
+| Proyectos (crear/editar/eliminar) | Sí (`POST /api/proyectos`) | Escritura; la lectura M3 ya está integrada |
+| KPIs dashboard (lectura) | Sí (integrado M3) | — |
 | Clasificación | Sí | Tool lectura |
 | Weekly LD | Sí | Tool |
 | Persistir/auditar chat | No | Nueva persistencia (fuera de «reutilizar») |
@@ -1291,6 +1305,7 @@ Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Re
 | Context | `lib/director-ia-context.js` |
 | Chat | `lib/director-ia-chat.js` |
 | Duplicados M16 | `lib/director-ia-duplicados.js`, `lib/folio-duplicados-load.js`, `lib/folio-duplicados.js` |
+| M3 Plantas / KPIs / Proyectos | `lib/director-ia-m3-plantas-kpis-proyectos.js` |
 | AR summarizers | `lib/director-ia-action-register.js` |
 | IGF/ARR annex | `lib/director-ia-igf-arr.js` |
 | Commercial state | `lib/director-ia-commercial-state.js` |
