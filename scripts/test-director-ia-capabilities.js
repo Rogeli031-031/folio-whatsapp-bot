@@ -51,6 +51,7 @@ const cases = [
     assert(all.length >= 28, `catálogo incompleto: ${all.length}`);
     assert(getDirectorIaCapability("action_register"), "action_register");
     assert(isDirectorIaDomainReadable("action_register") === true, "AR readable");
+    assert(isDirectorIaDomainReadable("duplicados") === true, "duplicados readable");
     assert(isDirectorIaDomainReadable("kanban") === false, "kanban not readable");
     assert(isDirectorIaDomainReadable("folio_historial") === false, "historial not readable");
     const summary = buildDirectorIaCapabilitiesSummary();
@@ -64,7 +65,8 @@ const cases = [
   () => expectBlocked("¿Ya tiene póliza?", "polizas"),
   () => expectBlocked("¿Tiene cheque o depósito?", "cheques"),
   () => expectBlocked("¿Cómo va el presupuesto semanal?", "presupuestos"),
-  () => expectBlocked("¿Existen folios duplicados?", "duplicados"),
+  () => expectAllowed("¿Existen folios duplicados?"),
+  () => expectAllowed("¿Hay folios duplicados?"),
   () => expectBlocked("¿Qué inversiones están pendientes?", "inversiones"),
   () => expectAllowed("¿Qué acciones están vencidas?"),
   () => expectAllowed("¿Cómo va ARR?"),

@@ -62,6 +62,7 @@ const actionRegisterEvidenciasExport = require("./lib/action-register-evidencias
 const { embedExcelEvidencePhoto } = require("./lib/excel-image-compress");
 const { isDirectorZPForDashboard } = require("./lib/dashboard-es-zp");
 const folioDuplicados = require("./lib/folio-duplicados");
+const { loadFoliosParaDuplicados } = require("./lib/folio-duplicados-load");
 const clasificacionApoyosExcel = require("./lib/clasificacion-apoyos-excel");
 const tallerAtExcel = require("./lib/taller-at-excel");
 const unidadTaller = require("./lib/unidad-taller");
@@ -11115,32 +11116,6 @@ app.post("/api/proyectos", dashboardAuthMiddleware, async (req, res) => {
   }
 });
 
-/** Carga folios de una planta (y equivalentes) en rango de fechas (creación) para análisis de duplicados. */
-async function loadFoliosParaDuplicados(client, plantaId, desde, hasta) {
-  const ids = getPlantaIdsEquivalentesForPendientes(plantaId);
-  const plantaIds = ids.length ? ids : [plantaId];
-  const params = [plantaIds];
-  let where = `f.planta_id = ANY($1::int[]) AND UPPER(TRIM(COALESCE(f.estatus,''))) <> 'CANCELADO'`;
-  if (desde) {
-    params.push(desde);
-    where += ` AND f.creado_en >= $${params.length}::date`;
-  }
-  if (hasta) {
-    params.push(hasta);
-    where += ` AND f.creado_en < ($${params.length}::date + INTERVAL '1 day')`;
-  }
-  const r = await client.query(
-    `SELECT f.id, f.numero_folio, f.folio_codigo, f.importe, f.estatus, f.mes_cargo, f.creado_en,
-            COALESCE(f.descripcion, f.concepto) AS concepto
-     FROM public.folios f
-     WHERE ${where}
-     ORDER BY f.creado_en DESC NULLS LAST
-     LIMIT 1500`,
-    params
-  );
-  return r.rows;
-}
-
 function assertPlantaPermitidaDashboard(req, plantaId) {
   const role = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) || "";
   if (["GG", "GA", "AD"].includes(role) && req.dashboardAuth.plantas_permitidas?.length > 0) {
@@ -11170,7 +11145,9 @@ app.post("/api/folios/duplicados/check", dashboardAuthMiddleware, dashboardBlock
     const desdeDate = new Date();
     desdeDate.setMonth(desdeDate.getMonth() - mesesSafe);
     const desde = desdeDate.toISOString().slice(0, 10);
-    const rows = await loadFoliosParaDuplicados(client, plantaId, desde, null);
+    const rows = await loadFoliosParaDuplicados(client, plantaId, desde, null, {
+      resolveEquivalentIds: getPlantaIdsEquivalentesForPendientes,
+    });
     const matches = folioDuplicados.findSimilarTo(rows, { concepto, importe }, { umbral, limit: 10 });
     return res.json({
       ok: true,
@@ -11213,7 +11190,9 @@ app.get("/api/folios/duplicados/analisis", dashboardAuthMiddleware, dashboardBlo
   try {
     const plantaRow = await client.query(`SELECT id, nombre FROM public.plantas WHERE id = $1`, [plantaId]);
     if (!plantaRow.rows.length) return res.status(404).json({ error: "Planta no encontrada" });
-    const rows = await loadFoliosParaDuplicados(client, plantaId, desde, hasta || null);
+    const rows = await loadFoliosParaDuplicados(client, plantaId, desde, hasta || null, {
+      resolveEquivalentIds: getPlantaIdsEquivalentesForPendientes,
+    });
     const result = folioDuplicados.findDuplicatePairs(rows, { umbral, maxPairs: 200 });
     return res.json({
       ok: true,
