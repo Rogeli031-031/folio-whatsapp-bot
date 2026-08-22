@@ -1,13 +1,13 @@
 # CURRENT_TASK
 
 ```yaml
-task_id: "ARCH-DIRECTOR-IA-M1-HEALTH-DASHBOARD-READINESS-001"
+task_id: "IMPL-DIRECTOR-IA-M1-HEALTH-DASHBOARD-001"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
-authorized_at: "2026-08-21T17:28:37-06:00"
+authorized_at: "2026-08-21T20:25:00-06:00"
 human_authorization: >
-  AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-21T17:28:37-06:00.
+  AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-21T20:25:00-06:00.
   G1 autorizado.
 
 gates:
@@ -17,168 +17,149 @@ gates:
   G8_calibration_materiality_signature: N/A
 
 objective: >
-  Auditar exclusivamente M1 — Health dashboard — para definir qué significa
-  completarlo en Director IA, qué señal de health/readiness ya existe,
-  qué parte falta en el frontend, cómo debe mostrarse sin confundir readiness
-  técnica con conclusión de negocio, y cuál es el slice mínimo correcto para
-  pasar M1 de NOT_STARTED a COMPLETE.
+  Implementar el slice mínimo de M1 — Health dashboard — consumiendo el
+  endpoint existente GET /health-director-ia desde el frontend Director IA,
+  mostrando readiness técnica en el header de DirectorIaShell, desacoplada
+  completamente del ciclo constitucional y sin modificar backend, contratos,
+  auth/authz ni semántica de Director IA.
+
+architecture_decision:
+  source_task: "ARCH-DIRECTOR-IA-M1-HEALTH-DASHBOARD-READINESS-001"
+  backend_endpoint: "GET /health-director-ia"
+  backend_change_required: false
+  endpoint_auth_required: false
+  placement: "header de DirectorIaShell"
+  cycle_panel_dependency: false
+  refresh_strategy: "one-shot al montar + refresh manual"
+  polling: false
+  automatic_retry: false
 
 in_scope:
   - "docs/dev-loop/CURRENT_TASK.md"
-  - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M1-HEALTH-DASHBOARD-READINESS-001.md"
-
-  - "docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md (solo lectura)"
-  - "docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md (solo lectura)"
-
-  - "server.js (solo lectura)"
-  - "lib/director-ia-dashboard-cycle-transport.js (solo lectura)"
-  - "frontend-dashboard/modules/director-ia/components/DirectorIaShell.tsx (solo lectura)"
-  - "frontend-dashboard/modules/director-ia/components/DirectorIaCyclePanel.tsx (solo lectura)"
-  - "frontend-dashboard/modules/director-ia/lib/api.ts (solo lectura)"
-  - "frontend-dashboard/lib/auth.ts (solo lectura)"
-  - "tests Director IA relevantes (solo lectura)"
+  - "docs/dev-loop/reports/IMPL-DIRECTOR-IA-M1-HEALTH-DASHBOARD-001.md"
+  - "frontend-dashboard/modules/director-ia/lib/api.ts"
+  - "frontend-dashboard/modules/director-ia/components/DirectorIaShell.tsx"
+  - "tests mínimos necesarios para M1 health dashboard"
 
 out_of_scope:
-  - "implementar UI"
-  - "modificar backend"
-  - "modificar health endpoint"
-  - "modificar contratos"
-  - "modificar auth/authz"
-  - "hacer smoke productivo"
+  - "server.js"
+  - "lib/director-ia-dashboard-cycle-transport.js"
+  - "backend health/readiness"
+  - "DirectorIaCyclePanel semantics"
+  - "cycle-client-core"
+  - "docs/director-ia/*"
+  - "contratos D1-D9"
+  - "auth/authz"
+  - "Render config/env"
+  - "package.json"
+  - "lockfiles"
+  - "polling"
+  - "retry automático"
+  - "smoke productivo"
   - "commit"
   - "push"
   - "merge"
-  - "abrir siguiente implementación"
+  - "implementar comentarios diarios"
+  - "implementar conversación constitucional"
 
-baseline_in_force:
-  roadmap:
-    module: "M1"
-    declared_state: "NO INTEGRADA / NOT_STARTED"
-    objective: "Health dashboard"
-  backend:
-    route: "GET /health-director-ia"
-    known_result:
-      status: 200
-      enabled: true
-      ready: true
-  semantic_rule:
-    - "readiness técnica no equivale a conclusión de negocio"
-    - "HTTP 200 readiness no implica ACQUIRED_OK"
-    - "UI no debe presentar health como KPI operativo"
+semantic_invariants:
+  - "health/readiness técnica != estado de adquisición/ciclo"
+  - "health/readiness técnica != conclusión de negocio"
+  - "ready=true no significa datos disponibles"
+  - "ready=true no significa operación saludable"
+  - "health no puede producir ACQUIRED_OK, ACQUIRED_EMPTY, TOOL_ERROR o ABSTAIN"
+  - "health no bloquea DirectorIaCyclePanel"
 
-audit_questions:
-  D1_m1_definition:
-    question: >
-      ¿Qué exige exactamente M1 en la matriz canónica para poder considerarlo
-      COMPLETE?
+health_states:
+  loading:
+    copy: "Comprobando disponibilidad técnica…"
+    blocks_cycle: false
 
-  D2_existing_backend:
-    question: >
-      ¿Qué devuelve hoy GET /health-director-ia y qué valida realmente?
+  ready:
+    condition: "HTTP 200 && enabled === true && ready === true"
+    copy: "Servicio Director IA: listo (técnico)"
+    blocks_cycle: false
 
-  D3_existing_frontend:
-    question: >
-      ¿El frontend Director IA consume actualmente health/readiness?
-      Si no, ¿dónde debería integrarse mínimamente?
+  disabled:
+    condition: "HTTP 200 && enabled === false"
+    copy: "Director IA deshabilitado en el servidor"
+    blocks_cycle: false
 
-  D4_auth:
-    question: >
-      ¿La readiness requiere JWT o es pública? ¿Debe el frontend reutilizar el
-      mismo token del módulo?
+  unavailable:
+    condition: "HTTP 503 && enabled === true && ready === false"
+    copy: "Servicio Director IA no disponible (técnico)"
+    blocks_cycle: false
 
-  D5_transport:
-    question: >
-      ¿Debe reutilizar api.ts / fetch wrapper existente o crear una función
-      específica?
+  transport_error:
+    condition: "network error, HTTP inesperado, HTTP 500 o body inválido"
+    copy: "No se pudo consultar la disponibilidad técnica"
+    blocks_cycle: false
 
-  D6_ui_state:
-    question: >
-      Definir estados mínimos de UI:
-      loading / ready / disabled / unavailable / transport_error
-      sin convertirlos en estados cognitivos.
+implementation_requirements:
+  api:
+    - "crear fetchDirectorIaHealth o equivalente en modules/director-ia/lib/api.ts"
+    - "usar la misma resolución de base URL que el ciclo"
+    - "GET /health-director-ia"
+    - "NO enviar Authorization"
+    - "NO usar apiFetch de forma que HTTP 503 legítimo pierda su semántica"
+    - "parsear explícitamente HTTP 200 y HTTP 503"
+    - "otros fallos => transport_error"
 
-  D7_copy:
-    question: >
-      ¿Qué texto mínimo evita confundir "servicio listo" con "datos disponibles"
-      o "negocio sano"?
+  shell:
+    - "integrar indicador en header de DirectorIaShell"
+    - "ejecutar exactamente un GET automático al montar"
+    - "añadir refresh manual"
+    - "cada click manual puede ejecutar un nuevo GET"
+    - "sin setInterval"
+    - "sin polling"
+    - "sin retry automático"
+    - "no deshabilitar ni ocultar DirectorIaCyclePanel por estado health"
 
-  D8_refresh:
-    question: >
-      ¿Debe ser one-shot al cargar, manual refresh, o polling?
-      Preferir no polling salvo requisito físico.
-
-  D9_failure_semantics:
-    question: >
-      ¿Cómo representar 503/500/network error sin afectar el cycle panel?
-
-  D10_scope:
-    question: >
-      ¿M1 puede completarse sin tocar backend, contratos ni auth?
-
-  D11_tests:
-    question: >
-      ¿Qué tests mínimos hacen falta para considerar M1 COMPLETE?
-
-  D12_gate:
-    question: >
-      Determinar si el siguiente IMPL necesita solo G1 o también G2/G3.
-
-  D13_next_task:
-    question: >
-      Proponer exactamente un NEXT_TASK mínimo.
-
-decision_rules:
-  - "No polling automático salvo necesidad demostrada."
-  - "No retry automático."
-  - "No mezclar readiness técnica con estados ACQUIRED_* / ABSTAIN."
-  - "No introducir nueva arquitectura."
-  - "Preferir reutilizar fetch/auth existentes."
-  - "No tocar backend si /health-director-ia ya es suficiente."
-  - "No implementar en esta tarea."
-
-required_output:
-  - "definición operativa de M1 COMPLETE"
-  - "gap exacto frontend/backend"
-  - "estado auth"
-  - "shape de respuesta health"
-  - "estado UI mínimo"
-  - "copy recomendado"
-  - "estrategia refresh"
-  - "tests mínimos"
-  - "gates"
-  - "exactamente un NEXT_TASK"
+tests_required:
+  - "ready=true => ready"
+  - "enabled=false => disabled"
+  - "ready=false con HTTP 503 => unavailable"
+  - "network error => transport_error"
+  - "HTTP 500/status inesperado => transport_error"
+  - "loading visible mientras request está pendiente"
+  - "GET no envía Authorization"
+  - "URL health correcta con resolución existente"
+  - "health no bloquea ni altera cycle panel"
+  - "sin polling"
+  - "sin retry automático"
+  - "segundo GET solo mediante refresh manual"
+  - "copy no usa ACQUIRED_OK/ABSTAIN como health"
+  - "copy no afirma Todo está bien / Datos disponibles / Operación saludable"
 
 acceptance_criteria:
-  - "M1 definido con evidencia"
-  - "se identifica si backend ya basta"
-  - "se identifica el mínimo cambio frontend"
-  - "sin ambigüedad health vs business"
-  - "sin implementación"
-  - "gates definidos"
-  - "exactamente un NEXT_TASK"
+  - "endpoint backend existente reutilizado sin modificación"
+  - "indicador health visible en DirectorIaShell"
+  - "cinco estados health implementados"
+  - "one-shot al montar"
+  - "refresh manual"
+  - "sin polling"
+  - "sin retry automático"
+  - "sin Authorization en health"
+  - "HTTP 503 readiness tratado como unavailable, no como error genérico"
+  - "cycle panel permanece independiente"
+  - "tests del slice en verde"
+  - "suite Director IA relevante en verde"
   - "git diff --check limpio"
-  - "solo CURRENT_TASK y reporte modificados"
+  - "scope respetado"
+
+stop_conditions:
+  - "si hace falta modificar backend, STOP"
+  - "si hace falta modificar contrato D1-D9, STOP"
+  - "si hace falta cambiar auth/authz, STOP"
+  - "si aparece necesidad de G2/G3, STOP y pedir autorización"
+  - "no ampliar M1 a /health, /health-db o /health-proyectos"
+  - "no implementar NEXT_TASK adicional"
 
 expected_terminal_state: >
-  DONE_PENDING_REVIEW si puede definirse un slice mínimo para completar M1.
-  BLOCKED/STOPPED si M1 requiere redefinición contractual o backend adicional.
+  DONE_PENDING_REVIEW si M1 Health dashboard queda implementado y testeado
+  exclusivamente como indicador frontend de readiness técnica sobre
+  GET /health-director-ia, sin modificar backend ni contratos.
 
 max_attempts: 1
-result_report_path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M1-HEALTH-DASHBOARD-READINESS-001.md"
-
-documented_result:
-  outcome: "DONE_PENDING_REVIEW"
-  backend_sufficient: true
-  backend_change_required: false
-  frontend_consumes_health_today: false
-  indicator_location: "DirectorIaShell header, outside DirectorIaCyclePanel"
-  auth_on_health_endpoint: false
-  refresh: "one-shot_plus_manual"
-  polling: false
-  retry: false
-  blocks_cycle_panel: false
-  g2: N/A
-  g3: N/A
-  next_task_proposed: "IMPL-DIRECTOR-IA-M1-HEALTH-DASHBOARD-001"
-  next_task_authorized: false
+result_report_path: "docs/dev-loop/reports/IMPL-DIRECTOR-IA-M1-HEALTH-DASHBOARD-001.md"
 ```

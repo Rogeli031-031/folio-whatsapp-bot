@@ -10,8 +10,11 @@ import {
 import { fetchPlantas } from "@/lib/api";
 import {
   fetchDirectorIaContext,
+  fetchDirectorIaHealth,
   fetchDirectorIaMejoraContinua,
+  HEALTH_COPY,
   type DirectorIaContextResponse,
+  type DirectorIaHealthUiState,
   type DirectorIaInvalidOverdueExample,
   type DirectorIaMejoraContinuaResponse,
   type DirectorIaTopOverdueAction,
@@ -387,6 +390,7 @@ export function DirectorIaShell() {
   const [mejoraLoading, setMejoraLoading] = useState(false);
   const [mejoraError, setMejoraError] = useState<string | null>(null);
   const [mejoraData, setMejoraData] = useState<DirectorIaMejoraContinuaResponse | null>(null);
+  const [healthState, setHealthState] = useState<DirectorIaHealthUiState>("loading");
 
   useEffect(() => {
     const t = parseTokenFromQuery(searchParams) || getTokenFromStorage();
@@ -488,6 +492,17 @@ export function DirectorIaShell() {
     }
   }, [token, planta, anio, mes]);
 
+  const consultarHealth = useCallback(async () => {
+    setHealthState("loading");
+    const result = await fetchDirectorIaHealth();
+    setHealthState(result.state);
+  }, []);
+
+  useEffect(() => {
+    if (!token) return;
+    void consultarHealth();
+  }, [token, consultarHealth]);
+
   if (unauthorized || !token) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-slate-950 p-6">
@@ -503,7 +518,21 @@ export function DirectorIaShell() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <header className="border-b border-slate-800 bg-slate-900/50 px-4 py-4">
-        <h1 className="text-xl font-semibold text-white">Director IA</h1>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-xl font-semibold text-white">Director IA</h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-xs text-slate-300" aria-label="Disponibilidad técnica">
+              {HEALTH_COPY[healthState]}
+            </p>
+            <button
+              type="button"
+              onClick={() => void consultarHealth()}
+              className="rounded border border-slate-600 bg-slate-800 px-2 py-1 text-xs font-medium text-slate-200 hover:bg-slate-700"
+            >
+              Actualizar
+            </button>
+          </div>
+        </div>
       </header>
 
       <main className="mx-auto max-w-4xl p-4 space-y-6">
