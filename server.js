@@ -76,6 +76,7 @@ const directorIaDashboardCycle = require("./lib/director-ia-dashboard-cycle-tran
 const directorIaMejoraContinua = require("./lib/director-ia-mejora-continua");
 const directorIaBitacora = require("./lib/director-ia-bitacora");
 const { isDirectorIaEnabled } = require("./lib/director-ia");
+const directorIaM3 = require("./lib/director-ia-m3-plantas-kpis-proyectos");
 const directorIaEks = require("./lib/director-ia-eks");
 const comercialEntidad = require("./lib/comercial-entidad");
 const { buildActionRegisterBoardPayload } = require("./lib/action-register-board");
@@ -3498,26 +3499,14 @@ async function getProyectoById(client, id) {
 
 /** Proyectos EN_CURSO de una planta (para listados y para asociar folio). */
 async function listarProyectosPorPlanta(client, plantaId, soloEnCurso = true) {
-  let q = `SELECT p.id, p.codigo, p.nombre, p.fecha_inicio, p.fecha_cierre_estimada, p.estatus, p.aprobado_zp
-           FROM public.proyectos p WHERE p.planta_id = $1`;
-  if (soloEnCurso) q += " AND p.estatus = 'EN_CURSO'";
-  q += " ORDER BY p.creado_en DESC";
-  const r = await client.query(q, [plantaId]);
-  return r.rows || [];
+  return directorIaM3.listarProyectosPorPlanta(client, plantaId, soloEnCurso);
 }
 
 /** Proyectos EN_CURSO de una planta o de sus equivalentes (ubicación/código). Para asociar folio cuando la planta elegida puede ser E8 y el proyecto estar en Tehuacán id 3. */
 async function listarProyectosPorPlantaOEquivalentes(client, plantaId, soloEnCurso = true) {
-  const ids = getPlantaIdsEquivalentesForPendientes(plantaId);
-  if (ids.length === 0) return listarProyectosPorPlanta(client, plantaId, soloEnCurso);
-  if (ids.length === 1) return listarProyectosPorPlanta(client, ids[0], soloEnCurso);
-  const placeholders = ids.map((_, i) => `$${i + 1}`).join(",");
-  let q = `SELECT p.id, p.codigo, p.nombre, p.fecha_inicio, p.fecha_cierre_estimada, p.estatus, p.aprobado_zp
-           FROM public.proyectos p WHERE p.planta_id IN (${placeholders})`;
-  if (soloEnCurso) q += " AND p.estatus = 'EN_CURSO'";
-  q += " ORDER BY p.creado_en DESC";
-  const r = await client.query(q, ids);
-  return r.rows || [];
+  return directorIaM3.listarProyectosPorPlantaOEquivalentes(client, plantaId, soloEnCurso, {
+    getEquivalentIds: getPlantaIdsEquivalentesForPendientes,
+  });
 }
 
 /** Con totales de folios y montos por proyecto. */
@@ -5625,211 +5614,22 @@ const ETAPAS_ORDER = [
 const CATEGORIAS_FOLIO = ["GASTOS", "INVERSIONES", "DYO", "TALLER"];
 
 function parseDashboardFilters(q) {
-  const plantas = (q.planta_id || q.plantas || q.planta || "")
-    .toString()
-    .split(",")
-    .map((s) => parseInt(s, 10))
-    .filter((n) => Number.isFinite(n) && n > 0);
-  const categorias = (q.categoria || q.categorias || "")
-    .toString()
-    .split(",")
-    .map((s) => String(s).trim().toUpperCase())
-    .filter(Boolean);
-  const etapas = (q.etapa || q.etapas || "")
-    .toString()
-    .split(",")
-    .map((s) => String(s).trim().toUpperCase())
-    .filter(Boolean);
-  const soloActivos = q.solo_activos === "true" || q.solo_activos === "1" || q.activos === "1";
-  const miSemana = q.mi_semana === "true" || q.mi_semana === "1";
-  let fechaDesde = q.fecha_desde || q.desde || null;
-  let fechaHasta = q.fecha_hasta || q.hasta || null;
-  let fechaAprobDesde = q.fecha_aprob_desde || null;
-  let fechaAprobHasta = q.fecha_aprob_hasta || null;
-  const mes = (q.mes && /^\d{4}-\d{2}$/.test(String(q.mes).trim())) ? String(q.mes).trim() : null;
-  const mesesExtra = (q.meses_extra || q.meses || "")
-    .toString()
-    .split(",")
-    .map((s) => String(s).trim())
-    .filter((s) => /^\d{4}-\d{2}$/.test(s));
-  // Ventana por defecto: mes_cargo actual + creados mes actual y mes pasado (on por defecto).
-  const ventanaDefault =
-    q.ventana === "0" || q.ventana === "false" || q.sin_ventana === "1" || q.sin_ventana === "true"
-      ? false
-      : true;
-  if (fechaDesde && !/^\d{4}-\d{2}-\d{2}$/.test(fechaDesde)) fechaDesde = null;
-  if (fechaHasta && !/^\d{4}-\d{2}-\d{2}$/.test(fechaHasta)) fechaHasta = null;
-  if (fechaAprobDesde && !/^\d{4}-\d{2}-\d{2}$/.test(fechaAprobDesde)) fechaAprobDesde = null;
-  if (fechaAprobHasta && !/^\d{4}-\d{2}-\d{2}$/.test(fechaAprobHasta)) fechaAprobHasta = null;
-  return {
-    plantas,
-    categorias,
-    etapas,
-    soloActivos,
-    miSemana,
-    fechaDesde,
-    fechaHasta,
-    fechaAprobDesde,
-    fechaAprobHasta,
-    mes,
-    mesesExtra,
-    ventanaDefault,
-  };
+  return directorIaM3.parseDashboardFilters(q);
 }
 
 /** Meses YYYY-MM actuales en America/Mexico_City: [mesActual, mesAnterior]. */
 function getMesActualYAnteriorMx() {
-  const fmt = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Mexico_City",
-    year: "numeric",
-    month: "2-digit",
-  });
-  const parts = fmt.formatToParts(new Date());
-  const y = Number(parts.find((p) => p.type === "year")?.value);
-  const m = Number(parts.find((p) => p.type === "month")?.value);
-  const mesActual = `${y}-${String(m).padStart(2, "0")}`;
-  let py = y;
-  let pm = m - 1;
-  if (pm < 1) {
-    pm = 12;
-    py -= 1;
-  }
-  const mesAnterior = `${py}-${String(pm).padStart(2, "0")}`;
-  return { mesActual, mesAnterior };
+  return directorIaM3.getMesActualYAnteriorMx();
 }
 
 function buildDashboardWhere(auth, filters) {
-  const conditions = [];
-  const params = [];
-  let n = 1;
-  // Normalizar role del token (p. ej. "AD", "ad", " AD ") para Asistente de Dirección; CF_CDMX = Contralor financiero CDMX (solo ver)
-  const roleNorm = (auth.role != null && auth.role !== "" ? String(auth.role).replace(/\s/g, "").toUpperCase() : "") || "";
-  const esZP = roleNorm === "ZP";
-  const esAD = roleNorm === "AD";
-  const esCFCDMX = roleNorm === "CF_CDMX";
-  // Por defecto ZP/AD ven privados; otros roles no, salvo permiso acceso_ver_folios_solo_zp_ad.
-  if (!authCanVerFoliosSoloZpAd(auth)) {
-    conditions.push("(COALESCE(f.solo_zp_ad, false) = false)");
-  }
-  if (!esZP && !esAD && !esCFCDMX) {
-    conditions.push("(f.creado_por_rol_clave IS NULL OR UPPER(TRIM(COALESCE(f.creado_por_rol_clave,''))) <> 'AD')");
-  }
-  if (roleNorm === "GG" || roleNorm === "GA") {
-    if (auth.plantas_permitidas && auth.plantas_permitidas.length > 0) {
-      conditions.push(`f.planta_id = ANY($${n}::INT[])`);
-      params.push(auth.plantas_permitidas);
-      n++;
-    } else {
-      conditions.push("f.planta_id = -1");
-    }
-  }
-  if (filters.plantas && filters.plantas.length > 0) {
-    const plantasExpandidas = [];
-    for (const pid of filters.plantas) {
-      plantasExpandidas.push(...getPlantaIdsEquivalentesForPendientes(pid));
-    }
-    const plantasUnicas = [...new Set(plantasExpandidas)].filter((id) => Number.isFinite(id) && id > 0);
-    if (plantasUnicas.length > 0) {
-      conditions.push(`f.planta_id = ANY($${n}::INT[])`);
-      params.push(plantasUnicas);
-      n++;
-    }
-  }
-  if (filters.categorias && filters.categorias.length > 0) {
-    conditions.push(`UPPER(TRIM(COALESCE(f.categoria,''))) = ANY($${n}::TEXT[])`);
-    params.push(filters.categorias);
-    n++;
-  }
-  if (filters.etapas && filters.etapas.length > 0) {
-    const estatusList = [];
-    for (const e of filters.etapas) {
-      const ev = String(e).trim().toUpperCase();
-      if (ETAPAS_VISUAL_ORDER.includes(ev)) {
-        estatusList.push(...etapaVisualToEstatusTecnicos(ev));
-      } else {
-        estatusList.push(ev);
-      }
-    }
-    const uniq = [...new Set(estatusList)];
-    if (uniq.length > 0) {
-      conditions.push(`UPPER(TRIM(COALESCE(f.estatus,''))) = ANY($${n}::TEXT[])`);
-      params.push(uniq);
-      n++;
-    }
-  }
-  if (filters.soloActivos) {
-    conditions.push(`UPPER(TRIM(COALESCE(f.estatus,''))) NOT IN ('CERRADO','CANCELADO')`);
-  }
-  if (filters.miSemana) {
-    conditions.push(`UPPER(TRIM(COALESCE(f.estatus,''))) = 'SELECCIONADO_SEMANA'`);
-  }
-  // Filtro legacy: un solo mes_cargo exacto
-  if (filters.mes) {
-    conditions.push(`(f.mes_cargo = $${n}::TEXT)`);
-    params.push(filters.mes);
-    n++;
-  }
-  // Ventana por defecto (+ meses extra):
-  // - mes_cargo = mes anterior OR >= mes actual (incluye futuros Ago/Sep/…) OR en extras
-  // - OR creado en mes actual / anterior / extras
-  if (filters.ventanaDefault !== false && !filters.mes) {
-    const { mesActual, mesAnterior } = getMesActualYAnteriorMx();
-    const extras = Array.isArray(filters.mesesExtra) ? filters.mesesExtra : [];
-    const mesesCreado = [...new Set([mesActual, mesAnterior, ...extras])];
-    conditions.push(
-      `(
-        (
-          f.mes_cargo IS NOT NULL AND TRIM(f.mes_cargo) <> ''
-          AND (
-            f.mes_cargo = $${n}::TEXT
-            OR f.mes_cargo >= $${n + 1}::TEXT
-            OR (cardinality($${n + 2}::TEXT[]) > 0 AND f.mes_cargo = ANY($${n + 2}::TEXT[]))
-          )
-        )
-        OR to_char((f.creado_en AT TIME ZONE 'America/Mexico_City'), 'YYYY-MM') = ANY($${n + 3}::TEXT[])
-      )`
-    );
-    params.push(mesAnterior);
-    params.push(mesActual);
-    params.push(extras);
-    params.push(mesesCreado);
-    n += 4;
-  } else if (filters.mesesExtra && filters.mesesExtra.length > 0 && !filters.mes) {
-    // Sin ventana default pero con meses extra explícitos
-    const extras = filters.mesesExtra;
-    conditions.push(
-      `(
-        (f.mes_cargo IS NOT NULL AND TRIM(f.mes_cargo) <> '' AND f.mes_cargo = ANY($${n}::TEXT[]))
-        OR to_char((f.creado_en AT TIME ZONE 'America/Mexico_City'), 'YYYY-MM') = ANY($${n}::TEXT[])
-      )`
-    );
-    params.push(extras);
-    n++;
-  }
-  // Fecha de creación
-  if (filters.fechaDesde) {
-    conditions.push(`((f.creado_en AT TIME ZONE 'America/Mexico_City')::DATE >= $${n}::DATE)`);
-    params.push(filters.fechaDesde);
-    n++;
-  }
-  if (filters.fechaHasta) {
-    conditions.push(`((f.creado_en AT TIME ZONE 'America/Mexico_City')::DATE <= $${n}::DATE)`);
-    params.push(filters.fechaHasta);
-    n++;
-  }
-  // Fecha de aprobación (aprobado_en)
-  if (filters.fechaAprobDesde) {
-    conditions.push(`(f.aprobado_en IS NOT NULL AND (f.aprobado_en AT TIME ZONE 'America/Mexico_City')::DATE >= $${n}::DATE)`);
-    params.push(filters.fechaAprobDesde);
-    n++;
-  }
-  if (filters.fechaAprobHasta) {
-    conditions.push(`(f.aprobado_en IS NOT NULL AND (f.aprobado_en AT TIME ZONE 'America/Mexico_City')::DATE <= $${n}::DATE)`);
-    params.push(filters.fechaAprobHasta);
-    n++;
-  }
-  const where = conditions.length ? " AND " + conditions.join(" AND ") : "";
-  return { where, params };
+  return directorIaM3.buildDashboardWhere(auth, filters, {
+    authCanVerFoliosSoloZpAd,
+    getEquivalentIds: getPlantaIdsEquivalentesForPendientes,
+    etapaVisualToEstatusTecnicos,
+    ETAPAS_VISUAL_ORDER,
+    getMesActualYAnteriorMx,
+  });
 }
 
 function cardFromFolioRow(row) {
@@ -11431,69 +11231,12 @@ app.get("/api/dashboard/kpis", dashboardAuthMiddleware, async (req, res) => {
   try {
     const filters = parseDashboardFilters(req.query);
     const { where, params } = buildDashboardWhere(req.dashboardAuth, filters);
-    const whereActivos = where + (filters.soloActivos ? " AND UPPER(TRIM(COALESCE(f.estatus,''))) NOT IN ('CERRADO','CANCELADO')" : "");
-    const r = await client.query(
-      `SELECT COUNT(*)::INT AS total_activos, COALESCE(SUM(f.importe), 0)::NUMERIC AS total_mxn
-       FROM public.folios f WHERE 1=1 ${whereActivos}`,
-      params
-    );
-    const row = r.rows[0] || {};
-    const totalActivos = parseInt(row.total_activos, 10) || 0;
-    const totalMxn = row.total_mxn != null ? Number(row.total_mxn) : null;
-    const rZp = await client.query(
-      `SELECT COUNT(*)::INT AS c FROM public.folios f WHERE 1=1 ${where} AND UPPER(TRIM(COALESCE(f.estatus,''))) = 'PENDIENTE_APROB_ZP'`,
-      params
-    );
-    const pendientesZp = parseInt((rZp.rows[0] || {}).c, 10) || 0;
-    const rAging = await client.query(
-      `SELECT f.id, f.numero_folio, f.folio_codigo, f.estatus, f.creado_en, p.nombre AS planta_nombre,
-              EXTRACT(DAY FROM (NOW() - f.creado_en))::INT AS aging
-       FROM public.folios f LEFT JOIN public.plantas p ON p.id = f.planta_id
-       WHERE 1=1 ${whereActivos} AND f.creado_en IS NOT NULL
-       ORDER BY f.creado_en ASC NULLS LAST LIMIT 1`,
-      params
-    );
-    const oldestRow = rAging.rows[0] || null;
-    const oldest = oldestRow
-      ? {
-          folio_codigo: oldestRow.folio_codigo,
-          aging: parseInt(oldestRow.aging, 10) || 0,
-          etapa: oldestRow.estatus,
-          planta: oldestRow.planta_nombre || null,
-        }
-      : null;
-    const avgAgingRes = await client.query(
-      `SELECT AVG(EXTRACT(DAY FROM (NOW() - f.creado_en)))::NUMERIC AS avg_aging
-       FROM public.folios f WHERE 1=1 ${whereActivos} AND f.creado_en IS NOT NULL`,
-      params
-    );
-    const avgAging = avgAgingRes.rows[0] && avgAgingRes.rows[0].avg_aging != null ? Math.round(Number(avgAgingRes.rows[0].avg_aging)) : null;
-    const rTopPlanta = await client.query(
-      `SELECT f.planta_id, p.nombre AS planta_nombre, COUNT(*)::INT AS cnt, COALESCE(SUM(f.importe), 0)::NUMERIC AS total_mxn
-       FROM public.folios f LEFT JOIN public.plantas p ON p.id = f.planta_id
-       WHERE 1=1 ${whereActivos}
-       GROUP BY f.planta_id, p.nombre ORDER BY cnt DESC, total_mxn DESC NULLS LAST LIMIT 1`,
-      params
-    );
-    const topPlantaRow = rTopPlanta.rows[0] || null;
-    const topPlanta = topPlantaRow ? { nombre: topPlantaRow.planta_nombre || "Sin planta", count: parseInt(topPlantaRow.cnt, 10) || 0, total_mxn: Number(topPlantaRow.total_mxn) || null } : null;
-    const rTopCat = await client.query(
-      `SELECT UPPER(TRIM(COALESCE(f.categoria,''))) AS cat, COUNT(*)::INT AS cnt, COALESCE(SUM(f.importe), 0)::NUMERIC AS total_mxn
-       FROM public.folios f WHERE 1=1 ${whereActivos}
-       GROUP BY UPPER(TRIM(COALESCE(f.categoria,''))) ORDER BY cnt DESC, total_mxn DESC NULLS LAST LIMIT 1`,
-      params
-    );
-    const topCatRow = rTopCat.rows[0] || null;
-    const topCategoria = topCatRow ? { nombre: topCatRow.cat || "N/A", count: parseInt(topCatRow.cnt, 10) || 0, total_mxn: topCatRow.total_mxn != null ? Number(topCatRow.total_mxn) : null } : null;
-    res.json({
-      total_activos: totalActivos,
-      total_mxn: totalMxn,
-      pendientes_zp: pendientesZp,
-      avg_aging: avgAging,
-      top_planta: topPlanta,
-      top_categoria: topCategoria,
-      oldest,
+    const kpis = await directorIaM3.queryDashboardKpis(client, {
+      where,
+      params,
+      soloActivos: filters.soloActivos,
     });
+    res.json(kpis);
   } catch (e) {
     console.error("[Dashboard KPIs]", e);
     res.status(500).json({ error: e.message });

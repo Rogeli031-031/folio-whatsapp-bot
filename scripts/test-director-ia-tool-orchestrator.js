@@ -180,6 +180,22 @@ const cases = [
     assert(isDirectorIaToolExecutable("get_duplicate_folios") === true, "get_duplicate_folios exec");
   },
 
+  () => {
+    const { toolPlan } = planTools("¿Qué proyectos están retrasados?", { planta_id: 1 });
+    const t = getTool(toolPlan, "get_project_status");
+    assert(t && t.status === TOOL_STATUS.available_on_demand, "proyectos on demand");
+    assert(t.executable === true, "proyectos executable");
+    assert(isDirectorIaToolExecutable("get_project_status") === true, "get_project_status exec");
+  },
+
+  () => {
+    const { toolPlan } = planTools("¿Cuáles son los kpis del dashboard?", { planta_id: 1 });
+    const t = getTool(toolPlan, "get_dashboard_kpis");
+    assert(t && t.status === TOOL_STATUS.available_on_demand, "kpis on demand");
+    assert(t.executable === true, "kpis executable");
+    assert(isDirectorIaToolExecutable("get_dashboard_kpis") === true, "get_dashboard_kpis exec");
+  },
+
   // 13. Usuario permisos
   () => {
     const { toolPlan } = planTools("¿Qué permisos tiene el usuario?", {});
