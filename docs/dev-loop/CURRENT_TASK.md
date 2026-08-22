@@ -1,14 +1,24 @@
 # CURRENT_TASK
 
 ```yaml
-task_id: "DOCS-DIRECTOR-IA-M16-CAPABILITY-MATRIX-SYNC-001"
+task_id: "ARCH-DIRECTOR-IA-NEXT-MODULE-PRIORITIZATION-002"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
-authorized_at: "2026-08-21T21:51:51-06:00"
+authorized_at: "2026-08-21T22:06:18-06:00"
 human_authorization: >
-  AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-21T21:51:51-06:00.
-  Apruebo DOCS-DIRECTOR-IA-M16-CAPABILITY-MATRIX-SYNC-001 y autorizo G1.
+  AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-21T22:06:18-06:00.
+  Apruebo ARCH-DIRECTOR-IA-NEXT-MODULE-PRIORITIZATION-002 y autorizo G1.
+
+result:
+  report: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-NEXT-MODULE-PRIORITIZATION-002.md"
+  baseline_percentage: 37.5
+  winner: "M3"
+  winner_state: "PARTIAL"
+  target_state: "COMPLETE"
+  potential_gain_pp: 2.5
+  next_task_proposed: "ARCH-DIRECTOR-IA-M3-PLANTAS-KPIS-PROYECTOS-READINESS-001"
+  next_task_authorized: false
 
 gates:
   G1_task_authorization: AUTHORIZED
@@ -16,263 +26,289 @@ gates:
   G3_new_architecture_contract: N/A
   G8_calibration_materiality_signature: N/A
 
-result:
-  report: "docs/dev-loop/reports/DOCS-DIRECTOR-IA-M16-CAPABILITY-MATRIX-SYNC-001.md"
-  m16_previous: "NOT_STARTED / NO INTEGRADA"
-  m16_after: "COMPLETE"
-  g2: N/A
-  percentage_before: 32.5
-  percentage_after: 37.5
-  next_task_authorized: false
-
 objective: >
-  Sincronizar exclusivamente la capability matrix M0-M20 para reflejar el
-  estado real de M16 — análisis de posibles duplicados de folios — ya integrado
-  en main, determinando si la evidencia física satisface la definición canónica
-  de COMPLETE sin redefinir arquitectura ni ampliar M16 a mutaciones.
+  Priorizar el siguiente módulo funcional de Director IA después de completar
+  M16, usando evidencia física del repositorio y la capability matrix vigente.
+  El objetivo es elegir exactamente un módulo que maximice avance funcional y
+  probabilidad de COMPLETE, minimizando esfuerzo, dependencias, riesgo
+  productivo y cambio arquitectónico.
 
-baseline_in_force:
-  source_readiness: "ARCH-DIRECTOR-IA-M16-DUPLICADOS-READINESS-001"
-  implementation_task: "IMPL-DIRECTOR-IA-M16-DUPLICADOS-001"
-  implementation_state: "integrated_in_main"
-  current_matrix_state: "NOT_STARTED"
-  expected_state_if_evidence_matches: "COMPLETE"
-  current_m0_m20_percentage: 32.5
-  target_m0_m20_percentage_if_complete: 37.5
-
-implemented_capability:
-  mode: "read_only"
-  semantics: "possible_duplicates_only"
-  path:
-    - "pregunta"
-    - "duplicate_folios"
-    - "get_duplicate_folios"
-    - "executor read-only"
-    - "loadDuplicateFoliosForChat"
-    - "loadFoliosParaDuplicados"
-    - "findDuplicatePairs"
-    - "evidencia estructurada"
-    - "respuesta Director IA"
-  internal_http: false
-  cycle_integration: false
-  new_ui: false
-  mutations: false
-  authz_preserved: true
-  heuristic:
-    same_rounded_amount: true
-    concept_similarity_threshold: 0.72
-    confirmed_duplicate: false
-
-in_scope:
-  - "docs/dev-loop/CURRENT_TASK.md"
-  - "docs/dev-loop/reports/DOCS-DIRECTOR-IA-M16-CAPABILITY-MATRIX-SYNC-001.md"
-  - "docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md"
-
-evidence_read_only:
-  - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M16-DUPLICADOS-READINESS-001.md"
-  - "docs/dev-loop/reports/IMPL-DIRECTOR-IA-M16-DUPLICADOS-001.md"
-  - "lib/director-ia-duplicados.js"
-  - "lib/folio-duplicados-load.js"
-  - "lib/director-ia-capabilities.js"
-  - "lib/director-ia-tools.js"
-  - "lib/director-ia-chat.js"
-  - "server.js"
-  - "test/director-ia-duplicados.test.js"
-  - "scripts/test-director-ia-capabilities.js"
-  - "scripts/test-director-ia-tool-orchestrator.js"
-
-out_of_scope:
-  - "modificar runtime"
-  - "modificar backend"
-  - "modificar frontend"
-  - "modificar tests"
-  - "modificar contratos arquitectónicos"
-  - "modificar DIRECTOR_IA_ARCHITECTURE_INDEX.md"
-  - "modificar M0-M15"
-  - "modificar M17-M20"
-  - "cancelar folios"
-  - "resolver duplicados"
-  - "mutar folios"
-  - "añadir UI"
-  - "integrar M16 al cycle"
-  - "crear endpoint nuevo"
-  - "cambiar algoritmo findDuplicatePairs"
-  - "cambiar threshold 0.72"
-  - "commit"
-  - "push"
-  - "merge"
-  - "siguiente tarea"
-
-canonical_check:
-  question: >
-    Verificar en DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md qué significa M16 y si
-    la capacidad read-only integrada satisface de forma completa esa definición.
-  rule:
-    - >
-      Si la definición canónica de M16 exige solamente análisis/consulta de
-      posibles duplicados y la implementación integrada cubre fuente real,
-      wiring, authz, semántica y tests, puede marcarse COMPLETE.
-    - >
-      Si la definición canónica exige cancelación, resolución o mutación para
-      ser COMPLETE, STOP y solicitar G2; no reinterpretar la matriz.
-    - >
-      No usar el endpoint existente como única evidencia de COMPLETE.
-    - >
-      COMPLETE requiere integración real accesible desde Director IA.
-
-semantic_invariants:
-  - >
-    M16 analiza posibles duplicados; no confirma duplicidad de manera humana o
-    determinística cuando el algoritmo no lo sustenta.
-  - "No afirmar fraude."
-  - "No afirmar intención."
-  - "No afirmar que un folio debe cancelarse."
-  - >
-    El estado COMPLETE de capability significa que la capacidad canónica de M16
-    está integrada, no que el algoritmo tenga certeza absoluta.
-  - >
-    No confundir COMPLETE de integración con confirmación de duplicidad.
-
-required_document_change:
-  target_file: "docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md"
-  module: "M16"
-  requirements:
-    - "Modificar únicamente la entrada/secciones necesarias de M16."
-    - "Registrar la fuente real integrada."
-    - "Registrar que la cobertura es read-only."
-    - >
-      Describir los hallazgos como posibles duplicados/candidatos heurísticos.
-    - >
-      Registrar que cancelar/resolver folios queda fuera de esta capacidad si la
-      definición canónica no lo exige.
-    - "No alterar otros M."
-    - "No modificar otras prioridades salvo lo estrictamente derivado de M16."
-    - >
-      No inventar endpoints, permisos, tests o capacidades no soportadas por
-      evidencia física.
-
-complete_evidence_required:
-  - "intent duplicate_folios accesible"
-  - "SOURCE_NOT_INTEGRATED retirado únicamente para M16"
-  - "get_duplicate_folios con executor real"
-  - "fuente real public.folios"
-  - "findDuplicatePairs reutilizado"
-  - "scope/authz preservado"
-  - "evidencia estructurada"
-  - "happy/empty/error"
-  - "semántica de posibles duplicados"
-  - "sin mutaciones"
-  - "sin HTTP interno"
-  - "sin UI nueva"
-  - "sin cycle"
-  - "tests focales verdes"
-  - "suite Director IA verde"
-
-test_evidence:
-  m16_focal:
-    tests: 17
-    pass: 17
-    fail: 0
-
-  director_ia_suite:
-    tests: 416
-    pass: 416
-    fail: 0
-
-  capabilities:
-    tests: 20
-    pass: 20
-    fail: 0
-
-  planner:
-    tests: 28
-    pass: 28
-    fail: 0
-
-  orchestrator:
-    tests: 19
-    pass: 19
-    fail: 0
-
-gate_decision:
-  G2:
-    default: "PENDING_IF_REQUIRED"
-    rule:
-      - >
-        Si basta con reflejar la implementación ya existente usando el
-        vocabulario canónico actual, marcar N/A.
-      - >
-        Si hay que redefinir M16 para considerar COMPLETE una capacidad que el
-        documento define de otra manera, STOP y marcar REQUIRED.
-  G3: "N/A"
-  G8: "N/A"
-
-percentage_rule:
+baseline:
+  current_m0_m20_percentage: 37.5
+  numerator: 7.5
+  denominator: 20
   formula:
     COMPLETE: 1.0
     PARTIAL: 0.5
     NOT_STARTED: 0.0
-    N_A: "excluido"
-  before:
-    numerator: 6.5
-    denominator: 20
-    percentage: 32.5
-  expected_after_if_m16_complete:
-    numerator: 7.5
-    denominator: 20
-    percentage: 37.5
-  restriction: >
-    No cambiar el porcentaje si la revisión canónica concluye que M16 no puede
-    marcarse COMPLETE.
+    N_A: "excluido del denominador"
+  completed_since_previous_prioritization:
+    - "M16 — análisis de posibles duplicados de folios"
+  note: >
+    No volver a priorizar M16. La capability matrix ya lo registra COMPLETE.
+
+scope_rule: >
+  Evaluar únicamente módulos que todavía no estén COMPLETE en
+  docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md. No asumir el estado
+  por memoria; leer físicamente la matriz vigente.
+
+primary_goal: >
+  Identificar el siguiente candidato con mejor combinación de:
+  1) ganancia potencial;
+  2) probabilidad real de alcanzar COMPLETE;
+  3) reutilización de infraestructura existente;
+  4) bajo número de dependencias;
+  5) bajo riesgo productivo;
+  6) bajo riesgo semántico.
+
+in_scope:
+  - "docs/dev-loop/CURRENT_TASK.md"
+  - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-NEXT-MODULE-PRIORITIZATION-002.md"
+  - "docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md (solo lectura)"
+  - "código, tests, endpoints, servicios, tablas y frontend relevantes de candidatos (solo lectura)"
+
+out_of_scope:
+  - "implementar"
+  - "modificar runtime"
+  - "modificar frontend"
+  - "modificar backend"
+  - "modificar capability matrix"
+  - "modificar contratos"
+  - "crear migration"
+  - "modificar SQL"
+  - "smoke productivo"
+  - "commit"
+  - "push"
+  - "merge"
+  - "abrir siguiente task automáticamente"
+
+candidate_selection:
+  rule: >
+    Construir la lista de candidatos directamente desde la matriz vigente.
+    Excluir módulos COMPLETE y N_A.
+  include:
+    - "PARTIAL"
+    - "NOT_STARTED"
+    - "BLOCKED, únicamente para valorar si el blocker ya desapareció"
+  exclude:
+    - "COMPLETE"
+    - "N_A"
+
+evaluation_dimensions:
+
+  canonical_definition:
+    question: >
+      ¿Qué exige exactamente el módulo según la capability matrix?
+
+  current_state:
+    question: >
+      ¿Está PARTIAL, NOT_STARTED o BLOCKED?
+
+  potential_gain:
+    question: >
+      ¿Cuántos puntos porcentuales ganaría el indicador si alcanza COMPLETE?
+
+  backend_readiness:
+    question: >
+      ¿Ya existen endpoints, handlers, services, queries o loaders reutilizables?
+
+  frontend_readiness:
+    question: >
+      ¿Ya existe superficie/UI/patrón reutilizable o puede completarse sin UI nueva?
+
+  tool_readiness:
+    question: >
+      ¿Existe intent/tool/capability declarada pero no integrada, como ocurrió en M16?
+
+  data_source:
+    question: >
+      ¿La fuente real ya existe y es accesible con permisos conocidos?
+
+  authz:
+    question: >
+      ¿El scope y los permisos están resueltos o existe riesgo de exposición cross-scope?
+
+  dependencies:
+    question: >
+      ¿Cuántas tareas previas o dependencias humanas/externas requiere?
+
+  db_migration:
+    question: >
+      ¿Requiere cambios de schema, backfill o migración productiva?
+
+  external_services:
+    question: >
+      ¿Depende de S3, Twilio, WhatsApp, proveedores externos, archivos manuales u otros sistemas?
+
+  implementation_effort:
+    question: >
+      ¿El gap es wiring pequeño, integración media o capacidad nueva grande?
+
+  testability:
+    question: >
+      ¿Puede probarse determinísticamente con la infraestructura existente?
+
+  semantic_risk:
+    question: >
+      ¿Existe riesgo de convertir correlación, heurística o fuente parcial en conclusión fuerte?
+
+  production_risk:
+    question: >
+      ¿Requiere escritura, acciones clase C, secretos, permisos elevados o rollout delicado?
+
+  completeness_feasibility:
+    question: >
+      ¿Puede alcanzar COMPLETE en un único slice razonable o solo PARTIAL?
+
+mandatory_candidate_table:
+  columns:
+    - "module"
+    - "canonical_purpose"
+    - "current_state"
+    - "potential_gain_pp"
+    - "existing_backend"
+    - "existing_frontend"
+    - "existing_tool_or_intent"
+    - "data_source"
+    - "authz_ready"
+    - "dependencies"
+    - "db_or_migration"
+    - "external_dependency"
+    - "estimated_effort"
+    - "semantic_risk"
+    - "production_risk"
+    - "can_reach_complete_in_one_slice"
+    - "evidence"
+
+ranking_rules:
+  - "Rankear todos los candidatos evaluados."
+  - "No elegir por número de módulo."
+  - "No elegir por facilidad si solo puede llegar a PARTIAL."
+  - "Preferir un +5 pp real frente a un +2.5 pp si esfuerzo/riesgo son comparables."
+  - "Preferir read-only sobre mutaciones cuando el valor sea comparable."
+  - "Preferir wiring de capacidades existentes sobre desarrollo de dominio desde cero."
+  - "Penalizar dependencias externas."
+  - "Penalizar clase C / acciones irreversibles."
+  - "Penalizar ambigüedad de authz."
+  - "Penalizar migrations si existe candidato igual de valioso sin ellas."
+  - "No usar una puntuación arbitraria sin justificar componentes."
+
+blocked_modules:
+  rule: >
+    Revalidar blockers anteriores en lugar de asumir que siguen vigentes.
+    Si un blocker desapareció por trabajo reciente, el módulo vuelve a competir.
+  note: >
+    No ejecutar nada para remover blockers; solo diagnosticar.
+
+partial_modules:
+  rule: >
+    Evaluar si llevar un PARTIAL a COMPLETE es más barato y seguro que llevar un
+    NOT_STARTED a COMPLETE. No excluirlos automáticamente.
+  gain_formula: >
+    PARTIAL -> COMPLETE = +2.5 pp bajo la fórmula vigente.
+
+not_started_modules:
+  gain_formula: >
+    NOT_STARTED -> COMPLETE = +5.0 pp bajo la fórmula vigente.
+
+decision_target:
+  required: "exactamente un ganador"
+  winner_must:
+    - "tener evidencia física suficiente"
+    - "tener un path de implementación identificable"
+    - "tener gates determinables"
+    - "maximizar probabilidad de COMPLETE"
+    - "no depender de una reinterpretación artificial de la matriz"
+
+winner_analysis:
+  must_include:
+    - "por qué debe ir primero"
+    - "ganancia potencial"
+    - "delta físico faltante"
+    - "dependencias"
+    - "riesgos"
+    - "si necesita readiness adicional"
+    - "si puede ir directo a IMPL"
+    - "gates"
+
+next_task_policy:
+  exactly_one: true
+  rule:
+    - >
+      Si falta una auditoría específica del ganador:
+      proponer ARCH-DIRECTOR-IA-<MODULO>-READINESS-001.
+    - >
+      Si el gap está completamente determinado y puede implementarse sin
+      decisión adicional:
+      proponer IMPL-DIRECTOR-IA-<MODULO>-001.
+    - "No autorizar."
+    - "No ejecutar."
+    - "No proponer dos tareas alternativas."
+
+gate_rules:
+  G1: "requerido para cualquier NEXT_TASK"
+  G2:
+    - "N/A si cabe en arquitectura existente"
+    - "REQUIRED si hay que redefinir arquitectura"
+  G3:
+    - "N/A si contratos existentes bastan"
+    - "REQUIRED si hay que crear/modificar contrato arquitectónico"
+  G8:
+    - "N/A salvo evidencia material específica"
+  note: "No activar gates preventivamente."
+
+required_output:
+  - "baseline formal 37.5%"
+  - "lista de candidatos derivada de matriz vigente"
+  - "tabla comparativa completa"
+  - "ranking total"
+  - "ganador único"
+  - "ganancia potencial"
+  - "evidencia física del ganador"
+  - "por qué otros candidatos quedan detrás"
+  - "blockers revalidados"
+  - "NEXT_TASK único"
+  - "gates del NEXT_TASK"
 
 acceptance_criteria:
-  - "La definición canónica de M16 fue revisada."
-  - "La decisión COMPLETE/NO COMPLETE está sustentada con evidencia física."
-  - >
-    Si COMPLETE, DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md refleja la integración
-    read-only real sin exagerar semántica.
-  - "M0-M15 y M17-M20 permanecen intactos."
-  - "No se agregan mutaciones a M16."
-  - "No se afirma duplicado confirmado."
-  - "No se modifica runtime."
-  - "No se modifica código."
-  - "No se modifican tests."
-  - "No se modifica arquitectura."
-  - "G2 queda decidido con evidencia."
+  - "Se leyó la capability matrix vigente."
+  - "M16 no se vuelve a evaluar como candidato."
+  - "Todos los módulos no COMPLETE/N_A relevantes fueron considerados."
+  - "PARTIAL y NOT_STARTED fueron comparados bajo la fórmula correcta."
+  - "Los blockers fueron revalidados."
+  - "El ranking tiene evidencia física."
+  - "Hay exactamente un ganador."
+  - "Hay exactamente un NEXT_TASK."
+  - "No se implementó nada."
+  - "No se modificó la capability matrix."
   - "git diff --check limpio."
-  - "Solo CURRENT_TASK, reporte y capability matrix pueden cambiar."
+  - "Solo CURRENT_TASK y reporte modificados."
 
 report_requirements:
-  path: "docs/dev-loop/reports/DOCS-DIRECTOR-IA-M16-CAPABILITY-MATRIX-SYNC-001.md"
+  path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-NEXT-MODULE-PRIORITIZATION-002.md"
   must_include:
-    - "estado anterior M16"
-    - "definición canónica"
-    - "evidencia de implementación"
-    - "estado posterior"
-    - "razón COMPLETE o razón de STOP"
-    - "semántica de posibles duplicados"
-    - "scope/authz"
-    - "tests"
-    - "G2 decision"
-    - "porcentaje antes/después si aplica"
-    - "archivos modificados"
+    - "resumen ejecutivo"
+    - "baseline 37.5%"
+    - "estado actual de módulos"
+    - "tabla comparativa"
+    - "ranking"
+    - "ganador"
+    - "ganancia potencial"
+    - "evidencia física"
+    - "dependencias"
+    - "riesgos"
+    - "blockers revalidados"
+    - "NEXT_TASK"
+    - "gates"
     - "acciones no realizadas"
-
-stop_conditions:
-  - >
-    Si la definición canónica exige mutaciones para marcar M16 COMPLETE, STOP.
-  - >
-    Si hay que redefinir el significado de M16 para justificar COMPLETE, STOP y
-    solicitar G2.
-  - >
-    Si aparece una contradicción entre capability matrix y contratos que no
-    pueda resolverse documentalmente sin arquitectura, STOP.
-  - "No ampliar el scope."
+    - "git diff --check"
+    - "git status"
 
 expected_terminal_state: >
-  DONE_PENDING_REVIEW si M16 puede sincronizarse a COMPLETE sin redefinir su
-  definición canónica. BLOCKED/STOPPED si hace falta G2.
+  DONE_PENDING_REVIEW si existe un ganador claro y un siguiente slice
+  implementable. BLOCKED/STOPPED si no puede elegirse un ganador sin una
+  decisión arquitectónica previa.
 
 max_attempts: 1
-result_report_path: "docs/dev-loop/reports/DOCS-DIRECTOR-IA-M16-CAPABILITY-MATRIX-SYNC-001.md"
+result_report_path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-NEXT-MODULE-PRIORITIZATION-002.md"
 ```
