@@ -1,13 +1,13 @@
 # CURRENT_TASK
 
 ```yaml
-task_id: "ARCH-DIRECTOR-IA-NEXT-MODULE-PRIORITIZATION-001"
+task_id: "ARCH-DIRECTOR-IA-M16-DUPLICADOS-READINESS-001"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
-authorized_at: "2026-08-21T20:25:00-06:00"
+authorized_at: "2026-08-21T21:16:47-06:00"
 human_authorization: >
-  AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-21T20:25:00-06:00.
+  AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-21T21:16:47-06:00.
   G1 autorizado.
 
 gates:
@@ -16,160 +16,192 @@ gates:
   G3_new_architecture_contract: N/A
   G8_calibration_materiality_signature: N/A
 
+result:
+  report: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M16-DUPLICADOS-READINESS-001.md"
+  can_reach_complete_in_one_read_only_slice: YES
+  recommended_alternative: "A"
+  next_task_proposed: "IMPL-DIRECTOR-IA-M16-DUPLICADOS-001"
+  next_task_authorized: false
+
 objective: >
-  Priorizar el siguiente módulo funcional de Director IA que convenga implementar
-  después de M1, usando evidencia física del repositorio y la matriz M0-M20.
-  Comparar impacto, esfuerzo, dependencias, riesgo y capacidad real de mover un
-  módulo de NOT_STARTED a COMPLETE con un slice acotado.
+  Auditar exclusivamente M16 — Duplicados de folios — para determinar si puede
+  pasar de NOT_STARTED a COMPLETE mediante un slice de lectura, reutilizando la
+  capacidad física existente de análisis de duplicados y conectándola al
+  Director IA sin introducir mutaciones, cancelaciones, nuevas tablas ni nueva
+  arquitectura.
 
-current_progress:
-  m0_m20_percentage: 32.5
-  formula:
-    COMPLETE: 1.0
-    PARTIAL: 0.5
-    NOT_STARTED: 0.0
-    N_A: "excluido del denominador"
-  note: >
-    M1 ya está en PARCIAL. El objetivo de esta auditoría es encontrar el
-    siguiente módulo que maximice avance funcional sin abrir arquitectura
-    innecesaria.
+baseline:
+  module: "M16"
+  current_state: "NOT_STARTED"
+  potential_gain_if_complete_pp: 5.0
+  current_m0_m20_percentage: 32.5
+  target_percentage_if_complete: 37.5
+  prioritization_source: "ARCH-DIRECTOR-IA-NEXT-MODULE-PRIORITIZATION-001"
 
-candidates:
-  - "M4 Clasificación"
-  - "M5 Taller AT"
-  - "M6 Excel GASTOS/INVERSIONES"
-  - "M10 Weekly LD"
-  - "M14 Usuarios admin"
-  - "M15 Docs/media folio"
-  - "M16 Duplicados"
-
-excluded:
-  M18:
-    reason: "bloqueado por mapeo/definición de queries de presupuesto"
-  M19:
-    reason: "N_A / no integrar"
-  partial_modules:
-    reason: >
-      No son candidatos principales en esta auditoría; primero evaluar si un
-      NOT_STARTED puede aportar +5 puntos con menor esfuerzo.
+known_physical_evidence:
+  - "findDuplicatePairs existe"
+  - "GET /api/folios/duplicados/analisis existe"
+  - "intent duplicate_folios existe"
+  - "tool get_duplicate_folios existe pero sin executor conectado"
+  - "cancelación de folio queda fuera de este slice"
 
 in_scope:
   - "docs/dev-loop/CURRENT_TASK.md"
-  - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-NEXT-MODULE-PRIORITIZATION-001.md"
+  - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M16-DUPLICADOS-READINESS-001.md"
+
   - "docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md (solo lectura)"
-  - "código y tests de los candidatos (solo lectura)"
+
+  - "implementación física de findDuplicatePairs (solo lectura)"
+  - "endpoint GET /api/folios/duplicados/analisis (solo lectura)"
+  - "intent duplicate_folios (solo lectura)"
+  - "tool get_duplicate_folios (solo lectura)"
+  - "tool registry/executors Director IA (solo lectura)"
+  - "chat/context/cycle integration relevante (solo lectura)"
+  - "auth/authz relevante (solo lectura)"
+  - "tests de duplicados y Director IA relevantes (solo lectura)"
 
 out_of_scope:
   - "implementar"
-  - "modificar frontend/backend"
+  - "cancelar folios"
+  - "mutar folios"
+  - "crear endpoints nuevos"
+  - "crear tablas/migrations"
   - "modificar contratos"
   - "modificar matriz"
-  - "crear migrations"
+  - "frontend nuevo salvo que la auditoría demuestre necesidad"
   - "smoke productivo"
   - "commit"
   - "push"
   - "merge"
-  - "abrir siguiente tarea automáticamente"
+  - "siguiente tarea"
 
-evaluation_dimensions:
-  impact:
+audit_questions:
+  D1_canonical_definition:
     question: >
-      ¿Cuántos puntos M0-M20 ganaría si el módulo pasa realmente a COMPLETE?
+      ¿Qué exige exactamente M16 en la capability matrix para poder considerarlo
+      COMPLETE?
 
-  implementation_effort:
+  D2_duplicate_engine:
     question: >
-      ¿Cuánto wiring/runtime nuevo exige según el código físico existente?
+      ¿Qué hace findDuplicatePairs exactamente, sobre qué datos opera y qué
+      output devuelve?
 
-  dependency_count:
+  D3_endpoint:
     question: >
-      ¿Cuántos otros módulos, contratos, fuentes o permisos necesita antes?
+      ¿Cómo funciona GET /api/folios/duplicados/analisis: auth, filtros, shape,
+      límites y errores?
 
-  backend_readiness:
+  D4_intent:
     question: >
-      ¿Ya existe fuente/endpoint/helper reutilizable?
+      ¿Cómo se detecta duplicate_folios y qué lenguaje natural cubre hoy?
 
-  frontend_readiness:
+  D5_tool_contract:
     question: >
-      ¿Ya existe UI o patrón reutilizable?
+      ¿Qué contrato/shape tiene get_duplicate_folios y por qué hoy no tiene
+      executor?
 
-  testability:
+  D6_executor:
     question: >
-      ¿Puede cubrirse con tests deterministas existentes o focales simples?
+      ¿Cuál es el lugar correcto para conectar el executor reutilizando la
+      lógica existente sin duplicarla?
 
-  production_risk:
+  D7_read_only:
     question: >
-      ¿Requiere DB, migrations, permisos, secretos o cambios productivos
-      delicados?
+      Confirmar que M16 COMPLETE puede alcanzarse con lectura/análisis בלבד,
+      dejando cualquier cancelación/mutación completamente fuera.
 
-  semantic_risk:
+  D8_authz:
     question: >
-      ¿Puede inducir inferencias/causalidad no sustentada o mezclar funciones
-      que no corresponden al Director IA?
+      ¿Qué auth/authz debe respetar el Director IA al consultar duplicados?
+      ¿Necesita planta/rol/filtros?
 
-  completeness_feasibility:
+  D9_scope:
     question: >
-      ¿Es realista llevarlo a COMPLETE en un solo slice o solo a PARTIAL?
+      ¿El análisis es global, por planta, por rango temporal o por otro criterio?
+      ¿Qué necesita el usuario para una respuesta consistente?
 
-mandatory_matrix:
-  columns:
-    - "module"
-    - "current_state"
-    - "potential_gain_points"
-    - "existing_backend"
-    - "existing_frontend"
-    - "dependencies"
-    - "estimated_effort"
-    - "production_risk"
-    - "can_reach_complete_in_one_slice"
-    - "recommended_rank"
+  D10_semantics:
+    question: >
+      ¿Qué puede afirmar Director IA a partir de duplicate pairs y qué no puede
+      inferir automáticamente?
+
+  D11_response:
+    question: >
+      ¿Cuál debe ser el output mínimo del tool para que Director IA responda
+      con evidencia: folios, score/criterio, campos comparados, límites?
+
+  D12_cycle_vs_chat:
+    question: >
+      ¿M16 debe integrarse al chat/intent legado, al pipeline constitucional,
+      o puede completarse mediante tool read-only sin tocar el cycle?
+
+  D13_tests:
+    question: >
+      ¿Qué tests mínimos hacen falta para considerar M16 COMPLETE?
+
+  D14_frontend:
+    question: >
+      ¿Hace falta UI nueva o basta la superficie conversacional/Director IA
+      existente?
+
+  D15_gates:
+    question: >
+      ¿El siguiente IMPL requiere solo G1 o también G2/G3?
+
+  D16_complete:
+    question: >
+      Definir de forma binaria y verificable cuándo M16 pasa a COMPLETE.
+
+  D17_next_task:
+    question: >
+      Proponer exactamente un NEXT_TASK mínimo y sin mutaciones.
+
+mandatory_findings:
+  - "ruta exacta de findDuplicatePairs"
+  - "ruta exacta del endpoint de análisis"
+  - "shape real de request/response"
+  - "auth/authz"
+  - "intent duplicate_folios"
+  - "tool get_duplicate_folios"
+  - "punto exacto donde falta wiring/executor"
+  - "si se requiere o no frontend"
+  - "si se requiere o no backend nuevo"
+  - "si se requiere o no integración al cycle"
+  - "semántica segura de respuesta"
+  - "tests necesarios"
+  - "gates"
+  - "definición binaria de COMPLETE"
+  - "exactamente un NEXT_TASK"
 
 decision_rules:
-  - "Priorizar capacidad de llegar a COMPLETE, no solo facilidad de hacer algo parcial."
-  - "Preferir reutilización de código existente."
-  - "Penalizar dependencias humanas o contractuales no resueltas."
-  - "Penalizar migrations/DB si existe alternativa igual de valiosa sin ellas."
-  - "No elegir un módulo solo porque el archivo ya existe."
-  - "No asumir COMPLETE sin wiring + integration + tests."
-  - "Elegir EXACTAMENTE un siguiente módulo."
-  - "Proponer exactamente un NEXT_TASK."
-  - "No implementarlo."
-
-required_output:
-  - "ranking completo de candidatos"
-  - "ganancia potencial de porcentaje"
-  - "evidencia física por candidato"
-  - "por qué el ganador debe ir primero"
-  - "qué riesgos quedan"
-  - "exactamente un NEXT_TASK mínimo"
-  - "gates del NEXT_TASK"
+  - "M16 debe ser read-only en este slice."
+  - "Cancelar folios queda fuera."
+  - "No crear mutaciones."
+  - "No duplicar lógica si findDuplicatePairs ya es reusable."
+  - "Preferir conectar tool existente antes que crear endpoint nuevo."
+  - "No llevar M16 al cycle constitucional si el contrato no lo exige."
+  - "No declarar COMPLETE solo porque existe endpoint."
+  - "Exigir wiring + authz + semántica + tests."
+  - "No implementar en esta tarea."
 
 acceptance_criteria:
-  - "todos los candidatos evaluados con evidencia física"
-  - "ranking explícito"
-  - "un solo ganador"
-  - "ganancia porcentual estimada defendible"
-  - "NEXT_TASK único"
+  - "gap físico identificado con evidencia"
+  - "se determina si COMPLETE es viable en un solo slice"
+  - "cancelación/mutación explícitamente fuera"
+  - "executor/wiring exacto identificado"
+  - "auth/authz definidos"
+  - "semántica segura definida"
+  - "tests mínimos definidos"
+  - "gates definidos"
+  - "exactamente un NEXT_TASK"
   - "sin implementación"
   - "git diff --check limpio"
   - "solo CURRENT_TASK y reporte modificados"
 
 expected_terminal_state: >
-  DONE_PENDING_REVIEW si existe un ganador claro y un slice implementable.
-  BLOCKED/STOPPED si ninguno puede llegar razonablemente a COMPLETE sin una
-  tarea arquitectónica previa.
+  DONE_PENDING_REVIEW si M16 puede completarse con un slice read-only bien
+  definido. BLOCKED/STOPPED si requiere nueva arquitectura, mutaciones o una
+  decisión contractual no autorizada.
 
 max_attempts: 1
-result_report_path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-NEXT-MODULE-PRIORITIZATION-001.md"
-
-documented_result:
-  outcome: "DONE_PENDING_REVIEW"
-  baseline_percentage: 32.5
-  winner: "M16"
-  winner_name: "Análisis duplicados de folios"
-  potential_gain_if_complete_pp: 5.0
-  next_task_proposed: "ARCH-DIRECTOR-IA-M16-DUPLICADOS-READINESS-001"
-  next_task_authorized: false
-  g2: N/A
-  g3: N/A
-  g8: N/A
-```
+result_report_path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M16-DUPLICADOS-READINESS-001.md"
