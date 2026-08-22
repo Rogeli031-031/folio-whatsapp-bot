@@ -414,19 +414,19 @@
 | **ID** | M16 |
 | **Módulo** | Análisis duplicados |
 | **Propósito empresarial** | Detectar parejas de folios similares y opcionalmente cancelar. |
-| **Cobertura actual de Director IA** | NO INTEGRADA |
-| **Información exacta que sí consulta** | Ninguna. |
-| **Información que no consulta** | `/api/folios/duplicados/check`, `/analisis`. |
-| **Archivos actuales relacionados** | `lib/folio-duplicados.js` |
-| **Endpoints actuales relacionados** | `/api/folios/duplicados/*` |
+| **Cobertura actual de Director IA** | COMPLETA (respecto a la capacidad canónica de análisis/consulta; no implica confirmación determinística de cada par ni cancelación). |
+| **Información exacta que sí consulta** | Pares candidatos a posible duplicidad en `public.folios` (planta + equivalentes, no CANCELADO, ventana de `creado_en`, `LIMIT 1500`) vía `loadFoliosParaDuplicados` + `findDuplicatePairs` (mismo importe redondeado a 2 decimales + similitud de concepto ≥ 0.72). Intent `duplicate_folios` → tool `get_duplicate_folios` → executor `loadDuplicateFoliosForChat`. Evidencia estructurada (`semantic_class: possible_duplicate_heuristic`, IDs, importe, concepto, score, umbral, `scanned`, `truncated`). Happy / empty / error fail-safe. Sin OpenAI en este camino. |
+| **Información que no consulta** | `POST /api/folios/duplicados/check` (`findSimilarTo`, alarma al crear). No cancela, no edita, no fusiona, no confirma duplicidad humana. No usa duplicados Excel Taller (M5). No afirma fraude. |
+| **Archivos actuales relacionados** | `lib/folio-duplicados.js`, `lib/folio-duplicados-load.js`, `lib/director-ia-duplicados.js`, `lib/director-ia-chat.js`, `lib/director-ia-tools.js`, `lib/director-ia-capabilities.js`, `test/director-ia-duplicados.test.js` |
+| **Endpoints actuales relacionados** | Superficie Director IA: `POST /api/director-ia/chat`. Dashboard (no HTTP interno desde el tool): `GET /api/folios/duplicados/analisis`. Escritura ajena a esta capacidad: `POST /api/folios/:id/cancelar`. |
 | **Tablas o vistas relacionadas** | `public.folios` |
-| **Funciones existentes reutilizables** | `findDuplicatePairs`, `findSimilarTo` |
-| **Capacidades de lectura posibles** | DETECTAR RIESGOS/CONSULTAR — reutilizable con herramienta nueva. |
-| **Capacidades de escritura posibles** | CANCELAR folio desde UI análisis — ALTO. |
-| **Permisos aplicables** | Auth + bloqueo GV folios. |
-| **Nivel de riesgo** | MEDIO (lectura); ALTO (cancelar). |
+| **Funciones existentes reutilizables** | `findDuplicatePairs` (reutilizado, umbral 0.72 sin recalibrar), `loadFoliosParaDuplicados`, `loadDuplicateFoliosForChat`, `buildDuplicateFoliosChatResult`. `findSimilarTo` sigue en el check de creación, no en el chat. |
+| **Capacidades de lectura posibles** | DETECTAR RIESGOS/CONSULTAR — integrada (posibles duplicados / candidatos heurísticos). |
+| **Capacidades de escritura posibles** | CANCELAR folio desde UI análisis — ALTO; **no integrada** en Director IA (clase C). |
+| **Permisos aplicables** | Auth dashboard + bloqueo GV folios + `assertPlantaPermitidaDashboard` (GG/GA/AD con `plantas_permitidas`). |
+| **Nivel de riesgo** | MEDIO (lectura heurística); ALTO (cancelar, fuera de esta capacidad). |
 | **Dependencias** | Folios. |
-| **Observaciones verificadas** | Independiente de duplicados Excel Taller. |
+| **Observaciones verificadas** | `IMPL-DIRECTOR-IA-M16-DUPLICADOS-001` (integrado en main). Tests focales 17/17; suite `test/director-ia-*.test.js` 416/416; scripts capabilities 20/20, planner 28/28, orchestrator 19/19. Independiente de duplicados Excel Taller. COMPLETE = integración de la consulta canónica, no certeza de cada par. Scoring M0–M20 del loop (COMPLETE=1.0, PARCIAL=0.5, NOT_STARTED=0.0): 6.5/20 = 32.5% → **7.5/20 = 37.5%**. |
 
 ### M17 — WhatsApp → Dashboard
 
@@ -858,14 +858,14 @@
 
 ### Fuente: Duplicados
 
-- **Dominio:** M16 (+ hoja Taller M5)
-- **Cobertura actual:** NO INTEGRADA
-- **Archivo de acceso:** `lib/folio-duplicados.js`; taller Excel duplicados
-- **Función de acceso:** `findDuplicatePairs`, `findSimilarTo`
-- **Endpoint relacionado:** `/api/folios/duplicados/*`
+- **Dominio:** M16 (+ hoja Taller M5, no cableada)
+- **Cobertura actual:** COMPLETA para el análisis de **posibles** pares de folios (M16). La hoja de duplicados Excel Taller (M5) permanece NO INTEGRADA.
+- **Archivo de acceso:** `lib/folio-duplicados.js`, `lib/folio-duplicados-load.js`, `lib/director-ia-duplicados.js`
+- **Función de acceso:** `loadDuplicateFoliosForChat` → `loadFoliosParaDuplicados` → `findDuplicatePairs`
+- **Endpoint relacionado:** Chat `POST /api/director-ia/chat`; dashboard `GET /api/folios/duplicados/analisis` (misma lógica de carga; el tool no hace HTTP interno)
 - **Tablas consultadas:** `public.folios`
-- **Evidencia de integración actual:** No integrada
-- **Información que no puede concluirse con esta fuente:** Existencia de duplicados vía chat
+- **Evidencia de integración actual:** Intent `duplicate_folios`; tool `get_duplicate_folios` con executor real; `SOURCE_NOT_INTEGRATED` retirado solo para este dominio
+- **Información que no puede concluirse con esta fuente:** Duplicado confirmado, fraude, obligación de cancelar, pares fuera de ventana/`LIMIT`, duplicados Excel Taller, alarma `findSimilarTo` al crear
 
 ### Fuente: Usuarios y permisos
 
@@ -920,7 +920,7 @@
 | 11 | ¿Cuál fue el último movimiento del folio? | No | NO INTEGRADA | Historial | `GET /api/folios/:id/timeline` | Toda la fuente | Alto |
 | 12 | ¿Qué documentos le faltan? | No | NO INTEGRADA | Documentos/medios | `/media`, documento-* | Toda la fuente | Alto |
 | 13 | ¿Tiene cheque, depósito o póliza? | No | NO INTEGRADA | Folios/pólizas | Campos folio + endpoints póliza/cheque | Toda la fuente | Alto |
-| 14 | ¿Existen posibles folios duplicados? | No | NO INTEGRADA | Duplicados | `findDuplicatePairs` / `/api/folios/duplicados/analisis` | Toda la fuente | Alto |
+| 14 | ¿Existen posibles folios duplicados? | Sí (heurístico; candidatos, no confirmación) | COMPLETA | Duplicados | `loadDuplicateFoliosForChat` / `findDuplicatePairs` | Confirmación humana; cancelación; `/check` al crear; pares fuera de ventana o `LIMIT 1500` | Alto si se lee como duplicado confirmado o fraude |
 | 15 | ¿Qué gastos existen por planta? | No (Excel); confusión posible | NO INTEGRADA / INDIRECTA | Gastos Excel vs IGF «gasto» | `categoria-rango-excel` vs `PLANT_FINANCIAL_KPI_RE` | Listado folios GASTOS | Alto (ambigüedad semántica) |
 | 16 | ¿Qué inversiones están pendientes? | No | NO INTEGRADA | Inversiones Excel / folios | `categoria-rango-excel?categoria=INVERSIONES` | Toda la fuente | Alto |
 | 17 | ¿Cómo va el presupuesto semanal? | No | NO INTEGRADA | Presupuestos | Tablas `presupuesto_*` / bot carrito | Toda la fuente | Alto |
@@ -1150,11 +1150,11 @@ Escala 1–5. Prioridad derivada de: valor ejecutivo × disponibilidad de funcio
 
 | Campo | Contenido |
 |-------|-----------|
-| **Evidencia** | Auditoría M5/M16: check al crear, análisis modal (`folio-duplicados.js`), hoja Excel Taller. |
-| **Impacto posible** | Respuestas IA inconsistentes según qué detector se envuelva. |
+| **Evidencia** | Auditoría M5/M16: check al crear, análisis modal (`folio-duplicados.js`), hoja Excel Taller. El chat M16 declara el detector del modal: `findDuplicatePairs` (umbral 0.72). |
+| **Impacto posible** | Respuestas IA inconsistentes si se envolviera otro detector (check al crear o Excel Taller). |
 | **Dominios afectados** | M5, M16, M2. |
-| **¿Bloquea expansión?** | No; exige declarar cuál detector se usa. |
-| **Información adicional** | Paridad de umbrales entre los tres. |
+| **¿Bloquea expansión?** | No; el detector de M16 chat ya está declarado. |
+| **Información adicional** | Paridad de umbrales entre los tres (pendiente). |
 
 ### 12. Ausencia de hooks, providers o estado global compartido
 
@@ -1182,11 +1182,12 @@ Escala 1–5. Prioridad derivada de: valor ejecutivo × disponibilidad de funcio
 
 ### 1. Resumen de cobertura real actual
 
-Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Register**, **DICF**, **bitácora**, **comentarios** (cliente y folio) y **entidades comerciales**, con **anexos financieros on-demand** (IGF/ARR/margen/estado comercial) activados por **regex** en el chat. **No** opera el kanban, **no** lee documentos/pólizas/cheques/presupuestos/proyectos/duplicados/clasificación/taller/Excel GASTOS-INVERSIONES ni los endpoints Delta UI. Las escrituras propias (bitácora/entidades) existen por **API UI**, no como tools autónomos del LLM. El GET `/api/director-ia/context` **subdeclara** IGF/ARR/commercial_state respecto al chat.
+Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Register**, **DICF**, **bitácora**, **comentarios** (cliente y folio) y **entidades comerciales**, con **anexos financieros on-demand** (IGF/ARR/margen/estado comercial) activados por **regex** en el chat, y con **análisis on-demand de posibles duplicados de folios** (M16: `findDuplicatePairs`, no confirmación). **No** opera el kanban, **no** lee documentos/pólizas/cheques/presupuestos/proyectos/clasificación/taller/Excel GASTOS-INVERSIONES ni los endpoints Delta UI. Las escrituras propias (bitácora/entidades) existen por **API UI**, no como tools autónomos del LLM. El GET `/api/director-ia/context` **subdeclara** IGF/ARR/commercial_state respecto al chat.
 
 ### 2. Dominios completos (COMPLETA)
 
 - **M13 Director IA** (respecto a su propio módulo: bitácora, entidades, chat, mejora continua como parte del producto).
+- **M16 Duplicados** (consulta canónica de **posibles** pares vía `get_duplicate_folios` / `findDuplicatePairs`. COMPLETE significa integración de esa capacidad de análisis, no confirmación determinística de cada duplicado ni cancelación).
 
 ### 3. Dominios parciales (PARCIAL)
 
@@ -1214,7 +1215,6 @@ Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Re
 - M10 Weekly discount LD  
 - M14 Usuarios admin (como dominio)  
 - M15 Documentos/medios  
-- M16 Duplicados  
 - M18 Presupuestos semanales  
 - M19 Delta Ingreso AI test  
 - Kanban/estatus/timeline/cheque/póliza/proyectos (como fuentes de negocio)
@@ -1231,6 +1231,7 @@ Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Re
 | COMPARAR/CONSULTAR margen e IGF/ARR (on-demand) | `loadIgfArrAnnexForChat`, `getMargenKgPorPeriodo` |
 | LISTAR estado comercial | `loadCommercialStateForChat` → `dicf.computeDicf` |
 | RESUMIR Mejora Continua | `buildMejoraContinuaPayload` / `GET /api/director-ia/mejora-continua` |
+| DETECTAR RIESGOS / CONSULTAR posibles duplicados de folios | `loadDuplicateFoliosForChat` → `findDuplicatePairs` |
 
 ### 7. Capacidades que requieren herramientas nuevas (aunque exista API/lib)
 
@@ -1239,7 +1240,7 @@ Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Re
 | Etapa/estatus de folio / kanban | Sí (`/api/dashboard/kanban`, `/api/folios/:id`) | Loader + tool + permiso + prompt |
 | Timeline / último movimiento | Sí (`/timeline`) | Tool |
 | Metadatos documentos / póliza / cheque | Sí (endpoints folio) | Tool + política de URLs |
-| Duplicados | Sí (`folio-duplicados.js`) | Tool + declaración de detector |
+| Duplicados (cancelar / `findSimilarTo` al crear / Excel Taller) | Sí (cancelar UI, `POST /check`, Excel M5) | Escritura y detectores ajenos al análisis M16 ya integrado |
 | Excel/agregados Taller, GASTOS, INVERSIONES | Sí (libs Excel) | Tool de consulta (idealmente sin solo xlsx) |
 | Deltas UI | Sí (`delta-*`) | Tool o unificación con annex |
 | Presupuesto semanal | Tablas sí; API UI limitada | Queries/tool + mapeo bot |
@@ -1289,6 +1290,7 @@ Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Re
 | Documento base | `docs/ARQUITECTURA_DASHBOARD_FOLIOS.md` |
 | Context | `lib/director-ia-context.js` |
 | Chat | `lib/director-ia-chat.js` |
+| Duplicados M16 | `lib/director-ia-duplicados.js`, `lib/folio-duplicados-load.js`, `lib/folio-duplicados.js` |
 | AR summarizers | `lib/director-ia-action-register.js` |
 | IGF/ARR annex | `lib/director-ia-igf-arr.js` |
 | Commercial state | `lib/director-ia-commercial-state.js` |
