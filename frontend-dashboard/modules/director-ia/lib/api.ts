@@ -1,5 +1,6 @@
 import { apiFetch } from "@/lib/api";
 import cycleCore from "./cycle-client-core";
+import healthCore from "./health-client-core";
 
 export type DirectorIaContextSources = {
   igf: boolean;
@@ -156,6 +157,23 @@ function directorIaCycleApiUrl() {
   const base = process.env.NEXT_PUBLIC_API_URL || "";
   if (base) return `${base.replace(/\/$/, "")}${path}`;
   return `/api-backend${path}`;
+}
+
+export const HEALTH_PATH = healthCore.HEALTH_PATH;
+export const HEALTH_UI = healthCore.HEALTH_UI;
+export const HEALTH_COPY = healthCore.HEALTH_COPY;
+export type { DirectorIaHealthUiState, DirectorIaHealthResult } from "./health-client-core";
+
+export function directorIaHealthApiUrl() {
+  return healthCore.directorIaHealthApiUrl();
+}
+
+export function interpretDirectorIaHealthResponse(status: number, body: unknown) {
+  return healthCore.interpretDirectorIaHealthResponse(status, body);
+}
+
+export function fetchDirectorIaHealth(fetchImpl?: typeof fetch) {
+  return healthCore.fetchDirectorIaHealth(fetchImpl);
 }
 
 export type DirectorIaCycleRequest = {
