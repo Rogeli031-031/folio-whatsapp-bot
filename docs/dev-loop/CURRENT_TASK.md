@@ -1,8 +1,8 @@
 # CURRENT_TASK
 
 ```yaml
-task_id: "DOCS-DIRECTOR-IA-M1-CAPABILITY-MATRIX-SYNC-001"
-status: CLOSED
+task_id: "ARCH-DIRECTOR-IA-NEXT-MODULE-PRIORITIZATION-001"
+status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-08-21T20:25:00-06:00"
@@ -17,118 +17,159 @@ gates:
   G8_calibration_materiality_signature: N/A
 
 objective: >
-  Sincronizar exclusivamente el inventario/capability matrix M0–M20 para
-  reflejar la implementación real de M1 Health dashboard ya integrada en main,
-  sin ampliar su alcance a /health, /health-db o /health-proyectos y sin
-  redefinir arquitectura, contratos constitucionales ni runtime.
+  Priorizar el siguiente módulo funcional de Director IA que convenga implementar
+  después de M1, usando evidencia física del repositorio y la matriz M0-M20.
+  Comparar impacto, esfuerzo, dependencias, riesgo y capacidad real de mover un
+  módulo de NOT_STARTED a COMPLETE con un slice acotado.
 
-baseline_in_force:
-  source_audit: "ARCH-DIRECTOR-IA-M1-HEALTH-DASHBOARD-READINESS-001"
-  implementation_task: "IMPL-DIRECTOR-IA-M1-HEALTH-DASHBOARD-001"
-  implementation_state: "integrated_in_main"
-  backend_endpoint: "GET /health-director-ia"
-  frontend_indicator_location: "DirectorIaShell header"
-  refresh_strategy: "one-shot + refresh manual"
-  polling: false
-  retry: false
-  auth_header_on_health: false
+current_progress:
+  m0_m20_percentage: 32.5
+  formula:
+    COMPLETE: 1.0
+    PARTIAL: 0.5
+    NOT_STARTED: 0.0
+    N_A: "excluido del denominador"
+  note: >
+    M1 ya está en PARCIAL. El objetivo de esta auditoría es encontrar el
+    siguiente módulo que maximice avance funcional sin abrir arquitectura
+    innecesaria.
+
+candidates:
+  - "M4 Clasificación"
+  - "M5 Taller AT"
+  - "M6 Excel GASTOS/INVERSIONES"
+  - "M10 Weekly LD"
+  - "M14 Usuarios admin"
+  - "M15 Docs/media folio"
+  - "M16 Duplicados"
+
+excluded:
+  M18:
+    reason: "bloqueado por mapeo/definición de queries de presupuesto"
+  M19:
+    reason: "N_A / no integrar"
+  partial_modules:
+    reason: >
+      No son candidatos principales en esta auditoría; primero evaluar si un
+      NOT_STARTED puede aportar +5 puntos con menor esfuerzo.
 
 in_scope:
   - "docs/dev-loop/CURRENT_TASK.md"
-  - "docs/dev-loop/reports/DOCS-DIRECTOR-IA-M1-CAPABILITY-MATRIX-SYNC-001.md"
-  - "docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md"
+  - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-NEXT-MODULE-PRIORITIZATION-001.md"
+  - "docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md (solo lectura)"
+  - "código y tests de los candidatos (solo lectura)"
 
 out_of_scope:
-  - "docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md"
-  - "otros contratos docs/director-ia/*"
-  - "server.js"
-  - "lib/"
-  - "frontend-dashboard/"
-  - "test/"
-  - "sql/"
-  - "scripts/"
-  - "package.json"
-  - "lockfiles"
-  - "Render config/env"
-  - "cambiar M0/M2-M20"
-  - "ampliar M1 a /health"
-  - "ampliar M1 a /health-db"
-  - "ampliar M1 a /health-proyectos"
-  - "chat/LLM tool para health"
+  - "implementar"
+  - "modificar frontend/backend"
+  - "modificar contratos"
+  - "modificar matriz"
+  - "crear migrations"
+  - "smoke productivo"
   - "commit"
   - "push"
   - "merge"
-  - "siguiente tarea"
+  - "abrir siguiente tarea automáticamente"
 
-required_document_change:
-  module: "M1"
-  target_file: "docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md"
-  required_effect:
-    - >
-      Reflejar que M1 Health dashboard tiene integración operativa mediante
-      GET /health-director-ia en el módulo Director IA.
-    - >
-      Mantener explícito que esto no equivale a integrar /health, /health-db
-      ni /health-proyectos como fuentes conversacionales.
-    - >
-      No declarar que readiness técnica implica datos disponibles,
-      operación saludable o conclusión de negocio.
-    - >
-      No alterar otros módulos ni recalcular estados no soportados por evidencia.
+evaluation_dimensions:
+  impact:
+    question: >
+      ¿Cuántos puntos M0-M20 ganaría si el módulo pasa realmente a COMPLETE?
 
-m1_complete_definition:
-  - "indicador técnico visible en DirectorIaShell"
-  - "consume GET /health-director-ia"
-  - "sin Authorization"
-  - "estados loading/ready/disabled/unavailable/transport_error"
-  - "one-shot + refresh manual"
-  - "sin polling"
-  - "sin retry"
-  - "cycle panel independiente"
-  - "tests M1 verdes"
+  implementation_effort:
+    question: >
+      ¿Cuánto wiring/runtime nuevo exige según el código físico existente?
 
-evidence_required:
-  - "IMPL-DIRECTOR-IA-M1-HEALTH-DASHBOARD-001 integrado en main"
-  - "test/director-ia-dashboard-health-client.test.js"
-  - "suite Director IA relevante verde según reporte del IMPL"
-  - "sin backend nuevo"
+  dependency_count:
+    question: >
+      ¿Cuántos otros módulos, contratos, fuentes o permisos necesita antes?
 
-decision_rule:
-  - >
-    Si cambiar la etiqueta/semántica de M1 en la matriz contradice su definición
-    canónica original y requiere redefinir qué significa M1, STOP y solicitar G2.
-  - >
-    Si basta con actualizar el inventario para reflejar una integración ya
-    existente sin redefinir arquitectura, G2 puede ser N/A.
-  - "No tocar otros M."
-  - "No inventar porcentaje nuevo fuera de la fórmula auditada."
+  backend_readiness:
+    question: >
+      ¿Ya existe fuente/endpoint/helper reutilizable?
+
+  frontend_readiness:
+    question: >
+      ¿Ya existe UI o patrón reutilizable?
+
+  testability:
+    question: >
+      ¿Puede cubrirse con tests deterministas existentes o focales simples?
+
+  production_risk:
+    question: >
+      ¿Requiere DB, migrations, permisos, secretos o cambios productivos
+      delicados?
+
+  semantic_risk:
+    question: >
+      ¿Puede inducir inferencias/causalidad no sustentada o mezclar funciones
+      que no corresponden al Director IA?
+
+  completeness_feasibility:
+    question: >
+      ¿Es realista llevarlo a COMPLETE en un solo slice o solo a PARTIAL?
+
+mandatory_matrix:
+  columns:
+    - "module"
+    - "current_state"
+    - "potential_gain_points"
+    - "existing_backend"
+    - "existing_frontend"
+    - "dependencies"
+    - "estimated_effort"
+    - "production_risk"
+    - "can_reach_complete_in_one_slice"
+    - "recommended_rank"
+
+decision_rules:
+  - "Priorizar capacidad de llegar a COMPLETE, no solo facilidad de hacer algo parcial."
+  - "Preferir reutilización de código existente."
+  - "Penalizar dependencias humanas o contractuales no resueltas."
+  - "Penalizar migrations/DB si existe alternativa igual de valiosa sin ellas."
+  - "No elegir un módulo solo porque el archivo ya existe."
+  - "No asumir COMPLETE sin wiring + integration + tests."
+  - "Elegir EXACTAMENTE un siguiente módulo."
+  - "Proponer exactamente un NEXT_TASK."
+  - "No implementarlo."
+
+required_output:
+  - "ranking completo de candidatos"
+  - "ganancia potencial de porcentaje"
+  - "evidencia física por candidato"
+  - "por qué el ganador debe ir primero"
+  - "qué riesgos quedan"
+  - "exactamente un NEXT_TASK mínimo"
+  - "gates del NEXT_TASK"
 
 acceptance_criteria:
-  - "M1 queda alineado con la implementación real"
-  - "no se afirma integración de endpoints no implementados"
-  - "no se mezcla readiness técnica con negocio"
-  - "M0/M2-M20 intactos"
-  - "solo CURRENT_TASK, reporte y capability matrix pueden cambiar"
-  - "git diff --check limpio"
+  - "todos los candidatos evaluados con evidencia física"
+  - "ranking explícito"
+  - "un solo ganador"
+  - "ganancia porcentual estimada defendible"
+  - "NEXT_TASK único"
   - "sin implementación"
+  - "git diff --check limpio"
+  - "solo CURRENT_TASK y reporte modificados"
 
 expected_terminal_state: >
-  DONE_PENDING_REVIEW si M1 puede sincronizarse documentalmente sin redefinir
-  arquitectura. BLOCKED/STOPPED si hace falta G2.
+  DONE_PENDING_REVIEW si existe un ganador claro y un slice implementable.
+  BLOCKED/STOPPED si ninguno puede llegar razonablemente a COMPLETE sin una
+  tarea arquitectónica previa.
 
 max_attempts: 1
-result_report_path: "docs/dev-loop/reports/DOCS-DIRECTOR-IA-M1-CAPABILITY-MATRIX-SYNC-001.md"
+result_report_path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-NEXT-MODULE-PRIORITIZATION-001.md"
 
 documented_result:
   outcome: "DONE_PENDING_REVIEW"
-  g2_decision: "A"
+  baseline_percentage: 32.5
+  winner: "M16"
+  winner_name: "Análisis duplicados de folios"
+  potential_gain_if_complete_pp: 5.0
+  next_task_proposed: "ARCH-DIRECTOR-IA-M16-DUPLICADOS-READINESS-001"
+  next_task_authorized: false
   g2: N/A
-  m1_coverage_before: "NO INTEGRADA"
-  m1_coverage_after: "PARCIAL"
-  m1_completa: false
-  endpoint_integrated: "GET /health-director-ia"
-  endpoints_not_integrated:
-    - "/health"
-    - "/health-db"
-    - "/health-proyectos"
+  g3: N/A
+  g8: N/A
 ```
