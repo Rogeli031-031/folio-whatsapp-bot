@@ -63,6 +63,8 @@ const cases = [
     assert(isDirectorIaDomainReadable("folios") === true, "folios readable (estatus/etapa)");
     assert(isDirectorIaDomainReadable("folio_historial") === true, "historial readable");
     assert(isDirectorIaDomainReadable("documentos") === true, "documentos metadata readable");
+    assert(isDirectorIaDomainReadable("gastos") === true, "gastos query readable");
+    assert(isDirectorIaDomainReadable("inversiones") === true, "inversiones query readable");
     const summary = buildDirectorIaCapabilitiesSummary();
     assert(summary.readable.length > 0, "summary readable");
     assert(summary.not_integrated.length > 0, "summary not_integrated");
@@ -89,7 +91,12 @@ const cases = [
   () => expectAllowed("¿Cómo cambió la venta?"),
   () => expectAllowed("¿Cómo cambió el descuento?"),
   () => expectAllowed("¿Cómo cambió el ingreso?"),
-  () => expectBlocked("¿Qué inversiones están pendientes?", "inversiones"),
+  () => expectAllowed("¿Qué gastos de folios existen?"),
+  () => expectAllowed("¿Qué inversiones están pendientes?"),
+  () => expectAllowed("listar gastos de folios 2026-01"),
+  () => expectAllowed("cómo van los gastos"),
+  () => expectBlocked("exportar excel de gastos de folios", "gastos", { requireCanReadFalse: false }),
+  () => expectBlocked("exportar excel de inversiones", "inversiones", { requireCanReadFalse: false }),
   () => expectAllowed("¿Qué acciones están vencidas?"),
   () => expectAllowed("¿Cómo va ARR?"),
   () => expectAllowed("¿Cómo va IGF?"),

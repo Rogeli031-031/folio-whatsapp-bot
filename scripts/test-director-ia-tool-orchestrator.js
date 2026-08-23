@@ -273,6 +273,21 @@ const cases = [
     assert(isDirectorIaToolExecutable("get_folio_status") === true, "folio status exec");
     assert(isDirectorIaToolExecutable("get_folio_history") === true, "folio history exec");
     assert(isDirectorIaToolExecutable("get_arr_snapshot") === true, "arr exec");
+    assert(isDirectorIaToolExecutable("get_expense_analysis") === true, "expense exec");
+    assert(isDirectorIaToolExecutable("get_investment_analysis") === true, "investment exec");
+    assert(isDirectorIaToolExecutable("get_taller_at_analysis") === false, "taller_at not exec");
+    assert(getDirectorIaTool("get_expense_analysis").executor === "loadGastosInversionesForChat", "expense executor");
+    assert(getDirectorIaTool("get_investment_analysis").executor === "loadGastosInversionesForChat", "investment executor");
+    const { toolPlan: expensePlan } = planTools("¿Qué gastos de folios existen?", {
+      planta_id: 1,
+      question: "¿Qué gastos de folios existen?",
+    });
+    assert(hasTool(expensePlan, "get_expense_analysis"), "expense tool in plan");
+    const { toolPlan: invPlan } = planTools("¿Qué inversiones están pendientes?", {
+      planta_id: 1,
+      question: "¿Qué inversiones están pendientes?",
+    });
+    assert(hasTool(invPlan, "get_investment_analysis"), "investment tool in plan");
   },
 
   // Ejecución parcial: tool lista + otra con input faltante
