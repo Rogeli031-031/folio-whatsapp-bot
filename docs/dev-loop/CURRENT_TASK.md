@@ -1,14 +1,14 @@
 # CURRENT_TASK
 
 ```yaml
-task_id: "ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-003"
+task_id: "ARCH-DIRECTOR-IA-M18-PRESUPUESTO-SEMANAL-READINESS-001"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-08-23"
 human_authorization: >
   AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-23.
-  Apruebo ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-003 y autorizo G1.
+  Apruebo ARCH-DIRECTOR-IA-M18-PRESUPUESTO-SEMANAL-READINESS-001 y autorizo G1.
 
 gates:
   G1_task_authorization: AUTHORIZED
@@ -17,294 +17,379 @@ gates:
   G8_calibration_materiality_signature: N/A
 
 objective: >
-  Priorizar el siguiente frente global de Director IA desde el baseline 47.5%,
-  comparando todos los módulos no COMPLETE por valor ejecutivo marginal,
-  capacidad de razonamiento, actionability, frecuencia, fuentes físicas,
-  seguridad, dependencia y costo de integración. No continuar M4 por inercia
-  ni elegir M18 solo por haber quedado segundo en una priorización anterior.
+  Auditar físicamente un primer slice read-only de M18 — Presupuestos semanales —
+  para que Director IA pueda consultar el carro semanal de presupuesto por planta
+  y semana, incluyendo presupuesto asignado, seleccionado, disponible, folios
+  asociados y urgentes cuando exista evidencia física suficiente, mediante path
+  in-process y SELECT-only, sin Twilio, sin envío a cheques y sin writes.
 
 baseline:
-  numerator: 9.5
-  denominator: 20
-  percentage: 47.5
+  prioritization_task: "ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-003"
+  prioritization_report: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-003.md"
 
-  recent_changes:
-    - "M2 profundizado: status + history + documents metadata"
-    - "M6 = PARTIAL con query GASTOS / INVERSIONES"
-    - "M4 = PARTIAL con comparativo mes_a vs mes_b"
-    - "M4 COMPARAR/Excel siguen fuera"
-    - "M6 Export/Excel sigue fuera"
+  module: "M18 — Presupuestos semanales"
+  current_state: "NO INTEGRADA"
+  expected_state_after_future_slice: "PARTIAL"
+
+  global_percentage:
+    current: 47.5
+    numerator: 9.5
+    denominator: 20
+    expected_after_future_slice: 50.0
+    expected_numerator: 10.0
+    expected_gain_pp: 2.5
+
+canonical_boundary:
+  first_slice: "query JSON read-only del carro semanal"
+
+  complete_still_requires:
+    - "writes"
+    - "flujo hacia cheques"
+    - "operación/acciones de presupuesto"
+    - "WhatsApp/Twilio si forma parte del propósito canónico"
 
   rule: >
-    Esta tarea no cambia estados ni porcentaje. El 47.5% es baseline, no criterio
-    principal de decisión.
+    Este slice, aun si es implementable, solo lleva M18 a PARTIAL.
+    No reinterpretar COMPLETE.
 
 primary_question: >
-  ¿Qué módulo o slice pendiente produce ahora el mayor incremento neto de
-  inteligencia ejecutiva para Director IA, considerando todo lo ya integrado
-  y penalizando duplicación, writes, dependencias externas e inferencias débiles?
+  ¿Existe un path SELECT-only, in-process, autorizado y semánticamente claro
+  para que Director IA responda el estado del carro presupuestal semanal de una
+  planta y semana determinada — asignado, seleccionado, disponible, folios y
+  urgentes — reutilizando fuentes reales y getPresupuestoResumen o equivalente,
+  sin ejecutar writes, enviar WhatsApp/Twilio ni mover información a cheques?
 
-candidate_source:
-  canonical_matrix: "docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md"
+known_baseline:
+  candidate_sources:
+    - "presupuestos_semanales"
+    - "presupuesto_folios"
+    - "presupuesto_asignacion_detalle"
 
-  include:
-    - "PARTIAL"
-    - "INDIRECTA"
-    - "NO INTEGRADA"
-    - "NOT_STARTED"
-    - "bloqueados reconsiderables"
+  candidate_helper:
+    - "getPresupuestoResumen"
 
-  exclude:
-    - "COMPLETE"
-    - "N_A"
+  known_risks:
+    - "parte del SQL está embebido en server.js"
+    - "el producto mezcla lectura con acciones posteriores"
+    - "semana no debe inventarse"
+    - "urgente debe provenir de regla/campo real"
+    - "presupuesto disponible debe derivarse únicamente de datos físicos"
+    - "flujo de cheques y WhatsApp queda fuera"
 
-canonical_labels_rule: >
-  Usar exclusivamente nombres, propósitos y estados vigentes de las fichas
-  canónicas. No reutilizar etiquetas incorrectas de prompts previos.
+mandatory_audit:
 
-mandatory_rechecks:
-  - "M1"
-  - "M4 restante"
-  - "M5"
-  - "M6 restante"
-  - "M7"
-  - "M8"
-  - "M10"
-  - "M11"
-  - "M12"
-  - "M14"
-  - "M15"
-  - "M17"
-  - "M18"
-  - "M20"
-  - "cualquier otro módulo no COMPLETE vigente"
-
-special_rechecks:
-
-  M4_remaining:
+  canonical_definition:
     required:
-      - "query comparativa ya integrada"
-      - "evaluar únicamente COMPARAR/Excel restante"
-      - "penalizar writes"
-      - "penalizar continuidad por inercia"
-      - "no contar PARTIAL otra vez"
+      - "leer ficha M18 completa y vigente"
+      - "confirmar propósito canónico"
+      - "identificar qué cubre exactamente el carro semanal"
+      - "confirmar que query-only = PARTIAL"
+      - "confirmar efecto futuro 47.5 -> 50.0"
 
-  M6_remaining:
-    required:
-      - "query GASTOS/INVERSIONES ya integrada"
-      - "evaluar solo Export/xlsx restante"
-      - "no contar PARTIAL otra vez"
+  physical_sources:
+    inspect:
+      - "presupuestos_semanales"
+      - "presupuesto_folios"
+      - "presupuesto_asignacion_detalle"
+      - "tablas auxiliares reales"
+      - "joins"
+      - "server.js"
+      - "getPresupuestoResumen"
+      - "helpers equivalentes"
 
-  M7:
-    required:
-      - "qué sabe ya Director IA de IGF"
-      - "qué preguntas financieras siguen sin respuesta"
-      - "qué evidencia causal/contextual puede aportar"
-      - "qué source/helper físico existe"
-      - "qué se solapa con M6"
+    determine:
+      - "qué tabla define la semana"
+      - "qué tabla define presupuesto asignado"
+      - "qué tabla define folios seleccionados"
+      - "qué tabla define/importa importe seleccionado"
+      - "qué representa disponible"
+      - "cómo se relaciona folio con presupuesto"
+      - "qué representa urgente"
+      - "qué campos son observados"
+      - "qué campos son derivados"
 
-  M8:
-    required:
-      - "qué sabe ya de ARR"
-      - "qué falta"
-      - "qué duplica M9"
-      - "qué valor incremental queda"
-
-  M11:
-    required:
-      - "DICF actual"
-      - "qué consultas ya existen"
-      - "qué evidencia causal o de seguimiento falta"
-      - "si profundizar DICF mejora reasoning ejecutivo"
-
-  M12:
-    required:
-      - "Action Register actual"
-      - "qué huecos reales quedan"
-      - "si agrega valor superior a otro módulo"
-      - "no duplicar M2 history"
-
-  M18:
-    required:
-      - "leer definición canónica exacta"
-      - "fuentes físicas"
-      - "presupuestos semanales"
-      - "cheques si realmente pertenecen"
-      - "writes/dependencias"
-      - "primer slice read-only posible"
-      - "valor semanal"
-      - "si realmente supera otros candidatos ahora"
-
-  M20:
-    required:
-      - "Home KPI"
-      - "qué aporta sobre M3"
-      - "si es resumen duplicado o evidencia nueva"
-
-  WhatsApp_modules:
-    required:
-      - "canal != conocimiento"
-      - "no premiar transporte por sí mismo"
-      - "solo valorar si aporta información ejecutiva nueva"
-
-evaluation_model:
-
-  executive_value:
-    weight: "VERY_HIGH"
-    evaluate:
-      - "preguntas directivas nuevas"
-      - "detección de desviaciones/riesgos"
-      - "capacidad para decidir dónde mirar"
-      - "reducción de navegación manual"
-
-  reasoning_value:
-    weight: "VERY_HIGH"
-    evaluate:
-      - "nueva evidencia para diagnóstico"
-      - "contexto causal"
-      - "capacidad de combinarse con M2/M3/M4/M6/M9/M12"
-      - "explicación, no solo listado"
-
-  incremental_value:
-    weight: "VERY_HIGH"
-    evaluate:
-      - "qué no sabe hoy Director IA"
-      - "qué hueco neto cubre"
-      - "qué duplica"
-
-  actionability:
-    weight: "HIGH"
-    evaluate:
-      - "planta"
-      - "cliente"
-      - "responsable"
-      - "partida"
-      - "riesgo"
-      - "fecha"
-      - "acción posible"
-
-  frequency:
-    weight: "HIGH"
-
-  implementation_path:
-    weight: "MEDIUM"
-    evaluate:
-      - "fuente física"
-      - "helpers"
-      - "intent"
-      - "tool"
-      - "executor"
-      - "in-process"
-      - "first useful slice"
-
-  risk:
-    weight: "MEDIUM"
-    penalize:
-      - "writes"
-      - "Excel"
-      - "S3"
-      - "Twilio/WhatsApp"
+  helper_audit:
+    inspect:
+      - "getPresupuestoResumen"
+      - "queries llamadas"
+      - "shape retornado"
       - "side effects"
-      - "cross-module coupling"
-      - "semantic ambiguity"
-      - "stubs"
+      - "authz"
+      - "plant scope"
 
-  percentage_effect:
-    weight: "LOW"
+    determine:
+      - "SELECT-only sí/no"
+      - "qué puede reutilizarse"
+      - "qué SQL embebido debe extraerse o encapsularse"
+      - "si puede existir loader Director IA sin HTTP interno"
+
+  week_semantics:
+    determine:
+      - "identificador físico de semana"
+      - "fecha_inicio"
+      - "fecha_fin"
+      - "year/week si aplica"
+      - "cómo identifica el producto la semana"
+      - "si existe semana activa"
+      - "si existe default actual"
+      - "qué ocurre si usuario no indica semana"
+
+    rules:
+      - "no inventar semana"
+      - "no usar semana actual silenciosamente si no existe regla canónica"
+      - "si hay varias semanas posibles, clarificar"
+      - "preservar zona horaria/regla existente si aplica"
+
+  budget_semantics:
+    determine:
+      - "asignado"
+      - "seleccionado"
+      - "disponible"
+      - "importe de folios"
+      - "conteo de folios"
+      - "urgentes"
+      - "estatus"
+      - "qué es cálculo derivado"
+
+    rules:
+      - "disponible solo si fórmula física está verificada"
+      - "no inventar saldo"
+      - "no convertir seleccionado en pagado"
+      - "no convertir presupuesto en cheque"
+      - "no afirmar aprobado si el campo no lo soporta"
+      - "no afirmar urgencia sin campo/regla física"
+
+  folio_details:
+    determine:
+      - "folio_id"
+      - "numero_folio"
+      - "importe"
+      - "estatus"
+      - "tipo/categoría si existe"
+      - "urgente si existe"
+      - "planta"
+      - "orden"
+
+  authz:
+    determine:
+      - "JWT/contexto"
+      - "rol"
+      - "GA"
+      - "GV"
+      - "planta_id"
+      - "plantas_permitidas"
+      - "cross-planta"
+      - "fail-closed"
+      - "si el módulo actual permite scopes especiales"
+
+  planner_tools:
+    inspect:
+      - "budget_status"
+      - "intents relacionados"
+      - "capability M18"
+      - "tools existentes"
+      - "executor"
+      - "UNSUPPORTED_RULES"
+      - "SOURCE_NOT_INTEGRATED"
+      - "chat routing"
+
+    determine:
+      - "qué wiring ya existe"
+      - "qué falta"
+      - "si budget_status puede reutilizarse"
+      - "qué inputs mínimos requiere"
+      - "qué preguntas deben seguir bloqueadas"
+
+  cheques_boundary:
+    inspect:
+      - "flujo de envío a cheques"
+      - "writes"
+      - "status transitions"
+      - "tablas de cheques"
+      - "acciones del producto"
+
     rule: >
-      Registrar impacto futuro real, pero nunca elegir por porcentaje.
+      Ninguna operación hacia cheques puede ser necesaria para producir la
+      consulta read-only del carro semanal.
 
-mandatory_question_map:
-  for_each_candidate:
-    - "qué preguntas NUEVAS habilita"
-    - "qué ya puede responder Director IA"
-    - "qué sería duplicado"
-    - "qué no soporta la fuente"
+  whatsapp_twilio_boundary:
+    inspect:
+      - "Twilio"
+      - "WhatsApp"
+      - "notificaciones"
+      - "envíos"
+      - "acciones que muten estado"
 
-physical_audit:
-  for_each_candidate:
-    - "fuente primaria"
-    - "helpers"
-    - "queries"
-    - "intent"
-    - "tool"
-    - "executor"
+    rule: >
+      Canal y envío quedan fuera. La query debe funcionar sin dependencia de
+      WhatsApp/Twilio.
+
+  write_boundary:
+    inspect:
+      - "INSERT"
+      - "UPDATE"
+      - "DELETE"
+      - "seleccionar folio"
+      - "quitar folio"
+      - "asignar presupuesto"
+      - "enviar a cheque"
+
+    rule: >
+      Confirmar que todo write puede separarse completamente del slice de lectura.
+
+architecture_hypothesis:
+  preferred_path: >
+    budget_status -> tool -> executor ->
+    loadPresupuestoSemanalForChat(planta_id, semana) ->
+    SELECT helpers/fuentes -> resumen estructurado ->
+    evidencia -> respuesta
+
+  requirements:
+    - "in-process"
+    - "SELECT-only"
+    - "sin HTTP interno"
+    - "sin Twilio"
+    - "sin WhatsApp"
+    - "sin cheques"
+    - "sin writes"
+    - "sin contrato nuevo"
+
+response_contract:
+  include_if_physically_supported:
+    - "presupuesto_semana_id"
+    - "planta_id"
+    - "semana"
+    - "fecha_inicio"
+    - "fecha_fin"
+    - "asignado"
+    - "seleccionado"
+    - "disponible"
+    - "folios"
+    - "folio_id"
+    - "numero_folio"
+    - "importe"
+    - "urgente"
+    - "status"
+    - "source"
+
+  forbidden:
+    - "pagado"
+    - "cheque emitido"
+    - "aprobado"
+    - "faltante presupuestal"
+    - "desviación"
+    - "causa"
+    - "urgente inferido"
+    - "semana inventada"
+
+mandatory_evidence_table:
+  columns:
+    - "surface"
+    - "helper_or_route"
+    - "physical_source"
+    - "query_type"
+    - "select_only"
+    - "side_effects"
+    - "week_semantics"
+    - "budget_semantics"
     - "authz"
     - "plant_scope"
-    - "side_effects"
+    - "safe_fields"
     - "external_dependency"
-    - "semantic_risk"
-    - "testability"
-    - "first_slice"
-    - "state_after_slice"
-    - "percentage_effect"
+    - "reusable"
+    - "risk"
+    - "evidence"
 
-mandatory_table:
+mandatory_gap_table:
   columns:
-    - "rank"
-    - "module"
-    - "current_state"
-    - "new_executive_questions"
-    - "executive_value"
-    - "reasoning_value"
-    - "incremental_value"
-    - "frequency"
-    - "actionability"
-    - "source_ready"
-    - "wiring_ready"
-    - "authz_fit"
-    - "dependencies"
-    - "mutation_risk"
-    - "semantic_risk"
-    - "first_useful_slice"
-    - "state_after_slice"
-    - "percentage_effect"
-    - "decision"
+    - "gap_id"
+    - "missing_capability"
+    - "required_for_query_slice"
+    - "reusable_component"
+    - "proposed_change"
+    - "architecture_change"
+    - "contract_change"
+    - "authz_change"
+    - "complexity"
+    - "blocking"
 
-ranking_rules:
-  - "No elegir por número."
-  - "No elegir por porcentaje."
-  - "No elegir por facilidad solamente."
-  - "No continuar M4 ni M6 por inercia."
-  - "No elegir M18 por ranking previo."
-  - "Penalizar duplicación con capacidades actuales."
-  - "Preferir hechos observables."
-  - "Preferir datos estructurados."
-  - "Preferir integración in-process."
-  - "Preferir valor diagnóstico y actionable."
-  - "Penalizar writes y dependencias externas."
-  - "Penalizar stubs."
+tests_to_design_if_ready:
+  - "presupuesto por planta"
+  - "semana explícita"
+  - "semana inválida"
+  - "semana ausente"
+  - "varias semanas / clarificación"
+  - "asignado"
+  - "seleccionado"
+  - "disponible"
+  - "folios"
+  - "folio importe"
+  - "urgentes"
+  - "0 folios"
+  - "0 asignado"
+  - "nulls"
+  - "planta autorizada"
+  - "planta no autorizada"
+  - "plantas_permitidas"
+  - "cross-planta"
+  - "GA"
+  - "GV"
+  - "intent budget_status"
+  - "tool/executor"
+  - "chat wiring"
+  - "no cheques"
+  - "no Twilio"
+  - "no WhatsApp"
+  - "no HTTP interno"
+  - "sin writes"
+  - "M18 sigue PARTIAL"
 
-winner_requirements:
-  exactly_one: true
+decision_rules:
 
-  must_include:
-    - "ganador"
-    - "segundo lugar"
-    - "preguntas nuevas"
-    - "por qué gana"
-    - "por qué pierde el segundo"
-    - "primer slice"
-    - "estado posterior"
-    - "efecto porcentual"
-    - "riesgos"
-    - "dependencias"
-    - "gates"
+  ready:
+    all:
+      - "fuentes físicas claras"
+      - "getPresupuestoResumen o equivalente SELECT-only reutilizable"
+      - "semana resoluble sin inventar"
+      - "asignado/seleccionado/disponible definidos"
+      - "urgencia físicamente soportada o excluible"
+      - "authz preservable"
+      - "scope planta preservable"
+      - "writes separables"
+      - "cheques separables"
+      - "WhatsApp/Twilio separables"
+      - "path in-process posible"
+      - "tests determinísticos"
 
-next_task_policy:
-  if_readiness_needed:
-    pattern: "ARCH-DIRECTOR-IA-<MODULE>-<SLICE>-READINESS-001"
+    outcome: "DONE_PENDING_REVIEW"
+    next_task: "IMPL-DIRECTOR-IA-M18-PRESUPUESTO-SEMANAL-001"
 
-  if_gap_fully_verified:
-    pattern: "IMPL-DIRECTOR-IA-<MODULE>-<SLICE>-001"
+  stopped:
+    when:
+      - "lectura depende inseparablemente de writes"
+      - "semana no puede determinarse sin decisión humana"
+      - "disponible no tiene semántica verificable"
+      - "authz no puede preservarse"
+      - "carro depende inseparablemente de cheques/WhatsApp"
 
-  rule: >
-    Proponer exactamente una NEXT_TASK. No autorizar ni ejecutar.
+    outcome: "STOPPED"
+    next_task: null
+
+state_and_percentage:
+  current_task:
+    state_change: false
+    percentage_change: false
+
+  if_future_impl_succeeds:
+    m18_state: "PARTIAL"
+    numerator: 10.0
+    denominator: 20
+    percentage: 50.0
 
 in_scope:
   writable:
     - "docs/dev-loop/CURRENT_TASK.md"
-    - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-003.md"
+    - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M18-PRESUPUESTO-SEMANAL-READINESS-001.md"
 
   read_only:
     - "AGENTS.md"
@@ -327,8 +412,16 @@ out_of_scope:
   - "modificar tests"
   - "modificar scripts"
   - "modificar SQL"
+  - "modificar schema"
+  - "crear migration"
   - "modificar capability matrix"
   - "modificar contratos"
+  - "asignar presupuesto"
+  - "seleccionar/quitar folios"
+  - "enviar a cheque"
+  - "crear cheque"
+  - "usar Twilio"
+  - "enviar WhatsApp"
   - "hacer writes"
   - "hacer commit"
   - "hacer push"
@@ -336,49 +429,63 @@ out_of_scope:
   - "ejecutar NEXT_TASK"
 
 acceptance_criteria:
-  - "Baseline 9.5/20 = 47.5% verificado."
-  - "Nombres canónicos verificados desde matriz."
-  - "Todos los candidatos relevantes reevaluados."
-  - "M4 restante evaluado sin inercia."
-  - "M6 restante evaluado sin inercia."
-  - "M18 reevaluado desde cero."
-  - "Se identificaron preguntas ejecutivas nuevas."
-  - "Se midió valor incremental."
-  - "Se verificaron fuentes físicas."
-  - "Se verificó wiring."
+  - "Se verificó definición canónica M18."
+  - "Se verificaron tablas presupuestales."
+  - "Se verificó getPresupuestoResumen."
+  - "Se verificó SELECT-only."
+  - "Se verificó semántica de semana."
+  - "Se verificó asignado."
+  - "Se verificó seleccionado."
+  - "Se verificó disponible."
+  - "Se verificaron folios."
+  - "Se verificó urgencia o se excluyó si no está soportada."
   - "Se verificó authz."
   - "Se verificó scope planta."
-  - "Se verificaron dependencias."
-  - "Se produjo ranking."
-  - "Existe exactamente un ganador."
-  - "Existe exactamente un segundo lugar."
-  - "Existe exactamente una NEXT_TASK."
-  - "No se implementó nada."
-  - "No se modificó matriz."
+  - "Se verificó planner/tools."
+  - "Se separaron writes."
+  - "Se separó cheques."
+  - "Se separó Twilio/WhatsApp."
+  - "Se definió path mínimo."
+  - "Se diseñaron tests."
+  - "Se determinó G2."
+  - "Se determinó G3."
+  - "M18 no cambia durante readiness."
+  - "47.5% no cambia durante readiness."
+  - "No se implementó."
   - "Solo CURRENT_TASK y reporte cambiaron."
   - "git diff --check limpio."
 
 report_requirements:
-  path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-003.md"
+  path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M18-PRESUPUESTO-SEMANAL-READINESS-001.md"
 
   must_include:
     - "metadata"
     - "resumen ejecutivo"
-    - "baseline 47.5%"
-    - "capacidad actual"
-    - "huecos globales"
-    - "preguntas ejecutivas nuevas"
-    - "candidatos"
-    - "tabla comparativa"
-    - "ranking"
-    - "ganador"
-    - "segundo lugar"
-    - "primer slice"
-    - "estado posterior"
-    - "efecto porcentual"
-    - "riesgos"
-    - "dependencias"
+    - "baseline"
+    - "definición canónica M18"
+    - "query-only PARTIAL"
+    - "physical sources"
+    - "getPresupuestoResumen"
+    - "week semantics"
+    - "asignado"
+    - "seleccionado"
+    - "disponible"
+    - "folios"
+    - "urgentes"
+    - "authz"
+    - "plant scope"
+    - "planner/tools"
+    - "cheques boundary"
+    - "WhatsApp/Twilio boundary"
+    - "write boundary"
+    - "evidence table"
+    - "gap table"
+    - "implementation hypothesis"
+    - "tests"
     - "gates"
+    - "state after future slice"
+    - "percentage after future slice"
+    - "risks"
     - "NEXT_TASK"
     - "acciones no realizadas"
     - "secrets_check"
@@ -386,10 +493,11 @@ report_requirements:
     - "git status"
 
 expected_terminal_state: >
-  DONE_PENDING_REVIEW si existe un ganador global defendible. STOPPED si ningún
-  frente restante aporta suficiente valor marginal sin decisión contractual.
-  BLOCKED si falta gate humano indispensable.
+  DONE_PENDING_REVIEW si existe path read-only del carro semanal, in-process,
+  autorizado y separado de cheques/Twilio/writes. STOPPED si la lectura depende
+  inseparablemente de operaciones mutantes o la semana no puede resolverse.
+  BLOCKED si falta gate indispensable.
 
 max_attempts: 1
 
-result_report_path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-003.md"
+result_report_path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M18-PRESUPUESTO-SEMANAL-READINESS-001.md"
