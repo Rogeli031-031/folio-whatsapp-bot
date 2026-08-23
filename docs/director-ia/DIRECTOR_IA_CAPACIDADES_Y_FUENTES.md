@@ -267,19 +267,19 @@
 | **ID** | M9 |
 | **Módulo** | Deltas UI |
 | **Propósito empresarial** | Comparar periodos de venta, descuento e ingreso en modales dashboard. |
-| **Cobertura actual de Director IA** | NO INTEGRADA (endpoints `delta-*`); respuestas afines pueden ser **INDIRECTAS** vía commercial_state / anexo IGF-ARR. |
-| **Información exacta que sí consulta** | No llama `/api/dashboard/delta-venta-*`, `delta-descuento-*`, `delta-ingreso-*`. |
-| **Información que no consulta** | Periodos y matrices de los modales Delta*. |
-| **Archivos actuales relacionados** | `lib/delta-ingreso-forecast.js`; UI `Delta*Modal.tsx` |
-| **Endpoints actuales relacionados** | `/api/dashboard/delta-*` |
-| **Tablas o vistas relacionadas** | ARR + `arr.delta_ingreso_forecast_cliente` |
-| **Funciones existentes reutilizables** | Handlers delta en `server.js` / `delta-ingreso-forecast.js`; commercial_state y IGF annex como aproximación parcial. |
-| **Capacidades de lectura posibles** | COMPARAR/CONSULTAR — no cableadas a endpoints delta. |
-| **Capacidades de escritura posibles** | N/A típico (lectura). |
-| **Permisos aplicables** | Auth + bloqueos financieros. |
-| **Nivel de riesgo** | MEDIO |
-| **Dependencias** | ARR. |
-| **Observaciones verificadas** | Auditoría §M9 §7: «No lo usa»; chat usa `dicf.js` / commercial_state, no endpoints `delta-*`. |
+| **Cobertura actual de Director IA** | COMPLETA (respecto a la consulta canónica read-only de las tres familias de periodos reales: Delta Venta, Delta Descuento y Delta Ingreso; no implica forecast con escritura, M19, causalidad ni weekly LD). |
+| **Información exacta que sí consulta** | Comparación in-process de dos YYYY-MM por planta del scope: Delta Venta (kg, `arr.ventas_diarias_cliente`) vía `delta_sales` → `get_delta_sales` → `loadDeltaVentaForChat`; Delta Descuento ($/kg, descuentos + kg) vía `delta_discount` → `get_delta_discount` → `loadDeltaDescuentoForChat`; Delta Ingreso (MXN, `kg × (margen_$/kg − \|desc_$/kg\|)`) vía `delta_income` → `get_delta_income` → `loadDeltaIngresoForChat`. Periodos A≠B; default = los dos YYYY-MM más recientes con datos; no se inventan. |
+| **Información que no consulta** | Forecast de ingreso con `DELETE`/`INSERT` (`lib/delta-ingreso-forecast.js`); M19 `/api/ai/delta-ingreso/test/*`; weekly LD (M10); IGF/ARR snapshot o KPIs M3 como sustituto; causalidad de una diferencia. |
+| **Archivos actuales relacionados** | `lib/director-ia-m9-deltas.js`; wiring en `lib/director-ia-chat.js`, `lib/director-ia-tools.js`, `lib/director-ia-capabilities.js`, `lib/director-ia-planner.js`; `server.js` reutiliza helpers extraídos (contrato HTTP `delta-*` intacto). UI `Delta*Modal.tsx` y `lib/delta-ingreso-forecast.js` siguen fuera de este COMPLETE. |
+| **Endpoints actuales relacionados** | Lectura integrada in-process (no HTTP interno): semántica de `POST /api/dashboard/delta-venta-datos`, `delta-descuento-datos`, `delta-ingreso-datos` y periodos asociados. Escritura existente y no integrada: `POST /api/dashboard/delta-ingreso-forecast-datos`. M19 no es Director IA. |
+| **Tablas o vistas relacionadas** | `arr.ventas_diarias_cliente`, `arr.descuentos_diarios_cliente`, `arr.provincia_plants`, `public.plantas`; margen IGF (`igf.versions` + `igf.compromiso_lines`) solo como insumo de la fórmula de ingreso, no como anexo. `arr.delta_ingreso_forecast_cliente` queda fuera (forecast mutante). |
+| **Funciones existentes reutilizables** | `loadDeltaVentaForChat`, `loadDeltaDescuentoForChat`, `loadDeltaIngresoForChat`, `getPeriodosDeltaVenta`, `getPeriodosDeltaDescuento`, `getDeltaVentaClientes`, `getDeltaDescuentoClientes`, `getDeltaIngresoDatosInternal`, `assertM9DeltasAccess`, `resolvePeriodPair`, `percentChangeOrUnknown`. |
+| **Capacidades de lectura posibles** | COMPARAR/CONSULTAR las tres familias de periodos reales, read-only, on-demand. |
+| **Capacidades de escritura posibles** | Forecast ingreso (`DELETE`/`INSERT` de cache) — **no** en Director IA. M19 envío test — **no** en Director IA. |
+| **Permisos aplicables** | JWT + `planta_id`; GA 403; GV 403; `plantas_permitidas` (GG/AD); fail-closed cross-planta. Equivalente o más restrictivo que dashboard. |
+| **Nivel de riesgo** | MEDIO (lectura financiera). Escritura forecast/M19: ALTO y fuera de este módulo. |
+| **Dependencias** | ARR diario (venta/descuento); IGF solo como insumo de margen en la fórmula de ingreso. |
+| **Observaciones verificadas** | `IMPL-DIRECTOR-IA-M9-DELTAS-001` (integrado en main, `7b3e5a98`). Tests focales 23/23; suite `test/director-ia-*.test.js` 459/459; scripts capabilities 25/25, planner 30/30, orchestrator 24/24. COMPLETE = consulta autorizada de las tres familias de periodos reales; no forecast mutante; no M19; no causalidad. Scoring M0–M20 del loop (COMPLETE=1.0, PARCIAL=0.5, INDIRECTA=0.5, NOT_STARTED=0.0): 8.0/20 = 40.0% → **8.5/20 = 42.5%**. |
 
 ### M10 — Weekly discount LD
 
@@ -837,35 +837,35 @@
 ### Fuente: Delta Venta
 
 - **Dominio:** M9
-- **Cobertura actual:** NO INTEGRADA
-- **Archivo de acceso:** Handlers `delta-venta-*` en `server.js`
-- **Función de acceso:** Endpoints delta-venta (no IA)
-- **Endpoint relacionado:** `/api/dashboard/delta-venta-periodos`, `delta-venta-datos`
-- **Tablas consultadas:** ARR
-- **Evidencia de integración actual:** No integrada
-- **Información que no puede concluirse con esta fuente:** Comparativo modal Delta Venta exacto
+- **Cobertura actual:** COMPLETA (consulta canónica read-only; no es descuento/ingreso)
+- **Archivo de acceso:** `lib/director-ia-m9-deltas.js`
+- **Función de acceso:** `loadDeltaVentaForChat` → `getPeriodosDeltaVenta` / `getDeltaVentaClientes` / `buildDeltaVentaDatosPayload`
+- **Endpoint relacionado:** Chat `POST /api/director-ia/chat`; semántica de `POST /api/dashboard/delta-venta-datos` (sin HTTP interno)
+- **Tablas consultadas:** `arr.ventas_diarias_cliente`
+- **Evidencia de integración actual:** Intent `delta_sales`; tool `get_delta_sales` con executor real; rama in-process en `askDirectorIa`
+- **Información que no puede concluirse con esta fuente:** Causalidad; Delta Descuento; Delta Ingreso; ARR snapshot general
 
 ### Fuente: Delta Descuento
 
 - **Dominio:** M9
-- **Cobertura actual:** NO INTEGRADA
-- **Archivo de acceso:** Handlers `delta-descuento-*`
-- **Función de acceso:** Endpoints citados
-- **Endpoint relacionado:** `/api/dashboard/delta-descuento-*`
-- **Tablas consultadas:** ARR
-- **Evidencia de integración actual:** No integrada
-- **Información que no puede concluirse con esta fuente:** Comparativo modal Delta Descuento
+- **Cobertura actual:** COMPLETA (consulta canónica read-only; no es weekly LD ni venta)
+- **Archivo de acceso:** `lib/director-ia-m9-deltas.js`
+- **Función de acceso:** `loadDeltaDescuentoForChat` → `getPeriodosDeltaDescuento` / `getDeltaDescuentoClientes` / `buildDeltaDescuentoDatosPayload`
+- **Endpoint relacionado:** Chat `POST /api/director-ia/chat`; semántica de `POST /api/dashboard/delta-descuento-datos` (sin HTTP interno)
+- **Tablas consultadas:** `arr.descuentos_diarios_cliente` + kg de `arr.ventas_diarias_cliente`
+- **Evidencia de integración actual:** Intent `delta_discount`; tool `get_delta_discount` con executor real; rama in-process en `askDirectorIa`
+- **Información que no puede concluirse con esta fuente:** Weekly LD (M10); causalidad; Delta Venta; Delta Ingreso
 
 ### Fuente: Delta Ingreso
 
-- **Dominio:** M9 (+ forecast)
-- **Cobertura actual:** NO INTEGRADA a endpoints; aproximación PARCIAL/INDIRECTA vía commercial_state / IGF-ARR si la pregunta activa esos regex
-- **Archivo de acceso:** `lib/delta-ingreso-forecast.js`; commercial_state / igf-arr
-- **Función de acceso:** Endpoints `delta-ingreso-*` (no IA); `loadCommercialStateForChat` / anexo IGF-ARR
-- **Endpoint relacionado:** `/api/dashboard/delta-ingreso-*`
-- **Tablas consultadas:** ARR, `arr.delta_ingreso_forecast_cliente`
-- **Evidencia de integración actual:** Endpoints no cableados; señales «delta ingreso» en `ARR_SIGNAL_RE` / `DELTA_CLIENTES_SIGNAL_RE`
-- **Información que no puede concluirse con esta fuente:** Paridad exacta con el modal Delta Ingreso
+- **Dominio:** M9 (periodos reales; forecast y M19 fuera)
+- **Cobertura actual:** COMPLETA para el modal de periodos reales. Forecast con `DELETE`/`INSERT` y M19 permanecen NO INTEGRADOS.
+- **Archivo de acceso:** `lib/director-ia-m9-deltas.js`
+- **Función de acceso:** `loadDeltaIngresoForChat` → `getPeriodosDeltaVenta` / `getDeltaIngresoDatosInternal` (margen IGF solo como insumo de fórmula)
+- **Endpoint relacionado:** Chat `POST /api/director-ia/chat`; semántica de `POST /api/dashboard/delta-ingreso-datos` (sin HTTP interno)
+- **Tablas consultadas:** ventas + descuentos ARR; `igf.versions` / `igf.compromiso_lines` como insumo de margen. No `arr.delta_ingreso_forecast_cliente`.
+- **Evidencia de integración actual:** Intent `delta_income`; tool `get_delta_income` con executor real; no importa `delta-ingreso-forecast` ni `delta-ingreso-ai*`
+- **Información que no puede concluirse con esta fuente:** Forecast de ingreso; M19; causalidad; anexo IGF/ARR como sustituto; Delta Venta; Delta Descuento
 
 ### Fuente: Duplicados
 
@@ -921,8 +921,8 @@
 | 1 | ¿Cómo va una planta? | Parcialmente | PARCIAL | AR + (opcional) IGF/ARR/MC según wording | `buildDirectorIaContextPayload`; `buildPlantSummaryBlock`; `loadIgfArrAnnexForChat` si regex financiero | Presupuestos, Excel gastos; KPIs dashboard y proyectos existen on-demand con wording propio (no se activan solo con «cómo va la planta») | Alto si se interpreta como KPI financiero IGF/ARR o como KPI de folios sin el intent `dashboard_kpis` |
 | 2 | ¿Qué acciones están vencidas? | Sí (limitado) | PARCIAL | Action Register | `summarizeTopOverdueActions` / context | Acciones fuera del top 10; notas excluidas | Medio (omisión por límite) |
 | 3 | ¿Quién es responsable de una acción? | Sí (limitado) | PARCIAL | Action Register | `summarizeActionRegisterResponsables`, narrativa chat | Responsables fuera del top 10 | Medio |
-| 4 | ¿Por qué cayó el ingreso? | Parcialmente | PARCIAL / INDIRECTA | commercial_state + DICF + bitácora + IGF/ARR | `loadCommercialStateForChat`, `summarizeDicfContext`, anexo IGF/ARR | Modal Delta Ingreso exacto; causalidad no estructurada | Alto (hipótesis narrativa) |
-| 5 | ¿La caída proviene de venta o descuento? | Parcialmente | PARCIAL | ARR/IGF annex + commercial_state | `loadIgfArrAnnexForChat`, `getMargenKgPorPeriodo`, `dicf.computeDicf` | Endpoints `delta-venta` / `delta-descuento` no cableados | Medio-Alto |
+| 4 | ¿Por qué cayó el ingreso? | Parcialmente | PARCIAL / INDIRECTA | commercial_state + DICF + bitácora + IGF/ARR | `loadCommercialStateForChat`, `summarizeDicfContext`, anexo IGF/ARR | Causalidad no estructurada (M9 compara periodos reales; no afirma por qué cayó el ingreso) | Alto (hipótesis narrativa) |
+| 5 | ¿La caída proviene de venta o descuento? | Parcialmente | PARCIAL | ARR/IGF annex + commercial_state; familias M9 solo si el intent es `delta_*` | `loadIgfArrAnnexForChat`; loaders M9 si wording es «cómo cambió venta/descuento» | Esta pregunta causal no es el intent M9; no atribución automática venta vs descuento | Medio-Alto |
 | 6 | ¿Cómo va ARR contra la meta? | Parcialmente | PARCIAL | ARR annex | `loadArrProyForPlant` | Meta/UI completa ARR; depende de wording regex | Medio |
 | 7 | ¿Cómo va IGF contra el compromiso? | Parcialmente | PARCIAL | IGF annex | `loadIgfCommitSnapshot` | Versiones/HG UI; `sources.igf` no en GET | Medio |
 | 8 | ¿Qué clientes explican la desviación? | Parcialmente | PARCIAL | commercial_state / top clientes IGF-ARR / DICF | `loadCommercialStateForChat` (20 clientes), `loadTopClientesDescBrief` (8) | Universo completo de clientes | Medio (top-N) |
@@ -1193,11 +1193,12 @@ Escala 1–5. Prioridad derivada de: valor ejecutivo × disponibilidad de funcio
 
 ### 1. Resumen de cobertura real actual
 
-Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Register**, **DICF**, **bitácora**, **comentarios** (cliente y folio) y **entidades comerciales**, con **anexos financieros on-demand** (IGF/ARR/margen/estado comercial) activados por **regex** en el chat, **análisis on-demand de posibles duplicados de folios** (M16: `findDuplicatePairs`, no confirmación), y **consulta on-demand de KPIs de dashboard y proyectos por planta** (M3: `get_dashboard_kpis` / `get_project_status`; no catálogo global; no creación de proyectos). **No** opera el kanban, **no** lee documentos/pólizas/cheques/presupuestos/clasificación/taller/Excel GASTOS-INVERSIONES ni los endpoints Delta UI. Las escrituras propias (bitácora/entidades) existen por **API UI**, no como tools autónomos del LLM. El GET `/api/director-ia/context` **subdeclara** IGF/ARR/commercial_state respecto al chat.
+Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Register**, **DICF**, **bitácora**, **comentarios** (cliente y folio) y **entidades comerciales**, con **anexos financieros on-demand** (IGF/ARR/margen/estado comercial) activados por **regex** en el chat, **análisis on-demand de posibles duplicados de folios** (M16: `findDuplicatePairs`, no confirmación), **consulta on-demand de KPIs de dashboard y proyectos por planta** (M3: `get_dashboard_kpis` / `get_project_status`; no catálogo global; no creación de proyectos), y **consulta on-demand de Delta Venta / Descuento / Ingreso de periodos reales** (M9: `get_delta_sales` / `get_delta_discount` / `get_delta_income`; no forecast con escritura; no M19). **No** opera el kanban, **no** lee documentos/pólizas/cheques/presupuestos/clasificación/taller/Excel GASTOS-INVERSIONES ni el forecast mutante de ingreso. Las escrituras propias (bitácora/entidades) existen por **API UI**, no como tools autónomos del LLM. El GET `/api/director-ia/context` **subdeclara** IGF/ARR/commercial_state respecto al chat.
 
 ### 2. Dominios completos (COMPLETA)
 
 - **M3 Plantas / KPIs / Proyectos** (consulta canónica de la planta del scope, KPIs de `GET /api/dashboard/kpis` y `public.proyectos` por planta. COMPLETE no implica catálogo global, estatus «retrasado» almacenado ni `POST /api/proyectos`).
+- **M9 Delta Venta / Descuento / Ingreso** (consulta canónica read-only de las tres familias de periodos reales vía `get_delta_sales` / `get_delta_discount` / `get_delta_income`. COMPLETE no implica forecast con `DELETE`/`INSERT`, M19, weekly LD ni causalidad).
 - **M13 Director IA** (respecto a su propio módulo: bitácora, entidades, chat, mejora continua como parte del producto).
 - **M16 Duplicados** (consulta canónica de **posibles** pares vía `get_duplicate_folios` / `findDuplicatePairs`. COMPLETE significa integración de esa capacidad de análisis, no confirmación determinística de cada duplicado ni cancelación).
 
@@ -1214,7 +1215,6 @@ Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Re
 
 ### 4. Dominios indirectos (INDIRECTA)
 
-- M9 Deltas (aproximación vía commercial_state / IGF-ARR, no endpoints delta-*)
 - M20 Home KPI (comparte fuentes, no la página)
 - M6 «gastos» en lenguaje natural → posible anexo IGF (no Excel GASTOS)
 
@@ -1245,6 +1245,7 @@ Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Re
 | DETECTAR RIESGOS / CONSULTAR posibles duplicados de folios | `loadDuplicateFoliosForChat` → `findDuplicatePairs` |
 | CONSULTAR KPIs de dashboard (folios) | `loadDashboardKpisForChat` → `queryDashboardKpis` |
 | CONSULTAR proyectos por planta | `loadProyectosForChat` → `listarProyectosPorPlantaOEquivalentes` |
+| COMPARAR Delta Venta / Descuento / Ingreso (periodos reales) | `loadDeltaVentaForChat` / `loadDeltaDescuentoForChat` / `loadDeltaIngresoForChat` |
 
 ### 7. Capacidades que requieren herramientas nuevas (aunque exista API/lib)
 
@@ -1255,7 +1256,7 @@ Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Re
 | Metadatos documentos / póliza / cheque | Sí (endpoints folio) | Tool + política de URLs |
 | Duplicados (cancelar / `findSimilarTo` al crear / Excel Taller) | Sí (cancelar UI, `POST /check`, Excel M5) | Escritura y detectores ajenos al análisis M16 ya integrado |
 | Excel/agregados Taller, GASTOS, INVERSIONES | Sí (libs Excel) | Tool de consulta (idealmente sin solo xlsx) |
-| Deltas UI | Sí (`delta-*`) | Tool o unificación con annex |
+| Deltas UI (forecast con escritura / M19) | Sí (`delta-ingreso-forecast`, `/api/ai/delta-ingreso/test/*`) | La lectura de periodos reales ya está en COMPLETA M9; faltan forecast mutante y M19, a propósito fuera |
 | Presupuesto semanal | Tablas sí; API UI limitada | Queries/tool + mapeo bot |
 | Proyectos (crear/editar/eliminar) | Sí (`POST /api/proyectos`) | Escritura; la lectura M3 ya está integrada |
 | KPIs dashboard (lectura) | Sí (integrado M3) | — |
@@ -1306,6 +1307,7 @@ Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Re
 | Chat | `lib/director-ia-chat.js` |
 | Duplicados M16 | `lib/director-ia-duplicados.js`, `lib/folio-duplicados-load.js`, `lib/folio-duplicados.js` |
 | M3 Plantas / KPIs / Proyectos | `lib/director-ia-m3-plantas-kpis-proyectos.js` |
+| M9 Delta Venta / Descuento / Ingreso | `lib/director-ia-m9-deltas.js` |
 | AR summarizers | `lib/director-ia-action-register.js` |
 | IGF/ARR annex | `lib/director-ia-igf-arr.js` |
 | Commercial state | `lib/director-ia-commercial-state.js` |

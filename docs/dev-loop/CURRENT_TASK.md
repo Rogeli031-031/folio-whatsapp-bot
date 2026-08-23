@@ -1,14 +1,14 @@
 # CURRENT_TASK
 
 ```yaml
-task_id: "IMPL-DIRECTOR-IA-M9-DELTAS-001"
+task_id: "DOCS-DIRECTOR-IA-M9-CAPABILITY-MATRIX-SYNC-001"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-08-23T12:40:00-06:00"
 human_authorization: >
   AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-23.
-  Apruebo IMPL-DIRECTOR-IA-M9-DELTAS-001 y autorizo G1.
+  Apruebo DOCS-DIRECTOR-IA-M9-CAPABILITY-MATRIX-SYNC-001 y autorizo G1.
 
 gates:
   G1_task_authorization: AUTHORIZED
@@ -17,322 +17,356 @@ gates:
   G8_calibration_materiality_signature: N/A
 
 objective: >
-  Implementar M9 — Delta Venta / Descuento / Ingreso — como integración
-  read-only real de Director IA, cableando las tres familias delta a sus
-  helpers/fuentes existentes mediante ejecución in-process, preservando authz,
-  semántica de periodos, nulls, separación M9/M19 y scope por planta, sin
-  mutaciones, sin HTTP interno y sin modificar contratos arquitectónicos.
+  Sincronizar exclusivamente la capability matrix M0-M20 para reflejar el
+  estado físico real de M9 — Delta Venta / Descuento / Ingreso — después de
+  la integración read-only ya fusionada en main, verificando si satisface la
+  definición canónica de COMPLETE y recalculando el avance global sin
+  reinterpretar contratos ni ampliar M9 a mutaciones.
 
 baseline:
   readiness_task: "ARCH-DIRECTOR-IA-M9-DELTAS-READINESS-001"
-  readiness_report: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M9-DELTAS-READINESS-001.md"
+  implementation_task: "IMPL-DIRECTOR-IA-M9-DELTAS-001"
+  implementation_state: "integrated_in_main"
+  main_merge_commit: "7b3e5a9801f17f1224bf594476e5dfecaa772ce1"
+
+  module: "M9"
+  module_name: "Delta Venta / Descuento / Ingreso"
+
+  current_matrix_state: "INDIRECTA"
+  expected_state_if_evidence_matches: "COMPLETE"
+
   current_m0_m20_percentage: 40.0
   current_numerator: 8.0
   denominator: 20
-  module: "M9"
-  current_state: "INDIRECTA"
-  target_state_after_implementation: "physically ready for COMPLETE"
-  potential_gain_pp_after_docs_sync: 2.5
-  projected_percentage_after_docs_sync: 42.5
+
+  potential_gain_pp: 2.5
+  projected_numerator_if_complete: 8.5
+  projected_percentage_if_complete: 42.5
 
 canonical_families:
 
   delta_venta:
     intent: "delta_sales"
     tool: "get_delta_sales"
-    required:
-      - "executor read-only real"
-      - "usar helper/fuente delta venta real"
-      - "preservar periodos"
-      - "preservar shape y null semantics"
-      - "preservar authz"
-      - "wiring chat real"
+    executor: "loadDeltaVentaForChat"
+    physical_source: "arr.ventas_diarias_cliente"
+    unit: "kg"
 
   delta_descuento:
     intent: "delta_discount"
     tool: "get_delta_discount"
-    required:
-      - "executor read-only real"
-      - "usar helper/fuente delta descuento real"
-      - "preservar periodos"
-      - "preservar shape y null semantics"
-      - "preservar authz"
-      - "wiring chat real"
+    executor: "loadDeltaDescuentoForChat"
+    physical_source: "fuentes de descuento + kg"
+    unit: "$/kg"
 
   delta_ingreso:
     intent: "delta_income"
     tool: "get_delta_income"
-    required:
-      - "executor read-only real"
-      - "usar helper/fuente delta ingreso real"
-      - "preservar periodos"
-      - "preservar shape y null semantics"
-      - "preservar authz"
-      - "wiring chat real"
-      - "mantener fuera cualquier forecast con DELETE/INSERT"
+    executor: "loadDeltaIngresoForChat"
+    physical_semantics: "kg × (margen − |descuento|)"
+    mutation_forecast: "explicitly excluded"
+
+implemented_behavior:
+  mode: "read_only"
+
+  wiring:
+    - "intent -> tool -> executor -> helper/fuente -> respuesta"
+    - "in-process"
+    - "sin HTTP interno"
+
+  authz:
+    - "GA preservado"
+    - "GV preservado"
+    - "plantas_permitidas preservado"
+    - "sin cross-planta"
+    - "fail-closed"
+
+  periods:
+    - "A != B"
+    - "defaults únicamente desde periodos YYYY-MM existentes"
+    - "default = dos periodos más recientes disponibles"
+    - "no se inventan periodos"
+
+  null_semantics:
+    - "null/unknown preservado"
+    - "no convertir ausencia/error en cero"
+    - "percentChangeOrUnknown no genera porcentaje cuando base = 0"
+
+  exclusions:
+    - "M19 Delta Ingreso AI test"
+    - "forecast ingreso con DELETE/INSERT"
+    - "IGF como sustituto"
+    - "ARR snapshot general como sustituto"
+    - "KPIs M3 como sustituto"
+    - "mutaciones"
+
+canonical_check:
+  definition: >
+    M9 es COMPLETE únicamente si Director IA consulta directamente y de forma
+    consistente las tres familias canónicas — Delta Venta, Delta Descuento y
+    Delta Ingreso — dentro del scope autorizado, usando sus fuentes reales,
+    preservando periodos, authz y semántica, sin mutaciones ni sustituciones por
+    otros dominios.
+
+  required:
+    - "Delta Venta integrada"
+    - "Delta Descuento integrada"
+    - "Delta Ingreso integrada"
+    - "las tres tools tienen executor real"
+    - "los tres intents llegan a la familia correcta"
+    - "wiring chat real"
+    - "fuentes reales"
+    - "authz preservada"
+    - "scope planta preservado"
+    - "periodos preservados"
+    - "null/division-by-zero preservados"
+    - "M9 separado de M19"
+    - "sin forecast mutante"
+    - "sin HTTP interno"
+    - "sin mutaciones"
 
 semantic_invariants:
   - "Delta Venta ≠ Delta Descuento ≠ Delta Ingreso."
   - "M9 ≠ M19."
-  - "No usar IGF como sustituto de M9."
-  - "No usar ARR snapshot general como sustituto de delta específico."
-  - "No usar KPIs de M3 como sustituto de M9."
-  - "No afirmar causalidad a partir de una diferencia."
-  - "No afirmar mejora/deterioro sin definir métrica y signo."
+  - "No usar IGF como sustituto."
+  - "No usar ARR snapshot general como sustituto."
+  - "No usar KPIs M3 como sustituto."
+  - "No afirmar causalidad a partir del delta."
+  - "No afirmar mejora/deterioro sin métrica y signo."
   - "No inventar periodos."
-  - "No convertir división por cero en porcentaje válido."
+  - "No producir porcentaje válido cuando la base es cero."
   - "No convertir null/unknown/error en cero."
   - "No ampliar plantas_permitidas."
-  - "No saltarse GA/GV."
-  - "No ejecutar forecast de ingreso que escriba."
-  - "Toda respuesta debe mantener trazabilidad a la familia delta correcta."
+  - "No ampliar GA/GV."
+  - "No ejecutar forecast con DELETE/INSERT."
+  - "M9 permanece read-only."
 
-authz_requirements:
-  - "preservar restricciones existentes por planta"
-  - "preservar GA"
-  - "preservar GV"
-  - "equivalente o más restrictivo que dashboard"
-  - "no cross-planta"
-  - "fail-closed ante planta no autorizada"
-  - "fail-closed ante fuente no disponible"
+evidence_requirements:
 
-implementation_requirements:
+  delta_venta:
+    verify:
+      - "intent delta_sales"
+      - "tool get_delta_sales"
+      - "executor loadDeltaVentaForChat"
+      - "fuente real arr.ventas_diarias_cliente"
+      - "wiring chat"
+      - "periodos"
+      - "authz"
+      - "sin side effects"
 
-  loaders:
-    - "crear o extraer loaders/helpers reutilizables read-only para las tres familias"
-    - "reutilizar getDelta*Clientes o equivalentes reales"
-    - "no duplicar lógica divergente del backend"
-    - "no hacer HTTP interno"
-    - "no introducir side effects"
+  delta_descuento:
+    verify:
+      - "intent delta_discount"
+      - "tool get_delta_discount"
+      - "executor loadDeltaDescuentoForChat"
+      - "fuente real de descuento y kg"
+      - "wiring chat"
+      - "periodos"
+      - "authz"
+      - "sin side effects"
 
-  tools:
-    - "get_delta_sales debe tener executor real"
-    - "get_delta_discount debe tener executor real"
-    - "get_delta_income debe tener executor real"
-    - "cambiar estado de tools a available_on_demand o equivalente vigente"
-    - "mantener inputs mínimos necesarios para planta y periodos"
-
-  planner:
-    - "conservar delta_sales"
-    - "conservar delta_discount"
-    - "conservar delta_income"
-    - "no redirigir estos intents a IGF/ARR general"
-    - "no introducir colisión con M19"
-
-  chat:
-    - "añadir wiring in-process intent -> tool/executor -> helper/fuente -> respuesta"
-    - "evitar fallback erróneo a IGF/AR cuando la intención sea delta M9"
-    - "preservar evidencia estructurada"
-    - "preservar fail-closed"
-    - "no integrar al cycle constitucional"
-
-  ingreso:
-    - "separar explícitamente consulta delta ingreso de cualquier forecast con DELETE/INSERT"
-    - "no ejecutar ni importar ruta de mutación"
-    - "no confundir M9 delta ingreso con M19 AI test"
-
-  evidence:
-    - "incluir familia"
-    - "planta"
-    - "periodo actual"
-    - "periodo comparación"
-    - "fuente"
-    - "shape consultado"
-    - "valores observados"
-    - "derivados si aplican"
-    - "null/unknown preservado"
+  delta_ingreso:
+    verify:
+      - "intent delta_income"
+      - "tool get_delta_income"
+      - "executor loadDeltaIngresoForChat"
+      - "semántica kg × (margen − |descuento|)"
+      - "wiring chat"
+      - "periodos"
+      - "authz"
+      - "sin forecast DELETE/INSERT"
+      - "M19 fuera"
 
   tests:
-    - "happy path Delta Venta"
-    - "happy path Delta Descuento"
-    - "happy path Delta Ingreso"
-    - "periodos válidos"
-    - "periodos faltantes"
-    - "periodos inválidos"
-    - "planta_id ausente"
-    - "planta no autorizada"
-    - "GA"
-    - "GV"
-    - "cross-planta"
-    - "null"
-    - "cero"
-    - "división por cero"
-    - "fuente vacía"
-    - "error de fuente"
-    - "M9 no cae a IGF"
-    - "M9 no cae a ARR snapshot general"
-    - "M9 no cae a M19"
-    - "tools con executor"
-    - "intents preservados"
-    - "sin side effects"
-    - "sin forecast DELETE/INSERT"
+    verify:
+      - "23/23 focales M9"
+      - "25/25 capabilities"
+      - "30/30 planner"
+      - "24/24 orchestrator"
+      - "459/459 suite Director IA"
+      - "git diff --check limpio en implementación"
 
 in_scope:
   writable:
     - "docs/dev-loop/CURRENT_TASK.md"
+    - "docs/dev-loop/reports/DOCS-DIRECTOR-IA-M9-CAPABILITY-MATRIX-SYNC-001.md"
+    - "docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md"
+
+  read_only:
+    - "docs/dev-loop/LOOP_PROTOCOL.md"
+    - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M9-DELTAS-READINESS-001.md"
     - "docs/dev-loop/reports/IMPL-DIRECTOR-IA-M9-DELTAS-001.md"
+    - "lib/director-ia-m9-deltas.js"
     - "lib/director-ia-chat.js"
     - "lib/director-ia-tools.js"
     - "lib/director-ia-planner.js"
     - "lib/director-ia-capabilities.js"
-    - "lib/director-ia-igf-arr.js"
-    - "lib/director-ia-m9-deltas.js"
     - "server.js"
     - "test/director-ia-m9-deltas.test.js"
     - "scripts/test-director-ia-capabilities.js"
     - "scripts/test-director-ia-planner.js"
     - "scripts/test-director-ia-tool-orchestrator.js"
-
-  read_only:
-    - "docs/dev-loop/LOOP_PROTOCOL.md"
-    - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M9-DELTAS-READINESS-001.md"
     - "docs/director-ia/**"
-    - "lib/**"
-    - "frontend-dashboard/**"
-    - "test/**"
-    - "scripts/**"
-    - "sql/**"
-    - "package.json"
-    - "package-lock.json"
 
 out_of_scope:
-  - "modificar docs/director-ia/**"
-  - "modificar capability matrix"
+  - "modificar runtime"
+  - "modificar backend"
   - "modificar frontend"
+  - "modificar tests"
+  - "modificar scripts"
   - "modificar SQL"
   - "crear migrations"
   - "modificar schema"
-  - "crear endpoint nuevo"
-  - "cambiar contrato HTTP"
-  - "cargar ARR"
+  - "modificar contratos arquitectónicos"
+  - "modificar DIRECTOR_IA_ARCHITECTURE_INDEX.md"
+  - "modificar otros módulos salvo referencias matemáticas agregadas necesarias"
+  - "integrar M19"
+  - "ejecutar forecast ingreso"
   - "mutar ARR"
   - "mutar folios"
   - "mutar Action Register"
-  - "ejecutar forecast de ingreso con DELETE/INSERT"
-  - "integrar M19"
-  - "reabrir M3"
+  - "cambiar authz"
   - "HTTP interno"
-  - "dispatcher genérico"
   - "cycle constitucional"
-  - "OP/EB/EKS/IES/Reasoning"
   - "smoke productivo"
-  - "secretos/credenciales"
   - "commit"
   - "push"
   - "merge"
-  - "sync documental M9 a COMPLETE"
   - "abrir o ejecutar automáticamente la siguiente tarea"
 
-contracts_in_force:
-  - "docs/dev-loop/LOOP_PROTOCOL.md"
-  - "docs/director-ia/CONSTITUTION.md"
-  - "docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md"
-  - "docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md"
-  - "docs/director-ia/EXECUTIVE_KNOWLEDGE_ENGINE.md"
-  - "docs/director-ia/01-OBSERVATION-PIPELINE.md"
-  - "docs/director-ia/02-EVIDENCE-BUILDER.md"
-  - "docs/director-ia/03-EXECUTIVE-KNOWLEDGE-STORE.md"
-  - "docs/director-ia/04-IES-STANDARD.md"
-  - "docs/director-ia/05-REASONING-ENGINE.md"
+matrix_update_policy:
+
+  if_complete:
+    required:
+      - "cambiar M9 de INDIRECTA a COMPLETA/COMPLETE según terminología vigente"
+      - "actualizar Cobertura actual de Director IA"
+      - "actualizar Información exacta que sí consulta"
+      - "actualizar Información que no consulta eliminando únicamente gaps ya cerrados"
+      - "actualizar archivos actuales relacionados"
+      - "actualizar endpoints/tools/helpers relevantes"
+      - "actualizar capacidades de lectura"
+      - "preservar cualquier capacidad de escritura como no integrada"
+      - "actualizar permisos aplicables"
+      - "actualizar observaciones verificadas"
+      - "preservar explícitamente separación M9/M19"
+      - "preservar exclusión del forecast mutante"
+      - "actualizar Parte 9 o resúmenes M0-M20 matemáticamente afectados"
+      - "recalcular numerador y porcentaje"
+
+    forbidden:
+      - "marcar M19 como integrado"
+      - "marcar forecast con escritura como integrado"
+      - "cambiar otros módulos funcionalmente"
+      - "eliminar limitaciones reales"
+      - "reescribir historia del documento"
+
+  if_not_complete:
+    required:
+      - "no cambiar M9 a COMPLETE"
+      - "documentar gap físico"
+      - "STOPPED si requiere reinterpretación contractual"
+
+percentage_check:
+  formula:
+    COMPLETE: 1.0
+    PARTIAL: 0.5
+    INDIRECTA: 0.5
+    NOT_STARTED: 0.0
+    N_A: "excluido del denominador"
+
+  expected_denominator: 20
+
+  before:
+    numerator: 8.0
+    percentage: 40.0
+
+  if_m9_complete:
+    numerator: 8.5
+    percentage: 42.5
+
+  rule: >
+    Recalcular desde la matriz vigente. No asumir 42.5% si otra etiqueta o el
+    denominador cambió desde la última priorización.
 
 allowed_actions:
-  - "crear loaders/helpers read-only M9"
-  - "cablear las tres tools M9"
-  - "ajustar planner solo si hace falta para routing correcto"
-  - "ajustar capabilities solo en lo necesario"
-  - "ajustar chat para routing M9"
-  - "extraer/reutilizar lógica desde server/lib sin cambiar contrato HTTP"
-  - "crear tests focales M9"
-  - "actualizar scripts afectados"
-  - "ejecutar tests locales"
+  - "leer físicamente implementación y reportes"
+  - "verificar wiring real M9"
+  - "verificar resultados de tests"
+  - "aplicar definición canónica de COMPLETE"
+  - "actualizar únicamente ficha M9 y resúmenes matemáticos afectados"
+  - "escribir reporte"
   - "ejecutar git diff --check"
   - "ejecutar git status"
-  - "escribir reporte"
   - "proponer exactamente una NEXT_TASK"
+  - "no autorizar NEXT_TASK"
 
 forbidden_actions:
-  - "modificar arquitectura congelada"
-  - "crear contrato arquitectónico"
-  - "ampliar authz"
-  - "introducir mutaciones"
-  - "ejecutar forecast de ingreso con escritura"
-  - "crear endpoint nuevo"
-  - "hacer HTTP interno"
-  - "integrar M19"
-  - "integrar al cycle"
-  - "tocar frontend"
-  - "tocar SQL/migrations"
-  - "commit"
-  - "push"
-  - "merge"
-  - "encadenar NEXT_TASK"
+  - "modificar código"
+  - "modificar tests"
+  - "modificar runtime"
+  - "modificar arquitectura"
+  - "crear contrato"
+  - "hacer commit"
+  - "hacer push"
+  - "hacer merge"
+  - "ejecutar NEXT_TASK"
 
 acceptance_criteria:
-  - "Delta Venta es consultable directamente por Director IA."
-  - "Delta Descuento es consultable directamente por Director IA."
-  - "Delta Ingreso es consultable directamente por Director IA."
-  - "Cada familia usa su fuente/helper real."
-  - "Las tres tools tienen executor real."
-  - "Los tres intents llegan a la familia correcta."
-  - "M9 no cae a IGF/ARR general."
-  - "M9 permanece separado de M19."
-  - "No se ejecuta forecast de ingreso con DELETE/INSERT."
-  - "Authz GA/GV/planta se preserva."
-  - "No hay cross-planta."
-  - "Periodos se preservan."
-  - "Null/unknown se preservan."
-  - "División por cero no produce porcentaje falso."
-  - "No hay mutaciones."
-  - "No hay HTTP interno."
-  - "No hay cambio de contrato HTTP."
-  - "No hay cambio arquitectónico."
-  - "No se modifica capability matrix."
-  - "Tests focales M9 verdes."
-  - "Scripts afectados verdes."
-  - "Suite Director IA relevante verde."
+  - "Se verificó físicamente M9 integrado en main."
+  - "Se verificó Delta Venta."
+  - "Se verificó Delta Descuento."
+  - "Se verificó Delta Ingreso."
+  - "Se verificaron intents, tools y executors."
+  - "Se verificó wiring chat real."
+  - "Se verificaron fuentes reales."
+  - "Se verificó authz."
+  - "Se verificó scope por planta."
+  - "Se verificaron periodos."
+  - "Se verificaron nulls y base cero."
+  - "Se verificó separación M9/M19."
+  - "Se verificó exclusión del forecast con escritura."
+  - "Se verificó ausencia de mutaciones."
+  - "Se verificó ausencia de HTTP interno."
+  - "La definición vigente de COMPLETE se aplicó sin reinterpretación."
+  - "M9 solo se marca COMPLETE si la evidencia lo sustenta."
+  - "El porcentaje se recalcula desde la matriz vigente."
+  - "Solo M9 y resúmenes matemáticos directamente afectados cambian."
+  - "No se modifica código."
+  - "No se modifican otros contratos."
   - "git diff --check limpio."
-  - "Solo archivos autorizados modificados."
-  - "M9 queda físicamente listo para una tarea documental separada que lo marque COMPLETE."
-
-required_validation:
-  - "node --test test/director-ia-m9-deltas.test.js"
-  - "node scripts/test-director-ia-capabilities.js"
-  - "node scripts/test-director-ia-planner.js"
-  - "node scripts/test-director-ia-tool-orchestrator.js"
-  - "node --test test/director-ia-*.test.js"
-  - "git diff --check"
-  - "git status"
+  - "Solo CURRENT_TASK, reporte y capability matrix modificados."
+  - "Hay exactamente una NEXT_TASK si procede."
+  - "NEXT_TASK permanece no autorizada."
 
 next_task_policy:
-  if_success:
-    propose_exactly_one: "DOCS-DIRECTOR-IA-M9-CAPABILITY-MATRIX-SYNC-001"
+  if_m9_complete:
+    propose_exactly_one: "ARCH-DIRECTOR-IA-NEXT-MODULE-PRIORITIZATION-004"
 
-  if_contract_or_architecture_conflict:
-    outcome: "STOPPED"
+  if_m9_not_complete:
+    propose_exactly_one: "none until human review"
 
-  if_missing_human_gate_or_external_dependency:
-    outcome: "BLOCKED"
-
-  note: "No autorizar ni ejecutar NEXT_TASK."
+  note: "No autorizar ni ejecutar."
 
 report_requirements:
-  path: "docs/dev-loop/reports/IMPL-DIRECTOR-IA-M9-DELTAS-001.md"
+  path: "docs/dev-loop/reports/DOCS-DIRECTOR-IA-M9-CAPABILITY-MATRIX-SYNC-001.md"
 
   must_include:
     - "metadata"
     - "resumen ejecutivo"
-    - "archivos modificados"
-    - "Delta Venta"
-    - "Delta Descuento"
-    - "Delta Ingreso"
+    - "baseline"
+    - "evidencia Delta Venta"
+    - "evidencia Delta Descuento"
+    - "evidencia Delta Ingreso"
     - "M9 vs M19"
+    - "forecast con escritura excluido"
     - "authz"
     - "periodos"
-    - "null/division by zero"
-    - "wiring"
-    - "tools/executors"
-    - "tests"
-    - "resultados completos"
+    - "null/base cero"
+    - "tests verificados"
+    - "evaluación COMPLETE"
+    - "cambios exactos en matriz"
+    - "recalculo M0-M20"
+    - "porcentaje antes/después"
     - "acciones no realizadas"
     - "gates"
     - "secrets_check"
@@ -341,11 +375,11 @@ report_requirements:
     - "NEXT_TASK propuesta"
 
 expected_terminal_state: >
-  DONE_PENDING_REVIEW si las tres familias M9 quedan integradas read-only con
-  authz, semántica, tests y separación M19 correctos, dejando M9 físicamente
-  listo para COMPLETE. STOPPED ante contradicción contractual o necesidad de
-  G2/G3. BLOCKED si falta gate humano o dependencia indispensable.
+  DONE_PENDING_REVIEW si la evidencia integrada satisface COMPLETE y la matriz
+  queda sincronizada sin ampliar alcance. STOPPED si la documentación requiere
+  reinterpretación contractual. BLOCKED si falta gate o dato humano
+  indispensable.
 
 max_attempts: 1
 
-result_report_path: "docs/dev-loop/reports/IMPL-DIRECTOR-IA-M9-DELTAS-001.md"
+result_report_path: "docs/dev-loop/reports/DOCS-DIRECTOR-IA-M9-CAPABILITY-MATRIX-SYNC-001.md"
