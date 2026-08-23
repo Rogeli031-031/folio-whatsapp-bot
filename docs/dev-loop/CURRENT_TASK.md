@@ -1,14 +1,14 @@
 # CURRENT_TASK
 
 ```yaml
-task_id: "ARCH-DIRECTOR-IA-NEXT-MODULE-PRIORITIZATION-004"
+task_id: "ARCH-DIRECTOR-IA-M4-CLASIFICACION-READINESS-001"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
-authorized_at: "2026-08-23T13:41:00-06:00"
+authorized_at: "2026-08-23T13:55:52-06:00"
 human_authorization: >
   AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-23.
-  Apruebo ARCH-DIRECTOR-IA-NEXT-MODULE-PRIORITIZATION-004 y autorizo G1.
+  Apruebo ARCH-DIRECTOR-IA-M4-CLASIFICACION-READINESS-001 y autorizo G1.
 
 gates:
   G1_task_authorization: AUTHORIZED
@@ -17,333 +17,130 @@ gates:
   G8_calibration_materiality_signature: N/A
 
 objective: >
-  Priorizar el siguiente módulo funcional de Director IA después de completar
-  M9, utilizando la capability matrix vigente y evidencia física del
-  repositorio para elegir exactamente un módulo con el mejor balance entre
-  valor ejecutivo, probabilidad real de COMPLETE, esfuerzo, reutilización,
-  testabilidad, authz y riesgo.
+  Auditar físicamente M4 — Clasificación de apoyos — para determinar si la
+  consulta read-only de la matriz JSON de clasificación puede constituir
+  legítimamente COMPLETE para el módulo, separándola expresamente de COMPARAR,
+  Excel y cualquier escritura, y definir el delta exacto de implementación sin
+  modificar todavía runtime, contratos ni capability matrix.
 
 baseline:
+  source_task: "ARCH-DIRECTOR-IA-NEXT-MODULE-PRIORITIZATION-004"
+  source_report: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-NEXT-MODULE-PRIORITIZATION-004.md"
+
   current_m0_m20_percentage: 42.5
-  numerator: 8.5
+  current_numerator: 8.5
   denominator: 20
 
-  formula:
-    COMPLETE: 1.0
-    PARTIAL: 0.5
-    INDIRECTA: 0.5
-    NOT_STARTED: 0.0
-    N_A: "excluido del denominador"
+  module: "M4"
+  module_name: "Clasificación de apoyos + COMPARAR"
+  current_state: "NOT_STARTED / NO INTEGRADA"
+  candidate_target: "COMPLETE read-only"
+  potential_gain_pp_if_complete: 5.0
+  projected_numerator_if_complete: 9.5
+  projected_percentage_if_complete: 47.5
 
-  recently_completed:
-    - "M3 — Plantas / KPIs / Proyectos"
-    - "M9 — Delta Venta / Descuento / Ingreso"
+prioritization_hypothesis:
+  read_surface:
+    endpoint: "GET /api/dashboard/clasificacion-apoyos or equivalent current route"
+    expected_behavior:
+      - "SELECT/read-only"
+      - "buildClasificacionMatrix or equivalent"
+      - "planta_id scoped"
+      - "mes_a / mes_b"
+      - "A != B"
+      - "JSON response"
 
-  known_complete:
-    - "M3"
-    - "M9"
-    - "M13"
-    - "M16"
+  excluded_surfaces:
+    - "COMPARAR POST/write"
+    - "Excel reconciliation"
+    - "agregar/actualizar/rechazar folios"
+    - "mutations"
 
-  note: >
-    Recalcular físicamente todos los estados desde la capability matrix vigente.
-    No asumir que ninguna lista histórica permanece correcta.
+primary_question: >
+  ¿Puede M4 alcanzar legítimamente COMPLETE mediante un único slice read-only
+  que permita a Director IA consultar directamente la matriz de Clasificación
+  de apoyos para planta y periodos autorizados, usando la fuente JSON real,
+  mientras COMPARAR, Excel y las escrituras permanecen explícitamente fuera?
 
-primary_goal: >
-  Elegir exactamente un siguiente módulo con path realista a COMPLETE.
-  Priorizar cierre funcional verdadero sobre numeración secuencial, facilidad
-  superficial o ganancia teórica que solo pueda producir PARTIAL.
+critical_contract_question: >
+  Verificar físicamente si la definición canónica vigente de M4 permite
+  considerar COMPLETE a la capacidad de consulta read-only o si COMPLETE exige
+  necesariamente reconciliación COMPARAR/Excel y/o escritura. No reinterpretar
+  la matriz para obtener +5.0 pp.
 
-selection_principles:
-  - "No elegir por número."
-  - "No asumir que sigue M4, M10 o M1."
-  - "Excluir COMPLETE y N_A."
-  - "Comparar PARTIAL/INDIRECTA -> COMPLETE contra NOT_STARTED -> COMPLETE."
-  - "PARTIAL/INDIRECTA -> COMPLETE aporta +2.5 pp."
-  - "NOT_STARTED -> COMPLETE aporta +5.0 pp."
-  - "No premiar +5.0 pp si el slice realista solo llega a PARTIAL."
-  - "Preferir read-only cuando el valor sea comparable."
-  - "Preferir infraestructura JSON/helpers existente."
-  - "Preferir intents/tools ya declarados si son semánticamente correctos."
-  - "Penalizar mutaciones."
-  - "Penalizar endpoints GET con side effects."
-  - "Penalizar Excel/xlsx cuando no exista contrato JSON reutilizable."
-  - "Penalizar S3, Twilio, WhatsApp u otras dependencias externas."
-  - "Penalizar migrations/schema."
-  - "Penalizar authz ambigua."
-  - "Penalizar colisiones semánticas."
-  - "Considerar infraestructura nueva de M3 y M9 si reduce el delta."
-  - "No elegir Health solo porque sea barato si otro módulo comparable aporta mayor valor ejecutivo."
-
-candidate_scope:
-  derive_from: "docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md"
-
-  include:
-    - "PARTIAL"
-    - "INDIRECTA"
-    - "NOT_STARTED"
-    - "BLOCKED si aparece y debe revalidarse"
-
-  exclude:
-    - "COMPLETE"
-    - "N_A"
-
-mandatory_revalidation:
-  - "Recalcular baseline desde fichas M0-M20."
-  - "Confirmar M9 COMPLETE."
-  - "Confirmar denominador real."
-  - "Revalidar todos los blockers de priorización 003."
-  - "Revisar si infraestructura M9 ayuda a otros módulos."
-  - "Revisar si infraestructura M3 ayuda a otros módulos."
-  - "Verificar wiring real, no solo endpoints existentes."
-  - "Verificar side effects de endpoints GET/POST relevantes."
-  - "Revalidar scope por planta."
-  - "Revalidar roles GA/GV y permisos específicos."
-  - "Revalidar si algún candidato puede llegar a COMPLETE en un único slice."
-
-evaluation_dimensions:
-
-  canonical_definition:
-    question: >
-      ¿Qué exige exactamente COMPLETE según la capability matrix vigente?
-
-  current_state:
-    question: >
-      ¿PARTIAL, INDIRECTA, NOT_STARTED o BLOCKED?
-
-  potential_gain:
-    question: >
-      ¿Qué ganancia porcentual real aporta COMPLETE?
-
-  executive_value:
-    question: >
-      ¿Qué valor aporta al uso real de Director IA como inteligencia ejecutiva?
-
-  backend_readiness:
-    question: >
-      ¿Existen endpoints, helpers, queries o loaders reutilizables?
-
-  director_ia_readiness:
-    question: >
-      ¿Existen intents, tools, capabilities o wiring parcial?
-
-  source_quality:
-    question: >
-      ¿La fuente es primaria, estructurada y estable?
-
-  authz:
-    question: >
-      ¿Puede preservarse o reforzarse sin rediseño?
-
-  plant_scope:
-    question: >
-      ¿Puede mantenerse el aislamiento por planta?
-
-  dependencies:
-    question: >
-      ¿Qué dependencias internas, externas o humanas requiere?
-
-  db_or_migration:
-    question: >
-      ¿Requiere schema/migration/backfill?
-
-  external_services:
-    question: >
-      ¿Depende de Excel, S3, Twilio, WhatsApp o servicios externos?
-
-  effort:
-    question: >
-      ¿El delta es pequeño, medio o alto?
-
-  testability:
-    question: >
-      ¿Puede probarse localmente de forma determinística?
-
-  semantic_risk:
-    question: >
-      ¿Puede inducir conclusiones falsas, ambigüedad o colisión con otro dominio?
-
-  production_risk:
-    question: >
-      ¿Implica escritura, dinero, documentos o acciones irreversibles?
-
-  completeness_feasibility:
-    question: >
-      ¿Puede llegar a COMPLETE en un único slice razonable?
-
-mandatory_candidate_table:
-  columns:
-    - "module"
-    - "canonical_purpose"
-    - "current_state"
-    - "potential_gain_pp"
-    - "executive_value"
-    - "existing_backend"
-    - "existing_frontend"
-    - "existing_intent_or_tool"
-    - "source"
-    - "authz_ready"
-    - "plant_scope"
-    - "dependencies"
-    - "db_or_migration"
-    - "external_dependency"
-    - "estimated_effort"
-    - "testability"
-    - "semantic_risk"
-    - "production_risk"
-    - "can_reach_complete_in_one_slice"
-    - "evidence"
-
-ranking_rules:
-  - "Rankear todos los candidatos relevantes."
-  - "Explicar por qué cada candidato queda arriba o abajo."
-  - "No usar puntuación arbitraria sin justificarla."
-  - "Preferir +5.0 pp solo si COMPLETE es realista."
-  - "Aceptar +2.5 pp si P(COMPLETE) es claramente mayor."
-  - "Preferir módulos que reutilicen el patrón in-process probado por M3/M9."
-  - "No priorizar mutación si existe alternativa read-only comparable."
-  - "No priorizar dependencia externa innecesaria."
-  - "Penalizar endpoints cuyo GET tenga side effects."
-  - "Penalizar dominios donde el criterio de COMPLETE no esté claro."
-
-special_rechecks:
-
-  m1_health:
-    verify:
-      - "health"
-      - "health-db"
-      - "health-proyectos"
-      - "health-director-ia"
-      - "scope global vs planta"
-      - "si COMPLETE puede definirse sin fuga cross-planta"
-      - "valor ejecutivo real"
-
-  m2_folios_kanban:
-    verify:
-      - "folio_status"
-      - "folio_history"
-      - "folio_documents"
-      - "kanban"
-      - "GET con possible side effects"
-      - "maybeAdvanceFolioToComprobaciones"
-      - "authz"
-      - "si read-only COMPLETE es posible sin tocar mutación"
-
-  m4_clasificacion:
-    verify:
-      - "JSON read existente"
-      - "COMPARAR"
-      - "dependencia Excel"
-      - "escritura"
-      - "si COMPLETE puede limitarse legítimamente a lectura"
-
-  m7_igf:
-    verify:
-      - "qué falta para COMPLETE"
-      - "sources.igf"
-      - "annex"
-      - "GET context"
-      - "si delta es wiring o contrato"
-
-  m8_arr:
-    verify:
-      - "qué falta para COMPLETE"
-      - "sources.arr"
-      - "annex"
-      - "upload dependency"
-      - "si read-only puede cerrar COMPLETE"
-
-  m11_dicf:
-    verify:
-      - "qué falta respecto al estado PARTIAL"
-      - "comentarios"
-      - "acciones"
-      - "wiring"
-      - "si ya existe infraestructura suficiente para COMPLETE"
-
-  m12_action_register:
-    verify:
-      - "qué falta respecto al estado PARTIAL"
-      - "board"
-      - "acciones"
-      - "responsables"
-      - "cierres"
-      - "si COMPLETE exige escritura o solo lectura"
-
-  m17_whatsapp_bridge:
-    verify:
-      - "qué parte está integrada"
-      - "qué parte depende de WhatsApp/Twilio"
-      - "si COMPLETE requiere canal externo"
-
-  m20_home_kpi:
-    verify:
-      - "por qué es INDIRECTA"
-      - "fuente real"
-      - "valor ejecutivo"
-      - "si puede cerrar COMPLETE fácilmente"
-
-  not_started_modules:
-    verify:
-      - "si alguno ganó infraestructura reutilizable por M3/M9"
-      - "si alguno puede ahora pasar directamente a COMPLETE"
-      - "si alguno sigue limitado a PARTIAL"
-
-winner_requirements:
-  exactly_one: true
-
-  must_have:
-    - "evidencia física suficiente"
-    - "definición canónica clara"
-    - "fuente real"
-    - "path de implementación identificable"
-    - "authz determinable"
-    - "tests posibles"
-    - "gates claros"
-    - "probabilidad razonable de COMPLETE"
-
-  must_explain:
-    - "por qué gana"
-    - "ganancia potencial"
-    - "valor ejecutivo"
-    - "delta físico"
-    - "dependencias"
-    - "riesgos"
-    - "si requiere readiness"
-    - "si puede ir directo a IMPL"
-    - "gates"
-    - "por qué pierde el segundo lugar"
-
-next_task_policy:
-  exactly_one: true
-
-  if_specific_readiness_needed:
-    propose: "ARCH-DIRECTOR-IA-<MODULO>-READINESS-001"
-
-  if_gap_is_fully_determined:
-    propose: "IMPL-DIRECTOR-IA-<MODULO>-001"
-
-  rules:
-    - "No autorizar NEXT_TASK."
-    - "No ejecutar NEXT_TASK."
-    - "No proponer múltiples alternativas."
-    - "No encadenar trabajo."
+secondary_questions:
+  - >
+    ¿Cuál es la ruta real actual de Clasificación de apoyos y cuál es su método?
+  - >
+    ¿Qué handler/helper construye la matriz y qué consultas ejecuta?
+  - >
+    ¿La ruta de lectura tiene side effects directos o indirectos?
+  - >
+    ¿Qué tabla/vista/campos constituyen la fuente primaria?
+  - >
+    ¿Qué representan filas, columnas, categorías, periodos y totales?
+  - >
+    ¿Qué diferencia existe entre Clasificación de apoyos y COMPARAR?
+  - >
+    ¿Qué diferencia existe entre la consulta JSON y la reconciliación Excel?
+  - >
+    ¿COMPARAR forma parte inseparable del propósito canónico de M4 o es una
+    capacidad de escritura separable?
+  - >
+    ¿La capability matrix vigente define explícitamente CONSULTAR/COMPARAR como
+    una sola condición de COMPLETE?
+  - >
+    ¿Cómo se aplica planta_id?
+  - >
+    ¿Qué authz aplica a GV, priv_clave u otros roles/permisos?
+  - >
+    ¿mes_a y mes_b son obligatorios? ¿Qué formato usan?
+  - >
+    ¿Qué ocurre si mes_a = mes_b?
+  - >
+    ¿Qué ocurre con periodos sin datos?
+  - >
+    ¿Qué valores son cero por semántica fuente y cuáles son null/unknown?
+  - >
+    ¿Existe ya intent, capability o tool relacionada con clasificacion_apoyos?
+  - >
+    ¿UNSUPPORTED_RULES o early returns bloquean actualmente el dominio?
+  - >
+    ¿Puede reutilizarse el patrón in-process M3/M9?
+  - >
+    ¿Qué loader/executor mínimo sería necesario?
+  - >
+    ¿Qué tests serían suficientes para demostrar COMPLETE read-only?
 
 in_scope:
   writable:
     - "docs/dev-loop/CURRENT_TASK.md"
-    - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-NEXT-MODULE-PRIORITIZATION-004.md"
+    - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M4-CLASIFICACION-READINESS-001.md"
 
   read_only:
     - "docs/dev-loop/LOOP_PROTOCOL.md"
     - "docs/dev-loop/TASK_TEMPLATE.md"
     - "docs/dev-loop/reports/README.md"
-    - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-NEXT-MODULE-PRIORITIZATION-003.md"
-    - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M9-DELTAS-READINESS-001.md"
-    - "docs/dev-loop/reports/IMPL-DIRECTOR-IA-M9-DELTAS-001.md"
-    - "docs/dev-loop/reports/DOCS-DIRECTOR-IA-M9-CAPABILITY-MATRIX-SYNC-001.md"
+    - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-NEXT-MODULE-PRIORITIZATION-004.md"
     - "docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md"
-    - "docs/director-ia/**"
+    - "docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md"
+    - "docs/director-ia/CONSTITUTION.md"
+    - "docs/director-ia/EXECUTIVE_KNOWLEDGE_ENGINE.md"
+    - "docs/director-ia/01-OBSERVATION-PIPELINE.md"
+    - "docs/director-ia/02-EVIDENCE-BUILDER.md"
+    - "docs/director-ia/03-EXECUTIVE-KNOWLEDGE-STORE.md"
+    - "docs/director-ia/04-IES-STANDARD.md"
+    - "docs/director-ia/05-REASONING-ENGINE.md"
+    - "lib/director-ia-capabilities.js"
+    - "lib/director-ia-planner.js"
+    - "lib/director-ia-tools.js"
+    - "lib/director-ia-tool-orchestrator.js"
+    - "lib/director-ia-chat.js"
+    - "lib/director-ia-context.js"
+    - "lib/director-ia-m3-plantas-kpis-proyectos.js"
+    - "lib/director-ia-m9-deltas.js"
+    - "lib/clasificacion-apoyos-excel.js"
+    - "lib/clasificacion-comparar.js"
     - "lib/**"
     - "server.js"
     - "frontend-dashboard/**"
@@ -354,7 +151,7 @@ in_scope:
     - "package-lock.json"
 
 out_of_scope:
-  - "implementar"
+  - "implementar M4"
   - "modificar runtime"
   - "modificar backend"
   - "modificar frontend"
@@ -368,106 +165,439 @@ out_of_scope:
   - "crear tools"
   - "crear intents"
   - "cambiar authz"
+  - "ejecutar COMPARAR"
+  - "generar Excel"
+  - "subir Excel"
+  - "actualizar folios"
+  - "agregar folios"
+  - "rechazar folios"
+  - "mutar clasificación"
+  - "mutar Action Register"
+  - "mutar ARR"
+  - "HTTP interno"
+  - "dispatcher genérico"
+  - "cycle constitucional"
   - "smoke productivo"
-  - "usar secretos"
+  - "secretos o credenciales"
   - "commit"
   - "push"
   - "merge"
-  - "ejecutar siguiente tarea"
+  - "abrir o ejecutar automáticamente la siguiente tarea"
 
 contracts_in_force:
   - "docs/dev-loop/LOOP_PROTOCOL.md"
   - "docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md"
   - "docs/director-ia/CONSTITUTION.md"
   - "docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md"
+  - "docs/director-ia/EXECUTIVE_KNOWLEDGE_ENGINE.md"
+  - "docs/director-ia/01-OBSERVATION-PIPELINE.md"
+  - "docs/director-ia/02-EVIDENCE-BUILDER.md"
+  - "docs/director-ia/03-EXECUTIVE-KNOWLEDGE-STORE.md"
+  - "docs/director-ia/04-IES-STANDARD.md"
+  - "docs/director-ia/05-REASONING-ENGINE.md"
 
 allowed_actions:
-  - "leer físicamente matriz, código, tests, endpoints y reportes"
-  - "recalcular baseline"
-  - "construir candidatos"
-  - "revalidar blockers"
-  - "trazar wiring"
-  - "comparar gain/value/effort/risk"
-  - "elegir exactamente un ganador"
+  - "leer físicamente archivos del repositorio"
+  - "verificar definición canónica de M4"
+  - "trazar endpoint JSON de clasificación"
+  - "trazar handler -> helper -> queries -> fuente"
+  - "verificar side effects"
+  - "verificar separación lectura/COMPARAR/Excel"
+  - "verificar planner/tools/capabilities actuales"
+  - "verificar authz"
+  - "verificar scope por planta"
+  - "verificar periodos"
+  - "verificar null/zero semantics"
+  - "examinar tests existentes"
+  - "determinar delta físico"
+  - "determinar feasibility de COMPLETE"
+  - "determinar gates"
   - "proponer exactamente una NEXT_TASK"
-  - "escribir reporte"
+  - "escribir únicamente CURRENT_TASK y reporte"
   - "ejecutar git diff --check"
   - "ejecutar git status"
 
 forbidden_actions:
-  - "modificar código"
-  - "modificar capability matrix"
-  - "modificar arquitectura"
-  - "aprobar gates"
-  - "ejecutar NEXT_TASK"
+  - "implementar código"
+  - "modificar cualquier archivo fuera de los dos writable"
+  - "reinterpretar COMPLETE para obtener +5.0 pp"
+  - "asumir que COMPARAR es separable sin evidencia contractual"
+  - "asumir que COMPARAR es inseparable sin evidencia contractual"
+  - "asumir que GET es read-only sin verificar side effects"
+  - "usar Excel como fuente si existe JSON primario"
+  - "ejecutar POST de escritura"
+  - "crear o modificar folios"
+  - "ampliar acceso cross-planta"
+  - "bypassear GV/priv_clave"
+  - "usar HTTP interno"
+  - "aprobar G2/G3/G4/G5/G6/G7/G8"
   - "commit"
   - "push"
   - "merge"
+  - "encadenar implementación"
+
+audit_workstreams:
+
+  canonical_definition:
+    required:
+      - "leer ficha completa M4 en capability matrix"
+      - "leer resúmenes/Parte 9 relacionados"
+      - "identificar propósito empresarial exacto"
+      - "identificar capacidades de lectura"
+      - "identificar capacidades de escritura"
+      - "determinar si COMPLETE read-only es contractualmente legítimo"
+      - "detectar ambigüedad CONSULTAR vs COMPARAR"
+
+  classification_read:
+    inspect:
+      - "ruta GET/lectura actual"
+      - "handler"
+      - "buildClasificacionMatrix o equivalente"
+      - "queries"
+      - "public.folios u otras fuentes"
+      - "shape JSON"
+      - "categorías"
+      - "mes_a"
+      - "mes_b"
+      - "totales"
+      - "campos derivados"
+      - "side effects"
+    determine:
+      - "fuente primaria"
+      - "semántica exacta"
+      - "path reusable in-process"
+      - "campos mínimos de evidencia"
+      - "si puede responder preguntas ejecutivas útiles"
+
+  comparar_boundary:
+    inspect:
+      - "lib/clasificacion-comparar.js"
+      - "endpoints COMPARAR"
+      - "métodos POST"
+      - "operaciones de escritura"
+      - "actualizar/agregar/rechazar"
+      - "dependencia Excel"
+    determine:
+      - "frontera exacta entre lectura y reconciliación"
+      - "si COMPARAR es clase C"
+      - "si queda legítimamente fuera de COMPLETE read-only"
+      - "si su exclusión requeriría cambio contractual"
+
+  excel_boundary:
+    inspect:
+      - "lib/clasificacion-apoyos-excel.js"
+      - "endpoints Excel"
+      - "qué información contiene vs JSON"
+      - "si aporta información que no existe en lectura JSON"
+    determine:
+      - "si Excel es exportación de lectura o requisito canónico adicional"
+      - "si COMPLETE exige archivo"
+      - "si puede quedar fuera sin pérdida funcional canónica"
+
+  planner_and_tools:
+    inspect:
+      - "clasificacion_apoyos capability"
+      - "intents relacionados"
+      - "tools existentes"
+      - "executor actual"
+      - "UNSUPPORTED_RULES"
+      - "early returns"
+      - "routing chat"
+    determine:
+      - "qué wiring existe"
+      - "qué wiring falta"
+      - "si se necesita intent nuevo"
+      - "si se necesita tool nueva"
+      - "si una tool existente está semánticamente mal asignada"
+      - "si puede usarse patrón M3/M9"
+
+  authz:
+    required:
+      - "mapear JWT"
+      - "mapear planta_id"
+      - "mapear plantas_permitidas si aplica"
+      - "mapear GV"
+      - "mapear priv_clave"
+      - "mapear cualquier permiso específico"
+      - "confirmar que path Director IA puede ser igual o más restrictivo"
+      - "confirmar no cross-planta"
+
+  periods:
+    required:
+      - "formato real mes_a/mes_b"
+      - "A != B"
+      - "validación existente"
+      - "defaults si existen"
+      - "qué ocurre si falta uno"
+      - "qué ocurre con periodos vacíos"
+      - "no inventar periodos"
+
+  data_contract:
+    required:
+      - "identificar fuente primaria"
+      - "identificar valores observados"
+      - "identificar agregados"
+      - "identificar derivados"
+      - "identificar zeros legítimos"
+      - "identificar null/unknown"
+      - "no convertir ausencia/error en cero"
+      - "identificar freshness si existe"
+      - "identificar unidad monetaria/cantidad"
+
+  architecture_fit:
+    required:
+      - "determinar si M4 cabe en arquitectura existente"
+      - "determinar si necesita G2"
+      - "determinar si necesita G3"
+      - "determinar si toca OP/EB/EKS/IES/Reasoning"
+      - "determinar si entra al cycle"
+      - "no pedir gates preventivamente"
+
+  implementation_slice:
+    required:
+      - "describir archivos probablemente afectados"
+      - "describir loader/helper mínimo"
+      - "describir intent/tool/executor mínimo"
+      - "describir wiring chat"
+      - "describir tests"
+      - "determinar si un único slice puede cerrar COMPLETE"
+      - "determinar si necesita readiness adicional"
+
+semantic_invariants:
+  - "Clasificación read-only ≠ COMPARAR."
+  - "Clasificación read-only ≠ Excel reconciliation."
+  - "No convertir una comparación de periodos en autorización para escribir."
+  - "No afirmar que una diferencia implica error o corrección necesaria."
+  - "No inventar categorías."
+  - "No inventar periodos."
+  - "No convertir ausencia de datos en cero salvo semántica fuente."
+  - "No ampliar acceso a privados."
+  - "No ampliar scope de planta."
+  - "Toda conclusión debe ser trazable a la matriz JSON real."
+  - "COMPARAR/Excel solo pueden quedar fuera de COMPLETE si la definición canónica lo permite."
+  - "No modificar la definición canónica durante readiness."
+
+completion_test:
+  question: >
+    ¿Puede Director IA, después de un único slice de implementación read-only,
+    consultar directamente la matriz de Clasificación de apoyos para planta y
+    periodos autorizados, responder consistentemente con evidencia real y
+    satisfacer la definición canónica vigente de M4 COMPLETE sin ejecutar
+    COMPARAR, Excel ni escrituras?
+
+  outcomes:
+    YES:
+      requirement: >
+        Evidencia física y contractual suficiente para que lectura JSON sea
+        COMPLETE.
+      next_task: "IMPL-DIRECTOR-IA-M4-CLASIFICACION-001"
+
+    PARTIAL_ONLY:
+      requirement: >
+        La lectura JSON es implementable pero no satisface por sí sola COMPLETE.
+      consequence: >
+        No prometer +5.0 pp. Determinar si el siguiente slice debe implementar
+        lectura como PARTIAL o si conviene detener y repriorizar.
+
+    STOPPED:
+      requirement: >
+        COMPLETE exige COMPARAR/Excel/escritura o existe contradicción que
+        requiere decisión humana/arquitectónica.
+
+mandatory_evidence_table:
+  columns:
+    - "surface"
+    - "canonical_requirement"
+    - "current_state"
+    - "endpoint_or_helper"
+    - "source"
+    - "method"
+    - "side_effects"
+    - "authz"
+    - "plant_scope"
+    - "period_contract"
+    - "response_shape"
+    - "existing_director_ia_wiring"
+    - "missing_delta"
+    - "required_for_complete"
+    - "testability"
+    - "risk"
+    - "evidence"
+
+mandatory_gap_table:
+  columns:
+    - "gap_id"
+    - "surface"
+    - "missing_capability"
+    - "required_for_complete"
+    - "reusable_component"
+    - "proposed_physical_change"
+    - "architecture_change"
+    - "contract_change"
+    - "authz_change"
+    - "estimated_complexity"
+    - "blocking"
+
+decision_rules:
+
+  complete_ready:
+    all:
+      - "definición canónica permite COMPLETE read-only"
+      - "matriz JSON cubre información canónica de consulta"
+      - "fuente primaria real"
+      - "sin side effects"
+      - "authz preservable"
+      - "scope planta preservable"
+      - "periodos definidos"
+      - "semántica null/zero definida"
+      - "COMPARAR separable contractualmente"
+      - "Excel separable contractualmente"
+      - "sin mutaciones"
+      - "sin HTTP interno"
+      - "sin migration"
+      - "sin contrato nuevo"
+      - "tests determinísticos posibles"
+      - "un único slice cierra gaps"
+
+    then:
+      next_task: "IMPL-DIRECTOR-IA-M4-CLASIFICACION-001"
+
+  partial_only:
+    when:
+      - "lectura JSON es válida y útil"
+      - "pero COMPLETE canónico exige COMPARAR y/o Excel"
+
+    then:
+      outcome: "DONE_PENDING_REVIEW with PARTIAL_ONLY determination"
+      rule: >
+        No proponer DOCS COMPLETE ni prometer +5.0 pp. Proponer como máximo una
+        tarea que refleje honestamente el estado contractual.
+
+  contract_or_architecture_decision_required:
+    when:
+      - "definición COMPLETE es ambigua"
+      - "COMPARAR no puede separarse sin reinterpretar contrato"
+      - "Excel contiene requisito canónico no cubierto por JSON"
+      - "authz no puede preservarse"
+      - "GET tiene side effects indispensables"
+      - "se necesita modificar contrato arquitectónico"
+
+    then:
+      outcome: "STOPPED or BLOCKED"
+      next_task: "none until human review"
+
+gate_rules:
+  G1:
+    required: true
+    scope: "esta auditoría únicamente"
+
+  G2:
+    default: "N/A"
+    required_if: "se concluye que debe modificarse contrato arquitectónico existente"
+
+  G3:
+    default: "N/A"
+    required_if: "se concluye que debe crearse contrato arquitectónico nuevo"
+
+  G4:
+    state: "NOT_AUTHORIZED"
+
+  G5:
+    state: "NOT_AUTHORIZED"
+    note: "NEXT_TASK solo se propone"
+
+  G6:
+    state: "N/A"
+
+  G7:
+    state: "N/A unless ambiguity_or_contradiction_found"
+
+  G8:
+    state: "N/A"
 
 required_output:
-  - "baseline formal recalculado"
-  - "estado M0-M20 vigente"
-  - "candidatos"
-  - "tabla comparativa"
-  - "blockers revalidados"
-  - "impacto de infraestructura M3/M9"
-  - "ranking completo"
-  - "ganador único"
-  - "segundo lugar"
-  - "ganancia potencial"
-  - "valor ejecutivo"
-  - "evidencia física"
-  - "delta físico"
+  - "resumen ejecutivo"
+  - "baseline 42.5%"
+  - "definición canónica M4"
+  - "determinación COMPLETE vs PARTIAL_ONLY"
+  - "estado físico Clasificación JSON"
+  - "frontera COMPARAR"
+  - "frontera Excel"
+  - "planner/tools/capabilities"
+  - "authz"
+  - "scope planta"
+  - "periodos"
+  - "contrato de datos"
+  - "tabla de evidencia"
+  - "tabla de gaps"
+  - "riesgos semánticos"
+  - "riesgos productivos"
   - "dependencias"
-  - "riesgos"
-  - "COMPLETE feasibility"
-  - "NEXT_TASK único"
-  - "gates"
+  - "fit arquitectónico"
+  - "G2 sí/no"
+  - "G3 sí/no"
+  - "feasibility COMPLETE"
+  - "ganancia real posible"
+  - "delta físico"
+  - "archivos probables de implementación"
+  - "tests requeridos"
+  - "exactamente una NEXT_TASK o STOP/BLOCKED justificado"
   - "acciones no realizadas"
   - "git diff --check"
   - "git status"
 
 acceptance_criteria:
-  - "La capability matrix vigente fue leída físicamente."
-  - "El baseline 42.5% fue recalculado y no asumido."
-  - "M9 no vuelve a competir."
-  - "M3, M9, M13 y M16 no compiten si siguen COMPLETE."
-  - "Todos los módulos no COMPLETE/N_A relevantes fueron considerados."
-  - "Los blockers de 003 fueron revalidados."
-  - "Infraestructura M3/M9 fue considerada."
-  - "Side effects relevantes fueron verificados."
-  - "PARTIAL/INDIRECTA/NOT_STARTED se compararon correctamente."
-  - "Hay exactamente un ganador."
-  - "Hay exactamente una NEXT_TASK."
-  - "NEXT_TASK permanece no autorizada."
+  - "Se verificó físicamente la definición canónica de M4."
+  - "Se verificó físicamente la lectura JSON."
+  - "Se verificó buildClasificacionMatrix o equivalente."
+  - "Se verificaron queries/fuentes."
+  - "Se verificaron side effects."
+  - "Se verificó COMPARAR."
+  - "Se verificaron escrituras de COMPARAR."
+  - "Se verificó la superficie Excel."
+  - "Se determinó si COMPARAR es separable de COMPLETE."
+  - "Se determinó si Excel es separable de COMPLETE."
+  - "Se verificó authz."
+  - "Se verificó scope por planta."
+  - "Se verificaron periodos."
+  - "Se verificó null/zero semantics."
+  - "Se verificó Planner/tools/capabilities."
   - "No se implementó nada."
   - "No se modificó capability matrix."
   - "No se modificaron contratos."
+  - "No se modificó runtime/backend/frontend/tests."
   - "Solo CURRENT_TASK y reporte fueron modificados."
+  - "No se promete +5.0 pp si solo se alcanza PARTIAL."
+  - "Hay conclusión inequívoca COMPLETE/PARTIAL_ONLY/STOPPED."
+  - "Hay exactamente una NEXT_TASK si procede."
+  - "NEXT_TASK permanece no autorizada."
   - "git diff --check limpio."
 
 report_requirements:
-  path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-NEXT-MODULE-PRIORITIZATION-004.md"
+  path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M4-CLASIFICACION-READINESS-001.md"
 
   must_include:
     - "metadata"
     - "resumen ejecutivo"
-    - "baseline recalculado"
-    - "estado M0-M20"
-    - "candidatos"
-    - "tabla comparativa"
-    - "blockers revalidados"
-    - "infraestructura M3/M9"
-    - "ranking"
-    - "ganador"
-    - "segundo lugar"
-    - "ganancia potencial"
-    - "valor ejecutivo"
-    - "evidencia física"
-    - "delta físico"
-    - "dependencias"
+    - "baseline 42.5%"
+    - "ganancia teórica +5.0 pp"
+    - "ganancia real confirmada o rechazada"
+    - "definición canónica M4"
+    - "Clasificación JSON"
+    - "COMPARAR"
+    - "Excel"
+    - "COMPLETE vs PARTIAL_ONLY"
+    - "Planner/tools/capabilities"
+    - "authz"
+    - "scope planta"
+    - "periodos"
+    - "contrato de datos"
+    - "tabla de evidencia"
+    - "tabla de gaps"
     - "riesgos"
-    - "COMPLETE feasibility"
+    - "dependencias"
+    - "fit arquitectónico"
+    - "feasibility"
     - "NEXT_TASK"
     - "gates"
     - "acciones no realizadas"
@@ -476,11 +606,11 @@ report_requirements:
     - "git status"
 
 expected_terminal_state: >
-  DONE_PENDING_REVIEW si existe un ganador claro y un siguiente slice
-  implementable. STOPPED si no puede elegirse un ganador sin decisión
-  arquitectónica o contractual. BLOCKED si falta gate o dato humano
+  DONE_PENDING_REVIEW si existe una determinación inequívoca de COMPLETE
+  read-only o PARTIAL_ONLY y un siguiente paso acotado. STOPPED si la definición
+  canónica requiere decisión humana o contractual. BLOCKED si falta gate o dato
   indispensable.
 
 max_attempts: 1
 
-result_report_path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-NEXT-MODULE-PRIORITIZATION-004.md"
+result_report_path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M4-CLASIFICACION-READINESS-001.md"
