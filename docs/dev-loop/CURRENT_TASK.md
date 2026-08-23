@@ -1,14 +1,14 @@
 # CURRENT_TASK
 
 ```yaml
-task_id: "ARCH-DIRECTOR-IA-EXECUTIVE-VALUE-PRIORITIZATION-001"
+task_id: "ARCH-DIRECTOR-IA-M2-FOLIO-STATUS-READINESS-001"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-08-23T13:55:52-06:00"
 human_authorization: >
   AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-23.
-  Apruebo ARCH-DIRECTOR-IA-EXECUTIVE-VALUE-PRIORITIZATION-001 y autorizo G1.
+  Apruebo ARCH-DIRECTOR-IA-M2-FOLIO-STATUS-READINESS-001 y autorizo G1.
 
 gates:
   G1_task_authorization: AUTHORIZED
@@ -17,313 +17,114 @@ gates:
   G8_calibration_materiality_signature: N/A
 
 objective: >
-  Determinar cuál debe ser el siguiente frente funcional de Director IA
-  priorizando valor ejecutivo real por encima del porcentaje de COMPLETE,
-  aceptando explícitamente que el frente ganador pueda requerir varios slices
-  y atravesar estados PARTIAL antes de alcanzar COMPLETE.
+  Auditar físicamente el primer slice de M2 — Kanban / Folios — para habilitar
+  consulta read-only segura de estatus/etapa de folios en Director IA mediante
+  helpers SELECT-only e integración in-process, evitando expresamente rutas GET
+  que hoy producen side effects, y determinar el delta exacto de implementación.
 
 strategic_context:
-  previous_task: "ARCH-DIRECTOR-IA-NEXT-MODULE-PRIORITIZATION-005"
-  previous_outcome: "STOPPED"
+  source_task: "ARCH-DIRECTOR-IA-EXECUTIVE-VALUE-PRIORITIZATION-001"
+  source_report: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-EXECUTIVE-VALUE-PRIORITIZATION-001.md"
 
-  current_m0_m20_percentage: 42.5
-  numerator: 8.5
-  denominator: 20
+  winner: "M2 — Kanban / Folios"
+  first_slice: "estatus/etapa read-only"
+  expected_state_after_slice: "PARTIAL"
+  percentage_effect_after_slice: 0.0
 
-  conclusion_from_005: >
-    No existe actualmente un módulo restante que pueda alcanzar legítimamente
-    COMPLETE en un único slice razonable sin reinterpretar el contrato,
-    incorporar capacidades clase C o abordar dependencias mayores.
+  baseline:
+    current_m0_m20_percentage: 42.5
+    numerator: 8.5
+    denominator: 20
 
-  strategy_change: >
-    El porcentaje deja de ser el criterio primario de selección. El siguiente
-    frente se elegirá por la capacidad que más aumente la utilidad real de
-    Director IA para diagnóstico, explicación, seguimiento y toma de decisiones
-    ejecutivas.
-
-non_regression:
-  - "No reducir capacidades existentes."
-  - "No romper M3."
-  - "No romper M9."
-  - "No romper M13."
-  - "No romper M16."
-  - "No degradar módulos PARTIAL/INDIRECTA existentes."
-  - "No modificar contratos para inflar porcentaje."
-  - "No reinterpretar COMPLETE."
-  - "No convertir capacidades clase C en read-only ficticio."
-  - "Preservar authz."
-  - "Preservar scope por planta."
-  - "Preservar separación semántica entre dominios."
+  rationale: >
+    Director IA ya responde KPIs agregados, deltas comerciales y seguimiento
+    de Action Register, pero no puede responder de forma segura y directa en
+    qué etapa está un folio ni qué folios existen por etapa/planta.
 
 primary_question: >
-  Si el porcentaje M0-M20 deja de ser el objetivo inmediato, ¿qué frente
-  funcional pendiente produciría el mayor aumento real en la capacidad de
-  Director IA para ayudar a un director a entender qué está pasando, por qué
-  está pasando, qué requiere atención y qué seguimiento existe?
+  ¿Puede implementarse un primer slice seguro de M2 que permita a Director IA
+  consultar estatus/etapa de un folio y listados de folios por planta/etapa,
+  usando únicamente helpers SELECT-only, sin llamar rutas GET con side effects,
+  sin mutar folios y sin ampliar el alcance del módulo más allá de este slice?
 
-decision_horizon: >
-  Evaluar el valor del frente completo y también una trayectoria incremental.
-  Un ganador puede requerir varios slices. No descartarlo únicamente porque no
-  llegue a COMPLETE en el primer slice.
+known_risks:
+  unsafe_http_surfaces:
+    - "GET /kanban"
+    - "GET /folios/:id"
 
-evaluation_model:
+  reason: >
+    Estas superficies deben tratarse como potencialmente mutantes hasta verificar
+    físicamente su call graph, incluyendo cualquier llamada a
+    maybeAdvanceFolioToComprobaciones o equivalente.
 
-  executive_value:
-    weight: "VERY_HIGH"
-    questions:
-      - "¿Responde preguntas frecuentes y materialmente importantes para dirección?"
-      - "¿Ayuda a detectar desviaciones, riesgos, responsables o causas?"
-      - "¿Mejora diagnóstico y toma de decisiones?"
-      - "¿Permite conectar información que hoy está fragmentada?"
-      - "¿Reduce necesidad de navegar manualmente el dashboard?"
+candidate_safe_helpers:
+  - "getFolioById"
+  - "getManyFoliosStatus"
+  - "otros helpers SELECT-only equivalentes físicamente verificados"
 
-  reasoning_value:
-    weight: "VERY_HIGH"
-    questions:
-      - "¿Aporta evidencia útil al Reasoning Engine?"
-      - "¿Permite explicar causas, cambios o seguimiento?"
-      - "¿Puede combinarse legítimamente con capacidades ya integradas?"
-      - "¿Aumenta la profundidad de respuestas sin mezclar semánticas?"
+slice_scope:
+  included:
+    - "estatus actual de un folio"
+    - "etapa actual de un folio"
+    - "identificación básica del folio necesaria para desambiguar"
+    - "listado de folios por planta"
+    - "listado/filtrado por etapa si la fuente lo soporta"
+    - "conteos simples solo si derivan directamente del listado real"
+    - "evidencia estructurada trazable"
 
-  frequency_of_use:
-    weight: "HIGH"
-    questions:
-      - "¿Qué tan frecuentemente podría usarlo un director?"
-      - "¿Es una consulta ocasional o cotidiana?"
+  excluded:
+    - "timeline completo"
+    - "historial completo"
+    - "documentos"
+    - "PDFs"
+    - "cheques"
+    - "pólizas"
+    - "presupuestos"
+    - "mutaciones de folio"
+    - "avance automático de etapa"
+    - "kanban mutante"
+    - "edición"
+    - "aprobación"
+    - "cancelación"
+    - "creación de folios"
 
-  actionability:
-    weight: "HIGH"
-    questions:
-      - "¿La información conduce a una decisión o seguimiento?"
-      - "¿Identifica responsables, fechas, clientes, plantas, desviaciones o pendientes?"
+canonical_state:
+  current_module_state: "PARTIAL"
 
-  information_uniqueness:
-    weight: "HIGH"
-    questions:
-      - "¿Añade información que Director IA no puede obtener hoy?"
-      - "¿O duplica capacidades existentes?"
-
-  implementation_path:
-    weight: "MEDIUM"
-    questions:
-      - "¿Existe backend/fuente/helper reutilizable?"
-      - "¿Puede crecer incrementalmente?"
-      - "¿Existe un primer slice seguro y útil?"
-
-  risk:
-    weight: "MEDIUM"
-    questions:
-      - "¿Requiere writes?"
-      - "¿Requiere Excel?"
-      - "¿Requiere S3/Twilio/WhatsApp?"
-      - "¿Tiene GET con side effects?"
-      - "¿Requiere migration/schema?"
-      - "¿Tiene authz difícil?"
-      - "¿Tiene colisión semántica?"
-
-  completion_percentage:
-    weight: "LOW"
-    rule: >
-      Registrar impacto potencial en la matriz, pero no usarlo como criterio
-      dominante para elegir ganador.
-
-mandatory_candidates:
-  - "M1 Health"
-  - "M2 Kanban / Folios"
-  - "M4 Clasificación de apoyos + COMPARAR"
-  - "M5 Presupuestos / Cheques"
-  - "M6 GASTOS / INVERSIONES"
-  - "M7 IGF"
-  - "M8 ARR"
-  - "M10 WhatsApp operativo"
-  - "M11 DICF"
-  - "M12 Action Register"
-  - "M14 Documentos / PDFs"
-  - "M15 Usuarios / permisos"
-  - "M17 WhatsApp bridge"
-  - "M18 Folios relacionados"
-  - "M20 Home KPI"
-  - "cualquier otro módulo M0-M20 no COMPLETE y no N_A"
-
-known_constraints:
-
-  M4:
-    evidence: "ARCH-DIRECTOR-IA-M4-CLASIFICACION-READINESS-001"
-    rule: >
-      Read-only JSON es PARTIAL_ONLY. No volver a tratarlo como COMPLETE sin
-      COMPARAR/reconciliación Excel.
-
-  M6:
-    known:
-      - "expense_analysis / investment_analysis existen"
-      - "tools con executor null"
-      - "HTTP principal xlsx"
-      - "expandCategoriaRows puede aportar superficie estructurada"
-      - "riesgo de colisión semántica de 'gastos' con IGF"
-    rule: >
-      Evaluar valor ejecutivo independientemente de que el primer slice solo
-      alcance PARTIAL.
-
-  M2:
-    known:
-      - "algunas rutas GET tienen side effects"
-      - "folio_status/history/documents tienen infraestructura parcial"
-    rule: >
-      Separar lectura segura de superficies que mutan.
-
-  M7_M8:
-    rule: >
-      Determinar cuánto valor adicional aportaría completar la integración de
-      IGF/ARR dado que ya existen capacidades parciales/annex.
-
-  M11_M12:
-    rule: >
-      Evaluar especialmente su valor para seguimiento, responsables, causas,
-      acciones, cierres e historial.
-
-  M17_M10:
-    rule: >
-      Separar valor del conocimiento proveniente de WhatsApp del valor del canal
-      de comunicación. No confundir canal con inteligencia.
-
-analysis_workstreams:
-
-  current_capability_map:
-    required:
-      - "recalcular estado M0-M20"
-      - "identificar qué puede responder Director IA hoy"
-      - "identificar huecos ejecutivos reales"
-      - "identificar duplicidades"
-
-  executive_question_map:
-    required:
-      - "derivar preguntas ejecutivas que cada candidato habilitaría"
-      - "compararlas con preguntas ya respondibles"
-      - "identificar capacidades netamente nuevas"
-      - "clasificar valor diagnóstico"
-      - "clasificar valor de seguimiento"
-      - "clasificar valor causal"
-      - "clasificar valor financiero/comercial/operativo"
-
-  physical_readiness:
-    required:
-      - "trazar backend existente"
-      - "trazar fuentes"
-      - "trazar helpers"
-      - "trazar intents"
-      - "trazar tools"
-      - "trazar executors"
-      - "trazar authz"
-      - "trazar plant scope"
-      - "trazar side effects"
-      - "trazar dependencias externas"
-
-  incremental_path:
-    required:
-      - "definir primer slice útil"
-      - "definir qué estado alcanzaría"
-      - "definir segundo slice si es necesario"
-      - "definir trayectoria hasta COMPLETE"
-      - "no implementar"
-
-  architecture_fit:
-    required:
-      - "determinar si usa arquitectura existente"
-      - "determinar si requiere G2"
-      - "determinar si requiere G3"
-      - "determinar si necesita nuevo contrato"
-      - "determinar si puede alimentar OP/EB/EKS/IES/Reasoning sin cambios"
-      - "no pedir gates preventivamente"
-
-mandatory_comparison_table:
-  columns:
-    - "module"
-    - "current_state"
-    - "executive_questions_enabled"
-    - "executive_value"
-    - "reasoning_value"
-    - "frequency"
-    - "actionability"
-    - "new_information"
-    - "existing_backend"
-    - "existing_director_ia_wiring"
-    - "primary_source"
-    - "authz"
-    - "plant_scope"
-    - "mutation_risk"
-    - "external_dependency"
-    - "semantic_risk"
-    - "first_useful_slice"
-    - "state_after_first_slice"
-    - "path_to_complete"
-    - "estimated_effort"
-    - "percentage_effect"
-    - "evidence"
-
-winner_requirements:
-  exactly_one: true
-
-  selection_basis:
-    primary:
-      - "executive_value"
-      - "reasoning_value"
-      - "actionability"
-      - "information_uniqueness"
-      - "frequency_of_use"
-
-    secondary:
-      - "implementation_path"
-      - "risk"
-      - "testability"
-
-    tertiary:
-      - "percentage_effect"
-
-  must_answer:
-    - "¿Qué frente gana?"
-    - "¿Por qué es más importante para Director IA?"
-    - "¿Qué preguntas nuevas podrá contestar?"
-    - "¿Qué no puede contestar hoy?"
-    - "¿Cuál es el primer slice?"
-    - "¿Ese slice sería PARTIAL, INDIRECTA o COMPLETE?"
-    - "¿Qué falta después?"
-    - "¿Cuál es el camino hasta COMPLETE?"
-    - "¿Qué riesgos existen?"
-    - "¿Qué gates serían necesarios?"
-    - "¿Por qué pierde el segundo lugar?"
-
-percentage_policy:
-  rule: >
-    No manipular ni cambiar la definición de estados. El baseline permanece
-    42.5% hasta que una implementación y posterior sincronización documental
-    modifiquen legítimamente una ficha.
-
-  note: >
-    Un ganador puede ser elegido incluso si el primer slice solo añade +2.5 pp
-    o incluso si inicialmente no cambia la matriz, siempre que aporte mayor
-    valor ejecutivo real.
-
-next_task_policy:
-  exactly_one: true
-
-  preferred:
-    if_architectural_readiness_needed:
-      format: "ARCH-DIRECTOR-IA-<FRONT>-READINESS-001"
-
-    if_first_slice_is_fully_defined:
-      format: "IMPL-DIRECTOR-IA-<FRONT>-<SLICE>-001"
+  expected_after_slice: "PARTIAL"
 
   rule: >
-    La NEXT_TASK debe representar únicamente el primer slice seguro del frente
-    ganador, no todo el roadmap si este requiere varias fases.
+    Este slice no debe reinterpretarse como COMPLETE. M2 seguirá PARTIAL después
+    de integrar estatus/etapa porque historial, documentos, superficies
+    financieras y/o otras capacidades canónicas continúan fuera.
 
-  authorization: "NOT_AUTHORIZED"
-  execution: "FORBIDDEN"
+secondary_questions:
+  - "¿Qué helpers SELECT-only existen realmente para folio individual?"
+  - "¿Qué helpers SELECT-only existen para múltiples folios?"
+  - "¿Qué tablas/vistas consultan?"
+  - "¿Qué campos representan etapa/estatus?"
+  - "¿Existen diferencias entre etapa, estatus, estado y columna Kanban?"
+  - "¿Qué valores son canónicos y cuáles derivados?"
+  - "¿Cómo se filtra por planta?"
+  - "¿Qué authz se aplica hoy?"
+  - "¿Cómo se preservan plantas_permitidas?"
+  - "¿Qué ocurre con folio inexistente?"
+  - "¿Qué ocurre con folio de otra planta?"
+  - "¿Qué ocurre si el identificador es ambiguo?"
+  - "¿Existe ya intent folio_status?"
+  - "¿Existe tool get_folio_status o equivalente?"
+  - "¿Tiene executor?"
+  - "¿Qué early return / SOURCE_NOT_INTEGRATED bloquea hoy?"
+  - "¿Existe ya capability folio_status?"
+  - "¿Qué wiring falta en chat?"
+  - "¿Puede reutilizarse patrón M3/M9 in-process?"
+  - "¿Puede listarse por etapa sin usar GET /kanban?"
+  - "¿Qué tests hacen falta para demostrar ausencia de side effects?"
 
 in_scope:
   writable:
     - "docs/dev-loop/CURRENT_TASK.md"
-    - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-EXECUTIVE-VALUE-PRIORITIZATION-001.md"
+    - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M2-FOLIO-STATUS-READINESS-001.md"
 
   read_only:
     - "AGENTS.md"
@@ -350,125 +151,370 @@ out_of_scope:
   - "modificar schema"
   - "modificar capability matrix"
   - "modificar contratos"
-  - "cambiar definición COMPLETE/PARTIAL/INDIRECTA"
-  - "ejecutar writes"
-  - "ejecutar COMPARAR"
-  - "ejecutar uploads"
-  - "enviar WhatsApp"
-  - "usar secretos"
+  - "crear/editar/cancelar/aprobar folios"
+  - "ejecutar rutas con side effects"
+  - "usar GET /kanban como fuente si muta"
+  - "usar GET /folios/:id como fuente si muta"
+  - "timeline"
+  - "documentos"
+  - "cheques"
+  - "pólizas"
+  - "presupuestos"
+  - "HTTP interno"
+  - "cycle constitucional"
   - "smoke productivo"
+  - "secretos"
   - "commit"
   - "push"
   - "merge"
   - "ejecutar NEXT_TASK"
 
+contracts_in_force:
+  - "docs/dev-loop/LOOP_PROTOCOL.md"
+  - "docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md"
+  - "docs/director-ia/CONSTITUTION.md"
+  - "docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md"
+
 allowed_actions:
-  - "leer repositorio"
-  - "recalcular estado actual"
-  - "mapear preguntas ejecutivas"
-  - "comparar valor"
-  - "trazar fuentes"
-  - "trazar wiring"
+  - "leer físicamente repositorio"
+  - "trazar helpers de folio"
+  - "trazar queries SELECT"
+  - "trazar rutas GET y side effects"
+  - "trazar intent/tool/capability"
   - "trazar authz"
-  - "trazar riesgos"
-  - "diseñar trayectoria incremental"
-  - "elegir exactamente un frente"
+  - "trazar scope planta"
+  - "trazar semantics etapa/estatus"
+  - "determinar loader/executor mínimo"
+  - "determinar tests"
+  - "determinar archivos probables de implementación"
+  - "determinar gates"
   - "proponer exactamente una NEXT_TASK"
   - "escribir CURRENT_TASK y reporte"
   - "ejecutar git diff --check"
   - "ejecutar git status"
 
 forbidden_actions:
-  - "modificar archivos fuera de writable"
-  - "optimizar por porcentaje como criterio principal"
-  - "reinterpretar contratos"
-  - "inventar capacidades"
-  - "inventar fuentes"
-  - "inventar preguntas respondibles"
-  - "confundir canal con conocimiento"
-  - "confundir UI con fuente"
+  - "modificar código"
+  - "modificar capability matrix"
+  - "modificar arquitectura"
+  - "inventar que GET es seguro sin revisar side effects"
+  - "inventar etapa o estatus"
+  - "usar Action Register como sustituto"
+  - "usar M3 como sustituto del flujo de folios"
+  - "ampliar plantas_permitidas"
+  - "permitir cross-planta"
+  - "ejecutar mutaciones"
   - "aprobar gates adicionales"
-  - "ejecutar siguiente tarea"
+  - "ejecutar NEXT_TASK"
   - "commit"
   - "push"
   - "merge"
 
+audit_workstreams:
+
+  canonical_definition:
+    required:
+      - "leer ficha M2 completa"
+      - "identificar qué cubre hoy"
+      - "identificar qué falta"
+      - "confirmar que estatus/etapa es un slice legítimo"
+      - "confirmar que después sigue PARTIAL"
+
+  folio_single_read:
+    inspect:
+      - "getFolioById"
+      - "queries"
+      - "source tables"
+      - "campos etapa/estatus"
+      - "planta"
+      - "side effects"
+    determine:
+      - "si es SELECT-only"
+      - "shape reutilizable"
+      - "errores"
+      - "not found"
+      - "authz"
+
+  folio_many_read:
+    inspect:
+      - "getManyFoliosStatus"
+      - "queries"
+      - "filtros"
+      - "planta"
+      - "etapa"
+      - "side effects"
+    determine:
+      - "si soporta listado seguro"
+      - "si puede filtrar por etapa"
+      - "si puede responder qué hay en el tablero sin GET /kanban"
+
+  unsafe_routes:
+    inspect:
+      - "GET /kanban"
+      - "GET /folios/:id"
+      - "maybeAdvanceFolioToComprobaciones"
+      - "cualquier helper mutante en call graph"
+    determine:
+      - "qué side effects existen"
+      - "por qué no deben reutilizarse"
+      - "si existe forma SELECT-only equivalente"
+
+  planner_tools_capabilities:
+    inspect:
+      - "folio_status"
+      - "folio_history"
+      - "folio_documents"
+      - "get_folio_status"
+      - "get_folio_history"
+      - "get_folio_documents"
+      - "capabilities relacionadas"
+      - "executor actual"
+      - "UNSUPPORTED_RULES"
+      - "SOURCE_NOT_INTEGRATED"
+      - "routing chat"
+    determine:
+      - "qué wiring ya existe"
+      - "qué wiring falta"
+      - "si planner requiere cambios"
+      - "si tool requiere executor"
+      - "si capability requiere cambio"
+
+  authz:
+    required:
+      - "JWT"
+      - "rol"
+      - "GA/GV si aplica"
+      - "planta_id"
+      - "plantas_permitidas"
+      - "folio de otra planta"
+      - "fail-closed"
+      - "no cross-planta"
+
+  data_contract:
+    required:
+      - "definir folio_id"
+      - "definir etapa"
+      - "definir estatus"
+      - "definir campos mínimos de identidad"
+      - "definir planta"
+      - "distinguir valores observados vs derivados"
+      - "not found"
+      - "null/unknown"
+      - "freshness"
+      - "no inventar valores"
+
+  architecture_fit:
+    required:
+      - "verificar patrón in-process"
+      - "sin HTTP interno"
+      - "sin contrato nuevo"
+      - "sin cycle"
+      - "G2 sí/no"
+      - "G3 sí/no"
+
+  implementation_slice:
+    required:
+      - "describir loader/helper mínimo"
+      - "describir executor"
+      - "describir wiring"
+      - "describir tests"
+      - "describir archivos probables"
+      - "confirmar que slice es seguro"
+      - "confirmar que M2 seguirá PARTIAL"
+
+semantic_invariants:
+  - "Folio/Kanban ≠ Action Register."
+  - "M2 ≠ M3 KPIs/Proyectos."
+  - "Etapa ≠ historial."
+  - "Estatus actual ≠ timeline."
+  - "No inferir retraso si no existe dato."
+  - "No auto-avanzar etapa."
+  - "No mutar al consultar."
+  - "No inventar etapa."
+  - "No convertir not found en empty success."
+  - "No exponer folios de otra planta."
+  - "No usar GET mutante por comodidad."
+  - "Toda respuesta debe ser trazable a SELECT real."
+
+completion_test:
+  question: >
+    ¿Existe un path totalmente read-only e in-process para que Director IA
+    responda estatus/etapa de un folio y listados por planta/etapa, preservando
+    authz y sin tocar rutas mutantes?
+
+  success_next_task:
+    "IMPL-DIRECTOR-IA-M2-FOLIO-STATUS-001"
+
+  success_state_after_implementation:
+    "M2 remains PARTIAL"
+
+mandatory_evidence_table:
+  columns:
+    - "surface"
+    - "helper_or_route"
+    - "source"
+    - "method"
+    - "select_only"
+    - "side_effects"
+    - "authz"
+    - "plant_scope"
+    - "status_semantics"
+    - "stage_semantics"
+    - "existing_intent"
+    - "existing_tool"
+    - "executor"
+    - "missing_delta"
+    - "testability"
+    - "risk"
+    - "evidence"
+
+mandatory_gap_table:
+  columns:
+    - "gap_id"
+    - "missing_capability"
+    - "required_for_slice"
+    - "reusable_component"
+    - "proposed_physical_change"
+    - "architecture_change"
+    - "contract_change"
+    - "authz_change"
+    - "estimated_complexity"
+    - "blocking"
+
+decision_rules:
+
+  ready:
+    all:
+      - "helper folio individual SELECT-only"
+      - "helper listado SELECT-only"
+      - "semántica etapa/estatus clara"
+      - "authz preservable"
+      - "scope planta preservable"
+      - "rutas mutantes evitables"
+      - "sin HTTP interno"
+      - "sin migration"
+      - "sin contrato nuevo"
+      - "tests determinísticos posibles"
+      - "slice acotado"
+
+    then:
+      outcome: "DONE_PENDING_REVIEW"
+      next_task: "IMPL-DIRECTOR-IA-M2-FOLIO-STATUS-001"
+
+  stopped:
+    when:
+      - "no existe helper SELECT-only suficiente"
+      - "estatus/etapa depende inseparablemente de auto-mutación"
+      - "authz no puede preservarse"
+      - "definición etapa/estatus es ambigua"
+      - "requiere contrato nuevo"
+
+    then:
+      outcome: "STOPPED"
+
+gate_rules:
+  G1:
+    required: true
+
+  G2:
+    default: "N/A"
+    required_if: "se necesita modificar contrato arquitectónico"
+
+  G3:
+    default: "N/A"
+    required_if: "se necesita contrato nuevo"
+
+  G4:
+    state: "NOT_AUTHORIZED"
+
+  G5:
+    state: "NOT_AUTHORIZED"
+
+  G6:
+    state: "N/A"
+
+  G7:
+    state: "N/A unless ambiguity found"
+
+  G8:
+    state: "N/A"
+
 required_output:
   - "resumen ejecutivo"
   - "baseline 42.5%"
-  - "mapa de capacidades actuales"
-  - "mapa de huecos ejecutivos"
-  - "tabla comparativa completa"
-  - "ranking por valor ejecutivo"
-  - "ganador único"
-  - "segundo lugar"
-  - "preguntas ejecutivas habilitadas por el ganador"
-  - "primer slice útil"
-  - "estado después del primer slice"
-  - "roadmap hasta COMPLETE"
-  - "impacto porcentual como dato secundario"
-  - "fuentes"
+  - "definición del slice"
+  - "estado M2 antes/después"
+  - "folio individual SELECT-only"
+  - "listado SELECT-only"
+  - "rutas mutantes excluidas"
+  - "planner/tools/capabilities"
   - "authz"
-  - "scope por planta"
+  - "scope planta"
+  - "semántica etapa/estatus"
+  - "tabla evidencia"
+  - "tabla gaps"
   - "riesgos"
   - "dependencias"
   - "fit arquitectónico"
   - "G2 sí/no"
   - "G3 sí/no"
+  - "archivos probables"
+  - "tests requeridos"
   - "NEXT_TASK única"
   - "acciones no realizadas"
   - "git diff --check"
   - "git status"
 
 acceptance_criteria:
-  - "Baseline recalculado y no asumido."
-  - "42.5% no se altera durante esta tarea."
-  - "Todos los candidatos relevantes fueron evaluados."
-  - "M4 PARTIAL_ONLY fue respetado."
-  - "No se buscó artificialmente un COMPLETE."
-  - "Se evaluó valor ejecutivo real."
-  - "Se evaluó valor para razonamiento."
-  - "Se identificaron preguntas nuevas concretas."
-  - "Se identificó exactamente un ganador."
-  - "Se identificó segundo lugar y por qué pierde."
-  - "Se definió primer slice seguro."
-  - "Se definió estado real después del primer slice."
-  - "Se trazó roadmap hasta COMPLETE."
-  - "No se implementó nada."
+  - "Se verificó helper folio individual."
+  - "Se verificó helper de múltiples folios."
+  - "Se verificaron queries SELECT."
+  - "Se verificaron rutas mutantes."
+  - "Se verificó maybeAdvanceFolioToComprobaciones o equivalente."
+  - "Se verificó semántica etapa/estatus."
+  - "Se verificó authz."
+  - "Se verificó scope por planta."
+  - "Se verificó planner."
+  - "Se verificaron tools."
+  - "Se verificaron capabilities."
+  - "Se verificaron early returns."
+  - "Se determinó wiring mínimo."
+  - "Se determinaron tests."
+  - "No se implementó."
   - "No se modificó capability matrix."
   - "No se modificaron contratos."
-  - "Solo CURRENT_TASK y reporte fueron modificados."
-  - "Hay exactamente una NEXT_TASK."
-  - "NEXT_TASK permanece no autorizada."
+  - "No se modificó runtime/backend/frontend/tests."
+  - "Solo CURRENT_TASK y reporte modificados."
+  - "M2 sigue PARTIAL después del slice."
+  - "Porcentaje sigue 42.5%."
+  - "Hay exactamente una NEXT_TASK si procede."
+  - "NEXT_TASK no autorizada."
   - "git diff --check limpio."
 
 report_requirements:
-  path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-EXECUTIVE-VALUE-PRIORITIZATION-001.md"
+  path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M2-FOLIO-STATUS-READINESS-001.md"
 
   must_include:
     - "metadata"
     - "resumen ejecutivo"
     - "baseline"
-    - "cambio de estrategia"
-    - "capacidades actuales"
-    - "huecos ejecutivos"
-    - "candidatos"
-    - "tabla comparativa"
-    - "ranking"
-    - "ganador"
-    - "segundo lugar"
-    - "preguntas ejecutivas habilitadas"
-    - "primer slice"
-    - "estado después del primer slice"
-    - "roadmap hasta COMPLETE"
-    - "impacto porcentual"
-    - "fuentes"
+    - "slice definido"
+    - "estado M2"
+    - "folio individual"
+    - "listado"
+    - "rutas mutantes"
+    - "planner/tools/capabilities"
     - "authz"
     - "scope planta"
-    - "dependencias"
+    - "semántica etapa/estatus"
+    - "tabla evidencia"
+    - "tabla gaps"
     - "riesgos"
+    - "dependencias"
     - "fit arquitectónico"
     - "gates"
+    - "archivos probables"
+    - "tests"
     - "NEXT_TASK"
     - "acciones no realizadas"
     - "secrets_check"
@@ -476,10 +522,10 @@ report_requirements:
     - "git status"
 
 expected_terminal_state: >
-  DONE_PENDING_REVIEW si existe un frente ganador claro y un primer slice
-  seguro. STOPPED si ningún frente puede seleccionarse responsablemente sin
-  decisión humana adicional. BLOCKED si falta un gate o dato indispensable.
+  DONE_PENDING_REVIEW si existe path SELECT-only e in-process seguro para el
+  slice. STOPPED si el estatus/etapa depende inseparablemente de mutación o
+  requiere decisión contractual. BLOCKED si falta gate o dato humano.
 
 max_attempts: 1
 
-result_report_path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-EXECUTIVE-VALUE-PRIORITIZATION-001.md"
+result_report_path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M2-FOLIO-STATUS-READINESS-001.md"
