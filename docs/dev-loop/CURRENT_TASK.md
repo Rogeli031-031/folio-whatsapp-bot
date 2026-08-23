@@ -1,14 +1,14 @@
 # CURRENT_TASK
 
 ```yaml
-task_id: "ARCH-DIRECTOR-IA-M2-NEXT-SLICE-PRIORITIZATION-002"
+task_id: "ARCH-DIRECTOR-IA-M2-DOCUMENTS-READINESS-001"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-08-23"
 human_authorization: >
   AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-23.
-  Apruebo ARCH-DIRECTOR-IA-M2-NEXT-SLICE-PRIORITIZATION-002 y autorizo G1.
+  Apruebo ARCH-DIRECTOR-IA-M2-DOCUMENTS-READINESS-001 y autorizo G1.
 
 gates:
   G1_task_authorization: AUTHORIZED
@@ -17,224 +17,320 @@ gates:
   G8_calibration_materiality_signature: N/A
 
 objective: >
-  Priorizar el siguiente slice de M2 — Kanban / Folios — después de la
-  integración de folio_status + history, usando valor ejecutivo, cobertura
-  incremental real, seguridad read-only, costo/dependencias y fidelidad a la
-  definición canónica de M2. No asumir que documents sea el ganador.
+  Auditar físicamente un slice read-only de M2 — Kanban / Folios — para que
+  Director IA pueda consultar únicamente metadata documental registrada de un
+  folio desde la base de datos, de forma in-process, autorizada y trazable,
+  excluyendo contenido PDF, S3, descarga de archivos, s3_key y cualquier
+  inferencia sobre documentos faltantes.
 
 baseline:
+  prioritization_task: "ARCH-DIRECTOR-IA-M2-NEXT-SLICE-PRIORITIZATION-002"
+  prioritization_report: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M2-NEXT-SLICE-PRIORITIZATION-002.md"
+
+  winner: "documents"
+  scope: "metadata DB only"
+
   module: "M2 — Kanban / Folios"
   current_state: "PARTIAL"
-
-  integrated:
-    - "comentarios de folio"
-    - "folio_status"
-    - "consulta por id"
-    - "consulta por numero_folio"
-    - "varios folios"
-    - "listado por planta"
-    - "filtro/listado por etapa"
-    - "history read-only"
-    - "eventos históricos no deduplicados"
+  expected_state_after_slice: "PARTIAL"
 
   global_percentage:
     current: 42.5
     numerator: 8.5
     denominator: 20
+    expected_effect: 0.0
 
-  rule: >
-    Esta tarea no debe cambiar el estado ni el porcentaje. Debe calcular el
-    efecto futuro del candidato ganador sin otorgarlo anticipadamente.
+  already_integrated:
+    - "comentarios"
+    - "folio_status"
+    - "history read-only"
 
 primary_question: >
-  ¿Cuál es el siguiente slice real de M2 que aporta mayor valor ejecutivo
-  incremental después de folio_status + history, sin reinterpretar COMPLETE,
-  sin introducir writes y sin duplicar capacidades ya cubiertas?
+  ¿Existe un path SELECT-only, in-process, autorizado y semánticamente claro
+  para que Director IA liste la metadata documental registrada de un folio,
+  usando public.folio_archivos o fuente equivalente, sin acceder al contenido
+  de los archivos, sin S3 y sin exponer identificadores internos sensibles
+  como s3_key?
 
-mandatory_candidates:
-  - id: "kanban_flow"
-    questions:
-      - "¿Qué folios hay actualmente en cada etapa?"
-      - "¿Cómo está distribuido el flujo?"
-      - "¿Qué folios llevan más tiempo en su etapa?"
-      - "¿Qué puede afirmarse sin convertir antigüedad en retraso?"
+candidate_source:
+  expected_table: "public.folio_archivos"
+  expected_helpers:
+    - "listFolioArchivos"
+    - "listFolioArchivosByFolioId"
+    - "equivalentes físicamente verificados"
 
-  - id: "documents"
-    questions:
-      - "¿Qué documentos/metadatos están asociados al folio?"
-      - "¿Qué parte es DB metadata?"
-      - "¿Qué parte depende de S3/M15?"
-      - "¿Puede existir un slice útil sin leer el contenido del PDF?"
+metadata_scope:
+  candidate_included:
+    - "tipo de documento si existe"
+    - "status si existe"
+    - "nombre de archivo si existe"
+    - "fecha/creado_en si existe"
+    - "identificador documental solo si es seguro y útil"
+    - "identidad mínima del folio"
+    - "conteo de registros si deriva directamente del SELECT"
+    - "evidencia trazable"
 
-  - id: "financial_status"
-    questions:
-      - "¿Qué información financiera pertenece realmente a M2?"
-      - "cheque"
-      - "póliza"
-      - "presupuesto"
-      - "¿son una sola capacidad o varios dominios?"
-      - "¿qué dependencia existe con M18?"
+  excluded:
+    - "s3_key"
+    - "URL firmada"
+    - "bucket"
+    - "contenido PDF"
+    - "texto extraído del documento"
+    - "descarga"
+    - "S3"
+    - "filesystem"
+    - "OCR"
+    - "resumen del PDF"
+    - "afirmar que un documento falta"
+    - "afirmar que un documento es obligatorio"
+    - "inferir cumplimiento documental"
+    - "mutaciones"
+    - "uploads"
+    - "deletes"
 
-  - id: "other"
-    questions:
-      - "¿La ficha canónica contiene otro hueco M2 de mayor valor?"
-      - "¿Existe un slice no considerado en la priorización anterior?"
+mandatory_audit:
 
-canonical_audit:
-  required:
-    - "leer ficha M2 completa y vigente"
-    - "no inferir alcance desde el número del módulo"
-    - "separar propósito canónico de endpoints existentes"
-    - "separar capacidad ya integrada de capacidad faltante"
-    - "identificar qué exige COMPLETE"
-    - "no redefinir COMPLETE para facilitar implementación"
+  canonical_definition:
+    required:
+      - "leer ficha M2 vigente"
+      - "ubicar documents dentro del propósito canónico"
+      - "distinguir metadata vs contenido"
+      - "confirmar que este slice no lleva M2 a COMPLETE"
+      - "confirmar efecto porcentual"
 
-executive_value:
-  evaluate:
-    - "frecuencia probable de consulta directiva"
-    - "capacidad para responder qué está pasando"
-    - "capacidad para detectar dónde mirar"
-    - "valor para seguimiento diario"
-    - "valor para decisiones"
-    - "redundancia con M3 KPIs"
-    - "redundancia con M12 Action Register"
-    - "redundancia con folio_status"
-    - "redundancia con history"
+  physical_source:
+    determine:
+      - "tabla/vista real"
+      - "columnas reales"
+      - "folio_id foreign key"
+      - "tipo"
+      - "status"
+      - "nombre"
+      - "fecha"
+      - "s3_key u otros identificadores internos"
+      - "nullable fields"
+      - "orden"
+      - "índices visibles si aplica"
 
-physical_readiness:
-  for_each_candidate_determine:
-    - "fuente física"
-    - "tabla/helper"
-    - "SELECT-only sí/no"
-    - "handler HTTP asociado"
-    - "side effects"
-    - "posibilidad in-process"
-    - "authz"
-    - "scope planta"
-    - "dependencias"
-    - "semántica observada"
-    - "inferencias necesarias"
-    - "tests posibles"
-    - "riesgo"
+  helpers:
+    inspect:
+      - "listFolioArchivos"
+      - "listFolioArchivosByFolioId"
+      - "helpers equivalentes"
 
-kanban_specific_rules:
-  - "No usar GET /api/dashboard/kanban como path Director IA si muta."
-  - "No llamar maybeAdvanceFolioToComprobaciones."
-  - "Buscar SELECT/helper equivalente seguro."
-  - "History ya permite conocer timestamps de eventos."
-  - "Tiempo en etapa puede calcularse solo si la evidencia física lo soporta."
-  - "Tiempo en etapa no equivale a retraso."
-  - "No inventar SLA."
-  - "No inventar condición atorado."
-  - "No inventar prioridad."
+    determine:
+      - "query real"
+      - "SELECT-only"
+      - "joins"
+      - "side effects"
+      - "shape"
+      - "si expone s3_key"
+      - "si puede proyectarse un shape seguro sin s3_key"
 
-documents_specific_rules:
-  - "Separar metadata documental de contenido."
-  - "Separar DB de S3."
-  - "No asumir que existencia de metadata significa contenido accesible."
-  - "No afirmar documento faltante sin regla física/canónica."
-  - "No integrar M15 indirectamente."
-  - "No descargar ni procesar documentos en esta tarea."
+  routes:
+    inspect:
+      - "endpoints de archivos/documentos"
+      - "metadata"
+      - "descarga"
+      - "S3"
+      - "signed URLs"
+      - "uploads"
+      - "deletes"
 
-financial_specific_rules:
-  - "No agrupar cheque, póliza y presupuesto artificialmente."
-  - "Distinguir M2 de M18."
-  - "No convertir stub HTTP en capacidad."
-  - "No autorizar writes."
-  - "No reinterpretar propósito canónico."
+    purpose: >
+      Separar estrictamente la superficie metadata read-only del contenido y de
+      cualquier integración externa o mutante.
 
-comparison_dimensions:
-  score_each_0_to_5:
-    - "executive_value"
-    - "incremental_value_after_status_history"
-    - "read_only_safety"
-    - "physical_source_clarity"
-    - "authz_fit"
-    - "plant_scope_fit"
-    - "implementation_reuse"
-    - "semantic_clarity"
-    - "testability"
+  folio_resolution:
+    determine:
+      - "resolución por id"
+      - "resolución por numero_folio"
+      - "reutilización de folio_status"
+      - "autorizar folio antes de consultar metadata"
+      - "not found"
+      - "cross-planta"
 
-  penalties_0_to_5:
-    - "write_dependency"
-    - "external_storage_dependency"
-    - "cross_module_dependency"
-    - "inference_risk"
-    - "contract_ambiguity"
-    - "duplication_of_existing_capability"
+  authz:
+    determine:
+      - "JWT/contexto"
+      - "rol"
+      - "GA"
+      - "GV"
+      - "planta_id"
+      - "plantas_permitidas"
+      - "cross-planta"
+      - "fail-closed"
+
+  semantics:
+    determine:
+      - "qué significa tipo"
+      - "qué significa status"
+      - "qué significa nombre"
+      - "qué timestamp representa"
+      - "qué campos son internos"
+      - "qué campos son seguros para Director IA"
+      - "qué NO puede afirmarse a partir de la metadata"
+
+  planner_tools:
+    inspect:
+      - "intent folio_documents"
+      - "capability folio_documents"
+      - "tool existente"
+      - "executor"
+      - "UNSUPPORTED_RULES"
+      - "SOURCE_NOT_INTEGRATED"
+      - "chat routing"
+
+    determine:
+      - "qué ya existe"
+      - "qué falta"
+      - "si debe habilitarse un sub-slice metadata"
+      - "si el intent actual es demasiado amplio y requiere guardrails"
+
+  architecture_fit:
+    determine:
+      - "loader/helper metadata mínimo"
+      - "reutilización de authz M2"
+      - "path in-process"
+      - "sin HTTP interno"
+      - "sin S3"
+      - "sin contrato nuevo"
+      - "G2 sí/no"
+      - "G3 sí/no"
+
+required_safe_projection:
+  allow_if_physically_present:
+    - "folio_id"
+    - "numero_folio"
+    - "document_id"
+    - "tipo"
+    - "status"
+    - "nombre_archivo"
+    - "creado_en/fecha"
+    - "source"
+
+  explicitly_exclude:
+    - "s3_key"
+    - "bucket"
+    - "signed_url"
+    - "raw_path"
+    - "internal_storage_identifier"
+    - "file_content"
 
   rule: >
-    El score ayuda a comparar, pero no puede sustituir juicio arquitectónico ni
-    convertir un candidato contractualmente incorrecto en ganador.
+    Si el helper existente devuelve s3_key u otro identificador interno, el
+    loader de Director IA debe proyectar solo campos seguros antes de producir
+    evidencia.
 
-mandatory_table:
+semantic_invariants:
+  - "Metadata ≠ contenido."
+  - "Registro documental ≠ documento obligatorio."
+  - "Ausencia de registro ≠ documento faltante."
+  - "status documental ≠ cumplimiento global."
+  - "nombre de archivo ≠ contenido verificado."
+  - "No exponer s3_key."
+  - "No construir URL."
+  - "No descargar archivos."
+  - "No acceder S3."
+  - "No inferir falta."
+  - "No cross-planta."
+  - "Toda afirmación debe ser trazable al SELECT de metadata."
+
+mandatory_evidence_table:
   columns:
-    - "candidate"
-    - "canonical_gap"
-    - "executive_value"
+    - "surface"
+    - "helper_or_route"
     - "physical_source"
     - "select_only"
-    - "in_process_possible"
-    - "authz_fit"
+    - "side_effects"
+    - "authz"
     - "plant_scope"
-    - "dependencies"
-    - "inference_risk"
-    - "incremental_coverage"
-    - "state_after_slice"
-    - "percentage_effect"
-    - "recommendation"
+    - "safe_fields"
+    - "unsafe_fields"
+    - "external_dependency"
+    - "reusable"
+    - "risk"
+    - "evidence"
 
-winner_rules:
-  - "Elegir exactamente un ganador si existe candidato justificable."
-  - "No elegir por facilidad de implementación solamente."
-  - "No elegir por orden de la ficha."
-  - "No elegir documents por default."
-  - "No otorgar COMPLETE si el slice deja huecos canónicos."
-  - "Si ningún candidato justifica implementación, STOPPED es válido."
+mandatory_gap_table:
+  columns:
+    - "gap_id"
+    - "missing_capability"
+    - "required_for_metadata_slice"
+    - "reusable_component"
+    - "proposed_change"
+    - "architecture_change"
+    - "contract_change"
+    - "authz_change"
+    - "complexity"
+    - "blocking"
 
-percentage_rules:
-  - "Baseline = 8.5 / 20 = 42.5%."
-  - "Si el ganador solo profundiza un M2 ya PARTIAL, efecto = 0.0 pp."
-  - "No otorgar +2.5 pp nuevamente por profundizar el mismo PARTIAL."
-  - "Solo cambiaría en el futuro si M2 alcanzara legítimamente COMPLETE."
-  - "Esta tarea no modifica el porcentaje."
+implementation_hypothesis:
+  expected_path: >
+    intent folio_documents -> tool -> executor -> loadFolioDocumentsMetadataForChat
+    -> resolver/autorizar folio -> SELECT public.folio_archivos ->
+    safe projection without s3_key -> evidencia -> respuesta
 
-architecture_rules:
-  - "Preferir in-process."
-  - "No HTTP interno."
-  - "No dispatcher nuevo salvo necesidad demostrada y gate humano."
-  - "No contrato nuevo salvo necesidad demostrada y gate humano."
-  - "No writes."
-  - "No cross-planta."
-  - "Fail-closed."
+  note: >
+    Hipótesis a auditar. No autoriza implementación ni acceso al contenido.
 
-required_decision:
-  include:
-    - "ganador"
-    - "por qué gana"
-    - "por qué pierden los demás"
-    - "fuente física probable"
-    - "riesgos"
-    - "readiness requerida"
-    - "estado M2 después del slice"
-    - "efecto porcentual"
-    - "NEXT_TASK exacta"
+tests_to_design_if_ready:
+  - "metadata por folio id"
+  - "metadata por numero_folio"
+  - "múltiples documentos"
+  - "sin documentos"
+  - "tipo"
+  - "status"
+  - "nombre"
+  - "fecha"
+  - "nulls"
+  - "s3_key nunca expuesto"
+  - "folio inexistente"
+  - "cross-planta"
+  - "planta no autorizada"
+  - "plantas_permitidas"
+  - "GA"
+  - "GV"
+  - "intent/tool"
+  - "SOURCE_NOT_INTEGRATED levantado solo para metadata soportada"
+  - "contenido sigue bloqueado"
+  - "S3 sigue fuera"
+  - "no HTTP interno"
+  - "sin writes"
 
-next_task_policy:
-  if_winner:
-    pattern: "ARCH-DIRECTOR-IA-M2-<SLICE>-READINESS-001"
-    count: 1
+decision_rules:
 
-  if_no_winner:
+  ready:
+    all:
+      - "fuente metadata real"
+      - "SELECT-only"
+      - "safe projection posible"
+      - "s3_key excluible"
+      - "authz preservable"
+      - "scope planta preservable"
+      - "path in-process posible"
+      - "sin S3"
+      - "sin contrato nuevo"
+      - "tests determinísticos"
+
+    outcome: "DONE_PENDING_REVIEW"
+    next_task: "IMPL-DIRECTOR-IA-M2-DOCUMENTS-METADATA-001"
+
+  stopped:
+    when:
+      - "metadata depende inseparablemente de S3"
+      - "helper no puede proyectar sin exponer identificadores internos"
+      - "authz no es preservable"
+      - "scope planta no es preservable"
+      - "semántica requiere contrato nuevo"
+
+    outcome: "STOPPED"
     next_task: null
-
-  rule: >
-    NEXT_TASK se propone únicamente. No se autoriza ni ejecuta.
 
 in_scope:
   writable:
     - "docs/dev-loop/CURRENT_TASK.md"
-    - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M2-NEXT-SLICE-PRIORITIZATION-002.md"
+    - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M2-DOCUMENTS-READINESS-001.md"
 
   read_only:
     - "AGENTS.md"
@@ -250,7 +346,7 @@ in_scope:
     - "package-lock.json"
 
 out_of_scope:
-  - "implementar candidato"
+  - "implementar"
   - "modificar código"
   - "modificar runtime"
   - "modificar frontend"
@@ -261,67 +357,84 @@ out_of_scope:
   - "crear migration"
   - "modificar capability matrix"
   - "modificar contratos"
-  - "marcar M2 COMPLETE"
-  - "cambiar 42.5%"
+  - "acceder S3"
+  - "descargar PDF"
+  - "OCR"
+  - "procesar contenido"
+  - "hacer uploads"
+  - "hacer deletes"
+  - "hacer writes"
   - "hacer commit"
   - "hacer push"
   - "hacer merge"
   - "ejecutar NEXT_TASK"
 
 acceptance_criteria:
-  - "Se leyó la definición canónica vigente de M2."
-  - "Se verificó lo ya cubierto por folio_status."
-  - "Se verificó lo ya cubierto por history."
-  - "Se auditó kanban_flow."
-  - "Se auditó documents."
-  - "Se auditó financial_status."
-  - "Se buscaron otros huecos M2."
-  - "Cada candidato tiene fuente física identificada o ausencia explícita."
-  - "Cada candidato tiene riesgo de side effects evaluado."
-  - "Se evaluó authz."
-  - "Se evaluó scope planta."
-  - "Se evaluó redundancia con capacidades existentes."
-  - "Se eligió exactamente un ganador o se justificó STOPPED."
-  - "M2 permanece PARTIAL durante esta tarea."
-  - "42.5% permanece sin cambios."
-  - "No se implementó nada."
-  - "Solo CURRENT_TASK y reporte fueron modificados."
+  - "Se verificó la fuente real de metadata."
+  - "Se verificaron helpers."
+  - "Se verificó SELECT-only."
+  - "Se identificó s3_key y otros campos internos."
+  - "Se definió safe projection."
+  - "Se verificó authz."
+  - "Se verificó scope planta."
+  - "Se verificó planner/tools."
+  - "Se verificó separación metadata/contenido."
+  - "Se verificó separación DB/S3."
+  - "Se diseñaron tests."
+  - "Se determinó G2."
+  - "Se determinó G3."
+  - "M2 seguiría PARTIAL."
+  - "42.5% seguiría sin cambio."
+  - "No se implementó."
+  - "Solo CURRENT_TASK y reporte cambiaron."
   - "git diff --check limpio."
 
+next_task_policy:
+  if_ready:
+    propose_exactly_one: "IMPL-DIRECTOR-IA-M2-DOCUMENTS-METADATA-001"
+
+  if_stopped:
+    propose: null
+
 report_requirements:
-  path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M2-NEXT-SLICE-PRIORITIZATION-002.md"
+  path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M2-DOCUMENTS-READINESS-001.md"
 
   must_include:
     - "metadata"
     - "resumen ejecutivo"
     - "baseline"
-    - "definición canónica M2"
-    - "cobertura actual status + history"
-    - "candidatos"
-    - "kanban_flow"
-    - "documents"
-    - "financial_status"
-    - "otros huecos"
-    - "tabla comparativa"
-    - "scoring"
-    - "ganador"
-    - "razones del ganador"
-    - "razones de descarte"
-    - "riesgos"
-    - "estado M2 posterior"
-    - "efecto porcentual"
+    - "scope metadata only"
+    - "physical source"
+    - "helpers"
+    - "safe fields"
+    - "unsafe fields"
+    - "s3_key exclusion"
+    - "routes"
+    - "S3 boundary"
+    - "folio resolution"
+    - "authz"
+    - "plant scope"
+    - "semantics"
+    - "planner/tools"
+    - "evidence table"
+    - "gap table"
+    - "implementation hypothesis"
+    - "tests"
+    - "gates"
+    - "state after slice"
+    - "percentage"
+    - "risks"
     - "NEXT_TASK"
     - "acciones no realizadas"
-    - "gates"
     - "secrets_check"
     - "git diff --check"
     - "git status"
 
 expected_terminal_state: >
-  DONE_PENDING_REVIEW si existe un ganador defendible. STOPPED si ningún slice
-  M2 restante justifica implementación sin reinterpretar contrato o introducir
-  riesgo indebido. BLOCKED si falta gate o dato humano indispensable.
+  DONE_PENDING_REVIEW si existe path metadata-only SELECT-only, in-process,
+  autorizado y sin exposición de storage internals. STOPPED si metadata depende
+  inseparablemente de S3 o requiere decisión contractual. BLOCKED si falta gate.
 
 max_attempts: 1
 
-result_report_path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M2-NEXT-SLICE-PRIORITIZATION-002.md"
+result_report_path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M2-DOCUMENTS-READINESS-001.md"
