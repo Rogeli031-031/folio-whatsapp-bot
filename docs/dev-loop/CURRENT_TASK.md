@@ -1,14 +1,14 @@
 # CURRENT_TASK
 
 ```yaml
-task_id: "DOCS-DIRECTOR-IA-M4-CAPABILITY-MATRIX-SYNC-001"
+task_id: "ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-003"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-08-23"
 human_authorization: >
   AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-23.
-  Apruebo DOCS-DIRECTOR-IA-M4-CAPABILITY-MATRIX-SYNC-001 y autorizo G1.
+  Apruebo ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-003 y autorizo G1.
 
 gates:
   G1_task_authorization: AUTHORIZED
@@ -17,149 +17,318 @@ gates:
   G8_calibration_materiality_signature: N/A
 
 objective: >
-  Sincronizar la capability matrix de Director IA con la implementación
-  read-only de M4 ya integrada en main, cambiando M4 de NO INTEGRADA a PARTIAL
-  y recalculando el avance global de 9.0/20 = 45.0% a 9.5/20 = 47.5%,
-  sin marcar COMPLETE y manteniendo COMPARAR/Excel fuera.
+  Priorizar el siguiente frente global de Director IA desde el baseline 47.5%,
+  comparando todos los módulos no COMPLETE por valor ejecutivo marginal,
+  capacidad de razonamiento, actionability, frecuencia, fuentes físicas,
+  seguridad, dependencia y costo de integración. No continuar M4 por inercia
+  ni elegir M18 solo por haber quedado segundo en una priorización anterior.
 
 baseline:
-  implementation_task: "IMPL-DIRECTOR-IA-M4-CLASIFICACION-QUERY-001"
-  implementation_report: "docs/dev-loop/reports/IMPL-DIRECTOR-IA-M4-CLASIFICACION-QUERY-001.md"
+  numerator: 9.5
+  denominator: 20
+  percentage: 47.5
 
-  module: "M4 — Clasificación de apoyos + COMPARAR"
-  state_before: "NO INTEGRADA"
-  state_after: "PARTIAL"
+  recent_changes:
+    - "M2 profundizado: status + history + documents metadata"
+    - "M6 = PARTIAL con query GASTOS / INVERSIONES"
+    - "M4 = PARTIAL con comparativo mes_a vs mes_b"
+    - "M4 COMPARAR/Excel siguen fuera"
+    - "M6 Export/Excel sigue fuera"
 
-  global_before:
-    numerator: 9.0
-    denominator: 20
-    percentage: 45.0
+  rule: >
+    Esta tarea no cambia estados ni porcentaje. El 47.5% es baseline, no criterio
+    principal de decisión.
 
-  global_after:
-    numerator: 9.5
-    denominator: 20
-    percentage: 47.5
+primary_question: >
+  ¿Qué módulo o slice pendiente produce ahora el mayor incremento neto de
+  inteligencia ejecutiva para Director IA, considerando todo lo ya integrado
+  y penalizando duplicación, writes, dependencias externas e inferencias débiles?
 
-  gain_pp: 2.5
+candidate_source:
+  canonical_matrix: "docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md"
 
-implemented_slice:
-  supported:
-    - "query JSON read-only"
-    - "comparación mes_a vs mes_b"
-    - "GASTOS"
-    - "INVERSIONES"
-    - "TALLER"
-    - "planta autorizada"
-    - "valores comparativos y diferencias físicamente soportadas"
-    - "evidencia estructurada"
+  include:
+    - "PARTIAL"
+    - "INDIRECTA"
+    - "NO INTEGRADA"
+    - "NOT_STARTED"
+    - "bloqueados reconsiderables"
 
-  path: >
-    intent M4 query -> tool -> executor ->
-    loadClasificacionApoyosForChat ->
-    SELECT public.folios + buildClasificacionMatrix ->
-    evidencia -> respuesta
+  exclude:
+    - "COMPLETE"
+    - "N_A"
 
-  periods:
-    - "mes_a obligatorio"
-    - "mes_b obligatorio"
-    - "YYYY-MM"
-    - "mes_a != mes_b"
-    - "sin defaults inventados"
+canonical_labels_rule: >
+  Usar exclusivamente nombres, propósitos y estados vigentes de las fichas
+  canónicas. No reutilizar etiquetas incorrectas de prompts previos.
 
-  plant_scope:
-    - "sin fallback a las 6 plantas"
-    - "planta autorizada"
-    - "plantas_permitidas"
-    - "cross-planta bloqueado"
-    - "fail-closed"
+mandatory_rechecks:
+  - "M1"
+  - "M4 restante"
+  - "M5"
+  - "M6 restante"
+  - "M7"
+  - "M8"
+  - "M10"
+  - "M11"
+  - "M12"
+  - "M14"
+  - "M15"
+  - "M17"
+  - "M18"
+  - "M20"
+  - "cualquier otro módulo no COMPLETE vigente"
 
-  semantics:
-    - "GASTOS / INVERSIONES / TALLER permanecen separados"
-    - "delta factual no implica causalidad"
-    - "aumento no implica problema"
-    - "disminución no implica mejora"
-    - "no desviación presupuestal sin baseline correspondiente"
+special_rechecks:
 
-still_not_integrated:
-  - "COMPARAR"
-  - "writes de COMPARAR"
-  - "insertFolio"
-  - "UPDATE mes_cargo"
-  - "Excel"
-  - "xlsx"
-  - "reconciliación Excel"
-  - "propósito completo de M4"
+  M4_remaining:
+    required:
+      - "query comparativa ya integrada"
+      - "evaluar únicamente COMPARAR/Excel restante"
+      - "penalizar writes"
+      - "penalizar continuidad por inercia"
+      - "no contar PARTIAL otra vez"
 
-canonical_rule: >
-  M4 queda PARTIAL. La query comparativa read-only no satisface el propósito
-  canónico completo de Clasificación de apoyos + COMPARAR.
+  M6_remaining:
+    required:
+      - "query GASTOS/INVERSIONES ya integrada"
+      - "evaluar solo Export/xlsx restante"
+      - "no contar PARTIAL otra vez"
 
-test_evidence:
-  focal_m4: "18/18 pass"
-  capabilities: "42 pass"
-  planner: "39 pass"
-  orchestrator: "24 pass"
-  director_ia_suite: "575/575 pass"
-  git_diff_check: "clean"
+  M7:
+    required:
+      - "qué sabe ya Director IA de IGF"
+      - "qué preguntas financieras siguen sin respuesta"
+      - "qué evidencia causal/contextual puede aportar"
+      - "qué source/helper físico existe"
+      - "qué se solapa con M6"
 
-documentation_policy:
-  must_update:
-    - "M4: NO INTEGRADA -> PARTIAL"
-    - "query mes_a vs mes_b disponible"
-    - "GASTOS / INVERSIONES / TALLER"
-    - "source public.folios + buildClasificacionMatrix"
-    - "period semantics"
-    - "plant scope"
+  M8:
+    required:
+      - "qué sabe ya de ARR"
+      - "qué falta"
+      - "qué duplica M9"
+      - "qué valor incremental queda"
+
+  M11:
+    required:
+      - "DICF actual"
+      - "qué consultas ya existen"
+      - "qué evidencia causal o de seguimiento falta"
+      - "si profundizar DICF mejora reasoning ejecutivo"
+
+  M12:
+    required:
+      - "Action Register actual"
+      - "qué huecos reales quedan"
+      - "si agrega valor superior a otro módulo"
+      - "no duplicar M2 history"
+
+  M18:
+    required:
+      - "leer definición canónica exacta"
+      - "fuentes físicas"
+      - "presupuestos semanales"
+      - "cheques si realmente pertenecen"
+      - "writes/dependencias"
+      - "primer slice read-only posible"
+      - "valor semanal"
+      - "si realmente supera otros candidatos ahora"
+
+  M20:
+    required:
+      - "Home KPI"
+      - "qué aporta sobre M3"
+      - "si es resumen duplicado o evidencia nueva"
+
+  WhatsApp_modules:
+    required:
+      - "canal != conocimiento"
+      - "no premiar transporte por sí mismo"
+      - "solo valorar si aporta información ejecutiva nueva"
+
+evaluation_model:
+
+  executive_value:
+    weight: "VERY_HIGH"
+    evaluate:
+      - "preguntas directivas nuevas"
+      - "detección de desviaciones/riesgos"
+      - "capacidad para decidir dónde mirar"
+      - "reducción de navegación manual"
+
+  reasoning_value:
+    weight: "VERY_HIGH"
+    evaluate:
+      - "nueva evidencia para diagnóstico"
+      - "contexto causal"
+      - "capacidad de combinarse con M2/M3/M4/M6/M9/M12"
+      - "explicación, no solo listado"
+
+  incremental_value:
+    weight: "VERY_HIGH"
+    evaluate:
+      - "qué no sabe hoy Director IA"
+      - "qué hueco neto cubre"
+      - "qué duplica"
+
+  actionability:
+    weight: "HIGH"
+    evaluate:
+      - "planta"
+      - "cliente"
+      - "responsable"
+      - "partida"
+      - "riesgo"
+      - "fecha"
+      - "acción posible"
+
+  frequency:
+    weight: "HIGH"
+
+  implementation_path:
+    weight: "MEDIUM"
+    evaluate:
+      - "fuente física"
+      - "helpers"
+      - "intent"
+      - "tool"
+      - "executor"
+      - "in-process"
+      - "first useful slice"
+
+  risk:
+    weight: "MEDIUM"
+    penalize:
+      - "writes"
+      - "Excel"
+      - "S3"
+      - "Twilio/WhatsApp"
+      - "side effects"
+      - "cross-module coupling"
+      - "semantic ambiguity"
+      - "stubs"
+
+  percentage_effect:
+    weight: "LOW"
+    rule: >
+      Registrar impacto futuro real, pero nunca elegir por porcentaje.
+
+mandatory_question_map:
+  for_each_candidate:
+    - "qué preguntas NUEVAS habilita"
+    - "qué ya puede responder Director IA"
+    - "qué sería duplicado"
+    - "qué no soporta la fuente"
+
+physical_audit:
+  for_each_candidate:
+    - "fuente primaria"
+    - "helpers"
+    - "queries"
+    - "intent"
+    - "tool"
+    - "executor"
     - "authz"
-    - "sin fallback global"
-    - "COMPARAR fuera"
-    - "Excel fuera"
-    - "recalculo 9.0/20 -> 9.5/20"
-    - "45.0% -> 47.5%"
+    - "plant_scope"
+    - "side_effects"
+    - "external_dependency"
+    - "semantic_risk"
+    - "testability"
+    - "first_slice"
+    - "state_after_slice"
+    - "percentage_effect"
 
-  must_preserve:
-    - "M4 != COMPLETE"
-    - "COMPARAR no integrado"
-    - "Excel/xlsx no integrado"
-    - "writes no integrados"
-    - "ningún otro módulo cambia sin evidencia"
+mandatory_table:
+  columns:
+    - "rank"
+    - "module"
+    - "current_state"
+    - "new_executive_questions"
+    - "executive_value"
+    - "reasoning_value"
+    - "incremental_value"
+    - "frequency"
+    - "actionability"
+    - "source_ready"
+    - "wiring_ready"
+    - "authz_fit"
+    - "dependencies"
+    - "mutation_risk"
+    - "semantic_risk"
+    - "first_useful_slice"
+    - "state_after_slice"
+    - "percentage_effect"
+    - "decision"
 
-  forbidden:
-    - "marcar M4 COMPLETE"
-    - "contar COMPARAR como integrado"
-    - "contar Excel como integrado"
-    - "subir global por encima de 47.5% por esta tarea"
-    - "cambiar estados de otros módulos"
+ranking_rules:
+  - "No elegir por número."
+  - "No elegir por porcentaje."
+  - "No elegir por facilidad solamente."
+  - "No continuar M4 ni M6 por inercia."
+  - "No elegir M18 por ranking previo."
+  - "Penalizar duplicación con capacidades actuales."
+  - "Preferir hechos observables."
+  - "Preferir datos estructurados."
+  - "Preferir integración in-process."
+  - "Preferir valor diagnóstico y actionable."
+  - "Penalizar writes y dependencias externas."
+  - "Penalizar stubs."
+
+winner_requirements:
+  exactly_one: true
+
+  must_include:
+    - "ganador"
+    - "segundo lugar"
+    - "preguntas nuevas"
+    - "por qué gana"
+    - "por qué pierde el segundo"
+    - "primer slice"
+    - "estado posterior"
+    - "efecto porcentual"
+    - "riesgos"
+    - "dependencias"
+    - "gates"
+
+next_task_policy:
+  if_readiness_needed:
+    pattern: "ARCH-DIRECTOR-IA-<MODULE>-<SLICE>-READINESS-001"
+
+  if_gap_fully_verified:
+    pattern: "IMPL-DIRECTOR-IA-<MODULE>-<SLICE>-001"
+
+  rule: >
+    Proponer exactamente una NEXT_TASK. No autorizar ni ejecutar.
 
 in_scope:
   writable:
     - "docs/dev-loop/CURRENT_TASK.md"
-    - "docs/dev-loop/reports/DOCS-DIRECTOR-IA-M4-CAPABILITY-MATRIX-SYNC-001.md"
-    - "docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md"
+    - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-003.md"
 
   read_only:
     - "AGENTS.md"
     - "docs/dev-loop/**"
     - "docs/director-ia/**"
-    - "lib/director-ia-m4-clasificacion-query.js"
-    - "lib/director-ia-capabilities.js"
-    - "lib/director-ia-chat.js"
-    - "lib/director-ia-planner.js"
-    - "lib/director-ia-tools.js"
-    - "test/director-ia-m4-clasificacion-query.test.js"
+    - "lib/**"
+    - "server.js"
+    - "frontend-dashboard/**"
+    - "test/**"
+    - "scripts/**"
+    - "sql/**"
+    - "package.json"
+    - "package-lock.json"
 
 out_of_scope:
+  - "implementar"
   - "modificar código"
   - "modificar runtime"
   - "modificar frontend"
   - "modificar tests"
   - "modificar scripts"
   - "modificar SQL"
-  - "modificar schema"
-  - "crear migration"
+  - "modificar capability matrix"
   - "modificar contratos"
-  - "implementar COMPARAR"
-  - "implementar Excel"
   - "hacer writes"
   - "hacer commit"
   - "hacer push"
@@ -167,66 +336,60 @@ out_of_scope:
   - "ejecutar NEXT_TASK"
 
 acceptance_criteria:
-  - "Implementación M4 verificada físicamente en main."
-  - "M4 cambia documentalmente de NO INTEGRADA a PARTIAL."
-  - "M4 no se marca COMPLETE."
-  - "Query mes_a vs mes_b queda documentada."
-  - "GASTOS/INVERSIONES/TALLER quedan documentados y separados."
-  - "YYYY-MM y A != B quedan documentados."
-  - "No fallback global queda documentado."
-  - "Authz queda documentada."
-  - "COMPARAR sigue fuera."
-  - "Excel/xlsx sigue fuera."
-  - "Numerador pasa de 9.0 a 9.5."
-  - "Denominador permanece 20."
-  - "Porcentaje pasa de 45.0% a 47.5%."
-  - "Ningún otro módulo cambia."
-  - "No se modifica código/runtime/tests."
-  - "Solo los tres archivos autorizados cambian."
+  - "Baseline 9.5/20 = 47.5% verificado."
+  - "Nombres canónicos verificados desde matriz."
+  - "Todos los candidatos relevantes reevaluados."
+  - "M4 restante evaluado sin inercia."
+  - "M6 restante evaluado sin inercia."
+  - "M18 reevaluado desde cero."
+  - "Se identificaron preguntas ejecutivas nuevas."
+  - "Se midió valor incremental."
+  - "Se verificaron fuentes físicas."
+  - "Se verificó wiring."
+  - "Se verificó authz."
+  - "Se verificó scope planta."
+  - "Se verificaron dependencias."
+  - "Se produjo ranking."
+  - "Existe exactamente un ganador."
+  - "Existe exactamente un segundo lugar."
+  - "Existe exactamente una NEXT_TASK."
+  - "No se implementó nada."
+  - "No se modificó matriz."
+  - "Solo CURRENT_TASK y reporte cambiaron."
   - "git diff --check limpio."
 
-next_task_policy:
-  if_success:
-    propose_exactly_one: "ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-003"
-
-  rule: >
-    Volver a priorizar globalmente desde el nuevo baseline 47.5%.
-    No continuar M4 por inercia y no asumir M18 como ganador.
-
 report_requirements:
-  path: "docs/dev-loop/reports/DOCS-DIRECTOR-IA-M4-CAPABILITY-MATRIX-SYNC-001.md"
+  path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-003.md"
 
   must_include:
     - "metadata"
     - "resumen ejecutivo"
-    - "baseline"
-    - "implementación M4 verificada"
-    - "estado antes/después"
-    - "query mes_a vs mes_b"
-    - "GASTOS / INVERSIONES / TALLER"
-    - "source"
-    - "period semantics"
-    - "plant scope"
-    - "authz"
-    - "no fallback global"
-    - "COMPARAR boundary"
-    - "Excel boundary"
-    - "tests"
-    - "recalculo 9.0/20 -> 9.5/20"
-    - "45.0% -> 47.5%"
-    - "cambios exactos en matriz"
-    - "acciones no realizadas"
+    - "baseline 47.5%"
+    - "capacidad actual"
+    - "huecos globales"
+    - "preguntas ejecutivas nuevas"
+    - "candidatos"
+    - "tabla comparativa"
+    - "ranking"
+    - "ganador"
+    - "segundo lugar"
+    - "primer slice"
+    - "estado posterior"
+    - "efecto porcentual"
+    - "riesgos"
+    - "dependencias"
     - "gates"
+    - "NEXT_TASK"
+    - "acciones no realizadas"
     - "secrets_check"
     - "git diff --check"
     - "git status"
-    - "NEXT_TASK"
 
 expected_terminal_state: >
-  DONE_PENDING_REVIEW si la matriz refleja M4 PARTIAL y el baseline
-  9.5/20 = 47.5% sin marcar COMPLETE. STOPPED si la documentación vigente
-  contradice la implementación física. BLOCKED si falta gate.
+  DONE_PENDING_REVIEW si existe un ganador global defendible. STOPPED si ningún
+  frente restante aporta suficiente valor marginal sin decisión contractual.
+  BLOCKED si falta gate humano indispensable.
 
 max_attempts: 1
 
-result_report_path: "docs/dev-loop/reports/DOCS-DIRECTOR-IA-M4-CAPABILITY-MATRIX-SYNC-001.md"
+result_report_path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-003.md"
