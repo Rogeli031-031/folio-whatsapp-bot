@@ -63,7 +63,7 @@
 | Chat | `POST /api/director-ia/chat` → `askDirectorIa` (`lib/director-ia-chat.js`) |
 | Routing chat | Regex / heurísticas en `director-ia-chat.js`, `director-ia-igf-arr.js`, `director-ia-commercial-state.js` |
 | Fuentes en GET `sources` | `action_register`, `dicf`, `bitacora_ia`, `cliente_comentarios`, `folio_comentarios` pueden pasar a `true`; `igf`, `arr`, `commercial_state` permanecen `false` en `EMPTY_SOURCES` |
-| Fuentes solo en chat | Anexo IGF/ARR (`loadIgfArrAnnexForChat`), estado comercial (`loadCommercialStateForChat`), Mejora Continua (`loadMejoraContinuaForChat`); M6 GASTOS/INVERSIONES (`loadGastosInversionesForChat`) |
+| Fuentes solo en chat | Anexo IGF/ARR (`loadIgfArrAnnexForChat`), estado comercial (`loadCommercialStateForChat`), Mejora Continua (`loadMejoraContinuaForChat`); M6 GASTOS/INVERSIONES (`loadGastosInversionesForChat`); M4 clasificación query (`loadClasificacionApoyosForChat`) |
 | Persistencia de chat | No hay tabla de historial; solo `req.body.history` opcional en el request |
 | Escritura propia del módulo | Bitácora y entidades comerciales vía API CRUD (no vía chat) |
 
@@ -162,19 +162,19 @@
 | **ID** | M4 |
 | **Módulo** | Clasificación de apoyos + COMPARAR |
 | **Propósito empresarial** | Comparativo mensual por planta/categoría; reconciliación Excel. |
-| **Cobertura actual de Director IA** | NO INTEGRADA |
-| **Información exacta que sí consulta** | Ninguna. |
-| **Información que no consulta** | Matrices clasificación, Excel, inspección/comparar/agregar/rechazar. |
-| **Archivos actuales relacionados** | `lib/clasificacion-apoyos-excel.js`, `lib/clasificacion-comparar.js` |
-| **Endpoints actuales relacionados** | `/api/dashboard/clasificacion-apoyos*`, `/clasificacion-comparar*` |
-| **Tablas o vistas relacionadas** | Lectura/escritura `public.folios` (sin tablas `clasificacion_*`). |
-| **Funciones existentes reutilizables** | Generadores Excel/comparar en libs citadas — reutilizables solo si se envuelve herramienta interna nueva. |
-| **Capacidades de lectura posibles** | CONSULTAR/COMPARAR/RESUMIR (vía libs existentes; hoy no cableadas). |
-| **Capacidades de escritura posibles** | Actualizar/agregar folios vía comparar — ALTO; no en Director IA. |
-| **Permisos aplicables** | Auth dashboard + bloqueo GV; `priv_clave` para privados. |
-| **Nivel de riesgo** | MEDIO (lectura); ALTO (actualizar). |
-| **Dependencias** | Folios, plantas. |
-| **Observaciones verificadas** | Auditoría §M4 §7: No lo usa. |
+| **Cobertura actual de Director IA** | PARCIAL (query JSON read-only de matriz comparativa `mes_a` vs `mes_b` por planta y familia). **No** es COMPLETE: el propósito canónico incluye COMPARAR y reconciliación Excel, que permanecen fuera. |
+| **Información exacta que sí consulta** | Matriz agregada de `public.folios` vía `buildClasificacionMatrix`: GASTOS, INVERSIONES y TALLER separados; `valor_a`, `valor_b`, `delta` absoluto; `%` solo si la base (`valor_b`) ≠ 0. `mes_a` y `mes_b` obligatorios, formato `YYYY-MM`, A ≠ B; no se inventan periodos. 0 filas = matriz de ceros (respuesta válida). El delta es factual: aumento/disminución observada; no implica causa, problema, mejora, cumplimiento, desviación presupuestal ni responsable. |
+| **Información que no consulta** | COMPARAR (inspección/agregar/rechazar/confirmar); `insertFolio`; `UPDATE mes_cargo`; Excel/xlsx; `buildClasificacionApoyosWorkbook`; GET `/clasificacion-apoyos-excel`; detalle de celda HTTP; fallback a 6 plantas. No es listado M6 (`expandCategoriaRows`). Celda TALLER ≠ M5 Taller por AT. No IGF. |
+| **Archivos actuales relacionados** | `lib/director-ia-m4-clasificacion-query.js`; `lib/clasificacion-apoyos-excel.js` (`buildClasificacionMatrix`, `PLANTAS_COMPARATIVO` únicamente); wiring en `lib/director-ia-chat.js`, `lib/director-ia-tools.js`, `lib/director-ia-capabilities.js`, `lib/director-ia-planner.js`. `lib/clasificacion-comparar.js` **no** usado. |
+| **Endpoints actuales relacionados** | Chat: `POST /api/director-ia/chat` (in-process). GET `/api/dashboard/clasificacion-apoyos*` y POST `/clasificacion-comparar*` **no** se usan como transporte interno. |
+| **Tablas o vistas relacionadas** | Lectura `public.folios` (sin tablas `clasificacion_*`). Escritura de COMPARAR existe en producto y **sigue fuera**. |
+| **Funciones existentes reutilizables** | `loadClasificacionApoyosForChat` → SELECT + `buildClasificacionMatrix`. **No** `resolvePlantasComparativo` (evita fallback global). **No** `buildClasificacionApoyosWorkbook`. Authz: `requirePlantaId` + `assertFolioStatusAccess` + grupo canónico ∩ `plantas_permitidas`. |
+| **Capacidades de lectura posibles** | CONSULTAR/COMPARAR (tipo lectura: diffs A vs B) / RESUMIR matriz. DESCARGAR DOCUMENTO / reconciliación Excel **no** cableados. |
+| **Capacidades de escritura posibles** | Actualizar/agregar folios vía COMPARAR — ALTO; **no** en Director IA. |
+| **Permisos aplicables** | JWT/contexto; rol; `planta_id` obligatorio; `plantas_permitidas`; GV 403; GA permitido solo si el grupo comparativo completo está autorizado; cross-planta 403; planta fuera de `PLANTAS_COMPARATIVO` = fail-closed (no 6 provincias); privados excluidos (sin `priv_clave` de chat). |
+| **Nivel de riesgo** | MEDIO (lectura); ALTO (actualizar vía COMPARAR — fuera). |
+| **Dependencias** | Folios, plantas. Distinto de M5, M6 y M7. |
+| **Observaciones verificadas** | `IMPL-DIRECTOR-IA-M4-CLASIFICACION-QUERY-001` (integrado en main, `2c240407`). Tests: focales 18/18; capabilities 42/42; planner 39/39; orchestrator 24/24; suite `test/director-ia-*.test.js` 575/575; `git diff --check` limpio. COMPARAR/Excel **siguen fuera**. Scoring M0–M20 del loop (COMPLETE=1.0, PARCIAL=0.5, INDIRECTA=0.5, NOT_STARTED/NO INTEGRADA=0.0): 9.0/20 = 45.0% → **9.5/20 = 47.5%**. |
 
 ### M5 — Taller por AT
 
@@ -823,13 +823,13 @@
 ### Fuente: Clasificación de apoyos
 
 - **Dominio:** M4
-- **Cobertura actual:** NO INTEGRADA
-- **Archivo de acceso:** `lib/clasificacion-apoyos-excel.js`, `lib/clasificacion-comparar.js`
-- **Función de acceso:** Handlers `/api/dashboard/clasificacion-*`
-- **Endpoint relacionado:** citados
+- **Cobertura actual:** PARCIAL (query JSON `mes_a` vs `mes_b`; COMPARAR/Excel no integrados)
+- **Archivo de acceso:** `lib/director-ia-m4-clasificacion-query.js`; `buildClasificacionMatrix` en `lib/clasificacion-apoyos-excel.js`
+- **Función de acceso:** `loadClasificacionApoyosForChat` (in-process)
+- **Endpoint relacionado:** Chat `POST /api/director-ia/chat`. GET `/clasificacion-apoyos*` y POSTs COMPARAR **no** usados
 - **Tablas consultadas:** `public.folios`
-- **Evidencia de integración actual:** No integrada
-- **Información que no puede concluirse con esta fuente:** Matrices mensuales de clasificación
+- **Evidencia de integración actual:** Intent `clasificacion_apoyos_query` → tool `get_clasificacion_apoyos_query` → SELECT + `buildClasificacionMatrix`
+- **Información que no puede concluirse con esta fuente:** Causa del delta; desviación presupuestal; COMPARAR/reconciliación Excel; Taller por AT (M5); listado M6
 
 ### Fuente: Taller por AT
 
@@ -982,6 +982,7 @@
 | ¿Qué clientes dejaron de comprar? | Parcial | PARCIAL | commercial_state | `loadCommercialStateForChat` | >20 clientes; GA bloqueado | Medio |
 | ¿Qué alias tiene una entidad? | Sí (API/UI) | PARCIAL | Entidades | `/api/director-ia/comercial-entidades*` | Si no está en catálogo | Bajo-Medio |
 | ¿Qué documentos tiene / listar registros documentales de un folio? | Sí (solo metadata DB; no PDF/S3; no faltantes) | PARCIAL | Metadata `public.folio_archivos` | `loadFolioDocumentsMetadataForChat` / `get_folio_documents` (SELECT-only; **no** `/media`; **no** S3) | Contenido, URLs, documentos faltantes, cumplimiento | Alto si se lee como documentación completa o como «faltan documentos» |
+| ¿Cómo cambió la clasificación de apoyos entre mes_a y mes_b? | Sí (matriz agregada; no Excel; no COMPARAR) | PARCIAL | Folios + `buildClasificacionMatrix` | `loadClasificacionApoyosForChat` / `get_clasificacion_apoyos_query` | COMPARAR; Excel; causa del delta; igualdad con totales M6 | Alto si se lee como desviación presupuestal o como M6/M5 |
 
 ---
 
@@ -1057,7 +1058,7 @@ Escala 1–5. Prioridad derivada de: valor ejecutivo × disponibilidad de funcio
 | Duplicados (`folio-duplicados`) | 3 | 4 | 2 | 3 | Folios | **Media** |
 | Presupuesto semanal | 4 | 3 (UI limitada) | 4 (lógica en `server.js`) | 4 | Folios, bot | **Media-Baja** |
 | Proyectos | 3 | 4 | 2 | 2 | Plantas | **Media-Baja** |
-| Clasificación de apoyos (solo lectura matriz) | 3 | 4 | 3 | 3 | Folios, priv_clave | **Baja-Media** |
+| Clasificación de apoyos (solo lectura matriz) | 3 | 4 | 3 | 3 | Folios; query JSON ya en PARCIAL M4 | **Hecha (PARTIAL)**; COMPARAR/Excel siguen fuera |
 | Weekly discount LD | 2 | 3 | 2 | 2 | ARR, Twilio | **Baja** |
 | Health | 1 | 5 | 1 | 1 | Ninguna | **Baja** |
 | Usuarios admin (lectura) | 2 | 5 | 2 | 5 | Unlock/clave | **Baja** (riesgo alto) |
@@ -1228,7 +1229,7 @@ Escala 1–5. Prioridad derivada de: valor ejecutivo × disponibilidad de funcio
 
 ### 1. Resumen de cobertura real actual
 
-Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Register**, **DICF**, **bitácora**, **comentarios** (cliente y folio) y **entidades comerciales**, con **anexos financieros on-demand** (IGF/ARR/margen/estado comercial) activados por **regex** en el chat, **análisis on-demand de posibles duplicados de folios** (M16: `findDuplicatePairs`, no confirmación), **consulta on-demand de KPIs de dashboard y proyectos por planta** (M3: `get_dashboard_kpis` / `get_project_status`; no catálogo global; no creación de proyectos), **consulta on-demand de Delta Venta / Descuento / Ingreso de periodos reales** (M9: `get_delta_sales` / `get_delta_discount` / `get_delta_income`; no forecast con escritura; no M19), **consulta on-demand de estatus/etapa de folio** (M2 slice `folio_status`: `get_folio_status` / `loadFolioStatusForChat`; SELECT-only; no GET kanban; no GET `/folios/:id`; no autoavance), **consulta on-demand del historial de folio** (M2 slice `folio_history`: `get_folio_history` / `loadFolioHistoryForChat`; SELECT-only de `public.folio_historial`; no GET `/timeline`; no `dedupeHistorialByStage`; no autoavance), **consulta on-demand de metadata documental de folio** (M2 slice `folio_documents`: `get_folio_documents` / `loadFolioDocumentsMetadataForChat`; SELECT-only de `public.folio_archivos` con proyección segura; no S3; no PDF; no `s3_key`; no «faltan documentos»), y **consulta on-demand de GASTOS e INVERSIONES de folios** (M6 slice query JSON: `get_expense_analysis` / `get_investment_analysis` / `loadGastosInversionesForChat`; SELECT `public.folios` + `expandCategoriaRows`; `YYYY-MM` obligatorio; no Excel; no Export; no IGF). **No** opera el kanban HTTP, **no** usa `/timeline` como transporte interno, **no** lee contenido PDF/S3/pólizas/cheques/presupuestos/clasificación/taller/Export xlsx GASTOS-INVERSIONES ni el forecast mutante de ingreso. Las escrituras propias (bitácora/entidades) existen por **API UI**, no como tools autónomos del LLM. El GET `/api/director-ia/context` **subdeclara** IGF/ARR/commercial_state respecto al chat.
+Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Register**, **DICF**, **bitácora**, **comentarios** (cliente y folio) y **entidades comerciales**, con **anexos financieros on-demand** (IGF/ARR/margen/estado comercial) activados por **regex** en el chat, **análisis on-demand de posibles duplicados de folios** (M16: `findDuplicatePairs`, no confirmación), **consulta on-demand de KPIs de dashboard y proyectos por planta** (M3: `get_dashboard_kpis` / `get_project_status`; no catálogo global; no creación de proyectos), **consulta on-demand de Delta Venta / Descuento / Ingreso de periodos reales** (M9: `get_delta_sales` / `get_delta_discount` / `get_delta_income`; no forecast con escritura; no M19), **consulta on-demand de estatus/etapa de folio** (M2 slice `folio_status`: `get_folio_status` / `loadFolioStatusForChat`; SELECT-only; no GET kanban; no GET `/folios/:id`; no autoavance), **consulta on-demand del historial de folio** (M2 slice `folio_history`: `get_folio_history` / `loadFolioHistoryForChat`; SELECT-only de `public.folio_historial`; no GET `/timeline`; no `dedupeHistorialByStage`; no autoavance), **consulta on-demand de metadata documental de folio** (M2 slice `folio_documents`: `get_folio_documents` / `loadFolioDocumentsMetadataForChat`; SELECT-only de `public.folio_archivos` con proyección segura; no S3; no PDF; no `s3_key`; no «faltan documentos»), y **consulta on-demand de GASTOS e INVERSIONES de folios** (M6 slice query JSON: `get_expense_analysis` / `get_investment_analysis` / `loadGastosInversionesForChat`; SELECT `public.folios` + `expandCategoriaRows`; `YYYY-MM` obligatorio; no Excel; no Export; no IGF), y **consulta on-demand de la matriz comparativa de clasificación de apoyos** (M4 slice query JSON: `get_clasificacion_apoyos_query` / `loadClasificacionApoyosForChat`; SELECT `public.folios` + `buildClasificacionMatrix`; `mes_a` vs `mes_b` obligatorios y distintos; GASTOS / INVERSIONES / TALLER separados; sin fallback a 6 plantas; no COMPARAR; no Excel). **No** opera el kanban HTTP, **no** usa `/timeline` como transporte interno, **no** lee contenido PDF/S3/pólizas/cheques/presupuestos/COMPARAR-Excel de clasificación/taller/Export xlsx GASTOS-INVERSIONES ni el forecast mutante de ingreso. Las escrituras propias (bitácora/entidades) existen por **API UI**, no como tools autónomos del LLM. El GET `/api/director-ia/context` **subdeclara** IGF/ARR/commercial_state respecto al chat.
 
 ### 2. Dominios completos (COMPLETA)
 
@@ -1242,6 +1243,7 @@ Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Re
 - M0 Auth (gates, no catálogo)
 - M1 Health (readiness técnica `GET /health-director-ia` en header de DirectorIaShell; no `/health` `/health-db` `/health-proyectos`)
 - M2 Folios (comentarios + slice `folio_status` estatus/etapa + slice `folio_history` eventos crudos + slice `folio_documents` metadata-only; no contenido PDF/S3, no faltantes, no cheque/póliza, no `kanban_flow` ni kanban HTTP)
+- M4 Clasificación de apoyos (query JSON `mes_a` vs `mes_b` por planta y familia; no COMPARAR; no Excel/xlsx; no COMPLETE)
 - M6 GASTOS / INVERSIONES (query JSON de folios por planta y `YYYY-MM`; GASTOS ≠ INVERSIONES ≠ IGF; no Export/xlsx; no COMPLETE)
 - M7 IGF (chat on-demand)
 - M8 ARR (chat on-demand / motor DICF)
@@ -1256,8 +1258,8 @@ Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Re
 
 ### 5. Dominios no integrados (NO INTEGRADA)
 
-- M4 Clasificación  
-- M5 Taller AT  
+- M4 COMPARAR / Excel/xlsx (el query JSON ya está en PARCIAL M4; COMPLETE de M4 sigue fuera)
+- M5 Taller AT
 - M6 Export/xlsx (el query JSON ya está en PARCIAL M6; COMPLETE de M6 sigue fuera)
 - M10 Weekly discount LD  
 - M14 Usuarios admin (como dominio)  
@@ -1287,6 +1289,7 @@ Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Re
 | COMPARAR Delta Venta / Descuento / Ingreso (periodos reales) | `loadDeltaVentaForChat` / `loadDeltaDescuentoForChat` / `loadDeltaIngresoForChat` |
 | CONSULTAR GASTOS de folios (read-only, `YYYY-MM`) | `loadGastosInversionesForChat("GASTOS")` → SELECT + `expandCategoriaRows` |
 | CONSULTAR INVERSIONES de folios (read-only, `YYYY-MM`) | `loadGastosInversionesForChat("INVERSIONES")` → SELECT + `expandCategoriaRows` |
+| COMPARAR matriz de clasificación (`mes_a` vs `mes_b`, read-only) | `loadClasificacionApoyosForChat` → SELECT + `buildClasificacionMatrix` |
 
 ### 7. Capacidades que requieren herramientas nuevas (aunque exista API/lib)
 
@@ -1297,11 +1300,11 @@ Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Re
 | Metadatos documentos / póliza / cheque | Metadata de `folio_archivos` ya integrada (M2 SELECT-only, sin `s3_key`). Endpoints `/media` y póliza/cheque existen y **siguen excluidos** | Contenido PDF, S3, signed URLs, faltantes, póliza operativa, cheque |
 | Duplicados (cancelar / `findSimilarTo` al crear / Excel Taller) | Sí (cancelar UI, `POST /check`, Excel M5) | Escritura y detectores ajenos al análisis M16 ya integrado |
 | Excel/agregados Taller, GASTOS, INVERSIONES | Query JSON M6 ya integrado (SELECT + `expandCategoriaRows`). Libs Excel Taller/GASTOS/INVERSIONES siguen existiendo | Export/xlsx M6; Taller AT (M5); no usar workbook como transporte |
+| Clasificación COMPARAR / Excel | Query JSON M4 ya integrado (SELECT + `buildClasificacionMatrix`). POSTs COMPARAR y workbook siguen existiendo | COMPARAR writes (`insertFolio` / `UPDATE mes_cargo`); Excel/xlsx; no COMPLETE |
 | Deltas UI (forecast con escritura / M19) | Sí (`delta-ingreso-forecast`, `/api/ai/delta-ingreso/test/*`) | La lectura de periodos reales ya está en COMPLETA M9; faltan forecast mutante y M19, a propósito fuera |
 | Presupuesto semanal | Tablas sí; API UI limitada | Queries/tool + mapeo bot |
 | Proyectos (crear/editar/eliminar) | Sí (`POST /api/proyectos`) | Escritura; la lectura M3 ya está integrada |
 | KPIs dashboard (lectura) | Sí (integrado M3) | — |
-| Clasificación | Sí | Tool lectura |
 | Weekly LD | Sí | Tool |
 | Persistir/auditar chat | No | Nueva persistencia (fuera de «reutilizar») |
 | Igualar `sources` GET vs chat | Parcial | Cambio de contrato context (no implementado aquí) |
@@ -1351,6 +1354,7 @@ Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Re
 | M2 Folios / historial | `lib/director-ia-m2-history.js` |
 | M2 Folios / metadata documental | `lib/director-ia-m2-documents-metadata.js` |
 | M3 Plantas / KPIs / Proyectos | `lib/director-ia-m3-plantas-kpis-proyectos.js` |
+| M4 Clasificación (query JSON) | `lib/director-ia-m4-clasificacion-query.js` |
 | M6 GASTOS / INVERSIONES (query JSON) | `lib/director-ia-m6-gastos-inversiones.js` |
 | M9 Delta Venta / Descuento / Ingreso | `lib/director-ia-m9-deltas.js` |
 | AR summarizers | `lib/director-ia-action-register.js` |
