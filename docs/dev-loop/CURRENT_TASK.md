@@ -1,14 +1,14 @@
 # CURRENT_TASK
 
 ```yaml
-task_id: "ARCH-DIRECTOR-IA-M18-PRESUPUESTO-SEMANAL-READINESS-001"
+task_id: "IMPL-DIRECTOR-IA-M18-PRESUPUESTO-SEMANAL-001"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-08-23"
 human_authorization: >
   AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-23.
-  Apruebo ARCH-DIRECTOR-IA-M18-PRESUPUESTO-SEMANAL-READINESS-001 y autorizo G1.
+  Apruebo IMPL-DIRECTOR-IA-M18-PRESUPUESTO-SEMANAL-001 y autorizo G1.
 
 gates:
   G1_task_authorization: AUTHORIZED
@@ -17,250 +17,84 @@ gates:
   G8_calibration_materiality_signature: N/A
 
 objective: >
-  Auditar físicamente un primer slice read-only de M18 — Presupuestos semanales —
-  para que Director IA pueda consultar el carro semanal de presupuesto por planta
-  y semana, incluyendo presupuesto asignado, seleccionado, disponible, folios
-  asociados y urgentes cuando exista evidencia física suficiente, mediante path
-  in-process y SELECT-only, sin Twilio, sin envío a cheques y sin writes.
+  Implementar el primer slice read-only de M18 — Presupuestos semanales —
+  para que Director IA pueda consultar in-process el carro presupuestal semanal
+  de una planta, incluyendo asignado, seleccionado, disponible, folios y urgentes
+  físicamente soportados, reutilizando getPresupuestoResumen y fuentes SELECT-only,
+  sin cheques, sin Twilio/WhatsApp, sin writes y sin inventar semana.
 
 baseline:
-  prioritization_task: "ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-003"
-  prioritization_report: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-003.md"
+  readiness_task: "ARCH-DIRECTOR-IA-M18-PRESUPUESTO-SEMANAL-READINESS-001"
+  readiness_report: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M18-PRESUPUESTO-SEMANAL-READINESS-001.md"
 
   module: "M18 — Presupuestos semanales"
-  current_state: "NO INTEGRADA"
-  expected_state_after_future_slice: "PARTIAL"
+  state_before: "NO INTEGRADA"
+  state_after: "PARTIAL"
 
   global_percentage:
-    current: 47.5
-    numerator: 9.5
+    before: 47.5
+    before_numerator: 9.5
     denominator: 20
-    expected_after_future_slice: 50.0
-    expected_numerator: 10.0
-    expected_gain_pp: 2.5
+    after: 50.0
+    after_numerator: 10.0
+    gain_pp: 2.5
 
 canonical_boundary:
-  first_slice: "query JSON read-only del carro semanal"
+  this_slice:
+    - "query JSON read-only del carro semanal"
 
   complete_still_requires:
     - "writes"
     - "flujo hacia cheques"
-    - "operación/acciones de presupuesto"
-    - "WhatsApp/Twilio si forma parte del propósito canónico"
+    - "operación de presupuesto"
+    - "WhatsApp/Twilio si forma parte del propósito completo"
 
   rule: >
-    Este slice, aun si es implementable, solo lleva M18 a PARTIAL.
-    No reinterpretar COMPLETE.
+    Después de este slice M18 debe quedar PARTIAL, nunca COMPLETE.
 
-primary_question: >
-  ¿Existe un path SELECT-only, in-process, autorizado y semánticamente claro
-  para que Director IA responda el estado del carro presupuestal semanal de una
-  planta y semana determinada — asignado, seleccionado, disponible, folios y
-  urgentes — reutilizando fuentes reales y getPresupuestoResumen o equivalente,
-  sin ejecutar writes, enviar WhatsApp/Twilio ni mover información a cheques?
+readiness_findings:
+  helper:
+    name: "getPresupuestoResumen"
+    query_type: "SELECT-only"
+    side_effects: false
 
-known_baseline:
-  candidate_sources:
-    - "presupuestos_semanales"
-    - "presupuesto_folios"
+  physical_formulas:
+    asignado: "presupuestos_semanales.monto_asignado"
+    seleccionado: "SUM(presupuesto_folios.importe)"
+    disponible: "max(0, asignado - seleccionado)"
+    urgentes: "prioridad coincide /urgente/i"
+    semana: "semana_inicio + semana_fin"
+
+  excluded_source:
     - "presupuesto_asignacion_detalle"
 
-  candidate_helper:
-    - "getPresupuestoResumen"
+  excluded_reason: >
+    Es mensual y no representa el carro presupuestal semanal de este slice.
 
-  known_risks:
-    - "parte del SQL está embebido en server.js"
-    - "el producto mezcla lectura con acciones posteriores"
-    - "semana no debe inventarse"
-    - "urgente debe provenir de regla/campo real"
-    - "presupuesto disponible debe derivarse únicamente de datos físicos"
-    - "flujo de cheques y WhatsApp queda fuera"
-
-mandatory_audit:
-
-  canonical_definition:
-    required:
-      - "leer ficha M18 completa y vigente"
-      - "confirmar propósito canónico"
-      - "identificar qué cubre exactamente el carro semanal"
-      - "confirmar que query-only = PARTIAL"
-      - "confirmar efecto futuro 47.5 -> 50.0"
-
-  physical_sources:
-    inspect:
-      - "presupuestos_semanales"
-      - "presupuesto_folios"
-      - "presupuesto_asignacion_detalle"
-      - "tablas auxiliares reales"
-      - "joins"
-      - "server.js"
-      - "getPresupuestoResumen"
-      - "helpers equivalentes"
-
-    determine:
-      - "qué tabla define la semana"
-      - "qué tabla define presupuesto asignado"
-      - "qué tabla define folios seleccionados"
-      - "qué tabla define/importa importe seleccionado"
-      - "qué representa disponible"
-      - "cómo se relaciona folio con presupuesto"
-      - "qué representa urgente"
-      - "qué campos son observados"
-      - "qué campos son derivados"
-
-  helper_audit:
-    inspect:
-      - "getPresupuestoResumen"
-      - "queries llamadas"
-      - "shape retornado"
-      - "side effects"
-      - "authz"
-      - "plant scope"
-
-    determine:
-      - "SELECT-only sí/no"
-      - "qué puede reutilizarse"
-      - "qué SQL embebido debe extraerse o encapsularse"
-      - "si puede existir loader Director IA sin HTTP interno"
-
-  week_semantics:
-    determine:
-      - "identificador físico de semana"
-      - "fecha_inicio"
-      - "fecha_fin"
-      - "year/week si aplica"
-      - "cómo identifica el producto la semana"
-      - "si existe semana activa"
-      - "si existe default actual"
-      - "qué ocurre si usuario no indica semana"
-
-    rules:
-      - "no inventar semana"
-      - "no usar semana actual silenciosamente si no existe regla canónica"
-      - "si hay varias semanas posibles, clarificar"
-      - "preservar zona horaria/regla existente si aplica"
-
-  budget_semantics:
-    determine:
-      - "asignado"
-      - "seleccionado"
-      - "disponible"
-      - "importe de folios"
-      - "conteo de folios"
-      - "urgentes"
-      - "estatus"
-      - "qué es cálculo derivado"
-
-    rules:
-      - "disponible solo si fórmula física está verificada"
-      - "no inventar saldo"
-      - "no convertir seleccionado en pagado"
-      - "no convertir presupuesto en cheque"
-      - "no afirmar aprobado si el campo no lo soporta"
-      - "no afirmar urgencia sin campo/regla física"
-
-  folio_details:
-    determine:
-      - "folio_id"
-      - "numero_folio"
-      - "importe"
-      - "estatus"
-      - "tipo/categoría si existe"
-      - "urgente si existe"
-      - "planta"
-      - "orden"
-
-  authz:
-    determine:
-      - "JWT/contexto"
-      - "rol"
-      - "GA"
-      - "GV"
-      - "planta_id"
-      - "plantas_permitidas"
-      - "cross-planta"
-      - "fail-closed"
-      - "si el módulo actual permite scopes especiales"
-
-  planner_tools:
-    inspect:
-      - "budget_status"
-      - "intents relacionados"
-      - "capability M18"
-      - "tools existentes"
-      - "executor"
-      - "UNSUPPORTED_RULES"
-      - "SOURCE_NOT_INTEGRATED"
-      - "chat routing"
-
-    determine:
-      - "qué wiring ya existe"
-      - "qué falta"
-      - "si budget_status puede reutilizarse"
-      - "qué inputs mínimos requiere"
-      - "qué preguntas deben seguir bloqueadas"
-
-  cheques_boundary:
-    inspect:
-      - "flujo de envío a cheques"
-      - "writes"
-      - "status transitions"
-      - "tablas de cheques"
-      - "acciones del producto"
-
-    rule: >
-      Ninguna operación hacia cheques puede ser necesaria para producir la
-      consulta read-only del carro semanal.
-
-  whatsapp_twilio_boundary:
-    inspect:
-      - "Twilio"
-      - "WhatsApp"
-      - "notificaciones"
-      - "envíos"
-      - "acciones que muten estado"
-
-    rule: >
-      Canal y envío quedan fuera. La query debe funcionar sin dependencia de
-      WhatsApp/Twilio.
-
-  write_boundary:
-    inspect:
-      - "INSERT"
-      - "UPDATE"
-      - "DELETE"
-      - "seleccionar folio"
-      - "quitar folio"
-      - "asignar presupuesto"
-      - "enviar a cheque"
-
-    rule: >
-      Confirmar que todo write puede separarse completamente del slice de lectura.
-
-architecture_hypothesis:
-  preferred_path: >
+architecture_pattern:
+  required: >
     budget_status -> tool -> executor ->
     loadPresupuestoSemanalForChat(planta_id, semana) ->
-    SELECT helpers/fuentes -> resumen estructurado ->
+    getPresupuestoResumen / SELECT helpers ->
     evidencia -> respuesta
 
-  requirements:
-    - "in-process"
-    - "SELECT-only"
-    - "sin HTTP interno"
-    - "sin Twilio"
-    - "sin WhatsApp"
-    - "sin cheques"
-    - "sin writes"
-    - "sin contrato nuevo"
+  transport:
+    internal_http: false
 
-response_contract:
-  include_if_physically_supported:
-    - "presupuesto_semana_id"
-    - "planta_id"
-    - "semana"
-    - "fecha_inicio"
-    - "fecha_fin"
+  writes:
+    allowed: false
+
+  cheques:
+    enabled: false
+
+  whatsapp_twilio:
+    enabled: false
+
+scope:
+  included:
+    - "presupuesto semanal por planta"
+    - "semana explícita"
+    - "esta semana cuando la frase/regla existente lo permite"
     - "asignado"
     - "seleccionado"
     - "disponible"
@@ -268,135 +102,196 @@ response_contract:
     - "folio_id"
     - "numero_folio"
     - "importe"
+    - "prioridad/urgente físicamente observado"
+    - "estatus físico si existe"
+    - "evidencia estructurada"
+
+  excluded:
+    - "presupuesto_asignacion_detalle"
+    - "seleccionar folio"
+    - "quitar folio"
+    - "asignar presupuesto"
+    - "enviar a cheque"
+    - "crear cheque"
+    - "cambiar status"
+    - "Twilio"
+    - "WhatsApp"
+    - "notificaciones"
+    - "writes"
+    - "inferir urgencia"
+    - "inventar semana"
+
+week_semantics:
+  explicit:
+    required_format: "usar representación física existente"
+
+  current_week:
+    allowed_when:
+      - "pregunta explícitamente esta semana"
+      - "pregunta #17 / semántica mi presupuesto equivalente físicamente verificada"
+
+    resolver:
+      - "getCurrentWeekMexico()"
+
+  otherwise:
+    rule: >
+      Si no hay semana explícita ni frase que active la regla canónica de semana
+      actual, pedir clarificación. No inventar semana silenciosamente.
+
+  lookup_rule: >
+    No filtrar exclusivamente por estado ABIERTO. Un carro ya enviado a cheques
+    debe seguir siendo consultable si la fuente lo contiene.
+
+budget_semantics:
+  asignado:
+    source: "monto_asignado"
+
+  seleccionado:
+    formula: "sum(presupuesto_folios.importe)"
+
+  disponible:
+    formula: "max(0, asignado - seleccionado)"
+
+  urgente:
+    source_rule: "prioridad coincide /urgente/i"
+    infer: false
+
+  invariants:
+    - "seleccionado != pagado"
+    - "presupuesto != cheque"
+    - "asignado != aprobado"
+    - "disponible != dinero pagado"
+    - "urgente solo si la prioridad lo soporta"
+
+authz:
+  required:
+    - "JWT/contexto"
+    - "rol"
+    - "planta_id"
+    - "plantas_permitidas"
+    - "reuse assertFolioStatusAccess o modelo equivalente seguro"
+    - "GV = 403"
+    - "GA dentro de planta autorizada"
+    - "cross-planta = 403"
+    - "fail-closed"
+
+planner_tools_capabilities:
+  planner:
+    - "habilitar budget_status para este slice"
+    - "preservar otros intents"
+    - "manejar semana ausente con clarificación"
+
+  tools:
+    - "habilitar tool budget_status con executor real"
+    - "inputs planta_id + semana/contexto"
+    - "sin inputs de cheque/WhatsApp/write"
+
+  capabilities:
+    - "habilitar read-only de presupuesto semanal"
+    - "no marcar writes disponibles"
+
+  unsupported_rules:
+    - "levantar bloqueo solo para consulta soportada"
+    - "mantener bloqueadas acciones de presupuesto/cheques"
+
+  chat:
+    - "wiring in-process"
+    - "sin HTTP interno"
+    - "sin Twilio"
+    - "sin WhatsApp"
+    - "sin writes"
+    - "evidencia estructurada"
+
+response_contract:
+  include_if_supported:
+    - "presupuesto_semana_id"
+    - "planta_id"
+    - "semana_inicio"
+    - "semana_fin"
+    - "asignado"
+    - "seleccionado"
+    - "disponible"
+    - "folios"
+    - "folio_id"
+    - "numero_folio"
+    - "importe"
+    - "prioridad"
     - "urgente"
-    - "status"
+    - "estatus"
     - "source"
 
   forbidden:
     - "pagado"
     - "cheque emitido"
     - "aprobado"
-    - "faltante presupuestal"
-    - "desviación"
     - "causa"
-    - "urgente inferido"
+    - "desviación"
     - "semana inventada"
+    - "urgencia inferida"
 
-mandatory_evidence_table:
-  columns:
-    - "surface"
-    - "helper_or_route"
-    - "physical_source"
-    - "query_type"
-    - "select_only"
-    - "side_effects"
-    - "week_semantics"
-    - "budget_semantics"
-    - "authz"
-    - "plant_scope"
-    - "safe_fields"
-    - "external_dependency"
-    - "reusable"
-    - "risk"
-    - "evidence"
+tests_required:
+  focal:
+    - "presupuesto por planta"
+    - "semana explícita"
+    - "esta semana con getCurrentWeekMexico"
+    - "semana ausente sin trigger -> clarificación"
+    - "semana inválida"
+    - "asignado"
+    - "seleccionado"
+    - "disponible"
+    - "disponible nunca negativo"
+    - "folios"
+    - "folio importe"
+    - "prioridad urgente"
+    - "prioridad no urgente"
+    - "no inferir urgencia"
+    - "0 folios"
+    - "0 asignado"
+    - "nulls"
+    - "carro ABIERTO consultable"
+    - "carro no ABIERTO consultable"
+    - "planta autorizada"
+    - "planta no autorizada"
+    - "plantas_permitidas"
+    - "cross-planta"
+    - "GA"
+    - "GV"
+    - "intent budget_status"
+    - "tool/executor"
+    - "chat wiring"
+    - "no presupuesto_asignacion_detalle"
+    - "no cheques"
+    - "no Twilio"
+    - "no WhatsApp"
+    - "no HTTP interno"
+    - "sin writes"
 
-mandatory_gap_table:
-  columns:
-    - "gap_id"
-    - "missing_capability"
-    - "required_for_query_slice"
-    - "reusable_component"
-    - "proposed_change"
-    - "architecture_change"
-    - "contract_change"
-    - "authz_change"
-    - "complexity"
-    - "blocking"
-
-tests_to_design_if_ready:
-  - "presupuesto por planta"
-  - "semana explícita"
-  - "semana inválida"
-  - "semana ausente"
-  - "varias semanas / clarificación"
-  - "asignado"
-  - "seleccionado"
-  - "disponible"
-  - "folios"
-  - "folio importe"
-  - "urgentes"
-  - "0 folios"
-  - "0 asignado"
-  - "nulls"
-  - "planta autorizada"
-  - "planta no autorizada"
-  - "plantas_permitidas"
-  - "cross-planta"
-  - "GA"
-  - "GV"
-  - "intent budget_status"
-  - "tool/executor"
-  - "chat wiring"
-  - "no cheques"
-  - "no Twilio"
-  - "no WhatsApp"
-  - "no HTTP interno"
-  - "sin writes"
-  - "M18 sigue PARTIAL"
-
-decision_rules:
-
-  ready:
-    all:
-      - "fuentes físicas claras"
-      - "getPresupuestoResumen o equivalente SELECT-only reutilizable"
-      - "semana resoluble sin inventar"
-      - "asignado/seleccionado/disponible definidos"
-      - "urgencia físicamente soportada o excluible"
-      - "authz preservable"
-      - "scope planta preservable"
-      - "writes separables"
-      - "cheques separables"
-      - "WhatsApp/Twilio separables"
-      - "path in-process posible"
-      - "tests determinísticos"
-
-    outcome: "DONE_PENDING_REVIEW"
-    next_task: "IMPL-DIRECTOR-IA-M18-PRESUPUESTO-SEMANAL-001"
-
-  stopped:
-    when:
-      - "lectura depende inseparablemente de writes"
-      - "semana no puede determinarse sin decisión humana"
-      - "disponible no tiene semántica verificable"
-      - "authz no puede preservarse"
-      - "carro depende inseparablemente de cheques/WhatsApp"
-
-    outcome: "STOPPED"
-    next_task: null
-
-state_and_percentage:
-  current_task:
-    state_change: false
-    percentage_change: false
-
-  if_future_impl_succeeds:
-    m18_state: "PARTIAL"
-    numerator: 10.0
-    denominator: 20
-    percentage: 50.0
+  regression:
+    - "capabilities"
+    - "planner"
+    - "tool orchestrator"
+    - "suite Director IA completa"
 
 in_scope:
   writable:
     - "docs/dev-loop/CURRENT_TASK.md"
-    - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M18-PRESUPUESTO-SEMANAL-READINESS-001.md"
+    - "docs/dev-loop/reports/IMPL-DIRECTOR-IA-M18-PRESUPUESTO-SEMANAL-001.md"
+    - "lib/director-ia-capabilities.js"
+    - "lib/director-ia-chat.js"
+    - "lib/director-ia-planner.js"
+    - "lib/director-ia-tools.js"
+    - "lib/director-ia-m18-presupuesto-semanal.js"
+    - "scripts/test-director-ia-capabilities.js"
+    - "scripts/test-director-ia-planner.js"
+    - "scripts/test-director-ia-tool-orchestrator.js"
+    - "test/director-ia-m18-presupuesto-semanal.test.js"
+    - "server.js"
 
   read_only:
     - "AGENTS.md"
     - "docs/dev-loop/**"
     - "docs/director-ia/**"
     - "lib/**"
-    - "server.js"
     - "frontend-dashboard/**"
     - "test/**"
     - "scripts/**"
@@ -405,67 +300,84 @@ in_scope:
     - "package-lock.json"
 
 out_of_scope:
-  - "implementar"
-  - "modificar código"
-  - "modificar runtime"
-  - "modificar frontend"
-  - "modificar tests"
-  - "modificar scripts"
-  - "modificar SQL"
-  - "modificar schema"
-  - "crear migration"
+  - "modificar docs/director-ia/**"
   - "modificar capability matrix"
-  - "modificar contratos"
+  - "modificar frontend"
+  - "modificar SQL"
+  - "crear migration"
+  - "modificar schema"
+  - "crear endpoint HTTP"
+  - "cambiar contrato HTTP"
   - "asignar presupuesto"
-  - "seleccionar/quitar folios"
+  - "seleccionar/quitar folio"
   - "enviar a cheque"
   - "crear cheque"
-  - "usar Twilio"
-  - "enviar WhatsApp"
-  - "hacer writes"
-  - "hacer commit"
-  - "hacer push"
-  - "hacer merge"
+  - "modificar status"
+  - "Twilio"
+  - "WhatsApp"
+  - "writes"
+  - "cycle constitucional"
+  - "smoke productivo"
+  - "secretos"
+  - "commit"
+  - "push"
+  - "merge"
+  - "sync documental"
   - "ejecutar NEXT_TASK"
 
 acceptance_criteria:
-  - "Se verificó definición canónica M18."
-  - "Se verificaron tablas presupuestales."
-  - "Se verificó getPresupuestoResumen."
-  - "Se verificó SELECT-only."
-  - "Se verificó semántica de semana."
-  - "Se verificó asignado."
-  - "Se verificó seleccionado."
-  - "Se verificó disponible."
-  - "Se verificaron folios."
-  - "Se verificó urgencia o se excluyó si no está soportada."
-  - "Se verificó authz."
-  - "Se verificó scope planta."
-  - "Se verificó planner/tools."
-  - "Se separaron writes."
-  - "Se separó cheques."
-  - "Se separó Twilio/WhatsApp."
-  - "Se definió path mínimo."
-  - "Se diseñaron tests."
-  - "Se determinó G2."
-  - "Se determinó G3."
-  - "M18 no cambia durante readiness."
-  - "47.5% no cambia durante readiness."
-  - "No se implementó."
-  - "Solo CURRENT_TASK y reporte cambiaron."
+  - "Director IA consulta presupuesto semanal por planta."
+  - "Semana se resuelve sin inventarla."
+  - "Esta semana usa getCurrentWeekMexico solo cuando corresponde."
+  - "Carros no ABIERTO siguen consultables."
+  - "Asignado usa monto_asignado."
+  - "Seleccionado usa suma de presupuesto_folios.importe."
+  - "Disponible usa max(0, asignado-seleccionado)."
+  - "Urgencia solo desde prioridad /urgente/i."
+  - "No se usa presupuesto_asignacion_detalle."
+  - "Authz preservada."
+  - "No cross-planta."
+  - "budget_status tiene executor real."
+  - "Chat llega al executor."
+  - "No cheques."
+  - "No Twilio."
+  - "No WhatsApp."
+  - "No HTTP interno."
+  - "No writes."
+  - "M18 queda PARTIAL."
+  - "M18 no queda COMPLETE."
+  - "Futura sync lleva 9.5/20 -> 10.0/20 = 50.0%."
+  - "Tests focales verdes."
+  - "Regresión Director IA verde."
   - "git diff --check limpio."
+  - "Solo archivos autorizados modificados."
+
+required_validation:
+  - "node --test test/director-ia-m18-presupuesto-semanal.test.js"
+  - "node scripts/test-director-ia-capabilities.js"
+  - "node scripts/test-director-ia-planner.js"
+  - "node scripts/test-director-ia-tool-orchestrator.js"
+  - "node --test test/director-ia-*.test.js"
+  - "git diff --check"
+  - "git status"
+
+next_task_policy:
+  if_success:
+    propose_exactly_one: "DOCS-DIRECTOR-IA-M18-CAPABILITY-MATRIX-SYNC-001"
+
+  note: >
+    La sync documental posterior debe cambiar M18 de NO INTEGRADA a PARTIAL
+    y recalcular 9.5/20 -> 10.0/20 = 50.0%. No marcar COMPLETE.
 
 report_requirements:
-  path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M18-PRESUPUESTO-SEMANAL-READINESS-001.md"
+  path: "docs/dev-loop/reports/IMPL-DIRECTOR-IA-M18-PRESUPUESTO-SEMANAL-001.md"
 
   must_include:
     - "metadata"
     - "resumen ejecutivo"
-    - "baseline"
-    - "definición canónica M18"
-    - "query-only PARTIAL"
-    - "physical sources"
+    - "archivos modificados"
     - "getPresupuestoResumen"
+    - "physical formulas"
     - "week semantics"
     - "asignado"
     - "seleccionado"
@@ -474,30 +386,28 @@ report_requirements:
     - "urgentes"
     - "authz"
     - "plant scope"
-    - "planner/tools"
+    - "planner"
+    - "tools/executor"
+    - "chat wiring"
     - "cheques boundary"
     - "WhatsApp/Twilio boundary"
     - "write boundary"
-    - "evidence table"
-    - "gap table"
-    - "implementation hypothesis"
+    - "no presupuesto_asignacion_detalle"
     - "tests"
-    - "gates"
-    - "state after future slice"
-    - "percentage after future slice"
-    - "risks"
-    - "NEXT_TASK"
+    - "estado M18"
+    - "porcentaje futuro"
     - "acciones no realizadas"
+    - "gates"
     - "secrets_check"
     - "git diff --check"
     - "git status"
+    - "NEXT_TASK"
 
 expected_terminal_state: >
-  DONE_PENDING_REVIEW si existe path read-only del carro semanal, in-process,
-  autorizado y separado de cheques/Twilio/writes. STOPPED si la lectura depende
-  inseparablemente de operaciones mutantes o la semana no puede resolverse.
-  BLOCKED si falta gate indispensable.
+  DONE_PENDING_REVIEW si presupuesto semanal queda integrado SELECT-only,
+  in-process, autorizado y separado completamente de cheques/Twilio/writes.
+  STOPPED si aparece dependencia inseparable. BLOCKED si falta gate.
 
 max_attempts: 1
 
-result_report_path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M18-PRESUPUESTO-SEMANAL-READINESS-001.md"
+result_report_path: "docs/dev-loop/reports/IMPL-DIRECTOR-IA-M18-PRESUPUESTO-SEMANAL-001.md"

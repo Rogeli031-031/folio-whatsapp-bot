@@ -130,9 +130,10 @@ describe("M16 intent y gate", () => {
   it("otros dominios no integrados siguen bloqueados", () => {
     assert.equal(detectUnsupportedDirectorIaDomain("¿En qué etapa está el folio 123?"), null);
     assert.equal(detectUnsupportedDirectorIaDomain("¿Cuál fue el último movimiento del folio 123?"), null);
-    const budget = detectUnsupportedDirectorIaDomain("¿Cómo va el presupuesto semanal?");
-    assert.ok(budget);
-    assert.equal(budget.id, "presupuestos");
+    assert.equal(detectUnsupportedDirectorIaDomain("¿Cómo va el presupuesto semanal?"), null);
+    const taller = detectUnsupportedDirectorIaDomain("taller por AT");
+    assert.ok(taller);
+    assert.equal(taller.id, "taller_at");
   });
 });
 
@@ -150,14 +151,14 @@ describe("M16 registry", () => {
   it("tools no integrados siguen sin executor", () => {
     assert.equal(isDirectorIaToolExecutable("get_folio_status"), true);
     assert.equal(isDirectorIaToolExecutable("get_folio_history"), true);
-    assert.equal(getDirectorIaTool("get_budget_status").executor, null);
-    const plan = buildDirectorIaToolPlan(planDirectorIaQuestion("¿Cómo va el presupuesto semanal?"), {
+    assert.equal(getDirectorIaTool("get_taller_at_analysis").executor, null);
+    const plan = buildDirectorIaToolPlan(planDirectorIaQuestion("taller por AT"), {
       planta_id: 1,
     });
-    const budget = plan.tools.find((t) => t.tool_id === "get_budget_status");
-    assert.ok(budget);
-    assert.equal(budget.status, "declared_not_integrated");
-    assert.equal(budget.executable, false);
+    const taller = plan.tools.find((t) => t.tool_id === "get_taller_at_analysis");
+    assert.ok(taller);
+    assert.equal(taller.status, "declared_not_integrated");
+    assert.equal(taller.executable, false);
   });
 });
 
