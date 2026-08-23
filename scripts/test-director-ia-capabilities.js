@@ -66,6 +66,7 @@ const cases = [
     assert(isDirectorIaDomainReadable("gastos") === true, "gastos query readable");
     assert(isDirectorIaDomainReadable("inversiones") === true, "inversiones query readable");
     assert(isDirectorIaDomainReadable("clasificacion_apoyos") === true, "clasificacion query readable");
+    assert(isDirectorIaDomainReadable("presupuestos") === true, "presupuestos query readable");
     const summary = buildDirectorIaCapabilitiesSummary();
     assert(summary.readable.length > 0, "summary readable");
     assert(summary.not_integrated.length > 0, "summary not_integrated");
@@ -84,7 +85,11 @@ const cases = [
   () => expectBlocked("contenido del documento del folio 123", "documentos", { requireCanReadFalse: false }),
   () => expectBlocked("¿Ya tiene póliza?", "polizas"),
   () => expectBlocked("¿Tiene cheque o depósito?", "cheques"),
-  () => expectBlocked("¿Cómo va el presupuesto semanal?", "presupuestos"),
+  () => expectAllowed("¿Cómo va el presupuesto semanal?"),
+  () => expectAllowed("mi presupuesto"),
+  () => expectAllowed("cómo va el carro de presupuesto"),
+  () => expectBlocked("asignar presupuesto", "presupuestos", { requireCanReadFalse: false }),
+  () => expectBlocked("seleccionar folios del presupuesto semanal", "presupuestos", { requireCanReadFalse: false }),
   () => expectAllowed("¿Existen folios duplicados?"),
   () => expectAllowed("¿Hay folios duplicados?"),
   () => expectAllowed("¿Qué proyectos están retrasados?"),

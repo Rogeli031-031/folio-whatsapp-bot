@@ -100,6 +100,7 @@ const cases = [
   () => expectIntent("¿Qué documentos faltan del folio?", "folio_documents"),
   () => expectIntent("¿Tiene cheque o póliza?", "folio_financial_status"),
   () => expectIntent("¿Cómo va el presupuesto semanal?", "budget_status"),
+  () => expectIntent("mi presupuesto", "budget_status"),
   () => expectIntent("¿Qué proyectos están retrasados?", "project_status", { requireDomain: "proyectos" }),
   () => expectIntent("¿Cuáles son los kpis del dashboard?", "dashboard_kpis", { requireDomain: "dashboard_kpis" }),
   () => expectIntent("¿Cuántos folios activos hay?", "dashboard_kpis", { requireDomain: "dashboard_kpis" }),

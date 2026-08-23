@@ -143,12 +143,10 @@ describe("M2 history intent, capability y tool", () => {
     const poliza = detectUnsupportedDirectorIaDomain("¿Ya tiene póliza?");
     assert.ok(poliza);
     assert.equal(poliza.id, "polizas");
-    const budget = detectUnsupportedDirectorIaDomain("¿Cómo va el presupuesto semanal?");
-    assert.ok(budget);
-    assert.equal(budget.id, "presupuestos");
+    assert.equal(detectUnsupportedDirectorIaDomain("¿Cómo va el presupuesto semanal?"), null);
     assert.equal(isDirectorIaToolExecutable("get_folio_documents"), true);
     assert.equal(isDirectorIaToolExecutable("get_folio_financial_status"), false);
-    assert.equal(isDirectorIaToolExecutable("get_budget_status"), false);
+    assert.equal(isDirectorIaToolExecutable("get_budget_status"), true);
   });
 
   it("no redirige a Action Register ni a M3", () => {
@@ -542,16 +540,9 @@ describe("M2 history chat end-to-end in-process", () => {
     assert.equal(result.context_meta.requested_domain, "documentos");
   });
 
-  it("cheque y presupuesto siguen SOURCE_NOT_INTEGRATED", async () => {
+  it("cheque sigue SOURCE_NOT_INTEGRATED", async () => {
     configureDirectorIaChat({ pool: poolWith() });
     const cheque = await askDirectorIa({ body: {}, dashboardAuth: { role: "ZP" } }, 1, "¿Tiene cheque o depósito?");
     assert.equal(cheque.limitation && cheque.limitation.code, SOURCE_NOT_INTEGRATED);
-    const budget = await askDirectorIa(
-      { body: {}, dashboardAuth: { role: "ZP" } },
-      1,
-      "¿Cómo va el presupuesto semanal?"
-    );
-    assert.equal(budget.limitation && budget.limitation.code, SOURCE_NOT_INTEGRATED);
-    assert.equal(budget.context_meta.requested_domain, "presupuestos");
   });
 });

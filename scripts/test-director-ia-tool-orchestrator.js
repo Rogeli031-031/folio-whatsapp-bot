@@ -181,9 +181,14 @@ const cases = [
 
   // 11. Presupuesto
   () => {
-    const { toolPlan } = planTools("¿Cómo va el presupuesto semanal?", { planta_id: 1 });
+    const { toolPlan } = planTools("¿Cómo va el presupuesto semanal?", {
+      planta_id: 1,
+      question: "¿Cómo va el presupuesto semanal?",
+    });
     const t = getTool(toolPlan, "get_budget_status");
-    assert(t && t.status === TOOL_STATUS.declared_not_integrated, "budget not integrated");
+    assert(t && t.status === TOOL_STATUS.available_on_demand, "budget on demand");
+    assert(t.executable === true, "budget executable");
+    assert(isDirectorIaToolExecutable("get_budget_status") === true, "get_budget_status exec");
   },
 
   // 12. Duplicados
