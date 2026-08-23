@@ -1,14 +1,14 @@
 # CURRENT_TASK
 
-```yaml
-task_id: "ARCH-DIRECTOR-IA-M2-HISTORY-READINESS-001"
+```yaml id="m2hist001"
+task_id: "IMPL-DIRECTOR-IA-M2-HISTORY-001"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-08-23"
 human_authorization: >
   AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-23.
-  Apruebo ARCH-DIRECTOR-IA-M2-HISTORY-READINESS-001 y autorizo G1.
+  Apruebo IMPL-DIRECTOR-IA-M2-HISTORY-001 y autorizo G1.
 
 gates:
   G1_task_authorization: AUTHORIZED
@@ -17,362 +17,296 @@ gates:
   G8_calibration_materiality_signature: N/A
 
 objective: >
-  Auditar físicamente el slice history/timeline read-only de M2 — Kanban /
-  Folios — para determinar si Director IA puede consultar de forma segura,
-  in-process y trazable el historial real de un folio, incluyendo qué ocurrió,
-  quién y cuándo, reutilizando public.folio_historial y helpers SELECT-only,
-  sin autoavance, sin mutaciones y sin ampliar el alcance más allá de history.
+  Implementar el slice history/timeline read-only de M2 — Kanban / Folios —
+  para que Director IA pueda consultar el historial real de un folio de forma
+  in-process, autorizada y trazable, usando public.folio_historial mediante
+  SELECT-only, sin HTTP interno, sin autoavance, sin mutaciones y sin inventar
+  campos o eventos no presentes en la fuente física.
 
 baseline:
-  prioritization_task: "ARCH-DIRECTOR-IA-M2-NEXT-SLICE-PRIORITIZATION-001"
-  prioritization_report: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M2-NEXT-SLICE-PRIORITIZATION-001.md"
+  readiness_task: "ARCH-DIRECTOR-IA-M2-HISTORY-READINESS-001"
+  readiness_report: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M2-HISTORY-READINESS-001.md"
 
-  winner: "history"
   module: "M2 — Kanban / Folios"
   current_state: "PARTIAL"
-  expected_state_after_history_slice: "PARTIAL"
+  state_after_slice: "PARTIAL"
 
   global_percentage:
     current: 42.5
     numerator: 8.5
     denominator: 20
-    expected_effect: 0.0
+    effect_this_slice: 0.0
 
-  already_integrated:
-    - "comentarios de folio"
-    - "folio_status por id"
-    - "folio_status por numero_folio"
-    - "varios folios"
-    - "listado por planta"
-    - "filtro/listado por etapa"
-    - "estatus observado"
-    - "etapa derivada"
+readiness_findings:
+  source: "public.folio_historial"
 
-prioritization_findings:
-  candidate_source: "public.folio_historial"
-  candidate_helpers:
+  safe_helpers:
     - "getHistorialByFolioId"
     - "getHistorial"
 
-  candidate_http_surface: "GET /timeline"
+  helper_behavior:
+    query_type: "SELECT-only"
+    side_effects: false
 
-  known_safe_assumption_to_verify: >
-    La priorización encontró que GET /timeline no autoavanza, pero esta readiness
-    debe verificar físicamente su call graph y no convertir esa observación en
-    supuesto contractual.
+  timeline_route:
+    route: "GET /api/folios/:id/timeline"
+    autoadvance: false
+    use_as_director_ia_source: false
+    reason: >
+      Aunque la ruta no autoavanza, Director IA debe usar integración in-process.
+      Además, dedupeHistorialByStage puede ocultar eventos y no debe formar parte
+      de la semántica de history de Director IA.
 
-  excluded_unsafe_surfaces:
+  unsafe_surfaces:
     - "GET /api/dashboard/kanban"
     - "GET /api/folios/:id"
     - "maybeAdvanceFolioToComprobaciones"
 
-primary_question: >
-  ¿Existe un path SELECT-only, in-process, autorizado y semánticamente claro
-  para que Director IA responda el historial real de un folio — qué ocurrió,
-  quién y cuándo — preservando scope por planta y sin depender de handlers
-  mutantes ni introducir inferencias no soportadas?
+  physical_semantics:
+    observed_fields:
+      - "estatus"
+      - "comentario"
+      - "actor_telefono"
+      - "actor_rol"
+      - "creado_en"
+
+    absent_fields:
+      - "estatus_anterior"
+      - "estatus_nuevo"
+      - "event_type"
+
+    rules:
+      - "estatus puede ser null"
+      - "actor puede ser null"
+      - "actor null no significa sistema"
+      - "folios.estatus_anterior no es estatus anterior del evento histórico"
+      - "etapa solo puede derivarse cuando el evento tiene estatus observado"
+      - "no inventar eventos"
+
+architecture_pattern:
+  required: >
+    intent folio_history -> tool -> executor -> loadFolioHistoryForChat ->
+    resolver/autorización de folio -> SELECT public.folio_historial ->
+    evidencia -> respuesta
+
+  transport:
+    internal_http: false
+
+  cycle:
+    constitutional_cycle: false
+
+  dispatcher:
+    new_dispatcher: false
 
 history_scope:
-  candidate_included:
-    - "eventos históricos reales asociados al folio"
-    - "fecha/hora del evento si existe físicamente"
-    - "usuario/actor si existe físicamente"
-    - "acción/evento si existe físicamente"
-    - "estatus anterior/nuevo si existe físicamente"
-    - "cambio de etapa solo si puede derivarse fielmente de estados observados"
-    - "detalle/nota/motivo solo si existe físicamente"
-    - "orden cronológico"
+
+  included:
+    - "historial por folio id"
+    - "historial por numero_folio"
+    - "eventos reales registrados"
+    - "estatus del evento cuando exista"
+    - "etapa derivada cuando exista estatus mapeable"
+    - "comentario del evento"
+    - "actor_telefono cuando exista"
+    - "actor_rol cuando exista"
+    - "creado_en"
+    - "orden cronológico definido"
     - "identidad mínima del folio"
-    - "evidencia trazable"
+    - "evidencia estructurada"
 
   excluded:
-    - "inventar eventos faltantes"
-    - "reconstruir movimientos no registrados"
-    - "inferir quién actuó si no existe actor"
-    - "inferir retraso"
-    - "inferir bloqueo"
-    - "inferir causa"
-    - "inferir responsabilidad"
-    - "documentos/PDF"
-    - "cheques"
-    - "pólizas"
-    - "presupuestos"
+    - "estatus_anterior inventado"
+    - "estatus_nuevo inventado"
+    - "event_type inventado"
+    - "actor sistema por default"
+    - "reconstrucción de eventos faltantes"
+    - "dedupeHistorialByStage"
+    - "inferencia de retraso"
+    - "inferencia de bloqueo"
+    - "inferencia de causa"
+    - "inferencia de responsabilidad"
+    - "documents"
+    - "PDFs"
+    - "financial status"
+    - "kanban_flow"
     - "mutaciones"
     - "autoavance"
-    - "edición de historial"
-    - "creación manual de eventos"
 
-mandatory_audit:
+folio_resolution_and_authz:
+  required:
+    - "resolver folio por id"
+    - "resolver folio por numero_folio"
+    - "reutilizar lógica segura de M2 folio_status cuando corresponda"
+    - "autorizar folio antes de consultar historial"
+    - "preservar JWT/contexto"
+    - "preservar rol"
+    - "preservar planta_id"
+    - "preservar plantas_permitidas"
+    - "GV = 403"
+    - "GA solo dentro de planta autorizada"
+    - "cross-planta = 403"
+    - "not found = 404"
+    - "fail-closed"
 
-  canonical_definition:
-    required:
-      - "leer ficha M2 vigente completa"
-      - "verificar lugar de history/timeline en la definición canónica"
-      - "determinar qué parte exacta cubriría este slice"
-      - "confirmar que M2 seguiría PARTIAL después del slice"
-      - "confirmar impacto porcentual real"
+  order_rule: >
+    No consultar public.folio_historial antes de resolver y autorizar el folio.
 
-  table_schema:
-    source: "public.folio_historial"
-    determine:
-      - "columnas reales"
-      - "primary key si aplica"
-      - "folio foreign key"
-      - "timestamp(s)"
-      - "actor/usuario"
-      - "acción/tipo/evento"
-      - "estatus anterior"
-      - "estatus nuevo"
-      - "detalle/nota/motivo"
-      - "nullable fields"
-      - "orden canónico"
-      - "índices relevantes si son visibles"
+semantics:
+  observed:
+    - "estatus"
+    - "comentario"
+    - "actor_telefono"
+    - "actor_rol"
+    - "creado_en"
 
-  helpers:
-    inspect:
-      - "getHistorialByFolioId"
-      - "getHistorial"
-      - "helpers equivalentes encontrados"
+  derived:
+    - "etapa derivada mediante estatusToEtapaVisual solo si estatus existe y mapea"
 
-    determine:
-      - "firma"
-      - "query real"
-      - "SELECT-only"
-      - "joins"
-      - "orden"
-      - "límites"
-      - "filtros"
-      - "side effects"
-      - "shape retornado"
-      - "manejo de ausencia"
+  forbidden_derivations:
+    - "estatus anterior"
+    - "estatus nuevo"
+    - "tipo de evento"
+    - "duración"
+    - "retraso"
+    - "bloqueo"
+    - "causa"
+    - "responsabilidad"
+    - "actor sistema"
 
-  timeline_route:
-    inspect:
-      - "GET /timeline"
-      - "call graph completo"
-      - "helpers llamados"
-      - "auth middleware"
-      - "scope de planta"
-      - "side effects"
+  null_policy:
+    - "preservar null"
+    - "no sustituir null por texto factual inventado"
+    - "no convertir ausencia en cero"
+    - "no ocultar evento por tener campos null"
 
+  ordering:
     rule: >
-      Aunque GET /timeline resulte SELECT-only, Director IA debe preferir
-      integración in-process sobre HTTP interno.
+      Preservar todos los eventos y aplicar únicamente el orden físico/canónico
+      verificado en readiness. No deduplicar por etapa.
 
-  unsafe_routes:
-    inspect:
-      - "GET /api/dashboard/kanban"
-      - "GET /api/folios/:id"
-      - "maybeAdvanceFolioToComprobaciones"
+planner_tools_capabilities:
 
-    purpose: >
-      Confirmar que history puede implementarse sin atravesar estas superficies.
+  planner:
+    - "habilitar folio_history únicamente"
+    - "preservar folio_status"
+    - "no habilitar folio_documents"
+    - "no habilitar financial surfaces"
+    - "no habilitar kanban_flow inferencial"
 
-  folio_resolution:
-    determine:
-      - "cómo resolver folio id"
-      - "cómo resolver numero_folio"
-      - "si puede reutilizarse M2 folio_status"
-      - "cómo validar planta antes de devolver historial"
-      - "qué ocurre con folio inexistente"
-      - "qué ocurre con folio cross-planta"
+  tools:
+    - "habilitar tool de folio_history con executor real"
+    - "inputs mínimos para id/numero_folio"
+    - "no habilitar otras tools de M2"
 
-  semantics:
-    determine:
-      - "qué significa cada evento"
-      - "qué campos son observados"
-      - "qué campos son derivados"
-      - "si etapa puede derivarse desde estatus históricos"
-      - "si hay eventos no relacionados con cambio de estatus"
-      - "si existe actor humano/sistema distinguible"
-      - "si timestamp representa creación, acción u otra cosa"
-      - "qué no puede afirmarse"
+  capabilities:
+    - "actualizar únicamente lo necesario para que folio_history sea consultable"
+    - "mantener documentos y demás superficies como no integradas"
 
-  authz:
-    determine:
-      - "JWT/contexto"
-      - "rol"
-      - "GA"
-      - "GV"
-      - "planta_id"
-      - "plantas_permitidas"
-      - "cross-planta"
-      - "fail-closed"
-      - "si helper actual aplica authz o debe envolverlo loader Director IA"
+  unsupported_rules:
+    - "levantar bloqueo exclusivamente para preguntas soportadas por folio_history"
+    - "preservar SOURCE_NOT_INTEGRATED para documentos/financial/otros slices"
 
-  planner_tools:
-    inspect:
-      - "intent folio_history"
-      - "capability folio_history"
-      - "tool existente"
-      - "executor"
-      - "UNSUPPORTED_RULES"
-      - "SOURCE_NOT_INTEGRATED"
-      - "chat routing"
+  chat:
+    - "wiring in-process"
+    - "no fallback a Action Register"
+    - "no fallback a M3"
+    - "no usar GET /timeline"
+    - "no usar handlers HTTP"
+    - "preservar evidencia estructurada"
 
-    determine:
-      - "qué ya existe"
-      - "qué falta"
-      - "si planner necesita cambio"
-      - "si tool solo necesita executor"
-      - "qué bloqueo debe levantarse exclusivamente para history"
-
-  architecture_fit:
-    determine:
-      - "loader/helper M2 history mínimo"
-      - "reutilización de folio_status para resolución/authz"
-      - "path in-process"
-      - "sin HTTP interno"
-      - "sin dispatcher nuevo"
-      - "sin contrato nuevo"
-      - "G2 requerido sí/no"
-      - "G3 requerido sí/no"
-
-required_data_contract:
-  identify_if_physically_supported:
+evidence_contract:
+  required_if_available:
     - "folio_id"
     - "numero_folio"
-    - "event_id"
-    - "event_type/action"
-    - "timestamp"
-    - "actor"
-    - "previous_status"
-    - "new_status"
-    - "previous_stage derived"
-    - "new_stage derived"
-    - "detail"
+    - "planta_id"
+    - "event_index or event_id only if physically present"
+    - "estatus"
+    - "etapa_derived"
+    - "comentario"
+    - "actor_telefono"
+    - "actor_rol"
+    - "creado_en"
     - "source"
 
-  rules:
-    - "No inventar campos ausentes."
-    - "No convertir null en hecho."
-    - "No afirmar actor si no está registrado."
-    - "No afirmar cambio de etapa si el evento no lo soporta."
-    - "No transformar cualquier evento en cambio de estatus."
-    - "Preservar hechos observados separados de derivados."
+  forbidden:
+    - "event_type unless physically present"
+    - "previous_status"
+    - "new_status"
+    - "system_actor inference"
 
-mandatory_evidence_table:
-  columns:
-    - "surface"
-    - "helper_or_route"
-    - "physical_source"
-    - "query_type"
-    - "select_only"
-    - "side_effects"
-    - "authz"
-    - "plant_scope"
-    - "observed_fields"
-    - "derived_fields"
-    - "ordering"
-    - "absence_behavior"
-    - "reusable"
-    - "risk"
-    - "evidence"
+no_side_effect_requirements:
+  - "no llamar maybeAdvanceFolioToComprobaciones"
+  - "no ejecutar UPDATE"
+  - "no ejecutar INSERT"
+  - "no ejecutar DELETE"
+  - "no usar GET /api/dashboard/kanban"
+  - "no usar GET /api/folios/:id"
+  - "no usar GET /api/folios/:id/timeline como transporte interno"
+  - "no importar dedupeHistorialByStage como semántica"
 
-mandatory_gap_table:
-  columns:
-    - "gap_id"
-    - "missing_capability"
-    - "required_for_history_slice"
-    - "reusable_component"
-    - "proposed_change"
-    - "architecture_change"
-    - "contract_change"
-    - "authz_change"
-    - "complexity"
-    - "blocking"
+tests_required:
+  focal:
+    - "history por folio id"
+    - "history por numero_folio"
+    - "múltiples eventos"
+    - "orden de eventos"
+    - "preservar eventos repetidos de misma etapa"
+    - "evento con estatus"
+    - "evento con estatus null"
+    - "etapa derivada cuando estatus mapea"
+    - "sin etapa derivada cuando estatus null/no mapea"
+    - "comentario"
+    - "actor_telefono"
+    - "actor_rol"
+    - "actor null"
+    - "creado_en"
+    - "historial vacío"
+    - "folio inexistente"
+    - "cross-planta"
+    - "planta no autorizada"
+    - "plantas_permitidas"
+    - "GA"
+    - "GV"
+    - "intent folio_history"
+    - "tool con executor"
+    - "chat wiring"
+    - "SOURCE_NOT_INTEGRATED levantado solo para history"
+    - "folio_documents sigue bloqueado"
+    - "financial surfaces siguen bloqueadas"
+    - "no fallback Action Register"
+    - "no fallback M3"
+    - "no dedupe"
+    - "no autoavance"
+    - "no HTTP interno"
+    - "sin writes"
 
-semantic_invariants:
-  - "History ≠ current status."
-  - "History ≠ comments."
-  - "History ≠ documents."
-  - "History ≠ Action Register."
-  - "Timestamp ≠ duration unless computed explicitly."
-  - "Antigüedad ≠ retraso."
-  - "Event ≠ status transition unless physically supported."
-  - "Actor null ≠ system actor unless physically supported."
-  - "No inventar missing events."
-  - "No reconstruir timeline con suposiciones."
-  - "No autoavanzar al consultar."
-  - "No cross-planta."
-  - "No HTTP interno."
-  - "Toda afirmación debe ser trazable a public.folio_historial o fuente física verificada."
-
-implementation_hypothesis:
-  expected_path: >
-    intent folio_history -> tool -> executor -> loadFolioHistoryForChat ->
-    resolución/autorización de folio -> getHistorialByFolioId/getHistorial
-    SELECT-only -> evidencia -> respuesta
-
-  note: >
-    Esta es una hipótesis a verificar, no autorización de implementación.
-
-tests_to_design_if_ready:
-  - "history por folio id"
-  - "history por numero_folio"
-  - "orden cronológico"
-  - "múltiples eventos"
-  - "sin eventos"
-  - "folio inexistente"
-  - "folio cross-planta"
-  - "planta no autorizada"
-  - "plantas_permitidas"
-  - "GA"
-  - "GV"
-  - "actor null"
-  - "timestamp null si físicamente posible"
-  - "estatus anterior/nuevo"
-  - "derivación etapa solo cuando corresponda"
-  - "eventos no-status"
-  - "intent folio_history"
-  - "tool/executor"
-  - "SOURCE_NOT_INTEGRATED levantado solo para history"
-  - "folio_documents continúa bloqueado"
-  - "financial surfaces continúan bloqueadas"
-  - "no autoavance"
-  - "no writes"
-  - "no HTTP interno"
-
-decision_rules:
-
-  ready:
-    all:
-      - "public.folio_historial es fuente suficiente"
-      - "helper SELECT-only reutilizable"
-      - "resolución de folio segura"
-      - "authz preservable"
-      - "scope planta preservable"
-      - "semántica de eventos suficientemente clara"
-      - "rutas mutantes evitables"
-      - "path in-process posible"
-      - "sin contrato nuevo"
-      - "tests determinísticos posibles"
-
-    outcome: "DONE_PENDING_REVIEW"
-    next_task: "IMPL-DIRECTOR-IA-M2-HISTORY-001"
-
-  stopped:
-    when:
-      - "history depende inseparablemente de mutación"
-      - "no puede preservarse authz"
-      - "no puede preservarse scope planta"
-      - "public.folio_historial no permite identificar hechos mínimos"
-      - "semántica exige decisión contractual nueva"
-
-    outcome: "STOPPED"
-    next_task: null
+  regression:
+    - "capabilities"
+    - "planner"
+    - "tool orchestrator"
+    - "suite Director IA completa"
 
 in_scope:
   writable:
     - "docs/dev-loop/CURRENT_TASK.md"
-    - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M2-HISTORY-READINESS-001.md"
+    - "docs/dev-loop/reports/IMPL-DIRECTOR-IA-M2-HISTORY-001.md"
+    - "lib/director-ia-capabilities.js"
+    - "lib/director-ia-chat.js"
+    - "lib/director-ia-planner.js"
+    - "lib/director-ia-tools.js"
+    - "lib/director-ia-m2-history.js"
+    - "lib/director-ia-m2-folio-status.js"
+    - "test/director-ia-m2-history.test.js"
+    - "scripts/test-director-ia-capabilities.js"
+    - "scripts/test-director-ia-planner.js"
+    - "scripts/test-director-ia-tool-orchestrator.js"
+    - "server.js"
 
   read_only:
     - "AGENTS.md"
     - "docs/dev-loop/**"
     - "docs/director-ia/**"
     - "lib/**"
-    - "server.js"
     - "frontend-dashboard/**"
     - "test/**"
     - "scripts/**"
@@ -381,145 +315,152 @@ in_scope:
     - "package-lock.json"
 
 out_of_scope:
-  - "implementar history"
-  - "modificar código"
-  - "modificar runtime"
-  - "modificar frontend"
-  - "modificar tests"
-  - "modificar scripts"
-  - "modificar SQL"
-  - "modificar schema"
-  - "crear migration"
+  - "modificar docs/director-ia/**"
   - "modificar capability matrix"
-  - "modificar contratos"
+  - "modificar frontend"
+  - "modificar SQL"
+  - "crear migration"
+  - "modificar schema"
+  - "crear endpoint HTTP nuevo"
+  - "cambiar contrato HTTP"
+  - "usar GET /timeline como transporte"
+  - "usar dedupeHistorialByStage"
+  - "usar rutas mutantes"
   - "integrar documents"
   - "integrar financial status"
   - "integrar kanban_flow"
-  - "hacer commit"
-  - "hacer push"
-  - "hacer merge"
+  - "mutaciones"
+  - "cycle constitucional"
+  - "smoke productivo"
+  - "secretos"
+  - "commit"
+  - "push"
+  - "merge"
+  - "sync documental M2"
   - "ejecutar NEXT_TASK"
 
 allowed_actions:
-  - "auditar repositorio"
-  - "trazar public.folio_historial"
-  - "trazar helpers"
-  - "trazar GET /timeline"
-  - "trazar authz"
-  - "trazar scope planta"
-  - "trazar planner/tools"
-  - "diseñar delta mínimo"
-  - "diseñar tests"
-  - "determinar gates"
-  - "proponer exactamente una NEXT_TASK si READY"
-  - "escribir reporte"
+  - "crear loader/helper history SELECT-only"
+  - "reutilizar resolución/authz de folio_status"
+  - "cablear folio_history"
+  - "habilitar executor"
+  - "ajustar planner/capability/tool solo para history"
+  - "crear tests focales"
+  - "actualizar scripts afectados"
+  - "ejecutar tests"
   - "ejecutar git diff --check"
   - "ejecutar git status"
+  - "escribir reporte"
+  - "proponer exactamente una NEXT_TASK"
 
 forbidden_actions:
-  - "modificar código"
-  - "modificar matriz"
-  - "inventar schema"
-  - "inventar eventos"
-  - "reinterpretar historial"
-  - "usar HTTP interno como implementación"
-  - "usar rutas mutantes"
+  - "deduplicar eventos"
+  - "inventar event_type"
+  - "inventar previous/new status"
+  - "inventar actor"
+  - "ocultar eventos por null"
+  - "autoavanzar"
+  - "hacer writes"
+  - "hacer HTTP interno"
   - "ampliar authz"
-  - "otorgar COMPLETE"
-  - "mover 42.5%"
-  - "hacer commit"
-  - "hacer push"
-  - "hacer merge"
-  - "ejecutar NEXT_TASK"
+  - "modificar arquitectura"
+  - "crear contrato nuevo"
+  - "marcar M2 COMPLETE"
+  - "cambiar 42.5%"
+  - "commit"
+  - "push"
+  - "merge"
+  - "encadenar NEXT_TASK"
 
 acceptance_criteria:
-  - "Se verificó físicamente public.folio_historial."
-  - "Se verificó getHistorialByFolioId."
-  - "Se verificó getHistorial."
-  - "Se verificó GET /timeline."
-  - "Se verificó ausencia/presencia de side effects."
-  - "Se verificó resolución por id."
-  - "Se verificó resolución por numero_folio."
-  - "Se verificó authz."
-  - "Se verificó plantas_permitidas."
-  - "Se verificó cross-planta."
-  - "Se verificó semántica de eventos."
-  - "Se distinguieron campos observados y derivados."
-  - "Se verificó planner folio_history."
-  - "Se verificaron tools."
-  - "Se verificaron bloqueos actuales."
-  - "Se determinó path mínimo de implementación."
-  - "Se diseñaron tests."
-  - "Se determinó G2."
-  - "Se determinó G3."
-  - "M2 seguiría PARTIAL."
-  - "42.5% seguiría sin cambio."
-  - "No se implementó."
-  - "Solo CURRENT_TASK y reporte fueron modificados."
+  - "Director IA consulta history por folio id."
+  - "Director IA consulta history por numero_folio."
+  - "Se preservan todos los eventos reales."
+  - "No se aplica dedupeHistorialByStage."
+  - "estatus se trata como observado."
+  - "etapa se deriva solo cuando corresponde."
+  - "comentario se preserva."
+  - "actor_telefono se preserva."
+  - "actor_rol se preserva."
+  - "actor null se preserva como null/unknown."
+  - "creado_en se preserva."
+  - "No se inventa event_type."
+  - "No se inventan previous/new status."
+  - "Authz se aplica antes de consultar history."
+  - "No cross-planta."
+  - "folio_history tiene executor real."
+  - "planner llega a folio_history."
+  - "chat llega al executor correcto."
+  - "folio_documents sigue fuera."
+  - "financial surfaces siguen fuera."
+  - "no hay autoavance."
+  - "no hay writes."
+  - "no hay HTTP interno."
+  - "no cambia contrato HTTP."
+  - "no cambia arquitectura."
+  - "M2 sigue PARTIAL."
+  - "42.5% no cambia."
+  - "tests focales verdes."
+  - "regresión Director IA verde."
   - "git diff --check limpio."
+  - "solo archivos autorizados modificados."
 
-required_output:
-  - "resumen ejecutivo"
-  - "baseline"
-  - "definición exacta del slice"
-  - "schema físico observado"
-  - "helpers"
-  - "GET /timeline"
-  - "rutas mutantes excluidas"
-  - "resolución folio"
-  - "semántica"
-  - "authz"
-  - "scope planta"
-  - "planner/tools"
-  - "tabla evidencia"
-  - "tabla gaps"
-  - "arquitectura propuesta"
-  - "tests"
-  - "G2/G3"
-  - "estado M2 posterior"
-  - "porcentaje posterior"
-  - "riesgos"
-  - "NEXT_TASK"
-  - "acciones no realizadas"
+required_validation:
+  - "node --test test/director-ia-m2-history.test.js"
+  - "node scripts/test-director-ia-capabilities.js"
+  - "node scripts/test-director-ia-planner.js"
+  - "node scripts/test-director-ia-tool-orchestrator.js"
+  - "node --test test/director-ia-*.test.js"
   - "git diff --check"
   - "git status"
 
+next_task_policy:
+  if_success:
+    propose_exactly_one: "DOCS-DIRECTOR-IA-M2-HISTORY-SYNC-001"
+
+  note: >
+    La tarea documental posterior debe reflejar una profundización adicional de
+    M2 dentro de PARTIAL. No debe marcar COMPLETE ni cambiar el porcentaje.
+
 report_requirements:
-  path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M2-HISTORY-READINESS-001.md"
+  path: "docs/dev-loop/reports/IMPL-DIRECTOR-IA-M2-HISTORY-001.md"
 
   must_include:
     - "metadata"
     - "resumen ejecutivo"
-    - "baseline"
-    - "scope history"
-    - "public.folio_historial"
-    - "helpers"
-    - "timeline route"
-    - "unsafe routes"
-    - "folio resolution"
-    - "semantics"
+    - "archivos modificados"
+    - "source public.folio_historial"
+    - "history por id"
+    - "history por numero_folio"
+    - "observed fields"
+    - "derived fields"
+    - "null semantics"
+    - "event preservation"
+    - "no dedupe"
     - "authz"
-    - "plant scope"
-    - "planner/tools"
-    - "evidence table"
-    - "gap table"
-    - "implementation hypothesis"
+    - "scope planta"
+    - "planner"
+    - "tool/executor"
+    - "chat wiring"
+    - "unsafe routes excluded"
+    - "no side effects"
     - "tests"
-    - "gates"
-    - "state after slice"
-    - "percentage"
-    - "risks"
-    - "NEXT_TASK"
+    - "resultados completos"
+    - "estado M2"
+    - "porcentaje"
     - "acciones no realizadas"
+    - "gates"
     - "secrets_check"
     - "git diff --check"
     - "git status"
+    - "NEXT_TASK"
 
 expected_terminal_state: >
-  DONE_PENDING_REVIEW si existe un path SELECT-only, in-process y autorizado
-  para history. STOPPED si history depende de mutación, authz insegura o
-  semántica contractual nueva. BLOCKED si falta gate o dato humano indispensable.
+  DONE_PENDING_REVIEW si history queda integrado SELECT-only, in-process,
+  autorizado, sin dedupe y sin inferencias no soportadas, manteniendo M2 PARTIAL
+  y 42.5%. STOPPED ante dependencia inseparable de mutación o contradicción
+  semántica. BLOCKED si falta gate o dato humano indispensable.
 
 max_attempts: 1
 
-result_report_path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M2-HISTORY-READINESS-001.md"
+result_report_path: "docs/dev-loop/reports/IMPL-DIRECTOR-IA-M2-HISTORY-001.md"

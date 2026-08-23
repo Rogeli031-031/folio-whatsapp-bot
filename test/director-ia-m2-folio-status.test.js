@@ -108,17 +108,14 @@ describe("M2 intent, capability y tool", () => {
     assert.equal(isDirectorIaDomainReadable("kanban"), true);
   });
 
-  it("history y documents siguen no integrados", () => {
-    const history = detectUnsupportedDirectorIaDomain("¿Cuál fue el último movimiento del folio 123?");
-    assert.ok(history);
-    assert.equal(history.id, "folio_historial");
-    assert.equal(history.canRead, false);
+  it("history ya es consultable; documents siguen no integrados", () => {
+    assert.equal(detectUnsupportedDirectorIaDomain("¿Cuál fue el último movimiento del folio 123?"), null);
     assert.equal(planDirectorIaQuestion("¿Cuál fue el último movimiento del folio 123?").intent, "folio_history");
     const docs = detectUnsupportedDirectorIaDomain("¿Qué documentos le faltan?");
     assert.ok(docs);
     assert.equal(docs.id, "documentos");
     assert.equal(planDirectorIaQuestion("¿Qué documentos faltan del folio?").intent, "folio_documents");
-    assert.equal(isDirectorIaToolExecutable("get_folio_history"), false);
+    assert.equal(isDirectorIaToolExecutable("get_folio_history"), true);
     assert.equal(isDirectorIaToolExecutable("get_folio_documents"), false);
   });
 
@@ -482,15 +479,15 @@ describe("M2 chat end-to-end in-process", () => {
     assert.equal(result.context_meta.openai_called, false);
   });
 
-  it("historial sigue SOURCE_NOT_INTEGRATED", async () => {
+  it("historial ya no es SOURCE_NOT_INTEGRATED", async () => {
     configureDirectorIaChat({ pool: poolWith() });
     const result = await askDirectorIa(
       { body: {}, dashboardAuth: { role: "ZP" } },
       1,
       "¿Cuál fue el último movimiento del folio 123?"
     );
-    assert.equal(result.limitation && result.limitation.code, SOURCE_NOT_INTEGRATED);
-    assert.equal(result.context_meta.requested_domain, "folio_historial");
+    assert.notEqual(result.limitation && result.limitation.code, SOURCE_NOT_INTEGRATED);
+    assert.equal(result.context_meta.mode, "folio_history");
     assert.equal(result.folio_status, undefined);
   });
 

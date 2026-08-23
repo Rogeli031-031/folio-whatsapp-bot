@@ -149,9 +149,13 @@ const cases = [
 
   // 8. Historial
   () => {
-    const { toolPlan } = planTools("¿Cuál fue el último movimiento del folio 123?", { planta_id: 1 });
+    const q = "¿Cuál fue el último movimiento del folio 123?";
+    const { toolPlan } = planTools(q, { planta_id: 1, question: q });
     const t = getTool(toolPlan, "get_folio_history");
-    assert(t && t.status === TOOL_STATUS.declared_not_integrated, "history not integrated");
+    assert(t && t.status === TOOL_STATUS.available_on_demand, "history on demand");
+    assert(t.executable === true, "history executable");
+    assert(getDirectorIaTool("get_folio_history").executor === "loadFolioHistoryForChat", "history executor");
+    assert(toolPlan.can_execute === true, "history can execute");
   },
 
   // 9. Documentos
@@ -260,6 +264,7 @@ const cases = [
   () => {
     assert(isDirectorIaToolExecutable("get_action_register_context") === true, "AR exec");
     assert(isDirectorIaToolExecutable("get_folio_status") === true, "folio status exec");
+    assert(isDirectorIaToolExecutable("get_folio_history") === true, "folio history exec");
     assert(isDirectorIaToolExecutable("get_arr_snapshot") === true, "arr exec");
   },
 

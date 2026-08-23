@@ -59,7 +59,7 @@ const cases = [
     assert(isDirectorIaDomainReadable("delta_ingreso") === true, "delta_ingreso readable");
     assert(isDirectorIaDomainReadable("kanban") === true, "kanban readable (estatus/etapa)");
     assert(isDirectorIaDomainReadable("folios") === true, "folios readable (estatus/etapa)");
-    assert(isDirectorIaDomainReadable("folio_historial") === false, "historial not readable");
+    assert(isDirectorIaDomainReadable("folio_historial") === true, "historial readable");
     const summary = buildDirectorIaCapabilitiesSummary();
     assert(summary.readable.length > 0, "summary readable");
     assert(summary.not_integrated.length > 0, "summary not_integrated");
@@ -68,7 +68,8 @@ const cases = [
   () => expectAllowed("¿En qué etapa está el folio 123?"),
   () => expectAllowed("listar folios de la planta"),
   () => expectAllowed("folios en evidencias"),
-  () => expectBlocked("¿Cuál fue el último movimiento del folio 456?", "folio_historial"),
+  () => expectAllowed("¿Cuál fue el último movimiento del folio 456?"),
+  () => expectAllowed("¿Quién movió el folio 123?"),
   () => expectBlocked("¿Qué documentos le faltan?", "documentos"),
   () => expectBlocked("¿Ya tiene póliza?", "polizas"),
   () => expectBlocked("¿Tiene cheque o depósito?", "cheques"),
