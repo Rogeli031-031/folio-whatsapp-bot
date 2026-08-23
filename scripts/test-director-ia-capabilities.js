@@ -57,14 +57,17 @@ const cases = [
     assert(isDirectorIaDomainReadable("delta_venta") === true, "delta_venta readable");
     assert(isDirectorIaDomainReadable("delta_descuento") === true, "delta_descuento readable");
     assert(isDirectorIaDomainReadable("delta_ingreso") === true, "delta_ingreso readable");
-    assert(isDirectorIaDomainReadable("kanban") === false, "kanban not readable");
+    assert(isDirectorIaDomainReadable("kanban") === true, "kanban readable (estatus/etapa)");
+    assert(isDirectorIaDomainReadable("folios") === true, "folios readable (estatus/etapa)");
     assert(isDirectorIaDomainReadable("folio_historial") === false, "historial not readable");
     const summary = buildDirectorIaCapabilitiesSummary();
     assert(summary.readable.length > 0, "summary readable");
     assert(summary.not_integrated.length > 0, "summary not_integrated");
     assert(DIRECTOR_IA_VERACITY.SOURCE_NOT_INTEGRATED === "SOURCE_NOT_INTEGRATED", "const");
   },
-  () => expectBlocked("¿En qué etapa está el folio 123?", "kanban"),
+  () => expectAllowed("¿En qué etapa está el folio 123?"),
+  () => expectAllowed("listar folios de la planta"),
+  () => expectAllowed("folios en evidencias"),
   () => expectBlocked("¿Cuál fue el último movimiento del folio 456?", "folio_historial"),
   () => expectBlocked("¿Qué documentos le faltan?", "documentos"),
   () => expectBlocked("¿Ya tiene póliza?", "polizas"),

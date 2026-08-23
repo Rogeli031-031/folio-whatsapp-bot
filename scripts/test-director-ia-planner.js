@@ -90,6 +90,8 @@ const cases = [
       requireDomain: "bitacora",
     }),
   () => expectIntent("¿En qué etapa está el folio 123?", "folio_status"),
+  () => expectIntent("listar folios de la planta", "folio_status"),
+  () => expectIntent("folios en evidencias", "folio_status"),
   () => expectIntent("¿Cuál fue el último movimiento del folio 123?", "folio_history"),
   () => expectIntent("¿Qué documentos faltan del folio?", "folio_documents"),
   () => expectIntent("¿Tiene cheque o póliza?", "folio_financial_status"),
