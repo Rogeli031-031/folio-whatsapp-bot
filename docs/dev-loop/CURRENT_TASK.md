@@ -1,14 +1,14 @@
 # CURRENT_TASK
 
 ```yaml
-task_id: "ARCH-DIRECTOR-IA-M2-FOLIO-STATUS-READINESS-001"
+task_id: "IMPL-DIRECTOR-IA-M2-FOLIO-STATUS-001"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
-authorized_at: "2026-08-23T13:55:52-06:00"
+authorized_at: "2026-08-23T14:44:00-06:00"
 human_authorization: >
   AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-23.
-  Apruebo ARCH-DIRECTOR-IA-M2-FOLIO-STATUS-READINESS-001 y autorizo G1.
+  Apruebo IMPL-DIRECTOR-IA-M2-FOLIO-STATUS-001 y autorizo G1.
 
 gates:
   G1_task_authorization: AUTHORIZED
@@ -17,121 +17,237 @@ gates:
   G8_calibration_materiality_signature: N/A
 
 objective: >
-  Auditar físicamente el primer slice de M2 — Kanban / Folios — para habilitar
-  consulta read-only segura de estatus/etapa de folios en Director IA mediante
-  helpers SELECT-only e integración in-process, evitando expresamente rutas GET
-  que hoy producen side effects, y determinar el delta exacto de implementación.
+  Implementar el primer slice read-only seguro de M2 — Kanban / Folios —
+  para que Director IA pueda consultar estatus/etapa de un folio y listados
+  por planta/etapa mediante helpers SELECT-only e integración in-process,
+  sin usar rutas HTTP con side effects, sin autoavance y sin mutaciones.
 
-strategic_context:
-  source_task: "ARCH-DIRECTOR-IA-EXECUTIVE-VALUE-PRIORITIZATION-001"
-  source_report: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-EXECUTIVE-VALUE-PRIORITIZATION-001.md"
+baseline:
+  readiness_task: "ARCH-DIRECTOR-IA-M2-FOLIO-STATUS-READINESS-001"
+  readiness_report: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M2-FOLIO-STATUS-READINESS-001.md"
 
-  winner: "M2 — Kanban / Folios"
-  first_slice: "estatus/etapa read-only"
-  expected_state_after_slice: "PARTIAL"
-  percentage_effect_after_slice: 0.0
+  module: "M2"
+  current_state: "PARTIAL"
+  state_after_slice: "PARTIAL"
 
-  baseline:
-    current_m0_m20_percentage: 42.5
-    numerator: 8.5
-    denominator: 20
+  current_m0_m20_percentage: 42.5
+  numerator: 8.5
+  denominator: 20
+  percentage_effect_this_slice: 0.0
 
-  rationale: >
-    Director IA ya responde KPIs agregados, deltas comerciales y seguimiento
-    de Action Register, pero no puede responder de forma segura y directa en
-    qué etapa está un folio ni qué folios existen por etapa/planta.
+readiness_findings:
+  safe_helpers:
+    - "getFolioById"
+    - "getFolioByNumero"
+    - "getManyFoliosStatus"
+    - "SELECT delgado equivalente a kanban con buildDashboardWhere"
+    - "etapaVisualToEstatusTecnicos para filtrar por etapa"
 
-primary_question: >
-  ¿Puede implementarse un primer slice seguro de M2 que permita a Director IA
-  consultar estatus/etapa de un folio y listados de folios por planta/etapa,
-  usando únicamente helpers SELECT-only, sin llamar rutas GET con side effects,
-  sin mutar folios y sin ampliar el alcance del módulo más allá de este slice?
+  semantics:
+    estatus: "columna observada"
+    etapa: "derivada mediante estatusToEtapaVisual"
+    etapa_column_in_db: false
 
-known_risks:
-  unsafe_http_surfaces:
-    - "GET /kanban"
-    - "GET /folios/:id"
+  unsafe_surfaces:
+    - "GET /api/dashboard/kanban"
+    - "GET /api/folios/:id"
+    - "maybeAdvanceFolioToComprobaciones"
 
-  reason: >
-    Estas superficies deben tratarse como potencialmente mutantes hasta verificar
-    físicamente su call graph, incluyendo cualquier llamada a
-    maybeAdvanceFolioToComprobaciones o equivalente.
-
-candidate_safe_helpers:
-  - "getFolioById"
-  - "getManyFoliosStatus"
-  - "otros helpers SELECT-only equivalentes físicamente verificados"
+  unsafe_reason: >
+    Los handlers HTTP pueden ejecutar autoavance mediante UPDATE + historial
+    después del SELECT. El slice debe reutilizar únicamente superficies
+    SELECT-only verificadas.
 
 slice_scope:
+
   included:
-    - "estatus actual de un folio"
-    - "etapa actual de un folio"
-    - "identificación básica del folio necesaria para desambiguar"
-    - "listado de folios por planta"
-    - "listado/filtrado por etapa si la fuente lo soporta"
-    - "conteos simples solo si derivan directamente del listado real"
-    - "evidencia estructurada trazable"
+    single_folio:
+      - "consulta por id"
+      - "consulta por numero_folio"
+      - "estatus observado"
+      - "etapa derivada"
+      - "planta"
+      - "identidad mínima del folio"
+
+    multiple_folios:
+      - "listado por planta autorizada"
+      - "filtrado por etapa"
+      - "filtrado por estatus cuando corresponda"
+      - "listado por varios numeros de folio cuando aplique"
+      - "conteos derivados exclusivamente del conjunto consultado"
+
+    director_ia:
+      - "intent folio_status"
+      - "tool de folio status"
+      - "executor real"
+      - "wiring chat"
+      - "evidencia estructurada"
+      - "fail-closed"
 
   excluded:
-    - "timeline completo"
-    - "historial completo"
-    - "documentos"
-    - "PDFs"
+    - "timeline"
+    - "folio_history"
+    - "documents"
+    - "PDF"
     - "cheques"
-    - "pólizas"
+    - "polizas"
     - "presupuestos"
-    - "mutaciones de folio"
-    - "avance automático de etapa"
-    - "kanban mutante"
-    - "edición"
-    - "aprobación"
-    - "cancelación"
-    - "creación de folios"
+    - "crear folio"
+    - "editar folio"
+    - "aprobar folio"
+    - "cancelar folio"
+    - "autoavance"
+    - "cualquier UPDATE"
+    - "cualquier INSERT"
+    - "cualquier DELETE"
 
-canonical_state:
-  current_module_state: "PARTIAL"
+architecture_pattern:
+  required: >
+    intent -> tool -> executor -> helper/fuente SELECT-only -> evidencia ->
+    respuesta
 
-  expected_after_slice: "PARTIAL"
+  transport:
+    internal_http: false
 
-  rule: >
-    Este slice no debe reinterpretarse como COMPLETE. M2 seguirá PARTIAL después
-    de integrar estatus/etapa porque historial, documentos, superficies
-    financieras y/o otras capacidades canónicas continúan fuera.
+  cycle:
+    constitutional_cycle: false
 
-secondary_questions:
-  - "¿Qué helpers SELECT-only existen realmente para folio individual?"
-  - "¿Qué helpers SELECT-only existen para múltiples folios?"
-  - "¿Qué tablas/vistas consultan?"
-  - "¿Qué campos representan etapa/estatus?"
-  - "¿Existen diferencias entre etapa, estatus, estado y columna Kanban?"
-  - "¿Qué valores son canónicos y cuáles derivados?"
-  - "¿Cómo se filtra por planta?"
-  - "¿Qué authz se aplica hoy?"
-  - "¿Cómo se preservan plantas_permitidas?"
-  - "¿Qué ocurre con folio inexistente?"
-  - "¿Qué ocurre con folio de otra planta?"
-  - "¿Qué ocurre si el identificador es ambiguo?"
-  - "¿Existe ya intent folio_status?"
-  - "¿Existe tool get_folio_status o equivalente?"
-  - "¿Tiene executor?"
-  - "¿Qué early return / SOURCE_NOT_INTEGRATED bloquea hoy?"
-  - "¿Existe ya capability folio_status?"
-  - "¿Qué wiring falta en chat?"
-  - "¿Puede reutilizarse patrón M3/M9 in-process?"
-  - "¿Puede listarse por etapa sin usar GET /kanban?"
-  - "¿Qué tests hacen falta para demostrar ausencia de side effects?"
+  new_dispatcher: false
+
+semantic_invariants:
+  - "M2 Folios/Kanban ≠ M12 Action Register."
+  - "M2 Folios/Kanban ≠ M3 KPIs/Proyectos."
+  - "estatus observado ≠ etapa derivada."
+  - "etapa actual ≠ historial."
+  - "etapa actual ≠ timeline."
+  - "No inferir retraso si no existe dato."
+  - "No inventar estatus."
+  - "No inventar etapa."
+  - "No auto-avanzar folio al consultar."
+  - "No convertir not found en empty success."
+  - "No exponer folios fuera de plantas_permitidas."
+  - "No usar ruta GET mutante como fuente."
+  - "Toda respuesta debe ser trazable a SELECT real."
+
+authz_requirements:
+  - "preservar JWT/contexto de usuario"
+  - "preservar rol"
+  - "preservar GA/GV cuando aplique"
+  - "preservar planta_id"
+  - "preservar plantas_permitidas"
+  - "fail-closed ante folio de otra planta"
+  - "fail-closed ante planta no autorizada"
+  - "no cross-planta"
+  - "no ampliar acceso existente"
+
+implementation_requirements:
+
+  data_layer:
+    - "reutilizar getFolioById"
+    - "reutilizar getFolioByNumero"
+    - "reutilizar getManyFoliosStatus"
+    - "crear/exponer helper SELECT-only para listado por planta/etapa si hace falta"
+    - "reutilizar buildDashboardWhere donde corresponda"
+    - "reutilizar etapaVisualToEstatusTecnicos para filtro por etapa"
+    - "no copiar lógica de handlers mutantes"
+    - "no llamar HTTP interno"
+
+  status_semantics:
+    - "estatus debe provenir de columna real"
+    - "etapa debe derivarse mediante estatusToEtapaVisual"
+    - "si estatus no mapea, preservar unknown/null según semántica existente"
+    - "no crear columna ficticia etapa"
+
+  planner:
+    - "conservar intent folio_status"
+    - "evitar SOURCE_NOT_INTEGRATED para consultas soportadas por este slice"
+    - "no habilitar folio_history ni folio_documents"
+
+  tools:
+    - "habilitar tool de folio_status con executor real"
+    - "inputs mínimos para id/numero/planta/etapa"
+    - "no habilitar tools fuera de este slice"
+
+  chat:
+    - "wiring real in-process"
+    - "responder folio individual"
+    - "responder listado por planta/etapa"
+    - "desambiguar id vs numero cuando sea necesario"
+    - "no caer a Action Register"
+    - "no usar M3 como sustituto"
+    - "preservar evidencia estructurada"
+
+  evidence:
+    required_fields_if_available:
+      - "folio_id"
+      - "numero_folio"
+      - "estatus"
+      - "etapa"
+      - "planta_id"
+      - "planta_nombre/clave"
+      - "source"
+      - "retrieved_at o freshness equivalente"
+
+  no_side_effect_proof:
+    required:
+      - "tests no deben invocar maybeAdvanceFolioToComprobaciones"
+      - "tests deben demostrar que loaders/executors solo ejecutan SELECT"
+      - "no importar handler mutante como atajo"
+
+tests_required:
+  focal:
+    - "folio por id"
+    - "folio por numero_folio"
+    - "varios folios"
+    - "listado por planta"
+    - "filtrado por etapa"
+    - "estatus observado"
+    - "etapa derivada"
+    - "folio inexistente"
+    - "planta no autorizada"
+    - "folio de otra planta"
+    - "plantas_permitidas"
+    - "GA"
+    - "GV"
+    - "unknown/null"
+    - "intent folio_status"
+    - "tool con executor"
+    - "chat wiring"
+    - "no SOURCE_NOT_INTEGRATED en consultas soportadas"
+    - "folio_history sigue no integrado"
+    - "folio_documents sigue no integrado"
+    - "no Action Register fallback"
+    - "no M3 fallback"
+    - "no autoavance"
+    - "no HTTP interno"
+    - "sin writes"
+
+  regression:
+    - "capabilities"
+    - "planner"
+    - "tool orchestrator"
+    - "suite Director IA completa"
 
 in_scope:
   writable:
     - "docs/dev-loop/CURRENT_TASK.md"
-    - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M2-FOLIO-STATUS-READINESS-001.md"
+    - "docs/dev-loop/reports/IMPL-DIRECTOR-IA-M2-FOLIO-STATUS-001.md"
+    - "lib/director-ia-capabilities.js"
+    - "lib/director-ia-chat.js"
+    - "lib/director-ia-planner.js"
+    - "lib/director-ia-tools.js"
+    - "lib/director-ia-m2-folio-status.js"
+    - "server.js"
+    - "test/director-ia-m2-folio-status.test.js"
+    - "scripts/test-director-ia-capabilities.js"
+    - "scripts/test-director-ia-planner.js"
+    - "scripts/test-director-ia-tool-orchestrator.js"
 
   read_only:
     - "AGENTS.md"
     - "docs/dev-loop/**"
     - "docs/director-ia/**"
     - "lib/**"
-    - "server.js"
     - "frontend-dashboard/**"
     - "test/**"
     - "scripts/**"
@@ -140,392 +256,150 @@ in_scope:
     - "package-lock.json"
 
 out_of_scope:
-  - "implementar"
-  - "modificar runtime"
-  - "modificar backend"
-  - "modificar frontend"
-  - "modificar tests"
-  - "modificar scripts"
-  - "modificar SQL"
-  - "crear migrations"
-  - "modificar schema"
+  - "modificar docs/director-ia/**"
   - "modificar capability matrix"
-  - "modificar contratos"
-  - "crear/editar/cancelar/aprobar folios"
-  - "ejecutar rutas con side effects"
-  - "usar GET /kanban como fuente si muta"
-  - "usar GET /folios/:id como fuente si muta"
+  - "modificar frontend"
+  - "modificar SQL"
+  - "crear migration"
+  - "modificar schema"
+  - "crear endpoint HTTP nuevo"
+  - "cambiar contrato HTTP"
+  - "usar GET /api/dashboard/kanban como fuente"
+  - "usar GET /api/folios/:id como fuente"
+  - "llamar maybeAdvanceFolioToComprobaciones"
   - "timeline"
-  - "documentos"
+  - "history"
+  - "documents"
+  - "PDF"
   - "cheques"
-  - "pólizas"
+  - "polizas"
   - "presupuestos"
-  - "HTTP interno"
+  - "mutaciones"
   - "cycle constitucional"
   - "smoke productivo"
   - "secretos"
   - "commit"
   - "push"
   - "merge"
+  - "sync documental M2"
   - "ejecutar NEXT_TASK"
-
-contracts_in_force:
-  - "docs/dev-loop/LOOP_PROTOCOL.md"
-  - "docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md"
-  - "docs/director-ia/CONSTITUTION.md"
-  - "docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md"
 
 allowed_actions:
-  - "leer físicamente repositorio"
-  - "trazar helpers de folio"
-  - "trazar queries SELECT"
-  - "trazar rutas GET y side effects"
-  - "trazar intent/tool/capability"
-  - "trazar authz"
-  - "trazar scope planta"
-  - "trazar semantics etapa/estatus"
-  - "determinar loader/executor mínimo"
-  - "determinar tests"
-  - "determinar archivos probables de implementación"
-  - "determinar gates"
-  - "proponer exactamente una NEXT_TASK"
-  - "escribir CURRENT_TASK y reporte"
+  - "crear helper/loader SELECT-only M2"
+  - "reutilizar helpers existentes"
+  - "cablear folio_status"
+  - "añadir executor"
+  - "ajustar routing"
+  - "ajustar capability necesaria"
+  - "crear tests focales"
+  - "actualizar scripts afectados"
+  - "ejecutar tests"
   - "ejecutar git diff --check"
   - "ejecutar git status"
+  - "escribir reporte"
+  - "proponer exactamente una NEXT_TASK"
 
 forbidden_actions:
-  - "modificar código"
-  - "modificar capability matrix"
-  - "modificar arquitectura"
-  - "inventar que GET es seguro sin revisar side effects"
-  - "inventar etapa o estatus"
-  - "usar Action Register como sustituto"
-  - "usar M3 como sustituto del flujo de folios"
-  - "ampliar plantas_permitidas"
-  - "permitir cross-planta"
-  - "ejecutar mutaciones"
-  - "aprobar gates adicionales"
-  - "ejecutar NEXT_TASK"
-  - "commit"
-  - "push"
-  - "merge"
+  - "usar handler mutante"
+  - "introducir side effects"
+  - "ampliar authz"
+  - "crear writes"
+  - "integrar timeline"
+  - "integrar documentos"
+  - "integrar superficies financieras"
+  - "hacer HTTP interno"
+  - "crear nuevo contrato"
+  - "modificar arquitectura congelada"
+  - "cambiar estado documental de M2"
+  - "hacer commit"
+  - "hacer push"
+  - "hacer merge"
+  - "encadenar NEXT_TASK"
 
-audit_workstreams:
+acceptance_criteria:
+  - "Director IA consulta folio por id."
+  - "Director IA consulta folio por numero_folio."
+  - "Director IA consulta/lista folios por planta."
+  - "Director IA filtra por etapa sin usar kanban mutante."
+  - "estatus proviene de dato observado."
+  - "etapa se deriva con mapeo existente."
+  - "folio_status tiene executor real."
+  - "planner llega a folio_status."
+  - "chat llega al executor correcto."
+  - "SOURCE_NOT_INTEGRATED deja de ocurrir para este slice."
+  - "folio_history sigue fuera."
+  - "folio_documents sigue fuera."
+  - "authz se preserva."
+  - "plantas_permitidas se preserva."
+  - "no cross-planta."
+  - "not found se maneja correctamente."
+  - "no hay autoavance."
+  - "no se llama maybeAdvanceFolioToComprobaciones."
+  - "no hay writes."
+  - "no hay HTTP interno."
+  - "no cambia contrato HTTP."
+  - "no cambia arquitectura."
+  - "M2 sigue PARTIAL."
+  - "porcentaje sigue 42.5%."
+  - "tests focales verdes."
+  - "regresión Director IA verde."
+  - "git diff --check limpio."
+  - "solo archivos autorizados modificados."
 
-  canonical_definition:
-    required:
-      - "leer ficha M2 completa"
-      - "identificar qué cubre hoy"
-      - "identificar qué falta"
-      - "confirmar que estatus/etapa es un slice legítimo"
-      - "confirmar que después sigue PARTIAL"
-
-  folio_single_read:
-    inspect:
-      - "getFolioById"
-      - "queries"
-      - "source tables"
-      - "campos etapa/estatus"
-      - "planta"
-      - "side effects"
-    determine:
-      - "si es SELECT-only"
-      - "shape reutilizable"
-      - "errores"
-      - "not found"
-      - "authz"
-
-  folio_many_read:
-    inspect:
-      - "getManyFoliosStatus"
-      - "queries"
-      - "filtros"
-      - "planta"
-      - "etapa"
-      - "side effects"
-    determine:
-      - "si soporta listado seguro"
-      - "si puede filtrar por etapa"
-      - "si puede responder qué hay en el tablero sin GET /kanban"
-
-  unsafe_routes:
-    inspect:
-      - "GET /kanban"
-      - "GET /folios/:id"
-      - "maybeAdvanceFolioToComprobaciones"
-      - "cualquier helper mutante en call graph"
-    determine:
-      - "qué side effects existen"
-      - "por qué no deben reutilizarse"
-      - "si existe forma SELECT-only equivalente"
-
-  planner_tools_capabilities:
-    inspect:
-      - "folio_status"
-      - "folio_history"
-      - "folio_documents"
-      - "get_folio_status"
-      - "get_folio_history"
-      - "get_folio_documents"
-      - "capabilities relacionadas"
-      - "executor actual"
-      - "UNSUPPORTED_RULES"
-      - "SOURCE_NOT_INTEGRATED"
-      - "routing chat"
-    determine:
-      - "qué wiring ya existe"
-      - "qué wiring falta"
-      - "si planner requiere cambios"
-      - "si tool requiere executor"
-      - "si capability requiere cambio"
-
-  authz:
-    required:
-      - "JWT"
-      - "rol"
-      - "GA/GV si aplica"
-      - "planta_id"
-      - "plantas_permitidas"
-      - "folio de otra planta"
-      - "fail-closed"
-      - "no cross-planta"
-
-  data_contract:
-    required:
-      - "definir folio_id"
-      - "definir etapa"
-      - "definir estatus"
-      - "definir campos mínimos de identidad"
-      - "definir planta"
-      - "distinguir valores observados vs derivados"
-      - "not found"
-      - "null/unknown"
-      - "freshness"
-      - "no inventar valores"
-
-  architecture_fit:
-    required:
-      - "verificar patrón in-process"
-      - "sin HTTP interno"
-      - "sin contrato nuevo"
-      - "sin cycle"
-      - "G2 sí/no"
-      - "G3 sí/no"
-
-  implementation_slice:
-    required:
-      - "describir loader/helper mínimo"
-      - "describir executor"
-      - "describir wiring"
-      - "describir tests"
-      - "describir archivos probables"
-      - "confirmar que slice es seguro"
-      - "confirmar que M2 seguirá PARTIAL"
-
-semantic_invariants:
-  - "Folio/Kanban ≠ Action Register."
-  - "M2 ≠ M3 KPIs/Proyectos."
-  - "Etapa ≠ historial."
-  - "Estatus actual ≠ timeline."
-  - "No inferir retraso si no existe dato."
-  - "No auto-avanzar etapa."
-  - "No mutar al consultar."
-  - "No inventar etapa."
-  - "No convertir not found en empty success."
-  - "No exponer folios de otra planta."
-  - "No usar GET mutante por comodidad."
-  - "Toda respuesta debe ser trazable a SELECT real."
-
-completion_test:
-  question: >
-    ¿Existe un path totalmente read-only e in-process para que Director IA
-    responda estatus/etapa de un folio y listados por planta/etapa, preservando
-    authz y sin tocar rutas mutantes?
-
-  success_next_task:
-    "IMPL-DIRECTOR-IA-M2-FOLIO-STATUS-001"
-
-  success_state_after_implementation:
-    "M2 remains PARTIAL"
-
-mandatory_evidence_table:
-  columns:
-    - "surface"
-    - "helper_or_route"
-    - "source"
-    - "method"
-    - "select_only"
-    - "side_effects"
-    - "authz"
-    - "plant_scope"
-    - "status_semantics"
-    - "stage_semantics"
-    - "existing_intent"
-    - "existing_tool"
-    - "executor"
-    - "missing_delta"
-    - "testability"
-    - "risk"
-    - "evidence"
-
-mandatory_gap_table:
-  columns:
-    - "gap_id"
-    - "missing_capability"
-    - "required_for_slice"
-    - "reusable_component"
-    - "proposed_physical_change"
-    - "architecture_change"
-    - "contract_change"
-    - "authz_change"
-    - "estimated_complexity"
-    - "blocking"
-
-decision_rules:
-
-  ready:
-    all:
-      - "helper folio individual SELECT-only"
-      - "helper listado SELECT-only"
-      - "semántica etapa/estatus clara"
-      - "authz preservable"
-      - "scope planta preservable"
-      - "rutas mutantes evitables"
-      - "sin HTTP interno"
-      - "sin migration"
-      - "sin contrato nuevo"
-      - "tests determinísticos posibles"
-      - "slice acotado"
-
-    then:
-      outcome: "DONE_PENDING_REVIEW"
-      next_task: "IMPL-DIRECTOR-IA-M2-FOLIO-STATUS-001"
-
-  stopped:
-    when:
-      - "no existe helper SELECT-only suficiente"
-      - "estatus/etapa depende inseparablemente de auto-mutación"
-      - "authz no puede preservarse"
-      - "definición etapa/estatus es ambigua"
-      - "requiere contrato nuevo"
-
-    then:
-      outcome: "STOPPED"
-
-gate_rules:
-  G1:
-    required: true
-
-  G2:
-    default: "N/A"
-    required_if: "se necesita modificar contrato arquitectónico"
-
-  G3:
-    default: "N/A"
-    required_if: "se necesita contrato nuevo"
-
-  G4:
-    state: "NOT_AUTHORIZED"
-
-  G5:
-    state: "NOT_AUTHORIZED"
-
-  G6:
-    state: "N/A"
-
-  G7:
-    state: "N/A unless ambiguity found"
-
-  G8:
-    state: "N/A"
-
-required_output:
-  - "resumen ejecutivo"
-  - "baseline 42.5%"
-  - "definición del slice"
-  - "estado M2 antes/después"
-  - "folio individual SELECT-only"
-  - "listado SELECT-only"
-  - "rutas mutantes excluidas"
-  - "planner/tools/capabilities"
-  - "authz"
-  - "scope planta"
-  - "semántica etapa/estatus"
-  - "tabla evidencia"
-  - "tabla gaps"
-  - "riesgos"
-  - "dependencias"
-  - "fit arquitectónico"
-  - "G2 sí/no"
-  - "G3 sí/no"
-  - "archivos probables"
-  - "tests requeridos"
-  - "NEXT_TASK única"
-  - "acciones no realizadas"
+required_validation:
+  - "node --test test/director-ia-m2-folio-status.test.js"
+  - "node scripts/test-director-ia-capabilities.js"
+  - "node scripts/test-director-ia-planner.js"
+  - "node scripts/test-director-ia-tool-orchestrator.js"
+  - "node --test test/director-ia-*.test.js"
   - "git diff --check"
   - "git status"
 
-acceptance_criteria:
-  - "Se verificó helper folio individual."
-  - "Se verificó helper de múltiples folios."
-  - "Se verificaron queries SELECT."
-  - "Se verificaron rutas mutantes."
-  - "Se verificó maybeAdvanceFolioToComprobaciones o equivalente."
-  - "Se verificó semántica etapa/estatus."
-  - "Se verificó authz."
-  - "Se verificó scope por planta."
-  - "Se verificó planner."
-  - "Se verificaron tools."
-  - "Se verificaron capabilities."
-  - "Se verificaron early returns."
-  - "Se determinó wiring mínimo."
-  - "Se determinaron tests."
-  - "No se implementó."
-  - "No se modificó capability matrix."
-  - "No se modificaron contratos."
-  - "No se modificó runtime/backend/frontend/tests."
-  - "Solo CURRENT_TASK y reporte modificados."
-  - "M2 sigue PARTIAL después del slice."
-  - "Porcentaje sigue 42.5%."
-  - "Hay exactamente una NEXT_TASK si procede."
-  - "NEXT_TASK no autorizada."
-  - "git diff --check limpio."
+next_task_policy:
+  if_success:
+    propose_exactly_one: "DOCS-DIRECTOR-IA-M2-FOLIO-STATUS-SYNC-001"
+
+  note: >
+    La tarea documental posterior solo debe reflejar ampliación interna de M2
+    dentro de PARTIAL. No debe marcar M2 COMPLETE ni cambiar el porcentaje.
 
 report_requirements:
-  path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M2-FOLIO-STATUS-READINESS-001.md"
+  path: "docs/dev-loop/reports/IMPL-DIRECTOR-IA-M2-FOLIO-STATUS-001.md"
 
   must_include:
     - "metadata"
     - "resumen ejecutivo"
-    - "baseline"
-    - "slice definido"
-    - "estado M2"
-    - "folio individual"
-    - "listado"
-    - "rutas mutantes"
-    - "planner/tools/capabilities"
+    - "archivos modificados"
+    - "helper/loader SELECT-only"
+    - "folio por id"
+    - "folio por numero"
+    - "listado por planta"
+    - "filtro por etapa"
+    - "estatus vs etapa"
+    - "rutas mutantes excluidas"
     - "authz"
     - "scope planta"
-    - "semántica etapa/estatus"
-    - "tabla evidencia"
-    - "tabla gaps"
-    - "riesgos"
-    - "dependencias"
-    - "fit arquitectónico"
-    - "gates"
-    - "archivos probables"
+    - "planner"
+    - "tools/executor"
+    - "chat wiring"
+    - "no side effects"
     - "tests"
-    - "NEXT_TASK"
+    - "resultados completos"
+    - "estado M2"
+    - "porcentaje"
     - "acciones no realizadas"
+    - "gates"
     - "secrets_check"
     - "git diff --check"
     - "git status"
+    - "NEXT_TASK"
 
 expected_terminal_state: >
-  DONE_PENDING_REVIEW si existe path SELECT-only e in-process seguro para el
-  slice. STOPPED si el estatus/etapa depende inseparablemente de mutación o
-  requiere decisión contractual. BLOCKED si falta gate o dato humano.
+  DONE_PENDING_REVIEW si el slice queda integrado SELECT-only, in-process,
+  autorizado y probado, manteniendo M2 PARTIAL y el porcentaje en 42.5%.
+  STOPPED si aparece dependencia inseparable de mutación o contradicción
+  contractual. BLOCKED si falta gate o dato humano indispensable.
 
 max_attempts: 1
 
-result_report_path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M2-FOLIO-STATUS-READINESS-001.md"
+result_report_path: "docs/dev-loop/reports/IMPL-DIRECTOR-IA-M2-FOLIO-STATUS-001.md"

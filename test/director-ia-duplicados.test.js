@@ -128,10 +128,11 @@ describe("M16 intent y gate", () => {
   });
 
   it("otros dominios no integrados siguen bloqueados", () => {
-    const kanban = detectUnsupportedDirectorIaDomain("¿En qué etapa está el folio 123?");
-    assert.ok(kanban);
-    assert.equal(kanban.id, "kanban");
-    assert.equal(kanban.canRead, false);
+    assert.equal(detectUnsupportedDirectorIaDomain("¿En qué etapa está el folio 123?"), null);
+    const history = detectUnsupportedDirectorIaDomain("¿Cuál fue el último movimiento del folio 123?");
+    assert.ok(history);
+    assert.equal(history.id, "folio_historial");
+    assert.equal(history.canRead, false);
     const budget = detectUnsupportedDirectorIaDomain("¿Cómo va el presupuesto semanal?");
     assert.ok(budget);
     assert.equal(budget.id, "presupuestos");
@@ -150,7 +151,7 @@ describe("M16 registry", () => {
   });
 
   it("tools no integrados siguen sin executor", () => {
-    assert.equal(isDirectorIaToolExecutable("get_folio_status"), false);
+    assert.equal(isDirectorIaToolExecutable("get_folio_status"), true);
     assert.equal(getDirectorIaTool("get_budget_status").executor, null);
     const plan = buildDirectorIaToolPlan(planDirectorIaQuestion("¿Cómo va el presupuesto semanal?"), {
       planta_id: 1,

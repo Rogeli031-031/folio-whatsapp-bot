@@ -135,12 +135,16 @@ const cases = [
 
   // 7. Etapa folio
   () => {
-    const { toolPlan } = planTools("¿En qué etapa está el folio 123?", { planta_id: 1 });
+    const { toolPlan } = planTools("¿En qué etapa está el folio 123?", {
+      planta_id: 1,
+      question: "¿En qué etapa está el folio 123?",
+    });
     const t = getTool(toolPlan, "get_folio_status");
     assert(t, "folio status");
-    assert(t.status === TOOL_STATUS.declared_not_integrated, "not integrated");
-    assert(t.missing_inputs.includes("folio_id"), "missing folio_id");
-    assert(toolPlan.can_execute === false, "cannot execute");
+    assert(t.status === TOOL_STATUS.available_on_demand, "folio status on demand");
+    assert(t.executable === true, "folio status executable");
+    assert(getDirectorIaTool("get_folio_status").executor === "loadFolioStatusForChat", "folio status executor");
+    assert(toolPlan.can_execute === true, "folio status can execute");
   },
 
   // 8. Historial
@@ -255,7 +259,7 @@ const cases = [
   // Executable helpers
   () => {
     assert(isDirectorIaToolExecutable("get_action_register_context") === true, "AR exec");
-    assert(isDirectorIaToolExecutable("get_folio_status") === false, "folio not exec");
+    assert(isDirectorIaToolExecutable("get_folio_status") === true, "folio status exec");
     assert(isDirectorIaToolExecutable("get_arr_snapshot") === true, "arr exec");
   },
 
