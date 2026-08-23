@@ -63,7 +63,7 @@
 | Chat | `POST /api/director-ia/chat` → `askDirectorIa` (`lib/director-ia-chat.js`) |
 | Routing chat | Regex / heurísticas en `director-ia-chat.js`, `director-ia-igf-arr.js`, `director-ia-commercial-state.js` |
 | Fuentes en GET `sources` | `action_register`, `dicf`, `bitacora_ia`, `cliente_comentarios`, `folio_comentarios` pueden pasar a `true`; `igf`, `arr`, `commercial_state` permanecen `false` en `EMPTY_SOURCES` |
-| Fuentes solo en chat | Anexo IGF/ARR (`loadIgfArrAnnexForChat`), estado comercial (`loadCommercialStateForChat`), Mejora Continua (`loadMejoraContinuaForChat`) |
+| Fuentes solo en chat | Anexo IGF/ARR (`loadIgfArrAnnexForChat`), estado comercial (`loadCommercialStateForChat`), Mejora Continua (`loadMejoraContinuaForChat`); M6 GASTOS/INVERSIONES (`loadGastosInversionesForChat`) |
 | Persistencia de chat | No hay tabla de historial; solo `req.body.history` opcional en el request |
 | Escritura propia del módulo | Bitácora y entidades comerciales vía API CRUD (no vía chat) |
 
@@ -204,19 +204,19 @@
 | **ID** | M6 |
 | **Módulo** | GASTOS / INVERSIONES Excel |
 | **Propósito empresarial** | Export por categoría y ventana de meses. |
-| **Cobertura actual de Director IA** | NO INTEGRADA |
-| **Información exacta que sí consulta** | Ninguna de este Excel. Nota: la palabra «gasto(s)» en chat puede activar anexo IGF/ARR (`PLANT_FINANCIAL_KPI_RE` en `director-ia-igf-arr.js`) — eso es **INDIRECTA** respecto a este módulo, no consulta `categoria-rango-excel`. |
-| **Información que no consulta** | Listados GASTOS/INVERSIONES de folios del Excel. |
-| **Archivos actuales relacionados** | `lib/categoria-rango-excel.js` |
-| **Endpoints actuales relacionados** | `/api/dashboard/categoria-rango-excel` |
-| **Tablas o vistas relacionadas** | `public.folios` |
-| **Funciones existentes reutilizables** | `buildCategoriaRangoWorkbook` (nombre según lib) |
-| **Capacidades de lectura posibles** | CONSULTAR/RESUMIR/DESCARGAR DOCUMENTO — no cableadas a IA. |
+| **Cobertura actual de Director IA** | PARCIAL (query JSON read-only de folios GASTOS e INVERSIONES por planta y `YYYY-MM`). **No** es COMPLETE: el propósito canónico incluye Export/xlsx, que permanece fuera. |
+| **Información exacta que sí consulta** | Listados estructurados de `public.folios` categoría GASTOS xor INVERSIONES (predicados físicos distintos; no se mezclan). Campos observados tras `expandCategoriaRows`: folio, partida/subcategoría, concepto, importe, estatus, beneficiario, `mes_cargo`. Conteos/totales solo del conjunto consultado. Periodo `YYYY-MM` obligatorio (un mes o rango de dos; no se inventa mes). 0 filas es respuesta válida. |
+| **Información que no consulta** | Export/xlsx; `buildCategoriaRangoWorkbook`; GET `/categoria-rango-excel`; Taller AT (M5); IGF/ARR (M7/M8). No afirma desviación, causa, comparación ni «pendiente» como etapa. |
+| **Archivos actuales relacionados** | `lib/director-ia-m6-gastos-inversiones.js`; `lib/categoria-rango-excel.js` (`expandCategoriaRows` únicamente); wiring en `lib/director-ia-chat.js`, `lib/director-ia-tools.js`, `lib/director-ia-capabilities.js`, `lib/director-ia-planner.js` |
+| **Endpoints actuales relacionados** | Chat: `POST /api/director-ia/chat` (in-process). El GET `/api/dashboard/categoria-rango-excel` **no** se usa como transporte interno. |
+| **Tablas o vistas relacionadas** | `public.folios` ⋈ `public.plantas` |
+| **Funciones existentes reutilizables** | `loadGastosInversionesForChat` → SELECT + `expandCategoriaRows`. **No** `buildCategoriaRangoWorkbook`. Authz: `assertFolioStatusAccess` (no el bloqueo GA de KPIs IGF). |
+| **Capacidades de lectura posibles** | CONSULTAR/RESUMIR listados GASTOS e INVERSIONES de folios. DESCARGAR DOCUMENTO / Export **no** cableado. |
 | **Capacidades de escritura posibles** | N/A en este módulo. |
-| **Permisos aplicables** | Auth + `priv_clave`. |
+| **Permisos aplicables** | JWT/contexto; rol; `planta_id`; `plantas_permitidas`; GV 403; GA permitido en planta autorizada; cross-planta 403; fail-closed. Privados excluidos (equivalente a GET sin `priv_clave`). |
 | **Nivel de riesgo** | MEDIO |
-| **Dependencias** | Folios. |
-| **Observaciones verificadas** | Riesgo de confusión: «gastos» en chat ≠ Excel GASTOS. |
+| **Dependencias** | Folios. Distinto de IGF (M7). |
+| **Observaciones verificadas** | `IMPL-DIRECTOR-IA-M6-GASTOS-INVERSIONES-001` (integrado en main, `7b8e8bdf` / `2d145056`). Tests: focales 24/24; capabilities 38/38; planner 37/37; orchestrator 24/24; suite `test/director-ia-*.test.js` 557/557; `git diff --check` limpio. GASTOS ≠ INVERSIONES ≠ IGF. «cómo van los gastos» / margen / rentabilidad siguen M7. Export/xlsx **sigue fuera**. Scoring M0–M20 del loop (COMPLETE=1.0, PARCIAL=0.5, INDIRECTA=0.5, NOT_STARTED/NO INTEGRADA=0.0): 8.5/20 = 42.5% → **9.0/20 = 45.0%**. |
 
 ### M7 — IGF Forecast
 
@@ -844,25 +844,29 @@
 
 ### Fuente: Gastos
 
-- **Dominio:** Categoría GASTOS en Excel rango (M6) y/o folios categoría GASTOS
-- **Cobertura actual:** NO INTEGRADA (módulo Excel); posible confusión INDIRECTA con KPI «gasto» en anexo IGF
-- **Archivo de acceso:** `lib/categoria-rango-excel.js`
-- **Función de acceso:** Handler `categoria-rango-excel?categoria=GASTOS`
-- **Endpoint relacionado:** citado
-- **Tablas consultadas:** `public.folios`
-- **Evidencia de integración actual:** No integrada al Excel; regex «gasto(s)» puede adjuntar IGF/ARR
-- **Información que no puede concluirse con esta fuente:** Listado de folios GASTOS del Excel vía Director IA
+- **Dominio:** Folios categoría GASTOS (M6 query JSON). Distinto de IGF «gasto» (M7) y de Taller AT (M5)
+- **Cobertura actual:** PARCIAL (consulta on-demand; Export/xlsx no integrado)
+- **Archivo de acceso:** `lib/director-ia-m6-gastos-inversiones.js`; `expandCategoriaRows` en `lib/categoria-rango-excel.js`
+- **Función de acceso:** `loadGastosInversionesForChat("GASTOS")` → SELECT `public.folios` + `expandCategoriaRows`
+- **Endpoint relacionado:** Chat `POST /api/director-ia/chat` (in-process). **No** usa `GET /api/dashboard/categoria-rango-excel`
+- **Tablas consultadas:** `public.folios` ⋈ `public.plantas`
+- **Filtros disponibles:** `planta_id` obligatorio; `YYYY-MM` obligatorio (un mes o rango); partida/concepto opcional si aparece en la pregunta
+- **Permisos:** JWT/contexto; rol; `plantas_permitidas`; GV 403; GA en planta autorizada; cross-planta 403; fail-closed
+- **Evidencia de integración actual:** Intent `expense_analysis` + tool `get_expense_analysis` + rama en `askDirectorIa` (después de `detectUnsupported`, antes de OpenAI/IGF)
+- **Información que no puede concluirse con esta fuente:** Export/xlsx; IGF/margen/rentabilidad; Taller AT; desviación; causa; mes inventado
 
 ### Fuente: Inversiones
 
-- **Dominio:** Categoría INVERSIONES (M6)
-- **Cobertura actual:** NO INTEGRADA
-- **Archivo de acceso:** `lib/categoria-rango-excel.js`
-- **Función de acceso:** Handler `categoria=INVERSIONES`
-- **Endpoint relacionado:** `GET /api/dashboard/categoria-rango-excel`
-- **Tablas consultadas:** `public.folios`
-- **Evidencia de integración actual:** No integrada
-- **Información que no puede concluirse con esta fuente:** Inversiones pendientes
+- **Dominio:** Folios categoría INVERSIONES (M6 query JSON)
+- **Cobertura actual:** PARCIAL (consulta on-demand; Export/xlsx no integrado)
+- **Archivo de acceso:** `lib/director-ia-m6-gastos-inversiones.js`; `expandCategoriaRows` en `lib/categoria-rango-excel.js`
+- **Función de acceso:** `loadGastosInversionesForChat("INVERSIONES")` → SELECT `public.folios` + `expandCategoriaRows`
+- **Endpoint relacionado:** Chat `POST /api/director-ia/chat` (in-process). **No** usa `GET /api/dashboard/categoria-rango-excel`
+- **Tablas consultadas:** `public.folios` ⋈ `public.plantas`
+- **Filtros disponibles:** `planta_id` obligatorio; `YYYY-MM` obligatorio; partida/concepto opcional
+- **Permisos:** mismos que Gastos (authz de folios, no bloqueo GA de KPIs IGF)
+- **Evidencia de integración actual:** Intent `investment_analysis` + tool `get_investment_analysis` + rama en `askDirectorIa`
+- **Información que no puede concluirse con esta fuente:** Export/xlsx; «pendiente» como etapa almacenada; IGF; desviación; causa; mes inventado
 
 ### Fuente: Delta Venta
 
@@ -948,7 +952,7 @@
 
 | # | Pregunta | ¿Puede responderla hoy? | Cobertura | Fuente necesaria | Función/endpoint existente | Información faltante | Riesgo de respuesta incorrecta |
 |---|----------|-------------------------|-----------|------------------|----------------------------|----------------------|--------------------------------|
-| 1 | ¿Cómo va una planta? | Parcialmente | PARCIAL | AR + (opcional) IGF/ARR/MC según wording | `buildDirectorIaContextPayload`; `buildPlantSummaryBlock`; `loadIgfArrAnnexForChat` si regex financiero | Presupuestos, Excel gastos; KPIs dashboard y proyectos existen on-demand con wording propio (no se activan solo con «cómo va la planta») | Alto si se interpreta como KPI financiero IGF/ARR o como KPI de folios sin el intent `dashboard_kpis` |
+| 1 | ¿Cómo va una planta? | Parcialmente | PARCIAL | AR + (opcional) IGF/ARR/MC según wording | `buildDirectorIaContextPayload`; `buildPlantSummaryBlock`; `loadIgfArrAnnexForChat` si regex financiero | Presupuestos; Export GASTOS. Listado M6 y KPIs/proyectos M3 existen on-demand con wording propio (no se activan solo con «cómo va la planta») | Alto si se interpreta como KPI financiero IGF/ARR o como KPI de folios sin el intent `dashboard_kpis` |
 | 2 | ¿Qué acciones están vencidas? | Sí (limitado) | PARCIAL | Action Register | `summarizeTopOverdueActions` / context | Acciones fuera del top 10; notas excluidas | Medio (omisión por límite) |
 | 3 | ¿Quién es responsable de una acción? | Sí (limitado) | PARCIAL | Action Register | `summarizeActionRegisterResponsables`, narrativa chat | Responsables fuera del top 10 | Medio |
 | 4 | ¿Por qué cayó el ingreso? | Parcialmente | PARCIAL / INDIRECTA | commercial_state + DICF + bitácora + IGF/ARR | `loadCommercialStateForChat`, `summarizeDicfContext`, anexo IGF/ARR | Causalidad no estructurada (M9 compara periodos reales; no afirma por qué cayó el ingreso) | Alto (hipótesis narrativa) |
@@ -962,8 +966,8 @@
 | 12 | ¿Qué documentos le faltan? | No | NO INTEGRADA | Documentos/medios (faltantes / set esperado) | Guardrail `UNSUPPORTED_RULES.documentos` (`SOURCE_NOT_INTEGRATED`) | Set esperado canónico; cumplimiento; contenido | Alto si se lee la metadata M2 como «faltan documentos» |
 | 13 | ¿Tiene cheque, depósito o póliza? | No | NO INTEGRADA | Folios/pólizas | Campos folio + endpoints póliza/cheque | Toda la fuente | Alto |
 | 14 | ¿Existen posibles folios duplicados? | Sí (heurístico; candidatos, no confirmación) | COMPLETA | Duplicados | `loadDuplicateFoliosForChat` / `findDuplicatePairs` | Confirmación humana; cancelación; `/check` al crear; pares fuera de ventana o `LIMIT 1500` | Alto si se lee como duplicado confirmado o fraude |
-| 15 | ¿Qué gastos existen por planta? | No (Excel); confusión posible | NO INTEGRADA / INDIRECTA | Gastos Excel vs IGF «gasto» | `categoria-rango-excel` vs `PLANT_FINANCIAL_KPI_RE` | Listado folios GASTOS | Alto (ambigüedad semántica) |
-| 16 | ¿Qué inversiones están pendientes? | No | NO INTEGRADA | Inversiones Excel / folios | `categoria-rango-excel?categoria=INVERSIONES` | Toda la fuente | Alto |
+| 15 | ¿Qué gastos existen por planta? | Parcialmente (listado folios GASTOS si wording es categoría/folios + `YYYY-MM`; no Excel) | PARCIAL | Folios categoría GASTOS (`public.folios` + `expandCategoriaRows`) | `loadGastosInversionesForChat("GASTOS")` / `get_expense_analysis` | Export/xlsx; «cómo van los gastos» / margen / rentabilidad siguen IGF (M7) | Alto si se lee como IGF o como Export |
+| 16 | ¿Qué inversiones están pendientes? | Parcialmente (listado folios INVERSIONES no cancelados si hay `YYYY-MM`; «pendiente» no es etapa almacenada) | PARCIAL | Folios categoría INVERSIONES | `loadGastosInversionesForChat("INVERSIONES")` / `get_investment_analysis` | Export/xlsx; etapa «pendiente»; mes inventado | Alto si se afirma pendiente como estatus |
 | 17 | ¿Cómo va el presupuesto semanal? | No | NO INTEGRADA | Presupuestos | Tablas `presupuesto_*` / bot carrito | Toda la fuente | Alto |
 | 18 | ¿Qué proyectos están retrasados? | Sí (listado EN_CURSO; «retrasado» no es estatus almacenado) | COMPLETA (consulta del módulo; el retraso solo puede declararse como derivado de `fecha_cierre_estimada`) | Proyectos | `loadProyectosForChat` / `get_project_status` | Estatus oficial de retraso; crear/editar/eliminar | Alto si se lee como estatus almacenado o como Action Register |
 | 19 | ¿Qué usuario realizó un movimiento? | Parcialmente (folios: `actor_telefono`/`actor_rol` observados si existen; null ≠ sistema); parcial en AR/DICF | PARCIAL | Historial folio vs historial DICF/AR | `loadFolioHistoryForChat` (actor observado) vs detalles DICF/AR summarizers | Responsabilidad inferida; actor sistema; usuario canónico si actor es null | Alto si se atribuye mal |
@@ -1048,7 +1052,7 @@ Escala 1–5. Prioridad derivada de: valor ejecutivo × disponibilidad de funcio
 | IGF/ARR en GET context (no solo regex) | 5 | 4 (ya hay annex) | 2 | 3 | Igualar sources chat/context | **Alta** |
 | commercial_state en GET context | 5 | 4 | 2 | 3 | GA/GV gates | **Alta** |
 | Delta Venta/Descuento/Ingreso | 4 | 4 (endpoints) | 3 | 3 | ARR | **Media** |
-| GASTOS/INVERSIONES (query, no solo xlsx) | 4 | 4 | 3 | 3 | Folios, priv_clave | **Media** |
+| GASTOS/INVERSIONES (query, no solo xlsx) | 4 | 4 | 3 | 3 | Folios; query JSON ya en PARCIAL M6 | **Hecha (PARTIAL)**; Export/xlsx sigue fuera |
 | Taller por AT (agregados) | 3 | 4 | 3 | 3 | `unidad-taller` | **Media** |
 | Duplicados (`folio-duplicados`) | 3 | 4 | 2 | 3 | Folios | **Media** |
 | Presupuesto semanal | 4 | 3 (UI limitada) | 4 (lógica en `server.js`) | 4 | Folios, bot | **Media-Baja** |
@@ -1103,8 +1107,8 @@ Escala 1–5. Prioridad derivada de: valor ejecutivo × disponibilidad de funcio
 | Campo | Contenido |
 |-------|-----------|
 | **Evidencia** | `lib/director-ia-chat.js`, `lib/director-ia-igf-arr.js` (`IGF_SIGNAL_RE`, `ARR_SIGNAL_RE`, `PLANT_FINANCIAL_KPI_RE`), `isCommercialStateListQuestion`, etc. |
-| **Impacto posible** | Preguntas legítimas no activan la fuente correcta; «gasto» puede ir a IGF en lugar de Excel GASTOS. |
-| **Dominios afectados** | M7, M8, M9, M11, M12, M13. |
+| **Impacto posible** | Preguntas legítimas no activan la fuente correcta. El listado de folios GASTOS/INVERSIONES ya va a M6; «cómo van los gastos» / margen / rentabilidad siguen IGF (M7). Export/xlsx sigue fuera. |
+| **Dominios afectados** | M6, M7, M8, M9, M11, M12, M13. |
 | **¿Bloquea expansión?** | No; aumenta riesgo de veracidad al añadir fuentes. |
 | **Información adicional** | Cobertura de tests de routing (no inventariados como suite dedicada en esta auditoría). |
 
@@ -1224,7 +1228,7 @@ Escala 1–5. Prioridad derivada de: valor ejecutivo × disponibilidad de funcio
 
 ### 1. Resumen de cobertura real actual
 
-Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Register**, **DICF**, **bitácora**, **comentarios** (cliente y folio) y **entidades comerciales**, con **anexos financieros on-demand** (IGF/ARR/margen/estado comercial) activados por **regex** en el chat, **análisis on-demand de posibles duplicados de folios** (M16: `findDuplicatePairs`, no confirmación), **consulta on-demand de KPIs de dashboard y proyectos por planta** (M3: `get_dashboard_kpis` / `get_project_status`; no catálogo global; no creación de proyectos), **consulta on-demand de Delta Venta / Descuento / Ingreso de periodos reales** (M9: `get_delta_sales` / `get_delta_discount` / `get_delta_income`; no forecast con escritura; no M19), **consulta on-demand de estatus/etapa de folio** (M2 slice `folio_status`: `get_folio_status` / `loadFolioStatusForChat`; SELECT-only; no GET kanban; no GET `/folios/:id`; no autoavance), y **consulta on-demand del historial de folio** (M2 slice `folio_history`: `get_folio_history` / `loadFolioHistoryForChat`; SELECT-only de `public.folio_historial`; no GET `/timeline`; no `dedupeHistorialByStage`; no autoavance), y **consulta on-demand de metadata documental de folio** (M2 slice `folio_documents`: `get_folio_documents` / `loadFolioDocumentsMetadataForChat`; SELECT-only de `public.folio_archivos` con proyección segura; no S3; no PDF; no `s3_key`; no «faltan documentos»). **No** opera el kanban HTTP, **no** usa `/timeline` como transporte interno, **no** lee contenido PDF/S3/pólizas/cheques/presupuestos/clasificación/taller/Excel GASTOS-INVERSIONES ni el forecast mutante de ingreso. Las escrituras propias (bitácora/entidades) existen por **API UI**, no como tools autónomos del LLM. El GET `/api/director-ia/context` **subdeclara** IGF/ARR/commercial_state respecto al chat.
+Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Register**, **DICF**, **bitácora**, **comentarios** (cliente y folio) y **entidades comerciales**, con **anexos financieros on-demand** (IGF/ARR/margen/estado comercial) activados por **regex** en el chat, **análisis on-demand de posibles duplicados de folios** (M16: `findDuplicatePairs`, no confirmación), **consulta on-demand de KPIs de dashboard y proyectos por planta** (M3: `get_dashboard_kpis` / `get_project_status`; no catálogo global; no creación de proyectos), **consulta on-demand de Delta Venta / Descuento / Ingreso de periodos reales** (M9: `get_delta_sales` / `get_delta_discount` / `get_delta_income`; no forecast con escritura; no M19), **consulta on-demand de estatus/etapa de folio** (M2 slice `folio_status`: `get_folio_status` / `loadFolioStatusForChat`; SELECT-only; no GET kanban; no GET `/folios/:id`; no autoavance), **consulta on-demand del historial de folio** (M2 slice `folio_history`: `get_folio_history` / `loadFolioHistoryForChat`; SELECT-only de `public.folio_historial`; no GET `/timeline`; no `dedupeHistorialByStage`; no autoavance), **consulta on-demand de metadata documental de folio** (M2 slice `folio_documents`: `get_folio_documents` / `loadFolioDocumentsMetadataForChat`; SELECT-only de `public.folio_archivos` con proyección segura; no S3; no PDF; no `s3_key`; no «faltan documentos»), y **consulta on-demand de GASTOS e INVERSIONES de folios** (M6 slice query JSON: `get_expense_analysis` / `get_investment_analysis` / `loadGastosInversionesForChat`; SELECT `public.folios` + `expandCategoriaRows`; `YYYY-MM` obligatorio; no Excel; no Export; no IGF). **No** opera el kanban HTTP, **no** usa `/timeline` como transporte interno, **no** lee contenido PDF/S3/pólizas/cheques/presupuestos/clasificación/taller/Export xlsx GASTOS-INVERSIONES ni el forecast mutante de ingreso. Las escrituras propias (bitácora/entidades) existen por **API UI**, no como tools autónomos del LLM. El GET `/api/director-ia/context` **subdeclara** IGF/ARR/commercial_state respecto al chat.
 
 ### 2. Dominios completos (COMPLETA)
 
@@ -1238,6 +1242,7 @@ Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Re
 - M0 Auth (gates, no catálogo)
 - M1 Health (readiness técnica `GET /health-director-ia` en header de DirectorIaShell; no `/health` `/health-db` `/health-proyectos`)
 - M2 Folios (comentarios + slice `folio_status` estatus/etapa + slice `folio_history` eventos crudos + slice `folio_documents` metadata-only; no contenido PDF/S3, no faltantes, no cheque/póliza, no `kanban_flow` ni kanban HTTP)
+- M6 GASTOS / INVERSIONES (query JSON de folios por planta y `YYYY-MM`; GASTOS ≠ INVERSIONES ≠ IGF; no Export/xlsx; no COMPLETE)
 - M7 IGF (chat on-demand)
 - M8 ARR (chat on-demand / motor DICF)
 - M11 DICF + comentarios cliente
@@ -1247,13 +1252,13 @@ Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Re
 ### 4. Dominios indirectos (INDIRECTA)
 
 - M20 Home KPI (comparte fuentes, no la página)
-- M6 «gastos» en lenguaje natural → posible anexo IGF (no Excel GASTOS)
+- Colisión lingüística: «cómo van los gastos» / margen / rentabilidad siguen el anexo IGF (M7). Eso **no** puntúa a M6; M6 es PARCIAL por el listado de folios.
 
 ### 5. Dominios no integrados (NO INTEGRADA)
 
 - M4 Clasificación  
 - M5 Taller AT  
-- M6 Excel GASTOS/INVERSIONES  
+- M6 Export/xlsx (el query JSON ya está en PARCIAL M6; COMPLETE de M6 sigue fuera)
 - M10 Weekly discount LD  
 - M14 Usuarios admin (como dominio)  
 - M15 Documentos/medios  
@@ -1280,6 +1285,8 @@ Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Re
 | CONSULTAR KPIs de dashboard (folios) | `loadDashboardKpisForChat` → `queryDashboardKpis` |
 | CONSULTAR proyectos por planta | `loadProyectosForChat` → `listarProyectosPorPlantaOEquivalentes` |
 | COMPARAR Delta Venta / Descuento / Ingreso (periodos reales) | `loadDeltaVentaForChat` / `loadDeltaDescuentoForChat` / `loadDeltaIngresoForChat` |
+| CONSULTAR GASTOS de folios (read-only, `YYYY-MM`) | `loadGastosInversionesForChat("GASTOS")` → SELECT + `expandCategoriaRows` |
+| CONSULTAR INVERSIONES de folios (read-only, `YYYY-MM`) | `loadGastosInversionesForChat("INVERSIONES")` → SELECT + `expandCategoriaRows` |
 
 ### 7. Capacidades que requieren herramientas nuevas (aunque exista API/lib)
 
@@ -1289,7 +1296,7 @@ Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Re
 | Timeline / último movimiento | Slice `folio_history` ya integrado (SELECT-only de `public.folio_historial`). GET `/timeline` existe y **sigue excluido** (HTTP interno + `dedupeHistorialByStage`) | Transiciones inventadas, actor sistema, contenido/financial; no copiar dedupe |
 | Metadatos documentos / póliza / cheque | Metadata de `folio_archivos` ya integrada (M2 SELECT-only, sin `s3_key`). Endpoints `/media` y póliza/cheque existen y **siguen excluidos** | Contenido PDF, S3, signed URLs, faltantes, póliza operativa, cheque |
 | Duplicados (cancelar / `findSimilarTo` al crear / Excel Taller) | Sí (cancelar UI, `POST /check`, Excel M5) | Escritura y detectores ajenos al análisis M16 ya integrado |
-| Excel/agregados Taller, GASTOS, INVERSIONES | Sí (libs Excel) | Tool de consulta (idealmente sin solo xlsx) |
+| Excel/agregados Taller, GASTOS, INVERSIONES | Query JSON M6 ya integrado (SELECT + `expandCategoriaRows`). Libs Excel Taller/GASTOS/INVERSIONES siguen existiendo | Export/xlsx M6; Taller AT (M5); no usar workbook como transporte |
 | Deltas UI (forecast con escritura / M19) | Sí (`delta-ingreso-forecast`, `/api/ai/delta-ingreso/test/*`) | La lectura de periodos reales ya está en COMPLETA M9; faltan forecast mutante y M19, a propósito fuera |
 | Presupuesto semanal | Tablas sí; API UI limitada | Queries/tool + mapeo bot |
 | Proyectos (crear/editar/eliminar) | Sí (`POST /api/proyectos`) | Escritura; la lectura M3 ya está integrada |
@@ -1344,6 +1351,7 @@ Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Re
 | M2 Folios / historial | `lib/director-ia-m2-history.js` |
 | M2 Folios / metadata documental | `lib/director-ia-m2-documents-metadata.js` |
 | M3 Plantas / KPIs / Proyectos | `lib/director-ia-m3-plantas-kpis-proyectos.js` |
+| M6 GASTOS / INVERSIONES (query JSON) | `lib/director-ia-m6-gastos-inversiones.js` |
 | M9 Delta Venta / Descuento / Ingreso | `lib/director-ia-m9-deltas.js` |
 | AR summarizers | `lib/director-ia-action-register.js` |
 | IGF/ARR annex | `lib/director-ia-igf-arr.js` |
