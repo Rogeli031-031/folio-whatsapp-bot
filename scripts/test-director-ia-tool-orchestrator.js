@@ -196,6 +196,28 @@ const cases = [
     assert(isDirectorIaToolExecutable("get_dashboard_kpis") === true, "get_dashboard_kpis exec");
   },
 
+  () => {
+    const { toolPlan } = planTools("¿Cómo cambió la venta?", { planta_id: 1, question: "¿Cómo cambió la venta?" });
+    const t = getTool(toolPlan, "get_delta_sales");
+    assert(t && t.status === TOOL_STATUS.available_on_demand, "delta venta on demand");
+    assert(t.executable === true, "delta venta executable");
+    assert(isDirectorIaToolExecutable("get_delta_sales") === true, "get_delta_sales exec");
+  },
+
+  () => {
+    const { toolPlan } = planTools("¿Cómo cambió el descuento?", { planta_id: 1, question: "¿Cómo cambió el descuento?" });
+    const t = getTool(toolPlan, "get_delta_discount");
+    assert(t && t.status === TOOL_STATUS.available_on_demand, "delta descuento on demand");
+    assert(t.executable === true, "delta descuento executable");
+  },
+
+  () => {
+    const { toolPlan } = planTools("¿Cómo cambió el ingreso?", { planta_id: 1, question: "¿Cómo cambió el ingreso?" });
+    const t = getTool(toolPlan, "get_delta_income");
+    assert(t && t.status === TOOL_STATUS.available_on_demand, "delta ingreso on demand");
+    assert(t.executable === true, "delta ingreso executable");
+  },
+
   // 13. Usuario permisos
   () => {
     const { toolPlan } = planTools("¿Qué permisos tiene el usuario?", {});

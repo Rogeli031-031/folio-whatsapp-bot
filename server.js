@@ -77,6 +77,7 @@ const directorIaMejoraContinua = require("./lib/director-ia-mejora-continua");
 const directorIaBitacora = require("./lib/director-ia-bitacora");
 const { isDirectorIaEnabled } = require("./lib/director-ia");
 const directorIaM3 = require("./lib/director-ia-m3-plantas-kpis-proyectos");
+const directorIaM9 = require("./lib/director-ia-m9-deltas");
 const directorIaEks = require("./lib/director-ia-eks");
 const comercialEntidad = require("./lib/comercial-entidad");
 const { buildActionRegisterBoardPayload } = require("./lib/action-register-board");
@@ -1926,225 +1927,27 @@ async function getPlantasDeltaVenta(client) {
 
 /** Periodos disponibles (YYYY-MM) para Delta Venta por planta Provincia. */
 async function getPeriodosDeltaVenta(client, plantaNombre) {
-  const r = await client.query(
-    `WITH prov_map AS (
-       SELECT DISTINCT
-              p.nombre AS prov_name,
-              UPPER(TRIM(p.nombre)) AS key_nombre,
-              UPPER(TRIM(COALESCE(p.clave, ''))) AS key_clave
-         FROM public.plantas p
-         JOIN arr.provincia_plants ap
-           ON UPPER(TRIM(ap.plant_code)) = UPPER(TRIM(p.nombre))
-           OR (p.clave IS NOT NULL AND TRIM(p.clave) <> '' AND UPPER(TRIM(ap.plant_code)) = UPPER(TRIM(p.clave)))
-        WHERE UPPER(TRIM(COALESCE(p.nombre, ''))) != 'CORPORATIVO'
-          AND UPPER(TRIM(COALESCE(p.clave, ''))) != 'CORPORATIVO'
-     )
-     SELECT DISTINCT to_char(v.fecha, 'YYYY-MM') AS periodo
-       FROM arr.ventas_diarias_cliente v
-       JOIN prov_map pm
-         ON UPPER(TRIM(v.plant_code)) = pm.key_nombre
-         OR (pm.key_clave <> '' AND UPPER(TRIM(v.plant_code)) = pm.key_clave)
-      WHERE pm.prov_name = $1
-      ORDER BY periodo DESC`,
-    [plantaNombre]
-  );
-  return (r.rows || []).map((row) => row.periodo).filter(Boolean);
+  return directorIaM9.getPeriodosDeltaVenta(client, plantaNombre);
 }
 
 /** Delta de venta por cliente entre dos periodos (kg). */
 async function getDeltaVentaClientes(client, plantaNombre, periodoA, periodoB) {
-  const [yA, mA] = periodoA.split("-").map((s) => parseInt(s, 10));
-  const [yB, mB] = periodoB.split("-").map((s) => parseInt(s, 10));
-  if (!Number.isFinite(yA) || !Number.isFinite(mA) || !Number.isFinite(yB) || !Number.isFinite(mB)) {
-    return [];
-  }
-  const r = await client.query(
-    `WITH prov_map AS (
-       SELECT DISTINCT
-              p.nombre AS prov_name,
-              UPPER(TRIM(p.nombre)) AS key_nombre,
-              UPPER(TRIM(COALESCE(p.clave, ''))) AS key_clave
-         FROM public.plantas p
-         JOIN arr.provincia_plants ap
-           ON UPPER(TRIM(ap.plant_code)) = UPPER(TRIM(p.nombre))
-           OR (p.clave IS NOT NULL AND TRIM(p.clave) <> '' AND UPPER(TRIM(ap.plant_code)) = UPPER(TRIM(p.clave)))
-        WHERE UPPER(TRIM(COALESCE(p.nombre, ''))) != 'CORPORATIVO'
-          AND UPPER(TRIM(COALESCE(p.clave, ''))) != 'CORPORATIVO'
-     ),
-     ventas_mes AS (
-       SELECT pm.prov_name AS planta,
-              DATE_PART('year', v.fecha)::INT AS year,
-              DATE_PART('month', v.fecha)::INT AS month,
-              v.cliente_norm,
-              SUM(v.kg) AS kg
-         FROM arr.ventas_diarias_cliente v
-         JOIN prov_map pm
-           ON UPPER(TRIM(v.plant_code)) = pm.key_nombre
-           OR (pm.key_clave <> '' AND UPPER(TRIM(v.plant_code)) = pm.key_clave)
-        GROUP BY pm.prov_name, year, month, v.cliente_norm
-     ),
-     mesA AS (
-       SELECT cliente_norm, kg
-         FROM ventas_mes
-        WHERE planta = $1 AND year = $2 AND month = $3
-     ),
-     mesB AS (
-       SELECT cliente_norm, kg
-         FROM ventas_mes
-        WHERE planta = $1 AND year = $4 AND month = $5
-     )
-     SELECT
-       COALESCE(a.cliente_norm, b.cliente_norm) AS cliente_norm,
-       COALESCE(a.kg, 0) AS kg_a,
-       COALESCE(b.kg, 0) AS kg_b,
-       COALESCE(b.kg, 0) - COALESCE(a.kg, 0) AS delta_kg
-       FROM mesA a
-       FULL OUTER JOIN mesB b ON a.cliente_norm = b.cliente_norm`,
-    [plantaNombre, yA, mA, yB, mB]
-  );
-  return (r.rows || []).map((row) => ({
-    cliente: row.cliente_norm,
-    kgA: row.kg_a != null ? Number(row.kg_a) : 0,
-    kgB: row.kg_b != null ? Number(row.kg_b) : 0,
-    deltaKg: row.delta_kg != null ? Number(row.delta_kg) : 0,
-  }));
+  return directorIaM9.getDeltaVentaClientes(client, plantaNombre, periodoA, periodoB);
 }
 
 /** Plantas con datos de descuentos diarios (Delta Descuento), usando mapeo Provincia. */
 async function getPlantasDeltaDescuento(client) {
-  const r = await client.query(`
-    WITH prov_map AS (
-      SELECT DISTINCT
-             p.nombre AS prov_name,
-             UPPER(TRIM(p.nombre)) AS key_nombre,
-             UPPER(TRIM(COALESCE(p.clave, ''))) AS key_clave
-        FROM public.plantas p
-        JOIN arr.provincia_plants ap
-          ON UPPER(TRIM(ap.plant_code)) = UPPER(TRIM(p.nombre))
-          OR (p.clave IS NOT NULL AND TRIM(p.clave) <> '' AND UPPER(TRIM(ap.plant_code)) = UPPER(TRIM(p.clave)))
-       WHERE UPPER(TRIM(COALESCE(p.nombre, ''))) != 'CORPORATIVO'
-         AND UPPER(TRIM(COALESCE(p.clave, ''))) != 'CORPORATIVO'
-    )
-    SELECT DISTINCT pm.prov_name AS nombre
-      FROM arr.descuentos_diarios_cliente d
-      JOIN prov_map pm
-        ON UPPER(TRIM(d.plant_code)) = pm.key_nombre
-        OR (pm.key_clave <> '' AND UPPER(TRIM(d.plant_code)) = pm.key_clave)
-     ORDER BY pm.prov_name
-  `);
-  return (r.rows || []).map((row) => row.nombre).filter(Boolean);
+  return directorIaM9.getPlantasDeltaDescuento(client);
 }
 
 /** Periodos disponibles (YYYY-MM) para Delta Descuento por planta Provincia. */
 async function getPeriodosDeltaDescuento(client, plantaNombre) {
-  const r = await client.query(
-    `WITH prov_map AS (
-       SELECT DISTINCT
-              p.nombre AS prov_name,
-              UPPER(TRIM(p.nombre)) AS key_nombre,
-              UPPER(TRIM(COALESCE(p.clave, ''))) AS key_clave
-         FROM public.plantas p
-         JOIN arr.provincia_plants ap
-           ON UPPER(TRIM(ap.plant_code)) = UPPER(TRIM(p.nombre))
-           OR (p.clave IS NOT NULL AND TRIM(p.clave) <> '' AND UPPER(TRIM(ap.plant_code)) = UPPER(TRIM(p.clave)))
-        WHERE UPPER(TRIM(COALESCE(p.nombre, ''))) != 'CORPORATIVO'
-          AND UPPER(TRIM(COALESCE(p.clave, ''))) != 'CORPORATIVO'
-     )
-     SELECT DISTINCT to_char(d.fecha, 'YYYY-MM') AS periodo
-       FROM arr.descuentos_diarios_cliente d
-       JOIN prov_map pm
-         ON UPPER(TRIM(d.plant_code)) = pm.key_nombre
-         OR (pm.key_clave <> '' AND UPPER(TRIM(d.plant_code)) = pm.key_clave)
-      WHERE pm.prov_name = $1
-      ORDER BY periodo DESC`,
-    [plantaNombre]
-  );
-  return (r.rows || []).map((row) => row.periodo).filter(Boolean);
+  return directorIaM9.getPeriodosDeltaDescuento(client, plantaNombre);
 }
 
 /** Delta de descuento por kilo ($/kg) por cliente entre dos periodos. Usa descuento total y kg de ventas por periodo. */
 async function getDeltaDescuentoClientes(client, plantaNombre, periodoA, periodoB) {
-  const [yA, mA] = periodoA.split("-").map((s) => parseInt(s, 10));
-  const [yB, mB] = periodoB.split("-").map((s) => parseInt(s, 10));
-  if (!Number.isFinite(yA) || !Number.isFinite(mA) || !Number.isFinite(yB) || !Number.isFinite(mB)) {
-    return [];
-  }
-  const r = await client.query(
-    `WITH prov_map AS (
-       SELECT DISTINCT
-              p.nombre AS prov_name,
-              UPPER(TRIM(p.nombre)) AS key_nombre,
-              UPPER(TRIM(COALESCE(p.clave, ''))) AS key_clave
-         FROM public.plantas p
-         JOIN arr.provincia_plants ap
-           ON UPPER(TRIM(ap.plant_code)) = UPPER(TRIM(p.nombre))
-           OR (p.clave IS NOT NULL AND TRIM(p.clave) <> '' AND UPPER(TRIM(ap.plant_code)) = UPPER(TRIM(p.clave)))
-        WHERE UPPER(TRIM(COALESCE(p.nombre, ''))) != 'CORPORATIVO'
-          AND UPPER(TRIM(COALESCE(p.clave, ''))) != 'CORPORATIVO'
-     ),
-     desc_mes AS (
-       SELECT pm.prov_name AS planta,
-              DATE_PART('year', d.fecha)::INT AS year,
-              DATE_PART('month', d.fecha)::INT AS month,
-              d.cliente_norm,
-              SUM(d.monto) AS monto
-         FROM arr.descuentos_diarios_cliente d
-         JOIN prov_map pm
-           ON UPPER(TRIM(d.plant_code)) = pm.key_nombre
-           OR (pm.key_clave <> '' AND UPPER(TRIM(d.plant_code)) = pm.key_clave)
-        GROUP BY pm.prov_name, year, month, d.cliente_norm
-     ),
-     ventas_mes AS (
-       SELECT pm.prov_name AS planta,
-              DATE_PART('year', v.fecha)::INT AS year,
-              DATE_PART('month', v.fecha)::INT AS month,
-              v.cliente_norm,
-              SUM(v.kg) AS kg
-         FROM arr.ventas_diarias_cliente v
-         JOIN prov_map pm
-           ON UPPER(TRIM(v.plant_code)) = pm.key_nombre
-           OR (pm.key_clave <> '' AND UPPER(TRIM(v.plant_code)) = pm.key_clave)
-        GROUP BY pm.prov_name, year, month, v.cliente_norm
-     ),
-     desc_a AS (SELECT cliente_norm, monto AS monto_a FROM desc_mes WHERE planta = $1 AND year = $2 AND month = $3),
-     ventas_a AS (SELECT cliente_norm, kg AS kg_a FROM ventas_mes WHERE planta = $1 AND year = $2 AND month = $3),
-     desc_b AS (SELECT cliente_norm, monto AS monto_b FROM desc_mes WHERE planta = $1 AND year = $4 AND month = $5),
-     ventas_b AS (SELECT cliente_norm, kg AS kg_b FROM ventas_mes WHERE planta = $1 AND year = $4 AND month = $5),
-     period_a AS (
-       SELECT COALESCE(d.cliente_norm, v.cliente_norm) AS cliente_norm,
-              COALESCE(d.monto_a, 0) AS monto_a,
-              COALESCE(v.kg_a, 0) AS kg_a
-         FROM desc_a d
-         FULL OUTER JOIN ventas_a v ON d.cliente_norm = v.cliente_norm
-     ),
-     period_b AS (
-       SELECT COALESCE(d.cliente_norm, v.cliente_norm) AS cliente_norm,
-              COALESCE(d.monto_b, 0) AS monto_b,
-              COALESCE(v.kg_b, 0) AS kg_b
-         FROM desc_b d
-         FULL OUTER JOIN ventas_b v ON d.cliente_norm = v.cliente_norm
-     )
-     SELECT
-       COALESCE(a.cliente_norm, b.cliente_norm) AS cliente_norm,
-       a.monto_a, a.kg_a, b.monto_b, b.kg_b,
-       (CASE WHEN (a.kg_a IS NULL OR a.kg_a = 0) THEN 0 ELSE a.monto_a::numeric / a.kg_a END) AS ratio_a,
-       (CASE WHEN (b.kg_b IS NULL OR b.kg_b = 0) THEN 0 ELSE b.monto_b::numeric / b.kg_b END) AS ratio_b,
-       (CASE WHEN (b.kg_b IS NULL OR b.kg_b = 0) THEN 0 ELSE b.monto_b::numeric / b.kg_b END)
-       - (CASE WHEN (a.kg_a IS NULL OR a.kg_a = 0) THEN 0 ELSE a.monto_a::numeric / a.kg_a END) AS delta_ratio
-       FROM period_a a
-       FULL OUTER JOIN period_b b ON a.cliente_norm = b.cliente_norm`,
-    [plantaNombre, yA, mA, yB, mB]
-  );
-  return (r.rows || []).map((row) => ({
-    cliente: row.cliente_norm,
-    montoA: row.monto_a != null ? Number(row.monto_a) : 0,
-    montoB: row.monto_b != null ? Number(row.monto_b) : 0,
-    kgA: row.kg_a != null ? Number(row.kg_a) : 0,
-    kgB: row.kg_b != null ? Number(row.kg_b) : 0,
-    ratioA: row.ratio_a != null ? Number(row.ratio_a) : 0,
-    ratioB: row.ratio_b != null ? Number(row.ratio_b) : 0,
-    deltaRatio: row.delta_ratio != null ? Number(row.delta_ratio) : 0,
-  }));
+  return directorIaM9.getDeltaDescuentoClientes(client, plantaNombre, periodoA, periodoB);
 }
 
 /**
@@ -2154,121 +1957,16 @@ async function getDeltaDescuentoClientes(client, plantaNombre, periodoA, periodo
  * Devuelve null si no hay datos. Empresa se matchea con la planta ignorando tildes (ej. "Tehuacán" coincide con "Tehuacan" en IGF), igual que el comando "margen" en WhatsApp.
  */
 async function getMargenKgPorPeriodo(client, plantaNombre, year, month) {
-  try {
-    const ver = await client.query(
-      `SELECT id FROM igf.versions WHERE plant_code = 'GLOBAL' AND year = $1 AND month = $2 ORDER BY version_number DESC LIMIT 1`,
-      [year, month]
-    );
-    const versionId = ver.rows && ver.rows[0] && ver.rows[0].id;
-    if (versionId == null) return null;
-    const nombre = (plantaNombre || "").trim();
-    const patternConTilde = "%" + nombre + "%";
-    const patternSinTilde = "%" + igfHandler.quitarTildes(nombre) + "%";
-    const r = await client.query(
-      `SELECT SUM(margen_kg * COALESCE(venta_ton, 0)) / NULLIF(SUM(COALESCE(venta_ton, 0)), 0) AS margen_kg
-       FROM igf.compromiso_lines WHERE version_id = $1 AND (empresa ILIKE $2 OR empresa ILIKE $3)`,
-      [versionId, patternConTilde, patternSinTilde]
-    );
-    const val = r.rows && r.rows[0] && r.rows[0].margen_kg != null ? Number(r.rows[0].margen_kg) : null;
-    return val;
-  } catch (e) {
-    return null;
-  }
+  return directorIaM9.getMargenKgPorPeriodo(client, plantaNombre, year, month, {
+    quitarTildes: (n) => igfHandler.quitarTildes(n),
+  });
 }
 
 /** Delta ingreso por cliente entre dos periodos. Ingreso = venta_kg * (margen_$/kg - |descuento_$/kg|). Misma regla que Delta Venta (dejaron, mas, disminuyeron) y 80/20. */
 async function getDeltaIngresoClientes(client, plantaNombre, periodoA, periodoB) {
-  const [yA, mA] = periodoA.split("-").map((s) => parseInt(s, 10));
-  const [yB, mB] = periodoB.split("-").map((s) => parseInt(s, 10));
-  if (!Number.isFinite(yA) || !Number.isFinite(mA) || !Number.isFinite(yB) || !Number.isFinite(mB)) {
-    return [];
-  }
-  const margenA = (await getMargenKgPorPeriodo(client, plantaNombre, yA, mA)) ?? 0;
-  const margenB = (await getMargenKgPorPeriodo(client, plantaNombre, yB, mB)) ?? 0;
-  const r = await client.query(
-    `WITH prov_map AS (
-       SELECT DISTINCT
-              p.nombre AS prov_name,
-              UPPER(TRIM(p.nombre)) AS key_nombre,
-              UPPER(TRIM(COALESCE(p.clave, ''))) AS key_clave
-         FROM public.plantas p
-         JOIN arr.provincia_plants ap
-           ON UPPER(TRIM(ap.plant_code)) = UPPER(TRIM(p.nombre))
-           OR (p.clave IS NOT NULL AND TRIM(p.clave) <> '' AND UPPER(TRIM(ap.plant_code)) = UPPER(TRIM(p.clave)))
-        WHERE UPPER(TRIM(COALESCE(p.nombre, ''))) != 'CORPORATIVO'
-          AND UPPER(TRIM(COALESCE(p.clave, ''))) != 'CORPORATIVO'
-     ),
-     desc_mes AS (
-       SELECT pm.prov_name AS planta,
-              DATE_PART('year', d.fecha)::INT AS year,
-              DATE_PART('month', d.fecha)::INT AS month,
-              d.cliente_norm,
-              SUM(d.monto) AS monto
-         FROM arr.descuentos_diarios_cliente d
-         JOIN prov_map pm
-           ON UPPER(TRIM(d.plant_code)) = pm.key_nombre
-           OR (pm.key_clave <> '' AND UPPER(TRIM(d.plant_code)) = pm.key_clave)
-        GROUP BY pm.prov_name, year, month, d.cliente_norm
-     ),
-     ventas_mes AS (
-       SELECT pm.prov_name AS planta,
-              DATE_PART('year', v.fecha)::INT AS year,
-              DATE_PART('month', v.fecha)::INT AS month,
-              v.cliente_norm,
-              SUM(v.kg) AS kg
-         FROM arr.ventas_diarias_cliente v
-         JOIN prov_map pm
-           ON UPPER(TRIM(v.plant_code)) = pm.key_nombre
-           OR (pm.key_clave <> '' AND UPPER(TRIM(v.plant_code)) = pm.key_clave)
-        GROUP BY pm.prov_name, year, month, v.cliente_norm
-     ),
-     desc_a AS (SELECT cliente_norm, monto AS monto_a FROM desc_mes WHERE planta = $1 AND year = $2 AND month = $3),
-     ventas_a AS (SELECT cliente_norm, kg AS kg_a FROM ventas_mes WHERE planta = $1 AND year = $2 AND month = $3),
-     desc_b AS (SELECT cliente_norm, monto AS monto_b FROM desc_mes WHERE planta = $1 AND year = $4 AND month = $5),
-     ventas_b AS (SELECT cliente_norm, kg AS kg_b FROM ventas_mes WHERE planta = $1 AND year = $4 AND month = $5),
-     period_a AS (
-       SELECT COALESCE(d.cliente_norm, v.cliente_norm) AS cliente_norm,
-              COALESCE(d.monto_a, 0) AS monto_a,
-              COALESCE(v.kg_a, 0) AS kg_a
-         FROM desc_a d
-         FULL OUTER JOIN ventas_a v ON d.cliente_norm = v.cliente_norm
-     ),
-     period_b AS (
-       SELECT COALESCE(d.cliente_norm, v.cliente_norm) AS cliente_norm,
-              COALESCE(d.monto_b, 0) AS monto_b,
-              COALESCE(v.kg_b, 0) AS kg_b
-         FROM desc_b d
-         FULL OUTER JOIN ventas_b v ON d.cliente_norm = v.cliente_norm
-     )
-     SELECT
-       COALESCE(a.cliente_norm, b.cliente_norm) AS cliente_norm,
-       a.monto_a, a.kg_a, b.monto_b, b.kg_b,
-       (CASE WHEN (a.kg_a IS NULL OR a.kg_a = 0) THEN 0 ELSE a.monto_a::numeric / a.kg_a END) AS desc_kg_a,
-       (CASE WHEN (b.kg_b IS NULL OR b.kg_b = 0) THEN 0 ELSE b.monto_b::numeric / b.kg_b END) AS desc_kg_b
-       FROM period_a a
-       FULL OUTER JOIN period_b b ON a.cliente_norm = b.cliente_norm`,
-    [plantaNombre, yA, mA, yB, mB]
-  );
-  const rows = (r.rows || []).map((row) => {
-    const kgA = row.kg_a != null ? Number(row.kg_a) : 0;
-    const kgB = row.kg_b != null ? Number(row.kg_b) : 0;
-    const descKgA = row.desc_kg_a != null ? Number(row.desc_kg_a) : 0;
-    const descKgB = row.desc_kg_b != null ? Number(row.desc_kg_b) : 0;
-    const ingresoA = kgA * (margenA - Math.abs(descKgA));
-    const ingresoB = kgB * (margenB - Math.abs(descKgB));
-    const deltaIngreso = ingresoB - ingresoA;
-    return {
-      cliente: row.cliente_norm,
-      ingresoA,
-      ingresoB,
-      deltaIngreso,
-      kgA,
-      kgB,
-      descKgA,
-      descKgB,
-    };
+  return directorIaM9.getDeltaIngresoClientes(client, plantaNombre, periodoA, periodoB, {
+    getMargenKgPorPeriodo,
   });
-  return { rows, margenA, margenB };
 }
 
 /* ==================== SCHEMA (idempotente) ==================== */
@@ -17171,80 +16869,9 @@ app.get("/api/dashboard/delta-ingreso-forecast-excel", dashboardAuthMiddleware, 
 
 /** Interno: mismo resultado que POST delta-ingreso-datos. Usado por dashboard y por módulo Delta Ingreso AI. */
 async function getDeltaIngresoDatosInternal(client, planta, periodoA, periodoB, sinRegla8020) {
-  const pa = (typeof periodoA === "string" && /^\d{4}-\d{2}$/.test(periodoA)) ? periodoA : null;
-  const pb = (typeof periodoB === "string" && /^\d{4}-\d{2}$/.test(periodoB)) ? periodoB : null;
-  if (!planta || !pa || !pb || pa === pb) return null;
-  const fmtMxn = (m) => (m != null && !isNaN(m) ? m.toLocaleString("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 0, maximumFractionDigits: 0 }) : "$0");
-  const fmtKg = (kg) => (kg != null && !isNaN(kg) ? (kg / 1000).toLocaleString("es-MX", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : "0.0");
-  const fmtDescKg = (r) => (r != null && !isNaN(r) ? `${r.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} $/kg` : "0.00 $/kg");
-  const sinCorte8020 = !!sinRegla8020;
-  const { rows, margenA, margenB } = await getDeltaIngresoClientes(client, planta.trim(), pa, pb);
-  const margenAStr = fmtDescKg(margenA);
-  const margenBStr = fmtDescKg(margenB);
-  const fmtTon = (ton) => (ton != null && !isNaN(ton) ? ton.toLocaleString("es-MX", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + " ton" : "0.0 ton");
-  const build = (filterFn, sortFn, totalReduce, signPositive) => {
-    const candidatos = (rows || []).filter(filterFn).sort(sortFn);
-    const totalDeltaIngreso = candidatos.reduce(totalReduce, 0);
-    const top20 = sinCorte8020 ? candidatos.length : Math.max(1, Math.ceil(candidatos.length * 0.2));
-    const clientes = candidatos.slice(0, top20).map((r) => ({
-      cliente: r.cliente,
-      ingresoA: r.ingresoA,
-      ingresoB: r.ingresoB,
-      deltaIngreso: r.deltaIngreso,
-      ingresoAStr: fmtMxn(r.ingresoA),
-      ingresoBStr: fmtMxn(r.ingresoB),
-      deltaIngresoStr: fmtMxn(r.deltaIngreso),
-      kgA: r.kgA,
-      kgB: r.kgB,
-      kgAStr: fmtKg(r.kgA),
-      kgBStr: fmtKg(r.kgB),
-      descKgAStr: fmtDescKg(r.descKgA),
-      descKgBStr: fmtDescKg(r.descKgB),
-      margenAStr,
-      margenBStr,
-    }));
-    const totalTonA = clientes.reduce((s, c) => s + (c.kgA || 0) / 1000, 0);
-    const totalTonB = clientes.reduce((s, c) => s + (c.kgB || 0) / 1000, 0);
-    return {
-      totalDeltaIngreso,
-      totalDeltaIngresoStr: fmtMxn(Math.abs(totalDeltaIngreso)),
-      signPositive,
-      clientes,
-      totalTonA,
-      totalTonB,
-      totalTonAStr: fmtTon(totalTonA),
-      totalTonBStr: fmtTon(totalTonB),
-    };
-  };
-  const dejaron = build((r) => r.ingresoA > 0 && r.ingresoB <= 0, (a, b) => b.ingresoA - a.ingresoA, (sum, r) => sum + (r.ingresoA != null ? Number(r.ingresoA) : 0), false);
-  const mas = build((r) => r.deltaIngreso > 0 && (r.kgA || 0) > 0, (a, b) => b.deltaIngreso - a.deltaIngreso, (sum, r) => sum + (r.deltaIngreso != null ? Number(r.deltaIngreso) : 0), true);
-  const disminuyeron = build((r) => r.ingresoA > 0 && r.ingresoB > 0 && r.deltaIngreso < 0, (a, b) => a.deltaIngreso - b.deltaIngreso, (sum, r) => sum + (r.deltaIngreso != null ? -Number(r.deltaIngreso) : 0), false);
-  const clientesNuevos = build((r) => (r.kgA || 0) <= 0 && (r.kgB || 0) > 0, (a, b) => (b.kgB || 0) - (a.kgB || 0), (sum, r) => sum + (r.ingresoB != null ? Number(r.ingresoB) : 0), true);
-  const crecen = build((r) => (r.kgA || 0) < (r.kgB || 0), (a, b) => ((b.kgB || 0) - (b.kgA || 0)) - ((a.kgB || 0) - (a.kgA || 0)), (sum, r) => sum + (r.deltaIngreso != null ? Number(r.deltaIngreso) : 0), true);
-  const estables = build((r) => (r.kgA || 0) > 0 && Math.abs((r.kgB || 0) - (r.kgA || 0)) / (r.kgA || 1) < 0.05, (a, b) => Math.abs((b.kgB || 0) - (b.kgA || 0)) - Math.abs((a.kgB || 0) - (a.kgA || 0)), (sum, r) => sum + (r.deltaIngreso != null ? Number(r.deltaIngreso) : 0), false);
-  const esDejaron = (r) => r.ingresoA > 0 && r.ingresoB <= 0;
-  const esMas = (r) => r.deltaIngreso > 0 && (r.kgA || 0) > 0;
-  const esDisminuyeron = (r) => r.ingresoA > 0 && r.ingresoB > 0 && r.deltaIngreso < 0;
-  const esNuevo = (r) => (r.kgA || 0) <= 0 && (r.kgB || 0) > 0;
-  const otrosClientes = build((r) => !esDejaron(r) && !esMas(r) && !esDisminuyeron(r) && !esNuevo(r), (a, b) => (b.kgA || 0) + (b.kgB || 0) - ((a.kgA || 0) + (a.kgB || 0)), (sum, r) => sum + (r.deltaIngreso != null ? Number(r.deltaIngreso) : 0), false);
-  const totalTonAGeneral = (rows || []).reduce((s, r) => s + (r.kgA || 0) / 1000, 0);
-  const totalTonBGeneral = (rows || []).reduce((s, r) => s + (r.kgB || 0) / 1000, 0);
-  return {
-    planta: planta.trim(),
-    periodoA: pa,
-    periodoB: pb,
-    margenAStr,
-    margenBStr,
-    totalTonAGeneralStr: fmtTon(totalTonAGeneral),
-    totalTonBGeneralStr: fmtTon(totalTonBGeneral),
-    dejaron,
-    mas,
-    disminuyeron,
-    clientesNuevos,
-    crecen,
-    estables,
-    otrosClientes,
-  };
+  return directorIaM9.getDeltaIngresoDatosInternal(client, planta, periodoA, periodoB, sinRegla8020, {
+    getMargenKgPorPeriodo,
+  });
 }
 
 /** Datos Delta Ingreso: ingreso = venta_kg * (margen_$/kg - |descuento_$/kg|). Margen desde IGF con última versión del mes. 80/20 sobre la muestra de este delta (Delta Ingreso), no de otro. Si sinRegla8020=true, se muestran todos los clientes (sin recorte 80/20). */
