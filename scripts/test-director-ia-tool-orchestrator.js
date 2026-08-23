@@ -275,6 +275,7 @@ const cases = [
     assert(isDirectorIaToolExecutable("get_arr_snapshot") === true, "arr exec");
     assert(isDirectorIaToolExecutable("get_expense_analysis") === true, "expense exec");
     assert(isDirectorIaToolExecutable("get_investment_analysis") === true, "investment exec");
+    assert(isDirectorIaToolExecutable("get_clasificacion_apoyos_query") === true, "clasificacion exec");
     assert(isDirectorIaToolExecutable("get_taller_at_analysis") === false, "taller_at not exec");
     assert(getDirectorIaTool("get_expense_analysis").executor === "loadGastosInversionesForChat", "expense executor");
     assert(getDirectorIaTool("get_investment_analysis").executor === "loadGastosInversionesForChat", "investment executor");
@@ -288,6 +289,13 @@ const cases = [
       question: "¿Qué inversiones están pendientes?",
     });
     assert(hasTool(invPlan, "get_investment_analysis"), "investment tool in plan");
+    assert(getDirectorIaTool("get_clasificacion_apoyos_query").executor === "loadClasificacionApoyosForChat", "clasificacion executor");
+    const { toolPlan: clasPlan } = planTools("clasificación de apoyos 2026-01 2026-02", {
+      planta_id: 1,
+      question: "clasificación de apoyos 2026-01 2026-02",
+    });
+    assert(hasTool(clasPlan, "get_clasificacion_apoyos_query"), "clasificacion tool in plan");
+    assert(!hasTool(clasPlan, "get_expense_analysis"), "clasificacion no despacha M6");
   },
 
   // Ejecución parcial: tool lista + otra con input faltante
