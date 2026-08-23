@@ -120,19 +120,19 @@
 | **ID** | M2 |
 | **Módulo** | Kanban / Folios |
 | **Propósito empresarial** | Flujo operativo de folios por etapas (aprobación, carro, cheque, depósito, comprobaciones, evidencias). |
-| **Cobertura actual de Director IA** | PARCIAL (comentarios de folio + slice read-only `folio_status` + slice read-only `folio_history`). **No** es COMPLETE: no cubre el kanban HTTP, documentos, cheque/póliza, `kanban_flow` inferencial ni mutaciones. |
-| **Información exacta que sí consulta** | Comentarios: `loadFolioComentariosForDirectorIa` (límite 80) → `public.comentarios` ⋈ `public.folios`. Estatus/etapa on-demand: intent `folio_status` → tool `get_folio_status` → `loadFolioStatusForChat` → SELECT-only (`getFolioById` / `getFolioByNumero` / `getManyFoliosStatus` / `listFoliosByPlanta` + `buildDashboardWhere` con `ventana: "0"`). Consulta por id, por `numero_folio`, varios folios, listado por planta y filtro/listado por etapa. `estatus` = columna observada `public.folios.estatus`. `etapa` = derivada con `estatusToEtapaVisual` (no hay columna DB `etapa`). Historial on-demand: intent `folio_history` → tool `get_folio_history` → `loadFolioHistoryForChat` → resolver/autorizar folio → SELECT-only `public.folio_historial` (`listHistorialForFolio`). History por id o por `numero_folio`. Campos observados del evento: `estatus`, `comentario`, `actor_telefono`, `actor_rol`, `creado_en`. `etapa` del evento = derivada con `estatusToEtapaVisual` **solo** si el `estatus` del evento existe y mapea. Eventos no deduplicados; misma etapa repetida se preserva. Evidencia status: `folio_id`, `numero_folio`, `estatus`, `etapa`, `planta_id`, `planta_nombre`, `source`, `retrieved_at`. Evidencia history: esos identificadores + eventos crudos (`event_id` solo si `id` físico existe). |
-| **Información que no consulta** | `GET /api/dashboard/kanban` (excluido: puede autoavanzar). `GET /api/folios/:id` (excluido: puede autoavanzar). `GET /api/folios/:id/timeline` (excluido como transporte interno; no autoavanza, pero no es fuente de Director IA y su `dedupeHistorialByStage` no se copia). `maybeAdvanceFolioToComprobaciones`. `dedupeHistorialByStage`. Documentos/PDF / `folio_documents`. Cheque, póliza, presupuesto. `kanban_flow` inferencial. `estatus_anterior` / `estatus_nuevo` / `event_type` del evento (no existen en la fila). Actor sistema inferido (actor null **no** significa sistema). Crear/editar/aprobar/cancelar. Cualquier UPDATE/INSERT/DELETE. |
-| **Archivos actuales relacionados** | `lib/director-ia-m2-folio-status.js`; `lib/director-ia-m2-history.js`; wiring en `lib/director-ia-chat.js`, `lib/director-ia-tools.js`, `lib/director-ia-capabilities.js`, `lib/director-ia-planner.js`; comentarios: `lib/cliente-comentarios.js`. `server.js` handlers kanban/`/folios/:id`/`/timeline` **no** usados por Director IA. |
-| **Endpoints actuales relacionados** | Lectura integrada in-process (no HTTP interno). Folios HTTP existentes y **no** usados como fuente: `/api/dashboard/kanban`, `/api/folios/:id` (pueden llamar `maybeAdvanceFolioToComprobaciones`); `/api/folios/:id/timeline` (no autoavanza; excluido por HTTP interno + dedupe). |
-| **Tablas o vistas relacionadas** | `public.folios` (estatus observado), `public.plantas`, `public.comentarios`, `public.folio_historial` (eventos observados del slice history). Fuera de estos slices: `public.folio_archivos`. |
-| **Funciones existentes reutilizables** | `loadFolioStatusForChat`, `getFolioById`, `getFolioByNumero`, `getManyFoliosStatus`, `listFoliosByPlanta`, `estatusToEtapaVisual`, `etapaVisualToEstatusTecnicos`, `buildDashboardWhere`, `loadFolioHistoryForChat`, `listHistorialForFolio`, `assertFolioStatusAccess`, `folioVisibleToAuth`, `folioInPlantScope`, `loadFolioComentariosForDirectorIa`. |
-| **Capacidades de lectura posibles** | CONSULTAR/RESUMIR comentarios; CONSULTAR estatus observado; CONSULTAR etapa derivada; BUSCAR por id/`numero_folio`; LISTAR por planta/etapa; CONSULTAR historial de eventos observados (sin dedupe). CONSULTAR docs/cheque/póliza **no** integrados. |
-| **Capacidades de escritura posibles** | CREAR/EDITAR/APROBAR/CANCELAR folio existen en API folios; **no** conectadas a Director IA. No autoavance. |
-| **Permisos aplicables** | JWT/`req.dashboardAuth`; rol; `planta_id`; `plantas_permitidas` (GG/GA/AD fail-closed). GV = 403. GA solo en planta autorizada. Folio cross-planta = 403. Not found = 404. History: resolver folio y autorizar **antes** de consultar `public.folio_historial`. |
-| **Nivel de riesgo** | Lectura estatus/etapa/historial/comentarios: MEDIO. Mutaciones folio: ALTO (fuera de Director IA). |
-| **Dependencias** | Plantas; equivalentes M3; presupuestos (carro) y proyectos siguen fuera de este slice. |
-| **Observaciones verificadas** | `IMPL-DIRECTOR-IA-M2-FOLIO-STATUS-001` (main `e5bd3a05`) + `IMPL-DIRECTOR-IA-M2-HISTORY-001` (main `368394f7`). Tests history: focales 22/22; capabilities 28/28; planner 33/33; orchestrator 24/24; suite `test/director-ia-*.test.js` 509/509; `git diff --check` limpio. M2 **sigue PARCIAL**. Scoring M0–M20 **sin cambio**: 8.5/20 = **42.5%** (PARTIAL ya valía 0.5; no se suma +2.5 pp). |
+| **Cobertura actual de Director IA** | PARCIAL (comentarios de folio + slice read-only `folio_status` + slice read-only `folio_history` + slice read-only `folio_documents` metadata-only). **No** es COMPLETE: no cubre el kanban HTTP, contenido PDF/S3, documentos faltantes, cumplimiento documental, cheque/póliza, `kanban_flow` inferencial ni mutaciones. |
+| **Información exacta que sí consulta** | Comentarios: `loadFolioComentariosForDirectorIa` (límite 80) → `public.comentarios` ⋈ `public.folios`. Estatus/etapa on-demand: intent `folio_status` → tool `get_folio_status` → `loadFolioStatusForChat` → SELECT-only (`getFolioById` / `getFolioByNumero` / `getManyFoliosStatus` / `listFoliosByPlanta` + `buildDashboardWhere` con `ventana: "0"`). Consulta por id, por `numero_folio`, varios folios, listado por planta y filtro/listado por etapa. `estatus` = columna observada `public.folios.estatus`. `etapa` = derivada con `estatusToEtapaVisual` (no hay columna DB `etapa`). Historial on-demand: intent `folio_history` → tool `get_folio_history` → `loadFolioHistoryForChat` → resolver/autorizar folio → SELECT-only `public.folio_historial` (`listHistorialForFolio`). History por id o por `numero_folio`. Campos observados del evento: `estatus`, `comentario`, `actor_telefono`, `actor_rol`, `creado_en`. `etapa` del evento = derivada con `estatusToEtapaVisual` **solo** si el `estatus` del evento existe y mapea. Eventos no deduplicados; misma etapa repetida se preserva. Metadata documental on-demand: intent `folio_documents` → tool `get_folio_documents` → `loadFolioDocumentsMetadataForChat` → resolver/autorizar folio → SELECT-only `public.folio_archivos` (`listDocumentsMetadataForFolio`) → `projectDocument` (allowlist). Metadata por id o por `numero_folio`. Campos seguros: `document_id`, `tipo`, `status`, `file_name`, `subido_en` + identidad mínima del folio. Semántica: «Estos son los registros documentales que existen para este folio.» Cero filas: «no hay registros documentales encontrados» (**no** «faltan documentos»). Evidencia status: `folio_id`, `numero_folio`, `estatus`, `etapa`, `planta_id`, `planta_nombre`, `source`, `retrieved_at`. Evidencia history: esos identificadores + eventos crudos (`event_id` solo si `id` físico existe). Evidencia documents: esos identificadores + registros proyectados (`source` = `public.folio_archivos`). |
+| **Información que no consulta** | `GET /api/dashboard/kanban` (excluido: puede autoavanzar). `GET /api/folios/:id` (excluido: puede autoavanzar). `GET /api/folios/:id/timeline` (excluido como transporte interno; no autoavanza, pero no es fuente de Director IA y su `dedupeHistorialByStage` no se copia). `maybeAdvanceFolioToComprobaciones`. `dedupeHistorialByStage`. Contenido PDF, S3, signed URLs, descarga, OCR. `s3_key`, URL, bucket, raw path, `sha256`, bytes. Documentos faltantes / cumplimiento documental. Cheque, póliza, presupuesto. `kanban_flow` inferencial. `estatus_anterior` / `estatus_nuevo` / `event_type` del evento (no existen en la fila). Actor sistema inferido (actor null **no** significa sistema). Crear/editar/aprobar/cancelar. Cualquier UPDATE/INSERT/DELETE. |
+| **Archivos actuales relacionados** | `lib/director-ia-m2-folio-status.js`; `lib/director-ia-m2-history.js`; `lib/director-ia-m2-documents-metadata.js`; wiring en `lib/director-ia-chat.js`, `lib/director-ia-tools.js`, `lib/director-ia-capabilities.js`, `lib/director-ia-planner.js`; comentarios: `lib/cliente-comentarios.js`. `server.js` handlers kanban/`/folios/:id`/`/timeline`/`/media` **no** usados por Director IA. |
+| **Endpoints actuales relacionados** | Lectura integrada in-process (no HTTP interno). Folios HTTP existentes y **no** usados como fuente: `/api/dashboard/kanban`, `/api/folios/:id` (pueden llamar `maybeAdvanceFolioToComprobaciones`); `/api/folios/:id/timeline` (no autoavanza; excluido por HTTP interno + dedupe); `/api/folios/:id/media*`, `/cotizacion`, `documento-*` (excluidos: pueden exponer `s3_key` o contenido). |
+| **Tablas o vistas relacionadas** | `public.folios` (estatus observado), `public.plantas`, `public.comentarios`, `public.folio_historial` (eventos observados del slice history), `public.folio_archivos` (solo metadata del slice documents; SELECT sin `s3_key`/`url`/`sha256`). |
+| **Funciones existentes reutilizables** | `loadFolioStatusForChat`, `getFolioById`, `getFolioByNumero`, `getManyFoliosStatus`, `listFoliosByPlanta`, `estatusToEtapaVisual`, `etapaVisualToEstatusTecnicos`, `buildDashboardWhere`, `loadFolioHistoryForChat`, `listHistorialForFolio`, `loadFolioDocumentsMetadataForChat`, `listDocumentsMetadataForFolio`, `projectDocument`, `assertFolioStatusAccess`, `folioVisibleToAuth`, `folioInPlantScope`, `loadFolioComentariosForDirectorIa`. |
+| **Capacidades de lectura posibles** | CONSULTAR/RESUMIR comentarios; CONSULTAR estatus observado; CONSULTAR etapa derivada; BUSCAR por id/`numero_folio`; LISTAR por planta/etapa; CONSULTAR historial de eventos observados (sin dedupe); CONSULTAR metadata documental registrada (sin contenido). CONSULTAR PDF/S3/faltantes/cheque/póliza **no** integrados. |
+| **Capacidades de escritura posibles** | CREAR/EDITAR/APROBAR/CANCELAR folio existen en API folios; **no** conectadas a Director IA. No autoavance. No uploads/deletes de media. |
+| **Permisos aplicables** | JWT/`req.dashboardAuth`; rol; `planta_id`; `plantas_permitidas` (GG/GA/AD fail-closed). GV = 403. GA solo en planta autorizada. Folio cross-planta = 403. Not found = 404. History y metadata: resolver folio y autorizar **antes** de consultar `public.folio_historial` / `public.folio_archivos`. |
+| **Nivel de riesgo** | Lectura estatus/etapa/historial/comentarios/metadata: MEDIO. Mutaciones folio / exposición S3: ALTO (fuera de Director IA). |
+| **Dependencias** | Plantas; equivalentes M3; contenido M15, presupuestos (carro) y proyectos siguen fuera de este slice. |
+| **Observaciones verificadas** | `IMPL-DIRECTOR-IA-M2-FOLIO-STATUS-001` (main `e5bd3a05`) + `IMPL-DIRECTOR-IA-M2-HISTORY-001` (main `368394f7`) + `IMPL-DIRECTOR-IA-M2-DOCUMENTS-METADATA-001` (main `243d7e91`). Tests metadata: focales 24/24; capabilities 33/33; planner 36/36; orchestrator 24/24; suite `test/director-ia-*.test.js` 533/533; `git diff --check` limpio. M2 **sigue PARCIAL**. Scoring M0–M20 **sin cambio**: 8.5/20 = **42.5%** (PARTIAL ya valía 0.5; no se suma +2.5 pp). |
 
 ### M3 — Plantas / KPIs / Proyectos
 
@@ -394,8 +394,8 @@
 | **Módulo** | Documentos / media folio |
 | **Propósito empresarial** | Cotización, facturas, gastos, póliza, paquete completo, adjuntos. |
 | **Cobertura actual de Director IA** | NO INTEGRADA |
-| **Información exacta que sí consulta** | Ninguna (no lista media ni genera PDF). |
-| **Información que no consulta** | `/api/folios/:id/documento*`, `/media`, póliza, etc. |
+| **Información exacta que sí consulta** | Ninguna de M15 (no lista media, no genera PDF, no accede S3). La metadata DB de `public.folio_archivos` es un slice **M2** distinto; no integra este módulo. |
+| **Información que no consulta** | `/api/folios/:id/documento*`, `/media`, póliza, S3, signed URLs, contenido, OCR, documentos faltantes. |
 | **Archivos actuales relacionados** | Handlers en `server.js`; `ImprimirGastosModal.tsx` |
 | **Endpoints actuales relacionados** | Documentales y media bajo `/api/folios/:id/...` |
 | **Tablas o vistas relacionadas** | `public.folio_archivos`, campos en `public.folios` |
@@ -405,7 +405,7 @@
 | **Permisos aplicables** | `acceso_ver_imprimir_folios`, `acceso_subir_poliza` |
 | **Nivel de riesgo** | MEDIO (lectura docs); ALTO (subir). |
 | **Dependencias** | Folios, S3. |
-| **Observaciones verificadas** | Auditoría §M15 §7. |
+| **Observaciones verificadas** | Auditoría §M15 §7. M2 documenta metadata-only de `folio_archivos` (`IMPL-DIRECTOR-IA-M2-DOCUMENTS-METADATA-001`); M15 (contenido/S3/PDF) **sigue NO INTEGRADA**. |
 
 ### M16 — Análisis duplicados de folios
 
@@ -697,7 +697,7 @@
 - **Información sensible:** Importes, estatus, identidad de folio
 - **Estado de actualización:** Por request (`retrieved_at`)
 - **Evidencia de integración actual:** Intent `folio_status` + tool `get_folio_status` + rama en `askDirectorIa`
-- **Información que no puede concluirse con esta fuente:** Historial, documentos, cheque, póliza, presupuesto, tablero HTTP kanban, mutaciones
+- **Información que no puede concluirse con esta fuente:** Historial (fuente aparte), contenido PDF/S3, documentos faltantes, cheque, póliza, presupuesto, tablero HTTP kanban, mutaciones
 
 ### Fuente: Historial de folios
 
@@ -719,7 +719,7 @@
 - **Campos que no existen en el evento:** `estatus_anterior`, `estatus_nuevo`, `event_type`. `folios.estatus_anterior` no es el estatus anterior de cada evento
 - **Nulls:** se preservan. Actor null **no** significa sistema. Estatus null no convierte el evento en transición
 - **Orden / preservación:** `creado_en ASC` (desempate `id`). Eventos no deduplicados. Misma etapa repetida se preserva. **No** `dedupeHistorialByStage`
-- **Información que no puede concluirse con esta fuente:** Documentos/PDF, cheque, póliza, presupuesto, `kanban_flow`, transiciones inventadas, causa, retraso, responsabilidad, actor sistema, tablero HTTP
+- **Información que no puede concluirse con esta fuente:** Contenido PDF/S3, documentos faltantes, cheque, póliza, presupuesto, `kanban_flow`, transiciones inventadas, causa, retraso, responsabilidad, actor sistema, tablero HTTP
 
 ### Fuente: Kanban
 
@@ -730,7 +730,29 @@
 - **Endpoint relacionado:** **excluido** `GET /api/dashboard/kanban` (puede autoavanzar con UPDATE + historial)
 - **Tablas consultadas:** `public.folios` (+ `public.plantas`)
 - **Evidencia de integración actual:** mismo path `folio_status` / `get_folio_status` / `loadFolioStatusForChat`
-- **Información que no puede concluirse con esta fuente:** Tablero HTTP completo, autoavance, historial, documentos, cheque/póliza
+- **Información que no puede concluirse con esta fuente:** Tablero HTTP completo, autoavance, historial, contenido PDF/S3, documentos faltantes, cheque/póliza
+
+### Fuente: Metadata documental de folio
+
+- **Dominio:** Registros de `folio_archivos` (M2; **no** es M15)
+- **Cobertura actual:** PARCIAL (metadata DB read-only; **no** es contenido, PDF ni S3)
+- **Archivo de acceso:** `lib/director-ia-m2-documents-metadata.js`
+- **Función de acceso:** `loadFolioDocumentsMetadataForChat` → resolver/autorizar folio (`getFolioById` / `getFolioByNumero` + authz de `folio_status`) → `listDocumentsMetadataForFolio` (SELECT-only) → `projectDocument` (allowlist)
+- **Endpoint relacionado:** semántica SELECT-only in-process. **No** usa `GET /api/folios/:id/media`, `/media/:id/url`, `/cotizacion`, `documento-*`, `GET /api/folios/:id` ni `GET /api/dashboard/kanban`
+- **Tablas consultadas:** `public.folio_archivos` (después de resolver el folio en `public.folios`)
+- **Filtros disponibles:** un folio por id o por `numero_folio`
+- **Alcance por planta / periodo:** `planta_id` + equivalentes; metadata solo del folio autorizado
+- **Límites de filas:** 50 + `truncated`
+- **Permisos:** JWT/contexto; rol; `plantas_permitidas`; GV 403; GA solo planta autorizada; cross-planta 403; not found 404; fail-closed. Orden: resolver folio → autorizar → **luego** SELECT metadata
+- **Información sensible:** `file_name` (nombre observado, no contenido). **Nunca** `s3_key`, URL, signed URL, bucket, raw path, `sha256`, bytes, contenido
+- **Estado de actualización:** Por request (`retrieved_at`)
+- **Evidencia de integración actual:** Intent `folio_documents` + tool `get_folio_documents` + rama en `askDirectorIa` (después de `detectUnsupported`)
+- **Campos seguros:** `document_id`, `tipo`, `status`, `file_name`, `subido_en` + identidad mínima del folio (`folio_id`, `numero_folio`, `planta_id`, `planta_nombre`)
+- **Campos que nunca se exponen:** `s3_key`, `url`, signed URL, `bucket`, raw path, `sha256`, bytes, contenido
+- **Semántica:** «Estos son los registros documentales que existen para este folio.»
+- **Cero filas:** «no hay registros documentales encontrados». **No** «faltan documentos». No implica set esperado, documentación completa/incompleta ni cumplimiento
+- **Guardrail:** preguntas de faltantes / PDF / contenido / descarga / OCR / «debería tener» siguen `SOURCE_NOT_INTEGRATED`
+- **Información que no puede concluirse con esta fuente:** Contenido PDF, S3, signed URLs, descarga, OCR, documentos faltantes, cumplimiento documental, póliza operativa, cheque, `kanban_flow`, writes
 
 ### Fuente: Documentos y medios
 
@@ -739,9 +761,9 @@
 - **Archivo de acceso:** Handlers documento/media en `server.js`
 - **Función de acceso:** Endpoints documento/media (no IA)
 - **Endpoint relacionado:** `/api/folios/:id/documento*`, `/media*`
-- **Tablas consultadas:** `public.folio_archivos`
+- **Tablas consultadas:** `public.folio_archivos` (contenido/S3; **no** es el SELECT de metadata M2)
 - **Evidencia de integración actual:** No integrada
-- **Información que no puede concluirse con esta fuente:** Documentos faltantes, URLs firmadas
+- **Información que no puede concluirse con esta fuente:** Documentos faltantes, URLs firmadas, contenido PDF, S3
 
 ### Fuente: KPIs de dashboard
 
@@ -934,10 +956,10 @@
 | 6 | ¿Cómo va ARR contra la meta? | Parcialmente | PARCIAL | ARR annex | `loadArrProyForPlant` | Meta/UI completa ARR; depende de wording regex | Medio |
 | 7 | ¿Cómo va IGF contra el compromiso? | Parcialmente | PARCIAL | IGF annex | `loadIgfCommitSnapshot` | Versiones/HG UI; `sources.igf` no en GET | Medio |
 | 8 | ¿Qué clientes explican la desviación? | Parcialmente | PARCIAL | commercial_state / top clientes IGF-ARR / DICF | `loadCommercialStateForChat` (20 clientes), `loadTopClientesDescBrief` (8) | Universo completo de clientes | Medio (top-N) |
-| 9 | ¿En qué etapa está un folio? | Sí (estatus observado + etapa derivada; no es historial ni tablero HTTP) | PARCIAL | Folios (`public.folios.estatus`) | `loadFolioStatusForChat` / `get_folio_status` (SELECT-only; **no** `GET /kanban` ni `GET /folios/:id`) | Historial, documentos, cheque/póliza, autoavance, tablero HTTP | Alto si se lee como columna DB `etapa` o como kanban mutante |
+| 9 | ¿En qué etapa está un folio? | Sí (estatus observado + etapa derivada; no es historial ni tablero HTTP) | PARCIAL | Folios (`public.folios.estatus`) | `loadFolioStatusForChat` / `get_folio_status` (SELECT-only; **no** `GET /kanban` ni `GET /folios/:id`) | Contenido PDF/S3, cheque/póliza, autoavance, tablero HTTP | Alto si se lee como columna DB `etapa` o como kanban mutante |
 | 10 | ¿Por qué está detenido un folio? | No de forma fiable | INDIRECTA máx. | Comentarios folio | `loadFolioComentariosForDirectorIa` | Estatus, timeline, permisos de avance | Alto |
-| 11 | ¿Cuál fue el último movimiento del folio? | Sí (eventos observados de `public.folio_historial`; no es GET `/timeline` ni tablero HTTP) | PARCIAL | Historial (`public.folio_historial`) | `loadFolioHistoryForChat` / `get_folio_history` (SELECT-only; **no** `GET /timeline`; **no** `dedupeHistorialByStage`) | Documentos, cheque/póliza, transiciones inventadas, actor sistema, tablero HTTP | Alto si se lee como transición, como GET `/timeline` o como historial deduplicado |
-| 12 | ¿Qué documentos le faltan? | No | NO INTEGRADA | Documentos/medios | `/media`, documento-* | Toda la fuente | Alto |
+| 11 | ¿Cuál fue el último movimiento del folio? | Sí (eventos observados de `public.folio_historial`; no es GET `/timeline` ni tablero HTTP) | PARCIAL | Historial (`public.folio_historial`) | `loadFolioHistoryForChat` / `get_folio_history` (SELECT-only; **no** `GET /timeline`; **no** `dedupeHistorialByStage`) | Contenido PDF/S3, cheque/póliza, transiciones inventadas, actor sistema, tablero HTTP | Alto si se lee como transición, como GET `/timeline` o como historial deduplicado |
+| 12 | ¿Qué documentos le faltan? | No | NO INTEGRADA | Documentos/medios (faltantes / set esperado) | Guardrail `UNSUPPORTED_RULES.documentos` (`SOURCE_NOT_INTEGRATED`) | Set esperado canónico; cumplimiento; contenido | Alto si se lee la metadata M2 como «faltan documentos» |
 | 13 | ¿Tiene cheque, depósito o póliza? | No | NO INTEGRADA | Folios/pólizas | Campos folio + endpoints póliza/cheque | Toda la fuente | Alto |
 | 14 | ¿Existen posibles folios duplicados? | Sí (heurístico; candidatos, no confirmación) | COMPLETA | Duplicados | `loadDuplicateFoliosForChat` / `findDuplicatePairs` | Confirmación humana; cancelación; `/check` al crear; pares fuera de ventana o `LIMIT 1500` | Alto si se lee como duplicado confirmado o fraude |
 | 15 | ¿Qué gastos existen por planta? | No (Excel); confusión posible | NO INTEGRADA / INDIRECTA | Gastos Excel vs IGF «gasto» | `categoria-rango-excel` vs `PLANT_FINANCIAL_KPI_RE` | Listado folios GASTOS | Alto (ambigüedad semántica) |
@@ -955,6 +977,7 @@
 | ¿Cómo va Mejora Continua del mes? | Parcial | PARCIAL | MC | `loadMejoraContinuaForChat` / `GET /api/director-ia/mejora-continua` | Áreas no enfocadas por regex | Medio |
 | ¿Qué clientes dejaron de comprar? | Parcial | PARCIAL | commercial_state | `loadCommercialStateForChat` | >20 clientes; GA bloqueado | Medio |
 | ¿Qué alias tiene una entidad? | Sí (API/UI) | PARCIAL | Entidades | `/api/director-ia/comercial-entidades*` | Si no está en catálogo | Bajo-Medio |
+| ¿Qué documentos tiene / listar registros documentales de un folio? | Sí (solo metadata DB; no PDF/S3; no faltantes) | PARCIAL | Metadata `public.folio_archivos` | `loadFolioDocumentsMetadataForChat` / `get_folio_documents` (SELECT-only; **no** `/media`; **no** S3) | Contenido, URLs, documentos faltantes, cumplimiento | Alto si se lee como documentación completa o como «faltan documentos» |
 
 ---
 
@@ -1201,7 +1224,7 @@ Escala 1–5. Prioridad derivada de: valor ejecutivo × disponibilidad de funcio
 
 ### 1. Resumen de cobertura real actual
 
-Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Register**, **DICF**, **bitácora**, **comentarios** (cliente y folio) y **entidades comerciales**, con **anexos financieros on-demand** (IGF/ARR/margen/estado comercial) activados por **regex** en el chat, **análisis on-demand de posibles duplicados de folios** (M16: `findDuplicatePairs`, no confirmación), **consulta on-demand de KPIs de dashboard y proyectos por planta** (M3: `get_dashboard_kpis` / `get_project_status`; no catálogo global; no creación de proyectos), **consulta on-demand de Delta Venta / Descuento / Ingreso de periodos reales** (M9: `get_delta_sales` / `get_delta_discount` / `get_delta_income`; no forecast con escritura; no M19), **consulta on-demand de estatus/etapa de folio** (M2 slice `folio_status`: `get_folio_status` / `loadFolioStatusForChat`; SELECT-only; no GET kanban; no GET `/folios/:id`; no autoavance), y **consulta on-demand del historial de folio** (M2 slice `folio_history`: `get_folio_history` / `loadFolioHistoryForChat`; SELECT-only de `public.folio_historial`; no GET `/timeline`; no `dedupeHistorialByStage`; no autoavance). **No** opera el kanban HTTP, **no** usa `/timeline` como transporte interno, **no** lee documentos/pólizas/cheques/presupuestos/clasificación/taller/Excel GASTOS-INVERSIONES ni el forecast mutante de ingreso. Las escrituras propias (bitácora/entidades) existen por **API UI**, no como tools autónomos del LLM. El GET `/api/director-ia/context` **subdeclara** IGF/ARR/commercial_state respecto al chat.
+Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Register**, **DICF**, **bitácora**, **comentarios** (cliente y folio) y **entidades comerciales**, con **anexos financieros on-demand** (IGF/ARR/margen/estado comercial) activados por **regex** en el chat, **análisis on-demand de posibles duplicados de folios** (M16: `findDuplicatePairs`, no confirmación), **consulta on-demand de KPIs de dashboard y proyectos por planta** (M3: `get_dashboard_kpis` / `get_project_status`; no catálogo global; no creación de proyectos), **consulta on-demand de Delta Venta / Descuento / Ingreso de periodos reales** (M9: `get_delta_sales` / `get_delta_discount` / `get_delta_income`; no forecast con escritura; no M19), **consulta on-demand de estatus/etapa de folio** (M2 slice `folio_status`: `get_folio_status` / `loadFolioStatusForChat`; SELECT-only; no GET kanban; no GET `/folios/:id`; no autoavance), y **consulta on-demand del historial de folio** (M2 slice `folio_history`: `get_folio_history` / `loadFolioHistoryForChat`; SELECT-only de `public.folio_historial`; no GET `/timeline`; no `dedupeHistorialByStage`; no autoavance), y **consulta on-demand de metadata documental de folio** (M2 slice `folio_documents`: `get_folio_documents` / `loadFolioDocumentsMetadataForChat`; SELECT-only de `public.folio_archivos` con proyección segura; no S3; no PDF; no `s3_key`; no «faltan documentos»). **No** opera el kanban HTTP, **no** usa `/timeline` como transporte interno, **no** lee contenido PDF/S3/pólizas/cheques/presupuestos/clasificación/taller/Excel GASTOS-INVERSIONES ni el forecast mutante de ingreso. Las escrituras propias (bitácora/entidades) existen por **API UI**, no como tools autónomos del LLM. El GET `/api/director-ia/context` **subdeclara** IGF/ARR/commercial_state respecto al chat.
 
 ### 2. Dominios completos (COMPLETA)
 
@@ -1214,7 +1237,7 @@ Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Re
 
 - M0 Auth (gates, no catálogo)
 - M1 Health (readiness técnica `GET /health-director-ia` en header de DirectorIaShell; no `/health` `/health-db` `/health-proyectos`)
-- M2 Folios (comentarios + slice `folio_status` estatus/etapa + slice `folio_history` eventos crudos; no docs, cheque/póliza, `kanban_flow` ni kanban HTTP)
+- M2 Folios (comentarios + slice `folio_status` estatus/etapa + slice `folio_history` eventos crudos + slice `folio_documents` metadata-only; no contenido PDF/S3, no faltantes, no cheque/póliza, no `kanban_flow` ni kanban HTTP)
 - M7 IGF (chat on-demand)
 - M8 ARR (chat on-demand / motor DICF)
 - M11 DICF + comentarios cliente
@@ -1236,7 +1259,7 @@ Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Re
 - M15 Documentos/medios  
 - M18 Presupuestos semanales  
 - M19 Delta Ingreso AI test  
-- Kanban HTTP / GET `/timeline` (excluido) / cheque / póliza / `folio_documents` / `kanban_flow` (estatus/etapa e historial crudo ya están en PARCIAL M2; proyectos de `public.proyectos` ya están en COMPLETA M3)
+- Kanban HTTP / GET `/timeline` (excluido) / contenido PDF / S3 / documentos faltantes / cheque / póliza / `kanban_flow` (estatus/etapa, historial crudo y metadata documental ya están en PARCIAL M2; proyectos de `public.proyectos` ya están en COMPLETA M3)
 
 ### 6. Capacidades de lectura listas para reutilizar
 
@@ -1248,6 +1271,7 @@ Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Re
 | CONSULTAR comentarios | `loadClienteComentariosForDirectorIa`, `loadFolioComentariosForDirectorIa` |
 | CONSULTAR estatus/etapa de folio (read-only) | `loadFolioStatusForChat` → `getFolioById` / `getFolioByNumero` / `listFoliosByPlanta` |
 | CONSULTAR historial de folio (eventos crudos, read-only) | `loadFolioHistoryForChat` → resolver/autorizar → `listHistorialForFolio` (`public.folio_historial`) |
+| CONSULTAR metadata documental de folio (read-only) | `loadFolioDocumentsMetadataForChat` → resolver/autorizar → `listDocumentsMetadataForFolio` → `projectDocument` (`public.folio_archivos`; sin `s3_key`) |
 | RESOLVER entidad/alias | `resolveCommercialEntitiesForQuestion` |
 | COMPARAR/CONSULTAR margen e IGF/ARR (on-demand) | `loadIgfArrAnnexForChat`, `getMargenKgPorPeriodo` |
 | LISTAR estado comercial | `loadCommercialStateForChat` → `dicf.computeDicf` |
@@ -1261,9 +1285,9 @@ Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Re
 
 | Capacidad deseada | Existe en repo | Falta para Director IA |
 |-------------------|----------------|------------------------|
-| Etapa/estatus de folio / kanban HTTP | Slice `folio_status` ya integrado (SELECT-only). GET `/kanban` y GET `/folios/:id` siguen existiendo y **siguen excluidos** (autoavance) | Tablero HTTP, docs, cheque/póliza, `kanban_flow`; no reutilizar handlers mutantes |
-| Timeline / último movimiento | Slice `folio_history` ya integrado (SELECT-only de `public.folio_historial`). GET `/timeline` existe y **sigue excluido** (HTTP interno + `dedupeHistorialByStage`) | Transiciones inventadas, actor sistema, documents/financial; no copiar dedupe |
-| Metadatos documentos / póliza / cheque | Sí (endpoints folio) | Tool + política de URLs |
+| Etapa/estatus de folio / kanban HTTP | Slice `folio_status` ya integrado (SELECT-only). GET `/kanban` y GET `/folios/:id` siguen existiendo y **siguen excluidos** (autoavance) | Tablero HTTP, contenido PDF/S3, cheque/póliza, `kanban_flow`; no reutilizar handlers mutantes |
+| Timeline / último movimiento | Slice `folio_history` ya integrado (SELECT-only de `public.folio_historial`). GET `/timeline` existe y **sigue excluido** (HTTP interno + `dedupeHistorialByStage`) | Transiciones inventadas, actor sistema, contenido/financial; no copiar dedupe |
+| Metadatos documentos / póliza / cheque | Metadata de `folio_archivos` ya integrada (M2 SELECT-only, sin `s3_key`). Endpoints `/media` y póliza/cheque existen y **siguen excluidos** | Contenido PDF, S3, signed URLs, faltantes, póliza operativa, cheque |
 | Duplicados (cancelar / `findSimilarTo` al crear / Excel Taller) | Sí (cancelar UI, `POST /check`, Excel M5) | Escritura y detectores ajenos al análisis M16 ya integrado |
 | Excel/agregados Taller, GASTOS, INVERSIONES | Sí (libs Excel) | Tool de consulta (idealmente sin solo xlsx) |
 | Deltas UI (forecast con escritura / M19) | Sí (`delta-ingreso-forecast`, `/api/ai/delta-ingreso/test/*`) | La lectura de periodos reales ya está en COMPLETA M9; faltan forecast mutante y M19, a propósito fuera |
@@ -1318,6 +1342,7 @@ Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Re
 | Duplicados M16 | `lib/director-ia-duplicados.js`, `lib/folio-duplicados-load.js`, `lib/folio-duplicados.js` |
 | M2 Folios / estatus-etapa | `lib/director-ia-m2-folio-status.js` |
 | M2 Folios / historial | `lib/director-ia-m2-history.js` |
+| M2 Folios / metadata documental | `lib/director-ia-m2-documents-metadata.js` |
 | M3 Plantas / KPIs / Proyectos | `lib/director-ia-m3-plantas-kpis-proyectos.js` |
 | M9 Delta Venta / Descuento / Ingreso | `lib/director-ia-m9-deltas.js` |
 | AR summarizers | `lib/director-ia-action-register.js` |
