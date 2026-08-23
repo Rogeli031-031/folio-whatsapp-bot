@@ -105,6 +105,14 @@ const cases = [
   () => expectIntent("¿Cuántos folios activos hay?", "dashboard_kpis", { requireDomain: "dashboard_kpis" }),
   () => expectIntent("¿Qué gastos de folios existen?", "expense_analysis"),
   () => expectIntent("¿Qué inversiones están pendientes?", "investment_analysis"),
+  () =>
+    expectIntent("clasificación de apoyos 2026-01 2026-02", "clasificacion_apoyos_query", {
+      requireDomain: "clasificacion_apoyos",
+    }),
+  () =>
+    expectIntent("comparativo de clasificación 2026-01 vs 2026-02", "clasificacion_apoyos_query", {
+      requireDomain: "clasificacion_apoyos",
+    }),
   () => expectIntent("¿Cómo cambió la venta?", "delta_sales", { requireDomain: "delta_venta" }),
   () => expectIntent("¿Cómo cambió el descuento?", "delta_discount", { requireDomain: "delta_descuento" }),
   () => expectIntent("¿Cómo cambió el ingreso?", "delta_income", { requireDomain: "delta_ingreso" }),

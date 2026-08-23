@@ -65,6 +65,7 @@ const cases = [
     assert(isDirectorIaDomainReadable("documentos") === true, "documentos metadata readable");
     assert(isDirectorIaDomainReadable("gastos") === true, "gastos query readable");
     assert(isDirectorIaDomainReadable("inversiones") === true, "inversiones query readable");
+    assert(isDirectorIaDomainReadable("clasificacion_apoyos") === true, "clasificacion query readable");
     const summary = buildDirectorIaCapabilitiesSummary();
     assert(summary.readable.length > 0, "summary readable");
     assert(summary.not_integrated.length > 0, "summary not_integrated");
@@ -97,6 +98,10 @@ const cases = [
   () => expectAllowed("cómo van los gastos"),
   () => expectBlocked("exportar excel de gastos de folios", "gastos", { requireCanReadFalse: false }),
   () => expectBlocked("exportar excel de inversiones", "inversiones", { requireCanReadFalse: false }),
+  () => expectAllowed("clasificación de apoyos 2026-01 2026-02"),
+  () => expectAllowed("comparativo de clasificación 2026-01 vs 2026-02"),
+  () => expectBlocked("exportar excel de clasificación de apoyos", "clasificacion_apoyos", { requireCanReadFalse: false }),
+  () => expectBlocked("comparar clasificación contra excel", "clasificacion_apoyos", { requireCanReadFalse: false }),
   () => expectAllowed("¿Qué acciones están vencidas?"),
   () => expectAllowed("¿Cómo va ARR?"),
   () => expectAllowed("¿Cómo va IGF?"),
