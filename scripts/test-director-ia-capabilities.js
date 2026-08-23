@@ -54,6 +54,9 @@ const cases = [
     assert(isDirectorIaDomainReadable("duplicados") === true, "duplicados readable");
     assert(isDirectorIaDomainReadable("proyectos") === true, "proyectos readable");
     assert(isDirectorIaDomainReadable("dashboard_kpis") === true, "dashboard_kpis readable");
+    assert(isDirectorIaDomainReadable("delta_venta") === true, "delta_venta readable");
+    assert(isDirectorIaDomainReadable("delta_descuento") === true, "delta_descuento readable");
+    assert(isDirectorIaDomainReadable("delta_ingreso") === true, "delta_ingreso readable");
     assert(isDirectorIaDomainReadable("kanban") === false, "kanban not readable");
     assert(isDirectorIaDomainReadable("folio_historial") === false, "historial not readable");
     const summary = buildDirectorIaCapabilitiesSummary();
@@ -71,6 +74,9 @@ const cases = [
   () => expectAllowed("¿Hay folios duplicados?"),
   () => expectAllowed("¿Qué proyectos están retrasados?"),
   () => expectAllowed("¿Cuáles son los kpis del dashboard?"),
+  () => expectAllowed("¿Cómo cambió la venta?"),
+  () => expectAllowed("¿Cómo cambió el descuento?"),
+  () => expectAllowed("¿Cómo cambió el ingreso?"),
   () => expectBlocked("¿Qué inversiones están pendientes?", "inversiones"),
   () => expectAllowed("¿Qué acciones están vencidas?"),
   () => expectAllowed("¿Cómo va ARR?"),
