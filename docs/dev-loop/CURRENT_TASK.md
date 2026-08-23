@@ -1,14 +1,14 @@
 # CURRENT_TASK
 
 ```yaml
-task_id: "DOCS-DIRECTOR-IA-M6-CAPABILITY-MATRIX-SYNC-001"
+task_id: "ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-002"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-08-23"
 human_authorization: >
   AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-23.
-  Apruebo DOCS-DIRECTOR-IA-M6-CAPABILITY-MATRIX-SYNC-001 y autorizo G1.
+  Apruebo ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-002 y autorizo G1.
 
 gates:
   G1_task_authorization: AUTHORIZED
@@ -17,147 +17,291 @@ gates:
   G8_calibration_materiality_signature: N/A
 
 objective: >
-  Sincronizar la capability matrix de Director IA para reflejar la implementación
-  read-only de M6 — GASTOS / INVERSIONES — ya integrada en main, cambiando M6
-  de NO INTEGRADA a PARTIAL y recalculando el avance global de 8.5/20 = 42.5%
-  a 9.0/20 = 45.0%, sin marcar COMPLETE y preservando Export/XLSX fuera.
+  Priorizar el siguiente frente global de Director IA desde el baseline 45.0%,
+  comparando todos los módulos no COMPLETE por valor ejecutivo marginal,
+  capacidad de razonamiento, actionability, frecuencia, fuentes físicas,
+  seguridad y costo de integración. No continuar M6 por inercia ni elegir por
+  porcentaje.
+
+strategic_context:
+  previous_task: "DOCS-DIRECTOR-IA-M6-CAPABILITY-MATRIX-SYNC-001"
+  previous_outcome: "M6 PARTIAL"
+  prior_global_task: "ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-001"
 
 baseline:
-  implementation_task: "IMPL-DIRECTOR-IA-M6-GASTOS-INVERSIONES-001"
-  module: "M6 — GASTOS / INVERSIONES"
+  numerator: 9.0
+  denominator: 20
+  percentage: 45.0
 
-  state_before: "NO INTEGRADA"
-  state_after: "PARTIAL"
+  recent_changes:
+    - "M2 profundizado: status + history + documents metadata"
+    - "M6 pasó NO INTEGRADA -> PARTIAL mediante query read-only"
+    - "M6 Export/Excel sigue fuera"
 
-  global_before:
-    numerator: 8.5
-    denominator: 20
-    percentage: 42.5
+  rule: >
+    Esta tarea no modifica porcentaje ni estados. El porcentaje es secundario.
 
-  global_after:
-    numerator: 9.0
-    denominator: 20
-    percentage: 45.0
+primary_question: >
+  ¿Qué frente pendiente produce ahora el mayor incremento neto de inteligencia
+  ejecutiva, considerando lo que Director IA ya sabe y penalizando duplicación,
+  dependencias externas, writes e inferencias débiles?
 
-  gain_pp: 2.5
+candidate_source:
+  canonical_matrix: "docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md"
 
-implemented_slice:
-  supported:
-    - "GASTOS de folios por planta"
-    - "INVERSIONES de folios por planta"
-    - "periodo YYYY-MM"
-    - "partida/concepto"
-    - "importe cuando existe"
-    - "estatus cuando existe"
-    - "conteos/totales derivados del conjunto"
-    - "evidencia estructurada"
+  include:
+    - "PARTIAL"
+    - "INDIRECTA"
+    - "NO INTEGRADA"
+    - "NOT_STARTED"
+    - "bloqueados reconsiderables"
 
-  path: >
-    expense_analysis / investment_analysis -> tool ->
-    loadGastosInversionesForChat(category) ->
-    SELECT public.folios + expandCategoriaRows ->
-    evidencia -> respuesta
+  exclude:
+    - "COMPLETE"
+    - "N_A"
 
-  semantics:
-    - "GASTOS ≠ INVERSIONES"
-    - "M6 ≠ IGF"
-    - "YYYY-MM obligatorio"
-    - "no inventar periodo"
-    - "0 filas = respuesta válida"
-    - "no inferir desviación sin baseline"
-    - "no inferir causa por importe"
+mandatory_candidates:
+  - "M1 Health"
+  - "M4 Clasificación + COMPARAR"
+  - "M5"
+  - "M6 remaining Export"
+  - "M7 IGF"
+  - "M8 ARR"
+  - "M10 WhatsApp operativo"
+  - "M11 DICF"
+  - "M12 Action Register"
+  - "M14"
+  - "M15"
+  - "M17"
+  - "M18"
+  - "M20"
+  - "cualquier otro módulo no COMPLETE vigente"
 
-  authz:
-    - "JWT/contexto preservado"
-    - "rol preservado"
-    - "planta_id preservado"
-    - "plantas_permitidas preservado"
-    - "GV = 403"
-    - "GA permitido dentro de planta autorizada"
-    - "cross-planta = 403"
-    - "fail-closed"
+canonical_labels_rule: >
+  Usar nombres y propósitos directamente de las fichas canónicas vigentes.
+  Si prompts anteriores intercambiaron etiquetas M5/M14/M15/M18 u otras,
+  ignorar esas etiquetas y seguir la matriz real.
 
-still_not_integrated:
-  - "Export"
-  - "Excel"
-  - "xlsx"
-  - "generación de archivo"
-  - "writes"
-  - "forecast"
-  - "comparaciones no soportadas"
+evaluation_model:
 
-canonical_rule: >
-  M6 sigue siendo PARTIAL porque el propósito canónico incluye Export.
-  La consulta estructurada read-only no satisface COMPLETE.
+  executive_value:
+    weight: "VERY_HIGH"
+    evaluate:
+      - "preguntas directivas nuevas"
+      - "detección de desviaciones/riesgos"
+      - "capacidad de explicar qué requiere atención"
+      - "reducción de navegación manual"
 
-test_evidence:
-  focal_m6: "24/24 pass"
-  capabilities: "green"
-  planner: "green"
-  orchestrator: "green"
-  director_ia_suite: "557/557 pass"
-  git_diff_check: "clean"
+  reasoning_value:
+    weight: "VERY_HIGH"
+    evaluate:
+      - "evidencia nueva para diagnóstico"
+      - "capacidad causal/contextual"
+      - "combinación con M2/M3/M6/M9/M12"
+      - "profundidad adicional real"
 
-documentation_policy:
-  must_update:
-    - "estado M6: NO INTEGRADA -> PARTIAL"
-    - "cobertura query read-only"
-    - "GASTOS"
-    - "INVERSIONES"
-    - "periodo YYYY-MM"
-    - "source public.folios + expandCategoriaRows"
-    - "separación de IGF"
+  incremental_value:
+    weight: "VERY_HIGH"
+    evaluate:
+      - "qué no puede responder hoy"
+      - "qué duplica"
+      - "qué hueco neto cubre"
+
+  actionability:
+    weight: "HIGH"
+    evaluate:
+      - "identifica planta"
+      - "cliente"
+      - "partida"
+      - "responsable"
+      - "acción"
+      - "riesgo"
+      - "fecha"
+
+  frequency:
+    weight: "HIGH"
+
+  implementation_path:
+    weight: "MEDIUM"
+    evaluate:
+      - "fuente/helper existente"
+      - "intent/tool"
+      - "executor"
+      - "in-process"
+      - "primer slice útil"
+
+  risk:
+    weight: "MEDIUM"
+    penalize:
+      - "writes"
+      - "Excel"
+      - "S3"
+      - "Twilio/WhatsApp"
+      - "side effects"
+      - "cross-module coupling"
+      - "semantic ambiguity"
+
+  percentage:
+    weight: "LOW"
+
+mandatory_rechecks:
+
+  M4:
+    - "mantener PARTIAL_ONLY para query read-only"
+    - "COMPARAR/Excel clase C fuera del slice"
+    - "evaluar si ahora sigue teniendo valor marginal suficiente"
+
+  M6:
+    - "query ya integrada"
+    - "evaluar únicamente valor restante de Export"
+    - "penalizar continuidad por inercia"
+    - "no contar PARTIAL otra vez"
+
+  M7:
+    - "auditar qué partes reales de IGF ya están integradas"
+    - "qué preguntas financieras faltan"
+    - "si puede aportar explicación/causalidad nueva"
+    - "qué source/helper real existe"
+    - "qué diferencia tiene respecto a M6"
+
+  M8:
+    - "auditar ARR actual"
+    - "separar ARR de M9 deltas"
+    - "determinar valor incremental"
+
+  M11:
+    - "auditar DICF actual"
+    - "qué evidencia aporta"
+    - "si permite explicar causa/seguimiento"
+    - "qué falta para mayor profundidad"
+
+  M12:
+    - "Action Register ya integrado parcialmente"
+    - "identificar huecos reales"
+    - "evitar duplicar history M2"
+
+  M18:
+    - "usar definición canónica real"
+    - "auditar presupuesto/finanzas según ficha"
+    - "no mezclar etiquetas de prompts previos"
+
+  WhatsApp_modules:
+    - "canal != conocimiento"
+    - "valorar solo información nueva o capacidad ejecutiva nueva"
+
+mandatory_question_map:
+  for_each_candidate:
+    - "qué preguntas NUEVAS podrá responder"
+    - "qué preguntas ya puede responder"
+    - "qué preguntas serían duplicadas"
+    - "qué preguntas no soporta la fuente"
+
+physical_audit:
+  for_each_candidate:
+    - "fuente física"
+    - "helpers"
+    - "queries"
+    - "intent"
+    - "tool"
+    - "executor"
     - "authz"
-    - "limitaciones"
-    - "recalculo global 9.0/20 = 45.0%"
+    - "plant_scope"
+    - "side_effects"
+    - "external_dependency"
+    - "semantic_risk"
+    - "testability"
+    - "first_slice"
+    - "state_after_slice"
+    - "percentage_effect"
 
-  must_preserve:
-    - "M6 no COMPLETE"
-    - "Export no integrado"
-    - "Excel/xlsx no integrado"
-    - "IGF separado"
-    - "no writes"
+mandatory_table:
+  columns:
+    - "rank"
+    - "module"
+    - "current_state"
+    - "new_executive_questions"
+    - "executive_value"
+    - "reasoning_value"
+    - "incremental_value"
+    - "frequency"
+    - "actionability"
+    - "source_ready"
+    - "wiring_ready"
+    - "authz_fit"
+    - "dependencies"
+    - "mutation_risk"
+    - "semantic_risk"
+    - "first_useful_slice"
+    - "state_after_slice"
+    - "percentage_effect"
+    - "decision"
 
-  forbidden:
-    - "marcar COMPLETE"
-    - "contar Export como integrado"
-    - "mezclar M6 con IGF"
-    - "subir más de 45.0%"
-    - "cambiar estados de otros módulos sin evidencia"
+ranking_rules:
+  - "No elegir por porcentaje."
+  - "No elegir por número."
+  - "No elegir por facilidad sola."
+  - "No continuar M6 por inercia."
+  - "Penalizar duplicación con M2/M3/M6/M9/M12."
+  - "Preferir hechos observables."
+  - "Preferir fuentes estructuradas."
+  - "Preferir in-process."
+  - "Preferir valor diagnóstico/actionable."
+  - "Penalizar writes y dependencias externas."
+
+winner_requirements:
+  exactly_one: true
+
+  must_include:
+    - "ganador"
+    - "segundo lugar"
+    - "por qué gana"
+    - "por qué pierde el segundo"
+    - "preguntas nuevas habilitadas"
+    - "primer slice"
+    - "estado después del slice"
+    - "efecto porcentual"
+    - "riesgos"
+    - "dependencias"
+    - "gates necesarios"
+
+next_task_policy:
+  if_readiness_needed:
+    pattern: "ARCH-DIRECTOR-IA-<MODULE>-<SLICE>-READINESS-001"
+
+  if_gap_fully_verified:
+    pattern: "IMPL-DIRECTOR-IA-<MODULE>-<SLICE>-001"
+
+  rule: >
+    Proponer exactamente una NEXT_TASK. No autorizar ni ejecutar.
 
 in_scope:
   writable:
     - "docs/dev-loop/CURRENT_TASK.md"
-    - "docs/dev-loop/reports/DOCS-DIRECTOR-IA-M6-CAPABILITY-MATRIX-SYNC-001.md"
-    - "docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md"
+    - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-002.md"
 
   read_only:
     - "AGENTS.md"
     - "docs/dev-loop/**"
     - "docs/director-ia/**"
-    - "lib/director-ia-m6-gastos-inversiones.js"
-    - "lib/director-ia-capabilities.js"
-    - "lib/director-ia-chat.js"
-    - "lib/director-ia-planner.js"
-    - "lib/director-ia-tools.js"
-    - "test/director-ia-m6-gastos-inversiones.test.js"
-    - "scripts/test-director-ia-capabilities.js"
-    - "scripts/test-director-ia-planner.js"
-    - "scripts/test-director-ia-tool-orchestrator.js"
+    - "lib/**"
+    - "server.js"
+    - "frontend-dashboard/**"
+    - "test/**"
+    - "scripts/**"
+    - "sql/**"
+    - "package.json"
+    - "package-lock.json"
 
 out_of_scope:
+  - "implementar"
   - "modificar código"
   - "modificar runtime"
   - "modificar frontend"
   - "modificar tests"
   - "modificar scripts"
   - "modificar SQL"
-  - "modificar schema"
-  - "crear migration"
+  - "modificar capability matrix"
   - "modificar contratos"
-  - "marcar M6 COMPLETE"
-  - "integrar Export"
-  - "integrar Excel"
   - "hacer writes"
   - "hacer commit"
   - "hacer push"
@@ -165,65 +309,58 @@ out_of_scope:
   - "ejecutar NEXT_TASK"
 
 acceptance_criteria:
-  - "Se verificó físicamente la implementación M6 en main."
-  - "M6 cambió documentalmente de NO INTEGRADA a PARTIAL."
-  - "Se documentó GASTOS."
-  - "Se documentó INVERSIONES."
-  - "Se documentó YYYY-MM obligatorio."
-  - "Se documentó separación M6/IGF."
-  - "Se documentó authz."
-  - "Export sigue fuera."
-  - "Excel/xlsx sigue fuera."
-  - "M6 no se marca COMPLETE."
-  - "Numerador pasa de 8.5 a 9.0."
-  - "Denominador sigue 20."
-  - "Porcentaje pasa de 42.5% a 45.0%."
-  - "Ningún otro módulo cambia de etiqueta sin evidencia."
-  - "No se modificó código."
-  - "No se modificaron tests."
-  - "Solo CURRENT_TASK, reporte y capability matrix fueron modificados."
+  - "Baseline 9.0/20 = 45.0% verificado."
+  - "Nombres canónicos verificados desde matriz."
+  - "Todos los candidatos relevantes evaluados."
+  - "M6 restante evaluado sin inercia."
+  - "Se identificaron preguntas ejecutivas nuevas."
+  - "Se midió valor incremental."
+  - "Se verificaron fuentes físicas."
+  - "Se verificó wiring."
+  - "Se verificó authz."
+  - "Se verificó scope planta."
+  - "Se verificaron dependencias."
+  - "Se produjo ranking."
+  - "Existe exactamente un ganador."
+  - "Existe segundo lugar."
+  - "Existe exactamente una NEXT_TASK."
+  - "No se implementó nada."
+  - "No se modificó matriz."
+  - "Solo CURRENT_TASK y reporte cambiaron."
   - "git diff --check limpio."
 
-next_task_policy:
-  if_success:
-    propose_exactly_one: "ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-002"
-
-  rule: >
-    La siguiente tarea debe volver a priorizar globalmente por valor ejecutivo
-    desde el nuevo baseline 45.0%. No asumir M4 ni ningún módulo específico.
-
 report_requirements:
-  path: "docs/dev-loop/reports/DOCS-DIRECTOR-IA-M6-CAPABILITY-MATRIX-SYNC-001.md"
+  path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-002.md"
 
   must_include:
     - "metadata"
     - "resumen ejecutivo"
-    - "baseline"
-    - "implementación M6 verificada"
-    - "estado antes/después"
-    - "GASTOS"
-    - "INVERSIONES"
-    - "source"
-    - "period semantics"
-    - "IGF boundary"
-    - "authz"
-    - "Export boundary"
-    - "tests"
-    - "recalculo 8.5/20 -> 9.0/20"
-    - "42.5% -> 45.0%"
-    - "cambios exactos en matriz"
-    - "acciones no realizadas"
+    - "baseline 45.0%"
+    - "capacidad actual"
+    - "huecos globales"
+    - "preguntas ejecutivas nuevas"
+    - "candidatos"
+    - "tabla comparativa"
+    - "ranking"
+    - "ganador"
+    - "segundo lugar"
+    - "primer slice"
+    - "estado posterior"
+    - "efecto porcentual"
+    - "riesgos"
+    - "dependencias"
     - "gates"
+    - "NEXT_TASK"
+    - "acciones no realizadas"
     - "secrets_check"
     - "git diff --check"
     - "git status"
-    - "NEXT_TASK"
 
 expected_terminal_state: >
-  DONE_PENDING_REVIEW si la matriz refleja M6 PARTIAL y el nuevo baseline
-  9.0/20 = 45.0% sin marcar COMPLETE. STOPPED si la documentación vigente
-  impide reflejar la implementación sin reinterpretación. BLOCKED si falta gate.
+  DONE_PENDING_REVIEW si existe un ganador defendible. STOPPED si ningún
+  frente pendiente supera el costo/riesgo marginal sin decisión contractual.
+  BLOCKED si falta gate humano indispensable.
 
 max_attempts: 1
 
-result_report_path: "docs/dev-loop/reports/DOCS-DIRECTOR-IA-M6-CAPABILITY-MATRIX-SYNC-001.md"
+result_report_path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-002.md"
