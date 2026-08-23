@@ -158,11 +158,18 @@ const cases = [
     assert(toolPlan.can_execute === true, "history can execute");
   },
 
-  // 9. Documentos
+  // 9. Documentos metadata
   () => {
-    const { toolPlan } = planTools("¿Qué documentos faltan del folio?", { planta_id: 1 });
+    const q = "listar documentos del folio 123";
+    const { toolPlan } = planTools(q, { planta_id: 1, question: q });
     const t = getTool(toolPlan, "get_folio_documents");
-    assert(t && t.status === TOOL_STATUS.declared_not_integrated, "docs not integrated");
+    assert(t && t.status === TOOL_STATUS.available_on_demand, "docs metadata on demand");
+    assert(t.executable === true, "docs metadata executable");
+    assert(
+      getDirectorIaTool("get_folio_documents").executor === "loadFolioDocumentsMetadataForChat",
+      "docs metadata executor"
+    );
+    assert(toolPlan.can_execute === true, "docs metadata can execute");
   },
 
   // 10. Cheque/póliza

@@ -116,7 +116,7 @@ describe("M2 intent, capability y tool", () => {
     assert.equal(docs.id, "documentos");
     assert.equal(planDirectorIaQuestion("¿Qué documentos faltan del folio?").intent, "folio_documents");
     assert.equal(isDirectorIaToolExecutable("get_folio_history"), true);
-    assert.equal(isDirectorIaToolExecutable("get_folio_documents"), false);
+    assert.equal(isDirectorIaToolExecutable("get_folio_documents"), true);
   });
 
   it("no redirige a Action Register ni a M3", () => {
