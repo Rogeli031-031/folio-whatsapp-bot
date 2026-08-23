@@ -1,14 +1,14 @@
 # CURRENT_TASK
 
 ```yaml
-task_id: "DOCS-DIRECTOR-IA-M2-FOLIO-STATUS-SYNC-001"
+task_id: "ARCH-DIRECTOR-IA-M2-NEXT-SLICE-PRIORITIZATION-001"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
-authorized_at: "2026-08-23T15:02:00-06:00"
+authorized_at: "2026-08-23"
 human_authorization: >
   AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-23.
-  Apruebo DOCS-DIRECTOR-IA-M2-FOLIO-STATUS-SYNC-001 y autorizo G1.
+  Apruebo ARCH-DIRECTOR-IA-M2-NEXT-SLICE-PRIORITIZATION-001 y autorizo G1.
 
 gates:
   G1_task_authorization: AUTHORIZED
@@ -17,252 +17,391 @@ gates:
   G8_calibration_materiality_signature: N/A
 
 objective: >
-  Sincronizar exclusivamente la documentación de capacidades de Director IA
-  para reflejar el nuevo slice read-only de M2 — Kanban / Folios — ya integrado
-  en main, manteniendo M2 en PARTIAL, sin modificar el porcentaje global de
-  42.5%, sin reinterpretar COMPLETE y sin documentar capacidades todavía no
-  implementadas.
+  Auditar y priorizar el siguiente slice de M2 — Kanban / Folios — después
+  de folio_status, seleccionando exactamente un candidato por valor ejecutivo,
+  frecuencia de uso, reutilización de fuentes existentes, seguridad read-only,
+  costo de integración y ajuste a la definición canónica vigente de M2.
 
 baseline:
-  implementation_task: "IMPL-DIRECTOR-IA-M2-FOLIO-STATUS-001"
-  implementation_report: "docs/dev-loop/reports/IMPL-DIRECTOR-IA-M2-FOLIO-STATUS-001.md"
-  implementation_merge_commit: "e5bd3a05822dc81a79e5036b692dcf9a5b125e0c"
-
-  module: "M2"
-  module_name: "Kanban / Folios"
-
-  state_before: "PARTIAL"
-  state_after: "PARTIAL"
-
-  current_m0_m20_percentage: 42.5
-  current_numerator: 8.5
+  module: "M2 — Kanban / Folios"
+  current_state: "PARTIAL"
+  global_percentage: 42.5
+  numerator: 8.5
   denominator: 20
-  percentage_effect: 0.0
 
-implemented_slice:
-  name: "folio_status read-only"
-
-  supported:
-    - "consulta por folio id"
-    - "consulta por numero_folio"
-    - "consulta de varios folios"
-    - "listado por planta autorizada"
-    - "filtrado/listado por etapa"
+  already_integrated:
+    - "comentarios de folio"
+    - "folio_status por id"
+    - "folio_status por numero_folio"
+    - "varios folios"
+    - "listado por planta"
+    - "filtro/listado por etapa"
     - "estatus observado"
     - "etapa derivada"
-    - "evidencia estructurada"
 
-  runtime_path: >
-    intent folio_status -> get_folio_status -> loadFolioStatusForChat ->
-    helper SELECT-only -> evidencia -> respuesta
+  current_safe_path: >
+    folio_status -> get_folio_status -> loadFolioStatusForChat ->
+    SELECT-only -> evidencia -> respuesta
 
-  semantics:
-    estatus: "columna observada en DB"
-    etapa: "derivada mediante estatusToEtapaVisual"
-    etapa_db_column: false
+  state_rule: >
+    No asumir que el próximo slice lleva M2 a COMPLETE. El estado resultante
+    debe determinarse contra la ficha canónica vigente, no por conveniencia.
 
-  authz:
-    - "JWT/contexto preservado"
-    - "rol preservado"
-    - "planta_id preservado"
-    - "plantas_permitidas preservado"
-    - "GV = 403"
-    - "GA solo dentro de planta autorizada"
-    - "folio cross-planta = 403"
-    - "not found = 404"
-    - "fail-closed"
+primary_question: >
+  ¿Cuál es el siguiente slice de M2 que produce mayor valor ejecutivo real
+  para Director IA con el menor riesgo y delta arquitectónico, preservando
+  read-only cuando sea posible y sin reinterpretar la definición canónica
+  del módulo?
 
-  exclusions:
-    - "GET /api/dashboard/kanban como fuente"
-    - "GET /api/folios/:id como fuente"
-    - "maybeAdvanceFolioToComprobaciones"
-    - "autoavance"
-    - "writes"
-    - "HTTP interno"
-    - "folio_history"
-    - "folio_documents"
-    - "timeline"
-    - "PDF"
+candidate_families:
+  - id: "history"
+    examples:
+      - "historial del folio"
+      - "cambios de etapa/estatus"
+      - "quién hizo qué"
+      - "cuándo ocurrió"
+    note: "Auditar fuente física; no asumir que existe path seguro."
+
+  - id: "documents"
+    examples:
+      - "documentos asociados"
+      - "PDFs"
+      - "existencia/tipo de documentos"
+    note: >
+      Separar metadatos read-only de descarga/binario/S3. No asumir que todo
+      documents debe integrarse en un solo slice.
+
+  - id: "financial_status"
+    examples:
+      - "cheque"
+      - "póliza"
+      - "presupuesto"
+      - "estatus financiero del folio"
+    note: >
+      Determinar si existe una consulta ejecutiva coherente y SELECT-only.
+      No fusionar fuentes distintas solo para cerrar M2.
+
+  - id: "kanban_flow"
+    examples:
+      - "qué folios llevan demasiado tiempo en una etapa"
+      - "antigüedad por etapa"
+      - "flujo/atascos"
+      - "movimiento del tablero"
+    note: >
+      Separar hechos observables de inferencias como retrasado/atorado.
+      No usar handlers mutantes.
+
+  - id: "other"
+    note: >
+      Permitir candidato distinto solo si surge físicamente de la definición
+      canónica y del repositorio y tiene mayor valor ejecutivo.
+
+evaluation_dimensions:
+  - "valor ejecutivo"
+  - "frecuencia probable de consulta"
+  - "capacidad para explicar qué está pasando"
+  - "complementariedad con folio_status"
+  - "fuente física existente"
+  - "SELECT-only/read-only"
+  - "riesgo de side effects"
+  - "authz"
+  - "scope planta"
+  - "reutilización de helpers"
+  - "planner existente"
+  - "tools existentes"
+  - "delta de implementación"
+  - "testabilidad"
+  - "dependencias externas"
+  - "riesgo de reinterpretación contractual"
+  - "estado M2 resultante"
+  - "impacto porcentual real"
+
+mandatory_audit:
+
+  canonical_m2:
+    - "leer ficha M2 completa vigente"
+    - "identificar propósito canónico"
+    - "inventariar capacidades cubiertas"
+    - "inventariar capacidades faltantes"
+    - "determinar qué exige realmente COMPLETE"
+
+  physical_sources:
+    - "buscar helpers existentes"
+    - "buscar queries SQL"
+    - "buscar tablas/vistas"
+    - "buscar endpoints"
+    - "buscar side effects"
+    - "buscar S3/filesystem si aplica"
+    - "buscar joins financieros si aplica"
+
+  history:
+    - "fuente"
+    - "SELECT-only sí/no"
+    - "semántica"
+    - "authz"
+    - "scope planta"
+    - "planner/tool actuales"
+    - "delta"
+
+  documents:
+    - "fuente"
+    - "metadata vs binary"
+    - "SELECT-only sí/no"
+    - "S3/dependencias"
+    - "authz"
+    - "scope planta"
+    - "planner/tool actuales"
+    - "delta"
+
+  financial_status:
     - "cheques"
-    - "polizas"
+    - "pólizas"
     - "presupuestos"
-    - "crear/editar/aprobar/cancelar folios"
+    - "relación real con folio"
+    - "SELECT-only sí/no"
+    - "authz"
+    - "delta"
 
-test_evidence:
-  focal_m2: "28/28 pass"
-  capabilities: "27/27 pass"
-  planner: "32/32 pass"
-  orchestrator: "24/24 pass"
-  director_ia_suite: "487/487 pass"
-  git_diff_check: "clean"
+  kanban_flow:
+    - "timestamps reales disponibles"
+    - "antigüedad observable"
+    - "movimientos reales"
+    - "definición de atascado/retrasado"
+    - "si requiere nueva semántica"
+    - "si puede mantenerse factual"
 
-documentation_policy:
-  must_update:
-    - "M2 current Director IA coverage"
-    - "exact information now queryable"
-    - "exact information still not queryable"
-    - "sources/helpers/tools/intents for folio_status"
-    - "read-only nature of the slice"
-    - "authz and plant scope"
-    - "known unsafe HTTP surfaces excluded"
-    - "current limitations"
+  director_ia_wiring:
+    - "intents existentes"
+    - "tools existentes"
+    - "executors"
+    - "capabilities"
+    - "UNSUPPORTED_RULES"
+    - "SOURCE_NOT_INTEGRATED"
+    - "chat routing"
 
-  must_preserve:
-    - "M2 = PARTIAL"
-    - "42.5% global"
-    - "8.5 / 20 numerator"
-    - "folio_history not integrated"
-    - "folio_documents not integrated"
-    - "financial surfaces not integrated"
-    - "mutations not integrated"
-    - "Kanban mutating routes not used by Director IA"
+ranking_rules:
+  must_not:
+    - "elegir por número de módulo"
+    - "elegir porque ya existe intent"
+    - "elegir porque mueve porcentaje"
+    - "elegir history por ser NEXT_TASK nominal"
+    - "elegir documents por ser el siguiente campo de la matriz"
+    - "inventar COMPLETE"
+    - "agrupar múltiples slices para forzar COMPLETE"
 
-  forbidden_interpretations:
-    - "M2 COMPLETE"
-    - "M2 covers full Kanban"
-    - "M2 covers timeline/history"
-    - "M2 covers documents"
-    - "M2 covers cheque/poliza/presupuesto"
-    - "M2 can create/edit/approve/cancel"
-    - "M2 can auto-advance"
-    - "folio etapa is a DB column"
-    - "percentage increased"
+  prefer:
+    - "alto valor ejecutivo"
+    - "hechos observables"
+    - "fuente existente"
+    - "SELECT-only"
+    - "in-process"
+    - "authz reutilizable"
+    - "sin contrato nuevo"
+    - "sin infraestructura nueva"
+    - "tests determinísticos"
+
+mandatory_ranking_table:
+  columns:
+    - "rank"
+    - "candidate"
+    - "executive_value"
+    - "source_ready"
+    - "read_only"
+    - "authz_ready"
+    - "planner_tool_ready"
+    - "implementation_delta"
+    - "semantic_risk"
+    - "external_dependency"
+    - "state_after_slice"
+    - "percentage_effect"
+    - "decision"
+
+decision_rules:
+
+  winner:
+    required:
+      - "exactamente un slice"
+      - "evidencia física suficiente"
+      - "alcance acotable"
+      - "valor ejecutivo justificable"
+      - "estado posterior explícito"
+      - "porcentaje posterior explícito"
+
+    next_task_format: >
+      ARCH-DIRECTOR-IA-M2-<SLICE>-READINESS-001
+
+  no_winner:
+    when:
+      - "ningún slice tiene evidencia suficiente"
+      - "todos requieren decisión contractual previa"
+      - "todos dependen de mutación insegura"
+      - "no existe diferenciación defendible"
+
+    outcome: "STOPPED"
+    next_task: null
+
+semantic_invariants:
+  - "M2 ≠ Action Register."
+  - "M2 ≠ M3 KPIs."
+  - "estatus actual ≠ historial."
+  - "document metadata ≠ document content."
+  - "antigüedad ≠ retraso salvo regla explícita."
+  - "falta de movimiento ≠ bloqueo salvo evidencia/regla."
+  - "cheque ≠ póliza ≠ presupuesto."
+  - "No inventar eventos históricos."
+  - "No inventar documentos."
+  - "No inventar estado financiero."
+  - "No usar rutas mutantes por conveniencia."
+  - "No ampliar cross-planta."
+  - "No reinterpretar COMPLETE."
 
 in_scope:
   writable:
     - "docs/dev-loop/CURRENT_TASK.md"
-    - "docs/dev-loop/reports/DOCS-DIRECTOR-IA-M2-FOLIO-STATUS-SYNC-001.md"
-    - "docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md"
+    - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M2-NEXT-SLICE-PRIORITIZATION-001.md"
 
   read_only:
     - "AGENTS.md"
     - "docs/dev-loop/**"
     - "docs/director-ia/**"
-    - "lib/director-ia-m2-folio-status.js"
-    - "lib/director-ia-capabilities.js"
-    - "lib/director-ia-chat.js"
-    - "lib/director-ia-planner.js"
-    - "lib/director-ia-tools.js"
-    - "test/director-ia-m2-folio-status.test.js"
-    - "test/director-ia-duplicados.test.js"
-    - "scripts/test-director-ia-capabilities.js"
-    - "scripts/test-director-ia-planner.js"
-    - "scripts/test-director-ia-tool-orchestrator.js"
+    - "lib/**"
     - "server.js"
+    - "frontend-dashboard/**"
+    - "test/**"
+    - "scripts/**"
+    - "sql/**"
+    - "package.json"
+    - "package-lock.json"
 
 out_of_scope:
+  - "implementar"
   - "modificar código"
   - "modificar runtime"
   - "modificar frontend"
   - "modificar tests"
   - "modificar scripts"
   - "modificar SQL"
+  - "modificar capability matrix"
+  - "modificar contratos"
   - "crear migration"
-  - "modificar schema"
-  - "modificar contratos arquitectónicos"
-  - "modificar otros módulos funcionalmente"
-  - "marcar M2 COMPLETE"
-  - "cambiar porcentaje"
-  - "habilitar history"
-  - "habilitar documents"
-  - "habilitar financial surfaces"
-  - "habilitar writes"
+  - "hacer smoke productivo"
+  - "ejecutar writes"
   - "hacer commit"
   - "hacer push"
   - "hacer merge"
   - "ejecutar NEXT_TASK"
 
 allowed_actions:
-  - "leer implementación M2"
-  - "leer reportes de readiness e implementación"
-  - "verificar main"
-  - "actualizar únicamente la ficha M2 y resúmenes directamente afectados si existen"
-  - "preservar estado PARTIAL"
-  - "preservar porcentaje 42.5%"
+  - "auditar repositorio"
+  - "comparar candidatos"
+  - "trazar fuentes"
+  - "trazar authz"
+  - "trazar planner/tools"
+  - "trazar side effects"
+  - "determinar valor ejecutivo"
+  - "determinar estado posterior"
+  - "recalcular porcentaje solo si realmente corresponde"
+  - "elegir exactamente un ganador"
+  - "proponer exactamente una NEXT_TASK"
   - "escribir reporte"
   - "ejecutar git diff --check"
   - "ejecutar git status"
-  - "proponer como máximo una NEXT_TASK"
 
 forbidden_actions:
-  - "modificar código"
-  - "modificar tests"
-  - "reinterpretar M2 como COMPLETE"
-  - "sumar +2.5 pp"
-  - "documentar capacidades no implementadas"
-  - "eliminar limitaciones reales"
-  - "reabrir módulos ajenos"
+  - "implementar ganador"
+  - "editar capability matrix"
+  - "cambiar estado M2"
+  - "otorgar COMPLETE sin definición canónica"
+  - "inventar +2.5 pp"
   - "hacer commit"
   - "hacer push"
   - "hacer merge"
-  - "ejecutar tarea siguiente"
+  - "autorizar NEXT_TASK"
+  - "ejecutar NEXT_TASK"
+
+required_output:
+  - "resumen ejecutivo"
+  - "baseline M2"
+  - "baseline global 42.5%"
+  - "definición canónica M2"
+  - "inventario de gaps restantes"
+  - "análisis history"
+  - "análisis documents"
+  - "análisis financial_status"
+  - "análisis kanban_flow"
+  - "otros candidatos encontrados"
+  - "ranking completo"
+  - "ganador"
+  - "por qué gana"
+  - "por qué pierden los demás"
+  - "estado M2 después del ganador"
+  - "porcentaje después del ganador"
+  - "riesgos"
+  - "gates"
+  - "NEXT_TASK"
+  - "acciones no realizadas"
+  - "git diff --check"
+  - "git status"
 
 acceptance_criteria:
-  - "Se verificó físicamente el slice M2 integrado en main."
-  - "Se documentó folio por id."
-  - "Se documentó folio por numero_folio."
-  - "Se documentó listado por planta."
-  - "Se documentó filtro por etapa."
-  - "Se documentó estatus observado."
-  - "Se documentó etapa derivada."
-  - "Se documentó authz."
-  - "Se documentó scope planta."
-  - "Se documentaron rutas mutantes excluidas."
-  - "Se preservó folio_history como no integrado."
-  - "Se preservó folio_documents como no integrado."
-  - "Se preservaron superficies financieras como no integradas."
-  - "Se preservaron mutaciones como no integradas."
-  - "M2 sigue PARTIAL."
-  - "M0-M20 sigue 8.5/20."
-  - "Porcentaje sigue 42.5%."
+  - "Se leyó la definición canónica completa de M2."
+  - "Se verificó físicamente cada familia candidata."
+  - "Se identificaron fuentes reales."
+  - "Se identificaron side effects."
+  - "Se evaluó authz."
+  - "Se evaluó scope planta."
+  - "Se evaluó planner/tools."
+  - "Se evaluó costo de implementación."
+  - "Se evaluó riesgo semántico."
+  - "Se evaluó valor ejecutivo."
+  - "Se produjo ranking comparativo."
+  - "Se eligió exactamente un ganador o STOPPED."
+  - "No se asumió history."
+  - "No se asumió documents."
+  - "No se implementó."
+  - "No se modificó capability matrix."
   - "No se modificó código."
-  - "No se modificaron tests."
-  - "Solo CURRENT_TASK, reporte y capability matrix fueron modificados."
+  - "Solo CURRENT_TASK y reporte fueron modificados."
   - "git diff --check limpio."
 
 next_task_policy:
-  if_success:
-    propose_exactly_one: "ARCH-DIRECTOR-IA-M2-NEXT-SLICE-PRIORITIZATION-001"
+  winner_found:
+    propose_exactly_one: "ARCH-DIRECTOR-IA-M2-<WINNER>-READINESS-001"
 
-  note: >
-    La siguiente tarea, si se propone, debe decidir cuál es el próximo slice de
-    M2 por valor ejecutivo. No asumir automáticamente history o documents.
+  no_winner:
+    propose: null
 
 report_requirements:
-  path: "docs/dev-loop/reports/DOCS-DIRECTOR-IA-M2-FOLIO-STATUS-SYNC-001.md"
+  path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M2-NEXT-SLICE-PRIORITIZATION-001.md"
 
   must_include:
     - "metadata"
     - "resumen ejecutivo"
-    - "baseline 42.5%"
-    - "implementación verificada"
-    - "cobertura M2 antes/después"
-    - "estado PARTIAL"
-    - "folio id"
-    - "numero_folio"
-    - "listado planta"
-    - "filtro etapa"
-    - "estatus vs etapa"
-    - "authz"
-    - "scope planta"
-    - "rutas mutantes excluidas"
-    - "capacidades aún no integradas"
-    - "tests verificados"
-    - "cambios exactos en matriz"
-    - "porcentaje antes/después"
-    - "acciones no realizadas"
+    - "baseline"
+    - "definición canónica"
+    - "gaps M2"
+    - "fuentes físicas"
+    - "history"
+    - "documents"
+    - "financial status"
+    - "kanban flow"
+    - "ranking"
+    - "ganador"
+    - "estado posterior"
+    - "porcentaje posterior"
+    - "riesgos"
     - "gates"
+    - "NEXT_TASK"
+    - "acciones no realizadas"
     - "secrets_check"
     - "git diff --check"
     - "git status"
-    - "NEXT_TASK propuesta"
 
 expected_terminal_state: >
-  DONE_PENDING_REVIEW si la documentación refleja fielmente el slice integrado,
-  mantiene M2 PARTIAL y conserva 42.5%. STOPPED si la matriz vigente impide
-  documentar el slice sin reinterpretación contractual. BLOCKED si falta gate
-  o dato humano indispensable.
+  DONE_PENDING_REVIEW si existe un ganador defendible. STOPPED si no existe
+  candidato suficientemente seguro/valioso sin decisión previa. BLOCKED si
+  falta gate o dato humano indispensable.
 
 max_attempts: 1
 
-result_report_path: "docs/dev-loop/reports/DOCS-DIRECTOR-IA-M2-FOLIO-STATUS-SYNC-001.md"
+result_report_path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M2-NEXT-SLICE-PRIORITIZATION-001.md"
