@@ -20,11 +20,13 @@ function assert(cond, msg) {
   if (!cond) throw new Error(msg);
 }
 
-function expectBlocked(question, domainId) {
+function expectBlocked(question, domainId, opts = {}) {
   const cap = detectUnsupportedDirectorIaDomain(question);
   assert(cap, `"${question}" debería bloquearse`);
   assert(cap.id === domainId, `"${question}" → ${domainId}, got ${cap && cap.id}`);
-  assert(cap.canRead === false, `"${question}" dominio debe canRead=false`);
+  if (opts.requireCanReadFalse !== false) {
+    assert(cap.canRead === false, `"${question}" dominio debe canRead=false`);
+  }
   const result = buildUnsupportedDomainChatResult(cap, { planta_id: 1 });
   assert(result.ok === true, "limitation result ok");
   assert(Array.isArray(result.sources) && result.sources.length === 0, "sources vacío");
@@ -60,6 +62,7 @@ const cases = [
     assert(isDirectorIaDomainReadable("kanban") === true, "kanban readable (estatus/etapa)");
     assert(isDirectorIaDomainReadable("folios") === true, "folios readable (estatus/etapa)");
     assert(isDirectorIaDomainReadable("folio_historial") === true, "historial readable");
+    assert(isDirectorIaDomainReadable("documentos") === true, "documentos metadata readable");
     const summary = buildDirectorIaCapabilitiesSummary();
     assert(summary.readable.length > 0, "summary readable");
     assert(summary.not_integrated.length > 0, "summary not_integrated");
@@ -70,7 +73,12 @@ const cases = [
   () => expectAllowed("folios en evidencias"),
   () => expectAllowed("¿Cuál fue el último movimiento del folio 456?"),
   () => expectAllowed("¿Quién movió el folio 123?"),
-  () => expectBlocked("¿Qué documentos le faltan?", "documentos"),
+  () => expectAllowed("listar documentos del folio 123"),
+  () => expectAllowed("qué documentos tiene el folio 123"),
+  () => expectAllowed("registros documentales del folio 123"),
+  () => expectBlocked("¿Qué documentos le faltan?", "documentos", { requireCanReadFalse: false }),
+  () => expectBlocked("muéstrame el PDF del folio 123", "documentos", { requireCanReadFalse: false }),
+  () => expectBlocked("contenido del documento del folio 123", "documentos", { requireCanReadFalse: false }),
   () => expectBlocked("¿Ya tiene póliza?", "polizas"),
   () => expectBlocked("¿Tiene cheque o depósito?", "cheques"),
   () => expectBlocked("¿Cómo va el presupuesto semanal?", "presupuestos"),

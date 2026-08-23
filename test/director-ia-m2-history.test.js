@@ -136,7 +136,6 @@ describe("M2 history intent, capability y tool", () => {
     const docs = detectUnsupportedDirectorIaDomain("¿Qué documentos le faltan?");
     assert.ok(docs);
     assert.equal(docs.id, "documentos");
-    assert.equal(docs.canRead, false);
     assert.equal(planDirectorIaQuestion("¿Qué documentos faltan del folio?").intent, "folio_documents");
     const cheque = detectUnsupportedDirectorIaDomain("¿Tiene cheque o depósito?");
     assert.ok(cheque);
@@ -147,7 +146,7 @@ describe("M2 history intent, capability y tool", () => {
     const budget = detectUnsupportedDirectorIaDomain("¿Cómo va el presupuesto semanal?");
     assert.ok(budget);
     assert.equal(budget.id, "presupuestos");
-    assert.equal(isDirectorIaToolExecutable("get_folio_documents"), false);
+    assert.equal(isDirectorIaToolExecutable("get_folio_documents"), true);
     assert.equal(isDirectorIaToolExecutable("get_folio_financial_status"), false);
     assert.equal(isDirectorIaToolExecutable("get_budget_status"), false);
   });
