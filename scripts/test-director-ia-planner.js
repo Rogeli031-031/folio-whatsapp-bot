@@ -133,6 +133,13 @@ const cases = [
     assert(!plan.domains.includes("taller_at"), "taller tema AR no usa taller_at");
   },
   () => {
+    const plan = planDirectorIaQuestion("cómo van los gastos");
+    assertPlanShape(plan, "cómo van los gastos");
+    assert(plan.intent === "financial_diagnosis", `"cómo van los gastos" → financial_diagnosis, got ${plan.intent}`);
+    assert(plan.requires_clarification === true, "gastos IGF vs folios requiere clarificación");
+    assert(!plan.domains.includes("gastos"), "no forzar dominio gastos");
+  },
+  () => {
     const plan = planDirectorIaQuestion("¿Cómo van los proyectos de mantenimiento?");
     assertPlanShape(plan, "proyectos mantenimiento");
     assert(plan.requires_clarification === true, "proyectos+mantenimiento requiere clarificación");

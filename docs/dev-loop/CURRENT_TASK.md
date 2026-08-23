@@ -1,14 +1,14 @@
 # CURRENT_TASK
 
 ```yaml
-task_id: "ARCH-DIRECTOR-IA-M6-GASTOS-INVERSIONES-READINESS-001"
+task_id: "IMPL-DIRECTOR-IA-M6-GASTOS-INVERSIONES-001"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-08-23"
 human_authorization: >
   AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-23.
-  Apruebo ARCH-DIRECTOR-IA-M6-GASTOS-INVERSIONES-READINESS-001 y autorizo G1.
+  Apruebo IMPL-DIRECTOR-IA-M6-GASTOS-INVERSIONES-001 y autorizo G1.
 
 gates:
   G1_task_authorization: AUTHORIZED
@@ -17,305 +17,285 @@ gates:
   G8_calibration_materiality_signature: N/A
 
 objective: >
-  Auditar físicamente un primer slice read-only de M6 — GASTOS / INVERSIONES —
-  para que Director IA pueda consultar datos estructurados de folios por planta,
-  mes, categoría y partida mediante integración in-process, reutilizando fuentes
-  y helpers existentes, sin Excel, sin exportación, sin writes y sin confundir
-  estos datos con IGF.
+  Implementar el primer slice read-only de M6 — GASTOS / INVERSIONES — para
+  que Director IA pueda consultar datos estructurados de folios por planta,
+  periodo y categoría mediante integración in-process, reutilizando SELECT sobre
+  public.folios + expandCategoriaRows, sin Excel, sin HTTP interno, sin writes
+  y sin confundir GASTOS/INVERSIONES con IGF.
 
 baseline:
-  prioritization_task: "ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-001"
-  prioritization_report: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-001.md"
+  readiness_task: "ARCH-DIRECTOR-IA-M6-GASTOS-INVERSIONES-READINESS-001"
+  readiness_report: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M6-GASTOS-INVERSIONES-READINESS-001.md"
 
-  winner: "M6 — GASTOS / INVERSIONES"
-  first_slice: "query JSON read-only"
-  current_state: "NO INTEGRADA"
-  expected_state_after_slice: "PARTIAL"
+  module: "M6 — GASTOS / INVERSIONES"
+  state_before: "NO INTEGRADA"
+  state_after: "PARTIAL"
 
   global_percentage:
-    current: 42.5
-    numerator: 8.5
+    before: 42.5
+    before_numerator: 8.5
     denominator: 20
-    expected_after_slice: 45.0
-    expected_gain_pp: 2.5
+    after: 45.0
+    after_numerator: 9.0
+    gain_pp: 2.5
 
 canonical_boundary:
-  module_purpose: "GASTOS / INVERSIONES con Export"
-  slice_scope: "consulta estructurada únicamente"
+  complete_requires:
+    - "Export/xlsx"
+
+  this_slice:
+    - "consulta estructurada JSON/read-only"
+    - "no Export"
 
   rule: >
-    El slice read-only NO satisface COMPLETE canónico de M6 porque Export/Excel
-    permanece fuera. Si el path es implementable, M6 solo podrá pasar a PARTIAL.
+    Después de esta implementación M6 debe quedar PARTIAL, nunca COMPLETE.
 
-primary_question: >
-  ¿Existe un path SELECT-only, in-process, autorizado y semánticamente claro
-  para que Director IA responda consultas de GASTOS e INVERSIONES de folios por
-  planta, periodo y partida, sin usar Excel, sin HTTP interno, sin writes y sin
-  mezclar estas categorías con IGF?
+readiness_findings:
+  source:
+    base: "public.folios"
+    expansion: "expandCategoriaRows"
 
-known_baseline:
-  intents:
+  excel_boundary:
+    workbook_builder: "buildCategoriaRangoWorkbook"
+    role: "formateo xlsx únicamente"
+    use_in_director_ia: false
+
+  categories:
+    - "GASTOS"
+    - "INVERSIONES"
+
+  semantic_rule: >
+    GASTOS ≠ INVERSIONES ≠ IGF.
+
+  period:
+    required_format: "YYYY-MM"
+    invent_default: false
+    zero_rows: "respuesta válida sin registros"
+
+  known_intents:
     - "expense_analysis"
     - "investment_analysis"
 
-  tools:
-    status: "existentes pero históricamente con executor null"
-
-  known_backend:
-    - "categoria-rango-excel"
-    - "expandCategoriaRows"
-    - "fuentes de folios/categorías relacionadas"
-
-  known_risk:
-    - "la palabra gastos colisiona semánticamente con IGF"
-
-mandatory_audit:
-
-  canonical_definition:
-    required:
-      - "leer ficha M6 completa y vigente"
-      - "confirmar propósito canónico"
-      - "confirmar que Export forma parte de COMPLETE"
-      - "confirmar que query-only sería PARTIAL"
-      - "recalcular efecto 42.5 -> 45.0 solo como efecto futuro"
-
-  backend_sources:
-    inspect:
-      - "categoria-rango-excel"
-      - "expandCategoriaRows"
-      - "queries subyacentes"
-      - "helpers reutilizables"
-      - "tablas/vistas reales"
-      - "campos planta"
-      - "campos mes/periodo"
-      - "categoría"
-      - "partida/concepto"
-      - "importe"
-      - "estatus"
-      - "folio"
-
-    determine:
-      - "qué parte es SELECT-only"
-      - "qué parte solo formatea Excel"
-      - "qué fuente primaria existe antes del xlsx"
-      - "si puede extraerse/usar helper estructurado sin depender del export"
-
-  category_semantics:
-    required:
-      - "GASTOS"
-      - "INVERSIONES"
-      - "diferencia real entre ambas"
-      - "qué valores/códigos físicos las representan"
-      - "qué campos son observados"
-      - "qué campos son derivados"
-      - "qué puede agregarse con seguridad"
-
-  period_semantics:
-    determine:
-      - "mes"
-      - "rango"
-      - "YYYY-MM si aplica"
-      - "defaults existentes"
-      - "periodo inválido"
-      - "ausencia de datos"
-      - "comparación entre periodos si la fuente la soporta"
-      - "no inventar periodos"
-
-  plant_scope:
-    determine:
-      - "planta_id"
-      - "plantas_permitidas"
-      - "fallbacks globales existentes"
-      - "qué debe bloquear Director IA"
-      - "cross-planta"
-      - "fail-closed"
-
-  authz:
-    determine:
-      - "JWT/contexto"
-      - "rol"
-      - "GA"
-      - "GV"
-      - "planta autorizada"
-      - "cross-planta"
-      - "si la superficie actual tiene restricciones distintas"
-
-  planner_tools:
-    inspect:
-      - "expense_analysis"
-      - "investment_analysis"
-      - "tools existentes"
-      - "executor"
-      - "capability"
-      - "UNSUPPORTED_RULES"
-      - "SOURCE_NOT_INTEGRATED"
-      - "chat routing"
-
-    determine:
-      - "qué ya existe"
-      - "qué falta"
-      - "si deben mantenerse intents separados"
-      - "si se necesita un loader común con categoría explícita"
-      - "qué bloqueo debe levantarse únicamente para este slice"
-
-  igf_collision:
-    required:
-      - "trazar reglas actuales que mandan gastos a IGF"
-      - "identificar frases ambiguas"
-      - "separar gastos de folios vs gastos IGF"
-      - "definir necesidad de clarificación si falta contexto"
-      - "no cambiar semántica de IGF"
-      - "no degradar M7"
-
-  response_contract:
-    determine_if_supported:
-      - "folio_id/numero_folio"
-      - "planta"
-      - "periodo"
-      - "categoria"
-      - "partida/concepto"
-      - "importe"
-      - "estatus"
-      - "total"
-      - "conteo"
-      - "source"
-
-    rules:
-      - "No inventar partidas."
-      - "No inventar importes."
-      - "No confundir gasto con inversión."
-      - "No confundir gasto de folio con gasto IGF."
-      - "No afirmar causalidad solo por importe."
-      - "No afirmar desviación sin baseline."
-
-  export_boundary:
-    required:
-      - "confirmar que XLSX queda fuera"
-      - "confirmar que no se genera archivo"
-      - "confirmar que no se usa Excel como fuente primaria si existe JSON/helper previo"
-      - "confirmar que M6 sigue sin COMPLETE"
-
-architecture_hypothesis:
-  preferred_path: >
-    expense_analysis / investment_analysis -> tool -> executor ->
-    loadGastosInversionesForChat(category) -> helper/fuente SELECT-only ->
+architecture_pattern:
+  gastos: >
+    expense_analysis -> tool -> executor ->
+    loadGastosInversionesForChat("GASTOS") ->
+    SELECT public.folios -> expandCategoriaRows ->
     evidencia -> respuesta
 
+  inversiones: >
+    investment_analysis -> tool -> executor ->
+    loadGastosInversionesForChat("INVERSIONES") ->
+    SELECT public.folios -> expandCategoriaRows ->
+    evidencia -> respuesta
+
+  transport:
+    internal_http: false
+
+  excel:
+    generate: false
+
+  writes:
+    allowed: false
+
+scope:
+  included:
+    - "GASTOS de folios"
+    - "INVERSIONES de folios"
+    - "consulta por planta autorizada"
+    - "periodo YYYY-MM"
+    - "partida/concepto"
+    - "importe si existe físicamente"
+    - "estatus si existe físicamente"
+    - "folio"
+    - "conteos/totales derivados del conjunto consultado"
+    - "evidencia estructurada"
+
+  excluded:
+    - "Export xlsx"
+    - "generación de archivo"
+    - "descarga"
+    - "HTTP interno"
+    - "writes"
+    - "comparaciones inventadas"
+    - "causalidad inferida"
+    - "IGF"
+    - "forecast"
+    - "cambios de categoría"
+
+category_semantics:
+  required:
+    - "mantener GASTOS e INVERSIONES como familias distintas"
+    - "usar predicados físicos distintos"
+    - "no mezclar filas entre categorías"
+    - "no cambiar categoría a partir del lenguaje del usuario"
+
+period_semantics:
+  required:
+    - "YYYY-MM obligatorio"
+    - "validar formato"
+    - "no inventar periodo"
+    - "no usar mes actual por default salvo que exista regla canónica explícita"
+    - "0 filas = no hay registros para ese periodo"
+    - "periodo inválido = error/clarificación, no query inventada"
+
+igf_collision:
   requirements:
-    - "in-process"
-    - "sin HTTP interno"
-    - "sin Excel"
+    - "preservar routing existente de IGF"
+    - "no mandar toda pregunta con palabra gastos a M6"
+    - "identificar contexto de folios/categoría/partida"
+    - "si la intención es ambigua entre IGF y M6, pedir clarificación"
+    - "no degradar M7"
+    - "no usar IGF como fallback de M6"
+    - "no usar M6 como fallback de IGF"
+
+authz:
+  required:
+    - "JWT/contexto"
+    - "rol"
+    - "planta_id"
+    - "plantas_permitidas"
+    - "GV = 403"
+    - "GA dentro de planta autorizada"
+    - "cross-planta = 403"
+    - "fail-closed"
+    - "no usar bloqueo GA específico de KPIs IGF"
+
+response_contract:
+  include_if_physically_present:
+    - "folio_id"
+    - "numero_folio"
+    - "planta_id"
+    - "planta_nombre/clave"
+    - "periodo"
+    - "categoria"
+    - "partida/concepto"
+    - "importe"
+    - "estatus"
+    - "source"
+
+  derived_if_safe:
+    - "conteo"
+    - "total"
+
+  forbidden:
+    - "desviación sin baseline"
+    - "causa por importe"
+    - "clasificación inventada"
+    - "comparación contra periodo no solicitado"
+    - "mezcla con IGF"
+
+planner_tools_capabilities:
+  planner:
+    - "conservar expense_analysis"
+    - "conservar investment_analysis"
+    - "asegurar routing separado"
+    - "manejar ambigüedad con IGF"
+
+  tools:
+    - "habilitar executor real para gastos"
+    - "habilitar executor real para inversiones"
+    - "no agregar tool Excel"
+
+  capabilities:
+    - "actualizar M6 query/read-only"
+    - "no marcar Export disponible"
+
+  unsupported_rules:
+    - "levantar SOURCE_NOT_INTEGRATED para queries M6 soportadas"
+    - "preservar bloqueo de Export/xlsx"
+    - "preservar dominios fuera del slice"
+
+  chat:
+    - "wiring in-process"
+    - "no HTTP interno"
+    - "no fallback incorrecto a IGF"
+    - "evidencia estructurada"
+
+implementation_requirements:
+  data_layer:
+    - "reutilizar query SELECT de public.folios"
+    - "reutilizar expandCategoriaRows"
+    - "extraer/reutilizar la parte estructurada previa al workbook"
+    - "no invocar buildCategoriaRangoWorkbook"
+    - "no generar xlsx"
+
+  loader:
+    preferred_name: "loadGastosInversionesForChat"
+
+    inputs:
+      - "req/context"
+      - "planta_id"
+      - "periodo YYYY-MM"
+      - "category GASTOS|INVERSIONES"
+      - "partida opcional si físicamente soportada"
+
+    outputs:
+      - "records"
+      - "count"
+      - "total si derivable"
+      - "source/evidence"
+
+tests_required:
+  focal:
+    - "GASTOS por planta"
+    - "INVERSIONES por planta"
+    - "GASTOS por YYYY-MM"
+    - "INVERSIONES por YYYY-MM"
+    - "categorías separadas"
+    - "partida/concepto"
+    - "importe"
+    - "múltiples registros"
+    - "0 registros"
+    - "totales"
+    - "nulls"
+    - "periodo inválido"
+    - "periodo ausente"
+    - "planta no autorizada"
+    - "cross-planta"
+    - "plantas_permitidas"
+    - "GA"
+    - "GV"
+    - "intent expense_analysis"
+    - "intent investment_analysis"
+    - "tool executor gastos"
+    - "tool executor inversiones"
+    - "chat wiring"
+    - "pregunta gastos de folios -> M6"
+    - "pregunta inversiones -> M6"
+    - "pregunta gastos IGF -> IGF"
+    - "ambigüedad IGF/M6 -> clarificación si corresponde"
+    - "no Excel"
+    - "no buildCategoriaRangoWorkbook"
+    - "no HTTP interno"
     - "sin writes"
-    - "sin dispatcher nuevo"
-    - "sin contrato nuevo"
 
-mandatory_evidence_table:
-  columns:
-    - "surface"
-    - "helper_or_route"
-    - "physical_source"
-    - "category"
-    - "query_type"
-    - "select_only"
-    - "excel_dependency"
-    - "side_effects"
-    - "authz"
-    - "plant_scope"
-    - "period_semantics"
-    - "safe_fields"
-    - "reusable"
-    - "risk"
-    - "evidence"
-
-mandatory_gap_table:
-  columns:
-    - "gap_id"
-    - "missing_capability"
-    - "required_for_query_slice"
-    - "reusable_component"
-    - "proposed_change"
-    - "architecture_change"
-    - "contract_change"
-    - "authz_change"
-    - "complexity"
-    - "blocking"
-
-tests_to_design_if_ready:
-  - "gastos por planta"
-  - "inversiones por planta"
-  - "gastos por mes"
-  - "inversiones por mes"
-  - "filtro por partida"
-  - "múltiples registros"
-  - "sin registros"
-  - "totales derivados"
-  - "nulls"
-  - "periodo inválido"
-  - "planta no autorizada"
-  - "cross-planta"
-  - "plantas_permitidas"
-  - "GA"
-  - "GV"
-  - "intent expense_analysis"
-  - "intent investment_analysis"
-  - "tools/executor"
-  - "clarificación gastos IGF vs folios"
-  - "no fallback incorrecto a IGF"
-  - "no Excel"
-  - "no HTTP interno"
-  - "sin writes"
-  - "M6 sigue PARTIAL"
-
-decision_rules:
-
-  ready:
-    all:
-      - "fuente estructurada previa al Excel existe"
-      - "SELECT-only"
-      - "GASTOS e INVERSIONES distinguibles"
-      - "scope planta preservable"
-      - "authz preservable"
-      - "periodo claro"
-      - "colisión con IGF resoluble sin contrato nuevo"
-      - "path in-process posible"
-      - "tests determinísticos"
-
-    outcome: "DONE_PENDING_REVIEW"
-    next_task: "IMPL-DIRECTOR-IA-M6-GASTOS-INVERSIONES-001"
-
-  stopped:
-    when:
-      - "Excel es inseparable de la fuente"
-      - "no existe fuente estructurada reutilizable"
-      - "GASTOS/INVERSIONES no pueden distinguirse"
-      - "authz no puede preservarse"
-      - "colisión con IGF requiere decisión contractual nueva"
-
-    outcome: "STOPPED"
-    next_task: null
-
-state_and_percentage:
-  if_future_impl_succeeds:
-    m6_state: "PARTIAL"
-    global_numerator: 9.0
-    global_denominator: 20
-    global_percentage: 45.0
-
-  current_task:
-    m6_state_change: false
-    global_percentage_change: false
+  regression:
+    - "capabilities"
+    - "planner"
+    - "tool orchestrator"
+    - "suite Director IA completa"
 
 in_scope:
   writable:
     - "docs/dev-loop/CURRENT_TASK.md"
-    - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M6-GASTOS-INVERSIONES-READINESS-001.md"
+    - "docs/dev-loop/reports/IMPL-DIRECTOR-IA-M6-GASTOS-INVERSIONES-001.md"
+    - "lib/director-ia-capabilities.js"
+    - "lib/director-ia-chat.js"
+    - "lib/director-ia-planner.js"
+    - "lib/director-ia-tools.js"
+    - "lib/director-ia-m6-gastos-inversiones.js"
+    - "scripts/test-director-ia-capabilities.js"
+    - "scripts/test-director-ia-planner.js"
+    - "scripts/test-director-ia-tool-orchestrator.js"
+    - "test/director-ia-m6-gastos-inversiones.test.js"
+    - "server.js"
 
   read_only:
     - "AGENTS.md"
     - "docs/dev-loop/**"
     - "docs/director-ia/**"
     - "lib/**"
-    - "server.js"
     - "frontend-dashboard/**"
     - "test/**"
     - "scripts/**"
@@ -324,86 +304,110 @@ in_scope:
     - "package-lock.json"
 
 out_of_scope:
-  - "implementar"
-  - "modificar código"
-  - "modificar runtime"
-  - "modificar frontend"
-  - "modificar tests"
-  - "modificar scripts"
-  - "modificar SQL"
-  - "modificar schema"
-  - "crear migration"
+  - "modificar docs/director-ia/**"
   - "modificar capability matrix"
-  - "modificar contratos"
+  - "modificar frontend"
+  - "modificar SQL"
+  - "crear migration"
+  - "modificar schema"
+  - "crear endpoint HTTP"
+  - "cambiar contrato HTTP"
   - "generar Excel"
+  - "usar buildCategoriaRangoWorkbook como source"
   - "modificar export"
   - "hacer writes"
-  - "hacer commit"
-  - "hacer push"
-  - "hacer merge"
+  - "integrar IGF"
+  - "modificar semántica M7"
+  - "forecast"
+  - "cycle constitucional"
+  - "smoke productivo"
+  - "secretos"
+  - "commit"
+  - "push"
+  - "merge"
+  - "sync documental M6"
   - "ejecutar NEXT_TASK"
 
 acceptance_criteria:
-  - "Se verificó definición canónica M6."
-  - "Se confirmó que query-only = PARTIAL."
-  - "Se identificó fuente estructurada previa al Excel."
-  - "Se verificó SELECT-only."
-  - "Se distinguió GASTOS de INVERSIONES."
-  - "Se verificó planta."
-  - "Se verificó periodo."
-  - "Se verificó authz."
-  - "Se verificaron intents."
-  - "Se verificaron tools."
-  - "Se verificó executor actual."
-  - "Se auditó colisión con IGF."
-  - "Se definió path mínimo."
-  - "Se diseñaron tests."
-  - "Se determinó G2."
-  - "Se determinó G3."
-  - "M6 no cambia durante readiness."
-  - "42.5% no cambia durante readiness."
-  - "No se implementó."
-  - "Solo CURRENT_TASK y reporte cambiaron."
+  - "Director IA consulta GASTOS por planta/periodo."
+  - "Director IA consulta INVERSIONES por planta/periodo."
+  - "GASTOS e INVERSIONES permanecen separados."
+  - "Periodo YYYY-MM se valida."
+  - "No se inventa periodo."
+  - "0 registros se maneja correctamente."
+  - "Expense intent tiene executor real."
+  - "Investment intent tiene executor real."
+  - "Chat llega al executor correcto."
+  - "IGF routing se preserva."
+  - "Ambigüedad se maneja sin mezclar dominios."
+  - "Authz se preserva."
+  - "No cross-planta."
+  - "No Excel."
+  - "No xlsx."
+  - "No HTTP interno."
+  - "No writes."
+  - "No cambia contrato HTTP."
+  - "No cambia arquitectura."
+  - "M6 queda PARTIAL."
+  - "M6 no queda COMPLETE."
+  - "Global pasa a 9.0/20 = 45.0% después de sync documental."
+  - "Tests focales verdes."
+  - "Regresión Director IA verde."
   - "git diff --check limpio."
+  - "Solo archivos autorizados modificados."
+
+required_validation:
+  - "node --test test/director-ia-m6-gastos-inversiones.test.js"
+  - "node scripts/test-director-ia-capabilities.js"
+  - "node scripts/test-director-ia-planner.js"
+  - "node scripts/test-director-ia-tool-orchestrator.js"
+  - "node --test test/director-ia-*.test.js"
+  - "git diff --check"
+  - "git status"
+
+next_task_policy:
+  if_success:
+    propose_exactly_one: "DOCS-DIRECTOR-IA-M6-CAPABILITY-MATRIX-SYNC-001"
+
+  note: >
+    La sync documental posterior debe cambiar M6 de NO INTEGRADA a PARTIAL
+    y recalcular 8.5/20 -> 9.0/20 = 45.0%. No marcar COMPLETE.
 
 report_requirements:
-  path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M6-GASTOS-INVERSIONES-READINESS-001.md"
+  path: "docs/dev-loop/reports/IMPL-DIRECTOR-IA-M6-GASTOS-INVERSIONES-001.md"
 
   must_include:
     - "metadata"
     - "resumen ejecutivo"
-    - "baseline"
-    - "definición canónica M6"
-    - "query-only PARTIAL"
-    - "backend/source"
-    - "helpers"
+    - "archivos modificados"
+    - "source public.folios"
+    - "expandCategoriaRows"
     - "GASTOS"
     - "INVERSIONES"
     - "period semantics"
     - "plant scope"
     - "authz"
-    - "planner/tools"
+    - "planner"
+    - "tools/executors"
+    - "chat wiring"
     - "IGF collision"
     - "Excel boundary"
-    - "evidence table"
-    - "gap table"
-    - "implementation hypothesis"
+    - "no side effects"
     - "tests"
-    - "gates"
-    - "state after future slice"
-    - "percentage after future slice"
-    - "risks"
-    - "NEXT_TASK"
+    - "estado M6"
+    - "porcentaje futuro"
     - "acciones no realizadas"
+    - "gates"
     - "secrets_check"
     - "git diff --check"
     - "git status"
+    - "NEXT_TASK"
 
 expected_terminal_state: >
-  DONE_PENDING_REVIEW si existe path JSON/estructurado SELECT-only, in-process
-  y semánticamente separado de IGF. STOPPED si Excel es inseparable o la
-  colisión requiere decisión contractual. BLOCKED si falta gate indispensable.
+  DONE_PENDING_REVIEW si query GASTOS/INVERSIONES queda integrada SELECT-only,
+  in-process, separada de IGF y sin Excel/writes. STOPPED si aparece contradicción
+  semántica o dependencia inseparable. BLOCKED si falta gate.
 
 max_attempts: 1
 
-result_report_path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M6-GASTOS-INVERSIONES-READINESS-001.md"
+result_report_path: "docs/dev-loop/reports/IMPL-DIRECTOR-IA-M6-GASTOS-INVERSIONES-001.md"
