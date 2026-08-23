@@ -93,6 +93,7 @@ const cases = [
   () => expectIntent("listar folios de la planta", "folio_status"),
   () => expectIntent("folios en evidencias", "folio_status"),
   () => expectIntent("¿Cuál fue el último movimiento del folio 123?", "folio_history"),
+  () => expectIntent("¿Quién movió el folio 123?", "folio_history"),
   () => expectIntent("¿Qué documentos faltan del folio?", "folio_documents"),
   () => expectIntent("¿Tiene cheque o póliza?", "folio_financial_status"),
   () => expectIntent("¿Cómo va el presupuesto semanal?", "budget_status"),
