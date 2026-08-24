@@ -17,7 +17,7 @@
 
 ## Índice navegable
 
-1. [Parte 1 — Definiciones](#parte-1--definiciones) (incluye [continuidad conversacional efímera](#continuidad-conversacional-efímera-no-es-módulo-m0m20), [herencia natural de follow-up estrategia B](#herencia-natural-de-follow-up-estrategia-b-no-es-módulo-m0m20), [retorno de tema intra-sesión previous_frame](#retorno-de-tema-intra-sesión-previous_frame-no-es-módulo-m0m20), [memoria persistente pending_work_items_only](#memoria-persistente-pending_work_items_only-no-es-módulo-m0m20), [desviación diaria de venta daily_sales_deviation](#desviación-diaria-de-venta-daily_sales_deviation-no-es-módulo-m0m20), [desviación diaria de descuento/kg daily_discount_deviation](#desviación-diaria-de-descuento/kg-daily_discount_deviation-no-es-módulo-m0m20), [cross-metric follow-up diario](#cross-metric-follow-up-diario-no-es-módulo-m0m20) y [consultas Action Register por responsable/acción](#consultas-action-register-por-responsable--acción-no-es-módulo-m0m20))
+1. [Parte 1 — Definiciones](#parte-1--definiciones) (incluye [continuidad conversacional efímera](#continuidad-conversacional-efímera-no-es-módulo-m0m20), [herencia natural de follow-up estrategia B](#herencia-natural-de-follow-up-estrategia-b-no-es-módulo-m0m20), [retorno de tema intra-sesión previous_frame](#retorno-de-tema-intra-sesión-previous_frame-no-es-módulo-m0m20), [memoria persistente pending_work_items_only](#memoria-persistente-pending_work_items_only-no-es-módulo-m0m20), [desviación diaria de venta daily_sales_deviation](#desviación-diaria-de-venta-daily_sales_deviation-no-es-módulo-m0m20), [desviación diaria de descuento/kg daily_discount_deviation](#desviación-diaria-de-descuento/kg-daily_discount_deviation-no-es-módulo-m0m20), [cross-metric follow-up diario](#cross-metric-follow-up-diario-no-es-módulo-m0m20), [consultas Action Register por responsable/acción](#consultas-action-register-por-responsable--acción-no-es-módulo-m0m20) y [apoyos reviewable / contrafactual IGF](#apoyos-reviewable--contrafactual-igf-igf_reviewable_supports-no-es-módulo-m0m20))
 2. [Parte 2 — Matriz maestra M0–M20](#parte-2--matriz-maestra-m0m20)
 3. [Parte 3 — Catálogo de fuentes](#parte-3--catálogo-de-fuentes)
 4. [Parte 4 — Capacidades de negocio (preguntas)](#parte-4--capacidades-de-negocio-preguntas)
@@ -61,9 +61,9 @@
 | Auth | `dashboardAuthMiddleware` en todas las rutas `/api/director-ia/*` |
 | GET contexto | `GET /api/director-ia/context` → `buildDirectorIaContextPayload` (`lib/director-ia-context.js`) |
 | Chat | `POST /api/director-ia/chat` → `askDirectorIa` (`lib/director-ia-chat.js`) |
-| Routing chat | Planner (`planDirectorIaQuestion`) + ramas in-process en `askDirectorIa`; **continuidad efímera** (`lib/director-ia-conversation-state.js`) con **estrategia B**: si el planner aislado da `unknown` y el `structured_conversation_state` es válido, se hereda `parent_intent` (`inheritParentIntent` / `forceIntent` diario); standalone reconocido **siempre gana** (también con «volvamos» / «retomemos»); `unknown` sin estado válido **clarifica** y **no** cae al dump de Action Register. **Cross-metric diario** (estrategia **B** post-planner): parent diario + `active_date` válida + turno `unknown` que nombra inequívocamente la **otra** métrica diaria (`venta`/`descuento`) → cambia el intent efectivo, **conserva/revalida la fecha**, requery del pack destino; **conservar fecha ≠ conservar métrica**; **no** phrasebook; **no** intent nuevo. **Retorno de tema intra-sesión** (first slice **B**): exactamente un `previous_frame` efímero; no topic stack; restore ≠ fact; requery. Consultas naturales de **acción/responsable** → intent existente `action_status` (estrategia **C**; `lib/director-ia-action-person.js`): resolución física en el board; 0/1/N; `action_status` **inheritable**. Un intent AR específico gana sobre resume genérico de memoria. **No** phrasebook nuevo. **No** intent nuevo. Regex/heurísticas residuales de intents standalone en `director-ia-chat.js`, `director-ia-igf-arr.js`, `director-ia-commercial-state.js` |
+| Routing chat | Planner (`planDirectorIaQuestion`) + ramas in-process en `askDirectorIa`; **continuidad efímera** (`lib/director-ia-conversation-state.js`) con **estrategia B**: si el planner aislado da `unknown` y el `structured_conversation_state` es válido, se hereda `parent_intent` (`inheritParentIntent` / `forceIntent` diario); standalone reconocido **siempre gana** (también con «volvamos» / «retomemos»); `unknown` sin estado válido **clarifica** y **no** cae al dump de Action Register. **Cross-metric diario** (estrategia **B** post-planner): parent diario + `active_date` válida + turno `unknown` que nombra inequívocamente la **otra** métrica diaria (`venta`/`descuento`) → cambia el intent efectivo, **conserva/revalida la fecha**, requery del pack destino; **conservar fecha ≠ conservar métrica**; **no** phrasebook; **no** intent nuevo. **Retorno de tema intra-sesión** (first slice **B**): exactamente un `previous_frame` efímero; no topic stack; restore ≠ fact; requery. Consultas naturales de **acción/responsable** → intent existente `action_status` (estrategia **C**; `lib/director-ia-action-person.js`): resolución física en el board; 0/1/N; `action_status` **inheritable**. Un intent AR específico gana sobre resume genérico de memoria. **No** phrasebook nuevo. **No** intent nuevo. **Hop IGF → apoyos reviewable** (`igf_reviewable_supports`; first slice **C**): IGF mes actual → recortar/detener apoyos → same plant + same `mes_cargo` + Folios fresco; no se pega a `igf_status`; depósito/cierre de **este** slice no cae a cheques `coverage:none`. Intent **inheritable**. Read-only. Regex/heurísticas residuales de intents standalone en `director-ia-chat.js`, `director-ia-igf-arr.js`, `director-ia-commercial-state.js` |
 | Fuentes en GET `sources` | `action_register`, `dicf`, `bitacora_ia`, `cliente_comentarios`, `folio_comentarios` pueden pasar a `true`; `igf`, `arr`, `commercial_state` permanecen `false` en `EMPTY_SOURCES` |
-| Fuentes solo en chat | Anexo IGF/ARR (`loadIgfArrAnnexForChat` + `extractIgfComposition` sobre 1 fila de `igf.compromiso_lines`; no recálculo; no overlay) para `igf_status` / KPI annex; **diagnóstico financiero multi-fuente** (`financial_diagnosis` → `loadFinancialDiagnosisForChat` / `assembleFinancialDiagnosisEvidence`: bloques IGF + ARR + M9 separados; una llamada OpenAI; no IES; no N5); **diagnóstico de planta multi-fuente** (`plant_diagnosis` → `loadPlantDiagnosisForChat` / `assemblePlantDiagnosisEvidence`: bloques action_register + dicf + bitacora + arr + igf + commercial_state; SELECT-only `arr.dicf_cliente_mes`; slice `commercial_materiality_and_coverage`: magnitud `kg_mes_real` = kg observados del mes de la fila, concentración top-5, cobertura DICF por `cliente_key`; **no** `kg_mes_forecast − kg_mes_real` como venta perdida; **sin M9**; **sin** `computeDicf`; una llamada OpenAI; GA partial `SOURCE_RESTRICTED`; no IES; no N5; no Recommendation N5; no MAT_*); **desviación diaria de venta** (`daily_sales_deviation` → `loadDailySalesDeviationForChat` / `assembleDailySalesDeviationEvidence`: ayer CDMX; kg observados; referencia same-weekday 14 días; delta kg/%; contribución cliente y canal; DICF + comments **solo** `cliente_key`; information gaps; HILO; una llamada OpenAI; contribución ≠ causa; descuento/kg es otro intent; no IES; no N5); **desviación diaria de descuento/kg** (`daily_discount_deviation` → `loadDailyDiscountDeviationForChat` / `assembleDailyDiscountDeviationEvidence`: ayer CDMX; `arr.descuentos_diarios_cliente` + `arr.ventas_diarias_cliente`; `SUM(monto)/SUM(kg)`; referencia pooled same-weekday 14d `SUM(monto_ref)/SUM(kg_ref)`; contribución reconciliada por cliente; DICF + comments **solo** `cliente_key`; information gaps; HILO; una llamada OpenAI; contribución ≠ causa; **sin canal**; no average-of-averages; no M9; no IES; no N5); **Action Register por responsable/acción** (`action_status` → `loadActionPersonBoardForChat` / `resolveActionPersonFocus`: board de la planta; 0/1/N; status/fecha/vencimiento; historial/`resultado_cierre` solo si el ítem los trae; limitations + provenance; HILO; GPT; no culpa; no scoring de personas); estado comercial de listas (`loadCommercialStateForChat` → `computeDicf`); expediente comercial factual (`loadCommercialDossierForChat`; SELECT-only; no `computeDicf`); Mejora Continua (`loadMejoraContinuaForChat`); M6 GASTOS/INVERSIONES (`loadGastosInversionesForChat`); M5 Taller por AT (`loadTallerAtForChat`; SELECT `public.folios.unidad`; no Excel; no duplicados); M4 clasificación query (`loadClasificacionApoyosForChat`); M18 presupuesto semanal (`loadPresupuestoSemanalForChat`) |
+| Fuentes solo en chat | Anexo IGF/ARR (`loadIgfArrAnnexForChat` + `extractIgfComposition` sobre 1 fila de `igf.compromiso_lines`; no recálculo; no overlay) para `igf_status` / KPI annex; **diagnóstico financiero multi-fuente** (`financial_diagnosis` → `loadFinancialDiagnosisForChat` / `assembleFinancialDiagnosisEvidence`: bloques IGF + ARR + M9 separados; una llamada OpenAI; no IES; no N5); **diagnóstico de planta multi-fuente** (`plant_diagnosis` → `loadPlantDiagnosisForChat` / `assemblePlantDiagnosisEvidence`: bloques action_register + dicf + bitacora + arr + igf + commercial_state; SELECT-only `arr.dicf_cliente_mes`; slice `commercial_materiality_and_coverage`: magnitud `kg_mes_real` = kg observados del mes de la fila, concentración top-5, cobertura DICF por `cliente_key`; **no** `kg_mes_forecast − kg_mes_real` como venta perdida; **sin M9**; **sin** `computeDicf`; una llamada OpenAI; GA partial `SOURCE_RESTRICTED`; no IES; no N5; no Recommendation N5; no MAT_*); **desviación diaria de venta** (`daily_sales_deviation` → `loadDailySalesDeviationForChat` / `assembleDailySalesDeviationEvidence`: ayer CDMX; kg observados; referencia same-weekday 14 días; delta kg/%; contribución cliente y canal; DICF + comments **solo** `cliente_key`; information gaps; HILO; una llamada OpenAI; contribución ≠ causa; descuento/kg es otro intent; no IES; no N5); **desviación diaria de descuento/kg** (`daily_discount_deviation` → `loadDailyDiscountDeviationForChat` / `assembleDailyDiscountDeviationEvidence`: ayer CDMX; `arr.descuentos_diarios_cliente` + `arr.ventas_diarias_cliente`; `SUM(monto)/SUM(kg)`; referencia pooled same-weekday 14d `SUM(monto_ref)/SUM(kg_ref)`; contribución reconciliada por cliente; DICF + comments **solo** `cliente_key`; information gaps; HILO; una llamada OpenAI; contribución ≠ causa; **sin canal**; no average-of-averages; no M9; no IES; no N5); **Action Register por responsable/acción** (`action_status` → `loadActionPersonBoardForChat` / `resolveActionPersonFocus`: board de la planta; 0/1/N; status/fecha/vencimiento; historial/`resultado_cierre` solo si el ítem los trae; limitations + provenance; HILO; GPT; no culpa; no scoring de personas); estado comercial de listas (`loadCommercialStateForChat` → `computeDicf`); expediente comercial factual (`loadCommercialDossierForChat`; SELECT-only; no `computeDicf`); Mejora Continua (`loadMejoraContinuaForChat`); M6 GASTOS/INVERSIONES (`loadGastosInversionesForChat`); M5 Taller por AT (`loadTallerAtForChat`; SELECT `public.folios.unidad`; no Excel; no duplicados); M4 clasificación query (`loadClasificacionApoyosForChat`); M18 presupuesto semanal (`loadPresupuestoSemanalForChat`); **apoyos reviewable / contrafactual IGF** (`igf_reviewable_supports` → `loadIgfReviewableSupportsForChat`: reglas reales de cancelación; list/totals; overlay live **en memoria**; etiqueta ESCENARIO HIPOTÉTICO; no writes; no ahorro; no cheques; `igf_status` sigue sin overlay) |
 | Persistencia de chat | **No hay tabla de historial/transcript.** El FE puede reenviar `req.body.history` (hasta 8) y/o `conversation_state`. Eso **no** es evidencia. Continuidad **efímera** por request: `structured_conversation_state` + exactamente un `previous_frame` (navegación intra-sesión; no evidencia). First slice persistente **en repo**: `arr.director_ia_pending_work_items` (`sql/017_director_ia_pending_work_items.sql`; `lib/director-ia-persistent-memory.js`). Recuerda **trabajo pendiente**, no hechos. **No** navega temas intra-sesión. OpenAI recibe `HILO` + (si hay retoma cross-session) bloque `PENDIENTE DE TRABAJO`; no history crudo. **Capacidad en repositorio = IMPLEMENTED. Activación en un entorno = PENDING until SQL 017 applied.** |
 | Escritura propia del módulo | Bitácora y entidades comerciales vía API CRUD (no vía chat) |
 
@@ -95,7 +95,7 @@ turno actual
 
 | Campo | Runtime |
 |-------|---------|
-| `parent_intent` | **Unknown + estado válido → inherit.** Intents inheritable: `plant_diagnosis`, `expediente_comercial`, `daily_sales_deviation`, `daily_discount_deviation`, `action_status`. Standalone ≥ 0.55 **siempre gana** (presupuesto, Taller AT-15, Querétaro/planta nueva, venta ayer, descuento/kg ayer, IGF, acciones vencidas, acción + responsable, y los demás intents existentes). `financial_diagnosis` / presupuesto / Taller no se pisan ni reabren Puebla por history. |
+| `parent_intent` | **Unknown + estado válido → inherit.** Intents inheritable: `plant_diagnosis`, `expediente_comercial`, `daily_sales_deviation`, `daily_discount_deviation`, `action_status`, `igf_reviewable_supports`. `igf_status` **no** es inheritable (el hop a apoyos no se pega a IGF). Standalone ≥ 0.55 **siempre gana** (presupuesto, Taller AT-15, Querétaro/planta nueva, venta ayer, descuento/kg ayer, IGF, recortar apoyos, acciones vencidas, acción + responsable, y los demás intents existentes). `financial_diagnosis` / presupuesto / Taller no se pisan ni reabren Puebla por history. |
 | `planta_id` | Siempre el del request autorizado. Nunca del texto ni del history. |
 | `active_entities` | Máximo 1. Única en la planta actual (palabra completa / nombre exacto sobre el pack fresco). Ambiguo o ausente → clarifica. Sin fuzzy silencioso. En hilos `action_status` puede ecoar `ar_responsable` / `ar_action` (no como cliente). |
 | `active_date` | En hilos `daily_sales_deviation` y `daily_discount_deviation`: YYYY-MM-DD **efímero** del día objetivo. Se reusa para requery del mismo hilo **y** puede conservarse al cambiar de métrica diaria (cross-metric). **No** se inventa ayer si falta. Fecha explícita del turno gana. Señal mensual **no** reusa esta fecha. **No** es memoria persistente de periodos. No sobrevive un chat nuevo. |
@@ -486,7 +486,7 @@ descuento/kg + ayer  →  turno unknown que nombra venta
 
 Preserva: `daily_sales_deviation` standalone, `daily_discount_deviation` standalone, herencia natural same-metric, `previous_frame`, action-person, `pending_work_items_only`, `plant_diagnosis`, `financial_diagnosis`, M9 mensual.
 
-Diferido: terceras métricas diarias; parser de weekday; path mensual de «descuento este mes»; topic stack; SQL 017 en entorno; IGF → Folios.
+Diferido: terceras métricas diarias; parser de weekday; path mensual de «descuento este mes»; topic stack; SQL 017 en entorno. El hop IGF → Folios/apoyos reviewable es **otra** capacidad (`igf_reviewable_supports`, abajo); no es este switch diario.
 
 Archivos: `lib/director-ia-conversation-state.js` (`namedDailyMetricSignal`, `resolveConversationTurn`); wiring `lib/director-ia-chat.js` (`forceIntent` del destino, `keepIncomingPreviousFrame`); helpers `lib/director-ia-planner.js` (`namesDailySalesMetric` / `namesDailyDiscountMetric`). Tests: `test/director-ia-daily-cross-metric-followup.test.js`.
 
@@ -549,6 +549,80 @@ Preserva: `responsible_lookup`, `overdue_actions`, dump AR de planta, herencia n
 Diferido: SQL 017 en entorno; scoring de desempeño de personas; trade-off económico por cliente; efectividad/causalidad before→action→after.
 
 Archivos: `lib/director-ia-action-person.js`; wiring `lib/director-ia-chat.js` (`handleActionStatusPersonChat`), `lib/director-ia-planner.js`, `lib/director-ia-conversation-state.js`. Board existente (`buildActionRegisterBoardPayload`). **No** puntúa M12 a COMPLETE.
+
+---
+
+### Apoyos reviewable / contrafactual IGF `igf_reviewable_supports` (no es módulo M0–M20)
+
+**Implementado** (`IMPL-DIRECTOR-IA-IGF-REVIEWABLE-SUPPORTS-001`; first slice **C** — read model de Folios reviewable + contrafactual IGF). Chat legado. **No** IES. **No** Reasoning Engine N5. **No** Recommendation N5. **No** cambia cobertura de M2 ni de M7 ni el 52.5%.
+
+**Principio:** REVIEWABLE = cancelable operacionalmente bajo las reglas **reales** actuales. **No** «no depositado = recortable».
+
+cancelable operacional ≠ materializado contable ≠ ahorro realizado.
+
+Director IA es **read-only**: no cancela, no solicita cancelación, no mueve etapas, no aprueba, no edita, no persiste el escenario, no modifica IGF.
+
+Regla operativa de estatus (misma semántica de bloqueo que la cancelación directa del dashboard):
+
+| Grupo | Estados | En el pack |
+|-------|---------|------------|
+| No cancelable | `PAGADO`, `CERRADO`, `COMPROBACIONES`, `EVIDENCIAS` | `not_cancellable` |
+| Fuera | `CANCELADO` | excluded (no lista) |
+| Reviewable | Todo el resto que la operación actual acepta (incl. `CHEQUE_GENERADO`, `CUENTA_FONDOS`, `SOLICITANDO_PAGO`, `CANCELACION_SOLICITADA`, etapas de planta/carro) | `reviewable` |
+
+No documentar lo no cancelable como «ya gastado» o «materializado contablemente» sin evidencia contable adicional. Etiqueta preferida: «ya no cancelable bajo reglas actuales».
+
+Path:
+
+```text
+IGF Puebla mes actual
+  → “¿Qué podemos recortar de apoyos?”
+  → same plant (equivalentes M3; Puebla 2 → [2, 14])
+  → same mes_cargo
+  → Folios fresco (SELECT public.folios)
+  → clasificación según reglas reales de cancelación
+  → reviewable / not_cancellable / excluded
+  → counts + totals + detalle (estatus, categoría, importe, limitations, provenance)
+  → ESCENARIO HIPOTÉTICO IGF (overlay live en memoria; no DB write)
+  → HILO + evidencia fresca
+  → GPT
+```
+
+| Pieza | Runtime |
+|-------|---------|
+| Intent | `igf_reviewable_supports` (dominios `folios` + `igf`). Planner **antes** de documentos / cheques / `igf_status`. No captura cheque/póliza ni clasificación/comparativo M4. |
+| Scope | Misma planta que el IGF y mismo `mes_cargo`. Categorías que físicamente alimentan el overlay IGF de apoyos. `solo_zp_ad` respeta permiso. Authz folios fail-closed (GV no lista; GA puede listar y no ver contrafactual IGF). |
+| Pack | id/código, importe, estatus, categoria/subcategoria, planta, `mes_cargo`, flag reviewable, limitations, provenance. Agregados: reviewable count/total y not-cancellable count/total. |
+| Contrafactual | Overlay live del GET dashboard **en memoria** sobre la fila snapshot (`loadIgfArrSourceBlocksForChat`). Simula que los reviewable dejan de entrar. `recalcularUtilYResultado` + cubos ZP / carro / depósito-cierre / inversiones mes actual. `ventaKg = venta_ton * 1000`. Sin `venta_ton` no se inventa overlay cero. GA 403 → lista sí, contrafactual no. `presupuesto_kg` y campos no-folio salen del snapshot; no se reconsulta el GET. `gtos_apoyos_corp_kg` no sale de esta lista. |
+| Etiqueta | **ESCENARIO HIPOTÉTICO** obligatoria. Lenguaje seguro: «Si estos folios dejaran de formar parte del cálculo bajo las mismas reglas actuales, el escenario matemático sería…». |
+| Prohibido afirmar | ahorro realizado; cash; el IGF real mejorará; reversión contable garantizada; «debes cancelarlos». |
+| Continuidad | `parent_intent = igf_reviewable_supports` (**inheritable**). «¿Cuánto suman?» hereda el pack. `igf_status` **no** se hereda: el hop no se pega a IGF. Evidence IGF previa **no** se reusa como Folios. |
+| Guard cheques | Excepción mínima en `askDirectorIa` si el turno es este slice y el bloqueo es `cheques`. **No** habilita el módulo cheques. «¿Tiene cheque o depósito el folio?» sigue `SOURCE_NOT_INTEGRATED`. |
+| Ranking | Ordenar por importe/materialidad objetiva = «para revisión». **No** recomendación de cancelar. |
+| Riesgo comercial | Si falta join físico folio → cliente canónico → venta/DICF/comentarios/acciones, el pack declara exactamente qué falta. **No** inventa riesgo. |
+| GPT | Síntesis ejecutiva, explicación, qué merece revisión, limitations, qué falta, follow-ups. **No** decide cancelar. **No** repara un routing incorrecto. |
+
+Conversación canónica (ejemplos de hilo, **no** phrasebook de producción):
+
+```text
+¿Cómo proyectamos cerrar el IGF de Puebla este mes?
+  → ¿Qué podemos recortar de apoyos?
+  → ¿Cuáles todavía podemos detener?
+  → ¿Cuánto suman?
+  → ¿Cuáles ya no puedo cancelar?
+  → ¿Cuáles ya están depositados/cerrados?
+  → Si canceláramos los reviewable, ¿cómo quedaría el IGF?
+  → ¿Cuáles revisarías primero?
+  → ¿Qué riesgo tendría cancelar esos?
+```
+
+«Depositados/cerrados» en **este** hilo = estatus operativo (`PAGADO`/`CERRADO`/…). **No** es el dominio cheques.
+
+Preserva: `igf_status` (snapshot sin overlay), workflow Folios M2, daily sales, daily discount, cross-metric, topic return, action-person, persistent memory, M9.
+
+Diferido: closed-month IGF semantics; historical forecast; motor de riesgo comercial; ranking automático por ROI; writes / solicitud de cancelación.
+
+Archivos: `lib/director-ia-igf-reviewable-supports.js`; wiring `lib/director-ia-chat.js`, `lib/director-ia-planner.js`, `lib/director-ia-tools.js` (`get_igf_reviewable_supports`), `lib/director-ia-conversation-state.js`. Reusa `loadIgfArrSourceBlocksForChat`, `assertFolioStatusAccess`, equivalentes M3. **No** extrae helper de `server.js`. Tests: `test/director-ia-igf-reviewable-supports.test.js` (26/26). Suite Director IA **897/897**. `git diff --check` clean.
 
 ---
 
@@ -615,7 +689,7 @@ Archivos: `lib/director-ia-action-person.js`; wiring `lib/director-ia-chat.js` (
 | **Permisos aplicables** | JWT/`req.dashboardAuth`; rol; `planta_id`; `plantas_permitidas` (GG/GA/AD fail-closed). GV = 403. GA solo en planta autorizada. Folio cross-planta = 403. Not found = 404. History y metadata: resolver folio y autorizar **antes** de consultar `public.folio_historial` / `public.folio_archivos`. |
 | **Nivel de riesgo** | Lectura estatus/etapa/historial/comentarios/metadata: MEDIO. Mutaciones folio / exposición S3: ALTO (fuera de Director IA). |
 | **Dependencias** | Plantas; equivalentes M3; contenido M15, presupuestos (carro) y proyectos siguen fuera de este slice. |
-| **Observaciones verificadas** | `IMPL-DIRECTOR-IA-M2-FOLIO-STATUS-001` (main `e5bd3a05`) + `IMPL-DIRECTOR-IA-M2-HISTORY-001` (main `368394f7`) + `IMPL-DIRECTOR-IA-M2-DOCUMENTS-METADATA-001` (main `243d7e91`). Tests metadata: focales 24/24; capabilities 33/33; planner 36/36; orchestrator 24/24; suite `test/director-ia-*.test.js` 533/533; `git diff --check` limpio. M2 **sigue PARCIAL**. Scoring M0–M20 **sin cambio**: 8.5/20 = **42.5%** (PARTIAL ya valía 0.5; no se suma +2.5 pp). |
+| **Observaciones verificadas** | `IMPL-DIRECTOR-IA-M2-FOLIO-STATUS-001` (main `e5bd3a05`) + `IMPL-DIRECTOR-IA-M2-HISTORY-001` (main `368394f7`) + `IMPL-DIRECTOR-IA-M2-DOCUMENTS-METADATA-001` (main `243d7e91`). Tests metadata: focales 24/24; capabilities 33/33; planner 36/36; orchestrator 24/24; suite `test/director-ia-*.test.js` 533/533; `git diff --check` limpio. **Sync transversal** `IMPL-DIRECTOR-IA-IGF-REVIEWABLE-SUPPORTS-001`: el intent `igf_reviewable_supports` lee `public.folios` (same plant / `mes_cargo`) para clasificar cancelabilidad operativa; **no** cancela; **no** es `folio_status`; **no** habilita cheques. M2 **sigue PARCIAL**. Scoring M0–M20 **sin cambio**: 10.5/20 = **52.5%** (PARTIAL ya valía 0.5; no se suma módulo). |
 
 ### M3 — Plantas / KPIs / Proyectos
 
@@ -720,7 +794,7 @@ Archivos: `lib/director-ia-action-person.js`; wiring `lib/director-ia-chat.js` (
 | **Permisos aplicables** | Authz IGF vigente del annex: JWT/contexto; GA → 403 («GA no tiene acceso a KPIs financieros.»); GV vía `assertGVPlantaNombreAccess`; planta del scope; cross-planta bloqueado; fail-closed. `acceso_igf_forecast_kpis` en UI. |
 | **Nivel de riesgo** | MEDIO (lectura); ALTO si se lee composición como causa, problema, responsable o tendencia. |
 | **Dependencias** | ARR (proyección en el mismo annex), folios KPI, plantas. Distinto de M6 (folios GASTOS/INVERSIONES) y de M9 (deltas de periodos reales). |
-| **Observaciones verificadas** | `IMPL-DIRECTOR-IA-M7-IGF-COMPOSITION-001` (integrado, merge `05eb54c4`). Tests: focales 13/13; capabilities 52/52; planner 46/46; orchestrator 26/26; suite `test/director-ia-*.test.js` 657/657; `git diff --check` limpio. Runtime: read-only, in-process, sin HTTP interno, sin writes. Chat no se tocó en ese slice: el annex ya entra al prompt. **Sync transversal** `IMPL-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-EVIDENCE-ASSEMBLY-001` (merge `f7f90270`): el intent `financial_diagnosis` carga el bloque IGF vía `loadIgfArrSourceBlocksForChat` junto a ARR y M9; `igf_status` sigue el annex. **Sync transversal** `IMPL-DIRECTOR-IA-PLANT-DIAGNOSIS-EVIDENCE-ASSEMBLY-001` (merge `7faa3ead`): el intent `plant_diagnosis` carga el bloque IGF junto a AR/DICF/bitácora/ARR/CS; **sin M9**; GA `SOURCE_RESTRICTED` no aborta el pack. M7 **sigue PARCIAL**. **No** COMPLETE. Scoring M0–M20 **sin cambio**: 10.5/20 = **52.5%** (0.0 pp; no se suma módulo). Diferencia GET context vs chat sigue siendo hallazgo (Parte 8). |
+| **Observaciones verificadas** | `IMPL-DIRECTOR-IA-M7-IGF-COMPOSITION-001` (integrado, merge `05eb54c4`). Tests: focales 13/13; capabilities 52/52; planner 46/46; orchestrator 26/26; suite `test/director-ia-*.test.js` 657/657; `git diff --check` limpio. Runtime: read-only, in-process, sin HTTP interno, sin writes. Chat no se tocó en ese slice: el annex ya entra al prompt. **Sync transversal** `IMPL-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-EVIDENCE-ASSEMBLY-001` (merge `f7f90270`): el intent `financial_diagnosis` carga el bloque IGF vía `loadIgfArrSourceBlocksForChat` junto a ARR y M9; `igf_status` sigue el annex. **Sync transversal** `IMPL-DIRECTOR-IA-PLANT-DIAGNOSIS-EVIDENCE-ASSEMBLY-001` (merge `7faa3ead`): el intent `plant_diagnosis` carga el bloque IGF junto a AR/DICF/bitácora/ARR/CS; **sin M9**; GA `SOURCE_RESTRICTED` no aborta el pack. **Sync transversal** `IMPL-DIRECTOR-IA-IGF-REVIEWABLE-SUPPORTS-001`: el contrafactual IGF vive en `igf_reviewable_supports` (overlay live **en memoria**; no DB write; etiqueta ESCENARIO HIPOTÉTICO). `igf_status` **sigue sin overlay** y **no** se hereda en el hop. Eso **no** completa M7. M7 **sigue PARCIAL**. **No** COMPLETE. Scoring M0–M20 **sin cambio**: 10.5/20 = **52.5%** (0.0 pp; no se suma módulo). Diferencia GET context vs chat sigue siendo hallazgo (Parte 8). |
 
 ### M8 — ARR / Forecast provincia
 
@@ -835,9 +909,9 @@ Archivos: `lib/director-ia-action-person.js`; wiring `lib/director-ia-chat.js` (
 | **Módulo** | Director IA |
 | **Propósito empresarial** | Bitácora, entidades comerciales, mejora continua y chat ejecutivo. |
 | **Cobertura actual de Director IA** | COMPLETA (respecto a su propio módulo) |
-| **Información exacta que sí consulta** | Bitácora (chat hasta 30; UI list hasta 100), entidades/alias, mejora continua, contexto AR/DICF/comentarios, anexos on-demand. En `plant_diagnosis` la bitácora entra como bloque del pack (5 sesiones; sin contenido crudo; ventana 3 meses). Continuidad conversacional **efímera** del chat (`structured_conversation_state` por request; no es fuente de negocio; `active_date` efímero en hilos diarios; exactamente un `previous_frame` para retorno intra-sesión). First slice persistente `pending_work_items_only` (trabajo pendiente; no es evidencia; no navega temas). Pack diario `daily_sales_deviation` (venta de ayer; no es fuente mensual). Pack diario `daily_discount_deviation` (descuento/kg de ayer; `SUM(monto)/SUM(kg)`; no es M9 mensual). Cross-metric diario: misma `active_date`, pack destino fresco (venta ↔ descuento/kg). Consultas Action Register por responsable/acción (`action_status` inheritable; 0/1/N; no culpa). |
+| **Información exacta que sí consulta** | Bitácora (chat hasta 30; UI list hasta 100), entidades/alias, mejora continua, contexto AR/DICF/comentarios, anexos on-demand. En `plant_diagnosis` la bitácora entra como bloque del pack (5 sesiones; sin contenido crudo; ventana 3 meses). Continuidad conversacional **efímera** del chat (`structured_conversation_state` por request; no es fuente de negocio; `active_date` efímero en hilos diarios; exactamente un `previous_frame` para retorno intra-sesión). First slice persistente `pending_work_items_only` (trabajo pendiente; no es evidencia; no navega temas). Pack diario `daily_sales_deviation` (venta de ayer; no es fuente mensual). Pack diario `daily_discount_deviation` (descuento/kg de ayer; `SUM(monto)/SUM(kg)`; no es M9 mensual). Cross-metric diario: misma `active_date`, pack destino fresco (venta ↔ descuento/kg). Consultas Action Register por responsable/acción (`action_status` inheritable; 0/1/N; no culpa). Hop IGF → apoyos reviewable (`igf_reviewable_supports` inheritable; Folios fresco; contrafactual en memoria; no writes). |
 | **Información que no consulta** | History/transcript como hecho de DB. Authz cacheada. Payloads de evidencia guardados. El `history` del request no es evidencia. |
-| **Archivos actuales relacionados** | `lib/director-ia.js`, `director-ia-context.js`, `director-ia-chat.js`, `director-ia-conversation-state.js`, `director-ia-persistent-memory.js`, `director-ia-daily-deviation.js`, `director-ia-daily-discount.js`, `director-ia-action-person.js`, `director-ia-bitacora.js`, `comercial-entidad.js`, `sql/017_director_ia_pending_work_items.sql`, `frontend-dashboard/modules/director-ia/*` |
+| **Archivos actuales relacionados** | `lib/director-ia.js`, `director-ia-context.js`, `director-ia-chat.js`, `director-ia-conversation-state.js`, `director-ia-persistent-memory.js`, `director-ia-daily-deviation.js`, `director-ia-daily-discount.js`, `director-ia-action-person.js`, `director-ia-igf-reviewable-supports.js`, `director-ia-bitacora.js`, `comercial-entidad.js`, `sql/017_director_ia_pending_work_items.sql`, `frontend-dashboard/modules/director-ia/*` |
 | **Endpoints actuales relacionados** | `/api/director-ia/context`, `/mejora-continua`, `/bitacora*`, `/comercial-entidades*`, `/comercial-entidad-alias*`, `/chat` |
 | **Tablas o vistas relacionadas** | `arr.director_ia_bitacora`, `arr.comercial_entidad`, `arr.comercial_entidad_alias`, `arr.director_ia_pending_work_items` (DDL en repo; **habilitada en un entorno solo si SQL 017 fue aplicado allí**) |
 | **Funciones existentes reutilizables** | `askDirectorIa`, `buildDirectorIaContextPayload`, CRUD bitácora/entidades |
@@ -846,7 +920,7 @@ Archivos: `lib/director-ia-action-person.js`; wiring `lib/director-ia-chat.js` (
 | **Permisos aplicables** | `ENABLE_DIRECTOR_IA`; JWT; acceso planta. |
 | **Nivel de riesgo** | MEDIO (chat + bitácora); mutaciones entidades MEDIO. |
 | **Dependencias** | Action Register, DICF, ARR/IGF on-demand, OpenAI. |
-| **Observaciones verificadas** | Flag FE `is-enabled.ts` vs BE `isDirectorIaEnabled()` pueden diverger. **Sync transversal** `IMPL-DIRECTOR-IA-PLANT-DIAGNOSIS-EVIDENCE-ASSEMBLY-001` (merge `7faa3ead`): bitácora entra en el pack `plant_diagnosis`. **Sync transversal** `IMPL-DIRECTOR-IA-CONVERSATIONAL-CONTINUITY-001`: `structured_conversation_state` efímero. **Sync transversal** `IMPL-DIRECTOR-IA-PERSISTENT-CONVERSATIONAL-MEMORY-001`: `pending_work_items_only` (MEMORY ≠ EVIDENCE; requery+authz al retomar; no EKS/IES/N5). **Sync transversal** `IMPL-DIRECTOR-IA-DAILY-DEVIATION-001`: rama `daily_sales_deviation` en el chat legado (pack diario; HILO; una llamada OpenAI; `active_date` efímero; no memoria de fecha). **Sync transversal** `IMPL-DIRECTOR-IA-NATURAL-FOLLOWUP-INHERIT-001`: estrategia B (unknown + estado válido → inherit; standalone gana; sin phrasebook nuevo; hold-outs en tests; no fallback ciego a AR). **Sync transversal** `IMPL-DIRECTOR-IA-ACTION-PERSON-ROUTING-001`: `action_status` inheritable; AR específico gana sobre resume genérico; «¿Qué pasó con Arturo?» puede seguir memoria. **Sync transversal** `IMPL-DIRECTOR-IA-DAILY-DISCOUNT-KG-001`: rama `daily_discount_deviation` (pack diario ponderado; HILO; una llamada OpenAI; `active_date` efímero; contribución ≠ causa; M9 unchanged). **Sync transversal** `IMPL-DIRECTOR-IA-INTRA-SESSION-TOPIC-RETURN-001`: first slice B (standalone precedence + un `previous_frame` efímero; no stack; restore ≠ fact; requery; `volvamos` ≠ resume). **Sync transversal** `IMPL-DIRECTOR-IA-DAILY-CROSS-METRIC-FOLLOWUP-001`: estrategia B post-planner (conservar fecha ≠ conservar métrica; venta ↔ descuento/kg; misma `active_date`; requery pack destino; gap fresco; sin phrasebook; `previous_frame` no decide; memoria persistente no participa). Tests citados (IMPL; no reejecutados aquí): focal cross-metric 17/17; planner 58/58; capabilities 56/56; orchestrator 28/28; suite `test/director-ia-*.test.js` **871/871**. M13 **sigue COMPLETA**. Scoring M0–M20 vigente **sin cambio**: 10.5/20 = **52.5%**. |
+| **Observaciones verificadas** | Flag FE `is-enabled.ts` vs BE `isDirectorIaEnabled()` pueden diverger. **Sync transversal** `IMPL-DIRECTOR-IA-PLANT-DIAGNOSIS-EVIDENCE-ASSEMBLY-001` (merge `7faa3ead`): bitácora entra en el pack `plant_diagnosis`. **Sync transversal** `IMPL-DIRECTOR-IA-CONVERSATIONAL-CONTINUITY-001`: `structured_conversation_state` efímero. **Sync transversal** `IMPL-DIRECTOR-IA-PERSISTENT-CONVERSATIONAL-MEMORY-001`: `pending_work_items_only` (MEMORY ≠ EVIDENCE; requery+authz al retomar; no EKS/IES/N5). **Sync transversal** `IMPL-DIRECTOR-IA-DAILY-DEVIATION-001`: rama `daily_sales_deviation` en el chat legado (pack diario; HILO; una llamada OpenAI; `active_date` efímero; no memoria de fecha). **Sync transversal** `IMPL-DIRECTOR-IA-NATURAL-FOLLOWUP-INHERIT-001`: estrategia B (unknown + estado válido → inherit; standalone gana; sin phrasebook nuevo; hold-outs en tests; no fallback ciego a AR). **Sync transversal** `IMPL-DIRECTOR-IA-ACTION-PERSON-ROUTING-001`: `action_status` inheritable; AR específico gana sobre resume genérico; «¿Qué pasó con Arturo?» puede seguir memoria. **Sync transversal** `IMPL-DIRECTOR-IA-DAILY-DISCOUNT-KG-001`: rama `daily_discount_deviation` (pack diario ponderado; HILO; una llamada OpenAI; `active_date` efímero; contribución ≠ causa; M9 unchanged). **Sync transversal** `IMPL-DIRECTOR-IA-INTRA-SESSION-TOPIC-RETURN-001`: first slice B (standalone precedence + un `previous_frame` efímero; no stack; restore ≠ fact; requery; `volvamos` ≠ resume). **Sync transversal** `IMPL-DIRECTOR-IA-DAILY-CROSS-METRIC-FOLLOWUP-001`: estrategia B post-planner (conservar fecha ≠ conservar métrica; venta ↔ descuento/kg; misma `active_date`; requery pack destino; gap fresco; sin phrasebook; `previous_frame` no decide; memoria persistente no participa). **Sync transversal** `IMPL-DIRECTOR-IA-IGF-REVIEWABLE-SUPPORTS-001`: hop IGF → Folios reviewable (`igf_reviewable_supports`; first slice C; reglas reales de cancelación; contrafactual en memoria; ESCENARIO HIPOTÉTICO; no writes; no cheques; no ahorro). Tests citados (IMPL; no reejecutados aquí): focal reviewable supports 26/26; suite `test/director-ia-*.test.js` **897/897**. M13 **sigue COMPLETA**. Scoring M0–M20 vigente **sin cambio**: 10.5/20 = **52.5%**. |
 
 ### M14 — Usuarios admin
 
@@ -1163,13 +1237,13 @@ Archivos: `lib/director-ia-action-person.js`; wiring `lib/director-ia-chat.js` (
 - **Unidades:** `*_kg` = **$/kg**, no kilogramos. Familias distintas: `ton` ≠ `$/kg` ≠ `%` ≠ `MXN`. No mezclar ni sumar unidades incompatibles. Ranking de magnitud solo intra `$/kg` de roles `add`/`subtract`.
 - **Null:** `null` ≠ `0`. Null/`""`/no finito se omite (`omitted_null_keys`); no se emite como cero.
 - **Signos:** Signo físico almacenado; `hg_kg` no se invierte.
-- **Fórmula:** `recalcularUtilYResultado` es referencia semántica de `formula_role`; **no** se ejecuta. `gasto_kg` no participa. Sin overlay de folios.
+- **Fórmula:** En `igf_status` / composición: `recalcularUtilYResultado` es referencia semántica de `formula_role`; **no** se ejecuta. `gasto_kg` no participa. Sin overlay de folios. El overlay live **en memoria** vive solo en `igf_reviewable_supports` (fuente transversal aparte); no persiste ni completa M7.
 - **ORDER_DELTAS:** Presentación UI; no se importa; no es fórmula.
 - **Permisos:** Authz IGF vigente: GA 403; GV planta; cross-planta bloqueado; fail-closed. `acceso_igf_forecast_kpis` en UI.
 - **Información sensible:** Compromiso, margen, utilidad, resultado, HG
 - **Estado de actualización:** Según versiones IGF cargadas (snapshot ≠ tendencia)
 - **Evidencia de integración actual:** `shouldAttachIgfArrAnnex` / `isIgfCompositionQuestion` / `extractIgfComposition`; regex IGF/margen/rentabilidad; bloque IGF separado en `financial_diagnosis` (`assembleFinancialDiagnosisEvidence.sources.igf`); bloque IGF en `plant_diagnosis` (`assemblePlantDiagnosisEvidence.sources.igf`; sin M9). Semántica: composición ≠ causalidad; magnitud ≠ importancia operacional; línea ≠ responsable; signo ≠ juicio empresarial. M9 conserva deltas temporales.
-- **Información que no puede concluirse con esta fuente:** Meta HG completa UI, folios detalle IGF, PATCH, causalidad, tendencia, overlay de folios, recálculo de utilidad/resultado
+- **Información que no puede concluirse con esta fuente:** Meta HG completa UI, folios detalle IGF, PATCH, causalidad, tendencia, overlay persistente del GET dashboard, recálculo escrito. El contrafactual read-only es **otra** fuente (`igf_reviewable_supports`); no es ahorro realizado ni cambio real del IGF.
 
 ### Fuente: Margen o estado comercial
 
@@ -1203,8 +1277,8 @@ Archivos: `lib/director-ia-action-person.js`; wiring `lib/director-ia-chat.js` (
 - **Permisos:** JWT/contexto; rol; `plantas_permitidas`; GV 403; GA solo planta autorizada; cross-planta 403; not found 404
 - **Información sensible:** Importes, estatus, identidad de folio
 - **Estado de actualización:** Por request (`retrieved_at`)
-- **Evidencia de integración actual:** Intent `folio_status` + tool `get_folio_status` + rama en `askDirectorIa`
-- **Información que no puede concluirse con esta fuente:** Historial (fuente aparte), contenido PDF/S3, documentos faltantes, cheque, póliza, presupuesto, tablero HTTP kanban, mutaciones
+- **Evidencia de integración actual:** Intent `folio_status` + tool `get_folio_status` + rama en `askDirectorIa`. El listado reviewable de apoyos IGF es **otra** fuente (`igf_reviewable_supports`); no sustituye `folio_status`.
+- **Información que no puede concluirse con esta fuente:** Historial (fuente aparte), contenido PDF/S3, documentos faltantes, cheque, póliza, presupuesto, tablero HTTP kanban, mutaciones, que «no depositado» sea recortable
 
 ### Fuente: Historial de folios
 
@@ -1313,8 +1387,8 @@ Archivos: `lib/director-ia-action-person.js`; wiring `lib/director-ia-chat.js` (
 - **Función de acceso:** Endpoints folio (no IA)
 - **Endpoint relacionado:** `/api/folios/:id` patches relacionados
 - **Tablas consultadas:** campos en `public.folios`
-- **Evidencia de integración actual:** No integrada
-- **Información que no puede concluirse con esta fuente:** Si un folio «tiene cheque»
+- **Evidencia de integración actual:** No integrada. El hop `igf_reviewable_supports` usa «depósito/cierre» como **estatus de folio**, no como esta fuente. La excepción del guard en `askDirectorIa` **no** habilita cheques.
+- **Información que no puede concluirse con esta fuente:** Si un folio «tiene cheque». Un folio reviewable con `CHEQUE_GENERADO` no implica cheque consultable ni ahorro.
 
 ### Fuente: Pólizas
 
@@ -1540,6 +1614,21 @@ Archivos: `lib/director-ia-action-person.js`; wiring `lib/director-ia-chat.js` (
 - **Información que no puede concluirse con esta fuente:** causa; margen diario; path mensual; weekday de usuario no parseado; stack de temas
 - **Información que no puede concluirse con esta fuente:** hechos del tema previo sin requery; stack de temas; memoria semántica; navegación vía SQL 017
 
+### Fuente: Apoyos reviewable / contrafactual IGF (transversal)
+
+- **Dominio:** Chat legado (no es un módulo M0–M20; no puntúa). First slice **C**. `IMPL-DIRECTOR-IA-IGF-REVIEWABLE-SUPPORTS-001`.
+- **Cobertura actual:** PARCIAL respecto a «qué se puede recortar de apoyos» + escenario IGF hipotético del mes abierto. **No** closed-month. **No** forecast histórico. **No** cambia M2/M7 ni el 52.5%.
+- **Archivo de acceso:** `lib/director-ia-igf-reviewable-supports.js`; wiring `lib/director-ia-chat.js`, `lib/director-ia-planner.js`, `lib/director-ia-tools.js`, `lib/director-ia-conversation-state.js`.
+- **Función de acceso:** `loadIgfReviewableSupportsForChat` / `buildIgfReviewableSupportsPack` / `classifyCancellationEligibility`; IGF vía `loadIgfArrSourceBlocksForChat`; tool `get_igf_reviewable_supports`.
+- **Endpoint relacionado:** `POST /api/director-ia/chat` (in-process; SELECT `public.folios`; sin HTTP interno; sin writes)
+- **Tablas consultadas:** `public.folios` ⋈ `public.plantas` (listado). Snapshot IGF: `igf.versions` + `igf.compromiso_lines` (fila; no se escribe).
+- **Filtros disponibles:** planta + equivalentes M3; `mes_cargo`; exclusión `CANCELADO`; categorías que alimentan el overlay IGF.
+- **Clasificación:** REVIEWABLE = cancelable operacionalmente. No cancelable: `PAGADO`, `CERRADO`, `COMPROBACIONES`, `EVIDENCIAS`. `CANCELADO` fuera. **No** «no depositado = recortable».
+- **Contrafactual:** overlay live en memoria; IGF actual / hipotético / delta / folios incluidos. Etiqueta **ESCENARIO HIPOTÉTICO**.
+- **Qué conserva el hop:** planta y periodo del IGF. **Qué cambia:** parent a `igf_reviewable_supports`; Folios fresco. **Qué no hace:** pegarse a `igf_status`; caer a cheques; persistir escenario; afirmar ahorro/cash.
+- **GPT:** pack + HILO. No recomienda cancelar. Ranking por importe = para revisión. Riesgo comercial: si falta el join, dice qué falta.
+- **Información que no puede concluirse con esta fuente:** ahorro realizado; cash; mejora real del IGF; materialización contable de lo no cancelable; que el Director IA cancele o solicite cancelación; cheque operativo; closed-month; riesgo comercial inventado
+
 ### Fuente: Duplicados
 
 - **Dominio:** M16 (+ hoja Taller M5, no cableada)
@@ -1603,7 +1692,7 @@ Archivos: `lib/director-ia-action-person.js`; wiring `lib/director-ia-chat.js` (
 | 10 | ¿Por qué está detenido un folio? | No de forma fiable | INDIRECTA máx. | Comentarios folio | `loadFolioComentariosForDirectorIa` | Estatus, timeline, permisos de avance | Alto |
 | 11 | ¿Cuál fue el último movimiento del folio? | Sí (eventos observados de `public.folio_historial`; no es GET `/timeline` ni tablero HTTP) | PARCIAL | Historial (`public.folio_historial`) | `loadFolioHistoryForChat` / `get_folio_history` (SELECT-only; **no** `GET /timeline`; **no** `dedupeHistorialByStage`) | Contenido PDF/S3, cheque/póliza, transiciones inventadas, actor sistema, tablero HTTP | Alto si se lee como transición, como GET `/timeline` o como historial deduplicado |
 | 12 | ¿Qué documentos le faltan? | No | NO INTEGRADA | Documentos/medios (faltantes / set esperado) | Guardrail `UNSUPPORTED_RULES.documentos` (`SOURCE_NOT_INTEGRATED`) | Set esperado canónico; cumplimiento; contenido | Alto si se lee la metadata M2 como «faltan documentos» |
-| 13 | ¿Tiene cheque, depósito o póliza? | No | NO INTEGRADA | Folios/pólizas | Campos folio + endpoints póliza/cheque | Toda la fuente | Alto |
+| 13 | ¿Tiene cheque, depósito o póliza? | No (cheque/póliza operativa). El hop IGF→apoyos «depositados/cerrados» es **estatus** reviewable, no esta fuente | NO INTEGRADA (cheques/póliza) | Folios/pólizas | Campos folio + endpoints póliza/cheque. `igf_reviewable_supports` no consulta cheque | Toda la fuente de cheques/póliza | Alto si se lee el pack reviewable como «tiene cheque» |
 | 14 | ¿Existen posibles folios duplicados? | Sí (heurístico; candidatos, no confirmación) | COMPLETA | Duplicados | `loadDuplicateFoliosForChat` / `findDuplicatePairs` | Confirmación humana; cancelación; `/check` al crear; pares fuera de ventana o `LIMIT 1500` | Alto si se lee como duplicado confirmado o fraude |
 | 15 | ¿Qué gastos existen por planta? | Parcialmente (listado folios GASTOS si wording es categoría/folios + `YYYY-MM`; no Excel) | PARCIAL | Folios categoría GASTOS (`public.folios` + `expandCategoriaRows`) | `loadGastosInversionesForChat("GASTOS")` / `get_expense_analysis` | Export/xlsx; «cómo van los gastos» / margen / rentabilidad siguen IGF (M7) | Alto si se lee como IGF o como Export |
 | 16 | ¿Qué inversiones están pendientes? | Parcialmente (listado folios INVERSIONES no cancelados si hay `YYYY-MM`; «pendiente» no es etapa almacenada) | PARCIAL | Folios categoría INVERSIONES | `loadGastosInversionesForChat("INVERSIONES")` / `get_investment_analysis` | Export/xlsx; etapa «pendiente»; mes inventado | Alto si se afirma pendiente como estatus |
@@ -1642,6 +1731,10 @@ Archivos: `lib/director-ia-action-person.js`; wiring `lib/director-ia-chat.js` (
 | ¿Por qué subió el descuento/kg ayer? / ¿Cómo estuvo el descuento por kg ayer? / ¿Qué pasó ayer con el descuento? / ¿Quién movió más el descuento/kg ayer? | Sí (pack diario ponderado; no causa; no M9 mensual; no canal) | PARCIAL (transversal; no módulo) | `arr.descuentos_diarios_cliente` + `arr.ventas_diarias_cliente` + DICF/comments por `cliente_key` | `loadDailyDiscountDeviationForChat` / `assembleDailyDiscountDeviationEvidence` | Causa; canal; mix/rate; average-of-averages; join por nombre | Alto si se lee contribución como causa o como `delta_discount`/`financial_diagnosis` |
 | ¿Contra qué lo estás comparando? / ¿Quién movió más el promedio? / ¿Fue general? (tras descuento/kg ayer) | Sí si `parent_intent = daily_discount_deviation`; requery; `active_date` efímero | PARCIAL (continuidad efímera) | Pack fresco diario + `HILO` | `resolveConversationTurn` / `forceIntent` diario / loader diario | Tratar `active_date` como memoria persistente; HILO como hecho; ratio alto como mayor mover | Alto si se afirma causa o se reusa fecha cross-session |
 | ¿Sabemos por qué? / ¿Qué falta? / ¿Quién puede aclararlo? (tras descuento/kg ayer) | Sí: huecos del pack fresco; persona solo con vínculo físico a acción | PARCIAL | `information_gaps` del requery | `derivePendingInformationGap` / pack diario | Inventar causa; persistir la fecha diaria; culpar al responsable de una acción | Alto si se nombra culpa o se trata el gap como «no hay causa» |
+| ¿Qué podemos recortar de apoyos? / ¿Cuáles todavía podemos detener? (tras IGF mes actual) | Sí (read-only; same plant/`mes_cargo`; Folios fresco; reglas reales de cancelación) | PARCIAL (transversal; M2/M7 siguen PARCIAL) | `public.folios` + snapshot IGF | `loadIgfReviewableSupportsForChat` / `get_igf_reviewable_supports` | Closed-month; writes; que no depositado = recortable | Alto si se lee como orden de cancelar o como ahorro |
+| ¿Cuánto suman? / ¿Cuáles ya no puedo cancelar? / ¿Cuáles ya están depositados/cerrados? (tras apoyos reviewable) | Sí si `parent_intent = igf_reviewable_supports`; requery; depósito/cierre = estatus, no cheques | PARCIAL (continuidad efímera) | Pack fresco reviewable + `HILO` | `inheritParentIntent` / loader reviewable | Caer a cheques; reusar evidencia IGF como Folios | Alto si se afirma cheque emitido o materialización contable |
+| Si canceláramos los reviewable, ¿cómo quedaría el IGF? | Sí como **ESCENARIO HIPOTÉTICO** (overlay live en memoria; no DB write) | PARCIAL (transversal) | Snapshot IGF + cubos de Folios reviewable | `loadIgfReviewableSupportsForChat` (`recalcularUtilYResultado` en memoria) | Ahorro realizado; cash; mejora real garantizada; persistir escenario | Alto si se lee como forecast oficial o como cambio real |
+| ¿Cuáles revisarías primero? / ¿Qué riesgo tendría cancelar esos? | Ranking por importe = para revisión. Riesgo: si falta join folio→cliente→venta, dice qué falta | PARCIAL | Pack fresco + limitations | GPT sobre pack; no motor de riesgo | Recomendar cancelar; inventar riesgo comercial; ROI automático | Alto si se convierte el ranking en mandato de cancelación |
 
 ---
 
@@ -1906,7 +1999,9 @@ El chat legado integra **consultas Action Register por responsable/acción** (`a
 
 El chat legado integra **cross-metric follow-up diario** (`IMPL-DIRECTOR-IA-DAILY-CROSS-METRIC-FOLLOWUP-001`; estrategia **B** post-planner): parent diario + `active_date` válida + planner `unknown` + turno que nombra inequívocamente la otra métrica (`venta`/`descuento`) → intent destino, misma fecha revalidada, requery del pack destino, gap fresco. **Conservar fecha ≠ conservar métrica.** Sin `active_date` no se inventa ayer. Señal mensual no reusa la fecha diaria. Same-metric sigue estrategia B. `previous_frame` no decide el switch. Memoria persistente no participa. **No** phrasebook. **No** intent nuevo. GPT recibe el pack correcto + HILO. No puntúa módulos.
 
-**Scoring M0–M20 tras `DOCS-DIRECTOR-IA-DAILY-CROSS-METRIC-FOLLOWUP-SYNC-001`:** ningún módulo cambia de etiqueta. Global permanece **10.5 / 20 = 52.5%** (0.0 pp). Ni la continuidad efímera, ni la herencia natural de follow-up, ni el retorno intra-sesión (`previous_frame`), ni la memoria persistente, ni `daily_sales_deviation`, ni `daily_discount_deviation`, ni el cross-metric diario, ni el routing AR por responsable/acción suman 0.5. El switch de métrica diaria **no** suma módulo.
+El chat legado integra **apoyos reviewable / contrafactual IGF** (`igf_reviewable_supports` → `loadIgfReviewableSupportsForChat`; first slice **C**): IGF mes actual → recortar apoyos → same plant + same `mes_cargo` + Folios fresco; clasificación por reglas reales de cancelación (no «no depositado = recortable»); list/totals; overlay live **en memoria**; etiqueta **ESCENARIO HIPOTÉTICO**; no writes; no ahorro/cash; no se pega a `igf_status`; depósito/cierre de este slice no cae a cheques. Intent inheritable. GPT sintetiza; no recomienda cancelar. No puntúa módulos.
+
+**Scoring M0–M20 tras `DOCS-DIRECTOR-IA-IGF-REVIEWABLE-SUPPORTS-SYNC-001`:** ningún módulo cambia de etiqueta. Global permanece **10.5 / 20 = 52.5%** (0.0 pp). Ni la continuidad efímera, ni la herencia natural de follow-up, ni el retorno intra-sesión (`previous_frame`), ni la memoria persistente, ni `daily_sales_deviation`, ni `daily_discount_deviation`, ni el cross-metric diario, ni el routing AR por responsable/acción, ni `igf_reviewable_supports` suman 0.5. El hop IGF → Folios **no** suma módulo.
 
 ### 2. Dominios completos (COMPLETA)
 
@@ -1919,11 +2014,11 @@ El chat legado integra **cross-metric follow-up diario** (`IMPL-DIRECTOR-IA-DAIL
 
 - M0 Auth (gates, no catálogo)
 - M1 Health (readiness técnica `GET /health-director-ia` en header de DirectorIaShell; no `/health` `/health-db` `/health-proyectos`)
-- M2 Folios (comentarios + slice `folio_status` estatus/etapa + slice `folio_history` eventos crudos + slice `folio_documents` metadata-only; no contenido PDF/S3, no faltantes, no cheque/póliza, no `kanban_flow` ni kanban HTTP)
+- M2 Folios (comentarios + slice `folio_status` estatus/etapa + slice `folio_history` eventos crudos + slice `folio_documents` metadata-only; el listado reviewable IGF es transversal y **no** completa M2; no contenido PDF/S3, no faltantes, no cheque/póliza, no `kanban_flow` ni kanban HTTP)
 - M4 Clasificación de apoyos (query JSON `mes_a` vs `mes_b` por planta y familia; no COMPARAR; no Excel/xlsx; no COMPLETE)
 - M5 Taller por AT (query JSON de folios TALLER por token de `public.folios.unidad` y `YYYY-MM`; no `at_id`; no catálogo; no Excel/workbook; no duplicados; no COMPLETE)
 - M6 GASTOS / INVERSIONES (query JSON de folios por planta y `YYYY-MM`; GASTOS ≠ INVERSIONES ≠ IGF; no Export/xlsx; no COMPLETE)
-- M7 IGF (chat on-demand + slice de composición observada de 1 fila de `igf.compromiso_lines`; `*_kg` = $/kg; null ≠ 0; sin recálculo; sin overlay; sin deltas; sin causalidad; no COMPLETE)
+- M7 IGF (chat on-demand + slice de composición observada de 1 fila de `igf.compromiso_lines`; `*_kg` = $/kg; null ≠ 0; `igf_status` sin recálculo y sin overlay; el contrafactual en memoria es transversal y **no** completa M7; sin deltas; sin causalidad; no COMPLETE)
 - M8 ARR (chat on-demand / motor DICF)
 - M11 DICF + comentarios cliente (+ slice expediente comercial factual on-demand; SELECT-only; sin `computeDicf`; sin causalidad; no COMPLETE)
 - M12 Action Register (+ Mejora Continua; slice notas de revisión on-demand; consultas por responsable/acción vía `action_status` transversal; `includeNotes` always-on sigue false; no COMPLETE)
@@ -1944,13 +2039,14 @@ El chat legado integra **cross-metric follow-up diario** (`IMPL-DIRECTOR-IA-DAIL
 - Capacidad transversal `daily_discount_deviation` (descuento/kg de ayer CDMX; `SUM(monto)/SUM(kg)`; referencia pooled same-weekday 14d; contribución reconciliada por cliente; **sin canal**; DICF+comments por `cliente_key`; gaps; HILO; una llamada OpenAI; ratio alto ≠ mayor mover; contribución ≠ causa; M9 UNCHANGED): **no** es un módulo M0–M20; **no** cambia M8/M9/M11/M13 ni el 52.5%.
 - Capacidad transversal `daily_cross_metric_followup` (estrategia B: conservar fecha ≠ conservar métrica; venta ↔ descuento/kg; `active_date` heredada/revalidada; requery pack destino; gap fresco; sin phrasebook; `previous_frame` no decide; memoria persistente no participa): **no** es un módulo M0–M20; **no** cambia M8/M9/M13 ni el 52.5%.
 - Capacidad transversal `action_status` por responsable/acción (estrategia C; `accion`/`acciones`; resolución física 0/1/N; inheritable; AR > resume genérico; responsable registrado ≠ culpable; no motivo inventado): **no** es un módulo M0–M20; **no** cambia M12 PARCIAL ni el 52.5%.
+- Capacidad transversal `igf_reviewable_supports` (first slice C: Folios reviewable por reglas reales de cancelación + contrafactual IGF en memoria; ESCENARIO HIPOTÉTICO; no writes; no ahorro; no cheques; `igf_status` no inheritable en el hop): **no** es un módulo M0–M20; **no** cambia M2/M7 PARCIAL ni el 52.5%.
 
 ### 5. Dominios no integrados (NO INTEGRADA)
 
 - M4 COMPARAR / Excel/xlsx (el query JSON ya está en PARCIAL M4; COMPLETE de M4 sigue fuera)
 - M5 Excel / workbook / duplicados taller (el query JSON ya está en PARCIAL M5; COMPLETE de M5 sigue fuera)
 - M6 Export/xlsx (el query JSON ya está en PARCIAL M6; COMPLETE de M6 sigue fuera)
-- M7 UI / PATCH HG / meta Excel / versiones / overlay / recálculo (el slice de composición snapshot ya está en PARCIAL M7; COMPLETE de M7 sigue fuera)
+- M7 UI / PATCH HG / meta Excel / versiones / overlay persistente / recálculo escrito (el slice de composición snapshot ya está en PARCIAL M7; el contrafactual read-only es transversal; COMPLETE de M7 sigue fuera)
 - M10 Weekly discount LD  
 - M14 Usuarios admin (como dominio)  
 - M15 Documentos/medios  
@@ -1988,6 +2084,7 @@ El chat legado integra **cross-metric follow-up diario** (`IMPL-DIRECTOR-IA-DAIL
 | Conservar hilo conversacional efímero (parent_intent / 0\|1 entidad / gap; HILO ≠ evidence; requery) | `resolveConversationTurn` / `buildConversationState` / `formatConversationHiloForModel` (`lib/director-ia-conversation-state.js`) |
 | Retomar pending work item entre sesiones (memory ≠ evidence; requery+authz; si SQL 017 aplicado) | `classifyPersistentMemoryTurn` / `retrieveActiveWorkItems` / `upsertActiveWorkItem` (`lib/director-ia-persistent-memory.js`; tabla `arr.director_ia_pending_work_items`) |
 | CONSULTAR composición IGF (snapshot de 1 fila; read-only; no causa; no tendencia) | `extractIgfComposition` → `formatIgfCompositionBlock` vía `get_igf_snapshot` / `loadIgfCommitSnapshot` (`igf.compromiso_lines`) |
+| CONSULTAR apoyos reviewable + contrafactual IGF (read-only; reglas reales de cancelación; ESCENARIO HIPOTÉTICO; no writes; no ahorro) | `loadIgfReviewableSupportsForChat` / `get_igf_reviewable_supports` (`lib/director-ia-igf-reviewable-supports.js`) |
 | LISTAR estado comercial | Intent `commercial_state`: `loadCommercialStateForChat` → `dicf.computeDicf`. Pack `plant_diagnosis`: SELECT-only `arr.dicf_cliente_mes` (no compute; materialidad `kg_mes_real`; cobertura por `cliente_key`, no por nombre) |
 | RESUMIR Mejora Continua | `buildMejoraContinuaPayload` / `GET /api/director-ia/mejora-continua` |
 | DETECTAR RIESGOS / CONSULTAR posibles duplicados de folios | `loadDuplicateFoliosForChat` → `findDuplicatePairs` |
@@ -2014,7 +2111,7 @@ El chat legado integra **cross-metric follow-up diario** (`IMPL-DIRECTOR-IA-DAIL
 | Presupuesto semanal (writes / cheques / WhatsApp) | Query JSON M18 ya integrado (SELECT + `getPresupuestoResumen`). Writes y bot existen en `server.js` | Asignar/seleccionar; enviar a cheques; Twilio/WhatsApp; no COMPLETE |
 | Action Register notas / evidencias / CRUD | Slice notas de revisión ya integrado (`loadActionRegisterRevisionNotesForChat`; `includeNotes` always-on sigue false). Consultas por responsable/acción ya integradas (`action_status`; no intent nuevo) | Attachments/S3/PDF; CRUD ítems; scoring de personas; causalidad before→action→after; no COMPLETE; no atribuir nota a ítem; no silent pick |
 | DICF expediente / attachments / writes | Slice expediente factual ya integrado (`loadCommercialDossierForChat`; SELECT-only; sin `computeDicf`) | Attachments; Excel/UI; bitácora en el expediente; causalidad; CRUD acciones; no COMPLETE |
-| IGF composición / UI / PATCH / recálculo | Slice composición snapshot ya integrado (`extractIgfComposition`; 1 fila; `*_kg` = $/kg; no se ejecuta `recalcularUtilYResultado`; no overlay) | UI IGF; PATCH HG; meta Excel; versiones UI; overlay de folios; deltas IGF; causalidad; no COMPLETE |
+| IGF composición / UI / PATCH / recálculo | Slice composición snapshot ya integrado (`extractIgfComposition`; 1 fila; `*_kg` = $/kg; no se ejecuta `recalcularUtilYResultado`; no overlay en `igf_status`). Contrafactual read-only ya integrado en `igf_reviewable_supports` (overlay **en memoria**; no DB write) | UI IGF; PATCH HG; meta Excel; versiones UI; overlay persistente del GET dashboard; closed-month; causalidad; no COMPLETE |
 | Proyectos (crear/editar/eliminar) | Sí (`POST /api/proyectos`) | Escritura; la lectura M3 ya está integrada |
 | KPIs dashboard (lectura) | Sí (integrado M3) | — |
 | Weekly LD | Sí | Tool |
@@ -2084,6 +2181,7 @@ El chat legado integra **cross-metric follow-up diario** (`IMPL-DIRECTOR-IA-DAIL
 | Diagnóstico de planta multi-fuente | `lib/director-ia-plant-diagnosis.js` |
 | Desviación diaria de venta | `lib/director-ia-daily-deviation.js` |
 | Desviación diaria de descuento/kg | `lib/director-ia-daily-discount.js` |
+| Apoyos reviewable / contrafactual IGF | `lib/director-ia-igf-reviewable-supports.js`, `test/director-ia-igf-reviewable-supports.test.js` |
 | Commercial state | `lib/director-ia-commercial-state.js` |
 | Bitácora | `lib/director-ia-bitacora.js` |
 | Mejora continua | `lib/director-ia-mejora-continua.js` |
