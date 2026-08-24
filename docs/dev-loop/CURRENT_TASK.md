@@ -1,14 +1,15 @@
 # CURRENT_TASK
 
 ```yaml
-task_id: "IMPL-DIRECTOR-IA-DAILY-DEVIATION-001"
+task_id: "DOCS-DIRECTOR-IA-DAILY-DEVIATION-SYNC-001"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-08-24"
 human_authorization: >
   AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-24.
-  Apruebo IMPL-DIRECTOR-IA-DAILY-DEVIATION-001 y autorizo G1.
+  Apruebo DOCS-DIRECTOR-IA-DAILY-DEVIATION-SYNC-001
+  y autorizo G1.
 
 gates:
   G1_task_authorization: AUTHORIZED
@@ -18,371 +19,165 @@ gates:
   G8_calibration_materiality_signature: N/A
 
 objective: >
-  Implementar el first slice daily_sales_plus_business_evidence para que
-  Director IA pueda responder de forma fundamentada preguntas como
-  “¿por qué bajó la venta ayer?”, usando un pack diario específico con
-  detección, referencia comparable, desviación matemática, contribución por
-  cliente y canal, evidencia comercial relacionada y huecos explícitos de
-  información, sin programar causalidad.
+  Sincronizar la documentación de Director IA con el runtime ya integrado de
+  daily_sales_deviation, documentando exactamente el first slice
+  daily_sales_plus_business_evidence sin modificar código, contratos, runtime
+  ni cobertura de módulos.
 
 baseline:
-  global: "10.5 / 20 = 52.5%"
-  percentage_effect: "0.0 pp"
+  before: "10.5 / 20 = 52.5%"
+  after: "10.5 / 20 = 52.5%"
+  delta: "0.0 pp"
 
-  readiness:
-    task: "ARCH-DIRECTOR-IA-DAILY-DEVIATION-READINESS-001"
-    determination: "READY_WITH_LIMITS"
-    selected_first_slice: "daily_sales_plus_business_evidence"
+implemented_capability:
+  intent: "daily_sales_deviation"
+  first_slice: "daily_sales_plus_business_evidence"
 
-product_principle: >
-  El runtime calcula hechos y matemáticas exactas.
-  GPT conserva la explicación conversacional y determina, a partir de evidencia
-  y límites explícitos, qué sabemos y qué falta saber.
-
-new_intent:
-  name: "daily_sales_deviation"
-
-  must_not_reuse:
-    - "financial_diagnosis"
-    - "delta_sales"
-
-  reason: >
-    Los paths actuales son mensuales y no representan la granularidad solicitada
-    por preguntas sobre ayer.
+implemented_path: >
+  pregunta de venta diaria
+    → daily_sales_deviation
+    → ayer calendario completo America/Mexico_City
+    → venta observada kg
+    → referencia same-weekday / ventana 14 días
+    → delta kg / delta %
+    → contribución por cliente
+    → contribución por canal
+    → DICF + comments por cliente_key
+    → information gaps
+    → evidence pack
+    → HILO
+    → una llamada OpenAI
+    → respuesta conversacional
 
 routing:
-
-  required_examples:
-    - "¿Por qué bajó la venta ayer?"
-    - "¿Cómo estuvo la venta ayer?"
-    - "¿Qué pasó ayer con la venta?"
-    - "¿Por qué vendimos menos ayer?"
-    - "¿Dónde cayó la venta ayer?"
-
-  rules:
-    - "daily language debe ganar sobre financial_diagnosis mensual"
-    - "no degradar a M9 mensual"
-    - "pregunta diaria sin planta autorizada debe usar scope vigente/clarificar según reglas actuales"
-    - "standalone monthly intents preservados"
+  document:
+    - "daily_sales_deviation gana para preguntas de venta + ayer"
+    - "no degrada a financial_diagnosis mensual"
+    - "no degrada a delta_sales mensual"
+    - "monthly paths permanecen intactos"
 
 date_semantics:
-
   timezone: "America/Mexico_City"
+  target: "ayer calendario completo"
 
-  target_day:
-    definition: "ayer calendario completo"
-
-  rules:
-    - "hoy no se usa como día completo"
-    - "día sin filas != venta cero"
-    - "fecha debe quedar explícita en evidence/context"
-    - "no depender de timezone UTC del servidor"
+  invariants:
+    - "hoy no se trata como día completo"
+    - "día sin filas != 0"
+    - "target_date queda explícito"
+    - "active_date es efímero dentro del hilo"
 
 reference:
-
   type: "same_weekday_recent_average"
-
   window_days: 14
 
-  rule_source: >
-    Misma regla temporal homologada por el forecast ARR verificado en readiness.
-
-  requirements:
+  document:
     - "mismo día de semana"
-    - "solo días completos"
-    - "misma planta"
-    - "promedio sobre observaciones físicas válidas"
-    - "número de observaciones explícito"
-    - "si no hay base suficiente, limitation explícita"
-    - "siempre decir contra qué se comparó"
-
-  prohibited:
-    - "día anterior como default"
-    - "inventar ceros para días sin registros"
-    - "promedio MTD si no fue solicitado"
-    - "rolling distinto sin solicitud"
-
-daily_sales_source:
-
-  mandatory_before_code:
-    - "confirmar tabla(s) físicas"
-    - "confirmar campo fecha"
-    - "confirmar planta_id"
-    - "confirmar kg"
-    - "confirmar cliente"
-    - "confirmar canal"
-    - "confirmar semántica de filas"
-
-  rule: >
-    Usar el path diario físico auditado en readiness. No reconstruir venta diaria
-    desde una fuente mensual.
+    - "ventana de 14 días"
+    - "N observaciones explícito"
+    - "referencia siempre declarada al usuario"
+    - "día anterior no es default"
 
 daily_detection:
-
-  output:
-    target_date: "YYYY-MM-DD"
-    target_sales_kg: "kg observados"
-    reference_type: "same_weekday_recent_average"
-    reference_sales_kg: "promedio kg"
-    reference_observation_count: "N"
-    deviation_kg: "target - reference"
-    deviation_pct: "(target-reference)/reference cuando reference != 0"
-
-  null_rules:
-    - "reference 0 requiere handling explícito"
-    - "missing target != 0"
-    - "missing reference != 0"
-    - "null != 0"
+  fields:
+    - "target_date"
+    - "target_sales_kg"
+    - "reference_type"
+    - "reference_sales_kg"
+    - "reference_observation_count"
+    - "deviation_kg"
+    - "deviation_pct"
 
 mathematical_decomposition:
 
   customer:
-    required: true
-
-    purpose: >
-      Determinar qué clientes contribuyen matemáticamente a la diferencia entre
-      ayer y la referencia comparable.
-
-    requirements:
-      - "base comparable por cliente"
-      - "same-weekday reference por cliente"
-      - "contribution_kg"
-      - "share_of_total_deviation cuando matemáticamente válido"
-      - "top contributors determinísticos"
-      - "cliente_key preservado"
+    documented: true
+    key: "cliente_key"
+    meaning: >
+      contribución matemática del cliente a la diferencia entre el día objetivo
+      y la referencia comparable.
 
   channel:
-    required: true
+    documented: true
+    meaning: >
+      contribución matemática del canal a la diferencia entre el día objetivo
+      y la referencia comparable.
 
-    requirements:
-      - "usar canal físico existente en venta"
-      - "misma referencia comparable"
-      - "contribution_kg"
-      - "sumatoria consistente con total dentro de tolerancia explícita"
+  invariant: >
+    mathematical contribution != business cause
 
-  critical_rule: >
-    contributor != cause.
-
-  prohibited:
-    - "cliente con mayor venta = mayor contribuidor"
-    - "cliente con mayor caída relativa = mayor impacto automáticamente"
-    - "mezclar kg con pesos"
-    - "score compuesto"
+  required_warning: >
+    Cliente/canal que explica matemáticamente parte del delta no queda
+    demostrado como causa empresarial del movimiento.
 
 business_evidence:
 
-  customer_join_key: "cliente_key"
-
-  sources_allowed:
-    - "DICF actions"
+  sources:
+    - "DICF"
     - "commercial comments"
 
-  requirements:
-    - "join físico por cliente_key"
-    - "no join por nombre"
-    - "evidence relacionada con cliente"
-    - "fecha del comentario/acción preservada"
-    - "responsable solo si está físicamente ligado a acción"
+  join:
+    key: "cliente_key"
+    name_join: false
 
   semantics:
-    - "comment != external fact"
-    - "action != cause"
-    - "action != solution"
+    - "comment = stored statement, not proven cause"
+    - "action = recorded action, not proven cause"
+    - "responsible = responsible for action only when physically linked"
     - "responsible != responsible for sales decline"
 
-  forbidden:
-    - "bitácora por cliente sin join físico"
-    - "inventar causa desde comentario"
-    - "atribuir toda la caída a una evidencia parcial"
+information_gaps:
 
-information_gap:
+  document: >
+    El pack identifica contribuidores materiales para los que la evidencia
+    disponible no alcanza para explicar empresarialmente el movimiento.
 
-  objective: >
-    Entregar a GPT cuáles contribuidores materiales permanecen sin evidencia
-    suficiente para explicar el movimiento.
+  semantics:
+    - "gap != no cause exists"
+    - "gap = current pack lacks sufficient explanatory evidence"
 
-  for_each_relevant_contributor:
-    derive:
-      - "has_related_comment"
-      - "has_related_action"
-      - "has_recent_related_evidence if physically defensible"
-      - "explanation_gap"
+  enables_GPT_to_express:
+    - "qué sí está observado"
+    - "qué parte se localiza matemáticamente"
+    - "qué evidencia relacionada existe"
+    - "qué sigue sin explicación"
+    - "qué información concreta falta"
+    - "quién puede aclararla solo cuando existe vínculo físico"
 
-  rule: >
-    explanation_gap significa que el pack no contiene evidencia suficiente;
-    no significa que no exista una causa en el mundo real.
+reasoning_boundary:
 
-  GPT_should_be_able_to_say:
-    - "no encuentro evidencia suficiente para explicar este movimiento"
-    - "falta validar el motivo con el cliente"
-    - "hay una acción asociada que requiere actualización"
-    - "la persona se menciona solo si existe vínculo físico"
-
-daily_pack:
-
-  preferred_helper: "loadDailySalesDeviationForChat"
-
-  preferred_assembler: "assembleDailySalesDeviationEvidence"
-
-  required_sections:
-    - "summary"
+  deterministic_runtime:
+    - "target date"
+    - "timezone"
     - "reference"
-    - "customer_contributors"
-    - "channel_contributors"
-    - "business_evidence"
-    - "information_gaps"
-    - "limitations"
+    - "kg"
+    - "delta"
+    - "percentage"
+    - "customer contribution"
+    - "channel contribution"
+    - "identity/join"
+    - "authz"
     - "provenance"
+    - "absence/error semantics"
 
-  rule: >
-    Los nombres exactos pueden adaptarse al patrón existente. No crear capas
-    abstractas innecesarias.
+  GPT:
+    - "síntesis"
+    - "explicación narrativa"
+    - "qué llama la atención"
+    - "relación prudente entre evidencias"
+    - "qué no está explicado"
+    - "qué información falta"
+    - "follow-up conversacional"
 
-conversation_integration:
+  principle: >
+    El runtime entrega evidencia confiable y matemáticas correctas.
+    GPT conserva el razonamiento conversacional.
+
+conversation:
 
   parent_intent: "daily_sales_deviation"
+  active_date: "ephemeral"
 
-  required_followups:
-    - "¿Contra qué la estás comparando?"
-    - "¿Qué clientes explican más?"
-    - "¿Y por canal?"
-    - "¿Sabemos por qué?"
-    - "¿Qué falta investigar?"
-    - "¿Quién puede aclararlo?"
-
-  structured_conversation_state:
-    preserve: true
-
-  date_context:
-    requirement: >
-      Determinar el mecanismo mínimo para que los follow-ups de la misma
-      conversación sigan referidos al target_date diario sin introducir
-      memoria persistente de periodos ni romper el slice aprobado.
-
-    allowed: >
-      Puede incluir fecha objetivo dentro del HILO/contexto derivado del bundle
-      actual si no requiere ampliar persistent conversation state.
-
-    prohibited:
-      - "cross-session daily date memory"
-      - "period stack"
-
-openai:
-
-  required:
-    - "una sola llamada final"
-    - "recibe daily pack + HILO"
-    - "no recibe raw DB dump innecesario"
-    - "no programar respuesta final determinísticamente"
-
-  system_boundary:
-    instruct:
-      - "mathematical contribution != cause"
-      - "comments are stored statements"
-      - "state what is known"
-      - "state what remains unknown"
-      - "identify missing information when possible"
-
-  forbidden:
-    - "plantilla rígida que sustituya GPT"
-    - "causalidad automática"
-
-authz:
-
-  required:
-    - "rol actual"
-    - "planta actual"
-    - "plantas_permitidas"
-    - "cross-planta bloqueado"
-    - "fail-closed"
-
-  rule: >
-    El daily pack no amplía permisos de fuentes existentes.
-
-absence_error_semantics:
-
-  distinguish:
-    - "0 real"
-    - "null"
-    - "target day without rows"
-    - "insufficient reference observations"
-    - "DATA_NOT_FOUND"
-    - "SOURCE_RESTRICTED"
-    - "TOOL_ERROR"
-
-  rules:
-    - "día sin filas != venta cero"
-    - "error != ausencia"
-    - "restricted != missing"
-
-daily_discount:
-
-  implementation: false
-
-  readiness_findings_to_preserve:
-    formula: "SUM(monto) / SUM(kg)"
-    average_of_averages: false
-    channel_available: false
-
-  deferred:
-    - "daily discount/kg pack"
-    - "weighted contributor decomposition"
-    - "mix effect analysis"
-
-  rule: >
-    No añadir descuento/kg en este IMPL aunque comparta infraestructura.
-
-memory_and_continuity:
-
-  ephemeral_continuity:
-    preserve: true
-
-  persistent_pending_memory:
-    preserve: true
-
-  important:
-    - "daily deviation no se guarda automáticamente como persistent memory"
-    - "pending work item solo si surge gap conforme a reglas ya vigentes"
-    - "memory != evidence"
-
-deployment_note:
-
-  persistent_memory_sql_017:
-    status: "operationally pending unless separately applied"
-
-  rule: >
-    No hacer SQL 017 como parte de esta tarea.
-
-truth_boundaries:
-
-  deterministic_facts:
-    - "fecha"
-    - "kg"
-    - "reference"
-    - "delta"
-    - "contribution"
-    - "share"
-    - "customer/channel identity"
-    - "stored comments/actions"
-    - "provenance"
-
-  GPT_reasoning:
-    - "síntesis"
-    - "qué destaca"
-    - "cómo explicar la distribución del movimiento"
-    - "qué evidencia puede estar relacionada"
-    - "qué sigue sin explicación"
-    - "qué información falta"
-
-  prohibited_claims:
-    - "cliente X causó la caída"
-    - "competencia causó la caída"
-    - "acción vencida causó la caída"
-    - "todo el delta está explicado si solo una parte tiene evidencia"
-
-mandatory_product_test:
-
-  conversation:
+  canonical_flow:
     - "¿Por qué bajó la venta ayer?"
     - "¿Contra qué la estás comparando?"
     - "¿Qué clientes explican más?"
@@ -391,137 +186,132 @@ mandatory_product_test:
     - "¿Qué falta investigar?"
     - "¿Quién puede aclararlo?"
 
-  expected:
-    - "daily intent preserved"
-    - "target day preserved within active conversation"
-    - "same-weekday reference explicit"
-    - "mathematical contributors available"
-    - "business evidence available"
-    - "unexplained portion visible"
-    - "no causal invention"
-    - "natural GPT follow-ups"
+  runtime_behavior:
+    - "follow-ups heredan el pack defendible"
+    - "requery por turno"
+    - "una llamada OpenAI por turno"
+    - "HILO != evidence"
+    - "active_date no se convierte en memoria cross-session"
 
-tests_required:
+authz:
+  preserve: true
+  invariants:
+    - "planta actual"
+    - "rol actual"
+    - "plantas_permitidas"
+    - "no cross-plant"
+    - "fail-closed"
 
-  routing:
-    - "daily sales intent beats financial_diagnosis"
-    - "monthly financial query unchanged"
-    - "delta_sales monthly unchanged"
+absence_error_semantics:
+  distinguish:
+    - "0 real"
+    - "null"
+    - "día sin filas"
+    - "referencia insuficiente"
+    - "DATA_NOT_FOUND"
+    - "SOURCE_RESTRICTED"
+    - "TOOL_ERROR"
 
-  date:
-    - "yesterday CDMX"
-    - "today excluded"
-    - "no rows != zero"
+daily_discount:
+  status: "DEFERRED / NOT IMPLEMENTED"
 
-  reference:
-    - "same weekday"
-    - "14 day window"
-    - "observation count"
-    - "missing reference"
+  readiness_only:
+    formula: "SUM(monto) / SUM(kg)"
+    average_of_averages: false
+    channel_available: false
 
-  math:
-    - "daily total"
-    - "reference average"
-    - "delta kg"
-    - "delta pct"
-    - "customer contributions"
-    - "channel contributions"
-    - "contributors reconcile"
+  warning: >
+    No documentar daily discount/kg como capacidad implementada.
 
-  evidence:
-    - "cliente_key join"
-    - "comment not cause"
-    - "action not cause"
-    - "unexplained contributor"
+preserved:
+  - "M9 monthly"
+  - "financial_diagnosis"
+  - "plant_diagnosis"
+  - "structured_conversation_state"
+  - "pending_work_items_only"
 
-  conversation:
-    - "against what?"
-    - "which clients?"
-    - "by channel?"
-    - "do we know why?"
-    - "what is missing?"
-    - "who can clarify?"
+persistent_memory:
+  daily_date_memory: false
+  pending_work_items_only: "preserved"
 
-  security:
-    - "authz"
-    - "cross-plant"
+  deployment_note: >
+    SQL 017 sigue siendo requisito operativo separado para activar memoria
+    persistente en un entorno donde aún no se haya aplicado.
 
-  regression:
-    - "conversational continuity"
-    - "persistent memory"
-    - "plant_diagnosis"
-    - "financial_diagnosis"
-    - "M9"
-    - "capabilities"
-    - "planner"
-    - "orchestrator"
-    - "full Director IA suite"
+contracts:
+  Constitution: "unchanged"
+  EKE: "unchanged"
+  IES_04: "unchanged"
+  Reasoning_Engine_05: "unchanged"
+
+module_matrix:
+  changed_modules: "none"
+  global: "10.5 / 20 = 52.5%"
+  delta: "0.0 pp"
+
+test_evidence_from_impl:
+  daily_deviation: "16/16"
+  continuity: "20/20"
+  persistent_memory: "19/19"
+  capabilities: "56/56"
+  planner: "49/49"
+  orchestrator: "27/27"
+  director_ia_suite: "777/777"
+  git_diff_check: "clean"
+
+deferred_product_gaps:
+  - "daily discount/kg"
+  - "Julio Pérez / action routing gap"
+  - "phrasebook rigidity outside inherited paths"
+  - "client-level competition/margin tradeoff"
+  - "SQL 017 environment activation where pending"
 
 in_scope:
   writable:
     - "docs/dev-loop/CURRENT_TASK.md"
-    - "docs/dev-loop/reports/IMPL-DIRECTOR-IA-DAILY-DEVIATION-001.md"
-    - "lib/director-ia-chat.js"
-    - "lib/director-ia-planner.js"
-    - "lib/director-ia-tools.js"
-    - "lib/director-ia-daily-deviation.js"
-    - "lib/director-ia-conversation-state.js"
-    - "test/director-ia-daily-deviation.test.js"
-    - "scripts/test-director-ia-tool-orchestrator.js"
-
-  conditional_writable:
-    - "existing Director IA tests only if legitimate assertions require update"
+    - "docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md"
+    - "docs/dev-loop/reports/DOCS-DIRECTOR-IA-DAILY-DEVIATION-SYNC-001.md"
 
   read_only:
-    - "docs/director-ia/**"
-    - "server.js"
-    - "frontend-dashboard/**"
-    - "sql/**"
-    - "other unrelated code"
+    - "implemented runtime"
+    - "tests"
+    - "contracts"
+    - "sql"
 
 out_of_scope:
-  - "daily discount/kg implementation"
-  - "matrix changes"
-  - "contract changes"
-  - "IES changes"
-  - "Reasoning Engine changes"
-  - "schema changes"
-  - "new tables"
+  - "code"
+  - "tests"
+  - "runtime"
   - "SQL execution"
-  - "economic tradeoff"
-  - "causal engine"
-  - "notification workflow"
+  - "schema"
+  - "contracts"
+  - "new architecture"
+  - "daily discount implementation"
+  - "percentage changes"
   - "commit"
   - "push"
   - "merge"
 
 acceptance_criteria:
-  - "daily_sales_deviation implemented."
-  - "Yesterday uses America/Mexico_City."
-  - "Same-weekday 14-day reference implemented."
-  - "Reference disclosed."
-  - "Daily kg detection correct."
-  - "Customer decomposition correct."
-  - "Channel decomposition correct."
-  - "DICF/comments joined only by cliente_key."
-  - "Information gaps explicit."
-  - "Contribution != causality preserved."
-  - "One OpenAI call."
-  - "Conversational follow-ups work."
-  - "Monthly paths preserved."
-  - "No daily discount implementation."
-  - "Authz preserved."
+  - "daily_sales_deviation documented."
+  - "Daily vs monthly boundary explicit."
+  - "Yesterday/CDMX documented."
+  - "Same-weekday 14-day reference documented."
+  - "Customer decomposition documented."
+  - "Channel decomposition documented."
+  - "Business evidence by cliente_key documented."
+  - "Information gaps documented."
+  - "Contribution != causality explicit."
+  - "Conversational inheritance documented."
+  - "Reasoning boundary documented."
+  - "Daily discount explicitly deferred."
+  - "No module changes."
   - "52.5% preserved."
-  - "Tests green."
+  - "Only three authorized files changed."
   - "git diff --check clean."
 
-percentage_policy:
-  before: "10.5 / 20 = 52.5%"
-  after: "10.5 / 20 = 52.5%"
-  delta: "0.0 pp"
-
 next_task:
-  propose_only: "DOCS-DIRECTOR-IA-DAILY-DEVIATION-SYNC-001"
+  propose_only: "AUDIT-DIRECTOR-IA-CONVERSATIONAL-PRODUCT-GAP-003"
   authorize: false
   execute: false
 
@@ -530,4 +320,4 @@ expected_terminal_state: "DONE_PENDING_REVIEW"
 max_attempts: 1
 
 result_report_path: >
-  docs/dev-loop/reports/IMPL-DIRECTOR-IA-DAILY-DEVIATION-001.md
+  docs/dev-loop/reports/DOCS-DIRECTOR-IA-DAILY-DEVIATION-SYNC-001.md

@@ -17,7 +17,7 @@
 
 ## Índice navegable
 
-1. [Parte 1 — Definiciones](#parte-1--definiciones) (incluye [continuidad conversacional efímera](#continuidad-conversacional-efímera-no-es-módulo-m0m20) y [memoria persistente pending_work_items_only](#memoria-persistente-pending_work_items_only-no-es-módulo-m0m20))
+1. [Parte 1 — Definiciones](#parte-1--definiciones) (incluye [continuidad conversacional efímera](#continuidad-conversacional-efímera-no-es-módulo-m0m20), [memoria persistente pending_work_items_only](#memoria-persistente-pending_work_items_only-no-es-módulo-m0m20) y [desviación diaria de venta daily_sales_deviation](#desviación-diaria-de-venta-daily_sales_deviation-no-es-módulo-m0m20))
 2. [Parte 2 — Matriz maestra M0–M20](#parte-2--matriz-maestra-m0m20)
 3. [Parte 3 — Catálogo de fuentes](#parte-3--catálogo-de-fuentes)
 4. [Parte 4 — Capacidades de negocio (preguntas)](#parte-4--capacidades-de-negocio-preguntas)
@@ -63,7 +63,7 @@
 | Chat | `POST /api/director-ia/chat` → `askDirectorIa` (`lib/director-ia-chat.js`) |
 | Routing chat | Planner (`planDirectorIaQuestion`) + ramas in-process en `askDirectorIa`; **continuidad efímera** (`lib/director-ia-conversation-state.js`): follow-up defendible puede heredar `parent_intent` (`inheritParentIntent` solo si el detectado es `unknown`); standalone se clasifica normal; `unknown` sin estado válido **no** cae al dump de Action Register (clarifica). Regex/heurísticas residuales en `director-ia-chat.js`, `director-ia-igf-arr.js`, `director-ia-commercial-state.js` |
 | Fuentes en GET `sources` | `action_register`, `dicf`, `bitacora_ia`, `cliente_comentarios`, `folio_comentarios` pueden pasar a `true`; `igf`, `arr`, `commercial_state` permanecen `false` en `EMPTY_SOURCES` |
-| Fuentes solo en chat | Anexo IGF/ARR (`loadIgfArrAnnexForChat` + `extractIgfComposition` sobre 1 fila de `igf.compromiso_lines`; no recálculo; no overlay) para `igf_status` / KPI annex; **diagnóstico financiero multi-fuente** (`financial_diagnosis` → `loadFinancialDiagnosisForChat` / `assembleFinancialDiagnosisEvidence`: bloques IGF + ARR + M9 separados; una llamada OpenAI; no IES; no N5); **diagnóstico de planta multi-fuente** (`plant_diagnosis` → `loadPlantDiagnosisForChat` / `assemblePlantDiagnosisEvidence`: bloques action_register + dicf + bitacora + arr + igf + commercial_state; SELECT-only `arr.dicf_cliente_mes`; slice `commercial_materiality_and_coverage`: magnitud `kg_mes_real` = kg observados del mes de la fila, concentración top-5, cobertura DICF por `cliente_key`; **no** `kg_mes_forecast − kg_mes_real` como venta perdida; **sin M9**; **sin** `computeDicf`; una llamada OpenAI; GA partial `SOURCE_RESTRICTED`; no IES; no N5; no Recommendation N5; no MAT_*); estado comercial de listas (`loadCommercialStateForChat` → `computeDicf`); expediente comercial factual (`loadCommercialDossierForChat`; SELECT-only; no `computeDicf`); Mejora Continua (`loadMejoraContinuaForChat`); M6 GASTOS/INVERSIONES (`loadGastosInversionesForChat`); M5 Taller por AT (`loadTallerAtForChat`; SELECT `public.folios.unidad`; no Excel; no duplicados); M4 clasificación query (`loadClasificacionApoyosForChat`); M18 presupuesto semanal (`loadPresupuestoSemanalForChat`) |
+| Fuentes solo en chat | Anexo IGF/ARR (`loadIgfArrAnnexForChat` + `extractIgfComposition` sobre 1 fila de `igf.compromiso_lines`; no recálculo; no overlay) para `igf_status` / KPI annex; **diagnóstico financiero multi-fuente** (`financial_diagnosis` → `loadFinancialDiagnosisForChat` / `assembleFinancialDiagnosisEvidence`: bloques IGF + ARR + M9 separados; una llamada OpenAI; no IES; no N5); **diagnóstico de planta multi-fuente** (`plant_diagnosis` → `loadPlantDiagnosisForChat` / `assemblePlantDiagnosisEvidence`: bloques action_register + dicf + bitacora + arr + igf + commercial_state; SELECT-only `arr.dicf_cliente_mes`; slice `commercial_materiality_and_coverage`: magnitud `kg_mes_real` = kg observados del mes de la fila, concentración top-5, cobertura DICF por `cliente_key`; **no** `kg_mes_forecast − kg_mes_real` como venta perdida; **sin M9**; **sin** `computeDicf`; una llamada OpenAI; GA partial `SOURCE_RESTRICTED`; no IES; no N5; no Recommendation N5; no MAT_*); **desviación diaria de venta** (`daily_sales_deviation` → `loadDailySalesDeviationForChat` / `assembleDailySalesDeviationEvidence`: ayer CDMX; kg observados; referencia same-weekday 14 días; delta kg/%; contribución cliente y canal; DICF + comments **solo** `cliente_key`; information gaps; HILO; una llamada OpenAI; contribución ≠ causa; **no** descuento/kg; no IES; no N5); estado comercial de listas (`loadCommercialStateForChat` → `computeDicf`); expediente comercial factual (`loadCommercialDossierForChat`; SELECT-only; no `computeDicf`); Mejora Continua (`loadMejoraContinuaForChat`); M6 GASTOS/INVERSIONES (`loadGastosInversionesForChat`); M5 Taller por AT (`loadTallerAtForChat`; SELECT `public.folios.unidad`; no Excel; no duplicados); M4 clasificación query (`loadClasificacionApoyosForChat`); M18 presupuesto semanal (`loadPresupuestoSemanalForChat`) |
 | Persistencia de chat | **No hay tabla de historial/transcript.** El FE puede reenviar `req.body.history` (hasta 8) y/o `conversation_state`. Eso **no** es evidencia. Continuidad **efímera** por request: `structured_conversation_state`. First slice persistente **en repo**: `arr.director_ia_pending_work_items` (`sql/017_director_ia_pending_work_items.sql`; `lib/director-ia-persistent-memory.js`). Recuerda **trabajo pendiente**, no hechos. OpenAI recibe `HILO` + (si hay retoma) bloque `PENDIENTE DE TRABAJO`; no history crudo. **Capacidad en repositorio = IMPLEMENTED. Activación en un entorno = PENDING until SQL 017 applied.** |
 | Escritura propia del módulo | Bitácora y entidades comerciales vía API CRUD (no vía chat) |
 
@@ -85,13 +85,14 @@ turno actual
 
 | Campo | Runtime |
 |-------|---------|
-| `parent_intent` | Se hereda solo si el follow-up es defendible y el planner detectó `unknown`. Standalone (p. ej. `financial_diagnosis`) no se pisa. |
+| `parent_intent` | Se hereda solo si el follow-up es defendible y el planner detectó `unknown` (salvo inherit forzado de `daily_sales_deviation`). Standalone mensual (p. ej. `financial_diagnosis`, `delta_sales`) no se pisa. `daily_sales_deviation` es inheritable. |
 | `planta_id` | Siempre el del request autorizado. Nunca del texto ni del history. |
 | `active_entities` | Máximo 1. Única en la planta actual (palabra completa / nombre exacto sobre el pack fresco). Ambiguo o ausente → clarifica. Sin fuzzy silencioso. |
+| `active_date` | Solo en hilo `daily_sales_deviation`: YYYY-MM-DD **efímero** del día objetivo. Se reusa para requery del mismo hilo. **No** es memoria persistente de periodos. No sobrevive un chat nuevo. |
 | `last_evidence_bundle_type` | Recuerda el tipo de pack; **no** cachea el payload. |
 | `pending_information_gap` | Derivado del pack **requery** (`limitations`, cobertura, `SOURCE_RESTRICTED`). Persona solo si hay responsable de **acción** con vínculo físico. No se deriva de la prosa del assistant. |
 
-Follow-ups que el runtime ancla al hilo cuando hay `parent_intent` válido (p. ej. tras `¿Cómo va Puebla?`): `¿Qué te llama la atención?`, `¿Por qué?`, `¿Y Arturo?`, `¿Qué sabemos de él?`, `¿Tiene alguna acción?`, `¿Qué falta saber?`. También: `¿Qué te falta?`, `¿Quién puede darnos esa información?`, `¿Para qué la necesitas?`.
+Follow-ups que el runtime ancla al hilo cuando hay `parent_intent` válido (p. ej. tras `¿Cómo va Puebla?`): `¿Qué te llama la atención?`, `¿Por qué?`, `¿Y Arturo?`, `¿Qué sabemos de él?`, `¿Tiene alguna acción?`, `¿Qué falta saber?`. También: `¿Qué te falta?`, `¿Quién puede darnos esa información?`, `¿Para qué la necesitas?`. Tras `daily_sales_deviation`: `¿Contra qué la comparas?`, `¿Qué clientes explican más?`, `¿Y por canal?`, `¿Sabemos por qué?`, `¿Qué falta investigar?`, `¿Quién puede aclararlo?`.
 
 Evidencia y veracidad:
 
@@ -115,7 +116,7 @@ OpenAI: recibe el `HILO` mínimo para interpretar el follow-up. Los hechos viene
 
 **Principio rector:** la arquitectura da a GPT evidencia, memoria, contexto, permisos y provenance. GPT conserva el razonamiento conversacional. No se convierten en reglas determinísticas las cosas que el modelo ya puede razonar, salvo necesidad concreta de seguridad, exactitud, autorización, reproducibilidad o cálculo.
 
-Fuera de este slice: topic stack / «volviendo a lo anterior»; continuidad de periodo / «¿Y ayer?» / semana anterior; varias entidades activas; history selectivo al LLM; motor diario; workflow de notificaciones.
+Fuera de este slice de continuidad genérica: topic stack / «volviendo a lo anterior»; «¿Y ayer?» como switch de periodo **sin** venta diaria; semana anterior; varias entidades activas; history selectivo al LLM; workflow de notificaciones. El first slice diario de **venta** es `daily_sales_deviation` (abajo). Descuento/kg diario **no** está implementado.
 
 ### Memoria persistente `pending_work_items_only` (no es módulo M0–M20)
 
@@ -158,6 +159,76 @@ Al recuperar: authz actual; planta actual; entidad actual; requery. **Current ev
 
 Ejemplo correcto: «La última vez dejamos pendiente conocer el motivo documentado de Arturo. Revisé nuevamente…»
 Ejemplo incorrecto: «Arturo sigue sin comprar» solo porque se recordó.
+
+`daily_sales_deviation` **no** persiste la fecha objetivo ni el pack diario como work item. `active_date` es efímero. SQL 017 **no** se ejecuta en esta sync; la nota operativa de activación de entorno se conserva.
+
+---
+
+### Desviación diaria de venta `daily_sales_deviation` (no es módulo M0–M20)
+
+**Implementado** (`IMPL-DIRECTOR-IA-DAILY-DEVIATION-001`; first slice `daily_sales_plus_business_evidence`). Chat legado. **No** IES. **No** Reasoning Engine N5. **No** cambia cobertura de ningún módulo ni el 52.5%.
+
+**No** es `financial_diagnosis` mensual. **No** es `delta_sales` / M9 mensual. Preguntas de venta + **ayer** ganan este intent.
+
+Path:
+
+```text
+pregunta de venta diaria
+  → daily_sales_deviation
+  → ayer calendario completo America/Mexico_City
+  → venta observada kg
+  → referencia same-weekday / ventana 14 días (N observaciones)
+  → delta kg / delta %
+  → contribución por cliente
+  → contribución por canal
+  → DICF + comments por cliente_key
+  → information gaps
+  → evidence pack
+  → HILO
+  → una llamada OpenAI
+  → respuesta conversacional (GPT)
+```
+
+| Pieza | Runtime |
+|-------|---------|
+| Fecha | Ayer = día calendario completo en `America/Mexico_City`. Hoy **no** es día cerrado. `target_date` queda explícito. |
+| Venta | kg observados de `arr.ventas_diarias_cliente`. Día sin filas **≠** venta 0. `null` ≠ 0. |
+| Referencia | `same_weekday_recent_average`: mismo ISODOW en ventana de 14 días cerrados; solo días **con filas**; N explícito. **No** día anterior por default. Siempre se declara contra qué se comparó. |
+| Detección | `target_date`, `target_sales_kg`, `reference_type`, `reference_sales_kg`, `reference_observation_count`, `deviation_kg`, `deviation_pct`. |
+| Matemática | Contribución por cliente (`cliente_key`) y por canal al delta vs la referencia comparable; top contributors; reconciliación con el total. |
+| Evidencia de negocio | DICF + comentarios comerciales **solo** por `cliente_key`. **No** join por nombre. |
+| Huecos | Contribuidores materiales sin evidencia suficiente para explicar empresarialmente el movimiento. Acción sí/no. Comentario sí/no. Responsable **solo** si está ligado físicamente a una acción. |
+| Continuidad | `parent_intent = daily_sales_deviation`. `active_date` efímero. Requery cada turno. Una llamada OpenAI por turno. HILO ≠ evidence. |
+
+**CONTRIBUCIÓN MATEMÁTICA ≠ CAUSA.** Un cliente o canal que explica matemáticamente parte del delta **no** queda demostrado como causa empresarial. No documentar «Arturo causó la caída» solo porque concentre kg.
+
+Comentario almacenado (incluida «competencia») = declaración, **no** causa probada. Acción DICF ≠ causa. Responsable de una acción ≠ responsable de la caída.
+
+El **runtime** conserva: fecha, timezone, referencia, matemáticas, joins, authz, provenance, absence/error.
+
+**GPT** conserva: síntesis, explicación narrativa, qué llama la atención, qué sabemos, qué no sabemos, qué información falta, follow-ups conversacionales. El código **no** programa una respuesta final rígida ni causalidad.
+
+Conversación canónica:
+
+```text
+¿Por qué bajó la venta ayer?
+  → ¿Contra qué la comparas?
+  → ¿Qué clientes explican más?
+  → ¿Y por canal?
+  → ¿Sabemos por qué?
+  → ¿Qué falta investigar?
+  → ¿Quién puede aclararlo?
+```
+
+Authz: planta actual, rol actual, `plantas_permitidas`, no cross-plant, fail-closed. El pack diario **no** amplía permisos de M9. GA/GV `SOURCE_RESTRICTED`.
+
+Ausencia / error: distinguir 0 real, `null`, día sin filas, referencia insuficiente, `DATA_NOT_FOUND`, `SOURCE_RESTRICTED`, `TOOL_ERROR`. Día sin filas ≠ 0. Error ≠ ausencia. Restricted ≠ missing.
+
+**Descuento/kg diario: NO IMPLEMENTADO.** Diferido. Hallazgo de readiness (no capacidad): fórmula `SUM(monto)/SUM(kg)`; no average-of-averages; sin canal físico. No documentar descuento/kg diario como integrado.
+
+Preserva: M9 mensual, `financial_diagnosis`, `plant_diagnosis`, `structured_conversation_state`, `pending_work_items_only`. SQL 017 no se ejecuta aquí; sigue siendo requisito operativo separado de memoria persistente.
+
+Archivos: `lib/director-ia-daily-deviation.js`; wiring `lib/director-ia-chat.js`, `lib/director-ia-planner.js`, `lib/director-ia-tools.js`, `lib/director-ia-conversation-state.js`. Tool de registry `get_daily_sales_deviation` (no contamina `arr_status` / M9).
 
 ---
 
@@ -350,7 +421,7 @@ Ejemplo incorrecto: «Arturo sigue sin comprar» solo porque se recordó.
 | **Permisos aplicables** | Auth dashboard; GA bloqueado en commercial_state. |
 | **Nivel de riesgo** | MEDIO (lectura); ALTO (carga). |
 | **Dependencias** | Upload ARR, feriados, provincia_plants. |
-| **Observaciones verificadas** | `sources.arr = false` fijo en context GET. **Sync transversal** `IMPL-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-EVIDENCE-ASSEMBLY-001` (merge `f7f90270`): ARR entra como bloque propio en `financial_diagnosis`; `arr_status` se preserva. **Sync transversal** `IMPL-DIRECTOR-IA-PLANT-DIAGNOSIS-EVIDENCE-ASSEMBLY-001` (merge `7faa3ead`): ARR entra como bloque propio en `plant_diagnosis` (sin M9). M8 **sigue PARCIAL**. Scoring M0–M20 **sin cambio**: 10.5/20 = **52.5%**. |
+| **Observaciones verificadas** | `sources.arr = false` fijo en context GET. **Sync transversal** `IMPL-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-EVIDENCE-ASSEMBLY-001` (merge `f7f90270`): ARR entra como bloque propio en `financial_diagnosis`; `arr_status` se preserva. **Sync transversal** `IMPL-DIRECTOR-IA-PLANT-DIAGNOSIS-EVIDENCE-ASSEMBLY-001` (merge `7faa3ead`): ARR entra como bloque propio en `plant_diagnosis` (sin M9). **Sync transversal** `IMPL-DIRECTOR-IA-DAILY-DEVIATION-001`: `daily_sales_deviation` lee `arr.ventas_diarias_cliente` a granularidad de **un día** (ayer CDMX); **no** es anexo ARR mensual ni M8 COMPLETE. M8 **sigue PARCIAL**. Scoring M0–M20 **sin cambio**: 10.5/20 = **52.5%**. |
 
 ### M9 — Delta Venta / Descuento / Ingreso
 
@@ -361,7 +432,7 @@ Ejemplo incorrecto: «Arturo sigue sin comprar» solo porque se recordó.
 | **Propósito empresarial** | Comparar periodos de venta, descuento e ingreso en modales dashboard. |
 | **Cobertura actual de Director IA** | COMPLETA (respecto a la consulta canónica read-only de las tres familias de periodos reales: Delta Venta, Delta Descuento y Delta Ingreso; no implica forecast con escritura, M19, causalidad ni weekly LD). |
 | **Información exacta que sí consulta** | Comparación in-process de dos YYYY-MM por planta del scope: Delta Venta (kg, `arr.ventas_diarias_cliente`) vía `delta_sales` → `get_delta_sales` → `loadDeltaVentaForChat`; Delta Descuento ($/kg, descuentos + kg) vía `delta_discount` → `get_delta_discount` → `loadDeltaDescuentoForChat`; Delta Ingreso (MXN, `kg × (margen_$/kg − \|desc_$/kg\|)`) vía `delta_income` → `get_delta_income` → `loadDeltaIngresoForChat`. Periodos A≠B; default = los dos YYYY-MM más recientes con datos; no se inventan. Los mismos loaders se reutilizan en `financial_diagnosis` como bloque M9 (`period_a` / `period_b`); ese intent **no** hace early-return de un solo delta. |
-| **Información que no consulta** | Forecast de ingreso con `DELETE`/`INSERT` (`lib/delta-ingreso-forecast.js`); M19 `/api/ai/delta-ingreso/test/*`; weekly LD (M10); IGF/ARR snapshot o KPIs M3 como sustituto; causalidad de una diferencia. |
+| **Información que no consulta** | Forecast de ingreso con `DELETE`/`INSERT` (`lib/delta-ingreso-forecast.js`); M19 `/api/ai/delta-ingreso/test/*`; weekly LD (M10); IGF/ARR snapshot o KPIs M3 como sustituto; causalidad de una diferencia; desviación **diaria** de un día calendario (`daily_sales_deviation` es otro intent; no degrada M9). |
 | **Archivos actuales relacionados** | `lib/director-ia-m9-deltas.js`; `lib/director-ia-financial-diagnosis.js` (reutiliza loaders M9; no cambia COMPLETE); wiring en `lib/director-ia-chat.js`, `lib/director-ia-tools.js`, `lib/director-ia-capabilities.js`, `lib/director-ia-planner.js`; `server.js` reutiliza helpers extraídos (contrato HTTP `delta-*` intacto). UI `Delta*Modal.tsx` y `lib/delta-ingreso-forecast.js` siguen fuera de este COMPLETE. |
 | **Endpoints actuales relacionados** | Lectura integrada in-process (no HTTP interno): semántica de `POST /api/dashboard/delta-venta-datos`, `delta-descuento-datos`, `delta-ingreso-datos` y periodos asociados. Escritura existente y no integrada: `POST /api/dashboard/delta-ingreso-forecast-datos`. M19 no es Director IA. |
 | **Tablas o vistas relacionadas** | `arr.ventas_diarias_cliente`, `arr.descuentos_diarios_cliente`, `arr.provincia_plants`, `public.plantas`; margen IGF (`igf.versions` + `igf.compromiso_lines`) solo como insumo de la fórmula de ingreso, no como anexo. `arr.delta_ingreso_forecast_cliente` queda fuera (forecast mutante). |
@@ -371,7 +442,7 @@ Ejemplo incorrecto: «Arturo sigue sin comprar» solo porque se recordó.
 | **Permisos aplicables** | JWT + `planta_id`; GA 403; GV 403; `plantas_permitidas` (GG/AD); fail-closed cross-planta. Equivalente o más restrictivo que dashboard. |
 | **Nivel de riesgo** | MEDIO (lectura financiera). Escritura forecast/M19: ALTO y fuera de este módulo. |
 | **Dependencias** | ARR diario (venta/descuento); IGF solo como insumo de margen en la fórmula de ingreso. |
-| **Observaciones verificadas** | `IMPL-DIRECTOR-IA-M9-DELTAS-001` (integrado en main, `7b3e5a98`). Tests focales 23/23; suite `test/director-ia-*.test.js` 459/459; scripts capabilities 25/25, planner 30/30, orchestrator 24/24. COMPLETE = consulta autorizada de las tres familias de periodos reales; no forecast mutante; no M19; no causalidad. **Sync transversal** `IMPL-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-EVIDENCE-ASSEMBLY-001` (merge `f7f90270`): M9 entra junto a IGF/ARR en `financial_diagnosis`; intents `delta_sales` / `delta_discount` / `delta_income` se preservan in-process. **Sync transversal** `IMPL-DIRECTOR-IA-PLANT-DIAGNOSIS-EVIDENCE-ASSEMBLY-001` (merge `7faa3ead`): `plant_diagnosis` **no** incluye M9. M9 **sigue COMPLETA**. Scoring M0–M20 **sin cambio**: 10.5/20 = **52.5%**. |
+| **Observaciones verificadas** | `IMPL-DIRECTOR-IA-M9-DELTAS-001` (integrado en main, `7b3e5a98`). Tests focales 23/23; suite `test/director-ia-*.test.js` 459/459; scripts capabilities 25/25, planner 30/30, orchestrator 24/24. COMPLETE = consulta autorizada de las tres familias de periodos reales; no forecast mutante; no M19; no causalidad. **Sync transversal** `IMPL-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-EVIDENCE-ASSEMBLY-001` (merge `f7f90270`): M9 entra junto a IGF/ARR en `financial_diagnosis`; intents `delta_sales` / `delta_discount` / `delta_income` se preservan in-process. **Sync transversal** `IMPL-DIRECTOR-IA-PLANT-DIAGNOSIS-EVIDENCE-ASSEMBLY-001` (merge `7faa3ead`): `plant_diagnosis` **no** incluye M9. **Sync transversal** `IMPL-DIRECTOR-IA-DAILY-DEVIATION-001`: «¿Por qué bajó la venta ayer?» **no** degrada a `delta_sales` / M9 mensual; M9 **sigue COMPLETA**. Scoring M0–M20 **sin cambio**: 10.5/20 = **52.5%**. |
 
 ### M10 — Weekly discount LD
 
@@ -413,7 +484,7 @@ Ejemplo incorrecto: «Arturo sigue sin comprar» solo porque se recordó.
 | **Permisos aplicables** | JWT/contexto; rol; `planta_id`; `plantas_permitidas`; cross-planta 403; fail-closed. GA 403 (regla commercial_state: KPIs financieros). ZP/AD globales. Authz **antes** de consultar el expediente. `acceso_acciones_dicf` / `dashboardBlockDicfAccionesRole` siguen en el dominio DICF de dashboard. |
 | **Nivel de riesgo** | MEDIO (lectura); ALTO (mutar acciones/attachments — fuera). |
 | **Dependencias** | ARR (listas commercial_state / compute); plantas. Distinto de bitácora/Plaud, M2 y Action Register. |
-| **Observaciones verificadas** | `IMPL-DIRECTOR-IA-M11-EXPEDIENTE-COMERCIAL-001` (integrado en main, merge `a5fdea23` / `e3529599`). Tests: focales 19/19; capabilities 50/50; planner 46/46; orchestrator 26/26; suite `test/director-ia-*.test.js` 644/644; `git diff --check` limpio. Routing `commercial_state` / `dicf_focused` / `client_analysis` / Action Register / listas **preservado**. **Sync transversal** `IMPL-DIRECTOR-IA-PLANT-DIAGNOSIS-EVIDENCE-ASSEMBLY-001` (merge `7faa3ead`): DICF y CS SELECT-only entran como bloques del pack `plant_diagnosis`; el intent `commercial_state` de listas **sigue** `computeDicf`. **Sync transversal** `IMPL-DIRECTOR-IA-EXECUTIVE-PRIORITIZATION-001` (merge `0bfe5474`): el pack añade `commercial_materiality_and_coverage` (`kg_mes_real` observado; concentración top-5; cobertura por `cliente_key`; sin join por nombre). M11 **sigue PARCIAL**. **No** COMPLETE. Scoring M0–M20 vigente **sin cambio**: 10.5/20 = **52.5%**. `sources.dicf` true solo si hay filas; `sources.commercial_state` nunca true en GET. |
+| **Observaciones verificadas** | `IMPL-DIRECTOR-IA-M11-EXPEDIENTE-COMERCIAL-001` (integrado en main, merge `a5fdea23` / `e3529599`). Tests: focales 19/19; capabilities 50/50; planner 46/46; orchestrator 26/26; suite `test/director-ia-*.test.js` 644/644; `git diff --check` limpio. Routing `commercial_state` / `dicf_focused` / `client_analysis` / Action Register / listas **preservado**. **Sync transversal** `IMPL-DIRECTOR-IA-PLANT-DIAGNOSIS-EVIDENCE-ASSEMBLY-001` (merge `7faa3ead`): DICF y CS SELECT-only entran como bloques del pack `plant_diagnosis`; el intent `commercial_state` de listas **sigue** `computeDicf`. **Sync transversal** `IMPL-DIRECTOR-IA-EXECUTIVE-PRIORITIZATION-001` (merge `0bfe5474`): el pack añade `commercial_materiality_and_coverage` (`kg_mes_real` observado; concentración top-5; cobertura por `cliente_key`; sin join por nombre). **Sync transversal** `IMPL-DIRECTOR-IA-DAILY-DEVIATION-001`: el pack diario une DICF + comments **solo** por `cliente_key` (comentario ≠ causa; acción ≠ causa). M11 **sigue PARCIAL**. **No** COMPLETE. Scoring M0–M20 vigente **sin cambio**: 10.5/20 = **52.5%**. `sources.dicf` true solo si hay filas; `sources.commercial_state` nunca true en GET. |
 
 ### M12 — Action Register
 
@@ -444,9 +515,9 @@ Ejemplo incorrecto: «Arturo sigue sin comprar» solo porque se recordó.
 | **Módulo** | Director IA |
 | **Propósito empresarial** | Bitácora, entidades comerciales, mejora continua y chat ejecutivo. |
 | **Cobertura actual de Director IA** | COMPLETA (respecto a su propio módulo) |
-| **Información exacta que sí consulta** | Bitácora (chat hasta 30; UI list hasta 100), entidades/alias, mejora continua, contexto AR/DICF/comentarios, anexos on-demand. En `plant_diagnosis` la bitácora entra como bloque del pack (5 sesiones; sin contenido crudo; ventana 3 meses). Continuidad conversacional **efímera** del chat (`structured_conversation_state` por request; no es fuente de negocio). First slice persistente `pending_work_items_only` (trabajo pendiente; no es evidencia). |
+| **Información exacta que sí consulta** | Bitácora (chat hasta 30; UI list hasta 100), entidades/alias, mejora continua, contexto AR/DICF/comentarios, anexos on-demand. En `plant_diagnosis` la bitácora entra como bloque del pack (5 sesiones; sin contenido crudo; ventana 3 meses). Continuidad conversacional **efímera** del chat (`structured_conversation_state` por request; no es fuente de negocio; `active_date` efímero en hilos diarios). First slice persistente `pending_work_items_only` (trabajo pendiente; no es evidencia). Pack diario `daily_sales_deviation` (venta de ayer; no es fuente mensual). |
 | **Información que no consulta** | History/transcript como hecho de DB. Authz cacheada. Payloads de evidencia guardados. El `history` del request no es evidencia. |
-| **Archivos actuales relacionados** | `lib/director-ia.js`, `director-ia-context.js`, `director-ia-chat.js`, `director-ia-conversation-state.js`, `director-ia-persistent-memory.js`, `director-ia-bitacora.js`, `comercial-entidad.js`, `sql/017_director_ia_pending_work_items.sql`, `frontend-dashboard/modules/director-ia/*` |
+| **Archivos actuales relacionados** | `lib/director-ia.js`, `director-ia-context.js`, `director-ia-chat.js`, `director-ia-conversation-state.js`, `director-ia-persistent-memory.js`, `director-ia-daily-deviation.js`, `director-ia-bitacora.js`, `comercial-entidad.js`, `sql/017_director_ia_pending_work_items.sql`, `frontend-dashboard/modules/director-ia/*` |
 | **Endpoints actuales relacionados** | `/api/director-ia/context`, `/mejora-continua`, `/bitacora*`, `/comercial-entidades*`, `/comercial-entidad-alias*`, `/chat` |
 | **Tablas o vistas relacionadas** | `arr.director_ia_bitacora`, `arr.comercial_entidad`, `arr.comercial_entidad_alias`, `arr.director_ia_pending_work_items` (DDL en repo; **habilitada en un entorno solo si SQL 017 fue aplicado allí**) |
 | **Funciones existentes reutilizables** | `askDirectorIa`, `buildDirectorIaContextPayload`, CRUD bitácora/entidades |
@@ -455,7 +526,7 @@ Ejemplo incorrecto: «Arturo sigue sin comprar» solo porque se recordó.
 | **Permisos aplicables** | `ENABLE_DIRECTOR_IA`; JWT; acceso planta. |
 | **Nivel de riesgo** | MEDIO (chat + bitácora); mutaciones entidades MEDIO. |
 | **Dependencias** | Action Register, DICF, ARR/IGF on-demand, OpenAI. |
-| **Observaciones verificadas** | Flag FE `is-enabled.ts` vs BE `isDirectorIaEnabled()` pueden diverger. **Sync transversal** `IMPL-DIRECTOR-IA-PLANT-DIAGNOSIS-EVIDENCE-ASSEMBLY-001` (merge `7faa3ead`): bitácora entra en el pack `plant_diagnosis`. **Sync transversal** `IMPL-DIRECTOR-IA-CONVERSATIONAL-CONTINUITY-001`: `structured_conversation_state` efímero. **Sync transversal** `IMPL-DIRECTOR-IA-PERSISTENT-CONVERSATIONAL-MEMORY-001`: `pending_work_items_only` (MEMORY ≠ EVIDENCE; requery+authz al retomar; no EKS/IES/N5). M13 **sigue COMPLETA**. Scoring M0–M20 vigente **sin cambio**: 10.5/20 = **52.5%**. |
+| **Observaciones verificadas** | Flag FE `is-enabled.ts` vs BE `isDirectorIaEnabled()` pueden diverger. **Sync transversal** `IMPL-DIRECTOR-IA-PLANT-DIAGNOSIS-EVIDENCE-ASSEMBLY-001` (merge `7faa3ead`): bitácora entra en el pack `plant_diagnosis`. **Sync transversal** `IMPL-DIRECTOR-IA-CONVERSATIONAL-CONTINUITY-001`: `structured_conversation_state` efímero. **Sync transversal** `IMPL-DIRECTOR-IA-PERSISTENT-CONVERSATIONAL-MEMORY-001`: `pending_work_items_only` (MEMORY ≠ EVIDENCE; requery+authz al retomar; no EKS/IES/N5). **Sync transversal** `IMPL-DIRECTOR-IA-DAILY-DEVIATION-001`: rama `daily_sales_deviation` en el chat legado (pack diario; HILO; una llamada OpenAI; `active_date` efímero; no memoria de fecha). M13 **sigue COMPLETA**. Scoring M0–M20 vigente **sin cambio**: 10.5/20 = **52.5%**. |
 
 ### M14 — Usuarios admin
 
@@ -995,7 +1066,7 @@ Ejemplo incorrecto: «Arturo sigue sin comprar» solo porque se recordó.
 - **Endpoint relacionado:** Chat `POST /api/director-ia/chat`; semántica de `POST /api/dashboard/delta-venta-datos` (sin HTTP interno)
 - **Tablas consultadas:** `arr.ventas_diarias_cliente`
 - **Evidencia de integración actual:** Intent `delta_sales`; tool `get_delta_sales` con executor real; rama in-process en `askDirectorIa`; también bloque M9.venta en `financial_diagnosis` (sin early-return)
-- **Información que no puede concluirse con esta fuente:** Causalidad; Delta Descuento; Delta Ingreso; ARR snapshot general
+- **Información que no puede concluirse con esta fuente:** Causalidad; Delta Descuento; Delta Ingreso; ARR snapshot general; desviación **diaria** de un día calendario (intent `daily_sales_deviation`; no es M9 mensual)
 
 ### Fuente: Delta Descuento
 
@@ -1032,8 +1103,8 @@ Ejemplo incorrecto: «Arturo sigue sin comprar» solo porque se recordó.
 - **Ausencia / error:** distinguir `null`, `0`, `DATA_NOT_FOUND`, `SOURCE_*`, `TOOL_ERROR` (`error_kind`). `ABSENCE_CONFIRMED` **no** se emite en este path (Evidence Builder / chat legado). `null` ≠ `0`; ausencia ≠ `0`; error ≠ ausencia.
 - **Partial failure:** fuentes OK se conservan; missing/error se marca; no se presenta evidencia parcial como diagnóstico completo; no se fabrica evidencia.
 - **Semántica:** puede señalar coincidencias, tensiones y limitaciones. **No** correlación = causalidad; **no** «IGF causó ARR»; **no** «el delta prueba la causa». No IES runtime. No Reasoning Engine N5.
-- **Routing preservado:** `igf_status`, `arr_status`, `delta_sales`, `delta_discount`, `delta_income`, M6, M11, M12, M18, `plant_diagnosis` (otro intent; no fusiona M9 en el pack de planta).
-- **Información que no puede concluirse con esta fuente:** causa confirmada; responsable; impacto causal; runtime IES/N5; GET `sources.igf|arr`; diagnóstico de planta (es otro intent: `plant_diagnosis`)
+- **Routing preservado:** `igf_status`, `arr_status`, `delta_sales`, `delta_discount`, `delta_income`, M6, M11, M12, M18, `plant_diagnosis` (otro intent; no fusiona M9 en el pack de planta), `daily_sales_deviation` (otro intent; granularidad diaria; no degrada este path mensual).
+- **Información que no puede concluirse con esta fuente:** causa confirmada; responsable; impacto causal; runtime IES/N5; GET `sources.igf|arr`; diagnóstico de planta (es otro intent: `plant_diagnosis`); desviación diaria de venta (es otro intent: `daily_sales_deviation`)
 
 ### Fuente: Diagnóstico de planta multi-fuente (transversal)
 
@@ -1049,7 +1120,7 @@ Ejemplo incorrecto: «Arturo sigue sin comprar» solo porque se recordó.
 - **Materialidad comercial (`commercial_materiality_and_coverage`):** magnitud homogénea en **kg**; campo `kg_mes_real` = kg observados del **mes de la fila**. `null` ≠ `0` (null no entra al ranking ni al denominador). Periodo explícito (dejaron: mes previo; disminuyeron: mes vigente). Denominador explícito (suma de `kg_mes_real` finitos de la categoría). Top-N=5 determinístico (kg desc, empate por nombre/canal/subcanal). `kg_mes_forecast` es proyección a cierre; **no** se documenta ni se usa `kg_mes_forecast − kg_mes_real` como venta perdida. Concentración matemática ≠ causalidad: identifica **dónde** está la magnitud, no **por qué** ocurrió. Sin score compuesto. Sin mezclar kg con MXN ni con días vencidos.
 - **Cobertura DICF:** join `cliente_key` con patrón canónico M11/`buildClienteKey` (labels `Dejaron de comprar` / `Disminuyeron` / `Aumentaron` / `Nuevo` + `estado` almacenado). **No** join por nombre libre. Acción DICF asociada = cobertura registrada. Sin acción ≠ prueba de que nadie trabaje el caso. Responsable de acción ≠ responsable de la caída. Acción vencida ≠ negligencia. Acción cerrada ≠ éxito. Sin `cliente_key` derivable: cobertura desconocida (no se afirma ausencia).
 - **Sugerencia textual (chat legado):** el modelo puede señalar qué casos conviene revisar primero (magnitud/concentración y cobertura como razones **separadas**). **No** es Recommendation N5. **No** es MAT_*. **No** es IES. **No** es causalidad. **No** es mandato. **No** writes.
-- **Diferido (no integrado en este slice):** explicación de desviaciones diarias; «¿por qué bajó la venta ayer?»; «¿por qué subió descuento/kg?»; cierre de brechas de evidencia como workflow (qué información falta / quién puede aportarla, salvo vínculo físico a una acción); trade-offs económicos (recuperar vs no recuperar; margen por cliente; oferta estructurada de competencia); before → action → after; agenda del Director; seguimiento/repriorización; persistir recomendaciones.
+- **Diferido (no integrado en este slice de planta):** «¿por qué subió descuento/kg ayer?» (descuento/kg diario **no** implementado); trade-offs económicos (recuperar vs no recuperar; margen por cliente; oferta estructurada de competencia); before → action → after; agenda del Director; seguimiento/repriorización; persistir recomendaciones. La desviación **diaria de venta** («¿por qué bajó la venta ayer?») es **otro intent**: `daily_sales_deviation` (no forma parte de este pack mensual de planta).
 - **Provenance:** seis bloques separados. Cada uno conserva `status`, `plant`, `period`/`window`, `payload`, `source`/`evidence`, `absence`/`error`. La materialidad preserva `cliente_key`, magnitud, unidad, periodo, denominador, provenance. No fusionar procedencia.
 - **Planta:** `planta_id` común; cross-planta bloqueado; una fuente no amplía scope.
 - **Periodos:** cada fuente conserva su corte real (AR snapshot; DICF fechas de acción; bitácora 3 meses; ARR/IGF YYYY-MM; CS year/month materializado). `alignment.silently_aligned = false`. `heterogeneous_windows = true`. Mismatch YYYY-MM IGF/ARR/CS visible. **No** alineación silenciosa.
@@ -1058,8 +1129,29 @@ Ejemplo incorrecto: «Arturo sigue sin comprar» solo porque se recordó.
 - **Ausencia / error:** distinguir `null`, `0`, `DATA_NOT_FOUND`, `SOURCE_RESTRICTED`, `SOURCE_*`, `TOOL_ERROR`, unauthorized. `null` ≠ `0`; ausencia ≠ `0`; error ≠ ausencia; `SOURCE_RESTRICTED` ≠ missing.
 - **Semántica:** puede señalar riesgos observables, acciones/responsables registrados, coincidencias, tensiones, limitaciones, concentración de kg y cobertura DICF. **No** correlación = causalidad; **no** «AR causó IGF»; **no** «comentario DICF prueba causa»; **no** «KPI identifica responsable»; **no** «Julio es responsable de la caída».
 - **OpenAI:** una llamada final. No una llamada por fuente.
-- **Routing preservado:** `financial_diagnosis`, `igf_status` / `arr_status`, `commercial_state` (listas), DICF focused, bitácora, AR, `delta_*`, M5/M6/M11/M12/M18.
-- **Información que no puede concluirse con esta fuente:** causa confirmada; responsable del desempeño; impacto causal; runtime IES/N5; Recommendation N5; MAT_*; M9; GET `sources.igf|arr|commercial_state`; recálculo DICF; venta perdida = forecast−real; trade-off económico; agenda del Director; desviación diaria
+- **Routing preservado:** `financial_diagnosis`, `igf_status` / `arr_status`, `commercial_state` (listas), DICF focused, bitácora, AR, `delta_*`, M5/M6/M11/M12/M18, `daily_sales_deviation`.
+- **Información que no puede concluirse con esta fuente:** causa confirmada; responsable del desempeño; impacto causal; runtime IES/N5; Recommendation N5; MAT_*; M9; GET `sources.igf|arr|commercial_state`; recálculo DICF; venta perdida = forecast−real; trade-off económico; agenda del Director; pack diario de venta (es otro intent: `daily_sales_deviation`)
+
+### Fuente: Desviación diaria de venta (transversal)
+
+- **Dominio:** Chat legado `daily_sales_deviation` (no es un módulo M0–M20; no puntúa). First slice `daily_sales_plus_business_evidence`.
+- **Cobertura actual:** PARCIAL respecto a «por qué bajó la venta ayer» (hechos + matemáticas + evidencia relacionada + huecos; **no** causa). No cambia M8 PARCIAL, M9 COMPLETA, M11 PARCIAL ni M13 COMPLETA.
+- **Archivo de acceso:** `lib/director-ia-daily-deviation.js`; rama `askDirectorIa` en `lib/director-ia-chat.js`; planner `isDailySalesDeviationQuestion` **antes** de `financial_diagnosis` / `delta_sales`.
+- **Función de acceso:** `loadDailySalesDeviationForChat` → `assembleDailySalesDeviationEvidence` → prompt con detección / matemática / evidencia / huecos + `HILO` → **una** llamada `openaiDirectorIaChat` por turno.
+- **Endpoint relacionado:** `POST /api/director-ia/chat` (in-process; sin HTTP interno; sin writes)
+- **Tablas consultadas:** `arr.ventas_diarias_cliente` (kg, fecha, cliente, canal); `arr.dicf_acciones` y `arr.cliente_comentarios` **solo** por `cliente_key`. No join por nombre. **No** `arr.descuentos_diarios_cliente` en este slice.
+- **Fecha:** timezone `America/Mexico_City`. Ayer = día calendario completo. Hoy no entra. Día sin filas ≠ 0. `target_date` explícito. `active_date` efímero en el hilo; requery cada turno; no memoria persistente de fecha.
+- **Referencia:** `same_weekday_recent_average`, ventana 14 días, mismo ISODOW, solo días con filas, N observaciones explícito. Siempre se declara contra qué se comparó. **No** día anterior por default.
+- **Detección:** `target_date`, kg observados, tipo de referencia, kg de referencia, N, delta kg, delta %.
+- **Matemática:** contribución por cliente y por canal al delta vs la referencia; top contributors; reconciliación con el total. **Contribución matemática ≠ causa.**
+- **Evidencia de negocio:** DICF + comments por `cliente_key`. Comentario ≠ causa probada. Acción ≠ causa. Responsable de acción ≠ responsable de la caída.
+- **Huecos:** contribuidores materiales sin evidencia suficiente. Gap ≠ «no existe causa». Gap = el pack actual no alcanza para explicar empresarialmente el movimiento.
+- **Authz:** planta actual, rol actual, `plantas_permitidas`, no cross-plant, fail-closed. No amplía M9. GA/GV `SOURCE_RESTRICTED`.
+- **Ausencia / error:** 0 real ≠ `null` ≠ día sin filas ≠ referencia insuficiente ≠ `DATA_NOT_FOUND` ≠ `SOURCE_RESTRICTED` ≠ `TOOL_ERROR`.
+- **OpenAI:** una llamada por turno. GPT conserva síntesis, explicación, qué llama la atención, qué sabemos / no sabemos, qué falta, follow-ups. El runtime **no** programa una respuesta final rígida.
+- **Routing:** gana sobre `financial_diagnosis` y `delta_sales` cuando hay venta + **ayer**. Paths mensuales se preservan.
+- **Descuento/kg:** **NO IMPLEMENTADO.** Diferido. Readiness only: `SUM(monto)/SUM(kg)`; no average-of-averages; sin canal físico.
+- **Información que no puede concluirse con esta fuente:** causa empresarial; «Arturo causó la caída»; competencia como prueba; acción como causa; responsable de la caída; descuento/kg diario; M9 mensual; IES/N5
 
 ### Fuente: Duplicados
 
@@ -1119,7 +1211,7 @@ Ejemplo incorrecto: «Arturo sigue sin comprar» solo porque se recordó.
 | 5 | ¿La caída proviene de venta o descuento? | Parcialmente (puede señalar tensiones entre bloques; no atribución causal) | PARCIAL | Mismos bloques `financial_diagnosis`; `delta_*` si el wording es «cómo cambió venta/descuento/ingreso» | `assembleFinancialDiagnosisEvidence`; loaders M9 si intent `delta_*` | Atribución automática venta vs descuento como causa | Alto |
 | 6 | ¿Cómo va ARR contra la meta? | Parcialmente | PARCIAL | ARR annex | `loadArrProyForPlant` | Meta/UI completa ARR; depende de wording regex | Medio |
 | 7 | ¿Cómo va IGF contra el compromiso? | Parcialmente | PARCIAL | IGF annex + composición de 1 fila | `loadIgfCommitSnapshot` / `extractIgfComposition` / `get_igf_snapshot` | Versiones/HG UI; `sources.igf` no en GET; no es tendencia (M9) ni causa | Medio |
-| 8 | ¿Qué clientes explican la desviación? | Parcialmente | PARCIAL | commercial_state / top clientes IGF-ARR / DICF | `loadCommercialStateForChat` (20 clientes), `loadTopClientesDescBrief` (8) | Universo completo de clientes | Medio (top-N) |
+| 8 | ¿Qué clientes explican la desviación? | Parcialmente (mensual: commercial_state/top. Si es **venta ayer**, es `daily_sales_deviation`) | PARCIAL | commercial_state / top clientes IGF-ARR / DICF; pack diario si ayer | `loadCommercialStateForChat` (20 clientes), `loadTopClientesDescBrief` (8); `loadDailySalesDeviationForChat` si venta+ayer | Universo completo; causa empresarial | Medio (top-N); alto si contribución = causa |
 | 9 | ¿En qué etapa está un folio? | Sí (estatus observado + etapa derivada; no es historial ni tablero HTTP) | PARCIAL | Folios (`public.folios.estatus`) | `loadFolioStatusForChat` / `get_folio_status` (SELECT-only; **no** `GET /kanban` ni `GET /folios/:id`) | Contenido PDF/S3, cheque/póliza, autoavance, tablero HTTP | Alto si se lee como columna DB `etapa` o como kanban mutante |
 | 10 | ¿Por qué está detenido un folio? | No de forma fiable | INDIRECTA máx. | Comentarios folio | `loadFolioComentariosForDirectorIa` | Estatus, timeline, permisos de avance | Alto |
 | 11 | ¿Cuál fue el último movimiento del folio? | Sí (eventos observados de `public.folio_historial`; no es GET `/timeline` ni tablero HTTP) | PARCIAL | Historial (`public.folio_historial`) | `loadFolioHistoryForChat` / `get_folio_history` (SELECT-only; **no** `GET /timeline`; **no** `dedupeHistorialByStage`) | Contenido PDF/S3, cheque/póliza, transiciones inventadas, actor sistema, tablero HTTP | Alto si se lee como transición, como GET `/timeline` o como historial deduplicado |
@@ -1155,6 +1247,9 @@ Ejemplo incorrecto: «Arturo sigue sin comprar» solo porque se recordó.
 | ¿Qué falta saber? / ¿Quién puede darnos eso? / ¿Para qué lo necesitas? | Sí en la sesión: gap derivado del pack fresco; persona solo con vínculo físico. El gap objetivo puede persistirse como work item | PARCIAL | `pending_information_gap` del requery; opcional `arr.director_ia_pending_work_items` | `derivePendingInformationGap` / `upsertActiveWorkItem` | Inventar responsable; tratar el pendiente como hecho actual | Alto si se nombra persona sin acción ligada |
 | ¿Qué pasó con Arturo? / ¿En qué quedó? / ¿Seguimos con…? (sesión nueva) | Sí si hay work item `active` del usuario+planta y SQL 017 está aplicado en ese entorno; requery+authz; memory ≠ evidence | PARCIAL (no módulo) | Work item + pack fresco | `classifyPersistentMemoryTurn` / `retrieveActiveWorkItems` / loaders | Afirmar «sigue sin comprar» solo por memoria; cross-user/plant; entorno sin SQL 017 | Alto si se lee el pendiente como estado del cliente |
 | ¿Recuerdas lo de ayer / de la otra sesión? (history completo / semantic memory) | No como transcript ni long-term semántico. Sí el **pendiente de trabajo** del first slice | PARCIAL / diferido | Solo `pending_work_items_only` | `lib/director-ia-persistent-memory.js` | Full history; summaries; preferencias; conclusiones validadas | Alto si se afirma memoria long-term de conversación |
+| ¿Por qué bajó la venta ayer? / ¿Qué pasó ayer con la venta? / ¿Por qué vendimos menos ayer? | Sí (pack diario; no causa; no M9 mensual) | PARCIAL (transversal; no módulo) | `arr.ventas_diarias_cliente` + DICF/comments por `cliente_key` | `loadDailySalesDeviationForChat` / `assembleDailySalesDeviationEvidence` | Causa; descuento/kg diario; día anterior como referencia; join por nombre | Alto si se lee contribución como causa o como `financial_diagnosis`/`delta_sales` |
+| ¿Contra qué la comparas? / ¿Qué clientes explican más? / ¿Y por canal? (tras venta ayer) | Sí si `parent_intent = daily_sales_deviation`; requery; `active_date` efímero | PARCIAL (continuidad efímera) | Pack fresco diario + `HILO` | `resolveConversationTurn` / `inheritParentIntent` / loader diario | Tratar `active_date` como memoria persistente; HILO como hecho | Alto si se afirma causa o se reusa fecha cross-session |
+| ¿Sabemos por qué? / ¿Qué falta investigar? / ¿Quién puede aclararlo? (tras venta ayer) | Sí: huecos del pack fresco; persona solo con vínculo físico a acción | PARCIAL | `information_gaps` del requery | `derivePendingInformationGap` / pack diario | Inventar responsable de la caída; persistir la fecha diaria | Alto si se nombra culpa o se trata el gap como «no hay causa» |
 
 ---
 
@@ -1280,7 +1375,7 @@ Escala 1–5. Prioridad derivada de: valor ejecutivo × disponibilidad de funcio
 
 | Campo | Contenido |
 |-------|-----------|
-| **Evidencia** | `lib/director-ia-chat.js`, `lib/director-ia-planner.js`, `lib/director-ia-conversation-state.js`, `lib/director-ia-igf-arr.js` (`IGF_SIGNAL_RE`, `ARR_SIGNAL_RE`, `PLANT_FINANCIAL_KPI_RE`), `isCommercialStateListQuestion`, etc. El intent `financial_diagnosis` ya no cae a un solo `delta_*` ni al annex IGF/ARR exclusivo: ensambla IGF+ARR+M9. El intent `plant_diagnosis` ya no cae al dump JSON de Action Register: ensambla AR+DICF+bitácora+ARR+IGF+CS SELECT-only (**sin M9**) y, sobre ese pack, materialidad `kg_mes_real` + concentración top-5 + cobertura DICF por `cliente_key`. Un follow-up defendible con `parent_intent` válido **no** se reclasifica desde cero (`inheritParentIntent`). `unknown` sin estado válido clarifica; **no** cae al dump AR. `igf_status` / `arr_status` / `delta_*` / `financial_diagnosis` / `commercial_state` (listas) / M6 / M11 / M12 / M18 se preservan. |
+| **Evidencia** | `lib/director-ia-chat.js`, `lib/director-ia-planner.js`, `lib/director-ia-conversation-state.js`, `lib/director-ia-daily-deviation.js`, `lib/director-ia-igf-arr.js` (`IGF_SIGNAL_RE`, `ARR_SIGNAL_RE`, `PLANT_FINANCIAL_KPI_RE`), `isCommercialStateListQuestion`, etc. El intent `daily_sales_deviation` gana para venta + **ayer** y **no** cae a `financial_diagnosis` ni a `delta_sales` mensuales. El intent `financial_diagnosis` ya no cae a un solo `delta_*` ni al annex IGF/ARR exclusivo: ensambla IGF+ARR+M9. El intent `plant_diagnosis` ya no cae al dump JSON de Action Register: ensambla AR+DICF+bitácora+ARR+IGF+CS SELECT-only (**sin M9**) y, sobre ese pack, materialidad `kg_mes_real` + concentración top-5 + cobertura DICF por `cliente_key`. Un follow-up defendible con `parent_intent` válido **no** se reclasifica desde cero (`inheritParentIntent`). `unknown` sin estado válido clarifica; **no** cae al dump AR. `igf_status` / `arr_status` / `delta_*` / `financial_diagnosis` / `plant_diagnosis` / `daily_sales_deviation` / `commercial_state` (listas) / M6 / M11 / M12 / M18 se preservan. |
 | **Impacto posible** | Preguntas legítimas pueden no activar la fuente correcta fuera de `financial_diagnosis` / `plant_diagnosis` si no hay hilo heredable. El listado de folios GASTOS/INVERSIONES ya va a M6; «cómo van los gastos» / margen / rentabilidad pueden ir a `financial_diagnosis` o al annex IGF según wording. Export/xlsx sigue fuera. |
 | **Dominios afectados** | M6, M7, M8, M9, M11, M12, M13. |
 | **¿Bloquea expansión?** | No; aumenta riesgo de veracidad al añadir fuentes. |
@@ -1290,7 +1385,7 @@ Escala 1–5. Prioridad derivada de: valor ejecutivo × disponibilidad de funcio
 
 | Campo | Contenido |
 |-------|-----------|
-| **Evidencia** | Continuidad **efímera**: `askDirectorIa` reconstruye `structured_conversation_state` (`lib/director-ia-conversation-state.js`). **No hay tabla de transcript.** First slice persistente: `arr.director_ia_pending_work_items` + `lib/director-ia-persistent-memory.js`. OpenAI recibe `HILO` y, en retoma, `PENDIENTE DE TRABAJO`; no history crudo. |
+| **Evidencia** | Continuidad **efímera**: `askDirectorIa` reconstruye `structured_conversation_state` (`lib/director-ia-conversation-state.js`), incluido `active_date` efímero en hilos `daily_sales_deviation`. **No hay tabla de transcript.** **No** hay memoria persistente de fecha diaria. First slice persistente: `arr.director_ia_pending_work_items` + `lib/director-ia-persistent-memory.js`. OpenAI recibe `HILO` y, en retoma, `PENDIENTE DE TRABAJO`; no history crudo. |
 | **Impacto posible** | Hilo dentro de la sesión. Entre sesiones solo se recuerda **trabajo pendiente** (si SQL 017 está aplicado en el entorno). No hay auditoría persistente de respuestas. |
 | **Dominios afectados** | M13 (chat). **No** cambia etiqueta de módulo. |
 | **¿Bloquea expansión?** | No para lectura de negocio. Full history / semantic memory siguen diferidos. |
@@ -1404,11 +1499,13 @@ Escala 1–5. Prioridad derivada de: valor ejecutivo × disponibilidad de funcio
 
 Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Register**, **DICF**, **bitácora**, **comentarios** (cliente y folio) y **entidades comerciales**, con **anexos financieros on-demand** (IGF/ARR/margen/estado comercial) activados por **regex** en el chat, **diagnóstico financiero multi-fuente** en el chat legado (`financial_diagnosis` → `loadFinancialDiagnosisForChat` / `assembleFinancialDiagnosisEvidence`: bloques IGF + ARR + M9 con provenance separada; periodos reales; mismatch visible; authz más restrictiva; una llamada OpenAI; `openai_call_count = 1`; GA puede abortar sin llamar; no causalidad; no IES; no Reasoning Engine N5; no puntúa módulos), **diagnóstico de planta multi-fuente** en el chat legado (`plant_diagnosis` → `loadPlantDiagnosisForChat` / `assemblePlantDiagnosisEvidence`: bloques action_register + dicf + bitacora + arr + igf + commercial_state SELECT-only `arr.dicf_cliente_mes`; slice `commercial_materiality_and_coverage`: `kg_mes_real` = kg observados del mes de la fila; concentración top-5 con denominador/periodo explícitos; cobertura DICF por `cliente_key` (patrón M11; no join por nombre); el chat legado puede sugerir textualmente qué revisar primero; **no** `kg_mes_forecast − kg_mes_real` como venta perdida; **sin M9**; **sin** `computeDicf`; provenance de seis bloques; `assembly_status` explícito; GA partial `SOURCE_RESTRICTED` en IGF/ARR/CS sin abortar el pack; mismatch de periodos visible; una llamada OpenAI; no causalidad; no IES; no N5; no Recommendation N5; no MAT_*; no mandato; no puntúa módulos), incluida la **composición observada de un snapshot IGF** (M7 slice: `get_igf_snapshot` / `loadIgfCommitSnapshot` / `extractIgfComposition`; 1 fila de `igf.compromiso_lines`; `*_kg` = $/kg; null ≠ 0; `hg_kg` no invertido; `gasto_kg` fuera de fórmula; no se ejecuta `recalcularUtilYResultado`; no overlay; no deltas — M9; composición ≠ causalidad), **análisis on-demand de posibles duplicados de folios** (M16: `findDuplicatePairs`, no confirmación), **consulta on-demand de KPIs de dashboard y proyectos por planta** (M3: `get_dashboard_kpis` / `get_project_status`; no catálogo global; no creación de proyectos), **consulta on-demand de Delta Venta / Descuento / Ingreso de periodos reales** (M9: `get_delta_sales` / `get_delta_discount` / `get_delta_income`; no forecast con escritura; no M19), **consulta on-demand de estatus/etapa de folio** (M2 slice `folio_status`: `get_folio_status` / `loadFolioStatusForChat`; SELECT-only; no GET kanban; no GET `/folios/:id`; no autoavance), **consulta on-demand del historial de folio** (M2 slice `folio_history`: `get_folio_history` / `loadFolioHistoryForChat`; SELECT-only de `public.folio_historial`; no GET `/timeline`; no `dedupeHistorialByStage`; no autoavance), **consulta on-demand de metadata documental de folio** (M2 slice `folio_documents`: `get_folio_documents` / `loadFolioDocumentsMetadataForChat`; SELECT-only de `public.folio_archivos` con proyección segura; no S3; no PDF; no `s3_key`; no «faltan documentos»), y **consulta on-demand de GASTOS e INVERSIONES de folios** (M6 slice query JSON: `get_expense_analysis` / `get_investment_analysis` / `loadGastosInversionesForChat`; SELECT `public.folios` + `expandCategoriaRows`; `YYYY-MM` obligatorio; no Excel; no Export; no IGF), y **consulta on-demand de Taller por AT** (M5 slice query JSON: `get_taller_at` / `loadTallerAtForChat`; SELECT `public.folios` con `categoria LIKE '%TALLER%'` + `expandTallerRows`; unidad = token de `public.folios.unidad` (`AT-15` / `PT-03`); **no** `at_id`; **no** catálogo; `YYYY-MM` obligatorio; no Excel; no workbook; no duplicados taller; no writes; «cómo va Taller» sigue Action Register; familia TALLER de M4 ≠ detalle por unidad), y **consulta on-demand de la matriz comparativa de clasificación de apoyos** (M4 slice query JSON: `get_clasificacion_apoyos_query` / `loadClasificacionApoyosForChat`; SELECT `public.folios` + `buildClasificacionMatrix`; `mes_a` vs `mes_b` obligatorios y distintos; GASTOS / INVERSIONES / TALLER separados; sin fallback a 6 plantas; no COMPARAR; no Excel), y **consulta on-demand del carro presupuestal semanal** (M18 slice query JSON: `get_budget_status` / `loadPresupuestoSemanalForChat`; SELECT `presupuestos_semanales` + `presupuesto_folios`; no inventa semana; no filtra solo `ABIERTO`; no writes; no cheques; no WhatsApp; no `presupuesto_asignacion_detalle`), y **consulta on-demand de notas de revisión del Action Register** (M12 slice: `get_action_register_revision_notes` / `loadActionRegisterRevisionNotesForChat`; SELECT `arr.action_register_revision_notes` por `revision_id`; 1 revisión / 8 notas / 500 caracteres; última = `revision_date DESC`; `includeNotes` del context sigue `false`; no ítem; no Plaud; no M2; no binarios), y **consulta on-demand del expediente comercial factual** (M11 slice: `get_commercial_dossier` / `loadCommercialDossierForChat`; authz planta antes de datos; cliente único; SELECT `arr.dicf_cliente_mes` sin `computeDicf`; comentarios solo con `cliente_key`; acciones por `planta_id` + `cliente_key`; historial/cierre por `accion_id`; 1/8/500/8/8; procedencia separada; sin causalidad; sin bitácora). **No** opera el kanban HTTP, **no** usa `/timeline` como transporte interno, **no** lee contenido PDF/S3/pólizas/cheques/COMPARAR-Excel de clasificación/taller/Export xlsx GASTOS-INVERSIONES ni el forecast mutante de ingreso. Las escrituras propias (bitácora/entidades) existen por **API UI**, no como tools autónomos del LLM. El GET `/api/director-ia/context` **subdeclara** IGF/ARR/commercial_state respecto al chat.
 
-El chat legado mantiene **continuidad conversacional efímera** (`structured_conversation_state`: `parent_intent`, `planta_id` del request, máximo una `active_entity`, `last_evidence_bundle_type`, `pending_information_gap`). Follow-ups defendibles pueden heredar el intent padre; la evidencia se **requería** cada turno; OpenAI recibe `HILO`, no history crudo.
+El chat legado mantiene **continuidad conversacional efímera** (`structured_conversation_state`: `parent_intent`, `planta_id` del request, máximo una `active_entity`, `active_date` efímero en hilos diarios, `last_evidence_bundle_type`, `pending_information_gap`). Follow-ups defendibles pueden heredar el intent padre; la evidencia se **requería** cada turno; OpenAI recibe `HILO`, no history crudo.
 
-Además, el repositorio integra **memoria persistente `pending_work_items_only`**: pending gap + planta + entidad + intent + status en `arr.director_ia_pending_work_items`. **MEMORY ≠ CURRENT EVIDENCE.** Al retomar («¿Qué pasó con Arturo?») se revalida authz/planta/entidad y se hace requery. El `status` es del pendiente, no del cliente. No EKS / IES / N5. **Capacidad en repo = IMPLEMENTED. Activación de entorno = PENDING until SQL 017 applied.**
+Además, el repositorio integra **memoria persistente `pending_work_items_only`**: pending gap + planta + entidad + intent + status en `arr.director_ia_pending_work_items`. **MEMORY ≠ CURRENT EVIDENCE.** Al retomar («¿Qué pasó con Arturo?») se revalida authz/planta/entidad y se hace requery. El `status` es del pendiente, no del cliente. No EKS / IES / N5. **Capacidad en repo = IMPLEMENTED. Activación de entorno = PENDING until SQL 017 applied.** Esta sync **no** ejecuta SQL 017. La fecha diaria de `daily_sales_deviation` **no** se persiste.
 
-**Scoring M0–M20 tras `DOCS-DIRECTOR-IA-PERSISTENT-CONVERSATIONAL-MEMORY-SYNC-001`:** ningún módulo cambia de etiqueta. Global permanece **10.5 / 20 = 52.5%** (0.0 pp). Ni la continuidad efímera ni la memoria persistente suman 0.5.
+El chat legado integra **desviación diaria de venta** (`daily_sales_deviation` → `loadDailySalesDeviationForChat`: ayer `America/Mexico_City`; kg observados; referencia same-weekday 14 días con N explícito; delta kg/%; contribución cliente y canal; DICF + comments **solo** `cliente_key`; information gaps; HILO; una llamada OpenAI). **Contribución matemática ≠ causa.** Comentario ≠ prueba. Acción ≠ causa. Responsable de acción ≠ responsable de la caída. GPT conserva síntesis, explicación, qué llama la atención, qué sabemos / no sabemos, qué falta y follow-ups. Descuento/kg diario **no** está implementado (readiness: `SUM(monto)/SUM(kg)`; no average-of-averages; sin canal físico). No degrada M9 / `financial_diagnosis` / `plant_diagnosis`. No puntúa módulos.
+
+**Scoring M0–M20 tras `DOCS-DIRECTOR-IA-DAILY-DEVIATION-SYNC-001`:** ningún módulo cambia de etiqueta. Global permanece **10.5 / 20 = 52.5%** (0.0 pp). Ni la continuidad efímera, ni la memoria persistente, ni `daily_sales_deviation` suman 0.5.
 
 ### 2. Dominios completos (COMPLETA)
 
@@ -1441,6 +1538,7 @@ Además, el repositorio integra **memoria persistente `pending_work_items_only`*
 - Capacidad transversal `plant_diagnosis` (AR+DICF+bitácora+ARR+IGF+CS SELECT-only; `kg_mes_real` + top-5 + cobertura `cliente_key`; sin M9; sin N5): **no** es un módulo M0–M20; **no** cambia ningún módulo ni el 52.5%.
 - Capacidad transversal `structured_conversation_state` (continuidad **efímera**; HILO ≠ evidence; requery+authz; 0\|1 entidad; gap fresco): **no** es un módulo M0–M20; **no** cambia ningún módulo ni el 52.5%.
 - Capacidad transversal `pending_work_items_only` (memoria persistente de **trabajo pendiente**; MEMORY ≠ EVIDENCE; requery+authz al retomar; no EKS/IES/N5): **no** es un módulo M0–M20; **no** cambia ningún módulo ni el 52.5%. En un entorno concreto permanece inactiva hasta aplicar SQL 017.
+- Capacidad transversal `daily_sales_deviation` (venta de ayer CDMX; referencia same-weekday 14 días; contribución cliente/canal; DICF+comments por `cliente_key`; gaps; HILO; una llamada OpenAI; contribución ≠ causa; no descuento/kg): **no** es un módulo M0–M20; **no** cambia M8/M9/M11/M13 ni el 52.5%.
 
 ### 5. Dominios no integrados (NO INTEGRADA)
 
@@ -1456,6 +1554,7 @@ Además, el repositorio integra **memoria persistente `pending_work_items_only`*
 - M18 writes / cheques / WhatsApp (el query JSON ya está en PARCIAL M18; COMPLETE de M18 sigue fuera)
 - M19 Delta Ingreso AI test
 - Full conversation history / summaries / semantic long-term memory / preferencias / decisiones persistidas / memoria en EKS-IES-N5 (el first slice `pending_work_items_only` ya está en el repo; no es transcript)
+- Descuento/kg **diario** (NO IMPLEMENTADO; readiness only: `SUM(monto)/SUM(kg)`; no average-of-averages; sin canal físico)
 - Kanban HTTP / GET `/timeline` (excluido) / contenido PDF / S3 / documentos faltantes / cheque / póliza / `kanban_flow` (estatus/etapa, historial crudo y metadata documental ya están en PARCIAL M2; proyectos de `public.proyectos` ya están en COMPLETA M3)
 
 ### 6. Capacidades de lectura listas para reutilizar
@@ -1475,6 +1574,7 @@ Además, el repositorio integra **memoria persistente `pending_work_items_only`*
 | COMPARAR/CONSULTAR margen e IGF/ARR (on-demand) | `loadIgfArrAnnexForChat`, `getMargenKgPorPeriodo` |
 | CONSULTAR diagnóstico financiero multi-fuente (IGF+ARR+M9; una llamada OpenAI; no causa) | `loadFinancialDiagnosisForChat` / `assembleFinancialDiagnosisEvidence` |
 | CONSULTAR diagnóstico de planta multi-fuente (AR+DICF+bitácora+ARR+IGF+CS SELECT-only; `kg_mes_real` + top-5 + cobertura `cliente_key`; una llamada OpenAI; no M9; no causa; no N5) | `loadPlantDiagnosisForChat` / `assemblePlantDiagnosisEvidence` / `buildCommercialMateriality` / `applyDicfCoverageToMateriality` |
+| CONSULTAR desviación diaria de venta (ayer CDMX; kg; same-weekday 14 días; contribución cliente/canal; DICF+comments por `cliente_key`; gaps; una llamada OpenAI; no causa; no descuento/kg) | `loadDailySalesDeviationForChat` / `assembleDailySalesDeviationEvidence` (`lib/director-ia-daily-deviation.js`) |
 | Conservar hilo conversacional efímero (parent_intent / 0\|1 entidad / gap; HILO ≠ evidence; requery) | `resolveConversationTurn` / `buildConversationState` / `formatConversationHiloForModel` (`lib/director-ia-conversation-state.js`) |
 | Retomar pending work item entre sesiones (memory ≠ evidence; requery+authz; si SQL 017 aplicado) | `classifyPersistentMemoryTurn` / `retrieveActiveWorkItems` / `upsertActiveWorkItem` (`lib/director-ia-persistent-memory.js`; tabla `arr.director_ia_pending_work_items`) |
 | CONSULTAR composición IGF (snapshot de 1 fila; read-only; no causa; no tendencia) | `extractIgfComposition` → `formatIgfCompositionBlock` vía `get_igf_snapshot` / `loadIgfCommitSnapshot` (`igf.compromiso_lines`) |
