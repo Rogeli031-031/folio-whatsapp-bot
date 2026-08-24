@@ -67,6 +67,7 @@ const cases = [
     assert(isDirectorIaDomainReadable("inversiones") === true, "inversiones query readable");
     assert(isDirectorIaDomainReadable("clasificacion_apoyos") === true, "clasificacion query readable");
     assert(isDirectorIaDomainReadable("presupuestos") === true, "presupuestos query readable");
+    assert(isDirectorIaDomainReadable("revision_notes") === true, "revision_notes readable");
     const summary = buildDirectorIaCapabilitiesSummary();
     assert(summary.readable.length > 0, "summary readable");
     assert(summary.not_integrated.length > 0, "summary not_integrated");
@@ -107,6 +108,8 @@ const cases = [
   () => expectAllowed("comparativo de clasificación 2026-01 vs 2026-02"),
   () => expectBlocked("exportar excel de clasificación de apoyos", "clasificacion_apoyos", { requireCanReadFalse: false }),
   () => expectBlocked("comparar clasificación contra excel", "clasificacion_apoyos", { requireCanReadFalse: false }),
+  () => expectAllowed("¿Qué dicen las notas de la última revisión?"),
+  () => expectAllowed("notas de revisión 2026-08-20"),
   () => expectAllowed("¿Qué acciones están vencidas?"),
   () => expectAllowed("¿Cómo va ARR?"),
   () => expectAllowed("¿Cómo va IGF?"),
