@@ -1,14 +1,14 @@
 # CURRENT_TASK
 
 ```yaml
-task_id: "ARCH-DIRECTOR-IA-M5-TALLER-AT-READINESS-001"
+task_id: "IMPL-DIRECTOR-IA-M5-TALLER-AT-001"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-08-23"
 human_authorization: >
   AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-23.
-  Apruebo ARCH-DIRECTOR-IA-M5-TALLER-AT-READINESS-001 y autorizo G1.
+  Apruebo IMPL-DIRECTOR-IA-M5-TALLER-AT-001 y autorizo G1.
 
 gates:
   G1_task_authorization: AUTHORIZED
@@ -17,204 +17,73 @@ gates:
   G8_calibration_materiality_signature: N/A
 
 objective: >
-  Auditar físicamente un primer slice read-only de M5 — Taller por AT — para
-  que Director IA pueda consultar datos estructurados por unidad AT mediante
-  fuente SELECT-only e integración in-process, separando estrictamente Taller
-  de GASTOS, INVERSIONES, clasificación M4, Action Register y Excel.
+  Implementar el primer slice read-only de M5 — Taller por AT — para que
+  Director IA pueda consultar registros TALLER por unidad homologada AT/PT,
+  planta y periodo YYYY-MM mediante SELECT sobre public.folios e integración
+  in-process, sin Excel, sin duplicados, sin Action Register, sin HTTP interno
+  y sin writes.
 
 baseline:
-  prioritization_task: "ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-007"
-  prioritization_report: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-007.md"
+  readiness_task: "ARCH-DIRECTOR-IA-M5-TALLER-AT-READINESS-001"
+  readiness_report: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M5-TALLER-AT-READINESS-001.md"
 
   module: "M5 — Taller por AT"
-  current_state: "NO INTEGRADA"
-  expected_state_after_future_slice: "PARTIAL"
+  state_before: "NO INTEGRADA"
+  state_after: "PARTIAL"
 
   global_percentage:
-    current: 50.0
-    numerator: 10.0
+    before: 50.0
+    before_numerator: 10.0
     denominator: 20
-    expected_after_future_slice: 52.5
-    expected_numerator: 10.5
-    expected_gain_pp: 2.5
+    after: 52.5
+    after_numerator: 10.5
+    gain_pp: 2.5
 
 canonical_boundary:
-  required:
-    - "leer definición canónica exacta de M5"
-    - "confirmar qué significa Taller por AT"
-    - "confirmar qué exige COMPLETE"
-    - "separar query JSON de Excel/export/duplicados"
+  this_slice:
+    - "query JSON read-only de Taller por unidad"
+
+  still_out:
+    - "Excel/workbook"
+    - "duplicados"
+    - "writes"
+    - "cualquier capacidad canónica no incluida"
 
   rule: >
-    Un futuro slice query-only, si es válido, debe dejar M5 en PARTIAL.
-    No marcar COMPLETE si faltan capacidades canónicas como Excel u operaciones
-    adicionales.
+    Después de este slice M5 debe quedar PARTIAL, nunca COMPLETE.
 
-primary_question: >
-  ¿Existe un path SELECT-only, in-process, autorizado y semánticamente claro
-  para que Director IA consulte Taller por unidad AT, con campos y filtros
-  físicamente soportados, sin Excel, sin writes, sin Action Register y sin
-  confundir TALLER con las familias M4/M6?
+readiness_findings:
+  source: "public.folios"
 
-mandatory_audit:
+  unidad_semantics:
+    field: "unidad"
+    meaning: >
+      Token homologado físico de unidad, por ejemplo AT-15, PT-..., según
+      valores existentes en public.folios.unidad.
 
-  canonical_definition:
-    required:
-      - "leer ficha M5 vigente completa"
-      - "identificar propósito exacto"
-      - "identificar unidad AT"
-      - "identificar qué cubre query"
-      - "identificar qué queda para COMPLETE"
-      - "confirmar PARTIAL tras primer slice"
-
-  physical_sources:
-    inspect:
-      - "server.js"
-      - "helpers Taller/AT"
-      - "queries SQL reales"
-      - "tablas/vistas involucradas"
-      - "rutas GET"
-      - "rutas Excel/export"
-      - "duplicados relacionados si existen"
-
-    determine:
-      - "fuente primaria"
-      - "SELECT-only"
-      - "joins"
-      - "campos AT"
-      - "campos planta"
-      - "campos folio"
-      - "campos importe"
-      - "campos estatus"
-      - "campos fecha/periodo"
-      - "campos concepto/partida"
-
-  at_semantics:
-    required:
-      - "definir físicamente AT"
-      - "id/clave/nombre"
-      - "relación con planta"
-      - "relación con folio"
-      - "si una unidad puede repetirse"
-      - "si hay nulls"
-      - "si existe catálogo"
-
-    rules:
-      - "no inventar AT"
-      - "no asumir AT = responsable"
-      - "no asumir AT = Action Register"
-      - "no inferir planta por texto libre si no hay clave física"
-
-  taller_semantics:
-    determine:
-      - "qué registros pertenecen a TALLER"
-      - "qué predicado SQL los identifica"
-      - "qué campos son observados"
-      - "qué campos son derivados"
-      - "qué estados existen físicamente"
-      - "qué significa abierto/cerrado si aplica"
-
-    rules:
-      - "TALLER != GASTOS"
-      - "TALLER != INVERSIONES"
-      - "TALLER != Action Register"
-      - "TALLER en M4 como familia agregada != detalle M5 por AT"
-
-  period_semantics:
-    determine:
-      - "mes"
-      - "rango"
-      - "fecha"
-      - "defaults existentes"
-      - "qué necesita el primer slice"
-      - "qué ocurre sin periodo"
+    no_catalog: true
+    no_at_id: true
 
     rule: >
-      No inventar periodo. Si el producto usa periodo obligatorio o default
-      explícito, documentarlo; si no hay regla segura, clarificar.
+      No inventar at_id, catálogo ni entidad AT separada.
 
-  query_shape:
-    determine:
-      - "qué preguntas concretas puede responder"
-      - "por AT"
-      - "por planta"
-      - "por periodo"
-      - "por estatus si existe"
-      - "por folio si existe"
-      - "totales/conteos si son derivables"
+  period:
+    required: true
+    format: "YYYY-MM"
+    missing: "clarification"
 
-  action_register_boundary:
-    inspect:
-      - "cualquier uso de 'AT' que choque con Action Register"
-      - "routing actual"
-      - "planner intents"
-      - "DICF/AR si tienen vocabulario similar"
+  source_before_excel: true
 
-    rule: >
-      Taller por AT no debe absorber preguntas de Action Register ni viceversa.
+architecture:
+  intent: "taller_at"
+  tool: "get_taller_at"
+  loader: "loadTallerAtForChat"
 
-  m4_m6_boundary:
-    required:
-      - "M4 usa TALLER como familia agregada en comparativo"
-      - "M6 cubre GASTOS/INVERSIONES, no TALLER"
-      - "M5 debe aportar detalle nuevo por unidad AT"
-
-  excel_boundary:
-    inspect:
-      - "endpoint/export Excel"
-      - "workbook builders"
-      - "si consumen la misma fuente"
-
-    rule: >
-      Excel puede reutilizar la misma fuente, pero no debe ser transporte ni
-      dependencia del slice Director IA.
-
-  duplicates_boundary:
-    inspect:
-      - "duplicados"
-      - "si forman parte canónica de M5"
-      - "si el slice query debe excluirlos"
-
-    rule: >
-      No ampliar el slice a duplicados salvo que la ficha canónica y la fuente
-      lo exijan explícitamente.
-
-  authz:
-    determine:
-      - "JWT/contexto"
-      - "rol"
-      - "planta_id"
-      - "plantas_permitidas"
-      - "GA/GV"
-      - "cross-planta"
-      - "fail-closed"
-      - "authz vigente de Taller"
-
-  planner_tools:
-    inspect:
-      - "expense_analysis"
-      - "investment_analysis"
-      - "folio-related intents"
-      - "Action Register intents"
-      - "capabilities"
-      - "UNSUPPORTED_RULES"
-      - "SOURCE_NOT_INTEGRATED"
-      - "tools existentes"
-      - "executor"
-      - "chat routing"
-
-    determine:
-      - "si hace falta intent taller_at"
-      - "qué frases lo activan"
-      - "cómo evitar colisiones"
-      - "tool/executor mínimo"
-
-architecture_hypothesis:
-  preferred_path: >
+  path: >
     taller_at ->
     get_taller_at ->
-    loadTallerAtForChat(planta_id, at, periodo) ->
-    SELECT/helper estructurado ->
+    loadTallerAtForChat(planta_id, unidad, periodo) ->
+    SELECT public.folios ->
     evidencia ->
     respuesta
 
@@ -223,18 +92,42 @@ architecture_hypothesis:
     - "SELECT-only"
     - "sin HTTP interno"
     - "sin Excel"
-    - "sin writes"
+    - "sin duplicados"
     - "sin Action Register"
-    - "sin contrato nuevo"
+    - "sin writes"
 
-response_contract:
-  include_if_physically_supported:
+source_rules:
+  taller:
+    required:
+      - "usar predicado físico de TALLER verificado en readiness"
+      - "no mezclar GASTOS"
+      - "no mezclar INVERSIONES"
+
+  unidad:
+    required:
+      - "filtrar por public.folios.unidad"
+      - "usar token real"
+      - "normalización solo si existe helper físico actual"
+      - "no fuzzy match silencioso"
+
+  planta:
+    required:
+      - "planta_id autorizado"
+      - "no ampliar scope"
+
+  periodo:
+    required:
+      - "YYYY-MM"
+      - "no inventar"
+      - "no usar mes actual silenciosamente"
+
+query_scope:
+  include_if_supported:
     - "planta_id"
-    - "at_id/clave"
-    - "at_nombre"
+    - "unidad"
     - "folio_id"
     - "numero_folio"
-    - "periodo/fecha"
+    - "fecha/periodo"
     - "concepto"
     - "importe"
     - "estatus"
@@ -242,122 +135,166 @@ response_contract:
     - "total"
     - "source"
 
-  forbidden:
+  zero_rows: >
+    Respuesta válida: no se encontraron registros TALLER para esa planta,
+    unidad y periodo. No reinterpretar como error ni inexistencia histórica.
+
+semantic_boundaries:
+  - "TALLER != GASTOS"
+  - "TALLER != INVERSIONES"
+  - "TALLER != Action Register"
+  - "M5 detalle por unidad != M4 familia agregada"
+  - "unidad AT/PT != responsable"
+  - "estatus observado != atraso"
+  - "importe != desviación"
+  - "registro != causa"
+
+planner:
+  required:
+    - "habilitar intent taller_at"
+    - "detectar consultas explícitas de Taller por unidad"
+    - "preservar expense_analysis"
+    - "preservar investment_analysis"
+    - "preservar clasificación M4"
+    - "preservar intents de Action Register"
+
+  positive_examples:
+    - "¿Qué tiene Taller para AT-15 este mes?"
+    - "Muéstrame Taller de AT-15 en 2026-08"
+    - "¿Cuánto hay de Taller en PT-03 en julio?"
+
+  negative_examples:
+    - "¿Qué acciones tiene AT-15?"
+    - "¿Qué gastos hay este mes?"
+    - "¿Qué inversiones hay?"
+    - "Compara Taller contra el mes pasado"
+
+tools:
+  required:
+    - "get_taller_at executable"
+    - "executor real"
+    - "inputs planta_id, unidad, periodo"
+    - "sin params de Excel/duplicados"
+
+capabilities:
+  required:
+    - "habilitar lectura M5 query"
+    - "mantener Excel no integrado"
+    - "M5 runtime = PARTIAL"
+
+authz:
+  required:
+    - "JWT/contexto"
+    - "rol"
+    - "planta_id"
+    - "plantas_permitidas"
+    - "GA/GV según reglas reales de Taller/folios"
+    - "cross-planta bloqueado"
+    - "fail-closed"
+
+  ordering:
+    - "resolver planta"
+    - "autorizar"
+    - "consultar"
+
+  rule: >
+    No ejecutar SELECT de otra planta antes de autorización.
+
+response_policy:
+  allowed:
+    - "registros observados"
+    - "conteo"
+    - "total si se deriva de importes reales"
+    - "estatus físico"
+    - "unidad física"
+
+  forbidden_without_evidence:
     - "causa"
-    - "responsable inferido"
+    - "responsable"
     - "atrasado"
     - "urgente"
-    - "desviación"
     - "prioridad"
-    - "comparación no solicitada"
-    - "datos Action Register"
+    - "desviación"
+    - "problema"
+    - "comparación temporal no solicitada"
 
-mandatory_evidence_table:
-  columns:
-    - "surface"
-    - "helper_or_route"
-    - "physical_source"
-    - "AT_field"
-    - "plant_field"
-    - "period_field"
-    - "select_only"
-    - "excel_dependency"
-    - "side_effects"
-    - "authz"
-    - "safe_fields"
-    - "reusable"
-    - "risk"
-    - "evidence"
+excel_boundary:
+  rules:
+    - "no generar workbook"
+    - "no usar Excel como transporte"
+    - "no invocar builder de export"
+    - "la fuente estructurada es public.folios"
 
-mandatory_gap_table:
-  columns:
-    - "gap_id"
-    - "missing_capability"
-    - "required_for_query_slice"
-    - "reusable_component"
-    - "proposed_change"
-    - "architecture_change"
-    - "contract_change"
-    - "authz_change"
-    - "complexity"
-    - "blocking"
+duplicates_boundary:
+  rules:
+    - "duplicados fuera"
+    - "no consultar/crear lógica de duplicados"
 
-tests_to_design_if_ready:
-  - "consulta por AT"
-  - "AT existente"
-  - "AT inexistente"
-  - "AT ambiguo si aplica"
-  - "por planta"
-  - "por periodo"
-  - "sin periodo"
-  - "TALLER separado de GASTOS"
-  - "TALLER separado de INVERSIONES"
-  - "TALLER separado de Action Register"
-  - "folios"
-  - "importe"
-  - "estatus"
-  - "0 registros"
-  - "nulls"
-  - "conteo"
-  - "total"
-  - "planta autorizada"
-  - "planta no autorizada"
-  - "plantas_permitidas"
-  - "cross-planta"
-  - "GA/GV"
-  - "intent"
-  - "tool/executor"
-  - "chat wiring"
-  - "no Excel"
-  - "no duplicados si fuera de slice"
-  - "no HTTP interno"
-  - "sin writes"
+action_register_boundary:
+  rules:
+    - "no leer Action Register para este slice"
+    - "no interpretar AT como Action Register"
+    - "no absorber preguntas de acciones"
 
-decision_rules:
+m4_m6_boundary:
+  rules:
+    - "M4 permanece dominio de comparativo agregado"
+    - "M6 permanece GASTOS/INVERSIONES"
+    - "M5 cubre detalle TALLER por unidad"
 
-  ready:
-    all:
-      - "fuente Taller físicamente clara"
-      - "unidad AT físicamente definida"
-      - "SELECT-only"
-      - "scope planta preservable"
-      - "authz preservable"
-      - "period semantics segura"
-      - "Taller separable de M4/M6/AR"
-      - "Excel separable"
-      - "path in-process posible"
-      - "tests determinísticos"
+tests_required:
+  focal:
+    - "intent taller_at"
+    - "tool executable"
+    - "executor"
+    - "consulta AT-15"
+    - "consulta PT"
+    - "unidad existente"
+    - "unidad inexistente"
+    - "periodo YYYY-MM válido"
+    - "periodo ausente -> clarificación"
+    - "periodo inválido"
+    - "TALLER separado de GASTOS"
+    - "TALLER separado de INVERSIONES"
+    - "M4 preservado"
+    - "Action Register preservado"
+    - "folios"
+    - "importe"
+    - "estatus"
+    - "0 registros"
+    - "nulls"
+    - "conteo"
+    - "total"
+    - "planta autorizada"
+    - "planta no autorizada"
+    - "plantas_permitidas"
+    - "cross-planta"
+    - "GA/GV"
+    - "sin Excel"
+    - "sin workbook"
+    - "sin duplicados"
+    - "sin HTTP interno"
+    - "sin writes"
 
-    outcome: "DONE_PENDING_REVIEW"
-    next_task: "IMPL-DIRECTOR-IA-M5-TALLER-AT-001"
-
-  stopped:
-    when:
-      - "AT no tiene identidad física utilizable"
-      - "fuente Taller depende inseparablemente de Excel"
-      - "routing Taller/AR no puede separarse"
-      - "authz no puede preservarse"
-      - "semántica requiere contrato nuevo"
-
-    outcome: "STOPPED"
-    next_task: null
-
-state_and_percentage:
-  current_task:
-    state_change: false
-    percentage_change: false
-
-  if_future_impl_succeeds:
-    m5_state: "PARTIAL"
-    numerator: 10.5
-    denominator: 20
-    percentage: 52.5
-    gain_pp: 2.5
+  regression:
+    - "capabilities"
+    - "planner"
+    - "tool orchestrator"
+    - "suite Director IA completa"
 
 in_scope:
   writable:
     - "docs/dev-loop/CURRENT_TASK.md"
-    - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M5-TALLER-AT-READINESS-001.md"
+    - "docs/dev-loop/reports/IMPL-DIRECTOR-IA-M5-TALLER-AT-001.md"
+    - "lib/director-ia-capabilities.js"
+    - "lib/director-ia-chat.js"
+    - "lib/director-ia-planner.js"
+    - "lib/director-ia-tools.js"
+    - "lib/director-ia-m5-taller-at.js"
+    - "scripts/test-director-ia-capabilities.js"
+    - "scripts/test-director-ia-planner.js"
+    - "scripts/test-director-ia-tool-orchestrator.js"
+    - "test/director-ia-m5-taller-at.test.js"
 
   read_only:
     - "AGENTS.md"
@@ -373,83 +310,104 @@ in_scope:
     - "package-lock.json"
 
 out_of_scope:
-  - "implementar"
-  - "modificar código"
-  - "modificar runtime"
-  - "modificar frontend"
-  - "modificar tests"
-  - "modificar SQL"
-  - "modificar capability matrix"
-  - "modificar contratos"
-  - "generar Excel"
-  - "hacer writes"
-  - "integrar Action Register"
-  - "integrar duplicados"
-  - "hacer commit"
-  - "hacer push"
-  - "hacer merge"
-  - "ejecutar NEXT_TASK"
+  - "docs/director-ia/**"
+  - "capability matrix"
+  - "server.js"
+  - "frontend"
+  - "SQL/schema/migrations"
+  - "Excel/workbook"
+  - "duplicados"
+  - "Action Register"
+  - "writes"
+  - "HTTP interno"
+  - "contratos"
+  - "commit"
+  - "push"
+  - "merge"
+  - "sync documental"
+  - "NEXT_TASK"
 
 acceptance_criteria:
-  - "Definición canónica M5 verificada."
-  - "Fuente Taller identificada."
-  - "AT definido físicamente."
-  - "SELECT-only verificado."
-  - "Semántica de periodo verificada."
+  - "Existe intent taller_at."
+  - "Existe get_taller_at executable."
+  - "Existe loadTallerAtForChat."
+  - "Consulta usa SELECT public.folios."
+  - "Unidad usa token físico public.folios.unidad."
+  - "No existe/inventa at_id."
+  - "Periodo YYYY-MM obligatorio."
+  - "Periodo ausente clarifica."
   - "TALLER separado de GASTOS/INVERSIONES."
-  - "TALLER separado de M4 agregado."
-  - "TALLER separado de Action Register."
-  - "Excel separado."
-  - "Duplicados separados si no pertenecen al slice."
-  - "Authz verificada."
-  - "Planner/tools auditados."
-  - "Path mínimo definido."
-  - "Tests diseñados."
-  - "G2/G3 determinados."
-  - "M5 no cambia durante readiness."
-  - "50.0% no cambia."
-  - "Solo CURRENT_TASK y reporte cambian."
+  - "M4 preservado."
+  - "Action Register preservado."
+  - "Authz antes de SELECT."
+  - "No cross-planta."
+  - "No Excel."
+  - "No workbook."
+  - "No duplicados."
+  - "No HTTP interno."
+  - "No writes."
+  - "M5 queda PARTIAL."
+  - "M5 no COMPLETE."
+  - "Futura sync lleva 10.0/20 -> 10.5/20 = 52.5%."
+  - "Tests focales verdes."
+  - "Regresión completa verde."
   - "git diff --check limpio."
+  - "Solo archivos autorizados modificados."
+
+required_validation:
+  - "node --test test/director-ia-m5-taller-at.test.js"
+  - "node scripts/test-director-ia-capabilities.js"
+  - "node scripts/test-director-ia-planner.js"
+  - "node scripts/test-director-ia-tool-orchestrator.js"
+  - "node --test test/director-ia-*.test.js"
+  - "git diff --check"
+  - "git status"
+
+next_task_policy:
+  if_success:
+    propose_exactly_one: "DOCS-DIRECTOR-IA-M5-CAPABILITY-MATRIX-SYNC-001"
+
+  rule: >
+    La sync posterior debe cambiar M5 de NO INTEGRADA a PARTIAL y recalcular
+    10.0/20 -> 10.5/20 = 52.5%. No marcar COMPLETE.
 
 report_requirements:
-  path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M5-TALLER-AT-READINESS-001.md"
+  path: "docs/dev-loop/reports/IMPL-DIRECTOR-IA-M5-TALLER-AT-001.md"
 
   must_include:
     - "metadata"
     - "resumen ejecutivo"
-    - "baseline"
-    - "definición canónica M5"
-    - "physical source"
-    - "AT semantics"
-    - "Taller semantics"
+    - "archivos modificados"
+    - "path físico"
+    - "public.folios"
+    - "unidad semantics"
+    - "Taller predicate"
     - "period semantics"
-    - "query shape"
+    - "plant scope"
+    - "authz"
+    - "planner"
+    - "tool/executor"
+    - "chat wiring"
     - "M4 boundary"
     - "M6 boundary"
     - "Action Register boundary"
     - "Excel boundary"
     - "duplicates boundary"
-    - "authz"
-    - "planner/tools"
-    - "evidence table"
-    - "gap table"
-    - "implementation hypothesis"
     - "tests"
-    - "gates"
-    - "state after future slice"
-    - "percentage after future slice"
-    - "risks"
-    - "NEXT_TASK"
+    - "M5 state"
+    - "percentage future"
     - "acciones no realizadas"
+    - "gates"
     - "secrets_check"
     - "git diff --check"
     - "git status"
+    - "NEXT_TASK"
 
 expected_terminal_state: >
-  DONE_PENDING_REVIEW si existe path Taller/AT SELECT-only, in-process y
-  semánticamente separado. STOPPED si AT/fuente/authz no son seguros.
-  BLOCKED si falta gate indispensable.
+  DONE_PENDING_REVIEW si Taller/AT queda integrado SELECT-only, in-process,
+  autorizado y separado de M4/M6/AR/Excel. STOPPED si aparece contradicción
+  física. BLOCKED si falta gate.
 
 max_attempts: 1
 
-result_report_path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M5-TALLER-AT-READINESS-001.md"
+result_report_path: "docs/dev-loop/reports/IMPL-DIRECTOR-IA-M5-TALLER-AT-001.md"
