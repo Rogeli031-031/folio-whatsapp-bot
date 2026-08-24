@@ -254,6 +254,16 @@ const cases = [
   },
 
   () => {
+    const { plan, toolPlan } = planTools("¿Por qué bajó la venta ayer?", {
+      planta_id: 1,
+      question: "¿Por qué bajó la venta ayer?",
+    });
+    assert(plan.intent === "daily_sales_deviation", "intent daily_sales_deviation");
+    assert(!hasTool(toolPlan, "get_delta_sales"), "daily no usa M9 mensual");
+    assert(hasTool(toolPlan, "get_arr_snapshot") || hasTool(toolPlan, "get_dicf_context"), "daily usa fuentes existentes");
+  },
+
+  () => {
     const { toolPlan } = planTools("¿Cómo cambió el descuento?", { planta_id: 1, question: "¿Cómo cambió el descuento?" });
     const t = getTool(toolPlan, "get_delta_discount");
     assert(t && t.status === TOOL_STATUS.available_on_demand, "delta descuento on demand");
