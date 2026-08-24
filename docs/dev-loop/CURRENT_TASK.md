@@ -1,353 +1,404 @@
 # CURRENT_TASK
 
 ```yaml
-task_id: "AUDIT-DIRECTOR-IA-CONVERSATIONAL-PRODUCT-GAP-004"
+task_id: "ARCH-DIRECTOR-IA-ACTION-PERSON-ROUTING-READINESS-001"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-08-24"
 human_authorization: >
   AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-24.
-  Apruebo AUDIT-DIRECTOR-IA-CONVERSATIONAL-PRODUCT-GAP-004
-  y autorizo G1 exclusivamente para auditoría read-only.
+  Apruebo ARCH-DIRECTOR-IA-ACTION-PERSON-ROUTING-READINESS-001
+  y autorizo G1.
 
 gates:
   G1_task_authorization: AUTHORIZED
-  G2_architecture_change: N/A
-  G3_new_architecture_contract: N/A
+  G2_architecture_change: N/A_PENDING_AUDIT
+  G3_new_architecture_contract: N/A_PENDING_AUDIT
   G5_contract_conformance: N/A
   G8_calibration_materiality_signature: N/A
 
-mode:
-  type: "PRODUCT_EXPERIENCE_AUDIT_ONLY"
-  implementation: false
-  code_changes: false
-  runtime_changes: false
-  test_changes: false
-  matrix_changes: false
-  contract_changes: false
-  sql_execution: false
-
 objective: >
-  Evaluar el producto conversacional actual de Director IA después de haber
-  corregido continuidad, memoria persistente en repo, daily_sales_deviation
-  y natural follow-up inheritance. Determinar exactamente un cuello de botella
-  actual que todavía impida conversar naturalmente con una IA que conoce los
-  datos disponibles y que, cuando no tiene suficiente evidencia, identifica
-  qué información necesita para continuar.
-
-north_star: >
-  El usuario debe poder hablar de forma natural con Director IA sin aprender
-  frases especiales. Director IA debe acceder a evidencia confiable, conservar
-  el hilo, retomar pendientes, razonar con GPT y reconocer con precisión lo
-  que no sabe.
-
-product_principle: >
-  La arquitectura proporciona datos, authz, identidad, joins, fechas,
-  matemáticas, provenance, memoria y contexto. GPT conserva síntesis,
-  explicación, preguntas, seguimiento y razonamiento conversacional.
-  No programar manualmente lo que GPT ya puede hacer con evidencia suficiente.
+  Auditar el mecanismo mínimo y generalizable para que preguntas naturales sobre
+  una acción y/o su responsable, por ejemplo “¿Qué pasó con la acción de Julio
+  Pérez?”, ruteen al Action Register y carguen evidencia real disponible, sin
+  depender de un phrasebook cerrado, sin confundir responsable de acción con
+  responsable del problema y sin inventar la razón de un vencimiento o falta de
+  cierre.
 
 baseline:
-  functional_coverage: "10.5 / 20 = 52.5%"
+  global: "10.5 / 20 = 52.5%"
   percentage_effect: "0.0 pp"
 
-implemented_since_gap_003:
-  - "natural follow-up inheritance strategy B"
-  - "unknown + valid context -> inherit"
-  - "standalone intent precedence"
-  - "no blind Action Register fallback"
-  - "no bigger phrasebook"
-  - "hold-out generalization"
-  - "requery every turn"
+  prior_audit:
+    task: "AUDIT-DIRECTOR-IA-CONVERSATIONAL-PRODUCT-GAP-004"
+    bottleneck: >
+      Action Register por persona/acción no se rutea aunque board, responsable
+      y vencimiento ya existen.
+    failure_class: "MISSING_INFRASTRUCTURE"
 
-already_available:
-  - "plant_diagnosis multi-source"
-  - "financial_diagnosis multi-source"
-  - "commercial materiality/coverage"
-  - "structured conversational state"
-  - "pending_work_items_only in repository"
-  - "daily_sales_deviation"
-  - "natural follow-up inheritance"
+product_principle: >
+  Si los datos ya existen, la infraestructura debe llevar la pregunta a la
+  evidencia correcta. GPT conserva la explicación conversacional y reconoce
+  lo que todavía no está documentado.
 
-known_deferred_items:
-  - "daily discount/kg"
-  - "Action Register person/action routing e.g. Julio Pérez"
-  - "SQL 017 target-environment activation"
-  - "client-level economic tradeoff"
-  - "cross-session period/topic memory"
+central_question: >
+  ¿Cómo debe detectar Director IA que una pregunta trata sobre una acción
+  registrada y/o una persona responsable, sin codificar expresiones exactas ni
+  permitir que memoria u otro routing intercepte incorrectamente la consulta?
 
-primary_question: >
-  Después de las últimas correcciones, ¿cuál es el ÚNICO mayor impedimento
-  restante para cumplir el north star?
+known_failure:
+  example: "¿Qué pasó con la acción de Julio Pérez?"
+  current_behavior:
+    - "puede ser interceptado por persistent-memory 'qué pasó con'"
+    - "planner aislado queda unknown"
+    - "no carga Action Register"
+    - "termina en clarificación"
+  known_data:
+    - "Action Register board"
+    - "acciones"
+    - "responsable"
+    - "estado"
+    - "fecha/vencimiento"
+    - "historial disponible según path actual"
 
-failure_classes:
-  - "MISSING_DATA"
-  - "MISSING_INFRASTRUCTURE"
-  - "MODEL_REASONING_LIMIT"
-  - "OVERPROGRAMMING"
-  - "DEPLOYMENT_GAP"
-  - "CONTRACT_OR_AUTHZ_LIMIT"
+mandatory_runtime_audit:
 
-mandatory_conversations:
+  inspect:
+    - "planner intents de Action Register"
+    - "responsible_lookup"
+    - "action_status"
+    - "overdue_actions"
+    - "persistent-memory resume detector"
+    - "natural follow-up inheritance"
+    - "Action Register focused context/loaders"
+    - "responsible/entity resolution"
+    - "history/resultado de acciones"
+    - "askDirectorIa routing precedence"
 
-  A_free_plant_conversation:
-    turns:
-      - "¿Cómo va Puebla?"
-      - "¿Y eso?"
-      - "No te seguí."
-      - "¿Qué otra cosa ves?"
-      - "¿Entonces?"
-      - "¿Qué falta?"
-      - "¿Quién puede aclararlo?"
-      - "¿Para qué?"
+  trace_exactly:
+    - "¿Qué pasó con la acción de Julio Pérez?"
+    - "¿Qué acciones tiene Julio Pérez?"
+    - "¿Tiene alguna vencida?"
+    - "¿Por qué no la cerró?"
+    - "¿Qué falta saber?"
+    - "¿Qué necesitas de Julio?"
 
-    purpose: >
-      Verificar que natural follow-up inheritance realmente eliminó el
-      phrasebook como cuello de botella.
+routing_precedence_audit:
 
-  B_daily_sales:
-    turns:
-      - "¿Por qué bajó la venta ayer?"
-      - "¿O sea?"
-      - "¿Quién explica más?"
-      - "¿Y por canal?"
-      - "¿Sabemos por qué?"
-      - "¿Qué falta?"
-      - "¿Quién puede decirnos?"
+  question: >
+    ¿Qué debe ganar cuando un mensaje contiene señales de retomar (“qué pasó con”)
+    y a la vez señales estructurales de Action Register (“acción”, responsable)?
 
-    purpose: >
-      Verificar conversación natural sobre el nuevo daily pack.
+  determine:
+    - "explicit Action Register semantics vs memory resume"
+    - "named responsible resolution"
+    - "current parent_intent"
+    - "standalone AR query"
+    - "follow-up AR query"
 
-  C_action_person:
+  principle: >
+    Un intent explícito sobre acción/responsable debe ganar sobre un trigger
+    genérico de memoria.
+
+anti_phrasebook:
+
+  prohibited:
+    - "hardcode 'qué pasó con la acción de'"
+    - "listas de verbos para Julio/acción"
+    - "lista de nombres de responsables"
+    - "if text contains Julio"
+    - "score arbitrario de palabras"
+
+  required:
+    - "usar señales estructurales ya existentes"
+    - "intent semántico de Action Register"
+    - "resolución física de responsable"
+    - "contexto conversacional cuando aplique"
+
+responsible_resolution:
+
+  audit:
+    - "cómo se representa responsable en Action Register"
+    - "si existe identificador o solo texto"
+    - "cómo se resuelve Julio Pérez"
+    - "qué pasa con nombres parciales"
+    - "qué pasa con homónimos"
+    - "scope de planta"
+
+  rules:
+    - "no fuzzy silencioso"
+    - "ambiguous -> clarify"
+    - "responsable de acción != responsable del problema"
+    - "responsable registrado != culpable"
+
+action_identity:
+
+  audit:
+    - "si pregunta puede apuntar a una acción específica"
+    - "si hay varias acciones del responsable"
+    - "cómo seleccionar sin adivinar"
+    - "si debe listar y pedir clarificación"
+    - "qué identificadores/títulos/temas existen"
+
+  rule: >
+    Si Julio tiene varias acciones plausibles, Director IA no debe seleccionar
+    una silenciosamente.
+
+action_evidence:
+
+  must_determine_available_fields:
+    - "acción/título/tema"
+    - "status"
+    - "responsable"
+    - "fecha compromiso"
+    - "vencida sí/no derivable"
+    - "historial/eventos"
+    - "resultado_cierre"
+    - "revision notes si físicamente aplicables"
+    - "última actualización"
+
+  provenance:
+    required: true
+
+truth_boundaries:
+
+  facts_allowed_if_physical:
+    - "la acción está abierta"
+    - "la acción venció en fecha X"
+    - "la acción está asignada a Julio Pérez"
+    - "existe/no existe actualización registrada"
+    - "existe/no existe resultado de cierre"
+
+  forbidden_without_evidence:
+    - "Julio no la cerró por falta de seguimiento"
+    - "Julio es responsable del problema"
+    - "la acción falló"
+    - "la acción no funcionó"
+
+  principle: >
+    Estado/vencimiento son hechos del registro. Motivo del vencimiento es otra
+    pregunta y requiere evidencia adicional.
+
+information_gap_behavior:
+
+  canonical_case:
+    question: "¿Por qué no la cerró?"
+
+  expected_if_no_evidence: >
+    Director IA debe poder distinguir que sabe que la acción está vencida/abierta
+    pero no tiene evidencia suficiente para explicar el motivo.
+
+  should_enable_GPT_to_say:
+    - "no encuentro una explicación registrada del retraso"
+    - "necesito una actualización de la acción"
+    - "necesito saber si existe bloqueo, resultado parcial o nueva fecha"
+    - "Julio puede ser mencionado únicamente porque es el responsable registrado de esa acción"
+
+  rule: >
+    No programar respuesta final rígida. Entregar evidence + limitations a GPT.
+
+conversation_state:
+
+  desired_parent_intent:
+    candidates:
+      - "action_status"
+      - "responsible_lookup"
+      - "overdue_actions"
+      - "AR-focused intent existente"
+
+  requirement: >
+    Determinar cuál intent padre canónico permite sostener:
+    acción de Julio -> vencida -> por qué no cerró -> qué falta.
+
+  followups:
+    - "¿Está vencida?"
+    - "¿Por qué no la cerró?"
+    - "¿Lo sabemos?"
+    - "¿Qué falta?"
+    - "¿Qué necesitas de Julio?"
+
+  rule: >
+    Follow-ups abiertos deben aprovechar la herencia natural ya integrada.
+
+memory_interception:
+
+  mandatory:
+    - "identificar físicamente por qué 'qué pasó con' dispara resume memory"
+    - "definir precedencia segura"
+    - "no desactivar memoria globalmente"
+
+  preferred_principle: >
+    Una referencia explícita a acción/Action Register debe resolverse primero
+    como consulta empresarial; persistent memory queda para retomar pendientes
+    cuando no exista un intent empresarial más específico.
+
+solution_candidates:
+
+  A_phrasebook:
+    description: "agregar frases de acción/persona"
+    expected: "rechazar salvo evidencia excepcional"
+
+  B_planner_new_intent:
+    description: >
+      Crear intent específico action_person_status/action_person_query.
+
+  C_strengthen_existing_AR_intents:
+    description: >
+      Ampliar detección semántica/routing de intents AR existentes para combinar
+      acción + responsable sin crear una taxonomía redundante.
+
+  D_post_planner_business_signal_override:
+    description: >
+      Si planner queda unknown pero el turno contiene una entidad/responsable
+      resoluble y semántica empresarial de acción, priorizar AR antes de memory/
+      clarification.
+
+  requirement:
+    - "comparar A/B/C/D"
+    - "seleccionar exactamente un first slice"
+    - "preferir reuse de intents existentes si semánticamente correcto"
+    - "no elegir por facilidad"
+
+generalization:
+
+  required_tests:
+    examples:
+      - "¿Qué ocurrió con la tarea que tiene Julio Pérez?"
+      - "¿Cómo va lo que trae Julio?"
+      - "¿Julio tiene algo vencido?"
+      - "¿Qué pendiente tiene Julio?"
+      - "¿Hay actualización de la acción de Julio?"
+
+  rule: >
+    Los ejemplos son para diseñar hold-outs. No deben convertirse en lista de
+    producción.
+
+  requirement: >
+    La solución debe reconocer la estructura acción/responsable, no la frase exacta.
+
+standalone_and_followup:
+
+  standalone:
+    example: "¿Qué acciones tiene Julio Pérez?"
+    expected: "AR routing sin necesitar estado previo"
+
+  followup:
+    sequence:
+      - "¿Qué acciones tiene Julio Pérez?"
+      - "¿Cuál está vencida?"
+      - "¿Por qué no la cerró?"
+      - "¿Qué falta saber?"
+
+    expected: >
+      Estado conversacional + fresh AR evidence + GPT.
+
+authz:
+
+  required:
+    - "scope de planta actual"
+    - "roles actuales de Action Register"
+    - "cross-plant blocked"
+    - "fail-closed"
+
+  rule: >
+    Routing nuevo no amplía authz de AR.
+
+reasoning_boundary:
+
+  KEEP_DETERMINISTIC:
+    - "routing empresarial"
+    - "responsable identity"
+    - "action identity"
+    - "status"
+    - "vencimiento"
+    - "dates"
+    - "authz"
+    - "joins"
+    - "provenance"
+    - "absence/error"
+
+  LET_GPT_REASON:
+    - "explicación narrativa"
+    - "qué significa el estado"
+    - "qué información falta"
+    - "qué preguntar al responsable"
+    - "follow-up natural"
+
+  rule: >
+    No implementar un evaluador de desempeño de personas.
+
+daily_discount_boundary:
+  status: "deferred"
+
+persistent_memory_boundary:
+  preserve: true
+  SQL017_execution: false
+
+product_tests_if_ready:
+
+  conversation_1:
     turns:
       - "¿Qué pasó con la acción de Julio Pérez?"
       - "¿Está vencida?"
       - "¿Por qué no la cerró?"
       - "¿Lo sabemos?"
       - "¿Qué información falta?"
+      - "¿Qué necesitas de Julio?"
 
-    purpose: >
-      Determinar si el conocido gap de routing AR/persona es ahora el mayor
-      cuello real y si los datos ya existen.
+  conversation_2_multiple_actions:
+    setup: "responsable con múltiples acciones"
+    expected: >
+      listar/acotar o clarificar; no elegir una arbitrariamente.
 
-  D_daily_discount:
-    turns:
-      - "¿Por qué subió el descuento/kg ayer?"
-      - "¿Fue general?"
-      - "¿Quién movió más el promedio?"
-      - "¿Sabemos por qué?"
-      - "¿Qué falta?"
+  conversation_3_memory_precedence:
+    setup: "existe pending memory sobre Julio"
+    question: "¿Qué pasó con la acción de Julio?"
+    expected: >
+      Action Register explícito gana sobre resume memory.
 
-    purpose: >
-      Determinar impacto real del gap diario de descuento.
+  conversation_4_holdout:
+    use_phrases_not_in_production_logic: true
 
-  E_cross_session_memory:
-    session_1:
-      - "¿Por qué dejó de comprar Arturo?"
-      - "¿Qué falta?"
-    session_2:
-      - "¿Qué pasó con Arturo?"
-      - "¿Ya sabemos por qué?"
-      - "¿Qué sigue faltando?"
-
-    requirement: >
-      Separar repository capability de environment activation. No afirmar que
-      cross-session funciona físicamente en el entorno sin evidencia de SQL 017.
-
-  F_tradeoff:
-    prompt: >
-      Arturo dejó de comprar y hay un comentario que dice que la competencia
-      le ofrece una condición mejor. Si igualarla pudiera hacernos perder
-      dinero, ¿qué sabemos y qué información necesitamos para decidir?
-
-    purpose: >
-      Medir cuánto puede razonar GPT con datos actuales y dónde falta evidencia
-      económica real.
-
-  G_topic_switch:
-    turns:
-      - "¿Cómo va Puebla?"
-      - "¿Qué más?"
-      - "Ahora dime el presupuesto."
-      - "¿Y eso?"
-      - "Volvamos a la venta de ayer."
-
-    purpose: >
-      Verificar qué tan natural es el cambio de tema y qué parte sigue fuera
-      por no existir topic stack/period memory.
-
-trace_each_turn:
-  required:
-    - "isolated planner intent"
-    - "parent_intent"
-    - "inherit yes/no"
-    - "standalone precedence"
-    - "active entity/date"
-    - "sources loaded"
-    - "requery"
-    - "evidence supplied"
-    - "limitations supplied"
-    - "GPT invoked yes/no"
-    - "deterministic response yes/no"
-    - "failure point if any"
-
-experience_dimensions:
-
-  naturalness:
-    questions:
-      - "¿puede el usuario hablar libremente?"
-      - "¿requiere conocer el wording esperado?"
-      - "¿las respuestas suenan como continuidad o reinician análisis?"
-
-  knowledge:
-    questions:
-      - "¿carga las fuentes correctas?"
-      - "¿sabe qué datos tiene disponibles?"
-      - "¿se va a fuente equivocada?"
-
-  unknown_handling:
-    questions:
-      - "¿dice qué sabe?"
-      - "¿dice qué no sabe?"
-      - "¿identifica el dato faltante?"
-      - "¿explica para qué hace falta?"
-      - "¿nombra persona solo con vínculo físico?"
-
-  reasoning:
-    questions:
-      - "¿GPT realmente recibe libertad suficiente?"
-      - "¿hay respuestas enlatadas todavía?"
-      - "¿hay early returns que evitan al modelo?"
-      - "¿se está sobreprogramando?"
-
-  truth:
-    questions:
-      - "¿contribución se distingue de causa?"
-      - "¿comment se distingue de hecho?"
-      - "¿memory se distingue de evidence?"
-      - "¿restricted/missing/error siguen separados?"
-
-before_after_requirement:
-
-  compare:
-    - "GAP-002"
-    - "GAP-003"
-    - "runtime actual"
-
-  must_state:
-    - "qué se corrigió desde GAP-002"
-    - "qué se corrigió desde GAP-003"
-    - "qué sigue roto"
-    - "qué ya NO debe seguir tratándose como cuello"
-
-natural_followup_validation:
-
-  required:
-    - "confirmar que hold-outs llegan a GPT"
-    - "confirmar que no dependen del texto exacto"
-    - "confirmar standalone wins"
-    - "confirmar entity safety"
-
-  rule: >
-    Si esto ya está resuelto, no volver a elegir follow-up inheritance como gap.
-
-action_routing_audit:
-
-  mandatory:
-    - "trace exacto de '¿Qué pasó con la acción de Julio Pérez?'"
-    - "confirmar si AR/historial/responsable ya tienen datos suficientes"
-    - "determinar si el fallo es routing"
-    - "determinar qué conversación desbloquearía corregirlo"
-
-daily_discount_audit:
-
-  mandatory:
-    - "fuente física"
-    - "fecha disponible"
-    - "SUM(monto)/SUM(kg)"
-    - "cliente disponible"
-    - "canal no disponible"
-    - "contribución ponderada factible sí/no"
-    - "business evidence join factible sí/no"
-
-  selection_rule: >
-    No elegir daily_discount solo porque sea parecido a daily_sales.
-
-information_gap_audit:
-
-  mandatory:
-    - "identificar si el runtime todavía genera wording rígido"
-    - "identificar si GPT recibe pack + limitations suficientes"
-    - "determinar si falta infraestructura o solo routing al GPT"
-
-tradeoff_audit:
-
-  mandatory:
-    - "identificar exactamente qué datos económicos faltan"
-    - "no inventar client margin"
-    - "no convertir comment de competencia en causa"
-    - "determinar si es problema de datos, no de GPT"
-
-memory_audit:
-
-  repository:
-    capability: "IMPLEMENTED"
-
-  environment:
-    SQL017_status: "UNKNOWN/UNCONFIRMED unless physical evidence exists"
-
-  rule: >
-    DEPLOYMENT_GAP no debe presentarse como fallo de memoria arquitectónica.
-
-overprogramming_check:
-
+contract_audit:
   inspect:
-    - "phrasebook leftovers"
-    - "deterministic gap replies"
-    - "special early returns"
-    - "intent-specific response templates"
+    - "Constitution"
+    - "EKE"
+    - "04 IES"
+    - "05 RE"
 
-  classify_each:
-    - "KEEP_DETERMINISTIC"
-    - "LET_GPT_REASON"
-    - "MIXED"
+  determine:
+    - "G2"
+    - "G3"
 
-single_bottleneck:
+  expectation: "runtime-only"
 
-  exactly_one: true
-
-  required:
-    - "name"
-    - "failure_class"
-    - "physical_location"
-    - "conversation(s) affected"
-    - "why it is now the largest blocker"
-    - "what fixing it unlocks"
-    - "what it does not solve"
-
-  selection_rule: >
-    Elegir por impacto real en la conversación empresarial cotidiana, no por
-    porcentaje, facilidad, recencia o simetría con una mejora anterior.
-
-next_task:
-
-  exactly_one: true
-  authorize: false
-  execute: false
-
-  rule: >
-    La NEXT_TASK debe atacar directamente el cuello único demostrado.
+readiness_output:
+  must_determine:
+    - "READY / READY_WITH_LIMITS / NOT_READY"
+    - "selected A/B/C/D strategy"
+    - "canonical parent intent"
+    - "routing precedence"
+    - "memory precedence"
+    - "responsible resolution"
+    - "multiple-action behavior"
+    - "evidence fields"
+    - "information-gap behavior"
+    - "GPT boundary"
+    - "authz"
+    - "G2/G3"
+    - "percentage effect"
+    - "deferred gaps"
 
 percentage_policy:
   before: "10.5 / 20 = 52.5%"
-  after: "10.5 / 20 = 52.5%"
-  delta: "0.0 pp"
+  after_readiness: "10.5 / 20 = 52.5%"
+  expected_impl_effect: "0.0 pp"
 
 in_scope:
   writable:
     - "docs/dev-loop/CURRENT_TASK.md"
-    - "docs/dev-loop/reports/AUDIT-DIRECTOR-IA-CONVERSATIONAL-PRODUCT-GAP-004.md"
+    - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-ACTION-PERSON-ROUTING-READINESS-001.md"
 
   read_only:
     - "entire repository except writable files"
@@ -357,32 +408,47 @@ out_of_scope:
   - "code changes"
   - "test changes"
   - "matrix changes"
-  - "contract changes"
-  - "SQL execution"
+  - "contracts changes"
+  - "daily discount"
+  - "SQL 017 execution"
+  - "person performance scoring"
   - "commit"
   - "push"
   - "merge"
 
 acceptance_criteria:
-  - "North star evaluated against current runtime."
-  - "All seven product conversations traced."
-  - "GAP-002 -> GAP-003 -> now compared."
-  - "Natural follow-up improvement verified."
-  - "Action routing audited."
-  - "Daily discount audited."
-  - "Memory deployment separated."
-  - "Tradeoff data gap audited."
-  - "Unknown handling audited."
-  - "Overprogramming audited."
-  - "Exactly one bottleneck selected."
-  - "Exactly one NEXT_TASK."
+  - "Current failure traced."
+  - "Memory interception traced."
+  - "AR/responsible data availability confirmed."
+  - "A/B/C/D compared."
+  - "Exactly one strategy selected."
+  - "Canonical parent intent determined."
+  - "Responsible resolution defined."
+  - "Multiple-action ambiguity handled."
+  - "Action vs problem responsibility boundary explicit."
+  - "Information-gap behavior defined."
+  - "Hold-out/generalization tests designed."
+  - "No phrasebook solution."
+  - "G2/G3 determined."
   - "52.5% preserved."
   - "Only task + report changed."
   - "git diff --check clean."
 
-expected_terminal_state: "DONE_PENDING_REVIEW"
+next_task_policy:
+  if_ready:
+    propose_exactly_one: "IMPL-DIRECTOR-IA-ACTION-PERSON-ROUTING-001"
+
+  if_not_ready:
+    propose_exactly_one: "ARCH-DIRECTOR-IA-ACTION-PERSON-ROUTING-GAP-001"
+
+  rule: "Do not authorize or execute."
+
+expected_terminal_state: >
+  DONE_PENDING_REVIEW if READY/READY_WITH_LIMITS with one implementable slice.
+  STOPPED if a product/contract decision is needed.
+  BLOCKED if a gate is missing.
 
 max_attempts: 1
 
 result_report_path: >
-  docs/dev-loop/reports/AUDIT-DIRECTOR-IA-CONVERSATIONAL-PRODUCT-GAP-004.md
+  docs/dev-loop/reports/ARCH-DIRECTOR-IA-ACTION-PERSON-ROUTING-READINESS-001.md
