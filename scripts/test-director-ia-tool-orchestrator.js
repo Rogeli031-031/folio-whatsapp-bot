@@ -75,6 +75,21 @@ const cases = [
     assert(!hasTool(toolPlan, "get_action_register_context"), "notes no usa context always-on");
   },
 
+  () => {
+    const { plan, toolPlan } = planTools("Dame el expediente comercial de Acme", {
+      planta_id: 1,
+      question: "Dame el expediente comercial de Acme",
+    });
+    assert(plan.intent === "expediente_comercial", "intent expediente_comercial");
+    assert(hasTool(toolPlan, "get_commercial_dossier"), "dossier tool");
+    const t = getTool(toolPlan, "get_commercial_dossier");
+    assert(t.executable === true, "dossier executable");
+    assert(t.required_inputs.includes("planta_id"), "dossier planta_id");
+    assert(isDirectorIaToolExecutable("get_commercial_dossier") === true, "dossier exec");
+    assert(!hasTool(toolPlan, "get_bitacora_context"), "dossier no arrastra bitácora");
+    assert(!hasTool(toolPlan, "get_commercial_state"), "dossier no usa lista commercial_state");
+  },
+
   // 1. Acciones vencidas
   () => {
     const { toolPlan } = planTools("¿Qué acciones están vencidas?", { planta_id: 1, question: "¿Qué acciones están vencidas?" });
