@@ -1,15 +1,14 @@
 # CURRENT_TASK
 
 ```yaml
-task_id: "ARCH-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-EVIDENCE-ASSEMBLY-READINESS-001"
+task_id: "IMPL-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-EVIDENCE-ASSEMBLY-001"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-08-23"
 human_authorization: >
   AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-23.
-  Apruebo ARCH-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-EVIDENCE-ASSEMBLY-READINESS-001
-  y autorizo G1.
+  Apruebo IMPL-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-EVIDENCE-ASSEMBLY-001 y autorizo G1.
 
 gates:
   G1_task_authorization: AUTHORIZED
@@ -18,230 +17,65 @@ gates:
   G8_calibration_materiality_signature: N/A
 
 objective: >
-  Auditar físicamente el gap transversal de financial_diagnosis para determinar
-  si Director IA puede ejecutar y ensamblar en una misma corrida de razonamiento
-  evidencia de IGF, ARR y deltas M9, preservando provenance, authz, planta,
-  periodos, ausencia/error y semántica no causal, sin reabrir IES ni Reasoning
-  Engine y sin modificar contratos.
+  Implementar el ensamblaje multi-fuente de evidencia para financial_diagnosis
+  en el chat legado de Director IA, ejecutando y reuniendo en una sola corrida
+  IGF, ARR y deltas M9, preservando provenance, periodos, authz, ausencia/error
+  y semántica no causal, sin modificar IES, Reasoning Engine ni contratos.
 
 baseline:
-  prioritization_task: "ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-008"
-  prioritization_report: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-008.md"
-
-  transversal_capability: "financial_diagnosis evidence assembly"
+  readiness_task: "ARCH-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-EVIDENCE-ASSEMBLY-READINESS-001"
+  readiness_report: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-EVIDENCE-ASSEMBLY-READINESS-001.md"
 
   global:
-    numerator: 10.5
+    numerator_before: 10.5
     denominator: 20
-    percentage: 52.5
-    expected_gain_pp: 0.0
+    percentage_before: 52.5
+    numerator_after: 10.5
+    percentage_after: 52.5
+    gain_pp: 0.0
 
-known_gap:
-  planner: >
-    financial_diagnosis ya declara uso de múltiples dominios/evidencias.
+contract_boundary:
+  ies:
+    modify: false
+    runtime_ies: false
 
-  tool_plan: >
-    El plan ya contempla loaders de IGF, ARR y deltas M9.
+  reasoning_engine:
+    modify: false
+    execute_from_this_slice: false
 
-  runtime: >
-    El chat no ensambla esas evidencias en una sola corrida; puede hacer
-    early-return por intent o terminar enviando solo anexo IGF al modelo.
+  rule: >
+    Este slice entrega evidencia multi-fuente al chat legado/OpenAI conforme a
+    contratos vigentes. No introducir loaders dentro de N5 ni simular runtime IES.
 
-  contract_implication: >
-    El gap parece ser de wiring/runtime/context assembly, no de contrato IES o
-    Reasoning Engine.
-
-primary_question: >
-  ¿Existe un path in-process, read-only, autorizado y conforme al contrato
-  vigente para que financial_diagnosis ejecute IGF + ARR + M9 en una sola
-  corrida, preserve provenance por fuente y entregue un paquete de evidencia
-  multi-dominio al reasoning sin inventar causalidad ni ocultar ausencias/errores?
-
-mandatory_audit:
-
+readiness_findings:
   planner:
-    inspect:
-      - "intent financial_diagnosis"
-      - "dominios declarados"
-      - "evidence plan"
-      - "clarification"
-      - "confidence"
-      - "routing priority"
+    financial_diagnosis_multi_domain: true
+    expected_domains:
+      - "IGF"
+      - "ARR"
+      - "M9 deltas"
 
-    determine:
-      - "qué fuentes exige realmente el planner"
-      - "si son obligatorias u opcionales"
-      - "qué periodo/planta solicita cada una"
-      - "cómo se representa source/evidence"
+  orchestrator:
+    current_state: "declarative"
+    runtime_execution: false
 
-  tool_orchestrator:
-    inspect:
-      - "tool plan para financial_diagnosis"
-      - "get_igf_snapshot"
-      - "ARR loader/tool"
-      - "M9 delta tools/loaders"
-      - "executor ordering"
-      - "failure behavior"
-      - "partial success behavior"
+  chat_gap:
+    location: "askDirectorIa"
+    behavior:
+      - "early-return por delta_*"
+      - "OpenAI puede recibir solo annex IGF/ARR"
+      - "M9 no entra al contexto conjunto"
 
-    determine:
-      - "si puede ejecutar múltiples tools en una corrida"
-      - "si hoy corta después de la primera"
-      - "si existen dependencias entre tools"
-      - "cómo preservar resultados separados"
-
-  chat_runtime:
-    inspect:
-      - "askDirectorIa"
-      - "early returns"
-      - "focused modes"
-      - "annex IGF"
-      - "context builders"
-      - "OpenAI call"
-      - "source inference"
-
-    determine:
-      - "dónde se pierde el ensamblaje multi-dominio"
-      - "qué branch impide llegar con IGF+ARR+M9 juntos"
-      - "qué cambio mínimo de wiring sería necesario"
-
-  igf_evidence:
-    verify:
-      - "fuente física"
-      - "periodo"
-      - "version"
-      - "planta"
-      - "composition si aplica"
-      - "null semantics"
-      - "authz"
-      - "provenance"
-
-  arr_evidence:
-    verify:
-      - "fuente física"
-      - "periodo"
-      - "planta"
-      - "shape"
-      - "null semantics"
-      - "authz"
-      - "provenance"
-
-  m9_evidence:
-    verify:
-      - "delta venta"
-      - "delta descuento"
-      - "delta ingreso"
-      - "periodo comparado"
-      - "planta"
-      - "shape"
-      - "null semantics"
-      - "authz"
-      - "provenance"
-
-  temporal_alignment:
-    determine:
-      - "qué periodo representa IGF"
-      - "qué periodo representa ARR"
-      - "qué dos periodos usa M9"
-      - "si son comparables"
-      - "qué hacer si no coinciden"
-
-    rules:
-      - "no alinear periodos silenciosamente"
-      - "no presentar snapshots de meses distintos como mismo corte"
-      - "si falta alineación, explicitarla o clarificar"
-
-  plant_scope:
-    required:
-      - "misma planta autorizada para todas las fuentes"
-      - "una fuente no puede ampliar scope de otra"
-      - "cross-planta bloqueado"
-      - "fail-closed"
-
-  authz:
-    determine:
-      - "authz IGF"
-      - "authz ARR"
-      - "authz M9"
-      - "intersección segura"
-      - "GA/GV"
-      - "plantas_permitidas"
-      - "qué ocurre si una fuente tiene regla más restrictiva"
-
-    rule: >
-      El ensamblaje debe usar el scope más restrictivo requerido; nunca relajar
-      authz para completar el diagnóstico.
-
-  provenance:
-    required_sections:
-      - "igf"
-      - "arr"
-      - "deltas_m9"
-
-    each_must_keep:
-      - "source"
-      - "period"
-      - "plant"
-      - "status/availability"
-      - "evidence ids si existen"
-      - "error/absence state"
-
-    rule: >
-      No fusionar hechos de fuentes distintas en un único objeto que pierda su
-      procedencia.
-
-  absence_and_error:
-    distinguish:
-      - "ABSENCE_CONFIRMED si aplica"
-      - "DATA_NOT_FOUND"
-      - "SOURCE_*"
-      - "TOOL_ERROR"
-      - "null"
-      - "0"
-
-    rules:
-      - "ausencia != cero"
-      - "tool error != dato faltante"
-      - "source unavailable != resultado neutral"
-      - "no completar evidencia faltante con otra fuente"
-
-  reasoning_semantics:
-    allowed:
-      - "comparar hechos de fuentes alineadas"
-      - "señalar coincidencias"
-      - "señalar tensiones"
-      - "formular hipótesis claramente etiquetadas si contrato vigente lo permite"
-      - "decir qué evidencia soporta cada observación"
-
-    forbidden:
-      - "correlación -> causalidad"
-      - "IGF explica ARR automáticamente"
-      - "delta implica causa"
-      - "una fuente sustituye a otra"
-
-  contract_check:
-    inspect:
-      - "04-IES-STANDARD.md"
-      - "05-REASONING-ENGINE.md"
-      - "contratos vigentes relevantes"
-
-    determine:
-      - "si multi-source evidence assembly ya está permitido"
-      - "si se requiere G2"
-      - "si se requiere G3"
-      - "si basta wiring/runtime"
-
-    rule: >
-      No modificar contratos. Solo determinar conformidad.
-
-architecture_hypothesis:
-  preferred_path: >
+architecture:
+  required_path: >
     financial_diagnosis
-    -> planner multi-domain
-    -> tool orchestrator ejecuta IGF + ARR + M9
-    -> normalizeFinancialDiagnosisEvidence
-    -> paquete con provenance separada
-    -> Reasoning Engine
+    -> planner
+    -> load/execute IGF
+    -> load/execute ARR
+    -> load/execute M9 deltas
+    -> assembleFinancialDiagnosisEvidence
+    -> contexto multi-source con provenance
+    -> una llamada OpenAI
     -> respuesta
 
   requirements:
@@ -249,128 +83,237 @@ architecture_hypothesis:
     - "read-only"
     - "sin HTTP interno"
     - "sin writes"
+    - "sin IES runtime"
+    - "sin Reasoning Engine runtime"
     - "sin contrato nuevo"
-    - "sin ocultar partial failure"
 
-evidence_bundle_contract_hypothesis:
-  top_level:
+source_blocks:
+  igf:
+    preserve:
+      - "planta"
+      - "periodo"
+      - "versión"
+      - "snapshot"
+      - "composition si ya disponible"
+      - "null semantics"
+      - "source/provenance"
+
+  arr:
+    preserve:
+      - "planta"
+      - "periodo"
+      - "payload ARR"
+      - "null semantics"
+      - "source/provenance"
+
+  m9:
+    preserve:
+      - "delta_venta"
+      - "delta_descuento"
+      - "delta_ingreso"
+      - "periodo_a"
+      - "periodo_b"
+      - "planta"
+      - "source/provenance"
+
+provenance:
+  required_sections:
+    - "igf"
+    - "arr"
+    - "m9"
+
+  each_source_must_include:
+    - "status"
     - "plant"
-    - "requested_period"
-    - "sources"
-    - "alignment"
-    - "limitations"
+    - "period"
+    - "payload"
+    - "source/evidence"
+    - "absence/error state"
 
-  sources:
-    igf:
-      - "status"
-      - "period"
-      - "payload"
-      - "evidence/source"
+  forbidden:
+    - "fusionar payloads perdiendo procedencia"
+    - "copiar dato de una fuente como si proviniera de otra"
 
-    arr:
-      - "status"
-      - "period"
-      - "payload"
-      - "evidence/source"
+period_alignment:
+  rules:
+    - "no alinear silenciosamente"
+    - "IGF y ARR deben declarar su periodo real"
+    - "M9 debe declarar period_a y period_b"
+    - "si no son comparables, incluir limitación explícita"
+    - "clarificar si la pregunta exige comparación que no puede alinearse"
 
-    m9:
-      - "status"
-      - "period_a"
-      - "period_b"
-      - "payload"
-      - "evidence/source"
+  forbidden:
+    - "tratar meses distintos como mismo corte"
+    - "inventar periodo faltante"
+
+authz:
+  rule: >
+    Para cada fuente se conserva su authz vigente. El diagnóstico usa la
+    intersección más restrictiva; nunca relaja authz para completar evidencia.
+
+  required:
+    - "JWT/contexto"
+    - "planta_id"
+    - "plantas_permitidas"
+    - "GA/GV según cada fuente"
+    - "cross-planta bloqueado"
+    - "fail-closed"
+
+  special:
+    - "GA aborta si una fuente requerida lo bloquea"
+    - "GV puede limitar M9 según regla vigente"
+
+absence_error_semantics:
+  distinguish:
+    - "null"
+    - "0"
+    - "DATA_NOT_FOUND"
+    - "ABSENCE_CONFIRMED si aplica"
+    - "SOURCE_*"
+    - "TOOL_ERROR"
+
+  invariants:
+    - "null != 0"
+    - "ausencia != cero"
+    - "error != ausencia"
+    - "source unavailable != resultado neutral"
+    - "una fuente no reemplaza a otra"
+
+partial_failure_policy:
+  rules:
+    - "preservar resultados de fuentes OK"
+    - "marcar fuente missing/error explícitamente"
+    - "no ocultar partial success"
+    - "no fabricar evidencia faltante"
+
+  authz_failure:
+    rule: >
+      Una falla de autorización no se trata como simple ausencia; aplicar
+      fail-closed según el scope requerido.
+
+reasoning_semantics:
+  allowed:
+    - "señalar coincidencias entre fuentes"
+    - "señalar tensiones entre fuentes"
+    - "comparar hechos temporalmente alineados"
+    - "formular hipótesis solo etiquetadas y soportadas por evidencia"
+    - "citar procedencia por observación"
+
+  forbidden:
+    - "correlación = causalidad"
+    - "IGF causó ARR"
+    - "delta prueba causa"
+    - "una fuente subsana falta de otra"
+    - "convertir ausencia en cero"
+
+chat_runtime:
+  required:
+    - "financial_diagnosis no hace early-return por delta_*"
+    - "ejecuta las fuentes requeridas en una sola rama"
+    - "construye contexto unificado"
+    - "hace una sola llamada OpenAI para el diagnóstico"
+    - "preserva otros intents y early-returns existentes fuera de financial_diagnosis"
+
+routing_preservation:
+  must_preserve:
+    - "igf_status"
+    - "arr_status"
+    - "delta_sales"
+    - "delta_discount"
+    - "delta_income"
+    - "commercial_state"
+    - "M6"
+    - "M11"
+    - "M12"
+    - "M18"
 
   rule: >
-    Esto es hipótesis de runtime shape, no contrato arquitectónico nuevo.
-    Verificar si puede reutilizar shapes existentes antes de proponer uno nuevo.
+    Solo financial_diagnosis cambia a ensamblaje multi-fuente. No convertir
+    consultas simples en diagnósticos multi-source.
 
-mandatory_failure_matrix:
-  cases:
-    - "IGF ok / ARR ok / M9 ok"
-    - "IGF missing / ARR ok / M9 ok"
-    - "IGF ok / ARR missing / M9 ok"
-    - "IGF ok / ARR ok / M9 error"
-    - "una fuente unauthorized"
-    - "periodos no alineados"
-    - "todas sin datos"
-    - "una fuente devuelve nulls"
+implementation_hint:
+  helper_preferred: "assembleFinancialDiagnosisEvidence"
 
-  for_each:
-    determine:
-      - "¿se responde?"
-      - "¿se limita?"
-      - "¿se clarifica?"
-      - "¿se aborta?"
-      - "qué provenance queda"
+  rule: >
+    Reutilizar loaders/helpers existentes donde sean read-only y seguros.
+    No duplicar lógica de negocio innecesariamente.
 
-tests_to_design_if_ready:
-  - "financial_diagnosis ejecuta IGF+ARR+M9"
-  - "no early-return con una sola fuente"
-  - "provenance separada"
-  - "misma planta"
-  - "cross-planta bloqueado"
-  - "periodos alineados"
-  - "periodos desalineados"
-  - "IGF ausente"
-  - "ARR ausente"
-  - "M9 ausente"
-  - "tool error"
-  - "null != 0"
-  - "ausencia != cero"
-  - "partial success"
-  - "sin causalidad"
-  - "IGF composition preservada"
-  - "M9 sigue siendo deltas"
-  - "ARR no se confunde con M9"
-  - "authz restrictiva"
-  - "sin HTTP interno"
-  - "sin writes"
-  - "contratos no modificados"
+context_policy:
+  required:
+    - "bloques separados"
+    - "orden determinista"
+    - "payloads acotados"
+    - "provenance visible"
+    - "limitations visibles"
+    - "no desbordar contexto con dumps completos"
 
-decision_rules:
+response_contract:
+  must_allow:
+    - "resumen financiero conjunto"
+    - "evidencia IGF"
+    - "evidencia ARR"
+    - "evidencia M9"
+    - "coincidencias"
+    - "tensiones"
+    - "limitaciones"
+    - "period mismatch"
 
-  ready:
-    all:
-      - "planner ya soporta multi-domain"
-      - "tools existentes son ejecutables"
-      - "runtime gap identificable"
-      - "provenance preservable"
-      - "authz compatible bajo regla restrictiva"
-      - "period alignment resoluble"
-      - "partial failure model defendible"
-      - "Reasoning Engine vigente acepta evidencia multi-source"
-      - "sin necesidad de G2/G3"
-      - "tests determinísticos"
+  must_not_claim_without_evidence:
+    - "causa confirmada"
+    - "responsable"
+    - "impacto causal"
+    - "resultado neutral por fuente faltante"
 
-    outcome: "DONE_PENDING_REVIEW"
-    next_task: "IMPL-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-EVIDENCE-ASSEMBLY-001"
+tests_required:
+  focal:
+    - "financial_diagnosis carga IGF+ARR+M9"
+    - "una sola llamada OpenAI"
+    - "no early-return delta dentro de financial_diagnosis"
+    - "IGF provenance"
+    - "ARR provenance"
+    - "M9 provenance"
+    - "periodos alineados"
+    - "periodos desalineados"
+    - "IGF missing"
+    - "ARR missing"
+    - "M9 missing"
+    - "M9 tool error"
+    - "partial success visible"
+    - "null != 0"
+    - "absence != 0"
+    - "error != absence"
+    - "una fuente no reemplaza otra"
+    - "authz más restrictiva"
+    - "GA"
+    - "GV"
+    - "cross-planta"
+    - "sin causalidad"
+    - "igf_status preservado"
+    - "arr_status preservado"
+    - "delta_* preservados fuera de financial_diagnosis"
+    - "M6/M11/M12/M18 preservados"
+    - "sin HTTP interno"
+    - "sin writes"
+    - "IES sin cambios"
+    - "Reasoning Engine sin cambios"
 
-  stopped:
-    when:
-      - "requiere modificar contrato IES/RE"
-      - "no puede preservarse provenance"
-      - "authz de fuentes es incompatible"
-      - "periodos no pueden alinearse"
-      - "tool orchestration no soporta multi-source sin cambio arquitectónico"
-
-    outcome: "STOPPED"
-    next_task: null
-
-state_and_percentage:
-  current_task:
-    state_change: false
-    percentage_change: false
-
-  future_impl:
-    global_numerator: 10.5
-    denominator: 20
-    percentage: 52.5
-    gain_pp: 0.0
+  regression:
+    - "capabilities"
+    - "planner"
+    - "tool orchestrator"
+    - "suite Director IA completa"
 
 in_scope:
   writable:
     - "docs/dev-loop/CURRENT_TASK.md"
-    - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-EVIDENCE-ASSEMBLY-READINESS-001.md"
+    - "docs/dev-loop/reports/IMPL-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-EVIDENCE-ASSEMBLY-001.md"
+    - "lib/director-ia-chat.js"
+    - "lib/director-ia-context.js"
+    - "lib/director-ia-igf-arr.js"
+    - "lib/director-ia-tools.js"
+    - "lib/director-ia-financial-diagnosis.js"
+    - "scripts/test-director-ia-tool-orchestrator.js"
+    - "test/director-ia-financial-diagnosis.test.js"
 
   read_only:
     - "AGENTS.md"
@@ -386,78 +329,100 @@ in_scope:
     - "package-lock.json"
 
 out_of_scope:
-  - "implementar"
-  - "modificar código"
-  - "modificar runtime"
-  - "modificar matriz"
-  - "modificar contratos"
-  - "reabrir IES"
-  - "reabrir Reasoning Engine"
-  - "modificar tests"
-  - "modificar frontend"
-  - "modificar SQL"
-  - "hacer writes"
-  - "hacer commit"
-  - "hacer push"
-  - "hacer merge"
-  - "ejecutar NEXT_TASK"
+  - "docs/director-ia/**"
+  - "capability matrix"
+  - "04-IES-STANDARD.md"
+  - "05-REASONING-ENGINE.md"
+  - "contratos"
+  - "IES runtime"
+  - "Reasoning Engine runtime"
+  - "server.js"
+  - "frontend"
+  - "SQL/schema/migrations"
+  - "writes"
+  - "HTTP interno"
+  - "commit"
+  - "push"
+  - "merge"
+  - "sync documental"
+  - "NEXT_TASK"
 
 acceptance_criteria:
-  - "Gap runtime localizado físicamente."
-  - "Planner multi-domain verificado."
-  - "Tool plan multi-source verificado."
-  - "IGF/ARR/M9 auditados."
-  - "Authz por fuente auditada."
-  - "Intersección de authz definida."
-  - "Semántica temporal definida."
-  - "Provenance multi-source definida."
-  - "Absence/error semantics definidas."
-  - "Failure matrix completada."
-  - "Conformidad IES/Reasoning Engine verificada."
-  - "G2/G3 determinados."
-  - "No se modificaron contratos."
-  - "52.5% no cambia."
-  - "Solo CURRENT_TASK y reporte cambian."
+  - "financial_diagnosis ejecuta IGF + ARR + M9."
+  - "No hay early-return de un delta en esa rama."
+  - "Existe evidencia multi-source en una sola corrida."
+  - "Provenance IGF/ARR/M9 separada."
+  - "Periodos preservados."
+  - "Desalineación no se oculta."
+  - "Authz más restrictiva preservada."
+  - "Partial failures visibles."
+  - "Ausencia/error/null/0 separados."
+  - "No causalidad."
+  - "Una sola llamada OpenAI para financial_diagnosis."
+  - "Otros intents preservados."
+  - "No HTTP interno."
+  - "No writes."
+  - "IES sin cambios."
+  - "Reasoning Engine sin cambios."
+  - "Global permanece 10.5/20 = 52.5%."
+  - "Tests focales verdes."
+  - "Regresión completa verde."
   - "git diff --check limpio."
+  - "Solo archivos autorizados modificados."
+
+required_validation:
+  - "node --test test/director-ia-financial-diagnosis.test.js"
+  - "node scripts/test-director-ia-capabilities.js"
+  - "node scripts/test-director-ia-planner.js"
+  - "node scripts/test-director-ia-tool-orchestrator.js"
+  - "node --test test/director-ia-*.test.js"
+  - "git diff --check"
+  - "git status"
+
+next_task_policy:
+  if_success:
+    propose_exactly_one: "DOCS-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-EVIDENCE-ASSEMBLY-SYNC-001"
+
+  rule: >
+    La sync posterior documenta capacidad transversal. No cambia estados de
+    módulos ni 10.5/20 = 52.5%.
 
 report_requirements:
-  path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-EVIDENCE-ASSEMBLY-READINESS-001.md"
+  path: "docs/dev-loop/reports/IMPL-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-EVIDENCE-ASSEMBLY-001.md"
 
   must_include:
     - "metadata"
     - "resumen ejecutivo"
-    - "baseline"
-    - "physical runtime gap"
-    - "planner"
-    - "tool orchestration"
-    - "chat runtime"
+    - "physical gap closed"
+    - "chat path"
+    - "planner alignment"
     - "IGF evidence"
     - "ARR evidence"
     - "M9 evidence"
+    - "provenance"
     - "period alignment"
     - "authz intersection"
-    - "provenance"
     - "absence/error semantics"
-    - "failure matrix"
-    - "reasoning semantics"
-    - "contract check"
-    - "implementation hypothesis"
+    - "partial failure"
+    - "OpenAI call count"
+    - "routing preservation"
+    - "semantic boundaries"
+    - "IES boundary"
+    - "Reasoning Engine boundary"
     - "tests"
-    - "gates"
     - "percentage"
-    - "risks"
-    - "NEXT_TASK"
     - "acciones no realizadas"
+    - "gates"
     - "secrets_check"
     - "git diff --check"
     - "git status"
+    - "NEXT_TASK"
 
 expected_terminal_state: >
-  DONE_PENDING_REVIEW si el gap puede resolverse solo con wiring/runtime y
-  evidencia multi-source conforme al contrato vigente. STOPPED si requiere
-  reabrir arquitectura o no puede preservar authz/provenance. BLOCKED si falta
-  gate indispensable.
+  DONE_PENDING_REVIEW si financial_diagnosis queda cableado con evidencia
+  multi-fuente conforme a contratos vigentes. STOPPED si aparece necesidad de
+  modificar IES/RE o no puede preservarse authz/provenance. BLOCKED si falta gate.
 
 max_attempts: 1
 
-result_report_path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-EVIDENCE-ASSEMBLY-READINESS-001.md"
+result_report_path: "docs/dev-loop/reports/IMPL-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-EVIDENCE-ASSEMBLY-001.md"
