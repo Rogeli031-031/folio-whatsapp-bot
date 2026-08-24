@@ -1,14 +1,14 @@
 # CURRENT_TASK
 
 ```yaml
-task_id: "DOCS-DIRECTOR-IA-M7-IGF-COMPOSITION-SYNC-001"
+task_id: "ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-007"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-08-23"
 human_authorization: >
   AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-23.
-  Apruebo DOCS-DIRECTOR-IA-M7-IGF-COMPOSITION-SYNC-001 y autorizo G1.
+  Apruebo ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-007 y autorizo G1.
 
 gates:
   G1_task_authorization: AUTHORIZED
@@ -17,164 +17,347 @@ gates:
   G8_calibration_materiality_signature: N/A
 
 objective: >
-  Sincronizar la documentación/capability matrix con la composición IGF de M7
-  ya integrada en main, documentando el bloque observado de compromiso_lines,
-  sus unidades, signos, nulls y fronteras semánticas, sin ampliar la capacidad
-  a causalidad, tendencias o nuevos deltas.
+  Priorizar el siguiente frente global de Director IA desde el baseline 50.0%,
+  reevaluando todos los módulos no COMPLETE por valor ejecutivo marginal,
+  razonamiento, conexión de evidencia, actionability, frecuencia, novedad real,
+  fuentes físicas y riesgo. Favorecer un dominio nuevo o una mejora de reasoning
+  material; no elegir por porcentaje ni por ranking previo.
 
 baseline:
-  implementation_task: "IMPL-DIRECTOR-IA-M7-IGF-COMPOSITION-001"
-  implementation_report: "docs/dev-loop/reports/IMPL-DIRECTOR-IA-M7-IGF-COMPOSITION-001.md"
+  numerator: 10.0
+  denominator: 20
+  percentage: 50.0
 
-  module: "M7 — IGF"
-  state_before: "PARTIAL"
-  state_after: "PARTIAL"
+  recent_depth:
+    - "M7: composición IGF"
+    - "M11: expediente comercial factual"
+    - "M12: notas de revisión"
+    - "M18: presupuesto semanal"
+    - "M4: comparativo mensual"
+    - "M6: GASTOS/INVERSIONES"
+    - "M2: status/history/doc metadata"
 
-  global_before: "10.0 / 20 = 50.0%"
-  global_after: "10.0 / 20 = 50.0%"
-  gain_pp: 0.0
+  rule: >
+    Esta tarea no cambia estados ni porcentaje.
 
-implemented_path: >
-  igf_status / financial_diagnosis ->
-  get_igf_snapshot ->
-  loadIgfCommitSnapshot ->
-  extractIgfComposition ->
-  bloque acotado ->
-  evidencia ->
-  respuesta
+primary_question: >
+  ¿Qué capacidad pendiente aporta ahora el mayor valor neto nuevo a Director IA:
+  un dominio todavía silencioso o una mejora de razonamiento suficientemente
+  material como para superar a los demás candidatos?
 
-must_document:
-  source:
-    - "igf.compromiso_lines"
-    - "una fila: planta + versión + mes"
+candidate_source:
+  canonical_matrix: "docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md"
 
-  units:
-    - "*_kg = $/kg, no kilogramos"
-    - "ton, $/kg, %, MXN son unidades distintas"
-    - "no mezclar ni sumar unidades incompatibles"
+  include:
+    - "PARTIAL"
+    - "INDIRECTA"
+    - "NO INTEGRADA"
+    - "NOT_STARTED"
+    - "bloqueados reconsiderables"
 
-  nulls:
-    - "null != 0"
-    - "null se preserva"
+  exclude:
+    - "COMPLETE"
+    - "N_A"
 
-  signs:
-    - "signo físico preservado"
-    - "hg_kg no se invierte"
+priority_model:
 
-  formula:
-    - "recalcularUtilYResultado es referencia semántica de fórmula"
-    - "no se ejecuta desde este slice"
-    - "gasto_kg no participa en esa fórmula"
-    - "snapshot no hace overlay de folios"
+  new_domain_value:
+    weight: "CRITICAL"
+    evaluate:
+      - "abre preguntas que hoy Director IA no puede responder"
+      - "reduce silencios funcionales"
+      - "no es simplemente una variante de otra consulta"
 
-  order:
-    - "ORDER_DELTAS es presentación"
-    - "ORDER_DELTAS no es fórmula"
+  reasoning_value:
+    weight: "CRITICAL"
+    evaluate:
+      - "explica mejor"
+      - "conecta evidencia"
+      - "mejora diagnóstico"
+      - "mejora priorización"
 
-  semantics:
-    - "composición != causalidad"
-    - "magnitud != importancia operacional"
-    - "línea != responsable"
-    - "snapshot != tendencia"
-    - "signo != juicio empresarial"
+  evidence_connectivity:
+    weight: "VERY_HIGH"
 
-  m9_boundary:
-    - "M9 conserva los deltas temporales"
-    - "M7 composition no crea deltas nuevos"
+  executive_value:
+    weight: "VERY_HIGH"
 
-  runtime:
-    - "read-only"
-    - "in-process"
-    - "sin HTTP interno"
-    - "sin writes"
+  actionability:
+    weight: "VERY_HIGH"
 
-  authz:
-    - "preservar authz IGF vigente"
-    - "GA 403 según regla vigente"
-    - "GV según regla vigente"
-    - "cross-planta bloqueado"
-    - "fail-closed"
+  incremental_value:
+    weight: "VERY_HIGH"
 
-test_evidence:
-  focal: "13/13 pass"
-  capabilities: "52/52 pass"
-  planner: "46/46 pass"
-  orchestrator: "26/26 pass"
-  suite: "657/657 pass"
-  git_diff_check: "clean"
+  frequency:
+    weight: "HIGH"
 
-state_policy:
-  - "M7 permanece PARTIAL"
-  - "M7 != COMPLETE"
-  - "no sumar 0.5 nuevamente"
-  - "10.0/20 = 50.0%"
-  - "ningún otro módulo cambia"
+  implementation_path:
+    weight: "MEDIUM"
+
+  risk:
+    weight: "MEDIUM"
+    penalize:
+      - "writes"
+      - "Excel"
+      - "S3"
+      - "Twilio"
+      - "side effects"
+      - "semantic ambiguity"
+      - "duplication"
+      - "stubs"
+
+  percentage_effect:
+    weight: "LOW"
+
+mandatory_rechecks:
+  - "M1"
+  - "M2 restante"
+  - "M4 restante"
+  - "M5"
+  - "M6 restante"
+  - "M7 restante"
+  - "M8"
+  - "M10"
+  - "M11 restante"
+  - "M12 restante"
+  - "M14"
+  - "M15"
+  - "M17"
+  - "M18 restante"
+  - "M20"
+  - "cualquier otro módulo no COMPLETE"
+
+special_rechecks:
+
+  M5:
+    required:
+      - "usar definición canónica exacta"
+      - "Taller/AT si corresponde"
+      - "qué preguntas nuevas abre"
+      - "qué parte es SELECT-only"
+      - "qué dependencia Excel existe"
+      - "frecuencia real"
+      - "si sigue siendo otra lista o un dominio operativo nuevo"
+      - "estado después de primer slice"
+      - "efecto porcentual real"
+
+  M8:
+    required:
+      - "ARR actual"
+      - "qué huecos reales quedan"
+      - "duplicación con M9"
+      - "si existe una vista/atributo hoy no expuesto"
+
+  M20:
+    required:
+      - "Home KPI"
+      - "si añade evidencia propia"
+      - "si solo resume M3"
+      - "valor incremental real"
+
+  M7_remaining:
+    required:
+      - "composition ya integrada"
+      - "evaluar solo huecos nuevos"
+      - "no continuar por inercia"
+
+  M11_remaining:
+    required:
+      - "dossier ya integrado"
+      - "evaluar solo huecos nuevos"
+
+  M12_remaining:
+    required:
+      - "revision notes ya integradas"
+      - "evaluar solo huecos nuevos"
+
+  M18_remaining:
+    required:
+      - "weekly budget query ya integrada"
+      - "restante write-heavy"
+      - "penalizar"
+
+  M4_M6_remaining:
+    required:
+      - "restante principalmente Excel/writes"
+      - "penalizar"
+
+hidden_evidence_review:
+  required: >
+    Buscar campos, líneas o estructuras ya cargadas en runtime pero todavía
+    omitidas del reasoning. Solo cuentan si aportan preguntas nuevas o reasoning
+    materialmente mejor que los módulos candidatos.
+
+mandatory_question_map:
+  for_each_candidate:
+    - "qué preguntas nuevas habilita"
+    - "qué ya responde"
+    - "qué duplica"
+    - "qué razonamiento nuevo aporta"
+    - "qué evidencia nueva expone"
+    - "qué conexión habilita"
+    - "qué NO puede afirmar"
+
+physical_audit:
+  for_each_candidate:
+    - "fuente"
+    - "helper"
+    - "query"
+    - "intent"
+    - "tool"
+    - "executor"
+    - "authz"
+    - "plant_scope"
+    - "side_effects"
+    - "external_dependency"
+    - "semantic_risk"
+    - "testability"
+    - "first_slice"
+    - "state_after_slice"
+    - "percentage_effect"
+
+mandatory_table:
+  columns:
+    - "rank"
+    - "module"
+    - "current_state"
+    - "new_domain_value"
+    - "new_questions"
+    - "reasoning_value"
+    - "evidence_connectivity"
+    - "executive_value"
+    - "actionability"
+    - "incremental_value"
+    - "frequency"
+    - "source_ready"
+    - "wiring_ready"
+    - "dependencies"
+    - "risk"
+    - "first_slice"
+    - "state_after_slice"
+    - "percentage_effect"
+    - "decision"
+
+ranking_rules:
+  - "No elegir por porcentaje."
+  - "No elegir por facilidad sola."
+  - "No elegir por ranking anterior."
+  - "No continuar M7/M11/M12/M18/M4/M6 por inercia."
+  - "Premiar dominio nuevo si aporta valor ejecutivo fuerte."
+  - "Premiar reasoning oculto solo si es material."
+  - "Penalizar listas redundantes."
+  - "Penalizar write-heavy y external dependencies."
+  - "Preferir SELECT-only e in-process."
+
+winner_requirements:
+  exactly_one: true
+
+  must_include:
+    - "ganador"
+    - "segundo lugar"
+    - "preguntas nuevas"
+    - "valor de dominio nuevo"
+    - "reasoning nuevo"
+    - "por qué gana"
+    - "por qué pierde segundo"
+    - "primer slice"
+    - "estado posterior"
+    - "efecto porcentual"
+    - "riesgos"
+    - "dependencias"
+
+next_task_policy:
+  if_readiness_needed:
+    pattern: "ARCH-DIRECTOR-IA-<MODULE>-<SLICE>-READINESS-001"
+
+  if_fully_verified:
+    pattern: "IMPL-DIRECTOR-IA-<MODULE>-<SLICE>-001"
+
+  rule: >
+    Proponer exactamente una NEXT_TASK. No autorizar ni ejecutar.
 
 in_scope:
   writable:
     - "docs/dev-loop/CURRENT_TASK.md"
-    - "docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md"
-    - "docs/dev-loop/reports/DOCS-DIRECTOR-IA-M7-IGF-COMPOSITION-SYNC-001.md"
+    - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-007.md"
 
   read_only:
     - "AGENTS.md"
     - "docs/dev-loop/**"
     - "docs/director-ia/**"
     - "lib/**"
+    - "server.js"
+    - "frontend-dashboard/**"
     - "test/**"
     - "scripts/**"
+    - "sql/**"
+    - "package.json"
+    - "package-lock.json"
 
 out_of_scope:
-  - "código"
-  - "runtime"
-  - "tests"
-  - "frontend"
-  - "SQL/schema"
-  - "contratos"
-  - "recalcular producto"
-  - "overlay de folios"
-  - "deltas nuevos"
-  - "causalidad"
-  - "commit"
-  - "push"
-  - "merge"
+  - "implementar"
+  - "modificar código"
+  - "modificar runtime"
+  - "modificar matriz"
+  - "modificar contratos"
+  - "modificar tests"
+  - "modificar frontend"
+  - "modificar SQL"
+  - "hacer writes"
+  - "hacer commit"
+  - "hacer push"
+  - "hacer merge"
   - "ejecutar NEXT_TASK"
 
 acceptance_criteria:
-  - "Implementación M7 verificada físicamente."
-  - "Composición IGF documentada."
-  - "Unidades documentadas correctamente."
-  - "Null semantics documentada."
-  - "Signos documentados."
-  - "hg_kg no invertido."
-  - "gasto_kg fuera de fórmula."
-  - "ORDER_DELTAS documentado solo como presentación."
-  - "No ejecución de recalcularUtilYResultado documentada."
-  - "No overlay documentado."
-  - "Composición separada de causalidad."
-  - "M9 preservado como dominio de deltas."
-  - "M7 permanece PARTIAL."
-  - "M7 no COMPLETE."
-  - "10.0/20 = 50.0%."
-  - "Ningún otro módulo cambia."
-  - "Solo tres archivos autorizados modificados."
+  - "Baseline 10.0/20 = 50.0% verificado."
+  - "Todos los módulos no COMPLETE relevantes reevaluados."
+  - "New-domain value ponderado explícitamente."
+  - "Reasoning value ponderado explícitamente."
+  - "Hidden evidence revisada."
+  - "Se identificaron preguntas nuevas."
+  - "Se verificaron fuentes."
+  - "Existe ranking."
+  - "Existe exactamente un ganador."
+  - "Existe exactamente un segundo lugar."
+  - "Existe exactamente una NEXT_TASK."
+  - "No se implementó."
+  - "No se modificó matriz."
+  - "Solo CURRENT_TASK y reporte cambiaron."
   - "git diff --check limpio."
 
-next_task_policy:
-  if_success:
-    propose_exactly_one: "ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-007"
-  rule: >
-    Repriorizar globalmente desde 50.0%. No asumir M5 por haber sido segundo
-    en la priorización anterior.
-
 report_requirements:
-  path: "docs/dev-loop/reports/DOCS-DIRECTOR-IA-M7-IGF-COMPOSITION-SYNC-001.md"
+  path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-007.md"
+
+  must_include:
+    - "metadata"
+    - "resumen ejecutivo"
+    - "baseline"
+    - "current capabilities"
+    - "new-domain gaps"
+    - "reasoning gaps"
+    - "hidden evidence gaps"
+    - "candidatos"
+    - "tabla"
+    - "ranking"
+    - "ganador"
+    - "segundo"
+    - "primer slice"
+    - "estado posterior"
+    - "porcentaje"
+    - "riesgos"
+    - "dependencias"
+    - "NEXT_TASK"
+    - "acciones no realizadas"
+    - "gates"
+    - "secrets_check"
+    - "git diff --check"
+    - "git status"
 
 expected_terminal_state: >
-  DONE_PENDING_REVIEW si la matriz queda fiel al runtime integrado.
-  STOPPED si existe contradicción física.
-  BLOCKED si falta gate.
+  DONE_PENDING_REVIEW si existe un ganador defendible. STOPPED si ningún frente
+  restante aporta valor marginal suficiente. BLOCKED si falta gate indispensable.
 
 max_attempts: 1
 
-result_report_path: "docs/dev-loop/reports/DOCS-DIRECTOR-IA-M7-IGF-COMPOSITION-SYNC-001.md"
+result_report_path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-007.md"
