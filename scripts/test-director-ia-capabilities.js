@@ -68,6 +68,7 @@ const cases = [
     assert(isDirectorIaDomainReadable("clasificacion_apoyos") === true, "clasificacion query readable");
     assert(isDirectorIaDomainReadable("presupuestos") === true, "presupuestos query readable");
     assert(isDirectorIaDomainReadable("revision_notes") === true, "revision_notes readable");
+    assert(isDirectorIaDomainReadable("commercial_dossier") === true, "commercial_dossier readable");
     const summary = buildDirectorIaCapabilitiesSummary();
     assert(summary.readable.length > 0, "summary readable");
     assert(summary.not_integrated.length > 0, "summary not_integrated");
@@ -117,6 +118,8 @@ const cases = [
   () => expectAllowed("¿Qué dice la bitácora?"),
   () => expectAllowed("¿Qué comentarios hay del cliente?"),
   () => expectAllowed("¿Qué clientes dejaron de comprar?"),
+  () => expectAllowed("Dame el expediente comercial de Acme"),
+  () => expectAllowed("Muéstrame estado, comentarios y acciones de Acme"),
   () => expectAllowed("cómo va la planta"),
   () => expectAllowed("folio 123"),
   () => expectAllowed("háblame del folio"),
