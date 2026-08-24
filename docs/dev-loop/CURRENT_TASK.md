@@ -1,14 +1,14 @@
 # CURRENT_TASK
 
 ```yaml
-task_id: "IMPL-DIRECTOR-IA-DAILY-EXECUTIVE-BRIEF-001"
+task_id: "DOCS-DIRECTOR-IA-DAILY-EXECUTIVE-BRIEF-SYNC-001"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-08-24"
 human_authorization: >
   AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-24.
-  Apruebo IMPL-DIRECTOR-IA-DAILY-EXECUTIVE-BRIEF-001
+  Apruebo DOCS-DIRECTOR-IA-DAILY-EXECUTIVE-BRIEF-SYNC-001
   y autorizo G1.
 
 gates:
@@ -19,161 +19,107 @@ gates:
   G8_calibration_materiality_signature: N/A
 
 mode:
-  type: "IMPLEMENTATION"
-  first_slice: "B — daily sales + daily discount/kg"
+  type: "DOCUMENTATION_SYNC_ONLY"
+  implementation: false
+  code_changes: false
+  test_changes: false
+  contract_changes: false
+  sql_execution: false
 
 objective: >
-  Implementar un brief ejecutivo diario para que Director IA pueda responder
-  preguntas abiertas como “¿Cómo nos fue ayer?” sin exigir que el usuario
-  nombre previamente venta o descuento. El runtime debe cargar evidencia fresca
-  de venta diaria y descuento/kg para la misma planta/fecha y GPT debe sintetizar
-  qué merece atención sin causalidad inventada ni respuestas programadas.
+  Sincronizar la documentación de Director IA con el runtime ya integrado de
+  daily_executive_brief: petición abierta de panorama diario que compone venta
+  diaria + descuento/kg para la misma planta/fecha, con evidencia fresca,
+  provenance/limitations separadas y síntesis ejecutiva por GPT.
 
 baseline:
   global: "10.5 / 20 = 52.5%"
-  expected_delta: "0.0 pp"
+  delta: "0.0 pp"
 
-readiness:
-  task: "ARCH-DIRECTOR-IA-DAILY-EXECUTIVE-BRIEF-001"
-  determination: "READY_WITH_LIMITS"
-  selected_slice: "B"
-
-canonical_intent:
+implemented_capability:
   name: "daily_executive_brief"
+  first_slice: "B — daily sales + daily discount/kg"
 
+canonical_semantics:
   meaning: >
-    Solicitud semántica de panorama/resumen ejecutivo de un día sin especificar
-    una métrica concreta.
+    Solicitud abierta de panorama diario sin exigir que el usuario nombre
+    previamente venta o descuento.
 
-  rule: >
-    No implementar mediante phrasebook.
-
-semantic_generalization:
-  examples_test_only:
+  examples_for_documentation:
     - "¿Cómo nos fue ayer?"
     - "¿Qué tal estuvo ayer?"
     - "Dame el resumen de ayer."
-    - "¿Cómo cerramos el día?"
-    - "¿Qué pasó ayer?"
-    - "¿Algo importante de ayer?"
-    - "¿Qué debo saber de ayer?"
+    - "¿Qué panorama tuvimos ayer?"
 
-  requirement: >
-    Debe generalizar a wording no listado.
+  anti_phrasebook: >
+    Las frases son ejemplos de intención, no reglas literales de routing.
 
-  prohibited:
-    - "switch por frases exactas"
-    - "phrasebook"
-    - "hardcode de respuesta"
-
-standalone_precedence:
-  rule: >
-    Una pregunta explícita de venta o descuento conserva sus intents existentes.
-
-  examples:
-    sales: "¿Cómo estuvo la venta ayer?"
-    expected_sales_intent: "daily_sales_deviation"
-
-    discount: "¿Cómo estuvo el descuento/kg ayer?"
-    expected_discount_intent: "daily_discount_deviation"
-
-  brief_only_when: >
-    El usuario pide panorama diario sin seleccionar una métrica específica.
+implemented_flow: >
+  daily overview question
+    → daily_executive_brief
+    → resolve plant/date
+    → fresh daily sales pack
+    → fresh daily discount/kg pack
+    → compose metric blocks
+    → independent provenance + limitations
+    → HILO
+    → GPT executive synthesis
 
 date_semantics:
   timezone: "America/Mexico_City"
 
   rules:
-    - "reutilizar resolución diaria existente"
     - "ayer = día calendario completo"
     - "fecha explícita gana"
-    - "hoy no se trata silenciosamente como día cerrado"
+    - "hoy no se trata silenciosamente como cerrado"
     - "0 filas != 0"
 
-plant_semantics:
-  rules:
-    - "usar planta explícita si existe y está autorizada"
-    - "si existe contexto de planta válido, revalidarlo"
-    - "respetar authz"
-    - "no cruzar plantas"
-
-metric_composition:
+metric_blocks:
 
   sales:
-    source: "existing daily_sales_deviation pack"
-    required:
+    source: "daily_sales_deviation"
+    includes:
       - "target kg"
       - "reference"
       - "delta"
       - "contributors"
-      - "evidence"
-      - "information gaps"
+      - "business evidence"
+      - "gaps"
       - "provenance"
 
   discount_per_kg:
-    source: "existing daily_discount_deviation pack"
-    required:
+    source: "daily_discount_deviation"
+    includes:
       - "target ratio"
-      - "reference pooled same-weekday 14d"
+      - "reference"
       - "delta"
       - "contributors"
-      - "evidence"
-      - "information gaps"
+      - "business evidence"
+      - "gaps"
       - "provenance"
 
-  excluded_first_slice:
+  excluded:
     - "daily income"
     - "generic KPI registry"
-    - "monthly metrics"
-    - "IGF"
-    - "Folios"
 
-brief_pack:
-  preferred_name: "daily_executive_brief"
-
-  required:
-    - "plant"
-    - "target_date"
-    - "sales block"
-    - "discount block"
-    - "metric-specific limitations"
-    - "metric-specific provenance"
-    - "partial-data state"
-
-  principle: >
-    Componer evidencia; no componer conclusiones causales.
-
-provenance:
-  rule: >
-    Venta y descuento conservan provenance independiente.
-
-limitations:
-  rule: >
-    Venta y descuento conservan sus limitaciones/gaps independientes.
+composition_boundary:
+  invariant: >
+    Shared plant/date does not merge provenance, limitations or causal claims.
 
   prohibited:
-    - "colapsar todos los gaps en una causa única"
-    - "hacer que comentario de un cliente pruebe causalidad"
+    - "sales gap becomes discount gap"
+    - "discount evidence proves sales cause"
+    - "single synthetic causal explanation"
 
 partial_data:
+  rules:
+    - "sales available + discount unavailable => useful partial brief"
+    - "discount available + sales unavailable => useful partial brief"
+    - "both unavailable => no invented brief"
+    - "missing != zero"
 
-  required_behavior:
-    sales_ok_discount_missing:
-      - "responder con venta"
-      - "indicar que descuento no pudo establecerse"
-
-    discount_ok_sales_missing:
-      - "responder con descuento"
-      - "indicar que venta no pudo establecerse"
-
-    both_missing:
-      - "no inventar resumen"
-      - "explicar ausencia/error correctamente"
-
-  invariant: "missing != zero"
-
-materiality_strategy:
-  selected: "relative evidence + GPT synthesis"
+materiality:
+  strategy: "relative evidence + GPT synthesis"
 
   runtime:
     provides:
@@ -187,25 +133,23 @@ materiality_strategy:
   GPT:
     decides:
       - "what stands out"
-      - "whether picture is mixed"
+      - "whether the picture is mixed"
       - "what deserves attention"
       - "what remains unexplained"
 
-  prohibited:
-    - "arbitrary hard thresholds"
-    - "hardcoded good/bad classification"
-    - "learned materiality model in this slice"
+  not_implemented:
+    - "hard thresholds"
+    - "good/bad day rules"
+    - "learned materiality score"
 
 reasoning_boundary:
-
-  deterministic_runtime:
-    - "identity/authz"
+  runtime:
     - "plant"
     - "date"
     - "metric math"
     - "references"
-    - "deltas"
     - "contributors"
+    - "authz"
     - "provenance"
     - "absence/error"
 
@@ -213,260 +157,136 @@ reasoning_boundary:
     - "executive synthesis"
     - "salience"
     - "tension between metrics"
-    - "explanation with caveats"
-    - "follow-up suggestions"
+    - "follow-up wording"
 
-causality_boundary:
+causality:
+  invariant: >
+    Movimiento conjunto no implica causalidad.
 
-  allowed:
-    - >
-      “La venta subió y también aumentó el descuento/kg.”
-    - >
-      “Conviene revisar qué clientes contribuyeron a ambos movimientos.”
+  safe_example: >
+    “La venta subió y también aumentó el descuento/kg; conviene revisar qué
+    clientes contribuyeron a ambos movimientos.”
 
   prohibited:
     - "el descuento provocó la venta"
     - "vendimos más gracias al descuento"
-    - "comentario = causa demostrada"
 
-conversation_state:
-
-  parent_intent: "daily_executive_brief"
-
-  required_state:
-    - "active_date"
-    - "plant"
-    - "last_evidence_bundle_type"
-    - "brief-compatible information gaps"
-
+precedence:
   preserve:
-    - "previous_frame behavior"
-    - "topic-return behavior"
-
-  prohibited:
-    - "topic stack"
-    - "persistent memory as daily navigation"
-
-cross_metric_followup:
-
-  required:
-    - >
-      brief -> “¿Y la venta?” -> daily_sales_deviation using same active_date
-    - >
-      brief -> “¿Y el descuento?” -> daily_discount_deviation using same active_date
+    - "explicit sales question -> daily_sales_deviation"
+    - "explicit discount question -> daily_discount_deviation"
 
   rule: >
-    Reutilizar daily cross-metric runtime ya integrado.
+    daily_executive_brief aplica cuando el usuario pide panorama diario sin
+    seleccionar métrica.
 
-open_followup:
+conversation_state:
+  parent_intent: "daily_executive_brief"
 
+  preserves:
+    - "active_date"
+    - "plant context"
+    - "previous_frame semantics"
+    - "topic return"
+
+cross_metric_followup:
+  examples:
+    - "brief -> ¿Y la venta? -> daily_sales_deviation"
+    - "brief -> ¿Y el descuento? -> daily_discount_deviation"
+
+  rule: >
+    Same active_date preserved; existing daily cross-metric runtime reused.
+
+open_followups:
   examples:
     - "¿Qué te llama la atención?"
     - "¿Qué más ves?"
     - "¿Qué debería revisar?"
     - "¿Qué sigue sin explicación?"
 
-  expected: >
-    Mantener el brief como contexto efectivo y llegar a GPT con evidencia del
-    brief, no aclarar innecesariamente ni degradar a una sola métrica.
+  behavior: >
+    Heredan el brief y llegan a GPT con evidencia vigente.
 
-mandatory_validation_conversation:
-
-  turns:
-    - "¿Cómo nos fue ayer?"
-    - "¿Qué te llama la atención?"
-    - "¿Y la venta?"
-    - "¿Y el descuento?"
-    - "¿Quién lo movió más?"
-    - "¿Sabemos por qué?"
-    - "¿Qué sigue sin explicación?"
-
-  validate_each_turn:
-    - "planner"
-    - "effective intent"
-    - "active_date"
-    - "plant"
-    - "loaded pack"
-    - "fresh requery"
-    - "GPT invocation"
-    - "limitations"
-
-holdout_validation:
-
-  unseen_wording_required: true
-
-  examples:
-    - "Cuéntame cómo estuvo el día de ayer."
-    - "¿Qué panorama tuvimos ayer?"
-    - "¿Hay algo de ayer que deba revisar?"
-
-  rule: >
-    At least one holdout must not depend on literal wording present in routing
-    implementation.
-
-neutral_day_behavior:
-  requirement: >
-    Si ambas métricas están cerca de sus referencias, GPT puede indicarlo.
-    No fabricar una anomalía para hacer la respuesta interesante.
-
-mixed_day_behavior:
-  setup:
-    - "sales above reference"
-    - "discount/kg above reference"
-
-  requirement: >
-    Presentar la tensión ejecutiva sin atribuir causalidad.
-
-tooling:
-  preferred:
-    - "reuse existing sales loader"
-    - "reuse existing discount loader"
-    - "compose in one brief loader/tool"
-
-  prohibited:
-    - "internal HTTP"
-    - "duplicate daily SQL unnecessarily"
-    - "parallel divergent formulas"
-
-new_files_if_needed:
-  preferred:
-    - "lib/director-ia-daily-executive-brief.js"
-    - "test/director-ia-daily-executive-brief.test.js"
-
-preserve:
+preserved:
   - "daily_sales_deviation"
   - "daily_discount_deviation"
   - "daily cross-metric followup"
-  - "strategy B natural followup"
+  - "natural followup strategy B"
   - "intra-session topic return"
   - "action-person routing"
   - "IGF reviewable supports"
-  - "persistent memory"
+  - "persistent pending memory"
   - "M9"
 
-out_of_scope_features:
+deferred:
   - "last month / last 3 months trend analysis"
-  - "CASA / COMISIONISTA graph analysis"
+  - "CASA / COMISIONISTA trend conversation"
   - "daily income"
-  - "generic metric registry"
   - "scheduled morning brief"
-  - "notifications"
+  - "personalized greeting"
+  - "SEH directory"
+  - "Taller Mayor by unit"
   - "closed-month IGF semantics"
   - "longitudinal client profile"
-  - "Taller Mayor unit analysis"
-  - "organizational directory / SEH"
-  - "personalized greeting"
 
-tests_required:
+test_evidence:
+  focal_daily_executive_brief: "18/18"
+  director_ia_suite: "915/915"
+  planner: "58/58"
+  capabilities: "56/56"
+  orchestrator: "28/28"
+  git_diff_check: "clean"
 
-  planner:
-    - "generic daily overview -> daily_executive_brief"
-    - "explicit sales -> daily_sales_deviation"
-    - "explicit discount -> daily_discount_deviation"
-    - "semantic holdouts"
+module_state:
+  changed_modules: "none"
+  global: "10.5 / 20 = 52.5%"
+  delta: "0.0 pp"
 
-  pack:
-    - "sales + discount same date"
-    - "same plant"
-    - "fresh evidence"
-    - "separate provenance"
-    - "separate limitations"
-
-  date:
-    - "yesterday CDMX"
-    - "explicit date"
-    - "today semantics"
-    - "no rows != zero"
-
-  partial:
-    - "sales only available"
-    - "discount only available"
-    - "both unavailable"
-    - "tool/source error"
-
-  conversation:
-    - "brief -> open followup"
-    - "brief -> sales"
-    - "brief -> discount"
-    - "brief -> contributor"
-    - "brief -> why"
-    - "brief -> unresolved gap"
-
-  reasoning:
-    - "neutral day does not manufacture issue"
-    - "mixed day does not manufacture causality"
-
-  regression:
-    - "daily sales"
-    - "daily discount"
-    - "daily cross-metric"
-    - "topic return"
-    - "action-person"
-    - "IGF reviewable supports"
-    - "persistent memory"
-    - "planner"
-    - "capabilities"
-    - "orchestrator"
-    - "full Director IA suite"
+contracts:
+  Constitution: "unchanged"
+  EKE: "unchanged"
+  IES_04: "unchanged"
+  Reasoning_Engine_05: "unchanged"
 
 in_scope:
   writable:
     - "docs/dev-loop/CURRENT_TASK.md"
-    - "docs/dev-loop/reports/IMPL-DIRECTOR-IA-DAILY-EXECUTIVE-BRIEF-001.md"
-    - "lib/director-ia-chat.js"
-    - "lib/director-ia-planner.js"
-    - "lib/director-ia-conversation-state.js"
-    - "lib/director-ia-tools.js"
-    - "lib/director-ia-daily-executive-brief.js"
-    - "test/director-ia-daily-executive-brief.test.js"
-
-  conditional_writable:
-    - "existing Director IA test scripts only if legitimate regression assertions require it"
-
-  read_only:
-    - "docs/director-ia/**"
-    - "sql/**"
-    - "frontend-dashboard/**"
-    - "contracts"
+    - "docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md"
+    - "docs/dev-loop/reports/DOCS-DIRECTOR-IA-DAILY-EXECUTIVE-BRIEF-SYNC-001.md"
 
 out_of_scope:
-  - "database writes"
-  - "schema"
-  - "SQL execution"
-  - "contract changes"
+  - "code"
+  - "tests"
+  - "runtime"
+  - "contracts"
+  - "SQL"
   - "matrix changes"
-  - "monthly/trend feature"
+  - "monthly trend implementation"
+  - "CASA/COMISIONISTA implementation"
   - "commit"
   - "push"
   - "merge"
 
 acceptance_criteria:
-  - "daily_executive_brief implemented."
-  - "First slice B only."
-  - "Generic daily overview reaches GPT."
-  - "Sales + discount packs composed."
-  - "Same plant/date."
-  - "No phrasebook."
-  - "Explicit metric paths preserved."
-  - "Separate provenance/gaps."
-  - "Partial data works."
-  - "Neutral day safe."
-  - "Mixed day no causal claim."
-  - "Open followups work."
-  - "Cross-metric followups work."
-  - "No daily income invented."
-  - "Existing capabilities preserved."
-  - "Full suite green."
-  - "git diff --check clean."
+  - "daily_executive_brief documented."
+  - "First slice B documented."
+  - "Open daily overview semantics documented."
+  - "No phrasebook explicit."
+  - "Sales + discount composition documented."
+  - "Separate provenance/limitations documented."
+  - "Partial-data behavior documented."
+  - "Materiality/GPT boundary documented."
+  - "Cross-metric followup documented."
+  - "Open followups documented."
+  - "Explicit metric precedence documented."
+  - "915/915 evidence recorded."
+  - "No module coverage change."
   - "52.5% preserved."
-
-percentage_policy:
-  before: "10.5 / 20 = 52.5%"
-  after: "10.5 / 20 = 52.5%"
-  delta: "0.0 pp"
+  - "Only three authorized files changed."
+  - "git diff --check clean."
 
 next_task:
-  propose_only: "DOCS-DIRECTOR-IA-DAILY-EXECUTIVE-BRIEF-SYNC-001"
+  propose_only: "AUDIT-DIRECTOR-IA-PRODUCTION-CONVERSATION-GAP-009"
   authorize: false
   execute: false
 
@@ -475,4 +295,4 @@ expected_terminal_state: "DONE_PENDING_REVIEW"
 max_attempts: 1
 
 result_report_path: >
-  docs/dev-loop/reports/IMPL-DIRECTOR-IA-DAILY-EXECUTIVE-BRIEF-001.md
+  docs/dev-loop/reports/DOCS-DIRECTOR-IA-DAILY-EXECUTIVE-BRIEF-SYNC-001.md
