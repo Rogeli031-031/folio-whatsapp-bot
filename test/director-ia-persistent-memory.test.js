@@ -259,6 +259,7 @@ describe("askDirectorIa persistent memory — day1/day2", () => {
       loadPlantDiagnosisForChat: undefined,
       loadFinancialDiagnosisForChat: undefined,
       persistentMemoryStore: null,
+      loadActionPersonBoardForChat: undefined,
     });
   });
 

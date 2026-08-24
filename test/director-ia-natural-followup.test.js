@@ -272,6 +272,7 @@ describe("askDirectorIa natural follow-up inherit", () => {
       loadTallerAtForChat: undefined,
       resolveConversationCandidates: undefined,
       persistentMemoryStore: null,
+      loadActionPersonBoardForChat: undefined,
     });
   });
 

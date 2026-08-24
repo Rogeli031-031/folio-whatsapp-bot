@@ -1,343 +1,349 @@
 # CURRENT_TASK
 
 ```yaml
-task_id: "ARCH-DIRECTOR-IA-ACTION-PERSON-ROUTING-READINESS-001"
+task_id: "IMPL-DIRECTOR-IA-ACTION-PERSON-ROUTING-001"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-08-24"
 human_authorization: >
   AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-24.
-  Apruebo ARCH-DIRECTOR-IA-ACTION-PERSON-ROUTING-READINESS-001
+  Apruebo IMPL-DIRECTOR-IA-ACTION-PERSON-ROUTING-001
   y autorizo G1.
 
 gates:
   G1_task_authorization: AUTHORIZED
-  G2_architecture_change: N/A_PENDING_AUDIT
-  G3_new_architecture_contract: N/A_PENDING_AUDIT
+  G2_architecture_change: N/A
+  G3_new_architecture_contract: N/A
   G5_contract_conformance: N/A
   G8_calibration_materiality_signature: N/A
 
 objective: >
-  Auditar el mecanismo mínimo y generalizable para que preguntas naturales sobre
-  una acción y/o su responsable, por ejemplo “¿Qué pasó con la acción de Julio
-  Pérez?”, ruteen al Action Register y carguen evidencia real disponible, sin
-  depender de un phrasebook cerrado, sin confundir responsable de acción con
-  responsable del problema y sin inventar la razón de un vencimiento o falta de
-  cierre.
+  Implementar la estrategia C aprobada para consultas naturales sobre acciones
+  y responsables: fortalecer los intents existentes de Action Register,
+  especialmente action_status, para que preguntas como “¿Qué pasó con la acción
+  de Julio Pérez?” y “¿Qué acciones tiene Julio Pérez?” carguen evidencia real
+  del board y puedan sostener follow-ups naturales, sin phrasebook nuevo,
+  sin seleccionar acciones ambiguas en silencio y sin atribuir causalidad,
+  culpa o motivo no documentado.
 
 baseline:
   global: "10.5 / 20 = 52.5%"
   percentage_effect: "0.0 pp"
 
-  prior_audit:
-    task: "AUDIT-DIRECTOR-IA-CONVERSATIONAL-PRODUCT-GAP-004"
-    bottleneck: >
-      Action Register por persona/acción no se rutea aunque board, responsable
-      y vencimiento ya existen.
-    failure_class: "MISSING_INFRASTRUCTURE"
+  readiness:
+    task: "ARCH-DIRECTOR-IA-ACTION-PERSON-ROUTING-READINESS-001"
+    determination: "READY_WITH_LIMITS"
+    strategy: "C — strengthen existing AR intents"
+    canonical_parent_intent: "action_status"
 
 product_principle: >
-  Si los datos ya existen, la infraestructura debe llevar la pregunta a la
-  evidencia correcta. GPT conserva la explicación conversacional y reconoce
-  lo que todavía no está documentado.
+  Los datos de Action Register ya existen. La implementación debe llevar la
+  pregunta a esa evidencia y dejar que GPT converse sobre ella. No crear un
+  evaluador de desempeño de personas.
 
-central_question: >
-  ¿Cómo debe detectar Director IA que una pregunta trata sobre una acción
-  registrada y/o una persona responsable, sin codificar expresiones exactas ni
-  permitir que memoria u otro routing intercepte incorrectamente la consulta?
+known_failure_to_fix:
 
-known_failure:
-  example: "¿Qué pasó con la acción de Julio Pérez?"
-  current_behavior:
-    - "puede ser interceptado por persistent-memory 'qué pasó con'"
-    - "planner aislado queda unknown"
-    - "no carga Action Register"
-    - "termina en clarificación"
-  known_data:
-    - "Action Register board"
-    - "acciones"
-    - "responsable"
-    - "estado"
-    - "fecha/vencimiento"
-    - "historial disponible según path actual"
+  singular_action_token:
+    current_problem: >
+      Tras normalización “acción” -> “accion”, el regex actual no cubre
+      correctamente singular/plural y deja consultas válidas en unknown.
 
-mandatory_runtime_audit:
+  action_status_semantics:
+    current_problem: >
+      action_status exige señales adicionales como abiert/pendient/estado/tema/
+      register, por lo que consultas naturales de acción + responsable pueden
+      quedar unknown aunque sean inequívocamente Action Register.
 
-  inspect:
-    - "planner intents de Action Register"
-    - "responsible_lookup"
-    - "action_status"
-    - "overdue_actions"
-    - "persistent-memory resume detector"
-    - "natural follow-up inheritance"
-    - "Action Register focused context/loaders"
-    - "responsible/entity resolution"
-    - "history/resultado de acciones"
-    - "askDirectorIa routing precedence"
+  inheritance:
+    current_problem: >
+      action_status no está en INHERITABLE_INTENTS, por lo que follow-ups como
+      “¿Está vencida?” o “¿Por qué no la cerró?” pierden el hilo.
 
-  trace_exactly:
+routing:
+
+  canonical_intent: "action_status"
+
+  required_examples:
     - "¿Qué pasó con la acción de Julio Pérez?"
     - "¿Qué acciones tiene Julio Pérez?"
-    - "¿Tiene alguna vencida?"
-    - "¿Por qué no la cerró?"
-    - "¿Qué falta saber?"
-    - "¿Qué necesitas de Julio?"
+    - "¿Hay una acción de Julio Pérez?"
+    - "¿Cómo va la acción de Julio Pérez?"
+    - "¿Julio Pérez tiene algo vencido?"
 
-routing_precedence_audit:
-
-  question: >
-    ¿Qué debe ganar cuando un mensaje contiene señales de retomar (“qué pasó con”)
-    y a la vez señales estructurales de Action Register (“acción”, responsable)?
-
-  determine:
-    - "explicit Action Register semantics vs memory resume"
-    - "named responsible resolution"
-    - "current parent_intent"
-    - "standalone AR query"
-    - "follow-up AR query"
-
-  principle: >
-    Un intent explícito sobre acción/responsable debe ganar sobre un trigger
-    genérico de memoria.
+  rules:
+    - "semántica explícita de Action Register + responsable debe rutear a AR"
+    - "planner debe resolver antes de que memory resume genérico intercepte"
+    - "persistent memory no se desactiva globalmente"
+    - "standalone AR query no requiere contexto previo"
+    - "follow-up AR puede heredar action_status"
 
 anti_phrasebook:
 
   prohibited:
-    - "hardcode 'qué pasó con la acción de'"
-    - "listas de verbos para Julio/acción"
+    - "hardcode exacto de 'qué pasó con la acción de'"
+    - "if contains Julio"
     - "lista de nombres de responsables"
-    - "if text contains Julio"
-    - "score arbitrario de palabras"
+    - "listas extensas de verbos"
+    - "nuevo catálogo de expresiones"
+    - "score arbitrario"
 
   required:
-    - "usar señales estructurales ya existentes"
-    - "intent semántico de Action Register"
-    - "resolución física de responsable"
-    - "contexto conversacional cuando aplique"
+    - "corregir semántica estructural accion/acciones"
+    - "usar resolución física de responsable"
+    - "usar intents AR existentes"
+
+planner_changes:
+
+  mandatory:
+    - "corregir detección accion/acciones"
+    - "permitir action_status cuando exista semántica clara de acción + responsable"
+    - "preservar responsible_lookup y overdue_actions"
+    - "no crear intent nuevo salvo contradicción física inesperada"
+
+  inheritance:
+    add: "action_status"
+
+  rule: >
+    No convertir planner en parser de lenguaje natural por listas de frases.
 
 responsible_resolution:
 
-  audit:
-    - "cómo se representa responsable en Action Register"
-    - "si existe identificador o solo texto"
-    - "cómo se resuelve Julio Pérez"
-    - "qué pasa con nombres parciales"
-    - "qué pasa con homónimos"
-    - "scope de planta"
+  source: "Action Register actual"
 
-  rules:
-    - "no fuzzy silencioso"
-    - "ambiguous -> clarify"
-    - "responsable de acción != responsable del problema"
+  requirements:
+    - "resolver responsable dentro del scope/planta actual"
+    - "sin fuzzy silencioso"
+    - "nombre parcial solo si el mecanismo existente lo soporta de forma única"
+    - "homónimo/ambigüedad -> clarificar"
+
+  truth_boundary:
+    - "responsable registrado de acción != responsable del problema"
     - "responsable registrado != culpable"
+    - "acción vencida != negligencia"
 
-action_identity:
+action_selection:
 
-  audit:
-    - "si pregunta puede apuntar a una acción específica"
-    - "si hay varias acciones del responsable"
-    - "cómo seleccionar sin adivinar"
-    - "si debe listar y pedir clarificación"
-    - "qué identificadores/títulos/temas existen"
+  zero_actions:
+    behavior: >
+      Informar que no se encontraron acciones asociadas al responsable en el
+      scope consultado, con las limitaciones/provenance correspondientes.
+
+  one_action:
+    behavior: >
+      Puede cargarla directamente y continuar conversación.
+
+  multiple_actions:
+    behavior: >
+      No seleccionar una arbitrariamente. Entregar lista acotada con identificador/
+      título/tema/estado/fecha suficiente para que el usuario elija o clarifique.
 
   rule: >
-    Si Julio tiene varias acciones plausibles, Director IA no debe seleccionar
-    una silenciosamente.
+    Nunca inferir “la acción” si existen varias plausibles.
 
-action_evidence:
+evidence_pack:
 
-  must_determine_available_fields:
-    - "acción/título/tema"
+  preferred_behavior: >
+    Reutilizar el board/context/loaders actuales de Action Register y producir
+    un bloque focal por responsable/acción sin duplicar la fuente.
+
+  required_fields_if_physical:
+    - "action id"
+    - "title/topic"
     - "status"
-    - "responsable"
-    - "fecha compromiso"
-    - "vencida sí/no derivable"
-    - "historial/eventos"
-    - "resultado_cierre"
-    - "revision notes si físicamente aplicables"
-    - "última actualización"
-
-  provenance:
-    required: true
-
-truth_boundaries:
-
-  facts_allowed_if_physical:
-    - "la acción está abierta"
-    - "la acción venció en fecha X"
-    - "la acción está asignada a Julio Pérez"
-    - "existe/no existe actualización registrada"
-    - "existe/no existe resultado de cierre"
-
-  forbidden_without_evidence:
-    - "Julio no la cerró por falta de seguimiento"
-    - "Julio es responsable del problema"
-    - "la acción falló"
-    - "la acción no funcionó"
-
-  principle: >
-    Estado/vencimiento son hechos del registro. Motivo del vencimiento es otra
-    pregunta y requiere evidencia adicional.
-
-information_gap_behavior:
-
-  canonical_case:
-    question: "¿Por qué no la cerró?"
-
-  expected_if_no_evidence: >
-    Director IA debe poder distinguir que sabe que la acción está vencida/abierta
-    pero no tiene evidencia suficiente para explicar el motivo.
-
-  should_enable_GPT_to_say:
-    - "no encuentro una explicación registrada del retraso"
-    - "necesito una actualización de la acción"
-    - "necesito saber si existe bloqueo, resultado parcial o nueva fecha"
-    - "Julio puede ser mencionado únicamente porque es el responsable registrado de esa acción"
+    - "responsible"
+    - "commit/due date"
+    - "overdue derivation"
+    - "last update"
+    - "history/events when available"
+    - "resultado_cierre when available"
+    - "provenance"
 
   rule: >
-    No programar respuesta final rígida. Entregar evidence + limitations a GPT.
+    No fabricar historial o resultado si no existe.
+
+DICF_boundary:
+
+  allowed_only_if_existing_path_supports:
+    - "resultado_cierre"
+    - "historial physically linked to action"
+
+  rule: >
+    No mezclar DICF por nombre de persona ni inventar linkage.
 
 conversation_state:
 
-  desired_parent_intent:
-    candidates:
-      - "action_status"
-      - "responsible_lookup"
-      - "overdue_actions"
-      - "AR-focused intent existente"
+  parent_intent: "action_status"
 
-  requirement: >
-    Determinar cuál intent padre canónico permite sostener:
-    acción de Julio -> vencida -> por qué no cerró -> qué falta.
-
-  followups:
+  required_followups:
     - "¿Está vencida?"
     - "¿Por qué no la cerró?"
     - "¿Lo sabemos?"
-    - "¿Qué falta?"
+    - "¿Qué información falta?"
     - "¿Qué necesitas de Julio?"
+    - "¿Hay alguna actualización?"
+    - "¿Y la otra?"
+
+  inheritance:
+    preserve_natural_followup_strategy_B: true
+
+  required_state:
+    - "active action only if uniquely resolved"
+    - "active responsible if physically resolved"
+    - "plant current"
+    - "fresh evidence bundle"
+
+  multiple_actions_rule: >
+    No crear active_action hasta que exista una acción inequívoca.
+
+information_gap:
+
+  canonical_question: "¿Por qué no la cerró?"
+
+  if_no_reason_evidence:
+    runtime_should_supply:
+      - "action status"
+      - "due date"
+      - "overdue yes/no"
+      - "responsible"
+      - "latest update if any"
+      - "absence of recorded explanation"
+      - "limitations"
+
+    GPT_may_say_naturally:
+      - "no encuentro una explicación registrada del retraso"
+      - "necesito una actualización de la acción"
+      - "necesito saber si existe un bloqueo"
+      - "necesito un resultado parcial/final si ya ocurrió"
+      - "si sigue abierta, falta una fecha/estado actualizado cuando corresponda"
+
+  prohibited:
+    - "Julio no la cerró porque no dio seguimiento"
+    - "Julio incumplió"
+    - "Julio causó el atraso"
+    - "la acción falló"
+    - "la acción no funcionó"
+
+  person_rule: >
+    Julio puede ser mencionado como fuente natural de actualización SOLO porque
+    está físicamente registrado como responsable de esa acción.
+
+GPT_boundary:
+
+  runtime_owns:
+    - "routing"
+    - "responsible identity"
+    - "action identity"
+    - "status"
+    - "dates"
+    - "overdue math"
+    - "history/result retrieval"
+    - "authz"
+    - "provenance"
+    - "missing/error semantics"
+
+  GPT_owns:
+    - "explicación conversacional"
+    - "síntesis"
+    - "qué sabemos/no sabemos"
+    - "qué información falta"
+    - "cómo formular una pregunta de seguimiento"
+    - "qué actualización solicitar"
 
   rule: >
-    Follow-ups abiertos deben aprovechar la herencia natural ya integrada.
+    No programar respuestas finales rígidas salvo clarificación de ambigüedad.
 
-memory_interception:
+memory_precedence:
 
-  mandatory:
-    - "identificar físicamente por qué 'qué pasó con' dispara resume memory"
-    - "definir precedencia segura"
-    - "no desactivar memoria globalmente"
+  required:
+    - "explicit AR semantics win over generic resume-memory trigger"
+    - "persistent memory preserved for real resume cases"
+    - "no disable 'qué pasó con' globally"
 
-  preferred_principle: >
-    Una referencia explícita a acción/Action Register debe resolverse primero
-    como consulta empresarial; persistent memory queda para retomar pendientes
-    cuando no exista un intent empresarial más específico.
+  example:
+    question: "¿Qué pasó con la acción de Julio Pérez?"
+    expected: "Action Register routing"
 
-solution_candidates:
-
-  A_phrasebook:
-    description: "agregar frases de acción/persona"
-    expected: "rechazar salvo evidencia excepcional"
-
-  B_planner_new_intent:
-    description: >
-      Crear intent específico action_person_status/action_person_query.
-
-  C_strengthen_existing_AR_intents:
-    description: >
-      Ampliar detección semántica/routing de intents AR existentes para combinar
-      acción + responsable sin crear una taxonomía redundante.
-
-  D_post_planner_business_signal_override:
-    description: >
-      Si planner queda unknown pero el turno contiene una entidad/responsable
-      resoluble y semántica empresarial de acción, priorizar AR antes de memory/
-      clarification.
-
-  requirement:
-    - "comparar A/B/C/D"
-    - "seleccionar exactamente un first slice"
-    - "preferir reuse de intents existentes si semánticamente correcto"
-    - "no elegir por facilidad"
-
-generalization:
-
-  required_tests:
-    examples:
-      - "¿Qué ocurrió con la tarea que tiene Julio Pérez?"
-      - "¿Cómo va lo que trae Julio?"
-      - "¿Julio tiene algo vencido?"
-      - "¿Qué pendiente tiene Julio?"
-      - "¿Hay actualización de la acción de Julio?"
-
-  rule: >
-    Los ejemplos son para diseñar hold-outs. No deben convertirse en lista de
-    producción.
-
-  requirement: >
-    La solución debe reconocer la estructura acción/responsable, no la frase exacta.
-
-standalone_and_followup:
-
-  standalone:
-    example: "¿Qué acciones tiene Julio Pérez?"
-    expected: "AR routing sin necesitar estado previo"
-
-  followup:
-    sequence:
-      - "¿Qué acciones tiene Julio Pérez?"
-      - "¿Cuál está vencida?"
-      - "¿Por qué no la cerró?"
-      - "¿Qué falta saber?"
-
+  contrasting_example:
+    question: "¿Qué pasó con Arturo?"
     expected: >
-      Estado conversacional + fresh AR evidence + GPT.
+      Persistent memory may still participate when no more specific business
+      intent wins.
+
+natural_followup_preservation:
+
+  strategy_B: true
+
+  rule: >
+    Una vez dentro de action_status, unknown follow-ups con valid state heredan
+    y llegan a GPT con requery, no mediante phrasebook.
+
+holdout_generalization:
+
+  mandatory: true
+
+  examples_for_tests_only:
+    - "¿Qué ocurrió con lo que trae Julio Pérez?"
+    - "¿Cómo va lo pendiente de Julio?"
+    - "¿Tiene algo fuera de fecha?"
+    - "¿Hay novedades de esa acción?"
+    - "¿Y la que sigue abierta?"
+
+  rule: >
+    No copiar estos textos a production routing. Deben funcionar por semántica
+    existente/contexto.
 
 authz:
 
+  preserve_Action_Register_authz: true
+
   required:
-    - "scope de planta actual"
-    - "roles actuales de Action Register"
-    - "cross-plant blocked"
+    - "scope actual de planta"
+    - "rol actual"
+    - "no cross-plant"
     - "fail-closed"
 
   rule: >
-    Routing nuevo no amplía authz de AR.
+    El nuevo routing no amplía visibilidad de Action Register.
 
-reasoning_boundary:
+absence_error_semantics:
 
-  KEEP_DETERMINISTIC:
-    - "routing empresarial"
-    - "responsable identity"
-    - "action identity"
-    - "status"
-    - "vencimiento"
-    - "dates"
-    - "authz"
-    - "joins"
-    - "provenance"
-    - "absence/error"
-
-  LET_GPT_REASON:
-    - "explicación narrativa"
-    - "qué significa el estado"
-    - "qué información falta"
-    - "qué preguntar al responsable"
-    - "follow-up natural"
+  distinguish:
+    - "responsable sin acciones"
+    - "acción no encontrada"
+    - "acción ambigua"
+    - "sin historial"
+    - "sin explicación registrada"
+    - "SOURCE_RESTRICTED"
+    - "DATA_NOT_FOUND"
+    - "TOOL_ERROR"
 
   rule: >
-    No implementar un evaluador de desempeño de personas.
+    No convertir ausencia de actualización en evidencia de incumplimiento.
 
-daily_discount_boundary:
-  status: "deferred"
+preserve:
 
-persistent_memory_boundary:
-  preserve: true
-  SQL017_execution: false
+  - "persistent conversational memory"
+  - "natural follow-up strategy B"
+  - "daily_sales_deviation"
+  - "plant_diagnosis"
+  - "financial_diagnosis"
+  - "responsible_lookup"
+  - "overdue_actions"
+  - "existing Action Register queries"
+  - "monthly paths"
+  - "M5/M6/M11/M12/M18"
 
-product_tests_if_ready:
+deferred:
+  - "daily discount/kg"
+  - "SQL 017 environment deployment"
+  - "person performance scoring"
+  - "client economic trade-off"
+  - "before-action-after causality/effectiveness"
 
-  conversation_1:
+mandatory_product_conversations:
+
+  conversation_1_single_action:
     turns:
       - "¿Qué pasó con la acción de Julio Pérez?"
       - "¿Está vencida?"
@@ -346,109 +352,159 @@ product_tests_if_ready:
       - "¿Qué información falta?"
       - "¿Qué necesitas de Julio?"
 
+    required:
+      - "AR routing"
+      - "responsible resolution"
+      - "action evidence"
+      - "action_status inheritance"
+      - "requery"
+      - "GPT"
+      - "no blame"
+
   conversation_2_multiple_actions:
-    setup: "responsable con múltiples acciones"
-    expected: >
-      listar/acotar o clarificar; no elegir una arbitrariamente.
+    turns:
+      - "¿Qué acciones tiene Julio Pérez?"
+      - "¿Cuál está vencida?"
+      - "¿Y la otra?"
+    required:
+      - "no silent selection"
+      - "safe narrowing"
+      - "fresh evidence"
 
   conversation_3_memory_precedence:
-    setup: "existe pending memory sobre Julio"
-    question: "¿Qué pasó con la acción de Julio?"
-    expected: >
-      Action Register explícito gana sobre resume memory.
+    setup: "pending memory exists for Julio/entity"
+    turns:
+      - "¿Qué pasó con la acción de Julio Pérez?"
+    required:
+      - "AR wins over generic memory resume"
 
   conversation_4_holdout:
-    use_phrases_not_in_production_logic: true
+    use_unlisted_phrases: true
+    required:
+      - "no production phrase hardcoding"
 
-contract_audit:
-  inspect:
-    - "Constitution"
-    - "EKE"
-    - "04 IES"
-    - "05 RE"
+tests_required:
 
-  determine:
-    - "G2"
-    - "G3"
+  planner:
+    - "accion singular"
+    - "acciones plural"
+    - "action + responsible -> action_status"
+    - "existing action_status preserved"
+    - "responsible_lookup preserved"
+    - "overdue_actions preserved"
 
-  expectation: "runtime-only"
+  routing:
+    - "AR wins over memory resume"
+    - "standalone action-person query"
+    - "action_status inheritable"
 
-readiness_output:
-  must_determine:
-    - "READY / READY_WITH_LIMITS / NOT_READY"
-    - "selected A/B/C/D strategy"
-    - "canonical parent intent"
-    - "routing precedence"
-    - "memory precedence"
-    - "responsible resolution"
-    - "multiple-action behavior"
-    - "evidence fields"
-    - "information-gap behavior"
-    - "GPT boundary"
+  responsible:
+    - "unique responsible"
+    - "ambiguous responsible"
+    - "no responsible"
+
+  actions:
+    - "0 actions"
+    - "1 action"
+    - "N actions"
+    - "no silent pick"
+
+  conversation:
+    - "is overdue?"
+    - "why not closed?"
+    - "do we know?"
+    - "what is missing?"
+    - "what do you need from responsible?"
+
+  truth:
+    - "responsible != culprit"
+    - "overdue != negligence"
+    - "absence explanation != cause"
+
+  security:
     - "authz"
-    - "G2/G3"
-    - "percentage effect"
-    - "deferred gaps"
+    - "cross-plant"
 
-percentage_policy:
-  before: "10.5 / 20 = 52.5%"
-  after_readiness: "10.5 / 20 = 52.5%"
-  expected_impl_effect: "0.0 pp"
+  regression:
+    - "natural follow-up"
+    - "persistent memory"
+    - "daily deviation"
+    - "plant diagnosis"
+    - "financial diagnosis"
+    - "capabilities"
+    - "planner"
+    - "orchestrator"
+    - "full Director IA suite"
 
 in_scope:
   writable:
     - "docs/dev-loop/CURRENT_TASK.md"
-    - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-ACTION-PERSON-ROUTING-READINESS-001.md"
+    - "docs/dev-loop/reports/IMPL-DIRECTOR-IA-ACTION-PERSON-ROUTING-001.md"
+    - "lib/director-ia-planner.js"
+    - "lib/director-ia-chat.js"
+    - "lib/director-ia-conversation-state.js"
+    - "test/director-ia-action-person-routing.test.js"
+    - "scripts/test-director-ia-planner.js"
+
+  conditional_writable:
+    - "existing Director IA tests only if legitimate assertions require update"
+    - "Action Register helper file only if existing code organization requires a minimal focused helper"
 
   read_only:
-    - "entire repository except writable files"
+    - "docs/director-ia/**"
+    - "server.js"
+    - "frontend-dashboard/**"
+    - "sql/**"
+    - "other unrelated code"
 
 out_of_scope:
-  - "implementation"
-  - "code changes"
-  - "test changes"
-  - "matrix changes"
-  - "contracts changes"
-  - "daily discount"
+  - "new intent"
+  - "larger phrasebook"
+  - "daily discount/kg"
   - "SQL 017 execution"
-  - "person performance scoring"
+  - "person scoring"
+  - "matrix changes"
+  - "contract changes"
+  - "schema changes"
+  - "new tables"
   - "commit"
   - "push"
   - "merge"
 
 acceptance_criteria:
-  - "Current failure traced."
-  - "Memory interception traced."
-  - "AR/responsible data availability confirmed."
-  - "A/B/C/D compared."
-  - "Exactly one strategy selected."
-  - "Canonical parent intent determined."
-  - "Responsible resolution defined."
-  - "Multiple-action ambiguity handled."
-  - "Action vs problem responsibility boundary explicit."
-  - "Information-gap behavior defined."
-  - "Hold-out/generalization tests designed."
-  - "No phrasebook solution."
-  - "G2/G3 determined."
+  - "Strategy C implemented."
+  - "accion/acciones correctly routed."
+  - "action + responsible reaches Action Register."
+  - "action_status is inheritable."
+  - "explicit AR beats generic memory resume."
+  - "Responsible resolved physically."
+  - "0/1/N action behavior safe."
+  - "No silent action selection."
+  - "Status/date/overdue evidence available."
+  - "History/resultado only when physical."
+  - "No invented delay reason."
+  - "Responsible != culprit preserved."
+  - "Natural follow-ups reach GPT."
+  - "No phrasebook expansion."
+  - "Hold-out generalization."
+  - "Authz preserved."
   - "52.5% preserved."
-  - "Only task + report changed."
+  - "Tests green."
   - "git diff --check clean."
 
-next_task_policy:
-  if_ready:
-    propose_exactly_one: "IMPL-DIRECTOR-IA-ACTION-PERSON-ROUTING-001"
+percentage_policy:
+  before: "10.5 / 20 = 52.5%"
+  after: "10.5 / 20 = 52.5%"
+  delta: "0.0 pp"
 
-  if_not_ready:
-    propose_exactly_one: "ARCH-DIRECTOR-IA-ACTION-PERSON-ROUTING-GAP-001"
+next_task:
+  propose_only: "DOCS-DIRECTOR-IA-ACTION-PERSON-ROUTING-SYNC-001"
+  authorize: false
+  execute: false
 
-  rule: "Do not authorize or execute."
-
-expected_terminal_state: >
-  DONE_PENDING_REVIEW if READY/READY_WITH_LIMITS with one implementable slice.
-  STOPPED if a product/contract decision is needed.
-  BLOCKED if a gate is missing.
+expected_terminal_state: "DONE_PENDING_REVIEW"
 
 max_attempts: 1
 
 result_report_path: >
-  docs/dev-loop/reports/ARCH-DIRECTOR-IA-ACTION-PERSON-ROUTING-READINESS-001.md
+  docs/dev-loop/reports/IMPL-DIRECTOR-IA-ACTION-PERSON-ROUTING-001.md

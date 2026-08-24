@@ -141,6 +141,22 @@ const cases = [
   () => expectIntent("¿Cómo cambió el ingreso?", "delta_income", { requireDomain: "delta_ingreso" }),
   () => expectIntent("¿Hay folios duplicados?", "duplicate_folios"),
   () => expectIntent("¿Qué permisos tiene el usuario?", "user_permissions"),
+  () => expectIntent("¿Qué pasó con la acción de Julio Pérez?", "action_status", { requireDomain: "action_register" }),
+  () => expectIntent("¿Qué acciones tiene Julio Pérez?", "action_status", { requireDomain: "action_register" }),
+  () => expectIntent("¿Hay una acción de Julio Pérez?", "action_status", { requireDomain: "action_register" }),
+  () => expectIntent("¿Cómo va la acción de Julio Pérez?", "action_status", { requireDomain: "action_register" }),
+  () => expectIntent("¿Julio Pérez tiene algo vencido?", "action_status", { requireDomain: "action_register" }),
+  () => expectIntent("¿Qué pasó con Arturo?", "unknown"),
+  () => {
+    const plan = planDirectorIaQuestion("¿Qué ocurrió con lo que trae Julio Pérez?");
+    assertPlanShape(plan, "holdout tarea/trae");
+    assert(plan.intent === "unknown", `holdout no debe hardcodearse, got ${plan.intent}`);
+  },
+  () => {
+    const plan = planDirectorIaQuestion("¿Tiene algo fuera de fecha?");
+    assertPlanShape(plan, "holdout fuera de fecha");
+    assert(plan.intent === "unknown", `holdout fuera de fecha got ${plan.intent}`);
+  },
   () => expectIntent("Hola", "smalltalk"),
   () => expectIntent("Ayuda", "help"),
   () => {
