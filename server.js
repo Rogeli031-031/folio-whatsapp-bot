@@ -9879,7 +9879,10 @@ comercialEntidad.configureComercialEntidad({
   assertPlantaAccess: assertDashboardPlantaAccessForActionRegister,
 });
 
-directorIaChat.configureDirectorIaChat({ pool });
+directorIaChat.configureDirectorIaChat({
+  pool,
+  persistentMemoryStore: require("./lib/director-ia-persistent-memory").createPgStore(pool),
+});
 
 async function loadArrProyForDirectorIaDashboardCycle(client, year, month, plant_code) {
   const proyByPlant = await dashboardArrForecast.computePronosticoProyByPlant(client, year, month, {

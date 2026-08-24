@@ -257,6 +257,7 @@ describe("askDirectorIa continuity", () => {
       loadPlantDiagnosisForChat: undefined,
       loadFinancialDiagnosisForChat: undefined,
       resolveConversationCandidates: undefined,
+      persistentMemoryStore: null,
     });
   });
 
