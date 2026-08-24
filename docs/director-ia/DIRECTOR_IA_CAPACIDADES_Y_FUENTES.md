@@ -63,7 +63,7 @@
 | Chat | `POST /api/director-ia/chat` → `askDirectorIa` (`lib/director-ia-chat.js`) |
 | Routing chat | Regex / heurísticas en `director-ia-chat.js`, `director-ia-igf-arr.js`, `director-ia-commercial-state.js` |
 | Fuentes en GET `sources` | `action_register`, `dicf`, `bitacora_ia`, `cliente_comentarios`, `folio_comentarios` pueden pasar a `true`; `igf`, `arr`, `commercial_state` permanecen `false` en `EMPTY_SOURCES` |
-| Fuentes solo en chat | Anexo IGF/ARR (`loadIgfArrAnnexForChat`), estado comercial (`loadCommercialStateForChat`), expediente comercial factual (`loadCommercialDossierForChat`; SELECT-only; no `computeDicf`); Mejora Continua (`loadMejoraContinuaForChat`); M6 GASTOS/INVERSIONES (`loadGastosInversionesForChat`); M4 clasificación query (`loadClasificacionApoyosForChat`); M18 presupuesto semanal (`loadPresupuestoSemanalForChat`) |
+| Fuentes solo en chat | Anexo IGF/ARR (`loadIgfArrAnnexForChat` + `extractIgfComposition` sobre 1 fila de `igf.compromiso_lines`; no recálculo; no overlay), estado comercial (`loadCommercialStateForChat`), expediente comercial factual (`loadCommercialDossierForChat`; SELECT-only; no `computeDicf`); Mejora Continua (`loadMejoraContinuaForChat`); M6 GASTOS/INVERSIONES (`loadGastosInversionesForChat`); M4 clasificación query (`loadClasificacionApoyosForChat`); M18 presupuesto semanal (`loadPresupuestoSemanalForChat`) |
 | Persistencia de chat | No hay tabla de historial; solo `req.body.history` opcional en el request |
 | Escritura propia del módulo | Bitácora y entidades comerciales vía API CRUD (no vía chat) |
 
@@ -225,19 +225,19 @@
 | **ID** | M7 |
 | **Módulo** | IGF Forecast |
 | **Propósito empresarial** | Forecast financiero por planta/empresa, compromiso, HG, pronóstico. |
-| **Cobertura actual de Director IA** | PARCIAL (solo chat on-demand; `sources.igf` siempre false en GET context) |
-| **Información exacta que sí consulta** | Anexo IGF: `loadIgfCommitSnapshot` sobre `igf.versions` / `igf.compromiso_lines`; margen vía `getMargenKgPorPeriodo` (inyectado); activado por `shouldAttachIgfArrAnnex` / `isPlantFinancialKpiQuestion`. |
-| **Información que no consulta** | UI completa IGF, PATCH HG, meta Excel, metahg completo, `igf-folios-detalle`, presupuesto-detalle UI, versiones UI. |
-| **Archivos actuales relacionados** | `lib/director-ia-igf-arr.js`, `igf-handler.js`, `lib/dashboard-arr-forecast.js` |
-| **Endpoints actuales relacionados** | Chat: `POST /api/director-ia/chat`. Dashboard (no usados por IA): `/api/dashboard/igf-*` |
-| **Tablas o vistas relacionadas** | `igf.versions`, `igf.compromiso_lines`, schemas `igf_meta` / `igf_metahg` (UI; no confirmado en anexo chat completo) |
-| **Funciones existentes reutilizables** | `loadIgfArrAnnexForChat`, `loadIgfCommitSnapshot`, `buildIgfForecastPayload` (handler/server) |
-| **Capacidades de lectura posibles** | CONSULTAR/COMPARAR/RESUMIR/EXPLICAR KPIs bajo demanda. |
-| **Capacidades de escritura posibles** | PATCH IGF existe en dashboard; no en Director IA. |
-| **Permisos aplicables** | `acceso_igf_forecast_kpis`; bloqueos GA/GV en handlers financieros. |
-| **Nivel de riesgo** | MEDIO |
-| **Dependencias** | ARR, folios KPI, plantas. |
-| **Observaciones verificadas** | Diferencia GET context vs chat es hallazgo crítico (Parte 8). |
+| **Cobertura actual de Director IA** | PARCIAL (chat on-demand + slice de composición observada de **una** fila). `sources.igf` siempre false en GET context. **No** es COMPLETE: UI IGF, PATCH HG, meta Excel, versiones UI, overlay de folios, recálculo y causalidad permanecen fuera. |
+| **Información exacta que sí consulta** | Anexo IGF on-demand: `igf_status` / `financial_diagnosis` → `get_igf_snapshot` → `loadIgfArrAnnexForChat` → `loadIgfCommitSnapshot` (`SELECT id, version_number` de `igf.versions` GLOBAL del mes, `ORDER BY version_number DESC LIMIT 1`; `SELECT *` de `igf.compromiso_lines`; `findIgfRowForPlant` → **una** fila: planta + versión + mes) → `extractIgfComposition` (allowlist `IGF_COMPOSITION_CATALOG`; omite null/`""`/no finito; `omitted_null_keys`; ranking de magnitud solo intra `$/kg` de roles `add`/`subtract`) → `formatIgfCompositionBlock` (bloque «COMPOSICIÓN IGF (snapshot, no tendencia)») → evidencia en annex. Margen vía `getMargenKgPorPeriodo` (inyectado). Activado por `shouldAttachIgfArrAnnex` / `isPlantFinancialKpiQuestion` / `isIgfCompositionQuestion` / `isIgfForecastQuestion`. Fuente de líneas: `igf.compromiso_lines`. Unidades: `*_kg` = **$/kg**, no kilogramos; `ton` ≠ `$/kg` ≠ `%` ≠ `MXN`; no se mezclan. Null ≠ 0 (null se omite, no se emite como cero). Signo físico preservado; `hg_kg` **no** invertido. `gasto_kg` tiene `formula_role: none` (aparece en el snapshot; no entra a la fórmula de utilidad/resultado). `recalcularUtilYResultado` es **referencia semántica** de roles (`add`/`subtract`/`stored_*`); **no** se ejecuta. Sin overlay de folios. `ORDER_DELTAS` es presentación UI; **no** se importa ni entra a fórmula. Snapshot ≠ tendencia: `isIgfCompositionQuestion` es false ante «cómo cambió venta/descuento/ingreso» (M9). Composición ≠ causalidad; magnitud ≠ importancia operacional; línea ≠ responsable; signo ≠ juicio empresarial. |
+| **Información que no consulta** | UI completa IGF, PATCH HG, meta Excel, metahg completo, `igf-folios-detalle`, presupuesto-detalle UI, versiones UI. Recálculo de utilidad/resultado. Overlay de folios/presupuesto del GET dashboard. Deltas temporales de líneas IGF (dominio M9). Causalidad / problema / responsable / prioridad. GET `sources.igf`. |
+| **Archivos actuales relacionados** | `lib/director-ia-igf-arr.js` (`extractIgfComposition`, `formatIgfCompositionBlock`, `loadIgfCommitSnapshot`, `loadIgfArrAnnexForChat`); wiring existente `lib/director-ia-tools.js` (`get_igf_snapshot`), `lib/director-ia-planner.js` (`igf_status` / `financial_diagnosis`), `lib/director-ia-capabilities.js`; `igf-handler.js`, `lib/dashboard-arr-forecast.js` (referencia de producto; no transporte del slice). |
+| **Endpoints actuales relacionados** | Chat: `POST /api/director-ia/chat` (in-process; sin HTTP interno). Dashboard (no usados por IA): `/api/dashboard/igf-*`. |
+| **Tablas o vistas relacionadas** | `igf.versions`, `igf.compromiso_lines`. Schemas `igf_meta` / `igf_metahg` (UI; no en el bloque de composición). |
+| **Funciones existentes reutilizables** | `loadIgfArrAnnexForChat`, `loadIgfCommitSnapshot`, `extractIgfComposition`, `formatIgfCompositionBlock`, `isIgfCompositionQuestion`, `buildIgfForecastPayload` (handler/server). **No** `recalcularUtilYResultado`. **No** `ORDER_DELTAS`. |
+| **Capacidades de lectura posibles** | CONSULTAR/COMPARAR/RESUMIR/EXPLICAR KPIs bajo demanda. CONSULTAR composición observada de un snapshot IGF (1 fila; read-only; sin causalidad; sin tendencia). |
+| **Capacidades de escritura posibles** | PATCH IGF existe en dashboard; no en Director IA. Slice read-only; sin writes. |
+| **Permisos aplicables** | Authz IGF vigente del annex: JWT/contexto; GA → 403 («GA no tiene acceso a KPIs financieros.»); GV vía `assertGVPlantaNombreAccess`; planta del scope; cross-planta bloqueado; fail-closed. `acceso_igf_forecast_kpis` en UI. |
+| **Nivel de riesgo** | MEDIO (lectura); ALTO si se lee composición como causa, problema, responsable o tendencia. |
+| **Dependencias** | ARR (proyección en el mismo annex), folios KPI, plantas. Distinto de M6 (folios GASTOS/INVERSIONES) y de M9 (deltas de periodos reales). |
+| **Observaciones verificadas** | `IMPL-DIRECTOR-IA-M7-IGF-COMPOSITION-001` (integrado, merge `05eb54c4`). Tests: focales 13/13; capabilities 52/52; planner 46/46; orchestrator 26/26; suite `test/director-ia-*.test.js` 657/657; `git diff --check` limpio. Runtime: read-only, in-process, sin HTTP interno, sin writes. Chat no se tocó: el annex ya entra al prompt. M7 **sigue PARCIAL**. **No** COMPLETE. Scoring M0–M20 **sin cambio**: 10.0/20 = **50.0%** (PARTIAL ya valía 0.5; no se suma +2.5 pp). Diferencia GET context vs chat sigue siendo hallazgo (Parte 8). |
 
 ### M8 — ARR / Forecast provincia
 
@@ -668,20 +668,25 @@
 ### Fuente: IGF
 
 - **Dominio:** Compromiso / forecast financiero (M7)
-- **Cobertura actual:** PARCIAL (chat on-demand; `sources.igf` siempre false en GET)
+- **Cobertura actual:** PARCIAL (chat on-demand + composición observada de 1 fila; `sources.igf` siempre false en GET)
 - **Archivo de acceso:** `lib/director-ia-igf-arr.js`
-- **Función de acceso:** `loadIgfCommitSnapshot`, `loadIgfArrAnnexForChat`, `getMargenKgPorPeriodo` (inyectado desde server)
-- **Endpoint relacionado:** `POST /api/director-ia/chat`
-- **Tablas consultadas:** `igf.versions`, `igf.compromiso_lines` (y margen según implementación inyectada)
+- **Función de acceso:** `loadIgfCommitSnapshot`, `extractIgfComposition`, `formatIgfCompositionBlock`, `loadIgfArrAnnexForChat`, `getMargenKgPorPeriodo` (inyectado desde server)
+- **Endpoint relacionado:** `POST /api/director-ia/chat` (in-process; tool `get_igf_snapshot`)
+- **Tablas consultadas:** `igf.versions` (1 versión GLOBAL del mes), `igf.compromiso_lines` (fuente de líneas; 1 fila planta + versión + mes vía `findIgfRowForPlant`)
 - **Filtros disponibles:** planta, year/month
-- **Alcance por planta:** Sí
-- **Alcance por periodo:** Mes de pregunta / actual
-- **Límites de filas:** Snapshot de versión más reciente (`ORDER BY version_number DESC LIMIT 1`)
-- **Permisos:** `acceso_igf_forecast_kpis` en UI; gates GA/GV en paths financieros
-- **Información sensible:** Compromiso, margen, utilidad
-- **Estado de actualización:** Según versiones IGF cargadas
-- **Evidencia de integración actual:** Regex IGF/margen/rentabilidad en `director-ia-igf-arr.js`
-- **Información que no puede concluirse con esta fuente:** Meta HG completa UI, folios detalle IGF, PATCH
+- **Alcance por planta:** Sí (una fila; no combina plantas)
+- **Alcance por periodo:** Mes de pregunta / actual (snapshot; no tendencia)
+- **Límites de filas:** Versión más reciente (`ORDER BY version_number DESC LIMIT 1`); composición = allowlist de esa fila; máx. 18 líneas `*_kg` (`IGF_COMPOSITION_MAX_USD_KG`)
+- **Unidades:** `*_kg` = **$/kg**, no kilogramos. Familias distintas: `ton` ≠ `$/kg` ≠ `%` ≠ `MXN`. No mezclar ni sumar unidades incompatibles. Ranking de magnitud solo intra `$/kg` de roles `add`/`subtract`.
+- **Null:** `null` ≠ `0`. Null/`""`/no finito se omite (`omitted_null_keys`); no se emite como cero.
+- **Signos:** Signo físico almacenado; `hg_kg` no se invierte.
+- **Fórmula:** `recalcularUtilYResultado` es referencia semántica de `formula_role`; **no** se ejecuta. `gasto_kg` no participa. Sin overlay de folios.
+- **ORDER_DELTAS:** Presentación UI; no se importa; no es fórmula.
+- **Permisos:** Authz IGF vigente: GA 403; GV planta; cross-planta bloqueado; fail-closed. `acceso_igf_forecast_kpis` en UI.
+- **Información sensible:** Compromiso, margen, utilidad, resultado, HG
+- **Estado de actualización:** Según versiones IGF cargadas (snapshot ≠ tendencia)
+- **Evidencia de integración actual:** `shouldAttachIgfArrAnnex` / `isIgfCompositionQuestion` / `extractIgfComposition`; regex IGF/margen/rentabilidad. Semántica: composición ≠ causalidad; magnitud ≠ importancia operacional; línea ≠ responsable; signo ≠ juicio empresarial. M9 conserva deltas temporales.
+- **Información que no puede concluirse con esta fuente:** Meta HG completa UI, folios detalle IGF, PATCH, causalidad, tendencia, overlay de folios, recálculo de utilidad/resultado
 
 ### Fuente: Margen o estado comercial
 
@@ -977,7 +982,7 @@
 | 4 | ¿Por qué cayó el ingreso? | Parcialmente | PARCIAL / INDIRECTA | commercial_state + DICF + bitácora + IGF/ARR | `loadCommercialStateForChat`, `summarizeDicfContext`, anexo IGF/ARR | Causalidad no estructurada (M9 compara periodos reales; no afirma por qué cayó el ingreso) | Alto (hipótesis narrativa) |
 | 5 | ¿La caída proviene de venta o descuento? | Parcialmente | PARCIAL | ARR/IGF annex + commercial_state; familias M9 solo si el intent es `delta_*` | `loadIgfArrAnnexForChat`; loaders M9 si wording es «cómo cambió venta/descuento» | Esta pregunta causal no es el intent M9; no atribución automática venta vs descuento | Medio-Alto |
 | 6 | ¿Cómo va ARR contra la meta? | Parcialmente | PARCIAL | ARR annex | `loadArrProyForPlant` | Meta/UI completa ARR; depende de wording regex | Medio |
-| 7 | ¿Cómo va IGF contra el compromiso? | Parcialmente | PARCIAL | IGF annex | `loadIgfCommitSnapshot` | Versiones/HG UI; `sources.igf` no en GET | Medio |
+| 7 | ¿Cómo va IGF contra el compromiso? | Parcialmente | PARCIAL | IGF annex + composición de 1 fila | `loadIgfCommitSnapshot` / `extractIgfComposition` / `get_igf_snapshot` | Versiones/HG UI; `sources.igf` no en GET; no es tendencia (M9) ni causa | Medio |
 | 8 | ¿Qué clientes explican la desviación? | Parcialmente | PARCIAL | commercial_state / top clientes IGF-ARR / DICF | `loadCommercialStateForChat` (20 clientes), `loadTopClientesDescBrief` (8) | Universo completo de clientes | Medio (top-N) |
 | 9 | ¿En qué etapa está un folio? | Sí (estatus observado + etapa derivada; no es historial ni tablero HTTP) | PARCIAL | Folios (`public.folios.estatus`) | `loadFolioStatusForChat` / `get_folio_status` (SELECT-only; **no** `GET /kanban` ni `GET /folios/:id`) | Contenido PDF/S3, cheque/póliza, autoavance, tablero HTTP | Alto si se lee como columna DB `etapa` o como kanban mutante |
 | 10 | ¿Por qué está detenido un folio? | No de forma fiable | INDIRECTA máx. | Comentarios folio | `loadFolioComentariosForDirectorIa` | Estatus, timeline, permisos de avance | Alto |
@@ -1004,6 +1009,7 @@
 | ¿Qué documentos tiene / listar registros documentales de un folio? | Sí (solo metadata DB; no PDF/S3; no faltantes) | PARCIAL | Metadata `public.folio_archivos` | `loadFolioDocumentsMetadataForChat` / `get_folio_documents` (SELECT-only; **no** `/media`; **no** S3) | Contenido, URLs, documentos faltantes, cumplimiento | Alto si se lee como documentación completa o como «faltan documentos» |
 | ¿Cómo cambió la clasificación de apoyos entre mes_a y mes_b? | Sí (matriz agregada; no Excel; no COMPARAR) | PARCIAL | Folios + `buildClasificacionMatrix` | `loadClasificacionApoyosForChat` / `get_clasificacion_apoyos_query` | COMPARAR; Excel; causa del delta; igualdad con totales M6 | Alto si se lee como desviación presupuestal o como M6/M5 |
 | ¿Qué dicen las notas de la última revisión / de una revisión? | Sí (texto/autor/`created_at` de una revisión; no ítem) | PARCIAL | `arr.action_register_revision_notes` | `loadActionRegisterRevisionNotesForChat` / `get_action_register_revision_notes` | Revisión no identificada (clarifica); overflow >8; body >500 truncado; attachments | Alto si se lee como nota de ítem, acuerdo formal, Plaud, history M2 o comentario de folio |
+| ¿De qué se compone la utilidad / resultado / compromiso IGF? | Sí (snapshot de 1 fila; hechos observados; no causa) | PARCIAL | `igf.compromiso_lines` | `extractIgfComposition` / `get_igf_snapshot` / `loadIgfCommitSnapshot` | UI/PATCH/versiones; recálculo; overlay; «cómo cambió venta/descuento/ingreso» es M9 | Alto si se lee como causa, problema, responsable, prioridad o tendencia |
 
 ---
 
@@ -1250,7 +1256,7 @@ Escala 1–5. Prioridad derivada de: valor ejecutivo × disponibilidad de funcio
 
 ### 1. Resumen de cobertura real actual
 
-Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Register**, **DICF**, **bitácora**, **comentarios** (cliente y folio) y **entidades comerciales**, con **anexos financieros on-demand** (IGF/ARR/margen/estado comercial) activados por **regex** en el chat, **análisis on-demand de posibles duplicados de folios** (M16: `findDuplicatePairs`, no confirmación), **consulta on-demand de KPIs de dashboard y proyectos por planta** (M3: `get_dashboard_kpis` / `get_project_status`; no catálogo global; no creación de proyectos), **consulta on-demand de Delta Venta / Descuento / Ingreso de periodos reales** (M9: `get_delta_sales` / `get_delta_discount` / `get_delta_income`; no forecast con escritura; no M19), **consulta on-demand de estatus/etapa de folio** (M2 slice `folio_status`: `get_folio_status` / `loadFolioStatusForChat`; SELECT-only; no GET kanban; no GET `/folios/:id`; no autoavance), **consulta on-demand del historial de folio** (M2 slice `folio_history`: `get_folio_history` / `loadFolioHistoryForChat`; SELECT-only de `public.folio_historial`; no GET `/timeline`; no `dedupeHistorialByStage`; no autoavance), **consulta on-demand de metadata documental de folio** (M2 slice `folio_documents`: `get_folio_documents` / `loadFolioDocumentsMetadataForChat`; SELECT-only de `public.folio_archivos` con proyección segura; no S3; no PDF; no `s3_key`; no «faltan documentos»), y **consulta on-demand de GASTOS e INVERSIONES de folios** (M6 slice query JSON: `get_expense_analysis` / `get_investment_analysis` / `loadGastosInversionesForChat`; SELECT `public.folios` + `expandCategoriaRows`; `YYYY-MM` obligatorio; no Excel; no Export; no IGF), y **consulta on-demand de la matriz comparativa de clasificación de apoyos** (M4 slice query JSON: `get_clasificacion_apoyos_query` / `loadClasificacionApoyosForChat`; SELECT `public.folios` + `buildClasificacionMatrix`; `mes_a` vs `mes_b` obligatorios y distintos; GASTOS / INVERSIONES / TALLER separados; sin fallback a 6 plantas; no COMPARAR; no Excel), y **consulta on-demand del carro presupuestal semanal** (M18 slice query JSON: `get_budget_status` / `loadPresupuestoSemanalForChat`; SELECT `presupuestos_semanales` + `presupuesto_folios`; no inventa semana; no filtra solo `ABIERTO`; no writes; no cheques; no WhatsApp; no `presupuesto_asignacion_detalle`), y **consulta on-demand de notas de revisión del Action Register** (M12 slice: `get_action_register_revision_notes` / `loadActionRegisterRevisionNotesForChat`; SELECT `arr.action_register_revision_notes` por `revision_id`; 1 revisión / 8 notas / 500 caracteres; última = `revision_date DESC`; `includeNotes` del context sigue `false`; no ítem; no Plaud; no M2; no binarios), y **consulta on-demand del expediente comercial factual** (M11 slice: `get_commercial_dossier` / `loadCommercialDossierForChat`; authz planta antes de datos; cliente único; SELECT `arr.dicf_cliente_mes` sin `computeDicf`; comentarios solo con `cliente_key`; acciones por `planta_id` + `cliente_key`; historial/cierre por `accion_id`; 1/8/500/8/8; procedencia separada; sin causalidad; sin bitácora). **No** opera el kanban HTTP, **no** usa `/timeline` como transporte interno, **no** lee contenido PDF/S3/pólizas/cheques/COMPARAR-Excel de clasificación/taller/Export xlsx GASTOS-INVERSIONES ni el forecast mutante de ingreso. Las escrituras propias (bitácora/entidades) existen por **API UI**, no como tools autónomos del LLM. El GET `/api/director-ia/context` **subdeclara** IGF/ARR/commercial_state respecto al chat.
+Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Register**, **DICF**, **bitácora**, **comentarios** (cliente y folio) y **entidades comerciales**, con **anexos financieros on-demand** (IGF/ARR/margen/estado comercial) activados por **regex** en el chat, incluida la **composición observada de un snapshot IGF** (M7 slice: `get_igf_snapshot` / `loadIgfCommitSnapshot` / `extractIgfComposition`; 1 fila de `igf.compromiso_lines`; `*_kg` = $/kg; null ≠ 0; `hg_kg` no invertido; `gasto_kg` fuera de fórmula; no se ejecuta `recalcularUtilYResultado`; no overlay; no deltas — M9; composición ≠ causalidad), **análisis on-demand de posibles duplicados de folios** (M16: `findDuplicatePairs`, no confirmación), **consulta on-demand de KPIs de dashboard y proyectos por planta** (M3: `get_dashboard_kpis` / `get_project_status`; no catálogo global; no creación de proyectos), **consulta on-demand de Delta Venta / Descuento / Ingreso de periodos reales** (M9: `get_delta_sales` / `get_delta_discount` / `get_delta_income`; no forecast con escritura; no M19), **consulta on-demand de estatus/etapa de folio** (M2 slice `folio_status`: `get_folio_status` / `loadFolioStatusForChat`; SELECT-only; no GET kanban; no GET `/folios/:id`; no autoavance), **consulta on-demand del historial de folio** (M2 slice `folio_history`: `get_folio_history` / `loadFolioHistoryForChat`; SELECT-only de `public.folio_historial`; no GET `/timeline`; no `dedupeHistorialByStage`; no autoavance), **consulta on-demand de metadata documental de folio** (M2 slice `folio_documents`: `get_folio_documents` / `loadFolioDocumentsMetadataForChat`; SELECT-only de `public.folio_archivos` con proyección segura; no S3; no PDF; no `s3_key`; no «faltan documentos»), y **consulta on-demand de GASTOS e INVERSIONES de folios** (M6 slice query JSON: `get_expense_analysis` / `get_investment_analysis` / `loadGastosInversionesForChat`; SELECT `public.folios` + `expandCategoriaRows`; `YYYY-MM` obligatorio; no Excel; no Export; no IGF), y **consulta on-demand de la matriz comparativa de clasificación de apoyos** (M4 slice query JSON: `get_clasificacion_apoyos_query` / `loadClasificacionApoyosForChat`; SELECT `public.folios` + `buildClasificacionMatrix`; `mes_a` vs `mes_b` obligatorios y distintos; GASTOS / INVERSIONES / TALLER separados; sin fallback a 6 plantas; no COMPARAR; no Excel), y **consulta on-demand del carro presupuestal semanal** (M18 slice query JSON: `get_budget_status` / `loadPresupuestoSemanalForChat`; SELECT `presupuestos_semanales` + `presupuesto_folios`; no inventa semana; no filtra solo `ABIERTO`; no writes; no cheques; no WhatsApp; no `presupuesto_asignacion_detalle`), y **consulta on-demand de notas de revisión del Action Register** (M12 slice: `get_action_register_revision_notes` / `loadActionRegisterRevisionNotesForChat`; SELECT `arr.action_register_revision_notes` por `revision_id`; 1 revisión / 8 notas / 500 caracteres; última = `revision_date DESC`; `includeNotes` del context sigue `false`; no ítem; no Plaud; no M2; no binarios), y **consulta on-demand del expediente comercial factual** (M11 slice: `get_commercial_dossier` / `loadCommercialDossierForChat`; authz planta antes de datos; cliente único; SELECT `arr.dicf_cliente_mes` sin `computeDicf`; comentarios solo con `cliente_key`; acciones por `planta_id` + `cliente_key`; historial/cierre por `accion_id`; 1/8/500/8/8; procedencia separada; sin causalidad; sin bitácora). **No** opera el kanban HTTP, **no** usa `/timeline` como transporte interno, **no** lee contenido PDF/S3/pólizas/cheques/COMPARAR-Excel de clasificación/taller/Export xlsx GASTOS-INVERSIONES ni el forecast mutante de ingreso. Las escrituras propias (bitácora/entidades) existen por **API UI**, no como tools autónomos del LLM. El GET `/api/director-ia/context` **subdeclara** IGF/ARR/commercial_state respecto al chat.
 
 ### 2. Dominios completos (COMPLETA)
 
@@ -1266,7 +1272,7 @@ Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Re
 - M2 Folios (comentarios + slice `folio_status` estatus/etapa + slice `folio_history` eventos crudos + slice `folio_documents` metadata-only; no contenido PDF/S3, no faltantes, no cheque/póliza, no `kanban_flow` ni kanban HTTP)
 - M4 Clasificación de apoyos (query JSON `mes_a` vs `mes_b` por planta y familia; no COMPARAR; no Excel/xlsx; no COMPLETE)
 - M6 GASTOS / INVERSIONES (query JSON de folios por planta y `YYYY-MM`; GASTOS ≠ INVERSIONES ≠ IGF; no Export/xlsx; no COMPLETE)
-- M7 IGF (chat on-demand)
+- M7 IGF (chat on-demand + slice de composición observada de 1 fila de `igf.compromiso_lines`; `*_kg` = $/kg; null ≠ 0; sin recálculo; sin overlay; sin deltas; sin causalidad; no COMPLETE)
 - M8 ARR (chat on-demand / motor DICF)
 - M11 DICF + comentarios cliente (+ slice expediente comercial factual on-demand; SELECT-only; sin `computeDicf`; sin causalidad; no COMPLETE)
 - M12 Action Register (+ Mejora Continua; slice notas de revisión on-demand; `includeNotes` always-on sigue false; no COMPLETE)
@@ -1283,6 +1289,7 @@ Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Re
 - M4 COMPARAR / Excel/xlsx (el query JSON ya está en PARCIAL M4; COMPLETE de M4 sigue fuera)
 - M5 Taller AT
 - M6 Export/xlsx (el query JSON ya está en PARCIAL M6; COMPLETE de M6 sigue fuera)
+- M7 UI / PATCH HG / meta Excel / versiones / overlay / recálculo (el slice de composición snapshot ya está en PARCIAL M7; COMPLETE de M7 sigue fuera)
 - M10 Weekly discount LD  
 - M14 Usuarios admin (como dominio)  
 - M15 Documentos/medios  
@@ -1307,6 +1314,7 @@ Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Re
 | CONSULTAR metadata documental de folio (read-only) | `loadFolioDocumentsMetadataForChat` → resolver/autorizar → `listDocumentsMetadataForFolio` → `projectDocument` (`public.folio_archivos`; sin `s3_key`) |
 | RESOLVER entidad/alias | `resolveCommercialEntitiesForQuestion` |
 | COMPARAR/CONSULTAR margen e IGF/ARR (on-demand) | `loadIgfArrAnnexForChat`, `getMargenKgPorPeriodo` |
+| CONSULTAR composición IGF (snapshot de 1 fila; read-only; no causa; no tendencia) | `extractIgfComposition` → `formatIgfCompositionBlock` vía `get_igf_snapshot` / `loadIgfCommitSnapshot` (`igf.compromiso_lines`) |
 | LISTAR estado comercial | `loadCommercialStateForChat` → `dicf.computeDicf` |
 | RESUMIR Mejora Continua | `buildMejoraContinuaPayload` / `GET /api/director-ia/mejora-continua` |
 | DETECTAR RIESGOS / CONSULTAR posibles duplicados de folios | `loadDuplicateFoliosForChat` → `findDuplicatePairs` |
@@ -1332,6 +1340,7 @@ Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Re
 | Presupuesto semanal (writes / cheques / WhatsApp) | Query JSON M18 ya integrado (SELECT + `getPresupuestoResumen`). Writes y bot existen en `server.js` | Asignar/seleccionar; enviar a cheques; Twilio/WhatsApp; no COMPLETE |
 | Action Register notas / evidencias / CRUD | Slice notas de revisión ya integrado (`loadActionRegisterRevisionNotesForChat`; `includeNotes` always-on sigue false) | Attachments/S3/PDF; CRUD ítems; no COMPLETE; no atribuir nota a ítem |
 | DICF expediente / attachments / writes | Slice expediente factual ya integrado (`loadCommercialDossierForChat`; SELECT-only; sin `computeDicf`) | Attachments; Excel/UI; bitácora en el expediente; causalidad; CRUD acciones; no COMPLETE |
+| IGF composición / UI / PATCH / recálculo | Slice composición snapshot ya integrado (`extractIgfComposition`; 1 fila; `*_kg` = $/kg; no se ejecuta `recalcularUtilYResultado`; no overlay) | UI IGF; PATCH HG; meta Excel; versiones UI; overlay de folios; deltas IGF; causalidad; no COMPLETE |
 | Proyectos (crear/editar/eliminar) | Sí (`POST /api/proyectos`) | Escritura; la lectura M3 ya está integrada |
 | KPIs dashboard (lectura) | Sí (integrado M3) | — |
 | Weekly LD | Sí | Tool |
