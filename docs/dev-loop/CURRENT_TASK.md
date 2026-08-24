@@ -1,14 +1,14 @@
 # CURRENT_TASK
 
 ```yaml
-task_id: "ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-005"
+task_id: "ARCH-DIRECTOR-IA-M11-EXPEDIENTE-COMERCIAL-READINESS-001"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-08-23"
 human_authorization: >
   AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-23.
-  Apruebo ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-005 y autorizo G1.
+  Apruebo ARCH-DIRECTOR-IA-M11-EXPEDIENTE-COMERCIAL-READINESS-001 y autorizo G1.
 
 gates:
   G1_task_authorization: AUTHORIZED
@@ -17,308 +17,392 @@ gates:
   G8_calibration_materiality_signature: N/A
 
 objective: >
-  Priorizar el siguiente frente global de Director IA desde el baseline 50.0%,
-  comparando todos los módulos no COMPLETE por valor ejecutivo marginal,
-  reasoning value, actionability, frecuencia, novedad de evidencia, fuentes
-  físicas, seguridad y costo de integración. Favorecer capacidades que permitan
-  explicar, priorizar o decidir mejor, no simplemente añadir otro listado.
+  Auditar físicamente un slice read-only de M11 — DICF / expediente comercial —
+  para que Director IA pueda reunir en una sola consulta el estado comercial
+  observable de un cliente, sus comentarios almacenados, acciones DICF,
+  historial y resultado_cierre cuando existan, mediante la clave física
+  planta_id + cliente_key, sin inventar causalidad, motivo, resultado o relación
+  que no esté soportada por las fuentes.
 
 baseline:
-  numerator: 10.0
-  denominator: 20
-  percentage: 50.0
+  prioritization_task: "ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-005"
+  prioritization_report: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-005.md"
 
-  current_depth:
-    - "M2: status + history + documents metadata"
-    - "M3: plantas/KPIs/proyectos"
-    - "M4: comparativo mensual de clasificación"
-    - "M6: GASTOS / INVERSIONES query"
-    - "M9: deltas comerciales"
-    - "M12: Action Register + notas de revisión"
-    - "M13"
-    - "M16"
-    - "M18: presupuesto semanal read-only"
+  module: "M11 — DICF"
+  current_state: "PARTIAL"
 
-  rule: >
-    Esta tarea no cambia estados ni porcentaje.
+  current_coverage:
+    - "estado comercial"
+    - "comentarios de cliente"
+    - "acciones DICF"
+    - "consultas DICF ya existentes"
+    - "acciones_abiertas por cliente"
+
+  known_gap: >
+    Las fuentes ya existen, pero el planner/chat las consulta separadamente.
+    Falta una vista factual integrada por cliente.
+
+  global_percentage:
+    current: 50.0
+    numerator: 10.0
+    denominator: 20
+
+  expected_effect_of_future_slice:
+    m11_state: "PARTIAL"
+    gain_pp: 0.0
+    global_percentage: 50.0
 
 primary_question: >
-  ¿Qué capacidad pendiente añade ahora el mayor valor neto de inteligencia
-  ejecutiva, especialmente para explicar causas, conectar evidencia, priorizar
-  atención o convertir hechos ya disponibles en mejores decisiones?
+  ¿Existe un path SELECT-only, in-process, autorizado y semánticamente seguro
+  para que Director IA construya un expediente comercial observable por cliente
+  enlazando únicamente mediante planta_id + cliente_key:
+  estado comercial, comentarios almacenados, acciones DICF, historial y
+  resultado_cierre, sin convertir comentarios en causa ni acciones en solución?
 
-candidate_source:
-  canonical_matrix: "docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md"
+known_join_key:
+  fields:
+    - "planta_id"
+    - "cliente_key"
 
-  include:
-    - "PARTIAL"
-    - "INDIRECTA"
-    - "NO INTEGRADA"
-    - "NOT_STARTED"
-    - "bloqueados reconsiderables"
+  evidence:
+    - "acciones_abiertas ya usa esta clave"
 
-  exclude:
-    - "COMPLETE"
-    - "N_A"
-
-canonical_labels_rule: >
-  Usar nombres y propósitos exactos de las fichas canónicas vigentes.
-
-mandatory_rechecks:
-  - "M1"
-  - "M2 restante"
-  - "M4 restante"
-  - "M5"
-  - "M6 restante"
-  - "M7"
-  - "M8"
-  - "M10"
-  - "M11"
-  - "M12 restante"
-  - "M14"
-  - "M15"
-  - "M17"
-  - "M18 restante"
-  - "M20"
-  - "cualquier otro módulo no COMPLETE"
-
-priority_shift:
   rule: >
-    Como la cobertura de consultas estructuradas ya es amplia, aumentar el peso
-    de reasoning_value, evidence_connectivity y actionability. No premiar una
-    integración solo porque agrega otra tabla/listado.
+    La readiness debe verificar físicamente que esta clave es válida para cada
+    fuente incluida. No asumir join en fuentes donde no exista.
 
-evaluation_model:
+mandatory_audit:
 
-  executive_value:
-    weight: "VERY_HIGH"
-    evaluate:
-      - "preguntas directivas nuevas"
-      - "riesgos/desviaciones"
-      - "dónde mirar"
-      - "qué merece atención"
+  canonical_definition:
+    required:
+      - "leer ficha M11 completa y vigente"
+      - "confirmar propósito canónico"
+      - "confirmar estado actual PARTIAL"
+      - "confirmar que este slice profundiza PARTIAL"
+      - "confirmar efecto porcentual 0.0 pp"
 
-  reasoning_value:
-    weight: "CRITICAL"
-    evaluate:
-      - "explica por qué"
-      - "aporta causa/contexto"
-      - "conecta fuentes"
-      - "permite construir hipótesis mejor soportadas"
-      - "mejora recomendaciones"
-      - "reduce respuestas meramente descriptivas"
+  commercial_state:
+    inspect:
+      - "fuente física del estado comercial"
+      - "loadCommercialStateForChat"
+      - "computeDicf si aplica"
+      - "cliente_key"
+      - "planta_id"
+      - "estado/categoría observada"
+      - "periodo"
+      - "campos derivados"
 
-  evidence_connectivity:
-    weight: "VERY_HIGH"
-    evaluate:
-      - "conecta M3 con M9"
-      - "conecta M4/M6 con acciones"
-      - "conecta revisiones M12 con resultados"
-      - "permite triangular evidencia"
-      - "evita silos"
+    determine:
+      - "qué es hecho observado"
+      - "qué es derivado"
+      - "qué periodo representa"
+      - "qué puede mostrarse en expediente"
 
-  incremental_value:
-    weight: "VERY_HIGH"
-    evaluate:
-      - "qué no sabe hoy"
-      - "qué hueco real cubre"
-      - "qué duplica"
+  comments:
+    inspect:
+      - "fuente de comentarios comerciales"
+      - "get_cliente_comentarios"
+      - "loaders/helpers"
+      - "cliente_key"
+      - "planta_id"
+      - "texto"
+      - "autor si existe"
+      - "timestamp"
+      - "orden"
+      - "nulls"
 
-  actionability:
-    weight: "VERY_HIGH"
-    evaluate:
+    rules:
+      - "comentario almacenado != causa"
+      - "comentario almacenado != diagnóstico validado"
+      - "autor null no se inventa"
+
+  dicf_actions:
+    inspect:
+      - "arr.dicf_acciones"
+      - "helpers actuales"
+      - "cliente_key"
+      - "planta_id"
       - "responsable"
       - "acción"
-      - "prioridad"
-      - "riesgo"
       - "fecha"
-      - "seguimiento"
+      - "estatus"
+      - "resultado_cierre"
+      - "historial"
+      - "acciones_abiertas"
 
-  frequency:
-    weight: "HIGH"
+    determine:
+      - "campos reales"
+      - "qué es observado"
+      - "qué es derivado"
+      - "qué historial existe"
+      - "cómo se representa cierre"
+      - "si resultado_cierre pertenece a acción"
 
-  implementation_path:
-    weight: "MEDIUM"
-    evaluate:
-      - "fuente física"
-      - "helper"
-      - "intent"
-      - "tool"
+  history_and_close:
+    required:
+      - "identificar fuente física de historial"
+      - "identificar fuente física de resultado_cierre"
+      - "confirmar relación con acción"
+      - "confirmar orden temporal"
+      - "confirmar SELECT-only"
+
+    rules:
+      - "historial != causa"
+      - "resultado_cierre != efectividad salvo semántica física"
+      - "cerrada != exitosa"
+      - "no inferir causalidad post hoc"
+
+  client_resolution:
+    determine:
+      - "cómo se resuelve cliente por nombre"
+      - "resolve_entidades_comerciales"
+      - "cliente_key"
+      - "ambigüedad"
+      - "duplicados"
+      - "planta"
+      - "qué ocurre si hay múltiples candidatos"
+
+    rule: >
+      No construir expediente hasta resolver cliente y planta de forma segura.
+
+  join_integrity:
+    for_each_source_verify:
+      - "planta_id presente"
+      - "cliente_key presente"
+      - "normalización compatible"
+      - "case/collation si aplica"
+      - "null behavior"
+      - "duplicados"
+      - "cardinalidad"
+
+    rule: >
+      No inventar join por nombre libre si la fuente no comparte cliente_key.
+
+  time_semantics:
+    determine:
+      - "periodo de estado comercial"
+      - "fecha de comentarios"
+      - "fecha de acciones"
+      - "fecha de historial"
+      - "fecha de cierre"
+
+    rule: >
+      Director IA puede mostrar una cronología factual, pero no afirmar que un
+      evento causó otro solo por ocurrir antes/después.
+
+  authz:
+    determine:
+      - "JWT/contexto"
+      - "rol"
+      - "planta_id"
+      - "plantas_permitidas"
+      - "GA/GV"
+      - "cross-planta"
+      - "fail-closed"
+      - "authz actual DICF/commercial_state"
+
+  planner_tools:
+    inspect:
+      - "client_analysis"
+      - "dicf_focused"
+      - "commercial_state"
+      - "tools actuales"
       - "executor"
-      - "in-process"
-      - "primer slice útil"
+      - "chat routing"
+      - "resolve_entidades_comerciales"
+      - "get_dicf_context"
+      - "get_cliente_comentarios"
+      - "get_commercial_state"
 
-  risk:
-    weight: "MEDIUM"
-    penalize:
-      - "writes"
-      - "Excel"
-      - "S3"
-      - "Twilio/WhatsApp"
-      - "side effects"
-      - "stubs"
-      - "semantic ambiguity"
-      - "duplicación"
+    determine:
+      - "si conviene intent específico expediente_comercial"
+      - "si puede reutilizar client_analysis"
+      - "tool/executor mínimo"
+      - "cómo evitar consultas duplicadas"
+      - "cómo conservar routing actual"
 
-  percentage_effect:
-    weight: "LOW"
-
-special_rechecks:
-
-  M5:
+  context_policy:
     required:
-      - "definición canónica exacta"
-      - "Taller por AT si corresponde"
-      - "qué evidencia nueva aporta"
-      - "Excel dependency"
-      - "colisiones con TALLER/AR"
-      - "valor mensual vs diario"
+      - "definir límites por fuente"
+      - "máximo de comentarios"
+      - "máximo de acciones"
+      - "máximo de eventos de historial"
+      - "orden"
+      - "recorte determinista"
+      - "prioridad de evidencia"
 
-  M7:
+    rule: >
+      Evitar que un expediente grande desplace evidencia crítica o exceda contexto.
+
+  semantic_boundaries:
     required:
-      - "IGF ya integrado on-demand"
-      - "qué falta para pasar de KPI a explicación"
-      - "qué evidencia subyacente existe"
-      - "si permite responder por qué margen/ingreso/forecast se mueve"
-      - "qué se solapa con M6"
+      - "estado comercial != causa"
+      - "comentario != motivo probado"
+      - "acción != solución"
+      - "resultado_cierre != éxito automático"
+      - "historial != causalidad"
+      - "responsable de acción != responsable de caída comercial"
 
-  M8:
-    required:
-      - "ARR ya integrado"
-      - "qué profundidad falta"
-      - "duplicación con M9"
-      - "capacidad causal nueva"
+architecture_hypothesis:
+  preferred_path: >
+    intent expediente_comercial / client_analysis -> tool -> executor ->
+    loadCommercialDossierForChat(planta_id, cliente_key) ->
+    commercial_state + comentarios + dicf_acciones + historial/cierre ->
+    expediente factual acotado ->
+    evidencia -> respuesta
 
-  M11:
-    required:
-      - "DICF actual"
-      - "comentarios/causas/acciones disponibles"
-      - "qué ya consume Director IA"
-      - "qué evidencia no consume"
-      - "si puede conectar estado comercial con causas y acciones"
+  requirements:
+    - "in-process"
+    - "SELECT-only"
+    - "sin HTTP interno"
+    - "sin writes"
+    - "sin contrato nuevo"
+    - "sin joins inventados"
 
-  M12_remaining:
-    required:
-      - "notas ya integradas"
-      - "qué más queda"
-      - "si otro slice agrega dominio nuevo o solo más detalle"
-      - "no continuar por inercia"
+response_contract:
+  include_if_physically_supported:
+    - "planta_id"
+    - "cliente_key"
+    - "cliente_nombre"
+    - "estado_comercial"
+    - "periodo_estado"
+    - "comentarios"
+    - "comentario_texto"
+    - "comentario_autor"
+    - "comentario_fecha"
+    - "acciones"
+    - "accion_id"
+    - "accion"
+    - "responsable"
+    - "fecha"
+    - "estatus"
+    - "resultado_cierre"
+    - "historial"
+    - "source"
 
-  M20:
-    required:
-      - "si Home KPI es resumen redundante"
-      - "si tiene evidencia propia"
-      - "si aporta reasoning"
+  forbidden:
+    - "causa confirmada"
+    - "motivo probado"
+    - "responsable de la caída"
+    - "acción efectiva"
+    - "solución"
+    - "impacto causal"
+    - "relación entre fuentes no soportada"
 
-  remaining_write_heavy:
-    required:
-      - "M4 COMPARAR"
-      - "M6 Export"
-      - "M18 operations"
-      - "WhatsApp/channel modules"
-      - "penalizar salvo valor ejecutivo desproporcionado"
+semantic_invariants:
+  - "Estado comercial es estado, no causa."
+  - "Comentario es evidencia textual almacenada, no motivo validado."
+  - "Acción DICF es acción registrada, no solución demostrada."
+  - "Resultado de cierre no implica éxito salvo campo explícito."
+  - "Responsable de acción no implica responsable del desempeño comercial."
+  - "Cronología no implica causalidad."
+  - "Join solo por clave física verificada."
 
-cross_source_opportunity:
-  required: >
-    Identificar si algún módulo pendiente desbloquea conexiones útiles entre
-    fuentes ya integradas. Si una capacidad nueva permite unir evidencia que hoy
-    vive aislada, otorgarle valor adicional, pero sin inventar joins o causalidad.
-
-mandatory_question_map:
-  for_each_candidate:
-    - "qué preguntas NUEVAS habilita"
-    - "qué preguntas ya responde Director IA"
-    - "qué sería duplicado"
-    - "qué aporta al reasoning"
-    - "qué conexiones de evidencia habilita"
-    - "qué no soporta la fuente"
-
-physical_audit:
-  for_each_candidate:
-    - "fuente primaria"
-    - "helpers"
-    - "queries"
-    - "intent"
-    - "tool"
-    - "executor"
+mandatory_evidence_table:
+  columns:
+    - "component"
+    - "source"
+    - "helper"
+    - "join_key"
+    - "select_only"
+    - "fields"
+    - "time_semantics"
     - "authz"
     - "plant_scope"
-    - "side_effects"
-    - "external_dependency"
-    - "semantic_risk"
-    - "testability"
-    - "first_slice"
-    - "state_after_slice"
-    - "percentage_effect"
+    - "context_limit"
+    - "reusable"
+    - "risk"
+    - "evidence"
 
-mandatory_table:
+mandatory_gap_table:
   columns:
-    - "rank"
-    - "module"
-    - "current_state"
-    - "new_executive_questions"
-    - "executive_value"
-    - "reasoning_value"
-    - "evidence_connectivity"
-    - "incremental_value"
-    - "actionability"
-    - "frequency"
-    - "source_ready"
-    - "wiring_ready"
-    - "dependencies"
-    - "mutation_risk"
-    - "semantic_risk"
-    - "first_useful_slice"
-    - "state_after_slice"
-    - "percentage_effect"
-    - "decision"
+    - "gap_id"
+    - "missing_capability"
+    - "required_for_slice"
+    - "reusable_component"
+    - "proposed_change"
+    - "architecture_change"
+    - "contract_change"
+    - "authz_change"
+    - "complexity"
+    - "blocking"
 
-ranking_rules:
-  - "No elegir por porcentaje."
-  - "No elegir por número."
-  - "No elegir por facilidad sola."
-  - "No elegir por ranking anterior."
-  - "No continuar M12/M18/M4/M6 por inercia."
-  - "Penalizar listados redundantes."
-  - "Premiar contexto causal verificable."
-  - "Premiar conexión de evidencia."
-  - "Premiar actionability."
-  - "Preferir hechos físicos a inferencias."
-  - "Preferir in-process."
-  - "Penalizar writes/dependencias externas/stubs."
+tests_to_design_if_ready:
+  - "expediente por cliente_key"
+  - "resolución por nombre"
+  - "cliente ambiguo -> clarificación"
+  - "estado comercial"
+  - "comentarios"
+  - "acciones"
+  - "acciones abiertas"
+  - "historial"
+  - "resultado_cierre"
+  - "0 comentarios"
+  - "0 acciones"
+  - "0 historial"
+  - "cliente sin estado comercial"
+  - "nulls"
+  - "orden temporal"
+  - "no causalidad"
+  - "no motivo inferido"
+  - "no responsable inferido"
+  - "planta autorizada"
+  - "planta no autorizada"
+  - "plantas_permitidas"
+  - "cross-planta"
+  - "GA/GV"
+  - "intent/tool/executor"
+  - "chat wiring"
+  - "no fallback incorrecto"
+  - "sin HTTP interno"
+  - "sin writes"
 
-winner_requirements:
-  exactly_one: true
+decision_rules:
 
-  must_include:
-    - "ganador"
-    - "segundo lugar"
-    - "preguntas nuevas"
-    - "reasoning nuevo"
-    - "conexión de evidencia"
-    - "por qué gana"
-    - "por qué pierde el segundo"
-    - "primer slice"
-    - "estado posterior"
-    - "efecto porcentual"
-    - "riesgos"
-    - "dependencias"
-    - "gates"
+  ready:
+    all:
+      - "join planta_id + cliente_key verificado en fuentes necesarias"
+      - "fuentes SELECT-only"
+      - "client resolution segura"
+      - "historial/cierre físicamente verificables"
+      - "authz preservable"
+      - "scope planta preservable"
+      - "contexto acotable"
+      - "separación semántica defendible"
+      - "path in-process posible"
+      - "tests determinísticos"
 
-next_task_policy:
-  if_readiness_needed:
-    pattern: "ARCH-DIRECTOR-IA-<MODULE>-<SLICE>-READINESS-001"
+    outcome: "DONE_PENDING_REVIEW"
+    next_task: "IMPL-DIRECTOR-IA-M11-EXPEDIENTE-COMERCIAL-001"
 
-  if_gap_fully_verified:
-    pattern: "IMPL-DIRECTOR-IA-<MODULE>-<SLICE>-001"
+  stopped:
+    when:
+      - "join físico no existe"
+      - "cliente_key es incompatible entre fuentes"
+      - "historial/cierre no puede relacionarse"
+      - "authz no puede preservarse"
+      - "expediente requiere inferir causalidad"
+      - "contexto no puede acotarse"
 
-  rule: >
-    Proponer exactamente una NEXT_TASK. No autorizar ni ejecutar.
+    outcome: "STOPPED"
+    next_task: null
+
+state_and_percentage:
+  current_task:
+    state_change: false
+    percentage_change: false
+
+  if_future_impl_succeeds:
+    m11_state: "PARTIAL"
+    numerator: 10.0
+    denominator: 20
+    percentage: 50.0
+    gain_pp: 0.0
 
 in_scope:
   writable:
     - "docs/dev-loop/CURRENT_TASK.md"
-    - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-005.md"
+    - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M11-EXPEDIENTE-COMERCIAL-READINESS-001.md"
 
   read_only:
     - "AGENTS.md"
@@ -343,6 +427,8 @@ out_of_scope:
   - "modificar SQL"
   - "modificar capability matrix"
   - "modificar contratos"
+  - "inventar joins"
+  - "inferir causalidad"
   - "hacer writes"
   - "hacer commit"
   - "hacer push"
@@ -350,48 +436,60 @@ out_of_scope:
   - "ejecutar NEXT_TASK"
 
 acceptance_criteria:
-  - "Baseline 10.0/20 = 50.0% verificado."
-  - "Todos los candidatos relevantes reevaluados."
-  - "Reasoning value ponderado explícitamente."
-  - "Evidence connectivity ponderada explícitamente."
-  - "Se identificaron preguntas nuevas."
-  - "Se identificaron conexiones de evidencia."
-  - "Se verificaron fuentes físicas."
-  - "Se verificó wiring."
+  - "Se verificó definición canónica M11."
+  - "Se verificó estado comercial."
+  - "Se verificaron comentarios."
+  - "Se verificaron acciones DICF."
+  - "Se verificó historial."
+  - "Se verificó resultado_cierre."
+  - "Se verificó join planta_id + cliente_key."
+  - "Se verificó resolución de cliente."
+  - "Se verificó SELECT-only."
   - "Se verificó authz."
-  - "Se verificaron dependencias."
-  - "Se produjo ranking."
-  - "Existe exactamente un ganador."
-  - "Existe exactamente un segundo lugar."
-  - "Existe exactamente una NEXT_TASK."
-  - "No se implementó nada."
-  - "No se modificó matriz."
+  - "Se verificó scope planta."
+  - "Se verificó semántica temporal."
+  - "Se definió política de contexto."
+  - "Se separó correlación de causalidad."
+  - "Se auditó planner/tools."
+  - "Se definió path mínimo."
+  - "Se diseñaron tests."
+  - "Se determinó G2."
+  - "Se determinó G3."
+  - "M11 sigue PARTIAL."
+  - "50.0% sigue sin cambio."
+  - "No se implementó."
   - "Solo CURRENT_TASK y reporte cambiaron."
   - "git diff --check limpio."
 
 report_requirements:
-  path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-005.md"
+  path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M11-EXPEDIENTE-COMERCIAL-READINESS-001.md"
 
   must_include:
     - "metadata"
     - "resumen ejecutivo"
-    - "baseline 50.0%"
-    - "capacidad actual"
-    - "huecos globales"
-    - "reasoning gaps"
-    - "evidence connectivity gaps"
-    - "preguntas ejecutivas nuevas"
-    - "candidatos"
-    - "tabla comparativa"
-    - "ranking"
-    - "ganador"
-    - "segundo lugar"
-    - "primer slice"
-    - "estado posterior"
-    - "efecto porcentual"
-    - "riesgos"
-    - "dependencias"
+    - "baseline"
+    - "definición canónica M11"
+    - "commercial state"
+    - "comments"
+    - "dicf actions"
+    - "history"
+    - "resultado_cierre"
+    - "join key"
+    - "client resolution"
+    - "time semantics"
+    - "authz"
+    - "plant scope"
+    - "planner/tools"
+    - "context policy"
+    - "semantic boundaries"
+    - "evidence table"
+    - "gap table"
+    - "implementation hypothesis"
+    - "tests"
     - "gates"
+    - "state after future slice"
+    - "percentage"
+    - "risks"
     - "NEXT_TASK"
     - "acciones no realizadas"
     - "secrets_check"
@@ -399,10 +497,10 @@ report_requirements:
     - "git status"
 
 expected_terminal_state: >
-  DONE_PENDING_REVIEW si existe un ganador global defendible. STOPPED si ningún
-  frente aporta suficiente valor marginal sin decisión contractual. BLOCKED si
-  falta gate indispensable.
+  DONE_PENDING_REVIEW si el expediente comercial puede construirse con joins
+  físicos, SELECT-only, authz y semántica segura. STOPPED si requiere inventar
+  relaciones o causalidad. BLOCKED si falta gate indispensable.
 
 max_attempts: 1
 
-result_report_path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-005.md"
+result_report_path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M11-EXPEDIENTE-COMERCIAL-READINESS-001.md"
