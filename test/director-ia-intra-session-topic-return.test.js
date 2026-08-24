@@ -35,6 +35,7 @@ const FRAME_ALLOWED = new Set([
   "active_date",
   "active_range_days",
   "active_channel",
+  "active_period_months",
 ]);
 
 function srcBlock(name, extra = {}) {
