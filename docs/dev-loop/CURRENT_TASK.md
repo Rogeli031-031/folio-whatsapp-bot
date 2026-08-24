@@ -1,15 +1,15 @@
 # CURRENT_TASK
 
 ```yaml
-task_id: "DOCS-DIRECTOR-IA-COMMERCIAL-TREND-CHART-PARITY-SYNC-001"
+task_id: "AUDIT-DIRECTOR-IA-PRODUCTION-CONVERSATION-GAP-010"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-08-24"
 human_authorization: >
   AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-24.
-  Apruebo DOCS-DIRECTOR-IA-COMMERCIAL-TREND-CHART-PARITY-SYNC-001
-  y autorizo G1.
+  Apruebo AUDIT-DIRECTOR-IA-PRODUCTION-CONVERSATION-GAP-010
+  y autorizo G1 exclusivamente para auditoría read-only de producto.
 
 gates:
   G1_task_authorization: AUTHORIZED
@@ -19,313 +19,436 @@ gates:
   G8_calibration_materiality_signature: N/A
 
 mode:
-  type: "DOCUMENTATION_SYNC_ONLY"
+  type: "PRODUCTION_CONVERSATION_AUDIT_ONLY"
   implementation: false
   code_changes: false
+  runtime_changes: false
   test_changes: false
+  matrix_changes: false
   contract_changes: false
   sql_execution: false
 
 objective: >
-  Sincronizar la documentación de Director IA con el runtime ya integrado de
-  commercial_trend: motor backend compartido entre dashboard y chat para serie
-  diaria, ventana 30/90 días, CASA/COMISIONISTA, pendiente OLS y top-6 movers,
-  con paridad matemática y sin comments en este first slice.
+  Auditar los pendientes de producción que siguen abiertos después de integrar
+  daily_executive_brief y commercial_trend. Determinar exactamente un siguiente
+  cuello de mayor valor entre perfil longitudinal de cliente, Taller Mayor por
+  unidad, identidad/saludo, directorio SEH y semántica temporal IGF.
 
 baseline:
   global: "10.5 / 20 = 52.5%"
-  delta: "0.0 pp"
+  percentage_effect: "0.0 pp"
 
-implemented_capability:
-  name: "commercial_trend"
-  architecture: "B — shared backend engine"
-  first_slice: "B — series + OLS + top-6 movers"
+north_star: >
+  Director IA debe sostener conversaciones ejecutivas reales sobre clientes,
+  unidades, responsables organizacionales e IGF temporal usando fuentes físicas,
+  continuidad de contexto y límites honestos, sin exigir nombres de módulos ni
+  wording específico.
 
-single_source_of_truth:
-  engine: "lib/commercial-trend-engine.js"
+regressions_not_to_reselect_if_working:
 
-  consumers:
-    - "GET /api/arr/venta-serie"
-    - "Director IA commercial_trend"
+  daily_executive_brief:
+    conversation:
+      - "¿Cómo nos fue ayer?"
+      - "¿Qué te llama la atención?"
+      - "¿Y la venta?"
+      - "¿Y el descuento?"
 
-  invariant: >
-    Dashboard y Director IA consumen la misma verdad comercial.
+  commercial_trend:
+    conversation:
+      - "¿Cómo vamos en CASA los últimos 3 meses?"
+      - "¿Y COMISIONISTAS?"
+      - "Compáralos."
+      - "¿Quién está moviendo la caída?"
+      - "Háblame del primero."
+
+  IGF_reviewable_supports:
+    conversation:
+      - "¿Cómo proyectamos cerrar Puebla este mes?"
+      - "¿Qué podemos recortar de apoyos?"
+      - "¿Cuáles todavía podemos detener?"
+      - "Si dejaran de entrar, ¿cómo quedaría el IGF?"
+
+  action_person:
+    conversation:
+      - "¿Qué pasó con la acción de Julio Pérez?"
+      - "¿Está vencida?"
+
+  rule: >
+    Solo reabrir uno de estos cuellos si existe evidencia de regresión real.
+
+production_case_1_longitudinal_client:
+
+  canonical_question: >
+    ¿Qué cliente de Puebla es el de mayor volumen, cuánto compró cada mes en los
+    últimos 3 meses, qué descuento/kg tuvo por mes, cuánto ingreso generó por mes,
+    subió o bajó y qué sabemos de él?
+
+  followups:
+    - "¿En qué mes compró más?"
+    - "¿En qué mes tuvo más descuento?"
+    - "¿Coincidió con más volumen?"
+    - "¿Cuánto ingreso generó?"
+    - "¿Qué sabemos de él?"
+    - "¿Qué comentarios tenemos?"
+    - "¿Tiene acciones pendientes?"
+    - "¿Qué pasó con esas acciones?"
+
+  semantic_variants:
+    - "Háblame de nuestro cliente más grande de Puebla."
+    - "¿Cómo se ha comportado el principal cliente estos 3 meses?"
+    - "¿Qué tendencia trae nuestro mayor cliente?"
+    - "¿Qué tanto le hemos descontado últimamente?"
+
+  mandatory_audit:
+    - "top client selection"
+    - "cliente_key canonical identity"
+    - "three-month semantics"
+    - "monthly sales source"
+    - "monthly discount/kg source"
+    - "monthly income source"
+    - "period alignment"
+    - "comments"
+    - "DICF"
+    - "Action Register"
+    - "entity handoff from commercial_trend mover"
+    - "null != zero"
+    - "no joins by display name"
+
+  key_questions:
+    - "Can existing monthly packs be composed safely per cliente_key?"
+    - "Is monthly income physically available at client grain?"
+    - "Does one reusable longitudinal client read model exist?"
+    - "Can the selected top mover from commercial_trend become active_entity?"
+
+  truth_boundary:
+    - "discount and volume correlation != causality"
+    - "comment != cause"
+    - "action != outcome"
+    - "highest volume != highest margin"
+
+production_case_2_taller_mayor_units:
+
+  canonical_question: >
+    ¿Qué unidades de Puebla tienen apoyos/Folios de Taller Mayor este mes?
+    Dame detalles.
+
+  followups:
+    - "¿Cuál tiene el apoyo más alto?"
+    - "¿Qué le están haciendo?"
+    - "¿Qué folio es?"
+    - "¿En qué estatus va?"
+    - "¿Todavía se puede detener?"
+    - "¿Cuánto hemos gastado en esa unidad?"
+    - "¿Qué otros apoyos ha tenido?"
+
+  semantic_variants:
+    - "¿Qué carros de Puebla traen apoyos de taller mayor?"
+    - "Enséñame las unidades con reparaciones fuertes este mes."
+    - "¿Qué unidades tienen folios de Taller Mayor?"
+
+  mandatory_audit:
+    - "physical Taller Mayor definition"
+    - "categoria/subcategoria"
+    - "unidad/economico field"
+    - "folio link"
+    - "current month/mes_cargo"
+    - "plant scope"
+    - "amount"
+    - "status"
+    - "concept/details"
+    - "reviewability"
+    - "unit-level history"
+    - "existing Taller modules/helpers"
+    - "whether Director IA currently has any read path to this grain"
+
+  key_question: >
+    Is this primarily a routing/read-model gap over data that already exists?
+
+production_case_3_authenticated_greeting:
+
+  canonical_turn: "Hola"
+
+  desired_behavior_if_supported: >
+    Personalize greeting using the currently authenticated user identity.
+
+  desired_example_only_if_data_supports: >
+    “Hola, Ing. Zaragoza. ¿En qué le puedo ayudar hoy?”
+
+  mandatory_audit:
+    - "POST /chat auth/session payload"
+    - "dashboard token identity"
+    - "user id"
+    - "name"
+    - "role"
+    - "title/salutation field"
+    - "smalltalk path"
+    - "whether identity is currently dropped before GPT"
+
+  truth_boundary:
+    - "name must be current authenticated identity"
+    - "professional title only if physically stored/derived by explicit rule"
+    - "no model memory identity"
+    - "no hardcoded name"
+
+  value_question: >
+    Is the missing personalized greeting a narrow presentation gap or does user
+    identity unlock broader person-aware conversation?
+
+production_case_4_SEH_directory:
+
+  canonical_question: >
+    ¿Quién es el responsable de Seguridad e Higiene en Puebla?
+
+  followups:
+    - "¿Cuál es su teléfono?"
+    - "¿Y su correo?"
+    - "¿Tiene acciones pendientes?"
+    - "¿Qué sabemos de él?"
+
+  semantic_variants:
+    - "¿Quién lleva SEH en Puebla?"
+    - "Dame el contacto de Seguridad e Higiene Puebla."
+    - "¿Quién es el encargado de SEH?"
+
+  mandatory_audit:
+    - "physical DB source"
+    - "usuarios/personas tables"
+    - "plant assignment"
+    - "area/department/function field"
+    - "SEH aliases"
+    - "current/vigencia semantics"
+    - "name"
+    - "phone"
+    - "email"
+    - "authz/privacy"
+    - "whether data exists but is unreachable"
+    - "whether data does not exist at all"
+
+  key_question: >
+    Is this MISSING_INFRASTRUCTURE over existing organizational data or
+    MISSING_DATA requiring a directory source?
+
+production_case_5_closed_month_IGF:
+
+  canonical_question: >
+    ¿Cuál es la proyección final del IGF de Puebla de mayo pasado?
+
+  expected_behavior:
+    - "detect past closed month"
+    - "do not silently label current/latest version as forecast"
+    - "offer actual closed result if available"
+
+  followups:
+    - "¿Entonces cómo cerró mayo?"
+    - "¿Qué proyectábamos durante mayo?"
+    - "¿Qué tan cerca estuvimos?"
+    - "Compáralo con junio."
+
+  semantic_variants:
+    - "¿Cómo cerramos mayo en IGF?"
+    - "¿Cuál fue el resultado final de mayo?"
+    - "¿Qué habíamos proyectado para mayo?"
+
+  mandatory_audit:
+    - "current date/month semantics"
+    - "period resolver"
+    - "igf_status routing"
+    - "closed actual fields"
+    - "version semantics"
+    - "historical snapshot persistence"
+    - "whether a forecast-as-of date is stored"
+    - "whether actual and forecast can be distinguished physically"
+
+  truth_boundary:
+    - "past closed actual != current forecast"
+    - "latest historical record != necessarily historical forecast"
+    - "no reconstructed forecast from final actual"
+
+production_case_6_regression_commercial_to_client:
+
+  conversation:
+    - "¿Cómo vamos en CASA los últimos 3 meses?"
+    - "¿Quién está moviendo la caída?"
+    - "Háblame del primero."
+    - "¿Qué sabemos de él?"
+    - "¿Tiene alguna acción pendiente?"
+
+  purpose: >
+    Test whether commercial_trend handoff already unlocks part of the
+    longitudinal-client conversation and identify the exact point where it stops.
+
+trace_each_case:
+  required:
+    - "isolated planner intent"
+    - "effective intent"
+    - "coverage guard"
+    - "parent_intent"
+    - "previous_frame"
+    - "active_entity"
+    - "plant"
+    - "period/range"
+    - "physical sources"
+    - "sources actually loaded"
+    - "entity resolution"
+    - "fresh requery"
+    - "evidence sent to GPT"
+    - "limitations"
+    - "GPT invoked"
+    - "deterministic early return"
+    - "exact failure point"
+
+physical_source_rule: >
+  Search the entire repository for actual sources/helpers before classifying
+  something as missing. Data that exists in dashboard/WhatsApp but not chat is
+  MISSING_INFRASTRUCTURE, not MISSING_DATA.
+
+answerability_classification:
+  values:
+    - "WORKS_NOW"
+    - "PARTIALLY_WORKS"
+    - "ROUTING_GAP"
+    - "MISSING_READ_MODEL"
+    - "MISSING_PHYSICAL_DATA"
+    - "TEMPORAL_SEMANTICS_GAP"
+    - "AUTHZ_LIMIT"
+    - "REGRESSION"
+
+failure_classes:
+  - "MISSING_DATA"
+  - "MISSING_INFRASTRUCTURE"
+  - "MODEL_REASONING_LIMIT"
+  - "OVERPROGRAMMING"
+  - "DEPLOYMENT_GAP"
+  - "CONTRACT_OR_AUTHZ_LIMIT"
+
+production_value_selection:
+
+  dimensions:
+    frequency: "likelihood in real executive use"
+    executive_value: "decision/awareness usefulness"
+    transversal_unlock: "number of future conversations unlocked"
+    data_readiness: "how much physical truth already exists"
+    natural_conversation: "how much it improves human-like continuity"
+
+  rule: >
+    Use these dimensions to justify the single bottleneck, not to create a
+    permanent automated roadmap score.
+
+single_bottleneck:
+  exactly_one: true
+
+  required:
+    - "name"
+    - "failure_class"
+    - "production cases affected"
+    - "physical location/source"
+    - "evidence"
+    - "why it wins now"
+    - "what fixing it unlocks"
+    - "what it does not solve"
 
   prohibited:
-    - "chat-specific SQL"
-    - "internal HTTP"
-    - "copied OLS only for chat"
-    - "parallel trend math"
+    - "selecting multiple parallel features"
+    - "selecting easiest implementation only"
 
-dashboard_parity:
-  endpoint: "GET /api/arr/venta-serie"
+information_gap_quality:
 
-  behavior: >
-    El endpoint delega al motor compartido y conserva el comportamiento del
-    dashboard.
+  when physical data is missing:
+    desired_answer_behavior:
+      - "what is known"
+      - "what is not available"
+      - "specific missing source/field"
+      - "why it matters"
+      - "what becomes answerable if added"
 
-  comments_boundary: >
-    Comments permanecen en el wrapper HTTP/dashboard; no forman parte del motor
-    canónico del chat en este first slice.
+  principle: >
+    Good handling of missing data is conversational capability, not necessarily
+    a failure.
 
-range_semantics:
-  one_month:
-    days: 30
-    meaning: "30 trailing days"
-
-  three_months:
-    days: 90
-    meaning: "90 trailing days"
-
-  anchor: "MAX(fecha) disponible"
-
+phrasebook_policy:
   invariant: >
-    No es mes calendario y no se ancla automáticamente a hoy.
+    Canonical questions are semantic production tests, not strings for routing.
 
-channel_semantics:
-  COMISIONISTA:
-    physical_rule: "LIKE '%comisionista%'"
-
-  CASA:
-    physical_rule: "resto de filas"
-
-  aliases:
-    - "COMISIONISTA"
-    - "COMISIONISTAS"
-
-  unspecified:
-    behavior: >
-      Se conserva la semántica soportada por el motor; no inventar canal.
-
-OLS:
-  x: "índice de puntos filtrados"
-  y: "venta_ton"
-  n_lt_2: "null"
-
-  direction:
-    positive: "UP"
-    negative: "DOWN"
-    zero: "FLAT"
-    insufficient: "INSUFFICIENT_DATA"
-
-  invariant: >
-    “Subiendo/bajando” deriva del signo de la pendiente OLS, no de comparar
-    primer punto contra último ni de lectura visual.
-
-series:
-  grain: "daily"
-
-  preserves:
-    - "same date points as dashboard"
-    - "same plant scope"
-    - "same channel filter"
-    - "same missing-day semantics"
-
-top_movers:
-  count: 6
-
-  behavior: >
-    Usa el mismo delta y selección que el dashboard.
-
-  truth_boundary: >
-    Mover/contributor != causa.
-
-comments:
-  included_in_chat_first_slice: false
-
-  reason: >
-    El join legacy por cliente_nombre no es evidencia canónica para Director IA.
-
-  deferred_rule: >
-    Comments solo podrán incorporarse más adelante vía cliente_key/evidencia
-    canónica.
-
-intent:
-  name: "commercial_trend"
-
-  slots:
-    - "range_days"
-    - "channel"
-    - "plant"
-
-  invariant: >
-    No existen intents separados para CASA, COMISIONISTA, 30d o 90d.
-
-conversation_examples:
-  canonical:
-    - "¿Cómo vamos en CASA los últimos 3 meses?"
-    - "¿Y COMISIONISTAS?"
-    - "Compáralos."
-    - "¿Quién explica más la caída?"
-    - "Háblame del primero."
-
-  semantics:
-    channel_switch: >
-      CASA 90d -> COMISIONISTA conserva rango y hace fresh requery.
-
-    comparison: >
-      CASA y COMISIONISTA se consultan para la misma planta/rango y se comparan
-      con dos pendientes OLS defendibles.
-
-    mover_question: >
-      “Quién explica” se interpreta matemáticamente como mayor contributor/mover,
-      no causa demostrada.
-
-    client_handoff: >
-      El mover seleccionado puede pasar a resolución canónica de cliente cuando
-      es seguro, sin implementar todavía perfil longitudinal 3M.
-
-conversation_state:
-  stores:
-    - "plant"
-    - "active_range_days"
-    - "active_channel"
-    - "parent_intent commercial_trend"
-
-  invariant: >
-    State conserva contexto de routing; la evidencia se reconsulta.
-
-comparison_mode:
-  rule: >
-    CASA vs COMISIONISTAS requiere dos consultas al mismo motor con el mismo
-    rango. No usar “ambos” agregado como sustituto de comparación.
-
-  outputs_if_available:
-    - "CASA slope/direction"
-    - "COMISIONISTA slope/direction"
-    - "totals"
-    - "top movers by channel"
+  mandatory:
+    - "semantic variants"
+    - "holdouts"
+    - "inspect lib/ for exact phrase coding"
 
 reasoning_boundary:
-  runtime:
-    - "range"
-    - "channel"
-    - "series"
-    - "OLS"
-    - "top movers"
+
+  KEEP_DETERMINISTIC:
+    - "user identity"
+    - "client identity"
+    - "unit identity"
+    - "plant"
+    - "period"
+    - "amount"
+    - "monthly math"
+    - "status"
+    - "contact data"
     - "authz"
     - "provenance"
     - "absence/error"
 
-  GPT:
+  LET_GPT_REASON:
     - "executive synthesis"
-    - "comparison wording"
+    - "trend interpretation with caveats"
     - "what stands out"
-    - "what deserves investigation"
-    - "follow-ups"
+    - "what to investigate"
+    - "follow-up wording"
 
-  prohibited:
-    - "scripted causal explanation"
-    - "mover = cause"
-    - "trend = cause"
+next_task:
+  exactly_one: true
+  authorize: false
+  execute: false
 
-partial_data:
-  handles:
-    - "no rows"
-    - "insufficient observations"
-    - "one channel missing"
-    - "source error"
+  naming_rule: >
+    NEXT_TASK must directly attack the selected physical bottleneck and should
+    be ARCH-* when readiness is required before implementation.
 
-  invariant: "missing != zero unless source semantics explicitly establish zero"
-
-parity_evidence:
-  requirement: >
-    Para mismo fixture/planta/rango/canal, dashboard/shared engine/Director IA
-    producen los mismos:
-    - range_start
-    - range_end
-    - daily dates
-    - venta_ton
-    - top-6 movers
-    - OLS slope
-    - observation count
-
-preserved:
-  - "daily_executive_brief"
-  - "daily_sales_deviation"
-  - "daily_discount_deviation"
-  - "daily cross-metric followup"
-  - "commercial_state"
-  - "natural followup"
-  - "topic return"
-  - "action-person"
-  - "IGF reviewable supports"
-  - "persistent memory"
-
-deferred:
-  - "comments parity via cliente_key"
-  - "longitudinal client 3M profile"
-  - "Taller Mayor"
-  - "SEH directory"
-  - "personalized greeting"
-  - "closed-month IGF semantics"
-
-test_evidence:
-  focal_commercial_trend: "18/18"
-  planner: "58/58"
-  capabilities: "56/56"
-  orchestrator: "28/28"
-  director_ia_suite: "933/933"
-  git_diff_check: "clean"
-
-module_state:
-  changed_modules: "none"
-  global: "10.5 / 20 = 52.5%"
+percentage_policy:
+  before: "10.5 / 20 = 52.5%"
+  after: "10.5 / 20 = 52.5%"
   delta: "0.0 pp"
-
-contracts:
-  Constitution: "unchanged"
-  EKE: "unchanged"
-  IES_04: "unchanged"
-  Reasoning_Engine_05: "unchanged"
 
 in_scope:
   writable:
     - "docs/dev-loop/CURRENT_TASK.md"
-    - "docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md"
-    - "docs/dev-loop/reports/DOCS-DIRECTOR-IA-COMMERCIAL-TREND-CHART-PARITY-SYNC-001.md"
+    - "docs/dev-loop/reports/AUDIT-DIRECTOR-IA-PRODUCTION-CONVERSATION-GAP-010.md"
+
+  read_only:
+    - "entire repository except writable files"
 
 out_of_scope:
-  - "code"
-  - "tests"
-  - "runtime"
-  - "contracts"
-  - "SQL"
+  - "implementation"
+  - "code changes"
+  - "test changes"
   - "matrix changes"
-  - "comments implementation"
-  - "longitudinal client implementation"
+  - "contract changes"
+  - "SQL execution"
+  - "schema creation"
   - "commit"
   - "push"
   - "merge"
 
 acceptance_criteria:
-  - "Shared engine documented."
-  - "Dashboard/chat parity documented."
-  - "30/90 semantics documented."
-  - "MAX(fecha) anchor documented."
-  - "CASA/COMISIONISTA semantics documented."
-  - "OLS semantics documented."
-  - "Top-6 movers documented."
-  - "Mover != cause explicit."
-  - "Comments exclusion documented."
-  - "commercial_trend intent/slots documented."
-  - "Channel switch documented."
-  - "Comparison behavior documented."
-  - "Client handoff boundary documented."
-  - "933/933 evidence recorded."
-  - "No module coverage change."
+  - "Longitudinal client audited end-to-end."
+  - "Commercial trend -> client handoff audited."
+  - "Taller Mayor by unit audited."
+  - "Authenticated greeting audited."
+  - "SEH directory/data availability audited."
+  - "Closed-month IGF semantics audited."
+  - "Prior major fixes regression-checked."
+  - "Semantic variants used."
+  - "Exactly one bottleneck selected."
+  - "Exactly one NEXT_TASK proposed."
   - "52.5% preserved."
-  - "Only three authorized files changed."
+  - "Only task + report changed."
   - "git diff --check clean."
-
-next_task:
-  propose_only: "AUDIT-DIRECTOR-IA-PRODUCTION-CONVERSATION-GAP-010"
-  authorize: false
-  execute: false
 
 expected_terminal_state: "DONE_PENDING_REVIEW"
 
 max_attempts: 1
 
 result_report_path: >
-  docs/dev-loop/reports/DOCS-DIRECTOR-IA-COMMERCIAL-TREND-CHART-PARITY-SYNC-001.md
+  docs/dev-loop/reports/AUDIT-DIRECTOR-IA-PRODUCTION-CONVERSATION-GAP-010.md
