@@ -1,15 +1,14 @@
 # CURRENT_TASK
 
 ```yaml
-task_id: "ARCH-DIRECTOR-IA-PLANT-DIAGNOSIS-EVIDENCE-ASSEMBLY-READINESS-001"
+task_id: "IMPL-DIRECTOR-IA-PLANT-DIAGNOSIS-EVIDENCE-ASSEMBLY-001"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-08-23"
 human_authorization: >
   AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-23.
-  Apruebo ARCH-DIRECTOR-IA-PLANT-DIAGNOSIS-EVIDENCE-ASSEMBLY-READINESS-001
-  y autorizo G1.
+  Apruebo IMPL-DIRECTOR-IA-PLANT-DIAGNOSIS-EVIDENCE-ASSEMBLY-001 y autorizo G1.
 
 gates:
   G1_task_authorization: AUTHORIZED
@@ -18,200 +17,41 @@ gates:
   G8_calibration_materiality_signature: N/A
 
 objective: >
-  Auditar físicamente el gap transversal de plant_diagnosis para determinar
-  si Director IA puede ejecutar y ensamblar en una misma corrida evidencia de
-  Action Register, DICF, bitácora, ARR, IGF y commercial_state, preservando
-  provenance, authz, planta, periodos, ausencia/error y semántica no causal,
-  sin reabrir IES ni Reasoning Engine y sin introducir M9 por inercia.
+  Implementar el ensamblaje multi-fuente de evidencia para plant_diagnosis
+  en el chat legado de Director IA, reuniendo en una sola corrida Action Register,
+  DICF, bitácora, ARR, IGF y commercial_state, preservando provenance, authz,
+  planta, periodos, restricciones parciales y semántica no causal, sin introducir
+  M9 ni modificar IES/Reasoning Engine.
 
 baseline:
-  prioritization_task: "ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-009"
-  prioritization_report: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-009.md"
-
-  transversal_capability: "plant_diagnosis evidence assembly"
+  readiness_task: "ARCH-DIRECTOR-IA-PLANT-DIAGNOSIS-EVIDENCE-ASSEMBLY-READINESS-001"
+  readiness_report: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-PLANT-DIAGNOSIS-EVIDENCE-ASSEMBLY-READINESS-001.md"
 
   global:
-    numerator: 10.5
+    numerator_before: 10.5
     denominator: 20
-    percentage: 52.5
-    expected_gain_pp: 0.0
+    percentage_before: 52.5
+    numerator_after: 10.5
+    percentage_after: 52.5
+    gain_pp: 0.0
 
-known_gap:
-  planner: >
-    plant_diagnosis ya declara múltiples dominios/fuentes: Action Register,
-    DICF, bitácora, ARR, IGF y commercial_state.
+contract_boundary:
+  ies:
+    modify: false
+    runtime: false
 
-  runtime: >
-    El chat legado no ejecuta ese plan multi-source y puede terminar respondiendo
-    principalmente desde Action Register.
-
-  contract_implication: >
-    El gap parece de wiring/runtime/context assembly, no de contrato IES/RE.
-
-primary_question: >
-  ¿Existe un path in-process, read-only, autorizado y conforme al contrato
-  vigente para que plant_diagnosis ejecute y ensamble AR + DICF + bitácora +
-  ARR + IGF + commercial_state en una sola corrida, preserve provenance por
-  fuente y entregue una respuesta de planta sin inventar causalidad ni mezclar
-  periodos o scopes?
-
-source_scope:
-  required_sources:
-    - "action_register"
-    - "dicf"
-    - "bitacora"
-    - "arr"
-    - "igf"
-    - "commercial_state"
-
-  explicitly_not_included:
-    - "M9 deltas"
+  reasoning_engine:
+    modify: false
+    runtime: false
 
   rule: >
-    No incorporar M9 por similitud con financial_diagnosis. Solo incluirlo si la
-    readiness demuestra que plant_diagnosis canónico realmente lo requiere,
-    cosa que hoy no se asume.
+    Este slice corrige wiring del chat legado. No introducir loaders en N5,
+    no crear runtime IES y no modificar contratos.
 
-mandatory_audit:
-
+readiness_findings:
   planner:
-    inspect:
-      - "intent plant_diagnosis"
-      - "domains declarados"
-      - "evidence plan"
-      - "clarification"
-      - "confidence"
-      - "routing priority"
-
-    determine:
-      - "qué fuentes exige realmente"
-      - "qué fuentes son opcionales"
-      - "qué periodo/scope pide cada una"
-      - "qué evidencia espera"
-
-  chat_runtime:
-    inspect:
-      - "askDirectorIa"
-      - "early returns"
-      - "focused modes"
-      - "plant_diagnosis branch"
-      - "Action Register context"
-      - "DICF context"
-      - "bitácora context"
-      - "ARR annex"
-      - "IGF annex"
-      - "commercial_state loader"
-      - "OpenAI call"
-
-    determine:
-      - "dónde se corta el ensamblaje"
-      - "por qué termina dominando Action Register"
-      - "qué cambio mínimo de wiring sería necesario"
-
-  action_register:
-    verify:
-      - "fuente física"
-      - "planta"
-      - "periodo/snapshot si aplica"
-      - "acciones"
-      - "responsables"
-      - "vencidas"
-      - "notas de revisión si entran o no"
-      - "authz"
-      - "provenance"
-
-  dicf:
-    verify:
-      - "fuente física"
-      - "planta"
-      - "periodo"
-      - "acciones/comentarios si aplica"
-      - "authz"
-      - "provenance"
-
-  bitacora:
-    verify:
-      - "fuente física"
-      - "planta"
-      - "periodo"
-      - "campos"
-      - "authz"
-      - "provenance"
-
-  arr:
-    verify:
-      - "fuente física"
-      - "planta"
-      - "periodo"
-      - "shape"
-      - "null semantics"
-      - "authz"
-      - "provenance"
-
-  igf:
-    verify:
-      - "fuente física"
-      - "planta"
-      - "periodo"
-      - "versión"
-      - "snapshot/composición si aplica"
-      - "null semantics"
-      - "authz"
-      - "provenance"
-
-  commercial_state:
-    verify:
-      - "fuente física"
-      - "planta"
-      - "periodo"
-      - "estado comercial"
-      - "si el loader actual escribe caché"
-      - "path SELECT-only disponible"
-      - "authz"
-      - "provenance"
-
-  plant_key:
-    required:
-      - "planta_id como clave común"
-      - "verificar que cada fuente puede acotarse por planta"
-      - "no hacer joins por nombre de planta si existe planta_id"
-      - "no combinar fuentes de plantas distintas"
-
-  temporal_alignment:
-    determine:
-      - "periodo de AR"
-      - "periodo DICF"
-      - "periodo bitácora"
-      - "periodo ARR"
-      - "periodo IGF"
-      - "periodo commercial_state"
-
-    rules:
-      - "no alinear silenciosamente"
-      - "no tratar snapshots de cortes distintos como mismo periodo"
-      - "si las fuentes tienen ventanas distintas, hacerlo visible"
-      - "clarificar cuando la pregunta exige un corte común imposible"
-
-  authz:
-    determine:
-      - "authz Action Register"
-      - "authz DICF"
-      - "authz bitácora"
-      - "authz ARR"
-      - "authz IGF"
-      - "authz commercial_state"
-      - "intersección más restrictiva"
-      - "GA/GV"
-      - "plantas_permitidas"
-      - "cross-planta"
-      - "fail-closed"
-
-    rule: >
-      El ensamblaje debe usar el scope más restrictivo de todas las fuentes
-      requeridas. Nunca relajar authz para completar diagnóstico.
-
-  provenance:
-    required_sections:
+    plant_diagnosis_multi_domain: true
+    declared_sources:
       - "action_register"
       - "dicf"
       - "bitacora"
@@ -219,98 +59,35 @@ mandatory_audit:
       - "igf"
       - "commercial_state"
 
-    each_must_preserve:
-      - "source"
-      - "plant"
-      - "period/window"
-      - "status/availability"
-      - "payload"
-      - "absence/error"
+  chat_gap:
+    exact_gap: >
+      askDirectorIa no tiene una rama específica intent === "plant_diagnosis".
+      La pregunta puede caer a OpenAI con contexto dominado por Action Register.
 
-    rule: >
-      No fusionar hechos de varias fuentes en un único bloque que pierda origen.
+  m9:
+    included: false
 
-  absence_and_error:
-    distinguish:
-      - "null"
-      - "0"
-      - "DATA_NOT_FOUND"
-      - "ABSENCE_CONFIRMED si aplica"
-      - "SOURCE_*"
-      - "TOOL_ERROR"
-      - "unauthorized"
+  commercial_state:
+    unsafe_loader: "loadCommercialStateForChat"
+    reason: >
+      Ejecuta computeDicf, que hace DELETE+INSERT de caché.
 
-    rules:
-      - "ausencia != cero"
-      - "error != ausencia"
-      - "unauthorized != missing"
-      - "una fuente no sustituye otra"
-      - "partial success debe ser explícito"
+    required_strategy: >
+      Usar lectura SELECT-only de arr.dicf_cliente_mes o helper equivalente puro,
+      siguiendo el patrón ya usado por M11.
 
-  reasoning_semantics:
-    allowed:
-      - "señalar riesgos observables"
-      - "señalar coincidencias"
-      - "señalar tensiones"
-      - "mostrar acciones/responsables registrados"
-      - "mostrar indicadores y estados por fuente"
-      - "formular hipótesis solo si el contrato vigente lo permite y etiquetadas"
-
-    forbidden:
-      - "correlación -> causalidad"
-      - "AR explica IGF automáticamente"
-      - "comentario DICF prueba causa"
-      - "un KPI determina responsable"
-      - "fuente faltante = situación normal"
-
-  plant_diagnosis_scope:
-    determine:
-      - "qué significa 'cómo va la planta'"
-      - "qué significa 'qué riesgos hay'"
-      - "qué evidencia entra"
-      - "qué evidencia queda fuera"
-      - "si notas M12 entran o no"
-      - "si M9 queda fuera definitivamente"
-
-    rule: >
-      Mantener plant_diagnosis como diagnóstico ejecutivo de planta, no convertirlo
-      en un mega-dump de todos los módulos.
-
-  context_policy:
-    required:
-      - "bloques separados"
-      - "límites por fuente"
-      - "orden determinista"
-      - "prioridad de evidencia"
-      - "payloads acotados"
-      - "limitations visibles"
-
-    rule: >
-      La readiness debe definir límites defendibles para evitar un contexto enorme.
-
-  contract_check:
-    inspect:
-      - "04-IES-STANDARD.md"
-      - "05-REASONING-ENGINE.md"
-      - "contratos relevantes"
-
-    determine:
-      - "si multi-source plant diagnosis ya está permitido"
-      - "si basta wiring/runtime"
-      - "si requiere G2"
-      - "si requiere G3"
-
-    rule: >
-      No modificar contratos. Si requiere reabrirlos, STOPPED.
-
-architecture_hypothesis:
-  preferred_path: >
+architecture:
+  required_path: >
     plant_diagnosis
-    -> planner multi-domain
-    -> loaders AR + DICF + bitácora + ARR + IGF + commercial_state
+    -> planner
+    -> load Action Register
+    -> load DICF
+    -> load bitácora
+    -> load ARR
+    -> load IGF
+    -> load commercial_state SELECT-only
     -> assemblePlantDiagnosisEvidence
-    -> provenance separada
-    -> contexto multi-source
+    -> contexto multi-source con provenance
     -> una llamada OpenAI
     -> respuesta
 
@@ -319,106 +96,288 @@ architecture_hypothesis:
     - "read-only"
     - "sin HTTP interno"
     - "sin writes"
+    - "sin computeDicf cache writes"
+    - "sin M9"
     - "sin IES runtime"
     - "sin Reasoning Engine runtime"
-    - "sin M9 salvo evidencia canónica"
 
-mandatory_failure_matrix:
-  cases:
-    - "todas las fuentes OK"
+source_blocks:
+
+  action_register:
+    preserve:
+      - "status"
+      - "plant"
+      - "period/window"
+      - "payload"
+      - "source/evidence"
+      - "absence/error"
+
+  dicf:
+    preserve:
+      - "status"
+      - "plant"
+      - "period/window"
+      - "payload"
+      - "source/evidence"
+      - "absence/error"
+
+  bitacora:
+    preserve:
+      - "status"
+      - "plant"
+      - "period/window"
+      - "payload"
+      - "source/evidence"
+      - "absence/error"
+
+  arr:
+    preserve:
+      - "status"
+      - "plant"
+      - "period"
+      - "payload"
+      - "source/evidence"
+      - "absence/error"
+
+  igf:
+    preserve:
+      - "status"
+      - "plant"
+      - "period"
+      - "version"
+      - "payload"
+      - "source/evidence"
+      - "absence/error"
+
+  commercial_state:
+    source: "arr.dicf_cliente_mes"
+    preserve:
+      - "status"
+      - "plant"
+      - "period"
+      - "payload"
+      - "source/evidence"
+      - "absence/error"
+
+provenance:
+  required_sections:
+    - "action_register"
+    - "dicf"
+    - "bitacora"
+    - "arr"
+    - "igf"
+    - "commercial_state"
+
+  forbidden:
+    - "fusionar payloads perdiendo origen"
+    - "presentar una fuente como si fuera otra"
+
+plant_scope:
+  key: "planta_id"
+
+  rules:
+    - "todas las fuentes se acotan a la misma planta"
+    - "no join por nombre de planta cuando existe planta_id"
+    - "cross-planta bloqueado"
+    - "una fuente no amplía el scope de otra"
+
+authz:
+  rule: >
+    Cada fuente conserva su authz. El ensamblaje aplica la intersección más
+    restrictiva sin abortar innecesariamente fuentes que sí son permitidas.
+
+  special_ga:
+    rule: >
+      GA puede ver AR/DICF/bitácora. IGF/ARR/commercial_state deben quedar
+      SOURCE_RESTRICTED si sus reglas vigentes lo impiden. No abortar todo el pack
+      solo porque esas fuentes estén restringidas.
+
+  required:
+    - "JWT/contexto"
+    - "planta_id"
+    - "plantas_permitidas"
+    - "cross-planta"
+    - "fail-closed"
+    - "unauthorized != missing"
+
+period_semantics:
+  rules:
+    - "cada fuente conserva su periodo/window real"
+    - "no alinear silenciosamente"
+    - "mismatch temporal visible"
+    - "si pregunta exige corte común imposible, clarificar o limitar"
+
+absence_error_semantics:
+  distinguish:
+    - "null"
+    - "0"
+    - "DATA_NOT_FOUND"
+    - "ABSENCE_CONFIRMED si aplica"
+    - "SOURCE_RESTRICTED"
+    - "SOURCE_*"
+    - "TOOL_ERROR"
+    - "unauthorized"
+
+  invariants:
+    - "null != 0"
+    - "absence != 0"
+    - "error != absence"
+    - "SOURCE_RESTRICTED != missing"
+    - "una fuente no sustituye otra"
+
+partial_failure_policy:
+  rules:
+    - "conservar fuentes OK"
+    - "mostrar SOURCE_RESTRICTED por fuente"
+    - "mostrar missing/error explícitamente"
+    - "no presentar diagnóstico parcial como completo"
+    - "no fabricar datos faltantes"
+
+reasoning_semantics:
+  allowed:
+    - "señalar riesgos observables"
+    - "señalar acciones y responsables registrados"
+    - "señalar coincidencias y tensiones"
+    - "mostrar indicadores y estados por fuente"
+    - "formular hipótesis solo etiquetadas si contrato vigente lo permite"
+
+  forbidden:
+    - "correlación = causalidad"
+    - "AR causó IGF"
+    - "comentario DICF prueba causa"
+    - "KPI identifica responsable"
+    - "fuente restringida = sin problemas"
+
+chat_runtime:
+  required:
+    - "crear rama específica plant_diagnosis"
+    - "no caer al dump general de Action Register"
+    - "cargar seis fuentes"
+    - "ensamblar evidencia"
+    - "una sola llamada OpenAI"
+    - "preservar otros intents"
+
+routing_preservation:
+  must_preserve:
+    - "financial_diagnosis"
+    - "igf_status"
+    - "arr_status"
+    - "commercial_state"
+    - "dicf_focused"
+    - "bitacora_lookup"
+    - "Action Register"
+    - "M5"
+    - "M6"
+    - "M11"
+    - "M12"
+    - "M18"
+
+  m9:
+    rule: "No incluir M9 en plant_diagnosis."
+
+implementation_hint:
+  helper_preferred: "assemblePlantDiagnosisEvidence"
+
+  commercial_state_reader:
+    preferred: "SELECT-only helper sobre arr.dicf_cliente_mes"
+
+  rule: >
+    Reutilizar helpers existentes cuando sean read-only. No reutilizar
+    loadCommercialStateForChat si implica computeDicf/cache writes.
+
+context_policy:
+  required:
+    - "seis bloques separados"
+    - "orden determinista"
+    - "payloads acotados"
+    - "limitations visibles"
+    - "no mega-dump"
+
+  preferred_priority_order:
+    - "risks/actions"
+    - "commercial state"
+    - "operational notes"
+    - "ARR"
+    - "IGF"
+
+  rule: >
+    El orden puede ajustarse a helpers reales, pero debe quedar determinista y
+    no eliminar provenance.
+
+response_contract:
+  must_allow:
+    - "estado general de planta"
+    - "riesgos observables"
+    - "acciones registradas"
+    - "responsables registrados"
+    - "estado comercial"
+    - "bitácora"
+    - "ARR"
+    - "IGF"
+    - "restricciones/ausencias"
+    - "period mismatch"
+
+  must_not_claim_without_evidence:
+    - "causa confirmada"
+    - "responsable causal"
+    - "impacto causal"
+    - "normalidad por fuente restringida"
+    - "ausencia de riesgo porque una fuente falta"
+
+tests_required:
+  focal:
+    - "plant_diagnosis carga seis fuentes"
+    - "una sola llamada OpenAI"
+    - "no fallback al dump Action Register"
+    - "provenance de seis fuentes"
+    - "misma planta"
+    - "cross-planta"
+    - "period mismatch visible"
     - "AR missing"
     - "DICF missing"
     - "bitácora missing"
     - "ARR missing"
     - "IGF missing"
     - "commercial_state missing"
-    - "una fuente TOOL_ERROR"
-    - "una fuente unauthorized"
-    - "period mismatch"
-    - "todas sin datos"
+    - "SOURCE_RESTRICTED"
+    - "TOOL_ERROR"
+    - "partial success"
+    - "null != 0"
+    - "absence != 0"
+    - "error != absence"
+    - "unauthorized != missing"
+    - "GA conserva AR/DICF/bitácora"
+    - "GA restringe IGF/ARR/CS por bloque"
+    - "no abort total GA"
+    - "commercial_state SELECT-only"
+    - "no computeDicf"
+    - "no cache writes"
+    - "no M9"
+    - "no causalidad"
+    - "financial_diagnosis preservado"
+    - "otros intents preservados"
+    - "sin HTTP interno"
+    - "sin writes"
+    - "IES sin cambios"
+    - "RE sin cambios"
 
-  for_each:
-    determine:
-      - "responder"
-      - "limitar"
-      - "clarificar"
-      - "abortar"
-      - "qué provenance permanece"
-
-tests_to_design_if_ready:
-  - "plant_diagnosis carga seis fuentes"
-  - "una sola llamada OpenAI"
-  - "no early-return Action Register"
-  - "provenance separada por seis fuentes"
-  - "misma planta"
-  - "cross-planta bloqueado"
-  - "periodos visibles"
-  - "period mismatch visible"
-  - "AR missing"
-  - "DICF missing"
-  - "bitácora missing"
-  - "ARR missing"
-  - "IGF missing"
-  - "commercial_state missing"
-  - "tool error"
-  - "unauthorized"
-  - "partial success"
-  - "null != 0"
-  - "absence != 0"
-  - "sin causalidad"
-  - "M9 no incluido"
-  - "financial_diagnosis preservado"
-  - "otros intents preservados"
-  - "sin HTTP interno"
-  - "sin writes"
-  - "contratos sin cambios"
-
-decision_rules:
-
-  ready:
-    all:
-      - "planner ya soporta multi-domain"
-      - "gap runtime localizado"
-      - "seis fuentes ejecutables/read-only o con path seguro"
-      - "planta_id común"
-      - "provenance preservable"
-      - "authz compatible bajo intersección restrictiva"
-      - "period mismatch representable"
-      - "partial failure model defendible"
-      - "contrato vigente permite evidencia multi-source"
-      - "sin necesidad de G2/G3"
-      - "tests determinísticos"
-
-    outcome: "DONE_PENDING_REVIEW"
-    next_task: "IMPL-DIRECTOR-IA-PLANT-DIAGNOSIS-EVIDENCE-ASSEMBLY-001"
-
-  stopped:
-    when:
-      - "requiere modificar IES/RE"
-      - "alguna fuente no puede ser read-only"
-      - "provenance no puede preservarse"
-      - "authz incompatible"
-      - "planta_id no puede alinear fuentes"
-      - "contexto no puede acotarse"
-
-    outcome: "STOPPED"
-    next_task: null
-
-state_and_percentage:
-  current_task:
-    state_change: false
-    percentage_change: false
-
-  future_impl:
-    numerator: 10.5
-    denominator: 20
-    percentage: 52.5
-    gain_pp: 0.0
+  regression:
+    - "capabilities"
+    - "planner"
+    - "tool orchestrator"
+    - "suite Director IA completa"
 
 in_scope:
   writable:
     - "docs/dev-loop/CURRENT_TASK.md"
-    - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-PLANT-DIAGNOSIS-EVIDENCE-ASSEMBLY-READINESS-001.md"
+    - "docs/dev-loop/reports/IMPL-DIRECTOR-IA-PLANT-DIAGNOSIS-EVIDENCE-ASSEMBLY-001.md"
+    - "lib/director-ia-chat.js"
+    - "lib/director-ia-context.js"
+    - "lib/director-ia-igf-arr.js"
+    - "lib/director-ia-tools.js"
+    - "lib/director-ia-plant-diagnosis.js"
+    - "scripts/test-director-ia-tool-orchestrator.js"
+    - "test/director-ia-plant-diagnosis.test.js"
 
   read_only:
     - "AGENTS.md"
@@ -434,81 +393,112 @@ in_scope:
     - "package-lock.json"
 
 out_of_scope:
-  - "implementar"
-  - "modificar código"
-  - "modificar runtime"
-  - "modificar matriz"
-  - "modificar contratos"
-  - "reabrir IES/RE"
-  - "modificar tests"
-  - "modificar frontend"
-  - "modificar SQL"
-  - "hacer writes"
-  - "hacer commit"
-  - "hacer push"
-  - "hacer merge"
-  - "ejecutar NEXT_TASK"
+  - "docs/director-ia/**"
+  - "capability matrix"
+  - "04-IES-STANDARD.md"
+  - "05-REASONING-ENGINE.md"
+  - "contratos"
+  - "IES runtime"
+  - "Reasoning Engine runtime"
+  - "M9"
+  - "server.js"
+  - "frontend"
+  - "SQL/schema/migrations"
+  - "writes"
+  - "HTTP interno"
+  - "commit"
+  - "push"
+  - "merge"
+  - "sync documental"
+  - "NEXT_TASK"
 
 acceptance_criteria:
-  - "Gap runtime localizado."
-  - "Planner plant_diagnosis multi-domain verificado."
-  - "Seis fuentes auditadas."
-  - "planta_id común verificado."
-  - "Authz por fuente auditada."
-  - "Intersección restrictiva definida."
-  - "Semántica temporal definida."
-  - "Provenance de seis fuentes definida."
-  - "Absence/error semantics definidas."
-  - "Failure matrix completada."
-  - "M9 boundary definida."
-  - "Conformidad IES/RE verificada."
-  - "G2/G3 determinados."
-  - "52.5% no cambia."
-  - "Solo CURRENT_TASK y reporte cambian."
+  - "Existe rama específica plant_diagnosis en chat."
+  - "Carga AR + DICF + bitácora + ARR + IGF + commercial_state."
+  - "No carga M9."
+  - "commercial_state se lee SELECT-only."
+  - "No se llama computeDicf."
+  - "No cache writes."
+  - "Una sola llamada OpenAI."
+  - "Provenance por seis fuentes."
+  - "planta_id común preservado."
+  - "Periodos reales preservados."
+  - "Mismatch temporal visible."
+  - "GA no aborta pack completo por restricciones parciales."
+  - "SOURCE_RESTRICTED visible por fuente."
+  - "Unauthorized no se convierte en missing."
+  - "Partial failures explícitos."
+  - "No causalidad."
+  - "financial_diagnosis preservado."
+  - "Otros intents preservados."
+  - "No HTTP interno."
+  - "No writes."
+  - "IES/RE sin cambios."
+  - "Global permanece 10.5/20 = 52.5%."
+  - "Tests focales verdes."
+  - "Regresión completa verde."
   - "git diff --check limpio."
+  - "Solo archivos autorizados modificados."
+
+required_validation:
+  - "node --test test/director-ia-plant-diagnosis.test.js"
+  - "node scripts/test-director-ia-capabilities.js"
+  - "node scripts/test-director-ia-planner.js"
+  - "node scripts/test-director-ia-tool-orchestrator.js"
+  - "node --test test/director-ia-*.test.js"
+  - "git diff --check"
+  - "git status"
+
+next_task_policy:
+  if_success:
+    propose_exactly_one: "DOCS-DIRECTOR-IA-PLANT-DIAGNOSIS-EVIDENCE-ASSEMBLY-SYNC-001"
+
+  rule: >
+    La sync posterior documenta capacidad transversal. No cambia estados de
+    módulos ni 10.5/20 = 52.5%.
 
 report_requirements:
-  path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-PLANT-DIAGNOSIS-EVIDENCE-ASSEMBLY-READINESS-001.md"
+  path: "docs/dev-loop/reports/IMPL-DIRECTOR-IA-PLANT-DIAGNOSIS-EVIDENCE-ASSEMBLY-001.md"
 
   must_include:
     - "metadata"
     - "resumen ejecutivo"
-    - "baseline"
-    - "physical runtime gap"
-    - "planner"
-    - "chat runtime"
-    - "Action Register evidence"
+    - "physical gap closed"
+    - "chat path"
+    - "planner alignment"
+    - "AR evidence"
     - "DICF evidence"
     - "bitácora evidence"
     - "ARR evidence"
     - "IGF evidence"
     - "commercial_state evidence"
-    - "plant key"
-    - "period alignment"
-    - "authz intersection"
     - "provenance"
-    - "absence/error"
-    - "failure matrix"
-    - "reasoning semantics"
+    - "period semantics"
+    - "authz intersection"
+    - "GA partial restrictions"
+    - "absence/error semantics"
+    - "partial failure"
+    - "OpenAI call count"
     - "M9 boundary"
-    - "context policy"
-    - "contract check"
-    - "implementation hypothesis"
+    - "routing preservation"
+    - "semantic boundaries"
+    - "IES boundary"
+    - "RE boundary"
     - "tests"
-    - "gates"
     - "percentage"
-    - "risks"
-    - "NEXT_TASK"
     - "acciones no realizadas"
+    - "gates"
     - "secrets_check"
     - "git diff --check"
     - "git status"
+    - "NEXT_TASK"
 
 expected_terminal_state: >
-  DONE_PENDING_REVIEW si el gap puede resolverse como wiring/runtime conforme a
-  contratos vigentes. STOPPED si requiere reabrir arquitectura o no puede
-  preservar authz/provenance. BLOCKED si falta gate indispensable.
+  DONE_PENDING_REVIEW si plant_diagnosis queda cableado con seis fuentes,
+  provenance, authz parcial y una llamada OpenAI conforme a contratos vigentes.
+  STOPPED si no puede preservarse scope/provenance o aparece necesidad de
+  modificar IES/RE. BLOCKED si falta gate.
 
 max_attempts: 1
 
-result_report_path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-PLANT-DIAGNOSIS-EVIDENCE-ASSEMBLY-READINESS-001.md"
+result_report_path: "docs/dev-loop/reports/IMPL-DIRECTOR-IA-PLANT-DIAGNOSIS-EVIDENCE-ASSEMBLY-001.md"
