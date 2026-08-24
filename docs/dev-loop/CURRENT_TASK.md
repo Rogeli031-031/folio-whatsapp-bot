@@ -1,469 +1,479 @@
 # CURRENT_TASK
 
 ```yaml
-task_id: "ARCH-DIRECTOR-IA-NATURAL-FOLLOWUP-INHERIT-READINESS-001"
+task_id: "IMPL-DIRECTOR-IA-NATURAL-FOLLOWUP-INHERIT-001"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-08-24"
 human_authorization: >
   AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-24.
-  Apruebo ARCH-DIRECTOR-IA-NATURAL-FOLLOWUP-INHERIT-READINESS-001
+  Apruebo IMPL-DIRECTOR-IA-NATURAL-FOLLOWUP-INHERIT-001
   y autorizo G1.
 
 gates:
   G1_task_authorization: AUTHORIZED
-  G2_architecture_change: N/A_PENDING_AUDIT
-  G3_new_architecture_contract: N/A_PENDING_AUDIT
+  G2_architecture_change: N/A
+  G3_new_architecture_contract: N/A
   G5_contract_conformance: N/A
   G8_calibration_materiality_signature: N/A
 
 objective: >
-  Auditar el mecanismo mínimo y seguro para que follow-ups naturales y no
-  enumerados puedan heredar un contexto conversacional válido y llegar a GPT,
-  sin ampliar un phrasebook cerrado y sin relajar authz, resolución de entidad,
-  cambio de planta, provenance ni requery.
+  Implementar la estrategia B aprobada para follow-ups naturales:
+  cuando el planner aislado devuelve unknown, existe un parent_intent válido,
+  el contexto conversacional sigue vigente, no hay intent standalone claro,
+  no hay cambio de planta/topic y no hay conflicto de entidad, el turno hereda
+  el parent_intent, hace requery y llega a GPT con HILO + evidencia fresca.
 
 baseline:
   global: "10.5 / 20 = 52.5%"
   percentage_effect: "0.0 pp"
 
-  prior_audit:
-    task: "AUDIT-DIRECTOR-IA-CONVERSATIONAL-PRODUCT-GAP-003"
-    bottleneck: "phrasebook cerrado de follow-ups"
-    failure_class: "OVERPROGRAMMING"
+  readiness:
+    task: "ARCH-DIRECTOR-IA-NATURAL-FOLLOWUP-INHERIT-READINESS-001"
+    determination: "READY_WITH_LIMITS"
+    strategy: "B — unknown + valid state -> inherit"
 
 product_principle: >
-  El runtime debe proteger verdad, identidad, scope y evidencia.
-  GPT debe interpretar lenguaje conversacional abierto cuando existe suficiente
-  contexto seguro para hacerlo.
+  El usuario no debe aprender frases especiales para hablar con Director IA.
+  El runtime protege identidad, scope, authz y evidencia; GPT interpreta
+  lenguaje conversacional abierto.
 
-central_problem: >
-  Frases no enumeradas como “¿Y eso?”, “¿Cómo así?”, “¿Qué más?” o
-  “¿Entonces qué falta?” no llegan al modelo aunque exista parent_intent,
-  evidencia fresca y un hilo válido.
+core_rule: >
+  UNKNOWN aislado no equivale automáticamente a “no entiendo”.
+  Si hay contexto válido y no existe una señal más fuerte de intent nuevo o
+  cambio de scope, el turno puede heredar el parent_intent.
 
-anti_solution:
-  forbidden:
-    - "agregar más frases exactas al phrasebook"
-    - "convertir cualquier unknown en follow-up"
-    - "mandar history crudo como evidencia"
-    - "heredar contexto después de un topic switch explícito"
+routing_precedence:
 
-primary_question: >
-  ¿Qué condición general puede determinar que un turno corto/ambiguo es un
-  follow-up del contexto activo y debe llegar a GPT con evidence fresca, en vez
-  de terminar en clarificación o routing erróneo?
+  1_explicit_standalone_intent:
+    rule: >
+      Un intent reconocido explícitamente en el turno actual siempre gana sobre
+      la herencia conversacional.
 
-mandatory_runtime_audit:
+    preserve_examples:
+      - "¿Cómo va el presupuesto esta semana?"
+      - "¿Qué tiene Taller AT-15?"
+      - "¿Cómo va Querétaro?"
+      - "¿Por qué bajó la venta ayer?"
+      - "¿Cómo va el IGF?"
+      - "¿Qué acciones están vencidas?"
 
-  inspect:
-    - "follow-up classifier actual"
-    - "phrasebook/kinds enumerados"
-    - "unknown handling"
-    - "entity extraction"
-    - "structured_conversation_state"
-    - "parent_intent"
-    - "active_entity"
-    - "active_date"
-    - "last_evidence_bundle_type"
-    - "pending_information_gap"
-    - "planner clarification"
-    - "OpenAI invocation"
+  2_scope_or_topic_change:
+    rule: >
+      Cambio explícito de planta, topic o entidad incompatible debe resolverse,
+      invalidarse o clarificarse antes de heredar contexto.
 
-  determine:
-    - "dónde se corta el turno"
-    - "qué señales ya existen para herencia"
-    - "qué señales indican topic switch"
-    - "qué señales indican nueva entidad"
-    - "qué señales indican un intent standalone"
+  3_unknown_with_valid_context:
+    rule: >
+      Si el planner devuelve unknown y existe estado conversacional válido,
+      heredar parent_intent y llegar a GPT.
 
-inheritance_gate_hypothesis:
-  audit_not_assume: true
+  4_unknown_without_valid_context:
+    rule: >
+      Clarificar. No caer al Action Register ni inventar intent.
 
-  candidate_requirements:
-    - "parent_intent válido"
-    - "estado conversacional activo"
-    - "último pack defendible"
-    - "turno corto o semánticamente dependiente"
-    - "sin intent standalone claro"
-    - "sin cambio explícito de planta"
-    - "sin nueva entidad inequívoca que cambie scope"
-    - "sin topic switch"
+valid_context_requirements:
 
-  desired_behavior: >
-    Si estas condiciones se cumplen, el turno puede heredar contexto y llegar a
-    GPT con evidencia fresca aunque el planner aislado lo marque unknown.
+  required:
+    - "parent_intent presente y soportado"
+    - "planta actual autorizada"
+    - "last_evidence_bundle_type defendible para ese intent"
+    - "sin topic switch explícito"
+    - "sin intent standalone reconocido"
+    - "sin conflicto de entidad"
+    - "estado no invalidado"
 
   rule: >
-    Unknown no significa automáticamente follow-up. Debe existir evidencia
-    contextual suficiente.
+    No usar longitud de frase, número de palabras ni vocabulario cerrado como
+    condición primaria de follow-up.
 
-followup_classes_to_audit:
+anti_phrasebook:
 
-  explanation:
-    examples:
-      - "¿Cómo así?"
-      - "¿Por qué?"
-      - "¿A qué te refieres?"
-      - "Explícame eso."
+  prohibited:
+    - "agregar listas extensas de frases"
+    - "if text === '¿cómo así?'"
+    - "if contains 'qué más'"
+    - "listas de sinónimos para follow-up"
+    - "score de anáforas"
+    - "threshold opaco de palabras"
+    - "clasificador manual de español coloquial"
 
-  expansion:
-    examples:
-      - "¿Qué más?"
-      - "¿Y los demás?"
-      - "¿Algo más?"
+  allowed:
+    - "protecciones puntuales necesarias para distinguir entidad física"
+    - "detección de intent standalone ya existente"
+    - "topic/plant switch explícito ya soportado"
 
-  consequence:
-    examples:
-      - "¿Entonces?"
-      - "¿Y eso qué implica?"
-      - "¿Qué significa eso?"
-
-  gap:
-    examples:
-      - "¿Entonces qué falta?"
-      - "¿Qué necesitas?"
-      - "¿Y para saberlo?"
-
-  reference:
-    examples:
-      - "¿Y eso?"
-      - "¿Y él?"
-      - "¿Y ese cliente?"
-
-  rule: >
-    Estas clases sirven para auditar intención conversacional, no para crear un
-    nuevo catálogo rígido de frases.
+  critical_rule: >
+    Los tests pueden contener frases de ejemplo. El código de producción no
+    debe depender de reconocer esas frases específicas.
 
 entity_safety:
 
-  critical_case:
-    phrase: "¿Y eso?"
+  demonstratives:
+    examples:
+      - "eso"
+      - "esto"
+      - "aquello"
 
-  known_problem: >
-    Hoy puede interpretarse como entidad/cliente.
+    rule: >
+      No deben tratarse como nombres de cliente ni activar resolución comercial.
 
-  requirement: >
-    Auditar cómo evitar que pronombres/demostrativos sin identidad física
-    disparen resolución de entidad.
+  pronouns:
+    examples:
+      - "él"
+      - "ella"
+      - "ese cliente"
 
-  rules:
-    - "eso/esto/aquello no son cliente por defecto"
-    - "él/ella solo pueden usar active_entity si ya existe y sigue válida"
-    - "nueva entidad nombrada debe resolverse físicamente"
-    - "ambigüedad => clarificación"
+    rule: >
+      Solo pueden apoyarse en active_entity ya validada. No crear entidad nueva.
 
-topic_switch:
+  named_entity:
+    rule: >
+      Si aparece una entidad nominal nueva, usar resolución física actual.
+      Única -> puede actualizar active_entity.
+      Ambigua -> clarificar.
+      No encontrada -> no inventar.
 
-  explicit_examples:
-    - "Ahora dime Querétaro."
-    - "Cambiando de tema..."
-    - "¿Cómo va el presupuesto?"
-    - "Hablemos de Taller."
-
-  rule: >
-    Un intent standalone claro o cambio explícito debe ganar sobre la herencia.
-
-  required:
-    - "invalidate incompatible conversational state"
-    - "no drag old evidence into new topic"
-
-plant_switch:
-
-  required:
-    - "request planta actual prevalece"
-    - "active_entity incompatible se invalida"
-    - "pending gap incompatible se invalida"
-    - "no cross-plant leakage"
+  plant_switch:
+    rule: >
+      Cambio de planta invalida active_entity incompatible y pending gap ligado
+      al scope anterior.
 
 evidence_policy:
 
   strategy: "requery_every_turn"
 
-  invariant:
-    - "context inheritance != evidence reuse"
+  required:
+    - "heredar contexto, no payload"
+    - "authz actual"
+    - "source availability actual"
+    - "provenance actual"
+    - "SOURCE_RESTRICTED actual"
+    - "fresh data"
+
+  invariant: >
+    CONTEXT INHERITANCE != EVIDENCE REUSE.
+
+GPT_path:
 
   required:
-    - "heredar parent_intent/contexto"
-    - "volver a cargar evidence"
-    - "authz actual"
-    - "SOURCE_RESTRICTED actual"
-    - "provenance actual"
-
-  rule: >
-    El modelo puede heredar la conversación, nunca la verdad empresarial stale.
-
-GPT_context:
-
-  required_to_audit:
-    - "structured HILO"
-    - "parent_intent"
-    - "active entity if valid"
-    - "active date if applicable"
-    - "pending gap"
-    - "fresh pack"
+    - "parent_intent heredado"
+    - "HILO estructurado"
+    - "active_entity si válida"
+    - "active_date si ya forma parte del intent activo"
+    - "pending_information_gap si aplica"
+    - "fresh evidence pack"
     - "limitations"
 
-  desired: >
-    GPT debe poder interpretar libremente “¿Cómo así?” o “¿Qué más?” a partir
-    del contexto, sin que el código determine la respuesta.
+  model_role:
+    - "interpretar el follow-up abierto"
+    - "explicar"
+    - "ampliar"
+    - "responder consecuencias"
+    - "formular el gap de información"
+    - "mantener conversación natural"
+
+  runtime_must_not:
+    - "determinar el contenido final de la respuesta"
+    - "programar 'qué más'"
+    - "programar 'cómo así'"
+    - "programar consecuencias"
+    - "programar wording de gaps"
+
+deterministic_gap_responses:
+
+  objective: >
+    Reducir dependencia de respuestas enlatadas cuando ya existe pack +
+    limitations suficientes para que GPT formule la respuesta.
+
+  mandatory_audit_during_impl:
+    - "identificar early returns/enlatados que interceptan follow-ups heredados"
+    - "desactivar SOLO los que bloqueen este slice y tengan evidence suficiente"
+    - "preservar respuestas determinísticas necesarias por seguridad/clarificación"
+
+  rule: >
+    No hacer refactor general del chat. Cambios mínimos para permitir GPT donde
+    la readiness ya demostró contexto suficiente.
+
+holdout_generalization:
+
+  mandatory: true
+
+  implementation_examples_may_include:
+    - "¿Y eso?"
+    - "¿Cómo así?"
+    - "¿Qué más?"
+    - "¿Entonces?"
+
+  holdout_tests_must_include_phrases_not_present_in_production_logic:
+    examples:
+      - "¿O sea?"
+      - "No te seguí"
+      - "¿En qué sentido?"
+      - "¿Me explicas mejor?"
+      - "¿Qué otra cosa ves?"
+      - "¿Y después?"
+      - "¿Qué quieres decir con eso?"
+
+  rule: >
+    Estos textos son tests de generalización. No copiarlos como reglas de
+    producción.
+
+  success_condition: >
+    Las frases hold-out heredan por estado/contexto y no porque estén codificadas.
+
+mandatory_conversations:
+
+  plant:
+    turns:
+      - "¿Cómo va Puebla?"
+      - "No te seguí"
+      - "¿En qué sentido?"
+      - "¿Qué otra cosa ves?"
+      - "¿Y después?"
+    required:
+      - "parent_intent plant_diagnosis"
+      - "requery"
+      - "GPT"
+
+  daily_sales:
+    turns:
+      - "¿Por qué bajó la venta ayer?"
+      - "¿O sea?"
+      - "¿Qué otra cosa ves?"
+      - "¿Y después?"
+    required:
+      - "daily_sales_deviation preserved"
+      - "active_date preserved ephemerally"
+      - "fresh daily pack"
+
+  entity:
+    turns:
+      - "¿Y Arturo?"
+      - "¿Y él?"
+      - "No te seguí"
+    required:
+      - "active_entity remains safe"
+      - "no new entity invented"
+
+  standalone_switch:
+    turns:
+      - "¿Cómo va Puebla?"
+      - "¿Qué más?"
+      - "¿Cómo va el presupuesto esta semana?"
+      - "¿Y eso?"
+    required:
+      - "budget intent wins"
+      - "follow-up after switch uses new parent context only if valid"
+
+  plant_switch:
+    turns:
+      - "¿Cómo va Puebla?"
+      - "¿Y Arturo?"
+      - "Ahora Querétaro."
+      - "¿Y él?"
+    required:
+      - "no Arturo/Puebla leakage"
+      - "clarify/re-resolve according to current scope"
+
+unknown_policy:
+
+  with_valid_state:
+    result: "inherit_parent_intent"
+
+  without_valid_state:
+    result: "clarification"
 
   prohibited:
-    - "respuesta determinística para cada clase de follow-up"
-    - "assistant previous prose promoted to evidence"
+    - "fallback blindly to Action Register"
+    - "fallback blindly to plant_diagnosis"
+    - "invent generic intent"
 
-clarification_policy:
+planner_boundary:
 
-  clarify_when:
-    - "no valid conversational state"
-    - "multiple plausible parent contexts"
-    - "entity ambiguous"
-    - "new topic cannot be safely inferred"
-    - "scope conflict"
+  preserve:
+    - "planner standalone classification"
+    - "explicit clarification where current query itself is ambiguous"
+    - "existing intent definitions"
 
-  do_not_clarify_only_because:
-    - "planner isolated intent = unknown"
+  allowed_change:
+    - "post-planner inheritance decision when isolated result = unknown"
 
-reasoning_boundary:
-
-  KEEP_DETERMINISTIC:
-    - "authz"
-    - "plant scope"
-    - "entity identity"
-    - "topic switch when explicit"
-    - "standalone intent routing"
-    - "requery"
-    - "provenance"
-    - "absence/error semantics"
-
-  LET_GPT_REASON:
-    - "interpretation of open follow-up"
-    - "explanation"
-    - "expansion"
-    - "consequence"
-    - "information gap wording"
-    - "natural response"
+  preferred_location: >
+    Implement inheritance where conversational state is available, rather than
+    teaching planner a catalog of follow-up utterances.
 
   rule: >
-    No crear un sistema experto de conversación.
-
-master_tests:
-
-  canonical_context:
-    initial: "¿Cómo va Puebla?"
-
-    free_followups_not_to_hardcode:
-      - "¿Y eso?"
-      - "¿Cómo así?"
-      - "¿A qué te refieres?"
-      - "¿Qué más?"
-      - "¿Algo más?"
-      - "¿Entonces?"
-      - "¿Y eso qué implica?"
-      - "¿Entonces qué falta?"
-      - "¿Y para saberlo?"
-
-  requirement: >
-    La readiness debe demostrar que la solución propuesta generaliza a frases
-    no enumeradas en producción, no únicamente a las del test.
-
-generalization_test_design:
-
-  required:
-    - "hold-out follow-ups no presentes en implementation examples"
-    - "paráfrasis"
-    - "turnos cortos"
-    - "turnos con signos/puntuación distintos"
-    - "lenguaje coloquial"
-
-  rule: >
-    Si la solución necesita conocer cada frase por adelantado, NO está lista.
-
-standalone_preservation:
-
-  examples:
-    - "¿Cómo va el presupuesto esta semana?"
-    - "¿Qué tiene Taller AT-15?"
-    - "¿Cómo va Querétaro?"
-    - "¿Por qué bajó la venta ayer?"
-
-  requirement: >
-    Deben seguir tomando su intent propio aunque exista un parent_intent previo.
+    Do not mutate planner into a conversational language model.
 
 action_routing_boundary:
 
-  known_issue:
-    - "¿Qué pasó con la acción de Julio Pérez?"
+  known_issue: "¿Qué pasó con la acción de Julio Pérez?"
+  implementation: false
 
   rule: >
-    Auditar interacción, pero NO resolver aquí si requiere routing explícito de
-    Action Register. Este slice es natural follow-up inheritance.
+    No fix Action Register person routing in this task. Preserve as deferred gap.
 
-daily_discount_boundary:
-  status: "deferred"
-  rule: "No implementar ni diseñar en este readiness."
+daily_discount:
+  implementation: false
 
-persistent_memory_boundary:
-  status: "preserved"
-  note: "SQL 017 environment activation sigue siendo asunto operativo separado."
+persistent_memory:
+  preserve: true
 
-solution_candidates:
+  SQL017:
+    execute: false
 
-  A_expand_phrasebook:
-    expected: "reject unless evidence strongly contradicts"
-    risk: "repite sobreprogramación"
+authz_and_security:
 
-  B_unknown_with_valid_state_to_GPT:
-    description: >
-      Si existe estado válido y no hay señales de standalone/topic switch,
-      unknown puede heredar parent_intent.
+  required:
+    - "authz every turn"
+    - "plantas_permitidas"
+    - "no cross-plant"
+    - "history != evidence"
+    - "assistant prior answer != fact"
+    - "user prior statement != database fact"
+    - "prompt injection in conversational text cannot alter system rules"
 
-  C_lightweight_followup_score:
-    description: >
-      Señales estructurales para determinar dependencia contextual sin listar
-      frases exactas.
+truth_boundary:
 
-    warning: >
-      No crear score arbitrario u opaco.
+  code_owns:
+    - "identity"
+    - "authz"
+    - "scope"
+    - "dates"
+    - "math"
+    - "joins"
+    - "fresh evidence"
+    - "provenance"
+    - "limitations"
 
-  D_LLM_followup_classifier:
-    description: >
-      Usar modelo para decidir continuidad antes del planner/runtime.
+  GPT_owns:
+    - "interpretation of conversational continuation"
+    - "natural explanation"
+    - "synthesis"
+    - "follow-up response"
+    - "information-gap wording"
 
-    risks:
-      - "extra call"
-      - "latency"
-      - "nondeterministic routing"
-      - "authz/scope concerns"
+regression_requirements:
 
-  requirement:
-    - "comparar A/B/C/D"
-    - "seleccionar exactamente un first slice"
-    - "priorizar generalización + simplicidad + seguridad"
+  preserve:
+    - "plant_diagnosis"
+    - "daily_sales_deviation"
+    - "financial_diagnosis"
+    - "commercial_state"
+    - "expediente_comercial"
+    - "M5"
+    - "M6"
+    - "M11"
+    - "M12"
+    - "M18"
+    - "structured conversation state"
+    - "persistent memory"
+    - "standalone intents"
 
-contract_audit:
-  inspect:
-    - "Constitution"
-    - "EKE"
-    - "04 IES"
-    - "05 RE"
+tests_required:
 
-  determine:
-    - "G2"
-    - "G3"
-
-  expectation: "runtime-only unless evidence says otherwise"
-
-tests_to_design_if_ready:
-
-  positive:
-    - "free explanation follow-up"
-    - "free expansion follow-up"
-    - "free consequence follow-up"
-    - "free gap follow-up"
-    - "reference to active entity"
+  focal:
+    - "unknown with valid state inherits"
+    - "unknown without state clarifies"
+    - "standalone intent wins"
+    - "topic switch wins"
+    - "plant switch safe"
+    - "demonstrative not entity"
+    - "pronoun uses valid active entity only"
+    - "named new entity resolves"
+    - "ambiguous entity clarifies"
+    - "requery each inherited turn"
+    - "GPT invoked for inherited open follow-up"
+    - "no Action Register fallback"
 
   holdout:
-    - "phrases not present in implementation"
-    - "colloquial variants"
+    - "No te seguí"
+    - "¿En qué sentido?"
+    - "¿Me explicas mejor?"
+    - "¿Qué otra cosa ves?"
+    - "¿Y después?"
+    - "at least additional variants chosen by test author"
 
-  negative:
-    - "standalone intent wins"
-    - "topic switch"
-    - "plant switch"
-    - "entity ambiguity"
-    - "unknown without state clarifies"
-    - "smalltalk not inherited blindly"
-
-  security:
-    - "authz revalidated"
-    - "no stale evidence"
-    - "no cross-plant leakage"
-    - "history not evidence"
+  critical_test_rule: >
+    Before finalizing, grep/search production code and confirm hold-out texts are
+    not present in follow-up routing logic.
 
   regression:
-    - "daily_sales_deviation"
-    - "plant_diagnosis"
-    - "financial_diagnosis"
+    - "daily deviation focal tests"
+    - "conversational continuity"
     - "persistent memory"
-    - "M5/M6/M11/M12/M18"
-    - "full suite"
-
-readiness_output:
-  must_determine:
-    - "READY / READY_WITH_LIMITS / NOT_READY"
-    - "selected strategy A/B/C/D"
-    - "inheritance gate"
-    - "standalone precedence"
-    - "topic-switch rules"
-    - "entity rules"
-    - "clarification rules"
-    - "GPT context"
-    - "requery behavior"
-    - "generalization test"
-    - "G2/G3"
-    - "percentage effect"
-    - "deferred gaps"
-
-percentage_policy:
-  before: "10.5 / 20 = 52.5%"
-  after_readiness: "10.5 / 20 = 52.5%"
-  expected_impl_effect: "0.0 pp"
+    - "capabilities"
+    - "planner"
+    - "orchestrator"
+    - "full Director IA suite"
 
 in_scope:
   writable:
     - "docs/dev-loop/CURRENT_TASK.md"
-    - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-NATURAL-FOLLOWUP-INHERIT-READINESS-001.md"
+    - "docs/dev-loop/reports/IMPL-DIRECTOR-IA-NATURAL-FOLLOWUP-INHERIT-001.md"
+    - "lib/director-ia-chat.js"
+    - "lib/director-ia-conversation-state.js"
+    - "lib/director-ia-planner.js"
+    - "test/director-ia-natural-followup.test.js"
+
+  conditional_writable:
+    - "existing Director IA tests if legitimate assertions require update"
 
   read_only:
-    - "entire repository except writable files"
+    - "docs/director-ia/**"
+    - "server.js"
+    - "frontend-dashboard/**"
+    - "sql/**"
+    - "other unrelated code"
 
 out_of_scope:
-  - "implementation"
-  - "code changes"
-  - "test changes"
+  - "larger phrasebook"
+  - "Action Register Julio routing fix"
+  - "daily discount/kg"
+  - "SQL 017 execution"
   - "matrix changes"
-  - "contracts changes"
-  - "daily discount"
-  - "Action Register Julio fix"
-  - "SQL execution"
+  - "contract changes"
+  - "schema changes"
+  - "new tables"
+  - "second LLM routing call"
   - "commit"
   - "push"
   - "merge"
 
 acceptance_criteria:
-  - "Phrasebook bottleneck traced."
-  - "General inheritance principle audited."
-  - "A/B/C/D compared."
-  - "Exactly one strategy selected."
-  - "Unknown != automatic clarification when context valid."
-  - "Standalone/topic switch precedence defined."
-  - "Entity safety defined."
-  - "Requery preserved."
-  - "GPT reasoning freedom preserved."
-  - "Hold-out/generalization testing designed."
-  - "No bigger phrasebook proposed as final solution."
-  - "G2/G3 determined."
+  - "Strategy B implemented."
+  - "Unknown + valid state can inherit."
+  - "Unknown without state clarifies."
+  - "Explicit standalone intents still win."
+  - "Topic/plant switches are safe."
+  - "Demonstratives do not become entities."
+  - "Entity safety preserved."
+  - "Evidence is requeried."
+  - "GPT interprets open follow-ups."
+  - "No larger phrasebook."
+  - "Hold-out phrases generalize without production entries."
+  - "No blind Action Register fallback."
+  - "Daily sales conversation preserved."
+  - "Persistent memory preserved."
   - "52.5% preserved."
-  - "Only task + report changed."
+  - "Tests green."
   - "git diff --check clean."
 
-next_task_policy:
-  if_ready:
-    propose_exactly_one: "IMPL-DIRECTOR-IA-NATURAL-FOLLOWUP-INHERIT-001"
+percentage_policy:
+  before: "10.5 / 20 = 52.5%"
+  after: "10.5 / 20 = 52.5%"
+  delta: "0.0 pp"
 
-  if_not_ready:
-    propose_exactly_one: "ARCH-DIRECTOR-IA-NATURAL-FOLLOWUP-GAP-001"
+next_task:
+  propose_only: "DOCS-DIRECTOR-IA-NATURAL-FOLLOWUP-INHERIT-SYNC-001"
+  authorize: false
+  execute: false
 
-  rule: "Do not authorize or execute."
-
-expected_terminal_state: >
-  DONE_PENDING_REVIEW if READY/READY_WITH_LIMITS with one generalizable slice.
-  STOPPED if a product/contract decision is required.
-  BLOCKED if a gate is missing.
+expected_terminal_state: "DONE_PENDING_REVIEW"
 
 max_attempts: 1
 
 result_report_path: >
-  docs/dev-loop/reports/ARCH-DIRECTOR-IA-NATURAL-FOLLOWUP-INHERIT-READINESS-001.md
+  docs/dev-loop/reports/IMPL-DIRECTOR-IA-NATURAL-FOLLOWUP-INHERIT-001.md

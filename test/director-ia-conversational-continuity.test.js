@@ -103,12 +103,16 @@ describe("structured_conversation_state (puro)", () => {
     assert.equal(classifyTurnKind("Volvamos a Puebla."), "topic_return");
     assert.equal(classifyTurnKind("¿Y la anterior?"), "period_switch");
     assert.equal(classifyTurnKind("xyz no es un follow-up"), "other");
+    assert.equal(classifyTurnKind("¿Y eso?"), "other");
+    assert.equal(classifyTurnKind("¿Y después?"), "other");
   });
 
   it("extrae hint de Arturo y no de pronombre", () => {
     assert.equal(extractEntityHint("¿Y Arturo?"), "Arturo");
     assert.equal(extractEntityHint("¿Por qué dejó de comprar Arturo?"), "Arturo");
     assert.equal(extractEntityHint("¿Qué sabemos de él?"), null);
+    assert.equal(extractEntityHint("¿Y eso?"), null);
+    assert.equal(extractEntityHint("¿Y después?"), null);
   });
 
   it("entidad única vs ambigua sin fuzzy silencioso", () => {
@@ -132,7 +136,7 @@ describe("structured_conversation_state (puro)", () => {
     assert.equal(noFuzzy.status, "none");
   });
 
-  it("hereda parent_intent solo si el follow-up es defendible", () => {
+  it("hereda parent_intent en follow-up canónico; unknown sin estado clarifica", () => {
     const hist = historyFromTurns([{ q: "¿Cómo va Puebla?", a: "Resumen." }]);
     const follow = resolveConversationTurn({
       question: "¿Qué te llama la atención?",
@@ -379,15 +383,16 @@ describe("askDirectorIa continuity", () => {
     assert.equal(accion.context_meta.mode, "plant_diagnosis");
 
     const falta = await runTurn("¿Qué falta saber?", { history: hist, conversation_state: state });
-    assert.match(falta.answer, /Me falta/);
+    assert.equal(falta.context_meta.openai_called, true);
     assert.ok(falta.context_meta.pending_information_gap);
     assert.equal(falta.context_meta.conversation_state.last_evidence_bundle_type, "plant_diagnosis");
+    assert.equal(falta.context_meta.mode, "plant_diagnosis");
   });
 
   it("gap: quién no inventa; con vínculo físico sí nombra", async () => {
     configureDirectorIaChat({
       pool: {},
-      openaiChat: async () => "no",
+      openaiChat: async () => "Sin responsable con vínculo físico en la evidencia.",
       loadPlantDiagnosisForChat: async () => assembledArturo({ responsible: null }),
     });
     const state = buildConversationState({
@@ -400,21 +405,25 @@ describe("askDirectorIa continuity", () => {
       { q: "¿Por qué dejó de comprar Arturo?", a: "No hay evidencia suficiente de causa." },
     ]);
     const whoNone = await runTurn("¿Quién puede darnos esa información?", { history: hist, conversation_state: state });
-    assert.match(whoNone.answer, /No hay un responsable nombrable/);
+    assert.equal(whoNone.context_meta.openai_called, true);
+    assert.equal(whoNone.context_meta.mode, "plant_diagnosis");
     assert.doesNotMatch(whoNone.answer, /Julio Pérez|Julio Perez/);
 
     configureDirectorIaChat({
       pool: {},
-      openaiChat: async () => "no",
+      openaiChat: async () => "Ana aparece como responsable de una acción ligada.",
       loadPlantDiagnosisForChat: async () => assembledArturo({ responsible: "Ana" }),
     });
     const whoYes = await runTurn("¿Quién puede darnos esa información?", { history: hist, conversation_state: state });
+    assert.equal(whoYes.context_meta.openai_called, true);
     assert.match(whoYes.answer, /Ana/);
 
     const para = await runTurn("¿Para qué la necesitas?", { history: hist, conversation_state: state });
+    assert.equal(para.context_meta.openai_called, true);
     assert.ok(para.answer.length > 10);
     const queFalta = await runTurn("¿Qué información te falta?", { history: hist, conversation_state: state });
-    assert.match(queFalta.answer, /Me falta/);
+    assert.equal(queFalta.context_meta.openai_called, true);
+    assert.equal(queFalta.context_meta.mode, "plant_diagnosis");
   });
 
   it("plant switch no reutiliza Arturo/Puebla", async () => {
