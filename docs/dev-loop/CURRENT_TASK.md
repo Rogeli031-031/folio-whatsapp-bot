@@ -1,324 +1,449 @@
 # CURRENT_TASK
 
 ```yaml
-task_id: "AUDIT-DIRECTOR-IA-CONVERSATIONAL-PRODUCT-GAP-005"
+task_id: "ARCH-DIRECTOR-IA-DAILY-DISCOUNT-KG-READINESS-001"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-08-24"
 human_authorization: >
   AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-24.
-  Apruebo AUDIT-DIRECTOR-IA-CONVERSATIONAL-PRODUCT-GAP-005
-  y autorizo G1 exclusivamente para auditoría read-only.
+  Apruebo ARCH-DIRECTOR-IA-DAILY-DISCOUNT-KG-READINESS-001
+  y autorizo G1.
 
 gates:
   G1_task_authorization: AUTHORIZED
-  G2_architecture_change: N/A
-  G3_new_architecture_contract: N/A
+  G2_architecture_change: N/A_PENDING_AUDIT
+  G3_new_architecture_contract: N/A_PENDING_AUDIT
   G5_contract_conformance: N/A
   G8_calibration_materiality_signature: N/A
 
-mode:
-  type: "PRODUCT_GAP_AUDIT_ONLY"
-  implementation: false
-  code_changes: false
-  runtime_changes: false
-  test_changes: false
-  matrix_changes: false
-  contract_changes: false
-  sql_execution: false
-
 objective: >
-  Evaluar el estado conversacional actual de Director IA después de corregir
-  daily_sales_deviation, natural follow-up inheritance y Action Register por
-  responsable/acción, para identificar exactamente un cuello de botella restante
-  que más impida conversar naturalmente sobre la empresa con datos reales y,
-  cuando falte evidencia, saber qué información se necesita para continuar.
-
-north_star: >
-  Director IA debe conversar naturalmente sobre la empresa sin exigir wording
-  especial, consultar la evidencia correcta, conservar contexto y memoria, y
-  distinguir con claridad hechos, inferencias y datos faltantes.
+  Auditar el first slice mínimo, seguro y físicamente soportado para que
+  Director IA pueda responder preguntas como “¿por qué subió el descuento/kg
+  ayer?”, construyendo un pack diario con descuento/kg ponderado, referencia
+  comparable, contribución matemática por cliente, evidencia comercial
+  relacionada y huecos de información, sin promediar ratios, sin inventar canal
+  inexistente y sin convertir contribución matemática en causalidad.
 
 baseline:
-  functional_coverage: "10.5 / 20 = 52.5%"
+  global: "10.5 / 20 = 52.5%"
   percentage_effect: "0.0 pp"
 
-fixed_bottlenecks_not_to_reselect:
-  - "GAP-002: daily sales question routed to monthly pack"
-  - "GAP-003: closed follow-up phrasebook"
-  - "GAP-004: Action Register person/action routing"
+  prior_audit:
+    task: "AUDIT-DIRECTOR-IA-CONVERSATIONAL-PRODUCT-GAP-005"
+    bottleneck: "daily discount/kg has physical data but no conversational pack"
+    failure_class: "MISSING_INFRASTRUCTURE"
 
-current_verified_capabilities:
-  - "daily_sales_deviation"
-  - "same-weekday 14-day sales reference"
-  - "customer/channel contribution"
-  - "natural follow-up inheritance"
-  - "structured conversation state"
-  - "pending_work_items_only in repository"
-  - "action_status by responsible/action"
-  - "AR > generic memory resume"
-  - "0/1/N action handling"
-  - "plant_diagnosis multi-source"
-  - "financial_diagnosis multi-source"
+product_principle: >
+  El código debe proteger fecha, unidades, ponderación, identidad, joins,
+  referencia, contribuciones, provenance y authz. GPT debe conservar síntesis,
+  explicación narrativa, identificación de evidencia relacionada y formulación
+  de qué información falta.
 
-known_remaining_candidates_not_assume:
+primary_question:
+  - "¿Por qué subió el descuento/kg ayer?"
 
-  daily_discount:
-    examples:
-      - "¿Por qué subió el descuento/kg ayer?"
-      - "¿Quién movió más el promedio?"
-      - "¿Fue general o concentrado?"
+required_followups:
+  - "¿Contra qué lo estás comparando?"
+  - "¿Fue general o fueron algunos clientes?"
+  - "¿Quién movió más el promedio?"
+  - "¿Sabemos por qué?"
+  - "¿Qué falta saber?"
+  - "¿Quién puede aclararlo?"
 
-    known:
-      - "not implemented"
-      - "formula = SUM(monto)/SUM(kg)"
-      - "daily fecha exists"
-      - "cliente exists"
-      - "no canal físico"
+central_truth_rule: >
+  Contribución matemática al cambio del descuento/kg != causa empresarial.
 
-  economic_tradeoff:
-    example: >
-      Arturo dejó de comprar y hay evidencia almacenada de que competencia
-      ofreció mejor condición. ¿Conviene recuperarlo si igualar la oferta puede
-      destruir margen?
+mandatory_physical_audit:
 
-    known:
-      - "no structured competitor offer"
-      - "no validated client-level margin calculation"
+  daily_discount_source:
+    inspect:
+      - "arr.descuentos_diarios_cliente"
+      - "columnas físicas"
+      - "fecha"
+      - "planta_id"
+      - "cliente"
+      - "cliente_key si existe o derivación canónica"
+      - "monto"
+      - "kg"
+      - "otros campos realmente disponibles"
 
-  persistent_memory_deployment:
-    known:
-      - "repo capability implemented"
-      - "SQL 017 environment activation unconfirmed"
+    determine:
+      - "grain físico exacto"
+      - "si hay una fila por cliente/día o múltiples"
+      - "null semantics"
+      - "qué representa monto"
+      - "qué representa kg"
+      - "timezone/date semantics"
 
-  information_gap_depth:
-    question: >
-      ¿Ya puede Director IA ir más allá de “falta información” y decir qué dato
-      concreto necesita, por qué lo necesita y qué análisis desbloquea?
+  related_sales_or_kg_source:
+    audit: >
+      Confirmar si kg necesario para ponderar ya vive en la misma fuente o si
+      requiere otra tabla/join físico. No asumir.
 
-  cross_topic_return:
-    example:
-      - "¿Cómo va Puebla?"
-      - "Ahora dime presupuesto."
-      - "Volvamos a lo de la venta de ayer."
+  channel:
+    expected: "NOT AVAILABLE"
+    requirement: >
+      Confirmar físicamente que canal no existe en la fuente daily discount.
+      No inventarlo ni reconstruirlo por nombre.
 
-    known:
-      - "topic stack / cross-session period memory deferred"
+formula:
 
-  other_unseen_gap:
-    rule: >
-      Auditoría puede elegir algo distinto si la evidencia demuestra mayor impacto.
+  plant_daily_discount_kg:
+    exact: "SUM(monto) / SUM(kg)"
 
-failure_classes:
-  - "MISSING_DATA"
-  - "MISSING_INFRASTRUCTURE"
-  - "MODEL_REASONING_LIMIT"
-  - "OVERPROGRAMMING"
-  - "DEPLOYMENT_GAP"
-  - "CONTRACT_OR_AUTHZ_LIMIT"
-
-mandatory_conversations:
-
-  A_plant:
-    turns:
-      - "¿Cómo va Puebla?"
-      - "¿Qué más?"
-      - "¿Qué te preocupa?"
-      - "¿Qué falta saber?"
-      - "¿Para qué necesitas ese dato?"
-
-  B_daily_sales:
-    turns:
-      - "¿Por qué bajó la venta ayer?"
-      - "¿Quién explica más?"
-      - "¿Sabemos por qué?"
-      - "¿Qué falta?"
-      - "¿Quién podría aclararlo?"
-
-  C_action_person:
-    turns:
-      - "¿Qué pasó con la acción de Julio Pérez?"
-      - "¿Está vencida?"
-      - "¿Por qué no la cerró?"
-      - "¿Qué información falta?"
-      - "¿Qué necesitas de Julio?"
-
-  D_daily_discount:
-    turns:
-      - "¿Por qué subió el descuento/kg ayer?"
-      - "¿Contra qué lo comparas?"
-      - "¿Quién movió más el promedio?"
-      - "¿Fue general?"
-      - "¿Sabemos por qué?"
-      - "¿Qué falta?"
-
-  E_tradeoff:
-    turns:
-      - "Arturo dejó de comprar y dicen que la competencia le ofreció más."
-      - "¿Conviene recuperarlo?"
-      - "¿Y si igualar la oferta nos hace perder dinero?"
-      - "¿Qué información necesitas para decidir?"
-
-  F_cross_session_memory:
-    session_1:
-      - "¿Por qué dejó de comprar Arturo?"
-      - "¿Qué falta?"
-    session_2:
-      - "¿Qué pasó con Arturo?"
-      - "¿Ya sabemos por qué?"
-
-  G_topic_return:
-    turns:
-      - "¿Cómo va Puebla?"
-      - "Ahora dime el presupuesto."
-      - "Volvamos a lo de la venta de ayer."
-      - "¿Quién explicó más?"
-
-trace_each_turn:
-  required:
-    - "planner intent"
-    - "parent_intent"
-    - "inherit yes/no"
-    - "active entity/date"
-    - "sources loaded"
-    - "fresh requery yes/no"
-    - "evidence supplied"
-    - "limitations"
-    - "GPT invoked yes/no"
-    - "deterministic reply yes/no"
-    - "failure point"
-
-before_after_comparison:
-
-  compare:
-    - "GAP-002"
-    - "GAP-003"
-    - "GAP-004"
-    - "runtime current"
-
-  must_state:
-    - "what is genuinely fixed"
-    - "what is still broken"
-    - "what no longer deserves priority"
-
-daily_discount_audit:
-
-  mandatory:
-    - "exact daily source"
-    - "date semantics"
-    - "SUM(monto)/SUM(kg)"
-    - "reference candidate"
-    - "customer weighted contribution"
-    - "mix effect feasibility"
-    - "business evidence join feasibility"
-    - "absence/error semantics"
-
-  critical:
+  rules:
     - "no average-of-averages"
-    - "highest ratio != biggest mover"
+    - "no AVG(cliente_ratio)"
+    - "kg_total es denominador"
+    - "monto_total es numerador"
+    - "reference kg = 0 requiere handling explícito"
+    - "null != 0"
+
+  required_validation:
+    - "comparar con fórmula vigente del producto/runtime"
+    - "confirmar signo/unidad"
+    - "confirmar pesos/MXN por kg si ésa es la unidad física"
+
+date_semantics:
+
+  timezone: "America/Mexico_City"
+  target_day: "ayer calendario completo"
+
+  rules:
+    - "hoy no es día completo"
+    - "día sin filas != descuento/kg 0"
+    - "fecha objetivo explícita"
+    - "no usar UTC del servidor como calendario de negocio"
+
+reference_model:
+
+  mandatory_candidates:
+
+    A_previous_day:
+      description: "día inmediatamente anterior"
+
+    B_same_weekday_14d:
+      description: "promedio ponderado de mismos días de semana en ventana 14 días"
+
+    C_month_to_date:
+      description: "ratio agregado MTD = SUM(monto MTD)/SUM(kg MTD)"
+
+    D_recent_rolling:
+      description: "ratio agregado de ventana reciente"
+
+    E_existing_business_reference:
+      description: "referencia ya usada físicamente por dashboard/ARR si existe"
+
+  audit_each:
+    - "meaning"
+    - "availability"
+    - "seasonality"
+    - "weekday effect"
+    - "days with missing rows"
+    - "volume mix"
+    - "number of observations"
+
+  requirement: >
+    Seleccionar exactamente una política default defendible para el first slice
+    o demostrar que se requiere otra política. Siempre exponer la referencia.
+
+  important: >
+    Si se usa same-weekday, la referencia debe agregarse correctamente como
+    SUM(monto_ref)/SUM(kg_ref), salvo que la semántica física exija otra fórmula.
+    No promediar ratios diarios.
+
+mathematical_decomposition:
+
+  objective: >
+    Determinar qué clientes contribuyeron matemáticamente al cambio del
+    descuento/kg planta entre el target y su referencia.
+
+  audit_required:
+    - "cliente target monto/kg"
+    - "cliente reference monto/kg"
+    - "kg target"
+    - "kg reference"
+    - "cambio por condición de descuento"
+    - "cambio por mix/participación si puede descomponerse defendiblemente"
+    - "reconciliación al delta planta"
+
+  critical_question: >
+    ¿Puede existir una descomposición exacta/reconciliable del cambio del
+    ponderado por cliente sin introducir una fórmula arbitraria?
+
+  rules:
+    - "cliente con ratio más alto != mayor contribuidor automáticamente"
+    - "cliente con más kg puede mover más el ponderado"
+    - "mix puede cambiar el promedio aunque ratio individual no cambie"
+    - "no crear score"
+
+  output_requirement: >
+    Si puede reconciliarse físicamente, documentar fórmula exacta.
+    Si no puede hacerse sin supuestos, limitar el first slice y declararlo.
+
+mix_effect:
+
+  mandatory_audit: true
+
+  determine:
+    - "si separar rate effect vs mix effect es físicamente defendible"
+    - "si requiere baseline por cliente"
+    - "si la suma reconcilia exactamente"
+    - "si sería demasiado complejo para first slice"
 
   rule: >
-    Choose only if it is now the largest product blocker.
+    No implementar una descomposición económica sofisticada solo por elegancia.
 
-economic_tradeoff_audit:
+business_evidence:
 
-  mandatory:
-    - "what data GPT currently receives"
-    - "what economic data physically exists"
-    - "what client-level data is missing"
-    - "whether decision is calculable"
-    - "whether missing piece is data or infrastructure"
+  sources_to_audit:
+    - "commercial comments"
+    - "DICF actions"
 
-  truth:
-    - "comment about competition != verified competitor offer"
-    - "plant margin != client margin"
-    - "do not infer recoverability"
+  join_rule:
+    - "cliente_key únicamente"
+    - "sin join por nombre libre"
 
-information_gap_quality:
+  determine:
+    - "fecha de comentario"
+    - "acción abierta/vencida"
+    - "responsable ligado a acción"
+    - "evidence related, not causal"
 
-  evaluate:
-    - "known facts"
-    - "unknown facts"
-    - "specific missing datum"
-    - "why needed"
-    - "possible physical source"
-    - "physically linked person only if valid"
-    - "what analysis/decision becomes possible"
+  semantics:
+    - "comentario que menciona competencia != prueba causal"
+    - "acción != causa del descuento"
+    - "responsable de acción != responsable del aumento"
 
-  question: >
-    Is this now mostly GPT reasoning, or is runtime still starving GPT of the
-    right limitations/evidence?
+information_gap:
 
-memory_deployment:
+  target_behavior: >
+    El pack debe permitir que GPT identifique clientes/contribuidores relevantes
+    sin explicación suficiente y diga qué dato falta.
 
-  repository: "IMPLEMENTED"
-  environment: "UNCONFIRMED unless SQL 017 physical evidence exists"
+  audit:
+    - "cliente contribuidor sin comentario relacionado"
+    - "cliente con acción"
+    - "cliente sin acción"
+    - "responsable físicamente ligado"
+    - "qué dato comercial faltaría para explicar una concesión"
 
   rule: >
-    Do not make deployment the winner unless it is actually the largest blocker
-    in the intended current environment.
+    No crear workflow ni recomendación rígida.
 
-topic_return_audit:
+routing:
+
+  audit:
+    - "planner actual para descuento + ayer"
+    - "delta_discount mensual"
+    - "financial_diagnosis"
+    - "natural follow-up inheritance"
+
+  determine:
+    - "nuevo intent requerido sí/no"
+    - "si puede reutilizarse intent existente sin mezclar granularidad"
+    - "precedencia daily vs monthly"
+
+  principle: >
+    Una pregunta explícitamente diaria no debe terminar en un pack mensual.
+
+conversation_state:
 
   required:
-    - "trace 'volvamos a lo de...'"
-    - "determine whether current state supports return"
-    - "distinguish topic stack gap from ordinary follow-up"
-    - "assess real frequency/impact"
+    - "parent intent diario"
+    - "active_date efímero"
+    - "requery cada turno"
+    - "follow-ups abiertos vía strategy B"
 
-overprogramming_check:
+  no_cross_session_date_memory: true
+
+authz:
+
+  required:
+    - "scope de planta actual"
+    - "rol actual"
+    - "plantas_permitidas"
+    - "no cross-plant"
+    - "fail-closed"
+
+absence_error_semantics:
+
+  distinguish:
+    - "0 real"
+    - "null"
+    - "kg = 0"
+    - "día sin registros"
+    - "referencia sin observaciones"
+    - "DATA_NOT_FOUND"
+    - "SOURCE_RESTRICTED"
+    - "TOOL_ERROR"
+
+reasoning_boundary:
+
+  KEEP_DETERMINISTIC:
+    - "target date"
+    - "reference"
+    - "SUM(monto)"
+    - "SUM(kg)"
+    - "weighted ratio"
+    - "customer identity"
+    - "mathematical contribution if proven"
+    - "authz"
+    - "provenance"
+    - "absence/error"
+
+  LET_GPT_REASON:
+    - "síntesis"
+    - "qué clientes llaman la atención"
+    - "qué evidencia podría estar relacionada"
+    - "qué sigue sin explicación"
+    - "qué información falta"
+    - "follow-ups"
+
+  prohibited:
+    - "causalidad automática"
+    - "recomendación comercial rígida"
+    - "concluir que mayor descuento = culpable"
+
+first_slice_candidates:
+
+  A_daily_ratio_only:
+    includes:
+      - "ayer"
+      - "reference"
+      - "discount/kg delta"
+
+  B_daily_ratio_plus_customer_comparison:
+    includes:
+      - "ratio"
+      - "reference"
+      - "clientes relevantes"
+
+  C_daily_ratio_plus_reconciled_customer_contribution:
+    includes:
+      - "ratio"
+      - "reference"
+      - "contribution matemática por cliente"
+
+  D_daily_discount_plus_business_evidence:
+    includes:
+      - "ratio"
+      - "reconciled contribution"
+      - "comments/actions"
+      - "information gaps"
+
+  requirement:
+    - "comparar A/B/C/D"
+    - "seleccionar exactamente un first slice"
+    - "preferir el mínimo que sostenga la pregunta ejecutiva real"
+    - "no seleccionar D si la matemática de contribución no está demostrada"
+
+sales_daily_boundary:
+  preserve: "daily_sales_deviation intacto"
+  no_refactor_by_symmetry: true
+
+tradeoff_boundary:
+  status: "deferred"
+  note: >
+    Margen por cliente y oferta estructurada de competencia siguen faltando.
+
+persistent_memory:
+  preserve: true
+  SQL017_execution: false
+
+topic_return_gap:
+  preserve_as_deferred: true
+  no_fix_here: true
+
+contract_audit:
 
   inspect:
-    - "early returns"
-    - "deterministic gap wording"
-    - "special-case routes"
-    - "response templates"
+    - "Constitution"
+    - "EKE"
+    - "04 IES"
+    - "05 RE"
 
-  classify:
-    - "KEEP_DETERMINISTIC"
-    - "LET_GPT_REASON"
-    - "MIXED"
+  determine:
+    - "G2"
+    - "G3"
 
-  rule: >
-    Do not create new deterministic reasoning if GPT already has sufficient
-    evidence.
+  expectation: "runtime-only"
 
-single_bottleneck:
+tests_to_design_if_ready:
 
-  exactly_one: true
+  formula:
+    - "SUM(monto)/SUM(kg)"
+    - "no average-of-averages"
+    - "kg zero"
+    - "null"
 
-  required_fields:
-    - "name"
-    - "failure_class"
-    - "physical_location"
-    - "affected conversations"
-    - "evidence"
-    - "why it is now the biggest blocker"
-    - "what fixing it unlocks"
-    - "what it does not solve"
+  date:
+    - "yesterday CDMX"
+    - "today excluded"
 
-  selection_rule: >
-    Choose by impact on real executive conversation, not coverage percentage,
-    recency, symmetry, ease, or previous ranking.
+  reference:
+    - "selected reference exact formula"
+    - "missing observations"
 
-next_task:
-  exactly_one: true
-  authorize: false
-  execute: false
+  decomposition:
+    - "customer contribution"
+    - "reconciliation"
+    - "mix effect if selected"
+    - "highest ratio != biggest mover"
 
-  rule: >
-    Propose only the task that directly addresses the single demonstrated bottleneck.
+  evidence:
+    - "cliente_key only"
+    - "comment != cause"
+    - "action != cause"
+    - "gap"
+
+  conversation:
+    - "¿por qué subió descuento/kg ayer?"
+    - "¿contra qué?"
+    - "¿quién movió más?"
+    - "¿fue general?"
+    - "¿sabemos por qué?"
+    - "¿qué falta?"
+
+  regression:
+    - "daily sales"
+    - "action-person routing"
+    - "natural followup"
+    - "persistent memory"
+    - "plant/financial diagnosis"
+    - "M9 monthly"
+    - "full suite"
+
+readiness_output:
+
+  must_determine:
+    - "READY / READY_WITH_LIMITS / NOT_READY"
+    - "selected A/B/C/D"
+    - "daily source"
+    - "date semantics"
+    - "formula"
+    - "reference"
+    - "customer contribution formula or limit"
+    - "mix effect yes/no"
+    - "business evidence"
+    - "routing/intent"
+    - "conversation integration"
+    - "authz"
+    - "G2/G3"
+    - "percentage effect"
+    - "deferred capabilities"
 
 percentage_policy:
   before: "10.5 / 20 = 52.5%"
-  after: "10.5 / 20 = 52.5%"
-  delta: "0.0 pp"
+  after_readiness: "10.5 / 20 = 52.5%"
+  expected_impl_effect: "0.0 pp"
 
 in_scope:
   writable:
     - "docs/dev-loop/CURRENT_TASK.md"
-    - "docs/dev-loop/reports/AUDIT-DIRECTOR-IA-CONVERSATIONAL-PRODUCT-GAP-005.md"
+    - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-DAILY-DISCOUNT-KG-READINESS-001.md"
 
   read_only:
     - "entire repository except writable files"
@@ -330,29 +455,48 @@ out_of_scope:
   - "matrix changes"
   - "contract changes"
   - "SQL execution"
+  - "schema changes"
+  - "new tables"
+  - "tradeoff implementation"
+  - "topic stack"
   - "commit"
   - "push"
   - "merge"
 
 acceptance_criteria:
-  - "Current north star audited."
-  - "Previous three bottlenecks verified as fixed."
-  - "Seven conversations traced."
-  - "Daily discount audited from scratch."
-  - "Tradeoff data audited."
-  - "Information-gap depth audited."
-  - "Memory deployment separated."
-  - "Topic-return gap audited."
-  - "Overprogramming checked."
-  - "Exactly one bottleneck selected."
-  - "Exactly one NEXT_TASK."
+  - "Daily source physically audited."
+  - "SUM(monto)/SUM(kg) confirmed or corrected from physical evidence."
+  - "No average-of-averages."
+  - "Yesterday semantics determined."
+  - "Reference candidates compared."
+  - "Exactly one reference policy selected."
+  - "Customer contribution mathematically audited."
+  - "Mix effect audited."
+  - "Business evidence joins audited."
+  - "Routing audited."
+  - "A/B/C/D compared."
+  - "Exactly one first slice selected."
+  - "G2/G3 determined."
   - "52.5% preserved."
+  - "No implementation."
   - "Only task + report changed."
   - "git diff --check clean."
 
-expected_terminal_state: "DONE_PENDING_REVIEW"
+next_task_policy:
+  if_ready:
+    propose_exactly_one: "IMPL-DIRECTOR-IA-DAILY-DISCOUNT-KG-001"
+
+  if_not_ready:
+    propose_exactly_one: "ARCH-DIRECTOR-IA-DAILY-DISCOUNT-KG-GAP-001"
+
+  rule: "Do not authorize or execute."
+
+expected_terminal_state: >
+  DONE_PENDING_REVIEW if READY/READY_WITH_LIMITS with an implementable slice.
+  STOPPED if a product/contract decision is required.
+  BLOCKED if a gate is missing.
 
 max_attempts: 1
 
 result_report_path: >
-  docs/dev-loop/reports/AUDIT-DIRECTOR-IA-CONVERSATIONAL-PRODUCT-GAP-005.md
+  docs/dev-loop/reports/ARCH-DIRECTOR-IA-DAILY-DISCOUNT-KG-READINESS-001.md
