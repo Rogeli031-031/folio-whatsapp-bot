@@ -1,15 +1,15 @@
 # CURRENT_TASK
 
 ```yaml
-task_id: "DOCS-DIRECTOR-IA-DAILY-DEVIATION-SYNC-001"
+task_id: "AUDIT-DIRECTOR-IA-CONVERSATIONAL-PRODUCT-GAP-003"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-08-24"
 human_authorization: >
   AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-24.
-  Apruebo DOCS-DIRECTOR-IA-DAILY-DEVIATION-SYNC-001
-  y autorizo G1.
+  Apruebo AUDIT-DIRECTOR-IA-CONVERSATIONAL-PRODUCT-GAP-003
+  y autorizo G1 exclusivamente para auditoría read-only.
 
 gates:
   G1_task_authorization: AUTHORIZED
@@ -18,306 +18,350 @@ gates:
   G5_contract_conformance: N/A
   G8_calibration_materiality_signature: N/A
 
+mode:
+  type: "PRODUCT_IMPACT_AUDIT_ONLY"
+  implementation: false
+  code_changes: false
+  runtime_changes: false
+  test_changes: false
+  matrix_changes: false
+  contract_changes: false
+
 objective: >
-  Sincronizar la documentación de Director IA con el runtime ya integrado de
-  daily_sales_deviation, documentando exactamente el first slice
-  daily_sales_plus_business_evidence sin modificar código, contratos, runtime
-  ni cobertura de módulos.
+  Medir cuánto mejoró realmente la experiencia conversacional de Director IA
+  después de continuidad efímera, memoria pending_work_items_only,
+  plant_diagnosis multi-source, commercial materiality y daily_sales_deviation;
+  identificar exactamente un cuello de botella actual que todavía impida
+  conversar naturalmente con una IA que conoce los datos y, cuando no tiene
+  información suficiente, sabe qué necesita para continuar.
+
+north_star: >
+  Director IA debe permitir conversar naturalmente sobre la empresa con una IA
+  que conoce los datos disponibles. La infraestructura entrega evidencia,
+  permisos, memoria, identidad, periodos, cálculos y provenance. GPT conserva
+  síntesis, explicación, preguntas de seguimiento y razonamiento conversacional.
 
 baseline:
+  functional_coverage: "10.5 / 20 = 52.5%"
+  percentage_effect: "0.0 pp"
+
+before_reference:
+  audit: "AUDIT-DIRECTOR-IA-CONVERSATIONAL-PRODUCT-GAP-002"
+
+  prior_bottleneck: >
+    Preguntas diarias como “¿por qué bajó la venta ayer?” eran interceptadas
+    o perdidas por paths mensuales.
+
+new_capabilities_since_gap_002:
+  - "daily_sales_deviation"
+  - "ayer America/Mexico_City"
+  - "same-weekday / 14-day reference"
+  - "customer contribution"
+  - "channel contribution"
+  - "DICF/comments por cliente_key"
+  - "information gaps"
+  - "7-turn daily conversational inheritance"
+
+primary_question: >
+  Ahora que el cuello diario de venta fue corregido, ¿cuál es el ÚNICO mayor
+  obstáculo restante para cumplir el north star?
+
+candidate_gaps_to_evaluate_not_assume:
+
+  daily_discount:
+    examples:
+      - "¿Por qué subió el descuento/kg ayer?"
+      - "¿Fue general o algunos clientes?"
+      - "¿Quién movió el ponderado?"
+    known:
+      - "not implemented"
+      - "formula audited = SUM(monto)/SUM(kg)"
+      - "no channel in discount source"
+
+  natural_followups:
+    examples:
+      - "¿Y eso?"
+      - "¿Cómo así?"
+      - "¿Qué más?"
+      - "¿Entonces?"
+      - "¿Y los demás?"
+    question: >
+      ¿El phrasebook/follow-up detector sigue siendo demasiado rígido aunque
+      exista structured_conversation_state?
+
+  action_routing:
+    examples:
+      - "¿Qué pasó con la acción de Julio?"
+      - "¿Por qué no la cerró?"
+      - "¿Ya respondió?"
+    known_prior_issue: >
+      “qué pasó con” podía entrar a memoria en vez de Action Register.
+
+  information_gap_expression:
+    examples:
+      - "¿Qué te falta?"
+      - "¿Quién puede conseguirlo?"
+      - "¿Para qué lo necesitas?"
+    question: >
+      ¿GPT recibe suficiente evidence/limitations para formular naturalmente
+      la brecha o sigue dependiendo de frases enlatadas?
+
+  economic_tradeoff:
+    example: >
+      Arturo dejó de comprar y competencia ofrece mejor condición; ¿conviene
+      recuperarlo si deteriora margen?
+
+    known_prior_limit:
+      - "no client-level structured offer"
+      - "no reliable client-level margin calculation"
+
+  persistent_memory_deployment:
+    known:
+      - "repo support implemented"
+      - "SQL 017 may still be unapplied"
+
+  overprogramming:
+    question: >
+      ¿Existen reglas recientes que reducen naturalidad y podrían sustituirse
+      por evidence + state + GPT sin sacrificar verdad?
+
+mandatory_before_after_tests:
+
+  conversation_A_plant:
+    turns:
+      - "¿Cómo va Puebla?"
+      - "¿Qué te llama la atención?"
+      - "¿Por qué?"
+      - "¿Y Arturo?"
+      - "¿Qué sabemos de él?"
+      - "¿Tiene acción?"
+      - "¿Qué falta saber?"
+      - "¿Quién puede darnos esa información?"
+      - "¿Para qué la necesitas?"
+
+  conversation_B_daily_sales:
+    turns:
+      - "¿Por qué bajó la venta ayer?"
+      - "¿Contra qué la comparas?"
+      - "¿Qué clientes explican más?"
+      - "¿Y por canal?"
+      - "¿Sabemos por qué?"
+      - "¿Qué falta investigar?"
+      - "¿Quién puede aclararlo?"
+
+  conversation_C_daily_discount:
+    turns:
+      - "¿Por qué subió el descuento/kg ayer?"
+      - "¿Fue general?"
+      - "¿Quién movió más el promedio?"
+      - "¿Sabemos por qué?"
+      - "¿Qué falta?"
+
+  conversation_D_action:
+    turns:
+      - "¿Qué pasó con la acción de Julio Pérez?"
+      - "¿Está vencida?"
+      - "¿Por qué no la ha cerrado?"
+      - "¿Lo sabemos?"
+      - "¿Qué necesitas para saberlo?"
+
+  conversation_E_memory:
+    session_1:
+      - "¿Por qué dejó de comprar Arturo?"
+      - "¿Qué falta?"
+    session_2:
+      - "¿Qué pasó con Arturo?"
+      - "¿Ya sabemos por qué?"
+
+  conversation_F_free_followups:
+    turns:
+      - "¿Cómo va Puebla?"
+      - "¿Y eso?"
+      - "¿Cómo así?"
+      - "¿Qué más?"
+      - "¿Entonces qué falta?"
+    purpose: >
+      Medir si Director IA conversa o solo reconoce follow-ups enumerados.
+
+trace_requirements_for_each_turn:
+  - "intent"
+  - "parent_intent"
+  - "follow-up classification"
+  - "active entity"
+  - "active date if applicable"
+  - "sources loaded"
+  - "evidence supplied to GPT"
+  - "limitations"
+  - "whether answer is deterministic or GPT-generated"
+  - "where failure occurs"
+
+impact_comparison:
+
+  compare_gap_002_vs_now:
+    dimensions:
+      - "naturalness"
+      - "correct routing"
+      - "daily awareness"
+      - "data grounding"
+      - "follow-up continuity"
+      - "ability to identify unknowns"
+      - "ability to say what information is needed"
+      - "cross-session continuity"
+      - "overprogramming"
+
+  required_conclusion: >
+    State explicitly what daily_sales_deviation fixed and what it did not fix.
+
+failure_classes:
+  - "MISSING_DATA"
+  - "MISSING_INFRASTRUCTURE"
+  - "MODEL_REASONING_LIMIT"
+  - "OVERPROGRAMMING"
+  - "DEPLOYMENT_GAP"
+  - "CONTRACT_OR_AUTHZ_LIMIT"
+
+reasoning_boundary_audit:
+
+  classify:
+    - "KEEP_DETERMINISTIC"
+    - "LET_GPT_REASON"
+    - "MIXED"
+    - "UNKNOWN"
+
+  inspect:
+    - "follow-up phrase matching"
+    - "pending gap text"
+    - "daily pack"
+    - "commercial materiality"
+    - "early returns"
+    - "special prompts"
+
+  required_question: >
+    ¿Estamos todavía programando frases/conclusiones que GPT podría formular
+    naturalmente si recibe state + evidence correctos?
+
+information_gap_quality:
+
+  target: >
+    No basta con “no hay suficiente información”.
+
+  evaluate:
+    - "what is known"
+    - "what is unknown"
+    - "exact missing datum"
+    - "why needed"
+    - "possible source"
+    - "physically-linked person only if valid"
+    - "what decision/analysis it unlocks"
+
+  determine:
+    - "whether runtime supplies enough structure"
+    - "whether GPT gets freedom to formulate it"
+    - "whether phrasebook blocks natural variants"
+
+daily_discount_audit:
+
+  required:
+    - "confirm source"
+    - "daily date capability"
+    - "weighted formula"
+    - "customer decomposition feasibility"
+    - "mix effect feasibility"
+    - "business evidence join feasibility"
+    - "what exactly is missing"
+
+  rule: >
+    Do not automatically make daily_discount the winner just because daily sales
+    is now solved.
+
+action_routing_audit:
+
+  required:
+    - "trace 'qué pasó con la acción de Julio'"
+    - "trace 'por qué no la cerró'"
+    - "determine whether existing AR/history data is sufficient"
+    - "distinguish routing bug from missing data"
+
+memory_deployment_audit:
+
+  required:
+    - "repo capability exists"
+    - "do not claim environment active without SQL 017 confirmation"
+
+  rule: >
+    Deployment-only gap should win only if it is the main blocker of the north
+    star in actual target environment.
+
+single_bottleneck:
+
+  exactly_one: true
+
+  required_fields:
+    - "name"
+    - "failure_class"
+    - "physical_location"
+    - "evidence"
+    - "why it is now the largest blocker"
+    - "what fixing it unlocks"
+    - "what it does not solve"
+
+  selection_rule: >
+    Choose by impact on natural business conversation, not percentage, ease,
+    recency, or previous ranking.
+
+next_task_policy:
+  exactly_one: true
+  authorize: false
+  execute: false
+
+  rule: >
+    NEXT_TASK must directly address the demonstrated single bottleneck.
+    It may be readiness, implementation, simplification, routing fix, or
+    deployment task depending on evidence.
+
+percentage_policy:
   before: "10.5 / 20 = 52.5%"
   after: "10.5 / 20 = 52.5%"
   delta: "0.0 pp"
 
-implemented_capability:
-  intent: "daily_sales_deviation"
-  first_slice: "daily_sales_plus_business_evidence"
-
-implemented_path: >
-  pregunta de venta diaria
-    → daily_sales_deviation
-    → ayer calendario completo America/Mexico_City
-    → venta observada kg
-    → referencia same-weekday / ventana 14 días
-    → delta kg / delta %
-    → contribución por cliente
-    → contribución por canal
-    → DICF + comments por cliente_key
-    → information gaps
-    → evidence pack
-    → HILO
-    → una llamada OpenAI
-    → respuesta conversacional
-
-routing:
-  document:
-    - "daily_sales_deviation gana para preguntas de venta + ayer"
-    - "no degrada a financial_diagnosis mensual"
-    - "no degrada a delta_sales mensual"
-    - "monthly paths permanecen intactos"
-
-date_semantics:
-  timezone: "America/Mexico_City"
-  target: "ayer calendario completo"
-
-  invariants:
-    - "hoy no se trata como día completo"
-    - "día sin filas != 0"
-    - "target_date queda explícito"
-    - "active_date es efímero dentro del hilo"
-
-reference:
-  type: "same_weekday_recent_average"
-  window_days: 14
-
-  document:
-    - "mismo día de semana"
-    - "ventana de 14 días"
-    - "N observaciones explícito"
-    - "referencia siempre declarada al usuario"
-    - "día anterior no es default"
-
-daily_detection:
-  fields:
-    - "target_date"
-    - "target_sales_kg"
-    - "reference_type"
-    - "reference_sales_kg"
-    - "reference_observation_count"
-    - "deviation_kg"
-    - "deviation_pct"
-
-mathematical_decomposition:
-
-  customer:
-    documented: true
-    key: "cliente_key"
-    meaning: >
-      contribución matemática del cliente a la diferencia entre el día objetivo
-      y la referencia comparable.
-
-  channel:
-    documented: true
-    meaning: >
-      contribución matemática del canal a la diferencia entre el día objetivo
-      y la referencia comparable.
-
-  invariant: >
-    mathematical contribution != business cause
-
-  required_warning: >
-    Cliente/canal que explica matemáticamente parte del delta no queda
-    demostrado como causa empresarial del movimiento.
-
-business_evidence:
-
-  sources:
-    - "DICF"
-    - "commercial comments"
-
-  join:
-    key: "cliente_key"
-    name_join: false
-
-  semantics:
-    - "comment = stored statement, not proven cause"
-    - "action = recorded action, not proven cause"
-    - "responsible = responsible for action only when physically linked"
-    - "responsible != responsible for sales decline"
-
-information_gaps:
-
-  document: >
-    El pack identifica contribuidores materiales para los que la evidencia
-    disponible no alcanza para explicar empresarialmente el movimiento.
-
-  semantics:
-    - "gap != no cause exists"
-    - "gap = current pack lacks sufficient explanatory evidence"
-
-  enables_GPT_to_express:
-    - "qué sí está observado"
-    - "qué parte se localiza matemáticamente"
-    - "qué evidencia relacionada existe"
-    - "qué sigue sin explicación"
-    - "qué información concreta falta"
-    - "quién puede aclararla solo cuando existe vínculo físico"
-
-reasoning_boundary:
-
-  deterministic_runtime:
-    - "target date"
-    - "timezone"
-    - "reference"
-    - "kg"
-    - "delta"
-    - "percentage"
-    - "customer contribution"
-    - "channel contribution"
-    - "identity/join"
-    - "authz"
-    - "provenance"
-    - "absence/error semantics"
-
-  GPT:
-    - "síntesis"
-    - "explicación narrativa"
-    - "qué llama la atención"
-    - "relación prudente entre evidencias"
-    - "qué no está explicado"
-    - "qué información falta"
-    - "follow-up conversacional"
-
-  principle: >
-    El runtime entrega evidencia confiable y matemáticas correctas.
-    GPT conserva el razonamiento conversacional.
-
-conversation:
-
-  parent_intent: "daily_sales_deviation"
-  active_date: "ephemeral"
-
-  canonical_flow:
-    - "¿Por qué bajó la venta ayer?"
-    - "¿Contra qué la estás comparando?"
-    - "¿Qué clientes explican más?"
-    - "¿Y por canal?"
-    - "¿Sabemos por qué?"
-    - "¿Qué falta investigar?"
-    - "¿Quién puede aclararlo?"
-
-  runtime_behavior:
-    - "follow-ups heredan el pack defendible"
-    - "requery por turno"
-    - "una llamada OpenAI por turno"
-    - "HILO != evidence"
-    - "active_date no se convierte en memoria cross-session"
-
-authz:
-  preserve: true
-  invariants:
-    - "planta actual"
-    - "rol actual"
-    - "plantas_permitidas"
-    - "no cross-plant"
-    - "fail-closed"
-
-absence_error_semantics:
-  distinguish:
-    - "0 real"
-    - "null"
-    - "día sin filas"
-    - "referencia insuficiente"
-    - "DATA_NOT_FOUND"
-    - "SOURCE_RESTRICTED"
-    - "TOOL_ERROR"
-
-daily_discount:
-  status: "DEFERRED / NOT IMPLEMENTED"
-
-  readiness_only:
-    formula: "SUM(monto) / SUM(kg)"
-    average_of_averages: false
-    channel_available: false
-
-  warning: >
-    No documentar daily discount/kg como capacidad implementada.
-
-preserved:
-  - "M9 monthly"
-  - "financial_diagnosis"
-  - "plant_diagnosis"
-  - "structured_conversation_state"
-  - "pending_work_items_only"
-
-persistent_memory:
-  daily_date_memory: false
-  pending_work_items_only: "preserved"
-
-  deployment_note: >
-    SQL 017 sigue siendo requisito operativo separado para activar memoria
-    persistente en un entorno donde aún no se haya aplicado.
-
-contracts:
-  Constitution: "unchanged"
-  EKE: "unchanged"
-  IES_04: "unchanged"
-  Reasoning_Engine_05: "unchanged"
-
-module_matrix:
-  changed_modules: "none"
-  global: "10.5 / 20 = 52.5%"
-  delta: "0.0 pp"
-
-test_evidence_from_impl:
-  daily_deviation: "16/16"
-  continuity: "20/20"
-  persistent_memory: "19/19"
-  capabilities: "56/56"
-  planner: "49/49"
-  orchestrator: "27/27"
-  director_ia_suite: "777/777"
-  git_diff_check: "clean"
-
-deferred_product_gaps:
-  - "daily discount/kg"
-  - "Julio Pérez / action routing gap"
-  - "phrasebook rigidity outside inherited paths"
-  - "client-level competition/margin tradeoff"
-  - "SQL 017 environment activation where pending"
-
 in_scope:
   writable:
     - "docs/dev-loop/CURRENT_TASK.md"
-    - "docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md"
-    - "docs/dev-loop/reports/DOCS-DIRECTOR-IA-DAILY-DEVIATION-SYNC-001.md"
+    - "docs/dev-loop/reports/AUDIT-DIRECTOR-IA-CONVERSATIONAL-PRODUCT-GAP-003.md"
 
   read_only:
-    - "implemented runtime"
-    - "tests"
-    - "contracts"
-    - "sql"
+    - "entire repository except writable files"
 
 out_of_scope:
-  - "code"
-  - "tests"
-  - "runtime"
+  - "implementation"
+  - "code changes"
+  - "tests changes"
+  - "matrix changes"
+  - "contract changes"
   - "SQL execution"
-  - "schema"
-  - "contracts"
-  - "new architecture"
-  - "daily discount implementation"
-  - "percentage changes"
   - "commit"
   - "push"
   - "merge"
 
 acceptance_criteria:
-  - "daily_sales_deviation documented."
-  - "Daily vs monthly boundary explicit."
-  - "Yesterday/CDMX documented."
-  - "Same-weekday 14-day reference documented."
-  - "Customer decomposition documented."
-  - "Channel decomposition documented."
-  - "Business evidence by cliente_key documented."
-  - "Information gaps documented."
-  - "Contribution != causality explicit."
-  - "Conversational inheritance documented."
-  - "Reasoning boundary documented."
-  - "Daily discount explicitly deferred."
-  - "No module changes."
-  - "52.5% preserved."
-  - "Only three authorized files changed."
+  - "Gap 002 vs now compared explicitly."
+  - "Six conversations traced."
+  - "Daily sales improvement measured."
+  - "Daily discount audited."
+  - "Action routing audited."
+  - "Free-form follow-ups audited."
+  - "Information-gap quality audited."
+  - "Overprogramming audited."
+  - "Memory deployment separated."
+  - "Exactly one bottleneck selected."
+  - "Exactly one NEXT_TASK."
+  - "52.5% unchanged."
+  - "Only task + report changed."
   - "git diff --check clean."
-
-next_task:
-  propose_only: "AUDIT-DIRECTOR-IA-CONVERSATIONAL-PRODUCT-GAP-003"
-  authorize: false
-  execute: false
 
 expected_terminal_state: "DONE_PENDING_REVIEW"
 
 max_attempts: 1
 
 result_report_path: >
-  docs/dev-loop/reports/DOCS-DIRECTOR-IA-DAILY-DEVIATION-SYNC-001.md
+  docs/dev-loop/reports/AUDIT-DIRECTOR-IA-CONVERSATIONAL-PRODUCT-GAP-003.md
