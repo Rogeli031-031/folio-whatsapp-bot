@@ -1,354 +1,502 @@
 # CURRENT_TASK
 
 ```yaml
-task_id: "ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-010"
+task_id: "ARCH-DIRECTOR-IA-EXECUTIVE-PRIORITIZATION-READINESS-001"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-08-23"
 human_authorization: >
   AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-23.
-  Apruebo ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-010 y autorizo G1.
+  Apruebo ARCH-DIRECTOR-IA-EXECUTIVE-PRIORITIZATION-READINESS-001
+  y autorizo G1.
 
 gates:
   G1_task_authorization: AUTHORIZED
-  G2_architecture_change: N/A
-  G3_new_architecture_contract: N/A
+  G2_architecture_change: N/A_PENDING_AUDIT
+  G3_new_architecture_contract: N/A_PENDING_AUDIT
   G8_calibration_materiality_signature: N/A
 
 objective: >
-  Priorizar el siguiente frente global de Director IA desde el baseline 52.5%,
-  comparando módulos no COMPLETE, profundizaciones materiales, gaps transversales
-  y específicamente la capacidad de transformar evidencia ya ensamblada en
-  priorización ejecutiva y recomendaciones accionables, sin inventar causalidad
-  ni reabrir contratos salvo evidencia de necesidad.
+  Determinar el slice mínimo, físicamente soportado y contractualmente válido
+  para que plant_diagnosis deje de limitarse a enumerar evidencia y pueda
+  producir priorización ejecutiva accionable: qué requiere atención primero,
+  por qué importa, qué evidencia lo soporta, qué está desatendido, qué siguiente
+  paso conviene y qué incertidumbre permanece. Auditar además trade-offs
+  económicos, reducción de incertidumbre, antes→acción→después, agenda del
+  Director y seguimiento/repriorización, sin inventar causalidad, scoring,
+  rentabilidad ni Recommendation N5.
 
 baseline:
-  numerator: 10.5
-  denominator: 20
-  percentage: 52.5
+  global:
+    numerator: 10.5
+    denominator: 20
+    percentage: 52.5
 
-  recent_capabilities:
-    - "M5 Taller por AT"
-    - "M7 composición IGF"
-    - "M11 expediente comercial"
-    - "M12 revision notes"
-    - "M18 presupuesto semanal"
-    - "financial_diagnosis multi-source"
-    - "plant_diagnosis multi-source"
+  current_runtime:
+    intent: "plant_diagnosis"
+    sources:
+      - "action_register"
+      - "dicf"
+      - "bitacora"
+      - "arr"
+      - "igf"
+      - "commercial_state"
+
+    m9: false
+    openai_calls: 1
+    provenance: "separada por fuente"
+    commercial_state: "SELECT-only arr.dicf_cliente_mes"
+
+  known_gap: >
+    El runtime puede reunir evidencia pero no tiene un paso explícito y
+    verificable que convierta esa evidencia en materialidad, excepciones,
+    prioridades y siguientes pasos ejecutivos.
+
+contract_baseline:
+  known:
+    - "Constitución V.14 ya contempla Recommendation."
+    - "05 §12 contempla Recommendation anclada a IES y condicionada."
+    - "Reasoning Engine N5 consume IES válido."
+    - "El chat legado no es N5 y no debe fingir objetos Recommendation N5."
+
+  audit_required:
+    - "verificar texto físico de Constitución/04/05"
+    - "determinar exactamente qué puede hacer el chat legado"
+    - "determinar si G2/G3 siguen N/A"
+    - "no reabrir contratos por conveniencia"
+
+central_principle: >
+  Director IA no debe optimizar una métrica aislada. Una pérdida de volumen
+  puede no justificar recuperación si la condición necesaria destruye margen
+  o resultado. Priorizar atención no equivale a afirmar causalidad ni a
+  autorizar una decisión comercial.
+
+executive_chain:
+  audit:
+    - "evidence"
+    - "finding"
+    - "materiality"
+    - "exception"
+    - "trade_off"
+    - "priority"
+    - "recommended_next_step"
+    - "human_decision"
+    - "follow_up"
+    - "observed_result"
+    - "reprioritization"
+
+capability_1_executive_compression:
+  question: >
+    ¿Puede separar lo material de lo secundario en vez de enumerar todo?
+
+  examples:
+    weak: >
+      40 clientes disminuyeron.
+
+    target: >
+      40 clientes disminuyeron, pero los N principales concentran X% de la
+      pérdida observable.
+
+  audit:
+    - "kg_mes_real"
+    - "kg_mes_forecast"
+    - "magnitudes comparables"
+    - "sumas/participaciones físicamente válidas"
+    - "top-N"
+    - "concentración"
+
+  rules:
+    - "no mezclar unidades"
+    - "no convertir forecast automáticamente en pérdida real"
+    - "definir denominador"
+    - "mostrar periodo"
+    - "mostrar base de comparación"
+
+capability_2_unattended_exception:
+  question: >
+    ¿Puede distinguir un problema observado de un problema sin cobertura
+    de seguimiento?
+
+  audit:
+    - "cliente con caída + acción DICF"
+    - "cliente con caída sin acción"
+    - "acción abierta"
+    - "acción vencida"
+    - "acción cerrada"
+    - "resultado_cierre"
+    - "responsable almacenado"
+
+  target_categories_hypothesis:
+    - "material_without_action"
+    - "material_with_open_action"
+    - "material_with_overdue_action"
+    - "material_with_closed_action"
+    - "material_with_unknown_outcome"
 
   rule: >
-    Esta tarea no cambia estados ni porcentaje.
+    Estas categorías son hipótesis de runtime para auditar; no crear contrato
+    ni taxonomía permanente sin evidencia.
 
-primary_question: >
-  ¿Cuál es ahora el mayor cuello de botella de Director IA:
-  falta de cobertura, falta de evidencia, falta de conexión entre fuentes o
-  falta de capacidad para convertir evidencia ya reunida en prioridades y
-  recomendaciones ejecutivas accionables?
+capability_3_uncertainty_reduction:
+  principle: >
+    Cuando no se conozca la causa, Director IA debe poder recomendar el
+    siguiente paso que reduzca incertidumbre, en lugar de inventar explicación.
 
-special_candidate:
-  name: "executive_prioritization_and_recommendation"
+  examples:
+    - "validar motivo con cliente"
+    - "confirmar condición de competencia"
+    - "obtener dato faltante"
+    - "pedir resultado de acción"
+    - "revisar excepción"
 
-  audit_not_assume: true
+  forbidden:
+    - "inventar motivo"
+    - "presentar comentario como causa"
+    - "presentar hipótesis como hecho"
 
-  motivating_gap: >
-    plant_diagnosis ya puede reunir seis fuentes, pero una respuesta que solo
-    enumera acciones, clientes, KPI y riesgos sigue siendo vaga. Falta determinar
-    si Director IA puede identificar materialidad, concentración, excepciones,
-    cobertura de acción y recomendar qué revisar primero.
+capability_4_economic_tradeoffs:
+  question: >
+    ¿Puede detectar que recuperar volumen puede destruir valor económico?
 
-  target_behavior_examples:
-    - "Estas son las 3 cosas que debes revisar primero."
-    - "Este cliente concentra la mayor pérdida y no tiene acción."
-    - "Esta acción está vencida y corresponde al segundo mayor impacto observable."
-    - "Esta evidencia justifica investigar primero este frente."
-    - "No puedo afirmar la causa; sí puedo recomendar dónde revisar primero."
+  mandatory_case: >
+    Un cliente importante dejó de comprar. Existe evidencia almacenada que
+    sugiere una oferta más agresiva de la competencia. Igualarla podría
+    deteriorar el margen o volver económicamente inconveniente la recuperación.
+    ¿Qué puede afirmar y qué debería recomendar Director IA?
 
-  forbidden_assumption: >
-    No asumir que esta capacidad ya está permitida ni que requiere contrato nuevo.
-    Auditar físicamente Constitución, IES, Reasoning Engine, planner, chat y runtime.
+  audit_physical_data:
+    - "kg_mes_real"
+    - "kg_mes_forecast"
+    - "ingreso_forecast"
+    - "ARR"
+    - "IGF"
+    - "discount/delta fields disponibles"
+    - "condición comercial almacenada si existe"
+    - "margen/contribución físicamente disponible si existe"
+    - "comentarios/evidencia de oferta competidor"
 
-priority_model:
+  mandatory_determinations:
+    - "si existe costo de recuperación físicamente calculable"
+    - "si existe margen incremental físicamente calculable"
+    - "si existe límite comercial almacenado"
+    - "si puede compararse recuperar vs no recuperar"
+    - "qué dato falta si no puede calcularse"
+    - "qué unidad usa cada dato"
 
-  executive_value:
-    weight: "CRITICAL"
+  forbidden:
+    - "inventar oferta de competencia"
+    - "inventar margen"
+    - "inventar costo de recuperación"
+    - "inventar umbral rentable"
+    - "margen negativo => abandonar cliente automáticamente"
+    - "volumen mayor => prioridad comercial automática"
 
-  actionability:
-    weight: "CRITICAL"
+  target_behavior: >
+    Si la evidencia económica es insuficiente, la recomendación correcta puede
+    ser obtener la condición comercial faltante y calcular la sostenibilidad
+    antes de autorizar descuento.
 
-  materiality_value:
-    weight: "CRITICAL"
-    evaluate:
-      - "magnitud"
-      - "concentración"
-      - "desviación observable"
-      - "urgencia físicamente soportada"
-      - "cobertura de acción"
-      - "acciones vencidas"
-      - "ausencia de seguimiento"
-      - "impacto económico observable"
+capability_5_alternative_comparison:
+  question: >
+    ¿Puede comparar opciones sin convertirlas en mandato?
 
-  reasoning_value:
-    weight: "CRITICAL"
+  target_shape_hypothesis:
+    option_a:
+      action: "recuperar/negociar"
+      observable_benefit: "si físicamente calculable"
+      observable_cost: "si físicamente calculable"
+      uncertainty: "explícita"
 
-  evidence_connectivity:
-    weight: "CRITICAL"
+    option_b:
+      action: "no igualar todavía"
+      observable_benefit: "si físicamente calculable"
+      observable_cost: "si físicamente calculable"
+      uncertainty: "explícita"
 
-  new_domain_value:
-    weight: "VERY_HIGH"
+    option_c:
+      action: "obtener evidencia adicional"
+      information_gain: "qué incertidumbre reduce"
 
-  incremental_value:
-    weight: "VERY_HIGH"
+  rule: >
+    No construir simulador financiero nuevo en este readiness.
 
-  frequency:
-    weight: "HIGH"
+capability_6_before_action_after:
+  question: >
+    ¿Puede reconstruir antes → acción → después sin afirmar causalidad?
 
-  source_readiness:
-    weight: "MEDIUM"
+  audit:
+    - "commercial_state por periodos"
+    - "dicf_actions timestamps"
+    - "action_history"
+    - "resultado_cierre"
+    - "revision notes si aplican"
+    - "M9 solo si físicamente necesario; no incorporarlo por inercia"
 
-  implementation_cost:
-    weight: "MEDIUM"
+  target: >
+    Mostrar cambio observado posterior a una intervención y describir asociación
+    temporal, nunca eficacia causal no demostrada.
 
-  risk:
-    weight: "MEDIUM"
-    penalize:
-      - "causalidad inventada"
-      - "score arbitrario"
-      - "writes"
-      - "Excel"
-      - "S3"
-      - "Twilio"
-      - "external dependencies"
-      - "contract reopening"
-      - "duplicación"
+  forbidden:
+    - "la acción causó la recuperación"
+    - "la acción funcionó"
+    - "atribución causal sin evidencia"
 
-  percentage_effect:
-    weight: "LOW"
+capability_7_director_agenda:
+  question: >
+    ¿Puede producir una agenda corta de asuntos que realmente requieren
+    atención del Director?
 
-mandatory_rechecks:
-  - "M1"
-  - "M2 restante"
-  - "M4 restante"
-  - "M5 restante"
-  - "M6 restante"
-  - "M7 restante"
-  - "M8"
-  - "M10"
-  - "M11 restante"
-  - "M12 restante"
-  - "M14"
-  - "M15"
-  - "M17"
-  - "M18 restante"
-  - "M20"
-  - "executive_prioritization_and_recommendation"
-  - "cualquier otro gap transversal físico"
+  target:
+    max_items_to_audit: 3
+    each_item:
+      - "finding"
+      - "why_it_matters"
+      - "materiality_basis"
+      - "coverage/status"
+      - "recommended_next_step"
+      - "evidence"
+      - "uncertainty"
 
-executive_prioritization_audit:
+  also_determine:
+    - "qué puede suprimirse por baja materialidad"
+    - "qué debe escalarse"
+    - "qué requiere atención operativa pero no del Director"
 
-  contracts:
-    inspect:
-      - "CONSTITUTION"
-      - "04-IES-STANDARD.md"
-      - "05-REASONING-ENGINE.md"
-      - "EXECUTIVE_KNOWLEDGE_ENGINE"
-      - "planner contracts"
+  rule: >
+    No fijar max_items=3 como contrato; auditarlo como UX ejecutiva.
 
-    determine:
-      - "si Recommendation ya existe contractualmente"
-      - "si Recommendation exige evidence anchors"
-      - "si materiality/prioritization ya está permitida"
-      - "si hypothesis vs recommendation está separada"
-      - "si hace falta G2/G3"
+capability_8_followup_reprioritization:
+  question: >
+    ¿Puede revisar posteriormente si el asunto ya obtuvo cobertura o cambió
+    materialmente?
 
-  runtime:
-    inspect:
-      - "plant_diagnosis assembled evidence"
-      - "financial_diagnosis assembled evidence"
-      - "chat prompts"
-      - "reasoning instructions"
-      - "response formatting"
-      - "source provenance"
+  target_example: >
+    El lunes el cliente era una pérdida material sin acción. Hoy existe una
+    acción abierta con responsable y vencimiento; el hallazgo conserva impacto
+    comercial pero ya no está desatendido.
 
-    determine:
-      - "si el modelo hoy recibe datos suficientes para priorizar"
-      - "si falta un ranking/materiality step"
-      - "si falta una estructura de recommendation"
-      - "si el problema es prompt/wiring o contrato"
+  audit:
+    - "qué memoria/evidencia física permite seguimiento"
+    - "si necesita persistir recomendaciones"
+    - "si puede hacerlo sin persistencia nueva"
+    - "si seguimiento pertenece a otro slice"
 
-  materiality:
-    determine:
-      - "qué magnitudes comparables existen"
-      - "qué concentración puede calcularse"
-      - "qué impacto económico existe"
-      - "qué vencimiento existe"
-      - "qué ausencia de acción puede observarse"
-      - "qué campos NO son comparables"
+  important: >
+    No implementar almacenamiento nuevo de recomendaciones en este slice.
 
-    rules:
-      - "no crear score arbitrario"
-      - "no mezclar unidades incompatibles"
-      - "no convertir magnitud en causalidad"
-      - "prioridad debe explicarse con evidencia"
+materiality_model:
+  principle: >
+    Materialidad debe derivarse de hechos comparables y explicarse. No crear
+    un número mágico que mezcle dimensiones incompatibles.
 
-  recommendation:
-    determine:
-      - "qué tipo de acciones puede recomendar sin write"
+  candidate_dimensions:
+    - "volumen"
+    - "ingreso"
+    - "margen/contribución si existe"
+    - "concentración"
+    - "desviación"
+    - "vencimiento"
+    - "ausencia de cobertura"
+    - "urgencia almacenada"
+
+  audit:
+    for_each:
+      - "physical_source"
+      - "field"
+      - "unit"
+      - "period"
+      - "denominator"
+      - "null semantics"
+      - "comparability"
+      - "whether_safe_for_priority"
+
+  prohibited:
+    - "score 0-100 inventado"
+    - "sumar kg + pesos + días"
+    - "normalización arbitraria"
+    - "peso subjetivo sin contrato/evidencia"
+
+priority_logic:
+  determine_minimal_safe_logic:
+    - "orden por una magnitud homogénea"
+    - "concentración dentro de misma magnitud"
+    - "cobertura de acción como segunda dimensión explicable"
+    - "vencimiento como estado separado"
+    - "trade-off como restricción/contrapeso, no score oculto"
+
+  rule: >
+    Si dos dimensiones no son comparables, mostrarlas como razones separadas
+    y no fabricar un ranking matemático combinado.
+
+recommendation_boundary:
+  legacy_chat:
+    allowed_if_supported:
+      - "sugerencia textual condicionada"
       - "revisar"
       - "validar"
       - "contactar"
       - "pedir resultado"
-      - "asignar seguimiento"
-      - "escalar para revisión"
+      - "obtener dato faltante"
+      - "escalar para decisión"
+      - "no autorizar automáticamente una concesión"
 
-    rule: >
-      Recomendación ejecutiva no equivale a acción automática. Debe conservar
-      control humano y evidencia de por qué se sugiere.
+    prohibited:
+      - "objeto Recommendation N5"
+      - "MAT_*"
+      - "fingir IES"
+      - "write"
+      - "asignación automática"
+      - "cambio de descuento"
+      - "envío WhatsApp/Twilio"
+      - "decisión irreversible"
 
-  ranking_shape:
-    candidate_hypothesis:
-      - "priority"
-      - "finding"
-      - "materiality_basis"
-      - "evidence_refs"
-      - "recommended_next_step"
-      - "uncertainty"
-      - "limitations"
+human_control:
+  principle: >
+    Director IA recomienda dónde mirar y cuál es el siguiente paso defendible.
+    La decisión comercial, financiera u operativa permanece humana.
 
-    rule: >
-      Esta forma es hipótesis de runtime, no contrato nuevo. Verificar si puede
-      mapearse a Recommendation vigente.
+  explicitly_audit:
+    - "descuentos"
+    - "abandono/recuperación de clientes"
+    - "asignación de responsables"
+    - "escalamiento"
+    - "cambios presupuestales"
 
-  causal_boundary:
-    - "priorizar != probar causa"
-    - "materialidad != causalidad"
-    - "correlación != explicación causal"
-    - "recomendación de investigar != afirmar motivo"
+truth_model:
+  required_separation:
+    - "fact"
+    - "stored_statement/comment"
+    - "relationship"
+    - "hypothesis"
+    - "calculation"
+    - "suggested_next_step"
+    - "unknown"
 
-  actionability_boundary:
-    - "sugerir siguiente paso != ejecutar write"
-    - "no crear/editar acciones"
-    - "no enviar mensajes"
-    - "no asignar responsables automáticamente"
+  rules:
+    - "comentario != hecho externo"
+    - "coincidencia != causalidad"
+    - "posterioridad != eficacia"
+    - "materialidad != causa"
+    - "recomendación != mandato"
 
-M10_recheck:
-  required:
-    - "definición canónica"
-    - "weekly discount read-only"
-    - "fuente real"
-    - "qué duplica ARR/M9"
-    - "qué aporta intra-mes"
-    - "qué depende de Twilio"
-    - "preguntas nuevas"
-    - "actionability"
-    - "state after slice"
-    - "percentage effect"
+mandatory_runtime_audit:
+  inspect:
+    - "lib/director-ia-plant-diagnosis.js"
+    - "lib/director-ia-chat.js"
+    - "commercial dossier"
+    - "DICF loaders/summarizers"
+    - "commercial_state SELECT"
+    - "ARR"
+    - "IGF"
+    - "Action Register"
+    - "revision notes"
+    - "bitácora"
+    - "planner"
+    - "tool orchestrator"
 
-other_transversal_review:
-  required:
-    - "buscar otros gaps físicos concretos"
-    - "no repetir financial/plant diagnosis por inercia"
-    - "no crear una capa abstracta sin evidencia"
+  determine:
+    - "qué campos ya llegan"
+    - "qué campos se descartan"
+    - "qué joins físicos existen"
+    - "qué cálculos son seguros"
+    - "qué falta para el first slice"
 
-mandatory_question_map:
-  for_each_candidate:
-    - "qué pregunta nueva responde"
-    - "qué decisión mejora"
-    - "qué acción sugiere"
-    - "qué materialidad usa"
-    - "qué evidencia soporta la prioridad"
-    - "qué no puede afirmar"
-    - "qué ya está cubierto"
-    - "qué duplica"
+first_slice_selection:
+  requirement: >
+    Readiness debe escoger el slice mínimo que produzca una mejora ejecutiva
+    real. No intentar implementar las ocho capacidades de una vez.
 
-physical_audit:
-  for_each_candidate:
-    - "sources"
-    - "helpers"
-    - "planner/tool/runtime"
-    - "context"
+  candidate_a:
+    name: "commercial_materiality_and_coverage"
+    behavior: >
+      Dentro de plant_diagnosis, identificar clientes con mayor movimiento
+      comercial observable, concentración y cobertura/ausencia de acción DICF,
+      y sugerir qué revisar primero.
+
+  candidate_b:
+    name: "economic_recovery_tradeoff"
+    behavior: >
+      Evaluar recuperabilidad económica de clientes cuando existan datos físicos
+      suficientes.
+
+  candidate_c:
+    name: "director_agenda"
+    behavior: >
+      Priorizar hasta N asuntos heterogéneos de la planta.
+
+  candidate_d:
+    name: "before_action_after"
+    behavior: >
+      Relacionar temporalmente cambio, intervención y resultado posterior.
+
+  requirement_winner:
+    - "exactamente un first slice"
+    - "justificar por qué"
+    - "definir qué queda después"
+    - "no escoger por facilidad solamente"
+
+mandatory_acceptance_scenarios:
+  scenario_1:
+    prompt: "¿Cómo va la planta y qué debo revisar primero?"
+    expected_capability: >
+      No enumerar seis fuentes; identificar asuntos materiales defendibles.
+
+  scenario_2:
+    prompt: >
+      ¿Qué clientes que dejaron o redujeron compra requieren mi atención primero?
+    expected_capability: >
+      Concentración + cobertura de acción + siguiente paso, sin causa inventada.
+
+  scenario_3:
+    prompt: >
+      Este cliente dejó de comprar porque aparentemente la competencia le dio
+      más margen y recuperarlo podría hacernos perder dinero. ¿Qué recomiendas?
+    expected_capability: >
+      Separar hecho/evidencia/hipótesis, auditar sostenibilidad económica,
+      mostrar trade-off o declarar datos faltantes, y mantener decisión humana.
+
+  scenario_4:
+    prompt: "¿Funcionó la acción que tomamos con este cliente?"
+    expected_capability: >
+      Antes→acción→después y asociación temporal; no causalidad inventada.
+
+  scenario_5:
+    prompt: "¿Qué necesita mi atención hoy?"
+    expected_capability: >
+      Determinar si una agenda transversal es físicamente posible o debe quedar
+      para slice posterior.
+
+readiness_output:
+  must_determine:
+    - "READY / NOT_READY / READY_WITH_LIMITS"
+    - "first slice exacto"
+    - "fuentes exactas"
+    - "campos exactos"
+    - "joins exactos"
+    - "cálculos permitidos"
+    - "materiality basis"
+    - "recommendation wording boundary"
     - "authz"
-    - "physical keys"
-    - "units"
-    - "side effects"
-    - "contract impact"
-    - "semantic risk"
-    - "first useful slice"
-    - "state after slice"
+    - "period semantics"
+    - "provenance"
+    - "truncation"
+    - "failure semantics"
+    - "G2"
+    - "G3"
     - "percentage effect"
+    - "deferred capabilities"
 
-mandatory_table:
-  columns:
-    - "rank"
-    - "candidate"
-    - "type"
-    - "current_state"
-    - "new_questions"
-    - "executive_value"
-    - "actionability"
-    - "materiality_value"
-    - "reasoning_value"
-    - "evidence_connectivity"
-    - "new_domain_value"
-    - "source_ready"
-    - "wiring_ready"
-    - "contract_impact"
-    - "risk"
-    - "first_slice"
-    - "state_after_slice"
-    - "percentage_effect"
-    - "decision"
-
-ranking_rules:
-  - "No elegir por porcentaje."
-  - "No elegir por facilidad."
-  - "No elegir M10 por ranking previo."
-  - "No elegir prioritization solo porque surgió en conversación."
-  - "Debe existir gap físico/contractual verificable."
-  - "No usar scores arbitrarios."
-  - "Premiar acción concreta soportada por evidencia."
-  - "Premiar materialidad defendible."
-  - "Penalizar recomendaciones genéricas."
-  - "Penalizar causalidad inferida."
-  - "Preferir read-only e in-process."
-
-winner_requirements:
-  exactly_one: true
-  second_place_exactly_one: true
-
-  must_include:
-    - "ganador"
-    - "tipo"
-    - "segundo lugar"
-    - "preguntas nuevas"
-    - "acción ejecutiva nueva"
-    - "base de materialidad"
-    - "por qué gana"
-    - "por qué pierde segundo"
-    - "first slice"
-    - "state after"
-    - "percentage effect"
-    - "G2/G3"
-    - "risks"
-    - "dependencies"
-
-next_task_policy:
-  if_prioritization_readiness:
-    pattern: "ARCH-DIRECTOR-IA-EXECUTIVE-PRIORITIZATION-READINESS-001"
-
-  if_module_readiness:
-    pattern: "ARCH-DIRECTOR-IA-<MODULE>-<SLICE>-READINESS-001"
-
-  if_other_transversal:
-    pattern: "ARCH-DIRECTOR-IA-<SLICE>-READINESS-001"
-
-  rule: >
-    Proponer exactamente una NEXT_TASK. No autorizar ni ejecutar.
+percentage_policy:
+  before: "10.5 / 20 = 52.5%"
+  after_readiness: "10.5 / 20 = 52.5%"
+  implementation_effect_expected: "0.0 pp unless audit proves module-state change"
+  rule: "No sumar cobertura por inteligencia transversal."
 
 in_scope:
   writable:
     - "docs/dev-loop/CURRENT_TASK.md"
-    - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-010.md"
+    - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-EXECUTIVE-PRIORITIZATION-READINESS-001.md"
 
   read_only:
     - "AGENTS.md"
@@ -369,55 +517,80 @@ out_of_scope:
   - "modificar runtime"
   - "modificar matriz"
   - "modificar contratos"
-  - "reabrir IES/RE"
-  - "crear scoring nuevo"
-  - "hacer writes"
-  - "hacer commit"
-  - "hacer push"
-  - "hacer merge"
+  - "reabrir IES"
+  - "reabrir Reasoning Engine"
+  - "crear score"
+  - "crear Recommendation N5"
+  - "persistir recomendaciones"
+  - "writes"
+  - "commit"
+  - "push"
+  - "merge"
   - "ejecutar NEXT_TASK"
 
 acceptance_criteria:
-  - "Baseline 10.5/20 = 52.5% verificado."
-  - "Todos los candidatos relevantes reevaluados."
-  - "Executive prioritization auditada físicamente."
-  - "Recommendation contractual auditada."
-  - "Materialidad físicamente defendible auditada."
-  - "No se inventó scoring."
-  - "M10 reevaluado desde cero."
-  - "Existe ranking."
-  - "Existe exactamente un ganador."
-  - "Existe exactamente un segundo."
-  - "Existe exactamente una NEXT_TASK."
-  - "No se implementó."
-  - "No se modificó matriz."
-  - "No se modificaron contratos."
+  - "Baseline 52.5% preservado."
+  - "Contratos auditados físicamente."
+  - "Chat legado vs N5 delimitado."
+  - "Materialidad auditada campo por campo."
+  - "Concentración auditada."
+  - "Cobertura/desatención auditada."
+  - "Reducción de incertidumbre auditada."
+  - "Trade-offs económicos auditados."
+  - "Caso competencia/margen auditado."
+  - "Antes→acción→después auditado."
+  - "Agenda del Director auditada."
+  - "Seguimiento/repriorización auditado."
+  - "No score arbitrario."
+  - "No causalidad inventada."
+  - "Exactamente un first slice seleccionado."
+  - "G2/G3 determinados."
   - "Solo CURRENT_TASK y reporte cambiaron."
   - "git diff --check limpio."
 
+next_task_policy:
+  if_ready:
+    propose_exactly_one: >
+      IMPL-DIRECTOR-IA-EXECUTIVE-PRIORITIZATION-001
+
+  if_not_ready:
+    propose_exactly_one: >
+      ARCH-DIRECTOR-IA-EXECUTIVE-PRIORITIZATION-GAP-001
+
+  rule: "No autorizar ni ejecutar."
+
 report_requirements:
-  path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-010.md"
+  path: >
+    docs/dev-loop/reports/ARCH-DIRECTOR-IA-EXECUTIVE-PRIORITIZATION-READINESS-001.md
 
   must_include:
     - "metadata"
     - "resumen ejecutivo"
     - "baseline"
-    - "current capability map"
-    - "module gaps"
-    - "reasoning gaps"
-    - "executive prioritization gap"
-    - "recommendation contract audit"
+    - "contract audit"
+    - "legacy chat vs N5"
+    - "physical data inventory"
     - "materiality audit"
-    - "actionability audit"
-    - "candidates"
-    - "ranking"
-    - "winner"
-    - "runner-up"
-    - "first slice"
-    - "state after"
+    - "concentration audit"
+    - "coverage/unattended audit"
+    - "uncertainty reduction"
+    - "economic trade-off audit"
+    - "competition/margin case"
+    - "alternative comparison"
+    - "before-action-after audit"
+    - "director agenda audit"
+    - "follow-up/reprioritization audit"
+    - "truth boundaries"
+    - "human control"
+    - "candidate first slices"
+    - "selected first slice"
+    - "deferred capabilities"
+    - "authz"
+    - "period semantics"
+    - "provenance"
+    - "failure semantics"
+    - "G2/G3"
     - "percentage effect"
-    - "contract impact"
-    - "gates"
     - "risks"
     - "dependencies"
     - "NEXT_TASK"
@@ -427,10 +600,12 @@ report_requirements:
     - "git status"
 
 expected_terminal_state: >
-  DONE_PENDING_REVIEW si existe un ganador defendible. STOPPED si executive
-  prioritization requiere decisión contractual nueva o ningún candidato
-  justifica inversión. BLOCKED si falta gate.
+  DONE_PENDING_REVIEW si READY/READY_WITH_LIMITS y existe un first slice
+  implementable sin decisión contractual nueva. STOPPED si se requiere
+  decisión humana de arquitectura/contrato antes de implementar. BLOCKED
+  si falta gate.
 
 max_attempts: 1
 
-result_report_path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-010.md"
+result_report_path: >
+  docs/dev-loop/reports/ARCH-DIRECTOR-IA-EXECUTIVE-PRIORITIZATION-READINESS-001.md
