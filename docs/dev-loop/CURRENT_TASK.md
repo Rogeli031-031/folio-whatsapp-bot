@@ -1,15 +1,15 @@
 # CURRENT_TASK
 
 ```yaml
-task_id: "DOCS-DIRECTOR-IA-ACTION-PERSON-ROUTING-SYNC-001"
+task_id: "AUDIT-DIRECTOR-IA-CONVERSATIONAL-PRODUCT-GAP-005"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-08-24"
 human_authorization: >
   AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-24.
-  Apruebo DOCS-DIRECTOR-IA-ACTION-PERSON-ROUTING-SYNC-001
-  y autorizo G1.
+  Apruebo AUDIT-DIRECTOR-IA-CONVERSATIONAL-PRODUCT-GAP-005
+  y autorizo G1 exclusivamente para auditoría read-only.
 
 gates:
   G1_task_authorization: AUTHORIZED
@@ -18,257 +18,341 @@ gates:
   G5_contract_conformance: N/A
   G8_calibration_materiality_signature: N/A
 
+mode:
+  type: "PRODUCT_GAP_AUDIT_ONLY"
+  implementation: false
+  code_changes: false
+  runtime_changes: false
+  test_changes: false
+  matrix_changes: false
+  contract_changes: false
+  sql_execution: false
+
 objective: >
-  Sincronizar la documentación de Director IA con el runtime ya integrado de
-  consultas Action Register por responsable/acción, documentando la estrategia C,
-  la precedencia AR sobre resume genérico de memoria, la resolución 0/1/N de
-  acciones y los límites de verdad respecto a responsabilidad, culpa y motivo
-  de retraso.
+  Evaluar el estado conversacional actual de Director IA después de corregir
+  daily_sales_deviation, natural follow-up inheritance y Action Register por
+  responsable/acción, para identificar exactamente un cuello de botella restante
+  que más impida conversar naturalmente sobre la empresa con datos reales y,
+  cuando falte evidencia, saber qué información se necesita para continuar.
+
+north_star: >
+  Director IA debe conversar naturalmente sobre la empresa sin exigir wording
+  especial, consultar la evidencia correcta, conservar contexto y memoria, y
+  distinguir con claridad hechos, inferencias y datos faltantes.
 
 baseline:
-  global: "10.5 / 20 = 52.5%"
-  delta: "0.0 pp"
+  functional_coverage: "10.5 / 20 = 52.5%"
+  percentage_effect: "0.0 pp"
 
-implemented_capability:
-  strategy: "C — strengthen existing AR intents"
-  canonical_parent_intent: "action_status"
+fixed_bottlenecks_not_to_reselect:
+  - "GAP-002: daily sales question routed to monthly pack"
+  - "GAP-003: closed follow-up phrasebook"
+  - "GAP-004: Action Register person/action routing"
 
-implemented_path: >
-  pregunta natural sobre acción/responsable
-    → planner
-    → action_status
-    → resolución física de responsable
-    → Action Register board
-    → 0 / 1 / N acciones
-    → status / fecha / vencimiento / historial-resultado si existe
-    → limitations + provenance
-    → HILO
-    → GPT
+current_verified_capabilities:
+  - "daily_sales_deviation"
+  - "same-weekday 14-day sales reference"
+  - "customer/channel contribution"
+  - "natural follow-up inheritance"
+  - "structured conversation state"
+  - "pending_work_items_only in repository"
+  - "action_status by responsible/action"
+  - "AR > generic memory resume"
+  - "0/1/N action handling"
+  - "plant_diagnosis multi-source"
+  - "financial_diagnosis multi-source"
 
-routing:
-  document:
-    - "accion singular y acciones plural cubiertas"
-    - "acción + responsable puede rutear a action_status"
-    - "action_status es inheritable"
-    - "consulta empresarial AR específica gana sobre resume genérico de memoria"
-    - "persistent memory permanece activa para casos reales de resume"
+known_remaining_candidates_not_assume:
 
-memory_precedence:
-  example_AR: "¿Qué pasó con la acción de Julio Pérez?"
-  expected_AR: "Action Register"
+  daily_discount:
+    examples:
+      - "¿Por qué subió el descuento/kg ayer?"
+      - "¿Quién movió más el promedio?"
+      - "¿Fue general o concentrado?"
 
-  example_memory: "¿Qué pasó con Arturo?"
-  expected_memory: >
-    Persistent memory puede participar cuando no existe un intent empresarial
-    más específico.
+    known:
+      - "not implemented"
+      - "formula = SUM(monto)/SUM(kg)"
+      - "daily fecha exists"
+      - "cliente exists"
+      - "no canal físico"
 
-  principle: >
-    Business intent específico > generic memory resume.
+  economic_tradeoff:
+    example: >
+      Arturo dejó de comprar y hay evidencia almacenada de que competencia
+      ofreció mejor condición. ¿Conviene recuperarlo si igualar la oferta puede
+      destruir margen?
 
-responsible_resolution:
-  rules:
-    - "responsable se resuelve físicamente dentro del board/scope actual"
-    - "sin fuzzy silencioso"
-    - "ambigüedad -> clarificación"
-    - "responsable registrado de acción != responsable del problema"
-    - "responsable registrado != culpable"
+    known:
+      - "no structured competitor offer"
+      - "no validated client-level margin calculation"
 
-action_selection:
-  zero:
-    behavior: "informar ausencia de acciones asociadas en el scope consultado"
+  persistent_memory_deployment:
+    known:
+      - "repo capability implemented"
+      - "SQL 017 environment activation unconfirmed"
 
-  one:
-    behavior: "puede cargarse directamente"
+  information_gap_depth:
+    question: >
+      ¿Ya puede Director IA ir más allá de “falta información” y decir qué dato
+      concreto necesita, por qué lo necesita y qué análisis desbloquea?
 
-  many:
-    behavior: >
-      listar/acotar/clarificar; nunca seleccionar una acción silenciosamente.
+  cross_topic_return:
+    example:
+      - "¿Cómo va Puebla?"
+      - "Ahora dime presupuesto."
+      - "Volvamos a lo de la venta de ayer."
 
-  invariant: "0 / 1 / N seguro"
+    known:
+      - "topic stack / cross-session period memory deferred"
 
-action_evidence:
-  document_if_physical:
-    - "action_id"
-    - "título/tema"
-    - "status"
-    - "responsable"
-    - "fecha compromiso"
-    - "vencida sí/no"
-    - "última actualización"
-    - "historial"
-    - "resultado_cierre"
-    - "provenance"
+  other_unseen_gap:
+    rule: >
+      Auditoría puede elegir algo distinto si la evidencia demuestra mayor impacto.
+
+failure_classes:
+  - "MISSING_DATA"
+  - "MISSING_INFRASTRUCTURE"
+  - "MODEL_REASONING_LIMIT"
+  - "OVERPROGRAMMING"
+  - "DEPLOYMENT_GAP"
+  - "CONTRACT_OR_AUTHZ_LIMIT"
+
+mandatory_conversations:
+
+  A_plant:
+    turns:
+      - "¿Cómo va Puebla?"
+      - "¿Qué más?"
+      - "¿Qué te preocupa?"
+      - "¿Qué falta saber?"
+      - "¿Para qué necesitas ese dato?"
+
+  B_daily_sales:
+    turns:
+      - "¿Por qué bajó la venta ayer?"
+      - "¿Quién explica más?"
+      - "¿Sabemos por qué?"
+      - "¿Qué falta?"
+      - "¿Quién podría aclararlo?"
+
+  C_action_person:
+    turns:
+      - "¿Qué pasó con la acción de Julio Pérez?"
+      - "¿Está vencida?"
+      - "¿Por qué no la cerró?"
+      - "¿Qué información falta?"
+      - "¿Qué necesitas de Julio?"
+
+  D_daily_discount:
+    turns:
+      - "¿Por qué subió el descuento/kg ayer?"
+      - "¿Contra qué lo comparas?"
+      - "¿Quién movió más el promedio?"
+      - "¿Fue general?"
+      - "¿Sabemos por qué?"
+      - "¿Qué falta?"
+
+  E_tradeoff:
+    turns:
+      - "Arturo dejó de comprar y dicen que la competencia le ofreció más."
+      - "¿Conviene recuperarlo?"
+      - "¿Y si igualar la oferta nos hace perder dinero?"
+      - "¿Qué información necesitas para decidir?"
+
+  F_cross_session_memory:
+    session_1:
+      - "¿Por qué dejó de comprar Arturo?"
+      - "¿Qué falta?"
+    session_2:
+      - "¿Qué pasó con Arturo?"
+      - "¿Ya sabemos por qué?"
+
+  G_topic_return:
+    turns:
+      - "¿Cómo va Puebla?"
+      - "Ahora dime el presupuesto."
+      - "Volvamos a lo de la venta de ayer."
+      - "¿Quién explicó más?"
+
+trace_each_turn:
+  required:
+    - "planner intent"
+    - "parent_intent"
+    - "inherit yes/no"
+    - "active entity/date"
+    - "sources loaded"
+    - "fresh requery yes/no"
+    - "evidence supplied"
+    - "limitations"
+    - "GPT invoked yes/no"
+    - "deterministic reply yes/no"
+    - "failure point"
+
+before_after_comparison:
+
+  compare:
+    - "GAP-002"
+    - "GAP-003"
+    - "GAP-004"
+    - "runtime current"
+
+  must_state:
+    - "what is genuinely fixed"
+    - "what is still broken"
+    - "what no longer deserves priority"
+
+daily_discount_audit:
+
+  mandatory:
+    - "exact daily source"
+    - "date semantics"
+    - "SUM(monto)/SUM(kg)"
+    - "reference candidate"
+    - "customer weighted contribution"
+    - "mix effect feasibility"
+    - "business evidence join feasibility"
+    - "absence/error semantics"
+
+  critical:
+    - "no average-of-averages"
+    - "highest ratio != biggest mover"
 
   rule: >
-    Historial/resultado solo si existen físicamente.
+    Choose only if it is now the largest product blocker.
 
-truth_boundaries:
-  facts_allowed:
-    - "acción abierta/cerrada si lo registra la fuente"
-    - "fecha de compromiso"
-    - "acción vencida si se deriva físicamente"
-    - "responsable registrado"
-    - "existe/no existe actualización registrada"
-    - "existe/no existe resultado de cierre"
+economic_tradeoff_audit:
 
-  prohibited_without_evidence:
-    - "Julio no la cerró porque no dio seguimiento"
-    - "Julio incumplió"
-    - "Julio causó el atraso"
-    - "Julio causó el problema"
-    - "la acción falló"
-    - "la acción no funcionó"
+  mandatory:
+    - "what data GPT currently receives"
+    - "what economic data physically exists"
+    - "what client-level data is missing"
+    - "whether decision is calculable"
+    - "whether missing piece is data or infrastructure"
 
-  principle: >
-    Vencimiento/estado son evidencia del registro. Motivo del retraso requiere
-    evidencia adicional.
+  truth:
+    - "comment about competition != verified competitor offer"
+    - "plant margin != client margin"
+    - "do not infer recoverability"
 
-information_gap:
-  canonical_followup: "¿Por qué no la cerró?"
+information_gap_quality:
 
-  expected_behavior: >
-    Si no existe explicación registrada, GPT recibe status, fecha, vencimiento,
-    responsable, actualización disponible y limitation explícita para poder
-    decir naturalmente que no conoce el motivo y qué información falta.
+  evaluate:
+    - "known facts"
+    - "unknown facts"
+    - "specific missing datum"
+    - "why needed"
+    - "possible physical source"
+    - "physically linked person only if valid"
+    - "what analysis/decision becomes possible"
 
-  safe_language:
-    - "no encuentro una explicación registrada del retraso"
-    - "falta una actualización de la acción"
-    - "falta saber si existe un bloqueo"
-    - "falta resultado/fecha actualizada si corresponde"
+  question: >
+    Is this now mostly GPT reasoning, or is runtime still starving GPT of the
+    right limitations/evidence?
 
-  person_boundary: >
-    El responsable puede mencionarse como fuente de actualización únicamente
-    porque está físicamente ligado a la acción.
+memory_deployment:
 
-conversation:
-  parent_intent: "action_status"
+  repository: "IMPLEMENTED"
+  environment: "UNCONFIRMED unless SQL 017 physical evidence exists"
 
-  canonical_flow:
-    - "¿Qué pasó con la acción de Julio Pérez?"
-    - "¿Está vencida?"
-    - "¿Por qué no la cerró?"
-    - "¿Lo sabemos?"
-    - "¿Qué información falta?"
-    - "¿Qué necesitas de Julio?"
+  rule: >
+    Do not make deployment the winner unless it is actually the largest blocker
+    in the intended current environment.
 
-  runtime_behavior:
-    - "natural follow-up strategy B preservada"
-    - "requery por turno"
-    - "fresh AR evidence"
-    - "GPT formula respuesta"
-    - "sin blame"
+topic_return_audit:
 
-anti_phrasebook:
-  document:
-    - "sin intent nuevo"
-    - "sin hardcode de Julio"
-    - "sin hardcode de 'qué pasó con la acción de'"
-    - "sin lista de responsables"
-    - "sin phrasebook nuevo"
+  required:
+    - "trace 'volvamos a lo de...'"
+    - "determine whether current state supports return"
+    - "distinguish topic stack gap from ordinary follow-up"
+    - "assess real frequency/impact"
 
-  principle: >
-    La solución aprovecha la semántica de Action Register existente y la
-    resolución física del responsable.
+overprogramming_check:
 
-preserved:
-  - "responsible_lookup"
-  - "overdue_actions"
-  - "Action Register actual"
-  - "natural follow-up inheritance"
-  - "persistent conversational memory"
-  - "daily_sales_deviation"
-  - "plant_diagnosis"
-  - "financial_diagnosis"
-  - "M5"
-  - "M6"
-  - "M11"
-  - "M12"
-  - "M18"
+  inspect:
+    - "early returns"
+    - "deterministic gap wording"
+    - "special-case routes"
+    - "response templates"
 
-deferred:
-  - "daily discount/kg"
-  - "SQL 017 environment activation"
-  - "person performance scoring"
-  - "client-level economic tradeoff"
-  - "before-action-after effectiveness/causality"
+  classify:
+    - "KEEP_DETERMINISTIC"
+    - "LET_GPT_REASON"
+    - "MIXED"
 
-test_evidence:
-  focal_action_person: "19/19"
-  planner: "57/57"
-  capabilities: "56/56"
-  orchestrator: "27/27"
-  director_ia_suite: "814/814"
-  git_diff_check: "clean"
+  rule: >
+    Do not create new deterministic reasoning if GPT already has sufficient
+    evidence.
 
-historical_test_note:
-  issue: "multiple-actions case returned action_id=0 instead of null"
-  status: "CORRECTED"
-  current_evidence: "814/814"
-  pending: "none"
+single_bottleneck:
 
-module_state:
-  changed_modules: "none"
-  global: "10.5 / 20 = 52.5%"
+  exactly_one: true
+
+  required_fields:
+    - "name"
+    - "failure_class"
+    - "physical_location"
+    - "affected conversations"
+    - "evidence"
+    - "why it is now the biggest blocker"
+    - "what fixing it unlocks"
+    - "what it does not solve"
+
+  selection_rule: >
+    Choose by impact on real executive conversation, not coverage percentage,
+    recency, symmetry, ease, or previous ranking.
+
+next_task:
+  exactly_one: true
+  authorize: false
+  execute: false
+
+  rule: >
+    Propose only the task that directly addresses the single demonstrated bottleneck.
+
+percentage_policy:
+  before: "10.5 / 20 = 52.5%"
+  after: "10.5 / 20 = 52.5%"
   delta: "0.0 pp"
-
-contracts:
-  Constitution: "unchanged"
-  EKE: "unchanged"
-  IES_04: "unchanged"
-  Reasoning_Engine_05: "unchanged"
 
 in_scope:
   writable:
     - "docs/dev-loop/CURRENT_TASK.md"
-    - "docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md"
-    - "docs/dev-loop/reports/DOCS-DIRECTOR-IA-ACTION-PERSON-ROUTING-SYNC-001.md"
+    - "docs/dev-loop/reports/AUDIT-DIRECTOR-IA-CONVERSATIONAL-PRODUCT-GAP-005.md"
 
   read_only:
-    - "implemented runtime"
-    - "tests"
-    - "contracts"
-    - "sql"
+    - "entire repository except writable files"
 
 out_of_scope:
-  - "code"
-  - "tests"
-  - "runtime"
-  - "contracts"
+  - "implementation"
+  - "code changes"
+  - "test changes"
+  - "matrix changes"
+  - "contract changes"
   - "SQL execution"
-  - "schema"
-  - "daily discount"
-  - "percentage changes"
   - "commit"
   - "push"
   - "merge"
 
 acceptance_criteria:
-  - "Strategy C documented."
-  - "action_status canonical parent documented."
-  - "accion/acciones routing documented."
-  - "AR > generic memory resume documented."
-  - "responsible resolution documented."
-  - "0/1/N action behavior documented."
-  - "no silent action selection documented."
-  - "responsible != culprit documented."
-  - "delay reason not invented documented."
-  - "natural followups documented."
-  - "historical action_id=0 failure marked corrected."
-  - "814/814 current evidence recorded."
-  - "no module changes."
+  - "Current north star audited."
+  - "Previous three bottlenecks verified as fixed."
+  - "Seven conversations traced."
+  - "Daily discount audited from scratch."
+  - "Tradeoff data audited."
+  - "Information-gap depth audited."
+  - "Memory deployment separated."
+  - "Topic-return gap audited."
+  - "Overprogramming checked."
+  - "Exactly one bottleneck selected."
+  - "Exactly one NEXT_TASK."
   - "52.5% preserved."
-  - "only three authorized files changed."
+  - "Only task + report changed."
   - "git diff --check clean."
-
-next_task:
-  propose_only: "AUDIT-DIRECTOR-IA-CONVERSATIONAL-PRODUCT-GAP-005"
-  authorize: false
-  execute: false
 
 expected_terminal_state: "DONE_PENDING_REVIEW"
 
 max_attempts: 1
 
 result_report_path: >
-  docs/dev-loop/reports/DOCS-DIRECTOR-IA-ACTION-PERSON-ROUTING-SYNC-001.md
+  docs/dev-loop/reports/AUDIT-DIRECTOR-IA-CONVERSATIONAL-PRODUCT-GAP-005.md
