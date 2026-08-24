@@ -61,6 +61,20 @@ const cases = [
     assert(listDirectorIaTools().length >= 20, "tools count");
   },
 
+  () => {
+    const { plan, toolPlan } = planTools("¿Qué dicen las notas de la última revisión?", {
+      planta_id: 1,
+      question: "¿Qué dicen las notas de la última revisión?",
+    });
+    assert(plan.intent === "revision_notes", "intent revision_notes");
+    assert(hasTool(toolPlan, "get_action_register_revision_notes"), "notes tool");
+    const t = getTool(toolPlan, "get_action_register_revision_notes");
+    assert(t.executable === true, "notes executable");
+    assert(t.required_inputs.includes("planta_id"), "notes planta_id");
+    assert(isDirectorIaToolExecutable("get_action_register_revision_notes") === true, "notes exec");
+    assert(!hasTool(toolPlan, "get_action_register_context"), "notes no usa context always-on");
+  },
+
   // 1. Acciones vencidas
   () => {
     const { toolPlan } = planTools("¿Qué acciones están vencidas?", { planta_id: 1, question: "¿Qué acciones están vencidas?" });

@@ -75,6 +75,12 @@ function expectIntent(question, intentOrList, opts = {}) {
 
 let failed = 0;
 const cases = [
+  () =>
+    expectIntent("¿Qué dicen las notas de la última revisión?", "revision_notes", {
+      requireDomain: "revision_notes",
+    }),
+  () =>
+    expectIntent("notas de revisión 2026-08-20", "revision_notes", { requireDomain: "revision_notes" }),
   () => expectIntent("¿Qué acciones están vencidas?", "overdue_actions", { requireDomain: "action_register" }),
   () =>
     expectIntent("¿Quién es responsable de mantenimiento?", ["responsible_lookup", "action_status"], {
