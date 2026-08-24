@@ -1,332 +1,438 @@
 # CURRENT_TASK
 
 ```yaml
-task_id: "AUDIT-DIRECTOR-IA-CONVERSATIONAL-PRODUCT-GAP-007"
+task_id: "ARCH-DIRECTOR-IA-DAILY-CROSS-METRIC-FOLLOWUP-001"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-08-24"
 human_authorization: >
   AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-24.
-  Apruebo AUDIT-DIRECTOR-IA-CONVERSATIONAL-PRODUCT-GAP-007
-  y autorizo G1 exclusivamente para auditoría read-only de producto.
+  Apruebo ARCH-DIRECTOR-IA-DAILY-CROSS-METRIC-FOLLOWUP-001
+  y autorizo G1 exclusivamente para readiness/auditoría.
 
 gates:
   G1_task_authorization: AUTHORIZED
-  G2_architecture_change: N/A
-  G3_new_architecture_contract: N/A
+  G2_architecture_change: N/A_PENDING_AUDIT
+  G3_new_architecture_contract: N/A_PENDING_AUDIT
   G5_contract_conformance: N/A
   G8_calibration_materiality_signature: N/A
 
 mode:
-  type: "INTEGRATED_CONVERSATIONAL_PRODUCT_AUDIT"
+  type: "READINESS_ONLY"
   implementation: false
   code_changes: false
   runtime_changes: false
-  tests_changes: false
+  test_changes: false
   matrix_changes: false
   contract_changes: false
   sql_execution: false
 
 objective: >
-  Evaluar Director IA como una conversación ejecutiva integrada después de
-  corregir los cuellos GAP-002 a GAP-006. Determinar exactamente un cuello de
-  botella actual que todavía impida sentir que se conversa con alguien que
-  conoce los datos de la empresa, sigue el hilo, cambia y retoma temas y, cuando
-  no sabe algo, identifica de forma útil qué información necesita.
-
-north_star: >
-  El usuario debe poder hablar naturalmente con Director IA sin aprender
-  comandos o frases especiales. Director IA debe recuperar la evidencia
-  adecuada, sostener contexto, cambiar y retomar temas, distinguir observación
-  de causalidad y responder qué sabe, qué no sabe y qué necesita investigar.
+  Determinar el mecanismo mínimo, seguro y generalizable para que un follow-up
+  dentro de un contexto diario pueda cambiar de métrica (por ejemplo venta ↔
+  descuento/kg) conservando la fecha activa cuando ésta sigue siendo válida,
+  sin repetir “ayer”, sin heredar erróneamente el pack de la métrica anterior,
+  sin phrasebook y sin inventar fechas.
 
 baseline:
-  functional_coverage: "10.5 / 20 = 52.5%"
+  global: "10.5 / 20 = 52.5%"
   percentage_effect: "0.0 pp"
 
-fixed_bottlenecks_not_to_reselect:
-  - "GAP-002: daily sales routed to monthly"
-  - "GAP-003: closed follow-up phrasebook"
-  - "GAP-004: Action Register person/action routing"
-  - "GAP-005: daily discount/kg missing pack"
-  - "GAP-006: intra-session topic return/context discard"
+  prior_audit:
+    task: "AUDIT-DIRECTOR-IA-CONVERSATIONAL-PRODUCT-GAP-007"
+    bottleneck: "daily_followup_keeps_prior_metric_pack"
+    failure_class: "OVERPROGRAMMING"
 
-current_verified_capabilities:
-  - "plant_diagnosis multi-source"
-  - "financial_diagnosis multi-source"
-  - "daily_sales_deviation"
-  - "daily_discount_deviation"
-  - "action_status by responsible/action"
-  - "natural follow-up inheritance strategy B"
-  - "structured_conversation_state"
-  - "exactly one previous_frame"
-  - "pending_work_items_only in repository"
-  - "fresh requery"
-  - "commercial materiality/coverage"
+north_star: >
+  En una conversación ejecutiva, si ya se estableció una fecha diaria válida y
+  el usuario cambia inequívocamente de métrica, Director IA debe conservar la
+  fecha, cambiar al pack correcto y reconsultar evidencia fresca.
 
-product_method:
+canonical_failure:
+
   sequence:
-    - "ask naturally"
-    - "observe"
-    - "trace physical runtime"
-    - "classify failure"
-    - "select exactly one bottleneck"
-
-  rule: >
-    Do not infer the next task from the known backlog. The conversation must
-    demonstrate the next bottleneck.
-
-failure_classes:
-  - "MISSING_DATA"
-  - "MISSING_INFRASTRUCTURE"
-  - "MODEL_REASONING_LIMIT"
-  - "OVERPROGRAMMING"
-  - "DEPLOYMENT_GAP"
-  - "CONTRACT_OR_AUTHZ_LIMIT"
-
-mandatory_executive_conversation:
-
-  turns:
-    - "¿Cómo va Puebla?"
-    - "¿Qué te preocupa?"
-    - "¿Y Arturo?"
-    - "¿Qué sabes realmente de él?"
-    - "¿Qué te falta saber?"
-    - "¿Para qué necesitas ese dato?"
     - "¿Cómo estuvo la venta ayer?"
-    - "¿Qué fue lo más importante?"
-    - "¿Quién explica más la caída?"
-    - "¿Sabemos por qué?"
     - "¿Y el descuento?"
     - "¿Quién lo movió más?"
     - "¿Tenemos explicación?"
-    - "Volvamos a Arturo."
-    - "¿Qué era lo que faltaba?"
-    - "¿Tiene alguna acción?"
-    - "¿Está vencida?"
-    - "¿Por qué sigue abierta?"
-    - "Retomemos la venta de ayer."
-    - "¿Qué sigue sin explicación?"
-    - "¿Quién podría aclararlo?"
-    - "¿Para qué necesitamos preguntárselo?"
-    - "Ahora dime el presupuesto."
-    - "¿Qué te llama la atención?"
-    - "Volvamos a Puebla."
-    - "¿Qué revisarías primero?"
 
-  purpose: >
-    Evaluar si Director IA sostiene una conversación larga sin reiniciar
-    contexto, mezclar dominios o requerir wording especial.
+  physical_current_behavior:
+    - "turno 1 -> daily_sales_deviation"
+    - "active_date disponible"
+    - "turno 2 planner aislado -> unknown"
+    - "classifyTurnKind -> pronoun"
+    - "strategy B hereda daily_sales_deviation"
+    - "forceIntent = daily_sales_deviation"
+    - "sales pack se recarga"
+    - "daily discount pack NO se carga"
 
-holdout_conversation:
+  desired_behavior: >
+    El turno que cambia inequívocamente a descuento debe conservar active_date,
+    cambiar a daily_discount_deviation, hacer requery y luego permitir que los
+    siguientes follow-ups hereden descuento.
 
-  rule: >
-    Usar además una conversación equivalente con formulaciones NO presentes en
-    tests ni phrasebooks conocidos.
+central_principle: >
+  En contexto diario:
+  conservar fecha != conservar métrica.
 
-  example_variants_for_test_design_only:
-    - "¿Qué ves raro?"
-    - "¿Y él qué?"
-    - "¿Qué me falta entender?"
-    - "¿De dónde sale eso?"
-    - "¿Qué otro foco ves?"
-    - "Regresemos a lo anterior."
-    - "¿Qué quedaba pendiente ahí?"
-    - "¿Quién tendría que explicarnos eso?"
-    - "¿Qué podríamos concluir si tuviéramos ese dato?"
+anti_solution:
+  forbidden:
+    - "hardcode exacto de '¿Y el descuento?'"
+    - "hardcode exacto de '¿Y la venta?'"
+    - "listas extensas de frases"
+    - "phrasebook métrica por métrica"
+    - "segunda llamada LLM para routing"
+    - "usar previous_frame para resolver un cambio de métrica dentro del mismo día"
+    - "inventar active_date cuando no existe"
 
-  warning: >
-    No convertir estos ejemplos en reglas de producción.
-
-trace_each_turn:
-
-  required:
-    - "isolated planner intent"
-    - "effective intent"
-    - "parent_intent"
-    - "previous_frame before/after"
-    - "inherit yes/no"
-    - "active entity"
-    - "active date"
-    - "plant scope"
-    - "sources loaded"
-    - "fresh requery yes/no"
-    - "evidence supplied to GPT"
-    - "limitations supplied"
-    - "GPT invoked yes/no"
-    - "deterministic response yes/no"
-    - "failure point"
-    - "whether answer can naturally support next turn"
-
-conversation_quality_dimensions:
-
-  continuity:
-    - "does it know what we are still discussing?"
-    - "does it survive topic changes?"
-    - "does return work?"
-
-  grounding:
-    - "correct sources?"
-    - "correct period?"
-    - "correct entity?"
-    - "fresh evidence?"
-
-  executive_value:
-    - "does answer say what matters?"
-    - "does it distinguish magnitude from cause?"
-    - "does it identify priorities without inventing?"
-
-  information_gap:
-    - "what is known?"
-    - "what is not known?"
-    - "what exact datum is missing?"
-    - "why is it needed?"
-    - "who can provide it only if physically linked?"
-    - "what analysis/decision does it unlock?"
-
-  conversational_naturalness:
-    - "does user need canonical wording?"
-    - "does answer feel reset?"
-    - "does GPT get enough freedom?"
-
-  truth:
-    - "contribution != causality"
-    - "comment != fact"
-    - "responsible != culprit"
-    - "memory != evidence"
-    - "history != evidence"
-
-information_gap_stress_test:
-
-  mandatory_cases:
-    - "sales contributor with no explanation"
-    - "discount contributor with no explanation"
-    - "overdue action with no delay reason"
-    - "Arturo tradeoff missing client economics"
-
-  target_behavior: >
-    Director IA should not stop at “no hay información suficiente” if the
-    current pack can identify the missing datum and why it matters.
-
-  audit_question: >
-    Is the remaining weakness lack of evidence structure, routing, or GPT
-    reasoning quality?
-
-tradeoff_case:
-
-  conversation:
-    - "Arturo dejó de comprar y dicen que la competencia le ofrece más."
-    - "¿Conviene recuperarlo?"
-    - "¿Y si igualar la condición nos destruye margen?"
-    - "¿Qué necesitas para poder decidir?"
-    - "¿Qué calcularías con ese dato?"
-
-  rule: >
-    Do not require Director IA to calculate an answer that current data cannot
-    support. Evaluate whether it correctly identifies the missing economics.
-
-persistent_memory_case:
-
-  repository_state: "IMPLEMENTED"
-  environment_SQL017: "UNCONFIRMED unless physical evidence exists"
-
-  rule: >
-    Do not confuse deployment with conversational architecture.
-
-  audit:
-    - "whether this materially blocks current target experience"
-    - "whether repo behavior is otherwise sound"
-
-one_previous_frame_limit:
-
-  mandatory:
-    - "test a return to immediate previous topic"
-    - "test a return to a topic older than previous_frame"
-
-  expected:
-    immediate_previous: "may work"
-    older_topic: "must not silently recover wrong context"
-
-  question: >
-    Is the one-frame limitation now a material real-world blocker, or is it an
-    acceptable first-slice constraint?
-
-reasoning_boundary_audit:
+mandatory_runtime_audit:
 
   inspect:
-    - "remaining deterministic early returns"
-    - "gap templates"
-    - "topic-return guards"
-    - "special routing"
-    - "response shortcuts"
+    - "lib/director-ia-planner.js"
+    - "isDailySalesDeviationQuestion"
+    - "isDailyDiscountDeviationQuestion"
+    - "lib/director-ia-conversation-state.js"
+    - "classifyTurnKind"
+    - "inherit / resolveConversationTurn"
+    - "active_date"
+    - "parent_intent"
+    - "lib/director-ia-chat.js"
+    - "forceIntent"
+    - "daily sales loader"
+    - "daily discount loader"
+    - "previous_frame interaction"
 
-  classify:
-    - "KEEP_DETERMINISTIC"
-    - "LET_GPT_REASON"
-    - "MIXED"
+  trace_exactly:
+    - "venta ayer -> ¿Y el descuento?"
+    - "descuento ayer -> ¿Y la venta?"
+    - "venta ayer -> ¿Y el descuento/kg?"
+    - "descuento ayer -> ¿Y las ventas?"
+    - "venta ayer -> ¿Y margen?"
+    - "venta ayer -> ¿Y eso?"
+    - "venta ayer -> ¿Y el presupuesto?"
 
-  rule: >
-    If GPT already has sufficient structured evidence and limitations, prefer
-    not to add deterministic conversational reasoning.
+metric_semantics:
 
-regression_of_previous_fixes:
+  daily_metrics_in_scope:
+    - "sales"
+    - "discount_per_kg"
 
-  must_verify:
-    - "daily sales still daily"
-    - "daily discount still daily"
-    - "AR action/person still routes"
-    - "follow-ups still generalize"
-    - "topic return works"
-    - "no blind AR fallback"
-    - "memory not used as topic stack"
+  required_mapping:
+    sales:
+      canonical_intent: "daily_sales_deviation"
 
-  rule: >
-    If a previous fix regressed, identify regression; do not pretend it is a new
-    product gap.
-
-single_bottleneck:
-
-  exactly_one: true
-
-  required_fields:
-    - "name"
-    - "failure_class"
-    - "physical_location"
-    - "affected conversational turns"
-    - "evidence"
-    - "why this is now the largest blocker"
-    - "what fixing it unlocks"
-    - "what it does NOT solve"
-
-  selection_rule: >
-    Choose by impact on real executive conversation. Do not choose by module
-    percentage, backlog order, ease or recency.
-
-next_task:
-  exactly_one: true
-  authorize: false
-  execute: false
-
-  allowed_types:
-    - "ARCH readiness"
-    - "IMPL if fully proven"
-    - "SIMPLIFICATION"
-    - "DEPLOYMENT"
-    - "DATA readiness"
+    discount:
+      canonical_intent: "daily_discount_deviation"
 
   rule: >
-    NEXT_TASK must directly attack the single demonstrated bottleneck.
+    Auditar cómo detectar la métrica nombrada en el turno sin exigir la fecha
+    nuevamente.
+
+metric_signal:
+
+  question: >
+    ¿Qué señal estructural ya existe para identificar que el usuario está
+    nombrando una métrica distinta aunque el planner aislado no forme todavía
+    un intent diario completo?
+
+  candidates:
+    A_planner_existing_semantics:
+      description: >
+        Reutilizar detectores/semántica existentes de ventas/descuento,
+        separando métrica de fecha.
+
+    B_post_planner_metric_switch:
+      description: >
+        Si planner=unknown, contexto actual es diario y el turno contiene una
+        métrica diaria inequívoca distinta, cambiar intent conservando active_date.
+
+    C_new_cross_metric_intent:
+      description: >
+        Crear intent específico para cambio de métrica diario.
+
+    D_phrasebook:
+      description: "listar frases como 'y el descuento'"
+
+  requirement:
+    - "comparar A/B/C/D"
+    - "seleccionar exactamente una estrategia"
+    - "preferir reuse de semántica existente"
+    - "no crear intent nuevo si no es necesario"
+
+date_inheritance:
+
+  allowed_only_if:
+    - "current parent_intent is a daily metric intent"
+    - "active_date exists"
+    - "active_date remains valid under current timezone semantics"
+    - "user does not explicitly provide another date"
+
+  rule: >
+    La fecha puede heredarse; la métrica debe venir del turno actual.
+
+  explicit_date_precedence:
+    examples:
+      - "¿Y el descuento de hoy?"
+      - "¿Y la venta del lunes?"
+    rule: >
+      Una fecha explícita nueva debe ganar sobre active_date heredada.
+
+  no_date_context:
+    example: "¿Y el descuento?"
+    state: "no active daily date"
+    expected: >
+      No inventar ayer. Debe usar routing/clarification normal.
+
+cross_metric_switch:
+
+  desired:
+    from_sales_to_discount:
+      precondition:
+        - "parent_intent = daily_sales_deviation"
+        - "active_date valid"
+        - "turn names discount metric"
+      result:
+        - "effective_intent = daily_discount_deviation"
+        - "same active_date"
+        - "requery discount pack"
+
+    from_discount_to_sales:
+      precondition:
+        - "parent_intent = daily_discount_deviation"
+        - "active_date valid"
+        - "turn names sales metric"
+      result:
+        - "effective_intent = daily_sales_deviation"
+        - "same active_date"
+        - "requery sales pack"
+
+  rule: >
+    Cross-metric switch is symmetric unless physical evidence shows otherwise.
+
+same_metric_followup:
+
+  examples:
+    - "venta ayer -> ¿Quién explicó más?"
+    - "descuento ayer -> ¿Quién lo movió más?"
+    - "venta ayer -> ¿Y eso?"
+    - "descuento ayer -> ¿Qué más?"
+
+  rule: >
+    Strategy B inheritance remains valid when the current turn does NOT name a
+    different metric.
+
+metric_ambiguity:
+
+  examples:
+    - "¿Y eso?"
+    - "¿Y cómo estuvo?"
+    - "¿Y lo otro?"
+    - "¿Y margen?"
+
+  required:
+    - "do not switch metric unless signal is sufficiently specific"
+    - "unknown + valid state may continue parent intent"
+    - "unsupported metric should not be forced into sales/discount"
+
+  rule: >
+    No adivinar una métrica diaria.
+
+daily_vs_monthly_boundary:
+
+  examples:
+    - "¿Y el descuento?" inside daily context
+    - "¿Cómo va el descuento este mes?"
+    - "¿Y la venta mensual?"
+
+  requirement: >
+    Contexto diario puede aportar fecha solo al cambio diario. Una señal
+    explícitamente mensual debe tomar su path mensual correspondiente.
+
+previous_frame_boundary:
+
+  rule: >
+    previous_frame no se usa para el cambio de métrica dentro del mismo marco
+    temporal diario.
+
+  reason: >
+    Esto no es “volver a un tema anterior”; es cambiar de métrica conservando
+    fecha.
+
+persistent_memory_boundary:
+  use: false
+  invariant: >
+    Persistent memory no participa en cross-metric follow-up.
+
+evidence_policy:
+
+  required:
+    - "requery every switch"
+    - "fresh loader for target metric"
+    - "authz current"
+    - "provenance current"
+    - "absence/error semantics current"
+
+  invariant: >
+    Shared date context != shared evidence.
+
+conversation_state:
+
+  audit:
+    - "active_date should remain"
+    - "parent_intent must change"
+    - "last_evidence_bundle_type must change"
+    - "pending gap from old metric should not silently survive if incompatible"
+    - "entity compatibility if any"
+
+  desired_after_switch:
+    - "parent_intent = target metric"
+    - "active_date = inherited/revalidated"
+    - "bundle type = target metric"
+    - "new limitations/gap derived from target pack"
+
+gap_reset:
+
+  mandatory_audit: >
+    Determine whether pending_information_gap from prior metric must be replaced
+    when switching metrics.
+
+  principle: >
+    Sales gap must not become discount gap merely because date is shared.
+
+GPT_boundary:
+
+  runtime_owns:
+    - "metric recognition"
+    - "date inheritance"
+    - "intent switch"
+    - "requery"
+    - "authz"
+    - "provenance"
+    - "gap replacement"
+
+  GPT_owns:
+    - "interpretation"
+    - "explanation"
+    - "what matters"
+    - "information-gap wording"
+    - "follow-ups"
+
+  rule: >
+    Do not ask GPT to repair a wrong metric pack after the fact.
+
+generalization:
+
+  canonical_examples:
+    - "¿Y el descuento?"
+    - "¿Y las ventas?"
+
+  holdout_examples_for_tests_only:
+    - "¿Qué pasó con el descuento?"
+    - "¿Y en descuento cómo quedó?"
+    - "¿Qué tal las ventas?"
+    - "¿Cómo salió la venta?"
+    - "¿Y el descuento por kilo?"
+
+  rule: >
+    Hold-outs test semantic generalization. Do not copy phrases into production
+    routing.
+
+solution_candidates:
+
+  A_refactor_daily_metric_detection:
+    description: >
+      Separar detección de métrica diaria de detección de fecha, reutilizando
+      los detectores actuales.
+
+  B_contextual_metric_switch_after_unknown:
+    description: >
+      Post-planner: unknown + active daily context + target metric signal
+      -> switch intent and inherit date.
+
+  C_new_cross_metric_intent:
+    description: >
+      Introducir una nueva intención dedicada al cambio de métrica.
+
+  D_phrasebook:
+    description: "enumerar frases"
+
+  requirement:
+    - "comparar A/B/C/D"
+    - "seleccionar exactamente un first slice"
+    - "priorizar mínima complejidad y generalización"
+
+tests_to_design_if_ready:
+
+  positive:
+    - "sales yesterday -> discount"
+    - "discount yesterday -> sales"
+    - "discount/kg wording"
+    - "sales wording without repeating date"
+    - "same active_date preserved"
+
+  explicit_date:
+    - "new date overrides inherited date"
+    - "today does not silently mean completed day if semantics prohibit it"
+
+  negative:
+    - "no active daily context -> no invented date"
+    - "¿Y eso? stays same metric"
+    - "unsupported metric does not switch"
+    - "monthly wording takes monthly path"
+
+  state:
+    - "parent intent changes"
+    - "bundle type changes"
+    - "old metric gap replaced"
+    - "requery target pack"
+
+  regression:
+    - "same-metric natural followup"
+    - "topic return"
+    - "daily sales"
+    - "daily discount"
+    - "action-person"
+    - "persistent memory"
+    - "full Director IA suite"
+
+contract_audit:
+  inspect:
+    - "Constitution"
+    - "EKE"
+    - "04 IES"
+    - "05 RE"
+
+  determine:
+    - "G2"
+    - "G3"
+
+  expectation: "runtime-only"
+
+readiness_output:
+  must_determine:
+    - "READY / READY_WITH_LIMITS / NOT_READY"
+    - "selected A/B/C/D strategy"
+    - "metric recognition rule"
+    - "date inheritance rule"
+    - "explicit date precedence"
+    - "state transition"
+    - "gap replacement"
+    - "requery"
+    - "ambiguity behavior"
+    - "daily/monthly boundary"
+    - "G2/G3"
+    - "percentage effect"
 
 percentage_policy:
   before: "10.5 / 20 = 52.5%"
-  after: "10.5 / 20 = 52.5%"
-  delta: "0.0 pp"
+  after_readiness: "10.5 / 20 = 52.5%"
+  expected_impl_effect: "0.0 pp"
 
 in_scope:
   writable:
     - "docs/dev-loop/CURRENT_TASK.md"
-    - "docs/dev-loop/reports/AUDIT-DIRECTOR-IA-CONVERSATIONAL-PRODUCT-GAP-007.md"
+    - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-DAILY-CROSS-METRIC-FOLLOWUP-001.md"
 
   read_only:
     - "entire repository except writable files"
@@ -338,29 +444,45 @@ out_of_scope:
   - "matrix changes"
   - "contract changes"
   - "SQL execution"
-  - "new modules"
+  - "topic stack"
+  - "new persistent memory"
+  - "new metrics beyond sales/discount"
   - "commit"
   - "push"
   - "merge"
 
 acceptance_criteria:
-  - "Integrated executive conversation traced."
-  - "Hold-out language tested conceptually."
-  - "Previous five bottlenecks verified as fixed or regression identified."
-  - "Information-gap depth stress-tested."
-  - "Tradeoff behavior audited."
-  - "Persistent-memory deployment separated."
-  - "One-previous-frame limitation evaluated."
-  - "Reasoning boundary audited."
-  - "Exactly one bottleneck selected."
-  - "Exactly one NEXT_TASK proposed."
+  - "Current sticky-metric failure traced."
+  - "Metric detection separated from date if physically valid."
+  - "A/B/C/D compared."
+  - "Exactly one first slice selected."
+  - "Sales ↔ discount symmetry audited."
+  - "Date inheritance defined."
+  - "Explicit date precedence defined."
+  - "No-date behavior safe."
+  - "State/gap transition defined."
+  - "No phrasebook solution."
+  - "Requery preserved."
+  - "G2/G3 determined."
   - "52.5% preserved."
   - "Only task + report changed."
   - "git diff --check clean."
 
-expected_terminal_state: "DONE_PENDING_REVIEW"
+next_task_policy:
+  if_ready:
+    propose_exactly_one: "IMPL-DIRECTOR-IA-DAILY-CROSS-METRIC-FOLLOWUP-001"
+
+  if_not_ready:
+    propose_exactly_one: "ARCH-DIRECTOR-IA-DAILY-CROSS-METRIC-FOLLOWUP-GAP-001"
+
+  rule: "Do not authorize or execute."
+
+expected_terminal_state: >
+  DONE_PENDING_REVIEW if READY/READY_WITH_LIMITS.
+  STOPPED if a product/architecture decision is required.
+  BLOCKED if a gate is missing.
 
 max_attempts: 1
 
 result_report_path: >
-  docs/dev-loop/reports/AUDIT-DIRECTOR-IA-CONVERSATIONAL-PRODUCT-GAP-007.md
+  docs/dev-loop/reports/ARCH-DIRECTOR-IA-DAILY-CROSS-METRIC-FOLLOWUP-001.md
