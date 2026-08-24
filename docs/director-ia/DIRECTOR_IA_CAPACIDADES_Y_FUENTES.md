@@ -63,7 +63,7 @@
 | Chat | `POST /api/director-ia/chat` → `askDirectorIa` (`lib/director-ia-chat.js`) |
 | Routing chat | Regex / heurísticas en `director-ia-chat.js`, `director-ia-igf-arr.js`, `director-ia-commercial-state.js` |
 | Fuentes en GET `sources` | `action_register`, `dicf`, `bitacora_ia`, `cliente_comentarios`, `folio_comentarios` pueden pasar a `true`; `igf`, `arr`, `commercial_state` permanecen `false` en `EMPTY_SOURCES` |
-| Fuentes solo en chat | Anexo IGF/ARR (`loadIgfArrAnnexForChat`), estado comercial (`loadCommercialStateForChat`), Mejora Continua (`loadMejoraContinuaForChat`); M6 GASTOS/INVERSIONES (`loadGastosInversionesForChat`); M4 clasificación query (`loadClasificacionApoyosForChat`) |
+| Fuentes solo en chat | Anexo IGF/ARR (`loadIgfArrAnnexForChat`), estado comercial (`loadCommercialStateForChat`), Mejora Continua (`loadMejoraContinuaForChat`); M6 GASTOS/INVERSIONES (`loadGastosInversionesForChat`); M4 clasificación query (`loadClasificacionApoyosForChat`); M18 presupuesto semanal (`loadPresupuestoSemanalForChat`) |
 | Persistencia de chat | No hay tabla de historial; solo `req.body.history` opcional en el request |
 | Escritura propia del módulo | Bitácora y entidades comerciales vía API CRUD (no vía chat) |
 
@@ -456,19 +456,19 @@
 | **ID** | M18 |
 | **Módulo** | Presupuestos semanales |
 | **Propósito empresarial** | Solicitudes/asignación semanal de presupuesto (carro). |
-| **Cobertura actual de Director IA** | NO INTEGRADA |
-| **Información exacta que sí consulta** | Ninguna de tablas `presupuesto_*`. |
-| **Información que no consulta** | Estado semanal, solicitudes, archivos presupuesto. |
-| **Archivos actuales relacionados** | DDL/lógica en `server.js`; WhatsApp carrito |
-| **Endpoints actuales relacionados** | Sin grupo REST `/api/presupuesto*` inventariado como API dashboard dedicada; operación mayormente bot. |
-| **Tablas o vistas relacionadas** | `public.presupuestos_semanales`, `presupuesto_folios`, `presupuesto_catalogo`, `presupuesto_asignacion_detalle`, `presupuesto_linea_detalle`, `presupuesto_counters`, `presupuesto_solicitudes`, `presupuesto_archivos`, `presupuesto_historial` |
-| **Funciones existentes reutilizables** | Lógica embebida en `server.js` (sin lib Director IA). |
-| **Capacidades de lectura posibles** | CONSULTAR — requeriría herramienta nueva sobre tablas existentes. |
-| **Capacidades de escritura posibles** | Modificar presupuesto / enviar a cheques — ALTO. |
-| **Permisos aplicables** | Roles GG / avance etapa. |
-| **Nivel de riesgo** | ALTO |
-| **Dependencias** | Folios, WhatsApp. |
-| **Observaciones verificadas** | Modelo de datos amplio, UI app limitada (auditoría). |
+| **Cobertura actual de Director IA** | PARCIAL (query JSON read-only del carro semanal por planta). **No** es COMPLETE: el propósito canónico incluye operación del carro, envío a cheques y canal WhatsApp, que permanecen fuera. |
+| **Información exacta que sí consulta** | Carro de `public.presupuestos_semanales` + `public.presupuesto_folios` por `planta_id` y semana. Asignado = `monto_asignado`. Seleccionado = `SUM(presupuesto_folios.importe)`. Disponible = `max(0, asignado - seleccionado)`. Folios: `folio_id`, `numero_folio`, `importe`, `prioridad`; urgente solo si `prioridad` coincide `/urgente/i`. `estatus` del carro si existe. Lookup **sin** filtrar solo `ABIERTO` (un carro enviado/cerrado sigue consultable). Semana: fechas explícitas `YYYY-MM-DD` / `DD/MM/AAAA`; `getCurrentWeekMexico()` solo con «esta semana», «semana actual», «mi presupuesto» o pregunta #17 (`presupuesto semanal`); si no hay fecha ni trigger, clarifica (no inventa semana). 0 filas = `DATA_NOT_FOUND` (no INSERT). Seleccionado ≠ pagado; presupuesto ≠ cheque; asignado ≠ aprobado. |
+| **Información que no consulta** | `presupuesto_asignacion_detalle` (asignación mensual; otro dominio). Asignar/reemplazar monto. Seleccionar/quitar folios. `enviarPresupuestoACheques`. Crear cheque. Twilio/WhatsApp/notificaciones. Solicitudes PRE-YYYYMM, archivos S3, catálogo, línea detalle. No afirma pagado, cheque emitido, desviación ni causa. |
+| **Archivos actuales relacionados** | `lib/director-ia-m18-presupuesto-semanal.js`; wiring en `lib/director-ia-chat.js`, `lib/director-ia-tools.js`, `lib/director-ia-capabilities.js`, `lib/director-ia-planner.js`. DDL/writes/bot en `server.js` **no** usados como transporte. |
+| **Endpoints actuales relacionados** | Chat: `POST /api/director-ia/chat` (in-process). Sin grupo REST `/api/presupuesto*` como transporte interno. WhatsApp carrito **no** se usa. |
+| **Tablas o vistas relacionadas** | Lectura: `public.presupuestos_semanales`, `public.presupuesto_folios`. El resto de `presupuesto_*` (asignación mensual, solicitudes, archivos) **sigue fuera**. |
+| **Funciones existentes reutilizables** | `loadPresupuestoSemanalForChat` → SELECT (equivalente a `getPresupuestoResumen`) + `assertFolioStatusAccess`. **No** `linkFoliosToPresupuesto`. **No** `enviarPresupuestoACheques`. **No** `sendWhatsApp`. |
+| **Capacidades de lectura posibles** | CONSULTAR/RESUMIR carro semanal. |
+| **Capacidades de escritura posibles** | Modificar presupuesto / enviar a cheques — ALTO; **no** en Director IA. |
+| **Permisos aplicables** | JWT/contexto; rol; `planta_id` obligatorio; `plantas_permitidas`; `assertFolioStatusAccess`; GV 403; GA solo en planta autorizada; cross-planta 403; fail-closed. |
+| **Nivel de riesgo** | MEDIO (lectura); ALTO (writes/cheques — fuera). |
+| **Dependencias** | Folios. WhatsApp/Twilio **no** son dependencia de este slice. Distinto de M4, M6, M7 e IGF. |
+| **Observaciones verificadas** | `IMPL-DIRECTOR-IA-M18-PRESUPUESTO-SEMANAL-001` (integrado en main, `719b3eaa`). Tests: focales 24/24; capabilities 46/46; planner 40/40; orchestrator 24/24; suite `test/director-ia-*.test.js` 599/599; `git diff --check` limpio. Cheques/Twilio/WhatsApp/writes **siguen fuera**. Scoring M0–M20 del loop (COMPLETE=1.0, PARCIAL/INDIRECTA=0.5, NO INTEGRADA=0.0): 9.5/20 = 47.5% → **10.0/20 = 50.0%**. |
 
 ### M19 — Delta Ingreso AI (test)
 
@@ -790,13 +790,13 @@
 ### Fuente: Presupuestos semanales
 
 - **Dominio:** Presupuesto / carro (M18)
-- **Cobertura actual:** NO INTEGRADA
-- **Archivo de acceso:** Lógica en `server.js` + tablas `presupuesto_*`
-- **Función de acceso:** No hay función Director IA
-- **Endpoint relacionado:** Sin API REST dashboard dedicada inventariada; WhatsApp carrito
-- **Tablas consultadas:** `public.presupuesto_*` (listadas en auditoría)
-- **Evidencia de integración actual:** No integrada
-- **Información que no puede concluirse con esta fuente:** Cómo va el presupuesto semanal
+- **Cobertura actual:** PARCIAL (query JSON del carro semanal; writes/cheques/WhatsApp no integrados)
+- **Archivo de acceso:** `lib/director-ia-m18-presupuesto-semanal.js`
+- **Función de acceso:** `loadPresupuestoSemanalForChat` (in-process)
+- **Endpoint relacionado:** Chat `POST /api/director-ia/chat`. Bot WhatsApp y writes de `server.js` **no** usados
+- **Tablas consultadas:** `public.presupuestos_semanales`, `public.presupuesto_folios`
+- **Evidencia de integración actual:** Intent `budget_status` → tool `get_budget_status` → SELECT + fórmulas de `getPresupuestoResumen`
+- **Información que no puede concluirse con esta fuente:** Pagado; cheque emitido; aprobado IGF; `presupuesto_asignacion_detalle`; asignación/selección/envío a cheques; Twilio/WhatsApp
 
 ### Fuente: Cheques o datos equivalentes
 
@@ -968,7 +968,7 @@
 | 14 | ¿Existen posibles folios duplicados? | Sí (heurístico; candidatos, no confirmación) | COMPLETA | Duplicados | `loadDuplicateFoliosForChat` / `findDuplicatePairs` | Confirmación humana; cancelación; `/check` al crear; pares fuera de ventana o `LIMIT 1500` | Alto si se lee como duplicado confirmado o fraude |
 | 15 | ¿Qué gastos existen por planta? | Parcialmente (listado folios GASTOS si wording es categoría/folios + `YYYY-MM`; no Excel) | PARCIAL | Folios categoría GASTOS (`public.folios` + `expandCategoriaRows`) | `loadGastosInversionesForChat("GASTOS")` / `get_expense_analysis` | Export/xlsx; «cómo van los gastos» / margen / rentabilidad siguen IGF (M7) | Alto si se lee como IGF o como Export |
 | 16 | ¿Qué inversiones están pendientes? | Parcialmente (listado folios INVERSIONES no cancelados si hay `YYYY-MM`; «pendiente» no es etapa almacenada) | PARCIAL | Folios categoría INVERSIONES | `loadGastosInversionesForChat("INVERSIONES")` / `get_investment_analysis` | Export/xlsx; etapa «pendiente»; mes inventado | Alto si se afirma pendiente como estatus |
-| 17 | ¿Cómo va el presupuesto semanal? | No | NO INTEGRADA | Presupuestos | Tablas `presupuesto_*` / bot carrito | Toda la fuente | Alto |
+| 17 | ¿Cómo va el presupuesto semanal? | Sí (carro read-only por planta/semana; no writes ni cheques) | PARCIAL | Presupuestos (`presupuestos_semanales` + `presupuesto_folios`) | `loadPresupuestoSemanalForChat` / `get_budget_status` (SELECT-only; no solo `ABIERTO`) | Asignar/seleccionar; cheques; WhatsApp; `presupuesto_asignacion_detalle`; semana inventada | Alto si se lee como pagado, cheque o asignación mensual |
 | 18 | ¿Qué proyectos están retrasados? | Sí (listado EN_CURSO; «retrasado» no es estatus almacenado) | COMPLETA (consulta del módulo; el retraso solo puede declararse como derivado de `fecha_cierre_estimada`) | Proyectos | `loadProyectosForChat` / `get_project_status` | Estatus oficial de retraso; crear/editar/eliminar | Alto si se lee como estatus almacenado o como Action Register |
 | 19 | ¿Qué usuario realizó un movimiento? | Parcialmente (folios: `actor_telefono`/`actor_rol` observados si existen; null ≠ sistema); parcial en AR/DICF | PARCIAL | Historial folio vs historial DICF/AR | `loadFolioHistoryForChat` (actor observado) vs detalles DICF/AR summarizers | Responsabilidad inferida; actor sistema; usuario canónico si actor es null | Alto si se atribuye mal |
 | 20 | ¿Qué información no puede consultar Director IA? | Sí (meta) | COMPLETA (esta pregunta de catálogo) | Este documento + `EMPTY_SOURCES` | N/A | — | Bajo si se responde con catálogo |
@@ -1056,7 +1056,7 @@ Escala 1–5. Prioridad derivada de: valor ejecutivo × disponibilidad de funcio
 | GASTOS/INVERSIONES (query, no solo xlsx) | 4 | 4 | 3 | 3 | Folios; query JSON ya en PARCIAL M6 | **Hecha (PARTIAL)**; Export/xlsx sigue fuera |
 | Taller por AT (agregados) | 3 | 4 | 3 | 3 | `unidad-taller` | **Media** |
 | Duplicados (`folio-duplicados`) | 3 | 4 | 2 | 3 | Folios | **Media** |
-| Presupuesto semanal | 4 | 3 (UI limitada) | 4 (lógica en `server.js`) | 4 | Folios, bot | **Media-Baja** |
+| Presupuesto semanal | 4 | 4 | 3 | 3 | Folios; query JSON ya en PARCIAL M18 | **Hecha (PARTIAL)**; writes/cheques/WhatsApp siguen fuera |
 | Proyectos | 3 | 4 | 2 | 2 | Plantas | **Media-Baja** |
 | Clasificación de apoyos (solo lectura matriz) | 3 | 4 | 3 | 3 | Folios; query JSON ya en PARCIAL M4 | **Hecha (PARTIAL)**; COMPARAR/Excel siguen fuera |
 | Weekly discount LD | 2 | 3 | 2 | 2 | ARR, Twilio | **Baja** |
@@ -1187,11 +1187,11 @@ Escala 1–5. Prioridad derivada de: valor ejecutivo × disponibilidad de funcio
 
 | Campo | Contenido |
 |-------|-----------|
-| **Evidencia** | Auditoría M18: muchas tablas `presupuesto_*`; sin página `app/presupuesto`. |
-| **Impacto posible** | Integrar lectura IA requiere entender lógica bot en `server.js`. |
+| **Evidencia** | Query read-only M18 integrada (`loadPresupuestoSemanalForChat` sobre `presupuestos_semanales` + `presupuesto_folios`). Siguen existiendo otras tablas `presupuesto_*` (asignación mensual, solicitudes) y el bot WhatsApp. |
+| **Impacto posible** | Confundir el carro semanal con `presupuesto_asignacion_detalle`, cheques o el canal WhatsApp. |
 | **Dominios afectados** | M18, M2 (carro). |
-| **¿Bloquea expansión?** | Sí para una respuesta fiable de «presupuesto semanal» hasta mapear queries. |
-| **Información adicional** | Flujos WhatsApp carrito y estados canónicos. |
+| **¿Bloquea expansión?** | No para la query del carro. Sí para writes, cheques y Twilio/WhatsApp (fuera de PARTIAL). |
+| **Información adicional** | Flujos WhatsApp carrito y estados canónicos siguen fuera de Director IA. |
 
 ### 11. Tres mecanismos distintos para detectar duplicados
 
@@ -1229,7 +1229,7 @@ Escala 1–5. Prioridad derivada de: valor ejecutivo × disponibilidad de funcio
 
 ### 1. Resumen de cobertura real actual
 
-Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Register**, **DICF**, **bitácora**, **comentarios** (cliente y folio) y **entidades comerciales**, con **anexos financieros on-demand** (IGF/ARR/margen/estado comercial) activados por **regex** en el chat, **análisis on-demand de posibles duplicados de folios** (M16: `findDuplicatePairs`, no confirmación), **consulta on-demand de KPIs de dashboard y proyectos por planta** (M3: `get_dashboard_kpis` / `get_project_status`; no catálogo global; no creación de proyectos), **consulta on-demand de Delta Venta / Descuento / Ingreso de periodos reales** (M9: `get_delta_sales` / `get_delta_discount` / `get_delta_income`; no forecast con escritura; no M19), **consulta on-demand de estatus/etapa de folio** (M2 slice `folio_status`: `get_folio_status` / `loadFolioStatusForChat`; SELECT-only; no GET kanban; no GET `/folios/:id`; no autoavance), **consulta on-demand del historial de folio** (M2 slice `folio_history`: `get_folio_history` / `loadFolioHistoryForChat`; SELECT-only de `public.folio_historial`; no GET `/timeline`; no `dedupeHistorialByStage`; no autoavance), **consulta on-demand de metadata documental de folio** (M2 slice `folio_documents`: `get_folio_documents` / `loadFolioDocumentsMetadataForChat`; SELECT-only de `public.folio_archivos` con proyección segura; no S3; no PDF; no `s3_key`; no «faltan documentos»), y **consulta on-demand de GASTOS e INVERSIONES de folios** (M6 slice query JSON: `get_expense_analysis` / `get_investment_analysis` / `loadGastosInversionesForChat`; SELECT `public.folios` + `expandCategoriaRows`; `YYYY-MM` obligatorio; no Excel; no Export; no IGF), y **consulta on-demand de la matriz comparativa de clasificación de apoyos** (M4 slice query JSON: `get_clasificacion_apoyos_query` / `loadClasificacionApoyosForChat`; SELECT `public.folios` + `buildClasificacionMatrix`; `mes_a` vs `mes_b` obligatorios y distintos; GASTOS / INVERSIONES / TALLER separados; sin fallback a 6 plantas; no COMPARAR; no Excel). **No** opera el kanban HTTP, **no** usa `/timeline` como transporte interno, **no** lee contenido PDF/S3/pólizas/cheques/presupuestos/COMPARAR-Excel de clasificación/taller/Export xlsx GASTOS-INVERSIONES ni el forecast mutante de ingreso. Las escrituras propias (bitácora/entidades) existen por **API UI**, no como tools autónomos del LLM. El GET `/api/director-ia/context` **subdeclara** IGF/ARR/commercial_state respecto al chat.
+Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Register**, **DICF**, **bitácora**, **comentarios** (cliente y folio) y **entidades comerciales**, con **anexos financieros on-demand** (IGF/ARR/margen/estado comercial) activados por **regex** en el chat, **análisis on-demand de posibles duplicados de folios** (M16: `findDuplicatePairs`, no confirmación), **consulta on-demand de KPIs de dashboard y proyectos por planta** (M3: `get_dashboard_kpis` / `get_project_status`; no catálogo global; no creación de proyectos), **consulta on-demand de Delta Venta / Descuento / Ingreso de periodos reales** (M9: `get_delta_sales` / `get_delta_discount` / `get_delta_income`; no forecast con escritura; no M19), **consulta on-demand de estatus/etapa de folio** (M2 slice `folio_status`: `get_folio_status` / `loadFolioStatusForChat`; SELECT-only; no GET kanban; no GET `/folios/:id`; no autoavance), **consulta on-demand del historial de folio** (M2 slice `folio_history`: `get_folio_history` / `loadFolioHistoryForChat`; SELECT-only de `public.folio_historial`; no GET `/timeline`; no `dedupeHistorialByStage`; no autoavance), **consulta on-demand de metadata documental de folio** (M2 slice `folio_documents`: `get_folio_documents` / `loadFolioDocumentsMetadataForChat`; SELECT-only de `public.folio_archivos` con proyección segura; no S3; no PDF; no `s3_key`; no «faltan documentos»), y **consulta on-demand de GASTOS e INVERSIONES de folios** (M6 slice query JSON: `get_expense_analysis` / `get_investment_analysis` / `loadGastosInversionesForChat`; SELECT `public.folios` + `expandCategoriaRows`; `YYYY-MM` obligatorio; no Excel; no Export; no IGF), y **consulta on-demand de la matriz comparativa de clasificación de apoyos** (M4 slice query JSON: `get_clasificacion_apoyos_query` / `loadClasificacionApoyosForChat`; SELECT `public.folios` + `buildClasificacionMatrix`; `mes_a` vs `mes_b` obligatorios y distintos; GASTOS / INVERSIONES / TALLER separados; sin fallback a 6 plantas; no COMPARAR; no Excel), y **consulta on-demand del carro presupuestal semanal** (M18 slice query JSON: `get_budget_status` / `loadPresupuestoSemanalForChat`; SELECT `presupuestos_semanales` + `presupuesto_folios`; no inventa semana; no filtra solo `ABIERTO`; no writes; no cheques; no WhatsApp; no `presupuesto_asignacion_detalle`). **No** opera el kanban HTTP, **no** usa `/timeline` como transporte interno, **no** lee contenido PDF/S3/pólizas/cheques/COMPARAR-Excel de clasificación/taller/Export xlsx GASTOS-INVERSIONES ni el forecast mutante de ingreso. Las escrituras propias (bitácora/entidades) existen por **API UI**, no como tools autónomos del LLM. El GET `/api/director-ia/context` **subdeclara** IGF/ARR/commercial_state respecto al chat.
 
 ### 2. Dominios completos (COMPLETA)
 
@@ -1250,6 +1250,7 @@ Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Re
 - M11 DICF + comentarios cliente
 - M12 Action Register (+ Mejora Continua)
 - M17 WhatsApp (solo link de acceso)
+- M18 Presupuestos semanales (query JSON del carro; no writes; no cheques; no WhatsApp; no COMPLETE)
 
 ### 4. Dominios indirectos (INDIRECTA)
 
@@ -1264,7 +1265,7 @@ Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Re
 - M10 Weekly discount LD  
 - M14 Usuarios admin (como dominio)  
 - M15 Documentos/medios  
-- M18 Presupuestos semanales  
+- M18 writes / cheques / WhatsApp (el query JSON ya está en PARCIAL M18; COMPLETE de M18 sigue fuera)
 - M19 Delta Ingreso AI test  
 - Kanban HTTP / GET `/timeline` (excluido) / contenido PDF / S3 / documentos faltantes / cheque / póliza / `kanban_flow` (estatus/etapa, historial crudo y metadata documental ya están en PARCIAL M2; proyectos de `public.proyectos` ya están en COMPLETA M3)
 
@@ -1290,6 +1291,7 @@ Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Re
 | CONSULTAR GASTOS de folios (read-only, `YYYY-MM`) | `loadGastosInversionesForChat("GASTOS")` → SELECT + `expandCategoriaRows` |
 | CONSULTAR INVERSIONES de folios (read-only, `YYYY-MM`) | `loadGastosInversionesForChat("INVERSIONES")` → SELECT + `expandCategoriaRows` |
 | COMPARAR matriz de clasificación (`mes_a` vs `mes_b`, read-only) | `loadClasificacionApoyosForChat` → SELECT + `buildClasificacionMatrix` |
+| CONSULTAR presupuesto semanal / carro (read-only) | `loadPresupuestoSemanalForChat` → SELECT `presupuestos_semanales` + `presupuesto_folios` |
 
 ### 7. Capacidades que requieren herramientas nuevas (aunque exista API/lib)
 
@@ -1302,7 +1304,7 @@ Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Re
 | Excel/agregados Taller, GASTOS, INVERSIONES | Query JSON M6 ya integrado (SELECT + `expandCategoriaRows`). Libs Excel Taller/GASTOS/INVERSIONES siguen existiendo | Export/xlsx M6; Taller AT (M5); no usar workbook como transporte |
 | Clasificación COMPARAR / Excel | Query JSON M4 ya integrado (SELECT + `buildClasificacionMatrix`). POSTs COMPARAR y workbook siguen existiendo | COMPARAR writes (`insertFolio` / `UPDATE mes_cargo`); Excel/xlsx; no COMPLETE |
 | Deltas UI (forecast con escritura / M19) | Sí (`delta-ingreso-forecast`, `/api/ai/delta-ingreso/test/*`) | La lectura de periodos reales ya está en COMPLETA M9; faltan forecast mutante y M19, a propósito fuera |
-| Presupuesto semanal | Tablas sí; API UI limitada | Queries/tool + mapeo bot |
+| Presupuesto semanal (writes / cheques / WhatsApp) | Query JSON M18 ya integrado (SELECT + `getPresupuestoResumen`). Writes y bot existen en `server.js` | Asignar/seleccionar; enviar a cheques; Twilio/WhatsApp; no COMPLETE |
 | Proyectos (crear/editar/eliminar) | Sí (`POST /api/proyectos`) | Escritura; la lectura M3 ya está integrada |
 | KPIs dashboard (lectura) | Sí (integrado M3) | — |
 | Weekly LD | Sí | Tool |
