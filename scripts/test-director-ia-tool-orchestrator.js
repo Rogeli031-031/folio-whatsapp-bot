@@ -310,7 +310,9 @@ const cases = [
     assert(isDirectorIaToolExecutable("get_expense_analysis") === true, "expense exec");
     assert(isDirectorIaToolExecutable("get_investment_analysis") === true, "investment exec");
     assert(isDirectorIaToolExecutable("get_clasificacion_apoyos_query") === true, "clasificacion exec");
-    assert(isDirectorIaToolExecutable("get_taller_at_analysis") === false, "taller_at not exec");
+    assert(isDirectorIaToolExecutable("get_taller_at") === true, "taller_at query exec");
+    assert(isDirectorIaToolExecutable("get_taller_at_analysis") === false, "taller excel not exec");
+    assert(getDirectorIaTool("get_taller_at").executor === "loadTallerAtForChat", "taller executor");
     assert(getDirectorIaTool("get_expense_analysis").executor === "loadGastosInversionesForChat", "expense executor");
     assert(getDirectorIaTool("get_investment_analysis").executor === "loadGastosInversionesForChat", "investment executor");
     const { toolPlan: expensePlan } = planTools("¿Qué gastos de folios existen?", {
@@ -330,6 +332,12 @@ const cases = [
     });
     assert(hasTool(clasPlan, "get_clasificacion_apoyos_query"), "clasificacion tool in plan");
     assert(!hasTool(clasPlan, "get_expense_analysis"), "clasificacion no despacha M6");
+    const { toolPlan: tallerPlan } = planTools("Muéstrame Taller de AT-15 en 2026-08", {
+      planta_id: 1,
+      question: "Muéstrame Taller de AT-15 en 2026-08",
+    });
+    assert(hasTool(tallerPlan, "get_taller_at"), "taller tool in plan");
+    assert(!hasTool(tallerPlan, "get_expense_analysis"), "taller no despacha M6");
   },
 
   // Ejecución parcial: tool lista + otra con input faltante

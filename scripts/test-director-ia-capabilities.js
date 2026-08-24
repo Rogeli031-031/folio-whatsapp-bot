@@ -69,6 +69,7 @@ const cases = [
     assert(isDirectorIaDomainReadable("presupuestos") === true, "presupuestos query readable");
     assert(isDirectorIaDomainReadable("revision_notes") === true, "revision_notes readable");
     assert(isDirectorIaDomainReadable("commercial_dossier") === true, "commercial_dossier readable");
+    assert(isDirectorIaDomainReadable("taller_at") === true, "taller_at query readable");
     const summary = buildDirectorIaCapabilitiesSummary();
     assert(summary.readable.length > 0, "summary readable");
     assert(summary.not_integrated.length > 0, "summary not_integrated");
@@ -102,6 +103,10 @@ const cases = [
   () => expectAllowed("¿Qué gastos de folios existen?"),
   () => expectAllowed("¿Qué inversiones están pendientes?"),
   () => expectAllowed("listar gastos de folios 2026-01"),
+  () => expectAllowed("Muéstrame Taller de AT-15 en 2026-08"),
+  () => expectAllowed("¿Cuánto hay de Taller en PT-03 en 2026-07?"),
+  () => expectBlocked("taller por AT", "taller_at", { requireCanReadFalse: false }),
+  () => expectBlocked("exportar excel taller AT-15", "taller_at", { requireCanReadFalse: false }),
   () => expectAllowed("cómo van los gastos"),
   () => expectBlocked("exportar excel de gastos de folios", "gastos", { requireCanReadFalse: false }),
   () => expectBlocked("exportar excel de inversiones", "inversiones", { requireCanReadFalse: false }),

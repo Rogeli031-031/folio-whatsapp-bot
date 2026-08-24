@@ -124,6 +124,9 @@ const cases = [
   () => expectIntent("¿Cuáles son los kpis del dashboard?", "dashboard_kpis", { requireDomain: "dashboard_kpis" }),
   () => expectIntent("¿Cuántos folios activos hay?", "dashboard_kpis", { requireDomain: "dashboard_kpis" }),
   () => expectIntent("¿Qué gastos de folios existen?", "expense_analysis"),
+  () => expectIntent("Muéstrame Taller de AT-15 en 2026-08", "taller_at", { requireDomain: "taller_at" }),
+  () => expectIntent("¿Cuánto hay de Taller en PT-03 en julio?", "taller_at", { requireDomain: "taller_at" }),
+  () => expectIntent("¿Qué acciones tiene AT-15?", "action_status", { requireDomain: "action_register" }),
   () => expectIntent("¿Qué inversiones están pendientes?", "investment_analysis"),
   () =>
     expectIntent("clasificación de apoyos 2026-01 2026-02", "clasificacion_apoyos_query", {
