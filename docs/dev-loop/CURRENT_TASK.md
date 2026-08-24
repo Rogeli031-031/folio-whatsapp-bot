@@ -1,14 +1,14 @@
 # CURRENT_TASK
 
 ```yaml
-task_id: "ARCH-DIRECTOR-IA-M7-IGF-COMPOSITION-READINESS-001"
+task_id: "IMPL-DIRECTOR-IA-M7-IGF-COMPOSITION-001"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-08-23"
 human_authorization: >
   AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-23.
-  Apruebo ARCH-DIRECTOR-IA-M7-IGF-COMPOSITION-READINESS-001 y autorizo G1.
+  Apruebo IMPL-DIRECTOR-IA-M7-IGF-COMPOSITION-001 y autorizo G1.
 
 gates:
   G1_task_authorization: AUTHORIZED
@@ -17,234 +17,121 @@ gates:
   G8_calibration_materiality_signature: N/A
 
 objective: >
-  Auditar físicamente un slice read-only de M7 — IGF — para que Director IA
-  pueda exponer al reasoning la composición real de igf.compromiso_lines ya
-  cargada por loadIgfCommitSnapshot pero actualmente omitida del annex/context,
-  preservando unidades, signos, orden y semántica física, sin convertir
-  composición matemática o contable en causalidad empresarial.
+  Implementar un slice read-only de M7 — IGF — para exponer al reasoning de
+  Director IA la composición observada de una fila de igf.compromiso_lines,
+  preservando unidades, signos, nulls, orden de presentación y semántica física,
+  sin ejecutar recálculos de producto, sin overlay de folios, sin crear deltas
+  temporales y sin convertir composición matemática en causalidad empresarial.
 
 baseline:
-  prioritization_task: "ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-006"
-  prioritization_report: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-006.md"
+  readiness_task: "ARCH-DIRECTOR-IA-M7-IGF-COMPOSITION-READINESS-001"
+  readiness_report: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M7-IGF-COMPOSITION-READINESS-001.md"
 
   module: "M7 — IGF"
-  current_state: "PARTIAL"
+  state_before: "PARTIAL"
+  state_after: "PARTIAL"
 
-  current_behavior:
-    - "IGF ya se consulta on-demand"
-    - "loadIgfCommitSnapshot usa SELECT *"
-    - "el row completo incluye compromiso_lines"
-    - "annex/context actual solo imprime subconjunto"
-    - "M9 ya cubre deltas comerciales por periodo"
-
-  global_percentage:
-    current: 50.0
-    numerator: 10.0
+  global:
+    numerator_before: 10.0
     denominator: 20
-
-  expected_effect_of_future_slice:
-    state: "PARTIAL"
+    percentage_before: 50.0
+    numerator_after: 10.0
+    percentage_after: 50.0
     gain_pp: 0.0
-    percentage: 50.0
 
-primary_question: >
-  ¿Existe un path read-only, in-process y semánticamente seguro para que
-  Director IA incorpore igf.compromiso_lines al contexto de razonamiento,
-  permitiendo explicar la composición observable de compromiso/utilidad/
-  resultado sin afirmar causalidad no soportada?
+readiness_findings:
+  physical_source: "igf.compromiso_lines"
 
-known_baseline:
-  loader: "loadIgfCommitSnapshot"
-  source: "igf.compromiso_lines"
-
-  related_logic:
-    - "ORDER_DELTAS"
-    - "recalcularUtilYResultado"
+  snapshot:
+    loader: "loadIgfCommitSnapshot"
+    query: "SELECT *"
+    cardinality: >
+      Una fila observada para una combinación físicamente resuelta de planta,
+      versión y mes.
 
   current_gap: >
-    compromiso_lines ya está disponible en el snapshot físico, pero el
-    annex/context de Director IA no la expone de forma completa.
+    El snapshot ya contiene compromiso_lines completo, pero el annex/context
+    actual solo expone un subconjunto.
 
-mandatory_audit:
+  order_deltas:
+    role: "presentación UI"
+    formula_role: false
 
-  canonical_definition:
-    required:
-      - "leer ficha M7 vigente"
-      - "confirmar estado PARTIAL"
-      - "confirmar que este slice profundiza PARTIAL"
-      - "confirmar 0.0 pp"
+  physical_formula:
+    source: "recalcularUtilYResultado"
 
-  physical_shape:
-    inspect:
-      - "loadIgfCommitSnapshot"
-      - "SELECT *"
-      - "igf.compromiso_lines"
-      - "shape real de compromiso_lines"
-      - "keys/códigos"
-      - "labels"
-      - "valores"
-      - "nulls"
-      - "tipos numéricos"
-      - "orden"
+  formula_summary:
+    - "suma margen"
+    - "suma com_desc"
+    - "suma depósito"
+    - "resta cargo planta"
+    - "luego resta corp"
 
-    determine:
-      - "qué campos son observados"
-      - "qué campos son derivados"
-      - "si hay arrays/objetos"
-      - "si hay líneas opcionales"
-      - "si hay duplicados"
+  important_exclusions:
+    - "gasto_kg no participa en la fórmula"
+    - "snapshot no ejecuta recalcularUtilYResultado"
+    - "snapshot no hace overlay de folios"
 
-  order_semantics:
-    inspect:
-      - "ORDER_DELTAS"
-      - "orden usado en UI"
-      - "orden usado en cálculos"
+unit_semantics:
+  rules:
+    - "_kg significa $/kg, no kilogramos"
+    - "ton != $/kg"
+    - "$/kg != %"
+    - "% != MXN"
+    - "no sumar unidades incompatibles"
+    - "no comparar magnitudes incompatibles como si fueran equivalentes"
 
-    determine:
-      - "si ORDER_DELTAS es semántico o solo visual"
-      - "si debe preservarse en Director IA"
-      - "si hay líneas fuera de ORDER_DELTAS"
+null_semantics:
+  rules:
+    - "null != 0"
+    - "no rellenar null con cero"
+    - "no derivar faltantes"
 
-  formula_semantics:
-    inspect:
-      - "recalcularUtilYResultado"
-      - "fórmulas"
-      - "qué líneas suman/restan"
-      - "signos"
-      - "unidades"
-      - "redondeos"
-      - "tratamiento de null"
+sign_semantics:
+  rules:
+    - "preservar signo físico"
+    - "no invertir hg_kg"
+    - "no reinterpretar signo como juicio de negocio"
 
-    determine:
-      - "qué total puede recomponerse"
-      - "qué subtotal existe"
-      - "qué relación matemática es verificable"
-      - "qué NO debe reinterpretarse"
-
-  units_and_signs:
-    required:
-      - "identificar unidad por línea"
-      - "distinguir pesos/kg/ton/%/otras"
-      - "preservar signos"
-      - "no comparar magnitudes incompatibles"
-      - "no sumar unidades distintas"
-
-  composition_semantics:
-    allowed:
-      - "esta línea aporta X al cálculo"
-      - "esta línea entra con signo positivo/negativo"
-      - "estas son las líneas de mayor magnitud dentro de la misma unidad"
-      - "este resultado se compone matemáticamente de estas partidas si la fórmula lo soporta"
-
-    forbidden:
-      - "esta línea causó la caída"
-      - "esta línea explica el negocio"
-      - "este concepto es el responsable"
-      - "esto ocurrió por culpa de"
-      - "la línea más grande es el principal problema"
-
-    rule: >
-      Composición matemática/contable != causalidad operacional.
-
-  comparison_semantics:
-    determine:
-      - "si compromiso_lines es snapshot de un periodo"
-      - "si existen líneas comparables entre periodos"
-      - "qué necesita M9"
-      - "qué no debe duplicarse"
-
-    rule: >
-      No crear nuevos deltas temporales si la fuente del slice es solo snapshot.
-      No duplicar M9 sin evidencia.
-
-  annex_context:
-    inspect:
-      - "annex actual IGF"
-      - "context builder"
-      - "summarizers"
-      - "qué campos ya imprime"
-      - "qué campos omite"
-
-    determine:
-      - "bloque mínimo de composición"
-      - "cómo no inflar contexto"
-      - "cómo mantener provenance"
-
-  planner_tools:
-    inspect:
-      - "igf_status"
-      - "financial_diagnosis"
-      - "tools IGF"
-      - "executor"
-      - "chat routing"
-
-    determine:
-      - "si se reutiliza intent existente"
-      - "si hace falta sub-intent composition"
-      - "qué preguntas nuevas habilitar"
-      - "qué consultas deben seguir en M9/M6"
-
-  authz:
-    determine:
-      - "JWT/contexto"
-      - "rol"
-      - "planta_id"
-      - "plantas_permitidas"
-      - "GA/GV"
-      - "cross-planta"
-      - "fail-closed"
-      - "authz actual IGF"
-
-  context_policy:
-    required:
-      - "máximo de líneas"
-      - "orden"
-      - "recorte determinista"
-      - "null handling"
-      - "precision/redondeo"
-      - "provenance"
-
-    rule: >
-      No cargar una estructura ilimitada si compromiso_lines puede crecer.
-
-architecture_hypothesis:
+architecture:
   preferred_path: >
     igf_status / financial_diagnosis ->
     get_igf_snapshot ->
     loadIgfCommitSnapshot ->
-    extractIgfComposition(compromiso_lines) ->
+    extractIgfComposition ->
     bloque de composición acotado ->
-    evidencia -> respuesta
+    evidencia ->
+    respuesta
 
   requirements:
     - "in-process"
     - "read-only"
     - "sin HTTP interno"
     - "sin writes"
-    - "sin contrato nuevo"
-    - "sin duplicar M9"
+    - "sin recálculo de producto"
+    - "sin overlay de folios"
+    - "sin crear nuevos deltas"
 
-response_contract:
-  include_if_physically_supported:
-    - "planta_id"
-    - "periodo"
+composition_scope:
+  included:
     - "line_key"
-    - "line_label"
+    - "line_label si existe"
     - "value"
     - "unit"
-    - "sign/role"
-    - "order"
-    - "subtotal/total relacionado"
+    - "sign/role físicamente soportado"
+    - "order de presentación si aplica"
+    - "subtotal/total solo si ya existe físicamente"
     - "source"
 
-  forbidden:
+  excluded:
     - "causa"
     - "responsable"
     - "problema"
     - "mejora"
     - "prioridad"
     - "impacto causal"
-    - "delta temporal inventado"
+    - "delta temporal nuevo"
+    - "forecast inventado"
 
 semantic_invariants:
   - "Composición != causalidad."
@@ -252,106 +139,117 @@ semantic_invariants:
   - "Signo matemático != juicio empresarial."
   - "Snapshot != tendencia."
   - "Línea != responsable."
+  - "ORDER_DELTAS != fórmula."
+  - "gasto_kg no entra a recalcularUtilYResultado."
+  - "null != 0."
+  - "No invertir hg_kg."
   - "No sumar unidades incompatibles."
-  - "No inventar línea faltante."
-  - "No inventar porcentaje."
 
-mandatory_evidence_table:
-  columns:
-    - "line_or_surface"
-    - "physical_source"
-    - "shape"
-    - "unit"
-    - "sign"
-    - "formula_role"
-    - "order"
-    - "observed_or_derived"
-    - "safe_for_reasoning"
-    - "risk"
-    - "evidence"
+m9_boundary:
+  rules:
+    - "M9 sigue siendo dominio de deltas temporales."
+    - "Este slice no crea comparación entre periodos."
+    - "No reinterpretar snapshot como tendencia."
 
-mandatory_gap_table:
-  columns:
-    - "gap_id"
-    - "missing_capability"
-    - "required_for_slice"
-    - "reusable_component"
-    - "proposed_change"
-    - "architecture_change"
-    - "contract_change"
-    - "authz_change"
-    - "complexity"
-    - "blocking"
+context_policy:
+  required:
+    - "bloque acotado"
+    - "orden determinista"
+    - "límites de líneas derivados del shape real"
+    - "preservar nulls"
+    - "preservar precisión razonable"
+    - "provenance"
 
-tests_to_design_if_ready:
-  - "snapshot con compromiso_lines"
-  - "snapshot sin compromiso_lines"
-  - "líneas null"
-  - "orden"
-  - "signos"
-  - "unidades"
-  - "líneas positivas"
-  - "líneas negativas"
-  - "base cero"
-  - "no sumar unidades distintas"
-  - "recomposición de subtotal si físicamente soportada"
-  - "no causalidad"
-  - "no responsable"
-  - "no prioridad inferida"
-  - "intent IGF preservado"
-  - "M6 preservado"
-  - "M9 preservado"
-  - "authz"
-  - "cross-planta"
-  - "GA/GV"
-  - "sin HTTP interno"
-  - "sin writes"
+planner_tools:
+  planner:
+    - "preservar igf_status"
+    - "preservar financial_diagnosis"
+    - "no crear colisión con M9"
+    - "habilitar preguntas explícitas de composición"
 
-decision_rules:
+  tools:
+    - "reutilizar get_igf_snapshot si es suficiente"
+    - "no crear tool duplicada si no hace falta"
+    - "si se agrega helper interno, mantener executor existente"
 
-  ready:
-    all:
-      - "compromiso_lines físicamente disponible"
-      - "shape verificable"
-      - "unidades/signos verificables"
-      - "ORDER_DELTAS entendible"
-      - "fórmulas físicamente verificables"
-      - "annex/context ampliable sin contrato nuevo"
-      - "authz preservable"
-      - "contexto acotable"
-      - "sin duplicar M9"
-      - "tests determinísticos"
+  chat:
+    - "incluir bloque de composición en evidencia/contexto"
+    - "no inflar annex innecesariamente"
+    - "no cambiar routing de M6/M9"
 
-    outcome: "DONE_PENDING_REVIEW"
-    next_task: "IMPL-DIRECTOR-IA-M7-IGF-COMPOSITION-001"
+authz:
+  model: "IGF vigente"
+  required:
+    - "JWT/contexto"
+    - "rol"
+    - "planta_id"
+    - "plantas_permitidas si aplica"
+    - "GA 403 según regla vigente"
+    - "GV según regla vigente"
+    - "cross-planta bloqueado"
+    - "fail-closed"
 
-  stopped:
-    when:
-      - "shape ambiguo"
-      - "unidades no identificables"
-      - "fórmulas inconsistentes"
-      - "compromiso_lines requiere writes"
-      - "semántica requiere contrato nuevo"
+response_policy:
+  allowed_examples:
+    - "Esta línea entra al cálculo con valor X."
+    - "Estas son las partidas observadas en el snapshot."
+    - "Dentro de la misma unidad, estas líneas tienen mayor magnitud."
+    - "El snapshot contiene estas componentes."
 
-    outcome: "STOPPED"
-    next_task: null
+  forbidden_examples:
+    - "Esta línea causó la caída."
+    - "Este es el principal problema."
+    - "Esta partida es responsable del resultado."
+    - "Esto empeoró por esta causa."
 
-state_and_percentage:
-  current_task:
-    state_change: false
-    percentage_change: false
+tests_required:
+  focal:
+    - "snapshot con compromiso_lines"
+    - "snapshot sin compromiso_lines"
+    - "una sola fila"
+    - "preservar null"
+    - "no null -> 0"
+    - "unidades"
+    - "_kg = $/kg"
+    - "ton"
+    - "%"
+    - "MXN"
+    - "no sumar unidades distintas"
+    - "signos preservados"
+    - "hg_kg no invertido"
+    - "ORDER_DELTAS solo presentación"
+    - "gasto_kg no entra a fórmula"
+    - "formula metadata correcta"
+    - "no ejecutar recalcularUtilYResultado"
+    - "no overlay de folios"
+    - "no causalidad"
+    - "no prioridad inferida"
+    - "no deltas temporales"
+    - "M9 preservado"
+    - "M6 preservado"
+    - "igf_status preservado"
+    - "financial_diagnosis preservado"
+    - "authz"
+    - "cross-planta"
+    - "GA/GV"
+    - "sin HTTP interno"
+    - "sin writes"
 
-  if_future_impl_succeeds:
-    m7_state: "PARTIAL"
-    numerator: 10.0
-    denominator: 20
-    percentage: 50.0
-    gain_pp: 0.0
+  regression:
+    - "capabilities"
+    - "planner"
+    - "tool orchestrator"
+    - "suite Director IA completa"
 
 in_scope:
   writable:
     - "docs/dev-loop/CURRENT_TASK.md"
-    - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M7-IGF-COMPOSITION-READINESS-001.md"
+    - "docs/dev-loop/reports/IMPL-DIRECTOR-IA-M7-IGF-COMPOSITION-001.md"
+    - "lib/director-ia-chat.js"
+    - "lib/director-ia-igf-arr.js"
+    - "lib/director-ia-capabilities.js"
+    - "scripts/test-director-ia-capabilities.js"
+    - "test/director-ia-m7-igf-composition.test.js"
 
   read_only:
     - "AGENTS.md"
@@ -367,85 +265,101 @@ in_scope:
     - "package-lock.json"
 
 out_of_scope:
-  - "implementar"
-  - "modificar código"
-  - "modificar runtime"
-  - "modificar frontend"
-  - "modificar tests"
-  - "modificar SQL"
+  - "modificar docs/director-ia/**"
   - "modificar capability matrix"
-  - "modificar contratos"
-  - "inventar causalidad"
+  - "modificar frontend"
+  - "modificar SQL"
+  - "crear migration"
+  - "modificar schema"
+  - "modificar contrato HTTP"
+  - "ejecutar recalcularUtilYResultado"
+  - "hacer overlay de folios"
   - "crear deltas M9"
+  - "inventar causalidad"
   - "hacer writes"
-  - "hacer commit"
-  - "hacer push"
-  - "hacer merge"
-  - "ejecutar NEXT_TASK"
+  - "commit"
+  - "push"
+  - "merge"
+  - "sync documental"
+  - "NEXT_TASK"
 
 acceptance_criteria:
-  - "Se verificó definición canónica M7."
-  - "Se verificó compromiso_lines."
-  - "Se verificó shape."
-  - "Se verificó ORDER_DELTAS."
-  - "Se verificó recalcularUtilYResultado."
-  - "Se verificaron unidades."
-  - "Se verificaron signos."
-  - "Se verificó semántica de fórmula."
-  - "Se auditó annex/context."
-  - "Se verificó planner/tools."
-  - "Se verificó authz."
-  - "Se definió política de contexto."
-  - "Se separó composición de causalidad."
-  - "Se separó M7 de M9."
-  - "Se diseñaron tests."
-  - "Se determinó G2."
-  - "Se determinó G3."
-  - "M7 sigue PARTIAL."
-  - "50.0% no cambia."
-  - "No se implementó."
-  - "Solo CURRENT_TASK y reporte cambiaron."
+  - "Director IA expone composición real de compromiso_lines."
+  - "Se trabaja sobre una fila físicamente resuelta."
+  - "No se ejecuta recalcularUtilYResultado."
+  - "No se hace overlay de folios."
+  - "ORDER_DELTAS se trata solo como presentación."
+  - "Unidades se preservan."
+  - "_kg se documenta/trata como $/kg."
+  - "No se mezclan unidades incompatibles."
+  - "Null se preserva."
+  - "hg_kg no se invierte."
+  - "gasto_kg no se presenta como componente de la fórmula si no lo es."
+  - "No se crea causalidad."
+  - "No se crean deltas temporales."
+  - "M9 se preserva."
+  - "Authz IGF se preserva."
+  - "No HTTP interno."
+  - "No writes."
+  - "M7 permanece PARTIAL."
+  - "10.0/20 = 50.0% permanece."
+  - "Tests focales verdes."
+  - "Regresión completa verde."
   - "git diff --check limpio."
+  - "Solo archivos autorizados modificados."
+
+required_validation:
+  - "node --test test/director-ia-m7-igf-composition.test.js"
+  - "node scripts/test-director-ia-capabilities.js"
+  - "node scripts/test-director-ia-planner.js"
+  - "node scripts/test-director-ia-tool-orchestrator.js"
+  - "node --test test/director-ia-*.test.js"
+  - "git diff --check"
+  - "git status"
+
+next_task_policy:
+  if_success:
+    propose_exactly_one: "DOCS-DIRECTOR-IA-M7-IGF-COMPOSITION-SYNC-001"
+
+  rule: >
+    La sync posterior documenta profundización dentro de M7 PARTIAL. No cambia
+    10.0/20 = 50.0%.
 
 report_requirements:
-  path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M7-IGF-COMPOSITION-READINESS-001.md"
+  path: "docs/dev-loop/reports/IMPL-DIRECTOR-IA-M7-IGF-COMPOSITION-001.md"
 
   must_include:
     - "metadata"
     - "resumen ejecutivo"
-    - "baseline"
-    - "definición canónica M7"
-    - "compromiso_lines shape"
+    - "archivos modificados"
+    - "compromiso_lines"
+    - "snapshot"
     - "ORDER_DELTAS"
     - "recalcularUtilYResultado"
-    - "units"
-    - "signs"
-    - "formula semantics"
-    - "composition vs causality"
-    - "annex/context"
-    - "planner/tools"
+    - "unidades"
+    - "signos"
+    - "null semantics"
+    - "hg_kg"
+    - "gasto_kg"
+    - "M9 boundary"
     - "authz"
     - "context policy"
-    - "M9 boundary"
-    - "evidence table"
-    - "gap table"
-    - "implementation hypothesis"
+    - "composition vs causality"
     - "tests"
-    - "gates"
-    - "state after future slice"
+    - "M7 state"
     - "percentage"
-    - "risks"
-    - "NEXT_TASK"
     - "acciones no realizadas"
+    - "gates"
     - "secrets_check"
     - "git diff --check"
     - "git status"
+    - "NEXT_TASK"
 
 expected_terminal_state: >
-  DONE_PENDING_REVIEW si compromiso_lines puede exponerse al reasoning de forma
-  segura y físicamente fiel. STOPPED si shape/unidades/fórmulas son ambiguos.
-  BLOCKED si falta gate indispensable.
+  DONE_PENDING_REVIEW si composición IGF queda expuesta read-only, in-process y
+  semánticamente fiel. STOPPED si aparece contradicción con shape/unidades o
+  fórmula física. BLOCKED si falta gate.
 
 max_attempts: 1
 
-result_report_path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M7-IGF-COMPOSITION-READINESS-001.md"
+result_report_path: "docs/dev-loop/reports/IMPL-DIRECTOR-IA-M7-IGF-COMPOSITION-001.md"
