@@ -1,519 +1,474 @@
 # CURRENT_TASK
 
 ```yaml
-task_id: "ARCH-DIRECTOR-IA-IGF-REVIEWABLE-SUPPORTS-001"
+task_id: "IMPL-DIRECTOR-IA-IGF-REVIEWABLE-SUPPORTS-001"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-08-24"
 human_authorization: >
   AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-24.
-  Apruebo ARCH-DIRECTOR-IA-IGF-REVIEWABLE-SUPPORTS-001
-  y autorizo G1 exclusivamente para readiness/auditoría.
+  Apruebo IMPL-DIRECTOR-IA-IGF-REVIEWABLE-SUPPORTS-001
+  y autorizo G1.
 
 gates:
   G1_task_authorization: AUTHORIZED
-  G2_architecture_change: N/A_PENDING_AUDIT
-  G3_new_architecture_contract: N/A_PENDING_AUDIT
+  G2_architecture_change: N/A
+  G3_new_architecture_contract: N/A
   G5_contract_conformance: N/A
   G8_calibration_materiality_signature: N/A
 
-mode:
-  type: "READINESS_ONLY"
-  implementation: false
-  code_changes: false
-  runtime_changes: false
-  test_changes: false
-  matrix_changes: false
-  contract_changes: false
-  sql_execution: false
-
 objective: >
-  Determinar el first slice mínimo y defendible para que Director IA pueda
-  pasar desde IGF del mes actual a los Folios/apoyos de la misma planta y
-  periodo, separando qué importes siguen siendo operacionalmente
-  cancelables/revisables de aquellos que ya no pueden cancelarse según las
-  reglas físicas actuales, y determinar si puede calcularse un escenario IGF
-  contrafactual sin convertirlo en recomendación ni ahorro garantizado.
+  Implementar el first slice C aprobado para que Director IA pueda pasar desde
+  IGF del mes actual a una lectura read-only de Folios/apoyos reviewable según
+  reglas operativas reales de cancelación, listar qué sigue siendo cancelable y
+  qué ya no lo es, y calcular un escenario IGF contrafactual usando exactamente
+  la matemática vigente del dashboard, sin mutar datos, sin recomendar
+  cancelaciones y sin afirmar ahorro/cash realizado.
 
 baseline:
   global: "10.5 / 20 = 52.5%"
   percentage_effect: "0.0 pp"
 
-prior_audit:
-  task: "AUDIT-DIRECTOR-IA-EXECUTIVE-CROSS-DOMAIN-IGF-FOLIOS-001"
-  bottleneck: "no_igf_to_reviewable_apoyos_path"
-  failure_class: "MISSING_INFRASTRUCTURE"
+readiness:
+  task: "ARCH-DIRECTOR-IA-IGF-REVIEWABLE-SUPPORTS-001"
+  determination: "READY_WITH_LIMITS"
+  first_slice: "C — reviewable Folios read model + IGF counterfactual"
 
-physical_findings_already_verified:
+truth_model:
 
-  folio_lifecycle:
-    technical_states:
-      - "GENERADO"
-      - "PENDIENTE_APROB_PLANTA"
-      - "APROB_PLANTA"
-      - "PENDIENTE_APROB_ZP"
-      - "APROBADO_ZP"
-      - "LISTO_PARA_PROGRAMACION"
-      - "SELECCIONADO_SEMANA"
-      - "SOLICITANDO_PAGO"
-      - "CUENTA_FONDOS"
-      - "CHEQUE_GENERADO"
-      - "PAGADO"
-      - "CERRADO"
-      - "COMPROBACIONES"
-      - "EVIDENCIAS"
-      - "CANCELACION_SOLICITADA"
-      - "CANCELADO"
+  operational_reviewable:
+    meaning: >
+      Folio que, bajo las reglas actuales del sistema, todavía puede llegar a
+      CANCELADO.
 
-  visual_deposit_close:
-    states:
-      - "PAGADO"
-      - "CERRADO"
+  non_cancellable_states:
+    - "PAGADO"
+    - "CERRADO"
+    - "COMPROBACIONES"
+    - "EVIDENCIAS"
 
-  cancellation_rule_found:
-    non_cancellable:
-      - "PAGADO"
-      - "CERRADO"
-      - "COMPROBACIONES"
-      - "EVIDENCIAS"
+  cancelled:
+    status: "CANCELADO"
+    reviewable: false
+    include_in_current_IGF: false
 
-    important: >
-      Existe runtime que rechaza cancelación en esos estados y permite llevar
-      otros estados a CANCELADO, sujeto a authz/reglas del endpoint que esta
-      readiness debe terminar de auditar.
+  critical_invariant: >
+    cancelable operacional != materializado contable != ahorro realizado.
 
-  IGF_folio_components:
-    observed:
-      - "folios_aprob_zp_kg"
-      - "folios_carro_kg"
-      - "deposito_cierre_kg"
+read_only_invariant:
+  absolute: true
 
-    gasto_formula_observed: >
-      gasto_kg incorpora presupuesto_kg + folios_aprob_zp_kg +
-      folios_carro_kg + deposito_cierre_kg antes de recalcular resultado.
+  prohibited:
+    - "cancelar"
+    - "solicitar cancelación"
+    - "mover etapa"
+    - "aprobar"
+    - "editar Folio"
+    - "actualizar IGF"
+    - "persistir escenario"
+    - "cualquier write"
 
-  support_classification:
-    categories_observed:
-      - "GASTOS"
-      - "INVERSIONES"
-      - "TALLER"
+  rule: >
+    Director IA solo consulta y calcula escenarios hipotéticos en memoria.
 
-    physical_fields:
+reviewable_classification:
+
+  classify_each_folio:
+    required_fields:
+      - "id"
+      - "numero_folio / folio_codigo if available"
       - "planta_id"
-      - "categoria"
-      - "importe"
       - "mes_cargo"
+      - "importe"
+      - "estatus"
+      - "categoria"
+      - "subcategoria"
+      - "concepto/beneficiario if physically available"
 
-    warning: >
-      Clasificación de apoyos no equivale por sí sola a reversibilidad.
+  rules:
+    cancelled:
+      condition: "estatus = CANCELADO"
+      group: "excluded"
 
-north_star_conversation:
-  turns:
+    non_reviewable:
+      condition:
+        - "PAGADO"
+        - "CERRADO"
+        - "COMPROBACIONES"
+        - "EVIDENCIAS"
+      group: "not_cancellable"
+
+    reviewable:
+      condition: >
+        Todo estado restante que la regla operacional real de cancelación
+        permite cancelar bajo authz vigente.
+
+  important: >
+    No simplificar a “no depositado”.
+
+authz:
+
+  required:
+    - "current role"
+    - "current plant"
+    - "plantas_permitidas"
+    - "fail-closed"
+    - "same plant as IGF context"
+
+  note: >
+    El rol determina quién puede actuar en el sistema, pero Director IA sigue
+    read-only. La clasificación debe respetar la misma realidad operacional.
+
+support_scope:
+
+  determine_from_runtime:
+    include_only:
+      - "Folios del mismo periodo/mes_cargo"
+      - "Folios de la misma planta"
+      - "categorías que físicamente alimentan el cálculo IGF de apoyos"
+
+  prohibited:
+    - "incluir cualquier Folio solo porque existe"
+    - "inventar que todo Folio es apoyo"
+
+  preserve_categories:
+    - "GASTOS"
+    - "INVERSIONES"
+    - "TALLER"
+    - "otras solo si el cálculo live IGF las incluye físicamente"
+
+IGF_live_math:
+
+  preserve_exactly:
+    - "folios_aprob_zp_kg"
+    - "folios_carro_kg"
+    - "deposito_cierre_kg"
+    - "gasto_kg"
+    - "recalcularUtilYResultado"
+
+  rule: >
+    Reutilizar la misma semántica de agrupación y matemática del GET/dashboard.
+    No crear una fórmula paralela simplificada.
+
+counterfactual:
+
+  type: "read-only hypothetical"
+
+  question:
+    canonical: >
+      Si canceláramos los apoyos que todavía se pueden detener,
+      ¿cómo quedaría el IGF?
+
+  algorithm:
+    - "partir del mismo snapshot/contexto IGF vigente"
+    - "identificar Folios reviewable físicamente incluidos"
+    - "simular su exclusión SIN DB write"
+    - "recalcular usando la misma matemática live"
+    - "producir before / hypothetical-after / delta"
+
+  required_output:
+    - "igf_current"
+    - "reviewable_folios_total"
+    - "reviewable_folios_count"
+    - "igf_counterfactual"
+    - "delta_counterfactual"
+    - "folios_included_in_scenario"
+    - "limitations"
+
+  labeling:
+    mandatory:
+      - "ESCENARIO HIPOTÉTICO"
+      - "NO ahorro realizado"
+      - "NO cambio real al IGF"
+      - "NO recomendación automática"
+
+  prohibited_claims:
+    - "ahorrarías X"
+    - "el resultado real mejorará X"
+    - "cash aumenta X"
+    - "contablemente se revierte X"
+    - "debes cancelar estos folios"
+
+  safe_language: >
+    “Si estos folios dejaran de formar parte del cálculo bajo las mismas reglas
+    actuales, el escenario matemático del IGF sería X.”
+
+cross_domain_routing:
+
+  canonical_sequence:
+    - "¿Cómo proyectamos cerrar el IGF de Puebla este mes?"
+    - "¿Qué podemos recortar de apoyos?"
+
+  desired_transition:
+    - "igf_status/current IGF context"
+    - "reviewable supports read model"
+    - "same plant"
+    - "same current/open period"
+    - "fresh Folios query"
+
+  rule: >
+    IGF context aporta planta/periodo y propósito. Folios aporta evidencia de
+    reviewability.
+
+conversation_state:
+
+  required:
+    - "preserve/revalidate plant"
+    - "preserve/revalidate current open month"
+    - "switch parent/effective intent to reviewable supports path"
+    - "fresh Folios evidence"
+    - "previous IGF evidence not reused as Folios evidence"
+
+new_runtime_capability:
+
+  preferred_name: "igf_reviewable_supports"
+
+  intent:
+    decision: >
+      Reutilizar intent existente si es defendible; introducir intent nuevo solo
+      si la implementación necesita un parent canónico claro y la readiness/code
+      demuestra que no puede representarse con los existentes.
+
+  warning: >
+    No crear arquitectura lateral innecesaria.
+
+loaders:
+
+  preferred:
+    - "loadIgfReviewableSupportsForChat"
+    - "buildIgfReviewableSupportsPack"
+
+  may_reuse:
+    - "existing Folio queries/helpers"
+    - "existing IGF calculation helpers"
+
+  prohibited:
+    - "HTTP interno"
+    - "duplicar lógica de cancelación"
+    - "duplicar matemática IGF si puede extraerse/reutilizarse"
+
+cheques_guard:
+
+  issue: >
+    “depósito/cierre” hoy puede caer en cheques coverage:none antes del planner.
+
+  required:
+    - "resolver solo la precedencia necesaria para esta conversación"
+    - "no habilitar módulo cheques"
+    - "no alterar unrelated cheques behavior"
+
+conversation_examples:
+
+  required_flow:
     - "¿Cómo proyectamos cerrar el IGF de Puebla este mes?"
     - "¿Qué podemos recortar de apoyos?"
     - "¿Cuáles todavía podemos detener?"
     - "¿Cuánto suman?"
+    - "¿Cuáles ya no puedo cancelar?"
     - "¿Cuáles ya están depositados/cerrados?"
-    - "¿Cuánto suman esos?"
-    - "¿Qué folios conforman cada grupo?"
-    - "Si canceláramos los que todavía se pueden detener, ¿cómo quedaría el IGF?"
+    - "Si canceláramos los reviewable, ¿cómo quedaría el IGF?"
     - "¿Cuáles revisarías primero?"
-    - "¿Qué riesgo tendría cancelar cada uno?"
+    - "¿Qué riesgo tendría cancelar esos?"
 
-central_question: >
-  ¿Las reglas físicas de cancelación actuales permiten definir una bolsa
-  read-only REVIEWABLE/CANCELLABLE suficientemente defendible, y el cálculo
-  actual de IGF permite producir un escenario contrafactual sin afirmar que
-  cancelar $X sea automáticamente ahorro real $X?
+  expected_boundary:
+    first_seven: >
+      deben responder con evidencia física y escenario matemático si soportado.
 
-mandatory_cancellation_audit:
+    review_first:
+      behavior: >
+        Puede ordenar por materialidad objetiva/importe o etapa solo si se
+        presenta como “para revisión”, no “recomiendo cancelar”.
 
-  inspect:
-    - "endpoint(s) de cancelación de folios"
-    - "roles autorizados"
-    - "plant scope"
-    - "estatus permitidos"
-    - "estatus bloqueados"
-    - "CANCELACION_SOLICITADA semantics"
-    - "direct CANCELADO semantics"
-    - "historial generado al cancelar"
-    - "any additional conditions beyond status"
-
-  determine:
-    - "si todos los estados no bloqueados son realmente cancelables"
-    - "si algunos requieren solicitud/aprobación"
-    - "si CHEQUE_GENERADO aún puede cancelarse"
-    - "si CUENTA_FONDOS aún puede cancelarse"
-    - "si SOLICITANDO_PAGO aún puede cancelarse"
-    - "si cancelable depende de rol"
-
-  rule: >
-    No inferir REVIEWABLE únicamente de estatus hasta auditar las reglas
-    completas de cancelación y authz.
-
-reviewability_model_candidates:
-
-  A_status_before_deposit:
-    description: "todo lo anterior a PAGADO/CERRADO"
-
-  B_runtime_cancellable:
-    description: >
-      exactamente estados para los que la operación de cancelación es válida
-      bajo las reglas actuales.
-
-  C_business_reviewable_subset:
-    description: >
-      subconjunto de B definido por reglas adicionales de negocio físicamente
-      existentes.
-
-  D_new_reviewable_flag:
-    description: >
-      introducir nuevo dato porque runtime actual no alcanza.
-
-  requirement:
-    - "comparar A/B/C/D"
-    - "seleccionar exactamente uno"
-    - "preferir evidencia operacional existente si suficiente"
-
-reviewable_output_if_supported:
-
-  required_fields:
-    - "folio id/código"
-    - "concepto"
-    - "categoria/subcategoria"
-    - "importe"
-    - "estatus técnico"
-    - "etapa visual"
-    - "mes_cargo"
-    - "planta"
-    - "cancelable_under_current_rules"
-    - "reason/limitation"
-    - "provenance"
-
-  aggregates:
-    - "count"
-    - "total importe"
-
-materialized_output:
-
-  candidate_definition: >
-    Estados donde cancelación ya está bloqueada por runtime, pero readiness debe
-    determinar si todos ellos pueden llamarse financieramente materializados.
-
-  important: >
-    NON-CANCELLABLE != necesariamente contablemente materializado.
-
-  required:
-    - "separar operational cancellability de accounting materialization"
-
-IGF_mapping_audit:
-
-  mandatory:
-    - "cómo se construye folios_aprob_zp_kg"
-    - "qué estados entran en folios_carro_kg"
-    - "qué estados entran en deposito_cierre_kg"
-    - "qué pasa con CANCELADO"
-    - "qué pasa con CANCELACION_SOLICITADA"
-    - "mes_cargo"
-    - "importe"
-    - "venta_kg denominator"
-    - "recalcularUtilYResultado"
-
-  key_question: >
-    Si un folio actualmente incluido en folios_aprob_zp/carrito se elimina por
-    CANCELADO, ¿el cálculo existente del IGF deja físicamente de incluirlo al
-    recalcular?
-
-counterfactual_IGF:
-
-  audit_not_assume: true
-
-  candidate:
-    description: >
-      escenario hipotético read-only: excluir un conjunto de folios
-      operacionalmente cancelables y reutilizar exactamente la matemática
-      vigente de IGF.
-
-  requirements:
-    - "same plant"
-    - "same mes_cargo"
-    - "same forecast snapshot"
-    - "same denominator/rules"
-    - "no DB mutation"
-    - "explicit hypothetical label"
-
-  prohibited:
-    - "modify actual IGF"
-    - "call scenario a forecast oficial"
-    - "claim realized savings"
-    - "assume cash impact"
-    - "assume one-for-one accounting effect unless existing IGF math proves it"
-
-  desired_language_if_supported: >
-    “Si estos folios dejaran de formar parte del cálculo bajo las mismas reglas
-    actuales, el escenario matemático del IGF sería X. Es un contrafactual, no
-    una confirmación de ahorro realizado.”
-
-cross_domain_routing:
-
-  sequence:
-    - "igf_status"
-    - "¿Qué podemos recortar de apoyos?"
-
-  audit:
-    - "planner"
-    - "coverage guard"
-    - "folios capability"
-    - "cheques blocker"
-    - "conversation state"
-    - "plant/period inheritance"
-
-  desired:
-    - "plant inherited/revalidated"
-    - "current month inherited/revalidated"
-    - "fresh Folios query"
-    - "IGF evidence not reused as Folios evidence"
-
-cheques_blocker:
-
-  known_prior_finding: >
-    Wording depósito/cierre puede caer en cheques coverage:none before planner.
-
-  mandatory:
-    - "trace this guard"
-    - "determine minimal safe precedence"
-    - "do not enable unrelated cheques capability"
-
-support_scope:
-
-  determine:
-    - "whether 'apoyos' means all Folios categories or a specific subset"
-    - "GASTOS vs INVERSIONES vs TALLER vs other Folio categories"
-    - "which categories currently feed the IGF support calculation"
-
-  rule: >
-    Do not silently treat every Folio as apoyo if physical IGF semantics differ.
-
-ranking_boundary:
-
-  first_slice_must_not:
-    - "recommend cancellation"
-    - "rank by commercial ROI"
-    - "claim risk"
-
-  allowed:
-    - "list largest reviewable amounts"
-    - "list by status/category"
-    - "say which deserve human review based on objective materiality only if clearly labeled"
-
-commercial_risk:
-  status: "DEFER unless physical links are sufficient"
-
-  audit:
-    - "folio -> client linkage"
-    - "cliente_key"
-    - "comments"
-    - "actions"
-    - "sales"
-
-  rule: >
-    Do not let this requirement block a safe first slice of reviewable supports
-    if linkage is not physically ready.
-
-temporal_IGF_boundary:
-
-  preserve_prior_finding:
-    - "current open month forecast"
-    - "past closed month real"
-    - "historical forecast only if stored"
-
-  scope_for_this_slice: >
-    Current open-month IGF -> reviewable supports.
-
-  rule: >
-    Do not expand implementation slice to fix closed-month semantics unless it
-    is required for this path.
-
-authz:
-
-  mandatory:
-    - "folio read authz"
-    - "cancellation authz is evidence for reviewability but Director IA remains read-only"
-    - "plantas_permitidas"
-    - "no cross-plant"
-    - "fail-closed"
-
-read_only_invariant:
-  critical: >
-    Director IA must NOT cancel, move, approve or mutate Folios.
-    It only reports what current operational rules indicate could still be
-    cancelled/reviewed.
+    commercial_risk:
+      behavior: >
+        Si no existe vínculo físico suficiente con cliente/ventas/comentarios,
+        debe decir qué información falta.
 
 reasoning_boundary:
 
-  KEEP_DETERMINISTIC:
-    - "folio identity"
-    - "status"
-    - "current cancellation eligibility"
-    - "amount"
+  runtime_owns:
+    - "folio states"
+    - "reviewable classification"
+    - "amounts"
     - "plant"
-    - "mes_cargo"
-    - "IGF math"
-    - "hypothetical recomputation if proven"
+    - "period"
+    - "IGF grouping"
+    - "counterfactual math"
     - "authz"
     - "provenance"
+    - "absence/error"
 
-  LET_GPT_REASON:
-    - "executive explanation"
-    - "summarization"
-    - "what to review"
+  GPT_owns:
+    - "executive synthesis"
+    - "explanation"
+    - "what deserves review"
     - "limitations"
+    - "what information is missing"
     - "follow-ups"
 
-  PROHIBITED:
+  prohibited:
+    - "automatic business decision"
     - "automatic cancellation recommendation"
-    - "claim savings realized"
-    - "invent business risk"
+    - "invented commercial risk"
 
-solution_candidates:
+materialization_boundary:
 
-  A_routing_only:
-    description: >
-      Expose existing folio stage aggregates to IGF conversation.
+  not_cancellable_label:
+    preferred: "ya no cancelable bajo reglas actuales"
 
-  B_reviewable_folios_read_model:
-    description: >
-      Build read-only model from physical cancellation rules and Folio rows.
+  avoid_unless_proven:
+    - "materializado contablemente"
+    - "ya gastado"
+    - "ya pagado" for non-PAGADO states
+    - "irreversible accounting expense"
 
-  C_reviewable_plus_IGF_counterfactual:
-    description: >
-      B plus exact read-only IGF scenario if existing math supports it.
+  rule: >
+    Operational status wording must remain separate from accounting claims.
 
-  D_new_business_flag:
-    description: >
-      Require persisted reviewable/reversible data before answering.
+absence_error_semantics:
 
-  requirement:
-    - "compare A/B/C/D"
-    - "select exactly one first slice"
-    - "do not choose C unless counterfactual reconciles with existing IGF math"
+  distinguish:
+    - "no reviewable Folios"
+    - "no Folios in period"
+    - "source restricted"
+    - "query/tool error"
+    - "missing IGF denominator/context"
 
-tests_to_design_if_ready:
+  rule: >
+    No convertir ausencia/error en total cero sin evidencia.
 
-  lifecycle:
-    - "each technical status classification"
-    - "blocked cancellation states"
-    - "allowed cancellation states"
-    - "role/authz distinctions"
+preserve:
+  - "IGF existing behavior"
+  - "Folios existing workflow"
+  - "daily sales"
+  - "daily discount"
+  - "cross-metric followup"
+  - "topic return"
+  - "action-person"
+  - "persistent memory"
+  - "M9"
 
-  query:
-    - "same plant"
+deferred:
+  - "closed-month IGF semantic fix"
+  - "historical forecast comparison"
+  - "client-level commercial risk"
+  - "automatic ranking by ROI"
+  - "folio mutation"
+  - "approval/cancellation workflows from Director IA"
+
+tests_required:
+
+  reviewability:
+    - "PAGADO not cancellable"
+    - "CERRADO not cancellable"
+    - "COMPROBACIONES not cancellable"
+    - "EVIDENCIAS not cancellable"
+    - "CANCELADO excluded"
+    - "eligible states classified reviewable"
+    - "role/plant authz respected"
+
+  scope:
+    - "same planta"
     - "same mes_cargo"
+    - "support categories consistent with IGF"
     - "cancelled excluded"
-    - "amount totals"
+
+  IGF:
+    - "same live math"
+    - "reviewable exclusion changes appropriate cube"
+    - "recalculated result reconciles"
+    - "no DB mutation"
 
   conversation:
-    - "IGF -> qué apoyos puedo revisar"
-    - "cuáles aún no se depositan"
-    - "cuáles ya no puedo detener"
-    - "cuánto suman"
+    - "IGF -> apoyos"
+    - "list reviewable"
+    - "list non-cancellable"
+    - "totals"
+    - "counterfactual"
+    - "commercial risk gap"
 
-  counterfactual_if_selected:
-    - "remove eligible folio"
-    - "reconcile resulting IGF math"
-    - "no mutation"
+  guard:
+    - "depósito/cierre wording does not fall to unrelated cheques coverage:none"
 
   regression:
     - "IGF"
     - "Folios"
-    - "budget"
     - "daily conversations"
+    - "action-person"
+    - "topic return"
+    - "planner"
+    - "capabilities"
+    - "orchestrator"
     - "full Director IA suite"
-
-contract_audit:
-  inspect:
-    - "Constitution"
-    - "EKE"
-    - "04 IES"
-    - "05 RE"
-
-  determine:
-    - "G2"
-    - "G3"
-
-readiness_output:
-  must_determine:
-    - "READY / READY_WITH_LIMITS / NOT_READY"
-    - "selected A/B/C/D"
-    - "physical reviewability definition"
-    - "role/authz implications"
-    - "support category scope"
-    - "IGF inclusion/exclusion semantics"
-    - "counterfactual feasibility"
-    - "routing fix"
-    - "cheques guard handling"
-    - "first slice exact boundary"
-    - "G2/G3"
-    - "percentage effect"
-
-percentage_policy:
-  before: "10.5 / 20 = 52.5%"
-  after_readiness: "10.5 / 20 = 52.5%"
-  expected_impl_effect: "to be determined only if module completeness changes"
 
 in_scope:
   writable:
     - "docs/dev-loop/CURRENT_TASK.md"
-    - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-IGF-REVIEWABLE-SUPPORTS-001.md"
+    - "docs/dev-loop/reports/IMPL-DIRECTOR-IA-IGF-REVIEWABLE-SUPPORTS-001.md"
+    - "lib/director-ia-chat.js"
+    - "lib/director-ia-planner.js"
+    - "lib/director-ia-conversation-state.js"
+    - "lib/director-ia-tools.js"
+    - "lib/director-ia-igf-reviewable-supports.js"
+    - "test/director-ia-igf-reviewable-supports.test.js"
+
+  conditional_writable:
+    - "server.js only if extracting a pure read/helper is strictly necessary and behavior stays unchanged"
+    - "existing Director IA tests/scripts if legitimate regression assertions require updates"
 
   read_only:
-    - "entire repository except writable files"
+    - "docs/director-ia/**"
+    - "sql/**"
+    - "frontend-dashboard/**"
+    - "contracts"
 
 out_of_scope:
-  - "implementation"
-  - "mutation"
-  - "cancel Folio"
+  - "writes"
+  - "cancel endpoint use"
   - "schema"
+  - "new tables"
   - "SQL execution"
-  - "contracts modification"
-  - "matrix modification"
-  - "automatic recommendations"
+  - "automatic recommendation"
+  - "commercial-risk engine"
+  - "closed-month IGF fix"
+  - "matrix changes"
+  - "contract changes"
   - "commit"
   - "push"
   - "merge"
 
 acceptance_criteria:
-  - "Cancellation lifecycle physically audited."
-  - "Reviewable != merely undeposited."
-  - "Operational cancellability vs accounting materialization separated."
-  - "IGF Folio components physically audited."
-  - "Cancelled behavior audited."
-  - "Cross-domain routing audited."
-  - "Cheques guard audited."
-  - "A/B/C/D compared."
-  - "Exactly one first slice selected."
-  - "Counterfactual only if mathematically proven."
-  - "Read-only invariant explicit."
-  - "G2/G3 determined."
-  - "Only task + report changed."
+  - "First slice C implemented."
+  - "Reviewable uses real cancellation rules."
+  - "No 'undeposited = cancellable' shortcut."
+  - "Non-cancellable states preserved."
+  - "Cancelled excluded."
+  - "Same plant/period enforced."
+  - "IGF live math reused."
+  - "Counterfactual read-only."
+  - "No mutation."
+  - "No savings/cash claim."
+  - "Cross-domain conversation works."
+  - "Cheques guard no longer blocks this path."
+  - "Commercial-risk gap remains honest."
+  - "52.5% preserved unless matrix policy independently proves otherwise."
+  - "Tests green."
   - "git diff --check clean."
 
-next_task_policy:
-  if_ready:
-    propose_exactly_one: "IMPL-DIRECTOR-IA-IGF-REVIEWABLE-SUPPORTS-001"
+percentage_policy:
+  before: "10.5 / 20 = 52.5%"
+  after: "10.5 / 20 = 52.5%"
+  delta: "0.0 pp"
 
-  if_not_ready:
-    propose_exactly_one: "ARCH-DIRECTOR-IA-IGF-REVIEWABLE-SUPPORTS-GAP-001"
+next_task:
+  propose_only: "DOCS-DIRECTOR-IA-IGF-REVIEWABLE-SUPPORTS-SYNC-001"
+  authorize: false
+  execute: false
 
-  rule: "Do not authorize or execute."
-
-expected_terminal_state: >
-  DONE_PENDING_REVIEW if one safe implementable slice exists.
-  STOPPED if business semantics require human decision.
-  BLOCKED if physical data is insufficient.
+expected_terminal_state: "DONE_PENDING_REVIEW"
 
 max_attempts: 1
 
 result_report_path: >
-  docs/dev-loop/reports/ARCH-DIRECTOR-IA-IGF-REVIEWABLE-SUPPORTS-001.md
+  docs/dev-loop/reports/IMPL-DIRECTOR-IA-IGF-REVIEWABLE-SUPPORTS-001.md
