@@ -330,19 +330,19 @@
 | **ID** | M12 |
 | **Módulo** | Action Register |
 | **Propósito empresarial** | Tablero de temas, ítems, revisiones, notas y evidencias por planta. |
-| **Cobertura actual de Director IA** | PARCIAL (alta: fuente primaria, pero resumen con límites) |
-| **Información exacta que sí consulta** | Board vía `buildActionRegisterBoardPayload` → summarizers: summary, responsables (10), temas, top_overdue (10), invalid_overdue, tema_details (5 temas × 10 acciones), executive_summary; Mejora Continua (`buildMejoraContinuaPayload`). |
-| **Información que no consulta** | Notas de revisión (`includeNotes: false` en context), attachments/binarios, export Excel/PDF evidencias como tool de chat, CRUD completo de ítems. |
-| **Archivos actuales relacionados** | `lib/action-register-board.js`, `lib/director-ia-action-register.js`, `lib/director-ia-mejora-continua.js`, `lib/director-ia-chat.js` |
-| **Endpoints actuales relacionados** | `GET /api/director-ia/context`, `GET /api/director-ia/mejora-continua`, `POST /api/director-ia/chat`; CRUD `/api/action-register/*` (UI Acciones, no chat tools) |
-| **Tablas o vistas relacionadas** | `arr.action_register_*` |
-| **Funciones existentes reutilizables** | `summarizeTopOverdueActions`, `buildExecutiveSummary`, `buildMejoraContinuaPayload`, `buildFocusedNarrativeContext` |
-| **Capacidades de lectura posibles** | CONSULTAR/BUSCAR/RESUMIR/EXPLICAR/DETECTAR RIESGOS/RECOMENDAR (narrativo). |
+| **Cobertura actual de Director IA** | PARCIAL (tablero/resumen con límites + slice on-demand de notas de revisión). **No** es COMPLETE: evidencias/binarios y CRUD de ítems permanecen fuera. |
+| **Información exacta que sí consulta** | Board vía `buildActionRegisterBoardPayload` → summarizers: summary, responsables (10), temas, top_overdue (10), invalid_overdue, tema_details (5 temas × 10 acciones), executive_summary; Mejora Continua (`buildMejoraContinuaPayload`). Slice on-demand de **notas de revisión**: `revision_notes` → `get_action_register_revision_notes` → `loadActionRegisterRevisionNotesForChat` → resolver revisión → SELECT `arr.action_register_revision_notes` ⋈ `arr.action_register_revisions` (`revision_id` only) → recorte (1 revisión; máx. 8 notas; 500 caracteres; truncation explícito) → evidencia separada. Campos: `body` (texto almacenado), `author_name` (vacío se preserva; no se inventa autor), `created_at`, `revision_id`, `revision_date`. Última revisión = `ORDER BY revision_date DESC, id DESC`. Sin revisión identificada ni «última»/«más reciente»: clarifica. |
+| **Información que no consulta** | Context always-on sigue con `includeNotes: false` (las notas no entran al board/summarizers de ítems). Attachments/binarios/S3/PDF. Export Excel/PDF evidencias. CRUD de ítems. No atribuye nota a action item (no hay `item_id`). No trata el texto como acuerdo formal, transición de estatus, history M2, comentario de folio ni Plaud. |
+| **Archivos actuales relacionados** | `lib/director-ia-m12-revision-notes.js`; `lib/action-register-board.js`; `lib/director-ia-action-register.js`; `lib/director-ia-mejora-continua.js`; wiring en `lib/director-ia-chat.js`, `lib/director-ia-planner.js`, `lib/director-ia-tools.js`, `lib/director-ia-capabilities.js` |
+| **Endpoints actuales relacionados** | Chat: `POST /api/director-ia/chat` (in-process). `GET /api/director-ia/context` y `GET /api/director-ia/mejora-continua` (board sin notas). CRUD `/api/action-register/*` (UI Acciones; **no** transporte interno del slice). |
+| **Tablas o vistas relacionadas** | Lectura de notas: `arr.action_register_revision_notes`, `arr.action_register_revisions`. Board: `arr.action_register_*`. `arr.action_register_revision_note_attachments` **fuera**. |
+| **Funciones existentes reutilizables** | `loadActionRegisterRevisionNotesForChat` (SELECT-only; authz `assertActionRegisterAccess` = gate AR vigente, no M2). `summarizeTopOverdueActions`, `buildExecutiveSummary`, `buildMejoraContinuaPayload`, `buildFocusedNarrativeContext`. |
+| **Capacidades de lectura posibles** | CONSULTAR/BUSCAR/RESUMIR/EXPLICAR/DETECTAR RIESGOS/RECOMENDAR (narrativo). CONSULTAR notas de una revisión (on-demand, recortadas). |
 | **Capacidades de escritura posibles** | CRUD Action Register en `/api/action-register/*` — no expuesto como tool de chat. |
-| **Permisos aplicables** | `acceso_acciones_dicf`; acceso planta. |
-| **Nivel de riesgo** | MEDIO (lectura); ALTO (mutar ítems/evidencias). |
-| **Dependencias** | Plantas, usuarios responsables, DICF inyectado en board. |
-| **Observaciones verificadas** | `sources.action_register = true` tras carga exitosa. |
+| **Permisos aplicables** | JWT/contexto; rol; `planta_id`; `plantas_permitidas`; gate AR (`ZP`/`AD`/`CF_CDMX` globales; resto por lista); cross-planta 403; fail-closed. GA/GV según reglas vigentes de AR (no `assertFolioStatusAccess`). |
+| **Nivel de riesgo** | MEDIO (lectura); ALTO (mutar ítems/evidencias — fuera). |
+| **Dependencias** | Plantas, usuarios responsables, DICF inyectado en board. Distinto de M2 history, comentarios de folio y bitácora/Plaud. |
+| **Observaciones verificadas** | `IMPL-DIRECTOR-IA-M12-NOTAS-REVISION-001` (integrado, merge `776df919`). Tests: focales 26/26; capabilities 48/48; planner 42/42; orchestrator 25/25; suite `test/director-ia-*.test.js` 625/625; `git diff --check` limpio. `includeNotes` del context **sigue false**. M12 **sigue PARCIAL**. **No** COMPLETE. Scoring M0–M20 **sin cambio**: 10.0/20 = **50.0%** (PARTIAL ya valía 0.5; no se suma +2.5 pp). |
 
 ### M13 — Director IA (módulo propio)
 
@@ -518,22 +518,22 @@
 
 ### Fuente: Action Register
 
-- **Dominio:** Acciones / temas / responsables / vencidas (M12)
+- **Dominio:** Acciones / temas / responsables / vencidas (M12); notas de revisión on-demand
 - **Cobertura actual:** PARCIAL
-- **Archivo de acceso:** `lib/director-ia-context.js`, `lib/director-ia-action-register.js`, `lib/action-register-board.js`
-- **Función de acceso:** `buildActionRegisterBoardPayload` → `summarizeActionRegisterBoard`, `summarizeTopOverdueActions`, `summarizeActionRegisterResponsables`, `summarizeTemaDetails`, `buildExecutiveSummary`
-- **Endpoint relacionado:** `GET /api/director-ia/context`; board UI `/api/action-register/*`
-- **Tablas consultadas:** `arr.action_register_revisions`, `items`, `entries`, `attachments` (board); notas excluidas en context (`includeNotes: false`)
-- **Filtros disponibles:** `planta_id`
+- **Archivo de acceso:** `lib/director-ia-context.js`, `lib/director-ia-action-register.js`, `lib/action-register-board.js`, `lib/director-ia-m12-revision-notes.js`
+- **Función de acceso:** `buildActionRegisterBoardPayload` → summarizers de ítems. Notas: `loadActionRegisterRevisionNotesForChat` (loader dedicado; no voltea `includeNotes`)
+- **Endpoint relacionado:** `GET /api/director-ia/context` (board **sin** notas); chat `POST /api/director-ia/chat` (intent `revision_notes`); board UI `/api/action-register/*` no es transporte interno
+- **Tablas consultadas:** Board: `arr.action_register_revisions`, `items`, `entries`, `attachments`. Notas on-demand: `arr.action_register_revision_notes` ⋈ `revisions` por `revision_id`. Context always-on: `includeNotes: false`
+- **Filtros disponibles:** `planta_id`; notas: `revision_id` / `revision_date` / última (`revision_date DESC`)
 - **Alcance por planta:** Sí (obligatorio)
-- **Alcance por periodo:** Implícito vía fechas de ítems/overdue; no es selector libre de meses en context
-- **Límites de filas:** responsables 10; top_overdue 10; findings 5; tema_details 5×10; narrativa chat máx. 10 acciones (`MAX_ACTIONS_FOR_NARRATIVE`)
-- **Permisos:** JWT + acceso planta; `acceso_acciones_dicf`
-- **Información sensible:** Responsables, títulos de acción, estatus
-- **Estado de actualización:** En cada GET context / chat que reconstruye payload
-- **Posibles errores:** `planta_id requerido`, `Sin acceso a esta planta`, error al cargar board
-- **Evidencia de integración actual:** `sources.action_register = true` tras carga OK
-- **Información que no puede concluirse con esta fuente:** Estado de kanban/folios, IGF completo, attachments binarios, notas de revisión
+- **Alcance por periodo:** Ítems: implícito vía fechas/overdue. Notas: una revisión (fecha o última)
+- **Límites de filas:** responsables 10; top_overdue 10; findings 5; tema_details 5×10; narrativa chat máx. 10 acciones. Notas: 1 revisión; 8 notas; 500 caracteres; truncation explícito
+- **Permisos:** JWT + acceso planta; gate AR vigente (`assertActionRegisterAccess`); no authz M2
+- **Información sensible:** Responsables, títulos de acción, estatus; texto/autor de notas de revisión
+- **Estado de actualización:** Context en cada GET; notas solo si el intent `revision_notes` se activa
+- **Posibles errores:** `planta_id requerido`, `Sin acceso a esta planta`, revisión no identificada (clarifica), revisión inexistente
+- **Evidencia de integración actual:** `sources.action_register = true` tras carga OK del board; slice notas = `context_meta.mode = revision_notes`
+- **Información que no puede concluirse con esta fuente:** Estado de kanban/folios, IGF completo, attachments binarios, atribución nota→ítem, acuerdo formal, Plaud, history M2, comentario de folio
 
 ### Fuente: DICF
 
@@ -953,7 +953,7 @@
 | # | Pregunta | ¿Puede responderla hoy? | Cobertura | Fuente necesaria | Función/endpoint existente | Información faltante | Riesgo de respuesta incorrecta |
 |---|----------|-------------------------|-----------|------------------|----------------------------|----------------------|--------------------------------|
 | 1 | ¿Cómo va una planta? | Parcialmente | PARCIAL | AR + (opcional) IGF/ARR/MC según wording | `buildDirectorIaContextPayload`; `buildPlantSummaryBlock`; `loadIgfArrAnnexForChat` si regex financiero | Presupuestos; Export GASTOS. Listado M6 y KPIs/proyectos M3 existen on-demand con wording propio (no se activan solo con «cómo va la planta») | Alto si se interpreta como KPI financiero IGF/ARR o como KPI de folios sin el intent `dashboard_kpis` |
-| 2 | ¿Qué acciones están vencidas? | Sí (limitado) | PARCIAL | Action Register | `summarizeTopOverdueActions` / context | Acciones fuera del top 10; notas excluidas | Medio (omisión por límite) |
+| 2 | ¿Qué acciones están vencidas? | Sí (limitado) | PARCIAL | Action Register | `summarizeTopOverdueActions` / context | Acciones fuera del top 10; notas de revisión son otro intent (no se mezclan con vencidas) | Medio (omisión por límite) |
 | 3 | ¿Quién es responsable de una acción? | Sí (limitado) | PARCIAL | Action Register | `summarizeActionRegisterResponsables`, narrativa chat | Responsables fuera del top 10 | Medio |
 | 4 | ¿Por qué cayó el ingreso? | Parcialmente | PARCIAL / INDIRECTA | commercial_state + DICF + bitácora + IGF/ARR | `loadCommercialStateForChat`, `summarizeDicfContext`, anexo IGF/ARR | Causalidad no estructurada (M9 compara periodos reales; no afirma por qué cayó el ingreso) | Alto (hipótesis narrativa) |
 | 5 | ¿La caída proviene de venta o descuento? | Parcialmente | PARCIAL | ARR/IGF annex + commercial_state; familias M9 solo si el intent es `delta_*` | `loadIgfArrAnnexForChat`; loaders M9 si wording es «cómo cambió venta/descuento» | Esta pregunta causal no es el intent M9; no atribución automática venta vs descuento | Medio-Alto |
@@ -983,6 +983,7 @@
 | ¿Qué alias tiene una entidad? | Sí (API/UI) | PARCIAL | Entidades | `/api/director-ia/comercial-entidades*` | Si no está en catálogo | Bajo-Medio |
 | ¿Qué documentos tiene / listar registros documentales de un folio? | Sí (solo metadata DB; no PDF/S3; no faltantes) | PARCIAL | Metadata `public.folio_archivos` | `loadFolioDocumentsMetadataForChat` / `get_folio_documents` (SELECT-only; **no** `/media`; **no** S3) | Contenido, URLs, documentos faltantes, cumplimiento | Alto si se lee como documentación completa o como «faltan documentos» |
 | ¿Cómo cambió la clasificación de apoyos entre mes_a y mes_b? | Sí (matriz agregada; no Excel; no COMPARAR) | PARCIAL | Folios + `buildClasificacionMatrix` | `loadClasificacionApoyosForChat` / `get_clasificacion_apoyos_query` | COMPARAR; Excel; causa del delta; igualdad con totales M6 | Alto si se lee como desviación presupuestal o como M6/M5 |
+| ¿Qué dicen las notas de la última revisión / de una revisión? | Sí (texto/autor/`created_at` de una revisión; no ítem) | PARCIAL | `arr.action_register_revision_notes` | `loadActionRegisterRevisionNotesForChat` / `get_action_register_revision_notes` | Revisión no identificada (clarifica); overflow >8; body >500 truncado; attachments | Alto si se lee como nota de ítem, acuerdo formal, Plaud, history M2 o comentario de folio |
 
 ---
 
@@ -1229,7 +1230,7 @@ Escala 1–5. Prioridad derivada de: valor ejecutivo × disponibilidad de funcio
 
 ### 1. Resumen de cobertura real actual
 
-Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Register**, **DICF**, **bitácora**, **comentarios** (cliente y folio) y **entidades comerciales**, con **anexos financieros on-demand** (IGF/ARR/margen/estado comercial) activados por **regex** en el chat, **análisis on-demand de posibles duplicados de folios** (M16: `findDuplicatePairs`, no confirmación), **consulta on-demand de KPIs de dashboard y proyectos por planta** (M3: `get_dashboard_kpis` / `get_project_status`; no catálogo global; no creación de proyectos), **consulta on-demand de Delta Venta / Descuento / Ingreso de periodos reales** (M9: `get_delta_sales` / `get_delta_discount` / `get_delta_income`; no forecast con escritura; no M19), **consulta on-demand de estatus/etapa de folio** (M2 slice `folio_status`: `get_folio_status` / `loadFolioStatusForChat`; SELECT-only; no GET kanban; no GET `/folios/:id`; no autoavance), **consulta on-demand del historial de folio** (M2 slice `folio_history`: `get_folio_history` / `loadFolioHistoryForChat`; SELECT-only de `public.folio_historial`; no GET `/timeline`; no `dedupeHistorialByStage`; no autoavance), **consulta on-demand de metadata documental de folio** (M2 slice `folio_documents`: `get_folio_documents` / `loadFolioDocumentsMetadataForChat`; SELECT-only de `public.folio_archivos` con proyección segura; no S3; no PDF; no `s3_key`; no «faltan documentos»), y **consulta on-demand de GASTOS e INVERSIONES de folios** (M6 slice query JSON: `get_expense_analysis` / `get_investment_analysis` / `loadGastosInversionesForChat`; SELECT `public.folios` + `expandCategoriaRows`; `YYYY-MM` obligatorio; no Excel; no Export; no IGF), y **consulta on-demand de la matriz comparativa de clasificación de apoyos** (M4 slice query JSON: `get_clasificacion_apoyos_query` / `loadClasificacionApoyosForChat`; SELECT `public.folios` + `buildClasificacionMatrix`; `mes_a` vs `mes_b` obligatorios y distintos; GASTOS / INVERSIONES / TALLER separados; sin fallback a 6 plantas; no COMPARAR; no Excel), y **consulta on-demand del carro presupuestal semanal** (M18 slice query JSON: `get_budget_status` / `loadPresupuestoSemanalForChat`; SELECT `presupuestos_semanales` + `presupuesto_folios`; no inventa semana; no filtra solo `ABIERTO`; no writes; no cheques; no WhatsApp; no `presupuesto_asignacion_detalle`). **No** opera el kanban HTTP, **no** usa `/timeline` como transporte interno, **no** lee contenido PDF/S3/pólizas/cheques/COMPARAR-Excel de clasificación/taller/Export xlsx GASTOS-INVERSIONES ni el forecast mutante de ingreso. Las escrituras propias (bitácora/entidades) existen por **API UI**, no como tools autónomos del LLM. El GET `/api/director-ia/context` **subdeclara** IGF/ARR/commercial_state respecto al chat.
+Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Register**, **DICF**, **bitácora**, **comentarios** (cliente y folio) y **entidades comerciales**, con **anexos financieros on-demand** (IGF/ARR/margen/estado comercial) activados por **regex** en el chat, **análisis on-demand de posibles duplicados de folios** (M16: `findDuplicatePairs`, no confirmación), **consulta on-demand de KPIs de dashboard y proyectos por planta** (M3: `get_dashboard_kpis` / `get_project_status`; no catálogo global; no creación de proyectos), **consulta on-demand de Delta Venta / Descuento / Ingreso de periodos reales** (M9: `get_delta_sales` / `get_delta_discount` / `get_delta_income`; no forecast con escritura; no M19), **consulta on-demand de estatus/etapa de folio** (M2 slice `folio_status`: `get_folio_status` / `loadFolioStatusForChat`; SELECT-only; no GET kanban; no GET `/folios/:id`; no autoavance), **consulta on-demand del historial de folio** (M2 slice `folio_history`: `get_folio_history` / `loadFolioHistoryForChat`; SELECT-only de `public.folio_historial`; no GET `/timeline`; no `dedupeHistorialByStage`; no autoavance), **consulta on-demand de metadata documental de folio** (M2 slice `folio_documents`: `get_folio_documents` / `loadFolioDocumentsMetadataForChat`; SELECT-only de `public.folio_archivos` con proyección segura; no S3; no PDF; no `s3_key`; no «faltan documentos»), y **consulta on-demand de GASTOS e INVERSIONES de folios** (M6 slice query JSON: `get_expense_analysis` / `get_investment_analysis` / `loadGastosInversionesForChat`; SELECT `public.folios` + `expandCategoriaRows`; `YYYY-MM` obligatorio; no Excel; no Export; no IGF), y **consulta on-demand de la matriz comparativa de clasificación de apoyos** (M4 slice query JSON: `get_clasificacion_apoyos_query` / `loadClasificacionApoyosForChat`; SELECT `public.folios` + `buildClasificacionMatrix`; `mes_a` vs `mes_b` obligatorios y distintos; GASTOS / INVERSIONES / TALLER separados; sin fallback a 6 plantas; no COMPARAR; no Excel), y **consulta on-demand del carro presupuestal semanal** (M18 slice query JSON: `get_budget_status` / `loadPresupuestoSemanalForChat`; SELECT `presupuestos_semanales` + `presupuesto_folios`; no inventa semana; no filtra solo `ABIERTO`; no writes; no cheques; no WhatsApp; no `presupuesto_asignacion_detalle`), y **consulta on-demand de notas de revisión del Action Register** (M12 slice: `get_action_register_revision_notes` / `loadActionRegisterRevisionNotesForChat`; SELECT `arr.action_register_revision_notes` por `revision_id`; 1 revisión / 8 notas / 500 caracteres; última = `revision_date DESC`; `includeNotes` del context sigue `false`; no ítem; no Plaud; no M2; no binarios). **No** opera el kanban HTTP, **no** usa `/timeline` como transporte interno, **no** lee contenido PDF/S3/pólizas/cheques/COMPARAR-Excel de clasificación/taller/Export xlsx GASTOS-INVERSIONES ni el forecast mutante de ingreso. Las escrituras propias (bitácora/entidades) existen por **API UI**, no como tools autónomos del LLM. El GET `/api/director-ia/context` **subdeclara** IGF/ARR/commercial_state respecto al chat.
 
 ### 2. Dominios completos (COMPLETA)
 
@@ -1248,7 +1249,7 @@ Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Re
 - M7 IGF (chat on-demand)
 - M8 ARR (chat on-demand / motor DICF)
 - M11 DICF + comentarios cliente
-- M12 Action Register (+ Mejora Continua)
+- M12 Action Register (+ Mejora Continua; slice notas de revisión on-demand; `includeNotes` always-on sigue false; no COMPLETE)
 - M17 WhatsApp (solo link de acceso)
 - M18 Presupuestos semanales (query JSON del carro; no writes; no cheques; no WhatsApp; no COMPLETE)
 
@@ -1265,6 +1266,7 @@ Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Re
 - M10 Weekly discount LD  
 - M14 Usuarios admin (como dominio)  
 - M15 Documentos/medios  
+- M12 evidencias / CRUD / binarios (el slice de notas de revisión ya está en PARCIAL M12; COMPLETE de M12 sigue fuera)
 - M18 writes / cheques / WhatsApp (el query JSON ya está en PARCIAL M18; COMPLETE de M18 sigue fuera)
 - M19 Delta Ingreso AI test  
 - Kanban HTTP / GET `/timeline` (excluido) / contenido PDF / S3 / documentos faltantes / cheque / póliza / `kanban_flow` (estatus/etapa, historial crudo y metadata documental ya están en PARCIAL M2; proyectos de `public.proyectos` ya están en COMPLETA M3)
@@ -1274,6 +1276,7 @@ Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Re
 | Capacidad | Respaldo |
 |-----------|----------|
 | RESUMIR Action Register / vencidas / responsables | `summarize*` en `director-ia-action-register.js` + `buildActionRegisterBoardPayload` |
+| CONSULTAR notas de revisión Action Register (read-only) | `loadActionRegisterRevisionNotesForChat` → SELECT `arr.action_register_revision_notes` (`revision_id`; no ítem) |
 | CONSULTAR/BUSCAR DICF | `summarizeDicfContext`, filtros chat |
 | CONSULTAR bitácora | `loadBitacoraForChat` |
 | CONSULTAR comentarios | `loadClienteComentariosForDirectorIa`, `loadFolioComentariosForDirectorIa` |
@@ -1305,6 +1308,7 @@ Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Re
 | Clasificación COMPARAR / Excel | Query JSON M4 ya integrado (SELECT + `buildClasificacionMatrix`). POSTs COMPARAR y workbook siguen existiendo | COMPARAR writes (`insertFolio` / `UPDATE mes_cargo`); Excel/xlsx; no COMPLETE |
 | Deltas UI (forecast con escritura / M19) | Sí (`delta-ingreso-forecast`, `/api/ai/delta-ingreso/test/*`) | La lectura de periodos reales ya está en COMPLETA M9; faltan forecast mutante y M19, a propósito fuera |
 | Presupuesto semanal (writes / cheques / WhatsApp) | Query JSON M18 ya integrado (SELECT + `getPresupuestoResumen`). Writes y bot existen en `server.js` | Asignar/seleccionar; enviar a cheques; Twilio/WhatsApp; no COMPLETE |
+| Action Register notas / evidencias / CRUD | Slice notas de revisión ya integrado (`loadActionRegisterRevisionNotesForChat`; `includeNotes` always-on sigue false) | Attachments/S3/PDF; CRUD ítems; no COMPLETE; no atribuir nota a ítem |
 | Proyectos (crear/editar/eliminar) | Sí (`POST /api/proyectos`) | Escritura; la lectura M3 ya está integrada |
 | KPIs dashboard (lectura) | Sí (integrado M3) | — |
 | Weekly LD | Sí | Tool |
