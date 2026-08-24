@@ -633,6 +633,231 @@ describe("plant_diagnosis chat wiring", () => {
   });
 });
 
+describe("commercial_materiality_and_coverage", () => {
+  const {
+    buildCommercialMateriality,
+    applyDicfCoverageToMateriality,
+    classifyCommercialMovement,
+    finiteKg,
+    previousYearMonth,
+    deriveClienteKeysForRow,
+    MAGNITUDE_FIELD,
+  } = require("../lib/director-ia-plant-diagnosis");
+
+  it("kg_mes_real es la magnitud; null no es 0; forecast no es pérdida", () => {
+    assert.equal(MAGNITUDE_FIELD, "kg_mes_real");
+    assert.equal(finiteKg(null), null);
+    assert.equal(finiteKg(undefined), null);
+    assert.equal(finiteKg(""), null);
+    assert.equal(finiteKg(0), 0);
+    assert.notEqual(finiteKg(0), null);
+    assert.deepEqual(previousYearMonth(2026, 1), { year: 2025, month: 12 });
+    const mat = buildCommercialMateriality({
+      year: 2026,
+      month: 2,
+      plantaId: 1,
+      currentRows: [
+        {
+          cliente_norm: "Acme",
+          canal: "Casa",
+          subcanal: "",
+          estado: "Activo",
+          es_recuperable: true,
+          kg_mes_real: 0,
+          kg_mes_forecast: 900,
+        },
+      ],
+      priorRows: [{ cliente_norm: "Acme", canal: "Casa", subcanal: "", kg_mes_real: 400 }],
+    });
+    const dejaron = mat.categories.find((c) => c.category === "dejaron");
+    assert.equal(dejaron.period, "2026-01");
+    assert.equal(dejaron.top_clients[0].observed_magnitude_kg, 400);
+    assert.equal(dejaron.top_clients[0].kg_mes_forecast_not_used, 900);
+    assert.equal(dejaron.top_clients[0].provenance, CS_SOURCE);
+    assert.equal(dejaron.denominator_kg, 400);
+    assert.equal(dejaron.top_n_share, 1);
+    assert.equal(dejaron.forecast_not_used_as_loss, true);
+    assert.equal(mat.unit, "kg");
+    assert.equal(mat.provenance, CS_SOURCE);
+  });
+
+  it("clasifica dejaron por es_recuperable y disminuyeron solo por estado almacenado", () => {
+    assert.equal(
+      classifyCommercialMovement({
+        es_recuperable: true,
+        estado: "Activo",
+        kg_mes_forecast: 10,
+        kg_mes_real: 1,
+      }),
+      "dejaron"
+    );
+    assert.equal(
+      classifyCommercialMovement({ estado: "Disminuyeron", kg_mes_real: 50, kg_mes_forecast: 80 }),
+      "disminuyeron"
+    );
+    assert.equal(
+      classifyCommercialMovement({
+        estado: "Activo",
+        es_recuperable: false,
+        kg_mes_real: 10,
+        kg_mes_forecast: 50,
+      }),
+      null
+    );
+  });
+
+  it("concentración top-N con denominador explícito y empate determinístico", () => {
+    const mat = buildCommercialMateriality({
+      year: 2026,
+      month: 3,
+      plantaId: 1,
+      topN: 2,
+      currentRows: [
+        { cliente_norm: "Beta", canal: "Casa", subcanal: "", estado: "Disminuyeron", kg_mes_real: 100 },
+        { cliente_norm: "Alfa", canal: "Casa", subcanal: "", estado: "Disminuyeron", kg_mes_real: 100 },
+        { cliente_norm: "Gamma", canal: "Casa", subcanal: "", estado: "Disminuyeron", kg_mes_real: 50 },
+        { cliente_norm: "NullCo", canal: "Casa", subcanal: "", estado: "Disminuyeron", kg_mes_real: null },
+      ],
+      priorRows: [],
+    });
+    const cat = mat.categories.find((c) => c.category === "disminuyeron");
+    assert.equal(cat.period, "2026-03");
+    assert.equal(cat.denominator_kg, 250);
+    assert.equal(cat.client_count_ranked, 3);
+    assert.equal(cat.client_count_magnitude_unknown, 1);
+    assert.equal(cat.top_clients.length, 2);
+    assert.equal(cat.top_clients[0].cliente_display, "Alfa");
+    assert.equal(cat.top_clients[1].cliente_display, "Beta");
+    assert.equal(cat.top_clients[0].share_of_observed_magnitude, 100 / 250);
+    assert.equal(cat.top_n_share, 200 / 250);
+    assert.equal(cat.magnitude_unknown_clients[0].cliente_display, "NullCo");
+    assert.equal(cat.magnitude_unknown_clients[0].missing_reason, "current_month_kg_mes_real_null");
+  });
+
+  it("dejaron sin mes previo no convierte null en 0 ni entra al ranking", () => {
+    const mat = buildCommercialMateriality({
+      year: 2026,
+      month: 2,
+      plantaId: 1,
+      currentRows: [{ cliente_norm: "Hueco", canal: "Casa", subcanal: "", es_recuperable: true, kg_mes_real: 0 }],
+      priorRows: [],
+    });
+    const cat = mat.categories.find((c) => c.category === "dejaron");
+    assert.equal(cat.denominator_kg, 0);
+    assert.equal(cat.top_clients.length, 0);
+    assert.equal(cat.magnitude_unknown_clients[0].missing_reason, "prior_month_row_absent");
+  });
+
+  it("cliente_key usa patrón M11 y no join por nombre", () => {
+    const keys = deriveClienteKeysForRow(1, {
+      cliente_norm: "Acme",
+      canal: "Casa",
+      subcanal: "",
+      estado: "Dejaron de comprar",
+    });
+    assert.ok(keys.length >= 1);
+    assert.ok(keys.every((k) => String(k).startsWith("1|")));
+    assert.ok(keys.some((k) => k.includes("dejaron de comprar")));
+    const mat = buildCommercialMateriality({
+      year: 2026,
+      month: 2,
+      plantaId: 1,
+      currentRows: [
+        { cliente_norm: "Acme", canal: "Casa", subcanal: "", es_recuperable: true, kg_mes_real: 0 },
+        { cliente_norm: "Otro", canal: "Casa", subcanal: "", es_recuperable: true, kg_mes_real: 0 },
+      ],
+      priorRows: [
+        { cliente_norm: "Acme", canal: "Casa", subcanal: "", kg_mes_real: 200 },
+        { cliente_norm: "Otro", canal: "Casa", subcanal: "", kg_mes_real: 50 },
+      ],
+    });
+    const acme = mat.categories[0].top_clients.find((c) => c.cliente_display === "Acme");
+    const covered = applyDicfCoverageToMateriality(
+      mat,
+      [
+        {
+          id: 9,
+          public_code: "D-9",
+          cliente_key: acme.cliente_keys[0],
+          estado: "pendiente",
+          fecha_compromiso: "2026-01-01",
+          created_at: "2026-01-02",
+          responsable: "Julio Pérez",
+          resultado_cierre: null,
+        },
+        {
+          id: 10,
+          public_code: "D-10",
+          cliente_key: "",
+          cliente_nombre: "Otro",
+          estado: "pendiente",
+          fecha_compromiso: "2026-01-01",
+          created_at: "2026-01-03",
+          responsable: "Nombre Libre",
+        },
+      ],
+      { plantaId: 1, todayYmd: "2026-08-23" }
+    );
+    const acmeCov = covered.categories[0].top_clients.find((c) => c.cliente_display === "Acme");
+    const otro = covered.categories[0].top_clients.find((c) => c.cliente_display === "Otro");
+    assert.equal(acmeCov.has_dicf_action, true);
+    assert.equal(acmeCov.coverage_status, "material_with_overdue_action");
+    assert.equal(acmeCov.latest_action.responsable, "Julio Pérez");
+    assert.ok(acmeCov.review_reasons.includes("dicf_action_overdue"));
+    assert.equal(otro.has_dicf_action, false);
+    assert.equal(otro.coverage_status, "material_without_action");
+    assert.equal(otro.latest_action, null);
+    assert.equal(covered.coverage_name_join, false);
+    assert.equal(covered.coverage_join, "cliente_key");
+  });
+
+  it("sin cliente_key no afirma ausencia de acción", () => {
+    const mat = buildCommercialMateriality({
+      year: 2026,
+      month: 3,
+      currentRows: [{ cliente_norm: "Zeta", canal: "Casa", subcanal: "", estado: "Disminuyeron", kg_mes_real: 10 }],
+      priorRows: [],
+    });
+    assert.deepEqual(mat.categories.find((c) => c.category === "disminuyeron").top_clients[0].cliente_keys, []);
+    const covered = applyDicfCoverageToMateriality(mat, [], { plantaId: 1, todayYmd: "2026-08-23" });
+    const zeta = covered.categories.find((c) => c.category === "disminuyeron").top_clients[0];
+    assert.equal(zeta.coverage_status, "coverage_unknown");
+    assert.equal(zeta.has_dicf_action, null);
+  });
+
+  it("assemble expone materialidad y el prompt pide revisar primero sin causalidad", () => {
+    const raw = buildCommercialMateriality({
+      year: 2026,
+      month: 2,
+      plantaId: 1,
+      currentRows: [{ cliente_norm: "Acme", canal: "Casa", subcanal: "", es_recuperable: true, kg_mes_real: 0 }],
+      priorRows: [{ cliente_norm: "Acme", canal: "Casa", subcanal: "", kg_mes_real: 400 }],
+    });
+    const assembled = assembleOk({
+      commercialStateRaw: {
+        ...csAvailable(),
+        payload: { ...csAvailable().payload, commercial_materiality: raw },
+      },
+    });
+    assert.equal(assembled.commercial_materiality.unit, "kg");
+    assert.equal(assembled.commercial_materiality.magnitude_field, "kg_mes_real");
+    assert.equal(assembled.commercial_materiality.provenance, CS_SOURCE);
+    assert.equal(assembled.sources.action_register.source, AR_SOURCE);
+    assert.equal(assembled.sources.igf.source, IGF_SOURCE);
+    const prompt = buildPlantDiagnosisPrompt(assembled, "¿Qué clientes requieren mi atención primero?");
+    assert.match(prompt.userContent, /MATERIALIDAD COMERCIAL/);
+    assert.match(prompt.userContent, /denominador_kg=400/);
+    assert.match(prompt.userContent, /Acme/);
+    assert.match(prompt.userContent, /señala primero los clientes/);
+    assert.match(prompt.systemPrompt, /No restes forecast-real/);
+    assert.match(prompt.systemPrompt, /declaración almacenada/);
+    assert.doesNotMatch(prompt.userContent, /BLOQUE M9/);
+    const result = buildPlantDiagnosisChatResult(assembled, { answer: "Revisar Acme. Sin causa.", planta_id: 1 });
+    assert.equal(result.context_meta.openai_call_count, 1);
+    assert.equal(result.plant_diagnosis.commercial_materiality.magnitude_field, "kg_mes_real");
+  });
+});
+
 describe("límites de implementación", () => {
   it("SELECT-only: no computeDicf, no cache writes, no HTTP, no M9", () => {
     assert.doesNotMatch(PD_SRC, /computeDicf\s*\(/);
@@ -645,6 +870,9 @@ describe("límites de implementación", () => {
     assert.doesNotMatch(PD_SRC, /\bUPDATE\s+\w+\s+SET\b/i);
     assert.doesNotMatch(PD_SRC, /\bDELETE\s+FROM\b/i);
     assert.match(PD_SRC, /FROM arr\.dicf_cliente_mes/);
+    assert.match(PD_SRC, /kg_mes_real/);
+    assert.doesNotMatch(PD_SRC, /kg_mes_forecast\s*-\s*kg_mes_real/);
+    assert.doesNotMatch(PD_SRC, /accionesAbiertasByNombre/);
     const branch = CHAT_SRC.split("plant_diagnosis in-process")[1] || "";
     const untilDelta = branch.split("delta_sales in-process")[0] || "";
     assert.doesNotMatch(untilDelta, /computeDicf/);
