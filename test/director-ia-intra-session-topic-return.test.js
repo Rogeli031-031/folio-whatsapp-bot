@@ -33,6 +33,8 @@ const FRAME_ALLOWED = new Set([
   "last_evidence_bundle_type",
   "pending_information_gap",
   "active_date",
+  "active_range_days",
+  "active_channel",
 ]);
 
 function srcBlock(name, extra = {}) {

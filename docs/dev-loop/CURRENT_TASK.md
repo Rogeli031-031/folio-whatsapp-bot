@@ -1,517 +1,498 @@
 # CURRENT_TASK
 
 ```yaml
-task_id: "ARCH-DIRECTOR-IA-COMMERCIAL-TREND-CHART-PARITY-001"
+task_id: "IMPL-DIRECTOR-IA-COMMERCIAL-TREND-CHART-PARITY-001"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-08-24"
 human_authorization: >
   AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-24.
-  Apruebo ARCH-DIRECTOR-IA-COMMERCIAL-TREND-CHART-PARITY-001
-  y autorizo G1 exclusivamente para readiness/auditoría.
+  Apruebo IMPL-DIRECTOR-IA-COMMERCIAL-TREND-CHART-PARITY-001
+  y autorizo G1.
 
 gates:
   G1_task_authorization: AUTHORIZED
-  G2_architecture_change: N/A_PENDING_AUDIT
-  G3_new_architecture_contract: N/A_PENDING_AUDIT
+  G2_architecture_change: N/A
+  G3_new_architecture_contract: N/A
   G5_contract_conformance: N/A
   G8_calibration_materiality_signature: N/A
 
 mode:
-  type: "READINESS_ONLY"
-  implementation: false
-  code_changes: false
-  runtime_changes: false
-  test_changes: false
-  matrix_changes: false
-  contract_changes: false
-  sql_execution: false
+  type: "IMPLEMENTATION"
+  architecture: "B — shared backend engine"
+  first_slice: "B — series + OLS + top-6 movers"
 
 objective: >
-  Determinar la arquitectura mínima para que Director IA pueda responder
-  preguntas de tendencia comercial de 30/90 días por CASA y COMISIONISTAS con
-  paridad matemática y semántica respecto a la gráfica real del dashboard,
-  reutilizando una fuente/motor común y evitando duplicar lógica en frontend,
-  server y chat.
+  Extraer/reutilizar un motor comercial compartido para que el dashboard y
+  Director IA consuman exactamente la misma verdad de tendencia de venta:
+  serie diaria, rango 30/90 días, canal CASA/COMISIONISTA, pendiente OLS y
+  top-6 movers. Exponer esa capacidad al chat mediante un intent canónico
+  commercial_trend, sin internal HTTP, sin comments en este slice y sin
+  causalidad inventada.
 
 baseline:
   global: "10.5 / 20 = 52.5%"
-  percentage_effect: "0.0 pp"
+  expected_delta: "0.0 pp"
 
-prior_audit:
-  task: "AUDIT-DIRECTOR-IA-PRODUCTION-CONVERSATION-GAP-009"
-  bottleneck: "dashboard_venta_serie_engine_unreachable_from_chat"
-  failure_class: "MISSING_INFRASTRUCTURE"
-
-physical_findings_from_prior_audit:
-  dashboard_endpoint: "GET /api/arr/venta-serie"
-  trend_function_location: "frontend ArrVentaGraficaModal.tsx / linearTrend"
-  chart_behavior:
-    - "daily series"
-    - "30-day range"
-    - "90-day range"
-    - "channel split"
-    - "CASA"
-    - "COMISIONISTA/COMISIONISTAS"
-    - "top-6 clients by delta"
-    - "OLS trend slope"
-    - "comments shown as contextual evidence"
-  chat_gap: >
-    No existe motor equivalente/reutilizable en lib/ y las preguntas caen a
-    unknown -> clarification.
-
-north_star: >
-  Cuando el usuario pregunte “¿Cómo vamos en CASA los últimos 3 meses?”,
-  Director IA debe hablar exactamente del mismo objeto matemático que muestra
-  la gráfica del dashboard: mismo rango, misma serie, mismo canal, misma
-  tendencia y mismos movers, con evidencia fresca y sin causalidad inventada.
-
-canonical_product_questions:
-  - "¿Cómo vamos en el último mes?"
-  - "¿Cómo vamos en los últimos 3 meses?"
-  - "¿Cómo vamos en CASA?"
-  - "¿Cómo van los COMISIONISTAS?"
-  - "Compárame CASA contra COMISIONISTAS."
-  - "¿Venimos subiendo o bajando?"
-  - "¿Quién explica más la caída?"
-  - "¿Qué sabemos de esos clientes?"
-
-semantic_holdouts:
-  test_only:
-    - "¿Qué tendencia trae CASA?"
-    - "¿Cómo se ha comportado COMISIONISTAS?"
-    - "¿Qué pasó con CASA estos meses?"
-    - "¿Cuál de los dos viene peor?"
-    - "¿Desde cuándo se ve la caída?"
-
-  rule: >
-    Son tests de intención; no phrasebook.
-
-mandatory_chart_engine_audit:
-
-  inspect_backend:
-    - "GET /api/arr/venta-serie"
-    - "query/source tables"
-    - "date filtering"
-    - "plant filtering"
-    - "channel filtering"
-    - "client aggregation"
-    - "top movers computation"
-    - "comments source"
-
-  inspect_frontend:
-    - "ArrVentaGraficaModal.tsx"
-    - "linearTrend"
-    - "range semantics"
-    - "30/90 selector"
-    - "CASA/COMISIONISTA selection"
-    - "graph data transformations"
-    - "any sorting/filtering done only in frontend"
-
-  determine:
-    - "what is data truth from backend"
-    - "what is derived truth in frontend"
-    - "what must move to reusable lib/"
-    - "what dashboard can continue consuming unchanged"
+readiness:
+  task: "ARCH-DIRECTOR-IA-COMMERCIAL-TREND-CHART-PARITY-001"
+  determination: "READY_WITH_LIMITS"
+  architecture: "B"
+  first_slice: "B"
 
 single_source_of_truth:
+  mandatory: true
 
-  central_principle: >
-    Dashboard and Director IA must consume the same commercial trend engine.
+  desired_shape: >
+    reusable lib engine
+      -> dashboard GET /api/arr/venta-serie
+      -> Director IA commercial_trend
 
   prohibited:
-    - "copying linearTrend into Director IA only"
-    - "reimplementing SQL separately in chat"
-    - "frontend-only truth for production reasoning"
-    - "internal HTTP from chat to dashboard endpoint if helper reuse is possible"
+    - "chat-specific SQL reimplementation"
+    - "copying linearTrend only into Director IA"
+    - "internal HTTP from chat to /api/arr/venta-serie"
+    - "leaving dashboard and chat with divergent trend math"
+
+shared_engine:
+  preferred_file: "lib/commercial-trend-engine.js"
+
+  responsibilities:
+    - "resolve plant scope"
+    - "resolve range"
+    - "load daily commercial series"
+    - "apply channel split"
+    - "compute/return top movers"
+    - "compute OLS trend or call shared pure OLS helper"
+    - "return provenance/limitations"
+
+  requirement: >
+    Extract existing backend logic rather than rewrite it unless extraction is
+    physically impossible.
+
+dashboard_parity:
+  endpoint: "GET /api/arr/venta-serie"
+
+  requirement: >
+    Refactor endpoint to delegate to the shared engine while preserving its
+    externally observable response/behavior unless a tiny compatibility adapter
+    is required.
+
+  invariant: >
+    Existing dashboard must not change meaning.
+
+frontend_trend:
+  current_source: "ArrVentaGraficaModal.tsx linearTrend"
+
+  implementation_goal: >
+    Move/canonicalize OLS truth into shared backend/pure JS semantics so
+    Director IA and dashboard can be verified against identical math.
+
+  compatibility:
+    rule: >
+      Do not silently change displayed trend.
 
   preferred:
-    - "extract/reuse pure shared lib helper(s)"
-    - "server endpoint delegates to shared engine"
-    - "Director IA loader delegates to same engine"
+    - "shared pure linearTrend helper usable in tests"
+    - "backend returns slope/trend metadata if needed"
+    - "frontend may continue rendering from same points, but parity tests must
+       prove same slope"
 
-architecture_candidates:
+OLS_semantics:
+  canonical:
+    x: "index of already-filtered daily points"
+    y: "venta_ton"
+    n_lt_2: "null"
 
-  A_chat_reimplements:
-    description: >
-      Director IA recreates query + OLS separately.
+  required_output:
+    - "slope"
+    - "observation_count"
+    - "direction derived from sign only when slope != null"
 
-  B_shared_backend_engine:
-    description: >
-      Extract chart query/aggregation/trend semantics into reusable lib;
-      dashboard endpoint and chat both call it.
+  direction:
+    positive: "UP"
+    negative: "DOWN"
+    zero: "FLAT"
+    insufficient: "INSUFFICIENT_DATA"
 
-  C_call_existing_HTTP:
-    description: >
-      Director IA calls GET /api/arr/venta-serie internally.
-
-  D_frontend_formula_copy:
-    description: >
-      Copy linearTrend from React into chat runtime.
-
-  requirement:
-    - "compare A/B/C/D"
-    - "select exactly one"
-    - "prefer single source of truth"
-    - "avoid internal HTTP"
+  prohibited:
+    - "first vs last"
+    - "visual guess"
+    - "causal interpretation"
 
 range_semantics:
 
-  mandatory:
-    one_month:
-      determine: >
-        Exact physical meaning used by dashboard: 30 trailing calendar days,
-        current partial day inclusion/exclusion, or other.
+  one_month:
+    days: 30
 
-    three_months:
-      determine: >
-        Exact physical meaning: 90 trailing days vs calendar months.
+  three_months:
+    days: 90
 
-  rule: >
-    Director IA must declare the same period definition used by the chart.
+  anchor: "MAX(fecha) in available sales data"
 
-  explicit_period_precedence:
-    examples:
-      - "últimos 30 días"
-      - "últimos 90 días"
-      - "del 1 de junio al 31 de agosto"
+  inclusive:
+    last_available_day: true
 
-  requirement: >
-    Explicit range wins if supported.
+  invariant: >
+    Range is trailing from latest available data day, not automatically today
+    and not calendar month(s).
+
+  explicit_range:
+    rule: >
+      Preserve if existing engine supports it; otherwise do not broaden first
+      slice beyond 30/90.
 
 channel_semantics:
 
-  mandatory:
-    - "CASA"
+  canonical:
+    CASA:
+      rule: "rows not matching COMISIONISTA rule"
+
+    COMISIONISTA:
+      rule: "physical existing LIKE '%comisionista%' semantics"
+
+  aliases:
     - "COMISIONISTA"
-    - "COMISIONISTAS alias"
-    - "all channels / unspecified"
+    - "COMISIONISTAS"
 
-  determine:
-    - "physical channel field"
-    - "normalization"
-    - "whether CASA and COMISIONISTA are mutually exclusive"
-    - "how null/other channels are treated"
+  comparison:
+    rule: >
+      Comparing channels means load the same range independently for CASA and
+      COMISIONISTA. Do not use 'ambos' aggregate as the comparison.
 
-  rule: >
-    Do not silently map unsupported channel names.
+series:
+  required_fields:
+    - "date"
+    - "venta_ton"
 
-trend_math:
-
-  canonical: "OLS linear trend"
-
-  audit:
-    - "x-axis definition"
-    - "y-axis definition"
-    - "slope"
-    - "units"
-    - "minimum observations"
-    - "zero/missing day handling"
-    - "whether gaps are filled with zero or omitted"
-    - "whether outliers are kept"
-
-  output_semantics:
-    required:
-      - "slope"
-      - "direction"
-      - "range"
-      - "observation count"
-
-  rule: >
-    “Subiendo/bajando” must derive from the same OLS math as dashboard.
-
-  prohibited:
-    - "first vs last shortcut"
-    - "visual guess"
-    - "causal language"
-
-series_semantics:
-
-  audit:
-    - "daily kg"
+  preserve:
+    - "point order"
+    - "missing-day semantics from dashboard"
     - "aggregation grain"
-    - "missing dates"
-    - "same-day multi-client aggregation"
-    - "plant equivalents if any"
-
-  rule: >
-    Missing day semantics must match the chart.
+    - "same plant-equivalence behavior"
 
 top_movers:
+  count: 6
 
-  audit:
-    - "exact delta definition"
-    - "reference/comparison window"
-    - "top-6 selection"
-    - "positive/negative sorting"
-    - "client identity/key"
-    - "channel filter interaction"
+  requirement: >
+    Reuse the same delta definition and selection logic currently used by the
+    dashboard endpoint.
 
-  desired_output:
-    - "client"
+  required_fields_when_available:
+    - "cliente identity"
     - "delta"
     - "direction"
-    - "material contribution"
 
-  truth_boundary: >
-    Mover != cause.
+  invariant: >
+    mover != cause.
 
-comments_evidence:
+comments:
+  included_first_slice: false
 
-  audit:
-    - "physical source"
-    - "join key"
-    - "recency"
-    - "whether comments are client-specific"
-    - "how graph chooses displayed comments"
-
-  Director_IA_rule: >
-    Comments may contextualize a mover but remain declarations/notes, not proven
-    causal evidence.
-
-comparison_mode:
-
-  required_question: "Compárame CASA contra COMISIONISTAS."
-
-  determine:
-    - "whether both can be loaded for same range"
-    - "how to compare slopes"
-    - "period totals"
-    - "whether one common reference is needed"
-    - "whether comparison can be done without inventing a new score"
-
-  preferred_output:
-    - "CASA direction/slope"
-    - "COMISIONISTA direction/slope"
-    - "which is deteriorating/improving more by comparable slope if units equal"
-    - "largest movers by channel"
+  reason: >
+    Existing chart comments-by-name join is not acceptable as canonical
+    Director IA evidence.
 
   prohibited:
-    - "declare one 'worse' from raw totals alone if question is trend"
+    - "copy comments join by cliente_nombre"
+    - "pretend comment parity exists"
 
-new_intent_audit:
+  deferred: >
+    Comments may be added later only through canonical cliente_key evidence.
 
-  candidates:
-    - "commercial_trend"
-    - "commercial_channel_trend"
+intent:
+  name: "commercial_trend"
 
-  determine:
-    - "whether one canonical intent is sufficient"
-    - "whether existing commercial_state can safely represent this"
-    - "whether channel/range belong as slots/state, not intents"
-
-  rule: >
-    Avoid multiple intents for CASA vs COMISIONISTA vs 1M vs 3M.
-
-conversation_state:
-
-  desired_slots:
-    - "plant"
-    - "range"
+  slots:
+    - "range_days"
     - "channel"
-    - "active commercial trend context"
-
-  followups:
-    sequence:
-      - "¿Cómo vamos en CASA los últimos 3 meses?"
-      - "¿Y COMISIONISTAS?"
-      - "Compáralos."
-      - "¿Quién explica la caída?"
-      - "Háblame del primero."
-      - "¿Qué sabemos de él?"
-      - "¿Tiene alguna acción pendiente?"
-
-  audit:
-    - "range inheritance"
-    - "channel switch"
-    - "comparison state"
-    - "active client resolution"
-    - "handoff to existing client/action contexts"
+    - "plant"
 
   rule: >
-    Requery each turn. State retains routing context, not evidence.
+    Do not create separate intents for CASA, COMISIONISTA, 30d or 90d.
 
-materiality_and_reasoning:
+routing:
+  semantic_examples_test_only:
+    - "¿Cómo vamos en el último mes?"
+    - "¿Cómo vamos en los últimos 3 meses?"
+    - "¿Cómo vamos en CASA?"
+    - "¿Cómo van los COMISIONISTAS?"
+    - "¿Qué tendencia trae CASA?"
+    - "¿Cómo se ha comportado COMISIONISTAS?"
 
+  prohibited:
+    - "phrasebook"
+    - "exact full-sentence rules"
+
+  explicit_metric_precedence:
+    rule: >
+      Do not break daily_sales_deviation or daily_executive_brief.
+
+commercial_trend_pack:
+  required:
+    - "plant"
+    - "range_days"
+    - "range_start"
+    - "range_end/latest_available_date"
+    - "channel"
+    - "daily_series"
+    - "period_total if physically existing/derived"
+    - "OLS slope"
+    - "OLS direction"
+    - "observation_count"
+    - "top movers"
+    - "limitations"
+    - "provenance"
+
+GPT_boundary:
   runtime_owns:
     - "range"
     - "channel"
     - "series"
-    - "OLS slope"
-    - "totals"
+    - "OLS"
     - "movers"
-    - "comments retrieval"
     - "authz"
     - "provenance"
     - "absence/error"
 
   GPT_owns:
-    - "executive summary"
+    - "executive synthesis"
     - "what stands out"
     - "comparison wording"
-    - "what requires investigation"
-    - "follow-up"
+    - "what to investigate"
+    - "natural followups"
 
   prohibited:
-    - "scripted conclusion"
-    - "cause from correlation"
-    - "good/bad hardcode"
+    - "scripted explanation"
+    - "trend cause"
+    - "client mover treated as cause"
+
+comparison_mode:
+  canonical_question: "Compárame CASA contra COMISIONISTAS."
+
+  behavior:
+    - "same plant"
+    - "same range"
+    - "fresh CASA engine call"
+    - "fresh COMISIONISTA engine call"
+    - "two slopes"
+    - "two totals if available"
+    - "movers separated by channel"
+
+  GPT:
+    may_say: >
+      Which channel has the more negative/positive comparable slope.
+
+    must_not_say: >
+      Why one channel moved unless evidence separately supports causality.
+
+conversation_state:
+  parent_intent: "commercial_trend"
+
+  slots:
+    - "active_range_days"
+    - "active_channel"
+    - "plant"
+
+  rule: >
+    State stores routing context only. Requery evidence every turn.
+
+channel_switch:
+  sequence:
+    - "¿Cómo vamos en CASA los últimos 3 meses?"
+    - "¿Y COMISIONISTAS?"
+
+  expected:
+    - "range remains 90"
+    - "channel changes"
+    - "fresh engine query"
+
+comparison_followup:
+  sequence:
+    - "CASA 90d"
+    - "¿Y COMISIONISTAS?"
+    - "Compáralos."
+
+  expected: >
+    Requery both or use only current-turn fresh evidence according to existing
+    safety pattern; never treat old assistant answer as evidence.
+
+mover_followup:
+  sequence:
+    - "¿Quién explica más la caída?"
+    - "Háblame del primero."
+
+  safe_semantics:
+    first_turn: >
+      Interpret as largest mathematical mover/contributor, not causal explainer.
+
+    second_turn: >
+      Active client may be handed off only through canonical entity resolution.
+
+  wording_boundary: >
+    GPT should correct causal wording where necessary:
+    “X es el mayor contribuidor al movimiento; eso no demuestra la causa.”
+
+client_handoff:
+  first_slice_requirement: >
+    If existing canonical client resolution can safely receive the selected
+    mover, preserve/enable handoff without building the longitudinal profile.
+
+  out_of_scope:
+    - "3-month client longitudinal read model"
 
 partial_data:
-
   cases:
-    - "series exists, comments unavailable"
-    - "CASA exists, COMISIONISTA absent"
-    - "insufficient observations for trend"
-    - "source error"
+    - "insufficient observations"
+    - "CASA available / COMISIONISTA absent"
     - "no rows"
+    - "source error"
 
-  required:
-    - "partial answer when possible"
-    - "explicit limitation"
-    - "no missing = zero unless chart semantics prove it"
+  rules:
+    - "answer partially when valid evidence exists"
+    - "limitations explicit"
+    - "missing != zero unless existing chart semantics explicitly use zero"
 
-parity_acceptance:
+authz:
+  preserve:
+    - "current plant"
+    - "plantas_permitidas"
+    - "no cross-plant"
+    - "fail-closed"
 
-  mandatory: >
-    For a fixed fixture/range/channel, dashboard engine and Director IA engine
-    must produce the same:
-    - dates
-    - daily values
-    - slope
-    - top movers
-    - totals if exposed
+parity_tests:
+  mandatory: true
+
+  fixed_fixture:
+    compare:
+      - "shared engine result"
+      - "dashboard endpoint adapter result"
+      - "Director IA pack result"
+
+  must_match:
+    - "range_start"
+    - "range_end"
+    - "daily dates"
+    - "daily venta_ton"
+    - "top-6 movers"
+    - "OLS slope"
+    - "observation count"
 
   tolerance:
-    numeric: >
-      Determine exact/rounding tolerance based on existing frontend behavior.
+    rule: >
+      Match exact source values before display rounding. Define only a tiny
+      floating-point tolerance for OLS if necessary.
 
-first_slice_candidates:
+regression_tests:
+  mandatory:
+    - "existing /api/arr/venta-serie behavior"
+    - "dashboard expected shape"
+    - "daily executive brief"
+    - "daily sales"
+    - "daily discount"
+    - "commercial_state"
+    - "natural followup"
+    - "topic return"
+    - "action-person"
+    - "IGF reviewable supports"
+    - "persistent memory"
+    - "planner"
+    - "capabilities"
+    - "orchestrator"
+    - "full Director IA suite"
 
-  A_series_plus_slope:
-    description: "trend direction only"
+preferred_files:
+  new:
+    - "lib/commercial-trend-engine.js"
+    - "lib/director-ia-commercial-trend.js"
+    - "test/director-ia-commercial-trend.test.js"
 
-  B_series_slope_plus_movers:
-    description: >
-      trend + top client movers, no comments.
+  modified_if_required:
+    - "server.js"
+    - "lib/director-ia-chat.js"
+    - "lib/director-ia-planner.js"
+    - "lib/director-ia-conversation-state.js"
+    - "lib/director-ia-tools.js"
 
-  C_chart_parity_full:
-    description: >
-      series + slope + movers + contextual comments using same graph engine.
-
-  D_generic_commercial_analytics_framework:
-    description: "build extensible analytics engine"
-
-  requirement:
-    - "compare A/B/C/D"
-    - "select exactly one"
-    - "prefer enough parity to answer user's real question"
-    - "avoid generic framework"
-
-existing_capabilities_to_preserve:
-  - "daily_executive_brief"
-  - "daily_sales_deviation"
-  - "daily_discount_deviation"
-  - "daily cross-metric"
-  - "commercial_state"
-  - "client analysis"
-  - "action-person"
-  - "topic return"
-  - "IGF reviewable supports"
-  - "persistent memory"
-
-G2_G3_audit:
-  determine:
-    - "G2"
-    - "G3"
-
-  expectation: >
-    Likely runtime/refactor only, but if moving frontend-derived truth into a
-    shared backend engine materially changes architecture, report it rather than
-    assuming N/A.
-
-readiness_output:
-  must_determine:
-    - "READY / READY_WITH_LIMITS / NOT_READY"
-    - "selected architecture A/B/C/D"
-    - "selected first slice A/B/C/D"
-    - "shared engine boundary"
-    - "range semantics"
-    - "channel semantics"
-    - "OLS semantics"
-    - "movers semantics"
-    - "comments semantics"
-    - "comparison behavior"
-    - "intent/state shape"
-    - "partial-data behavior"
-    - "G2/G3"
-    - "percentage effect"
-
-percentage_policy:
-  before: "10.5 / 20 = 52.5%"
-  after_readiness: "10.5 / 20 = 52.5%"
-  expected_impl_effect: "0.0 pp unless module matrix policy independently changes"
+  frontend:
+    conditional: >
+      Modify ArrVentaGraficaModal.tsx only if required to consume canonical
+      returned trend metadata without changing user-visible behavior.
+      Avoid frontend change if parity can be proven while preserving renderer.
 
 in_scope:
   writable:
     - "docs/dev-loop/CURRENT_TASK.md"
-    - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-COMMERCIAL-TREND-CHART-PARITY-001.md"
+    - "docs/dev-loop/reports/IMPL-DIRECTOR-IA-COMMERCIAL-TREND-CHART-PARITY-001.md"
+    - "lib/commercial-trend-engine.js"
+    - "lib/director-ia-commercial-trend.js"
+    - "lib/director-ia-chat.js"
+    - "lib/director-ia-planner.js"
+    - "lib/director-ia-conversation-state.js"
+    - "lib/director-ia-tools.js"
+    - "server.js"
+    - "test/director-ia-commercial-trend.test.js"
+
+  conditional_writable:
+    - "frontend-dashboard/src/components/ArrVentaGraficaModal.tsx"
+    - "existing Director IA/planner/orchestrator tests/scripts only when required"
 
   read_only:
-    - "entire repository except writable files"
+    - "contracts"
+    - "sql/**"
+    - "unrelated frontend"
 
 out_of_scope:
-  - "implementation"
-  - "code changes"
-  - "test changes"
-  - "matrix changes"
-  - "contracts modification"
-  - "SQL execution"
-  - "longitudinal client implementation"
+  - "comments parity"
+  - "cliente_nombre join"
+  - "longitudinal client profile"
   - "Taller Mayor"
   - "SEH"
-  - "greeting"
+  - "personalized greeting"
   - "closed-month IGF"
+  - "schema"
+  - "SQL execution"
+  - "matrix changes"
+  - "contract changes"
   - "commit"
   - "push"
   - "merge"
 
 acceptance_criteria:
-  - "Dashboard chart engine physically traced."
-  - "Backend vs frontend truth separated."
-  - "A/B/C/D architecture compared."
-  - "Exactly one architecture selected."
-  - "A/B/C/D first slice compared."
-  - "Exactly one first slice selected."
-  - "30/90 day semantics defined."
-  - "CASA/COMISIONISTA semantics defined."
-  - "OLS trend semantics defined."
-  - "Top mover semantics defined."
-  - "Comments semantics defined."
-  - "Parity test design defined."
-  - "Conversation state/followups defined."
-  - "No phrasebook."
-  - "G2/G3 determined."
-  - "52.5% preserved."
-  - "Only task + report changed."
+  - "Architecture B implemented."
+  - "Dashboard and chat use shared engine."
+  - "No internal HTTP."
+  - "No duplicated chat SQL."
+  - "30/90 semantics preserved."
+  - "MAX(fecha) anchor preserved."
+  - "CASA/COMISIONISTA semantics preserved."
+  - "OLS parity proven."
+  - "Top-6 mover parity proven."
+  - "Comments excluded."
+  - "commercial_trend intent works."
+  - "Range/channel slots work."
+  - "CASA -> COMISIONISTA followup works."
+  - "Comparison works."
+  - "Mover != cause."
+  - "Existing dashboard behavior preserved."
+  - "Regression suite green."
   - "git diff --check clean."
+  - "52.5% preserved."
 
-next_task_policy:
-  if_ready:
-    propose_exactly_one: "IMPL-DIRECTOR-IA-COMMERCIAL-TREND-CHART-PARITY-001"
+percentage_policy:
+  before: "10.5 / 20 = 52.5%"
+  after: "10.5 / 20 = 52.5%"
+  delta: "0.0 pp"
 
-  if_not_ready:
-    propose_exactly_one: "ARCH-DIRECTOR-IA-COMMERCIAL-TREND-CHART-PARITY-GAP-001"
+next_task:
+  propose_only: "DOCS-DIRECTOR-IA-COMMERCIAL-TREND-CHART-PARITY-SYNC-001"
+  authorize: false
+  execute: false
 
-  rule: "Do not authorize or execute."
-
-expected_terminal_state: >
-  DONE_PENDING_REVIEW if READY/READY_WITH_LIMITS.
-  STOPPED if a material architectural decision requires HUMAN.
-  BLOCKED if chart truth cannot be extracted safely.
+expected_terminal_state: "DONE_PENDING_REVIEW"
 
 max_attempts: 1
 
 result_report_path: >
-  docs/dev-loop/reports/ARCH-DIRECTOR-IA-COMMERCIAL-TREND-CHART-PARITY-001.md
+  docs/dev-loop/reports/IMPL-DIRECTOR-IA-COMMERCIAL-TREND-CHART-PARITY-001.md
