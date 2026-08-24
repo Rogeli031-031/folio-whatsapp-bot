@@ -1,14 +1,14 @@
 # CURRENT_TASK
 
 ```yaml
-task_id: "IMPL-DIRECTOR-IA-DAILY-CROSS-METRIC-FOLLOWUP-001"
+task_id: "DOCS-DIRECTOR-IA-DAILY-CROSS-METRIC-FOLLOWUP-SYNC-001"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-08-24"
 human_authorization: >
   AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-24.
-  Apruebo IMPL-DIRECTOR-IA-DAILY-CROSS-METRIC-FOLLOWUP-001
+  Apruebo DOCS-DIRECTOR-IA-DAILY-CROSS-METRIC-FOLLOWUP-SYNC-001
   y autorizo G1.
 
 gates:
@@ -18,449 +18,263 @@ gates:
   G5_contract_conformance: N/A
   G8_calibration_materiality_signature: N/A
 
+mode:
+  type: "DOCUMENTATION_SYNC_ONLY"
+  implementation: false
+  code_changes: false
+  test_changes: false
+  contract_changes: false
+  sql_execution: false
+
 objective: >
-  Implementar el first slice B aprobado para cross-metric follow-up diario:
-  cuando el planner aislado devuelve unknown, el contexto activo pertenece a una
-  métrica diaria con active_date válida y el turno actual nombra inequívocamente
-  la otra métrica diaria soportada, cambiar el intent efectivo conservando la
-  fecha, hacer requery del pack correcto y reemplazar el gap del dominio previo,
-  sin phrasebook, sin nuevo intent y sin inventar fechas.
+  Sincronizar la documentación de Director IA con el runtime ya integrado de
+  cross-metric follow-up diario: dentro de un contexto diario válido, la fecha
+  puede heredarse mientras la métrica cambia según el turno actual, con requery
+  del pack objetivo y sin phrasebook ni reutilización de evidencia.
 
 baseline:
   global: "10.5 / 20 = 52.5%"
-  percentage_effect: "0.0 pp"
+  delta: "0.0 pp"
 
-  readiness:
-    task: "ARCH-DIRECTOR-IA-DAILY-CROSS-METRIC-FOLLOWUP-001"
-    determination: "READY_WITH_LIMITS"
-    strategy: "B — contextual metric switch post-planner"
+implemented_capability:
+  name: "daily_cross_metric_followup"
+  strategy: "B — contextual metric switch post-planner"
 
-product_principle: >
-  La fecha puede venir del contexto conversacional diario. La métrica debe venir
-  del turno actual. Compartir fecha no significa compartir pack ni evidencia.
+implemented_principle: >
+  CONSERVAR FECHA != CONSERVAR MÉTRICA.
 
-supported_daily_metrics:
+implemented_flow: >
+  parent daily metric
+    + active_date válida
+    + planner isolated = unknown
+    + turno nombra inequívocamente la otra métrica diaria
+    → switch effective intent
+    → conservar/revalidar active_date
+    → requery target pack
+    → actualizar bundle type
+    → reemplazar pending gap
+    → HILO + evidencia fresca
+    → GPT
 
+supported_metrics:
   sales:
     intent: "daily_sales_deviation"
 
   discount:
     intent: "daily_discount_deviation"
 
-  rule: >
-    El first slice cubre únicamente sales <-> discount_per_kg.
+sales_to_discount:
+  canonical_sequence:
+    - "¿Cómo estuvo la venta ayer?"
+    - "¿Y el descuento?"
 
-core_switch_rule:
+  documented_result:
+    - "turno 1 = daily_sales_deviation"
+    - "turno 2 = daily_discount_deviation"
+    - "same active_date"
+    - "fresh discount pack"
 
-  preconditions:
-    - "isolated planner intent = unknown"
-    - "current parent_intent is a supported daily metric intent"
-    - "active_date exists and is valid"
-    - "current turn names the other supported daily metric unequivocally"
-    - "current turn does not explicitly request a monthly period"
-    - "current turn does not provide a conflicting explicit date"
+discount_to_sales:
+  canonical_sequence:
+    - "¿Por qué subió el descuento/kg ayer?"
+    - "¿Y la venta?"
 
-  behavior:
-    - "switch effective intent to target daily metric"
-    - "preserve/revalidate active_date"
-    - "requery target metric pack"
-    - "replace last_evidence_bundle_type"
-    - "derive new pending_information_gap from target pack"
-    - "do not reuse prior metric evidence"
+  documented_result:
+    - "turno 1 = daily_discount_deviation"
+    - "turno 2 = daily_sales_deviation"
+    - "same active_date"
+    - "fresh sales pack"
+
+date_inheritance:
+  allowed_only_when:
+    - "parent_intent actual es daily_sales_deviation o daily_discount_deviation"
+    - "active_date existe y sigue válida"
+    - "turno no trae una fecha explícita incompatible"
+    - "turno no pide un periodo mensual"
 
   invariant: >
-    CONSERVAR FECHA != CONSERVAR MÉTRICA.
+    La fecha heredada viene del contexto diario. No se inventa “ayer”.
 
-routing_examples:
+  explicit_date_precedence: >
+    Si el turno actual contiene una fecha explícita válida, esa fecha prevalece.
 
-  sales_to_discount:
-    sequence:
-      - "¿Cómo estuvo la venta ayer?"
-      - "¿Y el descuento?"
-    expected:
-      - "turn 1 = daily_sales_deviation"
-      - "turn 2 = daily_discount_deviation"
-      - "same active_date"
-      - "fresh discount pack"
-
-  discount_to_sales:
-    sequence:
-      - "¿Por qué subió el descuento/kg ayer?"
-      - "¿Y la venta?"
-    expected:
-      - "turn 1 = daily_discount_deviation"
-      - "turn 2 = daily_sales_deviation"
-      - "same active_date"
-      - "fresh sales pack"
-
-metric_recognition:
-
-  strategy: >
-    Reutilizar las señales semánticas ya existentes de venta/ventas/vend* y
-    descuento para reconocer la métrica objetivo dentro de un contexto diario.
-
-  allowed:
-    - "reuse existing normalized metric tokens/predicates"
-    - "minimal helper that distinguishes supported metric signal"
-
-  prohibited:
-    - "phrasebook de frases completas"
-    - "hardcode exacto de '¿Y el descuento?'"
-    - "hardcode exacto de '¿Y la venta?'"
-    - "listas de sinónimos extensas"
-    - "nuevo cross_metric intent"
-    - "segunda llamada LLM"
-
+no_date_behavior:
   rule: >
-    Reconocer una métrica, no una frase.
+    Sin active_date diaria válida, una frase como “¿Y el descuento?” no inventa
+    ayer ni fuerza un pack diario.
 
 same_metric_followup:
-
-  examples:
-    - "venta ayer -> ¿Quién explicó más?"
-    - "venta ayer -> ¿Y eso?"
-    - "descuento ayer -> ¿Quién lo movió más?"
-    - "descuento ayer -> ¿Qué más?"
-
-  behavior: >
-    Si el turno no nombra inequívocamente la otra métrica, preservar natural
-    follow-up strategy B y heredar el parent_intent actual.
-
-  rule: >
-    No convertir cualquier unknown en metric switch.
-
-ambiguity:
-
   examples:
     - "¿Y eso?"
-    - "¿Y lo otro?"
-    - "¿Y margen?"
-    - "¿Cómo estuvo?"
+    - "¿Qué más?"
+    - "¿Quién explica más?"
+    - "¿Quién lo movió más?"
 
-  rules:
-    - "no infer unsupported metric"
-    - "no force sales/discount"
-    - "existing inheritance/clarification behavior remains"
+  behavior: >
+    Si el turno no nombra inequívocamente la otra métrica, se preserva strategy B
+    y se hereda el parent_intent actual.
 
-date_policy:
-
-  inherited_date:
-    allowed_when:
-      - "supported daily parent intent"
-      - "active_date valid"
-      - "no explicit replacement date"
-
-  explicit_date:
-    rule: >
-      Una fecha explícita en el turno actual prevalece sobre active_date.
-
-  no_active_date:
-    rule: >
-      Si no existe active_date diaria válida, el switch contextual NO puede
-      inventar ayer. Dejar que planner/routing normal actúe o clarificar.
-
-  timezone:
-    preserve: "America/Mexico_City"
-
-  day_completion:
-    preserve: true
-
-daily_monthly_boundary:
-
-  examples:
-    daily_contextual:
-      - "venta ayer -> ¿Y el descuento?"
-      - "descuento ayer -> ¿Y la venta?"
-
-    monthly:
-      - "¿Cómo va el descuento este mes?"
-      - "¿Y la venta mensual?"
-
+metric_recognition:
   rule: >
-    Una señal explícita mensual debe tomar el path mensual correspondiente y no
-    reutilizar active_date diaria.
+    La implementación reconoce semántica de métrica usando señales existentes,
+    no frases completas.
 
-state_transition:
+  anti_phrasebook:
+    - "sin hardcode de '¿Y el descuento?'"
+    - "sin hardcode de '¿Y la venta?'"
+    - "sin lista extensa de sinónimos"
+    - "sin intent nuevo"
+    - "sin segunda llamada LLM de routing"
 
-  before:
-    fields:
-      - "parent_intent = source daily metric"
-      - "active_date = current daily date"
-      - "last_evidence_bundle_type = source metric"
-      - "pending_information_gap = source pack gap"
-
-  after_switch:
-    fields:
-      - "parent_intent = target daily metric"
-      - "active_date = inherited/revalidated date"
-      - "last_evidence_bundle_type = target metric"
-      - "pending_information_gap = freshly derived from target pack"
-
-  prohibited:
-    - "carrying sales gap into discount"
-    - "carrying discount gap into sales"
-    - "carrying source evidence payload"
-
-gap_replacement:
-
-  mandatory: true
-
+monthly_boundary:
   rule: >
-    El gap del dominio anterior se invalida/reemplaza al cambiar de métrica.
-    Una fecha compartida no vuelve compatibles los gaps.
+    Una señal explícitamente mensual no reutiliza active_date diaria.
 
   example:
-    - "sales missing customer explanation != discount missing explanation"
+    sequence:
+      - "¿Cómo estuvo la venta ayer?"
+      - "¿Y el descuento este mes?"
+    behavior: "monthly path corresponding to current query"
 
-previous_frame_boundary:
+state_transition:
+  before:
+    - "parent_intent = source daily metric"
+    - "active_date = shared date"
+    - "bundle type = source metric"
+    - "gap = source pack gap"
 
-  use_for_cross_metric_switch: false
+  after:
+    - "parent_intent = target daily metric"
+    - "active_date = inherited/revalidated"
+    - "bundle type = target metric"
+    - "gap = freshly derived from target pack"
 
-  rule: >
-    Este slice es cambio de métrica dentro de un contexto diario compartido, no
-    retorno a un tema anterior.
+gap_semantics:
+  invariant: >
+    El gap de venta no se convierte en gap de descuento ni viceversa.
 
-  preserve_existing_previous_frame_semantics: true
-
-persistent_memory_boundary:
-
-  use_for_cross_metric_switch: false
-  preserve_pending_work_items_only: true
-
-evidence_policy:
-
-  required:
+evidence:
+  rules:
     - "fresh target loader"
+    - "requery"
     - "current authz"
-    - "current plant scope"
     - "current provenance"
-    - "current absence/error semantics"
+    - "absence/error semantics current"
 
   invariant: >
-    ACTIVE_DATE REUSE != EVIDENCE REUSE.
+    Fecha compartida != evidencia compartida.
 
-loaders:
+previous_frame_boundary:
+  use_for_cross_metric_switch: false
+  preserved: true
 
-  sales_target:
-    use_existing: "loadDailySalesDeviationForChat"
+  principle: >
+    Cambiar de métrica dentro del mismo contexto diario no es topic return.
 
-  discount_target:
-    use_existing: "loadDailyDiscountDeviationForChat"
-
-  rule: >
-    No duplicar loaders ni reconstruir packs.
+persistent_memory_boundary:
+  use_for_cross_metric_switch: false
+  pending_work_items_only: "preserved"
 
 GPT_boundary:
-
-  runtime_owns:
+  runtime:
     - "metric recognition"
-    - "effective intent switch"
     - "date inheritance/revalidation"
-    - "pack selection"
+    - "effective intent switch"
+    - "target pack selection"
     - "requery"
     - "state transition"
     - "gap replacement"
-    - "authz"
-    - "provenance"
+    - "authz/provenance"
 
-  GPT_owns:
-    - "interpretation"
-    - "explanation"
-    - "synthesis"
-    - "what matters"
-    - "information-gap wording"
-    - "follow-up conversation"
+  GPT:
+    - "interpretación"
+    - "síntesis"
+    - "explicación"
+    - "qué importa"
+    - "qué no está explicado"
+    - "qué información falta"
+    - "follow-up"
 
-  rule: >
-    GPT debe recibir el pack correcto. No pedirle que detecte o repare un pack
-    equivocado después de cargarlo.
+  principle: >
+    GPT recibe el pack correcto; no se le pide reparar un routing incorrecto.
 
-mandatory_product_conversations:
-
-  conversation_1:
-    turns:
-      - "¿Cómo estuvo la venta ayer?"
-      - "¿Y el descuento?"
-      - "¿Quién lo movió más?"
-      - "¿Tenemos explicación?"
-    required:
-      - "sales -> discount switch"
-      - "active_date preserved"
-      - "discount pack"
-      - "followups inherit discount"
-
-  conversation_2:
-    turns:
-      - "¿Por qué subió el descuento/kg ayer?"
-      - "¿Y la venta?"
-      - "¿Quién explica más?"
-      - "¿Sabemos por qué?"
-    required:
-      - "discount -> sales switch"
-      - "sales pack"
-      - "same date"
-
-  conversation_3_same_metric:
-    turns:
-      - "¿Cómo estuvo la venta ayer?"
-      - "¿Y eso?"
-      - "¿Qué más?"
-    required:
-      - "no metric switch"
-      - "sales inheritance"
-
-  conversation_4_no_date:
-    turns:
-      - "¿Y el descuento?"
-    setup: "no valid daily state"
-    required:
-      - "no invented yesterday"
-      - "normal clarification/routing"
-
-  conversation_5_monthly:
-    turns:
-      - "¿Cómo estuvo la venta ayer?"
-      - "¿Y el descuento este mes?"
-    required:
-      - "monthly signal wins"
-      - "no daily active_date forcing"
-
-  conversation_6_topic_state:
-    turns:
-      - "¿Cómo estuvo la venta ayer?"
-      - "¿Y el descuento?"
-      - "Volvamos a Arturo."
-    required:
-      - "cross-metric switch must not corrupt previous_frame semantics"
-
-holdout_generalization:
-
-  examples_for_tests_only:
-    - "¿Qué pasó con el descuento?"
-    - "¿Y en descuento cómo quedó?"
-    - "¿Qué tal las ventas?"
-    - "¿Cómo salió la venta?"
-    - "¿Y el descuento por kilo?"
-
-  rule: >
-    Los textos hold-out NO deben aparecer como reglas exactas en lib/.
-
-  required_check: >
-    Buscar en production routing y confirmar que los hold-outs no fueron
-    hardcodeados como phrasebook.
-
-authz_security:
-
-  preserve:
-    - "plantas_permitidas"
-    - "current plant"
-    - "no cross-plant"
-    - "fail-closed"
-    - "history != evidence"
-    - "memory != evidence"
-
-regressions_to_preserve:
-  - "daily_sales_deviation standalone"
-  - "daily_discount_deviation standalone"
+preserved:
+  - "daily_sales_deviation"
+  - "daily_discount_deviation"
   - "natural follow-up strategy B"
   - "intra-session previous_frame"
   - "action-person routing"
   - "plant_diagnosis"
   - "financial_diagnosis"
-  - "persistent memory"
+  - "persistent pending memory"
   - "M9 monthly"
 
-tests_required:
+not_implemented:
+  - "nuevas métricas diarias"
+  - "topic stack"
+  - "persistent topic memory"
+  - "IGF -> Folios executive reasoning"
+  - "SQL 017 execution"
 
-  focal:
-    - "sales daily -> discount metric switch"
-    - "discount daily -> sales metric switch"
-    - "same active_date"
-    - "fresh target pack"
-    - "parent_intent updated"
-    - "bundle type updated"
-    - "old gap replaced"
-    - "same-metric followup preserved"
-    - "no active_date -> no invented date"
-    - "monthly signal does not use daily switch"
-    - "unsupported metric does not switch"
+test_evidence:
+  focal_cross_metric: "17/17"
+  director_ia_suite: "871/871"
+  planner: "58/58"
+  capabilities: "56/56"
+  orchestrator: "28/28"
+  git_diff_check: "clean"
 
-  holdout:
-    - "metric wording variants not in production phrasebook"
+module_state:
+  changed_modules: "none"
+  global: "10.5 / 20 = 52.5%"
+  delta: "0.0 pp"
 
-  regression:
-    - "topic return"
-    - "daily sales"
-    - "daily discount"
-    - "action-person"
-    - "natural followup"
-    - "persistent memory"
-    - "planner"
-    - "capabilities"
-    - "orchestrator"
-    - "full Director IA suite"
+contracts:
+  Constitution: "unchanged"
+  EKE: "unchanged"
+  IES_04: "unchanged"
+  Reasoning_Engine_05: "unchanged"
 
 in_scope:
   writable:
     - "docs/dev-loop/CURRENT_TASK.md"
-    - "docs/dev-loop/reports/IMPL-DIRECTOR-IA-DAILY-CROSS-METRIC-FOLLOWUP-001.md"
-    - "lib/director-ia-chat.js"
-    - "lib/director-ia-conversation-state.js"
-    - "lib/director-ia-planner.js"
-    - "test/director-ia-daily-cross-metric-followup.test.js"
-
-  conditional_writable:
-    - "existing Director IA tests if legitimate regression assertions require update"
-
-  read_only:
-    - "docs/director-ia/**"
-    - "server.js"
-    - "frontend-dashboard/**"
-    - "sql/**"
-    - "other unrelated code"
+    - "docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md"
+    - "docs/dev-loop/reports/DOCS-DIRECTOR-IA-DAILY-CROSS-METRIC-FOLLOWUP-SYNC-001.md"
 
 out_of_scope:
-  - "new intent"
-  - "phrasebook"
-  - "new daily metrics"
-  - "topic stack"
-  - "persistent topic memory"
-  - "SQL 017 execution"
-  - "IGF -> Folios executive reasoning"
+  - "code"
+  - "tests"
+  - "runtime"
+  - "contracts"
+  - "SQL"
   - "matrix changes"
-  - "contract changes"
-  - "schema changes"
-  - "new tables"
+  - "new metrics"
+  - "IGF/Folios implementation"
   - "commit"
   - "push"
   - "merge"
 
 acceptance_criteria:
-  - "Strategy B implemented."
-  - "Sales -> discount works without repeating date."
-  - "Discount -> sales works without repeating date."
-  - "Date inherited only from valid daily context."
-  - "No date invented."
-  - "Explicit period/date precedence preserved."
-  - "Same-metric followups preserved."
-  - "Target pack requeried."
-  - "Parent intent and bundle type updated."
-  - "Prior metric gap replaced."
-  - "Previous_frame unaffected."
-  - "Persistent memory not used."
-  - "No phrasebook."
-  - "Holdout generalization."
+  - "Strategy B documented."
+  - "Sales -> discount documented."
+  - "Discount -> sales documented."
+  - "Date inheritance documented."
+  - "No date invention documented."
+  - "Same-metric followup documented."
+  - "Monthly boundary documented."
+  - "State transition documented."
+  - "Gap replacement documented."
+  - "Previous_frame boundary documented."
+  - "Persistent memory boundary documented."
+  - "No phrasebook explicit."
+  - "871/871 evidence recorded."
+  - "No module coverage change."
   - "52.5% preserved."
-  - "Tests green."
+  - "Only three authorized files changed."
   - "git diff --check clean."
 
-percentage_policy:
-  before: "10.5 / 20 = 52.5%"
-  after: "10.5 / 20 = 52.5%"
-  delta: "0.0 pp"
-
 next_task:
-  propose_only: "DOCS-DIRECTOR-IA-DAILY-CROSS-METRIC-FOLLOWUP-SYNC-001"
+  propose_only: "AUDIT-DIRECTOR-IA-EXECUTIVE-CROSS-DOMAIN-IGF-FOLIOS-001"
   authorize: false
   execute: false
 
@@ -469,4 +283,4 @@ expected_terminal_state: "DONE_PENDING_REVIEW"
 max_attempts: 1
 
 result_report_path: >
-  docs/dev-loop/reports/IMPL-DIRECTOR-IA-DAILY-CROSS-METRIC-FOLLOWUP-001.md
+  docs/dev-loop/reports/DOCS-DIRECTOR-IA-DAILY-CROSS-METRIC-FOLLOWUP-SYNC-001.md
