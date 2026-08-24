@@ -1,14 +1,14 @@
 # CURRENT_TASK
 
 ```yaml
-task_id: "ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-004"
+task_id: "ARCH-DIRECTOR-IA-M12-NOTAS-REVISION-READINESS-001"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-08-23"
 human_authorization: >
   AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-23.
-  Apruebo ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-004 y autorizo G1.
+  Apruebo ARCH-DIRECTOR-IA-M12-NOTAS-REVISION-READINESS-001 y autorizo G1.
 
 gates:
   G1_task_authorization: AUTHORIZED
@@ -17,295 +17,349 @@ gates:
   G8_calibration_materiality_signature: N/A
 
 objective: >
-  Priorizar el siguiente frente global de Director IA desde el baseline 50.0%,
-  comparando todos los módulos no COMPLETE por valor ejecutivo marginal,
-  reasoning value, actionability, frecuencia, fuentes físicas, seguridad y
-  costo de integración. No continuar M18 por inercia ni elegir M12 solo por
-  haber quedado segundo previamente.
+  Auditar físicamente un slice read-only de M12 — Action Register — para que
+  Director IA pueda consultar notas de revisión asociadas a revisiones reales
+  del tablero, incluyendo qué se escribió, quién y cuándo, preservando la
+  relación revision_id -> notes, con recorte de contexto, semántica explícita
+  y separación estricta frente a Plaud, historial M2 y comentarios de folios.
 
 baseline:
-  numerator: 10.0
-  denominator: 20
-  percentage: 50.0
+  prioritization_task: "ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-004"
+  prioritization_report: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-004.md"
 
-  recent_changes:
-    - "M2 profundo: status + history + documents metadata"
-    - "M4 = PARTIAL con query comparativa mes_a vs mes_b"
-    - "M6 = PARTIAL con query GASTOS / INVERSIONES"
-    - "M18 = PARTIAL con presupuesto semanal read-only"
-    - "M4 COMPARAR/Excel fuera"
-    - "M6 Export fuera"
-    - "M18 writes/cheques/WhatsApp fuera"
+  module: "M12 — Action Register"
+  current_state: "PARTIAL"
 
-  rule: >
-    Esta tarea no cambia estados ni porcentaje. El 50.0% es baseline, no criterio
-    principal de decisión.
+  current_behavior:
+    - "Director IA ya consulta Action Register"
+    - "tablero/responsables/vencidas/temas ya existen"
+    - "includeNotes actualmente false"
+    - "board.notes no se consume en summarizers"
+
+  global_percentage:
+    current: 50.0
+    numerator: 10.0
+    denominator: 20
+
+  expected_effect_of_future_slice:
+    state: "PARTIAL"
+    percentage_change_pp: 0.0
 
 primary_question: >
-  ¿Qué módulo o slice pendiente aporta ahora el mayor incremento neto de
-  inteligencia ejecutiva, considerando todo lo ya integrado y penalizando
-  duplicación, writes, dependencias externas, canales y semántica débil?
+  ¿Existe un path SELECT-only, in-process, autorizado y semánticamente claro
+  para que Director IA responda preguntas sobre notas reales de revisiones del
+  Action Register — qué se escribió, quién y cuándo — sin convertirlas en
+  historial de ítems, sin mezclar Plaud/comentarios y sin exceder contexto?
 
 candidate_source:
-  canonical_matrix: "docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md"
+  expected_table: "arr.action_register_revision_notes"
+  key_relation: "revision_id"
 
-  include:
-    - "PARTIAL"
-    - "INDIRECTA"
-    - "NO INTEGRADA"
-    - "NOT_STARTED"
-    - "bloqueados reconsiderables"
+known_risks:
+  - "las notas están asociadas a revisión, no a ítem"
+  - "includeNotes hoy está desactivado"
+  - "ningún summarizer actual consume board.notes"
+  - "notas potencialmente largas"
+  - "pueden existir múltiples notas por revisión"
+  - "última revisión debe definirse físicamente"
+  - "no binarios/documentos"
+  - "no mezclar con Plaud"
+  - "no mezclar con M2 history"
+  - "no mezclar con comentarios"
 
-  exclude:
-    - "COMPLETE"
-    - "N_A"
+mandatory_audit:
 
-canonical_labels_rule: >
-  Usar exclusivamente nombres y propósitos de las fichas canónicas vigentes.
-  Ignorar etiquetas incorrectas de prompts anteriores.
-
-mandatory_rechecks:
-  - "M1"
-  - "M2 restante"
-  - "M4 restante"
-  - "M5"
-  - "M6 restante"
-  - "M7"
-  - "M8"
-  - "M10"
-  - "M11"
-  - "M12"
-  - "M14"
-  - "M15"
-  - "M17"
-  - "M18 restante"
-  - "M20"
-  - "cualquier otro módulo no COMPLETE vigente"
-
-special_rechecks:
-
-  M12:
+  canonical_definition:
     required:
-      - "Action Register ya integrado"
-      - "qué huecos reales quedan"
-      - "notas / includeNotes"
-      - "si notas agregan contexto causal/seguimiento"
-      - "si habilitan preguntas nuevas o solo enriquecen respuestas existentes"
-      - "fuente física"
-      - "read-only"
-      - "authz"
-      - "primer slice útil"
+      - "leer ficha M12 completa y vigente"
+      - "identificar alcance de notas"
+      - "confirmar que el slice solo profundiza PARTIAL"
+      - "confirmar efecto porcentual 0.0 pp"
 
-  M7:
-    required:
-      - "IGF actual"
-      - "qué ya se consulta"
-      - "qué preguntas financieras siguen faltando"
-      - "si aporta causalidad/contexto nuevo"
-      - "qué se solapa con M6"
+  physical_source:
+    inspect:
+      - "arr.action_register_revision_notes"
+      - "tabla/recurso de revisiones"
+      - "relación revision_id"
+      - "helpers de Action Register"
+      - "loaders"
+      - "queries"
+      - "includeNotes"
+      - "board.notes"
 
-  M8:
-    required:
-      - "ARR actual"
-      - "qué falta"
-      - "qué duplica M9"
-      - "valor incremental"
-
-  M11:
-    required:
-      - "DICF actual"
-      - "qué ya responde"
-      - "qué falta"
-      - "si puede aportar causas, acciones o seguimiento nuevo"
-      - "si mejora reasoning ejecutivo"
-
-  M20:
-    required:
-      - "Home KPI"
-      - "qué agrega sobre M3"
-      - "si es resumen redundante"
-      - "si tiene fuente nueva"
-
-  M18_remaining:
-    required:
-      - "presupuesto semanal ya integrado"
-      - "evaluar únicamente writes/cheques/WhatsApp restante"
-      - "penalizar continuidad por inercia"
-      - "no contar PARTIAL nuevamente"
-
-  M4_remaining:
-    required:
-      - "query comparativa ya integrada"
-      - "evaluar solo COMPARAR/Excel restante"
-      - "penalizar writes y Excel"
-
-  M6_remaining:
-    required:
-      - "query ya integrada"
-      - "evaluar solo Export/xlsx restante"
-
-  WhatsApp_modules:
-    required:
-      - "canal != conocimiento"
-      - "no premiar transporte por sí mismo"
-      - "solo contar nueva información ejecutiva"
-
-evaluation_model:
-
-  executive_value:
-    weight: "VERY_HIGH"
-    evaluate:
-      - "preguntas directivas nuevas"
-      - "detección de riesgo/desviación"
-      - "capacidad para decidir dónde mirar"
-      - "reducción de navegación manual"
-
-  reasoning_value:
-    weight: "VERY_HIGH"
-    evaluate:
-      - "evidencia nueva para explicación"
-      - "contexto causal"
-      - "capacidad de combinar M2/M3/M4/M6/M9/M12/M18"
-      - "profundidad diagnóstica"
-
-  incremental_value:
-    weight: "VERY_HIGH"
-    evaluate:
-      - "qué no sabe hoy Director IA"
-      - "qué hueco nuevo cubre"
-      - "qué duplica"
-
-  actionability:
-    weight: "HIGH"
-    evaluate:
-      - "responsable"
-      - "acción"
-      - "planta"
-      - "cliente"
-      - "partida"
-      - "riesgo"
-      - "fecha"
-      - "prioridad"
-
-  frequency:
-    weight: "HIGH"
-
-  implementation_path:
-    weight: "MEDIUM"
-    evaluate:
-      - "fuente física"
-      - "helper"
-      - "intent"
-      - "tool"
-      - "executor"
-      - "in-process"
-      - "primer slice útil"
-
-  risk:
-    weight: "MEDIUM"
-    penalize:
-      - "writes"
-      - "Excel"
-      - "S3"
-      - "Twilio/WhatsApp"
+    determine:
+      - "columnas reales"
+      - "id de nota"
+      - "revision_id"
+      - "texto"
+      - "autor/actor"
+      - "timestamp"
+      - "tipo si existe"
+      - "orden"
+      - "nulls"
+      - "SELECT-only"
       - "side effects"
-      - "cross-module coupling"
-      - "semantic ambiguity"
-      - "stubs"
 
-  percentage_effect:
-    weight: "LOW"
+  revision_semantics:
+    determine:
+      - "qué es una revisión"
+      - "cómo se identifica"
+      - "cómo se ordena"
+      - "qué significa última revisión"
+      - "si existe revisión activa"
+      - "si fecha de revisión es distinta de fecha de nota"
+      - "si varias notas pertenecen a la misma revisión"
 
-mandatory_question_map:
-  for_each_candidate:
-    - "qué preguntas NUEVAS habilita"
-    - "qué preguntas ya responde"
-    - "qué sería duplicado"
-    - "qué no soporta la fuente"
+    rules:
+      - "no inferir revisión desde nota suelta"
+      - "no tratar nota como evento de ítem"
+      - "no convertir nota en cambio de estatus"
+      - "no inventar autor"
+      - "no inventar timestamp"
 
-physical_audit:
-  for_each_candidate:
-    - "fuente primaria"
-    - "helpers"
-    - "queries"
-    - "intent"
-    - "tool"
-    - "executor"
+  latest_review:
+    required:
+      - "definir físicamente cómo obtener última revisión"
+      - "no usar 'última' por orden accidental"
+      - "documentar tie-breaker si existe"
+      - "si no existe semántica inequívoca, clarificar/usar revisión explícita"
+
+  scope_semantics:
+    distinguish:
+      - "nota de revisión Action Register"
+      - "comentario de acción"
+      - "comentario de folio"
+      - "historial M2"
+      - "Plaud/reunión"
+      - "documento/PDF"
+
+    rule: >
+      Director IA debe atribuir la nota a la revisión del Action Register y no
+      reinterpretarla como otra fuente.
+
+  content_policy:
+    determine:
+      - "máximo de notas por respuesta"
+      - "máximo de caracteres/tokens por nota"
+      - "orden"
+      - "recorte"
+      - "preservar texto sin inventar resumen"
+      - "si summarizer debe recibir notas completas o extractos"
+
+    rule: >
+      La readiness debe definir una política de contexto acotada y determinista
+      para evitar que notas extensas desplacen evidencia más importante.
+
+  authz:
+    determine:
+      - "JWT/contexto"
+      - "rol"
+      - "planta_id"
+      - "plantas_permitidas"
+      - "scope de Action Register"
+      - "cross-planta"
+      - "GA/GV"
+      - "fail-closed"
+
+  planner_tools:
+    inspect:
+      - "intents actuales Action Register"
+      - "action_status"
+      - "overdue_actions"
+      - "responsible_lookup"
+      - "otros intents relacionados"
+      - "tools actuales"
+      - "executor"
+      - "chat routing"
+      - "buildFocusedActionRegisterContext"
+      - "includeNotes"
+
+    determine:
+      - "si se necesita intent específico de revision_notes"
+      - "si puede reutilizarse intent existente sin ambigüedad"
+      - "tool/executor mínimo"
+      - "qué preguntas nuevas habilitar"
+      - "qué preguntas deben seguir fuera"
+
+  summarizer_boundary:
+    inspect:
+      - "summarizers actuales"
+      - "board.notes"
+      - "cómo se construye contexto AR"
+
+    determine:
+      - "si se agrega bloque separado de notas"
+      - "si notas deben mantenerse fuera de resumen de ítems"
+      - "cómo evitar que una nota se atribuya a responsable/acción incorrecta"
+
+  plaud_boundary:
+    required:
+      - "confirmar fuente Plaud separada"
+      - "no usar grabaciones"
+      - "no mezclar texto de reuniones"
+      - "no inferir que una nota proviene de Plaud"
+
+  binary_boundary:
+    required:
+      - "no archivos"
+      - "no adjuntos"
+      - "no PDFs"
+      - "no S3"
+      - "solo texto DB"
+
+architecture_hypothesis:
+  preferred_path: >
+    intent revision_notes -> tool -> executor ->
+    loadActionRegisterRevisionNotesForChat(planta_id, revision_id/latest) ->
+    SELECT revision + notes ->
+    contexto acotado ->
+    evidencia -> respuesta
+
+  alternative: >
+    Reutilizar loader Action Register existente con includeNotes=true solo si
+    puede preservarse separación semántica, authz y recorte sin contaminar
+    board/summarizers.
+
+  requirements:
+    - "in-process"
+    - "SELECT-only"
+    - "sin HTTP interno"
+    - "sin archivos"
+    - "sin Plaud"
+    - "sin writes"
+    - "sin contrato nuevo"
+
+response_contract:
+  include_if_physically_supported:
+    - "revision_id"
+    - "revision_date"
+    - "note_id"
+    - "note_text"
+    - "author"
+    - "created_at"
+    - "planta_id"
+    - "source"
+
+  forbidden:
+    - "item_id salvo relación física explícita"
+    - "estatus de acción inferido"
+    - "responsable inferido"
+    - "acuerdo formal inferido"
+    - "minuta Plaud"
+    - "comentario de folio"
+    - "evento M2"
+
+semantic_invariants:
+  - "Revision note ≠ action item."
+  - "Revision note ≠ status transition."
+  - "Revision note ≠ M2 history."
+  - "Revision note ≠ folio comment."
+  - "Revision note ≠ Plaud transcript."
+  - "Texto escrito ≠ acuerdo formal salvo semántica física."
+  - "Autor null ≠ sistema."
+  - "Última revisión requiere regla física."
+  - "No inventar vínculo de nota con ítem."
+
+mandatory_evidence_table:
+  columns:
+    - "surface"
+    - "helper_or_query"
+    - "physical_source"
+    - "select_only"
+    - "side_effects"
+    - "revision_relation"
+    - "author_semantics"
+    - "timestamp_semantics"
     - "authz"
     - "plant_scope"
-    - "side_effects"
-    - "external_dependency"
-    - "semantic_risk"
-    - "testability"
-    - "first_slice"
-    - "state_after_slice"
-    - "percentage_effect"
+    - "context_limit"
+    - "reusable"
+    - "risk"
+    - "evidence"
 
-mandatory_table:
+mandatory_gap_table:
   columns:
-    - "rank"
-    - "module"
-    - "current_state"
-    - "new_executive_questions"
-    - "executive_value"
-    - "reasoning_value"
-    - "incremental_value"
-    - "frequency"
-    - "actionability"
-    - "source_ready"
-    - "wiring_ready"
-    - "authz_fit"
-    - "dependencies"
-    - "mutation_risk"
-    - "semantic_risk"
-    - "first_useful_slice"
-    - "state_after_slice"
-    - "percentage_effect"
-    - "decision"
+    - "gap_id"
+    - "missing_capability"
+    - "required_for_slice"
+    - "reusable_component"
+    - "proposed_change"
+    - "architecture_change"
+    - "contract_change"
+    - "authz_change"
+    - "complexity"
+    - "blocking"
 
-ranking_rules:
-  - "No elegir por número."
-  - "No elegir por porcentaje."
-  - "No elegir por facilidad solamente."
-  - "No continuar M18/M4/M6 por inercia."
-  - "No elegir M12 por ranking previo."
-  - "Penalizar duplicación con capacidades actuales."
-  - "Preferir hechos observables."
-  - "Preferir fuentes estructuradas."
-  - "Preferir in-process."
-  - "Preferir valor diagnóstico/actionable."
-  - "Penalizar writes/dependencias externas/stubs."
+tests_to_design_if_ready:
+  - "notas por revision_id"
+  - "última revisión"
+  - "múltiples notas"
+  - "orden de notas"
+  - "nota sin autor"
+  - "nota sin timestamp si físicamente posible"
+  - "texto largo / truncation"
+  - "0 notas"
+  - "revisión inexistente"
+  - "planta autorizada"
+  - "planta no autorizada"
+  - "cross-planta"
+  - "plantas_permitidas"
+  - "GA/GV"
+  - "intent"
+  - "tool/executor"
+  - "chat wiring"
+  - "nota no atribuida a ítem"
+  - "no M2 history"
+  - "no folio comments"
+  - "no Plaud"
+  - "no binaries"
+  - "no HTTP interno"
+  - "sin writes"
 
-winner_requirements:
-  exactly_one: true
+decision_rules:
 
-  must_include:
-    - "ganador"
-    - "segundo lugar"
-    - "preguntas nuevas"
-    - "por qué gana"
-    - "por qué pierde el segundo"
-    - "primer slice"
-    - "estado posterior"
-    - "efecto porcentual"
-    - "riesgos"
-    - "dependencias"
-    - "gates"
+  ready:
+    all:
+      - "fuente notes SELECT-only"
+      - "revision_id verificable"
+      - "última revisión definible o clarificable"
+      - "authz preservable"
+      - "scope planta preservable"
+      - "recorte de contexto determinista"
+      - "separación semántica con M2/Plaud/comentarios"
+      - "path in-process posible"
+      - "tests determinísticos"
 
-next_task_policy:
-  if_readiness_needed:
-    pattern: "ARCH-DIRECTOR-IA-<MODULE>-<SLICE>-READINESS-001"
+    outcome: "DONE_PENDING_REVIEW"
+    next_task: "IMPL-DIRECTOR-IA-M12-NOTAS-REVISION-001"
 
-  if_gap_fully_verified:
-    pattern: "IMPL-DIRECTOR-IA-<MODULE>-<SLICE>-001"
+  stopped:
+    when:
+      - "notas no pueden separarse de otro contexto"
+      - "revision_id no puede resolverse de forma fiable"
+      - "authz no puede preservarse"
+      - "contexto no puede acotarse sin decisión contractual"
+      - "última revisión es ambigua sin dato humano"
 
-  rule: >
-    Proponer exactamente una NEXT_TASK. No autorizar ni ejecutar.
+    outcome: "STOPPED"
+    next_task: null
+
+state_and_percentage:
+  current_task:
+    state_change: false
+    percentage_change: false
+
+  if_future_impl_succeeds:
+    m12_state: "PARTIAL"
+    global_numerator: 10.0
+    denominator: 20
+    global_percentage: 50.0
+    gain_pp: 0.0
 
 in_scope:
   writable:
     - "docs/dev-loop/CURRENT_TASK.md"
-    - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-004.md"
+    - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M12-NOTAS-REVISION-READINESS-001.md"
 
   read_only:
     - "AGENTS.md"
@@ -330,6 +384,9 @@ out_of_scope:
   - "modificar SQL"
   - "modificar capability matrix"
   - "modificar contratos"
+  - "integrar Plaud"
+  - "integrar archivos"
+  - "integrar M2"
   - "hacer writes"
   - "hacer commit"
   - "hacer push"
@@ -337,49 +394,62 @@ out_of_scope:
   - "ejecutar NEXT_TASK"
 
 acceptance_criteria:
-  - "Baseline 10.0/20 = 50.0% verificado."
-  - "Nombres canónicos verificados desde matriz."
-  - "Todos los candidatos relevantes reevaluados."
-  - "M12 reevaluado desde cero."
-  - "M18 restante evaluado sin inercia."
-  - "M4/M6 restantes evaluados sin inercia."
-  - "Se identificaron preguntas ejecutivas nuevas."
-  - "Se midió valor incremental."
-  - "Se verificaron fuentes físicas."
-  - "Se verificó wiring."
+  - "Se verificó definición canónica M12."
+  - "Se verificó arr.action_register_revision_notes."
+  - "Se verificó relación revision_id."
+  - "Se verificó revisión."
+  - "Se definió última revisión o regla de clarificación."
+  - "Se verificó texto/autor/timestamp."
+  - "Se verificó SELECT-only."
   - "Se verificó authz."
   - "Se verificó scope planta."
-  - "Se verificaron dependencias."
-  - "Se produjo ranking."
-  - "Existe exactamente un ganador."
-  - "Existe exactamente un segundo lugar."
-  - "Existe exactamente una NEXT_TASK."
-  - "No se implementó nada."
-  - "No se modificó matriz."
+  - "Se definió recorte determinista."
+  - "Se separó de ítems."
+  - "Se separó de M2 history."
+  - "Se separó de comentarios."
+  - "Se separó de Plaud."
+  - "Se separó de binarios."
+  - "Se auditó planner/tools."
+  - "Se definió path mínimo."
+  - "Se diseñaron tests."
+  - "Se determinó G2."
+  - "Se determinó G3."
+  - "M12 sigue PARTIAL."
+  - "50.0% sigue sin cambio."
+  - "No se implementó."
   - "Solo CURRENT_TASK y reporte cambiaron."
   - "git diff --check limpio."
 
 report_requirements:
-  path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-004.md"
+  path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M12-NOTAS-REVISION-READINESS-001.md"
 
   must_include:
     - "metadata"
     - "resumen ejecutivo"
-    - "baseline 50.0%"
-    - "capacidad actual"
-    - "huecos globales"
-    - "preguntas ejecutivas nuevas"
-    - "candidatos"
-    - "tabla comparativa"
-    - "ranking"
-    - "ganador"
-    - "segundo lugar"
-    - "primer slice"
-    - "estado posterior"
-    - "efecto porcentual"
-    - "riesgos"
-    - "dependencias"
+    - "baseline"
+    - "definición canónica M12"
+    - "source revision_notes"
+    - "revision semantics"
+    - "latest revision"
+    - "notes semantics"
+    - "author/timestamp"
+    - "context limit"
+    - "authz"
+    - "plant scope"
+    - "planner/tools"
+    - "summarizer boundary"
+    - "M2 boundary"
+    - "comments boundary"
+    - "Plaud boundary"
+    - "binary boundary"
+    - "evidence table"
+    - "gap table"
+    - "implementation hypothesis"
+    - "tests"
     - "gates"
+    - "state after future slice"
+    - "percentage"
+    - "risks"
     - "NEXT_TASK"
     - "acciones no realizadas"
     - "secrets_check"
@@ -387,10 +457,10 @@ report_requirements:
     - "git status"
 
 expected_terminal_state: >
-  DONE_PENDING_REVIEW si existe un ganador global defendible. STOPPED si ningún
-  frente restante aporta suficiente valor marginal sin decisión contractual.
-  BLOCKED si falta gate humano indispensable.
+  DONE_PENDING_REVIEW si existe path de notas SELECT-only, in-process, acotado
+  y semánticamente separado. STOPPED si revisión/notas no pueden resolverse de
+  forma segura. BLOCKED si falta gate indispensable.
 
 max_attempts: 1
 
-result_report_path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-004.md"
+result_report_path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M12-NOTAS-REVISION-READINESS-001.md"
