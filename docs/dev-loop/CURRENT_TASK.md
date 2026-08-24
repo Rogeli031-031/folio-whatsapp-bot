@@ -1,15 +1,15 @@
 # CURRENT_TASK
 
 ```yaml
-task_id: "DOCS-DIRECTOR-IA-INTRA-SESSION-TOPIC-RETURN-SYNC-001"
+task_id: "AUDIT-DIRECTOR-IA-CONVERSATIONAL-PRODUCT-GAP-007"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-08-24"
 human_authorization: >
   AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-24.
-  Apruebo DOCS-DIRECTOR-IA-INTRA-SESSION-TOPIC-RETURN-SYNC-001
-  y autorizo G1.
+  Apruebo AUDIT-DIRECTOR-IA-CONVERSATIONAL-PRODUCT-GAP-007
+  y autorizo G1 exclusivamente para auditoría read-only de producto.
 
 gates:
   G1_task_authorization: AUTHORIZED
@@ -19,260 +19,348 @@ gates:
   G8_calibration_materiality_signature: N/A
 
 mode:
-  type: "DOCUMENTATION_SYNC_ONLY"
+  type: "INTEGRATED_CONVERSATIONAL_PRODUCT_AUDIT"
   implementation: false
   code_changes: false
-  test_changes: false
+  runtime_changes: false
+  tests_changes: false
+  matrix_changes: false
   contract_changes: false
   sql_execution: false
 
 objective: >
-  Sincronizar la documentación de Director IA con el runtime ya integrado de
-  retorno de tema intra-sesión: precedencia de standalone intent y exactamente
-  un previous_frame efímero, sin topic stack, sin memoria persistente para
-  navegación y siempre con revalidación y requery.
+  Evaluar Director IA como una conversación ejecutiva integrada después de
+  corregir los cuellos GAP-002 a GAP-006. Determinar exactamente un cuello de
+  botella actual que todavía impida sentir que se conversa con alguien que
+  conoce los datos de la empresa, sigue el hilo, cambia y retoma temas y, cuando
+  no sabe algo, identifica de forma útil qué información necesita.
+
+north_star: >
+  El usuario debe poder hablar naturalmente con Director IA sin aprender
+  comandos o frases especiales. Director IA debe recuperar la evidencia
+  adecuada, sostener contexto, cambiar y retomar temas, distinguir observación
+  de causalidad y responder qué sabe, qué no sabe y qué necesita investigar.
 
 baseline:
-  global: "10.5 / 20 = 52.5%"
-  delta: "0.0 pp"
+  functional_coverage: "10.5 / 20 = 52.5%"
+  percentage_effect: "0.0 pp"
 
-implemented_capability:
-  name: "intra_session_topic_return"
-  strategy: "B — standalone precedence + exactly one previous_frame"
+fixed_bottlenecks_not_to_reselect:
+  - "GAP-002: daily sales routed to monthly"
+  - "GAP-003: closed follow-up phrasebook"
+  - "GAP-004: Action Register person/action routing"
+  - "GAP-005: daily discount/kg missing pack"
+  - "GAP-006: intra-session topic return/context discard"
 
-implemented_flow: >
-  conversación actual
-    → nuevo standalone intent
-    → current frame mínimo pasa a previous_frame
-    → nuevo tema se vuelve current
-    → retorno autocontenido: standalone intent gana
-    → retorno implícito: previous_frame compatible
-    → revalidación
-    → requery
-    → HILO + evidencia fresca
-    → GPT
-
-standalone_precedence:
-  rule: >
-    Un standalone intent válido no se descarta por lenguaje de navegación como
-    “volvamos” o “retomemos”.
-
-  canonical_example:
-    text: "Volvamos a la venta de ayer."
-    planner: "daily_sales_deviation 0.92"
-    behavior: "daily_sales_deviation executes"
-
-previous_frame:
-  count: 1
-  persistence: "ephemeral / intra-session only"
-
-  contains_only:
-    - "parent_intent"
-    - "active_entity reference/key"
-    - "active_date"
-    - "last_evidence_bundle_type"
-    - "pending_information_gap"
-    - "plant scope reference"
-
-  never_contains:
-    - "raw evidence"
-    - "DB rows"
-    - "assistant answers"
-    - "raw transcript"
-    - "user prose as business fact"
-    - "authz snapshot"
-
-  invariant: >
-    Cada switch standalone reemplaza previous_frame. No existe topic stack.
-
-self_contained_return:
-  examples:
-    - "Volvamos a la venta de ayer."
-    - "Retomemos la acción de Julio Pérez."
-
-  rule: >
-    Si el turno actual contiene contexto suficiente, no depende del frame previo.
-
-implicit_return:
-  examples:
-    - "Volvamos a Arturo."
-    - "Retomemos la acción."
-    - "Volvamos a Puebla."
-
-  rule: >
-    Puede restaurar previous_frame solo si es compatible y suficiente.
-    Sin frame seguro, clarifica.
-
-restore_semantics:
-  mandatory:
-    - "current authz"
-    - "current plant scope"
-    - "entity revalidation"
-    - "date revalidation"
-    - "fresh requery"
-    - "current evidence wins"
-
-  invariant: >
-    Restaurar contexto no significa restaurar hechos.
-
-entity_safety:
-  rules:
-    - "entity reference may be restored"
-    - "entity facts are not restored"
-    - "entity is re-resolved/revalidated"
-    - "ambiguity clarifies"
-    - "plant incompatibility invalidates"
-
-date_safety:
-  rules:
-    - "current explicit date wording wins"
-    - "ayer preserves America/Mexico_City semantics"
-    - "date is not persistent cross-session"
-
-action_safety:
-  rules:
-    - "Action Register is requeried"
-    - "0/1/N semantics preserved"
-    - "no silent action pick"
-    - "no invented reason for delay"
-
-natural_followup:
-  strategy: "B"
-  preserved: true
-
-  rule: >
-    Después de restaurar un tema, un follow-up natural unknown puede heredar el
-    estado restaurado y llegar a GPT con evidencia fresca.
-
-persistent_memory_boundary:
-  pending_work_items_only: "cross-session pending work"
-  previous_frame: "intra-session navigation"
-
-  invariant: >
-    Persistent memory is not used for topic navigation.
-
-history_boundary:
-  rule: >
-    History puede aportar señal conversacional, pero no constituye evidencia ni
-    truth store empresarial.
-
-reasoning_boundary:
-  runtime:
-    - "standalone precedence"
-    - "frame capture"
-    - "frame restore"
-    - "scope"
-    - "identity"
-    - "date"
-    - "authz"
-    - "requery"
-    - "provenance"
-
-  GPT:
-    - "interpretation"
-    - "synthesis"
-    - "explanation"
-    - "follow-up"
-    - "information-gap wording"
-
-known_limit:
-  rule: >
-    Solo existe un previous_frame. Un retorno que requiera recuperar de forma
-    implícita un tema más antiguo no se resuelve silenciosamente.
-
-  behavior: "clarify rather than guess"
-
-document_examples:
-  - >
-    venta ayer → descuento/kg → “Volvamos a la venta de ayer” → venta fresca
-  - >
-    Puebla → Arturo → venta ayer → “Volvamos a Arturo” → revalidar + requery
-  - >
-    acción Julio → Puebla → “Retomemos la acción” → AR fresco
-  - >
-    Puebla → presupuesto → “Volvamos a Puebla” → plant evidence fresco
-
-preserved:
+current_verified_capabilities:
+  - "plant_diagnosis multi-source"
+  - "financial_diagnosis multi-source"
   - "daily_sales_deviation"
   - "daily_discount_deviation"
-  - "action-person routing"
-  - "natural follow-up inheritance"
-  - "structured conversation state"
-  - "pending_work_items_only"
-  - "plant_diagnosis"
-  - "financial_diagnosis"
-  - "M9"
+  - "action_status by responsible/action"
+  - "natural follow-up inheritance strategy B"
+  - "structured_conversation_state"
+  - "exactly one previous_frame"
+  - "pending_work_items_only in repository"
+  - "fresh requery"
+  - "commercial materiality/coverage"
 
-not_implemented:
-  - "topic stack"
-  - "more than one previous frame"
-  - "persistent topic memory"
-  - "semantic conversational memory"
-  - "raw history as evidence"
+product_method:
+  sequence:
+    - "ask naturally"
+    - "observe"
+    - "trace physical runtime"
+    - "classify failure"
+    - "select exactly one bottleneck"
 
-test_evidence:
-  focal_topic_return: "19/19"
-  director_ia_suite: "854/854"
-  planner: "58/58"
-  capabilities: "56/56"
-  orchestrator: "28/28"
-  git_diff_check: "clean"
+  rule: >
+    Do not infer the next task from the known backlog. The conversation must
+    demonstrate the next bottleneck.
 
-module_state:
-  changed_modules: "none"
-  global: "10.5 / 20 = 52.5%"
+failure_classes:
+  - "MISSING_DATA"
+  - "MISSING_INFRASTRUCTURE"
+  - "MODEL_REASONING_LIMIT"
+  - "OVERPROGRAMMING"
+  - "DEPLOYMENT_GAP"
+  - "CONTRACT_OR_AUTHZ_LIMIT"
+
+mandatory_executive_conversation:
+
+  turns:
+    - "¿Cómo va Puebla?"
+    - "¿Qué te preocupa?"
+    - "¿Y Arturo?"
+    - "¿Qué sabes realmente de él?"
+    - "¿Qué te falta saber?"
+    - "¿Para qué necesitas ese dato?"
+    - "¿Cómo estuvo la venta ayer?"
+    - "¿Qué fue lo más importante?"
+    - "¿Quién explica más la caída?"
+    - "¿Sabemos por qué?"
+    - "¿Y el descuento?"
+    - "¿Quién lo movió más?"
+    - "¿Tenemos explicación?"
+    - "Volvamos a Arturo."
+    - "¿Qué era lo que faltaba?"
+    - "¿Tiene alguna acción?"
+    - "¿Está vencida?"
+    - "¿Por qué sigue abierta?"
+    - "Retomemos la venta de ayer."
+    - "¿Qué sigue sin explicación?"
+    - "¿Quién podría aclararlo?"
+    - "¿Para qué necesitamos preguntárselo?"
+    - "Ahora dime el presupuesto."
+    - "¿Qué te llama la atención?"
+    - "Volvamos a Puebla."
+    - "¿Qué revisarías primero?"
+
+  purpose: >
+    Evaluar si Director IA sostiene una conversación larga sin reiniciar
+    contexto, mezclar dominios o requerir wording especial.
+
+holdout_conversation:
+
+  rule: >
+    Usar además una conversación equivalente con formulaciones NO presentes en
+    tests ni phrasebooks conocidos.
+
+  example_variants_for_test_design_only:
+    - "¿Qué ves raro?"
+    - "¿Y él qué?"
+    - "¿Qué me falta entender?"
+    - "¿De dónde sale eso?"
+    - "¿Qué otro foco ves?"
+    - "Regresemos a lo anterior."
+    - "¿Qué quedaba pendiente ahí?"
+    - "¿Quién tendría que explicarnos eso?"
+    - "¿Qué podríamos concluir si tuviéramos ese dato?"
+
+  warning: >
+    No convertir estos ejemplos en reglas de producción.
+
+trace_each_turn:
+
+  required:
+    - "isolated planner intent"
+    - "effective intent"
+    - "parent_intent"
+    - "previous_frame before/after"
+    - "inherit yes/no"
+    - "active entity"
+    - "active date"
+    - "plant scope"
+    - "sources loaded"
+    - "fresh requery yes/no"
+    - "evidence supplied to GPT"
+    - "limitations supplied"
+    - "GPT invoked yes/no"
+    - "deterministic response yes/no"
+    - "failure point"
+    - "whether answer can naturally support next turn"
+
+conversation_quality_dimensions:
+
+  continuity:
+    - "does it know what we are still discussing?"
+    - "does it survive topic changes?"
+    - "does return work?"
+
+  grounding:
+    - "correct sources?"
+    - "correct period?"
+    - "correct entity?"
+    - "fresh evidence?"
+
+  executive_value:
+    - "does answer say what matters?"
+    - "does it distinguish magnitude from cause?"
+    - "does it identify priorities without inventing?"
+
+  information_gap:
+    - "what is known?"
+    - "what is not known?"
+    - "what exact datum is missing?"
+    - "why is it needed?"
+    - "who can provide it only if physically linked?"
+    - "what analysis/decision does it unlock?"
+
+  conversational_naturalness:
+    - "does user need canonical wording?"
+    - "does answer feel reset?"
+    - "does GPT get enough freedom?"
+
+  truth:
+    - "contribution != causality"
+    - "comment != fact"
+    - "responsible != culprit"
+    - "memory != evidence"
+    - "history != evidence"
+
+information_gap_stress_test:
+
+  mandatory_cases:
+    - "sales contributor with no explanation"
+    - "discount contributor with no explanation"
+    - "overdue action with no delay reason"
+    - "Arturo tradeoff missing client economics"
+
+  target_behavior: >
+    Director IA should not stop at “no hay información suficiente” if the
+    current pack can identify the missing datum and why it matters.
+
+  audit_question: >
+    Is the remaining weakness lack of evidence structure, routing, or GPT
+    reasoning quality?
+
+tradeoff_case:
+
+  conversation:
+    - "Arturo dejó de comprar y dicen que la competencia le ofrece más."
+    - "¿Conviene recuperarlo?"
+    - "¿Y si igualar la condición nos destruye margen?"
+    - "¿Qué necesitas para poder decidir?"
+    - "¿Qué calcularías con ese dato?"
+
+  rule: >
+    Do not require Director IA to calculate an answer that current data cannot
+    support. Evaluate whether it correctly identifies the missing economics.
+
+persistent_memory_case:
+
+  repository_state: "IMPLEMENTED"
+  environment_SQL017: "UNCONFIRMED unless physical evidence exists"
+
+  rule: >
+    Do not confuse deployment with conversational architecture.
+
+  audit:
+    - "whether this materially blocks current target experience"
+    - "whether repo behavior is otherwise sound"
+
+one_previous_frame_limit:
+
+  mandatory:
+    - "test a return to immediate previous topic"
+    - "test a return to a topic older than previous_frame"
+
+  expected:
+    immediate_previous: "may work"
+    older_topic: "must not silently recover wrong context"
+
+  question: >
+    Is the one-frame limitation now a material real-world blocker, or is it an
+    acceptable first-slice constraint?
+
+reasoning_boundary_audit:
+
+  inspect:
+    - "remaining deterministic early returns"
+    - "gap templates"
+    - "topic-return guards"
+    - "special routing"
+    - "response shortcuts"
+
+  classify:
+    - "KEEP_DETERMINISTIC"
+    - "LET_GPT_REASON"
+    - "MIXED"
+
+  rule: >
+    If GPT already has sufficient structured evidence and limitations, prefer
+    not to add deterministic conversational reasoning.
+
+regression_of_previous_fixes:
+
+  must_verify:
+    - "daily sales still daily"
+    - "daily discount still daily"
+    - "AR action/person still routes"
+    - "follow-ups still generalize"
+    - "topic return works"
+    - "no blind AR fallback"
+    - "memory not used as topic stack"
+
+  rule: >
+    If a previous fix regressed, identify regression; do not pretend it is a new
+    product gap.
+
+single_bottleneck:
+
+  exactly_one: true
+
+  required_fields:
+    - "name"
+    - "failure_class"
+    - "physical_location"
+    - "affected conversational turns"
+    - "evidence"
+    - "why this is now the largest blocker"
+    - "what fixing it unlocks"
+    - "what it does NOT solve"
+
+  selection_rule: >
+    Choose by impact on real executive conversation. Do not choose by module
+    percentage, backlog order, ease or recency.
+
+next_task:
+  exactly_one: true
+  authorize: false
+  execute: false
+
+  allowed_types:
+    - "ARCH readiness"
+    - "IMPL if fully proven"
+    - "SIMPLIFICATION"
+    - "DEPLOYMENT"
+    - "DATA readiness"
+
+  rule: >
+    NEXT_TASK must directly attack the single demonstrated bottleneck.
+
+percentage_policy:
+  before: "10.5 / 20 = 52.5%"
+  after: "10.5 / 20 = 52.5%"
   delta: "0.0 pp"
-
-contracts:
-  Constitution: "unchanged"
-  EKE: "unchanged"
-  IES_04: "unchanged"
-  Reasoning_Engine_05: "unchanged"
 
 in_scope:
   writable:
     - "docs/dev-loop/CURRENT_TASK.md"
-    - "docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md"
-    - "docs/dev-loop/reports/DOCS-DIRECTOR-IA-INTRA-SESSION-TOPIC-RETURN-SYNC-001.md"
+    - "docs/dev-loop/reports/AUDIT-DIRECTOR-IA-CONVERSATIONAL-PRODUCT-GAP-007.md"
+
+  read_only:
+    - "entire repository except writable files"
 
 out_of_scope:
-  - "code"
-  - "tests"
-  - "runtime"
-  - "contracts"
-  - "SQL"
-  - "schema"
+  - "implementation"
+  - "code changes"
+  - "test changes"
   - "matrix changes"
-  - "topic stack"
+  - "contract changes"
+  - "SQL execution"
+  - "new modules"
   - "commit"
   - "push"
   - "merge"
 
 acceptance_criteria:
-  - "Standalone precedence documented."
-  - "Exactly one previous_frame documented."
-  - "No topic stack explicit."
-  - "Frame fields and prohibitions documented."
-  - "Self-contained vs implicit return documented."
-  - "Revalidation/requery documented."
-  - "Entity/date/action safety documented."
-  - "Persistent memory boundary documented."
-  - "Natural follow-up after return documented."
-  - "One-frame limitation explicit."
-  - "854/854 evidence recorded."
-  - "No module coverage change."
+  - "Integrated executive conversation traced."
+  - "Hold-out language tested conceptually."
+  - "Previous five bottlenecks verified as fixed or regression identified."
+  - "Information-gap depth stress-tested."
+  - "Tradeoff behavior audited."
+  - "Persistent-memory deployment separated."
+  - "One-previous-frame limitation evaluated."
+  - "Reasoning boundary audited."
+  - "Exactly one bottleneck selected."
+  - "Exactly one NEXT_TASK proposed."
   - "52.5% preserved."
-  - "Only three authorized files changed."
+  - "Only task + report changed."
   - "git diff --check clean."
-
-next_task:
-  propose_only: "AUDIT-DIRECTOR-IA-CONVERSATIONAL-PRODUCT-GAP-007"
-  authorize: false
-  execute: false
 
 expected_terminal_state: "DONE_PENDING_REVIEW"
 
 max_attempts: 1
 
 result_report_path: >
-  docs/dev-loop/reports/DOCS-DIRECTOR-IA-INTRA-SESSION-TOPIC-RETURN-SYNC-001.md
+  docs/dev-loop/reports/AUDIT-DIRECTOR-IA-CONVERSATIONAL-PRODUCT-GAP-007.md
