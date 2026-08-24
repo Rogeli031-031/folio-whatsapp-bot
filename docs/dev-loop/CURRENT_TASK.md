@@ -1,333 +1,420 @@
 # CURRENT_TASK
 
 ```yaml
-task_id: "AUDIT-DIRECTOR-IA-CONVERSATIONAL-PRODUCT-GAP-003"
+task_id: "ARCH-DIRECTOR-IA-NATURAL-FOLLOWUP-INHERIT-READINESS-001"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-08-24"
 human_authorization: >
   AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-24.
-  Apruebo AUDIT-DIRECTOR-IA-CONVERSATIONAL-PRODUCT-GAP-003
-  y autorizo G1 exclusivamente para auditoría read-only.
+  Apruebo ARCH-DIRECTOR-IA-NATURAL-FOLLOWUP-INHERIT-READINESS-001
+  y autorizo G1.
 
 gates:
   G1_task_authorization: AUTHORIZED
-  G2_architecture_change: N/A
-  G3_new_architecture_contract: N/A
+  G2_architecture_change: N/A_PENDING_AUDIT
+  G3_new_architecture_contract: N/A_PENDING_AUDIT
   G5_contract_conformance: N/A
   G8_calibration_materiality_signature: N/A
 
-mode:
-  type: "PRODUCT_IMPACT_AUDIT_ONLY"
-  implementation: false
-  code_changes: false
-  runtime_changes: false
-  test_changes: false
-  matrix_changes: false
-  contract_changes: false
-
 objective: >
-  Medir cuánto mejoró realmente la experiencia conversacional de Director IA
-  después de continuidad efímera, memoria pending_work_items_only,
-  plant_diagnosis multi-source, commercial materiality y daily_sales_deviation;
-  identificar exactamente un cuello de botella actual que todavía impida
-  conversar naturalmente con una IA que conoce los datos y, cuando no tiene
-  información suficiente, sabe qué necesita para continuar.
-
-north_star: >
-  Director IA debe permitir conversar naturalmente sobre la empresa con una IA
-  que conoce los datos disponibles. La infraestructura entrega evidencia,
-  permisos, memoria, identidad, periodos, cálculos y provenance. GPT conserva
-  síntesis, explicación, preguntas de seguimiento y razonamiento conversacional.
+  Auditar el mecanismo mínimo y seguro para que follow-ups naturales y no
+  enumerados puedan heredar un contexto conversacional válido y llegar a GPT,
+  sin ampliar un phrasebook cerrado y sin relajar authz, resolución de entidad,
+  cambio de planta, provenance ni requery.
 
 baseline:
-  functional_coverage: "10.5 / 20 = 52.5%"
+  global: "10.5 / 20 = 52.5%"
   percentage_effect: "0.0 pp"
 
-before_reference:
-  audit: "AUDIT-DIRECTOR-IA-CONVERSATIONAL-PRODUCT-GAP-002"
+  prior_audit:
+    task: "AUDIT-DIRECTOR-IA-CONVERSATIONAL-PRODUCT-GAP-003"
+    bottleneck: "phrasebook cerrado de follow-ups"
+    failure_class: "OVERPROGRAMMING"
 
-  prior_bottleneck: >
-    Preguntas diarias como “¿por qué bajó la venta ayer?” eran interceptadas
-    o perdidas por paths mensuales.
+product_principle: >
+  El runtime debe proteger verdad, identidad, scope y evidencia.
+  GPT debe interpretar lenguaje conversacional abierto cuando existe suficiente
+  contexto seguro para hacerlo.
 
-new_capabilities_since_gap_002:
-  - "daily_sales_deviation"
-  - "ayer America/Mexico_City"
-  - "same-weekday / 14-day reference"
-  - "customer contribution"
-  - "channel contribution"
-  - "DICF/comments por cliente_key"
-  - "information gaps"
-  - "7-turn daily conversational inheritance"
+central_problem: >
+  Frases no enumeradas como “¿Y eso?”, “¿Cómo así?”, “¿Qué más?” o
+  “¿Entonces qué falta?” no llegan al modelo aunque exista parent_intent,
+  evidencia fresca y un hilo válido.
+
+anti_solution:
+  forbidden:
+    - "agregar más frases exactas al phrasebook"
+    - "convertir cualquier unknown en follow-up"
+    - "mandar history crudo como evidencia"
+    - "heredar contexto después de un topic switch explícito"
 
 primary_question: >
-  Ahora que el cuello diario de venta fue corregido, ¿cuál es el ÚNICO mayor
-  obstáculo restante para cumplir el north star?
+  ¿Qué condición general puede determinar que un turno corto/ambiguo es un
+  follow-up del contexto activo y debe llegar a GPT con evidence fresca, en vez
+  de terminar en clarificación o routing erróneo?
 
-candidate_gaps_to_evaluate_not_assume:
-
-  daily_discount:
-    examples:
-      - "¿Por qué subió el descuento/kg ayer?"
-      - "¿Fue general o algunos clientes?"
-      - "¿Quién movió el ponderado?"
-    known:
-      - "not implemented"
-      - "formula audited = SUM(monto)/SUM(kg)"
-      - "no channel in discount source"
-
-  natural_followups:
-    examples:
-      - "¿Y eso?"
-      - "¿Cómo así?"
-      - "¿Qué más?"
-      - "¿Entonces?"
-      - "¿Y los demás?"
-    question: >
-      ¿El phrasebook/follow-up detector sigue siendo demasiado rígido aunque
-      exista structured_conversation_state?
-
-  action_routing:
-    examples:
-      - "¿Qué pasó con la acción de Julio?"
-      - "¿Por qué no la cerró?"
-      - "¿Ya respondió?"
-    known_prior_issue: >
-      “qué pasó con” podía entrar a memoria en vez de Action Register.
-
-  information_gap_expression:
-    examples:
-      - "¿Qué te falta?"
-      - "¿Quién puede conseguirlo?"
-      - "¿Para qué lo necesitas?"
-    question: >
-      ¿GPT recibe suficiente evidence/limitations para formular naturalmente
-      la brecha o sigue dependiendo de frases enlatadas?
-
-  economic_tradeoff:
-    example: >
-      Arturo dejó de comprar y competencia ofrece mejor condición; ¿conviene
-      recuperarlo si deteriora margen?
-
-    known_prior_limit:
-      - "no client-level structured offer"
-      - "no reliable client-level margin calculation"
-
-  persistent_memory_deployment:
-    known:
-      - "repo support implemented"
-      - "SQL 017 may still be unapplied"
-
-  overprogramming:
-    question: >
-      ¿Existen reglas recientes que reducen naturalidad y podrían sustituirse
-      por evidence + state + GPT sin sacrificar verdad?
-
-mandatory_before_after_tests:
-
-  conversation_A_plant:
-    turns:
-      - "¿Cómo va Puebla?"
-      - "¿Qué te llama la atención?"
-      - "¿Por qué?"
-      - "¿Y Arturo?"
-      - "¿Qué sabemos de él?"
-      - "¿Tiene acción?"
-      - "¿Qué falta saber?"
-      - "¿Quién puede darnos esa información?"
-      - "¿Para qué la necesitas?"
-
-  conversation_B_daily_sales:
-    turns:
-      - "¿Por qué bajó la venta ayer?"
-      - "¿Contra qué la comparas?"
-      - "¿Qué clientes explican más?"
-      - "¿Y por canal?"
-      - "¿Sabemos por qué?"
-      - "¿Qué falta investigar?"
-      - "¿Quién puede aclararlo?"
-
-  conversation_C_daily_discount:
-    turns:
-      - "¿Por qué subió el descuento/kg ayer?"
-      - "¿Fue general?"
-      - "¿Quién movió más el promedio?"
-      - "¿Sabemos por qué?"
-      - "¿Qué falta?"
-
-  conversation_D_action:
-    turns:
-      - "¿Qué pasó con la acción de Julio Pérez?"
-      - "¿Está vencida?"
-      - "¿Por qué no la ha cerrado?"
-      - "¿Lo sabemos?"
-      - "¿Qué necesitas para saberlo?"
-
-  conversation_E_memory:
-    session_1:
-      - "¿Por qué dejó de comprar Arturo?"
-      - "¿Qué falta?"
-    session_2:
-      - "¿Qué pasó con Arturo?"
-      - "¿Ya sabemos por qué?"
-
-  conversation_F_free_followups:
-    turns:
-      - "¿Cómo va Puebla?"
-      - "¿Y eso?"
-      - "¿Cómo así?"
-      - "¿Qué más?"
-      - "¿Entonces qué falta?"
-    purpose: >
-      Medir si Director IA conversa o solo reconoce follow-ups enumerados.
-
-trace_requirements_for_each_turn:
-  - "intent"
-  - "parent_intent"
-  - "follow-up classification"
-  - "active entity"
-  - "active date if applicable"
-  - "sources loaded"
-  - "evidence supplied to GPT"
-  - "limitations"
-  - "whether answer is deterministic or GPT-generated"
-  - "where failure occurs"
-
-impact_comparison:
-
-  compare_gap_002_vs_now:
-    dimensions:
-      - "naturalness"
-      - "correct routing"
-      - "daily awareness"
-      - "data grounding"
-      - "follow-up continuity"
-      - "ability to identify unknowns"
-      - "ability to say what information is needed"
-      - "cross-session continuity"
-      - "overprogramming"
-
-  required_conclusion: >
-    State explicitly what daily_sales_deviation fixed and what it did not fix.
-
-failure_classes:
-  - "MISSING_DATA"
-  - "MISSING_INFRASTRUCTURE"
-  - "MODEL_REASONING_LIMIT"
-  - "OVERPROGRAMMING"
-  - "DEPLOYMENT_GAP"
-  - "CONTRACT_OR_AUTHZ_LIMIT"
-
-reasoning_boundary_audit:
-
-  classify:
-    - "KEEP_DETERMINISTIC"
-    - "LET_GPT_REASON"
-    - "MIXED"
-    - "UNKNOWN"
+mandatory_runtime_audit:
 
   inspect:
-    - "follow-up phrase matching"
-    - "pending gap text"
-    - "daily pack"
-    - "commercial materiality"
-    - "early returns"
-    - "special prompts"
-
-  required_question: >
-    ¿Estamos todavía programando frases/conclusiones que GPT podría formular
-    naturalmente si recibe state + evidence correctos?
-
-information_gap_quality:
-
-  target: >
-    No basta con “no hay suficiente información”.
-
-  evaluate:
-    - "what is known"
-    - "what is unknown"
-    - "exact missing datum"
-    - "why needed"
-    - "possible source"
-    - "physically-linked person only if valid"
-    - "what decision/analysis it unlocks"
+    - "follow-up classifier actual"
+    - "phrasebook/kinds enumerados"
+    - "unknown handling"
+    - "entity extraction"
+    - "structured_conversation_state"
+    - "parent_intent"
+    - "active_entity"
+    - "active_date"
+    - "last_evidence_bundle_type"
+    - "pending_information_gap"
+    - "planner clarification"
+    - "OpenAI invocation"
 
   determine:
-    - "whether runtime supplies enough structure"
-    - "whether GPT gets freedom to formulate it"
-    - "whether phrasebook blocks natural variants"
+    - "dónde se corta el turno"
+    - "qué señales ya existen para herencia"
+    - "qué señales indican topic switch"
+    - "qué señales indican nueva entidad"
+    - "qué señales indican un intent standalone"
 
-daily_discount_audit:
+inheritance_gate_hypothesis:
+  audit_not_assume: true
 
-  required:
-    - "confirm source"
-    - "daily date capability"
-    - "weighted formula"
-    - "customer decomposition feasibility"
-    - "mix effect feasibility"
-    - "business evidence join feasibility"
-    - "what exactly is missing"
+  candidate_requirements:
+    - "parent_intent válido"
+    - "estado conversacional activo"
+    - "último pack defendible"
+    - "turno corto o semánticamente dependiente"
+    - "sin intent standalone claro"
+    - "sin cambio explícito de planta"
+    - "sin nueva entidad inequívoca que cambie scope"
+    - "sin topic switch"
 
-  rule: >
-    Do not automatically make daily_discount the winner just because daily sales
-    is now solved.
-
-action_routing_audit:
-
-  required:
-    - "trace 'qué pasó con la acción de Julio'"
-    - "trace 'por qué no la cerró'"
-    - "determine whether existing AR/history data is sufficient"
-    - "distinguish routing bug from missing data"
-
-memory_deployment_audit:
-
-  required:
-    - "repo capability exists"
-    - "do not claim environment active without SQL 017 confirmation"
+  desired_behavior: >
+    Si estas condiciones se cumplen, el turno puede heredar contexto y llegar a
+    GPT con evidencia fresca aunque el planner aislado lo marque unknown.
 
   rule: >
-    Deployment-only gap should win only if it is the main blocker of the north
-    star in actual target environment.
+    Unknown no significa automáticamente follow-up. Debe existir evidencia
+    contextual suficiente.
 
-single_bottleneck:
+followup_classes_to_audit:
 
-  exactly_one: true
+  explanation:
+    examples:
+      - "¿Cómo así?"
+      - "¿Por qué?"
+      - "¿A qué te refieres?"
+      - "Explícame eso."
 
-  required_fields:
-    - "name"
-    - "failure_class"
-    - "physical_location"
-    - "evidence"
-    - "why it is now the largest blocker"
-    - "what fixing it unlocks"
-    - "what it does not solve"
+  expansion:
+    examples:
+      - "¿Qué más?"
+      - "¿Y los demás?"
+      - "¿Algo más?"
 
-  selection_rule: >
-    Choose by impact on natural business conversation, not percentage, ease,
-    recency, or previous ranking.
+  consequence:
+    examples:
+      - "¿Entonces?"
+      - "¿Y eso qué implica?"
+      - "¿Qué significa eso?"
 
-next_task_policy:
-  exactly_one: true
-  authorize: false
-  execute: false
+  gap:
+    examples:
+      - "¿Entonces qué falta?"
+      - "¿Qué necesitas?"
+      - "¿Y para saberlo?"
+
+  reference:
+    examples:
+      - "¿Y eso?"
+      - "¿Y él?"
+      - "¿Y ese cliente?"
 
   rule: >
-    NEXT_TASK must directly address the demonstrated single bottleneck.
-    It may be readiness, implementation, simplification, routing fix, or
-    deployment task depending on evidence.
+    Estas clases sirven para auditar intención conversacional, no para crear un
+    nuevo catálogo rígido de frases.
+
+entity_safety:
+
+  critical_case:
+    phrase: "¿Y eso?"
+
+  known_problem: >
+    Hoy puede interpretarse como entidad/cliente.
+
+  requirement: >
+    Auditar cómo evitar que pronombres/demostrativos sin identidad física
+    disparen resolución de entidad.
+
+  rules:
+    - "eso/esto/aquello no son cliente por defecto"
+    - "él/ella solo pueden usar active_entity si ya existe y sigue válida"
+    - "nueva entidad nombrada debe resolverse físicamente"
+    - "ambigüedad => clarificación"
+
+topic_switch:
+
+  explicit_examples:
+    - "Ahora dime Querétaro."
+    - "Cambiando de tema..."
+    - "¿Cómo va el presupuesto?"
+    - "Hablemos de Taller."
+
+  rule: >
+    Un intent standalone claro o cambio explícito debe ganar sobre la herencia.
+
+  required:
+    - "invalidate incompatible conversational state"
+    - "no drag old evidence into new topic"
+
+plant_switch:
+
+  required:
+    - "request planta actual prevalece"
+    - "active_entity incompatible se invalida"
+    - "pending gap incompatible se invalida"
+    - "no cross-plant leakage"
+
+evidence_policy:
+
+  strategy: "requery_every_turn"
+
+  invariant:
+    - "context inheritance != evidence reuse"
+
+  required:
+    - "heredar parent_intent/contexto"
+    - "volver a cargar evidence"
+    - "authz actual"
+    - "SOURCE_RESTRICTED actual"
+    - "provenance actual"
+
+  rule: >
+    El modelo puede heredar la conversación, nunca la verdad empresarial stale.
+
+GPT_context:
+
+  required_to_audit:
+    - "structured HILO"
+    - "parent_intent"
+    - "active entity if valid"
+    - "active date if applicable"
+    - "pending gap"
+    - "fresh pack"
+    - "limitations"
+
+  desired: >
+    GPT debe poder interpretar libremente “¿Cómo así?” o “¿Qué más?” a partir
+    del contexto, sin que el código determine la respuesta.
+
+  prohibited:
+    - "respuesta determinística para cada clase de follow-up"
+    - "assistant previous prose promoted to evidence"
+
+clarification_policy:
+
+  clarify_when:
+    - "no valid conversational state"
+    - "multiple plausible parent contexts"
+    - "entity ambiguous"
+    - "new topic cannot be safely inferred"
+    - "scope conflict"
+
+  do_not_clarify_only_because:
+    - "planner isolated intent = unknown"
+
+reasoning_boundary:
+
+  KEEP_DETERMINISTIC:
+    - "authz"
+    - "plant scope"
+    - "entity identity"
+    - "topic switch when explicit"
+    - "standalone intent routing"
+    - "requery"
+    - "provenance"
+    - "absence/error semantics"
+
+  LET_GPT_REASON:
+    - "interpretation of open follow-up"
+    - "explanation"
+    - "expansion"
+    - "consequence"
+    - "information gap wording"
+    - "natural response"
+
+  rule: >
+    No crear un sistema experto de conversación.
+
+master_tests:
+
+  canonical_context:
+    initial: "¿Cómo va Puebla?"
+
+    free_followups_not_to_hardcode:
+      - "¿Y eso?"
+      - "¿Cómo así?"
+      - "¿A qué te refieres?"
+      - "¿Qué más?"
+      - "¿Algo más?"
+      - "¿Entonces?"
+      - "¿Y eso qué implica?"
+      - "¿Entonces qué falta?"
+      - "¿Y para saberlo?"
+
+  requirement: >
+    La readiness debe demostrar que la solución propuesta generaliza a frases
+    no enumeradas en producción, no únicamente a las del test.
+
+generalization_test_design:
+
+  required:
+    - "hold-out follow-ups no presentes en implementation examples"
+    - "paráfrasis"
+    - "turnos cortos"
+    - "turnos con signos/puntuación distintos"
+    - "lenguaje coloquial"
+
+  rule: >
+    Si la solución necesita conocer cada frase por adelantado, NO está lista.
+
+standalone_preservation:
+
+  examples:
+    - "¿Cómo va el presupuesto esta semana?"
+    - "¿Qué tiene Taller AT-15?"
+    - "¿Cómo va Querétaro?"
+    - "¿Por qué bajó la venta ayer?"
+
+  requirement: >
+    Deben seguir tomando su intent propio aunque exista un parent_intent previo.
+
+action_routing_boundary:
+
+  known_issue:
+    - "¿Qué pasó con la acción de Julio Pérez?"
+
+  rule: >
+    Auditar interacción, pero NO resolver aquí si requiere routing explícito de
+    Action Register. Este slice es natural follow-up inheritance.
+
+daily_discount_boundary:
+  status: "deferred"
+  rule: "No implementar ni diseñar en este readiness."
+
+persistent_memory_boundary:
+  status: "preserved"
+  note: "SQL 017 environment activation sigue siendo asunto operativo separado."
+
+solution_candidates:
+
+  A_expand_phrasebook:
+    expected: "reject unless evidence strongly contradicts"
+    risk: "repite sobreprogramación"
+
+  B_unknown_with_valid_state_to_GPT:
+    description: >
+      Si existe estado válido y no hay señales de standalone/topic switch,
+      unknown puede heredar parent_intent.
+
+  C_lightweight_followup_score:
+    description: >
+      Señales estructurales para determinar dependencia contextual sin listar
+      frases exactas.
+
+    warning: >
+      No crear score arbitrario u opaco.
+
+  D_LLM_followup_classifier:
+    description: >
+      Usar modelo para decidir continuidad antes del planner/runtime.
+
+    risks:
+      - "extra call"
+      - "latency"
+      - "nondeterministic routing"
+      - "authz/scope concerns"
+
+  requirement:
+    - "comparar A/B/C/D"
+    - "seleccionar exactamente un first slice"
+    - "priorizar generalización + simplicidad + seguridad"
+
+contract_audit:
+  inspect:
+    - "Constitution"
+    - "EKE"
+    - "04 IES"
+    - "05 RE"
+
+  determine:
+    - "G2"
+    - "G3"
+
+  expectation: "runtime-only unless evidence says otherwise"
+
+tests_to_design_if_ready:
+
+  positive:
+    - "free explanation follow-up"
+    - "free expansion follow-up"
+    - "free consequence follow-up"
+    - "free gap follow-up"
+    - "reference to active entity"
+
+  holdout:
+    - "phrases not present in implementation"
+    - "colloquial variants"
+
+  negative:
+    - "standalone intent wins"
+    - "topic switch"
+    - "plant switch"
+    - "entity ambiguity"
+    - "unknown without state clarifies"
+    - "smalltalk not inherited blindly"
+
+  security:
+    - "authz revalidated"
+    - "no stale evidence"
+    - "no cross-plant leakage"
+    - "history not evidence"
+
+  regression:
+    - "daily_sales_deviation"
+    - "plant_diagnosis"
+    - "financial_diagnosis"
+    - "persistent memory"
+    - "M5/M6/M11/M12/M18"
+    - "full suite"
+
+readiness_output:
+  must_determine:
+    - "READY / READY_WITH_LIMITS / NOT_READY"
+    - "selected strategy A/B/C/D"
+    - "inheritance gate"
+    - "standalone precedence"
+    - "topic-switch rules"
+    - "entity rules"
+    - "clarification rules"
+    - "GPT context"
+    - "requery behavior"
+    - "generalization test"
+    - "G2/G3"
+    - "percentage effect"
+    - "deferred gaps"
 
 percentage_policy:
   before: "10.5 / 20 = 52.5%"
-  after: "10.5 / 20 = 52.5%"
-  delta: "0.0 pp"
+  after_readiness: "10.5 / 20 = 52.5%"
+  expected_impl_effect: "0.0 pp"
 
 in_scope:
   writable:
     - "docs/dev-loop/CURRENT_TASK.md"
-    - "docs/dev-loop/reports/AUDIT-DIRECTOR-IA-CONVERSATIONAL-PRODUCT-GAP-003.md"
+    - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-NATURAL-FOLLOWUP-INHERIT-READINESS-001.md"
 
   read_only:
     - "entire repository except writable files"
@@ -335,33 +422,48 @@ in_scope:
 out_of_scope:
   - "implementation"
   - "code changes"
-  - "tests changes"
+  - "test changes"
   - "matrix changes"
-  - "contract changes"
+  - "contracts changes"
+  - "daily discount"
+  - "Action Register Julio fix"
   - "SQL execution"
   - "commit"
   - "push"
   - "merge"
 
 acceptance_criteria:
-  - "Gap 002 vs now compared explicitly."
-  - "Six conversations traced."
-  - "Daily sales improvement measured."
-  - "Daily discount audited."
-  - "Action routing audited."
-  - "Free-form follow-ups audited."
-  - "Information-gap quality audited."
-  - "Overprogramming audited."
-  - "Memory deployment separated."
-  - "Exactly one bottleneck selected."
-  - "Exactly one NEXT_TASK."
-  - "52.5% unchanged."
+  - "Phrasebook bottleneck traced."
+  - "General inheritance principle audited."
+  - "A/B/C/D compared."
+  - "Exactly one strategy selected."
+  - "Unknown != automatic clarification when context valid."
+  - "Standalone/topic switch precedence defined."
+  - "Entity safety defined."
+  - "Requery preserved."
+  - "GPT reasoning freedom preserved."
+  - "Hold-out/generalization testing designed."
+  - "No bigger phrasebook proposed as final solution."
+  - "G2/G3 determined."
+  - "52.5% preserved."
   - "Only task + report changed."
   - "git diff --check clean."
 
-expected_terminal_state: "DONE_PENDING_REVIEW"
+next_task_policy:
+  if_ready:
+    propose_exactly_one: "IMPL-DIRECTOR-IA-NATURAL-FOLLOWUP-INHERIT-001"
+
+  if_not_ready:
+    propose_exactly_one: "ARCH-DIRECTOR-IA-NATURAL-FOLLOWUP-GAP-001"
+
+  rule: "Do not authorize or execute."
+
+expected_terminal_state: >
+  DONE_PENDING_REVIEW if READY/READY_WITH_LIMITS with one generalizable slice.
+  STOPPED if a product/contract decision is required.
+  BLOCKED if a gate is missing.
 
 max_attempts: 1
 
 result_report_path: >
-  docs/dev-loop/reports/AUDIT-DIRECTOR-IA-CONVERSATIONAL-PRODUCT-GAP-003.md
+  docs/dev-loop/reports/ARCH-DIRECTOR-IA-NATURAL-FOLLOWUP-INHERIT-READINESS-001.md
