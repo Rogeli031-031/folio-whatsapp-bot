@@ -63,7 +63,7 @@
 | Chat | `POST /api/director-ia/chat` → `askDirectorIa` (`lib/director-ia-chat.js`) |
 | Routing chat | Regex / heurísticas en `director-ia-chat.js`, `director-ia-igf-arr.js`, `director-ia-commercial-state.js` |
 | Fuentes en GET `sources` | `action_register`, `dicf`, `bitacora_ia`, `cliente_comentarios`, `folio_comentarios` pueden pasar a `true`; `igf`, `arr`, `commercial_state` permanecen `false` en `EMPTY_SOURCES` |
-| Fuentes solo en chat | Anexo IGF/ARR (`loadIgfArrAnnexForChat` + `extractIgfComposition` sobre 1 fila de `igf.compromiso_lines`; no recálculo; no overlay), estado comercial (`loadCommercialStateForChat`), expediente comercial factual (`loadCommercialDossierForChat`; SELECT-only; no `computeDicf`); Mejora Continua (`loadMejoraContinuaForChat`); M6 GASTOS/INVERSIONES (`loadGastosInversionesForChat`); M4 clasificación query (`loadClasificacionApoyosForChat`); M18 presupuesto semanal (`loadPresupuestoSemanalForChat`) |
+| Fuentes solo en chat | Anexo IGF/ARR (`loadIgfArrAnnexForChat` + `extractIgfComposition` sobre 1 fila de `igf.compromiso_lines`; no recálculo; no overlay), estado comercial (`loadCommercialStateForChat`), expediente comercial factual (`loadCommercialDossierForChat`; SELECT-only; no `computeDicf`); Mejora Continua (`loadMejoraContinuaForChat`); M6 GASTOS/INVERSIONES (`loadGastosInversionesForChat`); M5 Taller por AT (`loadTallerAtForChat`; SELECT `public.folios.unidad`; no Excel; no duplicados); M4 clasificación query (`loadClasificacionApoyosForChat`); M18 presupuesto semanal (`loadPresupuestoSemanalForChat`) |
 | Persistencia de chat | No hay tabla de historial; solo `req.body.history` opcional en el request |
 | Escritura propia del módulo | Bitácora y entidades comerciales vía API CRUD (no vía chat) |
 
@@ -183,19 +183,19 @@
 | **ID** | M5 |
 | **Módulo** | Taller por AT |
 | **Propósito empresarial** | Excel de gasto taller por unidad AT, con hoja de duplicados. |
-| **Cobertura actual de Director IA** | NO INTEGRADA |
-| **Información exacta que sí consulta** | Ninguna del Excel Taller. (Mejora Continua puede tener tema/área «Taller» en Action Register — dominio distinto.) |
-| **Información que no consulta** | `GET /api/dashboard/taller-at-excel`, homologación AT, duplicados de taller. |
-| **Archivos actuales relacionados** | `lib/taller-at-excel.js`, `lib/unidad-taller.js` |
-| **Endpoints actuales relacionados** | `/api/dashboard/taller-at-excel` |
-| **Tablas o vistas relacionadas** | `public.folios`, `public.plantas` |
-| **Funciones existentes reutilizables** | `buildTallerAtWorkbook` / parsers en `unidad-taller.js` |
-| **Capacidades de lectura posibles** | CONSULTAR/RESUMIR/DETECTAR RIESGOS (duplicados taller) — no cableado. |
-| **Capacidades de escritura posibles** | DESCARGAR DOCUMENTO (xlsx) en API; no vía chat. |
-| **Permisos aplicables** | Auth + `priv_clave`. |
-| **Nivel de riesgo** | MEDIO |
-| **Dependencias** | Folios. |
-| **Observaciones verificadas** | Tres detectores de duplicados distintos (auditoría); este no es el de Director IA. |
+| **Cobertura actual de Director IA** | PARCIAL (query JSON read-only de folios TALLER por token de `public.folios.unidad`, planta y `YYYY-MM`). **No** es COMPLETE: el propósito canónico incluye Excel/workbook y hoja de duplicados, que permanecen fuera. |
+| **Información exacta que sí consulta** | Slice on-demand `taller_at` → `get_taller_at` → `loadTallerAtForChat` → SELECT `public.folios` (`categoria LIKE '%TALLER%'`; `estatus <> 'CANCELADO'`) + `expandTallerRows`. Unidad = token físico de `public.folios.unidad` homologado con `unidad-taller` (ej. `AT-15`, `PT-03`). **No** existe `at_id`. **No** existe catálogo AT. Unidad ≠ responsable. Periodo `YYYY-MM` obligatorio (un mes o rango de dos); si falta, clarifica; no inventa mes. Campos observados: unidad, folio, periodo, concepto, importe, estatus; count/total del conjunto consultado. 0 filas: «No se encontraron registros TALLER para esa planta/unidad/periodo.» Authz folios **antes** del SELECT (`assertFolioStatusAccess`). In-process. Sin HTTP interno. |
+| **Información que no consulta** | Excel/workbook (`buildTallerAtWorkbook`); GET `/api/dashboard/taller-at-excel`; hoja de duplicados de taller (detector ≠ M16); writes; `priv_clave`. No es listado M6 GASTOS/INVERSIONES. No es familia agregada M4. No es «cómo va Taller» (Action Register). No afirma causa, responsable, atraso, urgencia, desviación. |
+| **Archivos actuales relacionados** | `lib/director-ia-m5-taller-at.js`; `lib/taller-at-excel.js` (`expandTallerRows` únicamente); `lib/unidad-taller.js`; wiring en `lib/director-ia-chat.js`, `lib/director-ia-tools.js`, `lib/director-ia-capabilities.js`, `lib/director-ia-planner.js` |
+| **Endpoints actuales relacionados** | Chat: `POST /api/director-ia/chat` (in-process). El GET `/api/dashboard/taller-at-excel` **no** se usa como transporte interno. |
+| **Tablas o vistas relacionadas** | `public.folios` ⋈ `public.plantas`. Campo de unidad: `public.folios.unidad`. |
+| **Funciones existentes reutilizables** | `loadTallerAtForChat` → SELECT + `expandTallerRows` + `parseUnidadesList`. **No** `buildTallerAtWorkbook`. Authz: `assertFolioStatusAccess` (no el bloqueo GA de KPIs IGF). |
+| **Capacidades de lectura posibles** | CONSULTAR/RESUMIR gasto TALLER por unidad. DESCARGAR DOCUMENTO / Excel / duplicados taller **no** cableados. |
+| **Capacidades de escritura posibles** | DESCARGAR xlsx en API dashboard; no vía chat Director IA. |
+| **Permisos aplicables** | JWT/contexto; rol; `planta_id`; `plantas_permitidas`; GV 403; GA en planta autorizada; cross-planta 403; fail-closed. Privados excluidos (sin `priv_clave`). |
+| **Nivel de riesgo** | MEDIO (lectura); ALTO si se lee como AR, M4, M6, causa o Excel. |
+| **Dependencias** | Folios. Distinto de M4, M6, M7 y Action Register. |
+| **Observaciones verificadas** | `IMPL-DIRECTOR-IA-M5-TALLER-AT-001` (integrado, merge `848d3eb1`). Tests: focales 16/16; capabilities 56/56; planner 49/49; orchestrator 26/26; suite `test/director-ia-*.test.js` 673/673; `git diff --check` limpio. TALLER ≠ GASTOS ≠ INVERSIONES. M4 familia TALLER ≠ detalle por unidad. «cómo va Taller» / acciones AT-15 siguen AR. Excel/duplicados **siguen fuera**. M5 = **PARCIAL**. **No** COMPLETE. Scoring M0–M20 del loop (COMPLETE=1.0, PARCIAL/INDIRECTA=0.5, NO INTEGRADA=0.0): 10.0/20 = 50.0% → **10.5/20 = 52.5%**. |
 
 ### M6 — GASTOS / INVERSIONES (rango Excel)
 
@@ -857,14 +857,16 @@
 
 ### Fuente: Taller por AT
 
-- **Dominio:** M5
-- **Cobertura actual:** NO INTEGRADA
-- **Archivo de acceso:** `lib/taller-at-excel.js`, `lib/unidad-taller.js`
-- **Función de acceso:** Handler `taller-at-excel`
-- **Endpoint relacionado:** `GET /api/dashboard/taller-at-excel`
-- **Tablas consultadas:** `public.folios`
-- **Evidencia de integración actual:** No integrada
-- **Información que no puede concluirse con esta fuente:** Gasto por AT / duplicados taller
+- **Dominio:** M5. Distinto de familia TALLER en M4, de GASTOS/INVERSIONES (M6) y de tema «Taller» en Action Register
+- **Cobertura actual:** PARCIAL (query JSON on-demand por unidad; Excel/workbook/duplicados no integrados)
+- **Archivo de acceso:** `lib/director-ia-m5-taller-at.js`; `expandTallerRows` en `lib/taller-at-excel.js`; `lib/unidad-taller.js`
+- **Función de acceso:** `loadTallerAtForChat` (in-process)
+- **Endpoint relacionado:** Chat `POST /api/director-ia/chat`. GET `/taller-at-excel` **no** usado
+- **Tablas consultadas:** `public.folios` ⋈ `public.plantas`. Campo de unidad: `public.folios.unidad` (tokens `AT-15` / `PT-03`; **no** `at_id`; **no** catálogo)
+- **Filtros disponibles:** `planta_id` obligatorio; `YYYY-MM` obligatorio; unidad opcional si aparece en la pregunta (helper físico `unidad-taller`)
+- **Permisos:** JWT/contexto; rol; `plantas_permitidas`; GV 403; GA en planta autorizada; cross-planta 403; fail-closed
+- **Evidencia de integración actual:** Intent `taller_at` → tool `get_taller_at` → SELECT + `expandTallerRows`
+- **Información que no puede concluirse con esta fuente:** Excel/workbook; duplicados taller; causa; responsable; atraso; mes inventado; igualdad con M4/M6/AR
 
 ### Fuente: Gastos
 
@@ -1010,6 +1012,7 @@
 | ¿Cómo cambió la clasificación de apoyos entre mes_a y mes_b? | Sí (matriz agregada; no Excel; no COMPARAR) | PARCIAL | Folios + `buildClasificacionMatrix` | `loadClasificacionApoyosForChat` / `get_clasificacion_apoyos_query` | COMPARAR; Excel; causa del delta; igualdad con totales M6 | Alto si se lee como desviación presupuestal o como M6/M5 |
 | ¿Qué dicen las notas de la última revisión / de una revisión? | Sí (texto/autor/`created_at` de una revisión; no ítem) | PARCIAL | `arr.action_register_revision_notes` | `loadActionRegisterRevisionNotesForChat` / `get_action_register_revision_notes` | Revisión no identificada (clarifica); overflow >8; body >500 truncado; attachments | Alto si se lee como nota de ítem, acuerdo formal, Plaud, history M2 o comentario de folio |
 | ¿De qué se compone la utilidad / resultado / compromiso IGF? | Sí (snapshot de 1 fila; hechos observados; no causa) | PARCIAL | `igf.compromiso_lines` | `extractIgfComposition` / `get_igf_snapshot` / `loadIgfCommitSnapshot` | UI/PATCH/versiones; recálculo; overlay; «cómo cambió venta/descuento/ingreso» es M9 | Alto si se lee como causa, problema, responsable, prioridad o tendencia |
+| ¿Cuánto hay de Taller en AT-15 / PT-03 en YYYY-MM? | Sí (detalle por unidad; no Excel; no duplicados) | PARCIAL | `public.folios.unidad` + categoría TALLER | `loadTallerAtForChat` / `get_taller_at` (SELECT-only) | Periodo ausente (clarifica); Excel; duplicados; «cómo va Taller» es AR; familia M4 | Alto si se lee como GASTOS, M4, Action Register, causa o responsable |
 
 ---
 
@@ -1081,7 +1084,7 @@ Escala 1–5. Prioridad derivada de: valor ejecutivo × disponibilidad de funcio
 | commercial_state en GET context | 5 | 4 | 2 | 3 | GA/GV gates | **Alta** |
 | Delta Venta/Descuento/Ingreso | 4 | 4 (endpoints) | 3 | 3 | ARR | **Media** |
 | GASTOS/INVERSIONES (query, no solo xlsx) | 4 | 4 | 3 | 3 | Folios; query JSON ya en PARCIAL M6 | **Hecha (PARTIAL)**; Export/xlsx sigue fuera |
-| Taller por AT (agregados) | 3 | 4 | 3 | 3 | `unidad-taller` | **Media** |
+| Taller por AT (query JSON por unidad) | 3 | 4 | 3 | 3 | Folios; query JSON ya en PARCIAL M5 | **Hecha (PARTIAL)**; Excel/workbook/duplicados siguen fuera |
 | Duplicados (`folio-duplicados`) | 3 | 4 | 2 | 3 | Folios | **Media** |
 | Presupuesto semanal | 4 | 4 | 3 | 3 | Folios; query JSON ya en PARCIAL M18 | **Hecha (PARTIAL)**; writes/cheques/WhatsApp siguen fuera |
 | Proyectos | 3 | 4 | 2 | 2 | Plantas | **Media-Baja** |
@@ -1256,7 +1259,7 @@ Escala 1–5. Prioridad derivada de: valor ejecutivo × disponibilidad de funcio
 
 ### 1. Resumen de cobertura real actual
 
-Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Register**, **DICF**, **bitácora**, **comentarios** (cliente y folio) y **entidades comerciales**, con **anexos financieros on-demand** (IGF/ARR/margen/estado comercial) activados por **regex** en el chat, incluida la **composición observada de un snapshot IGF** (M7 slice: `get_igf_snapshot` / `loadIgfCommitSnapshot` / `extractIgfComposition`; 1 fila de `igf.compromiso_lines`; `*_kg` = $/kg; null ≠ 0; `hg_kg` no invertido; `gasto_kg` fuera de fórmula; no se ejecuta `recalcularUtilYResultado`; no overlay; no deltas — M9; composición ≠ causalidad), **análisis on-demand de posibles duplicados de folios** (M16: `findDuplicatePairs`, no confirmación), **consulta on-demand de KPIs de dashboard y proyectos por planta** (M3: `get_dashboard_kpis` / `get_project_status`; no catálogo global; no creación de proyectos), **consulta on-demand de Delta Venta / Descuento / Ingreso de periodos reales** (M9: `get_delta_sales` / `get_delta_discount` / `get_delta_income`; no forecast con escritura; no M19), **consulta on-demand de estatus/etapa de folio** (M2 slice `folio_status`: `get_folio_status` / `loadFolioStatusForChat`; SELECT-only; no GET kanban; no GET `/folios/:id`; no autoavance), **consulta on-demand del historial de folio** (M2 slice `folio_history`: `get_folio_history` / `loadFolioHistoryForChat`; SELECT-only de `public.folio_historial`; no GET `/timeline`; no `dedupeHistorialByStage`; no autoavance), **consulta on-demand de metadata documental de folio** (M2 slice `folio_documents`: `get_folio_documents` / `loadFolioDocumentsMetadataForChat`; SELECT-only de `public.folio_archivos` con proyección segura; no S3; no PDF; no `s3_key`; no «faltan documentos»), y **consulta on-demand de GASTOS e INVERSIONES de folios** (M6 slice query JSON: `get_expense_analysis` / `get_investment_analysis` / `loadGastosInversionesForChat`; SELECT `public.folios` + `expandCategoriaRows`; `YYYY-MM` obligatorio; no Excel; no Export; no IGF), y **consulta on-demand de la matriz comparativa de clasificación de apoyos** (M4 slice query JSON: `get_clasificacion_apoyos_query` / `loadClasificacionApoyosForChat`; SELECT `public.folios` + `buildClasificacionMatrix`; `mes_a` vs `mes_b` obligatorios y distintos; GASTOS / INVERSIONES / TALLER separados; sin fallback a 6 plantas; no COMPARAR; no Excel), y **consulta on-demand del carro presupuestal semanal** (M18 slice query JSON: `get_budget_status` / `loadPresupuestoSemanalForChat`; SELECT `presupuestos_semanales` + `presupuesto_folios`; no inventa semana; no filtra solo `ABIERTO`; no writes; no cheques; no WhatsApp; no `presupuesto_asignacion_detalle`), y **consulta on-demand de notas de revisión del Action Register** (M12 slice: `get_action_register_revision_notes` / `loadActionRegisterRevisionNotesForChat`; SELECT `arr.action_register_revision_notes` por `revision_id`; 1 revisión / 8 notas / 500 caracteres; última = `revision_date DESC`; `includeNotes` del context sigue `false`; no ítem; no Plaud; no M2; no binarios), y **consulta on-demand del expediente comercial factual** (M11 slice: `get_commercial_dossier` / `loadCommercialDossierForChat`; authz planta antes de datos; cliente único; SELECT `arr.dicf_cliente_mes` sin `computeDicf`; comentarios solo con `cliente_key`; acciones por `planta_id` + `cliente_key`; historial/cierre por `accion_id`; 1/8/500/8/8; procedencia separada; sin causalidad; sin bitácora). **No** opera el kanban HTTP, **no** usa `/timeline` como transporte interno, **no** lee contenido PDF/S3/pólizas/cheques/COMPARAR-Excel de clasificación/taller/Export xlsx GASTOS-INVERSIONES ni el forecast mutante de ingreso. Las escrituras propias (bitácora/entidades) existen por **API UI**, no como tools autónomos del LLM. El GET `/api/director-ia/context` **subdeclara** IGF/ARR/commercial_state respecto al chat.
+Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Register**, **DICF**, **bitácora**, **comentarios** (cliente y folio) y **entidades comerciales**, con **anexos financieros on-demand** (IGF/ARR/margen/estado comercial) activados por **regex** en el chat, incluida la **composición observada de un snapshot IGF** (M7 slice: `get_igf_snapshot` / `loadIgfCommitSnapshot` / `extractIgfComposition`; 1 fila de `igf.compromiso_lines`; `*_kg` = $/kg; null ≠ 0; `hg_kg` no invertido; `gasto_kg` fuera de fórmula; no se ejecuta `recalcularUtilYResultado`; no overlay; no deltas — M9; composición ≠ causalidad), **análisis on-demand de posibles duplicados de folios** (M16: `findDuplicatePairs`, no confirmación), **consulta on-demand de KPIs de dashboard y proyectos por planta** (M3: `get_dashboard_kpis` / `get_project_status`; no catálogo global; no creación de proyectos), **consulta on-demand de Delta Venta / Descuento / Ingreso de periodos reales** (M9: `get_delta_sales` / `get_delta_discount` / `get_delta_income`; no forecast con escritura; no M19), **consulta on-demand de estatus/etapa de folio** (M2 slice `folio_status`: `get_folio_status` / `loadFolioStatusForChat`; SELECT-only; no GET kanban; no GET `/folios/:id`; no autoavance), **consulta on-demand del historial de folio** (M2 slice `folio_history`: `get_folio_history` / `loadFolioHistoryForChat`; SELECT-only de `public.folio_historial`; no GET `/timeline`; no `dedupeHistorialByStage`; no autoavance), **consulta on-demand de metadata documental de folio** (M2 slice `folio_documents`: `get_folio_documents` / `loadFolioDocumentsMetadataForChat`; SELECT-only de `public.folio_archivos` con proyección segura; no S3; no PDF; no `s3_key`; no «faltan documentos»), y **consulta on-demand de GASTOS e INVERSIONES de folios** (M6 slice query JSON: `get_expense_analysis` / `get_investment_analysis` / `loadGastosInversionesForChat`; SELECT `public.folios` + `expandCategoriaRows`; `YYYY-MM` obligatorio; no Excel; no Export; no IGF), y **consulta on-demand de Taller por AT** (M5 slice query JSON: `get_taller_at` / `loadTallerAtForChat`; SELECT `public.folios` con `categoria LIKE '%TALLER%'` + `expandTallerRows`; unidad = token de `public.folios.unidad` (`AT-15` / `PT-03`); **no** `at_id`; **no** catálogo; `YYYY-MM` obligatorio; no Excel; no workbook; no duplicados taller; no writes; «cómo va Taller» sigue Action Register; familia TALLER de M4 ≠ detalle por unidad), y **consulta on-demand de la matriz comparativa de clasificación de apoyos** (M4 slice query JSON: `get_clasificacion_apoyos_query` / `loadClasificacionApoyosForChat`; SELECT `public.folios` + `buildClasificacionMatrix`; `mes_a` vs `mes_b` obligatorios y distintos; GASTOS / INVERSIONES / TALLER separados; sin fallback a 6 plantas; no COMPARAR; no Excel), y **consulta on-demand del carro presupuestal semanal** (M18 slice query JSON: `get_budget_status` / `loadPresupuestoSemanalForChat`; SELECT `presupuestos_semanales` + `presupuesto_folios`; no inventa semana; no filtra solo `ABIERTO`; no writes; no cheques; no WhatsApp; no `presupuesto_asignacion_detalle`), y **consulta on-demand de notas de revisión del Action Register** (M12 slice: `get_action_register_revision_notes` / `loadActionRegisterRevisionNotesForChat`; SELECT `arr.action_register_revision_notes` por `revision_id`; 1 revisión / 8 notas / 500 caracteres; última = `revision_date DESC`; `includeNotes` del context sigue `false`; no ítem; no Plaud; no M2; no binarios), y **consulta on-demand del expediente comercial factual** (M11 slice: `get_commercial_dossier` / `loadCommercialDossierForChat`; authz planta antes de datos; cliente único; SELECT `arr.dicf_cliente_mes` sin `computeDicf`; comentarios solo con `cliente_key`; acciones por `planta_id` + `cliente_key`; historial/cierre por `accion_id`; 1/8/500/8/8; procedencia separada; sin causalidad; sin bitácora). **No** opera el kanban HTTP, **no** usa `/timeline` como transporte interno, **no** lee contenido PDF/S3/pólizas/cheques/COMPARAR-Excel de clasificación/taller/Export xlsx GASTOS-INVERSIONES ni el forecast mutante de ingreso. Las escrituras propias (bitácora/entidades) existen por **API UI**, no como tools autónomos del LLM. El GET `/api/director-ia/context` **subdeclara** IGF/ARR/commercial_state respecto al chat.
 
 ### 2. Dominios completos (COMPLETA)
 
@@ -1271,6 +1274,7 @@ Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Re
 - M1 Health (readiness técnica `GET /health-director-ia` en header de DirectorIaShell; no `/health` `/health-db` `/health-proyectos`)
 - M2 Folios (comentarios + slice `folio_status` estatus/etapa + slice `folio_history` eventos crudos + slice `folio_documents` metadata-only; no contenido PDF/S3, no faltantes, no cheque/póliza, no `kanban_flow` ni kanban HTTP)
 - M4 Clasificación de apoyos (query JSON `mes_a` vs `mes_b` por planta y familia; no COMPARAR; no Excel/xlsx; no COMPLETE)
+- M5 Taller por AT (query JSON de folios TALLER por token de `public.folios.unidad` y `YYYY-MM`; no `at_id`; no catálogo; no Excel/workbook; no duplicados; no COMPLETE)
 - M6 GASTOS / INVERSIONES (query JSON de folios por planta y `YYYY-MM`; GASTOS ≠ INVERSIONES ≠ IGF; no Export/xlsx; no COMPLETE)
 - M7 IGF (chat on-demand + slice de composición observada de 1 fila de `igf.compromiso_lines`; `*_kg` = $/kg; null ≠ 0; sin recálculo; sin overlay; sin deltas; sin causalidad; no COMPLETE)
 - M8 ARR (chat on-demand / motor DICF)
@@ -1283,11 +1287,12 @@ Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Re
 
 - M20 Home KPI (comparte fuentes, no la página)
 - Colisión lingüística: «cómo van los gastos» / margen / rentabilidad siguen el anexo IGF (M7). Eso **no** puntúa a M6; M6 es PARCIAL por el listado de folios.
+- Colisión lingüística: «cómo va Taller» / acciones de AT-15 siguen Action Register (M12). Eso **no** puntúa a M5; M5 es PARCIAL por el detalle TALLER por unidad.
 
 ### 5. Dominios no integrados (NO INTEGRADA)
 
 - M4 COMPARAR / Excel/xlsx (el query JSON ya está en PARCIAL M4; COMPLETE de M4 sigue fuera)
-- M5 Taller AT
+- M5 Excel / workbook / duplicados taller (el query JSON ya está en PARCIAL M5; COMPLETE de M5 sigue fuera)
 - M6 Export/xlsx (el query JSON ya está en PARCIAL M6; COMPLETE de M6 sigue fuera)
 - M7 UI / PATCH HG / meta Excel / versiones / overlay / recálculo (el slice de composición snapshot ya está en PARCIAL M7; COMPLETE de M7 sigue fuera)
 - M10 Weekly discount LD  
@@ -1323,6 +1328,7 @@ Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Re
 | COMPARAR Delta Venta / Descuento / Ingreso (periodos reales) | `loadDeltaVentaForChat` / `loadDeltaDescuentoForChat` / `loadDeltaIngresoForChat` |
 | CONSULTAR GASTOS de folios (read-only, `YYYY-MM`) | `loadGastosInversionesForChat("GASTOS")` → SELECT + `expandCategoriaRows` |
 | CONSULTAR INVERSIONES de folios (read-only, `YYYY-MM`) | `loadGastosInversionesForChat("INVERSIONES")` → SELECT + `expandCategoriaRows` |
+| CONSULTAR Taller por AT (read-only, `YYYY-MM`, token `public.folios.unidad`) | `loadTallerAtForChat` → SELECT + `expandTallerRows` + `parseUnidadesList` |
 | COMPARAR matriz de clasificación (`mes_a` vs `mes_b`, read-only) | `loadClasificacionApoyosForChat` → SELECT + `buildClasificacionMatrix` |
 | CONSULTAR presupuesto semanal / carro (read-only) | `loadPresupuestoSemanalForChat` → SELECT `presupuestos_semanales` + `presupuesto_folios` |
 
@@ -1334,7 +1340,7 @@ Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Re
 | Timeline / último movimiento | Slice `folio_history` ya integrado (SELECT-only de `public.folio_historial`). GET `/timeline` existe y **sigue excluido** (HTTP interno + `dedupeHistorialByStage`) | Transiciones inventadas, actor sistema, contenido/financial; no copiar dedupe |
 | Metadatos documentos / póliza / cheque | Metadata de `folio_archivos` ya integrada (M2 SELECT-only, sin `s3_key`). Endpoints `/media` y póliza/cheque existen y **siguen excluidos** | Contenido PDF, S3, signed URLs, faltantes, póliza operativa, cheque |
 | Duplicados (cancelar / `findSimilarTo` al crear / Excel Taller) | Sí (cancelar UI, `POST /check`, Excel M5) | Escritura y detectores ajenos al análisis M16 ya integrado |
-| Excel/agregados Taller, GASTOS, INVERSIONES | Query JSON M6 ya integrado (SELECT + `expandCategoriaRows`). Libs Excel Taller/GASTOS/INVERSIONES siguen existiendo | Export/xlsx M6; Taller AT (M5); no usar workbook como transporte |
+| Excel/agregados Taller, GASTOS, INVERSIONES | Query JSON M6 ya integrado (SELECT + `expandCategoriaRows`). Query JSON M5 ya integrado (SELECT + `expandTallerRows`; token `public.folios.unidad`). Libs Excel Taller/GASTOS/INVERSIONES siguen existiendo | Export/xlsx M6; Excel/workbook/duplicados M5; no usar workbook como transporte |
 | Clasificación COMPARAR / Excel | Query JSON M4 ya integrado (SELECT + `buildClasificacionMatrix`). POSTs COMPARAR y workbook siguen existiendo | COMPARAR writes (`insertFolio` / `UPDATE mes_cargo`); Excel/xlsx; no COMPLETE |
 | Deltas UI (forecast con escritura / M19) | Sí (`delta-ingreso-forecast`, `/api/ai/delta-ingreso/test/*`) | La lectura de periodos reales ya está en COMPLETA M9; faltan forecast mutante y M19, a propósito fuera |
 | Presupuesto semanal (writes / cheques / WhatsApp) | Query JSON M18 ya integrado (SELECT + `getPresupuestoResumen`). Writes y bot existen en `server.js` | Asignar/seleccionar; enviar a cheques; Twilio/WhatsApp; no COMPLETE |
@@ -1393,6 +1399,7 @@ Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Re
 | M2 Folios / metadata documental | `lib/director-ia-m2-documents-metadata.js` |
 | M3 Plantas / KPIs / Proyectos | `lib/director-ia-m3-plantas-kpis-proyectos.js` |
 | M4 Clasificación (query JSON) | `lib/director-ia-m4-clasificacion-query.js` |
+| M5 Taller por AT (query JSON) | `lib/director-ia-m5-taller-at.js` |
 | M6 GASTOS / INVERSIONES (query JSON) | `lib/director-ia-m6-gastos-inversiones.js` |
 | M9 Delta Venta / Descuento / Ingreso | `lib/director-ia-m9-deltas.js` |
 | AR summarizers | `lib/director-ia-action-register.js` |
