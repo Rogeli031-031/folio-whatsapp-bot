@@ -138,6 +138,7 @@ const cases = [
     }),
   () => expectIntent("¿Cómo cambió la venta?", "delta_sales", { requireDomain: "delta_venta" }),
   () => expectIntent("¿Cómo cambió el descuento?", "delta_discount", { requireDomain: "delta_descuento" }),
+  () => expectIntent("¿Por qué subió el descuento/kg ayer?", "daily_discount_deviation", { requireDomain: "arr" }),
   () => expectIntent("¿Cómo cambió el ingreso?", "delta_income", { requireDomain: "delta_ingreso" }),
   () => expectIntent("¿Hay folios duplicados?", "duplicate_folios"),
   () => expectIntent("¿Qué permisos tiene el usuario?", "user_permissions"),
