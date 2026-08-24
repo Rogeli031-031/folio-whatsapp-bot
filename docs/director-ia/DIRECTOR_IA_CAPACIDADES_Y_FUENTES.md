@@ -63,7 +63,7 @@
 | Chat | `POST /api/director-ia/chat` → `askDirectorIa` (`lib/director-ia-chat.js`) |
 | Routing chat | Regex / heurísticas en `director-ia-chat.js`, `director-ia-igf-arr.js`, `director-ia-commercial-state.js` |
 | Fuentes en GET `sources` | `action_register`, `dicf`, `bitacora_ia`, `cliente_comentarios`, `folio_comentarios` pueden pasar a `true`; `igf`, `arr`, `commercial_state` permanecen `false` en `EMPTY_SOURCES` |
-| Fuentes solo en chat | Anexo IGF/ARR (`loadIgfArrAnnexForChat`), estado comercial (`loadCommercialStateForChat`), Mejora Continua (`loadMejoraContinuaForChat`); M6 GASTOS/INVERSIONES (`loadGastosInversionesForChat`); M4 clasificación query (`loadClasificacionApoyosForChat`); M18 presupuesto semanal (`loadPresupuestoSemanalForChat`) |
+| Fuentes solo en chat | Anexo IGF/ARR (`loadIgfArrAnnexForChat`), estado comercial (`loadCommercialStateForChat`), expediente comercial factual (`loadCommercialDossierForChat`; SELECT-only; no `computeDicf`); Mejora Continua (`loadMejoraContinuaForChat`); M6 GASTOS/INVERSIONES (`loadGastosInversionesForChat`); M4 clasificación query (`loadClasificacionApoyosForChat`); M18 presupuesto semanal (`loadPresupuestoSemanalForChat`) |
 | Persistencia de chat | No hay tabla de historial; solo `req.body.history` opcional en el request |
 | Escritura propia del módulo | Bitácora y entidades comerciales vía API CRUD (no vía chat) |
 
@@ -309,19 +309,19 @@
 | **ID** | M11 |
 | **Módulo** | DICF + Acciones DICF + Comentarios cliente |
 | **Propósito empresarial** | Oportunidades/proyección por cliente; compromisos DICF; comentarios. |
-| **Cobertura actual de Director IA** | PARCIAL |
-| **Información exacta que sí consulta** | `summarizeDicfContext` (máx. 40 detalles) en context; chat enfocado DICF; `loadClienteComentariosForDirectorIa` (80); commercial_state vía `dicf.computeDicf` on-demand. |
-| **Información que no consulta** | Attachments DICF binarios, UI completa dicf-accion, todos los clientes sin límite, Excel DICF UI. |
-| **Archivos actuales relacionados** | `lib/dicf.js`, `lib/dicf-acciones.js`, `lib/cliente-comentarios.js`, `lib/director-ia-action-register.js`, `lib/director-ia-commercial-state.js`, `lib/director-ia-chat.js` |
-| **Endpoints actuales relacionados** | Director IA context/chat; dashboard `/api/dashboard/dicf-*`, `/api/dicf-*` |
-| **Tablas o vistas relacionadas** | `arr.dicf_config`, `arr.dicf_cliente_mes`, `arr.dicf_acciones`, `arr.dicf_accion_historial`, `arr.dicf_acciones_attachments`, `arr.cliente_comentarios` |
-| **Funciones existentes reutilizables** | `summarizeDicfContext`, `dicf.computeDicf`, `loadCommercialStateForChat`, `buildFocusedDicfContext`, `buildComentariosAnnexText` |
-| **Capacidades de lectura posibles** | CONSULTAR/BUSCAR/RESUMIR/COMPARAR/EXPLICAR/DETECTAR RIESGOS (acciones abiertas). |
-| **Capacidades de escritura posibles** | CRUD DICF acciones en dashboard API — no vía chat Director IA. Comentario cliente: `createClienteComentario` existe en lib; no confirmado como tool de chat. |
-| **Permisos aplicables** | `acceso_acciones_dicf`; `dashboardBlockDicfAccionesRole`; GA restringido en KPIs. |
-| **Nivel de riesgo** | MEDIO |
-| **Dependencias** | ARR, plantas. |
-| **Observaciones verificadas** | `sources.dicf` true solo si hay filas; `sources.commercial_state` nunca true en GET. |
+| **Cobertura actual de Director IA** | PARCIAL (context/listas + slice on-demand de expediente comercial factual). **No** es COMPLETE: attachments, Excel/UI DICF, bitácora dentro del expediente, causalidad y writes permanecen fuera. |
+| **Información exacta que sí consulta** | Context: `summarizeDicfContext` (máx. 40 detalles); chat enfocado DICF (`buildFocusedDicfContext`); comentarios always-on `loadClienteComentariosForDirectorIa` (80). Listas commercial_state on-demand vía `loadCommercialStateForChat` → `dicf.computeDicf` (path distinto del expediente). Slice on-demand de **expediente comercial factual**: `expediente_comercial` → `get_commercial_dossier` → `loadCommercialDossierForChat` → autorizar planta (`assertCommercialDossierAccess`) → resolver **cliente único** → SELECT `arr.dicf_cliente_mes` (último year/month del `plant_code`; **no** `loadCommercialStateForChat`; **no** `computeDicf`; **no** write/cache) → comentarios solo con `cliente_key` coincidente (`IS NOT NULL` / no vacío) → acciones `arr.dicf_acciones` por `planta_id` + `cliente_key` → historial `arr.dicf_accion_historial` y `resultado_cierre` **por action id** → recorte 1 cliente / 8 comentarios / 500 caracteres / 8 acciones / 8 eventos; truncation explícito → evidencia con procedencia separada (`commercial_state`, `comments`, `dicf_actions`, `action_history`, `close_result`). Identidad runtime: `planta_id` + `cliente_key`. `cliente_key` de estado comercial **no está persistido**; se deriva con `buildClienteKey` + grupos de `injectAccionesAbiertas`. Ambigüedad → clarificación; no selección silenciosa. Comentario con `cliente_key` null **no se une**; **no** join por nombre. |
+| **Información que no consulta** | Bitácora/Plaud dentro del expediente. Attachments DICF binarios. UI completa dicf-accion. Excel DICF. Universo de clientes sin límite. Causalidad / motivo / solución / efectividad / responsable del desempeño. Comentarios sin `cliente_key`. Listas «dejaron/aumentaron» (siguen el intent `commercial_state`). |
+| **Archivos actuales relacionados** | `lib/director-ia-m11-commercial-dossier.js`; `lib/dicf.js`; `lib/dicf-acciones.js`; `lib/cliente-comentarios.js`; `lib/director-ia-action-register.js`; `lib/director-ia-commercial-state.js`; wiring en `lib/director-ia-chat.js`, `lib/director-ia-planner.js`, `lib/director-ia-tools.js`, `lib/director-ia-capabilities.js` |
+| **Endpoints actuales relacionados** | Chat: `POST /api/director-ia/chat` (in-process). `GET /api/director-ia/context` (DICF/comentarios always-on; expediente no entra al GET). Dashboard `/api/dashboard/dicf-*`, `/api/dicf-*` (**no** transporte interno del slice). |
+| **Tablas o vistas relacionadas** | Expediente: `arr.dicf_cliente_mes`, `arr.cliente_comentarios`, `arr.dicf_acciones`, `arr.dicf_accion_historial`. Resolución: `public.plantas`, `arr.comercial_entidad` / alias (no son clave de join). Context: `arr.dicf_config`. `arr.dicf_acciones_attachments` **fuera**. |
+| **Funciones existentes reutilizables** | `loadCommercialDossierForChat` (SELECT-only; authz antes de datos). `buildClienteKey` / `getCanonicalPlantaId` / `getPlantaIdsEquivalentes`. `summarizeDicfContext`, `dicf.computeDicf` (solo listas commercial_state, no expediente), `loadCommercialStateForChat`, `buildFocusedDicfContext`, `buildComentariosAnnexText`. |
+| **Capacidades de lectura posibles** | CONSULTAR/BUSCAR/RESUMIR/COMPARAR/EXPLICAR/DETECTAR RIESGOS (acciones abiertas). CONSULTAR expediente factual de un cliente (on-demand, recortado, sin causalidad). |
+| **Capacidades de escritura posibles** | CRUD DICF acciones en dashboard API — no vía chat Director IA. Comentario cliente: `createClienteComentario` existe en lib; no expuesto como tool de chat. |
+| **Permisos aplicables** | JWT/contexto; rol; `planta_id`; `plantas_permitidas`; cross-planta 403; fail-closed. GA 403 (regla commercial_state: KPIs financieros). ZP/AD globales. Authz **antes** de consultar el expediente. `acceso_acciones_dicf` / `dashboardBlockDicfAccionesRole` siguen en el dominio DICF de dashboard. |
+| **Nivel de riesgo** | MEDIO (lectura); ALTO (mutar acciones/attachments — fuera). |
+| **Dependencias** | ARR (listas commercial_state / compute); plantas. Distinto de bitácora/Plaud, M2 y Action Register. |
+| **Observaciones verificadas** | `IMPL-DIRECTOR-IA-M11-EXPEDIENTE-COMERCIAL-001` (integrado en main, merge `a5fdea23` / `e3529599`). Tests: focales 19/19; capabilities 50/50; planner 46/46; orchestrator 26/26; suite `test/director-ia-*.test.js` 644/644; `git diff --check` limpio. Routing `commercial_state` / `dicf_focused` / `client_analysis` / Action Register / listas **preservado**. M11 **sigue PARCIAL**. **No** COMPLETE. Scoring M0–M20 **sin cambio**: 10.0/20 = **50.0%** (PARTIAL ya valía 0.5; no se suma +2.5 pp). `sources.dicf` true solo si hay filas; `sources.commercial_state` nunca true en GET. |
 
 ### M12 — Action Register
 
@@ -539,20 +539,39 @@
 
 - **Dominio:** Acciones e historial DICF por cliente (M11)
 - **Cobertura actual:** PARCIAL
-- **Archivo de acceso:** `lib/director-ia-action-register.js` (`summarizeDicfContext`), `lib/director-ia-chat.js` (contextos enfocados)
-- **Función de acceso:** `summarizeDicfContext`; filtros chat `filterDicfDetailsByQuestion`, `buildFocusedDicfContext`
-- **Endpoint relacionado:** `GET /api/director-ia/context`; dashboard `/api/dashboard/dicf-*`
-- **Tablas consultadas:** `arr.dicf_acciones` (+ historial en detalles según query del summarizer)
-- **Filtros disponibles:** planta; chat: tokens comerciales / nombre cliente; ventana 3 meses en chat mensual
-- **Alcance por planta:** Sí (+ equivalentes en commercial_state)
-- **Alcance por periodo:** Ventana `BITACORA_CHAT_MONTH_WINDOW = 3` en modos mensuales de chat
-- **Límites de filas:** `DEFAULT_DICF_DETAILS_LIMIT = 40`
-- **Permisos:** JWT; bloqueos DICF role; GA sin KPIs financieros
+- **Archivo de acceso:** `lib/director-ia-action-register.js` (`summarizeDicfContext`), `lib/director-ia-chat.js` (contextos enfocados), `lib/director-ia-m11-commercial-dossier.js` (expediente)
+- **Función de acceso:** `summarizeDicfContext`; filtros chat `filterDicfDetailsByQuestion`, `buildFocusedDicfContext`; expediente: `loadCommercialDossierForChat` (acciones/historial por `cliente_key` / `accion_id`)
+- **Endpoint relacionado:** `GET /api/director-ia/context`; `POST /api/director-ia/chat` (intent `expediente_comercial`); dashboard `/api/dashboard/dicf-*` (no transporte interno del expediente)
+- **Tablas consultadas:** `arr.dicf_acciones`; historial context según summarizer; expediente: `arr.dicf_accion_historial` por `accion_id`
+- **Filtros disponibles:** planta; chat: tokens comerciales / nombre cliente; ventana 3 meses en chat mensual; expediente: `planta_id` + `cliente_key` (acciones) / `accion_id` (historial)
+- **Alcance por planta:** Sí (+ equivalentes canónicos en expediente y commercial_state)
+- **Alcance por periodo:** Ventana `BITACORA_CHAT_MONTH_WINDOW = 3` en modos mensuales de chat; expediente no usa esa ventana
+- **Límites de filas:** `DEFAULT_DICF_DETAILS_LIMIT = 40` (context). Expediente: 8 acciones; 8 eventos de historial por acción
+- **Permisos:** JWT; bloqueos DICF role; GA sin KPIs financieros; expediente: `assertCommercialDossierAccess` antes de datos
 - **Información sensible:** Clientes, compromisos, resultados de cierre
 - **Estado de actualización:** Por request
-- **Posibles errores:** Sin filas → `sources.dicf` false aunque AR cargue
-- **Evidencia de integración actual:** `sources.dicf` si `dicf_details.length > 0`
-- **Información que no puede concluirse con esta fuente:** Listas «dejaron/aumentaron» completas sin commercial_state; attachments
+- **Posibles errores:** Sin filas → `sources.dicf` false aunque AR cargue; expediente ambiguo/missing → clarificación
+- **Evidencia de integración actual:** `sources.dicf` si `dicf_details.length > 0`; expediente = `context_meta.mode = expediente_comercial`
+- **Información que no puede concluirse con esta fuente:** Listas «dejaron/aumentaron» completas sin commercial_state; attachments; causalidad; acción cerrada = exitosa; `resultado_cierre` = impacto; responsable de acción = responsable del desempeño
+
+### Fuente: Expediente comercial
+
+- **Dominio:** Expediente factual por un cliente (M11)
+- **Cobertura actual:** PARCIAL (on-demand; no COMPLETE del módulo)
+- **Archivo de acceso:** `lib/director-ia-m11-commercial-dossier.js`
+- **Función de acceso:** `loadCommercialDossierForChat` → `get_commercial_dossier`
+- **Endpoint relacionado:** `POST /api/director-ia/chat` (intent `expediente_comercial`; in-process). No HTTP interno.
+- **Tablas consultadas:** `arr.dicf_cliente_mes` (SELECT-only, último year/month); `arr.cliente_comentarios`; `arr.dicf_acciones`; `arr.dicf_accion_historial`. Resolución: `public.plantas`, `arr.comercial_entidad` / alias
+- **Filtros disponibles:** `planta_id` autorizado; cliente único (`planta_id` + `cliente_key`). `cliente_key` de estado **derivado** con `buildClienteKey` (no persistido en `dicf_cliente_mes`)
+- **Alcance por planta:** Sí; authz **antes** de datos; cross-planta 403; GA 403; ZP/AD globales; resto `plantas_permitidas`; fail-closed
+- **Alcance por periodo:** Periodo materializado más reciente del `plant_code` en `arr.dicf_cliente_mes`
+- **Límites de filas:** 1 cliente; 8 comentarios / 500 caracteres; 8 acciones; 8 eventos de historial; truncation explícito
+- **Permisos:** `assertCommercialDossierAccess` (intersección DICF / commercial_state vigente)
+- **Información sensible:** Estado comercial, comentarios, acciones, responsables de acción, `resultado_cierre`
+- **Estado de actualización:** Por request; no escribe caché; no llama `computeDicf` ni `loadCommercialStateForChat`
+- **Posibles errores:** `planta_id` obligatorio; 403 GA / planta no autorizada; `ambiguous_client` / `missing_client` (clarifica; no selecciona en silencio)
+- **Evidencia de integración actual:** `context_meta.mode = expediente_comercial`; bloques `commercial_state` / `comments` / `dicf_actions` / historial / `resultado_cierre` separados
+- **Información que no puede concluirse con esta fuente:** Causa del estado; motivo/diagnóstico del comentario; acción = solución; cerrada = exitosa; `resultado_cierre` = impacto causal; responsable de acción = dueño del desempeño; cronología = causalidad; correlación = causalidad; 0 comentarios = nadie comentó jamás; 0 acciones DICF = no hay seguimiento fuera de DICF; sin estado = inactivo; sin `resultado_cierre` = fracaso; bitácora/Plaud; listas comerciales
 
 ### Fuente: Bitácora IA
 
@@ -577,20 +596,20 @@
 
 - **Dominio:** Comentarios comerciales de cliente (M11)
 - **Cobertura actual:** PARCIAL
-- **Archivo de acceso:** `lib/cliente-comentarios.js`
-- **Función de acceso:** `loadClienteComentariosForDirectorIa`, `buildComentariosAnnexText`
-- **Endpoint relacionado:** Context/chat; dashboard cliente-comentarios
+- **Archivo de acceso:** `lib/cliente-comentarios.js`; expediente: `lib/director-ia-m11-commercial-dossier.js`
+- **Función de acceso:** `loadClienteComentariosForDirectorIa`, `buildComentariosAnnexText`; expediente: comentarios solo si `cliente_key` válido y coincidente
+- **Endpoint relacionado:** Context/chat; dashboard cliente-comentarios; expediente in-process en chat
 - **Tablas consultadas:** `arr.cliente_comentarios`
-- **Filtros disponibles:** `planta_id`
+- **Filtros disponibles:** Context: `planta_id`. Expediente: `planta_id` + `cliente_key IS NOT NULL AND TRIM(cliente_key) <> '' AND cliente_key = ANY(keys)`
 - **Alcance por planta:** Sí
 - **Alcance por periodo:** Orden por fecha desc; sin selector de meses en loader IA
-- **Límites de filas:** 80
-- **Permisos:** JWT + planta
+- **Límites de filas:** Context: 80. Expediente: 8 comentarios; 500 caracteres; truncation explícito (`truncated` + `original_length`)
+- **Permisos:** JWT + planta; expediente usa `assertCommercialDossierAccess`
 - **Información sensible:** Comentarios comerciales
 - **Estado de actualización:** Por request
-- **Posibles errores:** Fallos de query logueados
-- **Evidencia de integración actual:** `sources.cliente_comentarios`
-- **Información que no puede concluirse con esta fuente:** Historial DICF completo; ARR toneladas
+- **Posibles errores:** Fallos de query logueados; comentario sin `cliente_key` **no se une** (tampoco por nombre)
+- **Evidencia de integración actual:** `sources.cliente_comentarios`; expediente incluye bloque `comments` separado
+- **Información que no puede concluirse con esta fuente:** Historial DICF completo; ARR toneladas; comentario = motivo/diagnóstico; 0 comentarios enlazables = nadie comentó jamás
 
 ### Fuente: Comentarios de folio
 
@@ -680,7 +699,7 @@
 - **Información sensible:** Clientes e ingreso/ton
 - **Estado de actualización:** Cálculo on-demand
 - **Evidencia de integración actual:** `isCommercialStateListQuestion` / prompt mode `commercial_state`
-- **Información que no puede concluirse con esta fuente:** Endpoints Delta UI; weekly LD
+- **Información que no puede concluirse con esta fuente:** Endpoints Delta UI; weekly LD; expediente de un cliente (es otro intent: `expediente_comercial`, SELECT `arr.dicf_cliente_mes`, sin `computeDicf`)
 
 ### Fuente: Folios
 
@@ -979,7 +998,8 @@
 |----------|-------|-----------|--------|------------------|----------|--------|
 | ¿Qué hay en bitácora de un cliente? | Parcial | PARCIAL | Bitácora + entidades | `filterBitacoraByQuestion`, `resolveCommercialEntitiesForQuestion` | Fuera de 3 meses / 30 sesiones | Medio |
 | ¿Cómo va Mejora Continua del mes? | Parcial | PARCIAL | MC | `loadMejoraContinuaForChat` / `GET /api/director-ia/mejora-continua` | Áreas no enfocadas por regex | Medio |
-| ¿Qué clientes dejaron de comprar? | Parcial | PARCIAL | commercial_state | `loadCommercialStateForChat` | >20 clientes; GA bloqueado | Medio |
+| ¿Qué clientes dejaron de comprar? | Parcial | PARCIAL | commercial_state | `loadCommercialStateForChat` | >20 clientes; GA bloqueado; **no** es expediente_comercial | Medio |
+| ¿Qué sabemos comercialmente / expediente de Cliente X? | Sí (factual; un cliente; no causa) | PARCIAL | Expediente comercial | `loadCommercialDossierForChat` / `get_commercial_dossier` (SELECT-only) | Cliente ambiguo (clarifica); comentarios sin `cliente_key`; overflow 8/500/8/8; bitácora; causalidad | Alto si se lee como causa, solución, bitácora o lista de clientes |
 | ¿Qué alias tiene una entidad? | Sí (API/UI) | PARCIAL | Entidades | `/api/director-ia/comercial-entidades*` | Si no está en catálogo | Bajo-Medio |
 | ¿Qué documentos tiene / listar registros documentales de un folio? | Sí (solo metadata DB; no PDF/S3; no faltantes) | PARCIAL | Metadata `public.folio_archivos` | `loadFolioDocumentsMetadataForChat` / `get_folio_documents` (SELECT-only; **no** `/media`; **no** S3) | Contenido, URLs, documentos faltantes, cumplimiento | Alto si se lee como documentación completa o como «faltan documentos» |
 | ¿Cómo cambió la clasificación de apoyos entre mes_a y mes_b? | Sí (matriz agregada; no Excel; no COMPARAR) | PARCIAL | Folios + `buildClasificacionMatrix` | `loadClasificacionApoyosForChat` / `get_clasificacion_apoyos_query` | COMPARAR; Excel; causa del delta; igualdad con totales M6 | Alto si se lee como desviación presupuestal o como M6/M5 |
@@ -1230,7 +1250,7 @@ Escala 1–5. Prioridad derivada de: valor ejecutivo × disponibilidad de funcio
 
 ### 1. Resumen de cobertura real actual
 
-Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Register**, **DICF**, **bitácora**, **comentarios** (cliente y folio) y **entidades comerciales**, con **anexos financieros on-demand** (IGF/ARR/margen/estado comercial) activados por **regex** en el chat, **análisis on-demand de posibles duplicados de folios** (M16: `findDuplicatePairs`, no confirmación), **consulta on-demand de KPIs de dashboard y proyectos por planta** (M3: `get_dashboard_kpis` / `get_project_status`; no catálogo global; no creación de proyectos), **consulta on-demand de Delta Venta / Descuento / Ingreso de periodos reales** (M9: `get_delta_sales` / `get_delta_discount` / `get_delta_income`; no forecast con escritura; no M19), **consulta on-demand de estatus/etapa de folio** (M2 slice `folio_status`: `get_folio_status` / `loadFolioStatusForChat`; SELECT-only; no GET kanban; no GET `/folios/:id`; no autoavance), **consulta on-demand del historial de folio** (M2 slice `folio_history`: `get_folio_history` / `loadFolioHistoryForChat`; SELECT-only de `public.folio_historial`; no GET `/timeline`; no `dedupeHistorialByStage`; no autoavance), **consulta on-demand de metadata documental de folio** (M2 slice `folio_documents`: `get_folio_documents` / `loadFolioDocumentsMetadataForChat`; SELECT-only de `public.folio_archivos` con proyección segura; no S3; no PDF; no `s3_key`; no «faltan documentos»), y **consulta on-demand de GASTOS e INVERSIONES de folios** (M6 slice query JSON: `get_expense_analysis` / `get_investment_analysis` / `loadGastosInversionesForChat`; SELECT `public.folios` + `expandCategoriaRows`; `YYYY-MM` obligatorio; no Excel; no Export; no IGF), y **consulta on-demand de la matriz comparativa de clasificación de apoyos** (M4 slice query JSON: `get_clasificacion_apoyos_query` / `loadClasificacionApoyosForChat`; SELECT `public.folios` + `buildClasificacionMatrix`; `mes_a` vs `mes_b` obligatorios y distintos; GASTOS / INVERSIONES / TALLER separados; sin fallback a 6 plantas; no COMPARAR; no Excel), y **consulta on-demand del carro presupuestal semanal** (M18 slice query JSON: `get_budget_status` / `loadPresupuestoSemanalForChat`; SELECT `presupuestos_semanales` + `presupuesto_folios`; no inventa semana; no filtra solo `ABIERTO`; no writes; no cheques; no WhatsApp; no `presupuesto_asignacion_detalle`), y **consulta on-demand de notas de revisión del Action Register** (M12 slice: `get_action_register_revision_notes` / `loadActionRegisterRevisionNotesForChat`; SELECT `arr.action_register_revision_notes` por `revision_id`; 1 revisión / 8 notas / 500 caracteres; última = `revision_date DESC`; `includeNotes` del context sigue `false`; no ítem; no Plaud; no M2; no binarios). **No** opera el kanban HTTP, **no** usa `/timeline` como transporte interno, **no** lee contenido PDF/S3/pólizas/cheques/COMPARAR-Excel de clasificación/taller/Export xlsx GASTOS-INVERSIONES ni el forecast mutante de ingreso. Las escrituras propias (bitácora/entidades) existen por **API UI**, no como tools autónomos del LLM. El GET `/api/director-ia/context` **subdeclara** IGF/ARR/commercial_state respecto al chat.
+Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Register**, **DICF**, **bitácora**, **comentarios** (cliente y folio) y **entidades comerciales**, con **anexos financieros on-demand** (IGF/ARR/margen/estado comercial) activados por **regex** en el chat, **análisis on-demand de posibles duplicados de folios** (M16: `findDuplicatePairs`, no confirmación), **consulta on-demand de KPIs de dashboard y proyectos por planta** (M3: `get_dashboard_kpis` / `get_project_status`; no catálogo global; no creación de proyectos), **consulta on-demand de Delta Venta / Descuento / Ingreso de periodos reales** (M9: `get_delta_sales` / `get_delta_discount` / `get_delta_income`; no forecast con escritura; no M19), **consulta on-demand de estatus/etapa de folio** (M2 slice `folio_status`: `get_folio_status` / `loadFolioStatusForChat`; SELECT-only; no GET kanban; no GET `/folios/:id`; no autoavance), **consulta on-demand del historial de folio** (M2 slice `folio_history`: `get_folio_history` / `loadFolioHistoryForChat`; SELECT-only de `public.folio_historial`; no GET `/timeline`; no `dedupeHistorialByStage`; no autoavance), **consulta on-demand de metadata documental de folio** (M2 slice `folio_documents`: `get_folio_documents` / `loadFolioDocumentsMetadataForChat`; SELECT-only de `public.folio_archivos` con proyección segura; no S3; no PDF; no `s3_key`; no «faltan documentos»), y **consulta on-demand de GASTOS e INVERSIONES de folios** (M6 slice query JSON: `get_expense_analysis` / `get_investment_analysis` / `loadGastosInversionesForChat`; SELECT `public.folios` + `expandCategoriaRows`; `YYYY-MM` obligatorio; no Excel; no Export; no IGF), y **consulta on-demand de la matriz comparativa de clasificación de apoyos** (M4 slice query JSON: `get_clasificacion_apoyos_query` / `loadClasificacionApoyosForChat`; SELECT `public.folios` + `buildClasificacionMatrix`; `mes_a` vs `mes_b` obligatorios y distintos; GASTOS / INVERSIONES / TALLER separados; sin fallback a 6 plantas; no COMPARAR; no Excel), y **consulta on-demand del carro presupuestal semanal** (M18 slice query JSON: `get_budget_status` / `loadPresupuestoSemanalForChat`; SELECT `presupuestos_semanales` + `presupuesto_folios`; no inventa semana; no filtra solo `ABIERTO`; no writes; no cheques; no WhatsApp; no `presupuesto_asignacion_detalle`), y **consulta on-demand de notas de revisión del Action Register** (M12 slice: `get_action_register_revision_notes` / `loadActionRegisterRevisionNotesForChat`; SELECT `arr.action_register_revision_notes` por `revision_id`; 1 revisión / 8 notas / 500 caracteres; última = `revision_date DESC`; `includeNotes` del context sigue `false`; no ítem; no Plaud; no M2; no binarios), y **consulta on-demand del expediente comercial factual** (M11 slice: `get_commercial_dossier` / `loadCommercialDossierForChat`; authz planta antes de datos; cliente único; SELECT `arr.dicf_cliente_mes` sin `computeDicf`; comentarios solo con `cliente_key`; acciones por `planta_id` + `cliente_key`; historial/cierre por `accion_id`; 1/8/500/8/8; procedencia separada; sin causalidad; sin bitácora). **No** opera el kanban HTTP, **no** usa `/timeline` como transporte interno, **no** lee contenido PDF/S3/pólizas/cheques/COMPARAR-Excel de clasificación/taller/Export xlsx GASTOS-INVERSIONES ni el forecast mutante de ingreso. Las escrituras propias (bitácora/entidades) existen por **API UI**, no como tools autónomos del LLM. El GET `/api/director-ia/context` **subdeclara** IGF/ARR/commercial_state respecto al chat.
 
 ### 2. Dominios completos (COMPLETA)
 
@@ -1248,7 +1268,7 @@ Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Re
 - M6 GASTOS / INVERSIONES (query JSON de folios por planta y `YYYY-MM`; GASTOS ≠ INVERSIONES ≠ IGF; no Export/xlsx; no COMPLETE)
 - M7 IGF (chat on-demand)
 - M8 ARR (chat on-demand / motor DICF)
-- M11 DICF + comentarios cliente
+- M11 DICF + comentarios cliente (+ slice expediente comercial factual on-demand; SELECT-only; sin `computeDicf`; sin causalidad; no COMPLETE)
 - M12 Action Register (+ Mejora Continua; slice notas de revisión on-demand; `includeNotes` always-on sigue false; no COMPLETE)
 - M17 WhatsApp (solo link de acceso)
 - M18 Presupuestos semanales (query JSON del carro; no writes; no cheques; no WhatsApp; no COMPLETE)
@@ -1266,6 +1286,7 @@ Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Re
 - M10 Weekly discount LD  
 - M14 Usuarios admin (como dominio)  
 - M15 Documentos/medios  
+- M11 attachments / Excel DICF / bitácora en el expediente / causalidad / writes (el slice de expediente factual ya está en PARCIAL M11; COMPLETE de M11 sigue fuera)
 - M12 evidencias / CRUD / binarios (el slice de notas de revisión ya está en PARCIAL M12; COMPLETE de M12 sigue fuera)
 - M18 writes / cheques / WhatsApp (el query JSON ya está en PARCIAL M18; COMPLETE de M18 sigue fuera)
 - M19 Delta Ingreso AI test  
@@ -1278,6 +1299,7 @@ Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Re
 | RESUMIR Action Register / vencidas / responsables | `summarize*` en `director-ia-action-register.js` + `buildActionRegisterBoardPayload` |
 | CONSULTAR notas de revisión Action Register (read-only) | `loadActionRegisterRevisionNotesForChat` → SELECT `arr.action_register_revision_notes` (`revision_id`; no ítem) |
 | CONSULTAR/BUSCAR DICF | `summarizeDicfContext`, filtros chat |
+| CONSULTAR expediente comercial factual (read-only, un cliente) | `loadCommercialDossierForChat` → SELECT `arr.dicf_cliente_mes` + comentarios con `cliente_key` + `arr.dicf_acciones` + historial por `accion_id` |
 | CONSULTAR bitácora | `loadBitacoraForChat` |
 | CONSULTAR comentarios | `loadClienteComentariosForDirectorIa`, `loadFolioComentariosForDirectorIa` |
 | CONSULTAR estatus/etapa de folio (read-only) | `loadFolioStatusForChat` → `getFolioById` / `getFolioByNumero` / `listFoliosByPlanta` |
@@ -1309,6 +1331,7 @@ Director IA hoy es un **asistente de lectura/síntesis** centrado en **Action Re
 | Deltas UI (forecast con escritura / M19) | Sí (`delta-ingreso-forecast`, `/api/ai/delta-ingreso/test/*`) | La lectura de periodos reales ya está en COMPLETA M9; faltan forecast mutante y M19, a propósito fuera |
 | Presupuesto semanal (writes / cheques / WhatsApp) | Query JSON M18 ya integrado (SELECT + `getPresupuestoResumen`). Writes y bot existen en `server.js` | Asignar/seleccionar; enviar a cheques; Twilio/WhatsApp; no COMPLETE |
 | Action Register notas / evidencias / CRUD | Slice notas de revisión ya integrado (`loadActionRegisterRevisionNotesForChat`; `includeNotes` always-on sigue false) | Attachments/S3/PDF; CRUD ítems; no COMPLETE; no atribuir nota a ítem |
+| DICF expediente / attachments / writes | Slice expediente factual ya integrado (`loadCommercialDossierForChat`; SELECT-only; sin `computeDicf`) | Attachments; Excel/UI; bitácora en el expediente; causalidad; CRUD acciones; no COMPLETE |
 | Proyectos (crear/editar/eliminar) | Sí (`POST /api/proyectos`) | Escritura; la lectura M3 ya está integrada |
 | KPIs dashboard (lectura) | Sí (integrado M3) | — |
 | Weekly LD | Sí | Tool |

@@ -1,14 +1,14 @@
 # CURRENT_TASK
 
 ```yaml
-task_id: "IMPL-DIRECTOR-IA-M11-EXPEDIENTE-COMERCIAL-001"
+task_id: "DOCS-DIRECTOR-IA-M11-COMMERCIAL-DOSSIER-SYNC-001"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-08-23"
 human_authorization: >
   AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-23.
-  Apruebo IMPL-DIRECTOR-IA-M11-EXPEDIENTE-COMERCIAL-001 y autorizo G1.
+  Apruebo DOCS-DIRECTOR-IA-M11-COMMERCIAL-DOSSIER-SYNC-001 y autorizo G1.
 
 gates:
   G1_task_authorization: AUTHORIZED
@@ -17,486 +17,285 @@ gates:
   G8_calibration_materiality_signature: N/A
 
 objective: >
-  Implementar un expediente comercial factual read-only por cliente para M11,
-  reuniendo estado comercial, comentarios almacenados, acciones DICF,
-  historial de las acciones y resultado_cierre cuando existan, únicamente
-  después de resolver de forma inequívoca un cliente dentro de una planta
-  autorizada y sin inferir causalidad, motivo, solución, efectividad o
-  responsabilidades no observadas.
+  Sincronizar la documentación/capability matrix de Director IA con el
+  expediente comercial factual de M11 ya integrado en main, documentando la
+  nueva capacidad de reunir estado comercial, comentarios, acciones DICF,
+  historial y resultado_cierre por cliente, manteniendo M11 en PARTIAL y el
+  baseline global en 10.0/20 = 50.0%.
 
 baseline:
-  readiness_task: "ARCH-DIRECTOR-IA-M11-EXPEDIENTE-COMERCIAL-READINESS-001"
-  readiness_report: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-M11-EXPEDIENTE-COMERCIAL-READINESS-001.md"
+  implementation_task: "IMPL-DIRECTOR-IA-M11-EXPEDIENTE-COMERCIAL-001"
+  implementation_report: "docs/dev-loop/reports/IMPL-DIRECTOR-IA-M11-EXPEDIENTE-COMERCIAL-001.md"
 
   module: "M11 — DICF"
   state_before: "PARTIAL"
   state_after: "PARTIAL"
 
-  global:
-    numerator_before: 10.0
+  global_before:
+    numerator: 10.0
     denominator: 20
-    percentage_before: 50.0
-    numerator_after: 10.0
-    percentage_after: 50.0
-    gain_pp: 0.0
+    percentage: 50.0
 
-readiness_findings:
-  client_identity:
-    canonical_runtime_key: "planta_id + cliente_key"
+  global_after:
+    numerator: 10.0
+    denominator: 20
+    percentage: 50.0
 
-    dicf_actions:
-      cliente_key: "NOT NULL"
-      construction: "buildClienteKey"
+  gain_pp: 0.0
 
-    commercial_state:
-      cliente_key_persisted: false
-      rule: >
-        Derivar únicamente con la misma función/canonización físicamente usada
-        por el runtime actual para relacionar acciones abiertas.
+implemented_slice:
+  path: >
+    expediente_comercial -> get_commercial_dossier ->
+    loadCommercialDossierForChat ->
+    autorizar planta ->
+    resolver cliente único ->
+    estado comercial SELECT-only ->
+    comentarios ->
+    acciones DICF ->
+    historial/cierre por acción ->
+    recorte determinista ->
+    evidencia con procedencia separada ->
+    respuesta
 
-    comments:
-      cliente_key: "nullable"
-      rule: >
-        Solo incluir comentarios con cliente_key utilizable y coincidente.
-        Comentarios sin clave no se unen por nombre libre.
+  commercial_state_source: "arr.dicf_cliente_mes"
+  action_source: "arr.dicf_acciones"
 
-    entities:
-      cliente_key: false
-      rule: >
-        Entidades comerciales sirven para resolución, no constituyen por sí
-        mismas una clave física de join.
-
-    action_history:
-      relation: "por acción"
-
-    resultado_cierre:
-      relation: "por acción"
-
-  resolution:
-    rule: >
-      El expediente solo se construye después de resolver exactamente un cliente.
-      Ambigüedad => clarificación. No seleccionar silenciosamente un candidato.
-
-  select_only:
-    critical_rule: >
-      No reutilizar loadCommercialStateForChat tal cual si su path ejecuta
-      computeDicf con escritura de caché.
-
-    allowed_strategy:
-      - "lectura directa SELECT-only de fuente materializada existente"
-      - "arr.dicf_cliente_mes si corresponde físicamente"
-      - "helper nuevo SELECT-only que reproduzca solo la lectura necesaria"
-
-    forbidden:
-      - "computeDicf si persiste/cachea"
-      - "writes indirectos"
-      - "HTTP interno"
-
-architecture:
-  intent: "expediente_comercial"
-
-  do_not_reuse_as_intent:
-    - "client_analysis"
-
-  reason: >
-    client_analysis arrastra bitácora y no representa la semántica del
-    expediente comercial factual.
-
-  preferred_path: >
-    expediente_comercial
-    -> get_commercial_dossier
-    -> loadCommercialDossierForChat
-    -> resolver cliente único
-    -> autorizar planta
-    -> leer commercial state SELECT-only
-    -> leer comentarios por cliente_key
-    -> leer acciones DICF por cliente_key
-    -> leer historial/cierre por action id
-    -> recorte determinista
-    -> evidencia estructurada separada
-    -> respuesta
-
-source_rules:
-  commercial_state:
-    requirements:
-      - "SELECT-only"
-      - "planta"
-      - "periodo observado"
-      - "estado/categoría física"
-      - "cliente_key derivado con canonización existente"
-
-  comments:
-    requirements:
-      - "cliente_key coincidente"
-      - "planta coincidente"
-      - "texto almacenado"
-      - "autor almacenado si existe"
-      - "timestamp si existe"
-
-    forbidden:
-      - "join por nombre"
-      - "comentarios con cliente_key null unidos heurísticamente"
-
-  actions:
-    source: "arr.dicf_acciones"
-
-    requirements:
+  identity:
+    runtime_key:
       - "planta_id"
       - "cliente_key"
-      - "action id"
-      - "acción"
-      - "responsable"
-      - "fecha"
-      - "estatus"
-      - "resultado_cierre si existe"
 
-  history:
-    rule: >
-      Cargar únicamente historial físicamente relacionado con las acciones
-      seleccionadas. No unir historial directamente al cliente si la relación
-      física es action -> history.
+    rules:
+      - "cliente debe resolverse de forma única"
+      - "ambigüedad -> clarificación"
+      - "no selección silenciosa"
+      - "no join por nombre libre"
 
-context_limits:
+  select_only:
+    - "no loadCommercialStateForChat si ejecuta computeDicf"
+    - "no computeDicf"
+    - "sin write/cache"
+    - "sin HTTP interno"
+
+  comments:
+    - "solo cliente_key válido"
+    - "cliente_key null no se une"
+    - "no heurística por nombre"
+
+  actions:
+    - "planta_id + cliente_key"
+
+  history_close:
+    relation: "por action id"
+
+context_policy:
   clients: 1
   comments: 8
   chars_per_comment: 500
   actions: 8
   history_events: 8
+  truncation: "explícito"
 
-  rules:
-    - "recorte determinista"
-    - "orden temporal explícito"
-    - "truncation explícito para texto recortado"
-    - "no completar texto"
-    - "no ampliar límites silenciosamente"
-
-semantic_invariants:
-  - "estado comercial != causa"
-  - "comentario != motivo probado"
-  - "comentario != diagnóstico validado"
-  - "acción DICF != solución demostrada"
-  - "acción cerrada != acción exitosa"
-  - "resultado_cierre != impacto causal"
-  - "responsable de acción != responsable del desempeño comercial"
-  - "cronología != causalidad"
-  - "correlación != causalidad"
-  - "cliente_key derivado != cliente_key persistido"
-  - "comentario sin cliente_key no se une por nombre"
-
-response_policy:
-  allowed_language:
-    - "estado observado"
-    - "comentario registrado"
-    - "acción registrada"
-    - "historial registrado"
-    - "resultado de cierre registrado"
-    - "antes/después temporal cuando las fechas lo soporten"
-
-  forbidden_language_without_explicit_evidence:
-    - "la causa fue"
-    - "esto provocó"
-    - "el responsable de la caída es"
-    - "la acción resolvió"
-    - "la acción fue efectiva"
-    - "el comentario demuestra"
-    - "gracias a esta acción"
-
-authz:
-  model: "DICF / commercial state vigente"
-
-  required:
-    - "JWT/contexto"
-    - "rol"
-    - "planta_id"
-    - "plantas_permitidas"
-    - "cross-planta bloqueado"
-    - "fail-closed"
-    - "GA/GV según reglas vigentes del dominio"
-
-  ordering:
-    - "resolver solicitud/planta"
-    - "autorizar"
-    - "resolver cliente"
-    - "consultar expediente"
-
-  rule: >
-    Ninguna consulta de datos de otra planta puede ocurrir antes de confirmar
-    autorización.
-
-planner:
-  required:
-    - "agregar expediente_comercial"
-    - "detectar preguntas de expediente integral por cliente"
-    - "preservar commercial_state"
-    - "preservar dicf_focused"
-    - "preservar client_analysis"
-    - "preservar Action Register"
-    - "no absorber consultas de listas comerciales"
-
-  example_intents:
-    positive:
-      - "Dame el expediente comercial de Cliente X"
-      - "¿Qué está pasando con Cliente X y qué acciones tenemos?"
-      - "Muéstrame estado, comentarios y acciones de Cliente X"
-      - "¿Qué sabemos comercialmente de Cliente X?"
-
-    negative:
-      - "¿Qué clientes dejaron de comprar?"
-      - "¿Qué clientes aumentaron?"
-      - "¿Qué acciones están vencidas?"
-      - "¿Qué dice la bitácora de Cliente X?"
-
-tools:
-  tool_name: "get_commercial_dossier"
-
-  required_inputs:
-    - "planta_id"
-    - "referencia del cliente resoluble"
-
-  executor:
-    required: true
-
-  execution:
-    - "in-process"
-    - "SELECT-only"
-
-capabilities:
-  required:
-    - "registrar capacidad real del expediente"
-    - "tool executable"
-    - "M11 permanece PARTIAL"
-
-evidence:
-  required_sections:
-    - "client_identity"
+provenance:
+  sections:
     - "commercial_state"
     - "comments"
     - "dicf_actions"
     - "action_history"
     - "close_result"
 
-  source_labels:
-    required: true
+semantic_boundaries:
+  - "estado comercial != causa"
+  - "comentario != motivo probado"
+  - "comentario != diagnóstico"
+  - "acción != solución"
+  - "acción cerrada != exitosa"
+  - "resultado_cierre != impacto causal"
+  - "responsable de acción != responsable de desempeño"
+  - "cronología != causalidad"
+  - "correlación != causalidad"
 
-  rule: >
-    Mantener procedencia por componente para impedir que el modelo mezcle
-    comentario, estado y acción como si fueran un mismo hecho.
+authz:
+  model: "DICF / commercial state vigente"
 
-zero_data_semantics:
-  commercial_state: >
-    Ausencia de estado no implica cliente inactivo ni pérdida.
-
-  comments: >
-    0 comentarios significa que no se encontraron comentarios enlazables con la
-    clave disponible; no significa que nadie haya comentado jamás.
-
-  actions: >
-    0 acciones significa que no se encontraron acciones DICF para la clave
-    consultada; no significa que no exista ningún seguimiento fuera de DICF.
-
-  history: >
-    0 eventos significa que no se encontraron eventos físicos para las acciones
-    seleccionadas.
-
-  close_result: >
-    Ausencia de resultado_cierre no debe reinterpretarse.
-
-tests_required:
-  focal:
-    - "intent expediente_comercial"
-    - "tool executable"
-    - "executor"
-    - "cliente único"
-    - "cliente ambiguo -> clarificación"
-    - "cliente inexistente"
-    - "commercial state"
-    - "cliente_key derivado correctamente"
-    - "comentarios por cliente_key"
-    - "comentario cliente_key null excluido"
-    - "no join comentarios por nombre"
-    - "acciones por planta_id + cliente_key"
-    - "historial por action id"
-    - "resultado_cierre por acción"
-    - "1 cliente máximo"
-    - "8 comentarios máximo"
-    - "500 chars comentario"
-    - "truncation explícito"
-    - "8 acciones máximo"
-    - "8 eventos historial máximo"
-    - "0 comentarios"
-    - "0 acciones"
-    - "0 historial"
-    - "nulls"
-    - "orden temporal"
-    - "planta autorizada"
-    - "planta no autorizada"
+  rules:
+    - "JWT/contexto"
+    - "rol"
+    - "planta_id"
     - "plantas_permitidas"
-    - "cross-planta"
-    - "GA/GV"
-    - "no causalidad"
-    - "no motivo inferido"
-    - "no solución inferida"
-    - "no responsable inferido"
-    - "no client_analysis hijack"
-    - "listas comerciales preservadas"
-    - "dicf_focused preservado"
-    - "sin computeDicf con write/cache"
-    - "sin HTTP interno"
-    - "sin writes"
+    - "cross-planta bloqueado"
+    - "fail-closed"
+    - "GA/GV según dominio vigente"
+    - "autorización antes de consultar expediente"
 
-  regression:
-    - "capabilities"
-    - "planner"
-    - "tool orchestrator"
-    - "suite Director IA completa"
+routing_preserved:
+  - "commercial_state"
+  - "dicf_focused"
+  - "client_analysis"
+  - "Action Register"
+  - "listas comerciales"
 
-implementation_constraints:
-  - "No modificar schema."
-  - "No crear migration."
-  - "No crear tabla."
-  - "No modificar contratos arquitectónicos."
-  - "No modificar frontend."
-  - "No HTTP interno."
-  - "No writes."
-  - "No persistir cache."
-  - "No usar computeDicf si escribe."
-  - "No joins heurísticos."
+boundaries:
+  excluded:
+    - "bitácora dentro del expediente"
+    - "Plaud"
+    - "M2"
+    - "PDF/S3"
+    - "joins heurísticos"
+    - "writes"
+    - "cache writes"
+    - "HTTP interno"
+    - "inferencias causales"
+
+test_evidence:
+  focal_m11: "19/19 pass"
+  capabilities: "50/50 pass"
+  planner: "46/46 pass"
+  orchestrator: "26/26 pass"
+  director_ia_suite: "644/644 pass"
+  git_diff_check: "clean"
+
+documentation_policy:
+  must_update:
+    - "M11 permanece PARTIAL"
+    - "expediente comercial factual disponible"
+    - "path físico"
+    - "arr.dicf_cliente_mes"
+    - "arr.dicf_acciones"
+    - "planta_id + cliente_key"
+    - "cliente único"
+    - "ambigüedad -> clarificación"
+    - "comentarios null-key excluidos"
+    - "historial/cierre por acción"
+    - "límites 1/8/500/8/8"
+    - "provenance separada"
+    - "authz"
+    - "routing preservado"
+    - "no computeDicf/write-cache"
+    - "fronteras semánticas"
+    - "10.0/20 = 50.0% sin cambio"
+
+  must_preserve:
+    - "M11 = PARTIAL"
+    - "M11 != COMPLETE"
+    - "10.0/20"
+    - "50.0%"
+    - "ningún otro módulo cambia"
+
+  forbidden:
+    - "marcar M11 COMPLETE"
+    - "sumar 0.5 nuevamente"
+    - "subir porcentaje"
+    - "documentar causalidad"
+    - "documentar joins por nombre"
+    - "documentar comentarios null-key como unidos"
+    - "cambiar otro módulo"
 
 in_scope:
   writable:
     - "docs/dev-loop/CURRENT_TASK.md"
-    - "docs/dev-loop/reports/IMPL-DIRECTOR-IA-M11-EXPEDIENTE-COMERCIAL-001.md"
-    - "lib/director-ia-capabilities.js"
-    - "lib/director-ia-chat.js"
-    - "lib/director-ia-planner.js"
-    - "lib/director-ia-tools.js"
-    - "lib/director-ia-m11-commercial-dossier.js"
-    - "scripts/test-director-ia-capabilities.js"
-    - "scripts/test-director-ia-planner.js"
-    - "scripts/test-director-ia-tool-orchestrator.js"
-    - "test/director-ia-m11-commercial-dossier.test.js"
+    - "docs/dev-loop/reports/DOCS-DIRECTOR-IA-M11-COMMERCIAL-DOSSIER-SYNC-001.md"
+    - "docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md"
 
   read_only:
     - "AGENTS.md"
     - "docs/dev-loop/**"
     - "docs/director-ia/**"
-    - "lib/**"
-    - "server.js"
-    - "frontend-dashboard/**"
-    - "test/**"
-    - "scripts/**"
-    - "sql/**"
-    - "package.json"
-    - "package-lock.json"
+    - "lib/director-ia-m11-commercial-dossier.js"
+    - "lib/director-ia-capabilities.js"
+    - "lib/director-ia-chat.js"
+    - "lib/director-ia-planner.js"
+    - "lib/director-ia-tools.js"
+    - "test/director-ia-m11-commercial-dossier.test.js"
 
 out_of_scope:
-  - "docs/director-ia/**"
-  - "capability matrix"
-  - "server.js"
-  - "frontend"
-  - "SQL/schema/migrations"
-  - "writes"
-  - "cache writes"
-  - "HTTP interno"
-  - "Plaud"
-  - "M2"
-  - "PDF/S3"
-  - "bitácora dentro del expediente"
-  - "Action Register"
-  - "inferencias causales"
-  - "commit"
-  - "push"
-  - "merge"
-  - "sync documental"
-  - "NEXT_TASK"
+  - "modificar código"
+  - "modificar runtime"
+  - "modificar frontend"
+  - "modificar tests"
+  - "modificar scripts"
+  - "modificar SQL/schema"
+  - "modificar contratos"
+  - "integrar Plaud"
+  - "integrar M2"
+  - "integrar bitácora"
+  - "hacer writes"
+  - "hacer commit"
+  - "hacer push"
+  - "hacer merge"
+  - "ejecutar NEXT_TASK"
 
 acceptance_criteria:
-  - "Existe intent expediente_comercial."
-  - "Existe tool get_commercial_dossier ejecutable."
-  - "Existe loader dedicado loadCommercialDossierForChat."
-  - "Cliente se resuelve de forma única."
-  - "Ambigüedad clarifica."
-  - "Authz ocurre antes de consultar expediente."
-  - "Estado comercial se obtiene SELECT-only."
-  - "No se usa path con computeDicf que persista cache."
-  - "cliente_key comercial se deriva con canonización física existente."
-  - "Comentarios solo se unen por cliente_key válido."
-  - "No join por nombre libre."
-  - "Acciones se unen por planta_id + cliente_key."
-  - "Historial/cierre se unen por acción."
-  - "Límites 1/8/500/8/8 respetados."
-  - "Truncation explícito."
-  - "Evidencia conserva procedencia."
-  - "No se infiere causalidad."
-  - "No se infiere motivo."
-  - "No se infiere solución."
-  - "No se infiere responsable de desempeño."
-  - "Routing existente preservado."
-  - "No HTTP interno."
-  - "No writes."
+  - "Implementación M11 dossier verificada físicamente en main."
   - "M11 permanece PARTIAL."
-  - "10.0/20 = 50.0% permanece."
-  - "Tests focales verdes."
-  - "Regresión completa verde."
+  - "M11 no se marca COMPLETE."
+  - "Expediente comercial queda documentado."
+  - "Cliente único queda documentado."
+  - "Ambigüedad/clarificación queda documentada."
+  - "SELECT-only queda documentado."
+  - "No computeDicf/write-cache queda documentado."
+  - "cliente_key derivado queda documentado."
+  - "Comentarios null-key quedan excluidos."
+  - "No join por nombre queda documentado."
+  - "Historial/cierre por acción queda documentado."
+  - "Límites 1/8/500/8/8 quedan documentados."
+  - "Provenance separada queda documentada."
+  - "Fronteras semánticas quedan documentadas."
+  - "Routing preservado queda documentado."
+  - "Authz queda documentada."
+  - "10.0/20 permanece."
+  - "50.0% permanece."
+  - "Ningún otro módulo cambia."
+  - "No código/runtime/tests."
+  - "Solo los tres archivos autorizados cambian."
   - "git diff --check limpio."
-  - "Solo archivos autorizados modificados."
-
-required_validation:
-  - "node --test test/director-ia-m11-commercial-dossier.test.js"
-  - "node scripts/test-director-ia-capabilities.js"
-  - "node scripts/test-director-ia-planner.js"
-  - "node scripts/test-director-ia-tool-orchestrator.js"
-  - "node --test test/director-ia-*.test.js"
-  - "git diff --check"
-  - "git status"
 
 next_task_policy:
   if_success:
-    propose_exactly_one: "DOCS-DIRECTOR-IA-M11-COMMERCIAL-DOSSIER-SYNC-001"
+    propose_exactly_one: "ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-006"
 
   rule: >
-    No continuar profundizando M11 por inercia. La sync posterior documenta el
-    expediente manteniendo M11 PARTIAL y 50.0%.
+    Volver a priorizar globalmente desde 50.0%. No continuar M11 por inercia y
+    no asumir que M7 gana por haber quedado segundo.
 
 report_requirements:
-  path: "docs/dev-loop/reports/IMPL-DIRECTOR-IA-M11-EXPEDIENTE-COMERCIAL-001.md"
+  path: "docs/dev-loop/reports/DOCS-DIRECTOR-IA-M11-COMMERCIAL-DOSSIER-SYNC-001.md"
 
   must_include:
     - "metadata"
     - "resumen ejecutivo"
-    - "archivos modificados"
+    - "baseline"
+    - "implementación verificada"
     - "path físico"
-    - "resolución cliente"
-    - "authz"
-    - "commercial state"
-    - "cliente_key derivado"
+    - "client resolution"
+    - "identity/join"
+    - "commercial state source"
     - "comments"
     - "dicf actions"
-    - "history"
-    - "resultado_cierre"
+    - "history/close"
     - "context limits"
-    - "truncation"
-    - "source provenance"
+    - "provenance"
+    - "authz"
+    - "routing"
     - "semantic boundaries"
-    - "routing preservation"
-    - "SELECT-only evidence"
-    - "no computeDicf write/cache"
+    - "SELECT-only"
+    - "no computeDicf/cache write"
     - "tests"
-    - "M11 state"
-    - "percentage"
-    - "gates"
+    - "M11 PARTIAL"
+    - "10.0/20 = 50.0%"
+    - "cambios exactos en matriz"
     - "acciones no realizadas"
+    - "gates"
     - "secrets_check"
     - "git diff --check"
     - "git status"
     - "NEXT_TASK"
 
 expected_terminal_state: >
-  DONE_PENDING_REVIEW si el expediente comercial factual queda integrado
-  SELECT-only, in-process, autorizado y sin inferencias causales. STOPPED si
-  aparece una contradicción física respecto de la readiness. BLOCKED si falta
-  un gate indispensable.
+  DONE_PENDING_REVIEW si la matriz documenta correctamente el expediente
+  comercial manteniendo M11 PARTIAL y 10.0/20 = 50.0%. STOPPED si contradice
+  el runtime físico. BLOCKED si falta gate.
 
 max_attempts: 1
 
-result_report_path: "docs/dev-loop/reports/IMPL-DIRECTOR-IA-M11-EXPEDIENTE-COMERCIAL-001.md"
+result_report_path: "docs/dev-loop/reports/DOCS-DIRECTOR-IA-M11-COMMERCIAL-DOSSIER-SYNC-001.md"
