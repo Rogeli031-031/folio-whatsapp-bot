@@ -1,14 +1,15 @@
 # CURRENT_TASK
 
 ```yaml
-task_id: "ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-008"
+task_id: "ARCH-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-EVIDENCE-ASSEMBLY-READINESS-001"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-08-23"
 human_authorization: >
   AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-23.
-  Apruebo ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-008 y autorizo G1.
+  Apruebo ARCH-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-EVIDENCE-ASSEMBLY-READINESS-001
+  y autorizo G1.
 
 gates:
   G1_task_authorization: AUTHORIZED
@@ -17,333 +18,359 @@ gates:
   G8_calibration_materiality_signature: N/A
 
 objective: >
-  Priorizar el siguiente frente global de Director IA desde el baseline 52.5%,
-  comparando tanto módulos no COMPLETE como oportunidades transversales de
-  reasoning/evidence connectivity. Determinar qué aporta mayor valor ejecutivo
-  marginal: abrir un dominio nuevo o conectar/mejorar el razonamiento entre
-  dominios ya integrados, sin elegir por porcentaje, facilidad o ranking previo.
+  Auditar físicamente el gap transversal de financial_diagnosis para determinar
+  si Director IA puede ejecutar y ensamblar en una misma corrida de razonamiento
+  evidencia de IGF, ARR y deltas M9, preservando provenance, authz, planta,
+  periodos, ausencia/error y semántica no causal, sin reabrir IES ni Reasoning
+  Engine y sin modificar contratos.
 
 baseline:
-  numerator: 10.5
-  denominator: 20
-  percentage: 52.5
+  prioritization_task: "ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-008"
+  prioritization_report: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-008.md"
 
-  recent_depth:
-    - "M2: folio status/history/doc metadata"
-    - "M4: comparativo mensual"
-    - "M5: Taller por AT"
-    - "M6: GASTOS/INVERSIONES"
-    - "M7: composición IGF"
-    - "M9: deltas comerciales"
-    - "M11: expediente comercial"
-    - "M12: Action Register + revision notes"
-    - "M18: presupuesto semanal"
+  transversal_capability: "financial_diagnosis evidence assembly"
 
-  rule: >
-    Esta tarea no cambia estados ni porcentaje.
+  global:
+    numerator: 10.5
+    denominator: 20
+    percentage: 52.5
+    expected_gain_pp: 0.0
+
+known_gap:
+  planner: >
+    financial_diagnosis ya declara uso de múltiples dominios/evidencias.
+
+  tool_plan: >
+    El plan ya contempla loaders de IGF, ARR y deltas M9.
+
+  runtime: >
+    El chat no ensambla esas evidencias en una sola corrida; puede hacer
+    early-return por intent o terminar enviando solo anexo IGF al modelo.
+
+  contract_implication: >
+    El gap parece ser de wiring/runtime/context assembly, no de contrato IES o
+    Reasoning Engine.
 
 primary_question: >
-  ¿Cuál es ahora el mayor hueco de inteligencia ejecutiva de Director IA:
-  un dominio que todavía no puede consultar o una capacidad transversal que
-  impide conectar evidencia ya disponible para producir mejores diagnósticos,
-  prioridades o recomendaciones?
+  ¿Existe un path in-process, read-only, autorizado y conforme al contrato
+  vigente para que financial_diagnosis ejecute IGF + ARR + M9 en una sola
+  corrida, preserve provenance por fuente y entregue un paquete de evidencia
+  multi-dominio al reasoning sin inventar causalidad ni ocultar ausencias/errores?
 
-candidate_classes:
+mandatory_audit:
 
-  module_candidates:
-    source: "docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md"
-    include:
-      - "PARTIAL"
-      - "INDIRECTA"
-      - "NO INTEGRADA"
-      - "NOT_STARTED"
-      - "bloqueados reconsiderables"
-    exclude:
-      - "COMPLETE"
-      - "N_A"
+  planner:
+    inspect:
+      - "intent financial_diagnosis"
+      - "dominios declarados"
+      - "evidence plan"
+      - "clarification"
+      - "confidence"
+      - "routing priority"
 
-  transversal_candidates:
-    allowed_only_if_physically_grounded: true
-    examples_to_audit_not_assume:
-      - "cross-domain evidence assembly"
-      - "reasoning input enrichment"
-      - "executive prioritization across existing facts"
-      - "correlation/temporal comparison with explicit non-causal semantics"
-      - "evidence provenance improvements"
+    determine:
+      - "qué fuentes exige realmente el planner"
+      - "si son obligatorias u opcionales"
+      - "qué periodo/planta solicita cada una"
+      - "cómo se representa source/evidence"
+
+  tool_orchestrator:
+    inspect:
+      - "tool plan para financial_diagnosis"
+      - "get_igf_snapshot"
+      - "ARR loader/tool"
+      - "M9 delta tools/loaders"
+      - "executor ordering"
+      - "failure behavior"
+      - "partial success behavior"
+
+    determine:
+      - "si puede ejecutar múltiples tools en una corrida"
+      - "si hoy corta después de la primera"
+      - "si existen dependencias entre tools"
+      - "cómo preservar resultados separados"
+
+  chat_runtime:
+    inspect:
+      - "askDirectorIa"
+      - "early returns"
+      - "focused modes"
+      - "annex IGF"
+      - "context builders"
+      - "OpenAI call"
+      - "source inference"
+
+    determine:
+      - "dónde se pierde el ensamblaje multi-dominio"
+      - "qué branch impide llegar con IGF+ARR+M9 juntos"
+      - "qué cambio mínimo de wiring sería necesario"
+
+  igf_evidence:
+    verify:
+      - "fuente física"
+      - "periodo"
+      - "version"
+      - "planta"
+      - "composition si aplica"
+      - "null semantics"
+      - "authz"
+      - "provenance"
+
+  arr_evidence:
+    verify:
+      - "fuente física"
+      - "periodo"
+      - "planta"
+      - "shape"
+      - "null semantics"
+      - "authz"
+      - "provenance"
+
+  m9_evidence:
+    verify:
+      - "delta venta"
+      - "delta descuento"
+      - "delta ingreso"
+      - "periodo comparado"
+      - "planta"
+      - "shape"
+      - "null semantics"
+      - "authz"
+      - "provenance"
+
+  temporal_alignment:
+    determine:
+      - "qué periodo representa IGF"
+      - "qué periodo representa ARR"
+      - "qué dos periodos usa M9"
+      - "si son comparables"
+      - "qué hacer si no coinciden"
+
+    rules:
+      - "no alinear periodos silenciosamente"
+      - "no presentar snapshots de meses distintos como mismo corte"
+      - "si falta alineación, explicitarla o clarificar"
+
+  plant_scope:
+    required:
+      - "misma planta autorizada para todas las fuentes"
+      - "una fuente no puede ampliar scope de otra"
+      - "cross-planta bloqueado"
+      - "fail-closed"
+
+  authz:
+    determine:
+      - "authz IGF"
+      - "authz ARR"
+      - "authz M9"
+      - "intersección segura"
+      - "GA/GV"
+      - "plantas_permitidas"
+      - "qué ocurre si una fuente tiene regla más restrictiva"
 
     rule: >
-      Una oportunidad transversal solo puede competir si existe un hueco
-      físico/arquitectónico concreto. No inventar una nueva capa genérica por
-      intuición ni reabrir contratos congelados sin necesidad.
+      El ensamblaje debe usar el scope más restrictivo requerido; nunca relajar
+      authz para completar el diagnóstico.
 
-canonical_labels_rule: >
-  Para módulos, usar exclusivamente nombres, estados y propósitos de la matriz
-  canónica vigente.
+  provenance:
+    required_sections:
+      - "igf"
+      - "arr"
+      - "deltas_m9"
 
-priority_model:
+    each_must_keep:
+      - "source"
+      - "period"
+      - "plant"
+      - "status/availability"
+      - "evidence ids si existen"
+      - "error/absence state"
 
-  executive_value:
-    weight: "CRITICAL"
-    evaluate:
-      - "qué pregunta directiva nueva resuelve"
-      - "qué decisión mejora"
-      - "qué riesgo/prioridad hace visible"
+    rule: >
+      No fusionar hechos de fuentes distintas en un único objeto que pierda su
+      procedencia.
 
-  reasoning_value:
-    weight: "CRITICAL"
-    evaluate:
-      - "mejora explicación"
-      - "mejora diagnóstico"
-      - "permite hipótesis mejor soportadas"
-      - "reduce respuestas meramente descriptivas"
+  absence_and_error:
+    distinguish:
+      - "ABSENCE_CONFIRMED si aplica"
+      - "DATA_NOT_FOUND"
+      - "SOURCE_*"
+      - "TOOL_ERROR"
+      - "null"
+      - "0"
 
-  evidence_connectivity:
-    weight: "CRITICAL"
-    evaluate:
-      - "conecta hechos físicamente relacionables"
-      - "preserva provenance"
-      - "evita silos"
-      - "no inventa joins ni causalidad"
+    rules:
+      - "ausencia != cero"
+      - "tool error != dato faltante"
+      - "source unavailable != resultado neutral"
+      - "no completar evidencia faltante con otra fuente"
 
-  new_domain_value:
-    weight: "VERY_HIGH"
-    evaluate:
-      - "abre un dominio silencioso"
-      - "reduce SOURCE_NOT_INTEGRATED"
-      - "habilita preguntas no cubiertas"
+  reasoning_semantics:
+    allowed:
+      - "comparar hechos de fuentes alineadas"
+      - "señalar coincidencias"
+      - "señalar tensiones"
+      - "formular hipótesis claramente etiquetadas si contrato vigente lo permite"
+      - "decir qué evidencia soporta cada observación"
 
-  actionability:
-    weight: "VERY_HIGH"
-    evaluate:
-      - "responsable"
-      - "acción"
-      - "fecha"
-      - "planta"
-      - "cliente"
-      - "folio"
-      - "partida"
-      - "prioridad observable"
+    forbidden:
+      - "correlación -> causalidad"
+      - "IGF explica ARR automáticamente"
+      - "delta implica causa"
+      - "una fuente sustituye a otra"
 
-  incremental_value:
-    weight: "VERY_HIGH"
+  contract_check:
+    inspect:
+      - "04-IES-STANDARD.md"
+      - "05-REASONING-ENGINE.md"
+      - "contratos vigentes relevantes"
 
-  frequency:
-    weight: "HIGH"
+    determine:
+      - "si multi-source evidence assembly ya está permitido"
+      - "si se requiere G2"
+      - "si se requiere G3"
+      - "si basta wiring/runtime"
 
-  implementation_path:
-    weight: "MEDIUM"
-    evaluate:
-      - "fuente/helper real"
-      - "in-process"
-      - "SELECT-only"
-      - "intent/tool/executor"
-      - "primer slice"
+    rule: >
+      No modificar contratos. Solo determinar conformidad.
 
-  risk:
-    weight: "MEDIUM"
-    penalize:
-      - "writes"
-      - "Excel"
-      - "S3"
-      - "Twilio"
-      - "side effects"
-      - "stubs"
-      - "semantic ambiguity"
-      - "contract reopening"
-      - "duplicación"
+architecture_hypothesis:
+  preferred_path: >
+    financial_diagnosis
+    -> planner multi-domain
+    -> tool orchestrator ejecuta IGF + ARR + M9
+    -> normalizeFinancialDiagnosisEvidence
+    -> paquete con provenance separada
+    -> Reasoning Engine
+    -> respuesta
 
-  percentage_effect:
-    weight: "LOW"
+  requirements:
+    - "in-process"
+    - "read-only"
+    - "sin HTTP interno"
+    - "sin writes"
+    - "sin contrato nuevo"
+    - "sin ocultar partial failure"
 
-mandatory_module_rechecks:
-  - "M1"
-  - "M2 restante"
-  - "M4 restante"
-  - "M5 restante"
-  - "M6 restante"
-  - "M7 restante"
-  - "M8"
-  - "M10"
-  - "M11 restante"
-  - "M12 restante"
-  - "M14"
-  - "M15"
-  - "M17"
-  - "M18 restante"
-  - "M20"
-  - "cualquier otro módulo no COMPLETE"
+evidence_bundle_contract_hypothesis:
+  top_level:
+    - "plant"
+    - "requested_period"
+    - "sources"
+    - "alignment"
+    - "limitations"
 
-special_rechecks:
+  sources:
+    igf:
+      - "status"
+      - "period"
+      - "payload"
+      - "evidence/source"
 
-  M10:
-    required:
-      - "definición canónica exacta"
-      - "qué significa weekly discount/narrativa si aplica"
-      - "qué evidencia nueva aporta"
-      - "qué duplica M9/ARR"
-      - "qué parte depende de Twilio/WhatsApp"
-      - "qué slice estrictamente read-only existe"
-      - "si abre preguntas realmente nuevas"
+    arr:
+      - "status"
+      - "period"
+      - "payload"
+      - "evidence/source"
 
-  M8:
-    required:
-      - "ARR actual"
-      - "qué falta respecto a M9"
-      - "si existe fuente oculta o composición no expuesta"
-      - "si aporta valor incremental real"
-
-  M20:
-    required:
-      - "si Home KPI tiene fuente propia"
-      - "si solo resume M3"
-      - "si habilita priorización cross-domain"
-
-  M14_M15_M17:
-    required:
-      - "usar definición canónica real"
-      - "fuentes físicas"
-      - "dependencias externas"
-      - "si existe slice read-only defendible"
-      - "valor ejecutivo nuevo"
-
-  M5_remaining:
-    required:
-      - "query Taller/AT ya integrada"
-      - "no continuar por inercia"
-      - "evaluar solo Excel/duplicados/restante"
-
-  M7_M11_M12_remaining:
-    required:
-      - "ya profundizados"
-      - "evaluar solo huecos realmente nuevos"
-
-  M4_M6_M18_remaining:
-    required:
-      - "restante principalmente write/Excel/channel"
-      - "penalizar"
-
-transversal_audit:
-  required:
-    - "leer arquitectura Reasoning Engine/IES vigente"
-    - "no modificarla"
-    - "identificar si el runtime actual ya puede consumir evidencia multi-dominio"
-    - "identificar si el problema real es falta de source, routing, context assembly o reasoning"
-    - "buscar gaps concretos, no ideas abstractas"
-
-  questions:
-    - "¿Puede una pregunta ejecutiva usar hoy simultáneamente M3 + M9 + M11/M12?"
-    - "¿Puede usar M4/M6 + acciones M12 sin inventar join?"
-    - "¿Puede combinar IGF M7 con deltas M9 bajo provenance separado?"
-    - "¿Existe planner/tool path para diagnóstico cross-domain?"
-    - "¿La arquitectura ya lo permite pero el runtime no lo cablea?"
-    - "¿Haría falta contrato nuevo o solo wiring?"
+    m9:
+      - "status"
+      - "period_a"
+      - "period_b"
+      - "payload"
+      - "evidence/source"
 
   rule: >
-    Si el gap transversal requiere reabrir IES/Reasoning Engine congelados,
-    penalizar fuertemente y marcar gates necesarios. Si puede hacerse mediante
-    runtime/wiring conforme a contrato vigente, puede competir.
+    Esto es hipótesis de runtime shape, no contrato arquitectónico nuevo.
+    Verificar si puede reutilizar shapes existentes antes de proponer uno nuevo.
 
-mandatory_question_map:
-  for_each_candidate:
-    - "qué preguntas nuevas habilita"
-    - "qué ya responde"
-    - "qué duplica"
-    - "qué reasoning nuevo aporta"
-    - "qué evidencia conecta"
-    - "qué clave física soporta la conexión"
-    - "qué NO puede afirmar"
+mandatory_failure_matrix:
+  cases:
+    - "IGF ok / ARR ok / M9 ok"
+    - "IGF missing / ARR ok / M9 ok"
+    - "IGF ok / ARR missing / M9 ok"
+    - "IGF ok / ARR ok / M9 error"
+    - "una fuente unauthorized"
+    - "periodos no alineados"
+    - "todas sin datos"
+    - "una fuente devuelve nulls"
 
-physical_audit:
-  for_each_candidate:
-    - "source"
-    - "helper"
-    - "query"
-    - "intent"
-    - "tool"
-    - "executor"
-    - "context builder"
-    - "authz"
-    - "plant scope"
-    - "side effects"
-    - "external dependency"
-    - "contract impact"
-    - "semantic risk"
-    - "testability"
-    - "first slice"
-    - "state after slice"
-    - "percentage effect"
+  for_each:
+    determine:
+      - "¿se responde?"
+      - "¿se limita?"
+      - "¿se clarifica?"
+      - "¿se aborta?"
+      - "qué provenance queda"
 
-mandatory_table:
-  columns:
-    - "rank"
-    - "candidate"
-    - "type_module_or_transversal"
-    - "current_state"
-    - "new_questions"
-    - "executive_value"
-    - "reasoning_value"
-    - "evidence_connectivity"
-    - "new_domain_value"
-    - "actionability"
-    - "incremental_value"
-    - "source_ready"
-    - "wiring_ready"
-    - "contract_impact"
-    - "dependencies"
-    - "risk"
-    - "first_slice"
-    - "state_after_slice"
-    - "percentage_effect"
-    - "decision"
+tests_to_design_if_ready:
+  - "financial_diagnosis ejecuta IGF+ARR+M9"
+  - "no early-return con una sola fuente"
+  - "provenance separada"
+  - "misma planta"
+  - "cross-planta bloqueado"
+  - "periodos alineados"
+  - "periodos desalineados"
+  - "IGF ausente"
+  - "ARR ausente"
+  - "M9 ausente"
+  - "tool error"
+  - "null != 0"
+  - "ausencia != cero"
+  - "partial success"
+  - "sin causalidad"
+  - "IGF composition preservada"
+  - "M9 sigue siendo deltas"
+  - "ARR no se confunde con M9"
+  - "authz restrictiva"
+  - "sin HTTP interno"
+  - "sin writes"
+  - "contratos no modificados"
 
-ranking_rules:
-  - "No elegir por porcentaje."
-  - "No elegir por facilidad."
-  - "No elegir M10 por haber sido segundo."
-  - "No continuar M5/M7/M11/M12/M18/M4/M6 por inercia."
-  - "Un candidato transversal debe tener gap físico comprobable."
-  - "No reabrir arquitectura congelada sin evidencia de necesidad."
-  - "Premiar conexiones físicamente defendibles."
-  - "Penalizar causalidad inferida."
-  - "Preferir SELECT-only e in-process."
-  - "Preferir valor ejecutivo material."
+decision_rules:
 
-winner_requirements:
-  exactly_one: true
+  ready:
+    all:
+      - "planner ya soporta multi-domain"
+      - "tools existentes son ejecutables"
+      - "runtime gap identificable"
+      - "provenance preservable"
+      - "authz compatible bajo regla restrictiva"
+      - "period alignment resoluble"
+      - "partial failure model defendible"
+      - "Reasoning Engine vigente acepta evidencia multi-source"
+      - "sin necesidad de G2/G3"
+      - "tests determinísticos"
 
-  must_include:
-    - "ganador"
-    - "tipo: módulo o transversal"
-    - "segundo lugar"
-    - "preguntas nuevas"
-    - "reasoning nuevo"
-    - "evidence connectivity"
-    - "por qué gana"
-    - "por qué pierde segundo"
-    - "primer slice"
-    - "estado posterior"
-    - "efecto porcentual"
-    - "contract/gate impact"
-    - "riesgos"
-    - "dependencias"
+    outcome: "DONE_PENDING_REVIEW"
+    next_task: "IMPL-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-EVIDENCE-ASSEMBLY-001"
 
-next_task_policy:
-  module_readiness:
-    pattern: "ARCH-DIRECTOR-IA-<MODULE>-<SLICE>-READINESS-001"
+  stopped:
+    when:
+      - "requiere modificar contrato IES/RE"
+      - "no puede preservarse provenance"
+      - "authz de fuentes es incompatible"
+      - "periodos no pueden alinearse"
+      - "tool orchestration no soporta multi-source sin cambio arquitectónico"
 
-  transversal_readiness:
-    pattern: "ARCH-DIRECTOR-IA-<TRANSVERSAL-SLICE>-READINESS-001"
+    outcome: "STOPPED"
+    next_task: null
 
-  if_fully_verified:
-    pattern: "IMPL-DIRECTOR-IA-<SLICE>-001"
+state_and_percentage:
+  current_task:
+    state_change: false
+    percentage_change: false
 
-  rule: >
-    Proponer exactamente una NEXT_TASK. No autorizar ni ejecutar.
+  future_impl:
+    global_numerator: 10.5
+    denominator: 20
+    percentage: 52.5
+    gain_pp: 0.0
 
 in_scope:
   writable:
     - "docs/dev-loop/CURRENT_TASK.md"
-    - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-008.md"
+    - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-EVIDENCE-ASSEMBLY-READINESS-001.md"
 
   read_only:
     - "AGENTS.md"
@@ -364,7 +391,8 @@ out_of_scope:
   - "modificar runtime"
   - "modificar matriz"
   - "modificar contratos"
-  - "reabrir arquitectura"
+  - "reabrir IES"
+  - "reabrir Reasoning Engine"
   - "modificar tests"
   - "modificar frontend"
   - "modificar SQL"
@@ -375,45 +403,49 @@ out_of_scope:
   - "ejecutar NEXT_TASK"
 
 acceptance_criteria:
-  - "Baseline 10.5/20 = 52.5% verificado."
-  - "Todos los módulos no COMPLETE relevantes reevaluados."
-  - "Oportunidades transversales auditadas físicamente."
-  - "No se inventó una capa transversal."
-  - "Se verificó impacto contractual de candidatos transversales."
-  - "Se identificaron preguntas ejecutivas nuevas."
-  - "Reasoning y evidence connectivity ponderados."
-  - "Existe ranking."
-  - "Existe exactamente un ganador."
-  - "Existe exactamente un segundo lugar."
-  - "Existe exactamente una NEXT_TASK."
-  - "No se implementó."
-  - "No se modificó matriz."
-  - "Solo CURRENT_TASK y reporte cambiaron."
+  - "Gap runtime localizado físicamente."
+  - "Planner multi-domain verificado."
+  - "Tool plan multi-source verificado."
+  - "IGF/ARR/M9 auditados."
+  - "Authz por fuente auditada."
+  - "Intersección de authz definida."
+  - "Semántica temporal definida."
+  - "Provenance multi-source definida."
+  - "Absence/error semantics definidas."
+  - "Failure matrix completada."
+  - "Conformidad IES/Reasoning Engine verificada."
+  - "G2/G3 determinados."
+  - "No se modificaron contratos."
+  - "52.5% no cambia."
+  - "Solo CURRENT_TASK y reporte cambian."
   - "git diff --check limpio."
 
 report_requirements:
-  path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-008.md"
+  path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-EVIDENCE-ASSEMBLY-READINESS-001.md"
 
   must_include:
     - "metadata"
     - "resumen ejecutivo"
-    - "baseline 52.5%"
-    - "current capabilities"
-    - "module gaps"
-    - "transversal reasoning gaps"
-    - "evidence connectivity gaps"
-    - "contract impact"
-    - "candidatos"
-    - "tabla comparativa"
-    - "ranking"
-    - "ganador"
-    - "segundo"
-    - "primer slice"
-    - "estado posterior"
-    - "percentage effect"
+    - "baseline"
+    - "physical runtime gap"
+    - "planner"
+    - "tool orchestration"
+    - "chat runtime"
+    - "IGF evidence"
+    - "ARR evidence"
+    - "M9 evidence"
+    - "period alignment"
+    - "authz intersection"
+    - "provenance"
+    - "absence/error semantics"
+    - "failure matrix"
+    - "reasoning semantics"
+    - "contract check"
+    - "implementation hypothesis"
+    - "tests"
     - "gates"
+    - "percentage"
     - "risks"
-    - "dependencies"
     - "NEXT_TASK"
     - "acciones no realizadas"
     - "secrets_check"
@@ -421,10 +453,11 @@ report_requirements:
     - "git status"
 
 expected_terminal_state: >
-  DONE_PENDING_REVIEW si existe un ganador defendible. STOPPED si ningún
-  candidato aporta valor marginal suficiente sin reabrir contratos.
-  BLOCKED si falta gate indispensable.
+  DONE_PENDING_REVIEW si el gap puede resolverse solo con wiring/runtime y
+  evidencia multi-source conforme al contrato vigente. STOPPED si requiere
+  reabrir arquitectura o no puede preservar authz/provenance. BLOCKED si falta
+  gate indispensable.
 
 max_attempts: 1
 
-result_report_path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-008.md"
+result_report_path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-EVIDENCE-ASSEMBLY-READINESS-001.md"
