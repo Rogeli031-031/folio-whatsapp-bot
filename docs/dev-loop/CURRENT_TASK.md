@@ -1,25 +1,25 @@
 # CURRENT_TASK
 
 ```yaml
-task_id: "AUDIT-DIRECTOR-IA-PRODUCTION-CONVERSATION-GAP-010"
+task_id: "ARCH-DIRECTOR-IA-LONGITUDINAL-CLIENT-PROFILE-001"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-08-24"
 human_authorization: >
   AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-24.
-  Apruebo AUDIT-DIRECTOR-IA-PRODUCTION-CONVERSATION-GAP-010
-  y autorizo G1 exclusivamente para auditoría read-only de producto.
+  Apruebo ARCH-DIRECTOR-IA-LONGITUDINAL-CLIENT-PROFILE-001
+  y autorizo G1 exclusivamente para readiness/auditoría.
 
 gates:
   G1_task_authorization: AUTHORIZED
-  G2_architecture_change: N/A
-  G3_new_architecture_contract: N/A
+  G2_architecture_change: N/A_PENDING_AUDIT
+  G3_new_architecture_contract: N/A_PENDING_AUDIT
   G5_contract_conformance: N/A
   G8_calibration_materiality_signature: N/A
 
 mode:
-  type: "PRODUCTION_CONVERSATION_AUDIT_ONLY"
+  type: "READINESS_ONLY"
   implementation: false
   code_changes: false
   runtime_changes: false
@@ -29,392 +29,492 @@ mode:
   sql_execution: false
 
 objective: >
-  Auditar los pendientes de producción que siguen abiertos después de integrar
-  daily_executive_brief y commercial_trend. Determinar exactamente un siguiente
-  cuello de mayor valor entre perfil longitudinal de cliente, Taller Mayor por
-  unidad, identidad/saludo, directorio SEH y semántica temporal IGF.
+  Determinar la arquitectura mínima y segura para construir un perfil
+  longitudinal reutilizable por cliente_key que componga, para una planta y
+  periodo definidos, volumen mensual, descuento/kg mensual, ingreso mensual
+  disponible, comentarios, DICF y Action Register; y que pueda ser invocado
+  tanto desde una pregunta directa de cliente como desde el handoff de
+  commercial_trend.
 
 baseline:
   global: "10.5 / 20 = 52.5%"
   percentage_effect: "0.0 pp"
 
+prior_audit:
+  task: "AUDIT-DIRECTOR-IA-PRODUCTION-CONVERSATION-GAP-010"
+  bottleneck: "no_reusable_longitudinal_client_read_model"
+  failure_class: "MISSING_INFRASTRUCTURE"
+
 north_star: >
-  Director IA debe sostener conversaciones ejecutivas reales sobre clientes,
-  unidades, responsables organizacionales e IGF temporal usando fuentes físicas,
-  continuidad de contexto y límites honestos, sin exigir nombres de módulos ni
-  wording específico.
+  Director IA debe poder pasar de una tendencia agregada a un cliente concreto
+  y sostener una conversación sobre su evolución en el tiempo sin perder
+  identidad, periodo ni evidencia.
 
-regressions_not_to_reselect_if_working:
+canonical_product_questions:
+  - "¿Qué cliente de Puebla es el de mayor volumen?"
+  - "¿Cuánto compró por mes en los últimos 3 meses?"
+  - "¿Qué descuento/kg tuvo por mes?"
+  - "¿Cuánto ingreso generó por mes?"
+  - "¿Subió o bajó?"
+  - "¿Qué sabemos de él?"
+  - "¿Qué comentarios tenemos?"
+  - "¿Tiene acciones pendientes?"
+  - "¿Qué pasó con esas acciones?"
 
-  daily_executive_brief:
-    conversation:
-      - "¿Cómo nos fue ayer?"
-      - "¿Qué te llama la atención?"
-      - "¿Y la venta?"
-      - "¿Y el descuento?"
-
-  commercial_trend:
-    conversation:
-      - "¿Cómo vamos en CASA los últimos 3 meses?"
-      - "¿Y COMISIONISTAS?"
-      - "Compáralos."
-      - "¿Quién está moviendo la caída?"
-      - "Háblame del primero."
-
-  IGF_reviewable_supports:
-    conversation:
-      - "¿Cómo proyectamos cerrar Puebla este mes?"
-      - "¿Qué podemos recortar de apoyos?"
-      - "¿Cuáles todavía podemos detener?"
-      - "Si dejaran de entrar, ¿cómo quedaría el IGF?"
-
-  action_person:
-    conversation:
-      - "¿Qué pasó con la acción de Julio Pérez?"
-      - "¿Está vencida?"
-
-  rule: >
-    Solo reabrir uno de estos cuellos si existe evidencia de regresión real.
-
-production_case_1_longitudinal_client:
-
-  canonical_question: >
-    ¿Qué cliente de Puebla es el de mayor volumen, cuánto compró cada mes en los
-    últimos 3 meses, qué descuento/kg tuvo por mes, cuánto ingreso generó por mes,
-    subió o bajó y qué sabemos de él?
-
-  followups:
-    - "¿En qué mes compró más?"
-    - "¿En qué mes tuvo más descuento?"
-    - "¿Coincidió con más volumen?"
-    - "¿Cuánto ingreso generó?"
-    - "¿Qué sabemos de él?"
-    - "¿Qué comentarios tenemos?"
-    - "¿Tiene acciones pendientes?"
-    - "¿Qué pasó con esas acciones?"
-
-  semantic_variants:
-    - "Háblame de nuestro cliente más grande de Puebla."
-    - "¿Cómo se ha comportado el principal cliente estos 3 meses?"
-    - "¿Qué tendencia trae nuestro mayor cliente?"
-    - "¿Qué tanto le hemos descontado últimamente?"
-
-  mandatory_audit:
-    - "top client selection"
-    - "cliente_key canonical identity"
-    - "three-month semantics"
-    - "monthly sales source"
-    - "monthly discount/kg source"
-    - "monthly income source"
-    - "period alignment"
-    - "comments"
-    - "DICF"
-    - "Action Register"
-    - "entity handoff from commercial_trend mover"
-    - "null != zero"
-    - "no joins by display name"
-
-  key_questions:
-    - "Can existing monthly packs be composed safely per cliente_key?"
-    - "Is monthly income physically available at client grain?"
-    - "Does one reusable longitudinal client read model exist?"
-    - "Can the selected top mover from commercial_trend become active_entity?"
-
-  truth_boundary:
-    - "discount and volume correlation != causality"
-    - "comment != cause"
-    - "action != outcome"
-    - "highest volume != highest margin"
-
-production_case_2_taller_mayor_units:
-
-  canonical_question: >
-    ¿Qué unidades de Puebla tienen apoyos/Folios de Taller Mayor este mes?
-    Dame detalles.
-
-  followups:
-    - "¿Cuál tiene el apoyo más alto?"
-    - "¿Qué le están haciendo?"
-    - "¿Qué folio es?"
-    - "¿En qué estatus va?"
-    - "¿Todavía se puede detener?"
-    - "¿Cuánto hemos gastado en esa unidad?"
-    - "¿Qué otros apoyos ha tenido?"
-
-  semantic_variants:
-    - "¿Qué carros de Puebla traen apoyos de taller mayor?"
-    - "Enséñame las unidades con reparaciones fuertes este mes."
-    - "¿Qué unidades tienen folios de Taller Mayor?"
-
-  mandatory_audit:
-    - "physical Taller Mayor definition"
-    - "categoria/subcategoria"
-    - "unidad/economico field"
-    - "folio link"
-    - "current month/mes_cargo"
-    - "plant scope"
-    - "amount"
-    - "status"
-    - "concept/details"
-    - "reviewability"
-    - "unit-level history"
-    - "existing Taller modules/helpers"
-    - "whether Director IA currently has any read path to this grain"
-
-  key_question: >
-    Is this primarily a routing/read-model gap over data that already exists?
-
-production_case_3_authenticated_greeting:
-
-  canonical_turn: "Hola"
-
-  desired_behavior_if_supported: >
-    Personalize greeting using the currently authenticated user identity.
-
-  desired_example_only_if_data_supports: >
-    “Hola, Ing. Zaragoza. ¿En qué le puedo ayudar hoy?”
-
-  mandatory_audit:
-    - "POST /chat auth/session payload"
-    - "dashboard token identity"
-    - "user id"
-    - "name"
-    - "role"
-    - "title/salutation field"
-    - "smalltalk path"
-    - "whether identity is currently dropped before GPT"
-
-  truth_boundary:
-    - "name must be current authenticated identity"
-    - "professional title only if physically stored/derived by explicit rule"
-    - "no model memory identity"
-    - "no hardcoded name"
-
-  value_question: >
-    Is the missing personalized greeting a narrow presentation gap or does user
-    identity unlock broader person-aware conversation?
-
-production_case_4_SEH_directory:
-
-  canonical_question: >
-    ¿Quién es el responsable de Seguridad e Higiene en Puebla?
-
-  followups:
-    - "¿Cuál es su teléfono?"
-    - "¿Y su correo?"
-    - "¿Tiene acciones pendientes?"
-    - "¿Qué sabemos de él?"
-
-  semantic_variants:
-    - "¿Quién lleva SEH en Puebla?"
-    - "Dame el contacto de Seguridad e Higiene Puebla."
-    - "¿Quién es el encargado de SEH?"
-
-  mandatory_audit:
-    - "physical DB source"
-    - "usuarios/personas tables"
-    - "plant assignment"
-    - "area/department/function field"
-    - "SEH aliases"
-    - "current/vigencia semantics"
-    - "name"
-    - "phone"
-    - "email"
-    - "authz/privacy"
-    - "whether data exists but is unreachable"
-    - "whether data does not exist at all"
-
-  key_question: >
-    Is this MISSING_INFRASTRUCTURE over existing organizational data or
-    MISSING_DATA requiring a directory source?
-
-production_case_5_closed_month_IGF:
-
-  canonical_question: >
-    ¿Cuál es la proyección final del IGF de Puebla de mayo pasado?
-
-  expected_behavior:
-    - "detect past closed month"
-    - "do not silently label current/latest version as forecast"
-    - "offer actual closed result if available"
-
-  followups:
-    - "¿Entonces cómo cerró mayo?"
-    - "¿Qué proyectábamos durante mayo?"
-    - "¿Qué tan cerca estuvimos?"
-    - "Compáralo con junio."
-
-  semantic_variants:
-    - "¿Cómo cerramos mayo en IGF?"
-    - "¿Cuál fue el resultado final de mayo?"
-    - "¿Qué habíamos proyectado para mayo?"
-
-  mandatory_audit:
-    - "current date/month semantics"
-    - "period resolver"
-    - "igf_status routing"
-    - "closed actual fields"
-    - "version semantics"
-    - "historical snapshot persistence"
-    - "whether a forecast-as-of date is stored"
-    - "whether actual and forecast can be distinguished physically"
-
-  truth_boundary:
-    - "past closed actual != current forecast"
-    - "latest historical record != necessarily historical forecast"
-    - "no reconstructed forecast from final actual"
-
-production_case_6_regression_commercial_to_client:
-
-  conversation:
+commercial_trend_handoff:
+  sequence:
     - "¿Cómo vamos en CASA los últimos 3 meses?"
     - "¿Quién está moviendo la caída?"
     - "Háblame del primero."
     - "¿Qué sabemos de él?"
-    - "¿Tiene alguna acción pendiente?"
+    - "¿Tiene acciones?"
 
-  purpose: >
-    Test whether commercial_trend handoff already unlocks part of the
-    longitudinal-client conversation and identify the exact point where it stops.
+  current_behavior:
+    - "commercial_trend works"
+    - "mover selection works"
+    - "active_entity works"
+    - "pronoun/followup re-inherits commercial_trend"
+    - "client profile/action query never becomes effective"
 
-trace_each_case:
-  required:
-    - "isolated planner intent"
-    - "effective intent"
-    - "coverage guard"
-    - "parent_intent"
-    - "previous_frame"
-    - "active_entity"
-    - "plant"
-    - "period/range"
-    - "physical sources"
-    - "sources actually loaded"
-    - "entity resolution"
-    - "fresh requery"
-    - "evidence sent to GPT"
-    - "limitations"
-    - "GPT invoked"
-    - "deterministic early return"
-    - "exact failure point"
+  desired_behavior: >
+    Once a canonical client entity is active, a client-profile or action
+    question must route to the relevant client read model instead of being
+    swallowed by commercial_trend inheritance.
 
-physical_source_rule: >
-  Search the entire repository for actual sources/helpers before classifying
-  something as missing. Data that exists in dashboard/WhatsApp but not chat is
-  MISSING_INFRASTRUCTURE, not MISSING_DATA.
-
-answerability_classification:
-  values:
-    - "WORKS_NOW"
-    - "PARTIALLY_WORKS"
-    - "ROUTING_GAP"
-    - "MISSING_READ_MODEL"
-    - "MISSING_PHYSICAL_DATA"
-    - "TEMPORAL_SEMANTICS_GAP"
-    - "AUTHZ_LIMIT"
-    - "REGRESSION"
-
-failure_classes:
-  - "MISSING_DATA"
-  - "MISSING_INFRASTRUCTURE"
-  - "MODEL_REASONING_LIMIT"
-  - "OVERPROGRAMMING"
-  - "DEPLOYMENT_GAP"
-  - "CONTRACT_OR_AUTHZ_LIMIT"
-
-production_value_selection:
-
-  dimensions:
-    frequency: "likelihood in real executive use"
-    executive_value: "decision/awareness usefulness"
-    transversal_unlock: "number of future conversations unlocked"
-    data_readiness: "how much physical truth already exists"
-    natural_conversation: "how much it improves human-like continuity"
-
-  rule: >
-    Use these dimensions to justify the single bottleneck, not to create a
-    permanent automated roadmap score.
-
-single_bottleneck:
-  exactly_one: true
-
-  required:
-    - "name"
-    - "failure_class"
-    - "production cases affected"
-    - "physical location/source"
-    - "evidence"
-    - "why it wins now"
-    - "what fixing it unlocks"
-    - "what it does not solve"
+identity_invariant:
+  canonical_key: "cliente_key"
 
   prohibited:
-    - "selecting multiple parallel features"
-    - "selecting easiest implementation only"
+    - "join by cliente_nombre"
+    - "fuzzy display-name joins"
+    - "client identity inferred from comments text"
+    - "silent merge of multiple clients"
 
-information_gap_quality:
+  ambiguity:
+    rule: >
+      If one visible name maps to multiple canonical entities, clarify.
 
-  when physical data is missing:
-    desired_answer_behavior:
-      - "what is known"
-      - "what is not available"
-      - "specific missing source/field"
-      - "why it matters"
-      - "what becomes answerable if added"
+mandatory_source_audit:
+
+  monthly_sales:
+    determine:
+      - "physical table/source"
+      - "cliente_key availability"
+      - "plant scope"
+      - "month grain"
+      - "kg aggregation"
+      - "completed/current month behavior"
+
+  monthly_discount:
+    determine:
+      - "physical table/source"
+      - "canonical client identity path"
+      - "monto"
+      - "kg denominator"
+      - "SUM(monto)/SUM(kg)"
+      - "month grain"
+      - "whether M9 can be reused safely"
+
+  monthly_income:
+    determine:
+      - "what physically exists at client grain"
+      - "whether it is actual closed income, ARR-derived, DICF-derived, or formula"
+      - "whether same monthly grain is available"
+      - "whether calling it 'ingreso' is semantically safe"
+
+  comments:
+    determine:
+      - "cliente_key source"
+      - "recency"
+      - "plant scope"
+      - "author/date if available"
+
+  DICF:
+    determine:
+      - "client linkage"
+      - "current/historical actions"
+      - "status"
+      - "responsible"
+      - "outcomes if physically recorded"
+
+  action_register:
+    determine:
+      - "canonical client linkage if any"
+      - "responsible/person relation"
+      - "open/closed actions"
+      - "whether existing action-person path can be reused"
+
+period_semantics:
+
+  default_three_months:
+    audit_question: >
+      Does "últimos 3 meses" mean last 3 completed calendar months, current month
+      plus prior 2, or another existing business convention?
+
+  requirement:
+    - "select exact semantics from existing data/product conventions"
+    - "declare period explicitly in response"
+
+  current_month:
+    rule: >
+      If current month is incomplete, do not silently compare it as equivalent to
+      completed months without labeling partiality.
+
+  explicit_period:
+    examples:
+      - "mayo, junio y julio"
+      - "últimos 90 días"
+    rule: >
+      Do not conflate calendar months with trailing-day windows.
+
+top_client_selection:
+
+  metric: "volume"
+
+  audit:
+    - "homogeneous period"
+    - "same plant"
+    - "same channel if inherited"
+    - "sum kg"
+    - "ties"
+    - "client key"
+
+  rule: >
+    Highest-volume client must be selected deterministically from the same
+    comparison window.
+
+profile_pack:
+
+  target_shape:
+    identity:
+      - "cliente_key"
+      - "display_name"
+      - "plant"
+
+    period:
+      - "month list"
+      - "partial/completed markers"
+
+    monthly_rows:
+      each:
+        - "month"
+        - "kg"
+        - "discount_per_kg"
+        - "income if semantically valid"
+        - "null/absence markers"
+
+    trends:
+      - "kg direction"
+      - "discount direction"
+      - "income direction if valid"
+
+    context:
+      - "comments"
+      - "DICF"
+      - "actions"
+      - "limitations"
+      - "provenance"
+
+  invariant: >
+    Monthly metrics must align on the same month labels before GPT sees them.
+
+trend_semantics:
+
+  simple_monthly_comparison:
+    allowed:
+      - "month-over-month deltas"
+      - "first vs last across exactly 3 monthly buckets"
+      - "direction from monthly values"
+
+  rule: >
+    This is not the commercial_trend OLS engine. Monthly client profile has its
+    own grain and must not pretend to be daily-trend OLS.
+
+  prohibited:
+    - "claiming causality from correlated discount/volume"
+    - "using missing month as zero unless source proves zero"
+
+income_semantics:
+
+  critical: true
+
+  question: >
+    What does "ingreso por mes" physically mean for this client?
+
+  candidates:
+    A_actual_client_income:
+      description: "actual recognized client income by month"
+
+    B_ARR_or_forecast_derived:
+      description: "derived commercial amount, not accounting actual"
+
+    C_DICF_formula:
+      description: "formula-derived value from commercial model"
+
+    D_not_supported:
+      description: "no defensible client monthly income"
+
+  requirement:
+    - "compare A/B/C/D based on physical source"
+    - "choose one semantics or explicitly defer income"
+
+  invariant: >
+    Do not label a derived estimate as actual income.
+
+source_composition_candidates:
+
+  A_existing_packs_only:
+    description: >
+      Orchestrate existing loaders each turn without a reusable profile model.
+
+  B_longitudinal_client_read_model:
+    description: >
+      Build one canonical loader/pack keyed by cliente_key and period.
+
+  C_persisted_client_profile:
+    description: >
+      Persist a derived profile table/materialized view.
+
+  D_LLM_composition_only:
+    description: >
+      Send raw independent sources to GPT and let it align periods.
+
+  requirement:
+    - "compare A/B/C/D"
+    - "select exactly one"
+    - "prefer read-only runtime composition"
+    - "avoid persistence unless physically necessary"
+
+routing_candidates:
+
+  A_inherit_commercial_trend:
+    description: "keep current behavior"
+
+  B_client_profile_parent_intent:
+    description: >
+      Introduce/reuse canonical client_profile intent after active_entity exists.
+
+  C_phrasebook_override:
+    description: "special phrases like 'qué sabemos de él'"
+
+  D_second_LLM_router:
+    description: "LLM decides handoff"
+
+  requirement:
+    - "compare"
+    - "avoid phrasebook"
+    - "avoid second LLM router"
+
+intent_audit:
+
+  candidates:
+    - "client_analysis"
+    - "client_profile"
+    - "longitudinal_client_profile"
+
+  determine:
+    - "whether existing client_analysis can be extended safely"
+    - "whether new intent is necessary"
+    - "whether period is slot, not separate intent"
 
   principle: >
-    Good handling of missing data is conversational capability, not necessarily
-    a failure.
+    Prefer one client semantic parent over multiple metric-specific intents.
 
-phrasebook_policy:
-  invariant: >
-    Canonical questions are semantic production tests, not strings for routing.
+conversation_state:
 
-  mandatory:
-    - "semantic variants"
-    - "holdouts"
-    - "inspect lib/ for exact phrase coding"
+  required_slots:
+    - "active_entity cliente_key"
+    - "plant"
+    - "active_period_months"
+    - "optional inherited channel context"
+
+  rule: >
+    State holds routing context, not historical evidence.
+
+  handoff:
+    from_commercial_trend:
+      preserve:
+        - "plant"
+        - "selected client"
+        - "relevant channel if needed"
+      discard:
+        - "trend evidence as client evidence"
+
+  requery:
+    mandatory: true
+
+profile_followups:
+
+  should_work:
+    - "¿En qué mes compró más?"
+    - "¿En qué mes tuvo más descuento?"
+    - "¿Coincidió con más volumen?"
+    - "¿Y cuánto ingreso?"
+    - "¿Qué sabemos de él?"
+    - "¿Qué comentarios hay?"
+    - "¿Tiene acciones pendientes?"
+
+  principle: >
+    These should reuse client identity/period, but each evidence domain is
+    requeried as needed.
+
+causality_boundary:
+
+  safe:
+    - "descuento subió y volumen también subió"
+    - "ambos movimientos coinciden temporalmente"
+    - "hay comentario registrado sobre competencia"
+
+  unsafe:
+    - "el descuento causó el volumen"
+    - "la competencia causó la caída" unless separately proven
+    - "la acción recuperó al cliente" without outcome evidence
+
+information_gap:
+
+  required_when_missing:
+    - "what metric/source is absent"
+    - "specific month/entity affected"
+    - "whether data_not_found vs source unavailable"
+    - "what question remains unanswered"
+
+partial_data:
+  required:
+    - "sales exists, discount missing"
+    - "discount exists, income unsupported"
+    - "comments absent"
+    - "actions absent"
+    - "one month missing"
+
+  rule: >
+    Profile remains useful with explicit per-field limitations.
+
+authz:
+  preserve:
+    - "same plant"
+    - "plantas_permitidas"
+    - "no cross-plant"
+    - "fail-closed"
 
 reasoning_boundary:
 
-  KEEP_DETERMINISTIC:
-    - "user identity"
-    - "client identity"
-    - "unit identity"
-    - "plant"
+  runtime_owns:
+    - "identity"
     - "period"
-    - "amount"
-    - "monthly math"
-    - "status"
-    - "contact data"
+    - "monthly alignment"
+    - "kg math"
+    - "discount math"
+    - "income semantics"
+    - "comments retrieval"
+    - "DICF/action retrieval"
     - "authz"
     - "provenance"
     - "absence/error"
 
-  LET_GPT_REASON:
+  GPT_owns:
     - "executive synthesis"
-    - "trend interpretation with caveats"
     - "what stands out"
+    - "correlation wording with caveats"
     - "what to investigate"
-    - "follow-up wording"
+    - "follow-up"
 
-next_task:
-  exactly_one: true
-  authorize: false
-  execute: false
+mandatory_product_conversations:
 
-  naming_rule: >
-    NEXT_TASK must directly attack the selected physical bottleneck and should
-    be ARCH-* when readiness is required before implementation.
+  direct_top_client:
+    turns:
+      - "¿Qué cliente de Puebla es el de mayor volumen?"
+      - "¿Cómo se ha comportado en los últimos 3 meses?"
+      - "¿Qué descuento tuvo por mes?"
+      - "¿Cuánto ingreso generó?"
+      - "¿Qué sabemos de él?"
+      - "¿Tiene acciones pendientes?"
+
+  from_trend:
+    turns:
+      - "¿Cómo vamos en CASA los últimos 3 meses?"
+      - "¿Quién está moviendo la caída?"
+      - "Háblame del primero."
+      - "¿Qué sabemos de él?"
+      - "¿Tiene acciones?"
+      - "¿Qué pasó con esas acciones?"
+
+  comparison:
+    turns:
+      - "¿En qué mes tuvo más descuento?"
+      - "¿Ese mes compró más?"
+      - "¿Coincidió con mayor ingreso?"
+
+tests_to_design_if_ready:
+
+  identity:
+    - "cliente_key only"
+    - "ambiguous visible name"
+    - "cross-plant denial"
+
+  period:
+    - "3-month semantics"
+    - "partial current month"
+    - "explicit months"
+
+  math:
+    - "kg/month"
+    - "SUM(monto)/SUM(kg) discount/month"
+    - "income semantics if supported"
+    - "null != zero"
+
+  routing:
+    - "commercial_trend -> active client -> profile"
+    - "profile -> actions"
+    - "pronoun followups"
+    - "no phrasebook"
+
+  regression:
+    - "commercial_trend"
+    - "daily brief"
+    - "action-person"
+    - "topic return"
+    - "persistent memory"
+    - "full Director IA suite"
+
+contract_audit:
+  inspect:
+    - "Constitution"
+    - "EKE"
+    - "04 IES"
+    - "05 RE"
+
+  determine:
+    - "G2"
+    - "G3"
+
+  expectation: "runtime/read-model only unless evidence says otherwise"
+
+readiness_output:
+  must_determine:
+    - "READY / READY_WITH_LIMITS / NOT_READY"
+    - "source composition A/B/C/D"
+    - "routing strategy A/B/C/D"
+    - "intent choice"
+    - "cliente_key identity path"
+    - "3-month semantics"
+    - "monthly sales source"
+    - "monthly discount source/formula"
+    - "monthly income semantics"
+    - "comments/DICF/actions integration"
+    - "handoff from commercial_trend"
+    - "partial-data behavior"
+    - "G2/G3"
+    - "percentage effect"
 
 percentage_policy:
   before: "10.5 / 20 = 52.5%"
-  after: "10.5 / 20 = 52.5%"
-  delta: "0.0 pp"
+  after_readiness: "10.5 / 20 = 52.5%"
+  expected_impl_effect: "0.0 pp unless module policy independently changes"
 
 in_scope:
   writable:
     - "docs/dev-loop/CURRENT_TASK.md"
-    - "docs/dev-loop/reports/AUDIT-DIRECTOR-IA-PRODUCTION-CONVERSATION-GAP-010.md"
+    - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-LONGITUDINAL-CLIENT-PROFILE-001.md"
 
   read_only:
     - "entire repository except writable files"
@@ -422,33 +522,52 @@ in_scope:
 out_of_scope:
   - "implementation"
   - "code changes"
-  - "test changes"
-  - "matrix changes"
-  - "contract changes"
+  - "tests"
+  - "schema"
   - "SQL execution"
-  - "schema creation"
+  - "persisted profile"
+  - "Taller Mayor"
+  - "SEH"
+  - "greeting"
+  - "closed-month IGF"
   - "commit"
   - "push"
   - "merge"
 
 acceptance_criteria:
-  - "Longitudinal client audited end-to-end."
-  - "Commercial trend -> client handoff audited."
-  - "Taller Mayor by unit audited."
-  - "Authenticated greeting audited."
-  - "SEH directory/data availability audited."
-  - "Closed-month IGF semantics audited."
-  - "Prior major fixes regression-checked."
-  - "Semantic variants used."
-  - "Exactly one bottleneck selected."
-  - "Exactly one NEXT_TASK proposed."
+  - "Client identity path physically audited."
+  - "Commercial trend handoff traced."
+  - "Monthly sales source defined."
+  - "Monthly discount formula/source defined."
+  - "Monthly income semantics determined."
+  - "3-month period semantics fixed."
+  - "Comments/DICF/actions composition defined."
+  - "A/B/C/D source strategy compared."
+  - "Exactly one source strategy selected."
+  - "A/B/C/D routing compared."
+  - "Exactly one routing strategy selected."
+  - "No phrasebook."
+  - "Partial data behavior defined."
+  - "G2/G3 determined."
   - "52.5% preserved."
   - "Only task + report changed."
   - "git diff --check clean."
 
-expected_terminal_state: "DONE_PENDING_REVIEW"
+next_task_policy:
+  if_ready:
+    propose_exactly_one: "IMPL-DIRECTOR-IA-LONGITUDINAL-CLIENT-PROFILE-001"
+
+  if_not_ready:
+    propose_exactly_one: "ARCH-DIRECTOR-IA-LONGITUDINAL-CLIENT-PROFILE-GAP-001"
+
+  rule: "Do not authorize or execute."
+
+expected_terminal_state: >
+  DONE_PENDING_REVIEW if one safe first slice exists.
+  STOPPED if income/client semantics require human business decision.
+  BLOCKED if canonical identity/data is insufficient.
 
 max_attempts: 1
 
 result_report_path: >
-  docs/dev-loop/reports/AUDIT-DIRECTOR-IA-PRODUCTION-CONVERSATION-GAP-010.md
+  docs/dev-loop/reports/ARCH-DIRECTOR-IA-LONGITUDINAL-CLIENT-PROFILE-001.md
