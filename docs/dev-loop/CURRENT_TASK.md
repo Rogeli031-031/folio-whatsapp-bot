@@ -1,15 +1,15 @@
 # CURRENT_TASK
 
 ```yaml
-task_id: "AUDIT-DIRECTOR-IA-CONVERSATIONAL-INTELLIGENCE-001"
+task_id: "ARCH-DIRECTOR-IA-CONVERSATIONAL-CONTINUITY-READINESS-001"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-08-23"
 human_authorization: >
   AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-23.
-  Apruebo AUDIT-DIRECTOR-IA-CONVERSATIONAL-INTELLIGENCE-001
-  y autorizo G1 exclusivamente para auditoría read-only.
+  Apruebo ARCH-DIRECTOR-IA-CONVERSATIONAL-CONTINUITY-READINESS-001
+  y autorizo G1.
 
 gates:
   G1_task_authorization: AUTHORIZED
@@ -17,124 +17,270 @@ gates:
   G3_new_architecture_contract: N/A
   G8_calibration_materiality_signature: N/A
 
-mode:
-  type: "AUDIT_ONLY"
-  code_changes: false
-  runtime_changes: false
-  contract_changes: false
-  matrix_changes: false
-  implementation: false
-
 objective: >
-  Auditar si la arquitectura actual de Director IA preserva y mejora el
-  objetivo original del producto: permitir una conversación natural sobre
-  la empresa con una IA que conoce los datos disponibles, mantiene el
-  contexto relevante, razona con ellos y, cuando la evidencia no es
-  suficiente, identifica qué información necesita para continuar sin
-  inventarla.
-
-central_product_test: >
-  La arquitectura es infraestructura para Director IA; no debe sustituir
-  innecesariamente con reglas determinísticas capacidades de razonamiento
-  que el modelo ya puede realizar correctamente cuando recibe evidencia
-  suficiente y confiable.
+  Auditar el mecanismo mínimo, seguro y compatible con la arquitectura vigente
+  para que Director IA mantenga continuidad conversacional entre turnos:
+  tema activo, intent padre, planta, periodo, entidades, evidencia/packs relevantes,
+  preguntas pendientes y referencias elípticas, sin mandar indiscriminadamente
+  todo el historial crudo al modelo, sin mezclar plantas/periodos y sin reutilizar
+  evidencia obsoleta como si siguiera vigente.
 
 baseline:
-  functional_coverage: "10.5 / 20 = 52.5%"
+  global: "10.5 / 20 = 52.5%"
+  percentage_effect: "0.0 pp"
+
+  prior_audit:
+    task: "AUDIT-DIRECTOR-IA-CONVERSATIONAL-INTELLIGENCE-001"
+    finding: >
+      24 de 26 turnos de las cinco conversaciones maestras caen en unknown;
+      el frontend envía history, pero OpenAI recibe solo el mensaje actual.
+      El planner reclasifica cada frase desde cero y los packs no se reutilizan.
+
+central_problem: >
+  Director IA conoce más datos, pero no conserva el hilo de la conversación.
+  Preguntas como “¿Y Arturo?”, “¿Tiene acción?”, “¿Qué falta saber?” se tratan
+  como preguntas aisladas y pierden el contexto del turno anterior.
+
+primary_question: >
+  ¿Qué estado conversacional mínimo debe conservarse y reutilizarse para que
+  Director IA mantenga el hilo de una conversación natural sin sacrificar
+  veracidad, authz, freshness, provenance ni control de contexto?
+
+anti_solution:
+  forbidden_shortcut: >
+    No asumir que basta concatenar todo history y mandarlo a OpenAI.
+
+  risks_to_audit:
+    - "crecimiento descontrolado de tokens"
+    - "instrucciones antiguas/contradictorias"
+    - "contaminación entre plantas"
+    - "contaminación entre periodos"
+    - "reuso de evidencia obsoleta"
+    - "entidades ambiguas heredadas"
+    - "scope/authz antiguo reutilizado"
+    - "prompt injection desde mensajes previos"
+    - "confundir conversación con evidencia"
+
+mandatory_runtime_audit:
+
+  frontend:
+    inspect:
+      - "cómo se construye history"
+      - "shape de history"
+      - "cuántos turnos se envían"
+      - "qué metadata acompaña"
+      - "si se recorta"
+      - "si existen ids de conversación"
+
+  api_chat:
+    inspect:
+      - "qué recibe POST /chat"
+      - "qué campos de history llegan"
+      - "dónde se descartan"
+      - "qué llega a askDirectorIa"
+
+  askDirectorIa:
+    inspect:
+      - "routing"
+      - "planner invocation"
+      - "focused early returns"
+      - "OpenAI messages"
+      - "context_meta"
+      - "plant/period/entity handling"
+
+  planner:
+    inspect:
+      - "si acepta contexto previo"
+      - "si puede resolver follow-up"
+      - "unknown behavior"
+      - "clarification behavior"
+      - "entity references"
+      - "intent inheritance"
+
+  openai_call:
+    inspect:
+      - "messages actuales"
+      - "system prompt"
+      - "current user message"
+      - "context injection"
+      - "history omission"
+
+conversation_state_hypothesis:
+  audit_not_assume: true
+
+  candidate_fields:
+    - "active_topic"
+    - "parent_intent"
+    - "planta_id"
+    - "period"
+    - "period_a"
+    - "period_b"
+    - "active_entities"
+    - "active_cliente_key"
+    - "active_folio_id"
+    - "active_action_id"
+    - "active_revision_id"
+    - "last_evidence_bundle_type"
+    - "last_evidence_refs"
+    - "last_known_limitations"
+    - "pending_information_gap"
+    - "pending_question"
+    - "turn_id"
+    - "timestamp"
+
   rule: >
-    52.5% mide cobertura funcional de la matriz. No representa porcentaje
-    de inteligencia, calidad conversacional ni mejora respecto al Director
-    IA legado.
+    Determinar qué campos son realmente necesarios. No crear estado
+    conversacional sobredimensionado.
 
-audit_questions:
+continuity_types:
+  audit:
 
-  legacy_vs_current:
-    - >
-      Identificar qué razonamientos ya podía realizar OpenAI con el contexto
-      legado antes de los slices recientes.
-    - >
-      Identificar qué capacidades actuales son realmente nuevas por acceso,
-      adquisición, autorización, joins, provenance o nuevas fuentes.
-    - >
-      Identificar qué lógica reciente únicamente vuelve determinístico,
-      reproducible o verificable algo que OpenAI ya podía razonar.
-    - >
-      Detectar si alguna restricción actual reduce innecesariamente capacidad
-      conversacional o analítica que existía antes.
+    intent_continuation:
+      examples:
+        - "¿Qué te llama la atención?"
+        - "¿Por qué?"
+        - "¿Qué falta saber?"
+      question: >
+        ¿Debe heredar el intent padre cuando la frase aislada no es clasificable?
 
-  deterministic_vs_llm:
-    classify_current_behavior_into:
-      deterministic_should_own:
-        - "adquisición de datos"
-        - "authz"
-        - "identidad y joins"
-        - "unidades"
-        - "periodos"
-        - "cálculos exactos cuando sean requeridos"
-        - "provenance"
-        - "absence/error/restricted semantics"
+    entity_continuation:
+      examples:
+        - "¿Y Arturo?"
+        - "¿Qué sabemos de él?"
+        - "¿Tiene acción?"
+      question: >
+        ¿Cómo se hereda la entidad sin fuzzy match ni selección silenciosa?
 
-      llm_should_be_evaluated_for:
-        - "síntesis"
-        - "relación entre evidencias"
-        - "explicación"
-        - "formulación de hipótesis claramente etiquetadas"
-        - "preguntas de seguimiento"
-        - "identificación de información faltante"
-        - "conversación natural"
+    plant_continuation:
+      examples:
+        - "¿Cómo va Puebla?"
+        - "¿Y ventas?"
+      question: >
+        ¿Cuándo puede heredarse planta_id y cuándo debe clarificarse?
 
-    audit_rule: >
-      No asumir que toda lógica debe moverse al LLM ni que toda lógica debe
-      codificarse. Determinar la frontera mínima que preserve verdad y
-      aproveche el razonamiento del modelo.
+    period_continuation:
+      examples:
+        - "¿Y ayer?"
+        - "¿Comparado contra qué?"
+      question: >
+        ¿Cuándo heredar periodo y cuándo una expresión temporal cambia el scope?
 
-  insufficient_information:
-    required_behavior: >
-      Cuando Director IA no pueda contestar con fundamento, auditar si puede
-      avanzar desde "no tengo información suficiente" hacia una descripción
-      concreta de la brecha.
+    evidence_continuation:
+      examples:
+        - "¿Por qué?"
+        - "¿Y qué dice la acción?"
+      question: >
+        ¿Se reutiliza evidencia anterior, se vuelve a consultar o se rehidrata
+        bajo freshness/authz?
 
-    desired_structure:
-      - "qué sí sabe"
-      - "qué no sabe"
-      - "qué información específica falta"
-      - "por qué esa información es necesaria"
-      - "qué fuente podría contenerla, si existe evidencia física"
-      - "qué persona podría aportarla solo si existe vínculo físico"
-      - "qué análisis o decisión podría continuar una vez obtenida"
+    topic_switch:
+      examples:
+        - "Ahora dime Querétaro"
+        - "Cambiando de tema, ¿cómo va el presupuesto?"
+      question: >
+        ¿Cómo se invalida el estado anterior de forma explícita?
 
-    prohibitions:
-      - "inventar causa"
-      - "inventar responsable"
-      - "inventar fuente"
-      - "confundir comentario con hecho"
-      - "confundir ausencia con cero"
-      - "confundir SOURCE_RESTRICTED con DATA_NOT_FOUND"
+inheritance_rules_to_determine:
 
-  conversation_continuity:
-    audit:
-      - "seguimiento de entidad entre turnos"
-      - "seguimiento de planta"
-      - "seguimiento de periodo"
-      - "seguimiento del problema discutido"
-      - "pronombres/referencias como 'él', 'ese cliente', 'esa acción'"
-      - "preguntas elípticas como '¿y Arturo?'"
-      - "preguntas como '¿y tiene acción?'"
-      - "preguntas como '¿qué falta saber?'"
-      - "cambio de tema"
-      - "capacidad de volver al tema anterior"
+  must_not_inherit_blindly:
+    - "planta"
+    - "periodo"
+    - "entidad"
+    - "evidence payload"
+    - "authz result"
+    - "source availability"
 
-    rule: >
-      Determinar físicamente qué continuidad existe hoy. No asumir memoria
-      conversacional si el runtime no la implementa.
+  safe_inheritance_candidate:
+    - "topic label"
+    - "parent intent"
+    - "entity identity if uniquely resolved and still in scope"
+    - "pending question"
+    - "last selected plant if explicitly established"
+
+  rule: >
+    La readiness debe definir qué hereda, bajo qué condición, cuánto dura y
+    qué obliga a revalidar.
+
+evidence_reuse:
+
+  primary_question: >
+    ¿Debe reutilizarse el pack anterior o reconstruirse en cada follow-up?
+
+  audit:
+    - "coste de loaders"
+    - "freshness"
+    - "side effects"
+    - "authz"
+    - "source volatility"
+    - "planta/periodo"
+    - "payload size"
+    - "provenance"
+
+  candidate_strategies:
+    a_requery_every_turn:
+      pros:
+        - "freshness"
+        - "authz rechecked"
+      cons:
+        - "coste"
+        - "latencia"
+
+    b_reuse_raw_bundle:
+      risks:
+        - "stale evidence"
+        - "scope leak"
+
+    c_reuse_references_and_rehydrate:
+      hypothesis: >
+        Conservar ids/contexto y volver a cargar solo lo necesario.
+
+  requirement: >
+    Seleccionar estrategia mínima defendible. No asumir cache conversacional.
+
+history_policy:
+
+  audit:
+    - "raw history usefulness"
+    - "turn limit"
+    - "token budget"
+    - "summarization"
+    - "role preservation"
+    - "sensitive data"
+    - "system/user separation"
+
+  desired_outcome: >
+    Determinar si OpenAI debe recibir:
+    a) history filtrado,
+    b) estado conversacional estructurado,
+    c) ambos,
+    d) ninguno y resolver todo deterministicamente.
+
+  rule: >
+    Priorizar conversación natural sin permitir que history reemplace
+    provenance/evidence.
+
+information_gap_continuity:
+
+  required_case:
+    turns:
+      - "¿Por qué dejó de comprar Arturo?"
+      - "No hay evidencia suficiente."
+      - "¿Qué te falta?"
+      - "¿Quién puede darnos eso?"
+      - "¿Para qué lo necesitas?"
+
+  audit:
+    - "cómo mantener pending_information_gap"
+    - "cómo responder 'qué falta' sin recalcular desde cero"
+    - "cómo nombrar persona solo si existe vínculo físico"
+    - "cómo conservar por qué ese dato desbloquea el análisis"
 
 master_conversations:
 
   conversation_1:
-    purpose: "diagnóstico comercial natural"
     turns:
       - "¿Cómo va Puebla?"
-      - "¿Qué es lo que más te llama la atención?"
+      - "¿Qué te llama la atención?"
       - "¿Por qué?"
       - "¿Y Arturo?"
       - "¿Qué sabemos de él?"
@@ -142,7 +288,6 @@ master_conversations:
       - "¿Qué falta saber?"
 
   conversation_2:
-    purpose: "información insuficiente"
     turns:
       - "¿Por qué dejó de comprar Arturo?"
       - "¿Estás seguro?"
@@ -151,114 +296,158 @@ master_conversations:
       - "¿Para qué la necesitas?"
 
   conversation_3:
-    purpose: "desviación diaria futura"
     turns:
-      - "¿Por qué bajó la venta ayer?"
-      - "¿Contra qué la estás comparando?"
-      - "¿Qué clientes explican la diferencia?"
-      - "¿Sabemos por qué compraron menos?"
-      - "¿Qué falta investigar?"
-
-    audit_rule: >
-      No exigir que hoy pueda resolver esta conversación si las fuentes o
-      granularidad no existen. Determinar exactamente dónde se rompe y qué
-      capacidad falta.
+      - "¿Cómo va Puebla?"
+      - "Ahora Querétaro."
+      - "¿Y Arturo?"
+    required_finding: >
+      Determinar si Arturo debe considerarse en Querétaro o si la entidad previa
+      debe invalidarse/clarificarse.
 
   conversation_4:
-    purpose: "descuento diario futuro"
     turns:
-      - "¿Por qué subió el descuento por kg ayer?"
-      - "¿Fue general o fueron algunos clientes?"
-      - "¿Quién movió más el promedio?"
-      - "¿Tenemos explicación?"
-      - "¿Qué información falta?"
-
-    audit_rule: >
-      Distinguir capacidad matemática, evidencia disponible y causalidad.
-      No diseñar todavía el motor.
+      - "¿Cómo va el presupuesto esta semana?"
+      - "¿Y la anterior?"
+      - "Volvamos a Puebla."
+    required_finding: >
+      Auditar herencia de periodo, topic switch y recuperación de tema.
 
   conversation_5:
-    purpose: "acción y seguimiento"
     turns:
-      - "¿Qué pasó con la acción de Julio Pérez?"
-      - "¿Está vencida?"
-      - "¿Por qué no se ha cerrado?"
-      - "¿Sabemos el motivo?"
-      - "Si no, ¿qué necesitas?"
+      - "¿Cómo va Puebla?"
+      - "¿Qué falta saber?"
+      - "Cambiando de tema, ¿qué tiene Taller AT-15?"
+      - "Volviendo a lo anterior, ¿quién debe responder?"
+    required_finding: >
+      Determinar si soportar regreso a tema anterior requiere stack de temas o
+      si debe quedar fuera del first slice.
 
-required_findings:
+security_and_truth:
 
-  produce:
-    - "capacidades que ya existían en el Director IA legado/OpenAI"
-    - "capacidades nuevas reales construidas por la arquitectura"
-    - "capacidades antiguas que pudieran haberse restringido"
-    - "razonamientos posiblemente sobreprogramados"
-    - "gaps reales de datos"
-    - "gaps reales de conversación"
-    - "gaps reales de razonamiento"
-    - "gaps de información insuficiente/evidence-gap handling"
-    - "gaps de seguimiento multi-turn"
-    - "qué NO debemos construir porque el LLM ya puede hacerlo"
-    - "qué SÍ debe seguir siendo determinístico"
-    - "qué evidencia debe entregarse al LLM para aprovecharlo mejor"
+  required:
+    - "history != evidence"
+    - "assistant prior claim != fact"
+    - "user prior claim != database fact"
+    - "authz revalidated"
+    - "plant scope revalidated"
+    - "entity identity revalidated when needed"
+    - "source freshness preserved"
+    - "prompt injection from history mitigated"
+    - "no data from previous unauthorized plant"
 
-required_classification:
+  crucial_rule: >
+    Un mensaje anterior puede proporcionar contexto conversacional, pero no
+    debe convertirse automáticamente en evidencia factual.
 
-  for_each_relevant_capability:
-    classify_as_one_of:
-      - "ALREADY_EXISTED"
-      - "NEW_DATA_CAPABILITY"
-      - "NEW_TRUST_CAPABILITY"
-      - "NEW_REASONING_CAPABILITY"
-      - "DETERMINIZED_EXISTING_REASONING"
-      - "CURRENTLY_MISSING"
-      - "POTENTIALLY_REGRESSED"
-      - "UNKNOWN_REQUIRES_RUNTIME_TEST"
+first_slice_candidates:
+
+  candidate_a:
+    name: "parent_intent_plus_entity_continuity"
+    includes:
+      - "parent intent"
+      - "planta"
+      - "single active entity"
+      - "follow-up routing"
+
+  candidate_b:
+    name: "filtered_history_to_llm"
+    includes:
+      - "últimos N turnos"
+      - "sin estado estructurado"
+
+  candidate_c:
+    name: "structured_conversation_state"
+    includes:
+      - "topic"
+      - "intent"
+      - "plant"
+      - "period"
+      - "entities"
+      - "pending gap"
+
+  candidate_d:
+    name: "conversation_state_plus_selective_history"
+    includes:
+      - "structured state"
+      - "small filtered turn window"
+
+  requirement:
+    - "comparar al menos A/B/C/D"
+    - "seleccionar exactamente un first slice"
+    - "justificar por conversación natural + seguridad + simplicidad"
+    - "no elegir por facilidad sola"
+
+contract_audit:
+  inspect:
+    - "Constitution"
+    - "04-IES-STANDARD.md"
+    - "05-REASONING-ENGINE.md"
+    - "EKE"
+    - "chat legacy contracts"
+
+  determine:
+    - "si conversational state requiere G2"
+    - "si requiere G3"
+    - "si es runtime-only"
+    - "si history afecta boundaries"
 
   rule: >
-    No inflar avances. Si OpenAI ya podía hacerlo con el contexto anterior,
-    clasificarlo como ALREADY_EXISTED o DETERMINIZED_EXISTING_REASONING según
-    corresponda.
+    No modificar contratos en readiness.
 
-architecture_review:
+tests_to_design_if_ready:
+  - "¿Cómo va Puebla? -> follow-up ¿Por qué?"
+  - "¿Y Arturo?"
+  - "¿Qué sabemos de él?"
+  - "¿Tiene acción?"
+  - "¿Qué falta saber?"
+  - "pronoun resolution"
+  - "entity ambiguity -> clarify"
+  - "plant switch"
+  - "period switch"
+  - "topic switch"
+  - "no cross-plant leakage"
+  - "history is not evidence"
+  - "prior assistant claim not fact"
+  - "authz revalidated"
+  - "SOURCE_RESTRICTED preserved"
+  - "partial failure preserved"
+  - "token limit"
+  - "conversation reset"
+  - "legacy standalone queries preserved"
+  - "financial_diagnosis preserved"
+  - "plant_diagnosis preserved"
 
-  inspect_read_only:
-    - "lib/director-ia-chat.js"
-    - "lib/director-ia-context.js"
-    - "lib/director-ia-planner.js"
-    - "lib/director-ia-tool-orchestrator.js"
-    - "lib/director-ia-plant-diagnosis.js"
-    - "lib/director-ia-commercial-dossier.js if present"
-    - "relevant Director IA loaders"
-    - "relevant tests"
-    - "system prompts used by chat"
-    - "docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md"
-    - "docs/director-ia/DIRECTOR_IA_EXECUTIVE_KNOWLEDGE_ENGINE.md"
-    - "docs/director-ia/DIRECTOR_IA_CONSTITUTION.md if present"
-    - "docs/director-ia/04-IES-STANDARD.md"
-    - "docs/director-ia/05-REASONING-ENGINE.md"
-
-  rule: >
-    04/05 y contratos son READ-ONLY. La auditoría puede señalar tensiones,
-    pero no modificarlas.
-
-important_non_goal: >
-  No diseñar todavía la solución. Primero determinar con evidencia qué
-  funciona, qué ya existía, qué falta y dónde se encuentra realmente el
-  cuello de botella.
+readiness_output:
+  must_determine:
+    - "READY / READY_WITH_LIMITS / NOT_READY"
+    - "exact first slice"
+    - "state fields"
+    - "inheritance rules"
+    - "revalidation rules"
+    - "history policy"
+    - "evidence reuse strategy"
+    - "topic switch behavior"
+    - "entity switch behavior"
+    - "information-gap continuity"
+    - "security boundaries"
+    - "G2"
+    - "G3"
+    - "percentage effect"
+    - "deferred capabilities"
 
 percentage_policy:
   before: "10.5 / 20 = 52.5%"
-  after: "10.5 / 20 = 52.5%"
-  delta: "0.0 pp"
+  after_readiness: "10.5 / 20 = 52.5%"
+  expected_impl_effect: "0.0 pp"
+  rule: "Conversational continuity is not module coverage."
 
 in_scope:
   writable:
     - "docs/dev-loop/CURRENT_TASK.md"
-    - "docs/dev-loop/reports/AUDIT-DIRECTOR-IA-CONVERSATIONAL-INTELLIGENCE-001.md"
+    - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-CONVERSATIONAL-CONTINUITY-READINESS-001.md"
 
   read_only:
-    - "repository except the two writable files"
+    - "entire repository except writable files"
 
 out_of_scope:
   - "implementation"
@@ -266,44 +455,46 @@ out_of_scope:
   - "test changes"
   - "matrix changes"
   - "contract changes"
-  - "new architecture"
-  - "schema changes"
-  - "new prompts"
-  - "new intents"
-  - "new tools"
+  - "new DB tables"
+  - "persistent long-term memory"
+  - "cross-session memory"
   - "writes"
   - "commit"
   - "push"
   - "merge"
 
 acceptance_criteria:
-  - "Objetivo original evaluado explícitamente."
-  - "Legacy vs current separado."
-  - "No atribuir al proyecto capacidades nativas de OpenAI."
-  - "Frontera determinístico/LLM auditada."
-  - "Información insuficiente auditada."
-  - "Continuidad multi-turn auditada físicamente."
-  - "Las cinco conversaciones maestras evaluadas."
-  - "Gaps localizados en código/fuente/runtime cuando sea posible."
-  - "Posibles regresiones identificadas."
-  - "Sobreprogramación identificada."
-  - "No se diseña solución prematuramente."
-  - "52.5% preservado."
-  - "git diff --check limpio."
-  - "solo dos archivos autorizados cambian."
+  - "24/26 failure cause traced physically."
+  - "Frontend history path audited."
+  - "History discard point identified."
+  - "Planner follow-up behavior audited."
+  - "Minimum conversational state determined."
+  - "Inheritance rules determined."
+  - "Authz/freshness revalidation determined."
+  - "History != evidence preserved."
+  - "Information-gap continuity audited."
+  - "Master conversations evaluated."
+  - "A/B/C/D first slices compared."
+  - "Exactly one first slice selected."
+  - "G2/G3 determined."
+  - "52.5% preserved."
+  - "No implementation."
+  - "Only CURRENT_TASK and report changed."
+  - "git diff --check clean."
 
-next_task:
-  propose_based_on_findings: true
-  authorize: false
-  execute: false
-  rule: >
-    Proponer exactamente UNA siguiente tarea basada en el cuello de botella
-    demostrado por la auditoría. No asumir explanation_of_deviations,
-    evidence_gap_closure ni otro módulo antes de auditar.
+next_task_policy:
+  if_ready:
+    propose_exactly_one: "IMPL-DIRECTOR-IA-CONVERSATIONAL-CONTINUITY-001"
+  if_not_ready:
+    propose_exactly_one: "ARCH-DIRECTOR-IA-CONVERSATIONAL-CONTINUITY-GAP-001"
+  rule: "Do not authorize or execute."
 
-expected_terminal_state: "DONE_PENDING_REVIEW"
+expected_terminal_state: >
+  DONE_PENDING_REVIEW if READY/READY_WITH_LIMITS with one implementable slice.
+  STOPPED if contract/architecture decision is required first.
+  BLOCKED if a gate is missing.
 
 max_attempts: 1
 
 result_report_path: >
-  docs/dev-loop/reports/AUDIT-DIRECTOR-IA-CONVERSATIONAL-INTELLIGENCE-001.md
+  docs/dev-loop/reports/ARCH-DIRECTOR-IA-CONVERSATIONAL-CONTINUITY-READINESS-001.md
