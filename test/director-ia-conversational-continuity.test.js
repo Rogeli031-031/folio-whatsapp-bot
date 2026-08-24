@@ -215,7 +215,8 @@ describe("structured_conversation_state (puro)", () => {
 describe("planner continuity hooks", () => {
   it("standalone Puebla y financial se preservan", () => {
     assert.equal(planDirectorIaQuestion("¿Cómo va Puebla?").intent, "plant_diagnosis");
-    assert.equal(planDirectorIaQuestion("¿Por qué bajó la venta ayer?").intent, "financial_diagnosis");
+    assert.equal(planDirectorIaQuestion("¿Por qué bajó la venta ayer?").intent, "daily_sales_deviation");
+    assert.equal(planDirectorIaQuestion("por qué cayó el ingreso").intent, "financial_diagnosis");
     assert.equal(planDirectorIaQuestion("¿Cómo va el presupuesto esta semana?").intent, "budget_status");
   });
 
@@ -237,7 +238,7 @@ describe("planner continuity hooks", () => {
     const plan = planDirectorIaQuestion("¿Por qué bajó la venta ayer?", {
       inheritParentIntent: "plant_diagnosis",
     });
-    assert.equal(plan.intent, "financial_diagnosis");
+    assert.equal(plan.intent, "daily_sales_deviation");
   });
 });
 
@@ -256,6 +257,7 @@ describe("askDirectorIa continuity", () => {
       openaiChat: undefined,
       loadPlantDiagnosisForChat: undefined,
       loadFinancialDiagnosisForChat: undefined,
+      loadDailySalesDeviationForChat: undefined,
       resolveConversationCandidates: undefined,
       persistentMemoryStore: null,
     });
@@ -503,7 +505,7 @@ describe("askDirectorIa continuity", () => {
         throw new Error("plant_diagnosis no debe correr");
       },
     });
-    const result = await runTurn("¿Por qué bajó la venta ayer?");
+    const result = await runTurn("por qué cayó el ingreso");
     assert.equal(result.context_meta.mode, "financial_diagnosis");
     assert.equal(plantCalled, false);
   });
