@@ -1,15 +1,14 @@
 # CURRENT_TASK
 
 ```yaml
-task_id: "DOCS-DIRECTOR-IA-PLANT-DIAGNOSIS-EVIDENCE-ASSEMBLY-SYNC-001"
+task_id: "ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-010"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-08-23"
 human_authorization: >
   AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-23.
-  Apruebo DOCS-DIRECTOR-IA-PLANT-DIAGNOSIS-EVIDENCE-ASSEMBLY-SYNC-001
-  y autorizo G1.
+  Apruebo ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-010 y autorizo G1.
 
 gates:
   G1_task_authorization: AUTHORIZED
@@ -18,187 +17,360 @@ gates:
   G8_calibration_materiality_signature: N/A
 
 objective: >
-  Sincronizar la documentación de Director IA con el ensamblaje multi-fuente
-  ya integrado para plant_diagnosis en el chat legado, documentando que una
-  sola corrida reúne Action Register, DICF, bitácora, ARR, IGF y
-  commercial_state con provenance separada, restricciones parciales por fuente,
-  periodos visibles, partial failures explícitos y una sola llamada OpenAI,
-  sin modificar estados de módulos ni 10.5/20 = 52.5%.
+  Priorizar el siguiente frente global de Director IA desde el baseline 52.5%,
+  comparando módulos no COMPLETE, profundizaciones materiales, gaps transversales
+  y específicamente la capacidad de transformar evidencia ya ensamblada en
+  priorización ejecutiva y recomendaciones accionables, sin inventar causalidad
+  ni reabrir contratos salvo evidencia de necesidad.
 
 baseline:
-  implementation_task: "IMPL-DIRECTOR-IA-PLANT-DIAGNOSIS-EVIDENCE-ASSEMBLY-001"
-  implementation_report: >
-    docs/dev-loop/reports/IMPL-DIRECTOR-IA-PLANT-DIAGNOSIS-EVIDENCE-ASSEMBLY-001.md
+  numerator: 10.5
+  denominator: 20
+  percentage: 52.5
 
-  transversal_capability: "plant_diagnosis evidence assembly"
+  recent_capabilities:
+    - "M5 Taller por AT"
+    - "M7 composición IGF"
+    - "M11 expediente comercial"
+    - "M12 revision notes"
+    - "M18 presupuesto semanal"
+    - "financial_diagnosis multi-source"
+    - "plant_diagnosis multi-source"
 
-  global_before:
-    numerator: 10.5
-    denominator: 20
-    percentage: 52.5
+  rule: >
+    Esta tarea no cambia estados ni porcentaje.
 
-  global_after:
-    numerator: 10.5
-    denominator: 20
-    percentage: 52.5
+primary_question: >
+  ¿Cuál es ahora el mayor cuello de botella de Director IA:
+  falta de cobertura, falta de evidencia, falta de conexión entre fuentes o
+  falta de capacidad para convertir evidencia ya reunida en prioridades y
+  recomendaciones ejecutivas accionables?
 
-  gain_pp: 0.0
+special_candidate:
+  name: "executive_prioritization_and_recommendation"
 
-implemented_path: >
-  plant_diagnosis
-  -> Action Register + DICF + bitácora + ARR + IGF + commercial_state
-  -> assemblePlantDiagnosisEvidence
-  -> provenance separada
-  -> contexto multi-source
-  -> una llamada OpenAI
-  -> respuesta
+  audit_not_assume: true
 
-must_document:
+  motivating_gap: >
+    plant_diagnosis ya puede reunir seis fuentes, pero una respuesta que solo
+    enumera acciones, clientes, KPI y riesgos sigue siendo vaga. Falta determinar
+    si Director IA puede identificar materialidad, concentración, excepciones,
+    cobertura de acción y recomendar qué revisar primero.
 
-  source_pack:
-    included:
-      - "action_register"
-      - "dicf"
-      - "bitacora"
-      - "arr"
-      - "igf"
-      - "commercial_state"
+  target_behavior_examples:
+    - "Estas son las 3 cosas que debes revisar primero."
+    - "Este cliente concentra la mayor pérdida y no tiene acción."
+    - "Esta acción está vencida y corresponde al segundo mayor impacto observable."
+    - "Esta evidencia justifica investigar primero este frente."
+    - "No puedo afirmar la causa; sí puedo recomendar dónde revisar primero."
 
-    excluded:
-      - "M9"
+  forbidden_assumption: >
+    No asumir que esta capacidad ya está permitida ni que requiere contrato nuevo.
+    Auditar físicamente Constitución, IES, Reasoning Engine, planner, chat y runtime.
 
-  openai:
-    - "una sola llamada final"
-    - "no una llamada por fuente"
+priority_model:
 
-  commercial_state:
-    - "SELECT-only sobre arr.dicf_cliente_mes"
-    - "no loadCommercialStateForChat si ejecuta computeDicf"
-    - "no computeDicf"
-    - "no cache writes"
+  executive_value:
+    weight: "CRITICAL"
 
-  provenance:
-    sections:
-      - "action_register"
-      - "dicf"
-      - "bitacora"
-      - "arr"
-      - "igf"
-      - "commercial_state"
+  actionability:
+    weight: "CRITICAL"
 
-    each_preserves:
-      - "status"
-      - "plant"
-      - "period/window"
-      - "payload"
-      - "source/evidence"
-      - "absence/error"
+  materiality_value:
+    weight: "CRITICAL"
+    evaluate:
+      - "magnitud"
+      - "concentración"
+      - "desviación observable"
+      - "urgencia físicamente soportada"
+      - "cobertura de acción"
+      - "acciones vencidas"
+      - "ausencia de seguimiento"
+      - "impacto económico observable"
 
-  plant_scope:
-    - "planta_id común"
-    - "cross-planta bloqueado"
-    - "una fuente no amplía scope"
+  reasoning_value:
+    weight: "CRITICAL"
 
-  period_semantics:
-    - "cada fuente conserva su corte real"
-    - "period mismatch visible"
-    - "sin alineación silenciosa"
+  evidence_connectivity:
+    weight: "CRITICAL"
 
-  authz:
-    - "authz propia por fuente"
-    - "intersección restrictiva"
-    - "GA conserva AR/DICF/bitácora"
-    - "GA marca IGF/ARR/commercial_state como SOURCE_RESTRICTED cuando aplica"
-    - "SOURCE_RESTRICTED no aborta todo el pack"
-    - "unauthorized != missing"
-    - "fail-closed"
+  new_domain_value:
+    weight: "VERY_HIGH"
 
-  partial_failure:
-    - "assembly_status explícito"
-    - "fuentes OK se conservan"
-    - "restricciones/missing/error visibles"
-    - "diagnóstico parcial no se presenta como completo"
+  incremental_value:
+    weight: "VERY_HIGH"
 
-  absence_error:
-    distinguish:
-      - "null"
-      - "0"
-      - "DATA_NOT_FOUND"
-      - "ABSENCE_CONFIRMED si aplica"
-      - "SOURCE_RESTRICTED"
-      - "SOURCE_*"
-      - "TOOL_ERROR"
-      - "unauthorized"
+  frequency:
+    weight: "HIGH"
+
+  source_readiness:
+    weight: "MEDIUM"
+
+  implementation_cost:
+    weight: "MEDIUM"
+
+  risk:
+    weight: "MEDIUM"
+    penalize:
+      - "causalidad inventada"
+      - "score arbitrario"
+      - "writes"
+      - "Excel"
+      - "S3"
+      - "Twilio"
+      - "external dependencies"
+      - "contract reopening"
+      - "duplicación"
+
+  percentage_effect:
+    weight: "LOW"
+
+mandatory_rechecks:
+  - "M1"
+  - "M2 restante"
+  - "M4 restante"
+  - "M5 restante"
+  - "M6 restante"
+  - "M7 restante"
+  - "M8"
+  - "M10"
+  - "M11 restante"
+  - "M12 restante"
+  - "M14"
+  - "M15"
+  - "M17"
+  - "M18 restante"
+  - "M20"
+  - "executive_prioritization_and_recommendation"
+  - "cualquier otro gap transversal físico"
+
+executive_prioritization_audit:
+
+  contracts:
+    inspect:
+      - "CONSTITUTION"
+      - "04-IES-STANDARD.md"
+      - "05-REASONING-ENGINE.md"
+      - "EXECUTIVE_KNOWLEDGE_ENGINE"
+      - "planner contracts"
+
+    determine:
+      - "si Recommendation ya existe contractualmente"
+      - "si Recommendation exige evidence anchors"
+      - "si materiality/prioritization ya está permitida"
+      - "si hypothesis vs recommendation está separada"
+      - "si hace falta G2/G3"
+
+  runtime:
+    inspect:
+      - "plant_diagnosis assembled evidence"
+      - "financial_diagnosis assembled evidence"
+      - "chat prompts"
+      - "reasoning instructions"
+      - "response formatting"
+      - "source provenance"
+
+    determine:
+      - "si el modelo hoy recibe datos suficientes para priorizar"
+      - "si falta un ranking/materiality step"
+      - "si falta una estructura de recommendation"
+      - "si el problema es prompt/wiring o contrato"
+
+  materiality:
+    determine:
+      - "qué magnitudes comparables existen"
+      - "qué concentración puede calcularse"
+      - "qué impacto económico existe"
+      - "qué vencimiento existe"
+      - "qué ausencia de acción puede observarse"
+      - "qué campos NO son comparables"
 
     rules:
-      - "null != 0"
-      - "absence != 0"
-      - "error != absence"
-      - "SOURCE_RESTRICTED != missing"
+      - "no crear score arbitrario"
+      - "no mezclar unidades incompatibles"
+      - "no convertir magnitud en causalidad"
+      - "prioridad debe explicarse con evidencia"
 
-  semantics:
-    allowed:
-      - "riesgos observables"
-      - "acciones registradas"
-      - "responsables registrados"
-      - "coincidencias"
-      - "tensiones"
-      - "limitaciones"
+  recommendation:
+    determine:
+      - "qué tipo de acciones puede recomendar sin write"
+      - "revisar"
+      - "validar"
+      - "contactar"
+      - "pedir resultado"
+      - "asignar seguimiento"
+      - "escalar para revisión"
 
-    forbidden:
-      - "correlación = causalidad"
-      - "AR causó IGF"
-      - "comentario DICF prueba causa"
-      - "KPI identifica responsable"
+    rule: >
+      Recomendación ejecutiva no equivale a acción automática. Debe conservar
+      control humano y evidencia de por qué se sugiere.
 
-  boundaries:
-    - "financial_diagnosis preservado"
-    - "M9 fuera"
-    - "sin IES runtime"
-    - "sin Reasoning Engine runtime"
-    - "sin cambios 04-IES-STANDARD.md"
-    - "sin cambios 05-REASONING-ENGINE.md"
-    - "sin contrato nuevo"
-    - "sin HTTP interno"
-    - "sin writes"
+  ranking_shape:
+    candidate_hypothesis:
+      - "priority"
+      - "finding"
+      - "materiality_basis"
+      - "evidence_refs"
+      - "recommended_next_step"
+      - "uncertainty"
+      - "limitations"
 
-test_evidence:
-  focal: "21 pass"
-  director_ia_suite: "715 pass"
-  capabilities: "pass"
-  planner: "pass"
-  orchestrator: "pass"
-  git_diff_check: "clean"
+    rule: >
+      Esta forma es hipótesis de runtime, no contrato nuevo. Verificar si puede
+      mapearse a Recommendation vigente.
 
-state_policy:
-  - "ningún módulo cambia de estado"
-  - "no sumar 0.5"
-  - "10.5/20 = 52.5% permanece"
+  causal_boundary:
+    - "priorizar != probar causa"
+    - "materialidad != causalidad"
+    - "correlación != explicación causal"
+    - "recomendación de investigar != afirmar motivo"
+
+  actionability_boundary:
+    - "sugerir siguiente paso != ejecutar write"
+    - "no crear/editar acciones"
+    - "no enviar mensajes"
+    - "no asignar responsables automáticamente"
+
+M10_recheck:
+  required:
+    - "definición canónica"
+    - "weekly discount read-only"
+    - "fuente real"
+    - "qué duplica ARR/M9"
+    - "qué aporta intra-mes"
+    - "qué depende de Twilio"
+    - "preguntas nuevas"
+    - "actionability"
+    - "state after slice"
+    - "percentage effect"
+
+other_transversal_review:
+  required:
+    - "buscar otros gaps físicos concretos"
+    - "no repetir financial/plant diagnosis por inercia"
+    - "no crear una capa abstracta sin evidencia"
+
+mandatory_question_map:
+  for_each_candidate:
+    - "qué pregunta nueva responde"
+    - "qué decisión mejora"
+    - "qué acción sugiere"
+    - "qué materialidad usa"
+    - "qué evidencia soporta la prioridad"
+    - "qué no puede afirmar"
+    - "qué ya está cubierto"
+    - "qué duplica"
+
+physical_audit:
+  for_each_candidate:
+    - "sources"
+    - "helpers"
+    - "planner/tool/runtime"
+    - "context"
+    - "authz"
+    - "physical keys"
+    - "units"
+    - "side effects"
+    - "contract impact"
+    - "semantic risk"
+    - "first useful slice"
+    - "state after slice"
+    - "percentage effect"
+
+mandatory_table:
+  columns:
+    - "rank"
+    - "candidate"
+    - "type"
+    - "current_state"
+    - "new_questions"
+    - "executive_value"
+    - "actionability"
+    - "materiality_value"
+    - "reasoning_value"
+    - "evidence_connectivity"
+    - "new_domain_value"
+    - "source_ready"
+    - "wiring_ready"
+    - "contract_impact"
+    - "risk"
+    - "first_slice"
+    - "state_after_slice"
+    - "percentage_effect"
+    - "decision"
+
+ranking_rules:
+  - "No elegir por porcentaje."
+  - "No elegir por facilidad."
+  - "No elegir M10 por ranking previo."
+  - "No elegir prioritization solo porque surgió en conversación."
+  - "Debe existir gap físico/contractual verificable."
+  - "No usar scores arbitrarios."
+  - "Premiar acción concreta soportada por evidencia."
+  - "Premiar materialidad defendible."
+  - "Penalizar recomendaciones genéricas."
+  - "Penalizar causalidad inferida."
+  - "Preferir read-only e in-process."
+
+winner_requirements:
+  exactly_one: true
+  second_place_exactly_one: true
+
+  must_include:
+    - "ganador"
+    - "tipo"
+    - "segundo lugar"
+    - "preguntas nuevas"
+    - "acción ejecutiva nueva"
+    - "base de materialidad"
+    - "por qué gana"
+    - "por qué pierde segundo"
+    - "first slice"
+    - "state after"
+    - "percentage effect"
+    - "G2/G3"
+    - "risks"
+    - "dependencies"
+
+next_task_policy:
+  if_prioritization_readiness:
+    pattern: "ARCH-DIRECTOR-IA-EXECUTIVE-PRIORITIZATION-READINESS-001"
+
+  if_module_readiness:
+    pattern: "ARCH-DIRECTOR-IA-<MODULE>-<SLICE>-READINESS-001"
+
+  if_other_transversal:
+    pattern: "ARCH-DIRECTOR-IA-<SLICE>-READINESS-001"
+
+  rule: >
+    Proponer exactamente una NEXT_TASK. No autorizar ni ejecutar.
 
 in_scope:
   writable:
     - "docs/dev-loop/CURRENT_TASK.md"
-    - "docs/dev-loop/reports/DOCS-DIRECTOR-IA-PLANT-DIAGNOSIS-EVIDENCE-ASSEMBLY-SYNC-001.md"
-    - "docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md"
+    - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-010.md"
 
   read_only:
     - "AGENTS.md"
     - "docs/dev-loop/**"
     - "docs/director-ia/**"
-    - "lib/director-ia-plant-diagnosis.js"
-    - "lib/director-ia-chat.js"
-    - "test/director-ia-plant-diagnosis.test.js"
+    - "lib/**"
+    - "server.js"
+    - "frontend-dashboard/**"
+    - "test/**"
+    - "scripts/**"
+    - "sql/**"
+    - "package.json"
+    - "package-lock.json"
 
 out_of_scope:
+  - "implementar"
   - "modificar código"
   - "modificar runtime"
-  - "modificar tests"
+  - "modificar matriz"
   - "modificar contratos"
-  - "modificar 04-IES-STANDARD.md"
-  - "modificar 05-REASONING-ENGINE.md"
-  - "implementar IES runtime"
-  - "implementar Reasoning Engine runtime"
-  - "integrar M9"
+  - "reabrir IES/RE"
+  - "crear scoring nuevo"
   - "hacer writes"
   - "hacer commit"
   - "hacer push"
@@ -206,74 +378,59 @@ out_of_scope:
   - "ejecutar NEXT_TASK"
 
 acceptance_criteria:
-  - "Path multi-source de plant_diagnosis documentado."
-  - "Seis fuentes documentadas en una sola corrida."
-  - "M9 documentado como fuera."
-  - "Una llamada OpenAI documentada."
-  - "commercial_state SELECT-only documentado."
-  - "No computeDicf/cache write documentado."
-  - "Provenance de seis fuentes documentada."
-  - "planta_id común documentado."
-  - "Period mismatch documentado."
-  - "GA partial restrictions documentadas."
-  - "SOURCE_RESTRICTED documentado."
-  - "Partial failure / assembly_status documentado."
-  - "No causalidad documentada."
-  - "financial_diagnosis preservado."
-  - "IES/RE sin cambios."
-  - "Ningún módulo cambia."
-  - "10.5/20 = 52.5% permanece."
-  - "Solo tres archivos autorizados cambian."
+  - "Baseline 10.5/20 = 52.5% verificado."
+  - "Todos los candidatos relevantes reevaluados."
+  - "Executive prioritization auditada físicamente."
+  - "Recommendation contractual auditada."
+  - "Materialidad físicamente defendible auditada."
+  - "No se inventó scoring."
+  - "M10 reevaluado desde cero."
+  - "Existe ranking."
+  - "Existe exactamente un ganador."
+  - "Existe exactamente un segundo."
+  - "Existe exactamente una NEXT_TASK."
+  - "No se implementó."
+  - "No se modificó matriz."
+  - "No se modificaron contratos."
+  - "Solo CURRENT_TASK y reporte cambiaron."
   - "git diff --check limpio."
 
-next_task_policy:
-  if_success:
-    propose_exactly_one: "ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-010"
-
-  rule: >
-    Repriorizar globalmente desde 52.5%. No continuar plant_diagnosis por
-    inercia y no asumir M10 por haber quedado segundo.
-
 report_requirements:
-  path: >
-    docs/dev-loop/reports/DOCS-DIRECTOR-IA-PLANT-DIAGNOSIS-EVIDENCE-ASSEMBLY-SYNC-001.md
+  path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-010.md"
 
   must_include:
     - "metadata"
     - "resumen ejecutivo"
     - "baseline"
-    - "runtime path"
-    - "six-source pack"
-    - "commercial_state SELECT-only"
-    - "provenance"
-    - "plant scope"
-    - "period semantics"
-    - "authz"
-    - "GA partial restrictions"
-    - "SOURCE_RESTRICTED"
-    - "partial failure"
-    - "assembly_status"
-    - "OpenAI call count"
-    - "M9 boundary"
-    - "financial_diagnosis preservation"
-    - "semantic boundaries"
-    - "IES boundary"
-    - "Reasoning Engine boundary"
-    - "tests"
-    - "10.5/20 = 52.5%"
-    - "acciones no realizadas"
+    - "current capability map"
+    - "module gaps"
+    - "reasoning gaps"
+    - "executive prioritization gap"
+    - "recommendation contract audit"
+    - "materiality audit"
+    - "actionability audit"
+    - "candidates"
+    - "ranking"
+    - "winner"
+    - "runner-up"
+    - "first slice"
+    - "state after"
+    - "percentage effect"
+    - "contract impact"
     - "gates"
+    - "risks"
+    - "dependencies"
+    - "NEXT_TASK"
+    - "acciones no realizadas"
     - "secrets_check"
     - "git diff --check"
     - "git status"
-    - "NEXT_TASK"
 
 expected_terminal_state: >
-  DONE_PENDING_REVIEW si la documentación refleja fielmente el runtime
-  multi-source de plant_diagnosis y mantiene 52.5%. STOPPED si contradice
-  implementación física. BLOCKED si falta gate.
+  DONE_PENDING_REVIEW si existe un ganador defendible. STOPPED si executive
+  prioritization requiere decisión contractual nueva o ningún candidato
+  justifica inversión. BLOCKED si falta gate.
 
 max_attempts: 1
 
-result_report_path: >
-  docs/dev-loop/reports/DOCS-DIRECTOR-IA-PLANT-DIAGNOSIS-EVIDENCE-ASSEMBLY-SYNC-001.md
+result_report_path: "docs/dev-loop/reports/ARCH-DIRECTOR-IA-GLOBAL-NEXT-MODULE-PRIORITIZATION-010.md"
