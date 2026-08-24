@@ -1,14 +1,14 @@
 # CURRENT_TASK
 
 ```yaml
-task_id: "IMPL-DIRECTOR-IA-DAILY-DISCOUNT-KG-001"
+task_id: "DOCS-DIRECTOR-IA-DAILY-DISCOUNT-KG-SYNC-001"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-08-24"
 human_authorization: >
   AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-24.
-  Apruebo IMPL-DIRECTOR-IA-DAILY-DISCOUNT-KG-001
+  Apruebo DOCS-DIRECTOR-IA-DAILY-DISCOUNT-KG-SYNC-001
   y autorizo G1.
 
 gates:
@@ -19,185 +19,135 @@ gates:
   G8_calibration_materiality_signature: N/A
 
 objective: >
-  Implementar el first slice D daily_discount_deviation para que Director IA
-  pueda responder preguntas como “¿por qué subió el descuento/kg ayer?” con
-  cálculo diario ponderado correcto, referencia comparable, contribución
-  reconciliada por cliente, evidencia comercial relacionada y huecos de
-  información, sin programar causalidad y sin copiar la matemática mensual M9.
+  Sincronizar la documentación de Director IA con el runtime ya integrado de
+  daily_discount_deviation, documentando el cálculo ponderado diario,
+  referencia pooled same-weekday 14d, contribución reconciliada por cliente,
+  evidencia comercial relacionada y huecos de información, sin modificar
+  código, contratos, M9, schema ni cobertura de módulos.
 
 baseline:
   global: "10.5 / 20 = 52.5%"
-  percentage_effect: "0.0 pp"
+  delta: "0.0 pp"
 
-  readiness:
-    task: "ARCH-DIRECTOR-IA-DAILY-DISCOUNT-KG-READINESS-001"
-    determination: "READY_WITH_LIMITS"
-    selected_first_slice: "D"
-    intent: "daily_discount_deviation"
+implemented_capability:
+  intent: "daily_discount_deviation"
+  first_slice: "D — ratio + reconciled contribution + business evidence/gaps"
 
-product_principle: >
-  El código debe resolver fecha, ratio ponderado, referencia, contribución,
-  identidad, joins, authz y provenance. GPT conserva la explicación
-  conversacional, la relación prudente con evidencia y la identificación de
-  información faltante.
+implemented_path: >
+  pregunta diaria de descuento/kg
+    → daily_discount_deviation
+    → ayer America/Mexico_City
+    → arr.descuentos_diarios_cliente
+    + arr.ventas_diarias_cliente
+    → SUM(monto) / SUM(kg)
+    → referencia pooled same-weekday / 14 días
+    → contribución reconciliada por cliente
+    → DICF + comments por cliente_key
+    → information gaps
+    → HILO
+    → GPT
 
-new_intent:
-  name: "daily_discount_deviation"
+routing:
+  document:
+    - "daily_discount_deviation gana para preguntas explícitamente diarias"
+    - "no degrada a delta_discount mensual"
+    - "no degrada a financial_diagnosis mensual"
+    - "monthly paths permanecen intactos"
 
-  must_win_for:
-    - "¿Por qué subió el descuento/kg ayer?"
-    - "¿Cómo estuvo el descuento por kg ayer?"
-    - "¿Qué pasó ayer con el descuento?"
-    - "¿Quién movió más el descuento/kg ayer?"
+date_semantics:
+  timezone: "America/Mexico_City"
+  target: "ayer calendario completo"
 
-  must_not_reuse:
-    - "delta_discount mensual"
-    - "financial_diagnosis mensual"
+  invariants:
+    - "hoy no se trata como día completo"
+    - "día sin filas != ratio 0"
+    - "target_date explícito"
+    - "active_date efímero"
 
-  rule: >
-    Si la pregunta es explícitamente diaria, no degradar al path mensual.
-
-source_model:
-
-  discount_source:
+sources:
+  discount:
     table: "arr.descuentos_diarios_cliente"
-    physical_fields:
+    fields:
       - "fecha"
       - "plant_code"
       - "cliente_norm"
       - "monto"
 
-    absent_fields:
-      - "planta_id"
-      - "cliente_key"
-      - "kg"
-      - "canal"
-
-  kg_source:
+  kg:
     table: "arr.ventas_diarias_cliente"
+    use: "SUM(kg) al mismo grano cliente/día/planta"
 
-    required:
-      - "SUM(kg)"
-      - "misma fecha"
-      - "misma planta"
-      - "mismo cliente"
+  absent:
+    - "canal en descuento"
+    - "planta_id en descuento"
+    - "cliente_key físico en descuento"
 
-  join_rule: >
-    Join discount + kg al mismo grano cliente/día usando claves físicas
-    compatibles verificadas. No inventar cliente_key si no puede derivarse con
-    el patrón canónico existente.
+  rule: >
+    No prorratear monto por canal y no inventar dimensiones ausentes.
 
-  critical_prohibition: >
-    No prorratear monto de descuento entre canales. La fuente de descuento no
-    tiene canal.
+formula:
+  plant_target: "SUM(monto_target) / SUM(kg_target)"
+  plant_reference: "SUM(monto_ref) / SUM(kg_ref)"
 
-date_semantics:
-
-  timezone: "America/Mexico_City"
-  target_date: "ayer calendario completo"
-
-  rules:
-    - "hoy no entra como día completo"
-    - "día sin filas != descuento/kg 0"
-    - "fecha explícita en pack"
-    - "no usar UTC del servidor como calendario de negocio"
-
-plant_ratio:
-
-  formula:
-    target_ratio: "SUM(monto_target) / SUM(kg_target)"
-    reference_ratio: "SUM(monto_ref) / SUM(kg_ref)"
-
-  unit: >
-    Preservar unidad física vigente del producto para monto/kg.
-
-  rules:
-    - "NO AVG de ratios"
-    - "NO promedio de promedios"
-    - "kg_total = denominador"
-    - "monto_total = numerador"
+  invariants:
+    - "no AVG de ratios"
+    - "no average-of-averages"
+    - "kg = denominador"
+    - "monto = numerador"
     - "kg=0 requiere handling explícito"
     - "null != 0"
 
 reference:
-
   type: "same_weekday_14d_pooled"
 
-  requirements:
+  rules:
     - "mismos días de semana"
     - "ventana 14 días"
     - "solo días completos"
     - "misma planta"
-    - "pooled numerator/denominator"
-    - "reference = SUM(monto_ref)/SUM(kg_ref)"
-    - "N observaciones/días explícito"
-    - "si referencia insuficiente -> limitation"
-
-  prohibited:
-    - "promediar ratios diarios"
-    - "día anterior como default"
-    - "copiar lógica mensual M9"
+    - "pooled SUM(monto_ref)/SUM(kg_ref)"
+    - "N observaciones explícito"
+    - "día anterior no es default"
+    - "no promedio de ratios diarios"
 
 customer_contribution:
-
-  exact_formula: >
+  formula: >
     contrib_i =
       monto_i_target / K_target
       -
       monto_i_ref / K_ref
 
   where:
-    K_target: "SUM(kg_target) planta"
-    K_ref: "SUM(kg_ref) planta"
+    K_target: "kg total planta target"
+    K_ref: "kg total planta reference"
 
   reconciliation:
-    required: true
-    identity: >
-      SUM(contrib_i) = target_ratio - reference_ratio
-      dentro de tolerancia numérica explícita.
+    rule: >
+      SUM(contrib_i) = R_target - R_ref
+      dentro de tolerancia numérica.
 
-  rules:
-    - "ratio alto != mayor mover"
-    - "más kg puede aumentar impacto"
-    - "cliente con mayor cambio relativo no necesariamente domina"
-    - "no score compuesto"
-
-  output:
-    - "cliente"
-    - "cliente_key si puede derivarse canónicamente"
-    - "monto_target"
-    - "kg_target"
-    - "ratio_target"
-    - "monto_ref"
-    - "kg_ref"
-    - "ratio_ref"
-    - "contribution_to_plant_delta"
-    - "share_of_delta cuando matemáticamente válido"
+  truth:
+    - "ratio más alto != mayor mover"
+    - "mayor mover = contribución matemática al delta del ponderado"
+    - "contribución != causa"
 
 mix_effect:
+  status: "DEFERRED"
+  rule: "No separar mix/rate en este slice."
 
-  implementation: false
-
+channel:
+  status: "NOT AVAILABLE / NOT IMPLEMENTED"
   rule: >
-    No separar rate effect vs mix effect en este slice. La contribución
-    reconciliada total por cliente sí entra.
+    No reconstruir ni prorratear canal desde otra fuente.
 
 business_evidence:
-
-  allowed_sources:
+  sources:
     - "commercial comments"
     - "DICF actions"
 
-  join_key: "cliente_key"
-
-  requirement: >
-    Derivar cliente_key únicamente con mecanismo canónico ya existente y solo
-    si el join es físicamente defendible.
-
-  prohibited:
-    - "join por nombre libre"
-    - "join por cliente_norm si no es canónicamente equivalente"
-    - "inventar evidencia por semejanza textual"
+  join:
+    key: "cliente_key canónico"
+    name_join: false
 
   semantics:
     - "comment != cause"
@@ -205,49 +155,51 @@ business_evidence:
     - "responsible != responsible for discount increase"
 
 information_gaps:
+  meaning: >
+    Clientes materialmente contribuidores para los que el pack actual no
+    contiene evidencia suficiente que explique empresarialmente el movimiento.
 
-  objective: >
-    Identificar contribuidores materiales para los que no existe evidencia
-    suficiente que explique empresarialmente el movimiento.
+  allows_GPT_to_express:
+    - "qué pasó matemáticamente"
+    - "qué clientes movieron el ponderado"
+    - "qué evidencia relacionada existe"
+    - "qué sigue sin explicación"
+    - "qué información hace falta"
+    - "quién puede aclarar solo con vínculo físico"
 
-  fields:
-    - "has_related_comment"
-    - "has_related_action"
-    - "linked_responsible if physical"
-    - "explanation_gap"
-    - "limitations"
-
-  rule: >
-    explanation_gap significa ausencia de evidencia suficiente en el pack,
-    no ausencia de causa real.
-
-daily_pack:
-
-  preferred_helper: "loadDailyDiscountDeviationForChat"
-  preferred_assembler: "assembleDailyDiscountDeviationEvidence"
-
-  required_sections:
-    - "summary"
+reasoning_boundary:
+  deterministic_runtime:
+    - "fecha"
+    - "timezone"
+    - "monto"
+    - "kg"
+    - "ratio"
     - "reference"
-    - "customer_contributors"
-    - "business_evidence"
-    - "information_gaps"
-    - "limitations"
+    - "contribution"
+    - "reconciliation"
+    - "identity/join"
+    - "authz"
     - "provenance"
+    - "absence/error"
 
-  no_channel_section: true
+  GPT:
+    - "síntesis"
+    - "explicación narrativa"
+    - "qué destaca"
+    - "relación prudente con evidencia"
+    - "qué no sabemos"
+    - "qué falta saber"
+    - "follow-ups"
 
-  rule: >
-    No crear channel contribution porque la fuente de descuento no tiene canal.
+  principle: >
+    Runtime calcula. GPT interpreta.
 
-conversation_state:
-
+conversation:
   parent_intent: "daily_discount_deviation"
+  active_date: "ephemeral"
 
-  active_date:
-    mode: "ephemeral"
-
-  required_followups:
+  canonical_flow:
+    - "¿Por qué subió el descuento/kg ayer?"
     - "¿Contra qué lo estás comparando?"
     - "¿Quién movió más el promedio?"
     - "¿Fue general?"
@@ -255,88 +207,26 @@ conversation_state:
     - "¿Qué falta?"
     - "¿Quién puede aclararlo?"
 
-  preserve_natural_followup_strategy_B: true
-  requery_every_turn: true
-
-  rule: >
-    Follow-ups abiertos heredan el intent y reciben pack fresco; no memoria
-    persistente de fecha.
-
-GPT_boundary:
-
-  runtime_owns:
-    - "target_date"
-    - "plant ratio"
-    - "reference"
-    - "weighted math"
-    - "customer contribution"
-    - "reconciliation"
-    - "identity"
-    - "joins"
-    - "authz"
-    - "provenance"
-    - "missing/error"
-
-  GPT_owns:
-    - "síntesis"
-    - "qué clientes destacan"
-    - "qué evidencia podría estar relacionada"
-    - "qué sigue sin explicación"
-    - "qué información falta"
-    - "follow-up conversational"
-
-  critical_rule: >
-    Contribución matemática != causa empresarial.
-
-  prohibited:
-    - "cliente X causó el aumento"
-    - "responsable X causó el descuento"
-    - "competencia causó el movimiento" sin evidencia suficiente
+  behavior:
+    - "natural follow-up strategy B preservada"
+    - "requery cada turno"
+    - "HILO + fresh evidence"
+    - "GPT invoked"
+    - "sin causalidad automática"
 
 M9_boundary:
+  status: "UNCHANGED"
 
-  preserve: true
+  explicit_warning: >
+    El comportamiento mensual M9 no se usa como fórmula del path diario.
+    No documentar que M9 fue corregido.
 
-  warning: >
-    M9 mensual actualmente promedia ratios. Ese comportamiento NO se reutiliza
-    como fórmula para daily_discount_deviation.
-
-  rule: >
-    No modificar M9 en esta tarea salvo que una regresión legítima exija una
-    adaptación mínima no semántica. No corregir M9 por alcance lateral.
-
-authz:
-
-  required:
-    - "planta/scope actual"
-    - "rol actual"
-    - "plantas_permitidas"
-    - "no cross-plant"
-    - "fail-closed"
-
-absence_error_semantics:
-
-  distinguish:
-    - "0 real"
-    - "null"
-    - "kg=0"
-    - "día sin filas"
-    - "referencia insuficiente"
-    - "DATA_NOT_FOUND"
-    - "SOURCE_RESTRICTED"
-    - "TOOL_ERROR"
-
-  rules:
-    - "sin filas != ratio 0"
-    - "restricted != missing"
-    - "error != absence"
-
-preserve:
+preserved:
   - "daily_sales_deviation"
   - "action-person routing"
   - "natural follow-up inheritance"
   - "structured conversation state"
-  - "persistent pending memory"
+  - "pending_work_items_only"
   - "plant_diagnosis"
   - "financial_diagnosis"
   - "M9 monthly"
@@ -350,143 +240,75 @@ deferred:
   - "SQL 017 environment activation"
   - "topic stack / return-to-topic"
 
-mandatory_product_conversation:
+test_evidence:
+  focal_daily_discount: "21/21"
+  combined_regression: "72/72"
+  planner: "58/58"
+  capabilities: "56/56"
+  orchestrator: "28/28"
+  director_ia_suite: "835/835"
+  git_diff_check: "clean"
 
-  turns:
-    - "¿Por qué subió el descuento/kg ayer?"
-    - "¿Contra qué lo estás comparando?"
-    - "¿Quién movió más el promedio?"
-    - "¿Fue general?"
-    - "¿Sabemos por qué?"
-    - "¿Qué falta?"
-    - "¿Quién puede aclararlo?"
+module_state:
+  changed_modules: "none"
+  global: "10.5 / 20 = 52.5%"
+  delta: "0.0 pp"
 
-  required:
-    - "daily intent"
-    - "target date"
-    - "pooled same-weekday reference"
-    - "reconciled customer contribution"
-    - "business evidence"
-    - "gaps"
-    - "GPT"
-    - "no causality"
-
-tests_required:
-
-  routing:
-    - "daily discount beats monthly delta_discount"
-    - "daily discount beats financial_diagnosis"
-    - "monthly paths preserved"
-
-  date:
-    - "yesterday CDMX"
-    - "today excluded"
-    - "no rows != zero"
-
-  formula:
-    - "SUM(monto)/SUM(kg)"
-    - "no average of averages"
-    - "kg zero"
-    - "null"
-
-  reference:
-    - "same weekday 14d pooled"
-    - "observation count"
-    - "insufficient reference"
-
-  contribution:
-    - "customer contribution exact"
-    - "SUM(contrib_i) reconciles plant delta"
-    - "highest ratio != biggest mover"
-
-  evidence:
-    - "cliente_key canonical"
-    - "no name join"
-    - "comment not cause"
-    - "action not cause"
-    - "gap"
-
-  conversation:
-    - "against what?"
-    - "who moved most?"
-    - "general?"
-    - "do we know why?"
-    - "what is missing?"
-    - "who can clarify?"
-
-  regression:
-    - "daily sales"
-    - "action-person"
-    - "natural followup"
-    - "persistent memory"
-    - "plant diagnosis"
-    - "financial diagnosis"
-    - "planner"
-    - "capabilities"
-    - "orchestrator"
-    - "full Director IA suite"
+contracts:
+  Constitution: "unchanged"
+  EKE: "unchanged"
+  IES_04: "unchanged"
+  Reasoning_Engine_05: "unchanged"
 
 in_scope:
   writable:
     - "docs/dev-loop/CURRENT_TASK.md"
-    - "docs/dev-loop/reports/IMPL-DIRECTOR-IA-DAILY-DISCOUNT-KG-001.md"
-    - "lib/director-ia-chat.js"
-    - "lib/director-ia-planner.js"
-    - "lib/director-ia-conversation-state.js"
-    - "lib/director-ia-tools.js"
-    - "lib/director-ia-daily-discount.js"
-    - "test/director-ia-daily-discount.test.js"
-    - "scripts/test-director-ia-tool-orchestrator.js"
-
-  conditional_writable:
-    - "existing Director IA tests if legitimate assertions require update"
+    - "docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md"
+    - "docs/dev-loop/reports/DOCS-DIRECTOR-IA-DAILY-DISCOUNT-KG-SYNC-001.md"
 
   read_only:
-    - "docs/director-ia/**"
-    - "server.js"
-    - "frontend-dashboard/**"
-    - "sql/**"
-    - "other unrelated code"
+    - "implemented runtime"
+    - "tests"
+    - "contracts"
+    - "sql"
 
 out_of_scope:
-  - "M9 formula correction"
-  - "mix/rate decomposition"
+  - "code"
+  - "tests"
+  - "runtime"
+  - "contracts"
+  - "SQL execution"
+  - "schema"
+  - "M9 changes"
+  - "mix/rate"
   - "channel reconstruction"
   - "tradeoff implementation"
-  - "SQL 017 execution"
-  - "matrix changes"
-  - "contract changes"
-  - "schema changes"
-  - "new tables"
+  - "percentage changes"
   - "commit"
   - "push"
   - "merge"
 
 acceptance_criteria:
-  - "daily_discount_deviation implemented."
-  - "Daily routing beats monthly paths."
-  - "Yesterday CDMX correct."
-  - "SUM(monto)/SUM(kg) correct."
-  - "Pooled same-weekday 14-day reference."
-  - "No average-of-averages."
-  - "Reconciled customer contribution."
-  - "No channel fabrication."
-  - "Business evidence by canonical cliente_key only."
-  - "Information gaps explicit."
-  - "Contribution != causality preserved."
-  - "Natural conversation works."
-  - "M9 preserved."
+  - "daily_discount_deviation documented."
+  - "Daily vs monthly boundary explicit."
+  - "SUM(monto)/SUM(kg) documented."
+  - "Pooled same-weekday 14d documented."
+  - "Reconciled customer contribution documented."
+  - "Highest ratio != biggest mover documented."
+  - "No channel documented."
+  - "Business evidence by cliente_key documented."
+  - "Information gaps documented."
+  - "Contribution != causality explicit."
+  - "GPT/runtime boundary documented."
+  - "M9 unchanged explicit."
+  - "835/835 evidence recorded."
+  - "No modules changed."
   - "52.5% preserved."
-  - "Tests green."
+  - "Only three authorized files changed."
   - "git diff --check clean."
 
-percentage_policy:
-  before: "10.5 / 20 = 52.5%"
-  after: "10.5 / 20 = 52.5%"
-  delta: "0.0 pp"
-
 next_task:
-  propose_only: "DOCS-DIRECTOR-IA-DAILY-DISCOUNT-KG-SYNC-001"
+  propose_only: "AUDIT-DIRECTOR-IA-CONVERSATIONAL-PRODUCT-GAP-006"
   authorize: false
   execute: false
 
@@ -495,4 +317,4 @@ expected_terminal_state: "DONE_PENDING_REVIEW"
 max_attempts: 1
 
 result_report_path: >
-  docs/dev-loop/reports/IMPL-DIRECTOR-IA-DAILY-DISCOUNT-KG-001.md
+  docs/dev-loop/reports/DOCS-DIRECTOR-IA-DAILY-DISCOUNT-KG-SYNC-001.md
