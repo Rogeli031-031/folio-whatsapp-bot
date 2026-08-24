@@ -1,343 +1,345 @@
 # CURRENT_TASK
 
 ```yaml
-task_id: "ARCH-DIRECTOR-IA-INTRA-SESSION-TOPIC-RETURN-001"
+task_id: "IMPL-DIRECTOR-IA-INTRA-SESSION-TOPIC-RETURN-001"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-08-24"
 human_authorization: >
   AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-24.
-  Apruebo ARCH-DIRECTOR-IA-INTRA-SESSION-TOPIC-RETURN-001
-  y autorizo G1 exclusivamente para readiness/auditoría.
+  Apruebo IMPL-DIRECTOR-IA-INTRA-SESSION-TOPIC-RETURN-001
+  y autorizo G1.
 
 gates:
   G1_task_authorization: AUTHORIZED
-  G2_architecture_change: N/A_PENDING_AUDIT
-  G3_new_architecture_contract: N/A_PENDING_AUDIT
+  G2_architecture_change: N/A
+  G3_new_architecture_contract: N/A
   G5_contract_conformance: N/A
   G8_calibration_materiality_signature: N/A
 
-mode:
-  type: "READINESS_ONLY"
-  implementation: false
-  code_changes: false
-  runtime_changes: false
-  test_changes: false
-  matrix_changes: false
-  contract_changes: false
-
 objective: >
-  Determinar el mecanismo mínimo, seguro y generalizable para que Director IA
-  pueda cambiar de tema y volver a un tema anterior dentro de la misma sesión,
-  sin usar memoria persistente como parche, sin construir un topic stack
-  innecesariamente complejo y sin descartar intents standalone que el planner
-  ya resolvió correctamente.
+  Implementar el first slice B aprobado para retorno de tema intra-sesión:
+  corregir la precedencia para que un standalone intent válido sobreviva al
+  lenguaje de retorno y mantener exactamente un previous_frame efímero que
+  permita restaurar el tema inmediatamente anterior cuando el retorno no sea
+  autocontenido, siempre con revalidación y requery de evidencia fresca.
 
 baseline:
   global: "10.5 / 20 = 52.5%"
   percentage_effect: "0.0 pp"
 
-  prior_audit:
-    task: "AUDIT-DIRECTOR-IA-CONVERSATIONAL-PRODUCT-GAP-006"
-    bottleneck: >
-      El retorno/cambio de tema intra-sesión descarta contexto recuperable.
-    failure_class: "OVERPROGRAMMING"
+  readiness:
+    task: "ARCH-DIRECTOR-IA-INTRA-SESSION-TOPIC-RETURN-001"
+    determination: "READY_WITH_LIMITS"
+    strategy: "B — one previous frame + standalone precedence"
 
-north_star: >
-  Director IA debe sostener una conversación ejecutiva larga: cambiar de tema,
-  responder el nuevo tema y volver a uno anterior sin exigir repetir toda la
-  pregunta ni perder entidad/fecha/contexto que todavía sea seguro recuperar.
+product_principle: >
+  Director IA debe poder cambiar de tema y volver al anterior dentro de la misma
+  sesión sin perder contexto útil. El frame conserva únicamente contexto
+  conversacional estructurado; nunca evidencia factual stale.
 
-central_findings_to_verify:
-  - >
-    "Volvamos a la venta de ayer" ya obtiene planner intent
-    daily_sales_deviation con alta confianza, pero el runtime lo descarta.
-  - >
-    reconstructFromUserHistory borra contexto al encontrar señales como
-    "ahora" / "volvamos".
-  - >
-    Un solo marco previo podría bastar para algunos retornos como Arturo/acción.
-  - >
-    Persistent pending memory no debe resolver navegación intra-sesión.
+core_rules:
 
-primary_question: >
-  ¿Cuál es el first slice mínimo que permite cambio y retorno de tema sin
-  perder un standalone intent válido ni requerir un topic stack general?
+  standalone_precedence: >
+    Si el turno actual tiene un standalone intent válido, ese intent gana aunque
+    el texto incluya lenguaje como “volvamos”, “retomemos” o equivalente.
 
-mandatory_runtime_audit:
+  one_previous_frame_only: >
+    Mantener exactamente un previous_frame. No stack, no lista de temas,
+    no profundidad configurable.
 
-  inspect:
-    - "askDirectorIa routing precedence"
-    - "planner result handling"
-    - "topic_return detection"
-    - "out_of_slice_clarify"
-    - "structured_conversation_state"
-    - "reconstructFromUserHistory"
-    - "parent_intent"
-    - "active_entity"
-    - "active_date"
-    - "pending_information_gap"
-    - "last_evidence_bundle_type"
-    - "natural follow-up inheritance"
-    - "persistent memory resume"
-    - "daily_sales_deviation"
-    - "daily_discount_deviation"
-    - "action_status"
-    - "budget intent/path"
+  requery: >
+    Restaurar contexto nunca implica restaurar evidencia. Toda fuente debe
+    reconsultarse con authz vigente.
 
-  trace_exactly:
-    - "¿Cómo va Puebla?"
-    - "Ahora dime el presupuesto."
-    - "Volvamos a la venta de ayer."
-    - "¿Quién explicó más?"
-    - "¿Cómo va Puebla?"
-    - "¿Y Arturo?"
-    - "¿Cómo estuvo la venta ayer?"
-    - "Bueno, volviendo a Arturo, ¿qué sabemos?"
-    - "¿Qué pasó con la acción de Julio?"
-    - "Ahora dime Puebla."
-    - "Retomemos la acción."
-    - "¿Por qué seguía abierta?"
+state_extension:
 
-first_principle:
+  current_frame:
+    existing: true
+
+  previous_frame:
+    ephemeral: true
+    cross_session: false
+    max_items: 1
+
+    allowed_fields:
+      - "parent_intent"
+      - "active_entity reference/key if valid"
+      - "active_date if applicable"
+      - "last_evidence_bundle_type"
+      - "pending_information_gap"
+      - "plant scope reference"
+
+    prohibited_fields:
+      - "raw evidence payload"
+      - "DB rows"
+      - "assistant prose"
+      - "user prose as fact"
+      - "OpenAI response"
+      - "authz snapshot"
+      - "source data cache"
+      - "topic stack"
+
+frame_capture:
+
+  when:
+    - "current valid conversational frame exists"
+    - "new standalone intent changes topic/domain"
+    - "new frame is compatible with current authorized plant scope"
+
+  behavior: >
+    Before replacing the active conversational frame with a new standalone
+    topic, copy only the minimal structured current frame into previous_frame.
+
+  do_not_capture:
+    - "invalid/empty state"
+    - "smalltalk with no business context"
+    - "raw history"
+    - "evidence payload"
+
   rule: >
-    Si el turno actual tiene un standalone intent válido y seguro, ese intent
-    debe ejecutarse aunque el texto contenga lenguaje de retorno como
-    "volvamos", "retomemos" o equivalente.
+    Each new valid topic switch replaces previous_frame. Depth remains one.
 
-  example:
+standalone_return:
+
+  canonical_example:
     text: "Volvamos a la venta de ayer."
-    planner: "daily_sales_deviation"
-    desired: >
-      Ejecutar daily_sales_deviation; no convertirlo en out_of_slice_clarify.
+    planner_intent: "daily_sales_deviation"
 
-anti_solution:
-  forbidden:
-    - "topic stack arbitrario de profundidad N"
-    - "guardar raw history como memoria factual"
-    - "usar persistent memory para cada cambio de tema"
-    - "phrasebook de 'volvamos/retomemos'"
-    - "segunda llamada LLM solo para routing"
-    - "copiar evidencia stale al restaurar tema"
-
-standalone_return_precedence:
-
-  mandatory_audit:
-    - >
-      Determinar si basta con permitir que planner standalone intent gane sobre
-      topic_return guard.
-    - >
-      Determinar qué estado debe reconstruirse después de ejecutar el intent.
-    - >
-      Determinar si active_date/entity pueden venir del propio turno actual.
-    - >
-      Requery obligatorio.
-
-  desired_rule: >
-    "return wording" no debe invalidar una clasificación standalone válida.
-
-prior_context_need:
-
-  audit_cases:
-
-    explicit_self_contained_return:
-      examples:
-        - "Volvamos a la venta de ayer."
-        - "Retomemos la acción de Julio."
-      question: >
-        ¿El turno contiene por sí mismo suficiente información para reroute/requery?
-
-    implicit_return:
-      examples:
-        - "Volvamos a Arturo."
-        - "Retomemos lo anterior."
-        - "¿Dónde nos quedamos?"
-      question: >
-        ¿Se requiere conservar exactamente un prior conversational frame?
-
-  requirement: >
-    Separar explicit self-contained return de implicit return.
-
-minimal_prior_frame_hypothesis:
-  audit_not_assume: true
-
-  candidate_fields:
-    - "parent_intent"
-    - "active_entity"
-    - "active_date"
-    - "last_evidence_bundle_type"
-    - "pending_information_gap"
-    - "plant scope reference"
+  required_behavior:
+    - "planner standalone intent wins"
+    - "do not route to out_of_slice_clarify"
+    - "derive target date from current turn when self-contained"
+    - "requery daily sales evidence"
+    - "update current frame"
+    - "capture previous current frame if appropriate"
 
   rule: >
-    Si hace falta un prior frame, seleccionar solo los campos mínimos.
-    Nunca guardar raw evidence payload.
+    Self-contained return does not require previous_frame to be usable.
 
-frame_depth:
+implicit_return:
 
-  candidates:
-    A_none:
-      description: >
-        Solo corregir precedence y dejar returns implícitos fuera.
+  examples:
+    - "Volvamos a Arturo."
+    - "Retomemos la acción."
+    - "Volvamos a Puebla."
+    - "¿Dónde nos quedamos?"
 
-    B_one_previous_frame:
-      description: >
-        Mantener exactamente un marco previo compatible para volver al tema
-        inmediatamente anterior.
+  behavior: >
+    If current turn alone does not provide a complete standalone context but
+    previous_frame is compatible and sufficient, restore its structured context,
+    revalidate it and requery.
 
-    C_small_stack:
-      description: >
-        Stack acotado de varios marcos.
+  if_no_safe_previous_frame:
+    behavior: "clarification"
 
-    D_history_reconstruction:
-      description: >
-        Reconstruir continuamente desde history de usuario.
+  prohibited:
+    - "guessing older-than-previous topic"
+    - "searching arbitrary raw history for factual context"
+    - "using persistent memory as fallback"
 
-  requirement:
-    - "comparar A/B/C/D"
-    - "seleccionar exactamente un first slice"
-    - "preferir la mínima complejidad que resuelva casos ejecutivos reales"
+restore_policy:
 
-  warning: >
-    GAP-006 indica que B podría bastar para algunos casos, pero no asumirlo.
+  mandatory:
+    - "current authz"
+    - "current plant scope"
+    - "entity revalidation if entity ref exists"
+    - "date re-derivation/revalidation if applicable"
+    - "fresh source requery"
+    - "SOURCE_RESTRICTED current semantics"
+    - "current evidence wins"
 
-context_switch_behavior:
+  restored_context_is:
+    - "routing/context hint"
 
-  on_valid_standalone_switch:
-    required:
-      - "ejecutar nuevo intent"
-      - "guardar/actualizar current frame de forma segura"
-      - "no arrastrar evidence del tema anterior"
-      - "requery"
+  restored_context_is_not:
+    - "evidence"
+    - "current fact"
 
-  on_return:
-    required:
-      - "restaurar solo contexto estructurado necesario"
-      - "revalidar planta/entidad/date"
-      - "requery"
-      - "current evidence wins"
+plant_safety:
 
-plant_scope:
-
-  rule: >
-    Planta actual/autorizada debe prevalecer. Restaurar un frame no puede
-    reintroducir scope de una planta ya incompatible.
-
-  required:
+  rules:
+    - "request/current authorized plant scope wins"
+    - "previous_frame from incompatible plant cannot be restored silently"
+    - "incompatible active_entity invalidated"
+    - "pending gap tied to prior plant invalidated if scope incompatible"
     - "no cross-plant leakage"
-    - "invalidate incompatible active_entity"
-    - "authz each turn"
 
 entity_return:
 
   example:
     sequence:
+      - "¿Cómo va Puebla?"
       - "¿Y Arturo?"
       - "¿Cómo estuvo la venta ayer?"
       - "Volvamos a Arturo."
 
-  audit:
-    - "cómo identificar Arturo de forma segura"
-    - "si un prior frame con entity_key basta"
-    - "si hay que re-resolver entity"
-    - "qué pasa si scope/planta cambió"
+  required:
+    - "previous entity reference may guide resolution"
+    - "entity must be physically revalidated"
+    - "no restored business facts"
+    - "ambiguous/not found -> clarification"
 
   rule: >
-    Restaurar referencia de entidad != restaurar hechos sobre la entidad.
+    Entity reference can return; entity facts cannot.
 
 date_return:
 
   example:
     sequence:
       - "¿Por qué bajó la venta ayer?"
-      - "Ahora descuento/kg."
+      - "Ahora dime el descuento/kg."
       - "Volvamos a la venta de ayer."
 
-  audit:
-    - "el turno ya contiene ayer"
-    - "active_date puede reconstruirse sin stack"
-    - "no persistent date memory"
+  required:
+    - "current text's 'ayer' is sufficient"
+    - "do not require previous frame"
+    - "America/Mexico_City semantics preserved"
+    - "requery"
 
 action_return:
 
   example:
     sequence:
-      - "¿Qué pasó con la acción de Julio?"
+      - "¿Qué pasó con la acción de Julio Pérez?"
       - "Ahora dime Puebla."
       - "Retomemos la acción."
 
-  audit:
-    - "si prior frame necesita action identity"
-    - "si action_status puede requery con responsable/action context"
-    - "qué pasa con múltiples acciones"
+  required:
+    - "restore action_status context only if previous_frame is sufficient"
+    - "revalidate responsible/action context"
+    - "0/1/N safety preserved"
+    - "multiple actions -> no silent pick"
 
   rule: >
-    No seleccionar acción silenciosamente al restaurar.
+    previous_frame must not silently create active_action if action identity was
+    never unique.
 
-reconstructFromUserHistory_audit:
+budget_switch:
 
-  mandatory:
-    - "identificar por qué 'ahora'/'volvamos' borran estado"
-    - "separar invalidación correcta de sobreinvalidación"
-    - "determinar si history debe servir solo como señal conversacional"
-    - "history != evidence"
-
-  anti_rule: >
-    No reconstruir verdad empresarial desde prosa pasada.
-
-natural_followup_interaction:
-
-  preserve_strategy_B: true
+  example:
+    sequence:
+      - "¿Cómo va Puebla?"
+      - "Ahora dime el presupuesto."
+      - "¿Y eso?"
+      - "Volvamos a Puebla."
 
   required:
-    - >
-      Después de volver a un tema, follow-ups unknown + valid state deben seguir
-      heredando normalmente.
-    - "No crear reglas especiales por tema."
+    - "budget standalone wins"
+    - "natural follow-up after budget uses budget context if valid"
+    - "return to Puebla can restore previous frame"
+    - "fresh plant evidence required"
+
+topic_return_detection:
+
+  role: >
+    Language such as “volvamos” or “retomemos” may signal navigation, but must
+    never override a valid standalone planner classification.
+
+  prohibited:
+    - "out_of_slice_clarify before honoring valid standalone intent"
+    - "phrasebook expansion"
+    - "list of every return wording"
+    - "second LLM router"
+
+reconstructFromUserHistory:
+
+  mandatory_change_if_needed: >
+    Remove only the over-invalidation proven by readiness: history markers such
+    as “ahora” / “volvamos” must not automatically destroy an otherwise valid
+    current/previous structured frame.
+
+  history_role:
+    - "conversational signal only"
+
+  history_not:
+    - "evidence"
+    - "truth store"
+    - "raw context cache"
+
+  rule: >
+    Do not rebuild old business facts from user history.
+
+natural_followup_strategy_B:
+
+  preserve: true
+
+  required: >
+    After a topic is restored, subsequent planner=unknown turns with valid state
+    must inherit normally and reach GPT with fresh evidence.
 
 persistent_memory_boundary:
 
   pending_work_items_only:
-    purpose: "cross-session pending work"
+    preserve: true
 
-  intra_session_return:
-    purpose: "ephemeral navigation"
+  use_for_topic_return: false
 
   invariant: >
-    Persistent memory != topic navigation.
+    Persistent conversational memory handles cross-session pending work.
+    previous_frame handles intra-session navigation.
 
-reasoning_boundary:
+frame_rotation:
 
-  KEEP_DETERMINISTIC:
-    - "standalone intent precedence"
-    - "frame capture/restore"
-    - "plant scope"
-    - "entity identity"
-    - "date semantics"
-    - "requery"
+  example:
+    sequence:
+      - "Puebla"
+      - "Arturo"
+      - "venta"
+      - "descuento"
+      - "volver Arturo"
+      - "retomar venta"
+
+  readiness_finding: >
+    A one-frame model is sufficient for the approved first slice because
+    discount may inherit from sales rather than create an additional standalone
+    frame in the demonstrated sequence.
+
+  implementation_rule: >
+    Follow the exact one-frame semantics demonstrated by current routing.
+    Do not opportunistically promote this to a multi-frame stack.
+
+  if_case_requires_older_than_previous:
+    behavior: "clarify / outside first slice"
+
+GPT_boundary:
+
+  runtime_owns:
+    - "standalone precedence"
+    - "frame capture"
+    - "frame restore"
+    - "scope"
+    - "entity/date revalidation"
     - "authz"
+    - "requery"
     - "provenance"
 
-  LET_GPT_REASON:
-    - "interpretar qué quiere discutir del tema restaurado"
-    - "explicación"
-    - "follow-up"
-    - "síntesis"
+  GPT_owns:
+    - "natural interpretation after restored context"
+    - "explanation"
+    - "synthesis"
+    - "follow-up response"
+    - "information gap wording"
 
   rule: >
-    No programar una respuesta distinta para cada frase de retorno.
+    Do not create deterministic topic-specific response templates.
 
 mandatory_product_conversations:
 
-  conversation_1_self_contained_return:
+  self_contained_return:
     turns:
       - "¿Por qué bajó la venta ayer?"
       - "Ahora dime el descuento/kg."
       - "Volvamos a la venta de ayer."
       - "¿Quién explicó más?"
 
-  conversation_2_entity_return:
+    required:
+      - "daily_sales_deviation standalone survives return wording"
+      - "fresh daily sales pack"
+      - "follow-up inherits restored/current sales context"
+
+  entity_return:
     turns:
       - "¿Cómo va Puebla?"
       - "¿Y Arturo?"
@@ -345,157 +347,166 @@ mandatory_product_conversations:
       - "Volvamos a Arturo."
       - "¿Qué faltaba saber?"
 
-  conversation_3_action_return:
+    required:
+      - "previous frame restoration"
+      - "entity revalidation"
+      - "fresh commercial/plant evidence"
+      - "pending gap if still valid"
+
+  action_return:
     turns:
       - "¿Qué pasó con la acción de Julio Pérez?"
       - "Ahora dime Puebla."
       - "Retomemos la acción."
       - "¿Por qué seguía abierta?"
 
-  conversation_4_budget_switch:
+    required:
+      - "action_status context restored safely"
+      - "AR requery"
+      - "no invented reason"
+      - "natural follow-up"
+
+  budget_return:
     turns:
       - "¿Cómo va Puebla?"
       - "Ahora dime el presupuesto."
       - "¿Y eso?"
       - "Volvamos a Puebla."
+      - "¿Qué más?"
 
-  conversation_5_multiple_switches:
-    turns:
-      - "¿Cómo va Puebla?"
-      - "¿Y Arturo?"
-      - "¿Cómo estuvo la venta ayer?"
-      - "¿Y el descuento?"
-      - "Volvamos a Arturo."
-      - "Retomemos la venta."
-    purpose: >
-      Determinar si first slice requiere solo one previous frame o más.
+    required:
+      - "standalone budget works"
+      - "return plant context"
+      - "strategy B after return"
 
-tests_to_design_if_ready:
+  one_frame_limit:
+    required: >
+      Add a test proving that a request requiring a topic older than
+      previous_frame does NOT silently recover the wrong topic.
+
+tests_required:
 
   precedence:
-    - "standalone return intent survives topic_return wording"
-    - "daily_sales 0.92 is not discarded"
-    - "budget standalone wins"
+    - "valid standalone beats topic_return guard"
+    - "daily_sales_deviation 0.92 path is not discarded"
+    - "budget standalone preserved"
+    - "daily_discount standalone preserved"
+    - "action_status preserved"
 
   frame:
-    - "capture previous frame"
-    - "restore one previous frame if selected"
-    - "no raw evidence storage"
-    - "requery after restore"
+    - "capture current into previous on standalone switch"
+    - "only one previous frame"
+    - "previous frame replacement"
+    - "no raw evidence in frame"
+    - "restore compatible previous"
+    - "no safe previous -> clarify"
 
   entity:
-    - "entity re-resolved/revalidated"
-    - "plant switch invalidates incompatible entity"
-
-  date:
-    - "self-contained yesterday works without prior frame"
+    - "entity revalidated on restore"
+    - "ambiguous entity clarifies"
+    - "plant incompatible frame blocked"
 
   action:
-    - "multiple action ambiguity preserved"
+    - "0/1/N action behavior preserved"
+    - "no silent action selection"
+
+  date:
+    - "self-contained yesterday return"
+    - "active_date rebuilt/revalidated"
 
   followup:
-    - "natural followup works after return"
+    - "strategy B works after restore"
+
+  memory:
+    - "persistent memory not used for intra-session return"
 
   security:
-    - "authz"
-    - "cross-plant"
-    - "history not evidence"
+    - "authz every restore"
+    - "no cross-plant"
+    - "history != evidence"
 
   regression:
     - "daily sales"
     - "daily discount"
     - "action-person"
+    - "natural followup"
     - "persistent memory"
     - "plant diagnosis"
     - "financial diagnosis"
-    - "full suite"
-
-contract_audit:
-  inspect:
-    - "Constitution"
-    - "EKE"
-    - "04 IES"
-    - "05 RE"
-
-  determine:
-    - "G2"
-    - "G3"
-
-  expectation: "runtime-only unless evidence says otherwise"
-
-readiness_output:
-  must_determine:
-    - "READY / READY_WITH_LIMITS / NOT_READY"
-    - "selected A/B/C/D"
-    - "standalone return precedence"
-    - "whether one previous frame is required"
-    - "minimal frame fields"
-    - "capture/restore rules"
-    - "requery"
-    - "entity/date/action behavior"
-    - "history boundary"
-    - "persistent memory boundary"
-    - "G2/G3"
-    - "percentage effect"
-    - "deferred capabilities"
-
-percentage_policy:
-  before: "10.5 / 20 = 52.5%"
-  after_readiness: "10.5 / 20 = 52.5%"
-  expected_impl_effect: "0.0 pp"
+    - "planner"
+    - "capabilities"
+    - "orchestrator"
+    - "full Director IA suite"
 
 in_scope:
   writable:
     - "docs/dev-loop/CURRENT_TASK.md"
-    - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-INTRA-SESSION-TOPIC-RETURN-001.md"
+    - "docs/dev-loop/reports/IMPL-DIRECTOR-IA-INTRA-SESSION-TOPIC-RETURN-001.md"
+    - "lib/director-ia-chat.js"
+    - "lib/director-ia-conversation-state.js"
+    - "lib/director-ia-planner.js"
+    - "test/director-ia-intra-session-topic-return.test.js"
+
+  conditional_writable:
+    - "existing Director IA tests if legitimate assertions require update"
 
   read_only:
-    - "entire repository except writable files"
+    - "docs/director-ia/**"
+    - "server.js"
+    - "frontend-dashboard/**"
+    - "sql/**"
+    - "other unrelated code"
 
 out_of_scope:
-  - "implementation"
-  - "code changes"
-  - "test changes"
-  - "matrix changes"
-  - "contract changes"
-  - "SQL execution"
+  - "topic stack"
+  - "more than one previous frame"
   - "persistent topic memory"
   - "semantic memory"
+  - "raw history evidence"
+  - "second LLM router"
+  - "tradeoff implementation"
+  - "SQL 017 execution"
+  - "matrix changes"
+  - "contract changes"
+  - "schema changes"
+  - "new tables"
   - "commit"
   - "push"
   - "merge"
 
 acceptance_criteria:
-  - "Current topic-return failure physically traced."
-  - "Standalone intent discard audited."
-  - "reconstructFromUserHistory behavior audited."
-  - "A/B/C/D compared."
-  - "Exactly one first slice selected."
-  - "Topic stack not assumed."
-  - "Minimal frame determined if needed."
-  - "Persistent memory kept separate."
-  - "Requery/current evidence preserved."
-  - "Entity/date/action safety defined."
-  - "G2/G3 determined."
+  - "Standalone intent survives return wording."
+  - "Exactly one previous_frame implemented."
+  - "No topic stack."
+  - "No raw evidence stored in frame."
+  - "Self-contained returns work without frame dependency."
+  - "Implicit previous-topic return works safely."
+  - "Entity revalidated."
+  - "Date revalidated."
+  - "Action ambiguity preserved."
+  - "Requery every restored turn."
+  - "Persistent memory not used as topic navigation."
+  - "Natural follow-up strategy B works after return."
+  - "Current evidence wins."
+  - "Authz preserved."
+  - "No cross-plant leakage."
   - "52.5% preserved."
-  - "Only task + report changed."
+  - "Tests green."
   - "git diff --check clean."
 
-next_task_policy:
-  if_ready:
-    propose_exactly_one: "IMPL-DIRECTOR-IA-INTRA-SESSION-TOPIC-RETURN-001"
+percentage_policy:
+  before: "10.5 / 20 = 52.5%"
+  after: "10.5 / 20 = 52.5%"
+  delta: "0.0 pp"
 
-  if_not_ready:
-    propose_exactly_one: "ARCH-DIRECTOR-IA-INTRA-SESSION-TOPIC-RETURN-GAP-001"
+next_task:
+  propose_only: "DOCS-DIRECTOR-IA-INTRA-SESSION-TOPIC-RETURN-SYNC-001"
+  authorize: false
+  execute: false
 
-  rule: "Do not authorize or execute."
-
-expected_terminal_state: >
-  DONE_PENDING_REVIEW if READY/READY_WITH_LIMITS.
-  STOPPED if a product/architecture decision is required.
-  BLOCKED if a gate is missing.
+expected_terminal_state: "DONE_PENDING_REVIEW"
 
 max_attempts: 1
 
 result_report_path: >
-  docs/dev-loop/reports/ARCH-DIRECTOR-IA-INTRA-SESSION-TOPIC-RETURN-001.md
+  docs/dev-loop/reports/IMPL-DIRECTOR-IA-INTRA-SESSION-TOPIC-RETURN-001.md
