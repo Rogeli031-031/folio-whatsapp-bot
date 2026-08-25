@@ -59,7 +59,7 @@ Ningún bypass de capas. Ningún dato crudo llega al IES directamente. Ningún L
 | 5 | `05-REASONING-ENGINE.md` | Nivel 5 — hipótesis/inferencia subordinada al IES; Reasoning Result / Run | **v1.0** — REASONING ENGINE v1.0 APROBADO PARA CONGELAMIENTO; **runtime PENDIENTE** |
 | 6 | `06-CHANNEL-PROJECTION.md` | Interfaces; proyección semántica pura; Projection Model; `projection_depth` L0–L3 | **v1.0** — PROPUESTO PARA REVISIÓN HUMANA; **runtime PENDIENTE**; no congelado |
 | — | `DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md` | Inventario de fuentes | Complemento |
-| — | `FINANCIAL-ACTUAL-EVIDENCE-CONTRACT.md` | Evidencia de dominio ACTUAL_FINANCIAL: FINANCE_PROVIDED, FORECAST/FINAL/SUPERSEDED, provenance, reconciliation, correction/supersession y frontera de autorización | **v1.0** — G3 autorizado; contrato existe; **no** es capa de pipeline; **no** alimenta IES; **FINALIZATION_INFRASTRUCTURE = IMPLEMENTED** (rama actual); AUTHZ acceso/finalización **RESOLVED** (`DECISION-DIRECTOR-IA-FINANCIAL-ACTUAL-AUTHZ-001`); **ACTUAL_FINANCIAL runtime / loader / P&L / IES = PENDING** |
+| — | `FINANCIAL-ACTUAL-EVIDENCE-CONTRACT.md` | Evidencia de dominio ACTUAL_FINANCIAL: FINANCE_PROVIDED, FORECAST/FINAL/SUPERSEDED, provenance, reconciliation, correction/supersession y frontera de autorización | **v1.0** — G3 autorizado; contrato existe; **no** es capa de pipeline; **no** alimenta IES; **FINALIZATION_INFRASTRUCTURE = IMPLEMENTED**; AUTHZ acceso/finalización **RESOLVED** (`DECISION-DIRECTOR-IA-FINANCIAL-ACTUAL-AUTHZ-001`); **ACTUAL_FINANCIAL READ MODEL = SUPPORTED_WITHIN_MONTH_CLOSE_RESULT** (loader RAW + `month_close_result.financial.actual` si hay FINAL GLOBAL autorizada del YYYY-MM); **no** soporte general; **pre_meeting / IES / RE / UI histórica / intent `financial_actual` = PENDING** |
 | F1 | `DIRECTOR_IA_V2_FASE_1_VERACIDAD.md` | Catálogo/veracidad (entrada) | Código soporte parcial |
 | F2 | `DIRECTOR_IA_V2_FASE_2_PLANNER.md` | Plan de intents/dominios (entrada) | Código soporte parcial |
 | F3 | `DIRECTOR_IA_V2_FASE_3_TOOL_ORCHESTRATOR.md` | Tool Plan declarativo (entrada) | Código soporte parcial |
@@ -82,7 +82,7 @@ Ningún bypass de capas. Ningún dato crudo llega al IES directamente. Ningún L
 | Planner (Fase 2) | `lib/director-ia-planner.js` (debug en chat) | **No** implementa Constitución, EKE ni Evidence Builder. Solo produce Plan. |
 | Tool Orchestrator (Fase 3) | `lib/director-ia-tools.js`, `lib/director-ia-tool-orchestrator.js` (debug) | **No** implementa Constitución, EKE ni Evidence Builder. Solo declara Tool Plan; no ejecuta. |
 | Chat / UI legado | `lib/director-ia-chat.js`, módulos frontend | Soporte parcial de producto; **no** es el pipeline N1–N4→IES |
-| FINANCIAL-ACTUAL-EVIDENCE-CONTRACT | Soporte parcial de **finalización** (`lib/igf-financial-final.js`; schema `018`/`019`). **No** hay loader ACTUAL_FINANCIAL ni P&L runtime | **No** — contrato de evidencia de dominio v1.0; no implementa Constitución / EKE / Evidence Builder / IES |
+| FINANCIAL-ACTUAL-EVIDENCE-CONTRACT | Finalización: `lib/igf-financial-final.js` + schema `018`/`019`. Read model legado: `lib/director-ia-financial-actual.js` (loader RAW FINAL) consumido solo por `month_close_result`. **No** IES / RE / pre_meeting / UI histórica | **No** — contrato de evidencia de dominio v1.0; no implementa Constitución / EKE / Evidence Builder / IES |
 
 ### Declaración explícita (obligatoria)
 
@@ -110,7 +110,7 @@ La columna anterior se denomina **“Código relacionado / soporte parcial”** 
 | Producto IES | `04-IES-STANDARD.md` bajo Constitución IX |
 | Reasoning Engine (N5) / Reasoning Result / Reasoning Run | `05-REASONING-ENGINE.md` (v1.0 congelado; no escribe EKS/IES; almacén Run pendiente) |
 | Channel Projection | `06-CHANNEL-PROJECTION.md` (v1.0 propuesto; no congelado; runtime pendiente; no escribe IES/RE; sin autoridad epistemológica) |
-| ACTUAL_FINANCIAL / FINANCE_PROVIDED / finalización FORECAST·FINAL·SUPERSEDED / provenance / reconciliation / corrección-supersession / frontera AUTHZ | `FINANCIAL-ACTUAL-EVIDENCE-CONTRACT.md` (v1.0; subordinado a Constitución y EKE; **no** reabre `04`/`05`; **no** alimenta IES). Semántica G3. Marker físico + FINALIZE/SUPERSEDE: **IMPLEMENTED**. AUTHZ: **RESOLVED** (DECISION-…; Index no es dueño de la matriz). Runtime ACTUAL_FINANCIAL / IES: **PENDING** |
+| ACTUAL_FINANCIAL / FINANCE_PROVIDED / finalización FORECAST·FINAL·SUPERSEDED / provenance / reconciliation / corrección-supersession / frontera AUTHZ | `FINANCIAL-ACTUAL-EVIDENCE-CONTRACT.md` (v1.0; subordinado a Constitución y EKE; **no** reabre `04`/`05`; **no** alimenta IES). Semántica G3. Marker físico + FINALIZE/SUPERSEDE: **IMPLEMENTED**. AUTHZ: **RESOLVED** (DECISION-…; Index no es dueño de la matriz). Read model: **SUPPORTED_WITHIN_MONTH_CLOSE_RESULT**. IES / RE / pre_meeting / UI histórica: **PENDING** |
 
 ---
 
@@ -122,7 +122,7 @@ La columna anterior se denomina **“Código relacionado / soporte parcial”** 
 4. El IES consume Knowledge Snapshot, no fuentes operacionales.
 5. `NO_CONOZCO` es resultado válido, no error arquitectónico.
 6. El Reasoning Engine consume IES; no modifica IES/Bundle/Snapshot; no es fuente de verdad.
-7. `FINANCIAL-ACTUAL-EVIDENCE-CONTRACT.md` no es capa de pipeline (no N6/N7; no `07`). ACTUAL_FINANCIAL **aún no alimenta** el IES oficial. **FINALIZATION_INFRASTRUCTURE** (FORECAST/FINAL/SUPERSEDED en `igf.versions`) **existe**. **No** existe loader ACTUAL_FINANCIAL ni exposición P&L runtime. AUTHZ de acceso/finalización está **RESOLVED**; eso **no** abre capability de consulta. Chat/runtime legado no es implementación del pipeline constitucional.
+7. `FINANCIAL-ACTUAL-EVIDENCE-CONTRACT.md` no es capa de pipeline (no N6/N7; no `07`). ACTUAL_FINANCIAL **aún no alimenta** el IES oficial. **FINALIZATION_INFRASTRUCTURE** (FORECAST/FINAL/SUPERSEDED en `igf.versions`) **existe**. El runtime legado consulta ACTUAL_FINANCIAL **solo** en `month_close_result` cuando hay FINAL GLOBAL autorizada del YYYY-MM (`lib/director-ia-financial-actual.js`). Eso **no** es capability financiera global ni pipeline constitucional. AUTHZ de acceso/finalización está **RESOLVED**. Chat/runtime legado no es implementación del pipeline constitucional.
 
 ---
 
@@ -131,7 +131,7 @@ La columna anterior se denomina **“Código relacionado / soporte parcial”** 
 | Campo | Valor |
 |-------|--------|
 | Documento | `DIRECTOR_IA_ARCHITECTURE_INDEX.md` |
-| Versión | 1.10 |
-| Estado | APROBADO COMO ÍNDICE (incluye `05` v1.0 congelado; `06` v1.0 propuesto, no congelado; EKS runtime mínimo sincronizado, no COMPLETE constitucional; FINANCIAL-ACTUAL-EVIDENCE-CONTRACT v1.0; FINALIZATION_INFRASTRUCTURE IMPLEMENTED; AUTHZ RESOLVED; ACTUAL_FINANCIAL runtime/IES pendientes) |
+| Versión | 1.11 |
+| Estado | APROBADO COMO ÍNDICE (incluye `05` v1.0 congelado; `06` v1.0 propuesto, no congelado; EKS runtime mínimo sincronizado, no COMPLETE constitucional; FINANCIAL-ACTUAL-EVIDENCE-CONTRACT v1.0; FINALIZATION_INFRASTRUCTURE IMPLEMENTED; AUTHZ RESOLVED; ACTUAL_FINANCIAL READ MODEL = SUPPORTED_WITHIN_MONTH_CLOSE_RESULT; IES / pre_meeting / RE / UI histórica pendientes) |
 | Dependencia | Constitución; EKE; Evidence Builder; 03; 03A; 03B; 04; 05; 06; FINANCIAL-ACTUAL-EVIDENCE-CONTRACT |
 | Implementación del pipeline completo | PENDIENTE |
