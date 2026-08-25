@@ -1,13 +1,13 @@
 # CURRENT_TASK
 
-task_id: "AUDIT-DIRECTOR-IA-CLOSE-MEETING-FINANCIAL-ACTUAL-001"
+task_id: "ARCH-DIRECTOR-IA-FINANCIAL-ACTUAL-SOURCE-GAP-001"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-08-24"
 
 mode:
-  type: "PHYSICAL_SOURCE_AUDIT_ONLY"
+  type: "ARCHITECTURE_GAP_READINESS_ONLY"
   implementation: false
   code_changes: false
   runtime_changes: false
@@ -17,274 +17,350 @@ mode:
   sql_execution: false
 
 objective: >
-  Determinar si existe en el sistema una fuente física, canónica y defendible de
-  resultado financiero ACTUAL de cierre mensual por planta.
-
-  La auditoría debe distinguir estrictamente ACTUAL de TARGET_COMMITMENT,
-  FORECAST y DERIVED_MODEL.
+  Diseñar la fuente física mínima, gobernada y defendible de resultado
+  financiero ACTUAL mensual por planta, necesaria para que Director IA pueda
+  responder sobre utilidad operativa real, resultado final real, rentabilidad
+  real y cumplimiento financiero contra TARGET_COMMITMENT sin usar forecast,
+  Folios o reconstrucciones incompletas como sustitutos.
 
 baseline:
   global: "10.5 / 20 = 52.5%"
   delta: "0.0 pp"
 
-prior_evidence:
-  plaud_eval_002:
-    remaining_bottleneck: "close_meeting_financial_actual_unsupported"
-    frequency: "4/4 juntas"
-    affected_real_intents: "5/26"
-    conversation_readiness: "CONVERSATION_BASE_READY_WITH_LIMITS"
+prior_audit:
+  task: "AUDIT-DIRECTOR-IA-CLOSE-MEETING-FINANCIAL-ACTUAL-001"
+  finding: "FINANCIAL ACTUAL SOURCE EXISTS: NO"
+  selected_class: "C — apparent result sources are forecast/model"
+  failure_class: "MISSING_DATA"
+  reconstruction: "NOT_DEFENSIBLE"
+  conversation_readiness: "CONVERSATION_BASE_READY_WITH_LIMITS"
 
 known_truth_classes:
 
-  ACTUAL:
-    currently_supported:
-      - "sales"
+  ACTUAL_COMMERCIAL:
+    source: "ARR"
+    includes:
+      - "sales kg/ton"
       - "channel mix"
       - "discount"
-      - "client movement"
-    source: "ARR actuals"
 
   TARGET_COMMITMENT:
     source: "igf_meta"
-    meaning: "META/COMPROMISO gerencial firmado"
+    meaning: "monthly managerial signed commitment"
 
   FORECAST:
-    source: "IGF compromiso/runtime"
+    source: "IGF"
 
   DERIVED_MODEL:
-    source: "forecast_mensual / derived commercial models"
+    source: "forecast_mensual / derived models"
 
-critical_question: >
-  Is there a physically recorded monthly financial ACTUAL for each plant that
-  Director IA simply does not consume yet?
+  ACTUAL_FINANCIAL:
+    status: "MISSING_PHYSICAL_DATA"
 
-canonical_real_questions:
-  - "¿Cómo quedó la rentabilidad real del mes?"
-  - "¿Cuál fue la utilidad operativa real?"
+north_star: >
+  For one plant and one closed month, Director IA must eventually be able to say:
+  actual operating profit = X,
+  actual final result = Y,
+  target/commitment = A,
+  forecast was B,
+  attainment vs target = Z,
+  with all truth classes kept separate and fully sourced.
+
+canonical_questions_future:
+  - "¿Cuál fue la utilidad operativa real de Puebla en julio?"
   - "¿Cuál fue el resultado final real?"
-  - "¿Vendimos más pero ganamos menos?"
-  - "¿Por qué tuvimos pérdida operativa?"
-  - "¿Cómo quedamos realmente contra la meta de rentabilidad?"
+  - "¿Cómo quedamos contra la meta de rentabilidad?"
+  - "¿Qué diferencia hubo entre la meta, el forecast y el cierre real?"
+  - "Vendimos más, ¿pero realmente ganamos menos?"
+  - "¿Dónde se explicó la desviación?"
 
-physical_search_scope:
+architecture_question: >
+  What should become the canonical physical source of ACTUAL_FINANCIAL?
 
-  repository_wide_terms:
-    - "utilidad operativa"
-    - "util_oper"
-    - "utilidad final"
-    - "resultado final"
-    - "resultado_final"
-    - "margen real"
-    - "margen_kg"
-    - "hg_kg"
-    - "hg_pct"
-    - "ingreso"
-    - "gastos"
-    - "bancos"
-    - "inversiones"
-    - "resultado"
-    - "real"
-    - "actual"
-    - "cierre"
-    - "contabilidad"
-    - "estado de resultados"
-    - "ER"
-    - "IGF"
-    - "ARR"
-    - "forecast_mensual"
+source_options:
 
-  inspect:
-    - "server.js"
-    - "lib/"
-    - "sql/"
-    - "frontend"
-    - "dashboard routes"
-    - "IGF loaders"
-    - "ARR loaders"
-    - "GASTOS"
-    - "INVERSIONES"
-    - "presupuestos"
-    - "folios"
-    - "uploaded Excel/VBA semantics already documented"
-    - "docs"
-
-source_candidates:
-
-  A_existing_actual_financial_table:
+  A_existing_external_accounting_or_erp:
     description: >
-      A physical DB source containing monthly realized financial results.
+      Integrate an authoritative accounting/ERP source that already owns the
+      monthly actual financial close.
 
-  B_reconstructable_actual_from_existing_atomic_sources:
+  B_controlled_monthly_actual_upload:
     description: >
-      Actual financial result can be recomputed defensibly from physical actual
-      sources already present.
+      Create a governed monthly upload/import of the signed/approved actual
+      financial close, analogous in discipline to IGF META but explicitly
+      classified as ACTUAL.
 
-  C_existing_IGF_or_forecast_misnamed:
+  C_reconstruct_from_operational_sources:
     description: >
-      Current apparent "financial result" sources are forecast/model values only.
+      Compute financial actual from ARR + Folios + operational sources.
 
-  D_missing_physical_source:
+  D_relabel_final_IGF_version:
     description: >
-      No defensible monthly financial actual exists in the current system.
+      Treat the final/latest IGF forecast version after month close as actual.
 
   requirement:
     - "compare A/B/C/D"
-    - "select exactly one"
+    - "select exactly one preferred canonical strategy"
+    - "reject C/D unless evidence proves them defensible"
 
-actual_financial_fields_to_find:
+preferred_principle: >
+  Financial actual should come from the system/process that owns the official
+  close, not from Director IA reconstruction.
 
-  desired:
-    - "actual operating profit amount"
-    - "actual operating profit $/kg"
-    - "actual final result amount"
-    - "actual final result $/kg"
-    - "actual margin"
-    - "actual expenses"
-    - "actual investments"
-    - "actual corporate supports"
-    - "actual banks/financial charges where applicable"
+source_discovery_audit:
 
-  rule: >
-    A field name is not sufficient. Determine semantics and provenance.
+  search_outside_current_director_runtime_conceptually:
+    determine_if_business_has:
+      - "ERP accounting close"
+      - "monthly P&L"
+      - "estado de resultados"
+      - "contabilidad export"
+      - "signed close workbook"
+      - "official management close report"
+      - "Power BI actual financial source"
+      - "other authoritative monthly close artifact"
 
-reconstruction_audit:
-
-  if_candidate_B:
-    mandatory:
-      - "list every component"
-      - "identify actual source for each component"
-      - "prove same plant"
-      - "prove same month"
-      - "prove same accounting/business semantics"
-      - "prove formula exists in governed product logic"
-      - "prove no forecast component enters"
-
-  prohibited:
-    - "invent formula"
-    - "reuse igf_meta target as actual component"
-    - "reuse IGF forecast as actual component"
-    - "mix actual and forecast"
-    - "derive accounting actual from incomplete operational signals"
-
-  readiness_rule: >
-    If any material component is missing or forecast-derived, candidate B is not
-    defensible as financial actual.
-
-IGF_audit:
-
-  determine:
-    - "what compromiso_lines physically represent"
-    - "whether any row is final actual or all are forecast/projection"
-    - "version semantics"
-    - "closed-month behavior"
-    - "whether latest version after close becomes actual or remains forecast"
-    - "whether dashboard wording distinguishes projection vs result"
-
-  invariant: >
-    Closed-month availability does not automatically convert forecast into actual.
-
-igf_meta_audit:
-
-  preserve:
-    classification: "TARGET_COMMITMENT"
-
-  invariant: >
-    Never reinterpret igf_meta as actual.
-
-forecast_mensual_audit:
-
-  preserve:
-    classification: "DERIVED_MODEL"
-
-ARR_audit:
-
-  determine:
-    actual_financial_scope:
-      - "does ARR contain only commercial actuals?"
-      - "does it include monetary actuals sufficient for operating/final result?"
-      - "are expenses/investments/corporate charges represented?"
-
-  invariant: >
-    Actual sales + discount alone are insufficient to call something operating
-    or final profit.
-
-gastos_inversiones_audit:
-
-  determine:
-    - "physical actual sources"
-    - "month grain"
-    - "plant grain"
-    - "approved/paid/incurred semantics"
-    - "whether they map to IGF buckets"
-    - "whether all financial components exist"
+  output:
+    - "known existing business source"
+    - "unknown / needs human confirmation"
+    - "not available"
 
   rule: >
-    Do not assume Folio importe or paid amount equals accounting expense in the
-    same month unless existing business logic explicitly establishes it.
+    Do not invent existence of an external ERP/accounting source if repository
+    evidence does not prove it. Mark human confirmation needed if necessary.
 
-accounting_boundary:
+minimum_data_contract:
 
-  critical: true
+  identity:
+    - "plant_id or canonical plant_code"
+    - "year"
+    - "month"
+    - "version"
+    - "is_current/final"
+    - "source_owner"
+    - "source_timestamp"
+    - "approval/finalization status if available"
 
-  distinguish:
-    - "operational support/Folio amount"
-    - "cash payment"
-    - "accounting expense"
-    - "forecast expense"
-    - "target expense"
+  actual_financial_core:
+    preferred_fields:
+      - "sales_ton_actual if source owns it"
+      - "margin_kg_actual"
+      - "com_desc_kg_actual"
+      - "gasto_kg_actual"
+      - "impuesto_kg_actual"
+      - "hg_pct_actual"
+      - "hg_kg_actual"
+      - "bancos_planta_kg_actual"
+      - "provision_planta_kg_actual"
+      - "util_oper_kg_actual"
+      - "util_oper_importe_actual"
+      - "gtos_apoyos_corp_kg_actual"
+      - "bancos_corp_kg_actual"
+      - "otros_programas_kg_actual"
+      - "inversiones_kg_actual"
+      - "resultado_final_kg_actual"
+      - "resultado_final_importe_actual"
 
-  prohibited:
-    - "collapse these into one number"
+  rule: >
+    Field names may mirror IGF META/FORECAST only if business semantics are
+    actually aligned. Do not force symmetry where actual accounting concepts
+    differ.
 
-monthly_close_model_impact:
+semantic_contract:
 
-  if_actual_source_exists:
-    determine:
-      - "how month_close_result should load it"
-      - "what fields can move from UNSUPPORTED to ACTUAL"
-      - "whether pre_meeting_brief can consume it"
+  ACTUAL_FINANCIAL:
+    definition: >
+      Official realized monthly financial close approved by the owning business
+      process/source.
 
-  if_actual_source_missing:
-    required_output: >
-      Confirm FINANCIAL_ACTUAL_UNSUPPORTED as MISSING_PHYSICAL_DATA rather than
-      missing infrastructure.
+  TARGET_COMMITMENT:
+    source: "igf_meta"
 
-real_meeting_impact:
+  FORECAST:
+    source: "IGF"
 
-  affected_intents:
-    - "A4"
-    - "M1"
-    - "M3"
-    - "Q1"
-    - "Q3"
+  invariant:
+    - "actual != target"
+    - "actual != forecast"
+    - "final forecast != actual"
+    - "paid Folio != accounting expense"
+    - "reviewable support != savings"
 
-  evaluate:
-    - "which could become answerable if actual exists"
-    - "which would remain causal/interpretive gaps"
+finalization_semantics:
 
-truth_boundary:
+  determine:
+    - "what makes a month financial close final"
+    - "who owns approval"
+    - "whether revisions after close are allowed"
+    - "how versioning works"
+    - "whether reopened months exist"
 
-  safe:
-    - "actual operating result was X"
-    - "actual final result was Y"
-    - "target was A"
-    - "forecast was B"
+  required_state_candidate:
+    - "DRAFT"
+    - "FINAL"
+    - "SUPERSEDED"
 
-  unsafe:
-    - "we lost money because commissions increased" unless evidence supports causality
-    - "higher sales caused lower profit"
-    - "forecast equals actual"
+  note: >
+    Use actual business states if they exist. Do not create states in this task
+    unless selected architecture requires them conceptually.
 
-failure_class_output:
+versioning:
 
-  if_source_exists_but_unwired:
-    class: "MISSING_INFRASTRUCTURE"
+  requirement:
+    - "exact plant"
+    - "exact YYYY-MM"
+    - "explicit current/final version"
+    - "no carry-forward"
+    - "no silent overwrite"
 
-  if_no_defensible_source:
-    class: "MISSING_DATA"
+  audit:
+    - "whether igf_meta-style versioning can be reused conceptually"
+    - "whether actual close needs stricter approval metadata"
 
-  if_only_reconstruction_requires_new_business_logic:
-    class: "MISSING_DATA_OR_NEW_ACCOUNTING_MODEL"
+approval_and_provenance:
+
+  required:
+    - "source_owner"
+    - "loaded_at / imported_at"
+    - "period"
+    - "version"
+    - "finalization status"
+    - "provenance/source reference"
+
+  preferred:
+    - "approved_by"
+    - "approved_at"
+    - "source document/hash if import-based"
+
+  purpose: >
+    Director IA must be able to say where the actual close came from.
+
+reconciliation_with_ARR:
+
+  rule: >
+    If financial actual source includes sales, do not silently overwrite ARR
+    commercial actual.
+
+  audit:
+    - "how to compare financial-close sales vs ARR sales"
+    - "whether one is operational and one accounting"
+    - "how differences should be surfaced"
+
+  safe_behavior:
+    - "show discrepancy"
+    - "do not force reconciliation in GPT"
+
+reconciliation_with_target_and_forecast:
+
+  future_month_close_result:
+    should_expose:
+      - "sales.actual"
+      - "sales.target"
+      - "sales.forecast if relevant"
+      - "financial.actual"
+      - "financial.target"
+      - "financial.forecast"
+
+  calculations:
+    if_actual_and_target:
+      - "delta_actual_vs_target"
+      - "attainment_actual_vs_target"
+
+    if_actual_and_forecast:
+      - "forecast_error / delta_actual_vs_forecast"
+
+  invariant: >
+    Label every comparison by truth class.
+
+data_quality_and_missing:
+
+  codes:
+    - "FINANCIAL_ACTUAL_MISSING_FOR_PERIOD"
+    - "FINANCIAL_ACTUAL_NOT_FINAL"
+    - "FINANCIAL_ACTUAL_SOURCE_UNAVAILABLE"
+    - "FINANCIAL_ACTUAL_VERSION_AMBIGUOUS"
+    - "FINANCIAL_ACTUAL_RECONCILIATION_GAP"
+
+  rule: >
+    Missing actual must never fall back to forecast.
+
+security_authz:
+
+  requirements:
+    - "same plant authorization"
+    - "financial data may require stricter roles"
+    - "fail closed"
+    - "no cross-plant"
+
+  audit:
+    - "whether GA/GG/AD/ZP or other role rules apply"
+    - "whether actual financial result is more sensitive than existing IGF"
+
+privacy_governance:
+  rule: >
+    Financial actual source should be treated as governed financial evidence,
+    not ordinary conversational memory.
+
+read_model_future_impact:
+
+  month_close_result:
+    future_upgrade:
+      financial.actual: "SUPPORTED from canonical source"
+      financial.target: "igf_meta"
+      financial.forecast: "IGF"
+
+  pre_meeting_brief:
+    future_upgrade:
+      - "actual profitability"
+      - "actual operating result"
+      - "actual final result"
+      - "actual vs target"
+      - "actual vs forecast"
+
+  Plaud_eval:
+    expected_unlock:
+      - "A4"
+      - "M1"
+      - "M3"
+      - "Q1"
+      - "Q3"
+
+  boundary: >
+    Even with financial actual, causal WHY questions may still require context.
+
+implementation_paths:
+
+  if_A_external_source_selected:
+    next_architecture_needed:
+      - "connector/import contract"
+      - "canonical mapping"
+      - "read-only loader"
+
+  if_B_upload_selected:
+    next_architecture_needed:
+      - "upload schema"
+      - "version/finalization semantics"
+      - "validation"
+      - "source provenance"
+
+  prohibit_now:
+    - "implementation"
+    - "schema creation"
+    - "upload UI"
+    - "ERP connector"
+
+human_decision_points:
+
+  determine_if_needed:
+    - "What business process currently owns the official financial close?"
+    - "Does an authoritative monthly file/report already exist?"
+    - "Who signs/approves it?"
+    - "Is actual close revised after approval?"
+
+  rule: >
+    If source ownership cannot be determined from repository evidence, return
+    STOPPED with a precise human decision request rather than inventing source
+    architecture.
 
 contract_audit:
 
@@ -295,57 +371,68 @@ contract_audit:
     - "05 RE"
 
   determine:
-    - "whether connecting actual financial source is runtime-only"
-    - "G2/G3/G8"
+    - "G2"
+    - "G3"
+    - "G8"
+
+  likely: >
+    New physical evidence source may require architecture/data contract review
+    even if runtime remains read-only.
 
 readiness_output:
 
   must_determine:
-    - "ACTUAL financial source exists: YES/NO"
-    - "canonical source"
-    - "grain"
-    - "fields"
-    - "semantics"
-    - "source A/B/C/D"
-    - "whether reconstruction is defensible"
-    - "IGF remains forecast or not"
-    - "month_close_result impact"
-    - "pre_meeting impact"
-    - "failure class"
+    - "Preferred source strategy A/B/C/D"
+    - "Whether official external source already exists"
+    - "Source owner"
+    - "Minimum data contract"
+    - "Finalization/version semantics"
+    - "Approval/provenance requirements"
+    - "Authz requirements"
+    - "Reconciliation rules"
+    - "Missing/error codes"
+    - "month_close_result future integration"
+    - "pre_meeting future integration"
+    - "Plaud real-question impact"
     - "G2/G3/G8"
-    - "percentage effect"
+    - "READY / READY_WITH_LIMITS / STOPPED / BLOCKED"
 
-next_task_policy:
+first_slice_candidate:
 
-  if_actual_exists_and_is_unwired:
-    propose_exactly_one: "ARCH-DIRECTOR-IA-CLOSE-MEETING-FINANCIAL-ACTUAL-001"
+  preferred_if_source_owner_known:
+    scope: >
+      One plant + one closed month + official financial actual core fields +
+      finalization/provenance + read-only retrieval.
 
-  if_actual_missing:
-    propose_exactly_one: "ARCH-DIRECTOR-IA-FINANCIAL-ACTUAL-SOURCE-GAP-001"
-
-  rule: "Do not authorize or execute."
+  defer:
+    - "automatic accounting reconciliation"
+    - "causal analysis"
+    - "multi-company consolidation"
+    - "write-back to ERP"
+    - "Plaud integration"
 
 percentage_policy:
   before: "10.5 / 20 = 52.5%"
-  after: "10.5 / 20 = 52.5%"
+  after_readiness: "10.5 / 20 = 52.5%"
   delta: "0.0 pp"
 
 in_scope:
   writable:
     - "docs/dev-loop/CURRENT_TASK.md"
-    - "docs/dev-loop/reports/AUDIT-DIRECTOR-IA-CLOSE-MEETING-FINANCIAL-ACTUAL-001.md"
+    - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-FINANCIAL-ACTUAL-SOURCE-GAP-001.md"
 
   read_only:
     - "entire repository except writable files"
 
 out_of_scope:
   - "implementation"
-  - "code changes"
+  - "code"
   - "tests"
   - "SQL execution"
-  - "schema"
-  - "new accounting model"
-  - "new financial formula"
+  - "schema creation"
+  - "ERP integration"
+  - "upload implementation"
+  - "new accounting formula"
   - "Plaud runtime"
   - "matrix"
   - "contracts modification"
@@ -354,21 +441,37 @@ out_of_scope:
   - "merge"
 
 acceptance_criteria:
-  - "Repository-wide financial actual source search completed."
-  - "A/B/C/D classified."
-  - "Actual vs target vs forecast vs derived preserved."
-  - "IGF closed-month semantics audited."
-  - "ARR financial sufficiency audited."
-  - "Gastos/Inversiones actual semantics audited."
-  - "Reconstruction defensibility explicitly decided."
-  - "No invented accounting formula."
-  - "Failure class assigned."
-  - "Exactly one NEXT_TASK proposed."
+  - "A/B/C/D source strategies compared."
+  - "C/D rejected or justified."
+  - "Official source ownership investigated."
+  - "Minimum financial actual contract defined."
+  - "Actual/target/forecast separation preserved."
+  - "Finalization semantics defined or identified as human gap."
+  - "Version/provenance rules defined."
+  - "Authz impact assessed."
+  - "Reconciliation boundaries defined."
+  - "Missing/error semantics defined."
+  - "Plaud affected intents mapped."
+  - "G2/G3/G8 determined."
+  - "Exactly one next task proposed if READY."
+  - "If source ownership unresolved, STOPPED with one precise human decision."
   - "52.5% preserved."
   - "Only task + report changed."
   - "git diff --check clean."
 
-expected_terminal_state: "DONE_PENDING_REVIEW"
+next_task_policy:
+  if_ready:
+    propose_exactly_one: "ARCH-DIRECTOR-IA-FINANCIAL-ACTUAL-SOURCE-001"
+
+  if_source_owner_unknown:
+    propose_exactly_one: "DECISION-DIRECTOR-IA-FINANCIAL-ACTUAL-SOURCE-OWNER-001"
+
+  rule: "Do not authorize or execute."
+
+expected_terminal_state: >
+  DONE_PENDING_REVIEW if canonical source strategy and owner are known.
+  STOPPED if human business ownership/source decision is required.
+  BLOCKED if no viable source path exists.
 
 result_report_path: >
-  docs/dev-loop/reports/AUDIT-DIRECTOR-IA-CLOSE-MEETING-FINANCIAL-ACTUAL-001.md
+  docs/dev-loop/reports/ARCH-DIRECTOR-IA-FINANCIAL-ACTUAL-SOURCE-GAP-001.md
