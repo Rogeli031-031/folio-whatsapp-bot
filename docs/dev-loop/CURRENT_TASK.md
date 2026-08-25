@@ -1,400 +1,292 @@
 # CURRENT_TASK
 
 ```yaml
-task_id: "AUDIT-DIRECTOR-IA-PRODUCTION-CONVERSATION-GAP-011"
+task_id: "IMPL-DIRECTOR-IA-TALLER-MAYOR-UNIDAD-001"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-08-24"
 human_authorization: >
   AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-24.
-  Apruebo AUDIT-DIRECTOR-IA-PRODUCTION-CONVERSATION-GAP-011
-  y autorizo G1 exclusivamente para auditoría read-only de producto.
+  Apruebo IMPL-DIRECTOR-IA-TALLER-MAYOR-UNIDAD-001
+  conforme a ARCH-DIRECTOR-IA-TALLER-MAYOR-UNIDAD-001.
 
 gates:
   G1_task_authorization: AUTHORIZED
   G2_architecture_change: N/A
   G3_new_architecture_contract: N/A
-  G5_contract_conformance: N/A
+  G5_contract_conformance: REQUIRED
   G8_calibration_materiality_signature: N/A
 
 mode:
-  type: "PRODUCTION_CONVERSATION_AUDIT_ONLY"
-  implementation: false
-  code_changes: false
-  runtime_changes: false
-  test_changes: false
-  matrix_changes: false
-  contract_changes: false
+  type: "IMPLEMENTATION"
+  contract_change: false
+  schema_change: false
   sql_execution: false
+  mutations: false
 
 objective: >
-  Auditar únicamente los principales pendientes reales de producción que siguen
-  abiertos después de integrar daily_executive_brief, commercial_trend,
-  client_profile e IGF reviewable supports. Seleccionar exactamente un siguiente
-  cuello de mayor impacto entre Taller Mayor por unidad, semántica temporal IGF
-  de periodos cerrados, identidad autenticada/saludo y directorio organizacional
-  SEH.
+  Implementar el read model y routing conversacional de Taller Mayor por unidad,
+  usando la verdad física existente de public.folios, preservando planta,
+  periodo, unidad y Folio activo durante follow-ups.
 
 baseline:
   global: "10.5 / 20 = 52.5%"
-  percentage_effect: "0.0 pp"
+  expected_delta: "0.0 pp"
 
-north_star: >
-  Director IA debe poder conversar naturalmente sobre objetos físicos reales de
-  la organización —unidades, periodos financieros cerrados y personas
-  responsables— sin inventar datos ni requerir wording técnico.
+architecture_decisions:
+  source: "B — reusable Taller Mayor unit read model"
+  routing: "B — canonical taller_mayor parent"
+  intent: "taller_mayor"
 
-regressions_not_to_reselect_if_working:
+identity:
+  canonical_unit: "(planta_id, canonical public.folios.unidad token)"
+  restrictions:
+    - "same plant mandatory"
+    - "no fuzzy"
+    - "no cross-plant unit merge"
+    - "do not call unidad económico or placa"
+    - "no invented unit master"
 
-  daily_executive_brief:
-    - "¿Cómo nos fue ayer?"
-    - "¿Qué te llama la atención?"
-    - "¿Y la venta?"
-    - "¿Y el descuento?"
-
-  commercial_trend:
-    - "¿Cómo vamos en CASA los últimos 3 meses?"
-    - "¿Y COMISIONISTAS?"
-    - "Compáralos."
-    - "¿Quién mueve la caída?"
-
-  client_profile:
-    - "Háblame del primero."
-    - "¿Qué sabemos de él?"
-    - "¿Cómo compró estos 3 meses?"
-    - "¿Qué descuento tuvo?"
-    - "¿Tiene acciones?"
-
-  IGF_reviewable_supports:
-    - "¿Qué podemos recortar de apoyos?"
-    - "¿Cuáles todavía se pueden detener?"
-    - "¿Cómo quedaría el escenario IGF?"
-
-  action_person:
-    - "¿Qué pasó con la acción de Julio Pérez?"
-
-  rule: >
-    Solo reabrir uno de estos si la auditoría demuestra una regresión física.
-
-production_case_1_taller_mayor_units:
-
-  canonical_question: >
-    ¿Qué unidades de Puebla tienen apoyos/Folios de Taller Mayor este mes?
-    Dame detalles.
-
-  semantic_variants:
-    - "¿Qué carros de Puebla traen apoyos de Taller Mayor?"
-    - "Enséñame las unidades con reparaciones mayores este mes."
-    - "¿Qué unidades tienen folios grandes de taller?"
-    - "¿Qué unidades están en Taller Mayor y cuánto llevan?"
-
-  followups:
-    - "¿Cuál tiene el apoyo más alto?"
-    - "¿Qué le están haciendo?"
-    - "¿Qué folio es?"
-    - "¿En qué estatus va?"
-    - "¿Todavía se puede detener?"
-    - "¿Cuánto hemos gastado en esa unidad?"
-    - "¿Qué otros apoyos ha tenido?"
-    - "¿Tiene historial de reparaciones anteriores?"
-
-  mandatory_audit:
-    - "physical definition of Taller Mayor"
-    - "category/subcategory/folio classification"
-    - "unidad/economico/placa/identifier fields"
-    - "folio -> unidad relationship"
-    - "same plant"
-    - "current month / mes_cargo"
-    - "importe"
-    - "status"
-    - "concept/details"
-    - "reviewability"
-    - "historical folios by same unit"
-    - "existing Taller AT/GASTOS helpers"
-    - "dashboard source"
-    - "whether Director IA has any unit-level read path"
-
-  key_questions:
-    - "Are unit and Folio physically linked by a canonical key?"
-    - "Can current-month Taller Mayor rows be grouped safely by unit?"
-    - "Can reviewability reuse the already integrated Folio rules?"
-    - "Can historical spending by unit be queried without name/text matching?"
-
-  truth_boundary:
-    - "high repair amount != bad unit decision"
-    - "folio status != mechanical diagnosis"
-    - "reviewable != recommended to cancel"
-
-production_case_2_closed_month_IGF_semantics:
-
-  canonical_question: >
-    ¿Cuál es la proyección final del IGF de Puebla de mayo pasado?
-
-  semantic_variants:
-    - "¿Cómo proyectamos cerrar mayo?"
-    - "¿Cuál fue la proyección de mayo?"
-    - "¿Cómo cerró realmente mayo?"
-    - "¿Qué habíamos estimado para mayo?"
-
-  expected_behavior:
-    - "recognize May as closed"
-    - "distinguish actual closed result from forecast"
-    - "offer actual result when forecast semantics do not apply"
-    - "historical forecast only if physically persisted"
-
-  followups:
-    - "¿Entonces cómo cerró mayo realmente?"
-    - "¿Qué proyectábamos durante mayo?"
-    - "¿Qué tan cerca quedamos?"
-    - "Compáralo con junio."
-
-  mandatory_audit:
-    - "period resolver"
-    - "current date/month"
-    - "open vs closed period semantics"
-    - "IGF actual fields"
-    - "latest version behavior"
-    - "snapshot/version history"
-    - "as-of timestamp"
-    - "whether historical forecast can be reconstructed legitimately"
-    - "whether frontend/dashboard already distinguishes actual vs forecast"
-
-  truth_boundary:
-    - "closed actual != forecast"
-    - "latest historical row != necessarily historical projection"
-    - "do not synthesize forecast from final actual"
-
-  key_question: >
-    Is this a narrow temporal routing/semantics gap over data already present,
-    or is historical forecast physically unavailable?
-
-production_case_3_authenticated_identity:
-
-  canonical_turn: "Hola"
-
-  desired_behavior_if_supported: >
-    Personalize greeting using the current authenticated user's identity.
-
-  examples:
-    - "Hola"
-    - "Buenos días"
-    - "Qué tal"
-
-  mandatory_audit:
-    - "dashboard authenticated user payload"
-    - "POST /director-ia/chat or equivalent"
-    - "user id"
-    - "nombre"
-    - "role"
-    - "plant permissions"
-    - "professional title/salutation field"
-    - "smalltalk path"
-    - "system prompt context"
-    - "whether identity is available but discarded"
-
-  desired_safe_behavior:
-    name_available: >
-      “Hola, <nombre>. ¿En qué le puedo ayudar hoy?”
-
-    title_available: >
-      Use professional title only if physically stored or governed by explicit
-      safe business rule.
-
+classification:
+  field: "public.folios.subcategoria"
+  value: "REPARACIÓN MAYOR"
+  runtime_helper: "matchTallerTipoCol"
   prohibited:
-    - "hardcoded Zaragoza"
-    - "memory as identity source"
-    - "guessing Ing./Lic./Dr."
-    - "identity leakage between users"
+    - "classification by importe"
+    - "classification by concepto"
 
-  broader_value_audit:
-    determine: >
-      Whether authenticated identity could also improve role-aware responses,
-      not just greeting cosmetics.
+period:
+  current_month: "current CDMX YYYY-MM"
+  physical_field: "mes_cargo"
 
-production_case_4_SEH_directory:
-
-  canonical_question: >
-    ¿Quién es el responsable de Seguridad e Higiene en Puebla?
-
-  semantic_variants:
-    - "¿Quién lleva SEH en Puebla?"
-    - "¿Quién es el encargado de Seguridad e Higiene?"
-    - "Dame el contacto de SEH Puebla."
-
-  followups:
-    - "¿Cuál es su teléfono?"
-    - "¿Y su correo?"
-    - "¿Tiene acciones pendientes?"
-    - "¿Qué sabemos de él?"
-
-  mandatory_audit:
-    - "usuarios"
-    - "personas/contactos"
-    - "role/cargo"
-    - "area/departamento"
-    - "plant assignment"
-    - "SEH aliases"
-    - "responsable currentness/vigencia"
-    - "telefono"
-    - "correo"
-    - "directory-like sources in dashboard/WhatsApp"
-    - "authz/privacy"
-
-  classification_requirement:
-    distinguish:
-      - "MISSING_PHYSICAL_DATA"
-      - "MISSING_INFRASTRUCTURE_OVER_EXISTING_DATA"
-
-  rule: >
-    Do not treat docs/equipos mentions as a responsible-person directory.
-
-production_case_5_regression_chain:
-
-  conversation:
-    - "¿Cómo vamos en CASA los últimos 3 meses?"
-    - "¿Quién mueve la caída?"
-    - "Háblame del primero."
-    - "¿Qué sabemos de él?"
-    - "¿Cómo compró estos meses?"
-    - "¿Tiene acciones?"
-
-  expected: >
-    commercial_trend -> client_profile handoff must still work.
-
-production_value_selection:
-
-  dimensions:
-    frequency: "probabilidad de uso ejecutivo real"
-    executive_value: "impacto en decisión/visibilidad"
-    transversal_unlock: "cuántas conversaciones nuevas habilita"
-    data_readiness: "qué tanto dato físico ya existe"
-    naturalness: "qué tanto mejora la sensación de conversación"
-
-  rule: >
-    Use only to justify the next bottleneck. Do not persist a roadmap score.
-
-trace_each_case:
-
-  required:
-    - "isolated planner"
-    - "effective intent"
-    - "coverage guard"
-    - "parent intent"
-    - "conversation state"
-    - "active entity if any"
+required_read_model:
+  output:
+    - "canonical unit token"
     - "plant"
     - "period"
-    - "physical sources"
-    - "sources actually loaded"
-    - "authz"
-    - "evidence to GPT"
+    - "folio count"
+    - "SUM(importe)"
+    - "individual Folio references"
+    - "individual importe"
+    - "estatus"
+    - "concepto"
+    - "subcategoria"
+    - "reviewability when applicable"
+    - "provenance"
     - "limitations"
-    - "GPT invoked"
-    - "deterministic early return"
-    - "exact failure point"
 
-physical_source_rule: >
-  Search repository-wide before declaring data missing. If dashboard/WhatsApp
-  already has the source, classify as missing infrastructure, not missing data.
+ranking:
+  after_unit_list:
+    "el más alto": "unit with greatest SUM(importe)"
 
-phrasebook_policy:
   invariant: >
-    User questions are semantic production tests, never strings to hardcode.
+    If selected unit contains multiple matching Folios, do not silently select
+    one Folio.
 
+conversation_state:
   required:
-    - "semantic variants"
-    - "holdouts"
-    - "inspect production routing for literal phrase rules"
+    - "active_unit"
+    - "active_folio when uniquely/explicitly selected"
+    - "plant"
+    - "active_period"
+    - "parent_intent=taller_mayor"
 
-answerability_classification:
-  values:
-    - "WORKS_NOW"
-    - "PARTIALLY_WORKS"
-    - "ROUTING_GAP"
-    - "MISSING_READ_MODEL"
-    - "MISSING_PHYSICAL_DATA"
-    - "TEMPORAL_SEMANTICS_GAP"
-    - "AUTHZ_LIMIT"
-    - "REGRESSION"
+  invariant: "routing identifiers only; no stale raw evidence"
+  requery: true
 
-failure_classes:
-  - "MISSING_DATA"
-  - "MISSING_INFRASTRUCTURE"
-  - "MODEL_REASONING_LIMIT"
-  - "OVERPROGRAMMING"
-  - "DEPLOYMENT_GAP"
-  - "CONTRACT_OR_AUTHZ_LIMIT"
+required_conversation:
+  - "¿Qué unidades de Puebla tienen apoyos de Taller Mayor este mes?"
+  - "¿Cuál tiene el importe más alto?"
+  - "Háblame de esa unidad."
+  - "¿Qué reparación le están haciendo?"
+  - "¿Qué Folio es?"
+  - "¿En qué estatus está?"
+  - "¿Todavía se puede detener?"
+  - "¿Qué otros Folios ha tenido esa unidad?"
+  - "¿Cuánto llevamos en reparaciones de esa unidad?"
 
-single_bottleneck:
+folio_selection:
+  rule: >
+    A unique active Folio may be selected only when evidence/context uniquely
+    identifies it or the user explicitly selects it.
 
-  exactly_one: true
+  multiple_folios: >
+    Preserve the set and ask/answer at unit level as appropriate. Do not silently
+    choose one.
 
-  required:
-    - "name"
-    - "failure_class"
-    - "production case affected"
-    - "physical location/source"
-    - "evidence"
-    - "why it wins now"
-    - "what fixing it unlocks"
-    - "what it does not solve"
+reviewability:
+  helper: "classifyCancellationEligibility"
 
-  selection_rule: >
-    Pick the highest-value structural blocker among the remaining production
-    cases, not the easiest cosmetic improvement.
+  precedence: >
+    If active_folio exists, “¿Todavía se puede detener?” evaluates that selected
+    Folio. It must not route to plant-wide IGF reviewable supports.
 
-next_task:
+  invariants:
+    - "reviewable != cancel"
+    - "reviewable != recommendation"
+    - "reviewable != savings"
+    - "reviewable != accounting reversal"
+    - "Director IA remains read-only"
 
-  exactly_one: true
-  authorize: false
-  execute: false
+history:
+  same_identity: "(same planta_id, same canonical unidad token)"
 
-  naming: >
-    Prefer ARCH-* if readiness/business semantics must be established before
-    implementation.
+  default_scope: >
+    Preserve Taller Mayor thread semantics and active period unless explicit
+    wording requests broader history.
 
-percentage_policy:
-  before: "10.5 / 20 = 52.5%"
-  after: "10.5 / 20 = 52.5%"
-  delta: "0.0 pp"
+  expansion:
+    examples:
+      - "histórico"
+      - "todos sus folios"
+      - "en total"
+
+  rule: "expand only when explicitly requested"
+
+cross_domain:
+  hypothetical_igf:
+    requirement: >
+      If active_folio exists and user asks how IGF would change if it did not
+      enter, preserve selected Folio/unit and reuse existing hypothetical IGF
+      semantics where physically supported.
+
+    restrictions:
+      - "no mutation"
+      - "no realized savings claim"
+      - "do not replace selected Folio with plant-wide candidates"
+
+reasoning_boundary:
+  runtime:
+    - "identity"
+    - "classification"
+    - "period"
+    - "amount math"
+    - "status"
+    - "reviewability"
+    - "history retrieval"
+    - "authorization"
+    - "provenance"
+    - "absence/error"
+
+  gpt:
+    - "executive synthesis"
+    - "summarization"
+    - "what stands out"
+    - "what to investigate"
+
+  prohibited:
+    - "mechanical diagnosis without evidence"
+    - "causal inference from concepto"
+    - "recommend cancellation because amount is high"
+    - "savings claims from reviewability"
+
+partial_data:
+  rule: "return supported facts + limitations; missing != zero"
+
+authz:
+  preserve:
+    - "existing plant authorization"
+    - "same-plant restrictions"
+    - "fail closed"
+
+no_phrasebook:
+  required: true
+
+regressions:
+  preserve:
+    - "generic folio_status"
+    - "taller_at"
+    - "IGF reviewable plant-wide query"
+    - "client_profile"
+    - "commercial_trend"
+    - "daily_executive_brief"
+    - "daily_sales_deviation"
+    - "daily_discount_deviation"
+    - "topic return"
+    - "persistent memory"
+
+tests_required:
+  focal:
+    - "list units current month"
+    - "ranking by SUM importe"
+    - "unit selection"
+    - "multiple Folios no silent pick"
+    - "details"
+    - "status"
+    - "selected Folio reviewability"
+    - "plant-wide IGF reviewable regression"
+    - "history"
+    - "period inheritance"
+    - "same-plant identity"
+    - "cross-plant fail closed"
+    - "hold-out wording"
+    - "missing data"
+    - "no phrasebook"
+
+  mandatory:
+    - "focal tests"
+    - "planner"
+    - "capabilities"
+    - "tool orchestrator"
+    - "full Director IA suite"
+    - "git diff --check"
 
 in_scope:
   writable:
     - "docs/dev-loop/CURRENT_TASK.md"
-    - "docs/dev-loop/reports/AUDIT-DIRECTOR-IA-PRODUCTION-CONVERSATION-GAP-011.md"
+    - "docs/dev-loop/reports/IMPL-DIRECTOR-IA-TALLER-MAYOR-UNIDAD-001.md"
+    - "lib/** only where required"
+    - "test/** only where required"
 
   read_only:
-    - "entire repository except writable files"
+    - "architecture/contracts"
+    - "database schema"
 
 out_of_scope:
-  - "implementation"
-  - "code changes"
-  - "tests"
-  - "matrix changes"
-  - "contracts"
+  - "schema changes"
   - "SQL execution"
-  - "schema"
+  - "unit master"
+  - "predictive maintenance"
+  - "mechanical diagnosis"
+  - "Taller mutations"
+  - "Folio cancellation"
+  - "new accounting semantics"
+  - "documentation sync"
+  - "capability matrix changes"
   - "commit"
   - "push"
   - "merge"
 
 acceptance_criteria:
-  - "Taller Mayor by unit audited physically."
-  - "Closed-month IGF semantics audited."
-  - "Authenticated identity/greeting audited."
-  - "SEH directory physically audited."
-  - "Commercial trend -> client profile regression validated."
-  - "Semantic variants used."
-  - "Exactly one bottleneck selected."
-  - "Exactly one NEXT_TASK proposed."
-  - "52.5% preserved."
-  - "Only task + report changed."
-  - "git diff --check clean."
+  - "taller_mayor parent works semantically"
+  - "same plant enforced"
+  - "current CDMX YYYY-MM uses mes_cargo"
+  - "REPARACIÓN MAYOR comes from canonical subcategoria"
+  - "unit list grouped correctly"
+  - "SUM importe ranking correct"
+  - "multiple Folios never silently collapse"
+  - "active_unit works"
+  - "active_folio works when uniquely selected"
+  - "selected-Folio reviewability works"
+  - "reviewability does not jump to plant-wide IGF"
+  - "history preserves identity"
+  - "requery fresh evidence"
+  - "no phrasebook"
+  - "no invented identity"
+  - "no savings claim"
+  - "all required regressions green"
+  - "52.5% preserved"
+  - "git diff --check clean"
+
+next_task:
+  propose_exactly_one_if_success:
+    "DOCS-DIRECTOR-IA-TALLER-MAYOR-UNIDAD-SYNC-001"
+
+  rule: "Do not authorize or execute."
 
 expected_terminal_state: "DONE_PENDING_REVIEW"
-
 max_attempts: 1
 
 result_report_path: >
-  docs/dev-loop/reports/AUDIT-DIRECTOR-IA-PRODUCTION-CONVERSATION-GAP-011.md
+  docs/dev-loop/reports/IMPL-DIRECTOR-IA-TALLER-MAYOR-UNIDAD-001.md
