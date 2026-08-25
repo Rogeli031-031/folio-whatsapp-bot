@@ -14,6 +14,7 @@
 | `docs/director-ia/DIRECTOR_IA_V2_FASE_2_PLANNER.md` | Disponible — plan de intents/dominios |
 | `docs/director-ia/DIRECTOR_IA_V2_FASE_3_TOOL_ORCHESTRATOR.md` | Disponible — tool plan declarativo |
 | `docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md` | Complemento de inventario de fuentes |
+| `docs/director-ia/FINANCIAL-ACTUAL-EVIDENCE-CONTRACT.md` | Disponible — contrato de evidencia de dominio ACTUAL_FINANCIAL v1.0 (G3); el detalle no se duplica aquí |
 
 Este documento **no inventa fuentes** fuera del inventario de Fases 1–3. En caso de conflicto, prevalece la Constitución.  
 Este documento **no redefine** conceptos constitucionales: los referencia.  
@@ -265,6 +266,32 @@ Clientes, pérdida (dejaron), crecimiento (aumentaron/nuevos), recuperación, co
 ## Financiero
 
 ARR, IGF, margen, forecast, venta, descuento, ingreso, desviaciones.
+
+Cinco clases de verdad **distintas** (no se relabelan). El detalle de evidencia ACTUAL_FINANCIAL es propiedad de `docs/director-ia/FINANCIAL-ACTUAL-EVIDENCE-CONTRACT.md` v1.0.
+
+| Clase | Fuente canónica | Significado |
+|-------|-----------------|-------------|
+| ACTUAL_COMMERCIAL | ARR | Actual comercial (venta, mix, descuento reales cuando existan) |
+| TARGET_COMMITMENT | `igf_meta` | Meta/compromiso gerencial del mes |
+| FORECAST | IGF no FINAL / vista financiera vigente | Proyección; no cierre financiero actual |
+| ACTUAL_FINANCIAL | FINANCE_PROVIDED de la única versión FINAL no SUPERSEDED del YYYY-MM + identidad autorizada | Cierre financiero actual; semántica detallada en el contrato G3 |
+| DERIVED_MODEL | `forecast_mensual` / modelos derivados | Salida de modelo; no evidencia actual |
+
+Invariantes: ACTUAL_COMMERCIAL ≠ ACTUAL_FINANCIAL; TARGET_COMMITMENT ≠ ACTUAL_FINANCIAL; FORECAST ≠ ACTUAL_FINANCIAL; DERIVED_MODEL ≠ ACTUAL_FINANCIAL; FINANCE_PROVIDED ≠ RUNTIME_COMPUTED. FINAL **no** se infiere (EKE / Reasoning / GPT). Missing ACTUAL_FINANCIAL **no** cae a FORECAST, a TARGET ni a cero.
+
+Mes abierto: actual comercial to-date + target + forecast. Prohibido etiquetar forecast como actual financiero.
+Mes cerrado no FINAL: financial actual = `NOT_FINAL`; no presentar P&L/resultado como ACTUAL_FINANCIAL.
+Mes cerrado FINAL: puede llamarse ACTUAL_FINANCIAL **solo** si el contrato G3 se satisface físicamente y hay autorización. Reconocer la clase **no** implica runtime, loader, marker físico ni consumo IES.
+
+Si el sistema calcula X con inputs FINAL + ARR, X sigue siendo RUNTIME_COMPUTED; no se atribuye a Finanzas como FINANCE_PROVIDED.
+
+Si evidencia FINANCE_PROVIDED contradice ARR del mismo periodo: `FINANCIAL_ACTUAL_RECONCILIATION_GAP`. Se conservan ambas fuentes. Sin overwrite silencioso ni elección GPT.
+
+`created_at` / timestamp de carga ≠ fecha efectiva de negocio. No afirmar «as of» calendario solo por timestamp.
+
+Varianza financiera ≠ causa. Gap ≠ causa. Coincidencia temporal ≠ causa. Declaración de junta ≠ verdad causal salvo evidencia aparte.
+
+**AUTHZ_DECISION_REQUIRED.** El permiso de IGF forecast **no** autoriza P&L / ACTUAL_FINANCIAL. La exposición runtime permanece prohibida hasta esa decisión.
 
 **Fuentes típicas (integradas / on-demand):** `arr`, `igf`.  
 **No integradas aún como tools UI delta:** `delta_venta`, `delta_descuento`, `delta_ingreso` (declaradas no integradas en Fase 3).
@@ -786,11 +813,11 @@ Las Fases 1–3 son **productores de entrada** al Motor; no son el Motor ni el E
 | Campo | Valor |
 |-------|--------|
 | Constitución usada | `docs/director-ia/DIRECTOR_IA_CONSTITUTION.md` |
-| Versión | 1.0 |
+| Versión | 1.1 |
 | Fecha de revisión | 2026-08-04 |
 | Documento auditado | `docs/director-ia/DIRECTOR_IA_EXECUTIVE_KNOWLEDGE_ENGINE.md` |
-| Resultado | **Conforme tras auditoría empresarial** (jerarquía Constitución→Motor→Evidence Builder→IES→Reasoning Engine→Interfaces; ausencia tipificada; sin redefinición constitucional; sin implementación; propiedad de contratos en Evidence Builder). |
-| Excepciones pendientes | (1) Calibración numérica Fs/R/Cb/Cs/Cb_ov — diferida. (2) Esquema de producto IES: `04-IES-STANDARD.md` existe; IES v1.0 **APROBADO PARA CONGELAMIENTO**; **runtime del IES PENDIENTE**. (3) Contrato Reasoning Engine: `05-REASONING-ENGINE.md` v1.0 **APROBADO PARA CONGELAMIENTO**; **runtime del RE PENDIENTE**. (4) Ejecución real de tools e integración de dominios no integrados — fuera de este diseño. |
+| Resultado | **Conforme tras auditoría empresarial** (jerarquía Constitución→Motor→Evidence Builder→IES→Reasoning Engine→Interfaces; ausencia tipificada; sin redefinición constitucional; sin implementación; propiedad de contratos en Evidence Builder; §7 Financiero sincronizado con FINANCIAL-ACTUAL-EVIDENCE-CONTRACT v1.0 sin reabrir `04`/`05`). |
+| Excepciones pendientes | (1) Calibración numérica Fs/R/Cb/Cs/Cb_ov — diferida. (2) Esquema de producto IES: `04-IES-STANDARD.md` existe; IES v1.0 **APROBADO PARA CONGELAMIENTO**; **runtime del IES PENDIENTE**. (3) Contrato Reasoning Engine: `05-REASONING-ENGINE.md` v1.0 **APROBADO PARA CONGELAMIENTO**; **runtime del RE PENDIENTE**. (4) Ejecución real de tools e integración de dominios no integrados — fuera de este diseño. (5) ACTUAL_FINANCIAL: clase reconocida; contrato G3 existe; marker físico FINAL, loader, exposición runtime, AUTHZ e integración IES **pendientes**. |
 | Prohibición de implementación | Queda **prohibido implementar** el Motor si reaparecen no conformidades críticas (Reasoning Engine antes del Nivel 5; Motor/Evidence Builder generando hipótesis; IES mutable; suavización de Tipo E; ausencia como cero; colapso `SOURCE_NOT_INTEGRATED`/`DATA_NOT_FOUND`; IES alternativo sin auditoría; Evidence Builder tomando decisiones de política). |
 
 ---
