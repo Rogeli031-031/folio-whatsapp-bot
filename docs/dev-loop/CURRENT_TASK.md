@@ -1,13 +1,13 @@
 # CURRENT_TASK
 
-task_id: "AUDIT-DIRECTOR-IA-PLAUD-CLOSE-MEETING-EVAL-002"
+task_id: "AUDIT-DIRECTOR-IA-CLOSE-MEETING-FINANCIAL-ACTUAL-001"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-08-24"
 
 mode:
-  type: "REAL_MEETING_REEVALUATION_ONLY"
+  type: "PHYSICAL_SOURCE_AUDIT_ONLY"
   implementation: false
   code_changes: false
   runtime_changes: false
@@ -15,296 +15,315 @@ mode:
   matrix_changes: false
   contract_changes: false
   sql_execution: false
-  plaud_runtime_integration: false
 
 objective: >
-  Repetir exactamente la evaluación AUDIT-DIRECTOR-IA-PLAUD-CLOSE-MEETING-EVAL-001
-  contra las mismas 26 intenciones reales provenientes de las mismas juntas
-  históricas de Plaud, después de integrar month_close_result.
+  Determinar si existe en el sistema una fuente física, canónica y defendible de
+  resultado financiero ACTUAL de cierre mensual por planta.
 
-  Medir el efecto real de la nueva capability sin cambiar muestra, criterios,
-  categorías ni denominador.
+  La auditoría debe distinguir estrictamente ACTUAL de TARGET_COMMITMENT,
+  FORECAST y DERIVED_MODEL.
 
 baseline:
-  coverage: "10.5 / 20 = 52.5%"
+  global: "10.5 / 20 = 52.5%"
   delta: "0.0 pp"
-  conversation: "CONVERSATION_BASE_READY_WITH_LIMITS"
 
-prior_eval:
-  task: "AUDIT-DIRECTOR-IA-PLAUD-CLOSE-MEETING-EVAL-001"
-  N: 26
+prior_evidence:
+  plaud_eval_002:
+    remaining_bottleneck: "close_meeting_financial_actual_unsupported"
+    frequency: "4/4 juntas"
+    affected_real_intents: "5/26"
+    conversation_readiness: "CONVERSATION_BASE_READY_WITH_LIMITS"
 
-  rates:
-    anticipated: "4/26 = 15.4%"
-    prepared: "9/26 = 34.6%"
-    unsupported: "6/26 = 23.1%"
-    partially_answerable: "11/26"
+known_truth_classes:
 
-new_capability_since_eval_001:
-  intent: "month_close_result"
+  ACTUAL:
+    currently_supported:
+      - "sales"
+      - "channel mix"
+      - "discount"
+      - "client movement"
+    source: "ARR actuals"
 
-  provides:
-    - "monthly ACTUAL sales"
-    - "TARGET_COMMITMENT from igf_meta"
-    - "actual vs target delta"
-    - "attainment %"
-    - "CASA/COMISIONISTA monthly mix"
-    - "monthly weighted discount/kg"
-    - "new/lost/movers"
-    - "financial.target"
-    - "financial.forecast separately"
-    - "financial.actual = UNSUPPORTED_METRIC"
-    - "actions"
-    - "information gaps"
+  TARGET_COMMITMENT:
+    source: "igf_meta"
+    meaning: "META/COMPROMISO gerencial firmado"
 
-  truth_classes:
-    - "ACTUAL"
-    - "TARGET_COMMITMENT"
-    - "FORECAST"
-    - "DERIVED_MODEL"
+  FORECAST:
+    source: "IGF compromiso/runtime"
 
-  target_rule:
-    - "exact YYYY-MM"
-    - "is_current"
-    - "no carry-forward"
-    - "TARGET_MISSING_FOR_PERIOD"
+  DERIVED_MODEL:
+    source: "forecast_mensual / derived commercial models"
 
-fixed_source_packet:
-  invariant: >
-    Use exactly the same 26 real intents from EVAL-001.
-    Do not add, remove, merge, split or paraphrase them into a new sample.
+critical_question: >
+  Is there a physically recorded monthly financial ACTUAL for each plant that
+  Director IA simply does not consume yet?
 
-  meetings:
-    - "Puebla"
-    - "Acapulco"
-    - "Morelos"
-    - "Querétaro/San Luis"
+canonical_real_questions:
+  - "¿Cómo quedó la rentabilidad real del mes?"
+  - "¿Cuál fue la utilidad operativa real?"
+  - "¿Cuál fue el resultado final real?"
+  - "¿Vendimos más pero ganamos menos?"
+  - "¿Por qué tuvimos pérdida operativa?"
+  - "¿Cómo quedamos realmente contra la meta de rentabilidad?"
 
-classification:
-  values:
-    - "ANTICIPATED"
-    - "GAP_DETECTED"
-    - "FOLLOWUP_ANSWERABLE"
-    - "PARTIALLY_ANSWERABLE"
-    - "MISSING_CAPABILITY"
-    - "MISSING_DATA"
-    - "NOT_DEFENSIBLE_AS_OF"
+physical_search_scope:
 
-classification_invariant: >
-  Use exactly the same definitions as EVAL-001.
+  repository_wide_terms:
+    - "utilidad operativa"
+    - "util_oper"
+    - "utilidad final"
+    - "resultado final"
+    - "resultado_final"
+    - "margen real"
+    - "margen_kg"
+    - "hg_kg"
+    - "hg_pct"
+    - "ingreso"
+    - "gastos"
+    - "bancos"
+    - "inversiones"
+    - "resultado"
+    - "real"
+    - "actual"
+    - "cierre"
+    - "contabilidad"
+    - "estado de resultados"
+    - "ER"
+    - "IGF"
+    - "ARR"
+    - "forecast_mensual"
 
-hindsight_control:
-  unchanged: true
+  inspect:
+    - "server.js"
+    - "lib/"
+    - "sql/"
+    - "frontend"
+    - "dashboard routes"
+    - "IGF loaders"
+    - "ARR loaders"
+    - "GASTOS"
+    - "INVERSIONES"
+    - "presupuestos"
+    - "folios"
+    - "uploaded Excel/VBA semantics already documented"
+    - "docs"
+
+source_candidates:
+
+  A_existing_actual_financial_table:
+    description: >
+      A physical DB source containing monthly realized financial results.
+
+  B_reconstructable_actual_from_existing_atomic_sources:
+    description: >
+      Actual financial result can be recomputed defensibly from physical actual
+      sources already present.
+
+  C_existing_IGF_or_forecast_misnamed:
+    description: >
+      Current apparent "financial result" sources are forecast/model values only.
+
+  D_missing_physical_source:
+    description: >
+      No defensible monthly financial actual exists in the current system.
+
+  requirement:
+    - "compare A/B/C/D"
+    - "select exactly one"
+
+actual_financial_fields_to_find:
+
+  desired:
+    - "actual operating profit amount"
+    - "actual operating profit $/kg"
+    - "actual final result amount"
+    - "actual final result $/kg"
+    - "actual margin"
+    - "actual expenses"
+    - "actual investments"
+    - "actual corporate supports"
+    - "actual banks/financial charges where applicable"
 
   rule: >
-    Information first introduced inside the historical meeting does not count as
-    pre-meeting knowledge.
+    A field name is not sufficient. Determine semantics and provenance.
 
-  correct_credit: >
-    If Director IA could detect that an explanation was absent beforehand, score
-    GAP_DETECTED rather than ANTICIPATED.
+reconstruction_audit:
 
-evaluation_method:
+  if_candidate_B:
+    mandatory:
+      - "list every component"
+      - "identify actual source for each component"
+      - "prove same plant"
+      - "prove same month"
+      - "prove same accounting/business semantics"
+      - "prove formula exists in governed product logic"
+      - "prove no forecast component enters"
 
-  for_each_of_26:
-    record:
-      - "meeting"
-      - "real question/intent"
-      - "EVAL-001 classification"
-      - "EVAL-002 classification"
-      - "changed? yes/no"
-      - "capability responsible for change"
-      - "physical/runtime evidence"
-      - "limitation"
+  prohibited:
+    - "invent formula"
+    - "reuse igf_meta target as actual component"
+    - "reuse IGF forecast as actual component"
+    - "mix actual and forecast"
+    - "derive accounting actual from incomplete operational signals"
 
-  required_change_labels:
-    - "PARTIALLY_ANSWERABLE -> ANTICIPATED"
-    - "PARTIALLY_ANSWERABLE -> FOLLOWUP_ANSWERABLE"
-    - "MISSING_CAPABILITY -> ANTICIPATED"
-    - "MISSING_CAPABILITY -> FOLLOWUP_ANSWERABLE"
-    - "no change"
-    - "other, with justification"
+  readiness_rule: >
+    If any material component is missing or forecast-derived, candidate B is not
+    defensible as financial actual.
 
-credit_policy:
+IGF_audit:
 
-  initial_brief_credit:
-    rule: >
-      ANTICIPATED only if pre_meeting_brief/month_close_result can surface the
-      needed fact/risk without unrelated manual investigation.
+  determine:
+    - "what compromiso_lines physically represent"
+    - "whether any row is final actual or all are forecast/projection"
+    - "version semantics"
+    - "closed-month behavior"
+    - "whether latest version after close becomes actual or remains forecast"
+    - "whether dashboard wording distinguishes projection vs result"
 
-  followup_credit:
-    rule: >
-      FOLLOWUP_ANSWERABLE if the issue is naturally reachable from the meeting
-      context through an existing canonical capability.
+  invariant: >
+    Closed-month availability does not automatically convert forecast into actual.
 
-  partial_credit:
-    rule: >
-      PARTIALLY_ANSWERABLE if only part of the executive demand is defensible.
+igf_meta_audit:
 
-  missing_target:
-    rule: >
-      If historical target for that exact period is not defensibly present,
-      do not assume target availability merely because runtime now supports
-      igf_meta.
-
-  financial_actual:
-    rule: >
-      financial.actual remains unsupported. Do not upgrade profitability/actual
-      income questions beyond what the physical sources support.
-
-mandatory_focus:
-
-  month_result_vs_target:
-    questions:
-      - "cómo salió la venta"
-      - "meta vs resultado"
-      - "cuánto faltó"
-      - "cumplimiento %"
-
-  mix_and_discount:
-    questions:
-      - "CASA vs comisionistas"
-      - "qué cambió en mix"
-      - "qué pasó con descuentos/comisiones"
-
-  client_movement:
-    questions:
-      - "qué clientes explican"
-      - "nuevos/perdidos"
-      - "movers"
-
-  profitability:
-    questions:
-      - "vendimos más pero ganamos menos"
-      - "por qué cayó margen/rentabilidad"
-      - "pérdida operativa"
-
-    boundary: >
-      month_close_result may improve the commercial side, but financial.actual
-      remains unsupported unless physically available.
-
-  actions:
-    questions:
-      - "qué quedó pendiente"
-      - "qué compromisos siguen abiertos"
-
-  next_month:
-    questions:
-      - "qué se hará"
-      - "meta siguiente defendible"
-
-    rule: >
-      Do not credit current month target capability for next-month planning
-      unless the exact source/capability supports it.
-
-metrics:
-
-  calculate_again:
-    anticipated_rate:
-      formula: "ANTICIPATED / 26"
-
-    prepared_rate:
-      formula: "(ANTICIPATED + GAP_DETECTED + FOLLOWUP_ANSWERABLE) / 26"
-
-    unsupported_rate:
-      formula: "(MISSING_CAPABILITY + MISSING_DATA + NOT_DEFENSIBLE_AS_OF) / 26"
-
-    partially_answerable:
-      report_count: true
-
-  delta_vs_eval_001:
-    required:
-      - "anticipated_rate delta"
-      - "prepared_rate delta"
-      - "unsupported_rate delta"
-      - "PARTIALLY_ANSWERABLE delta"
-
-  important: >
-    These remain audit-only measures, not permanent product KPIs.
-
-causal_attribution:
-
-  question: >
-    How much of the improvement is specifically attributable to month_close_result?
-
-  required:
-    - "count intents upgraded because of month_close_result"
-    - "list those intents"
-    - "do not attribute unchanged intents to the new capability"
-
-real_meeting_question_families:
   preserve:
-    - "WHAT_HAPPENED"
-    - "WHY"
-    - "WHO_MOVED_IT"
-    - "WHAT_CHANGED"
-    - "WHAT_IS_OPEN"
-    - "WHAT_NEXT"
-    - "WHAT_IS_MISSING"
+    classification: "TARGET_COMMITMENT"
 
-family_level_output:
-  for_each_family:
-    report:
-      - "count"
-      - "prepared count"
-      - "remaining weakness"
+  invariant: >
+    Never reinterpret igf_meta as actual.
 
-critical_question:
-  text: >
-    After month_close_result, would Director IA now enter these same historical
-    meetings materially better prepared?
+forecast_mensual_audit:
 
-  answer_required:
-    - "YES / PARTIALLY / NO"
-    - "with evidence"
+  preserve:
+    classification: "DERIVED_MODEL"
 
-conversation_readiness:
-  current: "CONVERSATION_BASE_READY_WITH_LIMITS"
+ARR_audit:
 
-  reassess:
-    rule: >
-      Change only if real-meeting evidence reveals a structural conversation
-      regression.
+  determine:
+    actual_financial_scope:
+      - "does ARR contain only commercial actuals?"
+      - "does it include monetary actuals sufficient for operating/final result?"
+      - "are expenses/investments/corporate charges represented?"
 
-  likely_outcome_if_no_regression: >
-    Preserve CONVERSATION_BASE_READY_WITH_LIMITS.
+  invariant: >
+    Actual sales + discount alone are insufficient to call something operating
+    or final profit.
 
-next_bottleneck:
+gastos_inversiones_audit:
 
-  exactly_one: true
+  determine:
+    - "physical actual sources"
+    - "month grain"
+    - "plant grain"
+    - "approved/paid/incurred semantics"
+    - "whether they map to IGF buckets"
+    - "whether all financial components exist"
 
-  selection_rule: >
-    Select the largest remaining repeated gap across the same 26 real intents
-    after month_close_result.
+  rule: >
+    Do not assume Folio importe or paid amount equals accounting expense in the
+    same month unless existing business logic explicitly establishes it.
 
-  candidates_may_include:
-    - "actual profitability / operating result"
-    - "portfolio/accounts receivable"
-    - "supply capacity"
-    - "next-month target/planning"
-    - "external-context intelligence"
-    - "other repeated demonstrated gap"
+accounting_boundary:
 
-  do_not_select:
-    - "a one-off issue"
-    - "something already solved"
-    - "missing data mislabeled as infrastructure"
+  critical: true
 
-  required:
-    - "name"
+  distinguish:
+    - "operational support/Folio amount"
+    - "cash payment"
+    - "accounting expense"
+    - "forecast expense"
+    - "target expense"
+
+  prohibited:
+    - "collapse these into one number"
+
+monthly_close_model_impact:
+
+  if_actual_source_exists:
+    determine:
+      - "how month_close_result should load it"
+      - "what fields can move from UNSUPPORTED to ACTUAL"
+      - "whether pre_meeting_brief can consume it"
+
+  if_actual_source_missing:
+    required_output: >
+      Confirm FINANCIAL_ACTUAL_UNSUPPORTED as MISSING_PHYSICAL_DATA rather than
+      missing infrastructure.
+
+real_meeting_impact:
+
+  affected_intents:
+    - "A4"
+    - "M1"
+    - "M3"
+    - "Q1"
+    - "Q3"
+
+  evaluate:
+    - "which could become answerable if actual exists"
+    - "which would remain causal/interpretive gaps"
+
+truth_boundary:
+
+  safe:
+    - "actual operating result was X"
+    - "actual final result was Y"
+    - "target was A"
+    - "forecast was B"
+
+  unsafe:
+    - "we lost money because commissions increased" unless evidence supports causality
+    - "higher sales caused lower profit"
+    - "forecast equals actual"
+
+failure_class_output:
+
+  if_source_exists_but_unwired:
+    class: "MISSING_INFRASTRUCTURE"
+
+  if_no_defensible_source:
+    class: "MISSING_DATA"
+
+  if_only_reconstruction_requires_new_business_logic:
+    class: "MISSING_DATA_OR_NEW_ACCOUNTING_MODEL"
+
+contract_audit:
+
+  inspect:
+    - "Constitution"
+    - "EKE"
+    - "04 IES"
+    - "05 RE"
+
+  determine:
+    - "whether connecting actual financial source is runtime-only"
+    - "G2/G3/G8"
+
+readiness_output:
+
+  must_determine:
+    - "ACTUAL financial source exists: YES/NO"
+    - "canonical source"
+    - "grain"
+    - "fields"
+    - "semantics"
+    - "source A/B/C/D"
+    - "whether reconstruction is defensible"
+    - "IGF remains forecast or not"
+    - "month_close_result impact"
+    - "pre_meeting impact"
     - "failure class"
-    - "frequency across meetings"
-    - "affected real intents"
-    - "physical/runtime cause"
-    - "what it unlocks"
-    - "what it does not solve"
+    - "G2/G3/G8"
+    - "percentage effect"
 
-Plaud_boundary:
-  runtime: false
-  ingestion: false
+next_task_policy:
 
-  this_task: >
-    Same curated historical source packet as EVAL-001 only.
+  if_actual_exists_and_is_unwired:
+    propose_exactly_one: "ARCH-DIRECTOR-IA-CLOSE-MEETING-FINANCIAL-ACTUAL-001"
+
+  if_actual_missing:
+    propose_exactly_one: "ARCH-DIRECTOR-IA-FINANCIAL-ACTUAL-SOURCE-GAP-001"
+
+  rule: "Do not authorize or execute."
 
 percentage_policy:
   before: "10.5 / 20 = 52.5%"
@@ -314,7 +333,7 @@ percentage_policy:
 in_scope:
   writable:
     - "docs/dev-loop/CURRENT_TASK.md"
-    - "docs/dev-loop/reports/AUDIT-DIRECTOR-IA-PLAUD-CLOSE-MEETING-EVAL-002.md"
+    - "docs/dev-loop/reports/AUDIT-DIRECTOR-IA-CLOSE-MEETING-FINANCIAL-ACTUAL-001.md"
 
   read_only:
     - "entire repository except writable files"
@@ -323,40 +342,33 @@ out_of_scope:
   - "implementation"
   - "code changes"
   - "tests"
-  - "new sample"
-  - "new Plaud meetings"
-  - "Plaud runtime integration"
-  - "SQL"
+  - "SQL execution"
   - "schema"
-  - "contracts"
-  - "matrix changes"
-  - "permanent KPI"
+  - "new accounting model"
+  - "new financial formula"
+  - "Plaud runtime"
+  - "matrix"
+  - "contracts modification"
   - "commit"
   - "push"
   - "merge"
 
 acceptance_criteria:
-  - "Exactly same N=26 sample used."
-  - "Every EVAL-001 classification compared against EVAL-002."
-  - "Change matrix produced."
-  - "No hindsight leakage."
-  - "New rates calculated."
-  - "Rate deltas calculated."
-  - "Improvements attributable to month_close_result identified."
-  - "Family-level weaknesses reported."
-  - "Conversation readiness reassessed."
-  - "Exactly one remaining bottleneck selected."
+  - "Repository-wide financial actual source search completed."
+  - "A/B/C/D classified."
+  - "Actual vs target vs forecast vs derived preserved."
+  - "IGF closed-month semantics audited."
+  - "ARR financial sufficiency audited."
+  - "Gastos/Inversiones actual semantics audited."
+  - "Reconstruction defensibility explicitly decided."
+  - "No invented accounting formula."
+  - "Failure class assigned."
   - "Exactly one NEXT_TASK proposed."
   - "52.5% preserved."
   - "Only task + report changed."
   - "git diff --check clean."
 
-next_task:
-  exactly_one: true
-  authorize: false
-  execute: false
-
 expected_terminal_state: "DONE_PENDING_REVIEW"
 
 result_report_path: >
-  docs/dev-loop/reports/AUDIT-DIRECTOR-IA-PLAUD-CLOSE-MEETING-EVAL-002.md
+  docs/dev-loop/reports/AUDIT-DIRECTOR-IA-CLOSE-MEETING-FINANCIAL-ACTUAL-001.md
