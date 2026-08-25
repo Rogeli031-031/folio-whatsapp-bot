@@ -281,7 +281,7 @@ Invariantes: ACTUAL_COMMERCIAL ≠ ACTUAL_FINANCIAL; TARGET_COMMITMENT ≠ ACTUA
 
 Mes abierto: actual comercial to-date + target + forecast. Prohibido etiquetar forecast como actual financiero.
 Mes cerrado no FINAL: financial actual = `NOT_FINAL`; no presentar P&L/resultado como ACTUAL_FINANCIAL.
-Mes cerrado FINAL: puede llamarse ACTUAL_FINANCIAL **solo** si el contrato G3 se satisface físicamente y hay autorización. El marker físico FINAL (FORECAST / FINAL / SUPERSEDED en `igf.versions`) está **IMPLEMENTED**. Reconocer la clase **no** implica loader, query P&L ni consumo IES (runtime ACTUAL_FINANCIAL = **PENDING**).
+Mes cerrado FINAL: puede llamarse ACTUAL_FINANCIAL **solo** si el contrato G3 se satisface físicamente y hay autorización. El marker físico FINAL (FORECAST / FINAL / SUPERSEDED en `igf.versions`) está **IMPLEMENTED**. El runtime legado **sí** consulta esa evidencia **solo** dentro de `month_close_result` (loader RAW; 17 campos FINANCE_PROVIDED; sin GET overlay). Reconocer la clase **no** implica consumo IES, RE, Evidence Builder, Observation Pipeline, `pre_meeting`, selector UI histórico ni un intent `financial_actual`. Fuera de `month_close_result` + FINAL autorizada: **UNSUPPORTED**.
 
 Si el sistema calcula X con inputs FINAL + ARR, X sigue siendo RUNTIME_COMPUTED; no se atribuye a Finanzas como FINANCE_PROVIDED.
 
@@ -291,7 +291,7 @@ Si evidencia FINANCE_PROVIDED contradice ARR del mismo periodo: `FINANCIAL_ACTUA
 
 Varianza financiera ≠ causa. Gap ≠ causa. Coincidencia temporal ≠ causa. Declaración de junta ≠ verdad causal salvo evidencia aparte.
 
-**AUTHZ de acceso/finalización = RESOLVED** (`docs/dev-loop/reports/DECISION-DIRECTOR-IA-FINANCIAL-ACTUAL-AUTHZ-001.md`; este Motor no es dueño de la matriz). El permiso de IGF forecast **no** autoriza P&L / ACTUAL_FINANCIAL. La exposición runtime de ACTUAL_FINANCIAL permanece **PENDING** (no hay loader).
+**AUTHZ de acceso/finalización = RESOLVED** (`docs/dev-loop/reports/DECISION-DIRECTOR-IA-FINANCIAL-ACTUAL-AUTHZ-001.md`; este Motor no es dueño de la matriz). VIEW: ZP + aliases y AD = ALL_PLANTS; GG = ASSIGNED_PLANTS; resto = NONE. FINALIZE/SUPERSEDE: ZP + aliases y AD = ALL_PLANTS; GG y resto = NONE. USUARIOS no es rol (ADMIN_FUNCTION / ACCESS_KEY). El permiso de IGF forecast **no** autoriza P&L / ACTUAL_FINANCIAL. La exposición runtime de ACTUAL_FINANCIAL está **acotada** a `month_close_result` + FINAL; IES / `pre_meeting` permanecen **PENDING**.
 
 **Fuentes típicas (integradas / on-demand):** `arr`, `igf`.  
 **No integradas aún como tools UI delta:** `delta_venta`, `delta_descuento`, `delta_ingreso` (declaradas no integradas en Fase 3).
@@ -817,7 +817,7 @@ Las Fases 1–3 son **productores de entrada** al Motor; no son el Motor ni el E
 | Fecha de revisión | 2026-08-04 |
 | Documento auditado | `docs/director-ia/DIRECTOR_IA_EXECUTIVE_KNOWLEDGE_ENGINE.md` |
 | Resultado | **Conforme tras auditoría empresarial** (jerarquía Constitución→Motor→Evidence Builder→IES→Reasoning Engine→Interfaces; ausencia tipificada; sin redefinición constitucional; sin implementación; propiedad de contratos en Evidence Builder; §7 Financiero sincronizado con FINANCIAL-ACTUAL-EVIDENCE-CONTRACT v1.0 sin reabrir `04`/`05`). |
-| Excepciones pendientes | (1) Calibración numérica Fs/R/Cb/Cs/Cb_ov — diferida. (2) Esquema de producto IES: `04-IES-STANDARD.md` existe; IES v1.0 **APROBADO PARA CONGELAMIENTO**; **runtime del IES PENDIENTE**. (3) Contrato Reasoning Engine: `05-REASONING-ENGINE.md` v1.0 **APROBADO PARA CONGELAMIENTO**; **runtime del RE PENDIENTE**. (4) Ejecución real de tools e integración de dominios no integrados — fuera de este diseño. (5) ACTUAL_FINANCIAL: clase reconocida; contrato G3 existe; marker físico FINAL **IMPLEMENTED**; AUTHZ acceso/finalización **RESOLVED**; loader, exposición runtime e integración IES **pendientes**. |
+| Excepciones pendientes | (1) Calibración numérica Fs/R/Cb/Cs/Cb_ov — diferida. (2) Esquema de producto IES: `04-IES-STANDARD.md` existe; IES v1.0 **APROBADO PARA CONGELAMIENTO**; **runtime del IES PENDIENTE**. (3) Contrato Reasoning Engine: `05-REASONING-ENGINE.md` v1.0 **APROBADO PARA CONGELAMIENTO**; **runtime del RE PENDIENTE**. (4) Ejecución real de tools e integración de dominios no integrados — fuera de este diseño. (5) ACTUAL_FINANCIAL: clase reconocida; contrato G3 existe; marker físico FINAL **IMPLEMENTED**; AUTHZ **RESOLVED**; read model legado **SUPPORTED_WITHIN_MONTH_CLOSE_RESULT**; IES / RE / `pre_meeting` / UI histórica **pendientes**. |
 | Prohibición de implementación | Queda **prohibido implementar** el Motor si reaparecen no conformidades críticas (Reasoning Engine antes del Nivel 5; Motor/Evidence Builder generando hipótesis; IES mutable; suavización de Tipo E; ausencia como cero; colapso `SOURCE_NOT_INTEGRATED`/`DATA_NOT_FOUND`; IES alternativo sin auditoría; Evidence Builder tomando decisiones de política). |
 
 ---
