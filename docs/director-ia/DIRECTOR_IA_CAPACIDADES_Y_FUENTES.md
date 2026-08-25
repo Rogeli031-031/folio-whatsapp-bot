@@ -1002,16 +1002,17 @@ Readiness conversacional documentada: **`CONVERSATION_BASE_READY_WITH_LIMITS`**.
 
 **No** es `pre_meeting_brief`. **No** es `igf_status`. **No** es `commercial_trend`. **No** es `plant_diagnosis`. Una planta autorizada. Un mes calendario `America/Mexico_City`. Default = último mes **COMPLETE**. Mes actual nombrado = **PARTIAL**. **No** 30/90 trailing.
 
-Cuatro clases de verdad **permanecen separadas**:
+Cinco clases de verdad **permanecen separadas**. Fuente existente ≠ capability runtime. Contrato existente ≠ runtime.
 
-| Clase | Fuente | Qué es | Qué no es |
-|-------|--------|--------|-----------|
-| **ACTUAL** | ARR mensual real (`arr.ventas_diarias_cliente` / descuentos diarios) | venta, mix CASA/COMISIONISTA, descuento/kg ponderado, movimiento de clientes | TARGET, FORECAST, DERIVED_MODEL |
+| Clase | Fuente | Qué es | Qué no es / runtime |
+|-------|--------|--------|---------------------|
+| **ACTUAL_COMMERCIAL** | ARR mensual real (`arr.ventas_diarias_cliente` / descuentos diarios) | venta, mix CASA/COMISIONISTA, descuento/kg ponderado, movimiento de clientes | TARGET, FORECAST, ACTUAL_FINANCIAL, DERIVED_MODEL |
 | **TARGET_COMMITMENT** | `igf_meta.versions` + `igf_meta.meta_lines` | META/COMPROMISO gerencial firmado del mes (`venta_ton` = venta objetivo) | forecast, actual, derived, Plaud |
-| **FORECAST** | IGF (`igf.compromiso_lines`) | proyección | actual, target, cumplimiento real |
+| **FORECAST** | IGF (`igf.compromiso_lines`) no FINAL / vista vigente | proyección | actual, target, cumplimiento real |
+| **ACTUAL_FINANCIAL** | FINANCE_PROVIDED de la única versión FINAL no SUPERSEDED (`igf.versions` + `igf.compromiso_lines`; owner FINANZAS). Semántica: `FINANCIAL-ACTUAL-EVIDENCE-CONTRACT.md` v1.0 | Cierre financiero actual **cuando** exista FINAL físico + AUTHZ | Overlay/GET/PROY/Folios (RUNTIME_COMPUTED). **Runtime Director IA: NOT_YET_SUPPORTED.** IES: PENDING. `is_final` / loader / intent / tool: **no existen** |
 | **DERIVED_MODEL** | `forecast_mensual` / 14d×DOW u equivalente | modelo derivado | actual, target |
 
-Invariantes: ACTUAL ≠ TARGET_COMMITMENT ≠ FORECAST ≠ DERIVED_MODEL. Sin relabel semántico por conveniencia de presentación.
+Invariantes: ACTUAL_COMMERCIAL ≠ ACTUAL_FINANCIAL ≠ TARGET_COMMITMENT ≠ FORECAST ≠ DERIVED_MODEL. FINANCE_PROVIDED ≠ RUNTIME_COMPUTED. `is_current` ≠ FINAL. latest ≠ FINAL. mes cerrado ≠ FINAL. ARR completo ≠ FINAL. FINAL no convierte un cálculo runtime en dato de Finanzas. Missing ≠ 0 ≠ forecast ≠ target. Sin relabel semántico.
 
 Path:
 
@@ -1049,23 +1050,24 @@ Si actual + target válidos: `actual_ton`, `target_ton`, `delta_ton`, `attainmen
 |-------|-------|--------|
 | `financial.target` | TARGET_COMMITMENT | `igf_meta` |
 | `financial.forecast` | FORECAST | IGF |
-| `financial.actual` | — | `UNSUPPORTED_METRIC` |
+| `financial.actual` | ACTUAL_FINANCIAL (semántica DEFINED; capability **no**) | `UNSUPPORTED_METRIC` en runtime. Fuente física + contrato G3 existen. Marker FINAL / loader / P&L query / IES: **no existen** |
 
-Se puede comparar TARGET vs FORECAST **solo** si queda etiquetado como proyección. **No** es cumplimiento financiero real. **No** se creó fuente de actual financiero.
+Se puede comparar TARGET vs FORECAST **solo** si queda etiquetado como proyección. **No** es cumplimiento financiero real. **No** afirmar ACTUAL_FINANCIAL en el pack. Conflicto ARR vs FINANCE_PROVIDED (si algún día se expone): `FINANCIAL_ACTUAL_RECONCILIATION_GAP`; no reconciliar en silencio. **AUTHZ_DECISION_REQUIRED:** `acceso_igf_forecast_kpis` no autoriza P&L actual.
 
 **ACTIONS:** reusa Action Register existente. Ausencia de cierre/resultado puede ser gap. Cerrado ≠ éxito inferido.
 
 **GAPS** (ausencia de evidencia; **gap ≠ cause**):
 
 - `TARGET_MISSING_FOR_PERIOD`
-- `FINANCIAL_ACTUAL_UNSUPPORTED`
+- `FINANCIAL_ACTUAL_UNSUPPORTED` (runtime actual: `financial.actual` no se afirma)
+- `FINANCIAL_ACTUAL_RECONCILIATION_GAP` (código reservado si ARR y FINANCE_PROVIDED discrepan; **no** reconciliar en silencio; el runtime **no** expone aún FINANCE_PROVIDED)
 - movimiento material sin evidencia explicativa
 - acción vencida sin resultado/cierre
 - source unavailable
 
 Partial-data: una sección fallida **no** tumba las demás. missing ≠ 0.
 
-Authz: una planta; fail closed; no cross-plant; mapping empresa no salta autorización.
+Authz: una planta; fail closed; no cross-plant; mapping empresa no salta autorización. **AUTHZ_DECISION_REQUIRED** para ACTUAL_FINANCIAL / P&L: `acceso_igf_forecast_kpis` **no** hereda. No se resuelve aquí.
 
 Read-only absoluto: no modifica/sube/aprueba meta; no cambia IGF; no muta acciones; no cancela Folios; no persiste el resultado.
 
@@ -1103,7 +1105,7 @@ Follow-ups (ejemplos de intención, **no** phrasebook):
 
 Preserva: daily brief, daily sales, daily discount, commercial trend, client profile, IGF, IGF reviewable, `taller_mayor`, `pre_meeting_brief`, topic return, persistent memory.
 
-Diferido: actual financiero; upload de meta; `igf_metahg` como sustituto de `venta_ton`; Plaud runtime; schema; matrix.
+Diferido (runtime): capability ACTUAL_FINANCIAL / P&L actual; marker FINAL físico; loader; intent/tool; IES; AUTHZ de exposición. Upload de meta; `igf_metahg` como sustituto de `venta_ton`; Plaud runtime; schema; matrix. La fuente física y el contrato G3 **ya** están inventariados; eso **no** es capability.
 
 Archivos: `lib/director-ia-month-close-result.js`; wiring `lib/director-ia-planner.js`, `lib/director-ia-conversation-state.js`, `lib/director-ia-chat.js`, `lib/director-ia-tools.js`, `lib/director-ia-capabilities.js` (`isMonthCloseQuery`; **sin** fila nueva de matriz), `lib/director-ia-pre-meeting.js` (cede si es pregunta de cierre), `lib/director-ia-igf-arr.js` (exporta `loadIgfCommitSnapshot` / `findIgfRowForPlant`). Tool `get_month_close_result` (read-only; dominio `arr`). Tests citados (IMPL; **no** reejecutados aquí): focal `test/director-ia-month-close-result.test.js` **27/27**; suite Director IA **1005/1005**; planner **58/58**; capabilities **56/56**; orchestrator **28/28**; `git diff --check` clean.
 
@@ -1703,7 +1705,7 @@ Archivos: `lib/director-ia-month-close-result.js`; wiring `lib/director-ia-plann
 - **Información sensible:** Venta, descuento, clientes
 - **Estado de actualización:** Datos ARR cargados externamente (`arr-load`)
 - **Evidencia de integración actual:** `shouldAttachIgfArrAnnex` + sources de prompt `igf.forecast` / `arr.forecast` en modos focused; bloque ARR separado en `financial_diagnosis` (`assembleFinancialDiagnosisEvidence.sources.arr`); bloque ARR en `plant_diagnosis` (`assemblePlantDiagnosisEvidence.sources.arr`; sin M9)
-- **Información que no puede concluirse con esta fuente:** UI ARR completa; carga; Excel dashboard
+- **Información que no puede concluirse con esta fuente:** UI ARR completa; carga; Excel dashboard; ACTUAL_FINANCIAL / P&L (ARR = ACTUAL_COMMERCIAL; no reconciliar en silencio con Finanzas)
 
 ### Fuente: IGF
 
@@ -1726,7 +1728,7 @@ Archivos: `lib/director-ia-month-close-result.js`; wiring `lib/director-ia-plann
 - **Información sensible:** Compromiso, margen, utilidad, resultado, HG
 - **Estado de actualización:** Según versiones IGF cargadas (snapshot ≠ tendencia)
 - **Evidencia de integración actual:** `shouldAttachIgfArrAnnex` / `isIgfCompositionQuestion` / `extractIgfComposition`; regex IGF/margen/rentabilidad; bloque IGF separado en `financial_diagnosis` (`assembleFinancialDiagnosisEvidence.sources.igf`); bloque IGF en `plant_diagnosis` (`assemblePlantDiagnosisEvidence.sources.igf`; sin M9). Semántica: composición ≠ causalidad; magnitud ≠ importancia operacional; línea ≠ responsable; signo ≠ juicio empresarial. M9 conserva deltas temporales.
-- **Información que no puede concluirse con esta fuente:** Meta HG completa UI, folios detalle IGF, PATCH, causalidad, tendencia, overlay persistente del GET dashboard, recálculo escrito. El contrafactual read-only es **otra** fuente (`igf_reviewable_supports`); no es ahorro realizado ni cambio real del IGF.
+- **Información que no puede concluirse con esta fuente:** Meta HG completa UI, folios detalle IGF, PATCH, causalidad, tendencia, overlay persistente del GET dashboard, recálculo escrito. El contrafactual read-only es **otra** fuente (`igf_reviewable_supports`); no es ahorro realizado ni cambio real del IGF. latest / `is_current` / versión más reciente **≠** FINAL. Esta lectura de chat **no** es ACTUAL_FINANCIAL. Fuente física compartida ≠ capability runtime.
 
 ### Fuente: Margen o estado comercial
 
@@ -1949,20 +1951,35 @@ Archivos: `lib/director-ia-month-close-result.js`; wiring `lib/director-ia-plann
 - **Archivo de acceso:** `lib/director-ia-month-close-result.js`. Reusa `queryMonthlySales` / `queryMonthlyDiscount` / `classifyCanalGrp` / `listMetaVersions` / `loadMetaLinesForVersion` / `loadIgfCommitSnapshot` / `findIgfRowForPlant` / Action Register existente.
 - **Función de acceso:** `loadMonthCloseResultForChat` / `assembleMonthClosePack` (in-process; `safeLoad` por fuente) → prompt + `HILO` → **una** llamada OpenAI por turno.
 - **Endpoint relacionado:** `POST /api/director-ia/chat` (in-process; sin HTTP interno; sin writes; sin snapshot persistido)
-- **Clases de verdad (no mezclar):** ACTUAL = ARR mensual real. TARGET_COMMITMENT = `igf_meta` (META/COMPROMISO gerencial firmado del mes). FORECAST = IGF. DERIVED_MODEL = `forecast_mensual` / modelos derivados (no usado como meta ni actual).
-- **Target:** `igf_meta.versions` + `igf_meta.meta_lines`; exact year + exact month + `is_current=true` + mapping empresa de la planta autorizada. `venta_ton` = TARGET/COMMITMENT de venta. Si falta: `TARGET_MISSING_FOR_PERIOD`. **No** carry-forward. **No** latest available. **No** forecast como meta. **No** hardcode. **No** Plaud runtime.
-- **Actual sales:** `arr.ventas_diarias_cliente`; `SUM(kg)`; mes calendario; `ton = kg / 1000`. Si hay target: actual / target / delta / attainment %.
+- **Clases de verdad (no mezclar):** ACTUAL_COMMERCIAL = ARR mensual real. TARGET_COMMITMENT = `igf_meta`. FORECAST = IGF no FINAL / vista vigente. ACTUAL_FINANCIAL = FINANCE_PROVIDED de versión FINAL (contrato G3 v1.0; **runtime NOT_YET_SUPPORTED**). DERIVED_MODEL = `forecast_mensual` / modelos derivados. Fuente existente ≠ capability. Contrato existente ≠ runtime.
+- **Target:** `igf_meta.versions` + `igf_meta.meta_lines`; exact year + exact month + `is_current=true` + mapping empresa de la planta autorizada. `venta_ton` = TARGET/COMMITMENT de venta. Si falta: `TARGET_MISSING_FOR_PERIOD`. **No** carry-forward. **No** latest available. **No** forecast como meta. **No** hardcode. **No** Plaud runtime. `is_current` ≠ FINAL.
+- **Actual sales:** `arr.ventas_diarias_cliente`; `SUM(kg)`; mes calendario; `ton = kg / 1000`. Si hay target: actual / target / delta / attainment %. ARR completo ≠ FINAL. ARR ≠ ACTUAL_FINANCIAL.
 - **Channels:** CASA / COMISIONISTA; kg/ton/share.
 - **Discount:** `SUM(monto)/SUM(kg)`. No average-of-averages.
 - **Clients:** mes vs mes calendario previo; new / lost / positive movers / negative movers. mover ≠ cause. No fuzzy. No forecast income as actual.
-- **Financial:** `financial.target` = `igf_meta` (TARGET_COMMITMENT). `financial.forecast` = IGF (FORECAST). `financial.actual` = `UNSUPPORTED_METRIC`. TARGET vs FORECAST puede etiquetarse como proyección; **no** es cumplimiento financiero real.
+- **Financial:** `financial.target` = `igf_meta` (TARGET_COMMITMENT). `financial.forecast` = IGF (FORECAST). `financial.actual` = `UNSUPPORTED_METRIC` en runtime. Semántica ACTUAL_FINANCIAL DEFINED en G3; marker FINAL / loader / P&L / IES **no existen**. TARGET vs FORECAST puede etiquetarse como proyección; **no** es cumplimiento financiero real. **AUTHZ_DECISION_REQUIRED.**
 - **Actions:** Action Register existente.
-- **Gaps:** `TARGET_MISSING_FOR_PERIOD`; `FINANCIAL_ACTUAL_UNSUPPORTED`; movimiento sin explicación; acción sin resultado; source unavailable. gap ≠ cause.
+- **Gaps:** `TARGET_MISSING_FOR_PERIOD`; `FINANCIAL_ACTUAL_UNSUPPORTED`; `FINANCIAL_ACTUAL_RECONCILIATION_GAP` (reservado; no reconciliar ARR vs Finanzas en silencio); movimiento sin explicación; acción sin resultado; source unavailable. gap ≠ cause.
 - **Period:** timezone `America/Mexico_City`. Mes actual = PARTIAL.
 - **State:** plant, month, `parent_intent`. No raw evidence. No stale target. Requery fresco.
 - **Handoff:** `pre_meeting_brief` → «¿Y cómo cerramos?» → `month_close_result` → fresh requery.
 - **GPT:** sintetiza, destaca, expone limitations, detecta qué falta explicar. No inventa target, actual financiero ni causa.
-- **Información que no puede concluirse con esta fuente:** actual financiero; causa de un mover; meta de otro mes; cumplimiento financiero usando forecast; IES/N5; Plaud como hecho
+- **Información que no puede concluirse con esta fuente:** capability runtime ACTUAL_FINANCIAL / P&L actual; `is_final`; marker FINAL físico; loader; intent/tool; que IES consuma ACTUAL_FINANCIAL; AUTHZ resuelto; causa de un mover; meta de otro mes; cumplimiento financiero usando forecast; Plaud como hecho. Mes cerrado ≠ FINAL.
+
+### Fuente: ACTUAL_FINANCIAL (semántica; no capability)
+
+- **Clase:** ACTUAL_FINANCIAL = FINANCE_PROVIDED de la única versión FINAL no SUPERSEDED del YYYY-MM + identidad autorizada.
+- **Owner:** FINANZAS.
+- **Persistencia física:** `igf.versions` + `igf.compromiso_lines`. PHYSICAL_SOURCE_EXISTS.
+- **Contrato:** `FINANCIAL-ACTUAL-EVIDENCE-CONTRACT.md` v1.0. Evidence semantics: DEFINED.
+- **Regla de inventario:** SOURCE EXISTS ≠ CAPABILITY EXISTS. CONTRACT EXISTS ≠ RUNTIME EXISTS.
+- **Finalización física:** PENDING. **No** existe `is_final`. **No** hay marker FINAL físico. **No** hay workflow de finalización.
+- **Director IA runtime:** PENDING / NOT_YET_SUPPORTED. **No** hay loader, tool, planner intent ni query P&L actual.
+- **IES:** PENDING. ACTUAL_FINANCIAL **aún no alimenta** IES.
+- **AUTHZ:** AUTHZ_DECISION_REQUIRED. `acceso_igf_forecast_kpis` **no** autoriza P&L actual. **No** se resuelve aquí.
+- **Invariantes:** FINANCE_PROVIDED ≠ RUNTIME_COMPUTED. FINAL no convierte un cálculo runtime en dato de Finanzas. `is_current` ≠ FINAL. latest ≠ FINAL. mes cerrado ≠ FINAL. ARR completo ≠ FINAL. missing ≠ 0 ≠ forecast ≠ target.
+- **Reconciliation:** `FINANCIAL_ACTUAL_RECONCILIATION_GAP`. ARR sigue siendo ACTUAL_COMMERCIAL. No reconciliar en silencio.
+- **Información que no puede concluirse con este inventario:** que exista capability `financial_actual`; que el chat consulte P&L actual; que Overlay/GET/PROY/Folios sean FINANCE_PROVIDED; que AUTHZ esté resuelto.
 
 ### Fuente: Gastos
 
@@ -2361,7 +2378,7 @@ Archivos: `lib/director-ia-month-close-result.js`; wiring `lib/director-ia-plann
 | ¿Cómo vamos en CASA? (tras pre-cierre) | Sí: `commercial_trend` standalone | PARCIAL | Motor 30/90 fresco | `loadCommercialTrendForChat` | Reusar el bloque comercial del brief | Alto si mover = causa |
 | ¿Qué unidades tienen Taller Mayor? (tras pre-cierre) | Sí: `taller_mayor` standalone; **no** estaba en el pack | PARCIAL | Folios Mayor frescos | `loadTallerMayorForChat` | Meter Taller Mayor en el brief inicial | Alto si se afirma que el brief ya cubrió Taller |
 | ¿Y cómo cerramos? / ¿Y cómo cerramos el mes? (tras pre-cierre) | Sí: handoff a `month_close_result`; requery fresco; no reusa el mes abierto del brief | PARCIAL (transversal) | Pack de cierre fresco | `isMonthCloseQuestion` / `loadMonthCloseResultForChat` | Tratar IGF como actual; reusar meeting_period abierto como mes de cierre | Alto si se afirma cierre real del mes abierto |
-| ¿Cómo cerramos? / ¿Cómo cerró Puebla en julio? / ¿Cómo quedamos contra la meta? / ¿Cuánto nos faltó para la meta? / ¿Qué porcentaje cumplimos? (ejemplos de intención, no phrasebook) | Sí (`month_close_result`; una planta; un mes calendario CDMX; ACTUAL vs TARGET `igf_meta`) | PARCIAL (transversal; no módulo) | ARR mensual + `igf_meta` exacto + IGF forecast | `loadMonthCloseResultForChat` / `isMonthCloseQuestion` | Carry-forward de meta; forecast como meta; actual financiero inventado | Alto si se mezclan las cuatro clases de verdad |
+| ¿Cómo cerramos? / ¿Cómo cerró Puebla en julio? / ¿Cómo quedamos contra la meta? / ¿Cuánto nos faltó para la meta? / ¿Qué porcentaje cumplimos? (ejemplos de intención, no phrasebook) | Sí (`month_close_result`; una planta; un mes calendario CDMX; ACTUAL_COMMERCIAL vs TARGET `igf_meta`; `financial.actual` unsupported) | PARCIAL (transversal; no módulo) | ARR mensual + `igf_meta` exacto + IGF forecast | `loadMonthCloseResultForChat` / `isMonthCloseQuestion` | Carry-forward de meta; forecast como meta; actual financiero inventado; tratar IGF latest como FINAL | Alto si se mezclan las cinco clases de verdad |
 | ¿Contra la meta? / ¿Cuánto nos faltó? / ¿Qué porcentaje cumplimos? (tras cierre) | Sí si `parent_intent = month_close_result`; requery; no inventa target | PARCIAL (continuidad efímera) | Pack fresco + `HILO` | `forceIntent month_close_result` | Usar meta de otro mes; dividir por target 0 | Alto si missing se lee como 0 |
 | ¿Y CASA? / ¿Y comisionistas? (tras cierre) | Sí: inherit `month_close_result` (mix del mes). **No** 30/90 | PARCIAL | Mix ACTUAL del mes | same loader | Caer a `commercial_trend` 90d | Alto si share del mes se lee como tendencia trailing |
 | ¿Qué pasó con el descuento? (tras cierre) | Sí: inherit `month_close_result`; `SUM(monto)/SUM(kg)` del mes | PARCIAL | Descuento mensual ponderado | same loader | Average-of-averages; daily discount | Alto si se afirma causa del ratio |
@@ -2643,9 +2660,11 @@ El chat legado integra **Taller Mayor por unidad** (`taller_mayor` → `loadTall
 
 El chat legado integra **preparación de junta / pre-cierre** (`pre_meeting_brief` → `loadPreMeetingBriefForChat`; arquitectura **B**; first slice **B**): una planta autorizada + mes abierto CDMX; compone comercial + IGF abierto + acciones + IGF reviewable + information gaps; loaders existentes; `safeLoad`/isolation; provenance y gaps separados; brief partial; missing ≠ 0; unsupported ≠ 0; source error ≠ hallazgo; una síntesis GPT. Runtime entrega deviations/rankings/statuses/overdue/reviewability/gaps ya existentes. GPT prioriza, ordena, sintetiza y sugiere qué aclarar. **No** thresholds nuevos. **No** learned score. **No** checklist hardcodeado. **No** Taller Mayor / Mejora Continua / Plaud / IGF mes cerrado en el pack. State: plant, `meeting_period`, `meeting_type`, `parent_intent`. Requery fresco. Read-only. Follow-ups de detalle salen a la capability canónica. Handoff «¿Y cómo cerramos?» → `month_close_result`. Readiness: **`CONVERSATION_BASE_READY_WITH_LIMITS`**. No puntúa módulos.
 
-El chat legado integra **resultado mensual de cierre** (`month_close_result` → `loadMonthCloseResultForChat` / `assembleMonthClosePack`; arquitectura **B**; first slice **C**): una planta autorizada + un mes calendario CDMX (default último COMPLETE; mes actual = PARTIAL). Alinea **antes** de GPT: ACTUAL ARR (`SUM(kg)`; mix CASA/COMISIONISTA; `SUM(monto)/SUM(kg)`; new/lost/movers) + TARGET_COMMITMENT `igf_meta` (exact year/month/`is_current`; `venta_ton`) + FORECAST IGF + acciones existentes + information gaps. `financial.actual` = `UNSUPPORTED_METRIC`. Si falta meta exacta: `TARGET_MISSING_FOR_PERIOD` (sin carry-forward). Las cuatro clases **no** se mezclan. GPT sintetiza destacados, tensiones, qué falta explicar y limitations. **No** inventa target, actual financiero ni causa. State: plant, month, `parent_intent`. Requery fresco. Read-only. No puntúa módulos.
+El chat legado integra **resultado mensual de cierre** (`month_close_result` → `loadMonthCloseResultForChat` / `assembleMonthClosePack`; arquitectura **B**; first slice **C**): una planta autorizada + un mes calendario CDMX (default último COMPLETE; mes actual = PARTIAL). Alinea **antes** de GPT: ACTUAL_COMMERCIAL ARR (`SUM(kg)`; mix CASA/COMISIONISTA; `SUM(monto)/SUM(kg)`; new/lost/movers) + TARGET_COMMITMENT `igf_meta` (exact year/month/`is_current`; `venta_ton`) + FORECAST IGF + acciones existentes + information gaps. `financial.actual` = `UNSUPPORTED_METRIC`. ACTUAL_FINANCIAL tiene fuente física + contrato G3; **no** hay capability runtime. Si falta meta exacta: `TARGET_MISSING_FOR_PERIOD` (sin carry-forward). Las cinco clases **no** se mezclan. GPT sintetiza destacados, tensiones, qué falta explicar y limitations. **No** inventa target, actual financiero ni causa. State: plant, month, `parent_intent`. Requery fresco. Read-only. No puntúa módulos.
 
 **Scoring M0–M20 tras `DOCS-DIRECTOR-IA-PRE-MEETING-MONTH-CLOSE-RESULT-SYNC-001`:** ningún módulo cambia de etiqueta. Global permanece **10.5 / 20 = 52.5%** (0.0 pp). Ni la continuidad efímera, ni la herencia natural de follow-up, ni el retorno intra-sesión (`previous_frame`), ni la memoria persistente, ni `daily_sales_deviation`, ni `daily_discount_deviation`, ni `daily_executive_brief`, ni el cross-metric diario, ni `commercial_trend`, ni `client_profile`, ni `taller_mayor`, ni `pre_meeting_brief`, ni `month_close_result`, ni el routing AR por responsable/acción, ni `igf_reviewable_supports` suman 0.5. Resultado mensual de cierre **no** suma módulo.
+
+**Scoring M0–M20 tras `DOCS-DIRECTOR-IA-FINANCIAL-ACTUAL-CAPABILITIES-SYNC-001`:** ningún módulo cambia de etiqueta. Global permanece **10.5 / 20 = 52.5%** (0.0 pp). Inventariar la fuente física y el contrato G3 de ACTUAL_FINANCIAL **no** crea capability runtime ni suma módulo.
 
 ### 2. Dominios completos (COMPLETA)
 
@@ -2689,7 +2708,7 @@ El chat legado integra **resultado mensual de cierre** (`month_close_result` →
 - Capacidad transversal `igf_reviewable_supports` (first slice C: Folios reviewable por reglas reales de cancelación + contrafactual IGF en memoria; ESCENARIO HIPOTÉTICO; no writes; no ahorro; no cheques; `igf_status` no inheritable en el hop): **no** es un módulo M0–M20; **no** cambia M2/M7 PARCIAL ni el 52.5%.
 - Capacidad transversal `taller_mayor` (source B; routing B: `(planta_id, token canónico)`; `matchTallerTipoCol===mayor`; mes CDMX / `mes_cargo`; ranking `SUM(importe)`; no silent folio pick; reviewability del Folio activo; no hop IGF plant-wide; historial same-plant+token; read-only): **no** es un módulo M0–M20; **no** cambia M5 PARCIAL ni el 52.5%.
 - Capacidad transversal `pre_meeting_brief` (arquitectura B; first slice B: una planta + mes abierto CDMX; comercial + IGF abierto + acciones + reviewable + gaps; isolation; requery; read-only; no Plaud runtime; no snapshot; `CONVERSATION_BASE_READY_WITH_LIMITS`): **no** es un módulo M0–M20; **no** cambia ningún módulo ni el 52.5%.
-- Capacidad transversal `month_close_result` (arquitectura B; first slice C: una planta + un mes calendario CDMX; ACTUAL ARR vs TARGET_COMMITMENT `igf_meta` vs FORECAST IGF vs DERIVED_MODEL; `financial.actual` unsupported; target exacto YYYY-MM; `TARGET_MISSING_FOR_PERIOD`; requery; read-only): **no** es un módulo M0–M20; **no** cambia ningún módulo ni el 52.5%.
+- Capacidad transversal `month_close_result` (arquitectura B; first slice C: una planta + un mes calendario CDMX; ACTUAL_COMMERCIAL ARR vs TARGET_COMMITMENT `igf_meta` vs FORECAST IGF vs DERIVED_MODEL; ACTUAL_FINANCIAL inventariado como fuente/contrato, **no** como capability runtime; `financial.actual` unsupported; target exacto YYYY-MM; `TARGET_MISSING_FOR_PERIOD`; requery; read-only): **no** es un módulo M0–M20; **no** cambia ningún módulo ni el 52.5%.
 
 ### 5. Dominios no integrados (NO INTEGRADA)
 
@@ -2707,7 +2726,7 @@ El chat legado integra **resultado mensual de cierre** (`month_close_result` →
 - Full conversation history / summaries / semantic long-term memory / preferencias / decisiones persistidas / memoria en EKS-IES-N5 / topic stack / más de un `previous_frame` (el first slice B de retorno intra-sesión — un prior — ya está en el repo; `pending_work_items_only` no es transcript ni navegación de temas)
 - Mix/rate del descuento/kg diario (el first slice **D** de `daily_discount_deviation` ya está integrado; no descompone mix vs rate)
 - Canal del descuento/kg diario (NOT AVAILABLE: no hay canal físico en `arr.descuentos_diarios_cliente`; no se prorratea)
-- Ingreso diario / brief matutino programado / saludo personalizado / directorio SEH / closed-month IGF / comments de gráfica vía `cliente_key` / **ingreso mensual actual de cliente** / **actual financiero de cierre** / **Plaud runtime** (el first slice **B** de `daily_executive_brief`, el first slice **B** de `commercial_trend`, el perfil `client_profile`, `taller_mayor`, `pre_meeting_brief` y `month_close_result` ya están integrados; `commercial_trend` cubre 30/90 CASA/COMISIONISTA + OLS + top-6 **sin** comments; `client_profile` cubre 3M calendario keyed **sin** ingreso actual ni join AR; `taller_mayor` cubre lista/ranking/reviewability/historial de Taller Mayor por unidad **sin** Excel M5 ni unit master; `pre_meeting_brief` cubre comercial + IGF abierto + acciones + reviewable + gaps **sin** Taller Mayor / MC / Plaud / mes cerrado en el pack; `month_close_result` cubre ACTUAL mensual vs TARGET `igf_meta` vs FORECAST IGF **sin** actual financiero ni carry-forward de meta. Plaud queda como evidencia **futura** de evaluación histórica; meeting statement ≠ causal truth)
+- Ingreso diario / brief matutino programado / saludo personalizado / directorio SEH / closed-month IGF / comments de gráfica vía `cliente_key` / **ingreso mensual actual de cliente** / **actual financiero de cierre (runtime)** / **Plaud runtime** (el first slice **B** de `daily_executive_brief`, el first slice **B** de `commercial_trend`, el perfil `client_profile`, `taller_mayor`, `pre_meeting_brief` y `month_close_result` ya están integrados; `commercial_trend` cubre 30/90 CASA/COMISIONISTA + OLS + top-6 **sin** comments; `client_profile` cubre 3M calendario keyed **sin** ingreso actual ni join AR; `taller_mayor` cubre lista/ranking/reviewability/historial de Taller Mayor por unidad **sin** Excel M5 ni unit master; `pre_meeting_brief` cubre comercial + IGF abierto + acciones + reviewable + gaps **sin** Taller Mayor / MC / Plaud / mes cerrado en el pack; `month_close_result` cubre ACTUAL_COMMERCIAL mensual vs TARGET `igf_meta` vs FORECAST IGF **sin** capability runtime ACTUAL_FINANCIAL ni carry-forward de meta. La fuente física `igf.versions` + `igf.compromiso_lines` y el contrato G3 v1.0 **existen**; el runtime / `is_final` / loader / IES **no**. Plaud queda como evidencia **futura** de evaluación histórica; meeting statement ≠ causal truth)
 - Trade-off económico por cliente / oferta estructurada de competencia
 - Scoring de desempeño de personas / culpa como causa del vencimiento (el path `action_status` consulta el responsable **registrado**; no evalúa personas)
 - Kanban HTTP / GET `/timeline` (excluido) / contenido PDF / S3 / documentos faltantes / cheque / póliza / `kanban_flow` (estatus/etapa, historial crudo y metadata documental ya están en PARCIAL M2; proyectos de `public.proyectos` ya están en COMPLETA M3)
@@ -2769,6 +2788,7 @@ El chat legado integra **resultado mensual de cierre** (`month_close_result` →
 | Action Register notas / evidencias / CRUD | Slice notas de revisión ya integrado (`loadActionRegisterRevisionNotesForChat`; `includeNotes` always-on sigue false). Consultas por responsable/acción ya integradas (`action_status`; no intent nuevo) | Attachments/S3/PDF; CRUD ítems; scoring de personas; causalidad before→action→after; no COMPLETE; no atribuir nota a ítem; no silent pick |
 | DICF expediente / attachments / writes | Slice expediente factual ya integrado (`loadCommercialDossierForChat`; SELECT-only; sin `computeDicf`) | Attachments; Excel/UI; bitácora en el expediente; causalidad; CRUD acciones; no COMPLETE |
 | IGF composición / UI / PATCH / recálculo | Slice composición snapshot ya integrado (`extractIgfComposition`; 1 fila; `*_kg` = $/kg; no se ejecuta `recalcularUtilYResultado`; no overlay en `igf_status`). Contrafactual read-only ya integrado en `igf_reviewable_supports` (overlay **en memoria**; no DB write) | UI IGF; PATCH HG; meta Excel; versiones UI; overlay persistente del GET dashboard; closed-month; causalidad; no COMPLETE |
+| ACTUAL_FINANCIAL / P&L actual de cierre | Fuente física `igf.versions` + `igf.compromiso_lines` (owner FINANZAS). Contrato G3 v1.0 DEFINED. **No** hay capability runtime | Marker FINAL físico; loader; intent/tool; AUTHZ de exposición; consumo IES |
 | Proyectos (crear/editar/eliminar) | Sí (`POST /api/proyectos`) | Escritura; la lectura M3 ya está integrada |
 | KPIs dashboard (lectura) | Sí (integrado M3) | — |
 | Weekly LD | Sí | Tool |
