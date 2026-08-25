@@ -61,6 +61,7 @@ const dicfAccionesLib = require("./lib/dicf-acciones");
 const actionRegisterEvidenciasExport = require("./lib/action-register-evidencias-export");
 const { embedExcelEvidencePhoto } = require("./lib/excel-image-compress");
 const { isDirectorZPForDashboard } = require("./lib/dashboard-es-zp");
+const igfFinancialFinal = require("./lib/igf-financial-final");
 const folioDuplicados = require("./lib/folio-duplicados");
 const { loadFoliosParaDuplicados } = require("./lib/folio-duplicados-load");
 const clasificacionApoyosExcel = require("./lib/clasificacion-apoyos-excel");
@@ -2641,6 +2642,13 @@ async function ensureSchema() {
     `).catch(() => {});
 
     await seedPresupuestoAcapulco(client);
+
+    await igfFinancialFinal.applyIgfFinancialFinalMigration(client).catch((e) => {
+      console.warn("[igf financial final schema]", e.message);
+    });
+    await igfFinancialFinal.applyIgfFinancialFinalImmutabilityMigration(client).catch((e) => {
+      console.warn("[igf financial final immutability]", e.message);
+    });
 
     return;
   } finally {
@@ -12392,26 +12400,65 @@ app.patch("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, re
     const merged = { ...matchRow, hg_pct: newHgPct, hg_kg: newHgKg };
     const { util_oper_kg, util_oper_importe, resultado_final_kg, resultado_final_importe } = recalcularUtilYResultado(merged);
 
-    await client.query(
-      `UPDATE igf.compromiso_lines SET
-         hg_pct = $1, hg_kg = $2,
-         util_oper_kg = $3, util_oper_importe = $4,
-         resultado_final_kg = $5, resultado_final_importe = $6
-       WHERE version_id = $7 AND empresa = $8`,
-      [
-        newHgPct,
-        newHgKg,
+    const wrote = await igfFinancialFinal.updateCompromisoLinesHgIfForecast(
+      client,
+      versionId,
+      (matchRow.empresa || "").trim(),
+      {
+        hg_pct: newHgPct,
+        hg_kg: newHgKg,
         util_oper_kg,
         util_oper_importe,
         resultado_final_kg,
         resultado_final_importe,
-        versionId,
-        (matchRow.empresa || "").trim(),
-      ]
+      }
     );
+    if (!wrote.ok) {
+      return res.status(wrote.status || 409).json({ error: wrote.error });
+    }
     res.json({ ok: true, empresa: (matchRow.empresa || "").trim(), year, month, util_oper_importe, resultado_final_importe });
   } catch (e) {
     console.error("[Dashboard IGF Forecast PATCH]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+function sendIgfFinancialFinalError(res, e) {
+  const status = e && Number.isFinite(Number(e.status)) ? Number(e.status) : 500;
+  if (e && e.body && e.body.error) return res.status(status).json(e.body);
+  return res.status(status).json({ error: (e && e.message) || "Error financiero" });
+}
+
+/** FINALIZE: ZP/AD only. FORECAST -> FINAL. No replace silencioso. */
+app.post("/api/dashboard/igf-forecast/finalize", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGAFinancialKpis(req, res)) return;
+  if (dashboardBlockGVForbidden(req, res)) return;
+  const client = await pool.connect();
+  try {
+    const result = await igfFinancialFinal.finalizeFinancialVersion(client, req.body || {}, req.dashboardAuth);
+    res.json(result);
+  } catch (e) {
+    if (e && e.status) return sendIgfFinancialFinalError(res, e);
+    console.error("[Dashboard IGF finalize]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/** SUPERSEDE: ZP/AD only. Nueva FORECAST -> FINAL; FINAL previa -> SUPERSEDED. */
+app.post("/api/dashboard/igf-forecast/supersede", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGAFinancialKpis(req, res)) return;
+  if (dashboardBlockGVForbidden(req, res)) return;
+  const client = await pool.connect();
+  try {
+    const result = await igfFinancialFinal.supersedeFinancialVersion(client, req.body || {}, req.dashboardAuth);
+    res.json(result);
+  } catch (e) {
+    if (e && e.status) return sendIgfFinancialFinalError(res, e);
+    console.error("[Dashboard IGF supersede]", e);
     res.status(500).json({ error: e.message });
   } finally {
     client.release();
