@@ -36,6 +36,7 @@ const FRAME_ALLOWED = new Set([
   "active_range_days",
   "active_channel",
   "active_period_months",
+  "meeting_type",
 ]);
 
 function srcBlock(name, extra = {}) {
