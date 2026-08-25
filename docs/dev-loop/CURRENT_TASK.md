@@ -1,145 +1,134 @@
 # CURRENT_TASK
 
-task_id: "DOCS-DIRECTOR-IA-FINANCIAL-ACTUAL-READ-MODEL-SYNC-001"
+task_id: "AUDIT-DIRECTOR-IA-PLAUD-EXECUTIVE-CYCLE-EVAL-003"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-08-25"
 
 mode:
-  type: "DOCS_SYNC"
+  type: "AUDIT / EVALUATION"
   implementation: false
   code_changes: false
   test_changes: false
   sql_changes: false
-  ies_changes: false
+  architecture_changes: false
+  docs_director_ia_changes: false
+  matrix_changes: false
 
 objective: >
-  Sincronizar la documentación con la realidad ya probada por
-  REAUDIT-DIRECTOR-IA-FINANCIAL-ACTUAL-READ-MODEL-001 = PASS:
-  ACTUAL_FINANCIAL runtime = SUPPORTED dentro de month_close_result
-  SOLO cuando existe versión FINAL autorizada del YYYY-MM.
-  No afirmar soporte general fuera de ese boundary.
+  Evaluar el ciclo ejecutivo real que Director IA debe soportar
+  (OPEN_MONTH → PRE_CLOSE → CLOSED_NOT_FINAL → CLOSED_FINAL →
+  COUNCIL_FINAL → POST_CLOSE_FOLLOWUP) usando la junta Plaud
+  2026-08-25 como muestra PRE_CLOSE, EVAL-001/EVAL-002 como
+  evidencia CLOSE, y la visión humana de CONSEJO / FINAL +
+  análisis posterior. No reducir Director IA a pre_meeting.
 
 preserve:
-  impl: "IMPL-DIRECTOR-IA-FINANCIAL-ACTUAL-READ-MODEL-001"
-  audit: "AUDIT-DIRECTOR-IA-FINANCIAL-ACTUAL-READ-MODEL-001"
-  fix: "FIX-DIRECTOR-IA-FINANCIAL-ACTUAL-READ-MODEL-001"
-  reaudit: "REAUDIT-DIRECTOR-IA-FINANCIAL-ACTUAL-READ-MODEL-001"
+  architecture_pending: "ARCH-DIRECTOR-IA-PRE-MEETING-FINANCIAL-ACTUAL-001"
+  architecture_execute: false
+  architecture_modify: false
   restore: false
   discard: false
 
-chain:
-  - "ARCH-DIRECTOR-IA-FINANCIAL-ACTUAL-READ-MODEL-001"
-  - "IMPL-DIRECTOR-IA-FINANCIAL-ACTUAL-READ-MODEL-001"
-  - "AUDIT-DIRECTOR-IA-FINANCIAL-ACTUAL-READ-MODEL-001"
-  - "FIX-DIRECTOR-IA-FINANCIAL-ACTUAL-READ-MODEL-001"
-  - "REAUDIT-DIRECTOR-IA-FINANCIAL-ACTUAL-READ-MODEL-001"
+plaud_sample:
+  date: "2026-08-25"
+  title: "Reunión: Zona Provincia ajusta operaciones y proyecta cierre"
+  role: "PRE_CLOSE / conducción del cierre"
 
-reaudit_verdict: "PASS"
-architecture_source: "ARCH-DIRECTOR-IA-FINANCIAL-ACTUAL-READ-MODEL-001"
-authoritative_contract:
-  path: "docs/director-ia/FINANCIAL-ACTUAL-EVIDENCE-CONTRACT.md"
-  version: "v1.0"
-  rewrite: false
+historical_close_evidence:
+  - "AUDIT-DIRECTOR-IA-PLAUD-CLOSE-MEETING-EVAL-001"
+  - "AUDIT-DIRECTOR-IA-PLAUD-CLOSE-MEETING-EVAL-002"
 
-baseline:
-  coverage: "10.5 / 20 = 52.5%"
-  delta: "0.0 pp"
+cycle_to_study:
+  - "OPEN_MONTH"
+  - "PRE_CLOSE"
+  - "CLOSED_NOT_FINAL"
+  - "CLOSED_FINAL"
+  - "COUNCIL_FINAL"
+  - "POST_CLOSE_FOLLOWUP"
 
-runtime_boundary:
-  supported: "month_close_result.financial.actual SUPPORTED iff authorized FINAL for YYYY-MM"
-  still_unsupported:
-    - "pre_meeting"
-    - "IES"
-    - "Reasoning Engine oficial"
-    - "historical UI"
-    - "independent financial_actual intent"
-
-must_sync:
-  - "ACTUAL_FINANCIAL runtime exists only inside month_close_result when FINAL"
-  - "17 FINANCE_PROVIDED stored fields + provenance"
-  - "ZP/AD ALL_PLANTS; GG ASSIGNED_PLANTS; rest DENY"
-  - "SUPERSEDED ignored; cross-plant isolation; historical YYYY-MM"
-  - "GPT context projects actual values; ACTUAL/TARGET/FORECAST separated"
-  - "RECONCILIATION_GAP preserves Finance + ARR"
-  - "utilidad real → month_close_result; cómo va IGF preserved; open month not forced"
-  - "pre_meeting / IES / RE / historical UI / new intent remain unsupported"
+must_not_reduce_to: "pre_meeting"
 
 must_not:
-  - "restore or discard IMPL/AUDIT/FIX/REAUDIT working tree"
-  - "modify implementation or tests or SQL"
-  - "rewrite G3 v1.0 semantics"
-  - "claim general ACTUAL_FINANCIAL support"
-  - "claim pre_meeting or IES consume ACTUAL_FINANCIAL"
-  - "change capability matrix percentage"
+  - "execute this audit in the G1-only turn"
+  - "create the AUDIT/EVAL-003 report before the audit is executed"
+  - "change status to IN_PROGRESS during G1 application"
+  - "execute or modify ARCH-DIRECTOR-IA-PRE-MEETING-FINANCIAL-ACTUAL-001"
+  - "modify code, tests, SQL, architecture, normative docs, or matrix"
   - "commit"
   - "push"
   - "merge"
-  - "authorize or execute a following task"
 
 in_scope:
   writable:
     - "docs/dev-loop/CURRENT_TASK.md"
-    - "docs/dev-loop/reports/DOCS-DIRECTOR-IA-FINANCIAL-ACTUAL-READ-MODEL-SYNC-001.md"
-    - "docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md"
-    - "docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md"
-    - "docs/director-ia/DIRECTOR_IA_EXECUTIVE_KNOWLEDGE_ENGINE.md"
+    - "docs/dev-loop/reports/AUDIT-DIRECTOR-IA-PLAUD-EXECUTIVE-CYCLE-EVAL-003.md"
   read_only:
     - "entire repository except writable files"
-    - "docs/director-ia/FINANCIAL-ACTUAL-EVIDENCE-CONTRACT.md"
+    - "Plaud meeting 2026-08-25 and EVAL-001 / EVAL-002 reports"
 
 out_of_scope:
   - "code changes"
   - "test changes"
   - "SQL"
-  - "schema"
-  - "IES integration"
-  - "pre_meeting integration"
-  - "historical UI"
-  - "new intent"
-  - "G3 rewrite"
-  - "matrix percentage"
+  - "architecture implementation"
+  - "ARCH-DIRECTOR-IA-PRE-MEETING-FINANCIAL-ACTUAL-001 execution"
+  - "docs/director-ia/ normative edits"
+  - "capability matrix"
   - "commit"
   - "push"
   - "merge"
 
 contracts_in_force:
   - "docs/director-ia/DIRECTOR_IA_CONSTITUTION.md"
-  - "docs/director-ia/FINANCIAL-ACTUAL-EVIDENCE-CONTRACT.md"
   - "docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md"
-  - "docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md"
-  - "docs/director-ia/DIRECTOR_IA_EXECUTIVE_KNOWLEDGE_ENGINE.md"
+  - "docs/director-ia/FINANCIAL-ACTUAL-EVIDENCE-CONTRACT.md"
 
 allowed_actions:
-  - "sync inventory docs listed in in_scope.writable to the proven runtime boundary"
-  - "write the DOCS report"
+  - "inspect Plaud packet + EVAL-001/002 and write the AUDIT report"
   - "update CURRENT_TASK status AUTHORIZED → IN_PROGRESS → DONE_PENDING_REVIEW"
 
 forbidden_actions:
-  - "execute this sync in the G1-only turn"
-  - "create the DOCS report before the sync task is executed"
-  - "change status to IN_PROGRESS during G1 application"
+  - "execute or redesign ARCH-DIRECTOR-IA-PRE-MEETING-FINANCIAL-ACTUAL-001"
   - "modify lib/, test/, sql/, frontend-dashboard/, vba/, server.js"
-  - "restore, reset, or clean the working tree"
+  - "modify docs/director-ia/"
   - "commit"
   - "push"
   - "merge"
   - "write AUTHORIZED_BY_HUMAN"
   - "approve gates G2–G8"
-  - "authorize or execute a following task"
 
 max_attempts: 1
 
+baseline:
+  coverage: "10.5 / 20 = 52.5%"
+  delta: "0.0 pp"
+
 acceptance_criteria:
-  - "IMPL, AUDIT, FIX and REAUDIT reports remain on disk."
-  - "Docs state month_close_result SUPPORTED only with authorized FINAL."
-  - "Docs keep pre_meeting / IES / RE / historical UI / new intent unsupported."
-  - "G3 v1.0 semantics not rewritten."
-  - "Baseline remains 52.5%."
-  - "git diff --check clean."
+  - "G1 intact; audit executed in a later turn."
+  - "ARCH-DIRECTOR-IA-PRE-MEETING-FINANCIAL-ACTUAL-001 remains unexecuted."
+  - "EVAL-003 report written with the required 25 sections."
+  - "No code, tests, SQL, architecture, or matrix changes."
+  - "EVAL-001/EVAL-002 N and rates not recomputed."
+  - "Exactly one NEXT_TASK proposed, not authorized, not executed."
 
 expected_terminal_state: "DONE_PENDING_REVIEW"
 
 result_report_path: >
-  docs/dev-loop/reports/DOCS-DIRECTOR-IA-FINANCIAL-ACTUAL-READ-MODEL-SYNC-001.md
+  docs/dev-loop/reports/AUDIT-DIRECTOR-IA-PLAUD-EXECUTIVE-CYCLE-EVAL-003.md
+
+execution_result:
+  status: DONE_PENDING_REVIEW
+  N_eval_003: 24
+  anticipated_rate: "1/24 = 4.2%"
+  prepared_rate: "3/24 = 12.5%"
+  unsupported_rate: "11/24 = 45.8%"
+  single_bottleneck: "pre_close_composition_missing"
+  cycle_model: "SUPPORTED_WITH_ADJUSTMENTS"
+  next_task_proposed: "ARCH-DIRECTOR-IA-PRE-CLOSE-STEERING-COMPOSITION-001"
+  next_task_authorized: false
+  next_task_executed: false
+  architecture_pending_still_frozen: true
+  matrix: "10.5 / 20 = 52.5%"
+  matrix_delta: "0.0 pp"
