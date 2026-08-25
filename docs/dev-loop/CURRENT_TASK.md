@@ -1,230 +1,202 @@
 # CURRENT_TASK
 
-task_id: "ARCH-DIRECTOR-IA-FINANCIAL-ACTUAL-EVIDENCE-CONTRACT-001"
+task_id: "DOCS-DIRECTOR-IA-FINANCIAL-ACTUAL-EVIDENCE-CONTRACT-001"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-08-25"
 
 mode:
-  type: "ARCHITECTURE_CONTRACT_ONLY"
+  type: "G3_CONTRACT_CREATION_ONLY"
   implementation: false
   runtime_changes: false
   schema_changes: false
   sql_execution: false
   test_changes: false
+  index_sync: false
+  eke_sync: false
+  inventory_sync: false
 
 objective: >
-  Definir y congelar el contrato de evidencia para FINANCIAL_ACTUAL antes de
-  cualquier implementación física. El contrato debe impedir que forecast,
-  latest/is_current, mes transcurrido o valores recalculados por runtime sean
-  promovidos silenciosamente a evidencia financiera ACTUAL.
+  Crear el contrato normativo v1.0
+  FINANCIAL-ACTUAL-EVIDENCE-CONTRACT.md a partir de la arquitectura ya
+  aprobada, subordinado a Constitución y EKE, compatible con 04/05 congelados,
+  sin tocar runtime, schema, Index, EKE §7 ni inventario.
 
-upstream_decision:
-  task: "ARCH-DIRECTOR-IA-FINANCIAL-ACTUAL-SOURCE-001"
-  result: "READY_WITH_LIMITS"
+source_architecture:
+  task: "ARCH-DIRECTOR-IA-FINANCIAL-ACTUAL-EVIDENCE-CONTRACT-001"
+  result: "DONE_PENDING_REVIEW / READY_WITH_LIMITS"
 
-established_architecture:
-  finalization_architecture: "A"
-  physical_source:
+g3_document:
+  path: "docs/director-ia/FINANCIAL-ACTUAL-EVIDENCE-CONTRACT.md"
+  version: "v1.0"
+  index_order_future: "—"
+  type: "domain evidence contract"
+  pipeline_layer: false
+
+authority:
+  subordinate_to:
+    - "DIRECTOR_IA_CONSTITUTION.md"
+    - "DIRECTOR_IA_EXECUTIVE_KNOWLEDGE_ENGINE.md"
+
+  compatible_with:
+    - "02-EVIDENCE-BUILDER.md"
+    - "03A-OBSERVATION-PIPELINE.md"
+    - "04-IES-STANDARD.md"
+    - "05-REASONING-ENGINE.md"
+
+  must_not_reopen:
+    - "DIRECTOR_IA_CONSTITUTION.md"
+    - "04-IES-STANDARD.md"
+    - "05-REASONING-ENGINE.md"
+
+normative_scope:
+  governs:
+    - "ACTUAL_FINANCIAL / FINANCIAL_ACTUAL evidence"
+    - "FINANCE_PROVIDED field origin"
+    - "ARR_ACTUAL field origin"
+    - "RUNTIME_COMPUTED field origin"
+    - "DERIVED field origin"
+    - "FORECAST / FINAL / SUPERSEDED"
+    - "provenance"
+    - "finalization"
+    - "correction/supersession"
+    - "reconciliation"
+    - "immutability of finalized evidence"
+    - "authorization boundary"
+    - "reasoning restrictions"
+
+physical_source:
+  owner: "FINANZAS"
+  persistence:
     - "igf.versions"
     - "igf.compromiso_lines"
-  source_owner: "FINANZAS"
-
-  states:
-    - "FORECAST"
-    - "FINAL"
-    - "SUPERSEDED"
-
-  actual_commercial:
-    source: "ARR"
-
-  target_commitment:
-    source: "igf_meta"
-
-  actual_financial_definition: >
-    FINANCE_PROVIDED fields belonging to the unique authoritative FINAL
-    Finance version for exact plant/company + YYYY-MM.
-
-critical_boundary:
-  FINANCE_PROVIDED: >
-    A value physically supplied by the Finance-owned source artifact and
-    preserved with source/version/period provenance.
-
-  RUNTIME_COMPUTED: >
-    A value calculated, substituted, overlaid, aggregated or otherwise
-    transformed by runtime after source ingestion.
-
-  invariant: >
-    FINAL applies to the Finance evidence version. FINAL does not convert a
-    RUNTIME_COMPUTED output into FINANCE_PROVIDED evidence.
 
 truth_classes:
-  - "ACTUAL_COMMERCIAL"
-  - "TARGET_COMMITMENT"
-  - "FORECAST"
-  - "ACTUAL_FINANCIAL"
-  - "DERIVED_MODEL"
+  ACTUAL_COMMERCIAL:
+    source: "ARR"
 
-truth_class_invariants:
+  TARGET_COMMITMENT:
+    source: "igf_meta"
+
+  FORECAST:
+    source: "non-final IGF Finance version/current model"
+
+  ACTUAL_FINANCIAL:
+    source: >
+      FINANCE_PROVIDED fields from the single authoritative FINAL,
+      non-SUPERSEDED Finance version for the exact YYYY-MM and authorized
+      company identity.
+
+  DERIVED_MODEL:
+    source: "forecast_mensual / derived models"
+
+invariants:
+  - "is_current != FINAL"
+  - "latest != FINAL"
+  - "month elapsed != FINAL"
+  - "complete ARR != FINAL"
+  - "FINAL must be explicit"
+  - "FINAL does not convert RUNTIME_COMPUTED into FINANCE_PROVIDED"
   - "ACTUAL_COMMERCIAL != ACTUAL_FINANCIAL"
   - "TARGET_COMMITMENT != ACTUAL_FINANCIAL"
   - "FORECAST != ACTUAL_FINANCIAL"
   - "DERIVED_MODEL != ACTUAL_FINANCIAL"
-  - "is_current != FINAL"
-  - "latest != FINAL"
-  - "month_elapsed != FINAL"
-  - "complete_ARR != FINAL"
-  - "FINAL must be explicit"
-  - "No fallback from missing ACTUAL_FINANCIAL to FORECAST"
-  - "No fallback from missing ACTUAL_FINANCIAL to TARGET_COMMITMENT"
+  - "missing ACTUAL_FINANCIAL never falls back to FORECAST/TARGET"
 
-canonical_identity:
-  required:
-    - "canonical plant/company identity"
-    - "year"
-    - "month"
-    - "version identity"
-
-  final_constraint: >
-    At most one authoritative non-superseded FINAL financial version may exist
-    for the exact canonical identity and period.
-
-evidence_classes:
-
+field_origins:
   FINANCE_PROVIDED:
-    requirements:
-      - "source_owner = FINANZAS"
-      - "exact period"
-      - "exact source version"
-      - "source provenance"
-      - "field/value physically present in Finance artifact"
-      - "finalization status"
+    definition: >
+      Value physically present in the Finance-owned artifact and persisted for
+      an identified version, period and company with provenance.
 
   ARR_ACTUAL:
-    requirements:
-      - "commercial actual provenance"
-      - "exact plant"
-      - "exact period/date grain"
+    definition: "Canonical commercial actual from ARR."
 
   RUNTIME_COMPUTED:
-    requirements:
-      - "computation provenance"
-      - "input evidence references where available"
-      - "must not be represented as Finance-provided actual"
+    definition: >
+      Value calculated, replaced, overlaid, aggregated or transformed after
+      ingestion.
 
   DERIVED:
-    requirements:
-      - "model/calculation provenance"
-      - "must remain distinguishable from actual evidence"
+    definition: "Model/calculation output distinct from actual evidence."
 
-finalization_contract:
-
+state_machine:
   FORECAST:
-    meaning: >
-      Finance version available for planning/current-view use but not approved
-      as authoritative financial actual close.
+    meaning: "Finance version not explicitly finalized."
 
   FINAL:
     meaning: >
-      Explicit human/governed designation that this exact Finance-owned version
-      is the authoritative financial close evidence for its exact period.
+      Explicit governed designation that this exact Finance version is the
+      authoritative financial close evidence for the period.
 
   SUPERSEDED:
     meaning: >
-      Previously finalized version retained historically but replaced by a
-      later explicitly finalized correction.
+      Historical previously FINAL version replaced by a later explicitly
+      finalized correction.
 
-  prohibited_transitions:
-    - "FORECAST -> FINAL by passage of time alone"
-    - "FORECAST -> FINAL because is_current=true"
-    - "FORECAST -> FINAL because ARR has last day"
-    - "SUPERSEDED -> current authoritative actual without explicit new decision"
+  prohibited:
+    - "FORECAST -> FINAL by time"
+    - "FORECAST -> FINAL by is_current"
+    - "FORECAST -> FINAL by latest"
+    - "FORECAST -> FINAL by complete ARR"
 
-finalization_authority:
-  requirement: >
-    Contract must require an authorized human/business process to finalize.
-
-  current_business_owner: "FINANZAS"
-
-  unresolved_authz: >
-    Exact application role/permission allowed to perform or consume financial
-    finalization remains a separate authorization decision.
-
-correction_contract:
-  rule: >
-    A correction after FINAL must create/use a distinct version. Historical
-    FINAL evidence must not be destructively overwritten.
-
-  transition:
-    old: "FINAL -> SUPERSEDED"
-    new: "FORECAST/new version -> FINAL"
-
-  invariants:
-    - "preserve old version"
-    - "preserve provenance"
-    - "preserve finalization history"
+correction:
+  required:
+    - "new version"
+    - "new FINAL designation"
+    - "prior FINAL -> SUPERSEDED"
+    - "preserve historical evidence"
     - "no destructive overwrite"
 
 mutation_protection:
-  requirement: >
-    Any existing mutation path, including HG PATCH or equivalent, must be
-    forbidden from silently altering FINANCE_PROVIDED evidence of FINAL or
-    SUPERSEDED versions.
+  rule: >
+    FINAL and SUPERSEDED FINANCE_PROVIDED evidence may not be silently mutated.
+
+  known_risk:
+    - "existing HG PATCH path"
 
   implementation: "OUT_OF_SCOPE"
 
-provenance_contract:
-  minimum:
+provenance:
+  mandatory:
     - "truth_class"
     - "source_owner"
     - "source artifact/type"
-    - "canonical plant/company"
+    - "canonical company/plant identity"
     - "YYYY-MM"
     - "version identity"
     - "finalization state"
     - "finalized_at when FINAL"
     - "finalization authority/process"
-    - "field origin: FINANCE_PROVIDED / ARR_ACTUAL / RUNTIME_COMPUTED / DERIVED"
+    - "field origin"
 
-  optional_if_physically_available:
+  optional_if_available:
     - "upload timestamp"
-    - "source filename/reference"
-    - "source hash"
+    - "filename/reference"
+    - "hash"
     - "superseded version reference"
 
-provided_vs_computed_contract:
-  requirement: >
-    Define field-level origin. A response may combine evidence classes, but
-    every material financial assertion must remain attributable to its origin.
+historical_semantics:
+  allow:
+    - "compare prior version vs FINAL"
+    - "compare TARGET vs FORECAST vs FINAL with valid provenance"
 
-  prohibited_example: >
-    "Finanzas cerró con resultado X" when X is a runtime recomputation not
-    physically provided by Finance.
+  prohibit:
+    - "created_at treated as business effective date without proof"
 
-  acceptable_semantic_pattern: >
-    "Con los datos finales proporcionados por Finanzas y los datos comerciales
-    reales de ARR, el sistema calculó X."
-
+reconciliation:
   rule: >
-    Exact response wording is runtime responsibility, but the evidence contract
-    must preserve enough provenance to support the distinction.
+    ARR remains canonical commercial actual. If a FINANCE_PROVIDED value such
+    as sale conflicts with ARR for the same period, preserve both and emit
+    FINANCIAL_ACTUAL_RECONCILIATION_GAP.
 
-reconciliation_contract:
-  case: >
-    Finance-provided sale/value conflicts materially with canonical ARR actual.
+  prohibited:
+    - "silent overwrite"
+    - "GPT choosing which value to erase"
 
-  result: "FINANCIAL_ACTUAL_RECONCILIATION_GAP"
-
-  behavior:
-    - "preserve both values"
-    - "preserve both provenance chains"
-    - "do not silently overwrite"
-    - "do not ask GPT to choose truth"
-    - "surface limitation/gap"
-
-missing_semantics:
-  supported_codes:
+failure_semantics:
+  include:
     - "FINANCIAL_ACTUAL_MISSING_FOR_PERIOD"
     - "FINANCIAL_ACTUAL_NOT_FINAL"
     - "FINANCIAL_ACTUAL_VERSION_AMBIGUOUS"
@@ -232,131 +204,44 @@ missing_semantics:
     - "FINANCIAL_ACTUAL_RECONCILIATION_GAP"
     - "FINANCIAL_ACTUAL_UNAUTHORIZED"
 
-  invariant:
-    missing: "!= 0"
-    not_final: "!= forecast"
-    unauthorized: "!= missing"
-
-historical_contract:
-  rule: >
-    Historical versions are immutable evidence records.
-
-  allow:
-    - "compare prior version with authoritative FINAL"
-    - "compare TARGET vs FORECAST version vs FINAL when provenance supports it"
-
-  prohibit: >
-    created_at/upload timestamp alone must not be represented as the business
-    effective date of a forecast unless such semantics are explicitly proven.
-
-reasoning_contract:
-  requirements:
-    - "Reasoning may synthesize across evidence classes."
-    - "Reasoning may calculate explicit comparisons from supported values."
-    - "Reasoning may not promote evidence truth class."
-    - "Reasoning may not infer FINAL."
-    - "Reasoning may not infer causality from reconciliation or temporal coincidence."
-    - "Recommendation must preserve evidence/limitation provenance."
-
-G3_contract:
-  requirement: >
-    Determine the new subordinate contract/document required to govern
-    FINANCIAL_ACTUAL evidence without reopening frozen 04/05.
-
-  audit:
-    - "exact document location/name"
-    - "authority relationship to Constitution/EKE/IES/Reasoning"
-    - "version"
-    - "freeze semantics"
-
-  preferred_candidate:
-    name: "FINANCIAL-ACTUAL-EVIDENCE-CONTRACT"
-    version: "v1.0"
-
-  rule: >
-    Use repository architecture conventions. Do not invent numbering until
-    existing index/order is inspected.
-
-G2_sync_order:
-  after_G3_contract:
-    - "DIRECTOR_IA_ARCHITECTURE_INDEX"
-    - "EXECUTIVE_KNOWLEDGE_ENGINE §7 Financiero"
-    - "DIRECTOR_IA_CAPACIDADES_Y_FUENTES"
-
-  rule: >
-    This task designs the contract and exact required sync. Do not perform
-    unrelated architecture changes.
-
-frozen_contracts:
-  Constitution:
-    modify: false
-
-  IES_04:
-    modify: false
-
-  Reasoning_05:
-    modify: false
-
-  requirement: >
-    Demonstrate that the new contract is subordinate and compatible rather
-    than requiring frozen contracts to be reopened.
-
 authorization_boundary:
   status: "AUTHZ_DECISION_REQUIRED"
 
   invariant: >
-    Permission to view/use IGF forecast does not automatically grant permission
-    to ACTUAL financial/P&L evidence.
+    Access to IGF forecast does not automatically authorize ACTUAL financial/P&L.
 
-  contract_requirement: >
-    Evidence contract must carry authorization classification/boundary but must
-    not invent the role mapping.
+  note: "Does not block G3 freeze; blocks runtime exposure."
 
-implementation_gate:
-  closed_until:
-    - "G3 evidence contract frozen"
-    - "G2 architecture index synchronized"
-    - "G2 EKE §7 synchronized"
-    - "G2 capability/source inventory synchronized"
-    - "AUTHZ decision resolved if required before runtime exposure"
+reasoning_restrictions:
+  - "Reasoning may synthesize supported evidence."
+  - "Reasoning may compute explicit comparisons from supported values."
+  - "Reasoning may not promote truth class."
+  - "Reasoning may not infer FINAL."
+  - "Reasoning may not hide reconciliation gaps."
+  - "Reasoning may not infer causality from temporal coincidence."
 
-  invariant: "No IMPL task before gates are satisfied."
+ies_boundary:
+  current: >
+    ACTUAL_FINANCIAL does not yet feed the official IES runtime.
 
-contract_audit:
-  inspect_read_only:
-    - "Director IA Constitution"
-    - "Executive Knowledge Engine"
-    - "04 IES"
-    - "05 Reasoning Engine"
-    - "Architecture Index"
-    - "Capabilities and Sources inventory"
-    - "existing evidence/source contracts"
+  requirement: >
+    The contract defines the domain evidence semantics only. Future integration
+    must obey Constitution/EKE/EB/IES.
 
-  determine:
-    - "compatibility"
-    - "subordination"
-    - "exact G3 document placement"
-    - "exact G2 sync targets"
-    - "whether authz decision is pre-implementation blocker"
+freeze_status:
+  target: "v1.0 APPROVED/FROZEN BY HUMAN G3"
 
-deliverable:
-  report_must_include:
-    - "contract scope"
-    - "normative definitions"
-    - "truth-class invariants"
-    - "state machine"
-    - "provenance requirements"
-    - "provided-vs-computed rules"
-    - "reconciliation rules"
-    - "historical/version rules"
-    - "mutation protection"
-    - "reasoning constraints"
-    - "authorization boundary"
-    - "G3 document proposal"
-    - "G2 sync plan"
-    - "compatibility with frozen 04/05"
-    - "implementation gate"
-    - "readiness verdict"
+  rule: >
+    Cursor may prepare the document as v1.0 approved for human freeze, but must
+    not claim autonomous human approval beyond this authorized G3 task.
+
+g2_after_g3:
+  order:
+    - "DIRECTOR_IA_ARCHITECTURE_INDEX.md"
+    - "DIRECTOR_IA_EXECUTIVE_KNOWLEDGE_ENGINE.md §7 Financiero"
+    - "DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md"
+
+  not_in_this_task: true
 
 percentage_policy:
   before: "10.5 / 20 = 52.5%"
@@ -366,57 +251,57 @@ percentage_policy:
 in_scope:
   writable:
     - "docs/dev-loop/CURRENT_TASK.md"
-    - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-FINANCIAL-ACTUAL-EVIDENCE-CONTRACT-001.md"
+    - "docs/director-ia/FINANCIAL-ACTUAL-EVIDENCE-CONTRACT.md"
+    - "docs/dev-loop/reports/DOCS-DIRECTOR-IA-FINANCIAL-ACTUAL-EVIDENCE-CONTRACT-001.md"
 
   read_only:
-    - "entire repository except writable files"
+    - "all other repository files"
 
 out_of_scope:
+  - "Index sync"
+  - "EKE sync"
+  - "CAPACIDADES_Y_FUENTES sync"
   - "runtime"
   - "code"
   - "tests"
-  - "schema"
   - "SQL"
+  - "schema"
   - "VBA"
   - "permissions implementation"
-  - "matrix"
-  - "04 modification"
-  - "05 modification"
-  - "Constitution modification"
+  - "04 changes"
+  - "05 changes"
+  - "Constitution changes"
   - "commit"
   - "push"
   - "merge"
 
 acceptance_criteria:
-  - "FINANCE_PROVIDED and RUNTIME_COMPUTED normatively separated."
-  - "ACTUAL_FINANCIAL normatively defined."
-  - "FORECAST/FINAL/SUPERSEDED state semantics defined."
-  - "No inferred finalization allowed."
-  - "Correction/supersession contract defined."
-  - "Mutation protection requirement defined."
-  - "Provenance contract defined."
-  - "Reconciliation contract defined."
-  - "Missing/error semantics defined."
-  - "Historical evidence semantics defined."
-  - "Reasoning restrictions defined."
-  - "Authz boundary preserved without invented roles."
-  - "G3 document placement determined."
-  - "G2 sync sequence determined."
-  - "Frozen 04/05 compatibility demonstrated."
-  - "Implementation gate explicit."
+  - "G3 file created at exact approved path."
+  - "Version v1.0."
+  - "No 07 numbering invented."
+  - "Normative definitions preserved."
+  - "FINANCE_PROVIDED vs RUNTIME_COMPUTED preserved."
+  - "FORECAST/FINAL/SUPERSEDED preserved."
+  - "Correction and supersession preserved."
+  - "Mutation protection requirement preserved."
+  - "Provenance preserved."
+  - "Reconciliation contract preserved."
+  - "Historical timestamp limitation preserved."
+  - "AUTHZ_DECISION_REQUIRED preserved."
+  - "No runtime exposure authorized."
+  - "No IES integration claimed."
+  - "04/05/Constitution untouched."
+  - "No Index/EKE/inventory sync performed."
   - "Baseline remains 52.5%."
-  - "Only CURRENT_TASK + report changed."
+  - "Only three authorized files changed."
   - "git diff --check clean."
 
-next_task_policy:
-  rule: >
-    Propose exactly one NEXT_TASK corresponding to the first required gate.
-    Do not authorize or execute it.
+next_task:
+  propose_exactly_one: "DOCS-DIRECTOR-IA-FINANCIAL-ACTUAL-INDEX-SYNC-001"
+  authorize: false
+  execute: false
 
-expected_terminal_state:
-  - "DONE_PENDING_REVIEW if contract architecture is complete."
-  - "STOPPED if a human contractual/authz decision is required before G3."
-  - "BLOCKED if incompatible with frozen upstream contracts."
+expected_terminal_state: "DONE_PENDING_REVIEW"
 
 result_report_path: >
-  docs/dev-loop/reports/ARCH-DIRECTOR-IA-FINANCIAL-ACTUAL-EVIDENCE-CONTRACT-001.md
+  docs/dev-loop/reports/DOCS-DIRECTOR-IA-FINANCIAL-ACTUAL-EVIDENCE-CONTRACT-001.md
