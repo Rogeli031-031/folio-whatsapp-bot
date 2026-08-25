@@ -4,37 +4,30 @@
 task_id: "ARCH-DIRECTOR-IA-PRE-MEETING-MONTH-CLOSE-RESULT-001"
 outcome: "DONE_PENDING_REVIEW"
 mode: "READINESS_ONLY"
+correction: true
 implementation: false
 determination: "READY_WITH_LIMITS"
-canonical_sales_target: false
-canonical_sales_target_declaration: "NO existe meta mensual canónica de venta por planta en las fuentes actuales."
-monthly_sales_actual_source: "arr.ventas_diarias_cliente SUM(kg) por plant_code + mes calendario"
-channel_mix_source: "arr.ventas_diarias_cliente.canal (+ arr.cliente_categoria_mes mismo mes)"
-monthly_discount_source: "SUM(arr.descuentos_diarios_cliente.monto) / SUM(arr.ventas_diarias_cliente.kg) mismo mes/planta"
-new_lost_source: "actual kg MoM from monthly buckets; DICF lists are forecast-income classes, not closed-month actual"
-financial_actual: false
-igf_class: "FORECAST"
+previous_finding: "canonical monthly sales meta = NO (persistence dismissed as forecast/workbook name)"
+new_evidence: "igf_meta / igf_metahg persist; VBA Subir_IGF_META_Global / Subir_IGF_METAHG; HUMAN_APPROVER classifies igf_meta as TARGET/COMMITMENT"
+corrected_finding: "igf_meta = TARGET/COMMITMENT of the month (venta + financial objectives). IGF runtime = FORECAST. ARR daily = ACTUAL. forecast_mensual = DERIVED_MODEL. Exact year/month/plant + is_current only. No carry-forward. Missing month = TARGET_MISSING_FOR_PERIOD."
+canonical_sales_target: true
+canonical_sales_target_source: "igf_meta.meta_lines.venta_ton (TARGET/COMMITMENT; same year/month; GLOBAL version is_current; row matched by empresa)"
+canonical_sales_target_unit: "ton (ARR actual is kg; convert explicitly; do not mix)"
+igf_meta_class: "TARGET_COMMITMENT"
+igf_metahg_class: "TARGET (category/HG block used by Evaluacion; not a substitute for igf_meta.venta_ton)"
+igf_forecast_class: "FORECAST"
+arr_daily_class: "ACTUAL"
 arr_forecast_mensual_class: "DERIVED_MODEL"
-igf_meta_class: "FORECAST (workbook META Global; not sales target)"
+financial_actual: false
 selected_architecture: "B_month_close_read_model"
 selected_architecture_letter: "B"
+architecture_changed: false
 selected_first_slice: "C_month_close_core"
 selected_first_slice_letter: "C"
+first_slice_changed: false
 canonical_intent: "month_close_result"
-intent_required: true
-igf_overloaded: false
-commercial_trend_overloaded: false
-pre_meeting_overloaded: false
-pre_meeting_handoff: true
-persistence: false
-internal_http: false
-plaud_runtime: false
-plaud_as_truth: false
-new_sql: false
-new_schema: false
-target_creation: false
-accounting_source_creation: false
-new_thresholds: false
+intent_changed: false
+pre_meeting_meta_gap: "META_MISSING_FOR_PERIOD"
 g2: "N/A"
 g3: "N/A"
 g8: "N/A"
@@ -42,8 +35,7 @@ modules_changed: []
 global_before: "10.5 / 20 = 52.5%"
 global_after: "10.5 / 20 = 52.5%"
 gain_pp: 0.0
-percentage_policy: "This readiness is not module coverage. 52.5% unchanged. 0.0 pp."
-destination: "chat legado (planner + conversation_state + in-process orchestrator); NO Motor N1–N5; NO IES; NO Reasoning Engine"
+percentage_policy: "This correction does not change module coverage. 0.0 pp."
 files_touched:
   - "docs/dev-loop/CURRENT_TASK.md"
   - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-PRE-MEETING-MONTH-CLOSE-RESULT-001.md"
@@ -56,31 +48,7 @@ files_not_touched:
   - "frontend-dashboard/"
   - "package.json"
   - "lockfiles"
-contracts_consulted:
-  - "AGENTS.md"
-  - "docs/dev-loop/LOOP_PROTOCOL.md"
-  - "docs/dev-loop/CURRENT_TASK.md"
-  - "docs/dev-loop/reports/AUDIT-DIRECTOR-IA-PLAUD-CLOSE-MEETING-EVAL-001.md"
-  - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-PRE-MEETING-READ-MODEL-001.md"
-  - "docs/director-ia/DIRECTOR_IA_CONSTITUTION.md"
-  - "docs/director-ia/DIRECTOR_IA_EXECUTIVE_KNOWLEDGE_ENGINE.md"
-  - "docs/director-ia/04-IES-STANDARD.md"
-  - "docs/director-ia/05-REASONING-ENGINE.md"
-  - "docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md"
-  - "sql/arr_forecast_schema.sql"
-  - "sql/012_igf_meta_global.sql"
-  - "lib/dicf.js"
-  - "lib/dicf-acciones.js"
-  - "lib/director-ia-client-profile.js"
-  - "lib/director-ia-igf-arr.js"
-  - "lib/director-ia-commercial-state.js"
-  - "lib/director-ia-commercial-trend.js"
-  - "lib/director-ia-pre-meeting.js"
-  - "lib/director-ia-m9-deltas.js"
-  - "lib/director-ia-planner.js"
 contracts_modified: []
-ambiguities_or_contradictions: []
-deviations_from_current_task: []
 next_task_proposed: "IMPL-DIRECTOR-IA-PRE-MEETING-MONTH-CLOSE-RESULT-001"
 next_task_authorized: false
 next_task_executed: false
@@ -88,19 +56,36 @@ secrets_check: "none"
 human_decision_needed:
   - "G5 LOOP: HUMAN_APPROVER cierra esta tarea. NEXT_TASK no está autorizada ni ejecutada."
   - "52.5% no cambia (0.0 pp)."
-  - "G2/G3/G8 de esta ARCH: N/A. El IMPL no edita docs/director-ia/."
-  - "No crear meta. No tratar IGF ni forecast_mensual como meta."
 ```
+
+## Corrección (esta revisión)
+
+| | |
+|---|---|
+| **PREVIOUS_FINDING** | Meta mensual canónica = **NO**. `igf_meta` se clasificó como forecast / nombre de plantilla. |
+| **NEW_EVIDENCE** | Persistencia física `igf_meta.*` / `igf_metahg.*`. Macros `Subir_IGF_META_Global` / `Subir_IGF_METAHG`. HUMAN_APPROVER: `igf_meta` es el compromiso gerencial del mes. |
+| **CORRECTED_FINDING** | `igf_meta` = **TARGET / COMMITMENT**. No forecast. No actual. No derived. Comparar ACTUAL vs META solo con la versión vigente del **mismo** year/month/planta. Sin carga = `TARGET_MISSING_FOR_PERIOD`. |
+
+Arquitectura **B**, first slice **C** e intent **`month_close_result`** se **mantienen**. Cambia el contenido de `sales.target` / `financial.target`: ahora tienen fuente canónica cuando el periodo está cargado.
+
+---
 
 ## Resumen ejecutivo
 
 **READY_WITH_LIMITS.**
 
-Existe un objeto mensual de cierre **defendible** con venta actual, mix CASA/COMISIONISTA, descuento/kg = `SUM(monto)/SUM(kg)`, movers y new/lost por kg, acciones y huecos. **No** existe meta mensual canónica de venta. **No** existe resultado financiero actual de cierre. IGF es **FORECAST**. ARR `forecast_mensual` es **DERIVED_MODEL**.
+`month_close_result` puede alinear, **antes** de GPT:
 
-Arquitectura **B**: read model estructurado `month_close_result`. No persistir. No sobrecargar IGF ni `commercial_trend` ni el pack abierto de `pre_meeting_brief`.
+- `sales.actual` — ARR kg del mes
+- `sales.target` — `igf_meta.meta_lines.venta_ton` del mismo YYYY-MM (ton → kg explícito)
+- `sales.delta_vs_target` / `sales.attainment_pct` — solo si ambos existen
+- `financial.target` — resto de `igf_meta.meta_lines` (margen, util, resultado)
+- `financial.forecast` — `igf.compromiso_lines` (IGF runtime)
+- `financial.actual` — **UNSUPPORTED** (no hay cierre contable)
 
-First slice **C — month-close core**: ventas + canales + descuento + clientes + IGF etiquetado como proyección (si hay versión) + acciones + information gaps. Meta y financial actual **omitidos** (no existen). Limitation explícita en ambos.
+Si el mes no tiene `igf_meta` vigente: **no** se usa junio para agosto. Gap `TARGET_MISSING_FOR_PERIOD`.
+
+Director IA **aún no** carga `igf_meta` (inventario: UI only). El IMPL debe leer las tablas; no inventar meta.
 
 **NEXT_TASK** (no autorizada, no ejecutada): `IMPL-DIRECTOR-IA-PRE-MEETING-MONTH-CLOSE-RESULT-001`.
 
@@ -108,298 +93,203 @@ First slice **C — month-close core**: ventas + canales + descuento + clientes 
 
 ## Ejecución
 
-- Rama: `architecture/director-ia-pre-meeting-month-close-result-001` (≠ `main`).
-- HEAD: `56df6262 Merge branch 'audit/director-ia-plaud-close-meeting-eval-001'`.
+- Rama: `implementation/director-ia-pre-meeting-month-close-result-001` (≠ `main`).
 - G1 intacto: `HUMAN_APPROVER` / `2026-08-24`. Solo se cambió `status`.
-- `max_attempts: 1`. Sin código, tests, SQL, schema, contratos, Plaud, matriz, commit, push, merge.
+- Corrección de readiness. Sin código, tests, SQL, schema, VBA, contratos, matriz, commit, push, merge.
 
 ---
 
-## 1. Meta de venta — búsqueda repo-wide
+## Cuatro verdades (no mezclar)
 
-Se buscó en `lib/`, `sql/`, `server.js`, `frontend-dashboard/`, `config`, queries y nombres: `meta_venta`, `metas`, `objetivo`, `target`, `presupuesto`, `forecast`, `ARR`, `IGF`.
-
-| Candidato | Qué es | ¿Meta de venta? |
-|-----------|--------|-----------------|
-| `meta_venta` / `objetivo_venta` / `kg_meta` | **No hay** tabla, columna ni loader | No |
-| `cumple_meta_mensual` | Mejora Continua: `evidencias_mes > 0` | No. Meta de evidencias, no de kg |
-| `arr.forecast_mensual` | Salida de `calcular_forecast_mensual` (DOW × días) | **FORECAST / DERIVED_MODEL**. Prohibido usarlo como meta |
-| `igf.compromiso_lines.venta_ton` | Compromiso/forecast IGF de la versión del mes | **FORECAST**. Prohibido usarlo como meta |
-| `igf_meta.meta_lines` | Workbook «IGF META Global» (`Subir_IGF_META_Global`) | Mismo tipo de snapshot financiero. El nombre META es de plantilla Excel, **no** objetivo de venta |
-| `igf_metahg` | Hoja METAHG | Categorías financieras, no meta kg |
-| `presupuesto_kg` (línea IGF) | Partida $/kg del compromiso | No es meta de toneladas |
-| `venta-proyeccion-mes` / ARR lookback | Regla 14d × DOW | **DERIVED_MODEL** |
-| `vtaAnioAnterior` (export Evaluación) | Venta año anterior | No es meta |
-| Números dichos en Plaud | Evaluación only | Prohibido como runtime truth |
-| Hardcode | — | Prohibido |
-
-**Declaración:** **NO** existe una meta mensual canónica de venta por planta.
-
-No hay grain, periodo, version ni owner de meta, porque la fuente no existe.
-
-Política: el read model **dice** que no hay meta canónica en las fuentes actuales. **No** inventa delta vs meta. **No** usa forecast, mes anterior, Plaud ni hardcode como meta.
-
----
-
-## 2. Venta mensual real (ACTUAL)
-
-| Campo | Valor |
-|-------|--------|
-| Fuente física | `arr.ventas_diarias_cliente` |
-| Agregación | `SUM(kg)` |
-| Scope | `plant_code` de la planta autorizada |
-| Periodo | mes calendario (`fecha` ∈ [YYYY-MM-01, último día]) |
-| Unidad | kg; ton = kg/1000 solo para display |
-| Canal | columna `canal` (`Casa` / `Comisionista`); overlay `arr.cliente_categoria_mes` del **mismo** year/month |
-| ¿Ya existe loader? | Sí, a grano cliente: `queryMonthlySales` en `lib/director-ia-client-profile.js`. El mes-cierre suma esas filas a planta |
-| No usar como canónico | `arr.venta_toneladas_diarias_provincia` (ton **enteras** redondeadas, sin canal) |
-| No usar como canónico | `arr.forecast_mensual.kg_actual` (snapshot del job de forecast) |
-
-**Clase:** `ACTUAL`.
-
-Cierre / inmutabilidad: **no hay** marcador `closed`/`final` en las tablas diarias. Un mes anterior al mes CDMX se etiqueta `COMPLETE` (mismo criterio que `client_profile`). `COMPLETE` ≠ cierre contable. Las recargas de ARR pueden alterar historia. Eso se declara como limitation, no se oculta.
-
----
-
-## 3. Channel mix (mismo mes)
-
-| Canal | Fuente | Share |
+| Clase | Fuente | Qué es |
 |-------|--------|--------|
-| CASA | `SUM(kg)` donde canal canónico = Casa | CASA / total |
-| COMISIONISTA | `SUM(kg)` donde canal = Comisionista | COMISIONISTA / total |
-| Total | suma de ambos | 100% si total > 0 |
+| **ACTUAL** | `arr.ventas_diarias_cliente` / descuentos diarios | Resultado físico observado del mes |
+| **TARGET / COMMITMENT** | `igf_meta.versions` + `igf_meta.meta_lines` | Meta/compromiso gerencial firmado del mes. Decisión de negocio del HUMAN_APPROVER. |
+| **FORECAST** | `igf.versions` + `igf.compromiso_lines` | IGF forecast/runtime vigente. Independiente de `igf_meta` (`sql/012`: «independiente de igf.compromiso_lines»). |
+| **DERIVED_MODEL** | `arr.forecast_mensual`, proyección 14d×DOW, overlay UI | Modelo calculado. Prohibido como meta. |
 
-Mismo mes, misma planta, misma fuente que la venta actual. Comparación vs mes previo **válida** si ambos meses tienen filas. `commercial_trend` 30/90 **no** es este grano.
+`igf_metahg` es **TARGET** de bloque por categoría (Evaluación: columna META = `kilos` / comisión). **No** sustituye `igf_meta.venta_ton`. **No** es solo «meta HG». First slice C usa `igf_meta` para venta/financiero objetivo.
 
----
-
-## 4. Descuento mensual
-
-Fórmula obligatoria:
-
-`discount_per_kg = SUM(monto) / SUM(kg)` del mismo mes/planta.
-
-- Monto: `arr.descuentos_diarios_cliente`
-- Kg: `arr.ventas_diarias_cliente`
-- **No** average-of-averages. **No** promedio de ratios diarios de `arr.descuento_por_kilo_diario_provincia`
-- `arr.descuentos_diarios_cliente` **no** trae canal en el schema. Split por canal: join `arr.cliente_categoria_mes` (year/month/cliente_norm) del **mismo** mes
-- Si `SUM(kg) <= 0`: no hay ratio; limitation, no cero inventado
-
-`client_profile` ya implementa esta fórmula a grano cliente/mes. El mes-cierre la aplica a planta (y opcionalmente por canal).
-
-**Clase:** `ACTUAL` (ratio derivado de dos actuals). No es forecast.
-
-`arr.forecast_mensual.desc_kg_forecast` = **FORECAST/DERIVED**. No mezclar.
+Prohibido: forecast como meta; mes anterior como meta; Plaud; hardcode; carry-forward.
 
 ---
 
-## 5. Clientes — DICF y `cliente_key`
+## A. IGF META Global — físico
 
-### Definiciones DICF (`lib/dicf.js`)
+Schema: `sql/012_igf_meta_global.sql`. Lectura: `lib/igf-meta-excel.js`. Endpoints: `GET /api/dashboard/igf-meta-versions`, `GET /api/dashboard/igf-meta-excel`. Director IA: **sin loader**.
+
+### Grain y claves
+
+| Campo | Significado físico |
+|-------|-------------------|
+| `versions.plant_code` | En lectura actual: **`GLOBAL`**. Un libro mensual, no una fila por planta. |
+| `versions.year` + `month` | Periodo del compromiso. |
+| `versions.version_number` | Entero. VBA: `MAX(version_number)+1` por plant_code/year/month. |
+| `versions.is_current` | Versión vigente **de ese** GLOBAL+year+month. Las anteriores quedan `false`. **No** significa «meta para cualquier mes futuro». |
+| `meta_lines.empresa` | Nombre de planta/empresa en la fila (Puebla, Morelos, …). `UNIQUE(version_id, empresa)` → **una línea por empresa** por versión. |
+| `line_key` | `META_GLOBAL\|YYYYMM\|empresa` (VBA confirmada). |
+
+`listMetaVersions` filtra `plant_code='GLOBAL' AND year AND month`. `pickIgfMetaVersionNumber` elige `is_current` dentro de **esa** lista; el fallback a `max(version_number)` es del **mismo** mes, no de otro mes.
+
+### Mapping empresa → planta
+
+Reusar el patrón de `findIgfRowForPlant` (`lib/director-ia-igf-arr.js`): normalizar, excluir `TOTAL`, match exacto / contains / strip `GTM`/`GT`. Fail closed si no hay match ≥ umbral. **No** inventar una segunda función de matching si se puede extraer/reusar.
+
+### Columnas = objetivos (TARGET), no resultados
+
+Misma forma que la plantilla Compromiso; **clase distinta**.
+
+| Columna | Objetivo de compromiso | Unidad |
+|---------|------------------------|--------|
+| `venta_ton` | **Venta objetivo** | ton |
+| `margen_kg` | Margen objetivo | $/kg |
+| `com_desc_kg` | Comisión/descuento objetivo | $/kg |
+| `gasto_kg` | Gasto objetivo | $/kg |
+| `impuesto_kg` | Impuesto objetivo | $/kg |
+| `hg_pct` / `hg_kg` | HG objetivo | % / $/kg |
+| `bancos_planta_kg` / `provision_planta_kg` | Cargos planta objetivo | $/kg |
+| `util_oper_kg` / `util_oper_importe` | Utilidad operativa **objetivo** | $/kg / MXN |
+| `gtos_apoyos_corp_kg` / `bancos_corp_kg` / `otros_programas_kg` / `inversiones_kg` | Cargos corp. objetivo | $/kg |
+| `resultado_final_kg` / `resultado_final_importe` | Resultado **esperado/comprometido** | $/kg / MXN |
+
+**No** son actual. **No** son IGF forecast.
+
+### Cómo leer (sin duplicar)
+
+1. Resolver YYYY-MM pedido (no el mes abierto de `pre_meeting`).
+2. `schemaMetaExists`.
+3. Versión: `is_current = true` para `GLOBAL` + year + month. Si no hay fila → `TARGET_MISSING_FOR_PERIOD`.
+4. `SELECT * FROM igf_meta.meta_lines WHERE version_id = ?`.
+5. Una fila: `findIgfRowForPlant` (o equivalente extraído).
+6. Provenance: version_id, version_number, year, month, empresa.
+
+Reusar `loadMetaLinesForVersion` / `listMetaVersions` si el IMPL puede llamarlos in-process. **No** HTTP interno. **No** nueva tabla.
+
+---
+
+## B. IGF METAHG — físico (no first-slice sales.target)
+
+Schema: `sql/013_igf_metahg.sql`. Lectura: `lib/igf-metahg.js` (`year+month+is_current`). Plantas: puebla, tehuacan, acapulco, queretaro, san luis, morelos.
+
+| Campo | Uso físico |
+|-------|------------|
+| `categoria` | PIPAS CASA, PORTÁTIL, ESTACIONES, PIPAS COMISIONISTA, PREDIEROS, recuperaciones, compras, VTA. AÑO ANTERIOR, TOTAL |
+| `kilos` | Evaluación: columna **META** de venta por rubro / TOTAL (`META!C`) vs ARR RESULTADO |
+| `comision` | Evaluación: META de comisión (`META!D` total) |
+| `prom` / `total` / `pct` / `kilos_h` | Bloque METAHG; `kilos_h` ≠ meta general de venta |
+| `is_total_row` | Fila TOTAL |
+
+Clase: TARGET de mix/categoría. **No** reemplaza `igf_meta.venta_ton`. Fuera del first slice C salvo handoff posterior.
+
+---
+
+## C. Versionado y staleness
 
 ```
-es_dejaron = ingreso_anterior > 0 && ingreso_forecast <= 0 && kg_mes_real <= 0
-es_nuevo   = ingreso_anterior <= 0 && ingreso_forecast > 0
+(plant_code, year, month, version_number) UNIQUE
+is_current = versión canónica de ESE plant_code + ESE year + ESE month
 ```
 
-`ingreso_*` = `kg * (margen_IGF − |descuento|)`. Es **ingreso de modelo**, no ingreso actual. `client_profile` ya marca `income_actual_unsupported`.
+**Regla obligatoria (candidata → norma del IMPL):**
 
-`computeDicf` se ancla a `MAX(fecha)` de ventas. **No** acepta un YYYY-MM de cierre pedido. Escribe `arr.dicf_cliente_mes` (y guarda `es_dejaron` en la columna `es_recuperable` — trampa de nombre).
+Para ACTUAL vs META de YYYY-MM:
 
-`loadCommercialStateForChat` llama `computeDicf` (puede escribir cache). `plant_diagnosis` lee `arr.dicf_cliente_mes` SELECT-only.
+- solo `igf_meta` con `year/month` **exactos**
+- solo la versión `is_current` (o la pedida si se nombra versión)
+- solo la fila `empresa` de la planta autorizada
 
-### `cliente_key`
+**Prohibido:** última meta de otro mes; carry-forward; forecast; mes anterior; Plaud; hardcode.
 
-```
-buildClienteKey(plantaId, grupoTipo, canal, subcanal, clienteNombre)
-= plantaId|grupo|canal|subcanal|nombre   (normalizado NFD/lower/spaces)
-```
+Si agosto no tiene carga y junio sí: agosto = **`TARGET_MISSING_FOR_PERIOD`**. No comparar agosto contra junio.
 
-DICF lista por `cliente_norm`. Comments/acciones se unen por `cliente_key`, no por nombre. Mover ≠ causa. Comentario ≠ causa.
-
-### First slice
-
-Listas **defendibles de cierre** = new/lost/movers por **kg actual** mes vs mes previo, mismas buckets que la venta:
-
-- new: kg previo ≤ 0 y kg mes > 0
-- lost: kg previo > 0 y kg mes ≤ 0
-- movers: mayor |Δ kg| mes vs previo
-
-Si existe fila `dicf_cliente_mes` del YYYY-MM pedido, puede **anexarse** como clase DICF (forecast-income), etiquetada aparte. **No** sustituye las listas de kg actual. **No** llamar `computeDicf` como si fuera el mes cerrado pedido.
+El HUMAN_APPROVER indicó ~2 meses sin subir META/METAHG. Eso es hecho operativo: los meses recientes **pueden** estar missing. No se ejecutó SQL. El runtime debe **detectar** ausencia, no asumir frescura.
 
 ---
 
-## 6. Financiero — no mezclar clases
+## D–E. `month_close_result` (reevaluado; B/C/intent sin cambio)
 
-| Objeto | Fuente | Clase |
-|--------|--------|--------|
-| Venta kg mes | `arr.ventas_diarias_cliente` | **ACTUAL** |
-| Mix / descuento/kg | mismas tablas diarias | **ACTUAL** / ratio de actuals |
-| Meta kg | no existe | — |
-| `igf.compromiso_lines` (`venta_ton`, `margen_kg`, `util_oper_*`, `resultado_final_*`, `com_desc_kg`) | versión GLOBAL year/month, `ORDER BY version_number DESC` | **FORECAST** (compromiso/snapshot). COMPOSICIÓN ≠ CAUSALIDAD. No es cierre real |
-| `getMargenKgPorPeriodo` | promedio ponderado de `margen_kg` IGF | **FORECAST** |
-| M9 deltas de margen | dos snapshots IGF | **FORECAST vs FORECAST** |
-| ARR proyección / `forecast_mensual` | motor 14d × DOW | **DERIVED_MODEL** |
-| `igf_meta` / `igf_metahg` | workbooks META/METAHG | **FORECAST**; no meta de venta |
-| Overlay dashboard / `recalcularUtilYResultado` | UI IGF | **DERIVED_MODEL**; chat IGF no lo ejecuta |
-| Utilidad operativa / resultado final **contable** | no hay fuente | **ausente** |
+Arquitectura **B** se mantiene: hace falta un read model que separe clases **antes** de GPT. A seguiría mezclar. C persistido no hace falta. D sobrecargaría el pack abierto.
 
-`loadIgfCommitSnapshot(year, month)` **sí** puede leer un mes histórico si hay versión. Eso no convierte IGF en actual.
-
-First slice: IGF entra **separado**, label `FORECAST` / «proyección IGF, no cierre real». Si no hay versión: sección ausente + gap. **Nunca** «utilidad real» ni «cerramos en $X».
-
----
-
-## 7. Semántica de mes
-
-| Caso | Regla |
-|------|--------|
-| Timezone | America/Mexico_City |
-| First slice | **una** planta + **un** mes calendario |
-| Default «cierre» / «mes pasado» | último mes `COMPLETE` = mes CDMX − 1 |
-| Mes explícito | «mayo 2026», «junio» |
-| Mes abierto CDMX | `PARTIAL`. No reutilizar semántica de cerrado |
-| Marcador físico closed/final | **No existe** |
-| ¿Basta la fecha? | Sí para `COMPLETE` vs `PARTIAL`. No para inmutabilidad |
-
-`pre_meeting_brief.meeting_period` hoy es el mes **abierto**. Ese grano **no** se reutiliza en silencio para este objeto.
-
----
-
-## 8. Arquitectura A/B/C/D — una sola
-
-| Opción | Veredicto |
-|--------|-----------|
-| **A** prompt-compose | Rechazada. GPT reconciliaría ayer + 90d + IGF abierto. Es el fallo auditado |
-| **B** structured month-close read model | **Elegida.** Alinea planta/mes/clases (actual/forecast/gap) **antes** de GPT. Read-only. Reusa loaders/SQL ya existentes. Sin persistencia |
-| **C** persisted snapshot | Rechazada. No hay close marker; recargas invalidarían el snapshot; no es requisito |
-| **D** solo extender pre_meeting | Rechazada. El pack es ayer+90d+IGF abierto. Mezclaría granos |
-
----
-
-## 9. Intent — uno
-
-| Candidato | Veredicto |
-|-----------|-----------|
-| **`month_close_result`** | **Canónico.** Mes + planta + cierre |
-| `monthly_result` | Ambiguo (MTD / 90d / proyección) |
-| `close_result` | Choca con `resultado_cierre` de acciones |
-
-No sobrecargar `igf_status` (composición FORECAST) ni `commercial_trend` (30/90 trailing).
-
-Slots: `plant`, `month` (YYYY-MM), `closed_or_open` (`COMPLETE`/`PARTIAL`).
-
-`month_close_result` es inheritable. Standalone (IGF, CASA 90d, cliente nombrado, acciones vencidas) gana.
-
----
-
-## 10. First slice A/B/C/D — uno
-
-| Opción | Veredicto |
-|--------|-----------|
-| A sales only | Cubre venta/mix/descuento. Omite clientes/acciones/huecos (4/4 juntas) |
-| B sales + clients | Mejor. Omite IGF-proyección y pendientes |
-| **C month-close core** | **Elegida.** A+B + target **solo si** existiera (no existe → limitation) + financial **actual** solo si existiera (no existe) + IGF como **FORECAST aparte** + acciones + gaps |
-| D everything | Taller, M6, cartera, CRM, suministro, equilibrio: no hay capability o no es este objeto |
-
-C **no obliga** campos de meta ni de utilidad real.
-
-### Read model first slice
+First slice **C** se mantiene y ahora **puede llenar target** cuando existe carga:
 
 ```
 identity: plant, month, COMPLETE|PARTIAL, generated_at
-sales.actual_kg          ACTUAL
-sales.target             ABSENT + limitation
-sales.delta_vs_target    omitted
-sales.vs_prior_month     ACTUAL if prior exists
-channels.casa_kg / comisionista_kg / shares    ACTUAL
-discount.per_kg          ACTUAL ratio
-clients.new/lost/movers  ACTUAL kg MoM
-clients.dicf_classes     optional, labeled FORECAST-income
-financial.actual         ABSENT + limitation
-financial.igf_projection FORECAST if version exists
-actions                  open/closed/overdue; resultado if recorded
-information_gaps         no target; no financial actual; movement without comments; IGF without causal driver; overdue without result
+sales.actual_kg            ACTUAL (SUM kg)
+sales.target_ton           TARGET igf_meta.venta_ton (same period)
+sales.target_kg            derived display = target_ton * 1000 (label as unit convert, not a new truth)
+sales.delta_vs_target      only if actual + target
+sales.attainment_pct       only if actual + target and target > 0
+channels / discount        ACTUAL
+clients                    ACTUAL kg new/lost/movers
+financial.target           igf_meta lines (util, resultado, margen) — TARGET
+financial.forecast         igf.compromiso_lines — FORECAST
+financial.actual           UNSUPPORTED
+actions / information_gaps including TARGET_MISSING_FOR_PERIOD
 ```
 
-Partial-data: devolver lo que cargó + limitation por sección. Fail closed por planta.
+Unidades: ARR = kg; meta venta = ton. El delta se hace en **una** unidad declarada.
 
 ---
 
-## 11. «Vendimos más pero ganamos menos»
+## F. Preguntas reales
 
-Responder **solo** si hay piezas defendibles:
+| Pregunta | ¿Físicamente? | Limitation |
+|----------|---------------|------------|
+| ¿Cómo cerramos contra la meta? | Sí, si hay `igf_meta` del mes + actual ARR | Sin carga: `TARGET_MISSING_FOR_PERIOD` |
+| ¿Cuánto nos faltó? | Sí (`actual − target`) | Idem; no usar otra mes |
+| ¿Qué % de la meta? | Sí si target > 0 | Idem |
+| Vendimos más, ¿contra la meta? | Sí: MoM actual **y** vs target del mismo mes | «Más» ≠ «llegamos»; son dos comparaciones |
 
-| Pieza | ¿Defendible? |
-|-------|----------------|
-| Volumen mes vs previo | Sí, ACTUAL |
-| Mix | Sí, ACTUAL kg |
-| Descuento/kg | Sí, ratio ACTUAL |
-| «Ganamos menos» como utilidad real | **No** |
-| IGF util/margen/resultado mes vs previo | Solo como **FORECAST vs FORECAST** |
-
-Salida segura: «estas magnitudes **co-ocurren**». Si hay IGF: «la proyección IGF de margen/utilidad se movió así». Hueco: no hay actual financiero.
-
-Prohibido: causa, «el comisionista erosionó margen» sin margen-por-canal (no existe), turismo/autoridad/huachicol de Plaud, mover = causa.
+«Ganamos menos» como utilidad **real**: sigue **UNSUPPORTED**. Se puede decir: actual de venta vs target de venta; `financial.target` vs `financial.forecast`; no «cerramos en $X reales».
 
 ---
 
-## 12. Pre-meeting handoff
+## G. Pre-meeting
 
-| Turno | Destino |
-|-------|---------|
-| Prepárame para la junta / pre-cierre | `pre_meeting_brief` (pack abierto; no cambia) |
-| ¿Cómo cerró el mes? / cierre de junio / contra la meta / mix del mes / clientes del mes | **`month_close_result`** (requery) |
-| Contra la meta | misma intent; texto: no hay meta canónica |
-| Háblame del cliente X | `client_profile` |
-| CASA 90 días | `commercial_trend` |
-| Acciones vencidas | `action_status` |
-| IGF composición / apoyos | `igf_status` / `igf_reviewable_supports` |
+Sí: `pre_meeting_brief` debe poder marcar **`META_MISSING_FOR_PERIOD`** cuando el mes de la junta (abierto o el de cierre pedido) no tenga `igf_meta` `is_current`.
 
-`pre_meeting_brief` **no absorbe** el objeto mensual. Handoff, no overload.
-
-Authz: una planta autorizada, fail closed, sin cross-plant. Mismo patrón que `pre_meeting` / `client_profile`.
+No implementar en esta tarea. No rellenar con mes anterior. No es un gap de «no existe el esquema»; es **ausencia de carga de ese periodo**.
 
 ---
 
-## 13. Plaud
+## Lectores existentes (IMPL)
 
-Solo evidencia de evaluación (AUDIT-001). Prohibido: meta, causa o número de transcripción como verdad de runtime. Sin API, ingest ni storage.
+| Pieza | Reusar | No |
+|-------|--------|----|
+| Versiones / líneas META | `listMetaVersions`, `loadMetaLinesForVersion` | HTTP a `/api/dashboard/igf-meta-*` |
+| Match planta | `findIgfRowForPlant` | Matching por nombre libre |
+| METAHG | `loadMetahgForEmpresa` (fuera de first slice) | Mezclar `kilos` como `sales.target` |
+| IGF forecast | `loadIgfCommitSnapshot` | Llamarlo meta |
+| Venta actual | `queryMonthlySales` (suma planta) | `forecast_mensual.kg_actual` |
 
----
-
-## 14. G2 / G3 / G8
-
-Consultados: Constitución, EKE, 04 IES, 05 RE.
-
-| Gate | Determinación | Por qué |
-|------|---------------|---------|
-| G2 | **N/A** | No se cambia Motor N1–N5, IES ni RE. Es compose de chat legado, igual que `pre_meeting_brief` |
-| G3 | **N/A** | Esta tarea y el IMPL propuesto **no** editan `docs/director-ia/` |
-| G8 | **N/A** | Sin umbrales nuevos, sin calibrar `k`/`wi`/materiality. Se reusan rankings y gaps existentes |
-
-Un sync de inventario, si el humano lo quiere, es **otra** tarea DOCS. No se abre aquí.
+Authz: una planta, fail closed, mismos bloqueos financieros GA/GV que IGF.
 
 ---
 
-## 15. Límites que no bloquean
+## G2 / G3 / G8
 
-1. No hay meta canónica → limitation, no vs-meta.
-2. No hay financial actual → IGF aparte, FORECAST.
-3. DICF ≠ new/lost de kg cerrado; first slice usa kg actual.
-4. Sin marcador de cierre inmutable.
-5. IGF histórico solo si hay `igf.versions` de ese mes.
-6. Cartera, suministro, equilibrio, meta siguiente: fuera de slice.
-
-Ninguno impide un objeto mensual **parcial y honesto**. Por eso **READY_WITH_LIMITS**, no `STOPPED` ni `BLOCKED`.
+| Gate | |
+|------|
+| G2 | **N/A** — chat legado; no Motor N1–N5 |
+| G3 | **N/A** — no se edita `docs/director-ia/` |
+| G8 | **N/A** — sin umbrales nuevos |
 
 ---
 
-## 16. Porcentaje
+## Límites (READY_WITH_LIMITS, no BLOCKED)
 
-Antes: 10.5 / 20 = 52.5%  
-Después: 10.5 / 20 = 52.5%  
-**0.0 pp.** No es cobertura de módulo.
+1. Sin `igf_meta` del mes → target omitido + `TARGET_MISSING_FOR_PERIOD`.
+2. Sin financial actual.
+3. Director IA aún no lee `igf_meta` (el IMPL lo añade).
+4. Unidades ton vs kg deben declararse.
+5. METAHG no es `sales.target` del first slice.
+6. Recargas ARR pueden cambiar actual; `COMPLETE` ≠ inmutable.
+
+---
+
+## Porcentaje
+
+10.5 / 20 = **52.5%**. **0.0 pp.** Esta corrección no sube porcentaje.
 
 ---
 
@@ -407,6 +297,6 @@ Después: 10.5 / 20 = 52.5%
 
 `IMPL-DIRECTOR-IA-PRE-MEETING-MONTH-CLOSE-RESULT-001`
 
-Implementar first slice **C** con arquitectura **B** e intent `month_close_result`. No crear meta. No llamar actual al IGF. No Plaud. No autorizar ni ejecutar aquí.
+First slice C, arquitectura B, intent `month_close_result`. `igf_meta` = TARGET/COMMITMENT. Exact period. No carry-forward. No llamar forecast a meta. No autorizar ni ejecutar aquí.
 
 STOP.
