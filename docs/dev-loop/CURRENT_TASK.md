@@ -1,175 +1,174 @@
 # CURRENT_TASK
 
 ```yaml
-task_id: "IMPL-DIRECTOR-IA-TALLER-MAYOR-UNIDAD-001"
+task_id: "DOCS-DIRECTOR-IA-TALLER-MAYOR-UNIDAD-SYNC-001"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-08-24"
 human_authorization: >
   AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-24.
-  Apruebo IMPL-DIRECTOR-IA-TALLER-MAYOR-UNIDAD-001
-  conforme a ARCH-DIRECTOR-IA-TALLER-MAYOR-UNIDAD-001.
+  Apruebo DOCS-DIRECTOR-IA-TALLER-MAYOR-UNIDAD-SYNC-001
+  y autorizo G1.
 
 gates:
   G1_task_authorization: AUTHORIZED
   G2_architecture_change: N/A
   G3_new_architecture_contract: N/A
-  G5_contract_conformance: REQUIRED
+  G5_contract_conformance: N/A
   G8_calibration_materiality_signature: N/A
 
 mode:
-  type: "IMPLEMENTATION"
-  contract_change: false
-  schema_change: false
+  type: "DOCUMENTATION_SYNC_ONLY"
+  implementation: false
+  code_changes: false
+  test_changes: false
+  runtime_changes: false
+  contract_changes: false
   sql_execution: false
-  mutations: false
 
 objective: >
-  Implementar el read model y routing conversacional de Taller Mayor por unidad,
-  usando la verdad física existente de public.folios, preservando planta,
-  periodo, unidad y Folio activo durante follow-ups.
+  Sincronizar la documentación de Director IA con el runtime ya integrado de
+  Taller Mayor por unidad: intent taller_mayor, identidad compuesta por planta
+  + token canónico de public.folios.unidad, agrupación por unidad, ranking por
+  SUM(importe), selección segura de Folio, reviewability del Folio activo e
+  historial conversacional read-only.
 
 baseline:
   global: "10.5 / 20 = 52.5%"
-  expected_delta: "0.0 pp"
+  delta: "0.0 pp"
 
-architecture_decisions:
-  source: "B — reusable Taller Mayor unit read model"
-  routing: "B — canonical taller_mayor parent"
-  intent: "taller_mayor"
+implemented_capability:
+  name: "taller_mayor"
+  source_strategy: "B — reusable Taller Mayor unit read model"
+  routing_strategy: "B — canonical taller_mayor parent"
 
 identity:
-  canonical_unit: "(planta_id, canonical public.folios.unidad token)"
-  restrictions:
+  canonical_unit: "(planta_id, canonical token de public.folios.unidad)"
+
+  invariants:
     - "same plant mandatory"
     - "no fuzzy"
-    - "no cross-plant unit merge"
-    - "do not call unidad económico or placa"
-    - "no invented unit master"
+    - "no cross-plant merge"
+    - "unidad no se documenta como económico"
+    - "unidad no se documenta como placa"
+    - "no existe unit master"
 
 classification:
-  field: "public.folios.subcategoria"
+  source: "public.folios.subcategoria"
   value: "REPARACIÓN MAYOR"
-  runtime_helper: "matchTallerTipoCol"
+  helper: "matchTallerTipoCol"
+
   prohibited:
-    - "classification by importe"
-    - "classification by concepto"
+    - "inferir por importe"
+    - "inferir por concepto"
 
 period:
-  current_month: "current CDMX YYYY-MM"
-  physical_field: "mes_cargo"
+  canonical: "este mes"
+  semantics: "YYYY-MM actual CDMX"
+  source_field: "mes_cargo"
 
-required_read_model:
-  output:
-    - "canonical unit token"
-    - "plant"
-    - "period"
-    - "folio count"
-    - "SUM(importe)"
-    - "individual Folio references"
-    - "individual importe"
-    - "estatus"
-    - "concepto"
-    - "subcategoria"
-    - "reviewability when applicable"
-    - "provenance"
-    - "limitations"
+read_model:
+  grouped_by_unit:
+    includes:
+      - "unit token"
+      - "plant"
+      - "period"
+      - "folio_count"
+      - "SUM(importe)"
+      - "folio refs"
+      - "individual amounts"
+      - "status"
+      - "concept"
+      - "subcategoria"
+      - "reviewability when applicable"
+      - "provenance"
+      - "limitations"
 
 ranking:
-  after_unit_list:
-    "el más alto": "unit with greatest SUM(importe)"
+  question: "¿Cuál tiene el importe más alto?"
+  semantics: "unidad con mayor SUM(importe)"
 
-  invariant: >
-    If selected unit contains multiple matching Folios, do not silently select
-    one Folio.
+  multi_folio_rule: >
+    Si la unidad tiene varios Folios, active_unit puede quedar seleccionado,
+    pero active_folio no se elige en silencio.
 
 conversation_state:
-  required:
+  stores:
     - "active_unit"
     - "active_folio when uniquely/explicitly selected"
     - "plant"
     - "active_period"
     - "parent_intent=taller_mayor"
 
-  invariant: "routing identifiers only; no stale raw evidence"
-  requery: true
+  evidence_policy: "fresh requery"
+  invariant: "state = routing identifiers, no raw evidence"
 
-required_conversation:
-  - "¿Qué unidades de Puebla tienen apoyos de Taller Mayor este mes?"
-  - "¿Cuál tiene el importe más alto?"
-  - "Háblame de esa unidad."
-  - "¿Qué reparación le están haciendo?"
-  - "¿Qué Folio es?"
-  - "¿En qué estatus está?"
-  - "¿Todavía se puede detener?"
-  - "¿Qué otros Folios ha tenido esa unidad?"
-  - "¿Cuánto llevamos en reparaciones de esa unidad?"
-
-folio_selection:
-  rule: >
-    A unique active Folio may be selected only when evidence/context uniquely
-    identifies it or the user explicitly selects it.
-
-  multiple_folios: >
-    Preserve the set and ask/answer at unit level as appropriate. Do not silently
-    choose one.
+conversation:
+  canonical:
+    - "¿Qué unidades de Puebla tienen apoyos de Taller Mayor este mes?"
+    - "¿Cuál tiene el importe más alto?"
+    - "Háblame de esa unidad."
+    - "¿Qué reparación le están haciendo?"
+    - "¿Qué Folio es?"
+    - "¿En qué estatus está?"
+    - "¿Todavía se puede detener?"
+    - "¿Qué otros Folios ha tenido esa unidad?"
+    - "¿Cuánto llevamos en reparaciones de esa unidad?"
 
 reviewability:
   helper: "classifyCancellationEligibility"
 
-  precedence: >
-    If active_folio exists, “¿Todavía se puede detener?” evaluates that selected
-    Folio. It must not route to plant-wide IGF reviewable supports.
+  selected_folio_behavior: >
+    Con active_folio, “¿Todavía se puede detener?” evalúa ese Folio específico.
+
+  regression_fixed: >
+    No salta a IGF reviewable plant-wide cuando hay Folio activo.
 
   invariants:
-    - "reviewable != cancel"
-    - "reviewable != recommendation"
-    - "reviewable != savings"
-    - "reviewable != accounting reversal"
-    - "Director IA remains read-only"
+    - "reviewable != cancelar"
+    - "reviewable != recomendación"
+    - "reviewable != ahorro"
+    - "reviewable != reversión contable"
+    - "Director IA permanece read-only"
 
 history:
-  same_identity: "(same planta_id, same canonical unidad token)"
+  identity: "(same planta_id, same canonical unidad token)"
 
   default_scope: >
-    Preserve Taller Mayor thread semantics and active period unless explicit
-    wording requests broader history.
+    Conserva el contexto Taller Mayor y periodo activo.
 
-  expansion:
-    examples:
-      - "histórico"
-      - "todos sus folios"
-      - "en total"
-
-  rule: "expand only when explicitly requested"
+  expansion_only_if_explicit:
+    - "histórico"
+    - "todos sus folios"
+    - "en total"
 
 cross_domain:
-  hypothetical_igf:
-    requirement: >
-      If active_folio exists and user asks how IGF would change if it did not
-      enter, preserve selected Folio/unit and reuse existing hypothetical IGF
-      semantics where physically supported.
+  selected_folio_IGF:
+    rule: >
+      Si existe active_folio y el usuario pregunta por impacto IGF, se conserva
+      el Folio/unidad seleccionado y no se sustituye por una bolsa general de
+      planta.
 
-    restrictions:
-      - "no mutation"
-      - "no realized savings claim"
-      - "do not replace selected Folio with plant-wide candidates"
+  invariants:
+    - "no mutation"
+    - "no realized savings claim"
 
 reasoning_boundary:
   runtime:
-    - "identity"
+    - "unit identity"
+    - "folio identity"
     - "classification"
     - "period"
-    - "amount math"
+    - "amount"
     - "status"
     - "reviewability"
-    - "history retrieval"
-    - "authorization"
+    - "history"
+    - "authz"
     - "provenance"
     - "absence/error"
 
-  gpt:
+  GPT:
     - "executive synthesis"
     - "summarization"
     - "what stands out"
@@ -179,114 +178,91 @@ reasoning_boundary:
     - "mechanical diagnosis without evidence"
     - "causal inference from concepto"
     - "recommend cancellation because amount is high"
-    - "savings claims from reviewability"
+    - "savings claim"
 
 partial_data:
-  rule: "return supported facts + limitations; missing != zero"
+  invariant: "missing != zero"
+  behavior: "return supported facts + explicit limitations"
 
-authz:
-  preserve:
-    - "existing plant authorization"
-    - "same-plant restrictions"
-    - "fail closed"
+preserved:
+  - "folio_status"
+  - "taller_at"
+  - "IGF reviewable plant-wide"
+  - "client_profile"
+  - "commercial_trend"
+  - "daily_executive_brief"
+  - "daily sales"
+  - "daily discount"
+  - "topic return"
+  - "persistent memory"
 
-no_phrasebook:
-  required: true
+test_evidence:
+  focal_taller_mayor: "17/17"
+  director_ia_suite: "964/964"
+  git_diff_check: "clean"
 
-regressions:
-  preserve:
-    - "generic folio_status"
-    - "taller_at"
-    - "IGF reviewable plant-wide query"
-    - "client_profile"
-    - "commercial_trend"
-    - "daily_executive_brief"
-    - "daily_sales_deviation"
-    - "daily_discount_deviation"
-    - "topic return"
-    - "persistent memory"
+module_state:
+  M5: "PARTIAL"
+  global: "10.5 / 20 = 52.5%"
+  delta: "0.0 pp"
 
-tests_required:
-  focal:
-    - "list units current month"
-    - "ranking by SUM importe"
-    - "unit selection"
-    - "multiple Folios no silent pick"
-    - "details"
-    - "status"
-    - "selected Folio reviewability"
-    - "plant-wide IGF reviewable regression"
-    - "history"
-    - "period inheritance"
-    - "same-plant identity"
-    - "cross-plant fail closed"
-    - "hold-out wording"
-    - "missing data"
-    - "no phrasebook"
-
-  mandatory:
-    - "focal tests"
-    - "planner"
-    - "capabilities"
-    - "tool orchestrator"
-    - "full Director IA suite"
-    - "git diff --check"
+contracts:
+  Constitution: "unchanged"
+  EKE: "unchanged"
+  IES_04: "unchanged"
+  Reasoning_Engine_05: "unchanged"
 
 in_scope:
   writable:
     - "docs/dev-loop/CURRENT_TASK.md"
-    - "docs/dev-loop/reports/IMPL-DIRECTOR-IA-TALLER-MAYOR-UNIDAD-001.md"
-    - "lib/** only where required"
-    - "test/** only where required"
-
-  read_only:
-    - "architecture/contracts"
-    - "database schema"
+    - "docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md"
+    - "docs/dev-loop/reports/DOCS-DIRECTOR-IA-TALLER-MAYOR-UNIDAD-SYNC-001.md"
 
 out_of_scope:
-  - "schema changes"
-  - "SQL execution"
+  - "code"
+  - "tests"
+  - "runtime"
+  - "contracts"
+  - "SQL"
+  - "matrix changes"
   - "unit master"
   - "predictive maintenance"
-  - "mechanical diagnosis"
   - "Taller mutations"
   - "Folio cancellation"
-  - "new accounting semantics"
-  - "documentation sync"
-  - "capability matrix changes"
+  - "M5 COMPLETE"
   - "commit"
   - "push"
   - "merge"
 
 acceptance_criteria:
-  - "taller_mayor parent works semantically"
-  - "same plant enforced"
-  - "current CDMX YYYY-MM uses mes_cargo"
-  - "REPARACIÓN MAYOR comes from canonical subcategoria"
-  - "unit list grouped correctly"
-  - "SUM importe ranking correct"
-  - "multiple Folios never silently collapse"
-  - "active_unit works"
-  - "active_folio works when uniquely selected"
-  - "selected-Folio reviewability works"
-  - "reviewability does not jump to plant-wide IGF"
-  - "history preserves identity"
-  - "requery fresh evidence"
-  - "no phrasebook"
-  - "no invented identity"
-  - "no savings claim"
-  - "all required regressions green"
-  - "52.5% preserved"
-  - "git diff --check clean"
+  - "taller_mayor documented."
+  - "Canonical unit identity documented."
+  - "REPARACIÓN MAYOR classification documented."
+  - "Current-month mes_cargo semantics documented."
+  - "Unit grouping documented."
+  - "SUM importe ranking documented."
+  - "Multi-Folio no-silent-pick documented."
+  - "active_unit / active_folio documented."
+  - "Selected-Folio reviewability documented."
+  - "Plant-wide IGF regression boundary documented."
+  - "History semantics documented."
+  - "Read-only invariant documented."
+  - "No mechanical inference explicit."
+  - "17/17 focal evidence recorded."
+  - "964/964 suite evidence recorded."
+  - "M5 remains PARTIAL."
+  - "52.5% preserved."
+  - "Only three authorized files changed."
+  - "git diff --check clean."
 
 next_task:
-  propose_exactly_one_if_success:
-    "DOCS-DIRECTOR-IA-TALLER-MAYOR-UNIDAD-SYNC-001"
-
-  rule: "Do not authorize or execute."
+  propose_only: "AUDIT-DIRECTOR-IA-PRODUCTION-CONVERSATION-GAP-012"
+  authorize: false
+  execute: false
 
 expected_terminal_state: "DONE_PENDING_REVIEW"
+
 max_attempts: 1
 
 result_report_path: >
-  docs/dev-loop/reports/IMPL-DIRECTOR-IA-TALLER-MAYOR-UNIDAD-001.md
+  docs/dev-loop/reports/DOCS-DIRECTOR-IA-TALLER-MAYOR-UNIDAD-SYNC-001.md
