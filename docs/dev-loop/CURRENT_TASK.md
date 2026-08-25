@@ -1,534 +1,573 @@
 # CURRENT_TASK
 
-task_id: "ARCH-DIRECTOR-IA-PRE-MEETING-MONTH-CLOSE-RESULT-001"
+task_id: "IMPL-DIRECTOR-IA-PRE-MEETING-MONTH-CLOSE-RESULT-001"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-08-24"
 
+gates:
+  G1_task_authorization: AUTHORIZED
+  G2_architecture_change: N/A
+  G3_new_architecture_contract: N/A
+  G8_calibration_materiality_signature: N/A
+
 mode:
-  type: "READINESS_ONLY"
-  implementation: false
-  code_changes: false
-  runtime_changes: false
-  test_changes: false
-  matrix_changes: false
-  contract_changes: false
-  sql_execution: false
+  type: "IMPLEMENTATION"
+  architecture: "B"
+  first_slice: "C"
+  canonical_intent: "month_close_result"
 
 objective: >
-  Determinar la arquitectura mínima y segura para que Director IA pueda construir
-  un resultado ejecutivo mensual de cierre por planta, con ventas, canal,
-  descuento y rentabilidad/resultado financiero físicamente defendibles, y
-  compararlo contra una meta SOLO si existe una fuente física canónica de meta.
+  Implementar el read model mensual ejecutivo aprobado para una planta y un
+  mes calendario, alineando antes de GPT venta real, META/COMPROMISO, mix,
+  descuento, clientes, forecast financiero, acciones e information gaps.
+
+  Debe permitir responder preguntas reales de junta como:
+  “¿Cómo cerramos?”,
+  “¿Cómo quedamos contra la meta?”,
+  “¿Qué cambió en CASA y COMISIONISTAS?”,
+  “¿Qué pasó con el descuento?”,
+  “¿Qué clientes ganamos/perdimos?”,
+  sin mezclar ACTUAL, TARGET, FORECAST ni DERIVED_MODEL.
 
 baseline:
-  global: "10.5 / 20 = 52.5%"
-  percentage_effect: "0.0 pp"
+  coverage: "10.5 / 20 = 52.5%"
+  expected_delta: "0.0 pp"
 
-prior_audit:
-  task: "AUDIT-DIRECTOR-IA-PLAUD-CLOSE-MEETING-EVAL-001"
-  bottleneck: "close_meeting_month_result_vs_target_not_composed"
-  failure_class: "MISSING_INFRASTRUCTURE"
+readiness:
+  determination: "READY_WITH_LIMITS"
+  architecture: "B — structured month-close read model"
+  first_slice: "C — month-close core"
+  intent: "month_close_result"
 
-conversation_readiness:
-  status: "CONVERSATION_BASE_READY_WITH_LIMITS"
+truth_classes:
 
-north_star: >
-  Ante preguntas reales de cierre como “¿cómo cerramos?”, “¿contra la meta?”,
-  “¿por qué vendimos más pero ganamos menos?” o “¿qué cambió en el mix?”,
-  Director IA debe responder con un marco mensual coherente y con fronteras
-  explícitas entre actual, meta, forecast y rentabilidad.
+  ACTUAL:
+    source: "ARR physical actuals"
+    includes:
+      - "monthly sales"
+      - "channel mix"
+      - "monthly discount/kg"
+      - "monthly client movement"
 
-canonical_questions:
-  - "¿Cómo cerró Puebla el mes?"
-  - "¿Cuánto vendimos contra la meta?"
-  - "¿Qué canal explicó el resultado?"
-  - "¿Qué pasó con el descuento?"
-  - "¿Vendimos más pero ganamos menos?"
-  - "¿Cómo quedó la rentabilidad?"
-  - "¿Qué clientes se ganaron o perdieron?"
-  - "¿Qué quedó pendiente del mes?"
+  TARGET_COMMITMENT:
+    source: "igf_meta"
+    semantic_owner: "HUMAN_APPROVER"
+    definition: >
+      META/COMPROMISO gerencial firmado para el mes: variables que se deben
+      lograr, incluyendo venta y objetivos de rentabilidad/resultado.
 
-semantic_policy:
-  invariant: "tests semánticos, no phrasebook"
+  FORECAST:
+    source: "IGF compromiso/runtime"
+    definition: "proyección, nunca actual"
 
-critical_physical_audit:
+  DERIVED_MODEL:
+    source: "forecast_mensual / 14d×DOW or equivalent"
+    definition: "modelo derivado, nunca actual ni target"
 
-  monthly_actual_sales:
-    determine:
-      - "physical source"
-      - "plant scope"
-      - "calendar month semantics"
-      - "kg/ton aggregation"
-      - "channel split"
-      - "closed-month stability"
-      - "whether historical month is immutable or late-adjusted"
+truth_invariants:
+  - "ACTUAL != TARGET_COMMITMENT"
+  - "TARGET_COMMITMENT != FORECAST"
+  - "FORECAST != ACTUAL"
+  - "DERIVED_MODEL != ACTUAL"
+  - "DERIVED_MODEL != TARGET_COMMITMENT"
+  - "No semantic relabeling for presentation convenience."
 
-  target/meta:
-    critical: true
+target_source:
 
-    search_repository_wide:
-      - "meta_venta"
-      - "metas"
-      - "objetivo"
-      - "presupuesto"
-      - "target"
-      - "forecast"
-      - "ARR"
-      - "IGF"
-      - "frontend"
-      - "server.js"
-      - "PostgreSQL queries"
-      - "configuration"
-      - "monthly planning"
+  schema:
+    versions: "igf_meta.versions"
+    lines: "igf_meta.meta_lines"
 
-    determine:
-      - "whether canonical monthly sales target exists"
-      - "grain: plant/month/channel?"
-      - "source owner"
-      - "version/currentness"
-      - "whether target can change after month close"
+  grain:
+    version: "GLOBAL + year + month + version_number"
+    line: "version + empresa"
 
-    invariant: >
-      If no canonical physical target exists, do not implement “vs meta” as if it
-      were known.
+  selection:
+    - "exact requested year"
+    - "exact requested month"
+    - "is_current=true for that period"
+    - "map empresa to authorized plant using existing canonical physical pattern"
 
-  monthly_discount:
-    determine:
-      - "physical source"
-      - "calendar month grain"
-      - "SUM(monto)/SUM(kg)"
-      - "channel split if available"
-      - "actual vs forecast"
+  sales_target:
+    field: "venta_ton"
+    semantic: "monthly sales TARGET / COMMITMENT"
 
-  monthly_channel_mix:
-    determine:
-      - "CASA"
-      - "COMISIONISTA"
-      - "total"
-      - "kg/ton"
-      - "share %"
-      - "same month"
+  financial_targets:
+    candidate_fields:
+      - "margen_kg"
+      - "com_desc_kg"
+      - "gasto_kg"
+      - "impuesto_kg"
+      - "hg_pct"
+      - "hg_kg"
+      - "bancos_planta_kg"
+      - "provision_planta_kg"
+      - "util_oper_kg"
+      - "util_oper_importe"
+      - "gtos_apoyos_corp_kg"
+      - "bancos_corp_kg"
+      - "otros_programas_kg"
+      - "inversiones_kg"
+      - "resultado_final_kg"
+      - "resultado_final_importe"
 
-  monthly_clients:
-    determine:
-      - "new clients"
-      - "lost clients"
-      - "largest movers"
-      - "client key"
-      - "month-over-month comparison"
-      - "whether DICF already has safe definitions"
+    rule: >
+      Preserve exact physical/business semantics. These are TARGET/COMMITMENT
+      values, not actual results.
 
-  monthly_financial_result:
-    critical: true
+target_staleness:
 
-    search:
-      - "IGF"
-      - "utilidad operativa"
-      - "utilidad final"
-      - "margen"
-      - "$/kg"
-      - "resultado real"
-      - "forecast"
-      - "closed period"
+  mandatory_rule: >
+    Target must match the exact requested YYYY-MM.
 
-    determine:
-      - "what is actual"
-      - "what is projection"
-      - "what is formula-derived"
-      - "what is accounting result"
-      - "month close semantics"
+  missing_code: "TARGET_MISSING_FOR_PERIOD"
 
-    invariant: >
-      Do not label an IGF projection as actual realized profit.
+  prohibited:
+    - "carry forward previous month"
+    - "latest available target from another month"
+    - "forecast as target"
+    - "prior actual as target"
+    - "Plaud value as target"
+    - "hardcoded target"
 
-  prior_commitments:
-    determine:
-      - "Action Register"
-      - "open/closed/vencidas"
-      - "month relation"
-      - "whether closure result exists"
+monthly_actual_sales:
 
-truth_model:
+  source: "arr.ventas_diarias_cliente"
 
-  actual:
-    definition: "physically observed/recorded result for the month"
+  grain:
+    - "authorized plant"
+    - "calendar month"
+
+  calculations:
+    sales_kg: "SUM(kg)"
+    sales_ton: "SUM(kg) / 1000"
+
+  rule: >
+    Use calendar-month actual rows only. Do not silently use 30/90 trailing
+    commercial_trend semantics.
+
+sales_target_comparison:
+
+  if_actual_and_target:
+    expose:
+      - "actual_ton"
+      - "target_ton"
+      - "delta_ton"
+      - "attainment_pct"
+
+    formulas:
+      delta_ton: "actual_ton - target_ton"
+      attainment_pct: "actual_ton / target_ton * 100 when target_ton is valid and nonzero"
+
+  if_target_missing:
+    expose:
+      limitation: "TARGET_MISSING_FOR_PERIOD"
+
+  zero_policy:
+    rule: "Do not divide by zero. Do not convert missing target to zero."
+
+channel_mix:
+
+  source: "same monthly ACTUAL sales source"
+
+  canonical_classification:
+    COMISIONISTA: "existing canonical LIKE '%comisionista%' semantics"
+    CASA: "remaining canonical rows"
+
+  expose:
+    - "CASA kg/ton"
+    - "COMISIONISTA kg/ton"
+    - "share % when denominator valid"
+
+  optional_prior_comparison:
+    rule: >
+      Include only if physically safe and already supported by the approved
+      monthly comparison. Do not expand scope merely for presentation.
+
+monthly_discount:
+
+  source: "actual monthly ARR discount evidence"
+
+  formula: "SUM(monto) / SUM(kg)"
+
+  invariant: "Never average per-row/per-client discount averages."
+
+  expose:
+    - "monthly discount/kg"
+    - "limitation if denominator/evidence unavailable"
+
+clients:
+
+  identity: "cliente_key where canonical identity is required"
+
+  compare:
+    current: "requested calendar month"
+    previous: "immediately previous calendar month"
+
+  expose:
+    - "new clients"
+    - "lost clients"
+    - "top positive movers"
+    - "top negative movers"
+
+  rules:
+    - "Use physically supported monthly kg movement."
+    - "Mover != cause."
+    - "No fuzzy identity."
+    - "No join by cliente_nombre where canonical key is required."
+    - "Do not substitute DICF forecast income for actual close."
+
+financial:
 
   target:
-    definition: "predefined business objective from canonical source"
+    source: "igf_meta"
+    truth_class: "TARGET_COMMITMENT"
 
   forecast:
-    definition: "projection/estimate, not actual"
+    source: "existing IGF forecast/compromiso path"
+    truth_class: "FORECAST"
 
-  derived_model:
-    definition: "formula/model output, not accounting actual unless explicitly so"
+  actual:
+    status: "UNSUPPORTED_METRIC"
 
-  invariant: >
-    These four categories must remain distinct in the read model and in GPT
-    wording.
+  mandatory_output_rule: >
+    financial.target and financial.forecast may coexist but must remain
+    separately labeled. financial.actual must remain unsupported unless a
+    pre-existing physically defensible actual source is discovered within the
+    already approved architecture; do not create one in this task.
 
-month_semantics:
+  prohibited:
+    - "forecast called actual"
+    - "target called actual"
+    - "target attainment claimed using forecast as actual"
+    - "derived model called actual"
 
-  first_slice:
-    preferred: "one explicit closed calendar month + one plant"
+actions:
 
-  closed_month:
-    determine:
-      - "how to know month is closed"
-      - "whether current date alone is sufficient"
-      - "whether data has close/final marker"
+  reuse: "existing Action Register capability/loaders"
 
-  current_open_month:
-    rule: >
-      Do not reuse closed-month semantics silently for the current month.
+  expose_when_supported:
+    - "open"
+    - "overdue"
+    - "closed/result status if physically available"
 
-  explicit_month:
-    examples:
-      - "mayo 2026"
-      - "mes pasado"
-      - "junio"
+  rule: >
+    Missing result/closure evidence may become an information gap. Do not infer
+    action success from closed status alone unless existing semantics support it.
 
-  timezone: "America/Mexico_City"
+information_gaps:
 
-architecture_candidates:
+  examples:
+    - "TARGET_MISSING_FOR_PERIOD"
+    - "FINANCIAL_ACTUAL_UNSUPPORTED"
+    - "material client movement without explanatory evidence"
+    - "action missing closure/result evidence"
+    - "source unavailable"
 
-  A_prompt_compose_existing:
-    description: >
-      Compose existing monthly sources ad hoc in chat and let GPT reconcile.
+  rule: >
+    Gap means missing/insufficient evidence, not a causal explanation.
 
-  B_month_close_read_model:
-    description: >
-      Create a structured read-only month-close model that aligns month, plant,
-      actual sales, channel mix, discount, clients, financial result, target if
-      canonical, actions and gaps before GPT.
+read_model:
 
-  C_persisted_close_snapshot:
-    description: >
-      Persist a derived monthly close summary.
-
-  D_reuse_pre_meeting_pack_only:
-    description: >
-      Extend pre_meeting_brief without a dedicated monthly close object.
-
-  requirement:
-    - "compare A/B/C/D"
-    - "select exactly one"
-    - "prefer structured read-only composition"
-    - "avoid persistence unless required"
-
-intent_audit:
-
-  candidates:
-    - "month_close_result"
-    - "monthly_result"
-    - "close_result"
-
-  determine:
-    - "whether one canonical intent is enough"
-    - "whether pre_meeting_brief should hand off to it"
-    - "whether month/plant are slots"
-
-  principle: >
-    Do not overload IGF or commercial_trend with a mixed monthly close object.
-
-read_model_candidate:
-
-  identity:
+  canonical_shape:
     - "plant"
     - "month"
-    - "closed/open marker"
+    - "period_status"
     - "generated_at"
+    - "sales"
+    - "channels"
+    - "discount"
+    - "clients"
+    - "financial"
+    - "actions"
+    - "information_gaps"
+    - "provenance"
+    - "limitations"
+
+period_semantics:
+
+  explicit_closed_month:
+    preferred: true
+
+  calendar_month:
+    timezone: "America/Mexico_City"
+
+  current_month:
+    status: "PARTIAL"
+    rule: >
+      If current month is explicitly requested, label it PARTIAL. Do not call it
+      closed.
+
+  prior_month:
+    status: >
+      COMPLETE only to the extent physically defensible under existing data
+      semantics. Do not invent an accounting close marker.
+
+intent:
+
+  canonical: "month_close_result"
+
+  slots:
+    - "plant"
+    - "year"
+    - "month"
+
+  examples_semantic_only:
+    - "¿Cómo cerramos?"
+    - "¿Cómo cerró Puebla en julio?"
+    - "¿Cómo quedamos contra la meta?"
+    - "¿Cuánto nos faltó para la meta?"
+    - "¿Qué porcentaje cumplimos?"
+    - "¿Qué pasó con CASA y comisionistas?"
+    - "¿Qué clientes ganamos y perdimos?"
+
+  invariant: "No literal phrasebook."
+
+routing:
+
+  preserve:
+    - "daily_executive_brief"
+    - "commercial_trend"
+    - "client_profile"
+    - "IGF"
+    - "IGF reviewable"
+    - "taller_mayor"
+    - "pre_meeting_brief"
+
+  precedence:
+    explicit_month_close: "month_close_result"
+
+  pre_meeting_handoff:
+    examples:
+      - "Prepárame para la junta."
+      - "¿Y cómo cerramos el mes?"
+      - "¿Contra la meta?"
+      - "¿Qué clientes movieron el resultado?"
+
+    behavior: >
+      pre_meeting_brief may hand off to month_close_result while preserving
+      authorized plant and explicit/relevant meeting month, then requery fresh
+      evidence.
+
+conversation_state:
+
+  store_routing_only:
+    - "plant"
+    - "month"
+    - "parent_intent"
+    - "active client/entity only when needed for canonical handoff"
+
+  prohibit:
+    - "persisting evidence snapshots as truth"
+    - "stale target reuse"
+    - "cross-plant entity carryover"
+
+  followups:
+    rule: "inherit identity/period only; requery evidence."
+
+GPT:
+
+  input: "structured aligned read model"
+
+  role:
+    - "executive synthesis"
+    - "highlight tensions"
+    - "state limitations"
+    - "identify what needs explanation"
+
+  prohibited:
+    - "inventing target"
+    - "inventing actual financial result"
+    - "causal claims from co-movement"
+    - "turning comments into verified causes"
+    - "hiding missing data"
+
+safe_language_examples:
+
+  supported:
+    - "La venta real fue X frente a una meta comprometida de Y."
+    - "El cumplimiento de la meta de venta es Z%."
+    - "El mix cambió hacia CASA/COMISIONISTA."
+    - "El descuento/kg real del mes fue X."
+    - "El IGF proyecta X frente a una meta financiera comprometida de Y."
+    - "No dispongo de resultado financiero actual para afirmar el cumplimiento financiero."
+
+  target_missing:
+    - "No encuentro una META/COMPROMISO cargada para este periodo; no usaré la de otro mes."
+
+  causality:
+    - "Este cliente explica parte del movimiento en volumen."
+    - "No tengo evidencia suficiente para afirmar la causa."
+
+partial_data:
+
+  required: true
+
+  examples:
+    - "actual sales exists + target missing"
+    - "target exists + IGF unavailable"
+    - "sales/discount exists + financial actual unsupported"
+    - "clients partially unavailable"
+    - "actions unavailable"
+
+  rule: >
+    One missing section must not erase independently valid sections.
+
+authz:
+
+  scope: "one authorized plant"
+
+  rules:
+    - "preserve existing plant authorization"
+    - "fail closed"
+    - "no cross-plant"
+    - "target empresa mapping must not bypass authorization"
+
+read_only:
+
+  absolute: true
+
+  prohibited:
+    - "modify target"
+    - "upload target"
+    - "approve commitment"
+    - "change IGF"
+    - "modify action"
+    - "cancel Folio"
+    - "persist month-close result"
+
+tests_required:
+
+  truth_separation:
+    - "ACTUAL/TARGET/FORECAST remain separate"
+    - "financial.actual unsupported"
+
+  target:
+    - "exact month target"
+    - "missing target"
+    - "prior-month target cannot leak"
+    - "is_current version selection"
+    - "zero target safe"
 
   sales:
-    - "actual kg/ton"
-    - "target if canonical"
-    - "delta vs target if valid"
-    - "prior-month comparison if valid"
+    - "calendar month aggregation"
+    - "not trailing 30/90"
 
-  channels:
-    - "CASA kg"
-    - "COMISIONISTA kg"
-    - "mix %"
-    - "change vs prior month if valid"
+  channel:
+    - "CASA"
+    - "COMISIONISTA"
 
   discount:
-    - "monthly discount/kg"
-    - "change vs prior month"
-    - "channel breakdown if physically supported"
+    - "weighted SUM(monto)/SUM(kg)"
 
   clients:
     - "new"
     - "lost"
-    - "top positive movers"
-    - "top negative movers"
+    - "positive/negative movers"
+    - "mover != cause"
 
-  financial:
-    - "actual result if physically supported"
-    - "projection separately if relevant"
-    - "margin/$kg if physically supported"
-    - "limitations"
+  routing:
+    - "month_close_result standalone"
+    - "pre_meeting -> month close"
+    - "month close -> target follow-up"
+    - "month close -> channel"
+    - "month close -> client handoff"
 
-  actions:
-    - "open/closed/vencidas"
-    - "missing closure/results"
+  partial_data:
+    - "target missing"
+    - "IGF missing"
+    - "actions missing"
 
-  information_gaps:
-    - "material movement without explanation"
-    - "target unavailable"
-    - "financial actual unavailable"
-    - "causal context absent"
+  regression:
+    - "daily brief"
+    - "commercial trend"
+    - "client profile"
+    - "IGF reviewable"
+    - "Taller Mayor"
+    - "pre-meeting"
+    - "topic return"
+    - "persistent memory"
 
-target_behavior:
+implementation_constraints:
 
-  if_canonical_target_exists:
-    allow:
-      - "actual"
-      - "target"
-      - "delta"
-      - "attainment %"
+  prefer:
+    - "reuse existing loaders/helpers"
+    - "shared truth"
+    - "safeLoad/isolation where composition needs it"
 
-  if_target_missing:
-    required: >
-      State explicitly that there is no canonical monthly sales target in the
-      currently available sources.
-
-    prohibited:
-      - "use forecast as target"
-      - "use prior month as target"
-      - "invent target from meeting transcript"
-      - "use hardcoded target"
-
-financial_behavior:
-
-  if_actual_financial_result_exists:
-    allow:
-      - "actual operating/final result with exact semantics"
-
-  if_only_IGF_projection_exists:
-    required: >
-      Keep it labeled projection/IGF and do not call it actual close result.
-
-  if_derived_formula_only:
-    required: "label as derived/model value"
-
-  if_unsupported:
-    required: "explicit limitation"
-
-“vendimos_mas_pero_ganamos_menos”:
-
-  required_analysis:
-    possible_inputs:
-      - "sales actual current vs prior month"
-      - "channel mix"
-      - "discount/kg"
-      - "financial actual/margin if available"
-
-  safe_output:
-    - "These movements co-occurred."
-    - "The channel mix shifted toward lower/higher margin if margin evidence exists."
-    - "Discount increased/decreased."
-
-  prohibited:
-    - "causal claim without evidence"
-    - "claiming margin erosion from commission if commission data unavailable"
-
-client_movement_semantics:
-
-  new/lost:
-    audit:
-      - "exact DICF definitions"
-      - "comparison month"
-      - "cliente_key"
-
-  mover:
-    rule: >
-      Contributor/mover != cause.
-
-pre_meeting_handoff:
-
-  desired:
-    - "Prepárame para cierre de Puebla"
-    - "¿Cómo cerró el mes?"
-    - "¿Contra la meta?"
-    - "¿Qué cambió en canales?"
-    - "¿Qué clientes explican el movimiento?"
-
-  behavior: >
-    pre_meeting_brief may hand off to month_close_result for monthly-close facts;
-    detailed client questions hand off to client_profile.
-
-historical_Plaud_boundary:
-
-  role: "evaluation evidence only"
-
-  prohibited:
-    - "using meeting-stated target as current runtime source"
-    - "using meeting-stated cause as business truth"
-    - "Plaud runtime integration"
-
-partial_data:
-
-  cases:
-    - "sales exists, target missing"
-    - "sales/discount exists, financial actual missing"
-    - "client movers available, new/lost unavailable"
-    - "action source unavailable"
-
-  rule: >
-    Return a partial monthly close with explicit per-section limitations.
-
-materiality:
-
-  reuse:
-    - "existing monthly deltas"
-    - "rankings"
-    - "statuses"
-    - "information gaps"
-
-  GPT:
-    - "executive synthesis"
-    - "what stands out"
-    - "what needs explanation"
-
-  prohibited:
-    - "new arbitrary thresholds"
-
-authz:
-
-  preserve:
-    - "one authorized plant"
-    - "fail closed"
-    - "no cross-plant"
-
-contract_audit:
-
-  inspect:
-    - "Constitution"
-    - "EKE"
-    - "04 IES"
-    - "05 RE"
-
-  determine:
-    - "G2"
-    - "G3"
-    - "G8 if relevant"
-
-readiness_output:
-
-  must_determine:
-    - "READY / READY_WITH_LIMITS / NOT_READY"
-    - "canonical sales target source or explicit absence"
-    - "monthly actual sales source"
-    - "channel mix source"
-    - "monthly discount source"
-    - "new/lost client source"
-    - "actual financial result source/semantics"
-    - "architecture A/B/C/D"
-    - "intent choice"
-    - "closed-month semantics"
-    - "target fallback policy"
-    - "financial fallback policy"
-    - "pre_meeting handoff"
-    - "partial-data behavior"
-    - "G2/G3/G8"
-    - "percentage effect"
-
-first_slice_candidates:
-
-  A_sales_only:
-    includes:
-      - "month sales"
-      - "channel mix"
-      - "discount"
-
-  B_sales_plus_clients:
-    includes:
-      - "A"
-      - "new/lost/movers"
-
-  C_month_close_core:
-    includes:
-      - "B"
-      - "target if canonical"
-      - "financial result if actual and physically supported"
-      - "actions"
-      - "information gaps"
-
-  D_everything:
-    includes:
-      - "all operational/financial modules"
-
-  requirement:
-    - "compare A/B/C/D"
-    - "select exactly one"
-    - "do not force target/financial fields if physical truth is absent"
+  prohibit:
+    - "HTTP calls to own server"
+    - "duplicate dashboard truth"
+    - "new SQL schema"
+    - "new target persistence"
+    - "new accounting model"
+    - "Plaud runtime"
+    - "second router"
+    - "phrasebook"
 
 percentage_policy:
   before: "10.5 / 20 = 52.5%"
-  after_readiness: "10.5 / 20 = 52.5%"
-  expected_delta: "0.0 pp unless matrix policy independently changes"
+  after: "10.5 / 20 = 52.5%"
+  delta: "0.0 pp"
 
 in_scope:
   writable:
     - "docs/dev-loop/CURRENT_TASK.md"
-    - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-PRE-MEETING-MONTH-CLOSE-RESULT-001.md"
+    - "lib/** only as required by this implementation"
+    - "test/** only as required"
+    - "docs/dev-loop/reports/IMPL-DIRECTOR-IA-PRE-MEETING-MONTH-CLOSE-RESULT-001.md"
 
   read_only:
-    - "entire repository except writable files"
+    - "all other repository files unless an existing shared helper requires the minimum safe edit"
 
 out_of_scope:
-  - "implementation"
-  - "code changes"
-  - "tests"
-  - "SQL execution"
-  - "schema"
-  - "target creation"
-  - "new accounting source"
-  - "Plaud runtime integration"
-  - "contracts modification"
-  - "matrix changes"
+  - "new schema"
+  - "SQL migration"
+  - "new meta upload flow"
+  - "financial actual model"
+  - "Plaud integration"
+  - "matrix change"
+  - "contract redesign"
   - "commit"
   - "push"
   - "merge"
 
 acceptance_criteria:
-  - "Canonical monthly target searched repository-wide."
-  - "Target existence/absence decided."
-  - "Monthly actual sales source defined."
-  - "Channel mix source defined."
-  - "Monthly discount source defined."
-  - "New/lost client semantics defined."
-  - "Financial actual vs forecast semantics defined."
-  - "Actual/target/forecast/derived distinction explicit."
-  - "A/B/C/D architecture compared."
-  - "Exactly one architecture selected."
-  - "A/B/C/D first slice compared."
-  - "Exactly one first slice selected."
-  - "Intent selected."
-  - "Closed-month semantics defined."
-  - "Partial-data behavior defined."
-  - "No Plaud truth leakage."
-  - "G2/G3/G8 determined."
-  - "52.5% preserved."
-  - "Only task + report changed."
+  - "month_close_result implemented."
+  - "Architecture B preserved."
+  - "First slice C preserved."
+  - "ACTUAL/TARGET/FORECAST/DERIVED_MODEL remain distinct."
+  - "igf_meta used as TARGET/COMMITMENT."
+  - "Exact YYYY-MM target selection."
+  - "No carry-forward."
+  - "TARGET_MISSING_FOR_PERIOD implemented."
+  - "Actual monthly sales implemented."
+  - "Actual CASA/COMISIONISTA mix implemented."
+  - "Actual monthly discount/kg implemented."
+  - "Monthly client movement implemented."
+  - "financial.target separated from financial.forecast."
+  - "financial.actual remains unsupported."
+  - "Actions/gaps composed."
+  - "Partial data survives."
+  - "Pre-meeting handoff works."
+  - "Canonical follow-ups work."
+  - "No phrasebook."
+  - "No causality invention."
+  - "Read-only."
+  - "Relevant focal tests pass."
+  - "Full Director IA suite passes."
   - "git diff --check clean."
+  - "52.5% preserved."
 
-next_task_policy:
-  if_ready:
-    propose_exactly_one: "IMPL-DIRECTOR-IA-PRE-MEETING-MONTH-CLOSE-RESULT-001"
+next_task:
+  exactly_one: true
+  proposed: "DOCS-DIRECTOR-IA-PRE-MEETING-MONTH-CLOSE-RESULT-SYNC-001"
+  authorize: false
+  execute: false
 
-  if_not_ready:
-    propose_exactly_one: "ARCH-DIRECTOR-IA-PRE-MEETING-MONTH-CLOSE-RESULT-GAP-001"
-
-  rule: "Do not authorize or execute."
-
-expected_terminal_state: >
-  DONE_PENDING_REVIEW if one safe first slice exists.
-  STOPPED if monthly target/financial semantics require human decision.
-  BLOCKED if physical data cannot support a defensible month-close object.
-
-max_attempts: 1
+expected_terminal_state: "DONE_PENDING_REVIEW"
 
 result_report_path: >
-  docs/dev-loop/reports/ARCH-DIRECTOR-IA-PRE-MEETING-MONTH-CLOSE-RESULT-001.md
+  docs/dev-loop/reports/IMPL-DIRECTOR-IA-PRE-MEETING-MONTH-CLOSE-RESULT-001.md
