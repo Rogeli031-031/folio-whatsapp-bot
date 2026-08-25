@@ -1,25 +1,13 @@
 # CURRENT_TASK
 
-```yaml
-task_id: "AUDIT-DIRECTOR-IA-PLAUD-CLOSE-MEETING-EVAL-001"
+task_id: "ARCH-DIRECTOR-IA-PRE-MEETING-MONTH-CLOSE-RESULT-001"
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-08-24"
-human_authorization: >
-  AUTHORIZED_BY_HUMAN: HUMAN_APPROVER 2026-08-24.
-  Apruebo AUDIT-DIRECTOR-IA-PLAUD-CLOSE-MEETING-EVAL-001
-  y autorizo G1 exclusivamente para auditoría read-only.
-
-gates:
-  G1_task_authorization: AUTHORIZED
-  G2_architecture_change: N/A
-  G3_new_architecture_contract: N/A
-  G5_contract_conformance: N/A
-  G8_calibration_materiality_signature: N/A
 
 mode:
-  type: "REAL_MEETING_EVALUATION_ONLY"
+  type: "READINESS_ONLY"
   implementation: false
   code_changes: false
   runtime_changes: false
@@ -27,451 +15,464 @@ mode:
   matrix_changes: false
   contract_changes: false
   sql_execution: false
-  plaud_runtime_integration: false
 
 objective: >
-  Evaluar el pre_meeting_brief y las capacidades conversacionales actuales de
-  Director IA contra preguntas, tensiones y decisiones observadas realmente en
-  juntas históricas de cierre/resultados registradas en Plaud.
-
-  No diseñar preguntas hipotéticas.
-  No integrar Plaud al runtime.
-  No implementar.
+  Determinar la arquitectura mínima y segura para que Director IA pueda construir
+  un resultado ejecutivo mensual de cierre por planta, con ventas, canal,
+  descuento y rentabilidad/resultado financiero físicamente defendibles, y
+  compararlo contra una meta SOLO si existe una fuente física canónica de meta.
 
 baseline:
-  coverage: "10.5 / 20 = 52.5%"
-  delta: "0.0 pp"
-  conversation: "CONVERSATION_BASE_READY_WITH_LIMITS"
-
-capability_under_evaluation:
-  intent: "pre_meeting_brief"
-
-  current_first_slice:
-    - "commercial"
-    - "open-month IGF"
-    - "actions"
-    - "IGF reviewable supports"
-    - "information gaps"
-
-historical_source_packet:
-
-  provenance: >
-    Curated from the user's authorized Plaud recordings. The source packet is
-    evaluation evidence, not Director IA runtime input.
-
-  meetings:
-
-    Puebla:
-      plaud_id: "acb82204db845a58c88e77d13ad6c811"
-      title: "07-02 Revisión Operativa y Estratégica de la Planta de Puebla"
-
-      observed_topics:
-        - "seguimiento de minuta anterior"
-        - "venta y comportamiento del mes"
-        - "rentabilidad"
-        - "comisiones"
-        - "clientes"
-        - "venta por canal"
-        - "venta directa vs comisionistas"
-        - "competencia/huachicol"
-        - "capacidad de suministro"
-        - "infraestructura/manifold"
-        - "cartera"
-        - "acciones antes de siguiente junta"
-
-      observed_question_patterns:
-        - "¿Cómo salió la venta?"
-        - "¿La autoridad seguirá afectando el mercado?"
-        - "¿Esto debe repercutir en la venta?"
-        - "¿La venta se puede disparar?"
-        - "¿Cómo andamos de clientes?"
-        - "¿Podemos soportar el crecimiento sin quedarnos sin suministro?"
-        - "¿Qué quedó de la minuta anterior?"
-
-    Acapulco:
-      plaud_id: "8a4da12596cec82cf21ec66f0c85065a"
-      title: "07-03 Revisión de Resultados de Planta Acapulco - Junio 2026"
-
-      observed_topics:
-        - "meta de venta vs resultado"
-        - "tendencia decreciente"
-        - "cliente perdido"
-        - "nuevos clientes"
-        - "venta casa"
-        - "rentabilidad vs volumen"
-        - "comisiones/descuento"
-        - "cartera"
-        - "gastos e inversiones"
-        - "meta siguiente"
-        - "acciones de recuperación"
-
-      observed_question_intents:
-        - "¿Por qué no se alcanzó la meta?"
-        - "¿La caída es coyuntural o tendencia?"
-        - "¿Qué clientes explican la pérdida?"
-        - "¿Estamos sacrificando volumen por rentabilidad?"
-        - "¿Por qué crecieron gastos/inversiones?"
-        - "¿Qué acciones concretas recuperarán el volumen?"
-        - "¿La meta del siguiente mes es defendible?"
-
-    Morelos:
-      plaud_id: "0580ae51fcdffbb124c3e5f69523c877"
-      title: "07-03 Revisión de Resultados de Junio y Planificación para Julio de la Unidad de Morelos"
-
-      observed_topics:
-        - "venta superior a meta"
-        - "comisiones superiores a objetivo"
-        - "rentabilidad deteriorada"
-        - "venta directa vs comisionistas"
-        - "clientes nuevos/perdidos"
-        - "cartera"
-        - "CRM/prospectos"
-        - "acciones"
-        - "meta siguiente"
-
-      observed_question_intents:
-        - "Si vendimos más, ¿por qué cayó la rentabilidad?"
-        - "¿Qué pasó con comisiones/descuentos?"
-        - "¿Qué canal está erosionando margen?"
-        - "¿Qué clientes ganamos y cuáles perdimos?"
-        - "¿Cómo compensaremos la baja esperada de un cliente?"
-        - "¿Qué debe corregirse antes de la siguiente junta?"
-
-    Queretaro_San_Luis:
-      plaud_id: "2a2cd8cb5ecc4cb5dd53764ef85c6811"
-      title: "07-03 Análisis de Resultados y Planes de Acción para Querétaro y San Luis"
-
-      observed_topics:
-        - "más volumen pero pérdida operativa"
-        - "mix CASA/comisionistas"
-        - "descuento/comisión"
-        - "margen"
-        - "prospectos"
-        - "punto de equilibrio"
-        - "productividad por unidad"
-        - "acciones"
-        - "meta siguiente"
-
-      observed_question_intents:
-        - "¿Cómo podemos vender más y perder dinero?"
-        - "¿Qué cambió en el mix de canales?"
-        - "¿Qué efecto tuvieron descuentos/comisiones?"
-        - "¿Qué clientes/prospectos pueden cerrar la brecha?"
-        - "¿Qué necesitamos vender para llegar al equilibrio?"
-        - "¿Qué compromisos deben cumplirse el siguiente mes?"
-
-truth_boundary:
-
-  meeting_statement: >
-    A statement made in the meeting is a recorded declaration/context, not
-    automatically a verified causal fact.
-
-  meeting_question: >
-    A question proves executive information demand; it does not prove that the
-    answer available in the meeting was correct.
-
-  hindsight: >
-    Do not assume Director IA could know before the meeting information first
-    introduced during the meeting.
-
-evaluation_unit:
-  definition: >
-    One executive question/intent or one defensible information need observed
-    in a historical meeting.
-
-classification:
-
-  ANTICIPATED:
-    definition: >
-      pre_meeting_brief could surface the required fact/risk before the meeting
-      using currently available capabilities and evidence.
-
-  GAP_DETECTED:
-    definition: >
-      It could not answer the issue, but could correctly identify that an
-      explanation/context/update was missing before the meeting.
-
-  FOLLOWUP_ANSWERABLE:
-    definition: >
-      It need not appear in the initial brief, but a natural follow-up can be
-      answered by an existing canonical capability.
-
-  PARTIALLY_ANSWERABLE:
-    definition: >
-      Some requested facts exist, but an important component is unavailable or
-      semantically unsafe.
-
-  MISSING_CAPABILITY:
-    definition: >
-      Physical data exists, but Director IA currently lacks the read
-      model/orchestration/routing to answer.
-
-  MISSING_DATA:
-    definition: >
-      Required physical data is not available in current sources.
-
-  NOT_DEFENSIBLE_AS_OF:
-    definition: >
-      Current repository/data may know it now, but there is no defensible basis
-      that the information was available before the historical meeting.
-
-mandatory_evaluation_domains:
-
-  sales_and_targets:
-    examples:
-      - "actual vs target"
-      - "month trend"
-      - "daily movement"
-      - "channel mix"
-
-  discount_and_margin:
-    examples:
-      - "discount/kg"
-      - "commission pressure"
-      - "rentability tension"
-
-  clients:
-    examples:
-      - "largest movers"
-      - "lost customers"
-      - "new customers"
-      - "longitudinal behavior"
-      - "comments/context"
-
-  financial:
-    examples:
-      - "IGF current projection"
-      - "financial pressure"
-      - "actual vs projection boundary"
-
-  actions:
-    examples:
-      - "prior commitments"
-      - "overdue actions"
-      - "missing closure/result"
-
-  supports:
-    examples:
-      - "reviewable Folios"
-      - "operational cancelability"
-      - "hypothetical IGF"
-
-  operations:
-    audit_only:
-      - "supply capacity"
-      - "route productivity"
-      - "infrastructure"
-      - "Taller Mayor"
-
-  external_context:
-    examples:
-      - "competition"
-      - "authority"
-      - "tourism"
-      - "market conditions"
-
-    rule: >
-      These may depend on declarations/current intelligence and must not be
-      converted into causal facts automatically.
-
-question_family_audit:
-
-  family_1:
-    intent: "WHAT_HAPPENED"
-    examples:
-      - "¿Cómo nos fue?"
-      - "¿Cómo cerramos?"
-
-  family_2:
-    intent: "WHY"
-    examples:
-      - "¿Por qué cayó?"
-      - "¿Por qué vendimos más pero ganamos menos?"
-
-  family_3:
-    intent: "WHO_MOVED_IT"
-    examples:
-      - "¿Qué cliente?"
-      - "¿Qué canal?"
-
-  family_4:
-    intent: "WHAT_CHANGED"
-    examples:
-      - "¿Qué cambió en descuento/comisión/mix?"
-
-  family_5:
-    intent: "WHAT_IS_OPEN"
-    examples:
-      - "¿Qué quedó pendiente?"
-      - "¿Qué acciones siguen abiertas?"
-
-  family_6:
-    intent: "WHAT_NEXT"
-    examples:
-      - "¿Qué vamos a hacer?"
-      - "¿La siguiente meta es defendible?"
-
-  family_7:
-    intent: "WHAT_IS_MISSING"
-    examples:
-      - "¿Qué no podemos explicar todavía?"
-      - "¿Qué comentario necesito antes de la junta?"
-
-pre_meeting_coverage_audit:
-
-  for_each_real_intent:
-    determine:
-      - "initial brief section that could surface it"
-      - "existing canonical follow-up capability"
-      - "physical evidence needed"
-      - "whether available before meeting"
-      - "classification"
-      - "limitation"
-
-  prohibit:
-    - "crediting the initial brief for a capability only reachable after an unrelated manual investigation"
-    - "crediting hindsight-only facts"
-
-anticipation_metrics:
-
-  audit_only: true
-
-  calculate:
-    total_real_intents: "N"
-
-    anticipated_rate:
-      formula: "ANTICIPATED / N"
-
-    prepared_rate:
-      formula: >
-        (ANTICIPATED + GAP_DETECTED + FOLLOWUP_ANSWERABLE) / N
-
-    unsupported_rate:
-      formula: >
-        (MISSING_CAPABILITY + MISSING_DATA + NOT_DEFENSIBLE_AS_OF) / N
-
-  rule: >
-    Report counts and percentages, but do not turn them into a permanent product
-    KPI without separate authorization.
-
-critical_test:
-  question: >
-    Would the current pre_meeting_brief have alerted the director to the main
-    tensions actually discussed in these meetings before the meeting began?
-
-  inspect:
-    - "sales vs target"
-    - "trend direction"
-    - "CASA/comisionista mix"
-    - "discount pressure"
-    - "top client movers"
-    - "open/vencida actions"
-    - "IGF pressure"
-    - "reviewable supports"
-    - "missing explanations"
-
-information_gap_quality:
-
-  high_value_case: >
-    If the real meeting later supplied an explanation that was not physically
-    available before the meeting, give credit to Director IA only if it could
-    have detected the missing explanation.
-
-  example:
-    before: "client volume dropped; no recent explanation"
-    meeting: "manager says tourism caused the decline"
-
-  correct_pre_meeting_output: >
-    “El cliente/segmento cayó y no encuentro evidencia suficiente que explique
-    la causa. Conviene obtener contexto antes de la junta.”
-
-  incorrect:
-    - "invent tourism as cause"
-    - "use post-meeting statement as pre-meeting evidence"
-
-action_continuity:
-
-  audit:
-    - "meeting discussed prior commitments"
-    - "current Action Register paths"
-    - "whether pre_meeting_brief surfaces overdue/open actions"
-    - "whether result/closure absence becomes information gap"
-
-monthly_close_limitations:
-
-  mandatory:
-    - "current pre_meeting first slice is open month"
-    - "historical close reconstruction is not automatically valid"
-    - "do not fail audit simply because historical as-of replay is impossible"
-
-  evaluation_mode: >
-    Capability coverage evaluation, not exact historical financial replay, unless
-    repository contains defensible as-of data.
-
-real_meeting_pattern_output:
-
-  produce:
-    - "recurring executive question families"
-    - "recurring data demands"
-    - "recurring missing-context demands"
-    - "recurring action/commitment demands"
-
-  purpose: >
-    Establish what a real Director IA preparation must consistently cover.
-
-single_bottleneck:
-  exactly_one: true
-
-  selection_rule: >
-    Select the largest demonstrated gap between current pre_meeting preparation
-    and real executive meeting demand.
-
-  required:
-    - "name"
-    - "failure_class"
-    - "real meeting evidence"
-    - "affected question families"
-    - "physical/runtime cause"
-    - "what fixing it unlocks"
-    - "what it does not solve"
-
-  do_not_select:
-    - "a gap only because it appears in one meeting"
-    - "missing physical data as infrastructure"
-    - "hindsight-only information"
+  global: "10.5 / 20 = 52.5%"
+  percentage_effect: "0.0 pp"
+
+prior_audit:
+  task: "AUDIT-DIRECTOR-IA-PLAUD-CLOSE-MEETING-EVAL-001"
+  bottleneck: "close_meeting_month_result_vs_target_not_composed"
+  failure_class: "MISSING_INFRASTRUCTURE"
 
 conversation_readiness:
-  preserve: "CONVERSATION_BASE_READY_WITH_LIMITS"
+  status: "CONVERSATION_BASE_READY_WITH_LIMITS"
 
-  question: >
-    Do real meeting questions reveal a new structural conversation failure?
+north_star: >
+  Ante preguntas reales de cierre como “¿cómo cerramos?”, “¿contra la meta?”,
+  “¿por qué vendimos más pero ganamos menos?” o “¿qué cambió en el mix?”,
+  Director IA debe responder con un marco mensual coherente y con fronteras
+  explícitas entre actual, meta, forecast y rentabilidad.
 
-  if_no: >
-    State explicitly that the remaining gap is executive/domain intelligence,
-    not conversational substrate.
+canonical_questions:
+  - "¿Cómo cerró Puebla el mes?"
+  - "¿Cuánto vendimos contra la meta?"
+  - "¿Qué canal explicó el resultado?"
+  - "¿Qué pasó con el descuento?"
+  - "¿Vendimos más pero ganamos menos?"
+  - "¿Cómo quedó la rentabilidad?"
+  - "¿Qué clientes se ganaron o perdieron?"
+  - "¿Qué quedó pendiente del mes?"
 
-Plaud_boundary:
-  runtime: false
-  repository_integration: false
+semantic_policy:
+  invariant: "tests semánticos, no phrasebook"
 
-  this_task: >
-    Plaud-derived source packet is evaluation evidence only.
+critical_physical_audit:
 
-  no:
-    - "API integration"
-    - "transcript storage"
-    - "automatic import"
-    - "meeting memory implementation"
+  monthly_actual_sales:
+    determine:
+      - "physical source"
+      - "plant scope"
+      - "calendar month semantics"
+      - "kg/ton aggregation"
+      - "channel split"
+      - "closed-month stability"
+      - "whether historical month is immutable or late-adjusted"
+
+  target/meta:
+    critical: true
+
+    search_repository_wide:
+      - "meta_venta"
+      - "metas"
+      - "objetivo"
+      - "presupuesto"
+      - "target"
+      - "forecast"
+      - "ARR"
+      - "IGF"
+      - "frontend"
+      - "server.js"
+      - "PostgreSQL queries"
+      - "configuration"
+      - "monthly planning"
+
+    determine:
+      - "whether canonical monthly sales target exists"
+      - "grain: plant/month/channel?"
+      - "source owner"
+      - "version/currentness"
+      - "whether target can change after month close"
+
+    invariant: >
+      If no canonical physical target exists, do not implement “vs meta” as if it
+      were known.
+
+  monthly_discount:
+    determine:
+      - "physical source"
+      - "calendar month grain"
+      - "SUM(monto)/SUM(kg)"
+      - "channel split if available"
+      - "actual vs forecast"
+
+  monthly_channel_mix:
+    determine:
+      - "CASA"
+      - "COMISIONISTA"
+      - "total"
+      - "kg/ton"
+      - "share %"
+      - "same month"
+
+  monthly_clients:
+    determine:
+      - "new clients"
+      - "lost clients"
+      - "largest movers"
+      - "client key"
+      - "month-over-month comparison"
+      - "whether DICF already has safe definitions"
+
+  monthly_financial_result:
+    critical: true
+
+    search:
+      - "IGF"
+      - "utilidad operativa"
+      - "utilidad final"
+      - "margen"
+      - "$/kg"
+      - "resultado real"
+      - "forecast"
+      - "closed period"
+
+    determine:
+      - "what is actual"
+      - "what is projection"
+      - "what is formula-derived"
+      - "what is accounting result"
+      - "month close semantics"
+
+    invariant: >
+      Do not label an IGF projection as actual realized profit.
+
+  prior_commitments:
+    determine:
+      - "Action Register"
+      - "open/closed/vencidas"
+      - "month relation"
+      - "whether closure result exists"
+
+truth_model:
+
+  actual:
+    definition: "physically observed/recorded result for the month"
+
+  target:
+    definition: "predefined business objective from canonical source"
+
+  forecast:
+    definition: "projection/estimate, not actual"
+
+  derived_model:
+    definition: "formula/model output, not accounting actual unless explicitly so"
+
+  invariant: >
+    These four categories must remain distinct in the read model and in GPT
+    wording.
+
+month_semantics:
+
+  first_slice:
+    preferred: "one explicit closed calendar month + one plant"
+
+  closed_month:
+    determine:
+      - "how to know month is closed"
+      - "whether current date alone is sufficient"
+      - "whether data has close/final marker"
+
+  current_open_month:
+    rule: >
+      Do not reuse closed-month semantics silently for the current month.
+
+  explicit_month:
+    examples:
+      - "mayo 2026"
+      - "mes pasado"
+      - "junio"
+
+  timezone: "America/Mexico_City"
+
+architecture_candidates:
+
+  A_prompt_compose_existing:
+    description: >
+      Compose existing monthly sources ad hoc in chat and let GPT reconcile.
+
+  B_month_close_read_model:
+    description: >
+      Create a structured read-only month-close model that aligns month, plant,
+      actual sales, channel mix, discount, clients, financial result, target if
+      canonical, actions and gaps before GPT.
+
+  C_persisted_close_snapshot:
+    description: >
+      Persist a derived monthly close summary.
+
+  D_reuse_pre_meeting_pack_only:
+    description: >
+      Extend pre_meeting_brief without a dedicated monthly close object.
+
+  requirement:
+    - "compare A/B/C/D"
+    - "select exactly one"
+    - "prefer structured read-only composition"
+    - "avoid persistence unless required"
+
+intent_audit:
+
+  candidates:
+    - "month_close_result"
+    - "monthly_result"
+    - "close_result"
+
+  determine:
+    - "whether one canonical intent is enough"
+    - "whether pre_meeting_brief should hand off to it"
+    - "whether month/plant are slots"
+
+  principle: >
+    Do not overload IGF or commercial_trend with a mixed monthly close object.
+
+read_model_candidate:
+
+  identity:
+    - "plant"
+    - "month"
+    - "closed/open marker"
+    - "generated_at"
+
+  sales:
+    - "actual kg/ton"
+    - "target if canonical"
+    - "delta vs target if valid"
+    - "prior-month comparison if valid"
+
+  channels:
+    - "CASA kg"
+    - "COMISIONISTA kg"
+    - "mix %"
+    - "change vs prior month if valid"
+
+  discount:
+    - "monthly discount/kg"
+    - "change vs prior month"
+    - "channel breakdown if physically supported"
+
+  clients:
+    - "new"
+    - "lost"
+    - "top positive movers"
+    - "top negative movers"
+
+  financial:
+    - "actual result if physically supported"
+    - "projection separately if relevant"
+    - "margin/$kg if physically supported"
+    - "limitations"
+
+  actions:
+    - "open/closed/vencidas"
+    - "missing closure/results"
+
+  information_gaps:
+    - "material movement without explanation"
+    - "target unavailable"
+    - "financial actual unavailable"
+    - "causal context absent"
+
+target_behavior:
+
+  if_canonical_target_exists:
+    allow:
+      - "actual"
+      - "target"
+      - "delta"
+      - "attainment %"
+
+  if_target_missing:
+    required: >
+      State explicitly that there is no canonical monthly sales target in the
+      currently available sources.
+
+    prohibited:
+      - "use forecast as target"
+      - "use prior month as target"
+      - "invent target from meeting transcript"
+      - "use hardcoded target"
+
+financial_behavior:
+
+  if_actual_financial_result_exists:
+    allow:
+      - "actual operating/final result with exact semantics"
+
+  if_only_IGF_projection_exists:
+    required: >
+      Keep it labeled projection/IGF and do not call it actual close result.
+
+  if_derived_formula_only:
+    required: "label as derived/model value"
+
+  if_unsupported:
+    required: "explicit limitation"
+
+“vendimos_mas_pero_ganamos_menos”:
+
+  required_analysis:
+    possible_inputs:
+      - "sales actual current vs prior month"
+      - "channel mix"
+      - "discount/kg"
+      - "financial actual/margin if available"
+
+  safe_output:
+    - "These movements co-occurred."
+    - "The channel mix shifted toward lower/higher margin if margin evidence exists."
+    - "Discount increased/decreased."
+
+  prohibited:
+    - "causal claim without evidence"
+    - "claiming margin erosion from commission if commission data unavailable"
+
+client_movement_semantics:
+
+  new/lost:
+    audit:
+      - "exact DICF definitions"
+      - "comparison month"
+      - "cliente_key"
+
+  mover:
+    rule: >
+      Contributor/mover != cause.
+
+pre_meeting_handoff:
+
+  desired:
+    - "Prepárame para cierre de Puebla"
+    - "¿Cómo cerró el mes?"
+    - "¿Contra la meta?"
+    - "¿Qué cambió en canales?"
+    - "¿Qué clientes explican el movimiento?"
+
+  behavior: >
+    pre_meeting_brief may hand off to month_close_result for monthly-close facts;
+    detailed client questions hand off to client_profile.
+
+historical_Plaud_boundary:
+
+  role: "evaluation evidence only"
+
+  prohibited:
+    - "using meeting-stated target as current runtime source"
+    - "using meeting-stated cause as business truth"
+    - "Plaud runtime integration"
+
+partial_data:
+
+  cases:
+    - "sales exists, target missing"
+    - "sales/discount exists, financial actual missing"
+    - "client movers available, new/lost unavailable"
+    - "action source unavailable"
+
+  rule: >
+    Return a partial monthly close with explicit per-section limitations.
+
+materiality:
+
+  reuse:
+    - "existing monthly deltas"
+    - "rankings"
+    - "statuses"
+    - "information gaps"
+
+  GPT:
+    - "executive synthesis"
+    - "what stands out"
+    - "what needs explanation"
+
+  prohibited:
+    - "new arbitrary thresholds"
+
+authz:
+
+  preserve:
+    - "one authorized plant"
+    - "fail closed"
+    - "no cross-plant"
+
+contract_audit:
+
+  inspect:
+    - "Constitution"
+    - "EKE"
+    - "04 IES"
+    - "05 RE"
+
+  determine:
+    - "G2"
+    - "G3"
+    - "G8 if relevant"
+
+readiness_output:
+
+  must_determine:
+    - "READY / READY_WITH_LIMITS / NOT_READY"
+    - "canonical sales target source or explicit absence"
+    - "monthly actual sales source"
+    - "channel mix source"
+    - "monthly discount source"
+    - "new/lost client source"
+    - "actual financial result source/semantics"
+    - "architecture A/B/C/D"
+    - "intent choice"
+    - "closed-month semantics"
+    - "target fallback policy"
+    - "financial fallback policy"
+    - "pre_meeting handoff"
+    - "partial-data behavior"
+    - "G2/G3/G8"
+    - "percentage effect"
+
+first_slice_candidates:
+
+  A_sales_only:
+    includes:
+      - "month sales"
+      - "channel mix"
+      - "discount"
+
+  B_sales_plus_clients:
+    includes:
+      - "A"
+      - "new/lost/movers"
+
+  C_month_close_core:
+    includes:
+      - "B"
+      - "target if canonical"
+      - "financial result if actual and physically supported"
+      - "actions"
+      - "information gaps"
+
+  D_everything:
+    includes:
+      - "all operational/financial modules"
+
+  requirement:
+    - "compare A/B/C/D"
+    - "select exactly one"
+    - "do not force target/financial fields if physical truth is absent"
 
 percentage_policy:
   before: "10.5 / 20 = 52.5%"
-  after: "10.5 / 20 = 52.5%"
-  delta: "0.0 pp"
+  after_readiness: "10.5 / 20 = 52.5%"
+  expected_delta: "0.0 pp unless matrix policy independently changes"
 
 in_scope:
   writable:
     - "docs/dev-loop/CURRENT_TASK.md"
-    - "docs/dev-loop/reports/AUDIT-DIRECTOR-IA-PLAUD-CLOSE-MEETING-EVAL-001.md"
+    - "docs/dev-loop/reports/ARCH-DIRECTOR-IA-PRE-MEETING-MONTH-CLOSE-RESULT-001.md"
 
   read_only:
     - "entire repository except writable files"
@@ -480,40 +481,54 @@ out_of_scope:
   - "implementation"
   - "code changes"
   - "tests"
-  - "Plaud runtime integration"
-  - "database writes"
   - "SQL execution"
   - "schema"
-  - "contracts"
+  - "target creation"
+  - "new accounting source"
+  - "Plaud runtime integration"
+  - "contracts modification"
   - "matrix changes"
-  - "permanent meeting KPI"
   - "commit"
   - "push"
   - "merge"
 
 acceptance_criteria:
-  - "Real-meeting source packet used."
-  - "No invented hypothetical meeting questions used as primary evidence."
-  - "Question families extracted."
-  - "Current pre_meeting_brief mapped against real demand."
-  - "ANTICIPATED/GAP_DETECTED/FOLLOWUP_ANSWERABLE/etc classifications applied."
-  - "Hindsight leakage explicitly controlled."
-  - "Prepared-rate audit calculated."
-  - "Conversation-base status reassessed."
-  - "Exactly one demonstrated bottleneck selected."
-  - "Exactly one NEXT_TASK proposed."
+  - "Canonical monthly target searched repository-wide."
+  - "Target existence/absence decided."
+  - "Monthly actual sales source defined."
+  - "Channel mix source defined."
+  - "Monthly discount source defined."
+  - "New/lost client semantics defined."
+  - "Financial actual vs forecast semantics defined."
+  - "Actual/target/forecast/derived distinction explicit."
+  - "A/B/C/D architecture compared."
+  - "Exactly one architecture selected."
+  - "A/B/C/D first slice compared."
+  - "Exactly one first slice selected."
+  - "Intent selected."
+  - "Closed-month semantics defined."
+  - "Partial-data behavior defined."
+  - "No Plaud truth leakage."
+  - "G2/G3/G8 determined."
   - "52.5% preserved."
   - "Only task + report changed."
   - "git diff --check clean."
 
-next_task:
-  exactly_one: true
-  authorize: false
-  execute: false
+next_task_policy:
+  if_ready:
+    propose_exactly_one: "IMPL-DIRECTOR-IA-PRE-MEETING-MONTH-CLOSE-RESULT-001"
 
-expected_terminal_state: "DONE_PENDING_REVIEW"
+  if_not_ready:
+    propose_exactly_one: "ARCH-DIRECTOR-IA-PRE-MEETING-MONTH-CLOSE-RESULT-GAP-001"
+
+  rule: "Do not authorize or execute."
+
+expected_terminal_state: >
+  DONE_PENDING_REVIEW if one safe first slice exists.
+  STOPPED if monthly target/financial semantics require human decision.
+  BLOCKED if physical data cannot support a defensible month-close object.
 
 max_attempts: 1
 
 result_report_path: >
-  docs/dev-loop/reports/AUDIT-DIRECTOR-IA-PLAUD-CLOSE-MEETING-EVAL-001.md
+  docs/dev-loop/reports/ARCH-DIRECTOR-IA-PRE-MEETING-MONTH-CLOSE-RESULT-001.md
