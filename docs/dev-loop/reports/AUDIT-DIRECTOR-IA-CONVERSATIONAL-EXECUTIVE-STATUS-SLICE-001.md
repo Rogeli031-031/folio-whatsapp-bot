@@ -46,7 +46,7 @@ Hay **3 MAJOR** que impiden PASS limpio:
 2. Planta explícita **sin catálogo** se resuelve en silencio a la planta UI.
 3. CEL `require` el composer PRE_CLOSE **untracked** (`director-ia-executive-cycle-composer.js`), que no pertenece al slice C.
 
-`MANUAL_CHAT_VALIDATION = PENDING`.  
+`MANUAL_CHAT_VALIDATION = PENDING`.
 `PRODUCTION_MANUAL_VALIDATION = NOT_YET_TESTABLE`.
 
 ## 2. Scope
@@ -92,7 +92,7 @@ Causa: `hasExecutiveStatusCue` pone `vamos|estamos|andamos` en **ambos** lados d
 
 **PASS** con catálogo; **MAJOR** sin catálogo.
 
-Con catálogo: «¿Cómo va Puebla?» + UI Acapulco → `explicit_plant` id=2.  
+Con catálogo: «¿Cómo va Puebla?» + UI Acapulco → `explicit_plant` id=2.
 Sin catálogo: misma frase → `ui_plant_anchor` Acapulco (carga evidencia de la UI). Si `public.plantas` falla o el pool no consulta, Puebla se trata como Acapulco.
 
 ## 7. AUTHZ
@@ -141,7 +141,7 @@ MINOR: etiquetas `snapshot` y `bitacora_window` (kind, no calendario) también d
 
 **PASS** para la frase auditada; MINOR en variantes.
 
-Contrato + guard reemplazan «No se han tomado medidas.» Probe: esa frase → «No encontré una acción DICF asociada.»  
+Contrato + guard reemplazan «No se han tomado medidas.» Probe: esa frase → «No encontré una acción DICF asociada.»
 «No se tomaron medidas ni hay seguimiento.» **no** se reescribe.
 
 ## 14. Client materiality
@@ -287,7 +287,7 @@ Before/after: **10.5 / 20 = 52.5%**. Delta **0.0 pp**. Sin promoción.
 
 ## 28. Manual validation status
 
-`MANUAL_CHAT_VALIDATION = PENDING`  
+`MANUAL_CHAT_VALIDATION = PENDING`
 `PRODUCTION_MANUAL_VALIDATION = NOT_YET_TESTABLE`
 
 Aun con este AUDIT, falta: FIX de MAJORs, E2E local/runtime cuando se autorice, ship controlado, prueba en Render.

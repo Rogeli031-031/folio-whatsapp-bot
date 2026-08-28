@@ -170,10 +170,10 @@ CEL            → executive-cycle-composer.js
 planner.js     → executive-cycle-composer.js
 ```
 
-CEL **no** viaja sin `lib/director-ia-executive-cycle-composer.js`.  
+CEL **no** viaja sin `lib/director-ia-executive-cycle-composer.js`.
 PRE_CLOSE **no** viaja en runtime de chat sin el mismo composer + `chat.js` + `planner.js`.
 
-`CEL_SHIP_DEPENDENCY = PRE_CLOSE_SHARED_COMPOSER`  
+`CEL_SHIP_DEPENDENCY = PRE_CLOSE_SHARED_COMPOSER`
 `ISOLATED_CEL_SHIP = NO`
 
 ## 5. SQL 020
@@ -261,7 +261,7 @@ CURRENT_TASK: no entra en LC-*.
 
 Después de CEL REAUDIT / 1141: solo CURRENT_TASK, ARCH readiness, este PACKAGE. **Sin** cambio de product code posterior.
 
-`TEST_EVIDENCE_FRESH = YES`  
+`TEST_EVIDENCE_FRESH = YES`
 `RETEST_REQUIRED_BEFORE_COMMIT = NO` (por freshness). El LC-CHAT POST_COMMIT_TEST_GATE sigue siendo la suite Director IA **cuando** se autorice commit.
 
 ## 12. Ship order (not executed)
@@ -290,8 +290,8 @@ SQL puede ir después del deploy **hoy** (chat no usa 020). Más seguro: aplicar
 | 5 | Acapulco | ¿Cómo va Puebla? | CEL explicit / 403 | Puebla o deny | respuesta Acapulco |
 | 6 | — | Prepárame para el pre-cierre | PRE_CLOSE | composer PRE_CLOSE | pack CEL o month_close FINAL |
 
-No wording GPT literal.  
-`MANUAL_CHAT_VALIDATION = PENDING`  
+No wording GPT literal.
+`MANUAL_CHAT_VALIDATION = PENDING`
 `PRODUCTION_MANUAL_VALIDATION = NOT_YET_TESTABLE`
 
 ## 14. Rollback (not executed)

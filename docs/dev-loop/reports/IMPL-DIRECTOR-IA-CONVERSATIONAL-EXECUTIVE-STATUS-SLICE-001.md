@@ -280,8 +280,8 @@ Los tests automáticos no constituyen aceptación UX.
 
 ## 29. Matrix impact
 
-Before: **10.5 / 20 = 52.5%**  
-After: **10.5 / 20 = 52.5%**  
+Before: **10.5 / 20 = 52.5%**
+After: **10.5 / 20 = 52.5%**
 Delta: **0.0 pp**
 
 Sin promoción de filas.

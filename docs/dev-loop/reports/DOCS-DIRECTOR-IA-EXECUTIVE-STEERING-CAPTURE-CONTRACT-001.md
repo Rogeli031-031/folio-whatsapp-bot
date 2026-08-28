@@ -112,7 +112,7 @@ Congelados en contrato §3. Incluyen anti-colapso PROPOSAL/DECISION/COMMITMENT/A
 
 Definición contractual: atestación estructurada con provenance de que el contenido fue capturado/declarado en ese contexto.
 
-Defendible: «quedó registrado que Acapulco se comprometió a +40 t.»  
+Defendible: «quedó registrado que Acapulco se comprometió a +40 t.»
 No defendible: «aumentará / vendió / el forecast subió / está aprobado / está cumplido.»
 
 Único estado operativo v1.0. `CONFIRMED` / `APPROVED` / candidatos = FUTURE / AUTHZ.
@@ -165,24 +165,24 @@ Evento que corrige otro. Preserva original. No borra historia.
 
 `declared_by` ≠ `captured_by` ≠ `extracted_by` ≠ `source`.
 
-Modos: `KNOWN_USER` | `KNOWN_ROLE` | `FREE_TEXT_SPEAKER` | `UNKNOWN`.  
+Modos: `KNOWN_USER` | `KNOWN_ROLE` | `FREE_TEXT_SPEAKER` | `UNKNOWN`.
 Transcript name ≠ user id. Role ≠ persona.
 
 ---
 
 ## 16. Provenance
 
-Mínimo RECORDED: identity, type, state, raw_text, source_type, captured_by, captured_at, modo de declared_by.  
-Opcional: declared_at, meeting_ref, source_id/offset, scope, period, quantity, baseline, supersedes.  
+Mínimo RECORDED: identity, type, state, raw_text, source_type, captured_by, captured_at, modo de declared_by.
+Opcional: declared_at, meeting_ref, source_id/offset, scope, period, quantity, baseline, supersedes.
 UNKNOWN > inventar.
 
 ---
 
 ## 17. Value / scope / period semantics
 
-Payload opcional (metric/value|delta/unit). Obligatorio **si** hay métrica estructurable para trazabilidad (+40 t).  
-Scope: PLANT / MULTI_PLANT / ZONE / OTHER_EXPLICIT / UNKNOWN. Scope ≠ authz.  
-Period: solo el declarado, no el mes de la junta por defecto.  
+Payload opcional (metric/value|delta/unit). Obligatorio **si** hay métrica estructurable para trazabilidad (+40 t).
+Scope: PLANT / MULTI_PLANT / ZONE / OTHER_EXPLICIT / UNKNOWN. Scope ≠ authz.
+Period: solo el declarado, no el mes de la junta por defecto.
 Baseline: solo si existe; PRE_CLOSE no se copia solo.
 
 ---
@@ -207,7 +207,7 @@ Fuera de v1.0. «Si X entonces Y» ≠ COMMITMENT. Sin tipo SCENARIO. Sin engine
 
 ## 21. Automated extraction boundary
 
-Transcript → candidato FUTURE → captura humana → RECORDED.  
+Transcript → candidato FUTURE → captura humana → RECORDED.
 LLM no confirma, no inventa speaker/quantity/period/plant/cause, no aprueba.
 
 ---
@@ -220,16 +220,16 @@ Fuente posible, no dominio. Runtime Plaud fuera. Compatible con SOURCE → candi
 
 ## 23. IES / Evidence Builder boundary
 
-**Domain first.** No es evidence IES directa.  
-`IES_REVIEW_REQUIRED` antes de proyectar. `02`/`04` no modificados.  
+**Domain first.** No es evidence IES directa.
+`IES_REVIEW_REQUIRED` antes de proyectar. `02`/`04` no modificados.
 EB: compatible; no SYNC en esta tarea.
 
 ---
 
 ## 24. Reasoning Engine boundary
 
-RECORDED COMMITMENT = evidencia de **declaración**, no de cumplimiento.  
-HUMAN_DECLARED_CAUSE = evidencia de **atribución**, no de causa.  
+RECORDED COMMITMENT = evidencia de **declaración**, no de cumplimiento.
+HUMAN_DECLARED_CAUSE = evidencia de **atribución**, no de causa.
 `RE_REVIEW_REQUIRED` antes de N5. `05` no modificado.
 
 ---

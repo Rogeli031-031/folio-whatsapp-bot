@@ -471,7 +471,7 @@ Roles físicos: JWT colapsa a ZP / AD / GG / GA / GV / CF. Permisos de catálogo
 | SUPERSEDE de terceros | No existe | `AUTHZ_DECISION_REQUIRED` |
 | LINK_ACTION | No | Diferido |
 
-**`AUTHZ_DECISION_REQUIRED`:** sí, **antes de implementar CONFIRM / SUPERSEDE ajeno**.  
+**`AUTHZ_DECISION_REQUIRED`:** sí, **antes de implementar CONFIRM / SUPERSEDE ajeno**.
 **No** bloquea el first slice `RECORDED` ni esta ARCH.
 
 No se propone `DECISION-…-AUTHZ-001` como NEXT_TASK: el G3 debe congelar semántica primero; el DECISION de confirmación organizacional queda como prerrequisito de un slice **posterior**.
@@ -489,9 +489,9 @@ No se propone `DECISION-…-AUTHZ-001` como NEXT_TASK: el G3 debe congelar semá
 | `RE_REVIEW` | No | No | Solo si N5 usa estos objects |
 | `CONSTITUTION_REVIEW` | No | No | Solo si se propusiera truth class constitucional |
 
-Qué puede diseñarse sin tocar contratos: **esta ARCH completa.**  
-Qué requiere G3: persistir tipos con nombres que parecen verdad (COMMITMENT, CAUSE) sin un contrato que prohíba colapsarlos.  
-IES: **no** acepta human-origin como observation en first slice.  
+Qué puede diseñarse sin tocar contratos: **esta ARCH completa.**
+Qué requiere G3: persistir tipos con nombres que parecen verdad (COMMITMENT, CAUSE) sin un contrato que prohíba colapsarlos.
+IES: **no** acepta human-origin como observation en first slice.
 RE: **no** distingue commitment todavía; no debe hacerlo el chat.
 
 ---
@@ -614,8 +614,8 @@ Clasificación **conceptual**. Las cifras **no** se copian a contratos.
 | 24 | First slice | B (manual + cause, `RECORDED`) |
 | 25 | Readiness | **READY_WITH_LIMITS** |
 
-No `READY` (hace falta G3; CONFIRMED/Plaud/Council diferidos).  
-No `STOPPED` (no falta una decisión humana para **cerrar esta ARCH**).  
+No `READY` (hace falta G3; CONFIRMED/Plaud/Council diferidos).
+No `STOPPED` (no falta una decisión humana para **cerrar esta ARCH**).
 No `BLOCKED` (no hay contradicción contractual).
 
 ---

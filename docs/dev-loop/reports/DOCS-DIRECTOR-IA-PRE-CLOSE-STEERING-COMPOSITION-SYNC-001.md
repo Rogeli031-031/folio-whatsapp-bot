@@ -106,9 +106,9 @@ Fechas históricas de cabecera no se reescribieron.
 
 ## 15. Matrix impact
 
-Before: 10.5 / 20 = 52.5%  
-After: 10.5 / 20 = 52.5%  
-Delta: 0.0 pp  
+Before: 10.5 / 20 = 52.5%
+After: 10.5 / 20 = 52.5%
+Delta: 0.0 pp
 
 **MATRIX_REVIEW_REQUIRED:** ninguno. PRE_CLOSE no es fila M0–M20.
 

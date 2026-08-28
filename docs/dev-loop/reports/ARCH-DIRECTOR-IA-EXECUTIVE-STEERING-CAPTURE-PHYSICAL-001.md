@@ -210,8 +210,8 @@ Zona («Zona Provincia debe cerrar positiva»): **una fila** `ZONE`. No expandir
 
 Tabla `event_relations`: `from_event_id`, `to_event_id`, `relation_kind` ∈ {`REFERS_PROPOSAL`,`CORRECTS`,`SUPERSEDES`}, `created_at`, `created_by_usuario_id`.
 
-`DECISION` **puede** `REFERS_PROPOSAL`. No obligatorio.  
-No `proposal_event_id` suelto: un solo patrón reutilizable.  
+`DECISION` **puede** `REFERS_PROPOSAL`. No obligatorio.
+No `proposal_event_id` suelto: un solo patrón reutilizable.
 Sin self-ref. Insert-only.
 
 ---
@@ -238,8 +238,8 @@ First slice: solo `CORRECTS` (+ `SUPERSEDES` si el sucesor reemplaza vigencia). 
 
 El original no se reescribe. `vigor` en el original pasa a `SUPERSEDED` **solo** en la misma transacción que el INSERT de la relación (metadata auditable; `created_by` en la relación).
 
-Rechazada A (`superseded_by` como único mutador sin relación).  
-Rechazada C (flag suelto).  
+Rechazada A (`superseded_by` como único mutador sin relación).
+Rechazada C (flag suelto).
 D (solo query) es el fallback de lectura; B es la fuente de la arista.
 
 ≠ `igf.versions.financial_state`.
@@ -311,11 +311,11 @@ No heredar `canViewFinancialActual` ni `acceso_igf_forecast_kpis`.
 
 **`AUTHZ_DECISION_REQUIRED`.**
 
-El contrato no congela quién puede `RECORD`.  
-Bitácora/AR: write = acceso de planta a **notas/acciones**, no a atestación tipada de junta.  
+El contrato no congela quién puede `RECORD`.
+Bitácora/AR: write = acceso de planta a **notas/acciones**, no a atestación tipada de junta.
 ACTUAL_FINANCIAL: ZP/AD finalizan P&L; **no** se copia.
 
-Prohibido inferir «ZP/AD pueden RECORD».  
+Prohibido inferir «ZP/AD pueden RECORD».
 `CONFIRM` / `APPROVE` / SUPERSEDE ajeno / `LINK_ACTION` siguen PENDING.
 
 Por la regla de terminal de esta tarea: **STOPPED**, no IMPL.
@@ -324,7 +324,7 @@ Por la regla de terminal de esta tarea: **STOPPED**, no IMPL.
 
 ## 22. Automated extraction boundary
 
-**No** en la misma tabla. First slice = solo `RECORDED` humano.  
+**No** en la misma tabla. First slice = solo `RECORDED` humano.
 `EXTRACTED_CANDIDATE` = store o estado futuro. Mezclarlos violaría el contrato (transcript ≠ confirmed; LLM ≠ confirmation).
 
 ---
@@ -367,8 +367,8 @@ No exigir actor user, period, metric, meeting_ref.
 
 **`NO_BACKFILL`**
 
-Plaud/EVAL-003 no se importan como `RECORDED`. Haría canónico un transcript no gobernado.  
-`MANUAL_CURATED_BACKFILL` solo tras AUTHZ + revisión humana, **otra** tarea.  
+Plaud/EVAL-003 no se importan como `RECORDED`. Haría canónico un transcript no gobernado.
+`MANUAL_CURATED_BACKFILL` solo tras AUTHZ + revisión humana, **otra** tarea.
 `CANDIDATE_ONLY_FUTURE` para ingestión Plaud.
 
 ---
@@ -417,7 +417,7 @@ Store de **dominio** en `arr`, no `eks`, no IES. First slice: cero writes N1. Ad
 
 **Selección: C** — IMPL (cuando exista AUTHZ) → G2 Index/EKE/CAPACIDADES.
 
-El contrato v1.0 **ya** es autoridad de semántica. G2 de inventario no abre runtime (LOOP: G2 = editar docs canónicos). PRE_CLOSE sincronizó docs **después** del runtime. FINANCIAL-ACTUAL indexó en G2 separado.  
+El contrato v1.0 **ya** es autoridad de semántica. G2 de inventario no abre runtime (LOOP: G2 = editar docs canónicos). PRE_CLOSE sincronizó docs **después** del runtime. FINANCIAL-ACTUAL indexó en G2 separado.
 G2 **no** es el siguiente gate: lo es AUTHZ de escritura.
 
 ---
@@ -479,7 +479,7 @@ Rechazadas: A (schema huérfano), C (API prematura), D/E/F (fuera de contrato).
 | 37 | G2 = C (tras IMPL) |
 | 38 | First slice B, bloqueado por AUTHZ |
 
-No `READY` / `READY_WITH_LIMITS` (la regla de terminal exige STOPPED).  
+No `READY` / `READY_WITH_LIMITS` (la regla de terminal exige STOPPED).
 No `BLOCKED` (no hay contradicción contractual).
 
 ---

@@ -2,10 +2,10 @@
 
 ## Contrato de dominio — EXECUTIVE_STEERING_CAPTURE / EXECUTIVE_STEERING_EVENT
 
-**Documento:** `docs/director-ia/EXECUTIVE-STEERING-CAPTURE-CONTRACT.md`  
-**Versión:** 1.0  
-**Estado:** EXECUTIVE-STEERING-CAPTURE-CONTRACT v1.0 — creado bajo G3 autorizado (`DOCS-DIRECTOR-IA-EXECUTIVE-STEERING-CAPTURE-CONTRACT-001`). **APPROVED_FOR_FREEZE** de semántica. **RUNTIME = PENDING.** **AUTHZ_CONFIRMATION = PENDING.**  
-**Tipo:** Contrato de dominio / capability. **No** es capa de pipeline. **No** es `07`. **No** es Channel Projection.  
+**Documento:** `docs/director-ia/EXECUTIVE-STEERING-CAPTURE-CONTRACT.md`
+**Versión:** 1.0
+**Estado:** EXECUTIVE-STEERING-CAPTURE-CONTRACT v1.0 — creado bajo G3 autorizado (`DOCS-DIRECTOR-IA-EXECUTIVE-STEERING-CAPTURE-CONTRACT-001`). **APPROVED_FOR_FREEZE** de semántica. **RUNTIME = PENDING.** **AUTHZ_CONFIRMATION = PENDING.**
+**Tipo:** Contrato de dominio / capability. **No** es capa de pipeline. **No** es `07`. **No** es Channel Projection.
 **Orden futuro en Index:** `—` (misma convención que `FINANCIAL-ACTUAL-EVIDENCE-CONTRACT.md` y `DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md`).
 
 Fuente normativa transcrita: `docs/dev-loop/reports/ARCH-DIRECTOR-IA-EXECUTIVE-STEERING-CAPTURE-001.md`. Este archivo no rediseña esa arquitectura.
@@ -25,8 +25,8 @@ Fuente normativa transcrita: `docs/dev-loop/reports/ARCH-DIRECTOR-IA-EXECUTIVE-S
 | `docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md` | Índice. G2 posterior indexará este archivo como `—`. Este contrato **no** modifica el índice. |
 | `docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md` | Inventario. G2 posterior. Este contrato **no** lo modifica. |
 
-En conflicto, prevalece la Constitución.  
-Este documento **no modifica** Constitución, `04` ni `05`.  
+En conflicto, prevalece la Constitución.
+Este documento **no modifica** Constitución, `04` ni `05`.
 **No** redefine N1–N5. **No** alimenta el IES oficial. **No** implementa runtime.
 
 ---
@@ -35,8 +35,8 @@ Este documento **no modifica** Constitución, `04` ni `05`.
 
 Gobierna la semántica de **EXECUTIVE_STEERING_CAPTURE**: registro estructurado de lo que **nace durante** una junta o contexto ejecutivo equivalente (propuesta, decisión, compromiso, causa declarada, corrección).
 
-No crea fuente física. No crea schema. No crea SQL. No crea API. No crea UI.  
-No integra Plaud. No implementa Consejo, post-cierre, what-if ni live copilot.  
+No crea fuente física. No crea schema. No crea SQL. No crea API. No crea UI.
+No integra Plaud. No implementa Consejo, post-cierre, what-if ni live copilot.
 No decide AUTHZ de confirmación organizacional.
 
 Grain: un `EXECUTIVE_STEERING_EVENT`. Una junta puede originar N events. Un event no exige planta, número, periodo ni responsable.
@@ -71,9 +71,9 @@ Los cinco tipos son **tipos del mismo objeto**, no stores separados ni un blob d
 4. `HUMAN_DECLARED_CAUSE`
 5. `CORRECTION`
 
-No existe tipo `MEETING_STATEMENT` aparte: el envelope **es** el statement.  
-No existe tipo `SCENARIO` en v1.0.  
-No existe tipo `REJECTION` (es `DECISION` con outcome `rejected`).  
+No existe tipo `MEETING_STATEMENT` aparte: el envelope **es** el statement.
+No existe tipo `SCENARIO` en v1.0.
+No existe tipo `REJECTION` (es `DECISION` con outcome `rejected`).
 No existe tipo `ACTION` en este store.
 
 ---
@@ -198,7 +198,7 @@ Para cada tipo: definición, condición mínima, qué permite afirmar, qué no, 
 | Relaciones | Futuro: 0..N `ACTION` (Action Register). **No obligatorio** en v1.0. **No** proyección automática. |
 | Corrección | Sí. Un cambio de compromiso es sucesor + supersession, no overwrite. |
 
-`COMMITMENT` → 0..N `ACTION`.  
+`COMMITMENT` → 0..N `ACTION`.
 `COMMITMENT` ≠ `ACTION`.
 
 ### 5.4 HUMAN_DECLARED_CAUSE
@@ -243,7 +243,7 @@ El sucesor puede ser:
 - un `CORRECTION` (mínimo), o
 - un event del mismo tipo que el original (p. ej. nuevo `COMMITMENT` de 35 t) **más** un `CORRECTION` o un `supersedes_event_ref` en el sucesor.
 
-El original pasa a vigencia `SUPERSEDED` (de este dominio). Histórico consultable.  
+El original pasa a vigencia `SUPERSEDED` (de este dominio). Histórico consultable.
 Campos conceptuales: `supersedes_event_ref` / `corrects_event_ref`, actor de corrección, `corrected_at`, `reason_text` (null si no se dijo).
 
 Ejemplos:
@@ -336,17 +336,17 @@ Si no hay número («hay que revisar el descuento»): payload null + `raw_text`.
 
 `scope_kind` ∈ {`PLANT`, `MULTI_PLANT`, `ZONE`, `OTHER_EXPLICIT`, `UNKNOWN`}.
 
-Scope del **event** ≠ authz del lector/escritor. No mezclar.  
+Scope del **event** ≠ authz del lector/escritor. No mezclar.
 No inventar autoridad de zona ni total financiero regional.
 
 ### 9.3 Period
 
-Preservar YYYY-MM, fecha, rango u otro periodo **explícito** en la declaración.  
+Preservar YYYY-MM, fecha, rango u otro periodo **explícito** en la declaración.
 Prohibido inferir el mes de la junta si el contenido habla de otro periodo.
 
 ### 9.4 Baseline
 
-Si el enunciado es un cambio (+40 t, bajar descuento), puede guardarse `baseline_ref` **cuando exista**.  
+Si el enunciado es un cambio (+40 t, bajar descuento), puede guardarse `baseline_ref` **cuando exista**.
 No inventar. PRE_CLOSE puede ser fuente futura; **no** se copia automáticamente a este store.
 
 ---
@@ -361,7 +361,7 @@ No inventar. PRE_CLOSE puede ser fuente futura; **no** se copia automáticamente
 | Store | Este dominio | `arr.action_register_items` / DICF |
 | «compromiso» DICF | — | Fecha de ejecución de la acción |
 
-Linkage futuro `COMMITMENT` → 0..N `ACTION`: permitido, no obligatorio, no automático en v1.0.  
+Linkage futuro `COMMITMENT` → 0..N `ACTION`: permitido, no obligatorio, no automático en v1.0.
 `LINK_ACTION` con autoridad organizacional: `AUTHZ_DECISION_REQUIRED`.
 
 ---
@@ -376,8 +376,8 @@ Ningún event muta automáticamente:
 - `ACTUAL_FINANCIAL`
 - FINAL
 
-Ningún `COMMITMENT` se convierte solo en forecast.  
-Ninguna `DECISION` modifica sola fuentes operacionales.  
+Ningún `COMMITMENT` se convierte solo en forecast.
+Ninguna `DECISION` modifica sola fuentes operacionales.
 Esas proyecciones exigirían contratos y runtime propios.
 
 ---
@@ -386,7 +386,7 @@ Esas proyecciones exigirían contratos y runtime propios.
 
 **Fuera de v1.0.** No se crea tipo `SCENARIO`.
 
-«Si hacemos X podríamos lograr Y» = candidato de escenario / what-if.  
+«Si hacemos X podríamos lograr Y» = candidato de escenario / what-if.
 **No** es `COMMITMENT` salvo declaración **explícita** de asunción.
 
 Live o Plaud no cambian esta frontera.
@@ -421,7 +421,7 @@ Vive en **domain store**. Se proyecta o adapta a ObservationRecord / IES **solo*
 
 v1.0: cero IES, cero Evidence Builder runtime.
 
-`IES_REVIEW_REQUIRED` = sí, **antes de** cualquier proyección a IES.  
+`IES_REVIEW_REQUIRED` = sí, **antes de** cualquier proyección a IES.
 `02` / `04`: **no** se modifican por este archivo.
 
 ---
@@ -436,7 +436,7 @@ v1.0: cero IES, cero Evidence Builder runtime.
 
 `MODEL_HYPOTHESIS` solo en N5 (`05`). Guardar un event **no** emite hipótesis.
 
-`RE_REVIEW_REQUIRED` = sí, **antes de** que N5 razone sobre estos objetos.  
+`RE_REVIEW_REQUIRED` = sí, **antes de** que N5 razone sobre estos objetos.
 `05`: **no** se modifica por este archivo.
 
 ---
@@ -459,9 +459,9 @@ No se añade truth class constitucional. `COMMITMENT` / `HUMAN_DECLARED_CAUSE` s
 
 Captura/atestación ≠ autoridad organizacional.
 
-No se inventa quién confirma.  
-No se asume que ZP/AD heredan permisos de ACTUAL_FINANCIAL.  
-`acceso_igf_forecast_kpis` no autoriza commitment.  
+No se inventa quién confirma.
+No se asume que ZP/AD heredan permisos de ACTUAL_FINANCIAL.
+`acceso_igf_forecast_kpis` no autoriza commitment.
 Speaker ≠ authenticated actor.
 
 VIEW / CREATE `RECORDED` de first slice físico futuro: fuera de este archivo (ARCH física + authz de planta existente). Este contrato no abre runtime.
@@ -481,7 +481,7 @@ PRE_CLOSE baseline (externo, requery)
   → OUTCOME (evaluación futura; no este store)
 ```
 
-Post-cierre puede comparar expected (payload + period + scope) contra actual/final **externo**.  
+Post-cierre puede comparar expected (payload + period + scope) contra actual/final **externo**.
 **No** se crea `FULFILLED` automáticamente.
 
 Live: mismos tipos y estados; fuente live ≠ mayor autoridad.
@@ -517,7 +517,7 @@ EXECUTIVE_STEERING_EVENT
   decision_outcome?             # solo DECISION
 ```
 
-UNKNOWN / null **obligatorio** cuando el dato no está demostrado.  
+UNKNOWN / null **obligatorio** cuando el dato no está demostrado.
 No hay meeting store canónico: `meeting_ref` es referencia externa.
 
 ---

@@ -110,8 +110,8 @@ Revalidado: junta, pre-cierre, «cómo cerramos julio», IGF, brief diario inequ
 
 ## 13. PRE_CLOSE dependency/ship boundary
 
-`CEL_SHIP_DEPENDENCY = PRE_CLOSE_SHARED_COMPOSER`  
-`ISOLATED_CEL_SHIP = NO`  
+`CEL_SHIP_DEPENDENCY = PRE_CLOSE_SHARED_COMPOSER`
+`ISOLATED_CEL_SHIP = NO`
 No autoriza empaquetado ni deploy.
 
 ## 14. Future integration boundaries

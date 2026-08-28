@@ -79,7 +79,7 @@ No se implementa middleware, tabla, API ni runtime en esta tarea.
 | SEH | NO | NONE | NO | NONE | NO | NO | NO |
 | OTRA_CLAVE / no autorizado explícitamente | NO | NONE | NO | NONE | NO | NO | NO |
 
-RECORD aplica por igual a: `RECORD_PROPOSAL`, `RECORD_DECISION`, `RECORD_COMMITMENT`, `RECORD_HUMAN_DECLARED_CAUSE`, `RECORD_CORRECTION`.  
+RECORD aplica por igual a: `RECORD_PROPOSAL`, `RECORD_DECISION`, `RECORD_COMMITMENT`, `RECORD_HUMAN_DECLARED_CAUSE`, `RECORD_CORRECTION`.
 No hay permisos separados por tipo en este slice. Los tipos **siguen** siendo semánticamente distintos.
 
 ### ADMIN_FUNCTIONS (no es fila de rol)
@@ -141,7 +141,7 @@ RECORD crea `attestation_state=RECORDED`. No concede CONFIRM/APPROVE.
 
 ## 6. PLANT / MULTI_PLANT / ZONE
 
-Ver matriz §2. Fail closed para GG: una planta o un fragmento de zona fuera de assigned → DENY.  
+Ver matriz §2. Fail closed para GG: una planta o un fragmento de zona fuera de assigned → DENY.
 Zona Provincia completa: GG **no** si el evento incluye plantas fuera de su scope, o si no se puede demostrar contención.
 
 ---

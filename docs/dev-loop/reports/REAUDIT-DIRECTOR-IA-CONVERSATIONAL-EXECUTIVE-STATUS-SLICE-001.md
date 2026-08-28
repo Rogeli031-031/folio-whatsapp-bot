@@ -48,8 +48,8 @@ Probes independientes (no los tests del FIX) confirman need layer sobre planner 
 
 Hallazgos nuevos: 0 CRITICAL, 0 MAJOR, 0 MINOR. 3 OBSERVATION (no material para reabrir el FIX).
 
-`MANUAL_CHAT_VALIDATION = PENDING`.  
-`PRODUCTION_MANUAL_VALIDATION = NOT_YET_TESTABLE`.  
+`MANUAL_CHAT_VALIDATION = PENDING`.
+`PRODUCTION_MANUAL_VALIDATION = NOT_YET_TESTABLE`.
 Render pre-CEL no se usó como PASS ni FAIL.
 
 ## 2. Independence method
@@ -144,7 +144,7 @@ Hola + Acapulco: contextual, sin OpenAI, sin lista STALE. Junta / pre-cierre / c
 
 ## 13. Production / manual
 
-`PRODUCTION_MANUAL_VALIDATION = NOT_YET_TESTABLE` (CEL fuera de origin/main). Observación Render pre-CEL no usada.  
+`PRODUCTION_MANUAL_VALIDATION = NOT_YET_TESTABLE` (CEL fuera de origin/main). Observación Render pre-CEL no usada.
 `MANUAL_CHAT_VALIDATION = PENDING`.
 
 ## 14. Findings table

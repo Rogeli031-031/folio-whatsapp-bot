@@ -205,7 +205,7 @@ Default del caso E2E: **COMPARE_WITH_LABELS**. Prohibido fusionar junio/julio/ag
 
 **Congelado:** `NO_DICF_ACTION` ≠ `NO_MEASURES_TAKEN`.
 
-Afirmable: «No encontré una acción DICF asociada a ese cliente.»  
+Afirmable: «No encontré una acción DICF asociada a ese cliente.»
 No afirmable: «No se han tomado medidas», salvo evidencia multi-fuente explícita (AR + DICF + bitácora) que el pack marque como tal.
 
 ## 15. User-language boundary

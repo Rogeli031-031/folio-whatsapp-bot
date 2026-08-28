@@ -169,7 +169,7 @@ Recommended message (do **not** commit yet):
 docs(dev-loop): record accumulated Director IA ship evidence
 ```
 
-PRE_COMMIT_TEST_GATE: none (markdown).  
+PRE_COMMIT_TEST_GATE: none (markdown).
 POST_COMMIT_TEST_GATE: none.
 
 ### Stage command (PowerShell) — ONLY this step now
@@ -234,7 +234,7 @@ Depends_on: LC-EVIDENCE committed (orden; no require de código).
 
 Message reserved: `feat(director-ia): add dormant executive steering store`
 
-PRE_COMMIT_TEST_GATE: confirmar que chat/server no aparecen en el stage.  
+PRE_COMMIT_TEST_GATE: confirmar que chat/server no aparecen en el stage.
 POST_COMMIT_TEST_GATE: opcional `node --test test/director-ia-executive-steering-capture.test.js` (humano; no exigido ahora; TEST_EVIDENCE_FRESH=YES).
 
 ## 7. Phase 6 — LC-CHAT — NOT_YET_TO_EXECUTE
@@ -243,7 +243,7 @@ ATOMIC=YES. Los 14 paths juntos o no se commitea.
 
 Message reserved: `feat(director-ia): add pre-close composer and conversational executive layer`
 
-PRE_COMMIT_TEST_GATE: stage contiene composer + CEL + chat + planner; ningún split.  
+PRE_COMMIT_TEST_GATE: stage contiene composer + CEL + chat + planner; ningún split.
 POST_COMMIT_TEST_GATE: REVIEW no exige rerun pre-commit (`RETEST_REQUIRED_BEFORE_COMMIT=NO`). Tras LC-CHAT, HUMAN puede correr `node --test test/director-ia-*.js` (1141 suite). No se exige en este paso.
 
 ## 8. Phase 7 — LC-DOCS — NOT_YET_TO_EXECUTE
@@ -258,8 +258,8 @@ R7 LIMIT se preserva (CEL no nombrado en Index; cabecera contrato RUNTIME/AUTHZ 
 
 ## 9. Phase 8 — tests
 
-`TEST_EVIDENCE_FRESH = YES`  
-`RETEST_REQUIRED_BEFORE_COMMIT = NO`  
+`TEST_EVIDENCE_FRESH = YES`
+`RETEST_REQUIRED_BEFORE_COMMIT = NO`
 CEL REAUDIT PASS; 1141/0/0; LOCAL_E2E_HARNESS PASS.
 
 No se ejecutaron tests en esta tarea.
@@ -270,8 +270,8 @@ Sigue modificado. SHIP=NO. Tras cada `git add` humano: `git status` y confirmar 
 
 ## 11. Limits preserved
 
-R7 LIMIT, R9 LIMIT, R10 LIMIT (sin DOWN). No-Orphan sin cambio.  
-`MANUAL_CHAT_VALIDATION = PENDING`  
+R7 LIMIT, R9 LIMIT, R10 LIMIT (sin DOWN). No-Orphan sin cambio.
+`MANUAL_CHAT_VALIDATION = PENDING`
 `PRODUCTION_MANUAL_VALIDATION = NOT_YET_TESTABLE`
 
 ## 12. Matrix

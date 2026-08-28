@@ -100,13 +100,13 @@ planner.js  → director-ia-executive-cycle-composer.js         (CU-CHAT)
 CEL         → director-ia-executive-cycle-composer.js         (CU-CHAT)
 ```
 
-HEAD `chat.js` / `planner.js`: **no** requieren CEL ni composer.  
+HEAD `chat.js` / `planner.js`: **no** requieren CEL ni composer.
 HEAD: composer, CEL, steering lib, SQL 020 **no existen**.
 
 Requires de CEL/composer hacia módulos **ya en origin/main**: capabilities, commercial-trend, month-close, pre-meeting, client-profile, plant-diagnosis, igf-arr, igf-reviewable, igf-meta-excel, commercial-trend-engine, dashboard-es-zp, action-register-temas.
 
-`conversation-state.js`: sin require nuevo a CEL/composer (solo campos `cycle_mode`).  
-`capabilities.js`: sin require nuevo.  
+`conversation-state.js`: sin require nuevo a CEL/composer (solo campos `cycle_mode`).
+`capabilities.js`: sin require nuevo.
 `tools.js`: lista composer en `sourceFiles` (no `require`).
 
 Steering lib: **ningún** require desde `lib/` de chat ni `server.js`. Solo el test de Steering.
@@ -115,8 +115,8 @@ Ninguna dependencia a archivo externo al package que no exista en `origin/main`.
 
 ## 5. R4 CEL_PRE_CLOSE_ATOMICITY — PASS
 
-`CEL_SHIP_DEPENDENCY = PRE_CLOSE_SHARED_COMPOSER`  
-`ISOLATED_CEL_SHIP = NO`  
+`CEL_SHIP_DEPENDENCY = PRE_CLOSE_SHARED_COMPOSER`
+`ISOLATED_CEL_SHIP = NO`
 `ATOMIC_COMMIT_REQUIRED = YES`
 
 Justificación física: `git cat-file` confirma que composer/CEL no están en `origin/main`. Un LC-CHAT parcial (`chat.js` o `planner.js` dirty sin los dos `??`) deja `MODULE_NOT_FOUND` al load.
@@ -214,7 +214,7 @@ Mtimes (27/08/2026): product/SQL/tests dirty **17:52–18:17**. CEL REAUDIT **18
 
 Tras REAUDIT 1141/0/0 **no** hubo cambio de product / test / SQL. Solo loop.
 
-`TEST_EVIDENCE_FRESH = YES`  
+`TEST_EVIDENCE_FRESH = YES`
 `RETEST_REQUIRED_BEFORE_COMMIT = NO`
 
 El COMMIT humano puede (no debe el agente) reejecutar `node --test test/director-ia-*.js` como POST_COMMIT_TEST_GATE de LC-CHAT.
@@ -251,7 +251,7 @@ Set congelado cubre los riesgos pedidos. Sin ajuste material.
 
 Junta clásica («Prepárame para la junta») ya está en `origin/main`; no es hueco de este package.
 
-`MANUAL_CHAT_VALIDATION = PENDING`  
+`MANUAL_CHAT_VALIDATION = PENDING`
 `PRODUCTION_MANUAL_VALIDATION = NOT_YET_TESTABLE`
 
 ## 15. R14 GIT_DIFF_CLEAN — PASS
@@ -310,8 +310,8 @@ Este REVIEW **sí** viaja en LC-EVIDENCE.
 
 `COMMIT-DIRECTOR-IA-ACCUMULATED-SHIP-PACKAGE-001`
 
-Preparación de secuencia exacta para **HUMAN_APPROVER**.  
-`LOOP_PROTOCOL` §8.10: el implementador no commit/push salvo `allowed_actions`; nunca a `main`.  
+Preparación de secuencia exacta para **HUMAN_APPROVER**.
+`LOOP_PROTOCOL` §8.10: el implementador no commit/push salvo `allowed_actions`; nunca a `main`.
 Cursor/agent **no** ejecuta Git commit / push / merge aunque la tarea se autorice, salvo que el humano liste esa acción **y** el protocolo lo permita. Preferible: el humano aplica los 4 `git add` path-scoped y los 4 commits.
 
 No autorizada. No ejecutada.
