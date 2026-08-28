@@ -551,19 +551,18 @@ describe("plant_diagnosis chat wiring", () => {
     assert.equal(openaiCalls, 1);
     assert.equal(result.context_meta.openai_call_count, 1);
     assert.equal(result.context_meta.mode, "plant_diagnosis");
+    assert.equal(result.context_meta.semantic_need, "EXECUTIVE_STATUS");
+    assert.equal(result.context_meta.executive_composer, true);
     assert.equal(result.context_meta.m9_included, false);
     assert.ok(result.plant_diagnosis.sources.action_register);
     assert.ok(result.plant_diagnosis.sources.igf);
     assert.equal(result.plant_diagnosis.sources.m9, undefined);
-    assert.match(lastPrompt.user, /BLOQUE action_register/);
-    assert.match(lastPrompt.user, /BLOQUE dicf/);
-    assert.match(lastPrompt.user, /BLOQUE bitacora/);
-    assert.match(lastPrompt.user, /BLOQUE commercial_state/);
-    assert.match(lastPrompt.user, /BLOQUE arr/);
-    assert.match(lastPrompt.user, /BLOQUE igf/);
+    assert.match(lastPrompt.user, /PACK EJECUTIVO DETERMINÍSTICO/);
+    assert.match(lastPrompt.user, /SLOT SITUATION/);
+    assert.doesNotMatch(lastPrompt.user, /señala primero los clientes/);
     assert.doesNotMatch(lastPrompt.user, /BLOQUE M9/);
     assert.doesNotMatch(lastPrompt.user, /tema_details/);
-    assert.match(lastPrompt.sys, /Prohibido: causalidad/);
+    assert.match(lastPrompt.sys, /Ausencia no es cero/);
   });
 
   it("GA llama OpenAI una vez con restricciones visibles", async () => {
@@ -597,7 +596,7 @@ describe("plant_diagnosis chat wiring", () => {
     assert.equal(result.ok, true);
     assert.equal(openaiCalls, 1);
     assert.equal(result.plant_diagnosis.sources.igf.status, DIRECTOR_IA_VERACITY.SOURCE_RESTRICTED);
-    assert.match(lastUser, /SOURCE_RESTRICTED/);
+    assert.match(lastUser, /NOT_AUTHORIZED|sin permiso|restringid/i);
     assert.notEqual(result.status, 403);
   });
 

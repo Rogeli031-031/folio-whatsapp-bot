@@ -249,10 +249,12 @@ describe("planner continuity hooks", () => {
 describe("askDirectorIa continuity", () => {
   let askDirectorIa;
   let configureDirectorIaChat;
+  const PUEBLA_CATALOG = [{ planta_id: 1, nombre: "Puebla", clave: "E7" }];
 
   before(() => {
     process.env.ENABLE_DIRECTOR_IA = "true";
     ({ askDirectorIa, configureDirectorIaChat } = require("../lib/director-ia-chat"));
+    configureDirectorIaChat({ plantCatalog: PUEBLA_CATALOG });
   });
 
   afterEach(() => {
@@ -264,6 +266,7 @@ describe("askDirectorIa continuity", () => {
       loadDailySalesDeviationForChat: undefined,
       resolveConversationCandidates: undefined,
       persistentMemoryStore: null,
+      plantCatalog: PUEBLA_CATALOG,
     });
   });
 

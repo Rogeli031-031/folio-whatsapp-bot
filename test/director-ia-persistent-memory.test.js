@@ -246,10 +246,12 @@ describe("askDirectorIa persistent memory — day1/day2", () => {
   let askDirectorIa;
   let configureDirectorIaChat;
   let store;
+  const PUEBLA_CATALOG = [{ planta_id: 1, nombre: "Puebla", clave: "E7" }];
 
   before(() => {
     process.env.ENABLE_DIRECTOR_IA = "true";
     ({ askDirectorIa, configureDirectorIaChat } = require("../lib/director-ia-chat"));
+    configureDirectorIaChat({ plantCatalog: PUEBLA_CATALOG });
   });
 
   afterEach(() => {
@@ -260,6 +262,7 @@ describe("askDirectorIa persistent memory — day1/day2", () => {
       loadFinancialDiagnosisForChat: undefined,
       persistentMemoryStore: null,
       loadActionPersonBoardForChat: undefined,
+      plantCatalog: PUEBLA_CATALOG,
     });
   });
 
