@@ -25,6 +25,7 @@ const {
   isSteeringReadQuestion,
   plannerIntentYieldsToExecutiveStatus,
   buildExecutiveStatusPack,
+  projectExecutiveTrendChannels,
   buildExecutiveStatusPrompt,
   applyExecutiveLanguageGuard,
   buildNeutralGreeting,
@@ -363,6 +364,221 @@ describe("CEL pack + composer", () => {
     assert.ok(pack.periods.distinct_periods.every((p) => !["snapshot", "bitacora_window"].includes(p)));
   });
 
+  it("TREND no emite tendencia combinada CASA/comisionista desde ols suelto", () => {
+    const pack = buildExecutiveStatusPack({
+      assembled: assembleOk(),
+      trend: { ok: true, range_start: "2026-07-24", range_end: "2026-08-23", ols: { direction: "DOWN" }, compare: true },
+      scope: { planta_id: 1, plant_name: "Acapulco" },
+    });
+    const trend = pack.items.find((i) => i.slot === "TREND");
+    assert.equal(trend.truth_semantics, "OLS_PER_CHANNEL");
+    assert.equal(trend.payload.direction, undefined);
+    assert.equal(trend.payload.casa.direction, null);
+    assert.equal(trend.payload.comisionista.direction, null);
+    const prompt = buildExecutiveStatusPrompt(pack, "¿Cómo vamos?");
+    assert.doesNotMatch(prompt.userContent, /CASA\/comisionista/);
+    assert.doesNotMatch(prompt.userContent, /tendencia_ols=DOWN/);
+    assert.match(prompt.userContent, /CASA availability=/);
+    assert.match(prompt.userContent, /COMISIONISTA availability=/);
+  });
+});
+
+describe("CEL TREND channel independence", () => {
+  function channelBlock(key, direction, over = {}) {
+    const missing = direction == null;
+    return {
+      channel: key,
+      range_start: over.range_start || "2026-07-24",
+      range_end: over.range_end || "2026-08-23",
+      ols: { direction: missing ? "INSUFFICIENT_DATA" : direction },
+      limitations: missing ? ["insufficient_observations"] : [],
+      provenance: { source: "commercial-trend-engine", canal: key },
+    };
+  }
+
+  function trendBoth(casaDir, comiDir, over = {}) {
+    const casa = casaDir === "NOT_AVAILABLE" ? null : channelBlock("casa", casaDir === "UNKNOWN" ? null : casaDir, {
+      range_start: over.casaFrom,
+      range_end: over.casaTo,
+    });
+    const comi =
+      comiDir === "NOT_AVAILABLE"
+        ? null
+        : channelBlock("comisionista", comiDir === "UNKNOWN" ? null : comiDir, {
+            range_start: over.comiFrom,
+            range_end: over.comiTo,
+          });
+    return {
+      ok: true,
+      compare: true,
+      channel: "both",
+      ols: null,
+      range_start: over.casaFrom || "2026-07-24",
+      range_end: over.casaTo || "2026-08-23",
+      channels: { casa, comisionista: comi },
+    };
+  }
+
+  function trendItem(casaDir, comiDir, over) {
+    const pack = buildExecutiveStatusPack({
+      assembled: assembleOk(),
+      trend: trendBoth(casaDir, comiDir, over),
+      scope: { planta_id: 1, plant_name: "Acapulco" },
+    });
+    return pack.items.find((i) => i.slot === "TREND");
+  }
+
+  it("A CASA DOWN + COMISIONISTA UP llegan separados y divergen", () => {
+    const item = trendItem("DOWN", "UP");
+    assert.equal(item.payload.casa.direction, "DOWN");
+    assert.equal(item.payload.comisionista.direction, "UP");
+    assert.equal(item.payload.diverge, true);
+    assert.match(item.summary, /Divergen/);
+    assert.doesNotMatch(item.summary, /CASA\/comisionista/);
+    const projected = projectExecutiveTrendChannels(trendBoth("DOWN", "UP"));
+    assert.equal(projected.casa.direction, "DOWN");
+    assert.equal(projected.comisionista.direction, "UP");
+  });
+
+  it("B CASA UP + COMISIONISTA DOWN llegan separados", () => {
+    const item = trendItem("UP", "DOWN");
+    assert.equal(item.payload.casa.direction, "UP");
+    assert.equal(item.payload.comisionista.direction, "DOWN");
+    assert.equal(item.payload.diverge, true);
+  });
+
+  it("C ambos DOWN conservan identidad", () => {
+    const item = trendItem("DOWN", "DOWN");
+    assert.equal(item.payload.casa.direction, "DOWN");
+    assert.equal(item.payload.comisionista.direction, "DOWN");
+    assert.equal(item.payload.diverge, false);
+    assert.match(item.summary, /CASA=DOWN/);
+    assert.match(item.summary, /Comisionista=DOWN/);
+    assert.match(item.summary, /no es una serie agregada/i);
+  });
+
+  it("D CASA UNKNOWN no se infiere si Comisionista UP", () => {
+    const item = trendItem("UNKNOWN", "UP");
+    assert.equal(item.payload.casa.direction, null);
+    assert.equal(item.payload.casa.availability, AVAILABILITY.UNAVAILABLE);
+    assert.equal(item.payload.comisionista.direction, "UP");
+    assert.equal(item.payload.diverge, false);
+    assert.match(item.summary, /CASA=UNAVAILABLE/);
+  });
+
+  it("E CASA DOWN + Comisionista NOT_AVAILABLE no inventa Comisionista", () => {
+    const item = trendItem("DOWN", "NOT_AVAILABLE");
+    assert.equal(item.payload.casa.direction, "DOWN");
+    assert.equal(item.payload.comisionista.direction, null);
+    assert.equal(item.payload.comisionista.availability, AVAILABILITY.UNAVAILABLE);
+    assert.doesNotMatch(item.summary, /Comisionista=DOWN|Comisionista=UP|Comisionista=FLAT/);
+  });
+
+  it("F periodos distintos de canal no se fusionan", () => {
+    const pack = buildExecutiveStatusPack({
+      assembled: assembleOk(),
+      trend: trendBoth("DOWN", "UP", {
+        casaFrom: "2026-07-01",
+        casaTo: "2026-07-31",
+        comiFrom: "2026-08-01",
+        comiTo: "2026-08-23",
+      }),
+      scope: { planta_id: 1, plant_name: "Acapulco" },
+    });
+    assert.equal(pack.periods.fuse, false);
+    assert.equal(pack.periods.strategy, PERIOD_STRATEGY);
+    const casaLabel = pack.periods.labels.find((l) => l.source === "commercial_trend.casa");
+    const comiLabel = pack.periods.labels.find((l) => l.source === "commercial_trend.comisionista");
+    assert.equal(casaLabel.period, "2026-07-01→2026-07-31");
+    assert.equal(comiLabel.period, "2026-08-01→2026-08-23");
+    assert.ok(pack.periods.distinct_periods.includes("2026-07-01→2026-07-31"));
+    assert.ok(pack.periods.distinct_periods.includes("2026-08-01→2026-08-23"));
+    const trend = pack.items.find((i) => i.slot === "TREND");
+    assert.match(trend.period, /2026-07-01→2026-07-31/);
+    assert.match(trend.period, /2026-08-01→2026-08-23/);
+  });
+
+  it("G prompt no contiene CASA/comisionista ni tendencia_ols de primary=casa", () => {
+    const pack = buildExecutiveStatusPack({
+      assembled: assembleOk(),
+      trend: trendBoth("DOWN", "UP"),
+      scope: { planta_id: 1, plant_name: "Acapulco" },
+    });
+    const prompt = buildExecutiveStatusPrompt(pack, "¿Cómo vamos?");
+    assert.doesNotMatch(prompt.userContent, /CASA\/comisionista/);
+    assert.doesNotMatch(prompt.userContent, /tendencia_ols=/);
+    assert.match(prompt.userContent, /CASA availability=REQUIRED direction=DOWN/);
+    assert.match(prompt.userContent, /COMISIONISTA availability=REQUIRED direction=UP/);
+    assert.match(prompt.userContent, /diverge=true/);
+    assert.match(prompt.systemPrompt, /tendencias independientes/);
+  });
+
+  it("H need EXECUTIVE_STATUS se conserva en variantes abiertas", () => {
+    for (const q of [
+      "¿Cómo vamos?",
+      "¿Cómo estamos?",
+      "¿Cómo va Acapulco?",
+      "¿Cómo vamos hoy?",
+      "¿Cómo va Puebla?",
+    ]) {
+      assert.equal(resolveExecutiveNeed(q).need_type, NEED_TYPES.EXECUTIVE_STATUS, q);
+    }
+  });
+
+  it("I specialized modes no los secuestra EXECUTIVE_STATUS", () => {
+    assert.equal(isUnequivocalDailyBriefQuestion("Dame el resumen diario"), true);
+    assert.equal(resolveExecutiveNeed("Dame el resumen diario").specialized, true);
+    assert.equal(isPreCloseQuestion("Prepárame para el pre-cierre"), true);
+    assert.equal(resolveExecutiveNeed("Prepárame para el pre-cierre").specialized, true);
+    assert.equal(resolveExecutiveNeed("Cómo va IGF").specialized, true);
+  });
+
+  it("J AUTHZ de trend no inventa canales", () => {
+    const pack = buildExecutiveStatusPack({
+      assembled: assembleOk(),
+      trend: { ok: false, abort: true, code: "SOURCE_RESTRICTED" },
+      scope: { planta_id: 1, plant_name: "Acapulco" },
+    });
+    const trend = pack.items.find((i) => i.slot === "TREND");
+    assert.equal(trend.availability, AVAILABILITY.NOT_AUTHORIZED);
+    assert.equal(trend.payload.casa.availability, AVAILABILITY.NOT_AUTHORIZED);
+    assert.equal(trend.payload.comisionista.availability, AVAILABILITY.NOT_AUTHORIZED);
+    assert.equal(trend.payload.casa.direction, null);
+    assert.equal(trend.payload.comisionista.direction, null);
+  });
+
+  it("K missing/null de canal no es 0 ni DOWN inventado", () => {
+    const item = trendItem("UNKNOWN", "UNKNOWN");
+    assert.equal(item.payload.casa.direction, null);
+    assert.equal(item.payload.comisionista.direction, null);
+    assert.notEqual(item.payload.casa.direction, 0);
+    assert.match(item.summary, /Ausencia no es cero/);
+  });
+
+  it("ledger refleja proyección per-channel sin inventar SEH/FA", () => {
+    const trend = CAPABILITY_INTEGRATION_LEDGER.find((r) => r.capability === "commercial_trend");
+    assert.equal(trend.first_slice_bridge, "PER_CHANNEL_OLS");
+    assert.ok(CAPABILITY_INTEGRATION_LEDGER.some((r) => r.capability === "commercial_trend.casa"));
+    assert.ok(CAPABILITY_INTEGRATION_LEDGER.some((r) => r.capability === "commercial_trend.comisionista"));
+    assert.equal(
+      CAPABILITY_INTEGRATION_LEDGER.find((r) => r.capability === "ACTUAL_FINANCIAL").first_slice_bridge,
+      "NOT_APPLICABLE"
+    );
+    assert.equal(CHANNEL_REGISTRY.CASA.independent, true);
+    assert.equal(CHANNEL_REGISTRY.COMISIONISTA.independent, true);
+  });
+
+  it("guard elimina el token fusionado CASA/comisionista", () => {
+    const guarded = applyExecutiveLanguageGuard(
+      "El motor CASA/comisionista muestra descenso.",
+      { dicf_measures_supported: false }
+    );
+    assert.doesNotMatch(guarded, /CASA\/comisionista/i);
+    assert.match(guarded, /CASA y Comisionista/);
+  });
+});
+
+describe("CEL pack + composer extra", () => {
   it("saludo neutral + planta, sin lista STALE", () => {
     const text = buildNeutralGreeting("Acapulco");
     assert.match(text, /Acapulco/);
@@ -446,6 +662,48 @@ describe("CEL chat E2E first slice", () => {
     assert.equal(result.context_meta.scope_source, "ui_plant_anchor");
     assert.equal(ctx.loadedPlantId, 1);
     assert.equal(result.context_meta.executive_composer, true);
+  });
+
+  it("1b UI Acapulco + cómo vamos con CASA↓ COMISIONISTA↑ no fusiona en el prompt", async () => {
+    const ctx = wire({
+      trend: {
+        ok: true,
+        compare: true,
+        channel: "both",
+        ols: null,
+        range_start: "2026-07-24",
+        range_end: "2026-08-23",
+        channels: {
+          casa: {
+            channel: "casa",
+            range_start: "2026-07-24",
+            range_end: "2026-08-23",
+            ols: { direction: "DOWN" },
+            limitations: [],
+            provenance: { source: "commercial-trend-engine", canal: "casa" },
+          },
+          comisionista: {
+            channel: "comisionista",
+            range_start: "2026-07-24",
+            range_end: "2026-08-23",
+            ols: { direction: "UP" },
+            limitations: [],
+            provenance: { source: "commercial-trend-engine", canal: "comisionista" },
+          },
+        },
+      },
+    });
+    const result = await askDirectorIa(
+      { body: { planta_nombre: "Acapulco" }, dashboardAuth: { role: "ZP" } },
+      1,
+      "¿Cómo vamos?"
+    );
+    assert.equal(result.ok, true);
+    assert.equal(result.context_meta.semantic_need, "EXECUTIVE_STATUS");
+    assert.doesNotMatch(ctx.lastPrompt.user, /CASA\/comisionista/);
+    assert.doesNotMatch(ctx.lastPrompt.user, /tendencia_ols=/);
+    assert.match(ctx.lastPrompt.user, /CASA availability=REQUIRED direction=DOWN/);
+    assert.match(ctx.lastPrompt.user, /COMISIONISTA availability=REQUIRED direction=UP/);
   });
 
   it("2 variantes semánticas usan el mismo need", async () => {
