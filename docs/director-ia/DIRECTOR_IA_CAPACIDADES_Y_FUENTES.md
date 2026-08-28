@@ -17,7 +17,7 @@
 
 ## Índice navegable
 
-1. [Parte 1 — Definiciones](#parte-1--definiciones) (incluye [continuidad conversacional efímera](#continuidad-conversacional-efímera-no-es-módulo-m0m20), [herencia natural de follow-up estrategia B](#herencia-natural-de-follow-up-estrategia-b-no-es-módulo-m0m20), [retorno de tema intra-sesión previous_frame](#retorno-de-tema-intra-sesión-previous_frame-no-es-módulo-m0m20), [memoria persistente pending_work_items_only](#memoria-persistente-pending_work_items_only-no-es-módulo-m0m20), [desviación diaria de venta daily_sales_deviation](#desviación-diaria-de-venta-daily_sales_deviation-no-es-módulo-m0m20), [desviación diaria de descuento/kg daily_discount_deviation](#desviación-diaria-de-descuento/kg-daily_discount_deviation-no-es-módulo-m0m20), [brief ejecutivo diario daily_executive_brief](#brief-ejecutivo-diario-daily_executive_brief-no-es-módulo-m0m20), [cross-metric follow-up diario](#cross-metric-follow-up-diario-no-es-módulo-m0m20), [tendencia comercial de gráfica commercial_trend](#tendencia-comercial-de-gráfica-commercial_trend-no-es-módulo-m0m20), [perfil longitudinal de cliente client_profile](#perfil-longitudinal-de-cliente-client_profile-no-es-módulo-m0m20), [consultas Action Register por responsable/acción](#consultas-action-register-por-responsable--acción-no-es-módulo-m0m20) [apoyos reviewable / contrafactual IGF](#apoyos-reviewable--contrafactual-igf-igf_reviewable_supports-no-es-módulo-m0m20), [Taller Mayor por unidad taller_mayor](#taller-mayor-por-unidad-taller_mayor-no-es-módulo-m0m20), [preparación de junta pre_meeting_brief](#preparación-de-junta-pre_meeting_brief-no-es-módulo-m0m20) y [resultado mensual de cierre month_close_result](#resultado-mensual-de-cierre-month_close_result-no-es-módulo-m0m20))
+1. [Parte 1 — Definiciones](#parte-1--definiciones) (incluye [continuidad conversacional efímera](#continuidad-conversacional-efímera-no-es-módulo-m0m20), [herencia natural de follow-up estrategia B](#herencia-natural-de-follow-up-estrategia-b-no-es-módulo-m0m20), [retorno de tema intra-sesión previous_frame](#retorno-de-tema-intra-sesión-previous_frame-no-es-módulo-m0m20), [memoria persistente pending_work_items_only](#memoria-persistente-pending_work_items_only-no-es-módulo-m0m20), [desviación diaria de venta daily_sales_deviation](#desviación-diaria-de-venta-daily_sales_deviation-no-es-módulo-m0m20), [desviación diaria de descuento/kg daily_discount_deviation](#desviación-diaria-de-descuento/kg-daily_discount_deviation-no-es-módulo-m0m20), [brief ejecutivo diario daily_executive_brief](#brief-ejecutivo-diario-daily_executive_brief-no-es-módulo-m0m20), [cross-metric follow-up diario](#cross-metric-follow-up-diario-no-es-módulo-m0m20), [tendencia comercial de gráfica commercial_trend](#tendencia-comercial-de-gráfica-commercial_trend-no-es-módulo-m0m20), [perfil longitudinal de cliente client_profile](#perfil-longitudinal-de-cliente-client_profile-no-es-módulo-m0m20), [consultas Action Register por responsable/acción](#consultas-action-register-por-responsable--acción-no-es-módulo-m0m20) [apoyos reviewable / contrafactual IGF](#apoyos-reviewable--contrafactual-igf-igf_reviewable_supports-no-es-módulo-m0m20), [Taller Mayor por unidad taller_mayor](#taller-mayor-por-unidad-taller_mayor-no-es-módulo-m0m20), [preparación de junta pre_meeting_brief](#preparación-de-junta-pre_meeting_brief-no-es-módulo-m0m20), [preparación de cierre PRE_CLOSE](#preparación-de-cierre-pre_close-composer-ciclo-ejecutivo-no-es-módulo-m0m20), [captura física EXECUTIVE_STEERING_EVENT](#captura-física-executive_steering_event-no-es-módulo-m0m20) y [resultado mensual de cierre month_close_result](#resultado-mensual-de-cierre-month_close_result-no-es-módulo-m0m20))
 2. [Parte 2 — Matriz maestra M0–M20](#parte-2--matriz-maestra-m0m20)
 3. [Parte 3 — Catálogo de fuentes](#parte-3--catálogo-de-fuentes)
 4. [Parte 4 — Capacidades de negocio (preguntas)](#parte-4--capacidades-de-negocio-preguntas)
@@ -101,8 +101,10 @@ turno actual
 | `active_date` | En hilos `daily_sales_deviation`, `daily_discount_deviation` y `daily_executive_brief`: YYYY-MM-DD **efímero** del día objetivo. El brief **establece** esta fecha. Se reusa para requery del mismo hilo **y** puede conservarse al cambiar de métrica diaria (cross-metric). **No** se inventa ayer si falta. Fecha explícita del turno gana. Hoy no se trata silenciosamente como día cerrado. Señal mensual **no** reusa esta fecha. **No** es memoria persistente de periodos. No sobrevive un chat nuevo. |
 | `active_range_days` | En hilos `commercial_trend`: 30 o 90. Contexto de **routing**. La evidencia se reconsulta. No es mes calendario. **No** es el periodo de `client_profile`. |
 | `active_channel` | En hilos `commercial_trend`: `casa` / `comisionista` / `both`. En `client_profile` puede heredarse como filtro de fuente si es `casa`/`comisionista`. Contexto de **routing**. Alias COMISIONISTAS → `comisionista`. |
-| `active_period_months` | En hilos `client_profile`: lista YYYY-MM de meses calendario alineados. En hilos `taller_mayor`: YYYY-MM de `mes_cargo` (default = mes actual CDMX). En hilos `pre_meeting_brief`: `meeting_period` = YYYY-MM del mes **abierto** CDMX. En hilos `month_close_result`: YYYY-MM del mes de cierre (default = último COMPLETE CDMX; mes actual nombrado = PARTIAL). Contexto de **routing**. La evidencia se reconsulta. **No** son 90 días trailing. **No** es el pack de junta ni el pack de cierre. |
+| `active_period_months` | En hilos `client_profile`: lista YYYY-MM de meses calendario alineados. En hilos `taller_mayor`: YYYY-MM de `mes_cargo` (default = mes actual CDMX). En hilos `pre_meeting_brief` (clásico o PRE_CLOSE): `meeting_period` = YYYY-MM del mes **abierto** CDMX. En hilos `month_close_result`: YYYY-MM del mes de cierre (default = último COMPLETE CDMX; mes actual nombrado = PARTIAL). Contexto de **routing**. La evidencia se reconsulta. **No** son 90 días trailing. **No** es el pack de junta ni el pack de cierre. |
 | `meeting_type` | En hilos `pre_meeting_brief` y `month_close_result`: solo `monthly_close` o `null` (sanitizado). Slot de routing. **No** persiste el brief ni el resultado de cierre. |
+| `cycle_mode` | En hilos PRE_CLOSE: `PRE_CLOSE` o `null`. Routing. **No** es evidencia. |
+| `portfolio_scope` | En hilos PRE_CLOSE: `PORTFOLIO` o `ONE_PLANT` o `null`. Routing. Follow-up «qué me preocupa» con `PORTFOLIO` reconsulta el portafolio autorizado; **no** colapsa a una planta. **No** persiste el pack. |
 | `last_evidence_bundle_type` | Recuerda el tipo de pack; **no** cachea el payload. |
 | `pending_information_gap` | Derivado del pack **requery** (`limitations`, cobertura, `SOURCE_RESTRICTED`). Persona solo si hay responsable de **acción** con vínculo físico. No se deriva de la prosa del assistant. |
 | `previous_frame` | **Exactamente uno.** Efímero. Intra-sesión. Copia mínima del current al cambiar a un standalone distinto. Cada switch **reemplaza** el prior. **No** topic stack. **No** evidencia. Ver [retorno de tema](#retorno-de-tema-intra-sesión-previous_frame-no-es-módulo-m0m20). |
@@ -153,7 +155,7 @@ Evidencia y veracidad:
 
 **MEMORY ≠ CURRENT EVIDENCE.** La memoria recuerda *qué trabajo quedó pendiente*. La evidencia fresca dice *qué es verdad hoy*. No se afirma «Arturo sigue sin comprar» solo porque quedó un pendiente.
 
-Fuera de este slice de continuidad genérica: topic stack (más de un `previous_frame`); «¿Y ayer?» como switch de periodo **sin** hilo diario; semana anterior; varias entidades activas; history selectivo al LLM; workflow de notificaciones. El first slice de **retorno de tema** es un `previous_frame` (abajo). El first slice diario de **venta** es `daily_sales_deviation` (abajo). El first slice diario de **descuento/kg** es `daily_discount_deviation` (abajo). El first slice de **brief ejecutivo diario** es `daily_executive_brief` (abajo). El first slice de **cross-metric diario** (conservar fecha ≠ conservar métrica) está abajo. El first slice de **tendencia comercial de gráfica** es `commercial_trend` (abajo). El first slice de **perfil longitudinal de cliente** es `client_profile` (abajo). El first slice de **Taller Mayor por unidad** es `taller_mayor` (abajo). El first slice de **preparación de junta / pre-cierre** es `pre_meeting_brief` (abajo). El first slice de **resultado mensual de cierre** es `month_close_result` (abajo). El first slice de consultas Action Register por responsable/acción es `action_status` (abajo). Trade-off económico por cliente **sigue diferido**.
+Fuera de este slice de continuidad genérica: topic stack (más de un `previous_frame`); «¿Y ayer?» como switch de periodo **sin** hilo diario; semana anterior; varias entidades activas; history selectivo al LLM; workflow de notificaciones. El first slice de **retorno de tema** es un `previous_frame` (abajo). El first slice diario de **venta** es `daily_sales_deviation` (abajo). El first slice diario de **descuento/kg** es `daily_discount_deviation` (abajo). El first slice de **brief ejecutivo diario** es `daily_executive_brief` (abajo). El first slice de **cross-metric diario** (conservar fecha ≠ conservar métrica) está abajo. El first slice de **tendencia comercial de gráfica** es `commercial_trend` (abajo). El first slice de **perfil longitudinal de cliente** es `client_profile` (abajo). El first slice de **Taller Mayor por unidad** es `taller_mayor` (abajo). El first slice de **preparación de junta clásica** es `pre_meeting_brief` (abajo). El first slice de **preparación de cierre PRE_CLOSE** es el composer de ciclo ejecutivo (abajo; misma superficie `pre_meeting_brief`). El first slice de **resultado mensual de cierre** es `month_close_result` (abajo). El first slice de consultas Action Register por responsable/acción es `action_status` (abajo). Trade-off económico por cliente **sigue diferido**.
 
 ### Retorno de tema intra-sesión `previous_frame` (no es módulo M0–M20)
 
@@ -548,7 +550,7 @@ Authz: planta actual, rol actual, `plantas_permitidas`, no cross-plant, fail-clo
 
 Preserva: `daily_sales_deviation`, `daily_discount_deviation`, cross-metric B, herencia natural, `previous_frame`, action-person, `igf_reviewable_supports`, `pending_work_items_only`, M9.
 
-Diferido desde el brief: ingreso diario; brief matutino programado; saludo personalizado; directorio SEH; closed-month IGF. La tendencia 30/90 CASA/COMISIONISTA es **otro intent** (`commercial_trend`, abajo). El perfil longitudinal 3M es **otro intent** (`client_profile`, abajo). Taller Mayor por unidad es **otro intent** (`taller_mayor`, abajo). La preparación de junta / pre-cierre es **otro intent** (`pre_meeting_brief`, abajo). El resultado mensual de cierre es **otro intent** (`month_close_result`, abajo).
+Diferido desde el brief: ingreso diario; brief matutino programado; saludo personalizado; directorio SEH; closed-month IGF. La tendencia 30/90 CASA/COMISIONISTA es **otro intent** (`commercial_trend`, abajo). El perfil longitudinal 3M es **otro intent** (`client_profile`, abajo). Taller Mayor por unidad es **otro intent** (`taller_mayor`, abajo). La preparación de junta clásica es **otro intent** (`pre_meeting_brief`, abajo). La preparación de cierre PRE_CLOSE usa la misma superficie y el composer (abajo). El resultado mensual de cierre es **otro intent** (`month_close_result`, abajo).
 
 Archivos: `lib/director-ia-daily-executive-brief.js`; wiring `lib/director-ia-chat.js`, `lib/director-ia-planner.js`, `lib/director-ia-tools.js`, `lib/director-ia-conversation-state.js`. Tool de registry `get_daily_executive_brief` (read-only; no contamina `arr_status` / M9). Tests: `test/director-ia-daily-executive-brief.test.js`.
 
@@ -895,7 +897,7 @@ Archivos: `lib/director-ia-taller-mayor.js`; wiring `lib/director-ia-chat.js`, `
 
 ### Preparación de junta `pre_meeting_brief` (no es módulo M0–M20)
 
-**Implementado** (`IMPL-DIRECTOR-IA-PRE-MEETING-READ-MODEL-001`; arquitectura **B** — structured pre-meeting read model; first slice **B** — core ejecutivo). Chat legado. **No** IES. **No** Reasoning Engine N5. **No** phrasebook. **No** segundo router LLM. **No** persistencia del pack. **No** HTTP interno. **No** writes. **No** Plaud runtime. **No** cambia cobertura de ningún módulo ni el 52.5%.
+**Implementado** (`IMPL-DIRECTOR-IA-PRE-MEETING-READ-MODEL-001`; arquitectura **B** — structured pre-meeting read model; first slice **B** — core ejecutivo). Chat legado. Superficie de intent **compartida** con PRE_CLOSE (abajo). El brief **clásico** aplica a junta genérica **sin** señales de conducción de cierre / pre-cierre. **No** IES. **No** Reasoning Engine N5. **No** phrasebook. **No** segundo router LLM. **No** persistencia del pack. **No** HTTP interno. **No** writes. **No** Plaud runtime. **No** cambia cobertura de ningún módulo ni el 52.5%.
 
 Readiness conversacional documentada: **`CONVERSATION_BASE_READY_WITH_LIMITS`**. La base conversacional (brief diario, trend, profile, actions, IGF, reviewable, Taller Mayor, topic return, memoria persistente) **más** este compose de junta está integrada. Los límites del first slice **siguen**: sin Taller Mayor / Mejora Continua / Plaud / IGF mes cerrado / SEH / ingreso real de cliente **dentro** del pack.
 
@@ -904,8 +906,8 @@ Readiness conversacional documentada: **`CONVERSATION_BASE_READY_WITH_LIMITS`**.
 Path:
 
 ```text
-pregunta de preparación de junta / pre-cierre
-  → pre_meeting_brief
+pregunta de preparación de junta genérica (sin pre-cierre / conducción de cierre)
+  → pre_meeting_brief / pre_meeting_compose
   → una planta + meeting_period abierto CDMX
   → safeLoad comercial (daily brief + trend 90d both + profiles de movers, cap 3)
   → safeLoad IGF abierto (pregunta sintética "igf")
@@ -990,7 +992,73 @@ Preserva: daily brief, daily sales, daily discount, commercial trend, client pro
 
 Diferido: Plaud ingest; closed-month IGF; Taller Mayor / Mejora Continua **dentro** del pack; SEH; ingreso real de cliente; writes; snapshot persistido; thresholds nuevos.
 
-Archivos: `lib/director-ia-pre-meeting.js`; wiring `lib/director-ia-chat.js`, `lib/director-ia-planner.js`, `lib/director-ia-conversation-state.js`, `lib/director-ia-tools.js`, `lib/director-ia-capabilities.js` (`isPreMeetingQuery`; **sin** fila nueva de matriz). Tool `get_pre_meeting_brief` (read-only; dominio `arr`). Tests citados (IMPL; **no** reejecutados aquí): focal `test/director-ia-pre-meeting.test.js` **14/14**; suite Director IA **978/978**; planner **58/58**; capabilities **56/56**; orchestrator **28/28**; `git diff --check` clean.
+Archivos: `lib/director-ia-pre-meeting.js`; wiring `lib/director-ia-chat.js`, `lib/director-ia-planner.js`, `lib/director-ia-conversation-state.js`, `lib/director-ia-tools.js`, `lib/director-ia-capabilities.js` (`isPreMeetingQuery`; **sin** fila nueva de matriz). Tool `get_pre_meeting_brief` (read-only; dominio `arr`). Tests citados (IMPL clásico; **no** reejecutados en este sync): focal `test/director-ia-pre-meeting.test.js` **14/14**.
+
+---
+
+### Preparación de cierre PRE_CLOSE (composer ciclo ejecutivo; no es módulo M0–M20)
+
+**SUPPORTED_WITHIN_PRE_CLOSE** (`IMPL-DIRECTOR-IA-PRE-CLOSE-STEERING-COMPOSITION-001` + FIX; REAUDIT **PASS**). Misma superficie `pre_meeting_brief` / evidence `pre_close_compose`. Chat legado. **No** IES. **No** Reasoning Engine N5. **No** Plaud runtime. **No** live copilot. **No** Consejo. **No** POST_CLOSE. **No** cambia cobertura de ningún módulo ni el 52.5%.
+
+Composer compartido: `lib/director-ia-executive-cycle-composer.js`, `cycle_mode=PRE_CLOSE`. Portafolio **planta a planta**. **No** total financiero regional.
+
+Clases (no mezclar):
+
+| Rol de sección | Truth class | Fuente física |
+|----------------|-------------|---------------|
+| CURRENT | `ACTUAL_COMMERCIAL` to-date | ARR mensual del mes abierto |
+| TARGET | `TARGET_COMMITMENT` | `igf_meta` YYYY-MM exacto; missing ≠ 0; sin carry-forward |
+| BASE_FORECAST | `FORECAST` | IGF latest operacional (`igf.compromiso_lines` stored) |
+| ACTIONS | ACTION | Action Register; acción ≠ compromiso de cierre |
+| REVIEWABLE | REVIEWABLE | apoyos reviewable; ≠ ahorro ≠ cancelación aprobada |
+| RISK | evidencia derivada / determinística | condición; ≠ causa; ≠ recomendación |
+| GAPS | tipados | ≠ causa; source failure visible |
+| DECISION_NEEDED | pregunta ejecutiva | solo desde risks/gaps tipados; ≠ decisión tomada |
+| PROVENANCE | source / period / version / cutoff si existe | `created_at` IGF = upload, no as-of de negocio |
+
+**Prohibido en este slice:** ACTUAL_FINANCIAL; HUMAN_COMMITMENT persistido; PROPOSED_INTERVENTION persistida; CLOSING_SCENARIO; WHAT_IF; COUNCIL_FINAL; POST_CLOSE; Plaud; live copilot; consumo IES; consumo de `EXECUTIVE_STEERING_EVENT`. PRE_CLOSE **no** lee historia de steering.
+
+Authz **de este composer** (no política global nueva): ZP / AD = portafolio autorizado; GG = `ASSIGNED_PLANTS`; resto deny. REAUDIT: follow-up PORTFOLIO no colapsa; requery; sin leak cross-plant material demostrado.
+
+Routing semántico (ejemplos, **no** phrasebook): conducción de cierre / pre-cierre / «qué debo resolver en la junta de hoy» → PRE_CLOSE. Junta genérica («Prepárame para la junta») → brief clásico. IGF / daily / `month_close_result` conservan sus rutas. Planner evalúa PRE_CLOSE **antes** del daily brief.
+
+State mínimo: `cycle_mode`, `portfolio_scope`, periodo, `parent_intent`. **No** valores CURRENT/TARGET/FORECAST ni raw pack. Evidence requery. Partial `safeLoad`.
+
+PRE_CLOSE = lo que se puede saber **antes** de la junta. **No** lo que se decide durante la junta. **No** el cierre FINAL. Forecast ≠ commitment. Risk ≠ causa. Gap ≠ causa. Reviewable ≠ saving.
+
+Evidencia de evaluación (no contrato): REAUDIT PASS; focales PRE_CLOSE **37/0/0**; suite Director IA **1065/0/0** (citados de la REAUDIT; **no** reejecutados en este sync). EVAL-003 no es norma: PRE_CLOSE puede llevar actual-to-date / target / base forecast / risks / actions / reviewable / gaps / decision-needed; **no** inventar 1,177 / +40 / +632 / what-if / intervenciones de sala.
+
+Diferido: CLOSED_FINAL; COUNCIL_FINAL; POST_CLOSE_FOLLOWUP; commitment/scenario stores; what-if; Plaud; live copilot. El store físico `EXECUTIVE_STEERING_EVENT` existe aparte (abajo) y **no** entra a este composer.
+
+---
+
+### Captura física `EXECUTIVE_STEERING_EVENT` (no es módulo M0–M20)
+
+Store físico + create/read in-process: **Implementado** (`IMPL-DIRECTOR-IA-EXECUTIVE-STEERING-CAPTURE-PHYSICAL-001` + FIX; REAUDIT **PASS**; CITED_FROM_REAUDIT, **no** reejecutado en este G2). Chat captura / Plaud / consumo ejecutivo / Consejo / live copilot: **NO INTEGRADA**. **No** cambia cobertura de ningún módulo ni el 52.5%.
+
+| Pieza | Estado (taxonomía de este inventario) |
+|-------|----------------------------------------|
+| STEERING_PHYSICAL_STORE (`arr`; schema `020`) | **Implementado** |
+| STEERING_ATTESTATION_RECORD/READ in-process (`lib/director-ia-executive-steering-capture.js`) | **Implementado** |
+| DIRECTOR IA CHAT CAPTURE | **NO INTEGRADA** |
+| PLAUD INGESTION | **NO INTEGRADA** |
+| EXECUTIVE REASONING CONSUMPTION | **NO INTEGRADA** |
+| COUNCIL | **NO INTEGRADA** |
+| LIVE COPILOT | **NO INTEGRADA** |
+
+Objeto: una fila / un `EXECUTIVE_STEERING_EVENT`. Tipos: `PROPOSAL` · `DECISION` · `COMMITMENT` · `HUMAN_DECLARED_CAUSE` · `CORRECTION`. First slice: `attestation_state = RECORDED`.
+
+`RECORDED` = atestación registrada con provenance. `RECORDED` **≠** verdad confirmada, forecast, target, actual, acción, resultado ni FINAL. Ejemplo: «Acapulco +40 t» puede existir como `COMMITMENT` `RECORDED`; eso **no** autoriza afirmar que Acapulco venderá +40 t, que el forecast/target/actual subió, que existe una acción +40 t, ni que la organización confirmó el compromiso.
+
+Provenance: `DECLARED_BY` separado de `RECORDED_BY`. `actor_nombre` **no** eleva autoridad. `ACCESS_KEY` / `USUARIOS` **no** concede autoridad. Plaud / LLM / Director IA / live copilot: **sin** autoridad RECORD autónoma.
+
+AUTHZ VIEW/RECORD **RESOLVED** (`DECISION-DIRECTOR-IA-EXECUTIVE-STEERING-CAPTURE-AUTHZ-001`; este inventario no redefine la decisión): ZP + aliases documentados = `ALL_PLANTS`; AD = `ALL_PLANTS`; GG = `ASSIGNED_PLANTS` (full scope); MULTI_PLANT / ZONE = full scope autorizado; resto = `DENY`.
+
+CORRECTION: **Implementado** (evento nuevo; original conservado; historia conservada; current-effective **solo** relacional). `SUPERSEDED` en historia de corrección **≠** SUPERSEDE organizacional. Confirmación / APPROVE / SUPERSEDE organizacional: **NO INTEGRADA**.
+
+Ciclo conceptual (estados reales, no runtime end-to-end): OPEN_MONTH → DAILY → PRE_CLOSE (**SUPPORTED_WITHIN_PRE_CLOSE**) → STEERING_CAPTURE foundation (**Implementado**; `RECORDED`) → CLOSED_FINAL (**NO INTEGRADA**) → COUNCIL_FINAL (**NO INTEGRADA**) → POST_CLOSE_FOLLOWUP (**NO INTEGRADA**).
+
+Contrato semántico: `EXECUTIVE-STEERING-CAPTURE-CONTRACT.md` v1.0 (congelado; este inventario no lo reescribe). Evidencia de evaluación: REAUDIT PASS; probes independientes **60/60**; focales **36/36**; suite Director IA **1101/1101** (CITED_FROM_REAUDIT; **NOT_REEXECUTED_IN_G2**).
 
 ---
 
@@ -1931,9 +1999,9 @@ Archivos: `lib/director-ia-financial-actual.js` (loader RAW); `lib/director-ia-m
 - **GPT:** sintetiza. No decide identidad, Folio, clasificación, importe, estatus, periodo, reviewability ni autorización. No diagnóstico mecánico. No causalidad desde concepto.
 - **Información que no puede concluirse con esta fuente:** económico/placa; catálogo de unidades; todos los tipos TALLER (`taller_at`); listado IGF plant-wide; cancelación real; ahorro; mes pasado inventado; IES/N5; preparación de junta (otro intent: `pre_meeting_brief`; Taller Mayor no entra en ese pack); resultado mensual de cierre (otro intent: `month_close_result`)
 
-### Fuente: Preparación de junta / pre-cierre (transversal)
+### Fuente: Preparación de junta clásica (transversal)
 
-- **Dominio:** Chat legado `pre_meeting_brief` (no es un módulo M0–M20; no puntúa). Arquitectura **B**. First slice **B**. `IMPL-DIRECTOR-IA-PRE-MEETING-READ-MODEL-001`. Readiness: **`CONVERSATION_BASE_READY_WITH_LIMITS`**.
+- **Dominio:** Chat legado `pre_meeting_brief` / `pre_meeting_compose` (no es un módulo M0–M20; no puntúa). Arquitectura **B**. First slice **B**. `IMPL-DIRECTOR-IA-PRE-MEETING-READ-MODEL-001`. Readiness: **`CONVERSATION_BASE_READY_WITH_LIMITS`**. Junta genérica **sin** pre-cierre / conducción de cierre. Pre-cierre → [PRE_CLOSE](#fuente-preparación-de-cierre-pre_close-transversal).
 - **Cobertura actual:** PARCIAL respecto a preparación de junta de una planta + mes abierto CDMX (comercial + IGF abierto + acciones + reviewable + gaps). **No** cambia ningún módulo ni el 52.5%.
 - **Archivo de acceso:** `lib/director-ia-pre-meeting.js`. Reusa loaders de brief diario, trend, profile, IGF, Action Register y reviewable.
 - **Función de acceso:** `loadPreMeetingBriefForChat` (in-process; `safeLoad` por fuente) → prompt + `HILO` → **una** llamada OpenAI por turno.
@@ -1946,7 +2014,31 @@ Archivos: `lib/director-ia-financial-actual.js` (loader RAW); `lib/director-ia-m
 - **State:** plant, `meeting_period`, `meeting_type`, `parent_intent=pre_meeting_brief`. No full pack como truth. Requery fresco.
 - **Follow-ups:** preocupa / falta explicar → brief. «¿Y cómo cerramos?» → `month_close_result` + requery. Acciones → capability canónica. Apoyos → `igf_reviewable_supports`. Cliente → `client_profile`. CASA/COMISIONISTAS → `commercial_trend`. Taller Mayor → `taller_mayor`.
 - **Plaud:** no runtime. Futuro: evidencia de evaluación histórica. Meeting statement ≠ causal truth.
-- **Información que no puede concluirse con esta fuente:** causa; resultado inventado; responsable inventado; ahorro; actual de mes cerrado; agenda del Consejo; Taller Mayor / MC / Plaud como parte del brief; IES/N5; resultado mensual de cierre (otro intent: `month_close_result`)
+- **Información que no puede concluirse con esta fuente:** causa; resultado inventado; responsable inventado; ahorro; actual de mes cerrado; agenda del Consejo; Taller Mayor / MC / Plaud como parte del brief; IES/N5; resultado mensual de cierre (otro intent: `month_close_result`); pack PRE_CLOSE (otro compose)
+
+### Fuente: Preparación de cierre PRE_CLOSE (transversal)
+
+- **Dominio:** Chat legado `pre_meeting_brief` / `pre_close_compose` (no es módulo M0–M20; no puntúa). **SUPPORTED_WITHIN_PRE_CLOSE**. IMPL + FIX; REAUDIT **PASS**. **No** cambia ningún módulo ni el 52.5%.
+- **Archivo de acceso:** `lib/director-ia-executive-cycle-composer.js`. Reusa ARR, `igf_meta`, IGF stored, Action Register, reviewable, trend.
+- **Función de acceso:** `composeExecutiveCycle` (`cycle_mode=PRE_CLOSE`) → prompt → una llamada OpenAI.
+- **Scope:** una planta o portafolio autorizado planta a planta (ZP/AD; GG = assigned). Mes abierto CDMX. **No** total zonal financiero.
+- **Pack:** CURRENT `ACTUAL_COMMERCIAL`; TARGET `TARGET_COMMITMENT`; BASE_FORECAST `FORECAST`; ACTIONS; REVIEWABLE; RISK; GAPS; DECISION_NEEDED; PROVENANCE. Partial safe-load. Requery.
+- **No incluye:** ACTUAL_FINANCIAL; `EXECUTIVE_STEERING_EVENT`; commitment/scenario/what-if persistidos; Consejo; Plaud; live copilot; IES. PRE_CLOSE **no** consume historia de steering.
+- **State:** `cycle_mode`, `portfolio_scope`, periodo, `parent_intent`. No raw pack.
+- **Información que no puede concluirse con esta fuente:** compromiso de sala; escenario de cierre; what-if; causa; decisión tomada; ahorro reviewable; actual financiero; que un `COMMITMENT` `RECORDED` sea forecast, target, actual o confirmación organizacional
+
+### Fuente: EXECUTIVE_STEERING_EVENT (store físico; transversal)
+
+- **Dominio:** Store dedicado en `arr` (no es módulo M0–M20; no puntúa). Contrato `EXECUTIVE-STEERING-CAPTURE-CONTRACT.md` v1.0. First slice: `attestation_state=RECORDED`.
+- **Cobertura actual:** Store + create/read in-process = **Implementado**. Chat / HTTP / UI / Plaud / live / Consejo / consumo EKE-IES-RE = **NO INTEGRADA**. **No** cambia ningún módulo ni el 52.5%.
+- **Archivo de acceso:** `sql/020_executive_steering_capture.sql`; `lib/director-ia-executive-steering-capture.js`.
+- **Función de acceso:** create/read in-process. **No** hay tool de chat. **No** hay `POST /api/director-ia/*` de steering.
+- **Tipos:** `PROPOSAL` · `DECISION` · `COMMITMENT` · `HUMAN_DECLARED_CAUSE` · `CORRECTION`.
+- **Provenance:** `DECLARED_BY` ≠ `RECORDED_BY`. `actor_nombre` no eleva. `ACCESS_KEY` / `USUARIOS` no conceden autoridad.
+- **AUTHZ VIEW/RECORD:** RESOLVED (`DECISION-DIRECTOR-IA-EXECUTIVE-STEERING-CAPTURE-AUTHZ-001`): ZP + aliases = ALL_PLANTS; AD = ALL_PLANTS; GG = ASSIGNED_PLANTS (full scope); MULTI/ZONE = full scope; resto = DENY.
+- **CORRECTION:** Implementado; historia y original conservados; current-effective relacional. `SUPERSEDED` de cadena **≠** SUPERSEDE organizacional.
+- **Plaud:** transcript ≠ evento `RECORDED`. Sin autoridad RECORD autónoma.
+- **Información que no puede concluirse con esta fuente:** que el contenido sea verdadero; que el forecast/target/actual cambió; que existe una acción; que la organización confirmó; que PRE_CLOSE / CLOSED_FINAL / Consejo / IES / RE ya leen estos eventos
 
 ### Fuente: Resultado mensual de cierre (transversal)
 
@@ -2378,8 +2470,11 @@ Archivos: `lib/director-ia-financial-actual.js` (loader RAW); `lib/director-ia-m
 | ¿Qué podemos recortar de apoyos? / ¿Cuáles todavía podemos detener? (tras IGF mes actual, **sin** Folio/unidad de `taller_mayor`) | Sí (read-only; same plant/`mes_cargo`; Folios fresco; reglas reales de cancelación) | PARCIAL (transversal; M2/M7 siguen PARCIAL) | `public.folios` + snapshot IGF | `loadIgfReviewableSupportsForChat` / `get_igf_reviewable_supports` | Closed-month; writes; que no depositado = recortable; hop desde Folio activo de Taller Mayor | Alto si se lee como orden de cancelar o como ahorro |
 | ¿Cuánto suman? / ¿Cuáles ya no puedo cancelar? / ¿Cuáles ya están depositados/cerrados? (tras apoyos reviewable) | Sí si `parent_intent = igf_reviewable_supports`; requery; depósito/cierre = estatus, no cheques | PARCIAL (continuidad efímera) | Pack fresco reviewable + `HILO` | `inheritParentIntent` / loader reviewable | Caer a cheques; reusar evidencia IGF como Folios | Alto si se afirma cheque emitido o materialización contable |
 | Si canceláramos los reviewable, ¿cómo quedaría el IGF? | Sí como **ESCENARIO HIPOTÉTICO** (overlay live en memoria; no DB write) | PARCIAL (transversal) | Snapshot IGF + cubos de Folios reviewable | `loadIgfReviewableSupportsForChat` (`recalcularUtilYResultado` en memoria) | Ahorro realizado; cash; mejora real garantizada; persistir escenario | Alto si se lee como forecast oficial o como cambio real |
-| Prepárame para la junta de cierre. / Dame un pre-cierre ejecutivo. / ¿Qué huecos tenemos antes de la junta? (ejemplos de intención, no phrasebook) | Sí (`pre_meeting_brief`; una planta; mes abierto CDMX; comercial + IGF abierto + acciones + reviewable + gaps) | PARCIAL (transversal; no módulo) | Loaders existentes compuestos | `loadPreMeetingBriefForChat` / `isPreMeetingQuestion` | Taller Mayor/MC/Plaud en el pack; mes cerrado como abierto; causa inventada | Alto si se lee el brief como diagnóstico causal o como snapshot persistido |
-| ¿Qué me preocupa más? / ¿Qué falta explicar? (tras pre-cierre) | Sí si `parent_intent = pre_meeting_brief`; requery; GPT sintetiza / presenta gaps | PARCIAL (continuidad efímera) | Pack fresco del brief + `HILO` | `forceIntent pre_meeting_brief` / loader | Inventar causa; reusar el pack anterior como truth | Alto si el gap se lee como explicación |
+| Prepárame para la junta. / ¿Qué huecos tenemos antes de la junta? (junta genérica; ejemplos, no phrasebook) | Sí (`pre_meeting_brief` / `pre_meeting_compose`; una planta; mes abierto; brief clásico) | PARCIAL (transversal; no módulo) | Loaders existentes compuestos | `loadPreMeetingBriefForChat` / `isPreMeetingQuestion` | Taller Mayor/MC/Plaud en el pack; mes cerrado como abierto; causa inventada | Alto si se lee el brief como diagnóstico causal o como snapshot persistido |
+| pre-cierre / junta de pre-cierre / prepárame para el pre-cierre / qué debo resolver en la junta de hoy / cierre de Zona Provincia (ejemplos, no phrasebook) | Sí (`pre_meeting_brief` / `pre_close_compose`; PRE_CLOSE; una planta o portafolio autorizado) | PARCIAL (transversal; **SUPPORTED_WITHIN_PRE_CLOSE**) | ARR + `igf_meta` + IGF stored + AR + reviewable | `composeExecutiveCycle` / `isPreCloseQuestion` | ACTUAL_FINANCIAL; `EXECUTIVE_STEERING_EVENT`; commitment/scenario/what-if; total zonal; Consejo | Alto si forecast se lee como commitment o decision_needed como decisión |
+| registrar / leer un compromiso o decisión de junta como `EXECUTIVE_STEERING_EVENT` (p. ej. «Acapulco +40 t») | No en chat/HTTP/UI. Store + create/read in-process **Implementado**; captura conversacional **NO INTEGRADA** | Store **Implementado**; chat **NO INTEGRADA** | `arr` schema `020` | `lib/director-ia-executive-steering-capture.js` | Tratar `RECORDED` como forecast/target/actual/acción/FINAL/confirmación | Alto si `COMMITMENT` `RECORDED` se lee como verdad de venta |
+| ¿Qué me preocupa más? / ¿Qué falta explicar? (tras PRE_CLOSE PORTFOLIO) | Sí: inherit PRE_CLOSE; conserva `portfolio_scope`; requery del portafolio autorizado | PARCIAL (continuidad efímera) | Pack PRE_CLOSE fresco | `forcePortfolio` + composer | Colapsar a una planta; reusar el pack anterior como truth | Alto si el gap se lee como explicación |
+| ¿Qué me preocupa más? / ¿Qué falta explicar? (tras brief clásico) | Sí si `parent_intent = pre_meeting_brief` sin `cycle_mode=PRE_CLOSE`; requery del brief clásico | PARCIAL (continuidad efímera) | Pack fresco del brief + `HILO` | `forceIntent pre_meeting_brief` / loader clásico | Inventar causa; reusar el pack anterior como truth | Alto si el gap se lee como explicación |
 | ¿Qué acciones están vencidas? (tras pre-cierre) | Sí: sale a la capability canónica de acciones; no queda atrapado en el brief | PARCIAL | Board AR fresco | `overdue_actions` / `action_status` | Tratar el resumen del brief como board | Alto si se afirma resultado o culpa |
 | ¿Qué apoyos puedo revisar? (tras pre-cierre) | Sí: `igf_reviewable_supports` standalone; requery | PARCIAL | Folios reviewable frescos | `loadIgfReviewableSupportsForChat` | Cancelar; ahorro; mes cerrado | Alto si reviewable = mandato |
 | Háblame del cliente X. (tras pre-cierre) | Sí: `client_profile`; no «Háblame del primero» | PARCIAL | Perfil keyed fresco | `loadClientProfileForChat` | Reusar movers del brief como perfil | Alto si se afirma causa del cliente |
@@ -2678,6 +2773,8 @@ El chat legado integra **resultado mensual de cierre** (`month_close_result` →
 
 **Scoring M0–M20 tras `DOCS-DIRECTOR-IA-FINANCIAL-ACTUAL-READ-MODEL-SYNC-001`:** ningún módulo cambia de etiqueta. Global permanece **10.5 / 20 = 52.5%** (0.0 pp). El read model ACTUAL_FINANCIAL **dentro de** `month_close_result` es transversal; **no** completa M7 (UI/PATCH/overlay/recálculo siguen fuera) ni crea fila nueva. COMPLETE=1.0 / PARCIAL=0.5 no se disparan.
 
+**Scoring M0–M20 tras `G2-DIRECTOR-IA-EXECUTIVE-STEERING-CAPTURE-PHYSICAL-SYNC-001`:** ningún módulo cambia de etiqueta. Global permanece **10.5 / 20 = 52.5%** (0.0 pp). El store físico `EXECUTIVE_STEERING_EVENT` (`RECORDED`; create/read in-process) **no** es fila M0–M20; **no** completa M12 (Action Register ≠ commitment) ni M7 (TARGET_COMMITMENT IGF ≠ `COMMITMENT` `RECORDED`) ni M13 (el módulo propio no gana COMPLETE por un store interno sin chat). Store interno ≠ capability conversacional.
+
 ### 2. Dominios completos (COMPLETA)
 
 - **M3 Plantas / KPIs / Proyectos** (consulta canónica de la planta del scope, KPIs de `GET /api/dashboard/kpis` y `public.proyectos` por planta. COMPLETE no implica catálogo global, estatus «retrasado» almacenado ni `POST /api/proyectos`).
@@ -2720,6 +2817,8 @@ El chat legado integra **resultado mensual de cierre** (`month_close_result` →
 - Capacidad transversal `igf_reviewable_supports` (first slice C: Folios reviewable por reglas reales de cancelación + contrafactual IGF en memoria; ESCENARIO HIPOTÉTICO; no writes; no ahorro; no cheques; `igf_status` no inheritable en el hop): **no** es un módulo M0–M20; **no** cambia M2/M7 PARCIAL ni el 52.5%.
 - Capacidad transversal `taller_mayor` (source B; routing B: `(planta_id, token canónico)`; `matchTallerTipoCol===mayor`; mes CDMX / `mes_cargo`; ranking `SUM(importe)`; no silent folio pick; reviewability del Folio activo; no hop IGF plant-wide; historial same-plant+token; read-only): **no** es un módulo M0–M20; **no** cambia M5 PARCIAL ni el 52.5%.
 - Capacidad transversal `pre_meeting_brief` (arquitectura B; first slice B: una planta + mes abierto CDMX; comercial + IGF abierto + acciones + reviewable + gaps; isolation; requery; read-only; no Plaud runtime; no snapshot; `CONVERSATION_BASE_READY_WITH_LIMITS`): **no** es un módulo M0–M20; **no** cambia ningún módulo ni el 52.5%.
+- Capacidad transversal PRE_CLOSE (`SUPPORTED_WITHIN_PRE_CLOSE`; composer ciclo; **no** consume `EXECUTIVE_STEERING_EVENT`): **no** es un módulo M0–M20; **no** cambia ningún módulo ni el 52.5%.
+- Capacidad transversal `EXECUTIVE_STEERING_EVENT` (store `arr` + create/read in-process; `attestation_state=RECORDED`; chat/Plaud/live/Consejo/consumo EKE-IES-RE = **NO INTEGRADA**): **no** es un módulo M0–M20; **no** cambia ningún módulo ni el 52.5%.
 - Capacidad transversal `month_close_result` (arquitectura B; first slice C + read model ACTUAL_FINANCIAL: una planta + un mes calendario CDMX; ACTUAL_COMMERCIAL ARR vs TARGET_COMMITMENT `igf_meta` vs FORECAST IGF vs ACTUAL_FINANCIAL FINAL vs DERIVED_MODEL; `financial.actual` SUPPORTED solo con FINAL autorizada; target exacto YYYY-MM; `TARGET_MISSING_FOR_PERIOD`; requery; read-only): **no** es un módulo M0–M20; **no** cambia ningún módulo ni el 52.5%.
 
 ### 5. Dominios no integrados (NO INTEGRADA)
@@ -2738,7 +2837,8 @@ El chat legado integra **resultado mensual de cierre** (`month_close_result` →
 - Full conversation history / summaries / semantic long-term memory / preferencias / decisiones persistidas / memoria en EKS-IES-N5 / topic stack / más de un `previous_frame` (el first slice B de retorno intra-sesión — un prior — ya está en el repo; `pending_work_items_only` no es transcript ni navegación de temas)
 - Mix/rate del descuento/kg diario (el first slice **D** de `daily_discount_deviation` ya está integrado; no descompone mix vs rate)
 - Canal del descuento/kg diario (NOT AVAILABLE: no hay canal físico en `arr.descuentos_diarios_cliente`; no se prorratea)
-- Ingreso diario / brief matutino programado / saludo personalizado / directorio SEH / closed-month IGF **en `pre_meeting`** / comments de gráfica vía `cliente_key` / **ingreso mensual actual de cliente** / **ACTUAL_FINANCIAL en `pre_meeting` / IES / RE / UI histórica** / **Plaud runtime** (el first slice **B** de `daily_executive_brief`, el first slice **B** de `commercial_trend`, el perfil `client_profile`, `taller_mayor`, `pre_meeting_brief` y `month_close_result` ya están integrados; `commercial_trend` cubre 30/90 CASA/COMISIONISTA + OLS + top-6 **sin** comments; `client_profile` cubre 3M calendario keyed **sin** ingreso actual ni join AR; `taller_mayor` cubre lista/ranking/reviewability/historial de Taller Mayor por unidad **sin** Excel M5 ni unit master; `pre_meeting_brief` cubre comercial + IGF abierto + acciones + reviewable + gaps **sin** Taller Mayor / MC / Plaud / ACTUAL_FINANCIAL / mes cerrado en el pack; `month_close_result` cubre ACTUAL_COMMERCIAL mensual vs TARGET `igf_meta` vs FORECAST IGF vs ACTUAL_FINANCIAL FINAL **sin** carry-forward de meta y **sin** IES. Selector UI histórico **MISSING**. Plaud queda como evidencia **futura** de evaluación histórica; meeting statement ≠ causal truth; este sync **no** sube readiness Plaud)
+- Ingreso diario / brief matutino programado / saludo personalizado / directorio SEH / closed-month IGF **en `pre_meeting`** / comments de gráfica vía `cliente_key` / **ingreso mensual actual de cliente** / **ACTUAL_FINANCIAL en `pre_meeting` / IES / RE / UI histórica** / **Plaud runtime** (el first slice **B** de `daily_executive_brief`, el first slice **B** de `commercial_trend`, el perfil `client_profile`, `taller_mayor`, `pre_meeting_brief` y `month_close_result` ya están integrados; `commercial_trend` cubre 30/90 CASA/COMISIONISTA + OLS + top-6 **sin** comments; `client_profile` cubre 3M calendario keyed **sin** ingreso actual ni join AR; `taller_mayor` cubre lista/ranking/reviewability/historial de Taller Mayor por unidad **sin** Excel M5 ni unit master; `pre_meeting_brief` cubre comercial + IGF abierto + acciones + reviewable + gaps **sin** Taller Mayor / MC / Plaud / ACTUAL_FINANCIAL / mes cerrado en el pack; `month_close_result` cubre ACTUAL_COMMERCIAL mensual vs TARGET `igf_meta` vs FORECAST IGF vs ACTUAL_FINANCIAL FINAL **sin** carry-forward de meta y **sin** IES. Selector UI histórico **MISSING**. Plaud queda como evidencia **futura** de evaluación histórica; meeting statement ≠ causal truth; transcript Plaud **≠** `EXECUTIVE_STEERING_EVENT` `RECORDED`; este sync **no** sube readiness Plaud)
+- Captura conversacional / HTTP / UI de `EXECUTIVE_STEERING_EVENT`; ingestión Plaud → RECORDED automático; live copilot; confirmación / APPROVE / SUPERSEDE organizacional; consumo PRE_CLOSE / CLOSED_FINAL / COUNCIL_FINAL / POST_CLOSE / IES / Reasoning Engine de historia de steering; linkage automático a Action Register; what-if; fulfillment de commitment (el store físico + create/read in-process ya está **Implementado**; `RECORDED` ≠ verdad del contenido)
 - Trade-off económico por cliente / oferta estructurada de competencia
 - Scoring de desempeño de personas / culpa como causa del vencimiento (el path `action_status` consulta el responsable **registrado**; no evalúa personas)
 - Kanban HTTP / GET `/timeline` (excluido) / contenido PDF / S3 / documentos faltantes / cheque / póliza / `kanban_flow` (estatus/etapa, historial crudo y metadata documental ya están en PARCIAL M2; proyectos de `public.proyectos` ya están en COMPLETA M3)
