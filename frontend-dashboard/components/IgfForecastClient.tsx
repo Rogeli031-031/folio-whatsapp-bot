@@ -9,6 +9,7 @@ import {
   setTokenInStorage,
   getRoleFromDashboardToken,
 } from "@/lib/auth";
+import { buildIgfForecastAccionesHref } from "@/lib/igf-to-acciones-href";
 import {
   fetchIgfForecast,
   fetchIgfForecastMini,
@@ -257,6 +258,11 @@ export function IgfForecastContent() {
     if (up && /^\d{4}-\d{2}-\d{2}$/.test(up)) q.set("upload_day", up);
     return `/arr?${q.toString()}`;
   }, [token, uploadDay]);
+
+  const accionesPageHref = useMemo(
+    () => buildIgfForecastAccionesHref({ token, upload_day: uploadDay }),
+    [token, uploadDay]
+  );
 
   /** Consola Gas Uber (HTML estático en backend-api). Sobrescribir con NEXT_PUBLIC_GAS_UBER_CONSOLA_URL si cambia el host. */
   const gasUberConsolaUrl =
@@ -861,7 +867,7 @@ export function IgfForecastContent() {
           Ver dashboard de folios
         </Link>
         <Link
-          href={token ? `/acciones?t=${encodeURIComponent(token)}&back=1` : "/acciones"}
+          href={accionesPageHref}
           className="inline-flex items-center gap-2 rounded bg-slate-700 px-4 py-2 text-sm font-medium text-white hover:bg-slate-600"
         >
           Acciones
