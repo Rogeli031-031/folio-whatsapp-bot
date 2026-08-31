@@ -169,7 +169,7 @@ describe("plant_diagnosis planner y tools", () => {
     assert.equal(planDirectorIaQuestion("por qué cayó el ingreso").intent, "financial_diagnosis");
     assert.equal(planDirectorIaQuestion("cómo va IGF").intent, "igf_status");
     assert.equal(planDirectorIaQuestion("cómo va ARR").intent, "arr_status");
-    assert.equal(planDirectorIaQuestion("quiénes dejaron de comprar").intent, "commercial_state");
+    assert.equal(planDirectorIaQuestion("quiénes dejaron de comprar").intent, "commercial_trend");
     assert.equal(planDirectorIaQuestion("acciones vencidas").intent, "overdue_actions");
     assert.equal(planDirectorIaQuestion("qué gastos de folios existen 2026-08").intent, "expense_analysis");
     assert.equal(planDirectorIaQuestion("Dame el expediente comercial de Acme").intent, "expediente_comercial");

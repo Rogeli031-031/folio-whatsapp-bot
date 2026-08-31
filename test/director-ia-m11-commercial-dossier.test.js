@@ -189,8 +189,8 @@ describe("M11 intent, capability y tools", () => {
   });
 
   it("no hijack de listas, bitácora, vencidas ni client_analysis", () => {
-    assert.equal(planDirectorIaQuestion("¿Qué clientes dejaron de comprar?").intent, "commercial_state");
-    assert.equal(planDirectorIaQuestion("¿Qué clientes aumentaron?").intent, "commercial_state");
+    assert.equal(planDirectorIaQuestion("¿Qué clientes dejaron de comprar?").intent, "commercial_trend");
+    assert.equal(planDirectorIaQuestion("¿Qué clientes aumentaron?").intent, "commercial_trend");
     assert.equal(planDirectorIaQuestion("¿Qué acciones están vencidas?").intent, "overdue_actions");
     const bit = planDirectorIaQuestion("¿Qué dice la bitácora de Cliente X?");
     assert.notEqual(bit.intent, "expediente_comercial");

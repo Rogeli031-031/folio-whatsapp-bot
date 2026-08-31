@@ -90,7 +90,7 @@ const cases = [
   () => expectIntent("¿Por qué cayó el ingreso?", "financial_diagnosis"),
   () => expectIntent("¿Cómo va ARR?", "arr_status", { requireDomain: "arr" }),
   () => expectIntent("¿Cómo va IGF?", "igf_status", { requireDomain: "igf" }),
-  () => expectIntent("¿Qué clientes dejaron de comprar?", "commercial_state"),
+  () => expectIntent("¿Qué clientes dejaron de comprar?", "commercial_trend");
   () =>
     expectIntent("Dame el expediente comercial de Acme", "expediente_comercial", {
       requireDomain: "commercial_dossier",
@@ -99,7 +99,7 @@ const cases = [
     expectIntent("Muéstrame estado, comentarios y acciones de Acme", "expediente_comercial", {
       requireDomain: "commercial_dossier",
     }),
-  () => expectIntent("¿Qué clientes aumentaron?", "commercial_state"),
+  () => expectIntent("¿Qué clientes aumentaron?", "commercial_trend"),
   () =>
     expectIntent("¿Qué dice la bitácora de Cliente X?", ["client_analysis", "bitacora_lookup"], {
       requireDomain: "bitacora",

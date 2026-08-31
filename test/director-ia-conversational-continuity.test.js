@@ -224,9 +224,9 @@ describe("planner continuity hooks", () => {
     assert.equal(planDirectorIaQuestion("¿Cómo va el presupuesto esta semana?").intent, "budget_status");
   });
 
-  it("dejó de comprar (singular) es plant_diagnosis; plural sigue commercial_state", () => {
+  it("dejó de comprar (singular) es plant_diagnosis; plural lista → commercial_trend", () => {
     assert.equal(planDirectorIaQuestion("¿Por qué dejó de comprar Arturo?").intent, "plant_diagnosis");
-    assert.equal(planDirectorIaQuestion("qué clientes dejaron de comprar").intent, "commercial_state");
+    assert.equal(planDirectorIaQuestion("qué clientes dejaron de comprar").intent, "commercial_trend");
   });
 
   it("unknown no hereda salvo inheritParentIntent", () => {
