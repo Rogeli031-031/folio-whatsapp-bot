@@ -11,6 +11,7 @@ const {
   buildExecutiveStatusPack,
   buildExecutiveStatusPrompt,
   classifyForecastMagnitudeFollowUp,
+  projectChannelMoversVerbal,
 } = require("../lib/director-ia-conversational-executive-layer");
 const {
   isCommercialTrendQuestion,
@@ -267,10 +268,10 @@ describe("commercial movers — Estado Ejecutivo aditivo", () => {
       movers.payload.comisionista.every((m) => m.channel === "COMISIONISTA"),
       true
     );
-    assert.match(movers.summary, /TORTILLERIA ERICK: Disminuyó/);
-    assert.match(movers.summary, /GRUPO MOVE EMPRESARIAL: Dejó de comprar/);
-    assert.match(movers.summary, /NUEVA WAL MART DE MEXICO: Aumentó/);
-    assert.match(movers.summary, /HOTELES ROMANO: Nuevo/);
+    assert.match(movers.summary, /TORTILLERIA ERICK: disminuyó/);
+    assert.match(movers.summary, /GRUPO MOVE EMPRESARIAL: dejó de comprar/);
+    assert.match(movers.summary, /NUEVA WAL MART DE MEXICO: aumentó/);
+    assert.match(movers.summary, /HOTELES ROMANO: nuevo/);
     assert.equal(
       movers.payload.casa.some((m) => m.cliente === "NUEVA WAL MART DE MEXICO"),
       false
@@ -284,11 +285,11 @@ describe("commercial movers — Estado Ejecutivo aditivo", () => {
   it("comentario existente es registrado; ausencia no inventa; contradicción no cambia el delta", () => {
     const pack = packWithMovers();
     const prompt = buildExecutiveStatusPrompt(pack, "¿Cómo vamos?");
-    assert.match(prompt.userContent, /Comentario registrado: POR FALTA DE PIPAS/);
+    assert.match(prompt.userContent, /Comentario registrado: «POR FALTA DE PIPAS»/);
     assert.match(prompt.userContent, /Sin comentario reciente/);
-    assert.match(prompt.userContent, /Comentario registrado: COMPRA DIARIAMENTE/);
-    assert.match(prompt.userContent, /GRUPO MOVE EMPRESARIAL: Dejó de comprar, Δ -161\.08 t/);
-    assert.match(prompt.userContent, /Comentario registrado ≠ causa|no es causa/i);
+    assert.match(prompt.userContent, /Comentario registrado: «COMPRA DIARIAMENTE»/);
+    assert.match(prompt.userContent, /GRUPO MOVE EMPRESARIAL: dejó de comprar -161\.08 t/);
+    assert.match(prompt.userContent, /El comentario no es la causa|Comentario registrado ≠ causa|no es causa/i);
     assert.equal(formatRegisteredComments([]), "Sin comentario reciente.");
     assert.equal(formatRegisteredComments([{ body: "X" }]), "Comentario registrado: X");
   });
@@ -367,5 +368,248 @@ describe("commercial movers — follow-up Forecast intacto", () => {
       executive_hilo: true,
     });
     assert.equal(fu && fu.kind, "descuento");
+  });
+});
+
+describe("HUMAN REVIEW — preservación de Magnitudes + compactación verbal", () => {
+  const FIX = {
+    actual: 1188,
+    forecastVenta: 1777.25,
+    forecastDesc: -0.19,
+    storedVenta: 1888.75,
+    storedDesc: 0.31,
+    utilidad: 2777000,
+    resultado: 644400,
+  };
+
+  function sixEngineMovers() {
+    return [
+      mover({ cliente: "NEG-A", tipo: "perdido", delta_ton: -40, prev: 40, actual: 0 }),
+      mover({ cliente: "NEG-B", tipo: "disminucion", delta_ton: -30, prev: 50, actual: 20 }),
+      mover({ cliente: "NEG-C", tipo: "disminucion", delta_ton: -20, prev: 25, actual: 5 }),
+      mover({ cliente: "POS-A", tipo: "aumento", delta_ton: 18, prev: 10, actual: 28 }),
+      mover({ cliente: "POS-B", tipo: "nuevo", delta_ton: 12, prev: 0, actual: 12 }),
+      mover({ cliente: "POS-C", tipo: "aumento", delta_ton: 8, prev: 4, actual: 12 }),
+    ];
+  }
+
+  function assembledPreservation() {
+    return assemblePlantDiagnosisEvidence({
+      plant: plant(),
+      year: 2026,
+      month: 8,
+      actionRegisterRaw: {
+        period: { kind: "snapshot", as_of: "2026-08-31" },
+        payload: { summary: { open: 2, closed: 1, overdue: 9 }, top_overdue: [], responsables: [] },
+      },
+      dicfRaw: { period: { kind: "action_dates" }, payload: { actions: [], limit: 8 } },
+      bitacoraRaw: {
+        period: { kind: "bitacora_window", months: 3, from: "2026-06" },
+        payload: { sessions: [{ fecha: "2026-07-01", tipo: "visita_planta", titulo: "Visita" }] },
+      },
+      arrRaw: { venta_ton: 9999, load_error: null },
+      igfRaw: {
+        version_id: 44,
+        version_number: 3,
+        row: { empresa: "E4", venta_ton: FIX.storedVenta },
+        composition: {
+          ok: true,
+          lines: [
+            { line_key: "venta_ton", line_label: "Venta", value: FIX.storedVenta, unit: "ton" },
+            { line_key: "com_desc_kg", line_label: "Com. y Desc.", value: FIX.storedDesc, unit: "$/kg" },
+          ],
+        },
+      },
+      commercialStateRaw: {
+        period: { kind: "materialized_cache", yyyy_mm: "2026-08", year: 2026, month: 8 },
+        payload: {
+          materialized: true,
+          commercial_materiality: {
+            enabled: true,
+            current_period: "2026-08",
+            categories: [
+              {
+                category: "dejaron",
+                period: "2026-07",
+                top_clients: [{ cliente_display: "Acme", coverage_status: "material_without_action", has_dicf_action: false }],
+              },
+            ],
+          },
+        },
+      },
+    });
+  }
+
+  function preservationPack() {
+    const casa = sixEngineMovers().map((m) => ({ ...m, channel: "CASA", cliente: `CASA-${m.cliente}` }));
+    const comi = sixEngineMovers().map((m) => ({ ...m, channel: "COMISIONISTA", cliente: `COMI-${m.cliente}` }));
+    return buildExecutiveStatusPack({
+      assembled: assembledPreservation(),
+      trend: {
+        ok: true,
+        compare: true,
+        channel: "both",
+        range_days: 30,
+        range_start: "2026-08-02",
+        range_end: "2026-08-31",
+        channels: {
+          casa: {
+            channel: "casa",
+            range_start: "2026-08-02",
+            range_end: "2026-08-31",
+            ols: { direction: "DOWN" },
+            limitations: [],
+            top_movers: casa,
+          },
+          comisionista: {
+            channel: "comisionista",
+            range_start: "2026-08-02",
+            range_end: "2026-08-31",
+            ols: { direction: "UP" },
+            limitations: [],
+            top_movers: comi,
+          },
+        },
+      },
+      scope: { planta_id: 1, plant_name: "Zihuatanejo", scope_source: "ui_plant_anchor" },
+      forecastParity: {
+        ok: true,
+        reachable: true,
+        period: { year: 2026, month: 8, yyyy_mm: "2026-08", cutoff_date: "2026-08-31" },
+        actual_to_date: { venta_ton: FIX.actual, cutoff_date: "2026-08-31", truth_semantics: "ACTUAL_TO_DATE" },
+        mini: {
+          venta_ton: FIX.forecastVenta,
+          desc_kg: FIX.forecastDesc,
+          util_oper_importe: FIX.utilidad,
+          resultado_final_importe: FIX.resultado,
+          cutoff_date: "2026-08-31",
+          source: "computeIgfForecastMiniPayload",
+        },
+      },
+    });
+  }
+
+  function itemByMetric(pack, metric) {
+    return (pack.items || []).find((i) => i.payload && i.payload.metric === metric);
+  }
+
+  it("pack+prompt conservan simultáneamente las 7 magnitudes, tendencias, movers, riesgos, ejecución y próxima decisión", () => {
+    const pack = preservationPack();
+    const prompt = buildExecutiveStatusPrompt(pack, "¿Cómo vamos?");
+    const actual = itemByMetric(pack, "venta_ton");
+    const forecast = itemByMetric(pack, "forecast_venta_desc");
+    const forecastDesc = itemByMetric(pack, "forecast_desc_kg");
+    const storedVenta = (pack.items || []).find(
+      (i) => i.truth_semantics === "FORECAST_STORED" && i.payload && i.payload.metric === "venta_ton"
+    );
+    const storedDesc = itemByMetric(pack, "com_desc_kg");
+    const util = itemByMetric(pack, "util_oper_importe");
+    const resultado = itemByMetric(pack, "resultado_final_importe");
+    const trend = pack.items.find((i) => i.slot === "TREND");
+    const movers = pack.items.find((i) => i.slot === "COMMERCIAL_MOVERS");
+    const risks = pack.items.find((i) => i.slot === "RISKS");
+    const exec = pack.items.find((i) => i.slot === "EXECUTION");
+    const next = pack.items.find((i) => i.slot === "NEXT_DECISION");
+
+    assert.equal(actual.truth_semantics, "ACTUAL_TO_DATE");
+    assert.equal(actual.payload.venta_ton, FIX.actual);
+    assert.equal(forecast.truth_semantics, "FORECAST_PROJECTION");
+    assert.equal(forecast.payload.venta_ton, FIX.forecastVenta);
+    assert.equal(forecastDesc.payload.desc_kg, FIX.forecastDesc);
+    assert.equal(storedVenta.payload.venta_ton, FIX.storedVenta);
+    assert.equal(storedDesc.payload.com_desc_kg, FIX.storedDesc);
+    assert.equal(storedDesc.truth_semantics, "FORECAST_STORED");
+    assert.equal(util.payload.util_oper_importe, FIX.utilidad);
+    assert.equal(resultado.payload.resultado_final_importe, FIX.resultado);
+    assert.equal(trend.payload.casa.direction, "DOWN");
+    assert.equal(trend.payload.comisionista.direction, "UP");
+    assert.ok(movers && risks && exec && next);
+
+    assert.match(prompt.userContent, /IGF almacenado/);
+    assert.match(prompt.userContent, /IGF descuento almacenado/);
+    assert.match(prompt.userContent, /Descuento \(Forecast\)/);
+    assert.match(prompt.userContent, /incluye «IGF almacenado/);
+    assert.match(prompt.userContent, /No las omitas para dejar espacio a COMMERCIAL_MOVERS/);
+    assert.match(prompt.userContent, /FORECAST_STORED, cuando AVAILABLE, COEXISTE/);
+    assert.match(prompt.userContent, /Movimientos comerciales relevantes/);
+    assert.doesNotMatch(prompt.userContent, /1261|1491\.5|1536\.5405/);
+  });
+
+  it("orden estructural Magnitudes < Tendencias < Movers < Riesgos y ninguna sección previa desaparece", () => {
+    const pack = preservationPack();
+    const slots = pack.items.map((i) => i.slot);
+    const firstMag = slots.indexOf("MAGNITUDE");
+    const trend = slots.indexOf("TREND");
+    const movers = slots.indexOf("COMMERCIAL_MOVERS");
+    const risks = slots.indexOf("RISKS");
+    assert.ok(firstMag >= 0 && firstMag < trend && trend < movers && movers < risks);
+    for (const slot of ["SITUATION", "MAGNITUDE", "TREND", "COMMERCIAL_MOVERS", "DRIVERS", "RISKS", "EXECUTION", "NEXT_DECISION"]) {
+      assert.ok(slots.includes(slot), slot);
+    }
+    const hier = ANSWER_HIERARCHY;
+    assert.ok(hier.indexOf("MAGNITUDE") < hier.indexOf("TREND"));
+    assert.ok(hier.indexOf("TREND") < hier.indexOf("COMMERCIAL_MOVERS"));
+    assert.ok(hier.indexOf("COMMERCIAL_MOVERS") < hier.indexOf("RISKS"));
+  });
+
+  it("Forecast descuento y stored descuento coexisten con valores y signos distintos", () => {
+    const pack = preservationPack();
+    const forecastDesc = itemByMetric(pack, "forecast_desc_kg");
+    const storedDesc = itemByMetric(pack, "com_desc_kg");
+    assert.equal(forecastDesc.truth_semantics, "FORECAST_PROJECTION");
+    assert.equal(storedDesc.truth_semantics, "FORECAST_STORED");
+    assert.notEqual(forecastDesc.payload.desc_kg, storedDesc.payload.desc_kg);
+    assert.ok(forecastDesc.payload.desc_kg < 0);
+    assert.ok(storedDesc.payload.desc_kg > 0);
+    const storedVenta = (pack.items || []).find(
+      (i) => i.truth_semantics === "FORECAST_STORED" && i.payload && i.payload.metric === "venta_ton"
+    );
+    const forecast = itemByMetric(pack, "forecast_venta_desc");
+    assert.doesNotMatch(storedVenta.summary, /Forecast al corte/);
+    assert.doesNotMatch(forecast.summary, /IGF almacenado/);
+  });
+
+  it("proyección verbal compacta no cambia el Top 6 del motor ni mezcla canales", () => {
+    const pack = preservationPack();
+    const movers = pack.items.find((i) => i.slot === "COMMERCIAL_MOVERS");
+    assert.equal(movers.payload.casa.length, 6);
+    assert.equal(movers.payload.comisionista.length, 6);
+    assert.equal(movers.payload.verbal_projection.casa.length, 4);
+    assert.equal(movers.payload.verbal_projection.comisionista.length, 4);
+    assert.equal(movers.payload.verbal_projection.engine_top_n_unchanged, true);
+    const verbalCasa = projectChannelMoversVerbal(movers.payload.casa);
+    assert.deepEqual(
+      verbalCasa.map((m) => m.cliente),
+      ["CASA-NEG-A", "CASA-NEG-B", "CASA-POS-A", "CASA-POS-B"]
+    );
+    assert.equal(movers.payload.casa.some((m) => m.cliente === "CASA-NEG-C"), true);
+    assert.match(movers.summary, /CASA-NEG-A/);
+    assert.doesNotMatch(movers.summary, /CASA-NEG-C/);
+    assert.equal(
+      movers.payload.casa.every((m) => m.channel === "CASA"),
+      true
+    );
+    assert.equal(
+      movers.payload.comisionista.every((m) => m.channel === "COMISIONISTA"),
+      true
+    );
+    const prompt = buildExecutiveStatusPrompt(pack, "¿Cómo vamos?");
+    assert.match(prompt.userContent, /CASA-NEG-A: dejó de comprar/);
+    assert.doesNotMatch(prompt.userContent, /CASA-NEG-C/);
+    assert.doesNotMatch(prompt.userContent, /\(falta de pipas\)|\(compra diaria\)/i);
+  });
+
+  it("comentario contradictorio no altera el delta del motor", () => {
+    const pack = packWithMovers();
+    const move = pack.items
+      .find((i) => i.slot === "COMMERCIAL_MOVERS")
+      .payload.casa.find((m) => m.cliente === "GRUPO MOVE EMPRESARIAL");
+    assert.equal(move.tipo, "perdido");
+    assert.equal(move.delta_ton, -161.08);
+    assert.equal(move.registered_comments[0].body, "COMPRA DIARIAMENTE");
+    const prompt = buildExecutiveStatusPrompt(pack, "¿Cómo vamos?");
+    assert.match(prompt.userContent, /dejó de comprar -161\.08 t/);
+    assert.match(prompt.userContent, /Comentario registrado: «COMPRA DIARIAMENTE»/);
+    assert.match(prompt.userContent, /El comentario no es la causa/);
   });
 });

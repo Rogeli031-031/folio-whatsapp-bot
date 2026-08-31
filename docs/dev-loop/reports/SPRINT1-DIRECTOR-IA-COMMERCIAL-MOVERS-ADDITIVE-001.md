@@ -5,7 +5,8 @@ task_id: SPRINT1-DIRECTOR-IA-COMMERCIAL-MOVERS-ADDITIVE-001
 outcome: DONE
 current_task_status: DONE_PENDING_REVIEW
 validation_level: LOCAL / TESTED / DONE_PENDING_REVIEW
-production_pass: NOT_CLAIMED
+production_pass: NOT_YET_PROVEN
+PRODUCTION_PASS: NOT_YET_PROVEN
 DASHBOARD_BEHAVIOR_CHANGED: NO
 ui_1m_3m_transport: NOT_IMPLEMENTED
 git: none
@@ -132,3 +133,99 @@ Ninguna autorizada. Un DONE no abre la siguiente. Transporte UI 1M/3M + canal qu
 
 - G5: HUMAN_APPROVER CLOSED o REJECTED.
 - Validación de producción posterior al deploy (HUMAN_APPROVER).
+
+---
+
+## HUMAN REVIEW — PRODUCTION REGRESSION
+
+Corrección dentro de la misma tarea. `status` permanece `DONE_PENDING_REVIEW`. No se abrió otra tarea.
+
+### Respuesta de producción observada
+
+Corte 31 de agosto de 2026, «¿Cómo vamos?». Magnitudes Clave mostró:
+
+- Venta Actual
+- Forecast venta
+- Descuento (Forecast)
+- Utilidad Operativa (Forecast)
+- Resultado Final (Forecast)
+
+y **omitió**:
+
+- IGF almacenado
+- IGF descuento almacenado
+
+Después apareció COMMERCIAL_MOVERS con 6 CASA + 6 COMISIONISTA. Comentarios se verbalizaron entre paréntesis (p. ej. «disminuyó … (falta de pipas)»), forma que parece causal.
+
+### Campos que desaparecieron
+
+IGF almacenado (FORECAST_STORED `venta_ton`) e IGF descuento almacenado (FORECAST_STORED `com_desc_kg`). No desaparecieron del pack ni de la fuente.
+
+### Trazado físico
+
+| Paso | Resultado | Clasificación |
+|---|---|---|
+| A. IGF almacenado aguas arriba | `buildExecutiveStatusPack` sigue leyendo `igf.compromiso_lines` / `igfCompositionLine(..., "venta_ton")` (~1148–1163). No se tocó el loader IGF ni el pack Forecast. | PROVEN |
+| B. IGF descuento almacenado aguas arriba | Mismo pack, `igfCompositionLine(..., "com_desc_kg")` (~1165–1186). | PROVEN |
+| C. Llegan al Estado Ejecutivo | Ambos se `items.push` como MAGNITUDE `FORECAST_STORED` incondicionalmente, con o sin COMMERCIAL_MOVERS. | PROVEN |
+| D. Llegan a slots | `included_slots` incluye MAGNITUDE si cualquier magnitud está AVAILABLE. COMMERCIAL_MOVERS no filtra MAGNITUDE. | PROVEN |
+| E. Llegan al prompt final | `formatPackForPrompt` imprime `item.summary` y `venta_ton` / `com_desc_kg` de cada MAGNITUDE. | PROVEN |
+| F. El LLM los recibe y los omite | La respuesta de producción escribió Magnitudes **completas** (5 líneas) **sin** stored, y **después** Tendencias + 12 movers. Truncamiento por `max_tokens: 1000` cortaría el **final**, no el medio de Magnitudes. La omisión es de **selección**. | PROVEN |
+| G. Qué cambió COMMERCIAL_MOVERS | 1) Slot REQUIRED con dump de hasta 12 movers en el prompt. 2) Instrucción nueva: incluir COMMERCIAL_MOVERS. 3) Foco de «cómo vamos» **exigía** Descuento (Forecast) y **no** exigía IGF stored. 4) «no hagas dump / Selecciona por materialidad / breve». 5) PRECEDENCIA KPI: «FORECAST_STORED no los pisa» sin decir que **coexiste**. | PROVEN |
+
+No hay código que borre IGF stored al añadir movers. No se reconstruyó ni se perdió la fuente.
+
+### Causa raíz PROVEN
+
+**Composición / preservación del prompt**, no pérdida de dato ni de Forecast.
+
+El pack y el prompt **sí** contienen IGF stored. El contrato de foco de «¿Cómo vamos?» mandaba incluir Descuento (Forecast) y COMMERCIAL_MOVERS, y **no** mandaba conservar FORECAST_STORED. El LLM eligió las líneas mandatorias y omitió las stored. COMMERCIAL_MOVERS agravó la presión de selección (bloque REQUIRED + 12 líneas + «no dump»).
+
+Mecanismo responsable:
+
+- `lib/director-ia-conversational-executive-layer.js` `executiveQuestionFocusLines` (foco de «cómo vamos» sin garantía stored).
+- `formatPackForPrompt` (PRECEDENCIA sin coexistencia explícita; dump verbal de todos los movers).
+- `formatCommercialMoversSummary` / `formatPackForPrompt` COMMERCIAL_MOVERS (proyección 6+6).
+
+No es `buildAuthoritativeForecastRunPack`, ni PROM, ni `computeIgfForecastMiniPayload`, ni Dashboard.
+
+### Corrección mínima aplicada
+
+1. Garantía de foco: si FORECAST_STORED `venta_ton` / `com_desc_kg` están AVAILABLE, el prompt **exige** «IGF almacenado» e «IGF descuento almacenado» en Magnitudes Clave. Coexisten con Forecast. No se omiten por COMMERCIAL_MOVERS.
+2. PRECEDENCIA: FORECAST_STORED no pisa Forecast **y** cuando AVAILABLE **coexiste**.
+3. Compactación **solo verbal** de COMMERCIAL_MOVERS: 2 negativos + 2 positivos por canal, en el orden ya rankeado del motor. Payload conserva Top 6. El engine no se tocó.
+4. Comentario: hecho cuantitativo en una frase; `Comentario registrado: «…»`; «El comentario no es la causa». Prohibido el paréntesis causal.
+
+### Por qué no modifica Forecast
+
+No se editó el run pack, mini payload, PROM, cutoff, bootstrap ni follow-ups. Las cifras stored siguen saliendo de `assembled.sources.igf`.
+
+### Por qué no modifica Dashboard
+
+No se tocó gráfica, 1M/3M, endpoints ni UI. `commercial-trend-engine.js` intacto.
+
+`DASHBOARD_BEHAVIOR_CHANGED = NO`
+
+### Compactación de COMMERCIAL_MOVERS
+
+Sí, solo presentación del Estado Ejecutivo: `projectChannelMoversVerbal` (2+2 por canal). Preguntas directas siguen con el conjunto del motor.
+
+### Tests nuevos/modificados
+
+- `test/director-ia-commercial-movers-additive.test.js`: bloque «HUMAN REVIEW — preservación…» (5 tests). Fixtures distintos a 1261 / 1491.5 / 1536.5405.
+- Ajustes de aserción al nuevo wording de movers/comentarios.
+
+### Suite final real
+
+- Focales movers: 18/18
+- Batch forecast + CEL + trend + golden + continuity + plant diagnosis + M11: 221/221
+- `node --test test/director-ia-*.test.js`: **1301/1301 pass, 0 fail**
+
+`PRODUCTION_PASS = NOT_YET_PROVEN`
+
+### Limitaciones restantes
+
+- La respuesta final sigue siendo prosa del LLM; la garantía local es pack+prompt+contrato de foco, no un post-procesador que reinserte líneas.
+- `max_tokens: 1000` no se cambió (la omisión observada no fue corte de cola).
+- 1M/3M UI no se transporta.
+- Validación visual de producción pendiente del HUMAN_APPROVER.
