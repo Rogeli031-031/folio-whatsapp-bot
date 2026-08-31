@@ -121,6 +121,8 @@ function packFor(question, over = {}) {
       },
       actual_to_date: { venta_ton: 880.4, cutoff_date: "2026-08-15", truth_semantics: "ACTUAL_TO_DATE" },
       mini: {
+        venta_ton: 1212,
+        desc_kg: 1.85,
         util_oper_importe: 420000,
         resultado_final_importe: 310000,
         cutoff_date: "2026-08-15",
