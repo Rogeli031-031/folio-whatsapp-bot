@@ -382,7 +382,7 @@ describe("SPRINT1 CUTOFF-TRANSPORT-E2E — 4 absence", () => {
     assert.equal(result.ok, true);
     assert.equal(result.context_meta.requested_upload_day, null);
     assert.equal(result.context_meta.effective_cutoff_date, LAST_UPLOAD);
-    assert.equal(result.context_meta.cutoff_source, "arr.upload_log");
+    assert.equal(result.context_meta.cutoff_source, "arr.upload_log.plant");
     assert.equal(result.context_meta.mini_loader_invoked, true);
     assert.equal(miniOpts[0].upload_day, LAST_UPLOAD);
     assert.notEqual(miniOpts[0].upload_day, MONTH_END_INVENTED);
