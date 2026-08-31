@@ -103,3 +103,31 @@ Limitación real: `buildIgfForecastPayload` no está exportado. No se duplicó o
 - Golden Set (archivo sprint1): 14/14
 - 12 originales: PASS
 - Suite Director IA: 1170/1170
+
+---
+
+## Production acceptance FAIL — continuación
+
+DASHBOARD_CHANGED: NO.
+
+### Bloqueo (STOP)
+
+`computeIgfForecastMiniPayload` vive solo en `server.js` y **no está exportado**.
+Esa es la salida que pinta Utilidad 3,169,502 y Resultado 803,537.
+No se copió. Para paridad en runtime hace falta exponer esa función (o inyectarla read-only a Director IA) **sin** cambiar el endpoint.
+
+### Tests (esta continuación)
+
+- Golden Set sprint1: 16/16
+- Suite Director IA: 1172/1172
+
+### Valores del test (extractor + pack, fixture UI)
+
+| Cifra | Test |
+|---|---|
+| Venta | 1488 |
+| Descuento | -0.11 |
+| Utilidad | 3169502 |
+| Resultado | 803537 |
+| CASA | 839.36 |
+| COMISIONISTA | 648.64 |
