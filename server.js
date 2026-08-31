@@ -9891,6 +9891,34 @@ comercialEntidad.configureComercialEntidad({
 directorIaChat.configureDirectorIaChat({
   pool,
   persistentMemoryStore: require("./lib/director-ia-persistent-memory").createPgStore(pool),
+  loadArrLastUploadDay: async function loadArrLastUploadDayForDirectorIa(poolOrClient, year, month) {
+    let client = null;
+    let release = false;
+    if (poolOrClient && typeof poolOrClient.connect === "function") {
+      client = await poolOrClient.connect();
+      release = true;
+    } else {
+      client = poolOrClient;
+    }
+    try {
+      const r = await client.query(
+        `SELECT plant_code, uploaded_day, uploaded_at, uploaded_by
+           FROM arr.upload_log
+          WHERE year = $1::int AND month = $2::int
+          ORDER BY uploaded_at DESC
+          LIMIT 1`,
+        [year, month]
+      );
+      const row = r.rows && r.rows[0] ? r.rows[0] : null;
+      if (!row) return { ok: true, year, month, upload_day: null };
+      const uploadDay =
+        row.uploaded_day &&
+        (typeof row.uploaded_day === "string" ? row.uploaded_day : row.uploaded_day.toISOString?.().slice(0, 10));
+      return { ok: true, year, month, upload_day: uploadDay || null };
+    } finally {
+      if (release && client && typeof client.release === "function") client.release();
+    }
+  },
   loadIgfForecastMiniPayload: async function loadIgfForecastMiniPayloadForDirectorIa(poolOrClient, opts) {
     const year = opts && opts.year;
     const month = opts && opts.month;

@@ -138,14 +138,21 @@ export function fetchDirectorIaChat(
   token: string,
   plantaId: number,
   question: string,
-  history?: DirectorIaChatHistoryMessage[]
+  history?: DirectorIaChatHistoryMessage[],
+  opts?: { upload_day?: string | null; planta_nombre?: string | null }
 ): Promise<DirectorIaChatResponse> {
+  const uploadDay =
+    opts && opts.upload_day && /^\d{4}-\d{2}-\d{2}$/.test(String(opts.upload_day).trim().slice(0, 10))
+      ? String(opts.upload_day).trim().slice(0, 10)
+      : null;
   return apiFetch<DirectorIaChatResponse>("/api/director-ia/chat", {
     method: "POST",
     token,
     body: JSON.stringify({
       planta_id: plantaId,
       question,
+      ...(opts && opts.planta_nombre ? { planta_nombre: opts.planta_nombre } : {}),
+      ...(uploadDay ? { upload_day: uploadDay } : {}),
       ...(history && history.length > 0 ? { history: history.slice(-8) } : {}),
     }),
     cache: "no-store",

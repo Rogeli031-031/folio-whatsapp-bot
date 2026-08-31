@@ -68,7 +68,17 @@ export function DirectorIaChatPanel({
     setLastSources([]);
 
     try {
-      const res = await fetchDirectorIaChat(token, pid, q, historyForApi);
+      let uploadDay: string | null = null;
+      if (typeof window !== "undefined") {
+        const fromUrl = new URLSearchParams(window.location.search).get("upload_day");
+        if (fromUrl && /^\d{4}-\d{2}-\d{2}$/.test(fromUrl.trim().slice(0, 10))) {
+          uploadDay = fromUrl.trim().slice(0, 10);
+        }
+      }
+      const res = await fetchDirectorIaChat(token, pid, q, historyForApi, {
+        upload_day: uploadDay,
+        planta_nombre: plantaNombre || null,
+      });
       if ("enabled" in res && res.enabled === false) {
         setError("Director IA deshabilitado en el servidor.");
         return;
@@ -87,7 +97,7 @@ export function DirectorIaChatPanel({
     } finally {
       setLoading(false);
     }
-  }, [token, plantaId, question, messages]);
+  }, [token, plantaId, plantaNombre, question, messages]);
 
   const shellClass = chatMode
     ? `flex flex-col min-h-0 ${className}`

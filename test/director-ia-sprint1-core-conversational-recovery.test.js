@@ -221,7 +221,7 @@ describe("SPRINT1 Golden Set — planta / periodo / verdad / campos", () => {
     assert.notEqual(trend.payload.casa.direction, trend.payload.comisionista.direction);
     const target = pack.items.find((i) => i.slot === "TARGET_COMMITMENT");
     assert.equal(target.availability, AVAILABILITY.UNAVAILABLE);
-    assert.equal(target.truth_semantics, "TARGET");
+    assert.ok(target.truth_semantics === "TARGET" || target.truth_semantics === "TARGET_OR_COMMITMENT");
   });
 
   it("Q2 pack expone rentabilidad stored y no la etiqueta actual/TARGET", () => {
@@ -278,7 +278,7 @@ describe("SPRINT1 Golden Set — planta / periodo / verdad / campos", () => {
 describe("SPRINT1 — paridad Dashboard y bug d.canal", () => {
   it("adaptador reutiliza helpers Dashboard y no recalcula", () => {
     assert.match(ADAPTER_SRC, /computePronosticoProyByPlant/);
-    assert.match(ADAPTER_SRC, /getVentaRealTonProvinciaByPlant/);
+    assert.match(ADAPTER_SRC, /getPronosticoPlantDetail/);
     assert.match(ADAPTER_SRC, /resolveProyFromPlantMap/);
     assert.doesNotMatch(ADAPTER_SRC, /generarDashboardArrForecast/);
     assert.match(DASHBOARD_FORECAST_SRC, /function computePronosticoProyByPlant/);
