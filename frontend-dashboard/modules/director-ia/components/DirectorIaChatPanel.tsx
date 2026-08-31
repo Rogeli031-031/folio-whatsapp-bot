@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchDirectorIaChat } from "@/modules/director-ia/lib/api";
+import { resolveDirectorIaUploadDayFromSearch } from "@/modules/director-ia/lib/chat-request";
 
 export type DirectorIaChatMessage = {
   id: string;
@@ -18,6 +19,8 @@ type DirectorIaChatPanelProps = {
   /** Estilo burbujas de chat; oculta textos explicativos extra. */
   chatMode?: boolean;
   className?: string;
+  /** Corte IGF/ARR ya resuelto por el padre; si falta, se lee `upload_day` de la URL. */
+  uploadDay?: string | null;
 };
 
 function newMessageId() {
@@ -31,6 +34,7 @@ export function DirectorIaChatPanel({
   showSources = false,
   chatMode = false,
   className = "",
+  uploadDay: uploadDayProp = null,
 }: DirectorIaChatPanelProps) {
   const [question, setQuestion] = useState("");
   const [loading, setLoading] = useState(false);
@@ -68,16 +72,13 @@ export function DirectorIaChatPanel({
     setLastSources([]);
 
     try {
-      let uploadDay: string | null = null;
-      if (typeof window !== "undefined") {
-        const fromUrl = new URLSearchParams(window.location.search).get("upload_day");
-        if (fromUrl && /^\d{4}-\d{2}-\d{2}$/.test(fromUrl.trim().slice(0, 10))) {
-          uploadDay = fromUrl.trim().slice(0, 10);
-        }
-      }
+      const fromUrl =
+        typeof window !== "undefined" ? resolveDirectorIaUploadDayFromSearch(window.location.search) : null;
+      const uploadDay = uploadDayProp || fromUrl;
       const res = await fetchDirectorIaChat(token, pid, q, historyForApi, {
         upload_day: uploadDay,
         planta_nombre: plantaNombre || null,
+        search: typeof window !== "undefined" ? window.location.search : null,
       });
       if ("enabled" in res && res.enabled === false) {
         setError("Director IA deshabilitado en el servidor.");
@@ -97,7 +98,7 @@ export function DirectorIaChatPanel({
     } finally {
       setLoading(false);
     }
-  }, [token, plantaId, plantaNombre, question, messages]);
+  }, [token, plantaId, plantaNombre, question, messages, uploadDayProp]);
 
   const shellClass = chatMode
     ? `flex flex-col min-h-0 ${className}`

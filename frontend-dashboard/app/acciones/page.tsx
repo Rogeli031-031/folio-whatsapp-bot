@@ -1675,6 +1675,7 @@ function ActionRegisterContent() {
           token={token}
           plantaId={plantaId}
           plantaNombre={plantaNombre}
+          uploadDay={(searchParams.get("upload_day") || "").trim().slice(0, 10) || null}
         />
       ) : null}
     </div>

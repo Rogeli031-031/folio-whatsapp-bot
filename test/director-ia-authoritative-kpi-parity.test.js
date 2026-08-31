@@ -203,6 +203,7 @@ describe("SPRINT1 AUTHORITATIVE-KPI-PARITY — ruta conversacional askDirectorIa
       loadPlantDiagnosisForChat: async () => assembledWithDecoys(),
       loadCommercialTrendForChat: async () => over.trend || { ok: false },
       loadDashboardForecastParity: async () => decoyParity(),
+      loadArrLastUploadDay: async () => ({ upload_day: null }),
       loadIgfForecastMiniPayload: async (_pool, opts) => {
         miniCalls.push(opts);
         return authoritativeMiniPayload();
@@ -232,7 +233,7 @@ describe("SPRINT1 AUTHORITATIVE-KPI-PARITY — ruta conversacional askDirectorIa
   it("Q1 cómo vamos: loader mini corre y el prompt final conserva el payload autoritativo", async () => {
     const ctx = wireCel();
     const result = await askDirectorIa(
-      { body: { planta_nombre: "Acapulco" }, dashboardAuth: { role: "ZP" } },
+      { body: { planta_nombre: "Acapulco", upload_day: "2026-08-12" }, dashboardAuth: { role: "ZP" } },
       1,
       Q1
     );
@@ -249,7 +250,7 @@ describe("SPRINT1 AUTHORITATIVE-KPI-PARITY — ruta conversacional askDirectorIa
   it("Q2 rentabilidad: decoy stored no gana precedencia en pack ni prompt", async () => {
     const ctx = wireCel();
     const result = await askDirectorIa(
-      { body: { planta_nombre: "Acapulco" }, dashboardAuth: { role: "ZP" } },
+      { body: { planta_nombre: "Acapulco", upload_day: "2026-08-12" }, dashboardAuth: { role: "ZP" } },
       1,
       Q2
     );
@@ -266,7 +267,7 @@ describe("SPRINT1 AUTHORITATIVE-KPI-PARITY — ruta conversacional askDirectorIa
   it("Q3 descuento: desc autoritativo atraviesa; decoy adapter no gobierna", async () => {
     const ctx = wireCel();
     const result = await askDirectorIa(
-      { body: { planta_nombre: "Acapulco" }, dashboardAuth: { role: "ZP" } },
+      { body: { planta_nombre: "Acapulco", upload_day: "2026-08-12" }, dashboardAuth: { role: "ZP" } },
       1,
       Q3
     );

@@ -8,6 +8,7 @@ type DirectorIaChatModalProps = {
   token: string;
   plantaId: number;
   plantaNombre?: string;
+  uploadDay?: string | null;
 };
 
 export function DirectorIaChatModal({
@@ -16,6 +17,7 @@ export function DirectorIaChatModal({
   token,
   plantaId,
   plantaNombre,
+  uploadDay = null,
 }: DirectorIaChatModalProps) {
   if (!open) return null;
 
@@ -57,6 +59,7 @@ export function DirectorIaChatModal({
             token={token}
             plantaId={plantaId}
             plantaNombre={plantaNombre}
+            uploadDay={uploadDay}
             chatMode
             className="flex-1 min-h-[320px]"
           />
