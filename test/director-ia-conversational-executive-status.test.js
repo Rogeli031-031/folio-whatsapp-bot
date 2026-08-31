@@ -300,16 +300,18 @@ describe("CEL pack + composer", () => {
     assert.equal(pack.channels.CASA.availability, "PARTIAL");
     assert.equal(pack.demand.actual_financial, AVAILABILITY.NOT_APPLICABLE);
     assert.equal(pack.demand.steering_recorded, AVAILABILITY.NOT_APPLICABLE);
-    const arr = pack.items.find((i) => i.source === "arr.proyeccion_planta");
-    assert.equal(arr.truth_semantics, "FORECAST_PROJECTION");
+    const forecast = pack.items.find((i) => i.payload && i.payload.metric === "forecast_venta_desc");
+    assert.equal(forecast.truth_semantics, "FORECAST_PROJECTION");
+    assert.equal(forecast.availability, AVAILABILITY.UNAVAILABLE);
+    assert.equal(forecast.payload.venta_ton, null);
     const missing = buildExecutiveStatusPack({
       assembled: assembleOk({ arrRaw: { venta_ton: null } }),
       trend: null,
       scope: { planta_id: 1, plant_name: "Acapulco" },
     });
-    const missingArr = missing.items.find((i) => i.source === "arr.proyeccion_planta");
-    assert.notEqual(missingArr.payload && missingArr.payload.venta_ton, 0);
-    assert.match(missingArr.summary, /no es cero/i);
+    const missingForecast = missing.items.find((i) => i.payload && i.payload.metric === "forecast_venta_desc");
+    assert.notEqual(missingForecast.payload && missingForecast.payload.venta_ton, 0);
+    assert.match(missingForecast.summary, /UNAVAILABLE|no es cero/i);
   });
 
   it("composer no es source dump ni materialidad-first", () => {

@@ -42,6 +42,9 @@ function buildDirectorIaChatBody(input) {
   if (input && input.planta_nombre) body.planta_nombre = input.planta_nombre;
   if (uploadDay) body.upload_day = uploadDay;
   if (history.length) body.history = history;
+  if (input && input.conversation_state && typeof input.conversation_state === "object") {
+    body.conversation_state = input.conversation_state;
+  }
   return body;
 }
 

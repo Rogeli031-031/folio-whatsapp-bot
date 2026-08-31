@@ -112,12 +112,18 @@ function packFor(question, over = {}) {
     forecastParity: {
       ok: true,
       reachable: true,
-      period: { year: 2026, month: 8, yyyy_mm: "2026-08" },
-      forecast: { venta_ton: 1212, desc_kg: 1.85, truth_semantics: "FORECAST_PROJECTION" },
-      actual_to_date: { venta_ton: 880.4, truth_semantics: "ACTUAL_TO_DATE" },
+      period: { year: 2026, month: 8, yyyy_mm: "2026-08", cutoff_date: "2026-08-15" },
+      forecast: {
+        venta_ton: 1212,
+        desc_kg: 1.85,
+        cutoff_date: "2026-08-15",
+        truth_semantics: "FORECAST_PROJECTION",
+      },
+      actual_to_date: { venta_ton: 880.4, cutoff_date: "2026-08-15", truth_semantics: "ACTUAL_TO_DATE" },
       mini: {
         util_oper_importe: 420000,
         resultado_final_importe: 310000,
+        cutoff_date: "2026-08-15",
         source: "GET /api/dashboard/igf-forecast include_mini → mini.rows[]",
       },
     },
@@ -200,7 +206,7 @@ describe("SPRINT1 Golden Set — planta / periodo / verdad / campos", () => {
   it("Q1 pack dispone venta al corte, forecast, desc, util, resultado, tendencias", () => {
     const pack = packFor(Q1);
     const actual = itemByMetric(pack, "venta_ton") && pack.items.find((i) => i.truth_semantics === "ACTUAL_TO_DATE");
-    const forecast = pack.items.find((i) => i.source === "arr.proyeccion_planta");
+    const forecast = itemByMetric(pack, "forecast_venta_desc");
     const util = itemByMetric(pack, "util_oper_importe");
     const resultado = itemByMetric(pack, "resultado_final_importe");
     const descStored = itemByMetric(pack, "com_desc_kg");
@@ -241,7 +247,7 @@ describe("SPRINT1 Golden Set — planta / periodo / verdad / campos", () => {
 
   it("Q3 pack expone descuento forecast y stored; ausencia no es 0", () => {
     const pack = packFor(Q3);
-    const forecast = pack.items.find((i) => i.source === "arr.proyeccion_planta");
+    const forecast = itemByMetric(pack, "forecast_venta_desc");
     const descStored = itemByMetric(pack, "com_desc_kg");
     assert.equal(forecast.payload.desc_kg, 1.85);
     assert.equal(forecast.truth_semantics, "FORECAST_PROJECTION");
@@ -252,7 +258,7 @@ describe("SPRINT1 Golden Set — planta / periodo / verdad / campos", () => {
       scope: { planta_id: 1, plant_name: "Acapulco" },
       forecastParity: { reachable: false, actual_to_date: { venta_ton: null }, forecast: { venta_ton: null, desc_kg: null } },
     });
-    const missingForecast = missing.items.find((i) => i.source === "arr.proyeccion_planta");
+    const missingForecast = itemByMetric(missing, "forecast_venta_desc");
     const missingDesc = missing.items.find((i) => i.payload && i.payload.metric === "com_desc_kg");
     assert.equal(missingForecast.payload.desc_kg, null);
     assert.notEqual(missingForecast.payload.desc_kg, 0);
@@ -431,14 +437,20 @@ describe("SPRINT1 — paridad UI Acapulco Agosto 2026", () => {
       forecastParity: {
         ok: true,
         reachable: true,
-        period: { year: 2026, month: 8, yyyy_mm: "2026-08" },
-        forecast: { venta_ton: AUTH.venta_ton, desc_kg: AUTH.desc_kg, truth_semantics: "FORECAST_PROJECTION" },
-        actual_to_date: { venta_ton: 1258.81, truth_semantics: "ACTUAL_TO_DATE" },
+        period: { year: 2026, month: 8, yyyy_mm: "2026-08", cutoff_date: "2026-08-15" },
+        forecast: {
+          venta_ton: AUTH.venta_ton,
+          desc_kg: AUTH.desc_kg,
+          cutoff_date: "2026-08-15",
+          truth_semantics: "FORECAST_PROJECTION",
+        },
+        actual_to_date: { venta_ton: 1258.81, cutoff_date: "2026-08-15", truth_semantics: "ACTUAL_TO_DATE" },
         mini: {
           venta_ton: AUTH.venta_ton,
           desc_kg: AUTH.desc_kg,
           util_oper_importe: AUTH.util_oper_importe,
           resultado_final_importe: AUTH.resultado_final_importe,
+          cutoff_date: "2026-08-15",
           source: "GET /api/dashboard/igf-forecast include_mini → mini.rows[]",
         },
       },

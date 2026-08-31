@@ -141,7 +141,12 @@ export function fetchDirectorIaChat(
   plantaId: number,
   question: string,
   history?: DirectorIaChatHistoryMessage[],
-  opts?: { upload_day?: string | null; planta_nombre?: string | null; search?: string | null }
+  opts?: {
+    upload_day?: string | null;
+    planta_nombre?: string | null;
+    search?: string | null;
+    conversation_state?: Record<string, unknown> | null;
+  }
 ): Promise<DirectorIaChatResponse> {
   const body = buildDirectorIaChatBody({
     planta_id: plantaId,
@@ -150,6 +155,7 @@ export function fetchDirectorIaChat(
     upload_day: opts && opts.upload_day,
     planta_nombre: opts && opts.planta_nombre,
     search: opts && opts.search,
+    conversation_state: opts && opts.conversation_state,
   });
   return apiFetch<DirectorIaChatResponse>("/api/director-ia/chat", {
     method: "POST",

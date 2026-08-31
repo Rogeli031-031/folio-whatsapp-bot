@@ -101,14 +101,19 @@ function decoyParity() {
   return {
     ok: true,
     reachable: true,
-    period: { year: 2026, month: 8, yyyy_mm: "2026-08" },
+    period: { year: 2026, month: 8, yyyy_mm: "2026-08", cutoff_date: "2026-08-12" },
     forecast: {
       venta_ton: DECOY.venta_ton,
       desc_kg: DECOY.desc_kg,
+      cutoff_date: "2026-08-12",
       source: "computePronosticoProyByPlant",
       truth_semantics: "FORECAST_PROJECTION",
     },
-    actual_to_date: { venta_ton: DECOY.actual_to_date, truth_semantics: "ACTUAL_TO_DATE" },
+    actual_to_date: {
+      venta_ton: DECOY.actual_to_date,
+      cutoff_date: "2026-08-12",
+      truth_semantics: "ACTUAL_TO_DATE",
+    },
   };
 }
 
@@ -142,6 +147,7 @@ describe("SPRINT1 AUTHORITATIVE-KPI-PARITY — pack no deja ganar fallback", () 
           desc_kg: AUTH.desc_kg,
           util_oper_importe: AUTH.util_oper_importe,
           resultado_final_importe: AUTH.resultado_final_importe,
+          cutoff_date: "2026-08-12",
           source: "computeIgfForecastMiniPayload",
         },
       },

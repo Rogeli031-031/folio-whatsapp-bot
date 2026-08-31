@@ -41,7 +41,12 @@ export function DirectorIaChatPanel({
   const [error, setError] = useState<string | null>(null);
   const [messages, setMessages] = useState<DirectorIaChatMessage[]>([]);
   const [lastSources, setLastSources] = useState<string[]>([]);
+  const [conversationState, setConversationState] = useState<Record<string, unknown> | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setConversationState(null);
+  }, [plantaId]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -79,6 +84,7 @@ export function DirectorIaChatPanel({
         upload_day: uploadDay,
         planta_nombre: plantaNombre || null,
         search: typeof window !== "undefined" ? window.location.search : null,
+        conversation_state: conversationState,
       });
       if ("enabled" in res && res.enabled === false) {
         setError("Director IA deshabilitado en el servidor.");
@@ -93,12 +99,19 @@ export function DirectorIaChatPanel({
         { id: newMessageId(), role: "assistant", content: res.answer },
       ]);
       setLastSources(res.sources || []);
+      const nextState =
+        res.context_meta &&
+        typeof res.context_meta === "object" &&
+        "conversation_state" in res.context_meta
+          ? (res.context_meta as { conversation_state?: Record<string, unknown> }).conversation_state
+          : null;
+      if (nextState) setConversationState(nextState);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Error al consultar");
     } finally {
       setLoading(false);
     }
-  }, [token, plantaId, plantaNombre, question, messages, uploadDayProp]);
+  }, [token, plantaId, plantaNombre, question, messages, uploadDayProp, conversationState]);
 
   const shellClass = chatMode
     ? `flex flex-col min-h-0 ${className}`

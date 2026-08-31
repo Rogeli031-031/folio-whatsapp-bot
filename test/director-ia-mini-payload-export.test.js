@@ -113,14 +113,15 @@ describe("SPRINT1 mini payload export — frontera mínima", () => {
       scope: { scope_source: "explicit_plant", planta_id: 1, plant_name: "Acapulco" },
       forecastParity: {
         reachable: true,
-        period: { year: 2026, month: 8, yyyy_mm: "2026-08" },
-        forecast: { venta_ton: AUTH.venta_ton, desc_kg: AUTH.desc_kg },
-        actual_to_date: { venta_ton: 1258.81 },
+        period: { year: 2026, month: 8, yyyy_mm: "2026-08", cutoff_date: "2026-08-15" },
+        forecast: { venta_ton: AUTH.venta_ton, desc_kg: AUTH.desc_kg, cutoff_date: "2026-08-15" },
+        actual_to_date: { venta_ton: 1258.81, cutoff_date: "2026-08-15" },
         mini: {
           venta_ton: AUTH.venta_ton,
           desc_kg: AUTH.desc_kg,
           util_oper_importe: AUTH.util_oper_importe,
           resultado_final_importe: AUTH.resultado_final_importe,
+          cutoff_date: "2026-08-15",
           source: "computeIgfForecastMiniPayload",
         },
       },
