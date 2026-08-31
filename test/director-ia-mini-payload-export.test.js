@@ -125,7 +125,7 @@ describe("SPRINT1 mini payload export — frontera mínima", () => {
         },
       },
     });
-    const forecast = pack.items.find((i) => i.source === "arr.proyeccion_planta");
+    const forecast = pack.items.find((i) => i.payload && i.payload.metric === "forecast_venta_desc");
     const actual = pack.items.find((i) => i.truth_semantics === "ACTUAL_TO_DATE");
     const util = pack.items.find((i) => i.payload && i.payload.metric === "util_oper_importe");
     const resultado = pack.items.find((i) => i.payload && i.payload.metric === "resultado_final_importe");

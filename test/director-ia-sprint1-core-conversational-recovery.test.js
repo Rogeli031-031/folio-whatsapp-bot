@@ -443,10 +443,11 @@ describe("SPRINT1 — paridad UI Acapulco Agosto 2026", () => {
         },
       },
     });
-    const forecast = pack.items.find((i) => i.source === "arr.proyeccion_planta");
+    const forecast = pack.items.find((i) => i.payload && i.payload.metric === "forecast_venta_desc");
     const actual = pack.items.find((i) => i.truth_semantics === "ACTUAL_TO_DATE");
     const util = pack.items.find((i) => i.payload && i.payload.metric === "util_oper_importe");
     const resultado = pack.items.find((i) => i.payload && i.payload.metric === "resultado_final_importe");
+    assert.equal(forecast.payload.governed_by, "dashboard_authoritative_mini");
     assert.equal(forecast.payload.venta_ton, 1488);
     assert.equal(forecast.payload.desc_kg, -0.11);
     assert.equal(actual.payload.venta_ton, 1258.81);
