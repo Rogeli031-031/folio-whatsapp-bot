@@ -9891,6 +9891,32 @@ comercialEntidad.configureComercialEntidad({
 directorIaChat.configureDirectorIaChat({
   pool,
   persistentMemoryStore: require("./lib/director-ia-persistent-memory").createPgStore(pool),
+  loadIgfForecastMiniPayload: async function loadIgfForecastMiniPayloadForDirectorIa(poolOrClient, opts) {
+    const year = opts && opts.year;
+    const month = opts && opts.month;
+    const uploadDay = (opts && opts.upload_day) || null;
+    let client = null;
+    let release = false;
+    if (poolOrClient && typeof poolOrClient.connect === "function") {
+      client = await poolOrClient.connect();
+      release = true;
+    } else {
+      client = poolOrClient;
+    }
+    try {
+      const buildOpts = {};
+      if (uploadDay) buildOpts.upload_day = uploadDay;
+      const igf = await buildIgfForecastPayload(
+        client,
+        year,
+        month,
+        Object.keys(buildOpts).length ? buildOpts : undefined
+      );
+      return computeIgfForecastMiniPayload(client, igf, year, month, uploadDay);
+    } finally {
+      if (release && client && typeof client.release === "function") client.release();
+    }
+  },
 });
 
 async function loadArrProyForDirectorIaDashboardCycle(client, year, month, plant_code) {

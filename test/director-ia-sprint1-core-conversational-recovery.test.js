@@ -34,9 +34,9 @@ const {
   loadDashboardForecastParity,
   parseYearMonth,
   aggregateCasaComiFromClientesMes,
-  economicsFromIgfRow,
+  dashboardDescSigned,
+  readIgfForecastMiniAuthoritative,
 } = require("../lib/director-ia-dashboard-forecast-adapter");
-const { recalcularUtilYResultado } = require("../lib/director-ia-igf-reviewable-supports");
 
 const ROOT = path.join(__dirname, "..");
 const CLIENT_PROFILE_SRC = fs.readFileSync(path.join(ROOT, "lib", "director-ia-client-profile.js"), "utf8");
@@ -115,11 +115,10 @@ function packFor(question, over = {}) {
       period: { year: 2026, month: 8, yyyy_mm: "2026-08" },
       forecast: { venta_ton: 1212, desc_kg: 1.85, truth_semantics: "FORECAST_PROJECTION" },
       actual_to_date: { venta_ton: 880.4, truth_semantics: "ACTUAL_TO_DATE" },
-      economics: {
+      mini: {
         util_oper_importe: 420000,
         resultado_final_importe: 310000,
-        truth_semantics: "FORECAST_PROJECTION",
-        helper: "recalcularUtilYResultado after computePronosticoProyByPlant overlay",
+        source: "GET /api/dashboard/igf-forecast include_mini → mini.rows[]",
       },
     },
     ...over,
@@ -234,7 +233,7 @@ describe("SPRINT1 Golden Set — planta / periodo / verdad / campos", () => {
     assert.equal(util.truth_semantics, "FORECAST_PROJECTION");
     const prompt = buildExecutiveStatusPrompt(pack, Q2);
     assert.match(prompt.userContent, /resultado_final_importe=310000/);
-    assert.match(prompt.userContent, /recalcularUtilYResultado/);
+    assert.match(prompt.userContent, /utilOperImporte|Utilidad operativa 420000/);
     assert.match(prompt.userContent, /rentabilidad/);
     assert.match(prompt.userContent, /No infieras TARGET/);
     assert.equal(pack.demand.actual_financial, AVAILABILITY.NOT_APPLICABLE);
@@ -339,38 +338,14 @@ describe("SPRINT1 — paridad Dashboard y bug d.canal", () => {
     assert.doesNotMatch(ctx, /trailing; ancla MAX\(fecha\)/);
   });
 
-  it("util/resultado usan recalcularUtilYResultado tras overlay PROY, no stored", () => {
-    const stored = {
-      venta_ton: 100,
-      com_desc_kg: 1,
-      margen_kg: 2,
-      deposito_cierre_kg: 0,
-      presupuesto_kg: 0,
-      folios_aprob_zp_kg: 0,
-      folios_carro_kg: 0,
-      impuesto_kg: 0,
-      hg_kg: 0,
-      bancos_planta_kg: 0,
-      provision_planta_kg: 0,
-      gtos_apoyos_corp_kg: 0,
-      bancos_corp_kg: 0,
-      otros_programas_kg: 0,
-      inversiones_kg: 0,
-      util_oper_importe: 1,
-      resultado_final_importe: 1,
-    };
-    const proy = { proy_venta_ton: 200, proy_desc_kg: 1.5 };
-    const eco = economicsFromIgfRow(stored, proy);
-    const expected = recalcularUtilYResultado({ ...stored, venta_ton: 200, com_desc_kg: 1.5 });
-    assert.equal(eco.truth_semantics, "FORECAST_PROJECTION");
-    assert.equal(eco.util_oper_importe, expected.util_oper_importe);
-    assert.equal(eco.resultado_final_importe, expected.resultado_final_importe);
-    assert.notEqual(eco.util_oper_importe, stored.util_oper_importe);
-    assert.match(eco.helper, /recalcularUtilYResultado/);
-    const missingEco = packFor(Q2, { forecastParity: { reachable: true, economics: {} } });
+  it("util/resultado salen del mini IGF, no de stored ni recalcularUtilYResultado", () => {
+    const missingEco = packFor(Q2, { forecastParity: { reachable: true, mini: {} } });
     const utilMissing = missingEco.items.find((i) => i.payload && i.payload.metric === "util_oper_importe");
     assert.equal(utilMissing.availability, AVAILABILITY.UNAVAILABLE);
     assert.notEqual(utilMissing.payload.util_oper_importe, 0);
+    assert.equal(utilMissing.source, "igf-forecast-mini.utilOperImporte");
+    assert.doesNotMatch(ADAPTER_SRC, /recalcularUtilYResultado/);
+    assert.equal(utilMissing.source, "igf-forecast-mini.utilOperImporte");
   });
 
   it("adaptador sin pool no inventa 0", async () => {
@@ -385,5 +360,112 @@ describe("SPRINT1 — paridad Dashboard y bug d.canal", () => {
       month: 8,
       yyyy_mm: "2026-08",
     });
+  });
+});
+
+describe("SPRINT1 — paridad UI Acapulco Agosto 2026", () => {
+  const WRONG = {
+    venta_ton: 1260,
+    desc_kg: 0.12,
+    util_oper_importe: 9247518,
+    resultado_final_importe: 7307370,
+    casa_ton: 1560.01,
+    comisionista_ton: 1205.53,
+  };
+  const AUTH = {
+    venta_ton: 1488,
+    desc_kg: -0.11,
+    util_oper_importe: 3169502,
+    resultado_final_importe: 803537,
+    casa_ton: 839.36,
+    comisionista_ton: 648.64,
+  };
+
+  const miniPayload = {
+    rows: [
+      {
+        empresa: "Acapulco",
+        ventaTon: 1488,
+        comDesc: 0.11,
+        utilOperImporte: 3169502,
+        resultadoFinalImporte: 803537,
+      },
+    ],
+  };
+
+  function figuresFromAuthoritativeUi(plantLabel) {
+    const mini = readIgfForecastMiniAuthoritative(miniPayload, plantLabel);
+    const channels = aggregateCasaComiFromClientesMes({
+      historico: false,
+      rows: [
+        { categoria: "Casa", kg: 1, kgProy: 839360 },
+        { categoria: "Comisionista", kg: 1, kgProy: 648640 },
+      ],
+    });
+    return {
+      venta_ton: mini.venta_ton,
+      desc_kg: mini.desc_kg,
+      util_oper_importe: mini.util_oper_importe,
+      resultado_final_importe: mini.resultado_final_importe,
+      casa_ton: channels.casa_ton,
+      comisionista_ton: channels.comisionista_ton,
+    };
+  }
+
+  it("extractor mini + CASA/COMI ARR coinciden con las 6 cifras de UI y rechazan las incorrectas", () => {
+    assert.equal(dashboardDescSigned(0.11), -0.11);
+    assert.equal(dashboardDescSigned(-0.11), -0.11);
+    const got = figuresFromAuthoritativeUi("Acapulco");
+    assert.deepEqual(got, AUTH);
+    assert.notEqual(got.venta_ton, WRONG.venta_ton);
+    assert.notEqual(got.desc_kg, WRONG.desc_kg);
+    assert.notEqual(got.util_oper_importe, WRONG.util_oper_importe);
+    assert.notEqual(got.resultado_final_importe, WRONG.resultado_final_importe);
+    assert.notEqual(got.casa_ton, WRONG.casa_ton);
+    assert.notEqual(got.comisionista_ton, WRONG.comisionista_ton);
+    assert.equal(got.casa_ton + got.comisionista_ton, got.venta_ton);
+  });
+
+  it("Q1–Q4 pack usa esas 6 cifras, no 1260 / +0.12 / 9.2M / 1560", () => {
+    const pack = packFor(Q1, {
+      forecastParity: {
+        ok: true,
+        reachable: true,
+        period: { year: 2026, month: 8, yyyy_mm: "2026-08" },
+        forecast: { venta_ton: AUTH.venta_ton, desc_kg: AUTH.desc_kg, truth_semantics: "FORECAST_PROJECTION" },
+        actual_to_date: { venta_ton: 1258.81, truth_semantics: "ACTUAL_TO_DATE" },
+        mini: {
+          venta_ton: AUTH.venta_ton,
+          desc_kg: AUTH.desc_kg,
+          util_oper_importe: AUTH.util_oper_importe,
+          resultado_final_importe: AUTH.resultado_final_importe,
+          source: "GET /api/dashboard/igf-forecast include_mini → mini.rows[]",
+        },
+      },
+    });
+    const forecast = pack.items.find((i) => i.source === "arr.proyeccion_planta");
+    const actual = pack.items.find((i) => i.truth_semantics === "ACTUAL_TO_DATE");
+    const util = pack.items.find((i) => i.payload && i.payload.metric === "util_oper_importe");
+    const resultado = pack.items.find((i) => i.payload && i.payload.metric === "resultado_final_importe");
+    assert.equal(forecast.payload.venta_ton, 1488);
+    assert.equal(forecast.payload.desc_kg, -0.11);
+    assert.equal(actual.payload.venta_ton, 1258.81);
+    assert.notEqual(forecast.payload.venta_ton, 1260);
+    assert.equal(util.payload.util_oper_importe, 3169502);
+    assert.equal(resultado.payload.resultado_final_importe, 803537);
+    const promptRent = buildExecutiveStatusPrompt(pack, Q2);
+    assert.match(promptRent.userContent, /3169502/);
+    assert.match(promptRent.userContent, /803537/);
+    const promptDesc = buildExecutiveStatusPrompt(pack, Q3);
+    assert.match(promptDesc.userContent, /desc_kg=-0\.11/);
+    const channels = aggregateCasaComiFromClientesMes({
+      historico: false,
+      rows: [
+        { categoria: "Casa", kg: 1, kgProy: 839360 },
+        { categoria: "Comisionista", kg: 1, kgProy: 648640 },
+      ],
+    });
+    assert.equal(channels.casa_ton, 839.36);
+    assert.equal(channels.comisionista_ton, 648.64);
   });
 });
