@@ -25,6 +25,8 @@ const {
   formatClientProfileContext,
   mergeCommentsByKeyThenNombre,
   explicitClientHintTakesPrecedence,
+  resolveClientProfileSlots,
+  parseExplicitPeriod,
   CLIENT_PROFILE_SYSTEM_ADDENDUM,
 } = require("../lib/director-ia-client-profile");
 
@@ -865,5 +867,208 @@ describe("askDirectorIa client_profile", () => {
     assert.match(CLIENT_PROFILE_SYSTEM_ADDENDUM, /comentario = declaración/i);
     const reg = validateDirectorIaToolRegistry();
     assert.equal(reg.ok, true, (reg.errors || []).join(", "));
+  });
+});
+
+describe("client_profile historical range", () => {
+  const now = new Date("2026-09-01T10:00:00-06:00");
+  const inherited = { active_period_months: ["2026-07", "2026-08", "2026-09"] };
+
+  function yms(slots) {
+    return (slots.months || []).map((m) => m.yyyymm);
+  }
+
+  it("acceptance: kg y descuento de Erick desde enero a la fecha", async () => {
+    const q = "Dame los kg y el descuento por cada mes de Erick desde enero a la fecha";
+    assert.equal(detectDirectorIaIntent(q).intent, "client_profile");
+    const slots = resolveClientProfileSlots(q, inherited, now);
+    assert.equal(slots.period_source, "explicit");
+    assert.deepEqual(yms(slots), [
+      "2026-01",
+      "2026-02",
+      "2026-03",
+      "2026-04",
+      "2026-05",
+      "2026-06",
+      "2026-07",
+      "2026-08",
+      "2026-09",
+    ]);
+    assert.deepEqual(slots.requested_range, { start: "2026-01", end: "2026-09" });
+    assert.equal(slots.query_start, "2026-01-01");
+    assert.equal(slots.query_end, "2026-09-30");
+    assert.equal(slots.months[8].completeness, "PARTIAL");
+    assert.equal(slots.months[0].completeness, "COMPLETE");
+
+    let salesWindow = null;
+    const keys = deriveClienteKeys(1, "Casa", "", "ERICK");
+    const pack = await loadClientProfileForChat(
+      { connect: async () => ({ release() {} }) },
+      1,
+      { dashboardAuth: { role: "ZP" } },
+      {
+        question: q,
+        cliente_norm: "ERICK",
+        display_name: "ERICK",
+        cliente_keys: keys,
+        identity_canal: "Casa",
+        active_period_months: inherited.active_period_months,
+        now,
+        resolvePlanta: async () => ({ id: 1, nombre: "Acapulco", clave: "ACA" }),
+        resolvePlantCodes: async () => ({ not_found: false, uniqueCodes: ["ACA"], plantCode: "ACA" }),
+        queryMonthlySales: async (_c, _codes, start, end) => {
+          salesWindow = { start, end };
+          return {
+            rows: [
+              { month: "2026-07", cliente_norm: "ERICK", canal: "Casa", subcanal: "", kg: 10 },
+              { month: "2026-08", cliente_norm: "OTRO", canal: "Casa", subcanal: "", kg: 4 },
+            ],
+          };
+        },
+        queryMonthlyDiscount: async () => ({ rows: [] }),
+        queryCommentsByKeys: async () => [],
+        queryActionsByKeys: async () => [],
+        queryHistorialForActions: async () => new Map(),
+      }
+    );
+    assert.deepEqual(salesWindow, { start: "2026-01-01", end: "2026-09-30" });
+    assert.equal(pack.ok, true);
+    assert.deepEqual(pack.period.requested_range, { start: "2026-01", end: "2026-09" });
+    assert.equal(pack.period.query_start, "2026-01-01");
+    assert.equal(pack.period.query_end, "2026-09-30");
+    assert.equal(pack.period.source, "explicit");
+    assert.equal(pack.period.months.length, 9);
+    assert.equal(pack.monthly_rows.find((r) => r.month === "2026-01").kg_status, "DATA_NOT_FOUND");
+    assert.equal(pack.monthly_rows.find((r) => r.month === "2026-01").kg, null);
+    assert.equal(pack.monthly_rows.find((r) => r.month === "2026-08").kg_status, "ZERO_OBSERVED");
+    assert.equal(pack.monthly_rows.find((r) => r.month === "2026-08").kg, 0);
+    assert.equal(pack.monthly_rows.find((r) => r.month === "2026-09").completeness, "PARTIAL");
+    const ctx = formatClientProfileContext(pack);
+    assert.match(ctx, /requested_range=2026-01→2026-09/);
+    assert.match(ctx, /query_start=2026-01-01 query_end=2026-09-30/);
+    const prompt = buildClientProfilePrompt(pack, q);
+    assert.match(prompt.userContent, /requested_range=2026-01→2026-09/);
+    assert.match(CLIENT_PROFILE_SYSTEM_ADDENDUM, /requested_range/);
+  });
+
+  it("golden phrases expand or stay default", () => {
+    assert.deepEqual(yms(resolveClientProfileSlots("Erick desde enero", {}, now)), [
+      "2026-01",
+      "2026-02",
+      "2026-03",
+      "2026-04",
+      "2026-05",
+      "2026-06",
+      "2026-07",
+      "2026-08",
+      "2026-09",
+    ]);
+    assert.deepEqual(yms(resolveClientProfileSlots("Erick de enero a la fecha", {}, now)), [
+      "2026-01",
+      "2026-02",
+      "2026-03",
+      "2026-04",
+      "2026-05",
+      "2026-06",
+      "2026-07",
+      "2026-08",
+      "2026-09",
+    ]);
+    assert.deepEqual(yms(resolveClientProfileSlots("Erick todo el año", {}, now)), [
+      "2026-01",
+      "2026-02",
+      "2026-03",
+      "2026-04",
+      "2026-05",
+      "2026-06",
+      "2026-07",
+      "2026-08",
+      "2026-09",
+    ]);
+    assert.deepEqual(yms(resolveClientProfileSlots("Erick este año", {}, now)), [
+      "2026-01",
+      "2026-02",
+      "2026-03",
+      "2026-04",
+      "2026-05",
+      "2026-06",
+      "2026-07",
+      "2026-08",
+      "2026-09",
+    ]);
+    assert.deepEqual(yms(resolveClientProfileSlots("Erick últimos 6 meses", {}, now)), [
+      "2026-04",
+      "2026-05",
+      "2026-06",
+      "2026-07",
+      "2026-08",
+      "2026-09",
+    ]);
+    assert.deepEqual(yms(resolveClientProfileSlots("Erick en enero", {}, now)), ["2026-01"]);
+    assert.deepEqual(yms(resolveClientProfileSlots("Erick de noviembre a febrero", {}, now)), [
+      "2025-11",
+      "2025-12",
+      "2026-01",
+      "2026-02",
+    ]);
+    assert.equal(resolveClientProfileSlots("Erick de noviembre a febrero", {}, now).query_start, "2025-11-01");
+    assert.equal(resolveClientProfileSlots("Erick de noviembre a febrero", {}, now).query_end, "2026-02-28");
+    assert.deepEqual(yms(resolveClientProfileSlots("Erick de enero a agosto", {}, now)), [
+      "2026-01",
+      "2026-02",
+      "2026-03",
+      "2026-04",
+      "2026-05",
+      "2026-06",
+      "2026-07",
+      "2026-08",
+    ]);
+  });
+
+  it("sin periodo conserva default 3M e inherit no gana a explicit", () => {
+    const fresh = resolveClientProfileSlots("¿Qué sabemos de TORTILLERIA ERICK?", {}, now);
+    assert.equal(fresh.period_source, "default");
+    assert.deepEqual(yms(fresh), ["2026-07", "2026-08", "2026-09"]);
+    const inheritedOnly = resolveClientProfileSlots("¿Qué descuento tuvo cada mes?", inherited, now);
+    assert.equal(inheritedOnly.period_source, "inherited");
+    assert.deepEqual(yms(inheritedOnly), ["2026-07", "2026-08", "2026-09"]);
+    const follow = resolveClientProfileSlots("¿Y desde enero?", inherited, now);
+    assert.equal(follow.period_source, "explicit");
+    assert.deepEqual(yms(follow)[0], "2026-01");
+    assert.deepEqual(yms(follow)[8], "2026-09");
+    assert.equal(isClientProfileQuestion("¿Y desde enero?", { hasActiveClient: true, now }), true);
+    assert.equal(explicitClientHintTakesPrecedence("GRUPO MOVE EMPRESARIAL", "TORTILLERIA ERICK"), true);
+  });
+
+  it("rango inválido fail-closed; 90 días no es last-N calendario", () => {
+    const bad = parseExplicitPeriod("Erick últimos 99 meses", now);
+    assert.equal(bad.error, "invalid_last_n");
+    const slots = resolveClientProfileSlots("Erick últimos 99 meses", inherited, now);
+    assert.equal(slots.period_error, "invalid_last_n");
+    assert.deepEqual(yms(slots), []);
+    const ninety = resolveClientProfileSlots("Erick últimos 90 días", inherited, now);
+    assert.equal(ninety.trailing_90_asked, true);
+    assert.equal(ninety.period_source, "inherited");
+    assert.deepEqual(yms(ninety), ["2026-07", "2026-08", "2026-09"]);
+    assert.equal(parseExplicitPeriod("¿Julio Pérez tiene algo vencido?", now).months, null);
+    assert.equal(detectDirectorIaIntent("¿Julio Pérez tiene algo vencido?").intent, "action_status");
+  });
+
+  it("ZERO_OBSERVED solo con cobertura de planta; missing sigue null", () => {
+    const months = [
+      { year: 2026, month: 1, yyyymm: "2026-01", completeness: "COMPLETE" },
+      { year: 2026, month: 2, yyyymm: "2026-02", completeness: "COMPLETE" },
+    ];
+    const rows = alignMonthlyRows(
+      months,
+      new Map(),
+      new Map(),
+      new Set(["2026-02"]),
+      new Set()
+    );
+    assert.equal(rows[0].kg, null);
+    assert.equal(rows[0].kg_status, "DATA_NOT_FOUND");
+    assert.equal(rows[1].kg, 0);
+    assert.equal(rows[1].kg_status, "ZERO_OBSERVED");
   });
 });
