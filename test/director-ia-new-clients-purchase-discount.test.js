@@ -21,6 +21,9 @@ const {
   computeIngreso,
   loadHistoricalNewClientsForChat,
   buildHistoricalNewClientsChatResult,
+  isDefendableHistoricalMargin,
+  legacyCoerceMargin,
+  IGF_MARGIN_SOURCE,
 } = require("../lib/director-ia-new-clients");
 
 const NOW = new Date("2026-09-01T18:00:00-06:00");
@@ -327,6 +330,11 @@ describe("historical new clients — mes abierto y regresiones", () => {
     assert.match(chat.answer, /MES ABIERTO/);
     assert.match(chat.answer, /No presento forecast/);
     assert.doesNotMatch(chat.answer, /compra real cerrada de septiembre/i);
+    assert.equal(payload.facts_consulted, false);
+    assert.deepEqual(payload.sources, []);
+    assert.deepEqual(chat.sources, []);
+    assert.equal(chat.sources.includes("arr.ventas_diarias_cliente"), false);
+    assert.equal(chat.sources.includes("arr.descuentos_diarios_cliente"), false);
   });
 
   it("regresión commercial_trend / client_profile / M9 / IGF / compound", () => {
@@ -359,6 +367,94 @@ describe("historical new clients — mes abierto y regresiones", () => {
     assert.equal(getDirectorIaTool("get_historical_new_clients").executor, "loadHistoricalNewClientsForChat");
     const v = validateDirectorIaToolRegistry();
     assert.equal(v.ok, true, (v.errors || []).join(","));
+  });
+});
+
+describe("historical new clients — margen fail-closed y sources", () => {
+  it("BEFORE: Number(null) se coerce a 0, no a fallback 1", () => {
+    assert.equal(Number(null), 0);
+    assert.equal(Number.isFinite(0), true);
+    assert.equal(legacyCoerceMargin(null), 0);
+    assert.notEqual(legacyCoerceMargin(null), 1);
+    assert.equal(isDefendableHistoricalMargin(null), false);
+  });
+
+  async function loadWithMargen(margenFn) {
+    return loadHistoricalNewClientsForChat(
+      null,
+      1,
+      { dashboardAuth: { role: "ZP" } },
+      { ...loadOpts(factsFixture()), getMargenKgPorPeriodo: margenFn }
+    );
+  }
+
+  it("margen A null → no clasificación fail-closed", async () => {
+    const payload = await loadWithMargen(async (_c, _n, year, month) =>
+      year === 2026 && month === 7 ? null : 7.2
+    );
+    assert.equal(payload.ok, false);
+    assert.equal(payload.code, DIRECTOR_IA_VERACITY.DATA_NOT_FOUND);
+    assert.equal(payload.clients.length, 0);
+    assert.equal(payload.margin_source_available, false);
+    assert.match(payload.error, /margen histórico defendible/i);
+    const chat = buildHistoricalNewClientsChatResult(payload, { planta_id: 1 });
+    assert.equal(chat.historical_new_clients, null);
+    assert.doesNotMatch(chat.answer, /Nuevo Alpha/);
+  });
+
+  it("margen B null → no clasificación fail-closed", async () => {
+    const payload = await loadWithMargen(async (_c, _n, year, month) =>
+      year === 2026 && month === 8 ? null : 7.0
+    );
+    assert.equal(payload.ok, false);
+    assert.equal(payload.code, DIRECTOR_IA_VERACITY.DATA_NOT_FOUND);
+    assert.equal(payload.clients.length, 0);
+    assert.match(payload.error, /margen histórico defendible/i);
+  });
+
+  it("margen 0 → fail-closed", async () => {
+    const payload = await loadWithMargen(async () => 0);
+    assert.equal(payload.ok, false);
+    assert.equal(payload.code, DIRECTOR_IA_VERACITY.DATA_NOT_FOUND);
+    assert.equal(isDefendableHistoricalMargin(0), false);
+  });
+
+  it("margen NaN / no finito → fail-closed", async () => {
+    const nanP = await loadWithMargen(async () => Number.NaN);
+    assert.equal(nanP.ok, false);
+    assert.equal(nanP.code, DIRECTOR_IA_VERACITY.DATA_NOT_FOUND);
+    const infP = await loadWithMargen(async () => Number.POSITIVE_INFINITY);
+    assert.equal(infP.ok, false);
+    assert.equal(infP.code, DIRECTOR_IA_VERACITY.DATA_NOT_FOUND);
+  });
+
+  it("ambos márgenes válidos conservan clasificación existente", async () => {
+    const payload = await loadHistoricalNewClientsForChat(
+      null,
+      1,
+      { dashboardAuth: { role: "ZP" } },
+      loadOpts(factsFixture())
+    );
+    assert.equal(payload.ok, true);
+    assert.equal(payload.margin_source_available, true);
+    assert.ok(payload.clients.some((c) => c.cliente === "Nuevo Alpha"));
+    assert.ok(!payload.clients.some((c) => c.cliente === "Viejo Beta"));
+    assert.equal(Object.prototype.hasOwnProperty.call(payload, "margen_fallback_used"), false);
+  });
+
+  it("closed-month sources incluye ventas, descuentos y IGF real", async () => {
+    const payload = await loadHistoricalNewClientsForChat(
+      null,
+      1,
+      { dashboardAuth: { role: "ZP" } },
+      loadOpts(factsFixture())
+    );
+    const chat = buildHistoricalNewClientsChatResult(payload, { planta_id: 1 });
+    assert.ok(chat.sources.includes("arr.ventas_diarias_cliente"));
+    assert.ok(chat.sources.includes("arr.descuentos_diarios_cliente"));
+    assert.ok(chat.sources.includes(IGF_MARGIN_SOURCE));
+    assert.equal(IGF_MARGIN_SOURCE, "igf.compromiso_lines");
+    assert.equal(chat.context_meta.margin_source_available, true);
   });
 });
 

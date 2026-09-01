@@ -89,16 +89,30 @@ es_nuevo  = ingreso_A <= 0 && ingreso_B > 0
 
 - kg A/B = SUM(kg) de `arr.ventas_diarias_cliente` del mes calendario.
 - descKg para **clasificar**: `abs(monto)/kg` si hay fila de descuento; si no, **0** (equivalente DICF).
-- margen = `getMargenKgPorPeriodo`; null → fallback 1 (mismo que DICF).
+- margen = `getMargenKgPorPeriodo` (lee `igf.versions` + `igf.compromiso_lines`).
+- Si margen A o B es null / undefined / NaN / no finito / ≤ 0: **fail-closed** `DATA_NOT_FOUND`. No clasifica. No usa 0 ni 1.
 - B cerrado **nunca** usa forecast.
 
-`DICF_SEMANTICS_PRESERVED = YES` (composición). No se usó `kgA=0 && kgB>0` como sustituto.
+`DICF_SEMANTICS_PRESERVED = YES` (composición cuando el margen es defendible). No se usó `kgA=0 && kgB>0` como sustituto.
+
+**Diferencia explícita (Human Review):**
+
+- DICF dashboard (`lib/dicf.js`, no modificado): puede conservar su fallback legacy a 1.
+- `historical_new_clients`: margen ausente o no defendible → no clasifica.
+
+**BEFORE (bug):** `Number(null) === 0` y `Number.isFinite(0)` → el “fallback 1” documentado **no ocurría**. Se usaba margen 0 y `margen_fallback_used` quedaba false.
 
 ## 5. Sources
 
 - kg: `arr.ventas_diarias_cliente` + `public.plantas` / `arr.provincia_plants`
 - descuento: `arr.descuentos_diarios_cliente` (SUM(monto) mes B)
-- margen (solo fórmula): IGF vía `getMargenKgPorPeriodo` (M9, contrato intacto)
+- margen (solo fórmula, evidencia necesaria): `getMargenKgPorPeriodo` → tag `igf.compromiso_lines`
+
+Closed-month ChatResult `sources`:
+`arr.ventas_diarias_cliente`, `arr.descuentos_diarios_cliente`, `igf.compromiso_lines`
++ `margin_source_available: true`
+
+Open-month: no consulta facts; `sources = []`.
 
 No HTTP. No writes.
 
@@ -133,19 +147,20 @@ Planta nombrada se revalida. Sin cruce.
 
 ## 11. Tests
 
-`test/director-ia-new-clients-purchase-discount.test.js` — 20 tests, 25 controles de CURRENT_TASK cubiertos.
+`test/director-ia-new-clients-purchase-discount.test.js` — controles originales + 8 de Human Review (null A/B, 0, NaN, márgenes válidos, sources closed, sources open, BEFORE Number(null)→0).
 
-Focalizados: movers, trend, M9, IGF composition, client-profile, compound — pass.
+Focalizados: new-clients + suite Director IA.
 
-Suite: `node --test test/director-ia-*.test.js` → **1404 pass / 0 fail** (baseline 1384 + 20).
+Suite: `node --test test/director-ia-*.test.js` → **1411 pass / 0 fail**.
 
 `git diff --check` limpio.
 
 ## 12. Riesgos
 
-- Margen null usa fallback 1 solo para clasificar; se declara `margen_fallback_used`.
+- Sin margen IGF defendible la pregunta queda fail-closed (no hay lista).
 - Canal/subcanal = MAX del mes (no moda estricta).
 - «Nuevo» por ingreso, no por kg=0 (un cliente con kg A>0 e ingreso A=0 puede ser Nuevo).
+- `margen_fallback_used` eliminado: no comunicaba el fallback real.
 
 ## 13. OUT_OF_SCOPE
 
@@ -184,7 +199,7 @@ DB_SCHEMA_CHANGED = NO
 DICF_FORMULA_CHANGED = NO
 SERVER_CHANGED = NO
 RENDER_CHANGED = NO
-TESTS = 1404 pass / 0 fail
+TESTS = 1411 pass / 0 fail
 GIT_DIFF_CHECK = CLEAN
 IMPLEMENTATION_AUTHORIZED = YES
 MERGE_AUTHORIZED = NO
