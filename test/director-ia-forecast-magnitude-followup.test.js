@@ -15,7 +15,8 @@ const {
   classifyForecastMagnitudeFollowUp,
   isAuthoritativeForecastMagnitudeFollowUp,
 } = require("../lib/director-ia-conversational-executive-layer");
-const { planDirectorIaQuestion } = require("../lib/director-ia-planner");
+const { planDirectorIaQuestion, detectDirectorIaIntent } = require("../lib/director-ia-planner");
+const { isPreCloseQuestion } = require("../lib/director-ia-executive-cycle-composer");
 const {
   sanitizeEchoedState,
   sanitizeForecastMagnitudes,
@@ -191,6 +192,61 @@ describe("SPRINT1 FORECAST-MAGNITUDE-FOLLOWUP — detector acotado", () => {
     assert.equal(classifyForecastMagnitudeFollowUp("¿Cuál es el forecast?", runOpts).kind, "venta");
     assert.equal(classifyForecastMagnitudeFollowUp("cómo va el descuento de Acapulco este mes", runOpts), null);
     assert.equal(classifyForecastMagnitudeFollowUp("¿Y el descuento?", { has_authoritative_run: false }), null);
+  });
+});
+
+const A = {
+  A1: "¿Cuál es el descuento forecast al corte que estás usando?",
+  A2: "¿Cuál es el descuento forecast al corte?",
+  A3: "¿Cuál es el descuento forecast al corte proyectado?",
+  A4: "¿Qué descuento forecast tenemos?",
+  A5: "¿Qué descuento proyectamos para el cierre?",
+  A6: "¿Qué descuento proyectamos para cerrar el mes?",
+  A7: "¿Con qué descuento vamos a cerrar?",
+  A8: "¿Cuál es el descuento proyectado?",
+  A9: "¿En cuánto vamos a cerrar de descuento?",
+  A10: "¿Qué descuento tenemos proyectado al cierre?",
+};
+
+const B = {
+  B1: "¿Qué descuento tiene el cliente X?",
+  B2: "¿Qué clientes tienen mayor descuento?",
+  B3: "¿Cómo estuvo el descuento diario?",
+  B4: "Muéstrame el ARR.",
+  B5: "¿Cuál es el descuento ARR?",
+  B6: "¿Cuál es el descuento almacenado en IGF?",
+  B7: "¿Qué acción tenemos para bajar el descuento del cliente X?",
+  B8: "¿Qué descuento dimos ayer?",
+  B9: "¿Qué descuento tiene CASA?",
+  B10: "¿Por qué aumentó el descuento?",
+};
+
+describe("SPRINT1 FORECAST-NL-PARITY — detector A1–A10 y decoys B1–B10", () => {
+  const runOpts = { has_authoritative_run: true, executive_hilo: true };
+
+  it("A1–A10 clasifican descuento sin phrasebook; A6 no queda bloqueada por pre-close", () => {
+    for (const [id, q] of Object.entries(A)) {
+      assert.equal(classifyForecastMagnitudeFollowUp(q, runOpts).kind, "descuento", id);
+      assert.equal(classifyForecastMagnitudeFollowUp(q, { has_authoritative_run: false }).kind, "descuento", id);
+    }
+    assert.equal(isPreCloseQuestion(A.A6), true);
+    assert.equal(detectDirectorIaIntent(A.A6).intent, "pre_meeting_brief");
+    assert.equal(planDirectorIaQuestion(A.A6).intent, "pre_meeting_brief");
+    assert.equal(planDirectorIaQuestion(A.A5).intent, "unknown");
+    assert.equal(planDirectorIaQuestion(A.A5, { inheritParentIntent: "plant_diagnosis" }).intent, "plant_diagnosis");
+  });
+
+  it("B1–B10 no son magnitud Forecast; ARR/IGF/ayer conservan intent", () => {
+    for (const [id, q] of Object.entries(B)) {
+      assert.equal(classifyForecastMagnitudeFollowUp(q, runOpts), null, id);
+    }
+    assert.equal(detectDirectorIaIntent(B.B4).intent, "arr_status");
+    assert.equal(detectDirectorIaIntent(B.B5).intent, "arr_status");
+    assert.equal(detectDirectorIaIntent(B.B6).intent, "igf_status");
+    assert.equal(detectDirectorIaIntent(B.B8).intent, "daily_discount_deviation");
+    assert.equal(classifyForecastMagnitudeFollowUp("descuento", runOpts), null);
+    assert.equal(classifyForecastMagnitudeFollowUp("al cierre", runOpts), null);
+    assert.equal(classifyForecastMagnitudeFollowUp("prepárame la junta de precierre", runOpts), null);
   });
 });
 
@@ -536,5 +592,130 @@ describe("SPRINT1 FORECAST-MAGNITUDE-FOLLOWUP — conversación multiturno askDi
     assert.equal(m.resultado_final, AUTH.resultado);
     assert.ok(m.run_key);
     assert.equal(m.semantics, "FORECAST");
+  });
+
+  function assertMagnitudeFromRun(t, state, counts) {
+    assert.equal(t.ok, true);
+    assert.equal(t.context_meta.mode, "forecast_magnitude_followup");
+    assert.equal(t.context_meta.answered_metric, "descuento");
+    assert.equal(t.context_meta.used_plant_diagnosis, false);
+    assert.equal(t.context_meta.used_materialidad, false);
+    assert.equal(t.context_meta.used_arr_legacy, false);
+    assert.equal(t.context_meta.used_forecast_stored, false);
+    assert.equal(counts.plantDiagnosis, 0);
+    assert.equal(counts.openai, 0);
+    assert.match(t.answer, new RegExp(String(AUTH.descuento).replace(".", "\\.")));
+    assert.doesNotMatch(t.answer, /MATERIALIDAD COMERCIAL/);
+    assert.doesNotMatch(t.answer, new RegExp(String(DECOY.arr_venta)));
+    assert.doesNotMatch(t.answer, new RegExp(String(DECOY.stored_desc).replace(".", "\\.")));
+    assert.equal(t.context_meta.conversation_state.forecast_magnitudes.run_key, state.forecast_magnitudes.run_key);
+    assert.equal(t.context_meta.effective_cutoff_date, AUTH.cutoff);
+  }
+
+  it("NL A5 tras cómo vamos usa forecast_run y no hereda plant_diagnosis", async () => {
+    const { result } = await turn1();
+    assert.equal(result.context_meta.semantic_need, "EXECUTIVE_STATUS");
+    const state = result.context_meta.conversation_state;
+    assert.equal(state.parent_intent, "plant_diagnosis");
+    const follow = wire({ forbidPlantDiagnosis: true, forbidParity: true });
+    const t2 = await askDirectorIa(reqOf(A.A5, { conversation_state: state }), 1, A.A5);
+    assertMagnitudeFromRun(t2, state, follow);
+  });
+
+  it("NL A6 no cae a pre_meeting_brief; usa magnitud Forecast de la misma corrida", async () => {
+    const { result } = await turn1();
+    const state = result.context_meta.conversation_state;
+    const follow = wire({ forbidPlantDiagnosis: true, forbidParity: true });
+    const t2 = await askDirectorIa(reqOf(A.A6, { conversation_state: state }), 1, A.A6);
+    assertMagnitudeFromRun(t2, state, follow);
+    assert.notEqual(t2.context_meta.mode, "pre_meeting_brief");
+    assert.notEqual(t2.context_meta.prompt_mode, "pre_meeting_brief");
+  });
+
+  it("NL A7–A10 siguen la misma corrida autoritativa", async () => {
+    const { result } = await turn1();
+    const state = result.context_meta.conversation_state;
+    for (const q of [A.A7, A.A8, A.A9, A.A10]) {
+      const follow = wire({ forbidPlantDiagnosis: true, forbidParity: true });
+      const t = await askDirectorIa(reqOf(q, { conversation_state: state }), 1, q);
+      assertMagnitudeFromRun(t, state, follow);
+    }
+  });
+
+  it("NL A5 bootstrap directo con upload_day; sin identidad UNAVAILABLE", async () => {
+    const boot = wire({ forbidPlantDiagnosis: true, forbidParity: true });
+    const t = await askDirectorIa(
+      { body: { planta_nombre: "Acapulco", upload_day: AUTH.cutoff }, dashboardAuth: { role: "ZP" } },
+      1,
+      A.A5
+    );
+    assert.equal(t.context_meta.mode, "forecast_magnitude_followup");
+    assert.equal(t.context_meta.answered_metric, "descuento");
+    assert.equal(boot.plantDiagnosis, 0);
+    assert.equal(boot.mini.length, 1);
+    assert.equal(boot.mini[0].year, 2026);
+    assert.equal(boot.mini[0].month, 8);
+    assert.match(t.answer, new RegExp(String(AUTH.descuento).replace(".", "\\.")));
+
+    const none = wire({ forbidPlantDiagnosis: true, forbidParity: true });
+    const unavailable = await askDirectorIa(
+      { body: { planta_nombre: "Acapulco" }, dashboardAuth: { role: "ZP" } },
+      1,
+      A.A5
+    );
+    assert.equal(unavailable.context_meta.mode, "forecast_magnitude_followup");
+    assert.match(unavailable.answer, /No tengo una corrida de forecast autoritativa vigente/);
+    assert.match(unavailable.answer, /No sustituyo con ARR ni con IGF almacenado/);
+    assert.equal(none.mini.length, 0);
+    assert.equal(none.plantDiagnosis, 0);
+  });
+
+  it("NL A5 no contamina planta, corte ni periodo", async () => {
+    const { result } = await turn1({
+      miniByCutoff: { [AUTH.cutoff]: AUTH, [AUTH_B.cutoff]: AUTH_B },
+    });
+    const state = result.context_meta.conversation_state;
+
+    wire({ forbidPlantDiagnosis: true, forbidParity: true });
+    const plantB = await askDirectorIa(
+      { body: { planta_nombre: "Zihuatanejo", conversation_state: state }, dashboardAuth: { role: "ZP" } },
+      2,
+      A.A5
+    );
+    assert.match(plantB.answer, /No tengo una corrida de forecast autoritativa vigente/);
+    assert.doesNotMatch(plantB.answer, new RegExp(String(AUTH.descuento).replace(".", "\\.")));
+
+    wire({
+      forbidPlantDiagnosis: true,
+      forbidParity: true,
+      miniByCutoff: { [AUTH.cutoff]: AUTH, [AUTH_B.cutoff]: AUTH_B },
+    });
+    const cutoffB = await askDirectorIa(
+      reqOf(A.A5, { conversation_state: state, body: { upload_day: AUTH_B.cutoff, planta_nombre: "Acapulco" } }),
+      1,
+      A.A5
+    );
+    assert.match(cutoffB.answer, new RegExp(String(AUTH_B.descuento).replace(".", "\\.")));
+    assert.doesNotMatch(cutoffB.answer, new RegExp(`${String(AUTH.descuento).replace(".", "\\.")} \\$/kg`));
+
+    wire({ forbidPlantDiagnosis: true, forbidParity: true });
+    const periodQ = "¿Cuál es el descuento proyectado de julio 2026?";
+    const period = await askDirectorIa(reqOf(periodQ, { conversation_state: state }), 1, periodQ);
+    assert.equal(period.context_meta.mode, "forecast_magnitude_followup");
+    assert.match(period.answer, /No tengo una corrida de forecast autoritativa vigente/);
+    assert.doesNotMatch(period.answer, new RegExp(String(AUTH.descuento).replace(".", "\\.")));
+  });
+
+  it("NL decoys ARR/IGF no usan el handler de magnitud Forecast", async () => {
+    const { result } = await turn1();
+    const state = result.context_meta.conversation_state;
+    wire({ forbidPlantDiagnosis: true, forbidParity: true });
+    const arr = await askDirectorIa(reqOf(B.B5, { conversation_state: state }), 1, B.B5);
+    assert.ok(arr);
+    assert.notEqual(arr.context_meta && arr.context_meta.mode, "forecast_magnitude_followup");
+    wire({ forbidPlantDiagnosis: true, forbidParity: true });
+    const igf = await askDirectorIa(reqOf(B.B6, { conversation_state: state }), 1, B.B6);
+    assert.ok(igf);
+    assert.notEqual(igf.context_meta && igf.context_meta.mode, "forecast_magnitude_followup");
   });
 });
