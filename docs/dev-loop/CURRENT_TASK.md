@@ -1,649 +1,301 @@
 # CURRENT_TASK
 
-## AUTORIZACIÓN HUMANA
+task_id: IMPL-DIRECTOR-IA-LEADING-Y-CLIENT-HINT-001
 
-AUTORIZACIÓN HUMANA CONFIRMADA PARA AUDITORÍA ÚNICAMENTE.
+status: DONE_PENDING_REVIEW
 
-Esta tarea autoriza:
+task_type: IMPLEMENTATION
 
-* inspección de código;
-* búsqueda física de funciones y call-sites;
-* ejecución de tests existentes;
-* creación de sondas temporales/read-only cuando sean necesarias;
-* comparación entre entradas y salidas intermedias;
-* documentación de evidencia;
-* creación del informe de auditoría correspondiente.
+branch: implementation/director-ia-leading-y-client-hint-001
 
-Esta tarea NO autoriza:
+authorized_by_human: YES
 
-* implementación;
-* corrección de bugs;
-* refactor;
-* modificación de comportamiento;
-* ampliación de capacidades;
-* cambios oportunistas;
-* actualización de parsers, planners, resolvers o prompts;
-* merge a `main`;
-* deploy;
-* corrección de hallazgos secundarios.
+base_main_sha: 4f286af9266e72d26c67ae0fd37b3a2f93865a3c
 
-Un hallazgo residual NO constituye autorización de implementación.
-
----
-
-# TAREA
-
-`AUDIT-DIRECTOR-IA-CLIENT-HINT-Y-GRUPO-MOVE-001`
-
-# RAMA
-
-`audit/director-ia-client-hint-y-grupo-move-001`
-
-# TIPO
-
-AUDIT / READ-ONLY / FIRST-DIVERGENCE
-
-# ESTADO INICIAL
-
-`DONE_PENDING_REVIEW`
-
----
-
-# 1. OBJETIVO ÚNICO
-
-Localizar físicamente el **primer punto de divergencia** por el cual Director IA reduce o transforma incorrectamente el nombre explícito del cliente:
-
-`Y GRUPO MOVE`
-
-hasta producir un hint equivalente a:
-
-`GRUPO`
-
-en lugar de preservar el nombre suficiente para su posterior resolución canónica.
-
-La auditoría debe determinar:
-
-1. cuál es la representación exacta del texto en cada frontera;
-2. en qué función aparece por primera vez la pérdida de información;
-3. qué regla concreta provoca esa transformación;
-4. si la pérdida ocurre antes o después de:
-
-   * clasificación de intención;
-   * extracción del cliente;
-   * normalización;
-   * construcción de slots;
-   * creación de `client_hint`;
-   * resolución canónica;
-   * ejecución de herramientas;
-5. si el comportamiento depende de que el cliente aparezca:
-
-   * solo;
-   * dentro de una pregunta compuesta;
-   * precedido por preposición/conector;
-   * acompañado de periodo;
-   * acompañado de métricas;
-6. si el problema es exclusivamente de extracción/hint o si existe una segunda divergencia posterior.
-
-No implementar la solución.
-
----
-
-# 2. CONTEXTO Y EVIDENCIA PREVIA
-
-Existe un hallazgo residual ya observado en una auditoría anterior:
-
-`Y GRUPO MOVE` → hint `GRUPO`
-
-Ese hallazgo NO fue corregido y NO estaba autorizado corregirlo dentro de aquella auditoría.
-
-La auditoría anterior relacionada con periodos históricos ya está CLOSED y NO debe ser reabierta ni reescrita:
-
-`docs/dev-loop/reports/SPRINT1-DIRECTOR-IA-CLIENT-HISTORICAL-RANGE-AUDIT-001.md`
-
-Su `FIRST_DIVERGENCE_POINT` histórico fue distinto:
-
-`parseExplicitMonths → null`
-
-para rangos abiertos como:
-
-`enero a la fecha`
-
-Ese incidente no forma parte del objetivo actual.
-
-No mezclar ambos problemas.
-
----
-
-# 3. BASE DE LA AUDITORÍA
-
-La rama actual fue creada desde `main` limpio y sincronizado con `origin/main`.
-
-Antes de realizar conclusiones:
-
-1. registrar SHA exacto de `HEAD`;
-2. registrar SHA de `origin/main`;
-3. comprobar que el working tree inició limpio.
-
-No asumir un SHA por memoria o documentación anterior.
-
-Evidencia mínima esperada:
-
-```text
-git rev-parse HEAD
-git rev-parse origin/main
-git status --short
-```
-
----
-
-# 4. PREGUNTA CENTRAL
-
-Responder con evidencia:
-
-> ¿En qué función y en qué transformación exacta deja de existir la representación correcta de `Y GRUPO MOVE` y aparece por primera vez `GRUPO`?
-
-La respuesta final NO puede limitarse a:
-
-* “el parser falla”;
-* “el planner lo interpreta mal”;
-* “el LLM no entiende el cliente”;
-* “el resolver no encuentra el cliente”;
-* “hay una regex”;
-* “parece un problema de normalización”.
-
-Debe identificarse:
-
-`archivo → función → entrada → transformación → salida`
-
-y, cuando sea posible:
-
-`caller → función divergente → siguiente consumidor`
-
----
-
-# 5. PRINCIPIO FIRST-DIVERGENCE
-
-No comenzar por modificar el lugar donde finalmente aparece `GRUPO`.
-
-Reconstruir la cadena desde la entrada original.
-
-Como mínimo rastrear físicamente, si existen en el runtime actual, fronteras equivalentes a:
-
-```text
-raw user text
-    ↓
-intent/routing
-    ↓
-explicit client extraction
-    ↓
-normalization/token filtering
-    ↓
-slots
-    ↓
-client_hint
-    ↓
-canonical resolution
-    ↓
-tool/query execution
-```
-
-Los nombres anteriores describen fronteras conceptuales.
-
-NO asumir que esos son los nombres reales de las funciones.
-
-Localizar los nombres reales en el repositorio.
-
----
-
-# 6. SONDAS OBLIGATORIAS
-
-Ejecutar sondas read-only suficientes para distinguir pérdida de identidad de fallo posterior.
-
-Debe incluirse como mínimo el cliente exacto:
-
-`Y GRUPO MOVE`
-
-y conservar el texto exacto de entrada y salida de cada sonda.
-
-## 6.1 Caso mínimo
-
-Probar una consulta mínima equivalente a:
-
-`¿Qué sabemos de Y GRUPO MOVE?`
-
-Objetivo:
-
-determinar qué cliente/hint/slot produce la primera vuelta desde un chat sin contexto previo.
-
----
-
-## 6.2 Cliente aislado
-
-Probar el mecanismo físico de extracción con:
-
-`Y GRUPO MOVE`
-
-sin métricas ni periodo, en el nivel más bajo que permita el código.
-
-Objetivo:
-
-separar el problema de extracción del routing conversacional.
-
----
-
-## 6.3 Pregunta compuesta
-
-Probar una consulta con cliente + métrica, por ejemplo:
-
-`Dame las compras de Y GRUPO MOVE.`
-
-y, si el runtime lo soporta:
-
-`Dame los kg comprados de Y GRUPO MOVE.`
-
-Objetivo:
-
-determinar si la presencia de una métrica cambia la extracción.
-
----
-
-## 6.4 Cliente + periodo
-
-Probar:
-
-`Dame las compras de Y GRUPO MOVE desde enero a la fecha.`
-
-Objetivo:
-
-confirmar que el parser temporal actual no es la causa de la mutilación del cliente.
-
-No reauditar el comportamiento completo de rangos históricos salvo lo necesario para separar ambas fronteras.
-
----
-
-## 6.5 Control semántico
-
-Crear controles read-only con nombres que permitan comprobar si existen reglas genéricas que eliminan tokens.
-
-Seleccionar controles derivados del mecanismo encontrado, no una batería arbitraria.
-
-Como mínimo debe quedar demostrado si el token inicial:
-
-`Y`
-
-es interpretado como:
-
-* conjunción;
-* separador;
-* stopword;
-* operador;
-* marcador conversacional;
-* parte legítima del nombre;
-* o no participa realmente en la divergencia.
-
-También debe verificarse por qué el resultado observado termina en:
-
-`GRUPO`
-
-y qué ocurre con:
-
-`MOVE`.
-
-No asumir que `Y` es necesariamente la causa.
-
----
-
-# 7. TRAZABILIDAD OBLIGATORIA
-
-Para cada frontera relevante documentar, cuando exista:
-
-| Frontera           | Función real | Entrada | Salida | ¿Identidad íntegra? |
-| ------------------ | ------------ | ------- | ------ | ------------------- |
-| raw text           | ...          | ...     | ...    | YES/NO              |
-| routing/planner    | ...          | ...     | ...    | YES/NO              |
-| extraction         | ...          | ...     | ...    | YES/NO              |
-| normalization      | ...          | ...     | ...    | YES/NO              |
-| slots/hint         | ...          | ...     | ...    | YES/NO              |
-| canonical resolver | ...          | ...     | ...    | YES/NO              |
-| executor/tool      | ...          | ...     | ...    | YES/NO              |
-
-La primera fila que cambie de `YES` a `NO` debe poder defenderse como:
-
-`FIRST_DIVERGENCE_POINT`
-
-si la evidencia demuestra que realmente es la primera.
-
----
-
-# 8. RESOLUCIÓN CANÓNICA
-
-Comprobar por separado:
-
-1. qué hint recibe físicamente el resolver;
-2. si el resolver conoce o puede encontrar `Y GRUPO MOVE` cuando recibe una representación adecuada;
-3. si el fallo sucede antes de entrar al resolver;
-4. si el resolver introduce una divergencia adicional.
-
-No atribuir al resolver un error causado por un hint ya mutilado.
-
-Si existe acceso read-only a catálogo/entidades comerciales mediante tests, fixtures o herramientas existentes, puede utilizarse.
-
-No insertar ni modificar clientes.
-
----
-
-# 9. CONTINUIDAD
-
-Esta auditoría está centrada en el **primer turno con cliente explícito**.
-
-La continuidad solo debe utilizarse como control comparativo si ayuda a localizar la frontera.
-
-No ampliar esta tarea al hallazgo independiente:
-
-`Ahora dime lo mismo…` → `plant_switch`, `inherit=false`
-
-Ese hallazgo debe permanecer separado.
-
-Si aparece durante las sondas:
-
-* documentarlo como `OUT_OF_SCOPE`;
-* no corregirlo;
-* no convertirlo en una segunda auditoría dentro de esta tarea.
-
----
-
-# 10. RENDER / DEPLOY
-
-La equivalencia entre runtime de Render y el SHA local NO es el objetivo de esta auditoría.
-
-Existe un hallazgo previo:
-
-`Render runtime SHA vs repository SHA = NOT_PROVEN`
-
-No intentar resolverlo aquí salvo que sea estrictamente necesario para interpretar una evidencia utilizada.
-
-Las conclusiones de esta auditoría deben especificar claramente si corresponden a:
-
-`CURRENT_REPOSITORY_CODE`
-
-y no afirmar equivalencia con producción sin evidencia.
-
----
-
-# 11. INSPECCIÓN DE TESTS
-
-Localizar tests existentes relacionados con:
-
-* cliente explícito;
-* client hint;
-* resolución de entidades;
-* planner/client profile;
-* canonicalización;
-* continuidad de cliente;
-* preguntas compuestas.
-
-Determinar:
-
-1. si `Y GRUPO MOVE` aparece actualmente en algún test;
-2. si existe un caso estructural equivalente;
-3. si el bug está cubierto o no;
-4. si un test existente permitiría el comportamiento incorrecto.
-
-NO agregar todavía el golden test.
-
-Registrar:
-
-`GOLDEN_SET_IMPLEMENTED = NO`
-
-salvo autorización futura independiente.
-
----
-
-# 12. GIT HISTORY
-
-Cuando resulte útil, usar historia Git únicamente para entender procedencia y causalidad.
-
-Puede utilizarse:
-
-```text
-git log
-git show
-git blame
-git diff
-```
-
-La auditoría debe diferenciar:
-
-* código vigente;
-* comportamiento histórico;
-* hipótesis;
-* evidencia demostrada.
-
-Si se identifica el commit que introdujo una regla relevante, documentarlo.
-
-No es obligatorio atribuir autoría causal si la evidencia no alcanza.
-
-Usar:
-
-`INTRODUCING_COMMIT = NOT_PROVEN`
-
-cuando corresponda.
-
----
-
-# 13. NO HACER
-
-Queda expresamente prohibido durante esta tarea:
-
-* corregir regex;
-* cambiar stopwords;
-* cambiar extracción;
-* modificar `client_hint`;
-* cambiar planner;
-* cambiar prompts;
-* cambiar canonical resolver;
-* cambiar continuidad;
-* agregar fallbacks;
-* ampliar heurísticas;
-* agregar aliases;
-* hardcodear `Y GRUPO MOVE`;
-* agregar tests que cambien el resultado esperado;
-* implementar golden set;
-* modificar producción;
-* deploy;
-* merge a main;
-* aprovechar para corregir `Ahora dime lo mismo…`;
-* aprovechar para demostrar SHA de Render;
-* reescribir auditorías CLOSED.
-
----
-
-# 14. ARTEFACTO DE SALIDA
-
-Crear exclusivamente el informe:
+audit_contract:
 
 `docs/dev-loop/reports/AUDIT-DIRECTOR-IA-CLIENT-HINT-Y-GRUPO-MOVE-001.md`
 
-Además de cualquier actualización de estado estrictamente requerida por el protocolo de `CURRENT_TASK.md`.
+## 1. Objetivo único
 
-No modificar documentación arquitectónica general.
+Implementar el cambio mínimo, determinista y defendible para que Director IA pueda preservar y resolver correctamente una identidad canónica legítima cuyo nombre comienza con `Y`, incluyendo:
 
----
+`Y GRUPO MOVE`
 
-# 15. CONTENIDO MÍNIMO DEL INFORME
+sin romper la semántica conversacional existente de follow-ups como:
 
-El informe debe incluir:
+`¿Y Arturo?` → `Arturo`
 
-## A. Executive result
+La implementación debe corregir únicamente la divergencia demostrada en la auditoría:
 
-Conclusión breve y verificable.
+`lib/director-ia-conversation-state.js`
+→ `extractEntityHint`
+→ `yMatch`
+→ captura de un solo token + return temprano.
 
-## B. Repository evidence
+No ampliar esta implementación a otros problemas de extracción.
 
-* branch;
-* HEAD SHA;
-* origin/main SHA;
-* working tree inicial.
+## 2. Evidencia contractual
 
-## C. Production observation inherited
+La auditoría demostró:
 
-Documentar el hallazgo recibido:
+* raw text preserva `Y GRUPO MOVE`;
+* `extractEntityHint` es el FIRST_DIVERGENCE_POINT;
+* `yMatch` interpreta `Y/y` inicial como marcador conversacional;
+* captura solamente `GRUPO`;
+* `MOVE` nunca entra al capture group;
+* el resolver canónico recibe el hint ya mutilado;
+* el resolver sí puede resolver `Y GRUPO MOVE` cuando recibe la identidad íntegra;
+* `¿Qué sabemos de Y GRUPO MOVE?` ya preserva correctamente la identidad;
+* `¿Y Arturo? → Arturo` es comportamiento existente cubierto por tests;
+* las preguntas compuestas que producen `null` son un hallazgo separado.
 
-`Y GRUPO MOVE` → `GRUPO`
+No reauditar estos hechos salvo lo necesario para verificar la implementación.
 
-sin presentarlo como una nueva observación de producción si no se ejecutó realmente contra producción.
+## 3. Principio de diseño obligatorio
 
-## D. Physical call chain
+No resolver la ambigüedad `Y` mediante una regla lexical frágil que simplemente diga:
 
-Cadena real de funciones desde texto hasta resolución.
+* “si hay dos palabras, entonces Y es parte del nombre”;
+* “si está en mayúsculas, entonces Y es parte del nombre”;
+* “captura todo después de Y”;
+* o equivalente.
 
-## E. Probe matrix
+La implementación debe conservar el comportamiento conversacional legítimo y preferir evidencia canónica/determinista cuando sea necesaria para distinguir:
 
-Entrada exacta y resultados.
+`Y GRUPO MOVE`
 
-## F. First divergence
+de:
 
-Formato obligatorio:
+`¿Y Arturo?`
 
-```text
-FIRST_DIVERGENCE_POINT =
-<archivo>
-→ <función>
-→ <transformación exacta>
-```
+No hardcodear:
 
-## G. Root cause
+`Y GRUPO MOVE`
 
-Debe describir mecanismo, no síntoma.
+ni ninguna lista especial de clientes.
 
-## H. Downstream behavior
+Si la arquitectura actual permite resolverlo con un cambio más pequeño sin introducir inferencias inseguras, usar el cambio mínimo y documentar por qué es correcto.
 
-Qué reciben planner/resolver/tools después de la divergencia.
+## 4. Acceptance criteria obligatorios
 
-## I. Canonical resolver control
+Debe quedar demostrado por tests que:
 
-Demostrar si el resolver puede o no resolver la identidad cuando recibe información adecuada, siempre que el repositorio permita demostrarlo.
+### Caso A — identidad canónica con Y inicial
 
-## J. Test coverage
+Entrada relevante:
 
-Qué cubren actualmente los tests y qué no.
+`Y GRUPO MOVE`
 
-## K. Secondary findings
+Resultado:
 
-Separados y marcados:
+la identidad que llega a resolución canónica conserva:
 
-`OUT_OF_SCOPE`
+`Y GRUPO MOVE`
 
-## L. Implementation assessment
+y no:
 
-Solo describir qué frontera tendría que ser objeto de una implementación futura.
+`GRUPO`
 
-NO diseñar ni aplicar el fix salvo lo mínimo necesario para explicar la frontera.
+ni:
 
----
+`GRUPO MOVE`
 
-# 16. CAMPOS DE CIERRE OBLIGATORIOS
+### Caso B — variante interrogativa
 
-El informe debe terminar contestando explícitamente:
+`¿Y GRUPO MOVE?`
 
-```text
-AUDIT_STATUS =
-INCIDENT_REPRODUCED =
-CURRENT_MAIN_CODE_BEHAVIOR =
-FIRST_DIVERGENCE_POINT =
-ROOT_CAUSE =
-CLIENT_NAME_RAW_PRESERVED =
-CLIENT_NAME_EXTRACTION_PRESERVED =
-CLIENT_HINT_PRESERVED =
-CANONICAL_RESOLVER_RECEIVES_FULL_IDENTITY =
-CANONICAL_RESOLUTION_WITH_FULL_IDENTITY =
-TOKEN_Y_CAUSAL =
-TOKEN_MOVE_LOSS_EXPLAINED =
-SECOND_DIVERGENCE_FOUND =
-CURRENT_TEST_COVERAGE =
-GOLDEN_SET_IMPLEMENTED = NO
-IMPLEMENTATION_AUTHORIZED = NO
-CURRENT_TASK_CHANGED =
+Debe poder preservar/resolver la identidad `Y GRUPO MOVE` cuando exista evidencia canónica de ese cliente.
+
+### Caso C — regresión conversacional
+
+`¿Y Arturo?`
+
+Debe continuar comportándose como follow-up:
+
+`Arturo`
+
+No debe convertirse automáticamente en:
+
+`Y Arturo`
+
+### Caso D — pregunta que ya funcionaba
+
+`¿Qué sabemos de Y GRUPO MOVE?`
+
+Debe seguir preservando:
+
+`Y GRUPO MOVE`
+
+### Caso E — no hardcode
+
+Agregar al menos un control estructural suficiente para demostrar que la implementación no depende literalmente del string `Y GRUPO MOVE`.
+
+### Caso F — fail closed
+
+Cuando exista ambigüedad real y no pueda demostrarse identidad canónica, no inventar una identidad.
+
+Conservar la semántica segura existente o clarificar según corresponda.
+
+## 5. Scope permitido
+
+Puede modificarse únicamente lo estrictamente necesario dentro de la frontera:
+
+* `lib/director-ia-conversation-state.js`
+* resolver/client-profile únicamente si la solución necesita evidencia canónica allí;
+* integración mínima necesaria para transportar candidatos/hint;
+* tests directamente relacionados;
+* `docs/dev-loop/CURRENT_TASK.md`
+* reporte de implementación.
+
+No asumir de antemano que todos esos archivos deben cambiar.
+
+Preferir el diff mínimo.
+
+## 6. Fuera de alcance
+
+NO corregir en esta tarea:
+
+* `Dame las compras de Y GRUPO MOVE.` → `null`
+* otras preguntas compuestas cuyo extractor no obtiene identidad;
+* `Ahora dime lo mismo…` → `plant_switch`
+* `inherit=false` asociado a ese hallazgo;
+* parser de `enero a la fecha`;
+* periodos históricos;
+* Render SHA;
+* deploy;
+* otros clientes;
+* aliases manuales;
+* fuzzy resolver general;
+* refactor general de conversation-state;
+* nuevos intents;
+* cambios de prompts LLM;
+* Golden Set general.
+
+Si aparece otro bug:
+
+documentarlo como `OUT_OF_SCOPE`.
+
+No corregirlo.
+
+## 7. Protección de regresiones
+
+Todos los tests existentes relacionados con:
+
+* conversation-state;
+* client_profile;
+* continuity;
+* entity follow-up;
+* persistent memory;
+* planner relacionado;
+
+deben continuar pasando.
+
+La implementación NO puede eliminar el contrato actualmente cubierto por:
+
+`extractEntityHint("¿Y Arturo?") === "Arturo"`
+
+o su equivalente vigente.
+
+## 8. Tests nuevos mínimos
+
+Agregar tests de regresión que demuestren el incidente y la corrección.
+
+Deben cubrir como mínimo:
+
+* `Y GRUPO MOVE`
+* `¿Y GRUPO MOVE?`
+* `¿Y Arturo?`
+* `¿Qué sabemos de Y GRUPO MOVE?`
+* control estructural no hardcodeado
+* caso ambiguo/fail-closed si la solución introduce resolución por candidatos.
+
+Los tests deben probar comportamiento real, no únicamente una regex aislada si la corrección depende de resolución canónica.
+
+## 9. No permitido
+
+* hardcodear cliente;
+* ampliar regex indiscriminadamente;
+* hacer que todo `Y <dos palabras>` sea nombre;
+* reducir controles fail-closed;
+* usar LLM para decidir identidad;
+* introducir fuzzy matching silencioso;
+* cambiar unrelated routing;
+* corregir OUT_OF_SCOPE;
+* modificar auditoría CLOSED;
+* merge a main;
+* deploy.
+
+## 10. Reporte
+
+Crear:
+
+`docs/dev-loop/reports/IMPL-DIRECTOR-IA-LEADING-Y-CLIENT-HINT-001.md`
+
+Debe documentar:
+
+* SHA base;
+* archivos modificados;
+* mecanismo elegido;
+* por qué distingue identidad canónica de follow-up;
+* before/after;
+* tests nuevos;
+* tests existentes ejecutados;
+* resultados;
+* riesgos;
+* OUT_OF_SCOPE;
+* diff summary.
+
+Debe terminar con:
+
+IMPLEMENTATION_STATUS =
+ROOT_CAUSE_CONTRACT_PRESERVED =
+Y_GRUPO_MOVE_FIXED =
+QUESTION_Y_GRUPO_MOVE_FIXED =
+Y_ARTURO_REGRESSION_PRESERVED =
+SABEMOS_REGRESSION_PRESERVED =
+HARDCODE_USED = NO
+CANONICAL_EVIDENCE_USED =
+AMBIGUOUS_CASE_FAIL_CLOSED =
+COMPOUND_QUESTION_NULL_FIXED = NO
+PLANT_SWITCH_FIXED = NO
+HISTORICAL_RANGE_CHANGED = NO
 RENDER_SHA_EQUIVALENCE = NOT_PROVEN
-OUT_OF_SCOPE_FINDINGS =
-```
+TESTS =
+GIT_DIFF_CHECK =
+IMPLEMENTATION_AUTHORIZED = YES
+MERGE_AUTHORIZED = NO
 
-No usar `YES`, `NO` o una causa concreta si no está demostrada.
+## 11. Ejecución autónoma autorizada
 
-Usar:
+Cursor está autorizado a completar en una sola pasada:
 
-`NOT_PROVEN`
+1. actualizar `CURRENT_TASK.md` con este contrato;
+2. inspeccionar el código necesario;
+3. implementar;
+4. crear/actualizar tests;
+5. ejecutar tests focalizados;
+6. ejecutar suite Director IA pertinente;
+7. corregir únicamente fallos causados por esta implementación;
+8. escribir el reporte;
+9. ejecutar `git diff --check`;
+10. revisar `git diff`;
+11. dejar `CURRENT_TASK` en `DONE_PENDING_REVIEW`;
+12. hacer commit de la rama;
+13. hacer push de la rama de implementación.
 
-cuando corresponda.
+No pedir confirmación humana entre estos pasos.
 
----
+## 12. Gate final
 
-# 17. CRITERIO DE ÉXITO
+Después del commit y push:
 
-La auditoría está completa únicamente cuando pueda explicarse con evidencia reproducible:
+STOP.
 
-```text
-"Y GRUPO MOVE"
-        ↓
-[función A: todavía correcto]
-        ↓
-[función B: transformación demostrada]
-        ↓
-"GRUPO"
-```
+No hacer merge a `main`.
 
-o, si la observación ya no se reproduce:
+No desplegar.
 
-```text
-historical observation
-        ↓
-current branch probe
-        ↓
-NOT_REPRODUCED
-```
+No abrir automáticamente otra tarea.
 
-y localizar hasta donde la historia/código permitan explicar la causa anterior sin inventarla.
-
-No forzar la conclusión de que el bug sigue existiendo.
-
----
-
-# 18. STOP CONDITION
-
-Al completar la evidencia:
-
-1. crear el informe;
-2. ejecutar validaciones/tests read-only pertinentes;
-3. mostrar `git diff --check`;
-4. mostrar `git status`;
-5. detenerse.
-
-NO hacer implementación.
-
-NO crear rama de implementación.
-
-NO hacer merge.
-
-NO push salvo autorización humana posterior.
-
-El resultado de esta tarea debe terminar en:
-
-`DONE_PENDING_REVIEW`
-
-y esperar revisión humana.
-
----
-
-# 19. REGLA FINAL
-
-La pregunta de esta auditoría es exclusivamente:
-
-> ¿Dónde y por qué `Y GRUPO MOVE` pierde su identidad antes de la resolución canónica?
-
-No:
-
-> ¿Cómo lo arreglamos?
-
-Primero evidencia.
-
-Después, si la auditoría demuestra una causa y existe autorización humana independiente, podrá evaluarse una implementación separada.
+Esperar revisión humana.
