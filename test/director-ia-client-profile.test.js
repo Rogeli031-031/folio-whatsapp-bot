@@ -24,6 +24,7 @@ const {
   buildClientProfilePrompt,
   formatClientProfileContext,
   mergeCommentsByKeyThenNombre,
+  explicitClientHintTakesPrecedence,
   CLIENT_PROFILE_SYSTEM_ADDENDUM,
 } = require("../lib/director-ia-client-profile");
 
@@ -212,7 +213,7 @@ describe("client_profile identity + math + period", () => {
     const ctx = formatClientProfileContext(pack);
     assert.match(ctx, /NO_ENCONTRADO_EN_ESTA_RUTA/);
     assert.match(ctx, /No es ABSENCE_CONFIRMED/);
-    assert.match(ctx, /Prohibido afirmar que no existen acciones/);
+    assert.match(ctx, /no encontré una acción DICF asociada en esta ruta/i);
     assert.match(ctx, /=== COMMENTS ===\n {2}\(NO_ENCONTRADO_EN_ESTA_RUTA/);
   });
 
@@ -425,6 +426,155 @@ describe("client_profile identity + math + period", () => {
     assert.ok(seenPlantas.map(Number).includes(2));
   });
 
+  it("entidad explícita nueva domina al cliente heredado; no cruza comentarios", async () => {
+    assert.equal(explicitClientHintTakesPrecedence("GRUPO MOVE EMPRESARIAL", "TORTILLERIA ERICK"), true);
+    assert.equal(explicitClientHintTakesPrecedence("TORTILLERIA ERICK", "TORTILLERIA ERICK"), false);
+    assert.equal(explicitClientHintTakesPrecedence("", "TORTILLERIA ERICK"), false);
+
+    const erickKeys = deriveClienteKeys(1, "Casa", "", "TORTILLERIA ERICK");
+    const moveKeys = deriveClienteKeys(1, "Comisionista", "", "GRUPO MOVE EMPRESARIAL");
+    const salesBoth = {
+      rows: [
+        { month: "2026-07", cliente_norm: "TORTILLERIA ERICK", canal: "Casa", subcanal: "", kg: 4713.12 },
+        { month: "2026-08", cliente_norm: "TORTILLERIA ERICK", canal: "Casa", subcanal: "", kg: 307.26 },
+        { month: "2026-08", cliente_norm: "GRUPO MOVE EMPRESARIAL", canal: "Comisionista", subcanal: "", kg: 100 },
+      ],
+    };
+    const commentsFor = async (_c, _p, ks) => {
+      const blob = (ks || []).join(" ").toLowerCase();
+      if (blob.includes("grupo move")) {
+        return [{ body: "COMPRA DIARIAMENTE", created_at: "2026-08-12", cliente_key: moveKeys[0] }];
+      }
+      if (blob.includes("erick")) {
+        return [{ body: "POR FALTA DE PIPAS", created_at: "2026-08-12", cliente_key: erickKeys[0] }];
+      }
+      return [];
+    };
+    let seenCanal = null;
+    const baseOpts = {
+      now: new Date("2026-09-01T10:00:00-06:00"),
+      resolvePlanta: async () => ({ id: 1, nombre: "Acapulco", clave: "E3" }),
+      resolvePlantCodes: async () => ({ not_found: false, uniqueCodes: ["E3"], plantCode: "E3" }),
+      queryMonthlySales: async (_c, _codes, _s, _e, canal) => {
+        seenCanal = canal;
+        return salesBoth;
+      },
+      queryMonthlyDiscount: async () => ({ rows: [] }),
+      queryActionsByKeys: async () => [],
+      queryHistorialForActions: async () => new Map(),
+      loadRecentCommentsByClienteNombres: async () => new Map(),
+    };
+
+    const firstErick = await loadClientProfileForChat({ connect: async () => ({ release() {} }) }, 1, { dashboardAuth: { role: "ZP" } }, {
+      ...baseOpts,
+      question: "¿Qué sabemos de TORTILLERIA ERICK?",
+      entity_hint: "TORTILLERIA ERICK",
+      queryCommentsByKeys: commentsFor,
+    });
+    assert.equal(firstErick.identity.cliente_norm, "TORTILLERIA ERICK");
+    assert.ok(String(firstErick.identity.cliente_key || "").includes("|"));
+    assert.equal(firstErick.monthly_rows.find((r) => r.month === "2026-07").kg, 4713.12);
+    assert.equal(firstErick.comments[0].body, "POR FALTA DE PIPAS");
+    assert.equal(
+      firstErick.comments.some((c) => c.body === "COMPRA DIARIAMENTE"),
+      false
+    );
+    assert.ok(firstErick.limitations.includes("actions_absence_not_confirmed"));
+    assert.match(buildClientProfilePrompt(firstErick, "¿Qué sabemos de TORTILLERIA ERICK?").userContent, /no encontré una acción DICF asociada en esta ruta/i);
+
+    const afterErick = await loadClientProfileForChat({ connect: async () => ({ release() {} }) }, 1, { dashboardAuth: { role: "ZP" } }, {
+      ...baseOpts,
+      question: "¿Qué sabemos de GRUPO MOVE EMPRESARIAL?",
+      entity_hint: "GRUPO MOVE EMPRESARIAL",
+      cliente_norm: "TORTILLERIA ERICK",
+      display_name: "TORTILLERIA ERICK",
+      cliente_keys: erickKeys,
+      identity_canal: "Casa",
+      active_channel: "casa",
+      queryCommentsByKeys: commentsFor,
+    });
+    assert.equal(afterErick.identity.cliente_norm, "GRUPO MOVE EMPRESARIAL");
+    assert.ok(String(afterErick.identity.cliente_key || "").includes("|"));
+    assert.equal(seenCanal, "ambos");
+    assert.equal(
+      afterErick.monthly_rows.some((r) => r.kg === 4713.12),
+      false
+    );
+    assert.equal(
+      afterErick.comments.some((c) => c.body === "COMPRA DIARIAMENTE"),
+      true
+    );
+    assert.equal(
+      afterErick.comments.some((c) => /PIPAS|CHILPANCINGO/i.test(c.body || "")),
+      false
+    );
+    const movePrompt = buildClientProfilePrompt(afterErick, "¿Qué sabemos de GRUPO MOVE EMPRESARIAL?");
+    assert.match(movePrompt.userContent, /display=GRUPO MOVE EMPRESARIAL/);
+    assert.doesNotMatch(movePrompt.userContent, /TORTILLERIA ERICK/);
+    assert.doesNotMatch(movePrompt.userContent, /porque COMPRA DIARIAMENTE/i);
+
+    const afterMove = await loadClientProfileForChat({ connect: async () => ({ release() {} }) }, 1, { dashboardAuth: { role: "ZP" } }, {
+      ...baseOpts,
+      question: "¿Qué sabemos de TORTILLERIA ERICK?",
+      entity_hint: "TORTILLERIA ERICK",
+      cliente_norm: "GRUPO MOVE EMPRESARIAL",
+      display_name: "GRUPO MOVE EMPRESARIAL",
+      cliente_keys: moveKeys,
+      identity_canal: "Comisionista",
+      active_channel: "comisionista",
+      queryCommentsByKeys: commentsFor,
+    });
+    assert.equal(afterMove.identity.cliente_norm, "TORTILLERIA ERICK");
+    assert.equal(
+      afterMove.comments.some((c) => c.body === "POR FALTA DE PIPAS"),
+      true
+    );
+    assert.equal(
+      afterMove.comments.some((c) => c.body === "COMPRA DIARIAMENTE"),
+      false
+    );
+
+    const pronounKeeps = await loadClientProfileForChat({ connect: async () => ({ release() {} }) }, 1, { dashboardAuth: { role: "ZP" } }, {
+      ...baseOpts,
+      question: "¿Qué sabemos de él?",
+      entity_hint: "TORTILLERIA ERICK",
+      cliente_norm: "TORTILLERIA ERICK",
+      display_name: "TORTILLERIA ERICK",
+      cliente_keys: erickKeys,
+      identity_canal: "Casa",
+      queryCommentsByKeys: commentsFor,
+    });
+    assert.equal(pronounKeeps.identity.cliente_norm, "TORTILLERIA ERICK");
+    assert.equal(pronounKeeps.comments[0].body, "POR FALTA DE PIPAS");
+
+    const moveViaNombre = await loadClientProfileForChat({ connect: async () => ({ release() {} }) }, 1, { dashboardAuth: { role: "ZP" } }, {
+      ...baseOpts,
+      question: "¿Qué sabemos de GRUPO MOVE EMPRESARIAL?",
+      entity_hint: "GRUPO MOVE EMPRESARIAL",
+      cliente_norm: "TORTILLERIA ERICK",
+      display_name: "TORTILLERIA ERICK",
+      cliente_keys: erickKeys,
+      identity_canal: "Casa",
+      active_channel: "casa",
+      queryCommentsByKeys: async () => [],
+      loadRecentCommentsByClienteNombres: async (_c, opts) => {
+        assert.ok(opts.nombres.some((n) => String(n).toLowerCase().includes("grupo move")));
+        assert.equal(
+          opts.nombres.some((n) => String(n).toLowerCase().includes("erick")),
+          false
+        );
+        const m = new Map();
+        m.set("grupo move empresarial", [{ body: "COMPRA DIARIAMENTE", created_at: "2026-08-12" }]);
+        m.set("tortilleria erick", [{ body: "POR FALTA DE PIPAS", created_at: "2026-08-12" }]);
+        return m;
+      },
+    });
+    assert.equal(moveViaNombre.identity.cliente_norm, "GRUPO MOVE EMPRESARIAL");
+    assert.equal(moveViaNombre.comments.length, 1);
+    assert.equal(moveViaNombre.comments[0].body, "COMPRA DIARIAMENTE");
+    assert.equal(moveViaNombre.provenance.name_join, true);
+  });
+
   it("top client empate no elige en silencio; cross-plant deny GA", async () => {
     const tie = await loadClientProfileForChat({}, 1, { dashboardAuth: { role: "ZP" } }, {
       question: "¿Qué cliente de Puebla es el de mayor volumen?",
@@ -502,6 +652,14 @@ describe("askDirectorIa client_profile", () => {
       loadCommercialTrendForChat: undefined,
       loadDailyExecutiveBriefForChat: undefined,
       loadPlantDiagnosisForChat: undefined,
+      resolveClientProfilePlanta: undefined,
+      resolveClientProfilePlantCodes: undefined,
+      queryClientProfileSales: undefined,
+      queryClientProfileDiscount: undefined,
+      queryClientProfileComments: undefined,
+      queryClientProfileActions: undefined,
+      queryClientProfileHistorial: undefined,
+      clientProfileNow: undefined,
     });
   });
 
@@ -595,6 +753,83 @@ describe("askDirectorIa client_profile", () => {
     );
     assert.equal(t4.context_meta.mode, "client_profile");
     assert.ok(loadCount >= 2);
+  });
+
+  it("hilo Erick → Grupo Move usa el loader real y no reusa Erick", async () => {
+    const erickKeys = deriveClienteKeys(1, "Casa", "", "TORTILLERIA ERICK");
+    const moveKeys = deriveClienteKeys(1, "Comisionista", "", "GRUPO MOVE EMPRESARIAL");
+    const salesBoth = {
+      rows: [
+        { month: "2026-07", cliente_norm: "TORTILLERIA ERICK", canal: "Casa", subcanal: "", kg: 4713.12 },
+        { month: "2026-08", cliente_norm: "TORTILLERIA ERICK", canal: "Casa", subcanal: "", kg: 307.26 },
+        { month: "2026-08", cliente_norm: "GRUPO MOVE EMPRESARIAL", canal: "Comisionista", subcanal: "", kg: 100 },
+      ],
+    };
+    const commentsFor = async (_c, _p, ks) => {
+      const blob = (ks || []).join(" ").toLowerCase();
+      if (blob.includes("grupo move")) {
+        return [{ body: "COMPRA DIARIAMENTE", created_at: "2026-08-12", cliente_key: moveKeys[0] }];
+      }
+      if (blob.includes("erick")) {
+        return [
+          { body: "POR FALTA DE PIPAS", created_at: "2026-08-12", cliente_key: erickKeys[0] },
+          { body: "ESTA EN CHILPANCINGO Y LO TOMÓ LA COMPETENCIA", created_at: "2026-08-12", cliente_key: erickKeys[0] },
+        ];
+      }
+      return [];
+    };
+    const seenUsers = [];
+    configureDirectorIaChat({
+      pool: { connect: async () => ({ release() {} }) },
+      clientProfileNow: new Date("2026-09-01T10:00:00-06:00"),
+      openaiChat: async (_sys, user) => {
+        seenUsers.push(String(user || ""));
+        if (/display=GRUPO MOVE EMPRESARIAL/.test(user)) {
+          return "Perfil de GRUPO MOVE EMPRESARIAL. Comentario registrado, no causa.";
+        }
+        return "Perfil de TORTILLERIA ERICK. Comentario registrado, no causa.";
+      },
+      resolveClientProfilePlanta: async () => ({ id: 1, nombre: "Acapulco", clave: "E3" }),
+      resolveClientProfilePlantCodes: async () => ({ not_found: false, uniqueCodes: ["E3"], plantCode: "E3" }),
+      queryClientProfileSales: async () => salesBoth,
+      queryClientProfileDiscount: async () => ({ rows: [] }),
+      queryClientProfileComments: commentsFor,
+      queryClientProfileActions: async () => [],
+      queryClientProfileHistorial: async () => new Map(),
+    });
+
+    const req = { dashboardAuth: { role: "ZP" }, body: {} };
+    const t1 = await askDirectorIa(req, 1, "¿Qué sabemos de TORTILLERIA ERICK?");
+    assert.equal(t1.ok, true);
+    assert.equal(t1.context_meta.mode, "client_profile");
+    assert.equal(t1.client_profile.identity.cliente_norm, "TORTILLERIA ERICK");
+    assert.equal(
+      t1.client_profile.comments.some((c) => c.body === "POR FALTA DE PIPAS"),
+      true
+    );
+
+    const t2 = await askDirectorIa(
+      { ...req, body: { conversation_state: t1.context_meta.conversation_state } },
+      1,
+      "¿Qué sabemos de GRUPO MOVE EMPRESARIAL?"
+    );
+    assert.equal(t2.ok, true);
+    assert.equal(t2.context_meta.mode, "client_profile");
+    assert.equal(t2.client_profile.identity.cliente_norm, "GRUPO MOVE EMPRESARIAL");
+    assert.equal(
+      t2.client_profile.comments.some((c) => c.body === "COMPRA DIARIAMENTE"),
+      true
+    );
+    assert.equal(
+      t2.client_profile.comments.some((c) => /PIPAS|CHILPANCINGO/i.test(c.body || "")),
+      false
+    );
+    const perfilMove = (seenUsers[1] || "").split("=== PERFIL LONGITUDINAL CLIENTE ===")[1] || "";
+    assert.match(perfilMove, /display=GRUPO MOVE EMPRESARIAL/);
+    assert.doesNotMatch(perfilMove, /TORTILLERIA ERICK/);
+    assert.doesNotMatch(perfilMove, /POR FALTA DE PIPAS/);
+    assert.match(perfilMove, /COMPRA DIARIAMENTE/);
+    assert.match(perfilMove, /no encontré una acción DICF asociada en esta ruta/i);
   });
 
   it("preserva brief diario", async () => {
