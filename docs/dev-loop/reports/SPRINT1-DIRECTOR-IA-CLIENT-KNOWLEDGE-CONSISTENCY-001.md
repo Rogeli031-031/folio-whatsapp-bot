@@ -84,3 +84,115 @@ TRACK_B_STARTED = NO
 ## STOP
 
 No CLOSED ni APPROVED. Un DONE no autoriza otra tarea.
+
+---
+
+## HUMAN REVIEW CORRECTION
+
+Corrección de la misma tarea. No es tarea nueva. No es Track B. `CURRENT_TASK` permanece `DONE_PENDING_REVIEW`.
+
+### Fallo observado
+
+Caso 1 (PASS, no romper): `¿Qué sabemos de TORTILLERIA ERICK?` recuperó 4713.12 kg julio 2026, 307.26 kg agosto 2026 y dos comentarios `[2026-08-12]` (`POR FALTA DE PIPAS`, `ESTA EN CHILPANCINGO Y LO TOMÓ LA COMPETENCIA`), no tratados como causa.
+
+Caso 2 (FAIL crítico, mismo hilo): `¿Qué sabemos de GRUPO MOVE EMPRESARIAL?` verbalizó «No se dispone de información específica sobre GRUPO MOVE EMPRESARIAL. Sin embargo, se tiene un perfil longitudinal de TORTILLERIA ERICK…» y reutilizó historial, comentarios y acciones de Erick.
+
+### Causa raíz
+
+Clasificación: **INHERIT_PRECEDENCE** + **PROFILE_CONTEXT_REUSE** (canal heredado).
+
+No es ENTITY_EXTRACTION: `extractEntityHint` ya extrae `GRUPO MOVE EMPRESARIAL`.
+No es planner: el intent sigue `client_profile`.
+
+`director-ia-chat.js` ~4467–4480 inyecta a la vez:
+
+- `entity_hint` = turno actual (Grupo Move)
+- `cliente_norm` / `display_name` / `cliente_keys` / `identity_canal` / `active_channel` = cliente activo heredado (Erick, canal Casa)
+
+`loadClientProfileForChat` resolvía `if (inheritedNorm) identity = Erick` **antes** de `entity_hint`. El hint nunca corría. El pack era Erick; la pregunta era Move; el LLM sintetizaba «no hay Move, aquí está Erick».
+
+Segunda trampa: si se ignoraba `inheritedNorm` pero se dejaba `slots.channel = casa`, `queryMonthlySales` excluía a Grupo Move (Comisionista) y el pack volvía vacío.
+
+`chat.js` no se tocó: la precedencia se corrige localmente en `client_profile` (`in_scope`).
+
+```
+STALE_ENTITY_INTRODUCTION_POINT =
+  1) lib/director-ia-chat.js ~4470–4480 (inyecta cliente_norm/keys/canal stale; no modificado)
+  2) lib/director-ia-client-profile.js (inheritedNorm ANTES de entity_hint; corregido)
+```
+
+Traza demostrada antes del cambio:
+
+```
+current user text
+→ extractEntityHint = "GRUPO MOVE EMPRESARIAL"
+→ planner client_profile
+→ chat pasa entity_hint=Move + cliente_norm=Erick
+→ loadClientProfileForChat: inheritedNorm gana
+→ selected cliente = Erick
+→ profile/comments/pack = Erick
+```
+
+### Archivos modificados
+
+- `lib/director-ia-client-profile.js`
+- `test/director-ia-client-profile.test.js`
+- `docs/dev-loop/reports/SPRINT1-DIRECTOR-IA-CLIENT-KNOWLEDGE-CONSISTENCY-001.md`
+
+No modificados: `director-ia-chat.js`, planner, commercial-trend, CEL, Dashboard, Forecast, IGF, engine, DICF loader, Action Register, `CURRENT_TASK.md`, constitución, schema.
+
+### Solución
+
+Regla: `EXPLICIT_ENTITY_CURRENT_TURN > INHERITED_ENTITY_PREVIOUS_TURN` cuando el hint actual es resoluble y `exactNorm(hint) !== exactNorm(inherited)`.
+
+1. `explicitClientHintTakesPrecedence(entity_hint, cliente_norm)`.
+2. Si gana el hint: `slots.channel = channelNamedInQuestion(question)` (null → ventas `ambos`). No se reusa canal/keys del cliente anterior.
+3. Identidad se resuelve contra ventas por `exactNorm`. 1 hit → keys del hit. 0 hits → identity = hint + keys derivadas del hint (nunca keys de Erick). Ambiguo → clarification.
+4. Si hint e inherited son el mismo `exactNorm` (pronombre / misma entidad): se conserva continuidad.
+5. Inherit global no se desactiva. No phrasebook. No hardcode Erick/Move. No rediseño de planner.
+
+### Semántica de acciones
+
+DICF vacío en esta ruta ≠ ausencia global. Action Register no se consulta.
+
+- Addendum y pack: «no encontré una acción DICF asociada en esta ruta» + `NO_ENCONTRADA_EN_ESTA_RUTA` + `actions_absence_not_confirmed`.
+- Prohibido verbalizar como hecho: «no existen acciones», «no se han registrado acciones», «no hay acciones para este cliente».
+- No se rediseñó DICF ni Action Register.
+
+### Pruebas
+
+Focal `test/director-ia-client-profile.test.js`: 19/19.
+
+Suite `node --test test/director-ia*.js`: **1320/1320**, fail 0.
+
+Cubierto:
+
+1. Erick solo → Erick (kg julio/agosto + `POR FALTA DE PIPAS`).
+2. Mismo hilo Erick → Grupo Move → Move; no Erick; `askDirectorIa` con loader real.
+3. Orden inverso Move → Erick → Erick.
+4. Entidad explícita distinta domina al heredado.
+5. Sin entidad nueva (pronombre / mismo `exactNorm`) conserva continuidad.
+6. Grupo Move recupera `COMPRA DIARIAMENTE` (key y fallback nombre+planta).
+7. Move no recibe `POR FALTA DE PIPAS`.
+8. Erick no recibe `COMPRA DIARIAMENTE`.
+9. comentario ≠ causa.
+10. Aislamiento por planta se conserva.
+11. `cliente_key` válido (`|`) se conserva.
+12. Fallback nombre+planta se conserva.
+13–14. Historial mensual y descuento no regresan (tests previos intactos).
+15–18. Commercial Movers / commercial_trend / Forecast / IGF no se tocaron.
+19. Suite Director IA completa.
+20. DICF vacío no afirma ausencia global de acciones.
+
+### No regresiones
+
+```
+DASHBOARD_BEHAVIOR_CHANGED = NO
+PRODUCTION_PASS = NOT_YET_PROVEN
+IMPLEMENTATION_AUTHORIZED_NEXT = NO
+TRACK_B_STARTED = NO
+```
+
+No git add / commit / push / merge / deploy.
+No CLOSED ni APPROVED.
+Un DONE no autoriza otra tarea. STOP.
