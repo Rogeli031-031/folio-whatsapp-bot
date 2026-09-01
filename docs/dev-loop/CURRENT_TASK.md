@@ -2,7 +2,7 @@
 
 task_id: IMPL-DIRECTOR-IA-HISTORICAL-MARGIN-QUESTIONS-001
 
-status: DONE_PENDING_REVIEW
+status: CLOSED
 
 authorized_by: "Human Approver"
 
@@ -18,8 +18,7 @@ base_main_sha: 1f7774d7bff5fdd71f4e7b88433dde178f4fef86
 
 implementation_authorized: YES
 
-merge_authorized: NO
-
+merge_authorized: YES
 deploy_authorized: NO
 
 max_attempts: 1
@@ -799,7 +798,7 @@ DEPLOY_AUTHORIZED = NO
 
 At completion:
 
-status: DONE_PENDING_REVIEW
+status: CLOSED
 
 Suggested commit:
 
@@ -814,3 +813,5 @@ Then STOP.
 NO MERGE.
 NO DEPLOY.
 NO NEXT TASK.
+human_review: APPROVED
+closed_by_human: YES
