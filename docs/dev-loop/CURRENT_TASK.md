@@ -2,7 +2,7 @@
 
 task_id: AUDIT-DIRECTOR-IA-HISTORICAL-MARGIN-QUESTIONS-001
 
-status: AUTHORIZED
+status: DONE_PENDING_REVIEW
 
 authorized_by: "Human Approver"
 
