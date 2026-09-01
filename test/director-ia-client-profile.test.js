@@ -22,6 +22,8 @@ const {
   deriveClienteKeys,
   loadClientProfileForChat,
   buildClientProfilePrompt,
+  formatClientProfileContext,
+  mergeCommentsByKeyThenNombre,
   CLIENT_PROFILE_SYSTEM_ADDENDUM,
 } = require("../lib/director-ia-client-profile");
 
@@ -205,9 +207,16 @@ describe("client_profile identity + math + period", () => {
     assert.ok(pack.limitations.includes("action_register_has_no_cliente_key"));
     assert.equal(pack.provenance.name_join, false);
     assert.equal(pack.provenance.aligned_before_gpt, true);
+    assert.ok(pack.limitations.includes("comments_absence_not_confirmed"));
+    assert.ok(pack.limitations.includes("actions_absence_not_confirmed"));
+    const ctx = formatClientProfileContext(pack);
+    assert.match(ctx, /NO_ENCONTRADO_EN_ESTA_RUTA/);
+    assert.match(ctx, /No es ABSENCE_CONFIRMED/);
+    assert.match(ctx, /Prohibido afirmar que no existen acciones/);
+    assert.match(ctx, /=== COMMENTS ===\n {2}\(NO_ENCONTRADO_EN_ESTA_RUTA/);
   });
 
-  it("comments y DICF solo por cliente_key", async () => {
+  it("comments y DICF por cliente_key se conservan", async () => {
     const keys = deriveClienteKeys(1, "Casa", "", "ARTURO");
     const pack = await loadClientProfileForChat(
       { connect: async () => ({ release() {} }) },
@@ -256,6 +265,7 @@ describe("client_profile identity + math + period", () => {
         },
         queryHistorialForActions: async () =>
           new Map([[9, [{ evento: "creada", detalle: "alta", creado_en: "2026-07-03" }]]]),
+        loadRecentCommentsByClienteNombres: async () => new Map(),
       }
     );
     assert.equal(pack.ok, true);
@@ -269,6 +279,150 @@ describe("client_profile identity + math + period", () => {
     assert.match(prompt.systemPrompt, /NO está disponible/);
     assert.match(prompt.userContent, /UNSUPPORTED_METRIC/);
     assert.doesNotMatch(prompt.userContent, /income=0\b/);
+    assert.equal(pack.provenance.name_join, false);
+    assert.match(prompt.userContent, /Comentario registrado/);
+    assert.match(prompt.userContent, /El comentario no es la causa/);
+    assert.match(prompt.systemPrompt, /no se han registrado comentarios/);
+  });
+
+  it("key vacía + nombre resoluble recupera comentario; no es causa; created_at se conserva", async () => {
+    const keys = deriveClienteKeys(1, "Casa", "", "TORTILLERIA ERICK");
+    const byNombre = new Map();
+    byNombre.set("tortilleria erick", [
+      { body: "POR FALTA DE PIPAS", author_name: "GA", created_at: "2026-08-12" },
+    ]);
+    const pack = await loadClientProfileForChat(
+      { connect: async () => ({ release() {} }) },
+      1,
+      { dashboardAuth: { role: "ZP" } },
+      {
+        question: "¿Qué sabemos de TORTILLERIA ERICK?",
+        entity_hint: "TORTILLERIA ERICK",
+        cliente_norm: "TORTILLERIA ERICK",
+        display_name: "TORTILLERIA ERICK",
+        cliente_keys: keys,
+        identity_canal: "Casa",
+        now: new Date("2026-09-01T10:00:00-06:00"),
+        resolvePlanta: async () => ({ id: 1, nombre: "Acapulco", clave: "E3" }),
+        resolvePlantCodes: async () => ({ not_found: false, uniqueCodes: ["E3"], plantCode: "E3" }),
+        queryMonthlySales: async () => ({
+          rows: [
+            { month: "2026-07", cliente_norm: "TORTILLERIA ERICK", canal: "Casa", subcanal: "", kg: 4713.12 },
+            { month: "2026-08", cliente_norm: "TORTILLERIA ERICK", canal: "Casa", subcanal: "", kg: 307.26 },
+          ],
+        }),
+        queryMonthlyDiscount: async () => ({
+          rows: [{ month: "2026-07", cliente_norm: "TORTILLERIA ERICK", canal: "Casa", subcanal: "", monto: 10 }],
+        }),
+        queryCommentsByKeys: async () => [],
+        queryActionsByKeys: async () => [],
+        queryHistorialForActions: async () => new Map(),
+        loadRecentCommentsByClienteNombres: async (_c, opts) => {
+          assert.ok(Array.isArray(opts.plantaIds) && opts.plantaIds.includes(1));
+          assert.ok(opts.nombres.some((n) => String(n).toLowerCase().includes("erick")));
+          return byNombre;
+        },
+      }
+    );
+    assert.equal(pack.ok, true);
+    assert.equal(pack.monthly_rows.find((r) => r.month === "2026-07").kg, 4713.12);
+    assert.equal(pack.comments.length, 1);
+    assert.equal(pack.comments[0].body, "POR FALTA DE PIPAS");
+    assert.equal(pack.comments[0].created_at, "2026-08-12");
+    assert.equal(pack.comments[0].source_join, "nombre_planta");
+    assert.equal(pack.provenance.name_join, true);
+    const prompt = buildClientProfilePrompt(pack, "¿Qué sabemos de TORTILLERIA ERICK?");
+    assert.match(prompt.userContent, /Comentario registrado \[2026-08-12\]: «POR FALTA DE PIPAS»/);
+    assert.match(prompt.userContent, /El comentario no es la causa/);
+    assert.doesNotMatch(prompt.userContent, /cayó porque|disminuyó porque|porque faltaron pipas/i);
+    assert.doesNotMatch(prompt.userContent, /=== COMMENTS ===\n {2}\(NO_ENCONTRADO/);
+  });
+
+  it("sin comentario no inventa; ausencia no es inexistencia global; key+nombre no duplica", async () => {
+    const keys = deriveClienteKeys(1, "Casa", "", "GRUPO MOVE EMPRESARIAL");
+    const empty = await loadClientProfileForChat(
+      { connect: async () => ({ release() {} }) },
+      1,
+      { dashboardAuth: { role: "ZP" } },
+      {
+        question: "¿Qué sabemos de GRUPO MOVE EMPRESARIAL?",
+        cliente_norm: "GRUPO MOVE EMPRESARIAL",
+        display_name: "GRUPO MOVE EMPRESARIAL",
+        cliente_keys: keys,
+        identity_canal: "Comisionista",
+        now: new Date("2026-09-01T10:00:00-06:00"),
+        resolvePlanta: async () => ({ id: 1, nombre: "Acapulco", clave: "E3" }),
+        resolvePlantCodes: async () => ({ not_found: false, uniqueCodes: ["E3"], plantCode: "E3" }),
+        queryMonthlySales: async () => ({
+          rows: [{ month: "2026-08", cliente_norm: "GRUPO MOVE EMPRESARIAL", canal: "Comisionista", subcanal: "", kg: 1 }],
+        }),
+        queryMonthlyDiscount: async () => ({ rows: [] }),
+        queryCommentsByKeys: async () => [],
+        queryActionsByKeys: async () => [],
+        queryHistorialForActions: async () => new Map(),
+        loadRecentCommentsByClienteNombres: async () => new Map(),
+      }
+    );
+    assert.equal(empty.comments.length, 0);
+    const emptyPrompt = buildClientProfilePrompt(empty, "¿Qué sabemos de GRUPO MOVE EMPRESARIAL?");
+    assert.match(emptyPrompt.userContent, /NO_ENCONTRADO_EN_ESTA_RUTA/);
+    assert.match(emptyPrompt.systemPrompt, /ABSENCE_CONFIRMED/);
+    assert.doesNotMatch(emptyPrompt.userContent, /Comentario registrado: «/);
+    assert.ok(empty.limitations.includes("comments_absence_not_confirmed"));
+
+    const merged = mergeCommentsByKeyThenNombre(
+      [{ body: "COMPRA DIARIAMENTE", created_at: "2026-08-12", cliente_key: keys[0] }],
+      [{ body: "COMPRA DIARIAMENTE", created_at: "2026-08-12" }]
+    );
+    assert.equal(merged.length, 1);
+    assert.equal(merged[0].source_join, "cliente_key");
+    const causePrompt = buildClientProfilePrompt(
+      {
+        ...empty,
+        comments: [{ body: "COMPRA DIARIAMENTE", created_at: "2026-08-12" }],
+        limitations: [],
+      },
+      "¿Qué sabemos de GRUPO MOVE EMPRESARIAL?"
+    );
+    assert.match(causePrompt.userContent, /Comentario registrado \[2026-08-12\]: «COMPRA DIARIAMENTE»/);
+    assert.doesNotMatch(causePrompt.userContent, /porque COMPRA DIARIAMENTE/i);
+  });
+
+  it("aislamiento de planta: el complemento nombre usa plantaIds de la planta resuelta", async () => {
+    const keys = deriveClienteKeys(2, "Casa", "", "TORTILLERIA ERICK");
+    let seenPlantas = null;
+    await loadClientProfileForChat(
+      { connect: async () => ({ release() {} }) },
+      2,
+      { dashboardAuth: { role: "ZP" } },
+      {
+        question: "¿Qué comentarios tiene TORTILLERIA ERICK?",
+        cliente_norm: "TORTILLERIA ERICK",
+        display_name: "TORTILLERIA ERICK",
+        cliente_keys: keys,
+        now: new Date("2026-09-01T10:00:00-06:00"),
+        resolvePlanta: async () => ({ id: 2, nombre: "Puebla", clave: "E4" }),
+        resolvePlantCodes: async () => ({ not_found: false, uniqueCodes: ["E4"], plantCode: "E4" }),
+        queryMonthlySales: async () => ({
+          rows: [{ month: "2026-08", cliente_norm: "TORTILLERIA ERICK", canal: "Casa", subcanal: "", kg: 1 }],
+        }),
+        queryMonthlyDiscount: async () => ({ rows: [] }),
+        queryCommentsByKeys: async (_c, plantaId) => {
+          assert.equal(plantaId, 2);
+          return [];
+        },
+        queryActionsByKeys: async () => [],
+        queryHistorialForActions: async () => new Map(),
+        loadRecentCommentsByClienteNombres: async (_c, opts) => {
+          seenPlantas = opts.plantaIds;
+          const m = new Map();
+          m.set("tortilleria erick", [{ body: "COMENTARIO PUEBLA", created_at: "2026-08-01" }]);
+          return m;
+        },
+      }
+    );
+    assert.ok(Array.isArray(seenPlantas) && seenPlantas.length > 0);
+    assert.ok(seenPlantas.map(Number).includes(2));
   });
 
   it("top client empate no elige en silencio; cross-plant deny GA", async () => {
