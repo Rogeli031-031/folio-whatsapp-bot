@@ -236,6 +236,20 @@ describe("SPRINT1 FORECAST-NL-PARITY — detector A1–A10 y decoys B1–B10", (
     assert.equal(planDirectorIaQuestion(A.A5, { inheritParentIntent: "plant_diagnosis" }).intent, "plant_diagnosis");
   });
 
+  it("A5/A6 no regresan tras comentarios de movers; tendencia negativa no es magnitud Forecast", () => {
+    const runOpts = { has_authoritative_run: true, executive_hilo: true };
+    assert.equal(classifyForecastMagnitudeFollowUp(A.A5, runOpts).kind, "descuento");
+    assert.equal(classifyForecastMagnitudeFollowUp(A.A6, runOpts).kind, "descuento");
+    assert.equal(
+      classifyForecastMagnitudeFollowUp("¿Qué clientes tienen tendencia negativa en ventas?", runOpts),
+      null
+    );
+    assert.equal(
+      classifyForecastMagnitudeFollowUp("¿Qué comentarios tienen los clientes que disminuyeron?", runOpts),
+      null
+    );
+  });
+
   it("B1–B10 no son magnitud Forecast; ARR/IGF/ayer conservan intent", () => {
     for (const [id, q] of Object.entries(B)) {
       assert.equal(classifyForecastMagnitudeFollowUp(q, runOpts), null, id);

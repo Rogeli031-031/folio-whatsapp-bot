@@ -123,7 +123,7 @@ function trendWithMovers() {
             delta_ton: -4.41,
             prev: 4.71,
             actual: 0.31,
-            comments: [{ body: "POR FALTA DE PIPAS" }],
+            comments: [{ body: "POR FALTA DE PIPAS", created_at: "2026-08-10" }],
           }),
           mover({
             cliente: "GRUPO MOVE EMPRESARIAL",
@@ -131,7 +131,7 @@ function trendWithMovers() {
             delta_ton: -161.08,
             prev: 161.08,
             actual: 0,
-            comments: [{ body: "COMPRA DIARIAMENTE" }],
+            comments: [{ body: "COMPRA DIARIAMENTE", created_at: "2026-07-01" }],
           }),
         ],
       },
@@ -172,6 +172,7 @@ function packWithMovers() {
 
 describe("commercial movers — routing", () => {
   const commercialQs = [
+    "¿Qué clientes tienen tendencia negativa en ventas?",
     "¿Qué clientes tienen una tendencia negativa en ventas y qué comentarios tienen?",
     "¿Qué clientes disminuyeron?",
     "¿Quién dejó de comprar?",
@@ -179,6 +180,7 @@ describe("commercial movers — routing", () => {
     "¿Qué clientes son nuevos?",
     "¿Cuáles son los que más bajaron?",
     "¿Qué comentarios tienen los clientes que disminuyeron?",
+    "¿Qué comentarios tienen los clientes que dejaron de comprar?",
     "¿Qué comentarios tienen?",
   ];
 
@@ -285,13 +287,24 @@ describe("commercial movers — Estado Ejecutivo aditivo", () => {
   it("comentario existente es registrado; ausencia no inventa; contradicción no cambia el delta", () => {
     const pack = packWithMovers();
     const prompt = buildExecutiveStatusPrompt(pack, "¿Cómo vamos?");
-    assert.match(prompt.userContent, /Comentario registrado: «POR FALTA DE PIPAS»/);
+    assert.match(prompt.userContent, /Comentario registrado \[2026-08-10\]: «POR FALTA DE PIPAS»/);
     assert.match(prompt.userContent, /Sin comentario reciente/);
-    assert.match(prompt.userContent, /Comentario registrado: «COMPRA DIARIAMENTE»/);
+    assert.match(prompt.userContent, /Comentario registrado \[2026-07-01\]: «COMPRA DIARIAMENTE»/);
     assert.match(prompt.userContent, /GRUPO MOVE EMPRESARIAL: dejó de comprar -161\.08 t/);
     assert.match(prompt.userContent, /El comentario no es la causa|Comentario registrado ≠ causa|no es causa/i);
+    assert.match(prompt.userContent, /Si una línea de esa proyección incluye «Comentario registrado», cópiala completa/);
+    assert.match(prompt.userContent, /No la omitas/);
+    assert.match(prompt.userContent, /Prohibido: «disminuyó porque/);
+    assert.doesNotMatch(prompt.userContent, /dejó de comprar porque COMPRA DIARIAMENTE|disminuyó porque POR FALTA DE PIPAS/i);
     assert.equal(formatRegisteredComments([]), "Sin comentario reciente.");
     assert.equal(formatRegisteredComments([{ body: "X" }]), "Comentario registrado: X");
+    assert.equal(
+      formatRegisteredComments([{ body: "X", created_at: "2026-08-15T12:00:00.000Z" }]),
+      "Comentario registrado [2026-08-15]: X"
+    );
+    assert.equal(formatRegisteredComments([{ body: "X", created_at: null }]), "Comentario registrado: X");
+    assert.equal(formatRegisteredComments([{ body: "X", created_at: "" }]), "Comentario registrado: X");
+    assert.equal(formatRegisteredComments([{ body: "X", created_at: "ayer" }]), "Comentario registrado: X");
   });
 
   it("prompt de cómo vamos pide el bloque entre Tendencias y Riesgos", () => {
@@ -609,7 +622,197 @@ describe("HUMAN REVIEW — preservación de Magnitudes + compactación verbal", 
     assert.equal(move.registered_comments[0].body, "COMPRA DIARIAMENTE");
     const prompt = buildExecutiveStatusPrompt(pack, "¿Cómo vamos?");
     assert.match(prompt.userContent, /dejó de comprar -161\.08 t/);
-    assert.match(prompt.userContent, /Comentario registrado: «COMPRA DIARIAMENTE»/);
+    assert.match(prompt.userContent, /Comentario registrado \[2026-07-01\]: «COMPRA DIARIAMENTE»/);
     assert.match(prompt.userContent, /El comentario no es la causa/);
+    assert.doesNotMatch(prompt.userContent, /porque COMPRA DIARIAMENTE/i);
+  });
+});
+
+describe("commercial movers — comentarios obligatorios y no-causa", () => {
+  it("dos comentarios se verbalizan en el orden del payload; created_at inválido no inventa fecha", () => {
+    const pack = buildExecutiveStatusPack({
+      assembled: assembleOk(),
+      trend: {
+        ...trendWithMovers(),
+        channels: {
+          casa: {
+            ...trendWithMovers().channels.casa,
+            top_movers: [
+              mover({
+                cliente: "TORTILLERIA ERICK",
+                tipo: "disminucion",
+                delta_ton: -4.41,
+                prev: 4.71,
+                actual: 0.31,
+                comments: [
+                  { body: "POR FALTA DE PIPAS", created_at: "2026-08-10" },
+                  { body: "segunda nota", created_at: "2026-08-01T09:00:00Z" },
+                ],
+              }),
+            ],
+          },
+          comisionista: trendWithMovers().channels.comisionista,
+        },
+      },
+      scope: { planta_id: 1, plant_name: "Acapulco", scope_source: "ui_plant_anchor" },
+    });
+    const prompt = buildExecutiveStatusPrompt(pack, "¿Cómo vamos?");
+    const erick = prompt.userContent.match(/TORTILLERIA ERICK:[^\n]+/);
+    assert.ok(erick);
+    assert.match(erick[0], /Comentario registrado \[2026-08-10\]: «POR FALTA DE PIPAS»/);
+    assert.match(erick[0], /Comentario registrado \[2026-08-01\]: «segunda nota»/);
+    assert.ok(erick[0].indexOf("POR FALTA DE PIPAS") < erick[0].indexOf("segunda nota"));
+    assert.doesNotMatch(erick[0], /porque POR FALTA DE PIPAS/i);
+    assert.equal(
+      formatRegisteredComments([
+        { body: "A", created_at: "2026-08-10" },
+        { body: "B", created_at: null },
+      ]),
+      "Comentario registrado [2026-08-10]: A Comentario registrado: B"
+    );
+  });
+
+  it("comentario en Top 6 fuera de 2+2 no entra al prompt; no cambia ranking", () => {
+    const casa = [
+      mover({ cliente: "NEG-A", tipo: "perdido", delta_ton: -40, prev: 40, actual: 0 }),
+      mover({ cliente: "NEG-B", tipo: "disminucion", delta_ton: -30, prev: 50, actual: 20 }),
+      mover({
+        cliente: "NEG-C",
+        tipo: "disminucion",
+        delta_ton: -20,
+        prev: 25,
+        actual: 5,
+        comments: [{ body: "COMENTARIO OCULTO 2+2", created_at: "2026-08-20" }],
+      }),
+      mover({ cliente: "POS-A", tipo: "aumento", delta_ton: 18, prev: 10, actual: 28 }),
+      mover({ cliente: "POS-B", tipo: "nuevo", delta_ton: 12, prev: 0, actual: 12 }),
+      mover({ cliente: "POS-C", tipo: "aumento", delta_ton: 8, prev: 4, actual: 12 }),
+    ];
+    const pack = buildExecutiveStatusPack({
+      assembled: assembleOk(),
+      trend: {
+        ok: true,
+        compare: true,
+        channel: "both",
+        range_days: 30,
+        range_start: "2026-08-02",
+        range_end: "2026-08-31",
+        channels: {
+          casa: {
+            channel: "casa",
+            range_start: "2026-08-02",
+            range_end: "2026-08-31",
+            ols: { direction: "DOWN" },
+            limitations: [],
+            top_movers: casa,
+          },
+          comisionista: { channel: "comisionista", ols: { direction: "UP" }, limitations: [], top_movers: [] },
+        },
+      },
+      scope: { planta_id: 1, plant_name: "Acapulco", scope_source: "ui_plant_anchor" },
+    });
+    const movers = pack.items.find((i) => i.slot === "COMMERCIAL_MOVERS");
+    assert.equal(movers.payload.casa.length, 6);
+    assert.deepEqual(
+      projectChannelMoversVerbal(movers.payload.casa).map((m) => m.cliente),
+      ["NEG-A", "NEG-B", "POS-A", "POS-B"]
+    );
+    const prompt = buildExecutiveStatusPrompt(pack, "¿Cómo vamos?");
+    assert.match(prompt.userContent, /NEG-A:/);
+    assert.doesNotMatch(prompt.userContent, /NEG-C/);
+    assert.doesNotMatch(prompt.userContent, /COMENTARIO OCULTO 2\+2/);
+    assert.equal(movers.payload.casa.find((m) => m.cliente === "NEG-C").delta_ton, -20);
+  });
+
+  it("aislamiento de planta: comentarios de un pack no aparecen en el otro", () => {
+    const acapulco = packWithMovers();
+    const pueblaTrend = trendWithMovers();
+    pueblaTrend.channels.casa.top_movers = [
+      mover({
+        cliente: "TORTILLERIA ERICK",
+        tipo: "disminucion",
+        delta_ton: -4.41,
+        prev: 4.71,
+        actual: 0.31,
+        comments: [{ body: "COMENTARIO PUEBLA", created_at: "2026-08-12" }],
+      }),
+    ];
+    const puebla = buildExecutiveStatusPack({
+      assembled: assemblePlantDiagnosisEvidence({
+        plant: { planta_id: 2, planta_nombre: "Puebla", plant_code: "E4" },
+        year: 2026,
+        month: 8,
+        actionRegisterRaw: {
+          period: { kind: "snapshot", as_of: "2026-08-23" },
+          payload: { summary: { open: 1, closed: 0, overdue: 2 }, top_overdue: [], responsables: [] },
+        },
+        dicfRaw: { period: { kind: "action_dates" }, payload: { actions: [], limit: 8 } },
+        bitacoraRaw: {
+          period: { kind: "bitacora_window", months: 3, from: "2026-06" },
+          payload: { sessions: [] },
+        },
+        arrRaw: { venta_ton: 100, load_error: null },
+        igfRaw: { version_id: 1, composition: { ok: true, lines: [] } },
+        commercialStateRaw: {
+          period: { kind: "materialized_cache", yyyy_mm: "2026-07", year: 2026, month: 7 },
+          payload: { materialized: true, commercial_materiality: { enabled: false } },
+        },
+      }),
+      trend: pueblaTrend,
+      scope: { planta_id: 2, plant_name: "Puebla", scope_source: "ui_plant_anchor" },
+    });
+    const acapulcoPrompt = buildExecutiveStatusPrompt(acapulco, "¿Cómo vamos?");
+    const pueblaPrompt = buildExecutiveStatusPrompt(puebla, "¿Cómo vamos?");
+    assert.match(acapulcoPrompt.userContent, /POR FALTA DE PIPAS/);
+    assert.doesNotMatch(acapulcoPrompt.userContent, /COMENTARIO PUEBLA/);
+    assert.match(pueblaPrompt.userContent, /COMENTARIO PUEBLA/);
+    assert.doesNotMatch(pueblaPrompt.userContent, /POR FALTA DE PIPAS/);
+    assert.match(acapulcoPrompt.userContent, /planta=Acapulco id=1/);
+    assert.match(pueblaPrompt.userContent, /planta=Puebla id=2/);
+  });
+
+  it("negativo/negativa/negativos/negativas + preguntas directas → commercial_trend; por qué no se implementa aquí", () => {
+    const morph = [
+      "¿Qué clientes tienen tendencia negativa en ventas?",
+      "¿Qué clientes tienen tendencia negativo en ventas?",
+      "¿Qué clientes tienen tendencia negativos en ventas?",
+      "¿Qué clientes tienen tendencia negativas en ventas?",
+    ];
+    for (const q of morph) {
+      assert.equal(isCommercialMoversQuestion(q), true, q);
+      assert.equal(isCommercialTrendQuestion(q), true, q);
+      assert.equal(planDirectorIaQuestion(q).intent, "commercial_trend", q);
+    }
+    assert.equal(
+      planDirectorIaQuestion("¿Qué clientes tienen tendencia negativa en ventas y qué comentarios tienen?").intent,
+      "commercial_trend"
+    );
+    assert.equal(planDirectorIaQuestion("¿Qué comentarios tienen los clientes que disminuyeron?").intent, "commercial_trend");
+    assert.equal(
+      planDirectorIaQuestion("¿Qué comentarios tienen los clientes que dejaron de comprar?").intent,
+      "commercial_trend"
+    );
+    assert.equal(isCommercialMoversQuestion("¿Por qué cayó Grupo Move?"), false);
+    assert.notEqual(planDirectorIaQuestion("¿Por qué cayó Grupo Move?").intent, "commercial_trend");
+  });
+
+  it("enriquecer comentarios no reordena ni cambia delta; join no empeora homónimo (mismo nombre → mismo bucket)", async () => {
+    const movers = [
+      { cliente: "ACME", tipo: "disminucion", delta_ton: -9, venta_ton_prev: 10, venta_ton_actual: 1 },
+      { cliente: "BETA", tipo: "aumento", delta_ton: 4, venta_ton_prev: 1, venta_ton_actual: 5 },
+    ];
+    const byNombre = new Map();
+    byNombre.set("acme", [{ body: "nota acme", created_at: "2026-08-11" }]);
+    const out = await enrichMoversWithRegisteredComments({ query: async () => ({ rows: [] }) }, 1, movers, {
+      loadRecentComments: async () => byNombre,
+    });
+    assert.deepEqual(
+      out.map((m) => m.cliente),
+      ["ACME", "BETA"]
+    );
+    assert.equal(out[0].delta_ton, -9);
+    assert.equal(out[1].delta_ton, 4);
+    assert.equal(out[0].registered_comments[0].body, "nota acme");
+    assert.deepEqual(out[1].registered_comments, []);
   });
 });
