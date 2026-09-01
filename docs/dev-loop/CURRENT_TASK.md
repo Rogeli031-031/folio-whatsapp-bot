@@ -1,307 +1,354 @@
 # CURRENT_TASK
 
-task_id: IMPL-DIRECTOR-IA-LEADING-Y-CLIENT-HINT-001
+task_id: AUDIT-DIRECTOR-IA-COMPOUND-CLIENT-ENTITY-EXTRACTION-001
 
-status: CLOSED
+status: DONE_PENDING_REVIEW
 
-human_review: APPROVED
+authorized_by: "Human Approver"
 
-merge_authorized: YES
+authorized_at: "2026-09-01T14:49:00-06:00"
 
-closed_by_human: YES
+human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-01"
 
-task_type: IMPLEMENTATION
+task_type: AUDIT
 
-branch: implementation/director-ia-leading-y-client-hint-001
+branch: audit/director-ia-compound-client-entity-extraction-001
 
-authorized_by_human: YES
+base_main_sha: b0e6c8880166e63e7fec0e4b680ed0658378749d
 
-base_main_sha: 4f286af9266e72d26c67ae0fd37b3a2f93865a3c
+objective: >
+  Localizar físicamente el primer punto de divergencia, por tipo de consulta,
+  que impide preservar y resolver un cliente explícito cuando su nombre aparece
+  dentro de una pregunta compuesta con métricas y/o periodo, sin asumir que la
+  causa única sea planner, routing, extractEntityHint, leading-Y, periodo o resolver.
 
-audit_contract:
+## Contexto contractual
 
-`docs/dev-loop/reports/AUDIT-DIRECTOR-IA-CLIENT-HINT-Y-GRUPO-MOVE-001.md`
+La tarea anterior:
 
-## 1. Objetivo único
+IMPL-DIRECTOR-IA-LEADING-Y-CLIENT-HINT-001
 
-Implementar el cambio mínimo, determinista y defendible para que Director IA pueda preservar y resolver correctamente una identidad canónica legítima cuyo nombre comienza con `Y`, incluyendo:
+está CLOSED e integrada en main.
 
-`Y GRUPO MOVE`
+Su comportamiento aprobado NO se reabre:
 
-sin romper la semántica conversacional existente de follow-ups como:
+- Y GRUPO MOVE como leading-Y multi-token usa evidencia canónica exacta.
+- ¿Y GRUPO MOVE? puede resolver Y GRUPO MOVE con evidencia canónica.
+- ¿Y Arturo? conserva semántica conversacional Arturo.
+- ¿Qué sabemos de Y Arturo? permite identidad explícita Y Arturo.
+- No fuzzy.
+- Fail-closed preservado.
 
-`¿Y Arturo?` → `Arturo`
+Hallazgo que quedó expresamente OUT_OF_SCOPE:
 
-La implementación debe corregir únicamente la divergencia demostrada en la auditoría:
+- Dame las compras de Y GRUPO MOVE. → extractEntityHint = null
+- Dame los kg comprados de Y GRUPO MOVE. → extractEntityHint = null
 
-`lib/director-ia-conversation-state.js`
-→ `extractEntityHint`
-→ `yMatch`
-→ captura de un solo token + return temprano.
+Esta auditoría investiga ese frente independiente.
 
-No ampliar esta implementación a otros problemas de extracción.
+NO implementa su solución.
 
-## 2. Evidencia contractual
+## Pregunta central
 
-La auditoría demostró:
+Determinar, para cada clase de pregunta compuesta:
 
-* raw text preserva `Y GRUPO MOVE`;
-* `extractEntityHint` es el FIRST_DIVERGENCE_POINT;
-* `yMatch` interpreta `Y/y` inicial como marcador conversacional;
-* captura solamente `GRUPO`;
-* `MOVE` nunca entra al capture group;
-* el resolver canónico recibe el hint ya mutilado;
-* el resolver sí puede resolver `Y GRUPO MOVE` cuando recibe la identidad íntegra;
-* `¿Qué sabemos de Y GRUPO MOVE?` ya preserva correctamente la identidad;
-* `¿Y Arturo? → Arturo` es comportamiento existente cubierto por tests;
-* las preguntas compuestas que producen `null` son un hallazgo separado.
+raw question
+→ semantic recognition
+→ planner intent
+→ conversation-state
+→ entity extraction/candidates
+→ client-profile slots
+→ canonical resolution
 
-No reauditar estos hechos salvo lo necesario para verificar la implementación.
+y localizar la PRIMERA frontera en la que se pierde:
 
-## 3. Principio de diseño obligatorio
+a) la intención correcta,
+b) la identidad explícita del cliente,
+c) o la capacidad de resolverla.
 
-No resolver la ambigüedad `Y` mediante una regla lexical frágil que simplemente diga:
+No forzar un FIRST_DIVERGENCE_POINT global si existen dos o más clases causales diferentes.
 
-* “si hay dos palabras, entonces Y es parte del nombre”;
-* “si está en mayúsculas, entonces Y es parte del nombre”;
-* “captura todo después de Y”;
-* o equivalente.
+## Writable in_scope
 
-La implementación debe conservar el comportamiento conversacional legítimo y preferir evidencia canónica/determinista cuando sea necesaria para distinguir:
+- docs/dev-loop/CURRENT_TASK.md
+- docs/dev-loop/reports/AUDIT-DIRECTOR-IA-COMPOUND-CLIENT-ENTITY-EXTRACTION-001.md
 
-`Y GRUPO MOVE`
+## Read-only in_scope
 
-de:
+- AGENTS.md
+- docs/dev-loop/LOOP_PROTOCOL.md
+- docs/dev-loop/TASK_TEMPLATE.md
+- docs/dev-loop/reports/README.md
+- docs/director-ia/DIRECTOR_IA_CONSTITUTION.md
+- docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md
+- docs/dev-loop/reports/AUDIT-DIRECTOR-IA-CLIENT-HINT-Y-GRUPO-MOVE-001.md
+- docs/dev-loop/reports/IMPL-DIRECTOR-IA-LEADING-Y-CLIENT-HINT-001.md
+- lib/director-ia-conversation-state.js
+- lib/director-ia-client-profile.js
+- lib/director-ia-planner.js
+- lib/director-ia-chat.js
+- tests Director IA relevantes
+- git history estrictamente necesaria
 
-`¿Y Arturo?`
+## Out of scope
 
-No hardcodear:
+- cualquier modificación de código runtime
+- cualquier modificación de tests
+- implementar extractor nuevo
+- cambiar regex
+- cambiar hasNamedClientToken
+- cambiar isClientProfileQuestion
+- cambiar detectDirectorIaIntent
+- cambiar conversation-state
+- cambiar canonical resolver
+- cambiar prompts LLM
+- cambiar aliases
+- fuzzy matching
+- corregir plant_switch
+- corregir Ahora dime lo mismo…
+- corregir inherit=false
+- reabrir leading-Y ya CLOSED
+- reabrir auditoría histórica de enero a la fecha
+- cambiar parser temporal
+- clientes nuevos
+- aumentaron/disminuyeron/dejaron de comprar
+- Golden Set
+- Render
+- Exit 137
+- PG pool
+- deploy
+- merge a main
+- docs/director-ia/*
+- meta-protocolo
+
+## Probes obligatorios
+
+### Control conocido bueno
 
-`Y GRUPO MOVE`
+1. ¿Qué sabemos de Y GRUPO MOVE?
+2. Y GRUPO MOVE
+3. ¿Y Arturo?
 
-ni ninguna lista especial de clientes.
+### Compound sin periodo explícito
 
-Si la arquitectura actual permite resolverlo con un cambio más pequeño sin introducir inferencias inseguras, usar el cambio mínimo y documentar por qué es correcto.
+4. Dame las compras de Y GRUPO MOVE.
+5. Dame los kg comprados de Y GRUPO MOVE.
+6. Dame las compras de TORTILLERIA ERICK.
+7. Dame los kg comprados de TORTILLERIA ERICK.
 
-## 4. Acceptance criteria obligatorios
+### Compound con periodo explícito
 
-Debe quedar demostrado por tests que:
+8. Dame las compras de Y GRUPO MOVE desde enero a la fecha.
+9. Dame los kg comprados de Y GRUPO MOVE desde enero a la fecha.
+10. Dame los kg comprados y el descuento por cada mes de Y GRUPO MOVE desde enero a la fecha.
+11. Dame las compras de TORTILLERIA ERICK desde enero a la fecha.
+12. Dame los kg comprados y el descuento por cada mes de TORTILLERIA ERICK desde enero a la fecha.
 
-### Caso A — identidad canónica con Y inicial
+### Control con anchor explícito "cliente"
 
-Entrada relevante:
+13. Dame las compras del cliente Y GRUPO MOVE desde enero a la fecha.
+14. Dame las compras del cliente TORTILLERIA ERICK desde enero a la fecha.
 
-`Y GRUPO MOVE`
+### Control multi-token sin Y inicial
 
-Resultado:
+15. Dame los kg comprados de GRUPO MOVE EMPRESARIAL desde enero a la fecha.
 
-la identidad que llega a resolución canónica conserva:
+Los nombres utilizados en sondas estructurales no prueban existencia real en producción.
+No consultar ni mutar producción para fabricar evidencia.
 
-`Y GRUPO MOVE`
+## Fronteras mínimas a medir
 
-y no:
+Para cada probe, capturar cuando sea físicamente posible:
 
-`GRUPO`
+- raw input
+- isClientProfileQuestion
+- detectDirectorIaIntent:
+  - intent
+  - confidence
+  - requires_clarification
+  - evidence
+- classifyTurnKind o equivalente observable
+- extractEntityHint
+- extractLeadingYHintCandidates
+- resolveConversationTurn:
+  - inherit
+  - entity_hint
+  - entity_hint_candidates
+  - leading_y_requires_canonical
+  - invalidate_entity
+- parseExplicitPeriod o resolveClientProfileSlots:
+  - period_source
+  - requested_range
+  - query_start
+  - query_end
+- canonical resolver / loadClientProfileForChat mediante fixture o dependencia inyectada read-only cuando sea útil
 
-ni:
+No modificar exports únicamente para poder sondar.
 
-`GRUPO MOVE`
+Usar interfaces ya exportadas o call-sites existentes.
 
-### Caso B — variante interrogativa
+## Reglas de interpretación
 
-`¿Y GRUPO MOVE?`
+No asumir:
 
-Debe poder preservar/resolver la identidad `Y GRUPO MOVE` cuando exista evidencia canónica de ese cliente.
+- que una consulta sin periodo debe ser client_profile;
+- que extractEntityHint es necesariamente la primera divergencia;
+- que leading-Y es la causa;
+- que el parser de periodo es la causa;
+- que el resolver es la causa;
+- que todas las preguntas compuestas comparten el mismo bug.
 
-### Caso C — regresión conversacional
+Separar como mínimo:
 
-`¿Y Arturo?`
+A. SEMANTIC_ROUTING_DIVERGENCE
+B. ENTITY_EXTRACTION_DIVERGENCE
+C. CANDIDATE_TRANSPORT_DIVERGENCE
+D. CANONICAL_RESOLUTION_DIVERGENCE
+E. NO_DIVERGENCE
+F. CURRENT_CONTRACT_DOES_NOT_CLASSIFY_AS_CLIENT_PROFILE
 
-Debe continuar comportándose como follow-up:
+Una consulta puede pertenecer a una clase distinta de otra.
 
-`Arturo`
+## Control crítico
 
-No debe convertirse automáticamente en:
+Para las consultas con periodo explícito:
 
-`Y Arturo`
+"desde enero a la fecha"
 
-### Caso D — pregunta que ya funcionaba
+verificar únicamente que el parser actual sigue construyendo el rango.
 
-`¿Qué sabemos de Y GRUPO MOVE?`
+NO reabrir la auditoría histórica del parser.
 
-Debe seguir preservando:
+Si el periodo es correcto y la identidad falla después:
 
-`Y GRUPO MOVE`
+PERIOD_PARSER_CAUSAL = NO para esa sonda.
 
-### Caso E — no hardcode
+## Resolver control
 
-Agregar al menos un control estructural suficiente para demostrar que la implementación no depende literalmente del string `Y GRUPO MOVE`.
+Si una pregunta pierde la identidad antes del resolver:
 
-### Caso F — fail closed
+probar por separado, mediante fixture/inyección existente, si el resolver puede resolver correctamente cuando recibe el cliente completo.
 
-Cuando exista ambigüedad real y no pueda demostrarse identidad canónica, no inventar una identidad.
+Ejemplos estructurales:
 
-Conservar la semántica segura existente o clarificar según corresponda.
+- Y GRUPO MOVE
+- TORTILLERIA ERICK
+- GRUPO MOVE EMPRESARIAL
 
-## 5. Scope permitido
+No modificar base de datos.
 
-Puede modificarse únicamente lo estrictamente necesario dentro de la frontera:
+No insertar clientes.
 
-* `lib/director-ia-conversation-state.js`
-* resolver/client-profile únicamente si la solución necesita evidencia canónica allí;
-* integración mínima necesaria para transportar candidatos/hint;
-* tests directamente relacionados;
-* `docs/dev-loop/CURRENT_TASK.md`
-* reporte de implementación.
+No atribuir al resolver un problema causado upstream.
 
-No asumir de antemano que todos esos archivos deben cambiar.
+## Leading-Y control
 
-Preferir el diff mínimo.
+La implementación CLOSED de leading-Y es una frontera protegida.
 
-## 6. Fuera de alcance
+Determinar solamente:
 
-NO corregir en esta tarea:
+- si extractLeadingYHintCandidates se ejecuta cuando Y aparece dentro de una oración;
+- si está diseñado únicamente para Y/y al inicio;
+- si el nuevo transporte de candidates participa o no en preguntas compuestas.
 
-* `Dame las compras de Y GRUPO MOVE.` → `null`
-* otras preguntas compuestas cuyo extractor no obtiene identidad;
-* `Ahora dime lo mismo…` → `plant_switch`
-* `inherit=false` asociado a ese hallazgo;
-* parser de `enero a la fecha`;
-* periodos históricos;
-* Render SHA;
-* deploy;
-* otros clientes;
-* aliases manuales;
-* fuzzy resolver general;
-* refactor general de conversation-state;
-* nuevos intents;
-* cambios de prompts LLM;
-* Golden Set general.
+No modificar ese comportamiento.
 
-Si aparece otro bug:
+## Tests
 
-documentarlo como `OUT_OF_SCOPE`.
+Localizar tests existentes de:
 
-No corregirlo.
+- client_profile
+- conversation-state
+- planner
+- leading-Y
+- natural follow-up
+- explicit period
+- client identity
+- compound questions si existen
 
-## 7. Protección de regresiones
+Determinar:
 
-Todos los tests existentes relacionados con:
+- qué está cubierto;
+- qué no está cubierto;
+- si existe algún test que codifique el comportamiento actual como correcto.
 
-* conversation-state;
-* client_profile;
-* continuity;
-* entity follow-up;
-* persistent memory;
-* planner relacionado;
+NO agregar tests.
 
-deben continuar pasando.
+GOLDEN_SET_IMPLEMENTED = NO
 
-La implementación NO puede eliminar el contrato actualmente cubierto por:
+## Git history
 
-`extractEntityHint("¿Y Arturo?") === "Arturo"`
+Puede usarse:
 
-o su equivalente vigente.
+- git log
+- git show
+- git blame
+- git diff
+- git grep / rg
 
-## 8. Tests nuevos mínimos
+solo para entender procedencia cuando sea material.
 
-Agregar tests de regresión que demuestren el incidente y la corrección.
+No gastar la auditoría intentando atribuir un commit si la causa física actual ya está demostrada.
 
-Deben cubrir como mínimo:
+Usar INTRODUCING_COMMIT = NOT_PROVEN cuando corresponda.
 
-* `Y GRUPO MOVE`
-* `¿Y GRUPO MOVE?`
-* `¿Y Arturo?`
-* `¿Qué sabemos de Y GRUPO MOVE?`
-* control estructural no hardcodeado
-* caso ambiguo/fail-closed si la solución introduce resolución por candidatos.
+## Allowed actions
 
-Los tests deben probar comportamiento real, no únicamente una regex aislada si la corrección depende de resolución canónica.
+- pasar CURRENT_TASK de AUTHORIZED a IN_PROGRESS cambiando únicamente status
+- inspección read-only
+- sondas node read-only
+- tests existentes
+- fixtures/deps inyectadas solo en proceso, sin escribir repo
+- git history read-only
+- escribir el reporte
+- pasar CURRENT_TASK a DONE_PENDING_REVIEW al terminar
+- git diff --check
+- commit de CURRENT_TASK + reporte
+- push únicamente de esta rama de auditoría
 
-## 9. No permitido
+## Forbidden actions
 
-* hardcodear cliente;
-* ampliar regex indiscriminadamente;
-* hacer que todo `Y <dos palabras>` sea nombre;
-* reducir controles fail-closed;
-* usar LLM para decidir identidad;
-* introducir fuzzy matching silencioso;
-* cambiar unrelated routing;
-* corregir OUT_OF_SCOPE;
-* modificar auditoría CLOSED;
-* merge a main;
-* deploy.
+- source edits
+- test edits
+- architecture edits
+- implementation
+- refactor
+- aliases
+- fuzzy
+- DB writes
+- producción writes
+- merge
+- push a main
+- deploy
+- Render changes
+- abrir siguiente tarea
+- autoautorizar implementación
+- escribir APPROVED
+- escribir CLOSED
+- cambiar authorized_by
+- cambiar authorized_at
+- cambiar human_authorization
 
-## 10. Reporte
+max_attempts: 1
 
-Crear:
+result_report_path:
+docs/dev-loop/reports/AUDIT-DIRECTOR-IA-COMPOUND-CLIENT-ENTITY-EXTRACTION-001.md
 
-`docs/dev-loop/reports/IMPL-DIRECTOR-IA-LEADING-Y-CLIENT-HINT-001.md`
+implementation_authorized: NO
 
-Debe documentar:
+merge_authorized: NO
 
-* SHA base;
-* archivos modificados;
-* mecanismo elegido;
-* por qué distingue identidad canónica de follow-up;
-* before/after;
-* tests nuevos;
-* tests existentes ejecutados;
-* resultados;
-* riesgos;
-* OUT_OF_SCOPE;
-* diff summary.
+## Stop condition
 
-Debe terminar con:
+Después de:
 
-IMPLEMENTATION_STATUS =
-ROOT_CAUSE_CONTRACT_PRESERVED =
-Y_GRUPO_MOVE_FIXED =
-QUESTION_Y_GRUPO_MOVE_FIXED =
-Y_ARTURO_REGRESSION_PRESERVED =
-SABEMOS_REGRESSION_PRESERVED =
-HARDCODE_USED = NO
-CANONICAL_EVIDENCE_USED =
-AMBIGUOUS_CASE_FAIL_CLOSED =
-COMPOUND_QUESTION_NULL_FIXED = NO
-PLANT_SWITCH_FIXED = NO
-HISTORICAL_RANGE_CHANGED = NO
-RENDER_SHA_EQUIVALENCE = NOT_PROVEN
-TESTS =
-GIT_DIFF_CHECK =
-IMPLEMENTATION_AUTHORIZED = YES
-MERGE_AUTHORIZED = NO
-
-## 11. Ejecución autónoma autorizada
-
-Cursor está autorizado a completar en una sola pasada:
-
-1. actualizar `CURRENT_TASK.md` con este contrato;
-2. inspeccionar el código necesario;
-3. implementar;
-4. crear/actualizar tests;
-5. ejecutar tests focalizados;
-6. ejecutar suite Director IA pertinente;
-7. corregir únicamente fallos causados por esta implementación;
-8. escribir el reporte;
-9. ejecutar `git diff --check`;
-10. revisar `git diff`;
-11. dejar `CURRENT_TASK` en `DONE_PENDING_REVIEW`;
-12. hacer commit de la rama;
-13. hacer push de la rama de implementación.
-
-No pedir confirmación humana entre estos pasos.
-
-## 12. Gate final
-
-Después del commit y push:
+- evidencia completa,
+- reporte,
+- CURRENT_TASK = DONE_PENDING_REVIEW,
+- validaciones,
+- commit,
+- push de la rama,
 
 STOP.
-
-No hacer merge a `main`.
-
-No desplegar.
-
-No abrir automáticamente otra tarea.
 
 Esperar revisión humana.
