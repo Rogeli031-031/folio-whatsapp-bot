@@ -2,7 +2,7 @@
 
 task_id: IMPL-DIRECTOR-IA-NEW-CLIENTS-PURCHASE-DISCOUNT-001
 
-status: DONE_PENDING_REVIEW
+status: CLOSED
 
 authorized_by: "Human Approver"
 
@@ -473,7 +473,7 @@ result_report_path:
 docs/dev-loop/reports/IMPL-DIRECTOR-IA-NEW-CLIENTS-PURCHASE-DISCOUNT-001.md
 
 implementation_authorized: YES
-merge_authorized: NO
+merge_authorized: YES
 deploy_authorized: NO
 
 ## Stop condition
@@ -490,3 +490,6 @@ STOP.
 No merge.
 No deploy.
 No siguiente tarea.
+
+human_review: APPROVED
+closed_by_human: YES
