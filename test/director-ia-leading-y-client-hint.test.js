@@ -74,6 +74,22 @@ describe("leading Y client hint — conversation-state", () => {
     assert.equal(resolveUniqueEntity("Arturo", [{ display: "Arturo Lopez", cliente_keys: ["a1"] }]).status, "unique");
   });
 
+  it("¿Y Arturo? no elige Y Arturo aunque exista un exact hit más largo", () => {
+    const parsed = extractLeadingYHintCandidates("¿Y Arturo?");
+    assert.equal(parsed.requires_canonical_evidence, false);
+    const collision = resolveUniqueEntityFromHints(
+      [parsed.canonical, parsed.conversational],
+      [
+        { display: "Y Arturo", cliente_keys: ["y1"] },
+        { display: "Arturo Lopez", cliente_keys: ["a1"] },
+      ],
+      { requires_canonical_evidence: false }
+    );
+    assert.equal(collision.status, "unique");
+    assert.equal(collision.entity.display, "Arturo Lopez");
+    assert.notEqual(collision.entity.display, "Y Arturo");
+  });
+
   it("¿Qué sabemos de Y GRUPO MOVE? conserva la identidad en extracción", () => {
     assert.equal(extractEntityHint("¿Qué sabemos de Y GRUPO MOVE?"), "Y GRUPO MOVE");
     assert.equal(extractLeadingYHintCandidates("¿Qué sabemos de Y GRUPO MOVE?"), null);
@@ -189,6 +205,27 @@ describe("leading Y client hint — client_profile resolver", () => {
     assert.equal(assembled.clarification.status, "not_found");
     assert.equal(assembled.clarification.hint, "Y GRUPO MOVE");
     assert.equal(assembled.identity, undefined);
+  });
+
+  it("¿Y Arturo? no resuelve Y Arturo frente a Arturo Lopez", async () => {
+    const assembled = await loadProfile("¿Y Arturo?", [
+      { month: "2026-08", cliente_norm: "Y Arturo", canal: "Casa", subcanal: "", kg: 80 },
+      { month: "2026-08", cliente_norm: "Arturo Lopez", canal: "Casa", subcanal: "", kg: 40 },
+    ]);
+    assert.notEqual(assembled.identity && assembled.identity.cliente_norm, "Y Arturo");
+    assert.ok(
+      assembled.identity &&
+        (assembled.identity.cliente_norm === "Arturo" || assembled.identity.cliente_norm === "Arturo Lopez")
+    );
+  });
+
+  it("¿Qué sabemos de Y Arturo? resuelve la identidad canónica Y Arturo", async () => {
+    assert.equal(extractEntityHint("¿Qué sabemos de Y Arturo?"), "Y Arturo");
+    const assembled = await loadProfile("¿Qué sabemos de Y Arturo?", [
+      { month: "2026-08", cliente_norm: "Y Arturo", canal: "Casa", subcanal: "", kg: 80 },
+      { month: "2026-08", cliente_norm: "Arturo Lopez", canal: "Casa", subcanal: "", kg: 40 },
+    ]);
+    assert.equal(assembled.identity.cliente_norm, "Y Arturo");
   });
 
   it("fail-closed: dos filas exactas del mismo hint quedan ambiguous", async () => {

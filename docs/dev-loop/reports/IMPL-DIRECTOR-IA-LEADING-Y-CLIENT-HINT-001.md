@@ -153,11 +153,26 @@ No corregidos (documentados, no implementados):
 * Render SHA
 * aliases / fuzzy general
 
+## Revisión humana — gap de precedencia de un token
+
+Observación antes del merge: `resolveUniqueEntityFromHints` / `resolveExactRankedByHints` ordenaban por longitud. Con catálogo simultáneo `Y Arturo` + `Arturo Lopez`, `¿Y Arturo?` elegía `Y Arturo` por exact hit más largo.
+
+Reproducción (tests en rojo, código previo a este follow-up):
+
+* `resolveUniqueEntityFromHints` → `Y Arturo`
+* `loadClientProfileForChat("¿Y Arturo?")` → `identity.cliente_norm = Y Arturo`
+
+Corrección mínima:
+
+* Un token (`requires_canonical_evidence = false`): no se usa el orden por longitud. Se resuelve el hint conversacional. En `resolveUniqueEntityFromHints` se excluye el homónimo exacto `Y <token>` para que el whole-word de `Arturo` no tome `Y Arturo`. En `loadClientProfileForChat` el exact match usa solo `entity_hint` conversacional.
+* Dos o más tokens: se conserva evidencia canónica exacta (más largo primero) y fail-closed sin hit.
+* `¿Qué sabemos de Y Arturo?` sigue la rama `sabemos` y resuelve `Y Arturo` si existe en catálogo.
+
 ## Riesgos
 
-* Identidades canónicas que empiezan con `Y` y tienen un solo token (`Y FOO`) siguen el camino de Arturo; requieren match de ese token, no se exige evidencia `Y FOO` salvo que el catálogo la tenga por exactitud previa.
+* Identidades canónicas de un solo token (`Y Arturo`) no se alcanzan con `¿Y Arturo?`; requieren forma explícita (`¿Qué sabemos de Y Arturo?`). Es el contrato de esta revisión.
 * `extractEntityHint` aislado de `Y GRUPO MOVE` sigue devolviendo `GRUPO`. La corrección vive en candidatos + resolver. Un caller que ignore `entity_hint_candidates` puede repetir el recorte.
-* `not_found` cuando no existe la fila canónica es más estricto que forzar el hint. Es el fail-closed pedido.
+* `not_found` cuando no existe la fila canónica multi-token es más estricto que forzar el hint. Es el fail-closed pedido.
 
 ## Protocolo
 
@@ -175,6 +190,8 @@ ROOT_CAUSE_CONTRACT_PRESERVED = YES
 Y_GRUPO_MOVE_FIXED = YES
 QUESTION_Y_GRUPO_MOVE_FIXED = YES
 Y_ARTURO_REGRESSION_PRESERVED = YES
+Y_ARTURO_COLLISION_PRECEDENCE_PRESERVED = YES
+SABEMOS_Y_ARTURO_ACCESSIBLE = YES
 SABEMOS_REGRESSION_PRESERVED = YES
 HARDCODE_USED = NO
 CANONICAL_EVIDENCE_USED = YES
@@ -183,7 +200,7 @@ COMPOUND_QUESTION_NULL_FIXED = NO
 PLANT_SWITCH_FIXED = NO
 HISTORICAL_RANGE_CHANGED = NO
 RENDER_SHA_EQUIVALENCE = NOT_PROVEN
-TESTS = 1351_PASS_0_FAIL
+TESTS = 1354_PASS_0_FAIL
 GIT_DIFF_CHECK = CLEAN
 IMPLEMENTATION_AUTHORIZED = YES
 MERGE_AUTHORIZED = NO
