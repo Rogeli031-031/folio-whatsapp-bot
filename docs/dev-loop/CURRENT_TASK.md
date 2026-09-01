@@ -1,495 +1,718 @@
 # CURRENT_TASK
 
-task_id: IMPL-DIRECTOR-IA-NEW-CLIENTS-PURCHASE-DISCOUNT-001
+task_id: AUDIT-DIRECTOR-IA-HISTORICAL-MARGIN-QUESTIONS-001
 
 status: CLOSED
 
 authorized_by: "Human Approver"
 
-authorized_at: "2026-09-01T16:17:32-06:00"
+authorized_at: "2026-09-01T16:42:31-06:00"
 
-human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-01"
+human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver autorizó continuar con el prompt grande para AUDIT-DIRECTOR-IA-HISTORICAL-MARGIN-QUESTIONS-001."
 
-task_type: IMPLEMENTATION
+task_type: AUDIT
 
-branch: implementation/director-ia-new-clients-purchase-discount-001
+branch: audit/director-ia-historical-margin-questions-001
 
-base_main_sha: 91fe8b8b4bea40bb51d5da7299946f6c397620c0
+base_main_sha: fc7767d02a41c6f2e53c30f21ce39d5e03d807db
 
-audit_contract:
-docs/dev-loop/reports/AUDIT-DIRECTOR-IA-NEW-CLIENTS-PURCHASE-DISCOUNT-001.md
+implementation_authorized: NO
 
-objective: >
-  Hacer que Director IA responda de forma determinista, trazable y fail-closed
-  preguntas ejecutivas sobre clientes nuevos de un mes calendario cerrado,
-  entregando la lista completa, compra real por cliente y descuento real por kg,
-  sin confundir margen con descuento ni forecast DICF con resultado histórico real.
-
-## Product question
-
-Caso principal:
-
-¿Qué clientes nuevos entraron en agosto?
-¿Cuánto compraron y con qué descuento?
-
-Planta:
-- usar planta explícita cuando exista;
-- en ausencia de planta explícita, usar la planta actual autorizada;
-- nunca cruzar plantas ni saltar autorización.
-
-Periodo:
-- agosto 2026 es un mes cerrado;
-- para un mes cerrado, usar semántica histórica REAL;
-- no responder con forecast a cierre;
-- no hardcodear agosto ni 2026 en runtime.
-
-## Contractual decision: closed month
-
-Para un mes calendario cerrado:
-
-PURCHASE = compra real del mes solicitado.
-
-DISCOUNT = descuento real por kg del mes solicitado.
-
-No usar como respuesta:
-- kg forecast;
-- margen IGF por kg;
-- delta ingreso como sustituto de compra;
-- forecast observado en una captura anterior.
-
-La observación:
-66 clientes / aproximadamente 15.4-15.5 t / 108482 MXN
-corresponde al DICF forecast observado con corte 2026-08-30.
-
-NO obligar a que el resultado histórico final sea 66.
-
-No hardcodear esos valores.
-
-## Definition of New for this slice
-
-Conservar la semántica comercial defendible de DICF, pero aplicada a periodos
-históricos reales cerrados.
-
-La implementación debe probar físicamente la fórmula actual de DICF antes de
-codificarla.
-
-Para periodo A = mes calendario anterior y periodo B = mes solicitado:
-
-- ingreso A debe derivarse de datos reales de A;
-- ingreso B debe derivarse de datos reales de B;
-- sin forecast si B está cerrado;
-- Nuevo cuando la misma condición comercial de DICF resulte verdadera usando
-  los valores reales cerrados.
-
-No cambiar la definición de DICF en lib/dicf.js.
-
-Si reproducir exactamente la definición requiere margen histórico, reutilizar la
-fuente existente de margen por periodo.
-
-No sustituir la definición silenciosamente por "kgA = 0 y kgB > 0" salvo que
-la inspección demuestre que es semánticamente equivalente para el contrato
-existente.
-
-## Required response
-
-Para cada cliente nuevo:
-
-- nombre canónico;
-- canal/subcanal cuando esté disponible;
-- compra real del mes:
-  - kg;
-  - toneladas;
-- descuento real por kg;
-- monto de descuento real si está defendiblemente disponible.
-
-Además:
-
-- número total de clientes nuevos;
-- kg/toneladas reales totales;
-- periodo;
-- planta.
-
-No sustituir descuento por margen.
-
-No mostrar "COMPARACION MARGEN" como respuesta al descuento.
-
-## Complete list
-
-La respuesta debe poder transportar TODOS los clientes nuevos del periodo.
-
-No usar el límite actual:
-COMMERCIAL_STATE_CLIENT_LIMIT = 20
-
-para esta capacidad histórica.
-
-No aumentar globalmente ese límite para otras capacidades.
-
-Preferir un builder determinista/estructurado específico para esta respuesta,
-de modo que no dependa de que el LLM enumere 66 clientes correctamente.
-
-Si la cantidad excede la capacidad razonable de una sola respuesta, el runtime
-debe preservar el conjunto completo y usar un mecanismo determinista que no
-afirme que la lista parcial es completa.
-
-No inventar ni perder clientes por truncation silenciosa.
-
-## Discount truthfulness
-
-Rastrear descuentos desde:
-arr.descuentos_diarios_cliente
-
-Para periodo cerrado, calcular únicamente con evidencia real.
-
-Verificar el contrato físico antes de decidir cómo interpretar ausencia de fila.
-
-No afirmar:
-descuento = 0
-
-si ausencia de evidencia no demuestra realmente cero.
-
-Cuando el contrato no permita distinguir:
-- cero real;
-- dato faltante;
-
-usar DATA_NOT_FOUND/null/explicación equivalente fail-closed.
-
-No transformar missing en zero silenciosamente.
-
-## Routing acceptance
-
-Estas sondas deben converger a ESTA capacidad histórica cuando el periodo sea
-un mes cerrado:
-
-P1:
-¿Qué clientes nuevos entraron en agosto?
-
-P2:
-¿Qué clientes nuevos entraron en agosto? ¿Cuánto compraron y con qué descuento?
-
-P3:
-¿Qué clientes nuevos entraron en agosto en Acapulco? ¿Cuánto compraron y con qué descuento?
-
-P4:
-¿Cuántos clientes nuevos hubo en agosto en Acapulco?
-
-P5:
-Dime los clientes nuevos de agosto en Acapulco.
-
-P6:
-Dime los nuevos de agosto en Acapulco, sus toneladas y descuento por kg.
-
-P6 no debe exigir necesariamente la palabra literal "clientes" si la construcción
-"los nuevos" + periodo + métricas es inequívoca en este contexto.
-
-No enviar:
-P1/P4/P5 a commercial_trend trailing 30d.
-
-No enviar:
-P2/P6 a IGF por la palabra descuento.
-
-No enviar:
-P3 a client_profile por detectar Acapulco como entidad cliente.
-
-## Period semantics
-
-"agosto" debe significar mes calendario agosto, no trailing 30 days.
-
-Resolver año de forma determinista con las utilidades temporales existentes.
-
-Para la fecha actual 2026-09-01:
-agosto sin año → agosto 2026.
-
-No hardcodear esa fecha.
-
-No reescribir globalmente todos los parsers temporales.
-
-## Open/current month protection
-
-Esta tarea está centrada en MES CERRADO.
-
-Si la misma formulación apunta al mes actualmente abierto:
-
-NO presentar forecast como compra real cerrada.
-
-Puede:
-- usar una aclaración semántica;
-- o delegar al DICF forecast existente con etiqueta explícita;
-
-solo si puede hacerse sin ampliar el slice.
-
-No mezclar silenciosamente real-to-date con forecast.
-
-## Architecture direction
-
-Preferir una capacidad dedicada y testeable para:
-historical_new_clients
-
-o equivalente compatible con la arquitectura existente.
-
-No es obligatorio ese nombre.
-
-Evitar parches ad-hoc únicamente dentro del prompt LLM.
-
-Preferir:
-
-semantic detection
-→ period/plant resolution
-→ deterministic read-only loader
-→ deterministic evidence pack
-→ deterministic response builder
-
-El LLM no debe inventar la lista.
-
-## Potential source reuse
-
-Inspeccionar y reutilizar cuando sea apropiado:
-
-- lib/director-ia-m9-deltas.js
-- getDeltaDescuentoClientes
-- getMargenKgPorPeriodo
-- arr.ventas_diarias_cliente
-- arr.descuentos_diarios_cliente
-- public.plantas / provincia mapping
-
-No asumir que M9 completo puede reutilizarse tal cual.
-
-Su definición de Nuevo no está autorizada automáticamente.
-
-## in_scope runtime
-
-- lib/director-ia-new-clients.js (nuevo, si es la opción mínima limpia)
-- lib/director-ia-chat.js
-- lib/director-ia-planner.js
-- lib/director-ia-m9-deltas.js
-- lib/director-ia-commercial-state.js
-- lib/director-ia-tools.js
-- lib/director-ia-tool-orchestrator.js
-- lib/director-ia-capabilities.js
-
-Modificar solo los necesarios.
-
-## in_scope tests/docs
-
-- test/director-ia-new-clients-purchase-discount.test.js
-- tests Director IA existentes estrictamente necesarios
-- docs/dev-loop/CURRENT_TASK.md
-- docs/dev-loop/reports/IMPL-DIRECTOR-IA-NEW-CLIENTS-PURCHASE-DISCOUNT-001.md
-
-## Protected behavior
-
-No romper:
-
-- DICF dashboard
-- commercial_state actual para forecast
-- Aumentaron
-- Disminuyeron
-- Dejaron de comprar
-- compound client query CLOSED
-- leading-Y CLOSED
-- client_profile
-- commercial_trend
-- IGF financial KPI
-- M9 delta descuento
-- autorización por planta
-- DATA_NOT_FOUND semantics
-
-## Out of scope
-
-- modificar lib/dicf.js salvo STOP y revisión humana si resultara absolutamente necesario
-- modificar fórmula del dashboard DICF
-- modificar UI
-- modificar server.js
-- DB/schema/migrations
-- writes a DB
-- Render
-- Exit 137
-- PG pool
-- deploy
-- Movimiento completo de clientes
-- implementar Aumentaron
-- implementar Disminuyeron
-- implementar Dejaron
-- plant_switch
-- Ahora dime lo mismo
-- Golden Set general
-- fuzzy
-- alias redesign
-- meta-protocolo
-- docs/director-ia/* salvo que un contrato existente exija una actualización
-- cambios oportunistas
-
-## Tests mínimos
-
-Crear:
-test/director-ia-new-clients-purchase-discount.test.js
-
-Debe probar:
-
-1. P1-P6 routing.
-2. Agosto como mes calendario, no trailing 30d.
-3. Planta explícita Acapulco tratada como planta, no cliente.
-4. Planta actual cuando no se nombra planta.
-5. Autorización de planta preservada.
-6. Mes anterior correctamente calculado, incluyendo cambio de año:
-   enero → diciembre del año anterior.
-7. Clasificación Nuevo con fórmula comercial equivalente al DICF para datos cerrados.
-8. Cliente con compra anterior no es Nuevo.
-9. Cliente sin ingreso anterior y con ingreso real positivo en B sí es Nuevo.
-10. Compra usa kg REAL B, no forecast.
-11. Descuento/kg usa datos reales B.
-12. Margen no aparece como sustituto de descuento.
-13. Lista >20 no se trunca silenciosamente.
-14. Fixture con al menos 66 clientes para demostrar transporte completo.
-15. Totales = suma de filas crudas, no suma de valores formateados.
-16. Missing discount no se convierte a cero sin evidencia contractual.
-17. Respuesta contiene cliente + compra + descuento.
-18. No-client-data → fail-closed / DATA_NOT_FOUND.
-19. Current/open-month no se presenta falsamente como closed historical actual.
-20. Regresión de commercial_state/DICF forecast.
-21. Regresión M9.
-22. Regresión commercial_trend.
-23. Regresión client_profile.
-24. Regresión compound client query.
-25. No hardcodes de clientes o valores observacionales.
-
-## Validation
-
-Ejecutar focalizados nuevos y todos los tests afectados.
-
-Después:
-
-node --test test/director-ia-*.test.js
-
-Baseline previo conocido:
-1384 pass / 0 fail
-
-La suite final debe tener:
-0 fail
-
-y no eliminar tests existentes.
-
-Ejecutar:
-
-git diff --check
-git diff --stat
-git status
-
-Revisar diff completo.
-
-## Report
-
-Crear:
-
-docs/dev-loop/reports/IMPL-DIRECTOR-IA-NEW-CLIENTS-PURCHASE-DISCOUNT-001.md
-
-Documentar:
-
-- diseño elegido;
-- routing before/after P1-P6;
-- semántica calendario;
-- definición exacta Nuevo histórica;
-- source SQL;
-- kg real;
-- descuento real;
-- missing-vs-zero;
-- lista completa;
-- no truncation;
-- deterministic builder;
-- actual vs forecast protection;
-- margen vs descuento;
-- autorización;
-- tests;
-- riesgos;
-- OUT_OF_SCOPE.
-
-Final fields:
-
-IMPLEMENTATION_STATUS =
-BASE_MAIN_SHA =
-ROUTING_P1 =
-ROUTING_P2 =
-ROUTING_P3 =
-ROUTING_P4 =
-ROUTING_P5 =
-ROUTING_P6 =
-HISTORICAL_NEW_CLIENTS_CAPABILITY =
-CALENDAR_MONTH_SEMANTICS =
-PREVIOUS_MONTH_SEMANTICS =
-NEW_CLASSIFICATION_FORMULA =
-DICF_SEMANTICS_PRESERVED =
-PURCHASE_USES_REAL_KG =
-FORECAST_USED_FOR_CLOSED_MONTH = NO
-DISCOUNT_USES_REAL_SOURCE =
-MARGIN_USED_AS_DISCOUNT = NO
-MISSING_DISCOUNT_FAIL_CLOSED =
-ALL_CLIENTS_TRANSPORTED =
-CONTEXT_LIMIT_20_BYPASSED_LOCALLY =
-GLOBAL_COMMERCIAL_STATE_LIMIT_CHANGED = NO
-DETERMINISTIC_LIST_BUILDER =
-PLANT_AUTH_PRESERVED =
-P3_ACAPULCO_NOT_CLIENT_PROFILE =
-P2_NOT_HIJACKED_BY_IGF =
-P1_P4_P5_NOT_TRAILING_TREND =
-CURRENT_MONTH_PROTECTION =
-HARDCODE_USED = NO
-DB_SCHEMA_CHANGED = NO
-DICF_FORMULA_CHANGED = NO
-SERVER_CHANGED = NO
-RENDER_CHANGED = NO
-TESTS =
-GIT_DIFF_CHECK =
-IMPLEMENTATION_AUTHORIZED = YES
-MERGE_AUTHORIZED = NO
-DEPLOY_AUTHORIZED = NO
-OUT_OF_SCOPE_FINDINGS =
-
-## Allowed actions
-
-- AUTHORIZED → IN_PROGRESS cambiando solo status
-- inspección
-- implementación in_scope
-- tests
-- reporte
-- DONE_PENDING_REVIEW
-- commit de esta rama
-- push de esta rama
-
-## Forbidden actions
-
-- modificar G1 humano
-- escribir APPROVED
-- escribir CLOSED
-- merge a main
-- push a main
-- deploy
-- siguiente tarea
-- corregir OUT_OF_SCOPE
-- writes DB
-- migrations
-
-max_attempts: 1
-
-result_report_path:
-docs/dev-loop/reports/IMPL-DIRECTOR-IA-NEW-CLIENTS-PURCHASE-DISCOUNT-001.md
-
-implementation_authorized: YES
 merge_authorized: YES
 deploy_authorized: NO
 
-## Stop condition
+max_attempts: 1
 
-CURRENT_TASK = DONE_PENDING_REVIEW
-tests = green
-report = complete
-commit = created
-branch = pushed
-working tree = clean
+## Objective
+
+Localizar físicamente por qué Director IA no responde correctamente preguntas
+históricas y comparativas de MARGEN $/kg y determinar el contrato mínimo,
+defendible y reutilizable necesario para responder:
+
+P1:
+¿Cuál fue el margen en mayo?
+
+P2:
+¿Cuál fue el margen de abril y el de mayo?
+
+P3:
+¿Cuál es el mejor margen del año?
+
+P4:
+¿Cuál fue el menor margen del año?
+
+La auditoría debe distinguir:
+
+- routing/intención;
+- periodo calendario;
+- planta/autorización;
+- fuente física del margen;
+- semántica histórica real vs forecast/compromiso;
+- selección de versión IGF;
+- cálculo por planta;
+- comparación de meses;
+- máximo/mínimo anual;
+- mes cerrado vs mes abierto;
+- DATA_NOT_FOUND vs SOURCE_ERROR;
+- contexto enviado al LLM;
+- continuidad conversacional;
+- narrativa final.
+
+NO implementar todavía.
+
+## Human production evidence
+
+Pregunta observada:
+
+¿Cuál fue el margen en mayo?
+
+Respuesta incorrecta observada:
+
+"No tengo información sobre el margen en mayo. Sin embargo, puedo
+proporcionarte datos sobre la tendencia comercial reciente en la planta
+de Acapulco (ID 1) para el periodo de 30 días más reciente."
+
+Después respondió con:
+
+CASA
+- Total de toneladas vendidas en 30 días: 801.2
+- Pendiente OLS: -0.233
+
+COMISIONISTA
+- Total de toneladas vendidas en 30 días: 629.427
+- Pendiente OLS: 0.070
+
+Esto NO responde la pregunta solicitada.
+
+No hardcodear esos valores.
+Son evidencia observacional humana.
+
+## Desired executive questions
+
+P1:
+¿Cuál fue el margen en mayo?
+
+P2:
+¿Cuál fue el margen de abril y el de mayo?
+
+P3:
+¿Cuál es el mejor margen del año?
+
+P4:
+¿Cuál fue el menor margen del año?
+
+También auditar:
+
+P5:
+¿Cuál fue el margen de mayo 2025?
+
+P6:
+¿Cuál fue el margen de mayo de 2026 en Acapulco?
+
+P7:
+¿Cuál fue el mejor margen de 2026 en Acapulco?
+
+P8:
+¿Cuál fue el menor margen de 2026 en Acapulco?
+
+P9:
+¿Cuál es el margen de septiembre?
+
+Con fecha de referencia humana 2026-09-01,
+septiembre es mes abierto.
+
+P10:
+¿Cuál será el margen de octubre?
+
+Debe demostrar protección de periodo futuro/no cerrado.
+
+## Semantic target to audit, not yet implement
+
+MARGEN significa MARGEN $/kg.
+
+No confundir con:
+
+- descuento $/kg;
+- venta;
+- toneladas;
+- pendiente OLS;
+- tendencia comercial 30/90;
+- resultado final;
+- utilidad;
+- ingreso;
+- Delta Ingreso;
+- DICF.
+
+Para meses cerrados, determinar físicamente cuál es la fuente histórica
+canónica y si representa un hecho cerrado o un forecast/compromiso.
+
+NO declarar de antemano que igf.compromiso_lines es suficiente.
+
+Probarlo.
+
+## Existing physical clues to verify
+
+Existe actualmente getMargenKgPorPeriodo.
+
+Auditar físicamente su contrato completo:
+
+- qué tabla(s) consulta;
+- cómo selecciona igf.versions;
+- qué significa plant_code = GLOBAL;
+- cómo elige version_number;
+- qué columnas usa;
+- qué representa margen_kg;
+- qué representa venta_ton;
+- fórmula exacta del promedio ponderado;
+- cómo identifica la planta;
+- cardinalidad de filas;
+- comportamiento con múltiples coincidencias;
+- comportamiento con null;
+- comportamiento con 0;
+- comportamiento con excepción SQL;
+- si colapsa DATA_NOT_FOUND y SOURCE_ERROR;
+- si una versión posterior puede modificar retrospectivamente un mes;
+- si una versión de mes cerrado representa dato final real,
+  compromiso, forecast u otra semántica.
+
+Auditar también si existe OTRA fuente física de margen histórico
+más apropiada.
+
+No asumir que el helper actual es necesariamente el contrato final.
+
+## Critical source question
+
+Responder explícitamente:
+
+HISTORICAL_MARGIN_CANONICAL_SOURCE =
+PROVEN | PARTIAL | NOT_PROVEN
+
+Y explicar exactamente por qué.
+
+Si es PROVEN:
+documentar fuente, fórmula, versión y semántica.
+
+Si es PARTIAL:
+documentar qué sí prueba y qué no.
+
+Si es NOT_PROVEN:
+no inventar una arquitectura final.
+
+## Period semantics
+
+Auditar resolución temporal.
+
+Con fecha CDMX 2026-09-01:
+
+"mayo"
+→ candidato natural 2026-05.
+
+"abril y mayo"
+→ 2026-04 y 2026-05.
+
+"mayo 2025"
+→ 2025-05.
+
+"mejor margen del año"
+→ determinar físicamente qué debe significar "año":
+  current calendar year vs otra semántica existente.
+
+Para máximo/mínimo anual evaluar específicamente:
+
+- meses cerrados;
+- mes actual abierto;
+- meses futuros;
+- meses sin fuente;
+- meses con null;
+- meses con cero;
+- años explícitos;
+- cambio de año;
+- empates.
+
+No asumir que un mes ausente vale 0.
+
+No usar 0 para ganar/perder un ranking cuando significa ausencia.
+
+## Closed vs open month
+
+Auditar si un mes cerrado puede responderse como histórico REAL.
+
+Auditar qué significa el margen de un mes actualmente abierto.
+
+NO presentar compromiso/forecast como "margen que fue".
+
+Para P9 en septiembre 2026 abierto:
+
+determinar qué fuente existe y qué etiqueta correcta tendría.
+
+Ejemplos de semántica aceptable futura, solo si la fuente la respalda:
+
+- margen comprometido;
+- margen forecast;
+- margen observado a corte;
+- DATA_NOT_FOUND.
+
+No decidir por redacción únicamente.
+
+## Annual extrema
+
+Para:
+
+¿Cuál es el mejor margen del año?
+¿Cuál fue el menor margen del año?
+
+Determinar cómo construir un conjunto comparable de meses.
+
+La auditoría debe responder:
+
+- qué meses entran;
+- qué meses se excluyen;
+- por qué;
+- si se excluye mes abierto;
+- si se excluyen DATA_NOT_FOUND;
+- si margen 0 es valor real o missing;
+- cómo resolver empate;
+- qué fuente/fórmula debe ser idéntica entre meses;
+- si la comparación puede hacerse determinísticamente sin LLM.
+
+No aceptar un ranking que compare peras con manzanas
+(p. ej. meses cerrados reales contra forecast abierto).
+
+## Plant semantics and authorization
+
+Auditar:
+
+- planta actual de sesión;
+- planta nombrada explícitamente;
+- resolución Acapulco;
+- plantas_permitidas;
+- GA;
+- GV;
+- GG;
+- AD;
+- no cross-plant.
+
+Reusar controles existentes cuando corresponda,
+pero NO modificar autorización.
+
+Determinar si el helper actual identifica empresa/planta con ILIKE y si
+eso puede producir cardinalidad ambigua o mezcla de empresas.
+
+Si existe riesgo:
+PROBARLO físicamente y documentarlo.
+
+No corregirlo en esta auditoría.
+
+## Routing audit
+
+Para P1-P10 capturar cuando aplique:
+
+- normalizeQuestion
+- detectDirectorIaIntent
+- planDirectorIaQuestion
+- isPlantFinancialKpiQuestion
+- shouldAttachIgfArrAnnex
+- isCommercialTrendQuestion
+- financial_diagnosis
+- unknown
+- tool plan
+- handler seleccionado
+- anexos
+- conversation state
+- inherited intent
+- OpenAI called true/false
+- sources/context_meta
+- respuesta final
+
+Especialmente explicar por qué P1 puede terminar respondiendo
+commercial_trend / OLS aunque la pregunta diga "margen".
+
+No asumir que la causa está únicamente en planner.
+
+## Fresh-turn vs continuity probes
+
+Ejecutar P1 en un turno/chat limpio.
+
+Después simular cuando sea posible:
+
+Turno A:
+¿Cómo va la tendencia comercial de CASA y COMISIONISTA?
+
+Turno B:
+¿Cuál fue el margen en mayo?
+
+Determinar si la continuidad hereda commercial_trend incorrectamente.
+
+También:
+
+Turno A:
+¿Cuál fue el margen en abril?
+
+Turno B:
+¿Y en mayo?
+
+Solo auditar si la infraestructura actual permite esa continuidad.
+No implementar follow-up nuevo.
+
+Etiquetar:
+
+FIRST_TURN_ROUTE =
+CONTINUITY_ROUTE =
+
+## Current IGF annex audit
+
+Inspeccionar físicamente:
+
+IGF_ARR_ANNEX_SYSTEM_ADDENDUM
+
+y cualquier bloque:
+
+COMPARACION MARGEN $/kg
+
+Determinar si actualmente fuerza:
+
+mes solicitado vs mes anterior
+
+o:
+
+mes actual vs previo
+
+y qué ocurre para:
+
+- una sola fecha histórica;
+- dos meses explícitos;
+- máximo anual;
+- mínimo anual.
+
+Determinar si el LLM recibe suficiente evidencia para responder
+P1-P4 sin inventar.
+
+## Existing helper audit
+
+Auditar getMargenKgPorPeriodo incluyendo:
+
+SELECT de igf.versions
+
+y cálculo equivalente a:
+
+SUM(margen_kg * venta_ton) / SUM(venta_ton)
+
+No asumir que esta fórmula es incorrecta.
+
+No asumir que es correcta para la nueva capacidad.
+
+Compararla contra la fuente/UI/contrato físico disponible.
+
+## Data truth table required
+
+El reporte debe incluir una tabla como mínimo:
+
+CASE
+SOURCE AVAILABLE?
+PERIOD CLOSED?
+MARGIN VALUE?
+SEMANTIC LABEL
+CAN ANSWER?
+VERACITY
+
+Casos:
+
+closed + valid
+closed + missing
+closed + source error
+open + valid commitment/forecast
+open + missing
+future
+annual ranking with partial months
+
+## Source error semantics
+
+Auditar si los helpers actuales convierten excepción a null.
+
+Determinar si hoy puede distinguirse:
+
+DATA_NOT_FOUND
+
+de:
+
+SOURCE_ERROR
+
+Esto es importante.
+
+No implementar.
+
+## Deterministic capability readiness
+
+Evaluar si conviene una capacidad futura dedicada como:
+
+historical_margin
+
+o nombre equivalente.
+
+No implementar.
+
+La auditoría debe concluir si una capacidad determinista puede resolver:
+
+single_month
+month_compare
+year_max
+year_min
+
+sin depender de que el LLM haga el ranking.
+
+Debe recomendar arquitectura mínima,
+pero NO escribir runtime.
+
+## Regression boundaries
+
+No romper ni modificar:
+
+- historical_new_clients
+- commercial_trend
+- financial_diagnosis actual
+- M9 delta descuento
+- M9 delta venta
+- DICF
+- IGF dashboard
+- Action Register
+- client_profile
+- compound client query
+- leading-Y
+- Folios
+- Taller
+- voice
+- WhatsApp
+- server.js
+- DB/schema
+
+## Control questions
+
+C1:
+¿Cómo va el margen de la planta?
+
+Debe permanecer conceptualmente separado de una consulta histórica puntual.
+
+C2:
+¿Cómo cambió el descuento de abril a mayo?
+
+No debe convertirse en margen.
+
+C3:
+¿Cómo va la tendencia de CASA los últimos 30 días?
+
+Debe seguir siendo commercial_trend.
+
+C4:
+¿Qué clientes nuevos entraron en agosto?
+
+Debe seguir siendo historical_new_clients.
+
+C5:
+¿Cuál fue la venta de mayo?
+
+No usar esta auditoría para implementar venta histórica.
+
+## Read-only DB probes
+
+Permitidos únicamente si existe conexión ya configurada.
+
+Reglas:
+
+- SELECT solamente;
+- no INSERT;
+- no UPDATE;
+- no DELETE;
+- no DDL;
+- no transacciones con writes;
+- no imprimir secretos;
+- no modificar DB;
+- no crear tablas temporales persistentes.
+
+Si no hay conexión:
+marcar LIVE_DB = NOT_PROVEN.
+
+No detener la auditoría por falta de DB.
+
+## Writable in_scope
+
+- docs/dev-loop/CURRENT_TASK.md
+- docs/dev-loop/reports/AUDIT-DIRECTOR-IA-HISTORICAL-MARGIN-QUESTIONS-001.md
+
+## Read-only in_scope
+
+Como mínimo:
+
+- AGENTS.md
+- docs/dev-loop/LOOP_PROTOCOL.md
+- docs/dev-loop/TASK_TEMPLATE.md
+- docs/dev-loop/reports/README.md
+- docs/director-ia/DIRECTOR_IA_CONSTITUTION.md
+- docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md
+- lib/director-ia-planner.js
+- lib/director-ia-chat.js
+- lib/director-ia-igf-arr.js
+- lib/director-ia-m9-deltas.js
+- lib/director-ia-commercial-trend.js
+- lib/director-ia-financial-diagnosis.js
+- lib/director-ia-capabilities.js
+- lib/director-ia-tools.js
+- lib/director-ia-tool-orchestrator.js
+- lib/director-ia-conversation-state.js
+- lib/director-ia-new-clients.js
+- utilidades temporales usadas físicamente
+- tests Director IA relevantes
+- código productor/consumidor de igf.versions / igf.compromiso_lines
+- frontend IGF únicamente si es necesario para probar semántica física
+- git history estrictamente necesaria
+
+Otros archivos pueden inspeccionarse read-only si aparecen en el call chain.
+Documentar por qué.
+
+## Out of scope
+
+- modificar runtime
+- modificar tests
+- crear historical_margin
+- corregir routing
+- cambiar planner
+- cambiar chat
+- cambiar IGF
+- cambiar fórmula margen
+- cambiar getMargenKgPorPeriodo
+- cambiar commercial_trend
+- cambiar financial_diagnosis
+- cambiar UI
+- cambiar server.js
+- cambiar DB/schema
+- writes DB
+- migraciones
+- hardcodes de margen
+- hardcode mayo
+- hardcode 2026
+- implementar mejor/menor margen
+- implementar abril vs mayo
+- implementar follow-ups
+- implementar voz
+- implementar Folios pendientes
+- implementar AT-01
+- implementar contractuales
+- implementar llantas
+- implementar movimiento de clientes
+- Render
+- deploy
+- merge a main
+- abrir siguiente tarea
+
+## Required report conclusions
+
+El reporte debe terminar con valores explícitos:
+
+P1_CURRENT_ROUTE =
+P2_CURRENT_ROUTE =
+P3_CURRENT_ROUTE =
+P4_CURRENT_ROUTE =
+
+P1_FIRST_DIVERGENCE =
+P2_FIRST_DIVERGENCE =
+P3_FIRST_DIVERGENCE =
+P4_FIRST_DIVERGENCE =
+
+FIRST_TURN_MARGIN_ROUTE =
+CONTINUITY_AFTER_COMMERCIAL_TREND_ROUTE =
+
+HISTORICAL_MARGIN_CANONICAL_SOURCE =
+MARGIN_SOURCE_TABLES =
+MARGIN_SOURCE_FORMULA =
+VERSION_SELECTION_SEMANTICS =
+CLOSED_MONTH_SEMANTICS =
+OPEN_MONTH_SEMANTICS =
+FUTURE_MONTH_SEMANTICS =
+
+MONTH_RESOLUTION_MAY_2026 =
+TWO_MONTH_COMPARE_READINESS =
+YEAR_MAX_READINESS =
+YEAR_MIN_READINESS =
+ANNUAL_COMPARABILITY_RULE =
+
+PLANT_MATCH_CARDINALITY =
+PLANT_AUTH_PRESERVED =
+
+DATA_NOT_FOUND_VS_SOURCE_ERROR =
+LLM_REQUIRED_FOR_VALUE =
+LLM_REQUIRED_FOR_RANKING =
+
+DEDICATED_CAPABILITY_RECOMMENDED =
+MINIMAL_IMPLEMENTATION_SLICE =
+
+RUNTIME_CHANGED = NO
+TESTS_CHANGED = NO
+DB_CHANGED = NO
+MERGE_AUTHORIZED = NO
+DEPLOY_AUTHORIZED = NO
+
+## Audit quality bar
+
+No responder únicamente:
+
+"routing incorrecto"
+
+o:
+
+"falta intent".
+
+Debe demostrar físicamente:
+
+pregunta
+→ routing
+→ periodo
+→ planta
+→ fuente
+→ versión
+→ cálculo
+→ evidence/context
+→ narrativa
+
+para cada familia P1-P4.
+
+Si distintas preguntas tienen causas diferentes,
+mantenerlas separadas.
+
+No inventar una causa global.
+
+## Allowed actions
+
+- leer archivos
+- grep/search
+- git log/show/diff read-only
+- ejecutar Node/scripts existentes read-only
+- ejecutar tests existentes
+- ejecutar probes read-only
+- SELECT DB si existe conexión
+- editar únicamente CURRENT_TASK y el reporte
+- commit del audit
+- push de la rama audit
+
+## Forbidden
+
+- implementación
+- runtime edits
+- test edits
+- main merge
+- deploy
+- nueva tarea
+
+Al terminar:
+
+status: CLOSED
+
+Commit sugerido:
+
+docs(director-ia): audit historical margin questions
+
+Push:
+
+origin/audit/director-ia-historical-margin-questions-001
 
 STOP.
-
-No merge.
-No deploy.
-No siguiente tarea.
-
 human_review: APPROVED
 closed_by_human: YES
