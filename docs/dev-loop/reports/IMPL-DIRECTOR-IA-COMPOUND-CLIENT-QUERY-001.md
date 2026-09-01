@@ -354,3 +354,31 @@ B1–E1, leading-Y, Arturo, fail-closed, ambiguity, default 3M, enero→fecha, p
 ### Riesgo residual Gap 2
 
 Un proper noun de un solo token **ausente** de `PLANTS_PROVINCIA` y de `ALIAS_PLANTA_NOMBRE` puede seguir abriendo Slice B. Cerrar eso exigiría un catálogo manual nuevo o DB. Fuera de este follow-up. La identidad final sigue siendo fail-closed canónico.
+
+## Human review / closure
+
+HUMAN_REVIEW = APPROVED
+IMPLEMENTATION_ACCEPTED = YES
+MERGE_AUTHORIZED = YES
+DEPLOY_AUTHORIZED = NO
+CLOSED_BY_HUMAN = YES
+
+Reviewed implementation head:
+
+d94cf75b7ccaaedbb9d05523dcb10c5c9f72bf1c
+
+Human review accepted:
+
+- Slice A embedded client identity
+- Slice B no-period client semantics
+- canonical exact resolution
+- fail-closed behavior
+- multi-token names with internal connectors
+- known-plant exclusion from Slice B
+- leading-Y / Arturo regressions
+- default 3M
+- explicit historical period preservation
+
+Residual documented proper-noun routing risk is accepted as non-blocking because final client identity remains canonical-exact and fail-closed.
+
+No deploy authorized.

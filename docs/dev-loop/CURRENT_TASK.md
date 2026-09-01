@@ -2,7 +2,9 @@
 
 task_id: IMPL-DIRECTOR-IA-COMPOUND-CLIENT-QUERY-001
 
-status: DONE_PENDING_REVIEW
+status: CLOSED
+
+human_review: APPROVED
 
 authorized_by: "Human Approver"
 
@@ -235,7 +237,9 @@ result_report_path:
 docs/dev-loop/reports/IMPL-DIRECTOR-IA-COMPOUND-CLIENT-QUERY-001.md
 
 implementation_authorized: YES
-merge_authorized: NO
+merge_authorized: YES
+
+closed_by_human: YES
 deploy_authorized: NO
 
 ## Stop condition
