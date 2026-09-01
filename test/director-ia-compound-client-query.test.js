@@ -63,6 +63,11 @@ const Q = Object.freeze({
   NO_CLIENT: "Dame las compras.",
   STRUCTURAL: "Dame las compras de Y DELTA NORTE.",
   MISSING: "Dame las compras de ACME SUR INDUSTRIAL.",
+  PACIFICO: "Dame las compras de COMERCIAL DEL PACIFICO.",
+  MOLINOS: "Dame los kg comprados de MOLINOS DE ACAPULCO desde enero a la fecha.",
+  PLANT_ACAPULCO: "Dame las compras de Acapulco.",
+  PLANT_PUEBLA: "Dame las compras de Puebla.",
+  SINGLE_ARTURO: "Dame las compras de Arturo.",
 });
 
 function catalogSales() {
@@ -76,6 +81,9 @@ function catalogSales() {
     { month: "2026-08", cliente_norm: "Y Arturo", canal: "Casa", subcanal: "", kg: 70 },
     { month: "2026-08", cliente_norm: "Arturo Lopez", canal: "Casa", subcanal: "", kg: 35 },
     { month: "2026-08", cliente_norm: "Y DELTA NORTE", canal: "Casa", subcanal: "", kg: 55 },
+    { month: "2026-08", cliente_norm: "COMERCIAL DEL PACIFICO", canal: "Casa", subcanal: "", kg: 44 },
+    { month: "2026-01", cliente_norm: "MOLINOS DE ACAPULCO", canal: "Casa", subcanal: "", kg: 18 },
+    { month: "2026-08", cliente_norm: "MOLINOS DE ACAPULCO", canal: "Casa", subcanal: "", kg: 33 },
   ];
 }
 
@@ -378,6 +386,52 @@ describe("compound client query — periods, precedence, fail-closed", () => {
     assertResolvedClient(assembled, "Y DELTA NORTE");
     assertDefaultThreeMonths(assembled);
   });
+
+  it("conectores internos: COMERCIAL DEL PACIFICO con default 3M", async () => {
+    const parsed = extractEmbeddedClientHintCandidates(Q.PACIFICO);
+    assert.equal(parsed.longest, "COMERCIAL DEL PACIFICO");
+    assert.equal(parsed.spans.includes("COMERCIAL"), false);
+    assert.equal(detectDirectorIaIntent(Q.PACIFICO).intent, "client_profile");
+    const assembled = await loadFromQuestion(Q.PACIFICO, catalogSales());
+    assertResolvedClient(assembled, "COMERCIAL DEL PACIFICO");
+    assert.notEqual(assembled.identity.cliente_norm, "COMERCIAL");
+    assertDefaultThreeMonths(assembled);
+  });
+
+  it("conectores internos: MOLINOS DE ACAPULCO conserva nombre y periodo explícito", async () => {
+    const parsed = extractEmbeddedClientHintCandidates(Q.MOLINOS);
+    assert.equal(parsed.longest, "MOLINOS DE ACAPULCO");
+    assert.equal(turnFor(Q.MOLINOS).entity_hint_candidates.includes("ACAPULCO"), false);
+    const assembled = await loadFromQuestion(Q.MOLINOS, catalogSales());
+    assertResolvedClient(assembled, "MOLINOS DE ACAPULCO");
+    assert.notEqual(assembled.identity.cliente_norm, "ACAPULCO");
+    assert.notEqual(assembled.identity.cliente_norm, "MOLINOS");
+    assertExplicitEneroFecha(assembled);
+  });
+
+  it("Slice B no abre por proper noun de planta (Acapulco / Puebla)", () => {
+    assert.equal(extractEmbeddedClientHintCandidates(Q.PLANT_ACAPULCO).longest, "Acapulco");
+    assert.equal(isClientProfileQuestion(Q.PLANT_ACAPULCO), false);
+    assert.equal(detectDirectorIaIntent(Q.PLANT_ACAPULCO).intent, "unknown");
+    assert.equal(isClientProfileQuestion(Q.PLANT_PUEBLA), false);
+    assert.equal(detectDirectorIaIntent(Q.PLANT_PUEBLA).intent, "unknown");
+  });
+
+  it("Slice B sigue aceptando cliente de un solo token", async () => {
+    assert.equal(isClientProfileQuestion(Q.SINGLE_ARTURO), true);
+    assert.equal(detectDirectorIaIntent(Q.SINGLE_ARTURO).intent, "client_profile");
+    const assembled = await loadFromQuestion(Q.SINGLE_ARTURO, [
+      { month: "2026-08", cliente_norm: "Arturo", canal: "Casa", subcanal: "", kg: 22 },
+    ]);
+    assertResolvedClient(assembled, "Arturo");
+    assertDefaultThreeMonths(assembled);
+  });
+
+  it("sentence-boundary: desde/fecha no se tragan como parte del nombre", () => {
+    const parsed = extractEmbeddedClientHintCandidates(Q.C1);
+    assert.equal(parsed.longest, "Y GRUPO MOVE");
+    assert.equal(/desde|enero|fecha/i.test(parsed.longest), false);
+  });
 });
 
 describe("compound client query — no hardcode en runtime", () => {
@@ -387,6 +441,9 @@ describe("compound client query — no hardcode en runtime", () => {
       assert.equal(src.includes("Y GRUPO MOVE"), false, rel);
       assert.equal(src.includes("TORTILLERIA ERICK"), false, rel);
       assert.equal(src.includes("GRUPO MOVE EMPRESARIAL"), false, rel);
+      assert.equal(src.includes("COMERCIAL DEL PACIFICO"), false, rel);
+      assert.equal(src.includes("MOLINOS DE ACAPULCO"), false, rel);
+      assert.equal(src.includes("Acapulco"), false, rel);
     }
   });
 });

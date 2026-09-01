@@ -18,9 +18,10 @@ planner_js_changed: NO
 server_js_changed: NO
 slice_a: YES
 slice_b: YES
-suite_pass: 1379
+suite_pass: 1384
 suite_fail: 0
 baseline_prior: 1354 pass / 0 fail
+followup_from_sha: fb4445ebd755904f79f244bc1b0290a20871d87c
 production_db_queried: NO
 render_touched: NO
 ```
@@ -67,18 +68,20 @@ Sin periodo explícito:
 ```text
 rawQuestion
   → isClientProfileQuestion
-       Slice B: namesPurchaseOrKgMetric AND hasEmbeddedClientSpan
+       Slice B: namesPurchaseOrKgMetric AND hasDefensibleEmbeddedClientSpan
+       (span embebido y NO igualdad exacta con planta conocida)
        (C/D/E ya entraban por mes/periodo + named token)
   → detectDirectorIaIntent → client_profile
   → extractEmbeddedClientHintCandidates
        markers \b(cliente|de)\s+
-       tokens capitalizados consecutivos
+       tokens capitalizados + conectores internos de/del/el/la/los/las
        Y permitido como primer token
-       stop: NAME_STOP + desde/hasta/fecha/planta/cada/por
+       corte de oración: desde/hasta/fecha/planta/cada/por/meses/métrica
        candidato = span más largo; no identidad
   → resolveConversationTurn
        transporta entity_hint / candidates
-       descarta prefijos estrictos del span largo (D2: no TORTILLERIA)
+       descarta prefijos y sufijos estrictos del span largo
+       (D2: no TORTILLERIA; MOLINOS: no ACAPULCO suelto)
        embedded_client_requires_canonical
   → loadClientProfileForChat
        exactNorm vs cliente_norm del catálogo
@@ -92,20 +95,21 @@ rawQuestion
 
 `extractEmbeddedClientHintCandidates(raw)`:
 
-1. Busca anclas `cliente` o `de` (no `del` como `de`).
+1. Busca anclas `cliente` o `de` (no `del` como ancla; `del` sí puede ser conector interno).
 2. Recoge tokens `^[A-ZÁÉÍÓÚÑ]`.
-3. Para en minúscula o stop.
-4. Varios matches → se conserva el span más largo.
-5. `requires_canonical_evidence = true` siempre en el parseo; el transporte enciende el flag si no hay extract, el extract no coincide, o el span tiene ≥2 tokens.
+3. `de`/`del`/`el`/`la`/`los`/`las` se aceptan **entre** tokens de nombre si el siguiente sigue siendo name-head.
+4. Corta en boundary de oración (`desde`, `hasta`, `fecha`, `planta`, meses, etc.). No captura hasta el final.
+5. Varios matches → se conserva el span más largo; se descartan prefijos/sufijos contenidos.
+6. `requires_canonical_evidence = true` siempre en el parseo; el transporte enciende el flag si no hay extract, el extract no coincide, o el span tiene ≥2 tokens.
 
-No hay literal de cliente en runtime.
+No hay literal de cliente ni de `Acapulco` en runtime.
 
 ## Canonical exact evidence
 
 `loadClientProfileForChat` con `embedded_client_requires_canonical` o `leading_y_requires_canonical`:
 
 - `resolveExactRankedByHints` = igualdad `exactNorm(hint) === exactNorm(cliente_norm)`
-- hints embebidos pasan por `dropStrictPrefixHints` para no caer al recorte de un token
+- hints embebidos pasan por `dropStrictPrefixHints` (prefijo **o** sufijo contenido) para no caer al recorte de un token
 - hit 1 → `unique`
 - hits >1 del mismo hint → `ambiguous`
 - 0 hits → `not_found` (no se fuerza el hint)
@@ -204,7 +208,7 @@ Cubre: B1–B4, C1–C5, D1–D2, E1, sabemos Y GRUPO MOVE, leading-Y, `¿Y Artu
 
 Focalizados:
 
-- `test/director-ia-compound-client-query.test.js` — 25 pass
+- `test/director-ia-compound-client-query.test.js` — 30 pass
 - `test/director-ia-leading-y-client-hint.test.js` — pass
 - `test/director-ia-client-profile.test.js` — pass
 - `test/director-ia-conversational-continuity.test.js` — pass (incluye planner continuity hooks)
@@ -215,18 +219,19 @@ Suite:
 
 ```text
 node --test test/director-ia-*.test.js
-1379 pass / 0 fail
+1384 pass / 0 fail
 ```
 
-Baseline previo: 1354 pass / 0 fail. Delta = +25 tests del archivo nuevo. Ningún test existente eliminado.
+Baseline previo: 1354 pass / 0 fail. Tras `fb4445eb`: 1379. Follow-up humano: +5 tests, total 1384. Ningún test existente eliminado.
 
 Protecciones de fórmula descuento/kg, autorización por planta y `DATA_NOT_FOUND`: **PROVEN** por la suite existente (0 fail). No se reabrió su diseño.
 
 ## Riesgos
 
-- El ancla `\bde\s+` puede recoger un nombre capitalizado que no sea cliente si aparece después de `de` en otra frase. Mitigado por fail-closed canónico y por no activar Slice B sin métrica compras/kg.
+- El ancla `\bde\s+` puede recoger un nombre capitalizado que no sea cliente si aparece después de `de` en otra frase. Mitigado por fail-closed canónico, por no activar Slice B sin métrica compras/kg, y por rechazo exacto de planta conocida.
 - `extractEntityHint` sigue recortando D2 a un token; el transporte lo anula. Un caller que ignore `entity_hint_candidates` podría ver el recorte. Chat/loader usan el span largo + flag.
 - Preguntas de compras/kg con cliente embebido y la palabra `planta` ahora sí pueden ser `client_profile` si hay span (no era acceptance). `compras de la planta` sin span sigue fuera.
+- Un proper noun de un solo token que **no** esté en `PLANTS_PROVINCIA` ni en `ALIAS_PLANTA_NOMBRE` puede seguir abriendo Slice B. No se inventó un catálogo extra. Residual documentado en el follow-up humano.
 
 ## OUT_OF_SCOPE
 
@@ -271,3 +276,81 @@ Fuera de scope en el diff: ninguno.
 | merge | NO | no ejecutado |
 | deploy | NO | no ejecutado |
 | producción verbal | NOT_PROVEN | no se consultó DB ni Render |
+
+## Human review follow-up
+
+Revisión sobre `fb4445ebd755904f79f244bc1b0290a20871d87c`. Misma tarea. Sin nueva rama.
+
+### Gap 1 — conectores internos
+
+**Encontrado.** `collectEmbeddedNameTokens` heredaba `NAME_STOP` (`de`, `del`, `el`, `la`, `los`, `las`) como corte duro.
+
+**Reproducción (antes, SHA `fb4445eb`):**
+
+| Pregunta | longest |
+| --- | --- |
+| `Dame las compras de COMERCIAL DEL PACIFICO.` | `COMERCIAL` |
+| `Dame los kg comprados de MOLINOS DE ACAPULCO desde enero a la fecha.` | `ACAPULCO` (spans `MOLINOS` + `ACAPULCO`) |
+
+**Corrección.** Separar:
+
+- conectores internos `de/del/el/la/los/las`: se aceptan **entre** name-heads;
+- sentence-boundary: `desde`, `hasta`, `fecha`, `planta`, meses, `cada`, `por`, canales.
+
+No se quitaron todos los stops. No se captura hasta el final de la oración.
+
+`dropStrictPrefixHints` ahora también descarta **sufijos** contenidos (`ACAPULCO` no sobrevive junto a `MOLINOS DE ACAPULCO`). D2 (`TORTILLERIA` prefijo) se conserva.
+
+**Después:**
+
+| Pregunta | intent | candidate | identity | periodo |
+| --- | --- | --- | --- | --- |
+| COMERCIAL DEL PACIFICO | `client_profile` | `COMERCIAL DEL PACIFICO` | exacto | default 3M |
+| MOLINOS DE ACAPULCO enero→fecha | `client_profile` | `MOLINOS DE ACAPULCO` | exacto | explicit 01–09 |
+
+La regex sigue sin declarar identidad. Canonical exact obligatorio.
+
+### Gap 2 — Slice B demasiado amplio
+
+**Encontrado.** `namesPurchaseOrKgMetric && hasEmbeddedClientSpan` clasificaba cualquier capitalizada tras `de`.
+
+**Reproducción (antes):**
+
+| Pregunta | isCPQ | intent |
+| --- | --- | --- |
+| `Dame las compras de Acapulco.` | true | `client_profile` |
+| `Dame las compras de Puebla.` | false | `unknown` (ya estaba en `NAME_STOP`) |
+| `Dame las compras de Arturo.` | true | `client_profile` (debe conservarse) |
+
+**Inspección de mecanismo de planta.** No hay reconocedor de planta en esta capa sin catálogo o DB.
+
+- `extractExplicitPlant` (CEL) exige catálogo inyectado y CEL ya importa `isClientProfileQuestion` → cycle.
+- `extractLeadingYHintCandidates` / `plant_switch` no identifican planta por nombre.
+- Ya dependemos de `dicf-acciones` (`ALIAS_PLANTA_NOMBRE` exportado).
+- `delta-ingreso-commands` ya exporta `PLANTS_PROVINCIA` (lista existente, incluye el nombre de planta del ejemplo). No se inventó un catálogo nuevo. No se escribió el literal `Acapulco` en runtime.
+
+**Corrección.** `hasDefensibleEmbeddedClientSpan`: hay span **y** el span completo **no** es igualdad `exactNorm` contra `PLANTS_PROVINCIA` ∪ keys/values de `ALIAS_PLANTA_NOMBRE`.
+
+No se usó `resolvePlanta` (tiene `.includes`). No se exigió “2+ palabras”. `Dame las compras de Arturo.` sigue siendo `client_profile`.
+
+**Después:**
+
+- `Dame las compras de Acapulco.` → no `client_profile`
+- `Dame las compras de Puebla.` → no `client_profile` (control estructural equivalente)
+- `Dame las compras de Arturo.` → sí `client_profile`
+
+### Tests del follow-up
+
+Añadidos en `test/director-ia-compound-client-query.test.js`:
+
+1. COMERCIAL DEL PACIFICO
+2. MOLINOS DE ACAPULCO + enero→fecha
+3. Acapulco / Puebla no abren Slice B
+4. Arturo un token sí abre Slice B
+5. sentence-boundary `desde`/`fecha`
+
+B1–E1, leading-Y, Arturo, fail-closed, ambiguity, default 3M, enero→fecha, precedencias: verdes.
+
+### Riesgo residual Gap 2
+
+Un proper noun de un solo token **ausente** de `PLANTS_PROVINCIA` y de `ALIAS_PLANTA_NOMBRE` puede seguir abriendo Slice B. Cerrar eso exigiría un catálogo manual nuevo o DB. Fuera de este follow-up. La identidad final sigue siendo fail-closed canónico.
