@@ -1,241 +1,164 @@
 # CURRENT_TASK
 
-task_id: AUDIT-DIRECTOR-IA-NEW-CLIENTS-PURCHASE-DISCOUNT-001
+task_id: IMPL-DIRECTOR-IA-NEW-CLIENTS-PURCHASE-DISCOUNT-001
 
-status: CLOSED
-
-human_review: APPROVED
+status: DONE_PENDING_REVIEW
 
 authorized_by: "Human Approver"
 
-authorized_at: "2026-09-01T15:48:59-06:00"
+authorized_at: "2026-09-01T16:17:32-06:00"
 
 human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-01"
 
-task_type: AUDIT
+task_type: IMPLEMENTATION
 
-branch: audit/director-ia-new-clients-purchase-discount-001
+branch: implementation/director-ia-new-clients-purchase-discount-001
 
-base_main_sha: 382003789e51f7aca5ace46cd29a4fa0d0c9d2df
+base_main_sha: 91fe8b8b4bea40bb51d5da7299946f6c397620c0
+
+audit_contract:
+docs/dev-loop/reports/AUDIT-DIRECTOR-IA-NEW-CLIENTS-PURCHASE-DISCOUNT-001.md
 
 objective: >
-  Localizar físicamente las fronteras que impiden que Director IA responda de
-  forma defendible la pregunta ejecutiva "¿Qué clientes nuevos entraron en
-  agosto? ¿Cuánto compraron y con qué descuento?", distinguiendo clasificación
-  Nuevos, listado individual, compra real/proyectada, descuento real/proyectado,
-  agregado de categoría, contexto enviado al modelo y narrativa final.
+  Hacer que Director IA responda de forma determinista, trazable y fail-closed
+  preguntas ejecutivas sobre clientes nuevos de un mes calendario cerrado,
+  entregando la lista completa, compra real por cliente y descuento real por kg,
+  sin confundir margen con descuento ni forecast DICF con resultado histórico real.
 
-## Evidencia humana de producción
+## Product question
 
-Planta observada:
-Acapulco
+Caso principal:
 
-Pantalla:
-Delta Ingreso Cliente Forecast
+¿Qué clientes nuevos entraron en agosto?
+¿Cuánto compraron y con qué descuento?
 
-Corte visible:
-datos hasta 2026-08-30
+Planta:
+- usar planta explícita cuando exista;
+- en ausencia de planta explícita, usar la planta actual autorizada;
+- nunca cruzar plantas ni saltar autorización.
 
-La UI muestra categoría:
-Nuevos
+Periodo:
+- agosto 2026 es un mes cerrado;
+- para un mes cerrado, usar semántica histórica REAL;
+- no responder con forecast a cierre;
+- no hardcodear agosto ni 2026 en runtime.
 
-Control visual de conteos por categoría:
-42 + 20 + 0 + 2 + 2 = 66 clientes nuevos
+## Contractual decision: closed month
 
-Control visual de ingreso:
-,482
+Para un mes calendario cerrado:
 
-Toneladas visibles por bloques:
-13.2 + 1.4 + 0.0 + 0.4 + 0.5 = aproximadamente 15.5 t
+PURCHASE = compra real del mes solicitado.
 
-Una respuesta de Director IA reportó:
-66 clientes
-15.4 t
-,482
+DISCOUNT = descuento real por kg del mes solicitado.
 
-Por tanto:
+No usar como respuesta:
+- kg forecast;
+- margen IGF por kg;
+- delta ingreso como sustituto de compra;
+- forecast observado en una captura anterior.
 
-NEW_CLIENT_COUNT_OBSERVED = 66
-NEW_CLIENT_INCOME_OBSERVED = 108482
-VISIBLE_BUCKET_TON_SUM = APPROX_15_5
-DIRECTOR_REPORTED_TON = 15_4
-RAW_CANONICAL_TON = NOT_PROVEN
+La observación:
+66 clientes / aproximadamente 15.4-15.5 t / 108482 MXN
+corresponde al DICF forecast observado con corte 2026-08-30.
 
-No hardcodear ninguno de estos valores en runtime.
+NO obligar a que el resultado histórico final sea 66.
 
-La captura es evidencia observacional humana, no reemplaza la fuente física.
+No hardcodear esos valores.
 
-## Respuestas problemáticas observadas
+## Definition of New for this slice
 
-### Escenario A
+Conservar la semántica comercial defendible de DICF, pero aplicada a periodos
+históricos reales cerrados.
 
-Pregunta relacionada con nuevos en Acapulco.
+La implementación debe probar físicamente la fórmula actual de DICF antes de
+codificarla.
 
-Director IA afirmó:
+Para periodo A = mes calendario anterior y periodo B = mes solicitado:
 
-"No se identificaron clientes nuevos en la planta de Acapulco"
+- ingreso A debe derivarse de datos reales de A;
+- ingreso B debe derivarse de datos reales de B;
+- sin forecast si B está cerrado;
+- Nuevo cuando la misma condición comercial de DICF resulte verdadera usando
+  los valores reales cerrados.
 
-y después respondió con clientes de:
-- aumentaron
-- disminuyeron
+No cambiar la definición de DICF en lib/dicf.js.
 
-Esto contradice la pantalla DICF que sí muestra Nuevos.
+Si reproducir exactamente la definición requiere margen histórico, reutilizar la
+fuente existente de margen por periodo.
 
-### Escenario B
+No sustituir la definición silenciosamente por "kgA = 0 y kgB > 0" salvo que
+la inspección demuestre que es semánticamente equivalente para el contrato
+existente.
 
-Pregunta exacta:
+## Required response
 
-¿Qué clientes nuevos entraron en agosto? ¿Cuánto compraron y con qué descuento?
+Para cada cliente nuevo:
 
-Director IA respondió aproximadamente:
+- nombre canónico;
+- canal/subcanal cuando esté disponible;
+- compra real del mes:
+  - kg;
+  - toneladas;
+- descuento real por kg;
+- monto de descuento real si está defendiblemente disponible.
 
-- margen julio 2026: 7.11 $/kg
-- margen agosto 2026: 7.32 $/kg
-- comparación: +0.21 $/kg
-- 66 clientes nuevos
-- 15.4 toneladas
-- ,482
-- "no se especifica el descuento aplicado"
+Además:
 
-Problemas a auditar:
+- número total de clientes nuevos;
+- kg/toneladas reales totales;
+- periodo;
+- planta.
 
-1. obtiene agregado pero no lista;
-2. no entrega compra individual;
-3. no entrega descuento individual;
-4. introduce margen $/kg aunque se preguntó descuento;
-5. otra ruta llegó a negar que existieran nuevos.
+No sustituir descuento por margen.
 
-## Pregunta central
+No mostrar "COMPARACION MARGEN" como respuesta al descuento.
 
-Rastrear físicamente:
+## Complete list
 
-pregunta
-→ intent/routing
-→ categoría comercial
-→ motor DICF
-→ clasificación Nuevos
-→ filas individuales
-→ kg real/proyectado
-→ descuento real/proyectado
-→ agregados
-→ contexto Director IA
-→ anexos
-→ prompt/narrativa
-→ respuesta
+La respuesta debe poder transportar TODOS los clientes nuevos del periodo.
 
-y localizar la PRIMERA divergencia para cada síntoma.
+No usar el límite actual:
+COMMERCIAL_STATE_CLIENT_LIMIT = 20
 
-No asumir una sola causa global.
+para esta capacidad histórica.
 
-## Distinción semántica obligatoria
+No aumentar globalmente ese límite para otras capacidades.
 
-No confundir:
+Preferir un builder determinista/estructurado específico para esta respuesta,
+de modo que no dependa de que el LLM enumere 66 clientes correctamente.
 
-MARGEN $/kg
-con
-DESCUENTO $/kg
+Si la cantidad excede la capacidad razonable de una sola respuesta, el runtime
+debe preservar el conjunto completo y usar un mecanismo determinista que no
+afirme que la lista parcial es completa.
 
-No confundir:
+No inventar ni perder clientes por truncation silenciosa.
 
-kgBReal
-con
-kgB proyectado
+## Discount truthfulness
 
-No confundir:
+Rastrear descuentos desde:
+arr.descuentos_diarios_cliente
 
-descuento real de agosto
-con
-descuento proyectado a cierre
+Para periodo cerrado, calcular únicamente con evidencia real.
 
-No confundir:
+Verificar el contrato físico antes de decidir cómo interpretar ausencia de fila.
 
-clasificación DICF de forecast
-con
-comparación histórica mensual M9
+No afirmar:
+descuento = 0
 
-La pregunta humana:
+si ausencia de evidencia no demuestra realmente cero.
 
-"¿Qué clientes nuevos entraron en agosto? ¿Cuánto compraron y con qué descuento?"
+Cuando el contrato no permita distinguir:
+- cero real;
+- dato faltante;
 
-puede exigir semántica histórica real.
+usar DATA_NOT_FOUND/null/explicación equivalente fail-closed.
 
-La auditoría debe determinar físicamente qué contrato usa hoy Director IA y si
-existe una divergencia ACTUAL_VS_FORECAST.
+No transformar missing en zero silenciosamente.
 
-No decidir implementación todavía.
+## Routing acceptance
 
-## Writable in_scope
-
-- docs/dev-loop/CURRENT_TASK.md
-- docs/dev-loop/reports/AUDIT-DIRECTOR-IA-NEW-CLIENTS-PURCHASE-DISCOUNT-001.md
-
-## Read-only in_scope
-
-- AGENTS.md
-- docs/dev-loop/LOOP_PROTOCOL.md
-- docs/dev-loop/TASK_TEMPLATE.md
-- docs/dev-loop/reports/README.md
-- docs/director-ia/DIRECTOR_IA_CONSTITUTION.md
-- docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md
-- server.js
-- frontend/dashboard files relacionados con Delta Ingreso Cliente Forecast
-- lib/dicf.js
-- lib/delta-ingreso-forecast.js
-- lib/delta-ingreso-commands.js
-- lib/delta-ingreso-ai.js
-- lib/delta-ingreso-ai-db.js
-- lib/director-ia-commercial-state.js
-- lib/director-ia-chat.js
-- lib/director-ia-planner.js
-- lib/director-ia-m9-deltas.js
-- lib/director-ia-daily-discount.js
-- lib/director-ia-tools.js
-- lib/director-ia-tool-orchestrator.js
-- lib/director-ia-dashboard-forecast-adapter.js
-- lib/director-ia-dashboard-cycle-transport.js
-- lib/director-ia-authoritative-forecast-run-pack.js
-- tests Director IA / DICF relevantes
-- git history estrictamente necesaria
-
-Otros archivos pueden inspeccionarse read-only si aparecen físicamente en el call
-chain y se documenta por qué.
-
-## Out of scope
-
-- modificar código runtime
-- modificar tests
-- implementar clientes nuevos
-- implementar descuento
-- cambiar DICF
-- cambiar fórmula forecast
-- cambiar margen
-- cambiar descuentos
-- cambiar UI
-- modificar server.js
-- modificar DB/schema
-- writes a DB
-- hardcodear clientes de la captura
-- hardcodear 66
-- hardcodear ,482
-- hardcodear 15.4 o 15.5
-- arreglar aumentaron
-- arreglar disminuyeron
-- arreglar dejaron de comprar
-- implementar Movimiento de clientes
-- plant_switch
-- Ahora dime lo mismo
-- leading-Y
-- compound client query ya CLOSED
-- parser enero a la fecha
-- Render
-- Exit 137
-- PG pool
-- deploy
-- merge a main
-- Golden Set general
-- meta-protocolo
-
-## Probes obligatorios
+Estas sondas deben converger a ESTA capacidad histórica cuando el periodo sea
+un mes cerrado:
 
 P1:
 ¿Qué clientes nuevos entraron en agosto?
@@ -255,411 +178,315 @@ Dime los clientes nuevos de agosto en Acapulco.
 P6:
 Dime los nuevos de agosto en Acapulco, sus toneladas y descuento por kg.
 
-Control C1:
-¿Qué clientes aumentaron en agosto en Acapulco?
+P6 no debe exigir necesariamente la palabra literal "clientes" si la construcción
+"los nuevos" + periodo + métricas es inequívoca en este contexto.
 
-C1 es read-only y únicamente demuestra separación de categoría.
+No enviar:
+P1/P4/P5 a commercial_trend trailing 30d.
 
-No corregir Aumentaron.
+No enviar:
+P2/P6 a IGF por la palabra descuento.
 
-## Fronteras mínimas a probar
+No enviar:
+P3 a client_profile por detectar Acapulco como entidad cliente.
 
-Para P1-P6 capturar cuando sea posible:
+## Period semantics
 
-- detectDirectorIaIntent
-- planDirectorIaQuestion
-- resolveCommercialStateCategory
-- isCommercialStateListQuestion
-- tool plan / domain
-- handler seleccionado
-- source tags
-- loadCommercialStateForChat
-- dicf.computeDicf
-- data.periodoMes
-- data.last_date
-- data.nuevos
-- data.nuevos.clientes.length
-- campos disponibles en cada cliente
-- totalDeltaKg / totalDeltaIngreso físicos
-- buildCommercialStateFocusedContext
-- número de clientes transportados al contexto
-- si existe límite/top
-- si kg individual está en contexto
-- si descuento individual está en contexto
-- si margen entra al contexto por otro anexo
-- respuesta determinista o prompt final relevante
+"agosto" debe significar mes calendario agosto, no trailing 30 days.
 
-No editar exports para poder observar.
+Resolver año de forma determinista con las utilidades temporales existentes.
 
-Usar caller real cuando una función no esté exportada.
+Para la fecha actual 2026-09-01:
+agosto sin año → agosto 2026.
 
-## Motor dashboard
+No hardcodear esa fecha.
 
-Localizar físicamente:
+No reescribir globalmente todos los parsers temporales.
 
-UI
-→ endpoint
-→ server route
-→ compute function
+## Open/current month protection
 
-Probar si la pantalla actual usa:
+Esta tarea está centrada en MES CERRADO.
 
-dicf.computeDicf
+Si la misma formulación apunta al mes actualmente abierto:
 
-o:
+NO presentar forecast como compra real cerrada.
 
-computeDeltaIngresoForecast
+Puede:
+- usar una aclaración semántica;
+- o delegar al DICF forecast existente con etiqueta explícita;
 
-u otra ruta.
+solo si puede hacerse sin ampliar el slice.
 
-No asumir equivalencia por nombres similares.
+No mezclar silenciosamente real-to-date con forecast.
 
-Documentar:
+## Architecture direction
 
-DASHBOARD_ENGINE = <función exacta>
+Preferir una capacidad dedicada y testeable para:
+historical_new_clients
 
-## Definición de NUEVO
+o equivalente compatible con la arquitectura existente.
 
-Localizar la condición exacta en el motor que realmente usa el dashboard.
+No es obligatorio ese nombre.
 
-Capturar:
+Evitar parches ad-hoc únicamente dentro del prompt LLM.
 
-- criterio kg previo;
-- criterio kg actual/proyectado;
-- ventana temporal;
-- uso o no de mes anterior;
-- si basta kgA <= 0 y kgB > 0;
-- si B es real o proyectado;
-- si usa frecuencia/estado;
-- cualquier filtro posterior.
+Preferir:
 
-No reinterpretar.
+semantic detection
+→ period/plant resolution
+→ deterministic read-only loader
+→ deterministic evidence pack
+→ deterministic response builder
 
-## Compra por cliente
+El LLM no debe inventar la lista.
 
-Determinar qué variables físicas existen para un cliente Nuevo:
+## Potential source reuse
 
-- kg real del mes;
-- kg proyectado;
-- toneladas mostradas;
-- delta kg;
-- cualquier otro campo.
+Inspeccionar y reutilizar cuando sea apropiado:
 
-Probar cuál de ellas alimenta la UI.
+- lib/director-ia-m9-deltas.js
+- getDeltaDescuentoClientes
+- getMargenKgPorPeriodo
+- arr.ventas_diarias_cliente
+- arr.descuentos_diarios_cliente
+- public.plantas / provincia mapping
 
-La pregunta "cuánto compraron" no debe asumirse equivalente a forecast.
+No asumir que M9 completo puede reutilizarse tal cual.
 
-Clasificar:
+Su definición de Nuevo no está autorizada automáticamente.
 
-PURCHASE_METRIC_UI =
-PURCHASE_METRIC_DIRECTOR =
-PURCHASE_METRIC_HISTORICAL_REAL =
+## in_scope runtime
 
-## Descuento por cliente
+- lib/director-ia-new-clients.js (nuevo, si es la opción mínima limpia)
+- lib/director-ia-chat.js
+- lib/director-ia-planner.js
+- lib/director-ia-m9-deltas.js
+- lib/director-ia-commercial-state.js
+- lib/director-ia-tools.js
+- lib/director-ia-tool-orchestrator.js
+- lib/director-ia-capabilities.js
 
-Rastrear:
+Modificar solo los necesarios.
 
-arr.descuentos_diarios_cliente
-→ suma monto
-→ kg
-→ descuento $/kg
+## in_scope tests/docs
 
-Determinar qué campos ya existen en:
+- test/director-ia-new-clients-purchase-discount.test.js
+- tests Director IA existentes estrictamente necesarios
+- docs/dev-loop/CURRENT_TASK.md
+- docs/dev-loop/reports/IMPL-DIRECTOR-IA-NEW-CLIENTS-PURCHASE-DISCOUNT-001.md
 
-- dicf.js
-- delta-ingreso-forecast.js
+## Protected behavior
+
+No romper:
+
+- DICF dashboard
+- commercial_state actual para forecast
+- Aumentaron
+- Disminuyeron
+- Dejaron de comprar
+- compound client query CLOSED
+- leading-Y CLOSED
+- client_profile
+- commercial_trend
+- IGF financial KPI
 - M9 delta descuento
+- autorización por planta
+- DATA_NOT_FOUND semantics
 
-y si llegan o no a:
+## Out of scope
 
-buildCommercialStateFocusedContext
+- modificar lib/dicf.js salvo STOP y revisión humana si resultara absolutamente necesario
+- modificar fórmula del dashboard DICF
+- modificar UI
+- modificar server.js
+- DB/schema/migrations
+- writes a DB
+- Render
+- Exit 137
+- PG pool
+- deploy
+- Movimiento completo de clientes
+- implementar Aumentaron
+- implementar Disminuyeron
+- implementar Dejaron
+- plant_switch
+- Ahora dime lo mismo
+- Golden Set general
+- fuzzy
+- alias redesign
+- meta-protocolo
+- docs/director-ia/* salvo que un contrato existente exija una actualización
+- cambios oportunistas
 
-No implementar el cruce.
+## Tests mínimos
 
-Capturar:
+Crear:
+test/director-ia-new-clients-purchase-discount.test.js
 
-DISCOUNT_SOURCE_FIELD =
-DISCOUNT_CONTEXT_FIELD =
-DISCOUNT_DROPPED_AT =
+Debe probar:
 
-## Límite de clientes
+1. P1-P6 routing.
+2. Agosto como mes calendario, no trailing 30d.
+3. Planta explícita Acapulco tratada como planta, no cliente.
+4. Planta actual cuando no se nombra planta.
+5. Autorización de planta preservada.
+6. Mes anterior correctamente calculado, incluyendo cambio de año:
+   enero → diciembre del año anterior.
+7. Clasificación Nuevo con fórmula comercial equivalente al DICF para datos cerrados.
+8. Cliente con compra anterior no es Nuevo.
+9. Cliente sin ingreso anterior y con ingreso real positivo en B sí es Nuevo.
+10. Compra usa kg REAL B, no forecast.
+11. Descuento/kg usa datos reales B.
+12. Margen no aparece como sustituto de descuento.
+13. Lista >20 no se trunca silenciosamente.
+14. Fixture con al menos 66 clientes para demostrar transporte completo.
+15. Totales = suma de filas crudas, no suma de valores formateados.
+16. Missing discount no se convierte a cero sin evidencia contractual.
+17. Respuesta contiene cliente + compra + descuento.
+18. No-client-data → fail-closed / DATA_NOT_FOUND.
+19. Current/open-month no se presenta falsamente como closed historical actual.
+20. Regresión de commercial_state/DICF forecast.
+21. Regresión M9.
+22. Regresión commercial_trend.
+23. Regresión client_profile.
+24. Regresión compound client query.
+25. No hardcodes de clientes o valores observacionales.
 
-Auditar explícitamente cualquier:
+## Validation
 
-slice
-limit
-top N
-COMMERCIAL_STATE_CLIENT_LIMIT
+Ejecutar focalizados nuevos y todos los tests afectados.
 
-Determinar si una categoría con 66 clientes puede físicamente transportar los 66
-al contexto actual.
+Después:
 
-No cambiar el límite.
+node --test test/director-ia-*.test.js
 
-## Falso cero
+Baseline previo conocido:
+1384 pass / 0 fail
 
-Para el escenario donde Director IA dijo:
+La suite final debe tener:
+0 fail
 
-"No se identificaron clientes nuevos"
+y no eliminar tests existentes.
 
-localizar la primera frontera físicamente demostrable entre:
+Ejecutar:
 
-- category recognition
-- selected handler
-- plant
-- period
-- source payload
-- filtering
-- LLM narrative
+git diff --check
+git diff --stat
+git status
 
-Si la frase exacta no puede reproducirse localmente:
+Revisar diff completo.
 
-FALSE_ZERO_NEW_PATH = NOT_REPRODUCED
-
-pero documentar qué rutas podrían producir lista vacía y qué evidencia falta.
-
-No inventar causalidad.
-
-## Margen vs descuento
-
-Determinar por qué una respuesta a "con qué descuento" incluyó:
-
-COMPARACION MARGEN $/kg
-
-Inspeccionar:
-
-- annex selection
-- igf/arr annex
-- prompt composition
-- source prioritization
-- deterministic builders
-
-Clasificar:
-
-MARGIN_INJECTION_PATH =
-MARGIN_VS_DISCOUNT_CONFUSION_CAUSAL = YES / NO / NOT_PROVEN
-
-No corregir.
-
-## 15.4 vs 15.5
-
-Rastrear valores crudos de:
-
-- total kg Nuevos;
-- toneladas por categoría;
-- formato/rounding por bloque;
-- formato del agregado;
-- valor que llega a Director IA.
-
-Determinar si:
-
-15.4 vs 15.5
-
-se explica por:
-- redondeo individual;
-- agregado antes de redondear;
-- forecast distinto;
-- otro motor;
-- otro corte;
-- o NOT_PROVEN.
-
-No usar la suma visual como valor canónico.
-
-## Producción / DB
-
-NO escribir en producción.
-
-Puede ejecutarse una consulta DB estrictamente read-only únicamente si:
-
-- el entorno local ya tiene conexión autorizada;
-- no se imprimen secretos;
-- no requiere cambios;
-- no se modifica ninguna tabla.
-
-No es requisito.
-
-Si no se ejecuta:
-
-LIVE_DB_VALIDATION = NOT_RUN
-
-La captura humana sigue siendo evidencia observacional.
-
-## Tests
-
-Ejecutar únicamente tests existentes relevantes.
-
-No crear tests.
-
-Buscar cobertura de:
-
-- commercial_state
-- nuevos
-- dicf
-- M9
-- descuento
-- chat routing
-- annex selection
-
-Registrar gaps de cobertura.
-
-## Root cause classes permitidas
-
-Usar las que la evidencia demuestre:
-
-- CATEGORY_ROUTING_DIVERGENCE
-- PERIOD_SEMANTIC_DIVERGENCE
-- SOURCE_ENGINE_DIVERGENCE
-- PAYLOAD_FIELD_OMISSION
-- CONTEXT_FIELD_OMISSION
-- CONTEXT_TRUNCATION
-- ACTUAL_VS_FORECAST_SEMANTIC_GAP
-- MARGIN_VS_DISCOUNT_CONFUSION
-- LLM_NARRATIVE_DIVERGENCE
-- AGGREGATE_ROUNDING_DIFFERENCE
-- NO_DIVERGENCE
-- NOT_PROVEN
-
-Puede haber múltiples clases.
-
-## Reporte
+## Report
 
 Crear:
 
-docs/dev-loop/reports/AUDIT-DIRECTOR-IA-NEW-CLIENTS-PURCHASE-DISCOUNT-001.md
+docs/dev-loop/reports/IMPL-DIRECTOR-IA-NEW-CLIENTS-PURCHASE-DISCOUNT-001.md
 
-Debe incluir:
+Documentar:
 
-1. Executive result
-2. Human production evidence
-3. Physical dashboard call chain
-4. Physical Director IA call chain
-5. Probe matrix P1-P6
-6. Definition of Nuevo
-7. Actual vs Forecast semantics
-8. Purchase metric trace
-9. Discount metric trace
-10. Aggregate trace
-11. 15.4 vs 15.5 analysis
-12. Client-list truncation analysis
-13. False-zero analysis
-14. Margin-vs-discount analysis
-15. M9 relevance
-16. Existing test coverage
-17. Root cause classes
-18. First divergence by symptom
-19. Implementation readiness assessment WITHOUT implementing
-20. OUT_OF_SCOPE
-21. Final audit fields
+- diseño elegido;
+- routing before/after P1-P6;
+- semántica calendario;
+- definición exacta Nuevo histórica;
+- source SQL;
+- kg real;
+- descuento real;
+- missing-vs-zero;
+- lista completa;
+- no truncation;
+- deterministic builder;
+- actual vs forecast protection;
+- margen vs descuento;
+- autorización;
+- tests;
+- riesgos;
+- OUT_OF_SCOPE.
 
-## Final fields obligatorios
+Final fields:
 
-AUDIT_STATUS =
+IMPLEMENTATION_STATUS =
 BASE_MAIN_SHA =
-DASHBOARD_ENGINE =
-DIRECTOR_COMMERCIAL_STATE_ENGINE =
-SAME_ENGINE_DASHBOARD_DIRECTOR =
+ROUTING_P1 =
+ROUTING_P2 =
+ROUTING_P3 =
+ROUTING_P4 =
+ROUTING_P5 =
+ROUTING_P6 =
+HISTORICAL_NEW_CLIENTS_CAPABILITY =
+CALENDAR_MONTH_SEMANTICS =
+PREVIOUS_MONTH_SEMANTICS =
 NEW_CLASSIFICATION_FORMULA =
-NEW_CLIENT_COUNT_UI_CONTROL = 66_OBSERVATIONAL
-NEW_CLIENT_INCOME_UI_CONTROL = 108482_OBSERVATIONAL
-VISIBLE_BUCKET_TON_SUM = APPROX_15_5_OBSERVATIONAL
-DIRECTOR_REPORTED_TON = 15_4_OBSERVATIONAL
-RAW_CANONICAL_TON =
-ACTUAL_VS_FORECAST_CONTRACT =
-PURCHASE_METRIC_UI =
-PURCHASE_METRIC_DIRECTOR =
-KG_PER_CLIENT_AVAILABLE_IN_SOURCE =
-CLIENT_LIST_AVAILABLE_IN_SOURCE =
-CLIENT_LIST_CONTEXT_LIMIT =
-ALL_66_CAN_REACH_CURRENT_CONTEXT =
-DISCOUNT_PER_CLIENT_AVAILABLE_IN_SOURCE =
-DISCOUNT_SOURCE_FIELD =
-DISCOUNT_EXPOSED_TO_DIRECTOR_CONTEXT =
-DISCOUNT_DROPPED_AT =
-CATEGORY_ROUTING_P1 =
-CATEGORY_ROUTING_P2 =
-CATEGORY_ROUTING_P3 =
-CATEGORY_ROUTING_P4 =
-CATEGORY_ROUTING_P5 =
-CATEGORY_ROUTING_P6 =
-FALSE_ZERO_NEW_PATH =
-FALSE_ZERO_NEW_FIRST_DIVERGENCE =
-AGGREGATE_ONLY_PATH_FIRST_DIVERGENCE =
-MARGIN_INJECTION_PATH =
-MARGIN_VS_DISCOUNT_CONFUSION_CAUSAL =
-M9_ACTUAL_DISCOUNT_RELEVANCE =
-TONNAGE_15_4_VS_15_5_EXPLANATION =
-ROOT_CAUSE_CLASSES =
-CURRENT_TEST_COVERAGE =
-LIVE_DB_VALIDATION =
-INTRODUCING_COMMIT =
-SOURCE_CODE_CHANGED = NO
-TEST_CODE_CHANGED = NO
-IMPLEMENTATION_AUTHORIZED = NO
+DICF_SEMANTICS_PRESERVED =
+PURCHASE_USES_REAL_KG =
+FORECAST_USED_FOR_CLOSED_MONTH = NO
+DISCOUNT_USES_REAL_SOURCE =
+MARGIN_USED_AS_DISCOUNT = NO
+MISSING_DISCOUNT_FAIL_CLOSED =
+ALL_CLIENTS_TRANSPORTED =
+CONTEXT_LIMIT_20_BYPASSED_LOCALLY =
+GLOBAL_COMMERCIAL_STATE_LIMIT_CHANGED = NO
+DETERMINISTIC_LIST_BUILDER =
+PLANT_AUTH_PRESERVED =
+P3_ACAPULCO_NOT_CLIENT_PROFILE =
+P2_NOT_HIJACKED_BY_IGF =
+P1_P4_P5_NOT_TRAILING_TREND =
+CURRENT_MONTH_PROTECTION =
+HARDCODE_USED = NO
+DB_SCHEMA_CHANGED = NO
+DICF_FORMULA_CHANGED = NO
+SERVER_CHANGED = NO
+RENDER_CHANGED = NO
+TESTS =
+GIT_DIFF_CHECK =
+IMPLEMENTATION_AUTHORIZED = YES
 MERGE_AUTHORIZED = NO
 DEPLOY_AUTHORIZED = NO
-RENDER_SHA_EQUIVALENCE = NOT_PROVEN
 OUT_OF_SCOPE_FINDINGS =
 
 ## Allowed actions
 
-- AUTHORIZED → IN_PROGRESS cambiando únicamente status
-- inspección read-only
-- Node probes read-only
-- tests existentes
-- DB read-only solo bajo reglas anteriores
-- escribir reporte
-- IN_PROGRESS → DONE_PENDING_REVIEW
-- git diff --check
-- commit documental
-- push únicamente de esta rama
+- AUTHORIZED → IN_PROGRESS cambiando solo status
+- inspección
+- implementación in_scope
+- tests
+- reporte
+- DONE_PENDING_REVIEW
+- commit de esta rama
+- push de esta rama
 
 ## Forbidden actions
 
-- editar runtime
-- editar tests
-- editar arquitectura
-- editar server.js
-- editar UI
-- DB writes
-- migrations
-- implementar
-- hardcodear evidencia
-- merge
-- push a main
-- deploy
-- abrir siguiente tarea
+- modificar G1 humano
 - escribir APPROVED
 - escribir CLOSED
-- modificar authorized_by
-- modificar authorized_at
-- modificar human_authorization
+- merge a main
+- push a main
+- deploy
+- siguiente tarea
+- corregir OUT_OF_SCOPE
+- writes DB
+- migrations
 
 max_attempts: 1
 
 result_report_path:
-docs/dev-loop/reports/AUDIT-DIRECTOR-IA-NEW-CLIENTS-PURCHASE-DISCOUNT-001.md
+docs/dev-loop/reports/IMPL-DIRECTOR-IA-NEW-CLIENTS-PURCHASE-DISCOUNT-001.md
 
-implementation_authorized: NO
-merge_authorized: YES
-
-closed_by_human: YES
+implementation_authorized: YES
+merge_authorized: NO
 deploy_authorized: NO
 
 ## Stop condition
 
-Al terminar:
-
-- reporte completo
-- CURRENT_TASK = DONE_PENDING_REVIEW
-- solo CURRENT_TASK + reporte modificados
-- git diff --check limpio
-- commit documental
-- push de rama
-- working tree clean
+CURRENT_TASK = DONE_PENDING_REVIEW
+tests = green
+report = complete
+commit = created
+branch = pushed
+working tree = clean
 
 STOP.
 
-No implementation.
 No merge.
 No deploy.
 No siguiente tarea.
