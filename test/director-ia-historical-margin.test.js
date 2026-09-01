@@ -639,6 +639,134 @@ describe("G. continuity", () => {
     assert.equal(req.periods[0].month, 5);
   });
 
+  it("¿Cómo vamos? → ¿Cuál fue el margen en abril? no hereda pack ejecutivo", async () => {
+    process.env.ENABLE_DIRECTOR_IA = "true";
+    const { askDirectorIa, configureDirectorIaChat } = require("../lib/director-ia-chat");
+    const parentQuestion = "¿Cómo vamos?";
+    const marginQuestion = "¿Cuál fue el margen en abril?";
+    const executivePackAnswer = [
+      "MATERIALIDAD COMERCIAL de julio: clientes de julio con DICF y Commercial State.",
+      "Action Register vencido. Bitácora del trimestre. ARR e IGF almacenado.",
+      "OLS toneladas. SOURCE_RESTRICTED en commercial_state. period mismatch julio vs abril.",
+    ].join(" ");
+    const executiveParent = buildConversationState({
+      plantaId: 1,
+      parent_intent: "plant_diagnosis",
+      last_evidence_bundle_type: "plant_diagnosis",
+      forecast_run: {
+        plant_code: "AC",
+        year: 2026,
+        month: 7,
+        upload_day: "2026-07-31",
+        effective_cutoff_date: "2026-07-31",
+        corte_day: "2026-07-31",
+        cutoff_origin: "REQUEST_UPLOAD_DAY",
+      },
+    });
+    assert.equal(executiveParent.parent_intent, "plant_diagnosis");
+    assert.equal(isHistoricalMarginQuestion(marginQuestion), true);
+    const detected = detectDirectorIaIntent(marginQuestion);
+    assert.equal(detected.intent, "historical_margin");
+    const turn = resolveConversationTurn({
+      question: marginQuestion,
+      plantaId: 1,
+      detectIntent: detectDirectorIaIntent,
+      history: [
+        { role: "user", content: parentQuestion },
+        { role: "assistant", content: executivePackAnswer },
+      ],
+      echoedState: executiveParent,
+    });
+    assert.equal(turn.standalone, true);
+    assert.equal(turn.inherit, false);
+    const plan = planDirectorIaQuestion(
+      marginQuestion,
+      turn.inherit && turn.inherit_parent_intent ? { inheritParentIntent: turn.inherit_parent_intent } : {}
+    );
+    assert.equal(plan.intent, "historical_margin");
+    const period = resolveHistoricalMarginRequest(marginQuestion, NOW);
+    assert.equal(period.operation, "single_month");
+    assert.equal(period.periods[0].year, 2026);
+    assert.equal(period.periods[0].month, 4);
+
+    let seenQuestion = null;
+    configureDirectorIaChat({
+      now: NOW,
+      pool: { connect: async () => ({ release() {} }) },
+      openaiChat: async () => {
+        throw new Error("OpenAI no debe correr para margen histórico");
+      },
+      loadPlantDiagnosisForChat: async () => {
+        throw new Error("plant_diagnosis / executive pack no debe correr");
+      },
+      loadFinancialDiagnosisForChat: async () => {
+        throw new Error("financial_diagnosis no debe correr");
+      },
+      loadCommercialTrendForChat: async () => {
+        throw new Error("commercial_trend no debe correr");
+      },
+      loadHistoricalMarginForChat: async (_pool, plantaId, req, opts) => {
+        seenQuestion = opts.question;
+        return loadHistoricalMarginForChat(
+          null,
+          plantaId,
+          req,
+          loadOpts(makeSource({ "2026-4": closedFinal(2026, 4, 6.77) }), { question: opts.question })
+        );
+      },
+    });
+    try {
+      const out = await askDirectorIa(
+        {
+          body: {
+            history: [
+              { role: "user", content: parentQuestion },
+              { role: "assistant", content: executivePackAnswer },
+              { role: "user", content: marginQuestion },
+            ],
+            conversation_state: executiveParent,
+          },
+          dashboardAuth: { role: "ZP", actor_id: 9, plantas_permitidas: [1] },
+        },
+        1,
+        marginQuestion
+      );
+      assert.equal(seenQuestion, marginQuestion);
+      assert.equal(out.context_meta.mode, "historical_margin");
+      assert.equal(out.context_meta.operation, "single_month");
+      assert.equal(out.context_meta.openai_called, false);
+      assert.match(out.answer, /Abril 2026/);
+      assert.match(out.answer, /6[.,]77/);
+      assert.match(out.answer, /FINAL/);
+      const contamination = [
+        /MATERIALIDAD COMERCIAL/i,
+        /Action Register/i,
+        /\bDICF\b/,
+        /Commercial State/i,
+        /Bit[aá]cora/i,
+        /\bARR\b/,
+        /IGF almacenado/i,
+        /clientes de julio/i,
+        /\bOLS\b/,
+        /SOURCE_RESTRICTED/,
+        /period mismatch/i,
+      ];
+      for (const re of contamination) {
+        assert.doesNotMatch(out.answer, re);
+      }
+    } finally {
+      configureDirectorIaChat({
+        loadHistoricalMarginForChat: undefined,
+        loadPlantDiagnosisForChat: undefined,
+        loadFinancialDiagnosisForChat: undefined,
+        loadCommercialTrendForChat: undefined,
+        openaiChat: undefined,
+        now: undefined,
+        pool: undefined,
+      });
+    }
+  });
+
   it("commercial_trend + ¿Y en mayo? no se convierte en historical_margin", () => {
     const echoed = buildConversationState({
       plantaId: 1,

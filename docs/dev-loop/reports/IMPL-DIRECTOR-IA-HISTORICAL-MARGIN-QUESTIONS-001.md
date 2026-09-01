@@ -498,3 +498,24 @@ IMPLEMENTATION_AUTHORIZED = YES
 MERGE_AUTHORIZED = NO
 DEPLOY_AUTHORIZED = NO
 ```
+
+## Human review — executive parent contamination
+
+Última revisión humana sobre el mismo `task_id`. SOURCE_ERROR previa: APROBADA.
+
+Evidencia de producción: turno 1 `¿Cómo vamos?` (CEL `executive_status` → `conversation_state.parent_intent = plant_diagnosis`) y turno 2 `¿Cuál fue el margen en abril?` llegó a hablar de margen pero arrastró MATERIALIDAD COMERCIAL de julio, clientes, DICF, Action Register, ARR, IGF, SOURCE_RESTRICTED y period mismatch.
+
+Se agregó regresión E2E (`askDirectorIa` + echoed state físico + loader inyectado). El test pasó **sin cambio de runtime**: detector standalone `historical_margin`, `inherit = false`, handler in-process, `rawQuestion` del turno 2, respuesta Abril 2026 FINAL, sin rastros del pack ejecutivo.
+
+```
+HOW_ARE_WE_TO_MARGIN_REGRESSION = PASS
+EXECUTIVE_PARENT_CONTAMINATION = BLOCKED
+OPENAI_CALLED = false
+RUNTIME_CHANGED = NO
+FOCAL_TESTS = 29 pass / 0 fail
+FINAL_TESTS = 1440 pass / 0 fail
+GIT_DIFF_CHECK = CLEAN
+IMPLEMENTATION_AUTHORIZED = YES
+MERGE_AUTHORIZED = NO
+DEPLOY_AUTHORIZED = NO
+```
