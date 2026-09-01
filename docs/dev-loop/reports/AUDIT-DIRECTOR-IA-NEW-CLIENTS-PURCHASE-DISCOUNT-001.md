@@ -600,3 +600,28 @@ DEPLOY_AUTHORIZED = NO
 RENDER_SHA_EQUIVALENCE = NOT_PROVEN
 OUT_OF_SCOPE_FINDINGS = live DB not run; production SHA equivalence unknown; false-zero phrase not in source; delta-ingreso-forecast is a different engine; M9 not wired; UI list cap 15 is dashboard-only
 ```
+
+## Human review / closure
+
+HUMAN_REVIEW = APPROVED
+AUDIT_ACCEPTED = YES
+MERGE_AUTHORIZED = YES
+NEXT_IMPLEMENTATION_AUTHORIZED = YES
+CLOSED_BY_HUMAN = YES
+
+Human review accepts the demonstrated audit findings, including:
+
+- routing divergence across P1-P6;
+- commercial_state helper/runtime mismatch;
+- 66-to-20 commercial-state context truncation;
+- per-client discount available in source but omitted from Director IA context;
+- margin-vs-discount collision caused by financial KPI routing;
+- historical-actual vs DICF forecast semantic distinction;
+- M9 as physically relevant evidence for closed-month kg and discount;
+- false-zero path not reproduced;
+- Render/runtime equivalence remains NOT_PROVEN.
+
+The observational forecast controls from the 2026-08-30 screenshot are not mandated
+as the final historical closed-month result.
+
+No production deployment is authorized by this closure.

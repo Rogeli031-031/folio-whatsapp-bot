@@ -2,7 +2,9 @@
 
 task_id: AUDIT-DIRECTOR-IA-NEW-CLIENTS-PURCHASE-DISCOUNT-001
 
-status: DONE_PENDING_REVIEW
+status: CLOSED
+
+human_review: APPROVED
 
 authorized_by: "Human Approver"
 
@@ -638,7 +640,9 @@ result_report_path:
 docs/dev-loop/reports/AUDIT-DIRECTOR-IA-NEW-CLIENTS-PURCHASE-DISCOUNT-001.md
 
 implementation_authorized: NO
-merge_authorized: NO
+merge_authorized: YES
+
+closed_by_human: YES
 deploy_authorized: NO
 
 ## Stop condition
