@@ -2,7 +2,9 @@
 
 task_id: AUDIT-DIRECTOR-IA-COMPOUND-CLIENT-ENTITY-EXTRACTION-001
 
-status: DONE_PENDING_REVIEW
+status: CLOSED
+
+human_review: APPROVED
 
 authorized_by: "Human Approver"
 
@@ -336,8 +338,9 @@ docs/dev-loop/reports/AUDIT-DIRECTOR-IA-COMPOUND-CLIENT-ENTITY-EXTRACTION-001.md
 
 implementation_authorized: NO
 
-merge_authorized: NO
+merge_authorized: YES
 
+closed_by_human: YES
 ## Stop condition
 
 Después de:

@@ -280,3 +280,18 @@ MERGE_AUTHORIZED = NO
 RENDER_SHA_EQUIVALENCE = NOT_PROVEN
 OUT_OF_SCOPE_FINDINGS = plant_switch; inherit_false; render_137; D2_one_token_residual
 ```
+
+## Human review / closure
+
+HUMAN_REVIEW = APPROVED
+AUDIT_ACCEPTED = YES
+MERGE_AUTHORIZED = YES
+IMPLEMENTATION_AUTHORIZED_SEPARATELY = YES
+CLOSED_BY_HUMAN = YES
+
+The human reviewer accepted the demonstrated separation between:
+- semantic contract divergence for compound client queries without explicit period;
+- embedded entity extraction divergence for compound queries already classified as client_profile;
+- one-token `clienteNamed` truncation as part of the extraction boundary.
+
+Leading-Y, canonical resolver and explicit historical period behavior remain protected and are not reopened by this closure.
