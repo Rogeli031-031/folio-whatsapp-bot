@@ -2,7 +2,7 @@
 
 task_id: AUDIT-DIRECTOR-IA-HISTORICAL-MARGIN-QUESTIONS-001
 
-status: DONE_PENDING_REVIEW
+status: CLOSED
 
 authorized_by: "Human Approver"
 
@@ -18,8 +18,7 @@ base_main_sha: fc7767d02a41c6f2e53c30f21ce39d5e03d807db
 
 implementation_authorized: NO
 
-merge_authorized: NO
-
+merge_authorized: YES
 deploy_authorized: NO
 
 max_attempts: 1
@@ -704,7 +703,7 @@ No inventar una causa global.
 
 Al terminar:
 
-status: DONE_PENDING_REVIEW
+status: CLOSED
 
 Commit sugerido:
 
@@ -715,3 +714,5 @@ Push:
 origin/audit/director-ia-historical-margin-questions-001
 
 STOP.
+human_review: APPROVED
+closed_by_human: YES
