@@ -7,7 +7,8 @@ task_type: IMPLEMENTATION
 branch: implementation/director-ia-leading-y-client-hint-001
 base_main_sha: 4f286af9266e72d26c67ae0fd37b3a2f93865a3c
 implementation_authorized: YES
-merge_authorized: NO
+merge_authorized: YES
+human_review: APPROVED
 docs_director_ia_changed: NO
 hardcode_used: NO
 golden_set_implemented: NO
@@ -203,5 +204,6 @@ RENDER_SHA_EQUIVALENCE = NOT_PROVEN
 TESTS = 1354_PASS_0_FAIL
 GIT_DIFF_CHECK = CLEAN
 IMPLEMENTATION_AUTHORIZED = YES
-MERGE_AUTHORIZED = NO
+MERGE_AUTHORIZED = YES
+HUMAN_REVIEW = APPROVED
 ```
