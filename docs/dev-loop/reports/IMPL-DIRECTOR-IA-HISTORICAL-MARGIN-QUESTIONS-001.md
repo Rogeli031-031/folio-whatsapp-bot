@@ -445,3 +445,56 @@ IMPLEMENTATION_AUTHORIZED = YES
 MERGE_AUTHORIZED = NO
 DEPLOY_AUTHORIZED = NO
 ```
+
+## Human review — CHANGES_REQUIRED (veracity builder)
+
+Revisión humana sobre el mismo `task_id`. No reabre arquitectura. No autoriza merge ni deploy.
+
+**Causa:** `buildHistoricalMarginAnswer` delegaba `single_month` a `buildSingleAnswer(payload.evidence)` antes de respetar `SOURCE_ERROR`. `buildSingleAnswer` trataba todo `status !== valid` como ausencia → copy de `DATA_NOT_FOUND` («No hay un margen histórico FINAL defendible…») para `VERSION_AMBIGUOUS`, `PLANT_AMBIGUOUS` y `SOURCE_UNAVAILABLE`.
+
+**Corrección (solo frontera payload → respuesta):**
+
+1. `SOURCE_RESTRICTED` → mensaje de permiso.
+2. `SOURCE_ERROR` → mensaje de imposibilidad de validar/consultar la fuente, diferenciado por `VERSION_AMBIGUOUS` / `PLANT_AMBIGUOUS` / `SOURCE_UNAVAILABLE`.
+3. `DATA_NOT_FOUND` (incl. no FINAL) conserva «No hay un margen histórico FINAL defendible…».
+4. `SOURCE_PARTIAL` conserva respuesta parcial; un periodo `error` en compare ya no se etiqueta como missing.
+5. No se imprimen errores SQL ni secretos.
+
+Self-review: 0 caminos `SOURCE_ERROR` → wording de `DATA_NOT_FOUND`.
+
+Tests nuevos: respuesta final (no solo payload) para 2 FINAL, plant ambiguous, query throw, open source error, y no FINAL → DATA_NOT_FOUND.
+
+Focal: 28 pass / 0 fail.
+Suite: 1439 pass / 0 fail.
+`git diff --check` limpio.
+
+```
+HUMAN_REVIEW_CHANGES_REQUIRED = YES
+SOURCE_ERROR_ANSWER_DISTINCT = YES
+DATA_NOT_FOUND_WORDING_PRESERVED_FOR_MISSING = YES
+SOURCE_ERROR_NOT_PRESENTED_AS_MISSING = YES
+VERSION_AMBIGUOUS_COPY = YES
+PLANT_AMBIGUOUS_COPY = YES
+SOURCE_UNAVAILABLE_COPY = YES
+SQL_NOT_EXPOSED = YES
+CONTEXT_META_VERACITY_SOURCE_ERROR = YES
+LIMITATION_CODE_SOURCE_ERROR = YES
+OPENAI_CALLED = false
+ROUTING_UNCHANGED = YES
+PERIOD_RESOLVER_UNCHANGED = YES
+FINAL_SEMANTICS_UNCHANGED = YES
+FORECAST_SEMANTICS_UNCHANGED = YES
+AUTH_UNCHANGED = YES
+PLANT_MATCHER_UNCHANGED = YES
+RANKING_UNCHANGED = YES
+DELTA_UNCHANGED = YES
+CONTINUITY_UNCHANGED = YES
+SHARED_FILES_UNCHANGED = YES
+SERVER_CHANGED = NO
+FOCAL_TESTS = 28 pass / 0 fail
+FINAL_TESTS = 1439 pass / 0 fail
+GIT_DIFF_CHECK = CLEAN
+IMPLEMENTATION_AUTHORIZED = YES
+MERGE_AUTHORIZED = NO
+DEPLOY_AUTHORIZED = NO
+```

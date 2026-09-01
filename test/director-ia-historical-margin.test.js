@@ -410,6 +410,104 @@ describe("D. builder", () => {
     const miss = await loadHistoricalMarginForChat(null, 1, { dashboardAuth: { role: "ZP" } }, loadOpts(makeSource({})));
     assert.match(buildHistoricalMarginChatResult(miss).answer, /No hay un margen histórico FINAL/);
   });
+
+  it("SOURCE_ERROR no usa wording de DATA_NOT_FOUND en la respuesta final", async () => {
+    const missingWording = /No hay un margen histórico FINAL|No hay un margen forecast defendible/;
+    const twoFinal = await loadHistoricalMarginForChat(
+      null,
+      1,
+      { dashboardAuth: { role: "ZP" } },
+      loadOpts(
+        makeSource({
+          "2026-5": {
+            versions: [
+              { id: 1, version_number: 1, financial_state: "FINAL" },
+              { id: 2, version_number: 2, financial_state: "FINAL" },
+            ],
+            lines: {},
+          },
+        })
+      )
+    );
+    const twoChat = buildHistoricalMarginChatResult(twoFinal, { planta_id: 1 });
+    assert.equal(twoFinal.code, DIRECTOR_IA_VERACITY.SOURCE_ERROR);
+    assert.equal(twoChat.context_meta.veracity, DIRECTOR_IA_VERACITY.SOURCE_ERROR);
+    assert.equal(twoChat.limitation.code, DIRECTOR_IA_VERACITY.SOURCE_ERROR);
+    assert.equal(twoChat.context_meta.openai_called, false);
+    assert.doesNotMatch(twoChat.answer, missingWording);
+    assert.match(twoChat.answer, /m[uú]ltiples versiones FINAL/i);
+
+    const amb = await loadHistoricalMarginForChat(
+      null,
+      1,
+      { dashboardAuth: { role: "ZP" } },
+      loadOpts(
+        makeSource({
+          "2026-5": {
+            versions: [{ id: 51, version_number: 1, financial_state: "FINAL" }],
+            lines: {
+              51: [
+                { empresa: "ACAPULCO", margen_kg: 1 },
+                { empresa: "GTM ACAPULCO", margen_kg: 2 },
+                { empresa: "ACAPULCO DIAMANTE", margen_kg: 3 },
+              ],
+            },
+          },
+        })
+      )
+    );
+    const ambChat = buildHistoricalMarginChatResult(amb, { planta_id: 1 });
+    assert.equal(amb.code, DIRECTOR_IA_VERACITY.SOURCE_ERROR);
+    assert.equal(ambChat.context_meta.veracity, DIRECTOR_IA_VERACITY.SOURCE_ERROR);
+    assert.equal(ambChat.limitation.code, DIRECTOR_IA_VERACITY.SOURCE_ERROR);
+    assert.equal(ambChat.context_meta.openai_called, false);
+    assert.doesNotMatch(ambChat.answer, missingWording);
+    assert.match(ambChat.answer, /[uú]nica fila de planta/i);
+
+    const boom = await loadHistoricalMarginForChat(
+      null,
+      1,
+      { dashboardAuth: { role: "ZP" } },
+      loadOpts(makeSource({ "2026-5": { throw: true } }))
+    );
+    const boomChat = buildHistoricalMarginChatResult(boom, { planta_id: 1 });
+    assert.equal(boom.code, DIRECTOR_IA_VERACITY.SOURCE_ERROR);
+    assert.equal(boomChat.context_meta.veracity, DIRECTOR_IA_VERACITY.SOURCE_ERROR);
+    assert.equal(boomChat.limitation.code, DIRECTOR_IA_VERACITY.SOURCE_ERROR);
+    assert.equal(boomChat.context_meta.openai_called, false);
+    assert.doesNotMatch(boomChat.answer, missingWording);
+    assert.match(boomChat.answer, /consultar o validar la fuente/i);
+    assert.doesNotMatch(boomChat.answer, /db boom|SQL|password|token/i);
+
+    const openErr = await loadHistoricalMarginForChat(
+      null,
+      1,
+      { dashboardAuth: { role: "ZP" } },
+      loadOpts(makeSource({ "2026-9": { throw: true } }), { question: Q.P9 })
+    );
+    const openChat = buildHistoricalMarginChatResult(openErr, { planta_id: 1 });
+    assert.equal(openErr.code, DIRECTOR_IA_VERACITY.SOURCE_ERROR);
+    assert.equal(openChat.context_meta.veracity, DIRECTOR_IA_VERACITY.SOURCE_ERROR);
+    assert.equal(openChat.limitation.code, DIRECTOR_IA_VERACITY.SOURCE_ERROR);
+    assert.equal(openChat.context_meta.openai_called, false);
+    assert.doesNotMatch(openChat.answer, missingWording);
+    assert.doesNotMatch(openChat.answer, /No hay un margen forecast/i);
+    assert.match(openChat.answer, /consultar o validar la fuente/i);
+
+    const notFinal = await loadHistoricalMarginForChat(
+      null,
+      1,
+      { dashboardAuth: { role: "ZP" } },
+      loadOpts(
+        makeSource({
+          "2026-5": { versions: [{ id: 1, version_number: 3, financial_state: "FORECAST" }], lines: {} },
+        })
+      )
+    );
+    const notFinalChat = buildHistoricalMarginChatResult(notFinal, { planta_id: 1 });
+    assert.equal(notFinal.code, DIRECTOR_IA_VERACITY.DATA_NOT_FOUND);
+    assert.match(notFinalChat.answer, /No hay un margen histórico FINAL defendible/);
+  });
 });
 
 describe("E. planner / tool", () => {
