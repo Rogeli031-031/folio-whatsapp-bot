@@ -1,11 +1,10 @@
-# FIX-FOLIO-DASHBOARD-BENEFICIARIO-PDF-STALE-001
+# IMPL-DIRECTOR-IA-GOLDEN-REGRESSION-GATE-001
 
 task_type: IMPLEMENTATION
 
-mode: IMPLEMENTATION
+mode: TEST_INFRASTRUCTURE_ONLY
 
-status: DONE_PENDING_REVIEW
-
+status: CLOSED
 implementation_authorized: YES
 
 merge_authorized: NO
@@ -16,9 +15,9 @@ rollback_authorized: NO
 
 docs_director_ia_changed: NO
 
-runtime_changed: YES
+runtime_changed: NO
 
-backend_changed: YES
+backend_changed: NO
 
 frontend_changed: NO
 
@@ -30,424 +29,691 @@ max_attempts: 3
 
 authorized_by: "Human Approver"
 
-authorized_at: "2026-09-02T16:38:00-06:00"
+authorized_at: "2026-09-02T17:12:57-06:00"
 
-human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver approved FIX-FOLIO-DASHBOARD-BENEFICIARIO-PDF-STALE-001 to fix stale beneficiary data in generated folio PDFs by synchronizing the edited principal beneficiary with detalle_lineas[0].beneficiario. Preserve independent beneficiaries in lines 1..N. No schema changes, no destructive SQL, no Director IA changes, no merge, no deploy, no next task."
+human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver approved IMPL-DIRECTOR-IA-GOLDEN-REGRESSION-GATE-001 to build a deterministic Golden Regression harness from real Director IA executive questions so Cursor can reproduce and locate failures without relying on manual human chat testing. Test infrastructure only. No Director IA behavior changes, no production runtime changes, no DB/schema changes, no merge, no deploy, no next task."
+
+## 0. Disposición humana de la tarea anterior
+
+La tarea:
+
+`DEPLOY-FOLIO-DASHBOARD-BENEFICIARIO-PDF-STALE-001`
+
+permanece:
+
+`BLOCKED / NOT_EXECUTED`
+
+El humano decide estacionarla y autoriza explícitamente continuar con una tarea independiente de Director IA.
+
+No reinterpretar `BLOCKED` como deploy exitoso.
+
+No borrar su CURRENT_TASK/report.
+
+Preservar esa evidencia.
+
+El humano NO está autorizando reintentar ese deploy dentro de esta tarea.
 
 ## 1. Objetivo único
 
-Corregir el bug demostrado por:
+Construir un sistema reproducible de regresión para Director IA que permita ejecutar automáticamente preguntas ejecutivas reales ya usadas por el humano y determinar:
 
-`AUDIT-FOLIO-DASHBOARD-BENEFICIARIO-PDF-STALE-001`
+`Pregunta → contexto → planner → entidades → métricas → periodo → herramientas → evidencia → resultado`
 
-Síntoma:
+sin depender de que el humano tenga que descubrir manualmente las regresiones conversando con Director IA.
 
-Después de editar el beneficiario principal de un folio desde el dashboard, el dashboard muestra el nuevo beneficiario pero los PDFs que leen `detalle_lineas` pueden continuar mostrando el beneficiario anterior.
+Esta tarea crea INFRAESTRUCTURA DE PRUEBAS.
 
-Causa demostrada:
+NO corrige todavía ninguna de las respuestas que actualmente fallen.
 
-`PATCH /api/folios/:id/editar`
+## 2. North star
 
-actualiza:
+Después de esta tarea, Cursor debe poder ejecutar UN comando y entregar algo conceptualmente equivalente a:
 
-`public.folios.beneficiario`
+DIRECTOR IA GOLDEN REGRESSION
 
-pero NO actualiza:
+Clientes
+PASS / FAIL ...
 
-`detalle_lineas[0].beneficiario`
+Continuidad
+PASS / FAIL ...
 
-Los documentos que usan `getFolioLineasFromRow` continúan leyendo el valor viejo del JSON.
+Movimiento de clientes
+PASS / FAIL ...
 
-## 2. Semántica congelada por auditoría
+Métricas
+PASS / FAIL ...
 
-La auditoría demostró:
+TOTAL
+PASS: N
+FAIL: N
 
-* `folios.beneficiario` representa el beneficiario principal del folio.
-* En creación, esa columna se obtiene de la línea 0.
-* `detalle_lineas[0].beneficiario` corresponde al beneficiario principal.
-* `detalle_lineas[1..N].beneficiario` puede ser independiente por línea.
-* El modal actual de edición NO es un editor multilínea.
+y para cada FAIL indicar la primera frontera observable que divergió.
 
-Por tanto:
+Ejemplo conceptual:
 
-### DEBE
+Pregunta:
+Dame los kg comprados y el descuento por cada mes de TORTILLERIA ERICK desde enero a la fecha.
 
-Cuando el PATCH autorizado cambie `beneficiario`:
+Entity extraction: PASS
+Canonical resolution: FAIL
+Planner: client_analysis
+Metrics: kg + descuento
+Period: enero→fecha
+Tool execution: NOT_REACHED
+Evidence: NOT_REACHED
 
-`folios.beneficiario = NUEVO`
+FIRST_BAD_BOUNDARY:
+<función/frontera físicamente demostrada>
 
-y, si existe `detalle_lineas` válido con línea 0:
+Expected:
+resolver cliente explícito sin pedir cliente_key
 
-`detalle_lineas[0].beneficiario = NUEVO`
+Actual:
+cliente_key = null / clarification
 
-### NO DEBE
+No limitarse a decir:
 
-Modificar:
+`respuesta incorrecta`
 
-`detalle_lineas[1]`
-`detalle_lineas[2]`
-...
-`detalle_lineas[N]`
+## 3. Regla fundamental: NO comparar prosa literal
 
-Los beneficiarios de esas líneas son independientes.
+El Golden Set NO debe exigir una respuesta redactada palabra por palabra.
 
-## 3. Fuente causal
+NO usar snapshots del texto completo del LLM como criterio principal.
 
-Ruta principal:
+Debe comprobar semántica observable.
 
-`PATCH /api/folios/:id/editar`
+Por ejemplo:
 
-en:
+* intent correcto;
+* dominio correcto;
+* cliente explícito detectado;
+* resolución canónica;
+* métricas pedidas;
+* periodo solicitado;
+* continuidad correcta;
+* herramienta/ruta correcta;
+* ausencia/presencia correcta de clarification;
+* evidencia requerida;
+* fail-closed cuando corresponda.
 
-`server.js`
+La redacción final puede variar sin convertir el caso en FAIL.
 
-La corrección debe realizarse en la operación de edición persistida.
+## 4. Inventario obligatorio antes de crear nada
 
-NO corregir solamente la representación del PDF.
+Antes de implementar:
 
-NO pasar beneficiario por querystring desde frontend.
+localizar físicamente en el repositorio:
 
-NO alterar `getFolioLineasFromRow` para hacer que la columna gane globalmente sobre todas las líneas.
+* suites existentes de Director IA;
+* tests de planner;
+* tests de client/profile;
+* tests de compound client query;
+* tests de conversation state;
+* tests de continuity;
+* tests de persistent memory;
+* tests de metric switching;
+* tests de historical margin;
+* tests de tools/orchestrator;
+* tests relacionados con ARR/IGF/clientes;
+* helpers/fixtures reutilizables;
+* scripts existentes para ejecutar las suites.
 
-## 4. Comportamiento requerido
+No asumir nombres de archivo por este CURRENT_TASK.
 
-### Caso A — folio sin detalle_lineas
+Registrar cuáles existen realmente.
 
-Si `detalle_lineas` es NULL, vacío o no contiene una línea 0 válida:
+Reutilizar infraestructura existente antes de crear otra.
 
-actualizar normalmente:
+NO introducir Jest/Vitest/Mocha u otro framework nuevo si el repo ya usa `node:test` u otra infraestructura funcional.
 
-`folios.beneficiario`
+## 5. Golden cases iniciales obligatorios
 
-No fabricar líneas nuevas solamente para resolver este bug.
+Incorporar como casos reales, conservando literalmente las preguntas humanas cuando aquí están disponibles.
 
-### Caso B — una línea
+### G-CLIENT-001 — cliente explícito + consulta compuesta en primer turno
 
-ANTES:
+Chat NUEVO.
 
-`folios.beneficiario = A`
-`detalle_lineas[0].beneficiario = A`
+Pregunta exacta:
 
-Después de editar A → B:
+`Dame los kg comprados y el descuento por cada mes de TORTILLERIA ERICK desde enero a la fecha.`
 
-`folios.beneficiario = B`
-`detalle_lineas[0].beneficiario = B`
+Expected semantic behavior:
 
-### Caso C — múltiples líneas
+* detectar `TORTILLERIA ERICK` como cliente explícito;
+* intentar/resolver identidad canónica por la ruta existente;
+* NO depender de continuidad previa;
+* NO pedir `cliente_key` si la resolución canónica existente puede resolverlo;
+* identificar ambas métricas:
 
-ANTES:
+  * kg comprados;
+  * descuento;
+* identificar granularidad mensual;
+* identificar rango enero → fecha;
+* alcanzar la ruta de datos correspondiente si la identidad se resuelve.
 
-`folios.beneficiario = A`
-`detalle_lineas[0].beneficiario = A`
-`detalle_lineas[1].beneficiario = X`
-`detalle_lineas[2].beneficiario = Y`
+No hardcodear importes/kg reales salvo que una fixture existente y controlada los proporcione.
 
-Después de editar A → B:
+### G-CLIENT-002 — perfil simple en primer turno
 
-`folios.beneficiario = B`
-`detalle_lineas[0].beneficiario = B`
-`detalle_lineas[1].beneficiario = X`
-`detalle_lineas[2].beneficiario = Y`
+Chat NUEVO.
 
-Solo la línea 0 cambia.
+Pregunta exacta:
 
-## 5. Atomicidad
+`¿Qué sabemos de TORTILLERIA ERICK?`
 
-La actualización de:
+Expected:
 
-* `folios.beneficiario`
-* `detalle_lineas[0].beneficiario`
+* cliente explícito detectado;
+* resolución canónica;
+* intent/ruta de perfil de cliente correspondiente;
+* sin exigir identidad heredada de turno anterior.
 
-debe quedar conceptualmente en la misma edición.
+### G-CLIENT-003 — continuidad después de resolver cliente
 
-Evitar un estado persistido donde uno se actualice y el otro no.
+Turno 1:
 
-Reutilizar la estrategia SQL/transaccional existente que resulte mínima y consistente con el endpoint.
+`¿Qué sabemos de TORTILLERIA ERICK?`
 
-No introducir una arquitectura nueva.
+Turno 2:
 
-## 6. Historial
+`Dame los kg comprados y el descuento por cada mes de TORTILLERIA ERICK desde enero a la fecha.`
 
-Preservar el historial existente:
+Expected:
 
-`Edición AD: beneficiario: A → B`
+* continuidad conserva/resuelve identidad;
+* segundo turno no pierde el cliente;
+* periodo y métricas correctos.
 
-No duplicar artificialmente el evento por haber sincronizado `detalle_lineas[0]`.
+Este caso debe poder contrastarse con G-CLIENT-001.
 
-El cambio de JSON es consecuencia técnica de la misma edición humana del beneficiario.
+La infraestructura debe permitir detectar explícitamente:
 
-## 7. PDFs a preservar
+`funciona con continuidad pero falla first-turn`
 
-Después de la corrección, verificar la coherencia del beneficiario principal en:
+si eso sigue ocurriendo.
 
-* tablero/drawer;
-* póliza;
-* documento-folio;
-* documento-gastos;
-* documento-completo.
+## 6. Clientes nuevos
 
-No modificar el diseño ni formato visual de esos documentos salvo que sea estrictamente necesario para este bug.
+### G-NEW-CLIENTS-001
 
-La solución esperada es que los documentos actuales reciban el dato ya sincronizado desde DB.
+Pregunta exacta:
 
-## 8. Frontend
+`¿Qué clientes nuevos entraron en el mes de agosto? ¿Cuánto compraron y con qué descuento?`
 
-No se espera modificación del frontend.
+Expected semantic behavior:
 
-`EditarFolioModal.tsx` ya envía `beneficiario` correctamente.
+* consulta AGREGADA de clientes;
+* NO exigir un `cliente_key` específico;
+* detectar periodo agosto;
+* identificar clientes nuevos;
+* solicitar/obtener compra;
+* solicitar/obtener descuento;
+* no inventar clientes.
 
-Si durante implementación se concluye que es indispensable cambiar frontend para resolver este bug:
+Si Director IA todavía no posee físicamente la capacidad completa, el caso debe registrar FAIL y su FIRST_BAD_BOUNDARY.
 
-STOP.
+NO cambiar runtime para hacerlo pasar en esta tarea.
 
-Documentar la necesidad.
+## 7. Movimiento de clientes
 
-No ampliar alcance automáticamente.
+Crear casos independientes para las tres capacidades:
 
-## 9. Base de datos
+### G-MOVEMENT-UP-001
 
-No cambiar:
+Pregunta ejecutiva equivalente a:
 
-* schema;
-* tipos;
-* tablas;
-* constraints;
-* migraciones.
+`¿Qué clientes aumentaron sus compras en el periodo comparado?`
 
-No ejecutar SQL destructivo ni correcciones masivas de producción.
+Expected:
 
-Esta tarea corrige el comportamiento FUTURO del endpoint de edición.
+* consulta agregada;
+* categoría AUMENTARON;
+* no exigir cliente individual.
 
-La reparación histórica de folios que ya estén divergentes queda fuera de alcance y, si fuera necesaria, requiere otra tarea explícita.
+### G-MOVEMENT-DOWN-001
 
-## 10. Protección de datos existentes
+`¿Qué clientes disminuyeron sus compras en el periodo comparado?`
 
-La implementación debe preservar íntegramente el objeto de cada elemento de `detalle_lineas`.
+Expected:
 
-Al actualizar línea 0:
+* categoría DISMINUYERON;
+* no exigir cliente individual.
 
-cambiar exclusivamente su propiedad:
+### G-MOVEMENT-STOPPED-001
 
-`beneficiario`
+`¿Qué clientes dejaron de comprar en el periodo comparado?`
 
-No reconstruir la línea perdiendo propiedades desconocidas o adicionales.
+Expected:
 
-No borrar:
+* categoría DEJARON DE COMPRAR;
+* no exigir cliente individual.
 
-* concepto;
-* importe;
-* información fiscal;
-* metadata;
-* campos auxiliares;
-* líneas adicionales.
+Antes de congelar el wording de estos tres casos:
 
-## 11. Gate Git obligatorio
+buscar en reportes/tests existentes si ya están registradas preguntas humanas exactas.
 
-Antes de modificar código:
+Si existen, usar las preguntas humanas existentes en lugar de inventar nuevas.
 
-1. inspeccionar `git status`;
-2. identificar la rama actual;
-3. preservar los artefactos de auditoría existentes;
-4. partir de `main` limpio y sincronizado con `origin/main`;
-5. crear:
+No inventar datos de clientes.
 
-`fix/folio-dashboard-beneficiario-pdf-stale-001`
+## 8. Continuidad y cambio de métrica
 
-6. confirmar rama ≠ `main`;
-7. confirmar CURRENT_TASK correcto;
-8. confirmar G1;
-9. confirmar `implementation_authorized: YES`.
+Localizar en reportes/tests existentes las regresiones ya documentadas relacionadas con:
 
-La auditoría reportó working tree con documentación no comprometida.
+* historical margin;
+* cambio de margen → descuento;
+* cambio de margen → venta;
+* client profile;
+* continuity;
+* metric switch.
 
-NO borrar ni sobrescribir esa evidencia.
+Si existen identificadores como:
 
-Si no es posible llegar de forma segura a una rama de implementación sin perder esos archivos:
+* R-EXEC
+* R-VENTA
+* R-HM-PROFILE
+* R-METRIC-SWITCH
 
-STOP.
+reutilizar su definición física y sus prompts exactos.
 
-No implementar sobre `main`.
+No inventar su contenido si no existen físicamente.
 
-## 12. Alcance técnico
+El Golden Set debe demostrar al menos la regla:
 
-### in_scope
+Un contexto previo de `historical_margin` NO puede obligar a una pregunta posterior explícita de otra métrica a continuar usando margen.
 
-* `server.js`
-* `PATCH /api/folios/:id/editar`
-* helper mínimo si resulta necesario para modificar de forma segura `detalle_lineas[0]`
-* tests existentes relacionados
-* test nuevo mínimo del bug si la infraestructura actual de tests lo permite sin introducir framework nuevo
-* reporte de implementación
+Ejemplo de segundo turno relevante:
 
-### out_of_scope
+`¿descuento de agosto?`
 
-* frontend visual
-* Director IA
-* `docs/director-ia/`
-* schema
-* migraciones
-* reparación histórica masiva
-* edición multilínea
-* otros campos de `detalle_lineas`
-* refactor general de folios
-* merge
-* deploy
+Si el usuario pide explícitamente descuento:
 
-## 13. No ampliar a otros campos
+Expected:
 
-Esta tarea corrige exclusivamente:
+`metric = descuento`
 
-`beneficiario`
+NO:
 
-Aunque la auditoría haya observado que otros campos pudieran tener patrones similares, NO corregir:
+`metric = historical_margin`
 
-* concepto;
-* importe;
-* otros campos duplicados;
+Usar el primer turno exacto de los tests/reportes existentes si está disponible.
 
-sin una auditoría/autorización específica.
+## 9. Estructura de cada Golden Case
 
-No “arreglar de paso”.
+Crear una representación mantenible de casos.
 
-## 14. Validaciones obligatorias
+Puede ser JS/JSON/fixture según las convenciones existentes.
 
-Validar como mínimo:
+Cada caso debe poder expresar, cuando aplique:
 
-### Test 1 — sin detalle_lineas
+* `id`
+* `category`
+* `turns`
+* `question`
+* `expected_intent`
+* `expected_domains`
+* `expected_entity`
+* `expected_metrics`
+* `expected_period`
+* `expected_granularity`
+* `clarification_allowed`
+* `expected_tool_or_route`
+* `expected_evidence_behavior`
+* `notes`
 
-Editar beneficiario.
+No es obligatorio usar exactamente esos nombres si existe una convención mejor en el repo.
 
-Esperado:
+Priorizar claridad y extensibilidad.
 
-* columna actualizada;
-* endpoint exitoso;
-* sin fabricación de JSON.
+## 10. Diagnóstico FIRST_BAD_BOUNDARY
 
-### Test 2 — una línea
+El runner debe intentar evaluar, cuando sean observables sin modificar runtime:
 
-Editar:
+1. INPUT
+2. CONTEXT / conversation state
+3. PLANNER
+4. ENTITY EXTRACTION
+5. CANONICAL RESOLUTION
+6. METRIC RESOLUTION
+7. PERIOD RESOLUTION
+8. TOOL / ORCHESTRATOR ROUTE
+9. EVIDENCE
+10. USER-VISIBLE OUTCOME
 
-A → B
+Para cada caso:
 
-Esperado:
+* PASS;
+* FAIL;
+* NOT_REACHED;
+* NOT_OBSERVABLE;
 
-* `folios.beneficiario = B`
-* `detalle_lineas[0].beneficiario = B`
+según corresponda.
 
-### Test 3 — múltiples líneas
+`NOT_OBSERVABLE` es válido si la arquitectura actual no expone esa frontera.
 
-Editar línea principal:
+NO modificar producción solamente para hacer una frontera observable.
 
-A → B
+No falsificar precisión.
 
-Con:
+## 11. Tres niveles de prueba
 
-* línea 1 = X
-* línea 2 = Y
+Diseñar el harness para distinguir:
 
-Esperado:
+### TIER 1 — CONTRACT / DETERMINISTIC
 
-* header = B
-* línea 0 = B
-* línea 1 = X
-* línea 2 = Y
+* sin LIVE_DB;
+* fixtures/mocks/helpers existentes;
+* reproducible;
+* apto para ejecución frecuente;
+* este tier SÍ se ejecuta en esta tarea.
 
-### Test 4 — historial
+### TIER 2 — LIVE_DB_READ_ONLY
 
-Esperado:
+Reservar soporte conceptual/manifest para casos que necesiten datos reales.
 
-un único cambio lógico del beneficiario A → B.
+Pero esta tarea:
 
-### Test 5 — documentos
+`LIVE_DB_AUTHORIZED: NO`
 
-Confirmar por código/test disponible que:
+NO consultar producción.
 
-* documento-folio
-* documento-gastos
-* documento-completo
-* póliza
+NO ejecutar SQL live.
 
-ya no divergen respecto al beneficiario principal después de la edición.
+NO fabricar acceso.
 
-No fabricar navegación autenticada si el entorno no la permite; documentar esa limitación.
+### TIER 3 — AUTHENTICATED E2E
 
-## 15. Regresión
+Dashboard/chat real autenticado.
 
-Ejecutar las pruebas existentes aplicables a folios/backend.
+Esta tarea:
 
-No inventar comandos.
+`AUTHENTICATED_E2E_AUTHORIZED: NO`
+
+No fabricar token.
+
+No iniciar sesión como usuario.
+
+No usar credenciales.
+
+Si no puede ejecutarse:
+
+`NOT_PROVEN`
+
+No es FAIL del harness.
+
+## 12. Dos modos de ejecución
+
+El sistema debe permitir conceptualmente:
+
+### REPORT MODE
+
+Ejecuta todos los Golden Cases y produce el baseline real.
+
+Los fallos actuales de Director IA se reportan como FAIL, pero no se disfrazan.
+
+Este modo sirve mientras estamos cerrando regresiones conocidas.
+
+### GATE MODE
+
+Debe existir una ruta para que, cuando los casos estén cerrados, cualquier regresión vuelva a producir exit code no-cero.
+
+No conectar obligatoriamente GATE MODE al pipeline global en esta tarea si existen regresiones conocidas.
+
+No dejar el repositorio con una suite global permanentemente roja por defectos ya conocidos.
+
+El reporte debe distinguir:
+
+`HARNESS FAILURE`
+
+de:
+
+`PRODUCT GOLDEN FAILURE`
+
+## 13. Comando único
+
+Después de implementar debe existir UN comando claro para que Cursor pueda ejecutar el Golden Regression Set.
+
+Preferir una convención existente del repositorio.
+
+Ejemplo conceptual, NO obligatorio:
+
+`npm run test:director-ia:golden`
+
+o:
+
+`node --test ...`
+
+El nombre final debe basarse en las convenciones físicas del repo.
+
+Debe poder ejecutarse sin intervención humana turno por turno.
+
+## 14. Baseline antes de modificar
+
+Antes de crear el harness:
+
+ejecutar las suites existentes relevantes de Director IA.
 
 Registrar:
 
-* comando;
-* exit code;
-* resultado.
+* comandos;
+* pass;
+* fail;
+* total;
+* errores preexistentes.
 
-Si existe suite específica de edición/PDF, ejecutarla.
+No corregirlos en esta tarea.
 
-## 16. Evidencia final
+Esto será BASELINE BEFORE.
+
+## 15. Baseline Golden después
+
+Después de implementar:
+
+ejecutar el Golden Set completo en REPORT MODE.
+
+Entregar una matriz:
+
+| ID           | Pregunta/Escenario | Resultado | FIRST_BAD_BOUNDARY |
+| ------------ | ------------------ | --------- | ------------------ |
+| G-CLIENT-001 | ...                | PASS/FAIL | ...                |
+| ...          | ...                | ...       | ...                |
+
+IMPORTANTE:
+
+Esta tarea puede terminar correctamente en `DONE_PENDING_REVIEW` aunque algunos Golden Cases sean `FAIL`.
+
+Eso NO significa que la tarea falló.
+
+Significa:
+
+`harness funciona y reprodujo defectos actuales`.
+
+No alterar expectativas para convertir artificialmente FAIL en PASS.
+
+## 16. No implementar fixes
+
+Está expresamente prohibido modificar comportamiento de:
+
+* planner;
+* canonical client resolution;
+* client profile;
+* conversation state;
+* persistent memory;
+* historical margin;
+* metric switching;
+* ARR/IGF;
+* tool orchestrator;
+* evidence builder;
+* server runtime;
+* prompts de producción.
+
+Si un Golden Case demuestra un bug:
+
+registrar el FIRST_BAD_BOUNDARY.
+
+NO arreglarlo.
+
+Ese FAIL se convertirá después en un FIX independiente.
+
+## 17. Protección de Director IA
+
+Esta tarea puede:
+
+* añadir tests;
+* añadir fixtures;
+* añadir test helpers;
+* añadir script de test si es necesario;
+* añadir reporte del dev-loop.
+
+No debe cambiar código productivo para hacer pasar las pruebas.
+
+Si físicamente no puede construirse el harness sin refactor productivo:
+
+STOP.
+
+Documentar la frontera exacta y la mínima necesidad.
+
+No ampliar alcance.
+
+## 18. Working tree / tarea BLOCKED anterior
+
+Al inicio probablemente existen artefactos locales de:
+
+`DEPLOY-FOLIO-DASHBOARD-BENEFICIARIO-PDF-STALE-001`
+
+incluyendo:
+
+* `docs/dev-loop/CURRENT_TASK.md`
+* su reporte BLOCKED.
+
+No borrarlos.
+
+No mezclarlos accidentalmente con el código/test de Director IA.
+
+Preservarlos siguiendo `AGENTS.md` y `LOOP_PROTOCOL`.
+
+Después crear la rama:
+
+`implementation/director-ia-golden-regression-gate-001`
+
+desde `origin/main` vigente.
+
+Si el protocolo permite stash seguro de esos artefactos, puede utilizarse.
+
+Si exige otra preservación, seguir el protocolo.
+
+No pedir al humano comandos uno por uno.
+
+Si no existe forma protocolaria de preservar el estado y llegar a una rama limpia:
+
+STOP con UNA instrucción humana concreta.
+
+## 19. Git
+
+Rama requerida:
+
+`implementation/director-ia-golden-regression-gate-001`
+
+Antes de escribir tests:
+
+* branch ≠ main;
+* base sincronizada con `origin/main`;
+* G1 presente;
+* implementation_authorized = YES.
+
+Commit de implementación al finalizar.
+
+NO merge.
+
+NO push a `main`.
+
+El push de la rama está permitido solo si el protocolo actual lo permite dentro de G3; si no, dejarla local.
+
+## 20. Validación obligatoria
+
+Ejecutar:
+
+1. suites Director IA existentes relevantes;
+2. tests propios del harness;
+3. Golden Set REPORT MODE;
+4. comprobar que el runner identifica correctamente al menos un FIRST_BAD_BOUNDARY cuando exista un caso FAIL;
+5. comprobar que un FAIL de producto no se etiqueta como error del harness.
+
+No reducir/eliminar tests existentes para obtener verde.
+
+## 21. Evidencia final
 
 Entregar:
 
-### A. Root cause confirmado
+### A. Inventario
 
-Ruta exacta before.
+Suites/helpers existentes encontrados.
 
-### B. Cambio
+### B. Diseño
 
-Archivo(s), función(es) y comportamiento modificado.
+Cómo quedó representado un Golden Case.
 
-### C. Casos
+### C. Casos sembrados
 
-Tabla:
+Lista de IDs y preguntas exactas.
 
-| Caso | Header | línea 0 | líneas 1..N | Resultado |
-| ---- | ------ | ------- | ----------- | --------- |
+### D. Baseline BEFORE
 
-### D. Historial
+Resultado de tests existentes.
 
-Confirmar que no se duplicó.
+### E. Golden baseline
 
-### E. PDFs
+PASS / FAIL por caso.
 
-Explicar por qué ahora cada salida obtiene el valor correcto.
+### F. FIRST_BAD_BOUNDARY
 
-### F. Validación
+Para cada FAIL, primera frontera demostrada.
 
-Comandos y resultados reales.
+### G. Ejecución
 
-### G. Git
+Comando único para repetir todo.
 
-* base SHA
-* branch
-* commit SHA
-* `git status --short`
-* diff summary
+### H. Archivos
 
-### H. Alcance
+Archivos creados/modificados y propósito.
+
+### I. Git
+
+* base SHA;
+* branch;
+* commit SHA;
+* `git status --short`.
+
+### J. Scope
 
 Confirmar:
 
+* no runtime behavior changes;
+* no planner changes;
+* no tool changes;
+* no DB;
+* no LIVE_DB;
 * no frontend;
-* no schema;
-* no migración;
-* no reparación masiva;
-* no Director IA;
+* no Director IA production behavior changed;
 * no merge;
 * no deploy.
 
-## 17. Completion
+## 22. Completion
 
-Si todas las validaciones son correctas:
+Si el harness funciona y el baseline queda reproducible:
 
 `status: DONE_PENDING_REVIEW`
 
-NO CLOSED.
+aunque existan PRODUCT GOLDEN FAILURES.
+
+NO corregir esos failures en esta misma tarea.
+
+NO abrir automáticamente un fix.
 
 NO merge.
 
 NO deploy.
 
-NO siguiente tarea.
-
-Esperar revisión humana.
+STOP y esperar revisión humana.
