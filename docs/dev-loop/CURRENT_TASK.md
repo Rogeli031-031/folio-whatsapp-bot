@@ -1,4 +1,4 @@
-# UI-ACTION-REGISTER-GROUPING-001
+# FIX-FOLIO-DASHBOARD-BENEFICIARIO-PDF-STALE-001
 
 task_type: IMPLEMENTATION
 
@@ -16,524 +16,438 @@ rollback_authorized: NO
 
 docs_director_ia_changed: NO
 
-runtime_changed: NO
+runtime_changed: YES
 
-backend_changed: NO
+backend_changed: YES
+
+frontend_changed: NO
 
 database_changed: NO
 
-frontend_changed: YES
+schema_changed: NO
 
 max_attempts: 3
 
 authorized_by: "Human Approver"
 
-authorized_at: "2026-09-02T15:37:00-06:00"
+authorized_at: "2026-09-02T16:38:00-06:00"
 
-human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver approved UI-ACTION-REGISTER-GROUPING-001 to implement the approved Action Register presentation redesign without loss of information. Frontend presentation only. No Director IA changes, no database/schema/API contract changes, no merge, no deploy, and no next task."
+human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver approved FIX-FOLIO-DASHBOARD-BENEFICIARIO-PDF-STALE-001 to fix stale beneficiary data in generated folio PDFs by synchronizing the edited principal beneficiary with detalle_lineas[0].beneficiario. Preserve independent beneficiaries in lines 1..N. No schema changes, no destructive SQL, no Director IA changes, no merge, no deploy, no next task."
 
 ## 1. Objetivo único
 
-Implementar la reorganización visual del Action Register para reducir drásticamente el espacio en blanco y mejorar lectura/captura, SIN perder información, funcionalidades existentes ni semántica del producto.
+Corregir el bug demostrado por:
 
-La intervención debe ser principalmente de PRESENTACIÓN.
+`AUDIT-FOLIO-DASHBOARD-BENEFICIARIO-PDF-STALE-001`
 
-No rediseñar el modelo de datos.
+Síntoma:
 
-No modificar Director IA.
+Después de editar el beneficiario principal de un folio desde el dashboard, el dashboard muestra el nuevo beneficiario pero los PDFs que leen `detalle_lineas` pueden continuar mostrando el beneficiario anterior.
 
-No reinterpretar el Action Register.
+Causa demostrada:
 
-## 2. Baseline funcional que debe preservarse
+`PATCH /api/folios/:id/editar`
 
-Archivo principal actual:
+actualiza:
 
-`frontend-dashboard/app/acciones/page.tsx`
+`public.folios.beneficiario`
 
-Temas canónicos:
+pero NO actualiza:
 
-`ACTION_REGISTER_TEMAS`
+`detalle_lineas[0].beneficiario`
 
-Catálogo actual:
+Los documentos que usan `getFolioLineasFromRow` continúan leyendo el valor viejo del JSON.
 
-* Contrataciones
-* Mantenimiento
-* General
-* Clientes
-* Apoyos
-* Licencias
-* Taller
-* Oficinas
-* Sistema vs Incendio
-* ERP
-* Imagen Corporativa
+## 2. Semántica congelada por auditoría
 
-El Action Register actual trabaja conceptualmente como:
+La auditoría demostró:
 
-`fecha × (Comentarios del día + temas)`
+* `folios.beneficiario` representa el beneficiario principal del folio.
+* En creación, esa columna se obtiene de la línea 0.
+* `detalle_lineas[0].beneficiario` corresponde al beneficiario principal.
+* `detalle_lineas[1..N].beneficiario` puede ser independiente por línea.
+* El modal actual de edición NO es un editor multilínea.
 
-El espacio en blanco proviene principalmente de:
+Por tanto:
 
-* repetir formularios de captura en múltiples celdas;
-* mostrar fechas sin contenido;
-* mostrar siempre todos los temas aunque estén vacíos;
-* desplegar captura y lectura simultáneamente.
+### DEBE
 
-El objetivo NO es eliminar ninguna de esas dimensiones.
+Cuando el PATCH autorizado cambie `beneficiario`:
 
-El objetivo es representarlas mejor.
+`folios.beneficiario = NUEVO`
 
-## 3. Principio de diseño obligatorio
+y, si existe `detalle_lineas` válido con línea 0:
 
-### Separar lectura de captura
+`detalle_lineas[0].beneficiario = NUEVO`
 
-La vista normal debe estar optimizada para LEER.
+### NO DEBE
 
-La captura debe realizarse mediante UN SOLO mecanismo reutilizable.
+Modificar:
 
-No debe existir un formulario completo permanentemente desplegado en cada cruce:
+`detalle_lineas[1]`
+`detalle_lineas[2]`
+...
+`detalle_lineas[N]`
 
-`fecha × tema`
+Los beneficiarios de esas líneas son independientes.
 
-## 4. Vista principal — Registro vivo
+## 3. Fuente causal
 
-Crear una vista principal denominada conceptualmente:
+Ruta principal:
 
-`Registro vivo`
+`PATCH /api/folios/:id/editar`
 
-Debe ser la vista DEFAULT al entrar al Action Register.
+en:
 
-Debe organizar las acciones existentes de forma compacta y fácil de recorrer.
+`server.js`
 
-Cada acción debe conservar como mínimo la información que actualmente corresponda, incluyendo cuando aplique:
+La corrección debe realizarse en la operación de edición persistida.
 
-* fecha;
-* tema;
-* descripción;
-* responsable;
-* vencimiento;
-* estado derivado;
-* comentarios;
-* subacciones/items;
-* fotos;
-* controles existentes.
+NO corregir solamente la representación del PDF.
 
-### Estados
+NO pasar beneficiario por querystring desde frontend.
 
-Para acciones propias utilizar solamente la semántica actualmente demostrada por el producto:
+NO alterar `getFolioLineasFromRow` para hacer que la columna gane globalmente sobre todas las líneas.
 
-* Abierta
-* Vencida
-* Terminada
+## 4. Comportamiento requerido
 
-`Vencida` puede derivarse de `due_date` + `closed`.
+### Caso A — folio sin detalle_lineas
 
-NO inventar estados como:
+Si `detalle_lineas` es NULL, vacío o no contiene una línea 0 válida:
 
-* Programada
-* En revisión
-* Pausada
-* Aprobada
+actualizar normalmente:
 
-salvo que ya existan físicamente en el modelo actual.
+`folios.beneficiario`
 
-## 5. Agrupación por temas
+No fabricar líneas nuevas solamente para resolver este bug.
 
-En Registro vivo:
+### Caso B — una línea
 
-### Temas con actividad
+ANTES:
 
-Mostrar normalmente los temas que tengan acciones dentro del rango/contexto visible.
+`folios.beneficiario = A`
+`detalle_lineas[0].beneficiario = A`
 
-Ejemplo conceptual:
+Después de editar A → B:
 
-`Mantenimiento (6 abiertas)`
+`folios.beneficiario = B`
+`detalle_lineas[0].beneficiario = B`
 
-seguido por sus acciones.
+### Caso C — múltiples líneas
 
-### Temas sin acciones
+ANTES:
 
-No renderizar 11 bloques vacíos permanentemente.
+`folios.beneficiario = A`
+`detalle_lineas[0].beneficiario = A`
+`detalle_lineas[1].beneficiario = X`
+`detalle_lineas[2].beneficiario = Y`
 
-Agruparlos bajo un control compacto:
+Después de editar A → B:
 
-`Temas sin acciones (N) ▸`
+`folios.beneficiario = B`
+`detalle_lineas[0].beneficiario = B`
+`detalle_lineas[1].beneficiario = X`
+`detalle_lineas[2].beneficiario = Y`
 
-Al expandirlo deben continuar disponibles los temas canónicos individualmente.
+Solo la línea 0 cambia.
 
-NO fusionar temas.
+## 5. Atomicidad
 
-NO borrar temas.
+La actualización de:
 
-NO crear un tema genérico.
+* `folios.beneficiario`
+* `detalle_lineas[0].beneficiario`
 
-El catálogo de 11 temas sigue siendo canónico.
+debe quedar conceptualmente en la misma edición.
 
-## 6. Comentarios del día
+Evitar un estado persistido donde uno se actualice y el otro no.
 
-`Comentarios del día` continúa siendo una entidad visual distinta de una acción.
+Reutilizar la estrategia SQL/transaccional existente que resulte mínima y consistente con el endpoint.
 
-NO mezclar comentarios del día con acciones.
+No introducir una arquitectura nueva.
 
-En modo lectura:
+## 6. Historial
 
-* mostrar cada fecha de manera compacta;
-* si existe comentario, mostrar una línea/resumen;
-* si no existe, mostrar `Sin comentarios` solo cuando sea relevante;
-* NO mantener un textarea permanentemente abierto.
+Preservar el historial existente:
 
-Debe existir acceso claro para agregar/editar según las capacidades actuales.
+`Edición AD: beneficiario: A → B`
 
-## 7. Panel único de captura
+No duplicar artificialmente el evento por haber sincronizado `detalle_lineas[0]`.
 
-Crear UN SOLO mecanismo de captura reutilizable.
+El cambio de JSON es consecuencia técnica de la misma edición humana del beneficiario.
 
-Puede ser:
+## 7. PDFs a preservar
 
-* drawer lateral;
-* panel;
-* modal;
+Después de la corrección, verificar la coherencia del beneficiario principal en:
 
-elegir la opción que mejor se integre con la UI existente.
+* tablero/drawer;
+* póliza;
+* documento-folio;
+* documento-gastos;
+* documento-completo.
 
-Debe permanecer CERRADO mientras el usuario solamente lee.
+No modificar el diseño ni formato visual de esos documentos salvo que sea estrictamente necesario para este bug.
 
-Botones como:
+La solución esperada es que los documentos actuales reciban el dato ya sincronizado desde DB.
 
-`+ Agregar`
+## 8. Frontend
 
-o
+No se espera modificación del frontend.
 
-`+`
+`EditarFolioModal.tsx` ya envía `beneficiario` correctamente.
 
-desde una fecha/tema deben abrir ESTE MISMO panel.
-
-### Campos
-
-El panel debe reutilizar los datos y contratos actuales.
-
-Debe poder manejar al menos:
-
-#### Comentario del día
-
-* Fecha
-* Texto
-
-#### Acción
-
-* Fecha
-* Tema
-* Acción/texto
-* Responsable
-* Vencimiento
-* demás campos actualmente soportados
-
-Cuando se abra desde una fecha o tema específico debe prellenar ese contexto.
-
-NO duplicar formularios por celda.
-
-## 8. Vista secundaria — Matriz por fecha
-
-Conservar una segunda vista para comparación histórica:
-
-`Matriz por fecha`
-
-Esta vista mantiene el concepto fecha × tema, pero debe ser compacta.
-
-### Agrupación temporal
-
-Agrupar visualmente fechas por semana.
-
-Ejemplo conceptual:
-
-`Semana 28 jul – 3 ago`
-
-`Semana 4 – 10 ago`
-
-La agrupación NO cambia fechas reales ni datos.
-
-### Fechas vacías
-
-Una fecha sin comentarios ni acciones NO debe ocupar una columna completa con formularios vacíos.
-
-Puede:
-
-* ocultarse de la expansión normal;
-* mostrarse como chip compacto;
-* quedar accesible mediante la agrupación semanal.
-
-Al seleccionar una fecha debe seguir siendo posible visualizarla y capturar información.
-
-### Captura
-
-La Matriz NO debe volver a introducir formularios completos permanentes.
-
-Usar el mismo panel único de captura definido anteriormente.
-
-## 9. Selector de vistas
-
-Debe existir una forma simple de alternar entre:
-
-* Registro vivo
-* Matriz por fecha
-
-NO apilar ambas vistas completas una debajo de la otra.
-
-Registro vivo debe ser DEFAULT.
-
-## 10. Información y capacidades que NO pueden perderse
-
-Preservar físicamente las capacidades existentes, incluyendo donde actualmente existan:
-
-* acciones;
-* comentarios del día;
-* responsable;
-* vencimiento;
-* editar;
-* eliminar;
-* cerrar/reabrir cuando aplique;
-* items/subacciones;
-* comentarios de acción;
-* fotos;
-* copiar acción previa;
-* PDF diario;
-* exportación Excel;
-* crear/seleccionar fecha;
-* selección de planta;
-* sticky/identificación de tema;
-* DICF virtual/read-only;
-* historial actualmente accesible.
-
-La reorganización no autoriza eliminar funciones porque sean difíciles de colocar.
-
-Si alguna función requiere una ubicación visual diferente, reubicarla conservando comportamiento.
-
-## 11. DICF
-
-DICF virtual continúa siendo READ-ONLY.
-
-Sus estados propios no deben mezclarse ni normalizarse artificialmente con los estados de acciones propias.
-
-NO modificar su modelo.
-
-NO convertir DICF en acción editable.
-
-## 12. Restricciones técnicas
-
-### Prohibido
-
-* cambiar schema;
-* ejecutar SQL;
-* migrar datos;
-* borrar filas;
-* cambiar contratos de API;
-* cambiar payloads existentes salvo necesidad técnica demostrada e inevitable;
-* modificar Director IA;
-* modificar planner;
-* modificar conversation-state;
-* modificar historical_margin;
-* cambiar documentos de `docs/director-ia/`;
-* implementar directamente en `main`;
-* hacer merge;
-* hacer deploy;
-* abrir automáticamente la siguiente tarea.
-
-### Preferencia
-
-Resolver todo en frontend reutilizando endpoints y estructuras existentes.
-
-`server.js` debe permanecer sin cambios salvo que exista una imposibilidad física demostrable para implementar PRESENTACIÓN con el contrato actual.
-
-Si aparece esa imposibilidad:
+Si durante implementación se concluye que es indispensable cambiar frontend para resolver este bug:
 
 STOP.
 
-Documentarla.
+Documentar la necesidad.
 
 No ampliar alcance automáticamente.
 
-## 13. Rama obligatoria
+## 9. Base de datos
 
-Partir de `main` limpio, actualizado y sincronizado con `origin/main`.
+No cambiar:
 
-Crear rama:
+* schema;
+* tipos;
+* tablas;
+* constraints;
+* migraciones.
 
-`implementation/ui-action-register-grouping-001`
+No ejecutar SQL destructivo ni correcciones masivas de producción.
 
-Confirmar antes de escribir:
+Esta tarea corrige el comportamiento FUTURO del endpoint de edición.
 
-* rama ≠ main;
-* working tree limpio;
-* CURRENT_TASK = UI-ACTION-REGISTER-GROUPING-001;
-* status = AUTHORIZED;
-* implementation_authorized = YES.
+La reparación histórica de folios que ya estén divergentes queda fuera de alcance y, si fuera necesaria, requiere otra tarea explícita.
 
-## 14. Orden de implementación
+## 10. Protección de datos existentes
 
-Implementar incrementalmente en este orden:
+La implementación debe preservar íntegramente el objeto de cada elemento de `detalle_lineas`.
 
-1. panel único de captura;
-2. colapsar temas sin acciones;
-3. compactar Comentarios del día;
-4. Registro vivo como vista principal;
-5. Matriz por fecha compacta;
-6. agrupación semanal;
-7. selector Registro vivo / Matriz;
-8. revisión integral de funcionalidades preservadas.
+Al actualizar línea 0:
 
-No realizar un rewrite total si puede resolverse por refactor incremental.
+cambiar exclusivamente su propiedad:
 
-## 15. Criterios visuales
+`beneficiario`
 
-Priorizar:
+No reconstruir la línea perdiendo propiedades desconocidas o adicionales.
 
-* densidad útil de información;
-* lectura ejecutiva rápida;
-* reducción de scroll horizontal innecesario;
-* reducción de formularios repetidos;
-* mantenimiento de contexto de planta, fecha y tema;
-* jerarquía clara;
-* responsive razonable.
+No borrar:
 
-Evitar:
+* concepto;
+* importe;
+* información fiscal;
+* metadata;
+* campos auxiliares;
+* líneas adicionales.
 
-* panel derecho permanentemente abierto;
-* cinco o más colores de estado sin significado real;
-* una columna completa por cada fecha vacía;
-* duplicar Registro vivo y Matriz simultáneamente;
-* ocultar funciones existentes;
-* copiar literalmente el poster/mockup previo.
+## 11. Gate Git obligatorio
 
-El mockup previo es referencia conceptual, NO especificación pixel-perfect.
+Antes de modificar código:
 
-## 16. Protección contra pérdida de información
+1. inspeccionar `git status`;
+2. identificar la rama actual;
+3. preservar los artefactos de auditoría existentes;
+4. partir de `main` limpio y sincronizado con `origin/main`;
+5. crear:
 
-Antes de modificar:
+`fix/folio-dashboard-beneficiario-pdf-stale-001`
 
-inventariar físicamente en `page.tsx`:
+6. confirmar rama ≠ `main`;
+7. confirmar CURRENT_TASK correcto;
+8. confirmar G1;
+9. confirmar `implementation_authorized: YES`.
 
-* estados React relevantes;
-* loaders;
-* handlers;
-* mutations;
-* botones;
-* exportaciones;
-* PDF;
-* fotos;
-* items;
-* comentarios;
-* DICF;
-* formularios;
-* comportamiento responsive.
+La auditoría reportó working tree con documentación no comprometida.
 
-Después de modificar:
+NO borrar ni sobrescribir esa evidencia.
 
-hacer una matriz BEFORE → AFTER.
+Si no es posible llegar de forma segura a una rama de implementación sin perder esos archivos:
 
-Cada capacidad existente debe aparecer como:
+STOP.
 
-`PRESERVED`
+No implementar sobre `main`.
 
-o, si no puede preservarse:
+## 12. Alcance técnico
 
-`STOP`
+### in_scope
 
-No aceptar silenciosamente:
+* `server.js`
+* `PATCH /api/folios/:id/editar`
+* helper mínimo si resulta necesario para modificar de forma segura `detalle_lineas[0]`
+* tests existentes relacionados
+* test nuevo mínimo del bug si la infraestructura actual de tests lo permite sin introducir framework nuevo
+* reporte de implementación
 
-`REMOVED`
+### out_of_scope
 
-## 17. Validación obligatoria
+* frontend visual
+* Director IA
+* `docs/director-ia/`
+* schema
+* migraciones
+* reparación histórica masiva
+* edición multilínea
+* otros campos de `detalle_lineas`
+* refactor general de folios
+* merge
+* deploy
 
-Ejecutar las validaciones existentes aplicables al frontend.
+## 13. No ampliar a otros campos
 
-Como mínimo:
+Esta tarea corrige exclusivamente:
 
-* lint/build/typecheck correspondientes al proyecto si existen;
-* comprobar que la página compile;
-* comprobar ausencia de errores introducidos;
-* revisar estados empty/loading/error;
-* comprobar apertura/cierre del panel;
-* comprobar creación de comentario;
-* comprobar creación de acción;
-* comprobar edición/borrado existentes;
-* comprobar vistas;
-* comprobar temas sin acciones;
-* comprobar fechas vacías;
-* comprobar export/PDF;
-* comprobar DICF read-only;
-* comprobar que no haya pérdida de información.
+`beneficiario`
 
-Si existen tests específicos del Action Register, ejecutarlos.
+Aunque la auditoría haya observado que otros campos pudieran tener patrones similares, NO corregir:
 
-No fabricar pruebas inexistentes.
+* concepto;
+* importe;
+* otros campos duplicados;
 
-## 18. Evidencia final requerida
+sin una auditoría/autorización específica.
 
-Entregar reporte con:
+No “arreglar de paso”.
 
-### A. Baseline
+## 14. Validaciones obligatorias
 
-Qué existía antes y qué funciones fueron identificadas.
+Validar como mínimo:
 
-### B. Implementación
+### Test 1 — sin detalle_lineas
 
-Archivos modificados y propósito de cada cambio.
+Editar beneficiario.
 
-### C. Registro vivo
+Esperado:
 
-Cómo quedó funcionando.
+* columna actualizada;
+* endpoint exitoso;
+* sin fabricación de JSON.
 
-### D. Matriz por fecha
+### Test 2 — una línea
 
-Cómo quedó funcionando.
+Editar:
 
-### E. Panel único
+A → B
 
-Cómo reemplaza formularios repetidos.
+Esperado:
 
-### F. Información preservada
+* `folios.beneficiario = B`
+* `detalle_lineas[0].beneficiario = B`
+
+### Test 3 — múltiples líneas
+
+Editar línea principal:
+
+A → B
+
+Con:
+
+* línea 1 = X
+* línea 2 = Y
+
+Esperado:
+
+* header = B
+* línea 0 = B
+* línea 1 = X
+* línea 2 = Y
+
+### Test 4 — historial
+
+Esperado:
+
+un único cambio lógico del beneficiario A → B.
+
+### Test 5 — documentos
+
+Confirmar por código/test disponible que:
+
+* documento-folio
+* documento-gastos
+* documento-completo
+* póliza
+
+ya no divergen respecto al beneficiario principal después de la edición.
+
+No fabricar navegación autenticada si el entorno no la permite; documentar esa limitación.
+
+## 15. Regresión
+
+Ejecutar las pruebas existentes aplicables a folios/backend.
+
+No inventar comandos.
+
+Registrar:
+
+* comando;
+* exit code;
+* resultado.
+
+Si existe suite específica de edición/PDF, ejecutarla.
+
+## 16. Evidencia final
+
+Entregar:
+
+### A. Root cause confirmado
+
+Ruta exacta before.
+
+### B. Cambio
+
+Archivo(s), función(es) y comportamiento modificado.
+
+### C. Casos
 
 Tabla:
 
-| Capacidad | Before | After | Estado    |
-| --------- | ------ | ----- | --------- |
-| ...       | ...    | ...   | PRESERVED |
+| Caso | Header | línea 0 | líneas 1..N | Resultado |
+| ---- | ------ | ------- | ----------- | --------- |
 
-### G. Validaciones
+### D. Historial
 
-Comandos ejecutados + resultado real.
+Confirmar que no se duplicó.
 
-### H. Git
+### E. PDFs
 
-* branch
+Explicar por qué ahora cada salida obtiene el valor correcto.
+
+### F. Validación
+
+Comandos y resultados reales.
+
+### G. Git
+
 * base SHA
-* final SHA/commit
+* branch
+* commit SHA
 * `git status --short`
 * diff summary
 
-### I. Declaración de alcance
+### H. Alcance
 
-Confirmar explícitamente:
+Confirmar:
 
-* Director IA untouched;
-* DB untouched;
-* schema untouched;
-* API contracts unchanged;
+* no frontend;
+* no schema;
+* no migración;
+* no reparación masiva;
+* no Director IA;
 * no merge;
 * no deploy.
 
-## 19. Completion
+## 17. Completion
 
-Al terminar correctamente:
+Si todas las validaciones son correctas:
 
 `status: DONE_PENDING_REVIEW`
 
-NO poner CLOSED.
+NO CLOSED.
 
-NO hacer merge.
+NO merge.
 
-NO desplegar.
+NO deploy.
 
-NO iniciar la siguiente tarea.
+NO siguiente tarea.
 
 Esperar revisión humana.

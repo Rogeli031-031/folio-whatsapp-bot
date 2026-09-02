@@ -63,6 +63,7 @@ const { embedExcelEvidencePhoto } = require("./lib/excel-image-compress");
 const { isDirectorZPForDashboard } = require("./lib/dashboard-es-zp");
 const igfFinancialFinal = require("./lib/igf-financial-final");
 const folioDuplicados = require("./lib/folio-duplicados");
+const { syncDetalleLineasPrincipalBeneficiario } = require("./lib/folio-detalle-lineas-principal-beneficiario");
 const { loadFoliosParaDuplicados } = require("./lib/folio-duplicados-load");
 const clasificacionApoyosExcel = require("./lib/clasificacion-apoyos-excel");
 const tallerAtExcel = require("./lib/taller-at-excel");
@@ -13843,6 +13844,19 @@ app.patch("/api/folios/:id/editar", dashboardAuthMiddleware, dashboardBlockGVFol
       setParts.push(`${k} = $${idx}`);
       params.push(v);
       idx++;
+    }
+    const beneficiarioChanged = changed.some(([k]) => k === "beneficiario");
+    if (beneficiarioChanged) {
+      const dlRes = await client.query(`SELECT detalle_lineas FROM public.folios WHERE id = $1`, [folioId]);
+      const sync = syncDetalleLineasPrincipalBeneficiario(
+        dlRes.rows[0] ? dlRes.rows[0].detalle_lineas : null,
+        next.beneficiario
+      );
+      if (sync.synced) {
+        setParts.push(`detalle_lineas = $${idx}::jsonb`);
+        params.push(JSON.stringify(sync.detalle_lineas));
+        idx++;
+      }
     }
     params.push(folioId);
     await client.query(`UPDATE public.folios SET ${setParts.join(", ")} WHERE id = $${idx}`, params);
