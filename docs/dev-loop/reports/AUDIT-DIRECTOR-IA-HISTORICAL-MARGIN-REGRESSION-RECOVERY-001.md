@@ -440,10 +440,13 @@ T1/T2 historical_margin; M1 follow-up `¿Y en mayo?`; M2/M3; SOURCE_ERROR vs DAT
 
 ## 17. LIVE_DB
 
-`DATABASE_URL` unset. `.env` ausente en el workspace.  
-`LIVE_DB = NOT_PROVEN`  
-`MAY_LIVE_DB_REASON = NOT_PROVEN`  
-`AUGUST_DATA_NOT_FOUND_REASON = NOT_PROVEN_WITHOUT_LIVE_DB`  
+`DATABASE_URL` unset. `.env` ausente en el workspace.
+
+`LIVE_DB = NOT_PROVEN`
+
+`MAY_LIVE_DB_REASON = NOT_PROVEN`
+
+`AUGUST_DATA_NOT_FOUND_REASON = NOT_PROVEN_WITHOUT_LIVE_DB`
 
 Routing, inherit, CEL, parsers y el TypeError de `codes` **no** requieren DB.
 
@@ -548,12 +551,12 @@ Repro sin DB: `( { uniqueCodes: ["ACA"] } || [] ).map(...)` → `TypeError: (cod
 
 No concluir «historical_margin rompió todo».
 
-1. **PROTECTED_AND_STILL_WORKING** — ver §16.  
-2. **REGRESSED** — R-EXEC, R-VENTA, R-HM-PROFILE, R-METRIC-SWITCH. `REGRESSION_COUNT = 4`. `FIRST_BAD_COMMIT = 93404936` para las 4.  
-3. **PREEXISTING_GAPS** — first-turn venta+descuento; unknown no canónico; first-turn descuento/venta/ingreso/utilidad cortos. **No** incluye G9/G10. **No** incluye causa live mayo/agosto.  
-4. **CONTEXT_REQUIRED / EXPECTED_BEHAVIOR** — G9/G10 con parent adecuado (Golden Set).  
-5. **PREEXISTING_BUG** — META `codes.map` (`e241729e`); tarea futura aparte.  
-6. **NOT_PROVEN** — `LIVE_DB`; `MAY_LIVE_DB_REASON`; `AUGUST_DATA_NOT_FOUND_REASON`.  
+1. **PROTECTED_AND_STILL_WORKING** — ver §16.
+2. **REGRESSED** — R-EXEC, R-VENTA, R-HM-PROFILE, R-METRIC-SWITCH. `REGRESSION_COUNT = 4`. `FIRST_BAD_COMMIT = 93404936` para las 4.
+3. **PREEXISTING_GAPS** — first-turn venta+descuento; unknown no canónico; first-turn descuento/venta/ingreso/utilidad cortos. **No** incluye G9/G10. **No** incluye causa live mayo/agosto.
+4. **CONTEXT_REQUIRED / EXPECTED_BEHAVIOR** — G9/G10 con parent adecuado (Golden Set).
+5. **PREEXISTING_BUG** — META `codes.map` (`e241729e`); tarea futura aparte.
+6. **NOT_PROVEN** — `LIVE_DB`; `MAY_LIVE_DB_REASON`; `AUGUST_DATA_NOT_FOUND_REASON`.
 7. **STATE_DEPENDENT_FAILURES** — misma pregunta PASS/FAIL según parent/history/refresh (§16 y §26–§27).
 
 ## 26. Short historical_margin follow-ups (addendum)
