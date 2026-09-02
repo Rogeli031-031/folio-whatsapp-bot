@@ -4,8 +4,7 @@ task_type: IMPLEMENTATION
 
 mode: TEST_INFRASTRUCTURE_ONLY
 
-status: DONE_PENDING_REVIEW
-
+status: CLOSED
 implementation_authorized: YES
 
 merge_authorized: NO
