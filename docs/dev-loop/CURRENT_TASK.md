@@ -1,817 +1,153 @@
 # CURRENT_TASK
 
-task_id: IMPL-DIRECTOR-IA-HISTORICAL-MARGIN-QUESTIONS-001
+task_id: AUDIT-DIRECTOR-IA-HISTORICAL-MARGIN-REGRESSION-RECOVERY-001
 
-status: CLOSED
+status: DONE_PENDING_REVIEW
 
 authorized_by: "Human Approver"
 
-authorized_at: "2026-09-01T17:06:10-06:00"
+authorized_at: "2026-09-01T18:03:20-06:00"
 
-human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver autorizó implementar historical_margin después de aprobar y cerrar AUDIT-DIRECTOR-IA-HISTORICAL-MARGIN-QUESTIONS-001."
+human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver approved AUDIT-DIRECTOR-IA-HISTORICAL-MARGIN-REGRESSION-RECOVERY-001 to compare pre-historical_margin behavior against current main, locate all regressions and define recovery requirements. Audit/read-only only. No implementation, rollback, merge, deploy or next task."
 
-task_type: IMPLEMENTATION
+task_type: AUDIT
 
-branch: implementation/director-ia-historical-margin-questions-001
+branch: audit/director-ia-historical-margin-regression-recovery-001
 
-base_main_sha: 1f7774d7bff5fdd71f4e7b88433dde178f4fef86
+base_main_sha: 50fb33e5a4e6cf57ddd53cb6001e87e25c7193da
 
-implementation_authorized: YES
+behavior_baseline_sha: 1f7774d7bff5fdd71f4e7b88433dde178f4fef86
 
-merge_authorized: YES
+implementation_authorized: NO
+
+merge_authorized: NO
+
 deploy_authorized: NO
+
+rollback_authorized: NO
 
 max_attempts: 1
 
+result_report_path: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-HISTORICAL-MARGIN-REGRESSION-RECOVERY-001.md
+
 ## Objective
 
-Implementar una capacidad read-only, determinista y fuente-defendible:
+Determinar exhaustivamente qué capacidades conversacionales o rutas preexistentes de Director IA fueron alteradas, contaminadas o rotas por la integración de historical_margin; localizar el primer punto causal de cada regresión; y producir un contrato de recuperación que (A) recupere todo comportamiento preexistente defendible, (B) preserve historical_margin, (C) no restaure bugs antiguos, (D) no amplíe alcance, (E) no implemente nada en esta auditoría.
+
+## Notes
+
+El SHA `1f7774d7` es referencia de comportamiento pre-historical_margin. NO es autorización de rollback.
+
+TESTS VERDES != ausencia de regresión conversacional.
+
+LIVE_DB no bloquea la auditoría de continuidad. Mayo DATA_NOT_FOUND live es frente separable.
+
+## Human production evidence (to verify, not assume)
+
+Planta: Acapulco. SHA integrado: 50fb33e5.
+
+- T1 «cual es el margen de mayo?» → historical_margin DATA_NOT_FOUND copy. Causa live mayo NOT_PROVEN.
+- T2 «margen en mayo?» → equivalente historical_margin.
+- T3 «cuanto fue la venta con su descuento por mes de febrero a abril?» → HTTP 500. El humano afirma que Director IA ya la había respondido. Probar ruta histórica; no asumirla.
+- T4 «como vamos?» → «No pude resolver un periodo de margen histórico. No invento el mes.» REGRESIÓN CRÍTICA OBSERVADA.
+
+## in_scope
+
+- docs/dev-loop/CURRENT_TASK.md
+- docs/dev-loop/reports/AUDIT-DIRECTOR-IA-HISTORICAL-MARGIN-REGRESSION-RECOVERY-001.md
+- read-only: lib/director-ia-conversation-state.js
+- read-only: lib/director-ia-planner.js
+- read-only: lib/director-ia-chat.js
+- read-only: lib/director-ia-historical-margin.js
+- read-only: lib/director-ia-conversational-executive-layer.js
+- read-only: lib/director-ia-financial-diagnosis.js
+- read-only: lib/director-ia-client-profile.js
+- read-only: lib/director-ia-new-clients.js
+- read-only: lib/director-ia-commercial-trend.js
+- read-only: lib/director-ia-month-close-result.js
+- read-only: lib/director-ia-igf-arr.js
+- read-only: test/director-ia-*.test.js
+- read-only: server.js (solo boundary HTTP/API)
+- read-only: frontend Chat Director IA (HTTP error + conversation_state)
+- git history / worktrees temporales detached (sin alterar commits)
+- SELECT-only si DATABASE_URL ya está configurada (mayo separable)
+
+## out_of_scope
+
+- docs/director-ia/ (sin G2/G3)
+- runtime edits
+- revert / rollback a 1f7774d7
+- quitar historical_margin
+- cambiar INHERITABLE_INTENTS / planner / conversation-state
+- server.js writes
+- frontend writes
+- SQL / schema / migrations / DB writes
+- merge main / deploy / voice
+- abrir implementación o next task
+- cliente de mayor venta, rentabilidad, movers completos, Taller, AT-03, depósitos, tanques, baterías
+- hardcode Acapulco/mayo/febrero/marzo/abril
+- secretos
+
+## contracts_in_force
+
+- docs/director-ia/DIRECTOR_IA_CONSTITUTION.md
+- docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md
+- docs/director-ia/FINANCIAL-ACTUAL-EVIDENCE-CONTRACT.md
+- docs/dev-loop/LOOP_PROTOCOL.md
+
+## allowed_actions
+
+- inspeccionar código, tests, git, frontend (read-only)
+- comparar baseline 1f7774d7 vs current 50fb33e5 en worktrees temporales
+- stubs/inyección determinística para routing (sin DB)
+- SELECT-only si LIVE_DB ya existe
+- ejecutar `node --test test/director-ia-*.test.js` en CURRENT (registrar; no añadir tests)
+- escribir únicamente el reporte de auditoría listado
+- actualizar solo status de esta CURRENT_TASK tras G1 (AUTHORIZED → IN_PROGRESS → DONE_PENDING_REVIEW)
+
+## forbidden_actions
+
+- escribir AUTHORIZED_BY_HUMAN
+- poner status AUTHORIZED
+- crear, borrar o modificar authorized_by, authorized_at o human_authorization
+- aprobar gates G1–G8
+- modificar runtime / planner / conversation-state / INHERITABLE_INTENTS
+- revertir, merge, deploy
+- implementar recuperación
+- almacenar secretos
+
+## Required work after G1 only
+
+1. Reverificar hechos A–G (INHERITABLE_INTENTS, unknown inherit, planner substitution, detector exige margen, venta+descuento no es historical_margin, compare_months ≠ rango inclusivo, suite verde no cubre estas transiciones).
+2. A/B reproducible baseline vs current para cada síntoma (campos de traza listados en el prompt de auditoría).
+3. Clasificar cada caso: REGRESSION | PREEXISTING_GAP | NEW_CAPABILITY | EXPECTED_CHANGE | NOT_PROVEN.
+4. Arqueología de la pregunta venta+descuento (A1–A7). No inventar capacidad nueva. No asumir feb–abr = dos endpoints.
+5. Golden G1–G12 first-turn + H1–H10 after historical_margin parent. H10 expected intent solo después de probar baseline.
+6. INHERITABLE_INTENT_TRANSITION_MATRIX completa (preguntas de fixtures existentes).
+7. Continuidad propia M1–M3 (no proponer deshabilitar inherit de margen).
+8. Trace HTTP 500 + post-error conversation_state / frontend.
+9. FIRST_DIVERGENCE_FUNCTION / CONDITION / BASELINE / CURRENT / COMMIT por regresión.
+10. Causalidad de commits: 1f7774d7, 93404936, 9afacbec, 1db7e005, e7e9b901, 50fb33e5. Documentar asimetría: 1db7e005 cubre executive→margin, no margin→executive.
+11. LIVE_DB = PROVEN | NOT_PROVEN. Mayo no bloquea continuidad.
+12. Registrar suite CURRENT. Si 1440/0: SUITE GREEN BUT REGRESSION NOT COVERED. Diseñar matriz de tests futuros; no añadir tests ahora.
+13. Recovery invariants 1–7 (contrato, no código).
+14. Reporte con secciones A–S del prompt.
+
+## Completion (after authorized execution)
 
-historical_margin
+status: DONE_PENDING_REVIEW
 
-para responder correctamente:
+STOP. NO IMPLEMENTATION. NO MERGE. NO DEPLOY. NO NEXT TASK.
 
-P1:
-¿Cuál fue el margen en mayo?
+## G1 (solo HUMAN_APPROVER)
 
-P2:
-¿Cuál fue el margen de abril y el de mayo?
+Para autorizar, el humano debe escribir:
 
-P3:
-¿Cuál es el mejor margen del año?
+```
+status: AUTHORIZED
+authorized_by: "Human Approver"
+authorized_at: "2026-09-01T18:03:20-06:00"
+human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver approved AUDIT-DIRECTOR-IA-HISTORICAL-MARGIN-REGRESSION-RECOVERY-001 to compare pre-historical_margin behavior against current main, locate all regressions and define recovery requirements. Audit/read-only only. No implementation, rollback, merge, deploy or next task."
+```
 
-P4:
-¿Cuál fue el menor margen del año?
-
-La capacidad debe soportar además año explícito, planta explícita,
-mes abierto, periodo futuro y continuidad conversacional controlada.
-
-No resolver mediante prompt-only patch.
-
-No permitir que el LLM calcule el valor, delta, máximo o mínimo.
-
-## Approved architecture
-
-Pipeline objetivo:
-
-semantic detection
-→ operation resolution
-→ calendar period resolution
-→ plant resolution
-→ authorization
-→ source adapter
-→ deterministic calculation
-→ deterministic evidence/result
-→ deterministic response builder
-
-Operations:
-
-- single_month
-- compare_months
-- year_max
-- year_min
-
-## Fundamental truth contract
-
-MARGEN significa:
-
-MARGEN $/kg
-
-No significa:
-
-- descuento/kg
-- venta
-- toneladas
-- OLS
-- commercial_trend
-- ingreso
-- utilidad
-- resultado final
-- Delta Ingreso
-- DICF
-
-## Closed calendar month
-
-Un mes cerrado SOLO puede presentarse como margen histórico real
-si existe evidencia financiera FINAL defendible.
-
-Contrato:
-
-- igf.versions
-- plant_code = GLOBAL
-- year/month solicitados
-- exactamente una versión financial_state = FINAL
-- igf.compromiso_lines de esa versión
-- una fila de planta resuelta de forma única
-- usar el margen_kg ALMACENADO de esa fila
-
-NO usar:
-
-- latest como sustituto de FINAL
-- getMargenKgPorPeriodo legacy
-- promedio ILIKE de varias empresas
-- forecast como cierre
-- fallback 0
-- fallback 1
-- margen de otro mes
-- margen de otra planta
-
-margen_kg = 0 es un valor numérico válido si está realmente almacenado
-en una fuente FINAL válida.
-
-null / undefined / NaN / nonfinite no son 0.
-
-## Open current month
-
-Para el mes calendario actualmente abierto:
-
-- NO llamarlo cierre;
-- NO llamarlo "margen que fue";
-- puede responderse únicamente con el latest IGF almacenado
-  si existe fuente defendible;
-- etiquetar inequívocamente como FORECAST;
-- usar margen_kg almacenado de la fila única de planta;
-- incluir version_id/version_number cuando corresponda en metadata;
-- no mezclarlo con FINAL;
-- no usarlo en rankings históricos anuales.
-
-Ejemplo semántico:
-
-Margen forecast de septiembre 2026: X.XX $/kg.
-Septiembre está abierto; no lo presento como cierre real.
-
-## Future calendar month
-
-Un mes posterior al mes calendario actual:
-
-- no se presenta como histórico;
-- no inventar forecast;
-- no retroceder automáticamente al año anterior;
-- no convertir octubre 2026 en octubre 2025;
-- DATA_NOT_FOUND/fail-closed para esta capacidad.
-
-## Plant matching
-
-La auditoría demostró que el ILIKE legacy es ambiguo.
-
-historical_margin NO debe usar:
-
-empresa ILIKE '%nombre%'
-
-ni una suma/promedio de todas las coincidencias.
-
-La fila debe resolverse de forma única y defendible.
-
-Implementar matcher dedicado y fail-closed.
-
-Preferencias admitidas:
-
-1. igualdad normalizada exacta contra plant_code o planta_nombre;
-2. equivalencia exacta después de normalización controlada de prefijos
-   físicos conocidos GT/GTM, únicamente si es única;
-3. una sola fila candidata.
-
-Si hay 0:
-DATA_NOT_FOUND.
-
-Si hay >1 candidatos defendibles:
-SOURCE_ERROR o SOURCE_PARTIAL explícito
-con plant_match_ambiguous = true.
-
-No elegir arbitrariamente la primera.
-
-No fuzzy.
-
-No substring amplio.
-
-No LLM.
-
-## Plant resolution / authorization
-
-- usar planta actual como anchor;
-- reconocer planta explícita conocida;
-- revalidar autorización sobre la planta explícita;
-- no cross-plant;
-- no ampliar permisos actuales.
-
-Para closed ACTUAL_FINANCIAL:
-mantener como mínimo la semántica de autorización existente
-de financial actual.
-
-Para open FORECAST:
-no otorgar permisos más amplios que el camino IGF financiero existente.
-
-Si la reutilización exacta de auth implica acoplamiento inseguro:
-preferir el comportamiento más restrictivo y documentarlo.
-
-No modificar esquema de permisos.
-
-## Period resolver
-
-Debe ser propio de historical_margin.
-
-No copiar a ciegas el resolver de historical_new_clients porque ese resolver
-puede mover un mes nominal posterior al mes actual hacia el año anterior.
-
-Con fecha CDMX 2026-09-01:
-
-mayo
-→ 2026-05
-
-abril y mayo
-→ 2026-04 + 2026-05
-
-mayo 2025
-→ 2025-05
-
-septiembre
-→ 2026-09 OPEN
-
-octubre
-→ 2026-10 FUTURE
-
-"del año"
-→ año calendario actual
-
-"de 2025"
-→ 2025
-
-Soportar enero/diciembre y cambio de año.
-
-## P1 single_month
-
-Pregunta:
-
-¿Cuál fue el margen en mayo?
-
-Resultado futuro esperado:
-
-Mayo 2026: X.XX $/kg.
-
-Debe indicar que proviene de cierre FINAL cuando corresponda.
-
-No toneladas.
-No OLS.
-No comparación forzada contra abril.
-No forecast.
-No OpenAI.
-
-## P2 compare_months
-
-Pregunta:
-
-¿Cuál fue el margen de abril y el de mayo?
-
-Resultado futuro esperado:
-
-Abril 2026: X.XX $/kg
-Mayo 2026: Y.YY $/kg
-Variación mayo − abril: ±Z.ZZ $/kg
-
-Reglas:
-
-- ambos periodos deben ser comparables;
-- para dos meses cerrados: ambos FINAL;
-- misma planta;
-- misma magnitud;
-- delta desde valores raw;
-- redondear solo display;
-- no calcular delta desde números ya formateados.
-
-Si las dos fuentes tienen distintas truth classes
-(p. ej. closed actual vs open forecast):
-NO presentar el delta como comparación histórica homogénea.
-
-Fail closed o respuesta parcial explícita.
-
-## P3 / P4 annual ranking
-
-Preguntas:
-
-¿Cuál es el mejor margen del año?
-¿Cuál fue el menor margen del año?
-
-Ranking determinista.
-
-Para current year:
-
-solo meses calendario cerrados anteriores al current month.
-
-A 2026-09-01:
-enero–agosto son candidatos;
-septiembre open no participa;
-octubre–diciembre future no participan.
-
-Para un año pasado:
-enero–diciembre son candidatos.
-
-Por cada candidato:
-
-- unique FINAL
-- unique plant row
-- margen_kg finite
-- 0 es valor válido
-- missing no es 0
-- source error no es 0
-
-Ranking:
-
-- usar raw margin;
-- max/min determinista;
-- tie sobre raw values, no sobre valores redondeados;
-- reportar todos los meses empatados.
-
-Si faltan algunos meses:
-
-puede responder sobre los meses FINAL válidos,
-PERO debe declarar cobertura y exclusiones.
-
-No afirmar "de todo el año" si la cobertura es parcial.
-
-Si existe source error en meses excluidos:
-veracity global debe reflejar SOURCE_PARTIAL.
-
-Si no hay meses válidos:
-DATA_NOT_FOUND o SOURCE_ERROR según causa.
-
-## Veracity mapping
-
-Distinguir físicamente:
-
-SOURCE_AVAILABLE
-SOURCE_PARTIAL
-SOURCE_RESTRICTED
-SOURCE_ERROR
-DATA_NOT_FOUND
-
-Ejemplos:
-
-0 versions
-→ DATA_NOT_FOUND
-
-versions pero no FINAL para closed
-→ DATA_NOT_FOUND / cierre FINAL no disponible
-
->1 FINAL
-→ SOURCE_ERROR / VERSION_AMBIGUOUS
-
-FINAL sin fila de planta
-→ DATA_NOT_FOUND
-
-multiple plant candidates
-→ SOURCE_ERROR o SOURCE_PARTIAL explícito
-
-DB/query error
-→ SOURCE_ERROR
-
-margen_kg null/nonfinite
-→ DATA_NOT_FOUND
-
-margen_kg = 0
-→ valor válido
-
-future
-→ DATA_NOT_FOUND sin consultar como histórico
-
-## Deterministic builder
-
-P1-P4 no requieren OpenAI.
-
-openai_called = false
-
-El builder debe producir la respuesta final.
-
-LLM no decide:
-
-- valor
-- periodo
-- delta
-- máximo
-- mínimo
-- empate
-- source class
-- plant
-- closed/open/future
-
-## Routing
-
-Crear intent dedicado:
-
-historical_margin
-
-y dominio:
-
-historical_margin
-
-Debe ganar para preguntas explícitamente históricas de margen
-con periodo o extrema anual.
-
-NO debe robar:
-
-C1:
-¿Cómo va el margen de la planta?
-→ conservar financial_diagnosis / ruta actual.
-
-C2:
-¿Cómo cambió el descuento de abril a mayo?
-→ delta_discount.
-
-C3:
-¿Cómo va la tendencia de CASA los últimos 30 días?
-→ commercial_trend.
-
-C4:
-¿Qué clientes nuevos entraron en agosto?
-→ historical_new_clients.
-
-C5:
-¿Cuál fue la venta de mayo?
-→ no convertir en margen.
-
-No corregir en esta tarea el regex legacy `margenes?`
-si historical_margin funciona sin tocarlo.
-
-No hacer prompt-only patch de IGF annex.
-
-## Human observed bug to eliminate
-
-Fresh turn:
-
-¿Cuál fue el margen en mayo?
-
-ANTES:
-unknown clarification.
-
-Después de commercial_trend:
-podía heredar commercial_trend y responder toneladas + OLS.
-
-DESPUÉS:
-
-la pregunta explícita de margen histórico debe ganar sobre herencia
-de commercial_trend.
-
-Nunca debe heredar commercial_trend si el nuevo mensaje
-contiene una consulta histórica de margen reconocible.
-
-## Continuity
-
-Debe soportarse:
-
-Turno 1:
-¿Cuál fue el margen en abril?
-
-Turno 2:
-¿Y en mayo?
-
-Turno 2 debe conservar:
-
-- historical_margin
-- planta autorizada
-
-pero resolver el nuevo periodo mayo.
-
-No reutilizar abril como periodo activo cuando mayo está explícito.
-
-No convertir follow-up de otra capacidad en historical_margin
-si no existe parent historical_margin.
-
-## Golden executive regressions
-
-Proteger expresamente:
-
-¿Cómo vamos?
-
-¿Cómo cerramos?
-
-¿Cómo quedamos contra la meta?
-
-¿Cómo va la tendencia de CASA los últimos 30 días?
-
-¿Cómo van los comisionistas?
-
-¿Qué clientes nuevos entraron en agosto?
-
-¿Qué sabemos de TORTILLERIA ERICK?
-
-Dame los kg comprados y el descuento por cada mes de TORTILLERIA ERICK desde enero a la fecha.
-
-¿Y GRUPO MOVE?
-
-¿Y Arturo?
-
-¿Cómo cambió el descuento de abril a mayo?
-
-No cambiar sus intents ni su semántica aprobada.
-
-## Required implementation files
-
-Se permite crear:
-
-lib/director-ia-historical-margin.js
-
-test/director-ia-historical-margin.test.js
-
-docs/dev-loop/reports/IMPL-DIRECTOR-IA-HISTORICAL-MARGIN-QUESTIONS-001.md
-
-Se permite modificar únicamente si es necesario:
-
-lib/director-ia-planner.js
-lib/director-ia-chat.js
-lib/director-ia-capabilities.js
-lib/director-ia-tools.js
-lib/director-ia-conversation-state.js
-docs/director-ia/DIRECTOR_IA_CAPACIDADES_Y_FUENTES.md
-docs/dev-loop/CURRENT_TASK.md
-
-## Shared files read-only unless a blocker is physically proven
-
-lib/director-ia-financial-actual.js
-lib/director-ia-igf-arr.js
-lib/director-ia-m9-deltas.js
-lib/director-ia-new-clients.js
-lib/director-ia-commercial-trend.js
-lib/director-ia-financial-diagnosis.js
-lib/director-ia-month-close-result.js
-lib/director-ia-client-profile.js
-lib/dicf.js
-server.js
-
-No modificar estos archivos por conveniencia.
-
-Si crees que uno DEBE modificarse:
-STOP antes de hacerlo y documenta el blocker.
-
-## Source adapter preference
-
-Reusar constantes/helpers existentes cuando sea seguro.
-
-No es obligatorio reutilizar loadFinancialActualEvidence si su matcher actual
-impide demostrar unicidad.
-
-Opciones aceptables:
-
-A. reutilizar loadFinancialActualEvidence con un matcher estricto
-si se preserva la clasificación de ambigüedad;
-
-o
-
-B. adapter read-only local de historical_margin que replique el contrato
-FINAL sin modificar el loader compartido.
-
-En ambos casos:
-
-- una sola conexión;
-- SELECT-only;
-- no HTTP interno;
-- no schema change;
-- no side effects.
-
-## Required tests
-
-Como mínimo cubrir:
-
-P1 fresh turn
-P1 after commercial_trend parent
-P2
-P3
-P4
-P5 mayo 2025
-P6 mayo 2026 Acapulco
-P7 mejor 2026 Acapulco
-P8 menor 2026 Acapulco
-P9 septiembre open
-P10 octubre future
-
-Además:
-
-- month implicit year
-- explicit year
-- Jan/Dec rollover
-- current year annual candidates
-- past year annual candidates
-- 0 versions
-- no FINAL
-- >1 FINAL
-- no plant row
-- ambiguous plant row
-- DB source error
-- margen null
-- margen NaN/nonfinite
-- margen 0 valid
-- open forecast value
-- open forecast label
-- open not used in annual ranking
-- future no query
-- compare raw delta
-- compare semantic mismatch
-- annual missing month
-- annual source error / SOURCE_PARTIAL
-- annual ties raw
-- annual 0 participates
-- full source traceability
-- auth current plant
-- auth named plant
-- unauthorized named plant
-- no cross-plant
-- deterministic answer
-- openai_called false
-- source metadata
-- tool registry valid
-- capability readable
-- continuity historical_margin → "¿Y en mayo?"
-- no inheritance from commercial_trend for explicit margin question
-
-Golden regressions:
-
-- ¿Cómo vamos?
-- ¿Cómo cerramos?
-- ¿Cómo quedamos contra la meta?
-- commercial_trend
-- historical_new_clients
-- client_profile
-- compound client query
-- leading-Y
-- delta_discount
-- C1 financial_diagnosis
-
-## Baseline and suite
-
-Antes de editar runtime:
-
-node --test test/director-ia-*.test.js
-
-Esperado por historia actual:
-1411 pass / 0 fail.
-
-Si baseline falla:
-STOP.
-No ocultar baseline rojo.
-
-Después de implementar:
-
-- tests focalizados nuevos
-- regresiones relacionadas
-- suite completa:
-  node --test test/director-ia-*.test.js
-
-Debe terminar:
-0 fail
-
-y pass total > baseline.
-
-También:
-
-git diff --check
-
-## Explicit forbidden changes
-
-NO:
-
-- server.js
-- DB schema
-- migrations
-- writes DB
-- DICF formula
-- IGF dashboard
-- ARR dashboard
-- getMargenKgPorPeriodo legacy
-- financial actual shared contract
-- commercial trend formula
-- OLS
-- historical_new_clients behavior
-- Action Register
-- Folios
-- Taller
-- voice
-- WhatsApp architecture
-- Render
-- deploy
-- merge main
-- next task
-- hardcode Acapulco
-- hardcode mayo
-- hardcode 2026
-- fabricate source data
-- LLM ranking
-- fuzzy plant selection
-- `%nombre%` plant matching
-
-## Report required
-
-Crear:
-
-docs/dev-loop/reports/IMPL-DIRECTOR-IA-HISTORICAL-MARGIN-QUESTIONS-001.md
-
-Debe incluir:
-
-- architecture implemented
-- routing before/after
-- operation resolver
-- period resolver
-- source contract
-- FINAL semantics
-- FORECAST semantics
-- future protection
-- plant matching
-- auth
-- veracity
-- deterministic calculations
-- continuity
-- source traceability
-- golden regressions
-- tests
-- files changed
-- risks
-- OUT_OF_SCOPE
-- exact final state
-
-## Final required keys
-
-HISTORICAL_MARGIN_IMPLEMENTED =
-SINGLE_MONTH =
-COMPARE_MONTHS =
-YEAR_MAX =
-YEAR_MIN =
-
-P1_ROUTE_AFTER =
-P2_ROUTE_AFTER =
-P3_ROUTE_AFTER =
-P4_ROUTE_AFTER =
-
-CLOSED_SOURCE =
-CLOSED_FINAL_REQUIRED =
-OPEN_SOURCE =
-OPEN_LABEL =
-FUTURE_BEHAVIOR =
-
-PLANT_MATCH =
-PLANT_AMBIGUITY_FAIL_CLOSED =
-AUTH_PRESERVED =
-
-DATA_NOT_FOUND_DISTINCT =
-SOURCE_ERROR_DISTINCT =
-ZERO_MARGIN_VALID =
-
-DELTA_DETERMINISTIC =
-RANKING_DETERMINISTIC =
-TIES_DETERMINISTIC =
-LLM_USED_FOR_VALUE = NO
-LLM_USED_FOR_COMPARISON = NO
-LLM_USED_FOR_RANKING = NO
-
-CONTINUITY_MARGIN_FOLLOWUP =
-COMMERCIAL_TREND_INHERITANCE_BUG_FIXED =
-
-HOW_ARE_WE_REGRESSION =
-MONTH_CLOSE_REGRESSION =
-COMMERCIAL_TREND_REGRESSION =
-HISTORICAL_NEW_CLIENTS_REGRESSION =
-CLIENT_PROFILE_REGRESSION =
-COMPOUND_CLIENT_REGRESSION =
-LEADING_Y_REGRESSION =
-DELTA_DISCOUNT_REGRESSION =
-
-SERVER_CHANGED = NO
-DB_SCHEMA_CHANGED = NO
-DICF_CHANGED = NO
-IGF_DASHBOARD_CHANGED = NO
-
-TESTS =
-GIT_DIFF_CHECK =
-
-IMPLEMENTATION_AUTHORIZED = YES
-MERGE_AUTHORIZED = NO
-DEPLOY_AUTHORIZED = NO
-
-## Allowed actions
-
-- inspect source
-- edit in-scope implementation files
-- create new module/test/report
-- run existing and new tests
-- SELECT-only probes if DB is already configured
-- git diff/log/status
-- commit implementation
-- push implementation branch
-
-## Completion
-
-At completion:
-
-status: CLOSED
-
-Suggested commit:
-
-feat(director-ia): answer historical margin questions
-
-Push:
-
-origin/implementation/director-ia-historical-margin-questions-001
-
-Then STOP.
-
-NO MERGE.
-NO DEPLOY.
-NO NEXT TASK.
-human_review: APPROVED
-closed_by_human: YES
+Sin esa línea exacta, escrita por humano, esta tarea no es ejecutable.
