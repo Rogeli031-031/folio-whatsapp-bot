@@ -2,8 +2,7 @@
 
 task_id: AUDIT-DIRECTOR-IA-HISTORICAL-MARGIN-REGRESSION-RECOVERY-001
 
-status: DONE_PENDING_REVIEW
-
+status: CLOSED
 authorized_by: "Human Approver"
 
 authorized_at: "2026-09-01T18:03:20-06:00"
@@ -20,8 +19,7 @@ behavior_baseline_sha: 1f7774d7bff5fdd71f4e7b88433dde178f4fef86
 
 implementation_authorized: NO
 
-merge_authorized: NO
-
+merge_authorized: YES
 deploy_authorized: NO
 
 rollback_authorized: NO
@@ -135,8 +133,7 @@ Planta: Acapulco. SHA integrado: 50fb33e5.
 
 ## Completion (after authorized execution)
 
-status: DONE_PENDING_REVIEW
-
+status: CLOSED
 STOP. NO IMPLEMENTATION. NO MERGE. NO DEPLOY. NO NEXT TASK.
 
 ## G1 (solo HUMAN_APPROVER)
@@ -151,3 +148,6 @@ human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver approved AUDIT-DIRECTO
 ```
 
 Sin esa línea exacta, escrita por humano, esta tarea no es ejecutable.
+
+human_review: APPROVED
+closed_by_human: YES
