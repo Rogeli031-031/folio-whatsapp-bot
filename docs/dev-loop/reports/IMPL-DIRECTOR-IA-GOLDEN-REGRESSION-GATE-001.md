@@ -178,7 +178,7 @@ Harness tests: `node --test test/director-ia-golden-regression.test.js` — 2/2 
 
 * base SHA: `cc55a607202e997fb1817b2616f43be4de8b198d`
 * branch: `implementation/director-ia-golden-regression-gate-001`
-* commit SHA: ver commit de esta rama
+* commit SHA: `b0ca898374d3ef5be5cc33deb51535b8603306b8`
 * no merge; no push a `main`
 
 ## J. Scope
