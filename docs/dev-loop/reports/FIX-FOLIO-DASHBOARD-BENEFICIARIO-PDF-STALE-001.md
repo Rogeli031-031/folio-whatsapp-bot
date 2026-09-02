@@ -133,10 +133,13 @@ Limitación: no se imprimieron PDFs live ni se navegó el dashboard autenticado.
 
 * base SHA: `7619f0bf`
 * branch: `fix/folio-dashboard-beneficiario-pdf-stale-001` (≠ `main`)
-* commit SHA: ver commit de esta rama que incluye este reporte
+* commit SHA: `d087d232ea8c9afe9fa701e7d5c16ee8c29edd00`
 * evidencia de auditoría preservada en el working tree y versionada en esta rama
+* `git status --short` post-commit de implementación: limpio
 * no push a `main`
 * no merge
+
+Nota de cierre Git: el SHA anterior es el commit de implementación. Si este archivo se re-commitea solo para anotar el SHA, el HEAD de la rama puede avanzar un commit docs.
 
 ## H. Alcance
 
