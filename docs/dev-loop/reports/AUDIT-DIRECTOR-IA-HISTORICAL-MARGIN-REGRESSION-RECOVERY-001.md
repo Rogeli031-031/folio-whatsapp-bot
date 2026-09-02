@@ -28,6 +28,7 @@ august_data_not_found_reason: NOT_PROVEN_WITHOUT_LIVE_DB
 descuento_abril_result: NOT_PROVEN_FROM_SCREENSHOT
 explicit_metric_switch_from_historical_margin: PROVEN
 state_dependent_margin_routing: PROVEN
+regression_count: 4
 ```
 
 ## 1. Executive summary
@@ -99,7 +100,7 @@ Esas mismas frases, **después** de parent `historical_margin`, siguen standalon
 
 | ID | Observación | Hallazgo |
 |---|---|---|
-| META | Tras pack `¿Cómo vamos?`, `¿Cómo quedamos contra la meta?` → `(codes \|\| []).map is not a function` | Routing correcto a `month_close_result`. Crash en loader. PREEXISTING_GAP / bug de tipo. No es HM. |
+| META | Tras pack `¿Cómo vamos?`, `¿Cómo quedamos contra la meta?` → `(codes \|\| []).map is not a function` | Routing correcto a `month_close_result`. Crash en loader. PREEXISTING_BUG / tarea futura aparte. No es HM. |
 | MARGIN_AFTER_ERICK | Tras perfil Erick + longitudinal + delta descuento, `¿Cuál fue el margen en abril?` → copy de ingreso/DICF de cliente | REGRESSION de invariante HM: `forceIntent=client_profile`. STATE_DEPENDENT. |
 
 ## 4. Diff surface (`1f7774d7` → `50fb33e5`)
@@ -171,8 +172,8 @@ Campos: detect, kind, standalone, inherit, plan, CEL.
 | G6 | clientes nuevos agosto | historical_new_clients | false | HUMAN_PRODUCTION_PASS |
 | G7 | ¿Qué sabemos de TORTILLERIA ERICK? | client_profile | false | HUMAN_PRODUCTION_PASS |
 | G8 | kg/descuento Erick enero–fecha | client_profile | false | HUMAN_PRODUCTION_PASS |
-| G9 | ¿Y GRUPO MOVE? | unknown, kind=entity_intro | false | First-turn artificial. Requiere parent client |
-| G10 | ¿Y Arturo? | unknown, kind=entity_intro | false | Igual |
+| G9 | ¿Y GRUPO MOVE? | unknown, kind=entity_intro | false | CONTEXT_REQUIRED / EXPECTED_BEHAVIOR. No es first-turn. Contrato: parent client. Sigue en Golden Set. No abrir leading-Y. |
+| G10 | ¿Y Arturo? | unknown, kind=entity_intro | false | CONTEXT_REQUIRED / EXPECTED_BEHAVIOR. No es first-turn. Contrato: parent de persona/AR o cliente según fixture. Sigue en Golden Set. No abrir leading-Y. |
 | G11 | descuento abril a mayo | delta_discount | false | HUMAN_PRODUCTION_PASS |
 | G12 | ¿Cómo va el margen de la planta? | financial_diagnosis | false (need EXECUTIVE_STATUS pero planner no overridable) | |
 
@@ -285,7 +286,7 @@ El HTTP 500 **no** es requisito del atrapamiento. El refresh limpia **ambos** ve
 
 ## 10. Golden first-turn matrix
 
-Ver 6.1. First-turn G1–G8, G11, G12 **no** se degradan por el módulo HM. G9/G10 nunca fueron first-turn.
+Ver 6.1. First-turn G1–G8, G11, G12 **no** se degradan por el módulo HM. G9/G10 son **CONTEXT_REQUIRED / EXPECTED_BEHAVIOR**: preguntas contextuales del Golden Set; no se clasifican como PREEXISTING_GAP por no resolver first-turn. No se abre trabajo leading-Y.
 
 ## 11. historical_margin → protected capabilities (H1–H11)
 
@@ -294,7 +295,7 @@ Parent realista: `historical_margin` (tras «¿Cuál fue el margen en mayo?»).
 | ID | Pregunta | Detected | Inherit | Plan | CEL | CLASS |
 |---|---|---|---|---|---|---|
 | H1 | ¿Cómo vamos? / como vamos? | unknown | **true HM** | historical_margin | false | **REGRESSION** |
-| H2 | ¿Cómo cerramos? | month_close_result | false | month_close_result | false | PROTECTED_AND_STILL_WORKING (routing). Loader: PREEXISTING_GAP |
+| H2 | ¿Cómo cerramos? | month_close_result | false | month_close_result | false | PROTECTED_AND_STILL_WORKING (routing). Loader: PREEXISTING_BUG aparte |
 | H3 | ¿Cómo quedamos contra la meta? | month_close_result | false | month_close_result | false | igual H2 |
 | H4 | tendencia CASA 30d | commercial_trend | false | commercial_trend | false | PROTECTED_AND_STILL_WORKING |
 | H5 | comisionistas | commercial_trend | false | commercial_trend | false | PROTECTED_AND_STILL_WORKING |
@@ -325,7 +326,7 @@ Parent FROM = `historical_margin`. Preguntas de fixtures ya aceptados.
 | historical_margin | ¿Cómo va Taller? | action_status | other | true | false | — | action_status | AR | igual | igual | PROTECTED_AND_STILL_WORKING |
 | historical_margin | ¿Qué podemos recortar de apoyos? | igf_reviewable_supports | other | true | false | — | igf_reviewable_supports | IGF supports | igual | igual | PROTECTED_AND_STILL_WORKING |
 | historical_margin | Prepárame para la junta de cierre. | pre_meeting_brief | other | true | false | — | pre_meeting_brief | pre-meeting | igual | igual | PROTECTED_AND_STILL_WORKING |
-| historical_margin | ¿Cómo cerramos? / contra la meta? | month_close_result | other | true | false | — | month_close_result | month_close | igual | igual | routing OK; loader PREEXISTING_GAP |
+| historical_margin | ¿Cómo cerramos? / contra la meta? | month_close_result | other | true | false | — | month_close_result | month_close | igual | igual | routing OK; loader PREEXISTING_BUG aparte |
 
 `delta_discount` **no** está en `INHERITABLE_INTENTS`. Tras un delta exitoso el frontend puede **seguir** enviando el parent anterior.
 
@@ -390,7 +391,7 @@ No recomendar «quitar `historical_margin` de `INHERITABLE_INTENTS`»: eso rompe
 
 G1 first-turn / refresh; G2 routing; G4–G8; G11; G12; H2–H10 routing; fixtures inheritable con detect ≠ unknown; M1–M3/M4–M6; HUMAN_PRODUCTION_PASS del addendum.
 
-### REGRESSED (4)
+### REGRESSED (`REGRESSION_COUNT = 4`; `FIRST_BAD_COMMIT = 93404936` para las 4)
 
 1. **R-EXEC** — `¿Cómo vamos?` tras parent/history HM.  
 2. **R-VENTA** — venta+descuento tras parent/history HM (routing + 500).  
@@ -400,11 +401,16 @@ G1 first-turn / refresh; G2 routing; G4–G8; G11; G12; H2–H10 routing; fixtur
 ### PREEXISTING_GAPS
 
 - First-turn venta+descuento sin capacidad propia.
-- G9/G10 sin contexto de entidad.
-- `month_close_result` `(codes || []).map` (`e241729e`).
-- Mayo FINAL live: `MAY_LIVE_DB_REASON = NOT_PROVEN`.
 - Unknown no canónico tras cualquier inheritable (diseño previo; ahora dañino si el parent es HM).
 - First-turn `descuento de agosto?` / `venta de abril?` / `ingreso de abril?` / `utilidad de abril?` = `unknown` en **ambos** SHA (no había detector mensual de esas frases). El GAP first-turn **no** autoriza sustituir la métrica por margen.
+
+### PREEXISTING_BUG (aparte; no es regresión HM)
+
+- `month_close_result` `(codes || []).map` (`e241729e`). Tarea futura separada. No mezclar con REGRESSION_COUNT.
+
+### CONTEXT_REQUIRED / EXPECTED_BEHAVIOR
+
+- G9 `¿Y GRUPO MOVE?` y G10 `¿Y Arturo?`: preguntas contextuales por contrato. Permanecen en el Golden Set con parent adecuado. **No** son PREEXISTING_GAP por no funcionar first-turn. No abrir leading-Y.
 
 ### NEW_CAPABILITY / EXPECTED_CHANGE
 
@@ -425,7 +431,9 @@ T1/T2 historical_margin; M1 follow-up `¿Y en mayo?`; M2/M3; SOURCE_ERROR vs DAT
 
 ### NOT_PROVEN
 
-- `LIVE_DB` / filas `igf.versions` 2026-05.
+- `LIVE_DB = NOT_PROVEN`.
+- `MAY_LIVE_DB_REASON = NOT_PROVEN`. Causa física del DATA_NOT_FOUND de mayo cerrado: no probada. No asumir NO_VERSION / NOT_FINAL / NO_PLANT_ROW / NULL_MARGIN.
+- `AUGUST_DATA_NOT_FOUND_REASON = NOT_PROVEN_WITHOUT_LIVE_DB`. Causa física del DATA_NOT_FOUND de agosto cerrado: no probada. No asumir NO_VERSION / NOT_FINAL / NO_PLANT_ROW / NULL_MARGIN.
 - Stack live de producción (solo reproducción de tipo / mapeo status).
 - Que la venta feb–abr hubiera tenido un handler dedicado distinto de diagnosis+annex.
 - Que `month_close` crashe en **todas** las plantas (requiere `db` + `planta_nombre` + `resolvePlantCodes` default).
@@ -435,6 +443,7 @@ T1/T2 historical_margin; M1 follow-up `¿Y en mayo?`; M2/M3; SOURCE_ERROR vs DAT
 `DATABASE_URL` unset. `.env` ausente en el workspace.  
 `LIVE_DB = NOT_PROVEN`  
 `MAY_LIVE_DB_REASON = NOT_PROVEN`  
+`AUGUST_DATA_NOT_FOUND_REASON = NOT_PROVEN_WITHOUT_LIVE_DB`  
 
 Routing, inherit, CEL, parsers y el TypeError de `codes` **no** requieren DB.
 
@@ -533,16 +542,19 @@ Anotados, no tocados: cliente de mayor venta, rentabilidad como capacidad nueva,
 Quién construye: `lib/commercial-trend-engine.js`.  
 Quién asume array: `lib/director-ia-month-close-result.js:855` y `lib/director-ia-executive-cycle-composer.js:724`.  
 Repro sin DB: `( { uniqueCodes: ["ACA"] } || [] ).map(...)` → `TypeError: (codes || []).map is not a function`.  
-`STACK_LIVE = NOT_PROVEN`. `FIRST_BAD_COMMIT = e241729e`. Clasificación: **PREEXISTING_GAP**. ¿Depende de HM? **No**.
+`STACK_LIVE = NOT_PROVEN`. `FIRST_BAD_COMMIT = e241729e`. Clasificación: **PREEXISTING_BUG** / separate future task. ¿Depende de HM? **No**. No entra en REGRESSION_COUNT.
 
 ## 25. Recuperación — tres más uno
 
 No concluir «historical_margin rompió todo».
 
 1. **PROTECTED_AND_STILL_WORKING** — ver §16.  
-2. **REGRESSED** — R-EXEC, R-VENTA, R-HM-PROFILE, R-METRIC-SWITCH (4).  
-3. **PREEXISTING_GAPS** — venta first-turn, G9/G10, codes.map, mayo/agosto FINAL live, unknown no canónico, first-turn descuento/venta/ingreso/utilidad cortos.  
-4. **STATE_DEPENDENT_FAILURES** — misma pregunta PASS/FAIL según parent/history/refresh (§16 y §26–§27).
+2. **REGRESSED** — R-EXEC, R-VENTA, R-HM-PROFILE, R-METRIC-SWITCH. `REGRESSION_COUNT = 4`. `FIRST_BAD_COMMIT = 93404936` para las 4.  
+3. **PREEXISTING_GAPS** — first-turn venta+descuento; unknown no canónico; first-turn descuento/venta/ingreso/utilidad cortos. **No** incluye G9/G10. **No** incluye causa live mayo/agosto.  
+4. **CONTEXT_REQUIRED / EXPECTED_BEHAVIOR** — G9/G10 con parent adecuado (Golden Set).  
+5. **PREEXISTING_BUG** — META `codes.map` (`e241729e`); tarea futura aparte.  
+6. **NOT_PROVEN** — `LIVE_DB`; `MAY_LIVE_DB_REASON`; `AUGUST_DATA_NOT_FOUND_REASON`.  
+7. **STATE_DEPENDENT_FAILURES** — misma pregunta PASS/FAIL según parent/history/refresh (§16 y §26–§27).
 
 ## 26. Short historical_margin follow-ups (addendum)
 
