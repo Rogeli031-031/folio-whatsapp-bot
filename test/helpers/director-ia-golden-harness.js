@@ -284,7 +284,14 @@ async function evaluateCase(goldenCase) {
       boundaries.PERIOD_RESOLUTION = mark("PASS", months.join(",") || defaultThreeMonths(NOW).map((m) => m.yyyymm).join(","));
     } else if (periodExp.start && /agosto/.test(norm(question))) {
       const hm = resolveHistoricalMarginRequest(question, NOW);
-      if (goldenCase.forbidden_intent === "historical_margin" && hm && hm.operation === "single_month") {
+      // El parser de mes de margen es elíptico a propósito (¿Y en mayo?).
+      // Solo es fallo de producto si el planner todavía enruta historical_margin.
+      if (
+        plan.intent === "historical_margin" &&
+        goldenCase.forbidden_intent === "historical_margin" &&
+        hm &&
+        hm.operation === "single_month"
+      ) {
         boundaries.PERIOD_RESOLUTION = mark(
           "FAIL",
           "resolveHistoricalMarginRequest aceptó mes sin métrica margen"
