@@ -1,153 +1,539 @@
-# CURRENT_TASK
+# UI-ACTION-REGISTER-GROUPING-001
 
-task_id: AUDIT-DIRECTOR-IA-HISTORICAL-MARGIN-REGRESSION-RECOVERY-001
+task_type: IMPLEMENTATION
 
-status: CLOSED
-authorized_by: "Human Approver"
+mode: IMPLEMENTATION
 
-authorized_at: "2026-09-01T18:03:20-06:00"
+status: DONE_PENDING_REVIEW
 
-human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver approved AUDIT-DIRECTOR-IA-HISTORICAL-MARGIN-REGRESSION-RECOVERY-001 to compare pre-historical_margin behavior against current main, locate all regressions and define recovery requirements. Audit/read-only only. No implementation, rollback, merge, deploy or next task."
+implementation_authorized: YES
 
-task_type: AUDIT
+merge_authorized: NO
 
-branch: audit/director-ia-historical-margin-regression-recovery-001
-
-base_main_sha: 50fb33e5a4e6cf57ddd53cb6001e87e25c7193da
-
-behavior_baseline_sha: 1f7774d7bff5fdd71f4e7b88433dde178f4fef86
-
-implementation_authorized: NO
-
-merge_authorized: YES
 deploy_authorized: NO
 
 rollback_authorized: NO
 
-max_attempts: 1
+docs_director_ia_changed: NO
 
-result_report_path: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-HISTORICAL-MARGIN-REGRESSION-RECOVERY-001.md
+runtime_changed: NO
 
-## Objective
+backend_changed: NO
 
-Determinar exhaustivamente qué capacidades conversacionales o rutas preexistentes de Director IA fueron alteradas, contaminadas o rotas por la integración de historical_margin; localizar el primer punto causal de cada regresión; y producir un contrato de recuperación que (A) recupere todo comportamiento preexistente defendible, (B) preserve historical_margin, (C) no restaure bugs antiguos, (D) no amplíe alcance, (E) no implemente nada en esta auditoría.
+database_changed: NO
 
-## Notes
+frontend_changed: YES
 
-El SHA `1f7774d7` es referencia de comportamiento pre-historical_margin. NO es autorización de rollback.
+max_attempts: 3
 
-TESTS VERDES != ausencia de regresión conversacional.
-
-LIVE_DB no bloquea la auditoría de continuidad. Mayo DATA_NOT_FOUND live es frente separable.
-
-## Human production evidence (to verify, not assume)
-
-Planta: Acapulco. SHA integrado: 50fb33e5.
-
-- T1 «cual es el margen de mayo?» → historical_margin DATA_NOT_FOUND copy. Causa live mayo NOT_PROVEN.
-- T2 «margen en mayo?» → equivalente historical_margin.
-- T3 «cuanto fue la venta con su descuento por mes de febrero a abril?» → HTTP 500. El humano afirma que Director IA ya la había respondido. Probar ruta histórica; no asumirla.
-- T4 «como vamos?» → «No pude resolver un periodo de margen histórico. No invento el mes.» REGRESIÓN CRÍTICA OBSERVADA.
-
-## in_scope
-
-- docs/dev-loop/CURRENT_TASK.md
-- docs/dev-loop/reports/AUDIT-DIRECTOR-IA-HISTORICAL-MARGIN-REGRESSION-RECOVERY-001.md
-- read-only: lib/director-ia-conversation-state.js
-- read-only: lib/director-ia-planner.js
-- read-only: lib/director-ia-chat.js
-- read-only: lib/director-ia-historical-margin.js
-- read-only: lib/director-ia-conversational-executive-layer.js
-- read-only: lib/director-ia-financial-diagnosis.js
-- read-only: lib/director-ia-client-profile.js
-- read-only: lib/director-ia-new-clients.js
-- read-only: lib/director-ia-commercial-trend.js
-- read-only: lib/director-ia-month-close-result.js
-- read-only: lib/director-ia-igf-arr.js
-- read-only: test/director-ia-*.test.js
-- read-only: server.js (solo boundary HTTP/API)
-- read-only: frontend Chat Director IA (HTTP error + conversation_state)
-- git history / worktrees temporales detached (sin alterar commits)
-- SELECT-only si DATABASE_URL ya está configurada (mayo separable)
-
-## out_of_scope
-
-- docs/director-ia/ (sin G2/G3)
-- runtime edits
-- revert / rollback a 1f7774d7
-- quitar historical_margin
-- cambiar INHERITABLE_INTENTS / planner / conversation-state
-- server.js writes
-- frontend writes
-- SQL / schema / migrations / DB writes
-- merge main / deploy / voice
-- abrir implementación o next task
-- cliente de mayor venta, rentabilidad, movers completos, Taller, AT-03, depósitos, tanques, baterías
-- hardcode Acapulco/mayo/febrero/marzo/abril
-- secretos
-
-## contracts_in_force
-
-- docs/director-ia/DIRECTOR_IA_CONSTITUTION.md
-- docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md
-- docs/director-ia/FINANCIAL-ACTUAL-EVIDENCE-CONTRACT.md
-- docs/dev-loop/LOOP_PROTOCOL.md
-
-## allowed_actions
-
-- inspeccionar código, tests, git, frontend (read-only)
-- comparar baseline 1f7774d7 vs current 50fb33e5 en worktrees temporales
-- stubs/inyección determinística para routing (sin DB)
-- SELECT-only si LIVE_DB ya existe
-- ejecutar `node --test test/director-ia-*.test.js` en CURRENT (registrar; no añadir tests)
-- escribir únicamente el reporte de auditoría listado
-- actualizar solo status de esta CURRENT_TASK tras G1 (AUTHORIZED → IN_PROGRESS → DONE_PENDING_REVIEW)
-
-## forbidden_actions
-
-- escribir AUTHORIZED_BY_HUMAN
-- poner status AUTHORIZED
-- crear, borrar o modificar authorized_by, authorized_at o human_authorization
-- aprobar gates G1–G8
-- modificar runtime / planner / conversation-state / INHERITABLE_INTENTS
-- revertir, merge, deploy
-- implementar recuperación
-- almacenar secretos
-
-## Required work after G1 only
-
-1. Reverificar hechos A–G (INHERITABLE_INTENTS, unknown inherit, planner substitution, detector exige margen, venta+descuento no es historical_margin, compare_months ≠ rango inclusivo, suite verde no cubre estas transiciones).
-2. A/B reproducible baseline vs current para cada síntoma (campos de traza listados en el prompt de auditoría).
-3. Clasificar cada caso: REGRESSION | PREEXISTING_GAP | NEW_CAPABILITY | EXPECTED_CHANGE | NOT_PROVEN.
-4. Arqueología de la pregunta venta+descuento (A1–A7). No inventar capacidad nueva. No asumir feb–abr = dos endpoints.
-5. Golden G1–G12 first-turn + H1–H10 after historical_margin parent. H10 expected intent solo después de probar baseline.
-6. INHERITABLE_INTENT_TRANSITION_MATRIX completa (preguntas de fixtures existentes).
-7. Continuidad propia M1–M3 (no proponer deshabilitar inherit de margen).
-8. Trace HTTP 500 + post-error conversation_state / frontend.
-9. FIRST_DIVERGENCE_FUNCTION / CONDITION / BASELINE / CURRENT / COMMIT por regresión.
-10. Causalidad de commits: 1f7774d7, 93404936, 9afacbec, 1db7e005, e7e9b901, 50fb33e5. Documentar asimetría: 1db7e005 cubre executive→margin, no margin→executive.
-11. LIVE_DB = PROVEN | NOT_PROVEN. Mayo no bloquea continuidad.
-12. Registrar suite CURRENT. Si 1440/0: SUITE GREEN BUT REGRESSION NOT COVERED. Diseñar matriz de tests futuros; no añadir tests ahora.
-13. Recovery invariants 1–7 (contrato, no código).
-14. Reporte con secciones A–S del prompt.
-
-## Completion (after authorized execution)
-
-status: CLOSED
-STOP. NO IMPLEMENTATION. NO MERGE. NO DEPLOY. NO NEXT TASK.
-
-## G1 (solo HUMAN_APPROVER)
-
-Para autorizar, el humano debe escribir:
-
-```
-status: AUTHORIZED
 authorized_by: "Human Approver"
-authorized_at: "2026-09-01T18:03:20-06:00"
-human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver approved AUDIT-DIRECTOR-IA-HISTORICAL-MARGIN-REGRESSION-RECOVERY-001 to compare pre-historical_margin behavior against current main, locate all regressions and define recovery requirements. Audit/read-only only. No implementation, rollback, merge, deploy or next task."
-```
 
-Sin esa línea exacta, escrita por humano, esta tarea no es ejecutable.
+authorized_at: "2026-09-02T15:37:00-06:00"
 
-human_review: APPROVED
-closed_by_human: YES
+human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver approved UI-ACTION-REGISTER-GROUPING-001 to implement the approved Action Register presentation redesign without loss of information. Frontend presentation only. No Director IA changes, no database/schema/API contract changes, no merge, no deploy, and no next task."
+
+## 1. Objetivo único
+
+Implementar la reorganización visual del Action Register para reducir drásticamente el espacio en blanco y mejorar lectura/captura, SIN perder información, funcionalidades existentes ni semántica del producto.
+
+La intervención debe ser principalmente de PRESENTACIÓN.
+
+No rediseñar el modelo de datos.
+
+No modificar Director IA.
+
+No reinterpretar el Action Register.
+
+## 2. Baseline funcional que debe preservarse
+
+Archivo principal actual:
+
+`frontend-dashboard/app/acciones/page.tsx`
+
+Temas canónicos:
+
+`ACTION_REGISTER_TEMAS`
+
+Catálogo actual:
+
+* Contrataciones
+* Mantenimiento
+* General
+* Clientes
+* Apoyos
+* Licencias
+* Taller
+* Oficinas
+* Sistema vs Incendio
+* ERP
+* Imagen Corporativa
+
+El Action Register actual trabaja conceptualmente como:
+
+`fecha × (Comentarios del día + temas)`
+
+El espacio en blanco proviene principalmente de:
+
+* repetir formularios de captura en múltiples celdas;
+* mostrar fechas sin contenido;
+* mostrar siempre todos los temas aunque estén vacíos;
+* desplegar captura y lectura simultáneamente.
+
+El objetivo NO es eliminar ninguna de esas dimensiones.
+
+El objetivo es representarlas mejor.
+
+## 3. Principio de diseño obligatorio
+
+### Separar lectura de captura
+
+La vista normal debe estar optimizada para LEER.
+
+La captura debe realizarse mediante UN SOLO mecanismo reutilizable.
+
+No debe existir un formulario completo permanentemente desplegado en cada cruce:
+
+`fecha × tema`
+
+## 4. Vista principal — Registro vivo
+
+Crear una vista principal denominada conceptualmente:
+
+`Registro vivo`
+
+Debe ser la vista DEFAULT al entrar al Action Register.
+
+Debe organizar las acciones existentes de forma compacta y fácil de recorrer.
+
+Cada acción debe conservar como mínimo la información que actualmente corresponda, incluyendo cuando aplique:
+
+* fecha;
+* tema;
+* descripción;
+* responsable;
+* vencimiento;
+* estado derivado;
+* comentarios;
+* subacciones/items;
+* fotos;
+* controles existentes.
+
+### Estados
+
+Para acciones propias utilizar solamente la semántica actualmente demostrada por el producto:
+
+* Abierta
+* Vencida
+* Terminada
+
+`Vencida` puede derivarse de `due_date` + `closed`.
+
+NO inventar estados como:
+
+* Programada
+* En revisión
+* Pausada
+* Aprobada
+
+salvo que ya existan físicamente en el modelo actual.
+
+## 5. Agrupación por temas
+
+En Registro vivo:
+
+### Temas con actividad
+
+Mostrar normalmente los temas que tengan acciones dentro del rango/contexto visible.
+
+Ejemplo conceptual:
+
+`Mantenimiento (6 abiertas)`
+
+seguido por sus acciones.
+
+### Temas sin acciones
+
+No renderizar 11 bloques vacíos permanentemente.
+
+Agruparlos bajo un control compacto:
+
+`Temas sin acciones (N) ▸`
+
+Al expandirlo deben continuar disponibles los temas canónicos individualmente.
+
+NO fusionar temas.
+
+NO borrar temas.
+
+NO crear un tema genérico.
+
+El catálogo de 11 temas sigue siendo canónico.
+
+## 6. Comentarios del día
+
+`Comentarios del día` continúa siendo una entidad visual distinta de una acción.
+
+NO mezclar comentarios del día con acciones.
+
+En modo lectura:
+
+* mostrar cada fecha de manera compacta;
+* si existe comentario, mostrar una línea/resumen;
+* si no existe, mostrar `Sin comentarios` solo cuando sea relevante;
+* NO mantener un textarea permanentemente abierto.
+
+Debe existir acceso claro para agregar/editar según las capacidades actuales.
+
+## 7. Panel único de captura
+
+Crear UN SOLO mecanismo de captura reutilizable.
+
+Puede ser:
+
+* drawer lateral;
+* panel;
+* modal;
+
+elegir la opción que mejor se integre con la UI existente.
+
+Debe permanecer CERRADO mientras el usuario solamente lee.
+
+Botones como:
+
+`+ Agregar`
+
+o
+
+`+`
+
+desde una fecha/tema deben abrir ESTE MISMO panel.
+
+### Campos
+
+El panel debe reutilizar los datos y contratos actuales.
+
+Debe poder manejar al menos:
+
+#### Comentario del día
+
+* Fecha
+* Texto
+
+#### Acción
+
+* Fecha
+* Tema
+* Acción/texto
+* Responsable
+* Vencimiento
+* demás campos actualmente soportados
+
+Cuando se abra desde una fecha o tema específico debe prellenar ese contexto.
+
+NO duplicar formularios por celda.
+
+## 8. Vista secundaria — Matriz por fecha
+
+Conservar una segunda vista para comparación histórica:
+
+`Matriz por fecha`
+
+Esta vista mantiene el concepto fecha × tema, pero debe ser compacta.
+
+### Agrupación temporal
+
+Agrupar visualmente fechas por semana.
+
+Ejemplo conceptual:
+
+`Semana 28 jul – 3 ago`
+
+`Semana 4 – 10 ago`
+
+La agrupación NO cambia fechas reales ni datos.
+
+### Fechas vacías
+
+Una fecha sin comentarios ni acciones NO debe ocupar una columna completa con formularios vacíos.
+
+Puede:
+
+* ocultarse de la expansión normal;
+* mostrarse como chip compacto;
+* quedar accesible mediante la agrupación semanal.
+
+Al seleccionar una fecha debe seguir siendo posible visualizarla y capturar información.
+
+### Captura
+
+La Matriz NO debe volver a introducir formularios completos permanentes.
+
+Usar el mismo panel único de captura definido anteriormente.
+
+## 9. Selector de vistas
+
+Debe existir una forma simple de alternar entre:
+
+* Registro vivo
+* Matriz por fecha
+
+NO apilar ambas vistas completas una debajo de la otra.
+
+Registro vivo debe ser DEFAULT.
+
+## 10. Información y capacidades que NO pueden perderse
+
+Preservar físicamente las capacidades existentes, incluyendo donde actualmente existan:
+
+* acciones;
+* comentarios del día;
+* responsable;
+* vencimiento;
+* editar;
+* eliminar;
+* cerrar/reabrir cuando aplique;
+* items/subacciones;
+* comentarios de acción;
+* fotos;
+* copiar acción previa;
+* PDF diario;
+* exportación Excel;
+* crear/seleccionar fecha;
+* selección de planta;
+* sticky/identificación de tema;
+* DICF virtual/read-only;
+* historial actualmente accesible.
+
+La reorganización no autoriza eliminar funciones porque sean difíciles de colocar.
+
+Si alguna función requiere una ubicación visual diferente, reubicarla conservando comportamiento.
+
+## 11. DICF
+
+DICF virtual continúa siendo READ-ONLY.
+
+Sus estados propios no deben mezclarse ni normalizarse artificialmente con los estados de acciones propias.
+
+NO modificar su modelo.
+
+NO convertir DICF en acción editable.
+
+## 12. Restricciones técnicas
+
+### Prohibido
+
+* cambiar schema;
+* ejecutar SQL;
+* migrar datos;
+* borrar filas;
+* cambiar contratos de API;
+* cambiar payloads existentes salvo necesidad técnica demostrada e inevitable;
+* modificar Director IA;
+* modificar planner;
+* modificar conversation-state;
+* modificar historical_margin;
+* cambiar documentos de `docs/director-ia/`;
+* implementar directamente en `main`;
+* hacer merge;
+* hacer deploy;
+* abrir automáticamente la siguiente tarea.
+
+### Preferencia
+
+Resolver todo en frontend reutilizando endpoints y estructuras existentes.
+
+`server.js` debe permanecer sin cambios salvo que exista una imposibilidad física demostrable para implementar PRESENTACIÓN con el contrato actual.
+
+Si aparece esa imposibilidad:
+
+STOP.
+
+Documentarla.
+
+No ampliar alcance automáticamente.
+
+## 13. Rama obligatoria
+
+Partir de `main` limpio, actualizado y sincronizado con `origin/main`.
+
+Crear rama:
+
+`implementation/ui-action-register-grouping-001`
+
+Confirmar antes de escribir:
+
+* rama ≠ main;
+* working tree limpio;
+* CURRENT_TASK = UI-ACTION-REGISTER-GROUPING-001;
+* status = AUTHORIZED;
+* implementation_authorized = YES.
+
+## 14. Orden de implementación
+
+Implementar incrementalmente en este orden:
+
+1. panel único de captura;
+2. colapsar temas sin acciones;
+3. compactar Comentarios del día;
+4. Registro vivo como vista principal;
+5. Matriz por fecha compacta;
+6. agrupación semanal;
+7. selector Registro vivo / Matriz;
+8. revisión integral de funcionalidades preservadas.
+
+No realizar un rewrite total si puede resolverse por refactor incremental.
+
+## 15. Criterios visuales
+
+Priorizar:
+
+* densidad útil de información;
+* lectura ejecutiva rápida;
+* reducción de scroll horizontal innecesario;
+* reducción de formularios repetidos;
+* mantenimiento de contexto de planta, fecha y tema;
+* jerarquía clara;
+* responsive razonable.
+
+Evitar:
+
+* panel derecho permanentemente abierto;
+* cinco o más colores de estado sin significado real;
+* una columna completa por cada fecha vacía;
+* duplicar Registro vivo y Matriz simultáneamente;
+* ocultar funciones existentes;
+* copiar literalmente el poster/mockup previo.
+
+El mockup previo es referencia conceptual, NO especificación pixel-perfect.
+
+## 16. Protección contra pérdida de información
+
+Antes de modificar:
+
+inventariar físicamente en `page.tsx`:
+
+* estados React relevantes;
+* loaders;
+* handlers;
+* mutations;
+* botones;
+* exportaciones;
+* PDF;
+* fotos;
+* items;
+* comentarios;
+* DICF;
+* formularios;
+* comportamiento responsive.
+
+Después de modificar:
+
+hacer una matriz BEFORE → AFTER.
+
+Cada capacidad existente debe aparecer como:
+
+`PRESERVED`
+
+o, si no puede preservarse:
+
+`STOP`
+
+No aceptar silenciosamente:
+
+`REMOVED`
+
+## 17. Validación obligatoria
+
+Ejecutar las validaciones existentes aplicables al frontend.
+
+Como mínimo:
+
+* lint/build/typecheck correspondientes al proyecto si existen;
+* comprobar que la página compile;
+* comprobar ausencia de errores introducidos;
+* revisar estados empty/loading/error;
+* comprobar apertura/cierre del panel;
+* comprobar creación de comentario;
+* comprobar creación de acción;
+* comprobar edición/borrado existentes;
+* comprobar vistas;
+* comprobar temas sin acciones;
+* comprobar fechas vacías;
+* comprobar export/PDF;
+* comprobar DICF read-only;
+* comprobar que no haya pérdida de información.
+
+Si existen tests específicos del Action Register, ejecutarlos.
+
+No fabricar pruebas inexistentes.
+
+## 18. Evidencia final requerida
+
+Entregar reporte con:
+
+### A. Baseline
+
+Qué existía antes y qué funciones fueron identificadas.
+
+### B. Implementación
+
+Archivos modificados y propósito de cada cambio.
+
+### C. Registro vivo
+
+Cómo quedó funcionando.
+
+### D. Matriz por fecha
+
+Cómo quedó funcionando.
+
+### E. Panel único
+
+Cómo reemplaza formularios repetidos.
+
+### F. Información preservada
+
+Tabla:
+
+| Capacidad | Before | After | Estado    |
+| --------- | ------ | ----- | --------- |
+| ...       | ...    | ...   | PRESERVED |
+
+### G. Validaciones
+
+Comandos ejecutados + resultado real.
+
+### H. Git
+
+* branch
+* base SHA
+* final SHA/commit
+* `git status --short`
+* diff summary
+
+### I. Declaración de alcance
+
+Confirmar explícitamente:
+
+* Director IA untouched;
+* DB untouched;
+* schema untouched;
+* API contracts unchanged;
+* no merge;
+* no deploy.
+
+## 19. Completion
+
+Al terminar correctamente:
+
+`status: DONE_PENDING_REVIEW`
+
+NO poner CLOSED.
+
+NO hacer merge.
+
+NO desplegar.
+
+NO iniciar la siguiente tarea.
+
+Esperar revisión humana.
