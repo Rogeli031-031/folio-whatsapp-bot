@@ -159,8 +159,11 @@ No tocados (entre otros):
 
 * base SHA: `3c4e53d188e877581afc0d868607779a33b5117c` (`origin/main`)
 * branch: `fix/director-ia-metric-switch-explicit-overrides-inheritance-001` (≠ `main`)
-* commit SHA: se anota tras el commit de implementación
+* commit SHA: `6e8131146673ccee8e884144d974fa93ce2a0d7c`
+* `git status --short` post-commit de implementación: limpio
 * no push a `main`
 * no merge
 * no deploy
 * no siguiente tarea
+
+Nota de cierre Git: el SHA anterior es el commit de implementación. Si este archivo se re-commitea solo para anotar el SHA, el HEAD de la rama puede avanzar un commit docs.
