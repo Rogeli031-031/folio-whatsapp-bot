@@ -1,7 +1,6 @@
 task_id: FIX-DIRECTOR-IA-METRIC-SWITCH-EXPLICIT-OVERRIDES-INHERITANCE-001
 
-status: DONE_PENDING_REVIEW
-
+status: CLOSED
 authorized_by: Human Approver
 
 authorized_at: 2026-09-02T17:35:55-06:00
@@ -178,8 +177,7 @@ Los siete Golden Cases previamente PASS deben seguir PASS.
 
 Si G-METRIC-SWITCH-001 pasa sin regresiones:
 
-status: DONE_PENDING_REVIEW
-
+status: CLOSED
 Entregar:
 
 * causa raíz;
