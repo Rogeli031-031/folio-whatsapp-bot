@@ -130,7 +130,7 @@ Asimetría del test `1db7e005`: cubre `¿Cómo vamos?` parent → margen explíc
 
 ### 5.1 INHERITABLE_INTENTS
 
-Baseline: 12 intents, **sin** `historical_margin`.  
+Baseline: 12 intents, **sin** `historical_margin`.
 Current: los mismos 12 + `historical_margin`.
 
 La condición ejecutada **no** es «historical_margin es inheritable» como explicación final. La condición es:
@@ -279,7 +279,7 @@ Probe:
 | HM + HTTP500 + como vamos | HM por V1 o V2 | true | historical_margin | false | copy T4 |
 | PAGE_REFRESH | null | false | unknown | true | PASS humano |
 
-`POST_ERROR_STATE_CONTAMINATION` = **PROVEN** (V2 seguro en la secuencia 404; V1 si hubo 200 previo).  
+`POST_ERROR_STATE_CONTAMINATION` = **PROVEN** (V2 seguro en la secuencia 404; V1 si hubo 200 previo).
 El HTTP 500 **no** es requisito del atrapamiento. El refresh limpia **ambos** vectores.
 
 `delta_discount` **no** escribe `conversation_state` en `context_meta`. El frontend **conserva** el parent `client_profile` previo. Eso encadena el síntoma C.
@@ -362,7 +362,7 @@ No recomendar «quitar `historical_margin` de `INHERITABLE_INTENTS`»: eso rompe
 10. Handler real: `client_profile` + OpenAI.
 11. Builder del copy: prompt de `lib/director-ia-client-profile.js` («Ingreso mensual actual del cliente NO está disponible…» / DICF vacía en esta ruta). El modelo verbaliza esa limitación como si fuera margen de abril.
 
-`FIRST_DIVERGENCE_FUNCTION` (C1): `isClientProfileQuestion` (explicitPeriod + hasActiveClient) → `profileFollowUp` → `forceIntent` en `askDirectorIa`.  
+`FIRST_DIVERGENCE_FUNCTION` (C1): `isClientProfileQuestion` (explicitPeriod + hasActiveClient) → `profileFollowUp` → `forceIntent` en `askDirectorIa`.
 `FIRST_BAD_COMMIT`: `93404936` (HM debía ganar y no se excluyó de profileFollowUp/forceIntent). El swallow de **unknown** con mes+cliente activo **ya existía** en baseline; ahora además pisa un detect `historical_margin`.
 
 ## 14. First divergence per regression
@@ -393,9 +393,9 @@ G1 first-turn / refresh; G2 routing; G4–G8; G11; G12; H2–H10 routing; fixtur
 
 ### REGRESSED (`REGRESSION_COUNT = 4`; `FIRST_BAD_COMMIT = 93404936` para las 4)
 
-1. **R-EXEC** — `¿Cómo vamos?` tras parent/history HM.  
-2. **R-VENTA** — venta+descuento tras parent/history HM (routing + 500).  
-3. **R-HM-PROFILE** — margen explícito tras `client_profile` (forceIntent).  
+1. **R-EXEC** — `¿Cómo vamos?` tras parent/history HM.
+2. **R-VENTA** — venta+descuento tras parent/history HM (routing + 500).
+3. **R-HM-PROFILE** — margen explícito tras `client_profile` (forceIntent).
 4. **R-METRIC-SWITCH** — `descuento de agosto?` (y la misma ruta para descuento/venta/ingreso/utilidad + mes) tras parent HM: detect unknown → inherit HM → loader responde **margen**. Sin HTTP 500.
 
 ### PREEXISTING_GAPS
@@ -541,10 +541,10 @@ Anotados, no tocados: cliente de mayor venta, rentabilidad como capacidad nueva,
 | historical_margin → contra la meta | historical_margin | month_close_result | true | false | month_close_result | month_close | month_close | **no** robado por HM |
 | post-error → contra la meta | HM reconstructed | month_close_result | true | false | month_close_result | month_close | month_close | igual |
 
-`codes` real: objeto `{ not_found, uniqueCodes, plantCode, matchedMeta }` de `resolvePlantCodes`.  
-Quién construye: `lib/commercial-trend-engine.js`.  
-Quién asume array: `lib/director-ia-month-close-result.js:855` y `lib/director-ia-executive-cycle-composer.js:724`.  
-Repro sin DB: `( { uniqueCodes: ["ACA"] } || [] ).map(...)` → `TypeError: (codes || []).map is not a function`.  
+`codes` real: objeto `{ not_found, uniqueCodes, plantCode, matchedMeta }` de `resolvePlantCodes`.
+Quién construye: `lib/commercial-trend-engine.js`.
+Quién asume array: `lib/director-ia-month-close-result.js:855` y `lib/director-ia-executive-cycle-composer.js:724`.
+Repro sin DB: `( { uniqueCodes: ["ACA"] } || [] ).map(...)` → `TypeError: (codes || []).map is not a function`.
 `STACK_LIVE = NOT_PROVEN`. `FIRST_BAD_COMMIT = e241729e`. Clasificación: **PREEXISTING_BUG** / separate future task. ¿Depende de HM? **No**. No entra en REGRESSION_COUNT.
 
 ## 25. Recuperación — tres más uno
@@ -629,7 +629,7 @@ Aunque first-turn sea PREEXISTING_GAP, **no** es aceptable que HM conteste como 
 
 No existe parent `historical_margin`. First-turn de esas frases ya era GAP. Current introduce un parent que **sustituye la métrica por margen**.
 
-`FIRST_DIVERGENCE_FUNCTION` = `resolveConversationTurn` (isolatedUnknown + inherit) + `resolveHistoricalMarginRequest` (mes sin exigir margen).  
+`FIRST_DIVERGENCE_FUNCTION` = `resolveConversationTurn` (isolatedUnknown + inherit) + `resolveHistoricalMarginRequest` (mes sin exigir margen).
 `FIRST_BAD_COMMIT` = `93404936`.
 
 Esto prueba que el problema **no** está limitado al estado post-HTTP 500.
