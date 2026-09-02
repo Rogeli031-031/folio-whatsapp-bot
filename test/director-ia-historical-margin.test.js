@@ -639,6 +639,33 @@ describe("G. continuity", () => {
     assert.equal(req.periods[0].month, 5);
   });
 
+  it("historical_margin → ¿descuento de agosto? no hereda margen", () => {
+    const echoed = buildConversationState({
+      plantaId: 1,
+      parent_intent: "historical_margin",
+      last_evidence_bundle_type: "historical_margin",
+    });
+    const question = "¿descuento de agosto?";
+    const turn = resolveConversationTurn({
+      question,
+      plantaId: 1,
+      detectIntent: detectDirectorIaIntent,
+      history: [{ role: "user", content: "¿Cuál fue el margen en mayo?" }],
+      echoedState: echoed,
+    });
+    const plan = planDirectorIaQuestion(
+      question,
+      turn.inherit && turn.inherit_parent_intent ? { inheritParentIntent: turn.inherit_parent_intent } : {}
+    );
+    assert.notEqual(plan.intent, "historical_margin");
+    assert.equal(detectDirectorIaIntent(question).intent, "unknown");
+    assert.equal(planDirectorIaQuestion("¿Y en mayo?", { inheritParentIntent: "historical_margin" }).intent, "historical_margin");
+    assert.notEqual(
+      planDirectorIaQuestion("¿venta de agosto?", { inheritParentIntent: "historical_margin" }).intent,
+      "historical_margin"
+    );
+  });
+
   it("¿Cómo vamos? → ¿Cuál fue el margen en abril? no hereda pack ejecutivo", async () => {
     process.env.ENABLE_DIRECTOR_IA = "true";
     const { askDirectorIa, configureDirectorIaChat } = require("../lib/director-ia-chat");
