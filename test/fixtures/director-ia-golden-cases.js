@@ -19,6 +19,10 @@ const Q = Object.freeze({
   MOVEMENT_STOPPED: "¿Qué clientes dejaron de comprar?",
   HM_PARENT: "¿Cuál fue el margen en mayo?",
   METRIC_SWITCH: "¿descuento de agosto?",
+  RUNTIME_HM_ERICK: "Dame el margen histórico de TORTILLERIA ERICK de enero a agosto.",
+  RUNTIME_DISCOUNT_AUG: "¿descuento de agosto?",
+  RUNTIME_DISCOUNT_AUG_BARE: "descuento de agosto?",
+  RUNTIME_COMO_VAMOS: "como vamos?",
 });
 
 const CASES = Object.freeze([
@@ -170,8 +174,65 @@ const CASES = Object.freeze([
   },
 ]);
 
+const RUNTIME_CASES = Object.freeze([
+  {
+    id: "R-RUNTIME-001",
+    label: "Historical margin ERICK",
+    category: "runtime",
+    tier: "runtime",
+    turns: [{ role: "user", question: Q.RUNTIME_HM_ERICK }],
+    expected_metrics: ["margen"],
+    expected_entity: "TORTILLERIA ERICK",
+    forbidden_packs: ["descuento", "materialidad", "dicf", "daily_executive_brief", "plant_diagnosis"],
+    must_not_http_5xx: true,
+    must_return_client_margin: true,
+    notes: "Capa B: handlePostChat + loader real. No inventa margen por cliente.",
+  },
+  {
+    id: "R-RUNTIME-002",
+    label: "Margin → discount",
+    category: "runtime",
+    tier: "runtime",
+    turns: [
+      { role: "user", question: Q.RUNTIME_HM_ERICK },
+      { role: "user", question: Q.RUNTIME_DISCOUNT_AUG },
+    ],
+    expected_metrics: ["descuento"],
+    forbidden_packs: ["historical_margin", "materialidad", "dicf", "plant_diagnosis"],
+    must_not_http_5xx: true,
+    notes: "Parent = R-RUNTIME-001. Capa B mira askDirectorIa, no el planner TIER 1.",
+  },
+  {
+    id: "R-RUNTIME-003",
+    label: "Plant/executive → discount",
+    category: "runtime",
+    tier: "runtime",
+    turns: [
+      { role: "user", question: Q.RUNTIME_COMO_VAMOS },
+      { role: "user", question: Q.RUNTIME_DISCOUNT_AUG_BARE },
+    ],
+    expected_metrics: ["descuento"],
+    forbidden_packs: ["plant_diagnosis", "daily_executive_brief", "materialidad", "dicf"],
+    must_not_http_5xx: true,
+    notes: "Padre ejecutivo/CEL. El FIX HM→descuento no cubre este padre.",
+  },
+  {
+    id: "R-RUNTIME-004",
+    label: "First-turn discount",
+    category: "runtime",
+    tier: "runtime",
+    turns: [{ role: "user", question: Q.RUNTIME_DISCOUNT_AUG }],
+    expected_metrics: ["descuento"],
+    forbidden_packs: ["historical_margin", "materialidad", "dicf", "plant_diagnosis"],
+    must_not_http_5xx: true,
+    forbid_generic_intent: true,
+    notes: "Chat nuevo. PASS solo clarificación específica o pack de descuento.",
+  },
+]);
+
 module.exports = {
   NOW_ISO,
   Q,
   CASES,
+  RUNTIME_CASES,
 };
