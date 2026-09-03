@@ -1,248 +1,151 @@
-task_id: FIX-DIRECTOR-IA-CLIENT-MARGIN-SEMANTIC-ROUTING-001
+task_id: AUDIT-DIRECTOR-IA-AUGUST-MARGIN-VERSION-PARITY-001
 
-status: CLOSED
+status: BLOCKED
 authorized_by: "Human Approver"
-authorized_at: "2026-09-02T21:22:25-06:00"
-human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-02"
-objective: Endurecer el Runtime Gate y, solo después del BEFORE rojo, enrutar semánticamente margen de planta (IGF) vs margen con cliente explícito (descuento/kg histórico ARR), sin tocar la continuidad historical_margin → como vamos?.
+authorized_at: "2026-09-02T21:42:52-06:00"
+human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-02 - LIVE_DB READ_ONLY audit only"
+objective: Resolver con LIVE_DB READ-ONLY la discrepancia entre el margen visible de IGF Forecast ARR Acapulco agosto 2026 (≈ 7.32 $/kg) y el fail-closed de Director IA ante «¿Cuál es el margen de agosto?».
 
 in_scope:
-- test/fixtures/director-ia-golden-cases.js
-- test/helpers/director-ia-runtime-golden-harness.js
-- test/helpers/director-ia-golden-harness.js solo si la observabilidad del Runtime Gate lo exige
-- código productivo de Director IA estrictamente causal al enrutado semántico margen-planta vs margen-cliente (planner/chat/metric-pack)
-- tests determinísticos existentes de historical-margin, client-profile, planner y Runtime Gate
+- consulta LIVE_DB estrictamente SELECT / READ-ONLY (solo tras G1 que ponga live_db_authorized: YES)
+- igf.versions y igf.compromiso_lines para plant_code GLOBAL year=2026 month=8
+- lectura de lib/director-ia-historical-margin.js (loadClosedMonth / findUniquePlantRow) para mapear reason
+- lectura de server.js resolveIgfGlobalVersion / buildIgfForecastPayload (paridad dashboard)
 - docs/dev-loop/CURRENT_TASK.md
-- docs/dev-loop/reports/FIX-DIRECTOR-IA-CLIENT-MARGIN-SEMANTIC-ROUTING-001.md
+- docs/dev-loop/reports/AUDIT-DIRECTOR-IA-AUGUST-MARGIN-VERSION-PARITY-001.md
 
 out_of_scope:
-- continuidad `historical_margin` / aclaración de cliente → `como vamos?`
-- cualquier caso nuevo o fix cuyo único objetivo sea esa secuencia
-- DB/schema/migrations
-- LIVE_DB
-- frontend / IGF Forecast ARR UI
-- Action Register
-- Folios
-- docs/director-ia/
+- modificar producto
+- modificar tests
+- cambiar Golden / Runtime expectations
+- modificar docs/director-ia/
 - nuevos contratos
+- decidir si latest debe usarse como histórico
+- implementar fallback FORECAST para mes cerrado
+- continuidad historical_margin → como vamos?
+- DB writes / schema / migrations
 - merge a main
 - deploy
 - siguiente tarea
-- hardcode de ERICK, agosto, 0.93 o 7.32 en producto
 
 contracts_in_force:
 - AGENTS.md
 - docs/dev-loop/LOOP_PROTOCOL.md
 - docs/director-ia/DIRECTOR_IA_CONSTITUTION.md
 - docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md
-- contratos vigentes aplicables de Director IA (obedecer, no reescribir)
+- docs/director-ia/DIRECTOR_IA_EXECUTIVE_KNOWLEDGE_ENGINE.md
+- docs/director-ia/FINANCIAL-ACTUAL-EVIDENCE-CONTRACT.md
+- contratos vigentes aplicables (obedecer, no reescribir)
 
 allowed_actions:
-- (solo tras G1) crear rama fix/director-ia-client-margin-semantic-routing-001 desde origin/main limpio
-- primero endurecer Runtime Gate (R-RUNTIME-001 + protección planta)
-- ejecutar BEFORE de TIER 1 y PRE-DEPLOY Runtime Gate
-- STOP si el BEFORE no queda rojo en R-RUNTIME-001 o si la protección de planta no permanece PASS
-- después del BEFORE rojo, cambio mínimo en la frontera causal de routing/metric-pack
-- tests determinísticos necesarios para observabilidad, no para acomodar el producto
+- (solo tras G1) crear rama audit/director-ia-august-margin-version-parity-001
+- (solo si G1 deja live_db_authorized: YES) SELECT READ-ONLY a igf.versions / igf.compromiso_lines 2026-08 GLOBAL
+- mapear filas al reason de loadClosedMonth sin ejecutar producto
+- escribir reporte
 - commit en la rama de tarea
-- reporte final
 - dejar DONE_PENDING_REVIEW
 
 forbidden_actions:
 - escribir AUTHORIZED_BY_HUMAN
 - poner status AUTHORIZED
 - crear, borrar o modificar authorized_by, authorized_at o human_authorization
-- implementar antes de G1
-- implementar el fix de producto antes de endurecer el Runtime Gate y registrar BEFORE rojo
-- corregir `como vamos?` después de un turno de margen/cliente
-- cambiar Golden/Runtime expectations para obtener PASS artificial (el endurecimiento de R-RUNTIME-001 y el alta de la protección de planta sí están in_scope; no debilitar R-RUNTIME-002..004 ni TIER 1)
-- hardcodear ERICK, agosto, 0.93 o 7.32 en producto
-- hacer que mocks seleccionen artificialmente la ruta esperada
-- inventar margen IGF de cliente
-- consultar LIVE_DB
+- consultar LIVE_DB mientras live_db_authorized sea NO
+- INSERT / UPDATE / DELETE / DDL
+- modificar producto
+- modificar tests
+- cambiar contratos
+- decidir que latest es histórico
+- servir o proponer 7.32 como ACTUAL_FINANCIAL
 - merge/push a main
 - deploy
 - abrir siguiente tarea
+- almacenar secretos, connection strings o credenciales en el reporte
 
 max_attempts: 1
 
-result_report_path: docs/dev-loop/reports/FIX-DIRECTOR-IA-CLIENT-MARGIN-SEMANTIC-ROUTING-001.md
+result_report_path: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-AUGUST-MARGIN-VERSION-PARITY-001.md
 
-implementation_authorized: YES
+implementation_authorized: NO
 merge_authorized: NO
 deploy_authorized: NO
-live_db_authorized: NO
-
+live_db_authorized: YES
 ## Estado
 
 DRAFT. No hay Gate G1. No es ejecutable.
 
-## Contrato de negocio confirmado (evidencia humana, dashboard IGF Forecast ARR / Acapulco)
+Esta auditoría **requiere** `live_db_authorized: YES` para ejecutarse. Hoy permanece `NO` hasta que un humano lo escriba en G1.
 
-No son reglas de producto hardcodeadas. Son el criterio semántico que el Runtime Gate debe exigir y que el FIX debe implementar de forma general.
+## Discrepancia a resolver (evidencia humana LIVE)
 
-1. `margen` sin cliente, referido a planta/mes:
-   corresponde a `margen_kg` de IGF de planta (`historical_margin`).
-   Evidencia de tablero: agosto ≈ 7.32 $/kg (fila MARGEN de la tabla mensual de planta).
-   Pregunta de protección: `¿Cuál es el margen de agosto?`
+Planta: Acapulco.
 
-2. `margen` con cliente explícito:
-   en el lenguaje operativo del usuario corresponde al descuento/kg histórico del cliente mostrado en “Clientes por mes”, calculado desde ARR (`descuento/kg = SUM(monto)/SUM(kg)`).
-   Evidencia de tablero: TORTILLERIA ERICK enero ≈ 0.93 $/kg (columna DESCUENTO ENERO; no existe columna MARGEN de cliente).
-   Pregunta de R-RUNTIME-001: `Dame el margen histórico de TORTILLERIA ERICK de enero a agosto.`
+IGF Forecast ARR, agosto 2026, columna MARGEN de planta ≈ **7.32 $/kg**.
 
-ERICK, agosto, 0.93 y 7.32 sirven solo como evidencia/fixture. No se incrustan en producto.
-
-## Relación con la tarea CLOSED
-
-`FIX-DIRECTOR-IA-RUNTIME-METRIC-PACK-ROUTING-001` (CLOSED) dejó R-RUNTIME-001 en:
-
-- la entidad de cliente participa;
-- no se convierte silenciosamente en compare_months de planta;
-- el pack de descuento estaba **prohibido**;
-- no se exigía devolver descuento/kg histórico de cliente.
-
-Esa expectativa queda **superada** por la evidencia de negocio. No se reabre aquella tarea. Esta es una tarea nueva.
-
-El producto actual (anclar cliente + rechazar margen FINAL de planta + `parent_intent=historical_margin`) es el BEFORE esperado de R-RUNTIME-001 **después** de endurecer el gate.
-
-## Orden de ejecución (obligatorio)
-
-### Paso 1 — Endurecer el Runtime Gate (antes de tocar producto)
-
-Actualizar R-RUNTIME-001 para exigir ruta/pack de **descuento histórico de cliente**, no solamente evitar margen de planta.
-
-R-RUNTIME-001 actual (insuficiente):
-
-- `expected_metrics: ["margen"]`
-- `forbidden_packs` incluye `descuento`
-- `must_return_client_margin` solo comprueba mención de entidad y ausencia de compare de planta
-
-R-RUNTIME-001 requerido:
-
-- la entidad explícita de cliente participa;
-- la familia semántica es descuento/kg histórico de cliente (ARR / “Clientes por mes”), no `historical_margin` IGF de planta;
-- pack/ruta de descuento histórico de cliente o `client_profile` comercial mensual que exponga esa métrica;
-- `forbidden_packs` debe incluir `historical_margin` y packs de planta/CEL (`plant_diagnosis`, `daily_executive_brief`, `materialidad`, `dicf`);
-- `forbidden_packs` **no** debe incluir `descuento`;
-- no basta anclar el nombre y rechazar;
-- no inventar `margen_kg` IGF a nivel cliente;
-- no exigir el literal 0.93 en producto; puede usarse en fixture/evidencia si el harness aporta filas ARR.
-
-Agregar protección (chat nuevo, sin cliente):
-
-Pregunta exacta:
+Director IA, chat nuevo, sin herencia:
 
 `¿Cuál es el margen de agosto?`
 
-Expected:
+→ `No hay un margen histórico FINAL defendible para agosto 2026.`
 
-- ruta/pack `historical_margin` IGF de planta;
-- no enrutar a descuento de cliente ni a `client_profile`;
-- no exigir el literal 7.32 en producto; puede usarse en fixture/evidencia si el harness aporta IGF FINAL.
+Tracing previo (READ-ONLY, sin LIVE_DB): dashboard = `MAX(version_number)` GLOBAL sin filtro FINAL; Director IA mes cerrado = única `financial_state='FINAL'`. El `reason` físico exacto (`NOT_FINAL` vs `NO_PLANT_ROW` vs otro) queda **NOT_PROVEN** hasta esta auditoría.
 
-Propuesta de id: `R-RUNTIME-005`. Si el harness exige otro id, documentarlo. No reutilizar R-RUNTIME-001..004.
+7.32 y agosto son evidencia/fixture de la pregunta. No se incrustan en producto.
 
-No debilitar R-RUNTIME-002..004 ni los 8 casos TIER 1.
+## Demostraciones obligatorias (después de G1 + LIVE_DB YES)
 
-No añadir en esta tarea un caso `HM-cliente → como vamos?`.
+Consultar solo lectura y registrar:
 
-### Paso 2 — BEFORE
+1. todas las versiones GLOBAL de 2026-08: `id`, `version_number`, `financial_state`, `created_at`;
+2. cuál es la latest por `version_number`;
+3. si existe una o más versiones `FINAL`;
+4. `margen_kg` de Acapulco en la latest;
+5. `margen_kg` de Acapulco en FINAL, si existe (y si el matcher único de `findUniquePlantRow` sería unique / missing / ambiguous);
+6. `reason` físico exacto que produciría `loadClosedMonth`: `NO_VERSION` / `NOT_FINAL` / `VERSION_AMBIGUOUS` / `NO_PLANT_ROW` / `PLANT_AMBIGUOUS` / `NULL_MARGIN` / `valid`;
+7. si el 7.32 del dashboard es latest/current forecast, FINAL, o ambos;
+8. si Dashboard y Director IA muestran correctamente dos estados epistemológicos distintos, o existe un bug real.
 
-Desde:
+No concluir ausencia física de FINAL sin las filas. No concluir bug de producto solo porque el chat no copia el 7.32.
 
-origin/main = 3a47a8fa5910bfeacf9eb740354b41bf64d50131
+## Queries previstas (no ejecutar en DRAFT)
 
-Rama propuesta (solo tras G1):
+```sql
+SELECT id, version_number, financial_state, created_at
+  FROM igf.versions
+ WHERE plant_code = 'GLOBAL' AND year = 2026 AND month = 8
+ ORDER BY version_number DESC;
 
-fix/director-ia-client-margin-semantic-routing-001
+SELECT financial_state, COUNT(*)
+  FROM igf.versions
+ WHERE plant_code = 'GLOBAL' AND year = 2026 AND month = 8
+ GROUP BY 1;
 
-Ejecutar:
+SELECT empresa, margen_kg
+  FROM igf.compromiso_lines
+ WHERE version_id = :latest_id
+ ORDER BY empresa;
 
-npm run test:director-ia:golden
+SELECT empresa, margen_kg
+  FROM igf.compromiso_lines
+ WHERE version_id = :final_id
+ ORDER BY empresa;
+```
 
-y:
+Sustituir `:latest_id` / `:final_id` por los ids leídos. No copiar secretos al reporte. Redactar `empresa`/valores como evidencia de auditoría, no como hardcode de producto.
 
-npm run test:director-ia:predeploy -- --gate
+## Contratos a citar, no a cambiar
 
-BEFORE esperado tras el endurecimiento, **antes** del FIX de producto:
+- EKE: FORECAST ≠ ACTUAL_FINANCIAL; missing ACTUAL_FINANCIAL no cae a FORECAST; mes cerrado no FINAL = `NOT_FINAL`.
+- `FINANCIAL-ACTUAL-EVIDENCE-CONTRACT.md`: `latest ≠ FINAL`; `mes transcurrido ≠ FINAL`.
+- `loadClosedMonth`: mes cerrado exige única FINAL.
 
-- TIER 1: 8/8 PASS
-- R-RUNTIME-001: FAIL (producto actual no entrega pack de descuento histórico de cliente)
-- R-RUNTIME-002..004: PASS (no debilitar)
-- R-RUNTIME-005 (o el id de protección planta): PASS
-- PRE-DEPLOY GATE = FAIL por R-RUNTIME-001
-
-Si R-RUNTIME-001 no queda rojo, o la protección de planta no queda PASS, STOP y reportar. No modificar producto.
-
-### Paso 3 — FIX (solo si el BEFORE del Paso 2 coincide)
-
-Enrutar semánticamente con reglas generales:
-
-- cliente explícito + `margen` → métrica histórica de cliente/descuento (ARR), no `historical_margin` de planta
-- planta/mes + `margen` sin cliente → `historical_margin` IGF (`margen_kg`)
-
-No hardcodear cliente, mes ni importe.
-
-No corregir todavía `como vamos?` después de esa conversación. Tras este FIX se volverá a reproducir esa secuencia: la causa (`parent_intent=historical_margin` del Turno 1) puede cambiar al corregirse el intent.
-
-## Hipótesis de entrada (no es orden de parche)
-
-El producto actual trata “margen histórico” como IGF de planta y, con cliente embebido, rechaza en vez de servir descuento/kg de cliente.
-
-Cursor debe verificar físicamente:
-
-INPUT
-→ conversation state
-→ planner
-→ entity/metric/period resolution
-→ route selection
-→ metric-pack
-→ tool/loaders
-→ response
-
-y corregir la primera frontera causal incorrecta. No arreglar solo la prosa.
-
-## Protección contra regresión
-
-TIER 1 debe permanecer 8/8 PASS.
-
-R-RUNTIME-002..004 no se debilitan. Si el padre de 002 cambia de pack al corregir 001, re-observar el último turno; el expected de 002 sigue siendo pack/clarificación de descuento, no `historical_margin`.
-
-No aplicar inherit-block en `conversation-state` que rompa el cruce diario venta↔descuento (`ayer` / `forceIntent`).
-
-## Objetivo AFTER
-
-TIER 1
-8/8 PASS
-
-RUNTIME
-R-RUNTIME-001 PASS (descuento histórico de cliente, no rechazo ni compare de planta)
-R-RUNTIME-002 PASS
-R-RUNTIME-003 PASS
-R-RUNTIME-004 PASS
-R-RUNTIME-005 (protección planta) PASS
-
-HARNESS FAILURE = 0
-PRE-DEPLOY GATE = PASS
-
-Si solo una parte cabe en alcance, no falsear verde.
-
-## Evidencia final
-
-1. diff del Runtime Gate (R-RUNTIME-001 + protección planta);
-2. BEFORE rojo de R-RUNTIME-001 y PASS de la protección planta;
-3. FIRST_BAD_BOUNDARY de R-RUNTIME-001 bajo la nueva expectativa;
-4. frontera causal corregida;
-5. AFTER TIER 1 / RUNTIME / GATE;
-6. confirmación de que no se implementó `como vamos?` post-margen-cliente;
-7. confirmación de que no se hardcodearon ERICK / agosto / 0.93 / 7.32;
-8. commit SHA;
-9. git status --short.
+Esta tarea **no** decide si el chat debe usar latest como histórico.
 
 ## Completion
 
-status: CLOSED
+status: BLOCKED
+
+LIVE_DB autorizada pero no alcanzable (sin DATABASE_URL / .env en el entorno).
+SELECT no ejecutado.
 NO merge.
 NO deploy.
 NO next task.
