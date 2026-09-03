@@ -1,6 +1,6 @@
 task_id: FIX-DIRECTOR-IA-CLIENT-MARGIN-SEMANTIC-ROUTING-001
 
-status: DONE_PENDING_REVIEW
+status: CLOSED
 authorized_by: "Human Approver"
 authorized_at: "2026-09-02T21:22:25-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-02"
@@ -242,8 +242,7 @@ Si solo una parte cabe en alcance, no falsear verde.
 
 ## Completion
 
-status: DONE_PENDING_REVIEW
-
+status: CLOSED
 NO merge.
 NO deploy.
 NO next task.
