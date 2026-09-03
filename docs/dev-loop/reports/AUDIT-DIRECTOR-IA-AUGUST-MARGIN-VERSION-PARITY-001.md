@@ -165,3 +165,5 @@ No se añadió ningún test en esta tarea.
 La autorización G1 de lectura existe. La conexión de producción **no** está en este entorno. Los puntos 1–7 y 9 siguen `NOT_PROVEN`. El punto 8 (regla de código) está demostrado. El punto 10 está propuesto.
 
 No merge. No deploy. No next task.
+
+docs SHA: `5542c721983b6962aa26dbfe30c58656012a25d3`
