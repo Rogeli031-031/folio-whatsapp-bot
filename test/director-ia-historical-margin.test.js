@@ -5,7 +5,12 @@ const assert = require("node:assert/strict");
 const fs = require("fs");
 const path = require("path");
 
-const { planDirectorIaQuestion, detectDirectorIaIntent } = require("../lib/director-ia-planner");
+const {
+  planDirectorIaQuestion,
+  detectDirectorIaIntent,
+  isDiscountPeriodQuestion,
+  explicitClientScopeSpan,
+} = require("../lib/director-ia-planner");
 const { DIRECTOR_IA_VERACITY, isDirectorIaDomainReadable } = require("../lib/director-ia-capabilities");
 const { getDirectorIaTool, validateDirectorIaToolRegistry } = require("../lib/director-ia-tools");
 const { INHERITABLE_INTENTS, resolveConversationTurn, buildConversationState } = require("../lib/director-ia-conversation-state");
@@ -658,11 +663,36 @@ describe("G. continuity", () => {
       turn.inherit && turn.inherit_parent_intent ? { inheritParentIntent: turn.inherit_parent_intent } : {}
     );
     assert.notEqual(plan.intent, "historical_margin");
-    assert.equal(detectDirectorIaIntent(question).intent, "unknown");
+    assert.equal(detectDirectorIaIntent(question).intent, "client_profile");
     assert.equal(planDirectorIaQuestion("¿Y en mayo?", { inheritParentIntent: "historical_margin" }).intent, "historical_margin");
     assert.notEqual(
       planDirectorIaQuestion("¿venta de agosto?", { inheritParentIntent: "historical_margin" }).intent,
       "historical_margin"
+    );
+  });
+
+  it("descuento + mes nombrado no es unknown ni generic intent", () => {
+    assert.equal(isDiscountPeriodQuestion("¿descuento de agosto?"), true);
+    assert.equal(detectDirectorIaIntent("¿descuento de agosto?").intent, "client_profile");
+    const plan = planDirectorIaQuestion("¿descuento de agosto?");
+    assert.equal(plan.intent, "client_profile");
+    assert.equal(plan.requires_clarification, true);
+    assert.match(plan.clarification_reason, /descuento/i);
+    assert.doesNotMatch(plan.clarification_reason, /no se pudo determinar una intenci/i);
+  });
+
+  it("margen + cliente embebido no es planta; ¿Y en mayo? sí hereda", () => {
+    const q = "Dame el margen histórico de TORTILLERIA ERICK de enero a agosto.";
+    assert.equal(detectDirectorIaIntent(q).intent, "historical_margin");
+    assert.ok(explicitClientScopeSpan(q));
+    assert.notEqual(explicitClientScopeSpan(q).toLowerCase(), "acapulco");
+    assert.equal(
+      planDirectorIaQuestion("¿Y en mayo?", { inheritParentIntent: "historical_margin" }).intent,
+      "historical_margin"
+    );
+    assert.equal(
+      planDirectorIaQuestion("descuento de agosto?", { inheritParentIntent: "plant_diagnosis" }).intent,
+      "client_profile"
     );
   });
 
