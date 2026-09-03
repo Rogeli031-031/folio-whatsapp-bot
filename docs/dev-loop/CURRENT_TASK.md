@@ -1,7 +1,6 @@
 task_id: FIX-DIRECTOR-IA-RUNTIME-METRIC-PACK-ROUTING-001
 
-status: DONE_PENDING_REVIEW
-
+status: CLOSED
 authorized_by: "Human Approver"
 
 authorized_at: "2026-09-02T20:45:00-06:00"
@@ -347,8 +346,7 @@ Entregar:
 
 Si la implementación permitida termina:
 
-status: DONE_PENDING_REVIEW
-
+status: CLOSED
 NO merge.
 NO deploy.
 NO next task.
