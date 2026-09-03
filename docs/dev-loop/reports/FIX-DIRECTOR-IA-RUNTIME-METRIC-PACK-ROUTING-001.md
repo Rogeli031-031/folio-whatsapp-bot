@@ -115,5 +115,8 @@ No: `lib/director-ia-conversation-state.js`, fixtures Golden, harness expectatio
 
 * base: `efe055af` (`origin/main`)
 * branch: `fix/director-ia-runtime-metric-pack-routing-001`
-* commit SHA: se anota tras el commit
+* commit SHA: `f71e67ff67a64b0146586d06f9e9b26f1fc3174c`
+* `git status --short` post-commit de implementación: limpio
 * no merge / no deploy / no next task
+
+Nota de cierre Git: el SHA anterior es el commit de implementación. Si este archivo se re-commitea solo para anotar el SHA, el HEAD de la rama puede avanzar un commit docs.
