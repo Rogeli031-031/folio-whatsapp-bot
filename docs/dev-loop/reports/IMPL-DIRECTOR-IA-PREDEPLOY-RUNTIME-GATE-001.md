@@ -150,9 +150,12 @@ node --test test/director-ia-golden-regression.test.js
 
 * base: `3722dbcd` (`origin/main`, merge del metric-switch)
 * branch: `implementation/director-ia-predeploy-runtime-gate-001` (≠ `main`)
-* commit SHA: se anota tras el commit de implementación
+* commit SHA: `8ebb77e33b8012a1d8b57acbaa325e678b3a5a90`
+* `git status --short` post-commit de implementación: limpio
 * no push a `main`
 * no merge
 * no deploy
 * no FIX de producto
 * no siguiente tarea
+
+Nota de cierre Git: el SHA anterior es el commit de implementación. Si este archivo se re-commitea solo para anotar el SHA, el HEAD de la rama puede avanzar un commit docs.
