@@ -135,4 +135,6 @@ No tocados: `docs/director-ia/`, DB/schema, LIVE_DB, frontend, `conversation-sta
 
 ## 9. Commit / status
 
-Ver SHA del commit de esta rama y `git status --short` al cierre.
+implementation SHA: `13676cef71d8f066255a75f7b7551ac41059d11d`
+
+Tras el stamp documental de este SHA, `git status --short` debe quedar limpio en la rama `fix/director-ia-client-margin-semantic-routing-001`. No push. No merge.
