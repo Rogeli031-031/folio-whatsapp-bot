@@ -1,298 +1,356 @@
-task_id: IMPL-DIRECTOR-IA-PREDEPLOY-RUNTIME-GATE-001
+task_id: FIX-DIRECTOR-IA-RUNTIME-METRIC-PACK-ROUTING-001
 
-status: CLOSED
+status: DONE_PENDING_REVIEW
+
 authorized_by: "Human Approver"
-authorized_at: "2026-09-02T20:26:11-06:00"
-human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-02"
-objective: Añadir la capa B de Golden in-process sobre askDirectorIa para que el gate pre-deploy detecte HTTP 500 y cambios de métrica/pack que TIER 1 no ve, sin corregir producto.
 
-mode: TEST_INFRASTRUCTURE_ONLY
+authorized_at: "2026-09-02T20:45:00-06:00"
+
+human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-02"
+
+objective: Corregir los cuatro PRODUCT RUNTIME FAIL actuales R-RUNTIME-001..004 detectados por el PRE-DEPLOY Runtime Gate, aplicando el cambio mínimo en las fronteras causales reales de routing/metric-pack sin debilitar tests ni alterar otras capacidades de Director IA.
+
+in_scope:
+- código productivo de Director IA estrictamente necesario para corregir R-RUNTIME-001..004
+- planner/routing/conversation-state/metric-pack únicamente cuando sean causalmente demostrados
+- tests existentes relacionados
+- Golden Regression TIER 1
+- PRE-DEPLOY Runtime Gate
+- fixtures/helpers de tests solo para ampliar observabilidad, nunca para acomodar el producto
+- docs/dev-loop/CURRENT_TASK.md
+- docs/dev-loop/reports/FIX-DIRECTOR-IA-RUNTIME-METRIC-PACK-ROUTING-001.md
+
+out_of_scope:
+- DB/schema/migrations
+- LIVE_DB
+- frontend
+- Action Register behavior
+- Folios
+- arquitectura congelada
+- nuevos contratos
+- cambios generales de prompts no causales
+- reparación del HTTP 500 observado en producción cuya paridad aún no está demostrada
+- cambios para casos fuera de R-RUNTIME-001..004
+- merge a main
+- deploy
+- siguiente tarea
+
+contracts_in_force:
+- AGENTS.md
+- docs/dev-loop/LOOP_PROTOCOL.md
+- contratos vigentes aplicables de Director IA
+
+allowed_actions:
+- crear rama fix/director-ia-runtime-metric-pack-routing-001 desde main limpio y sincronizado
+- inspección física y tracing de R-RUNTIME-001..004
+- ejecutar TIER 1 y PRE-DEPLOY Runtime Gate
+- modificar la mínima frontera productiva causal
+- añadir tests determinísticos necesarios
+- commit en la rama de tarea
+- reporte final
+- dejar DONE_PENDING_REVIEW
+
+forbidden_actions:
+- cambiar Golden/Runtime expectations para obtener PASS artificial
+- hardcodear respuestas para TORTILLERIA ERICK
+- hardcodear agosto
+- hacer que mocks seleccionen artificialmente la ruta esperada
+- convertir failures de producto en NOT_OBSERVABLE para obtener verde
+- ocultar errores mediante respuesta final
+- modificar DB/schema
+- consultar LIVE_DB
+- resolver el HTTP 500 de producción sin demostrar primero su causa
+- merge/push a main
+- deploy
+- abrir siguiente tarea
+
+max_attempts: 1
+
+result_report_path: docs/dev-loop/reports/FIX-DIRECTOR-IA-RUNTIME-METRIC-PACK-ROUTING-001.md
 
 implementation_authorized: YES
 merge_authorized: NO
 deploy_authorized: NO
 live_db_authorized: NO
 
-in_scope:
+## BASE
 
-* test/fixtures/director-ia-golden-cases.js (añadir casos RUNTIME; no debilitar expectations TIER 1)
-* test/helpers/director-ia-golden-harness.js (observación TIER 1 intacta; añadir runner Capa B o extraer helper hermano)
-* test/helpers/director-ia-runtime-golden-harness.js (nuevo, si se separa Capa B)
-* test/director-ia-golden-regression.test.js
-* scripts/director-ia-golden-regression.js
-* package.json (comando o extensión del comando Golden; no inventar otro runner de producto)
-* docs/dev-loop/CURRENT_TASK.md
-* docs/dev-loop/reports/IMPL-DIRECTOR-IA-PREDEPLOY-RUNTIME-GATE-001.md
+Crear desde:
 
-out_of_scope:
+origin/main = efe055af9e20287bc2dd3a9530c87f2bb73d88b1
 
-* cualquier cambio de comportamiento en lib/ (planner, chat, conversation-state, tools, historical-margin, client-profile, evidence, orchestrator)
-* server.js
-* docs/director-ia/
-* DB / schema / LIVE_DB / Render / tokens
-* frontend
-* arreglar el HTTP 500 de margen histórico ERICK
-* arreglar inherit/runtime de descuento
-* crear capacidad de descuento mensual de planta
-* crear margen histórico por cliente
-* debilitar G-METRIC-SWITCH-001 u otros TIER 1 para forzar PASS
-* comparar prosa LLM / “se siente bien”
-* merge o push a main
-* deploy
-* iniciar FIX de los casos RUNTIME
+La rama requerida es:
 
-contracts_in_force:
+fix/director-ia-runtime-metric-pack-routing-001
 
-* AGENTS.md
-* docs/dev-loop/LOOP_PROTOCOL.md
-* docs/dev-loop/TASK_TEMPLATE.md
-* docs/dev-loop/reports/IMPL-DIRECTOR-IA-GOLDEN-REGRESSION-GATE-001.md
-* docs/dev-loop/reports/FIX-DIRECTOR-IA-METRIC-SWITCH-EXPLICIT-OVERRIDES-INHERITANCE-001.md
-* contratos vigentes de Director IA (lectura; no reescribir)
+## Baseline obligatorio BEFORE
 
-allowed_actions:
+Ejecutar:
 
-* inspección read-only inicial
-* crear rama implementation/director-ia-predeploy-runtime-gate-001 desde main limpio y sincronizado
-* ejecutar TIER 1 y suites existentes de solo lectura
-* añadir harness/fixtures/comando de Capa B in-process
-* llamar askDirectorIa / configureDirectorIaChat desde tests con stubs/fixtures (misma entrada que el chat)
-* commit en la rama de tarea
-* escribir reporte
-* dejar DONE_PENDING_REVIEW
+npm run test:director-ia:golden
 
-forbidden_actions:
+y:
 
-* escribir AUTHORIZED_BY_HUMAN
-* poner status AUTHORIZED
-* crear, borrar o modificar authorized_by, authorized_at o human_authorization
-* editar lib/ o server.js
-* consultar LIVE_DB
-* usar el backend Render o tokens de dashboard/WhatsApp
-* corregir producto para poner RUNTIME en PASS
-* cambiar expectations TIER 1 para forzar PASS
-* match de prosa GPT como criterio de PASS
-* merge a main
-* push a main
-* deploy
-* encadenar la siguiente tarea (FIX de 500, FIX de descuento, etc.)
+npm run test:director-ia:predeploy -- --gate
 
-max_attempts: 1
+Debe reproducirse conceptualmente:
 
-result_report_path: docs/dev-loop/reports/IMPL-DIRECTOR-IA-PREDEPLOY-RUNTIME-GATE-001.md
+TIER 1
+8/8 PASS
 
-## Por qué esta tarea (no es un FIX)
+RUNTIME
+R-RUNTIME-001 FAIL
+R-RUNTIME-002 FAIL
+R-RUNTIME-003 FAIL
+R-RUNTIME-004 FAIL
 
-TIER 1 Golden observa planner / conversation-state / loaders. No ejecuta el runtime de chat.
+PRE-DEPLOY GATE = FAIL
 
-Por eso coexisten:
+Si el baseline ya no coincide materialmente, STOP y reportar antes de modificar producto.
 
-* TIER 1 `G-METRIC-SWITCH-001` PASS (`plan.intent !== historical_margin`)
-* chat real: HTTP 500, pack de materialidad/kg/DICF, o “no se pudo determinar intención”
+## Casos a corregir
 
-Esta tarea construye el detector. No autoriza reparar lo detectado.
+### R-RUNTIME-001
 
-Los cuatro casos RUNTIME son fallos distintos. No unificarlos en un solo “arreglar descuento”.
+Pregunta exacta:
 
-## Capa A — TIER 1 (ya existe; no rehacer)
+Dame el margen histórico de TORTILLERIA ERICK de enero a agosto.
 
-Comando actual: `npm run test:director-ia:golden`
+Actual:
 
-Debe seguir existiendo y no perder casos. No cambiar producto. No debilitar fixtures TIER 1.
+el runtime alcanza un metric-pack de historical margin de planta y devuelve compare_months de planta, ignorando la entidad explícita TORTILLERIA ERICK.
 
-Capa A no es gate de deploy por sí sola.
+Expected:
 
-## Capa B — PRE-DEPLOY RUNTIME (a construir)
+la entidad explícita de cliente debe participar en la selección de la ruta/pack correspondiente.
 
-Entrada: la misma que el chat (`askDirectorIa(req, plantaId, question)`), in-process.
+No hardcodear ERICK.
 
-Deps: `configureDirectorIaChat` con pool/loaders stub o fixture. `now` fijo (p. ej. 2026-09-01 America/Mexico_City), igual que TIER 1.
+No convertir silenciosamente una pregunta de cliente en una comparación de planta.
 
-Prohibido: LIVE_DB, HTTP real a Render, OpenAI de producción. Si un caso exige modelo, stubear la llamada y afirmar pack/intent/status, no la prosa.
+### R-RUNTIME-002
 
-Asserts estructurales (PASS/FAIL de producto):
+Secuencia:
 
-* no throw no capturado
-* `status` no 5xx (en particular no 500)
-* `intent` / tool / `last_evidence_bundle_type` / `parent_intent` del estado
-* métrica del pack (margen vs descuento vs materialidad/kg/DICF)
-* clarificación específica vs genérica de intención
-* continuidad o cambio de contexto en el segundo turno
+Turno 1:
+Dame el margen histórico de TORTILLERIA ERICK de enero a agosto.
 
-No es PASS “la respuesta se siente bien”.
+Turno 2:
+¿descuento de agosto?
 
-Si el 500 de ERICK no se reproduce in-process: STOP y reportar. No fingir PASS. No ir a LIVE_DB. No “arreglarlo un poco” para que el harness corra.
+Actual:
 
-## Casos RUNTIME obligatorios
+el segundo turno no alcanza un pack correcto de descuento y termina en un fallthrough/contexto genérico, observado incluso como HTTP 403 en el harness.
 
-Textos exactos. No parafrasear.
+Expected:
 
-### R-RUNTIME-001 — margen histórico ERICK rango
+- conservar identidad/contexto compatible;
+- reconocer cambio explícito a descuento;
+- seleccionar ruta/pack correspondiente a descuento;
+- no reutilizar historical_margin;
+- no caer en Action Register/contexto genérico.
 
-Turnos:
+### R-RUNTIME-003
 
-1. `Dame el margen histórico de TORTILLERIA ERICK de enero a agosto.`
+Secuencia:
 
-Hard FAIL:
+Turno 1:
+como vamos?
 
-* throw
-* HTTP/status 5xx
+Turno 2:
+descuento de agosto?
 
-Semantic FAIL:
+Actual:
 
-* responde como descuento, kg de perfil, materialidad, DICF o brief ejecutivo
+el segundo turno permanece funcionalmente dentro de plant_diagnosis/CEL y produce materialidad/kg/DICF en vez de descuento.
 
-Esta tarea NO decide si debe existir margen histórico por cliente. NO implementar esa capacidad.
+Expected:
 
-Si el runtime no 500 y entrega fail-closed o clarificación específica (margen histórico es de planta / no cubre cliente+rango), registrarlo en el reporte como observación. El caso sigue siendo PRODUCT FAIL respecto de “devuelve margen” hasta un FIX humano posterior. El éxito de ESTA tarea es detectar, no poner verde.
+la métrica explícita del nuevo turno debe provocar una nueva selección de ruta/metric-pack compatible con descuento.
 
-Expected AFTER de esta infra: el caso corre y, si el 500 existe, queda PRODUCT_GOLDEN_FAILURE con FIRST_BAD_BOUNDARY (no HARNESS_FAILURE).
+No reutilizar plant_diagnosis cuando el usuario cambió explícitamente de métrica.
 
-### R-RUNTIME-002 — margen histórico → descuento de agosto
+### R-RUNTIME-004
 
-Turnos:
+Chat nuevo.
 
-1. parent de margen histórico (el de R-RUNTIME-001, o `¿Cuál fue el margen en mayo?` si el parent 500 impide encadenar; documentar cuál se usó y por qué)
-2. `¿descuento de agosto?`
+Pregunta:
 
-Expected (contrato de observación, no de FIX):
+¿descuento de agosto?
 
-* no 5xx
-* no pack `historical_margin`
-* pack/ruta de descuento, o clarificación específica de descuento+periodo+cliente
-* no materialidad/kg/DICF como respuesta de descuento
+Actual:
 
-TIER 1 `G-METRIC-SWITCH-001` PASS no basta. Capa B debe ver el resultado de `askDirectorIa`.
+unknown → conversation_clarification genérica:
 
-### R-RUNTIME-003 — como vamos → descuento de agosto
+“No se pudo determinar una intención clara…”
 
-Turnos:
+Expected:
 
-1. `como vamos?`
-2. `descuento de agosto?`
+el sistema debe reconocer que la pregunta pertenece al dominio/métrica descuento.
 
-Expected (observación):
+Si para responder necesita una entidad o alcance adicional, debe llegar a una aclaración específica del dominio de descuento.
 
-* no 5xx
-* no reutilizar pack de `daily_executive_brief` / CEL / `plant_diagnosis` / materialidad comercial / kg / DICF como si fuera descuento
-* cambio a descuento, o clarificación específica de descuento
+NO se exige inventar cliente, planta, valor ni fuente.
 
-El FIX de inherit HM→descuento no cubre este padre. No “corregirlo” aquí.
+NO se exige responder un descuento numérico si falta información necesaria.
 
-### R-RUNTIME-004 — first-turn descuento
+Sí se exige evitar la aclaración genérica de “intención desconocida”.
 
-Turnos:
+## Hipótesis de entrada
 
-1. `¿descuento de agosto?` (chat nuevo, sin estado)
+El PRE-DEPLOY Runtime Gate reportó para los cuatro casos:
 
-Esta tarea NO crea capacidad de descuento mensual de planta.
+FIRST_BAD_BOUNDARY = METRIC_PACK
 
-FAIL:
+Esto es evidencia inicial, NO una orden para parchear una función por nombre.
 
-* mensaje genérico de “no se pudo determinar intención” (o equivalente) como outcome de éxito
-* 5xx
-* pack de materialidad/kg/DICF/margen
+Cursor debe verificar físicamente para cada caso:
 
-PASS (solo observación; no implementar):
+INPUT
+→ conversation state
+→ planner
+→ entity/metric/period resolution
+→ route selection
+→ metric-pack
+→ tool/loaders
+→ response
 
-* clarificación específica que pida cliente y/o alcance, o
-* pack real de descuento si la infraestructura de test ya lo produce sin cambiar lib/
+y localizar la primera decisión causal incorrecta.
 
-No inventar el contrato de producto más allá de: nunca genérico de intención; nunca 500; nunca otra métrica.
+## Regla principal
 
-## Comando y letrero
+No arreglar la redacción final si la selección de ruta es incorrecta.
 
-Un comando único (extender `scripts/director-ia-golden-regression.js` o el npm script existente) debe imprimir conceptualmente:
+La corrección debe realizarse en la primera frontera causal demostrada.
 
-```text
+Preferir reglas generales:
+
+explicit current-turn signal
++
+compatible inherited context
+→ correct semantic route
+
+sobre excepciones por frase, cliente o mes.
+
+## Multiplicidad de causas
+
+R-RUNTIME-001..004 están autorizados dentro de esta misma tarea porque pertenecen al mismo bloque observado de routing/metric-pack.
+
+Si Cursor demuestra que existen varias causas independientes PERO todas permanecen dentro de planner/routing/conversation-state/metric-pack y dentro de estos cuatro casos, puede corregirlas en esta tarea con cambios mínimos y tests separados.
+
+Si alguno requiere:
+- nueva arquitectura;
+- DB;
+- contrato;
+- herramienta nueva;
+- fuente nueva;
+- cambio fuera del dominio autorizado;
+
+NO expandir alcance.
+
+Dejar ese caso FAIL, documentar FIRST_BAD_BOUNDARY y continuar únicamente con los casos que sí estén dentro del alcance.
+
+## HTTP 500
+
+El HTTP 500 observado manualmente en producción con:
+
+Dame el margen histórico de TORTILLERIA ERICK de enero a agosto.
+
+NO se considera explicado todavía.
+
+El harness demostró:
+- con IGF FINAL disponible → HTTP 200;
+- sin FINAL → puede producir 500 natural.
+
+Pero no hay paridad demostrada con producción.
+
+Por tanto:
+
+NO arreglar el 500 de producción dentro de esta tarea salvo que resulte ser una consecuencia directa e inequívoca del mismo cambio autorizado y quede demostrada por el Runtime Gate.
+
+En otro caso, dejarlo explícitamente como NOT_PROVEN / pendiente separado.
+
+## Protección contra regresión
+
+Durante la corrección:
+
+TIER 1 debe permanecer:
+
+8/8 PASS
+
+No debilitar ninguno de los ocho casos existentes.
+
+Ejecutar suites relacionadas de planner, conversation-state, routing, historical-margin, client-profile y tool/orchestrator según archivos físicamente afectados.
+
+## Objetivo AFTER
+
+El objetivo ideal es:
+
 PRE-DEPLOY DIRECTOR IA
 
 TIER 1
-<n>/<n> PASS
+8/8 PASS
 
 RUNTIME
-R-RUNTIME-001  Historical margin ERICK ........ PASS|FAIL  FIRST_BAD_BOUNDARY=...
-R-RUNTIME-002  Margin → discount .............. PASS|FAIL  FIRST_BAD_BOUNDARY=...
-R-RUNTIME-003  Plant/executive → discount ..... PASS|FAIL  FIRST_BAD_BOUNDARY=...
-R-RUNTIME-004  First-turn discount ............ PASS|FAIL  FIRST_BAD_BOUNDARY=...
-HTTP 5xx ...................................... <count>
+R-RUNTIME-001 PASS
+R-RUNTIME-002 PASS
+R-RUNTIME-003 PASS
+R-RUNTIME-004 PASS
 
-PRE-DEPLOY GATE = PASS|FAIL
-```
+HARNESS FAILURE = 0
 
-Reglas:
+PRE-DEPLOY GATE = PASS
 
-* REPORT (default): exit 0 salvo HARNESS_FAILURE
-* GATE (`--gate`): exit 1 si TIER 1 PRODUCT FAIL o RUNTIME PRODUCT FAIL o HARNESS_FAILURE
-* PRE-DEPLOY GATE = PASS solo si TIER 1 PASS completo y RUNTIME PASS completo y HTTP 5xx = 0 y HARNESS 0
+Si solo una parte puede corregirse sin salir del alcance, NO falsear verde.
 
-En ESTA tarea, PRE-DEPLOY GATE = FAIL es el resultado esperado si se reproducen los bugs. Eso es éxito de la infra.
+Reportar claramente:
 
-No cablear este gate a CI/GitHub Actions/watchers.
+PASS: N
+FAIL: N
 
-## Validación BEFORE
+y las causas pendientes.
 
-1. Confirmar rama ≠ `main` para implementar (solo tras G1).
-2. `npm run test:director-ia:golden` — registrar TIER 1 actual (esperado: 8 PASS / 0 PRODUCT FAIL / HARNESS 0, salvo que main haya cambiado; si cambia, STOP y reportar).
-3. No existe Capa B: los cuatro RUNTIME no están en el letrero pre-deploy.
+## Validación semántica
 
-Si TIER 1 no corre: STOP. No “arreglar producto” para poder escribir el harness.
+PASS no significa únicamente HTTP 200.
 
-## Implementación
+Cada caso Runtime debe comprobar que:
 
-1. Inventariar cómo `askDirectorIa` se stubee hoy en tests existentes. Reutilizar, no inventar framework.
-2. Añadir fixtures RUNTIME con los textos exactos.
-3. Harness Capa B: una entrada chat, frontiers al menos HTTP/STATUS, INTENT/ROUTE, EVIDENCE_BUNDLE, METRIC_PACK, USER_VISIBLE_OUTCOME.
-4. Preservar TIER 1. Si un helper se comparte, no cambiar el significado de un PASS TIER 1.
-5. Si falta un export de test-only y eso exige editar lib/: STOP. No “abrir un hueco” de producto.
+- se eligió la familia semántica correcta;
+- no se reutilizó un pack incompatible;
+- no se devolvió un bloque de materialidad/kg cuando se pidió descuento;
+- no se ignoró una entidad explícita;
+- no se produjo aclaración genérica cuando la métrica sí era reconocible.
 
-## Validación AFTER (éxito de infra, no de producto)
+No comparar prosa literal salvo fragmentos estructurales necesarios para detectar respuestas equivocadas.
 
-* TIER 1: mismos 8 casos, mismas expectations, mismo veredicto que BEFORE (salvo HARNESS nuevo = STOP).
-* Los 4 RUNTIME se ejecutan.
-* Ningún RUNTIME FAIL se etiqueta HARNESS_FAILURE.
-* Cada RUNTIME FAIL tiene FIRST_BAD_BOUNDARY.
-* R-RUNTIME-001, si el 500 existe, es PRODUCT FAIL (status/throw), no “NOT_OBSERVABLE”.
-* `PRE-DEPLOY GATE = FAIL` mientras exista algún RUNTIME FAIL.
-* `--gate` exit 1 si PRE-DEPLOY GATE = FAIL.
-* Suites del harness Golden existentes siguen pasando.
-* `git diff` de lib/ y server.js vacío.
+## Evidencia final
 
-Si los 4 RUNTIME pasan sin tocar lib/: STOP. El harness no está observando el runtime real.
+Entregar:
+
+1. causa raíz de cada R-RUNTIME-001..004;
+2. si compartían o no causa;
+3. FIRST_BAD_BOUNDARY definitivo de cada uno;
+4. funciones modificadas;
+5. diff conceptual;
+6. PRE-DEPLOY BEFORE;
+7. PRE-DEPLOY AFTER;
+8. TIER 1 AFTER;
+9. suites relacionadas;
+10. archivos modificados;
+11. commit SHA;
+12. git status --short;
+13. estado del HTTP 500: PROVEN / NOT_PROVEN;
+14. confirmación de que no se cambiaron expectations para obtener verde.
 
 ## Completion
 
-status: CLOSED
-Entregar:
+Si la implementación permitida termina:
 
-* inventario de entrada chat / stubs reutilizados
-* diseño Capa B (fronteras, asserts)
-* TIER 1 BEFORE/AFTER
-* RUNTIME resultado por caso + FIRST_BAD_BOUNDARY
-* conteo HTTP 5xx
-* letrero PRE-DEPLOY completo
-* archivos tocados / no tocados
-* prueba de que lib/ y server.js no cambiaron
-* branch
-* commit SHA
-* git status --short
+status: DONE_PENDING_REVIEW
 
-No merge.
-No deploy.
-No FIX de producto.
-No next task.
+NO merge.
+NO deploy.
+NO next task.
+
 STOP.
-
-## Autorización (solo HUMAN_APPROVER)
-
-Para ejecutar, el humano sustituye únicamente:
-
-```yaml
-status: AUTHORIZED
-authorized_by: "<nombre>"
-authorized_at: "<ISO-8601 con zona>"
-human_authorization: "AUTHORIZED_BY_HUMAN: <nombre> <YYYY-MM-DD>"
-implementation_authorized: YES
-```
-
-Sin esa línea `human_authorization` escrita por humano, esta propuesta no es ejecutable.
