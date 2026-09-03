@@ -2343,6 +2343,28 @@ async function ensureSchema() {
       console.warn("[migracion creado_en TIMESTAMPTZ]", e.message);
     }
 
+    /**
+     * Migración idempotente: instalaciones antiguas pueden tener folios.concepto
+     * como VARCHAR(50). Excel y el dashboard envían descripciones más largas.
+     */
+    try {
+      await client.query(
+        `DO $$
+         BEGIN
+           IF EXISTS (
+             SELECT 1 FROM information_schema.columns
+             WHERE table_schema = 'public' AND table_name = 'folios'
+               AND column_name = 'concepto'
+               AND data_type = 'character varying'
+           ) THEN
+             EXECUTE 'ALTER TABLE public.folios ALTER COLUMN concepto TYPE TEXT';
+           END IF;
+         END $$;`
+      );
+    } catch (e) {
+      console.warn("[migracion folios.concepto TEXT]", e.message);
+    }
+
     await client.query(`
       CREATE TABLE IF NOT EXISTS public.comentarios (
         id SERIAL PRIMARY KEY,

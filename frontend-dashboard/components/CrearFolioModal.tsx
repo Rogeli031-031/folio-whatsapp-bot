@@ -476,8 +476,9 @@ export default function CrearFolioModal({
                     <textarea
                       value={L.concepto}
                       onChange={(e) => updateLinea(idx, { concepto: e.target.value })}
-                      className="w-full rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200 min-h-[44px]"
-                      placeholder="Descripción del gasto"
+                      className="w-full rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200 min-h-[56px]"
+                      placeholder="Descripción del gasto (puede ser larga, como en el Excel)"
+                      rows={3}
                       required={idx === 0}
                     />
                   </div>
