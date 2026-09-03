@@ -683,9 +683,11 @@ describe("G. continuity", () => {
 
   it("margen + cliente embebido no es planta; ¿Y en mayo? sí hereda", () => {
     const q = "Dame el margen histórico de TORTILLERIA ERICK de enero a agosto.";
-    assert.equal(detectDirectorIaIntent(q).intent, "historical_margin");
+    assert.equal(detectDirectorIaIntent(q).intent, "client_profile");
     assert.ok(explicitClientScopeSpan(q));
     assert.notEqual(explicitClientScopeSpan(q).toLowerCase(), "acapulco");
+    assert.equal(detectDirectorIaIntent("¿Cuál es el margen de agosto?").intent, "historical_margin");
+    assert.equal(explicitClientScopeSpan("¿Cuál es el margen de agosto?"), null);
     assert.equal(
       planDirectorIaQuestion("¿Y en mayo?", { inheritParentIntent: "historical_margin" }).intent,
       "historical_margin"

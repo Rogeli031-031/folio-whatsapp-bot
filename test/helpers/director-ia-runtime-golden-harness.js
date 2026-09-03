@@ -55,6 +55,21 @@ function availableIgfMap() {
   };
 }
 
+function catalogClientSales() {
+  return [
+    { month: "2026-01", cliente_norm: "TORTILLERIA ERICK", canal: "Casa", subcanal: "", kg: 10 },
+    { month: "2026-08", cliente_norm: "TORTILLERIA ERICK", canal: "Casa", subcanal: "", kg: 40 },
+    { month: "2026-08", cliente_norm: "TORTILLERIA", canal: "Casa", subcanal: "", kg: 15 },
+  ];
+}
+
+function catalogClientDiscount() {
+  return [
+    { month: "2026-01", cliente_norm: "TORTILLERIA ERICK", canal: "Casa", subcanal: "", monto: 12, kg: 10 },
+    { month: "2026-08", cliente_norm: "TORTILLERIA ERICK", canal: "Casa", subcanal: "", monto: 48, kg: 40 },
+  ];
+}
+
 function igfQueryFns(map) {
   return {
     queryHistoricalMarginVersions: async (_c, y, m) => (map[`${y}-${m}`] || {}).versions || [],
@@ -92,8 +107,35 @@ function packKind(body) {
   return mode || parent || "unknown";
 }
 
-function isDiscountPack(body) {
-  return packKind(body) === "descuento";
+function isClientDiscountFamilyPack(body) {
+  const pack = packKind(body);
+  return pack === "descuento" || pack === "client_profile";
+}
+
+function normalizeBlob(raw) {
+  return String(raw || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function entityParticipates(runtimeCase, body) {
+  const expected = runtimeCase.expected_entity;
+  if (!expected) return true;
+  const meta = metaOf(body);
+  const state = (meta && meta.conversation_state) || {};
+  const entities = Array.isArray(state.active_entities) ? state.active_entities : [];
+  const profile = body && body.client_profile;
+  const identity = profile && profile.identity;
+  const blob = [
+    body && body.answer,
+    identity && identity.display_name,
+    identity && identity.cliente_norm,
+    ...entities.map((e) => e && (e.display || e.cliente_norm || e.cliente_key)),
+  ]
+    .filter(Boolean)
+    .join(" ");
+  return normalizeBlob(blob).includes(normalizeBlob(expected));
 }
 
 function isSpecificDiscountClarification(body) {
@@ -153,6 +195,13 @@ function installRuntimeDeps(chat, map) {
     },
     resolveHistoricalMarginPlanta: async () => ({ id: 1, nombre: "Acapulco", clave: "AC" }),
     resolveHistoricalMarginPlantByNombre: async () => null,
+    resolveClientProfilePlanta: async () => ({ id: 1, nombre: "Acapulco", clave: "E3" }),
+    resolveClientProfilePlantCodes: async () => ({ not_found: false, uniqueCodes: ["E3"], plantCode: "E3" }),
+    queryClientProfileSales: async () => ({ rows: catalogClientSales() }),
+    queryClientProfileDiscount: async () => ({ rows: catalogClientDiscount() }),
+    queryClientProfileComments: async () => [],
+    queryClientProfileActions: async () => [],
+    queryClientProfileHistorial: async () => new Map(),
     ...igfQueryFns(map),
     openaiChat: async () => "STUB_OPENAI_TRANSPORT",
   });
@@ -164,6 +213,13 @@ function clearRuntimeDeps(chat) {
     pool: null,
     resolveHistoricalMarginPlanta: undefined,
     resolveHistoricalMarginPlantByNombre: undefined,
+    resolveClientProfilePlanta: undefined,
+    resolveClientProfilePlantCodes: undefined,
+    queryClientProfileSales: undefined,
+    queryClientProfileDiscount: undefined,
+    queryClientProfileComments: undefined,
+    queryClientProfileActions: undefined,
+    queryClientProfileHistorial: undefined,
     queryHistoricalMarginVersions: undefined,
     queryHistoricalMarginLatestVersion: undefined,
     queryHistoricalMarginLines: undefined,
@@ -205,6 +261,24 @@ function evaluateLastTurn(runtimeCase, last) {
     boundaries.METRIC_PACK = mark("FAIL", `pack=${pack} forbidden`);
     return { boundaries, http, pack };
   }
+  if (runtimeCase.expected_pack && pack !== runtimeCase.expected_pack) {
+    boundaries.METRIC_PACK = mark("FAIL", `expected_pack=${runtimeCase.expected_pack} pack=${pack}`);
+    return { boundaries, http, pack };
+  }
+  if (runtimeCase.must_return_client_historical_discount) {
+    if (
+      !isClientDiscountFamilyPack(body) ||
+      meta.requires_clarification ||
+      !entityParticipates(runtimeCase, body) ||
+      looksLikePlantMarginAnswer(body)
+    ) {
+      boundaries.METRIC_PACK = mark(
+        "FAIL",
+        `expected client historical discount; pack=${pack} clarify=${Boolean(meta.requires_clarification)} entity=${entityParticipates(runtimeCase, body)} plant_margin=${looksLikePlantMarginAnswer(body)}`
+      );
+      return { boundaries, http, pack };
+    }
+  }
   if (runtimeCase.must_return_client_margin) {
     if (!mentionsErick(body) || looksLikePlantMarginAnswer(body)) {
       boundaries.METRIC_PACK = mark(
@@ -214,7 +288,11 @@ function evaluateLastTurn(runtimeCase, last) {
       return { boundaries, http, pack };
     }
   }
-  if ((runtimeCase.expected_metrics || []).includes("descuento") && !isDiscountPack(body) && !isSpecificDiscountClarification(body)) {
+  if (
+    (runtimeCase.expected_metrics || []).includes("descuento") &&
+    !isClientDiscountFamilyPack(body) &&
+    !isSpecificDiscountClarification(body)
+  ) {
     boundaries.METRIC_PACK = mark("FAIL", `expected descuento; pack=${pack} http=${http} error=${body.error || ""}`);
     return { boundaries, http, pack };
   }
@@ -225,8 +303,20 @@ function evaluateLastTurn(runtimeCase, last) {
     boundaries.USER_VISIBLE_OUTCOME = mark("FAIL", "generic_intent_clarification");
     return { boundaries, http, pack };
   }
-  if ((runtimeCase.expected_metrics || []).includes("descuento") && !isDiscountPack(body) && !isSpecificDiscountClarification(body)) {
+  if (
+    (runtimeCase.expected_metrics || []).includes("descuento") &&
+    !isClientDiscountFamilyPack(body) &&
+    !isSpecificDiscountClarification(body)
+  ) {
     boundaries.USER_VISIBLE_OUTCOME = mark("FAIL", `not_discount answer=${answer.slice(0, 120)}`);
+    return { boundaries, http, pack };
+  }
+  if (runtimeCase.must_return_client_historical_discount && (meta.requires_clarification || !isClientDiscountFamilyPack(body))) {
+    boundaries.USER_VISIBLE_OUTCOME = mark("FAIL", `not_client_historical_discount pack=${pack}`);
+    return { boundaries, http, pack };
+  }
+  if (runtimeCase.expected_pack === "historical_margin" && pack !== "historical_margin") {
+    boundaries.USER_VISIBLE_OUTCOME = mark("FAIL", `expected plant historical_margin pack=${pack}`);
     return { boundaries, http, pack };
   }
   boundaries.USER_VISIBLE_OUTCOME = mark(
