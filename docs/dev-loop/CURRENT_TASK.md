@@ -1,6 +1,6 @@
 task_id: IMPL-DIRECTOR-IA-PREDEPLOY-RUNTIME-GATE-001
 
-status: DONE_PENDING_REVIEW
+status: CLOSED
 authorized_by: "Human Approver"
 authorized_at: "2026-09-02T20:26:11-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-02"
@@ -262,8 +262,7 @@ Si los 4 RUNTIME pasan sin tocar lib/: STOP. El harness no está observando el r
 
 ## Completion
 
-status: DONE_PENDING_REVIEW
-
+status: CLOSED
 Entregar:
 
 * inventario de entrada chat / stubs reutilizados
