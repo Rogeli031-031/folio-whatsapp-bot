@@ -1,88 +1,161 @@
-task_id: FIX-DIRECTOR-IA-RUNTIME-METRIC-PACK-ROUTING-001
+task_id: FIX-DIRECTOR-IA-CLIENT-MARGIN-SEMANTIC-ROUTING-001
 
 status: CLOSED
 authorized_by: "Human Approver"
-
-authorized_at: "2026-09-02T20:45:00-06:00"
-
+authorized_at: "2026-09-02T21:22:25-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-02"
-
-objective: Corregir los cuatro PRODUCT RUNTIME FAIL actuales R-RUNTIME-001..004 detectados por el PRE-DEPLOY Runtime Gate, aplicando el cambio mínimo en las fronteras causales reales de routing/metric-pack sin debilitar tests ni alterar otras capacidades de Director IA.
+objective: Endurecer el Runtime Gate y, solo después del BEFORE rojo, enrutar semánticamente margen de planta (IGF) vs margen con cliente explícito (descuento/kg histórico ARR), sin tocar la continuidad historical_margin → como vamos?.
 
 in_scope:
-- código productivo de Director IA estrictamente necesario para corregir R-RUNTIME-001..004
-- planner/routing/conversation-state/metric-pack únicamente cuando sean causalmente demostrados
-- tests existentes relacionados
-- Golden Regression TIER 1
-- PRE-DEPLOY Runtime Gate
-- fixtures/helpers de tests solo para ampliar observabilidad, nunca para acomodar el producto
+- test/fixtures/director-ia-golden-cases.js
+- test/helpers/director-ia-runtime-golden-harness.js
+- test/helpers/director-ia-golden-harness.js solo si la observabilidad del Runtime Gate lo exige
+- código productivo de Director IA estrictamente causal al enrutado semántico margen-planta vs margen-cliente (planner/chat/metric-pack)
+- tests determinísticos existentes de historical-margin, client-profile, planner y Runtime Gate
 - docs/dev-loop/CURRENT_TASK.md
-- docs/dev-loop/reports/FIX-DIRECTOR-IA-RUNTIME-METRIC-PACK-ROUTING-001.md
+- docs/dev-loop/reports/FIX-DIRECTOR-IA-CLIENT-MARGIN-SEMANTIC-ROUTING-001.md
 
 out_of_scope:
+- continuidad `historical_margin` / aclaración de cliente → `como vamos?`
+- cualquier caso nuevo o fix cuyo único objetivo sea esa secuencia
 - DB/schema/migrations
 - LIVE_DB
-- frontend
-- Action Register behavior
+- frontend / IGF Forecast ARR UI
+- Action Register
 - Folios
-- arquitectura congelada
+- docs/director-ia/
 - nuevos contratos
-- cambios generales de prompts no causales
-- reparación del HTTP 500 observado en producción cuya paridad aún no está demostrada
-- cambios para casos fuera de R-RUNTIME-001..004
 - merge a main
 - deploy
 - siguiente tarea
+- hardcode de ERICK, agosto, 0.93 o 7.32 en producto
 
 contracts_in_force:
 - AGENTS.md
 - docs/dev-loop/LOOP_PROTOCOL.md
-- contratos vigentes aplicables de Director IA
+- docs/director-ia/DIRECTOR_IA_CONSTITUTION.md
+- docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md
+- contratos vigentes aplicables de Director IA (obedecer, no reescribir)
 
 allowed_actions:
-- crear rama fix/director-ia-runtime-metric-pack-routing-001 desde main limpio y sincronizado
-- inspección física y tracing de R-RUNTIME-001..004
-- ejecutar TIER 1 y PRE-DEPLOY Runtime Gate
-- modificar la mínima frontera productiva causal
-- añadir tests determinísticos necesarios
+- (solo tras G1) crear rama fix/director-ia-client-margin-semantic-routing-001 desde origin/main limpio
+- primero endurecer Runtime Gate (R-RUNTIME-001 + protección planta)
+- ejecutar BEFORE de TIER 1 y PRE-DEPLOY Runtime Gate
+- STOP si el BEFORE no queda rojo en R-RUNTIME-001 o si la protección de planta no permanece PASS
+- después del BEFORE rojo, cambio mínimo en la frontera causal de routing/metric-pack
+- tests determinísticos necesarios para observabilidad, no para acomodar el producto
 - commit en la rama de tarea
 - reporte final
 - dejar DONE_PENDING_REVIEW
 
 forbidden_actions:
-- cambiar Golden/Runtime expectations para obtener PASS artificial
-- hardcodear respuestas para TORTILLERIA ERICK
-- hardcodear agosto
+- escribir AUTHORIZED_BY_HUMAN
+- poner status AUTHORIZED
+- crear, borrar o modificar authorized_by, authorized_at o human_authorization
+- implementar antes de G1
+- implementar el fix de producto antes de endurecer el Runtime Gate y registrar BEFORE rojo
+- corregir `como vamos?` después de un turno de margen/cliente
+- cambiar Golden/Runtime expectations para obtener PASS artificial (el endurecimiento de R-RUNTIME-001 y el alta de la protección de planta sí están in_scope; no debilitar R-RUNTIME-002..004 ni TIER 1)
+- hardcodear ERICK, agosto, 0.93 o 7.32 en producto
 - hacer que mocks seleccionen artificialmente la ruta esperada
-- convertir failures de producto en NOT_OBSERVABLE para obtener verde
-- ocultar errores mediante respuesta final
-- modificar DB/schema
+- inventar margen IGF de cliente
 - consultar LIVE_DB
-- resolver el HTTP 500 de producción sin demostrar primero su causa
 - merge/push a main
 - deploy
 - abrir siguiente tarea
 
 max_attempts: 1
 
-result_report_path: docs/dev-loop/reports/FIX-DIRECTOR-IA-RUNTIME-METRIC-PACK-ROUTING-001.md
+result_report_path: docs/dev-loop/reports/FIX-DIRECTOR-IA-CLIENT-MARGIN-SEMANTIC-ROUTING-001.md
 
 implementation_authorized: YES
 merge_authorized: NO
 deploy_authorized: NO
 live_db_authorized: NO
 
-## BASE
+## Estado
 
-Crear desde:
+DRAFT. No hay Gate G1. No es ejecutable.
 
-origin/main = efe055af9e20287bc2dd3a9530c87f2bb73d88b1
+## Contrato de negocio confirmado (evidencia humana, dashboard IGF Forecast ARR / Acapulco)
 
-La rama requerida es:
+No son reglas de producto hardcodeadas. Son el criterio semántico que el Runtime Gate debe exigir y que el FIX debe implementar de forma general.
 
-fix/director-ia-runtime-metric-pack-routing-001
+1. `margen` sin cliente, referido a planta/mes:
+   corresponde a `margen_kg` de IGF de planta (`historical_margin`).
+   Evidencia de tablero: agosto ≈ 7.32 $/kg (fila MARGEN de la tabla mensual de planta).
+   Pregunta de protección: `¿Cuál es el margen de agosto?`
 
-## Baseline obligatorio BEFORE
+2. `margen` con cliente explícito:
+   en el lenguaje operativo del usuario corresponde al descuento/kg histórico del cliente mostrado en “Clientes por mes”, calculado desde ARR (`descuento/kg = SUM(monto)/SUM(kg)`).
+   Evidencia de tablero: TORTILLERIA ERICK enero ≈ 0.93 $/kg (columna DESCUENTO ENERO; no existe columna MARGEN de cliente).
+   Pregunta de R-RUNTIME-001: `Dame el margen histórico de TORTILLERIA ERICK de enero a agosto.`
+
+ERICK, agosto, 0.93 y 7.32 sirven solo como evidencia/fixture. No se incrustan en producto.
+
+## Relación con la tarea CLOSED
+
+`FIX-DIRECTOR-IA-RUNTIME-METRIC-PACK-ROUTING-001` (CLOSED) dejó R-RUNTIME-001 en:
+
+- la entidad de cliente participa;
+- no se convierte silenciosamente en compare_months de planta;
+- el pack de descuento estaba **prohibido**;
+- no se exigía devolver descuento/kg histórico de cliente.
+
+Esa expectativa queda **superada** por la evidencia de negocio. No se reabre aquella tarea. Esta es una tarea nueva.
+
+El producto actual (anclar cliente + rechazar margen FINAL de planta + `parent_intent=historical_margin`) es el BEFORE esperado de R-RUNTIME-001 **después** de endurecer el gate.
+
+## Orden de ejecución (obligatorio)
+
+### Paso 1 — Endurecer el Runtime Gate (antes de tocar producto)
+
+Actualizar R-RUNTIME-001 para exigir ruta/pack de **descuento histórico de cliente**, no solamente evitar margen de planta.
+
+R-RUNTIME-001 actual (insuficiente):
+
+- `expected_metrics: ["margen"]`
+- `forbidden_packs` incluye `descuento`
+- `must_return_client_margin` solo comprueba mención de entidad y ausencia de compare de planta
+
+R-RUNTIME-001 requerido:
+
+- la entidad explícita de cliente participa;
+- la familia semántica es descuento/kg histórico de cliente (ARR / “Clientes por mes”), no `historical_margin` IGF de planta;
+- pack/ruta de descuento histórico de cliente o `client_profile` comercial mensual que exponga esa métrica;
+- `forbidden_packs` debe incluir `historical_margin` y packs de planta/CEL (`plant_diagnosis`, `daily_executive_brief`, `materialidad`, `dicf`);
+- `forbidden_packs` **no** debe incluir `descuento`;
+- no basta anclar el nombre y rechazar;
+- no inventar `margen_kg` IGF a nivel cliente;
+- no exigir el literal 0.93 en producto; puede usarse en fixture/evidencia si el harness aporta filas ARR.
+
+Agregar protección (chat nuevo, sin cliente):
+
+Pregunta exacta:
+
+`¿Cuál es el margen de agosto?`
+
+Expected:
+
+- ruta/pack `historical_margin` IGF de planta;
+- no enrutar a descuento de cliente ni a `client_profile`;
+- no exigir el literal 7.32 en producto; puede usarse en fixture/evidencia si el harness aporta IGF FINAL.
+
+Propuesta de id: `R-RUNTIME-005`. Si el harness exige otro id, documentarlo. No reutilizar R-RUNTIME-001..004.
+
+No debilitar R-RUNTIME-002..004 ni los 8 casos TIER 1.
+
+No añadir en esta tarea un caso `HM-cliente → como vamos?`.
+
+### Paso 2 — BEFORE
+
+Desde:
+
+origin/main = 3a47a8fa5910bfeacf9eb740354b41bf64d50131
+
+Rama propuesta (solo tras G1):
+
+fix/director-ia-client-margin-semantic-routing-001
 
 Ejecutar:
 
@@ -92,118 +165,32 @@ y:
 
 npm run test:director-ia:predeploy -- --gate
 
-Debe reproducirse conceptualmente:
+BEFORE esperado tras el endurecimiento, **antes** del FIX de producto:
 
-TIER 1
-8/8 PASS
+- TIER 1: 8/8 PASS
+- R-RUNTIME-001: FAIL (producto actual no entrega pack de descuento histórico de cliente)
+- R-RUNTIME-002..004: PASS (no debilitar)
+- R-RUNTIME-005 (o el id de protección planta): PASS
+- PRE-DEPLOY GATE = FAIL por R-RUNTIME-001
 
-RUNTIME
-R-RUNTIME-001 FAIL
-R-RUNTIME-002 FAIL
-R-RUNTIME-003 FAIL
-R-RUNTIME-004 FAIL
+Si R-RUNTIME-001 no queda rojo, o la protección de planta no queda PASS, STOP y reportar. No modificar producto.
 
-PRE-DEPLOY GATE = FAIL
+### Paso 3 — FIX (solo si el BEFORE del Paso 2 coincide)
 
-Si el baseline ya no coincide materialmente, STOP y reportar antes de modificar producto.
+Enrutar semánticamente con reglas generales:
 
-## Casos a corregir
+- cliente explícito + `margen` → métrica histórica de cliente/descuento (ARR), no `historical_margin` de planta
+- planta/mes + `margen` sin cliente → `historical_margin` IGF (`margen_kg`)
 
-### R-RUNTIME-001
+No hardcodear cliente, mes ni importe.
 
-Pregunta exacta:
+No corregir todavía `como vamos?` después de esa conversación. Tras este FIX se volverá a reproducir esa secuencia: la causa (`parent_intent=historical_margin` del Turno 1) puede cambiar al corregirse el intent.
 
-Dame el margen histórico de TORTILLERIA ERICK de enero a agosto.
+## Hipótesis de entrada (no es orden de parche)
 
-Actual:
+El producto actual trata “margen histórico” como IGF de planta y, con cliente embebido, rechaza en vez de servir descuento/kg de cliente.
 
-el runtime alcanza un metric-pack de historical margin de planta y devuelve compare_months de planta, ignorando la entidad explícita TORTILLERIA ERICK.
-
-Expected:
-
-la entidad explícita de cliente debe participar en la selección de la ruta/pack correspondiente.
-
-No hardcodear ERICK.
-
-No convertir silenciosamente una pregunta de cliente en una comparación de planta.
-
-### R-RUNTIME-002
-
-Secuencia:
-
-Turno 1:
-Dame el margen histórico de TORTILLERIA ERICK de enero a agosto.
-
-Turno 2:
-¿descuento de agosto?
-
-Actual:
-
-el segundo turno no alcanza un pack correcto de descuento y termina en un fallthrough/contexto genérico, observado incluso como HTTP 403 en el harness.
-
-Expected:
-
-- conservar identidad/contexto compatible;
-- reconocer cambio explícito a descuento;
-- seleccionar ruta/pack correspondiente a descuento;
-- no reutilizar historical_margin;
-- no caer en Action Register/contexto genérico.
-
-### R-RUNTIME-003
-
-Secuencia:
-
-Turno 1:
-como vamos?
-
-Turno 2:
-descuento de agosto?
-
-Actual:
-
-el segundo turno permanece funcionalmente dentro de plant_diagnosis/CEL y produce materialidad/kg/DICF en vez de descuento.
-
-Expected:
-
-la métrica explícita del nuevo turno debe provocar una nueva selección de ruta/metric-pack compatible con descuento.
-
-No reutilizar plant_diagnosis cuando el usuario cambió explícitamente de métrica.
-
-### R-RUNTIME-004
-
-Chat nuevo.
-
-Pregunta:
-
-¿descuento de agosto?
-
-Actual:
-
-unknown → conversation_clarification genérica:
-
-“No se pudo determinar una intención clara…”
-
-Expected:
-
-el sistema debe reconocer que la pregunta pertenece al dominio/métrica descuento.
-
-Si para responder necesita una entidad o alcance adicional, debe llegar a una aclaración específica del dominio de descuento.
-
-NO se exige inventar cliente, planta, valor ni fuente.
-
-NO se exige responder un descuento numérico si falta información necesaria.
-
-Sí se exige evitar la aclaración genérica de “intención desconocida”.
-
-## Hipótesis de entrada
-
-El PRE-DEPLOY Runtime Gate reportó para los cuatro casos:
-
-FIRST_BAD_BOUNDARY = METRIC_PACK
-
-Esto es evidencia inicial, NO una orden para parchear una función por nombre.
-
-Cursor debe verificar físicamente para cada caso:
+Cursor debe verificar físicamente:
 
 INPUT
 → conversation state
@@ -214,137 +201,46 @@ INPUT
 → tool/loaders
 → response
 
-y localizar la primera decisión causal incorrecta.
-
-## Regla principal
-
-No arreglar la redacción final si la selección de ruta es incorrecta.
-
-La corrección debe realizarse en la primera frontera causal demostrada.
-
-Preferir reglas generales:
-
-explicit current-turn signal
-+
-compatible inherited context
-→ correct semantic route
-
-sobre excepciones por frase, cliente o mes.
-
-## Multiplicidad de causas
-
-R-RUNTIME-001..004 están autorizados dentro de esta misma tarea porque pertenecen al mismo bloque observado de routing/metric-pack.
-
-Si Cursor demuestra que existen varias causas independientes PERO todas permanecen dentro de planner/routing/conversation-state/metric-pack y dentro de estos cuatro casos, puede corregirlas en esta tarea con cambios mínimos y tests separados.
-
-Si alguno requiere:
-- nueva arquitectura;
-- DB;
-- contrato;
-- herramienta nueva;
-- fuente nueva;
-- cambio fuera del dominio autorizado;
-
-NO expandir alcance.
-
-Dejar ese caso FAIL, documentar FIRST_BAD_BOUNDARY y continuar únicamente con los casos que sí estén dentro del alcance.
-
-## HTTP 500
-
-El HTTP 500 observado manualmente en producción con:
-
-Dame el margen histórico de TORTILLERIA ERICK de enero a agosto.
-
-NO se considera explicado todavía.
-
-El harness demostró:
-- con IGF FINAL disponible → HTTP 200;
-- sin FINAL → puede producir 500 natural.
-
-Pero no hay paridad demostrada con producción.
-
-Por tanto:
-
-NO arreglar el 500 de producción dentro de esta tarea salvo que resulte ser una consecuencia directa e inequívoca del mismo cambio autorizado y quede demostrada por el Runtime Gate.
-
-En otro caso, dejarlo explícitamente como NOT_PROVEN / pendiente separado.
+y corregir la primera frontera causal incorrecta. No arreglar solo la prosa.
 
 ## Protección contra regresión
 
-Durante la corrección:
+TIER 1 debe permanecer 8/8 PASS.
 
-TIER 1 debe permanecer:
+R-RUNTIME-002..004 no se debilitan. Si el padre de 002 cambia de pack al corregir 001, re-observar el último turno; el expected de 002 sigue siendo pack/clarificación de descuento, no `historical_margin`.
 
-8/8 PASS
-
-No debilitar ninguno de los ocho casos existentes.
-
-Ejecutar suites relacionadas de planner, conversation-state, routing, historical-margin, client-profile y tool/orchestrator según archivos físicamente afectados.
+No aplicar inherit-block en `conversation-state` que rompa el cruce diario venta↔descuento (`ayer` / `forceIntent`).
 
 ## Objetivo AFTER
-
-El objetivo ideal es:
-
-PRE-DEPLOY DIRECTOR IA
 
 TIER 1
 8/8 PASS
 
 RUNTIME
-R-RUNTIME-001 PASS
+R-RUNTIME-001 PASS (descuento histórico de cliente, no rechazo ni compare de planta)
 R-RUNTIME-002 PASS
 R-RUNTIME-003 PASS
 R-RUNTIME-004 PASS
+R-RUNTIME-005 (protección planta) PASS
 
 HARNESS FAILURE = 0
-
 PRE-DEPLOY GATE = PASS
 
-Si solo una parte puede corregirse sin salir del alcance, NO falsear verde.
-
-Reportar claramente:
-
-PASS: N
-FAIL: N
-
-y las causas pendientes.
-
-## Validación semántica
-
-PASS no significa únicamente HTTP 200.
-
-Cada caso Runtime debe comprobar que:
-
-- se eligió la familia semántica correcta;
-- no se reutilizó un pack incompatible;
-- no se devolvió un bloque de materialidad/kg cuando se pidió descuento;
-- no se ignoró una entidad explícita;
-- no se produjo aclaración genérica cuando la métrica sí era reconocible.
-
-No comparar prosa literal salvo fragmentos estructurales necesarios para detectar respuestas equivocadas.
+Si solo una parte cabe en alcance, no falsear verde.
 
 ## Evidencia final
 
-Entregar:
-
-1. causa raíz de cada R-RUNTIME-001..004;
-2. si compartían o no causa;
-3. FIRST_BAD_BOUNDARY definitivo de cada uno;
-4. funciones modificadas;
-5. diff conceptual;
-6. PRE-DEPLOY BEFORE;
-7. PRE-DEPLOY AFTER;
-8. TIER 1 AFTER;
-9. suites relacionadas;
-10. archivos modificados;
-11. commit SHA;
-12. git status --short;
-13. estado del HTTP 500: PROVEN / NOT_PROVEN;
-14. confirmación de que no se cambiaron expectations para obtener verde.
+1. diff del Runtime Gate (R-RUNTIME-001 + protección planta);
+2. BEFORE rojo de R-RUNTIME-001 y PASS de la protección planta;
+3. FIRST_BAD_BOUNDARY de R-RUNTIME-001 bajo la nueva expectativa;
+4. frontera causal corregida;
+5. AFTER TIER 1 / RUNTIME / GATE;
+6. confirmación de que no se implementó `como vamos?` post-margen-cliente;
+7. confirmación de que no se hardcodearon ERICK / agosto / 0.93 / 7.32;
+8. commit SHA;
+9. git status --short.
 
 ## Completion
-
-Si la implementación permitida termina:
 
 status: CLOSED
 NO merge.

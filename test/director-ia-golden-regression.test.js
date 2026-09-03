@@ -49,10 +49,10 @@ describe("director-ia golden regression harness", () => {
 });
 
 describe("director-ia runtime golden harness", () => {
-  it("ejecuta los 4 RUNTIME por handlePostChat y no etiqueta FAIL de producto como HARNESS", async () => {
+  it("ejecuta los RUNTIME por handlePostChat y no etiqueta FAIL de producto como HARNESS", async () => {
     const summary = await runRuntimeSet(RUNTIME_CASES);
     assert.equal(summary.total, RUNTIME_CASES.length);
-    assert.equal(summary.rows.length, 4);
+    assert.equal(summary.rows.length, RUNTIME_CASES.length);
     assert.deepEqual(
       summary.rows.map((r) => r.id),
       RUNTIME_CASES.map((c) => c.id)
