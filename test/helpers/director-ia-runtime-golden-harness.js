@@ -55,6 +55,49 @@ function availableIgfMap() {
   };
 }
 
+function closedForecastOnly(year, month, margenKg, empresa) {
+  const latestId = year * 1000 + month;
+  const olderId = latestId + 1;
+  const plant = empresa || "Acapulco";
+  return {
+    versions: [
+      { id: latestId, version_number: 8, financial_state: "FORECAST" },
+      { id: olderId, version_number: 3, financial_state: "FORECAST" },
+    ],
+    lines: {
+      [latestId]: [{ empresa: plant, margen_kg: margenKg }],
+      [olderId]: [{ empresa: plant, margen_kg: margenKg - 0.4 }],
+    },
+  };
+}
+
+function closedFinalPlusLaterForecast(year, month, finalKg, forecastKg, empresa) {
+  const finalId = year * 100 + month;
+  const forecastId = year * 1000 + month;
+  const plant = empresa || "Acapulco";
+  return {
+    versions: [
+      { id: forecastId, version_number: 8, financial_state: "FORECAST" },
+      { id: finalId, version_number: 2, financial_state: "FINAL" },
+    ],
+    lines: {
+      [forecastId]: [{ empresa: plant, margen_kg: forecastKg }],
+      [finalId]: [{ empresa: plant, margen_kg: finalKg }],
+    },
+  };
+}
+
+function igfMapForCase(runtimeCase) {
+  const base = availableIgfMap();
+  if (runtimeCase && runtimeCase.id === "R-RUNTIME-006") {
+    return { ...base, "2026-8": closedForecastOnly(2026, 8, 6.4) };
+  }
+  if (runtimeCase && runtimeCase.id === "R-RUNTIME-007") {
+    return { ...base, "2026-8": closedFinalPlusLaterForecast(2026, 8, 8.2, 6.4) };
+  }
+  return base;
+}
+
 function catalogClientSales() {
   return [
     { month: "2026-01", cliente_norm: "TORTILLERIA ERICK", canal: "Casa", subcanal: "", kg: 10 },
@@ -73,7 +116,11 @@ function catalogClientDiscount() {
 function igfQueryFns(map) {
   return {
     queryHistoricalMarginVersions: async (_c, y, m) => (map[`${y}-${m}`] || {}).versions || [],
-    queryHistoricalMarginLatestVersion: async (_c, y, m) => ((map[`${y}-${m}`] || {}).versions || [])[0] || null,
+    queryHistoricalMarginLatestVersion: async (_c, y, m) => {
+      const list = (map[`${y}-${m}`] || {}).versions || [];
+      if (!list.length) return null;
+      return [...list].sort((a, b) => Number(b.version_number) - Number(a.version_number))[0];
+    },
     queryHistoricalMarginLines: async (_c, versionId) => {
       for (const pack of Object.values(map)) {
         if (pack.lines && pack.lines[versionId]) return pack.lines[versionId];
@@ -149,6 +196,25 @@ function isSpecificDiscountClarification(body) {
 function looksLikePlantMarginAnswer(body) {
   const answer = String((body && body.answer) || "");
   return /\$\/kg/.test(answer) && /enero|agosto|mayo|variaci[oó]n/i.test(answer);
+}
+
+function looksLikeFinalClosedCopy(answer) {
+  return /fuente:\s*cierre financiero final/i.test(String(answer || ""));
+}
+
+function looksLikeForecastLabel(answer) {
+  return /forecast|proyecci[oó]n|vista vigente/i.test(String(answer || ""));
+}
+
+function looksLikeOnlyFinalUnavailable(answer) {
+  const text = String(answer || "").trim();
+  return /no hay un margen hist[oó]rico final defendible/i.test(text) && !/\$\/kg/.test(text) && !looksLikeForecastLabel(text);
+}
+
+function mentionsFinalAbsence(answer) {
+  return /no hay un margen hist[oó]rico final defendible|sin margen final defendible|no (hay|existe) (un )?cierre/i.test(
+    String(answer || "")
+  );
 }
 
 function mentionsErick(body) {
@@ -319,6 +385,36 @@ function evaluateLastTurn(runtimeCase, last) {
     boundaries.USER_VISIBLE_OUTCOME = mark("FAIL", `expected plant historical_margin pack=${pack}`);
     return { boundaries, http, pack };
   }
+  if (runtimeCase.require_labeled_forecast_context) {
+    const asActual =
+      looksLikeFinalClosedCopy(answer) ||
+      Boolean(meta.presented_as_closed_actual) ||
+      meta.truth_class === "ACTUAL_FINANCIAL";
+    if (
+      !mentionsFinalAbsence(answer) ||
+      !looksLikeForecastLabel(answer) ||
+      !/\$\/kg/.test(answer) ||
+      asActual ||
+      looksLikeOnlyFinalUnavailable(answer)
+    ) {
+      boundaries.USER_VISIBLE_OUTCOME = mark(
+        "FAIL",
+        `expected labeled FORECAST context; final_absent=${mentionsFinalAbsence(answer)} labeled=${looksLikeForecastLabel(answer)} kg=${/\$\/kg/.test(answer)} as_actual=${asActual} only_missing=${looksLikeOnlyFinalUnavailable(answer)}`
+      );
+      return { boundaries, http, pack };
+    }
+  }
+  if (runtimeCase.require_final_not_latest_forecast) {
+    const hasFinal = looksLikeFinalClosedCopy(answer) && /8[.,]20/.test(answer);
+    const substituted = /6[.,]40/.test(answer);
+    if (!hasFinal || substituted) {
+      boundaries.USER_VISIBLE_OUTCOME = mark(
+        "FAIL",
+        `expected unique FINAL to win; has_final=${hasFinal} substituted_latest=${substituted}`
+      );
+      return { boundaries, http, pack };
+    }
+  }
   boundaries.USER_VISIBLE_OUTCOME = mark(
     "PASS",
     meta.requires_clarification ? "specific_or_allowed_clarification" : `mode=${meta.mode || "none"}`
@@ -327,6 +423,7 @@ function evaluateLastTurn(runtimeCase, last) {
 }
 
 async function evaluateRuntimeCase(runtimeCase, chat) {
+  installRuntimeDeps(chat, igfMapForCase(runtimeCase));
   const history = [];
   let state = null;
   let last = null;

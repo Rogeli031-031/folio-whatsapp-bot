@@ -241,6 +241,32 @@ const RUNTIME_CASES = Object.freeze([
     must_not_http_5xx: true,
     notes: "Chat nuevo. margen de mes sin cliente = historical_margin IGF de planta. No descuento de cliente.",
   },
+  {
+    id: "R-RUNTIME-006",
+    label: "Closed month no FINAL + FORECAST",
+    category: "runtime",
+    tier: "runtime",
+    turns: [{ role: "user", question: Q.RUNTIME_PLANT_MARGIN_AUG }],
+    expected_metrics: ["margen"],
+    expected_pack: "historical_margin",
+    forbidden_packs: ["descuento", "client_profile", "materialidad", "dicf", "daily_executive_brief", "plant_diagnosis"],
+    must_not_http_5xx: true,
+    require_labeled_forecast_context: true,
+    notes: "Mes cerrado, 0 FINAL, latest FORECAST válida. FINAL unavailable + contexto FORECAST etiquetado. No ACTUAL.",
+  },
+  {
+    id: "R-RUNTIME-007",
+    label: "Closed month unique FINAL",
+    category: "runtime",
+    tier: "runtime",
+    turns: [{ role: "user", question: Q.RUNTIME_PLANT_MARGIN_AUG }],
+    expected_metrics: ["margen"],
+    expected_pack: "historical_margin",
+    forbidden_packs: ["descuento", "client_profile", "materialidad", "dicf", "daily_executive_brief", "plant_diagnosis"],
+    must_not_http_5xx: true,
+    require_final_not_latest_forecast: true,
+    notes: "Mes cerrado con FINAL única y latest FORECAST distinta. FINAL gana. No sustituir por proyección.",
+  },
 ]);
 
 module.exports = {

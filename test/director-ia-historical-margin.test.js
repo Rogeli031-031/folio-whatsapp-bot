@@ -94,7 +94,8 @@ function makeSource(map) {
       if (!pack) return null;
       if (pack.throw) throw new Error("db boom");
       const list = pack.versions || [];
-      return list[0] || null;
+      if (!list.length) return null;
+      return [...list].sort((a, b) => Number(b.version_number) - Number(a.version_number))[0];
     },
     queryLines: async (_c, versionId) => {
       queried.push({ kind: "lines", versionId });
@@ -217,6 +218,93 @@ describe("B. source adapter", () => {
     const payload = await loadHistoricalMarginForChat(null, 1, { dashboardAuth: { role: "ZP" } }, loadOpts(src));
     assert.equal(payload.code, DIRECTOR_IA_VERACITY.DATA_NOT_FOUND);
     assert.equal(payload.evidence.reason, "NOT_FINAL");
+  });
+
+  it("closed month NOT_FINAL + latest FORECAST válida → contexto etiquetado, no ACTUAL", async () => {
+    const src = makeSource({
+      "2026-5": {
+        versions: [
+          { id: 80, version_number: 8, financial_state: "FORECAST" },
+          { id: 30, version_number: 3, financial_state: "FORECAST" },
+        ],
+        lines: {
+          80: [{ empresa: "Acapulco", margen_kg: 6.4 }],
+          30: [{ empresa: "Acapulco", margen_kg: 6.0 }],
+        },
+      },
+    });
+    const payload = await loadHistoricalMarginForChat(null, 1, { dashboardAuth: { role: "ZP" } }, loadOpts(src));
+    const chat = buildHistoricalMarginChatResult(payload, { planta_id: 1 });
+    assert.equal(payload.ok, true);
+    assert.equal(payload.code, DIRECTOR_IA_VERACITY.SOURCE_PARTIAL);
+    assert.equal(payload.evidence.reason, "NOT_FINAL");
+    assert.equal(payload.truth_class, null);
+    assert.equal(payload.presented_as_closed_actual, false);
+    assert.equal(payload.forecast_used, true);
+    assert.equal(payload.margin_kg, undefined);
+    assert.equal(payload.forecast_context.truth_class, "FORECAST");
+    assert.equal(payload.forecast_context.margin_kg, 6.4);
+    assert.equal(payload.forecast_context.version_number, 8);
+    assert.equal(chat.context_meta.truth_class, null);
+    assert.equal(chat.context_meta.presented_as_closed_actual, false);
+    assert.match(chat.answer, /No hay un margen histórico FINAL defendible/);
+    assert.match(chat.answer, /FORECAST/);
+    assert.match(chat.answer, /proyecci[oó]n/i);
+    assert.match(chat.answer, /vista vigente/i);
+    assert.match(chat.answer, /6[.,]40\s*\$\/kg/);
+    assert.match(chat.answer, /no lo presento como cierre real/i);
+    assert.doesNotMatch(chat.answer, /Fuente: cierre financiero FINAL/);
+  });
+
+  it("closed month FINAL única + latest FORECAST → FINAL gana", async () => {
+    const src = makeSource({
+      "2026-5": {
+        versions: [
+          { id: 80, version_number: 8, financial_state: "FORECAST" },
+          { id: 20, version_number: 2, financial_state: "FINAL" },
+        ],
+        lines: {
+          80: [{ empresa: "Acapulco", margen_kg: 6.4 }],
+          20: [{ empresa: "Acapulco", margen_kg: 8.2 }],
+        },
+      },
+    });
+    const payload = await loadHistoricalMarginForChat(null, 1, { dashboardAuth: { role: "ZP" } }, loadOpts(src));
+    const chat = buildHistoricalMarginChatResult(payload, { planta_id: 1 });
+    assert.equal(payload.ok, true);
+    assert.equal(payload.truth_class, "ACTUAL_FINANCIAL");
+    assert.equal(payload.presented_as_closed_actual, true);
+    assert.equal(payload.forecast_used, false);
+    assert.equal(payload.financial_state, "FINAL");
+    assert.equal(payload.margin_kg, 8.2);
+    assert.equal(payload.evidence.forecast_context, undefined);
+    assert.match(chat.answer, /Fuente: cierre financiero FINAL/);
+    assert.match(chat.answer, /8[.,]20/);
+    assert.doesNotMatch(chat.answer, /6[.,]40/);
+    assert.doesNotMatch(chat.answer, /FORECAST/);
+  });
+
+  it("VERSION_AMBIGUOUS no se oculta con latest FORECAST", async () => {
+    const src = makeSource({
+      "2026-5": {
+        versions: [
+          { id: 1, version_number: 1, financial_state: "FINAL" },
+          { id: 2, version_number: 2, financial_state: "FINAL" },
+          { id: 8, version_number: 8, financial_state: "FORECAST" },
+        ],
+        lines: {
+          8: [{ empresa: "Acapulco", margen_kg: 6.4 }],
+        },
+      },
+    });
+    const payload = await loadHistoricalMarginForChat(null, 1, { dashboardAuth: { role: "ZP" } }, loadOpts(src));
+    const chat = buildHistoricalMarginChatResult(payload, { planta_id: 1 });
+    assert.equal(payload.code, DIRECTOR_IA_VERACITY.SOURCE_ERROR);
+    assert.equal(payload.evidence.reason, "VERSION_AMBIGUOUS");
+    assert.equal(payload.evidence.forecast_context, undefined);
+    assert.match(chat.answer, /m[uú]ltiples versiones FINAL/i);
+    assert.doesNotMatch(chat.answer, /6[.,]40/);
+    assert.doesNotMatch(chat.answer, /FORECAST/);
   });
 
   it("2 FINAL → SOURCE_ERROR VERSION_AMBIGUOUS", async () => {
