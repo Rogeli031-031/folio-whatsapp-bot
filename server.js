@@ -11481,26 +11481,12 @@ function isIgfUploadDayAllowedForMonth(year, month, uploadDayYmd) {
  * @returns {Promise<Map<string,{proy_venta_ton:number,proy_desc_kg:number}>>}
  */
 async function loadProyVentaDescByPlantForIgf(client, year, month, uploadDay) {
-  const fechaCorteStr = (uploadDay || "").toString().trim().slice(0, 10);
-  const corteYmdFast = dashboardArrForecast.getPronosticoCorteYmdStr(year, month, fechaCorteStr);
-  const snapMini = await dashboardArrForecast.loadPronosticoMiniSnapshot(client, year, month, corteYmdFast);
-  const ctxProno = await dashboardArrForecast.buildPronosticoVentaDescMaps(client, year, month, fechaCorteStr);
-  let computed = await dashboardArrForecast.computePronosticoProyByPlant(client, year, month, {
-    fechaCorte: fechaCorteStr,
-    prebuiltVentaDescCtx: ctxProno,
-  });
-  if (snapMini && snapMini.size > 0) {
-    computed = new Map(computed);
-    for (const [k, v] of snapMini.entries()) {
-      if (v && Number.isFinite(Number(v.proy_venta_ton))) {
-        computed.set(k, {
-          proy_venta_ton: Number(v.proy_venta_ton),
-          proy_desc_kg: v.proy_desc_kg != null && Number.isFinite(Number(v.proy_desc_kg)) ? Number(v.proy_desc_kg) : 0,
-        });
-      }
-    }
-  }
-  return computed;
+  return require("./lib/igf-effective-proy-target").loadProyVentaDescByPlantForIgf(
+    client,
+    year,
+    month,
+    uploadDay
+  );
 }
 
 /**
