@@ -1,47 +1,46 @@
-task_id: AUDIT-DIRECTOR-IA-DELTA-INGRESO-NEGATIVE-IMPACT-COMMENTS-001
+task_id: FIX-DIRECTOR-IA-DELTA-INGRESO-FORECAST-NEGATIVE-TOPN-COMMENTS-001
 
-task_type: AUDIT
-mode: READ_ONLY_PHYSICAL_TRACE
+task_type: FIX
+mode: REGRESSION_FIRST
 
 status: CLOSED
 authorized_by: "Human Approver"
-authorized_at: "2026-09-05T12:41:18-06:00"
-human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-05 - READ_ONLY AUDIT ONLY; NO LIVE_DB"
-objective: Localizar físicamente cómo se calcula y expone el Delta Ingreso por cliente en IGF Forecast ARR / Delta Ingreso Forecast, y por qué Director IA no puede responder hoy cuáles son los clientes con mayor impacto negativo del mes junto con sus comentarios.
+authorized_at: "2026-09-05T12:59:25-06:00"
+human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-05"
+objective: Hacer que Director IA responda el mayor impacto negativo de ingreso forecast del mes explícito (Top N + comentarios) reutilizando el helper Forecast de periodo solicitado, no kg ni M9 ni computeDicf anclado a MAX(fecha).
 
 in_scope:
-  - frontend IGF Forecast ARR relacionado con Delta Ingreso / Clientes por mes
-  - lib/delta-ingreso-forecast.js
-  - helpers/loaders/endpoints relacionados
-  - server.js solo tracing
-  - planner/capabilities de delta_income
-  - director-ia-chat
-  - tool orchestrator
-  - loaders de comentarios de cliente
-  - DICF solo si participa físicamente
-  - Action Register solo si participa físicamente
-  - tests existentes relacionados, solo lectura
+  - lib/director-ia-planner.js (solo detector/routing de impacto negativo / delta ingreso + periodo)
+  - lib/director-ia-commercial-trend.js (solo para que comentarios no secuestre el dominio a kg)
+  - lib/director-ia-chat.js (solo ruta delta income forecast)
+  - lib/director-ia-tools.js / capabilities solo si el intent/tool forecast debe declararse sin reinterpretar contratos
+  - lib/delta-ingreso-forecast.js (reutilizar computeDeltaIngresoForecast; no tercera fórmula)
+  - lib/dicf.js solo si puede resolverse el mismo periodo solicitado sin MAX(fecha) indebido
+  - lib/cliente-comentarios.js (join de comentarios; no causalidad)
+  - test/fixtures/director-ia-golden-cases.js (R-DELTA-INCOME-001..010; no debilitar TIER 1 / R-RUNTIME / R-MOVEMENT)
+  - test/helpers/director-ia-runtime-golden-harness.js
+  - tests determinísticos físicamente afectados
   - docs/dev-loop/CURRENT_TASK.md
-  - docs/dev-loop/reports/AUDIT-DIRECTOR-IA-DELTA-INGRESO-NEGATIVE-IMPACT-COMMENTS-001.md
+  - docs/dev-loop/reports/FIX-DIRECTOR-IA-DELTA-INGRESO-FORECAST-NEGATIVE-TOPN-COMMENTS-001.md
 
 out_of_scope:
-  - implementación
-  - modificar tests
-  - LIVE_DB
-  - DB/schema/migrations
-  - frontend changes
+  - nueva fórmula de rentabilidad
+  - Delta Gastos
+  - alertas automáticas
+  - notificaciones
   - nuevos vs reactivados
-  - movement calendar parity ya CLOSED
-  - margen histórico
-  - terminology margen cliente
-  - dirty continuity `como vamos?`
-  - creación de alertas
-  - envío de notificaciones
-  - cálculo nuevo de rentabilidad forecast
-  - modificación de contratos congelados
+  - cumplimiento automático de compromisos
+  - causal inference
+  - HG si no está en fuente
+  - DB/schema/migrations
+  - frontend
+  - docs/director-ia/
+  - contratos congelados
+  - LIVE_DB
   - merge
   - deploy
   - next task
+  - planner → computeDicf como atajo si el periodo explícito queda anclado a MAX(fecha)
 
 contracts_in_force:
   - AGENTS.md
@@ -49,24 +48,31 @@ contracts_in_force:
   - docs/director-ia/DIRECTOR_IA_CONSTITUTION.md
   - docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md
   - docs/director-ia/DIRECTOR_IA_EXECUTIVE_KNOWLEDGE_ENGINE.md
+  - docs/dev-loop/reports/AUDIT-DIRECTOR-IA-DELTA-INGRESO-NEGATIVE-IMPACT-COMMENTS-001.md (evidencia CLOSED; no reabre la auditoría)
   - contratos vigentes aplicables (obedecer, no reescribir)
 
 allowed_actions:
-  - (solo tras G1 humano) trazar en solo lectura las cadenas Dashboard y Director IA
-  - escribir el reporte de auditoría
-  - proponer Runtime regressions futuras sin implementarlas
-  - si el código no alcanza: marcar NOT_PROVEN_WITHOUT_LIVE_DB y dejar SELECT read-only mínimo, sin ejecutarlos
-  - dejar DONE_PENDING_REVIEW o BLOCKED
+  - (solo tras G1 humano) endurecer primero PRE-DEPLOY Runtime Gate R-DELTA-INCOME-001..010
+  - BEFORE: TIER 1 / R-RUNTIME / R-MOVEMENT PASS y R-DELTA-INCOME rojo; STOP si no reproduce
+  - reutilizar computeDeltaIngresoForecast si representa Forecast + periodoB explícito
+  - reutilizar computeDicf solo si el mismo periodo solicitado es defendible sin MAX(fecha) incorrecto
+  - join de comentarios por identidad compatible con la gráfica (nombre), no repetir el fallo cliente_key
+  - respuesta determinista/grounded; no parchear solo prosa
+  - reporte y commit en rama de tarea
+  - dejar DONE_PENDING_REVIEW
 
 forbidden_actions:
   - escribir AUTHORIZED_BY_HUMAN
   - poner status AUTHORIZED
   - crear, borrar o modificar authorized_by, authorized_at o human_authorization
-  - implementar producto
-  - modificar tests
+  - implementar antes de G1
+  - implementar producto antes del Runtime Gate y BEFORE rojo
+  - convertir planner → computeDicf si septiembre queda anclado a MAX(fecha)=agosto
+  - usar commercial_trend / kg como sustituto de Delta Ingreso MXN
+  - usar M9 histórico como respuesta de forecast de septiembre
+  - convertir comentario en causa
+  - hardcodear BAYAM u otros clientes LIVE
   - consultar LIVE_DB
-  - hardcodear clientes o importes como regla
-  - inventar causalidad o convertir comentarios en causas
   - modificar docs/director-ia/
   - merge/push a main
   - deploy
@@ -74,9 +80,9 @@ forbidden_actions:
 
 max_attempts: 1
 
-result_report_path: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-DELTA-INGRESO-NEGATIVE-IMPACT-COMMENTS-001.md
+result_report_path: docs/dev-loop/reports/FIX-DIRECTOR-IA-DELTA-INGRESO-FORECAST-NEGATIVE-TOPN-COMMENTS-001.md
 
-implementation_authorized: NO
+implementation_authorized: YES
 merge_authorized: NO
 deploy_authorized: NO
 live_db_authorized: NO
@@ -85,571 +91,506 @@ live_db_authorized: NO
 
 DRAFT. No hay Gate G1. No es ejecutable.
 
-## North Star de negocio
+## North Star
 
-El objetivo ejecutivo principal de Director IA es ayudar a incrementar mes con mes:
+Director IA debe ayudar a aumentar mes con mes la rentabilidad operativa y final.
 
-- rentabilidad operativa;
-- rentabilidad final;
+La prioridad ejecutiva es detectar qué clientes deterioran más el Delta Ingreso del periodo forecast para poder enfocar seguimiento y acción.
 
-y evitar retrocesos.
+Conceptualmente:
 
-La lectura ejecutiva utilizada por negocio parte de:
-
-Ingreso del mes anterior por cliente
-vs
-Ingreso proyectado / forecast del mes actual por cliente
-
-La diferencia por cliente es:
-
-Delta Ingreso cliente
-
-Conceptualmente, para la lectura ejecutiva:
-
-Rentabilidad forecast
+Rentabilidad Forecast
 =
 Rentabilidad mes anterior
 + Delta Ingreso
 - Delta Gastos
 
-Esta tarea NO debe implementar ni reinterpretar esa fórmula.
+Esta tarea NO implementa una nueva fórmula de rentabilidad.
 
-Debe localizar físicamente qué datos existentes la soportan y cómo Director IA puede llegar posteriormente a los clientes que más deterioran la rentabilidad forecast.
+Trabaja únicamente sobre el Delta Ingreso por cliente que ya existe físicamente.
 
-## Pregunta LIVE que falla
-
-Planta: Acapulco.
-
-Pregunta exacta:
+## Pregunta objetivo
 
 `Dame 5 clientes que tengan el mayor impacto negativo en el ingreso para el mes de septiembre, y ponme sus comentarios.`
 
-Respuesta actual de Director IA:
+Debe responder usando Delta Ingreso en MXN.
 
-`No puedo proporcionar información sobre los cinco clientes con mayor impacto negativo en el ingreso para el mes de septiembre, ya que no tengo acceso a los datos necesarios para realizar esa evaluación...`
+NO usar movimiento de kg como sustituto.
 
-Sin embargo, el Dashboard sí expone información por cliente en:
+## Auditoría CLOSED de origen
 
-IGF Forecast ARR
-→ Delta Ingreso / Delta Ingreso Forecast
-→ Clientes por mes
+Usar como evidencia:
 
-Por tanto el audit debe determinar si el problema está en:
+AUDIT-DIRECTOR-IA-DELTA-INGRESO-NEGATIVE-IMPACT-COMMENTS-001
 
-- capability/planner;
-- routing;
-- tool coverage;
-- loader inexistente;
-- fuente no expuesta a Director IA;
-- periodo;
-- ranking;
-- comentarios;
-- combinación de las anteriores.
+Hallazgos:
 
-No asumir.
-
-## Evidencia adicional — BAYAM RESIDENCES
-
-Existe otro síntoma relacionado.
-
-En la gráfica / seguimiento del cliente BAYAM RESIDENCES aparece un comentario:
-
-`EL DÍA LUNES 31 DE AGOSTO COMPRARÁ 3,000LTS TODO EN BASE A OCUPACION DEL CONDOMINIO`
-
-Pero en otra superficie de Delta Ingreso Cliente Forecast aparece:
-
-`Aún no hay comentarios.`
-
-Director IA sí llegó a recuperar ese comentario en una respuesta previa.
-
-Por tanto:
-
-NO asumir que “comentarios” es una única fuente.
-
-Auditar físicamente:
-
-- qué fuente usa la gráfica;
-- qué fuente usa el modal Delta Ingreso Cliente Forecast;
-- qué fuente usa Director IA;
-- por qué pueden divergir;
-- cuál es la semántica de cada comentario.
-
-## Pregunta de negocio objetivo futura
-
-Después de un FIX posterior, Director IA debería poder resolver conceptualmente:
-
-`Dame los 5 clientes que tienen mayor impacto negativo en el Delta Ingreso de septiembre y ponme sus comentarios.`
-
-La respuesta debería poder distinguir:
-
-- ranking;
-- Delta Ingreso por cliente;
-- suma del impacto de los Top 5;
-- comentario disponible;
-- fecha del comentario;
-- fuente del comentario;
-- ausencia real de comentario.
-
-No implementar todavía.
-
-## Definición que debe verificarse físicamente
-
-NO asumir que ésta es la fórmula exacta del código.
-
-El audit debe probar o rechazar si actualmente:
-
-Delta Ingreso cliente
-=
-Ingreso proyectado mes actual
--
-Ingreso mes anterior
-
-Determinar:
-
-1. qué representa `Ingreso A`;
-2. qué representa `Ingreso B`;
-3. qué periodo usa cada uno;
-4. si B es FORECAST, ACTUAL, mezcla o snapshot;
-5. qué versión/corte utiliza;
-6. qué unidad monetaria utiliza;
-7. si el cálculo es por cliente canónico;
-8. si agrupa por canal/categoría/planta;
-9. dónde se calcula Delta Ingreso;
-10. dónde se ordena.
-
-## Ranking negativo
-
-Determinar físicamente cómo debe obtenerse:
-
-Top 5 mayor impacto negativo
-
-La hipótesis de negocio a verificar es:
-
-- filtrar `delta_ingreso < 0`;
-- ordenar de más negativo a menos negativo;
-- tomar 5.
-
-Ejemplo conceptual:
-
--250,000
--180,000
--120,000
--90,000
--50,000
-
-No usar valor absoluto para cambiar el signo.
-
-No mezclar clientes positivos.
-
-No implementar todavía.
-
-## Cadena obligatoria — Dashboard
-
-Trazar completamente:
-
-IGF Forecast ARR
-→ Delta Ingreso
-→ Clientes por mes / cliente
-→ frontend
-→ endpoint
-→ handler
-→ helper
-→ loader
-→ query
-→ tabla(s)
-→ columnas
-→ cálculo
-→ periodo
-→ versión/snapshot
-→ agrupación
-→ Delta Ingreso final
-→ sorting/ranking
-
-Identificar archivo y función en cada frontera.
-
-## Cadena obligatoria — Director IA
-
-Trazar:
-
-pregunta
-→ planner
-→ intent
-→ capability
-→ routing
-→ tool/orchestrator
-→ loader
-→ query
-→ metric pack
-→ comments enrichment
-→ response
-
-Responder:
-
-¿Por qué la pregunta actual termina en “no tengo acceso”?
-
-Localizar FIRST_BAD_BOUNDARY.
-
-No aceptar como conclusión:
-
-`Director IA todavía no lo soporta`
-
-sin ubicar físicamente la primera frontera que impide llegar a los datos.
-
-## Comentarios — trazabilidad obligatoria
-
-Auditar todas las rutas relevantes de comentarios que puedan aplicar a clientes comerciales.
-
-Para cada ruta determinar:
-
-COMMENT_SOURCE
-COMMENT_TABLE
-CLIENT_IDENTITY_KEY
-DATE_FIELD
-PLANT_SCOPE
-PERIOD_SCOPE
-AUTHOR/OWNER si existe
-COMMENT_TYPE si existe
-
-Buscar especialmente:
-
-- comentarios de gráfica;
-- comentarios del modal Delta Ingreso;
-- comentarios del cliente;
-- Action Register solo si físicamente participa en esta lectura;
-- DICF solo si físicamente participa;
-- cualquier tabla/campo usado hoy por Director IA.
-
-No mezclar fuentes solo porque contienen texto.
-
-## BAYAM — matriz obligatoria
-
-Construir:
-
-Surface | Source | Client key | Comment found | Date | Text | Why visible/not visible
-
-como mínimo para:
-
-- gráfica;
-- Delta Ingreso Cliente Forecast;
-- Director IA.
-
-La divergencia:
-
-gráfica = comentario visible
-modal = “Aún no hay comentarios”
-
-debe terminar con una explicación física o:
-
-NOT_PROVEN_WITHOUT_LIVE_DB
-
-No adivinar.
-
-## Drivers del Delta Ingreso
-
-Negocio identifica como variables relevantes:
-
-- margen;
-- descuento;
-- compra/venta/volumen;
-- cliente disminuyó;
-- cliente dejó de comprar;
-- HG.
-
-El audit debe determinar cuáles de estas variables existen físicamente en la cadena de Delta Ingreso y cuáles NO.
-
-Para cada una:
-
-VARIABLE
-SOURCE
-PERIOD
-AVAILABLE_PER_CLIENT: YES/NO
-USED_IN_DELTA_FORMULA: YES/NO
-CAN_EXPLAIN_DELTA: YES/NO
-
-Especial cuidado:
-
-El margen puede ser una variable externa/fuera del control comercial.
-
-No convertir correlación en causalidad.
-
-Un comentario tampoco demuestra automáticamente causa.
-
-## Controlabilidad
-
-No implementar clasificación todavía, pero documentar si físicamente sería posible distinguir en un FIX posterior:
-
-- factor posiblemente controlable:
-  - descuento;
-  - pérdida/disminución de volumen;
-  - seguimiento comercial;
-  - compromiso incumplido;
-
-- factor no controlable o externo:
-  - margen, según regla de negocio;
-
-- desconocido:
-  - no existe evidencia.
-
-No inventar causa.
-
-## Alertas
-
-No implementar alertas.
-
-Solo determinar si los datos existentes permitirían posteriormente crear:
-
-ALERTA:
-cliente con Delta Ingreso negativo material
-
-con:
-
-- cliente;
-- Delta Ingreso;
-- ranking;
-- venta/kg anterior;
-- venta/kg forecast/actual;
-- descuento;
-- HG;
-- comentario más reciente;
-- compromiso;
-- responsable/acción, si existe físicamente.
-
-## Periodo septiembre
-
-Determinar exactamente qué significa actualmente:
-
-`septiembre`
-
-en Delta Ingreso Forecast.
-
-No asumir mes cerrado.
-
-Debe quedar claro si septiembre representa:
-
-- mes actual parcial;
-- forecast del cierre;
-- última versión forecast;
-- actual a fecha;
-- mezcla actual + forecast;
-- otra definición.
-
-Identificar la fuente/versionado.
-
-## FIRST_BAD_BOUNDARY
-
-Debe declararse una frontera concreta.
-
-Ejemplos válidos:
-
+FIRST_BAD_BOUNDARY:
 PLANNER
-CAPABILITY_COVERAGE
-ROUTING
-TOOL_MISSING
-SOURCE_NOT_EXPOSED
-PERIOD_RESOLUTION
-DELTA_CALCULATION
-COMMENT_SOURCE
-CLIENT_IDENTITY
-RANKING
 
-Puede haber más de una causa, pero debe identificarse cuál ocurre primero para la pregunta objetivo.
+Secundarios:
+- forecast source/routing;
+- explicit month resolution;
+- comments identity;
+- no Runtime coverage.
 
-## Hipótesis obligatorias
+La auditoría demostró:
 
-Marcar cada una como:
+- el Dashboard ya calcula Delta Ingreso;
+- `computeDeltaIngresoForecast` representa una ruta Forecast;
+- `computeDicf` contiene información ejecutiva similar, pero está anclada a `MAX(fecha)`;
+- `get_delta_income` actual usa M9 histórico y NO representa el forecast solicitado;
+- `commercial_trend` representa kg y NO es la fuente correcta;
+- comentarios están en `arr.cliente_comentarios`;
+- gráfica consulta comentarios por nombre;
+- modal DICF por `cliente_key`;
+- comentario no demuestra causalidad.
 
-PROVEN
-REJECTED
-NOT_PROVEN
+## Regla semántica principal
 
-H1 — El Delta Ingreso ya está calculado en un helper reutilizable.
+Preguntas con:
 
-H2 — Director IA no tiene actualmente tool/loader para esa fuente.
+`delta ingreso`
+`impacto negativo en ingreso`
+`clientes que más afectan el ingreso`
+`clientes que más deterioran el ingreso`
+`mayor impacto negativo`
 
-H3 — Planner conoce `delta_income` pero la ejecución física no está conectada.
+más un periodo/mes
 
-H4 — El ranking Top 5 puede obtenerse sin nueva fórmula de negocio.
+deben resolver a Delta Ingreso, NO a `commercial_trend`.
 
-H5 — Septiembre usa forecast y no venta real cerrada.
+Agregar `comentarios` no debe cambiar el dominio primario hacia movimientos de kg.
 
-H6 — Los comentarios del modal y de la gráfica vienen de fuentes diferentes.
+## Fuente correcta
 
-H7 — Director IA ya tiene acceso a al menos una de las fuentes de comentarios.
+NO asumir automáticamente que `computeDicf` es la fuente primaria.
 
-H8 — Es posible unir Delta Ingreso + comentarios mediante una identidad canónica existente.
+Antes de implementar, determinar cuál helper existente representa exactamente:
 
-H9 — Existen variables suficientes para explicar al menos parte del deterioro: kg/venta, descuento, HG y/o margen.
+Delta Ingreso Forecast
++
+periodo explícitamente solicitado.
 
-H10 — El actual “no tengo acceso” es un problema de cobertura/routing y no ausencia física del dato.
+Regla:
 
-## Runtime / Golden gap
+si el usuario pregunta `septiembre`, el cálculo debe corresponder a septiembre.
 
-Auditar si actualmente existe cobertura para preguntas como:
+No aceptar:
 
-`Dame los clientes con mayor Delta Ingreso negativo de septiembre.`
+`MAX(fecha)=agosto`
+→ responder agosto
+→ etiquetar septiembre.
+
+Preferencia:
+
+reutilizar `computeDeltaIngresoForecast` si es la superficie física que ya representa Forecast para un `periodoB` explícito.
+
+`computeDicf` puede reutilizarse solamente si se le puede suministrar o resolver de forma defendible el mismo periodo solicitado sin depender incorrectamente de `MAX(fecha)`.
+
+No crear una tercera fórmula paralela.
+
+## Fórmula
+
+No reinventar.
+
+Mantener la fórmula física existente de la fuente seleccionada.
+
+La auditoría encontró conceptualmente:
+
+Ingreso = kg × (margen IGF − |descuento/kg|)
+Delta Ingreso = Ingreso B − Ingreso A
+
+Pero el FIX debe reutilizar el helper actual, no reimplementar esta aritmética en Director IA.
+
+Unidad:
+MXN.
+
+## Ranking
+
+Para:
+
+`5 clientes con mayor impacto negativo`
+
+usar filas con:
+
+delta_ingreso < 0
+
+orden:
+
+más negativo → menos negativo
 
 y:
 
-`Dame los 5 clientes con mayor Delta Ingreso negativo y sus comentarios.`
+Top N = N pedido por el usuario.
 
-Determinar:
+Ejemplo conceptual:
 
-- intent esperado;
-- fixture;
-- tool esperado;
-- source esperado;
-- qué verifica el test;
-- qué NO verifica.
+-250000
+-180000
+-120000
+-90000
+-50000
 
-Si no existe cobertura, declararlo.
+No ordenar por valor absoluto mezclando signos.
 
-## Regresiones futuras a proponer
+No incluir positivos.
 
-NO implementarlas en esta auditoría.
+## Top N
 
-Proponer como mínimo:
+Resolver números naturales solicitados:
 
-R-DELTA-INCOME-001
-Top negative ranking.
+`5 clientes`
+`10 clientes`
+etc.
 
-R-DELTA-INCOME-002
-Correct month / forecast period.
+Si no se indica N, usar una política existente defendible y declarar el alcance.
 
-R-DELTA-INCOME-003
-Correct monetary values and sign.
+La respuesta debe declarar:
 
-R-DELTA-INCOME-004
-Top 5 ordering.
+- total de clientes negativos encontrados, si está disponible;
+- Top N mostrado;
+- impacto combinado del Top N.
 
-R-DELTA-INCOME-005
-Comments enrichment.
+## Impacto agregado
 
-R-DELTA-INCOME-006
-No comment → explicit DATA_NOT_FOUND / equivalent, not invented.
+Para las filas mostradas:
 
-R-DELTA-INCOME-007
-Comment does not become causal explanation automatically.
+impacto_top_n =
+SUM(delta_ingreso)
 
-R-DELTA-INCOME-008
-Client identity parity Delta Ingreso ↔ comments.
+Debe conservar signo negativo.
 
-R-DELTA-INCOME-009
-Aggregate Top 5 negative impact.
+No presentarlo como rentabilidad final.
 
-R-DELTA-INCOME-010
-Driver evidence: sales/kg, discount, HG, margin where physically available.
+Puede decir:
+
+`Estos 5 clientes acumulan un Delta Ingreso de -$X`
+
+No decir:
+
+`La rentabilidad caerá -$X`
+
+salvo que exista evidencia adicional.
+
+## Periodo explícito
+
+`septiembre`
+→ resolver septiembre del año correspondiente según las reglas de periodo ya existentes.
+
+Debe distinguir:
+
+A = periodo base
+B = periodo forecast solicitado.
+
+La respuesta debe expresar qué está comparando.
+
+Ejemplo:
+
+`Agosto 2026 real vs septiembre 2026 forecast`
+
+solo si ésa es físicamente la semántica de la fuente.
+
+No inventar CLOSED/FINAL.
+
+## Comentarios
+
+Enriquecer cada cliente mostrado con comentarios de:
+
+arr.cliente_comentarios
+
+Debe usar una unión compatible con la identidad disponible en la fuente Delta Ingreso.
+
+La auditoría demostró que `cliente_key` DICF puede no coincidir con la forma en que se guardó el comentario.
+
+No repetir esa falla.
+
+Prioridad de identidad:
+
+1. identidad canónica existente, si puede probarse;
+2. nombre normalizado dentro de la misma planta, si ésa es la unión física ya usada por la gráfica;
+3. DATA_NOT_FOUND si no puede resolverse inequívocamente.
+
+No realizar fuzzy match peligroso.
+
+## Comentario más reciente
+
+Si hay varios comentarios:
+
+devolver el más reciente por fecha.
+
+Idealmente incluir:
+
+- fecha;
+- texto.
+
+Si no existe comentario:
+
+`Sin comentario registrado`
+
+o contrato equivalente de ausencia.
+
+Nunca inventar texto.
+
+## Comentario ≠ causa
+
+Prohibido transformar automáticamente:
+
+`comentario: baja ocupación`
+
+en:
+
+`La causa de la caída fue baja ocupación`
+
+salvo que exista una clasificación/atribución explícita y defendible.
+
+Presentar como:
+
+`Comentario registrado: ...`
+
+## Drivers
+
+Cuando estén físicamente disponibles en el objeto reutilizado, pueden enriquecer la respuesta:
+
+- kg A/B;
+- descuento A/B;
+- margen de planta;
+- clasificación disminuyó/dejó;
+- otros drivers existentes.
+
+NO son obligatorios para cerrar este slice salvo lo requerido por Runtime.
+
+HG queda fuera si la cadena no lo provee.
+
+No implementar causal inference.
+
+## Regression-first obligatorio
+
+ANTES de modificar producto, ampliar PRE-DEPLOY Runtime Gate.
+
+Crear:
+
+R-DELTA-INCOME-001..010
+
+### R-DELTA-INCOME-001 — routing
+
+Pregunta:
+
+`Dame 5 clientes que tengan el mayor impacto negativo en el ingreso para septiembre.`
+
+Expected:
+
+delta_income_forecast / metric pack equivalente
+
+NO:
+
+commercial_trend
+client_profile
+
+Debe observar Runtime completo.
+
+### R-DELTA-INCOME-002 — explicit period
+
+Pregunta sobre septiembre.
+
+Expected:
+B = septiembre solicitado.
+
+NO:
+periodo silenciosamente anclado a MAX(fecha) de agosto.
+
+### R-DELTA-INCOME-003 — MXN / sign
+
+Fixture determinístico con Delta Ingreso negativo.
+
+Comprobar:
+
+- unidad MXN;
+- signo;
+- valor.
+
+No aceptar kg como métrica primaria.
+
+### R-DELTA-INCOME-004 — Top 5 ordering
+
+Fixture con más de 5 clientes negativos.
+
+Expected:
+exactamente los cinco más negativos y orden correcto.
+
+### R-DELTA-INCOME-005 — comments enrichment
+
+Cliente del Top N con comentario.
+
+Expected:
+comentario correcto + fecha.
+
+### R-DELTA-INCOME-006 — missing comment
+
+Cliente sin comentario.
+
+Expected:
+ausencia explícita.
+
+No inventar.
+
+### R-DELTA-INCOME-007 — no causal hallucination
+
+Comentario disponible.
+
+Expected:
+puede mostrar comentario.
+
+Prohibido:
+convertirlo automáticamente en causa demostrada.
+
+### R-DELTA-INCOME-008 — identity parity
+
+Delta Ingreso usa una identidad;
+comentario está asociado mediante la ruta compatible.
+
+Debe reproducir conceptualmente el fallo BAYAM:
+nombre puede encontrar comentario aunque un cliente_key incompatible no lo haga.
+
+No hardcodear BAYAM en producto.
+
+### R-DELTA-INCOME-009 — aggregate Top N
+
+Comprobar suma de los cinco delta_ingreso mostrados.
+
+### R-DELTA-INCOME-010 — forecast vs historical source
+
+Pregunta de forecast de septiembre.
+
+Expected:
+ruta forecast.
+
+Prohibido:
+M9 histórico de dos meses reales.
+
+## BEFORE obligatorio
+
+Antes de tocar producto:
+
+TIER 1 existente:
+PASS
+
+R-RUNTIME existente:
+PASS
+
+R-MOVEMENT existente:
+PASS
+
+R-DELTA-INCOME nuevos:
+deben reproducir los defectos actuales.
+
+Como mínimo deben estar rojos:
+
+001 routing
+002 period
+004 Top N
+005 comments
+010 forecast source
+
+PRE-DEPLOY:
+FAIL
+
+Si no reproduce el problema:
+STOP.
+
+No implementar.
+
+## AFTER objetivo
+
+TIER 1:
+PASS
+
+R-RUNTIME:
+PASS
+
+R-MOVEMENT:
+PASS
+
+R-DELTA-INCOME-001..010:
+PASS
+
+HTTP 5xx:
+0
+
+PRE-DEPLOY:
+PASS
+
+## Product change
+
+Corregir la primera frontera causal:
+
+PLANNER / routing
+
+pero no detenerse allí si la ruta seleccionada todavía apunta a M9 histórico o periodo incorrecto.
+
+La cadena final debe ser:
+
+pregunta
+→ delta income forecast intent
+→ periodo explícito
+→ helper forecast existente
+→ negativos
+→ ranking
+→ Top N
+→ comments enrichment
+→ respuesta determinista/grounded
+
+No parchear únicamente prompt final.
+
+## Protecciones
+
+No romper:
+
+commercial_trend
+calendar movement
+historical delta income
+client_profile
+historical_margin
+DICF existente
+IGF Forecast ARR frontend
+
+## Out of scope
+
+- nueva fórmula de rentabilidad;
+- Delta Gastos;
+- alertas automáticas;
+- notificaciones;
+- nuevos vs reactivados;
+- cumplimiento automático de compromisos;
+- causal inference;
+- HG si no está en fuente;
+- DB/schema/migrations;
+- frontend;
+- contracts;
+- LIVE_DB;
+- merge;
+- deploy;
+- next task.
 
 ## LIVE_DB
 
 live_db_authorized: NO
 
-No consultar producción.
+No hace falta para el regression-first ni para implementar reutilizando helpers existentes.
 
-Si el código no permite demostrar:
+Validación exacta de producción se hará después del deploy.
 
-- el valor exacto;
-- el ranking exacto;
-- la versión forecast;
-- o la divergencia de comentarios;
-
-marcar:
-
-NOT_PROVEN_WITHOUT_LIVE_DB
-
-y entregar SELECT read-only mínimo necesario:
-
-- tabla;
-- columnas;
-- planta;
-- cliente si aplica;
-- año/mes;
-- version_id si aplica;
-- ORDER BY;
-- LIMIT.
-
-No abrir LIVE_DB automáticamente.
-
-Requiere nuevo G1 humano específico.
-
-## In scope
-
-- frontend IGF Forecast ARR relacionado con Delta Ingreso / Clientes por mes
-- lib/delta-ingreso-forecast.js
-- helpers/loaders/endpoints relacionados
-- server.js solo tracing
-- planner/capabilities de delta_income
-- director-ia-chat
-- tool orchestrator
-- loaders de comentarios de cliente
-- DICF solo si participa físicamente
-- Action Register solo si participa físicamente
-- tests existentes relacionados, solo lectura
-- docs/dev-loop/CURRENT_TASK.md
-- reporte de auditoría
-
-## Out of scope
-
-- implementación
-- modificar tests
-- LIVE_DB
-- DB/schema/migrations
-- frontend changes
-- nuevos vs reactivados
-- movement calendar parity ya CLOSED
-- margen histórico
-- terminology margen cliente
-- dirty continuity `como vamos?`
-- creación de alertas
-- envío de notificaciones
-- cálculo nuevo de rentabilidad forecast
-- modificación de contratos congelados
-- merge
-- deploy
-- next task
-
-## Prohibiciones
-
-No hardcodear clientes.
-No hardcodear importes.
-No asumir que screenshot = contrato de código.
-No inventar causalidad.
-No convertir comentarios en causas.
-No consultar LIVE_DB.
-No modificar producto.
-No modificar tests.
-No merge.
-No deploy.
-No next task.
-
-## Entregables obligatorios
-
-1. Executive summary máximo 15 líneas.
-2. North Star map: Rentabilidad → Delta Ingreso → cliente → variables → comentario/acción.
-3. Physical source map de Delta Ingreso.
-4. Fórmula física actual.
-5. Period/version semantics.
-6. Ranking semantics.
-7. Director IA source/routing map.
-8. FIRST_BAD_BOUNDARY.
-9. Comments source map.
-10. BAYAM divergence matrix.
-11. Driver availability matrix.
-12. Hypothesis disposition H1–H10.
-13. Golden/Runtime gap.
-14. Future Runtime regressions.
-15. Si hace falta LIVE_DB: SELECTs mínimos.
-16. Recommended next FIX slice.
-17. Git branch/commit/status.
+No consultar producción durante la tarea.
 
 ## Completion
 
-DONE_PENDING_REVIEW
-si el código permite localizar las fronteras y diseñar el FIX.
+DRAFT.
 
-BLOCKED
-si una frontera crítica solo puede resolverse con LIVE_DB.
+Esperar G1 humano.
 
-No implementación.
-No next task.
+No implementar.
+No tests todavía.
+No merge.
+No deploy.
 
 STOP.

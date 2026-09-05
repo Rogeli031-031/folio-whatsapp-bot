@@ -542,6 +542,13 @@ describe("commercial_trend calendar_compare", () => {
     assert.equal(slots.month_b.last, "2026-08-31");
     assert.equal(isCommercialTrendQuestion("agosto comparado con julio"), true);
     assert.equal(planDirectorIaQuestion("agosto comparado con julio").intent, "commercial_trend");
+    assert.equal(
+      isCommercialTrendQuestion(
+        "Dame 5 clientes que tengan el mayor impacto negativo en el ingreso para el mes de septiembre, y ponme sus comentarios."
+      ),
+      false
+    );
+    assert.equal(isCommercialTrendQuestion("¿Qué clientes disminuyeron?"), true);
   });
 
   it("últimos 30 días y últimas 4 semanas conservan trailing", () => {
