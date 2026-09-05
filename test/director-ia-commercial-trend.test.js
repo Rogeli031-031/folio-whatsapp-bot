@@ -27,6 +27,8 @@ const {
   resolveCommercialTrendSlots,
   loadCommercialTrendForChat,
   buildCommercialTrendPrompt,
+  calendarMonthBounds,
+  classifyPurchaseDelta,
   COMMERCIAL_TREND_SYSTEM_ADDENDUM,
 } = require("../lib/director-ia-commercial-trend");
 const { getDirectorIaTool } = require("../lib/director-ia-tools");
@@ -522,5 +524,84 @@ describe("askDirectorIa commercial_trend", () => {
     const t = await askDirectorIa({ dashboardAuth: { role: "ZP" }, body: {} }, 1, "¿Cómo nos fue ayer?");
     assert.equal(t.ok, true);
     assert.equal(t.context_meta.mode, "daily_executive_brief");
+  });
+});
+
+describe("commercial_trend calendar_compare", () => {
+  const now = new Date("2026-09-01T12:00:00-06:00");
+
+  it("agosto comparado con julio resuelve meses calendario completos, no trailing", () => {
+    const slots = resolveCommercialTrendSlots("agosto comparado con julio", { now });
+    assert.equal(slots.period_kind, "calendar_compare");
+    assert.equal(slots.range_days, null);
+    assert.deepEqual(slots.month_a, calendarMonthBounds(2026, 7));
+    assert.deepEqual(slots.month_b, calendarMonthBounds(2026, 8));
+    assert.equal(slots.month_a.first, "2026-07-01");
+    assert.equal(slots.month_a.last, "2026-07-31");
+    assert.equal(slots.month_b.first, "2026-08-01");
+    assert.equal(slots.month_b.last, "2026-08-31");
+    assert.equal(isCommercialTrendQuestion("agosto comparado con julio"), true);
+    assert.equal(planDirectorIaQuestion("agosto comparado con julio").intent, "commercial_trend");
+  });
+
+  it("últimos 30 días y últimas 4 semanas conservan trailing", () => {
+    const trailing = resolveCommercialTrendSlots("¿Cómo vamos los últimos 30 días?", { now });
+    assert.equal(trailing.period_kind, "trailing");
+    assert.equal(trailing.range_days, 30);
+    const weeks = resolveCommercialTrendSlots("últimas 4 semanas", { now });
+    assert.equal(weeks.period_kind, "trailing");
+    assert.equal(weeks.range_days, 30);
+    const weeksNamed = resolveCommercialTrendSlots("últimas 4 semanas de agosto", { now });
+    assert.equal(weeksNamed.period_kind, "trailing");
+  });
+
+  it("clasifica AUMENTÓ / DISMINUYÓ / DEJÓ DE COMPRAR en kg", () => {
+    assert.equal(classifyPurchaseDelta(19980, 23652).class, "AUMENTÓ");
+    assert.equal(classifyPurchaseDelta(19980, 23652).delta_kg, 3672);
+    assert.equal(classifyPurchaseDelta(6370, 459).class, "DISMINUYÓ");
+    assert.equal(classifyPurchaseDelta(6370, 0).class, "DEJÓ DE COMPRAR");
+    assert.notEqual(classifyPurchaseDelta(6370, 459).tipo, "perdido");
+  });
+
+  it("agrega SUM(kg) por mes calendario y no recorta la clase pedida", async () => {
+    const pack = await loadCommercialTrendForChat(
+      { connect: async () => ({ release() {} }) },
+      1,
+      { dashboardAuth: { role: "ZP" } },
+      {
+        question: "¿Qué clientes aumentaron agosto comparado con julio?",
+        now,
+        resolvePlanta: async () => ({ id: 1, nombre: "Acapulco", clave: "E3" }),
+        resolvePlantCodes: async () => ({ not_found: false, uniqueCodes: ["E3"], plantCode: "E3" }),
+        queryCalendarKg: async (_c, _codes, start, end) => {
+          if (start === "2026-07-01" && end === "2026-07-31") {
+            return [
+              { cliente: "CLIENTE_DELTA", kg: 19980 },
+              { cliente: "CLIENTE_REMANENTE", kg: 6370 },
+              { cliente: "CLIENTE_EXTRA_1", kg: 2000 },
+            ];
+          }
+          if (start === "2026-08-01" && end === "2026-08-31") {
+            return [
+              { cliente: "CLIENTE_DELTA", kg: 23652 },
+              { cliente: "CLIENTE_REMANENTE", kg: 459 },
+              { cliente: "CLIENTE_EXTRA_1", kg: 3000 },
+            ];
+          }
+          return [];
+        },
+      }
+    );
+    assert.equal(pack.ok, true);
+    assert.equal(pack.period_kind, "calendar_compare");
+    assert.equal(pack.list_truncated, false);
+    assert.equal(pack.calendar_movers.length, 2);
+    const delta = pack.calendar_movers.find((m) => m.cliente === "CLIENTE_DELTA");
+    assert.equal(delta.kg_a, 19980);
+    assert.equal(delta.kg_b, 23652);
+    assert.equal(delta.delta_kg, 3672);
+    assert.equal(delta.class, "AUMENTÓ");
+    assert.match(pack.deterministic_answer, /3,672 kg|3672 kg/);
+    assert.equal(/3\.672\s*kg/.test(pack.deterministic_answer), false);
   });
 });
