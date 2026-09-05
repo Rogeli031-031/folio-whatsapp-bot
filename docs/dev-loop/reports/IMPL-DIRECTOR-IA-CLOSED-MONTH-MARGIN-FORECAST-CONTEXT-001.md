@@ -148,6 +148,6 @@ No tocados: `docs/director-ia/`, DB/schema, LIVE_DB, frontend, planner inherit d
 
 ## 9. Commit / status
 
-implementation SHA: pendiente de este commit.
+implementation SHA: `f2739f07037598bc1815e1fd76325bed9d07f094`
 
 Rama: `impl/director-ia-closed-month-margin-forecast-context-001`. No push. No merge.
