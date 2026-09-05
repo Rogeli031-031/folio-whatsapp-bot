@@ -312,6 +312,6 @@ No tocados: `lib/**`, `test/**`, `docs/director-ia/`, `server.js`, frontend de c
 
 ## 15. Commit / status
 
-implementation SHA: pendiente de este commit.
+implementation SHA: `eb0375c032ba801fee9f593afaa992793606a286`
 
 Rama: `audit/director-ia-commercial-movement-dashboard-parity-001`. No push. No merge.
