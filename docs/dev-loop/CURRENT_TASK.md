@@ -3,7 +3,7 @@ task_id: FIX-DIRECTOR-IA-DELTA-INGRESO-FORECAST-NEGATIVE-TOPN-COMMENTS-001
 task_type: FIX
 mode: REGRESSION_FIRST
 
-status: DONE_PENDING_REVIEW
+status: CLOSED
 authorized_by: "Human Approver"
 authorized_at: "2026-09-05T12:59:25-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-05"
