@@ -193,6 +193,6 @@ No tocados: `docs/director-ia/`, `lib/commercial-trend-engine.js`, `lib/director
 
 ## 14. Commit / status
 
-implementation SHA: pendiente del commit de esta rama.
+implementation SHA: `342b0d23e0edb47c00f4f8f8695b5708048f3e25`
 
-No push. No merge. No deploy. No next task.
+Tras el stamp documental de este SHA, `git status --short` debe quedar limpio en la rama `fix/director-ia-commercial-trend-calendar-parity-001`. No push. No merge. No deploy. No next task.
