@@ -87,6 +87,114 @@ function closedFinalPlusLaterForecast(year, month, finalKg, forecastKg, empresa)
   };
 }
 
+function ymd(year, month, day) {
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function daysInMonth(year, month) {
+  return new Date(year, month, 0).getDate();
+}
+
+function pushDaily(rows, cliente, fecha, kg) {
+  rows.push({ fecha, cliente, kg, canal: "Casa" });
+}
+
+function spreadRange(rows, cliente, start, end, totalKg) {
+  const dates = [];
+  const cursor = new Date(`${start}T12:00:00Z`);
+  const last = new Date(`${end}T12:00:00Z`);
+  while (cursor.getTime() <= last.getTime()) {
+    dates.push(cursor.toISOString().slice(0, 10));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  if (!dates.length) return;
+  const each = Math.floor(totalKg / dates.length);
+  let used = 0;
+  for (let i = 0; i < dates.length; i++) {
+    const kg = i === dates.length - 1 ? totalKg - used : each;
+    used += kg;
+    pushDaily(rows, cliente, dates[i], kg);
+  }
+}
+
+function movementDailyRows() {
+  const rows = [];
+  spreadRange(rows, "CLIENTE_DELTA", "2026-07-01", "2026-07-02", 5724);
+  spreadRange(rows, "CLIENTE_DELTA", "2026-07-03", "2026-07-31", 14256);
+  pushDaily(rows, "CLIENTE_DELTA", "2026-08-01", 2862);
+  spreadRange(rows, "CLIENTE_DELTA", "2026-08-02", "2026-08-31", 20790);
+
+  spreadRange(rows, "CLIENTE_SIGNO", "2026-07-01", "2026-07-02", 5001);
+  spreadRange(rows, "CLIENTE_SIGNO", "2026-07-03", "2026-07-31", 50472);
+  pushDaily(rows, "CLIENTE_SIGNO", "2026-08-01", 6130);
+  spreadRange(rows, "CLIENTE_SIGNO", "2026-08-02", "2026-08-31", 52698);
+
+  spreadRange(rows, "CLIENTE_BAJA", "2026-07-01", "2026-07-31", 168890);
+  spreadRange(rows, "CLIENTE_BAJA", "2026-08-01", "2026-08-31", 150199);
+
+  spreadRange(rows, "CLIENTE_REMANENTE", "2026-07-01", "2026-07-31", 6370);
+  pushDaily(rows, "CLIENTE_REMANENTE", "2026-08-01", 459);
+
+  spreadRange(rows, "CLIENTE_CERO", "2026-07-01", "2026-07-31", 8000);
+
+  for (let i = 1; i <= 7; i++) {
+    const name = `CLIENTE_EXTRA_${i}`;
+    spreadRange(rows, name, "2026-07-03", "2026-07-31", 2000);
+    spreadRange(rows, name, "2026-08-02", "2026-08-31", 3000);
+  }
+  return rows;
+}
+
+const MOVEMENT_DAILY = movementDailyRows();
+
+function rowsBetween(start, end) {
+  return MOVEMENT_DAILY.filter((r) => r.fecha >= start && r.fecha <= end);
+}
+
+function aggregateClientTons(start, end) {
+  const map = new Map();
+  for (const r of rowsBetween(start, end)) {
+    map.set(r.cliente, (map.get(r.cliente) || 0) + Number(r.kg || 0));
+  }
+  return [...map.entries()].map(([cliente, kg]) => ({
+    cliente,
+    venta_ton: Math.round((kg / 1000) * 1000) / 1000,
+  }));
+}
+
+function aggregateClientKg(start, end) {
+  const map = new Map();
+  for (const r of rowsBetween(start, end)) {
+    map.set(r.cliente, (map.get(r.cliente) || 0) + Number(r.kg || 0));
+  }
+  return [...map.entries()].map(([cliente, kg]) => ({ cliente, kg }));
+}
+
+function isMovementCase(runtimeCase) {
+  return runtimeCase && String(runtimeCase.id || "").startsWith("R-MOVEMENT-");
+}
+
+function movementTrendDeps() {
+  return {
+    resolveCommercialTrendPlanta: async () => ({ id: 1, nombre: "Acapulco", clave: "E3" }),
+    resolveCommercialTrendPlantCodes: async () => ({ not_found: false, uniqueCodes: ["E3"], plantCode: "E3" }),
+    queryCommercialTrendBounds: async () => ({ rows: [{ min_f: "2026-07-01", max_f: "2026-08-31" }] }),
+    queryCommercialTrendClients: async (_c, _codes, start, end) => ({
+      rows: aggregateClientTons(start, end),
+    }),
+    queryCommercialTrendSales: async (_c, _codes, start, end) => ({
+      rows: aggregateClientTons(start, end).map((r) => ({
+        fecha: start,
+        venta_ton: r.venta_ton,
+      })),
+    }),
+    queryCommercialTrendDiscount: async () => ({ rows: [] }),
+    queryCommercialTrendCalendarKg: async (_c, _codes, start, end) => ({
+      rows: aggregateClientKg(start, end),
+    }),
+  };
+}
+
 function igfMapForCase(runtimeCase) {
   const base = availableIgfMap();
   if (runtimeCase && runtimeCase.id === "R-RUNTIME-006") {
@@ -151,6 +259,9 @@ function packKind(body) {
   if (/discount|descuento/.test(blob)) return "descuento";
   if (mode === "conversation_clarification") return "clarification";
   if (mode === "client_profile") return "client_profile";
+  if (mode === "commercial_trend" || parent === "commercial_trend" || bundle === "commercial_trend") {
+    return "commercial_trend";
+  }
   return mode || parent || "unknown";
 }
 
@@ -217,6 +328,72 @@ function mentionsFinalAbsence(answer) {
   );
 }
 
+function movementPack(body) {
+  return (body && body.commercial_trend) || {};
+}
+
+function movementRows(body) {
+  const pack = movementPack(body);
+  const rows = pack.calendar_movers || pack.movers || pack.top_movers || body.customer_contributors || [];
+  return Array.isArray(rows) ? rows : [];
+}
+
+function findMover(body, name) {
+  const want = String(name || "").trim().toUpperCase();
+  return movementRows(body).find((m) => String((m && (m.cliente || m.cliente_norm)) || "").trim().toUpperCase() === want) || null;
+}
+
+function moverKgPair(mover) {
+  if (!mover) return null;
+  if (mover.kg_a != null || mover.kg_b != null) {
+    const a = Number(mover.kg_a);
+    const b = Number(mover.kg_b);
+    const delta = mover.delta_kg != null ? Number(mover.delta_kg) : b - a;
+    return { a, b, delta };
+  }
+  if (mover.venta_ton_prev != null || mover.venta_ton_actual != null) {
+    const a = Math.round(Number(mover.venta_ton_prev || 0) * 1000);
+    const b = Math.round(Number(mover.venta_ton_actual || 0) * 1000);
+    const delta = mover.delta_ton != null ? Math.round(Number(mover.delta_ton) * 1000) : b - a;
+    return { a, b, delta };
+  }
+  return null;
+}
+
+function moverClass(mover, answer) {
+  const tipo = String((mover && mover.tipo) || (mover && mover.class) || "").toLowerCase();
+  if (tipo === "aumento" || tipo === "aumento" || /aument/i.test(tipo)) return "AUMENTÓ";
+  if (tipo === "disminucion" || tipo === "disminuyó" || tipo === "disminuyo") return "DISMINUYÓ";
+  if (tipo === "perdido" || tipo === "stopped" || /dej[oó] de comprar/.test(tipo)) return "DEJÓ DE COMPRAR";
+  const blob = `${String((mover && mover.tipo_label) || "")} ${String(answer || "")}`;
+  if (/dej[oó] de comprar/i.test(blob)) return "DEJÓ DE COMPRAR";
+  if (/disminuy/i.test(blob)) return "DISMINUYÓ";
+  if (/aument/i.test(blob)) return "AUMENTÓ";
+  return tipo || "";
+}
+
+function isCalendarCompare(body) {
+  const pack = movementPack(body);
+  const meta = metaOf(body);
+  const kind = String(pack.period_kind || meta.period_kind || "");
+  return kind === "calendar_compare" || kind === "calendar_month";
+}
+
+function looksLikeTonLabeledAsKg(answer, deltaKg) {
+  const text = String(answer || "");
+  const tonsDot = (Number(deltaKg) / 1000).toFixed(3);
+  return new RegExp(`${tonsDot.replace(".", "\\.")}\\s*kg`, "i").test(text);
+}
+
+function looksLikeValidDeltaUnit(answer, deltaKg) {
+  const text = String(answer || "");
+  const kgEs = Math.abs(Number(deltaKg)).toLocaleString("es-MX");
+  const ton = (Math.abs(Number(deltaKg)) / 1000).toFixed(3);
+  if (new RegExp(`${kgEs.replace(".", "\\.")}\\s*kg`, "i").test(text)) return true;
+  if (new RegExp(`${ton.replace(".", "[.,]")}\\s*t\\b`, "i").test(text)) return true;
+  return false;
+}
+
 function mentionsErick(body) {
   return /tortilleria erick/i.test(String((body && body.answer) || ""));
 }
@@ -250,7 +427,7 @@ async function postChat(handlePostChat, question, conversationState, history) {
   return { http: res.out.statusCode, body: res.out.body, threw };
 }
 
-function installRuntimeDeps(chat, map) {
+function installRuntimeDeps(chat, map, runtimeCase) {
   chat.configureDirectorIaChat({
     now: NOW,
     pool: {
@@ -269,6 +446,7 @@ function installRuntimeDeps(chat, map) {
     queryClientProfileActions: async () => [],
     queryClientProfileHistorial: async () => new Map(),
     ...igfQueryFns(map),
+    ...(isMovementCase(runtimeCase) ? movementTrendDeps() : {}),
     openaiChat: async () => "STUB_OPENAI_TRANSPORT",
   });
 }
@@ -289,6 +467,13 @@ function clearRuntimeDeps(chat) {
     queryHistoricalMarginVersions: undefined,
     queryHistoricalMarginLatestVersion: undefined,
     queryHistoricalMarginLines: undefined,
+    resolveCommercialTrendPlanta: undefined,
+    resolveCommercialTrendPlantCodes: undefined,
+    queryCommercialTrendBounds: undefined,
+    queryCommercialTrendClients: undefined,
+    queryCommercialTrendSales: undefined,
+    queryCommercialTrendDiscount: undefined,
+    queryCommercialTrendCalendarKg: undefined,
     openaiChat: undefined,
   });
 }
@@ -415,6 +600,72 @@ function evaluateLastTurn(runtimeCase, last) {
       return { boundaries, http, pack };
     }
   }
+  if (runtimeCase.require_calendar_compare) {
+    const packCt = movementPack(body);
+    const trailing = Number(packCt.range_days) === 30 && !isCalendarCompare(body);
+    if (!isCalendarCompare(body) || trailing) {
+      boundaries.USER_VISIBLE_OUTCOME = mark(
+        "FAIL",
+        `expected calendar_compare; period_kind=${packCt.period_kind || meta.period_kind || "none"} range_days=${packCt.range_days}`
+      );
+      return { boundaries, http, pack };
+    }
+  }
+  if (runtimeCase.movement_focus || runtimeCase.require_calendar_kg_parity || runtimeCase.require_stopped || runtimeCase.forbid_stopped) {
+    const mover = findMover(body, runtimeCase.movement_focus);
+    const pair = moverKgPair(mover);
+    const klass = moverClass(mover, answer);
+    if (runtimeCase.require_calendar_kg_parity) {
+      if (!pair || pair.a !== runtimeCase.expected_kg_a || pair.b !== runtimeCase.expected_kg_b || pair.delta !== runtimeCase.expected_delta_kg) {
+        boundaries.USER_VISIBLE_OUTCOME = mark(
+          "FAIL",
+          `kg parity focus=${runtimeCase.movement_focus} got=${pair ? `${pair.a}→${pair.b} Δ${pair.delta}` : "missing"} expected=${runtimeCase.expected_kg_a}→${runtimeCase.expected_kg_b} Δ${runtimeCase.expected_delta_kg}`
+        );
+        return { boundaries, http, pack };
+      }
+    }
+    if (runtimeCase.expected_class && klass !== runtimeCase.expected_class) {
+      boundaries.USER_VISIBLE_OUTCOME = mark("FAIL", `class=${klass || "none"} expected=${runtimeCase.expected_class}`);
+      return { boundaries, http, pack };
+    }
+    if (runtimeCase.forbid_stopped && (klass === "DEJÓ DE COMPRAR" || String((mover && mover.tipo) || "") === "perdido")) {
+      boundaries.USER_VISIBLE_OUTCOME = mark("FAIL", "classified STOPPED with remaining purchase");
+      return { boundaries, http, pack };
+    }
+    if (runtimeCase.require_stopped && klass !== "DEJÓ DE COMPRAR") {
+      boundaries.USER_VISIBLE_OUTCOME = mark("FAIL", `expected STOPPED class=${klass || "none"}`);
+      return { boundaries, http, pack };
+    }
+    if (runtimeCase.forbid_sign_flip && pair && Math.sign(pair.delta) !== Math.sign(runtimeCase.expected_delta_kg)) {
+      boundaries.USER_VISIBLE_OUTCOME = mark("FAIL", `sign flip delta=${pair.delta} expected=${runtimeCase.expected_delta_kg}`);
+      return { boundaries, http, pack };
+    }
+  }
+  if (runtimeCase.require_unambiguous_units) {
+    if (looksLikeTonLabeledAsKg(answer, runtimeCase.expected_delta_kg) || !looksLikeValidDeltaUnit(answer, runtimeCase.expected_delta_kg)) {
+      boundaries.USER_VISIBLE_OUTCOME = mark(
+        "FAIL",
+        `ambiguous units answer=${answer.slice(0, 160)}`
+      );
+      return { boundaries, http, pack };
+    }
+  }
+  if (runtimeCase.require_list_completeness) {
+    const ups = movementRows(body).filter((m) => moverClass(m, "") === "AUMENTÓ");
+    const packCt = movementPack(body);
+    const declared =
+      Boolean(packCt.list_truncated) ||
+      packCt.list_scope === "top_n" ||
+      /top\s*\d+|recorte|principales|de \d+\s+clientes/i.test(answer);
+    const fakeFull = /estos son los clientes/i.test(answer) && ups.length < Number(runtimeCase.expected_up_count || 0);
+    if (ups.length < Number(runtimeCase.expected_up_count || 0) && (!declared || fakeFull)) {
+      boundaries.USER_VISIBLE_OUTCOME = mark(
+        "FAIL",
+        `list completeness ups=${ups.length} expected=${runtimeCase.expected_up_count} declared=${declared}`
+      );
+      return { boundaries, http, pack };
+    }
+  }
   boundaries.USER_VISIBLE_OUTCOME = mark(
     "PASS",
     meta.requires_clarification ? "specific_or_allowed_clarification" : `mode=${meta.mode || "none"}`
@@ -423,7 +674,7 @@ function evaluateLastTurn(runtimeCase, last) {
 }
 
 async function evaluateRuntimeCase(runtimeCase, chat) {
-  installRuntimeDeps(chat, igfMapForCase(runtimeCase));
+  installRuntimeDeps(chat, igfMapForCase(runtimeCase), runtimeCase);
   const history = [];
   let state = null;
   let last = null;
