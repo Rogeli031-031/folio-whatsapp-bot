@@ -8,6 +8,7 @@
 
 const { RUNTIME_CASES, NOW_ISO } = require("../fixtures/director-ia-golden-cases");
 const parityFx = require("../fixtures/delta-ingreso-clientes-por-mes-parity");
+const cutFx = require("../fixtures/delta-ingreso-target-proy-cut");
 
 const NOW = new Date(NOW_ISO);
 
@@ -183,6 +184,10 @@ function isDeltaParityCase(runtimeCase) {
   return runtimeCase && String(runtimeCase.id || "").startsWith("R-DELTA-PARITY-");
 }
 
+function isDeltaCutCase(runtimeCase) {
+  return runtimeCase && String(runtimeCase.id || "").startsWith("R-DELTA-CUT-");
+}
+
 function forecastNegativeRows() {
   return [
     { cliente: "CLIENTE_N1", ingresoA: 400000, ingresoB: 150000, deltaIngreso: -250000, kgA: 10000, kgB: 4000 },
@@ -282,6 +287,76 @@ function deltaParityDeps() {
       margenA: parityFx.MARGEN_A,
       margenB: parityFx.MARGEN_B,
       rows: parityFx.olsForecastRows(),
+      source_helper: "computeDeltaIngresoForecast",
+    }),
+    loadRecentCommentsByClienteNombres: async () => new Map(),
+  };
+}
+
+function deltaCutDeps(runtimeCase) {
+  const uploadDay = runtimeCase && runtimeCase.upload_day ? runtimeCase.upload_day : cutFx.UPLOAD_DAY_A;
+  return {
+    resolveDeltaIngresoForecastPlanta: async () => ({ id: 1, nombre: cutFx.PLANTA, clave: "E3" }),
+    getPlantCodeArrFromPlantaNombre: async () => cutFx.PLANTA,
+    computeDeltaIngresoClientesPorMes: undefined,
+    loadIgfPlantMetrics: async (_c, _plant, year, month) => {
+      if (year === cutFx.YEAR_B && month === cutFx.MONTH_B) {
+        return {
+          ...cutFx.METRICS_B,
+          version_id: cutFx.IGF_VERSION.id,
+          version_number: cutFx.IGF_VERSION.version_number,
+          financial_state: cutFx.IGF_VERSION.financial_state,
+          ventaTon: cutFx.RAW_COMPROMISO_VENTA_TON,
+          targetKg: cutFx.TARGET_KG_RAW,
+          target_source: "compromiso",
+        };
+      }
+      return {
+        ...cutFx.METRICS_A,
+        version_number: 2,
+        financial_state: "FINAL",
+        ventaTon: cutFx.METRICS_A.ventaTon,
+        target_source: "compromiso",
+      };
+    },
+    loadEffectiveIgfTarget: async (_c, _plant, year, month, opts = {}) => {
+      if (year !== cutFx.YEAR_B || month !== cutFx.MONTH_B) return null;
+      const day = opts.upload_day || uploadDay;
+      const eff = cutFx.effectiveForUploadDay(day);
+      return {
+        ...cutFx.METRICS_B,
+        version_id: cutFx.IGF_VERSION.id,
+        version_number: cutFx.IGF_VERSION.version_number,
+        financial_state: cutFx.IGF_VERSION.financial_state,
+        ventaTon: eff.ventaTon,
+        targetKg: eff.targetKg,
+        upload_day: day,
+        target_source: "proy",
+      };
+    },
+    computeClientesDescuentoMes: async (_c, year, month, _plant, opts = {}) => {
+      if (month === cutFx.MONTH_A) {
+        return { historico: true, ty: year, tm: month, rows: cutFx.cdmRowsA() };
+      }
+      return {
+        historico: false,
+        ty: year,
+        tm: month,
+        rows: cutFx.cdmRowsB(opts && opts.targetKgOverride),
+      };
+    },
+    computeDeltaIngresoForecast: async (_c, _plant, yearA, monthA, yearB, monthB) => ({
+      planta: cutFx.PLANTA,
+      periodoA: `${yearA}-${String(monthA).padStart(2, "0")}`,
+      periodoB: `${yearB}-${String(monthB).padStart(2, "0")}`,
+      rows: cutFx.CLIENTS_RAW.map((c) => ({
+        cliente: c.cliente,
+        kgA: c.kgA,
+        kgB: c.kgB,
+        ingresoA: c.ingresoA,
+        ingresoB: c.ingresoB,
+        deltaIngreso: c.delta,
+      })),
       source_helper: "computeDeltaIngresoForecast",
     }),
     loadRecentCommentsByClienteNombres: async () => new Map(),
@@ -580,7 +655,7 @@ function firstBadBoundary(boundaries) {
   return null;
 }
 
-async function postChat(handlePostChat, question, conversationState, history) {
+async function postChat(handlePostChat, question, conversationState, history, extraBody) {
   const res = captureRes();
   let threw = null;
   try {
@@ -591,6 +666,7 @@ async function postChat(handlePostChat, question, conversationState, history) {
           question,
           conversation_state: conversationState || undefined,
           history: Array.isArray(history) ? history : [],
+          ...(extraBody && typeof extraBody === "object" ? extraBody : {}),
         },
         dashboardAuth: { role: "ZP", actor_id: 1 },
       },
@@ -625,8 +701,15 @@ function installRuntimeDeps(chat, map, runtimeCase) {
     computeDeltaIngresoClientesPorMes: undefined,
     computeClientesDescuentoMes: undefined,
     loadIgfPlantMetrics: undefined,
+    loadEffectiveIgfTarget: undefined,
     ...(isMovementCase(runtimeCase) ? movementTrendDeps() : {}),
-    ...(isDeltaParityCase(runtimeCase) ? deltaParityDeps() : isDeltaIncomeCase(runtimeCase) ? deltaIncomeForecastDeps() : {}),
+    ...(isDeltaCutCase(runtimeCase)
+      ? deltaCutDeps(runtimeCase)
+      : isDeltaParityCase(runtimeCase)
+        ? deltaParityDeps()
+        : isDeltaIncomeCase(runtimeCase)
+          ? deltaIncomeForecastDeps()
+          : {}),
     openaiChat: async () => "STUB_OPENAI_TRANSPORT",
   });
 }
@@ -660,6 +743,7 @@ function clearRuntimeDeps(chat) {
     computeDeltaIngresoClientesPorMes: undefined,
     computeClientesDescuentoMes: undefined,
     loadIgfPlantMetrics: undefined,
+    loadEffectiveIgfTarget: undefined,
     loadRecentCommentsByClienteNombres: undefined,
     openaiChat: undefined,
   });
@@ -1144,6 +1228,144 @@ function evaluateLastTurn(runtimeCase, last) {
       }
     }
   }
+  if (runtimeCase.require_cut_fixture) {
+    const packFi = incomeForecastPack(body);
+    const focusName = runtimeCase.movement_focus;
+    const expected = focusName ? cutFx.BY_NAME_PROY[focusName] : null;
+    const rawExpected = focusName ? cutFx.BY_NAME_RAW[focusName] : null;
+    const row = focusName ? findIncomeRow(body, focusName) : null;
+    const kgA = row && (row.kg_a != null ? Number(row.kg_a) : row.kgA != null ? Number(row.kgA) : null);
+    const kgB = row && (row.kg_b != null ? Number(row.kg_b) : row.kgB != null ? Number(row.kgB) : null);
+    const ingB = row && (row.ingreso_b != null ? Number(row.ingreso_b) : row.ingresoB != null ? Number(row.ingresoB) : null);
+    const descB = row && (row.desc_kg_b != null ? Number(row.desc_kg_b) : row.descKgB != null ? Number(row.descKgB) : null);
+    const delta = incomeDelta(row);
+    const targetKg = packFi.target_kg != null ? Number(packFi.target_kg) : packFi.targetKg != null ? Number(packFi.targetKg) : null;
+    const ventaTon = packFi.igf_venta_ton != null ? Number(packFi.igf_venta_ton) : null;
+    const targetSource = String(packFi.target_source || packFi.igf_target_source || "");
+    const shown = incomeForecastRows(body);
+    const names = shown.map((r) => String((r && (r.cliente || r.cliente_norm)) || "").trim().toUpperCase());
+    const allRows = incomeForecastRows(body, { all: true });
+
+    if (runtimeCase.require_effective_target_source) {
+      if (ventaTon !== cutFx.EFFECTIVE_PROY_VENTA_TON || targetKg !== cutFx.TARGET_KG_PROY) {
+        boundaries.USER_VISIBLE_OUTCOME = mark(
+          "FAIL",
+          `TARGET_PROY_SOURCE ventaTon=${ventaTon} expected_proy=${cutFx.EFFECTIVE_PROY_VENTA_TON} raw=${cutFx.RAW_COMPROMISO_VENTA_TON} targetKg=${targetKg} expected=${cutFx.TARGET_KG_PROY}`
+        );
+        return { boundaries, http, pack };
+      }
+    }
+    if (runtimeCase.require_upload_day_overlay) {
+      if (ventaTon !== cutFx.EFFECTIVE_PROY_VENTA_TON_UPLOAD_B || targetKg !== cutFx.TARGET_KG_UPLOAD_B) {
+        boundaries.USER_VISIBLE_OUTCOME = mark(
+          "FAIL",
+          `upload_day overlay ventaTon=${ventaTon} expected=${cutFx.EFFECTIVE_PROY_VENTA_TON_UPLOAD_B} targetKg=${targetKg} expectedKg=${cutFx.TARGET_KG_UPLOAD_B}`
+        );
+        return { boundaries, http, pack };
+      }
+    }
+    if (runtimeCase.require_raw_compromiso_rejected) {
+      const usedRaw = ventaTon === cutFx.RAW_COMPROMISO_VENTA_TON || targetKg === cutFx.TARGET_KG_RAW || targetSource === "compromiso";
+      if (usedRaw || ventaTon !== cutFx.EFFECTIVE_PROY_VENTA_TON) {
+        boundaries.USER_VISIBLE_OUTCOME = mark(
+          "FAIL",
+          `raw compromiso still used ventaTon=${ventaTon} targetKg=${targetKg} source=${targetSource || "none"}`
+        );
+        return { boundaries, http, pack };
+      }
+    }
+    if (runtimeCase.require_cut_kg_b_parity) {
+      if (!expected || kgB !== expected.kgB) {
+        boundaries.USER_VISIBLE_OUTCOME = mark(
+          "FAIL",
+          `kg B cut parity focus=${focusName} got=${kgB} expected_proy=${expected && expected.kgB} raw=${rawExpected && rawExpected.kgB}`
+        );
+        return { boundaries, http, pack };
+      }
+    }
+    if (runtimeCase.require_cut_ingreso_b_parity) {
+      if (!expected || ingB !== expected.ingresoB) {
+        boundaries.USER_VISIBLE_OUTCOME = mark(
+          "FAIL",
+          `ingreso B cut parity focus=${focusName} got=${ingB} expected_proy=${expected && expected.ingresoB} raw=${rawExpected && rawExpected.ingresoB}`
+        );
+        return { boundaries, http, pack };
+      }
+    }
+    if (runtimeCase.require_cut_sign_parity) {
+      const proySign = expected ? Math.sign(expected.delta) : 0;
+      const rawSign = rawExpected ? Math.sign(rawExpected.delta) : 0;
+      const gotSign = delta == null ? 0 : Math.sign(delta);
+      if (!expected || gotSign !== proySign || proySign >= 0 || rawSign <= 0) {
+        boundaries.USER_VISIBLE_OUTCOME = mark(
+          "FAIL",
+          `sign cut parity focus=${focusName} got=${delta} proy=${expected && expected.delta} raw=${rawExpected && rawExpected.delta}`
+        );
+        return { boundaries, http, pack };
+      }
+    }
+    if (runtimeCase.require_cut_ranking_boundary) {
+      const expectedNames = cutFx.TOP5_PROY.map((c) => c.cliente);
+      const rawNames = cutFx.TOP5_RAW.map((c) => c.cliente);
+      const rankedRaw = names.join("|") === rawNames.join("|");
+      if (names.join("|") !== expectedNames.join("|") || rankedRaw || names.includes("RANK_SHIFT") === false) {
+        boundaries.USER_VISIBLE_OUTCOME = mark(
+          "FAIL",
+          `ranking boundary names=${names.join(",")} expected=${expectedNames.join(",")} raw=${rawNames.join(",")}`
+        );
+        return { boundaries, http, pack };
+      }
+    }
+    if (runtimeCase.require_cut_closed_a) {
+      if (!expected || kgA !== expected.kgA || kgA === expected.kgB) {
+        boundaries.USER_VISIBLE_OUTCOME = mark(
+          "FAIL",
+          `closed A reproyectado focus=${focusName} kgA=${kgA} expected=${expected && expected.kgA} kgB=${expected && expected.kgB}`
+        );
+        return { boundaries, http, pack };
+      }
+    }
+    if (runtimeCase.require_cut_no_react_sim) {
+      const usedReact =
+        descB === cutFx.DESC_KG_REACT_SIM ||
+        (ingB != null &&
+          expected &&
+          ingB ===
+            require("../../lib/ingreso-cliente-marginal").ingresoClienteMarginal(
+              expected.kgB,
+              cutFx.DESC_KG_REACT_SIM,
+              cutFx.METRICS_B
+            ));
+      if (!expected || usedReact || (descB != null && descB !== cutFx.DESC_KG_PERSISTIDO)) {
+        boundaries.USER_VISIBLE_OUTCOME = mark(
+          "FAIL",
+          `react sim leaked descB=${descB} ingresoB=${ingB} persistido=${cutFx.DESC_KG_PERSISTIDO}`
+        );
+        return { boundaries, http, pack };
+      }
+    }
+    if (runtimeCase.require_cut_snapshot) {
+      const expectedNames = cutFx.TOP5_PROY.map((c) => c.cliente);
+      const expectedDeltas = cutFx.TOP5_PROY.map((c) => c.delta);
+      const deltas = shown.map((r) => incomeDelta(r));
+      const declaredNeg = packFi.list_total_negative != null ? Number(packFi.list_total_negative) : null;
+      const declaredImpact = packFi.impacto_top_n != null ? Number(packFi.impacto_top_n) : null;
+      const universe = allRows.length;
+      if (
+        names.join("|") !== expectedNames.join("|") ||
+        expectedDeltas.some((d, i) => deltas[i] !== d) ||
+        declaredNeg !== cutFx.NEG_PROY.length ||
+        declaredImpact !== cutFx.IMPACTO_TOP5_PROY ||
+        universe !== cutFx.CLIENTS_PROY.length
+      ) {
+        boundaries.USER_VISIBLE_OUTCOME = mark(
+          "FAIL",
+          `snapshot names=${names.join(",")} neg=${declaredNeg} expectedNeg=${cutFx.NEG_PROY.length} impact=${declaredImpact} expectedImpact=${cutFx.IMPACTO_TOP5_PROY} universe=${universe}`
+        );
+        return { boundaries, http, pack };
+      }
+    }
+  }
   boundaries.USER_VISIBLE_OUTCOME = mark(
     "PASS",
     meta.requires_clarification ? "specific_or_allowed_clarification" : `mode=${meta.mode || "none"}`
@@ -1159,7 +1381,13 @@ async function evaluateRuntimeCase(runtimeCase, chat) {
   const turnTrace = [];
 
   for (const turn of runtimeCase.turns) {
-    last = await postChat(chat.handlePostChat, turn.question, state, history);
+    last = await postChat(
+      chat.handlePostChat,
+      turn.question,
+      state,
+      history,
+      runtimeCase.upload_day ? { upload_day: runtimeCase.upload_day } : undefined
+    );
     history.push({ role: "user", content: turn.question });
     const meta = metaOf(last.body);
     if (meta.conversation_state) state = meta.conversation_state;

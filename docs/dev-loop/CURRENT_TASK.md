@@ -1,52 +1,56 @@
-task_id: AUDIT-DIRECTOR-IA-CLIENTES-POR-MES-RUNTIME-CUT-PARITY-001
+task_id: FIX-DIRECTOR-IA-CLIENTES-POR-MES-TARGET-PROY-PARITY-001
 
-task_type: AUDIT
-mode: READ_ONLY_PHYSICAL_TRACE
+task_type: FIX
+mode: REGRESSION_FIRST
 
-status: CLOSED
+status: DONE_PENDING_REVIEW
 authorized_by: "Human Approver"
-authorized_at: "2026-09-05T15:37:32-06:00"
-human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-05 - READ_ONLY AUDIT ONLY; NO LIVE_DB"
-objective: Localizar físicamente la primera frontera (cut/state/input/export) que hace divergir Delta Ingreso LIVE entre Director IA y Clientes por mes → Exportar Excel, sin rediseñar la fórmula.
+authorized_at: "2026-09-05T15:54:56-06:00"
+human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-05 - IMPLEMENTATION ONLY; NO MERGE; NO DEPLOY; NO LIVE_DB"
+implementation_authorized: YES
+merge_authorized: NO
+deploy_authorized: NO
+live_db_authorized: NO
+
+objective: Hacer que Director IA use exactamente el mismo venta_ton efectivo / PROY / overlay que Clientes por mes usa para targetKg del periodo B cuando B es mes abierto forecast.
 
 in_scope:
-  - IGF Forecast ARR
-  - Clientes por mes
-  - Exportar Excel
-  - frontend-dashboard/app/arr/ArrClient.tsx
-  - función export
-  - React state relacionado
-  - lib/dashboard-arr-forecast.js (computeClientesDescuentoMes; solo lectura)
-  - lib/ingreso-cliente-marginal.js
-  - lib/delta-ingreso-clientes-por-mes.js
-  - lib/director-ia-chat.js (ruta delta ingreso Clientes por mes; solo lectura)
-  - target/version loaders
-  - discount loaders
-  - HG/margin loaders
-  - null/zero handling
-  - sorting/filtering
-  - cache/state
-  - R-DELTA-PARITY read-only
+  - lib/delta-ingreso-clientes-por-mes.js (target efectivo del periodo B; no convertir defaultLoadIgfPlantMetrics en cambio global si otros consumidores requieren compromiso crudo)
+  - resolver canónico mínimo del target IGF efectivo (PROY/overlay/upload_day) si hace falta extraerlo de la implementación física ya usada por Clientes por mes
+  - lib/director-ia-chat.js solo si hay que inyectar ese resolver en computeDeltaIngresoClientesPorMes
+  - R-DELTA-CUT-001..010 (crear ANTES de producto, solo tras G1)
+  - fixtures determinísticos de TARGET_PROY_SOURCE (nombres sintéticos; no hardcodear clientes LIVE)
   - docs/dev-loop/CURRENT_TASK.md
-  - docs/dev-loop/reports/AUDIT-DIRECTOR-IA-CLIENTES-POR-MES-RUNTIME-CUT-PARITY-001.md
+  - docs/dev-loop/reports/FIX-DIRECTOR-IA-CLIENTES-POR-MES-TARGET-PROY-PARITY-001.md
 
 out_of_scope:
-  - implementación
-  - modificar tests
-  - cambiar fórmula
-  - cambiar ranking
-  - cambiar comentarios
-  - LIVE_DB
-  - frontend visual
+  - fórmula nueva / ingresoClienteMarginal
+  - HG
+  - descuento persistido
+  - ranking / comentarios
+  - React simulations remotas
+  - localStorage
+  - cambio visual de Clientes por mes / Export Excel / IGF Forecast ARR
+  - HTTP interno
+  - computeDeltaIngresoForecast OLS
+  - M9 historical Delta Ingreso
+  - commercial_trend
+  - movement
+  - client_profile
+  - DICF
+  - historical_margin
+  - financial diagnosis
+  - Delta Gastos
+  - alertas
+  - notificaciones
+  - nuevos/reactivados
+  - commitment fulfillment
+  - causal inference
   - DB/schema
   - migrations
-  - nuevos/reactivados
-  - alertas
-  - Delta Gastos
-  - causalidad
-  - commitment evaluation
   - docs/director-ia/
   - contracts
+  - LIVE_DB
   - merge
   - deploy
   - next task
@@ -57,833 +61,571 @@ contracts_in_force:
   - docs/director-ia/DIRECTOR_IA_CONSTITUTION.md
   - docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md
   - docs/director-ia/DIRECTOR_IA_EXECUTIVE_KNOWLEDGE_ENGINE.md
+  - docs/dev-loop/reports/AUDIT-DIRECTOR-IA-CLIENTES-POR-MES-RUNTIME-CUT-PARITY-001.md (CLOSED; evidencia; FIRST_BAD_BOUNDARY físico = TARGET_PROY_SOURCE)
   - docs/dev-loop/reports/AUDIT-DIRECTOR-IA-DELTA-INGRESO-FORECAST-DASHBOARD-PARITY-001.md (CLOSED; no reabre fórmula)
-  - docs/dev-loop/reports/FIX-DIRECTOR-IA-DELTA-INGRESO-CLIENTES-POR-MES-PARITY-001.md (CLOSED; no reabre el FIX)
+  - docs/dev-loop/reports/FIX-DIRECTOR-IA-DELTA-INGRESO-CLIENTES-POR-MES-PARITY-001.md (CLOSED; no reabre el FIX de fórmula)
   - contratos vigentes aplicables (obedecer, no reescribir)
 
 allowed_actions:
-  - (solo tras G1 humano) tracing físico read-only
-  - leer código, tests y reportes CLOSED
-  - reportar fronteras H1–H12 y FIRST_BAD_BOUNDARY
-  - proponer R-DELTA-CUT-001..010 sin implementarlos
-  - redactar sondas/SELECTs mínimos sin ejecutarlos
-  - dejar DONE_PENDING_REVIEW o BLOCKED
+  - (solo tras G1 humano) regression-first: crear R-DELTA-CUT-001..010 ANTES de producto
+  - (solo tras G1 y BEFORE rojo en CUT mismatch) alinear target B de computeDeltaIngresoClientesPorMes con el PROY efectivo de Clientes por mes
+  - extraer helper canónico mínimo si la lógica PROY está atrapada; no segunda implementación aproximada
+  - ejecutar TIER1 / RUNTIME / MOVEMENT / DELTA-INCOME / DELTA-PARITY / PRE-DEPLOY --gate
+  - redactar el reporte en result_report_path
+  - dejar DONE_PENDING_REVIEW, STOPPED o BLOCKED
 
 forbidden_actions:
   - escribir AUTHORIZED_BY_HUMAN
   - poner status AUTHORIZED
   - crear, borrar o modificar authorized_by, authorized_at o human_authorization
-  - implementar
-  - modificar tests
-  - cambiar fórmula / ranking / comentarios
+  - implementar o escribir tests mientras status sea DRAFT
   - consultar LIVE_DB
-  - ejecutar SELECTs de producción
-  - hardcodear valores LIVE en producto
+  - hardcodear valores LIVE en producto o fixtures
+  - cambiar fórmula / HG / descuento / ranking / comentarios
+  - leer o enviar React state / localStorage a Director IA
+  - convertir defaultLoadIgfPlantMetrics en cambio global si otros consumidores requieren compromiso crudo
+  - reproyectar el periodo A real/cerrado
+  - inventar reglas de upload_day por día
   - modificar docs/director-ia/
   - merge/push a main
   - deploy
   - abrir siguiente tarea
 
-implementation_authorized: NO
-merge_authorized: NO
-deploy_authorized: NO
-live_db_authorized: NO
-
 max_attempts: 1
 
-result_report_path: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-CLIENTES-POR-MES-RUNTIME-CUT-PARITY-001.md
+result_report_path: docs/dev-loop/reports/FIX-DIRECTOR-IA-CLIENTES-POR-MES-TARGET-PROY-PARITY-001.md
 
 ## Estado
 
-DRAFT. No hay Gate G1. No es ejecutable.
-
-## Precondición
-
-Antes de bajar este DRAFT:
-
-FIX-DIRECTOR-IA-DELTA-INGRESO-CLIENTES-POR-MES-PARITY-001
-
-debe estar CLOSED en HEAD.
-
-Si no está CLOSED:
-STOP.
+Implementación completa en rama. Pendiente revisión humana. No merge. No deploy. No next task.
 
 ## North Star
 
-Director IA debe priorizar correctamente a los clientes que más deterioran el Delta Ingreso y, por tanto, dónde existe mayor oportunidad de proteger o recuperar rentabilidad.
+Director IA debe priorizar a los clientes que más deterioran Delta Ingreso usando la misma realidad económica que:
 
-Para ello:
+IGF Forecast ARR
+→ Clientes por mes
+→ Exportar Excel.
 
-Director IA
-y
-IGF Forecast ARR → Clientes por mes → Exportar Excel
+No basta tener la misma fórmula.
 
-deben partir del mismo contrato económico y, cuando se comparan bajo el mismo corte, deben producir:
+Debe usar el mismo target económico efectivo del mes abierto.
 
-- mismo universo de clientes;
-- mismos inputs económicos;
-- mismo Delta Ingreso;
-- mismo signo;
-- mismo ranking.
+## Auditoría CLOSED
 
-La auditoría anterior ya corrigió la divergencia de fórmula/proyección.
+Usar como evidencia contractual:
 
-Esta tarea NO debe rediseñar nuevamente Delta Ingreso.
+AUDIT-DIRECTOR-IA-CLIENTES-POR-MES-RUNTIME-CUT-PARITY-001
 
-## Antecedente CLOSED
+Hallazgo:
 
-AUDIT-DIRECTOR-IA-DELTA-INGRESO-FORECAST-DASHBOARD-PARITY-001
+Ambas rutas ya comparten:
 
-demostró:
-
-FIRST_BAD_BOUNDARY anterior:
-FORECAST_PROJECTION / kg B
-
-y que:
-
-Clientes por mes:
 computeClientesDescuentoMes
 +
 ingresoClienteMarginal
 
-era la semántica ejecutiva de negocio.
+y NO requieren otra fórmula.
 
-El FIX:
+FIRST_BAD_BOUNDARY conceptual exacto para este FIX:
 
-FIX-DIRECTOR-IA-DELTA-INGRESO-CLIENTES-POR-MES-PARITY-001
+TARGET_PROY_SOURCE
 
-implementó esa paridad.
+El reporte utilizó TARGET_VERSION_SELECTION, pero la diferencia física NO consiste en elegir otro version_number.
 
-Runtime regression quedó verde.
+Ambas rutas seleccionan latest.
 
-Sin embargo la validación LIVE posterior muestra que la paridad todavía no es exacta para todos los clientes.
+La divergencia consiste en:
 
-## Evidencia LIVE — Director IA
-
-Pregunta exacta:
-
-`Dame 5 clientes que tengan el mayor impacto negativo en el ingreso para el mes de septiembre, y ponme sus comentarios.`
-
-Planta:
-Acapulco
-
-Director IA respondió:
-
-1. SERVICIOS ADMINISTRATIVOS ACAPULCO HOSPITALITY
-   -$227,423
-
-2. PUBLICO EN GENERAL
-   -$210,363
-
-3. 20 CUMBRES
-   -$169,708
-
-4. CARBURACION PALMA SOLA
-   -$102,200
-
-5. ASOCIACION DE PROPIETARIOS DE RESIDENCIAS ACAPULCO
-   -$96,983
-
-Top 5 acumulado:
--$806,677
-
-Clientes negativos declarados:
-297
-
-Fuente declarada:
-Clientes por mes
-(computeClientesDescuentoMes + ingresoClienteMarginal)
-
-## Evidencia humana — Exportar Excel
-
-Misma planta:
-Acapulco
-
-Comparación:
-Agosto 2026 vs Septiembre 2026
-
-Excel ordenado por Delta Ingreso ascendente:
-
-1. SERVICIOS ADMINISTRATIVOS ACAPULCO HOSPITALITY
-   Ingreso agosto: $227,423
-   Ingreso septiembre: $0
-   Delta: -$227,423
-
-2. PUBLICO EN GENERAL
-   Ingreso agosto: $724,462
-   Ingreso septiembre: $502,898
-   Delta: -$221,564
-
-3. 20 CUMBRES
-   Ingreso agosto: $169,708
-   Ingreso septiembre: $0
-   Delta: -$169,708
-
-4. CARBURACION PALMA SOLA
-   Ingreso agosto: $122,325
-   Ingreso septiembre: $19,686
-   Delta: -$102,639
-
-5. GRUPO MOVE EMPRESARIAL
-   Ingreso agosto: $738,246
-   Ingreso septiembre: $639,172
-   Delta: -$99,074
-
-6. ASOCIACION DE PROPIETARIOS DE RESIDENCIAS ACAPULCO
-   Ingreso agosto: $96,983
-   Ingreso septiembre: $0
-   Delta: -$96,983
-
-Top 5 correcto de ese Excel:
-
--$820,408
-
-## Comparación directa
-
-SERVICIOS ADMINISTRATIVOS:
-Excel -227423
-IA    -227423
-MATCH
-
-PUBLICO EN GENERAL:
-Excel -221564
-IA    -210363
-DIFF = 11201
-
-20 CUMBRES:
-Excel -169708
-IA    -169708
-MATCH
-
-CARBURACION PALMA SOLA:
-Excel -102639
-IA    -102200
-DIFF = 439
-
-GRUPO MOVE:
-Excel -99074
-IA no aparece en Top 5
-
-ASOCIACION:
-Excel -96983
-IA    -96983
-MATCH
-pero Excel la posiciona #6.
+Clientes por mes / Excel:
+usa venta_ton efectiva PROY / overlay del IGF de mes abierto,
+incluyendo la semántica upload_day demostrada.
 
 Director IA:
-Top5 sum = -806677
+defaultLoadIgfPlantMetrics
+usa igf.compromiso_lines.venta_ton crudo de latest GLOBAL.
+
+Por tanto:
+
+misma versión
+≠
+mismo target efectivo.
+
+## Evidencia LIVE
+
+Acapulco
+Agosto 2026 real vs Septiembre 2026 forecast.
 
 Excel:
-Top5 sum = -820408
 
-DIFF:
-13731
+SERVICIOS ADMINISTRATIVOS
+-227423
+
+PUBLICO EN GENERAL
+-221564
+
+20 CUMBRES
+-169708
+
+CARBURACION PALMA SOLA
+-102639
+
+GRUPO MOVE EMPRESARIAL
+-99074
+
+ASOCIACION DE PROPIETARIOS
+-96983
+
+Top5:
+-820408
+
+Director IA:
+
+SERVICIOS ADMINISTRATIVOS
+-227423
+
+PUBLICO
+-210363
+
+20 CUMBRES
+-169708
+
+PALMA SOLA
+-102200
+
+ASOCIACION
+-96983
+
+Top5:
+-806677
+
+Los casos con B = 0 coinciden exactamente.
+
+Los casos con B > 0 divergen según una escala común compatible con targetKg distinto.
+
+No hardcodear estos valores.
 
 ## Objetivo único
 
-Localizar físicamente la primera frontera que explica por qué:
+Para la capacidad ejecutiva de Delta Ingreso por cliente, hacer que Director IA use EXACTAMENTE el mismo:
 
-la misma semántica canónica
-computeClientesDescuentoMes + ingresoClienteMarginal
+venta_ton efectivo / PROY / overlay
 
-produce paridad exacta para algunos clientes y divergencia para otros entre:
+que Clientes por mes usa para construir targetKg del periodo B cuando B es un mes abierto forecast.
 
-A) Clientes por mes / Exportar Excel
+No cambiar:
 
-y
-
-B) Director IA LIVE.
-
-No aceptar como explicación:
-
-“cambiaron los datos”
-
-sin localizar qué dato, request, corte, versión, estado o transformación puede hacerlo.
-
-## Preguntas obligatorias
-
-### Q1 — PUBLICO EN GENERAL
-
-¿Por qué Excel produce:
-
--221564
-
-y Director IA:
-
--210363?
-
-Localizar cuál input difiere primero:
-
-- kg A;
-- kg B;
-- descuento A;
-- descuento B;
-- margen;
+- fórmula de ingreso;
 - HG;
-- ingreso A;
-- ingreso B.
-
-### Q2 — CARBURACION PALMA SOLA
-
-¿Por qué:
-
-Excel -102639
-
-vs
-
-IA -102200?
-
-Determinar si los $439 provienen de:
-
-- kg;
 - descuento;
-- margen;
-- HG;
-- rounding;
-- version/cut.
+- ranking;
+- comentarios.
 
-No clasificar como rounding sin demostrarlo.
+Solo corregir la frontera causal demostrada.
 
-### Q3 — GRUPO MOVE
+## Source of truth
 
-¿Por qué:
+Localizar y reutilizar la implementación física que resuelve el target PROY efectivo para Clientes por mes.
 
-Excel -99074
+Debe incluir exactamente la misma semántica relevante de:
 
-debería ocupar #5
-
-pero Director IA coloca:
-
-ASOCIACION -96983
-
-como #5?
-
-Determinar cuál Delta calculó realmente Director IA para GRUPO MOVE antes del filtro/ranking.
-
-Si el valor no es observable sin LIVE_DB:
-localizar la frontera y marcar NOT_PROVEN_WITHOUT_LIVE_DB.
-
-### Q4 — universo de negativos
-
-Director IA declaró:
-
-297 clientes negativos.
-
-Determinar si el Excel/export actual contiene un número distinto bajo exactamente el mismo criterio:
-
-delta_ingreso < 0.
-
-No confiar en conteo visual/manual.
-
-Identificar:
-
-- cantidad total de filas;
-- cantidad delta < 0;
-- cantidad delta = 0;
-- cantidad delta > 0;
-- filas blank/null;
-- duplicados de identidad si existen.
-
-Si el export no está disponible físicamente en repo:
-usar la evidencia humana como referencia, no inventar conteos.
-
-### Q5 — snapshot/cut
-
-¿Dashboard/export e IA están utilizando realmente el mismo snapshot temporal?
-
-Auditar:
-
-- timestamp del request;
-- DB query time;
-- MTD cut;
-- NOW;
-- MAX(fecha);
-- request period;
-- version selection;
+- year/month;
+- plant;
+- latest version;
+- version_number;
+- financial state si participa;
 - upload_day;
-- cache;
-- frontend state;
-- persisted state;
-- local React state.
+- overlay;
+- PROY;
+- venta_ton efectivo.
 
-## Hipótesis obligatorias
+NO copiar la regla desde este prompt si ya existe físicamente.
 
-Clasificar cada una:
+NO construir una segunda implementación aproximada.
 
-PROVEN
-REJECTED
-NOT_PROVEN
-NOT_PROVEN_WITHOUT_LIVE_DB
+## Arquitectura
 
-### H1 — Request-time cut
+Preferir:
 
-El Excel y Director IA recalculan en momentos diferentes y existen nuevas ventas/datos entre ambos requests.
+canonical effective IGF target resolver
+        ↓
+Clientes por mes
+        ↓
+Director IA executive Delta Ingreso
 
-### H2 — Target/version IGF
+y no:
 
-Ambas superficies usan la misma fórmula pero no seleccionan exactamente el mismo target/version.
+frontend PROY logic
++
+backend approximation distinta.
 
-### H3 — upload_day / version cut
+Si la lógica canónica está atrapada en frontend, extraer el mínimo helper reutilizable de forma segura.
 
-Una ruta aplica una regla de fecha/upload/version que la otra no.
+No cambiar comportamiento visual.
 
-### H4 — Descuento persisted state
+No hacer HTTP interno.
 
-El descuento backend utilizado por IA no coincide con el que exporta Clientes por mes.
+## Periodo B
 
-### H5 — React simulation state
+Para la consulta:
 
-El Excel se genera desde estado React/simulaciones locales que Director IA no puede ver.
+`... para septiembre`
 
-Esta hipótesis es PRIORITARIA.
+con septiembre abierto:
 
-Determinar físicamente si:
+A = agosto real
+B = septiembre forecast
 
-Exportar Excel
+B debe consumir el mismo target PROY efectivo de septiembre que Clientes por mes.
 
-serializa los valores actuales visibles en el browser
+No usar:
 
-o
+compromiso_lines.venta_ton crudo
 
-hace una nueva consulta backend.
+si no representa el target efectivo que muestra la superficie.
 
-### H6 — HG input
+## Periodo A
 
-HG difiere entre ambas rutas por fuente, periodo o versión.
+No romper la semántica del mes A real/cerrado.
 
-### H7 — Margin input
+El FIX está dirigido al target forecast del periodo B.
 
-Margen difiere por latest/version/cut.
+No transformar agosto real en forecast.
 
-### H8 — Client identity / aggregation
+## upload_day
 
-PUBLICO, PALMA o MOVE agrupan distintas filas físicas.
+Es parte de scope porque la auditoría demostró que participa en la resolución PROY/overlay.
 
-### H9 — Null/blank semantics
+Rastrear y reutilizar su semántica exacta.
 
-Filas con septiembre blank, null o 0 son tratadas distinto y explican la diferencia en total negativos.
+No inventar reglas por día.
 
-### H10 — Floating point / rounding
+## React simulations
 
-Existe diferencia únicamente por precision/rounding.
+FUERA DEL FIX.
 
-Debe ser REJECTED para PUBLICO si no puede explicar $11,201.
+La auditoría demostró que el Excel puede incorporar simulaciones locales React.
 
-### H11 — Cache
+Director IA independiente NO tiene que reproducir estado local no persistido del navegador en esta tarea.
 
-Frontend/export o Director IA utilizan un cache/snapshot distinto.
+La paridad requerida es contra:
 
-### H12 — Different dataset execution
+estado económico base/canónico disponible al backend.
 
-Aunque el helper económico sea común, los loaders entregan datasets diferentes antes de entrar al helper.
+No intentar leer localStorage o React state desde Director IA.
 
-## Cadena física — Exportar Excel
+No mandar simulaciones al servidor.
 
-Trazar completamente:
+## Margen / HG
 
-IGF Forecast ARR
-→ Clientes por mes
-→ datos cargados
-→ estado React
-→ simulaciones/ediciones
-→ botón Exportar Excel
-→ función export
-→ dataset serializado
-→ columnas Excel
+NO cambiar.
 
-Responder específicamente:
+Auditoría:
+misma fuente si misma versión.
 
-¿El Excel exporta:
+Mantener ingresoClienteMarginal canónico.
 
-A) resultado backend original;
-B) resultado ya transformado en frontend;
-C) estado React actual;
-D) valores simulados/editados;
-E) una nueva consulta?
+## Descuento
 
-Identificar:
+NO cambiar.
 
-archivo
-función
-objeto
-campos
-transformaciones.
+Usar descuento persistido/base ya establecido.
 
-## Cadena física — Director IA
+No incorporar simulaciones React.
 
-Trazar:
+## Client identity
 
-pregunta
-→ planner
-→ periodo
-→ computeDeltaIngresoClientesPorMes
-→ target/version
-→ loader clientes A/B
-→ computeClientesDescuentoMes
-→ ingresoClienteMarginal
-→ Delta
-→ negatives
-→ sort
-→ Top N
-→ comments
-→ response
+NO cambiar salvo evidencia de regresión.
 
-Identificar exactamente:
+La auditoría rechazó client identity como FIRST_BAD_BOUNDARY.
 
-qué inputs entrega a computeClientesDescuentoMes.
+## Ranking
 
-## Comparación física obligatoria
+NO cambiar algoritmo.
 
-Crear matriz:
+Después del Delta correcto:
 
-BOUNDARY
-| EXPORT/DASHBOARD
-| DIRECTOR IA
-| SAME / DIFFERENT / UNKNOWN
-| EVIDENCE
+delta < 0
+→ más negativo a menos negativo
+→ Top N.
+
+MOVE-like debe recuperarse naturalmente por corregir el target, no por reglas especiales.
+
+## Negative count
+
+Debe derivarse del mismo dataset corregido.
+
+No hardcodear 297/298.
+
+## Regression-first obligatorio
+
+Crear:
+
+R-DELTA-CUT-001..010
+
+ANTES de producto.
+
+### R-DELTA-CUT-001 — effective target source
+
+Fixture donde:
+
+raw compromiso venta_ton
+!=
+PROY efectivo.
+
+Expected:
+
+Director IA usa PROY efectivo.
+
+Debe fallar con producto actual.
+
+### R-DELTA-CUT-002 — upload_day / overlay
+
+Fixture determinístico donde upload_day altera el target efectivo.
+
+Expected:
+
+misma resolución que Clientes por mes.
+
+### R-DELTA-CUT-003 — raw compromiso rejection
+
+Demostrar explícitamente que la capacidad ejecutiva NO toma compromiso crudo cuando PROY efectivo difiere.
+
+### R-DELTA-CUT-004 — kg B parity
+
+Mismo MTD + mismo target efectivo.
+
+Expected:
+kg B idéntico a Clientes por mes.
+
+### R-DELTA-CUT-005 — ingreso B parity
+
+Con ingresoClienteMarginal compartido.
+
+Expected:
+Ingreso B idéntico.
+
+### R-DELTA-CUT-006 — Delta/sign parity
+
+Caso conceptual donde elegir compromiso crudo altera materialmente Delta/sign.
+
+Expected:
+signo del source-of-truth.
+
+### R-DELTA-CUT-007 — ranking boundary
+
+Fixture conceptual MOVE-like / ASOCIACION-like.
+
+Con target equivocado:
+cliente correcto cae debajo del corte.
+
+Con PROY:
+ocupa la posición correcta.
+
+No hardcodear clientes reales.
+
+### R-DELTA-CUT-008 — closed A protection
+
+A real/cerrado permanece estable.
+
+El cambio de target B no debe reproyectar A.
+
+### R-DELTA-CUT-009 — no React simulation dependency
+
+El cálculo backend debe ser determinístico sin localStorage/React state.
+
+### R-DELTA-CUT-010 — single snapshot TopN/count/sum
+
+Con un mismo dataset + target efectivo:
+
+- Delta por fila;
+- cantidad negativos;
+- orden;
+- Top N;
+- suma Top N
+
+deben derivar de una sola ejecución coherente.
+
+## BEFORE obligatorio
+
+Antes de modificar producto:
+
+TIER 1 = PASS
+R-RUNTIME = PASS
+R-MOVEMENT = PASS
+R-DELTA-INCOME = PASS
+R-DELTA-PARITY = PASS
+
+R-DELTA-CUT nuevos:
+
+deben quedar rojos donde existe TARGET_PROY_SOURCE mismatch.
 
 Como mínimo:
 
-plant_id
-period A
-period B
-request timestamp semantics
-kg A dataset
-kg B MTD dataset
-targetKg
-sum MTD
-projection factor
-discount A
-discount B
-HG A
-HG B
-margin A
-margin B
-version_id
-version_number
-upload_day
-client identity
-null handling
-rounding
-cache/state
-input row count
-output row count
+001 FAIL
+002 FAIL
+003 FAIL
+004 FAIL
+005 FAIL
+006 FAIL
+007 FAIL
+010 FAIL
 
-## No reabrir fórmula sin evidencia
+PRE-DEPLOY --gate = FAIL.
 
-El FIX anterior dejó compartido:
+Si estos tests quedan verdes con producto actual:
+STOP.
 
-lib/ingreso-cliente-marginal.js
+No implementar.
 
-y reutilizó:
+## FIRST_BAD_BOUNDARY en fixture
 
-computeClientesDescuentoMes.
+Reproducir:
 
-Auditar que efectivamente ambas superficies llaman la misma lógica.
+TARGET_PROY_SOURCE
 
-Si sí:
+Debe quedar demostrada la cadena:
 
-NO recomendar otro cambio de fórmula.
+raw compromiso target
+vs
+effective PROY target
+→ targetKg distinto
+→ factor distinto
+→ kg B distinto
+→ ingreso B distinto
+→ Delta/ranking distinto.
 
-Buscar primero divergencia en INPUTS/CUT/STATE.
+## Cambio de producto
 
-## Excel export / simulaciones
+Modificar únicamente lo necesario para que la ruta:
 
-Esta sección es crítica.
+computeDeltaIngresoClientesPorMes
 
-La UI permite campos editables para descuento septiembre.
+obtenga el target efectivo desde la misma semántica PROY que Clientes por mes.
 
-Determinar:
+No convertir globalmente otros consumidores de:
 
-- si cambiar un input modifica únicamente React state;
-- si actualiza una estructura usada por Exportar Excel;
-- si persiste al backend;
-- si exportar toma el valor editado;
-- si Director IA puede tener acceso a ese mismo valor.
+defaultLoadIgfPlantMetrics
 
-Si Excel puede incorporar simulaciones no persistidas:
+si requieren compromiso crudo.
 
-dejar explícito que:
+Preferir resolver el target específico de esta capacidad.
 
-“paridad exacta contra cualquier estado local del browser”
+## Protección de otras superficies
 
-no es posible para un chat independiente sin un contrato adicional.
+No romper:
 
-NO diseñar ese contrato todavía.
+- Clientes por mes;
+- Export Excel;
+- IGF Forecast ARR;
+- computeDeltaIngresoForecast OLS;
+- M9 historical Delta Ingreso;
+- commercial_trend;
+- movement;
+- client_profile;
+- DICF;
+- historical_margin;
+- comments;
+- financial diagnosis.
 
-## Target IGF
+## R-DELTA-PARITY
 
-Determinar exactamente si ambas rutas resuelven:
+Debe continuar PASS.
 
-venta_ton
+No debilitarlo.
 
-desde el mismo:
+Ahora R-DELTA-CUT debe cubrir la frontera que R-DELTA-PARITY no observaba:
 
-- month/year;
-- plant;
-- version_id;
-- version_number;
-- financial_state;
-- selection rule.
-
-No basta que ambas digan “latest”.
-
-## Same-cut reproducibility
-
-Determinar si el código actual permite construir una prueba determinística en la que:
-
-el mismo input dataset
-→ Dashboard/export
-→ Director IA
-
-produzcan exactamente los mismos clientes y deltas.
-
-Si sí, indicar cómo.
-
-Esto será la base del siguiente regression gate si hace falta.
-
-## Runtime false-green / limitación actual
-
-Auditar:
-
-R-DELTA-PARITY-001..010.
-
-Explicar:
-
-1. por qué ahora sí detectan fórmula/proyección;
-2. qué fixture comparten;
-3. qué boundary NO cubren;
-4. por qué pueden quedar verdes aunque producción diverja por cut/state/version/input dataset;
-5. qué nueva regresión hace falta para proteger same-cut parity.
-
-No modificar tests.
-
-## Future regression cases
-
-NO implementarlos.
-
-Proponer como mínimo:
-
-R-DELTA-CUT-001
-same input rowset parity.
-
-R-DELTA-CUT-002
-same target/version parity.
-
-R-DELTA-CUT-003
-same discount persisted inputs.
-
-R-DELTA-CUT-004
-same HG/margin inputs.
-
-R-DELTA-CUT-005
-same client universe/count.
-
-R-DELTA-CUT-006
-null vs zero handling.
-
-R-DELTA-CUT-007
-PUBLICO-like nonzero delta parity.
-
-R-DELTA-CUT-008
-PALMA-like small-value parity.
-
-R-DELTA-CUT-009
-MOVE-like ranking boundary parity.
-
-R-DELTA-CUT-010
-TopN and negative-count parity from a single shared snapshot.
-
-No hardcodear clientes reales en producto.
-
-Fixtures pueden ser equivalentes conceptuales.
-
-## FIRST_BAD_BOUNDARY
-
-La salida debe nombrar una frontera concreta.
-
-Ejemplos válidos:
-
-EXPORT_REACT_STATE
-INPUT_DATASET
-REQUEST_TIME_CUT
-TARGET_VERSION_SELECTION
-DISCOUNT_SOURCE
-HG_SOURCE
-MARGIN_SOURCE
-CLIENT_ROWSET
-NULL_NORMALIZATION
-CACHE_SNAPSHOT
-
-No aceptar:
-
-RUNTIME_DIFFERENCE
-
-sin más detalle.
+target PROY real vs compromiso raw.
 
 ## LIVE_DB
 
-live_db_authorized: NO
+NO.
+
+live_db_authorized: NO.
 
 No consultar producción.
 
-Primero agotar tracing físico del código.
+Los fixtures deben reconstruir semántica de código de forma determinística.
 
-Si los importes exactos LIVE no pueden explicarse sin leer producción:
+## AFTER obligatorio
 
-marcar:
+TIER 1 = PASS
+R-RUNTIME = PASS
+R-MOVEMENT = PASS
+R-DELTA-INCOME = PASS
+R-DELTA-PARITY = PASS
+R-DELTA-CUT-001..010 = PASS
 
-NOT_PROVEN_WITHOUT_LIVE_DB
+HTTP 5xx = 0
+HARNESS FAILURE = 0
 
-y entregar sondas/SELECTs mínimos exactos.
+PRE-DEPLOY --gate = PASS
 
-No ejecutar.
+Ejecutar suites relacionadas con:
 
-## SELECTs mínimos si hacen falta
+- ARR;
+- Clientes por mes;
+- IGF Forecast;
+- PROY/overlay;
+- upload_day;
+- compromiso;
+- Delta Ingreso;
+- periodo;
+- margin/HG;
+- discount;
+- comments;
+- routing.
 
-Preparar únicamente si son indispensables.
+## Evidencia LIVE posterior
 
-### A — ventas/client rows
+Después de deploy NO comparar contra números históricos a ciegas.
 
-Para Acapulco:
+Generar/exportar un Excel fresco y lanzar la pregunta LIVE lo más cerca posible en el tiempo.
 
-PUBLICO EN GENERAL
-CARBURACION PALMA SOLA
-GRUPO MOVE EMPRESARIAL
+Comparar:
 
-agosto/septiembre 2026.
+- universo de negativos;
+- Top 5;
+- cada Delta;
+- suma Top 5.
 
-Incluir campos exactos usados por computeClientesDescuentoMes.
+Los valores:
 
-### B — target/version
+-227423
+-221564
+-169708
+-102639
+-99074
 
-Version y venta_ton efectiva de agosto/septiembre.
+son evidencia del corte observado, no fixtures eternos.
 
-### C — descuento
+## Fuera de scope
 
-Fuente persistida real para los tres clientes.
-
-### D — margen/HG
-
-Version y valores efectivos usados por ingresoClienteMarginal.
-
-### E — rowset count
-
-Consulta que permita reproducir:
-
-total rows
-delta negative
-zero
-positive
-
-solo si la fórmula puede expresarse sin alterar semántica.
-
-Si requiere helper JS, proponer una sonda read-only en vez de SQL incorrecto.
-
-## In scope
-
-- IGF Forecast ARR
-- Clientes por mes
-- Exportar Excel
-- ArrClient.tsx
-- export function
-- React state relacionado
-- computeClientesDescuentoMes
-- ingresoClienteMarginal
-- Director IA delta ingreso Clientes por mes path
-- target/version loaders
-- discount loaders
-- HG/margin loaders
-- null/zero handling
-- sorting/filtering
-- cache/state
-- R-DELTA-PARITY read-only
-- CURRENT_TASK
-- report
-
-## Out of scope
-
-- implementación
-- modificar tests
-- cambiar fórmula
-- cambiar ranking
-- cambiar comentarios
-- LIVE_DB
-- frontend visual
-- DB/schema
-- migrations
-- nuevos/reactivados
-- alertas
-- Delta Gastos
-- causalidad
-- commitment evaluation
-- contracts
-- merge
-- deploy
-- next task
-
-## Prohibiciones
-
-No hardcodear valores LIVE.
-No cambiar source-of-truth.
-No escribir tests.
-No modificar producto.
-No consultar LIVE_DB.
-No asumir que Excel y Dashboard representan el mismo snapshot sin probarlo.
-No asumir que el export contiene solo datos persistidos.
-No atribuir diferencia a rounding sin demostrarla.
-No merge.
-No deploy.
-No next task.
-
-## Entregables
-
-1. Executive summary máximo 15 líneas.
-2. Export Excel physical chain.
-3. Director IA physical chain.
-4. Boundary comparison matrix.
-5. PUBLICO deep trace.
-6. PALMA SOLA deep trace.
-7. GRUPO MOVE deep trace.
-8. Negative universe/count analysis.
-9. React simulation/export analysis.
-10. Target/version analysis.
-11. Discount analysis.
-12. Margin/HG analysis.
-13. Client identity/null analysis.
-14. Cache/request-time analysis.
-15. H1–H12 disposition.
-16. FIRST_BAD_BOUNDARY.
-17. Root cause(s).
-18. R-DELTA-PARITY limitation / false-green explanation.
-19. R-DELTA-CUT-001..010 proposed.
-20. LIVE_DB probes if required.
-21. Recommended next slice.
-22. Git branch/commit/status.
+- fórmula nueva;
+- Delta Gastos;
+- alertas;
+- notificaciones;
+- nuevos/reactivados;
+- commitment fulfillment;
+- causal inference;
+- React simulations remotas;
+- localStorage;
+- DB/schema;
+- migrations;
+- contracts;
+- LIVE_DB;
+- cambio visual;
+- merge;
+- deploy;
+- next task.
 
 ## Completion
 
-DRAFT.
+DONE_PENDING_REVIEW.
 
-Esperar G1 humano.
-
-No implementar.
-No tests.
-No LIVE_DB.
-No merge.
-No deploy.
-
-STOP.
-
-DONE_PENDING_REVIEW
-
-si código + evidencia permiten localizar una frontera suficientemente concreta para diseñar el siguiente FIX.
-
-BLOCKED
-
-si solo LIVE_DB puede determinar la frontera crítica.
-
-No implementación.
-No next task.
+NO merge.
+NO deploy.
+NO next task.
 
 STOP.
