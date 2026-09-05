@@ -188,6 +188,10 @@ function isDeltaCutCase(runtimeCase) {
   return runtimeCase && String(runtimeCase.id || "").startsWith("R-DELTA-CUT-");
 }
 
+function isRentSnapshotCase(runtimeCase) {
+  return runtimeCase && String(runtimeCase.id || "").startsWith("R-RENT-SNAPSHOT-");
+}
+
 function forecastNegativeRows() {
   return [
     { cliente: "CLIENTE_N1", ingresoA: 400000, ingresoB: 150000, deltaIngreso: -250000, kgA: 10000, kgB: 4000 },
@@ -363,8 +367,64 @@ function deltaCutDeps(runtimeCase) {
   };
 }
 
+function rentSnapshotKpis() {
+  return {
+    operativa_a: 1300000,
+    operativa_b: 1100000,
+    final_a: 800000,
+    final_b: 450000,
+  };
+}
+
+function rentSnapshotRows() {
+  return forecastNegativeRows().map((r, i) => ({
+    ...r,
+    descKgA: 2 + i * 0.1,
+    descKgB: 3 + i * 0.1,
+    desc_kg_a: 2 + i * 0.1,
+    desc_kg_b: 3 + i * 0.1,
+  }));
+}
+
+function rentSnapshotDeps() {
+  const rows = rentSnapshotRows();
+  const kpis = rentSnapshotKpis();
+  return {
+    ...deltaIncomeForecastDeps(),
+    computeDeltaIngresoClientesPorMes: async (_c, _plant, yearA, monthA, yearB, monthB) => ({
+      planta: "Acapulco",
+      periodoA: `${yearA}-${String(monthA).padStart(2, "0")}`,
+      periodoB: `${yearB}-${String(monthB).padStart(2, "0")}`,
+      margenA: 8,
+      margenB: 7.5,
+      rows,
+      source_helper: "computeDeltaIngresoClientesPorMes",
+      physical_source: "dashboard-arr-forecast.computeClientesDescuentoMes",
+    }),
+    computeDeltaIngresoForecast: async (_c, _plant, yearA, monthA, yearB, monthB) => ({
+      planta: "Acapulco",
+      periodoA: `${yearA}-${String(monthA).padStart(2, "0")}`,
+      periodoB: `${yearB}-${String(monthB).padStart(2, "0")}`,
+      rows,
+      source_helper: "computeDeltaIngresoForecast",
+    }),
+    loadRentabilidadKpis: async (_c, _plant, year, month) => {
+      const isB = Number(month) === 9;
+      return {
+        ok: true,
+        util_oper_importe: isB ? kpis.operativa_b : kpis.operativa_a,
+        resultado_final_importe: isB ? kpis.final_b : kpis.final_a,
+        source_operativa: "util_oper_importe",
+        source_final: "resultado_final_importe",
+        year,
+        month,
+      };
+    },
+  };
+}
+
 function incomeForecastPack(body) {
-  return (body && body.delta_ingreso_forecast) || {};
+  return (body && body.profitability_deterioro_snapshot) || (body && body.delta_ingreso_forecast) || {};
 }
 
 function incomeForecastRows(body, opts = {}) {
@@ -411,6 +471,65 @@ function looksLikeCausalComment(answer, commentText) {
 
 function looksLikeRentabilidadCaera(answer) {
   return /la rentabilidad caer/i.test(String(answer || ""));
+}
+
+function looksLikeMonetaryDriverAttribution(answer) {
+  const blob = normalizeBlob(answer);
+  return (
+    /(causad[oa]s?|atribuid[oa]s?|explicad[oa]s?)\s+por\s+(el\s+)?(volumen|kg|descuento)/.test(blob) ||
+    /fueron causados por/.test(blob) ||
+    /\$\s*-?[\d.,]+.{0,40}(causad|provocad|atribuid).{0,30}(volumen|kg|descuento)/.test(blob) ||
+    /(volumen|kg|descuento).{0,30}caus[oó].{0,20}\$/.test(blob)
+  );
+}
+
+function looksLikeExpenseExplanation(answer) {
+  const blob = normalizeBlob(answer);
+  if (/no existe( todavia)? un? delta gastos reconciliado/.test(blob)) return false;
+  return (
+    /delta gastos?\s*[=:]\s*\$?-?[\d]/.test(blob) ||
+    (/folios? (de )?(gastos?|presupuesto|cheques?)/.test(blob) && /rentabilidad/.test(blob)) ||
+    (/\b(m6|m4)\b/.test(blob) && /explica/.test(blob)) ||
+    /el deterioro .{0,40}(gastos?|presupuesto|cheques?)/.test(blob)
+  );
+}
+
+function hasExpenseFailClosed(answer) {
+  return /no existe( todavia)? un? delta gastos reconciliado/.test(normalizeBlob(answer));
+}
+
+function looksLikeControllabilityLabels(answer) {
+  const blob = normalizeBlob(answer);
+  return (
+    /directamente_accionable|directamente accionable/.test(blob) ||
+    /\bno_controlable\b|\bno controlable\b/.test(blob) ||
+    /\bcontrolable\b/.test(blob)
+  );
+}
+
+function looksLikeFakeBridge(answer) {
+  const blob = normalizeBlob(answer);
+  return (
+    /delta (de )?(la )?rentabilidad\s*=/.test(blob) ||
+    /rentabilidad\s*=\s*delta ingreso/.test(blob) ||
+    /delta ingreso.{0,40}delta gastos/.test(blob) ||
+    /delta (de )?(la )?rentabilidad.{0,20}(ingreso|ingresos).{0,20}(gasto|gastos)/.test(blob)
+  );
+}
+
+function looksLikeCauseLabel(answer) {
+  return /\bcausa\s*:/.test(normalizeBlob(answer));
+}
+
+function rentPeriodOf(pack, meta, side) {
+  if (side === "a") {
+    return String(
+      pack.periodo_a || pack.periodoA || (pack.rentabilidad_final && pack.rentabilidad_final.periodo_a) || meta.periodo_a || ""
+    );
+  }
+  return String(
+    pack.periodo_b || pack.periodoB || (pack.rentabilidad_final && pack.rentabilidad_final.periodo_b) || meta.periodo_b || ""
+  );
 }
 
 function movementTrendDeps() {
@@ -498,6 +617,14 @@ function packKind(body) {
   if (/discount|descuento/.test(blob)) return "descuento";
   if (mode === "conversation_clarification") return "clarification";
   if (mode === "client_profile") return "client_profile";
+  if (
+    mode === "profitability_deterioro_snapshot" ||
+    parent === "profitability_deterioro_snapshot" ||
+    bundle === "profitability_deterioro_snapshot" ||
+    (body && body.profitability_deterioro_snapshot)
+  ) {
+    return "profitability_deterioro_snapshot";
+  }
   if (
     mode === "delta_income_forecast" ||
     parent === "delta_income_forecast" ||
@@ -707,9 +834,11 @@ function installRuntimeDeps(chat, map, runtimeCase) {
       ? deltaCutDeps(runtimeCase)
       : isDeltaParityCase(runtimeCase)
         ? deltaParityDeps()
-        : isDeltaIncomeCase(runtimeCase)
-          ? deltaIncomeForecastDeps()
-          : {}),
+        : isRentSnapshotCase(runtimeCase)
+          ? rentSnapshotDeps()
+          : isDeltaIncomeCase(runtimeCase)
+            ? deltaIncomeForecastDeps()
+            : {}),
     openaiChat: async () => "STUB_OPENAI_TRANSPORT",
   });
 }
@@ -745,6 +874,8 @@ function clearRuntimeDeps(chat) {
     loadIgfPlantMetrics: undefined,
     loadEffectiveIgfTarget: undefined,
     loadRecentCommentsByClienteNombres: undefined,
+    loadRentabilidadKpis: undefined,
+    loadIgfForecastMiniPayload: undefined,
     openaiChat: undefined,
   });
 }
@@ -1365,6 +1496,91 @@ function evaluateLastTurn(runtimeCase, last) {
         return { boundaries, http, pack };
       }
     }
+  }
+  if (runtimeCase.require_rent_period_a || runtimeCase.require_rent_period_b || runtimeCase.forbid_max_fecha_period) {
+    const packRent = incomeForecastPack(body);
+    const a = rentPeriodOf(packRent, meta, "a");
+    const b = rentPeriodOf(packRent, meta, "b");
+    const maxFecha = String(packRent.anchored_to_max_fecha || packRent.max_fecha || packRent.period_source || "");
+    if (runtimeCase.require_rent_period_a && a !== runtimeCase.require_rent_period_a) {
+      boundaries.USER_VISIBLE_OUTCOME = mark(
+        "FAIL",
+        `expected periodoA=${runtimeCase.require_rent_period_a} got=${a || "none"}`
+      );
+      return { boundaries, http, pack };
+    }
+    if (runtimeCase.require_rent_period_b && b !== runtimeCase.require_rent_period_b) {
+      boundaries.USER_VISIBLE_OUTCOME = mark(
+        "FAIL",
+        `expected periodoB=${runtimeCase.require_rent_period_b} got=${b || "none"}`
+      );
+      return { boundaries, http, pack };
+    }
+    if (runtimeCase.forbid_max_fecha_period && /max\s*\(?fecha\)?|max_fecha/i.test(maxFecha)) {
+      boundaries.USER_VISIBLE_OUTCOME = mark("FAIL", `periodo anclado a MAX(fecha): ${maxFecha}`);
+      return { boundaries, http, pack };
+    }
+  }
+  if (runtimeCase.require_operativa_final_distinct) {
+    const packRent = incomeForecastPack(body);
+    const op = packRent.rentabilidad_operativa || {};
+    const fin = packRent.rentabilidad_final || {};
+    const opSrc = String(op.source || packRent.source_operativa || "");
+    const finSrc = String(fin.source || packRent.source_final || packRent.kpi_principal || "");
+    const sameSource = opSrc && finSrc && opSrc === finSrc;
+    const sameValue =
+      op.a != null && fin.a != null && Number(op.a) === Number(fin.a) && Number(op.b) === Number(fin.b);
+    if (sameSource || sameValue || !/util_oper_importe/.test(opSrc) || !/resultado_final_importe/.test(finSrc)) {
+      boundaries.USER_VISIBLE_OUTCOME = mark(
+        "FAIL",
+        `operativa/final mixed op=${opSrc || "none"} final=${finSrc || "none"} same_value=${sameValue}`
+      );
+      return { boundaries, http, pack };
+    }
+  }
+  if (runtimeCase.require_kpi_principal_final) {
+    const packRent = incomeForecastPack(body);
+    const principal = String(packRent.kpi_principal || packRent.rentabilidad_principal_source || "");
+    const blob = normalizeBlob(answer);
+    const finalFirst =
+      blob.indexOf("rentabilidad final") >= 0 &&
+      (blob.indexOf("rentabilidad operativa") < 0 || blob.indexOf("rentabilidad final") < blob.indexOf("rentabilidad operativa"));
+    if (principal !== "resultado_final_importe" || !finalFirst) {
+      boundaries.USER_VISIBLE_OUTCOME = mark(
+        "FAIL",
+        `kpi_principal=${principal || "none"} final_first=${finalFirst}`
+      );
+      return { boundaries, http, pack };
+    }
+  }
+  if (runtimeCase.require_volume_fact) {
+    const blob = normalizeBlob(answer);
+    if (!/(volumen|kg).{0,24}(bajo|baj[oó]|cayo|caida|disminuy)/.test(blob) && !/(bajo|baj[oó]|cayo|disminuy).{0,24}(volumen|kg)/.test(blob)) {
+      boundaries.USER_VISIBLE_OUTCOME = mark("FAIL", "expected volume-down fact");
+      return { boundaries, http, pack };
+    }
+  }
+  if (runtimeCase.forbid_monetary_attribution && looksLikeMonetaryDriverAttribution(answer)) {
+    boundaries.USER_VISIBLE_OUTCOME = mark("FAIL", "monetary driver attribution");
+    return { boundaries, http, pack };
+  }
+  if (runtimeCase.forbid_causal_comment && looksLikeCauseLabel(answer)) {
+    boundaries.USER_VISIBLE_OUTCOME = mark("FAIL", "comment labeled as Causa");
+    return { boundaries, http, pack };
+  }
+  if (runtimeCase.forbid_expense_explanation) {
+    if (looksLikeExpenseExplanation(answer) || !hasExpenseFailClosed(answer)) {
+      boundaries.USER_VISIBLE_OUTCOME = mark("FAIL", "expense fail-closed missing or invented");
+      return { boundaries, http, pack };
+    }
+  }
+  if (runtimeCase.forbid_controllability_labels && looksLikeControllabilityLabels(answer)) {
+    boundaries.USER_VISIBLE_OUTCOME = mark("FAIL", "invented controllability taxonomy");
+    return { boundaries, http, pack };
+  }
+  if (runtimeCase.forbid_fake_bridge && looksLikeFakeBridge(answer)) {
+    boundaries.USER_VISIBLE_OUTCOME = mark("FAIL", "fake profitability bridge");
+    return { boundaries, http, pack };
   }
   boundaries.USER_VISIBLE_OUTCOME = mark(
     "PASS",
