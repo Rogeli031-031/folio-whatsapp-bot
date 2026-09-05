@@ -222,6 +222,6 @@ No tocados: `docs/director-ia/`, `lib/delta-ingreso-forecast.js` (solo reutiliza
 
 ## 13. Commit / status
 
-implementation SHA: pendiente de stamp en el commit de esta rama.
+implementation SHA: `631a64da`
 
-No push. No merge. No deploy. No next task.
+Tras el stamp documental de este SHA, `git status --short` debe quedar limpio en la rama `fix/director-ia-delta-ingreso-forecast-negative-topn-comments-001`. No push. No merge. No deploy. No next task.
