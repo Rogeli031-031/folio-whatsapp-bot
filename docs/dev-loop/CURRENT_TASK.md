@@ -1,87 +1,82 @@
-task_id: FIX-DIRECTOR-IA-COMMERCIAL-TREND-CALENDAR-PARITY-001
+task_id: AUDIT-DIRECTOR-IA-DELTA-INGRESO-NEGATIVE-IMPACT-COMMENTS-001
+
+task_type: AUDIT
+mode: READ_ONLY_PHYSICAL_TRACE
 
 status: CLOSED
 authorized_by: "Human Approver"
-authorized_at: "2026-09-05T11:45:01-06:00"
-human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-05"
-objective: En commercial_trend, meses calendario explícitos (p. ej. agosto comparado con julio) deben usar 2026-07-01..31 vs 2026-08-01..31, con unidades, delta, clasificación y recorte de lista coherentes; no trailing 30d.
+authorized_at: "2026-09-05T12:41:18-06:00"
+human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-05 - READ_ONLY AUDIT ONLY; NO LIVE_DB"
+objective: Localizar físicamente cómo se calcula y expone el Delta Ingreso por cliente en IGF Forecast ARR / Delta Ingreso Forecast, y por qué Director IA no puede responder hoy cuáles son los clientes con mayor impacto negativo del mes junto con sus comentarios.
 
 in_scope:
-- lib/director-ia-commercial-trend.js (resolución de periodo, prompt/builder de movers, unidades, recorte)
-- lib/commercial-trend-engine.js solo si la ventana/clasificación/agregación de movers debe aceptar meses calendario sin romper trailing
-- lib/director-ia-planner.js solo si el detector de meses explícitos ya existente debe reutilizarse sin reinterpretar intents
-- lib/director-ia-chat.js solo la ruta commercial_trend / commercial_movers (presentación/transporte, no prosa parcheada)
-- helper canónico de meses calendario de IGF Forecast ARR «Clientes por mes» (p. ej. computeClientesDescuentoMes / límites firstDay–lastDay) solo si es físicamente reutilizable sin coupling inapropiado
-- test/fixtures/director-ia-golden-cases.js (familia R-MOVEMENT; no debilitar TIER 1 ni R-RUNTIME-001..007)
-- test/helpers/director-ia-runtime-golden-harness.js
-- test/helpers/director-ia-golden-harness.js solo si la observabilidad del Runtime Gate lo exige
-- tests determinísticos de commercial_trend / movers físicamente afectados
-- docs/dev-loop/CURRENT_TASK.md
-- docs/dev-loop/reports/FIX-DIRECTOR-IA-COMMERCIAL-TREND-CALENDAR-PARITY-001.md
+  - frontend IGF Forecast ARR relacionado con Delta Ingreso / Clientes por mes
+  - lib/delta-ingreso-forecast.js
+  - helpers/loaders/endpoints relacionados
+  - server.js solo tracing
+  - planner/capabilities de delta_income
+  - director-ia-chat
+  - tool orchestrator
+  - loaders de comentarios de cliente
+  - DICF solo si participa físicamente
+  - Action Register solo si participa físicamente
+  - tests existentes relacionados, solo lectura
+  - docs/dev-loop/CURRENT_TASK.md
+  - docs/dev-loop/reports/AUDIT-DIRECTOR-IA-DELTA-INGRESO-NEGATIVE-IMPACT-COMMENTS-001.md
 
 out_of_scope:
-- nuevos vs reactivados
-- definición histórica de cliente nuevo
-- margen de cliente
-- historical_margin
-- Action Register
-- DICF / commercial_state como motor de estas listas
-- DB/schema/migrations
-- LIVE_DB
-- frontend / IGF Forecast ARR UI
-- docs/director-ia/
-- contratos congelados
-- convertir trailing 30d en calendario siempre
-- parchear prosa LLM para esconder números incorrectos
-- hardcodear 20 CUMBRES, NUEVA WAL MART, GRUPO MOVE, CARBURADORA MASTER o sus kg LIVE como reglas de producto
-- merge a main
-- deploy
-- siguiente tarea
+  - implementación
+  - modificar tests
+  - LIVE_DB
+  - DB/schema/migrations
+  - frontend changes
+  - nuevos vs reactivados
+  - movement calendar parity ya CLOSED
+  - margen histórico
+  - terminology margen cliente
+  - dirty continuity `como vamos?`
+  - creación de alertas
+  - envío de notificaciones
+  - cálculo nuevo de rentabilidad forecast
+  - modificación de contratos congelados
+  - merge
+  - deploy
+  - next task
 
 contracts_in_force:
-- AGENTS.md
-- docs/dev-loop/LOOP_PROTOCOL.md
-- docs/director-ia/DIRECTOR_IA_CONSTITUTION.md
-- docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md
-- docs/director-ia/DIRECTOR_IA_EXECUTIVE_KNOWLEDGE_ENGINE.md
-- contratos vigentes aplicables (obedecer, no reescribir)
-- docs/dev-loop/reports/AUDIT-DIRECTOR-IA-COMMERCIAL-MOVEMENT-DASHBOARD-PARITY-001.md (evidencia CLOSED; no reabre la auditoría)
+  - AGENTS.md
+  - docs/dev-loop/LOOP_PROTOCOL.md
+  - docs/director-ia/DIRECTOR_IA_CONSTITUTION.md
+  - docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md
+  - docs/director-ia/DIRECTOR_IA_EXECUTIVE_KNOWLEDGE_ENGINE.md
+  - contratos vigentes aplicables (obedecer, no reescribir)
 
 allowed_actions:
-- (solo tras G1) crear rama fix/director-ia-commercial-trend-calendar-parity-001
-- primero endurecer PRE-DEPLOY Runtime Gate (R-MOVEMENT-001..008) con fixtures determinísticos
-- ejecutar BEFORE de TIER 1 y PRE-DEPLOY Runtime Gate
-- STOP si R-MOVEMENT no queda FAIL o si TIER 1 / R-RUNTIME-001..007 se debilitan
-- después del BEFORE rojo, cambio mínimo en la frontera PERIOD (meses explícitos → calendario completo)
-- en el mismo slice: UNITS, DELTA/clasificación y LIST COMPLETENESS según las reglas de esta tarea
-- tests determinísticos de observabilidad, no para acomodar el producto
-- commit en la rama de tarea
-- reporte final
-- dejar DONE_PENDING_REVIEW
+  - (solo tras G1 humano) trazar en solo lectura las cadenas Dashboard y Director IA
+  - escribir el reporte de auditoría
+  - proponer Runtime regressions futuras sin implementarlas
+  - si el código no alcanza: marcar NOT_PROVEN_WITHOUT_LIVE_DB y dejar SELECT read-only mínimo, sin ejecutarlos
+  - dejar DONE_PENDING_REVIEW o BLOCKED
 
 forbidden_actions:
-- escribir AUTHORIZED_BY_HUMAN
-- poner status AUTHORIZED
-- crear, borrar o modificar authorized_by, authorized_at o human_authorization
-- implementar antes de G1
-- implementar producto antes de endurecer el Runtime Gate y registrar BEFORE rojo
-- cambiar la semántica de «últimos 30 días» / «últimas 4 semanas» / trailing
-- clasificar STOPPED si kg_B > 0
-- etiquetar toneladas como kg
-- afirmar lista completa si solo se transportó Top 6
-- parchear prosa final para acomodar números incorrectos
-- hardcodear clientes o kg LIVE de evidencia como solución
-- consultar LIVE_DB
-- modificar docs/director-ia/
-- merge/push a main
-- deploy
-- abrir siguiente tarea
+  - escribir AUTHORIZED_BY_HUMAN
+  - poner status AUTHORIZED
+  - crear, borrar o modificar authorized_by, authorized_at o human_authorization
+  - implementar producto
+  - modificar tests
+  - consultar LIVE_DB
+  - hardcodear clientes o importes como regla
+  - inventar causalidad o convertir comentarios en causas
+  - modificar docs/director-ia/
+  - merge/push a main
+  - deploy
+  - abrir siguiente tarea
 
 max_attempts: 1
 
-result_report_path: docs/dev-loop/reports/FIX-DIRECTOR-IA-COMMERCIAL-TREND-CALENDAR-PARITY-001.md
+result_report_path: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-DELTA-INGRESO-NEGATIVE-IMPACT-COMMENTS-001.md
 
-implementation_authorized: YES
+implementation_authorized: NO
 merge_authorized: NO
 deploy_authorized: NO
 live_db_authorized: NO
@@ -90,185 +85,571 @@ live_db_authorized: NO
 
 DRAFT. No hay Gate G1. No es ejecutable.
 
-## Relación con la auditoría CLOSED
+## North Star de negocio
 
-`AUDIT-DIRECTOR-IA-COMMERCIAL-MOVEMENT-DASHBOARD-PARITY-001` está CLOSED e integrada. Esta tarea no la reabre. Usa su FIRST_BAD_BOUNDARY:
+El objetivo ejecutivo principal de Director IA es ayudar a incrementar mes con mes:
 
-- principal: PERIOD
-- secundarios: UNIT_LABEL, CLASSIFICATION, LIST_COMPLETENESS
+- rentabilidad operativa;
+- rentabilidad final;
 
-No corrige nuevos vs reactivados. No toca margen de cliente ni historical_margin.
+y evitar retrocesos.
 
-## Evidencia humana (fija el caso de negocio; no es regla de producto)
+La lectura ejecutiva utilizada por negocio parte de:
 
-Pregunta tipo `agosto comparado con julio`. Planta de evidencia: Acapulco. No hardcodear en producto.
+Ingreso del mes anterior por cliente
+vs
+Ingreso proyectado / forecast del mes actual por cliente
 
-### 20 CUMBRES
+La diferencia por cliente es:
 
-Dashboard: 19,980 → 23,652 kg = +3,672 kg
+Delta Ingreso cliente
 
-### NUEVA WAL MART DE MEXICO
+Conceptualmente, para la lectura ejecutiva:
 
-Dashboard: 55,473 → 58,828 kg → AUMENTÓ  
-Director IA (antes): 56.602 → 52.698, DISMINUYÓ
+Rentabilidad forecast
+=
+Rentabilidad mes anterior
++ Delta Ingreso
+- Delta Gastos
 
-### GRUPO MOVE EMPRESARIAL
+Esta tarea NO debe implementar ni reinterpretar esa fórmula.
 
-Dashboard: 168,890 → 150,199 kg = −18,691 kg
+Debe localizar físicamente qué datos existentes la soportan y cómo Director IA puede llegar posteriormente a los clientes que más deterioran la rentabilidad forecast.
 
-### CARBURADORA MASTER
+## Pregunta LIVE que falla
 
-Dashboard: 6,370 → 459 kg → DISMINUYÓ, no «dejó de comprar»
+Planta: Acapulco.
 
-Estos nombres e importes sirven solo como evidencia/fixture. No se incrustan en producto.
+Pregunta exacta:
 
-## Objetivo de producto (después del BEFORE)
+`Dame 5 clientes que tengan el mayor impacto negativo en el ingreso para el mes de septiembre, y ponme sus comentarios.`
 
-Preguntas con meses calendario explícitos (p. ej. `agosto comparado con julio`) en la familia `commercial_trend`:
+Respuesta actual de Director IA:
 
-Periodo A = 2026-07-01..2026-07-31  
-Periodo B = 2026-08-01..2026-08-31  
+`No puedo proporcionar información sobre los cinco clientes con mayor impacto negativo en el ingreso para el mes de septiembre, ya que no tengo acceso a los datos necesarios para realizar esa evaluación...`
 
-No ventanas trailing 30d ancladas a `MAX(fecha)`.
+Sin embargo, el Dashboard sí expone información por cliente en:
 
-Reutilizar, si es físicamente apropiado, la misma resolución de meses calendario que IGF Forecast ARR → Clientes por mes. No duplicar lógica de calendario si ya existe una función canónica.
+IGF Forecast ARR
+→ Delta Ingreso / Delta Ingreso Forecast
+→ Clientes por mes
 
-### 1. PERIOD
+Por tanto el audit debe determinar si el problema está en:
 
-Meses explícitos (`julio`, `agosto`, etc.) → meses calendario completos.
+- capability/planner;
+- routing;
+- tool coverage;
+- loader inexistente;
+- fuente no expuesta a Director IA;
+- periodo;
+- ranking;
+- comentarios;
+- combinación de las anteriores.
 
-No cambiar preguntas que pidan de verdad:
-- últimos 30 días
-- últimas 4 semanas
-- trailing period
+No asumir.
 
-La corrección es: explicit calendar month names → calendar month boundaries.  
-No: `commercial_trend` siempre calendario.
+## Evidencia adicional — BAYAM RESIDENCES
 
-### 2. UNITS
+Existe otro síntoma relacionado.
 
-`arr.ventas_diarias_cliente` entrega kg.
+En la gráfica / seguimiento del cliente BAYAM RESIDENCES aparece un comentario:
 
-Si internamente `kg / 1000 = toneladas`, la salida se etiqueta `t`.  
-Si se responde en kg: no dividir por 1000.
+`EL DÍA LUNES 31 DE AGOSTO COMPRARÁ 3,000LTS TODO EN BASE A OCUPACION DEL CONDOMINIO`
 
-Nunca: `3.672` etiquetado como `3.672 kg` cuando significa `3.672 t = 3,672 kg`.
+Pero en otra superficie de Delta Ingreso Cliente Forecast aparece:
 
-Aceptable: `3,672 kg` o `3.672 t`, según el contrato de presentación que elija el FIX (uno solo, consistente).
+`Aún no hay comentarios.`
 
-### 3. DELTA / clasificación
+Director IA sí llegó a recuperar ese comentario en una respuesta previa.
 
-Comparación de compra:
+Por tanto:
 
-- `delta_kg = kg_B - kg_A`
-- AUMENTÓ: `delta_kg > 0`
-- DISMINUYÓ: `kg_A > 0` AND `kg_B > 0` AND `delta_kg < 0`
-- DEJÓ DE COMPRAR: `kg_A > 0` AND `kg_B = 0`
+NO asumir que “comentarios” es una única fuente.
 
-No clasificar STOPPED a quien tenga `kg_B > 0`.
+Auditar físicamente:
 
-### 4. LIST COMPLETENESS
+- qué fuente usa la gráfica;
+- qué fuente usa el modal Delta Ingreso Cliente Forecast;
+- qué fuente usa Director IA;
+- por qué pueden divergir;
+- cuál es la semántica de cada comentario.
 
-Auditar el Top 6 actual.
+## Pregunta de negocio objetivo futura
 
-Para `¿Qué clientes aumentaron/disminuyeron/dejaron de comprar...?` sin `principales` / `top` / `más relevantes`:
+Después de un FIX posterior, Director IA debería poder resolver conceptualmente:
 
-- devolver lista completa si la arquitectura lo permite razonablemente; o
-- declarar explícitamente Top N / recorte y total encontrado.
+`Dame los 5 clientes que tienen mayor impacto negativo en el Delta Ingreso de septiembre y ponme sus comentarios.`
 
-No afirmar «Estos son los clientes» si solo se transportó Top 6.
+La respuesta debería poder distinguir:
 
-## Orden de ejecución (obligatorio)
+- ranking;
+- Delta Ingreso por cliente;
+- suma del impacto de los Top 5;
+- comentario disponible;
+- fecha del comentario;
+- fuente del comentario;
+- ausencia real de comentario.
 
-### Paso 1 — Endurecer Runtime Gate (antes de producto)
+No implementar todavía.
 
-Añadir familia `R-MOVEMENT` con fixtures determinísticos. No hardcodear clientes LIVE en producto. Los kg del harness son genéricos equivalentes a la evidencia.
+## Definición que debe verificarse físicamente
 
-**R-MOVEMENT-001** — bases + delta (equivalente conceptual 20 CUMBRES: 19,980 → 23,652). Expected +3,672 kg. Comprobar A, B, delta, signo y unidad. No basta intent.
+NO asumir que ésta es la fórmula exacta del código.
 
-**R-MOVEMENT-002** — SIGN PARITY (equivalente NUEVA WAL MART: 55,473 → 58,828). Expected AUMENTÓ y +3,355 kg según el fixture exacto coherente. Debe FAIL si una ventana alternativa cambia el signo.
+El audit debe probar o rechazar si actualmente:
 
-**R-MOVEMENT-003** — disminuyó (equivalente GRUPO MOVE: A > B > 0). Expected DISMINUYÓ. Prohibido STOPPED.
+Delta Ingreso cliente
+=
+Ingreso proyectado mes actual
+-
+Ingreso mes anterior
 
-**R-MOVEMENT-004** — partial remaining purchase (equivalente CARBURADORA: 6,370 → 459). Expected DISMINUYÓ. Prohibido DEJÓ DE COMPRAR.
+Determinar:
 
-**R-MOVEMENT-005** — stopped (A > 0, B = 0). Expected DEJÓ DE COMPRAR.
+1. qué representa `Ingreso A`;
+2. qué representa `Ingreso B`;
+3. qué periodo usa cada uno;
+4. si B es FORECAST, ACTUAL, mezcla o snapshot;
+5. qué versión/corte utiliza;
+6. qué unidad monetaria utiliza;
+7. si el cálculo es por cliente canónico;
+8. si agrupa por canal/categoría/planta;
+9. dónde se calcula Delta Ingreso;
+10. dónde se ordena.
 
-**R-MOVEMENT-006** — units. FAIL ante `3.672` etiquetado como kg si internamente es toneladas. PASS `3,672 kg` o `3.672 t`.
+## Ranking negativo
 
-**R-MOVEMENT-007** — explicit calendar months. Pregunta `agosto comparado con julio`. Expected `calendar_month` A/B. Prohibido `trailing_30d`.
+Determinar físicamente cómo debe obtenerse:
 
-**R-MOVEMENT-008** — completeness. Si el loader encuentra N y transporta < N, la respuesta debe expresar recorte/Top N. No fingir FULL_LIST.
+Top 5 mayor impacto negativo
 
-No debilitar TIER 1 ni R-RUNTIME-001..007.
+La hipótesis de negocio a verificar es:
 
-### Paso 2 — BEFORE
+- filtrar `delta_ingreso < 0`;
+- ordenar de más negativo a menos negativo;
+- tomar 5.
 
-Desde origin/main (tras G1). Rama propuesta:
+Ejemplo conceptual:
 
-`fix/director-ia-commercial-trend-calendar-parity-001`
+-250,000
+-180,000
+-120,000
+-90,000
+-50,000
 
-Ejecutar:
+No usar valor absoluto para cambiar el signo.
 
-`npm run test:director-ia:golden`
+No mezclar clientes positivos.
+
+No implementar todavía.
+
+## Cadena obligatoria — Dashboard
+
+Trazar completamente:
+
+IGF Forecast ARR
+→ Delta Ingreso
+→ Clientes por mes / cliente
+→ frontend
+→ endpoint
+→ handler
+→ helper
+→ loader
+→ query
+→ tabla(s)
+→ columnas
+→ cálculo
+→ periodo
+→ versión/snapshot
+→ agrupación
+→ Delta Ingreso final
+→ sorting/ranking
+
+Identificar archivo y función en cada frontera.
+
+## Cadena obligatoria — Director IA
+
+Trazar:
+
+pregunta
+→ planner
+→ intent
+→ capability
+→ routing
+→ tool/orchestrator
+→ loader
+→ query
+→ metric pack
+→ comments enrichment
+→ response
+
+Responder:
+
+¿Por qué la pregunta actual termina en “no tengo acceso”?
+
+Localizar FIRST_BAD_BOUNDARY.
+
+No aceptar como conclusión:
+
+`Director IA todavía no lo soporta`
+
+sin ubicar físicamente la primera frontera que impide llegar a los datos.
+
+## Comentarios — trazabilidad obligatoria
+
+Auditar todas las rutas relevantes de comentarios que puedan aplicar a clientes comerciales.
+
+Para cada ruta determinar:
+
+COMMENT_SOURCE
+COMMENT_TABLE
+CLIENT_IDENTITY_KEY
+DATE_FIELD
+PLANT_SCOPE
+PERIOD_SCOPE
+AUTHOR/OWNER si existe
+COMMENT_TYPE si existe
+
+Buscar especialmente:
+
+- comentarios de gráfica;
+- comentarios del modal Delta Ingreso;
+- comentarios del cliente;
+- Action Register solo si físicamente participa en esta lectura;
+- DICF solo si físicamente participa;
+- cualquier tabla/campo usado hoy por Director IA.
+
+No mezclar fuentes solo porque contienen texto.
+
+## BAYAM — matriz obligatoria
+
+Construir:
+
+Surface | Source | Client key | Comment found | Date | Text | Why visible/not visible
+
+como mínimo para:
+
+- gráfica;
+- Delta Ingreso Cliente Forecast;
+- Director IA.
+
+La divergencia:
+
+gráfica = comentario visible
+modal = “Aún no hay comentarios”
+
+debe terminar con una explicación física o:
+
+NOT_PROVEN_WITHOUT_LIVE_DB
+
+No adivinar.
+
+## Drivers del Delta Ingreso
+
+Negocio identifica como variables relevantes:
+
+- margen;
+- descuento;
+- compra/venta/volumen;
+- cliente disminuyó;
+- cliente dejó de comprar;
+- HG.
+
+El audit debe determinar cuáles de estas variables existen físicamente en la cadena de Delta Ingreso y cuáles NO.
+
+Para cada una:
+
+VARIABLE
+SOURCE
+PERIOD
+AVAILABLE_PER_CLIENT: YES/NO
+USED_IN_DELTA_FORMULA: YES/NO
+CAN_EXPLAIN_DELTA: YES/NO
+
+Especial cuidado:
+
+El margen puede ser una variable externa/fuera del control comercial.
+
+No convertir correlación en causalidad.
+
+Un comentario tampoco demuestra automáticamente causa.
+
+## Controlabilidad
+
+No implementar clasificación todavía, pero documentar si físicamente sería posible distinguir en un FIX posterior:
+
+- factor posiblemente controlable:
+  - descuento;
+  - pérdida/disminución de volumen;
+  - seguimiento comercial;
+  - compromiso incumplido;
+
+- factor no controlable o externo:
+  - margen, según regla de negocio;
+
+- desconocido:
+  - no existe evidencia.
+
+No inventar causa.
+
+## Alertas
+
+No implementar alertas.
+
+Solo determinar si los datos existentes permitirían posteriormente crear:
+
+ALERTA:
+cliente con Delta Ingreso negativo material
+
+con:
+
+- cliente;
+- Delta Ingreso;
+- ranking;
+- venta/kg anterior;
+- venta/kg forecast/actual;
+- descuento;
+- HG;
+- comentario más reciente;
+- compromiso;
+- responsable/acción, si existe físicamente.
+
+## Periodo septiembre
+
+Determinar exactamente qué significa actualmente:
+
+`septiembre`
+
+en Delta Ingreso Forecast.
+
+No asumir mes cerrado.
+
+Debe quedar claro si septiembre representa:
+
+- mes actual parcial;
+- forecast del cierre;
+- última versión forecast;
+- actual a fecha;
+- mezcla actual + forecast;
+- otra definición.
+
+Identificar la fuente/versionado.
+
+## FIRST_BAD_BOUNDARY
+
+Debe declararse una frontera concreta.
+
+Ejemplos válidos:
+
+PLANNER
+CAPABILITY_COVERAGE
+ROUTING
+TOOL_MISSING
+SOURCE_NOT_EXPOSED
+PERIOD_RESOLUTION
+DELTA_CALCULATION
+COMMENT_SOURCE
+CLIENT_IDENTITY
+RANKING
+
+Puede haber más de una causa, pero debe identificarse cuál ocurre primero para la pregunta objetivo.
+
+## Hipótesis obligatorias
+
+Marcar cada una como:
+
+PROVEN
+REJECTED
+NOT_PROVEN
+
+H1 — El Delta Ingreso ya está calculado en un helper reutilizable.
+
+H2 — Director IA no tiene actualmente tool/loader para esa fuente.
+
+H3 — Planner conoce `delta_income` pero la ejecución física no está conectada.
+
+H4 — El ranking Top 5 puede obtenerse sin nueva fórmula de negocio.
+
+H5 — Septiembre usa forecast y no venta real cerrada.
+
+H6 — Los comentarios del modal y de la gráfica vienen de fuentes diferentes.
+
+H7 — Director IA ya tiene acceso a al menos una de las fuentes de comentarios.
+
+H8 — Es posible unir Delta Ingreso + comentarios mediante una identidad canónica existente.
+
+H9 — Existen variables suficientes para explicar al menos parte del deterioro: kg/venta, descuento, HG y/o margen.
+
+H10 — El actual “no tengo acceso” es un problema de cobertura/routing y no ausencia física del dato.
+
+## Runtime / Golden gap
+
+Auditar si actualmente existe cobertura para preguntas como:
+
+`Dame los clientes con mayor Delta Ingreso negativo de septiembre.`
 
 y:
 
-`npm run test:director-ia:predeploy -- --gate`
+`Dame los 5 clientes con mayor Delta Ingreso negativo y sus comentarios.`
 
-BEFORE esperado **antes** del FIX:
+Determinar:
 
-- TIER 1 intacto PASS
-- R-RUNTIME-001..007 PASS
-- R-MOVEMENT-001..008 reproducen los defectos actuales (FAIL)
-- PRE-DEPLOY GATE = FAIL
+- intent esperado;
+- fixture;
+- tool esperado;
+- source esperado;
+- qué verifica el test;
+- qué NO verifica.
 
-Si los nuevos casos no quedan rojos, o TIER 1 / 001–007 no permanecen PASS: STOP. No modificar producto.
+Si no existe cobertura, declararlo.
 
-### Paso 3 — FIX (solo si el BEFORE coincide)
+## Regresiones futuras a proponer
 
-Corregir la primera frontera causal (PERIOD). No parchear prosa final.
+NO implementarlas en esta auditoría.
 
-En el mismo slice: UNITS, DELTA/clasificación, LIST COMPLETENESS.
+Proponer como mínimo:
 
-Preguntas trailing reales siguen trailing.
+R-DELTA-INCOME-001
+Top negative ranking.
 
-## Protección
+R-DELTA-INCOME-002
+Correct month / forecast period.
 
-TIER 1 PASS. R-RUNTIME-001..007 no se debilitan. `últimos 30 días` sigue siendo trailing 30d.
+R-DELTA-INCOME-003
+Correct monetary values and sign.
 
-## Objetivo AFTER
+R-DELTA-INCOME-004
+Top 5 ordering.
 
-TIER 1 PASS  
-R-RUNTIME-001..007 PASS  
-R-MOVEMENT-001..008 PASS  
-HARNESS FAILURE = 0  
-PRE-DEPLOY GATE = PASS  
+R-DELTA-INCOME-005
+Comments enrichment.
 
-Si solo una parte cabe, no falsear verde.
+R-DELTA-INCOME-006
+No comment → explicit DATA_NOT_FOUND / equivalent, not invented.
 
-## Evidencia final
+R-DELTA-INCOME-007
+Comment does not become causal explanation automatically.
 
-1. diff del Runtime Gate (R-MOVEMENT-001..008);
-2. BEFORE rojo de R-MOVEMENT y PASS de TIER 1 / R-RUNTIME-001..007;
-3. FIRST_BAD_BOUNDARY de los casos rojos;
-4. frontera causal corregida (PERIOD + UNITS + CLASSIFICATION + COMPLETENESS);
-5. AFTER TIER 1 / RUNTIME / GATE;
-6. confirmación de que trailing 30d no se convirtió en calendario;
-7. confirmación de que no se hardcodearon los clientes LIVE;
-8. commit SHA;
-9. git status --short.
+R-DELTA-INCOME-008
+Client identity parity Delta Ingreso ↔ comments.
+
+R-DELTA-INCOME-009
+Aggregate Top 5 negative impact.
+
+R-DELTA-INCOME-010
+Driver evidence: sales/kg, discount, HG, margin where physically available.
+
+## LIVE_DB
+
+live_db_authorized: NO
+
+No consultar producción.
+
+Si el código no permite demostrar:
+
+- el valor exacto;
+- el ranking exacto;
+- la versión forecast;
+- o la divergencia de comentarios;
+
+marcar:
+
+NOT_PROVEN_WITHOUT_LIVE_DB
+
+y entregar SELECT read-only mínimo necesario:
+
+- tabla;
+- columnas;
+- planta;
+- cliente si aplica;
+- año/mes;
+- version_id si aplica;
+- ORDER BY;
+- LIMIT.
+
+No abrir LIVE_DB automáticamente.
+
+Requiere nuevo G1 humano específico.
+
+## In scope
+
+- frontend IGF Forecast ARR relacionado con Delta Ingreso / Clientes por mes
+- lib/delta-ingreso-forecast.js
+- helpers/loaders/endpoints relacionados
+- server.js solo tracing
+- planner/capabilities de delta_income
+- director-ia-chat
+- tool orchestrator
+- loaders de comentarios de cliente
+- DICF solo si participa físicamente
+- Action Register solo si participa físicamente
+- tests existentes relacionados, solo lectura
+- docs/dev-loop/CURRENT_TASK.md
+- reporte de auditoría
+
+## Out of scope
+
+- implementación
+- modificar tests
+- LIVE_DB
+- DB/schema/migrations
+- frontend changes
+- nuevos vs reactivados
+- movement calendar parity ya CLOSED
+- margen histórico
+- terminology margen cliente
+- dirty continuity `como vamos?`
+- creación de alertas
+- envío de notificaciones
+- cálculo nuevo de rentabilidad forecast
+- modificación de contratos congelados
+- merge
+- deploy
+- next task
+
+## Prohibiciones
+
+No hardcodear clientes.
+No hardcodear importes.
+No asumir que screenshot = contrato de código.
+No inventar causalidad.
+No convertir comentarios en causas.
+No consultar LIVE_DB.
+No modificar producto.
+No modificar tests.
+No merge.
+No deploy.
+No next task.
+
+## Entregables obligatorios
+
+1. Executive summary máximo 15 líneas.
+2. North Star map: Rentabilidad → Delta Ingreso → cliente → variables → comentario/acción.
+3. Physical source map de Delta Ingreso.
+4. Fórmula física actual.
+5. Period/version semantics.
+6. Ranking semantics.
+7. Director IA source/routing map.
+8. FIRST_BAD_BOUNDARY.
+9. Comments source map.
+10. BAYAM divergence matrix.
+11. Driver availability matrix.
+12. Hypothesis disposition H1–H10.
+13. Golden/Runtime gap.
+14. Future Runtime regressions.
+15. Si hace falta LIVE_DB: SELECTs mínimos.
+16. Recommended next FIX slice.
+17. Git branch/commit/status.
 
 ## Completion
 
-DRAFT. Esperar G1 humano.
+DONE_PENDING_REVIEW
+si el código permite localizar las fronteras y diseñar el FIX.
 
-NO G1.
-NO implementar.
-NO tests todavía.
-NO LIVE_DB.
-NO merge.
-NO deploy.
-NO next task.
+BLOCKED
+si una frontera crítica solo puede resolverse con LIVE_DB.
+
+No implementación.
+No next task.
 
 STOP.
