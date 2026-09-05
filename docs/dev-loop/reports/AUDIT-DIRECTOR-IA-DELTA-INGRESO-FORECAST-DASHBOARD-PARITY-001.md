@@ -494,6 +494,6 @@ Rama: `audit/director-ia-delta-ingreso-forecast-dashboard-parity-001`
 
 implementation: no. Solo CURRENT_TASK (status) + este reporte.
 
-SHA: pendiente de stamp en el commit de esta rama.
+SHA: `8190aa1d`
 
-No push. No merge. No deploy. No next task.
+Tras el stamp documental, `git status --short` debe quedar limpio en `audit/director-ia-delta-ingreso-forecast-dashboard-parity-001`. No push. No merge. No deploy. No next task.
