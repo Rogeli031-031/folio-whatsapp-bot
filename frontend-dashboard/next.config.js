@@ -1,6 +1,15 @@
+const path = require("path");
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  webpack: (config) => {
+    config.resolve.alias = {
+      ...(config.resolve.alias || {}),
+      "../../../lib/ingreso-cliente-marginal.js": path.join(__dirname, "..", "lib", "ingreso-cliente-marginal.js"),
+    };
+    return config;
+  },
   /** Menor huella en RAM en producción (Render Starter 512MB): evita cargar todo node_modules al arrancar. */
   output: "standalone",
   // Evita que el build falle por warnings/errores de ESLint en Render

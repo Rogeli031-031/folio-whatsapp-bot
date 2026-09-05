@@ -7,6 +7,7 @@
  */
 
 const { RUNTIME_CASES, NOW_ISO } = require("../fixtures/director-ia-golden-cases");
+const parityFx = require("../fixtures/delta-ingreso-clientes-por-mes-parity");
 
 const NOW = new Date(NOW_ISO);
 
@@ -178,6 +179,10 @@ function isDeltaIncomeCase(runtimeCase) {
   return runtimeCase && String(runtimeCase.id || "").startsWith("R-DELTA-INCOME-");
 }
 
+function isDeltaParityCase(runtimeCase) {
+  return runtimeCase && String(runtimeCase.id || "").startsWith("R-DELTA-PARITY-");
+}
+
 function forecastNegativeRows() {
   return [
     { cliente: "CLIENTE_N1", ingresoA: 400000, ingresoB: 150000, deltaIngreso: -250000, kgA: 10000, kgB: 4000 },
@@ -205,6 +210,7 @@ function forecastCommentsByName() {
 }
 
 function deltaIncomeForecastDeps() {
+  const rows = forecastNegativeRows();
   return {
     resolveDeltaIngresoForecastPlanta: async () => ({ id: 1, nombre: "Acapulco", clave: "E3" }),
     getPlantCodeArrFromPlantaNombre: async () => "Acapulco",
@@ -214,8 +220,18 @@ function deltaIncomeForecastDeps() {
       periodoB: `${yearB}-${String(monthB).padStart(2, "0")}`,
       margenA: 8,
       margenB: 7.5,
-      rows: forecastNegativeRows(),
+      rows,
       source_helper: "computeDeltaIngresoForecast",
+    }),
+    computeDeltaIngresoClientesPorMes: async (_c, _plant, yearA, monthA, yearB, monthB) => ({
+      planta: "Acapulco",
+      periodoA: `${yearA}-${String(monthA).padStart(2, "0")}`,
+      periodoB: `${yearB}-${String(monthB).padStart(2, "0")}`,
+      margenA: 8,
+      margenB: 7.5,
+      rows,
+      source_helper: "computeDeltaIngresoClientesPorMes",
+      physical_source: "dashboard-arr-forecast.computeClientesDescuentoMes",
     }),
     loadRecentCommentsByClienteNombres: async (_c, opts = {}) => {
       const all = forecastCommentsByName();
@@ -229,23 +245,67 @@ function deltaIncomeForecastDeps() {
   };
 }
 
+function deltaParityDeps() {
+  return {
+    resolveDeltaIngresoForecastPlanta: async () => ({ id: 1, nombre: parityFx.PLANTA, clave: "E3" }),
+    getPlantCodeArrFromPlantaNombre: async () => parityFx.PLANTA,
+    computeDeltaIngresoClientesPorMes: undefined,
+    loadIgfPlantMetrics: async (_c, _plant, year, month) => {
+      if (year === parityFx.YEAR_B && month === parityFx.MONTH_B) {
+        return {
+          ...parityFx.METRICS_B,
+          version_id: parityFx.IGF_FORECAST_VERSION.id,
+          version_number: parityFx.IGF_FORECAST_VERSION.version_number,
+          financial_state: parityFx.IGF_FORECAST_VERSION.financial_state,
+          ventaTon: parityFx.IGF_FORECAST_VERSION.venta_ton,
+          targetKg: parityFx.TARGET_KG_B,
+          decoy_final_venta_ton: parityFx.IGF_FINAL_DECOY_VERSION.venta_ton,
+        };
+      }
+      return {
+        ...parityFx.METRICS_A,
+        version_number: 2,
+        financial_state: "FINAL",
+        ventaTon: parityFx.METRICS_A.ventaTon,
+      };
+    },
+    computeClientesDescuentoMes: async (_c, year, month) => ({
+      historico: month === parityFx.MONTH_A,
+      ty: year,
+      tm: month,
+      rows: parityFx.clientesDescuentoMesRows(month === parityFx.MONTH_B ? "B" : "A"),
+    }),
+    computeDeltaIngresoForecast: async (_c, _plant, yearA, monthA, yearB, monthB) => ({
+      planta: parityFx.PLANTA,
+      periodoA: `${yearA}-${String(monthA).padStart(2, "0")}`,
+      periodoB: `${yearB}-${String(monthB).padStart(2, "0")}`,
+      margenA: parityFx.MARGEN_A,
+      margenB: parityFx.MARGEN_B,
+      rows: parityFx.olsForecastRows(),
+      source_helper: "computeDeltaIngresoForecast",
+    }),
+    loadRecentCommentsByClienteNombres: async () => new Map(),
+  };
+}
+
 function incomeForecastPack(body) {
   return (body && body.delta_ingreso_forecast) || {};
 }
 
-function incomeForecastRows(body) {
+function incomeForecastRows(body, opts = {}) {
   const pack = incomeForecastPack(body);
+  if (opts.all && Array.isArray(pack.rows_all) && pack.rows_all.length) {
+    return pack.rows_all;
+  }
   const rows = pack.top_negatives || pack.rows || pack.clientes || [];
   return Array.isArray(rows) ? rows : [];
 }
 
 function findIncomeRow(body, name) {
   const want = String(name || "").trim().toUpperCase();
-  return (
-    incomeForecastRows(body).find(
-      (r) => String((r && (r.cliente || r.cliente_norm)) || "").trim().toUpperCase() === want
-    ) || null
-  );
+  const match = (list) =>
+    list.find((r) => String((r && (r.cliente || r.cliente_norm)) || "").trim().toUpperCase() === want) || null;
+  return match(incomeForecastRows(body, { all: true })) || match(incomeForecastRows(body));
 }
 
 function incomeDelta(row) {
@@ -561,8 +621,12 @@ function installRuntimeDeps(chat, map, runtimeCase) {
     queryClientProfileActions: async () => [],
     queryClientProfileHistorial: async () => new Map(),
     ...igfQueryFns(map),
+    computeDeltaIngresoForecast: undefined,
+    computeDeltaIngresoClientesPorMes: undefined,
+    computeClientesDescuentoMes: undefined,
+    loadIgfPlantMetrics: undefined,
     ...(isMovementCase(runtimeCase) ? movementTrendDeps() : {}),
-    ...(isDeltaIncomeCase(runtimeCase) ? deltaIncomeForecastDeps() : {}),
+    ...(isDeltaParityCase(runtimeCase) ? deltaParityDeps() : isDeltaIncomeCase(runtimeCase) ? deltaIncomeForecastDeps() : {}),
     openaiChat: async () => "STUB_OPENAI_TRANSPORT",
   });
 }
@@ -593,6 +657,9 @@ function clearRuntimeDeps(chat) {
     resolveDeltaIngresoForecastPlanta: undefined,
     getPlantCodeArrFromPlantaNombre: undefined,
     computeDeltaIngresoForecast: undefined,
+    computeDeltaIngresoClientesPorMes: undefined,
+    computeClientesDescuentoMes: undefined,
+    loadIgfPlantMetrics: undefined,
     loadRecentCommentsByClienteNombres: undefined,
     openaiChat: undefined,
   });
@@ -884,21 +951,198 @@ function evaluateLastTurn(runtimeCase, last) {
       return { boundaries, http, pack };
     }
   }
-  if (runtimeCase.require_forecast_source) {
+  if (runtimeCase.require_forecast_source || runtimeCase.require_clientes_por_mes_source) {
     const packFi = incomeForecastPack(body);
     const src = String(packFi.source_helper || packFi.source || meta.source_helper || "");
     const kind = String(packFi.period_kind || meta.period_kind || "");
-    if (!/computeDeltaIngresoForecast/i.test(src) || /m9|period_compare/i.test(kind)) {
+    const executive =
+      /computeDeltaIngresoClientesPorMes|computeClientesDescuentoMes|clientes por mes|ingresoClienteMarginal/i.test(
+        src
+      );
+    const ols = /computeDeltaIngresoForecast/i.test(src);
+    if (runtimeCase.require_clientes_por_mes_source && (!executive || ols)) {
       boundaries.USER_VISIBLE_OUTCOME = mark(
         "FAIL",
-        `expected computeDeltaIngresoForecast; source=${src || "none"} period_kind=${kind || "none"}`
+        `expected Clientes por mes source; source=${src || "none"} period_kind=${kind || "none"}`
       );
+      return { boundaries, http, pack };
+    }
+    if (
+      runtimeCase.require_forecast_source &&
+      !runtimeCase.require_clientes_por_mes_source &&
+      (!/computeDeltaIngresoForecast|computeDeltaIngresoClientesPorMes|computeClientesDescuentoMes/i.test(src) ||
+        /m9|period_compare/i.test(kind))
+    ) {
+      boundaries.USER_VISIBLE_OUTCOME = mark(
+        "FAIL",
+        `expected forecast source; source=${src || "none"} period_kind=${kind || "none"}`
+      );
+      return { boundaries, http, pack };
+    }
+    if (runtimeCase.forbid_ols_forecast_source && ols) {
+      boundaries.USER_VISIBLE_OUTCOME = mark("FAIL", `OLS computeDeltaIngresoForecast still used; source=${src}`);
+      return { boundaries, http, pack };
+    }
+    if (/m9|period_compare/i.test(kind)) {
+      boundaries.USER_VISIBLE_OUTCOME = mark("FAIL", `period_kind=${kind}`);
       return { boundaries, http, pack };
     }
   }
   if (runtimeCase.forbid_m9_historical && (pack === "delta_income" || meta.semantic_class === "delta_ingreso_period_compare")) {
     boundaries.USER_VISIBLE_OUTCOME = mark("FAIL", "M9 historical used for forecast question");
     return { boundaries, http, pack };
+  }
+  if (runtimeCase.require_parity_fixture) {
+    const packFi = incomeForecastPack(body);
+    const focusName = runtimeCase.movement_focus;
+    const expected = focusName ? parityFx.BY_NAME[focusName] : null;
+    const row = focusName ? findIncomeRow(body, focusName) : null;
+    const kgA = row && (row.kg_a != null ? Number(row.kg_a) : row.kgA != null ? Number(row.kgA) : null);
+    const kgB = row && (row.kg_b != null ? Number(row.kg_b) : row.kgB != null ? Number(row.kgB) : null);
+    const ingA = row && (row.ingreso_a != null ? Number(row.ingreso_a) : row.ingresoA != null ? Number(row.ingresoA) : null);
+    const ingB = row && (row.ingreso_b != null ? Number(row.ingreso_b) : row.ingresoB != null ? Number(row.ingresoB) : null);
+    const delta = incomeDelta(row);
+    const descB = row && (row.desc_kg_b != null ? Number(row.desc_kg_b) : row.descKgB != null ? Number(row.descKgB) : null);
+    const targetKg = packFi.target_kg != null ? Number(packFi.target_kg) : packFi.targetKg != null ? Number(packFi.targetKg) : null;
+    const versionState = String(packFi.igf_financial_state || packFi.version_financial_state || "");
+    const ventaTon = packFi.igf_venta_ton != null ? Number(packFi.igf_venta_ton) : null;
+
+    if (runtimeCase.require_kg_a_parity) {
+      if (!expected || kgA !== expected.kgA) {
+        boundaries.USER_VISIBLE_OUTCOME = mark(
+          "FAIL",
+          `kg A parity focus=${focusName} got=${kgA} expected=${expected && expected.kgA}`
+        );
+        return { boundaries, http, pack };
+      }
+    }
+    if (runtimeCase.require_kg_b_forecast_parity) {
+      if (!expected || kgB !== expected.kgB) {
+        boundaries.USER_VISIBLE_OUTCOME = mark(
+          "FAIL",
+          `kg B forecast parity focus=${focusName} got=${kgB} expected_cpm=${expected && expected.kgB} ols=${expected && expected.olsKgB}`
+        );
+        return { boundaries, http, pack };
+      }
+    }
+    if (runtimeCase.require_ingreso_a_parity) {
+      if (!expected || ingA !== expected.ingresoA) {
+        boundaries.USER_VISIBLE_OUTCOME = mark(
+          "FAIL",
+          `ingreso A parity focus=${focusName} got=${ingA} expected=${expected && expected.ingresoA}`
+        );
+        return { boundaries, http, pack };
+      }
+    }
+    if (runtimeCase.require_ingreso_b_parity) {
+      if (!expected || ingB !== expected.ingresoB) {
+        boundaries.USER_VISIBLE_OUTCOME = mark(
+          "FAIL",
+          `ingreso B parity focus=${focusName} got=${ingB} expected=${expected && expected.ingresoB} ols=${expected && expected.ingresoBOls}`
+        );
+        return { boundaries, http, pack };
+      }
+    }
+    if (runtimeCase.require_delta_parity) {
+      if (!expected || delta !== expected.delta) {
+        boundaries.USER_VISIBLE_OUTCOME = mark(
+          "FAIL",
+          `delta parity focus=${focusName} got=${delta} expected=${expected && expected.delta} ols=${expected && expected.deltaOls}`
+        );
+        return { boundaries, http, pack };
+      }
+    }
+    if (runtimeCase.require_sign_parity) {
+      const cpmSign = expected ? Math.sign(expected.delta) : 0;
+      const gotSign = delta == null ? 0 : Math.sign(delta);
+      if (!expected || gotSign !== cpmSign || cpmSign <= 0 || Math.sign(expected.deltaOls) >= 0) {
+        boundaries.USER_VISIBLE_OUTCOME = mark(
+          "FAIL",
+          `sign parity focus=${focusName} got=${delta} cpm=${expected && expected.delta} ols=${expected && expected.deltaOls}`
+        );
+        return { boundaries, http, pack };
+      }
+    }
+    if (runtimeCase.require_hg_parity) {
+      if (!expected || !expected.hgChangesIngresoA || ingA !== expected.ingresoA || ingB !== expected.ingresoB) {
+        boundaries.USER_VISIBLE_OUTCOME = mark(
+          "FAIL",
+          `HG parity focus=${focusName} ingresoA=${ingA} expected=${expected && expected.ingresoA} noHg=${expected && expected.ingresoANoHg}`
+        );
+        return { boundaries, http, pack };
+      }
+    }
+    if (runtimeCase.require_discount_parity) {
+      const usedReactSim =
+        descB === parityFx.DESC_KG_REACT_SIM ||
+        (ingB != null &&
+          expected &&
+          ingB ===
+            parityFx.ingresoClienteMarginalOracle(expected.kgB, parityFx.DESC_KG_REACT_SIM, parityFx.METRICS_B));
+      if (
+        !expected ||
+        !row ||
+        usedReactSim ||
+        (descB != null && descB !== parityFx.DESC_KG_PERSISTIDO) ||
+        ingB !== expected.ingresoB
+      ) {
+        boundaries.USER_VISIBLE_OUTCOME = mark(
+          "FAIL",
+          `discount parity focus=${focusName} descB=${descB} ingresoB=${ingB} persistido=${parityFx.DESC_KG_PERSISTIDO} reactSim=${parityFx.DESC_KG_REACT_SIM}`
+        );
+        return { boundaries, http, pack };
+      }
+    }
+    if (runtimeCase.require_target_version_parity) {
+      const decoyKgB =
+        expected && parityFx.SUM_MTD_B > 0
+          ? Math.round(expected.mtdB * (parityFx.TARGET_KG_FINAL_DECOY / parityFx.SUM_MTD_B) * 100) / 100
+          : null;
+      const usedFinalDecoy = kgB === decoyKgB || ventaTon === parityFx.IGF_FINAL_DECOY_VERSION.venta_ton;
+      if (
+        !expected ||
+        kgB !== expected.kgB ||
+        usedFinalDecoy ||
+        /final/i.test(versionState) ||
+        (targetKg != null && targetKg !== parityFx.TARGET_KG_B)
+      ) {
+        boundaries.USER_VISIBLE_OUTCOME = mark(
+          "FAIL",
+          `target/version parity kgB=${kgB} expected=${expected && expected.kgB} targetKg=${targetKg} ventaTon=${ventaTon} state=${versionState || "none"}`
+        );
+        return { boundaries, http, pack };
+      }
+    }
+    if (runtimeCase.require_top_n_after_parity) {
+      const shown = incomeForecastRows(body);
+      const names = shown.map((r) => String((r && (r.cliente || r.cliente_norm)) || "").trim().toUpperCase());
+      const deltas = shown.map((r) => incomeDelta(r));
+      const expectedNames = parityFx.TOP5_CPM.map((c) => c.cliente);
+      const expectedDeltas = parityFx.TOP5_CPM.map((c) => c.delta);
+      const olsNames = parityFx.TOP5_OLS.map((c) => c.cliente);
+      const positives = shown.filter((r) => incomeDelta(r) > 0);
+      const rankedOls = names.join("|") === olsNames.join("|");
+      if (
+        names.join("|") !== expectedNames.join("|") ||
+        expectedDeltas.some((d, i) => deltas[i] !== d) ||
+        positives.length ||
+        rankedOls
+      ) {
+        boundaries.USER_VISIBLE_OUTCOME = mark(
+          "FAIL",
+          `top n after parity names=${names.join(",")} expected=${expectedNames.join(",")} ols=${olsNames.join(",")} deltas=${deltas.join(",")}`
+        );
+        return { boundaries, http, pack };
+      }
+      const declared = packFi.impacto_top_n != null ? Number(packFi.impacto_top_n) : null;
+      if (declared !== parityFx.IMPACTO_TOP5_CPM) {
+        boundaries.USER_VISIBLE_OUTCOME = mark(
+          "FAIL",
+          `impacto_top_n=${declared} expected=${parityFx.IMPACTO_TOP5_CPM} ols=${parityFx.IMPACTO_TOP5_OLS}`
+        );
+        return { boundaries, http, pack };
+      }
+    }
   }
   boundaries.USER_VISIBLE_OUTCOME = mark(
     "PASS",

@@ -13,6 +13,10 @@ import ArrNuevoClientePlanModal from "@/components/ArrNuevoClientePlanModal";
 import ArrVentaGraficaModal from "@/components/ArrVentaGraficaModal";
 import { categoriaEsComisionista } from "@/lib/arr-categoria";
 import {
+  ingresoClienteMarginal as ingresoClienteMarginalShared,
+  targetKgDesdeIgfVentaTon,
+} from "../../../lib/ingreso-cliente-marginal.js";
+import {
   fetchIgfForecast,
   fetchIgfVersiones,
   fetchArrClientesMes,
@@ -507,7 +511,7 @@ function targetKgDesdeIgfTon(
   const rv = computeRowValues(data, empresaLabel);
   const ton = rv.ventaTon;
   if (ton == null || !Number.isFinite(ton) || ton <= 0) return undefined;
-  return Math.round(ton * 1000 * 100) / 100;
+  return targetKgDesdeIgfVentaTon(ton);
 }
 
 function clientesCacheKey(
@@ -522,30 +526,15 @@ function clientesCacheKey(
   return `${empresaLabel}|${periodo}|tg:${part}`;
 }
 
-/** Ingreso cliente (pesos): misma expresión que el Excel exportado (margen y HG del mes). */
+/** Ingreso cliente (pesos): helper canónico compartido con Director IA. */
 function ingresoClienteMarginal(
   kg: number,
   descKg: number | null,
   m: ResumenMesMetrics,
-  /** Opcional: reemplaza solo el factor HG del mes en el término `kg×HG×HG$/100`. */
   hgCliente?: number | null,
-  /** Opcional: reemplaza HG$ (dinero) del mes en el mismo término. */
   hgCompra?: number | null
 ): number | null {
-  if (kg <= 0) return null;
-  const margen = m.margenKg;
-  const hgMes = m.hgDisplay;
-  const hgDinMes = m.hgDinero;
-  if (margen == null) return null;
-  const hg =
-    hgCliente != null && Number.isFinite(hgCliente) ? hgCliente : hgMes;
-  const hgDin =
-    hgCompra != null && Number.isFinite(hgCompra) ? hgCompra : hgDinMes;
-  if (hg == null || hgDin == null) return null;
-  const d = descKg ?? 0;
-  const dMag = Number.isFinite(d) ? Math.abs(d) : 0;
-  const raw = kg * (margen - dMag) + (hg * kg * hgDin) / 100;
-  return Math.round(raw);
+  return ingresoClienteMarginalShared(kg, descKg, m, hgCliente, hgCompra);
 }
 
 /** Ingreso marginal fila «Nuevos clientes» (ARR Plan): (E×(C6+F))+((H+I)×E×I6/100); «Sin venta» invierte signo. I6 = HG$ hoja ARR. */

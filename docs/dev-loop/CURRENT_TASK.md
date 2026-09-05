@@ -1,48 +1,43 @@
-task_id: AUDIT-DIRECTOR-IA-DELTA-INGRESO-FORECAST-DASHBOARD-PARITY-001
+task_id: FIX-DIRECTOR-IA-DELTA-INGRESO-CLIENTES-POR-MES-PARITY-001
 
-task_type: AUDIT
-mode: READ_ONLY_PHYSICAL_TRACE
+task_type: FIX
+mode: REGRESSION_FIRST
 
 status: CLOSED
 authorized_by: "Human Approver"
-authorized_at: "2026-09-05T14:49:42-06:00"
-human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-05 - READ_ONLY AUDIT ONLY; NO LIVE_DB"
-objective: Localizar la primera frontera física donde Clientes por mes y Director IA dejan de compartir periodo/kg/forecast/descuento/margen/agrupación y por qué WAL MART pasa de +$511,219 a -$309,994.
+authorized_at: "2026-09-05T15:00:59-06:00"
+human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-05"
+objective: Hacer que Director IA use la misma base de Delta Ingreso que IGF Forecast ARR → Clientes por mes (kg B por target IGF de planta + ingresoClienteMarginal/HG), no OLS de computeDeltaIngresoForecast.
 
 in_scope:
-  - IGF Forecast ARR Clientes por mes (solo tracing)
-  - frontend tracing read-only
-  - endpoint / helper / loader / SQL de Delta Ingreso
-  - lib/delta-ingreso-forecast.js (computeDeltaIngresoForecast)
-  - lib/dicf.js (computeDicf) solo si participa
-  - computeClientesDescuentoMes solo si participa
-  - Director IA planner/routing solo tracing
-  - Director IA delta-income forecast path
-  - margin / discount / forecast loaders
-  - client identity/grouping
-  - R-DELTA-INCOME-001..010 solo lectura (false-green)
+  - lib/director-ia-chat.js (ruta ejecutiva delta ingreso / Clientes por mes)
+  - lib/director-ia-planner.js solo si el routing ejecutivo debe declararse sin reinterpretar contratos
+  - lib/dashboard-arr-forecast.js (reutilizar computeClientesDescuentoMes; no tercera fórmula)
+  - extracción/reutilización de ingresoClienteMarginal o helper canónico compartido
+  - lib/delta-ingreso-forecast.js solo para no convertirlo globalmente / no usarlo como source-of-truth de esta pregunta
+  - lib/cliente-comentarios.js (enrichment posterior; no altera delta)
+  - test/fixtures/director-ia-golden-cases.js (R-DELTA-PARITY-001..010; corregir R-DELTA-INCOME-010 a fuente ejecutiva, no debilitar)
+  - test/helpers/director-ia-runtime-golden-harness.js
+  - tests determinísticos físicamente afectados
   - docs/dev-loop/CURRENT_TASK.md
-  - docs/dev-loop/reports/AUDIT-DIRECTOR-IA-DELTA-INGRESO-FORECAST-DASHBOARD-PARITY-001.md
+  - docs/dev-loop/reports/FIX-DIRECTOR-IA-DELTA-INGRESO-CLIENTES-POR-MES-PARITY-001.md
 
 out_of_scope:
-  - implementación
-  - modificar tests
-  - comentarios como feature
-  - alertas
-  - nuevos/reactivados
-  - movement calendar fix
-  - fórmula de rentabilidad
+  - nueva fórmula rentabilidad
   - Delta Gastos
-  - HG
-  - DB/schema
-  - migrations
-  - frontend changes
+  - alertas/notificaciones
+  - nuevos vs reactivados
+  - causal inference
+  - cumplimiento de compromisos
+  - DB/schema/migrations
+  - LIVE_DB
+  - cambio visual frontend
   - docs/director-ia/
   - contratos congelados
-  - LIVE_DB
   - merge
   - deploy
   - next task
+  - convertir computeDeltaIngresoForecast globalmente
 
 contracts_in_force:
   - AGENTS.md
@@ -50,727 +45,571 @@ contracts_in_force:
   - docs/director-ia/DIRECTOR_IA_CONSTITUTION.md
   - docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md
   - docs/director-ia/DIRECTOR_IA_EXECUTIVE_KNOWLEDGE_ENGINE.md
-  - docs/dev-loop/reports/FIX-DIRECTOR-IA-DELTA-INGRESO-FORECAST-NEGATIVE-TOPN-COMMENTS-001.md (evidencia CLOSED; no reabre el FIX)
+  - docs/dev-loop/reports/AUDIT-DIRECTOR-IA-DELTA-INGRESO-FORECAST-DASHBOARD-PARITY-001.md (evidencia CLOSED; no reabre la auditoría)
   - contratos vigentes aplicables (obedecer, no reescribir)
 
 allowed_actions:
-  - (solo tras G1 humano) trazar en solo lectura ambas cadenas
-  - escribir el reporte de auditoría
-  - proponer R-DELTA-PARITY-001..010 sin implementarlas
-  - si el código no alcanza: NOT_PROVEN_WITHOUT_LIVE_DB y SELECTs read-only mínimos, sin ejecutarlos
-  - dejar DONE_PENDING_REVIEW o BLOCKED
+  - (solo tras G1 humano) endurecer primero PRE-DEPLOY Runtime Gate R-DELTA-PARITY-001..010
+  - BEFORE: TIER 1 / R-RUNTIME / R-MOVEMENT PASS y R-DELTA-PARITY rojo; STOP si no reproduce
+  - actualizar R-DELTA-INCOME-010 a la fuente ejecutiva correcta, sin debilitar
+  - reutilizar computeClientesDescuentoMes + lógica ingresoClienteMarginal
+  - extraer helper canónico compartido si hace falta paridad sin tercera fórmula
+  - respuesta determinista/grounded; comments después del ranking
+  - reporte y commit en rama de tarea
+  - dejar DONE_PENDING_REVIEW
 
 forbidden_actions:
   - escribir AUTHORIZED_BY_HUMAN
   - poner status AUTHORIZED
   - crear, borrar o modificar authorized_by, authorized_at o human_authorization
-  - implementar producto
-  - modificar tests
+  - implementar antes de G1
+  - implementar producto antes del Runtime Gate y BEFORE rojo
+  - usar OLS / projectKgToMonthEnd como kg B de esta capacidad
+  - hardcodear WAL MART u otros clientes LIVE
+  - leer estado React del navegador
   - consultar LIVE_DB
-  - hardcodear clientes o importes como regla
-  - aceptar “usan helpers diferentes” sin el primer input/transformación
-  - asumir Dashboard o computeDeltaIngresoForecast correcto porque Runtime PASS
   - modificar docs/director-ia/
   - merge/push a main
   - deploy
   - abrir siguiente tarea
 
-implementation_authorized: NO
+implementation_authorized: YES
 merge_authorized: NO
 deploy_authorized: NO
 live_db_authorized: NO
 
 max_attempts: 1
 
-result_report_path: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-DELTA-INGRESO-FORECAST-DASHBOARD-PARITY-001.md
+result_report_path: docs/dev-loop/reports/FIX-DIRECTOR-IA-DELTA-INGRESO-CLIENTES-POR-MES-PARITY-001.md
 
 ## Estado
 
 DRAFT. No hay Gate G1. No es ejecutable.
 
-## North Star de negocio
+## North Star
 
-Director IA debe ayudar a aumentar mes con mes:
+Director IA debe ayudar a incrementar mes con mes:
 
 - rentabilidad operativa;
 - rentabilidad final;
 
 y evitar retrocesos.
 
-La prioridad ejecutiva es detectar correctamente qué clientes deterioran más el Delta Ingreso del periodo forecast.
-
-Para esta capacidad, el Delta Ingreso utilizado por Director IA debe tener paridad con el Delta Ingreso mostrado en:
+Para ello, la métrica ejecutiva de Delta Ingreso por cliente utilizada por Director IA debe ser la misma que utiliza:
 
 IGF Forecast ARR
 → Clientes por mes
 → Delta Ingreso
 
-salvo que exista una razón contractual explícita, físicamente demostrada, para mostrar una métrica distinta.
+No una métrica forecast paralela.
 
-No asumir que una de las dos superficies es correcta.
-Probarlo.
+## Auditoría CLOSED de origen
 
-## Contexto
+Usar:
 
-El FIX anterior:
+AUDIT-DIRECTOR-IA-DELTA-INGRESO-FORECAST-DASHBOARD-PARITY-001
 
-FIX-DIRECTOR-IA-DELTA-INGRESO-FORECAST-NEGATIVE-TOPN-COMMENTS-001
+Hallazgo principal:
 
-corrigió:
+FIRST_BAD_BOUNDARY = FORECAST_PROJECTION / kg B
 
-- planner;
-- routing;
-- forecast intent;
-- explicit month;
-- Top N;
-- comments enrichment.
+La diferencia aparece antes de Delta Ingreso:
 
-La pregunta LIVE ya entra correctamente a Delta Ingreso Forecast en MXN.
+Clientes por mes:
+kg B = MTD del cliente × (target IGF planta / Σ MTD planta)
 
-Pero producción demuestra que los montos NO tienen paridad con el Dashboard.
+Director IA actual:
+kg B = MTD + OLS individual por cliente / projectKgToMonthEnd
 
-Por tanto:
+Además:
 
-NO reabrir PLANNER salvo tracing.
-NO asumir que el problema sigue siendo routing.
-La frontera crítica ahora está aguas abajo.
+Clientes por mes:
+ingresoClienteMarginal incluye HG.
 
-## Pregunta LIVE
+computeDeltaIngresoForecast:
+no incluye HG.
 
-Planta:
+Por tanto las dos superficies NO representan el mismo contrato ejecutivo.
 
-Acapulco
+## Source of truth
 
-Pregunta:
+Para preguntas ejecutivas sobre:
 
-`Dame 5 clientes que tengan el mayor impacto negativo en el ingreso para el mes de septiembre, y ponme sus comentarios.`
+- Delta Ingreso por cliente;
+- mayor impacto negativo;
+- clientes que más deterioran ingreso;
+- Top N de impacto;
 
-Respuesta Director IA:
+la fuente debe tener paridad con:
 
-`Delta Ingreso Forecast (MXN) de Acapulco: Agosto 2026 real vs septiembre 2026 forecast.`
+computeClientesDescuentoMes
++
+la misma lógica de ingresoClienteMarginal usada por Clientes por mes.
 
-Director IA reportó:
+No copiar esa fórmula a una tercera implementación.
 
-1. PUBLICO EN GENERAL: -$536,735
-2. GRUPO MOVE EMPRESARIAL: -$430,513
-3. NUEVA WAL MART DE MEXICO: -$309,994
-4. 21 DURANGO: -$237,353
-5. 62 CALZADA: -$213,806
+Reutilizar/refactorizar una función común si técnicamente es necesario y seguro.
 
-Top 5 acumulado:
+La UI no puede continuar siendo el único lugar donde vive una parte esencial del cálculo ejecutivo si Director IA necesita consumir el mismo contrato.
 
--$1,728,401
+## Pregunta objetivo
 
-## Evidencia humana Dashboard
+`Dame 5 clientes que tengan el mayor impacto negativo en el ingreso para septiembre, y ponme sus comentarios.`
 
-Misma planta:
+Para Acapulco debe usar exactamente la misma base de Delta Ingreso que Clientes por mes.
 
-Acapulco
+## Paridad obligatoria
 
-Comparación:
+Para un mismo:
 
-Agosto 2026
-vs
-Septiembre 2026
-
-Superficie:
-
-IGF Forecast ARR
-→ Clientes por mes
-
-### PUBLICO EN GENERAL
-
-Ingreso agosto:
-$724,462
-
-Ingreso septiembre:
-$502,898
-
-Delta Ingreso Dashboard:
-
--$221,564
-
-Director IA:
-
--$536,735
-
-### GRUPO MOVE EMPRESARIAL
-
-Ingreso agosto:
-$738,246
-
-Ingreso septiembre:
-$639,172
-
-Delta Ingreso Dashboard:
-
--$99,074
-
-Director IA:
-
--$430,513
-
-### NUEVA WAL MART DE MEXICO
-
-Ingreso agosto:
-$519,948
-
-Ingreso septiembre:
-$1,031,167
-
-Delta Ingreso Dashboard:
-
-+$511,219
-
-Director IA:
-
--$309,994
-
-Esto es una divergencia crítica de SIGNO.
-
-En Dashboard:
-
-positivo
-
-En Director IA:
-
-negativo
-
-Por tanto WAL MART no debería pertenecer al conjunto negativo si la superficie Dashboard representa el contrato ejecutivo.
-
-### 21 DURANGO
-
-Ingreso agosto:
-$349,130
-
-Ingreso septiembre:
-$312,082
-
-Delta Ingreso Dashboard:
-
--$37,048
-
-Director IA:
-
--$237,353
-
-### 62 CALZADA
-
-Ingreso agosto:
-$314,117
-
-Ingreso septiembre:
-$278,389
-
-Delta Ingreso Dashboard:
-
--$35,728
-
-Director IA:
-
--$213,806
-
-## Aritmética Dashboard observada
-
-La pantalla cumple:
-
-delta_ingreso
-=
-ingreso_septiembre
--
-ingreso_agosto
-
-Ejemplo GRUPO MOVE:
-
-639,172
--
-738,246
-=
--99,074
-
-Ejemplo WAL MART:
-
-1,031,167
--
-519,948
-=
-+511,219
-
-El audit debe comprobar dónde se originan los valores A y B.
-
-No asumir que la captura prueba el contrato interno.
-
-## Objetivo único
-
-Localizar físicamente la primera frontera donde:
-
-IGF Forecast ARR → Clientes por mes
-
-y
-
-Director IA → Delta Ingreso Forecast
-
-dejan de usar los mismos:
-
-- periodo;
+- planta;
+- periodo A;
+- periodo B;
+- version/cut;
 - cliente;
-- kg;
-- descuento;
+
+deben coincidir:
+
+- kg A;
+- kg B;
+- descuento A;
+- descuento B;
 - margen;
-- forecast;
-- versión;
-- agrupación;
+- HG si forma parte del contrato;
 - ingreso A;
 - ingreso B;
-- Delta Ingreso.
+- Delta Ingreso;
+- signo.
 
-No aceptar como conclusión:
+No basta que coincida únicamente Delta.
 
-`usan helpers diferentes`
+## Forecast de kg B
 
-sin explicar exactamente qué input o transformación genera la divergencia.
+No usar OLS individual para esta capacidad si Clientes por mes no lo usa.
 
-## Pregunta principal
+La lógica ejecutiva demostrada es:
 
-¿Por qué, para el mismo Acapulco y agosto→septiembre 2026:
+targetKgPlanta =
+venta_ton IGF × 1000
 
-Dashboard:
-WAL MART = +$511,219
-
-pero:
-
-Director IA:
-WAL MART = -$309,994?
-
-El audit NO puede cerrarse correctamente sin localizar la primera frontera capaz de explicar este cambio de signo, o marcar:
-
-NOT_PROVEN_WITHOUT_LIVE_DB
+factor =
+targetKgPlanta / SUM(kgRealMTDPlanta)
 
-con los SELECTs exactos necesarios.
-
-## Cadena física obligatoria — Dashboard
-
-Trazar completamente:
-
-IGF Forecast ARR
-→ Clientes por mes
-→ frontend
-→ endpoint
-→ handler
-→ helper
-→ loader
-→ SQL/query
-→ tablas
-→ cliente identity
-→ periodo A
-→ periodo B
-→ kg A/B
-→ descuento A/B
-→ margen
-→ ingreso A/B
-→ Delta Ingreso
-→ sorting/filter
-→ rendering
-
-Identificar:
+kgForecastCliente =
+kgRealMTDCliente × factor
 
-archivo
-función
-query
-tabla
-columnas
-unidad
-transformación
-
-en cada frontera.
-
-No asumir que la superficie usa `computeDicf`.
-Demostrarlo físicamente.
-
-## Cadena física obligatoria — Director IA
-
-Trazar:
-
-pregunta
-→ planner
-→ intent
-→ period resolution
-→ delta income forecast route
-→ helper seleccionado
-→ query
-→ tablas
-→ cliente identity
-→ kg A/B
-→ descuento A/B
-→ margen
-→ forecast/projection
-→ ingreso A/B
-→ delta
-→ negatives filter
-→ ranking
-→ Top N
-→ comments enrichment
-→ response
+Debe reutilizar el cálculo canónico existente.
 
-Identificar exactamente:
+NO reimplementar aritmética desde este texto si ya existe físicamente en computeClientesDescuentoMes/helper relacionado.
 
-qué objeto llega al ranking.
+## Ingreso
 
-## Comparación helper vs helper
+La auditoría demostró que Clientes por mes usa una lógica equivalente a:
 
-Determinar físicamente si las cadenas usan:
+ingresoClienteMarginal
 
-- computeDeltaIngresoForecast;
-- computeDicf;
-- computeClientesDescuentoMes;
-- otro helper;
-- combinación.
+que contempla:
 
-Para cada helper relevante documentar:
+kg × (margen − |descuento|)
++
+componente HG
 
-INPUT PERIOD
-SOURCE TABLE
-KG SOURCE
-DISCOUNT SOURCE
-MARGIN SOURCE
-FORECAST METHOD
-CLAMPING
-ROUNDING
-CLIENT GROUPING
-OUTPUT UNIT
-DELTA FORMULA
+No implementar desde el contrato textual.
 
-## Matriz obligatoria por cliente
+Reutilizar la función física existente o extraer un helper backend/shared canónico si hoy está atrapada exclusivamente en frontend.
 
-Construir:
+El objetivo es una única semántica ejecutiva.
 
-CLIENT
-| Dashboard source
-| Director IA source
-| Dashboard A
-| IA A
-| Dashboard B
-| IA B
-| Dashboard Delta
-| IA Delta
-| Dashboard Sign
-| IA Sign
-| FIRST_BAD_BOUNDARY
+## HG
 
-para:
+Esta tarea SÍ incluye HG porque la auditoría demostró que forma parte del ingreso mostrado por Clientes por mes.
 
-PUBLICO EN GENERAL
-GRUPO MOVE EMPRESARIAL
-NUEVA WAL MART DE MEXICO
-21 DURANGO
-62 CALZADA
+No tratar HG como comentario/driver opcional si altera el valor de Delta Ingreso.
 
-Si A/B internos de Director IA no son visibles actualmente, localizar cómo obtenerlos sin modificar producto.
+Determinar físicamente:
 
-## FIRST_BAD_BOUNDARY
+- fuente de HG;
+- unidad;
+- signo;
+- periodo;
+- cómo entra en ingreso A/B.
 
-Debe ser una frontera física específica.
+Mantener exactamente la semántica de Clientes por mes.
 
-Ejemplos válidos:
+## Descuento
 
-PERIOD_RESOLUTION
-FORECAST_PROJECTION
-KG_SOURCE
-DISCOUNT_SOURCE
-MARGIN_VERSION
-CLIENT_AGGREGATION
-SOURCE_SELECTION
-OVERRIDE_APPLICATION
-CACHE_CUT
-FORMULA
-CLAMPING
-ROUNDING
+Usar la misma base de descuento que Clientes por mes para el cálculo canónico.
 
-No aceptar:
+No asumir que simulaciones manuales del frontend deban llegar a Director IA.
 
-`HELPER_DIFFERENCE`
+Distinguir:
 
-sin más precisión.
+1. valor persistido/base que alimenta el cálculo normal;
+2. simulación React no persistida.
 
-Debe decir:
+La paridad obligatoria es contra el estado real de negocio disponible al backend.
 
-qué valor entra;
-qué valor sale;
-dónde cambia;
-por qué.
+No intentar leer estado local del navegador desde Director IA.
 
-## Hipótesis obligatorias
+## Periodo
 
-Marcar:
+La pregunta explícita:
 
-PROVEN
-REJECTED
-NOT_PROVEN
-NOT_PROVEN_WITHOUT_LIVE_DB
+`septiembre`
 
-### H1 — Misma tabla, distinto helper
+debe resolver:
 
-Dashboard y Director IA parten de las mismas tablas pero transforman distinto.
+A = agosto 2026
+B = septiembre 2026
 
-### H2 — Periodo distinto
+con la misma semántica temporal que Clientes por mes.
 
-Agosto/septiembre no representan exactamente los mismos límites o corte.
+No usar MAX(fecha) para sustituir silenciosamente el periodo solicitado.
 
-### H3 — Forecast distinto
+## Version / target IGF
 
-La proyección de septiembre usa una metodología distinta entre ambas superficies.
+Debe resolverse con la misma regla que la superficie Clientes por mes.
 
-### H4 — Margen distinto
+No inventar FINAL.
 
-Dashboard y Director IA usan distinta versión / valor de margen IGF.
-
-### H5 — Descuento distinto
-
-El descuento de septiembre que entra al ingreso difiere entre superficies.
-
-### H6 — Override/UI
-
-Los valores editables de descuento o forecast en el Dashboard aplican overrides que `computeDeltaIngresoForecast` no incorpora.
-
-### H7 — KG distinto
-
-Los kg forecast de septiembre son diferentes antes de calcular ingreso.
-
-### H8 — Client aggregation
-
-El mismo nombre agrupa filas/canales/subcanales de forma distinta.
-
-### H9 — Clamp
-
-Uno de los helpers aplica:
-
-max(0, ingreso)
-
-u otro clamp y el otro no.
-
-### H10 — Version / snapshot
-
-Usan diferente `version_id`, snapshot, cache o momento de cálculo.
-
-### H11 — Sign error
-
-Existe una inversión de signo o A/B.
-
-### H12 — Source-of-truth mismatch
-
-`computeDeltaIngresoForecast` no representa la misma métrica ejecutiva que “Clientes por mes”.
-
-## WAL MART — tracing especial
-
-Este caso es prioridad máxima.
-
-Dashboard:
-
-A = $519,948
-B = $1,031,167
-Delta = +$511,219
-
-Director IA:
-
-Delta = -$309,994
-
-Determinar:
-
-1. cuál es IA A;
-2. cuál es IA B;
-3. qué kg A/B usa;
-4. qué descuento A/B usa;
-5. qué margen usa;
-6. cuál de esos inputs diverge primero;
-7. si el cambio de signo ocurre antes o dentro de la fórmula de ingreso.
-
-No cerrar con:
-
-`diferente forecast`
-
-sin demostrar el valor específico que cambia.
-
-## PUBLICO / MOVE — tracing especial
-
-Determinar por qué la magnitud negativa en Director IA es aproximadamente mucho mayor que Dashboard.
-
-Buscar:
-
-- A incorrecto;
-- B incorrecto;
-- forecast incompleto;
-- descuento;
-- margen;
-- corte del mes;
-- agrupación;
-- proyección;
-- override.
-
-## 21 DURANGO / 62 CALZADA
-
-Determinar por qué IA amplifica considerablemente el deterioro.
-
-No asumir misma causa que PUBLICO/MOVE sin probarlo.
-
-## Forecast de septiembre
-
-Auditar exactamente qué significa:
-
-`Ingreso septiembre`
-
-en la superficie Dashboard.
-
-Determinar si usa:
-
-- venta real MTD;
-- forecast a cierre;
-- ritmo diario;
-- días calendario;
-- días operativos;
-- promedio histórico;
-- override manual;
-- descuento capturado;
-- margen latest;
-- otra lógica.
-
-Luego comparar contra la ruta de Director IA.
-
-## Descuento editable
-
-La UI muestra campos editables de descuento septiembre.
-
-Determinar:
-
-- si son solo presentación;
-- si modifican estado frontend;
-- si se mandan al backend;
-- si afectan el forecast;
-- si se persisten;
-- si `computeDeltaIngresoForecast` recibe esos valores;
-- si Director IA puede verlos.
-
-No modificar frontend.
-
-## Margin/version
-
-Para cada superficie determinar:
-
-- tabla IGF;
-- scope GLOBAL/planta;
-- year/month;
-- version_id;
-- version_number;
-- financial_state;
-- latest rule;
-- fallback.
-
-No asumir que el mismo `7.12` llega a ambas rutas.
-
-## Cache / estado
-
-Determinar si alguna superficie usa:
-
-- cache en memoria;
-- snapshot previo;
-- object state;
-- frontend state;
-- request body con valores que no están en DB;
-- `MAX(fecha)`;
-- `NOW`;
-- request-specific period.
+Si la UI utiliza latest forecast vigente para septiembre, Director IA debe usar el mismo contrato.
 
 ## Ranking
 
-No auditar todavía si el Top 5 de Dashboard real es exactamente el mostrado por IA hasta primero cerrar paridad de valores.
+Una vez obtenidos los Delta correctos:
 
-El ranking solo puede considerarse válido si los Delta Ingreso base son válidos.
+filter:
+delta_ingreso < 0
+
+sort:
+más negativo → menos negativo
+
+Top N:
+N solicitado.
+
+El ranking debe ocurrir DESPUÉS de la paridad de fuente.
 
 ## Comentarios
 
-Los comentarios NO son el foco de esta auditoría.
+Mantener el enrichment ya implementado:
 
-Solo confirmar que el enrichment ocurre después del cálculo y no altera:
+arr.cliente_comentarios
 
+por identidad segura/nombre normalizado + planta.
+
+Comentarios se agregan DESPUÉS del ranking.
+
+No deben alterar:
+
+- kg;
 - ingreso;
 - delta;
 - ranking.
 
-No reabrir BAYAM salvo que comments afecten accidentalmente routing/data path.
+Comentario ≠ causa.
 
-## Runtime false-green
+## Aggregate Top N
 
-Auditar:
+SUM(delta_ingreso) de los clientes mostrados.
 
-R-DELTA-INCOME-001..010
+Debe coincidir con los Delta fuente.
 
-Responder:
+No usar el agregado anterior basado en computeDeltaIngresoForecast.
 
-1. qué helper fixturean;
-2. qué inputs usan;
-3. qué boundary prueban;
-4. por qué pudieron PASS aunque producción no tenga paridad con Dashboard;
-5. si el fixture estaba validando solamente consistencia interna de `computeDeltaIngresoForecast` en vez de paridad con la fuente ejecutiva.
+## Regression-first obligatorio
+
+ANTES de producto, endurecer PRE-DEPLOY.
+
+Agregar:
+
+R-DELTA-PARITY-001..010
+
+### R-DELTA-PARITY-001 — kg A parity
+
+Mismo fixture compartido por superficie ejecutiva y Director IA.
+
+Expected:
+kg A idéntico.
+
+### R-DELTA-PARITY-002 — kg B forecast parity
+
+Fixture donde:
+
+target planta
+/
+SUM MTD
+
+produce un factor conocido.
+
+Expected:
+kg B Director IA = kg B Clientes por mes.
+
+Debe fallar con OLS individual.
+
+### R-DELTA-PARITY-003 — ingreso A parity
+
+Mismos inputs:
+kg
+margen
+descuento
+HG
+
+Expected:
+Ingreso A idéntico.
+
+### R-DELTA-PARITY-004 — ingreso B parity
+
+Expected:
+Ingreso B idéntico.
+
+### R-DELTA-PARITY-005 — Delta arithmetic parity
+
+Expected:
+
+Delta = B − A
+
+idéntico en ambas superficies.
+
+### R-DELTA-PARITY-006 — SIGN parity
+
+Crear fixture equivalente conceptual a WAL MART:
+
+la lógica Clientes por mes produce Delta positivo.
+
+La antigua OLS produciría negativo.
+
+Expected:
+Director IA debe conservar el signo de Clientes por mes.
+
+No hardcodear WAL MART en producto.
+
+### R-DELTA-PARITY-007 — HG parity
+
+Fixture donde retirar HG cambie materialmente ingreso.
+
+Expected:
+Director IA incorpora exactamente el mismo HG que source-of-truth.
+
+### R-DELTA-PARITY-008 — discount parity
+
+Misma tasa/base de descuento en ambas rutas.
+
+No confundir simulación React con dato persistido.
+
+### R-DELTA-PARITY-009 — target/version parity
+
+Mismo target IGF / versión / periodo.
+
+Expected:
+misma venta objetivo de planta para construir kg B.
+
+### R-DELTA-PARITY-010 — Top N only after parity
+
+Fixture con varios clientes.
+
+Primero construir Delta mediante source-of-truth.
+
+Después:
+filtrar negativos
+→ sort
+→ Top N.
+
+Debe fallar si se rankean deltas de computeDeltaIngresoForecast.
+
+## Protección de Runtime anterior
+
+R-DELTA-INCOME-001..010 deben actualizarse únicamente donde su expectation de source-of-truth quedó invalidada por la auditoría.
+
+NO debilitarlos.
 
 Especial atención:
 
-R-DELTA-INCOME-010
-forecast vs historical source
+R-DELTA-INCOME-010 hoy certifica computeDeltaIngresoForecast.
 
-Puede estar validando la fuente equivocada.
+Eso es un false-green demostrado.
 
-## Future Runtime parity regressions
+El cambio debe convertirlo en protección de la fuente ejecutiva correcta, no borrarlo ni hacerlo menos específico.
 
-NO implementarlas.
+## BEFORE obligatorio
 
-Proponer como mínimo:
+Antes de modificar producto:
 
-R-DELTA-PARITY-001
-Dashboard source vs Director IA A.
+TIER 1:
+PASS
 
-R-DELTA-PARITY-002
-Dashboard source vs Director IA B.
+R-RUNTIME:
+PASS
 
-R-DELTA-PARITY-003
-Delta arithmetic parity.
+R-MOVEMENT:
+PASS
 
-R-DELTA-PARITY-004
-Sign parity.
+R-DELTA-INCOME existentes:
+estado actual documentado
 
-R-DELTA-PARITY-005
-Forecast kg parity.
+R-DELTA-PARITY-001..010:
+deben quedar rojos donde computeDeltaIngresoForecast diverge.
 
-R-DELTA-PARITY-006
-Discount parity.
+Como mínimo deben demostrar FAIL de:
 
-R-DELTA-PARITY-007
-Margin/version parity.
+002 kg B forecast parity
+004 ingreso B
+005 delta
+006 sign parity
+007 HG
+009 target/version/source
+010 ranking-after-parity
 
-R-DELTA-PARITY-008
-Client aggregation parity.
+PRE-DEPLOY:
+FAIL
 
-R-DELTA-PARITY-009
-Override parity.
+Si los nuevos casos quedan verdes con producto actual:
+STOP.
 
-R-DELTA-PARITY-010
-Top N computed only after source parity.
+## FIRST_BAD_BOUNDARY esperado antes del FIX
 
-## Source of truth
+FORECAST_PROJECTION
 
-El audit debe recomendar cuál componente debe ser el contrato ejecutivo de:
+No asumirlo sin reproducirlo en fixture.
 
-`Delta Ingreso por cliente`
+## Product change
 
-pero NO implementarlo.
+El cambio debe corregir la frontera causal.
 
-La recomendación debe basarse en:
+Cadena futura deseada:
 
-- cuál alimenta realmente “Clientes por mes”;
-- cuál coincide con la lectura usada por negocio;
-- cuál acepta periodo explícito;
-- cuál incorpora forecast/overrides reales;
-- cuál evita duplicar fórmula.
+pregunta
+→ delta income executive intent
+→ periodo explícito
+→ source-of-truth Clientes por mes
+→ target IGF planta
+→ proyección kg cliente
+→ margen/descuento/HG
+→ ingreso A/B
+→ Delta
+→ negativos
+→ ranking
+→ Top N
+→ comments
+→ response
 
-No elegir por conveniencia técnica.
+## Arquitectura
+
+Evitar:
+
+frontend formula
++
+backend formula #1
++
+backend formula #2
+
+Preferir extraer/reutilizar un helper canónico compartido si ésa es la forma más segura de lograr paridad.
+
+No hacer HTTP interno.
+
+No duplicar SQL innecesariamente.
+
+No cambiar el frontend visible salvo que una extracción interna/shared exija importar el mismo helper sin cambiar comportamiento.
+
+## Evidencia LIVE posterior
+
+Después del deploy se validará contra Clientes por mes.
+
+Casos de referencia humanos:
+
+PUBLICO EN GENERAL
+Dashboard -$221,564
+
+GRUPO MOVE EMPRESARIAL
+Dashboard -$99,074
+
+NUEVA WAL MART DE MEXICO
+Dashboard +$511,219
+
+21 DURANGO
+Dashboard -$37,048
+
+62 CALZADA
+Dashboard -$35,728
+
+Estos importes son evidencia humana de un corte LIVE.
+
+NO hardcodear en producto ni tests como verdad eterna.
+
+Los fixtures deben ser determinísticos y conceptualmente equivalentes.
+
+## Protecciones
+
+No romper:
+
+- commercial_trend;
+- movement calendar;
+- M9 historical delta income;
+- client_profile;
+- comments enrichment;
+- historical_margin;
+- IGF frontend;
+- DICF.
+
+No convertir computeDeltaIngresoForecast globalmente si otras superficies lo usan con su semántica propia.
+
+La corrección puede crear una ruta ejecutiva específica basada en Clientes por mes.
+
+## Out of scope
+
+- nueva fórmula rentabilidad;
+- Delta Gastos;
+- alertas/notificaciones;
+- nuevos vs reactivados;
+- causal inference;
+- cumplimiento de compromisos;
+- DB/schema/migrations;
+- LIVE_DB;
+- cambio visual frontend;
+- contracts;
+- merge;
+- deploy;
+- next task.
+
+## AFTER
+
+TIER 1:
+PASS
+
+R-RUNTIME:
+PASS
+
+R-MOVEMENT:
+PASS
+
+R-DELTA-INCOME:
+PASS con expectations corregidas a source-of-truth ejecutivo
+
+R-DELTA-PARITY-001..010:
+PASS
+
+HTTP 5xx:
+0
+
+HARNESS FAILURE:
+0
+
+PRE-DEPLOY:
+PASS
+
+Ejecutar suites relacionadas con:
+
+- Clientes por mes;
+- ARR;
+- IGF forecast;
+- delta income;
+- planner;
+- period resolution;
+- HG;
+- discount;
+- margin/version;
+- client identity;
+- comments;
+- routing.
 
 ## LIVE_DB
 
@@ -778,141 +617,20 @@ live_db_authorized: NO
 
 No consultar producción.
 
-Si código + fixtures no permiten explicar físicamente los importes observados:
+No es necesaria para el regression-first.
 
-marcar:
-
-NOT_PROVEN_WITHOUT_LIVE_DB
-
-y entregar SELECTs mínimos.
-
-Como mínimo, si hacen falta:
-
-### SELECT A — rows de ventas
-
-Para Acapulco y los cinco clientes:
-
-- fecha;
-- kg;
-- cliente_nombre;
-- cliente_norm;
-- canal;
-- subcanal/grupo si aplica;
-
-agosto/septiembre 2026.
-
-### SELECT B — IGF margin/version
-
-- version_id;
-- version_number;
-- financial_state;
-- year/month;
-- empresa/planta;
-- margen_kg;
-
-para septiembre.
-
-### SELECT C — discount/forecast inputs
-
-Tabla/campos exactos usados por ambas superficies.
-
-### SELECT D — cache/snapshot
-
-Si existe persistencia/cut relevante.
-
-No ejecutar.
-
-Requiere G1 LIVE_DB separado.
-
-## In scope
-
-- IGF Forecast ARR Clientes por mes
-- frontend tracing read-only
-- endpoint relacionado
-- computeDeltaIngresoForecast
-- computeDicf
-- computeClientesDescuentoMes si participa
-- delta-ingreso-forecast
-- Director IA planner/routing solo tracing
-- Director IA delta-income forecast path
-- margin loader
-- discount loaders
-- forecast logic
-- client identity/grouping
-- relevant Runtime fixtures/tests solo lectura
-- CURRENT_TASK
-- report
-
-## Out of scope
-
-- implementación
-- modificar tests
-- comentarios como feature
-- alertas
-- nuevos/reactivados
-- movement calendar fix
-- rentabilidad formula
-- Delta Gastos
-- HG
-- DB/schema
-- migrations
-- frontend changes
-- contracts
-- LIVE_DB
-- merge
-- deploy
-- next task
-
-## Prohibiciones
-
-No hardcodear clientes.
-No corregir valores.
-No cambiar helper.
-No cambiar planner.
-No modificar tests.
-No LIVE_DB.
-No asumir Dashboard correcto sin tracing.
-No asumir computeDeltaIngresoForecast correcto porque Runtime PASS.
-No inventar source of truth.
-No merge.
-No deploy.
-No next task.
-
-## Entregables
-
-1. Executive summary máximo 15 líneas.
-2. Dashboard physical chain.
-3. Director IA physical chain.
-4. Helper comparison matrix.
-5. Five-client evidence matrix.
-6. WAL MART deep trace.
-7. PUBLICO/MOVE deep trace.
-8. 21 DURANGO/62 CALZADA trace.
-9. Forecast semantics.
-10. Discount/override analysis.
-11. Margin/version analysis.
-12. Cache/snapshot analysis.
-13. H1–H12 disposition.
-14. FIRST_BAD_BOUNDARY por cliente.
-15. Root cause(s).
-16. Runtime false-green explanation.
-17. Future R-DELTA-PARITY-001..010.
-18. Source-of-truth recommendation.
-19. LIVE_DB SELECTs si se requieren.
-20. Recommended next FIX slice.
-21. Git branch/commit/status.
+Validación exacta LIVE será post-deploy.
 
 ## Completion
 
-DONE_PENDING_REVIEW
+DRAFT.
 
-si la causa puede demostrarse físicamente.
+Esperar G1 humano.
 
-BLOCKED
-
-si la diferencia de producción requiere LIVE_DB para cerrar la frontera crítica.
-
-No implementación.
-No next task.
+No implementar.
+No tests todavía.
+No LIVE_DB.
+No merge.
+No deploy.
 
 STOP.
