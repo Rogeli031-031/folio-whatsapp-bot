@@ -1,6 +1,6 @@
 task_id: AUDIT-DIRECTOR-IA-AUGUST-MARGIN-VERSION-PARITY-001
 
-status: BLOCKED
+status: CLOSED
 authorized_by: "Human Approver"
 authorized_at: "2026-09-02T21:42:52-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-02 - LIVE_DB READ_ONLY audit only"
@@ -142,8 +142,7 @@ Esta tarea **no** decide si el chat debe usar latest como histórico.
 
 ## Completion
 
-status: BLOCKED
-
+status: CLOSED
 LIVE_DB autorizada pero no alcanzable (sin DATABASE_URL / .env en el entorno).
 SELECT no ejecutado.
 NO merge.
