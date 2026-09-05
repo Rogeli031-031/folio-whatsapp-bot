@@ -460,6 +460,6 @@ Fuera de ese slice: rentabilidad forecast completa, alertas, HG, nuevos vs react
 ## 17. Git
 
 Rama: `audit/director-ia-delta-ingreso-negative-impact-comments-001`  
-implementation SHA: pendiente del commit de esta rama.
+implementation SHA: `695c56b703930e1d689325e59048fb89ca2b3534`
 
-No push. No merge. No deploy. No next task.
+Tras el stamp documental de este SHA, `git status --short` debe quedar limpio en la rama `audit/director-ia-delta-ingreso-negative-impact-comments-001`. No push. No merge. No deploy. No next task.
