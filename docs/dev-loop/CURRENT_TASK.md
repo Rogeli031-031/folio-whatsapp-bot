@@ -1,631 +1,1455 @@
-task_id: FIX-DIRECTOR-IA-CLIENTES-POR-MES-TARGET-PROY-PARITY-001
+task_id: AUDIT-DIRECTOR-IA-RENTABILIDAD-DETERIORO-ACTIONABLE-DRIVERS-001
 
-task_type: FIX
-mode: REGRESSION_FIRST
+task_type: AUDIT
+mode: READ_ONLY_PHYSICAL_TRACE
 
 status: CLOSED
 authorized_by: "Human Approver"
-authorized_at: "2026-09-05T15:54:56-06:00"
-human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-05 - IMPLEMENTATION ONLY; NO MERGE; NO DEPLOY; NO LIVE_DB"
-implementation_authorized: YES
+authorized_at: "2026-09-05T16:42:56-06:00"
+human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-05 - READ_ONLY AUDIT ONLY; NO IMPLEMENTATION; NO LIVE_DB"
+implementation_authorized: NO
 merge_authorized: NO
 deploy_authorized: NO
 live_db_authorized: NO
 
-objective: Hacer que Director IA use exactamente el mismo venta_ton efectivo / PROY / overlay que Clientes por mes usa para targetKg del periodo B cuando B es mes abierto forecast.
-
-in_scope:
-  - lib/delta-ingreso-clientes-por-mes.js (target efectivo del periodo B; no convertir defaultLoadIgfPlantMetrics en cambio global si otros consumidores requieren compromiso crudo)
-  - resolver canónico mínimo del target IGF efectivo (PROY/overlay/upload_day) si hace falta extraerlo de la implementación física ya usada por Clientes por mes
-  - lib/director-ia-chat.js solo si hay que inyectar ese resolver en computeDeltaIngresoClientesPorMes
-  - R-DELTA-CUT-001..010 (crear ANTES de producto, solo tras G1)
-  - fixtures determinísticos de TARGET_PROY_SOURCE (nombres sintéticos; no hardcodear clientes LIVE)
-  - docs/dev-loop/CURRENT_TASK.md
-  - docs/dev-loop/reports/FIX-DIRECTOR-IA-CLIENTES-POR-MES-TARGET-PROY-PARITY-001.md
-
-out_of_scope:
-  - fórmula nueva / ingresoClienteMarginal
-  - HG
-  - descuento persistido
-  - ranking / comentarios
-  - React simulations remotas
-  - localStorage
-  - cambio visual de Clientes por mes / Export Excel / IGF Forecast ARR
-  - HTTP interno
-  - computeDeltaIngresoForecast OLS
-  - M9 historical Delta Ingreso
-  - commercial_trend
-  - movement
-  - client_profile
-  - DICF
-  - historical_margin
-  - financial diagnosis
-  - Delta Gastos
-  - alertas
-  - notificaciones
-  - nuevos/reactivados
-  - commitment fulfillment
-  - causal inference
-  - DB/schema
-  - migrations
-  - docs/director-ia/
-  - contracts
-  - LIVE_DB
-  - merge
-  - deploy
-  - next task
-
-contracts_in_force:
-  - AGENTS.md
-  - docs/dev-loop/LOOP_PROTOCOL.md
-  - docs/director-ia/DIRECTOR_IA_CONSTITUTION.md
-  - docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md
-  - docs/director-ia/DIRECTOR_IA_EXECUTIVE_KNOWLEDGE_ENGINE.md
-  - docs/dev-loop/reports/AUDIT-DIRECTOR-IA-CLIENTES-POR-MES-RUNTIME-CUT-PARITY-001.md (CLOSED; evidencia; FIRST_BAD_BOUNDARY físico = TARGET_PROY_SOURCE)
-  - docs/dev-loop/reports/AUDIT-DIRECTOR-IA-DELTA-INGRESO-FORECAST-DASHBOARD-PARITY-001.md (CLOSED; no reabre fórmula)
-  - docs/dev-loop/reports/FIX-DIRECTOR-IA-DELTA-INGRESO-CLIENTES-POR-MES-PARITY-001.md (CLOSED; no reabre el FIX de fórmula)
-  - contratos vigentes aplicables (obedecer, no reescribir)
-
-allowed_actions:
-  - (solo tras G1 humano) regression-first: crear R-DELTA-CUT-001..010 ANTES de producto
-  - (solo tras G1 y BEFORE rojo en CUT mismatch) alinear target B de computeDeltaIngresoClientesPorMes con el PROY efectivo de Clientes por mes
-  - extraer helper canónico mínimo si la lógica PROY está atrapada; no segunda implementación aproximada
-  - ejecutar TIER1 / RUNTIME / MOVEMENT / DELTA-INCOME / DELTA-PARITY / PRE-DEPLOY --gate
-  - redactar el reporte en result_report_path
-  - dejar DONE_PENDING_REVIEW, STOPPED o BLOCKED
-
-forbidden_actions:
-  - escribir AUTHORIZED_BY_HUMAN
-  - poner status AUTHORIZED
-  - crear, borrar o modificar authorized_by, authorized_at o human_authorization
-  - implementar o escribir tests mientras status sea DRAFT
-  - consultar LIVE_DB
-  - hardcodear valores LIVE en producto o fixtures
-  - cambiar fórmula / HG / descuento / ranking / comentarios
-  - leer o enviar React state / localStorage a Director IA
-  - convertir defaultLoadIgfPlantMetrics en cambio global si otros consumidores requieren compromiso crudo
-  - reproyectar el periodo A real/cerrado
-  - inventar reglas de upload_day por día
-  - modificar docs/director-ia/
-  - merge/push a main
-  - deploy
-  - abrir siguiente tarea
-
 max_attempts: 1
 
-result_report_path: docs/dev-loop/reports/FIX-DIRECTOR-IA-CLIENTES-POR-MES-TARGET-PROY-PARITY-001.md
+result_report_path: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-RENTABILIDAD-DETERIORO-ACTIONABLE-DRIVERS-001.md
 
-## Estado
+# 1. PRECONDICIÓN
 
-Implementación completa en rama. Pendiente revisión humana. No merge. No deploy. No next task.
+Antes de ejecutar esta auditoría debe verificarse que:
 
-## North Star
+FIX-DIRECTOR-IA-CLIENTES-POR-MES-TARGET-PROY-PARITY-001
 
-Director IA debe priorizar a los clientes que más deterioran Delta Ingreso usando la misma realidad económica que:
+esté CLOSED en HEAD.
 
-IGF Forecast ARR
-→ Clientes por mes
-→ Exportar Excel.
+La capacidad Delta Ingreso / Clientes por mes fue aceptada en validación LIVE con:
 
-No basta tener la misma fórmula.
+- mismo conjunto ejecutivo de clientes prioritarios;
+- diferencias residuales menores de corte/magnitud;
+- sin bloqueo para continuar.
 
-Debe usar el mismo target económico efectivo del mes abierto.
+NO reabrir esa familia de fixes salvo que esta auditoría descubra evidencia nueva directamente relevante.
 
-## Auditoría CLOSED
+Si existe todavía como DRAFT no autorizado:
 
-Usar como evidencia contractual:
+AUDIT-DIRECTOR-IA-DELTA-INGRESO-DRIVER-DECOMPOSITION-001
 
-AUDIT-DIRECTOR-IA-CLIENTES-POR-MES-RUNTIME-CUT-PARITY-001
+este task lo REEMPLAZA.
 
-Hallazgo:
+No deben existir dos tareas vigentes.
 
-Ambas rutas ya comparten:
+# 2. NORTH STAR DE NEGOCIO
 
-computeClientesDescuentoMes
-+
-ingresoClienteMarginal
+Director IA debe ayudar a incrementar mes con mes:
 
-y NO requieren otra fórmula.
+- rentabilidad operativa;
+- rentabilidad final;
 
-FIRST_BAD_BOUNDARY conceptual exacto para este FIX:
+y evitar retrocesos.
 
-TARGET_PROY_SOURCE
+La pregunta ejecutiva principal que Director IA debe llegar a responder es:
 
-El reporte utilizó TARGET_VERSION_SELECTION, pero la diferencia física NO consiste en elegir otro version_number.
+¿Qué está provocando el deterioro de la rentabilidad y sobre qué puedo actuar?
 
-Ambas rutas seleccionan latest.
+La respuesta futura no debe limitarse a listar clientes.
 
-La divergencia consiste en:
+Debe ser capaz de recorrer, cuando los datos lo permitan:
 
-Clientes por mes / Excel:
-usa venta_ton efectiva PROY / overlay del IGF de mes abierto,
-incluyendo la semántica upload_day demostrada.
+RENTABILIDAD
+→ cambio vs periodo anterior
+→ Delta Ingreso
+→ Delta Gastos
+→ principales contribuyentes
+→ drivers económicos
+→ controlabilidad
+→ contexto operativo
+→ acciones / compromisos existentes
 
-Director IA:
-defaultLoadIgfPlantMetrics
-usa igf.compromiso_lines.venta_ton crudo de latest GLOBAL.
+sin inventar causalidad.
 
-Por tanto:
+# 3. EVIDENCIA LIVE ACTUAL
 
-misma versión
-≠
-mismo target efectivo.
+Pregunta:
 
-## Evidencia LIVE
+¿Qué está provocando el deterioro de la rentabilidad y sobre qué puedo actuar?
 
-Acapulco
-Agosto 2026 real vs Septiembre 2026 forecast.
+Resultado actual:
 
-Excel:
+No se pudo determinar una intención clara con las reglas actuales.
+Indica si quieres el diagnóstico de la planta actual, un cliente concreto u otro tema.
+No asumo el hilo ni consulto Action Register a ciegas.
 
-SERVICIOS ADMINISTRATIVOS
--227423
+Por tanto existe como mínimo una frontera de ROUTING / CAPABILITY.
 
-PUBLICO EN GENERAL
--221564
+NO asumir que ésa es la única frontera.
 
-20 CUMBRES
--169708
+La auditoría debe determinar también si, aunque el planner reconociera la pregunta, existen físicamente los datos y contratos suficientes para contestarla correctamente.
 
-CARBURACION PALMA SOLA
--102639
+# 4. OBJETIVO ÚNICO
 
-GRUPO MOVE EMPRESARIAL
--99074
+Determinar físicamente qué necesita Director IA para contestar de manera trazable:
 
-ASOCIACION DE PROPIETARIOS
--96983
+¿Qué está provocando el deterioro de la rentabilidad y sobre qué puedo actuar?
 
-Top5:
--820408
+La auditoría debe demostrar:
 
-Director IA:
+1. cuál es la definición física de rentabilidad operativa;
+2. cuál es la definición física de rentabilidad final;
+3. qué periodo A y B utiliza cada una;
+4. cómo se explica matemáticamente su cambio;
+5. cuánto corresponde a ingreso;
+6. cuánto corresponde a gastos;
+7. qué clientes explican principalmente el lado ingreso;
+8. qué gastos/categorías explican principalmente el lado gastos;
+9. qué drivers económicos pueden aislarse;
+10. qué drivers son accionables;
+11. qué contexto operativo existe;
+12. qué afirmaciones NO pueden hacerse con la evidencia disponible.
 
-SERVICIOS ADMINISTRATIVOS
--227423
+NO implementar.
 
-PUBLICO
--210363
+# 5. PRINCIPIO DE RESPUESTA FUTURA
 
-20 CUMBRES
--169708
+La respuesta ejecutiva futura debe poder organizarse conceptualmente en cinco niveles.
 
-PALMA SOLA
--102200
+## NIVEL A — RESULTADO
 
-ASOCIACION
--96983
+Ejemplo conceptual:
 
-Top5:
--806677
+La rentabilidad forecast de septiembre está X por debajo / encima de agosto.
 
-Los casos con B = 0 coinciden exactamente.
+Separar:
 
-Los casos con B > 0 divergen según una escala común compatible con targetKg distinto.
+- rentabilidad operativa;
+- rentabilidad final;
 
-No hardcodear estos valores.
+si físicamente son KPIs distintos.
 
-## Objetivo único
+No intercambiarlas.
 
-Para la capacidad ejecutiva de Delta Ingreso por cliente, hacer que Director IA use EXACTAMENTE el mismo:
+## NIVEL B — PUENTE ECONÓMICO
 
-venta_ton efectivo / PROY / overlay
+Explicar qué bloques económicos deterioran/mejoran el resultado.
 
-que Clientes por mes usa para construir targetKg del periodo B cuando B es un mes abierto forecast.
+Ejemplo conceptual:
 
-No cambiar:
+Rentabilidad periodo anterior
++/- cambio de ingresos
+-/+ cambio de gastos
+= rentabilidad periodo forecast
 
-- fórmula de ingreso;
+NO asumir esta ecuación como contrato hasta verificarla físicamente en código/datos.
+
+Debe probarse.
+
+## NIVEL C — CONTRIBUYENTES
+
+En ingreso:
+
+- clientes con mayor Delta Ingreso negativo;
+- clientes con mayor mejora positiva si sirve para contexto.
+
+En gastos:
+
+- categorías;
+- conceptos;
+- centros;
+- cuentas;
+- partidas;
+
+según lo que realmente exista físicamente.
+
+## NIVEL D — DRIVERS
+
+Ejemplos posibles:
+
+- menor volumen / kg;
+- mayor descuento;
+- cambio de margen de planta;
 - HG;
-- descuento;
-- ranking;
-- comentarios.
+- aumento de gasto específico.
 
-Solo corregir la frontera causal demostrada.
+Solo si el driver participa realmente en la fórmula o bridge.
 
-## Source of truth
+## NIVEL E — ACCIÓN / CONTEXTO
 
-Localizar y reutilizar la implementación física que resuelve el target PROY efectivo para Clientes por mes.
+Separar:
 
-Debe incluir exactamente la misma semántica relevante de:
+- potencialmente accionable;
+- influenciable;
+- planta/global;
+- externo/no controlable;
+- desconocido.
 
-- year/month;
-- plant;
-- latest version;
-- version_number;
-- financial state si participa;
-- upload_day;
-- overlay;
-- PROY;
-- venta_ton efectivo.
+Después enriquecer con:
 
-NO copiar la regla desde este prompt si ya existe físicamente.
+- comentarios;
+- compromisos;
+- acciones;
 
-NO construir una segunda implementación aproximada.
+sin presentarlos automáticamente como causas demostradas.
 
-## Arquitectura
+# 6. CONTRATO SEMÁNTICO CRÍTICO
 
-Preferir:
+La auditoría debe separar explícitamente:
 
-canonical effective IGF target resolver
-        ↓
+## 6.1 HECHO
+
+Ejemplo:
+
+El cliente compró menos kg.
+
+Debe derivar directamente de evidencia.
+
+## 6.2 DRIVER ECONÓMICO
+
+Ejemplo:
+
+La reducción de kg ejerce presión negativa sobre Delta Ingreso.
+
+Debe ser demostrable matemáticamente.
+
+## 6.3 CONTEXTO OPERATIVO
+
+Ejemplo:
+
+Comentario registrado:
+“FALLO LA LUZ Y LA BOMBA...”
+
+Es información registrada por operación.
+
+## 6.4 CAUSA
+
+Ejemplo:
+
+“La venta cayó por la falla de la bomba.”
+
+NO puede afirmarse automáticamente solo porque exista el comentario.
+
+Debe existir evidencia contractual suficiente para atribuir causalidad.
+
+Regla:
+
+HECHO ≠ DRIVER ≠ CONTEXTO ≠ CAUSA.
+
+# 7. RENTABILIDAD OPERATIVA
+
+Localizar físicamente:
+
+- nombre del KPI;
+- fuente;
+- endpoint;
+- handler;
+- helper;
+- SQL/query;
+- tablas;
+- columnas;
+- unidad;
+- periodo;
+- forecast vs actual;
+- version;
+- financial_state;
+- formula;
+- rounding;
+- null handling.
+
+Responder:
+
+¿qué significa exactamente “rentabilidad operativa” en Director IA / Dashboard?
+
+No aceptar definiciones de negocio no trazadas a código.
+
+# 8. RENTABILIDAD FINAL
+
+Repetir el tracing completo para rentabilidad final.
+
+Determinar:
+
+- si es un KPI realmente distinto;
+- qué conceptos adicionales incluye;
+- qué gastos/ingresos intervienen;
+- si existe forecast;
+- si existe cierre real;
+- si usa la misma versión IGF.
+
+No asumir que:
+
+rentabilidad final = rentabilidad operativa - X
+
+sin probarlo.
+
+# 9. PERIODO Y COMPARACIÓN
+
+Para una pregunta sin mes explícito como:
+
+¿Qué está provocando el deterioro de la rentabilidad y sobre qué puedo actuar?
+
+auditar cuál debería ser la semántica correcta.
+
+Posibles opciones a investigar:
+
+- mes actual forecast vs mes anterior real;
+- último forecast disponible vs mes cerrado anterior;
+- latest version vs previous period;
+- current selected dashboard period.
+
+No decidir arbitrariamente.
+
+Determinar qué puede inferirse de:
+
+- planta seleccionada;
+- fecha actual;
+- conversación;
+- estado del Dashboard;
+- latest IGF version.
+
+Debe existir comportamiento fail-closed si el periodo no puede resolverse de forma segura.
+
+# 10. PUENTE DE RENTABILIDAD
+
+Buscar físicamente si ya existe un bridge/variance/decomposition que explique:
+
+cambio de rentabilidad
+=
+cambio por ingresos
++
+cambio por gastos
++
+otros componentes
+
+Buscar términos y helpers relacionados con:
+
+- rentabilidad;
+- utilidad;
+- operating profit;
+- final profit;
+- delta ingreso;
+- delta gastos;
+- variance;
+- bridge;
+- waterfall;
+- contribution;
+- forecast;
+- financial diagnosis.
+
+Si ya existe:
+documentarlo.
+
+Si no existe:
+decirlo.
+
+NO crear fórmula nueva.
+
+# 11. DELTA INGRESO
+
+Usar como source-of-truth la capacidad ejecutiva ya construida:
+
 Clientes por mes
-        ↓
-Director IA executive Delta Ingreso
+→ computeClientesDescuentoMes
+→ ingresoClienteMarginal
+→ Delta Ingreso
+
+con el target PROY efectivo del mes abierto.
+
+Auditar cómo puede integrarse al diagnóstico de rentabilidad sin duplicar fórmula.
+
+No reimplementar.
+
+# 12. CONTRIBUYENTES DE INGRESO
+
+Determinar si hoy puede obtenerse:
+
+- total Delta Ingreso;
+- clientes negativos;
+- clientes positivos;
+- Top N negativos;
+- participación de cada cliente sobre el deterioro;
+- suma Top N.
+
+Auditar si:
+
+SUM(delta cliente)
+
+reconcilia exactamente con el componente de ingreso utilizado por la rentabilidad de planta.
+
+Esta reconciliación es CRÍTICA.
+
+Puede existir un Delta Ingreso por clientes que no reconcilie 1:1 con el KPI general.
+
+Si no reconcilia:
+localizar por qué.
+
+No ocultar residuales.
+
+# 13. DRIVERS DEL DELTA INGRESO POR CLIENTE
+
+Para un cliente:
+
+Ingreso A = f(inputs A)
+Ingreso B = f(inputs B)
+
+Auditar los inputs reales:
+
+- kg;
+- descuento/kg;
+- margen de planta;
+- HG;
+- otros si existen.
+
+Determinar para cada variable:
+
+AVAILABLE
+CAN_QUANTIFY_CONTRIBUTION
+REQUIRES_ATTRIBUTION_METHOD
+NOT_AVAILABLE
+
+# 14. INTERACCIONES Y ADITIVIDAD
+
+Esta sección es obligatoria.
+
+Cuando cambian simultáneamente:
+
+- kg;
+- descuento;
+- margen;
+- HG;
+
+pueden existir términos de interacción.
+
+La auditoría debe determinar si una descomposición tipo:
+
+efecto volumen
++
+efecto descuento
++
+efecto margen
++
+efecto HG
+
+puede sumar exactamente al Delta.
+
+Analizar:
+
+- secuencial bridge;
+- one-factor-at-a-time;
+- residual/interactions;
+- Shapley decomposition;
+- cualquier método ya existente en repo.
+
+NO implementar ninguno.
+
+Para cada opción documentar:
+
+- exact additivity;
+- order dependence;
+- interpretability;
+- computational cost;
+- reproducibility;
+- suitability for executive explanation.
+
+El siguiente FIX no debe elegir un método arbitrario.
+
+# 15. DRIVER VOLUMEN / KG
+
+Determinar físicamente si puede afirmarse:
+
+- kg A;
+- kg B;
+- delta kg;
+- contribución monetaria atribuible al cambio de kg.
+
+No basta con decir:
+
+“bajó venta”.
+
+Debe distinguir:
+
+venta/kg
+vs
+Delta Ingreso MXN.
+
+# 16. DRIVER DESCUENTO
+
+Recordatorio semántico:
+
+DESCUENTO/KG es métrica de cliente.
+
+MARGEN es métrica de planta.
+
+Nunca llamar:
+
+“margen del cliente”
+
+al descuento/kg.
+
+Auditar:
+
+- descuento A;
+- descuento B;
+- unidad;
+- signo;
+- source;
+- contribución posible en MXN.
+
+# 17. DRIVER MARGEN
+
+Margen es plant-level.
+
+Auditar:
+
+- margen A;
+- margen B;
+- version;
+- period;
+- financial state;
+- si el mismo margen aplica a todos los clientes;
+- cómo afecta cada cliente.
+
+La respuesta futura debe poder decir conceptualmente:
+
+“Parte del deterioro está asociada a margen de planta”
+
+y NO:
+
+“este cliente tiene mal margen”
+
+salvo que exista una métrica realmente client-level distinta.
+
+# 18. DRIVER HG
+
+Localizar físicamente qué representa HG.
+
+Documentar:
+
+- definición;
+- source;
+- unidad;
+- signo;
+- periodo;
+- nivel de agregación;
+- fórmula;
+- controlabilidad.
+
+No asumir que HG es controlable o no controlable.
+
+Determinarlo.
+
+# 19. DELTA GASTOS
+
+Esta auditoría SÍ incluye Delta Gastos.
+
+La pregunta habla de rentabilidad completa.
+
+Localizar físicamente:
+
+- módulo;
+- endpoint;
+- helper;
+- tablas;
+- forecast;
+- actual;
+- period;
+- category;
+- concept;
+- plant scope;
+- unit MXN;
+- sign convention.
+
+Determinar si existe hoy:
+
+Delta Gastos = gasto B - gasto A
+
+o una semántica distinta.
+
+No asumir.
+
+# 20. CONTRIBUYENTES DE GASTOS
+
+Determinar el nivel de detalle físicamente disponible:
+
+- cuenta;
+- concepto;
+- categoría;
+- centro de costo;
+- proveedor;
+- proyecto;
+- gasto operativo;
+- gasto extraordinario;
+- inversión;
+- otro.
+
+Responder:
+
+¿Director IA puede decir cuáles son los 5 gastos que más deterioran rentabilidad?
+
+Si no:
+explicar frontera.
+
+# 21. RECONCILIACIÓN DE GASTOS
+
+Auditar si:
+
+SUM(delta gastos detallados)
+
+reconcilia con el componente de gastos usado en rentabilidad.
+
+Identificar:
+
+- exclusiones;
+- inversiones;
+- reclasificaciones;
+- gastos no operativos;
+- rounding;
+- forecast;
+- partidas sin detalle.
+
+No asumir reconciliación.
+
+# 22. CLASIFICACIÓN DE CONTROLABILIDAD
+
+Auditar si puede construirse de forma respaldada una clasificación como:
+
+DIRECTAMENTE_ACCIONABLE
+INFLUENCIABLE
+PLANT_LEVEL
+EXTERNO_NO_CONTROLABLE
+UNKNOWN
+
+No implementarla.
+
+Para cada driver evaluar evidencia.
+
+Ejemplos conceptuales, NO reglas definitivas:
+
+kg de cliente:
+posiblemente influenciable comercialmente.
+
+descuento cliente:
+posiblemente directamente accionable con autorización.
+
+margen de planta:
+plant-level / fuera del control comercial directo.
+
+gasto discrecional:
+potencialmente accionable.
+
+gasto contractual:
+puede no ser inmediatamente accionable.
+
+HG:
+pendiente de definición física.
+
+No codificar clasificación con intuición.
+
+# 23. PRIORIZACIÓN EJECUTIVA
+
+Auditar si los datos permiten construir en el futuro una prioridad basada en:
+
+1. impacto MXN;
+2. controlabilidad;
+3. reversibilidad;
+4. tiempo para actuar;
+5. evidencia disponible;
+6. riesgo comercial.
+
+NO diseñar score arbitrario.
+
+Determinar cuáles de estas dimensiones tienen fuente física real.
+
+# 24. COMENTARIOS
+
+Fuente conocida a auditar:
+
+arr.cliente_comentarios
+
+Determinar:
+
+- lookup;
+- identity;
+- fecha;
+- latest comment;
+- plant scope.
+
+La respuesta debe etiquetar:
+
+Comentario registrado:
 
 y no:
 
-frontend PROY logic
-+
-backend approximation distinta.
+Causa:
 
-Si la lógica canónica está atrapada en frontend, extraer el mínimo helper reutilizable de forma segura.
+# 25. CASO 20 CUMBRES
 
-No cambiar comportamiento visual.
+Referencia conceptual:
 
-No hacer HTTP interno.
+Comentario:
 
-## Periodo B
+FALLO LA LUZ Y LA BOMBA ES POR ESO QUE DISMINUYÓ SU VENTA
 
-Para la consulta:
+Auditar el tratamiento correcto.
 
-`... para septiembre`
+Si datos muestran:
 
-con septiembre abierto:
+kg B < kg A
 
-A = agosto real
-B = septiembre forecast
+se puede afirmar:
 
-B debe consumir el mismo target PROY efectivo de septiembre que Clientes por mes.
+HECHO:
+menor volumen.
 
-No usar:
+Si el comentario existe:
 
-compromiso_lines.venta_ton crudo
+CONTEXTO:
+la operación registró falla de luz/bomba.
 
-si no representa el target efectivo que muestra la superficie.
+No concluir automáticamente:
 
-## Periodo A
+CAUSA PROBADA:
+la bomba causó X pesos de deterioro.
 
-No romper la semántica del mes A real/cerrado.
+# 26. CASO GRUPO MOVE
 
-El FIX está dirigido al target forecast del periodo B.
+Comentario:
 
-No transformar agosto real en forecast.
+COMPRA DIARIAMENTE
 
-## upload_day
+Este caso debe demostrar que un comentario puede ser poco explicativo.
 
-Es parte de scope porque la auditoría demostró que participa en la resolución PROY/overlay.
+No forzar una narrativa causal.
 
-Rastrear y reutilizar su semántica exacta.
+La respuesta futura debe poder decir:
 
-No inventar reglas por día.
+Comentario registrado, pero no explica por sí mismo el deterioro.
 
-## React simulations
+# 27. ÚLTIMA COMPRA
 
-FUERA DEL FIX.
+Mapear físicamente si existe fuente para:
 
-La auditoría demostró que el Excel puede incorporar simulaciones locales React.
+- última fecha de compra;
+- kg de esa transacción;
+- total mensual.
 
-Director IA independiente NO tiene que reproducir estado local no persistido del navegador en esta tarea.
+Separar:
 
-La paridad requerida es contra:
-
-estado económico base/canónico disponible al backend.
-
-No intentar leer localStorage o React state desde Director IA.
-
-No mandar simulaciones al servidor.
-
-## Margen / HG
-
-NO cambiar.
-
-Auditoría:
-misma fuente si misma versión.
-
-Mantener ingresoClienteMarginal canónico.
-
-## Descuento
-
-NO cambiar.
-
-Usar descuento persistido/base ya establecido.
-
-No incorporar simulaciones React.
-
-## Client identity
-
-NO cambiar salvo evidencia de regresión.
-
-La auditoría rechazó client identity como FIRST_BAD_BOUNDARY.
-
-## Ranking
-
-NO cambiar algoritmo.
-
-Después del Delta correcto:
-
-delta < 0
-→ más negativo a menos negativo
-→ Top N.
-
-MOVE-like debe recuperarse naturalmente por corregir el target, no por reglas especiales.
-
-## Negative count
-
-Debe derivarse del mismo dataset corregido.
-
-No hardcodear 297/298.
-
-## Regression-first obligatorio
-
-Crear:
-
-R-DELTA-CUT-001..010
-
-ANTES de producto.
-
-### R-DELTA-CUT-001 — effective target source
-
-Fixture donde:
-
-raw compromiso venta_ton
-!=
-PROY efectivo.
-
-Expected:
-
-Director IA usa PROY efectivo.
-
-Debe fallar con producto actual.
-
-### R-DELTA-CUT-002 — upload_day / overlay
-
-Fixture determinístico donde upload_day altera el target efectivo.
-
-Expected:
-
-misma resolución que Clientes por mes.
-
-### R-DELTA-CUT-003 — raw compromiso rejection
-
-Demostrar explícitamente que la capacidad ejecutiva NO toma compromiso crudo cuando PROY efectivo difiere.
-
-### R-DELTA-CUT-004 — kg B parity
-
-Mismo MTD + mismo target efectivo.
-
-Expected:
-kg B idéntico a Clientes por mes.
-
-### R-DELTA-CUT-005 — ingreso B parity
-
-Con ingresoClienteMarginal compartido.
-
-Expected:
-Ingreso B idéntico.
-
-### R-DELTA-CUT-006 — Delta/sign parity
-
-Caso conceptual donde elegir compromiso crudo altera materialmente Delta/sign.
-
-Expected:
-signo del source-of-truth.
-
-### R-DELTA-CUT-007 — ranking boundary
-
-Fixture conceptual MOVE-like / ASOCIACION-like.
-
-Con target equivocado:
-cliente correcto cae debajo del corte.
-
-Con PROY:
-ocupa la posición correcta.
-
-No hardcodear clientes reales.
-
-### R-DELTA-CUT-008 — closed A protection
-
-A real/cerrado permanece estable.
-
-El cambio de target B no debe reproyectar A.
-
-### R-DELTA-CUT-009 — no React simulation dependency
-
-El cálculo backend debe ser determinístico sin localStorage/React state.
-
-### R-DELTA-CUT-010 — single snapshot TopN/count/sum
-
-Con un mismo dataset + target efectivo:
-
-- Delta por fila;
-- cantidad negativos;
-- orden;
-- Top N;
-- suma Top N
-
-deben derivar de una sola ejecución coherente.
-
-## BEFORE obligatorio
-
-Antes de modificar producto:
-
-TIER 1 = PASS
-R-RUNTIME = PASS
-R-MOVEMENT = PASS
-R-DELTA-INCOME = PASS
-R-DELTA-PARITY = PASS
-
-R-DELTA-CUT nuevos:
-
-deben quedar rojos donde existe TARGET_PROY_SOURCE mismatch.
-
-Como mínimo:
-
-001 FAIL
-002 FAIL
-003 FAIL
-004 FAIL
-005 FAIL
-006 FAIL
-007 FAIL
-010 FAIL
-
-PRE-DEPLOY --gate = FAIL.
-
-Si estos tests quedan verdes con producto actual:
-STOP.
+LAST_TRANSACTION
+vs
+MONTH_TOTAL.
 
 No implementar.
 
-## FIRST_BAD_BOUNDARY en fixture
+# 28. COMPROMISOS
 
-Reproducir:
+Localizar si existe una estructura física para:
 
-TARGET_PROY_SOURCE
+cliente
+→ compromiso
+→ fecha
+→ cantidad
+→ unidad
+→ responsable.
 
-Debe quedar demostrada la cadena:
+Determinar si está en:
 
-raw compromiso target
+- comentarios;
+- Action Register;
+- dicf_acciones;
+- otra tabla.
+
+No inferir compromiso desde cualquier comentario libre.
+
+# 29. CUMPLIMIENTO DE COMPROMISOS
+
+NO implementar.
+
+Solo determinar si técnicamente podría compararse:
+
+promesa
 vs
-effective PROY target
-→ targetKg distinto
-→ factor distinto
-→ kg B distinto
-→ ingreso B distinto
-→ Delta/ranking distinto.
+compra real posterior.
 
-## Cambio de producto
+Identificar requisitos:
 
-Modificar únicamente lo necesario para que la ruta:
+- identity;
+- quantity unit;
+- date;
+- tolerance;
+- transaction evidence.
 
-computeDeltaIngresoClientesPorMes
+Caso BAYAM puede usarse como referencia conceptual, no hardcode.
 
-obtenga el target efectivo desde la misma semántica PROY que Clientes por mes.
+# 30. ACCIONES
 
-No convertir globalmente otros consumidores de:
+Auditar físicamente:
 
-defaultLoadIgfPlantMetrics
+cliente
+→ acción abierta
+→ responsable
+→ fecha compromiso
+→ status
 
-si requieren compromiso crudo.
+Determinar si existe relación canónica.
 
-Preferir resolver el target específico de esta capacidad.
+No consultar Action Register a ciegas.
 
-## Protección de otras superficies
+Si solo existe texto sin cliente_key:
+decirlo.
 
-No romper:
+# 31. IDENTIDAD
+
+Crear matriz:
+
+SOURCE
+| IDENTITY KEY
+| PLANT
+| CLIENT NAME
+| CANAL
+| GRUPO
+| SUBCANAL
+| CLIENT_KEY
+| SAFE JOIN?
+
+Como mínimo:
 
 - Clientes por mes;
-- Export Excel;
-- IGF Forecast ARR;
-- computeDeltaIngresoForecast OLS;
-- M9 historical Delta Ingreso;
-- commercial_trend;
-- movement;
-- client_profile;
-- DICF;
-- historical_margin;
+- cliente comentarios;
+- dicf_acciones;
+- Action Register;
+- transaction history;
+- Delta Ingreso;
+- gastos si aplican.
+
+No fuzzy matching.
+
+# 32. PLANNER / ROUTING
+
+Trazar la pregunta exacta:
+
+¿Qué está provocando el deterioro de la rentabilidad y sobre qué puedo actuar?
+
+Recorrer:
+
+question
+→ planner
+→ rules
+→ intent candidates
+→ evidence request
+→ pack/router
+→ clarification/unknown.
+
+Determinar FIRST_BAD_BOUNDARY para routing.
+
+Investigar intents existentes:
+
+- financial_diagnosis;
+- plant_diagnosis;
+- delta_income;
+- expense_analysis;
+- investment_analysis;
+- other relevant intents.
+
+No crear intent nuevo todavía.
+
+Responder:
+
+¿puede reutilizarse un intent existente con contrato ampliado?
+
+o
+
+¿requiere un intent ejecutivo nuevo?
+
+Recomendar, no implementar.
+
+# 33. CONVERSATION CONTINUITY
+
+Auditar también:
+
+Pregunta 1:
+¿Cómo va la rentabilidad de septiembre?
+
+Pregunta 2:
+¿Qué está provocando el deterioro y sobre qué puedo actuar?
+
+Determinar si el segundo turno puede heredar:
+
+- planta;
+- periodo;
+- KPI;
+- financial state.
+
+No depender obligatoriamente de continuidad para la pregunta standalone.
+
+# 34. EVIDENCE CONTRACT
+
+La respuesta futura debe identificar evidencia por afirmación.
+
+Crear propuesta conceptual de evidence buckets:
+
+PROFITABILITY_EVIDENCE
+INCOME_DELTA_EVIDENCE
+EXPENSE_DELTA_EVIDENCE
+CLIENT_DRIVER_EVIDENCE
+COMMENT_CONTEXT
+ACTION_EVIDENCE
+
+No modificar IES/RE/EKS/contracts.
+
+Solo mapear compatibilidad.
+
+# 35. CALIDAD / CONFIANZA
+
+Auditar si cada conclusión puede clasificarse:
+
+PROVEN
+SUPPORTED
+CONTEXT_ONLY
+UNKNOWN
+
+Ejemplo:
+
+“Público deteriora $X”
+→ PROVEN si source parity.
+
+“El deterioro se relaciona matemáticamente con menor kg”
+→ SUPPORTED/PROVEN según decomposition.
+
+“La operación escribió que falló la bomba”
+→ CONTEXT_ONLY.
+
+“La falla de la bomba causó exactamente $X”
+→ UNKNOWN salvo evidencia adicional.
+
+# 36. FORMATO EJECUTIVO FUTURO
+
+Sin implementar, evaluar si los datos soportarían una respuesta como:
+
+Rentabilidad:
+- Operativa: ...
+- Final: ...
+- Cambio vs agosto: ...
+
+Qué la deteriora:
+1. Ingreso: -$...
+2. Gastos: -$...
+3. Otros/residual: ...
+
+Clientes con mayor presión:
+1. Cliente A: -$...
+   Driver calculado: ...
+   Accionable: ...
+   Comentario registrado: ...
+
+Gastos con mayor presión:
+1. Concepto A: +$...
+   Accionable: ...
+
+Prioridades:
+1. ...
+2. ...
+3. ...
+
+No producir este formato como producto todavía.
+
+Auditar si cada campo es físicamente soportable.
+
+# 37. ADDITIVITY / RECONCILIATION GATE
+
+Antes de recomendar implementación debe responderse:
+
+A. ¿Delta Ingreso detallado reconcilia con rentabilidad?
+
+B. ¿Delta Gastos detallado reconcilia con rentabilidad?
+
+C. ¿Ingreso + gastos explican 100% del cambio?
+
+D. Si existe residual:
+qué representa.
+
+E. ¿los drivers por cliente suman al Delta del cliente?
+
+F. ¿los clientes suman al Delta Ingreso total?
+
+Si alguna respuesta es NO:
+documentar residual y no ocultarlo.
+
+# 38. HIPÓTESIS OBLIGATORIAS
+
+Clasificar cada una:
+
+PROVEN
+REJECTED
+NOT_PROVEN
+NOT_PROVEN_WITHOUT_LIVE_DB
+
+H1
+Existe una definición física inequívoca de rentabilidad operativa.
+
+H2
+Existe una definición física inequívoca de rentabilidad final.
+
+H3
+El cambio de rentabilidad puede reconciliarse con Delta Ingreso y Delta Gastos.
+
+H4
+Delta Ingreso por clientes reconcilia con el componente de ingreso de planta.
+
+H5
+Existe Delta Gastos físico utilizable por Director IA.
+
+H6
+Delta Gastos puede desglosarse en contribuyentes.
+
+H7
+Ya existe un helper de decomposition/bridge de rentabilidad.
+
+H8
+Ya existe un helper de decomposition de Delta Ingreso por kg/descuento/margen/HG.
+
+H9
+Existe interacción matemática entre los drivers de ingreso.
+
+H10
+Puede construirse una atribución aditiva exacta.
+
+H11
+La atribución actual, si existe, es independiente del orden.
+
+H12
+Volumen puede cuantificarse en MXN como contribution.
+
+H13
+Descuento puede cuantificarse en MXN como contribution.
+
+H14
+Margen puede cuantificarse en MXN como contribution.
+
+H15
+HG puede cuantificarse en MXN como contribution.
+
+H16
+Existe suficiente evidencia física para clasificar controlabilidad.
+
+H17
+Comentarios están disponibles de forma segura después del cálculo.
+
+H18
+Comentarios pueden mostrarse sin causal inference.
+
+H19
+Última transacción está físicamente disponible.
+
+H20
+Compromisos tienen estructura suficiente para evaluación futura.
+
+H21
+Acciones tienen relación canónica segura con cliente.
+
+H22
+La pregunta exacta falla primero en PLANNER/ROUTING.
+
+H23
+financial_diagnosis puede ser reutilizado para esta capacidad.
+
+H24
+La pregunta puede resolverse standalone sin contexto heredado.
+
+# 39. RUNTIME / GOLDEN COVERAGE ACTUAL
+
+Auditar read-only cobertura existente para:
+
+- profitability;
+- financial diagnosis;
+- Delta Ingreso;
+- Delta Gastos;
+- expense analysis;
+- driver decomposition;
 - comments;
-- financial diagnosis.
+- causal guardrail;
+- controlability;
+- continuity.
 
-## R-DELTA-PARITY
+No modificar tests.
 
-Debe continuar PASS.
+Identificar false-greens potenciales.
 
-No debilitarlo.
+# 40. FUTURE REGRESSION PACK PROPUESTO
 
-Ahora R-DELTA-CUT debe cubrir la frontera que R-DELTA-PARITY no observaba:
+NO implementar.
 
-target PROY real vs compromiso raw.
+Proponer como mínimo:
 
-## LIVE_DB
+R-RENT-DRIVER-001
+Pregunta exacta routea a diagnóstico de rentabilidad.
 
-NO.
+R-RENT-DRIVER-002
+Periodo A/B correcto.
+
+R-RENT-DRIVER-003
+Rentabilidad operativa source-of-truth.
+
+R-RENT-DRIVER-004
+Rentabilidad final source-of-truth.
+
+R-RENT-DRIVER-005
+Delta Ingreso reconciliado.
+
+R-RENT-DRIVER-006
+Delta Gastos reconciliado.
+
+R-RENT-DRIVER-007
+Bridge total aditivo.
+
+R-RENT-DRIVER-008
+Top clientes negativos.
+
+R-RENT-DRIVER-009
+Top gastos negativos.
+
+R-RENT-DRIVER-010
+Volume driver contribution.
+
+R-RENT-DRIVER-011
+Discount driver contribution.
+
+R-RENT-DRIVER-012
+Margin driver contribution.
+
+R-RENT-DRIVER-013
+HG driver contribution.
+
+R-RENT-DRIVER-014
+Drivers sum to client Delta.
+
+R-RENT-DRIVER-015
+Controlability classification grounded.
+
+R-RENT-DRIVER-016
+Comment shown as context, not cause.
+
+R-RENT-DRIVER-017
+Missing evidence fails closed.
+
+R-RENT-DRIVER-018
+Standalone question works.
+
+R-RENT-DRIVER-019
+Continuity question works.
+
+R-RENT-DRIVER-020
+No blind Action Register query.
+
+# 41. LIVE_DB
 
 live_db_authorized: NO.
 
-No consultar producción.
+NO consultar producción.
 
-Los fixtures deben reconstruir semántica de código de forma determinística.
+Esta tarea debe agotar:
 
-## AFTER obligatorio
+- code tracing;
+- existing fixtures;
+- helper inspection;
+- schema references;
+- deterministic local reasoning.
 
-TIER 1 = PASS
-R-RUNTIME = PASS
-R-MOVEMENT = PASS
-R-DELTA-INCOME = PASS
-R-DELTA-PARITY = PASS
-R-DELTA-CUT-001..010 = PASS
+Si una reconciliación numérica real requiere datos de producción:
 
-HTTP 5xx = 0
-HARNESS FAILURE = 0
+marcar:
 
-PRE-DEPLOY --gate = PASS
+NOT_PROVEN_WITHOUT_LIVE_DB
 
-Ejecutar suites relacionadas con:
+y preparar sondas mínimas.
 
-- ARR;
-- Clientes por mes;
-- IGF Forecast;
-- PROY/overlay;
-- upload_day;
-- compromiso;
-- Delta Ingreso;
-- periodo;
-- margin/HG;
-- discount;
-- comments;
-- routing.
+NO ejecutar.
 
-## Evidencia LIVE posterior
+# 42. PROBES SI SON NECESARIOS
 
-Después de deploy NO comparar contra números históricos a ciegas.
+Preparar únicamente si resultan indispensables.
 
-Generar/exportar un Excel fresco y lanzar la pregunta LIVE lo más cerca posible en el tiempo.
+Separar:
 
-Comparar:
+A. profitability KPI inputs
+B. Delta Ingreso totals
+C. Delta Gastos totals
+D. top expense details
+E. margin/HG/version
+F. client drivers
+G. comments/actions
 
-- universo de negativos;
-- Top 5;
-- cada Delta;
-- suma Top 5.
+Preferir sondas JS read-only que reutilicen helpers reales cuando SQL duplicaría lógica.
 
-Los valores:
+No escribir una fórmula SQL aproximada para “validar” otra fórmula.
 
--227423
--221564
--169708
--102639
--99074
+# 43. FIRST_BAD_BOUNDARIES
 
-son evidencia del corte observado, no fixtures eternos.
+La auditoría puede descubrir más de una frontera.
 
-## Fuera de scope
+Debe separar al menos:
 
-- fórmula nueva;
-- Delta Gastos;
-- alertas;
-- notificaciones;
-- nuevos/reactivados;
-- commitment fulfillment;
-- causal inference;
-- React simulations remotas;
-- localStorage;
-- DB/schema;
-- migrations;
-- contracts;
-- LIVE_DB;
-- cambio visual;
-- merge;
-- deploy;
-- next task.
+ROUTING_FIRST_BAD_BOUNDARY
 
-## Completion
+DATA_FIRST_BAD_BOUNDARY
 
-DONE_PENDING_REVIEW.
+ATTRIBUTION_FIRST_BAD_BOUNDARY
 
-NO merge.
-NO deploy.
-NO next task.
+ACTIONABILITY_FIRST_BAD_BOUNDARY
+
+Ejemplos válidos:
+
+PLANNER
+CAPABILITY_COVERAGE
+PROFITABILITY_SOURCE
+DELTA_EXPENSE_SOURCE
+RECONCILIATION
+DRIVER_ATTRIBUTION_METHOD
+CLIENT_IDENTITY
+ACTION_IDENTITY
+CONTROLABILITY_CONTRACT
+
+No aceptar:
+
+“falta inteligencia”
+“LLM no entiende”
+“faltan datos”
+
+sin una frontera física.
+
+# 44. CRITERIO PARA RECOMENDAR SIGUIENTE FIX
+
+Solo recomendar implementación si la auditoría puede responder:
+
+1. cuál es la fuente canónica de rentabilidad;
+2. cuál es la fuente canónica de ingreso;
+3. cuál es la fuente canónica de gastos;
+4. cómo reconciliarlos;
+5. qué attribution method se recomienda y por qué;
+6. qué puede clasificarse como accionable;
+7. qué contexto puede mostrarse;
+8. cómo debe routearse la pregunta.
+
+Si esto no queda demostrado:
+NO recomendar un megapatch.
+
+Dividir en slices.
+
+# 45. POSIBLES SLICES FUTUROS
+
+La auditoría debe decidir físicamente, no asumir, si conviene separar:
+
+SLICE A
+Routing + profitability bridge.
+
+SLICE B
+Income driver decomposition.
+
+SLICE C
+Expense driver decomposition.
+
+SLICE D
+Actionability classification.
+
+SLICE E
+Comments/actions enrichment.
+
+Preferir slices pequeños, testeables y reversibles.
+
+NO implementarlos.
+
+# 46. IN SCOPE
+
+- planner read-only
+- Director IA routing
+- financial_diagnosis
+- plant_diagnosis
+- profitability KPIs
+- IGF
+- Delta Ingreso
+- Clientes por mes
+- computeClientesDescuentoMes
+- ingresoClienteMarginal
+- effective PROY target
+- Delta Gastos / expense sources
+- kg
+- descuento
+- margen
+- HG
+- client comments
+- last transaction loaders
+- commitment/action loaders
+- client identity
+- existing runtime/golden tests read-only
+- CURRENT_TASK
+- audit report
+
+# 47. OUT OF SCOPE
+
+- implementation
+- modifying tests
+- new formulas
+- alerts
+- notifications
+- automatic commitment fulfillment
+- new/reactivated
+- DB/schema
+- migrations
+- LIVE_DB
+- frontend changes
+- contracts
+- IES changes
+- RE changes
+- EKS changes
+- merge
+- deploy
+- next task implementation
+
+# 48. PROHIBICIONES
+
+No inventar una fórmula de rentabilidad.
+
+No asumir que Delta Ingreso + Delta Gastos reconcilia sin probarlo.
+
+No llamar descuento “margen del cliente”.
+
+No atribuir comentarios como causas.
+
+No inventar controlabilidad.
+
+No fuzzy matching.
+
+No consultar Action Register a ciegas.
+
+No hardcodear clientes LIVE.
+
+No ocultar residual de reconciliación.
+
+No modificar tests.
+
+No modificar producto.
+
+No LIVE_DB.
+
+No merge.
+
+No deploy.
+
+No next task.
+
+# 49. ENTREGABLES
+
+1. Executive summary ≤15 líneas.
+
+2. Exact-question routing trace.
+
+3. Rentabilidad operativa physical chain.
+
+4. Rentabilidad final physical chain.
+
+5. Period/forecast semantics.
+
+6. Profitability bridge analysis.
+
+7. Delta Ingreso physical chain.
+
+8. Delta Ingreso reconciliation.
+
+9. Delta Gastos physical chain.
+
+10. Delta Gastos reconciliation.
+
+11. Income contributor analysis.
+
+12. Expense contributor analysis.
+
+13. Economic input map.
+
+14. Existing decomposition helper search.
+
+15. Interaction/additivity analysis.
+
+16. Attribution method comparison.
+
+17. Volume driver analysis.
+
+18. Discount driver analysis.
+
+19. Margin driver analysis.
+
+20. HG driver analysis.
+
+21. Controllability evidence matrix.
+
+22. Comments/context chain.
+
+23. 20 CUMBRES semantic example.
+
+24. GRUPO MOVE semantic example.
+
+25. Last transaction chain.
+
+26. Commitments chain.
+
+27. Actions chain.
+
+28. Identity matrix.
+
+29. Evidence-quality classification.
+
+30. Continuity analysis.
+
+31. H1–H24 disposition.
+
+32. Current Runtime/Golden coverage.
+
+33. False-green risks.
+
+34. Proposed R-RENT-DRIVER-001..020.
+
+35. ROUTING_FIRST_BAD_BOUNDARY.
+
+36. DATA_FIRST_BAD_BOUNDARY.
+
+37. ATTRIBUTION_FIRST_BAD_BOUNDARY.
+
+38. ACTIONABILITY_FIRST_BAD_BOUNDARY.
+
+39. Root causes.
+
+40. Reconciliation residuals / unknowns.
+
+41. Recommended future response contract.
+
+42. Recommended implementation slices.
+
+43. Recommended immediate next FIX only.
+
+44. LIVE_DB probes if indispensable.
+
+45. Branch.
+
+46. commit SHA if allowed.
+
+47. git status --short.
+
+# 50. COMPLETION
+
+DONE_PENDING_REVIEW
+
+si puede definirse una arquitectura física segura para responder:
+
+¿Qué está provocando el deterioro de la rentabilidad y sobre qué puedo actuar?
+
+sin inventar causalidad ni fórmulas.
+
+BLOCKED
+
+si no puede reconciliarse rentabilidad/ingreso/gastos o no puede definirse attribution/actionability sin datos adicionales.
+
+Si queda BLOCKED:
+indicar exactamente qué evidencia falta.
+
+No implementación.
+
+No next task.
 
 STOP.
