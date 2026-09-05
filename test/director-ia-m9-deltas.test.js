@@ -82,6 +82,16 @@ describe("M9 intent y gate", () => {
     assert.equal(planDirectorIaQuestion("¿Cómo cambió la venta?").intent, "delta_sales");
     assert.equal(planDirectorIaQuestion("¿Cómo cambió el descuento?").intent, "delta_discount");
     assert.equal(planDirectorIaQuestion("¿Cómo cambió el ingreso?").intent, "delta_income");
+    const forecastPlan = planDirectorIaQuestion(
+      "Dame 5 clientes que tengan el mayor impacto negativo en el ingreso para septiembre."
+    );
+    assert.equal(forecastPlan.intent, "delta_income");
+    assert.equal(forecastPlan.evidence.some((e) => e.value === "delta_ingreso_forecast"), true);
+    const commentsPlan = planDirectorIaQuestion(
+      "Dame 5 clientes que tengan el mayor impacto negativo en el ingreso para el mes de septiembre, y ponme sus comentarios."
+    );
+    assert.equal(commentsPlan.intent, "delta_income");
+    assert.notEqual(commentsPlan.intent, "commercial_trend");
     assert.equal(detectUnsupportedDirectorIaDomain("¿Cómo cambió la venta?"), null);
     assert.equal(detectUnsupportedDirectorIaDomain("¿Cómo cambió el descuento?"), null);
     assert.equal(detectUnsupportedDirectorIaDomain("¿Cómo cambió el ingreso?"), null);

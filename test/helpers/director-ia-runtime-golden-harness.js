@@ -174,6 +174,110 @@ function isMovementCase(runtimeCase) {
   return runtimeCase && String(runtimeCase.id || "").startsWith("R-MOVEMENT-");
 }
 
+function isDeltaIncomeCase(runtimeCase) {
+  return runtimeCase && String(runtimeCase.id || "").startsWith("R-DELTA-INCOME-");
+}
+
+function forecastNegativeRows() {
+  return [
+    { cliente: "CLIENTE_N1", ingresoA: 400000, ingresoB: 150000, deltaIngreso: -250000, kgA: 10000, kgB: 4000 },
+    { cliente: "CLIENTE_N2", ingresoA: 300000, ingresoB: 120000, deltaIngreso: -180000, kgA: 8000, kgB: 3500 },
+    { cliente: "CLIENTE_N3", ingresoA: 220000, ingresoB: 100000, deltaIngreso: -120000, kgA: 7000, kgB: 3200 },
+    { cliente: "CLIENTE_N4", ingresoA: 160000, ingresoB: 70000, deltaIngreso: -90000, kgA: 5000, kgB: 2200 },
+    { cliente: "CLIENTE_N5", ingresoA: 110000, ingresoB: 60000, deltaIngreso: -50000, kgA: 4000, kgB: 2100 },
+    { cliente: "CLIENTE_N6", ingresoA: 80000, ingresoB: 50000, deltaIngreso: -30000, kgA: 3000, kgB: 1800 },
+    { cliente: "CLIENTE_N7", ingresoA: 40000, ingresoB: 30000, deltaIngreso: -10000, kgA: 2000, kgB: 1500 },
+    { cliente: "CLIENTE_POS", ingresoA: 20000, ingresoB: 100000, deltaIngreso: 80000, kgA: 1000, kgB: 4000 },
+  ];
+}
+
+function forecastCommentsByName() {
+  return new Map([
+    [
+      "cliente_n1",
+      [{ body: "ocupación baja del condominio", author_name: "ZP", created_at: "2026-08-31T10:00:00-06:00" }],
+    ],
+    [
+      "cliente_n3",
+      [{ body: "comentario por nombre no por key", author_name: "ZP", created_at: "2026-08-30T09:00:00-06:00" }],
+    ],
+  ]);
+}
+
+function deltaIncomeForecastDeps() {
+  return {
+    resolveDeltaIngresoForecastPlanta: async () => ({ id: 1, nombre: "Acapulco", clave: "E3" }),
+    getPlantCodeArrFromPlantaNombre: async () => "Acapulco",
+    computeDeltaIngresoForecast: async (_c, _plant, yearA, monthA, yearB, monthB) => ({
+      planta: "Acapulco",
+      periodoA: `${yearA}-${String(monthA).padStart(2, "0")}`,
+      periodoB: `${yearB}-${String(monthB).padStart(2, "0")}`,
+      margenA: 8,
+      margenB: 7.5,
+      rows: forecastNegativeRows(),
+      source_helper: "computeDeltaIngresoForecast",
+    }),
+    loadRecentCommentsByClienteNombres: async (_c, opts = {}) => {
+      const all = forecastCommentsByName();
+      const out = new Map();
+      const names = (opts.nombres || []).map((n) => String(n || "").trim().toLowerCase());
+      for (const n of names) {
+        if (all.has(n)) out.set(n, all.get(n));
+      }
+      return out;
+    },
+  };
+}
+
+function incomeForecastPack(body) {
+  return (body && body.delta_ingreso_forecast) || {};
+}
+
+function incomeForecastRows(body) {
+  const pack = incomeForecastPack(body);
+  const rows = pack.top_negatives || pack.rows || pack.clientes || [];
+  return Array.isArray(rows) ? rows : [];
+}
+
+function findIncomeRow(body, name) {
+  const want = String(name || "").trim().toUpperCase();
+  return (
+    incomeForecastRows(body).find(
+      (r) => String((r && (r.cliente || r.cliente_norm)) || "").trim().toUpperCase() === want
+    ) || null
+  );
+}
+
+function incomeDelta(row) {
+  if (!row) return null;
+  if (row.delta_ingreso != null) return Number(row.delta_ingreso);
+  if (row.deltaIngreso != null) return Number(row.deltaIngreso);
+  return null;
+}
+
+function incomeCommentBlob(row, answer) {
+  const c = row && (row.comment || row.comentario || row.registered_comment);
+  const bits = [
+    c && c.body,
+    c && c.text,
+    c && c.created_at,
+    row && row.comment_body,
+    answer,
+  ];
+  return bits.filter(Boolean).join(" ");
+}
+
+function looksLikeCausalComment(answer, commentText) {
+  const blob = normalizeBlob(answer);
+  const snippet = normalizeBlob(commentText).slice(0, 24);
+  if (!snippet || !blob.includes(snippet)) return false;
+  return /la ca[ií]da (ocurri[oó]|fue)|la causa (de la ca[ií]da )?fue|disminuy[oó] porque|ca[ií]da por\b/.test(blob);
+}
+
+function looksLikeRentabilidadCaera(answer) {
+  return /la rentabilidad caer/i.test(String(answer || ""));
+}
+
 function movementTrendDeps() {
   return {
     resolveCommercialTrendPlanta: async () => ({ id: 1, nombre: "Acapulco", clave: "E3" }),
@@ -259,6 +363,17 @@ function packKind(body) {
   if (/discount|descuento/.test(blob)) return "descuento";
   if (mode === "conversation_clarification") return "clarification";
   if (mode === "client_profile") return "client_profile";
+  if (
+    mode === "delta_income_forecast" ||
+    parent === "delta_income_forecast" ||
+    bundle === "delta_income_forecast" ||
+    (body && body.delta_ingreso_forecast)
+  ) {
+    return "delta_income_forecast";
+  }
+  if (mode === "delta_income" || parent === "delta_income" || (body && body.delta_ingreso && !body.delta_ingreso_forecast)) {
+    return "delta_income";
+  }
   if (mode === "commercial_trend" || parent === "commercial_trend" || bundle === "commercial_trend") {
     return "commercial_trend";
   }
@@ -447,6 +562,7 @@ function installRuntimeDeps(chat, map, runtimeCase) {
     queryClientProfileHistorial: async () => new Map(),
     ...igfQueryFns(map),
     ...(isMovementCase(runtimeCase) ? movementTrendDeps() : {}),
+    ...(isDeltaIncomeCase(runtimeCase) ? deltaIncomeForecastDeps() : {}),
     openaiChat: async () => "STUB_OPENAI_TRANSPORT",
   });
 }
@@ -474,6 +590,10 @@ function clearRuntimeDeps(chat) {
     queryCommercialTrendSales: undefined,
     queryCommercialTrendDiscount: undefined,
     queryCommercialTrendCalendarKg: undefined,
+    resolveDeltaIngresoForecastPlanta: undefined,
+    getPlantCodeArrFromPlantaNombre: undefined,
+    computeDeltaIngresoForecast: undefined,
+    loadRecentCommentsByClienteNombres: undefined,
     openaiChat: undefined,
   });
 }
@@ -665,6 +785,120 @@ function evaluateLastTurn(runtimeCase, last) {
       );
       return { boundaries, http, pack };
     }
+  }
+  if (runtimeCase.require_forecast_period_b) {
+    const packFi = incomeForecastPack(body);
+    const b = String(packFi.periodo_b || packFi.periodoB || meta.periodo_b || "");
+    const maxFecha = String(packFi.anchored_to_max_fecha || packFi.max_fecha || "");
+    if (b !== runtimeCase.require_forecast_period_b) {
+      boundaries.USER_VISIBLE_OUTCOME = mark(
+        "FAIL",
+        `expected periodoB=${runtimeCase.require_forecast_period_b} got=${b || "none"}`
+      );
+      return { boundaries, http, pack };
+    }
+    if (runtimeCase.forbid_max_fecha_august && /2026-08/.test(maxFecha) && b === "2026-09") {
+      boundaries.USER_VISIBLE_OUTCOME = mark("FAIL", "septiembre etiquetado sobre MAX(fecha)=agosto");
+      return { boundaries, http, pack };
+    }
+  }
+  if (runtimeCase.require_mxn_primary) {
+    const row = findIncomeRow(body, runtimeCase.movement_focus);
+    const delta = incomeDelta(row);
+    if (delta !== runtimeCase.expected_delta_mxn) {
+      boundaries.USER_VISIBLE_OUTCOME = mark(
+        "FAIL",
+        `mxn focus=${runtimeCase.movement_focus} delta=${delta} expected=${runtimeCase.expected_delta_mxn}`
+      );
+      return { boundaries, http, pack };
+    }
+    if (/\bdelta\b/i.test(answer) && /\bkg\b/i.test(answer) && !/MXN|\$/.test(answer)) {
+      boundaries.USER_VISIBLE_OUTCOME = mark("FAIL", "kg presented as primary ranking metric");
+      return { boundaries, http, pack };
+    }
+  }
+  if (runtimeCase.require_top_n) {
+    const rows = incomeForecastRows(body);
+    const names = rows.map((r) => String((r && (r.cliente || r.cliente_norm)) || "").trim().toUpperCase());
+    const deltas = rows.map((r) => incomeDelta(r));
+    const expectedNames = (runtimeCase.expected_top_names || []).map((n) => String(n).toUpperCase());
+    const positives = rows.filter((r) => incomeDelta(r) > 0);
+    if (rows.length !== runtimeCase.require_top_n || names.join("|") !== expectedNames.join("|")) {
+      boundaries.USER_VISIBLE_OUTCOME = mark(
+        "FAIL",
+        `top n names=${names.join(",")} expected=${expectedNames.join(",")}`
+      );
+      return { boundaries, http, pack };
+    }
+    if ((runtimeCase.expected_top_deltas || []).some((d, i) => deltas[i] !== d) || positives.length) {
+      boundaries.USER_VISIBLE_OUTCOME = mark(
+        "FAIL",
+        `top n deltas=${deltas.join(",")} positives=${positives.length}`
+      );
+      return { boundaries, http, pack };
+    }
+  }
+  if (runtimeCase.require_comment_text) {
+    const row = findIncomeRow(body, runtimeCase.movement_focus);
+    const blob = incomeCommentBlob(row, answer);
+    if (!normalizeBlob(blob).includes(normalizeBlob(runtimeCase.require_comment_text))) {
+      boundaries.USER_VISIBLE_OUTCOME = mark(
+        "FAIL",
+        `missing comment focus=${runtimeCase.movement_focus}`
+      );
+      return { boundaries, http, pack };
+    }
+    if (runtimeCase.require_comment_date && !String(blob).includes(runtimeCase.require_comment_date)) {
+      boundaries.USER_VISIBLE_OUTCOME = mark("FAIL", `missing comment date=${runtimeCase.require_comment_date}`);
+      return { boundaries, http, pack };
+    }
+  }
+  if (runtimeCase.require_missing_comment) {
+    const row = findIncomeRow(body, runtimeCase.movement_focus);
+    const c = row && (row.comment || row.comentario);
+    const explicit =
+      (row && (row.comment_missing || row.sin_comentario)) ||
+      /sin comentario registrado/i.test(answer);
+    if ((c && (c.body || c.text)) || !explicit) {
+      boundaries.USER_VISIBLE_OUTCOME = mark("FAIL", "expected explicit missing comment");
+      return { boundaries, http, pack };
+    }
+  }
+  if (runtimeCase.forbid_causal_comment && looksLikeCausalComment(answer, runtimeCase.require_comment_text)) {
+    boundaries.USER_VISIBLE_OUTCOME = mark("FAIL", "comment converted to cause");
+    return { boundaries, http, pack };
+  }
+  if (runtimeCase.expected_impacto_top_n != null) {
+    const packFi = incomeForecastPack(body);
+    const shown = incomeForecastRows(body).reduce((s, r) => s + (incomeDelta(r) || 0), 0);
+    const declared = packFi.impacto_top_n != null ? Number(packFi.impacto_top_n) : shown;
+    if (declared !== runtimeCase.expected_impacto_top_n || shown !== runtimeCase.expected_impacto_top_n) {
+      boundaries.USER_VISIBLE_OUTCOME = mark(
+        "FAIL",
+        `impacto_top_n declared=${declared} shown=${shown} expected=${runtimeCase.expected_impacto_top_n}`
+      );
+      return { boundaries, http, pack };
+    }
+    if (looksLikeRentabilidadCaera(answer)) {
+      boundaries.USER_VISIBLE_OUTCOME = mark("FAIL", "impacto presented as rentabilidad final");
+      return { boundaries, http, pack };
+    }
+  }
+  if (runtimeCase.require_forecast_source) {
+    const packFi = incomeForecastPack(body);
+    const src = String(packFi.source_helper || packFi.source || meta.source_helper || "");
+    const kind = String(packFi.period_kind || meta.period_kind || "");
+    if (!/computeDeltaIngresoForecast/i.test(src) || /m9|period_compare/i.test(kind)) {
+      boundaries.USER_VISIBLE_OUTCOME = mark(
+        "FAIL",
+        `expected computeDeltaIngresoForecast; source=${src || "none"} period_kind=${kind || "none"}`
+      );
+      return { boundaries, http, pack };
+    }
+  }
+  if (runtimeCase.forbid_m9_historical && (pack === "delta_income" || meta.semantic_class === "delta_ingreso_period_compare")) {
+    boundaries.USER_VISIBLE_OUTCOME = mark("FAIL", "M9 historical used for forecast question");
+    return { boundaries, http, pack };
   }
   boundaries.USER_VISIBLE_OUTCOME = mark(
     "PASS",
