@@ -1,53 +1,46 @@
-task_id: FIX-DIRECTOR-IA-RENTABILIDAD-SNAPSHOT-UPLOAD-DAY-MINI-PARITY-001
+task_id: AUDIT-DIRECTOR-IA-RENTABILIDAD-LIVE-UPLOAD-DAY-RUNTIME-001
 
-task_type: FIX
-mode: REGRESSION_FIRST
+task_type: AUDIT
+mode: READ_ONLY_PHYSICAL_TRACE
 
 status: CLOSED
 authorized_by: "Human Approver"
-authorized_at: "2026-09-05T20:07:15-06:00"
-human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-05 - IMPLEMENTATION ONLY; NO MERGE; NO DEPLOY; NO LIVE_DB"
-implementation_authorized: YES
+authorized_at: "2026-09-05T20:47:13-06:00"
+human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-05 - READ_ONLY AUDIT + MINIMAL LIVE_DB READ-ONLY PROBES; NO IMPLEMENTATION; NO MERGE; NO DEPLOY"
+implementation_authorized: NO
 merge_authorized: NO
 deploy_authorized: NO
-live_db_authorized: NO
+live_db_authorized: YES
 
 max_attempts: 1
 
-result_report_path: docs/dev-loop/reports/FIX-DIRECTOR-IA-RENTABILIDAD-SNAPSHOT-UPLOAD-DAY-MINI-PARITY-001.md
+result_report_path: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-RENTABILIDAD-LIVE-UPLOAD-DAY-RUNTIME-001.md
 
-objective: Hacer que el snapshot de rentabilidad use, en periodo B abierto, el mismo upload_day efectivo que IGF Forecast ARR antes de computeIgfForecastMiniPayload, sin nueva fórmula y sin tocar Delta Ingreso.
+objective: Determinar qué upload_day y qué camino físico utiliza realmente el snapshot LIVE de Director IA para septiembre 2026, sin implementar.
 
 in_scope:
-  - resolver canónico de último corte mensual (loadArrLastUploadDay / resolveUploadDayLikeClientesPorMes o equivalente ya usado)
-  - loadKpiForMonth(B) / cableado mínimo del snapshot para pasar upload_day al mini
-  - R-RENT-CUT-001..010 (solo tras G1; ANTES de producto; sin mockear loadRentabilidadKpis)
+  - lectura de configureDirectorIaChat / assembleRentabilidadDeterioroSnapshot / loadKpiForMonth / resolveOpenMonthUploadDay / resolveUploadDayLikeClientesPorMes / loadIgfForecastMiniPayload / computeIgfForecastMiniPayload
+  - todos los configureDirectorIaChat del repo
+  - posible bypass por deps.loadRentabilidadKpis
+  - pérdida de upload_day en dependency injection
+  - diferencia entre cut Dashboard y latest arr.upload_log
+  - posible estado/cut explícito del frontend (solo lectura)
+  - preparación (no ejecución) de probes read-only si hace falta LIVE_DB
   - docs/dev-loop/CURRENT_TASK.md
-  - docs/dev-loop/reports/FIX-DIRECTOR-IA-RENTABILIDAD-SNAPSHOT-UPLOAD-DAY-MINI-PARITY-001.md
+  - docs/dev-loop/reports/AUDIT-DIRECTOR-IA-RENTABILIDAD-LIVE-UPLOAD-DAY-RUNTIME-001.md
 
 out_of_scope:
-  - nueva fórmula de rentabilidad
-  - computeDeltaIngresoClientesPorMes
-  - computeClientesDescuentoMes
-  - ingresoClienteMarginal
-  - resolveUploadDayLikeClientesPorMes (salvo extracción mecánica que preserve comportamiento)
-  - effective PROY target (salvo reutilizar el existente)
-  - Delta Gastos
-  - bridge rentabilidad
-  - driver attribution
-  - Shapley
-  - OAT
-  - controlability
-  - comments
+  - reabrir B_UPLOAD_DAY
+  - reabrir DEPLOY_STALE
+  - implementación
+  - tests
+  - modificar Delta Ingreso
+  - modificar fórmula de rentabilidad
+  - crear endpoint debug
+  - agregar logging productivo
   - Action Register
-  - last purchase
-  - commitments
-  - alerts
-  - DB/schema
-  - migrations
-  - frontend
   - docs/director-ia/
-  - LIVE_DB
+  - LIVE_DB (salvo Gate separado; este DRAFT no lo autoriza)
   - merge
   - deploy
   - next task
@@ -58,27 +51,25 @@ contracts_in_force:
   - docs/director-ia/DIRECTOR_IA_CONSTITUTION.md
   - docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md
   - docs/director-ia/DIRECTOR_IA_EXECUTIVE_KNOWLEDGE_ENGINE.md
+  - docs/dev-loop/reports/FIX-DIRECTOR-IA-RENTABILIDAD-SNAPSHOT-UPLOAD-DAY-MINI-PARITY-001.md
   - docs/dev-loop/reports/AUDIT-DIRECTOR-IA-RENTABILIDAD-SNAPSHOT-DASHBOARD-PARITY-001.md
-  - docs/dev-loop/reports/FIX-DIRECTOR-IA-RENTABILIDAD-DETERIORO-ROUTING-SNAPSHOT-001.md
 
 allowed_actions:
-  - (solo tras G1 humano) regression-first: crear R-RENT-CUT-001..010 ANTES de producto
-  - (solo tras G1 y BEFORE rojo) cablear upload_day canónico en loadKpiForMonth(B) / mini
-  - ejecutar TIER1 / RUNTIME / MOVEMENT / DELTA-* / R-RENT-SNAPSHOT / PRE-DEPLOY --gate
-  - redactar el reporte en result_report_path
-  - dejar DONE_PENDING_REVIEW, STOPPED o BLOCKED
+  - ninguna hasta G1 humano
+  - (solo tras G1) lectura física del wiring
+  - (solo tras G1) redactar el reporte
+  - (solo tras G1) preparar probes read-only sin ejecutarlos si live_db_authorized es NO
+  - (solo tras G1) dejar DONE_PENDING_REVIEW o BLOCKED_NEEDS_LIVE_DB
 
 forbidden_actions:
   - escribir AUTHORIZED_BY_HUMAN
   - poner status AUTHORIZED
   - crear, borrar o modificar authorized_by, authorized_at o human_authorization
   - implementar o escribir tests mientras status sea DRAFT
-  - mockear loadRentabilidadKpis con constantes en R-RENT-CUT
-  - crear un tercer resolver SQL de upload_day si existe el canónico
-  - hardcodear planta, mes, importes o upload_day en producto
-  - modificar Delta Ingreso salvo extracción mecánica que preserve tests verdes
   - consultar LIVE_DB
-  - modificar docs/director-ia/
+  - reabrir hipótesis DEPLOY_STALE
+  - volver a modificar B_UPLOAD_DAY
+  - modificar producto, tests o Delta Ingreso
   - merge/push a main
   - deploy
   - abrir siguiente tarea
@@ -87,380 +78,354 @@ forbidden_actions:
 
 DONE_PENDING_REVIEW.
 
-B_UPLOAD_DAY eliminado en loadKpiForMonth(B) vía resolveUploadDayLikeClientesPorMes.
-R-RENT-CUT-001..010 PASS. PRE-DEPLOY --gate PASS.
-Commit bloqueado por allowed_actions.
-No merge. No deploy. No next task.
+HUMAN_EXECUTED_LIVE_DB_EVIDENCE: arr.upload_log = 0 filas → resolver null.
+LIVE_RENTABILITY_CUT_FIRST_BAD_BOUNDARY = UPLOAD_DAY_QUERY_RESULT.
+
+No implementación.
+No FIX.
+No next task.
 
 ## Precondición
 
-CLOSED e integrada por humano:
+Debe estar CLOSED en HEAD:
 
-AUDIT-DIRECTOR-IA-RENTABILIDAD-SNAPSHOT-DASHBOARD-PARITY-001
+FIX-DIRECTOR-IA-RENTABILIDAD-SNAPSHOT-UPLOAD-DAY-MINI-PARITY-001
 
-Hallazgo contractual:
+Hecho ya confirmado. No reconsultar:
 
-RENTABILITY_B_FIRST_BAD_BOUNDARY = B_UPLOAD_DAY
+Render está LIVE en merge
 
-No reabrir búsqueda general de rentabilidad.
+15d07879a086676c6d07d7b7e0018eda87772ba7
 
-## Evidencia LIVE (crítica; no reconsultar producción)
+Una prueba nueva después de Ctrl+F5 sigue dando exactamente los números MTD.
 
-Planta:
-Acapulco
+Por tanto:
 
-Periodo:
-Agosto 2026 real vs Septiembre 2026 forecast.
+DEPLOY_STALE = REJECTED
+
+No investigar deploy stale.
+
+## Evidencia LIVE post-FIX (crítica; no reconsultar producción)
+
+Pregunta:
+
+¿Qué está provocando el deterioro de la rentabilidad y sobre qué puedo actuar?
 
 Dashboard ARR:
 
-A resultado_final:
+Agosto final:
 $1,073,657
 
-B resultado_final:
+Septiembre final:
 -$80,735
 
 Delta:
 -$1,154,392
 
-Director IA antes del FIX:
+Dashboard septiembre venta:
+1,474 ton
 
-A resultado_final:
+Director IA POST-DEPLOY (Ctrl+F5):
+
+Agosto final:
 $1,073,657
 
-B resultado_final:
+Septiembre final:
 -$9,565,353
+
+Septiembre operativa:
+-$7,003,653
 
 Delta:
 -$10,639,010
 
-Diferencia B:
-$9,484,618
-
-Auditoría demostró:
-
-- A cerrado coincide.
-- B abierto diverge.
-- Dashboard y Director IA usan el mismo computeIgfForecastMiniPayload.
-- Dashboard B abierto: resolve upload_day → forecast completo.
-- Director IA B abierto: upload_day=null → fechaCorte="" → isCorteEnMes=false → enableLookback=false → sin remaining-day forecast → MTD.
-- corporativos B coinciden.
-- resultado_final solo propaga util_oper incorrecto.
-- Delta Ingreso clientes NO participa.
+La salida es exactamente la misma que antes del FIX.
 
 ## North Star
 
-Hacer que el snapshot de rentabilidad de Director IA utilice para el periodo B abierto
-el mismo corte efectivo que IGF Forecast ARR antes de llamar:
+Determinar qué upload_day y qué camino físico utiliza realmente
+el snapshot LIVE de Director IA para septiembre 2026.
 
-computeIgfForecastMiniPayload
+No implementar.
 
-Sin crear otra fórmula y sin modificar Delta Ingreso.
+## Pregunta central
 
-## Source of truth
+El código actual hace:
 
-Reutilizar el resolver físico ya existente de último corte mensual.
-
-Preferencia:
-
-loadArrLastUploadDay
-/ resolveUploadDayLikeClientesPorMes
-
-o el helper canónico equivalente ya utilizado realmente.
-
-NO duplicar SQL ni crear un tercer resolver si puede reutilizarse el existente.
-
-## Semántica
-
-Para periodo cerrado:
-
-mantener comportamiento actual.
-
-Para periodo abierto:
-
-resolver upload_day correspondiente al año/mes B.
-
-Pasar ese corte al mismo:
-
-computeIgfForecastMiniPayload
-
-que utiliza la arquitectura existente.
-
-No cambiar fórmula de rentabilidad.
-
-## Regression-first
-
-Crear un pack nuevo que NO mockee loadRentabilidadKpis con constantes.
-
-Nombre propuesto:
-
-R-RENT-CUT-001..010
-
-Debe probar la frontera física real.
-
-### R-RENT-CUT-001
-
-A cerrado permanece real independientemente de upload_day B.
-
-### R-RENT-CUT-002
-
-B abierto con upload_day=null reproduce MTD incorrecto BEFORE.
-
-### R-RENT-CUT-003
-
-Resolver last-upload mensual produce fecha de corte esperada.
-
-### R-RENT-CUT-004
-
-El upload_day resuelto llega a computeIgfForecastMiniPayload.
-
-### R-RENT-CUT-005
-
-B venta forecast coincide con Dashboard fixture.
-
-### R-RENT-CUT-006
-
-B util_oper_importe coincide con Dashboard fixture.
-
-### R-RENT-CUT-007
-
-B resultado_final_importe coincide con Dashboard fixture.
-
-### R-RENT-CUT-008
-
-Delta A→B coincide con Dashboard fixture.
-
-### R-RENT-CUT-009
-
-Corporativos no cambian por este FIX.
-
-### R-RENT-CUT-010
-
-Delta Ingreso path permanece independiente y no se modifica.
-
-## BEFORE
-
-Antes de producto ejecutar:
-
-TIER 1
-R-RUNTIME
-R-MOVEMENT
-R-DELTA-INCOME
-R-DELTA-PARITY
-R-DELTA-CUT
-R-RENT-SNAPSHOT
-
-Todos los existentes deben permanecer PASS.
-
-R-RENT-CUT nuevo debe demostrar el defecto.
-
-Como mínimo BEFORE deben fallar los casos relacionados con:
-
-- upload_day propagation;
-- B forecast;
-- util_oper B;
-- resultado_final B;
-- delta A/B.
-
-Si el nuevo pack queda completamente verde antes del cambio:
-STOP.
-
-No aceptar un fixture que vuelva a mockear el KPI final.
-
-## FIRST_BAD_BOUNDARY
-
-Reproducir:
-
-snapshot
-→ loadKpiForMonth(B)
+mes abierto
+→ resolveOpenMonthUploadDay
+→ resolveUploadDayLikeClientesPorMes
+→ loadIgfForecastMiniPayload
 → computeIgfForecastMiniPayload
-→ upload_day=null
-→ fechaCorte=""
-→ isCorteEnMes=false
-→ enableLookback=false
-→ no remaining-day forecast
-→ MTD
-→ util_oper incorrecto
-→ resultado_final incorrecto
 
-Documentarlo en BEFORE.
+¿Por qué LIVE sigue comportándose como upload_day=null?
 
-## Implementación mínima
+## Wiring a auditar primero (tras G1; no ahora)
 
-Cambiar solo la ruta necesaria para que:
+configureDirectorIaChat
+→ assembleRentabilidadDeterioroSnapshot
+→ loadKpiForMonth
+→ resolveOpenMonthUploadDay
+→ resolveUploadDayLikeClientesPorMes
+→ loadIgfForecastMiniPayload
+→ computeIgfForecastMiniPayload
 
-loadKpiForMonth(B)
+Especialmente:
 
-resuelva un upload_day canónico y lo suministre al mini.
+1. todos los configureDirectorIaChat del repo;
+2. posible bypass por deps.loadRentabilidadKpis;
+3. pérdida del upload_day en dependency injection;
+4. diferencia entre cut Dashboard y latest arr.upload_log;
+5. posible estado/cut explícito del frontend.
 
-No transformar este cambio en comportamiento global si otros consumidores requieren semántica distinta.
+No volver a modificar B_UPLOAD_DAY.
 
-Preferir dependency injection/helper reutilizable si la arquitectura actual ya lo soporta.
+## Etapa A — Wiring read-only
 
-## No duplicación
+Auditar todas las llamadas y configuraciones de:
 
-No escribir otra función que:
+configureDirectorIaChat
 
-SELECT MAX(upload_day...)
+Determinar si en runtime se inyecta:
 
-si ya existe resolver canónico.
-
-Una sola semántica de corte.
-
-## Closed month
-
-No alterar agosto cerrado.
-
-Un periodo cerrado debe seguir usando real.
-
-R-RENT-CUT-001 debe protegerlo.
-
-## Open month
-
-Septiembre abierto debe usar:
-
-observado hasta corte
-+
-proyección correspondiente a días faltantes
-
-según la lógica existente del mini.
-
-No implementar nueva proyección.
-
-## Corporativos
-
-No modificar cálculo.
-
-Auditoría demostró que corporativos B ya coinciden.
-
-## Operativos
-
-No modificar fórmula.
-
-Si se corrigen como consecuencia de utilizar el bRes forecast correcto:
-documentarlo.
-
-No parchear el número.
-
-## Rentabilidad final
-
-No modificar fórmula.
-
-Debe corregirse como consecuencia de util_oper correcto.
-
-## Delta Ingreso
-
-PROHIBIDO modificar sin evidencia nueva:
-
-computeDeltaIngresoClientesPorMes
-computeClientesDescuentoMes
-ingresoClienteMarginal
-resolveUploadDayLikeClientesPorMes
-effective PROY target
-
-salvo una extracción mecánica de helper común que preserve exactamente su comportamiento.
-
-Si se extrae helper común:
-todos los tests Delta deben permanecer verdes.
-
-## No hardcode
-
-No hardcodear:
-
-2026-09
-Acapulco
--$80,735
-1,474
-upload_day específico
-
-en producto.
-
-Solo fixtures pueden usar números determinísticos.
-
-## False-green prevention
-
-R-RENT-SNAPSHOT actual mockea loadRentabilidadKpis.
-
-No eliminarlo.
-
-El nuevo R-RENT-CUT debe ir una capa abajo y demostrar la integración:
-
-resolver corte
-→ mini
-→ util_oper
-→ resultado_final
-
-Expected y actual no pueden usar el mismo mock/función de manera circular.
-
-## LIVE_DB
-
-NO.
-
-Todo regression-first debe ejecutarse con fixtures determinísticos.
-
-Validación LIVE después del deploy humano.
-
-## AFTER
-
-Obligatorio:
-
-TIER 1 PASS
-R-RUNTIME PASS
-R-MOVEMENT PASS
-R-DELTA-INCOME PASS
-R-DELTA-PARITY PASS
-R-DELTA-CUT PASS
-R-RENT-SNAPSHOT PASS
-R-RENT-CUT-001..010 PASS
-
-HTTP 5xx = 0
-HARNESS FAILURE = 0
-
-PRE-DEPLOY --gate PASS
-
-Ejecutar suites relacionadas con:
-
-IGF mini
-forecast
+loadRentabilidadKpis
+loadIgfForecastMiniPayload
+resolveUploadDay
+pool
+client
+now
 upload_day
-period
-profitability
-financial_diagnosis
-Delta Ingreso
-planner
-runtime
 
-## Validación esperada post-deploy
+Especialmente verificar el early return:
 
-La pregunta:
+if (typeof deps.loadRentabilidadKpis === "function")
 
-¿Qué está provocando el deterioro de la rentabilidad y sobre qué puedo actuar?
+en loadKpiForMonth.
 
-debe seguir routeando al snapshot.
+Determinar si alguna dependencia inyectada hace bypass de:
 
-Para el mismo cut LIVE, el KPI B de Director IA debe coincidir con
-IGF Forecast ARR.
+resolveOpenMonthUploadDay.
 
-La validación debe comparar como mínimo:
+Buscar todas las llamadas a configureDirectorIaChat en repo.
 
-A final
-B final
-Delta final
-A operativa
-B operativa
-Delta operativa
+No asumir que server.js tiene una sola.
 
-No aceptar únicamente "más cercano".
+## Etapa B — Cut source
+
+Comparar físicamente:
+
+Dashboard:
+ArrClient.resolveUploadDayForMonth
+GET /api/arr/last-upload-day
+request upload_day enviado a /api/dashboard/igf-forecast-mini
+
+vs
+
+Director IA:
+resolveUploadDayLikeClientesPorMes
+
+Determinar si realmente utilizan el mismo valor en runtime.
+
+No conformarse con que usen SQL parecido.
+
+## Etapa C — Dashboard local state
+
+Determinar si el Dashboard puede usar:
+
+- upload_day explícito;
+- proyeccion_hasta;
+- estado React;
+- corte seleccionado;
+- valor persistido en URL/state;
+
+que no necesariamente sea el último arr.upload_log mensual.
+
+Responder:
+
+¿el $-80,735 mostrado en Dashboard depende de un cut explícito distinto
+al que Director IA resuelve automáticamente?
+
+## Etapa D — LIVE probes
+
+NO ejecutar mientras:
+
+live_db_authorized: NO
+
+Preparar únicamente probes mínimos read-only para un Gate LIVE_DB separado.
+
+Los probes deberán poder demostrar:
+
+1. Valor devuelto por:
+
+resolveUploadDayLikeClientesPorMes(pool, 2026, 9)
+
+2. Últimas filas relevantes de:
+
+arr.upload_log
+
+para septiembre 2026:
+
+plant_code
+uploaded_day
+uploaded_at
+
+Sin datos personales innecesarios.
+
+3. Mini Acapulco con:
+
+upload_day = null
+
+capturando:
+
+ventaTon
+utilOperImporte
+resultadoFinalImporte
+
+4. Mini Acapulco con:
+
+upload_day = resolvedUploadDay
+
+capturando:
+
+ventaTon
+utilOperImporte
+resultadoFinalImporte
+
+5. Si existe un cut distinto usado por Dashboard,
+mini con ese cut.
+
+## Valores de control
+
+Null/MTD observado LIVE:
+
+util_oper:
+-$7,003,653
+
+resultado_final:
+-$9,565,353
+
+Dashboard:
+
+venta:
+1,474 ton
+
+resultado_final:
+-$80,735
+
+Operativa Dashboard esperada según la misma relación con corporativos:
+
+$2,480,965
+
+No hardcodear estos valores en producto.
+
+Solo son control de auditoría.
+
+## Matriz obligatoria
+
+Construir:
+
+PATH
+| UPLOAD_DAY
+| VENTA_TON
+| UTIL_OPER
+| RESULTADO_FINAL
+| MATCH DASHBOARD?
+
+Como mínimo:
+
+Dashboard request
+Director resolver
+Mini null
+Mini resolved
+Snapshot LIVE
+
+## Hipótesis
+
+H1
+resolveUploadDayLikeClientesPorMes devuelve null en producción.
+
+H2
+Devuelve una fecha válida pero distinta al Dashboard.
+
+H3
+Dashboard usa un upload_day explícito/local distinto al latest mensual.
+
+H4
+loadKpiForMonth está siendo bypassed por loadRentabilidadKpis.
+
+H5
+Otra configureDirectorIaChat sobrescribe deps.
+
+H6
+loadIgfForecastMiniPayload recibe upload_day correcto pero lo pierde.
+
+H7
+computeIgfForecastMiniPayload recibe upload_day correcto pero produce MTD.
+
+H8
+El FIX funciona con fixture pero el fixture no representa arr.upload_log LIVE.
+
+H9
+El problema está en resolución de corte, no en fórmula financiera.
+
+H10
+Delta Ingreso sigue siendo independiente y no debe tocarse.
+
+Clasificar:
+
+PROVEN
+REJECTED
+NOT_PROVEN
+NOT_PROVEN_WITHOUT_LIVE_DB
+
+## First bad boundary
+
+Entregar exactamente uno:
+
+LIVE_RENTABILITY_CUT_FIRST_BAD_BOUNDARY
+
+Posibles resultados:
+
+RUNTIME_DEPENDENCY_BYPASS
+UPLOAD_DAY_QUERY_RESULT
+DASHBOARD_EXPLICIT_CUT
+UPLOAD_DAY_PROPAGATION
+MINI_CUT_INTERPRETATION
+OTHER_PROVEN_BOUNDARY
+
+No elegir por intuición.
+
+## False green
+
+Explicar por qué R-RENT-CUT pasa pero producción falla.
+
+Determinar qué elemento de runtime no está representado en fixture:
+
+- arr.upload_log real;
+- dependency wiring;
+- dashboard explicit cut;
+- otro.
+
+## Prohibiciones
+
+No implementar.
+No modificar tests.
+No modificar Delta Ingreso.
+No modificar fórmula de rentabilidad.
+No crear endpoint debug.
+No agregar logging productivo.
+No consultar LIVE_DB sin Gate separado.
+No Action Register.
+No merge.
+No deploy.
+No reabrir B_UPLOAD_DAY.
+No reabrir DEPLOY_STALE.
 
 ## Completion
 
 DONE_PENDING_REVIEW.
 
-B_UPLOAD_DAY eliminado. R-RENT-CUT 001..010 PASS. Suites anteriores PASS.
-PRE-DEPLOY PASS. COMMIT_BLOCKED_BY_ALLOWED_ACTIONS.
-
-No merge.
-No deploy.
-No next task.
+H1 PROVEN. First bad boundary = UPLOAD_DAY_QUERY_RESULT.
+No implementación. No merge. No deploy. No next task.
 
 STOP.
