@@ -1,11 +1,11 @@
-task_id: AUDIT-DIRECTOR-IA-DASHBOARD-EFFECTIVE-CUT-SOURCE-001
+task_id: AUDIT-DIRECTOR-IA-CHAT-EFFECTIVE-CUT-TRANSPORT-001
 
 task_type: AUDIT
 mode: READ_ONLY_PHYSICAL_TRACE
 
 status: CLOSED
 authorized_by: "Human Approver"
-authorized_at: "2026-09-05T21:07:24-06:00"
+authorized_at: "2026-09-05T21:46:19-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-05 - READ_ONLY AUDIT ONLY; NO IMPLEMENTATION; NO LIVE_DB; NO MERGE; NO DEPLOY"
 implementation_authorized: NO
 merge_authorized: NO
@@ -14,37 +14,33 @@ live_db_authorized: NO
 
 max_attempts: 1
 
-result_report_path: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-DASHBOARD-EFFECTIVE-CUT-SOURCE-001.md
+result_report_path: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-CHAT-EFFECTIVE-CUT-TRANSPORT-001.md
 
-objective: Determinar de dónde obtiene IGF Forecast ARR el cut efectivo de septiembre 2026 cuando arr.upload_log LIVE está vacío, sin implementar.
+objective: Determinar si el request real del chat de Director IA transporta el effective cut del Dashboard hasta askDirectorIa y el snapshot de rentabilidad, sin implementar.
 
 in_scope:
-  - frontend ARR/IGF Forecast
-  - ArrClient.resolveUploadDayForMonth
-  - upload_day
-  - proyeccion_hasta
-  - estado React relacionado con fecha/corte
-  - query params relacionados con forecast
-  - /api/arr/last-upload-day
-  - /api/dashboard/igf-forecast
-  - /api/dashboard/igf-forecast-mini
-  - exportación Excel solo para comparar semántica de cut
+  - superficie frontend de Director IA
+  - DirectorIaChatPanel y componentes equivalentes
+  - construcción del POST de chat
+  - upload_day en props, URL, state o body
+  - handler HTTP del chat
+  - handlePostChat
+  - askDirectorIa
+  - entrada al snapshot de rentabilidad
   - docs/dev-loop/CURRENT_TASK.md
-  - docs/dev-loop/reports/AUDIT-DIRECTOR-IA-DASHBOARD-EFFECTIVE-CUT-SOURCE-001.md
+  - docs/dev-loop/reports/AUDIT-DIRECTOR-IA-CHAT-EFFECTIVE-CUT-TRANSPORT-001.md
+  - preparación de evidencia browser runtime ejecutada por humano si código no basta
 
 out_of_scope:
   - implementación
   - tests
-  - modificar arr.upload_log
-  - crear tablas
-  - insertar filas
-  - migrations
-  - modificar Director IA
-  - modificar fórmula de rentabilidad
-  - modificar Delta Ingreso
+  - LIVE_DB
+  - DB/schema
+  - arr.upload_log
+  - fórmula de rentabilidad
+  - Delta Ingreso
   - Action Register
   - docs/director-ia/
-  - LIVE_DB
   - merge
   - deploy
   - next task
@@ -56,13 +52,14 @@ contracts_in_force:
   - docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md
   - docs/director-ia/DIRECTOR_IA_EXECUTIVE_KNOWLEDGE_ENGINE.md
   - docs/dev-loop/reports/AUDIT-DIRECTOR-IA-RENTABILIDAD-LIVE-UPLOAD-DAY-RUNTIME-001.md
+  - docs/dev-loop/reports/AUDIT-DIRECTOR-IA-DASHBOARD-EFFECTIVE-CUT-SOURCE-001.md
 
 allowed_actions:
   - ninguna hasta G1 humano
   - tras G1: inspección read-only de código
   - tras G1: redactar reporte
-  - tras G1: preparar instrucciones de browser runtime evidence si fueran necesarias
-  - tras G1: DONE_PENDING_REVIEW o BLOCKED
+  - tras G1: preparar evidencia browser runtime para ejecución humana si hace falta
+  - tras G1: DONE_PENDING_REVIEW o BLOCKED_NEEDS_BROWSER_RUNTIME_EVIDENCE
 
 forbidden_actions:
   - escribir AUTHORIZED_BY_HUMAN
@@ -70,127 +67,165 @@ forbidden_actions:
   - implementación
   - escribir tests
   - consultar LIVE_DB
-  - crear/modificar DB/schema
-  - insertar datos en arr.upload_log
+  - modificar DB/schema
+  - modificar arr.upload_log
+  - modificar Director IA
   - merge/push main
   - deploy
   - abrir siguiente tarea
 
 ## Hechos ya demostrados
 
-Producción:
-arr.upload_log = 0 filas.
+IGF Forecast ARR LIVE:
+
+effective cut visible:
+2026-09-05
+
+request físico observado:
+
+GET /api/dashboard/igf-forecast
+year=2026
+month=9
+upload_day=2026-09-05
+include_mini=1
 
 Por tanto:
-resolveUploadDayLikeClientesPorMes(2026, 9) = null.
+
+DASHBOARD_EFFECTIVE_CUT_SOURCE =
+FRONTEND_EFFECTIVE_CUT_STATE
+
+DASHBOARD_EFFECTIVE_CUT_VALUE =
+2026-09-05
 
 Director IA:
-upload_day = null
-→ septiembre se comporta como MTD.
 
-LIVE_RENTABILITY_CUT_FIRST_BAD_BOUNDARY =
-UPLOAD_DAY_QUERY_RESULT.
+arr.upload_log LIVE = 0 filas
+→ resolver = null
+→ mini sin cut
+→ septiembre MTD.
 
-Valores observados:
+No reabrir:
 
-Director IA septiembre:
-resultado_final = -9,565,353
-util_oper = -7,003,653
+DEPLOY_STALE
+B_UPLOAD_DAY
+UPLOAD_DAY_QUERY_RESULT
+DASHBOARD_EFFECTIVE_CUT_SOURCE
 
-IGF Forecast ARR septiembre:
-venta ≈ 1,474 ton
-resultado_final ≈ -80,735
+## Pregunta única
 
-No reabrir DEPLOY_STALE.
-No reabrir wiring del snapshot salvo evidencia nueva.
+Cuando se hace la pregunta:
 
-## Pregunta central
+¿Qué está provocando el deterioro de la rentabilidad y sobre qué puedo actuar?
 
-Si arr.upload_log está vacío:
+desde el contexto que tiene effective cut 2026-09-05:
 
-¿de dónde obtiene IGF Forecast ARR el cut efectivo con el que calcula septiembre forecast?
+¿el POST del chat de Director IA transporta upload_day=2026-09-05?
 
 ## Trazabilidad obligatoria
 
-Auditar físicamente:
+Auditar:
 
-ArrClient
-→ inicialización de fecha/corte
-→ resolveUploadDayForMonth
-→ respuesta null de /api/arr/last-upload-day
-→ fallback
-→ estado React
-→ upload_day
-→ proyeccion_hasta
-→ URL/query
-→ /api/dashboard/igf-forecast
-→ /api/dashboard/igf-forecast-mini
-→ computeIgfForecastMiniPayload
+effective cut frontend
+→ componente que abre/renderiza Director IA
+→ props / URL / state
+→ DirectorIaChatPanel o equivalente
+→ body del POST
+→ handler server
+→ handlePostChat
+→ askDirectorIa
+→ snapshot de rentabilidad
 
-Determinar todos los posibles orígenes de cut:
+Para cada hop marcar:
 
-- último upload
-- fecha actual
-- último día con datos
-- proyeccion_hasta
-- query string
-- selector UI
-- estado persistido
-- fecha derivada de ARR
-- otro
+PRESERVED
+TRANSFORMED
+DROPPED
+NOT_PRESENT
+RUNTIME_REQUIRED
 
-## Version selection
+## Matriz obligatoria
 
-Determinar si version_as_of_corte participa o no en los valores observados.
+HOP
+| FIELD
+| VALUE/SOURCE
+| REACHES NEXT HOP?
+| VERDICT
 
-## Entregable
+Como mínimo:
 
-DASHBOARD_EFFECTIVE_CUT_SOURCE =
-<fuente física demostrada | NOT_PROVEN>
+Dashboard effective cut
+Director IA component
+chat POST body
+HTTP handler
+handlePostChat
+askDirectorIa
+rentabilidad snapshot deps
 
-DASHBOARD_EFFECTIVE_CUT_VALUE =
-<YYYY-MM-DD | RUNTIME_REQUIRED>
+## Resultado decisivo
 
-Construir tabla:
+Clasificar exactamente uno:
 
-SOURCE
-| VALUE
-| FALLBACK CONDITION
-| REACHES IGF REQUEST?
-| PROVEN?
+A.
+CHAT_CUT_TRANSPORTED_BUT_NOT_CONSUMED
 
-Y cadena física:
+El POST contiene upload_day=2026-09-05 pero el snapshot no lo consume.
 
-source
-→ frontend state
-→ request
-→ server uploadDay
-→ mini
+B.
+CHAT_CUT_NOT_TRANSPORTED
 
-## Browser runtime
+El POST no contiene el effective cut.
 
-Si código permite varias rutas posibles y no puede determinar cuál ocurrió LIVE:
+C.
+CHAT_CUT_WRONG_SOURCE
+
+El POST contiene upload_day pero es distinto del effective cut.
+
+D.
+RUNTIME_REQUIRED
+
+Código no permite saber qué ocurrió en el request LIVE concreto.
+
+## Browser evidence
+
+Si resulta D:
 
 BLOCKED_NEEDS_BROWSER_RUNTIME_EVIDENCE
 
-Preparar exactamente qué request mirar en DevTools Network:
+Preparar instrucciones para que el Human Approver inspeccione únicamente
+el Payload del POST de chat.
 
-- endpoint
-- query string
-- upload_day
-- proyeccion_hasta
-- version_as_of_corte
+Pregunta exacta:
 
-No pedir credenciales.
-No LIVE_DB.
+¿Qué está provocando el deterioro de la rentabilidad y sobre qué puedo actuar?
+
+Con el Dashboard usando corte:
+
+2026-09-05
+
+Registrar solamente:
+
+endpoint
+question
+plant/planta si aparece
+year si aparece
+month si aparece
+upload_day si aparece
+
+NO registrar:
+
+Authorization
+Bearer
+cookies
+headers
+tokens
 
 ## Prohibiciones
 
 No implementar.
 No tests.
+No DB.
 No crear tablas.
-No poblar arr.upload_log.
-No modificar DB.
+No modificar arr.upload_log.
 No FIX.
 No merge.
 No deploy.
