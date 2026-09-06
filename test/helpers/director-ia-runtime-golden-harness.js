@@ -9,6 +9,8 @@
 const { RUNTIME_CASES, NOW_ISO } = require("../fixtures/director-ia-golden-cases");
 const parityFx = require("../fixtures/delta-ingreso-clientes-por-mes-parity");
 const cutFx = require("../fixtures/delta-ingreso-target-proy-cut");
+const rentCutFx = require("../fixtures/director-ia-rent-cut");
+const { resolveUploadDayLikeClientesPorMes } = require("../../lib/igf-effective-proy-target");
 
 const NOW = new Date(NOW_ISO);
 
@@ -190,6 +192,77 @@ function isDeltaCutCase(runtimeCase) {
 
 function isRentSnapshotCase(runtimeCase) {
   return runtimeCase && String(runtimeCase.id || "").startsWith("R-RENT-SNAPSHOT-");
+}
+
+function isRentCutCase(runtimeCase) {
+  return runtimeCase && String(runtimeCase.id || "").startsWith("R-RENT-CUT-");
+}
+
+const rentCutState = {
+  calls: [],
+  lastMiniByMonth: {},
+};
+
+function rentCutPool() {
+  const query = async (sql, params) => {
+    const y = params && Number(params[0]);
+    const m = params && Number(params[1]);
+    if (String(sql).includes("arr.upload_log") && y === rentCutFx.YEAR_B && m === rentCutFx.MONTH_B) {
+      return { rows: [rentCutFx.CANONICAL_UPLOAD_LOG_B] };
+    }
+    return { rows: [] };
+  };
+  return {
+    query,
+    connect: async () => ({
+      query,
+      release() {},
+    }),
+  };
+}
+
+function rentCutDeps() {
+  rentCutState.calls = [];
+  rentCutState.lastMiniByMonth = {};
+  const rows = rentSnapshotRows();
+  return {
+    ...deltaIncomeForecastDeps(),
+    pool: rentCutPool(),
+    computeDeltaIngresoClientesPorMes: async (_c, _plant, yearA, monthA, yearB, monthB) => ({
+      planta: rentCutFx.PLANT,
+      periodoA: `${yearA}-${String(monthA).padStart(2, "0")}`,
+      periodoB: `${yearB}-${String(monthB).padStart(2, "0")}`,
+      margenA: 8,
+      margenB: 7.5,
+      rows,
+      source_helper: "computeDeltaIngresoClientesPorMes",
+      physical_source: "dashboard-arr-forecast.computeClientesDescuentoMes",
+    }),
+    computeDeltaIngresoForecast: async (_c, _plant, yearA, monthA, yearB, monthB) => ({
+      planta: rentCutFx.PLANT,
+      periodoA: `${yearA}-${String(monthA).padStart(2, "0")}`,
+      periodoB: `${yearB}-${String(monthB).padStart(2, "0")}`,
+      rows,
+      source_helper: "computeDeltaIngresoForecast",
+    }),
+    loadRentabilidadKpis: undefined,
+    loadIgfForecastMiniPayload: async (_client, opts) => {
+      const call = {
+        year: opts && opts.year,
+        month: opts && opts.month,
+        upload_day: (opts && opts.upload_day) || null,
+      };
+      rentCutState.calls.push(call);
+      const mini = rentCutFx.computeRentCutMiniPayload({
+        year: call.year,
+        month: call.month,
+        upload_day: call.upload_day,
+        now: NOW,
+      });
+      rentCutState.lastMiniByMonth[Number(call.month)] = mini;
+      return mini;
+    },
+  };
 }
 
 function forecastNegativeRows() {
@@ -829,16 +902,21 @@ function installRuntimeDeps(chat, map, runtimeCase) {
     computeClientesDescuentoMes: undefined,
     loadIgfPlantMetrics: undefined,
     loadEffectiveIgfTarget: undefined,
+    loadRentabilidadKpis: undefined,
+    loadIgfForecastMiniPayload: undefined,
+    resolveUploadDay: undefined,
     ...(isMovementCase(runtimeCase) ? movementTrendDeps() : {}),
     ...(isDeltaCutCase(runtimeCase)
       ? deltaCutDeps(runtimeCase)
       : isDeltaParityCase(runtimeCase)
         ? deltaParityDeps()
-        : isRentSnapshotCase(runtimeCase)
-          ? rentSnapshotDeps()
-          : isDeltaIncomeCase(runtimeCase)
-            ? deltaIncomeForecastDeps()
-            : {}),
+        : isRentCutCase(runtimeCase)
+          ? rentCutDeps()
+          : isRentSnapshotCase(runtimeCase)
+            ? rentSnapshotDeps()
+            : isDeltaIncomeCase(runtimeCase)
+              ? deltaIncomeForecastDeps()
+              : {}),
     openaiChat: async () => "STUB_OPENAI_TRANSPORT",
   });
 }
@@ -876,11 +954,12 @@ function clearRuntimeDeps(chat) {
     loadRecentCommentsByClienteNombres: undefined,
     loadRentabilidadKpis: undefined,
     loadIgfForecastMiniPayload: undefined,
+    resolveUploadDay: undefined,
     openaiChat: undefined,
   });
 }
 
-function evaluateLastTurn(runtimeCase, last) {
+async function evaluateLastTurn(runtimeCase, last) {
   const boundaries = {};
   for (const name of BOUNDARIES) boundaries[name] = mark("NOT_REACHED");
 
@@ -1582,6 +1661,134 @@ function evaluateLastTurn(runtimeCase, last) {
     boundaries.USER_VISIBLE_OUTCOME = mark("FAIL", "fake profitability bridge");
     return { boundaries, http, pack };
   }
+  if (runtimeCase.require_rent_cut_fixture) {
+    const packRent = incomeForecastPack(body);
+    const fin = packRent.rentabilidad_final || {};
+    const op = packRent.rentabilidad_operativa || {};
+    const bCall = rentCutState.calls.find((c) => Number(c.month) === rentCutFx.MONTH_B);
+    const aCall = rentCutState.calls.find((c) => Number(c.month) === rentCutFx.MONTH_A);
+    const miniB = rentCutState.lastMiniByMonth[rentCutFx.MONTH_B];
+    const ventaB = miniB && miniB.rows && miniB.rows[0] ? miniB.rows[0].ventaTon : null;
+
+    if (runtimeCase.require_rent_cut_closed_a) {
+      const aWithB = rentCutFx.computeRentCutMiniPayload({
+        year: rentCutFx.YEAR_A,
+        month: rentCutFx.MONTH_A,
+        upload_day: rentCutFx.UPLOAD_DAY_B,
+        now: NOW,
+      });
+      if (
+        Number(fin.a) !== rentCutFx.EXPECTED_A.resultadoFinalImporte ||
+        Number(op.a) !== rentCutFx.EXPECTED_A.utilOperImporte ||
+        aWithB.rows[0].ventaTon !== rentCutFx.EXPECTED_A.ventaTon ||
+        (aCall && aCall.upload_day && String(aCall.upload_day).slice(0, 7) === "2026-08")
+      ) {
+        boundaries.USER_VISIBLE_OUTCOME = mark(
+          "FAIL",
+          `closed A broken finalA=${fin.a} expected=${rentCutFx.EXPECTED_A.resultadoFinalImporte} aUpload=${aCall && aCall.upload_day}`
+        );
+        return { boundaries, http, pack };
+      }
+    }
+    if (runtimeCase.require_rent_cut_mtd_repro) {
+      const mtd = rentCutFx.computeRentCutMiniPayload({
+        year: rentCutFx.YEAR_B,
+        month: rentCutFx.MONTH_B,
+        upload_day: null,
+        now: NOW,
+      });
+      const forecast = rentCutFx.computeRentCutMiniPayload({
+        year: rentCutFx.YEAR_B,
+        month: rentCutFx.MONTH_B,
+        upload_day: rentCutFx.UPLOAD_DAY_B,
+        now: NOW,
+      });
+      if (
+        mtd.rows[0].ventaTon !== rentCutFx.BRES.B_MTD ||
+        mtd.rows[0].resultadoFinalImporte !== rentCutFx.EXPECTED_B_MTD.resultadoFinalImporte ||
+        mtd.rows[0].ventaTon === forecast.rows[0].ventaTon ||
+        mtd.rows[0].utilOperImporte === forecast.rows[0].utilOperImporte
+      ) {
+        boundaries.USER_VISIBLE_OUTCOME = mark("FAIL", "null upload_day did not reproduce mini MTD");
+        return { boundaries, http, pack };
+      }
+    }
+    if (runtimeCase.require_rent_cut_resolver) {
+      const resolved = await resolveUploadDayLikeClientesPorMes(
+        rentCutPool(),
+        rentCutFx.YEAR_B,
+        rentCutFx.MONTH_B
+      );
+      if (resolved !== rentCutFx.UPLOAD_DAY_B) {
+        boundaries.USER_VISIBLE_OUTCOME = mark(
+          "FAIL",
+          `resolver got=${resolved} expected=${rentCutFx.UPLOAD_DAY_B}`
+        );
+        return { boundaries, http, pack };
+      }
+    }
+    if (runtimeCase.require_rent_cut_propagation) {
+      if (!bCall || bCall.upload_day !== rentCutFx.UPLOAD_DAY_B) {
+        boundaries.USER_VISIBLE_OUTCOME = mark(
+          "FAIL",
+          `B upload_day not propagated to mini got=${bCall ? bCall.upload_day : "no-call"}`
+        );
+        return { boundaries, http, pack };
+      }
+    }
+    if (runtimeCase.require_rent_cut_b_venta) {
+      if (ventaB !== rentCutFx.EXPECTED_B_DASHBOARD.ventaTon) {
+        boundaries.USER_VISIBLE_OUTCOME = mark(
+          "FAIL",
+          `B ventaTon=${ventaB} expected=${rentCutFx.EXPECTED_B_DASHBOARD.ventaTon} upload=${bCall && bCall.upload_day}`
+        );
+        return { boundaries, http, pack };
+      }
+    }
+    if (runtimeCase.require_rent_cut_b_util) {
+      if (Number(op.b) !== rentCutFx.EXPECTED_B_DASHBOARD.utilOperImporte) {
+        boundaries.USER_VISIBLE_OUTCOME = mark(
+          "FAIL",
+          `B util_oper=${op.b} expected=${rentCutFx.EXPECTED_B_DASHBOARD.utilOperImporte} mtd=${rentCutFx.EXPECTED_B_MTD.utilOperImporte}`
+        );
+        return { boundaries, http, pack };
+      }
+    }
+    if (runtimeCase.require_rent_cut_b_final) {
+      if (Number(fin.b) !== rentCutFx.EXPECTED_B_DASHBOARD.resultadoFinalImporte) {
+        boundaries.USER_VISIBLE_OUTCOME = mark(
+          "FAIL",
+          `B resultado_final=${fin.b} expected=${rentCutFx.EXPECTED_B_DASHBOARD.resultadoFinalImporte} mtd=${rentCutFx.EXPECTED_B_MTD.resultadoFinalImporte}`
+        );
+        return { boundaries, http, pack };
+      }
+    }
+    if (runtimeCase.require_rent_cut_delta) {
+      if (Number(fin.delta) !== rentCutFx.EXPECTED_DELTA_AB) {
+        boundaries.USER_VISIBLE_OUTCOME = mark(
+          "FAIL",
+          `delta A→B=${fin.delta} expected=${rentCutFx.EXPECTED_DELTA_AB}`
+        );
+        return { boundaries, http, pack };
+      }
+    }
+    if (runtimeCase.require_rent_cut_corporativos) {
+      if (
+        rentCutFx.EXPECTED_A.corporativos !== rentCutFx.EXPECTED_B_DASHBOARD.corporativos ||
+        rentCutFx.EXPECTED_B_MTD.corporativos !== rentCutFx.EXPECTED_B_DASHBOARD.corporativos
+      ) {
+        boundaries.USER_VISIBLE_OUTCOME = mark("FAIL", "corporativos changed across cut");
+        return { boundaries, http, pack };
+      }
+    }
+    if (runtimeCase.require_rent_cut_delta_ingreso_independent) {
+      const src = String(packRent.source_helper || packRent.source || "");
+      if (src !== "computeDeltaIngresoClientesPorMes") {
+        boundaries.USER_VISIBLE_OUTCOME = mark("FAIL", `Delta Ingreso path changed source=${src || "none"}`);
+        return { boundaries, http, pack };
+      }
+    }
+  }
   boundaries.USER_VISIBLE_OUTCOME = mark(
     "PASS",
     meta.requires_clarification ? "specific_or_allowed_clarification" : `mode=${meta.mode || "none"}`
@@ -1620,7 +1827,10 @@ async function evaluateRuntimeCase(runtimeCase, chat) {
     if (last.threw) break;
   }
 
-  const evaluated = evaluateLastTurn(runtimeCase, last || { threw: new Error("sin turnos"), http: null, body: null });
+  const evaluated = await evaluateLastTurn(
+    runtimeCase,
+    last || { threw: new Error("sin turnos"), http: null, body: null }
+  );
   const first = firstBadBoundary(evaluated.boundaries);
   const official5xx = evaluated.http >= 500 ? 1 : 0;
 

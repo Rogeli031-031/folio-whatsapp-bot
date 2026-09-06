@@ -1,51 +1,53 @@
-task_id: AUDIT-DIRECTOR-IA-RENTABILIDAD-SNAPSHOT-DASHBOARD-PARITY-001
+task_id: FIX-DIRECTOR-IA-RENTABILIDAD-SNAPSHOT-UPLOAD-DAY-MINI-PARITY-001
 
-task_type: AUDIT
-mode: READ_ONLY_PHYSICAL_TRACE
+task_type: FIX
+mode: REGRESSION_FIRST
 
 status: CLOSED
 authorized_by: "Human Approver"
-authorized_at: "2026-09-05T19:56:48-06:00"
-human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-05 - READ_ONLY AUDIT ONLY; NO IMPLEMENTATION; NO LIVE_DB"
-implementation_authorized: NO
+authorized_at: "2026-09-05T20:07:15-06:00"
+human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-05 - IMPLEMENTATION ONLY; NO MERGE; NO DEPLOY; NO LIVE_DB"
+implementation_authorized: YES
 merge_authorized: NO
 deploy_authorized: NO
 live_db_authorized: NO
 
 max_attempts: 1
 
-result_report_path: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-RENTABILIDAD-SNAPSHOT-DASHBOARD-PARITY-001.md
+result_report_path: docs/dev-loop/reports/FIX-DIRECTOR-IA-RENTABILIDAD-SNAPSHOT-UPLOAD-DAY-MINI-PARITY-001.md
 
-objective: Localizar el primer input físico divergente entre Dashboard ARR y Director IA para la rentabilidad de septiembre B (forecast), dado que agosto A coincide exactamente y la diferencia en B es $9,484,618.
+objective: Hacer que el snapshot de rentabilidad use, en periodo B abierto, el mismo upload_day efectivo que IGF Forecast ARR antes de computeIgfForecastMiniPayload, sin nueva fórmula y sin tocar Delta Ingreso.
 
 in_scope:
-  - traza read-only Dashboard ARR (ArrClient / IGF Forecast / PROY / mini / recalcularUtilYResultado / render RENTABILIDAD)
-  - traza read-only Director IA (rentabilidad_deterioro_snapshot / loader mini IGF / periodo A / periodo B)
-  - comparación input-por-input de septiembre B
-  - hipótesis H1–H14 (PROVEN / REJECTED / NOT_PROVEN)
-  - reconciliación de $9,484,618
-  - probes read-only mínimos redactados, no ejecutados
+  - resolver canónico de último corte mensual (loadArrLastUploadDay / resolveUploadDayLikeClientesPorMes o equivalente ya usado)
+  - loadKpiForMonth(B) / cableado mínimo del snapshot para pasar upload_day al mini
+  - R-RENT-CUT-001..010 (solo tras G1; ANTES de producto; sin mockear loadRentabilidadKpis)
   - docs/dev-loop/CURRENT_TASK.md
-  - docs/dev-loop/reports/AUDIT-DIRECTOR-IA-RENTABILIDAD-SNAPSHOT-DASHBOARD-PARITY-001.md
+  - docs/dev-loop/reports/FIX-DIRECTOR-IA-RENTABILIDAD-SNAPSHOT-UPLOAD-DAY-MINI-PARITY-001.md
 
 out_of_scope:
-  - implementación
-  - tests nuevos
-  - LIVE_DB
-  - Delta Ingreso (no modificar ni recomendar cambios salvo evidencia física de que participa en ESTE defecto)
+  - nueva fórmula de rentabilidad
   - computeDeltaIngresoClientesPorMes
   - computeClientesDescuentoMes
   - ingresoClienteMarginal
-  - effective PROY target (salvo evidencia física de que participa en ESTE defecto)
+  - resolveUploadDayLikeClientesPorMes (salvo extracción mecánica que preserve comportamiento)
+  - effective PROY target (salvo reutilizar el existente)
   - Delta Gastos
+  - bridge rentabilidad
   - driver attribution
-  - controlabilidad
+  - Shapley
+  - OAT
+  - controlability
   - comments
   - Action Register
-  - frontend changes
+  - last purchase
+  - commitments
+  - alerts
   - DB/schema
   - migrations
+  - frontend
   - docs/director-ia/
+  - LIVE_DB
   - merge
   - deploy
   - next task
@@ -56,24 +58,26 @@ contracts_in_force:
   - docs/director-ia/DIRECTOR_IA_CONSTITUTION.md
   - docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md
   - docs/director-ia/DIRECTOR_IA_EXECUTIVE_KNOWLEDGE_ENGINE.md
+  - docs/dev-loop/reports/AUDIT-DIRECTOR-IA-RENTABILIDAD-SNAPSHOT-DASHBOARD-PARITY-001.md
   - docs/dev-loop/reports/FIX-DIRECTOR-IA-RENTABILIDAD-DETERIORO-ROUTING-SNAPSHOT-001.md
-  - docs/dev-loop/reports/AUDIT-DIRECTOR-IA-RENTABILIDAD-DETERIORO-ACTIONABLE-DRIVERS-001.md
 
 allowed_actions:
-  - (solo tras G1 humano) traza read-only de código y fixtures
-  - (solo tras G1 humano) redactar probes LIVE read-only; no ejecutarlos
-  - (solo tras G1 humano) escribir el reporte en result_report_path
+  - (solo tras G1 humano) regression-first: crear R-RENT-CUT-001..010 ANTES de producto
+  - (solo tras G1 y BEFORE rojo) cablear upload_day canónico en loadKpiForMonth(B) / mini
+  - ejecutar TIER1 / RUNTIME / MOVEMENT / DELTA-* / R-RENT-SNAPSHOT / PRE-DEPLOY --gate
+  - redactar el reporte en result_report_path
   - dejar DONE_PENDING_REVIEW, STOPPED o BLOCKED
 
 forbidden_actions:
   - escribir AUTHORIZED_BY_HUMAN
   - poner status AUTHORIZED
   - crear, borrar o modificar authorized_by, authorized_at o human_authorization
-  - implementar
-  - escribir tests
+  - implementar o escribir tests mientras status sea DRAFT
+  - mockear loadRentabilidadKpis con constantes en R-RENT-CUT
+  - crear un tercer resolver SQL de upload_day si existe el canónico
+  - hardcodear planta, mes, importes o upload_day en producto
+  - modificar Delta Ingreso salvo extracción mecánica que preserve tests verdes
   - consultar LIVE_DB
-  - asumir MTD vs forecast sin demostrarlo o rechazarlo
-  - modificar Delta Ingreso
   - modificar docs/director-ia/
   - merge/push a main
   - deploy
@@ -81,326 +85,382 @@ forbidden_actions:
 
 ## Estado
 
-DRAFT. No hay Gate G1. No es ejecutable.
+DONE_PENDING_REVIEW.
 
-No implementar.
-No escribir tests.
-No LIVE_DB.
+B_UPLOAD_DAY eliminado en loadKpiForMonth(B) vía resolveUploadDayLikeClientesPorMes.
+R-RENT-CUT-001..010 PASS. PRE-DEPLOY --gate PASS.
+Commit bloqueado por allowed_actions.
+No merge. No deploy. No next task.
 
-## North Star
+## Precondición
 
-Localizar físicamente por qué Director IA y el Dashboard ARR producen distinta
-rentabilidad para el periodo B abierto/forecast, mientras el periodo A real
-coincide exactamente.
+CLOSED e integrada por humano:
 
-NO implementar.
+AUDIT-DIRECTOR-IA-RENTABILIDAD-SNAPSHOT-DASHBOARD-PARITY-001
 
-## Evidencia LIVE (crítica; no reconsultar producción en esta tarea)
+Hallazgo contractual:
+
+RENTABILITY_B_FIRST_BAD_BOUNDARY = B_UPLOAD_DAY
+
+No reabrir búsqueda general de rentabilidad.
+
+## Evidencia LIVE (crítica; no reconsultar producción)
 
 Planta:
 Acapulco
 
-Comparación:
-Agosto 2026 real vs Septiembre 2026 forecast
+Periodo:
+Agosto 2026 real vs Septiembre 2026 forecast.
 
-DASHBOARD ARR
+Dashboard ARR:
 
-Agosto:
-resultado_final = 1,073,657
+A resultado_final:
+$1,073,657
 
-Septiembre:
-resultado_final = -80,735
-
-Delta:
--1,154,392
-
-Campos visibles septiembre:
-
-venta = 1,474
-margen = 7.12
-descuento = -0.20
-operativos = 9,945,756
-corporativos = 2,561,700
-gasto = 12,507,456
-HG = 12.00
-HG$ = 12.57
-impuestos = 0.93
-casa = 900.63
-comisionista = 572.90
-rentabilidad = -80,735
-
-DIRECTOR IA
-
-Agosto:
-resultado_final_importe = 1,073,657
-
-Septiembre:
-resultado_final_importe = -9,565,353
+B resultado_final:
+-$80,735
 
 Delta:
--10,639,010
+-$1,154,392
 
-util_oper_importe septiembre:
--7,003,653
+Director IA antes del FIX:
 
-Diferencia Dashboard vs Director IA en B:
-9,484,618 MXN
+A resultado_final:
+$1,073,657
 
-Observación importante:
+B resultado_final:
+-$9,565,353
 
-Director IA:
+Delta:
+-$10,639,010
 
--7,003,653 - 2,561,700 = -9,565,353
+Diferencia B:
+$9,484,618
 
-Por tanto corporativos B coincide físicamente con Dashboard.
+Auditoría demostró:
 
-La divergencia parece estar antes de resultado_final_importe,
-en la construcción de util_oper_importe B.
+- A cerrado coincide.
+- B abierto diverge.
+- Dashboard y Director IA usan el mismo computeIgfForecastMiniPayload.
+- Dashboard B abierto: resolve upload_day → forecast completo.
+- Director IA B abierto: upload_day=null → fechaCorte="" → isCorteEnMes=false → enableLookback=false → sin remaining-day forecast → MTD.
+- corporativos B coinciden.
+- resultado_final solo propaga util_oper incorrecto.
+- Delta Ingreso clientes NO participa.
 
-NO asumir root cause todavía.
+## North Star
 
-NO asumir MTD vs forecast.
-Demostrarlo o rechazarlo.
+Hacer que el snapshot de rentabilidad de Director IA utilice para el periodo B abierto
+el mismo corte efectivo que IGF Forecast ARR antes de llamar:
 
-## Pregunta fundamental
+computeIgfForecastMiniPayload
 
-¿Por qué:
+Sin crear otra fórmula y sin modificar Delta Ingreso.
 
-A real Dashboard = A real Director IA
+## Source of truth
 
-pero:
+Reutilizar el resolver físico ya existente de último corte mensual.
 
-B forecast Dashboard != B forecast Director IA?
+Preferencia:
 
-Quiero localizar el primer input divergente entre Dashboard ARR
-y Director IA para septiembre B.
+loadArrLastUploadDay
+/ resolveUploadDayLikeClientesPorMes
 
-Especial atención a:
+o el helper canónico equivalente ya utilizado realmente.
 
-effective PROY
-venta forecast
-upload_day
-version
-financial_state
-recalcularUtilYResultado
-raw stored fields
-MTD vs forecast
+NO duplicar SQL ni crear un tercer resolver si puede reutilizarse el existente.
 
-No tocar Delta Ingreso.
+## Semántica
 
-## Traza obligatoria Dashboard
+Para periodo cerrado:
 
-Trazar físicamente:
+mantener comportamiento actual.
 
-ArrClient / IGF Forecast ARR
-→ selección Agosto / Septiembre
-→ workspace / PROY
-→ effective target
-→ venta forecast
-→ margen
-→ descuento
-→ HG
-→ operativos
-→ corporativos
-→ impuestos
-→ recalcularUtilYResultado
-→ util_oper_importe
-→ resultado_final_importe
-→ render RENTABILIDAD
+Para periodo abierto:
 
-Identificar:
+resolver upload_day correspondiente al año/mes B.
 
-archivo
-función
-inputs
-version
-PROY/compromiso
-upload_day
-forecast state
-overlays/simulations
-rounding
+Pasar ese corte al mismo:
 
-## Traza obligatoria Director IA
+computeIgfForecastMiniPayload
 
-Trazar:
+que utiliza la arquitectura existente.
 
-pregunta rentabilidad deterioro
-→ rentabilidad_deterioro_snapshot
-→ loader de mini IGF
-→ periodo A
-→ periodo B
-→ version
-→ forecast state
-→ util_oper_importe
-→ resultado_final_importe
+No cambiar fórmula de rentabilidad.
 
-Determinar si Director IA:
+## Regression-first
 
-A. lee campos almacenados directamente;
-B. llama recalcularUtilYResultado;
-C. reconstruye el forecast;
-D. usa compromiso crudo;
-E. usa PROY efectivo;
-F. usa MTD actual;
-G. mezcla MTD con gastos forecast;
-H. utiliza otra versión.
+Crear un pack nuevo que NO mockee loadRentabilidadKpis con constantes.
 
-No asumir ninguna.
+Nombre propuesto:
 
-## FIRST BAD BOUNDARY
+R-RENT-CUT-001..010
 
-Comparar Dashboard vs Director IA input por input para B:
+Debe probar la frontera física real.
 
-venta_ton
-margen
-descuento
-HG
-HG$
-operativos
-corporativos
-impuestos
-casa
-comisionista
-util_oper_importe
-resultado_final_importe
+### R-RENT-CUT-001
 
-Encontrar el PRIMER input divergente.
+A cerrado permanece real independientemente de upload_day B.
 
-Nombrar exactamente:
+### R-RENT-CUT-002
 
-RENTABILITY_B_FIRST_BAD_BOUNDARY
+B abierto con upload_day=null reproduce MTD incorrecto BEFORE.
 
-Posibles fronteras a investigar, no asumir:
+### R-RENT-CUT-003
 
-B_PERIOD_SOURCE
-B_FINANCIAL_STATE
-B_VERSION_SELECTION
-B_EFFECTIVE_PROY_SOURCE
-B_UPLOAD_DAY
-B_SALES_FORECAST
-B_RECALCULATION
-B_MTD_VS_FORECAST
-B_OVERLAY
-B_SIMULATION_STATE
+Resolver last-upload mensual produce fecha de corte esperada.
 
-## Hipótesis
+### R-RENT-CUT-004
 
-Clasificar PROVEN / REJECTED / NOT_PROVEN.
+El upload_day resuelto llega a computeIgfForecastMiniPayload.
 
-H1
-Director IA usa MTD para ingreso/venta B y gastos forecast mensuales.
+### R-RENT-CUT-005
 
-H2
-Director IA no aplica el mismo PROY efectivo que ARR.
+B venta forecast coincide con Dashboard fixture.
 
-H3
-Dashboard llama recalcularUtilYResultado y Director IA reutiliza valores raw.
+### R-RENT-CUT-006
 
-H4
-La versión IGF seleccionada es distinta.
+B util_oper_importe coincide con Dashboard fixture.
 
-H5
-El upload_day es distinto.
+### R-RENT-CUT-007
 
-H6
-Margen B diverge.
+B resultado_final_importe coincide con Dashboard fixture.
 
-H7
-Descuento B diverge.
+### R-RENT-CUT-008
 
-H8
-HG/HG$ B diverge.
+Delta A→B coincide con Dashboard fixture.
 
-H9
-Operativos B divergen.
+### R-RENT-CUT-009
 
-H10
-Corporativos B divergen.
+Corporativos no cambian por este FIX.
 
-H11
-El error nace antes de util_oper_importe.
+### R-RENT-CUT-010
 
-H12
-resultado_final_importe solo propaga correctamente el error de util_oper_importe.
+Delta Ingreso path permanece independiente y no se modifica.
 
-H13
-Delta Ingreso clientes es independiente de este defecto y no debe modificarse.
+## BEFORE
 
-H14
-Estado React/simulación local explica la diferencia.
+Antes de producto ejecutar:
 
-## Reconciliación
+TIER 1
+R-RUNTIME
+R-MOVEMENT
+R-DELTA-INCOME
+R-DELTA-PARITY
+R-DELTA-CUT
+R-RENT-SNAPSHOT
 
-Reproducir matemáticamente con fixtures/helpers reales:
+Todos los existentes deben permanecer PASS.
 
-Dashboard B:
-inputs
-→ util_oper
-→ resultado_final
+R-RENT-CUT nuevo debe demostrar el defecto.
 
-Director IA B:
-inputs
-→ util_oper
-→ resultado_final
+Como mínimo BEFORE deben fallar los casos relacionados con:
 
-La diferencia final debe reconciliarse hasta explicar los:
+- upload_day propagation;
+- B forecast;
+- util_oper B;
+- resultado_final B;
+- delta A/B.
 
-9,484,618 MXN
+Si el nuevo pack queda completamente verde antes del cambio:
+STOP.
 
-No basta localizar dos valores distintos.
+No aceptar un fixture que vuelva a mockear el KPI final.
 
-Debe demostrarse qué input produce la divergencia.
+## FIRST_BAD_BOUNDARY
 
-## Protección de Delta Ingreso
+Reproducir:
 
-NO modificar ni recomendar cambios a:
+snapshot
+→ loadKpiForMonth(B)
+→ computeIgfForecastMiniPayload
+→ upload_day=null
+→ fechaCorte=""
+→ isCorteEnMes=false
+→ enableLookback=false
+→ no remaining-day forecast
+→ MTD
+→ util_oper incorrecto
+→ resultado_final incorrecto
+
+Documentarlo en BEFORE.
+
+## Implementación mínima
+
+Cambiar solo la ruta necesaria para que:
+
+loadKpiForMonth(B)
+
+resuelva un upload_day canónico y lo suministre al mini.
+
+No transformar este cambio en comportamiento global si otros consumidores requieren semántica distinta.
+
+Preferir dependency injection/helper reutilizable si la arquitectura actual ya lo soporta.
+
+## No duplicación
+
+No escribir otra función que:
+
+SELECT MAX(upload_day...)
+
+si ya existe resolver canónico.
+
+Una sola semántica de corte.
+
+## Closed month
+
+No alterar agosto cerrado.
+
+Un periodo cerrado debe seguir usando real.
+
+R-RENT-CUT-001 debe protegerlo.
+
+## Open month
+
+Septiembre abierto debe usar:
+
+observado hasta corte
++
+proyección correspondiente a días faltantes
+
+según la lógica existente del mini.
+
+No implementar nueva proyección.
+
+## Corporativos
+
+No modificar cálculo.
+
+Auditoría demostró que corporativos B ya coinciden.
+
+## Operativos
+
+No modificar fórmula.
+
+Si se corrigen como consecuencia de utilizar el bRes forecast correcto:
+documentarlo.
+
+No parchear el número.
+
+## Rentabilidad final
+
+No modificar fórmula.
+
+Debe corregirse como consecuencia de util_oper correcto.
+
+## Delta Ingreso
+
+PROHIBIDO modificar sin evidencia nueva:
 
 computeDeltaIngresoClientesPorMes
 computeClientesDescuentoMes
 ingresoClienteMarginal
+resolveUploadDayLikeClientesPorMes
 effective PROY target
 
-salvo evidencia física directa de que participan en ESTE defecto.
+salvo una extracción mecánica de helper común que preserve exactamente su comportamiento.
+
+Si se extrae helper común:
+todos los tests Delta deben permanecer verdes.
+
+## No hardcode
+
+No hardcodear:
+
+2026-09
+Acapulco
+-$80,735
+1,474
+upload_day específico
+
+en producto.
+
+Solo fixtures pueden usar números determinísticos.
+
+## False-green prevention
+
+R-RENT-SNAPSHOT actual mockea loadRentabilidadKpis.
+
+No eliminarlo.
+
+El nuevo R-RENT-CUT debe ir una capa abajo y demostrar la integración:
+
+resolver corte
+→ mini
+→ util_oper
+→ resultado_final
+
+Expected y actual no pueden usar el mismo mock/función de manera circular.
 
 ## LIVE_DB
 
 NO.
 
-Si no puede demostrarse el valor exacto sin producción:
+Todo regression-first debe ejecutarse con fixtures determinísticos.
 
-NOT_PROVEN_WITHOUT_LIVE_DB
+Validación LIVE después del deploy humano.
 
-Preparar probes read-only mínimos, pero no ejecutarlos.
+## AFTER
 
-## Entregables (solo tras G1)
+Obligatorio:
 
-Executive summary.
-Dashboard physical chain.
-Director IA physical chain.
-A parity explanation.
-B input-by-input comparison.
-RENTABILITY_B_FIRST_BAD_BOUNDARY.
-H1-H14 disposition.
-Exact 9,484,618 reconciliation.
-Root cause.
-Why existing regression suite was false-green.
-Minimum future regression cases.
-Recommended minimum FIX.
-git status.
+TIER 1 PASS
+R-RUNTIME PASS
+R-MOVEMENT PASS
+R-DELTA-INCOME PASS
+R-DELTA-PARITY PASS
+R-DELTA-CUT PASS
+R-RENT-SNAPSHOT PASS
+R-RENT-CUT-001..010 PASS
+
+HTTP 5xx = 0
+HARNESS FAILURE = 0
+
+PRE-DEPLOY --gate PASS
+
+Ejecutar suites relacionadas con:
+
+IGF mini
+forecast
+upload_day
+period
+profitability
+financial_diagnosis
+Delta Ingreso
+planner
+runtime
+
+## Validación esperada post-deploy
+
+La pregunta:
+
+¿Qué está provocando el deterioro de la rentabilidad y sobre qué puedo actuar?
+
+debe seguir routeando al snapshot.
+
+Para el mismo cut LIVE, el KPI B de Director IA debe coincidir con
+IGF Forecast ARR.
+
+La validación debe comparar como mínimo:
+
+A final
+B final
+Delta final
+A operativa
+B operativa
+Delta operativa
+
+No aceptar únicamente "más cercano".
 
 ## Completion
 
-DRAFT.
+DONE_PENDING_REVIEW.
 
-Esperar G1 humano.
+B_UPLOAD_DAY eliminado. R-RENT-CUT 001..010 PASS. Suites anteriores PASS.
+PRE-DEPLOY PASS. COMMIT_BLOCKED_BY_ALLOWED_ACTIONS.
 
-No implementar.
-No escribir tests.
-No LIVE_DB.
 No merge.
 No deploy.
-
-Tras G1, el auditor deja DONE_PENDING_REVIEW si el primer punto físico de
-divergencia queda demostrado, o BLOCKED si requiere LIVE_DB.
+No next task.
 
 STOP.
