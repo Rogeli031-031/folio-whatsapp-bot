@@ -1,51 +1,54 @@
-task_id: FIX-DIRECTOR-IA-RENTABILIDAD-DETERIORO-ROUTING-SNAPSHOT-001
+task_id: AUDIT-DIRECTOR-IA-RENTABILIDAD-SNAPSHOT-DASHBOARD-PARITY-001
 
-task_type: FIX
-mode: REGRESSION_FIRST
+task_type: AUDIT
+mode: READ_ONLY_PHYSICAL_TRACE
 
 status: CLOSED
 authorized_by: "Human Approver"
-authorized_at: "2026-09-05T16:54:00-06:00"
-human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-05 - IMPLEMENTATION ONLY; NO MERGE; NO DEPLOY; NO LIVE_DB"
-implementation_authorized: YES
+authorized_at: "2026-09-05T19:56:48-06:00"
+human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-05 - READ_ONLY AUDIT ONLY; NO IMPLEMENTATION; NO LIVE_DB"
+implementation_authorized: NO
 merge_authorized: NO
 deploy_authorized: NO
 live_db_authorized: NO
 
 max_attempts: 1
 
-result_report_path: docs/dev-loop/reports/FIX-DIRECTOR-IA-RENTABILIDAD-DETERIORO-ROUTING-SNAPSHOT-001.md
+result_report_path: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-RENTABILIDAD-SNAPSHOT-DASHBOARD-PARITY-001.md
 
-objective: Hacer que la pregunta «¿Qué está provocando el deterioro de la rentabilidad y sobre qué puedo actuar?» deje de caer en unknown y produzca un snapshot ejecutivo grounded con capacidades existentes, sin inventar bridge, Delta Gastos, atribución monetaria ni controlabilidad.
+objective: Localizar el primer input físico divergente entre Dashboard ARR y Director IA para la rentabilidad de septiembre B (forecast), dado que agosto A coincide exactamente y la diferencia en B es $9,484,618.
 
 in_scope:
-  - planner / routing mínimo para la pregunta exacta (preferir reutilizar financial_diagnosis si el contrato físico lo permite)
-  - orquestación de snapshot (operativa, final, Delta Ingreso existente, comentarios existentes)
-  - contrato determinístico de respuesta / fail-closed
-  - R-RENT-SNAPSHOT-001..010 (solo tras G1; ANTES de producto)
+  - traza read-only Dashboard ARR (ArrClient / IGF Forecast / PROY / mini / recalcularUtilYResultado / render RENTABILIDAD)
+  - traza read-only Director IA (rentabilidad_deterioro_snapshot / loader mini IGF / periodo A / periodo B)
+  - comparación input-por-input de septiembre B
+  - hipótesis H1–H14 (PROVEN / REJECTED / NOT_PROVEN)
+  - reconciliación de $9,484,618
+  - probes read-only mínimos redactados, no ejecutados
   - docs/dev-loop/CURRENT_TASK.md
-  - docs/dev-loop/reports/FIX-DIRECTOR-IA-RENTABILIDAD-DETERIORO-ROUTING-SNAPSHOT-001.md
+  - docs/dev-loop/reports/AUDIT-DIRECTOR-IA-RENTABILIDAD-SNAPSHOT-DASHBOARD-PARITY-001.md
 
 out_of_scope:
+  - implementación
+  - tests nuevos
+  - LIVE_DB
+  - Delta Ingreso (no modificar ni recomendar cambios salvo evidencia física de que participa en ESTE defecto)
+  - computeDeltaIngresoClientesPorMes
+  - computeClientesDescuentoMes
+  - ingresoClienteMarginal
+  - effective PROY target (salvo evidencia física de que participa en ESTE defecto)
   - Delta Gastos
-  - bridge financiero
-  - Shapley
-  - OAT
-  - attribution monetaria
-  - controlability contract
-  - commitment fulfillment
-  - last purchase
-  - Action Register enrichment
-  - alerts
-  - notifications
+  - driver attribution
+  - controlabilidad
+  - comments
+  - Action Register
+  - frontend changes
   - DB/schema
   - migrations
-  - frontend
-  - LIVE_DB
+  - docs/director-ia/
   - merge
   - deploy
   - next task
-  - docs/director-ia/
 
 contracts_in_force:
   - AGENTS.md
@@ -53,23 +56,24 @@ contracts_in_force:
   - docs/director-ia/DIRECTOR_IA_CONSTITUTION.md
   - docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md
   - docs/director-ia/DIRECTOR_IA_EXECUTIVE_KNOWLEDGE_ENGINE.md
-  - docs/dev-loop/reports/AUDIT-DIRECTOR-IA-RENTABILIDAD-DETERIORO-ACTIONABLE-DRIVERS-001.md (CLOSED; no reabre fronteras)
+  - docs/dev-loop/reports/FIX-DIRECTOR-IA-RENTABILIDAD-DETERIORO-ROUTING-SNAPSHOT-001.md
+  - docs/dev-loop/reports/AUDIT-DIRECTOR-IA-RENTABILIDAD-DETERIORO-ACTIONABLE-DRIVERS-001.md
 
 allowed_actions:
-  - (solo tras G1 humano) regression-first: crear R-RENT-SNAPSHOT-001..010 ANTES de producto
-  - (solo tras G1 y BEFORE rojo) routing + snapshot orchestration + response contract fail-closed
-  - ejecutar TIER1 / RUNTIME / MOVEMENT / DELTA-* / PRE-DEPLOY --gate
-  - redactar el reporte en result_report_path
+  - (solo tras G1 humano) traza read-only de código y fixtures
+  - (solo tras G1 humano) redactar probes LIVE read-only; no ejecutarlos
+  - (solo tras G1 humano) escribir el reporte en result_report_path
   - dejar DONE_PENDING_REVIEW, STOPPED o BLOCKED
 
 forbidden_actions:
   - escribir AUTHORIZED_BY_HUMAN
   - poner status AUTHORIZED
   - crear, borrar o modificar authorized_by, authorized_at o human_authorization
-  - implementar o escribir tests mientras status sea DRAFT
-  - inventar Delta Gastos, bridge, atribución $ o controlabilidad
-  - consultar Action Register a ciegas
+  - implementar
+  - escribir tests
   - consultar LIVE_DB
+  - asumir MTD vs forecast sin demostrarlo o rechazarlo
+  - modificar Delta Ingreso
   - modificar docs/director-ia/
   - merge/push a main
   - deploy
@@ -80,512 +84,309 @@ forbidden_actions:
 DRAFT. No hay Gate G1. No es ejecutable.
 
 No implementar.
-No escribir tests todavía.
+No escribir tests.
 No LIVE_DB.
 
 ## North Star
 
-Habilitar de forma segura la pregunta:
+Localizar físicamente por qué Director IA y el Dashboard ARR producen distinta
+rentabilidad para el periodo B abierto/forecast, mientras el periodo A real
+coincide exactamente.
 
-¿Qué está provocando el deterioro de la rentabilidad y sobre qué puedo actuar?
+NO implementar.
 
-sin fingir capacidades que todavía no existen.
+## Evidencia LIVE (crítica; no reconsultar producción en esta tarea)
 
-## Auditoría CLOSED de origen
+Planta:
+Acapulco
 
-AUDIT-DIRECTOR-IA-RENTABILIDAD-DETERIORO-ACTIONABLE-DRIVERS-001
+Comparación:
+Agosto 2026 real vs Septiembre 2026 forecast
 
-Hallazgos contractuales:
+DASHBOARD ARR
 
-ROUTING_FIRST_BAD_BOUNDARY:
-PLANNER
+Agosto:
+resultado_final = 1,073,657
 
-DATA_FIRST_BAD_BOUNDARY:
-DELTA_EXPENSE_SOURCE
+Septiembre:
+resultado_final = -80,735
 
-ATTRIBUTION_FIRST_BAD_BOUNDARY:
-DRIVER_ATTRIBUTION_METHOD
+Delta:
+-1,154,392
 
-ACTIONABILITY_FIRST_BAD_BOUNDARY:
-CONTROLABILITY_CONTRACT
+Campos visibles septiembre:
 
-Rentabilidad operativa:
+venta = 1,474
+margen = 7.12
+descuento = -0.20
+operativos = 9,945,756
+corporativos = 2,561,700
+gasto = 12,507,456
+HG = 12.00
+HG$ = 12.57
+impuestos = 0.93
+casa = 900.63
+comisionista = 572.90
+rentabilidad = -80,735
+
+DIRECTOR IA
+
+Agosto:
+resultado_final_importe = 1,073,657
+
+Septiembre:
+resultado_final_importe = -9,565,353
+
+Delta:
+-10,639,010
+
+util_oper_importe septiembre:
+-7,003,653
+
+Diferencia Dashboard vs Director IA en B:
+9,484,618 MXN
+
+Observación importante:
+
+Director IA:
+
+-7,003,653 - 2,561,700 = -9,565,353
+
+Por tanto corporativos B coincide físicamente con Dashboard.
+
+La divergencia parece estar antes de resultado_final_importe,
+en la construcción de util_oper_importe B.
+
+NO asumir root cause todavía.
+
+NO asumir MTD vs forecast.
+Demostrarlo o rechazarlo.
+
+## Pregunta fundamental
+
+¿Por qué:
+
+A real Dashboard = A real Director IA
+
+pero:
+
+B forecast Dashboard != B forecast Director IA?
+
+Quiero localizar el primer input divergente entre Dashboard ARR
+y Director IA para septiembre B.
+
+Especial atención a:
+
+effective PROY
+venta forecast
+upload_day
+version
+financial_state
+recalcularUtilYResultado
+raw stored fields
+MTD vs forecast
+
+No tocar Delta Ingreso.
+
+## Traza obligatoria Dashboard
+
+Trazar físicamente:
+
+ArrClient / IGF Forecast ARR
+→ selección Agosto / Septiembre
+→ workspace / PROY
+→ effective target
+→ venta forecast
+→ margen
+→ descuento
+→ HG
+→ operativos
+→ corporativos
+→ impuestos
+→ recalcularUtilYResultado
+→ util_oper_importe
+→ resultado_final_importe
+→ render RENTABILIDAD
+
+Identificar:
+
+archivo
+función
+inputs
+version
+PROY/compromiso
+upload_day
+forecast state
+overlays/simulations
+rounding
+
+## Traza obligatoria Director IA
+
+Trazar:
+
+pregunta rentabilidad deterioro
+→ rentabilidad_deterioro_snapshot
+→ loader de mini IGF
+→ periodo A
+→ periodo B
+→ version
+→ forecast state
+→ util_oper_importe
+→ resultado_final_importe
+
+Determinar si Director IA:
+
+A. lee campos almacenados directamente;
+B. llama recalcularUtilYResultado;
+C. reconstruye el forecast;
+D. usa compromiso crudo;
+E. usa PROY efectivo;
+F. usa MTD actual;
+G. mezcla MTD con gastos forecast;
+H. utiliza otra versión.
+
+No asumir ninguna.
+
+## FIRST BAD BOUNDARY
+
+Comparar Dashboard vs Director IA input por input para B:
+
+venta_ton
+margen
+descuento
+HG
+HG$
+operativos
+corporativos
+impuestos
+casa
+comisionista
 util_oper_importe
-
-Rentabilidad final:
 resultado_final_importe
 
-En ARR, “rentabilidad” refiere al resultado final.
+Encontrar el PRIMER input divergente.
 
-NO existe bridge reconciliado de rentabilidad.
+Nombrar exactamente:
 
-NO existe Delta Gastos reconciliado.
+RENTABILITY_B_FIRST_BAD_BOUNDARY
 
-NO existe attribution method de kg/desc/margen/HG.
+Posibles fronteras a investigar, no asumir:
 
-NO existe contrato de controlabilidad.
+B_PERIOD_SOURCE
+B_FINANCIAL_STATE
+B_VERSION_SELECTION
+B_EFFECTIVE_PROY_SOURCE
+B_UPLOAD_DAY
+B_SALES_FORECAST
+B_RECALCULATION
+B_MTD_VS_FORECAST
+B_OVERLAY
+B_SIMULATION_STATE
 
-Por tanto este FIX NO debe inventar ninguno.
+## Hipótesis
 
-## Objetivo único
+Clasificar PROVEN / REJECTED / NOT_PROVEN.
 
-Hacer que la pregunta:
+H1
+Director IA usa MTD para ingreso/venta B y gastos forecast mensuales.
 
-¿Qué está provocando el deterioro de la rentabilidad y sobre qué puedo actuar?
+H2
+Director IA no aplica el mismo PROY efectivo que ARR.
 
-sea reconocida y produzca un snapshot ejecutivo grounded con las capacidades existentes.
+H3
+Dashboard llama recalcularUtilYResultado y Director IA reutiliza valores raw.
 
-Debe responder únicamente con evidencia disponible y marcar explícitamente las fronteras aún desconocidas.
+H4
+La versión IGF seleccionada es distinta.
 
-## Comportamiento futuro mínimo
+H5
+El upload_day es distinto.
 
-La respuesta debe poder mostrar, cuando los datos estén disponibles:
+H6
+Margen B diverge.
 
-1. Rentabilidad operativa A y B.
-2. Delta rentabilidad operativa.
-3. Rentabilidad final A y B.
-4. Delta rentabilidad final.
-5. Principales clientes con Delta Ingreso negativo.
-6. Delta Ingreso de esos clientes.
-7. Comentarios registrados.
-8. Señalar qué hechos comerciales se observan:
-   - kg bajó/subió;
-   - descuento/kg cambió;
-   cuando ya estén disponibles en la misma fuente.
+H7
+Descuento B diverge.
 
-Y debe decir explícitamente:
+H8
+HG/HG$ B diverge.
 
-- no existe todavía un bridge reconciliado de rentabilidad;
-- no puede atribuir $ exactos a volumen/descuento/margen/HG;
-- no puede afirmar qué parte de la caída viene de gastos;
-- no puede clasificar formalmente una variable como accionable si no existe contrato;
-- comentarios son contexto registrado, no causa demostrada.
+H9
+Operativos B divergen.
 
-## Pregunta exacta
+H10
+Corporativos B divergen.
 
-¿Qué está provocando el deterioro de la rentabilidad y sobre qué puedo actuar?
+H11
+El error nace antes de util_oper_importe.
 
-Debe dejar de resolver:
+H12
+resultado_final_importe solo propaga correctamente el error de util_oper_importe.
 
-unknown / clarification
+H13
+Delta Ingreso clientes es independiente de este defecto y no debe modificarse.
 
-cuando planta y periodo puedan resolverse de manera segura.
+H14
+Estado React/simulación local explica la diferencia.
 
-## Routing
+## Reconciliación
 
-Auditoría:
+Reproducir matemáticamente con fixtures/helpers reales:
 
-detectDirectorIaIntent no tiene regla.
+Dashboard B:
+inputs
+→ util_oper
+→ resultado_final
 
-isCauseQuestion exige “por que”.
+Director IA B:
+inputs
+→ util_oper
+→ resultado_final
 
-CAUSE_EXPLANATION está fuera del slice actual.
+La diferencia final debe reconciliarse hasta explicar los:
 
-El FIX debe encontrar la mínima ruta semántica segura.
+9,484,618 MXN
 
-Preferir reutilizar:
+No basta localizar dos valores distintos.
 
-financial_diagnosis
+Debe demostrarse qué input produce la divergencia.
 
-si su contrato físico permite representar este snapshot sin mezclar semánticas.
+## Protección de Delta Ingreso
 
-No crear intent nuevo salvo que sea indispensable y quede demostrado.
-
-## Rentabilidad
-
-Usar fuentes existentes y autoritativas.
-
-No crear fórmula nueva.
-
-Distinguir siempre:
-
-rentabilidad operativa
-vs
-rentabilidad final.
-
-Si el usuario dice solamente:
-
-rentabilidad
-
-usar la semántica ARR demostrada:
-resultado_final_importe
-
-pero puede mostrar operativa como contexto separado.
-
-No sustituir una por otra.
-
-## Periodo
-
-Para:
-
-¿Qué está provocando el deterioro de la rentabilidad y sobre qué puedo actuar?
-
-usar la semántica temporal ya soportada si puede resolverse con seguridad.
-
-Preferencia contractual a demostrar en regression:
-
-mes actual forecast
-vs
-mes anterior real
-
-cuando el mes actual está abierto y existe forecast válido.
-
-No usar MAX(fecha) silenciosamente si cambia el periodo solicitado.
-
-Si no puede resolverse:
-clarification grounded.
-
-## Delta Ingreso
-
-Reutilizar la ruta ejecutiva aceptada:
+NO modificar ni recomendar cambios a:
 
 computeDeltaIngresoClientesPorMes
-
-con:
-
 computeClientesDescuentoMes
 ingresoClienteMarginal
 effective PROY target
 
-No crear otro cálculo.
-
-## Top clientes
-
-Usar Delta Ingreso negativo:
-
-delta < 0
-sort más negativo → menos negativo
-
-Mostrar un Top N pequeño y ejecutivo.
-
-Default propuesto:
-Top 5
-
-si la pregunta no especifica N.
-
-No hardcodear clientes.
-
-## Hechos observables
-
-Para cada cliente, solo si físicamente ya están disponibles en el resultado:
-
-kg A
-kg B
-delta kg
-desc/kg A
-desc/kg B
-delta desc
-
-Puede decir:
-
-“el volumen bajó”
-
-o
-
-“el descuento/kg aumentó”
-
-como HECHO.
-
-NO convertir ese cambio en una atribución monetaria.
-
-NO decir:
-
-“$X se debe al volumen”
-
-en este slice.
-
-## Margen
-
-Margen es plant-level.
-
-Puede mostrarse si es relevante al snapshot general.
-
-NO decir:
-
-“margen del cliente”.
-
-NO atribuirle $ del cliente en este slice.
-
-## HG
-
-Puede participar en la fórmula existente.
-
-NO descomponer su contribución.
-
-NO clasificarlo como accionable.
-
-## Gastos
-
-FAIL CLOSED.
-
-No existe Delta Gastos reconciliado.
-
-Este FIX NO debe consultar módulos de gastos y presentar una lista como si explicara la rentabilidad.
-
-Puede decir de manera concisa:
-
-“No tengo todavía un Delta Gastos reconciliado con esta rentabilidad, así que no atribuyo parte del deterioro a gastos.”
-
-No navegar presupuesto/cheques/expense_analysis a ciegas.
-
-## Actionability
-
-FAIL CLOSED.
-
-No existe CONTROLABILITY_CONTRACT.
-
-La pregunta dice:
-
-“sobre qué puedo actuar”.
-
-La respuesta puede distinguir únicamente hechos que requieren revisión comercial, sin presentar una taxonomía contractual falsa.
-
-Ejemplo permitido:
-
-“Estos son los clientes y variables comerciales que conviene revisar primero.”
-
-Ejemplo NO permitido:
-
-“$X es directamente controlable.”
-
-No usar labels DIRECTAMENTE_ACCIONABLE/etc. todavía.
-
-## Comentarios
-
-Usar el enrichment seguro ya existente.
-
-Formato conceptual:
-
-Comentario registrado:
-"..."
-
-No:
-
-Causa:
-"..."
-
-## Action Register
-
-NO consultarlo a ciegas.
-
-No Action Register en este slice salvo relación física canónica ya demostrada y necesaria.
-
-## No bridge
-
-No afirmar:
-
-Delta rentabilidad
-=
-Delta Ingreso
--
-Delta Gastos
-
-La auditoría demostró que no existe reconciliación.
-
-La respuesta debe mantener separados:
-
-A. Resultado de rentabilidad.
-B. Presión observada en clientes / Delta Ingreso.
-C. Limitaciones de atribución.
-
-## Regression-first
-
-Crear:
-
-R-RENT-SNAPSHOT-001..010
-
-antes de producto.
-
-### 001 — exact routing
-
-Pregunta exacta:
-¿Qué está provocando el deterioro de la rentabilidad y sobre qué puedo actuar?
-
-Expected:
-no unknown.
-
-Debe llegar a la ruta ejecutiva elegida.
-
-### 002 — standalone period
-
-Pregunta standalone resuelve periodo seguro cuando existe forecast actual.
-
-### 003 — profitability distinction
-
-Operativa y final no se mezclan.
-
-### 004 — generic “rentabilidad”
-
-Usa resultado_final_importe como KPI principal según semántica ARR.
-
-### 005 — Delta Income Top clients
-
-Usa computeDeltaIngresoClientesPorMes source-of-truth.
-
-### 006 — fact vs attribution
-
-Puede mostrar:
-kg bajó.
-
-No puede decir:
-“$X fue causado por kg”.
-
-### 007 — comments are context
-
-Comentario registrado se muestra como contexto, no causa.
-
-### 008 — expense fail-closed
-
-No inventa Delta Gastos.
-
-### 009 — actionability fail-closed
-
-No inventa clasificación de controlabilidad.
-
-### 010 — no fake bridge
-
-No afirma que Delta Ingreso ± gastos reconcilia con Delta rentabilidad.
-
-## BEFORE
-
-Antes de producto:
-
-TIER 1 PASS
-R-RUNTIME PASS
-R-MOVEMENT PASS
-R-DELTA-INCOME PASS
-R-DELTA-PARITY PASS
-R-DELTA-CUT PASS
-
-R-RENT-SNAPSHOT nuevos:
-deben reproducir el defecto.
-
-Como mínimo:
-
-001 FAIL
-002 según routing actual
-005 no alcanzable por exact question
-008/009/010 deben proteger fail-closed
-
-PRE-DEPLOY FAIL.
-
-Si 001 queda verde con producto actual:
-STOP y revisar fixture.
-
-## Product change
-
-Cambiar únicamente:
-
-- routing;
-- snapshot orchestration;
-- deterministic response contract necesario.
-
-No crear:
-
-- Delta Gastos;
-- driver attribution;
-- bridge;
-- actionability policy;
-- alerts;
-- actions automation.
-
-## Response semantics
-
-La respuesta futura debe tender a:
-
-Rentabilidad de Acapulco:
-- Final ...
-- Operativa ...
-
-Presión comercial observada:
-1. Cliente...
-   Delta Ingreso...
-   Volumen...
-   Descuento...
-   Comentario registrado...
-
-Qué revisar:
-- priorizar clientes con mayor presión;
-- revisar cambios observables de volumen/descuento.
-
-Límites:
-- Delta Gastos no reconciliado;
-- no atribuyo pesos por driver;
-- no presento comentarios como causa.
-
-No hardcodear texto exacto si existe formatter mejor.
-
-## Protecciones
-
-No romper:
-
-- Delta Ingreso
-- Clientes por mes
-- IGF
-- profitability existing paths
-- financial_diagnosis
-- commercial_trend
-- movement
-- M9
-- client_profile
-- comments
-- DICF
-- historical_margin
-- Action Register
-
-## Out of scope
-
-- Delta Gastos
-- bridge financiero
-- Shapley
-- OAT
-- attribution monetaria
-- controlability contract
-- commitment fulfillment
-- last purchase
-- Action Register enrichment
-- alerts
-- notifications
-- DB/schema
-- migrations
-- frontend
-- LIVE_DB
-- merge
-- deploy
-- next task
+salvo evidencia física directa de que participan en ESTE defecto.
 
 ## LIVE_DB
 
 NO.
 
-Validación LIVE será post-deploy.
+Si no puede demostrarse el valor exacto sin producción:
 
-## AFTER
+NOT_PROVEN_WITHOUT_LIVE_DB
 
-TIER 1 PASS
-R-RUNTIME PASS
-R-MOVEMENT PASS
-R-DELTA-INCOME PASS
-R-DELTA-PARITY PASS
-R-DELTA-CUT PASS
-R-RENT-SNAPSHOT-001..010 PASS
+Preparar probes read-only mínimos, pero no ejecutarlos.
 
-HTTP 5xx = 0
-HARNESS FAILURE = 0
+## Entregables (solo tras G1)
 
-PRE-DEPLOY PASS
-
-Ejecutar suites relacionadas con:
-
-planner
-financial_diagnosis
-IGF
-profitability
-period
-Delta Ingreso
-comments
-continuity
-fail-closed
+Executive summary.
+Dashboard physical chain.
+Director IA physical chain.
+A parity explanation.
+B input-by-input comparison.
+RENTABILITY_B_FIRST_BAD_BOUNDARY.
+H1-H14 disposition.
+Exact 9,484,618 reconciliation.
+Root cause.
+Why existing regression suite was false-green.
+Minimum future regression cases.
+Recommended minimum FIX.
+git status.
 
 ## Completion
 
@@ -594,9 +395,12 @@ DRAFT.
 Esperar G1 humano.
 
 No implementar.
-No escribir tests todavía.
+No escribir tests.
 No LIVE_DB.
 No merge.
 No deploy.
+
+Tras G1, el auditor deja DONE_PENDING_REVIEW si el primer punto físico de
+divergencia queda demostrado, o BLOCKED si requiere LIVE_DB.
 
 STOP.
