@@ -1,172 +1,242 @@
-task_id: FIX-DIRECTOR-IA-RENTABILIDAD-CHAT-UPLOAD-DAY-ONLY-002
+task_id: AUDIT-DIRECTOR-IA-CONVERSATIONAL-SHORT-FOLLOWUP-001
 
-task_type: FIX
-mode: REGRESSION_FIRST
+task_type: AUDIT
+mode: READ_ONLY_PHYSICAL_TRACE
 
 status: CLOSED
 authorized_by: "Human Approver"
-authorized_at: "2026-09-05T22:10:17-06:00"
-human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-05 - MICRO FIX IMPLEMENTATION AUTHORIZED; REGRESSION_FIRST; COMMIT ON FIX BRANCH AUTHORIZED; NO LIVE_DB; NO MERGE; NO PUSH MAIN; NO DEPLOY"
-implementation_authorized: YES
+authorized_at: "2026-09-06T17:07:00-06:00"
+human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-06 - READ_ONLY CONVERSATIONAL AUDIT ONLY; NO IMPLEMENTATION; NO LIVE_DB; NO MERGE; NO DEPLOY"
+implementation_authorized: NO
 merge_authorized: NO
 deploy_authorized: NO
 live_db_authorized: NO
 
 max_attempts: 1
 
-base_main_sha: 17adf284d6113bf92c28bb0307e0cbf0115edb6b
+base_main_sha: 107977dabba7fe8f691fbc23997fd0612439d4c4
 
-result_report_path: docs/dev-loop/reports/FIX-DIRECTOR-IA-RENTABILIDAD-CHAT-UPLOAD-DAY-ONLY-002.md
+result_report_path: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-CONVERSATIONAL-SHORT-FOLLOWUP-001.md
 
-objective: Corregir exclusivamente la pérdida de req.body.upload_day entre askDirectorIa y assembleRentabilidadDeterioroSnapshot.
+objective: Localizar el primer boundary físico que impide o permite que Director IA continúe naturalmente una conversación ejecutiva cuando el usuario responde con un follow-up mínimo como "gasto", sin repetir planta, periodo ni tema.
 
 contracts_in_force:
   - AGENTS.md
   - docs/dev-loop/LOOP_PROTOCOL.md
   - docs/director-ia/DIRECTOR_IA_CONSTITUTION.md
   - docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md
-  - docs/dev-loop/reports/AUDIT-DIRECTOR-IA-CHAT-EFFECTIVE-CUT-TRANSPORT-001.md
 
-## Hechos congelados
+## North Star conversacional
 
-LIVE:
+Director IA debe comportarse como una conversación y no como una secuencia de consultas aisladas.
 
-POST /api/director-ia/chat
-upload_day=2026-09-05
+Escenario canónico:
 
-PROVEN:
+T1:
+¿Qué está provocando el deterioro de la rentabilidad y sobre qué puedo actuar?
 
-CHAT_CUT_TRANSPORTED_BUT_NOT_CONSUMED
+Contexto físico conocido:
+- planta: Acapulco
+- periodo A: agosto 2026 real
+- periodo B: septiembre 2026 forecast
+- effective cut: 2026-09-05
 
-FIRST_BAD_BOUNDARY:
+T2:
+gasto
 
-askDirectorIa
-→ assembleRentabilidadDeterioroSnapshot
+La intención humana de T2 es:
 
-El snapshot ya soporta deps.upload_day y reutiliza:
+"continúa sobre el deterioro de rentabilidad que acabamos de discutir y profundiza en el gasto"
 
-resolveUploadDayLikeClientesPorMes
+No debería requerir que el usuario vuelva a escribir:
+- Acapulco
+- agosto
+- septiembre
+- rentabilidad
+- forecast
+- upload_day
 
-## Cambio funcional autorizado
+## Hechos físicos a verificar
 
-Únicamente transportar:
+En main actual:
 
-req.body.upload_day
+- T1 entra por rentabilidad deterioration snapshot.
+- askDirectorIa construye conversation_state.
+- revisar si parent_intent profitability_deterioro_snapshot sobrevive al sanitize/echo del siguiente turno.
+- revisar transporte frontend de conversation_state.
+- revisar resolveConversationTurn.
+- revisar planner/CEL routing de una utterance mínima "gasto".
+- revisar si existe una capacidad física disponible para responder una comparación básica de gasto dentro del contexto heredado.
 
-hasta:
+NO asumir que el defecto está únicamente en INHERITABLE_INTENTS.
 
-assembleRentabilidadDeterioroSnapshot({
-  ...
-  upload_day: ...
-})
+## Pregunta única
 
-La forma funcional objetivo debe ser equivalente a:
+Después de T1 exitoso, cuando el usuario dice únicamente:
 
-upload_day:
-  (req && req.body && req.body.upload_day) || null
+gasto
 
-## Explícitamente prohibido
+¿cuál es el PRIMER boundary que impide resolverlo como follow-up del análisis activo de rentabilidad?
 
-NO usar:
+## Traza obligatoria
 
-req.body.cutoff_date
+T1 response
+→ context_meta.conversation_state
+→ frontend conserva state
+→ T2 POST conversation_state
+→ sanitizeEchoedState
+→ resolveConversationTurn
+→ parent intent / previous frame
+→ planner
+→ CEL
+→ tool/specialized route
+→ respuesta o aclaración
 
-NO agregar alias alternativos.
-NO agregar otra fuente de cut.
-NO modificar frontend.
-NO modificar server.js.
-NO modificar arr.upload_log.
-NO DB/schema.
-NO fórmula financiera.
-NO Delta Ingreso.
-NO planner/CEL.
-NO hardcode LIVE.
+Para cada hop registrar:
 
-## Regression first
+PRESERVED
+TRANSFORMED
+DROPPED
+NOT_INHERITABLE
+NOT_RECOGNIZED
+CAPABILITY_MISSING
+RUNTIME_REQUIRED
 
-La prueba debe cruzar askDirectorIa.
+## Clasificación decisiva
 
-Cubrir como mínimo:
+Elegir exactamente una como FIRST_BAD_BOUNDARY:
 
-R-RENT-CHAT-CUT-001
-request upload_day llega al snapshot.
+A. FOLLOWUP_STATE_NOT_TRANSPORTED
 
-R-RENT-CHAT-CUT-002
-B abierto entrega el mismo YMD al mini.
+El frontend/request no devuelve el state producido en T1.
 
-R-RENT-CHAT-CUT-003
-con explicit cut B usa forecast y no MTD.
+B. FOLLOWUP_PARENT_NOT_INHERITABLE
 
-R-RENT-CHAT-CUT-004
-sin upload_day conserva fallback.
+El state llega, pero profitability_deterioro_snapshot no sobrevive como contexto activo/heredable.
 
-R-RENT-CHAT-CUT-005
-invalid/mismatched upload_day usa semántica canónica existente.
+C. FOLLOWUP_ROUTING_NOT_CONTEXTUAL
 
-R-RENT-CHAT-CUT-006
-A cerrado permanece real.
+El contexto sobrevive, pero "gasto" se planifica/rutea sin usarlo.
+
+D. FOLLOWUP_BRANCH_CAPABILITY_MISSING
+
+El contexto y routing funcionan, pero no existe una capacidad física apropiada para desarrollar la rama gasto.
+
+E. FOLLOWUP_ALREADY_SUPPORTED
+
+La cadena ya resuelve correctamente el follow-up.
+
+F. RUNTIME_REQUIRED
+
+Código estático no permite determinar qué ocurrió en la sesión LIVE.
+
+## Portabilidad secundaria
+
+Sin rediseñar arquitectura, clasificar cada hop como:
+
+GENERIC_CONVERSATION
+FOLIOS_DOMAIN
+MIXED
+
+Objetivo:
+identificar qué parte del mecanismo podría reutilizarse posteriormente en otro proyecto y cuál pertenece al conocimiento/herramientas de Director IA.
+
+No proponer todavía extracción/refactor.
+
+## Human-like acceptance conceptual
+
+La auditoría NO implementa esta respuesta, pero debe evaluar si la arquitectura actual puede llegar a una interacción del tipo:
+
+T1:
+¿Qué está provocando el deterioro...?
+
+T2:
+gasto
+
+Respuesta esperada semánticamente:
+- conserva planta y periodos;
+- entiende que "gasto" profundiza el tema anterior;
+- no obliga a reformular la pregunta completa;
+- no inventa causalidad;
+- puede ofrecer el siguiente paso conversacional.
+
+## Browser runtime
+
+Si la estática no basta:
+
+BLOCKED_NEEDS_BROWSER_RUNTIME_EVIDENCE
+
+Preparar una prueba humana mínima con únicamente dos turnos:
+
+T1:
+¿Qué está provocando el deterioro de la rentabilidad y sobre qué puedo actuar?
+
+T2:
+gasto
+
+Si DevTools fuera necesario, registrar únicamente:
+- endpoint
+- question
+- planta_id
+- upload_day
+- presencia/ausencia y campos estructurales de conversation_state
+
+Nunca registrar:
+- Authorization
+- Bearer
+- cookies
+- tokens
+- headers sensibles
 
 ## In scope
 
+- frontend-dashboard/modules/director-ia/ solo lectura
 - lib/director-ia-chat.js
-- test/director-ia-rent-chat-cut.test.js
-- fixtures/helpers estrictamente necesarios si el baseline los requiere
+- lib/director-ia-conversation-state.js
+- lib/director-ia-conversational-executive-layer.js
+- lib/director-ia-planner.js
+- financial/gastos route únicamente para determinar capability física
+- tests existentes solo para inspección/probes read-only
 - docs/dev-loop/CURRENT_TASK.md
-- docs/dev-loop/reports/FIX-DIRECTOR-IA-RENTABILIDAD-CHAT-UPLOAD-DAY-ONLY-002.md
+- docs/dev-loop/reports/AUDIT-DIRECTOR-IA-CONVERSATIONAL-SHORT-FOLLOWUP-001.md
 
 ## Out of scope
 
-- frontend-dashboard/
-- server.js
-- lib/director-ia-rentabilidad-deterioro-snapshot.js salvo contradicción física y STOP
+- implementación
+- escribir tests nuevos
+- modificar producto
 - DB/schema
-- arr.upload_log
-- fórmulas financieras
-- Delta Ingreso
-- Action Register
-- planner/CEL
-- docs/director-ia/
-- merge
-- push main
-- deploy
 - LIVE_DB
+- arr.upload_log
+- rentabilidad formulas
+- Delta Ingreso
+- crear Delta Gastos
+- nueva arquitectura
+- extraer reusable engine
+- modificar docs/director-ia/
+- merge
+- deploy
 - next task
 
 allowed_actions:
   - ninguna hasta G1 humano
-  - tras G1: regression-first
-  - tras G1: implementación mínima dentro de in_scope
-  - tras G1: tests y validaciones
-  - tras G1: reporte
-  - tras G1: commit únicamente en rama del FIX si G1 lo autoriza
-  - tras G1: DONE_PENDING_REVIEW
+  - tras G1: inspección read-only
+  - tras G1: probes locales read-only existentes si son necesarios
+  - tras G1: redactar reporte
+  - tras G1: preparar browser evidence humana si fuera necesaria
+  - tras G1: DONE_PENDING_REVIEW o BLOCKED_NEEDS_BROWSER_RUNTIME_EVIDENCE
 
 forbidden_actions:
   - escribir AUTHORIZED_BY_HUMAN
   - poner status AUTHORIZED
-  - usar req.body.cutoff_date
-  - agregar fuentes alternativas de cut
+  - implementación
+  - tests nuevos
+  - modificar producto
   - LIVE_DB
   - DB/schema
-  - frontend
   - merge/push main
   - deploy
   - abrir siguiente tarea
-
-## Acceptance
-
-PASS solo si:
-
-req.body.upload_day
-→ askDirectorIa
-→ snapshot deps.upload_day
-
-sin cutoff_date ni otra fuente adicional.
-
-BEFORE rojo.
-AFTER verde.
-
-Suites relacionadas sin NEW FAILURE.
 
 ## Completion
 
