@@ -1,235 +1,172 @@
-task_id: AUDIT-DIRECTOR-IA-CHAT-EFFECTIVE-CUT-TRANSPORT-001
+task_id: FIX-DIRECTOR-IA-RENTABILIDAD-CHAT-UPLOAD-DAY-ONLY-002
 
-task_type: AUDIT
-mode: READ_ONLY_PHYSICAL_TRACE
+task_type: FIX
+mode: REGRESSION_FIRST
 
 status: CLOSED
 authorized_by: "Human Approver"
-authorized_at: "2026-09-05T21:46:19-06:00"
-human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-05 - READ_ONLY AUDIT ONLY; NO IMPLEMENTATION; NO LIVE_DB; NO MERGE; NO DEPLOY"
-implementation_authorized: NO
+authorized_at: "2026-09-05T22:10:17-06:00"
+human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-05 - MICRO FIX IMPLEMENTATION AUTHORIZED; REGRESSION_FIRST; COMMIT ON FIX BRANCH AUTHORIZED; NO LIVE_DB; NO MERGE; NO PUSH MAIN; NO DEPLOY"
+implementation_authorized: YES
 merge_authorized: NO
 deploy_authorized: NO
 live_db_authorized: NO
 
 max_attempts: 1
 
-result_report_path: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-CHAT-EFFECTIVE-CUT-TRANSPORT-001.md
+base_main_sha: 17adf284d6113bf92c28bb0307e0cbf0115edb6b
 
-objective: Determinar si el request real del chat de Director IA transporta el effective cut del Dashboard hasta askDirectorIa y el snapshot de rentabilidad, sin implementar.
+result_report_path: docs/dev-loop/reports/FIX-DIRECTOR-IA-RENTABILIDAD-CHAT-UPLOAD-DAY-ONLY-002.md
 
-in_scope:
-  - superficie frontend de Director IA
-  - DirectorIaChatPanel y componentes equivalentes
-  - construcción del POST de chat
-  - upload_day en props, URL, state o body
-  - handler HTTP del chat
-  - handlePostChat
-  - askDirectorIa
-  - entrada al snapshot de rentabilidad
-  - docs/dev-loop/CURRENT_TASK.md
-  - docs/dev-loop/reports/AUDIT-DIRECTOR-IA-CHAT-EFFECTIVE-CUT-TRANSPORT-001.md
-  - preparación de evidencia browser runtime ejecutada por humano si código no basta
-
-out_of_scope:
-  - implementación
-  - tests
-  - LIVE_DB
-  - DB/schema
-  - arr.upload_log
-  - fórmula de rentabilidad
-  - Delta Ingreso
-  - Action Register
-  - docs/director-ia/
-  - merge
-  - deploy
-  - next task
+objective: Corregir exclusivamente la pérdida de req.body.upload_day entre askDirectorIa y assembleRentabilidadDeterioroSnapshot.
 
 contracts_in_force:
   - AGENTS.md
   - docs/dev-loop/LOOP_PROTOCOL.md
   - docs/director-ia/DIRECTOR_IA_CONSTITUTION.md
   - docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md
-  - docs/director-ia/DIRECTOR_IA_EXECUTIVE_KNOWLEDGE_ENGINE.md
-  - docs/dev-loop/reports/AUDIT-DIRECTOR-IA-RENTABILIDAD-LIVE-UPLOAD-DAY-RUNTIME-001.md
-  - docs/dev-loop/reports/AUDIT-DIRECTOR-IA-DASHBOARD-EFFECTIVE-CUT-SOURCE-001.md
+  - docs/dev-loop/reports/AUDIT-DIRECTOR-IA-CHAT-EFFECTIVE-CUT-TRANSPORT-001.md
+
+## Hechos congelados
+
+LIVE:
+
+POST /api/director-ia/chat
+upload_day=2026-09-05
+
+PROVEN:
+
+CHAT_CUT_TRANSPORTED_BUT_NOT_CONSUMED
+
+FIRST_BAD_BOUNDARY:
+
+askDirectorIa
+→ assembleRentabilidadDeterioroSnapshot
+
+El snapshot ya soporta deps.upload_day y reutiliza:
+
+resolveUploadDayLikeClientesPorMes
+
+## Cambio funcional autorizado
+
+Únicamente transportar:
+
+req.body.upload_day
+
+hasta:
+
+assembleRentabilidadDeterioroSnapshot({
+  ...
+  upload_day: ...
+})
+
+La forma funcional objetivo debe ser equivalente a:
+
+upload_day:
+  (req && req.body && req.body.upload_day) || null
+
+## Explícitamente prohibido
+
+NO usar:
+
+req.body.cutoff_date
+
+NO agregar alias alternativos.
+NO agregar otra fuente de cut.
+NO modificar frontend.
+NO modificar server.js.
+NO modificar arr.upload_log.
+NO DB/schema.
+NO fórmula financiera.
+NO Delta Ingreso.
+NO planner/CEL.
+NO hardcode LIVE.
+
+## Regression first
+
+La prueba debe cruzar askDirectorIa.
+
+Cubrir como mínimo:
+
+R-RENT-CHAT-CUT-001
+request upload_day llega al snapshot.
+
+R-RENT-CHAT-CUT-002
+B abierto entrega el mismo YMD al mini.
+
+R-RENT-CHAT-CUT-003
+con explicit cut B usa forecast y no MTD.
+
+R-RENT-CHAT-CUT-004
+sin upload_day conserva fallback.
+
+R-RENT-CHAT-CUT-005
+invalid/mismatched upload_day usa semántica canónica existente.
+
+R-RENT-CHAT-CUT-006
+A cerrado permanece real.
+
+## In scope
+
+- lib/director-ia-chat.js
+- test/director-ia-rent-chat-cut.test.js
+- fixtures/helpers estrictamente necesarios si el baseline los requiere
+- docs/dev-loop/CURRENT_TASK.md
+- docs/dev-loop/reports/FIX-DIRECTOR-IA-RENTABILIDAD-CHAT-UPLOAD-DAY-ONLY-002.md
+
+## Out of scope
+
+- frontend-dashboard/
+- server.js
+- lib/director-ia-rentabilidad-deterioro-snapshot.js salvo contradicción física y STOP
+- DB/schema
+- arr.upload_log
+- fórmulas financieras
+- Delta Ingreso
+- Action Register
+- planner/CEL
+- docs/director-ia/
+- merge
+- push main
+- deploy
+- LIVE_DB
+- next task
 
 allowed_actions:
   - ninguna hasta G1 humano
-  - tras G1: inspección read-only de código
-  - tras G1: redactar reporte
-  - tras G1: preparar evidencia browser runtime para ejecución humana si hace falta
-  - tras G1: DONE_PENDING_REVIEW o BLOCKED_NEEDS_BROWSER_RUNTIME_EVIDENCE
+  - tras G1: regression-first
+  - tras G1: implementación mínima dentro de in_scope
+  - tras G1: tests y validaciones
+  - tras G1: reporte
+  - tras G1: commit únicamente en rama del FIX si G1 lo autoriza
+  - tras G1: DONE_PENDING_REVIEW
 
 forbidden_actions:
   - escribir AUTHORIZED_BY_HUMAN
   - poner status AUTHORIZED
-  - implementación
-  - escribir tests
-  - consultar LIVE_DB
-  - modificar DB/schema
-  - modificar arr.upload_log
-  - modificar Director IA
+  - usar req.body.cutoff_date
+  - agregar fuentes alternativas de cut
+  - LIVE_DB
+  - DB/schema
+  - frontend
   - merge/push main
   - deploy
   - abrir siguiente tarea
 
-## Hechos ya demostrados
+## Acceptance
 
-IGF Forecast ARR LIVE:
+PASS solo si:
 
-effective cut visible:
-2026-09-05
-
-request físico observado:
-
-GET /api/dashboard/igf-forecast
-year=2026
-month=9
-upload_day=2026-09-05
-include_mini=1
-
-Por tanto:
-
-DASHBOARD_EFFECTIVE_CUT_SOURCE =
-FRONTEND_EFFECTIVE_CUT_STATE
-
-DASHBOARD_EFFECTIVE_CUT_VALUE =
-2026-09-05
-
-Director IA:
-
-arr.upload_log LIVE = 0 filas
-→ resolver = null
-→ mini sin cut
-→ septiembre MTD.
-
-No reabrir:
-
-DEPLOY_STALE
-B_UPLOAD_DAY
-UPLOAD_DAY_QUERY_RESULT
-DASHBOARD_EFFECTIVE_CUT_SOURCE
-
-## Pregunta única
-
-Cuando se hace la pregunta:
-
-¿Qué está provocando el deterioro de la rentabilidad y sobre qué puedo actuar?
-
-desde el contexto que tiene effective cut 2026-09-05:
-
-¿el POST del chat de Director IA transporta upload_day=2026-09-05?
-
-## Trazabilidad obligatoria
-
-Auditar:
-
-effective cut frontend
-→ componente que abre/renderiza Director IA
-→ props / URL / state
-→ DirectorIaChatPanel o equivalente
-→ body del POST
-→ handler server
-→ handlePostChat
+req.body.upload_day
 → askDirectorIa
-→ snapshot de rentabilidad
+→ snapshot deps.upload_day
 
-Para cada hop marcar:
+sin cutoff_date ni otra fuente adicional.
 
-PRESERVED
-TRANSFORMED
-DROPPED
-NOT_PRESENT
-RUNTIME_REQUIRED
+BEFORE rojo.
+AFTER verde.
 
-## Matriz obligatoria
-
-HOP
-| FIELD
-| VALUE/SOURCE
-| REACHES NEXT HOP?
-| VERDICT
-
-Como mínimo:
-
-Dashboard effective cut
-Director IA component
-chat POST body
-HTTP handler
-handlePostChat
-askDirectorIa
-rentabilidad snapshot deps
-
-## Resultado decisivo
-
-Clasificar exactamente uno:
-
-A.
-CHAT_CUT_TRANSPORTED_BUT_NOT_CONSUMED
-
-El POST contiene upload_day=2026-09-05 pero el snapshot no lo consume.
-
-B.
-CHAT_CUT_NOT_TRANSPORTED
-
-El POST no contiene el effective cut.
-
-C.
-CHAT_CUT_WRONG_SOURCE
-
-El POST contiene upload_day pero es distinto del effective cut.
-
-D.
-RUNTIME_REQUIRED
-
-Código no permite saber qué ocurrió en el request LIVE concreto.
-
-## Browser evidence
-
-Si resulta D:
-
-BLOCKED_NEEDS_BROWSER_RUNTIME_EVIDENCE
-
-Preparar instrucciones para que el Human Approver inspeccione únicamente
-el Payload del POST de chat.
-
-Pregunta exacta:
-
-¿Qué está provocando el deterioro de la rentabilidad y sobre qué puedo actuar?
-
-Con el Dashboard usando corte:
-
-2026-09-05
-
-Registrar solamente:
-
-endpoint
-question
-plant/planta si aparece
-year si aparece
-month si aparece
-upload_day si aparece
-
-NO registrar:
-
-Authorization
-Bearer
-cookies
-headers
-tokens
-
-## Prohibiciones
-
-No implementar.
-No tests.
-No DB.
-No crear tablas.
-No modificar arr.upload_log.
-No FIX.
-No merge.
-No deploy.
-No next task.
+Suites relacionadas sin NEW FAILURE.
 
 ## Completion
 
