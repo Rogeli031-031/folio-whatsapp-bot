@@ -1,239 +1,256 @@
-task_id: FIX-DIRECTOR-IA-CONVERSATIONAL-PROFITABILITY-FOLLOWUP-001
+task_id: AUDIT-DIRECTOR-IA-CONVERSATIONAL-SUBTOPIC-DEPTH-001
 
-task_type: FIX
-mode: REGRESSION_FIRST
+task_type: AUDIT
+mode: READ_ONLY_PHYSICAL_TRACE
 
 status: CLOSED
 authorized_by: "Human Approver"
-authorized_at: "2026-09-06T17:14:59-06:00"
-human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-06 - CONVERSATIONAL FIX IMPLEMENTATION AUTHORIZED; REGRESSION_FIRST; COMMIT ON FIX BRANCH AUTHORIZED; NO LIVE_DB; NO MERGE; NO PUSH MAIN; NO DEPLOY"
-implementation_authorized: YES
+authorized_at: "2026-09-06T17:43:33-06:00"
+human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-06 - READ_ONLY CONVERSATIONAL DEPTH AUDIT ONLY; NO IMPLEMENTATION; NO REGEX PATCH; NO LIVE_DB; NO MERGE; NO DEPLOY"
+implementation_authorized: NO
 merge_authorized: NO
 deploy_authorized: NO
 live_db_authorized: NO
 
 max_attempts: 1
 
-base_main_sha: f11c4ce947e001acdf8fabde3a3e0b7ba70af1b4
+base_main_sha: 8fd0600f5ab84bf9980e8faaaeb1c8a2d61c6f19
 
-result_report_path: docs/dev-loop/reports/FIX-DIRECTOR-IA-CONVERSATIONAL-PROFITABILITY-FOLLOWUP-001.md
+result_report_path: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-CONVERSATIONAL-SUBTOPIC-DEPTH-001.md
 
-objective: Hacer que un follow-up mínimo como "gasto" continúe el hilo activo de deterioro de rentabilidad sin obligar al usuario a repetir planta, periodos ni tema, sin crear Delta Gastos ni inventar nueva evidencia financiera.
+objective: Localizar el primer boundary físico que rompe una conversación cuando el usuario profundiza un subtema del turno anterior, usando T1 rentabilidad → T2 gasto → T3 corporativos.
 
 contracts_in_force:
   - AGENTS.md
   - docs/dev-loop/LOOP_PROTOCOL.md
   - docs/director-ia/DIRECTOR_IA_CONSTITUTION.md
   - docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md
-  - docs/dev-loop/reports/AUDIT-DIRECTOR-IA-CONVERSATIONAL-SHORT-FOLLOWUP-001.md
+  - docs/dev-loop/reports/FIX-DIRECTOR-IA-CONVERSATIONAL-PROFITABILITY-FOLLOWUP-001.md
 
-## Hecho demostrado por auditoría
-
-FIRST_BAD_BOUNDARY:
-
-FOLLOWUP_PARENT_NOT_INHERITABLE
-
-T1 construye:
-
-parent_intent = profitability_deterioro_snapshot
-
-pero buildConversationState lo anula porque ese parent no está registrado como heredable.
-
-El frontend sí transporta conversation_state.
-
-T2:
-
-gasto
-
-hoy termina como:
-- detected unknown
-- inherit false
-- CEL no_need
-- aclaración genérica.
-
-## North Star
+## Evidencia LIVE congelada
 
 T1:
 
 ¿Qué está provocando el deterioro de la rentabilidad y sobre qué puedo actuar?
 
+Resultado:
+PASS.
+Snapshot correcto de rentabilidad.
+
 T2:
 
-gasto
+y gasto?
 
-T2 debe entenderse como:
+Resultado:
+PASS.
 
-"continúa sobre el análisis de rentabilidad activo y profundiza en gasto"
+Respuesta contextual:
+- conserva Acapulco;
+- conserva 2026-08 vs 2026-09;
+- reconoce rama gasto;
+- no inventa Delta Gastos;
+- devuelve conversation_state.
 
-sin repetir:
-- planta
-- periodo A
-- periodo B
-- rentabilidad
-- forecast
-- effective cut
+T3:
 
-## Restricción crítica
+y corporativos?
 
-NO asumir que agregar una entrada a INHERITABLE_INTENTS resuelve todo.
+Resultado:
+FAIL.
 
-La regresión debe cruzar físicamente:
+Director IA abandona la conversación financiera y responde con diagnóstico general de planta / Action Register:
+- acciones abiertas;
+- mantenimiento;
+- clientes;
+- responsables;
+- riesgos operativos.
 
-T1
-→ state producido
-→ T2 echoed state
+Eso NO corresponde al hilo activo.
+
+## North Star
+
+Una persona interpreta:
+
+T1 rentabilidad
+→ T2 gasto
+→ T3 corporativos
+
+como:
+
+"de los gastos que acabamos de mencionar, háblame de los corporativos"
+
+No debe exigir:
+
+"háblame de los gastos corporativos dentro de la comparación de rentabilidad de Acapulco agosto vs septiembre"
+
+## Pregunta única
+
+¿Cuál es el PRIMER boundary físico que hace que:
+
+y corporativos?
+
+abandone el hilo:
+
+rentabilidad → gasto
+
+y termine en plant diagnosis / Action Register?
+
+## No asumir
+
+NO asumir de antemano que el único defecto es:
+
+isProfitabilityExpenseFollowUp()
+
+Aunque físicamente hoy reconoce solo gasto/gastos.
+
+Demostrar la cadena completa.
+
+## Traza obligatoria
+
+T2 response
+→ context_meta.conversation_state
+→ frontend echo T3
 → sanitizeEchoedState
-→ resolveConversationTurn
+→ resolveConversationTurn("y corporativos?")
+→ parent intent
+→ subtopic disponible o inexistente
+→ detectDirectorIaIntent
 → planner
-→ chat route
-→ respuesta
+→ CEL
+→ specialized profitability route
+→ generic route
+→ plant diagnosis final
 
-## Estado conversacional requerido
+Para cada hop:
 
-Después de T1 debe conservarse de forma segura al menos:
+PRESERVED
+TRANSFORMED
+DROPPED
+NO_SUBTOPIC_MODEL
+LEXICAL_GATE_MISS
+PLANNER_OVERRIDE
+CEL_OVERRIDE
+GENERIC_FALLTHROUGH
+RUNTIME_REQUIRED
 
-- parent_intent = profitability_deterioro_snapshot
-- planta_id
-- periodo_a
-- periodo_b
+## Clasificación decisiva
 
-Si la infraestructura existente permite representar esos periodos mediante active_period_months, reutilizarla.
+Elegir exactamente un FIRST_BAD_BOUNDARY:
 
-No crear un segundo sistema de estado paralelo.
+A. T3_STATE_NOT_TRANSPORTED
 
-El effective cut debe continuar usando el mecanismo request/upload_day ya existente.
+B. T3_PARENT_CONTEXT_LOST
 
-## Comportamiento mínimo T2 "gasto"
+C. ACTIVE_SUBTOPIC_NOT_REPRESENTED
 
-PASS si:
+El parent rentabilidad sobrevive, pero el sistema no representa que T2 dejó "gasto" como subtopic activo.
 
-1. no genera aclaración genérica de tema;
-2. reconoce que sigue dentro del deterioro de rentabilidad;
-3. conserva planta y comparación temporal;
-4. no vuelve a imprimir simplemente el reporte completo de T1;
-5. responde de forma breve y conversacional;
-6. no afirma que existe Delta Gastos;
-7. no inventa atribución monetaria causal;
-8. puede indicar que la comparación de gasto disponible es básica si esa capacidad está físicamente disponible;
-9. si la rama detallada de gasto todavía no está físicamente disponible, lo dice dentro del contexto activo en vez de perder el hilo.
+D. SUBTOPIC_LEXICAL_GATE_TOO_NARROW
 
-Ejemplo semántico permitido, NO hardcode:
+Existe contexto suficiente pero el recognizer/routing solo acepta formas explícitas como "gasto".
 
-"Sí, seguimos con el deterioro de rentabilidad. Sobre gasto, todavía no tengo un Delta Gastos reconciliado. Puedo revisar la comparación de gasto disponible sin atribuirle causalidad."
+E. PLANNER_OVERRIDES_VALID_CONTEXT
 
-No copiar literalmente si los datos/capacidades físicas permiten una respuesta mejor.
+F. CEL_OVERRIDES_VALID_CONTEXT
 
-## No objetivo
+G. GENERIC_FALLTHROUGH_AFTER_VALID_CONTEXT
 
-Este FIX NO tiene que construir todavía:
+H. RUNTIME_REQUIRED
 
-- Delta Gastos
-- bridge reconciliado
-- atribución por driver
-- controlabilidad
-- nueva fórmula financiera
+## Auditoría arquitectónica secundaria
 
-El objetivo es continuidad conversacional.
+Determinar si la implementación actual modela conversación como:
 
-## Regression first
+1. ACTIVE_TOPIC + ACTIVE_SUBTOPIC estructurados
 
-Crear prueba end-to-end/in-process que cruce askDirectorIa.
+o como:
 
-Como mínimo:
+2. colección de recognizers específicos por frase.
 
-R-CONV-PROFIT-001
-T1 produce parent_intent heredable profitability_deterioro_snapshot.
+No rediseñar aún.
 
-R-CONV-PROFIT-002
-T1 conserva planta.
+## Variantes read-only
 
-R-CONV-PROFIT-003
-T1 conserva periodo A/B usando estado estructurado existente.
+Sin convertirlas en nuevos requisitos funcionales, analizar estáticamente cómo caerían:
 
-R-CONV-PROFIT-004
-T2 "gasto" con echoed state produce inherit=true.
+- y corporativos?
+- y operativos?
+- cuánto subieron?
+- cuál pesa más?
+- y los clientes?
+- el primero?
+- por qué?
 
-R-CONV-PROFIT-005
-T2 no termina en unknown clarification genérica.
-
-R-CONV-PROFIT-006
-T2 no repite íntegramente T1.
-
-R-CONV-PROFIT-007
-T2 no afirma Delta Gastos reconciliado.
-
-R-CONV-PROFIT-008
-plant mismatch sigue limpiando contexto y no cruza planta.
-
-R-CONV-PROFIT-009
-sin conversation_state, "gasto" aislado NO inventa hilo.
+Objetivo:
+detectar si arreglar solo "corporativos" crearía whack-a-mole.
 
 ## Portabilidad
 
-La solución debe distinguir:
+Clasificar:
 
-GENERIC_CONVERSATION:
-- conservar parent/frame
-- heredar un follow-up corto
-- invalidar por cambio de planta
-- evitar inventar contexto cuando no existe
+GENERIC_CONVERSATION
+- topic/subtopic continuity
+- elliptical follow-up
+- pronouns/references
+- depth > 2 turns
 
-FOLIOS_DOMAIN:
-- profitability_deterioro_snapshot
-- significado de gasto/rentabilidad
-- fuentes financieras
+FOLIOS_DOMAIN
+- rentabilidad
+- gasto
+- corporativos
+- operativos
+- clientes
 
-No extraer todavía un engine reusable.
-No refactor masivo.
+MIXED
+si el routing combina ambos.
+
+No extraer engine todavía.
 
 ## In scope
 
 - lib/director-ia-conversation-state.js
 - lib/director-ia-chat.js
-- lib/director-ia-planner.js solo si físicamente necesario para continuidad
-- helper de rentabilidad existente solo si es estrictamente necesario para respuesta contextual
-- tests de continuidad
-- fixtures/helpers mínimos
+- lib/director-ia-planner.js
+- lib/director-ia-conversational-executive-layer.js
+- helper rentabilidad solo lectura
+- frontend Director IA solo lectura si hace falta confirmar echo
+- tests existentes solo lectura/probes existentes
 - docs/dev-loop/CURRENT_TASK.md
-- docs/dev-loop/reports/FIX-DIRECTOR-IA-CONVERSATIONAL-PROFITABILITY-FOLLOWUP-001.md
+- docs/dev-loop/reports/AUDIT-DIRECTOR-IA-CONVERSATIONAL-SUBTOPIC-DEPTH-001.md
 
 ## Out of scope
 
-- frontend salvo contradicción física y STOP
+- implementación
+- tests nuevos
+- modificar producto
+- agregar "corporativos" al regex
+- agregar "operativos" al regex
+- Delta Gastos
+- nueva fórmula
 - DB/schema
 - LIVE_DB
-- arr.upload_log
-- Delta Gastos
-- fórmula de rentabilidad
-- nueva fuente de verdad
-- hardcode Acapulco
-- hardcode agosto/septiembre
-- hardcode 2026-09-05
-- persistencia cross-session
+- frontend changes
 - reusable engine extraction
 - docs/director-ia/
 - merge
-- push main
 - deploy
 - next task
 
 allowed_actions:
   - ninguna hasta G1 humano
-  - tras G1: regression-first
-  - tras G1: implementación mínima
-  - tras G1: tests relacionados
+  - tras G1: inspección read-only
+  - tras G1: probes existentes read-only
   - tras G1: reporte
-  - tras G1: commit en rama si autorizado
   - tras G1: DONE_PENDING_REVIEW
 
 forbidden_actions:
   - escribir AUTHORIZED_BY_HUMAN
   - poner status AUTHORIZED
-  - Delta Gastos
-  - nueva fórmula
-  - DB/schema
+  - implementación
+  - tests nuevos
+  - parche regex
   - LIVE_DB
-  - frontend sin STOP
+  - DB/schema
   - merge/push main
   - deploy
   - abrir siguiente tarea
@@ -242,6 +259,6 @@ forbidden_actions:
 
 DONE_PENDING_REVIEW.
 
-Reporte: docs/dev-loop/reports/FIX-DIRECTOR-IA-CONVERSATIONAL-PROFITABILITY-FOLLOWUP-001.md
+Reporte: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-CONVERSATIONAL-SUBTOPIC-DEPTH-001.md
 
-STOP. Revisión humana. No merge. No push main. No deploy. No next task.
+STOP. Revisión humana. No implementación. No merge. No deploy. No next task.
