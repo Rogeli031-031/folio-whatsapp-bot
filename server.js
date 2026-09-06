@@ -7424,9 +7424,18 @@ app.get("/api/seh/cumplimiento", dashboardAuthMiddleware, async (req, res) => {
     }
     const today = sehCarpetasLegales.todayYmdMexico();
     const amb = {
-      planta: { total: 0, complying: 0 },
-      estacion: { total: 0, complying: 0 },
-      autotanque: { total: 0, complying: 0 },
+      planta: {
+        operacion: { total: 0, complying: 0 },
+        regulacion: { total: 0, complying: 0 },
+      },
+      estacion: {
+        operacion: { total: 0, complying: 0 },
+        regulacion: { total: 0, complying: 0 },
+      },
+      autotanque: {
+        operacion: { total: 0, complying: 0 },
+        regulacion: { total: 0, complying: 0 },
+      },
     };
     for (const pid of plantaIds) {
       const eq = await client.query(
@@ -7439,22 +7448,34 @@ app.get("/api/seh/cumplimiento", dashboardAuthMiddleware, async (req, res) => {
       const rows = eq.rows || [];
       for (const [key, cats] of Object.entries(SEH_AMBITO_CATEGORIAS)) {
         const s = scoreSehOperacion(rows, cats, today);
-        amb[key].total += s.total;
-        amb[key].complying += s.complying;
+        amb[key].operacion.total += s.total;
+        amb[key].operacion.complying += s.complying;
       }
       const carpetasRows = await sehCarpetasLegales.listByPlanta(client, pid);
       const reg = sehCarpetasLegales.scoreRegulacion(carpetasRows, today);
-      amb.planta.total += reg.total;
-      amb.planta.complying += reg.complying;
+      amb.planta.regulacion.total += reg.total;
+      amb.planta.regulacion.complying += reg.complying;
     }
     const build = (key) => {
-      const t = amb[key].total;
-      const c = amb[key].complying;
+      const op = amb[key].operacion;
+      const reg = amb[key].regulacion;
+      const t = op.total + reg.total;
+      const c = op.complying + reg.complying;
       return {
         ambito: key,
         complying: c,
         total: t,
         pct: t > 0 ? Math.round((100 * c) / t) : 0,
+        operacion: {
+          complying: op.complying,
+          total: op.total,
+          pct: op.total > 0 ? Math.round((100 * op.complying) / op.total) : 0,
+        },
+        regulacion: {
+          complying: reg.complying,
+          total: reg.total,
+          pct: reg.total > 0 ? Math.round((100 * reg.complying) / reg.total) : 0,
+        },
       };
     };
     res.json({
