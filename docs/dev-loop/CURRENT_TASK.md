@@ -1,483 +1,335 @@
-task_id: FIX-DIRECTOR-IA-FOLIO-SEARCH-FRAME-MORPHOLOGY-001
+task_id: AUDIT-DIRECTOR-IA-FOLIO-SEARCH-PERIOD-RANGE-001
 
-task_type: FIX
-mode: REGRESSION_FIRST
+task_type: AUDIT
+mode: READ_ONLY_PHYSICAL_TRACE
 
-status: CLOSED
+status: DONE_PENDING_REVIEW
 authorized_by: "Human Approver"
-authorized_at: "2026-09-07T11:03:41-06:00"
-human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-07 - IMPLEMENT FOLIO SEARCH FRAME + CONTROLLED TOKEN MORPHOLOGY; NO SQL; NO PERIOD CHANGES; NO MERGE; NO DEPLOY; NO LIVE_DB"
+authorized_at: "2026-09-07T11:41:28-06:00"
+human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-07 - READ_ONLY FOLIO SEARCH PERIOD RANGE AUDIT; NO IMPLEMENTATION; NO SQL; NO LIVE_DB; NO MERGE; NO DEPLOY"
 
-implementation_authorized: YES
+implementation_authorized: NO
 merge_authorized: NO
 deploy_authorized: NO
 live_db_authorized: NO
 
 max_attempts: 1
 
-base_main_sha: 4ff25f14a60a82a56f7d41e4c0fdf24ad4b584c6
+base_main_sha: 4dc15ac1d9870efeb1796a45a3135e699c1ec5d5
 
-result_report_path: docs/dev-loop/reports/FIX-DIRECTOR-IA-FOLIO-SEARCH-FRAME-MORPHOLOGY-001.md
+result_report_path: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-FOLIO-SEARCH-PERIOD-RANGE-001.md
 
-objective: Corregir falsos negativos de búsqueda natural de folios/apoyos separando el marco relacional del concepto y sustituyendo el substring matcher por matching secuencial de tokens con variantes singular/plural controladas.
+objective: Determinar el cambio mínimo y veraz para que folio_search entienda rangos temporales naturales como "de enero a agosto", conserve correctamente el concepto buscado y consulte todos los meses del rango sin SQL nuevo.
 
-## North Star LIVE
+## LIVE ya validado
 
-Planta:
-Acapulco
+NO reabrir:
 
-Pregunta:
+- folio_search intent
+- ALL_PUBLIC_FOLIOS
+- SUPPORT_FAMILIES
+- frame relacional
+- token sequence
+- singular/plural controlado
+- gas guardrail
+- SQL/source
+- búsqueda de un solo mes
 
-qué apoyos de julio fueron de llantas?
-
-Estado actual:
-
-period_month = 2026-07
-concept_query = "fueron de llantas"
-resultado = vacío
-
-Además existe un folio real cuyo texto físico contiene:
-
-LLANTA
-
-Por tanto hay DOS boundaries independientes.
-
-## Boundary 1 — FRAME
-
-Actual:
+PASS real:
 
 "qué apoyos de julio fueron de llantas?"
-→ "fueron de llantas"
+→ 2026-07
+→ llantas
+→ encontró LLANTA real.
 
-Esperado:
+PASS real:
 
-→ "llantas"
+"qué apoyos de julio fueron de gas?"
+→ encontró GAS
+→ no confundió GASOLINA.
 
-Implementar un recorte de marco RELACIONAL únicamente al inicio del span conceptual.
+## Nuevo North Star
 
-Frames auditados:
+"que apoyos de enero a agosto fueron de IMPRESORA?"
 
-fueron de
-son de
-eran de
-relacionados con
-relacionadas con
-relacionado con
-relacionada con
+LIVE actual:
 
-No convertir "de" ni "con" en stopwords globales.
+period_month = 2026-01
+concept_query = "a fueron de impresora"
 
-No borrar preposiciones internas.
+resultado vacío.
 
-Ejemplo obligatorio:
+## Hipótesis física
 
-"qué apoyos de agosto fueron de aceite de motor?"
-→ concept_query = "aceite de motor"
+Boundary 1:
 
-NO:
+SINGLE_MONTH_PERIOD_MODEL
 
-"aceite motor"
+extractPeriodMonth devuelve un solo YYYY-MM y toma el primer mes encontrado.
 
-## Boundary 2 — MORPHOLOGY
+Boundary 2:
 
-Matcher actual:
+RANGE_CONNECTOR_LEAKS_INTO_CONCEPT
 
-concepto.includes(needle) || sub.includes(needle)
+al retirar enero/agosto queda:
 
-Debe sustituirse para folio_search por matching de TOKENS EN SECUENCIA.
+"a fueron de impresora"
 
-Mantener campos:
+y stripRelationalFrame ya no puede retirar "fueron de".
 
-row.concepto
-row.subcategoria
+Boundary 3 potencial:
 
-No ampliar fuente.
+SINGLE_MONTH_SOURCE_INVOCATION
 
-### Regla fundamental
+loadFolioSearchForChat consulta queryReviewableSupportFolios una sola vez con shaped.period_month.
 
-NO generar stems destructivos.
+Demostrar cada frontera.
 
-NO hacer:
+## NO arreglar con
 
-token termina en s
-→ quitar s
+- añadir "a" globalmente a STRUCTURAL_TOKENS
+- regex de IMPRESORA
+- catálogo de conceptos
+- SQL nuevo
+- BETWEEN nuevo
+- cambiar queryReviewableSupportFolios sin necesidad demostrada
+- consultar LIVE_DB
 
-En su lugar comparar DOS TOKENS COMPLETOS.
+El token "a" puede formar parte de otras expresiones y no debe eliminarse globalmente para simular un rango.
 
-tokenEquivalent(a, b) es verdadero solo si:
+## Representación a evaluar
 
-1. exact normalized token equality; o
-2. forman un par singular/plural controlado.
+Determinar si el contrato futuro debe ser:
 
-### Variantes controladas
+period_mode: SINGLE | RANGE
 
-Vocal + s:
+period_start: YYYY-MM
+period_end: YYYY-MM
 
-llanta ↔ llantas
+o una forma equivalente mínima.
 
-Requerir singular suficientemente largo.
-No permitir bases triviales.
+Para SINGLE debe conservarse compatibilidad con period_month actual.
 
-Consonante + es:
+No implementar todavía.
 
-motor ↔ motores
+## Estrategias de lectura a comparar
 
-Requerir singular suficientemente largo.
+A. cambiar SQL a BETWEEN
+B. reutilizar queryReviewableSupportFolios una vez por mes
+C. helper existente de rango en repo
+D. otra estrategia existente
 
-z ↔ ces:
+Preferencia arquitectónica si es viable:
 
-luz ↔ luces
+reusar lectura mensual existente N veces,
+sin SQL nuevo ni duplicado.
 
-La comparación debe ser bidireccional.
+Pero debe auditarse antes.
 
-No es requisito resolver toda la morfología española.
+## Casos obligatorios
 
-Priorizar precisión.
+A.
+apoyos de enero a agosto de impresora
 
-## Seguridad
+B.
+apoyos de enero a agosto fueron de impresora
 
-La implementación NO debe contener excepciones de producto como:
+C.
+folios de enero a agosto de llantas
 
-if token === "llantas"
+D.
+folios desde enero hasta agosto de llantas
 
-ni catálogo de conceptos.
+E.
+folios enero-agosto de llantas
 
-Las palabras de los casos de prueba pueden aparecer en TESTS,
-pero no como branching empresarial en product code.
+F.
+folios de julio a agosto de isuzu
 
-### gas
+G.
+folios de agosto a agosto de isuzu
 
-"gas" debe hacer match con token GAS.
+H.
+folios de diciembre 2025 a febrero 2026 de llantas
 
-"gas" NO debe hacer match con:
+I.
+folios de agosto a julio de llantas
 
-GASTO
-GASOLINA
-GA
+Debe definir fail-closed o interpretación inequívoca para rango invertido.
 
-El cambio de substring → token sequence es obligatorio para este guardrail.
+J.
+folios de enero a agosto
 
-### parabrisas
+Sin concepto:
+determinar si lista todo el scope del rango o requiere concepto.
 
-No mutilar PARABRISAS mediante strip-final-s.
+## Año
 
-### multiword
+Sin año explícito:
 
-"aceite de motor"
+enero a agosto
+→ usar año de deps.now para ambos extremos.
 
-debe hacer match como SECUENCIA CONTIGUA de tokens equivalentes dentro de:
+Con año explícito único:
 
-"COMPRA DE ACEITE DE MOTOR PARA UNIDAD"
+enero a agosto de 2026
+→ ambos 2026.
 
-Debe preservar y comparar "de".
+Con años por extremo:
 
-No convertir indiscriminadamente a bag-of-words.
+diciembre 2025 a febrero 2026
+→ respetar ambos.
 
-"aceite de motor"
+No hardcode 2026.
 
-NO debe considerarse equivalente simplemente a:
+## Concept extraction
 
-"motor aceite"
+Después de reconocer primero el span temporal completo:
 
-## Token sequence
+"de enero a agosto"
 
-El concept_query normalizado debe convertirse a tokens.
+o:
 
-El texto de cada campo físico debe convertirse a tokens.
+"desde enero hasta agosto"
 
-Buscar si la secuencia completa del query aparece dentro del campo,
-en el mismo orden y de forma contigua,
-usando tokenEquivalent por posición.
+ese span debe retirarse como unidad ANTES de extraer el concepto.
 
-Puede haber tokens adicionales antes/después en la fila.
+Entonces:
 
-Ejemplo:
+"que apoyos de enero a agosto fueron de IMPRESORA?"
 
-query tokens:
-[llantas]
+debe terminar en:
 
-row:
-[compra, de, llanta, para, utilitario]
+concept_query = impresora
 
-→ MATCH por variante controlada.
+No resolverlo eliminando "a" globalmente.
 
-Ejemplo:
+## Fetch semantics
 
-query:
-[aceite, de, motor]
+Determinar:
 
-row:
-[compra, aceite, de, motores, para, unidad]
+- cuántas llamadas mensuales máximas son seguras;
+- orden cronológico;
+- deduplicación si fuera necesaria;
+- record limit global vs mensual;
+- count correcto;
+- truncated correcto;
+- qué ocurre si un mes falla;
+- si debe fail-closed todo el rango ante SOURCE_ERROR parcial.
 
-→ MATCH.
+No inventar respuesta parcial silenciosa.
 
-## Periodo congelado
+## Response semantics
 
-NO modificar:
+Para RANGE la respuesta debe declarar el rango real consultado.
 
-MONTHS_ES
-extractPeriodMonth
-resolución del año
-mes_cargo
-conversation-state de periodo
+Ejemplo conceptual:
 
-La auditoría demostró:
+Filtros: mes_cargo 2026-01 a 2026-08, concepto impresora.
 
-CURRENT TURN EXPLICIT MONTH WINS LOCALLY = YES
+No debe decir solamente:
 
-Los tests existentes de periodo deben continuar pasando.
+mes_cargo 2026-01.
 
-## Scope congelado
+## Guardrails SINGLE
 
-NO modificar semántica:
+Todos deben permanecer iguales:
 
-folios
-→ ALL_PUBLIC_FOLIOS
+"julio fueron de llantas"
+→ 2026-07
 
-apoyos
-→ SUPPORT_FAMILIES
+"agosto fueron de aceite"
+→ 2026-08
 
-apoyos/folios
-→ ALL_PUBLIC_FOLIOS
+"julio fueron de gas"
+→ 2026-07
 
-SUPPORT_FAMILIES permanece:
+## Scope
 
-GASTOS + INVERSIONES + TALLER
+Congelado:
 
-## Fuente congelada
+folios → ALL_PUBLIC_FOLIOS
+apoyos → SUPPORT_FAMILIES
+apoyos/folios → ALL_PUBLIC_FOLIOS
 
-NO SQL nuevo.
+## Auditoría física
 
-NO copiar SQL.
-
-NO cambiar queryReviewableSupportFolios.
-
-NO IGF-reviewable filters.
-
-NO DB/schema.
-
-## Regression first
-
-Antes del cambio demostrar rojo para el caso real mediante fixture:
-
-question:
-"qué apoyos de julio fueron de llantas?"
-
-period:
-2026-07
-
-physical row concept:
-"AT-36 (4) LLANTA 11R22.5 LINEAL"
-
-Debe fallar ANTES por:
-
-- frame over-capture
-- singular/plural
-
-Después debe pasar.
-
-## Tests obligatorios
-
-R-FOLIO-LANG-001
-North Star natural falla antes y pasa después.
-
-R-FOLIO-LANG-002
-extrae "llantas", no "fueron de llantas".
-
-R-FOLIO-LANG-003
-julio sigue siendo 2026-07.
-
-R-FOLIO-LANG-004
-llantas ↔ LLANTA.
-
-R-FOLIO-LANG-005
-llanta ↔ LLANTAS.
-
-R-FOLIO-LANG-006
-bombas ↔ BOMBA.
-
-R-FOLIO-LANG-007
-bomba ↔ BOMBAS.
-
-R-FOLIO-LANG-008
-motores ↔ MOTOR.
-
-R-FOLIO-LANG-009
-motor ↔ MOTORES.
-
-R-FOLIO-LANG-010
-luces ↔ LUZ.
-
-R-FOLIO-LANG-011
-luz ↔ LUCES.
-
-R-FOLIO-LANG-012
-gas ↔ GAS.
-
-R-FOLIO-LANG-013
-gas NO match GASTO.
-
-R-FOLIO-LANG-014
-gas NO match GASOLINA.
-
-R-FOLIO-LANG-015
-gas NO se transforma a ga.
-
-R-FOLIO-LANG-016
-parabrisas no se mutila.
-
-R-FOLIO-LANG-017
-"aceite de motor" preservado.
-
-R-FOLIO-LANG-018
-"aceite de motor" hace match en secuencia.
-
-R-FOLIO-LANG-019
-"motor aceite" NO equivale a "aceite de motor".
-
-R-FOLIO-LANG-020
-"filtros de aire" preservado.
-
-R-FOLIO-LANG-021
-filtros ↔ FILTRO dentro de frase.
-
-R-FOLIO-LANG-022
-"bomba de agua" preservado.
-
-R-FOLIO-LANG-023
-frame "fueron de".
-
-R-FOLIO-LANG-024
-frame "son de".
-
-R-FOLIO-LANG-025
-frame "eran de".
-
-R-FOLIO-LANG-026
-frame "relacionados con".
-
-R-FOLIO-LANG-027
-frame "relacionadas con".
-
-R-FOLIO-LANG-028
-"folios de llantas de julio" sigue extrayendo llantas.
-
-R-FOLIO-LANG-029
-turno septiembre → julio explícito conserva 2026-07.
-
-R-FOLIO-LANG-030
-turno septiembre → agosto explícito conserva 2026-08.
-
-R-FOLIO-LANG-031
-folios conserva ALL_PUBLIC_FOLIOS.
-
-R-FOLIO-LANG-032
-apoyos conserva SUPPORT_FAMILIES.
-
-R-FOLIO-LANG-033
-apoyos/folios conserva ALL_PUBLIC_FOLIOS.
-
-R-FOLIO-LANG-034
-no Action Register fallback.
-
-R-FOLIO-LANG-035
-no SQL nuevo/copied.
-
-R-FOLIO-LANG-036
-no dependencia nueva.
-
-R-FOLIO-LANG-037
-no cambio a queryReviewableSupportFolios.
-
-R-FOLIO-LANG-038
-no vocabulario de negocio usado como branching productivo.
-
-## Product files permitidos
-
-Preferentemente:
+Revisar:
 
 lib/director-ia-folio-search.js
+queryReviewableSupportFolios
+helpers existentes de rango/periodo en repo
+tests de folio_search
+package.json solo si hace falta verificar dependencia existente
 
-Tests correspondientes.
+NO modificar product code.
 
-Solo tocar planner/chat/capabilities/tools si una regresión demuestra que es estrictamente necesario.
+## Reporte obligatorio
 
-No ampliar alcance preventivamente.
+Comenzar exactamente:
 
-## Suites obligatorias
+RANGE_CLASSIFICATION:
+RANGE_FIRST_BAD_BOUNDARY:
 
-- nueva suite R-FOLIO-LANG
-- suite R-FOLIO-TRUTH completa
-- planner
-- capabilities
-- tool orchestrator
-- M2
-- M4
-- M5
-- M6
-- IGF
-- continuity
-- Tier 1
-- pre-deploy --gate
+CONCEPT_RANGE_CLASSIFICATION:
+CONCEPT_FIRST_BAD_BOUNDARY:
 
-Si existe fallo preexistente:
+SOURCE_RANGE_CLASSIFICATION:
+SOURCE_FIRST_BAD_BOUNDARY:
 
-probar contra base_main_sha.
+EXISTING_RANGE_HELPER_REUSABLE:
+YES / NO
 
-NEW FAILURE debe ser 0.
+SAFE_PERIOD_MODEL:
+...
 
-## STOP CONDITIONS
+SAFE_CONCEPT_STRATEGY:
+...
 
-STOP si requiere:
+SAFE_FETCH_STRATEGY:
+...
 
-- SQL
-- schema
-- LIVE_DB
-- nueva dependencia
-- cambio de periodo
-- cambio de scope
-- cambio de fuente
-- concept catalog
-- stemming global
-- frontend
-- server.js product behavior no previsto
+SQL_CHANGE_REQUIRED:
+YES / NO
 
-## Reporte
+MULTI_YEAR_SUPPORTED_SAFELY:
+YES / NO
 
-Crear:
+INVERTED_RANGE_BEHAVIOR:
+...
 
-docs/dev-loop/reports/FIX-DIRECTOR-IA-FOLIO-SEARCH-FRAME-MORPHOLOGY-001.md
+PARTIAL_MONTH_FAILURE_BEHAVIOR:
+...
 
-Debe comenzar:
+GLOBAL_LIMIT_SEMANTICS:
+...
 
-IMPLEMENTATION_SHA:
-BEFORE:
-AFTER:
-FRAME_STRATEGY:
-TOKEN_STRATEGY:
-MORPHOLOGY_STRATEGY:
-NORTH_STAR:
-PERIOD_UNCHANGED:
-SCOPE_UNCHANGED:
-SQL_NEW:
-DEPENDENCY_NEW:
-001..038:
-SUITES:
-FILES:
-RISKS:
+A-J MATRIX:
+...
+
+NORTH_STAR_EXPECTED:
+period_start = ...
+period_end = ...
+concept_query = ...
+
+ONE_FIX_CAN_HANDLE_RANGE:
+YES / NO
+
+FIX CONTRACT:
+...
+
+FILES FUTUROS:
+...
 
 ## Completion
 
-Después de implementación y pruebas:
-
 CURRENT_TASK → DONE_PENDING_REVIEW
-
-Commit únicamente en esta rama.
 
 STOP.
 
-NO merge.
-NO push main.
-NO deploy.
+NO implementación.
+NO SQL.
 NO LIVE_DB.
+NO merge.
+NO deploy.
 NO next task.
