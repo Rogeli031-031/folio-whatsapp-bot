@@ -37,6 +37,7 @@ const FRAME_ALLOWED = new Set([
   "active_channel",
   "active_period_months",
   "meeting_type",
+  "active_subtopic",
 ]);
 
 function srcBlock(name, extra = {}) {
