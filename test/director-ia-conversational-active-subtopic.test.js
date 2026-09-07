@@ -293,7 +293,11 @@ describe("R-CONV-SUBTOPIC askDirectorIa T1→T2 gasto→T3 corporativos", () => 
     assert.notEqual(t4.context_meta && t4.context_meta.openai_called, true);
     assert.equal(openaiCalls, 0);
     assert.doesNotMatch(String(t4.answer || ""), AR_OR_PLANT_RE);
-    assert.doesNotMatch(String(t4.answer || ""), /\$\s*\d{2,}/);
-    assert.match(String(t4.answer || ""), /no (tengo|puedo|est[aá] conectad)|todav[ií]a no/i);
+    const cmp = t4.context_meta && t4.context_meta.expense_compare;
+    assert.equal(cmp && cmp.field, "corporativos");
+    assert.equal(cmp && cmp.a, fx.EXPECTED_A.corporativos);
+    assert.equal(cmp && cmp.b, fx.EXPECTED_B_DASHBOARD.corporativos);
+    assert.equal(cmp && cmp.delta, fx.EXPECTED_B_DASHBOARD.corporativos - fx.EXPECTED_A.corporativos);
+    assert.match(String(t4.answer || ""), /variaci[oó]n/i);
   });
 });
