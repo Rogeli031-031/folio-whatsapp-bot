@@ -1,316 +1,210 @@
-task_id: FIX-DIRECTOR-IA-PROFITABILITY-EXPENSE-SUBTOPIC-DATA-001
+task_id: AUDIT-DIRECTOR-IA-FOLIO-SUPPORTS-CONCEPT-MONTH-001
 
-task_type: FIX
-mode: REGRESSION_FIRST
+task_type: AUDIT
+mode: READ_ONLY_PHYSICAL_TRACE
 
 status: CLOSED
 authorized_by: "Human Approver"
-authorized_at: "2026-09-06T18:54:31-06:00"
-human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-06 - PROFITABILITY EXPENSE SUBTOPIC DATA FIX AUTHORIZED; REGRESSION_FIRST; COMMIT ON FIX BRANCH AUTHORIZED; NO LIVE_DB; NO MERGE; NO PUSH MAIN; NO DEPLOY"
-implementation_authorized: YES
+authorized_at: "2026-09-07T08:42:57-06:00"
+human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-07 - READ_ONLY FOLIO SUPPORTS CONCEPT MONTH AUDIT; NO IMPLEMENTATION; NO LIVE_DB; NO MERGE; NO DEPLOY"
+
+implementation_authorized: NO
 merge_authorized: NO
 deploy_authorized: NO
 live_db_authorized: NO
 
 max_attempts: 1
 
-base_main_sha: 07ed179dc2a45ef4b86822da017de5f5c1ed1938
+base_main_sha: d66f37e1e02d515526e612db7754de6dcd55cc13
 
-result_report_path: docs/dev-loop/reports/FIX-DIRECTOR-IA-PROFITABILITY-EXPENSE-SUBTOPIC-DATA-001.md
+result_report_path: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-FOLIO-SUPPORTS-CONCEPT-MONTH-001.md
 
-objective: Conectar a la conversación de rentabilidad los importes físicos OPERATIVOS, CORPORATIVOS y GASTO ya materializados en IGF Forecast Mini para responder comparaciones A/B dentro del active_subtopic, sin crear Delta Gastos ni nuevas fórmulas.
+objective: Determinar físicamente el FIRST_BAD_BOUNDARY de la consulta natural "que apoyos/folios tenemos para septiembre de llantas?" y comprobar si, además del reconocimiento del intent, existen o faltan extracción de mes/concepto, capacidad de listado, tool/executor y filtros físicos sobre Folios.
 
-contracts_in_force:
-  - AGENTS.md
-  - docs/dev-loop/LOOP_PROTOCOL.md
-  - docs/director-ia/DIRECTOR_IA_CONSTITUTION.md
-  - docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md
-  - docs/dev-loop/reports/AUDIT-DIRECTOR-IA-PROFITABILITY-EXPENSE-SUBTOPIC-DATA-001.md
+## Evidencia LIVE
 
-## Diagnóstico congelado
+Planta:
+Acapulco
 
-CLASIFICACIÓN:
+Pregunta:
+que apoyos/folios tenemos para septiembre de llantas?
 
-B. DATA_ALREADY_LOADED_BUT_DROPPED
+Respuesta:
+No se pudo determinar una intención clara con las reglas actuales Indica si quieres el diagnóstico de la planta actual, un cliente concreto u otro tema. No asumo el hilo ni consulto Action Register a ciegas.
 
-FIRST_BAD_BOUNDARY:
+## Hipótesis inicial
 
-readIgfForecastMiniAuthoritative
+PLANNER_LEXICAL_MISS
 
-El mismo IGF Forecast Mini usado por el dashboard ya contiene:
+Es solo hipótesis.
 
-rows[].operativos
-rows[].corporativos
-rows[].gasto
+NO cerrar diagnóstico sin trazar físicamente toda la cadena.
 
-Director IA carga ese mini pero el adapter no conserva esos campos.
+## Traza obligatoria
 
-No crear otra fuente.
+QUESTION
+→ normalization
+→ planner intent
+→ structured filters
+→ capability/domain
+→ tool plan
+→ executor
+→ loader/helper
+→ physical Folios source
+→ plant filter
+→ month filter
+→ concept/text filter
+→ response
 
-## Semántica obligatoria
+Marcar cada frontera:
 
-rows[].operativos
-= GASTO OPERATIVO
+PASS
+FAIL
+MISSING
+AMBIGUOUS
+NOT_REACHED
 
-rows[].corporativos
-= GASTO CORPORATIVO
+## Sondas obligatorias
 
-rows[].gasto
-= GASTO TOTAL
+Probar read-only:
 
-util_oper_importe
-= RENTABILIDAD OPERATIVA
+A. qué folios tenemos de llantas?
+B. qué folios tenemos en septiembre?
+C. qué folios tenemos en septiembre de llantas?
+D. qué apoyos tenemos de llantas?
+E. qué apoyos tenemos en septiembre?
+F. qué apoyos/folios tenemos para septiembre de llantas?
+G. muéstrame los folios de llantas de septiembre
+H. qué gastos de llantas tenemos en septiembre?
 
-resultado_final_importe
-= RENTABILIDAD FINAL
+Para cada una registrar:
 
-PROHIBIDO confundir gasto operativo con rentabilidad operativa.
+normalized question
+intent
+confidence
+clarification
+domains
+tool plan si existe
 
-## Evidencia visual LIVE de validación
+## Preguntas que debe resolver la auditoría
 
-Acapulco.
+1. ¿folio_status sirve solo para un folio individual o también para listados?
+2. ¿Existe una capacidad SEARCH/LIST FOLIOS BY FILTERS?
+3. ¿"apoyos" y "folios" convergen en la misma capacidad?
+4. ¿Existe hoy extracción estructurada de:
+   - planta
+   - mes
+   - concepto libre?
+5. ¿Existe tool/executor con esos filtros?
+6. ¿Existe loader reutilizable de Folios sin SQL nuevo?
+7. ¿Qué campo físico puede contener "llantas"?
+8. ¿Qué campo de fecha debería representar "septiembre"?
+9. ¿Qué datos se pueden devolver físicamente:
+   - folio
+   - concepto/descripción
+   - importe
+   - fecha
+   - estatus
+   - proveedor?
+10. ¿La palabra "apoyos" está siendo confundida con igf_reviewable_supports o clasificacion_apoyos?
 
-Agosto 2026:
+## Importante
 
-OPERATIVOS:
-9,664,071
+NO asumir que el FIX es una regex.
 
-CORPORATIVOS:
-2,378,296
+NO asumir que basta con reconocer "folio".
 
-GASTO:
-12,042,367
+La pregunta requiere potencialmente:
 
-Septiembre 2026:
+LISTADO + PLANTA + MES + CONCEPTO LIBRE.
 
-OPERATIVOS:
-9,945,756
+Si el planner empieza a reconocerla pero no existe ejecución física de esos filtros, documentar el siguiente boundary también.
 
-CORPORATIVOS:
-2,561,700
+## Clasificación principal
 
-GASTO:
-12,507,456
+Elegir exactamente una:
 
-Comparación B - A mostrada por el dashboard:
+A. PLANNER_PATTERN_MISSING
+B. FILTER_EXTRACTION_MISSING
+C. LIST_SEARCH_INTENT_MISSING
+D. TOOL_EXECUTOR_MISSING
+E. EXISTING_LOADER_NOT_CONNECTED
+F. SOURCE_FILTER_SEMANTICS_UNDEFINED
+G. MULTIPLE_BOUNDARIES
 
-OPERATIVOS:
-+281,685
+Además indicar:
 
-CORPORATIVOS:
-+183,404
+FIRST_BAD_BOUNDARY: ...
 
-GASTO:
-+465,089
+y, si aplica:
 
-Estos valores son evidencia para validación humana.
+NEXT_BAD_BOUNDARY: ...
 
-NO hardcodearlos en código ni tests.
+## Archivos mínimos a inspeccionar
 
-## North Star
-
-T1:
-¿Qué está provocando el deterioro de la rentabilidad y sobre qué puedo actuar?
-
-T2:
-y gasto?
-
-T3:
-y corporativos?
-
-T4:
-¿cuánto subieron?
-
-La continuidad conversacional ya funciona.
-
-T4 debe volver a leer la fuente física para A/B y responder el comparativo correspondiente al active_subtopic.
-
-## Regla de evidencia
-
-conversation_state conserva contexto:
-
-parent_intent
-active_subtopic
-active_period_months
-planta
-
-conversation_state NO almacena los importes financieros.
-
-History NO es evidencia.
-
-T4 debe volver a consultar la fuente autoritativa existente.
-
-## Cambio mínimo esperado
-
-1. lib/director-ia-dashboard-forecast-adapter.js
-
-Preservar SIN RECALCULAR:
-
-operativos
-corporativos
-gasto
-
-2. lib/director-ia-rentabilidad-deterioro-snapshot.js
-
-loadKpiForMonth debe conservar esos campos.
-
-No modificar las métricas de rentabilidad existentes.
-
-3. lib/director-ia-profitability-subtopic.js
-
-Componer comparativo factual según active_subtopic:
-
-expense.corporate -> corporativos
-expense.operational -> operativos
-expense / total -> gasto
-
-4. lib/director-ia-chat.js
-
-En probe cuantitativo contextual, volver a cargar A/B usando:
-
-planta
-active_period_months
-active_subtopic
-
-No guardar importes en state.
-
-## Variación permitida
-
-Solo:
-
-B - A
-
-sobre EL MISMO campo físico.
-
-Nombrar:
-
-variación de gasto corporativo
-variación de gasto operativo
-variación de gasto total
-
-NO llamarlo Delta Gastos.
-
-## Regression first
-
-ANTES del cambio de producto demostrar rojo.
-
-R-EXP-SUBTOPIC-001
-adapter conserva rows[].operativos.
-
-R-EXP-SUBTOPIC-002
-adapter conserva rows[].corporativos.
-
-R-EXP-SUBTOPIC-003
-adapter conserva rows[].gasto.
-
-R-EXP-SUBTOPIC-004
-loadKpiForMonth conserva los tres campos.
-
-R-EXP-SUBTOPIC-005
-T1 conserva resultado_final_importe sin cambio.
-
-R-EXP-SUBTOPIC-006
-T1 conserva util_oper_importe como rentabilidad operativa y no lo sustituye por rows[].operativos.
-
-R-EXP-SUBTOPIC-007
-T3 conserva expense.corporate.
-
-R-EXP-SUBTOPIC-008
-T4 vuelve a consultar A/B.
-
-R-EXP-SUBTOPIC-009
-T4 corporate usa exclusivamente rows[].corporativos.
-
-R-EXP-SUBTOPIC-010
-T4 responde A, B y B-A correctamente.
-
-R-EXP-SUBTOPIC-011
-No llama Delta Gastos a B-A.
-
-R-EXP-SUBTOPIC-012
-No atribuye causalidad monetaria exacta.
-
-R-EXP-SUBTOPIC-013
-operativos usa exclusivamente rows[].operativos.
-
-R-EXP-SUBTOPIC-014
-gasto total usa exclusivamente rows[].gasto.
-
-R-EXP-SUBTOPIC-015
-sin conversation_state no inventa hilo financiero.
-
-R-EXP-SUBTOPIC-016
-plant mismatch no reutiliza contexto de otra planta.
-
-R-EXP-SUBTOPIC-017
-conversation_state no contiene importes de gasto.
-
-R-EXP-SUBTOPIC-018
-con evidencia disponible T4 no consulta Action Register ni OpenAI.
+- lib/director-ia-planner.js
+- lib/director-ia-capabilities.js
+- lib/director-ia-tools.js
+- lib/director-ia-tool-orchestrator.js
+- lib/director-ia-chat.js
+- loaders/helpers existentes de Folios
+- server.js solo lectura para localizar fuente
+- tests existentes de planner/folios
 
 ## Prohibido
 
-NO Delta Gastos.
-NO computeDeltaGastos.
-NO delta_gastos.
-NO deltaGastos.
-
-NO util_oper_importe - resultado_final_importe.
-
-NO reconstruir corporativos desde componentes.
-NO reconstruir operativos desde componentes.
-NO reconstruir gasto total.
-
-NO usar gasto_kg como gasto total.
-
-NO modificar fórmulas de server.js.
-
+NO implementación.
+NO regex nueva.
+NO tests permanentes.
 NO SQL nuevo.
 NO DB/schema.
 NO LIVE_DB.
-NO nueva fuente.
-NO hardcodes LIVE.
 NO frontend.
-NO planner salvo contradicción física y STOP.
-NO docs/director-ia.
-NO refactor masivo.
+NO Action Register como sustituto.
 NO merge.
 NO push main.
 NO deploy.
 NO next task.
 
-## In scope
+## Reporte obligatorio
 
-- lib/director-ia-dashboard-forecast-adapter.js
-- lib/director-ia-rentabilidad-deterioro-snapshot.js
-- lib/director-ia-profitability-subtopic.js
-- lib/director-ia-chat.js
-- tests/fixtures relacionados
-- docs/dev-loop/CURRENT_TASK.md
-- docs/dev-loop/reports/FIX-DIRECTOR-IA-PROFITABILITY-EXPENSE-SUBTOPIC-DATA-001.md
+El reporte debe comenzar:
 
-## Validaciones
+CLASIFICACIÓN: ...
 
-- R-EXP-SUBTOPIC-001..018
-- active-subtopic 001..010
-- T4 previo
-- profitability followup
-- rent-chat-cut
-- rent-cut
-- conversation-state
-- continuity
-- intra-session
-- TIER 1
-- PRE-DEPLOY --gate
-- HTTP 5xx = 0
-- HARNESS FAILURE = 0
-- NEW FAILURE = 0
-- git diff --check limpio
+FIRST_BAD_BOUNDARY: ...
 
-## Completion
+NEXT_BAD_BOUNDARY: ... o NONE
 
-DONE_PENDING_REVIEW.
+PLANNER ACTUAL: ...
 
-Reporte: docs/dev-loop/reports/FIX-DIRECTOR-IA-PROFITABILITY-EXPENSE-SUBTOPIC-DATA-001.md
+LIST/SEARCH FOLIOS CAPABILITY: YES/NO/PARTIAL
 
-STOP. Esperar revisión humana. No merge. No push main. No deploy. No next task.
+FUENTE FÍSICA: ...
+
+FILTRO PLANTA: YES/NO
+
+FILTRO MES: YES/NO/AMBIGUOUS
+
+FILTRO CONCEPTO LIBRE: YES/NO/PARTIAL
+
+CAMPO FÍSICO PARA "LLANTAS": ...
+
+SEMÁNTICA TEMPORAL DE "SEPTIEMBRE": ...
+
+FIX MÍNIMO RECOMENDADO: ...
+
+ARCHIVOS QUE TOCARÍA: ...
+
+TESTS QUE ESCRIBIRÍA: ...
+
+Después:
+
+CURRENT_TASK → DONE_PENDING_REVIEW
+
+STOP.
+
+NO implementación.
+NO merge.
+NO deploy.
+NO next task.
