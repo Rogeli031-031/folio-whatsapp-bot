@@ -328,12 +328,14 @@ const cases = [
     assert(isDirectorIaToolExecutable("get_folio_status") === true, "folio status exec");
     assert(isDirectorIaToolExecutable("get_folio_history") === true, "folio history exec");
     assert(isDirectorIaToolExecutable("get_arr_snapshot") === true, "arr exec");
+    assert(isDirectorIaToolExecutable("get_folio_search") === true, "folio search exec");
     assert(isDirectorIaToolExecutable("get_expense_analysis") === true, "expense exec");
     assert(isDirectorIaToolExecutable("get_investment_analysis") === true, "investment exec");
     assert(isDirectorIaToolExecutable("get_clasificacion_apoyos_query") === true, "clasificacion exec");
     assert(isDirectorIaToolExecutable("get_taller_at") === true, "taller_at query exec");
     assert(isDirectorIaToolExecutable("get_taller_at_analysis") === false, "taller excel not exec");
     assert(getDirectorIaTool("get_taller_at").executor === "loadTallerAtForChat", "taller executor");
+    assert(getDirectorIaTool("get_folio_search").executor === "loadFolioSearchForChat", "folio search executor");
     assert(getDirectorIaTool("get_expense_analysis").executor === "loadGastosInversionesForChat", "expense executor");
     assert(getDirectorIaTool("get_investment_analysis").executor === "loadGastosInversionesForChat", "investment executor");
     const { toolPlan: expensePlan } = planTools("¿Qué gastos de folios existen?", {
@@ -359,6 +361,12 @@ const cases = [
     });
     assert(hasTool(tallerPlan, "get_taller_at"), "taller tool in plan");
     assert(!hasTool(tallerPlan, "get_expense_analysis"), "taller no despacha M6");
+    const { toolPlan: folioSearchPlan } = planTools("folios de uniformes de agosto", {
+      planta_id: 1,
+      question: "folios de uniformes de agosto",
+    });
+    assert(hasTool(folioSearchPlan, "get_folio_search"), "folio search tool in plan");
+    assert(!hasTool(folioSearchPlan, "get_expense_analysis"), "folio search no despacha M6");
   },
 
   // Ejecución parcial: tool lista + otra con input faltante
