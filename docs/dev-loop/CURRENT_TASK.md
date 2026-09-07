@@ -1,296 +1,288 @@
-task_id: FIX-DIRECTOR-IA-CONVERSATIONAL-ACTIVE-SUBTOPIC-001
+task_id: AUDIT-DIRECTOR-IA-PROFITABILITY-EXPENSE-SUBTOPIC-DATA-001
 
-task_type: FIX
-mode: REGRESSION_FIRST
+task_type: AUDIT
+mode: READ_ONLY_PHYSICAL_TRACE
 
 status: CLOSED
 authorized_by: "Human Approver"
-authorized_at: "2026-09-06T18:00:48-06:00"
-human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-06 - ACTIVE_SUBTOPIC CONVERSATIONAL FIX AUTHORIZED; REGRESSION_FIRST; COMMIT ON FIX BRANCH AUTHORIZED; NO LIVE_DB; NO MERGE; NO PUSH MAIN; NO DEPLOY"
-implementation_authorized: YES
+authorized_at: "2026-09-06T18:35:31-06:00"
+human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-06 - READ_ONLY EXPENSE SUBTOPIC DATA AUDIT; NO IMPLEMENTATION; NO LIVE_DB; NO MERGE; NO DEPLOY"
+
+implementation_authorized: NO
 merge_authorized: NO
 deploy_authorized: NO
 live_db_authorized: NO
 
 max_attempts: 1
 
-base_main_sha: e0e2bd60dbdf07ff02c8357ebbbf26b43db234fd
+base_main_sha: 6c5aa8dfecd7517fcb4022e7c06073ad537cec21
 
-result_report_path: docs/dev-loop/reports/FIX-DIRECTOR-IA-CONVERSATIONAL-ACTIVE-SUBTOPIC-001.md
+result_report_path: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-PROFITABILITY-EXPENSE-SUBTOPIC-DATA-001.md
 
-objective: Introducir representación estructurada mínima de active_subtopic para que Director IA pueda profundizar una conversación más allá de dos turnos, comenzando con rentabilidad → gasto → corporativos, sin resolverlo mediante una lista creciente de regex independientes.
+objective: Determinar por qué, después de una conversación válida rentabilidad -> gasto -> corporativos -> "¿cuánto subieron?", Director IA conserva correctamente el contexto pero no puede devolver el comparativo corporativo, y definir el cambio físico mínimo necesario sin crear Delta Gastos ni nueva fórmula.
 
-contracts_in_force:
-  - AGENTS.md
-  - docs/dev-loop/LOOP_PROTOCOL.md
-  - docs/director-ia/DIRECTOR_IA_CONSTITUTION.md
-  - docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md
-  - docs/dev-loop/reports/AUDIT-DIRECTOR-IA-CONVERSATIONAL-SUBTOPIC-DEPTH-001.md
-
-## Hecho demostrado
-
-FIRST_BAD_BOUNDARY:
-
-ACTIVE_SUBTOPIC_NOT_REPRESENTED
-
-Después de T2:
-
-parent_intent = profitability_deterioro_snapshot
-planta = preservada
-periodos = preservados
-
-pero no existe representación estructurada equivalente a:
-
-active_subtopic = gasto
-
-T3 "y corporativos?" hereda correctamente el parent,
-pero no puede resolver la referencia relativa al subtema anterior.
-
-## North Star
+## Evidencia LIVE
 
 T1:
 ¿Qué está provocando el deterioro de la rentabilidad y sobre qué puedo actuar?
 
+PASS.
+
 T2:
 y gasto?
+
+PASS.
 
 T3:
 y corporativos?
 
-La semántica humana de T3 es:
-
-"de la rama gasto que acabamos de abrir dentro del análisis de rentabilidad,
-háblame ahora de corporativos"
-
-No debe convertirse en:
-plant diagnosis
-Action Register
-diagnóstico general de operación.
-
-## Objetivo arquitectónico mínimo
-
-Introducir un slot conversacional estructurado reutilizable:
-
-active_subtopic
-
-La infraestructura genérica debe poder:
-
-- sanitizarlo;
-- transportarlo;
-- conservarlo;
-- limpiarlo por plant mismatch;
-- incluirlo en snapshotCurrentFrame / previous_frame si corresponde;
-- actualizarlo cuando un turno establece un subtema;
-- reutilizarlo en el siguiente turno.
-
-NO crear un segundo sistema paralelo de estado.
-
-## Separación obligatoria
-
-GENERIC_CONVERSATION:
-
-- active_subtopic como estructura/slot
-- persistencia intra-session
-- sanitización
-- invalidación por planta
-- continuidad de referencias elípticas
-
-FOLIOS_DOMAIN:
-
-- profitability_deterioro_snapshot
-- expense / gasto
-- corporate expense / corporativos
-- operating expense / operativos
-- respuesta/limitaciones financieras
-
-La capa genérica NO debe saber qué significa "corporativos".
-
-## Primera jerarquía domain-specific permitida
-
-La implementación puede modelar conceptualmente:
-
-profitability_deterioro_snapshot
-  → expense
-      → corporate
-      → operational
-
-Los nombres físicos pueden diferir si existe una convención mejor.
-
-No crear una taxonomía global completa.
-
-## Regression first
-
-La prueba debe cruzar askDirectorIa.
-
-Como mínimo:
-
-R-CONV-SUBTOPIC-001
-T1 deja parent profitability_deterioro_snapshot.
-
-R-CONV-SUBTOPIC-002
-T2 "y gasto?" deja active_subtopic estructurado equivalente a expense.
-
-R-CONV-SUBTOPIC-003
-T2 conserva planta y A/B.
-
-R-CONV-SUBTOPIC-004
-T3 "y corporativos?" recibe parent + active_subtopic expense.
-
-R-CONV-SUBTOPIC-005
-T3 resuelve corporativos como child/focus de gasto, no como plant diagnosis.
-
-R-CONV-SUBTOPIC-006
-T3 no cae en generic Action Register / GPT.
-
-R-CONV-SUBTOPIC-007
-T3 conserva conversation_state para un T4 posterior.
-
-R-CONV-SUBTOPIC-008
-plant mismatch limpia parent/subtopic y no cruza contexto.
-
-R-CONV-SUBTOPIC-009
-"y corporativos?" sin hilo previo NO inventa que hablamos de gasto.
-
-R-CONV-SUBTOPIC-010
-un subtopic no reconocido dentro de un parent válido no debe producir datos no relacionados; debe responder contextual o aclarar dentro del hilo.
-
-## T4 exploratorio de regresión
-
-Agregar al menos una prueba que demuestre profundidad adicional sin exigir nueva capacidad financiera:
+PASS conversacional.
 
 T4:
 ¿cuánto subieron?
 
-Debe demostrar una de estas dos conductas seguras:
+Respuesta actual:
 
-A. si existe evidencia física conectada al active_subtopic corporate, responde con ella;
+"Seguimos en el análisis de rentabilidad, dentro de corporativos (2026-08 vs 2026-09). Todavía no está conectado un comparativo que permita decir cuánto se movió esa rama. No invento la cifra ni cambio de tema."
 
-o
+## Hecho
 
-B. conserva el hilo y explica que ese comparativo específico todavía no está conectado.
+La continuidad conversacional YA funciona.
 
-NO puede saltar a otro dominio.
+Después de T3/T4 existe contexto equivalente a:
 
-El acceptance principal sigue siendo T1→T2→T3.
+parent_intent = profitability_deterioro_snapshot
+active_subtopic = expense.corporate
+active_period_months = A/B
 
-## Respuesta T3
+NO auditar nuevamente el problema de continuidad salvo contradicción física.
 
-Debe ser breve y conversacional.
+## Pregunta principal
 
-Si la capacidad física para comparar gasto corporativo ya existe de forma explícita y segura, puede usarla.
+¿Existe ya en el sistema una fuente física/autoritativa que permita obtener, para los mismos periodos A/B del profitability snapshot:
 
-Si NO existe conectada a esta ruta:
+- gasto corporativo A
+- gasto corporativo B
+- variación B - A
 
-debe decirlo dentro del hilo.
+y análogamente, si existe:
 
-Ejemplo semántico permitido:
+- gasto operativo A
+- gasto operativo B
+- variación B - A
 
-"Sí, seguimos dentro de gasto. Corporativos es la siguiente rama. Todavía no tengo ese comparativo reconciliado conectado a este análisis, así que no voy a atribuirle una parte de la caída."
+?
 
-NO hardcodear ese texto si existe mejor evidencia física.
+Si existe:
 
-## Prohibición financiera
+¿por qué esa evidencia no llega actualmente al profitability subtopic route?
 
-NO crear Delta Gastos.
+## Buscar físicamente
 
-NO derivar gasto corporativo mediante una fórmula nueva.
+Inspeccionar como mínimo:
 
-NO inferir:
-
-corporativo = rentabilidad operativa - rentabilidad final
-
-como nueva fuente física.
-
-NO nueva fórmula financiera.
-
-NO causalidad monetaria.
-
-Si existe un campo físico de gasto corporativo ya disponible, puede reutilizarse únicamente si el routing actual puede accederlo sin ampliar el scope de forma sustancial.
-
-Si para responder cifras se requiere nueva adquisición de datos:
-NO hacerlo en este FIX.
-
-La continuidad tiene prioridad sobre agregar capacidad.
-
-## Anti whack-a-mole
-
-NO resolver el task agregando únicamente regex independientes para:
-
-corporativos
-operativos
-clientes
-cuánto
-por qué
-primero
-etc.
-
-Puede existir reconocimiento lexical domain-specific,
-pero debe resolverse CONTRA active_subtopic/parent estructurados.
-
-El resultado debe demostrar:
-
-"corporativos" significa algo diferente por el contexto activo,
-no porque exista una ruta global hardcodeada que siempre lo capture.
-
-## In scope
-
-- lib/director-ia-conversation-state.js
+- lib/director-ia-rentabilidad-deterioro-snapshot.js
+- lib/director-ia-profitability-subtopic.js
 - lib/director-ia-chat.js
-- lib/director-ia-planner.js solo si es estrictamente necesario
-- helper conversacional/domain-specific mínimo para rentabilidad si físicamente conviene
-- helper rentabilidad existente solo para composición contextual segura
-- tests de continuidad/subtopic
-- fixtures/helpers mínimos
-- docs/dev-loop/CURRENT_TASK.md
-- docs/dev-loop/reports/FIX-DIRECTOR-IA-CONVERSATIONAL-ACTIVE-SUBTOPIC-001.md
+- loaders/helpers IGF usados por rentabilidad
+- endpoint/payload que alimenta el IGF Forecast/dashboard
+- campos reales ya existentes para gastos operativos/corporativos
+- tests relacionados
 
-## Out of scope
+Buscar nombres físicos reales, no asumirlos.
 
-- frontend salvo contradicción física y STOP
-- DB/schema
-- LIVE_DB
-- Delta Gastos
-- nueva fórmula
-- nuevas consultas SQL
-- arr.upload_log
-- nueva adquisición financiera
-- refactor masivo
-- taxonomía global de todos los dominios
-- reusable engine extraction
-- persistencia cross-session
-- docs/director-ia/
-- merge
-- push main
-- deploy
-- next task
+Investigar términos como:
 
-allowed_actions:
-  - ninguna hasta G1 humano
-  - tras G1: regression-first
-  - tras G1: implementación mínima
-  - tras G1: tests relacionados
-  - tras G1: reporte
-  - tras G1: commit únicamente en rama si G1 lo autoriza
-  - tras G1: DONE_PENDING_REVIEW
+corporativo
+corporativos
+operativo
+operativos
+gasto
+gastos
+gasto_total
+gasto_corporativo
+gasto_operativo
+util_oper_importe
+resultado_final_importe
 
-forbidden_actions:
-  - escribir AUTHORIZED_BY_HUMAN
-  - poner status AUTHORIZED
-  - parche regex aislado
-  - Delta Gastos
-  - nueva fórmula financiera
-  - DB/schema
-  - LIVE_DB
-  - nuevas queries
-  - frontend sin STOP
-  - merge/push main
-  - deploy
-  - abrir siguiente tarea
+y cualquier nombre real encontrado en los loaders/payloads.
+
+## Traza obligatoria
+
+Para CORPORATIVOS:
+
+source physical field
+→ loader
+→ monthly KPI / IGF payload
+→ profitability snapshot A/B
+→ chat state/context
+→ profitability subtopic
+→ T4 "¿cuánto subieron?"
+
+Marcar cada boundary como:
+
+AVAILABLE
+LOADED
+NOT_LOADED
+DROPPED
+NOT_EXPOSED
+NOT_TRANSPORTED
+NOT_CONNECTED
+DERIVED_ONLY
+SOURCE_MISSING
+
+Identificar exactamente el PRIMER boundary donde deja de estar disponible.
+
+Repetir brevemente para OPERATIVOS si existe la fuente.
+
+## Clasificación final
+
+Elegir exactamente una:
+
+A. DATA_ALREADY_IN_SNAPSHOT_NOT_EXPOSED
+
+Los valores ya están en el snapshot pero el subtopic no los usa.
+
+B. DATA_ALREADY_LOADED_BUT_DROPPED
+
+El loader los obtiene pero el snapshot no los conserva.
+
+C. EXISTING_SOURCE_NOT_LOADED_BY_SNAPSHOT
+
+La fuente física existe y ya se usa en otro módulo/dashboard, pero esta ruta no la carga.
+
+D. ONLY_DERIVABLE_BY_NEW_FORMULA
+
+No existe campo físico; solo podría obtenerse mediante una derivación nueva.
+
+E. SOURCE_NOT_FOUND
+
+No se localiza fuente física suficiente.
+
+F. RUNTIME_REQUIRED
+
+La estática no permite determinarlo.
+
+## Regla crítica
+
+NO aceptar como fuente nueva:
+
+rentabilidad operativa - rentabilidad final
+
+solo porque matemáticamente pudiera parecer gasto corporativo.
+
+Si el sistema YA define explícitamente esa relación como contrato existente, documentarla, pero NO implementarla en esta auditoría.
+
+No crear ninguna fórmula.
+
+## Importante
+
+NO existe formalmente un módulo Delta Gastos.
+
+Esta auditoría NO debe diseñarlo.
+
+La pregunta es mucho más pequeña:
+
+"¿Ya tenemos físicamente los valores de gasto corporativo/operativo de A y B y solamente falta conectarlos a la conversación?"
+
+## Si la fuente YA existe
+
+Proponer el FIX mínimo exacto:
+
+- archivos;
+- campos;
+- flujo;
+- estado/evidence que habría que transportar;
+- tests;
+- riesgos.
+
+Debe permitir algo conceptualmente como:
+
+T3:
+y corporativos?
+
+T4:
+¿cuánto subieron?
+
+→ Corporativos pasaron de [A] a [B], una variación de [delta].
+
+Pero solamente si A y B provienen de fuente física existente.
+
+## Si NO existe
+
+Decir exactamente qué falta.
+
+No inventar solución.
+
+No crear SQL nuevo.
+
+No proponer poblar tablas artificialmente.
+
+## También revisar
+
+Si existe gasto total A/B físicamente disponible, documentarlo por separado.
+
+Distinguir claramente:
+
+- gasto operativo
+- gasto corporativo
+- gasto total
+- rentabilidad operativa
+- rentabilidad final
+
+No mezclar conceptos.
+
+## Prohibido
+
+NO implementación.
+NO modificar producto.
+NO tests nuevos.
+NO SQL nuevo.
+NO DB/schema.
+NO LIVE_DB.
+NO Delta Gastos.
+NO nueva fórmula.
+NO hardcodes.
+NO frontend changes.
+NO merge.
+NO push main.
+NO deploy.
+NO siguiente tarea.
+
+## Cierre
+
+Crear:
+
+docs/dev-loop/reports/AUDIT-DIRECTOR-IA-PROFITABILITY-EXPENSE-SUBTOPIC-DATA-001.md
+
+El reporte debe responder:
+
+1. ¿Dónde vive físicamente gasto corporativo?
+2. ¿Dónde vive físicamente gasto operativo?
+3. ¿Existe gasto total físico?
+4. ¿Están disponibles A/B?
+5. ¿Cuál es el FIRST_BAD_BOUNDARY?
+6. Clasificación A-F.
+7. ¿Cuál sería el FIX mínimo?
+8. Archivos exactos que tocaría.
+9. Qué pruebas habría que escribir.
+10. Qué NO debe hacerse.
+
+Después:
+
+CURRENT_TASK → DONE_PENDING_REVIEW
+
+STOP.
+
+NO implementación.
+NO merge.
+NO deploy.
+NO next task.
 
 ## Completion
 
 DONE_PENDING_REVIEW.
 
-Reporte: docs/dev-loop/reports/FIX-DIRECTOR-IA-CONVERSATIONAL-ACTIVE-SUBTOPIC-001.md
+Reporte: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-PROFITABILITY-EXPENSE-SUBTOPIC-DATA-001.md
 
-STOP. Esperar revisión humana. No merge. No push main. No deploy. No next task.
+STOP. Esperar revisión humana. No implementación. No commit. No merge. No deploy. No next task.
