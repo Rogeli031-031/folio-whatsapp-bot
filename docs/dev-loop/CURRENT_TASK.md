@@ -1,534 +1,495 @@
-task_id: AUDIT-DIRECTOR-IA-FOLIO-ANALYTIC-AGGREGATION-001
+task_id: FIX-DIRECTOR-IA-FOLIO-LOCATOR-ESTAN-PERIOD-BRIDGE-001
 
-task_type: AUDIT
-mode: READ_ONLY_PHYSICAL_TRACE
+task_type: FIX
+mode: REGRESSION_FIRST
 
-status: CLOSED
+status: AUTHORIZED
 authorized_by: "Human Approver"
-authorized_at: "2026-09-07T12:58:44-06:00"
-human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-07 - READ_ONLY FOLIO ANALYTIC AGGREGATION AUDIT; NO IMPLEMENTATION; NO SQL; NO LIVE_DB; NO MERGE; NO DEPLOY"
+authorized_at: "2026-09-07T16:37:24-06:00"
 
-implementation_authorized: NO
+human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-07 - IMPLEMENT PERIOD-ADJACENT ESTAN CONTROL BRIDGE IN FOLIO LOCATOR; PRESERVE PROTECTED BUSINESS CONCEPTS; REIMPLEMENT FROZEN AGGREGATE/NULL CONTRACT FROM MAIN; NO PLANNER; NO SQL; NO LIVE_DB; NO MERGE; NO DEPLOY"
+
+implementation_authorized: YES
 merge_authorized: NO
 deploy_authorized: NO
 live_db_authorized: NO
 
 max_attempts: 1
 
-base_main_sha: 4eb775c3d73a30b6d09b7830c5b42a1990cf6b34
+base_main_sha: e1d256b4f330931fcd349850f639e4a62df44f5c
 
-result_report_path: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-FOLIO-ANALYTIC-AGGREGATION-001.md
+result_report_path: docs/dev-loop/reports/FIX-DIRECTOR-IA-FOLIO-LOCATOR-ESTAN-PERIOD-BRIDGE-001.md
 
-objective: Determinar el contrato mínimo y veraz para responder preguntas analíticas sobre folios/apoyos —SUM, agrupación mensual y acumulado— incluyendo routing natural cuando el usuario no dice explícitamente "folio" o "apoyo".
+objective: Corregir únicamente la frontera del locator para que 'estan/están' quede fuera del concept span cuando funciona sintácticamente como puente hacia un periodo, sin convertir 'estan' en stopword/trailing leftover global y sin mutilar BUSINESS DATA.
 
-## Contratos ya LIVE — NO reabrir
+## Implementaciones rechazadas
 
-- folio_search
-- SINGLE month
-- RANGE month
-- concept SINGLE
-- concept ANY
-- scope phrases
-- token sequence
-- morphology controlada
-- SUPPORT_FAMILIES
-- ALL_PUBLIC_FOLIOS
-- queryReviewableSupportFolios
-- public.folios
-- gas != gasolina
-- SQL vigente
+NO cherry-pick:
 
-## North Star A — analítica explícita sobre apoyos
+805a4ce51029fda39bd4a0adb7836a2e7a75255a
+51a6d775b656121a13911c3e0a0e8bc44f890b31
+488a3faf85ea915aeec49bb98f8e0e8d27e4f7d2
+fe1e263534d1e1510a757437f98919c88aac8154
+623f4dca66bf078f4f74b3a8e6223be20bfa9952
 
-Pregunta LIVE:
+Usarlas solo como evidencia histórica.
 
-¿Cuánto hemos gastado en apoyos en REMODELACION DE TALLER de enero a agosto? suma los montos en un acumulado por mes
+## Blocker demostrado
 
 Actual:
 
-folio_search reconoce RANGE pero produce aproximadamente:
+que apoyos de llantas estan en septiembre?
+→ concept_query="llantas estan"
 
-concept_query =
-"cuanto hemos gastado remodelacion de taller suma montos acumulado por"
+que folios de llantas estan en agosto?
+→ concept_query="llantas estan"
 
-y devuelve cero.
+que apoyos de llantas estan para septiembre?
+→ concept_query="llantas estan"
 
-Resultado conceptual deseado a auditar:
+Correcto:
 
-domain/scope = SUPPORT_FAMILIES
-period = RANGE 2026-01..2026-08
-concept = remodelacion de taller
-aggregation = SUM
-group_by = MONTH
-cumulative = YES
+→ concept_query="llantas"
 
-Pero NO asumir todavía que la medida defendible se llama "gasto realizado".
+## Invariante
 
-## North Star B — routing natural sin folio/apoyo
+ESTAN NO ES STOPWORD GLOBAL.
 
-Pregunta LIVE:
+ESTAN NO SE AGREGA COMO TRAILING LEFTOVER GENERICO.
 
-¿Cuánto llevamos acumulado en mantenimiento de ISUZU?
+Debe considerarse CONTROL únicamente cuando la sintaxis demuestra
+que funciona como bridge hacia el periodo.
 
-Actual:
+Ejemplos:
 
-unknown
-→ "No se pudo determinar una intención clara..."
+llantas estan en septiembre
+llantas estan para septiembre
 
-Resultado conceptual deseado a auditar:
-
-reconocer solicitud analítica económica relacionada con folios
-concept = mantenimiento de ISUZU
-aggregation = SUM
-period = MISSING salvo contrato físico distinto
-
-NO asumir YTD solo por "llevamos acumulado".
-
-Determinar si debe:
-
-A. pedir periodo;
-B. existir semántica ya establecida "acumulado = YTD";
-C. otra resolución físicamente defendible.
-
-## Problema central: qué significa "gastado"
-
-NO implementar suma hasta clasificar esto.
-
-public.folios contiene al menos:
-
-- importe
-- estatus
-- categoria
-- mes_cargo
-- concepto/descripcion
-
-y diferentes estados pueden representar momentos operativos distintos.
-
-Auditar si existe una semántica física ya usada en producto para distinguir:
-
-- solicitado
-- aprobado
-- comprometido
-- cheque generado
-- pagado
-- comprobaciones
-- evidencias
-- cerrado
-- cancelado
-
-Pregunta obligatoria:
-
-¿SUM(importe) de todos los matches puede llamarse "hemos gastado"?
-
-Si NO:
-
-definir el wording veraz mínimo.
-
-Ejemplos posibles a evaluar:
-
-- importe total de folios encontrados
-- importe de folios pagados
-- importe materializado
-- gasto realizado
-
-NO elegir por intuición.
-
-Probarlo contra contratos existentes.
-
-## Medida
-
-Evaluar físicamente:
-
-MEASURE_CLASSIFICATION:
-
-A. ALL_MATCHED_FOLIO_AMOUNT
-B. PAID_ONLY_AMOUNT
-C. MATERIALIZED_STATUS_SUBSET
-D. MULTIPLE_MEASURES_REQUIRED
-E. CANNOT_DEFEND_SPEND_FROM_CURRENT_SOURCE
-F. OTHER
-
-Explicar exactamente qué estados/fuentes soportan cada interpretación.
-
-## Aggregation model
-
-Evaluar shape mínimo:
-
-analysis_mode = LIST | AGGREGATE
-
-aggregation = SUM | NONE
-
-group_by = MONTH | NONE
-
-cumulative = YES | NO
-
-o equivalente.
-
-No implementar todavía.
-
-## Monthly semantics
-
-Para RANGE:
-
-agrupar por mes_cargo.
-
-No por fecha de creación del folio.
-
-Debe auditarse si mes_cargo es efectivamente la semántica vigente de periodo de folio_search.
-
-## "por mes"
-
-Pregunta:
-
-¿Cuánto gastamos en llantas de enero a agosto por mes?
-
-Debe distinguir:
-
-monthly subtotal
-
-de:
-
-running cumulative total
-
-## "acumulado por mes"
-
-Para:
-
-"Suma los montos en un acumulado por mes"
-
-evaluar si la salida debe contener:
-
-mes
-subtotal_mes
-acumulado_hasta_mes
-
-Ejemplo conceptual:
-
-Enero    subtotal X    acumulado X
-Febrero  subtotal Y    acumulado X+Y
-
-No implementar hasta confirmar.
-
-## Total final
-
-Determinar si además debe devolver:
-
-TOTAL PERIODO
-
-igual al último acumulado.
-
-## Meses sin matches
-
-Para RANGE mensual:
-
-¿debe mostrar mes con 0?
-
-Preferencia a auditar:
-
-sí, si el usuario pidió "por mes" sobre un rango explícito,
-para que el periodo sea completo.
-
-No asumir.
-
-## Routing sin palabras mágicas
-
-Trazar físicamente:
-
-¿Cuánto llevamos acumulado en mantenimiento de ISUZU?
-
-Planner
-→ intent
-→ capabilities/domains
-→ tools
-→ chat
-
-Determinar por qué cae en unknown.
-
-Auditar colisiones con intents existentes, especialmente:
-
-- expense_analysis
-- investment_analysis
-- folio_search
-- igf
-- proyectos
-- Action Register
-
-No secuestrar preguntas financieras generales.
-
-## Regla candidata de routing
-
-Solo evaluar, NO implementar:
-
-consulta con lenguaje de agregación económica:
-
-cuánto gastamos
-cuánto hemos gastado
-cuánto llevamos
-total
-suma
-acumulado
-
-+
-
-concepto operativo explícito
-
-puede pertenecer a folio analytics.
-
-Pero debe definirse una frontera segura.
-
-## Casos obligatorios
-
-A.
-¿Cuánto hemos gastado en apoyos en remodelación de taller de enero a agosto? Suma los montos en un acumulado por mes.
-
-B.
-¿Cuánto llevamos acumulado en mantenimiento de ISUZU?
-
-C.
-¿Cuánto gastamos en llantas de enero a agosto?
-
-D.
-¿Cuánto gastamos en llantas de enero a agosto por mes?
-
-E.
-¿Cuánto llevamos acumulado en llantas de enero a agosto?
-
-F.
-Suma los apoyos de impresoras de enero a agosto.
-
-G.
-¿Cuál es el total de apoyos de MAYAN PALACE de enero a agosto?
-
-H.
-¿Cuánto gastamos en apoyos de gas en julio?
-
-I.
-¿Cuánto gastamos en septiembre?
-
-Guardrail:
-sin concepto explícito, determinar si esto debe ir a folio analytics o al dominio financiero/expense existente.
-
-J.
-¿Cuánto gastamos en gastos operativos en septiembre?
-
-Guardrail:
-NO debe secuestrarse si pertenece al gasto operativo financiero/IGF.
-
-K.
-¿Cuánto invertimos en MAYAN PALACE de enero a agosto?
-
-Determinar colisión con investment_analysis.
-
-L.
-¿Cuánto suman los folios de bonos de septiembre?
-
-M.
-¿Cuánto suman los folios de bonos o bono de septiembre?
-
-Debe preservar concept ANY.
-
-N.
-Dame los folios de bonos de septiembre.
-
-Debe seguir siendo LIST, no AGGREGATE.
-
-## Extracción analítica
-
-Auditar cómo retirar del concepto frases como:
-
-cuanto hemos gastado
-cuanto gastamos
-cuanto llevamos acumulado
-suma los montos
-suma
-total
-por mes
-acumulado por mes
-
-sin convertirlas en stopwords globales destructivos.
-
-No hardcode de:
-
-remodelacion
-isuzu
+Concept:
 llantas
-impresoras
-mayan palace
-bonos
 
-Estas palabras solo pueden aparecer en tests.
+Control:
+estan en septiembre
+estan para septiembre
 
-## Fuente / reutilización
+## Business data protegido
 
-Preferencia si es veraz:
+Debe seguir siendo posible buscar conceptos que contengan ESTAN.
 
-reutilizar el resultado estructurado de folio_search
-ANTES del formatting textual.
+B1
+que folios de agosto fueron de ESTAN?
+→ LIST
+→ concept_query="estan"
 
-No volver a consultar otra fuente si no hace falta.
+B2
+dame los folios de agosto de ESTAN
+→ LIST
+→ concept_query="estan"
 
-Auditar:
+B3
+cuanto suman los folios de agosto de ESTAN?
+→ AGGREGATE
+→ concept_query="estan"
 
-- si loadFolioSearchForChat puede reutilizarse;
-- si entrega todos los registros necesarios antes del RECORD_LIMIT;
-- si para agregaciones
-ecords actualmente podría estar truncado;
-- si se puede sumar desde el conjunto completo interno;
-- si count/matched completo está disponible;
-- si el límite 40 debe afectar o NO una suma.
+B4
+que folios de agosto fueron de SERVICIOS ESTAN?
+→ LIST
+→ concept_query="servicios estan"
 
-CRÍTICO:
+No puede resolverse B1-B4 eliminando 'estan'.
 
-Una agregación NO puede sumar solo los primeros 40 si existen más matches.
+## Period bridge obligatorio
 
-## RECORD_LIMIT
+P1
+que apoyos de llantas estan en septiembre?
+→ LIST
+→ concept llantas
+→ period 2026-09
 
-Determinar:
+P2
+que folios de llantas estan en agosto?
+→ LIST
+→ concept llantas
+→ period 2026-08
 
-LIST:
-sigue limitado a 40.
+P3
+que apoyos de llantas estan para septiembre?
+→ LIST
+→ concept llantas
+→ period 2026-09
 
-AGGREGATE:
-debe calcular sobre TODOS los matches del scope/periodo,
-aunque la lista detalle se trunque.
+P4
+que apoyos estan en septiembre?
+→ LIST
+→ concept null
+→ period 2026-09
 
-No implementar todavía.
+P5
+que folios estan en agosto?
+→ LIST
+→ concept null
+→ period 2026-08
 
-## Status semantics / cancelled
+## Controles ya congelados
 
-Determinar expresamente qué ocurre con:
+C1
+que apoyos de llantas tenemos en septiembre?
+→ llantas
 
-CANCELADO
+C2
+que apoyos de llantas hay en septiembre?
+→ llantas
 
-y otros estados.
+C3
+que apoyos de llantas existen en septiembre?
+→ llantas
 
-Si la pregunta dice:
+C4
+que folios de agosto fueron de RENTA DEL MES?
+→ renta del mes
 
-"cuánto hemos gastado"
+C5
+que folios de agosto fueron de CURSO?
+→ curso
 
-no incluir CANCELADO salvo evidencia contractual fuerte.
+C6
+dame los folios de agosto de TOTAL PLAY
+→ LIST
+→ total play
 
-Pero NO asumir que PAGADO es el único estado válido.
+C7
+cuanto suman los folios de agosto de TOTAL PLAY
+→ AGGREGATE
+→ total play
 
-Auditar físicamente.
+C8
+cual es el importe total de los folios de agosto de IMPORTE TOTAL SEGUROS?
+→ AGGREGATE
+→ importe total seguros
 
-## Authorization
+C9
+dame el total de los folios de agosto de POR MES SERVICIOS
+→ AGGREGATE
+→ por mes servicios
+
+## North Star congelado
+
+cuanto hemos gastado en apoyos en REMODELACION DE TALLER de enero a agosto? suma los montos en un acumulado por mes
+
+Debe seguir:
+
+scope=SUPPORT_FAMILIES
+period_mode=RANGE
+period_start=2026-01
+period_end=2026-08
+concept_query=remodelacion de taller
+
+analysis_mode=AGGREGATE
+aggregation=SUM
+group_by=MONTH
+cumulative=YES
+
+## Lexical immutability congelada
+
+Una vez localizado un HIGH-CONFIDENCE concept span:
+
+PROTECTED_CONCEPT_IS_LEXICALLY_IMMUTABLE = YES
+
+No STRUCTURAL_TOKENS.pop().
 
 Conservar:
 
-planta
-solo_zp_ad
+RENTA DEL MES
+PAGO DEL MES
+SALDO ACTUAL
+MATERIAL PARA
+CURSO
+SERVICIO EN
+
+## NULL semantics congelada
+
+KNOWN_ZERO:
+0 físico
+→ conocido
+→ suma 0
+
+KNOWN_NONZERO:
+finito
+→ conocido
+
+UNKNOWN:
+
+null
+undefined
+blank
+nonfinite
+
+→ NO es cero
+→ no suma
+→ unknown_amount_count++
+→ is_complete=false
+
+Clasificar antes de Number().
+
+## CANCELADO
+
+AGGREGATE:
+fuera de eligible
+fuera de suma
+fuera de unknown count
+
+LIST:
+sin cambio.
+
+## PAGADO
+
+No filtro implícito.
+No prueba gasto contable.
+
+## Full set
+
+AGGREGATE:
+todos los matched/deduped antes del cap.
+
+LIST:
+cap 40.
+
+## MONTH / cumulative
+
+Preservar exactamente contrato anterior:
+
+mes_cargo
+empty month complete zero
+unknown month incomplete
+running solo conocidos
+running_is_complete propaga
+known_total = último running cuando cumulative YES
+
+## Preservar sin cambios semánticos
+
+SINGLE
+RANGE
+ANY
+
+inclusive range
+max 12
+inverted 0 calls
+>12 0 calls
+partial range fail-closed
+
+bonos o bono
+
+gas != gasolina
+O-RING
+SELLO O-RING
+aceite de motor
+MAYAN PALACE
+
+morphology
 scope
-permisos
+authz
 
-Agregación nunca puede sumar folios que el usuario no puede ver.
+queryReviewableSupportFolios
+SQL existente
 
-## No SQL
+## No cambiar
 
-Auditar si todo puede resolverse en memoria sobre la lectura actual.
+planner
+routing
+SQL
+schema
+dependencies
+authz
+scope semantics
+RANGE semantics
+ANY semantics
+morphology semantics
 
-SQL_CHANGE_REQUIRED debe ser NO para autorizar un futuro slice.
+## Fuera de alcance
 
-Si resulta YES:
-STOP y explicar.
+No resolver:
 
-## Reporte obligatorio
+cuanto tenemos de apoyos de enero a agosto de taller?
+inversiones en cilindros
+inversiones a clientes
+mantenimiento ISUZU
+acciones abiertas
+folio exacto sin mes
+ranking AT
+ARR 302 vs 1522.76
+LIST formatMoney(null)
 
-Crear:
+## Regression first
 
-docs/dev-loop/reports/AUDIT-DIRECTOR-IA-FOLIO-ANALYTIC-AGGREGATION-001.md
+Demostrar contra base_main_sha:
 
-Debe comenzar exactamente:
+- no AGGREGATE
+- comportamiento base de ESTAN
+- no Option B
+- no cherry-pick
 
-ROUTING_CLASSIFICATION:
-ROUTING_FIRST_BAD_BOUNDARY:
+## Tests mínimos
 
-ANALYTIC_PARSE_CLASSIFICATION:
-ANALYTIC_FIRST_BAD_BOUNDARY:
+R-FOLIO-ESTAN-001 llantas estan en septiembre
+002 llantas estan en agosto
+003 llantas estan para septiembre
+004 apoyos estan en septiembre no concept
+005 folios estan en agosto no concept
 
-MEASURE_CLASSIFICATION:
-MEASURE_SEMANTICS:
+006 ESTAN como concepto
+007 dame ESTAN como concepto
+008 aggregate ESTAN
+009 SERVICIOS ESTAN
 
-AGGREGATION_SOURCE_CLASSIFICATION:
-AGGREGATION_FIRST_BAD_BOUNDARY:
+010 tenemos control
+011 hay control
+012 existen control
 
-EXISTING_ANALYTIC_HELPER_REUSABLE:
-YES / NO
+013 RENTA DEL MES
+014 CURSO
 
-SAFE_ROUTING_STRATEGY:
-...
+015 TOTAL PLAY LIST
+016 TOTAL PLAY AGG
+017 IMPORTE TOTAL SEGUROS AGG
+018 POR MES SERVICIOS AGG
 
-SAFE_ANALYTIC_PARSE_STRATEGY:
-...
+019 North Star concept
+020 North Star RANGE
+021 North Star MONTH
+022 North Star cumulative
 
-SAFE_MEASURE_STRATEGY:
-...
+023 NULL != 0
+024 zero known
+025 null unknown
+026 undefined unknown
+027 blank unknown
+028 nonfinite unknown
+029 unknown no suma
+030 unknown count
+031 complete false
+032 complete true
 
-SAFE_AGGREGATION_STRATEGY:
-...
+033 CANCELADO null excluido
+034 PAGADO null unknown
 
-MISSING_PERIOD_BEHAVIOR:
-...
+035 empty month complete zero
+036 null month incomplete
+037 running known
+038 running completeness
+039 known total
 
-MONTHLY_GROUPING_FIELD:
-...
+040 aggregate >40 full set
+041 LIST cap40
 
-MONTH_ZERO_FILL:
-YES / NO
+042 ANY bonos|bono
+043 gas != gasolina
+044 O-RING
+045 aceite de motor
+046 MAYAN PALACE
 
-CUMULATIVE_SEMANTICS:
-...
+047 partial range fail closed
+048 inverted range 0 calls
+049 >12 range 0 calls
 
-CANCELLED_BEHAVIOR:
-...
+050 planner unchanged
+051 SQL unchanged
+052 dependencies unchanged
 
-RECORD_LIMIT_AFFECTS_AGGREGATE:
-YES / NO
+## Suites
 
-SQL_CHANGE_REQUIRED:
-YES / NO
+R-FOLIO-ESTAN
+R-FOLIO-LOCATOR
+R-FOLIO-COMP
+R-FOLIO-RANGE
+R-FOLIO-LANG
+R-FOLIO-TRUTH
 
-NORTH_STAR_A_EXPECTED:
-...
+planner
+capabilities
+orchestrator
 
-NORTH_STAR_B_EXPECTED:
-...
+M2
+M4
+M5
+M6
+IGF
+continuity
 
-A-N MATRIX:
-...
+Tier 1
+pre-deploy --gate
 
-ONE_FIX_CAN_HANDLE_ANALYTICS:
-YES / NO
+NEW FAILURE = 0.
 
-FIX CONTRACT:
-...
+Si una falla parece preexistente:
+demostrar contra base_main_sha.
 
-FILES FUTUROS:
-...
+## STOP CONDITIONS
 
-## Prohibido
+STOP si requiere:
 
-NO implementación.
-NO SQL.
-NO DB/schema.
-NO LIVE_DB.
-NO frontend.
-NO dependencia nueva.
-NO asumir acumulado=YTD.
-NO sumar solo primeros 40.
-NO llamar "gastado" a una métrica no defendible.
-NO hardcode de conceptos.
-NO parser NLP general.
-NO cambiar RANGE.
-NO cambiar morphology.
-NO cambiar concept ANY.
-NO cambiar scope.
-NO merge.
-NO deploy.
-NO next task.
+agregar ESTAN como stopword/trailing leftover global
+
+planner
+routing
+SQL
+schema
+dependency
+LIVE_DB
+
+cambiar RANGE
+ANY
+morphology
+scope
+authz
+
+## Reporte
+
+docs/dev-loop/reports/FIX-DIRECTOR-IA-FOLIO-LOCATOR-ESTAN-PERIOD-BRIDGE-001.md
+
+Debe iniciar:
+
+IMPLEMENTATION_SHA:
+BEFORE:
+AFTER:
+
+ESTAN_PERIOD_BRIDGE_MODEL:
+ESTAN_GLOBAL_STOPWORD:
+ESTAN_BUSINESS_DATA_PRESERVED:
+
+LLANTAS_ESTAN_EN:
+LLANTAS_ESTAN_PARA:
+ESTAN_AS_CONCEPT:
+SERVICIOS_ESTAN:
+
+LOCATOR_BOUNDARY:
+PROTECTED_SPAN_IMMUTABILITY:
+ANALYTIC_MODEL:
+
+NULL_MODEL:
+FULL_SET:
+MONTHLY:
+CUMULATIVE:
+
+NORTH_STAR:
+001..052:
+SUITES:
+FILES:
+RISKS:
+
+PLANNER_CHANGED:
+SQL_NEW:
+DEPENDENCY_NEW:
 
 ## Completion
 
 CURRENT_TASK → DONE_PENDING_REVIEW
 
+Commit únicamente en rama FIX.
+
 STOP.
+
+NO merge.
+NO push main.
+NO deploy.
+NO LIVE_DB.
+NO next task.
