@@ -1,238 +1,483 @@
-task_id: AUDIT-DIRECTOR-IA-FOLIO-SEARCH-CONCEPT-MORPHOLOGY-001
+task_id: FIX-DIRECTOR-IA-FOLIO-SEARCH-FRAME-MORPHOLOGY-001
 
-task_type: AUDIT
-mode: READ_ONLY_PHYSICAL_TRACE
+task_type: FIX
+mode: REGRESSION_FIRST
 
 status: CLOSED
 authorized_by: "Human Approver"
-authorized_at: "2026-09-07T10:56:01-06:00"
-human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-07 - READ_ONLY FOLIO CONCEPT FRAME/MORPHOLOGY AUDIT; NO IMPLEMENTATION; NO LIVE_DB; NO MERGE; NO DEPLOY"
+authorized_at: "2026-09-07T11:03:41-06:00"
+human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-07 - IMPLEMENT FOLIO SEARCH FRAME + CONTROLLED TOKEN MORPHOLOGY; NO SQL; NO PERIOD CHANGES; NO MERGE; NO DEPLOY; NO LIVE_DB"
 
-implementation_authorized: NO
+implementation_authorized: YES
 merge_authorized: NO
 deploy_authorized: NO
 live_db_authorized: NO
 
 max_attempts: 1
 
-base_main_sha: 46d0e5185c55bc295819399f49e0cea7578b1938
+base_main_sha: 4ff25f14a60a82a56f7d41e4c0fdf24ad4b584c6
 
-result_report_path: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-FOLIO-SEARCH-CONCEPT-MORPHOLOGY-001.md
+result_report_path: docs/dev-loop/reports/FIX-DIRECTOR-IA-FOLIO-SEARCH-FRAME-MORPHOLOGY-001.md
 
-objective: Determinar la regla lingüística mínima y segura para corregir conjuntamente FRAME OVER-CAPTURE y MORPHOLOGICAL VARIANT MATCH en folio_search, sin tocar periodo, SQL, scope ni fuentes.
+objective: Corregir falsos negativos de búsqueda natural de folios/apoyos separando el marco relacional del concepto y sustituyendo el substring matcher por matching secuencial de tokens con variantes singular/plural controladas.
 
-## Hallazgos ya demostrados
+## North Star LIVE
 
-NO reauditar periodo.
+Planta:
+Acapulco
 
-CURRENT TURN EXPLICIT MONTH WINS LOCALLY = YES.
+Pregunta:
 
-Boundary 1:
+qué apoyos de julio fueron de llantas?
 
-CONCEPT_SPAN_OVER_CAPTURE
+Estado actual:
+
+period_month = 2026-07
+concept_query = "fueron de llantas"
+resultado = vacío
+
+Además existe un folio real cuyo texto físico contiene:
+
+LLANTA
+
+Por tanto hay DOS boundaries independientes.
+
+## Boundary 1 — FRAME
+
+Actual:
 
 "qué apoyos de julio fueron de llantas?"
-→ concept_query = "fueron de llantas"
+→ "fueron de llantas"
 
-Boundary 2:
+Esperado:
 
-MORPHOLOGICAL_VARIANT_MATCH_MISSING
+→ "llantas"
 
-Después de corregir el frame:
+Implementar un recorte de marco RELACIONAL únicamente al inicio del span conceptual.
 
-"llantas"
-
-todavía NO coincide con una fila física:
-
-"LLANTA"
-
-Matcher actual:
-
-concepto.includes(needle) || sub.includes(needle)
-
-## Objetivo
-
-Encontrar un algoritmo genérico mínimo que:
-
-1. quite únicamente el marco gramatical previo al concepto;
-2. preserve preposiciones internas;
-3. soporte variantes singular/plural españolas comunes;
-4. evite stemming destructivo;
-5. no use catálogo empresarial.
-
-## Casos obligatorios
-
-A.
-"qué apoyos de julio fueron de llantas?"
-concepto esperado: llantas
-candidate: LLANTA
-
-B.
-"qué apoyos de agosto fueron de aceite de motor?"
-concepto esperado: aceite de motor
-NO: aceite motor
-
-C.
-"qué apoyos fueron de bombas?"
-candidate: BOMBA
-
-D.
-"qué apoyos fueron de bomba?"
-candidate: BOMBAS
-
-E.
-"qué apoyos fueron de motores?"
-candidate: MOTOR
-
-F.
-"qué apoyos fueron de motor?"
-candidate: MOTORES
-
-G.
-"qué apoyos fueron de luces?"
-candidate: LUZ
-
-H.
-"qué apoyos fueron de gas?"
-candidate: GAS
-
-PROHIBIDO gas → ga.
-
-I.
-"qué apoyos fueron de parabrisas?"
-candidate: PARABRISAS
-
-J.
-"qué apoyos fueron de filtros de aire?"
-concepto esperado: filtros de aire
-candidate: FILTRO DE AIRE
-
-Debe conservar el "de" interno.
-
-## FRAME
-
-Evaluar marco cerrado genérico como:
+Frames auditados:
 
 fueron de
 son de
 eran de
 relacionados con
 relacionadas con
+relacionado con
+relacionada con
 
-sin vocabulario de negocio.
+No convertir "de" ni "con" en stopwords globales.
 
-## MORPHOLOGY
+No borrar preposiciones internas.
 
-Evaluar:
+Ejemplo obligatorio:
 
-- substring actual;
-- token-level comparison;
-- variantes singular/plural controladas;
-- helpers existentes en repo;
-- librerías ya existentes, si las hay.
+"qué apoyos de agosto fueron de aceite de motor?"
+→ concept_query = "aceite de motor"
 
-NO dependencia nueva.
+NO:
 
-NO strip-final-s global.
+"aceite motor"
 
-Cubrir:
+## Boundary 2 — MORPHOLOGY
 
-vocal + s
-llanta ↔ llantas
+Matcher actual:
 
-consonante + es
-motor ↔ motores
+concepto.includes(needle) || sub.includes(needle)
 
-z ↔ ces
-luz ↔ luces
+Debe sustituirse para folio_search por matching de TOKENS EN SECUENCIA.
 
-y proteger:
-
-gas
-parabrisas
-analisis
-mes
-
-## Multiword
-
-Preservar:
-
-aceite de motor
-filtro de aire
-bomba de agua
-
-No convertir indiscriminadamente a bag-of-words si crea falsos positivos.
-
-## Fuente
-
-Mantener únicamente:
+Mantener campos:
 
 row.concepto
 row.subcategoria
 
-NO SQL.
-NO fuente nueva.
+No ampliar fuente.
 
-## Clasificación
+### Regla fundamental
 
-FRAME_CLASSIFICATION:
-A CLOSED_RELATIONAL_FRAME_SUFFICIENT
-B TOKEN_STOPWORD_MODEL_REQUIRED
-C OTHER
+NO generar stems destructivos.
 
-MORPHOLOGY_CLASSIFICATION:
-A CONTROLLED_TOKEN_VARIANTS_SUFFICIENT
-B EXISTING_HELPER_REUSABLE
-C STEMMING_REQUIRED
-D PHRASE_MATCH_REDIRECTION_REQUIRED
-E OTHER
+NO hacer:
 
-## Decisión
+token termina en s
+→ quitar s
 
-ONE_FIX_CAN_SAFELY_HANDLE_FRAME_AND_MORPHOLOGY:
-YES / NO
+En su lugar comparar DOS TOKENS COMPLETOS.
 
-## Reporte obligatorio
+tokenEquivalent(a, b) es verdadero solo si:
 
-FRAME_CLASSIFICATION:
-FRAME_FIRST_BAD_BOUNDARY:
-MORPHOLOGY_CLASSIFICATION:
-MORPHOLOGY_FIRST_BAD_BOUNDARY:
-EXISTING_HELPER_REUSABLE:
-SAFE_FRAME_STRATEGY:
-SAFE_MORPHOLOGY_STRATEGY:
-MULTIWORD_PREPOSITION_PRESERVED:
-LLANTAS_LLANTA:
-MOTORES_MOTOR:
-LUCES_LUZ:
-GAS_SAFE:
-PARABRISAS_SAFE:
-ACEITE_DE_MOTOR_SAFE:
-ONE_FIX_CAN_SAFELY_HANDLE_FRAME_AND_MORPHOLOGY:
-FIX CONTRACT:
-FILES FUTUROS:
+1. exact normalized token equality; o
+2. forman un par singular/plural controlado.
 
-Incluir matriz A-J.
+### Variantes controladas
 
-## Prohibido
+Vocal + s:
 
-NO implementación.
-NO SQL.
+llanta ↔ llantas
+
+Requerir singular suficientemente largo.
+No permitir bases triviales.
+
+Consonante + es:
+
+motor ↔ motores
+
+Requerir singular suficientemente largo.
+
+z ↔ ces:
+
+luz ↔ luces
+
+La comparación debe ser bidireccional.
+
+No es requisito resolver toda la morfología española.
+
+Priorizar precisión.
+
+## Seguridad
+
+La implementación NO debe contener excepciones de producto como:
+
+if token === "llantas"
+
+ni catálogo de conceptos.
+
+Las palabras de los casos de prueba pueden aparecer en TESTS,
+pero no como branching empresarial en product code.
+
+### gas
+
+"gas" debe hacer match con token GAS.
+
+"gas" NO debe hacer match con:
+
+GASTO
+GASOLINA
+GA
+
+El cambio de substring → token sequence es obligatorio para este guardrail.
+
+### parabrisas
+
+No mutilar PARABRISAS mediante strip-final-s.
+
+### multiword
+
+"aceite de motor"
+
+debe hacer match como SECUENCIA CONTIGUA de tokens equivalentes dentro de:
+
+"COMPRA DE ACEITE DE MOTOR PARA UNIDAD"
+
+Debe preservar y comparar "de".
+
+No convertir indiscriminadamente a bag-of-words.
+
+"aceite de motor"
+
+NO debe considerarse equivalente simplemente a:
+
+"motor aceite"
+
+## Token sequence
+
+El concept_query normalizado debe convertirse a tokens.
+
+El texto de cada campo físico debe convertirse a tokens.
+
+Buscar si la secuencia completa del query aparece dentro del campo,
+en el mismo orden y de forma contigua,
+usando tokenEquivalent por posición.
+
+Puede haber tokens adicionales antes/después en la fila.
+
+Ejemplo:
+
+query tokens:
+[llantas]
+
+row:
+[compra, de, llanta, para, utilitario]
+
+→ MATCH por variante controlada.
+
+Ejemplo:
+
+query:
+[aceite, de, motor]
+
+row:
+[compra, aceite, de, motores, para, unidad]
+
+→ MATCH.
+
+## Periodo congelado
+
+NO modificar:
+
+MONTHS_ES
+extractPeriodMonth
+resolución del año
+mes_cargo
+conversation-state de periodo
+
+La auditoría demostró:
+
+CURRENT TURN EXPLICIT MONTH WINS LOCALLY = YES
+
+Los tests existentes de periodo deben continuar pasando.
+
+## Scope congelado
+
+NO modificar semántica:
+
+folios
+→ ALL_PUBLIC_FOLIOS
+
+apoyos
+→ SUPPORT_FAMILIES
+
+apoyos/folios
+→ ALL_PUBLIC_FOLIOS
+
+SUPPORT_FAMILIES permanece:
+
+GASTOS + INVERSIONES + TALLER
+
+## Fuente congelada
+
+NO SQL nuevo.
+
+NO copiar SQL.
+
+NO cambiar queryReviewableSupportFolios.
+
+NO IGF-reviewable filters.
+
 NO DB/schema.
-NO LIVE_DB.
-NO frontend.
-NO cambios de periodo.
-NO concept catalog.
-NO regex de llantas.
-NO naive strip-final-s.
-NO dependencia nueva.
-NO merge.
-NO push main.
-NO deploy.
-NO next task.
+
+## Regression first
+
+Antes del cambio demostrar rojo para el caso real mediante fixture:
+
+question:
+"qué apoyos de julio fueron de llantas?"
+
+period:
+2026-07
+
+physical row concept:
+"AT-36 (4) LLANTA 11R22.5 LINEAL"
+
+Debe fallar ANTES por:
+
+- frame over-capture
+- singular/plural
+
+Después debe pasar.
+
+## Tests obligatorios
+
+R-FOLIO-LANG-001
+North Star natural falla antes y pasa después.
+
+R-FOLIO-LANG-002
+extrae "llantas", no "fueron de llantas".
+
+R-FOLIO-LANG-003
+julio sigue siendo 2026-07.
+
+R-FOLIO-LANG-004
+llantas ↔ LLANTA.
+
+R-FOLIO-LANG-005
+llanta ↔ LLANTAS.
+
+R-FOLIO-LANG-006
+bombas ↔ BOMBA.
+
+R-FOLIO-LANG-007
+bomba ↔ BOMBAS.
+
+R-FOLIO-LANG-008
+motores ↔ MOTOR.
+
+R-FOLIO-LANG-009
+motor ↔ MOTORES.
+
+R-FOLIO-LANG-010
+luces ↔ LUZ.
+
+R-FOLIO-LANG-011
+luz ↔ LUCES.
+
+R-FOLIO-LANG-012
+gas ↔ GAS.
+
+R-FOLIO-LANG-013
+gas NO match GASTO.
+
+R-FOLIO-LANG-014
+gas NO match GASOLINA.
+
+R-FOLIO-LANG-015
+gas NO se transforma a ga.
+
+R-FOLIO-LANG-016
+parabrisas no se mutila.
+
+R-FOLIO-LANG-017
+"aceite de motor" preservado.
+
+R-FOLIO-LANG-018
+"aceite de motor" hace match en secuencia.
+
+R-FOLIO-LANG-019
+"motor aceite" NO equivale a "aceite de motor".
+
+R-FOLIO-LANG-020
+"filtros de aire" preservado.
+
+R-FOLIO-LANG-021
+filtros ↔ FILTRO dentro de frase.
+
+R-FOLIO-LANG-022
+"bomba de agua" preservado.
+
+R-FOLIO-LANG-023
+frame "fueron de".
+
+R-FOLIO-LANG-024
+frame "son de".
+
+R-FOLIO-LANG-025
+frame "eran de".
+
+R-FOLIO-LANG-026
+frame "relacionados con".
+
+R-FOLIO-LANG-027
+frame "relacionadas con".
+
+R-FOLIO-LANG-028
+"folios de llantas de julio" sigue extrayendo llantas.
+
+R-FOLIO-LANG-029
+turno septiembre → julio explícito conserva 2026-07.
+
+R-FOLIO-LANG-030
+turno septiembre → agosto explícito conserva 2026-08.
+
+R-FOLIO-LANG-031
+folios conserva ALL_PUBLIC_FOLIOS.
+
+R-FOLIO-LANG-032
+apoyos conserva SUPPORT_FAMILIES.
+
+R-FOLIO-LANG-033
+apoyos/folios conserva ALL_PUBLIC_FOLIOS.
+
+R-FOLIO-LANG-034
+no Action Register fallback.
+
+R-FOLIO-LANG-035
+no SQL nuevo/copied.
+
+R-FOLIO-LANG-036
+no dependencia nueva.
+
+R-FOLIO-LANG-037
+no cambio a queryReviewableSupportFolios.
+
+R-FOLIO-LANG-038
+no vocabulario de negocio usado como branching productivo.
+
+## Product files permitidos
+
+Preferentemente:
+
+lib/director-ia-folio-search.js
+
+Tests correspondientes.
+
+Solo tocar planner/chat/capabilities/tools si una regresión demuestra que es estrictamente necesario.
+
+No ampliar alcance preventivamente.
+
+## Suites obligatorias
+
+- nueva suite R-FOLIO-LANG
+- suite R-FOLIO-TRUTH completa
+- planner
+- capabilities
+- tool orchestrator
+- M2
+- M4
+- M5
+- M6
+- IGF
+- continuity
+- Tier 1
+- pre-deploy --gate
+
+Si existe fallo preexistente:
+
+probar contra base_main_sha.
+
+NEW FAILURE debe ser 0.
+
+## STOP CONDITIONS
+
+STOP si requiere:
+
+- SQL
+- schema
+- LIVE_DB
+- nueva dependencia
+- cambio de periodo
+- cambio de scope
+- cambio de fuente
+- concept catalog
+- stemming global
+- frontend
+- server.js product behavior no previsto
+
+## Reporte
+
+Crear:
+
+docs/dev-loop/reports/FIX-DIRECTOR-IA-FOLIO-SEARCH-FRAME-MORPHOLOGY-001.md
+
+Debe comenzar:
+
+IMPLEMENTATION_SHA:
+BEFORE:
+AFTER:
+FRAME_STRATEGY:
+TOKEN_STRATEGY:
+MORPHOLOGY_STRATEGY:
+NORTH_STAR:
+PERIOD_UNCHANGED:
+SCOPE_UNCHANGED:
+SQL_NEW:
+DEPENDENCY_NEW:
+001..038:
+SUITES:
+FILES:
+RISKS:
 
 ## Completion
 
+Después de implementación y pruebas:
+
 CURRENT_TASK → DONE_PENDING_REVIEW
 
+Commit únicamente en esta rama.
+
 STOP.
+
+NO merge.
+NO push main.
+NO deploy.
+NO LIVE_DB.
+NO next task.
