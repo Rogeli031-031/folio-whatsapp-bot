@@ -1,6 +1,6 @@
 # FIX-DIRECTOR-IA-FOLIO-SEARCH-FRAME-MORPHOLOGY-001
 
-IMPLEMENTATION_SHA: (pendiente de commit)
+IMPLEMENTATION_SHA: d4bd72569295d761d27a536ec899ca70ad1184d0
 
 BEFORE: `qué apoyos de julio fueron de llantas?` → `concept_query=fueron de llantas`; fila `AT-36 (4) LLANTA 11R22.5 LINEAL` = 0.
 
