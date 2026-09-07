@@ -3,7 +3,7 @@ task_id: FIX-DIRECTOR-IA-FOLIO-LOCATOR-ESTAN-PERIOD-BRIDGE-001
 task_type: FIX
 mode: REGRESSION_FIRST
 
-status: DONE_PENDING_REVIEW
+status: CLOSED
 authorized_by: "Human Approver"
 authorized_at: "2026-09-07T16:37:24-06:00"
 
@@ -493,3 +493,4 @@ NO push main.
 NO deploy.
 NO LIVE_DB.
 NO next task.
+closure_reason: "HUMAN REVIEW MERGE_OK. ESTAN funciona como period-adjacent control bridge sin convertirse en stopword global; ESTAN y SERVICIOS ESTAN permanecen como BUSINESS DATA. Locator boundary, protected-span lexical immutability, TOTAL PLAY, Option B NULL semantics, full-set aggregation, CANCELADO, RANGE/ANY y North Star pasan. NEW FAILURE = 0."
