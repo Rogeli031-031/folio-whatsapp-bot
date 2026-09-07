@@ -1,48 +1,29 @@
-task_id: AUDIT-DIRECTOR-IA-FOLIO-SEARCH-COMPOSITIONAL-QUERY-GRAMMAR-001
+task_id: FIX-DIRECTOR-IA-FOLIO-SEARCH-COMPOSITIONAL-QUERY-GRAMMAR-001
 
-task_type: AUDIT
-mode: READ_ONLY_PHYSICAL_TRACE
+task_type: FIX
+mode: REGRESSION_FIRST
 
-status: CLOSED
+status: DONE_PENDING_REVIEW
 authorized_by: "Human Approver"
-authorized_at: "2026-09-07T12:19:53-06:00"
-human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-07 - READ_ONLY FOLIO COMPOSITIONAL QUERY GRAMMAR AUDIT; NO IMPLEMENTATION; NO SQL; NO LIVE_DB; NO MERGE; NO DEPLOY"
+authorized_at: "2026-09-07T12:28:04-06:00"
+human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-07 - IMPLEMENT FOLIO COMPOSITIONAL QUERY GRAMMAR; NO SQL; NO RANGE CHANGES; NO MORPHOLOGY CHANGES; NO MERGE; NO DEPLOY; NO LIVE_DB"
 
-implementation_authorized: NO
+implementation_authorized: YES
 merge_authorized: NO
 deploy_authorized: NO
 live_db_authorized: NO
 
 max_attempts: 1
 
-base_main_sha: 5184e98665b7a6993043fd0e7e518f558c7bc917
+base_main_sha: 517f746e6488574b8df937986e6f9c849861b563
 
-result_report_path: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-FOLIO-SEARCH-COMPOSITIONAL-QUERY-GRAMMAR-001.md
+result_report_path: docs/dev-loop/reports/FIX-DIRECTOR-IA-FOLIO-SEARCH-COMPOSITIONAL-QUERY-GRAMMAR-001.md
 
-objective: Determinar el cambio lingüístico mínimo para que folio_search separe operadores conceptuales, conectores gramaticales y frases de alcance sin contaminar concept_query, preservando todos los contratos LIVE ya validados.
+objective: Corregir composición lingüística de folio_search separando frases cerradas de scope/sujeto, conectores residuales de frontera y alternativas conceptuales ANY, sin modificar rango, morfología, fuentes ni SQL.
 
-## Contratos LIVE congelados
+## LIVE failures
 
-NO reabrir:
-
-- SINGLE month
-- RANGE month
-- enero→agosto
-- multi-month fetch
-- fail-closed parcial
-- frame ya vigente
-- token sequence
-- morfología controlada
-- gas != gasolina
-- ALL_PUBLIC_FOLIOS
-- SUPPORT_FAMILIES
-- public.folios
-- queryReviewableSupportFolios
-- SQL
-
-Estos ya funcionan.
-
-## Evidencia LIVE — problema 1: disyunción conceptual
+### A — concepto alternativo
 
 Pregunta:
 
@@ -54,29 +35,16 @@ period_month = 2026-08
 concept_query = "bonos o bono"
 0 resultados
 
-El matcher vigente interpreta los tokens:
+Esperado:
 
-[bonos, o, bono]
+scope = ALL_PUBLIC_FOLIOS
+period_month = 2026-08
+concept_mode = ANY
+concept_alternatives = ["bonos", "bono"]
 
-como una única secuencia contigua.
+No relajar morfología global para resolver bono/bonos.
 
-Auditar si el lenguaje natural requiere representar:
-
-bonos OR bono
-
-como alternativas conceptuales.
-
-NO asumir aún el shape.
-
-Evaluar como posible contrato:
-
-concept_mode = SINGLE | ANY
-concept_query = string | null
-concept_alternatives = [phrase...]
-
-o equivalente mínimo compatible.
-
-## Evidencia LIVE — problema 2: conector residual
+### B — boundary connector residual
 
 Pregunta:
 
@@ -84,29 +52,13 @@ que folios son de agosto de bonos?
 
 Actual:
 
-period_month = 2026-08
 concept_query = "de bonos"
 
-Traza esperada físicamente:
+Esperado:
 
-quitar agosto
-→ "que folios son de de bonos"
-→ STRUCTURAL
-→ "son de de bonos"
-→ stripRelationalFrame
-→ "de bonos"
+concept_query = "bonos"
 
-Determinar la frontera exacta.
-
-No resolver poniendo "de" como stopword global.
-
-Guardrail obligatorio:
-
-aceite de motor
-
-debe conservar el "de" interno.
-
-## Evidencia LIVE — problema 3: frase de alcance contamina concepto
+### C — scope phrase contaminando concepto
 
 Pregunta:
 
@@ -114,56 +66,358 @@ que apoyos o inversiones de enero a agosto fueron de MAYAN PALACE?
 
 Actual:
 
-period_mode = RANGE
-period_start = 2026-01
-period_end = 2026-08
 scope = SUPPORT_FAMILIES
 concept_query = "o inversiones fueron de mayan palace"
 
-0 resultados.
+Esperado:
 
-Bajo el contrato vigente:
+scope = SUPPORT_FAMILIES
+period_mode = RANGE
+period_start = 2026-01
+period_end = 2026-08
+concept_mode = SINGLE
+concept_query = "mayan palace"
 
-"apoyos"
+## Contratos congelados
+
+NO modificar:
+
+- SINGLE month
+- RANGE parser
+- range cap
+- monthly fetch
+- partial fail-closed
+- token sequence
+- controlled morphology
+- gas guardrail
+- queryReviewableSupportFolios
+- SQL
+- authorization
+
+Scope vigente:
+
+folios
+→ ALL_PUBLIC_FOLIOS
+
+apoyos
 → SUPPORT_FAMILIES
-→ GASTOS + INVERSIONES + TALLER
 
-Por tanto "o inversiones" NO debe convertirse silenciosamente en parte
-del concepto buscado.
+apoyos/folios
+→ ALL_PUBLIC_FOLIOS
 
-Auditar si debe clasificarse como:
+SUPPORT_FAMILIES:
+GASTOS + INVERSIONES + TALLER
 
-- frase redundante de scope que se retira antes del concepto; o
-- facet de categoría; o
-- otra representación.
+## 1. Scope / subject phrases
 
-NO reabrir el significado congelado de SUPPORT_FAMILIES.
+Reconocer únicamente frases cerradas inequívocas del sujeto:
 
-No ampliar todavía standalone "inversiones" a un nuevo intent.
-Solo documentar colisiones con rutas existentes si las hay.
+apoyos o inversiones
+apoyos o folios
+folios o apoyos
 
-## Evidencia visual humana
+Estas frases deben retirarse del texto que luego alimenta concept extraction.
 
-Existe en el Excel mostrado por el usuario una fila:
+NO hacer:
 
-F-202605-029
-MAY 2026
-INVERSIONES
-Concepto contiene:
-MAYAN PALACE PUERTA 4
-Importe:
-29000
-Estatus:
-PAGADO
+"inversiones" como stopword global
 
-Esto demuestra el objetivo humano de búsqueda.
+NO introducir category facet.
 
-NO usar esta evidencia como prueba automática de que la misma fila está
-en public.folios.
+NO nuevo intent de inversiones.
 
-NO LIVE_DB.
+La resolución de scope debe permanecer coherente:
 
-## Preguntas obligatorias
+apoyos o inversiones
+→ SUPPORT_FAMILIES
+
+apoyos o folios
+→ ALL_PUBLIC_FOLIOS
+
+folios o apoyos
+→ ALL_PUBLIC_FOLIOS
+
+La palabra concreta "inversiones" puede aparecer en la gramática cerrada
+de scope porque forma parte del contrato auditado.
+
+No usar nombres de conceptos de negocio.
+
+## 2. Boundary connector post-frame
+
+Pipeline conceptual:
+
+retirar scope phrase
+→ retirar periodo/range
+→ STRUCTURAL
+→ relational frame
+→ boundary connector residual
+→ concepto
+
+Después del relational frame se permite recortar UNA sola preposición
+residual al inicio:
+
+de
+con
+
+solo si está en frontera inicial.
+
+Ejemplo:
+
+son de agosto de bonos
+→ de bonos
+→ bonos
+
+Pero:
+
+aceite de motor
+→ aceite de motor
+
+NO eliminar "de" medial.
+
+NO agregar "de" o "con" a STRUCTURAL_TOKENS.
+
+## 3. Concept modes
+
+Mantener compatibilidad SINGLE.
+
+SINGLE:
+
+concept_mode = SINGLE
+concept_query = string | null
+concept_alternatives = []
+
+ANY:
+
+concept_mode = ANY
+concept_query = null
+concept_alternatives = [phrase1, phrase2, ...]
+
+Se acepta shape equivalente solo si conserva compatibilidad observable.
+
+## 4. Disjunction ANY
+
+Reconocer únicamente operador espacial:
+
+" o "
+
+entre DOS O MÁS frases conceptuales no vacías.
+
+Ejemplo:
+
+bonos o bono
+→ ["bonos", "bono"]
+
+bonos o vales
+→ ["bonos", "vales"]
+
+Cada alternativa conserva:
+
+- token sequence
+- morphology existente
+
+Matching ANY:
+
+una fila coincide si cualquiera de las frases completas coincide.
+
+NO bag-of-words.
+
+NO parser booleano general.
+
+NO AND/NOT.
+
+## 5. O-RING guardrail
+
+"O-RING"
+
+NO debe dividirse por el operador conceptual.
+
+El parser ANY NO puede usar simplemente:
+
+\b o \b
+
+Debe requerir el operador espacial auditado.
+
+El tokenizador existente puede seguir procesando el texto posteriormente.
+
+Casos:
+
+O-RING
+→ SINGLE
+
+SELLO O-RING
+→ SINGLE
+
+No generar alternativa vacía.
+
+## 6. Multiword alternatives
+
+Pregunta:
+
+que folios de agosto fueron de aceite de motor o filtros de aire?
+
+Debe producir conceptualmente:
+
+ANY:
+- aceite de motor
+- filtros de aire
+
+Cada alternativa se compara como secuencia contigua completa.
+
+NO:
+
+[aceite, motor, filtros, aire] como bolsa.
+
+## 7. Response semantics
+
+SINGLE:
+conservar wording existente.
+
+ANY:
+la respuesta debe declarar de manera veraz las alternativas.
+
+Ejemplo aceptable:
+
+concepto cualquiera de: bonos | bono
+
+No debe imprimir:
+
+concepto null
+
+ni fingir que la búsqueda fue una sola frase.
+
+## 8. Sin concepto
+
+No romper búsquedas de rango sin concepto.
+
+concept_mode puede permanecer SINGLE con concept_query=null.
+
+No crear ANY vacío.
+
+## Tests obligatorios
+
+R-FOLIO-COMP-001
+"bonos o bono" falla antes y pasa después.
+
+R-FOLIO-COMP-002
+concept_mode ANY.
+
+R-FOLIO-COMP-003
+alternatives ["bonos","bono"].
+
+R-FOLIO-COMP-004
+bonos hace match independientemente.
+
+R-FOLIO-COMP-005
+bono hace match independientemente.
+
+R-FOLIO-COMP-006
+no requiere que aparezca "o" en la fila.
+
+R-FOLIO-COMP-007
+"bonos o vales" ANY.
+
+R-FOLIO-COMP-008
+"aceite de motor o filtros de aire" conserva dos frases completas.
+
+R-FOLIO-COMP-009
+ANY no es bag-of-words.
+
+R-FOLIO-COMP-010
+O-RING permanece SINGLE.
+
+R-FOLIO-COMP-011
+SELLO O-RING permanece SINGLE.
+
+R-FOLIO-COMP-012
+no alternativa vacía por O-RING.
+
+R-FOLIO-COMP-013
+"son de agosto de bonos" → bonos.
+
+R-FOLIO-COMP-014
+"de agosto fueron de bonos" → bonos.
+
+R-FOLIO-COMP-015
+"aceite de motor" conserva de medial.
+
+R-FOLIO-COMP-016
+"relacionados con agosto con bonos" no elimina conectores internos indiscriminadamente.
+
+R-FOLIO-COMP-017
+apoyos o inversiones → SUPPORT_FAMILIES.
+
+R-FOLIO-COMP-018
+apoyos o inversiones no contamina concepto.
+
+R-FOLIO-COMP-019
+MAYAN PALACE → concept_query "mayan palace".
+
+R-FOLIO-COMP-020
+MAYAN PALACE mantiene RANGE 2026-01..2026-08.
+
+R-FOLIO-COMP-021
+apoyos o folios → ALL_PUBLIC_FOLIOS.
+
+R-FOLIO-COMP-022
+folios o apoyos → ALL_PUBLIC_FOLIOS.
+
+R-FOLIO-COMP-023
+apoyos/folios → ALL_PUBLIC_FOLIOS sin cambio.
+
+R-FOLIO-COMP-024
+inversiones NO se añade a STRUCTURAL_TOKENS global.
+
+R-FOLIO-COMP-025
+"o" NO se añade a STRUCTURAL_TOKENS global.
+
+R-FOLIO-COMP-026
+"de" NO se añade a STRUCTURAL_TOKENS global.
+
+R-FOLIO-COMP-027
+range anterior impresora sigue funcionando.
+
+R-FOLIO-COMP-028
+single julio llantas sigue funcionando.
+
+R-FOLIO-COMP-029
+motor/motores morphology sigue funcionando.
+
+R-FOLIO-COMP-030
+gas != gasolina sigue funcionando.
+
+R-FOLIO-COMP-031
+partial range fail-closed sigue funcionando.
+
+R-FOLIO-COMP-032
+range cap sigue 12.
+
+R-FOLIO-COMP-033
+queryReviewableSupportFolios sin cambios.
+
+R-FOLIO-COMP-034
+SQL nuevo NO.
+
+R-FOLIO-COMP-035
+SQL copiado NO.
+
+R-FOLIO-COMP-036
+dependencia nueva NO.
+
+R-FOLIO-COMP-037
+no intent nuevo standalone inversiones.
+
+R-FOLIO-COMP-038
+response ANY declara alternativas.
+
+R-FOLIO-COMP-039
+response SINGLE permanece compatible.
+
+R-FOLIO-COMP-040
+no Action Register fallback.
+
+## Regression first
+
+Demostrar rojo antes del product change para:
 
 A.
 que folios fueron de bonos o bono para agosto?
@@ -172,327 +426,104 @@ B.
 que folios son de agosto de bonos?
 
 C.
-que folios de agosto fueron de bonos?
-
-D.
-que folios de agosto fueron de bono?
-
-E.
-que folios de agosto fueron de bonos o vales?
-
-F.
-que folios de agosto fueron de aceite de motor o filtros de aire?
-
-G.
 que apoyos o inversiones de enero a agosto fueron de MAYAN PALACE?
 
-H.
-que apoyos de enero a agosto fueron de MAYAN PALACE?
+Con fixtures físicos.
 
-I.
-que apoyos/folios de enero a agosto fueron de MAYAN PALACE?
+No LIVE_DB.
 
-J.
-que apoyos de enero a agosto fueron de gas?
+## Product files permitidos
 
-K.
-que apoyos de enero a agosto fueron de O-RING?
+Preferentemente:
 
-L.
-que apoyos de enero a agosto fueron de SELLO O-RING?
+lib/director-ia-folio-search.js
 
-M.
-que apoyos o folios de enero a agosto fueron de impresora?
+Tests nuevos.
 
-## Operador "o"
+Solo tocar planner/chat/tools si una regresión demuestra necesidad estricta.
 
-Auditar cuándo el token español:
+No ampliar alcance preventivamente.
 
-o
+## Suites
 
-debe significar disyunción conceptual.
+- R-FOLIO-COMP
+- R-FOLIO-RANGE
+- R-FOLIO-LANG
+- R-FOLIO-TRUTH
+- planner
+- capabilities
+- tool orchestrator
+- M2/M4/M5/M6/IGF
+- continuity
+- Tier 1
+- pre-deploy --gate
 
-No convertir cualquier letra/palabra "o" en operador sin contexto.
+Si existe fallo preexistente:
 
-Guardrail:
+probarlo contra base_main_sha.
 
-O-RING
+NEW FAILURE = 0.
 
-no debe romperse en una disyunción vacía.
+## STOP CONDITIONS
 
-SELLO O-RING
+STOP si requiere:
 
-no debe interpretarse accidentalmente como:
+- SQL
+- schema
+- LIVE_DB
+- nueva dependencia
+- cambio de RANGE
+- cambio de morphology
+- cambio de SUPPORT_FAMILIES
+- category facet nuevo
+- intent nuevo de inversiones
+- parser booleano general
+- frontend
+- server.js product behavior no previsto
 
-SELLO OR RING
-
-si la forma física conserva el guion.
-
-Determinar la regla mínima.
-
-No implementar parser booleano general.
-
-Solo determinar si una disyunción ANY de alternativas conceptuales es suficiente.
-
-## Morfología
-
-NO ampliar automáticamente las reglas solo para:
-
-bono ↔ bonos
-
-La regla vigente de vocal+s usa longitud mínima auditada.
-
-Determinar si:
-
-"bonos o bono"
-
-puede resolverse de forma segura mediante alternativas,
-sin relajar morfología global.
-
-No hardcode de bono.
-
-## Boundary connectors
-
-Evaluar si después de:
-
-1. periodo/rango
-2. STRUCTURAL
-3. relational frame
-
-debe existir un recorte adicional SOLO de conectores de frontera.
-
-Ejemplo:
-
-"son de agosto de bonos"
-→ bonos
-
-pero:
-
-"aceite de motor"
-→ aceite de motor
-
-No eliminar "de" medial.
-
-## Scope phrase
-
-Auditar específicamente:
-
-apoyos o inversiones
-
-apoyos o folios
-
-folios o apoyos
-
-No permitir que:
-
-o inversiones
-o folios
-o apoyos
-
-entren al concept matcher cuando forman parte inequívoca del sujeto/scope.
-
-Pero tampoco convertir nombres de categoría en stopwords globales.
-
-## Existing helpers
-
-Buscar en repo:
-
-- concept alternatives
-- OR parsing
-- search facets
-- category parsing
-- scope parsing
-- token-expression parsing
-
-Si existe helper reutilizable:
-documentarlo y probar compatibilidad.
-
-Si no:
-
-EXISTING_COMPOSITION_HELPER_REUSABLE = NO
-
-## Clasificaciones obligatorias
-
-DISJUNCTION_CLASSIFICATION:
-
-A. MISSING_CONCEPT_ALTERNATIVE_MODEL
-B. MORPHOLOGY_ONLY
-C. BOTH
-D. OTHER
-
-BOUNDARY_CONNECTOR_CLASSIFICATION:
-
-A. POST_FRAME_BOUNDARY_CONNECTOR_LEAK
-B. STRUCTURAL_MODEL_INCOMPLETE
-C. OTHER
-
-SCOPE_PHRASE_CLASSIFICATION:
-
-A. REDUNDANT_SCOPE_PHRASE_LEAK
-B. CATEGORY_FACET_REQUIRED
-C. BOTH
-D. OTHER
-
-## Estrategias a comparar
-
-Para alternativas:
-
-1. substring/token actual
-2. ANY de frases completas
-3. bag-of-words
-4. parser booleano general
-
-Preferir mínimo cambio seguro.
-
-Para scope:
-
-1. borrar "inversiones" globalmente
-2. reconocer frase de scope antes del concepto
-3. category filter
-4. otra infraestructura existente
-
-No implementar.
-
-## Invariantes
-
-RANGE sigue funcionando.
-
-North Star anterior debe permanecer:
-
-que apoyos de enero a agosto fueron de IMPRESORA?
-
-→ concept_query impresora
-→ RANGE 2026-01..2026-08
-
-Julio llantas sigue funcionando.
-
-Gas sigue sin encontrar gasolina.
-
-"aceite de motor" sigue siendo secuencia.
-
-## Desired semantic outcomes a evaluar
-
-A:
-
-period = 2026-08
-scope = ALL_PUBLIC_FOLIOS
-concept alternatives conceptualmente:
-bonos | bono
-
-B:
-
-period = 2026-08
-scope = ALL_PUBLIC_FOLIOS
-concept = bonos
-
-G:
-
-period = RANGE 2026-01..2026-08
-scope = SUPPORT_FAMILIES
-concept = mayan palace
-
-El término "inversiones" NO debe quedar dentro del concepto bajo ese
-scope congelado.
-
-I:
-
-apoyos/folios
-→ ALL_PUBLIC_FOLIOS
-
-M:
-
-apoyos o folios
-debe determinarse si equivale de forma segura a ALL_PUBLIC_FOLIOS,
-coherente con la regla vigente cuando aparece "folios".
-
-## Reporte obligatorio
+## Reporte
 
 Crear:
 
-docs/dev-loop/reports/AUDIT-DIRECTOR-IA-FOLIO-SEARCH-COMPOSITIONAL-QUERY-GRAMMAR-001.md
+docs/dev-loop/reports/FIX-DIRECTOR-IA-FOLIO-SEARCH-COMPOSITIONAL-QUERY-GRAMMAR-001.md
 
-Debe comenzar exactamente:
+Debe comenzar:
 
-DISJUNCTION_CLASSIFICATION:
-DISJUNCTION_FIRST_BAD_BOUNDARY:
+IMPLEMENTATION_SHA:
+BEFORE:
+AFTER:
 
-BOUNDARY_CONNECTOR_CLASSIFICATION:
-BOUNDARY_FIRST_BAD_BOUNDARY:
+SCOPE_PHRASE_STRATEGY:
+BOUNDARY_STRATEGY:
+CONCEPT_MODEL:
+ANY_STRATEGY:
 
-SCOPE_PHRASE_CLASSIFICATION:
-SCOPE_FIRST_BAD_BOUNDARY:
-
-EXISTING_COMPOSITION_HELPER_REUSABLE:
-YES / NO
-
-SAFE_DISJUNCTION_STRATEGY:
-...
-
-SAFE_BOUNDARY_STRATEGY:
-...
-
-SAFE_SCOPE_PHRASE_STRATEGY:
-...
-
-BONOS_OR_BONO_EXPECTED:
-...
-
-DE_BONOS_EXPECTED:
-...
-
-MAYAN_PALACE_EXPECTED:
-...
-
-O_RING_SAFE:
-YES / NO
-
-ACEITE_DE_MOTOR_SAFE:
-YES / NO
+O_RING:
+ACEITE_DE_MOTOR:
+MAYAN_PALACE:
 
 RANGE_UNCHANGED:
-YES / NO
-
 MORPHOLOGY_UNCHANGED:
-YES / NO
-
 SCOPE_CONTRACT_UNCHANGED:
-YES / NO
 
-ONE_FIX_CAN_HANDLE_COMPOSITION:
-YES / NO
+SQL_NEW:
+DEPENDENCY_NEW:
 
-FIX CONTRACT:
-...
-
-FILES FUTUROS:
-...
-
-A-M MATRIX:
-...
-
-## Prohibido
-
-NO implementación.
-NO SQL.
-NO DB/schema.
-NO LIVE_DB.
-NO frontend.
-NO dependencia nueva.
-NO parser booleano general.
-NO "o" como stopword global.
-NO "de" como stopword global.
-NO "inversiones" como stopword global.
-NO hardcode de BONO.
-NO hardcode de MAYAN PALACE.
-NO cambio de range.
-NO cambio de morphology.
-NO cambio de source.
-NO merge.
-NO deploy.
-NO next task.
+001..040:
+SUITES:
+FILES:
+RISKS:
 
 ## Completion
 
 CURRENT_TASK → DONE_PENDING_REVIEW
 
+Commit únicamente en rama FIX.
+
 STOP.
+
+NO merge.
+NO push main.
+NO deploy.
+NO LIVE_DB.
+NO next task.
