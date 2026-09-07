@@ -1,6 +1,6 @@
 # FIX-DIRECTOR-IA-FOLIO-SEARCH-PERIOD-RANGE-001
 
-IMPLEMENTATION_SHA: (pendiente de commit)
+IMPLEMENTATION_SHA: 4410a26959272f82fb50bd782d8cef1371ccd045
 
 BEFORE: `que apoyos de enero a agosto fueron de IMPRESORA?` → `period_month=2026-01`; `concept_query="a fueron de impresora"`; 1 llamada (`2026-01`); 0 hits contra IMPRESORA.
 
