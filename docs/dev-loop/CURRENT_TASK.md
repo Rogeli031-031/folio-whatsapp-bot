@@ -3,7 +3,7 @@ task_id: FIX-DIRECTOR-IA-FOLIO-LOCATOR-ESTAN-PERIOD-BRIDGE-001
 task_type: FIX
 mode: REGRESSION_FIRST
 
-status: AUTHORIZED
+status: DONE_PENDING_REVIEW
 authorized_by: "Human Approver"
 authorized_at: "2026-09-07T16:37:24-06:00"
 
