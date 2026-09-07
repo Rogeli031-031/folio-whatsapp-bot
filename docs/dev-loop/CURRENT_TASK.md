@@ -1,335 +1,482 @@
-task_id: AUDIT-DIRECTOR-IA-FOLIO-SEARCH-PERIOD-RANGE-001
+task_id: FIX-DIRECTOR-IA-FOLIO-SEARCH-PERIOD-RANGE-001
 
-task_type: AUDIT
-mode: READ_ONLY_PHYSICAL_TRACE
+task_type: FIX
+mode: REGRESSION_FIRST
 
-status: CLOSED
+status: DONE_PENDING_REVIEW
 authorized_by: "Human Approver"
-authorized_at: "2026-09-07T11:41:28-06:00"
-human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-07 - READ_ONLY FOLIO SEARCH PERIOD RANGE AUDIT; NO IMPLEMENTATION; NO SQL; NO LIVE_DB; NO MERGE; NO DEPLOY"
+authorized_at: "2026-09-07T11:55:30-06:00"
+human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-07 - IMPLEMENT FOLIO SEARCH PERIOD RANGE; NO SQL; NO LIVE_DB; NO MERGE; NO DEPLOY"
 
-implementation_authorized: NO
+implementation_authorized: YES
 merge_authorized: NO
 deploy_authorized: NO
 live_db_authorized: NO
 
 max_attempts: 1
 
-base_main_sha: 4dc15ac1d9870efeb1796a45a3135e699c1ec5d5
+base_main_sha: a73cf044ff356f078318979c30a3260d9a75b4b7
 
-result_report_path: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-FOLIO-SEARCH-PERIOD-RANGE-001.md
+result_report_path: docs/dev-loop/reports/FIX-DIRECTOR-IA-FOLIO-SEARCH-PERIOD-RANGE-001.md
 
-objective: Determinar el cambio mínimo y veraz para que folio_search entienda rangos temporales naturales como "de enero a agosto", conserve correctamente el concepto buscado y consulte todos los meses del rango sin SQL nuevo.
+objective: Implementar rangos mensuales naturales en folio_search conservando exactamente la búsqueda SINGLE vigente, retirando el span temporal completo antes de extraer concepto y reutilizando la fuente mensual existente N veces sin SQL nuevo.
 
-## LIVE ya validado
+## North Star LIVE
 
-NO reabrir:
+Pregunta:
 
-- folio_search intent
-- ALL_PUBLIC_FOLIOS
-- SUPPORT_FAMILIES
-- frame relacional
-- token sequence
-- singular/plural controlado
-- gas guardrail
-- SQL/source
-- búsqueda de un solo mes
+que apoyos de enero a agosto fueron de IMPRESORA?
 
-PASS real:
-
-"qué apoyos de julio fueron de llantas?"
-→ 2026-07
-→ llantas
-→ encontró LLANTA real.
-
-PASS real:
-
-"qué apoyos de julio fueron de gas?"
-→ encontró GAS
-→ no confundió GASOLINA.
-
-## Nuevo North Star
-
-"que apoyos de enero a agosto fueron de IMPRESORA?"
-
-LIVE actual:
+Actual incorrecto:
 
 period_month = 2026-01
 concept_query = "a fueron de impresora"
 
-resultado vacío.
+Esperado:
 
-## Hipótesis física
+period_mode = RANGE
+period_start = 2026-01
+period_end = 2026-08
+concept_query = impresora
 
-Boundary 1:
+Scope:
 
-SINGLE_MONTH_PERIOD_MODEL
+SUPPORT_FAMILIES
 
-extractPeriodMonth devuelve un solo YYYY-MM y toma el primer mes encontrado.
+## Contratos congelados
 
-Boundary 2:
+NO reabrir:
 
-RANGE_CONNECTOR_LEAKS_INTO_CONCEPT
+- frame relacional
+- token sequence
+- singular/plural controlado
+- gas guardrail
+- ALL_PUBLIC_FOLIOS
+- SUPPORT_FAMILIES
+- queryReviewableSupportFolios SQL
+- fuente public.folios
 
-al retirar enero/agosto queda:
+NO SQL nuevo.
+NO BETWEEN.
+NO dependencia nueva.
 
-"a fueron de impresora"
+## Modelo temporal
 
-y stripRelationalFrame ya no puede retirar "fueron de".
+SINGLE conserva compatibilidad actual:
 
-Boundary 3 potencial:
+period_mode = SINGLE
+period_month = YYYY-MM
+period_start = null
+period_end = null
 
-SINGLE_MONTH_SOURCE_INVOCATION
+RANGE:
 
-loadFolioSearchForChat consulta queryReviewableSupportFolios una sola vez con shaped.period_month.
+period_mode = RANGE
+period_month = null
+period_start = YYYY-MM
+period_end = YYYY-MM
 
-Demostrar cada frontera.
+Se acepta shape equivalente solo si mantiene compatibilidad observable y tests.
 
-## NO arreglar con
+## Detección RANGE
 
-- añadir "a" globalmente a STRUCTURAL_TOKENS
-- regex de IMPRESORA
-- catálogo de conceptos
-- SQL nuevo
-- BETWEEN nuevo
-- cambiar queryReviewableSupportFolios sin necesidad demostrada
-- consultar LIVE_DB
+Reconocer genéricamente:
 
-El token "a" puede formar parte de otras expresiones y no debe eliminarse globalmente para simular un rango.
+de enero a agosto
+desde enero hasta agosto
+enero-agosto
+julio a agosto
+diciembre 2025 a febrero 2026
 
-## Representación a evaluar
+No hardcodear año 2026.
 
-Determinar si el contrato futuro debe ser:
-
-period_mode: SINGLE | RANGE
-
-period_start: YYYY-MM
-period_end: YYYY-MM
-
-o una forma equivalente mínima.
-
-Para SINGLE debe conservarse compatibilidad con period_month actual.
-
-No implementar todavía.
-
-## Estrategias de lectura a comparar
-
-A. cambiar SQL a BETWEEN
-B. reutilizar queryReviewableSupportFolios una vez por mes
-C. helper existente de rango en repo
-D. otra estrategia existente
-
-Preferencia arquitectónica si es viable:
-
-reusar lectura mensual existente N veces,
-sin SQL nuevo ni duplicado.
-
-Pero debe auditarse antes.
-
-## Casos obligatorios
-
-A.
-apoyos de enero a agosto de impresora
-
-B.
-apoyos de enero a agosto fueron de impresora
-
-C.
-folios de enero a agosto de llantas
-
-D.
-folios desde enero hasta agosto de llantas
-
-E.
-folios enero-agosto de llantas
-
-F.
-folios de julio a agosto de isuzu
-
-G.
-folios de agosto a agosto de isuzu
-
-H.
-folios de diciembre 2025 a febrero 2026 de llantas
-
-I.
-folios de agosto a julio de llantas
-
-Debe definir fail-closed o interpretación inequívoca para rango invertido.
-
-J.
-folios de enero a agosto
-
-Sin concepto:
-determinar si lista todo el scope del rango o requiere concepto.
+Los nombres de meses ya pertenecen a la gramática temporal existente.
 
 ## Año
 
-Sin año explícito:
+Sin año:
 
 enero a agosto
-→ usar año de deps.now para ambos extremos.
+→ ambos extremos usan deps.now.year
 
-Con año explícito único:
+Un año explícito aplicable al rango:
 
 enero a agosto de 2026
-→ ambos 2026.
+→ 2026-01 .. 2026-08
 
-Con años por extremo:
+Dos años explícitos:
 
 diciembre 2025 a febrero 2026
-→ respetar ambos.
+→ 2025-12 .. 2026-02
 
-No hardcode 2026.
+No adivinar rollover.
+
+## Rango invertido
+
+agosto a julio del mismo año:
+
+FAIL-CLOSED
+
+No intercambiar extremos.
+
+No interpretar como julio del año siguiente.
+
+Respuesta segura:
+
+el rango inicial es posterior al final; solicita corregirlo.
+
+## Cap
+
+Máximo 12 meses inclusivos.
+
+Si el rango supera 12 meses:
+
+FAIL-CLOSED.
+
+No truncar silenciosamente.
 
 ## Concept extraction
 
-Después de reconocer primero el span temporal completo:
+PRIMERO identificar y retirar el span temporal completo.
 
-"de enero a agosto"
+DESPUÉS aplicar el pipeline vigente de concepto:
 
-o:
+STRUCTURAL
+→ relational frame
+→ token matching
 
-"desde enero hasta agosto"
-
-ese span debe retirarse como unidad ANTES de extraer el concepto.
-
-Entonces:
+North Star:
 
 "que apoyos de enero a agosto fueron de IMPRESORA?"
 
-debe terminar en:
+después de retirar span:
 
-concept_query = impresora
+"que apoyos fueron de impresora"
 
-No resolverlo eliminando "a" globalmente.
+→ concept_query = impresora
 
-## Fetch semantics
+NO añadir "a" globalmente a STRUCTURAL_TOKENS.
 
-Determinar:
+## Fetch RANGE
 
-- cuántas llamadas mensuales máximas son seguras;
-- orden cronológico;
-- deduplicación si fuera necesaria;
-- record limit global vs mensual;
-- count correcto;
-- truncated correcto;
-- qué ocurre si un mes falla;
-- si debe fail-closed todo el rango ante SOURCE_ERROR parcial.
+Reutilizar exactamente:
 
-No inventar respuesta parcial silenciosa.
+queryReviewableSupportFolios
 
-## Response semantics
+una vez por cada YYYY-MM del rango.
 
-Para RANGE la respuesta debe declarar el rango real consultado.
+Mismo client.
 
-Ejemplo conceptual:
+Orden cronológico.
+
+NO SQL nuevo.
+NO copiar SQL.
+NO modificar WHERE a BETWEEN.
+
+## Partial failure
+
+Si cualquier mes produce SOURCE_ERROR:
+
+FAIL-CLOSED TODO EL RANGO.
+
+No devolver resultados parciales como si fueran completos.
+
+Puede indicar qué mes falló si existe evidencia física,
+pero no debe listar un resultado parcial como respuesta final válida.
+
+## Merge
+
+Fusionar filas de todos los meses.
+
+Deduplicar por identidad estable de folio.
+
+Preferencia:
+
+folio id físico si existe.
+
+Si el helper actual usa id/folio_id, preservar ese contrato.
+
+No deduplicar únicamente por concepto.
+
+## Filtering order
+
+Después de cargar el rango:
+
+permission visibility
+→ scope
+→ concept matching
+→ merge/dedup final según arquitectura más segura demostrada
+
+No cambiar autorización.
+
+## Count / limit
+
+RECORD_LIMIT = 40 GLOBAL.
+
+count:
+cantidad total de matches deduplicados antes del truncado.
+
+truncated:
+count > 40
+
+records:
+máximo 40.
+
+NO 40 por mes.
+
+## Orden
+
+Respuesta RANGE debe ser determinística.
+
+Orden cronológico por mes_cargo.
+
+Dentro del mismo mes preservar orden estable de la fuente
+salvo que exista contrato previo distinto.
+
+## Response
+
+SINGLE conserva wording actual.
+
+RANGE debe declarar:
+
+mes_cargo 2026-01 a 2026-08
+
+y concepto si existe.
+
+Ejemplo:
 
 Filtros: mes_cargo 2026-01 a 2026-08, concepto impresora.
 
-No debe decir solamente:
+Nunca debe mostrar solo 2026-01 para un RANGE.
 
-mes_cargo 2026-01.
+## Sin concepto
 
-## Guardrails SINGLE
+"qué apoyos de enero a agosto?"
 
-Todos deben permanecer iguales:
+es válido.
 
-"julio fueron de llantas"
-→ 2026-07
+Debe listar el scope completo del rango:
 
-"agosto fueron de aceite"
-→ 2026-08
+SUPPORT_FAMILIES
 
-"julio fueron de gas"
-→ 2026-07
+subject to global RECORD_LIMIT.
 
-## Scope
+No inventar concepto.
 
-Congelado:
+## Tests obligatorios
 
-folios → ALL_PUBLIC_FOLIOS
-apoyos → SUPPORT_FAMILIES
-apoyos/folios → ALL_PUBLIC_FOLIOS
+R-FOLIO-RANGE-001
+North Star falla antes y pasa después.
 
-## Auditoría física
+R-FOLIO-RANGE-002
+North Star period_mode=RANGE.
 
-Revisar:
+R-FOLIO-RANGE-003
+period_start=2026-01 con deps.now 2026.
+
+R-FOLIO-RANGE-004
+period_end=2026-08.
+
+R-FOLIO-RANGE-005
+concept_query=impresora.
+
+R-FOLIO-RANGE-006
+no concept "a fueron de impresora".
+
+R-FOLIO-RANGE-007
+"de enero a agosto".
+
+R-FOLIO-RANGE-008
+"desde enero hasta agosto".
+
+R-FOLIO-RANGE-009
+"enero-agosto".
+
+R-FOLIO-RANGE-010
+"julio a agosto".
+
+R-FOLIO-RANGE-011
+"agosto a agosto" válido un mes RANGE o normalización SINGLE documentada.
+
+R-FOLIO-RANGE-012
+"diciembre 2025 a febrero 2026".
+
+R-FOLIO-RANGE-013
+multi-year produce 2025-12..2026-02.
+
+R-FOLIO-RANGE-014
+agosto→julio fail-closed.
+
+R-FOLIO-RANGE-015
+no rollover inventado.
+
+R-FOLIO-RANGE-016
+rango >12 meses fail-closed.
+
+R-FOLIO-RANGE-017
+llama fuente una vez por mes.
+
+R-FOLIO-RANGE-018
+enero-agosto = 8 llamadas.
+
+R-FOLIO-RANGE-019
+orden de llamadas cronológico.
+
+R-FOLIO-RANGE-020
+misma queryReviewableSupportFolios.
+
+R-FOLIO-RANGE-021
+SQL nuevo NO.
+
+R-FOLIO-RANGE-022
+SQL copiado NO.
+
+R-FOLIO-RANGE-023
+partial failure fail-closed.
+
+R-FOLIO-RANGE-024
+no respuesta parcial silenciosa.
+
+R-FOLIO-RANGE-025
+dedup por folio id.
+
+R-FOLIO-RANGE-026
+count global antes de truncate.
+
+R-FOLIO-RANGE-027
+RECORD_LIMIT global 40.
+
+R-FOLIO-RANGE-028
+response declara start/end.
+
+R-FOLIO-RANGE-029
+sin concepto lista rango.
+
+R-FOLIO-RANGE-030
+SINGLE julio llantas no cambia.
+
+R-FOLIO-RANGE-031
+SINGLE agosto aceite no cambia.
+
+R-FOLIO-RANGE-032
+SINGLE julio gas no cambia.
+
+R-FOLIO-RANGE-033
+frame vigente no cambia.
+
+R-FOLIO-RANGE-034
+morphology vigente no cambia.
+
+R-FOLIO-RANGE-035
+gas != gasolina sigue pasando.
+
+R-FOLIO-RANGE-036
+folios -> ALL_PUBLIC_FOLIOS.
+
+R-FOLIO-RANGE-037
+apoyos -> SUPPORT_FAMILIES.
+
+R-FOLIO-RANGE-038
+apoyos/folios -> ALL_PUBLIC_FOLIOS.
+
+R-FOLIO-RANGE-039
+no Action Register fallback.
+
+R-FOLIO-RANGE-040
+no dependencia nueva.
+
+## Product files permitidos
+
+Preferentemente:
 
 lib/director-ia-folio-search.js
-queryReviewableSupportFolios
-helpers existentes de rango/periodo en repo
-tests de folio_search
-package.json solo si hace falta verificar dependencia existente
 
-NO modificar product code.
+Tests nuevos correspondientes.
 
-## Reporte obligatorio
+Solo tocar otros product files si una regresión demuestra necesidad estricta.
 
-Comenzar exactamente:
+No ampliar scope preventivamente.
 
-RANGE_CLASSIFICATION:
-RANGE_FIRST_BAD_BOUNDARY:
+## Suites obligatorias
 
-CONCEPT_RANGE_CLASSIFICATION:
-CONCEPT_FIRST_BAD_BOUNDARY:
+- R-FOLIO-RANGE
+- R-FOLIO-LANG
+- R-FOLIO-TRUTH
+- planner
+- capabilities
+- tool orchestrator
+- M2/M4/M5/M6/IGF
+- continuity
+- Tier 1
+- pre-deploy --gate
 
-SOURCE_RANGE_CLASSIFICATION:
-SOURCE_FIRST_BAD_BOUNDARY:
+Si existe un fallo preexistente:
 
-EXISTING_RANGE_HELPER_REUSABLE:
-YES / NO
+demostrarlo contra base_main_sha.
 
-SAFE_PERIOD_MODEL:
-...
+NEW FAILURE = 0.
 
-SAFE_CONCEPT_STRATEGY:
-...
+## STOP CONDITIONS
 
-SAFE_FETCH_STRATEGY:
-...
+STOP si requiere:
 
-SQL_CHANGE_REQUIRED:
-YES / NO
+- SQL nuevo
+- SQL BETWEEN
+- DB/schema
+- LIVE_DB
+- nueva dependencia
+- cambio de scope
+- cambio de source
+- cambio de autorización
+- frontend
+- server.js product behavior no previsto
+- reabrir morphology/frame innecesariamente
 
-MULTI_YEAR_SUPPORTED_SAFELY:
-YES / NO
+## Reporte
 
-INVERTED_RANGE_BEHAVIOR:
-...
+Crear:
 
-PARTIAL_MONTH_FAILURE_BEHAVIOR:
-...
+docs/dev-loop/reports/FIX-DIRECTOR-IA-FOLIO-SEARCH-PERIOD-RANGE-001.md
 
-GLOBAL_LIMIT_SEMANTICS:
-...
+Debe comenzar:
 
-A-J MATRIX:
-...
+IMPLEMENTATION_SHA:
+BEFORE:
+AFTER:
 
-NORTH_STAR_EXPECTED:
-period_start = ...
-period_end = ...
-concept_query = ...
+PERIOD_MODEL:
+RANGE_PARSER:
+CONCEPT_STRATEGY:
+FETCH_STRATEGY:
+DEDUP_STRATEGY:
+PARTIAL_FAILURE:
+GLOBAL_LIMIT:
 
-ONE_FIX_CAN_HANDLE_RANGE:
-YES / NO
+NORTH_STAR:
 
-FIX CONTRACT:
-...
+SINGLE_UNCHANGED:
+FRAME_UNCHANGED:
+MORPHOLOGY_UNCHANGED:
+SCOPE_UNCHANGED:
 
-FILES FUTUROS:
-...
+SQL_NEW:
+DEPENDENCY_NEW:
+
+001..040:
+SUITES:
+FILES:
+RISKS:
 
 ## Completion
 
 CURRENT_TASK → DONE_PENDING_REVIEW
 
+Commit únicamente en rama FIX.
+
 STOP.
 
-NO implementación.
-NO SQL.
-NO LIVE_DB.
 NO merge.
+NO push main.
 NO deploy.
+NO LIVE_DB.
 NO next task.
