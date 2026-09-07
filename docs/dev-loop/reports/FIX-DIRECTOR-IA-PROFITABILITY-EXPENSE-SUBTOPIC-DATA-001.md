@@ -101,7 +101,7 @@ R-CONV-SUBTOPIC-001..010 PASS
 R-CONV-SUBTOPIC-T4       PASS (comparativo físico del fixture rent-cut)
 ```
 
-009 demuestra que `corporativos` ≠ `util_oper_importe - resultado_final_importe`.  
+009 demuestra que `corporativos` ≠ `util_oper_importe - resultado_final_importe`.
 006 demuestra que T1 sigue usando `util_oper_importe` como rentabilidad operativa.
 
 ## 5. Archivos modificados
@@ -125,7 +125,7 @@ Ningún archivo añadido o tocado define `computeDeltaGastos`, `delta_gastos` o 
 
 ## 8. Evidencia operativos ≠ util_oper_importe
 
-R-EXP-SUBTOPIC-006: snapshot T1 usa `888000` / `800000` (`utilOperImporte`), no `111000` / `150000` (`operativos`).  
+R-EXP-SUBTOPIC-006: snapshot T1 usa `888000` / `800000` (`utilOperImporte`), no `111000` / `150000` (`operativos`).
 R-EXP-SUBTOPIC-013: T4 operativo usa solo `rows[].operativos`.
 
 ## 9. Suites
