@@ -64,6 +64,7 @@ const cases = [
     assert(isDirectorIaDomainReadable("folio_historial") === true, "historial readable");
     assert(isDirectorIaDomainReadable("documentos") === true, "documentos metadata readable");
     assert(isDirectorIaDomainReadable("gastos") === true, "gastos query readable");
+    assert(isDirectorIaDomainReadable("folio_search") === true, "folio_search query readable");
     assert(isDirectorIaDomainReadable("inversiones") === true, "inversiones query readable");
     assert(isDirectorIaDomainReadable("clasificacion_apoyos") === true, "clasificacion query readable");
     assert(isDirectorIaDomainReadable("presupuestos") === true, "presupuestos query readable");
@@ -128,6 +129,7 @@ const cases = [
   () => expectAllowed("Dame el expediente comercial de Acme"),
   () => expectAllowed("Muéstrame estado, comentarios y acciones de Acme"),
   () => expectAllowed("cómo va la planta"),
+  () => expectAllowed("que apoyos/folios tenemos para septiembre de llantas?"),
   () => expectAllowed("folio 123"),
   () => expectAllowed("háblame del folio"),
 ];

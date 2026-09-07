@@ -90,7 +90,7 @@ const cases = [
   () => expectIntent("¿Por qué cayó el ingreso?", "financial_diagnosis"),
   () => expectIntent("¿Cómo va ARR?", "arr_status", { requireDomain: "arr" }),
   () => expectIntent("¿Cómo va IGF?", "igf_status", { requireDomain: "igf" }),
-  () => expectIntent("¿Qué clientes dejaron de comprar?", "commercial_trend");
+  () => expectIntent("¿Qué clientes dejaron de comprar?", "commercial_trend"),
   () =>
     expectIntent("Dame el expediente comercial de Acme", "expediente_comercial", {
       requireDomain: "commercial_dossier",
@@ -193,6 +193,11 @@ const cases = [
     assert(plan.requires_clarification === true, "proyectos+mantenimiento requiere clarificación");
     assert(plan.intent === "project_status", `got ${plan.intent}`);
   },
+  () => expectIntent("que apoyos/folios tenemos para septiembre de llantas?", "folio_search", {
+    requireDomain: "folio_search",
+  }),
+  () => expectIntent("qué apoyos de llantas tenemos en septiembre?", "folio_search"),
+  () => expectIntent("folios de uniformes de agosto", "folio_search"),
   () => {
     // Todos los intents del mapa tienen labels y domains arrays
     for (const intent of Object.keys(INTENT_DOMAIN_MAP)) {

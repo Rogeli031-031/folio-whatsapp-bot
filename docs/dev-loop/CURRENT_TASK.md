@@ -1,27 +1,27 @@
-task_id: AUDIT-DIRECTOR-IA-GENERIC-FOLIO-SEARCH-COVERAGE-001
+task_id: FIX-DIRECTOR-IA-GENERIC-FOLIO-SEARCH-TRUTHFUL-001
 
-task_type: AUDIT
-mode: READ_ONLY_PHYSICAL_TRACE
+task_type: FIX
+mode: REGRESSION_FIRST
 
-status: CLOSED
+status: DONE_PENDING_REVIEW
 authorized_by: "Human Approver"
-authorized_at: "2026-09-07T09:14:08-06:00"
-human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-07 - READ_ONLY GENERIC FOLIO SEARCH COVERAGE AUDIT; NO IMPLEMENTATION; NO LIVE_DB; NO MERGE; NO DEPLOY"
+authorized_at: "2026-09-07T09:19:57-06:00"
+human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-07 - TRUTHFUL GENERIC FOLIO SEARCH FIX AUTHORIZED; REGRESSION_FIRST; COMMIT ON FIX BRANCH AUTHORIZED; NO LIVE_DB; NO MERGE; NO PUSH MAIN; NO DEPLOY"
 
-implementation_authorized: NO
+implementation_authorized: YES
 merge_authorized: NO
 deploy_authorized: NO
 live_db_authorized: NO
 
 max_attempts: 1
 
-base_main_sha: c6000ce599222330ab4839ea0a50d3ec74bb2466
+base_main_sha: 093a8700e3bfa72eec4b87fa942e0c8314994a81
 
-result_report_path: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-GENERIC-FOLIO-SEARCH-COVERAGE-001.md
+result_report_path: docs/dev-loop/reports/FIX-DIRECTOR-IA-GENERIC-FOLIO-SEARCH-TRUTHFUL-001.md
 
-objective: Determinar físicamente qué universo de Folios debe consultar una búsqueda genérica de "folios/apoyos" para no sobreafirmar cobertura, y si puede implementarse reutilizando loaders existentes sin SQL nuevo.
+objective: Implementar búsqueda conversacional veraz de folios/apoyos por planta, mes_cargo y concepto libre, distinguiendo explícitamente entre el universo completo de public.folios y las tres familias operativas de apoyos, sin SQL nuevo y sin reutilizar el commit rechazado.
 
-## Antecedente
+## Antecedentes congelados
 
 La implementación:
 
@@ -31,368 +31,458 @@ fue REJECTED.
 
 Motivo:
 
-SOURCE_SCOPE_OVERCLAIM.
+SOURCE_SCOPE_OVERCLAIM
 
-Su ruta ejecutaba:
+Hacía:
 
-loadFolioSearchForChat
-→ loadGastosInversionesForChat(..., { category: "GASTOS" })
+category = GASTOS
 
-pero respondía al usuario genéricamente:
+y respondía:
 
 "folios"
-"No se encontraron folios"
 
-sin aclarar que solo había consultado GASTOS.
+como si hubiera consultado todo el universo.
 
-No reutilizar esa solución como verdad.
+PROHIBIDO reutilizar esa semántica.
 
-## North Star
+## Auditoría posterior
 
-Pregunta real:
+GENERIC_FOLIO_SEARCH_CAN_BE_TRUTHFUL_WITH_EXISTING_LOADERS = YES
 
-"que apoyos/folios tenemos para septiembre de llantas?"
+Fuente:
 
-Director IA debe poder responder únicamente si ha consultado el universo físico suficiente para afirmar que encontró los folios/apoyos pertinentes.
+public.folios
 
-No puede consultar solo GASTOS y presentarlo como todos los Folios.
+Campos comunes suficientes:
 
-## Pregunta central
+planta
+mes_cargo
+COALESCE(descripcion, concepto)
 
-¿Qué significa físicamente "todos los folios/apoyos pertinentes" dentro del producto actual?
+La lectura ancha físicamente existente está en la ruta auditada de
+queryReviewableSupportFolios.
 
-Auditar sin asumir que son:
+Puede reutilizarse como ACCESO A public.folios únicamente si NO se
+aplica la semántica/filtro IGF-reviewable.
+
+No presentar esa búsqueda como "IGF reviewable".
+
+## Universo semántico
+
+### FOLIOS
+
+Si la utterance solicita explícitamente:
+
+folio
+folios
+
+scope:
+
+ALL_PUBLIC_FOLIOS
+
+Debe consultar el conjunto general de filas de public.folios para la
+planta, sujeto solamente a los filtros explícitos de búsqueda
+permitidos en este slice.
+
+NO limitar category = GASTOS.
+
+NO limitar a GASTOS + INVERSIONES + TALLER.
+
+### APOYOS
+
+Si la utterance dice "apoyo/apoyos" y NO contiene folio/folios:
+
+scope:
+
+SUPPORT_FAMILIES
+
+Familias operativas auditadas:
 
 GASTOS
 INVERSIONES
 TALLER
 
-Esas son hipótesis que deben verificarse.
+Debe declararse ese alcance en metadata/respuesta.
 
-## Traza obligatoria
+### APOYOS/FOLIOS
 
-Mapear físicamente los módulos/universos que representan Folios.
+Si aparecen ambos:
 
-Para cada universo encontrado documentar:
+scope:
 
-- nombre funcional;
-- tabla física;
-- discriminador físico si existe;
-- loader/helper;
-- campos de planta;
-- campos de periodo;
-- concepto/descripcion buscable;
-- estatus;
-- importe;
-- si el dato vive en public.folios o en otra fuente;
-- si puede consultarse con loaders existentes sin SQL nuevo.
+ALL_PUBLIC_FOLIOS
 
-## Revisar como mínimo
+La palabra "folios" solicita el universo más amplio.
 
-M2 Folios / listado
-M6 Gastos / Inversiones
-Taller AT
-Taller Mayor
-Kanban / folio_status
-Clasificación de apoyos
-IGF reviewable supports
+Esto evita omitir otras categorías físicas existentes.
 
-La auditoría debe determinar cuáles realmente pertenecen al universo
-de una búsqueda genérica de folios y cuáles son vistas derivadas o
-capacidades distintas.
+## No confundir
 
-## public.folios
+clasificacion_apoyos_query
+≠ listado operativo de apoyos
 
-Determinar:
+igf_reviewable_supports
+≠ generic folio search
 
-1. Qué clases/categorías/tipos físicos de registros contiene.
-2. Qué campo discrimina esas clases.
-3. Si GASTOS e INVERSIONES son categorías de la misma tabla.
-4. Si TALLER vive en la misma tabla o en otra fuente.
-5. Si existe una consulta/helper ya capaz de leer public.folios sin
-   limitar category = GASTOS.
-6. Si ese helper proyecta:
-   concepto
-   descripcion
-   mes_cargo
-   planta_id
-   número de folio
-   importe
-   estatus
+folio_status
+≠ folio_search
 
-No crear una consulta nueva.
+Action Register
+≠ Folios
 
-## M6
+## Intent
 
-Auditar exactamente:
+Crear:
 
-loadGastosInversionesForChat
-queryGastosInversionesFolios
+folio_search
 
-Responder:
+o equivalente consistente.
 
-- categorías soportadas físicamente;
-- si category es obligatorio;
-- si acepta GASTOS;
-- si acepta INVERSIONES;
-- si puede consultar ambas sin cambiar SQL;
-- si puede omitirse category;
-- qué campos proyecta;
-- filtros disponibles.
+Debe representar:
 
-No modificar M6.
+LIST / SEARCH
 
-## M2 / listado general
+no status individual.
 
-Determinar si ya existe un loader de listado general de Folios por planta.
+## Filter shape
 
-Si existe:
+Estructura mínima:
 
-- qué registros incluye;
-- si es realmente más amplio que M6;
-- qué campos proyecta;
-- si dispone de concepto/descripcion/mes_cargo;
-- si puede servir para search sin SQL nuevo.
+{
+  planta_id,
+  scope,
+  period_month,
+  concept_query
+}
 
-## TALLER
+scope:
 
-Determinar físicamente:
+ALL_PUBLIC_FOLIOS
+o
+SUPPORT_FAMILIES
 
-- si los folios de Taller son registros de public.folios;
-- si existen tipos/categorías identificables;
-- si "llantas" podría existir dentro de esa fuente;
-- si los loaders actuales permiten una búsqueda textual y temporal;
-- si deben formar parte de una consulta genérica "folios/apoyos".
+period_month:
 
-No asumir que TALLER debe incluirse solo porque se llame Folio.
+YYYY-MM | null
 
-## Apoyos
+concept_query:
 
-Determinar qué significa físicamente "apoyo" en este contexto.
+string | null
 
-Separar:
+## Mes
 
-- folio operativo;
-- clasificación de apoyo;
-- apoyo revisable IGF;
-- gasto;
-- inversión;
-- taller.
+Soportar:
 
-No unir dominios semánticamente distintos únicamente por compartir
-la palabra "apoyo".
+enero ... diciembre
+setiembre / septiembre
+YYYY-MM
+mes + año explícito
 
-## Pregunta temporal
+Mes sin año:
 
-Para una futura búsqueda:
+usar deps.now year.
 
-"septiembre"
+Año explícito:
 
-determinar si un único campo temporal puede aplicarse a todos los
-universos.
+gana.
 
-M6 auditado usa:
+No hardcodear 2026.
+
+Campo físico:
 
 mes_cargo
 
-Si otros universos no tienen la misma semántica, documentarlo.
+## Concepto
 
-No inventar una semántica temporal común.
+Extracción genérica.
 
-## Pregunta de concepto
+Ejemplos de TEST:
 
-Para:
+llantas
+uniformes
+mantenimiento
 
-"llantas"
+NO hardcodearlos en producto.
 
-determinar si:
+Texto físico:
 
-concepto
-descripcion
+COALESCE(descripcion, concepto)
 
-son campos comunes a todos los Folios pertinentes.
+Usar subcategoria únicamente si la fuente ancha auditada la proyecta
+y ya forma parte del contrato físico.
 
-Si otro universo usa campos distintos, documentarlo.
+No inventar campos.
 
-No diseñar todavía un buscador multi-source.
+## Source rule
 
-## Opciones de arquitectura a evaluar
+Preferencia para ALL_PUBLIC_FOLIOS:
 
-Clasificar cuál es físicamente posible:
+reutilizar la consulta/helper existente que ya lee public.folios con:
 
-A. EXISTING_ALL_FOLIOS_LOADER
+planta
+concepto/descripcion
+mes_cargo
 
-Ya existe un loader suficientemente amplio y puede reutilizarse.
+sin aplicar filtros de IGF reviewable.
 
-B. M6_MULTI_CATEGORY_SUFFICIENT
+Puede exponerse mediante un wrapper con nombre neutral si es necesario.
 
-M6 ya puede cubrir todas las categorías pertinentes sin SQL nuevo.
+NO copiar SQL.
 
-C. EXISTING_LOADERS_UNION_REQUIRED
+NO crear SELECT nuevo.
 
-Se necesitan dos o más loaders existentes, pero no SQL nuevo.
+NO duplicar query SQL.
 
-D. PARTIAL_COVERAGE_ONLY
+Si la única forma técnica exige copiar/modificar SQL:
 
-Solo puede garantizarse una cobertura parcial con las fuentes actuales;
-la respuesta futura debe declarar el scope.
+STOP.
 
-E. NEW_DATA_ACCESS_REQUIRED
+## SUPPORT_FAMILIES
 
-La cobertura correcta exigiría SQL/helper/data access nuevo.
+Puede reutilizar la MISMA lectura ancha de public.folios y filtrar
+por categoria en memoria:
 
-F. SOURCE_SEMANTICS_AMBIGUOUS
+GASTOS
+INVERSIONES
+TALLER
 
-No existe contrato físico suficiente para definir qué significa
-"todos los folios/apoyos".
+si la evidencia física confirma que esas son exactamente las familias
+auditadas.
 
-G. MULTIPLE_BOUNDARIES
+No hacer tres SQL nuevos.
 
-Más de uno aplica; identificar el primero.
+No es obligatorio usar tres loaders si una lectura existente ya cubre
+el universo.
 
-## FIRST_BAD_BOUNDARY
+## Respuesta veraz
 
-Identificar la primera frontera que impide una búsqueda genérica
-veraz.
+Para ALL_PUBLIC_FOLIOS:
 
-Ejemplos:
+puede decir:
 
-- no existe loader all-folios;
-- categorías no convergen;
-- TALLER es otra fuente;
-- concepto no es común;
-- mes no es común;
-- cobertura semántica no está definida.
+"Encontré N folios..."
 
-No asumir la respuesta.
+porque efectivamente consultó public.folios amplio.
 
-## Matriz obligatoria
+Para SUPPORT_FAMILIES:
 
-El reporte debe incluir una matriz conceptual equivalente a:
+debe declarar scope conceptualmente:
 
-UNIVERSO
-SOURCE
-LOADER
-PLANTA
-MES
-CONCEPTO
-¿INCLUIR EN GENERIC FOLIO SEARCH?
-POR QUÉ
+"Encontré N apoyos en GASTOS, INVERSIONES y TALLER..."
 
-Con una fila por cada universo físico encontrado.
+No puede decir simplemente:
 
-## Decisión obligatoria
+"todos los folios"
 
-Al final responder una de estas dos:
+## Empty result
 
-GENERIC_FOLIO_SEARCH_CAN_BE_TRUTHFUL_WITH_EXISTING_LOADERS = YES
+ALL_PUBLIC_FOLIOS:
 
-o
+"No encontré folios con esos filtros."
 
-GENERIC_FOLIO_SEARCH_CAN_BE_TRUTHFUL_WITH_EXISTING_LOADERS = NO
+solo si realmente se consultó ALL_PUBLIC_FOLIOS.
 
-Si YES:
+SUPPORT_FAMILIES:
 
-decir exactamente qué loader(s) y qué scopes debe consultar.
+"No encontré apoyos en GASTOS, INVERSIONES o TALLER con esos filtros."
 
-Si NO:
+o equivalente claro.
 
-decir qué falta.
+## North Star exacto
 
-## Fix futuro
+Planta:
 
-Proponer únicamente el FIX mínimo posterior.
+Acapulco
 
-No implementarlo.
+Pregunta:
 
-El FIX recomendado debe impedir explícitamente repetir:
+que apoyos/folios tenemos para septiembre de llantas?
 
-GASTOS_ONLY
-→ texto genérico "folios"
+Debe resolver:
+
+intent = folio_search
+
+scope = ALL_PUBLIC_FOLIOS
+
+planta_id = contexto UI
+
+period_month = septiembre del año de now
+
+concept_query = llantas
+
+y buscar sin recorte GASTOS_ONLY.
+
+## Regression first
+
+ANTES demostrar rojo.
+
+R-FOLIO-TRUTH-001
+North Star actualmente unknown en main.
+
+R-FOLIO-TRUTH-002
+North Star clasifica folio_search.
+
+R-FOLIO-TRUTH-003
+scope = ALL_PUBLIC_FOLIOS cuando aparece "folios".
+
+R-FOLIO-TRUTH-004
+"qué apoyos de llantas..." sin "folios"
+→ SUPPORT_FAMILIES.
+
+R-FOLIO-TRUTH-005
+apoyos/folios
+→ ALL_PUBLIC_FOLIOS.
+
+R-FOLIO-TRUTH-006
+ALL_PUBLIC_FOLIOS no fuerza category=GASTOS.
+
+R-FOLIO-TRUTH-007
+ALL_PUBLIC_FOLIOS no fuerza solo GASTOS+INVERSIONES+TALLER.
+
+R-FOLIO-TRUTH-008
+SUPPORT_FAMILIES = GASTOS+INVERSIONES+TALLER.
+
+R-FOLIO-TRUTH-009
+respuesta ALL_PUBLIC_FOLIOS puede decir folios.
+
+R-FOLIO-TRUTH-010
+respuesta SUPPORT_FAMILIES declara las tres familias.
+
+R-FOLIO-TRUTH-011
+empty ALL_PUBLIC_FOLIOS solo se produce tras consultar scope completo.
+
+R-FOLIO-TRUTH-012
+empty SUPPORT_FAMILIES declara scope limitado.
+
+R-FOLIO-TRUTH-013
+septiembre usa mes_cargo.
+
+R-FOLIO-TRUTH-014
+mes sin año usa deps.now.
+
+R-FOLIO-TRUTH-015
+año explícito gana.
+
+R-FOLIO-TRUTH-016
+concept_query genérico funciona con llantas.
+
+R-FOLIO-TRUTH-017
+otro concepto demuestra que no hay hardcode.
+
+R-FOLIO-TRUTH-018
+planta proviene del chat.
+
+R-FOLIO-TRUTH-019
+folio_status individual conserva prioridad.
+
+R-FOLIO-TRUTH-020
+IGF-reviewable conserva prioridad.
+
+R-FOLIO-TRUTH-021
+clasificacion_apoyos conserva prioridad.
+
+R-FOLIO-TRUTH-022
+no Action Register.
+
+R-FOLIO-TRUTH-023
+no SQL nuevo.
+
+R-FOLIO-TRUTH-024
+no copia/duplica SQL existente.
+
+R-FOLIO-TRUTH-025
+no reutiliza semántica IGF-reviewable como generic search.
+
+R-FOLIO-TRUTH-026
+DYO/COMISIONES/u otra categoría fixture aparece en ALL_PUBLIC_FOLIOS
+si satisface los filtros.
+
+R-FOLIO-TRUTH-027
+esa misma categoría NO aparece en SUPPORT_FAMILIES.
+
+R-FOLIO-TRUTH-028
+H "qué gastos de llantas..." no se fuerza artificialmente al intent
+si la prioridad existente corresponde a otra ruta.
+
+## No reutilizar branch rechazado
+
+Implementar desde esta rama nueva derivada de main.
+
+No cherry-pick:
+
+7879bfc5a573f3a0ce7f1b1f685fce480215a71c
+
+El código puede reconstruir ideas correctas únicamente a partir del
+contrato actual y la auditoría.
+
+## In scope
+
+- helper nuevo neutral de folio search si hace falta
+- planner
+- capabilities
+- tools/orchestrator
+- chat
+- helper existente que contiene la lectura ancha SOLO si basta exportar
+  una función/query ya existente sin alterar SQL
+- tests
+- CURRENT_TASK
+- reporte
+
+## STOP obligatorio
+
+Si se requiere:
+
+SQL nuevo
+cambiar SELECT existente
+DB/schema
+LIVE_DB
+frontend
+server.js product behavior
+inventar semántica temporal
+
+STOP.
 
 ## Prohibido
 
-NO implementación.
-NO modificar producto.
-NO regex nueva.
 NO SQL nuevo.
+NO copiar SQL.
 NO DB/schema.
 NO LIVE_DB.
 NO frontend.
-NO crear union de loaders.
-NO cambiar M6.
-NO cambiar Taller.
-NO Action Register como sustituto.
+NO Action Register.
+NO hardcode llantas/uniformes/mantenimiento en producto.
+NO catálogo fijo.
 NO merge.
 NO push main.
 NO deploy.
 NO next task.
 
-## Archivos mínimos a inspeccionar
+## Suites
 
-- loaders/helpers M2
-- loaders/helpers M6
-- Taller AT
-- Taller Mayor
-- folio_status / Kanban
-- clasificacion_apoyos
-- igf_reviewable_supports
-- lib/director-ia-tools.js
-- lib/director-ia-tool-orchestrator.js
-- lib/director-ia-chat.js
-- server.js solo lectura para localizar fuentes
+R-FOLIO-TRUTH-001..028
 
-## Reporte
+planner
+capabilities
+tool orchestrator
+M2/M4/M5/M6/IGF/Taller relacionadas
+continuity si chat cambia
 
-Crear:
+TIER 1 PASS
+PRE-DEPLOY --gate PASS
+HTTP 5xx = 0
+HARNESS = 0
+NEW FAILURE = 0
+git diff --check limpio
 
-docs/dev-loop/reports/AUDIT-DIRECTOR-IA-GENERIC-FOLIO-SEARCH-COVERAGE-001.md
+## Completion
 
-Debe comenzar exactamente:
+CURRENT_TASK → DONE_PENDING_REVIEW.
 
-CLASIFICACIÓN: ...
-
-FIRST_BAD_BOUNDARY: ...
-
-GENERIC_FOLIO_SEARCH_CAN_BE_TRUTHFUL_WITH_EXISTING_LOADERS: YES/NO
-
-GENERIC FOLIO UNIVERSE:
-...
-
-PUBLIC.FOLIOS COVERAGE:
-...
-
-M2 COVERAGE:
-...
-
-M6 COVERAGE:
-...
-
-TALLER COVERAGE:
-...
-
-APOYOS SEMANTICS:
-...
-
-COMMON MONTH SEMANTICS:
-...
-
-COMMON CONCEPT SEMANTICS:
-...
-
-FIX MÍNIMO RECOMENDADO:
-...
-
-ARCHIVOS QUE TOCARÍA:
-...
-
-Después:
-
-CURRENT_TASK → DONE_PENDING_REVIEW
+Commit solo en rama FIX.
 
 STOP.
 
-NO implementación.
 NO merge.
+NO push main.
 NO deploy.
 NO next task.
