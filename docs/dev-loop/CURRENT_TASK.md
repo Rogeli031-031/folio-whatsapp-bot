@@ -1,488 +1,238 @@
-task_id: FIX-DIRECTOR-IA-GENERIC-FOLIO-SEARCH-TRUTHFUL-001
+task_id: AUDIT-DIRECTOR-IA-FOLIO-SEARCH-CONCEPT-MORPHOLOGY-001
 
-task_type: FIX
-mode: REGRESSION_FIRST
+task_type: AUDIT
+mode: READ_ONLY_PHYSICAL_TRACE
 
 status: CLOSED
 authorized_by: "Human Approver"
-authorized_at: "2026-09-07T09:19:57-06:00"
-human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-07 - TRUTHFUL GENERIC FOLIO SEARCH FIX AUTHORIZED; REGRESSION_FIRST; COMMIT ON FIX BRANCH AUTHORIZED; NO LIVE_DB; NO MERGE; NO PUSH MAIN; NO DEPLOY"
+authorized_at: "2026-09-07T10:56:01-06:00"
+human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-07 - READ_ONLY FOLIO CONCEPT FRAME/MORPHOLOGY AUDIT; NO IMPLEMENTATION; NO LIVE_DB; NO MERGE; NO DEPLOY"
 
-implementation_authorized: YES
+implementation_authorized: NO
 merge_authorized: NO
 deploy_authorized: NO
 live_db_authorized: NO
 
 max_attempts: 1
 
-base_main_sha: 093a8700e3bfa72eec4b87fa942e0c8314994a81
+base_main_sha: 46d0e5185c55bc295819399f49e0cea7578b1938
 
-result_report_path: docs/dev-loop/reports/FIX-DIRECTOR-IA-GENERIC-FOLIO-SEARCH-TRUTHFUL-001.md
+result_report_path: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-FOLIO-SEARCH-CONCEPT-MORPHOLOGY-001.md
 
-objective: Implementar búsqueda conversacional veraz de folios/apoyos por planta, mes_cargo y concepto libre, distinguiendo explícitamente entre el universo completo de public.folios y las tres familias operativas de apoyos, sin SQL nuevo y sin reutilizar el commit rechazado.
+objective: Determinar la regla lingüística mínima y segura para corregir conjuntamente FRAME OVER-CAPTURE y MORPHOLOGICAL VARIANT MATCH en folio_search, sin tocar periodo, SQL, scope ni fuentes.
 
-## Antecedentes congelados
+## Hallazgos ya demostrados
 
-La implementación:
+NO reauditar periodo.
 
-7879bfc5a573f3a0ce7f1b1f685fce480215a71c
+CURRENT TURN EXPLICIT MONTH WINS LOCALLY = YES.
 
-fue REJECTED.
+Boundary 1:
 
-Motivo:
+CONCEPT_SPAN_OVER_CAPTURE
 
-SOURCE_SCOPE_OVERCLAIM
+"qué apoyos de julio fueron de llantas?"
+→ concept_query = "fueron de llantas"
 
-Hacía:
+Boundary 2:
 
-category = GASTOS
+MORPHOLOGICAL_VARIANT_MATCH_MISSING
 
-y respondía:
+Después de corregir el frame:
 
-"folios"
+"llantas"
 
-como si hubiera consultado todo el universo.
+todavía NO coincide con una fila física:
 
-PROHIBIDO reutilizar esa semántica.
+"LLANTA"
 
-## Auditoría posterior
+Matcher actual:
 
-GENERIC_FOLIO_SEARCH_CAN_BE_TRUTHFUL_WITH_EXISTING_LOADERS = YES
+concepto.includes(needle) || sub.includes(needle)
 
-Fuente:
+## Objetivo
 
-public.folios
+Encontrar un algoritmo genérico mínimo que:
 
-Campos comunes suficientes:
+1. quite únicamente el marco gramatical previo al concepto;
+2. preserve preposiciones internas;
+3. soporte variantes singular/plural españolas comunes;
+4. evite stemming destructivo;
+5. no use catálogo empresarial.
 
-planta
-mes_cargo
-COALESCE(descripcion, concepto)
+## Casos obligatorios
 
-La lectura ancha físicamente existente está en la ruta auditada de
-queryReviewableSupportFolios.
+A.
+"qué apoyos de julio fueron de llantas?"
+concepto esperado: llantas
+candidate: LLANTA
 
-Puede reutilizarse como ACCESO A public.folios únicamente si NO se
-aplica la semántica/filtro IGF-reviewable.
+B.
+"qué apoyos de agosto fueron de aceite de motor?"
+concepto esperado: aceite de motor
+NO: aceite motor
 
-No presentar esa búsqueda como "IGF reviewable".
+C.
+"qué apoyos fueron de bombas?"
+candidate: BOMBA
 
-## Universo semántico
+D.
+"qué apoyos fueron de bomba?"
+candidate: BOMBAS
 
-### FOLIOS
+E.
+"qué apoyos fueron de motores?"
+candidate: MOTOR
 
-Si la utterance solicita explícitamente:
+F.
+"qué apoyos fueron de motor?"
+candidate: MOTORES
 
-folio
-folios
+G.
+"qué apoyos fueron de luces?"
+candidate: LUZ
 
-scope:
+H.
+"qué apoyos fueron de gas?"
+candidate: GAS
 
-ALL_PUBLIC_FOLIOS
+PROHIBIDO gas → ga.
 
-Debe consultar el conjunto general de filas de public.folios para la
-planta, sujeto solamente a los filtros explícitos de búsqueda
-permitidos en este slice.
+I.
+"qué apoyos fueron de parabrisas?"
+candidate: PARABRISAS
 
-NO limitar category = GASTOS.
+J.
+"qué apoyos fueron de filtros de aire?"
+concepto esperado: filtros de aire
+candidate: FILTRO DE AIRE
 
-NO limitar a GASTOS + INVERSIONES + TALLER.
+Debe conservar el "de" interno.
 
-### APOYOS
+## FRAME
 
-Si la utterance dice "apoyo/apoyos" y NO contiene folio/folios:
+Evaluar marco cerrado genérico como:
 
-scope:
+fueron de
+son de
+eran de
+relacionados con
+relacionadas con
 
-SUPPORT_FAMILIES
+sin vocabulario de negocio.
 
-Familias operativas auditadas:
+## MORPHOLOGY
 
-GASTOS
-INVERSIONES
-TALLER
+Evaluar:
 
-Debe declararse ese alcance en metadata/respuesta.
+- substring actual;
+- token-level comparison;
+- variantes singular/plural controladas;
+- helpers existentes en repo;
+- librerías ya existentes, si las hay.
 
-### APOYOS/FOLIOS
+NO dependencia nueva.
 
-Si aparecen ambos:
+NO strip-final-s global.
 
-scope:
+Cubrir:
 
-ALL_PUBLIC_FOLIOS
+vocal + s
+llanta ↔ llantas
 
-La palabra "folios" solicita el universo más amplio.
+consonante + es
+motor ↔ motores
 
-Esto evita omitir otras categorías físicas existentes.
+z ↔ ces
+luz ↔ luces
 
-## No confundir
+y proteger:
 
-clasificacion_apoyos_query
-≠ listado operativo de apoyos
+gas
+parabrisas
+analisis
+mes
 
-igf_reviewable_supports
-≠ generic folio search
+## Multiword
 
-folio_status
-≠ folio_search
+Preservar:
 
-Action Register
-≠ Folios
+aceite de motor
+filtro de aire
+bomba de agua
 
-## Intent
+No convertir indiscriminadamente a bag-of-words si crea falsos positivos.
 
-Crear:
+## Fuente
 
-folio_search
+Mantener únicamente:
 
-o equivalente consistente.
+row.concepto
+row.subcategoria
 
-Debe representar:
+NO SQL.
+NO fuente nueva.
 
-LIST / SEARCH
+## Clasificación
 
-no status individual.
+FRAME_CLASSIFICATION:
+A CLOSED_RELATIONAL_FRAME_SUFFICIENT
+B TOKEN_STOPWORD_MODEL_REQUIRED
+C OTHER
 
-## Filter shape
+MORPHOLOGY_CLASSIFICATION:
+A CONTROLLED_TOKEN_VARIANTS_SUFFICIENT
+B EXISTING_HELPER_REUSABLE
+C STEMMING_REQUIRED
+D PHRASE_MATCH_REDIRECTION_REQUIRED
+E OTHER
 
-Estructura mínima:
+## Decisión
 
-{
-  planta_id,
-  scope,
-  period_month,
-  concept_query
-}
+ONE_FIX_CAN_SAFELY_HANDLE_FRAME_AND_MORPHOLOGY:
+YES / NO
 
-scope:
+## Reporte obligatorio
 
-ALL_PUBLIC_FOLIOS
-o
-SUPPORT_FAMILIES
+FRAME_CLASSIFICATION:
+FRAME_FIRST_BAD_BOUNDARY:
+MORPHOLOGY_CLASSIFICATION:
+MORPHOLOGY_FIRST_BAD_BOUNDARY:
+EXISTING_HELPER_REUSABLE:
+SAFE_FRAME_STRATEGY:
+SAFE_MORPHOLOGY_STRATEGY:
+MULTIWORD_PREPOSITION_PRESERVED:
+LLANTAS_LLANTA:
+MOTORES_MOTOR:
+LUCES_LUZ:
+GAS_SAFE:
+PARABRISAS_SAFE:
+ACEITE_DE_MOTOR_SAFE:
+ONE_FIX_CAN_SAFELY_HANDLE_FRAME_AND_MORPHOLOGY:
+FIX CONTRACT:
+FILES FUTUROS:
 
-period_month:
-
-YYYY-MM | null
-
-concept_query:
-
-string | null
-
-## Mes
-
-Soportar:
-
-enero ... diciembre
-setiembre / septiembre
-YYYY-MM
-mes + año explícito
-
-Mes sin año:
-
-usar deps.now year.
-
-Año explícito:
-
-gana.
-
-No hardcodear 2026.
-
-Campo físico:
-
-mes_cargo
-
-## Concepto
-
-Extracción genérica.
-
-Ejemplos de TEST:
-
-llantas
-uniformes
-mantenimiento
-
-NO hardcodearlos en producto.
-
-Texto físico:
-
-COALESCE(descripcion, concepto)
-
-Usar subcategoria únicamente si la fuente ancha auditada la proyecta
-y ya forma parte del contrato físico.
-
-No inventar campos.
-
-## Source rule
-
-Preferencia para ALL_PUBLIC_FOLIOS:
-
-reutilizar la consulta/helper existente que ya lee public.folios con:
-
-planta
-concepto/descripcion
-mes_cargo
-
-sin aplicar filtros de IGF reviewable.
-
-Puede exponerse mediante un wrapper con nombre neutral si es necesario.
-
-NO copiar SQL.
-
-NO crear SELECT nuevo.
-
-NO duplicar query SQL.
-
-Si la única forma técnica exige copiar/modificar SQL:
-
-STOP.
-
-## SUPPORT_FAMILIES
-
-Puede reutilizar la MISMA lectura ancha de public.folios y filtrar
-por categoria en memoria:
-
-GASTOS
-INVERSIONES
-TALLER
-
-si la evidencia física confirma que esas son exactamente las familias
-auditadas.
-
-No hacer tres SQL nuevos.
-
-No es obligatorio usar tres loaders si una lectura existente ya cubre
-el universo.
-
-## Respuesta veraz
-
-Para ALL_PUBLIC_FOLIOS:
-
-puede decir:
-
-"Encontré N folios..."
-
-porque efectivamente consultó public.folios amplio.
-
-Para SUPPORT_FAMILIES:
-
-debe declarar scope conceptualmente:
-
-"Encontré N apoyos en GASTOS, INVERSIONES y TALLER..."
-
-No puede decir simplemente:
-
-"todos los folios"
-
-## Empty result
-
-ALL_PUBLIC_FOLIOS:
-
-"No encontré folios con esos filtros."
-
-solo si realmente se consultó ALL_PUBLIC_FOLIOS.
-
-SUPPORT_FAMILIES:
-
-"No encontré apoyos en GASTOS, INVERSIONES o TALLER con esos filtros."
-
-o equivalente claro.
-
-## North Star exacto
-
-Planta:
-
-Acapulco
-
-Pregunta:
-
-que apoyos/folios tenemos para septiembre de llantas?
-
-Debe resolver:
-
-intent = folio_search
-
-scope = ALL_PUBLIC_FOLIOS
-
-planta_id = contexto UI
-
-period_month = septiembre del año de now
-
-concept_query = llantas
-
-y buscar sin recorte GASTOS_ONLY.
-
-## Regression first
-
-ANTES demostrar rojo.
-
-R-FOLIO-TRUTH-001
-North Star actualmente unknown en main.
-
-R-FOLIO-TRUTH-002
-North Star clasifica folio_search.
-
-R-FOLIO-TRUTH-003
-scope = ALL_PUBLIC_FOLIOS cuando aparece "folios".
-
-R-FOLIO-TRUTH-004
-"qué apoyos de llantas..." sin "folios"
-→ SUPPORT_FAMILIES.
-
-R-FOLIO-TRUTH-005
-apoyos/folios
-→ ALL_PUBLIC_FOLIOS.
-
-R-FOLIO-TRUTH-006
-ALL_PUBLIC_FOLIOS no fuerza category=GASTOS.
-
-R-FOLIO-TRUTH-007
-ALL_PUBLIC_FOLIOS no fuerza solo GASTOS+INVERSIONES+TALLER.
-
-R-FOLIO-TRUTH-008
-SUPPORT_FAMILIES = GASTOS+INVERSIONES+TALLER.
-
-R-FOLIO-TRUTH-009
-respuesta ALL_PUBLIC_FOLIOS puede decir folios.
-
-R-FOLIO-TRUTH-010
-respuesta SUPPORT_FAMILIES declara las tres familias.
-
-R-FOLIO-TRUTH-011
-empty ALL_PUBLIC_FOLIOS solo se produce tras consultar scope completo.
-
-R-FOLIO-TRUTH-012
-empty SUPPORT_FAMILIES declara scope limitado.
-
-R-FOLIO-TRUTH-013
-septiembre usa mes_cargo.
-
-R-FOLIO-TRUTH-014
-mes sin año usa deps.now.
-
-R-FOLIO-TRUTH-015
-año explícito gana.
-
-R-FOLIO-TRUTH-016
-concept_query genérico funciona con llantas.
-
-R-FOLIO-TRUTH-017
-otro concepto demuestra que no hay hardcode.
-
-R-FOLIO-TRUTH-018
-planta proviene del chat.
-
-R-FOLIO-TRUTH-019
-folio_status individual conserva prioridad.
-
-R-FOLIO-TRUTH-020
-IGF-reviewable conserva prioridad.
-
-R-FOLIO-TRUTH-021
-clasificacion_apoyos conserva prioridad.
-
-R-FOLIO-TRUTH-022
-no Action Register.
-
-R-FOLIO-TRUTH-023
-no SQL nuevo.
-
-R-FOLIO-TRUTH-024
-no copia/duplica SQL existente.
-
-R-FOLIO-TRUTH-025
-no reutiliza semántica IGF-reviewable como generic search.
-
-R-FOLIO-TRUTH-026
-DYO/COMISIONES/u otra categoría fixture aparece en ALL_PUBLIC_FOLIOS
-si satisface los filtros.
-
-R-FOLIO-TRUTH-027
-esa misma categoría NO aparece en SUPPORT_FAMILIES.
-
-R-FOLIO-TRUTH-028
-H "qué gastos de llantas..." no se fuerza artificialmente al intent
-si la prioridad existente corresponde a otra ruta.
-
-## No reutilizar branch rechazado
-
-Implementar desde esta rama nueva derivada de main.
-
-No cherry-pick:
-
-7879bfc5a573f3a0ce7f1b1f685fce480215a71c
-
-El código puede reconstruir ideas correctas únicamente a partir del
-contrato actual y la auditoría.
-
-## In scope
-
-- helper nuevo neutral de folio search si hace falta
-- planner
-- capabilities
-- tools/orchestrator
-- chat
-- helper existente que contiene la lectura ancha SOLO si basta exportar
-  una función/query ya existente sin alterar SQL
-- tests
-- CURRENT_TASK
-- reporte
-
-## STOP obligatorio
-
-Si se requiere:
-
-SQL nuevo
-cambiar SELECT existente
-DB/schema
-LIVE_DB
-frontend
-server.js product behavior
-inventar semántica temporal
-
-STOP.
+Incluir matriz A-J.
 
 ## Prohibido
 
-NO SQL nuevo.
-NO copiar SQL.
+NO implementación.
+NO SQL.
 NO DB/schema.
 NO LIVE_DB.
 NO frontend.
-NO Action Register.
-NO hardcode llantas/uniformes/mantenimiento en producto.
-NO catálogo fijo.
+NO cambios de periodo.
+NO concept catalog.
+NO regex de llantas.
+NO naive strip-final-s.
+NO dependencia nueva.
 NO merge.
 NO push main.
 NO deploy.
 NO next task.
-
-## Suites
-
-R-FOLIO-TRUTH-001..028
-
-planner
-capabilities
-tool orchestrator
-M2/M4/M5/M6/IGF/Taller relacionadas
-continuity si chat cambia
-
-TIER 1 PASS
-PRE-DEPLOY --gate PASS
-HTTP 5xx = 0
-HARNESS = 0
-NEW FAILURE = 0
-git diff --check limpio
 
 ## Completion
 
-CURRENT_TASK → DONE_PENDING_REVIEW.
-
-Commit solo en rama FIX.
+CURRENT_TASK → DONE_PENDING_REVIEW
 
 STOP.
-
-NO merge.
-NO push main.
-NO deploy.
-NO next task.
