@@ -1,6 +1,6 @@
 # FIX-DIRECTOR-IA-FOLIO-LOCATOR-ESTAN-PERIOD-BRIDGE-001
 
-IMPLEMENTATION_SHA: PENDING
+IMPLEMENTATION_SHA: 89bed5d9a488294b1158b014b63f203d8d22b9c4
 
 BEFORE: `e1d256b4` no tiene `analysis_mode`. `estan` es STRUCTURAL global: `fueron de ESTAN` → `fueron`; `SERVICIOS ESTAN` → `servicios`. `cuanto suman … TOTAL PLAY` no es AGGREGATE. El blocker del locator previo (`623f4dca`) era `llantas estan` porque `estan` no era leftover y el span era inmutable.
 
