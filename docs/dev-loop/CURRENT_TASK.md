@@ -1,560 +1,71 @@
-task_id: FIX-DIRECTOR-IA-M9-ABSENT-NOT-ZERO-001
+task_id: AUDIT-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-CAUSALITY-ALIGNMENT-001
 
-task_type: FIX
-mode: REGRESSION_FIRST
+task_type: AUDIT
+mode: READ_ONLY_AUDIT
 
-status: CLOSED
+status: AUTHORIZED
+
 authorized_by: "Human Approver"
-authorized_at: "2026-09-08T11:47:32-06:00"
+authorized_at: "2026-09-08T12:28:17-06:00"
 
-human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-08 - FIX M9 ABSENT NOT ZERO ONLY; PRESERVE LEGITIMATE STRUCTURAL ZEROS; NO ARR ROOT1 CHANGES; NO PLANNER; NO ROUTING; NO LIVE_DB; NO MERGE; NO DEPLOY"
+human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-08 - AUDIT FINANCIAL DIAGNOSIS CAUSALITY / M9 NARRATIVE / ALIGNMENT ONLY; NO IMPLEMENTATION; NO BEHAVIOR CHANGE; NO LIVE_DB; NO MERGE; NO DEPLOY"
 
-implementation_authorized: YES
+implementation_authorized: NO
 merge_authorized: NO
 deploy_authorized: NO
 live_db_authorized: NO
 
 max_attempts: 1
 
-base_main_sha: b3e1b0311597604ce75a5962d3b0d809518b22c1
+base_main_sha: c554c2742a83d222c2c38dd1fb33347d16e26b8d
 
-audit_report_path: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-ARR-PROJECTION-SEMANTICS-001.md
-result_report_path: docs/dev-loop/reports/FIX-DIRECTOR-IA-M9-ABSENT-NOT-ZERO-001.md
+result_report_path: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-CAUSALITY-ALIGNMENT-001.md
 
 ## Objetivo único
 
-Corregir Root 2 demostrado por:
+Auditar físicamente por qué financial_diagnosis produce una
+respuesta narrativa que contradice o reinterpreta la evidencia
+estructurada que recibe.
 
-AUDIT-DIRECTOR-IA-ARR-PROJECTION-SEMANTICS-001
+No implementar.
 
-M9 no debe transformar ausencia/no disponibilidad de evidencia en
-un cero observado.
+No corregir.
 
-Contrato:
+No modificar comportamiento.
 
-ABSENT
-DATA_NOT_FOUND
-SOURCE_PARTIAL
-SOURCE_ERROR
-null
-undefined
-input matemáticamente insuficiente
+## Evidencia LIVE post Root 2
 
-!=
-
-KNOWN_ZERO
-
-Un 0 físicamente conocido sigue siendo 0.
-
-## North Star
-
-Cuando una pregunta como:
+Pregunta:
 
 ¿Por qué cayó el ingreso?
 
-obtenga M9 sin Delta Venta, Delta Descuento o Delta Ingreso
-disponible para la comparación, Director IA debe recibir evidencia
-inequívoca equivalente a:
+Respuesta relevante:
 
-Delta Venta: NO DISPONIBLE
-Delta Descuento: NO DISPONIBLE
-Delta Ingreso: NO DISPONIBLE
+BLOQUE M9:
+"Delta venta, descuento e ingreso presentan cambios, pero no se
+especifican cifras exactas debido a la ausencia de clientes en el
+mes disponible."
 
-y NO:
+Limitación declarada:
 
-Delta Venta: 0
-Delta Descuento: 0
-Delta Ingreso:
-sin cambios
-no hubo impacto
+"No se puede establecer causalidad entre los bloques."
 
-La ausencia M9 no autoriza causalidad.
+Conclusión posterior:
 
-## Root físico demostrado
+"La caída en el ingreso podría estar relacionada con la discrepancia
+entre las ventas observadas y proyectadas, así como la ausencia de
+clientes en el mes de comparación, pero no se puede afirmar una
+causa directa."
 
-Archivo principal:
+También afirmó:
 
-lib/director-ia-m9-deltas.js
+"Los periodos de IGF y ARR son comparables, pero el bloque M9 presenta
+un periodo diferente (2026-08 vs 2026-09), lo que limita la comparación
+directa."
 
-La auditoría encontró colapsos de ausencia a cero, incluyendo:
+## Hechos ya demostrados
 
-- COALESCE de kg / monto a 0
-- CASE de ratio indefinido a 0
-- row.null -> 0
-- margenA / margenB con ?? 0
-- invalid input retornando margen 0
-- fmtKg(null) -> "0.0"
-- fmtDescKg(null) -> "0.00 $/kg"
-- fmtMxn(null) -> ""
-- fmtTon(null) -> "0.0 ton"
-
-Además:
-
-lib/director-ia-financial-diagnosis.js
-
-ya contiene el contrato:
-
-"null no es 0. Ausencia no es cero."
-
-y modela:
-
-SOURCE_AVAILABLE
-SOURCE_PARTIAL
-DATA_NOT_FOUND
-SOURCE_ERROR
-SOURCE_RESTRICTED
-
-Por tanto, arreglar primero la evidencia M9 aguas arriba.
-No hacer que el prompt compense datos falsamente convertidos a 0.
-
-## PRECAUCIÓN CRÍTICA — dos tipos de ausencia
-
-NO eliminar COALESCE a ciegas.
-
-Antes de cambiar cada coerción, clasificarla físicamente como:
-
-A. KNOWN_ZERO / STRUCTURAL_ZERO
-
-Ejemplo posible:
-
-el periodo mensual existe y está disponible,
-pero un cliente concreto no tiene ventas registradas en ese mes
-dentro de una fuente que representa únicamente transacciones.
-
-Si el contrato físico existente demuestra que eso significa
-0 kg comprados:
-
-PRESERVAR 0.
-
-Esto es necesario para conceptos como:
-
-- dejó de comprar
-- cliente nuevo
-- pasó de X kg a 0
-- pasó de 0 a X kg
-
-B. MISSING / UNKNOWN
-
-Ejemplos:
-
-- periodo fuente no disponible
-- margen IGF no disponible
-- familia M9 no disponible
-- error de fuente
-- ratio matemáticamente no determinable
-- input requerido null
-- payload parcial
-
-Eso NO puede convertirse en cero.
-
-## Regla de clasificación
-
-Cada coerción auditada debe aparecer en el reporte con:
-
-LOCATION:
-CURRENT_BEHAVIOR:
-CLASSIFICATION:
-KNOWN_ZERO /
-MISSING_SOURCE /
-MISSING_INPUT /
-UNDEFINED_RATIO /
-LEGACY_FORMATTING
-
-ACTION:
-PRESERVE_ZERO /
-PRESERVE_NULL /
-PROPAGATE_PARTIAL /
-PROPAGATE_NOT_FOUND /
-STOP_UNPROVEN
-
-EVIDENCE:
-
-Si no puede demostrar si una coerción representa
-KNOWN_ZERO o MISSING:
-
-STOP.
-
-No adivinar semántica empresarial.
-
-## Delta Venta
-
-Preservar:
-
-un cero legítimo de compras para un cliente dentro de
-periodos cuya fuente está disponible.
-
-No preservar como cero:
-
-un periodo/fuente que no existe.
-
-No fabricar:
-
-deltaKg = 0
-
-si uno de los lados es realmente UNKNOWN.
-
-## Delta Descuento
-
-Distinguir:
-
-sin descuento conocido = 0 monto
-
-de:
-
-descuento no disponible
-
-y de:
-
-ratio $/kg matemáticamente indefinido.
-
-No asumir automáticamente que denominador 0 implica
-"descuento observado = 0 $/kg" si eso no está probado por
-el contrato físico existente.
-
-Si cambiar esa semántica rompería deliberadamente la paridad
-del dashboard y no hay evidencia suficiente:
-
-STOP y documentar.
-
-No rediseñar M9.
-
-## Delta Ingreso
-
-Este es crítico.
-
-Fórmula existente:
-
-kg × (margen_$/kg − |desc_$/kg|)
-
-Requiere inputs conocidos.
-
-Si:
-
-margenA = null
-o
-margenB = null
-
-NO usar:
-
-margen ?? 0
-
-NO calcular un ingreso exacto.
-
-NO calcular deltaIngreso exacto.
-
-Debe propagarse ausencia/partial.
-
-Igual si un input requerido para ingreso es UNKNOWN.
-
-Un cero físicamente observado sigue siendo válido.
-
-## Formatters
-
-NULL no debe renderizarse como cero.
-
-Ejemplos requeridos:
-
-fmtKg(null)       != "0.0"
-fmtDescKg(null)   != "0.00 $/kg"
-fmtMxn(null)      != ""
-fmtTon(null)      != "0.0 ton"
-
-Puede usarse:
-
-"n/d"
-"no disponible"
-
-o un mecanismo equivalente ya existente.
-
-Pero:
-
-fmtKg(0)
-fmtMxn(0)
-etc.
-
-sí deben seguir representando 0.
-
-## Status / availability
-
-Una familia con inputs esenciales ausentes no debe terminar
-marcada como SOURCE_AVAILABLE con valores numéricos fabricados.
-
-Usar el modelo de veracidad ya existente cuando sea suficiente:
-
-SOURCE_AVAILABLE
-SOURCE_PARTIAL
-DATA_NOT_FOUND
-SOURCE_ERROR
-SOURCE_RESTRICTED
-
-No crear un segundo sistema de veracidad si no hace falta.
-
-Cuando una familia sea parcial:
-
-identificar qué input falta.
-
-Ejemplo conceptual:
-
-availability:
-{
-  margenA: DATA_NOT_FOUND,
-  margenB: SOURCE_AVAILABLE
-}
-
-No es obligatorio este shape exacto si existe un equivalente más
-simple y compatible.
-
-## Financial diagnosis
-
-ssembleFinancialDiagnosisEvidence ya separa IGF / ARR / M9.
-
-Preservar esa arquitectura.
-
-Para M9 ausente/parcial, el contexto final debe expresar
-claramente ausencia.
-
-No imprimir:
-
-0
-
-0.00 $/kg
-
-como sustituto de missing.
-
-Y mantener la regla:
-
-NO CAUSALIDAD.
-
-Si M9 no está disponible:
-
-no concluir "el ingreso cayó por..."
-basándose en un cero inventado.
-
-## Caso A — missing completo
-
-Fixture:
-
-Delta Venta = DATA_NOT_FOUND
-Delta Descuento = DATA_NOT_FOUND
-Delta Ingreso = DATA_NOT_FOUND
-
-Esperado:
-
-M9 status = DATA_NOT_FOUND
-
-y ninguna cifra:
-
-0 kg
-0.00 $/kg
-
-
-como representación de ausencia.
-
-## Caso B — margen faltante
-
-Fixture:
-
-kgA conocido
-kgB conocido
-descA conocido
-descB conocido
-
-margenA = null
-margenB = 7.12
-
-Esperado:
-
-Delta Ingreso exacto = UNKNOWN
-familia != SOURCE_AVAILABLE exacta
-no ingresoA con margen 0
-no delta exacto
-
-## Caso C — cero conocido
-
-Fixture:
-
-periodo A disponible
-periodo B disponible
-
-cliente:
-kgA = 1000
-kgB = 0 conocido/estructural
-
-Esperado:
-
-kgB = 0
-deltaKg = -1000
-
-si el contrato físico existente demuestra
-cliente ausente = cero dentro de un periodo disponible.
-
-No romper dejó de comprar.
-
-## Caso D — cliente nuevo
-
-kgA = 0 conocido/estructural
-kgB = 2000
-
-Esperado:
-
-nuevo cliente sigue clasificable.
-
-## Caso E — formatter
-
-null -> n/d/no disponible
-0 -> cero formateado
-
-## Caso F — error
-
-SOURCE_ERROR nunca debe convertirse en 0.
-
-## Caso G — restricted
-
-SOURCE_RESTRICTED nunca debe convertirse en 0.
-
-## Caso H — partial
-
-Si una de las tres familias M9 es partial/not-found y otras available:
-
-aggregate M9 = SOURCE_PARTIAL
-
-y conservar status individual de cada familia.
-
-## BEFORE requerido
-
-B-001:
-margen null -> 0 mediante ?? 0
-
-B-002:
-row kg null -> 0 en mapper donde aplique
-
-B-003:
-row desc null -> 0 donde aplique
-
-B-004:
-formatters null -> strings de cero
-
-B-005:
-financial diagnosis declara null != zero,
-pero upstream puede haberlo colapsado antes
-
-B-006:
-clasificar físicamente COALESCE cliente-ausente.
-
-No modificar ese COALESCE hasta clasificarlo.
-
-## Regresiones requeridas
-
-R-M9-ABSENCE-001 missing margin preserved
-002 missing margin not numeric zero
-003 no exact ingreso with missing margin
-004 no exact deltaIngreso with missing margin
-005 formatter kg null != zero
-006 formatter desc null != zero
-007 formatter mxn null != zero
-008 formatter ton null != zero
-009 physical zero kg remains zero
-010 physical zero desc remains zero where semantically defined
-011 physical zero mxn remains zero
-012 period DATA_NOT_FOUND remains DATA_NOT_FOUND
-013 SOURCE_ERROR remains error
-014 SOURCE_RESTRICTED remains restricted
-015 SOURCE_PARTIAL remains partial
-016 family availability preserved
-017 aggregate M9 partial when one family partial
-018 aggregate M9 not available when all not-found
-019 no "sin cambios" from missing
-020 no numeric M9 zero from missing family
-021 Delta Venta legitimate dejaron semantics intact
-022 Delta Venta legitimate nuevos semantics intact
-023 Delta Descuento existing known cases intact
-024 Delta Ingreso known-input calculation intact
-025 known-input margin 0 if physically real remains 0
-026 missing margin distinct from margin 0
-027 invalid period not represented as margin 0
-028 no Number(null)-style zero
-029 no || 0 for UNKNOWN essential inputs
-030 no ?? 0 for UNKNOWN essential inputs
-031 financial evidence null_is_not_zero intact
-032 causality prohibition intact
-033 ARR Root1 semantics intact
-034 ARR projected/observed fields intact
-035 IGF commitment separation intact
-036 planner unchanged
-037 routing unchanged
-038 DICF unchanged
-039 commercial_state unchanged
-040 authz unchanged
-041 plant scope unchanged
-042 no schema change
-043 no dependency change
-044 no LIVE_DB required
-045 no hardcoded plant/period values
-046 no new source invented
-047 dashboard formulas not redesigned
-048 existing M9 known-data tests pass
-
-## SQL boundary
-
-SQL expression changes dentro de:
-
-lib/director-ia-m9-deltas.js
-
-están autorizados SOLO si son necesarios para preservar
-NULL vs KNOWN_ZERO dentro de las queries M9 existentes.
-
-NO:
-
-new tables
-new columns
-DDL
-migration
-new DB source
-new query family
-schema change
-
-Si necesita cualquiera de esos:
-
-STOP.
-
-Reportar:
-
-SQL_EXPRESSION_CHANGED:
-YES / NO
-
-Si YES:
-
-exact query expression
-before
-after
-why
-and prove no schema/query-source change.
-
-## Archivos permitidos
-
-Preferentemente:
-
-lib/director-ia-m9-deltas.js
-lib/director-ia-financial-diagnosis.js
-
-test focal nuevo
-CURRENT_TASK
-reporte
-
-Puede tocar test/helpers M9 existentes si es estrictamente necesario.
-
-NO tocar:
-
-lib/director-ia-igf-arr.js
-server.js
-planner
-routing
-commercial_state
-DICF
-
-## Root 1 congelado
-
-No cambiar el FIX ARR ya validado LIVE:
+Root 1 ARR está validado LIVE:
 
 observed current
 !=
@@ -564,170 +75,482 @@ previous month
 !=
 IGF commitment
 
-Prueba regresión.
+Root 2 M9 está validado en su objetivo primario:
 
-## Root 3 fuera de alcance
+MISSING != ZERO
 
-NO arreglar todavía:
+No reabrir ni reinterpretar esos roots.
 
-¿Cuánto proyectamos vender?
-¿Cómo vamos a cerrar septiembre?
-¿Cuál es la proyección de venta?
+## Contratos existentes a verificar
 
-si el routing actual no las resuelve.
+En lib/director-ia-financial-diagnosis.js existe:
 
-Eso será otra tarea.
+"null no es 0. Ausencia no es cero."
 
-## Natural Folio/Taller fuera de alcance
+"Prohibido: causalidad"
 
-NO arreglar todavía:
+"No formules hipótesis N5."
 
-¿Cuánto gasté en taller en enero?
-¿Cuánto gasté en taller en mayo?
-¿Cuánto gasté en inversiones en agosto?
+"No completes vacíos."
 
-Eso será el siguiente bloque funcional después de los roots ARR/M9.
+Y el contexto termina con equivalente a:
 
-## Suites
+"No inventes cifras. No afirmes causa."
 
-Agregar focal:
+También existe buildAlignment() con status calculado
+determinísticamente.
 
-R-M9-ABSENT-NOT-ZERO
+## Síntomas a auditar por separado
 
-Ejecutar:
+### S1 — causalidad / hipótesis
 
-M9 existentes
-financial diagnosis
-ARR
-IGF
+Determinar por qué el modelo puede emitir:
+
+"podría estar relacionada con..."
+
+aunque el system/context la prohíba.
+
+Clasificar si la divergencia ocurre en:
+
+A. evidence assembly
+B. context formatter
+C. prompt construction
+D. OpenAI generation
+E. post-generation validation
+F. response formatting
+G. otro punto físico
+
+Determinar si existe o no un validador determinístico después
+de la generación.
+
+### S2 — M9 "presenta cambios"
+
+Determinar qué texto exacto recibe el modelo para cada familia:
+
+delta_venta
+delta_descuento
+delta_ingreso
+
+y si frases como:
+
+"dejaron/mas/disminuyeron presentes"
+
+pueden ser interpretadas incorrectamente como:
+
+"hubo cambios"
+
+aunque:
+
+- los buckets estén vacíos
+- no haya cifras exactas
+- la familia sea partial
+- falten inputs
+- no exista evidencia suficiente para esa conclusión
+
+No asumir que este es el root.
+Probarlo.
+
+Distinguir:
+
+BUCKET_EXISTS
+BUCKET_NONEMPTY
+NUMERIC_DELTA_AVAILABLE
+EXACT_DELTA_AVAILABLE
+SOURCE_PARTIAL
+DATA_NOT_FOUND
+
+No tratarlos como equivalentes.
+
+### S3 — "ausencia de clientes"
+
+Localizar de dónde salió la frase:
+
+"ausencia de clientes en el mes disponible"
+
+Determinar si:
+
+- existe literalmente en contexto
+- se deriva de source_coercion
+- se deriva de buckets vacíos
+- se inventa durante generación
+- proviene de otra fuente
+
+Reportar exacto.
+
+### S4 — alignment
+
+Auditar:
+
+buildAlignment()
+
+y la forma en que alignment.status / alignment.note
+llegan al modelo.
+
+Caso LIVE:
+
+IGF = 2026-09
+ARR = 2026-09
+M9 = 2026-08 vs 2026-09
+
+Determinar qué status produce físicamente la función.
+
+Si produce comparable:
+
+probar que el modelo recibió "comparable"
+y aun así narró "periodo diferente".
+
+Si produce mismatch:
+
+explicar físicamente por qué.
+
+No inferir.
+
+### S5 — "tensión" IGF vs ARR
+
+Auditar qué significa actualmente una tensión.
+
+IGF venta:
+1506.3507 ton
+
+ARR proyectada:
+1469.36 ton
+
+La diferencia puede señalarse como diferencia entre objetos,
+pero NO como causa de caída de ingreso.
+
+Determinar si el prompt distingue correctamente:
+
+DIFFERENCE
+TENSION
+CAUSE
+DRIVER
+HYPOTHESIS
+
+y en qué frontera se pierde esa distinción.
+
+## Cadena física obligatoria
+
+Trazar completa:
+
+pregunta
+-> planner intent
+-> financial_diagnosis route
+-> loadFinancialDiagnosisForChat
+-> loadIgfArrSourceBlocksForChat
+-> M9 loaders
+-> assembleFinancialDiagnosisEvidence
+-> mapM9Family
+-> aggregateM9
+-> buildAlignment
+-> formatFinancialDiagnosisContext
+-> buildFinancialDiagnosisPrompt
+-> llamada OpenAI
+-> respuesta generada
+-> cualquier post-procesamiento
+-> respuesta HTTP/chat
+
+Para cada hop:
+
+FILE:
+FUNCTION:
+INPUT:
+OUTPUT:
+CAN_INTRODUCE_CAUSALITY:
+CAN_OVERRIDE_ALIGNMENT:
+CAN_INVENT_M9_CHANGE:
+POST_VALIDATION_PRESENT:
+
+## Reproducción sin LIVE_DB
+
+No usar LIVE_DB.
+
+Usar fixtures / unit tests / llamadas puras existentes.
+
+Crear únicamente sondas read-only temporales si hace falta.
+No commitear código de sonda.
+
+Reproducir al menos:
+
+### A — all M9 unavailable
+
+venta DATA_NOT_FOUND
+descuento DATA_NOT_FOUND
+ingreso DATA_NOT_FOUND
+
+Ver contexto exacto.
+
+### B — venta/descuento available, ingreso partial
+
+Reproducir contexto exacto.
+
+### C — buckets existentes pero vacíos
+
+Determinar qué texto ve el modelo.
+
+### D — alignment comparable
+
+IGF 2026-09
+ARR 2026-09
+M9 2026-08 -> 2026-09
+
+Expected physical status:
+probar, no asumir.
+
+### E — alignment mismatch real
+
+Construir un caso donde M9 no incluya 2026-09.
+
+Comparar textos.
+
+## Auditoría del prompt
+
+Separar:
+
+SYSTEM PROMPT
+USER CONTENT
+CONTEXT
+
+Listar las instrucciones relevantes en orden real.
+
+Determinar si existen instrucciones contradictorias o demasiado
+blandas, por ejemplo:
+
+"señala tensiones"
+vs
+"no causalidad"
+
+"resume hechos"
+vs
+datos parciales
+
+No recomendar todavía una solución hasta probar el root.
+
+## Auditoría post-generation
+
+Buscar físicamente si la respuesta generada se valida contra:
+
+- causal language
+- unsupported claims
+- alignment.status
+- source availability
+- missing inputs
+
+Si NO existe validator:
+
+POST_GENERATION_GUARD_PRESENT: NO
+
+Si existe:
+
+identificar por qué no bloqueó la respuesta LIVE.
+
+## Preguntas de auditoría obligatorias
+
+Q1:
+¿La causalidad apareció antes o después de OpenAI?
+
+Q2:
+¿El contexto entregado a OpenAI contenía alguna afirmación causal?
+
+Q3:
+¿"presentan cambios" está soportado por evidencia estructurada?
+
+Q4:
+¿"ausencia de clientes" está soportado por evidencia estructurada?
+
+Q5:
+¿Qué alignment.status produce físicamente el caso
+2026-09 / 2026-09 / 2026-08→2026-09?
+
+Q6:
+¿El LLM puede contradecir alignment.status sin ser bloqueado?
+
+Q7:
+¿Existe post-generation validation?
+
+Q8:
+¿Cuál es el PRIMER punto físico de divergencia para cada síntoma?
+
+Q9:
+¿Los tres síntomas comparten un solo root o son roots distintos?
+
+Q10:
+¿Cuál es la frontera mínima de un futuro FIX?
+
+## Root classification
+
+Para cada síntoma usar una de:
+
+EVIDENCE_WRONG
+EVIDENCE_AMBIGUOUS
+PROMPT_AMBIGUOUS
+LLM_NONCOMPLIANCE
+POST_VALIDATION_ABSENT
+POST_VALIDATION_BUG
+ALIGNMENT_BUG
+FORMATTER_BUG
+OTHER
+
+Puede haber más de un root.
+
+No forzar mega-fix.
+
+## Posibles fronteras futuras
+
+Auditar, NO implementar, si la corrección mínima debería vivir en:
+
+1. evidence/context formatter
+2. prompt contract
+3. deterministic post-generation validator
+4. deterministic answer builder para ciertos estados
+5. combinación de fronteras
+
+Evaluar tradeoff:
+
+- seguridad semántica
+- mínima superficie
+- no volver respuestas robóticas
+- no convertir LLM en fuente de verdad
+- preservar lenguaje natural
+- preservar bloques IGF/ARR/M9 separados
+
+## Scope prohibido
+
+NO modificar:
+
+lib/director-ia-m9-deltas.js
+lib/director-ia-igf-arr.js
 planner
-capabilities
-tool-orchestrator
+routing
+server.js
+DICF
 commercial_state
-continuity
+schema
+SQL
+dependencies
 
-Tier 1
-pre-deploy --gate
+NO implementar validator.
 
-NEW FAILURE = 0
+NO cambiar prompt.
 
-Si existe fallo preexistente:
-demostrar contra base_main_sha.
+NO cambiar formatter.
 
-## STOP CONDITIONS
+NO cambiar tests de producto.
 
-STOP si:
+NO LIVE_DB.
 
-- no puede distinguir KNOWN_ZERO de MISSING
-- requiere decisión empresarial no demostrada
-- requiere LIVE_DB
-- requiere schema
-- requiere nueva fuente
-- requiere planner
-- requiere routing
-- requiere alterar ARR Root1
-- requiere cambiar DICF
-- requiere cambiar commercial_state
-- requiere mega-rediseño de M9
+## Archivos permitidos
 
-No sustituir incertidumbre por una implementación agresiva.
+Solo:
 
-## Reporte
+docs/dev-loop/CURRENT_TASK.md
+docs/dev-loop/reports/AUDIT-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-CAUSALITY-ALIGNMENT-001.md
 
-docs/dev-loop/reports/FIX-DIRECTOR-IA-M9-ABSENT-NOT-ZERO-001.md
+Las sondas temporales read-only deben eliminarse antes de cerrar.
 
-Debe iniciar:
+## Suites / probes
 
-IMPLEMENTATION_SHA:
+No se exige suite completa de implementación.
 
-BEFORE:
+Ejecutar al menos:
 
-COERCION_CLASSIFICATION:
+financial diagnosis tests existentes
+M9 tests existentes
+ARR projection regression existente
 
-M9_ABSENCE_MODEL:
+Más fixtures/sondas puras necesarias para probar:
 
-KNOWN_ZERO_MODEL:
+alignment
+M9 status text
+context
+prompt
 
-MISSING_MARGIN_HANDLING:
+No alterar tests.
 
-DELTA_VENTA_HANDLING:
-DELTA_DESCUENTO_HANDLING:
-DELTA_INGRESO_HANDLING:
+## Resultado requerido
 
-FORMATTER_NULL_HANDLING:
+El reporte debe iniciar:
 
-FINANCIAL_DIAGNOSIS_CONTEXT:
+AUDIT_RESULT:
 
-NORTH_STAR_MISSING_CONTEXT:
+BASE_MAIN_SHA:
 
-001..048:
+LIVE_SYMPTOMS:
 
-SUITES:
+PHYSICAL_CHAIN:
 
-FILES:
-RISKS:
+S1_CAUSALITY:
+FIRST_DIVERGENCE:
+ROOT_CLASS:
 
-STRUCTURAL_ZERO_PRESERVED:
-YES / NO
+S2_M9_CHANGE_CLAIM:
+FIRST_DIVERGENCE:
+ROOT_CLASS:
 
-MISSING_COLLAPSES_TO_ZERO:
-YES / NO
+S3_ABSENCE_OF_CLIENTS:
+SOURCE:
+SUPPORTED:
+ROOT_CLASS:
 
-SQL_EXPRESSION_CHANGED:
-YES / NO
+S4_ALIGNMENT:
+PHYSICAL_STATUS:
+CONTEXT_STATUS:
+MODEL_STATEMENT:
+FIRST_DIVERGENCE:
+ROOT_CLASS:
 
-SCHEMA_CHANGED:
-YES / NO
+S5_IGF_ARR_TENSION:
+SUPPORTED_DIFFERENCE:
+SUPPORTED_CAUSALITY:
 
-PLANNER_CHANGED:
-YES / NO
+POST_GENERATION_GUARD_PRESENT:
 
-ROUTING_CHANGED:
-YES / NO
+Q1:
+Q2:
+Q3:
+Q4:
+Q5:
+Q6:
+Q7:
+Q8:
+Q9:
+Q10:
 
-ARR_ROOT1_CHANGED:
-YES / NO
+MINIMAL_FIX_BOUNDARY:
 
-DICF_CHANGED:
-YES / NO
+SPLIT_RECOMMENDATION:
 
-COMMERCIAL_STATE_CHANGED:
-YES / NO
+FILES_INSPECTED:
+FUNCTIONS_INSPECTED:
+PROBES:
+TESTS:
 
-DEPENDENCY_CHANGED:
-YES / NO
-
-LIVE_DB_USED:
-YES / NO
+ARR_ROOT1_CHANGED: NO
+M9_ROOT2_CHANGED: NO
+PLANNER_CHANGED: NO
+ROUTING_CHANGED: NO
+SQL_CHANGED: NO
+SCHEMA_CHANGED: NO
+DEPENDENCY_CHANGED: NO
+LIVE_DB_USED: NO
 
 FINAL:
-PASS /
-STOP_UNPROVEN_SEMANTICS /
-STOP_OTHER
+DONE_PENDING_REVIEW /
+STOPPED
 
 ## Completion
 
-Si implementación segura:
+Al terminar auditoría:
 
 CURRENT_TASK -> DONE_PENDING_REVIEW
 
-Commit en rama FIX.
+Crear reporte.
+
+Commit únicamente docs de auditoría.
 
 STOP.
 
-Si debe detenerse por semántica no demostrada:
-
-CURRENT_TASK -> STOPPED
-
-Crear reporte con evidencia exacta.
-
-Commit docs únicamente si protocolo lo permite.
-
-STOP.
-
-NO merge.
-NO push main.
-NO deploy.
-NO LIVE_DB.
-NO next task.
-closure_reason: "HUMAN REVIEW MERGE_OK. M9 now preserves structural known-zero semantics while keeping missing/unknown distinct from numeric zero; missing margin no longer produces exact Delta Ingreso; null formatters no longer render zero; financial diagnosis propagates PARTIAL/NOT_FOUND and no-causality; ARR Root 1 frozen and regression passes; R-M9-ABSENCE 48/48 and required suites pass; NEW FAILURE=0."
+No implementation.
+No merge.
+No push main.
+No deploy.
+No next task.
