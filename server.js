@@ -9893,6 +9893,10 @@ directorIaIgfArr.configureDirectorIaIgfArr({
   getPlantCodeArrFromPlantaNombre,
   getMargenKgPorPeriodo,
   assertGVPlantaNombreAccess,
+  loadArrLastUploadDay: async function loadArrLastUploadDayForIgfArr(poolOrClient, year, month, opts) {
+    const plantCode = opts && (opts.plant_code || opts.plantCode);
+    return directorIaChat.queryArrLastUploadDayPlantAware(poolOrClient, year, month, plantCode);
+  },
 });
 
 directorIaMejoraContinua.configureDirectorIaMejoraContinua({

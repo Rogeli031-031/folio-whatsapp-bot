@@ -3,7 +3,7 @@ task_id: FIX-DIRECTOR-IA-ARR-PROJECTION-CUTOFF-LABEL-001
 task_type: FIX
 mode: REGRESSION_FIRST
 
-status: AUTHORIZED
+status: DONE_PENDING_REVIEW
 
 authorized_by: "Human Approver"
 authorized_at: "2026-09-08T10:18:38-06:00"
