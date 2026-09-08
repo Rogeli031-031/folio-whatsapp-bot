@@ -3,8 +3,7 @@ task_id: FIX-DIRECTOR-IA-HISTORICAL-MARGIN-COMPARE-HTTP-STATUS-001
 task_type: FIX
 mode: REGRESSION_FIRST
 
-status: DONE_PENDING_REVIEW
-
+status: CLOSED
 authorized_by: "Human Approver"
 authorized_at: "2026-09-08T17:05:28-06:00"
 
@@ -257,3 +256,4 @@ No push main.
 No deploy.
 No LIVE_DB.
 No siguiente task.
+closure_reason: "HUMAN REVIEW PASS. historical_margin compare_months now always returns an explicit HTTP status: 200 for comparable or partial usable evidence, 404 for true DATA_NOT_FOUND, and 500 only for real SOURCE_ERROR. FORECAST remains distinct from FINAL and no forecast-to-forecast delta was introduced."
