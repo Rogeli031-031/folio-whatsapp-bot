@@ -3,8 +3,7 @@ task_id: AUDIT-DIRECTOR-IA-ARR-PROJECTION-SEMANTICS-001
 task_type: AUDIT
 mode: READ_ONLY_PHYSICAL_TRACE
 
-status: DONE_PENDING_REVIEW
-
+status: CLOSED
 authorized_by: "Human Approver"
 authorized_at: "2026-09-08T10:01:57-06:00"
 
@@ -565,3 +564,4 @@ NO push.
 NO deploy.
 NO LIVE_DB.
 NO next task.
+closure_reason: "HUMAN REVIEW APPROVED. Audit demonstrated three independent roots: ARR projection cutoff/semantic labeling; M9 absence collapse to zero; ARR projection question routing. FINAL_RECOMMENDATION=FIX_SPLIT_ROOTS. No product code changed."
