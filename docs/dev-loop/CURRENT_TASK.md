@@ -1,13 +1,14 @@
-task_id: FIX-DIRECTOR-IA-FOLIO-LOCATOR-ESTAN-PERIOD-BRIDGE-001
+task_id: FIX-DIRECTOR-IA-FOLIO-POST-CONCEPT-ANALYTIC-TAIL-001
 
 task_type: FIX
 mode: REGRESSION_FIRST
 
-status: CLOSED
-authorized_by: "Human Approver"
-authorized_at: "2026-09-07T16:37:24-06:00"
+status: AUTHORIZED
 
-human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-07 - IMPLEMENT PERIOD-ADJACENT ESTAN CONTROL BRIDGE IN FOLIO LOCATOR; PRESERVE PROTECTED BUSINESS CONCEPTS; REIMPLEMENT FROZEN AGGREGATE/NULL CONTRACT FROM MAIN; NO PLANNER; NO SQL; NO LIVE_DB; NO MERGE; NO DEPLOY"
+authorized_by: "Human Approver"
+authorized_at: "2026-09-07T18:03:45-06:00"
+
+human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-07 - FIX POST-CONCEPT ANALYTIC TAIL BOUNDARY IN FOLIO SEARCH; PRESERVE DEPLOYED ESTAN/LOCATOR/NULL/AGGREGATE CONTRACTS; NO PLANNER; NO ROUTING; NO SQL; NO LIVE_DB; NO MERGE; NO DEPLOY"
 
 implementation_authorized: YES
 merge_authorized: NO
@@ -16,188 +17,187 @@ live_db_authorized: NO
 
 max_attempts: 1
 
-base_main_sha: e1d256b4f330931fcd349850f639e4a62df44f5c
+base_main_sha: d4291bc0d22cc367e597b41ce448810fc4bb2790
 
-result_report_path: docs/dev-loop/reports/FIX-DIRECTOR-IA-FOLIO-LOCATOR-ESTAN-PERIOD-BRIDGE-001.md
+audit_report_path: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-FOLIO-POST-CONCEPT-ANALYTIC-TAIL-001.md
+result_report_path: docs/dev-loop/reports/FIX-DIRECTOR-IA-FOLIO-POST-CONCEPT-ANALYTIC-TAIL-001.md
 
-objective: Corregir únicamente la frontera del locator para que 'estan/están' quede fuera del concept span cuando funciona sintácticamente como puente hacia un periodo, sin convertir 'estan' en stopword/trailing leftover global y sin mutilar BUSINESS DATA.
+## Objetivo único
 
-## Implementaciones rechazadas
+Corregir el END boundary de POST_PERIOD_DE_TO_TEXT_END para que
+una cola analítica posterior al concepto quede FUERA del protected
+concept span y permanezca dentro de control-language.
 
-NO cherry-pick:
+No rediseñar el agregado.
 
-805a4ce51029fda39bd4a0adb7836a2e7a75255a
-51a6d775b656121a13911c3e0a0e8bc44f890b31
-488a3faf85ea915aeec49bb98f8e0e8d27e4f7d2
-fe1e263534d1e1510a757437f98919c88aac8154
-623f4dca66bf078f4f74b3a8e6223be20bfa9952
+## Hallazgo físico auditado
 
-Usarlas solo como evidencia histórica.
+FIRST_DIVERGENCE:
 
-## Blocker demostrado
+locateConceptSpan
+POST_PERIOD_DE_TO_TEXT_END
 
 Actual:
 
-que apoyos de llantas estan en septiembre?
-→ concept_query="llantas estan"
+boundConceptSpan(text, afterControl + 3, text.length)
 
-que folios de llantas estan en agosto?
-→ concept_query="llantas estan"
+Eso produce:
 
-que apoyos de llantas estan para septiembre?
-→ concept_query="llantas estan"
+liquidaciones suma los montos en un acumulado por mes
 
-Correcto:
+como un único concept span.
 
-→ concept_query="llantas"
+ROOT_CAUSE_CLASS:
 
-## Invariante
+CONCEPT_END_BOUNDARY
 
-ESTAN NO ES STOPWORD GLOBAL.
+## North Star de este FIX
 
-ESTAN NO SE AGREGA COMO TRAILING LEFTOVER GENERICO.
+Pregunta:
 
-Debe considerarse CONTROL únicamente cuando la sintaxis demuestra
-que funciona como bridge hacia el periodo.
+¿Cuánto suman los folios de enero a agosto de liquidaciones? suma los montos en un acumulado por mes
 
-Ejemplos:
+Debe producir:
 
-llantas estan en septiembre
-llantas estan para septiembre
-
-Concept:
-llantas
-
-Control:
-estan en septiembre
-estan para septiembre
-
-## Business data protegido
-
-Debe seguir siendo posible buscar conceptos que contengan ESTAN.
-
-B1
-que folios de agosto fueron de ESTAN?
-→ LIST
-→ concept_query="estan"
-
-B2
-dame los folios de agosto de ESTAN
-→ LIST
-→ concept_query="estan"
-
-B3
-cuanto suman los folios de agosto de ESTAN?
-→ AGGREGATE
-→ concept_query="estan"
-
-B4
-que folios de agosto fueron de SERVICIOS ESTAN?
-→ LIST
-→ concept_query="servicios estan"
-
-No puede resolverse B1-B4 eliminando 'estan'.
-
-## Period bridge obligatorio
-
-P1
-que apoyos de llantas estan en septiembre?
-→ LIST
-→ concept llantas
-→ period 2026-09
-
-P2
-que folios de llantas estan en agosto?
-→ LIST
-→ concept llantas
-→ period 2026-08
-
-P3
-que apoyos de llantas estan para septiembre?
-→ LIST
-→ concept llantas
-→ period 2026-09
-
-P4
-que apoyos estan en septiembre?
-→ LIST
-→ concept null
-→ period 2026-09
-
-P5
-que folios estan en agosto?
-→ LIST
-→ concept null
-→ period 2026-08
-
-## Controles ya congelados
-
-C1
-que apoyos de llantas tenemos en septiembre?
-→ llantas
-
-C2
-que apoyos de llantas hay en septiembre?
-→ llantas
-
-C3
-que apoyos de llantas existen en septiembre?
-→ llantas
-
-C4
-que folios de agosto fueron de RENTA DEL MES?
-→ renta del mes
-
-C5
-que folios de agosto fueron de CURSO?
-→ curso
-
-C6
-dame los folios de agosto de TOTAL PLAY
-→ LIST
-→ total play
-
-C7
-cuanto suman los folios de agosto de TOTAL PLAY
-→ AGGREGATE
-→ total play
-
-C8
-cual es el importe total de los folios de agosto de IMPORTE TOTAL SEGUROS?
-→ AGGREGATE
-→ importe total seguros
-
-C9
-dame el total de los folios de agosto de POR MES SERVICIOS
-→ AGGREGATE
-→ por mes servicios
-
-## North Star congelado
-
-cuanto hemos gastado en apoyos en REMODELACION DE TALLER de enero a agosto? suma los montos en un acumulado por mes
-
-Debe seguir:
-
-scope=SUPPORT_FAMILIES
 period_mode=RANGE
 period_start=2026-01
 period_end=2026-08
-concept_query=remodelacion de taller
+
+concept_mode=SINGLE
+concept_query=liquidaciones
 
 analysis_mode=AGGREGATE
 aggregation=SUM
 group_by=MONTH
 cumulative=YES
 
-## Lexical immutability congelada
+## Segunda forma LIVE obligatoria
 
-Una vez localizado un HIGH-CONFIDENCE concept span:
+Pregunta:
 
-PROTECTED_CONCEPT_IS_LEXICALLY_IMMUTABLE = YES
+¿Cuánto suman los folios de enero a agosto de liquidaciones? dame el monto por mes y acumulado
 
-No STRUCTURAL_TOKENS.pop().
+Debe producir:
 
-Conservar:
+concept_query=liquidaciones
+
+analysis_mode=AGGREGATE
+aggregation=SUM
+group_by=MONTH
+cumulative=YES
+
+## Regla estructural
+
+Separar:
+
+BUSINESS DATA | POST-CONCEPT ANALYTIC TAIL
+
+La cola solo puede separarse si forma un SUFIJO COMPLETO
+reconocido hasta EOF.
+
+NO substring global.
+
+NO stopwords globales.
+
+NO borrar palabras dentro de protected concept span.
+
+## Tails cerrados autorizados
+
+Cuando formen un sufijo completo hasta EOF:
+
+por mes
+
+acumulado por mes
+
+suma los montos
+
+suma los montos por mes
+
+suma los montos en un acumulado por mes
+
+dame el monto por mes y acumulado
+
+dame el monto por mes y el acumulado
+
+Singular/plural equivalente de monto/montos es permitido
+solo mediante gramática cerrada y tests.
+
+## Casos auditados obligatorios
+
+C:
+
+¿Cuánto suman los folios de enero a agosto de liquidaciones?
+
+→ concept=liquidaciones
+→ AGGREGATE
+→ group_by=NONE
+→ cumulative=NO
+
+D:
+
+¿Cuánto suman los folios de enero a agosto de liquidaciones por mes?
+
+→ concept=liquidaciones
+→ AGGREGATE
+→ MONTH
+→ cumulative=NO
+
+E:
+
+¿Cuánto suman los folios de enero a agosto de liquidaciones? por mes
+
+→ igual D
+
+F:
+
+¿Cuánto suman los folios de enero a agosto de liquidaciones? acumulado por mes
+
+→ concept=liquidaciones
+→ AGGREGATE
+→ MONTH
+→ cumulative=YES
+
+G:
+
+¿Cuánto suman los folios de enero a agosto de liquidaciones? suma los montos
+
+→ concept=liquidaciones
+→ AGGREGATE
+→ SUM
+→ group_by=NONE
+→ cumulative=NO
+
+## BUSINESS DATA que NO debe romperse
+
+que folios de agosto fueron de POR MES SERVICIOS
+→ LIST
+→ concept="por mes servicios"
+
+que folios de agosto fueron de SUMA LOS MONTOS SA
+→ LIST
+→ concept="suma los montos sa"
+
+que folios de agosto fueron de IMPORTE TOTAL SEGUROS
+→ LIST
+→ concept="importe total seguros"
+
+dame el total de los folios de agosto de POR MES SERVICIOS
+→ AGGREGATE
+→ concept="por mes servicios"
+
+suma los montos de los folios de agosto de SUMA LOS MONTOS SA
+→ AGGREGATE
+→ concept="suma los montos sa"
+
+## Contratos congelados — NO reabrir
+
+ESTAN period bridge.
+
+¿Qué apoyos de llantas están en septiembre?
+→ concept=llantas
+→ 2026-09
+
+Protected lexical immutability:
 
 RENTA DEL MES
 PAGO DEL MES
@@ -206,83 +206,80 @@ MATERIAL PARA
 CURSO
 SERVICIO EN
 
-## NULL semantics congelada
+TOTAL PLAY LIST/AGGREGATE.
+
+NULL != 0.
 
 KNOWN_ZERO:
-0 físico
-→ conocido
-→ suma 0
-
-KNOWN_NONZERO:
-finito
-→ conocido
+0 físico = conocido.
 
 UNKNOWN:
-
 null
 undefined
 blank
 nonfinite
 
-→ NO es cero
-→ no suma
-→ unknown_amount_count++
-→ is_complete=false
+UNKNOWN:
+no suma
+unknown_amount_count++
+is_complete=false
 
-Clasificar antes de Number().
+CANCELADO:
+fuera del agregado.
 
-## CANCELADO
+PAGADO:
+no es prueba contable.
 
-AGGREGATE:
-fuera de eligible
-fuera de suma
-fuera de unknown count
+Full-set:
+AGGREGATE antes del cap 40.
+LIST cap 40.
 
-LIST:
-sin cambio.
+MONTH:
+mes_cargo.
 
-## PAGADO
+CUMULATIVE:
+running solo conocidos.
 
-No filtro implícito.
-No prueba gasto contable.
+## North Star anterior — regresión obligatoria
 
-## Full set
+cuanto hemos gastado en apoyos en REMODELACION DE TALLER de enero a agosto? suma los montos en un acumulado por mes
 
-AGGREGATE:
-todos los matched/deduped antes del cap.
+Debe seguir:
 
-LIST:
-cap 40.
+SUPPORT_FAMILIES
+RANGE 2026-01..2026-08
+concept=remodelacion de taller
+AGGREGATE
+SUM
+MONTH
+cumulative=YES
 
-## MONTH / cumulative
-
-Preservar exactamente contrato anterior:
-
-mes_cargo
-empty month complete zero
-unknown month incomplete
-running solo conocidos
-running_is_complete propaga
-known_total = último running cuando cumulative YES
-
-## Preservar sin cambios semánticos
+## Preservar
 
 SINGLE
 RANGE
 ANY
 
-inclusive range
-max 12
-inverted 0 calls
->12 0 calls
-partial range fail-closed
+range max 12
+
+inverted range:
+0 calls
+
+range >12:
+0 calls
+
+partial monthly failure:
+fail closed
 
 bonos o bono
 
 gas != gasolina
+
 O-RING
 SELLO O-RING
+
 aceite de motor
+
 MAYAN PALACE
 
 morphology
@@ -290,7 +287,6 @@ scope
 authz
 
 queryReviewableSupportFolios
-SQL existente
 
 ## No cambiar
 
@@ -307,96 +303,121 @@ morphology semantics
 
 ## Fuera de alcance
 
-No resolver:
+NO resolver:
 
-cuanto tenemos de apoyos de enero a agosto de taller?
+apoyos ... de taller como categoría
+
 inversiones en cilindros
+
 inversiones a clientes
-mantenimiento ISUZU
+
+mantenimiento ISUZU sin folio/apoyo
+
 acciones abiertas
+
 folio exacto sin mes
-ranking AT
-ARR 302 vs 1522.76
+
+ranking autotanque
+
+ARR forecast 302 vs 1522.76
+
 LIST formatMoney(null)
 
 ## Regression first
 
-Demostrar contra base_main_sha:
+Antes de implementar demostrar contra base_main_sha:
 
-- no AGGREGATE
-- comportamiento base de ESTAN
-- no Option B
-- no cherry-pick
+1. CASE A falla por concept tail.
+2. CASE H falla por concept tail.
+3. CASE C ya conserva liquidaciones.
+4. North Star anterior ya funciona.
+5. ESTAN ya funciona.
 
 ## Tests mínimos
 
-R-FOLIO-ESTAN-001 llantas estan en septiembre
-002 llantas estan en agosto
-003 llantas estan para septiembre
-004 apoyos estan en septiembre no concept
-005 folios estan en agosto no concept
+R-FOLIO-TAIL-001 CASE A concept
+002 CASE A aggregate
+003 CASE A month
+004 CASE A cumulative
 
-006 ESTAN como concepto
-007 dame ESTAN como concepto
-008 aggregate ESTAN
-009 SERVICIOS ESTAN
+005 CASE H concept
+006 CASE H aggregate
+007 CASE H month
+008 CASE H cumulative
 
-010 tenemos control
-011 hay control
-012 existen control
+009 CASE C
 
-013 RENTA DEL MES
-014 CURSO
+010 CASE D concept
+011 CASE D MONTH
 
-015 TOTAL PLAY LIST
-016 TOTAL PLAY AGG
-017 IMPORTE TOTAL SEGUROS AGG
+012 CASE E
+
+013 CASE F concept
+014 CASE F cumulative
+
+015 CASE G concept
+016 CASE G aggregate
+
+017 POR MES SERVICIOS LIST
 018 POR MES SERVICIOS AGG
 
-019 North Star concept
-020 North Star RANGE
-021 North Star MONTH
-022 North Star cumulative
+019 SUMA LOS MONTOS SA LIST
+020 SUMA LOS MONTOS SA AGG
 
-023 NULL != 0
-024 zero known
-025 null unknown
-026 undefined unknown
-027 blank unknown
-028 nonfinite unknown
-029 unknown no suma
-030 unknown count
-031 complete false
-032 complete true
+021 IMPORTE TOTAL SEGUROS
 
-033 CANCELADO null excluido
-034 PAGADO null unknown
+022 North Star concept
+023 North Star RANGE
+024 North Star MONTH
+025 North Star cumulative
 
-035 empty month complete zero
-036 null month incomplete
-037 running known
-038 running completeness
-039 known total
+026 ESTAN regression
+027 ESTAN business data
 
-040 aggregate >40 full set
-041 LIST cap40
+028 RENTA DEL MES
+029 CURSO
 
-042 ANY bonos|bono
-043 gas != gasolina
-044 O-RING
-045 aceite de motor
-046 MAYAN PALACE
+030 TOTAL PLAY LIST
+031 TOTAL PLAY AGG
 
-047 partial range fail closed
-048 inverted range 0 calls
-049 >12 range 0 calls
+032 NULL != 0
+033 zero known
+034 null unknown
+035 blank unknown
+036 nonfinite unknown
+037 unknown no suma
+038 unknown count
+039 incomplete false/true semantics
+040 complete true
 
-050 planner unchanged
-051 SQL unchanged
-052 dependencies unchanged
+041 CANCELADO excluded
+042 PAGADO null unknown
 
-## Suites
+043 empty month complete
+044 null month incomplete
+045 running known
+046 running completeness
 
+047 aggregate >40 full set
+048 LIST cap40
+
+049 ANY bonos|bono
+050 gas != gasolina
+051 O-RING
+052 aceite de motor
+053 MAYAN PALACE
+
+054 partial range fail closed
+055 inverted range 0 calls
+056 range >12 0 calls
+
+057 planner unchanged
+058 routing unchanged
+059 SQL/dependency unchanged
+
+## Suites obligatorias
+
+R-FOLIO-TAIL
 R-FOLIO-ESTAN
 R-FOLIO-LOCATOR
 R-FOLIO-COMP
@@ -416,18 +437,27 @@ IGF
 continuity
 
 Tier 1
+
 pre-deploy --gate
 
-NEW FAILURE = 0.
+NEW FAILURE = 0
 
-Si una falla parece preexistente:
+Si falla algo aparentemente preexistente:
 demostrar contra base_main_sha.
+
+## Product files
+
+Preferentemente:
+
+lib/director-ia-folio-search.js
+
+test/director-ia-folio-search-post-concept-analytic-tail.test.js
+
+No planner.
 
 ## STOP CONDITIONS
 
 STOP si requiere:
-
-agregar ESTAN como stopword/trailing leftover global
 
 planner
 routing
@@ -436,15 +466,23 @@ schema
 dependency
 LIVE_DB
 
+cambiar ESTAN semantics
+cambiar NULL model
 cambiar RANGE
-ANY
-morphology
-scope
-authz
+cambiar ANY
+cambiar morphology
+cambiar scope
+cambiar authz
+
+STOP si la solución propuesta depende de:
+
+global stopwords
+global analytic token stripping
+mutar protected concept span
 
 ## Reporte
 
-docs/dev-loop/reports/FIX-DIRECTOR-IA-FOLIO-LOCATOR-ESTAN-PERIOD-BRIDGE-001.md
+docs/dev-loop/reports/FIX-DIRECTOR-IA-FOLIO-POST-CONCEPT-ANALYTIC-TAIL-001.md
 
 Debe iniciar:
 
@@ -452,31 +490,36 @@ IMPLEMENTATION_SHA:
 BEFORE:
 AFTER:
 
-ESTAN_PERIOD_BRIDGE_MODEL:
-ESTAN_GLOBAL_STOPWORD:
-ESTAN_BUSINESS_DATA_PRESERVED:
+FIRST_DIVERGENCE_FIXED:
+POST_PERIOD_END_MODEL:
+ANALYTIC_TAIL_GRAMMAR:
+TAIL_MUST_REACH_EOF:
+PROTECTED_BUSINESS_DATA:
 
-LLANTAS_ESTAN_EN:
-LLANTAS_ESTAN_PARA:
-ESTAN_AS_CONCEPT:
-SERVICIOS_ESTAN:
+CASE_A:
+CASE_C:
+CASE_D:
+CASE_E:
+CASE_F:
+CASE_G:
+CASE_H:
 
-LOCATOR_BOUNDARY:
-PROTECTED_SPAN_IMMUTABILITY:
-ANALYTIC_MODEL:
+NORTH_STAR:
+ESTAN_REGRESSION:
+PROTECTED_SPAN_REGRESSION:
 
 NULL_MODEL:
 FULL_SET:
 MONTHLY:
 CUMULATIVE:
 
-NORTH_STAR:
-001..052:
+001..059:
 SUITES:
 FILES:
 RISKS:
 
 PLANNER_CHANGED:
+ROUTING_CHANGED:
 SQL_NEW:
 DEPENDENCY_NEW:
 
@@ -493,4 +536,3 @@ NO push main.
 NO deploy.
 NO LIVE_DB.
 NO next task.
-closure_reason: "HUMAN REVIEW MERGE_OK. ESTAN funciona como period-adjacent control bridge sin convertirse en stopword global; ESTAN y SERVICIOS ESTAN permanecen como BUSINESS DATA. Locator boundary, protected-span lexical immutability, TOTAL PLAY, Option B NULL semantics, full-set aggregation, CANCELADO, RANGE/ANY y North Star pasan. NEW FAILURE = 0."
