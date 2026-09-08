@@ -1,13 +1,14 @@
-task_id: FIX-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-M9-PRETRUNCATE-COUNT-001
+task_id: FIX-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-PROMPT-STATUS-ALIGNMENT-001
 
 task_type: FIX
-mode: REGRESSION_FIRST_REPLACEMENT
+mode: REGRESSION_FIRST
 
-status: CLOSED
+status: AUTHORIZED
+
 authorized_by: "Human Approver"
-authorized_at: "2026-09-08T14:05:20-06:00"
+authorized_at: "2026-09-08T15:02:16-06:00"
 
-human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-08 - REPLACEMENT FIX FOR M9 FORMATTER SEMANTICS + PRE-TRUNCATE PAYLOAD COUNT ONLY; PREVIOUS IMPLEMENTATION REJECTED; NO CHERRY-PICK WHOLE REJECTED IMPLEMENTATION; NO PROMPT REDESIGN; NO POST-GENERATION VALIDATOR; NO M9 LOADERS; NO ARR; NO PLANNER; NO ROUTING; NO LIVE_DB; NO MERGE; NO DEPLOY"
+human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-08 - FINANCIAL DIAGNOSIS PROMPT STATUS/ALIGNMENT CONTRACT ONLY; NO FORMATTER CHANGES; NO BUILDALIGNMENT CHANGE; NO M9/ARR LOADERS; NO POST-GENERATION VALIDATOR; NO OPENAI RETRY; NO PLANNER; NO ROUTING; NO SQL; NO LIVE_DB; NO MERGE; NO DEPLOY"
 
 implementation_authorized: YES
 merge_authorized: NO
@@ -16,479 +17,354 @@ live_db_authorized: NO
 
 max_attempts: 1
 
-base_main_sha: 7686c093724550da184ae3329a56b96a85a1c217
+base_main_sha: 952ba1b5a44e1c9410a15643d1c7d7feb30b4905
 
 audit_report_path: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-CAUSALITY-ALIGNMENT-001.md
-result_report_path: docs/dev-loop/reports/FIX-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-M9-PRETRUNCATE-COUNT-001.md
-
-rejected_reference_implementation: 3ef8579ac76e1372ee1a087be4604543e15e0775
-rejected_reference_decision: 153c8edf
+result_report_path: docs/dev-loop/reports/FIX-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-PROMPT-STATUS-ALIGNMENT-001.md
 
 ## Objetivo único
 
-Implementar correctamente la semántica del formatter M9 para
-financial_diagnosis sin introducir un conteo engañoso después del
-truncate de contexto.
+Endurecer únicamente el contrato de prompt de financial_diagnosis
+para que el LLM trate como hechos obligatorios los estados
+deterministas ya calculados.
 
-Este FIX reemplaza completamente la implementación rechazada:
+NO cambiar evidencia.
+NO cambiar formatter.
+NO cambiar buildAlignment().
+NO implementar validator post-generation.
 
-3ef8579ac76e1372ee1a087be4604543e15e0775
+## Evidencia LIVE confirmada
 
-Esa implementación NO está en main y NO debe mergearse.
+Commit LIVE:
 
-Puede inspeccionarse únicamente como referencia.
+952ba1b5a44e1c9410a15643d1c7d7feb30b4905
 
-NO hacer cherry-pick completo.
+Pregunta:
 
-## Dos defects que este replacement debe cerrar juntos
+¿Por qué cayó el ingreso?
 
-### D1 — ambigüedad original
+Respuesta LIVE incluyó:
 
-En main, formatM9Family() puede representar:
+1.
+"El delta ingreso en M9 muestra una disminución significativa,
+lo que puede estar relacionado con la disminución en la venta."
 
-dejaron
-mas
-disminuyeron
+2.
+"el bloque M9 se refiere a un periodo diferente
+(2026-08 vs 2026-09)."
 
-como simplemente:
+3.
+"La caída en el ingreso puede estar relacionada con
+la disminución en la venta"
 
-"presentes"
+Pero físicamente:
 
-aunque los arrays estén vacíos.
+IGF = 2026-09
+ARR = 2026-09
+M9 = 2026-08 -> 2026-09
 
-Eso permite que BUCKET_EXISTS se interprete como:
+buildAlignment():
 
-"hubo cambios"
+alignment.status = comparable
 
-Debe corregirse.
+Por tanto el modelo contradijo un hecho determinista.
 
-### D2 — defecto introducido en implementación rechazada
+## Root físico
 
-La implementación rechazada intentó mostrar:
+FINANCIAL_DIAGNOSIS_SYSTEM_ADDENDUM actualmente dice:
 
-clientes=N
+"Si alignment.status es mismatch, no trates los cortes como el mismo mes."
 
-pero la cadena física fue:
+Pero no contiene la regla inversa obligatoria:
 
-mapM9Family
--> truncateM9Datos
--> clientes.slice(0, 3)
--> formatM9Bucket
--> bucket.clientes.length
+Si alignment.status=comparable,
+NO puedes declarar mismatch,
+periodo diferente que limite alineación,
+ni falta de comparabilidad.
 
-Por tanto:
+buildFinancialDiagnosisPrompt() actualmente termina:
 
-payload clientes = 17
+"Declara limitaciones y period mismatch si existen."
 
-podía terminar como:
+Eso permite al LLM decidir semánticamente si "existe",
+aunque buildAlignment ya lo decidió.
 
-clientes=3
+## Invariantes
 
-Eso es falso como conteo del payload.
+DETERMINISTIC_STATUS > LLM_INTERPRETATION
 
-El test anterior usó exactamente 3 clientes y no detectó el defecto.
+alignment.status=comparable
+=> MUST describe comparable
 
-## Invariante crítica
+alignment.status=comparable
+=> MUST NOT claim:
+   mismatch
+   periodo diferente que limita comparación
+   falta de alineación
+   period mismatch
 
-PAYLOAD_CLIENT_COUNT
-!=
-CONTEXT_SAMPLE_COUNT
-!=
-UNIVERSE_CLIENT_COUNT
+alignment.status=mismatch
+=> MUST describe mismatch
 
-Este FIX solo puede conocer con certeza:
+SOURCE_AVAILABLE
+=> MUST NOT be rewritten as missing/unavailable.
 
-PAYLOAD_CLIENT_COUNT
-
-antes de:
-
-slice(0, 3)
-
-y:
-
-CONTEXT_SAMPLE_COUNT
-
-después del truncate.
-
-NO afirmar:
-
-UNIVERSE_CLIENT_COUNT
-
-porque aguas arriba M9 puede haber aplicado selección/corte propio.
-
-## Modelo requerido
-
-Antes de truncar cada bucket relevante preservar un metadata
-equivalente a:
-
-payload_client_count
-
-Luego del truncate puede preservarse:
-
-sample_client_count
-
-y:
-
-clientes_truncated
-
-No es obligatorio usar exactamente esos nombres si existe una forma
-más compatible con el shape actual, pero la semántica debe ser
-inequívoca.
-
-### Caso crítico obligatorio
-
-Input al financial diagnosis:
-
-clientes.length = 17
-
-Después de truncate:
-
-sample.length = 3
-
-Contexto esperado equivalente a:
-
-payload_client_count=17
-sample_client_count=3
-truncated=YES
-state=NONEMPTY
-
-NO:
-
-clientes=3
-
-como si fuera el conteo completo del payload.
-
-NO:
-
-total_clientes=17
-
-porque no prueba universo total M9.
-
-## Caso <=3
-
-Input:
-
-clientes.length=2
-
-Esperado:
-
-payload_client_count=2
-sample_client_count=2
-truncated=NO
-state=NONEMPTY
-
-## Caso vacío
-
-Input:
-
-clientes=[]
-
-Esperado:
-
-payload_client_count=0
-sample_client_count=0
-truncated=NO
-state=EMPTY
-
-BUCKET_EMPTY no significa:
-
-sin cambio global
-
-Solo significa:
-
-ese bucket del payload está vacío.
-
-## Caso bucket no existente
-
-Si el bucket no existe físicamente:
-
-exists=NO
-
-payload_client_count debe ser:
-
-UNAVAILABLE
-
-o equivalente.
-
-NO fabricar 0.
-
-## Formatter requerido
-
-Eliminar la ambigüedad:
-
-"dejaron/mas/disminuyeron presentes"
-
-Distinguir al menos:
-
-exists
-state EMPTY/NONEMPTY
-payload_client_count
-sample_client_count
-truncated
-
-cuando dichos valores estén físicamente disponibles.
-
-## Totales numéricos
-
-Mantener el modelo correcto de la implementación rechazada:
-
-Delta Venta:
-totalDeltaKg
-
-Delta Descuento:
-totalDeltaRatio
-
-Delta Ingreso:
-totalDeltaIngreso
-
-Solo NUMERIC_AVAILABLE si:
-
-value != null
-y
-Number.isFinite(Number(value))
-
-0 real sigue siendo 0.
-
-null no es 0.
-
-No inventar total.
-
-## source_coercion
-
-Conservar la mejora semántica:
-
-source_coercion debe estar etiquetado como:
+SOURCE_PARTIAL
+=> exact result unavailable only according to missing_inputs.
+=> MUST NOT invent reason outside missing_inputs.
 
 CONVENCION_ESTRUCTURAL
+=> MUST NOT become:
+   "el periodo no tiene clientes"
+   "ausencia de clientes"
+   DATA_NOT_FOUND
 
-y quedar claro que:
+NO_CAUSAL_EVIDENCE
+=> MUST NOT claim:
+   debido a
+   causó
+   provocó
+   explica
+   puede estar relacionado con
+   podría indicar la causa
+   sugiere que X ocasionó Y
 
-- describe reglas cliente-a-cliente / estructurales
-- NO significa que el periodo no tenga clientes
-- NO significa DATA_NOT_FOUND
-- NO significa ausencia global de evidencia
+Coexistencia/correlación descriptiva no prueba causalidad.
 
-No cambiar la semántica física del COALESCE.
+## North Star LIVE
 
-## SOURCE_PARTIAL
+Para los datos actuales:
 
-Preservar Root 2:
+IGF:
+venta 1506.3507 ton
+margen 7.1248 $/kg
 
-NO DISPONIBLE exacto
+ARR:
+proyección 1469.36 ton
 
-missing_inputs
+M9:
+2026-08 -> 2026-09
+delta ingreso disminuyeron 5906844.3468 MXN
+delta venta disminuyeron 1059160.2600 kg
 
-null no es 0
+Permitido:
 
-No degradar a SOURCE_AVAILABLE.
+"M9 registra una disminución de Delta Ingreso y una disminución
+de Delta Venta en el mismo par de periodos."
 
-## DATA_NOT_FOUND / ERROR / RESTRICTED
+NO permitido:
 
-Preservar verdad:
+"La caída del ingreso puede estar relacionada con la disminución
+de la venta."
 
-NO DISPONIBLE
+Permitido:
 
-No fabricar buckets.
+"IGF y ARR muestran cifras distintas para objetos distintos."
 
-No fabricar 0.
+NO permitido:
 
-## No causalidad
+"la diferencia podría indicar la causa del ingreso."
 
-El formatter no debe introducir:
+La conclusión debe reconocer:
 
-causó
-provocó
-explica
-afectó el ingreso
-responsable de
+"Con estas fuentes no puedo determinar por qué cayó el ingreso
+ni atribuir causalidad a venta, descuento o clientes."
 
-Puede decir únicamente hechos estructurados.
+No exigir literal exacto si existe redacción equivalente.
 
-## Prompt y OpenAI fuera de alcance
+## Prompt contract requerido
 
-NO modificar:
+El prompt debe incluir un bloque determinista generado desde
+assembled, equivalente conceptualmente a:
 
-FINANCIAL_DIAGNOSIS_SYSTEM_ADDENDUM
-buildFinancialDiagnosisPrompt
-openaiDirectorIaChat
-buildFinancialDiagnosisChatResult
+FINANCIAL_DIAGNOSIS_CONTROL
 
-No post-generation validator.
+ALIGNMENT_STATUS=comparable
 
-No retry OpenAI.
+REQUIRED:
+- tratar IGF 2026-09 / ARR 2026-09 /
+  M9 2026-08->2026-09 como comparables
+  según buildAlignment.
 
-La desobediencia causal y alignment serán FIX posteriores.
+FORBIDDEN:
+- decir que M9 tiene "periodo diferente" que limita comparación
+- declarar period mismatch
 
-## Alignment congelado
+CAUSAL_EVIDENCE=NONE
 
-NO cambiar:
+REQUIRED:
+- si preguntan "por qué", declarar que las fuentes no prueban causa.
 
-buildAlignment()
+FORBIDDEN:
+- inferir que Delta Venta causa Delta Ingreso
+- inferir causalidad por simultaneidad.
 
-Fixture:
+Puede implementarse con helper local de prompt dentro de:
 
-IGF 2026-09
-ARR 2026-09
-M9 2026-08 -> 2026-09
+lib/director-ia-financial-diagnosis.js
 
-debe seguir:
+No modificar evidencia ni context formatter.
 
-comparable
+## Status de fuentes
 
-## ARR Root 1 congelado
+El contrato también debe anclar los estados de:
 
-NO cambiar ARR.
+IGF
+ARR
+M9
+M9 venta
+M9 descuento
+M9 ingreso
 
-observed
-!=
-projected
-!=
-previous month
-!=
-IGF commitment
+Ejemplo:
 
-## M9 Root 2 congelado
+M9_DELTA_INGRESO_STATUS=SOURCE_AVAILABLE
 
-NO tocar:
+No permitir que el modelo lo convierta en unavailable.
 
-lib/director-ia-m9-deltas.js
+Para SOURCE_PARTIAL:
 
-Preservar:
+usar exclusivamente missing_inputs físicos.
 
-MISSING != ZERO
+No inventar "ausencia de clientes" si missing_inputs no lo dice.
 
-KNOWN_ZERO sigue siendo 0 donde ya está físicamente probado.
+## Tensión
+
+"Tensión" solo puede significar:
+
+diferencia descriptiva entre objetos/fuentes.
+
+No puede transformarse en:
+
+causa
+driver
+explicación
+"podría indicar"
+"puede estar relacionado"
 
 ## BEFORE requerido
 
 B-001:
-base main todavía usa semántica "presentes" o equivalente ambigua.
+system prompt tiene regla mismatch negativa pero no comparable positiva.
 
 B-002:
-rejected implementation eliminó "presentes" pero contó después del
-truncate.
+user prompt dice "period mismatch si existen" sin anclarlo
+obligatoriamente a alignment.status.
 
 B-003:
-fixture 17 clientes en rejected implementation produciría count=3.
+LIVE comparable produjo falso period mismatch.
 
 B-004:
-el metadata de count original se pierde después de slice(0,3).
+LIVE usó "puede estar relacionado" pese a no_causalidad.
 
 B-005:
-PARTIAL sigue correcto en base.
+LIVE atribuyó posible relación Delta Venta -> Delta Ingreso.
 
 B-006:
-alignment comparable sigue correcto en base.
+buildAlignment ya produce comparable correctamente y no debe cambiar.
 
 ## Regresiones obligatorias
 
-R-PRECOUNT-001 base ambiguity reproduced
-002 rejected post-truncate count defect reproduced/reference-proved
-003 17 payload clients -> payload_count=17
-004 17 payload clients -> sample_count=3
-005 17 payload clients -> truncated=YES
-006 17 payload clients -> state=NONEMPTY
-007 output never represents 3 as full payload count
-008 output never calls 17 universe total
-009 4 payload clients -> payload_count=4
-010 4 payload clients -> sample_count=3
-011 3 payload clients -> payload_count=3
-012 3 payload clients -> sample_count=3
-013 3 payload clients -> truncated=NO
-014 2 payload clients -> 2/2
-015 1 payload client -> 1/1
-016 0 payload clients -> 0/0 EMPTY
-017 missing bucket -> exists=NO
-018 missing bucket -> payload count unavailable
-019 bucket exists distinct from bucket nonempty
-020 EMPTY does not claim global "sin cambios"
-021 no literal ambiguous "presentes"
-022 no literal "presentan cambios"
-023 no literal "ausencia de clientes" from formatter
-024 source_coercion labeled CONVENCION_ESTRUCTURAL
-025 coercion explicitly not DATA_NOT_FOUND
-026 coercion explicitly not period-without-clients
-027 venta correct numeric total field
-028 descuento correct numeric total field
-029 ingreso correct numeric total field
-030 numeric total 0 preserved
-031 numeric total null not zero
-032 SOURCE_PARTIAL preserved
-033 partial missing_inputs preserved
-034 DATA_NOT_FOUND preserved
-035 SOURCE_ERROR preserved
-036 SOURCE_RESTRICTED preserved
-037 no invented clients
-038 no invented totals
-039 no causal wording
-040 alignment comparable unchanged
-041 alignment mismatch unchanged
-042 ARR Root1 regression PASS
-043 M9 Root2 missing-not-zero PASS
-044 known structural zero PASS
-045 planner unchanged
-046 routing unchanged
-047 server unchanged
-048 SQL/schema/dependencies unchanged
-049 no post-generation validator
-050 no prompt redesign
-051 existing financial diagnosis tests pass
-052 existing M9 tests pass
-053 existing ARR tests pass
-054 focal >3 test cannot pass if count occurs post-truncate
-055 NEW FAILURE = 0
+R-PROMPT-001 comparable genera contrato REQUIRED comparable
+002 comparable genera FORBIDDEN mismatch
+003 comparable prohíbe "periodo diferente que limita"
+004 mismatch genera REQUIRED mismatch
+005 mismatch no genera REQUIRED comparable
+006 alignment.status tratado como authoritative
+007 IGF status incluido en contrato
+008 ARR status incluido en contrato
+009 M9 aggregate status incluido
+010 delta_venta status incluido
+011 delta_descuento status incluido
+012 delta_ingreso status incluido
+013 SOURCE_AVAILABLE no puede describirse como missing
+014 SOURCE_PARTIAL usa missing_inputs
+015 SOURCE_PARTIAL no inventa missing reason
+016 structural convention no significa periodo sin clientes
+017 structural convention no significa DATA_NOT_FOUND
+018 no causal evidence queda explícito
+019 "por qué" exige declaración de no causa probada
+020 Delta Venta y Delta Ingreso pueden coexistir descriptivamente
+021 coexistencia no autoriza causalidad
+022 prohíbe "puede estar relacionado"
+023 prohíbe "podría indicar la causa"
+024 prohíbe "debido a" como atribución causal
+025 tensión queda definida como diferencia descriptiva
+026 tensión no es driver
+027 no hipótesis N5
+028 no responsable
+029 no impacto causal inventado
+030 formatter output unchanged
+031 truncate/count semantics unchanged
+032 buildAlignment unchanged
+033 assemble evidence unchanged
+034 M9 loaders unchanged
+035 ARR loaders unchanged
+036 Root1 ARR observed/projected PASS
+037 Root2 M9 missing-not-zero PASS
+038 17/3 pretruncate regression PASS
+039 no post-generation validator
+040 no retry OpenAI
+041 no nueva llamada OpenAI
+042 buildFinancialDiagnosisChatResult unchanged
+043 planner unchanged
+044 routing unchanged
+045 server unchanged
+046 SQL/schema/dependencies unchanged
+047 existing FD tests pass
+048 existing M9 formatter/pretruncate tests pass
+049 existing M9 tests pass
+050 existing ARR tests pass
+051 Tier 1 PASS
+052 pre-deploy --gate PASS
+053 NEW FAILURE = 0
 
-## Test crítico obligatorio
-
-Debe existir un fixture de EXACTAMENTE:
-
-17 clientes
-
-y comprobar simultáneamente:
-
-payload count = 17
-sample count = 3
-truncated = YES
-
-El test debe fallar si el formatter obtiene el payload count usando:
-
-bucket.clientes.length
-
-DESPUÉS de truncateM9Datos.
-
-También agregar caso:
-
-4 -> payload 4 / sample 3
-
-para cubrir el borde inmediatamente superior al límite.
-
-## Implementación permitida
-
-Producto:
+## Archivos de producto permitidos
 
 lib/director-ia-financial-diagnosis.js
 
-Puede modificar:
+Dentro de ese archivo solo puede modificarse:
+
+FINANCIAL_DIAGNOSIS_SYSTEM_ADDENDUM
+buildFinancialDiagnosisPrompt()
+
+y un helper local nuevo usado exclusivamente para construir
+el contrato del prompt.
+
+## Congelado dentro del mismo archivo
+
+NO modificar:
 
 truncateM9Datos
 mapM9Family
+aggregateM9
+buildAlignment
+collectLimitations
+assembleFinancialDiagnosisEvidence
+loadFinancialDiagnosisForChat
+formatIgfPayload
+formatArrPayload
 formatM9Bucket
+formatM9StructuralConvention
 formatM9Family
+formatFinancialDiagnosisContext
+buildFinancialDiagnosisChatResult
+shouldAbortForAuthz
 
-solo dentro del mismo archivo si es necesario.
+Si requiere cambiar alguno:
 
-No mover lógica a loaders.
+STOP.
 
 ## Test focal
 
 Preferentemente:
 
-test/director-ia-financial-diagnosis-m9-pretruncate-count.test.js
+test/director-ia-financial-diagnosis-prompt-status-alignment.test.js
 
 ## Gobernanza
 
 docs/dev-loop/CURRENT_TASK.md
-docs/dev-loop/reports/FIX-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-M9-PRETRUNCATE-COUNT-001.md
+docs/dev-loop/reports/FIX-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-PROMPT-STATUS-ALIGNMENT-001.md
 
 ## Prohibido
 
@@ -504,28 +380,16 @@ commercial_state
 package.json
 package-lock.json
 
+NO validator post-generation.
+NO scanner de respuesta.
+NO rewrite de respuesta.
+NO fallback determinista.
+NO segundo llamado OpenAI.
+NO retry.
 NO SQL.
 NO schema.
 NO LIVE_DB.
-NO nueva dependencia.
-
-## Rejected branch usage
-
-Se permite:
-
-git show 3ef8579ac76e1372ee1a087be4604543e15e0775
-
-para estudiar la implementación descartada.
-
-NO:
-
-git cherry-pick 3ef8579ac76e1372ee1a087be4604543e15e0775
-
-NO basar la nueva rama en la rama rechazada.
-
-NO merge de la rama rechazada.
-
-Reimplementar limpio desde base_main_sha.
+NO dependencia nueva.
 
 ## Suites
 
@@ -533,6 +397,7 @@ Ejecutar:
 
 test focal
 financial diagnosis existentes
+M9 formatter/pretruncate
 M9
 ARR Root1
 ARR
@@ -548,29 +413,25 @@ pre-deploy --gate
 
 NEW FAILURE=0.
 
-Si existe fallo preexistente:
-
-probar contra base_main_sha.
-
 ## STOP CONDITIONS
 
 STOP si requiere:
 
-- tocar loaders M9
-- redefinir universo total de clientes
-- cambiar 80/20 upstream
-- SQL
-- schema
+- modificar buildAlignment
+- modificar formatter
+- modificar loaders
+- modificar evidencia
+- validator post-generation
+- retry OpenAI
+- segunda llamada OpenAI
 - planner
 - routing
 - server
-- ARR
-- prompt redesign
-- post-generation validator
-- nueva llamada OpenAI
+- SQL
+- schema
 - LIVE_DB
-- dependency
-- mezclar FIX 2 o FIX 3 de la auditoría
+- dependencies
+- mezclar el siguiente validator FIX
 
 ## Reporte requerido
 
@@ -580,65 +441,52 @@ IMPLEMENTATION_SHA:
 
 BASE_MAIN_SHA:
 
-REJECTED_REFERENCE:
-
 BEFORE:
 
-PRETRUNCATE_COUNT_MODEL:
+PROMPT_CONTROL_MODEL:
 
-PAYLOAD_CLIENT_COUNT_MODEL:
+ALIGNMENT_AUTHORITY_MODEL:
 
-SAMPLE_CLIENT_COUNT_MODEL:
+COMPARABLE_MODEL:
 
-TRUNCATION_MODEL:
+MISMATCH_MODEL:
 
-UNIVERSE_COUNT_CLAIMED:
-YES / NO
-
-FORMATTER_MODEL:
-
-SOURCE_COERCION_MODEL:
+SOURCE_STATUS_MODEL:
 
 PARTIAL_MODEL:
 
-NUMERIC_TOTAL_MODEL:
+CAUSALITY_MODEL:
 
-17_CLIENT_FIXTURE:
+TENSION_MODEL:
 
-4_CLIENT_FIXTURE:
+LIVE_NORTH_STAR_MODEL:
 
-001..055:
+001..053:
 
 SUITES:
 
 FILES:
 RISKS:
 
-REJECTED_IMPLEMENTATION_MERGED:
+FORMATTER_CHANGED:
 YES / NO
 
-REJECTED_IMPLEMENTATION_CHERRYPICKED:
+BUILD_ALIGNMENT_CHANGED:
 YES / NO
 
-FORMATTER_AMBIGUITY_FIXED:
-YES / NO
-
-POST_TRUNCATE_FALSE_COUNT_FIXED:
-YES / NO
-
-PROMPT_REDESIGNED:
+EVIDENCE_CHANGED:
 YES / NO
 
 POST_GENERATION_VALIDATOR_ADDED:
+YES / NO
+
+OPENAI_RETRY_ADDED:
 YES / NO
 
 M9_LOADERS_CHANGED:
 YES / NO
 
 ARR_CHANGED:
-YES / NO
-
-ALIGNMENT_CHANGED:
 YES / NO
 
 PLANNER_CHANGED:
@@ -673,7 +521,7 @@ Si PASS:
 
 CURRENT_TASK -> DONE_PENDING_REVIEW
 
-Commit en nueva rama FIX.
+Commit en rama FIX.
 
 STOP.
 
@@ -690,4 +538,3 @@ CURRENT_TASK -> STOPPED
 Documentar razón.
 
 STOP.
-closure_reason: "HUMAN REVIEW PASS. Replacement implementation fixes the M9 formatter ambiguity and preserves payload_client_count before context truncation. Review HEAD contains only report documentation after IMPLEMENTATION_SHA. Fixtures 17->17/3/truncated and 4->4/3/truncated close the rejected post-truncate counting defect. Payload count is not represented as universe-wide M9 client count. ARR Root 1 and M9 Root 2 remain frozen."
