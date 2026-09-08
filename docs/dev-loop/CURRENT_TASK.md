@@ -3,8 +3,7 @@ task_id: FIX-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-M9-PRETRUNCATE-COUNT-001
 task_type: FIX
 mode: REGRESSION_FIRST_REPLACEMENT
 
-status: DONE_PENDING_REVIEW
-
+status: CLOSED
 authorized_by: "Human Approver"
 authorized_at: "2026-09-08T14:05:20-06:00"
 
@@ -691,3 +690,4 @@ CURRENT_TASK -> STOPPED
 Documentar razón.
 
 STOP.
+closure_reason: "HUMAN REVIEW PASS. Replacement implementation fixes the M9 formatter ambiguity and preserves payload_client_count before context truncation. Review HEAD contains only report documentation after IMPLEMENTATION_SHA. Fixtures 17->17/3/truncated and 4->4/3/truncated close the rejected post-truncate counting defect. Payload count is not represented as universe-wide M9 client count. ARR Root 1 and M9 Root 2 remain frozen."
