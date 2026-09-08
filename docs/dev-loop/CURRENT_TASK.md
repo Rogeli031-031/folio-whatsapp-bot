@@ -3,8 +3,7 @@ task_id: FIX-DIRECTOR-IA-FOLIO-POST-CONCEPT-ANALYTIC-TAIL-001
 task_type: FIX
 mode: REGRESSION_FIRST
 
-status: DONE_PENDING_REVIEW
-
+status: CLOSED
 authorized_by: "Human Approver"
 authorized_at: "2026-09-07T18:03:45-06:00"
 
@@ -536,3 +535,4 @@ NO push main.
 NO deploy.
 NO LIVE_DB.
 NO next task.
+closure_reason: "HUMAN REVIEW MERGE_OK. POST_PERIOD_DE_TO_TEXT_END now separates recognized post-concept analytic tails from BUSINESS DATA. CASE A-H, North Star, ESTAN, protected-span lexical immutability, Option B NULL semantics, full-set aggregation, CANCELADO, RANGE/ANY and required regressions pass. NEW FAILURE = 0. Declared full-span-tail collision is theoretical/non-blocking and not treated as a production acceptance case."
