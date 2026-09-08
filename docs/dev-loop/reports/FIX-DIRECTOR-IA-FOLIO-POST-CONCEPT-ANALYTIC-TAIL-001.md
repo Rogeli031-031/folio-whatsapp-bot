@@ -1,6 +1,6 @@
 # FIX-DIRECTOR-IA-FOLIO-POST-CONCEPT-ANALYTIC-TAIL-001
 
-IMPLEMENTATION_SHA: (set after commit)
+IMPLEMENTATION_SHA: de91f6e757bea34911ba3986df1e241dbd0741c1
 
 BEFORE: `d4291bc0` / HEAD de producto idéntico. `POST_PERIOD_DE_TO_TEXT_END` usa `END=text.length`. CASE A → `liquidaciones suma los montos en un acumulado por mes` AGGREGATE SUM GROUP_BY=NONE cumulative=NO. CASE H → `liquidaciones dame el monto por mes y acumulado` AGGREGATE SUM GROUP_BY=NONE cumulative=NO. CASE C, North Star y ESTAN ya pasaban.
 
