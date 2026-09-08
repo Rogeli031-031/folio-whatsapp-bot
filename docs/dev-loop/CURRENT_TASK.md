@@ -3,7 +3,7 @@ task_id: AUDIT-DIRECTOR-IA-HISTORICAL-MARGIN-COMPARISON-500-001
 task_type: AUDIT
 mode: READ_ONLY
 
-status: AUTHORIZED
+status: DONE_PENDING_REVIEW
 
 authorized_by: "Human Approver"
 authorized_at: "2026-09-08T16:53:12-06:00"
