@@ -3,8 +3,7 @@ task_id: AUDIT-DIRECTOR-IA-HISTORICAL-MARGIN-COMPARISON-500-001
 task_type: AUDIT
 mode: READ_ONLY
 
-status: DONE_PENDING_REVIEW
-
+status: CLOSED
 authorized_by: "Human Approver"
 authorized_at: "2026-09-08T16:53:12-06:00"
 
@@ -330,3 +329,4 @@ No producto.
 No LIVE_DB.
 No merge.
 No deploy.
+closure_reason: "HUMAN REVIEW PASS. Root cause confirmed: compare_months can return ok:false without explicit HTTP status; handlePostChat then synthesizes HTTP 500. Parser, routing, loaders, null semantics and database are not the demonstrated root cause."
