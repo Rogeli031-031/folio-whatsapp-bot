@@ -3,8 +3,7 @@ task_id: FIX-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-PROMPT-STATUS-ALIGNMENT-001
 task_type: FIX
 mode: REGRESSION_FIRST
 
-status: DONE_PENDING_REVIEW
-
+status: CLOSED
 authorized_by: "Human Approver"
 authorized_at: "2026-09-08T15:02:16-06:00"
 
@@ -538,3 +537,4 @@ CURRENT_TASK -> STOPPED
 Documentar razón.
 
 STOP.
+closure_reason: "HUMAN REVIEW PASS. Financial Diagnosis prompt now anchors deterministic alignment/source statuses and explicitly forbids causal reinterpretation when CAUSAL_EVIDENCE=NONE. Formatter, buildAlignment, evidence, loaders and post-generation behavior remain unchanged. Residual risk is intentional: prompt-only enforcement may still be disobeyed by the LLM; LIVE verification will determine whether the separate deterministic validator FIX is required."
