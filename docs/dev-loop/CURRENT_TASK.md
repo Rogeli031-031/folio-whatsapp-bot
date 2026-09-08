@@ -3,7 +3,7 @@ task_id: AUDIT-DIRECTOR-IA-ARR-PROJECTION-SEMANTICS-001
 task_type: AUDIT
 mode: READ_ONLY_PHYSICAL_TRACE
 
-status: AUTHORIZED
+status: DONE_PENDING_REVIEW
 
 authorized_by: "Human Approver"
 authorized_at: "2026-09-08T10:01:57-06:00"
