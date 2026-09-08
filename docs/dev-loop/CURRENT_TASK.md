@@ -1,332 +1,259 @@
-task_id: AUDIT-DIRECTOR-IA-HISTORICAL-MARGIN-COMPARISON-500-001
+task_id: FIX-DIRECTOR-IA-HISTORICAL-MARGIN-COMPARE-HTTP-STATUS-001
 
-task_type: AUDIT
-mode: READ_ONLY
+task_type: FIX
+mode: REGRESSION_FIRST
 
-status: CLOSED
+status: AUTHORIZED
+
 authorized_by: "Human Approver"
-authorized_at: "2026-09-08T16:53:12-06:00"
+authorized_at: "2026-09-08T17:05:28-06:00"
 
-human_authorization: "AUDIT ONLY. TRACE HISTORICAL MARGIN MAY-VS-JUNE HTTP 500. NO IMPLEMENTATION. NO PRODUCT CODE. NO LIVE_DB. NO MERGE MAIN. NO DEPLOY."
+human_authorization: "AUTHORIZED_BY_HUMAN - HISTORICAL MARGIN compare_months HTTP STATUS ONLY. MAY SHOW EXISTING FORECAST CONTEXT TRUTHFULLY. NO FORECAST-TO-FORECAST DELTA. NO SQL. NO ROUTING. NO PLANNER. NO GENERIC HTTP HANDLER CHANGE. NO LIVE_DB. NO MERGE. NO DEPLOY."
 
-implementation_authorized: NO
+implementation_authorized: YES
 merge_authorized: NO
 deploy_authorized: NO
 live_db_authorized: NO
 
 max_attempts: 1
 
-base_main_sha: c78dd860ad7b7cebefc0e130c2b6c643fc111c61
-result_report_path: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-HISTORICAL-MARGIN-COMPARISON-500-001.md
+base_main_sha: 8a59b251929b617890b4b4f5638df75f371e92ee
+result_report_path: docs/dev-loop/reports/FIX-DIRECTOR-IA-HISTORICAL-MARGIN-COMPARE-HTTP-STATUS-001.md
 
-## Producción observada
+## Problema demostrado
 
-Planta: Acapulco.
+North Star Acapulco:
 
-Caso A:
-
-Pregunta:
 cual fue el margen en mayo?
 
-Resultado:
 PASS.
 
-Director IA devuelve margen mayo aproximadamente:
+Mayo cerrado sin FINAL puede responder con contexto FORECAST
+vigente, aproximadamente 7.35 $/kg, claramente NO presentado
+como cierre real.
 
-7.35 $/kg
+Pero:
 
-y lo etiqueta como FORECAST / vista vigente,
-NO como cierre FINAL.
-
-Caso B:
-
-Pregunta:
 cual fue el cambio en el margen entre mayo y junio?
 
-Resultado:
-HTTP 500 reproducible.
+produce HTTP 500.
+
+Auditoría física:
+
+- mismo intent: historical_margin
+- parser correcto
+- operation compare_months correcta
+- no throw
+- no Promise rejection
+- DB/parser/routing no demostrados como bug
+
+Root:
+
+compare_months puede producir:
+
+ok:false
+code: DATA_NOT_FOUND
+veracity: DATA_NOT_FOUND
+
+pero SIN status.
+
+handlePostChat usa:
+
+result.status || (result.ok ? 200 : 500)
+
+y sintetiza 500.
 
 ## Objetivo único
 
-Localizar físicamente la primera divergencia y,
-si es reproducible sin LIVE_DB,
-la primera excepción exacta que convierte una pregunta
-válida de comparación histórica de margen en HTTP 500.
+Eliminar el HTTP 500 sintético de compare_months
+preservando la semántica histórica.
 
-NO arreglar.
+NO ampliar todavía la capacidad a delta
+FORECAST-vs-FORECAST.
 
-## Pregunta ejecutiva esperada
+## Fuente del arreglo
 
-La pregunta representa conceptualmente:
+Corregir en:
 
-plant = Acapulco
-metric = margen de planta
-period_a = 2026-05
-period_b = 2026-06
-operation = period_b - period_a
+lib/director-ia-historical-margin.js
 
-Pero NO asumir que el runtime la interpreta así.
-Probarlo.
+NO corregir globalmente en handlePostChat.
 
-## Trazado obligatorio
+El productor de historical_margin debe entregar un status
+HTTP explícito y coherente.
 
-Seguir físicamente:
+## Contrato compare_months
 
-POST /chat
-→ handler
-→ askDirectorIa
-→ planner / routing
-→ extracción de periodo(s)
-→ selección de dominio/fuente
-→ loaders
-→ ensamblaje
-→ cálculo/comparación
-→ formatter/prompt
-→ respuesta HTTP
+Todo resultado compare_months debe tener status explícito.
 
-Identificar el primer punto donde el caso comparativo
-difiere del caso de un solo mes.
+### Caso A — ambos periodos FINAL homogéneos
 
-## Escenarios mínimos
+ok=true
+status=200
+SOURCE_AVAILABLE
+comparable=true
+delta_raw permitido
 
-S1:
-cual fue el margen en mayo?
+### Caso B — comparación atendible pero incompleta
 
-S2:
-cual fue el margen en junio?
+Ejemplos:
 
-S3:
+- un periodo FINAL y otro no FINAL
+- NOT_FINAL con forecast_context existente
+- uno válido y otro missing
+- contexto parcial defendible
+
+Debe responder:
+
+status=200
+SOURCE_PARTIAL
+comparable=false
+delta_raw=null
+
+Puede mostrar contexto existente FORECAST por periodo,
+pero siempre etiquetado:
+
+FORECAST
+vista vigente
+NO cierre FINAL
+
+NO calcular delta entre forecasts.
+
+### Caso C — ausencia real
+
+Si ambos periodos carecen realmente de evidencia usable,
+por ejemplo NO_VERSION sin forecast_context:
+
+ok=false
+status=404
+DATA_NOT_FOUND
+
+NO 500.
+
+### Caso D — error real de fuente
+
+SOURCE_ERROR real:
+
+status=500
+
+Preservar error real.
+
+No convertir un SOURCE_ERROR en DATA_NOT_FOUND o 200.
+
+## North Star esperado
+
+Pregunta:
+
 cual fue el cambio en el margen entre mayo y junio?
 
-S4:
-cual fue el cambio en el margen de mayo a junio?
+NO debe mostrar:
 
-S5:
-compara el margen de mayo contra junio
+HTTP 500
 
-No LIVE_DB.
+Si mayo/junio no tienen FINAL homogéneo, respuesta equivalente:
 
-Usar pruebas existentes, stubs, fixtures o probes
-read-only cuando sea posible.
+"Mayo 2026 no tiene un margen FINAL defendible.
+Existe contexto FORECAST vigente de 7.35 $/kg.
 
-No agregar código de producto.
+Junio 2026 [estado defendible].
 
-## Period parser
+No calculo variación histórica porque los dos periodos
+no comparten semántica FINAL homogénea."
 
-Auditar especialmente:
+Si existe forecast de junio, puede mostrarse como FORECAST.
 
-- "entre mayo y junio"
-- "mayo y junio"
-- "de mayo a junio"
-- dos meses explícitos
-- año implícito
-- periodo único vs periodo doble
-- estructuras RANGE si existen
+NO:
 
-Determinar exactamente qué objeto produce el parser/planner:
+"el cambio fue X"
 
-period
-period_a
-period_b
-month
-year
-range
-o cualquier equivalente físico.
+usando FORECAST-vs-FORECAST.
 
-## Margen
-
-Determinar la fuente física que responde:
-
-cual fue el margen en mayo?
-
-y confirmar si junio individual usa la misma fuente.
-
-No convertir FORECAST en FINAL.
-
-No asumir cierre histórico.
-
-Preservar la semántica ya vigente:
+## Preservar
 
 FORECAST != FINAL
-margen = métrica de planta
-descuento/kg = métrica cliente
+ACTUAL_FINANCIAL != FORECAST
+margen = planta
+descuento/kg != margen
+null != 0
+DATA_NOT_FOUND != SOURCE_ERROR
+
+single_month mayo
+single_month junio
+year_max
+year_min
+authorization
+plant resolution
+
+## No tocar
+
+lib/director-ia-chat.js
+handlePostChat
+planner
+routing
+server.js
+SQL
+schema
+dependencies
+Financial Diagnosis
+M9
+ARR
+temporal safety gate
+
+## Regresiones obligatorias
+
+001 reproduce before: compare no status -> synthetic 500
+002 both FINAL -> status 200
+003 both FINAL -> delta_raw correcto
+004 both FINAL -> comparable true
+005 NOT_FINAL + forecast context -> status 200
+006 NOT_FINAL + forecast -> SOURCE_PARTIAL
+007 NOT_FINAL + forecast -> comparable false
+008 NOT_FINAL + forecast -> delta_raw null
+009 forecast context explicitly FORECAST
+010 forecast context not presented FINAL
+011 no forecast-vs-forecast delta
+012 both NO_VERSION -> status 404
+013 both NO_VERSION -> DATA_NOT_FOUND
+014 both NO_VERSION -> not 500
+015 source error -> status 500
+016 source error preserved
+017 one FINAL + one missing -> status 200 partial
+018 one FINAL + one missing -> no delta
+019 one error + usable evidence preserves SOURCE_PARTIAL behavior
+020 every compare_months result has explicit status
+021 single mayo behavior unchanged
+022 single junio behavior unchanged
+023 single usable forecast remains 200
+024 single true missing remains 404
+025 single source error remains 500
+026 parser "entre mayo y junio" unchanged
+027 parser "de mayo a junio" unchanged
+028 compare intent remains historical_margin
+029 no OpenAI
+030 no generic handlePostChat change
+031 no planner change
+032 no routing change
+033 no SQL change
+034 no schema
+035 no dependencies
+036 no LIVE_DB
+037 historical margin focal tests pass
+038 existing historical margin 35/35 preserved
+039 Tier1 pass
+040 pre-deploy gate PASS
+041 NEW FAILURE=0
+
+## Completion
+
+Si PASS:
+
+CURRENT_TASK -> DONE_PENDING_REVIEW
+commit implementation en rama FIX
+reporte append-only
+STOP
 
-## HTTP 500
-
-Determinar:
-
-¿El 500 proviene de excepción lanzada?
-
-¿De Promise rejection?
-
-¿De acceso a undefined/null?
-
-¿De shape inesperado?
-
-¿De parser de periodo?
-
-¿De llamada a loader con argumentos inválidos?
-
-¿De formatter?
-
-¿De OpenAI?
-
-¿De capa HTTP?
-
-Si existe catch que transforma cualquier excepción en
-HTTP 500, identificar:
-
-THROW_SITE
-CATCH_SITE
-ERROR_MESSAGE / ERROR_TYPE
-
-Si no puede obtenerse el mensaje sin producción,
-marcarlo NOT_PROVEN.
-
-No inventar stack trace.
-
-## Comparación
-
-Buscar si ya existe una capacidad física segura para:
-
-margen B - margen A
-
-o si el sistema solo soporta margen de un mes.
-
-Responder:
-
-SINGLE_PERIOD_MARGIN_SUPPORTED
-TWO_PERIOD_MARGIN_SUPPORTED
-MARGIN_DELTA_SUPPORTED
-
-YES / NO / PARTIAL
-
-No implementar capacidad faltante.
-
-## Relación con Financial Diagnosis
-
-Determinar si esta pregunta entra por:
-
-financial_diagnosis
-igf_status
-arr_status
-otro intent
-
-No asumir que pertenece a Financial Diagnosis.
-
-No modificar el temporal safety gate recién cerrado.
-
-## Contrato de ausencia
-
-Verificar que cualquier:
-
-null
-DATA_NOT_FOUND
-SOURCE_PARTIAL
-SOURCE_ERROR
-
-no pueda convertirse accidentalmente en 0.
-
-Especialmente junio.
-
-## Resultado requerido
-
-Entregar exactamente:
-
-AUDIT_RESULT:
-
-QUESTION_SINGLE_MAY_ROUTE:
-QUESTION_SINGLE_JUNE_ROUTE:
-QUESTION_COMPARE_ROUTE:
-
-SINGLE_MAY_INTENT:
-SINGLE_JUNE_INTENT:
-COMPARE_INTENT:
-
-SINGLE_MAY_PERIOD_OBJECT:
-SINGLE_JUNE_PERIOD_OBJECT:
-COMPARE_PERIOD_OBJECT:
-
-SINGLE_PERIOD_MARGIN_SUPPORTED:
-YES / NO
-
-TWO_PERIOD_MARGIN_SUPPORTED:
-YES / NO / PARTIAL
-
-MARGIN_DELTA_SUPPORTED:
-YES / NO / PARTIAL
-
-MAY_MARGIN_SOURCE:
-
-JUNE_MARGIN_SOURCE:
-
-COMPARE_MARGIN_SOURCE:
-
-FIRST_DIVERGENCE:
-
-FIRST_THROW_SITE:
-
-ERROR_TYPE:
-
-ERROR_MESSAGE:
-
-HTTP_500_CATCH_SITE:
-
-OPENAI_CALLED_BEFORE_FAILURE:
-YES / NO / NOT_PROVEN
-
-DB_CALLED_BEFORE_FAILURE:
-YES / NO / NOT_PROVEN
-
-MAY_DATA_REQUIRED:
-YES / NO
-
-JUNE_DATA_REQUIRED:
-YES / NO
-
-JUNE_ABSENCE_COLLAPSES_TO_ZERO:
-YES / NO / NOT_PROVEN
-
-PARSER_BUG:
-YES / NO
-
-ROUTING_BUG:
-YES / NO
-
-PERIOD_MODEL_BUG:
-YES / NO
-
-LOADER_BUG:
-YES / NO
-
-NULL_HANDLING_BUG:
-YES / NO
-
-FORMATTER_BUG:
-YES / NO
-
-HTTP_ERROR_HANDLING_BUG:
-YES / NO
-
-DATA_BUG:
-YES / NO / NOT_PROVEN
-
-CAN_FIX_WITHOUT_NEW_SQL:
-YES / NO / NOT_PROVEN
-
-RECOMMENDED_NEXT_SLICE:
-
-FILES_INSPECTED:
-
-TESTS_RUN:
-
-RISKS:
-
-STOP.
-
-No implementación.
-No producto.
-No LIVE_DB.
 No merge.
+No push main.
 No deploy.
-closure_reason: "HUMAN REVIEW PASS. Root cause confirmed: compare_months can return ok:false without explicit HTTP status; handlePostChat then synthesizes HTTP 500. Parser, routing, loaders, null semantics and database are not the demonstrated root cause."
+No LIVE_DB.
+No siguiente task.
