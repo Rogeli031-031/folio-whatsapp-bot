@@ -1,13 +1,14 @@
-task_id: FIX-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-PROMPT-STATUS-ALIGNMENT-001
+task_id: FIX-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-M9-GROSS-BUCKET-LABELS-001
 
 task_type: FIX
 mode: REGRESSION_FIRST
 
-status: CLOSED
-authorized_by: "Human Approver"
-authorized_at: "2026-09-08T15:02:16-06:00"
+status: AUTHORIZED
 
-human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-08 - FINANCIAL DIAGNOSIS PROMPT STATUS/ALIGNMENT CONTRACT ONLY; NO FORMATTER CHANGES; NO BUILDALIGNMENT CHANGE; NO M9/ARR LOADERS; NO POST-GENERATION VALIDATOR; NO OPENAI RETRY; NO PLANNER; NO ROUTING; NO SQL; NO LIVE_DB; NO MERGE; NO DEPLOY"
+authorized_by: "Human Approver"
+authorized_at: "2026-09-08T15:42:36-06:00"
+
+human_authorization: "AUTHORIZED_BY_HUMAN - FIX M9 GROSS BUCKET SEMANTIC LABELS ONLY; NO NEW NET DELTA; NO M9 SQL/LOADERS; NO ARR; NO BUILDALIGNMENT; NO POST-GENERATION VALIDATOR; NO LIVE_DB; NO MERGE; NO DEPLOY"
 
 implementation_authorized: YES
 merge_authorized: NO
@@ -16,525 +17,245 @@ live_db_authorized: NO
 
 max_attempts: 1
 
-base_main_sha: 952ba1b5a44e1c9410a15643d1c7d7feb30b4905
+base_main_sha: b99ca2f8fc1638a8763edcdd5058d5bb9168ab37
+result_report_path: docs/dev-loop/reports/FIX-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-M9-GROSS-BUCKET-LABELS-001.md
 
-audit_report_path: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-CAUSALITY-ALIGNMENT-001.md
-result_report_path: docs/dev-loop/reports/FIX-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-PROMPT-STATUS-ALIGNMENT-001.md
+## Problema probado
 
-## Objetivo único
+LIVE financial_diagnosis presentó:
 
-Endurecer únicamente el contrato de prompt de financial_diagnosis
-para que el LLM trate como hechos obligatorios los estados
-deterministas ya calculados.
+Delta Venta: Disminución de 1059160.26 kg
 
-NO cambiar evidencia.
-NO cambiar formatter.
-NO cambiar buildAlignment().
-NO implementar validator post-generation.
+La auditoría física demostró:
 
-## Evidencia LIVE confirmada
+1059160.26 kg = datos.disminuyeron.totalDeltaKg
 
-Commit LIVE:
+y significa:
 
-952ba1b5a44e1c9410a15643d1c7d7feb30b4905
+M9_GROSS_DECREASE_BUCKET
 
-Pregunta:
+NO significa:
 
-¿Por qué cayó el ingreso?
-
-Respuesta LIVE incluyó:
-
-1.
-"El delta ingreso en M9 muestra una disminución significativa,
-lo que puede estar relacionado con la disminución en la venta."
-
-2.
-"el bloque M9 se refiere a un periodo diferente
-(2026-08 vs 2026-09)."
-
-3.
-"La caída en el ingreso puede estar relacionada con
-la disminución en la venta"
-
-Pero físicamente:
-
-IGF = 2026-09
-ARR = 2026-09
-M9 = 2026-08 -> 2026-09
-
-buildAlignment():
-
-alignment.status = comparable
-
-Por tanto el modelo contradijo un hecho determinista.
-
-## Root físico
-
-FINANCIAL_DIAGNOSIS_SYSTEM_ADDENDUM actualmente dice:
-
-"Si alignment.status es mismatch, no trates los cortes como el mismo mes."
-
-Pero no contiene la regla inversa obligatoria:
-
-Si alignment.status=comparable,
-NO puedes declarar mismatch,
-periodo diferente que limite alineación,
-ni falta de comparabilidad.
-
-buildFinancialDiagnosisPrompt() actualmente termina:
-
-"Declara limitaciones y period mismatch si existen."
-
-Eso permite al LLM decidir semánticamente si "existe",
-aunque buildAlignment ya lo decidió.
+PLANT_NET_DELTA
+IGF_ARR_GAP
+ARR_FORECAST_DELTA
 
 ## Invariantes
 
-DETERMINISTIC_STATUS > LLM_INTERPRETATION
+M9_GROSS_DECREASE_BUCKET != PLANT_NET_DELTA
 
-alignment.status=comparable
-=> MUST describe comparable
+M9_GROSS_INCREASE_BUCKET != PLANT_NET_DELTA
 
-alignment.status=comparable
-=> MUST NOT claim:
-   mismatch
-   periodo diferente que limita comparación
-   falta de alineación
-   period mismatch
+M9_STOPPED_BUYING_BUCKET != PLANT_NET_DELTA
 
-alignment.status=mismatch
-=> MUST describe mismatch
+IGF_ARR_GAP != M9_DELTA
 
-SOURCE_AVAILABLE
-=> MUST NOT be rewritten as missing/unavailable.
+PLANT_NET_MOM_DELTA = NOT_AVAILABLE en Financial Diagnosis actual.
 
-SOURCE_PARTIAL
-=> exact result unavailable only according to missing_inputs.
-=> MUST NOT invent reason outside missing_inputs.
+No reconstruirlo.
 
-CONVENCION_ESTRUCTURAL
-=> MUST NOT become:
-   "el periodo no tiene clientes"
-   "ausencia de clientes"
-   DATA_NOT_FOUND
+No inventar:
 
-NO_CAUSAL_EVIDENCE
-=> MUST NOT claim:
-   debido a
-   causó
-   provocó
-   explica
-   puede estar relacionado con
-   podría indicar la causa
-   sugiere que X ocasionó Y
+mas - disminuyeron - dejaron
 
-Coexistencia/correlación descriptiva no prueba causalidad.
+aunque matemáticamente pudiera derivarse.
 
-## North Star LIVE
+## Semántica requerida
 
-Para los datos actuales:
+Para delta_venta:
 
-IGF:
-venta 1506.3507 ton
-margen 7.1248 $/kg
+### disminuyeron
 
-ARR:
-proyección 1469.36 ton
+datos.disminuyeron.totalDeltaKg
 
-M9:
-2026-08 -> 2026-09
-delta ingreso disminuyeron 5906844.3468 MXN
-delta venta disminuyeron 1059160.2600 kg
+debe exponerse conceptualmente como:
 
-Permitido:
+GROSS_DECREASE_MAGNITUDE_KG
 
-"M9 registra una disminución de Delta Ingreso y una disminución
-de Delta Venta en el mismo par de periodos."
+Ejemplo LIVE:
 
-NO permitido:
+1059160.26 kg
 
-"La caída del ingreso puede estar relacionada con la disminución
-de la venta."
+significa:
 
-Permitido:
+"suma bruta de las reducciones de clientes del bucket disminuyeron"
 
-"IGF y ARR muestran cifras distintas para objetos distintos."
+NO:
 
-NO permitido:
+"la venta de la planta disminuyó 1059160.26 kg"
 
-"la diferencia podría indicar la causa del ingreso."
+### mas
 
-La conclusión debe reconocer:
+totalDeltaKg debe etiquetarse como:
 
-"Con estas fuentes no puedo determinar por qué cayó el ingreso
-ni atribuir causalidad a venta, descuento o clientes."
+GROSS_INCREASE_MAGNITUDE_KG
 
-No exigir literal exacto si existe redacción equivalente.
+Incluye clientes nuevos según la semántica física actual.
 
-## Prompt contract requerido
+NO es delta neto planta.
 
-El prompt debe incluir un bloque determinista generado desde
-assembled, equivalente conceptualmente a:
+### dejaron
 
-FINANCIAL_DIAGNOSIS_CONTROL
+totalDeltaKg debe etiquetarse como:
 
-ALIGNMENT_STATUS=comparable
+GROSS_STOPPED_BUYING_MAGNITUDE_KG
 
-REQUIRED:
-- tratar IGF 2026-09 / ARR 2026-09 /
-  M9 2026-08->2026-09 como comparables
-  según buildAlignment.
+NO es delta neto planta.
+
+## Contrato de prompt requerido
+
+Debe quedar explícito:
+
+M9_PLANT_NET_DELTA_STATUS=NOT_AVAILABLE
 
 FORBIDDEN:
-- decir que M9 tiene "periodo diferente" que limita comparación
-- declarar period mismatch
 
-CAUSAL_EVIDENCE=NONE
+- "Delta Venta disminuyó X" usando solo disminuyeron.totalDeltaKg
+- "la planta cayó X" usando un bucket M9
+- "la venta neta cayó X" usando un bucket M9
+- equiparar M9 bucket con IGF-ARR gap
 
 REQUIRED:
-- si preguntan "por qué", declarar que las fuentes no prueban causa.
 
-FORBIDDEN:
-- inferir que Delta Venta causa Delta Ingreso
-- inferir causalidad por simultaneidad.
+si se menciona 1059160.26:
 
-Puede implementarse con helper local de prompt dentro de:
+"reducción bruta acumulada del bucket de clientes que disminuyeron"
 
-lib/director-ia-financial-diagnosis.js
+o equivalente.
 
-No modificar evidencia ni context formatter.
+Debe aclararse que otros buckets pueden compensar esa magnitud.
 
-## Status de fuentes
+No afirmar el resultado neto sin fuente física.
 
-El contrato también debe anclar los estados de:
+## IGF vs ARR
 
-IGF
-ARR
-M9
-M9 venta
-M9 descuento
-M9 ingreso
+Preservar separación:
 
-Ejemplo:
+IGF venta = compromiso/objeto IGF
 
-M9_DELTA_INGRESO_STATUS=SOURCE_AVAILABLE
+ARR projected_venta_ton = forecast cierre ARR
 
-No permitir que el modelo lo convierta en unavailable.
+Su diferencia:
 
-Para SOURCE_PARTIAL:
+NO es M9 Delta Venta.
 
-usar exclusivamente missing_inputs físicos.
+Este FIX no necesita calcular ni mostrar automáticamente la brecha.
 
-No inventar "ausencia de clientes" si missing_inputs no lo dice.
-
-## Tensión
-
-"Tensión" solo puede significar:
-
-diferencia descriptiva entre objetos/fuentes.
-
-No puede transformarse en:
-
-causa
-driver
-explicación
-"podría indicar"
-"puede estar relacionado"
-
-## BEFORE requerido
-
-B-001:
-system prompt tiene regla mismatch negativa pero no comparable positiva.
-
-B-002:
-user prompt dice "period mismatch si existen" sin anclarlo
-obligatoriamente a alignment.status.
-
-B-003:
-LIVE comparable produjo falso period mismatch.
-
-B-004:
-LIVE usó "puede estar relacionado" pese a no_causalidad.
-
-B-005:
-LIVE atribuyó posible relación Delta Venta -> Delta Ingreso.
-
-B-006:
-buildAlignment ya produce comparable correctamente y no debe cambiar.
-
-## Regresiones obligatorias
-
-R-PROMPT-001 comparable genera contrato REQUIRED comparable
-002 comparable genera FORBIDDEN mismatch
-003 comparable prohíbe "periodo diferente que limita"
-004 mismatch genera REQUIRED mismatch
-005 mismatch no genera REQUIRED comparable
-006 alignment.status tratado como authoritative
-007 IGF status incluido en contrato
-008 ARR status incluido en contrato
-009 M9 aggregate status incluido
-010 delta_venta status incluido
-011 delta_descuento status incluido
-012 delta_ingreso status incluido
-013 SOURCE_AVAILABLE no puede describirse como missing
-014 SOURCE_PARTIAL usa missing_inputs
-015 SOURCE_PARTIAL no inventa missing reason
-016 structural convention no significa periodo sin clientes
-017 structural convention no significa DATA_NOT_FOUND
-018 no causal evidence queda explícito
-019 "por qué" exige declaración de no causa probada
-020 Delta Venta y Delta Ingreso pueden coexistir descriptivamente
-021 coexistencia no autoriza causalidad
-022 prohíbe "puede estar relacionado"
-023 prohíbe "podría indicar la causa"
-024 prohíbe "debido a" como atribución causal
-025 tensión queda definida como diferencia descriptiva
-026 tensión no es driver
-027 no hipótesis N5
-028 no responsable
-029 no impacto causal inventado
-030 formatter output unchanged
-031 truncate/count semantics unchanged
-032 buildAlignment unchanged
-033 assemble evidence unchanged
-034 M9 loaders unchanged
-035 ARR loaders unchanged
-036 Root1 ARR observed/projected PASS
-037 Root2 M9 missing-not-zero PASS
-038 17/3 pretruncate regression PASS
-039 no post-generation validator
-040 no retry OpenAI
-041 no nueva llamada OpenAI
-042 buildFinancialDiagnosisChatResult unchanged
-043 planner unchanged
-044 routing unchanged
-045 server unchanged
-046 SQL/schema/dependencies unchanged
-047 existing FD tests pass
-048 existing M9 formatter/pretruncate tests pass
-049 existing M9 tests pass
-050 existing ARR tests pass
-051 Tier 1 PASS
-052 pre-deploy --gate PASS
-053 NEW FAILURE = 0
-
-## Archivos de producto permitidos
-
-lib/director-ia-financial-diagnosis.js
-
-Dentro de ese archivo solo puede modificarse:
-
-FINANCIAL_DIAGNOSIS_SYSTEM_ADDENDUM
-buildFinancialDiagnosisPrompt()
-
-y un helper local nuevo usado exclusivamente para construir
-el contrato del prompt.
-
-## Congelado dentro del mismo archivo
-
-NO modificar:
-
-truncateM9Datos
-mapM9Family
-aggregateM9
-buildAlignment
-collectLimitations
-assembleFinancialDiagnosisEvidence
-loadFinancialDiagnosisForChat
-formatIgfPayload
-formatArrPayload
-formatM9Bucket
-formatM9StructuralConvention
-formatM9Family
-formatFinancialDiagnosisContext
-buildFinancialDiagnosisChatResult
-shouldAbortForAuthz
-
-Si requiere cambiar alguno:
-
-STOP.
-
-## Test focal
-
-Preferentemente:
-
-test/director-ia-financial-diagnosis-prompt-status-alignment.test.js
-
-## Gobernanza
-
-docs/dev-loop/CURRENT_TASK.md
-docs/dev-loop/reports/FIX-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-PROMPT-STATUS-ALIGNMENT-001.md
-
-## Prohibido
-
-NO tocar:
+## No tocar
 
 lib/director-ia-m9-deltas.js
 lib/director-ia-igf-arr.js
-lib/director-ia-planner.js
-lib/director-ia-chat.js
 server.js
+planner
+routing
+SQL
+schema
+dependencies
 DICF
 commercial_state
-package.json
-package-lock.json
 
-NO validator post-generation.
-NO scanner de respuesta.
-NO rewrite de respuesta.
-NO fallback determinista.
-NO segundo llamado OpenAI.
-NO retry.
-NO SQL.
-NO schema.
-NO LIVE_DB.
-NO dependencia nueva.
+No modificar:
 
-## Suites
+buildAlignment()
+assembleFinancialDiagnosisEvidence()
+loadFinancialDiagnosisForChat()
 
-Ejecutar:
+No crear plant net delta.
 
-test focal
-financial diagnosis existentes
-M9 formatter/pretruncate
-M9
-ARR Root1
-ARR
-IGF
-planner
-capabilities
-tool-orchestrator
-commercial_state
-continuity
+No post-generation validator.
 
-Tier 1
-pre-deploy --gate
+## Archivos producto permitidos
 
-NEW FAILURE=0.
+lib/director-ia-financial-diagnosis.js
 
-## STOP CONDITIONS
+Cambios permitidos únicamente en:
 
-STOP si requiere:
+formatM9Bucket()
+formatM9Family()
+buildFinancialDiagnosisPromptControl()
+buildFinancialDiagnosisPrompt()
 
-- modificar buildAlignment
-- modificar formatter
-- modificar loaders
-- modificar evidencia
-- validator post-generation
-- retry OpenAI
-- segunda llamada OpenAI
-- planner
-- routing
-- server
-- SQL
-- schema
-- LIVE_DB
-- dependencies
-- mezclar el siguiente validator FIX
+o helper local estrictamente semántico.
 
-## Reporte requerido
+Preservar:
 
-Debe iniciar:
+pretruncate counts
+SOURCE_PARTIAL
+MISSING != ZERO
+alignment contract
+causality contract
 
-IMPLEMENTATION_SHA:
+## Regresiones mínimas
 
-BASE_MAIN_SHA:
+001 1059160.26 se etiqueta gross decrease bucket
+002 no se etiqueta plant net delta
+003 no se etiqueta IGF/ARR gap
+004 disminuyeron magnitude positiva mantiene dirección DECREASE
+005 mas se etiqueta gross increase
+006 mas no es net delta
+007 dejaron se etiqueta gross stopped buying
+008 dejaron no es net delta
+009 M9 plant net delta status = NOT_AVAILABLE
+010 no fórmula net reconstruida
+011 prompt prohíbe "Delta Venta disminuyó X" desde bucket
+012 prompt prohíbe "planta cayó X" desde bucket
+013 prompt permite "reducción bruta acumulada"
+014 prompt declara posible compensación por otros buckets
+015 IGF/ARR distinto de M9
+016 alignment comparable intacto
+017 causality NONE intacto
+018 pretruncate 17/3 intacto
+019 null != zero intacto
+020 SOURCE_PARTIAL intacto
+021 numeric zero intacto
+022 formatter no inventa signo
+023 no SQL
+024 no loaders
+025 no ARR
+026 no buildAlignment
+027 no post validator
+028 no retry OpenAI
+029 no planner
+030 no routing
+031 no server
+032 no schema
+033 no dependencies
+034 FD tests pass
+035 M9 tests pass
+036 ARR tests pass
+037 prompt status/alignment tests pass
+038 Tier1 pass
+039 pre-deploy gate pass
+040 NEW FAILURE=0
 
-BEFORE:
+## North Star
 
-PROMPT_CONTROL_MODEL:
+La respuesta LIVE NO debe decir:
 
-ALIGNMENT_AUTHORITY_MODEL:
+"Delta Venta: Disminución de 1059160.26 kg"
 
-COMPARABLE_MODEL:
+Debe decir algo equivalente a:
 
-MISMATCH_MODEL:
+"En M9, los clientes del bucket 'disminuyeron' acumulan
+1,059,160.26 kg de reducción bruta entre agosto y septiembre.
+Esta cifra no es el delta neto de venta de la planta."
 
-SOURCE_STATUS_MODEL:
+Si se habla de IGF 1506.3507 vs ARR 1469.36:
 
-PARTIAL_MODEL:
+deben permanecer como objetos diferentes.
 
-CAUSALITY_MODEL:
-
-TENSION_MODEL:
-
-LIVE_NORTH_STAR_MODEL:
-
-001..053:
-
-SUITES:
-
-FILES:
-RISKS:
-
-FORMATTER_CHANGED:
-YES / NO
-
-BUILD_ALIGNMENT_CHANGED:
-YES / NO
-
-EVIDENCE_CHANGED:
-YES / NO
-
-POST_GENERATION_VALIDATOR_ADDED:
-YES / NO
-
-OPENAI_RETRY_ADDED:
-YES / NO
-
-M9_LOADERS_CHANGED:
-YES / NO
-
-ARR_CHANGED:
-YES / NO
-
-PLANNER_CHANGED:
-YES / NO
-
-ROUTING_CHANGED:
-YES / NO
-
-SERVER_CHANGED:
-YES / NO
-
-SQL_CHANGED:
-YES / NO
-
-SCHEMA_CHANGED:
-YES / NO
-
-DEPENDENCY_CHANGED:
-YES / NO
-
-LIVE_DB_USED:
-YES / NO
-
-FINAL:
-PASS /
-STOP_SCOPE /
-STOP_OTHER
+No denominar su diferencia M9.
 
 ## Completion
 
 Si PASS:
 
 CURRENT_TASK -> DONE_PENDING_REVIEW
-
-Commit en rama FIX.
-
-STOP.
+commit en rama FIX
+STOP
 
 No merge.
 No push main.
 No deploy.
 No LIVE_DB.
-No siguiente task.
-
-Si STOP:
-
-CURRENT_TASK -> STOPPED
-
-Documentar razón.
-
-STOP.
-closure_reason: "HUMAN REVIEW PASS. Financial Diagnosis prompt now anchors deterministic alignment/source statuses and explicitly forbids causal reinterpretation when CAUSAL_EVIDENCE=NONE. Formatter, buildAlignment, evidence, loaders and post-generation behavior remain unchanged. Residual risk is intentional: prompt-only enforcement may still be disobeyed by the LLM; LIVE verification will determine whether the separate deterministic validator FIX is required."
+No siguiente tarea.
