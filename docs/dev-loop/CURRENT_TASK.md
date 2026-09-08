@@ -3,8 +3,7 @@ task_id: FIX-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-M9-GROSS-BUCKET-LABELS-001
 task_type: FIX
 mode: REGRESSION_FIRST
 
-status: DONE_PENDING_REVIEW
-
+status: CLOSED
 authorized_by: "Human Approver"
 authorized_at: "2026-09-08T15:42:36-06:00"
 
@@ -259,3 +258,4 @@ No push main.
 No deploy.
 No LIVE_DB.
 No siguiente tarea.
+closure_reason: "HUMAN REVIEW PASS. M9 bucket totals are now explicitly labeled as gross bucket magnitudes, not plant net delta or IGF-ARR gap. M9_PLANT_NET_DELTA remains NOT_AVAILABLE. No data, aggregation, SQL, loader, ARR, alignment or post-generation behavior changed."
