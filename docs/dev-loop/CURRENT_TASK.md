@@ -1,13 +1,13 @@
-task_id: FIX-DIRECTOR-IA-ARR-PROJECTION-CUTOFF-LABEL-001
+task_id: FIX-DIRECTOR-IA-M9-ABSENT-NOT-ZERO-001
 
 task_type: FIX
 mode: REGRESSION_FIRST
 
 status: CLOSED
 authorized_by: "Human Approver"
-authorized_at: "2026-09-08T10:18:38-06:00"
+authorized_at: "2026-09-08T11:47:32-06:00"
 
-human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-08 - FIX ARR PROJECTION CUTOFF AND SEMANTIC LABELS ONLY; PRESERVE DASHBOARD CALCULATION; NO M9; NO PLANNER; NO ROUTING; NO SQL; NO LIVE_DB; NO MERGE; NO DEPLOY"
+human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-08 - FIX M9 ABSENT NOT ZERO ONLY; PRESERVE LEGITIMATE STRUCTURAL ZEROS; NO ARR ROOT1 CHANGES; NO PLANNER; NO ROUTING; NO LIVE_DB; NO MERGE; NO DEPLOY"
 
 implementation_authorized: YES
 merge_authorized: NO
@@ -16,488 +16,593 @@ live_db_authorized: NO
 
 max_attempts: 1
 
-base_main_sha: ad20fb8b65f0b1936dc7f46599df04e72ccad37a
+base_main_sha: b3e1b0311597604ce75a5962d3b0d809518b22c1
 
 audit_report_path: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-ARR-PROJECTION-SEMANTICS-001.md
-result_report_path: docs/dev-loop/reports/FIX-DIRECTOR-IA-ARR-PROJECTION-CUTOFF-LABEL-001.md
+result_report_path: docs/dev-loop/reports/FIX-DIRECTOR-IA-M9-ABSENT-NOT-ZERO-001.md
 
 ## Objetivo único
 
-Corregir Root 1 demostrado por:
+Corregir Root 2 demostrado por:
 
 AUDIT-DIRECTOR-IA-ARR-PROJECTION-SEMANTICS-001
 
-Director IA debe preservar y etiquetar por separado:
+M9 no debe transformar ausencia/no disponibilidad de evidencia en
+un cero observado.
 
-1. venta ARR observada al corte
-2. proyección ARR de cierre del mes
-3. descuento ARR observado al corte
-4. descuento ARR proyectado
-5. venta real/final del mes previo cuando corresponda
+Contrato:
 
-No confundir ninguno con:
+ABSENT
+DATA_NOT_FOUND
+SOURCE_PARTIAL
+SOURCE_ERROR
+null
+undefined
+input matemáticamente insuficiente
 
-IGF compromiso / forecast.
-
-No resolver M9.
-No ampliar routing.
-
-## Root físico congelado
-
-La auditoría demostró:
-
-ARR_SALES_FIRST_DIVERGENCE:
-
-loadArrProyForPlant
-lib/director-ia-igf-arr.js
-
-Actual:
-
-computePronosticoProyByPlant(client, year, month, {
-  fechaCorte: ""
-})
-
-Con corte vacío se apaga el lookback/POR COMPRAR.
-
-Resultado observado:
-
-proy_venta_ton termina en la familia semántica del TOTAL mes
-observado y luego Director IA lo llama proyección.
-
-Además loadArrProyForPlant colapsa semántica a:
-
-venta_ton
-desc_kg
-
-y el anexo presenta:
-
-"ARR — VENTA / DESCUENTO (proyección o real según corte)"
-
-Eso debe desaparecer como ambigüedad.
-
-## Evidencia ejecutiva de referencia
-
-Puebla septiembre 2026, observada manualmente:
-
-TOTAL MES AL CORTE:
-302.00 ton
-
-PROY VENTA:
-1522.76 ton
-
-Agosto:
-aprox. 1176 ton
-
-Desc. PROY septiembre:
--4.84 $/kg
-
-Director IA antes reportó:
-
-venta esperada/proyectada:
-302 ton
-
-Δ vs agosto:
-aprox. -874 ton
-
-desc septiembre:
--4.92 $/kg
-
-Estos valores LIVE sirven como evidencia de producto.
-
-NO hardcodearlos.
-
-NO requieren LIVE_DB para implementar.
-
-Los tests deben usar fixtures deterministas equivalentes.
-
-## Fuentes físicas demostradas
-
-OBSERVED CURRENT SALE FAMILY:
-
-venta_sheet.total_mes_sum
-
-PROJECTED CURRENT SALE FAMILY:
-
-proy_total_ton
-proy_venta_ton cuando existe corte válido
-arr.pronostico_mini_snapshot.proy_venta_ton
-
-PROJECTED DISCOUNT:
-
-pronosticoDetail.proy_desc_kg
-/UI "Desc. PROY"
-
-IGF COMMITMENT:
-
-igf.compromiso_lines.venta_ton
-
-## Regla principal
-
-VENTA_REAL_AL_CORTE
 !=
-ARR_PROYECCION_CIERRE
-!=
-IGF_COMPROMISO
 
-Y:
+KNOWN_ZERO
 
-DESC_REAL_AL_CORTE
-!=
-ARR_DESC_PROYECTADO
-
-aunque numéricamente alguna vez coincidan.
-
-La identidad semántica NO se determina comparando valores.
-
-## Reuso obligatorio
-
-No crear una fórmula nueva de proyección.
-
-Reusar la misma lógica física de Pronóstico ARR/dashboard
-que ya produce:
-
-TOTAL mes observado
-PROY cierre
-Desc. PROY
-
-Investigar/reusar el adapter/pack existente señalado por la auditoría.
-
-No duplicar matemática de dashboard.
-
-No calcular manualmente:
-
-proyección = observado + estimación inventada
-
-No usar LLM para calcular.
-
-## Cutoff
-
-No volver a pasar:
-
-fechaCorte: ""
-
-para obtener una métrica etiquetada como proyección intra-mes.
-
-El FIX debe obtener/preservar el corte que usa la lógica autorizada
-del dashboard/adapter.
-
-Debe ser determinista y testeable.
-
-No usar new Date() disperso si ya existe un resolver/cutoff
-del dashboard.
-
-No hardcodear septiembre 2026.
-
-## Shape semántico mínimo
-
-El objeto interno ARR debe distinguir conceptualmente, con nombres
-inequívocos o equivalente probado:
-
-observed_venta_ton
-projected_venta_ton
-
-observed_desc_kg
-projected_desc_kg
-
-previous_month_venta_ton
-
-No es obligatorio usar exactamente estos nombres si el adapter físico
-ya tiene nombres canónicos mejores.
-
-Pero NO conservar únicamente:
-
-venta_ton
-desc_kg
-
-si eso vuelve a perder observed vs projected.
-
-## Anexo Director IA
-
-Para mes abierto, debe poder producir contexto equivalente a:
-
-ARR — VENTA
-
-- Venta observada al corte: 302.00 ton
-- Proyección de cierre ARR: 1522.76 ton
-
-ARR — DESCUENTO
-
-- Descuento observado al corte: <valor si está disponible>
-- Descuento proyectado ARR: -4.84 $/kg
-
-MES PREVIO
-
-- Venta mes previo: ~1176 ton
-
-COMPARACION
-
-- Proyección cierre actual vs venta mes previo:
-  +346.76 ton aproximadamente
-
-No exigir estas cifras reales en test.
-
-Usar fixture.
-
-## Regla de comparación
-
-Cuando compare el mes abierto contra el mes anterior:
-
-"proyección actual vs mes previo"
-
-debe usar:
-
-ARR_PROJECTED_CURRENT
--
-PREVIOUS_MONTH_OBSERVED/FINAL
-
-No:
-
-CURRENT_OBSERVED_TO_DATE
--
-PREVIOUS_MONTH
-
-La etiqueta debe dejar claro que se compara proyección con mes previo.
-
-## Mes cerrado / histórico
-
-No convertir artificialmente un mes histórico cerrado en
-"proyección futura".
-
-Si el adapter distingue cerrado/final vs forecast, preservar esa
-semántica.
-
-No inventar cierre/final si la fuente no lo demuestra.
-
-## Descuento
-
-La auditoría clasificó:
-
-DISCOUNT_DIFFERENCE_CLASS:
-OBSERVED_VS_PROJECTED
-
-El FIX debe impedir que un descuento observado/sin corte sea
-etiquetado como "Desc. PROY".
-
-Para una pregunta ARR de proyección, priorizar físicamente:
-
-projected_desc_kg
-
-cuando la fuente lo provea.
-
-Si el observado también está disponible:
-puede mostrarse por separado.
-
-No sustituir NULL por cero.
-
-## IGF
-
-IGF 2000.x sigue siendo:
-
-Compromiso venta IGF
-
-Nunca:
-
-ARR projection.
-
-El bloque IGF puede seguir disponible, pero debe permanecer
-claramente separado.
-
-No usar compromiso IGF como fallback silencioso de proyección ARR.
-
-## Ingreso híbrido
-
-La auditoría detectó que el anexo puede combinar:
-
-ARR venta
-+
-margen/desc/HG de IGF
-
-para mostrar "Ingreso aprox."
-
-En este FIX:
-
-NO presentar ese cálculo como:
-- ingreso ARR puro
-- proyección ARR pura
-- explicación causal
-
-Si se conserva por compatibilidad debe estar etiquetado
-inequívocamente como cálculo cruzado de fuentes y NO utilizarse
-para redefinir ARR projection.
-
-Si la solución mínima segura requiere retirarlo del bloque ARR
-para evitar mezcla semántica, documentarlo en reporte.
-
-NO rediseñar fórmula IGF.
+Un 0 físicamente conocido sigue siendo 0.
 
 ## North Star
 
-Pregunta ya ruteada:
+Cuando una pregunta como:
 
-¿Cómo va ARR?
+¿Por qué cayó el ingreso?
 
-Con fixture:
+obtenga M9 sin Delta Venta, Delta Descuento o Delta Ingreso
+disponible para la comparación, Director IA debe recibir evidencia
+inequívoca equivalente a:
 
-observed current = 302.00
-projected current = 1522.76
-previous observed = 1176.00
-projected desc = -4.84
+Delta Venta: NO DISPONIBLE
+Delta Descuento: NO DISPONIBLE
+Delta Ingreso: NO DISPONIBLE
 
-Debe entregar al modelo contexto inequívoco del tipo:
+y NO:
 
-Venta observada al corte: 302.00 ton
-Proyección de cierre ARR: 1522.76 ton
-Venta mes previo: 1176.00 ton
-Proyección vs mes previo: +346.76 ton
-Descuento proyectado ARR: -4.84 $/kg
+Delta Venta: 0
+Delta Descuento: 0
+Delta Ingreso:
+sin cambios
+no hubo impacto
 
-Y NO:
+La ausencia M9 no autoriza causalidad.
 
-"venta proyectada 302"
+## Root físico demostrado
 
-NO:
-"Δ venta -874"
-
-## Preguntas dentro de alcance
-
-Solo preguntas que YA llegan al path ARR en base_main_sha.
-
-Ejemplos:
-
-¿Cómo va ARR?
-
-ARR septiembre
-
-¿Cómo va el pronóstico de venta?
-
-No ampliar señal ni planner para cubrir nuevas frases.
-
-## Fuera de alcance explícito — Root 2
-
-NO tocar:
+Archivo principal:
 
 lib/director-ia-m9-deltas.js
 
-NO arreglar:
+La auditoría encontró colapsos de ausencia a cero, incluyendo:
 
-AUSENTE -> 0
+- COALESCE de kg / monto a 0
+- CASE de ratio indefinido a 0
+- row.null -> 0
+- margenA / margenB con ?? 0
+- invalid input retornando margen 0
+- fmtKg(null) -> "0.0"
+- fmtDescKg(null) -> "0.00 $/kg"
+- fmtMxn(null) -> ""
+- fmtTon(null) -> "0.0 ton"
 
-Eso será:
+Además:
 
-FIX-DIRECTOR-IA-M9-ABSENT-NOT-ZERO-001
+lib/director-ia-financial-diagnosis.js
 
-## Fuera de alcance explícito — Root 3
+ya contiene el contrato:
 
-NO agregar soporte ahora a:
+"null no es 0. Ausencia no es cero."
+
+y modela:
+
+SOURCE_AVAILABLE
+SOURCE_PARTIAL
+DATA_NOT_FOUND
+SOURCE_ERROR
+SOURCE_RESTRICTED
+
+Por tanto, arreglar primero la evidencia M9 aguas arriba.
+No hacer que el prompt compense datos falsamente convertidos a 0.
+
+## PRECAUCIÓN CRÍTICA — dos tipos de ausencia
+
+NO eliminar COALESCE a ciegas.
+
+Antes de cambiar cada coerción, clasificarla físicamente como:
+
+A. KNOWN_ZERO / STRUCTURAL_ZERO
+
+Ejemplo posible:
+
+el periodo mensual existe y está disponible,
+pero un cliente concreto no tiene ventas registradas en ese mes
+dentro de una fuente que representa únicamente transacciones.
+
+Si el contrato físico existente demuestra que eso significa
+0 kg comprados:
+
+PRESERVAR 0.
+
+Esto es necesario para conceptos como:
+
+- dejó de comprar
+- cliente nuevo
+- pasó de X kg a 0
+- pasó de 0 a X kg
+
+B. MISSING / UNKNOWN
+
+Ejemplos:
+
+- periodo fuente no disponible
+- margen IGF no disponible
+- familia M9 no disponible
+- error de fuente
+- ratio matemáticamente no determinable
+- input requerido null
+- payload parcial
+
+Eso NO puede convertirse en cero.
+
+## Regla de clasificación
+
+Cada coerción auditada debe aparecer en el reporte con:
+
+LOCATION:
+CURRENT_BEHAVIOR:
+CLASSIFICATION:
+KNOWN_ZERO /
+MISSING_SOURCE /
+MISSING_INPUT /
+UNDEFINED_RATIO /
+LEGACY_FORMATTING
+
+ACTION:
+PRESERVE_ZERO /
+PRESERVE_NULL /
+PROPAGATE_PARTIAL /
+PROPAGATE_NOT_FOUND /
+STOP_UNPROVEN
+
+EVIDENCE:
+
+Si no puede demostrar si una coerción representa
+KNOWN_ZERO o MISSING:
+
+STOP.
+
+No adivinar semántica empresarial.
+
+## Delta Venta
+
+Preservar:
+
+un cero legítimo de compras para un cliente dentro de
+periodos cuya fuente está disponible.
+
+No preservar como cero:
+
+un periodo/fuente que no existe.
+
+No fabricar:
+
+deltaKg = 0
+
+si uno de los lados es realmente UNKNOWN.
+
+## Delta Descuento
+
+Distinguir:
+
+sin descuento conocido = 0 monto
+
+de:
+
+descuento no disponible
+
+y de:
+
+ratio $/kg matemáticamente indefinido.
+
+No asumir automáticamente que denominador 0 implica
+"descuento observado = 0 $/kg" si eso no está probado por
+el contrato físico existente.
+
+Si cambiar esa semántica rompería deliberadamente la paridad
+del dashboard y no hay evidencia suficiente:
+
+STOP y documentar.
+
+No rediseñar M9.
+
+## Delta Ingreso
+
+Este es crítico.
+
+Fórmula existente:
+
+kg × (margen_$/kg − |desc_$/kg|)
+
+Requiere inputs conocidos.
+
+Si:
+
+margenA = null
+o
+margenB = null
+
+NO usar:
+
+margen ?? 0
+
+NO calcular un ingreso exacto.
+
+NO calcular deltaIngreso exacto.
+
+Debe propagarse ausencia/partial.
+
+Igual si un input requerido para ingreso es UNKNOWN.
+
+Un cero físicamente observado sigue siendo válido.
+
+## Formatters
+
+NULL no debe renderizarse como cero.
+
+Ejemplos requeridos:
+
+fmtKg(null)       != "0.0"
+fmtDescKg(null)   != "0.00 $/kg"
+fmtMxn(null)      != ""
+fmtTon(null)      != "0.0 ton"
+
+Puede usarse:
+
+"n/d"
+"no disponible"
+
+o un mecanismo equivalente ya existente.
+
+Pero:
+
+fmtKg(0)
+fmtMxn(0)
+etc.
+
+sí deben seguir representando 0.
+
+## Status / availability
+
+Una familia con inputs esenciales ausentes no debe terminar
+marcada como SOURCE_AVAILABLE con valores numéricos fabricados.
+
+Usar el modelo de veracidad ya existente cuando sea suficiente:
+
+SOURCE_AVAILABLE
+SOURCE_PARTIAL
+DATA_NOT_FOUND
+SOURCE_ERROR
+SOURCE_RESTRICTED
+
+No crear un segundo sistema de veracidad si no hace falta.
+
+Cuando una familia sea parcial:
+
+identificar qué input falta.
+
+Ejemplo conceptual:
+
+availability:
+{
+  margenA: DATA_NOT_FOUND,
+  margenB: SOURCE_AVAILABLE
+}
+
+No es obligatorio este shape exacto si existe un equivalente más
+simple y compatible.
+
+## Financial diagnosis
+
+ssembleFinancialDiagnosisEvidence ya separa IGF / ARR / M9.
+
+Preservar esa arquitectura.
+
+Para M9 ausente/parcial, el contexto final debe expresar
+claramente ausencia.
+
+No imprimir:
+
+0
+
+0.00 $/kg
+
+como sustituto de missing.
+
+Y mantener la regla:
+
+NO CAUSALIDAD.
+
+Si M9 no está disponible:
+
+no concluir "el ingreso cayó por..."
+basándose en un cero inventado.
+
+## Caso A — missing completo
+
+Fixture:
+
+Delta Venta = DATA_NOT_FOUND
+Delta Descuento = DATA_NOT_FOUND
+Delta Ingreso = DATA_NOT_FOUND
+
+Esperado:
+
+M9 status = DATA_NOT_FOUND
+
+y ninguna cifra:
+
+0 kg
+0.00 $/kg
+
+
+como representación de ausencia.
+
+## Caso B — margen faltante
+
+Fixture:
+
+kgA conocido
+kgB conocido
+descA conocido
+descB conocido
+
+margenA = null
+margenB = 7.12
+
+Esperado:
+
+Delta Ingreso exacto = UNKNOWN
+familia != SOURCE_AVAILABLE exacta
+no ingresoA con margen 0
+no delta exacto
+
+## Caso C — cero conocido
+
+Fixture:
+
+periodo A disponible
+periodo B disponible
+
+cliente:
+kgA = 1000
+kgB = 0 conocido/estructural
+
+Esperado:
+
+kgB = 0
+deltaKg = -1000
+
+si el contrato físico existente demuestra
+cliente ausente = cero dentro de un periodo disponible.
+
+No romper dejó de comprar.
+
+## Caso D — cliente nuevo
+
+kgA = 0 conocido/estructural
+kgB = 2000
+
+Esperado:
+
+nuevo cliente sigue clasificable.
+
+## Caso E — formatter
+
+null -> n/d/no disponible
+0 -> cero formateado
+
+## Caso F — error
+
+SOURCE_ERROR nunca debe convertirse en 0.
+
+## Caso G — restricted
+
+SOURCE_RESTRICTED nunca debe convertirse en 0.
+
+## Caso H — partial
+
+Si una de las tres familias M9 es partial/not-found y otras available:
+
+aggregate M9 = SOURCE_PARTIAL
+
+y conservar status individual de cada familia.
+
+## BEFORE requerido
+
+B-001:
+margen null -> 0 mediante ?? 0
+
+B-002:
+row kg null -> 0 en mapper donde aplique
+
+B-003:
+row desc null -> 0 donde aplique
+
+B-004:
+formatters null -> strings de cero
+
+B-005:
+financial diagnosis declara null != zero,
+pero upstream puede haberlo colapsado antes
+
+B-006:
+clasificar físicamente COALESCE cliente-ausente.
+
+No modificar ese COALESCE hasta clasificarlo.
+
+## Regresiones requeridas
+
+R-M9-ABSENCE-001 missing margin preserved
+002 missing margin not numeric zero
+003 no exact ingreso with missing margin
+004 no exact deltaIngreso with missing margin
+005 formatter kg null != zero
+006 formatter desc null != zero
+007 formatter mxn null != zero
+008 formatter ton null != zero
+009 physical zero kg remains zero
+010 physical zero desc remains zero where semantically defined
+011 physical zero mxn remains zero
+012 period DATA_NOT_FOUND remains DATA_NOT_FOUND
+013 SOURCE_ERROR remains error
+014 SOURCE_RESTRICTED remains restricted
+015 SOURCE_PARTIAL remains partial
+016 family availability preserved
+017 aggregate M9 partial when one family partial
+018 aggregate M9 not available when all not-found
+019 no "sin cambios" from missing
+020 no numeric M9 zero from missing family
+021 Delta Venta legitimate dejaron semantics intact
+022 Delta Venta legitimate nuevos semantics intact
+023 Delta Descuento existing known cases intact
+024 Delta Ingreso known-input calculation intact
+025 known-input margin 0 if physically real remains 0
+026 missing margin distinct from margin 0
+027 invalid period not represented as margin 0
+028 no Number(null)-style zero
+029 no || 0 for UNKNOWN essential inputs
+030 no ?? 0 for UNKNOWN essential inputs
+031 financial evidence null_is_not_zero intact
+032 causality prohibition intact
+033 ARR Root1 semantics intact
+034 ARR projected/observed fields intact
+035 IGF commitment separation intact
+036 planner unchanged
+037 routing unchanged
+038 DICF unchanged
+039 commercial_state unchanged
+040 authz unchanged
+041 plant scope unchanged
+042 no schema change
+043 no dependency change
+044 no LIVE_DB required
+045 no hardcoded plant/period values
+046 no new source invented
+047 dashboard formulas not redesigned
+048 existing M9 known-data tests pass
+
+## SQL boundary
+
+SQL expression changes dentro de:
+
+lib/director-ia-m9-deltas.js
+
+están autorizados SOLO si son necesarios para preservar
+NULL vs KNOWN_ZERO dentro de las queries M9 existentes.
+
+NO:
+
+new tables
+new columns
+DDL
+migration
+new DB source
+new query family
+schema change
+
+Si necesita cualquiera de esos:
+
+STOP.
+
+Reportar:
+
+SQL_EXPRESSION_CHANGED:
+YES / NO
+
+Si YES:
+
+exact query expression
+before
+after
+why
+and prove no schema/query-source change.
+
+## Archivos permitidos
+
+Preferentemente:
+
+lib/director-ia-m9-deltas.js
+lib/director-ia-financial-diagnosis.js
+
+test focal nuevo
+CURRENT_TASK
+reporte
+
+Puede tocar test/helpers M9 existentes si es estrictamente necesario.
+
+NO tocar:
+
+lib/director-ia-igf-arr.js
+server.js
+planner
+routing
+commercial_state
+DICF
+
+## Root 1 congelado
+
+No cambiar el FIX ARR ya validado LIVE:
+
+observed current
+!=
+projected current
+!=
+previous month
+!=
+IGF commitment
+
+Prueba regresión.
+
+## Root 3 fuera de alcance
+
+NO arreglar todavía:
 
 ¿Cuánto proyectamos vender?
 ¿Cómo vamos a cerrar septiembre?
 ¿Cuál es la proyección de venta?
 
-si alguna no rutea actualmente.
+si el routing actual no las resuelve.
 
-Eso será:
+Eso será otra tarea.
 
-FIX-DIRECTOR-IA-ARR-PROJECTION-QUESTION-ROUTE-001
+## Natural Folio/Taller fuera de alcance
 
-No modificar planner para hacerlas funcionar.
+NO arreglar todavía:
 
-No modificar ARR_SIGNAL_RE para ampliar routing.
+¿Cuánto gasté en taller en enero?
+¿Cuánto gasté en taller en mayo?
+¿Cuánto gasté en inversiones en agosto?
 
-## No cambiar
-
-planner
-routing
-M9
-DICF
-commercial_state
-SQL
-schema
-dependencies
-authz
-scope de planta
-IGF stored data
-dashboard UI
-fórmula matemática del Pronóstico ARR
-
-## Regresión requerida
-
-Probar BEFORE contra base_main_sha:
-
-B-001:
-loadArrProyForPlant usa fechaCorte ""
-
-B-002:
-observed/projected colapsan a venta_ton
-
-B-003:
-anexo usa texto "proyección o real según corte"
-
-B-004:
-fixture current observed 302 puede quedar presentado
-como proyección.
-
-B-005:
-delta usa current venta_ton - previous venta_ton.
-
-Después del FIX:
-
-R-ARR-PROJ-001 observed field separado
-002 projected field separado
-003 observed != projected soportado
-004 projected sale usa proyección real del adapter
-005 projected discount usa Desc PROY
-006 no empty cutoff para proyección intra-mes
-007 current observed label
-008 current projected label
-009 previous month label
-010 projection-vs-prev delta usa projected current
-011 fixture 1522.76 - 1176 = +346.76
-012 no -874 con fixture
-013 observed 302 preservado como observed
-014 projected 1522.76 preservado como projected
-015 projected desc -4.84 preservado
-016 observed desc no se llama PROY
-017 IGF commitment separado
-018 IGF commitment no fallback ARR
-019 anexo no dice "proyección o real según corte"
-020 no NULL->0 nuevo
-021 month resolution intacto
-022 plant authz intacto
-023 GA restriction intacta
-024 GV restriction intacta
-025 get_arr_snapshot path intacto
-026 loadIgfArrAnnexForChat intacto funcionalmente
-027 source blocks distinguen ARR/IGF
-028 no M9 changes
-029 no planner changes
-030 no routing changes
-031 no SQL changes
-032 no schema changes
-033 no dependency changes
-034 commercial_state unchanged
-035 DICF unchanged
-036 historical/closed month no fake forecast
-037 current-month cutoff determinista
-038 adapter/dashboard formula reused
-039 no duplicated projection math
-040 no hardcoded Puebla values
+Eso será el siguiente bloque funcional después de los roots ARR/M9.
 
 ## Suites
 
-Agregar suite focal:
+Agregar focal:
 
-R-ARR-PROJECTION-SEMANTICS
+R-M9-ABSENT-NOT-ZERO
 
-Ejecutar además:
+Ejecutar:
 
+M9 existentes
+financial diagnosis
+ARR
+IGF
 planner
 capabilities
 tool-orchestrator
-IGF
-ARR existentes
-M9 existentes
-financial diagnosis
 commercial_state
 continuity
 
@@ -506,94 +611,117 @@ pre-deploy --gate
 
 NEW FAILURE = 0
 
-Si orchestrator conserva fallo preexistente:
+Si existe fallo preexistente:
 demostrar contra base_main_sha.
 
 ## STOP CONDITIONS
 
-STOP si requiere:
+STOP si:
 
-planner
-routing
-M9
-SQL
-schema
-new dependency
-LIVE_DB
-cambiar fórmula del dashboard
-duplicar fórmula de proyección
+- no puede distinguir KNOWN_ZERO de MISSING
+- requiere decisión empresarial no demostrada
+- requiere LIVE_DB
+- requiere schema
+- requiere nueva fuente
+- requiere planner
+- requiere routing
+- requiere alterar ARR Root1
+- requiere cambiar DICF
+- requiere cambiar commercial_state
+- requiere mega-rediseño de M9
 
-STOP si no puede reutilizarse la fuente/cálculo autorizado
-del dashboard y la única alternativa es inventar otra proyección.
-
-STOP si observed y projected no pueden distinguirse físicamente
-sin LIVE_DB.
-
-## Archivos esperados
-
-Preferentemente:
-
-lib/director-ia-igf-arr.js
-
-y test focal nuevo.
-
-Puede tocar adapter ARR existente únicamente si es necesario
-para EXPONER un campo ya calculado por el dashboard,
-sin cambiar su fórmula.
-
-Si toca adapter:
-documentar exactamente por qué.
-
-No tocar frontend.
+No sustituir incertidumbre por una implementación agresiva.
 
 ## Reporte
 
-docs/dev-loop/reports/FIX-DIRECTOR-IA-ARR-PROJECTION-CUTOFF-LABEL-001.md
+docs/dev-loop/reports/FIX-DIRECTOR-IA-M9-ABSENT-NOT-ZERO-001.md
 
 Debe iniciar:
 
 IMPLEMENTATION_SHA:
 
 BEFORE:
-AFTER:
 
-ROOT_FIXED:
-ARR_DATA_SOURCE_REUSED:
-CUTOFF_SOURCE:
-EMPTY_CUTOFF_REMOVED:
+COERCION_CLASSIFICATION:
 
-OBSERVED_SALE_FIELD:
-PROJECTED_SALE_FIELD:
-PREVIOUS_SALE_FIELD:
+M9_ABSENCE_MODEL:
 
-OBSERVED_DISCOUNT_FIELD:
-PROJECTED_DISCOUNT_FIELD:
+KNOWN_ZERO_MODEL:
 
-NORTH_STAR_CONTEXT:
+MISSING_MARGIN_HANDLING:
 
-DELTA_MODEL:
-IGF_SEPARATION:
-HYBRID_INCOME_HANDLING:
+DELTA_VENTA_HANDLING:
+DELTA_DESCUENTO_HANDLING:
+DELTA_INGRESO_HANDLING:
 
-001..040:
+FORMATTER_NULL_HANDLING:
+
+FINANCIAL_DIAGNOSIS_CONTEXT:
+
+NORTH_STAR_MISSING_CONTEXT:
+
+001..048:
+
 SUITES:
 
 FILES:
 RISKS:
 
-M9_CHANGED:
-PLANNER_CHANGED:
-ROUTING_CHANGED:
-SQL_CHANGED:
+STRUCTURAL_ZERO_PRESERVED:
+YES / NO
+
+MISSING_COLLAPSES_TO_ZERO:
+YES / NO
+
+SQL_EXPRESSION_CHANGED:
+YES / NO
+
 SCHEMA_CHANGED:
+YES / NO
+
+PLANNER_CHANGED:
+YES / NO
+
+ROUTING_CHANGED:
+YES / NO
+
+ARR_ROOT1_CHANGED:
+YES / NO
+
+DICF_CHANGED:
+YES / NO
+
+COMMERCIAL_STATE_CHANGED:
+YES / NO
+
 DEPENDENCY_CHANGED:
-DASHBOARD_FORMULA_CHANGED:
+YES / NO
+
+LIVE_DB_USED:
+YES / NO
+
+FINAL:
+PASS /
+STOP_UNPROVEN_SEMANTICS /
+STOP_OTHER
 
 ## Completion
 
+Si implementación segura:
+
 CURRENT_TASK -> DONE_PENDING_REVIEW
 
-Commit únicamente en rama FIX.
+Commit en rama FIX.
+
+STOP.
+
+Si debe detenerse por semántica no demostrada:
+
+CURRENT_TASK -> STOPPED
+
+Crear reporte con evidencia exacta.
+
+Commit docs únicamente si protocolo lo permite.
 
 STOP.
 
@@ -602,4 +730,4 @@ NO push main.
 NO deploy.
 NO LIVE_DB.
 NO next task.
-closure_reason: "HUMAN REVIEW MERGE_OK. ARR Root 1 now keeps observed sale, projected sale, projected discount and previous-month sale semantically separate; reuses dashboard forecast parity/cutoff; IGF commitment remains separate; no M9/planner/routing/SQL/schema/dependency/dashboard-formula changes; R-ARR-PROJ 40/40 and required suites pass; NEW FAILURE=0."
+closure_reason: "HUMAN REVIEW MERGE_OK. M9 now preserves structural known-zero semantics while keeping missing/unknown distinct from numeric zero; missing margin no longer produces exact Delta Ingreso; null formatters no longer render zero; financial diagnosis propagates PARTIAL/NOT_FOUND and no-causality; ARR Root 1 frozen and regression passes; R-M9-ABSENCE 48/48 and required suites pass; NEW FAILURE=0."
