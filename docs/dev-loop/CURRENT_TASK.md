@@ -1,556 +1,693 @@
-task_id: AUDIT-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-CAUSALITY-ALIGNMENT-001
+task_id: FIX-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-M9-PRETRUNCATE-COUNT-001
 
-task_type: AUDIT
-mode: READ_ONLY_AUDIT
+task_type: FIX
+mode: REGRESSION_FIRST_REPLACEMENT
 
-status: CLOSED
+status: AUTHORIZED
+
 authorized_by: "Human Approver"
-authorized_at: "2026-09-08T12:28:17-06:00"
+authorized_at: "2026-09-08T14:05:20-06:00"
 
-human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-08 - AUDIT FINANCIAL DIAGNOSIS CAUSALITY / M9 NARRATIVE / ALIGNMENT ONLY; NO IMPLEMENTATION; NO BEHAVIOR CHANGE; NO LIVE_DB; NO MERGE; NO DEPLOY"
+human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-08 - REPLACEMENT FIX FOR M9 FORMATTER SEMANTICS + PRE-TRUNCATE PAYLOAD COUNT ONLY; PREVIOUS IMPLEMENTATION REJECTED; NO CHERRY-PICK WHOLE REJECTED IMPLEMENTATION; NO PROMPT REDESIGN; NO POST-GENERATION VALIDATOR; NO M9 LOADERS; NO ARR; NO PLANNER; NO ROUTING; NO LIVE_DB; NO MERGE; NO DEPLOY"
 
-implementation_authorized: NO
+implementation_authorized: YES
 merge_authorized: NO
 deploy_authorized: NO
 live_db_authorized: NO
 
 max_attempts: 1
 
-base_main_sha: c554c2742a83d222c2c38dd1fb33347d16e26b8d
+base_main_sha: 7686c093724550da184ae3329a56b96a85a1c217
 
-result_report_path: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-CAUSALITY-ALIGNMENT-001.md
+audit_report_path: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-CAUSALITY-ALIGNMENT-001.md
+result_report_path: docs/dev-loop/reports/FIX-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-M9-PRETRUNCATE-COUNT-001.md
+
+rejected_reference_implementation: 3ef8579ac76e1372ee1a087be4604543e15e0775
+rejected_reference_decision: 153c8edf
 
 ## Objetivo único
 
-Auditar físicamente por qué financial_diagnosis produce una
-respuesta narrativa que contradice o reinterpreta la evidencia
-estructurada que recibe.
+Implementar correctamente la semántica del formatter M9 para
+financial_diagnosis sin introducir un conteo engañoso después del
+truncate de contexto.
 
-No implementar.
+Este FIX reemplaza completamente la implementación rechazada:
 
-No corregir.
+3ef8579ac76e1372ee1a087be4604543e15e0775
 
-No modificar comportamiento.
+Esa implementación NO está en main y NO debe mergearse.
 
-## Evidencia LIVE post Root 2
+Puede inspeccionarse únicamente como referencia.
 
-Pregunta:
+NO hacer cherry-pick completo.
 
-¿Por qué cayó el ingreso?
+## Dos defects que este replacement debe cerrar juntos
 
-Respuesta relevante:
+### D1 — ambigüedad original
 
-BLOQUE M9:
-"Delta venta, descuento e ingreso presentan cambios, pero no se
-especifican cifras exactas debido a la ausencia de clientes en el
-mes disponible."
+En main, formatM9Family() puede representar:
 
-Limitación declarada:
+dejaron
+mas
+disminuyeron
 
-"No se puede establecer causalidad entre los bloques."
+como simplemente:
 
-Conclusión posterior:
+"presentes"
 
-"La caída en el ingreso podría estar relacionada con la discrepancia
-entre las ventas observadas y proyectadas, así como la ausencia de
-clientes en el mes de comparación, pero no se puede afirmar una
-causa directa."
+aunque los arrays estén vacíos.
 
-También afirmó:
-
-"Los periodos de IGF y ARR son comparables, pero el bloque M9 presenta
-un periodo diferente (2026-08 vs 2026-09), lo que limita la comparación
-directa."
-
-## Hechos ya demostrados
-
-Root 1 ARR está validado LIVE:
-
-observed current
-!=
-projected current
-!=
-previous month
-!=
-IGF commitment
-
-Root 2 M9 está validado en su objetivo primario:
-
-MISSING != ZERO
-
-No reabrir ni reinterpretar esos roots.
-
-## Contratos existentes a verificar
-
-En lib/director-ia-financial-diagnosis.js existe:
-
-"null no es 0. Ausencia no es cero."
-
-"Prohibido: causalidad"
-
-"No formules hipótesis N5."
-
-"No completes vacíos."
-
-Y el contexto termina con equivalente a:
-
-"No inventes cifras. No afirmes causa."
-
-También existe buildAlignment() con status calculado
-determinísticamente.
-
-## Síntomas a auditar por separado
-
-### S1 — causalidad / hipótesis
-
-Determinar por qué el modelo puede emitir:
-
-"podría estar relacionada con..."
-
-aunque el system/context la prohíba.
-
-Clasificar si la divergencia ocurre en:
-
-A. evidence assembly
-B. context formatter
-C. prompt construction
-D. OpenAI generation
-E. post-generation validation
-F. response formatting
-G. otro punto físico
-
-Determinar si existe o no un validador determinístico después
-de la generación.
-
-### S2 — M9 "presenta cambios"
-
-Determinar qué texto exacto recibe el modelo para cada familia:
-
-delta_venta
-delta_descuento
-delta_ingreso
-
-y si frases como:
-
-"dejaron/mas/disminuyeron presentes"
-
-pueden ser interpretadas incorrectamente como:
+Eso permite que BUCKET_EXISTS se interprete como:
 
 "hubo cambios"
 
-aunque:
+Debe corregirse.
 
-- los buckets estén vacíos
-- no haya cifras exactas
-- la familia sea partial
-- falten inputs
-- no exista evidencia suficiente para esa conclusión
+### D2 — defecto introducido en implementación rechazada
 
-No asumir que este es el root.
-Probarlo.
+La implementación rechazada intentó mostrar:
 
-Distinguir:
+clientes=N
 
-BUCKET_EXISTS
-BUCKET_NONEMPTY
-NUMERIC_DELTA_AVAILABLE
-EXACT_DELTA_AVAILABLE
-SOURCE_PARTIAL
-DATA_NOT_FOUND
+pero la cadena física fue:
 
-No tratarlos como equivalentes.
+mapM9Family
+-> truncateM9Datos
+-> clientes.slice(0, 3)
+-> formatM9Bucket
+-> bucket.clientes.length
 
-### S3 — "ausencia de clientes"
+Por tanto:
 
-Localizar de dónde salió la frase:
+payload clientes = 17
 
-"ausencia de clientes en el mes disponible"
+podía terminar como:
 
-Determinar si:
+clientes=3
 
-- existe literalmente en contexto
-- se deriva de source_coercion
-- se deriva de buckets vacíos
-- se inventa durante generación
-- proviene de otra fuente
+Eso es falso como conteo del payload.
 
-Reportar exacto.
+El test anterior usó exactamente 3 clientes y no detectó el defecto.
 
-### S4 — alignment
+## Invariante crítica
 
-Auditar:
+PAYLOAD_CLIENT_COUNT
+!=
+CONTEXT_SAMPLE_COUNT
+!=
+UNIVERSE_CLIENT_COUNT
+
+Este FIX solo puede conocer con certeza:
+
+PAYLOAD_CLIENT_COUNT
+
+antes de:
+
+slice(0, 3)
+
+y:
+
+CONTEXT_SAMPLE_COUNT
+
+después del truncate.
+
+NO afirmar:
+
+UNIVERSE_CLIENT_COUNT
+
+porque aguas arriba M9 puede haber aplicado selección/corte propio.
+
+## Modelo requerido
+
+Antes de truncar cada bucket relevante preservar un metadata
+equivalente a:
+
+payload_client_count
+
+Luego del truncate puede preservarse:
+
+sample_client_count
+
+y:
+
+clientes_truncated
+
+No es obligatorio usar exactamente esos nombres si existe una forma
+más compatible con el shape actual, pero la semántica debe ser
+inequívoca.
+
+### Caso crítico obligatorio
+
+Input al financial diagnosis:
+
+clientes.length = 17
+
+Después de truncate:
+
+sample.length = 3
+
+Contexto esperado equivalente a:
+
+payload_client_count=17
+sample_client_count=3
+truncated=YES
+state=NONEMPTY
+
+NO:
+
+clientes=3
+
+como si fuera el conteo completo del payload.
+
+NO:
+
+total_clientes=17
+
+porque no prueba universo total M9.
+
+## Caso <=3
+
+Input:
+
+clientes.length=2
+
+Esperado:
+
+payload_client_count=2
+sample_client_count=2
+truncated=NO
+state=NONEMPTY
+
+## Caso vacío
+
+Input:
+
+clientes=[]
+
+Esperado:
+
+payload_client_count=0
+sample_client_count=0
+truncated=NO
+state=EMPTY
+
+BUCKET_EMPTY no significa:
+
+sin cambio global
+
+Solo significa:
+
+ese bucket del payload está vacío.
+
+## Caso bucket no existente
+
+Si el bucket no existe físicamente:
+
+exists=NO
+
+payload_client_count debe ser:
+
+UNAVAILABLE
+
+o equivalente.
+
+NO fabricar 0.
+
+## Formatter requerido
+
+Eliminar la ambigüedad:
+
+"dejaron/mas/disminuyeron presentes"
+
+Distinguir al menos:
+
+exists
+state EMPTY/NONEMPTY
+payload_client_count
+sample_client_count
+truncated
+
+cuando dichos valores estén físicamente disponibles.
+
+## Totales numéricos
+
+Mantener el modelo correcto de la implementación rechazada:
+
+Delta Venta:
+totalDeltaKg
+
+Delta Descuento:
+totalDeltaRatio
+
+Delta Ingreso:
+totalDeltaIngreso
+
+Solo NUMERIC_AVAILABLE si:
+
+value != null
+y
+Number.isFinite(Number(value))
+
+0 real sigue siendo 0.
+
+null no es 0.
+
+No inventar total.
+
+## source_coercion
+
+Conservar la mejora semántica:
+
+source_coercion debe estar etiquetado como:
+
+CONVENCION_ESTRUCTURAL
+
+y quedar claro que:
+
+- describe reglas cliente-a-cliente / estructurales
+- NO significa que el periodo no tenga clientes
+- NO significa DATA_NOT_FOUND
+- NO significa ausencia global de evidencia
+
+No cambiar la semántica física del COALESCE.
+
+## SOURCE_PARTIAL
+
+Preservar Root 2:
+
+NO DISPONIBLE exacto
+
+missing_inputs
+
+null no es 0
+
+No degradar a SOURCE_AVAILABLE.
+
+## DATA_NOT_FOUND / ERROR / RESTRICTED
+
+Preservar verdad:
+
+NO DISPONIBLE
+
+No fabricar buckets.
+
+No fabricar 0.
+
+## No causalidad
+
+El formatter no debe introducir:
+
+causó
+provocó
+explica
+afectó el ingreso
+responsable de
+
+Puede decir únicamente hechos estructurados.
+
+## Prompt y OpenAI fuera de alcance
+
+NO modificar:
+
+FINANCIAL_DIAGNOSIS_SYSTEM_ADDENDUM
+buildFinancialDiagnosisPrompt
+openaiDirectorIaChat
+buildFinancialDiagnosisChatResult
+
+No post-generation validator.
+
+No retry OpenAI.
+
+La desobediencia causal y alignment serán FIX posteriores.
+
+## Alignment congelado
+
+NO cambiar:
 
 buildAlignment()
 
-y la forma en que alignment.status / alignment.note
-llegan al modelo.
-
-Caso LIVE:
-
-IGF = 2026-09
-ARR = 2026-09
-M9 = 2026-08 vs 2026-09
-
-Determinar qué status produce físicamente la función.
-
-Si produce comparable:
-
-probar que el modelo recibió "comparable"
-y aun así narró "periodo diferente".
-
-Si produce mismatch:
-
-explicar físicamente por qué.
-
-No inferir.
-
-### S5 — "tensión" IGF vs ARR
-
-Auditar qué significa actualmente una tensión.
-
-IGF venta:
-1506.3507 ton
-
-ARR proyectada:
-1469.36 ton
-
-La diferencia puede señalarse como diferencia entre objetos,
-pero NO como causa de caída de ingreso.
-
-Determinar si el prompt distingue correctamente:
-
-DIFFERENCE
-TENSION
-CAUSE
-DRIVER
-HYPOTHESIS
-
-y en qué frontera se pierde esa distinción.
-
-## Cadena física obligatoria
-
-Trazar completa:
-
-pregunta
--> planner intent
--> financial_diagnosis route
--> loadFinancialDiagnosisForChat
--> loadIgfArrSourceBlocksForChat
--> M9 loaders
--> assembleFinancialDiagnosisEvidence
--> mapM9Family
--> aggregateM9
--> buildAlignment
--> formatFinancialDiagnosisContext
--> buildFinancialDiagnosisPrompt
--> llamada OpenAI
--> respuesta generada
--> cualquier post-procesamiento
--> respuesta HTTP/chat
-
-Para cada hop:
-
-FILE:
-FUNCTION:
-INPUT:
-OUTPUT:
-CAN_INTRODUCE_CAUSALITY:
-CAN_OVERRIDE_ALIGNMENT:
-CAN_INVENT_M9_CHANGE:
-POST_VALIDATION_PRESENT:
-
-## Reproducción sin LIVE_DB
-
-No usar LIVE_DB.
-
-Usar fixtures / unit tests / llamadas puras existentes.
-
-Crear únicamente sondas read-only temporales si hace falta.
-No commitear código de sonda.
-
-Reproducir al menos:
-
-### A — all M9 unavailable
-
-venta DATA_NOT_FOUND
-descuento DATA_NOT_FOUND
-ingreso DATA_NOT_FOUND
-
-Ver contexto exacto.
-
-### B — venta/descuento available, ingreso partial
-
-Reproducir contexto exacto.
-
-### C — buckets existentes pero vacíos
-
-Determinar qué texto ve el modelo.
-
-### D — alignment comparable
+Fixture:
 
 IGF 2026-09
 ARR 2026-09
 M9 2026-08 -> 2026-09
 
-Expected physical status:
-probar, no asumir.
+debe seguir:
 
-### E — alignment mismatch real
+comparable
 
-Construir un caso donde M9 no incluya 2026-09.
+## ARR Root 1 congelado
 
-Comparar textos.
+NO cambiar ARR.
 
-## Auditoría del prompt
+observed
+!=
+projected
+!=
+previous month
+!=
+IGF commitment
 
-Separar:
+## M9 Root 2 congelado
 
-SYSTEM PROMPT
-USER CONTENT
-CONTEXT
+NO tocar:
 
-Listar las instrucciones relevantes en orden real.
+lib/director-ia-m9-deltas.js
 
-Determinar si existen instrucciones contradictorias o demasiado
-blandas, por ejemplo:
+Preservar:
 
-"señala tensiones"
-vs
-"no causalidad"
+MISSING != ZERO
 
-"resume hechos"
-vs
-datos parciales
+KNOWN_ZERO sigue siendo 0 donde ya está físicamente probado.
 
-No recomendar todavía una solución hasta probar el root.
+## BEFORE requerido
 
-## Auditoría post-generation
+B-001:
+base main todavía usa semántica "presentes" o equivalente ambigua.
 
-Buscar físicamente si la respuesta generada se valida contra:
+B-002:
+rejected implementation eliminó "presentes" pero contó después del
+truncate.
 
-- causal language
-- unsupported claims
-- alignment.status
-- source availability
-- missing inputs
+B-003:
+fixture 17 clientes en rejected implementation produciría count=3.
 
-Si NO existe validator:
+B-004:
+el metadata de count original se pierde después de slice(0,3).
 
-POST_GENERATION_GUARD_PRESENT: NO
+B-005:
+PARTIAL sigue correcto en base.
 
-Si existe:
+B-006:
+alignment comparable sigue correcto en base.
 
-identificar por qué no bloqueó la respuesta LIVE.
+## Regresiones obligatorias
 
-## Preguntas de auditoría obligatorias
+R-PRECOUNT-001 base ambiguity reproduced
+002 rejected post-truncate count defect reproduced/reference-proved
+003 17 payload clients -> payload_count=17
+004 17 payload clients -> sample_count=3
+005 17 payload clients -> truncated=YES
+006 17 payload clients -> state=NONEMPTY
+007 output never represents 3 as full payload count
+008 output never calls 17 universe total
+009 4 payload clients -> payload_count=4
+010 4 payload clients -> sample_count=3
+011 3 payload clients -> payload_count=3
+012 3 payload clients -> sample_count=3
+013 3 payload clients -> truncated=NO
+014 2 payload clients -> 2/2
+015 1 payload client -> 1/1
+016 0 payload clients -> 0/0 EMPTY
+017 missing bucket -> exists=NO
+018 missing bucket -> payload count unavailable
+019 bucket exists distinct from bucket nonempty
+020 EMPTY does not claim global "sin cambios"
+021 no literal ambiguous "presentes"
+022 no literal "presentan cambios"
+023 no literal "ausencia de clientes" from formatter
+024 source_coercion labeled CONVENCION_ESTRUCTURAL
+025 coercion explicitly not DATA_NOT_FOUND
+026 coercion explicitly not period-without-clients
+027 venta correct numeric total field
+028 descuento correct numeric total field
+029 ingreso correct numeric total field
+030 numeric total 0 preserved
+031 numeric total null not zero
+032 SOURCE_PARTIAL preserved
+033 partial missing_inputs preserved
+034 DATA_NOT_FOUND preserved
+035 SOURCE_ERROR preserved
+036 SOURCE_RESTRICTED preserved
+037 no invented clients
+038 no invented totals
+039 no causal wording
+040 alignment comparable unchanged
+041 alignment mismatch unchanged
+042 ARR Root1 regression PASS
+043 M9 Root2 missing-not-zero PASS
+044 known structural zero PASS
+045 planner unchanged
+046 routing unchanged
+047 server unchanged
+048 SQL/schema/dependencies unchanged
+049 no post-generation validator
+050 no prompt redesign
+051 existing financial diagnosis tests pass
+052 existing M9 tests pass
+053 existing ARR tests pass
+054 focal >3 test cannot pass if count occurs post-truncate
+055 NEW FAILURE = 0
 
-Q1:
-¿La causalidad apareció antes o después de OpenAI?
+## Test crítico obligatorio
 
-Q2:
-¿El contexto entregado a OpenAI contenía alguna afirmación causal?
+Debe existir un fixture de EXACTAMENTE:
 
-Q3:
-¿"presentan cambios" está soportado por evidencia estructurada?
+17 clientes
 
-Q4:
-¿"ausencia de clientes" está soportado por evidencia estructurada?
+y comprobar simultáneamente:
 
-Q5:
-¿Qué alignment.status produce físicamente el caso
-2026-09 / 2026-09 / 2026-08→2026-09?
+payload count = 17
+sample count = 3
+truncated = YES
 
-Q6:
-¿El LLM puede contradecir alignment.status sin ser bloqueado?
+El test debe fallar si el formatter obtiene el payload count usando:
 
-Q7:
-¿Existe post-generation validation?
+bucket.clientes.length
 
-Q8:
-¿Cuál es el PRIMER punto físico de divergencia para cada síntoma?
+DESPUÉS de truncateM9Datos.
 
-Q9:
-¿Los tres síntomas comparten un solo root o son roots distintos?
+También agregar caso:
 
-Q10:
-¿Cuál es la frontera mínima de un futuro FIX?
+4 -> payload 4 / sample 3
 
-## Root classification
+para cubrir el borde inmediatamente superior al límite.
 
-Para cada síntoma usar una de:
+## Implementación permitida
 
-EVIDENCE_WRONG
-EVIDENCE_AMBIGUOUS
-PROMPT_AMBIGUOUS
-LLM_NONCOMPLIANCE
-POST_VALIDATION_ABSENT
-POST_VALIDATION_BUG
-ALIGNMENT_BUG
-FORMATTER_BUG
-OTHER
+Producto:
 
-Puede haber más de un root.
+lib/director-ia-financial-diagnosis.js
 
-No forzar mega-fix.
+Puede modificar:
 
-## Posibles fronteras futuras
+truncateM9Datos
+mapM9Family
+formatM9Bucket
+formatM9Family
 
-Auditar, NO implementar, si la corrección mínima debería vivir en:
+solo dentro del mismo archivo si es necesario.
 
-1. evidence/context formatter
-2. prompt contract
-3. deterministic post-generation validator
-4. deterministic answer builder para ciertos estados
-5. combinación de fronteras
+No mover lógica a loaders.
 
-Evaluar tradeoff:
+## Test focal
 
-- seguridad semántica
-- mínima superficie
-- no volver respuestas robóticas
-- no convertir LLM en fuente de verdad
-- preservar lenguaje natural
-- preservar bloques IGF/ARR/M9 separados
+Preferentemente:
 
-## Scope prohibido
+test/director-ia-financial-diagnosis-m9-pretruncate-count.test.js
 
-NO modificar:
+## Gobernanza
+
+docs/dev-loop/CURRENT_TASK.md
+docs/dev-loop/reports/FIX-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-M9-PRETRUNCATE-COUNT-001.md
+
+## Prohibido
+
+NO tocar:
 
 lib/director-ia-m9-deltas.js
 lib/director-ia-igf-arr.js
-planner
-routing
+lib/director-ia-planner.js
+lib/director-ia-chat.js
 server.js
 DICF
 commercial_state
-schema
-SQL
-dependencies
+package.json
+package-lock.json
 
-NO implementar validator.
-
-NO cambiar prompt.
-
-NO cambiar formatter.
-
-NO cambiar tests de producto.
-
+NO SQL.
+NO schema.
 NO LIVE_DB.
+NO nueva dependencia.
 
-## Archivos permitidos
+## Rejected branch usage
 
-Solo:
+Se permite:
 
-docs/dev-loop/CURRENT_TASK.md
-docs/dev-loop/reports/AUDIT-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-CAUSALITY-ALIGNMENT-001.md
+git show 3ef8579ac76e1372ee1a087be4604543e15e0775
 
-Las sondas temporales read-only deben eliminarse antes de cerrar.
+para estudiar la implementación descartada.
 
-## Suites / probes
+NO:
 
-No se exige suite completa de implementación.
+git cherry-pick 3ef8579ac76e1372ee1a087be4604543e15e0775
 
-Ejecutar al menos:
+NO basar la nueva rama en la rama rechazada.
 
-financial diagnosis tests existentes
-M9 tests existentes
-ARR projection regression existente
+NO merge de la rama rechazada.
 
-Más fixtures/sondas puras necesarias para probar:
+Reimplementar limpio desde base_main_sha.
 
-alignment
-M9 status text
-context
-prompt
+## Suites
 
-No alterar tests.
+Ejecutar:
 
-## Resultado requerido
+test focal
+financial diagnosis existentes
+M9
+ARR Root1
+ARR
+IGF
+planner
+capabilities
+tool-orchestrator
+commercial_state
+continuity
 
-El reporte debe iniciar:
+Tier 1
+pre-deploy --gate
 
-AUDIT_RESULT:
+NEW FAILURE=0.
+
+Si existe fallo preexistente:
+
+probar contra base_main_sha.
+
+## STOP CONDITIONS
+
+STOP si requiere:
+
+- tocar loaders M9
+- redefinir universo total de clientes
+- cambiar 80/20 upstream
+- SQL
+- schema
+- planner
+- routing
+- server
+- ARR
+- prompt redesign
+- post-generation validator
+- nueva llamada OpenAI
+- LIVE_DB
+- dependency
+- mezclar FIX 2 o FIX 3 de la auditoría
+
+## Reporte requerido
+
+Debe iniciar:
+
+IMPLEMENTATION_SHA:
 
 BASE_MAIN_SHA:
 
-LIVE_SYMPTOMS:
+REJECTED_REFERENCE:
 
-PHYSICAL_CHAIN:
+BEFORE:
 
-S1_CAUSALITY:
-FIRST_DIVERGENCE:
-ROOT_CLASS:
+PRETRUNCATE_COUNT_MODEL:
 
-S2_M9_CHANGE_CLAIM:
-FIRST_DIVERGENCE:
-ROOT_CLASS:
+PAYLOAD_CLIENT_COUNT_MODEL:
 
-S3_ABSENCE_OF_CLIENTS:
-SOURCE:
-SUPPORTED:
-ROOT_CLASS:
+SAMPLE_CLIENT_COUNT_MODEL:
 
-S4_ALIGNMENT:
-PHYSICAL_STATUS:
-CONTEXT_STATUS:
-MODEL_STATEMENT:
-FIRST_DIVERGENCE:
-ROOT_CLASS:
+TRUNCATION_MODEL:
 
-S5_IGF_ARR_TENSION:
-SUPPORTED_DIFFERENCE:
-SUPPORTED_CAUSALITY:
+UNIVERSE_COUNT_CLAIMED:
+YES / NO
 
-POST_GENERATION_GUARD_PRESENT:
+FORMATTER_MODEL:
 
-Q1:
-Q2:
-Q3:
-Q4:
-Q5:
-Q6:
-Q7:
-Q8:
-Q9:
-Q10:
+SOURCE_COERCION_MODEL:
 
-MINIMAL_FIX_BOUNDARY:
+PARTIAL_MODEL:
 
-SPLIT_RECOMMENDATION:
+NUMERIC_TOTAL_MODEL:
 
-FILES_INSPECTED:
-FUNCTIONS_INSPECTED:
-PROBES:
-TESTS:
+17_CLIENT_FIXTURE:
 
-ARR_ROOT1_CHANGED: NO
-M9_ROOT2_CHANGED: NO
-PLANNER_CHANGED: NO
-ROUTING_CHANGED: NO
-SQL_CHANGED: NO
-SCHEMA_CHANGED: NO
-DEPENDENCY_CHANGED: NO
-LIVE_DB_USED: NO
+4_CLIENT_FIXTURE:
+
+001..055:
+
+SUITES:
+
+FILES:
+RISKS:
+
+REJECTED_IMPLEMENTATION_MERGED:
+YES / NO
+
+REJECTED_IMPLEMENTATION_CHERRYPICKED:
+YES / NO
+
+FORMATTER_AMBIGUITY_FIXED:
+YES / NO
+
+POST_TRUNCATE_FALSE_COUNT_FIXED:
+YES / NO
+
+PROMPT_REDESIGNED:
+YES / NO
+
+POST_GENERATION_VALIDATOR_ADDED:
+YES / NO
+
+M9_LOADERS_CHANGED:
+YES / NO
+
+ARR_CHANGED:
+YES / NO
+
+ALIGNMENT_CHANGED:
+YES / NO
+
+PLANNER_CHANGED:
+YES / NO
+
+ROUTING_CHANGED:
+YES / NO
+
+SERVER_CHANGED:
+YES / NO
+
+SQL_CHANGED:
+YES / NO
+
+SCHEMA_CHANGED:
+YES / NO
+
+DEPENDENCY_CHANGED:
+YES / NO
+
+LIVE_DB_USED:
+YES / NO
 
 FINAL:
-DONE_PENDING_REVIEW /
-STOPPED
+PASS /
+STOP_SCOPE /
+STOP_OTHER
 
 ## Completion
 
-Al terminar auditoría:
+Si PASS:
 
 CURRENT_TASK -> DONE_PENDING_REVIEW
 
-Crear reporte.
-
-Commit únicamente docs de auditoría.
+Commit en nueva rama FIX.
 
 STOP.
 
-No implementation.
 No merge.
 No push main.
 No deploy.
-No next task.
-closure_reason: "HUMAN REVIEW AUDIT_OK. Audit proved separate downstream roots: ambiguous M9 formatter semantics, prompt/LLM noncompliance with deterministic alignment and no-causality, and absence of post-generation validation. ARR Root 1 and M9 Root 2 remain correct and frozen. Future fixes must remain split."
+No LIVE_DB.
+No siguiente task.
+
+Si STOP:
+
+CURRENT_TASK -> STOPPED
+
+Documentar razón.
+
+STOP.
