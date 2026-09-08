@@ -3,7 +3,7 @@ task_id: FIX-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-M9-GROSS-BUCKET-LABELS-001
 task_type: FIX
 mode: REGRESSION_FIRST
 
-status: AUTHORIZED
+status: DONE_PENDING_REVIEW
 
 authorized_by: "Human Approver"
 authorized_at: "2026-09-08T15:42:36-06:00"
