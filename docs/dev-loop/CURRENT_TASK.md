@@ -3,7 +3,7 @@ task_id: FIX-DIRECTOR-IA-HISTORICAL-MARGIN-COMPARE-HTTP-STATUS-001
 task_type: FIX
 mode: REGRESSION_FIRST
 
-status: AUTHORIZED
+status: DONE_PENDING_REVIEW
 
 authorized_by: "Human Approver"
 authorized_at: "2026-09-08T17:05:28-06:00"
