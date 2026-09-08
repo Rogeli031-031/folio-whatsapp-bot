@@ -3,7 +3,7 @@ task_id: FIX-DIRECTOR-IA-M9-ABSENT-NOT-ZERO-001
 task_type: FIX
 mode: REGRESSION_FIRST
 
-status: AUTHORIZED
+status: DONE_PENDING_REVIEW
 
 authorized_by: "Human Approver"
 authorized_at: "2026-09-08T11:47:32-06:00"
