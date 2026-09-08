@@ -1,13 +1,13 @@
-task_id: FIX-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-M9-GROSS-BUCKET-LABELS-001
+task_id: FIX-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-M9-TEMPORAL-SAFETY-GATE-001
 
 task_type: FIX
 mode: REGRESSION_FIRST
 
 status: CLOSED
 authorized_by: "Human Approver"
-authorized_at: "2026-09-08T15:42:36-06:00"
+authorized_at: "2026-09-08T16:11:23-06:00"
 
-human_authorization: "AUTHORIZED_BY_HUMAN - FIX M9 GROSS BUCKET SEMANTIC LABELS ONLY; NO NEW NET DELTA; NO M9 SQL/LOADERS; NO ARR; NO BUILDALIGNMENT; NO POST-GENERATION VALIDATOR; NO LIVE_DB; NO MERGE; NO DEPLOY"
+human_authorization: "AUTHORIZED_BY_HUMAN - FINANCIAL DIAGNOSIS M9 TEMPORAL SAFETY GATE ONLY; NO M9 QUERY CHANGE; NO FORECAST POR CLIENTE; NO NET DELTA; NO SQL; NO LIVE_DB; NO POST-GENERATION VALIDATOR; NO MERGE; NO DEPLOY"
 
 implementation_authorized: YES
 merge_authorized: NO
@@ -16,234 +16,297 @@ live_db_authorized: NO
 
 max_attempts: 1
 
-base_main_sha: b99ca2f8fc1638a8763edcdd5058d5bb9168ab37
-result_report_path: docs/dev-loop/reports/FIX-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-M9-GROSS-BUCKET-LABELS-001.md
+base_main_sha: a39f6b1bfd02ce2ce5c78b86cb79e30e10c830f5
+result_report_path: docs/dev-loop/reports/FIX-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-M9-TEMPORAL-SAFETY-GATE-001.md
 
 ## Problema probado
 
-LIVE financial_diagnosis presentó:
+M9 Delta Venta compara por año/mes:
 
-Delta Venta: Disminución de 1059160.26 kg
+SUM(arr.ventas_diarias_cliente.kg)
 
-La auditoría física demostró:
+sin:
 
-1059160.26 kg = datos.disminuyeron.totalDeltaKg
+- cutoff parity
+- upload_day
+- same-day comparison
+- forecast
 
-y significa:
+En mes abierto, periodo B es OBSERVED_MTD por los datos disponibles.
 
-M9_GROSS_DECREASE_BUCKET
+La auditoría probó:
 
-NO significa:
+M9_CUTOFF_PARITY_EXISTS=NO
+M9_USES_UPLOAD_DAY=NO
 
-PLANT_NET_DELTA
-IGF_ARR_GAP
-ARR_FORECAST_DELTA
+buildAlignment.status=comparable significa únicamente
+overlap de etiquetas YYYY-MM.
 
-## Invariantes
+NO significa paridad temporal de ventanas.
 
-M9_GROSS_DECREASE_BUCKET != PLANT_NET_DELTA
+Caso LIVE Acapulco:
 
-M9_GROSS_INCREASE_BUCKET != PLANT_NET_DELTA
+IGF 2026-09 = 1506.3507 ton
+ARR forecast 2026-09 = 1469.36 ton
 
-M9_STOPPED_BUYING_BUCKET != PLANT_NET_DELTA
+M9 2026-08 -> 2026-09:
 
-IGF_ARR_GAP != M9_DELTA
+mas = 3194.1 kg
+disminuyeron = 1059160.26 kg
+dejaron = 113087.4 kg
 
-PLANT_NET_MOM_DELTA = NOT_AVAILABLE en Financial Diagnosis actual.
+Aritmética bruta:
 
-No reconstruirlo.
+3194.1 - 1059160.26 - 113087.4
+= -1169053.56 kg
 
-No inventar:
+Ese número sería SUM(deltaKg) observado del universo M9.
 
-mas - disminuyeron - dejaron
+NO es forecast.
+NO es IGF-ARR gap.
+NO es delta neto forecast de planta.
 
-aunque matemáticamente pudiera derivarse.
+## North Star
 
-## Semántica requerida
+Pregunta:
 
-Para delta_venta:
+¿Por qué cayó el ingreso?
 
-### disminuyeron
+Financial Diagnosis NO debe usar como explicación financiera
+los buckets de M9 cuando el par es:
 
-datos.disminuyeron.totalDeltaKg
+mes cerrado completo
+vs
+mes actual abierto OBSERVED_MTD
 
-debe exponerse conceptualmente como:
+sin paridad de corte.
 
-GROSS_DECREASE_MAGNITUDE_KG
+## Regla temporal requerida
 
-Ejemplo LIVE:
+Crear una evaluación temporal LOCAL de Financial Diagnosis.
 
-1059160.26 kg
+NO modificar el SQL ni los loaders M9.
 
-significa:
+Debe distinguir:
 
-"suma bruta de las reducciones de clientes del bucket disminuyeron"
+PERIOD_LABEL_ALIGNMENT
 
-NO:
+de
 
-"la venta de la planta disminuyó 1059160.26 kg"
+TEMPORAL_WINDOW_ALIGNMENT.
 
-### mas
+Cuando:
 
-totalDeltaKg debe etiquetarse como:
+- M9 periodo B corresponde al mes calendario actual
+- y M9 no posee cutoff parity
 
-GROSS_INCREASE_MAGNITUDE_KG
+debe producir semántica equivalente a:
 
-Incluye clientes nuevos según la semántica física actual.
+M9_CURRENT_PERIOD_MODE=OBSERVED_MTD
+M9_CUTOFF_PARITY=NO
+M9_TEMPORAL_COMPARABILITY=UNSAFE
+M9_FINANCIAL_DIAGNOSIS_USAGE=CONTEXT_ONLY
 
-NO es delta neto planta.
+## Gate determinista requerido
 
-### dejaron
+Cuando:
 
-totalDeltaKg debe etiquetarse como:
+M9_TEMPORAL_COMPARABILITY=UNSAFE
 
-GROSS_STOPPED_BUYING_MAGNITUDE_KG
+los valores numéricos detallados de buckets M9 NO deben
+exponerse al LLM como evidencia para coincidencias,
+tensiones, drivers o explicación financiera.
 
-NO es delta neto planta.
+El contexto puede declarar:
 
-## Contrato de prompt requerido
+M9 periodo 2026-08 -> 2026-09
+current side = OBSERVED_MTD
+cutoff parity = NO
+uso financiero comparativo = UNSAFE
 
-Debe quedar explícito:
+pero NO entregar como evidencia analítica:
 
-M9_PLANT_NET_DELTA_STATUS=NOT_AVAILABLE
+1059160.26
+113087.4
+3194.1
+5906844.35
+
+para que el LLM los use contra IGF/ARR.
+
+No destruir el payload interno.
+No modificar la fuente.
+Solo gatear su exposición al contexto/prompt de
+financial_diagnosis cuando sea temporalmente inseguro.
+
+## Alineación
+
+Preservar buildAlignment() físicamente sin cambio.
+
+Pero corregir la semántica del prompt:
+
+alignment.status=comparable
+=
+PERIOD_LABEL_ALIGNMENT=comparable
+
+NO
+=
+TEMPORAL_WINDOW_ALIGNMENT=comparable.
+
+Si temporal safety = UNSAFE:
 
 FORBIDDEN:
-
-- "Delta Venta disminuyó X" usando solo disminuyeron.totalDeltaKg
-- "la planta cayó X" usando un bucket M9
-- "la venta neta cayó X" usando un bucket M9
-- equiparar M9 bucket con IGF-ARR gap
+- decir "todos los bloques son temporalmente comparables"
+- comparar magnitudes M9 con IGF/ARR
+- usar M9 como tensión contra IGF/ARR
+- usar M9 para explicar caída del ingreso
+- causalidad
 
 REQUIRED:
+- explicar brevemente que M9 compara el mes previo con
+  observación MTD del mes abierto sin paridad de corte
+- por eso M9 no se usa para explicar el resultado financiero
+  de cierre/proyección.
 
-si se menciona 1059160.26:
+## IGF / ARR
 
-"reducción bruta acumulada del bucket de clientes que disminuyeron"
+No modificar.
 
-o equivalente.
+Preservar:
 
-Debe aclararse que otros buckets pueden compensar esa magnitud.
+observed_venta_ton != projected_venta_ton != IGF commitment.
 
-No afirmar el resultado neto sin fuente física.
-
-## IGF vs ARR
-
-Preservar separación:
-
-IGF venta = compromiso/objeto IGF
-
-ARR projected_venta_ton = forecast cierre ARR
-
-Su diferencia:
-
-NO es M9 Delta Venta.
-
-Este FIX no necesita calcular ni mostrar automáticamente la brecha.
+1469.36 debe seguir siendo PROJECTED, nunca observed.
 
 ## No tocar
 
 lib/director-ia-m9-deltas.js
 lib/director-ia-igf-arr.js
+lib/director-ia-dashboard-forecast-adapter.js
 server.js
 planner
 routing
 SQL
 schema
 dependencies
-DICF
 commercial_state
+DICF
 
-No modificar:
+No modificar buildAlignment().
 
-buildAlignment()
-assembleFinancialDiagnosisEvidence()
-loadFinancialDiagnosisForChat()
+No crear:
 
-No crear plant net delta.
+M9 net delta nuevo
+forecast por cliente
+same-day M9
+nuevo SQL
+post-generation validator
+OpenAI retry
 
-No post-generation validator.
-
-## Archivos producto permitidos
+## Producto permitido
 
 lib/director-ia-financial-diagnosis.js
 
-Cambios permitidos únicamente en:
+Puede añadirse helper local determinista exclusivamente para:
 
-formatM9Bucket()
-formatM9Family()
-buildFinancialDiagnosisPromptControl()
-buildFinancialDiagnosisPrompt()
+- detectar mes actual
+- clasificar M9 OBSERVED_MTD
+- calcular temporal safety
+- controlar qué M9 se expone al contexto/prompt
 
-o helper local estrictamente semántico.
+Debe permitir fecha inyectable en tests.
+No depender de reloj real en fixtures.
 
-Preservar:
+## Preservar
 
+M9 gross bucket labels
+M9_PLANT_NET_DELTA_STATUS=NOT_AVAILABLE
 pretruncate counts
+null != zero
 SOURCE_PARTIAL
-MISSING != ZERO
-alignment contract
-causality contract
+CAUSAL_EVIDENCE=NONE
+IGF/ARR semantics
+authorization gates
 
 ## Regresiones mínimas
 
-001 1059160.26 se etiqueta gross decrease bucket
-002 no se etiqueta plant net delta
-003 no se etiqueta IGF/ARR gap
-004 disminuyeron magnitude positiva mantiene dirección DECREASE
-005 mas se etiqueta gross increase
-006 mas no es net delta
-007 dejaron se etiqueta gross stopped buying
-008 dejaron no es net delta
-009 M9 plant net delta status = NOT_AVAILABLE
-010 no fórmula net reconstruida
-011 prompt prohíbe "Delta Venta disminuyó X" desde bucket
-012 prompt prohíbe "planta cayó X" desde bucket
-013 prompt permite "reducción bruta acumulada"
-014 prompt declara posible compensación por otros buckets
-015 IGF/ARR distinto de M9
-016 alignment comparable intacto
-017 causality NONE intacto
-018 pretruncate 17/3 intacto
-019 null != zero intacto
-020 SOURCE_PARTIAL intacto
-021 numeric zero intacto
-022 formatter no inventa signo
-023 no SQL
-024 no loaders
-025 no ARR
-026 no buildAlignment
-027 no post validator
-028 no retry OpenAI
-029 no planner
-030 no routing
-031 no server
-032 no schema
-033 no dependencies
-034 FD tests pass
-035 M9 tests pass
-036 ARR tests pass
-037 prompt status/alignment tests pass
-038 Tier1 pass
-039 pre-deploy gate pass
-040 NEW FAILURE=0
+001 current M9 period B -> OBSERVED_MTD
+002 current M9 cutoff parity -> NO
+003 current M9 temporal comparability -> UNSAFE
+004 label alignment can remain comparable
+005 comparable label != temporal comparable
+006 unsafe M9 bucket numbers withheld from LLM context
+007 1059160.26 not exposed in unsafe prompt context
+008 113087.4 not exposed in unsafe prompt context
+009 3194.1 not exposed in unsafe prompt context
+010 M9 delta ingreso bucket total not exposed unsafe
+011 internal M9 payload unchanged
+012 historical closed pair not automatically called MTD
+013 date injectable
+014 no wall-clock-dependent fixture
+015 ARR projected preserved
+016 ARR observed preserved
+017 1469.36 cannot be labeled observed when projected field
+018 IGF commitment distinct
+019 no IGF-ARR=M9 equivalence
+020 buildAlignment unchanged
+021 no M9 SQL change
+022 no M9 loader change
+023 no same-day implementation
+024 no client forecast
+025 no net delta reconstruction
+026 gross labels intact
+027 pretruncate intact
+028 SOURCE_PARTIAL intact
+029 null != zero intact
+030 CAUSAL_EVIDENCE NONE intact
+031 no causal use of unsafe M9
+032 no tension using unsafe M9 numbers
+033 prompt explicitly explains temporal limitation
+034 context explicitly explains temporal limitation
+035 no post-generation validator
+036 no OpenAI retry
+037 no planner
+038 no routing
+039 no server
+040 no schema
+041 no dependencies
+042 FD tests pass
+043 prompt-status tests pass
+044 gross-bucket tests pass
+045 M9 tests pass
+046 ARR Root1 tests pass
+047 ARR tests pass
+048 Tier1 pass
+049 pre-deploy gate PASS
+050 NEW FAILURE=0
 
-## North Star
+## LIVE expected
 
-La respuesta LIVE NO debe decir:
+Para Acapulco, septiembre abierto:
 
-"Delta Venta: Disminución de 1059160.26 kg"
+NO:
 
-Debe decir algo equivalente a:
+"Delta Venta disminuyeron 1059160.26 kg"
+como evidencia para explicar ingreso.
 
-"En M9, los clientes del bucket 'disminuyeron' acumulan
-1,059,160.26 kg de reducción bruta entre agosto y septiembre.
-Esta cifra no es el delta neto de venta de la planta."
+NO:
 
-Si se habla de IGF 1506.3507 vs ARR 1469.36:
+"puede estar relacionado"
 
-deben permanecer como objetos diferentes.
+NO:
 
-No denominar su diferencia M9.
+"todos los bloques son comparables"
+en sentido temporal.
+
+Esperado equivalente:
+
+"IGF y ARR corresponden a septiembre.
+M9 compara agosto contra observación MTD de septiembre
+sin paridad de corte, por lo que no uso ese bloque para
+explicar el resultado financiero del mes."
+
+Después puede mostrar hechos IGF/ARR defendibles,
+sin atribuir causalidad.
 
 ## Completion
 
@@ -258,4 +321,4 @@ No push main.
 No deploy.
 No LIVE_DB.
 No siguiente tarea.
-closure_reason: "HUMAN REVIEW PASS. M9 bucket totals are now explicitly labeled as gross bucket magnitudes, not plant net delta or IGF-ARR gap. M9_PLANT_NET_DELTA remains NOT_AVAILABLE. No data, aggregation, SQL, loader, ARR, alignment or post-generation behavior changed."
+closure_reason: "HUMAN REVIEW PASS. Financial Diagnosis now distinguishes period-label overlap from temporal-window comparability. When M9 current period is OBSERVED_MTD without cutoff parity, its numeric bucket evidence is withheld from the LLM financial-diagnosis context. Internal M9 payload, buildAlignment, M9 loaders, ARR, SQL and routing remain unchanged."
