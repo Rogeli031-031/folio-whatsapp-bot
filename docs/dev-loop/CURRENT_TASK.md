@@ -3,8 +3,7 @@ task_id: FIX-DIRECTOR-IA-ARR-PROJECTION-CUTOFF-LABEL-001
 task_type: FIX
 mode: REGRESSION_FIRST
 
-status: DONE_PENDING_REVIEW
-
+status: CLOSED
 authorized_by: "Human Approver"
 authorized_at: "2026-09-08T10:18:38-06:00"
 
@@ -603,3 +602,4 @@ NO push main.
 NO deploy.
 NO LIVE_DB.
 NO next task.
+closure_reason: "HUMAN REVIEW MERGE_OK. ARR Root 1 now keeps observed sale, projected sale, projected discount and previous-month sale semantically separate; reuses dashboard forecast parity/cutoff; IGF commitment remains separate; no M9/planner/routing/SQL/schema/dependency/dashboard-formula changes; R-ARR-PROJ 40/40 and required suites pass; NEW FAILURE=0."
