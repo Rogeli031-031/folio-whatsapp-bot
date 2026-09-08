@@ -1,7 +1,7 @@
 # FIX-DIRECTOR-IA-ARR-PROJECTION-CUTOFF-LABEL-001
 
 IMPLEMENTATION_SHA:
-pending_commit_on_fix/director-ia-arr-projection-cutoff-label-001
+af9faa2fe0d1e1e585e70c9a465a740fac293ad1
 
 BEFORE:
 B-001 empty cutoff `fechaCorte: ""` = true
