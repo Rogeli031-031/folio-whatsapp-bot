@@ -3,7 +3,7 @@ task_id: AUDIT-DIRECTOR-IA-CLIENT-LARGEST-SALES-LOSS-HISTORICAL-COMPARISON-001
 task_type: AUDIT
 mode: READ_ONLY
 
-status: AUTHORIZED
+status: DONE_PENDING_REVIEW
 
 authorized_by: "Human Approver"
 authorized_at: "2026-09-08T17:21:56-06:00"
