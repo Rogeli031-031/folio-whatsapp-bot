@@ -3,8 +3,7 @@ task_id: FIX-DIRECTOR-IA-M9-ABSENT-NOT-ZERO-001
 task_type: FIX
 mode: REGRESSION_FIRST
 
-status: DONE_PENDING_REVIEW
-
+status: CLOSED
 authorized_by: "Human Approver"
 authorized_at: "2026-09-08T11:47:32-06:00"
 
@@ -731,3 +730,4 @@ NO push main.
 NO deploy.
 NO LIVE_DB.
 NO next task.
+closure_reason: "HUMAN REVIEW MERGE_OK. M9 now preserves structural known-zero semantics while keeping missing/unknown distinct from numeric zero; missing margin no longer produces exact Delta Ingreso; null formatters no longer render zero; financial diagnosis propagates PARTIAL/NOT_FOUND and no-causality; ARR Root 1 frozen and regression passes; R-M9-ABSENCE 48/48 and required suites pass; NEW FAILURE=0."
