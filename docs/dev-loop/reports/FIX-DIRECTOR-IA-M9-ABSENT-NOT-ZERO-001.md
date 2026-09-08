@@ -1,7 +1,7 @@
 # FIX-DIRECTOR-IA-M9-ABSENT-NOT-ZERO-001
 
 IMPLEMENTATION_SHA:
-pending_commit_on_fix/director-ia-m9-absent-not-zero-001
+75f634edd0df2df282cd48fa7389c22324c615af
 
 BEFORE:
 B-001 `margenA/B = loadMargen() ?? 0` = true
@@ -106,7 +106,7 @@ SUITES:
 R-M9-ABSENT-NOT-ZERO 48/48 PASS
 M9 existentes PASS
 financial diagnosis PASS
-ARR Root1 (semántica 001-027, 029-031, 033-040 PASS; 028/032 fallan solo en working tree sucio porque `git diff HEAD -- m9` ya no está vacío; post-commit deben volver a 40/40)
+ARR Root1 40/40 PASS post-commit
 ARR existentes 24/24 PASS
 IGF PASS
 planner 61/61 PASS
