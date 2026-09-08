@@ -1,538 +1,567 @@
-task_id: FIX-DIRECTOR-IA-FOLIO-POST-CONCEPT-ANALYTIC-TAIL-001
+task_id: AUDIT-DIRECTOR-IA-ARR-PROJECTION-SEMANTICS-001
 
-task_type: FIX
-mode: REGRESSION_FIRST
+task_type: AUDIT
+mode: READ_ONLY_PHYSICAL_TRACE
 
-status: CLOSED
+status: AUTHORIZED
+
 authorized_by: "Human Approver"
-authorized_at: "2026-09-07T18:03:45-06:00"
+authorized_at: "2026-09-08T10:01:57-06:00"
 
-human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-07 - FIX POST-CONCEPT ANALYTIC TAIL BOUNDARY IN FOLIO SEARCH; PRESERVE DEPLOYED ESTAN/LOCATOR/NULL/AGGREGATE CONTRACTS; NO PLANNER; NO ROUTING; NO SQL; NO LIVE_DB; NO MERGE; NO DEPLOY"
+human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-08 - AUDIT ARR PROJECTION SEMANTICS ONLY; NO IMPLEMENTATION; NO LIVE_DB; NO MERGE; NO PUSH; NO DEPLOY"
 
-implementation_authorized: YES
+implementation_authorized: NO
 merge_authorized: NO
 deploy_authorized: NO
 live_db_authorized: NO
 
 max_attempts: 1
 
-base_main_sha: d4291bc0d22cc367e597b41ce448810fc4bb2790
+base_main_sha: 3073bbb70fa38db925be3f337c6012572886e38e
 
-audit_report_path: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-FOLIO-POST-CONCEPT-ANALYTIC-TAIL-001.md
-result_report_path: docs/dev-loop/reports/FIX-DIRECTOR-IA-FOLIO-POST-CONCEPT-ANALYTIC-TAIL-001.md
+result_report_path: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-ARR-PROJECTION-SEMANTICS-001.md
 
 ## Objetivo único
 
-Corregir el END boundary de POST_PERIOD_DE_TO_TEXT_END para que
-una cola analítica posterior al concepto quede FUERA del protected
-concept span y permanezca dentro de control-language.
+Localizar físicamente dónde Director IA pierde o mezcla la semántica
+de los datos de ARR al responder preguntas ejecutivas como:
 
-No rediseñar el agregado.
+¿Cómo va ARR?
+¿Cuánto proyectamos vender?
+¿Cómo vamos a cerrar septiembre?
+¿Cuál es la proyección de venta?
+¿Por qué cayó el ingreso?
 
-## Hallazgo físico auditado
+No implementar.
 
-FIRST_DIVERGENCE:
+No asumir que el defecto está en computeDicf, el adapter, el planner,
+el prompt, el formatter o el LLM. Probar cada frontera.
 
-locateConceptSpan
-POST_PERIOD_DE_TO_TEXT_END
+## Invariante ejecutiva
 
-Actual:
+Mantener separados:
 
-boundConceptSpan(text, afterControl + 3, text.length)
+VENTA REAL / TOTAL MES AL CORTE
+!=
+PROYECCION ARR DE CIERRE DEL MES
+!=
+COMPROMISO / META / FORECAST IGF
 
-Eso produce:
+Y mantener:
 
-liquidaciones suma los montos en un acumulado por mes
+DATO AUSENTE
+!=
+CERO OBSERVADO
 
-como un único concept span.
+## Evidencia observada — Puebla septiembre 2026
 
-ROOT_CAUSE_CLASS:
+Dashboard ARR mostró:
 
-CONCEPT_END_BOUNDARY
+TOTAL MES AL CORTE:
+302.00 ton
 
-## North Star de este FIX
+PROY VENTA:
+1522.76 ton
 
-Pregunta:
+Agosto:
+aprox. 1176 ton
 
-¿Cuánto suman los folios de enero a agosto de liquidaciones? suma los montos en un acumulado por mes
+Desc. PROY septiembre:
+-4.84 $/kg
 
-Debe producir:
+Director IA respondió en la prueba observada de ARR:
 
-period_mode=RANGE
-period_start=2026-01
-period_end=2026-08
+venta esperada septiembre:
+302.0 ton
 
-concept_mode=SINGLE
-concept_query=liquidaciones
+comparación aproximada:
+302 vs 1176
+caída aproximada:
+874 ton
 
-analysis_mode=AGGREGATE
-aggregation=SUM
-group_by=MONTH
-cumulative=YES
+descuento septiembre:
+-4.92 $/kg
 
-## Segunda forma LIVE obligatoria
+descuento agosto:
+-4.55 $/kg
 
-Pregunta:
+También presentó aproximadamente:
 
-¿Cuánto suman los folios de enero a agosto de liquidaciones? dame el monto por mes y acumulado
+compromiso / forecast IGF:
+2000.299 ton
 
-Debe producir:
+margen:
+6.52
 
-concept_query=liquidaciones
+ingreso aproximado:
+744702
 
-analysis_mode=AGGREGATE
-aggregation=SUM
-group_by=MONTH
-cumulative=YES
+No asumir que todos esos números tienen la misma fuente ni semántica.
 
-## Regla estructural
+## Hecho de producto esperado
 
-Separar:
+Para una pregunta de PROYECCION ARR:
 
-BUSINESS DATA | POST-CONCEPT ANALYTIC TAIL
+"Al corte llevamos 302 ton"
 
-La cola solo puede separarse si forma un SUFIJO COMPLETO
-reconocido hasta EOF.
+puede ser contexto observado.
 
-NO substring global.
+Pero:
 
-NO stopwords globales.
+"ARR proyecta cerrar septiembre en 1522.76 ton"
 
-NO borrar palabras dentro de protected concept span.
+debe usar la métrica PROY física si está disponible y autorizada.
 
-## Tails cerrados autorizados
+No llamar 302 "proyección" si físicamente representa el total al corte.
 
-Cuando formen un sufijo completo hasta EOF:
+No llamar 2000.299 "proyección ARR" si físicamente pertenece a IGF.
 
-por mes
+## Problema adicional observado
 
-acumulado por mes
+En una respuesta relacionada con:
 
-suma los montos
+¿Por qué cayó el ingreso?
 
-suma los montos por mes
+los Delta Venta / Delta Descuento / Delta Ingreso M9 ausentes
+fueron tratados o expresados como si fueran 0 / sin cambios.
 
-suma los montos en un acumulado por mes
+Contrato requerido:
 
-dame el monto por mes y acumulado
-
-dame el monto por mes y el acumulado
-
-Singular/plural equivalente de monto/montos es permitido
-solo mediante gramática cerrada y tests.
-
-## Casos auditados obligatorios
-
-C:
-
-¿Cuánto suman los folios de enero a agosto de liquidaciones?
-
-→ concept=liquidaciones
-→ AGGREGATE
-→ group_by=NONE
-→ cumulative=NO
-
-D:
-
-¿Cuánto suman los folios de enero a agosto de liquidaciones por mes?
-
-→ concept=liquidaciones
-→ AGGREGATE
-→ MONTH
-→ cumulative=NO
-
-E:
-
-¿Cuánto suman los folios de enero a agosto de liquidaciones? por mes
-
-→ igual D
-
-F:
-
-¿Cuánto suman los folios de enero a agosto de liquidaciones? acumulado por mes
-
-→ concept=liquidaciones
-→ AGGREGATE
-→ MONTH
-→ cumulative=YES
-
-G:
-
-¿Cuánto suman los folios de enero a agosto de liquidaciones? suma los montos
-
-→ concept=liquidaciones
-→ AGGREGATE
-→ SUM
-→ group_by=NONE
-→ cumulative=NO
-
-## BUSINESS DATA que NO debe romperse
-
-que folios de agosto fueron de POR MES SERVICIOS
-→ LIST
-→ concept="por mes servicios"
-
-que folios de agosto fueron de SUMA LOS MONTOS SA
-→ LIST
-→ concept="suma los montos sa"
-
-que folios de agosto fueron de IMPORTE TOTAL SEGUROS
-→ LIST
-→ concept="importe total seguros"
-
-dame el total de los folios de agosto de POR MES SERVICIOS
-→ AGGREGATE
-→ concept="por mes servicios"
-
-suma los montos de los folios de agosto de SUMA LOS MONTOS SA
-→ AGGREGATE
-→ concept="suma los montos sa"
-
-## Contratos congelados — NO reabrir
-
-ESTAN period bridge.
-
-¿Qué apoyos de llantas están en septiembre?
-→ concept=llantas
-→ 2026-09
-
-Protected lexical immutability:
-
-RENTA DEL MES
-PAGO DEL MES
-SALDO ACTUAL
-MATERIAL PARA
-CURSO
-SERVICIO EN
-
-TOTAL PLAY LIST/AGGREGATE.
-
-NULL != 0.
-
-KNOWN_ZERO:
-0 físico = conocido.
-
-UNKNOWN:
+ABSENT
+MISSING
+DATA_NOT_FOUND
 null
-undefined
-blank
-nonfinite
+campo inexistente
 
-UNKNOWN:
-no suma
-unknown_amount_count++
-is_complete=false
+NO equivalen automáticamente a cero.
 
-CANCELADO:
-fuera del agregado.
+Solo un cero físicamente observado puede expresarse como cero.
 
-PAGADO:
-no es prueba contable.
+## Auditoría física requerida
 
-Full-set:
-AGGREGATE antes del cap 40.
-LIST cap 40.
+Trazar, con función + archivo + línea/rango:
 
-MONTH:
-mes_cargo.
+1. ROUTING
 
-CUMULATIVE:
-running solo conocidos.
+¿Cómo va ARR?
 
-## North Star anterior — regresión obligatoria
+- intent
+- domains
+- tools solicitadas
+- tools realmente ejecutadas
+- contexto final enviado al modelo
 
-cuanto hemos gastado en apoyos en REMODELACION DE TALLER de enero a agosto? suma los montos en un acumulado por mes
+2. ARR DATA SOURCE
 
-Debe seguir:
+Localizar dónde se calculan o cargan:
 
-SUPPORT_FAMILIES
-RANGE 2026-01..2026-08
-concept=remodelacion de taller
-AGGREGATE
-SUM
-MONTH
-cumulative=YES
+- total al corte / real actual
+- proyección cierre
+- venta mes anterior
+- descuento actual
+- descuento proyectado
+- margen
+- ingreso
+- periodo
+- last_date / upload_day si aplica
 
-## Preservar
+3. DASHBOARD ARR
 
-SINGLE
-RANGE
-ANY
+Localizar el código físico que alimenta los valores visuales:
 
-range max 12
+TOTAL MES = 302
+PROY = 1522.76
+Desc. PROY = -4.84
 
-inverted range:
-0 calls
+Determinar los nombres de campo exactos.
 
-range >12:
-0 calls
+No asumir que el label de UI coincide con el nombre interno.
 
-partial monthly failure:
-fail closed
+4. DIRECTOR IA ARR ADAPTER / TOOL
 
-bonos o bono
+Localizar qué campos expone hoy a Director IA.
 
-gas != gasolina
+Para cada métrica reportar:
 
-O-RING
-SELLO O-RING
+SOURCE_FIELD:
+SOURCE_FUNCTION:
+SEMANTIC_LABEL:
+VALUE_TYPE:
+NULLABILITY:
 
-aceite de motor
+5. 302
 
-MAYAN PALACE
+Responder físicamente:
 
-morphology
-scope
-authz
+¿De qué campo sale 302?
 
-queryReviewableSupportFolios
+¿Es:
+OBSERVED_TO_DATE /
+CURRENT_TOTAL /
+FORECAST /
+OTHER?
+
+¿En qué función cambia, si cambia, su etiqueta semántica?
+
+6. 1522.76
+
+Responder:
+
+¿Existe físicamente en el objeto que usa Director IA?
+
+Si YES:
+¿por qué no se selecciona para una pregunta de proyección?
+
+Si NO:
+¿en qué capa se pierde respecto del dashboard?
+
+7. DESCUENTO -4.92 vs -4.84
+
+No asumir rounding.
+
+Determinar si provienen de:
+
+- campos diferentes
+- periodos diferentes
+- observado vs proyección
+- weighted calculation diferente
+- distinta fuente
+- distinta ventana
+- rounding
+- stale snapshot
+- OTHER
+
+Si sin LIVE_DB no puede demostrarse la diferencia exacta:
+marcar UNPROVEN_NO_LIVE_DB.
+
+No inventar explicación.
+
+8. IGF 2000.299
+
+Trazar cómo llega a la misma respuesta.
+
+Determinar:
+
+ARR_PROJECTION:
+<field>
+
+IGF_COMMITMENT:
+<field>
+
+¿El formatter/model context los etiqueta inequívocamente?
+
+¿Existe una frontera donde se vuelven intercambiables?
+
+9. M9 / DELTAS AUSENTES
+
+Localizar físicamente:
+
+- Delta Venta
+- Delta Descuento
+- Delta Ingreso
+
+Seguir desde tool result hasta respuesta/context.
+
+Buscar patrones tales como:
+
+value || 0
+Number(value) || 0
+?? 0
+default 0
+formatters que impriman ausente como 0
+arrays vacíos interpretados como no-change
+LLM prompt que omita availability/evidence status
+
+No asumir cuál existe.
+
+10. CAUSALIDAD
+
+Auditar específicamente si:
+
+¿Por qué cayó el ingreso?
+
+puede hoy construir causalidad mezclando:
+
+IGF commitment
+ARR observed-to-date
+ARR projection
+M9 absent deltas
+
+Determinar si existe una regla física que impida afirmar:
+
+"cayó por X"
+
+cuando las métricas no son homogéneas o las evidencias están ausentes.
+
+## Fronteras a inspeccionar
+
+Buscar físicamente, no asumir nombres:
+
+planner
+director-ia-chat
+tool orchestrator
+ARR snapshot tool
+IGF snapshot tool
+commercial_state
+dicf.computeDicf
+M9 delta tools
+context builders
+prompt / response assembly
+dashboard ARR calculation
+server handlers relacionados
+
+El código actual conocido usa dicf.computeDicf para commercial_state,
+pero eso NO demuestra que ¿Cómo va ARR? use exactamente el mismo path.
+
+Probarlo.
+
+## Probes read-only
+
+Sin DB y sin modificar product code, construir probes/tests temporales
+solo si pueden ejecutarse contra funciones puras o fixtures existentes.
+
+No dejar archivos temporales al cerrar.
+
+### Probe A
+
+Question:
+¿Cómo va ARR?
+
+Reportar:
+
+ROUTE_INTENT:
+TOOLS:
+ARR_CONTEXT_FIELDS:
+IGF_CONTEXT_FIELDS:
+M9_CONTEXT_FIELDS:
+
+### Probe B
+
+Question:
+¿Cuánto proyectamos vender?
+
+Determinar cuál field tendría prioridad hoy.
+
+### Probe C
+
+Question:
+¿Cómo vamos a cerrar septiembre?
+
+Igual.
+
+### Probe D
+
+Question:
+¿Cuál es la proyección de venta?
+
+Igual.
+
+### Probe E
+
+Question:
+¿Por qué cayó el ingreso?
+
+Determinar qué datos y availability flags recibe el modelo.
+
+## Comparación semántica obligatoria
+
+Crear tabla:
+
+METRIC
+PHYSICAL_SOURCE
+FIELD
+SEMANTIC_MEANING
+DIRECTOR_IA_LABEL
+DASHBOARD_LABEL
+CAN_BE_NULL
+ABSENCE_HANDLING
+
+Filas mínimas:
+
+ARR observed sale to date
+ARR projected month sale
+previous-month sale
+ARR observed discount
+ARR projected discount
+IGF commitment/forecast
+M9 Delta Venta
+M9 Delta Descuento
+M9 Delta Ingreso
+
+## Preguntas que la auditoría debe resolver
+
+ARR_SALES_FIRST_DIVERGENCE:
+<función/línea>
+
+ARR_PROJECTION_FIELD_EXISTS:
+YES / NO / UNPROVEN
+
+ARR_PROJECTION_REACHES_DIRECTOR_IA:
+YES / NO / PARTIAL / UNPROVEN
+
+OBSERVED_302_FIELD:
+<exacto>
+
+PROJECTED_1522_FIELD:
+<exacto o UNPROVEN>
+
+WHY_302_WAS_CALLED_PROJECTION:
+<evidencia física>
+
+DISCOUNT_FIRST_DIVERGENCE:
+<función/línea/UNPROVEN>
+
+DISCOUNT_492_SOURCE:
+<exacto/UNPROVEN>
+
+DISCOUNT_484_SOURCE:
+<exacto/UNPROVEN>
+
+DISCOUNT_DIFFERENCE_CLASS:
+FIELD_MISMATCH /
+PERIOD_MISMATCH /
+OBSERVED_VS_PROJECTED /
+CALCULATION_MISMATCH /
+ROUNDING /
+STALE_DATA /
+UNPROVEN
+
+IGF_2000_FIELD:
+<exacto>
+
+IGF_ARR_SEMANTIC_SEPARATION:
+SAFE / AMBIGUOUS / BROKEN
+
+M9_ABSENCE_FIRST_DIVERGENCE:
+<función/línea>
+
+M9_ABSENT_COLLAPSES_TO_ZERO:
+YES / NO / PARTIAL
+
+CAUSALITY_GATE_PRESENT:
+YES / NO / PARTIAL
 
 ## No cambiar
 
-planner
-routing
-SQL
-schema
-dependencies
-authz
-scope semantics
-RANGE semantics
-ANY semantics
-morphology semantics
-
-## Fuera de alcance
-
-NO resolver:
-
-apoyos ... de taller como categoría
-
-inversiones en cilindros
-
-inversiones a clientes
-
-mantenimiento ISUZU sin folio/apoyo
-
-acciones abiertas
-
-folio exacto sin mes
-
-ranking autotanque
-
-ARR forecast 302 vs 1522.76
-
-LIST formatMoney(null)
-
-## Regression first
-
-Antes de implementar demostrar contra base_main_sha:
-
-1. CASE A falla por concept tail.
-2. CASE H falla por concept tail.
-3. CASE C ya conserva liquidaciones.
-4. North Star anterior ya funciona.
-5. ESTAN ya funciona.
-
-## Tests mínimos
-
-R-FOLIO-TAIL-001 CASE A concept
-002 CASE A aggregate
-003 CASE A month
-004 CASE A cumulative
-
-005 CASE H concept
-006 CASE H aggregate
-007 CASE H month
-008 CASE H cumulative
-
-009 CASE C
-
-010 CASE D concept
-011 CASE D MONTH
-
-012 CASE E
-
-013 CASE F concept
-014 CASE F cumulative
-
-015 CASE G concept
-016 CASE G aggregate
-
-017 POR MES SERVICIOS LIST
-018 POR MES SERVICIOS AGG
-
-019 SUMA LOS MONTOS SA LIST
-020 SUMA LOS MONTOS SA AGG
-
-021 IMPORTE TOTAL SEGUROS
-
-022 North Star concept
-023 North Star RANGE
-024 North Star MONTH
-025 North Star cumulative
-
-026 ESTAN regression
-027 ESTAN business data
-
-028 RENTA DEL MES
-029 CURSO
-
-030 TOTAL PLAY LIST
-031 TOTAL PLAY AGG
-
-032 NULL != 0
-033 zero known
-034 null unknown
-035 blank unknown
-036 nonfinite unknown
-037 unknown no suma
-038 unknown count
-039 incomplete false/true semantics
-040 complete true
-
-041 CANCELADO excluded
-042 PAGADO null unknown
-
-043 empty month complete
-044 null month incomplete
-045 running known
-046 running completeness
-
-047 aggregate >40 full set
-048 LIST cap40
-
-049 ANY bonos|bono
-050 gas != gasolina
-051 O-RING
-052 aceite de motor
-053 MAYAN PALACE
-
-054 partial range fail closed
-055 inverted range 0 calls
-056 range >12 0 calls
-
-057 planner unchanged
-058 routing unchanged
-059 SQL/dependency unchanged
-
-## Suites obligatorias
-
-R-FOLIO-TAIL
-R-FOLIO-ESTAN
-R-FOLIO-LOCATOR
-R-FOLIO-COMP
-R-FOLIO-RANGE
-R-FOLIO-LANG
-R-FOLIO-TRUTH
-
-planner
-capabilities
-orchestrator
-
-M2
-M4
-M5
-M6
-IGF
-continuity
-
-Tier 1
-
-pre-deploy --gate
-
-NEW FAILURE = 0
-
-Si falla algo aparentemente preexistente:
-demostrar contra base_main_sha.
-
-## Product files
-
-Preferentemente:
-
-lib/director-ia-folio-search.js
-
-test/director-ia-folio-search-post-concept-analytic-tail.test.js
+No product code.
 
 No planner.
 
+No routing.
+
+No SQL.
+
+No schema.
+
+No dependencies.
+
+No prompts.
+
+No adapters.
+
+No tests permanentes.
+
+No DB.
+
+No Render.
+
 ## STOP CONDITIONS
 
-STOP si requiere:
+STOP si la auditoría requiere LIVE_DB para continuar.
 
-planner
-routing
-SQL
-schema
-dependency
-LIVE_DB
+En ese caso documentar exactamente qué punto quedó UNPROVEN.
 
-cambiar ESTAN semantics
-cambiar NULL model
-cambiar RANGE
-cambiar ANY
-cambiar morphology
-cambiar scope
-cambiar authz
+STOP si encuentras que los tres síntomas tienen roots independientes.
+No diseñar un mega-fix.
 
-STOP si la solución propuesta depende de:
-
-global stopwords
-global analytic token stripping
-mutar protected concept span
+Clasificarlos para tareas separadas.
 
 ## Reporte
 
-docs/dev-loop/reports/FIX-DIRECTOR-IA-FOLIO-POST-CONCEPT-ANALYTIC-TAIL-001.md
+docs/dev-loop/reports/AUDIT-DIRECTOR-IA-ARR-PROJECTION-SEMANTICS-001.md
 
-Debe iniciar:
+Debe contener:
 
-IMPLEMENTATION_SHA:
-BEFORE:
-AFTER:
+AUDIT_BASE_SHA:
 
-FIRST_DIVERGENCE_FIXED:
-POST_PERIOD_END_MODEL:
-ANALYTIC_TAIL_GRAMMAR:
-TAIL_MUST_REACH_EOF:
-PROTECTED_BUSINESS_DATA:
+EXECUTIVE_SUMMARY:
 
-CASE_A:
-CASE_C:
-CASE_D:
-CASE_E:
-CASE_F:
-CASE_G:
-CASE_H:
+ROUTE_TRACE:
 
-NORTH_STAR:
-ESTAN_REGRESSION:
-PROTECTED_SPAN_REGRESSION:
+ARR_DATA_FLOW:
 
-NULL_MODEL:
-FULL_SET:
-MONTHLY:
-CUMULATIVE:
+DASHBOARD_DATA_FLOW:
 
-001..059:
-SUITES:
-FILES:
-RISKS:
+SEMANTIC_MATRIX:
 
-PLANNER_CHANGED:
-ROUTING_CHANGED:
-SQL_NEW:
-DEPENDENCY_NEW:
+ARR_SALES_FIRST_DIVERGENCE:
+ARR_PROJECTION_FIELD_EXISTS:
+ARR_PROJECTION_REACHES_DIRECTOR_IA:
+OBSERVED_302_FIELD:
+PROJECTED_1522_FIELD:
+WHY_302_WAS_CALLED_PROJECTION:
+
+DISCOUNT_FIRST_DIVERGENCE:
+DISCOUNT_492_SOURCE:
+DISCOUNT_484_SOURCE:
+DISCOUNT_DIFFERENCE_CLASS:
+
+IGF_2000_FIELD:
+IGF_ARR_SEMANTIC_SEPARATION:
+
+M9_ABSENCE_FIRST_DIVERGENCE:
+M9_ABSENT_COLLAPSES_TO_ZERO:
+
+CAUSALITY_GATE_PRESENT:
+
+PROBE_A:
+PROBE_B:
+PROBE_C:
+PROBE_D:
+PROBE_E:
+
+REQUIRES_LIVE_DB:
+YES / NO
+
+REQUIRES_SQL_CHANGE:
+YES / NO / UNPROVEN
+
+REQUIRES_PLANNER_CHANGE:
+YES / NO / UNPROVEN
+
+REQUIRES_ROUTING_CHANGE:
+YES / NO / UNPROVEN
+
+ROOT_CAUSE_COUNT:
+<number>
+
+RECOMMENDED_TASK_SPLIT:
+<lista si hay roots independientes>
+
+MINIMAL_SAFE_FIX_BOUNDARY:
+<por cada root demostrado>
+
+FINAL_RECOMMENDATION:
+FIX_SINGLE_ROOT /
+FIX_SPLIT_ROOTS /
+STOP_LIVE_DB_REQUIRED /
+STOP_OTHER
 
 ## Completion
 
 CURRENT_TASK → DONE_PENDING_REVIEW
 
-Commit únicamente en rama FIX.
+Commit únicamente:
+
+docs/dev-loop/CURRENT_TASK.md
+docs/dev-loop/reports/AUDIT-DIRECTOR-IA-ARR-PROJECTION-SEMANTICS-001.md
+
+No product code.
 
 STOP.
 
 NO merge.
-NO push main.
+NO push.
 NO deploy.
 NO LIVE_DB.
 NO next task.
-closure_reason: "HUMAN REVIEW MERGE_OK. POST_PERIOD_DE_TO_TEXT_END now separates recognized post-concept analytic tails from BUSINESS DATA. CASE A-H, North Star, ESTAN, protected-span lexical immutability, Option B NULL semantics, full-set aggregation, CANCELADO, RANGE/ANY and required regressions pass. NEW FAILURE = 0. Declared full-span-tail collision is theoretical/non-blocking and not treated as a production acceptance case."
