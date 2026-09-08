@@ -157,83 +157,83 @@ El chat de este intent **no** ejecuta el tool orchestrator. `buildDirectorIaTool
 
 ### Hop 1 — pregunta HTTP
 
-FILE: `lib/director-ia-chat.js`  
-FUNCTION: `handlePostChat` L6185-6209  
-INPUT: `{ planta_id, question: "¿Por qué cayó el ingreso?" }`  
-OUTPUT: llama `askDirectorIa`; `res.status(status).json(result)`  
-CAN_INTRODUCE_CAUSALITY: NO  
-CAN_OVERRIDE_ALIGNMENT: NO  
-CAN_INVENT_M9_CHANGE: NO  
+FILE: `lib/director-ia-chat.js`
+FUNCTION: `handlePostChat` L6185-6209
+INPUT: `{ planta_id, question: "¿Por qué cayó el ingreso?" }`
+OUTPUT: llama `askDirectorIa`; `res.status(status).json(result)`
+CAN_INTRODUCE_CAUSALITY: NO
+CAN_OVERRIDE_ALIGNMENT: NO
+CAN_INVENT_M9_CHANGE: NO
 POST_VALIDATION_PRESENT: NO
 
 ### Hop 2 — planner
 
-FILE: `lib/director-ia-planner.js`  
-FUNCTION: regla L631-636  
-INPUT: pregunta normalizada con `por que/porque` + `cayo/caida/bajo/disminuy` + `ingreso/venta/margen/utilidad`  
-OUTPUT: `intent=financial_diagnosis`, evidence `caida_ingreso_financiera`, conf 0.9, domains `arr, igf, delta_venta, delta_descuento, delta_ingreso`  
-CAN_INTRODUCE_CAUSALITY: NO (el intent nombra el tema; no escribe causa)  
-CAN_OVERRIDE_ALIGNMENT: NO  
-CAN_INVENT_M9_CHANGE: NO  
+FILE: `lib/director-ia-planner.js`
+FUNCTION: regla L631-636
+INPUT: pregunta normalizada con `por que/porque` + `cayo/caida/bajo/disminuy` + `ingreso/venta/margen/utilidad`
+OUTPUT: `intent=financial_diagnosis`, evidence `caida_ingreso_financiera`, conf 0.9, domains `arr, igf, delta_venta, delta_descuento, delta_ingreso`
+CAN_INTRODUCE_CAUSALITY: NO (el intent nombra el tema; no escribe causa)
+CAN_OVERRIDE_ALIGNMENT: NO
+CAN_INVENT_M9_CHANGE: NO
 POST_VALIDATION_PRESENT: NO
 
 `isRentabilidadDeterioroSnapshotQuestion` (L247-254) exige `rentabilidad` + (`deterioro`|`provocando`). «¿Por qué cayó el ingreso?» no matchea.
 
 ### Hop 3 — route chat
 
-FILE: `lib/director-ia-chat.js`  
-FUNCTION: `askDirectorIa` L5491-5606  
-INPUT: `directorIaPlan.intent === "financial_diagnosis"`  
-OUTPUT: si evidence/pregunta es snapshot de rentabilidad → otro pack; si no → `loadFinancialDiagnosisForChat`  
-CAN_INTRODUCE_CAUSALITY: NO  
-CAN_OVERRIDE_ALIGNMENT: NO  
-CAN_INVENT_M9_CHANGE: NO  
+FILE: `lib/director-ia-chat.js`
+FUNCTION: `askDirectorIa` L5491-5606
+INPUT: `directorIaPlan.intent === "financial_diagnosis"`
+OUTPUT: si evidence/pregunta es snapshot de rentabilidad → otro pack; si no → `loadFinancialDiagnosisForChat`
+CAN_INTRODUCE_CAUSALITY: NO
+CAN_OVERRIDE_ALIGNMENT: NO
+CAN_INVENT_M9_CHANGE: NO
 POST_VALIDATION_PRESENT: NO
 
 ### Hop 4 — loadFinancialDiagnosisForChat
 
-FILE: `lib/director-ia-financial-diagnosis.js`  
-FUNCTION: `loadFinancialDiagnosisForChat` L425-493  
-INPUT: pool, plantaId, req, question  
-OUTPUT: objeto `assembled` o abort 403  
-CAN_INTRODUCE_CAUSALITY: NO  
-CAN_OVERRIDE_ALIGNMENT: NO  
-CAN_INVENT_M9_CHANGE: NO  
-POST_VALIDATION_PRESENT: NO  
+FILE: `lib/director-ia-financial-diagnosis.js`
+FUNCTION: `loadFinancialDiagnosisForChat` L425-493
+INPUT: pool, plantaId, req, question
+OUTPUT: objeto `assembled` o abort 403
+CAN_INTRODUCE_CAUSALITY: NO
+CAN_OVERRIDE_ALIGNMENT: NO
+CAN_INVENT_M9_CHANGE: NO
+POST_VALIDATION_PRESENT: NO
 
 No se ejecutó contra LIVE_DB. Los loaders se inspeccionaron por código y se sustituyeron por fixtures en assemble.
 
 ### Hop 5 — source blocks IGF/ARR
 
-FILE: `lib/director-ia-igf-arr.js`  
-FUNCTION: `loadIgfArrSourceBlocksForChat` (inyectable)  
-OUTPUT: `{ plant, year, month, igf, arr }`  
-CAN_INTRODUCE_CAUSALITY: NO  
-CAN_OVERRIDE_ALIGNMENT: NO  
-CAN_INVENT_M9_CHANGE: NO  
-POST_VALIDATION_PRESENT: NO  
+FILE: `lib/director-ia-igf-arr.js`
+FUNCTION: `loadIgfArrSourceBlocksForChat` (inyectable)
+OUTPUT: `{ plant, year, month, igf, arr }`
+CAN_INTRODUCE_CAUSALITY: NO
+CAN_OVERRIDE_ALIGNMENT: NO
+CAN_INVENT_M9_CHANGE: NO
+POST_VALIDATION_PRESENT: NO
 
 `year`/`month` de este bloque alimentan `toYyyyMm` de IGF/ARR en assemble. El periodo M9 sale de `periodoA`/`periodoB` del payload M9, no de IGF.
 
 ### Hop 6 — M9 loaders
 
-FILE: `lib/director-ia-m9-deltas.js`  
-FUNCTION: `loadDeltaVentaForChat` L802 / `loadDeltaDescuentoForChat` L822 / `loadDeltaIngresoForChat` L842  
+FILE: `lib/director-ia-m9-deltas.js`
+FUNCTION: `loadDeltaVentaForChat` L802 / `loadDeltaDescuentoForChat` L822 / `loadDeltaIngresoForChat` L842
 OUTPUT: payload familia + `source_coercion` fijo:
 
 - venta: `Cliente ausente en un mes = 0 kg (COALESCE de la fuente).` (L817)
 - descuento: `kg=0 → ratio 0 en la fuente; no es un porcentaje inventado.` (L837)
 - ingreso: `margen IGF ausente → no se calcula ingreso exacto; cliente ausente en mes disponible = 0 kg.` (L854)
 
-CAN_INTRODUCE_CAUSALITY: NO  
-CAN_OVERRIDE_ALIGNMENT: NO  
-CAN_INVENT_M9_CHANGE: NO (los buckets son datos; la coercion es regla estructural, no recuento)  
+CAN_INTRODUCE_CAUSALITY: NO
+CAN_OVERRIDE_ALIGNMENT: NO
+CAN_INVENT_M9_CHANGE: NO (los buckets son datos; la coercion es regla estructural, no recuento)
 POST_VALIDATION_PRESENT: NO
 
 ### Hop 7 — assemble / map / aggregate / align
 
-FILE: `lib/director-ia-financial-diagnosis.js`  
-FUNCTIONS: `assembleFinancialDiagnosisEvidence` L378; `mapM9Family` L241; `truncateM9Datos` L217; `aggregateM9` L309; `buildAlignment` L343; `collectLimitations` L364  
+FILE: `lib/director-ia-financial-diagnosis.js`
+FUNCTIONS: `assembleFinancialDiagnosisEvidence` L378; `mapM9Family` L241; `truncateM9Datos` L217; `aggregateM9` L309; `buildAlignment` L343; `collectLimitations` L364
 
 `truncateM9Datos` recorta `clientes` a 3 y escribe `clientes_shown`. `formatM9Family` **ignora** esos campos.
 
@@ -245,117 +245,117 @@ igfInM9    = igfPeriod === periodA OR periodB
 comparable = sameIgfArr && igfInM9
 ```
 
-Caso LIVE IGF=2026-09, ARR=2026-09, M9=2026-08 vs 2026-09 → `sameIgfArr=true`, `igfInM9=true` → **status=comparable**.  
-Note comparable: `El YYYY-MM de IGF/ARR aparece en el par M9. Siguen siendo objetos distintos.`  
+Caso LIVE IGF=2026-09, ARR=2026-09, M9=2026-08 vs 2026-09 → `sameIgfArr=true`, `igfInM9=true` → **status=comparable**.
+Note comparable: `El YYYY-MM de IGF/ARR aparece en el par M9. Siguen siendo objetos distintos.`
 `period_mismatch` entra a limitations **solo** si status es mismatch.
 
-CAN_INTRODUCE_CAUSALITY: NO  
-CAN_OVERRIDE_ALIGNMENT: esta función **es** la fuente de alignment; el caso LIVE no está mal calculado  
-CAN_INVENT_M9_CHANGE: NO  
+CAN_INTRODUCE_CAUSALITY: NO
+CAN_OVERRIDE_ALIGNMENT: esta función **es** la fuente de alignment; el caso LIVE no está mal calculado
+CAN_INVENT_M9_CHANGE: NO
 POST_VALIDATION_PRESENT: NO
 
 ### Hop 8 — format context
 
-FILE: `lib/director-ia-financial-diagnosis.js`  
-FUNCTION: `formatFinancialDiagnosisContext` L573; `formatM9Family` L540; `formatIgfPayload` L503; `formatArrPayload` L526  
+FILE: `lib/director-ia-financial-diagnosis.js`
+FUNCTION: `formatFinancialDiagnosisContext` L573; `formatM9Family` L540; `formatIgfPayload` L503; `formatArrPayload` L526
 
-IGF imprime líneas numéricas y `COMPOSICIÓN != CAUSALIDAD. No es M9.`  
-ARR imprime observed/projected y `ARR observed != projected != IGF commitment.`  
+IGF imprime líneas numéricas y `COMPOSICIÓN != CAUSALIDAD. No es M9.`
+ARR imprime observed/projected y `ARR observed != projected != IGF commitment.`
 M9 AVAILABLE:
 
 ```
 dejaron/mas/disminuyeron presentes. unit=…. {source_coercion}
 ```
 
-No imprime recuento de clientes, `totalDeltaKg`, emptiness, ni `clientes_shown`.  
-PARTIAL: `NO DISPONIBLE exacto (faltan: …)` — **no** pega `source_coercion`.  
+No imprime recuento de clientes, `totalDeltaKg`, emptiness, ni `clientes_shown`.
+PARTIAL: `NO DISPONIBLE exacto (faltan: …)` — **no** pega `source_coercion`.
 NOT_FOUND/ERROR/RESTRICTED: `NO DISPONIBLE. null no es 0. No afirma causalidad.`
 
 Cierre: `Fin de bloques. No inventes cifras. No afirmes causa.`
 
-CAN_INTRODUCE_CAUSALITY: NO (prohíbe causa; no la afirma)  
-CAN_OVERRIDE_ALIGNMENT: NO (imprime el status calculado)  
-CAN_INVENT_M9_CHANGE: SÍ, por ambigüedad — «presentes» no distingue BUCKET_EXISTS / BUCKET_NONEMPTY / NUMERIC_DELTA / EXACT_DELTA  
+CAN_INTRODUCE_CAUSALITY: NO (prohíbe causa; no la afirma)
+CAN_OVERRIDE_ALIGNMENT: NO (imprime el status calculado)
+CAN_INVENT_M9_CHANGE: SÍ, por ambigüedad — «presentes» no distingue BUCKET_EXISTS / BUCKET_NONEMPTY / NUMERIC_DELTA / EXACT_DELTA
 POST_VALIDATION_PRESENT: NO
 
 ### Hop 9 — prompt
 
-FILE: `lib/director-ia-financial-diagnosis.js`  
-FUNCTION: `buildFinancialDiagnosisPrompt` L603  
+FILE: `lib/director-ia-financial-diagnosis.js`
+FUNCTION: `buildFinancialDiagnosisPrompt` L603
 
 SYSTEM:
 
 1. `Eres Director IA. Responde en español, breve y ejecutivo.`
 2. Addendum L21-29: bloques separados; null≠0; si `alignment.status` es mismatch, no tratar cortes como el mismo mes; **Permitido: coincidencias, tensiones** y comparación solo con cortes alineados; **Prohibido: causalidad**; no hipótesis N5; no completar vacíos.
 
-USER = context + pregunta +  
+USER = context + pregunta +
 `Resume hechos por bloque. Señala coincidencias o tensiones sin causalidad. Declara limitaciones y period mismatch si existen.`
 
-No define DIFFERENCE vs TENSION vs CAUSE vs DRIVER vs HYPOTHESIS.  
+No define DIFFERENCE vs TENSION vs CAUSE vs DRIVER vs HYPOTHESIS.
 «tensiones» y «period mismatch si existen» son blandos: el modelo puede inventar mismatch al ver `M9=2026-08 vs 2026-09` aunque status=comparable, y puede usar una diferencia IGF/ARR como «relación» de la caída.
 
-CAN_INTRODUCE_CAUSALITY: no escribe causa; **ablanda** la frontera  
-CAN_OVERRIDE_ALIGNMENT: no cambia el status; invita a declarar mismatch sin anclarlo a `alignment.status`  
-CAN_INVENT_M9_CHANGE: NO  
+CAN_INTRODUCE_CAUSALITY: no escribe causa; **ablanda** la frontera
+CAN_OVERRIDE_ALIGNMENT: no cambia el status; invita a declarar mismatch sin anclarlo a `alignment.status`
+CAN_INVENT_M9_CHANGE: NO
 POST_VALIDATION_PRESENT: NO
 
 ### Hop 10 — OpenAI
 
-FILE: `lib/director-ia-chat.js`  
-FUNCTION: `openaiDirectorIaChat` L2802  
-INPUT: system + user  
-OUTPUT: `choices[0].message.content` trimmeado; temperature 0.2; max_tokens 1000  
-CAN_INTRODUCE_CAUSALITY: SÍ  
-CAN_OVERRIDE_ALIGNMENT: SÍ  
-CAN_INVENT_M9_CHANGE: SÍ  
+FILE: `lib/director-ia-chat.js`
+FUNCTION: `openaiDirectorIaChat` L2802
+INPUT: system + user
+OUTPUT: `choices[0].message.content` trimmeado; temperature 0.2; max_tokens 1000
+CAN_INTRODUCE_CAUSALITY: SÍ
+CAN_OVERRIDE_ALIGNMENT: SÍ
+CAN_INVENT_M9_CHANGE: SÍ
 POST_VALIDATION_PRESENT: NO
 
 ### Hop 11 — post-generation / HTTP
 
-FILE: `lib/director-ia-financial-diagnosis.js` `buildFinancialDiagnosisChatResult` L624  
-INPUT: `opts.answer` crudo  
-OUTPUT: `{ ok, answer, sources, context_meta, financial_diagnosis }` — `answer` sin filtro  
+FILE: `lib/director-ia-financial-diagnosis.js` `buildFinancialDiagnosisChatResult` L624
+INPUT: `opts.answer` crudo
+OUTPUT: `{ ok, answer, sources, context_meta, financial_diagnosis }` — `answer` sin filtro
 
-FILE: `lib/director-ia-chat.js` L5593-5606 / `handlePostChat` L6209  
-OUTPUT: JSON del result  
+FILE: `lib/director-ia-chat.js` L5593-5606 / `handlePostChat` L6209
+OUTPUT: JSON del result
 
-CAN_INTRODUCE_CAUSALITY: NO (no añade texto; tampoco lo quita)  
-CAN_OVERRIDE_ALIGNMENT: NO  
-CAN_INVENT_M9_CHANGE: NO  
+CAN_INTRODUCE_CAUSALITY: NO (no añade texto; tampoco lo quita)
+CAN_OVERRIDE_ALIGNMENT: NO
+CAN_INVENT_M9_CHANGE: NO
 POST_VALIDATION_PRESENT: NO
 
 No hay grep de validator/sanitize/causal-language-filter en el path FD. `buildFinancialDiagnosisChatResult` adjunta `alignment` y `limitations` en meta; **no** las usa para bloquear el texto.
 
 ## 3. Probes (fixtures; no LIVE_DB)
 
-Fixture IGF: version presente, `venta_ton=1506.3507`.  
-Fixture ARR: `observed_venta_ton=302`, `projected_venta_ton=1469.36`.  
+Fixture IGF: version presente, `venta_ton=1506.3507`.
+Fixture ARR: `observed_venta_ton=302`, `projected_venta_ton=1469.36`.
 year=2026, month=9 → IGF/ARR period `2026-09`.
 
 Planner probe: intent `financial_diagnosis`, evidence `caida_ingreso_financiera`.
 
 ### A — las tres familias DATA_NOT_FOUND
 
-alignment.status=**mismatch** (M9 period_a/b null).  
-limitations incluyen `period_mismatch`, `m9_DATA_NOT_FOUND`.  
-Contexto M9: cada familia `NO DISPONIBLE. null no es 0. No afirma causalidad.`  
-`causalInCtx=false`. `presentChangesInCtx=false`. `ausenciaLiteral=false`. `presentes=false`.  
+alignment.status=**mismatch** (M9 period_a/b null).
+limitations incluyen `period_mismatch`, `m9_DATA_NOT_FOUND`.
+Contexto M9: cada familia `NO DISPONIBLE. null no es 0. No afirma causalidad.`
+`causalInCtx=false`. `presentChangesInCtx=false`. `ausenciaLiteral=false`. `presentes=false`.
 No aparece `source_coercion`.
 
 ### B — venta/desc AVAILABLE (buckets vacíos), ingreso PARTIAL (`exact_ingreso=false`)
 
-alignment.status=**comparable**.  
-m9_status=SOURCE_PARTIAL.  
-venta/desc: `dejaron/mas/disminuyeron presentes` + coercion.  
-ingreso: `NO DISPONIBLE exacto (faltan: margenA)`. Sin coercion en esa línea.  
+alignment.status=**comparable**.
+m9_status=SOURCE_PARTIAL.
+venta/desc: `dejaron/mas/disminuyeron presentes` + coercion.
+ingreso: `NO DISPONIBLE exacto (faltan: margenA)`. Sin coercion en esa línea.
 Sin «presentan cambios». Sin literal de ausencia de clientes.
 
 ### C — tres AVAILABLE, buckets vacíos (`clientes=[]`)
 
-alignment.status=**comparable**.  
-Texto M9 (venta):  
-`dejaron/mas/disminuyeron presentes. unit=kg. Cliente ausente en un mes = 0 kg (COALESCE de la fuente).`  
-ingreso AVAILABLE pega: `cliente ausente en mes disponible = 0 kg.`  
+alignment.status=**comparable**.
+Texto M9 (venta):
+`dejaron/mas/disminuyeron presentes. unit=kg. Cliente ausente en un mes = 0 kg (COALESCE de la fuente).`
+ingreso AVAILABLE pega: `cliente ausente en mes disponible = 0 kg.`
 Sin cifras. Sin `clientes_shown`. Sin «presentan cambios».
 
 ### C2 — venta AVAILABLE con bucket no vacío; desc/ingreso vacíos
@@ -374,7 +374,7 @@ alignment.note: El YYYY-MM de IGF/ARR aparece en el par M9. Siguen siendo objeto
 limitations: no_causalidad, no_fusion_entre_fuentes, null_no_es_cero, chat_legado_no_ies_no_n5
 ```
 
-**No** incluye `period_mismatch`.  
+**No** incluye `period_mismatch`.
 Línea de contexto: `alignment.status=comparable | IGF=2026-09 | ARR=2026-09 | M9=2026-08 vs 2026-09`
 
 El modelo LIVE dijo que IGF/ARR son comparables **y** que M9 08 vs 09 limita la comparación. Eso contradice un único `comparable`. Primera divergencia: generación OpenAI, no `buildAlignment`.
@@ -415,44 +415,44 @@ Contradicción blanda (no causa numérica):
 
 ### S1 — causalidad
 
-Evidence/context: `causalInCtx=false` en A–E. Limitations siempre incluyen `no_causalidad`.  
-«podría estar relacionada con» **no existe** antes de OpenAI.  
+Evidence/context: `causalInCtx=false` en A–E. Limitations siempre incluyen `no_causalidad`.
+«podría estar relacionada con» **no existe** antes de OpenAI.
 No hay validator. El result pasa `answer` tal cual.
 
-FIRST_DIVERGENCE: D.  
+FIRST_DIVERGENCE: D.
 ROOT: LLM_NONCOMPLIANCE + POST_VALIDATION_ABSENT + PROMPT_AMBIGUOUS.
 
 ### S2 — «presentan cambios»
 
-El contexto nunca dice «presentan cambios» (`presentChangesInCtx=false`).  
-AVAILABLE siempre dice «presentes» aunque `clientes=[]` y `totalDeltaKg=0`.  
+El contexto nunca dice «presentan cambios» (`presentChangesInCtx=false`).
+AVAILABLE siempre dice «presentes» aunque `clientes=[]` y `totalDeltaKg=0`.
 El modelo convierte BUCKET_EXISTS → «hubo cambios» y explica la falta de cifras con S3.
 
-FIRST_DIVERGENCE: C `formatM9Family`. El literal LIVE nace en D.  
+FIRST_DIVERGENCE: C `formatM9Family`. El literal LIVE nace en D.
 ROOT: FORMATTER_BUG + EVIDENCE_AMBIGUOUS + LLM_NONCOMPLIANCE.
 
 ### S3 — «ausencia de clientes en el mes disponible»
 
-Literal de producto: **ausente**.  
-Origen más cercano: `source_coercion` de loaders M9, pegado **solo** si `formatM9Family` ve SOURCE_AVAILABLE.  
-Esa frase describe COALESCE (cliente ausente en un mes del par = 0 kg), no «el mes no tiene clientes / no hay evidencia».  
+Literal de producto: **ausente**.
+Origen más cercano: `source_coercion` de loaders M9, pegado **solo** si `formatM9Family` ve SOURCE_AVAILABLE.
+Esa frase describe COALESCE (cliente ausente en un mes del par = 0 kg), no «el mes no tiene clientes / no hay evidencia».
 Si LIVE fue AVAILABLE, el modelo parafraseó coercion. Si LIVE fue NOT_FOUND, el contexto no trae esa frase (probe A) y sería invención pura.
 
-SUPPORTED: no como prueba de ausencia de clientes/cifras.  
+SUPPORTED: no como prueba de ausencia de clientes/cifras.
 ROOT: EVIDENCE_AMBIGUOUS + LLM_NONCOMPLIANCE.
 
 ### S4 — alignment
 
-Físico D: **comparable**. Context D: **comparable**.  
-Modelo LIVE: comparable IGF/ARR + M9 «periodo diferente» limita comparación.  
-`buildAlignment` no está roto para este caso.  
-FIRST_DIVERGENCE: D.  
+Físico D: **comparable**. Context D: **comparable**.
+Modelo LIVE: comparable IGF/ARR + M9 «periodo diferente» limita comparación.
+`buildAlignment` no está roto para este caso.
+FIRST_DIVERGENCE: D.
 ROOT: LLM_NONCOMPLIANCE + PROMPT_AMBIGUOUS. No ALIGNMENT_BUG.
 
 ### S5 — tensión IGF vs ARR
 
-Diferencia 1506.3507 vs 1469.36: soportada como diferencia entre objetos (bloques distintos; ARR formatter lo declara).  
-Usarla como causa de la caída de ingreso: no soportada; prohibida por addendum (`IGF causó ARR` / causalidad).  
+Diferencia 1506.3507 vs 1469.36: soportada como diferencia entre objetos (bloques distintos; ARR formatter lo declara).
+Usarla como causa de la caída de ingreso: no soportada; prohibida por addendum (`IGF causó ARR` / causalidad).
 La frontera DIFFERENCE/TENSION/CAUSE se pierde en el addendum («tensiones» permitido) y se rompe en D.
 
 ## 6. Frontera mínima futura (NO implementar)
@@ -481,15 +481,15 @@ Resultado: 84 pass, 0 fail.
 
 ## 8. Invariantes
 
-ARR_ROOT1_CHANGED: NO  
-M9_ROOT2_CHANGED: NO  
-PLANNER_CHANGED: NO  
-ROUTING_CHANGED: NO  
-SQL_CHANGED: NO  
-SCHEMA_CHANGED: NO  
-DEPENDENCY_CHANGED: NO  
-LIVE_DB_USED: NO  
-implementation_authorized: NO  
-merge: NO  
-deploy: NO  
+ARR_ROOT1_CHANGED: NO
+M9_ROOT2_CHANGED: NO
+PLANNER_CHANGED: NO
+ROUTING_CHANGED: NO
+SQL_CHANGED: NO
+SCHEMA_CHANGED: NO
+DEPENDENCY_CHANGED: NO
+LIVE_DB_USED: NO
+implementation_authorized: NO
+merge: NO
+deploy: NO
 next_task: NO
