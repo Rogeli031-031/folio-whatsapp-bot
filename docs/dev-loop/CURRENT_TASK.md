@@ -3,8 +3,7 @@ task_id: FIX-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-M9-TEMPORAL-SAFETY-GATE-001
 task_type: FIX
 mode: REGRESSION_FIRST
 
-status: DONE_PENDING_REVIEW
-
+status: CLOSED
 authorized_by: "Human Approver"
 authorized_at: "2026-09-08T16:11:23-06:00"
 
@@ -322,3 +321,4 @@ No push main.
 No deploy.
 No LIVE_DB.
 No siguiente tarea.
+closure_reason: "HUMAN REVIEW PASS. Financial Diagnosis now distinguishes period-label overlap from temporal-window comparability. When M9 current period is OBSERVED_MTD without cutoff parity, its numeric bucket evidence is withheld from the LLM financial-diagnosis context. Internal M9 payload, buildAlignment, M9 loaders, ARR, SQL and routing remain unchanged."
