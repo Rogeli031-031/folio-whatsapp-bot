@@ -3,7 +3,7 @@ task_id: FIX-DIRECTOR-IA-FINANCIAL-DIAGNOSIS-M9-PRETRUNCATE-COUNT-001
 task_type: FIX
 mode: REGRESSION_FIRST_REPLACEMENT
 
-status: AUTHORIZED
+status: DONE_PENDING_REVIEW
 
 authorized_by: "Human Approver"
 authorized_at: "2026-09-08T14:05:20-06:00"
