@@ -1,60 +1,83 @@
-task_id: AUDIT-DIRECTOR-IA-ARR-PROJECTION-SEMANTICS-001
+task_id: FIX-DIRECTOR-IA-ARR-PROJECTION-CUTOFF-LABEL-001
 
-task_type: AUDIT
-mode: READ_ONLY_PHYSICAL_TRACE
+task_type: FIX
+mode: REGRESSION_FIRST
 
 status: CLOSED
 authorized_by: "Human Approver"
-authorized_at: "2026-09-08T10:01:57-06:00"
+authorized_at: "2026-09-08T10:18:38-06:00"
 
-human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-08 - AUDIT ARR PROJECTION SEMANTICS ONLY; NO IMPLEMENTATION; NO LIVE_DB; NO MERGE; NO PUSH; NO DEPLOY"
+human_authorization: "AUTHORIZED_BY_HUMAN: Human Approver 2026-09-08 - FIX ARR PROJECTION CUTOFF AND SEMANTIC LABELS ONLY; PRESERVE DASHBOARD CALCULATION; NO M9; NO PLANNER; NO ROUTING; NO SQL; NO LIVE_DB; NO MERGE; NO DEPLOY"
 
-implementation_authorized: NO
+implementation_authorized: YES
 merge_authorized: NO
 deploy_authorized: NO
 live_db_authorized: NO
 
 max_attempts: 1
 
-base_main_sha: 3073bbb70fa38db925be3f337c6012572886e38e
+base_main_sha: ad20fb8b65f0b1936dc7f46599df04e72ccad37a
 
-result_report_path: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-ARR-PROJECTION-SEMANTICS-001.md
+audit_report_path: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-ARR-PROJECTION-SEMANTICS-001.md
+result_report_path: docs/dev-loop/reports/FIX-DIRECTOR-IA-ARR-PROJECTION-CUTOFF-LABEL-001.md
 
 ## Objetivo único
 
-Localizar físicamente dónde Director IA pierde o mezcla la semántica
-de los datos de ARR al responder preguntas ejecutivas como:
+Corregir Root 1 demostrado por:
 
-¿Cómo va ARR?
-¿Cuánto proyectamos vender?
-¿Cómo vamos a cerrar septiembre?
-¿Cuál es la proyección de venta?
-¿Por qué cayó el ingreso?
+AUDIT-DIRECTOR-IA-ARR-PROJECTION-SEMANTICS-001
 
-No implementar.
+Director IA debe preservar y etiquetar por separado:
 
-No asumir que el defecto está en computeDicf, el adapter, el planner,
-el prompt, el formatter o el LLM. Probar cada frontera.
+1. venta ARR observada al corte
+2. proyección ARR de cierre del mes
+3. descuento ARR observado al corte
+4. descuento ARR proyectado
+5. venta real/final del mes previo cuando corresponda
 
-## Invariante ejecutiva
+No confundir ninguno con:
 
-Mantener separados:
+IGF compromiso / forecast.
 
-VENTA REAL / TOTAL MES AL CORTE
-!=
-PROYECCION ARR DE CIERRE DEL MES
-!=
-COMPROMISO / META / FORECAST IGF
+No resolver M9.
+No ampliar routing.
 
-Y mantener:
+## Root físico congelado
 
-DATO AUSENTE
-!=
-CERO OBSERVADO
+La auditoría demostró:
 
-## Evidencia observada — Puebla septiembre 2026
+ARR_SALES_FIRST_DIVERGENCE:
 
-Dashboard ARR mostró:
+loadArrProyForPlant
+lib/director-ia-igf-arr.js
+
+Actual:
+
+computePronosticoProyByPlant(client, year, month, {
+  fechaCorte: ""
+})
+
+Con corte vacío se apaga el lookback/POR COMPRAR.
+
+Resultado observado:
+
+proy_venta_ton termina en la familia semántica del TOTAL mes
+observado y luego Director IA lo llama proyección.
+
+Además loadArrProyForPlant colapsa semántica a:
+
+venta_ton
+desc_kg
+
+y el anexo presenta:
+
+"ARR — VENTA / DESCUENTO (proyección o real según corte)"
+
+Eso debe desaparecer como ambigüedad.
+
+## Evidencia ejecutiva de referencia
+
+Puebla septiembre 2026, observada manualmente:
 
 TOTAL MES AL CORTE:
 302.00 ton
@@ -68,500 +91,515 @@ aprox. 1176 ton
 Desc. PROY septiembre:
 -4.84 $/kg
 
-Director IA respondió en la prueba observada de ARR:
+Director IA antes reportó:
 
-venta esperada septiembre:
-302.0 ton
+venta esperada/proyectada:
+302 ton
 
-comparación aproximada:
-302 vs 1176
-caída aproximada:
-874 ton
+Δ vs agosto:
+aprox. -874 ton
 
-descuento septiembre:
+desc septiembre:
 -4.92 $/kg
 
-descuento agosto:
--4.55 $/kg
+Estos valores LIVE sirven como evidencia de producto.
 
-También presentó aproximadamente:
+NO hardcodearlos.
 
-compromiso / forecast IGF:
-2000.299 ton
+NO requieren LIVE_DB para implementar.
 
-margen:
-6.52
+Los tests deben usar fixtures deterministas equivalentes.
 
-ingreso aproximado:
-744702
+## Fuentes físicas demostradas
 
-No asumir que todos esos números tienen la misma fuente ni semántica.
+OBSERVED CURRENT SALE FAMILY:
 
-## Hecho de producto esperado
+venta_sheet.total_mes_sum
 
-Para una pregunta de PROYECCION ARR:
+PROJECTED CURRENT SALE FAMILY:
 
-"Al corte llevamos 302 ton"
+proy_total_ton
+proy_venta_ton cuando existe corte válido
+arr.pronostico_mini_snapshot.proy_venta_ton
 
-puede ser contexto observado.
+PROJECTED DISCOUNT:
 
-Pero:
+pronosticoDetail.proy_desc_kg
+/UI "Desc. PROY"
 
-"ARR proyecta cerrar septiembre en 1522.76 ton"
+IGF COMMITMENT:
 
-debe usar la métrica PROY física si está disponible y autorizada.
+igf.compromiso_lines.venta_ton
 
-No llamar 302 "proyección" si físicamente representa el total al corte.
+## Regla principal
 
-No llamar 2000.299 "proyección ARR" si físicamente pertenece a IGF.
+VENTA_REAL_AL_CORTE
+!=
+ARR_PROYECCION_CIERRE
+!=
+IGF_COMPROMISO
 
-## Problema adicional observado
+Y:
 
-En una respuesta relacionada con:
+DESC_REAL_AL_CORTE
+!=
+ARR_DESC_PROYECTADO
 
-¿Por qué cayó el ingreso?
+aunque numéricamente alguna vez coincidan.
 
-los Delta Venta / Delta Descuento / Delta Ingreso M9 ausentes
-fueron tratados o expresados como si fueran 0 / sin cambios.
+La identidad semántica NO se determina comparando valores.
 
-Contrato requerido:
+## Reuso obligatorio
 
-ABSENT
-MISSING
-DATA_NOT_FOUND
-null
-campo inexistente
+No crear una fórmula nueva de proyección.
 
-NO equivalen automáticamente a cero.
+Reusar la misma lógica física de Pronóstico ARR/dashboard
+que ya produce:
 
-Solo un cero físicamente observado puede expresarse como cero.
+TOTAL mes observado
+PROY cierre
+Desc. PROY
 
-## Auditoría física requerida
+Investigar/reusar el adapter/pack existente señalado por la auditoría.
 
-Trazar, con función + archivo + línea/rango:
+No duplicar matemática de dashboard.
 
-1. ROUTING
+No calcular manualmente:
 
-¿Cómo va ARR?
+proyección = observado + estimación inventada
 
-- intent
-- domains
-- tools solicitadas
-- tools realmente ejecutadas
-- contexto final enviado al modelo
+No usar LLM para calcular.
 
-2. ARR DATA SOURCE
+## Cutoff
 
-Localizar dónde se calculan o cargan:
+No volver a pasar:
 
-- total al corte / real actual
-- proyección cierre
-- venta mes anterior
-- descuento actual
-- descuento proyectado
-- margen
-- ingreso
-- periodo
-- last_date / upload_day si aplica
+fechaCorte: ""
 
-3. DASHBOARD ARR
+para obtener una métrica etiquetada como proyección intra-mes.
 
-Localizar el código físico que alimenta los valores visuales:
+El FIX debe obtener/preservar el corte que usa la lógica autorizada
+del dashboard/adapter.
 
-TOTAL MES = 302
-PROY = 1522.76
-Desc. PROY = -4.84
+Debe ser determinista y testeable.
 
-Determinar los nombres de campo exactos.
+No usar new Date() disperso si ya existe un resolver/cutoff
+del dashboard.
 
-No asumir que el label de UI coincide con el nombre interno.
+No hardcodear septiembre 2026.
 
-4. DIRECTOR IA ARR ADAPTER / TOOL
+## Shape semántico mínimo
 
-Localizar qué campos expone hoy a Director IA.
+El objeto interno ARR debe distinguir conceptualmente, con nombres
+inequívocos o equivalente probado:
 
-Para cada métrica reportar:
+observed_venta_ton
+projected_venta_ton
 
-SOURCE_FIELD:
-SOURCE_FUNCTION:
-SEMANTIC_LABEL:
-VALUE_TYPE:
-NULLABILITY:
+observed_desc_kg
+projected_desc_kg
 
-5. 302
+previous_month_venta_ton
 
-Responder físicamente:
+No es obligatorio usar exactamente estos nombres si el adapter físico
+ya tiene nombres canónicos mejores.
 
-¿De qué campo sale 302?
+Pero NO conservar únicamente:
 
-¿Es:
-OBSERVED_TO_DATE /
-CURRENT_TOTAL /
-FORECAST /
-OTHER?
+venta_ton
+desc_kg
 
-¿En qué función cambia, si cambia, su etiqueta semántica?
+si eso vuelve a perder observed vs projected.
 
-6. 1522.76
+## Anexo Director IA
 
-Responder:
+Para mes abierto, debe poder producir contexto equivalente a:
 
-¿Existe físicamente en el objeto que usa Director IA?
+ARR — VENTA
 
-Si YES:
-¿por qué no se selecciona para una pregunta de proyección?
+- Venta observada al corte: 302.00 ton
+- Proyección de cierre ARR: 1522.76 ton
 
-Si NO:
-¿en qué capa se pierde respecto del dashboard?
+ARR — DESCUENTO
 
-7. DESCUENTO -4.92 vs -4.84
+- Descuento observado al corte: <valor si está disponible>
+- Descuento proyectado ARR: -4.84 $/kg
 
-No asumir rounding.
+MES PREVIO
 
-Determinar si provienen de:
+- Venta mes previo: ~1176 ton
 
-- campos diferentes
-- periodos diferentes
-- observado vs proyección
-- weighted calculation diferente
-- distinta fuente
-- distinta ventana
-- rounding
-- stale snapshot
-- OTHER
+COMPARACION
 
-Si sin LIVE_DB no puede demostrarse la diferencia exacta:
-marcar UNPROVEN_NO_LIVE_DB.
+- Proyección cierre actual vs venta mes previo:
+  +346.76 ton aproximadamente
 
-No inventar explicación.
+No exigir estas cifras reales en test.
 
-8. IGF 2000.299
+Usar fixture.
 
-Trazar cómo llega a la misma respuesta.
+## Regla de comparación
 
-Determinar:
+Cuando compare el mes abierto contra el mes anterior:
 
-ARR_PROJECTION:
-<field>
+"proyección actual vs mes previo"
 
-IGF_COMMITMENT:
-<field>
+debe usar:
 
-¿El formatter/model context los etiqueta inequívocamente?
+ARR_PROJECTED_CURRENT
+-
+PREVIOUS_MONTH_OBSERVED/FINAL
 
-¿Existe una frontera donde se vuelven intercambiables?
+No:
 
-9. M9 / DELTAS AUSENTES
+CURRENT_OBSERVED_TO_DATE
+-
+PREVIOUS_MONTH
 
-Localizar físicamente:
+La etiqueta debe dejar claro que se compara proyección con mes previo.
 
-- Delta Venta
-- Delta Descuento
-- Delta Ingreso
+## Mes cerrado / histórico
 
-Seguir desde tool result hasta respuesta/context.
+No convertir artificialmente un mes histórico cerrado en
+"proyección futura".
 
-Buscar patrones tales como:
+Si el adapter distingue cerrado/final vs forecast, preservar esa
+semántica.
 
-value || 0
-Number(value) || 0
-?? 0
-default 0
-formatters que impriman ausente como 0
-arrays vacíos interpretados como no-change
-LLM prompt que omita availability/evidence status
+No inventar cierre/final si la fuente no lo demuestra.
 
-No asumir cuál existe.
+## Descuento
 
-10. CAUSALIDAD
-
-Auditar específicamente si:
-
-¿Por qué cayó el ingreso?
-
-puede hoy construir causalidad mezclando:
-
-IGF commitment
-ARR observed-to-date
-ARR projection
-M9 absent deltas
-
-Determinar si existe una regla física que impida afirmar:
-
-"cayó por X"
-
-cuando las métricas no son homogéneas o las evidencias están ausentes.
-
-## Fronteras a inspeccionar
-
-Buscar físicamente, no asumir nombres:
-
-planner
-director-ia-chat
-tool orchestrator
-ARR snapshot tool
-IGF snapshot tool
-commercial_state
-dicf.computeDicf
-M9 delta tools
-context builders
-prompt / response assembly
-dashboard ARR calculation
-server handlers relacionados
-
-El código actual conocido usa dicf.computeDicf para commercial_state,
-pero eso NO demuestra que ¿Cómo va ARR? use exactamente el mismo path.
-
-Probarlo.
-
-## Probes read-only
-
-Sin DB y sin modificar product code, construir probes/tests temporales
-solo si pueden ejecutarse contra funciones puras o fixtures existentes.
-
-No dejar archivos temporales al cerrar.
-
-### Probe A
-
-Question:
-¿Cómo va ARR?
-
-Reportar:
-
-ROUTE_INTENT:
-TOOLS:
-ARR_CONTEXT_FIELDS:
-IGF_CONTEXT_FIELDS:
-M9_CONTEXT_FIELDS:
-
-### Probe B
-
-Question:
-¿Cuánto proyectamos vender?
-
-Determinar cuál field tendría prioridad hoy.
-
-### Probe C
-
-Question:
-¿Cómo vamos a cerrar septiembre?
-
-Igual.
-
-### Probe D
-
-Question:
-¿Cuál es la proyección de venta?
-
-Igual.
-
-### Probe E
-
-Question:
-¿Por qué cayó el ingreso?
-
-Determinar qué datos y availability flags recibe el modelo.
-
-## Comparación semántica obligatoria
-
-Crear tabla:
-
-METRIC
-PHYSICAL_SOURCE
-FIELD
-SEMANTIC_MEANING
-DIRECTOR_IA_LABEL
-DASHBOARD_LABEL
-CAN_BE_NULL
-ABSENCE_HANDLING
-
-Filas mínimas:
-
-ARR observed sale to date
-ARR projected month sale
-previous-month sale
-ARR observed discount
-ARR projected discount
-IGF commitment/forecast
-M9 Delta Venta
-M9 Delta Descuento
-M9 Delta Ingreso
-
-## Preguntas que la auditoría debe resolver
-
-ARR_SALES_FIRST_DIVERGENCE:
-<función/línea>
-
-ARR_PROJECTION_FIELD_EXISTS:
-YES / NO / UNPROVEN
-
-ARR_PROJECTION_REACHES_DIRECTOR_IA:
-YES / NO / PARTIAL / UNPROVEN
-
-OBSERVED_302_FIELD:
-<exacto>
-
-PROJECTED_1522_FIELD:
-<exacto o UNPROVEN>
-
-WHY_302_WAS_CALLED_PROJECTION:
-<evidencia física>
-
-DISCOUNT_FIRST_DIVERGENCE:
-<función/línea/UNPROVEN>
-
-DISCOUNT_492_SOURCE:
-<exacto/UNPROVEN>
-
-DISCOUNT_484_SOURCE:
-<exacto/UNPROVEN>
+La auditoría clasificó:
 
 DISCOUNT_DIFFERENCE_CLASS:
-FIELD_MISMATCH /
-PERIOD_MISMATCH /
-OBSERVED_VS_PROJECTED /
-CALCULATION_MISMATCH /
-ROUNDING /
-STALE_DATA /
-UNPROVEN
+OBSERVED_VS_PROJECTED
 
-IGF_2000_FIELD:
-<exacto>
+El FIX debe impedir que un descuento observado/sin corte sea
+etiquetado como "Desc. PROY".
 
-IGF_ARR_SEMANTIC_SEPARATION:
-SAFE / AMBIGUOUS / BROKEN
+Para una pregunta ARR de proyección, priorizar físicamente:
 
-M9_ABSENCE_FIRST_DIVERGENCE:
-<función/línea>
+projected_desc_kg
 
-M9_ABSENT_COLLAPSES_TO_ZERO:
-YES / NO / PARTIAL
+cuando la fuente lo provea.
 
-CAUSALITY_GATE_PRESENT:
-YES / NO / PARTIAL
+Si el observado también está disponible:
+puede mostrarse por separado.
+
+No sustituir NULL por cero.
+
+## IGF
+
+IGF 2000.x sigue siendo:
+
+Compromiso venta IGF
+
+Nunca:
+
+ARR projection.
+
+El bloque IGF puede seguir disponible, pero debe permanecer
+claramente separado.
+
+No usar compromiso IGF como fallback silencioso de proyección ARR.
+
+## Ingreso híbrido
+
+La auditoría detectó que el anexo puede combinar:
+
+ARR venta
++
+margen/desc/HG de IGF
+
+para mostrar "Ingreso aprox."
+
+En este FIX:
+
+NO presentar ese cálculo como:
+- ingreso ARR puro
+- proyección ARR pura
+- explicación causal
+
+Si se conserva por compatibilidad debe estar etiquetado
+inequívocamente como cálculo cruzado de fuentes y NO utilizarse
+para redefinir ARR projection.
+
+Si la solución mínima segura requiere retirarlo del bloque ARR
+para evitar mezcla semántica, documentarlo en reporte.
+
+NO rediseñar fórmula IGF.
+
+## North Star
+
+Pregunta ya ruteada:
+
+¿Cómo va ARR?
+
+Con fixture:
+
+observed current = 302.00
+projected current = 1522.76
+previous observed = 1176.00
+projected desc = -4.84
+
+Debe entregar al modelo contexto inequívoco del tipo:
+
+Venta observada al corte: 302.00 ton
+Proyección de cierre ARR: 1522.76 ton
+Venta mes previo: 1176.00 ton
+Proyección vs mes previo: +346.76 ton
+Descuento proyectado ARR: -4.84 $/kg
+
+Y NO:
+
+"venta proyectada 302"
+
+NO:
+"Δ venta -874"
+
+## Preguntas dentro de alcance
+
+Solo preguntas que YA llegan al path ARR en base_main_sha.
+
+Ejemplos:
+
+¿Cómo va ARR?
+
+ARR septiembre
+
+¿Cómo va el pronóstico de venta?
+
+No ampliar señal ni planner para cubrir nuevas frases.
+
+## Fuera de alcance explícito — Root 2
+
+NO tocar:
+
+lib/director-ia-m9-deltas.js
+
+NO arreglar:
+
+AUSENTE -> 0
+
+Eso será:
+
+FIX-DIRECTOR-IA-M9-ABSENT-NOT-ZERO-001
+
+## Fuera de alcance explícito — Root 3
+
+NO agregar soporte ahora a:
+
+¿Cuánto proyectamos vender?
+¿Cómo vamos a cerrar septiembre?
+¿Cuál es la proyección de venta?
+
+si alguna no rutea actualmente.
+
+Eso será:
+
+FIX-DIRECTOR-IA-ARR-PROJECTION-QUESTION-ROUTE-001
+
+No modificar planner para hacerlas funcionar.
+
+No modificar ARR_SIGNAL_RE para ampliar routing.
 
 ## No cambiar
 
-No product code.
+planner
+routing
+M9
+DICF
+commercial_state
+SQL
+schema
+dependencies
+authz
+scope de planta
+IGF stored data
+dashboard UI
+fórmula matemática del Pronóstico ARR
 
-No planner.
+## Regresión requerida
 
-No routing.
+Probar BEFORE contra base_main_sha:
 
-No SQL.
+B-001:
+loadArrProyForPlant usa fechaCorte ""
 
-No schema.
+B-002:
+observed/projected colapsan a venta_ton
 
-No dependencies.
+B-003:
+anexo usa texto "proyección o real según corte"
 
-No prompts.
+B-004:
+fixture current observed 302 puede quedar presentado
+como proyección.
 
-No adapters.
+B-005:
+delta usa current venta_ton - previous venta_ton.
 
-No tests permanentes.
+Después del FIX:
 
-No DB.
+R-ARR-PROJ-001 observed field separado
+002 projected field separado
+003 observed != projected soportado
+004 projected sale usa proyección real del adapter
+005 projected discount usa Desc PROY
+006 no empty cutoff para proyección intra-mes
+007 current observed label
+008 current projected label
+009 previous month label
+010 projection-vs-prev delta usa projected current
+011 fixture 1522.76 - 1176 = +346.76
+012 no -874 con fixture
+013 observed 302 preservado como observed
+014 projected 1522.76 preservado como projected
+015 projected desc -4.84 preservado
+016 observed desc no se llama PROY
+017 IGF commitment separado
+018 IGF commitment no fallback ARR
+019 anexo no dice "proyección o real según corte"
+020 no NULL->0 nuevo
+021 month resolution intacto
+022 plant authz intacto
+023 GA restriction intacta
+024 GV restriction intacta
+025 get_arr_snapshot path intacto
+026 loadIgfArrAnnexForChat intacto funcionalmente
+027 source blocks distinguen ARR/IGF
+028 no M9 changes
+029 no planner changes
+030 no routing changes
+031 no SQL changes
+032 no schema changes
+033 no dependency changes
+034 commercial_state unchanged
+035 DICF unchanged
+036 historical/closed month no fake forecast
+037 current-month cutoff determinista
+038 adapter/dashboard formula reused
+039 no duplicated projection math
+040 no hardcoded Puebla values
 
-No Render.
+## Suites
+
+Agregar suite focal:
+
+R-ARR-PROJECTION-SEMANTICS
+
+Ejecutar además:
+
+planner
+capabilities
+tool-orchestrator
+IGF
+ARR existentes
+M9 existentes
+financial diagnosis
+commercial_state
+continuity
+
+Tier 1
+pre-deploy --gate
+
+NEW FAILURE = 0
+
+Si orchestrator conserva fallo preexistente:
+demostrar contra base_main_sha.
 
 ## STOP CONDITIONS
 
-STOP si la auditoría requiere LIVE_DB para continuar.
+STOP si requiere:
 
-En ese caso documentar exactamente qué punto quedó UNPROVEN.
+planner
+routing
+M9
+SQL
+schema
+new dependency
+LIVE_DB
+cambiar fórmula del dashboard
+duplicar fórmula de proyección
 
-STOP si encuentras que los tres síntomas tienen roots independientes.
-No diseñar un mega-fix.
+STOP si no puede reutilizarse la fuente/cálculo autorizado
+del dashboard y la única alternativa es inventar otra proyección.
 
-Clasificarlos para tareas separadas.
+STOP si observed y projected no pueden distinguirse físicamente
+sin LIVE_DB.
+
+## Archivos esperados
+
+Preferentemente:
+
+lib/director-ia-igf-arr.js
+
+y test focal nuevo.
+
+Puede tocar adapter ARR existente únicamente si es necesario
+para EXPONER un campo ya calculado por el dashboard,
+sin cambiar su fórmula.
+
+Si toca adapter:
+documentar exactamente por qué.
+
+No tocar frontend.
 
 ## Reporte
 
-docs/dev-loop/reports/AUDIT-DIRECTOR-IA-ARR-PROJECTION-SEMANTICS-001.md
+docs/dev-loop/reports/FIX-DIRECTOR-IA-ARR-PROJECTION-CUTOFF-LABEL-001.md
 
-Debe contener:
+Debe iniciar:
 
-AUDIT_BASE_SHA:
+IMPLEMENTATION_SHA:
 
-EXECUTIVE_SUMMARY:
+BEFORE:
+AFTER:
 
-ROUTE_TRACE:
+ROOT_FIXED:
+ARR_DATA_SOURCE_REUSED:
+CUTOFF_SOURCE:
+EMPTY_CUTOFF_REMOVED:
 
-ARR_DATA_FLOW:
+OBSERVED_SALE_FIELD:
+PROJECTED_SALE_FIELD:
+PREVIOUS_SALE_FIELD:
 
-DASHBOARD_DATA_FLOW:
+OBSERVED_DISCOUNT_FIELD:
+PROJECTED_DISCOUNT_FIELD:
 
-SEMANTIC_MATRIX:
+NORTH_STAR_CONTEXT:
 
-ARR_SALES_FIRST_DIVERGENCE:
-ARR_PROJECTION_FIELD_EXISTS:
-ARR_PROJECTION_REACHES_DIRECTOR_IA:
-OBSERVED_302_FIELD:
-PROJECTED_1522_FIELD:
-WHY_302_WAS_CALLED_PROJECTION:
+DELTA_MODEL:
+IGF_SEPARATION:
+HYBRID_INCOME_HANDLING:
 
-DISCOUNT_FIRST_DIVERGENCE:
-DISCOUNT_492_SOURCE:
-DISCOUNT_484_SOURCE:
-DISCOUNT_DIFFERENCE_CLASS:
+001..040:
+SUITES:
 
-IGF_2000_FIELD:
-IGF_ARR_SEMANTIC_SEPARATION:
+FILES:
+RISKS:
 
-M9_ABSENCE_FIRST_DIVERGENCE:
-M9_ABSENT_COLLAPSES_TO_ZERO:
-
-CAUSALITY_GATE_PRESENT:
-
-PROBE_A:
-PROBE_B:
-PROBE_C:
-PROBE_D:
-PROBE_E:
-
-REQUIRES_LIVE_DB:
-YES / NO
-
-REQUIRES_SQL_CHANGE:
-YES / NO / UNPROVEN
-
-REQUIRES_PLANNER_CHANGE:
-YES / NO / UNPROVEN
-
-REQUIRES_ROUTING_CHANGE:
-YES / NO / UNPROVEN
-
-ROOT_CAUSE_COUNT:
-<number>
-
-RECOMMENDED_TASK_SPLIT:
-<lista si hay roots independientes>
-
-MINIMAL_SAFE_FIX_BOUNDARY:
-<por cada root demostrado>
-
-FINAL_RECOMMENDATION:
-FIX_SINGLE_ROOT /
-FIX_SPLIT_ROOTS /
-STOP_LIVE_DB_REQUIRED /
-STOP_OTHER
+M9_CHANGED:
+PLANNER_CHANGED:
+ROUTING_CHANGED:
+SQL_CHANGED:
+SCHEMA_CHANGED:
+DEPENDENCY_CHANGED:
+DASHBOARD_FORMULA_CHANGED:
 
 ## Completion
 
-CURRENT_TASK → DONE_PENDING_REVIEW
+CURRENT_TASK -> DONE_PENDING_REVIEW
 
-Commit únicamente:
-
-docs/dev-loop/CURRENT_TASK.md
-docs/dev-loop/reports/AUDIT-DIRECTOR-IA-ARR-PROJECTION-SEMANTICS-001.md
-
-No product code.
+Commit únicamente en rama FIX.
 
 STOP.
 
 NO merge.
-NO push.
+NO push main.
 NO deploy.
 NO LIVE_DB.
 NO next task.
-closure_reason: "HUMAN REVIEW APPROVED. Audit demonstrated three independent roots: ARR projection cutoff/semantic labeling; M9 absence collapse to zero; ARR projection question routing. FINAL_RECOMMENDATION=FIX_SPLIT_ROOTS. No product code changed."
+closure_reason: "HUMAN REVIEW MERGE_OK. ARR Root 1 now keeps observed sale, projected sale, projected discount and previous-month sale semantically separate; reuses dashboard forecast parity/cutoff; IGF commitment remains separate; no M9/planner/routing/SQL/schema/dependency/dashboard-formula changes; R-ARR-PROJ 40/40 and required suites pass; NEW FAILURE=0."
