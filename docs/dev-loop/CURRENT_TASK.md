@@ -3,8 +3,7 @@ task_id: FIX-DIRECTOR-IA-FOLIO-KEYWORD-RANGE-SEARCH-PARITY-002
 task_type: FIX
 mode: REGRESSION_FIRST
 
-status: DONE_PENDING_REVIEW
-
+status: CLOSED
 authorized_by: "Human Approver"
 authorized_at: "2026-09-09T11:01:03-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Zaragoza 2026-09-09"
@@ -462,3 +461,6 @@ No push main.
 No deploy.
 No LIVE_DB.
 No siguiente tarea.
+closure_reason: "HUMAN REVIEW PASS. Keyword-range search reproduce la semántica textual del buscador del Kanban sobre el universo completo autorizado antes de truncar. S1 extrae aceite, usa ALL_PUBLIC_FOLIOS y mes_cargo enero-agosto. El LEFT JOIN public.proyectos es equivalente al existente del Kanban."
+
+human_acceptance: "PASS. 001..061 PASS; JOIN parity YES; Tier1 8/8; pre-deploy gate PASS; NEW FAILURE=0. Sin ILIKE, sin predicado textual SQL, sin schema, sin dependencies, sin OpenAI para match y sin LIVE_DB."
