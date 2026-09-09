@@ -1,109 +1,100 @@
-task_id: AUDIT-DIRECTOR-IA-RENTABILIDAD-EXECUTIVE-ROUTING-001
+task_id: FIX-DIRECTOR-IA-RENTABILIDAD-EXECUTIVE-ROUTING-001
 
-task_type: AUDIT
-mode: READ_ONLY
+task_type: FIX
+mode: REGRESSION_FIRST
 
-status: CLOSED
+status: AUTHORIZED
+
 authorized_by: "Human Approver"
-authorized_at: "2026-09-09T11:31:26-06:00"
+authorized_at: "2026-09-09T13:22:29-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Zaragoza 2026-09-09"
 
-implementation_authorized: NO
+implementation_authorized: YES
 merge_authorized: NO
 deploy_authorized: NO
 live_db_authorized: NO
 
 max_attempts: 1
 
-base_main_sha: f5f150f28b30f2cdd12b8caacea4be1c51d899dd
-result_report_path: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-RENTABILIDAD-EXECUTIVE-ROUTING-001.md
+base_main_sha: ac055bd9945cce551851e2d608a4a91e7113fdbb
+result_report_path: docs/dev-loop/reports/FIX-DIRECTOR-IA-RENTABILIDAD-EXECUTIVE-ROUTING-001.md
 
-objective: "Localizar por qué la pregunta ejecutiva ¿Qué rentabilidad tenemos? termina en tendencia comercial CASA/COMISIONISTA/OLS en lugar de responder utilidad operativa y resultado final desde IGF."
+objective: "Hacer que rentabilidad, utilidad operativa y resultado final se resuelvan por IGF y no por unknown, EXECUTIVE_STATUS, commercial_trend ni continuidad comercial."
 
-## Evidencia LIVE
+## Evidencia
 
-Planta:
-Acapulco.
-
-Pregunta exacta:
+Pregunta LIVE:
 
 ¿Qué rentabilidad tenemos?
 
-Respuesta incorrecta actual:
+Respuesta incorrecta observada:
 
-- rango de 30 días
 - CASA
-- toneladas vendidas
-- pendiente OLS
-- dirección UP
 - COMISIONISTA
-- toneladas vendidas
+- toneladas
 - pendiente OLS
-- dirección UP
-- tendencia al alza
+- UP
+- rango 30 días
 
-Esto NO corresponde a rentabilidad financiera.
+Auditoría:
 
-## Semántica humana objetivo
+S1 aislada:
+planner = unknown
 
-"¿Qué rentabilidad tenemos?"
+S4:
+¿Cómo estamos de rentabilidad?
+planner = unknown
+CEL EXECUTIVE_STATUS gana
+commercial trend 30d/both
 
-debe significar, por default ejecutivo:
+También existe riesgo de heredar parent_intent=commercial_trend
+cuando la nueva pregunta financiera queda unknown.
 
-1. Utilidad Operativa / Rentabilidad Operativa
-2. Resultado Final / Rentabilidad Final
-3. Variables principales que construyen ambos
+## Decisión humana
 
-Fuente esperada:
+RENTABILIDAD genérica:
 
-IGF de la planta seleccionada.
+→ IGF de la planta seleccionada
+→ Utilidad Operativa
+→ Resultado Final
+→ variables financieras disponibles del snapshot
 
-NO:
+Debe tener precedencia sobre:
 
-commercial trend
-CASA/COMISIONISTA
-OLS
-30-day sales trend
+- EXECUTIVE_STATUS
+- commercial_trend
+- commercial_state
+- continuidad/herencia comercial
 
-## Variables a auditar
+No significa:
 
-Determinar físicamente cuáles campos del IGF disponible representan:
+- tendencia de venta
+- toneladas 30d
+- CASA / COMISIONISTA
+- OLS
+- UP / DOWN
 
-- venta / volumen forecast
-- margen
-- descuento / comisiones
-- ingreso
-- gasto operativo
-- utilidad operativa
-- gasto corporativo
-- gasto total
-- resultado final
-- impuestos
-- HG
+## Intención
 
-No asumir nombres.
+Mapear explícitamente a:
 
-Trazar los nombres físicos reales y sus unidades.
+igf_status
 
-## Fórmulas
+estas familias:
 
-Auditar si los datos físicos permiten afirmar:
+rentabilidad
+rentabilidad operativa
+utilidad operativa
+rentabilidad final
+resultado final
 
-UTILIDAD OPERATIVA
-=
-INGRESO - GASTO OPERATIVO
+No convertir preguntas explícitas de margen en rentabilidad.
 
-RESULTADO FINAL
-=
-UTILIDAD OPERATIVA - GASTO CORPORATIVO
+Preservar:
 
-Si el runtime usa otra fórmula o columnas distintas:
+margen != rentabilidad
 
-documentarlo.
-
-NO redefinir fórmula durante la auditoría.
-
-## Preguntas North Star
+## North Stars
 
 S1:
 ¿Qué rentabilidad tenemos?
@@ -129,203 +120,388 @@ S7:
 S8:
 ¿Cuál es la rentabilidad final?
 
-## Distinciones obligatorias
+Todos deben usar IGF.
 
-Auditar y preservar:
+## Precedencia
+
+Una señal explícita de:
 
 rentabilidad
-!= ventas
-!= toneladas
-!= tendencia comercial
-!= pendiente OLS
-
 utilidad operativa
-!= gasto operativo
-
 resultado final
-!= utilidad operativa
 
-margen
-!= rentabilidad
+debe ganar sobre cue genérico:
 
-descuento/kg
-!= margen
+cómo estamos
+cómo vamos
+estado
+situación
 
-## Temporalidad
+Ejemplo:
 
-Determinar qué periodo debe usar hoy la pregunta genérica:
+¿Cómo estamos de rentabilidad?
 
+NO:
+EXECUTIVE_STATUS comercial
+
+SÍ:
+igf_status
+
+## Continuidad
+
+Caso obligatorio:
+
+Turno previo:
+¿Cómo vamos en CASA en los últimos 30 días?
+
+parent_intent:
+commercial_trend
+
+Nuevo turno:
 ¿Qué rentabilidad tenemos?
 
-Auditar si debe usar:
+La nueva señal financiera explícita debe ganar.
 
-- IGF vigente/actual de la planta;
-- último snapshot disponible;
-- forecast vigente del mes;
-- FINAL si mes cerrado.
+NO heredar commercial_trend.
 
-NO inventar regla nueva.
+## Periodo
 
-Documentar la resolución física actual.
+Sin mes explícito:
 
-## Routing
+usar la regla IGF existente:
 
-Trazar exactamente:
+currentYearMonthCdmx()
 
-question
-→ pre-routing
-→ planner
-→ intent
-→ mode
-→ tool
-→ source
-→ answer builder
+Con fecha de pruebas:
+2026-09-09
 
-Encontrar el FIRST_DIVERGENCE que provoca la ruta comercial.
+→ 2026-09
 
-Determinar si el fallo está en:
+NO:
 
-- intent detection
-- precedence
-- planner
-- pre-route
-- inheritance
-- tool selection
-- answer builder
-- source mapping
+trailing 30 días
 
-## Fuentes
+NO cambiar la resolución existente de meses explícitos.
 
-Auditar:
+## Tool / source
 
-- get_igf_snapshot
-- igf_status
-- financial_diagnosis
-- plant_diagnosis
-- commercial trend / commercial state
-- dashboard KPI path si interviene
+Usar capacidad existente:
 
-Determinar cuál ya contiene los datos necesarios.
+get_igf_snapshot
+loadIgfArrAnnexForChat
 
-## Respuesta objetivo futura
+Fuente existente:
 
-Formato aproximado, NO implementar:
+igf.compromiso_lines
 
-"Acapulco — IGF vigente de septiembre 2026.
+NO nueva tool.
+NO SQL nuevo.
+NO server.js.
 
-Utilidad operativa: $X
+## Datos obligatorios de headline
 
-Se forma con:
-- Ingreso: $A
-- Gastos operativos: $B
+Para pregunta genérica de rentabilidad, si existen:
 
-Resultado final: $Y
+Utilidad Operativa:
+util_oper_importe
+util_oper_kg
 
-Después de:
-- Gastos corporativos: $C
-- Gasto total: $D
+Resultado Final:
+resultado_final_importe
+resultado_final_kg
 
-Variables:
-- Venta forecast: X t
-- Margen: $X/kg
-- Descuento/comisiones: $X/kg
-- Impuestos: $X/kg
-- HG: $X/kg"
+Estos son métricas distintas.
 
-No afirmar causalidad.
+NO igualarlas.
+
+## Variables financieras disponibles
+
+Mostrar, cuando existan:
+
+venta_ton
+margen_kg
+com_desc_kg
+impuesto_kg
+hg_kg
+gtos_apoyos_corp_kg
+
+Unidades:
+
+venta_ton = toneladas
+margen_kg = MXN/kg
+com_desc_kg = MXN/kg
+impuesto_kg = MXN/kg
+hg_kg = MXN/kg
+gtos_apoyos_corp_kg = MXN/kg
+
+## Datos NO disponibles en este snapshot
+
+La auditoría determinó que el snapshot actual NO expone de forma defendible:
+
+ingreso MXN
+gasto operativo MXN nombrado
+gasto total MXN
+
+NO reconstruirlos.
+
+NO inferirlos.
+
+NO usar gasto_kg como si fuera gasto operativo,
+porque el runtime actual indica que no representa esa fórmula.
+
+Si se necesitan en la respuesta:
+
+n.d.
+
+o se omiten con una nota breve.
+
+## Fórmulas
+
+NO afirmar como fórmula probada:
+
+Utilidad Operativa = Ingreso - Gasto Operativo
+
+NO afirmar como fórmula probada:
+
+Resultado Final = Utilidad Operativa - Gasto Corporativo
+
+La auditoría las marcó:
+
+NOT_PROVABLE
+
+Este slice usa los valores almacenados.
+
+## Shape S1
+
+Respuesta esperada aproximada:
+
+Acapulco — IGF vigente de septiembre 2026.
+
+Utilidad operativa:
+$X
+$Y/kg
+
+Resultado final:
+$Z
+$W/kg
+
+Variables disponibles:
+- Venta: X t
+- Margen: X MXN/kg
+- Comisiones y descuentos: X MXN/kg
+- Impuestos: X MXN/kg
+- HG: X MXN/kg
+- Gastos/apoyos corporativos: X MXN/kg
+
+No incluir:
+
+CASA
+COMISIONISTA
+OLS
+UP/DOWN
+últimos 30 días
+
+No causalidad.
+
+## Shape S5
+
+¿Qué utilidad operativa tenemos?
+
+Abrir con:
+
+util_oper_importe
+util_oper_kg
+
+Puede incluir resultado final como contexto secundario,
+pero NO confundirlos.
+
+## Shape S6
+
+¿Cuál es el resultado final?
+
+Abrir con:
+
+resultado_final_importe
+resultado_final_kg
+
+Puede incluir utilidad operativa como contexto secundario.
 
 ## Ausencia
 
-Si algún dato no existe:
+Si no existe snapshot o campo:
 
 DATA_NOT_FOUND / n.d.
 
-No reconstruir o inventar números.
+No hacer fallback a commercial trend.
 
-## No implementar
+No inventar.
 
-SOLO AUDITORÍA.
+## Surface autorizado
 
-NO código.
+En scope:
+
+lib/director-ia-planner.js
+lib/director-ia-chat.js
+tests focales Director IA
+CURRENT_TASK
+reporte
+
+Modificar chat solo si es necesario para:
+
+- precedencia CEL
+- herencia de intent
+- shape de respuesta IGF
+
+No tocar server.js.
+
+## Prohibido
+
 NO SQL.
 NO schema.
+NO tool nueva.
+NO endpoint nuevo.
 NO dependencies.
+NO server.js.
 NO LIVE_DB.
-NO Render.
 NO deploy.
 NO merge.
 NO push main.
 
-## Entrega obligatoria
+## Regresiones obligatorias
 
-AUDIT_RESULT:
+001 S1 planner = igf_status
+002 S2 planner = igf_status
+003 S3 planner = igf_status
+004 S4 planner/ruta final = igf_status
+005 S5 = igf_status
+006 S6 = igf_status
+007 S7 = igf_status
+008 S8 = igf_status
 
-S1_CURRENT_INTENT:
-S1_CURRENT_ROUTE:
-S1_CURRENT_TOOL:
-S1_CURRENT_SOURCE:
-S1_CURRENT_PERIOD:
-S1_FIRST_DIVERGENCE:
+009 S1 current period = 2026-09 con now 2026-09-09
+010 S1 no trailing 30d
+011 S1 usa get_igf_snapshot
+012 S1 usa fuente IGF existente
 
-WHY_COMMERCIAL_TREND_WINS:
+013 S1 incluye util_oper_importe
+014 S1 incluye resultado_final_importe
+015 S1 distingue utilidad operativa de resultado final
 
-EXPECTED_EXECUTIVE_INTENT:
-EXPECTED_TOOL:
-EXPECTED_SOURCE:
+016 S1 puede mostrar venta_ton
+017 S1 puede mostrar margen_kg
+018 S1 puede mostrar com_desc_kg
+019 S1 puede mostrar impuesto_kg
+020 S1 puede mostrar hg_kg
+021 S1 puede mostrar gtos_apoyos_corp_kg
 
-IGF_CURRENT_PERIOD_RULE:
-IGF_CURRENT_VERSION_RULE:
-IGF_FINAL_VS_FORECAST_RULE:
+022 S1 no inventa ingreso
+023 S1 no inventa gasto operativo MXN
+024 S1 no inventa gasto total MXN
+025 S1 no afirma fórmula no probada
+026 S1 no usa gasto_kg como gasto operativo
+
+027 S1 no CASA
+028 S1 no COMISIONISTA
+029 S1 no OLS
+030 S1 no UP/DOWN
+031 S1 no commercial_trend
+
+032 S4 "cómo estamos" no activa EXECUTIVE_STATUS comercial
+033 financial cue tiene precedencia sobre generic status cue
+
+034 parent commercial_trend + S1 => igf_status
+035 financial explicit cue rompe herencia comercial
+
+036 "¿Cómo vamos?" genérico conserva comportamiento existente
+037 "¿Cómo vamos en CASA últimos 30 días?" conserva commercial_trend
+038 pregunta explícita de margen conserva semántica de margen
+039 margen != rentabilidad
+040 descuento != margen
+
+041 S5 abre con utilidad operativa
+042 S6 abre con resultado final
+043 S7 abre con utilidad operativa
+044 S8 abre con resultado final
+
+045 falta util_oper => DATA_NOT_FOUND/n.d.
+046 falta resultado_final => DATA_NOT_FOUND/n.d.
+047 falta snapshot => no commercial fallback
+
+048 no SQL nuevo
+049 no tool nueva
+050 no server.js
+051 no schema
+052 no deps
+053 no LIVE_DB
+054 no OpenAI inventando métricas
+
+055 planner focal PASS
+056 IGF focal PASS
+057 CEL focal PASS
+058 continuity/inheritance focal PASS
+059 Tier1 PASS
+060 pre-deploy --gate PASS
+061 NEW FAILURE = 0
+
+## Entrega
+
+IMPLEMENTATION_SHA:
+BASE_MAIN_SHA:
+
+S1_INTENT:
+S1_ROUTE:
+S1_TOOL:
+S1_SOURCE:
+S1_PERIOD:
+
+S4_INTENT:
+S4_EXECUTIVE_STATUS_INTERCEPTED:
+
+COMMERCIAL_PARENT_PLUS_S1:
+COMMERCIAL_INHERIT_BLOCKED:
 
 OPERATING_PROFIT_FIELD:
-OPERATING_EXPENSE_FIELD:
-INCOME_FIELD:
-CORPORATE_EXPENSE_FIELD:
-TOTAL_EXPENSE_FIELD:
 FINAL_RESULT_FIELD:
 
-SALES_VOLUME_FIELD:
-MARGIN_FIELD:
-DISCOUNT_FIELD:
-TAX_FIELD:
-HG_FIELD:
+VARIABLES_PRESENTED:
 
-OPERATING_PROFIT_FORMULA_PROVABLE:
-FINAL_RESULT_FORMULA_PROVABLE:
+INCOME_RECONSTRUCTED:
+OPERATING_EXPENSE_RECONSTRUCTED:
+TOTAL_EXPENSE_RECONSTRUCTED:
+UNPROVABLE_FORMULA_STATED:
 
-ALL_REQUIRED_FIELDS_AVAILABLE:
-CAN_FIX_WITHOUT_NEW_SQL:
-CAN_FIX_WITHOUT_NEW_TOOL:
-CAN_FIX_WITHOUT_PLANNER_CHANGE:
-CAN_FIX_WITHOUT_SERVER_CHANGE:
+CASA_PRESENT:
+COMISIONISTA_PRESENT:
+OLS_PRESENT:
+TRAILING_30D_PRESENT:
 
-S1_EXPECTED_SHAPE:
-S5_EXPECTED_SHAPE:
-S6_EXPECTED_SHAPE:
-
-ROUTING_BUG:
-PRECEDENCE_BUG:
-SOURCE_BUG:
-DATA_BUG:
-PRESENTATION_BUG:
-
-FILES_INSPECTED:
-TESTS_RUN:
+001..061:
+SUITES:
+FILES:
 RISKS:
 
-RECOMMENDED_NEXT_SLICE:
+PLANNER_CHANGED:
+CHAT_CHANGED:
+CEL_PRECEDENCE_CHANGED:
+INHERITANCE_CHANGED:
+SQL_CHANGED:
+TOOL_ADDED:
+SERVER_CHANGED:
+SCHEMA_CHANGED:
+DEPS_CHANGED:
+LIVE_DB_USED:
 
 ## Completion
 
-Al terminar:
+Si PASS:
 
 CURRENT_TASK -> DONE_PENDING_REVIEW
-crear reporte append-only
-commit auditoría
-STOP
+commit implementación
+reporte append-only
 
-No implementación.
+STOP.
+
+No merge.
+No push main.
+No deploy.
 No siguiente tarea.
-closure_reason: "HUMAN REVIEW PASS. La auditoría demuestra que rentabilidad no tiene regla propia en el planner; S1 aborta a unknown. El shape CASA/COMISIONISTA/OLS/30d procede de CEL EXECUTIVE_STATUS o continuidad comercial, no de una ruta financiera."
-
-human_semantic_decision: "Rentabilidad genérica significa IGF de la planta: Utilidad Operativa + Resultado Final + variables financieras disponibles. Rentabilidad, utilidad operativa y resultado final deben tener precedencia sobre EXECUTIVE_STATUS, commercial_trend y herencia comercial. No inventar ingreso, gasto operativo MXN ni gasto total si el snapshot no los expone."
