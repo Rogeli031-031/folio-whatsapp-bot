@@ -1,38 +1,42 @@
-task_id: AUDIT-DIRECTOR-IA-RENTABILIDAD-CURRENT-MONTH-FORECAST-SOURCE-001
+task_id: FIX-DIRECTOR-IA-RENTABILIDAD-CURRENT-MONTH-FORECAST-SOURCE-001
 
-task_type: AUDIT
-mode: READ_ONLY
+task_type: FIX
+mode: REGRESSION_FIRST
 
-status: CLOSED
+status: AUTHORIZED
+
 authorized_by: "Human Approver"
-authorized_at: "2026-09-09T16:20:11-06:00"
+authorized_at: "2026-09-09T16:43:02-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Zaragoza 2026-09-09"
 
-implementation_authorized: NO
+implementation_authorized: YES
 merge_authorized: NO
 deploy_authorized: NO
 live_db_authorized: NO
 
 max_attempts: 1
 
-base_main_sha: 2b67affe4ac3d95639a7809ac839e28a9ecce16a
-result_report_path: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-RENTABILIDAD-CURRENT-MONTH-FORECAST-SOURCE-001.md
+base_main_sha: 6842f242e0916033c8b235f3cb47c5ccc5093696
+result_report_path: docs/dev-loop/reports/FIX-DIRECTOR-IA-RENTABILIDAD-CURRENT-MONTH-FORECAST-SOURCE-001.md
 
-objective: "Localizar la fuente física de la proyección financiera vigente del IGF Forecast recalculado por ARR y explicar por qué Director IA usa hoy el snapshot IGF base para preguntas de rentabilidad del mes abierto."
+objective: "Hacer que preguntas actuales de rentabilidad del mes abierto usen el mismo mini forecast PROY vigente que la tabla IGF Forecast, preservando el snapshot stored para presupuesto/compromiso."
 
-## Evidencia LIVE
+## North Star LIVE
 
-Planta seleccionada:
+Planta:
 Acapulco
 
-Mes:
-septiembre 2026
+Fecha actual de pruebas:
+2026-09-09
 
 Pregunta:
 
 ¿Qué rentabilidad tenemos?
 
-Director IA responde actualmente desde IGF snapshot:
+ANTES, incorrecto para estado actual:
+
+Fuente:
+igf.compromiso_lines
 
 Venta:
 1506.4 t
@@ -43,427 +47,428 @@ Utilidad operativa:
 Resultado final:
 955783 MXN
 
-La pantalla IGF Forecast, después de:
+DASHBOARD VIGENTE observado:
 
-Recalcular venta forecast (ARR)
-
-muestra:
-
-Venta:
+Venta forecast PROY:
 1466.01 t
 
-Utilidad operación - importe:
+Ingreso:
+12860573 MXN
+
+Operativos:
+9938767 MXN
+
+Corporativos:
+2561700 MXN
+
+Gasto:
+12500467 MXN
+
+Utilidad operativa:
 2921806 MXN
 
-Resultado final - importe:
+Resultado final:
 360106 MXN
 
-Corte visual observado:
+Corte:
 07/09/2026
 
-Versión visual:
-Sep 2026 · v2
+## Decisión humana de fuente
 
-## Semántica humana deseada
-
-Para MES ABIERTO y pregunta ejecutiva actual:
+Para MES ACTUAL ABIERTO y lenguaje actual:
 
 ¿Qué rentabilidad tenemos?
-¿Cómo vamos de rentabilidad?
+¿Cómo estamos de rentabilidad?
 ¿Qué utilidad operativa tenemos?
 ¿Cuál es el resultado final?
+¿Qué rentabilidad proyectamos para cerrar septiembre?
 
-debe auditarse la posibilidad de usar:
+usar:
 
-FORECAST VIGENTE RECALCULADO
+computeIgfForecastMiniPayload
+/
+loadIgfForecastMiniPayload
+/
+readIgfForecastMiniAuthoritative
 
-y no automáticamente el IGF/compromiso original.
+según la arquitectura física existente.
 
-No implementar esta regla todavía.
+Debe ser la misma semántica de la tabla IGF Forecast mini.
 
-## Distinción temporal
+NO usar compromiso stored como fuente principal en estos casos.
 
-Auditar físicamente la separación entre:
+## Presupuesto / compromiso
 
-A) IGF / compromiso original
+Si el usuario pide explícitamente:
 
-B) forecast ARR recalculado vigente del mes abierto
+presupuesto
+presupuestada
+compromiso
+comprometido
+IGF original
+plan original
 
-C) FINAL / cierre histórico
+usar:
 
-No asumir que son la misma tabla, versión, handler ni cálculo.
+loadIgfCommitSnapshot
+igf.compromiso_lines
 
-## North Star físico
+NO sustituirlo por mini PROY.
 
-Trazar exactamente cómo la pantalla llega a:
+Ejemplo:
 
-Acapulco
-Venta = 1466.01
-Util Operación Importe = 2921806
-Resultado Final Importe = 360106
+¿Cuál era la rentabilidad presupuestada de septiembre?
 
-Determinar:
+=> universo A, stored.
 
-- endpoint
-- handler
-- loader
-- funciones
-- tablas
-- cálculos
-- joins
-- cutoff
-- versión
-- campos físicos
+## Mes histórico
 
-No reconstruirlos por intuición.
+El mini forecast del MES ACTUAL no puede responder por un mes histórico.
 
-## Dashboard trace obligatorio
+Ejemplo:
 
-Trazar:
+¿Cómo cerramos agosto?
 
-botón "Recalcular venta forecast (ARR)"
-→ handler frontend
-→ request
-→ endpoint backend
-→ función de recálculo
-→ persistencia o cálculo en memoria
-→ refresh de tabla IGF Forecast
-→ fila Acapulco
+NO usar mini septiembre.
 
-Determinar si al pulsar recalcular:
+Preservar el path histórico/FINAL existente.
 
-- se modifica una tabla;
-- se genera una proyección temporal;
-- se persiste una versión;
-- solo se recalcula la venta;
-- se recalculan también ingreso/utilidad/resultado;
-- o la tabla final combina varias fuentes.
+Si el path existente no entrega FINAL defendible:
 
-## Director IA trace obligatorio
+DATA_NOT_FOUND / NOT_FINAL
 
-Trazar:
-
-¿Qué rentabilidad tenemos?
-→ planner igf_status
-→ get_igf_snapshot
-→ loadIgfArrAnnexForChat / equivalente
-→ fuente
-→ versión
-→ fila Acapulco
-
-Explicar físicamente por qué obtiene:
-
-1506.4
-3373573
-955783
-
-en vez de:
-
-1466.01
-2921806
-360106
-
-## Fuentes a inspeccionar
-
-Inspeccionar, si existen físicamente:
-
-- rutas IGF Forecast
-- recálculo ARR
-- director-ia-igf-arr
-- get_igf_snapshot
-- loadIgfCommitSnapshot
-- loadIgfArrAnnexForChat
-- forecast projection
-- igf-financial-final
-- endpoints usados por la tabla IGF visual
-- handlers relacionados con "Recalcular venta forecast (ARR)"
-
-No asumir nombres no existentes.
+No ampliar cierre histórico en este slice.
 
 ## Cutoff
 
-Auditar qué representa:
+Cuando se use mini forecast:
 
-Fecha de carga (corte): 07/09/2026
+preservar y exponer el cutoff real del payload.
 
-Determinar si el forecast mostrado:
+Para evidencia observada:
 
-- usa datos ARR observados hasta ese corte;
-- usa el último upload_day;
-- usa la fecha del navegador;
-- usa la última versión disponible;
-- o alguna otra regla.
+07/09/2026
 
-No inventar.
+No hardcodear esa fecha.
 
-## Versiones
+Debe provenir de metadata/campo físico del mini.
 
-Auditar:
+No usar fecha actual como sustituto del cutoff.
 
-Sep 2026 · v2
+## Version
 
-Determinar:
+Preservar:
 
-- tabla/campo físico de version_number;
-- si la proyección recalculada pertenece a v2;
-- si get_igf_snapshot selecciona la misma versión;
-- si una versión puede tener múltiples cortes/proyecciones.
+version_number del IGF seleccionado.
+
+El recálculo PROY no crea una nueva versión.
+
+No presentar cutoff como version.
 
 ## Venta
 
-Determinar cómo se obtiene físicamente:
+En el mini:
 
-1466.01 t
+ventaTon
+=
+PROYECCIÓN DE VENTA DEL MES
 
-Separar, si existen:
+No llamarla:
+
+venta real
+venta al corte
+compromiso
+meta
+
+Wording:
+
+Venta proyectada del mes
+
+Preservar:
 
 VENTA OBSERVADA AL CORTE
-POR COMPRAR
-PROYECCIÓN VENTA DEL MES
-COMPROMISO / META IGF
-
-No confundirlas.
-
-Preservar invariante:
-
-VENTA REAL / TOTAL MES AL CORTE
 != PROY VENTA DEL MES
-!= COMPROMISO / META IGF
+!= COMPROMISO IGF
 
-## Rentabilidad
+## Shape de rentabilidad actual
 
-Determinar cómo la tabla calcula o carga:
+Respuesta esperada conceptualmente:
 
-2921806
-360106
+Acapulco — proyección vigente de septiembre 2026 al corte 07/09/2026.
 
-Auditar si son:
+Utilidad operativa proyectada:
+$2,921,806
 
-- valores persistidos;
-- derivados al vuelo;
-- función existente;
-- recomputación a partir de venta ARR;
-- otro snapshot.
+Se forma con:
+- Ingreso proyectado: $12,860,573
+- Gastos operativos proyectados: $9,938,767
 
-No afirmar fórmula hasta demostrarla.
+Resultado final proyectado:
+$360,106
 
-## Variables visuales de Acapulco
+Después de:
+- Gastos corporativos proyectados: $2,561,700
 
-La pantalla muestra además aproximadamente:
+Gasto total proyectado:
+$12,500,467
 
-Margen:
-7.12
+Variables:
+- Venta proyectada del mes: 1,466.01 t
+- Margen: 7.12 MXN/kg
+- Comisiones y descuentos: -0.16 MXN/kg
+- Impuestos: 0.93 MXN/kg
+- HG: -1.81 MXN/kg
 
-Comisiones y descuentos:
--0.16
+Los valores deben provenir del payload real.
+NO hardcodear cifras.
 
-Impuestos:
-0.93
+## Fórmulas autorizadas para mini forecast
 
-HG:
--1.81
+La auditoría probó físicamente:
 
-Ingreso:
-12860573
+utilOperImporte = ingreso - operativos
 
-Operativos:
-9938767
+resultadoFinalImporte = utilOperImporte - corporativos
 
-Corporativos:
-2561700
+Puede explicarse esa descomposición.
 
-Gasto:
-12500467
+No generalizar estas fórmulas a otros universos sin evidencia.
 
-Auditar nombres físicos reales y cómo se relacionan con la proyección.
+## Source selection
 
-NO asumir que el snapshot de Director IA contiene las mismas columnas.
+Agregar una selección determinista de universo para igf_status.
 
-## Regla futura a evaluar
+Conceptualmente:
 
-Auditar si el siguiente contrato es físicamente implementable SIN nueva fuente:
+CURRENT_OPEN_MONTH_CURRENT_STATE
+=> MINI_FORECAST_PROY
 
-MES ABIERTO + lenguaje actual
-→ forecast ARR vigente
+EXPLICIT_PROJECTION_CURRENT_MONTH
+=> MINI_FORECAST_PROY
 
-MES CERRADO + cierre/tuvimos
-→ FINAL defendible
+EXPLICIT_BUDGET_COMMITMENT
+=> IGF_COMMIT_SNAPSHOT
 
-presupuesto / compromiso / IGF original
-→ snapshot IGF original
+PAST_MONTH
+=> NEVER_CURRENT_MINI
 
-No implementar.
+No usar LLM para elegir la fuente.
 
-## Preguntas futuras que deben distinguirse
+## Tool
+
+NO crear tool nueva.
+
+El loader mini ya está disponible como dependencia del chat.
+
+`get_igf_snapshot` puede seguir siendo metadata/capability existente;
+no redefinir su contrato si no es necesario.
+
+El handler puede usar el loader ya inyectado.
+
+## SQL / servidor
+
+NO SQL nuevo.
+NO endpoint nuevo.
+NO server.js.
+NO frontend.
+
+## Ausencia del mini
+
+Si la pregunta requiere MINI_FORECAST_PROY y:
+
+- mini no existe;
+- planta no existe en mini;
+- valor requerido es null;
+- fuente falla;
+
+NO hacer fallback silencioso al compromiso stored presentándolo como actual.
+
+Responder de forma veraz:
+
+DATA_NOT_FOUND / proyección vigente no disponible
+
+Puede indicar que existe un compromiso IGF por separado,
+pero debe etiquetarlo como compromiso si se muestra.
+
+## Preserve
+
+Preservar el FIX anterior:
+
+rentabilidad
+utilidad operativa
+resultado final
+=> igf_status
+
+Preservar precedencia sobre CEL commercial trend.
+
+Preservar ruptura de herencia commercial_trend.
+
+Preservar preguntas explícitas de margen.
+
+Preservar "¿Cómo vamos?" genérico.
+
+Preservar CASA 30 días.
+
+## North Star tests
 
 S1:
 ¿Qué rentabilidad tenemos?
 
 S2:
-¿Qué utilidad operativa tenemos?
+¿Cómo estamos de rentabilidad?
 
 S3:
-¿Cuál es el resultado final?
+¿Qué utilidad operativa tenemos?
 
 S4:
-¿Qué rentabilidad proyectamos para cerrar septiembre?
+¿Cuál es el resultado final?
 
 S5:
-¿Cuál era la rentabilidad presupuestada de septiembre?
+¿Qué rentabilidad proyectamos para cerrar septiembre?
 
 S6:
+¿Cuál era la rentabilidad presupuestada de septiembre?
+
+S7:
 ¿Cómo cerramos agosto?
 
-Solo auditar la disponibilidad y fuente correcta.
+S8:
+¿Qué margen tenemos?
 
-## Ausencia
+## Regresiones obligatorias
 
-Si la fuente de forecast no contiene alguna variable:
+001 S1 intent = igf_status
+002 S1 source = MINI_FORECAST_PROY
+003 S1 period = 2026-09
+004 S1 uses mini authoritative loader
+005 S1 does not use commit snapshot as current truth
+006 S1 cutoff comes from mini metadata
+007 S1 version preserved
+008 S1 ventaTon labelled projected monthly sales
+009 S1 does not label ventaTon observed
+010 S1 does not label ventaTon commitment
 
-DATA_NOT_FOUND
+011 S1 util_oper = utilOperImporte
+012 S1 final = resultadoFinalImporte
+013 S1 income = ingreso
+014 S1 operating expense = operativos
+015 S1 corporate expense = corporativos
+016 S1 total expense = gasto
 
-No reconstruir.
+017 S1 formula util_oper = ingreso - operativos
+018 S1 formula final = util_oper - corporativos
+019 S1 values are projected wording
+020 S1 no CASA
+021 S1 no COMISIONISTA
+022 S1 no OLS
+023 S1 no trailing 30d
 
-No usar la columna parecida más cercana.
+024 S2 source mini
+025 S3 source mini
+026 S4 source mini
+027 S5 source mini
+028 S5 projected-close wording
 
-## No implementar
+029 S6 source = IGF_COMMIT
+030 S6 does not use mini as budget
+031 S6 stored values labelled budget/commitment
 
-SOLO LECTURA.
+032 S7 never uses current September mini
+033 S7 preserves existing historical/final path
+034 S7 no fabricated FINAL
 
-NO código de producto.
-NO SQL nuevo.
-NO schema.
-NO migrations.
-NO tool nueva.
-NO endpoint.
-NO dependencies.
-NO LIVE_DB.
-NO Render.
-NO deploy.
-NO merge.
-NO push main.
+035 S8 preserves margin semantics
 
-## Entrega exacta
+036 mini missing => no silent stored-current fallback
+037 plant missing mini => DATA_NOT_FOUND
+038 utilOperImporte null => no invented value
+039 resultadoFinalImporte null => no invented value
 
-AUDIT_RESULT:
+040 cutoff is not Date.now replacement
+041 cutoff is not version
+042 version is not modified by PROY
+043 no arr.forecast_mensual claimed as mini P&L source
 
-DASHBOARD_RECALCULATE_BUTTON_FILE:
-DASHBOARD_RECALCULATE_HANDLER:
-DASHBOARD_RECALCULATE_ENDPOINT:
+044 observed != projected invariant preserved
+045 projected != commitment invariant preserved
 
-DASHBOARD_TABLE_FETCH_FUNCTION:
-DASHBOARD_TABLE_ENDPOINT:
-DASHBOARD_TABLE_SOURCE:
+046 source selector deterministic
+047 no OpenAI source selection
 
-FORECAST_RECALC_FUNCTION:
-FORECAST_RECALC_SOURCE:
-FORECAST_RECALC_PERSISTS:
-FORECAST_RECALC_PERSISTENCE_TARGET:
+048 no SQL
+049 no new tool
+050 no server.js
+051 no frontend
+052 no schema
+053 no dependencies
+054 no LIVE_DB
 
-FORECAST_CUTOFF_FIELD:
-FORECAST_CUTOFF_RULE:
-FORECAST_VERSION_FIELD:
-FORECAST_VERSION_RULE:
+055 prior rentabilidad routing focal PASS
+056 mini payload focal PASS
+057 IGF focal PASS
+058 CEL focal PASS
+059 continuity/inheritance focal PASS
+060 Tier1 + pre-deploy gate PASS
+061 NEW FAILURE = 0
 
-ACAPULCO_FORECAST_SALES_VALUE:
-ACAPULCO_FORECAST_SALES_FIELD:
-ACAPULCO_FORECAST_SALES_SOURCE:
+## Expected delivery
 
-ACAPULCO_OPERATING_PROFIT_VALUE:
-ACAPULCO_OPERATING_PROFIT_FIELD:
-ACAPULCO_OPERATING_PROFIT_SOURCE:
+IMPLEMENTATION_SHA:
+BASE_MAIN_SHA:
 
-ACAPULCO_FINAL_RESULT_VALUE:
-ACAPULCO_FINAL_RESULT_FIELD:
-ACAPULCO_FINAL_RESULT_SOURCE:
+S1_INTENT:
+S1_SOURCE_MODE:
+S1_LOADER:
+S1_PERIOD:
+S1_CUTOFF:
+S1_VERSION:
 
-ACAPULCO_INCOME_VALUE:
-ACAPULCO_OPERATING_EXPENSE_VALUE:
-ACAPULCO_CORPORATE_EXPENSE_VALUE:
-ACAPULCO_TOTAL_EXPENSE_VALUE:
+S1_PROJECTED_SALES_FIELD:
+S1_PROJECTED_OPERATING_PROFIT_FIELD:
+S1_PROJECTED_FINAL_RESULT_FIELD:
 
-CURRENT_DIRECTOR_TOOL:
-CURRENT_DIRECTOR_SOURCE:
-CURRENT_DIRECTOR_VERSION_RULE:
-CURRENT_DIRECTOR_CUTOFF_RULE:
+S1_INCOME_FIELD:
+S1_OPERATING_EXPENSE_FIELD:
+S1_CORPORATE_EXPENSE_FIELD:
+S1_TOTAL_EXPENSE_FIELD:
 
-CURRENT_DIRECTOR_SALES_VALUE:
-CURRENT_DIRECTOR_OPERATING_PROFIT_VALUE:
-CURRENT_DIRECTOR_FINAL_RESULT_VALUE:
+S1_OPERATING_FORMULA:
+S1_FINAL_FORMULA:
 
-FIRST_DIVERGENCE:
+S5_SOURCE_MODE:
+S6_SOURCE_MODE:
+S7_CURRENT_MINI_BLOCKED:
 
-DIRECTOR_SOURCE_IS_BUDGET_OR_COMMIT:
-DASHBOARD_SOURCE_IS_ARR_FORECAST:
+MINI_MISSING_FALLBACK:
+COMMIT_LABEL_IF_EXPOSED:
 
-OBSERVED_SALES_FIELD:
-TO_BUY_FIELD:
-PROJECTED_SALES_FIELD:
-COMMITMENT_SALES_FIELD:
-
-OBSERVED_PLUS_TO_BUY_EQUALS_PROJECTED:
-PROJECTED_DIFFERS_FROM_COMMITMENT:
-
-OPERATING_PROFIT_RECALCULATED_WITH_ARR:
-FINAL_RESULT_RECALCULATED_WITH_ARR:
-
-FORMULA_OPERATING_PROFIT_PROVABLE:
-FORMULA_FINAL_RESULT_PROVABLE:
-
-EXISTING_DIRECTOR_LOADER_CAN_READ_FORECAST:
-EXISTING_TOOL_CAN_READ_FORECAST:
-EXISTING_SOURCE_ALREADY_AVAILABLE_TO_DIRECTOR:
-
-CAN_FIX_WITHOUT_NEW_SQL:
-CAN_FIX_WITHOUT_NEW_TOOL:
-CAN_FIX_WITHOUT_SERVER_CHANGE:
-CAN_FIX_WITHOUT_FRONTEND_CHANGE:
-
-OPEN_MONTH_FORECAST_RULE_PHYSICALLY_POSSIBLE:
-CLOSED_MONTH_FINAL_RULE_PHYSICALLY_POSSIBLE:
-ORIGINAL_IGF_RULE_PHYSICALLY_POSSIBLE:
-
-S1_RECOMMENDED_SOURCE:
-S2_RECOMMENDED_SOURCE:
-S3_RECOMMENDED_SOURCE:
-S4_RECOMMENDED_SOURCE:
-S5_RECOMMENDED_SOURCE:
-S6_RECOMMENDED_SOURCE:
-
-SOURCE_BUG:
-VERSION_BUG:
-CUTOFF_BUG:
-TOOL_GAP:
-ROUTING_BUG:
-PRESENTATION_BUG:
-DATA_BUG:
-
-FILES_INSPECTED:
-TESTS_RUN:
+001..061:
+SUITES:
+FILES:
 RISKS:
 
-RECOMMENDED_NEXT_SLICE:
+SOURCE_SELECTOR_ADDED:
+CHAT_CHANGED:
+PLANNER_CHANGED:
+TOOL_ADDED:
+SQL_CHANGED:
+SERVER_CHANGED:
+FRONTEND_CHANGED:
+SCHEMA_CHANGED:
+DEPS_CHANGED:
+LIVE_DB_USED:
 
 ## Completion
 
-Al terminar:
+Si PASS:
 
 CURRENT_TASK -> DONE_PENDING_REVIEW
-
-Crear reporte append-only.
-
-Commit auditoría.
+commit implementación
+reporte append-only
 
 STOP.
 
-No implementación.
-No siguiente tarea.
 No merge.
 No push main.
 No deploy.
-No LIVE_DB.
-closure_reason: "HUMAN REVIEW PASS. Director IA y la tabla IGF Forecast post-PROY leen universos distintos. Director usa compromiso stored; la tabla vigente usa computeIgfForecastMiniPayload con proy_venta_ton y cutoff ARR."
-
-human_semantic_decision: "Para preguntas ejecutivas actuales de rentabilidad durante el mes abierto debe usarse el mini forecast PROY vigente, con su cutoff. Preguntas explícitas de presupuesto/compromiso/IGF original conservan el snapshot stored. Un mes histórico no debe usar el mini del mes actual. El cierre FINAL histórico queda fuera de este slice salvo preservación de comportamiento existente."
-
-human_formula_decision: "En el mini forecast están físicamente probadas utilOperImporte = ingreso - operativos y resultadoFinalImporte = utilOperImporte - corporativos. Pueden explicarse como descomposición del forecast."
+No siguiente tarea.
