@@ -3,7 +3,7 @@ task_id: FIX-DIRECTOR-IA-FOLIO-KEYWORD-RANGE-SEARCH-PARITY-002
 task_type: FIX
 mode: REGRESSION_FIRST
 
-status: AUTHORIZED
+status: DONE_PENDING_REVIEW
 
 authorized_by: "Human Approver"
 authorized_at: "2026-09-09T11:01:03-06:00"
