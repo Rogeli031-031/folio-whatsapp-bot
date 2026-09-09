@@ -3,8 +3,7 @@ task_id: FIX-DIRECTOR-IA-RENTABILIDAD-EXECUTIVE-ROUTING-001
 task_type: FIX
 mode: REGRESSION_FIRST
 
-status: DONE_PENDING_REVIEW
-
+status: CLOSED
 authorized_by: "Human Approver"
 authorized_at: "2026-09-09T13:22:29-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Zaragoza 2026-09-09"
@@ -505,3 +504,6 @@ No merge.
 No push main.
 No deploy.
 No siguiente tarea.
+closure_reason: "HUMAN REVIEW PASS. Rentabilidad, utilidad operativa y resultado final se resuelven por IGF. Las señales financieras explícitas tienen precedencia sobre EXECUTIVE_STATUS comercial y sobre herencia commercial_trend."
+
+human_acceptance: "PASS. 001..061 PASS. S1-S8 -> igf_status según semántica autorizada. S4 no es interceptado por CEL. Parent commercial_trend + rentabilidad -> igf_status. Utilidad operativa y resultado final usan campos almacenados; no se reconstruyen ingreso, gasto operativo MXN ni gasto total; no se afirman fórmulas no probadas."
