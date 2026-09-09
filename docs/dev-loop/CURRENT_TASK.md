@@ -3,8 +3,7 @@ task_id: FIX-DIRECTOR-IA-CLIENT-LARGEST-SALES-LOSS-ROUTE-TO-CALENDAR-COMPARE-001
 task_type: FIX
 mode: REGRESSION_FIRST
 
-status: DONE_PENDING_REVIEW
-
+status: CLOSED
 authorized_by: "Human Approver"
 authorized_at: "2026-09-08T18:01:06-06:00"
 
@@ -295,3 +294,6 @@ No push main.
 No deploy.
 No LIVE_DB.
 No siguiente tarea.
+closure_reason: "HUMAN REVIEW PASS. North Star routea a commercial_trend/calendar_compare. La mayor pérdida usa el delta_kg más negativo sobre clientes con delta_kg < 0, incluyendo DISMINUYÓ y DEJÓ DE COMPRAR. No usa abs(delta). Mayo y junio 2026 se preservan. OpenAI no selecciona el ganador."
+
+human_acceptance: "PASS. 55/55 focal; Tier1 8/8; pre-deploy gate PASS; NEW FAILURE=0. SQL, schema, server, M9, Financial Diagnosis, historical_margin y client_profile sin cambios."
