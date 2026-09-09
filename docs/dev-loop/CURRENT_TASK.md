@@ -3,7 +3,7 @@ task_id: AUDIT-DIRECTOR-IA-RENTABILIDAD-EXECUTIVE-ROUTING-001
 task_type: AUDIT
 mode: READ_ONLY
 
-status: AUTHORIZED
+status: DONE_PENDING_REVIEW
 
 authorized_by: "Human Approver"
 authorized_at: "2026-09-09T11:31:26-06:00"
