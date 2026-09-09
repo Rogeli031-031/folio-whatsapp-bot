@@ -1,281 +1,111 @@
-task_id: AUDIT-DIRECTOR-IA-FOLIO-KEYWORD-RANGE-SEARCH-PARITY-001
+task_id: FIX-DIRECTOR-IA-FOLIO-KEYWORD-RANGE-SEARCH-PARITY-002
 
-task_type: AUDIT
-mode: READ_ONLY
+task_type: FIX
+mode: REGRESSION_FIRST
 
 status: CLOSED
 authorized_by: "Human Approver"
-authorized_at: "2026-09-09T09:34:40-06:00"
+authorized_at: "2026-09-09T11:01:03-06:00"
+human_authorization: "AUTHORIZED_BY_HUMAN: Luis Zaragoza 2026-09-09"
 
-human_authorization: "AUTHORIZED_BY_HUMAN. Auditar físicamente cómo reutilizar la búsqueda textual existente del dashboard de Folios dentro de Director IA, agregando una ventana explícita de mes_cargo. SOLO AUDITORÍA. Sin implementación. Sin SQL nuevo. Sin LIVE_DB. Sin merge. Sin deploy."
-
-implementation_authorized: NO
+implementation_authorized: YES
 merge_authorized: NO
 deploy_authorized: NO
 live_db_authorized: NO
 
 max_attempts: 1
 
-base_main_sha: 4fe5ab54c8bd25fb518f3acc22357e59074cb964
-result_report_path: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-FOLIO-KEYWORD-RANGE-SEARCH-PARITY-001.md
+base_main_sha: c2b362877e70a6cfd3797cd755ff45ded1186a1e
+result_report_path: docs/dev-loop/reports/FIX-DIRECTOR-IA-FOLIO-KEYWORD-RANGE-SEARCH-PARITY-002.md
 
-## Objetivo único
+objective: "Implementar búsqueda textual de Folios por keyword dentro de un rango explícito de mes_cargo, con paridad funcional con el buscador existente del Kanban."
 
-Determinar el slice mínimo y físicamente defendible para que Director IA pueda responder:
+## Decisión humana G7
+
+Se resuelve explícitamente el bloqueo del FIX 001.
+
+AUTORIZADO:
+
+Reutilizar EXACTAMENTE el LEFT JOIN a public.proyectos que ya existe
+en el handler físico del Kanban.
+
+El implementador debe:
+
+1. localizar el JOIN existente del Kanban;
+2. reutilizar exactamente su relación física;
+3. reutilizar exactamente las columnas físicas que ya alimentan:
+   proyecto_codigo
+   proyecto_nombre
+
+NO diseñar otro JOIN.
+
+Si no puede demostrar paridad con el JOIN existente:
+
+STOP.
+
+## SQL autorizado — alcance estricto
+
+En queryReviewableSupportFolios se permite únicamente:
+
+- agregar numero_cheque desde public.folios;
+- agregar proyecto_codigo;
+- agregar proyecto_nombre;
+- agregar UN LEFT JOIN a public.proyectos;
+- ese LEFT JOIN debe ser equivalente al ya usado por Kanban.
+
+NO se autoriza:
+
+- ILIKE
+- LIKE para keyword search
+- predicado textual SQL
+- otro JOIN
+- CTE
+- subquery nueva
+- tabla nueva
+- schema
+- migración
+- vista
+- función SQL
+- cambio de filtros de planta
+- cambio de mes_cargo
+- LIMIT previo al match
+
+La búsqueda textual sigue ocurriendo EN MEMORIA.
+
+## North Star
 
 ¿Qué folios de enero a agosto contienen la palabra aceite?
 
-y su forma parametrizada:
+Debe resolver:
 
-¿Qué folios de enero a agosto contienen la palabra XXXXX?
-
-Debe investigarse si la capacidad puede construirse reutilizando:
-
-1. el universo/rango existente de Folios en Director IA;
-2. la semántica de búsqueda textual existente del dashboard;
-3. datos ya disponibles en public.folios;
-
-sin crear SQL nuevo si físicamente no es necesario.
-
-NO implementar.
-
-## Semántica humana objetivo
-
-Pregunta:
-
-¿Qué folios de enero a agosto contienen la palabra aceite?
-
-Interpretación deseada:
-
-planta = planta seleccionada
-universo = ALL_PUBLIC_FOLIOS
-period_start = 2026-01
-period_end = 2026-08
+intent = folio_search
+universe = ALL_PUBLIC_FOLIOS
+period = 2026-01..2026-08 inclusive
 period_field = mes_cargo
 search_term = aceite
 operation = keyword_search
-output = folios encontrados
 
-## Regla de universo
+## Extractor
 
-Si el usuario dice:
+ANTES:
 
-"folios"
+concept_query = "contienen palabra aceite"
 
-usar conceptualmente:
+DESPUÉS:
 
-ALL_PUBLIC_FOLIOS
+search_term = "aceite"
 
-NO restringir automáticamente a:
+Reconocer:
 
-GASTOS
-INVERSIONES
-TALLER
-apoyos
+contienen la palabra XXXXX
+contienen XXXXX
+con XXXXX
+que tengan XXXXX
+donde aparezca XXXXX
 
-salvo que la pregunta lo pida expresamente.
+sin incorporar el wrapper al search_term.
 
-## Regla temporal
-
-"enero a agosto"
-
-significa:
-
-mes_cargo >= 2026-01
-mes_cargo <= 2026-08
-
-inclusive.
-
-NO usar:
-
-fecha_creacion
-fecha_aprobacion
-ventana reciente
-trailing days
-
-como sustitutos.
-
-No inventar mes para folios cuyo mes_cargo sea nulo.
-
-## Regla textual
-
-La intención es:
-
-"como el buscador que ya existe en el dashboard"
-
-Auditar exactamente la implementación física actual:
-
-frontend-dashboard/app/dashboard/page.tsx
-frontend-dashboard/components/FiltersBar.tsx
-frontend-dashboard/components/KanbanBoard.tsx
-frontend-dashboard/lib/texto-busqueda.ts
-
-Determinar:
-
-- campos buscados;
-- normalización;
-- acentos;
-- mayúsculas/minúsculas;
-- puntuación;
-- substring;
-- tokens;
-- stopwords;
-- umbral de coincidencia;
-- importe;
-- cheque;
-- proyecto;
-- categoría;
-- subcategoría;
-- beneficiario;
-- descripción;
-- número/código de folio.
-
-NO asumir que "contiene palabra" = SQL ILIKE.
-
-Probar la semántica real.
-
-## Distinción obligatoria
-
-Separar explícitamente:
-
-A. TEXT_MATCH_PARITY
-   Cómo decide el buscador si un folio coincide con XXXXX.
-
-B. DATA_WINDOW
-   Qué folios fueron cargados antes de aplicar esa búsqueda.
-
-El buscador del frontend puede estar filtrando únicamente cards
-ya devueltas por fetchKanban.
-
-Probarlo.
-
-NO confundir:
-
-"mismo algoritmo de texto"
-
-con:
-
-"mismos filtros actuales de la UI".
-
-## Solo activos
-
-El dashboard visual puede tener:
-
-Solo activos = checked
-
-Eso NO significa automáticamente que Director IA deba excluir
-folios cerrados, pagados o cancelados.
-
-Auditar la semántica actual del universo genérico de Folios.
-
-Objetivo deseado:
-
-"qué folios..."
-→ buscar todos los folios del universo autorizado en el rango
-
-salvo que el usuario diga:
-
-"activos"
-"pendientes"
-"cancelados"
-etc.
-
-Determinar si esto puede respetarse con la capacidad física actual.
-
-## Rutas a inspeccionar
-
-Trazar físicamente:
-
-### Dashboard
-
-FiltersBar
-→ searchTerm
-→ Dashboard page
-→ KanbanBoard
-→ matchesSearch
-→ textMatchesSearch
-
-y además:
-
-fetchKanban
-→ endpoint backend
-→ filtros de ventana/mes/planta/activo
-→ consulta física a public.folios
-
-### Director IA
-
-POST /api/director-ia/chat
-→ askDirectorIa
-→ planner/routing
-→ folio intent
-→ parser de rango mensual
-→ tool/orchestrator
-→ query/helper físico de Folios
-→ public.folios
-→ proyección de respuesta
-
-Encontrar el primer punto donde hoy:
-
-¿Qué folios de enero a agosto contienen la palabra aceite?
-
-deja de poder resolverse.
-
-## Capacidad Folios existente
-
-Auditar reutilización de las capacidades ya implementadas para:
-
-- generic folio search;
-- concepto;
-- rango SINGLE/RANGE;
-- ALL_PUBLIC_FOLIOS;
-- mes_cargo;
-- agregación/listado;
-- planta.
-
-Determinar si ya existe una función que:
-
-1. recupere el universo Jan–Aug;
-2. traiga los campos necesarios para search parity;
-3. permita aplicar el matcher en memoria;
-4. preserve autorización por planta.
-
-## SQL
-
-Objetivo preferente:
-
-CAN_FIX_WITHOUT_NEW_SQL = YES
-
-pero NO asumirlo.
-
-Probar físicamente si la consulta existente trae todos los campos
-necesarios.
-
-Si falta un campo:
-
-documentar exactamente cuál.
-
-NO escribir SQL.
-NO modificar SQL.
-
-## Search term
-
-Para este slice:
-
-"aceite"
-
-significa buscar "aceite" usando la semántica textual auditada.
-
-NO expandir automáticamente a:
-
-lubricante
-aceite de motor
-aceite hidráulico
-filtros
-refacciones
-
-No usar embeddings ni sinónimos inventados.
-
-## Frases North Star
+## Variantes
 
 S1:
 ¿Qué folios de enero a agosto contienen la palabra aceite?
@@ -298,211 +128,339 @@ S6:
 S7:
 ¿Qué folios de enero a agosto contienen la palabra XXXXX?
 
-## No confundir con
+## Periodos
 
-"¿En qué mes se apoyó para aceite?"
+de enero a agosto
+=> 2026-01..2026-08 inclusive
 
-Ese caso solicita descubrir el mes y queda como capacidad relacionada,
-pero NO es el North Star de este slice.
+entre enero y agosto
+=> 2026-01..2026-08 inclusive
 
-"aceite de motor o filtros de aire"
+de enero a hoy
+=> enero hasta MES ACTUAL inclusive
 
-requiere OR/refinamiento conversacional y NO debe implementarse
-en esta auditoría.
+Con now=2026-09-09:
 
-Documentar readiness solamente.
+de enero a hoy
+=> 2026-01..2026-09
 
-## Resultado esperado futuro
+Siempre usar:
 
-Si hay coincidencias:
+mes_cargo
 
-Encontré N folios de enero a agosto de 2026 que coinciden con "aceite"
-en Acapulco.
+NO:
+
+fecha_creacion
+fecha_aprobacion
+ventana reciente
+trailing days
+
+Máximo:
+12 meses.
+
+## Universo
+
+"folios"
+=> ALL_PUBLIC_FOLIOS
+
+No heredar:
+solo_activos=1
+
+LIST:
+CANCELADO puede aparecer si coincide.
+
+AGGREGATE:
+preservar exclusión actual de CANCELADO.
+
+## Paridad textual
+
+Normalización:
+
+- Unicode NFD
+- eliminar acentos
+- lowercase
+- puntuación a espacio
+- colapsar whitespace
+- trim
+
+Stopwords:
+
+a
+al
+con
+de
+del
+en
+para
+por
+y
+e
+o
+el
+la
+los
+las
+un
+una
+que
+su
+se
+
+Token significativo:
+length > 1
+
+MATCH:
+
+1. substring normalizado
+
+OR
+
+2. si query y field tienen >= 2 tokens significativos:
+   hits/query_tokens >= 0.85
+
+Para una palabra:
+
+aceite
+
+usar substring normalizado.
+
+NO:
+
+ILIKE
+embeddings
+sinónimos
+OpenAI
+fuzzy LLM
+
+## Campos de búsqueda
+
+Aplicar matcher sobre:
+
+numero_folio
+folio_codigo
+descripcion/concepto
+beneficiario
+categoria
+subcategoria
+proyecto_codigo
+proyecto_nombre
+planta_nombre
+numero_cheque
+importe
+
+Importe:
+
+formato equivalente a es-MX,
+0 decimales,
+solo para matching textual.
+
+## Arquitectura
+
+question
+-> folio_search
+-> parser keyword/range
+-> query mensual completo por mes_cargo/planta
+-> LEFT JOIN proyecto ya conocido
+-> matcher textual en memoria
+-> TOTAL_MATCHES
+-> orden/proyección
+-> LIST_SHOWN
+
+Nunca:
+
+LIMIT
+-> matcher
+
+## Truncación
+
+TOTAL_MATCHES antes del límite.
+
+Si:
+
+TOTAL_MATCHES > LIST_SHOWN
+
+declarar ambos.
+
+Ejemplo:
+
+Encontré 55 folios.
+Muestro los primeros 40.
+
+## Respuesta
+
+Ejemplo defendible:
+
+Encontré 7 folios de enero a agosto de 2026 que coinciden con "aceite" en Acapulco.
 
 F-XXXX
 Mes de cargo: enero 2026
 Categoría: TALLER
-Descripción: ...
+Descripción: ACEITE DE MOTOR...
 Beneficiario: ...
-Importe registrado: $...
+Importe registrado en el folio: 8,450 MXN
+Estatus: ...
 
-...
+NO decir:
 
-Semántica obligatoria del importe:
-
-"importe registrado en el folio"
-
-NO:
-
-"gasto contable pagado"
-
-salvo evidencia adicional.
-
-## Truncación
-
-Auditar:
-
-- total real de matches antes del límite;
-- límite actual de listado;
-- si el query físico trunca antes del text match.
-
-Esto es crítico.
-
-No aceptar una implementación futura donde:
-
-SQL/list cap
-→ luego keyword search
-
-si eso puede ocultar coincidencias.
-
-Debe poder distinguir:
-
-TOTAL_MATCHES
-LIST_SHOWN
+gastamos
+gasto pagado
+erogado
+costo contable
 
 ## Ausencia
 
-Si no existe coincidencia:
+Si no hay coincidencias:
 
-"No encontré folios que coincidan con 'XXXXX' en el rango indicado."
+No encontré folios que coincidan con "XXXXX" en el rango indicado.
 
-NO inventar folios.
-NO convertir ausencia en importe cero.
-NO buscar Action Register.
+No inventar.
 
-## Autorización y planta
+No reportar importe cero.
 
-Probar:
+No Action Register.
 
-- planta seleccionada;
-- IDs equivalentes si aplican;
-- roles/permisos actuales;
-- no cruce de planta.
+## No implementar todavía
 
-No modificar autorización.
+Fuera de este slice:
 
-## Evidencia de auditoría obligatoria
+- "aceite de motor o filtros de aire" como OR conversacional
+- follow-up "¿y filtros?"
+- "¿en qué mes se apoyó?"
+- month discovery
+- continuidad conversacional
+- embeddings
+- sinónimos
 
-Entregar exactamente:
+## Preservar
 
-AUDIT_RESULT:
+- exact F-ID priority
+- folio_status
+- folio_history
+- folio_documents
+- support universe
+- concept_mode ANY
+- aggregates
+- autorización por planta
+- max 12 meses
+- CANCELADO aggregate semantics
+- otros intents
 
-DASHBOARD_SEARCH_IS_CLIENT_SIDE:
-DASHBOARD_SEARCH_DATASET:
-DASHBOARD_SEARCH_FIELDS:
-DASHBOARD_SEARCH_NORMALIZER:
-DASHBOARD_SEARCH_MATCH_RULE:
-DASHBOARD_SEARCH_USES_SQL_SEARCH:
+## Regresiones obligatorias
 
-FETCH_KANBAN_FUNCTION:
-FETCH_KANBAN_ENDPOINT:
-FETCH_KANBAN_WINDOW_FILTER:
-FETCH_KANBAN_MONTH_FILTER:
-FETCH_KANBAN_PLANT_FILTER:
-FETCH_KANBAN_ACTIVE_FILTER:
+001 BEFORE S1 wrapper incorrecto
+002 AFTER S1 search_term aceite
+003 intent folio_search
+004 ALL_PUBLIC_FOLIOS
+005 Jan-Aug inclusive
+006 mes_cargo
+007 no fecha_creacion
+008 no active-only
+009 CANCELADO puede listarse
+010 S2 keyword aceite
+011 S3 keyword aceite
+012 S4 entre Jan-Aug
+013 S5 Jan-Sep con now
+014 S6 marzo SINGLE
+015 between range
+016 to-today range
+017 max 12 months
 
-DIRECTOR_S1_INTENT:
-DIRECTOR_S1_ROUTE:
-DIRECTOR_S1_PERIOD:
-DIRECTOR_S1_UNIVERSE:
-DIRECTOR_S1_FIRST_DIVERGENCE:
+018 accent normalization
+019 lowercase
+020 punctuation
+021 whitespace
+022 substring
+023 single-word substring
+024 multi-token 85 percent
+025 stopwords
 
-DIRECTOR_GENERIC_FOLIO_QUERY_FUNCTION:
-DIRECTOR_GENERIC_FOLIO_SOURCE:
-DIRECTOR_GENERIC_FOLIO_FIELDS:
-DIRECTOR_RANGE_SUPPORT:
-DIRECTOR_RANGE_MAX_MONTHS:
-DIRECTOR_QUERY_PRE_TRUNCATES:
-DIRECTOR_LIST_POST_TRUNCATES:
+026 numero_folio
+027 folio_codigo
+028 descripcion/concepto
+029 beneficiario
+030 categoria
+031 subcategoria
+032 proyecto_codigo
+033 proyecto_nombre
+034 planta_nombre
+035 numero_cheque
+036 importe
 
-TEXT_MATCH_PARITY_REUSABLE:
-FULL_RANGE_DATASET_AVAILABLE:
-ALL_REQUIRED_SEARCH_FIELDS_AVAILABLE:
-PLANT_AUTH_PRESERVED:
+037 no ILIKE
+038 no SQL text predicate
+039 no embeddings
+040 no synonyms
+041 no OpenAI match
+042 no pre-limit
+043 total before truncation
+044 list limit preserves total
+045 total/shown wording
+046 importe registrado wording
+047 zero truthful
+048 zero no monetary amount
 
-CAN_FIX_WITHOUT_NEW_SQL:
-CAN_FIX_WITHOUT_SERVER_CHANGE:
-CAN_FIX_WITHOUT_FRONTEND_CHANGE:
+049 plant auth
+050 no cross-plant
 
-RECOMMENDED_MATCH_LAYER:
-RECOMMENDED_RANGE_LAYER:
-RECOMMENDED_OUTPUT_LAYER:
+051 exact F-ID PASS
+052 support universe PASS
+053 aggregate PASS
+054 CANCELADO aggregate PASS
+055 folio status PASS
+056 previous range tests PASS
+057 planner focal PASS
+058 tool/orchestrator focal PASS
+059 Tier1 PASS
+060 pre-deploy --gate PASS
+061 NEW FAILURE = 0
 
-ACTIVE_ONLY_SHOULD_BE_INHERITED:
-CANCELLED_FOLIOS_SEMANTICS:
+## Evidencia obligatoria del JOIN
 
-TOTAL_BEFORE_TRUNCATION_POSSIBLE:
+Entregar:
 
-S1_SUPPORTED_TODAY:
-S2_SUPPORTED_TODAY:
-S3_SUPPORTED_TODAY:
-S4_SUPPORTED_TODAY:
-S5_SUPPORTED_TODAY:
-S6_SUPPORTED_TODAY:
+KANBAN_PROJECT_JOIN_FILE:
+KANBAN_PROJECT_JOIN_SIGNATURE:
+FOLIO_SEARCH_PROJECT_JOIN_SIGNATURE:
+JOIN_PARITY_CONFIRMED:
+EXTRA_JOIN_ADDED:
 
-OR_QUERY_READY:
-CONVERSATIONAL_REFINEMENT_READY:
-MONTH_DISCOVERY_READY:
+JOIN_PARITY_CONFIRMED debe ser YES.
 
-PARSER_BUG:
-ROUTING_BUG:
-RANGE_BUG:
-SEARCH_PARITY_GAP:
-SOURCE_BUG:
-DATA_BUG:
-PRESENTATION_BUG:
+EXTRA_JOIN_ADDED debe ser NO.
 
-FILES_INSPECTED:
-TESTS_RUN:
-RISKS:
+## Flags
 
-RECOMMENDED_NEXT_SLICE:
-
-## Restricciones
-
-SOLO READ-ONLY.
-
-NO implementación.
-NO cambios de comportamiento.
-NO SQL.
-NO migraciones.
-NO schema.
-NO dependencies.
-NO LIVE_DB.
-NO Render.
-NO deploy.
-NO merge.
-NO push main.
-NO siguiente tarea.
-
-Puede ejecutar:
-
-- tests existentes;
-- probes con stubs/fixtures;
-- inspección estática;
-- git grep;
-- lectura de handlers;
-- trazas read-only sin DB live.
+PARSER_CHANGED:
+MATCHER_CHANGED:
+FOLIO_QUERY_SELECT_CHANGED:
+PROJECT_JOIN_ADDED:
+PROJECT_JOIN_PARITY_WITH_KANBAN:
+SQL_TEXT_PREDICATE_ADDED:
+SCHEMA_CHANGED:
+DEPS_CHANGED:
+FRONTEND_CHANGED:
+SERVER_CHANGED:
+PLANNER_CHANGED:
+OPENAI_MATCH_USED:
+LIVE_DB_USED:
 
 ## Completion
 
-Si la auditoría termina:
+Si PASS:
 
 CURRENT_TASK -> DONE_PENDING_REVIEW
 
-Cambiar únicamente status según protocolo.
+Commit implementation.
 
-Crear reporte append-only:
-
-docs/dev-loop/reports/AUDIT-DIRECTOR-IA-FOLIO-KEYWORD-RANGE-SEARCH-PARITY-001.md
-
-Crear commit de auditoría.
+Reporte append-only.
 
 STOP.
 
+No merge.
+No push main.
+No deploy.
+No LIVE_DB.
 No siguiente tarea.
-closure_reason: "HUMAN REVIEW PASS. S1 ya tiene routing folio_search, ALL_PUBLIC_FOLIOS, planta y rango mes_cargo 2026-01..2026-08. La primera divergencia está en extracción de keyword y luego en search parity. El query mensual no pretrunca."
+closure_reason: "HUMAN REVIEW PASS. Keyword-range search reproduce la semántica textual del buscador del Kanban sobre el universo completo autorizado antes de truncar. S1 extrae aceite, usa ALL_PUBLIC_FOLIOS y mes_cargo enero-agosto. El LEFT JOIN public.proyectos es equivalente al existente del Kanban."
 
-human_semantic_decision: "El FIX debe reproducir la semántica textual del buscador del dashboard sobre el universo completo autorizado del rango. Debe incluir numero_folio, folio_codigo, descripcion/concepto, beneficiario, categoria, subcategoria, proyecto_codigo, proyecto_nombre, planta_nombre, numero_cheque e importe. Se autoriza ampliar solamente el SELECT existente para exponer numero_cheque/proyecto; no SQL de búsqueda, no ILIKE, no tabla nueva, no schema."
-
-human_period_decision: "'entre enero y agosto' equivale a rango inclusivo por mes_cargo. 'de enero a hoy' significa enero hasta el mes actual inclusive por mes_cargo; no fecha_creacion ni día exacto."
+human_acceptance: "PASS. 001..061 PASS; JOIN parity YES; Tier1 8/8; pre-deploy gate PASS; NEW FAILURE=0. Sin ILIKE, sin predicado textual SQL, sin schema, sin dependencies, sin OpenAI para match y sin LIVE_DB."
