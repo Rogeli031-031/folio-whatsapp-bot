@@ -3,8 +3,7 @@ task_id: AUDIT-DIRECTOR-IA-RENTABILIDAD-CURRENT-MONTH-FORECAST-SOURCE-001
 task_type: AUDIT
 mode: READ_ONLY
 
-status: DONE_PENDING_REVIEW
-
+status: CLOSED
 authorized_by: "Human Approver"
 authorized_at: "2026-09-09T16:20:11-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Zaragoza 2026-09-09"
@@ -463,3 +462,8 @@ No merge.
 No push main.
 No deploy.
 No LIVE_DB.
+closure_reason: "HUMAN REVIEW PASS. Director IA y la tabla IGF Forecast post-PROY leen universos distintos. Director usa compromiso stored; la tabla vigente usa computeIgfForecastMiniPayload con proy_venta_ton y cutoff ARR."
+
+human_semantic_decision: "Para preguntas ejecutivas actuales de rentabilidad durante el mes abierto debe usarse el mini forecast PROY vigente, con su cutoff. Preguntas explícitas de presupuesto/compromiso/IGF original conservan el snapshot stored. Un mes histórico no debe usar el mini del mes actual. El cierre FINAL histórico queda fuera de este slice salvo preservación de comportamiento existente."
+
+human_formula_decision: "En el mini forecast están físicamente probadas utilOperImporte = ingreso - operativos y resultadoFinalImporte = utilOperImporte - corporativos. Pueden explicarse como descomposición del forecast."
