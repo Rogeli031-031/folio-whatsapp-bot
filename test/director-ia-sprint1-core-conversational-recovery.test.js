@@ -148,18 +148,16 @@ describe("SPRINT1 Golden Set — routing", () => {
     assert.equal(shouldHandleExecutiveStatus(need, {}, planned.intent), true);
   });
 
-  it("Q2 rentabilidad planta-mes → CEL, no client_profile, no financial_actual", () => {
+  it("Q2 rentabilidad planta-mes → igf_status, no CEL comercial, no client_profile", () => {
     const need = resolveExecutiveNeed(Q2);
     const planned = planDirectorIaQuestion(Q2);
     assert.equal(isPlantLevelExecutiveFinancialQuestion(Q2), true);
     assert.equal(isClientProfileQuestion(Q2), false);
-    assert.equal(isSpecializedStandaloneQuestion(Q2), false);
-    assert.equal(isExecutiveStatusQuestion(Q2), true);
-    assert.equal(need.need_type, NEED_TYPES.EXECUTIVE_STATUS);
-    assert.ok(["unknown", "plant_diagnosis"].includes(planned.intent), planned.intent);
-    assert.equal(shouldHandleExecutiveStatus(need, {}, planned.intent), true);
+    assert.equal(planned.intent, "igf_status");
+    assert.equal(shouldHandleExecutiveStatus(need, {}, planned.intent), false);
     assert.notEqual(planned.intent, "client_profile");
     assert.notEqual(planned.intent, "financial_diagnosis");
+    assert.notEqual(planned.intent, "commercial_trend");
   });
 
   it("Q3 descuento planta-mes → CEL, no client_profile (no ruta d.canal)", () => {
