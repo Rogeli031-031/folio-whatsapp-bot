@@ -58,7 +58,7 @@ EXTRA_JOIN_ADDED:
 NO
 
 IMPLEMENTATION_SHA:
-(pending commit; ver git log de esta rama)
+0c20b91f429a2d01809e40dc71ca7efa9b9fde8d
 
 BASE_MAIN_SHA:
 c2b362877e70a6cfd3797cd755ff45ded1186a1e
