@@ -3,8 +3,7 @@ task_id: AUDIT-DIRECTOR-IA-FOLIO-KEYWORD-RANGE-SEARCH-PARITY-001
 task_type: AUDIT
 mode: READ_ONLY
 
-status: DONE_PENDING_REVIEW
-
+status: CLOSED
 authorized_by: "Human Approver"
 authorized_at: "2026-09-09T09:34:40-06:00"
 
@@ -502,3 +501,8 @@ Crear commit de auditoría.
 STOP.
 
 No siguiente tarea.
+closure_reason: "HUMAN REVIEW PASS. S1 ya tiene routing folio_search, ALL_PUBLIC_FOLIOS, planta y rango mes_cargo 2026-01..2026-08. La primera divergencia está en extracción de keyword y luego en search parity. El query mensual no pretrunca."
+
+human_semantic_decision: "El FIX debe reproducir la semántica textual del buscador del dashboard sobre el universo completo autorizado del rango. Debe incluir numero_folio, folio_codigo, descripcion/concepto, beneficiario, categoria, subcategoria, proyecto_codigo, proyecto_nombre, planta_nombre, numero_cheque e importe. Se autoriza ampliar solamente el SELECT existente para exponer numero_cheque/proyecto; no SQL de búsqueda, no ILIKE, no tabla nueva, no schema."
+
+human_period_decision: "'entre enero y agosto' equivale a rango inclusivo por mes_cargo. 'de enero a hoy' significa enero hasta el mes actual inclusive por mes_cargo; no fecha_creacion ni día exacto."
