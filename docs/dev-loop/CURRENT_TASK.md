@@ -1,509 +1,465 @@
-task_id: FIX-DIRECTOR-IA-RENTABILIDAD-EXECUTIVE-ROUTING-001
+task_id: AUDIT-DIRECTOR-IA-RENTABILIDAD-CURRENT-MONTH-FORECAST-SOURCE-001
 
-task_type: FIX
-mode: REGRESSION_FIRST
+task_type: AUDIT
+mode: READ_ONLY
 
-status: CLOSED
+status: AUTHORIZED
+
 authorized_by: "Human Approver"
-authorized_at: "2026-09-09T13:22:29-06:00"
+authorized_at: "2026-09-09T16:20:11-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Zaragoza 2026-09-09"
 
-implementation_authorized: YES
+implementation_authorized: NO
 merge_authorized: NO
 deploy_authorized: NO
 live_db_authorized: NO
 
 max_attempts: 1
 
-base_main_sha: ac055bd9945cce551851e2d608a4a91e7113fdbb
-result_report_path: docs/dev-loop/reports/FIX-DIRECTOR-IA-RENTABILIDAD-EXECUTIVE-ROUTING-001.md
+base_main_sha: 2b67affe4ac3d95639a7809ac839e28a9ecce16a
+result_report_path: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-RENTABILIDAD-CURRENT-MONTH-FORECAST-SOURCE-001.md
 
-objective: "Hacer que rentabilidad, utilidad operativa y resultado final se resuelvan por IGF y no por unknown, EXECUTIVE_STATUS, commercial_trend ni continuidad comercial."
+objective: "Localizar la fuente física de la proyección financiera vigente del IGF Forecast recalculado por ARR y explicar por qué Director IA usa hoy el snapshot IGF base para preguntas de rentabilidad del mes abierto."
 
-## Evidencia
+## Evidencia LIVE
 
-Pregunta LIVE:
+Planta seleccionada:
+Acapulco
+
+Mes:
+septiembre 2026
+
+Pregunta:
 
 ¿Qué rentabilidad tenemos?
 
-Respuesta incorrecta observada:
+Director IA responde actualmente desde IGF snapshot:
 
-- CASA
-- COMISIONISTA
-- toneladas
-- pendiente OLS
-- UP
-- rango 30 días
+Venta:
+1506.4 t
 
-Auditoría:
+Utilidad operativa:
+3373573 MXN
 
-S1 aislada:
-planner = unknown
+Resultado final:
+955783 MXN
 
-S4:
-¿Cómo estamos de rentabilidad?
-planner = unknown
-CEL EXECUTIVE_STATUS gana
-commercial trend 30d/both
+La pantalla IGF Forecast, después de:
 
-También existe riesgo de heredar parent_intent=commercial_trend
-cuando la nueva pregunta financiera queda unknown.
+Recalcular venta forecast (ARR)
 
-## Decisión humana
+muestra:
 
-RENTABILIDAD genérica:
+Venta:
+1466.01 t
 
-→ IGF de la planta seleccionada
-→ Utilidad Operativa
-→ Resultado Final
-→ variables financieras disponibles del snapshot
+Utilidad operación - importe:
+2921806 MXN
 
-Debe tener precedencia sobre:
+Resultado final - importe:
+360106 MXN
 
-- EXECUTIVE_STATUS
-- commercial_trend
-- commercial_state
-- continuidad/herencia comercial
+Corte visual observado:
+07/09/2026
 
-No significa:
+Versión visual:
+Sep 2026 · v2
 
-- tendencia de venta
-- toneladas 30d
-- CASA / COMISIONISTA
-- OLS
-- UP / DOWN
+## Semántica humana deseada
 
-## Intención
+Para MES ABIERTO y pregunta ejecutiva actual:
 
-Mapear explícitamente a:
+¿Qué rentabilidad tenemos?
+¿Cómo vamos de rentabilidad?
+¿Qué utilidad operativa tenemos?
+¿Cuál es el resultado final?
 
-igf_status
+debe auditarse la posibilidad de usar:
 
-estas familias:
+FORECAST VIGENTE RECALCULADO
 
-rentabilidad
-rentabilidad operativa
-utilidad operativa
-rentabilidad final
-resultado final
+y no automáticamente el IGF/compromiso original.
 
-No convertir preguntas explícitas de margen en rentabilidad.
+No implementar esta regla todavía.
 
-Preservar:
+## Distinción temporal
 
-margen != rentabilidad
+Auditar físicamente la separación entre:
 
-## North Stars
+A) IGF / compromiso original
+
+B) forecast ARR recalculado vigente del mes abierto
+
+C) FINAL / cierre histórico
+
+No asumir que son la misma tabla, versión, handler ni cálculo.
+
+## North Star físico
+
+Trazar exactamente cómo la pantalla llega a:
+
+Acapulco
+Venta = 1466.01
+Util Operación Importe = 2921806
+Resultado Final Importe = 360106
+
+Determinar:
+
+- endpoint
+- handler
+- loader
+- funciones
+- tablas
+- cálculos
+- joins
+- cutoff
+- versión
+- campos físicos
+
+No reconstruirlos por intuición.
+
+## Dashboard trace obligatorio
+
+Trazar:
+
+botón "Recalcular venta forecast (ARR)"
+→ handler frontend
+→ request
+→ endpoint backend
+→ función de recálculo
+→ persistencia o cálculo en memoria
+→ refresh de tabla IGF Forecast
+→ fila Acapulco
+
+Determinar si al pulsar recalcular:
+
+- se modifica una tabla;
+- se genera una proyección temporal;
+- se persiste una versión;
+- solo se recalcula la venta;
+- se recalculan también ingreso/utilidad/resultado;
+- o la tabla final combina varias fuentes.
+
+## Director IA trace obligatorio
+
+Trazar:
+
+¿Qué rentabilidad tenemos?
+→ planner igf_status
+→ get_igf_snapshot
+→ loadIgfArrAnnexForChat / equivalente
+→ fuente
+→ versión
+→ fila Acapulco
+
+Explicar físicamente por qué obtiene:
+
+1506.4
+3373573
+955783
+
+en vez de:
+
+1466.01
+2921806
+360106
+
+## Fuentes a inspeccionar
+
+Inspeccionar, si existen físicamente:
+
+- rutas IGF Forecast
+- recálculo ARR
+- director-ia-igf-arr
+- get_igf_snapshot
+- loadIgfCommitSnapshot
+- loadIgfArrAnnexForChat
+- forecast projection
+- igf-financial-final
+- endpoints usados por la tabla IGF visual
+- handlers relacionados con "Recalcular venta forecast (ARR)"
+
+No asumir nombres no existentes.
+
+## Cutoff
+
+Auditar qué representa:
+
+Fecha de carga (corte): 07/09/2026
+
+Determinar si el forecast mostrado:
+
+- usa datos ARR observados hasta ese corte;
+- usa el último upload_day;
+- usa la fecha del navegador;
+- usa la última versión disponible;
+- o alguna otra regla.
+
+No inventar.
+
+## Versiones
+
+Auditar:
+
+Sep 2026 · v2
+
+Determinar:
+
+- tabla/campo físico de version_number;
+- si la proyección recalculada pertenece a v2;
+- si get_igf_snapshot selecciona la misma versión;
+- si una versión puede tener múltiples cortes/proyecciones.
+
+## Venta
+
+Determinar cómo se obtiene físicamente:
+
+1466.01 t
+
+Separar, si existen:
+
+VENTA OBSERVADA AL CORTE
+POR COMPRAR
+PROYECCIÓN VENTA DEL MES
+COMPROMISO / META IGF
+
+No confundirlas.
+
+Preservar invariante:
+
+VENTA REAL / TOTAL MES AL CORTE
+!= PROY VENTA DEL MES
+!= COMPROMISO / META IGF
+
+## Rentabilidad
+
+Determinar cómo la tabla calcula o carga:
+
+2921806
+360106
+
+Auditar si son:
+
+- valores persistidos;
+- derivados al vuelo;
+- función existente;
+- recomputación a partir de venta ARR;
+- otro snapshot.
+
+No afirmar fórmula hasta demostrarla.
+
+## Variables visuales de Acapulco
+
+La pantalla muestra además aproximadamente:
+
+Margen:
+7.12
+
+Comisiones y descuentos:
+-0.16
+
+Impuestos:
+0.93
+
+HG:
+-1.81
+
+Ingreso:
+12860573
+
+Operativos:
+9938767
+
+Corporativos:
+2561700
+
+Gasto:
+12500467
+
+Auditar nombres físicos reales y cómo se relacionan con la proyección.
+
+NO asumir que el snapshot de Director IA contiene las mismas columnas.
+
+## Regla futura a evaluar
+
+Auditar si el siguiente contrato es físicamente implementable SIN nueva fuente:
+
+MES ABIERTO + lenguaje actual
+→ forecast ARR vigente
+
+MES CERRADO + cierre/tuvimos
+→ FINAL defendible
+
+presupuesto / compromiso / IGF original
+→ snapshot IGF original
+
+No implementar.
+
+## Preguntas futuras que deben distinguirse
 
 S1:
 ¿Qué rentabilidad tenemos?
 
 S2:
-¿Qué rentabilidad tenemos en Acapulco?
+¿Qué utilidad operativa tenemos?
 
 S3:
-¿Cuál es nuestra rentabilidad?
+¿Cuál es el resultado final?
 
 S4:
-¿Cómo estamos de rentabilidad?
+¿Qué rentabilidad proyectamos para cerrar septiembre?
 
 S5:
-¿Qué utilidad operativa tenemos?
+¿Cuál era la rentabilidad presupuestada de septiembre?
 
 S6:
-¿Cuál es el resultado final?
+¿Cómo cerramos agosto?
 
-S7:
-¿Cuál es la rentabilidad operativa?
-
-S8:
-¿Cuál es la rentabilidad final?
-
-Todos deben usar IGF.
-
-## Precedencia
-
-Una señal explícita de:
-
-rentabilidad
-utilidad operativa
-resultado final
-
-debe ganar sobre cue genérico:
-
-cómo estamos
-cómo vamos
-estado
-situación
-
-Ejemplo:
-
-¿Cómo estamos de rentabilidad?
-
-NO:
-EXECUTIVE_STATUS comercial
-
-SÍ:
-igf_status
-
-## Continuidad
-
-Caso obligatorio:
-
-Turno previo:
-¿Cómo vamos en CASA en los últimos 30 días?
-
-parent_intent:
-commercial_trend
-
-Nuevo turno:
-¿Qué rentabilidad tenemos?
-
-La nueva señal financiera explícita debe ganar.
-
-NO heredar commercial_trend.
-
-## Periodo
-
-Sin mes explícito:
-
-usar la regla IGF existente:
-
-currentYearMonthCdmx()
-
-Con fecha de pruebas:
-2026-09-09
-
-→ 2026-09
-
-NO:
-
-trailing 30 días
-
-NO cambiar la resolución existente de meses explícitos.
-
-## Tool / source
-
-Usar capacidad existente:
-
-get_igf_snapshot
-loadIgfArrAnnexForChat
-
-Fuente existente:
-
-igf.compromiso_lines
-
-NO nueva tool.
-NO SQL nuevo.
-NO server.js.
-
-## Datos obligatorios de headline
-
-Para pregunta genérica de rentabilidad, si existen:
-
-Utilidad Operativa:
-util_oper_importe
-util_oper_kg
-
-Resultado Final:
-resultado_final_importe
-resultado_final_kg
-
-Estos son métricas distintas.
-
-NO igualarlas.
-
-## Variables financieras disponibles
-
-Mostrar, cuando existan:
-
-venta_ton
-margen_kg
-com_desc_kg
-impuesto_kg
-hg_kg
-gtos_apoyos_corp_kg
-
-Unidades:
-
-venta_ton = toneladas
-margen_kg = MXN/kg
-com_desc_kg = MXN/kg
-impuesto_kg = MXN/kg
-hg_kg = MXN/kg
-gtos_apoyos_corp_kg = MXN/kg
-
-## Datos NO disponibles en este snapshot
-
-La auditoría determinó que el snapshot actual NO expone de forma defendible:
-
-ingreso MXN
-gasto operativo MXN nombrado
-gasto total MXN
-
-NO reconstruirlos.
-
-NO inferirlos.
-
-NO usar gasto_kg como si fuera gasto operativo,
-porque el runtime actual indica que no representa esa fórmula.
-
-Si se necesitan en la respuesta:
-
-n.d.
-
-o se omiten con una nota breve.
-
-## Fórmulas
-
-NO afirmar como fórmula probada:
-
-Utilidad Operativa = Ingreso - Gasto Operativo
-
-NO afirmar como fórmula probada:
-
-Resultado Final = Utilidad Operativa - Gasto Corporativo
-
-La auditoría las marcó:
-
-NOT_PROVABLE
-
-Este slice usa los valores almacenados.
-
-## Shape S1
-
-Respuesta esperada aproximada:
-
-Acapulco — IGF vigente de septiembre 2026.
-
-Utilidad operativa:
-$X
-$Y/kg
-
-Resultado final:
-$Z
-$W/kg
-
-Variables disponibles:
-- Venta: X t
-- Margen: X MXN/kg
-- Comisiones y descuentos: X MXN/kg
-- Impuestos: X MXN/kg
-- HG: X MXN/kg
-- Gastos/apoyos corporativos: X MXN/kg
-
-No incluir:
-
-CASA
-COMISIONISTA
-OLS
-UP/DOWN
-últimos 30 días
-
-No causalidad.
-
-## Shape S5
-
-¿Qué utilidad operativa tenemos?
-
-Abrir con:
-
-util_oper_importe
-util_oper_kg
-
-Puede incluir resultado final como contexto secundario,
-pero NO confundirlos.
-
-## Shape S6
-
-¿Cuál es el resultado final?
-
-Abrir con:
-
-resultado_final_importe
-resultado_final_kg
-
-Puede incluir utilidad operativa como contexto secundario.
+Solo auditar la disponibilidad y fuente correcta.
 
 ## Ausencia
 
-Si no existe snapshot o campo:
+Si la fuente de forecast no contiene alguna variable:
 
-DATA_NOT_FOUND / n.d.
+DATA_NOT_FOUND
 
-No hacer fallback a commercial trend.
+No reconstruir.
 
-No inventar.
+No usar la columna parecida más cercana.
 
-## Surface autorizado
+## No implementar
 
-En scope:
+SOLO LECTURA.
 
-lib/director-ia-planner.js
-lib/director-ia-chat.js
-tests focales Director IA
-CURRENT_TASK
-reporte
-
-Modificar chat solo si es necesario para:
-
-- precedencia CEL
-- herencia de intent
-- shape de respuesta IGF
-
-No tocar server.js.
-
-## Prohibido
-
-NO SQL.
+NO código de producto.
+NO SQL nuevo.
 NO schema.
+NO migrations.
 NO tool nueva.
-NO endpoint nuevo.
+NO endpoint.
 NO dependencies.
-NO server.js.
 NO LIVE_DB.
+NO Render.
 NO deploy.
 NO merge.
 NO push main.
 
-## Regresiones obligatorias
+## Entrega exacta
 
-001 S1 planner = igf_status
-002 S2 planner = igf_status
-003 S3 planner = igf_status
-004 S4 planner/ruta final = igf_status
-005 S5 = igf_status
-006 S6 = igf_status
-007 S7 = igf_status
-008 S8 = igf_status
+AUDIT_RESULT:
 
-009 S1 current period = 2026-09 con now 2026-09-09
-010 S1 no trailing 30d
-011 S1 usa get_igf_snapshot
-012 S1 usa fuente IGF existente
+DASHBOARD_RECALCULATE_BUTTON_FILE:
+DASHBOARD_RECALCULATE_HANDLER:
+DASHBOARD_RECALCULATE_ENDPOINT:
 
-013 S1 incluye util_oper_importe
-014 S1 incluye resultado_final_importe
-015 S1 distingue utilidad operativa de resultado final
+DASHBOARD_TABLE_FETCH_FUNCTION:
+DASHBOARD_TABLE_ENDPOINT:
+DASHBOARD_TABLE_SOURCE:
 
-016 S1 puede mostrar venta_ton
-017 S1 puede mostrar margen_kg
-018 S1 puede mostrar com_desc_kg
-019 S1 puede mostrar impuesto_kg
-020 S1 puede mostrar hg_kg
-021 S1 puede mostrar gtos_apoyos_corp_kg
+FORECAST_RECALC_FUNCTION:
+FORECAST_RECALC_SOURCE:
+FORECAST_RECALC_PERSISTS:
+FORECAST_RECALC_PERSISTENCE_TARGET:
 
-022 S1 no inventa ingreso
-023 S1 no inventa gasto operativo MXN
-024 S1 no inventa gasto total MXN
-025 S1 no afirma fórmula no probada
-026 S1 no usa gasto_kg como gasto operativo
+FORECAST_CUTOFF_FIELD:
+FORECAST_CUTOFF_RULE:
+FORECAST_VERSION_FIELD:
+FORECAST_VERSION_RULE:
 
-027 S1 no CASA
-028 S1 no COMISIONISTA
-029 S1 no OLS
-030 S1 no UP/DOWN
-031 S1 no commercial_trend
+ACAPULCO_FORECAST_SALES_VALUE:
+ACAPULCO_FORECAST_SALES_FIELD:
+ACAPULCO_FORECAST_SALES_SOURCE:
 
-032 S4 "cómo estamos" no activa EXECUTIVE_STATUS comercial
-033 financial cue tiene precedencia sobre generic status cue
+ACAPULCO_OPERATING_PROFIT_VALUE:
+ACAPULCO_OPERATING_PROFIT_FIELD:
+ACAPULCO_OPERATING_PROFIT_SOURCE:
 
-034 parent commercial_trend + S1 => igf_status
-035 financial explicit cue rompe herencia comercial
+ACAPULCO_FINAL_RESULT_VALUE:
+ACAPULCO_FINAL_RESULT_FIELD:
+ACAPULCO_FINAL_RESULT_SOURCE:
 
-036 "¿Cómo vamos?" genérico conserva comportamiento existente
-037 "¿Cómo vamos en CASA últimos 30 días?" conserva commercial_trend
-038 pregunta explícita de margen conserva semántica de margen
-039 margen != rentabilidad
-040 descuento != margen
+ACAPULCO_INCOME_VALUE:
+ACAPULCO_OPERATING_EXPENSE_VALUE:
+ACAPULCO_CORPORATE_EXPENSE_VALUE:
+ACAPULCO_TOTAL_EXPENSE_VALUE:
 
-041 S5 abre con utilidad operativa
-042 S6 abre con resultado final
-043 S7 abre con utilidad operativa
-044 S8 abre con resultado final
+CURRENT_DIRECTOR_TOOL:
+CURRENT_DIRECTOR_SOURCE:
+CURRENT_DIRECTOR_VERSION_RULE:
+CURRENT_DIRECTOR_CUTOFF_RULE:
 
-045 falta util_oper => DATA_NOT_FOUND/n.d.
-046 falta resultado_final => DATA_NOT_FOUND/n.d.
-047 falta snapshot => no commercial fallback
+CURRENT_DIRECTOR_SALES_VALUE:
+CURRENT_DIRECTOR_OPERATING_PROFIT_VALUE:
+CURRENT_DIRECTOR_FINAL_RESULT_VALUE:
 
-048 no SQL nuevo
-049 no tool nueva
-050 no server.js
-051 no schema
-052 no deps
-053 no LIVE_DB
-054 no OpenAI inventando métricas
+FIRST_DIVERGENCE:
 
-055 planner focal PASS
-056 IGF focal PASS
-057 CEL focal PASS
-058 continuity/inheritance focal PASS
-059 Tier1 PASS
-060 pre-deploy --gate PASS
-061 NEW FAILURE = 0
+DIRECTOR_SOURCE_IS_BUDGET_OR_COMMIT:
+DASHBOARD_SOURCE_IS_ARR_FORECAST:
 
-## Entrega
+OBSERVED_SALES_FIELD:
+TO_BUY_FIELD:
+PROJECTED_SALES_FIELD:
+COMMITMENT_SALES_FIELD:
 
-IMPLEMENTATION_SHA:
-BASE_MAIN_SHA:
+OBSERVED_PLUS_TO_BUY_EQUALS_PROJECTED:
+PROJECTED_DIFFERS_FROM_COMMITMENT:
 
-S1_INTENT:
-S1_ROUTE:
-S1_TOOL:
-S1_SOURCE:
-S1_PERIOD:
+OPERATING_PROFIT_RECALCULATED_WITH_ARR:
+FINAL_RESULT_RECALCULATED_WITH_ARR:
 
-S4_INTENT:
-S4_EXECUTIVE_STATUS_INTERCEPTED:
+FORMULA_OPERATING_PROFIT_PROVABLE:
+FORMULA_FINAL_RESULT_PROVABLE:
 
-COMMERCIAL_PARENT_PLUS_S1:
-COMMERCIAL_INHERIT_BLOCKED:
+EXISTING_DIRECTOR_LOADER_CAN_READ_FORECAST:
+EXISTING_TOOL_CAN_READ_FORECAST:
+EXISTING_SOURCE_ALREADY_AVAILABLE_TO_DIRECTOR:
 
-OPERATING_PROFIT_FIELD:
-FINAL_RESULT_FIELD:
+CAN_FIX_WITHOUT_NEW_SQL:
+CAN_FIX_WITHOUT_NEW_TOOL:
+CAN_FIX_WITHOUT_SERVER_CHANGE:
+CAN_FIX_WITHOUT_FRONTEND_CHANGE:
 
-VARIABLES_PRESENTED:
+OPEN_MONTH_FORECAST_RULE_PHYSICALLY_POSSIBLE:
+CLOSED_MONTH_FINAL_RULE_PHYSICALLY_POSSIBLE:
+ORIGINAL_IGF_RULE_PHYSICALLY_POSSIBLE:
 
-INCOME_RECONSTRUCTED:
-OPERATING_EXPENSE_RECONSTRUCTED:
-TOTAL_EXPENSE_RECONSTRUCTED:
-UNPROVABLE_FORMULA_STATED:
+S1_RECOMMENDED_SOURCE:
+S2_RECOMMENDED_SOURCE:
+S3_RECOMMENDED_SOURCE:
+S4_RECOMMENDED_SOURCE:
+S5_RECOMMENDED_SOURCE:
+S6_RECOMMENDED_SOURCE:
 
-CASA_PRESENT:
-COMISIONISTA_PRESENT:
-OLS_PRESENT:
-TRAILING_30D_PRESENT:
+SOURCE_BUG:
+VERSION_BUG:
+CUTOFF_BUG:
+TOOL_GAP:
+ROUTING_BUG:
+PRESENTATION_BUG:
+DATA_BUG:
 
-001..061:
-SUITES:
-FILES:
+FILES_INSPECTED:
+TESTS_RUN:
 RISKS:
 
-PLANNER_CHANGED:
-CHAT_CHANGED:
-CEL_PRECEDENCE_CHANGED:
-INHERITANCE_CHANGED:
-SQL_CHANGED:
-TOOL_ADDED:
-SERVER_CHANGED:
-SCHEMA_CHANGED:
-DEPS_CHANGED:
-LIVE_DB_USED:
+RECOMMENDED_NEXT_SLICE:
 
 ## Completion
 
-Si PASS:
+Al terminar:
 
 CURRENT_TASK -> DONE_PENDING_REVIEW
-commit implementación
-reporte append-only
+
+Crear reporte append-only.
+
+Commit auditoría.
 
 STOP.
 
+No implementación.
+No siguiente tarea.
 No merge.
 No push main.
 No deploy.
-No siguiente tarea.
-closure_reason: "HUMAN REVIEW PASS. Rentabilidad, utilidad operativa y resultado final se resuelven por IGF. Las señales financieras explícitas tienen precedencia sobre EXECUTIVE_STATUS comercial y sobre herencia commercial_trend."
-
-human_acceptance: "PASS. 001..061 PASS. S1-S8 -> igf_status según semántica autorizada. S4 no es interceptado por CEL. Parent commercial_trend + rentabilidad -> igf_status. Utilidad operativa y resultado final usan campos almacenados; no se reconstruyen ingreso, gasto operativo MXN ni gasto total; no se afirman fórmulas no probadas."
+No LIVE_DB.
