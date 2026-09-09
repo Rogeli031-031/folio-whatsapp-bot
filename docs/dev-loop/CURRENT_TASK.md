@@ -1,299 +1,504 @@
-task_id: FIX-DIRECTOR-IA-CLIENT-LARGEST-SALES-LOSS-ROUTE-TO-CALENDAR-COMPARE-001
+task_id: AUDIT-DIRECTOR-IA-FOLIO-KEYWORD-RANGE-SEARCH-PARITY-001
 
-task_type: FIX
-mode: REGRESSION_FIRST
+task_type: AUDIT
+mode: READ_ONLY
 
-status: CLOSED
+status: AUTHORIZED
+
 authorized_by: "Human Approver"
-authorized_at: "2026-09-08T18:01:06-06:00"
+authorized_at: "2026-09-09T09:34:40-06:00"
 
-human_authorization: "AUTHORIZED_BY_HUMAN. Corregir únicamente el routing y ranking de 'mayor pérdida de venta' histórica entre clientes usando calendar_compare existente. NO SQL nuevo. NO LIVE_DB. NO merge. NO deploy."
+human_authorization: "AUTHORIZED_BY_HUMAN. Auditar físicamente cómo reutilizar la búsqueda textual existente del dashboard de Folios dentro de Director IA, agregando una ventana explícita de mes_cargo. SOLO AUDITORÍA. Sin implementación. Sin SQL nuevo. Sin LIVE_DB. Sin merge. Sin deploy."
 
-implementation_authorized: YES
+implementation_authorized: NO
 merge_authorized: NO
 deploy_authorized: NO
 live_db_authorized: NO
 
 max_attempts: 1
 
-base_main_sha: 0a42123768829df7543888d0f84a0b084cf8645f
-result_report_path: docs/dev-loop/reports/FIX-DIRECTOR-IA-CLIENT-LARGEST-SALES-LOSS-ROUTE-TO-CALENDAR-COMPARE-001.md
+base_main_sha: 4fe5ab54c8bd25fb518f3acc22357e59074cb964
+result_report_path: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-FOLIO-KEYWORD-RANGE-SEARCH-PARITY-001.md
 
-## North Star
+## Objetivo único
 
-Planta: Acapulco.
+Determinar el slice mínimo y físicamente defendible para que Director IA pueda responder:
 
-Pregunta exacta:
+¿Qué folios de enero a agosto contienen la palabra aceite?
 
-que cliente tiene la perdida mayor de venta entre mayo vs junio?
+y su forma parametrizada:
 
-## Problema demostrado
+¿Qué folios de enero a agosto contienen la palabra XXXXX?
 
-Hoy:
+Debe investigarse si la capacidad puede construirse reutilizando:
 
-planner/routing
-→ client_profile
-→ perfil de un cliente
-→ posible ZERO_OBSERVED
+1. el universo/rango existente de Folios en Director IA;
+2. la semántica de búsqueda textual existente del dashboard;
+3. datos ya disponibles en public.folios;
 
-Debe:
+sin crear SQL nuevo si físicamente no es necesario.
 
-planner/routing
-→ commercial_trend
-→ calendar_compare
-→ universo completo de clientes
-→ ranking determinista de pérdida
+NO implementar.
 
-## Periodos
+## Semántica humana objetivo
 
-A = mayo 2026
-2026-05-01..2026-05-31
+Pregunta:
 
-B = junio 2026
-2026-06-01..2026-06-30
+¿Qué folios de enero a agosto contienen la palabra aceite?
 
-No trailing 30d.
-No agosto-septiembre.
-No M9.
-No MTD.
+Interpretación deseada:
 
-## Fuente física existente
+planta = planta seleccionada
+universo = ALL_PUBLIC_FOLIOS
+period_start = 2026-01
+period_end = 2026-08
+period_field = mes_cargo
+search_term = aceite
+operation = keyword_search
+output = folios encontrados
 
-Reutilizar:
+## Regla de universo
 
-lib/director-ia-commercial-trend.js
-calendar_compare
-defaultQueryCalendarClientKg
-buildCalendarMovers
+Si el usuario dice:
 
-Fuente:
+"folios"
 
-arr.ventas_diarias_cliente
+usar conceptualmente:
 
-NO SQL nuevo.
+ALL_PUBLIC_FOLIOS
 
-## Decisión semántica humana
+NO restringir automáticamente a:
 
-delta_kg = kg_b - kg_a
+GASTOS
+INVERSIONES
+TALLER
+apoyos
 
-Para:
+salvo que la pregunta lo pida expresamente.
 
-- mayor pérdida de venta
-- perdió más venta
-- mayor caída de venta
-- cliente con mayor pérdida
+## Regla temporal
 
-candidatos:
+"enero a agosto"
 
-delta_kg < 0
+significa:
 
-Incluye:
+mes_cargo >= 2026-01
+mes_cargo <= 2026-08
 
-1. DISMINUYÓ
-   kg_a > 0
-   kg_b > 0
-   kg_b < kg_a
+inclusive.
 
-2. DEJÓ DE COMPRAR
-   kg_a > 0
-   kg_b == 0
+NO usar:
 
-No incluye:
+fecha_creacion
+fecha_aprobacion
+ventana reciente
+trailing days
 
-- AUMENTÓ
-- NUEVO
-- SIN_CAMBIO
+como sustitutos.
 
-Ganador:
+No inventar mes para folios cuyo mes_cargo sea nulo.
 
-el delta_kg MÁS NEGATIVO.
+## Regla textual
 
-NO usar abs(delta_kg).
+La intención es:
 
-Ejemplo obligatorio:
+"como el buscador que ya existe en el dashboard"
 
-Cliente A:
-mayo 20,000
-junio 12,000
-delta -8,000
+Auditar exactamente la implementación física actual:
 
-Cliente B:
-mayo 15,000
-junio 0
-delta -15,000
+frontend-dashboard/app/dashboard/page.tsx
+frontend-dashboard/components/FiltersBar.tsx
+frontend-dashboard/components/KanbanBoard.tsx
+frontend-dashboard/lib/texto-busqueda.ts
 
-Debe ganar Cliente B.
+Determinar:
 
-## Semántica que debe preservarse
+- campos buscados;
+- normalización;
+- acentos;
+- mayúsculas/minúsculas;
+- puntuación;
+- substring;
+- tokens;
+- stopwords;
+- umbral de coincidencia;
+- importe;
+- cheque;
+- proyecto;
+- categoría;
+- subcategoría;
+- beneficiario;
+- descripción;
+- número/código de folio.
 
-"que cliente disminuyó más sus compras entre mayo y junio?"
+NO asumir que "contiene palabra" = SQL ILIKE.
 
-Debe conservar únicamente:
+Probar la semántica real.
 
-kg_a > 0
-kg_b > 0
-delta_kg < 0
+## Distinción obligatoria
 
-No incluir clientes que dejaron de comprar.
+Separar explícitamente:
 
-"que clientes dejaron de comprar entre mayo y junio?"
+A. TEXT_MATCH_PARITY
+   Cómo decide el buscador si un folio coincide con XXXXX.
 
-Debe conservar bucket perdido.
+B. DATA_WINDOW
+   Qué folios fueron cargados antes de aplicar esa búsqueda.
 
-"que clientes aumentaron entre mayo y junio?"
+El buscador del frontend puede estar filtrando únicamente cards
+ya devueltas por fetchKanban.
 
-Debe conservar bucket aumento.
+Probarlo.
 
-## Routing obligatorio
+NO confundir:
 
-Estas preguntas deben ir a commercial_trend/calendar_compare:
+"mismo algoritmo de texto"
+
+con:
+
+"mismos filtros actuales de la UI".
+
+## Solo activos
+
+El dashboard visual puede tener:
+
+Solo activos = checked
+
+Eso NO significa automáticamente que Director IA deba excluir
+folios cerrados, pagados o cancelados.
+
+Auditar la semántica actual del universo genérico de Folios.
+
+Objetivo deseado:
+
+"qué folios..."
+→ buscar todos los folios del universo autorizado en el rango
+
+salvo que el usuario diga:
+
+"activos"
+"pendientes"
+"cancelados"
+etc.
+
+Determinar si esto puede respetarse con la capacidad física actual.
+
+## Rutas a inspeccionar
+
+Trazar físicamente:
+
+### Dashboard
+
+FiltersBar
+→ searchTerm
+→ Dashboard page
+→ KanbanBoard
+→ matchesSearch
+→ textMatchesSearch
+
+y además:
+
+fetchKanban
+→ endpoint backend
+→ filtros de ventana/mes/planta/activo
+→ consulta física a public.folios
+
+### Director IA
+
+POST /api/director-ia/chat
+→ askDirectorIa
+→ planner/routing
+→ folio intent
+→ parser de rango mensual
+→ tool/orchestrator
+→ query/helper físico de Folios
+→ public.folios
+→ proyección de respuesta
+
+Encontrar el primer punto donde hoy:
+
+¿Qué folios de enero a agosto contienen la palabra aceite?
+
+deja de poder resolverse.
+
+## Capacidad Folios existente
+
+Auditar reutilización de las capacidades ya implementadas para:
+
+- generic folio search;
+- concepto;
+- rango SINGLE/RANGE;
+- ALL_PUBLIC_FOLIOS;
+- mes_cargo;
+- agregación/listado;
+- planta.
+
+Determinar si ya existe una función que:
+
+1. recupere el universo Jan–Aug;
+2. traiga los campos necesarios para search parity;
+3. permita aplicar el matcher en memoria;
+4. preserve autorización por planta.
+
+## SQL
+
+Objetivo preferente:
+
+CAN_FIX_WITHOUT_NEW_SQL = YES
+
+pero NO asumirlo.
+
+Probar físicamente si la consulta existente trae todos los campos
+necesarios.
+
+Si falta un campo:
+
+documentar exactamente cuál.
+
+NO escribir SQL.
+NO modificar SQL.
+
+## Search term
+
+Para este slice:
+
+"aceite"
+
+significa buscar "aceite" usando la semántica textual auditada.
+
+NO expandir automáticamente a:
+
+lubricante
+aceite de motor
+aceite hidráulico
+filtros
+refacciones
+
+No usar embeddings ni sinónimos inventados.
+
+## Frases North Star
 
 S1:
-que cliente tiene la perdida mayor de venta entre mayo vs junio?
+¿Qué folios de enero a agosto contienen la palabra aceite?
 
 S2:
-que cliente perdió más venta entre mayo y junio?
+¿Qué folios de enero a agosto contienen aceite?
+
+S3:
+Busca los folios de enero a agosto con aceite.
+
+S4:
+¿Qué folios tenemos de aceite entre enero y agosto?
+
+S5:
+¿Qué folios de enero a hoy contienen aceite?
+
+S6:
+¿Qué folios de marzo contienen aceite?
 
 S7:
-cual cliente tuvo la mayor perdida de ventas entre mayo y junio?
+¿Qué folios de enero a agosto contienen la palabra XXXXX?
 
-S8:
-quien tuvo la mayor caída de venta entre mayo y junio?
+## No confundir con
 
-El trigger debe ganar sobre client_profile aunque exista
-identidad de cliente heredada en conversation_state.
+"¿En qué mes se apoyó para aceite?"
 
-No exigir cliente_key.
+Ese caso solicita descubrir el mes y queda como capacidad relacionada,
+pero NO es el North Star de este slice.
 
-## Ranking
+"aceite de motor o filtros de aire"
 
-No reutilizar first_mover genérico si usa abs(delta).
+requiere OR/refinamiento conversacional y NO debe implementarse
+en esta auditoría.
 
-Crear o derivar selección determinista:
+Documentar readiness solamente.
 
-loss_candidates =
-all_calendar_movers.filter(delta_kg < 0)
+## Resultado esperado futuro
 
-worst_delta =
-MIN(delta_kg)
+Si hay coincidencias:
 
-winner =
-cliente(s) con delta_kg == worst_delta
+Encontré N folios de enero a agosto de 2026 que coinciden con "aceite"
+en Acapulco.
 
-En empate exacto:
+F-XXXX
+Mes de cargo: enero 2026
+Categoría: TALLER
+Descripción: ...
+Beneficiario: ...
+Importe registrado: $...
 
-NO elegir arbitrariamente.
-Reportar el empate de forma determinista.
+...
 
-## Respuesta esperada
+Semántica obligatoria del importe:
 
-Ejemplo:
+"importe registrado en el folio"
 
-Mayor pérdida de venta entre mayo 2026 y junio 2026:
+NO:
 
-CLIENTE X
-Mayo: 15,000 kg
-Junio: 0 kg
-Pérdida: 15,000 kg
+"gasto contable pagado"
 
-Además, dejó de comprar en junio.
+salvo evidencia adicional.
 
-O:
+## Truncación
 
-CLIENTE Y
-Mayo: 20,000 kg
-Junio: 12,000 kg
-Pérdida: 8,000 kg
+Auditar:
 
-Clasificación: disminuyó.
+- total real de matches antes del límite;
+- límite actual de listado;
+- si el query físico trunca antes del text match.
 
-## OpenAI
+Esto es crítico.
 
-North Star debe resolverse determinísticamente.
+No aceptar una implementación futura donde:
 
-OPENAI_CALLED = NO
+SQL/list cap
+→ luego keyword search
 
-No pedir al LLM seleccionar ganador.
+si eso puede ocultar coincidencias.
 
-## No corregir en este slice
+Debe poder distinguir:
 
-NO tocar la semántica ZERO_OBSERVED de:
+TOTAL_MATCHES
+LIST_SHOWN
 
-lib/director-ia-client-profile.js
+## Ausencia
 
-Ese bug queda separado.
+Si no existe coincidencia:
 
-## No tocar
+"No encontré folios que coincidan con 'XXXXX' en el rango indicado."
 
-SQL
-schema
-dependencies
-server.js
-Financial Diagnosis
-M9
-M9 temporal safety
-historical_margin
-folios
-Action Register
+NO inventar folios.
+NO convertir ausencia en importe cero.
+NO buscar Action Register.
 
-Preferir no modificar planner si basta ampliar el detector
-semántico que ya consume el planner.
+## Autorización y planta
 
-## Pruebas mínimas obligatorias
+Probar:
 
-- BEFORE S1 = client_profile
-- AFTER S1 = commercial_trend
-- S1 period_kind = calendar_compare
-- A = mayo 2026
-- B = junio 2026
-- S2/S7/S8 reconocidas
-- identidad heredada no roba S1
-- stopped buyer puede ganar
-- decreased buyer puede ganar
-- -15000 gana sobre -8000
-- +50000 nunca gana como pérdida
-- no abs ranking
-- output kg_a
-- output kg_b
-- output pérdida
-- indica dejó de comprar cuando corresponda
-- indica disminuyó cuando corresponda
-- empate no arbitrario
-- S3 conserva disminución
-- S5 conserva dejaron
-- S6 conserva aumentaron
-- OpenAI no llamado
-- no client_profile change
-- no M9 change
-- no historical_margin change
-- no SQL nuevo
-- no LIVE_DB
-- focal commercial-trend PASS
-- focal planner PASS
-- client-profile tests PASS
-- Tier1 PASS
-- pre-deploy --gate PASS
-- NEW FAILURE = 0
+- planta seleccionada;
+- IDs equivalentes si aplican;
+- roles/permisos actuales;
+- no cruce de planta.
+
+No modificar autorización.
+
+## Evidencia de auditoría obligatoria
+
+Entregar exactamente:
+
+AUDIT_RESULT:
+
+DASHBOARD_SEARCH_IS_CLIENT_SIDE:
+DASHBOARD_SEARCH_DATASET:
+DASHBOARD_SEARCH_FIELDS:
+DASHBOARD_SEARCH_NORMALIZER:
+DASHBOARD_SEARCH_MATCH_RULE:
+DASHBOARD_SEARCH_USES_SQL_SEARCH:
+
+FETCH_KANBAN_FUNCTION:
+FETCH_KANBAN_ENDPOINT:
+FETCH_KANBAN_WINDOW_FILTER:
+FETCH_KANBAN_MONTH_FILTER:
+FETCH_KANBAN_PLANT_FILTER:
+FETCH_KANBAN_ACTIVE_FILTER:
+
+DIRECTOR_S1_INTENT:
+DIRECTOR_S1_ROUTE:
+DIRECTOR_S1_PERIOD:
+DIRECTOR_S1_UNIVERSE:
+DIRECTOR_S1_FIRST_DIVERGENCE:
+
+DIRECTOR_GENERIC_FOLIO_QUERY_FUNCTION:
+DIRECTOR_GENERIC_FOLIO_SOURCE:
+DIRECTOR_GENERIC_FOLIO_FIELDS:
+DIRECTOR_RANGE_SUPPORT:
+DIRECTOR_RANGE_MAX_MONTHS:
+DIRECTOR_QUERY_PRE_TRUNCATES:
+DIRECTOR_LIST_POST_TRUNCATES:
+
+TEXT_MATCH_PARITY_REUSABLE:
+FULL_RANGE_DATASET_AVAILABLE:
+ALL_REQUIRED_SEARCH_FIELDS_AVAILABLE:
+PLANT_AUTH_PRESERVED:
+
+CAN_FIX_WITHOUT_NEW_SQL:
+CAN_FIX_WITHOUT_SERVER_CHANGE:
+CAN_FIX_WITHOUT_FRONTEND_CHANGE:
+
+RECOMMENDED_MATCH_LAYER:
+RECOMMENDED_RANGE_LAYER:
+RECOMMENDED_OUTPUT_LAYER:
+
+ACTIVE_ONLY_SHOULD_BE_INHERITED:
+CANCELLED_FOLIOS_SEMANTICS:
+
+TOTAL_BEFORE_TRUNCATION_POSSIBLE:
+
+S1_SUPPORTED_TODAY:
+S2_SUPPORTED_TODAY:
+S3_SUPPORTED_TODAY:
+S4_SUPPORTED_TODAY:
+S5_SUPPORTED_TODAY:
+S6_SUPPORTED_TODAY:
+
+OR_QUERY_READY:
+CONVERSATIONAL_REFINEMENT_READY:
+MONTH_DISCOVERY_READY:
+
+PARSER_BUG:
+ROUTING_BUG:
+RANGE_BUG:
+SEARCH_PARITY_GAP:
+SOURCE_BUG:
+DATA_BUG:
+PRESENTATION_BUG:
+
+FILES_INSPECTED:
+TESTS_RUN:
+RISKS:
+
+RECOMMENDED_NEXT_SLICE:
+
+## Restricciones
+
+SOLO READ-ONLY.
+
+NO implementación.
+NO cambios de comportamiento.
+NO SQL.
+NO migraciones.
+NO schema.
+NO dependencies.
+NO LIVE_DB.
+NO Render.
+NO deploy.
+NO merge.
+NO push main.
+NO siguiente tarea.
+
+Puede ejecutar:
+
+- tests existentes;
+- probes con stubs/fixtures;
+- inspección estática;
+- git grep;
+- lectura de handlers;
+- trazas read-only sin DB live.
 
 ## Completion
 
-Si todo pasa:
+Si la auditoría termina:
 
 CURRENT_TASK -> DONE_PENDING_REVIEW
 
-Crear commit de implementación.
+Cambiar únicamente status según protocolo.
 
 Crear reporte append-only:
 
-docs/dev-loop/reports/FIX-DIRECTOR-IA-CLIENT-LARGEST-SALES-LOSS-ROUTE-TO-CALENDAR-COMPARE-001.md
+docs/dev-loop/reports/AUDIT-DIRECTOR-IA-FOLIO-KEYWORD-RANGE-SEARCH-PARITY-001.md
+
+Crear commit de auditoría.
 
 STOP.
 
-No merge.
-No push main.
-No deploy.
-No LIVE_DB.
 No siguiente tarea.
-closure_reason: "HUMAN REVIEW PASS. North Star routea a commercial_trend/calendar_compare. La mayor pérdida usa el delta_kg más negativo sobre clientes con delta_kg < 0, incluyendo DISMINUYÓ y DEJÓ DE COMPRAR. No usa abs(delta). Mayo y junio 2026 se preservan. OpenAI no selecciona el ganador."
-
-human_acceptance: "PASS. 55/55 focal; Tier1 8/8; pre-deploy gate PASS; NEW FAILURE=0. SQL, schema, server, M9, Financial Diagnosis, historical_margin y client_profile sin cambios."
