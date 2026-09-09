@@ -1,466 +1,331 @@
-task_id: FIX-DIRECTOR-IA-FOLIO-KEYWORD-RANGE-SEARCH-PARITY-002
+task_id: AUDIT-DIRECTOR-IA-RENTABILIDAD-EXECUTIVE-ROUTING-001
 
-task_type: FIX
-mode: REGRESSION_FIRST
+task_type: AUDIT
+mode: READ_ONLY
 
 status: CLOSED
 authorized_by: "Human Approver"
-authorized_at: "2026-09-09T11:01:03-06:00"
+authorized_at: "2026-09-09T11:31:26-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Zaragoza 2026-09-09"
 
-implementation_authorized: YES
+implementation_authorized: NO
 merge_authorized: NO
 deploy_authorized: NO
 live_db_authorized: NO
 
 max_attempts: 1
 
-base_main_sha: c2b362877e70a6cfd3797cd755ff45ded1186a1e
-result_report_path: docs/dev-loop/reports/FIX-DIRECTOR-IA-FOLIO-KEYWORD-RANGE-SEARCH-PARITY-002.md
+base_main_sha: f5f150f28b30f2cdd12b8caacea4be1c51d899dd
+result_report_path: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-RENTABILIDAD-EXECUTIVE-ROUTING-001.md
 
-objective: "Implementar búsqueda textual de Folios por keyword dentro de un rango explícito de mes_cargo, con paridad funcional con el buscador existente del Kanban."
+objective: "Localizar por qué la pregunta ejecutiva ¿Qué rentabilidad tenemos? termina en tendencia comercial CASA/COMISIONISTA/OLS en lugar de responder utilidad operativa y resultado final desde IGF."
 
-## Decisión humana G7
+## Evidencia LIVE
 
-Se resuelve explícitamente el bloqueo del FIX 001.
+Planta:
+Acapulco.
 
-AUTORIZADO:
+Pregunta exacta:
 
-Reutilizar EXACTAMENTE el LEFT JOIN a public.proyectos que ya existe
-en el handler físico del Kanban.
+¿Qué rentabilidad tenemos?
 
-El implementador debe:
+Respuesta incorrecta actual:
 
-1. localizar el JOIN existente del Kanban;
-2. reutilizar exactamente su relación física;
-3. reutilizar exactamente las columnas físicas que ya alimentan:
-   proyecto_codigo
-   proyecto_nombre
+- rango de 30 días
+- CASA
+- toneladas vendidas
+- pendiente OLS
+- dirección UP
+- COMISIONISTA
+- toneladas vendidas
+- pendiente OLS
+- dirección UP
+- tendencia al alza
 
-NO diseñar otro JOIN.
+Esto NO corresponde a rentabilidad financiera.
 
-Si no puede demostrar paridad con el JOIN existente:
+## Semántica humana objetivo
 
-STOP.
+"¿Qué rentabilidad tenemos?"
 
-## SQL autorizado — alcance estricto
+debe significar, por default ejecutivo:
 
-En queryReviewableSupportFolios se permite únicamente:
+1. Utilidad Operativa / Rentabilidad Operativa
+2. Resultado Final / Rentabilidad Final
+3. Variables principales que construyen ambos
 
-- agregar numero_cheque desde public.folios;
-- agregar proyecto_codigo;
-- agregar proyecto_nombre;
-- agregar UN LEFT JOIN a public.proyectos;
-- ese LEFT JOIN debe ser equivalente al ya usado por Kanban.
+Fuente esperada:
 
-NO se autoriza:
+IGF de la planta seleccionada.
 
-- ILIKE
-- LIKE para keyword search
-- predicado textual SQL
-- otro JOIN
-- CTE
-- subquery nueva
-- tabla nueva
-- schema
-- migración
-- vista
-- función SQL
-- cambio de filtros de planta
-- cambio de mes_cargo
-- LIMIT previo al match
+NO:
 
-La búsqueda textual sigue ocurriendo EN MEMORIA.
+commercial trend
+CASA/COMISIONISTA
+OLS
+30-day sales trend
 
-## North Star
+## Variables a auditar
 
-¿Qué folios de enero a agosto contienen la palabra aceite?
+Determinar físicamente cuáles campos del IGF disponible representan:
 
-Debe resolver:
+- venta / volumen forecast
+- margen
+- descuento / comisiones
+- ingreso
+- gasto operativo
+- utilidad operativa
+- gasto corporativo
+- gasto total
+- resultado final
+- impuestos
+- HG
 
-intent = folio_search
-universe = ALL_PUBLIC_FOLIOS
-period = 2026-01..2026-08 inclusive
-period_field = mes_cargo
-search_term = aceite
-operation = keyword_search
+No asumir nombres.
 
-## Extractor
+Trazar los nombres físicos reales y sus unidades.
 
-ANTES:
+## Fórmulas
 
-concept_query = "contienen palabra aceite"
+Auditar si los datos físicos permiten afirmar:
 
-DESPUÉS:
+UTILIDAD OPERATIVA
+=
+INGRESO - GASTO OPERATIVO
 
-search_term = "aceite"
+RESULTADO FINAL
+=
+UTILIDAD OPERATIVA - GASTO CORPORATIVO
 
-Reconocer:
+Si el runtime usa otra fórmula o columnas distintas:
 
-contienen la palabra XXXXX
-contienen XXXXX
-con XXXXX
-que tengan XXXXX
-donde aparezca XXXXX
+documentarlo.
 
-sin incorporar el wrapper al search_term.
+NO redefinir fórmula durante la auditoría.
 
-## Variantes
+## Preguntas North Star
 
 S1:
-¿Qué folios de enero a agosto contienen la palabra aceite?
+¿Qué rentabilidad tenemos?
 
 S2:
-¿Qué folios de enero a agosto contienen aceite?
+¿Qué rentabilidad tenemos en Acapulco?
 
 S3:
-Busca los folios de enero a agosto con aceite.
+¿Cuál es nuestra rentabilidad?
 
 S4:
-¿Qué folios tenemos de aceite entre enero y agosto?
+¿Cómo estamos de rentabilidad?
 
 S5:
-¿Qué folios de enero a hoy contienen aceite?
+¿Qué utilidad operativa tenemos?
 
 S6:
-¿Qué folios de marzo contienen aceite?
+¿Cuál es el resultado final?
 
 S7:
-¿Qué folios de enero a agosto contienen la palabra XXXXX?
+¿Cuál es la rentabilidad operativa?
 
-## Periodos
+S8:
+¿Cuál es la rentabilidad final?
 
-de enero a agosto
-=> 2026-01..2026-08 inclusive
+## Distinciones obligatorias
 
-entre enero y agosto
-=> 2026-01..2026-08 inclusive
+Auditar y preservar:
 
-de enero a hoy
-=> enero hasta MES ACTUAL inclusive
+rentabilidad
+!= ventas
+!= toneladas
+!= tendencia comercial
+!= pendiente OLS
 
-Con now=2026-09-09:
+utilidad operativa
+!= gasto operativo
 
-de enero a hoy
-=> 2026-01..2026-09
+resultado final
+!= utilidad operativa
 
-Siempre usar:
+margen
+!= rentabilidad
 
-mes_cargo
+descuento/kg
+!= margen
 
-NO:
+## Temporalidad
 
-fecha_creacion
-fecha_aprobacion
-ventana reciente
-trailing days
+Determinar qué periodo debe usar hoy la pregunta genérica:
 
-Máximo:
-12 meses.
+¿Qué rentabilidad tenemos?
 
-## Universo
+Auditar si debe usar:
 
-"folios"
-=> ALL_PUBLIC_FOLIOS
+- IGF vigente/actual de la planta;
+- último snapshot disponible;
+- forecast vigente del mes;
+- FINAL si mes cerrado.
 
-No heredar:
-solo_activos=1
+NO inventar regla nueva.
 
-LIST:
-CANCELADO puede aparecer si coincide.
+Documentar la resolución física actual.
 
-AGGREGATE:
-preservar exclusión actual de CANCELADO.
+## Routing
 
-## Paridad textual
-
-Normalización:
-
-- Unicode NFD
-- eliminar acentos
-- lowercase
-- puntuación a espacio
-- colapsar whitespace
-- trim
-
-Stopwords:
-
-a
-al
-con
-de
-del
-en
-para
-por
-y
-e
-o
-el
-la
-los
-las
-un
-una
-que
-su
-se
-
-Token significativo:
-length > 1
-
-MATCH:
-
-1. substring normalizado
-
-OR
-
-2. si query y field tienen >= 2 tokens significativos:
-   hits/query_tokens >= 0.85
-
-Para una palabra:
-
-aceite
-
-usar substring normalizado.
-
-NO:
-
-ILIKE
-embeddings
-sinónimos
-OpenAI
-fuzzy LLM
-
-## Campos de búsqueda
-
-Aplicar matcher sobre:
-
-numero_folio
-folio_codigo
-descripcion/concepto
-beneficiario
-categoria
-subcategoria
-proyecto_codigo
-proyecto_nombre
-planta_nombre
-numero_cheque
-importe
-
-Importe:
-
-formato equivalente a es-MX,
-0 decimales,
-solo para matching textual.
-
-## Arquitectura
+Trazar exactamente:
 
 question
--> folio_search
--> parser keyword/range
--> query mensual completo por mes_cargo/planta
--> LEFT JOIN proyecto ya conocido
--> matcher textual en memoria
--> TOTAL_MATCHES
--> orden/proyección
--> LIST_SHOWN
+→ pre-routing
+→ planner
+→ intent
+→ mode
+→ tool
+→ source
+→ answer builder
 
-Nunca:
+Encontrar el FIRST_DIVERGENCE que provoca la ruta comercial.
 
-LIMIT
--> matcher
+Determinar si el fallo está en:
 
-## Truncación
+- intent detection
+- precedence
+- planner
+- pre-route
+- inheritance
+- tool selection
+- answer builder
+- source mapping
 
-TOTAL_MATCHES antes del límite.
+## Fuentes
 
-Si:
+Auditar:
 
-TOTAL_MATCHES > LIST_SHOWN
+- get_igf_snapshot
+- igf_status
+- financial_diagnosis
+- plant_diagnosis
+- commercial trend / commercial state
+- dashboard KPI path si interviene
 
-declarar ambos.
+Determinar cuál ya contiene los datos necesarios.
 
-Ejemplo:
+## Respuesta objetivo futura
 
-Encontré 55 folios.
-Muestro los primeros 40.
+Formato aproximado, NO implementar:
 
-## Respuesta
+"Acapulco — IGF vigente de septiembre 2026.
 
-Ejemplo defendible:
+Utilidad operativa: $X
 
-Encontré 7 folios de enero a agosto de 2026 que coinciden con "aceite" en Acapulco.
+Se forma con:
+- Ingreso: $A
+- Gastos operativos: $B
 
-F-XXXX
-Mes de cargo: enero 2026
-Categoría: TALLER
-Descripción: ACEITE DE MOTOR...
-Beneficiario: ...
-Importe registrado en el folio: 8,450 MXN
-Estatus: ...
+Resultado final: $Y
 
-NO decir:
+Después de:
+- Gastos corporativos: $C
+- Gasto total: $D
 
-gastamos
-gasto pagado
-erogado
-costo contable
+Variables:
+- Venta forecast: X t
+- Margen: $X/kg
+- Descuento/comisiones: $X/kg
+- Impuestos: $X/kg
+- HG: $X/kg"
+
+No afirmar causalidad.
 
 ## Ausencia
 
-Si no hay coincidencias:
+Si algún dato no existe:
 
-No encontré folios que coincidan con "XXXXX" en el rango indicado.
+DATA_NOT_FOUND / n.d.
 
-No inventar.
+No reconstruir o inventar números.
 
-No reportar importe cero.
+## No implementar
 
-No Action Register.
+SOLO AUDITORÍA.
 
-## No implementar todavía
+NO código.
+NO SQL.
+NO schema.
+NO dependencies.
+NO LIVE_DB.
+NO Render.
+NO deploy.
+NO merge.
+NO push main.
 
-Fuera de este slice:
+## Entrega obligatoria
 
-- "aceite de motor o filtros de aire" como OR conversacional
-- follow-up "¿y filtros?"
-- "¿en qué mes se apoyó?"
-- month discovery
-- continuidad conversacional
-- embeddings
-- sinónimos
+AUDIT_RESULT:
 
-## Preservar
+S1_CURRENT_INTENT:
+S1_CURRENT_ROUTE:
+S1_CURRENT_TOOL:
+S1_CURRENT_SOURCE:
+S1_CURRENT_PERIOD:
+S1_FIRST_DIVERGENCE:
 
-- exact F-ID priority
-- folio_status
-- folio_history
-- folio_documents
-- support universe
-- concept_mode ANY
-- aggregates
-- autorización por planta
-- max 12 meses
-- CANCELADO aggregate semantics
-- otros intents
+WHY_COMMERCIAL_TREND_WINS:
 
-## Regresiones obligatorias
+EXPECTED_EXECUTIVE_INTENT:
+EXPECTED_TOOL:
+EXPECTED_SOURCE:
 
-001 BEFORE S1 wrapper incorrecto
-002 AFTER S1 search_term aceite
-003 intent folio_search
-004 ALL_PUBLIC_FOLIOS
-005 Jan-Aug inclusive
-006 mes_cargo
-007 no fecha_creacion
-008 no active-only
-009 CANCELADO puede listarse
-010 S2 keyword aceite
-011 S3 keyword aceite
-012 S4 entre Jan-Aug
-013 S5 Jan-Sep con now
-014 S6 marzo SINGLE
-015 between range
-016 to-today range
-017 max 12 months
+IGF_CURRENT_PERIOD_RULE:
+IGF_CURRENT_VERSION_RULE:
+IGF_FINAL_VS_FORECAST_RULE:
 
-018 accent normalization
-019 lowercase
-020 punctuation
-021 whitespace
-022 substring
-023 single-word substring
-024 multi-token 85 percent
-025 stopwords
+OPERATING_PROFIT_FIELD:
+OPERATING_EXPENSE_FIELD:
+INCOME_FIELD:
+CORPORATE_EXPENSE_FIELD:
+TOTAL_EXPENSE_FIELD:
+FINAL_RESULT_FIELD:
 
-026 numero_folio
-027 folio_codigo
-028 descripcion/concepto
-029 beneficiario
-030 categoria
-031 subcategoria
-032 proyecto_codigo
-033 proyecto_nombre
-034 planta_nombre
-035 numero_cheque
-036 importe
+SALES_VOLUME_FIELD:
+MARGIN_FIELD:
+DISCOUNT_FIELD:
+TAX_FIELD:
+HG_FIELD:
 
-037 no ILIKE
-038 no SQL text predicate
-039 no embeddings
-040 no synonyms
-041 no OpenAI match
-042 no pre-limit
-043 total before truncation
-044 list limit preserves total
-045 total/shown wording
-046 importe registrado wording
-047 zero truthful
-048 zero no monetary amount
+OPERATING_PROFIT_FORMULA_PROVABLE:
+FINAL_RESULT_FORMULA_PROVABLE:
 
-049 plant auth
-050 no cross-plant
+ALL_REQUIRED_FIELDS_AVAILABLE:
+CAN_FIX_WITHOUT_NEW_SQL:
+CAN_FIX_WITHOUT_NEW_TOOL:
+CAN_FIX_WITHOUT_PLANNER_CHANGE:
+CAN_FIX_WITHOUT_SERVER_CHANGE:
 
-051 exact F-ID PASS
-052 support universe PASS
-053 aggregate PASS
-054 CANCELADO aggregate PASS
-055 folio status PASS
-056 previous range tests PASS
-057 planner focal PASS
-058 tool/orchestrator focal PASS
-059 Tier1 PASS
-060 pre-deploy --gate PASS
-061 NEW FAILURE = 0
+S1_EXPECTED_SHAPE:
+S5_EXPECTED_SHAPE:
+S6_EXPECTED_SHAPE:
 
-## Evidencia obligatoria del JOIN
+ROUTING_BUG:
+PRECEDENCE_BUG:
+SOURCE_BUG:
+DATA_BUG:
+PRESENTATION_BUG:
 
-Entregar:
+FILES_INSPECTED:
+TESTS_RUN:
+RISKS:
 
-KANBAN_PROJECT_JOIN_FILE:
-KANBAN_PROJECT_JOIN_SIGNATURE:
-FOLIO_SEARCH_PROJECT_JOIN_SIGNATURE:
-JOIN_PARITY_CONFIRMED:
-EXTRA_JOIN_ADDED:
-
-JOIN_PARITY_CONFIRMED debe ser YES.
-
-EXTRA_JOIN_ADDED debe ser NO.
-
-## Flags
-
-PARSER_CHANGED:
-MATCHER_CHANGED:
-FOLIO_QUERY_SELECT_CHANGED:
-PROJECT_JOIN_ADDED:
-PROJECT_JOIN_PARITY_WITH_KANBAN:
-SQL_TEXT_PREDICATE_ADDED:
-SCHEMA_CHANGED:
-DEPS_CHANGED:
-FRONTEND_CHANGED:
-SERVER_CHANGED:
-PLANNER_CHANGED:
-OPENAI_MATCH_USED:
-LIVE_DB_USED:
+RECOMMENDED_NEXT_SLICE:
 
 ## Completion
 
-Si PASS:
+Al terminar:
 
 CURRENT_TASK -> DONE_PENDING_REVIEW
+crear reporte append-only
+commit auditoría
+STOP
 
-Commit implementation.
-
-Reporte append-only.
-
-STOP.
-
-No merge.
-No push main.
-No deploy.
-No LIVE_DB.
+No implementación.
 No siguiente tarea.
-closure_reason: "HUMAN REVIEW PASS. Keyword-range search reproduce la semántica textual del buscador del Kanban sobre el universo completo autorizado antes de truncar. S1 extrae aceite, usa ALL_PUBLIC_FOLIOS y mes_cargo enero-agosto. El LEFT JOIN public.proyectos es equivalente al existente del Kanban."
+closure_reason: "HUMAN REVIEW PASS. La auditoría demuestra que rentabilidad no tiene regla propia en el planner; S1 aborta a unknown. El shape CASA/COMISIONISTA/OLS/30d procede de CEL EXECUTIVE_STATUS o continuidad comercial, no de una ruta financiera."
 
-human_acceptance: "PASS. 001..061 PASS; JOIN parity YES; Tier1 8/8; pre-deploy gate PASS; NEW FAILURE=0. Sin ILIKE, sin predicado textual SQL, sin schema, sin dependencies, sin OpenAI para match y sin LIVE_DB."
+human_semantic_decision: "Rentabilidad genérica significa IGF de la planta: Utilidad Operativa + Resultado Final + variables financieras disponibles. Rentabilidad, utilidad operativa y resultado final deben tener precedencia sobre EXECUTIVE_STATUS, commercial_trend y herencia comercial. No inventar ingreso, gasto operativo MXN ni gasto total si el snapshot no los expone."
