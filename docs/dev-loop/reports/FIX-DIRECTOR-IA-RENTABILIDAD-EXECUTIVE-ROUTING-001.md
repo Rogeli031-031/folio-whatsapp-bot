@@ -41,7 +41,7 @@ Deterioro sigue en `financial_diagnosis`. Margen explícito sigue en `historical
 ---
 
 IMPLEMENTATION_SHA:
-(pending commit)
+98c5325a701d5188d8037f50f42ec4623d89637b
 
 BASE_MAIN_SHA:
 ac055bd9945cce551851e2d608a4a91e7113fdbb
