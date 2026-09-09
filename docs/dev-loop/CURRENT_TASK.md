@@ -3,8 +3,7 @@ task_id: AUDIT-DIRECTOR-IA-RENTABILIDAD-EXECUTIVE-ROUTING-001
 task_type: AUDIT
 mode: READ_ONLY
 
-status: DONE_PENDING_REVIEW
-
+status: CLOSED
 authorized_by: "Human Approver"
 authorized_at: "2026-09-09T11:31:26-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Zaragoza 2026-09-09"
@@ -327,3 +326,6 @@ STOP
 
 No implementación.
 No siguiente tarea.
+closure_reason: "HUMAN REVIEW PASS. La auditoría demuestra que rentabilidad no tiene regla propia en el planner; S1 aborta a unknown. El shape CASA/COMISIONISTA/OLS/30d procede de CEL EXECUTIVE_STATUS o continuidad comercial, no de una ruta financiera."
+
+human_semantic_decision: "Rentabilidad genérica significa IGF de la planta: Utilidad Operativa + Resultado Final + variables financieras disponibles. Rentabilidad, utilidad operativa y resultado final deben tener precedencia sobre EXECUTIVE_STATUS, commercial_trend y herencia comercial. No inventar ingreso, gasto operativo MXN ni gasto total si el snapshot no los expone."
