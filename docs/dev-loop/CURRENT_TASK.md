@@ -3,8 +3,7 @@ task_id: AUDIT-DIRECTOR-IA-CLIENT-LARGEST-SALES-LOSS-HISTORICAL-COMPARISON-001
 task_type: AUDIT
 mode: READ_ONLY
 
-status: DONE_PENDING_REVIEW
-
+status: CLOSED
 authorized_by: "Human Approver"
 authorized_at: "2026-09-08T17:21:56-06:00"
 
@@ -352,3 +351,6 @@ No producto.
 No LIVE_DB.
 No merge.
 No deploy.
+closure_reason: "HUMAN REVIEW PASS. La causa raíz queda confirmada: preguntas de mayor pérdida histórica entre clientes se enrutan erróneamente a client_profile en vez de calendar_compare. Mayo y junio 2026 se resuelven correctamente. La capacidad física de comparación ya existe sobre arr.ventas_diarias_cliente."
+
+human_semantic_decision: "Para 'mayor pérdida de venta', 'perdió más venta' o 'mayor caída de venta', incluir todos los clientes con delta_kg < 0, tanto DISMINUYÓ como DEJÓ DE COMPRAR. El ganador es el delta_kg más negativo. Para 'disminuyó más', conservar exclusivamente clientes que compraron en ambos meses y disminuyeron."
