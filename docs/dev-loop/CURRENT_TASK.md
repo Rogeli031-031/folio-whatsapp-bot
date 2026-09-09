@@ -1,259 +1,356 @@
-task_id: FIX-DIRECTOR-IA-HISTORICAL-MARGIN-COMPARE-HTTP-STATUS-001
+task_id: AUDIT-DIRECTOR-IA-CLIENT-LARGEST-SALES-LOSS-HISTORICAL-COMPARISON-001
 
-task_type: FIX
-mode: REGRESSION_FIRST
+task_type: AUDIT
+mode: READ_ONLY
 
 status: CLOSED
 authorized_by: "Human Approver"
-authorized_at: "2026-09-08T17:05:28-06:00"
+authorized_at: "2026-09-08T17:21:56-06:00"
 
-human_authorization: "AUTHORIZED_BY_HUMAN - HISTORICAL MARGIN compare_months HTTP STATUS ONLY. MAY SHOW EXISTING FORECAST CONTEXT TRUTHFULLY. NO FORECAST-TO-FORECAST DELTA. NO SQL. NO ROUTING. NO PLANNER. NO GENERIC HTTP HANDLER CHANGE. NO LIVE_DB. NO MERGE. NO DEPLOY."
+human_authorization: "AUDIT ONLY. TRACE CLIENT LARGEST SALES LOSS MAY-VS-JUNE. NO IMPLEMENTATION. NO PRODUCT CODE. NO LIVE_DB. NO MERGE. NO DEPLOY."
 
-implementation_authorized: YES
+implementation_authorized: NO
 merge_authorized: NO
 deploy_authorized: NO
 live_db_authorized: NO
 
 max_attempts: 1
 
-base_main_sha: 8a59b251929b617890b4b4f5638df75f371e92ee
-result_report_path: docs/dev-loop/reports/FIX-DIRECTOR-IA-HISTORICAL-MARGIN-COMPARE-HTTP-STATUS-001.md
+base_main_sha: 22f505ea7907192e1efe7e820b4e532105e1e13a
+result_report_path: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-CLIENT-LARGEST-SALES-LOSS-HISTORICAL-COMPARISON-001.md
 
-## Problema demostrado
+## Producción observada
 
-North Star Acapulco:
-
-cual fue el margen en mayo?
-
-PASS.
-
-Mayo cerrado sin FINAL puede responder con contexto FORECAST
-vigente, aproximadamente 7.35 $/kg, claramente NO presentado
-como cierre real.
-
-Pero:
-
-cual fue el cambio en el margen entre mayo y junio?
-
-produce HTTP 500.
-
-Auditoría física:
-
-- mismo intent: historical_margin
-- parser correcto
-- operation compare_months correcta
-- no throw
-- no Promise rejection
-- DB/parser/routing no demostrados como bug
-
-Root:
-
-compare_months puede producir:
-
-ok:false
-code: DATA_NOT_FOUND
-veracity: DATA_NOT_FOUND
-
-pero SIN status.
-
-handlePostChat usa:
-
-result.status || (result.ok ? 200 : 500)
-
-y sintetiza 500.
-
-## Objetivo único
-
-Eliminar el HTTP 500 sintético de compare_months
-preservando la semántica histórica.
-
-NO ampliar todavía la capacidad a delta
-FORECAST-vs-FORECAST.
-
-## Fuente del arreglo
-
-Corregir en:
-
-lib/director-ia-historical-margin.js
-
-NO corregir globalmente en handlePostChat.
-
-El productor de historical_margin debe entregar un status
-HTTP explícito y coherente.
-
-## Contrato compare_months
-
-Todo resultado compare_months debe tener status explícito.
-
-### Caso A — ambos periodos FINAL homogéneos
-
-ok=true
-status=200
-SOURCE_AVAILABLE
-comparable=true
-delta_raw permitido
-
-### Caso B — comparación atendible pero incompleta
-
-Ejemplos:
-
-- un periodo FINAL y otro no FINAL
-- NOT_FINAL con forecast_context existente
-- uno válido y otro missing
-- contexto parcial defendible
-
-Debe responder:
-
-status=200
-SOURCE_PARTIAL
-comparable=false
-delta_raw=null
-
-Puede mostrar contexto existente FORECAST por periodo,
-pero siempre etiquetado:
-
-FORECAST
-vista vigente
-NO cierre FINAL
-
-NO calcular delta entre forecasts.
-
-### Caso C — ausencia real
-
-Si ambos periodos carecen realmente de evidencia usable,
-por ejemplo NO_VERSION sin forecast_context:
-
-ok=false
-status=404
-DATA_NOT_FOUND
-
-NO 500.
-
-### Caso D — error real de fuente
-
-SOURCE_ERROR real:
-
-status=500
-
-Preservar error real.
-
-No convertir un SOURCE_ERROR en DATA_NOT_FOUND o 200.
-
-## North Star esperado
+Planta: Acapulco.
 
 Pregunta:
 
-cual fue el cambio en el margen entre mayo y junio?
+que cliente tiene la perdida mayor de venta entre mayo vs junio?
 
-NO debe mostrar:
+Respuesta observada:
 
-HTTP 500
+Director IA indicó que no podía determinarlo porque
+ambos meses tenían cero observaciones en kg.
 
-Si mayo/junio no tienen FINAL homogéneo, respuesta equivalente:
+Eso NO está probado como verdad física.
 
-"Mayo 2026 no tiene un margen FINAL defendible.
-Existe contexto FORECAST vigente de 7.35 $/kg.
+## Objetivo único
 
-Junio 2026 [estado defendible].
+Localizar físicamente por qué una pregunta ejecutiva de
+ranking cliente-a-cliente entre dos meses históricos
+termina afirmando cero observaciones.
 
-No calculo variación histórica porque los dos periodos
-no comparten semántica FINAL homogénea."
+No arreglar.
 
-Si existe forecast de junio, puede mostrarse como FORECAST.
+## Semántica ejecutiva esperada
 
-NO:
+Interpretación a probar, no asumir:
 
-"el cambio fue X"
+plant = Acapulco
+metric = kg vendidos/comprados por cliente
+period_a = 2026-05
+period_b = 2026-06
+operation = rank largest negative client movement
 
-usando FORECAST-vs-FORECAST.
+delta_cliente_kg = kg_b - kg_a
 
-## Preservar
+"mayor pérdida de venta" debería significar el cliente
+con mayor deterioro de kg entre A y B.
 
-FORECAST != FINAL
-ACTUAL_FINANCIAL != FORECAST
-margen = planta
-descuento/kg != margen
-null != 0
-DATA_NOT_FOUND != SOURCE_ERROR
+Pero auditar si el runtime distingue:
 
-single_month mayo
-single_month junio
-year_max
-year_min
-authorization
-plant resolution
+- disminuyó pero siguió comprando
+- dejó de comprar por completo
 
-## No tocar
+Determinar si un cliente que dejó de comprar debe participar
+en el ranking de "mayor pérdida de venta" según la
+implementación física actual.
 
-lib/director-ia-chat.js
-handlePostChat
-planner
-routing
-server.js
-SQL
-schema
-dependencies
-Financial Diagnosis
-M9
-ARR
-temporal safety gate
+NO decidir semántica nueva durante auditoría.
 
-## Regresiones obligatorias
+## Trazado obligatorio
 
-001 reproduce before: compare no status -> synthetic 500
-002 both FINAL -> status 200
-003 both FINAL -> delta_raw correcto
-004 both FINAL -> comparable true
-005 NOT_FINAL + forecast context -> status 200
-006 NOT_FINAL + forecast -> SOURCE_PARTIAL
-007 NOT_FINAL + forecast -> comparable false
-008 NOT_FINAL + forecast -> delta_raw null
-009 forecast context explicitly FORECAST
-010 forecast context not presented FINAL
-011 no forecast-vs-forecast delta
-012 both NO_VERSION -> status 404
-013 both NO_VERSION -> DATA_NOT_FOUND
-014 both NO_VERSION -> not 500
-015 source error -> status 500
-016 source error preserved
-017 one FINAL + one missing -> status 200 partial
-018 one FINAL + one missing -> no delta
-019 one error + usable evidence preserves SOURCE_PARTIAL behavior
-020 every compare_months result has explicit status
-021 single mayo behavior unchanged
-022 single junio behavior unchanged
-023 single usable forecast remains 200
-024 single true missing remains 404
-025 single source error remains 500
-026 parser "entre mayo y junio" unchanged
-027 parser "de mayo a junio" unchanged
-028 compare intent remains historical_margin
-029 no OpenAI
-030 no generic handlePostChat change
-031 no planner change
-032 no routing change
-033 no SQL change
-034 no schema
-035 no dependencies
-036 no LIVE_DB
-037 historical margin focal tests pass
-038 existing historical margin 35/35 preserved
-039 Tier1 pass
-040 pre-deploy gate PASS
-041 NEW FAILURE=0
+POST /chat
+→ handlePostChat
+→ askDirectorIa
+→ planner/routing
+→ extracción de periodos
+→ intent
+→ tool/loader
+→ consulta/fuente
+→ payload
+→ bucket/ranking
+→ formatter/prompt
+→ respuesta
 
-## Completion
+## Preguntas de probe
 
-Si PASS:
+S1:
+que cliente tiene la perdida mayor de venta entre mayo vs junio?
 
-CURRENT_TASK -> DONE_PENDING_REVIEW
-commit implementation en rama FIX
-reporte append-only
-STOP
+S2:
+que cliente perdió más venta entre mayo y junio?
 
-No merge.
-No push main.
-No deploy.
+S3:
+que cliente disminuyó más sus compras entre mayo y junio?
+
+S4:
+que clientes disminuyeron entre mayo y junio?
+
+S5:
+que clientes dejaron de comprar entre mayo y junio?
+
+S6:
+que clientes aumentaron entre mayo y junio?
+
 No LIVE_DB.
-No siguiente task.
-closure_reason: "HUMAN REVIEW PASS. historical_margin compare_months now always returns an explicit HTTP status: 200 for comparable or partial usable evidence, 404 for true DATA_NOT_FOUND, and 500 only for real SOURCE_ERROR. FORECAST remains distinct from FINAL and no forecast-to-forecast delta was introduced."
+
+Usar fixtures/stubs/probes read-only.
+
+## Periodos
+
+Confirmar exactamente:
+
+A = 2026-05
+B = 2026-06
+
+Ambos son meses cerrados en septiembre de 2026.
+
+Determinar si:
+
+- se interpretan correctamente
+- se reemplazan por meses recientes
+- se hereda otro periodo
+- se usa default M9
+- se pierde año
+- se usa current month
+- existe continuidad que altera A/B
+
+## Fuente física
+
+Trazar si la fuente esperada es:
+
+arr.ventas_diarias_cliente
+
+u otra.
+
+Identificar:
+
+QUERY_FUNCTION
+SQL_OR_HELPER
+PLANT_MAPPING
+PERIOD_FILTER
+CLIENT_KEY
+KG_FIELD
+
+No ejecutar LIVE_DB.
+
+## "cero observaciones"
+
+Localizar exactamente de dónde sale.
+
+Responder si el cero proviene de:
+
+- COUNT real = 0
+- SUM real = 0
+- arreglo vacío
+- undefined/null convertido a 0
+- missing payload convertido a 0
+- periodo incorrecto
+- planta incorrecta
+- bucket vacío
+- sample/truncation
+- formatter/LLM
+- source unavailable
+
+Buscar todos los:
+
+|| 0
+?? 0
+Number(...)
+SUM/COALESCE
+length
+count
+
+relevantes al camino.
+
+## Missing != zero
+
+Contrato:
+
+DATA_NOT_FOUND != 0
+SOURCE_ERROR != 0
+period unavailable != 0
+empty bucket != plant has zero observations
+
+Probar si actualmente se viola.
+
+## Ranking
+
+Determinar si existe físicamente capacidad para:
+
+largest negative client delta
+
+sobre todo el universo.
+
+Responder:
+
+FULL_CLIENT_UNIVERSE_AVAILABLE
+CLIENT_DELTA_KG_AVAILABLE
+NEGATIVE_RANKING_AVAILABLE
+TOP_LOSS_CLIENT_AVAILABLE
+
+YES / NO / PARTIAL
+
+Si la capacidad actual usa buckets:
+
+- mas
+- disminuyeron
+- dejaron
+
+determinar:
+
+¿el ranking de disminuyeron incluye todo el universo
+antes de truncar?
+
+¿"dejaron" se mantiene separado?
+
+¿80/20 o slice altera quién puede ser top 1?
+
+No inventar unión entre buckets.
+
+## Temporalidad
+
+Mayo vs junio son dos meses cerrados.
+
+Determinar si el M9 temporal safety gate de
+financial_diagnosis es relevante a esta pregunta.
+
+Esperado probable: NO, pero probarlo.
+
+No tocar ese gate.
+
+## Respuesta requerida
+
+AUDIT_RESULT:
+
+QUESTION_S1_INTENT:
+QUESTION_S2_INTENT:
+QUESTION_S3_INTENT:
+QUESTION_S4_INTENT:
+QUESTION_S5_INTENT:
+QUESTION_S6_INTENT:
+
+S1_ROUTE:
+S1_PERIOD_OBJECT:
+S1_PERIOD_A:
+S1_PERIOD_B:
+
+SOURCE_MODULE:
+SOURCE_TABLE:
+QUERY_FUNCTION:
+PLANT_MAPPING:
+KG_FIELD:
+
+FULL_CLIENT_UNIVERSE_AVAILABLE:
+YES / NO / PARTIAL
+
+CLIENT_DELTA_KG_AVAILABLE:
+YES / NO / PARTIAL
+
+NEGATIVE_RANKING_AVAILABLE:
+YES / NO / PARTIAL
+
+TOP_LOSS_CLIENT_AVAILABLE:
+YES / NO / PARTIAL
+
+DECREASED_BUCKET_SEMANTICS:
+STOPPED_BUYING_BUCKET_SEMANTICS:
+
+TOP_LOSS_INCLUDES_STOPPED_BUYING:
+YES / NO / NOT_DEFINED
+
+BUCKET_TOTALS_BEFORE_TRUNCATION:
+YES / NO / NOT_APPLICABLE
+
+RANKING_BEFORE_TRUNCATION:
+YES / NO / NOT_APPLICABLE
+
+ZERO_OBSERVATIONS_ORIGIN:
+
+ZERO_IS_PHYSICAL_COUNT:
+YES / NO / NOT_PROVEN
+
+ZERO_IS_PHYSICAL_SUM:
+YES / NO / NOT_PROVEN
+
+MISSING_COLLAPSES_TO_ZERO:
+YES / NO
+
+PERIOD_A_CORRECT:
+YES / NO
+
+PERIOD_B_CORRECT:
+YES / NO
+
+PLANT_CORRECT:
+YES / NO / NOT_PROVEN
+
+FIRST_DIVERGENCE:
+
+FIRST_FALSE_ZERO_SITE:
+
+OPENAI_CALLED:
+YES / NO / NOT_PROVEN
+
+M9_TEMPORAL_SAFETY_RELEVANT:
+YES / NO
+
+PARSER_BUG:
+YES / NO
+
+ROUTING_BUG:
+YES / NO
+
+PERIOD_BUG:
+YES / NO
+
+SOURCE_BUG:
+YES / NO
+
+PLANT_MAPPING_BUG:
+YES / NO / NOT_PROVEN
+
+NULL_ZERO_BUG:
+YES / NO
+
+RANKING_BUG:
+YES / NO
+
+PRESENTATION_BUG:
+YES / NO
+
+DATA_BUG:
+YES / NO / NOT_PROVEN
+
+CAN_FIX_WITHOUT_NEW_SQL:
+YES / NO / NOT_PROVEN
+
+RECOMMENDED_NEXT_SLICE:
+
+FILES_INSPECTED:
+
+TESTS_RUN:
+
+RISKS:
+
+STOP.
+
+No implementación.
+No producto.
+No LIVE_DB.
+No merge.
+No deploy.
+closure_reason: "HUMAN REVIEW PASS. La causa raíz queda confirmada: preguntas de mayor pérdida histórica entre clientes se enrutan erróneamente a client_profile en vez de calendar_compare. Mayo y junio 2026 se resuelven correctamente. La capacidad física de comparación ya existe sobre arr.ventas_diarias_cliente."
+
+human_semantic_decision: "Para 'mayor pérdida de venta', 'perdió más venta' o 'mayor caída de venta', incluir todos los clientes con delta_kg < 0, tanto DISMINUYÓ como DEJÓ DE COMPRAR. El ganador es el delta_kg más negativo. Para 'disminuyó más', conservar exclusivamente clientes que compraron en ambos meses y disminuyeron."
