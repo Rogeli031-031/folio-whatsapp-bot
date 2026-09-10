@@ -57,6 +57,7 @@ const weeklyDiscountNarrative = require("./lib/weekly-discount-narrative");
 const weeklyDiscountLdConfig = require("./lib/weekly-discount-ld-config");
 const weeklyDiscountLdScheduler = require("./lib/weekly-discount-ld-scheduler");
 const dicf = require("./lib/dicf");
+const dicfExcelWorkbook = require("./lib/dicf-excel-workbook");
 const dicfAccionesLib = require("./lib/dicf-acciones");
 const actionRegisterEvidenciasExport = require("./lib/action-register-evidencias-export");
 const { embedExcelEvidencePhoto } = require("./lib/excel-image-compress");
@@ -15975,8 +15976,6 @@ app.get("/api/dashboard/dicf-excel", dashboardAuthMiddleware, async (req, res) =
     if (!excelData || !excelData.dates || !excelData.clientes) {
       return res.status(400).json({ error: "Sin datos para Excel (ejecuta primero Delta Ingreso Cliente Forecast)" });
     }
-    const dates = excelData.dates;
-    const margen = excelData.margen != null && Number.isFinite(excelData.margen) ? excelData.margen : 0;
     let clientes = excelData.clientes || [];
     const canal = (req.query.canal || "").toString().trim();
     const subcanal = (req.query.subcanal || "").toString().trim();
@@ -15988,83 +15987,37 @@ app.get("/api/dashboard/dicf-excel", dashboardAuthMiddleware, async (req, res) =
         (c) => (c.canal || "") === canal && (c.subcanal || "") === subcanal && (c.estado || "") === estadoFilter
       );
     }
-    const meses = excelData.meses || [];
-    const margenPorMes = excelData.margenPorMes || [];
+    const periodoMes = String(data.periodoMes || "").trim();
+    const periodoMatch = periodoMes.match(/^(\d{4})-(\d{2})$/);
+    const lastDateStr = data.last_date ? String(data.last_date).slice(0, 10) : "";
+    const lastMes = Array.isArray(excelData.meses) && excelData.meses.length
+      ? excelData.meses[excelData.meses.length - 1]
+      : null;
+    const forecastYear = periodoMatch
+      ? parseInt(periodoMatch[1], 10)
+      : lastDateStr
+        ? parseInt(lastDateStr.slice(0, 4), 10)
+        : lastMes && Number.isFinite(Number(lastMes.year))
+          ? Number(lastMes.year)
+          : null;
+    const forecastMonth = periodoMatch
+      ? parseInt(periodoMatch[2], 10)
+      : lastDateStr
+        ? parseInt(lastDateStr.slice(5, 7), 10)
+        : lastMes && Number.isFinite(Number(lastMes.month))
+          ? Number(lastMes.month)
+          : null;
+    const fechaCorte =
+      ((req.query.upload_day || "").toString().trim().slice(0, 10)) || lastDateStr || "";
 
-    const wb = XLSX.utils.book_new();
-
-    const monthHeaders = [];
-    for (const m of meses) {
-      monthHeaders.push(`Venta ${m.label}`, `Descuento ${m.label}`, `Margen ${m.label}`);
-    }
-    const headerRow = ["Cliente", "Estatus", "Categoría", "Subcategoría", ...monthHeaders, ...dates];
-    const numCols = dates.length;
-    const pad = (arr, len, fill) => {
-      const a = (arr || []).slice(0, len);
-      while (a.length < len) a.push(fill);
-      return a;
-    };
-    const numMeses = meses.length;
-    const monthValsForClient = (c) => {
-      const ventaPorMes = (c.ventaPorMes || []).slice(0, numMeses);
-      const descuentoPorMes = (c.descuentoPorMes || []).slice(0, numMeses);
-      const out = [];
-      for (let i = 0; i < numMeses; i++) {
-        const v = ventaPorMes[i];
-        const d = descuentoPorMes[i];
-        const mg = margenPorMes[i];
-        out.push(v != null && Number.isFinite(v) ? v : "");
-        out.push(d != null && Number.isFinite(d) ? d : "");
-        out.push(mg != null && Number.isFinite(mg) ? mg : "");
-      }
-      return out;
-    };
-
-    const sheet1Rows = [headerRow];
-    for (const c of clientes) {
-      const raw = (c.kgLast30 || []).map((v) => (v != null && Number.isFinite(v) ? v : ""));
-      const tonValues = pad(raw, numCols, "");
-      sheet1Rows.push([c.cliente || "", c.estado || "", c.canal || "", c.subcanal || "", ...monthValsForClient(c), ...tonValues]);
-    }
-    const ws1 = XLSX.utils.aoa_to_sheet(sheet1Rows);
-    XLSX.utils.book_append_sheet(wb, ws1, "Venta (Ton)");
-
-    const sheet2Rows = [headerRow];
-    for (const c of clientes) {
-      const raw = (c.descKgLast30 || []).map((v) => (v != null && Number.isFinite(v) ? Number(v.toFixed(4)) : ""));
-      const descValues = pad(raw, numCols, "");
-      sheet2Rows.push([c.cliente || "", c.estado || "", c.canal || "", c.subcanal || "", ...monthValsForClient(c), ...descValues]);
-    }
-    const ws2 = XLSX.utils.aoa_to_sheet(sheet2Rows);
-    XLSX.utils.book_append_sheet(wb, ws2, "Descuento ($ por kg)");
-
-    const sheet3Rows = [headerRow];
-    for (const c of clientes) {
-      const margenValues = dates.map(() => margen);
-      sheet3Rows.push([c.cliente || "", c.estado || "", c.canal || "", c.subcanal || "", ...monthValsForClient(c), ...margenValues]);
-    }
-    const ws3 = XLSX.utils.aoa_to_sheet(sheet3Rows);
-    XLSX.utils.book_append_sheet(wb, ws3, "Margen ($ por kg)");
-
-    const ingresoHeaders = ["Cliente", "Estatus", "Categoría", "Subcategoría", ...meses.map((m) => `Ingreso ${m.label}`)];
-    const ingresoRows = [ingresoHeaders];
-    for (const c of clientes) {
-      const ventaPorMes = (c.ventaPorMes || []).slice(0, numMeses);
-      const descuentoPorMes = (c.descuentoPorMes || []).slice(0, numMeses);
-      const ingresoVals = [];
-      for (let i = 0; i < numMeses; i++) {
-        const v = ventaPorMes[i] != null && Number.isFinite(ventaPorMes[i]) ? ventaPorMes[i] : 0;
-        const d = descuentoPorMes[i] != null && Number.isFinite(descuentoPorMes[i]) ? descuentoPorMes[i] : 0;
-        const mg = margenPorMes[i] != null && Number.isFinite(margenPorMes[i]) ? margenPorMes[i] : 0;
-        const ingreso = v * 1000 * mg - Math.abs(Number(d));
-        ingresoVals.push(Number.isFinite(ingreso) ? Math.round(ingreso * 100) / 100 : "");
-      }
-      ingresoRows.push([c.cliente || "", c.estado || "", c.canal || "", c.subcanal || "", ...ingresoVals]);
-    }
-    const wsIngreso = XLSX.utils.aoa_to_sheet(ingresoRows);
-    XLSX.utils.book_append_sheet(wb, wsIngreso, "Ingreso por cliente");
-
-    const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+    const built = await dicfExcelWorkbook.buildDicfClienteForecastWorkbook(excelData, clientes, {
+      client,
+      plantCode,
+      year: forecastYear,
+      month: forecastMonth,
+      fechaCorte,
+    });
+    const buf = XLSX.write(built.wb, { type: "buffer", bookType: "xlsx" });
     let filename = `Delta_Ingreso_Cliente_Forecast_${planta.replace(/\s+/g, "_")}_${data.periodoMes || "mes"}.xlsx`;
     if (canal !== "" && subcanal !== "" && tipo !== "") {
       const safe = (s) => (s || "").replace(/[\s/\\?*:[\]]+/g, "_");

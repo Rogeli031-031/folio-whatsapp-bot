@@ -3,7 +3,7 @@ task_id: IMPL-KPI-FINANCIEROS-DICF-EXCEL-2027-001
 task_type: IMPLEMENTATION
 mode: REGRESSION_FIRST
 
-status: AUTHORIZED
+status: DONE_PENDING_REVIEW
 
 authorized_by: "Human Approver"
 authorized_at: "2026-09-10T16:50:53-06:00"
