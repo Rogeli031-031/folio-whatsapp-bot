@@ -3,8 +3,7 @@ task_id: IMPL-KPI-FINANCIEROS-DICF-EXCEL-2027-001
 task_type: IMPLEMENTATION
 mode: REGRESSION_FIRST
 
-status: DONE_PENDING_REVIEW
-
+status: CLOSED
 authorized_by: "Human Approver"
 authorized_at: "2026-09-10T16:50:53-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Zaragoza 2026-09-10"
@@ -652,3 +651,8 @@ No push main.
 No deploy.
 No LIVE_DB.
 No siguiente tarea.
+closure_reason: "HUMAN REVIEW PASS. El export Cliente Forecast conserva las cuatro hojas existentes y agrega hoja 2027 con venta, participación y descuento MXN/kg por seis pares canal/subcanal, usando la receta PROM del Pronóstico."
+
+human_acceptance: "PASS técnico. R-DICF-2027 70/70. Calendario 2027 determinista; descuento mensual y anual ponderados por volumen; cuatro hojas anteriores con paridad AOA; sin Director IA, schema, tool ni endpoint nuevo."
+
+live_validation_pending: "Validar tras deploy el workbook real de una planta: cobertura/residual de los seis pares, reconciliación PROM, porcentajes mensuales y TOTAL, y descuento MXN/kg. No repartir residual real."
