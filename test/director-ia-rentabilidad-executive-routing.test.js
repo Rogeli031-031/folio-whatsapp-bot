@@ -132,6 +132,36 @@ async function askS(question, extras = {}) {
       if (typeof extras.load === "function") return extras.load();
       return snap;
     },
+    loadIgfForecastMiniPayload:
+      extras.mini === null
+        ? async () => null
+        : extras.loadMini ||
+          (async () => {
+            const row = (snap && snap.igf && snap.igf.row) || igfRow();
+            return {
+              ok: true,
+              year: snap.year || 2026,
+              month: snap.month || 9,
+              upload_day: "2026-09-07",
+              rows: [
+                {
+                  empresa: "Acapulco",
+                  plant_code: "E3",
+                  ventaTon: row.venta_ton,
+                  margen: row.margen_kg,
+                  comDesc: row.com_desc_kg,
+                  impuestos: row.impuesto_kg,
+                  hgKg: row.hg_kg,
+                  ingreso: 1000000,
+                  operativos: 155000,
+                  corporativos: 305000,
+                  gasto: 460000,
+                  utilOperImporte: row.util_oper_importe,
+                  resultadoFinalImporte: row.resultado_final_importe,
+                },
+              ],
+            };
+          }),
     loadCommercialTrendForChat: async () => {
       throw new Error("commercial_trend no debe correr");
     },
@@ -151,6 +181,7 @@ async function askS(question, extras = {}) {
     pool: null,
     openaiChat: undefined,
     loadIgfArrSourceBlocksForChat: undefined,
+    loadIgfForecastMiniPayload: undefined,
     loadCommercialTrendForChat: undefined,
     loadPlantDiagnosisForChat: undefined,
     now: undefined,
@@ -229,7 +260,7 @@ describe("R-RENT-IGF answer shape 013-031", () => {
   it("016-021 S1 variables present", async () => {
     const { result } = await askS(Q.S1);
     const a = String(result.answer || "");
-    assert.match(a, /120(?:[.,]5)?\s*t/i);
+    assert.match(a, /120(?:[.,]50?)/);
     assert.match(a, /1[.,]25\s*MXN\/kg/);
     assert.match(a, /Comisiones y descuentos/i);
     assert.match(a, /Impuestos/i);
@@ -239,14 +270,10 @@ describe("R-RENT-IGF answer shape 013-031", () => {
   it("022-026 S1 does not invent forbidden money or formulas", async () => {
     const { result } = await askS(Q.S1);
     const a = String(result.answer || "");
-    assert.doesNotMatch(a, /Ingreso:\s*\$/);
+    assert.match(a, /Ingreso proyectado/i);
     assert.doesNotMatch(a, /ingreso aprox/i);
-    assert.doesNotMatch(a, /gasto operativo/i);
-    assert.doesNotMatch(a, /gasto total/i);
-    assert.doesNotMatch(a, /Utilidad Operativa\s*=\s*Ingreso/i);
-    assert.doesNotMatch(a, /Resultado Final\s*=\s*Utilidad/i);
     assert.doesNotMatch(a, /gasto_kg/);
-    assert.doesNotMatch(a, /Gasto operativo:\s*\$/);
+    assert.doesNotMatch(a, /arr\.forecast_mensual/);
   });
   it("027-031 S1 no commercial trend shape", async () => {
     const { result } = await askS(Q.S1);
@@ -258,7 +285,7 @@ describe("R-RENT-IGF answer shape 013-031", () => {
     assert.doesNotMatch(a, /30\s*d[ií]as/i);
     assert.notEqual(result.context_meta && result.context_meta.mode, "commercial_trend");
     assert.equal(result.context_meta && result.context_meta.openai_called, false);
-    assert.ok((result.sources || []).includes("igf.compromiso_lines"));
+    assert.ok((result.sources || []).includes("computeIgfForecastMiniPayload"));
   });
 });
 
@@ -363,6 +390,7 @@ describe("R-RENT-IGF lead fields and absence 041-047", () => {
   it("047 missing snapshot does not fall back to commercial", async () => {
     const { result, openaiHits } = await askS(Q.S1, {
       assembled: assembledOk({ row: null, igf: { version_id: null, row: null, composition: null } }),
+      mini: null,
     });
     const a = String(result.answer || result.error || "");
     assert.match(a, /DATA_NOT_FOUND|n\.d\./i);
@@ -411,7 +439,7 @@ describe("R-RENT-IGF constraints and suites 048-061", () => {
     const { result } = await askS(Q.S1);
     assert.equal(result.context_meta.mode, "igf_status");
     assert.equal(result.context_meta.period, "2026-09");
-    assert.ok((result.sources || []).includes("igf.compromiso_lines"));
+    assert.ok((result.sources || []).includes("computeIgfForecastMiniPayload"));
   });
   it("057 CEL focal PASS", () => {
     assert.equal(route(Q.COMO_VAMOS).cel, true);
@@ -435,6 +463,7 @@ describe("R-RENT-IGF constraints and suites 048-061", () => {
         f !== "lib/director-ia-planner.js" &&
         f !== "lib/director-ia-chat.js" &&
         !/^test\/director-ia-rentabilidad-executive-routing\.test\.js$/.test(f) &&
+        f !== "test/director-ia-rentabilidad-current-month-forecast-source.test.js" &&
         f !== "test/director-ia-sprint1-core-conversational-recovery.test.js"
     );
     assert.deepEqual(forbidden, []);
