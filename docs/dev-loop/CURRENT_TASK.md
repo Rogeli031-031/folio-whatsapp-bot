@@ -3,8 +3,7 @@ task_id: FIX-DIRECTOR-IA-RENTABILIDAD-CURRENT-MONTH-FORECAST-SOURCE-001
 task_type: FIX
 mode: REGRESSION_FIRST
 
-status: DONE_PENDING_REVIEW
-
+status: CLOSED
 authorized_by: "Human Approver"
 authorized_at: "2026-09-09T16:43:02-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Zaragoza 2026-09-09"
@@ -472,3 +471,8 @@ No merge.
 No push main.
 No deploy.
 No siguiente tarea.
+closure_reason: "HUMAN REVIEW PASS. Para preguntas actuales de rentabilidad del mes abierto, Director IA usa MINI_FORECAST_PROY mediante readIgfForecastMiniAuthoritative y ya no presenta el compromiso stored como verdad vigente."
+
+human_acceptance: "PASS. 61/61. Corte proviene de mini.upload_day; ventaTon se trata como proyección mensual; utilidad operativa usa utilOperImporte y resultado final usa resultadoFinalImporte. Presupuesto/compromiso conserva IGF_COMMIT_SNAPSHOT. Mes histórico bloquea mini actual. Fail-closed si mini no existe."
+
+known_preexisting_failures: "forecast-magnitude conserva 3 fallos preexistentes reportados en HEAD 005484a8. No fueron introducidos ni corregidos por este slice y no se consideran aceptación de esos fallos."
