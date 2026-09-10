@@ -49,7 +49,7 @@ Los 6 pares se calculan sin schema nuevo. Residual de planta no se reparte.
 ---
 
 IMPLEMENTATION_SHA:
-PENDING_COMMIT
+21bfeec2c12853d8f18fc77e1434a936af5988ff
 
 BASE_MAIN_SHA:
 9f42c47f342341f3d943564aeee1afe7d71fc99e
