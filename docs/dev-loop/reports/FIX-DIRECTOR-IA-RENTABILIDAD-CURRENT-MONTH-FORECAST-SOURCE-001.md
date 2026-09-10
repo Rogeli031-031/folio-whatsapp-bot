@@ -43,7 +43,7 @@ Cutoff verbal = `mini.upload_day`. `version_number` de `igf.versions` no se alte
 ---
 
 IMPLEMENTATION_SHA:
-PENDING_COMMIT
+22e7e22d8ce94fe2a234064650777c7e735953cf
 
 BASE_MAIN_SHA:
 6842f242e0916033c8b235f3cb47c5ccc5093696
