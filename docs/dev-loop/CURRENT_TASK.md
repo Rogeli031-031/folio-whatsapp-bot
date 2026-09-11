@@ -3,8 +3,7 @@ task_id: IMPL-DIRECTOR-IA-MONTH-CLOSE-FINANCIAL-VARIABLES-COMPOSITION-001
 task_type: IMPLEMENTATION
 mode: REGRESSION_FIRST
 
-status: DONE_PENDING_REVIEW
-
+status: CLOSED
 authorized_by: "Human Approver"
 authorized_at: "2026-09-11T13:44:53-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Zaragoza 2026-09-11"
@@ -814,3 +813,12 @@ No push main.
 No deploy.
 No LIVE_DB.
 No siguiente tarea.
+closure_reason: "HUMAN REVIEW PASS. month_close_result implementa composición financiera A/B/C: FINAL, VISIBLE_NOT_FINAL y DATA_MISSING, sin convertir una vista histórica runtime en cierre financiero FINAL."
+
+human_acceptance: "PASS. La vista histórica NO FINAL usa el mismo periodo objetivo y puede presentar Venta, CASA, COMISIONISTA, Margen, Descuento, Impuestos, HG, HG$, Operativos, Corporativos, Gasto, Rentabilidad operativa y Resultado final, con advertencia explícita de que no constituye cierre financiero definitivo."
+
+human_truth_decision: "financial.actual FINAL conserva prioridad. VISIBLE_NOT_FINAL nunca muta financial_state. DATA_MISSING no inventa ceros ni hace fallback silencioso. RENTAB UI corresponde a resultado final de la vista; rentabilidad operativa corresponde a utilOperImporte."
+
+routing_acceptance: "Se acepta el ajuste focal en chat para que 'cierre financiero de <mes>' llegue a month_close_result en vez de PRE_CLOSE. Planner general, historical_margin, C3 y current-month MINI_FORECAST_PROY permanecen sin cambio."
+
+known_limitation: "Un cierre FINAL almacenado puede no contener algunos importes que sí existen en la vista mini; esos campos deben permanecer n/d. No se autoriza rellenar un FINAL con mini sin etiquetar otra fuente."
