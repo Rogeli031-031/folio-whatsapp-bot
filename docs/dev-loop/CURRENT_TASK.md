@@ -3,8 +3,7 @@ task_id: AUDIT-DIRECTOR-IA-FOLIO-KEYWORD-AGGREGATION-CONTINUITY-001
 task_type: AUDIT
 mode: READ_ONLY
 
-status: DONE_PENDING_REVIEW
-
+status: CLOSED
 authorized_by: "Human Approver"
 authorized_at: "2026-09-11T15:41:34-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Zaragoza 2026-09-11"
@@ -676,3 +675,14 @@ No merge.
 No push main.
 No deploy.
 No LIVE_DB.
+closure_reason: "HUMAN REVIEW PASS. La primera divergencia es que folio_search no escribe una specification heredable en conversation_state; por ello el follow-up pronominal llega sin antecedente y el planner cae en unknown."
+
+human_architecture_decision: "La continuidad debe persistir una specification canónica y mínima del search, no las filas renderizadas. El agregado del segundo turno debe reconsultar determinísticamente el universo completo."
+
+human_aggregation_decision: "No se autoriza motor nuevo. folio_search ya soporta AGGREGATE/SUM/MONTH. El FIX debe reutilizar esa capacidad sobre el mismo scope, planta, periodo, mes_cargo, keyword/match mode y filtros del turno anterior."
+
+human_truth_decision: "El agregado principal excluye CANCELADO y debe llamarse importe registrado. No afirmar gasto pagado, gasto real ni gasto contable."
+
+human_scope_decision: "Este slice cubre únicamente el follow-up de agregación equivalente a 'puedes sumarlos y darme un total por mes?'. ¿cuántos fueron? y ¿y solo julio? permanecen fuera de alcance."
+
+human_security_decision: "La specification debe estar ligada a planta_id, sanearse al eco y descartarse ante cambio de planta. La reconsulta vuelve a ejecutar autorización; no cross-plant reuse."
