@@ -3,7 +3,7 @@ task_id: AUDIT-DIRECTOR-IA-MONTH-CLOSE-HISTORICAL-MINI-LIVE-PARITY-001
 task_type: AUDIT
 mode: READ_ONLY
 
-status: AUTHORIZED
+status: DONE_PENDING_REVIEW
 
 authorized_by: "Human Approver"
 authorized_at: "2026-09-11T14:24:16-06:00"
