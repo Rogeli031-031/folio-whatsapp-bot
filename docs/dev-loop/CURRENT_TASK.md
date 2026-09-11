@@ -1,424 +1,678 @@
-task_id: FIX-DIRECTOR-IA-MONTH-CLOSE-HISTORICAL-MINI-CLIENT-WRAPPER-001
+task_id: AUDIT-DIRECTOR-IA-FOLIO-KEYWORD-AGGREGATION-CONTINUITY-001
 
-task_type: FIX
-mode: REGRESSION_FIRST
+task_type: AUDIT
+mode: READ_ONLY
 
-status: CLOSED
+status: AUTHORIZED
+
 authorized_by: "Human Approver"
-authorized_at: "2026-09-11T14:44:39-06:00"
+authorized_at: "2026-09-11T15:41:34-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Zaragoza 2026-09-11"
 
-implementation_authorized: YES
+implementation_authorized: NO
 merge_authorized: NO
 deploy_authorized: NO
 live_db_authorized: NO
 
 max_attempts: 1
 
-base_main_sha: ccee6a22b0df20aafb472afd45f78c729a502431
-result_report_path: docs/dev-loop/reports/FIX-DIRECTOR-IA-MONTH-CLOSE-HISTORICAL-MINI-CLIENT-WRAPPER-001.md
+base_main_sha: da57cc8c8162a4e189d6cbecf617716070cbe665
+result_report_path: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-FOLIO-KEYWORD-AGGREGATION-CONTINUITY-001.md
 
-objective: "Corregir el ownership del DB handle usado por month_close_result al cargar el mini histórico, evitando pasar un pg.Client ya adquirido a un wrapper que espera Pool y eliminando el falso DATA_MISSING causado por Client.connect()."
+objective: "Determinar por qué Director IA pierde el contexto de una búsqueda de folios por keyword/rango cuando el siguiente turno pide sumar esos mismos resultados y agruparlos por mes, y definir la mínima continuidad determinista necesaria sin inventar folios ni reinterpretar importes."
 
-## Evidencia LIVE
+## Antecedente físico ya cerrado
 
-Planta:
-Acapulco
+Existe el FIX:
 
-Pregunta:
+FIX-DIRECTOR-IA-FOLIO-KEYWORD-RANGE-SEARCH-PARITY-002
 
-¿Cómo cerramos agosto?
+Su contrato probado incluye:
 
-Resultado actual:
+- intent folio_search;
+- universo ALL_PUBLIC_FOLIOS;
+- rango histórico por mes_cargo;
+- keyword search con paridad Kanban;
+- CANCELADO incluido en el listado;
+- query sin pre-truncar;
+- match_count antes del límite visual;
+- list limit 40;
+- no OpenAI matching;
+- no embeddings.
 
-Acapulco — Agosto 2026
+No reabrir ese FIX.
 
-Datos financieros no disponibles.
+Leer obligatoriamente:
 
-Venta comercial:
-1,504.39 t
+docs/dev-loop/reports/FIX-DIRECTOR-IA-FOLIO-KEYWORD-RANGE-SEARCH-PARITY-002.md
 
-## Causa probada
+y sus tests relacionados.
 
-Ruta actual:
+## Escenario de continuidad
 
-loadMonthCloseResultForChat(pool, ...)
-→ acquire()
-→ db = pg.Client
-→ opts.loadIgfForecastMiniPayload(db, ...)
-→ loadIgfForecastMiniPayloadForDirectorIa(db,...)
-→ wrapper trata db como Pool
-→ db.connect()
-→ pg.Client.connect()
-→ throw
-→ catch
-→ historical_mini = null
-→ DATA_MISSING
+TURNO 1
 
-Dashboard correcto:
+Usar el escenario/regresión canónico ya existente del FIX anterior
+para una búsqueda equivalente a:
 
-pool.connect()
-→ pg.Client
-→ computeIgfForecastMiniPayload(client,...)
+¿Qué folios de enero a agosto contienen la palabra aceite?
 
-## FIRST_PARITY_GAP
+No inventar un nuevo fixture si el test anterior conserva
+la pregunta exacta. Preferir esa pregunta exacta.
 
-WRAPPER_CONNECT_HEURISTIC_THROWS_ON_CHECKED_OUT_CLIENT
+Esperado T1:
 
-## Decisión de implementación
+intent:
+folio_search
 
-Corregir el call-site/ownership.
+search_term:
+aceite
 
-El loader runtime:
+universe:
+ALL_PUBLIC_FOLIOS
 
-loadIgfForecastMiniPayloadForDirectorIa
+period:
+2026-01..2026-08
 
-debe recibir el DB root/Pool que contractualmente espera,
-NO el pg.Client ya adquirido por month_close.
+period_field:
+mes_cargo
 
-El fix preferido es en:
+La respuesta lista los folios encontrados.
 
-lib/director-ia-month-close-result.js
+TURNO 2 exacto:
 
-sin modificar server.js.
+puedes sumarlos y darme un total por mes?
 
-No cambiar el contrato global del wrapper si no es necesario.
+Problema observado:
 
-## Contrato
+Director IA pierde la referencia a "los"
+y actualmente termina fuera de la búsqueda anterior / UNKNOWN.
 
-La función inyectada:
+## Objetivo conversacional
 
-opts.loadIgfForecastMiniPayload
+El segundo turno debe poder significar:
 
-en runtime está configurada como:
+"Toma exactamente el mismo conjunto definido por mi búsqueda anterior
+de folios y agrégalo monetariamente por mes."
 
-loadIgfForecastMiniPayloadForDirectorIa
+NO significa:
 
-y espera un objeto capaz de adquirir su propio client.
+- buscar todos los folios de la planta;
+- inventar otro keyword;
+- ampliar rango;
+- cambiar ALL_PUBLIC_FOLIOS por apoyos activos;
+- usar solo los 40 mostrados;
+- consultar Action Register;
+- usar IGF;
+- inferir gasto pagado.
 
-Por lo tanto month_close no debe pasarle:
+## Lo que debe heredarse conceptualmente
 
-db = checked-out Client
+Auditar si existen físicamente y dónde pueden persistirse:
 
-cuando también dispone de:
+- dominio/intent de folios;
+- planta;
+- universe;
+- period start;
+- period end;
+- period field = mes_cargo;
+- search_term;
+- keyword match mode/regla;
+- cualquier filtro explícito aplicado en T1;
+- match_count;
+- identidad o specification del result set.
 
-pool = root Pool.
+No implementar persistencia.
 
-## Historical mini call
+## Pregunta central 1 — routing
 
-Antes:
+Trazar T1 y T2 por:
 
-opts.loadIgfForecastMiniPayload(db, {
-  year,
-  month,
-  plantName,
-  plantCode
-})
+planner
+→ chat
+→ conversation_state
+→ folio_search
+→ composer/response
 
-Deseado conceptualmente:
+Entregar el primer punto en el que T2 deja de poder identificar
+el antecedente "los".
 
-opts.loadIgfForecastMiniPayload(pool, {
-  year,
-  month,
-  plantName,
-  plantCode
-})
+Determinar si T2 cae en:
 
-si ese es el contrato físico probado.
+unknown
+folio_search
+folio_status
+otro
 
-No inventar otra abstracción.
+y por qué.
 
-## Fixtures / injected dependencies
+## Pregunta central 2 — conversation state
 
-Preservar tests y dependencias inyectadas razonables.
+Localizar todos los mecanismos actuales de continuidad relevantes:
 
-`historicalMini` directo debe seguir funcionando.
+conversation_state
+active_* fields
+last intent/domain
+entity inheritance
+period inheritance
+client continuity
+folio continuity si existe
 
-Si un test inyecta loadIgfForecastMiniPayload:
-debe probar el contrato correcto de ownership.
+Entregar:
 
-No añadir compatibilidad ambigua Client-or-Pool basada en heurísticas nuevas.
+STATE_WRITER_AFTER_T1:
+STATE_SHAPE_AFTER_T1:
+STATE_READER_ON_T2:
+FOLIO_SEARCH_STATE_PERSISTED:
+FOLIO_RESULT_SET_REFERENCE_PERSISTED:
 
-No detectar por nombre de constructor.
+No asumir que por existir conversation_state
+folio_search lo usa.
 
-No hacer:
+## Pregunta central 3 — filas vs specification
 
-if (db.connect) ...
+Determinar la arquitectura mínima correcta para continuidad.
 
-porque un pg.Client también tiene connect().
+Comparar físicamente dos modelos:
 
-## No tocar wrapper
+A)
+guardar todas las filas matched en conversation_state
 
-Preferencia fuerte:
+B)
+guardar una specification canónica y reconsultar determinísticamente
 
-NO modificar:
+Ejemplo conceptual de specification, NO autorizado como contrato todavía:
 
-loadIgfForecastMiniPayloadForDirectorIa
+{
+  domain: "folios",
+  intent: "folio_search",
+  planta_id,
+  universe: "ALL_PUBLIC_FOLIOS",
+  period: {
+    start: "2026-01",
+    end: "2026-08",
+    field: "mes_cargo"
+  },
+  search_term: "aceite",
+  match_mode: "...",
+  filters: {...}
+}
 
-si basta corregir el argumento en month_close.
+Determinar cuál encaja con la arquitectura existente.
 
-La auditoría determinó:
+Considerar:
 
-CAN_FIX_WITHOUT_SERVER_CHANGE = YES.
+- list limit 40;
+- match_count antes de truncado;
+- tamaño de conversation_state;
+- reproducibilidad;
+- autorización por planta;
+- cambios de datos entre turnos.
 
-Si Cursor concluye que server.js es imprescindible:
-STOP.
-No ampliar alcance.
+Entregar:
 
-## No tocar catch
+RECOMMENDED_CONTINUITY_MODEL:
+WHY_ROWS_OR_SPEC:
+REQUERY_REQUIRED_FOR_COMPLETE_AGGREGATE:
 
-El catch actual de historical mini queda fuera de alcance.
+## Pregunta central 4 — universo completo
 
-Este FIX elimina la excepción conocida aguas arriba.
+CRÍTICO.
 
-No rediseñar errores/logging.
+El agregado NO puede sumar únicamente:
 
-## Cutoff / upload_day
+rows.slice(0, 40)
 
-FUERA DE ALCANCE de este FIX.
+si hubo más matches.
 
-Se sabe que:
+Demostrar:
 
-ArrClient sí pasa upload_day.
-month_close no.
+- dónde ocurre el límite visual;
+- dónde existe el universo completo;
+- si el query actual trae todo antes del slice;
+- si un segundo turno puede reejecutar el mismo matcher sobre el universo completo.
 
-Pero la auditoría demostró:
+Entregar:
 
-UPLOAD_DAY_REQUIRED_FOR_HISTORICAL_MINI = NO
+QUERY_PRE_TRUNCATES:
+MATCH_COUNT_BEFORE_LIMIT:
+DISPLAY_LIMIT:
+AGGREGATION_MUST_USE_FULL_MATCH_SET:
 
-y su ausencia no causa DATA_MISSING.
+## Pregunta central 5 — campo monetario
 
-No agregar upload_day ahora.
+Trazar físicamente el campo:
 
-Después de LIVE se validará paridad numérica.
+importe
 
-## Periodo
+en la búsqueda de folios.
 
-C1 Agosto:
-2026-08
+Determinar:
 
-C3 Julio:
-2026-07
+- tabla/campo físico;
+- nullability;
+- tipo/unidad;
+- si corresponde a importe registrado del folio;
+- si existe otra cifra como pagado/ejercido/autorizado.
 
-No cambiar resolveCloseMonth.
+No reinterpretar.
 
-No current-month fallback.
+La respuesta futura debe usar terminología defendible.
 
-## Plant match
+Preferencia humana:
 
-No tocar findMiniRowForPlant.
+"importe registrado"
 
-La auditoría demostró que:
+NO:
 
-Acapulco
-→ exact match 100
+"gasto pagado"
+"gasto real"
+"efectivo desembolsado"
 
-No es el bug.
+salvo que el código demuestre otra semántica.
 
-## Presentation
+Entregar:
 
-No tocar:
+AMOUNT_SOURCE:
+AMOUNT_FIELD:
+AMOUNT_SEMANTIC:
+SAFE_VISIBLE_LABEL:
 
-financial.presentation
-FINAL
-VISIBLE_NOT_FINAL
-DATA_MISSING
+## Pregunta central 6 — mes de agrupación
 
-La composición A/B/C ya funciona.
+El grupo futuro debe usar:
 
-Después de que historical mini cargue,
-el estado existente debe poder seleccionar:
+mes_cargo
 
-VISIBLE_NOT_FINAL
+porque el search histórico ya está ligado a ese campo.
 
-si hay valores defendibles.
+Demostrar:
 
-## Septiembre actual
+GROUP_MONTH_SOURCE:
+GROUP_MONTH_FIELD:
+GROUP_MONTH_FORMAT:
 
-Pregunta:
+No reagrupar por fecha_creacion/fecha_pago
+salvo evidencia contraria.
 
-¿Qué rentabilidad tenemos?
+## Pregunta central 7 — CANCELADO
 
-Debe permanecer:
+El listado keyword actual incluye CANCELADO.
 
-igf_status
-→ MINI_FORECAST_PROY
-→ Septiembre 2026
+Para la suma monetaria deseada:
 
-No tocar selectIgfStatusSourceMode.
+CANCELADO no debe contribuir al total agregado principal.
 
-## North Star de regresión
+Auditar físicamente:
 
-Con fixture equivalente al runtime:
+- campo de status;
+- valores/status canónicos;
+- cómo se identifica CANCELADO;
+- si importe permanece registrado en un folio cancelado;
+- cómo otros agregados del sistema manejan CANCELADO.
 
-Pool
-→ month_close acquires Client para sus queries
-→ mini loader recibe Pool
-→ wrapper adquiere su propio Client
-→ compute mini
-→ devuelve row Acapulco
-→ financial.presentation = VISIBLE_NOT_FINAL
+No implementar.
 
-No Client.connect() sobre checked-out client.
+Contrato humano deseado para el siguiente FIX,
+si el código no demuestra una contradicción:
 
-## Tests obligatorios
+MAIN_TOTAL:
+excluir CANCELADO
 
-001 C1 intent month_close_result
-002 C1 period 2026-08
-003 month_close acquires Client for normal queries
-004 acquired Client remains used for sales/target/forecast/financial paths
+LIST:
+puede seguir mostrando CANCELADO
 
-005 mini loader receives Pool/root handle
-006 mini loader does NOT receive acquired pg.Client
-007 runtime wrapper can call pool.connect once
-008 wrapper-acquired Client reaches compute mini
-009 no second connect on month-close acquired Client
-010 pg.Client.connect throw reproduced pre-fix fixture
+Idealmente el agregado futuro debe poder informar por separado,
+si existe:
 
-011 pre-fix fixture yields DATA_MISSING
-012 post-fix fixture yields mini row
-013 post-fix presentation VISIBLE_NOT_FINAL
-014 no mutation to financial_state
-015 no promotion to FINAL
+cancelados_count
+cancelados_importe_registrado
 
-016 historicalMini direct override preserved
-017 direct historicalMini does not call loader
-018 injected loader called with root handle
-019 injected loader receives year
-020 injected loader receives month
-021 injected loader receives plantName
-022 injected loader receives plantCode
+pero no es requisito de este audit.
 
-023 C1 mini requested 2026-08
-024 C1 returned period 2026-08 accepted
-025 C1 current September mini not used
+Entregar:
 
-026 C3 July requested 2026-07
-027 C3 no August/September contamination
+STATUS_FIELD:
+CANCELLED_CANONICAL_VALUE:
+CANCELLED_INCLUDED_IN_SEARCH_LIST:
+CANCELLED_EXCLUDED_FROM_MAIN_AGGREGATE_RECOMMENDED:
+EXISTING_SYSTEM_PRECEDENT:
 
-028 findMiniRowForPlant unchanged
-029 Acapulco matcher regression PASS
-030 codes shape fix regression PASS
+## Pregunta central 8 — forma de agregado
 
-031 financial.presentation FINAL behavior unchanged
-032 VISIBLE_NOT_FINAL behavior unchanged
-033 DATA_MISSING behavior unchanged when mini truly absent
-034 defendable-values gate unchanged
+Determinar la salida determinista mínima posible.
 
-035 composer unchanged
-036 generic gaps behavior unchanged
-037 copy unchanged
+Shape conceptual:
 
-038 C2 cierre financiero agosto route unchanged
-039 C2 receives same corrected historical mini path
+{
+  period_field: "mes_cargo",
+  rows: [
+    {
+      month: "2026-01",
+      folio_count,
+      importe_registrado
+    }
+  ],
+  total_folios,
+  total_importe_registrado
+}
 
-040 C4 current-month route unchanged
-041 C4 MINI_FORECAST_PROY September unchanged
+Si cancelados se separan:
 
-042 no upload_day addition
-043 no cutoff logic change
-044 no version rule change
+{
+  ...
+  cancelled_count,
+  cancelled_importe_registrado
+}
 
-045 no server.js
-046 no wrapper modification
-047 no SQL
-048 no schema
-049 no migration
-050 no new tool
-051 no endpoint
-052 no frontend
+No implementar.
 
-053 no planner change
-054 no historical-margin change
-055 no resolvePlantCodes change
-056 no source-selector change
+No inventar nombres si ya existe convención.
 
-057 month-close existing suite PASS
-058 financial composition suite PASS
-059 current-month profitability suite PASS
-060 historical-margin focal PASS
-061 client-profile regression PASS
-062 commercial-trend regression PASS
+## Pregunta central 9 — dónde debe vivir la operación
 
-063 diff --check PASS
-064 applicable gate PASS
-065 NEW FAILURE = 0
+Determinar si el agregado debe implementarse:
+
+A) dentro de folio_search como follow-up mode
+
+B) nuevo intent pero misma tool/source
+
+C) composer sobre rows
+
+D) requery helper determinista
+
+E) otro
+
+Evaluar autorización y verdad.
+
+Preferencia:
+
+No crear herramienta nueva si la fuente actual basta.
+
+No hacer matemáticas por LLM sobre texto renderizado.
+
+La suma debe ser determinista en código.
+
+Entregar:
+
+RECOMMENDED_AGGREGATION_LAYER:
+NEW_TOOL_REQUIRED:
+NEW_SQL_REQUIRED:
+LLM_MATH_ALLOWED:
+
+LLM_MATH_ALLOWED esperado:
+NO
+
+## Dos turnos obligatorios
+
+C1 T1:
+keyword + rango existente
+
+Entregar:
+
+C1_INTENT:
+C1_SEARCH_TERM:
+C1_UNIVERSE:
+C1_PERIOD:
+C1_PERIOD_FIELD:
+C1_MATCH_COUNT:
+C1_DISPLAY_COUNT:
+C1_CONVERSATION_STATE_AFTER:
+
+C2 T2 exacto:
+
+puedes sumarlos y darme un total por mes?
+
+Entregar:
+
+C2_CURRENT_INTENT:
+C2_CURRENT_ROUTE:
+C2_CURRENT_CLARIFICATION:
+C2_INHERITS_FOLIO_DOMAIN:
+C2_INHERITS_PLANT:
+C2_INHERITS_PERIOD:
+C2_INHERITS_SEARCH_TERM:
+C2_INHERITS_RESULT_SPEC:
+
+## Controles de no contaminación
+
+C3:
+En chat nuevo:
+
+puedes sumarlos y darme un total por mes?
+
+Debe NO asumir un antecedente inexistente.
+
+Auditar comportamiento correcto esperado:
+clarificación o fail-close.
+
+C4:
+Después de T1, preguntar:
+
+¿cuántos fueron?
+
+Determinar si ya existe continuidad aplicable
+o si también cae en unknown.
+
+C5:
+Después de T1, preguntar:
+
+¿y solo julio?
+
+Determinar si el sistema puede restringir la specification heredada
+o si no existe continuidad.
+
+C4/C5 son diagnóstico.
+NO ampliar implementation recomendada automáticamente.
+
+## Planta / autorización
+
+La continuidad debe seguir ligada a la planta autorizada.
+
+No permitir que una specification heredada
+sobreviva a un cambio de planta sin revalidación.
+
+Entregar:
+
+PLANT_BOUND_STATE:
+AUTH_RECHECK_REQUIRED:
+CROSS_PLANT_REUSE_ALLOWED:
+
+CROSS_PLANT_REUSE_ALLOWED esperado:
+NO
+
+## Temporalidad
+
+El follow-up:
+
+"por mes"
+
+no cambia el rango.
+
+Solo cambia la presentación/agregación.
+
+No interpretar "por mes" como:
+
+mes actual
+último mes
+month discovery
+
+## No implementar
+
+NO product code.
+NO SQL nuevo.
+NO schema.
+NO migration.
+NO tool nueva.
+NO endpoint.
+NO frontend.
+NO server change.
+NO LIVE_DB.
+NO deploy.
+NO merge.
+NO push main.
+
+Tests/sondas read-only con fixtures:
+SÍ.
+
+## FIRST_DIVERGENCE
+
+La auditoría debe terminar con UNA frontera concreta.
+
+Ejemplos:
+
+FOLIO_SEARCH_DOES_NOT_WRITE_CONVERSATION_STATE
+
+PLANNER_DOES_NOT_RESOLVE_AGGREGATION_FOLLOWUP
+
+CHAT_DROPS_FOLIO_SEARCH_STATE
+
+RESULT_SPEC_NOT_PERSISTED
+
+AGGREGATION_MODE_MISSING
+
+otro demostrado.
+
+No responder simplemente:
+
+"falta contexto".
+
+## Clasificación
+
+Determinar:
+
+ROUTING_BUG:
+CONTINUITY_BUG:
+STATE_WRITE_BUG:
+STATE_READ_BUG:
+RESULT_SET_BUG:
+AGGREGATION_CAPABILITY_MISSING:
+DATA_BUG:
+SQL_BUG:
+PRESENTATION_BUG:
+
+## Fixability
+
+Entregar:
+
+CAN_FIX_WITHOUT_NEW_SQL:
+CAN_FIX_WITHOUT_NEW_TOOL:
+CAN_FIX_WITHOUT_SERVER_CHANGE:
+CAN_FIX_WITHOUT_FRONTEND_CHANGE:
+CAN_FIX_WITHOUT_SCHEMA_CHANGE:
 
 ## Expected delivery
 
-IMPLEMENTATION_SHA:
-BASE_MAIN_SHA:
+AUDIT_RESULT:
 
-ROOT_DB_HANDLE_TYPE:
-MONTH_CLOSE_ACQUIRED_HANDLE_TYPE:
-MINI_LOADER_HANDLE_BEFORE:
-MINI_LOADER_HANDLE_AFTER:
+PREVIOUS_FOLIO_FIX_CONTRACT:
 
-FIX_FILE:
-FIX_FUNCTION:
-FIX_SIGNATURE_OR_LINE:
-
-SERVER_CHANGED:
-WRAPPER_CHANGED:
-MONTH_CLOSE_CHANGED:
-
+C1_EXACT_QUESTION:
+C1_INTENT:
+C1_ROUTE:
+C1_SEARCH_TERM:
+C1_UNIVERSE:
 C1_PERIOD:
-C1_MINI_REQUEST_PERIOD:
-C1_MINI_ROW_FOUND:
-C1_PRESENTATION_STATE:
-C1_CLIENT_RECONNECT_ERROR_REMOVED:
+C1_PERIOD_FIELD:
+C1_MATCH_COUNT:
+C1_DISPLAY_LIMIT:
+C1_CONVERSATION_STATE_AFTER:
 
-C2_BEHAVIOR:
-C3_PERIOD:
-C4_CURRENT_MINI_UNCHANGED:
+C2_EXACT_QUESTION:
+C2_CURRENT_INTENT:
+C2_CURRENT_ROUTE:
+C2_CURRENT_RESPONSE_CLASS:
+C2_INHERITS_FOLIO_DOMAIN:
+C2_INHERITS_PLANT:
+C2_INHERITS_PERIOD:
+C2_INHERITS_SEARCH_TERM:
+C2_INHERITS_RESULT_SPEC:
 
-HISTORICAL_MINI_OVERRIDE_PRESERVED:
-INJECTED_LOADER_CONTRACT:
+STATE_WRITER_AFTER_T1:
+STATE_SHAPE_AFTER_T1:
+STATE_READER_ON_T2:
+FOLIO_SEARCH_STATE_PERSISTED:
+FOLIO_RESULT_SET_REFERENCE_PERSISTED:
 
-UPLOAD_DAY_ADDED:
-CUTOFF_CHANGED:
-VERSION_RULE_CHANGED:
+QUERY_PRE_TRUNCATES:
+MATCH_COUNT_BEFORE_LIMIT:
+DISPLAY_LIMIT:
+AGGREGATION_MUST_USE_FULL_MATCH_SET:
 
-001..065:
-SUITES:
-FILES:
+RECOMMENDED_CONTINUITY_MODEL:
+WHY_ROWS_OR_SPEC:
+REQUERY_REQUIRED_FOR_COMPLETE_AGGREGATE:
+
+AMOUNT_SOURCE:
+AMOUNT_FIELD:
+AMOUNT_SEMANTIC:
+SAFE_VISIBLE_LABEL:
+
+GROUP_MONTH_SOURCE:
+GROUP_MONTH_FIELD:
+GROUP_MONTH_FORMAT:
+
+STATUS_FIELD:
+CANCELLED_CANONICAL_VALUE:
+CANCELLED_INCLUDED_IN_SEARCH_LIST:
+CANCELLED_EXCLUDED_FROM_MAIN_AGGREGATE_RECOMMENDED:
+EXISTING_SYSTEM_PRECEDENT:
+
+RECOMMENDED_AGGREGATION_SHAPE:
+RECOMMENDED_AGGREGATION_LAYER:
+NEW_TOOL_REQUIRED:
+NEW_SQL_REQUIRED:
+LLM_MATH_ALLOWED:
+
+C3_NO_ANTECEDENT_BEHAVIOR:
+C4_COUNT_FOLLOWUP_BEHAVIOR:
+C5_MONTH_REFINEMENT_BEHAVIOR:
+
+PLANT_BOUND_STATE:
+AUTH_RECHECK_REQUIRED:
+CROSS_PLANT_REUSE_ALLOWED:
+
+FIRST_DIVERGENCE:
+
+ROUTING_BUG:
+CONTINUITY_BUG:
+STATE_WRITE_BUG:
+STATE_READ_BUG:
+RESULT_SET_BUG:
+AGGREGATION_CAPABILITY_MISSING:
+DATA_BUG:
+SQL_BUG:
+PRESENTATION_BUG:
+
+CAN_FIX_WITHOUT_NEW_SQL:
+CAN_FIX_WITHOUT_NEW_TOOL:
+CAN_FIX_WITHOUT_SERVER_CHANGE:
+CAN_FIX_WITHOUT_FRONTEND_CHANGE:
+CAN_FIX_WITHOUT_SCHEMA_CHANGE:
+
+FILES_INSPECTED:
+TESTS_RUN:
 RISKS:
 
-SQL_CHANGED:
-SCHEMA_CHANGED:
-TOOL_ADDED:
-ENDPOINT_ADDED:
-FRONTEND_CHANGED:
-PLANNER_CHANGED:
-COMPOSER_CHANGED:
-SOURCE_SELECTOR_CHANGED:
-LIVE_DB_USED:
+RECOMMENDED_NEXT_SLICE:
 
 ## Completion
 
-Si PASS:
+Al terminar:
 
 CURRENT_TASK -> DONE_PENDING_REVIEW
 
-Crear commit implementación.
-
 Crear reporte append-only:
 
-docs/dev-loop/reports/FIX-DIRECTOR-IA-MONTH-CLOSE-HISTORICAL-MINI-CLIENT-WRAPPER-001.md
+docs/dev-loop/reports/AUDIT-DIRECTOR-IA-FOLIO-KEYWORD-AGGREGATION-CONTINUITY-001.md
+
+Commit auditoría.
 
 STOP.
 
+No implementación.
+No siguiente tarea.
 No merge.
 No push main.
 No deploy.
 No LIVE_DB.
-No siguiente tarea.
-closure_reason: "HUMAN REVIEW PASS. month_close_result entrega el Pool/root al historical-mini loader en lugar del pg.Client ya adquirido, eliminando el Client.connect() inválido que provocaba falso DATA_MISSING."
-
-human_acceptance: "PASS 65/65. El Client adquirido por month_close se conserva para sus queries normales; únicamente el historical-mini loader recibe el root Pool y adquiere su propio Client conforme a su contrato."
-
-scope_preserved: "No server.js, wrapper, composer, planner, resolvePlantCodes, historical-margin, source selector, SQL, schema, tool, endpoint ni frontend."
-
-cutoff_decision: "No se agregó upload_day. La ausencia de cutoff no causaba DATA_MISSING; la paridad numérica exacta con ArrClient se validará después del deploy."
-
-live_validation_pending: "Validar en Acapulco que ¿Cómo cerramos agosto? y Dame el cierre financiero de agosto dejen DATA_MISSING y entren a VISIBLE_NOT_FINAL. Luego comparar cifra por cifra contra la fila Agosto 2026 del dashboard."
