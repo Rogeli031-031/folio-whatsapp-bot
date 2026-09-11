@@ -1,26 +1,26 @@
-task_id: IMPL-DIRECTOR-IA-MONTH-CLOSE-FINANCIAL-VARIABLES-COMPOSITION-001
+task_id: AUDIT-DIRECTOR-IA-MONTH-CLOSE-HISTORICAL-MINI-LIVE-PARITY-001
 
-task_type: IMPLEMENTATION
-mode: REGRESSION_FIRST
+task_type: AUDIT
+mode: READ_ONLY
 
 status: CLOSED
 authorized_by: "Human Approver"
-authorized_at: "2026-09-11T13:44:53-06:00"
+authorized_at: "2026-09-11T14:24:16-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Zaragoza 2026-09-11"
 
-implementation_authorized: YES
+implementation_authorized: NO
 merge_authorized: NO
 deploy_authorized: NO
 live_db_authorized: NO
 
 max_attempts: 1
 
-base_main_sha: 63fc66f0d74863b0ee825f7444a95308d1e9ee3e
-result_report_path: docs/dev-loop/reports/IMPL-DIRECTOR-IA-MONTH-CLOSE-FINANCIAL-VARIABLES-COMPOSITION-001.md
+base_main_sha: 3be41f59a88c417394431987fb3c4faa7b312bb9
+result_report_path: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-MONTH-CLOSE-HISTORICAL-MINI-LIVE-PARITY-001.md
 
-objective: "Enriquecer month_close_result con una composición financiera A/B/C: FINAL defendible, vista financiera histórica disponible pero NO FINAL, o datos financieros ausentes; presentar las variables ejecutivas del dashboard sin convertir una vista runtime en cierre contable FINAL."
+objective: "Determinar por qué ArrClient construye la fila Agosto 2026 y month_close_result cae en DATA_MISSING al intentar construir VISIBLE_NOT_FINAL para el mismo periodo."
 
-## North Star
+## Evidencia LIVE
 
 Planta:
 Acapulco
@@ -29,796 +29,619 @@ Pregunta:
 
 ¿Cómo cerramos agosto?
 
-Hoy:
-
-- ACTUAL COMERCIAL 1504.39 t
-- TARGET missing
-- FORECAST 1504.39 t
-- FINANCIAL_ACTUAL_NOT_FINAL
-- no presenta P&L visible del dashboard
-
-Deseado cuando el periodo no tiene FINAL pero sí existe vista financiera:
+Resultado actual:
 
 Acapulco — Agosto 2026
 
-VISTA FINANCIERA DISPONIBLE — NO FINAL
+Datos financieros no disponibles.
 
 Venta comercial:
 1,504.39 t
 
-CASA:
-832.74 t
-
-COMISIONISTA:
-671.65 t
-
-Margen:
-7.24 MXN/kg
-
-Descuento:
--0.22 MXN/kg
-
-Impuestos:
-0.90 MXN/kg
-
-HG:
-12.87 %
-
-HG$:
-12.45 MXN/kg
-
-Gastos operativos:
-$9,664,071
-
-Gastos corporativos:
-$2,378,296
-
-Gasto total:
-$12,042,367
-
-Rentabilidad operativa de esta vista:
-$3,451,953
-
-Resultado final de esta vista:
-$1,073,657
-
-Advertencia obligatoria:
-
-Esta vista financiera no está marcada como FINAL.
-No debe presentarse como cierre financiero definitivo.
-
-Las cifras son evidencia LIVE humana de referencia.
-NO hardcodearlas.
-
-## Principio de verdad
-
-No alterar:
-
-igf.versions.financial_state
-
-No convertir:
-
-NOT_FINAL
-→ FINAL
-
-por existir números visibles.
-
-La presentación debe distinguir tres estados.
-
-## Estado A — FINAL
-
-Si:
-
-financial.actual
-
-tiene un cierre FINAL defendible y campos financieros disponibles:
-
-presentation_state =
-FINAL
-
-Fuente primaria financiera:
-
-financial.actual / stored FINAL
-
-No reemplazarlo con mini/latest.
-
-Usar los campos FINAL realmente disponibles.
-
-Puede combinarse con ACTUAL comercial ARR para volumen/categoría
-solo si la semántica queda claramente separada y ya existe en month_close.
-
-No rellenar un campo financiero FINAL ausente usando mini
-sin etiquetarlo como fuente distinta.
-
-## Estado B — VISIBLE_NOT_FINAL
-
-Si NO hay FINAL pero existe una vista financiera histórica
-equivalente a la fila visible del dashboard para ese MISMO mes:
-
-presentation_state =
-VISIBLE_NOT_FINAL
-
-Usar la misma semántica física auditada:
-
-- latest IGF para variables stored;
-- mini runtime del MISMO periodo histórico;
-- ARR del MISMO mes para venta/categoría.
-
-Nunca usar mini del mes actual para contestar otro mes.
-
-La etiqueta visible debe ser inequívoca:
-
-VISTA FINANCIERA DISPONIBLE — NO FINAL
-
-No usar:
-
-cierre financiero definitivo
-resultado contable final
-cerramos financieramente en
-
-## Estado C — DATA_MISSING
-
-Si no hay FINAL
-y tampoco puede construirse la vista financiera histórica:
-
-presentation_state =
-DATA_MISSING
-
-Puede mostrar ACTUAL comercial si existe.
-
-Debe decir:
-
-datos financieros no disponibles
-
-No inventar ceros.
-No derivar métricas sin fuente.
-No fallback silencioso a commitment.
-
-## Fuente histórica de la vista
-
-Reusar las funciones/loaders en proceso que alimentan el dashboard.
-
-NO hacer HTTP interno.
-
-NO crear endpoint.
-
-NO crear SQL.
-
-NO copiar datos del frontend.
-
-Si hace falta extraer/reutilizar un helper puro ya existente,
-hacerlo con mínima superficie.
-
-La auditoría probó que el dashboard histórico usa:
-
-latest IGF
-+
-computeIgfForecastMiniPayload
-+
-ARR clientes/categoría
-
-Debe preservarse esa semántica.
-
-## Periodo
-
-Para:
-
-¿Cómo cerramos agosto?
-
-target period:
-
-2026-08
-
-Toda la vista B debe ser:
-
-2026-08
-
-Prohibido mezclar:
-
-2026-08 financiero
-con
-MINI_FORECAST_PROY 2026-09
-
-## VENTA
-
-Para mes histórico cerrado en vista B:
-
-venta comercial =
-venta real ARR del periodo
-
-No llamarla forecast.
-
-Ejemplo fixture:
-
-1504.39 t
-
-## CASA / COMISIONISTA
-
-Usar toneladas ARR del mismo periodo.
-
-No asumir contractualmente que:
-
-CASA + COMISIONISTA = VENTA
-
-si el origen tiene otras categorías.
-
-Si en el periodo sí reconcilia, puede mostrarse.
-
-No alterar universo para forzar reconciliación.
-
-## MARGEN
-
-Vista B:
-
-margen latest visible del mismo periodo.
-
-Unidad:
-
-MXN/kg
-
-No llamarlo margen FINAL.
-
-## DESCUENTO
-
-Para paridad de la fila del dashboard,
-usar la misma semántica visible auditada:
-
-UI-visible =
--abs(com_desc_kg)
-
-del IGF correspondiente.
-
-No sustituirlo por el descuento ARR de month_close
-si se presenta como "vista financiera del dashboard".
-
-Preservar exactamente la semántica/signo visible.
-
-## IMPUESTOS
-
-Campo:
-
-impuesto_kg
-
-Unidad:
-
-MXN/kg
-
-## HG
-
-Vista visible:
-
-hg_pct * 100
-
-Unidad:
-
-%
-
-No presentar el fraction crudo como porcentaje.
-
-## HG$
-
-Paridad auditada:
-
-abs(hg_kg / hg_pct)
-
-Unidad:
-
-MXN/kg
-
-Solo calcular cuando la división sea válida.
-
-Si hg_pct es 0/null:
-n/d
-
-No Infinity.
-No NaN.
-
-No llamar HG$ al hg_kg crudo.
-
-## OPERATIVOS
-
-Fuente vista B:
-
-mini runtime histórico.
-
-Semántica:
-
-GASTO OPERATIVO
-
-No llamarlo rentabilidad operativa.
-
-## CORPORATIVOS
-
-Fuente vista B:
-
-mini runtime histórico.
-
-Semántica:
-
-GASTO CORPORATIVO
-
-## GASTO TOTAL
-
-Vista B:
-
-gasto =
-operativos + corporativos
-
-Usar el campo/contrato físico del mini.
-
-No volver a sumar si el campo ya es autoritativo salvo control.
-
-## RENTABILIDAD OPERATIVA
-
-Vista B:
-
-utilOperImporte
-
-Semántica:
-
-rentabilidad/utilidad operativa de la vista financiera
-
-Fórmula auditada en este builder:
-
-utilOperImporte =
-ingreso - operativos
+Meta/compromiso del periodo: no cargada.
 
 También:
 
-utilOperImporte =
-resultadoFinalImporte + corporativos
-
-No generalizar a otros universos.
-
-Ejemplo fixture esperado:
-
-3,451,953 MXN
-
-No hardcodear.
-
-## RESULTADO FINAL
-
-Vista B:
-
-resultadoFinalImporte
-
-Este es el valor mostrado por:
-
-RENTAB.
-
-en la tabla.
-
-NO es rentabilidad operativa.
-
-Fórmula del mini:
-
-resultadoFinalImporte =
-utilOperImporte - corporativos
-
-Ejemplo fixture:
-
-1,073,657 MXN
-
-Debe llamarse:
-
-Resultado final de esta vista
-
-cuando presentation_state=VISIBLE_NOT_FINAL.
-
-NO:
-
-cierre final
-resultado FINAL contable
-
-## INGRESO
-
-El mini puede contener ingreso.
-
-No es obligatorio mostrarlo en North Star
-porque el humano pidió el formato de la tabla + rentabilidades.
-
-Puede mantenerse en evidencia/payload para explicar fórmula.
-
-No añadir ruido innecesario.
-
-## Payload normalizado
-
-Crear una representación determinista para composición.
-
-Nombre recomendado:
-
-financial.presentation
-
-Shape conceptual:
-
-{
-  state: "FINAL" | "VISIBLE_NOT_FINAL" | "DATA_MISSING",
-  source: "...",
-  period: "YYYY-MM",
-  is_final: boolean,
-  values: {
-    venta_ton,
-    casa_ton,
-    comisionista_ton,
-    margen_mxn_kg,
-    descuento_mxn_kg,
-    impuestos_mxn_kg,
-    hg_pct,
-    hg_mxn_kg,
-    operativos_mxn,
-    corporativos_mxn,
-    gasto_mxn,
-    ingreso_mxn,
-    rentabilidad_operativa_mxn,
-    resultado_final_mxn
-  }
-}
-
-El nombre exacto puede variar SOLO si existe una convención física
-mejor en el módulo.
-
-Debe reportarse el shape final.
-
-## Composer / respuesta
-
-La respuesta por defecto de:
-
-¿Cómo cerramos agosto?
-
-debe priorizar el bloque financiero.
-
-No iniciar con labels técnicos como:
-
-ACTUAL COMERCIAL
-TARGET COMMITMENT
-FORECAST
-ACTUAL FINANCIAL
-
-si existe presentation A/B.
-
-Esos estados pueden quedar como evidencia secundaria.
-
-La salida visible debe ser ejecutiva y en español.
-
-## Orden visible requerido
-
-Periodo + planta
-
-Estado financiero:
-FINAL
-o
-VISTA FINANCIERA DISPONIBLE — NO FINAL
-
-Venta
-CASA
-COMISIONISTA
-
-Margen
-Descuento
-Impuestos
-HG
-HG$
-
-Gastos operativos
-Gastos corporativos
-Gasto total
-
-Rentabilidad operativa
-Resultado final
-
-Advertencia de no-final si aplica.
-
-## Nulls
-
-Si un campo individual no existe:
-
-n/d
-
-No cero inventado.
-
-No omitir silenciosamente que la vista es NO FINAL.
-
-## Gaps / limitations
-
-En la respuesta ejecutiva por defecto NO introducir frases genéricas como:
-
-"fuentes de información no disponibles"
-"acciones no disponibles"
-"movimientos de material no explicados"
-
-solo por existir códigos genéricos de limitation/gap.
-
-Solo mencionar una incidencia si existe evidencia específica
-y es material para el cierre solicitado.
-
-No convertir ausencia de Action Register en explicación financiera.
-
-No inventar causalidad.
-
-## TARGET / FORECAST
-
-No eliminarlos del payload.
-
-Pero para:
-
-¿Cómo cerramos agosto?
-
-no deben desplazar el resumen financiero principal.
-
-TARGET_MISSING puede informarse al final si es útil,
-pero no debe hacer que la respuesta parezca incompleta.
-
-No afirmar que forecast=actual tiene significado causal.
-
-## C1
-
-¿Cómo cerramos agosto?
-
-intent:
-month_close_result
-
-Debe presentar A/B/C.
-
-Con fixture NO FINAL + vista disponible:
-VISIBLE_NOT_FINAL.
-
-Debe incluir todas las métricas disponibles del North Star.
-
-## C2
-
 Dame el cierre financiero de agosto.
 
-Mismo month_close_result.
+produce el mismo DATA_MISSING.
 
-Debe obedecer A/B/C.
+En cambio:
 
-Si B:
-decir explícitamente NO FINAL.
+¿Qué rentabilidad tenemos?
 
-## C3
+responde correctamente con:
 
-¿Cuál fue la rentabilidad operativa y el resultado final de agosto?
+MINI_FORECAST_PROY
+Septiembre 2026
+corte 11/09/2026
 
-NO cambiar routing en este slice.
+Este comportamiento de septiembre es correcto.
+NO tocarlo.
 
-Preservar el comportamiento/ruta auditada actual.
+## North Star esperado
 
-## C4
+Para Agosto 2026, el dashboard ya demuestra que existe
+una vista financiera histórica visible.
 
-¿Qué margen y descuento tuvimos en agosto?
+Por tanto, si month_close puede obtener
+la misma vista defendible del MISMO periodo:
 
-NO cambiar routing historical_margin en este slice.
+financial.presentation.state
 
-## C5
+debe poder ser:
 
+VISIBLE_NOT_FINAL
+
+y no:
+
+DATA_MISSING.
+
+NO convertirla en FINAL.
+
+## Alcance único
+
+Comparar físicamente:
+
+DASHBOARD
+
+ArrClient
+→ fetchIgfForecast(include_mini)
+→ GET /api/dashboard/igf-forecast
+→ buildIgfForecastPayload
+→ computeIgfForecastMiniPayload
+→ mini.rows
+→ fila Acapulco Agosto 2026
+
+VERSUS
+
+MONTH CLOSE
+
+isMonthCloseQuestion
+→ loadMonthCloseResultForChat
+→ chatDeps.loadIgfForecastMiniPayload
+→ loadIgfForecastMiniPayloadForDirectorIa
+→ computeIgfForecastMiniPayload
+→ findMiniRowForPlant
+→ financial.presentation
+→ VISIBLE_NOT_FINAL | DATA_MISSING
+
+Encontrar FIRST_PARITY_GAP.
+
+## No auditar nuevamente
+
+Ya está probado:
+
+- resolvePlantCodes shape FIX funciona;
+- month_close llega a 2026-08;
+- composer A/B/C existe;
+- DATA_MISSING hace fail-close correctamente;
+- septiembre current month usa MINI_FORECAST_PROY correctamente;
+- dashboard histórico no implica FINAL.
+
+No reabrir esos contratos.
+
+## In scope
+
+Solo lectura de:
+
+frontend-dashboard/app/arr/ArrClient.tsx
+frontend-dashboard/lib/api.ts
+server.js
+lib/director-ia-month-close-result.js
+lib/director-ia-chat.js
+lib/director-ia-dashboard-forecast-adapter.js
+
+y helpers directamente llamados por esos paths.
+
+Puede inspeccionar:
+
+computeIgfForecastMiniPayload
+loadIgfForecastMiniPayloadForDirectorIa
+findMiniRowForPlant
+resolveUploadDayForMonth
+buildIgfForecastPayload
+
+y dependencias estrictamente necesarias.
+
+## Out of scope
+
+NO cambios al composer.
+NO cambios de copy A/B/C.
+NO selectIgfStatusSourceMode.
+NO MINI_FORECAST_PROY septiembre.
+NO planner.
+NO resolvePlantCodes.
+NO historical-margin.
+NO SQL nuevo.
+NO schema.
+NO migration.
+NO tool nueva.
+NO endpoint nuevo.
+NO frontend change.
+NO server change.
+NO LIVE_DB.
+NO deploy.
+NO merge.
+NO push main.
+
+## Hipótesis a probar — no asumir
+
+H1 DEPENDENCY/WIRING
+
+¿chatDeps.loadIgfForecastMiniPayload existe realmente en runtime
+y apunta al wrapper correcto?
+
+Entregar:
+
+CHAT_DEP_NAME:
+CHAT_DEP_INJECTION_POINT:
+CHAT_DEP_RUNTIME_TARGET:
+CHAT_DEP_PRESENT:
+CHAT_DEP_OPTIONAL_OR_REQUIRED:
+
+## H2 ARGUMENT SHAPE
+
+Comparar argumentos exactos.
+
+Dashboard:
+
+fetchIgfForecast(...)
+→ year
+→ month
+→ include_mini
+→ upload_day / corte si aplica
+
+Month close:
+
+loadIgfForecastMiniPayload(...)
+→ ?
+
+Entregar:
+
+DASHBOARD_MINI_CALL_ARGS:
+MONTH_CLOSE_MINI_CALL_ARGS:
+
+ARG_YEAR_PARITY:
+ARG_MONTH_PARITY:
+ARG_PLANT_PARITY:
+ARG_CUTOFF_PARITY:
+ARG_VERSION_PARITY:
+
+## H3 CUTOFF
+
+Este punto es prioritario.
+
+Trazar físicamente:
+
+resolveUploadDayForMonth
+
+y determinar:
+
+- qué fecha usa ArrClient para Agosto 2026;
+- si el backend recibe upload_day;
+- si el mini cambia su construcción cuando upload_day está ausente;
+- qué hace month_close al no pasar upload_day.
+
+Entregar:
+
+DASHBOARD_CUTOFF_SOURCE:
+DASHBOARD_CUTOFF_VALUE_RULE:
+MONTH_CLOSE_CUTOFF_SOURCE:
+MONTH_CLOSE_PASSES_UPLOAD_DAY:
+
+UPLOAD_DAY_REQUIRED_FOR_HISTORICAL_MINI:
+UPLOAD_DAY_ABSENCE_EFFECT:
+
+No inventar el valor concreto de agosto sin LIVE_DB.
+
+## H4 PERIOD BINDING
+
+Confirmar:
+
+month_close resolveCloseMonth
+→ 2026-08
+
+y después comprobar que esa misma pareja:
+
+year=2026
+month=8
+
+llega hasta:
+
+computeIgfForecastMiniPayload
+
+No basta con que month_close resuelva agosto correctamente;
+debe comprobarse la llamada final.
+
+Entregar:
+
+RESOLVED_CLOSE_PERIOD:
+MINI_REQUESTED_PERIOD:
+MINI_RETURNED_PERIOD:
+
+PERIOD_PARITY:
+
+## H5 RETURN SHAPE
+
+Determinar shape real de:
+
+loadIgfForecastMiniPayloadForDirectorIa
+
+¿Devuelve directamente?
+
+{
+  year,
+  month,
+  rows
+}
+
+¿o?
+
+{
+  ok,
+  payload: {...}
+}
+
+¿o?
+
+{
+  mini: {...}
+}
+
+¿otro?
+
+Entregar:
+
+DASHBOARD_MINI_SHAPE:
+DIRECTOR_WRAPPER_RETURN_SHAPE:
+MONTH_CLOSE_EXPECTED_SHAPE:
+
+SHAPE_PARITY:
+SHAPE_FIRST_DIVERGENCE:
+
+No arreglar shape.
+
+## H6 PLANT MATCH
+
+Auditar:
+
+findMiniRowForPlant
+
+y los campos reales presentes en mini.rows.
+
+Para fixture/code-only determinar si compara:
+
+nombre
+planta_nombre
+plant_code
+provincia
+clave
+otro
+
+Month close puede tener:
+
+Acapulco
+E3
+ACA
+
+Demostrar cuáles manda.
+
+Entregar:
+
+MINI_ROW_PLANT_FIELDS:
+MONTH_CLOSE_PLANT_NAME:
+MONTH_CLOSE_PLANT_CODE:
+FIND_MINI_ROW_MATCH_RULE:
+
+PLANT_MATCH_POSSIBLE:
+PLANT_MATCH_FIRST_DIVERGENCE:
+
+No asumir que E3 debe coincidir con label.
+
+## H7 FINANCIAL-VALUE GATE
+
+VISIBLE_NOT_FINAL requiere que la fila tenga al menos
+un valor financiero defendible.
+
+Trazar exactamente el predicate.
+
+Entregar:
+
+VISIBLE_NOT_FINAL_REQUIRED_FIELDS:
+VISIBLE_NOT_FINAL_GATE_FUNCTION:
+
+Si mini row existe pero queda DATA_MISSING:
+
+demostrar qué campo/gate lo causa.
+
+## H8 SWALLOWED ERROR
+
+Auditar todos los:
+
+try/catch
+.catch(...)
+optional dependency guards
+fallbacks
+
+entre:
+
+loadIgfForecastMiniPayload
+y
+financial.presentation
+
+Determinar si un error de loader/compute es convertido silenciosamente en:
+
+historical_mini = null
+
+o equivalente.
+
+Entregar:
+
+ERROR_SWALLOW_POINT:
+ERROR_TYPE_VISIBLE_TO_CALLER:
+DATA_MISSING_CAUSED_BY_SWALLOW_POSSIBLE:
+
+No cambiar logging.
+
+## Dashboard vs Director parity table
+
+Entregar una tabla conceptual:
+
+FIELD | DASHBOARD | MONTH_CLOSE | PARITY
+
+para:
+
+year
+month
+upload_day
+plant identifier
+version rule
+compute function
+return shape
+row matcher
+required financial fields
+
+## Sondas READ_ONLY
+
+Puede crear/ejecutar pruebas o sondas temporales READ_ONLY
+sin cambiar producto.
+
+Reproducir con fixtures:
+
+S1
+dashboard-style invocation August
+
+S2
+month-close-style invocation August
+
+Usar el mismo fixture base.
+
+La comparación debe revelar cuál condición hace que:
+
+S1 → row available
+
+y
+
+S2 → DATA_MISSING
+
+si puede reproducirse sin LIVE_DB.
+
+Si no puede reproducirse:
+
+marcar:
+
+NOT_REPRODUCIBLE_WITHOUT_LIVE_DB
+
+y explicar el dato faltante.
+
+No activar LIVE_DB.
+
+## Preguntas de control
+
+C1:
+¿Cómo cerramos agosto?
+
+Esperado routing:
+month_close_result
+
+C2:
+Dame el cierre financiero de agosto.
+
+Esperado:
+month_close_result
+
+C3:
+¿Cómo cerramos julio?
+
+Misma auditoría de path histórico.
+
+C4:
 ¿Qué rentabilidad tenemos?
 
 Debe permanecer:
 
 igf_status
-+
 MINI_FORECAST_PROY
-del mes actual.
+current month
 
-## C6
+No tocar.
 
-¿Cómo cerramos julio?
+## FIRST_PARITY_GAP
 
-Misma composición A/B/C
-para JULIO.
+Debe ser UNA frontera física concreta.
 
-No usar agosto/septiembre accidentalmente.
+Ejemplos aceptables:
 
-## Regresiones obligatorias
+MONTH_CLOSE_DOES_NOT_PASS_UPLOAD_DAY
 
-001 C1 intent month_close_result
-002 C1 period 2026-08
-003 C1 no September mini
-004 C1 codes shape fix preserved
+DIRECTOR_WRAPPER_RETURNS_DIFFERENT_SHAPE
 
-005 presentation state enum exists
-006 state FINAL supported
-007 state VISIBLE_NOT_FINAL supported
-008 state DATA_MISSING supported
+FIND_MINI_ROW_PLANT_MATCH_FAILS
 
-009 FINAL requires financial actual FINAL
-010 FINAL financial source has priority over mini
-011 FINAL not silently replaced by latest
-012 FINAL does not become nonfinal merely because mini exists
+CHAT_DEP_NOT_INJECTED
 
-013 NOT_FINAL does not mutate financial_state
-014 NOT_FINAL uses same target historical period
-015 NOT_FINAL uses historical dashboard-view source
-016 NOT_FINAL does not use current-month mini
-017 NOT_FINAL clearly labelled no final
+HISTORICAL_MINI_COMPUTE_THROWS_AND_IS_SWALLOWED
 
-018 missing FINAL + missing view => DATA_MISSING
-019 DATA_MISSING no invented financial values
-020 DATA_MISSING may preserve actual commercial sale
+otro demostrado.
 
-021 venta field populated correctly in B
-022 venta labelled commercial/real, not forecast
-023 casa field same period
-024 comisionista field same period
-025 no forced casa+comisionista reconciliation
+No responder simplemente:
 
-026 margen field same period/latest visible
-027 margen unit MXN/kg
-028 margen not labelled FINAL in B
+"month-close no encuentra mini".
 
-029 descuento parity uses visible -abs(com_desc_kg)
-030 descuento unit MXN/kg
-031 discount ARR field not substituted for visible dashboard discount
+## Clasificación
 
-032 impuestos field impuesto_kg
-033 impuestos unit MXN/kg
+Determinar:
 
-034 HG uses hg_pct*100
-035 HG unit %
-036 HG$ uses abs(hg_kg/hg_pct)
-037 HG$ unit MXN/kg
-038 HG$ null/zero denominator safe
-039 HG$ never NaN/Infinity
+WIRING_BUG:
+ARGUMENT_BUG:
+CUTOFF_BUG:
+PERIOD_BUG:
+SHAPE_BUG:
+PLANT_MATCH_BUG:
+VALUE_GATE_BUG:
+ERROR_SWALLOW_BUG:
+DATA_BUG:
+COMPOSER_BUG:
+CURRENT_MONTH_SOURCE_BUG:
 
-040 operativos = mini operativos
-041 operativos labelled gasto operativo
-042 corporativos = mini corporativos
-043 gasto = mini gasto / proven contract
-044 gasto reconciles operativos+corporativos in fixture
+Composer bug esperado:
+NO
 
-045 rentabilidad operativa = utilOperImporte
-046 rentabilidad operativa not RENTAB UI
-047 resultado final = resultadoFinalImporte
-048 RENTAB UI semantic maps to resultado final
-049 util formula ingreso-operativos preserved
-050 final formula utilOper-corporativos preserved
+Current-month source bug esperado:
+NO
 
-051 August fixture utilOper = 3451953
-052 August fixture resultadoFinal = 1073657
-053 these fixture values not hardcoded into product
-054 B labels both as "de esta vista"/NO FINAL
+## Fixability
 
-055 response includes Venta
-056 response includes CASA
-057 response includes COMISIONISTA
-058 response includes Margen
-059 response includes Descuento
-060 response includes Impuestos
-061 response includes HG
-062 response includes HG$
-063 response includes Operativos
-064 response includes Corporativos
-065 response includes Gasto
-066 response includes Rentabilidad operativa
-067 response includes Resultado final
+Entregar:
 
-068 B warning NO FINAL visible
-069 response does not claim financial definitive close in B
-070 generic source/actions unavailable prose absent by default
-071 no unsupported material-movement prose by default
-072 no causal claim invented
+CAN_FIX_WITHOUT_NEW_SQL:
+CAN_FIX_WITHOUT_NEW_TOOL:
+CAN_FIX_WITHOUT_NEW_ENDPOINT:
+CAN_FIX_WITHOUT_SERVER_CHANGE:
+CAN_FIX_WITHOUT_FRONTEND_CHANGE:
 
-073 C2 obeys same A/B/C
-074 C3 routing unchanged
-075 C4 routing unchanged
-076 C5 current MINI_FORECAST_PROY unchanged
-077 C6 period July preserved
+No implementar.
 
-078 resolvePlantCodes shape fix regression PASS
-079 month-close existing suite PASS
-080 current-month profitability suite PASS
-081 historical-margin focal PASS
-082 client-profile resolution PASS
-083 commercial-trend resolution PASS
+## Entrega exacta
 
-084 no SQL
-085 no schema
-086 no migration
-087 no new tool
-088 no endpoint
-089 no internal HTTP
-090 no frontend
-091 no server.js unless physically unavoidable; audit says not needed
-092 no LIVE_DB
-093 no hardcoded Acapulco/Puebla
-094 no hardcoded August values
-095 diff --check PASS
-096 applicable gate PASS
-097 NEW FAILURE = 0
-
-## Expected delivery
-
-IMPLEMENTATION_SHA:
-BASE_MAIN_SHA:
-
-PRESENTATION_SHAPE:
-PRESENTATION_STATE_VALUES:
-
-FINAL_SOURCE:
-VISIBLE_NOT_FINAL_SOURCE:
-DATA_MISSING_BEHAVIOR:
-
-HISTORICAL_MINI_FUNCTION:
-HISTORICAL_MINI_PERIOD_BINDING:
+AUDIT_RESULT:
 
 C1_INTENT:
-C1_PERIOD:
-C1_PRESENTATION_STATE:
-C1_CURRENT_MONTH_MINI_BLOCKED:
+C1_ROUTE:
+C2_INTENT:
+C2_ROUTE:
+C3_ROUTE:
+C4_CURRENT_MONTH_ROUTE:
 
-VENTA_FIELD:
-CASA_FIELD:
-COMISIONISTA_FIELD:
-MARGEN_FIELD:
-DESCUENTO_FIELD:
-IMPUESTOS_FIELD:
-HG_FIELD:
-HG_DOLLAR_FIELD:
-OPERATIVOS_FIELD:
-CORPORATIVOS_FIELD:
-GASTO_FIELD:
-OPERATING_PROFIT_FIELD:
-FINAL_RESULT_FIELD:
+DASHBOARD_PATH:
+MONTH_CLOSE_PATH:
 
-DISCOUNT_PRESENTATION_RULE:
-HG_PRESENTATION_RULE:
-HG_DOLLAR_FORMULA:
-OPERATING_PROFIT_FORMULA:
-FINAL_RESULT_FORMULA:
+CHAT_DEP_NAME:
+CHAT_DEP_INJECTION_POINT:
+CHAT_DEP_RUNTIME_TARGET:
+CHAT_DEP_PRESENT:
+CHAT_DEP_OPTIONAL_OR_REQUIRED:
 
-NOT_FINAL_LABEL:
-GENERIC_GAPS_SUPPRESSED:
+DASHBOARD_MINI_CALL_ARGS:
+MONTH_CLOSE_MINI_CALL_ARGS:
 
-C2_BEHAVIOR:
-C3_UNCHANGED:
-C4_UNCHANGED:
-C5_MINI_FORECAST_PROY_UNCHANGED:
-C6_PERIOD:
+ARG_YEAR_PARITY:
+ARG_MONTH_PARITY:
+ARG_PLANT_PARITY:
+ARG_CUTOFF_PARITY:
+ARG_VERSION_PARITY:
 
-001..097:
-SUITES:
-FILES:
+DASHBOARD_CUTOFF_SOURCE:
+DASHBOARD_CUTOFF_VALUE_RULE:
+MONTH_CLOSE_CUTOFF_SOURCE:
+MONTH_CLOSE_PASSES_UPLOAD_DAY:
+UPLOAD_DAY_REQUIRED_FOR_HISTORICAL_MINI:
+UPLOAD_DAY_ABSENCE_EFFECT:
+
+RESOLVED_CLOSE_PERIOD:
+MINI_REQUESTED_PERIOD:
+MINI_RETURNED_PERIOD:
+PERIOD_PARITY:
+
+DASHBOARD_MINI_SHAPE:
+DIRECTOR_WRAPPER_RETURN_SHAPE:
+MONTH_CLOSE_EXPECTED_SHAPE:
+SHAPE_PARITY:
+SHAPE_FIRST_DIVERGENCE:
+
+MINI_ROW_PLANT_FIELDS:
+MONTH_CLOSE_PLANT_NAME:
+MONTH_CLOSE_PLANT_CODE:
+FIND_MINI_ROW_MATCH_RULE:
+PLANT_MATCH_POSSIBLE:
+PLANT_MATCH_FIRST_DIVERGENCE:
+
+VISIBLE_NOT_FINAL_REQUIRED_FIELDS:
+VISIBLE_NOT_FINAL_GATE_FUNCTION:
+
+ERROR_SWALLOW_POINT:
+ERROR_TYPE_VISIBLE_TO_CALLER:
+DATA_MISSING_CAUSED_BY_SWALLOW_POSSIBLE:
+
+DASHBOARD_VS_MONTH_CLOSE_PARITY_TABLE:
+
+S1_DASHBOARD_STYLE_RESULT:
+S2_MONTH_CLOSE_STYLE_RESULT:
+REPRODUCED_WITHOUT_LIVE_DB:
+
+FIRST_PARITY_GAP:
+
+WIRING_BUG:
+ARGUMENT_BUG:
+CUTOFF_BUG:
+PERIOD_BUG:
+SHAPE_BUG:
+PLANT_MATCH_BUG:
+VALUE_GATE_BUG:
+ERROR_SWALLOW_BUG:
+DATA_BUG:
+COMPOSER_BUG:
+CURRENT_MONTH_SOURCE_BUG:
+
+CAN_FIX_WITHOUT_NEW_SQL:
+CAN_FIX_WITHOUT_NEW_TOOL:
+CAN_FIX_WITHOUT_NEW_ENDPOINT:
+CAN_FIX_WITHOUT_SERVER_CHANGE:
+CAN_FIX_WITHOUT_FRONTEND_CHANGE:
+
+FILES_INSPECTED:
+TESTS_RUN:
 RISKS:
 
-MONTH_CLOSE_CHANGED:
-COMPOSER_CHANGED:
-CHAT_CHANGED:
-PLANNER_CHANGED:
-HISTORICAL_MARGIN_CHANGED:
-CURRENT_MONTH_SOURCE_SELECTOR_CHANGED:
-SQL_CHANGED:
-SERVER_CHANGED:
-FRONTEND_CHANGED:
-SCHEMA_CHANGED:
-TOOL_ADDED:
-ENDPOINT_ADDED:
-LIVE_DB_USED:
+RECOMMENDED_NEXT_SLICE:
 
 ## Completion
 
-Si PASS:
+Al terminar:
 
 CURRENT_TASK -> DONE_PENDING_REVIEW
 
-Crear commit implementación.
-
 Crear reporte append-only:
 
-docs/dev-loop/reports/IMPL-DIRECTOR-IA-MONTH-CLOSE-FINANCIAL-VARIABLES-COMPOSITION-001.md
+docs/dev-loop/reports/AUDIT-DIRECTOR-IA-MONTH-CLOSE-HISTORICAL-MINI-LIVE-PARITY-001.md
+
+Commit auditoría.
 
 STOP.
 
+No implementación.
+No siguiente tarea.
 No merge.
 No push main.
 No deploy.
 No LIVE_DB.
-No siguiente tarea.
-closure_reason: "HUMAN REVIEW PASS. month_close_result implementa composición financiera A/B/C: FINAL, VISIBLE_NOT_FINAL y DATA_MISSING, sin convertir una vista histórica runtime en cierre financiero FINAL."
+closure_reason: "HUMAN REVIEW PASS. La primera divergencia física entre ArrClient y month_close histórico es WRAPPER_CONNECT_HEURISTIC_THROWS_ON_CHECKED_OUT_CLIENT."
 
-human_acceptance: "PASS. La vista histórica NO FINAL usa el mismo periodo objetivo y puede presentar Venta, CASA, COMISIONISTA, Margen, Descuento, Impuestos, HG, HG$, Operativos, Corporativos, Gasto, Rentabilidad operativa y Resultado final, con advertencia explícita de que no constituye cierre financiero definitivo."
+human_root_cause: "loadMonthCloseResultForChat ya adquiere un pg.Client y lo entrega a loadIgfForecastMiniPayloadForDirectorIa. Ese wrapper espera un Pool/root DB owner y vuelve a ejecutar .connect(), provocando throw antes de computeIgfForecastMiniPayload."
 
-human_truth_decision: "financial.actual FINAL conserva prioridad. VISIBLE_NOT_FINAL nunca muta financial_state. DATA_MISSING no inventa ceros ni hace fallback silencioso. RENTAB UI corresponde a resultado final de la vista; rentabilidad operativa corresponde a utilOperImporte."
+human_fix_boundary: "El siguiente slice debe corregir únicamente el ownership/argumento del DB handle para la carga del mini histórico. No tocar composer, planner, MINI_FORECAST_PROY, resolvePlantCodes ni source selectors."
 
-routing_acceptance: "Se acepta el ajuste focal en chat para que 'cierre financiero de <mes>' llegue a month_close_result en vez de PRE_CLOSE. Planner general, historical_margin, C3 y current-month MINI_FORECAST_PROY permanecen sin cambio."
+human_cutoff_decision: "La ausencia de upload_day NO explica DATA_MISSING: el compute puede producir filas sin ese argumento. La paridad exacta de cutoff queda fuera de este FIX y se validará después en LIVE."
 
-known_limitation: "Un cierre FINAL almacenado puede no contener algunos importes que sí existen en la vista mini; esos campos deben permanecer n/d. No se autoriza rellenar un FINAL con mini sin etiquetar otra fuente."
+human_swallow_decision: "El catch que convierte el error del mini histórico en historical_mini=null explica por qué LIVE falla cerrado como DATA_MISSING. No ampliar este slice a rediseñar logging/error policy."
