@@ -3,7 +3,7 @@ task_id: FIX-DIRECTOR-IA-MONTH-CLOSE-RESOLVE-PLANT-CODES-SHAPE-001
 task_type: FIX
 mode: REGRESSION_FIRST
 
-status: AUTHORIZED
+status: DONE_PENDING_REVIEW
 
 authorized_by: "Human Approver"
 authorized_at: "2026-09-11T12:20:19-06:00"
