@@ -3,8 +3,7 @@ task_id: AUDIT-DIRECTOR-IA-MONTH-CLOSE-FINANCIAL-VARIABLES-PARITY-001
 task_type: AUDIT
 mode: READ_ONLY
 
-status: DONE_PENDING_REVIEW
-
+status: CLOSED
 authorized_by: "Human Approver"
 authorized_at: "2026-09-11T13:13:00-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Zaragoza 2026-09-11"
@@ -758,3 +757,18 @@ No merge.
 No push main.
 No deploy.
 No LIVE_DB.
+closure_reason: "HUMAN REVIEW PASS. La fila histórica visible del dashboard es una vista híbrida/latest+mini+ARR y no demuestra financial_state FINAL. month_close es correcto al no presentarla como ACTUAL_FINANCIAL definitivo."
+
+human_semantic_decision: "Para ¿Cómo cerramos <mes>?, Director IA debe manejar tres estados: FINAL financiero defendible; vista financiera disponible pero NO FINAL; o datos financieros no disponibles."
+
+human_not_final_decision: "Cuando no exista FINAL pero sí exista la misma vista financiera histórica disponible en el dashboard, se autoriza mostrar sus variables con etiqueta inequívoca VISTA FINANCIERA DISPONIBLE / NO FINAL. No llamarla cierre financiero definitivo."
+
+human_final_decision: "Cuando financial.actual sea FINAL, sus campos FINAL tienen prioridad. No sustituir un FINAL por mini/latest."
+
+human_missing_decision: "Si no existe FINAL ni vista financiera defendible, fail-close. Puede conservar ACTUAL comercial si existe, pero no inventar variables financieras."
+
+human_composition_decision: "La respuesta de month_close debe priorizar Venta, CASA, COMISIONISTA, Margen, Descuento, Impuestos, HG, HG$, Operativos, Corporativos, Gasto, Rentabilidad operativa y Resultado final. TARGET/FORECAST/limitaciones no deben desplazar el resumen financiero principal."
+
+human_truth_decision: "Rentab. del dashboard corresponde a resultadoFinalImporte del mini, no rentabilidad operativa. Rentabilidad operativa del mini es utilOperImporte. Para la vista NO FINAL ambas deben etiquetarse como valores de esa vista, no como cierre FINAL."
+
+known_routing_scope: "No cambiar en este slice el routing de C3 ¿Qué rentabilidad tuvimos en agosto? ni C4 margen/descuento; este slice implementa composición A/B/C de month_close_result."
