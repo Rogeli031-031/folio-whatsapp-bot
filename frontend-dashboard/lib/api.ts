@@ -3046,3 +3046,108 @@ export async function deleteUsuariosAdmin(
   }
   return res.json();
 }
+
+export type PlanMaestroDocument = {
+  slug: string;
+  title: string;
+  expected_size_label: string;
+  uploaded: boolean;
+  file_name: string | null;
+  content_type: string | null;
+  file_size_bytes: number | null;
+  uploaded_by: string | null;
+  uploaded_at: string | null;
+};
+
+export type PlanMaestroNote = {
+  id: number;
+  usuario_nombre: string;
+  comentario: string;
+  created_at: string;
+};
+
+export type PlanMaestroChatMessage = {
+  id: number;
+  usuario_nombre: string;
+  role: "user" | "assistant" | string;
+  message: string;
+  created_at: string;
+};
+
+export type PlanMaestroPayload = {
+  ok: boolean;
+  documents: PlanMaestroDocument[];
+  notes: PlanMaestroNote[];
+  chat: PlanMaestroChatMessage[];
+  can_upload: boolean;
+  me: string;
+};
+
+export function fetchPlanMaestro(token: string): Promise<PlanMaestroPayload> {
+  return apiFetch<PlanMaestroPayload>("/api/dashboard/plan-maestro", { token });
+}
+
+export async function uploadPlanMaestroFile(
+  token: string,
+  slug: string,
+  file: File
+): Promise<{ ok: boolean; document: PlanMaestroDocument }> {
+  const fileBase64 = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("No pude leer el archivo"));
+    reader.readAsDataURL(file);
+  });
+  return apiFetch(`/api/dashboard/plan-maestro/${encodeURIComponent(slug)}/upload`, {
+    token,
+    method: "POST",
+    body: JSON.stringify({
+      fileBase64,
+      fileName: file.name,
+      contentType: file.type || "application/pdf",
+    }),
+  });
+}
+
+export function planMaestroFileUrl(
+  token: string,
+  slug: string,
+  disposition: "inline" | "attachment"
+): string {
+  const base = getApiUrl(`/api/dashboard/plan-maestro/${encodeURIComponent(slug)}/file`);
+  return `${base}?disposition=${disposition}&t=${encodeURIComponent(token)}`;
+}
+
+export async function fetchPlanMaestroFileBlob(token: string, slug: string): Promise<Blob> {
+  const url = getApiUrl(`/api/dashboard/plan-maestro/${encodeURIComponent(slug)}/file`);
+  const res = await fetch(`${url}?disposition=inline`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as { error?: string }).error || `HTTP ${res.status}`);
+  }
+  return res.blob();
+}
+
+export function postPlanMaestroNota(
+  token: string,
+  comentario: string
+): Promise<{ ok: boolean; note: PlanMaestroNote }> {
+  return apiFetch("/api/dashboard/plan-maestro/notas", {
+    token,
+    method: "POST",
+    body: JSON.stringify({ comentario }),
+  });
+}
+
+export function postPlanMaestroChat(
+  token: string,
+  body: { question: string; slug?: string | null; page?: number | null; page_text?: string | null }
+): Promise<{ ok: boolean; message: PlanMaestroChatMessage }> {
+  return apiFetch("/api/dashboard/plan-maestro/chat", {
+    token,
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
