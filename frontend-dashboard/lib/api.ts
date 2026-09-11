@@ -1255,11 +1255,21 @@ export function getSehCarpetasLegalesArchivoUrl(
   return `${base}?planta_id=${encodeURIComponent(String(plantaId))}&doc_no=${encodeURIComponent(docNo)}&t=${encodeURIComponent(token)}`;
 }
 
+export interface SehCumplimientoParte {
+  complying: number;
+  total: number;
+  pct: number;
+}
+
 export interface SehCumplimientoAmbito {
   ambito: string;
   complying: number;
   total: number;
   pct: number;
+  /** Puntos de OPERACIÓN (equipos con vencimiento vigente). */
+  operacion?: SehCumplimientoParte;
+  /** Puntos de REGULACIÓN (carpetas legales; solo aplica a PLANTA). */
+  regulacion?: SehCumplimientoParte;
 }
 
 export interface SehCumplimientoResponse {

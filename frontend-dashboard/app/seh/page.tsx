@@ -70,6 +70,8 @@ function SehHomeContent() {
       pct: a?.pct ?? 0,
       complying: a?.complying ?? 0,
       total: a?.total ?? 0,
+      operacion: a?.operacion,
+      regulacion: a?.regulacion,
     };
   };
 
@@ -187,6 +189,9 @@ function SehHomeContent() {
                   complying={meter.complying}
                   total={meter.total}
                   loading={cumplimientoLoading}
+                  operacion={meter.operacion}
+                  regulacion={meter.regulacion}
+                  showRegulacion={ambito.key === "planta"}
                 />
               </div>
             );
