@@ -81,6 +81,7 @@ function resolveIgfYearMonthFromCorte(
   return { year: uy, month: um, closed: uploadYmd > lastYmdOfMonth(uy, um) };
 }
 import { UsuariosAdminModal } from "@/components/UsuariosAdminModal";
+import { PlanMaestroModal } from "@/components/PlanMaestroModal";
 
 export function IgfForecastContent() {
   const searchParams = useSearchParams();
@@ -220,6 +221,7 @@ export function IgfForecastContent() {
   const [forecastRecalcMsg, setForecastRecalcMsg] = useState<string | null>(null);
   const [evidenciasModalOpen, setEvidenciasModalOpen] = useState(false);
   const [usuariosModalOpen, setUsuariosModalOpen] = useState(false);
+  const [planMaestroOpen, setPlanMaestroOpen] = useState(false);
   const [evidenciasFechaInicio, setEvidenciasFechaInicio] = useState("");
   const [evidenciasFechaFin, setEvidenciasFechaFin] = useState("");
   const [evidenciasExportLoading, setEvidenciasExportLoading] = useState(false);
@@ -787,6 +789,15 @@ export function IgfForecastContent() {
     <div className="min-h-screen flex flex-col">
       <div className="border-b border-slate-700 bg-slate-900/50 px-4 py-3 flex flex-wrap items-center gap-2">
         <h1 className="text-xl font-semibold text-white shrink-0">IGF Forecast</h1>
+        {token && (
+          <button
+            type="button"
+            onClick={() => setPlanMaestroOpen(true)}
+            className="inline-flex items-center rounded border border-cyan-500/80 bg-cyan-950/70 px-4 py-2 text-sm font-semibold text-cyan-100 hover:bg-cyan-900/60 shadow-sm"
+          >
+            PLAN MAESTRO
+          </button>
+        )}
         <div className="flex flex-1 justify-center min-w-[10rem]">
           {token && (
             <button
@@ -2334,6 +2345,13 @@ export function IgfForecastContent() {
           open={usuariosModalOpen}
           token={token}
           onClose={() => setUsuariosModalOpen(false)}
+        />
+      )}
+      {token && (
+        <PlanMaestroModal
+          open={planMaestroOpen}
+          token={token}
+          onClose={() => setPlanMaestroOpen(false)}
         />
       )}
     </div>

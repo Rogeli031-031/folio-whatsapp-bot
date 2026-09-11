@@ -91,6 +91,7 @@ const clienteContactoLib = require("./lib/cliente-contacto");
 const commercialTrendEngine = require("./lib/commercial-trend-engine");
 const sehCarpetasLegales = require("./lib/seh-carpetas-legales");
 const sehEquipos = require("./lib/seh-equipos");
+const planMaestro = require("./lib/plan-maestro");
 
 const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
@@ -7348,6 +7349,207 @@ app.get("/api/seh/carpetas-legales/archivo", dashboardAuthMiddleware, async (req
   } catch (e) {
     console.error("[SEH carpetas-legales GET archivo]", e);
     res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/* ==================== PLAN MAESTRO (IGF Forecast) ==================== */
+
+app.get("/api/dashboard/plan-maestro", dashboardAuthMiddleware, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await planMaestro.ensurePlanMaestroTables(client);
+    const [documents, notes, chat] = await Promise.all([
+      planMaestro.listDocuments(client),
+      planMaestro.listNotes(client, 200),
+      planMaestro.listChat(client, 80),
+    ]);
+    res.json({
+      ok: true,
+      documents,
+      notes,
+      chat,
+      can_upload: planMaestro.canUpload(req.dashboardAuth),
+      me: planMaestro.actorLabel(req.dashboardAuth),
+    });
+  } catch (e) {
+    console.error("[Plan Maestro GET]", e);
+    res.status(500).json({ error: e.message || "No se pudo cargar Plan Maestro" });
+  } finally {
+    client.release();
+  }
+});
+
+app.post("/api/dashboard/plan-maestro/:slug/upload", dashboardAuthMiddleware, async (req, res) => {
+  if (!planMaestro.canUpload(req.dashboardAuth)) {
+    return res.status(403).json({ error: "Tu rol no puede cargar estos archivos." });
+  }
+  const def = planMaestro.documentBySlug(req.params.slug);
+  if (!def) return res.status(400).json({ error: "Documento no reconocido" });
+  const fileBase64 = typeof req.body?.fileBase64 === "string" ? req.body.fileBase64 : "";
+  if (!fileBase64) return res.status(400).json({ error: "Envía fileBase64" });
+  const fileName =
+    req.body?.fileName != null && String(req.body.fileName).trim()
+      ? String(req.body.fileName).trim().slice(0, 200)
+      : `${def.title}.pdf`;
+  const contentType =
+    (req.body?.contentType != null ? String(req.body.contentType).trim() : "") || "application/pdf";
+  let buffer;
+  try {
+    const raw = fileBase64.replace(/^data:[^;]+;base64,/, "");
+    buffer = Buffer.from(raw, "base64");
+  } catch (_) {
+    return res.status(400).json({ error: "fileBase64 inválido" });
+  }
+  if (!buffer || !buffer.length) return res.status(400).json({ error: "Archivo vacío" });
+  if (buffer.length > planMaestro.MAX_UPLOAD_BYTES) {
+    return res.status(413).json({ error: "El archivo excede 80 MB" });
+  }
+  if (buffer.length > 5 * 1024 * 1024 && !s3Enabled) {
+    return res.status(503).json({ error: "Para archivos mayores a 5 MB se requiere S3." });
+  }
+
+  const client = await pool.connect();
+  try {
+    await planMaestro.ensurePlanMaestroTables(client);
+    let s3Key = null;
+    let s3Url = null;
+    let storeBuffer = buffer;
+    if (s3Enabled) {
+      s3Key = planMaestro.buildS3Key(def.slug, fileName);
+      try {
+        await s3.send(
+          new PutObjectCommand({
+            Bucket: s3BucketName,
+            Key: s3Key,
+            Body: buffer,
+            ContentType: contentType,
+          })
+        );
+        s3Url = buildS3PublicUrl(s3BucketName, process.env.AWS_REGION, s3Key);
+        storeBuffer = null;
+      } catch (e) {
+        console.error("[Plan Maestro S3]", e);
+        if (buffer.length > 5 * 1024 * 1024) {
+          return res.status(503).json({ error: "No pude guardar el archivo en S3. Intenta de nuevo." });
+        }
+        s3Key = null;
+        s3Url = null;
+        storeBuffer = buffer;
+      }
+    }
+    const row = await planMaestro.saveDocument(client, {
+      slug: def.slug,
+      fileName,
+      contentType,
+      fileSizeBytes: buffer.length,
+      s3Key,
+      s3Url,
+      data: storeBuffer,
+      uploadedBy: planMaestro.actorLabel(req.dashboardAuth),
+    });
+    res.status(201).json({ ok: true, document: row });
+  } catch (e) {
+    console.error("[Plan Maestro upload]", e);
+    res.status(e.status || 500).json({ error: e.message || "No se pudo cargar el archivo" });
+  } finally {
+    client.release();
+  }
+});
+
+app.get("/api/dashboard/plan-maestro/:slug/file", dashboardAuthMiddleware, async (req, res) => {
+  const def = planMaestro.documentBySlug(req.params.slug);
+  if (!def) return res.status(400).json({ error: "Documento no reconocido" });
+  const disposition = String(req.query.disposition || "inline").toLowerCase() === "attachment"
+    ? "attachment"
+    : "inline";
+  const client = await pool.connect();
+  try {
+    await planMaestro.ensurePlanMaestroTables(client);
+    const row = await planMaestro.getDocumentRow(client, def.slug);
+    if (!row || !row.file_name) return res.status(404).json({ error: "Aún no hay archivo cargado" });
+    let buffer = null;
+    if (row.s3_key && s3Enabled) {
+      try {
+        buffer = await getBufferFromS3(row.s3_key);
+      } catch (e) {
+        console.warn("[Plan Maestro download S3]", e.message);
+      }
+    }
+    if (!buffer && row.data) {
+      buffer = Buffer.isBuffer(row.data) ? row.data : Buffer.from(row.data);
+    }
+    if (!buffer || !buffer.length) return res.status(404).json({ error: "Archivo no disponible" });
+    const safeName = String(row.file_name || `${def.title}.pdf`).replace(/[\r\n"]/g, "_");
+    res.setHeader("Content-Type", row.content_type || "application/pdf");
+    res.setHeader("Content-Disposition", `${disposition}; filename="${safeName}"`);
+    res.setHeader("Content-Length", String(buffer.length));
+    res.setHeader("Cache-Control", "private, no-store");
+    res.send(buffer);
+  } catch (e) {
+    console.error("[Plan Maestro file]", e);
+    res.status(500).json({ error: e.message || "No se pudo descargar" });
+  } finally {
+    client.release();
+  }
+});
+
+app.post("/api/dashboard/plan-maestro/notas", dashboardAuthMiddleware, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await planMaestro.ensurePlanMaestroTables(client);
+    const note = await planMaestro.addNote(client, {
+      usuarioNombre: planMaestro.actorLabel(req.dashboardAuth),
+      usuarioId: planMaestro.actorId(req.dashboardAuth),
+      comentario: req.body && req.body.comentario,
+    });
+    res.status(201).json({ ok: true, note });
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message || "No se pudo guardar la nota" });
+  } finally {
+    client.release();
+  }
+});
+
+app.post("/api/dashboard/plan-maestro/chat", dashboardAuthMiddleware, async (req, res) => {
+  const question = req.body && req.body.question;
+  const slug = req.body && req.body.slug;
+  const page = req.body && req.body.page;
+  const pageText = req.body && req.body.page_text;
+  const def = planMaestro.documentBySlug(slug);
+  const client = await pool.connect();
+  try {
+    await planMaestro.ensurePlanMaestroTables(client);
+    const me = planMaestro.actorLabel(req.dashboardAuth);
+    const uid = planMaestro.actorId(req.dashboardAuth);
+    await planMaestro.addChatMessage(client, {
+      usuarioNombre: me,
+      usuarioId: uid,
+      role: "user",
+      message: question,
+    });
+    const notes = await planMaestro.listNotes(client, 8);
+    const asked = await planMaestro.askAboutDocuments({
+      question,
+      docTitle: def ? def.title : null,
+      page,
+      pageText,
+      notes,
+    });
+    if (!asked.ok) {
+      return res.status(asked.status || 500).json({ error: asked.error });
+    }
+    const assistant = await planMaestro.addChatMessage(client, {
+      usuarioNombre: "Plan Maestro",
+      usuarioId: null,
+      role: "assistant",
+      message: asked.answer,
+    });
+    res.json({ ok: true, message: assistant });
+  } catch (e) {
+    console.error("[Plan Maestro chat]", e);
+    res.status(e.status || 500).json({ error: e.message || "No se pudo consultar el chat" });
   } finally {
     client.release();
   }
