@@ -3,8 +3,7 @@ task_id: AUDIT-DIRECTOR-IA-MONTH-CLOSE-HISTORICAL-MINI-LIVE-PARITY-001
 task_type: AUDIT
 mode: READ_ONLY
 
-status: DONE_PENDING_REVIEW
-
+status: CLOSED
 authorized_by: "Human Approver"
 authorized_at: "2026-09-11T14:24:16-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Zaragoza 2026-09-11"
@@ -637,3 +636,12 @@ No merge.
 No push main.
 No deploy.
 No LIVE_DB.
+closure_reason: "HUMAN REVIEW PASS. La primera divergencia física entre ArrClient y month_close histórico es WRAPPER_CONNECT_HEURISTIC_THROWS_ON_CHECKED_OUT_CLIENT."
+
+human_root_cause: "loadMonthCloseResultForChat ya adquiere un pg.Client y lo entrega a loadIgfForecastMiniPayloadForDirectorIa. Ese wrapper espera un Pool/root DB owner y vuelve a ejecutar .connect(), provocando throw antes de computeIgfForecastMiniPayload."
+
+human_fix_boundary: "El siguiente slice debe corregir únicamente el ownership/argumento del DB handle para la carga del mini histórico. No tocar composer, planner, MINI_FORECAST_PROY, resolvePlantCodes ni source selectors."
+
+human_cutoff_decision: "La ausencia de upload_day NO explica DATA_MISSING: el compute puede producir filas sin ese argumento. La paridad exacta de cutoff queda fuera de este FIX y se validará después en LIVE."
+
+human_swallow_decision: "El catch que convierte el error del mini histórico en historical_mini=null explica por qué LIVE falla cerrado como DATA_MISSING. No ampliar este slice a rediseñar logging/error policy."
