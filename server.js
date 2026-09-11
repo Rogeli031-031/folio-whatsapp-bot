@@ -87,6 +87,7 @@ const { buildActionRegisterBoardPayload } = require("./lib/action-register-board
 const { ACTION_REGISTER_TEMAS, isActionRegisterTema } = require("./lib/action-register-temas");
 const usuarioPermisos = require("./lib/usuario-permisos");
 const clienteComentariosLib = require("./lib/cliente-comentarios");
+const clienteContactoLib = require("./lib/cliente-contacto");
 const commercialTrendEngine = require("./lib/commercial-trend-engine");
 const sehCarpetasLegales = require("./lib/seh-carpetas-legales");
 const sehEquipos = require("./lib/seh-equipos");
@@ -16195,6 +16196,69 @@ app.post("/api/dashboard/cliente-comentarios", dashboardAuthMiddleware, async (r
     res.status(201).json(out);
   } catch (e) {
     console.error("[cliente-comentarios create]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+/** Contacto comercial por cliente (nombre / teléfono / correo) en DICF. */
+app.get("/api/dashboard/cliente-contacto", dashboardAuthMiddleware, async (req, res) => {
+  const planta = String(req.query.planta || "").trim();
+  const clienteNombre = String(req.query.cliente_nombre || "").trim();
+  if (!planta) return res.status(400).json({ error: "Falta planta" });
+  if (!clienteNombre) return res.status(400).json({ error: "Falta cliente_nombre" });
+  const client = await pool.connect();
+  try {
+    const raw = await dicfAccionesLib.resolvePlantaId(client, planta);
+    if (!raw) return res.status(400).json({ error: "Planta no encontrada" });
+    const canon = dicfAccionesLib.getCanonicalPlantaId(raw);
+    if (!dicfAccionesLib.assertPlantaAcceso(req.dashboardAuth, canon)) {
+      return res.status(403).json({ error: "Sin acceso a esta planta" });
+    }
+    const out = await clienteContactoLib.getClienteContacto(client, {
+      planta_id: canon,
+      cliente_nombre: clienteNombre,
+    });
+    if (out.error) return res.status(400).json({ error: out.error });
+    res.json(out);
+  } catch (e) {
+    console.error("[cliente-contacto get]", e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+app.put("/api/dashboard/cliente-contacto", dashboardAuthMiddleware, async (req, res) => {
+  const body = req.body || {};
+  const planta = String(body.planta || "").trim();
+  const clienteNombre = String(body.cliente_nombre || "").trim();
+  if (!planta) return res.status(400).json({ error: "Falta planta" });
+  if (!clienteNombre) return res.status(400).json({ error: "Falta cliente_nombre" });
+  const client = await pool.connect();
+  try {
+    const raw = await dicfAccionesLib.resolvePlantaId(client, planta);
+    if (!raw) return res.status(400).json({ error: "Planta no encontrada" });
+    const canon = dicfAccionesLib.getCanonicalPlantaId(raw);
+    if (!dicfAccionesLib.assertPlantaAcceso(req.dashboardAuth, canon)) {
+      return res.status(403).json({ error: "Sin acceso a esta planta" });
+    }
+    const actorId = req.dashboardAuth && req.dashboardAuth.actor_id ? Number(req.dashboardAuth.actor_id) : null;
+    const out = await clienteContactoLib.upsertClienteContacto(client, {
+      planta_id: canon,
+      cliente_nombre: clienteNombre,
+      canal: body.canal,
+      subcanal: body.subcanal,
+      nombre_contacto: body.nombre_contacto,
+      telefono: body.telefono,
+      correo: body.correo,
+      updated_by_usuario_id: Number.isFinite(actorId) ? actorId : null,
+    });
+    if (out.error) return res.status(400).json({ error: out.error });
+    res.json(out);
+  } catch (e) {
+    console.error("[cliente-contacto put]", e);
     res.status(500).json({ error: e.message });
   } finally {
     client.release();

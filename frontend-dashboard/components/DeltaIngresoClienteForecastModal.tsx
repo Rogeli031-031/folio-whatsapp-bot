@@ -10,6 +10,7 @@ import {
 } from "@/lib/api";
 import { DicfAccionesClientePanel } from "@/components/DicfAccionesClientePanel";
 import { ClienteComentariosPanel } from "@/components/ClienteComentariosPanel";
+import { ClienteContactoPanel } from "@/components/ClienteContactoPanel";
 import {
   DICF_HISTORY_WEEK_OPTIONS,
   type DicfHistoryWeeks,
@@ -305,32 +306,39 @@ export default function DeltaIngresoClienteForecastModal({
           {loadError && !loadingDicf && <p className="text-amber-300">{loadError}</p>}
           {deltaClienteSel && !loadingDicf && (
             <>
-              <p>
-                <span className="font-semibold">{deltaClienteSel.cliente.cliente}</span>{" "}
-                <span className="text-slate-400">· {deltaClienteSel.grupo}</span>
-              </p>
-              {deltaClienteSel.grupo === GRUPO_DICF_EXCEL_FALLBACK ? (
-                <p className="rounded border border-sky-800/60 bg-sky-950/40 px-3 py-2 text-sm text-sky-100/95">
-                  Este cliente no entra en las categorías Dejaron / − Ingreso / + Ingreso / Nuevos del periodo DICF
-                  actual (p. ej. inactivo o sin delta en forecast). Se muestran la tabla mensual y las compras diarias a
-                  partir del Excel completo de la planta.
-                </p>
-              ) : (
-                <>
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div className="min-w-0 space-y-3">
                   <p>
-                    Ingreso A:{" "}
-                    <span className="font-mono">{deltaClienteSel.cliente.ingresoAStr ?? "$0"}</span> · Ingreso B
-                    forecast: <span className="font-mono">{deltaClienteSel.cliente.ingresoBStr ?? "$0"}</span> · Delta:{" "}
-                    <span className="font-mono">{deltaClienteSel.cliente.deltaIngresoStr ?? "$0"}</span>
+                    <span className="font-semibold">{deltaClienteSel.cliente.cliente}</span>{" "}
+                    <span className="text-slate-400">· {deltaClienteSel.grupo}</span>
                   </p>
-                  <p className="text-xs text-slate-500 max-w-3xl">
-                    <strong>Ingreso A</strong> = ingreso del <strong>mes calendario anterior completo</strong> (kg del
-                    mes × margen IGF de ese mes − descuentos del mes). <strong>Ingreso B</strong> = proyección a cierre
-                    del <strong>mes en curso</strong>, usando margen IGF del mes actual y el descuento $/kg calculado
-                    sobre la ventana de historial (p. ej. 60 días). <strong>Delta</strong> = B − A.
-                  </p>
-                </>
-              )}
+                  {deltaClienteSel.grupo === GRUPO_DICF_EXCEL_FALLBACK ? (
+                    <p className="rounded border border-sky-800/60 bg-sky-950/40 px-3 py-2 text-sm text-sky-100/95">
+                      Este cliente no entra en las categorías Dejaron / − Ingreso / + Ingreso / Nuevos del periodo DICF
+                      actual (p. ej. inactivo o sin delta en forecast). Se muestran la tabla mensual y las compras diarias a
+                      partir del Excel completo de la planta.
+                    </p>
+                  ) : (
+                    <>
+                      <p>
+                        Ingreso A:{" "}
+                        <span className="font-mono">{deltaClienteSel.cliente.ingresoAStr ?? "$0"}</span> · Ingreso B
+                        forecast: <span className="font-mono">{deltaClienteSel.cliente.ingresoBStr ?? "$0"}</span> · Delta:{" "}
+                        <span className="font-mono">{deltaClienteSel.cliente.deltaIngresoStr ?? "$0"}</span>
+                      </p>
+                      <p className="text-xs text-slate-500 max-w-3xl">
+                        <strong>Ingreso A</strong> = ingreso del <strong>mes calendario anterior completo</strong> (kg del
+                        mes × margen IGF de ese mes − descuentos del mes). <strong>Ingreso B</strong> = proyección a cierre
+                        del <strong>mes en curso</strong>, usando margen IGF del mes actual y el descuento $/kg calculado
+                        sobre la ventana de historial (p. ej. 60 días). <strong>Delta</strong> = B − A.
+                      </p>
+                    </>
+                  )}
+                </div>
+                {token && planta && (
+                  <ClienteContactoPanel token={token} planta={planta} cliente={deltaClienteSel.cliente} />
+                )}
+              </div>
               {(() => {
                 const clienteNombreSel = (deltaClienteSel.cliente?.cliente || "").trim();
                 const grupo = (deltaClienteSel.grupo || "").toLowerCase();

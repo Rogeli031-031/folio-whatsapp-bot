@@ -2564,6 +2564,48 @@ export function postClienteComentario(
   });
 }
 
+export type ClienteContacto = {
+  id: number | null;
+  planta_id: number | null;
+  cliente_nombre: string;
+  canal: string;
+  subcanal: string;
+  nombre_contacto: string;
+  telefono: string;
+  correo: string;
+  updated_by_usuario_id: number | null;
+  updated_at: string | null;
+};
+
+export function fetchClienteContacto(
+  token: string,
+  params: { planta: string; cliente_nombre: string }
+): Promise<{ contacto: ClienteContacto }> {
+  return apiFetch("/api/dashboard/cliente-contacto", {
+    token,
+    params: { planta: params.planta, cliente_nombre: params.cliente_nombre },
+  });
+}
+
+export function putClienteContacto(
+  token: string,
+  body: {
+    planta: string;
+    cliente_nombre: string;
+    canal?: string;
+    subcanal?: string;
+    nombre_contacto?: string;
+    telefono?: string;
+    correo?: string;
+  }
+): Promise<{ contacto: ClienteContacto }> {
+  return apiFetch("/api/dashboard/cliente-contacto", {
+    token,
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+}
+
 export function postFolioPoliza(
   token: string,
   folioId: number,
