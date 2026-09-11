@@ -1,24 +1,25 @@
-task_id: AUDIT-DIRECTOR-IA-HISTORICAL-MONTH-CLOSE-CODES-TYPEERROR-001
+task_id: FIX-DIRECTOR-IA-MONTH-CLOSE-RESOLVE-PLANT-CODES-SHAPE-001
 
-task_type: AUDIT
-mode: READ_ONLY
+task_type: FIX
+mode: REGRESSION_FIRST
 
-status: CLOSED
+status: AUTHORIZED
+
 authorized_by: "Human Approver"
-authorized_at: "2026-09-11T11:57:26-06:00"
+authorized_at: "2026-09-11T12:20:19-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Zaragoza 2026-09-11"
 
-implementation_authorized: NO
+implementation_authorized: YES
 merge_authorized: NO
 deploy_authorized: NO
 live_db_authorized: NO
 
 max_attempts: 1
 
-base_main_sha: 3cba82240905eff97dd7d87cab09535f801de4ba
-result_report_path: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-HISTORICAL-MONTH-CLOSE-CODES-TYPEERROR-001.md
+base_main_sha: 811ff252661e0a7641cadfbb8e3bb43173611221
+result_report_path: docs/dev-loop/reports/FIX-DIRECTOR-IA-MONTH-CLOSE-RESOLVE-PLANT-CODES-SHAPE-001.md
 
-objective: "Localizar físicamente el TypeError (codes || []).map is not a function al responder preguntas históricas de cierre mensual y determinar el contrato correcto de codes, la ruta histórica y la fuente FINAL/NOT_FINAL sin implementar."
+objective: "Corregir el consumo del contrato resolvePlantCodes dentro de loadMonthCloseResultForChat para eliminar el TypeError (codes || []).map is not a function sin cambiar routing, fuentes financieras ni semántica temporal."
 
 ## Evidencia LIVE
 
@@ -29,343 +30,304 @@ Pregunta:
 
 ¿Cómo cerramos agosto?
 
-Resultado:
+Error actual:
 
 (codes || []).map is not a function
 
-## Contexto inmediato
+## Causa auditada
 
-La pregunta:
+Producer:
 
-¿Qué rentabilidad tenemos?
+lib/commercial-trend-engine.js
+resolvePlantCodes
 
-ya funciona correctamente para septiembre abierto usando:
+Contrato real:
 
-MINI_FORECAST_PROY
+{
+  not_found,
+  uniqueCodes: string[],
+  plantCode,
+  matchedMeta
+}
 
-No reabrir esa implementación.
+Ejemplo:
 
-Para agosto histórico, el FIX anterior bloqueó correctamente usar el mini de septiembre.
+{
+  not_found: false,
+  uniqueCodes: ["E3", "ACA"],
+  plantCode: "E3",
+  matchedMeta: [...]
+}
 
-La auditoría debe comenzar después de esa selección temporal.
+Consumer incorrecto:
 
-## Objetivo principal
+lib/director-ia-month-close-result.js
+loadMonthCloseResultForChat
 
-Encontrar la expresión física equivalente a:
+Actualmente trata la resolución completa como Array:
 
 (codes || []).map(...)
 
-y demostrar:
+El objeto es truthy y no implementa .map.
 
-- quién produce codes;
-- quién consume codes;
-- tipo esperado;
-- tipo real;
-- shape real;
-- primera frontera donde cambia el contrato;
-- por qué `codes || []` no evita el TypeError.
+## Decisión humana
 
-No implementar.
+Corregir únicamente la frontera:
 
-## Trace obligatorio
+resolvePlantCodes
+→ loadMonthCloseResultForChat
 
-Trazar:
+Consumir:
+
+resolution.uniqueCodes
+
+y respetar:
+
+resolution.not_found
+
+Usar como referencia el patrón correcto ya existente en:
+
+client-profile
+y/o
+commercial-trend
+
+No copiar comportamiento que cambie semántica.
+
+## Prohibición específica
+
+NO implementar:
+
+Array.isArray(codes) ? codes : []
+
+sobre el objeto de resolución.
+
+Eso convertiría una resolución válida con:
+
+uniqueCodes: ["E3","ACA"]
+
+en array vacío y perdería identidad de planta.
+
+## Compatibilidad
+
+Si loadMonthCloseResultForChat soporta overrides de test o de dependencia
+que legítimamente ya entregan:
+
+plantCodesUpper: string[]
+
+preservar ese contrato existente.
+
+La normalización debe diferenciar:
+
+A) resolución real resolvePlantCodes:
+   object → uniqueCodes
+
+B) override que contractualmente ya es Array:
+   preservar Array
+
+No inventar formatos adicionales.
+
+## not_found
+
+Si resolvePlantCodes devuelve:
+
+not_found: true
+
+no continuar fingiendo codes=[] como planta válida.
+
+Preservar/fail-close según la semántica existente del loader.
+
+No inventar planta.
+
+## Alcance temporal
+
+Preservar exactamente:
 
 ¿Cómo cerramos agosto?
-→ planner
-→ intent
-→ source selector
-→ ruta histórica
-→ handler
-→ loader/helper/tool
-→ resolución FINAL/FORECAST/NOT_FINAL
-→ codes
-→ consumer
-→ .map
-→ TypeError
+→ month_close_result
+→ mes explícito agosto
+→ NO MINI_FORECAST_PROY septiembre
 
-Usar nombres físicos reales.
+No cambiar:
 
-## Preguntas de control
+CURRENT_OPEN_MONTH_CURRENT_STATE
+MINI_FORECAST_PROY
+igf_status
+historical FINAL selection
+forecast historical selection
+
+## Alcance de fuente
+
+Este FIX NO decide si agosto tiene FINAL real.
+
+Su objetivo es que la ejecución supere la resolución de códigos
+y continúe hacia la fuente histórica correspondiente.
+
+Sin LIVE_DB:
+
+no afirmar dato FINAL de agosto.
+
+## Casos obligatorios
 
 C1:
 ¿Cómo cerramos agosto?
 
+Esperado:
+- intent month_close_result
+- no TypeError
+- codes provenientes de uniqueCodes
+- continúa al siguiente stage histórico
+
 C2:
 ¿Cuál fue el resultado final de agosto?
+
+Esperado:
+- ruta igf_status existente
+- sin cambios
 
 C3:
 ¿Qué rentabilidad tuvimos en agosto?
 
+Esperado:
+- ruta igf_status existente
+- sin cambios
+
 C4:
 ¿Cómo cerramos julio?
+
+Esperado:
+- month_close_result
+- no TypeError
 
 C5:
 ¿Qué rentabilidad tenemos?
 
-C5 debe continuar usando MINI_FORECAST_PROY del mes actual
-y NO compartir el error.
+Esperado:
+- MINI_FORECAST_PROY actual
+- sin cambios
 
-Determinar qué preguntas históricas llegan a la misma ruta rota.
+## Tests contractuales
 
-## `codes`
+001 C1 intent month_close_result
+002 C1 route loadMonthCloseResultForChat
+003 resolvePlantCodes returns object contract
+004 resolution.uniqueCodes consumed
+005 not resolution object .map
+006 uniqueCodes ["E3","ACA"] preserved
+007 uppercase normalization if existing contract requires it
+008 duplicate handling preserved from existing logic
+009 plantCode metadata not mistaken for codes array
+010 matchedMeta not mistaken for codes
 
-Buscar todas las definiciones y usos relevantes de `codes`
-en esta ruta.
+011 truthy object no longer TypeError
+012 `(codes || []).map` broken path removed/replaced
+013 no blind Array.isArray(object) => []
+014 real resolution with 2 codes remains 2 codes
 
-Para cada frontera documentar:
+015 not_found true fail-closes correctly
+016 not_found does not fabricate codes
+017 not_found does not fall through as valid plant
 
-FUNCTION
-INPUT_SHAPE
-OUTPUT_SHAPE
-CODES_TYPE
-CODES_EXAMPLE
+018 existing plantCodesUpper array override preserved
+019 override with ["E3","ACA"] preserved
+020 existing unit tests using plantCodesUpper remain PASS
 
-Determinar si es:
+021 C1 proceeds past code resolution
+022 C1 reaches historical source stage in stub
+023 C1 does not use September mini
+024 C1 source selector unchanged
+025 C1 month remains 2026-08
 
-Array<string>
-string
-object
-Set
-Map
-null
-otro
+026 C4 no TypeError
+027 C4 month remains 2026-07
 
-No asumir.
+028 C2 routing unchanged
+029 C3 routing unchanged
+030 C5 MINI_FORECAST_PROY unchanged
 
-## TypeError
+031 current-month rentabilidad 61/61 PASS
+032 month-close existing suite PASS
 
-Entregar:
+033 no SQL
+034 no schema
+035 no migration
+036 no tool new
+037 no endpoint
+038 no server.js
+039 no frontend
+040 no dependency
 
-TYPEERROR_FILE
-TYPEERROR_FUNCTION
-TYPEERROR_LINE_OR_SIGNATURE
-TYPEERROR_EXPECTED_TYPE
-TYPEERROR_ACTUAL_TYPE
+041 no changes to commercial-trend-engine contract unless strictly required
+042 no planner change
+043 no current-month source selector change
+044 no historical source-selection redesign
+045 no FINAL semantics change
 
-Explicar físicamente por qué:
+046 error path does not leak raw TypeError
+047 DATA_NOT_FOUND/not_found remains truthful
+048 no invented plant identity
 
-codes || []
+049 regression client-profile resolution PASS
+050 regression commercial-trend resolution PASS
 
-solo protege null/undefined/falsy,
-pero no protege un object/string truthy no-array.
+051 Tier1 applicable PASS
+052 runtime/pre-deploy gate applicable PASS
+053 diff --check PASS
+054 NEW FAILURE = 0
 
-## Ruta histórica
+## Expected delivery
 
-Determinar el intent y route reales.
-
-No asumir que necesariamente es month_close_result.
-
-Posibles nombres deben comprobarse físicamente:
-
-month_close_result
-igf_status
-historical_margin
-financial_diagnosis
-otro
-
-## Fuente histórica
-
-Determinar qué intenta leer agosto:
-
-- FINAL histórico;
-- forecast histórico;
-- compromiso stored;
-- igf-financial-final;
-- otra fuente.
-
-Entregar:
-
-HISTORICAL_SOURCE
-HISTORICAL_STATE_FIELD
-HISTORICAL_PERIOD_RULE
-HISTORICAL_VERSION_RULE
-
-## Estados
-
-Auditar soporte real para:
-
-FINAL
-FORECAST
-NOT_FINAL
-DATA_NOT_FOUND
-
-No inventar que agosto tiene FINAL si la auditoría sin LIVE_DB no puede demostrar el dato.
-
-## Invariante temporal
-
-Debe seguir siendo cierto:
-
-¿Cómo cerramos agosto?
-→ NO MINI_FORECAST_PROY de septiembre.
-
-Entregar:
-
-CURRENT_MINI_BLOCKED_FOR_AUGUST
-SEPTEMBER_MINI_USED
-SOURCE_SELECTION_REGRESSION
-
-## Causalidad
-
-Determinar si el error:
-
-PREEXISTED_BEFORE_22E7E22D
-INTRODUCED_BY_22E7E22D
-EXPOSED_BY_22E7E22D
-
-Comparar historia Git y ejecutar stubs/unit tests si es necesario.
-
-Importante:
-
-EXPOSED != INTRODUCED.
-
-El FIX de rentabilidad pudo simplemente haber permitido llegar
-a una ruta histórica que ya estaba rota.
-
-## Reproducción
-
-Reproducir sin LIVE_DB:
-
-now determinista:
-2026-09-10
-
-planta:
-Acapulco fixture/stub
-
-pregunta:
-¿Cómo cerramos agosto?
-
-Capturar:
-
-intent
-route
-source mode
-función que falla
-tipo real de codes
-stack/error
-
-No modificar producto para hacerlo pasar.
-
-## Fix futuro
-
-Solo auditar el punto correcto de normalización.
-
-No recomendar automáticamente:
-
-Array.isArray(codes) ? codes : []
-
-si eso podría ocultar datos válidos.
-
-Primero demostrar el contrato.
-
-## No implementar
-
-NO cambios de producto.
-NO SQL.
-NO schema.
-NO migration.
-NO tool nueva.
-NO endpoint.
-NO frontend.
-NO server.js salvo lectura.
-NO dependencies.
-NO LIVE_DB.
-NO Render.
-NO deploy.
-NO merge.
-NO push main.
-
-## Entrega exacta
-
-AUDIT_RESULT:
+IMPLEMENTATION_SHA:
+BASE_MAIN_SHA:
 
 C1_INTENT:
 C1_ROUTE:
-C1_TOOL_OR_LOADER:
-C1_SOURCE:
+C1_CODES_SOURCE:
+C1_CODES:
+C1_TYPEERROR_REMOVED:
+C1_REACHES_HISTORICAL_SOURCE_STAGE:
 
-TYPEERROR_FILE:
-TYPEERROR_FUNCTION:
-TYPEERROR_LINE_OR_SIGNATURE:
+C4_TYPEERROR_REMOVED:
 
-CODES_PRODUCER:
-CODES_CONSUMER:
-CODES_EXPECTED_TYPE:
-CODES_ACTUAL_TYPE:
-CODES_ACTUAL_SHAPE:
-CODES_ACTUAL_EXAMPLE:
+RESOLVE_PLANT_CODES_RETURN_TYPE:
+RESOLVE_PLANT_CODES_CODES_FIELD:
+NORMALIZATION_POINT:
+NOT_FOUND_BEHAVIOR:
+ARRAY_OVERRIDE_PRESERVED:
 
-WHY_OR_EMPTY_ARRAY_GUARD_FAILS:
+C2_UNCHANGED:
+C3_UNCHANGED:
+C5_MINI_FORECAST_PROY_UNCHANGED:
 
-FIRST_DIVERGENCE:
-
-HISTORICAL_SOURCE:
-HISTORICAL_STATE_FIELD:
-HISTORICAL_PERIOD_RULE:
-HISTORICAL_VERSION_RULE:
-
-FINAL_SUPPORTED:
-FORECAST_SUPPORTED:
-NOT_FINAL_SUPPORTED:
-DATA_NOT_FOUND_SUPPORTED:
-
-CURRENT_MINI_BLOCKED_FOR_AUGUST:
-SEPTEMBER_MINI_USED:
-SOURCE_SELECTION_REGRESSION:
-
-C1_REPRODUCED:
-C2_REPRODUCED:
-C3_REPRODUCED:
-C4_REPRODUCED:
-C5_CURRENT_MONTH_STILL_PASS:
-
-PREEXISTED_BEFORE_22E7E22D:
-INTRODUCED_BY_22E7E22D:
-EXPOSED_BY_22E7E22D:
-
-CAN_FIX_WITHOUT_NEW_SQL:
-CAN_FIX_WITHOUT_NEW_TOOL:
-CAN_FIX_WITHOUT_SERVER_CHANGE:
-CAN_FIX_WITHOUT_FRONTEND_CHANGE:
-
-CORRECT_CONTRACT_FOR_CODES:
-RECOMMENDED_NORMALIZATION_POINT:
-RECOMMENDED_MINIMAL_FIX_SURFACE:
-
-ROUTING_BUG:
-SOURCE_BUG:
-DATA_BUG:
-TYPE_SHAPE_BUG:
-PRESENTATION_BUG:
-
-FILES_INSPECTED:
-TESTS_RUN:
+001..054:
+SUITES:
+FILES:
 RISKS:
 
-RECOMMENDED_NEXT_SLICE:
+MONTH_CLOSE_CHANGED:
+COMMERCIAL_TREND_ENGINE_CHANGED:
+PLANNER_CHANGED:
+CHAT_CHANGED:
+CURRENT_MONTH_SOURCE_SELECTOR_CHANGED:
+SQL_CHANGED:
+SERVER_CHANGED:
+FRONTEND_CHANGED:
+SCHEMA_CHANGED:
+TOOL_ADDED:
+ENDPOINT_ADDED:
+LIVE_DB_USED:
 
 ## Completion
 
-Al terminar:
+Si PASS:
 
 CURRENT_TASK -> DONE_PENDING_REVIEW
-
-Crear reporte append-only.
-
-Commit auditoría.
+commit implementación
+reporte append-only
 
 STOP.
 
-No implementación.
-No siguiente tarea.
 No merge.
 No push main.
 No deploy.
 No LIVE_DB.
-closure_reason: "HUMAN REVIEW PASS. El crash de ¿Cómo cerramos agosto? es un TYPE_SHAPE_BUG: resolvePlantCodes devuelve un objeto de resolución y loadMonthCloseResultForChat lo consume erróneamente como Array."
-
-human_semantic_decision: "El contrato correcto de resolución de planta es objeto con not_found y uniqueCodes:Array<string>. month-close debe consumir uniqueCodes y respetar not_found. No usar Array.isArray sobre el objeto completo ni descartar silenciosamente códigos válidos."
-
-human_scope_decision: "No reabrir routing, MINI_FORECAST_PROY, fuentes financieras ni cierre histórico. El siguiente slice corrige únicamente la frontera resolvePlantCodes -> loadMonthCloseResultForChat."
-
-causality: "Bug preexistente antes de 22e7e22d; no fue introducido ni expuesto por el FIX de rentabilidad current-month."
+No siguiente tarea.
