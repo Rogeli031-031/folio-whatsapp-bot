@@ -3,8 +3,7 @@ task_id: AUDIT-DIRECTOR-IA-HISTORICAL-MONTH-CLOSE-CODES-TYPEERROR-001
 task_type: AUDIT
 mode: READ_ONLY
 
-status: DONE_PENDING_REVIEW
-
+status: CLOSED
 authorized_by: "Human Approver"
 authorized_at: "2026-09-11T11:57:26-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Zaragoza 2026-09-11"
@@ -363,3 +362,10 @@ No merge.
 No push main.
 No deploy.
 No LIVE_DB.
+closure_reason: "HUMAN REVIEW PASS. El crash de ¿Cómo cerramos agosto? es un TYPE_SHAPE_BUG: resolvePlantCodes devuelve un objeto de resolución y loadMonthCloseResultForChat lo consume erróneamente como Array."
+
+human_semantic_decision: "El contrato correcto de resolución de planta es objeto con not_found y uniqueCodes:Array<string>. month-close debe consumir uniqueCodes y respetar not_found. No usar Array.isArray sobre el objeto completo ni descartar silenciosamente códigos válidos."
+
+human_scope_decision: "No reabrir routing, MINI_FORECAST_PROY, fuentes financieras ni cierre histórico. El siguiente slice corrige únicamente la frontera resolvePlantCodes -> loadMonthCloseResultForChat."
+
+causality: "Bug preexistente antes de 22e7e22d; no fue introducido ni expuesto por el FIX de rentabilidad current-month."
