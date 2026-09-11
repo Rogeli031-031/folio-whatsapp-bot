@@ -3,8 +3,7 @@ task_id: FIX-DIRECTOR-IA-MONTH-CLOSE-RESOLVE-PLANT-CODES-SHAPE-001
 task_type: FIX
 mode: REGRESSION_FIRST
 
-status: DONE_PENDING_REVIEW
-
+status: CLOSED
 authorized_by: "Human Approver"
 authorized_at: "2026-09-11T12:20:19-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Zaragoza 2026-09-11"
@@ -331,3 +330,10 @@ No push main.
 No deploy.
 No LIVE_DB.
 No siguiente tarea.
+closure_reason: "HUMAN REVIEW PASS. month-close consume correctamente resolvePlantCodes.uniqueCodes y elimina el TypeError causado por tratar el objeto de resolución como Array."
+
+human_acceptance: "PASS 54/54. Se preservan plantCodesUpper overrides, not_found fail-closes sin inventar identidad, C1/C4 superan la resolución de planta y C5 conserva MINI_FORECAST_PROY."
+
+scope_preserved: "No planner, chat, current-month source selector, historical source-selection redesign, SQL, server, frontend, schema, tool ni endpoint."
+
+known_out_of_scope_risk: "El reporte identifica un shape bug similar en composer. No fue modificado ni aceptado en este slice; solo debe abrirse un nuevo task si evidencia LIVE o auditoría focal demuestra impacto."
