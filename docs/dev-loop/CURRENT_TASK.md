@@ -3,8 +3,7 @@ task_id: FIX-DIRECTOR-IA-MONTH-CLOSE-HISTORICAL-MINI-CLIENT-WRAPPER-001
 task_type: FIX
 mode: REGRESSION_FIRST
 
-status: DONE_PENDING_REVIEW
-
+status: CLOSED
 authorized_by: "Human Approver"
 authorized_at: "2026-09-11T14:44:39-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Zaragoza 2026-09-11"
@@ -414,3 +413,12 @@ No push main.
 No deploy.
 No LIVE_DB.
 No siguiente tarea.
+closure_reason: "HUMAN REVIEW PASS. month_close_result entrega el Pool/root al historical-mini loader en lugar del pg.Client ya adquirido, eliminando el Client.connect() inválido que provocaba falso DATA_MISSING."
+
+human_acceptance: "PASS 65/65. El Client adquirido por month_close se conserva para sus queries normales; únicamente el historical-mini loader recibe el root Pool y adquiere su propio Client conforme a su contrato."
+
+scope_preserved: "No server.js, wrapper, composer, planner, resolvePlantCodes, historical-margin, source selector, SQL, schema, tool, endpoint ni frontend."
+
+cutoff_decision: "No se agregó upload_day. La ausencia de cutoff no causaba DATA_MISSING; la paridad numérica exacta con ArrClient se validará después del deploy."
+
+live_validation_pending: "Validar en Acapulco que ¿Cómo cerramos agosto? y Dame el cierre financiero de agosto dejen DATA_MISSING y entren a VISIBLE_NOT_FINAL. Luego comparar cifra por cifra contra la fila Agosto 2026 del dashboard."
