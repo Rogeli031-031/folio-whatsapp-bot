@@ -1,26 +1,27 @@
-task_id: AUDIT-DIRECTOR-IA-MONTH-CLOSE-FINANCIAL-VARIABLES-PARITY-001
+task_id: IMPL-DIRECTOR-IA-MONTH-CLOSE-FINANCIAL-VARIABLES-COMPOSITION-001
 
-task_type: AUDIT
-mode: READ_ONLY
+task_type: IMPLEMENTATION
+mode: REGRESSION_FIRST
 
-status: CLOSED
+status: AUTHORIZED
+
 authorized_by: "Human Approver"
-authorized_at: "2026-09-11T13:13:00-06:00"
+authorized_at: "2026-09-11T13:44:53-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Zaragoza 2026-09-11"
 
-implementation_authorized: NO
+implementation_authorized: YES
 merge_authorized: NO
 deploy_authorized: NO
 live_db_authorized: NO
 
 max_attempts: 1
 
-base_main_sha: ec3b7178e38c5bb1b273055d56d9cd442ddcf917
-result_report_path: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-MONTH-CLOSE-FINANCIAL-VARIABLES-PARITY-001.md
+base_main_sha: 63fc66f0d74863b0ee825f7444a95308d1e9ee3e
+result_report_path: docs/dev-loop/reports/IMPL-DIRECTOR-IA-MONTH-CLOSE-FINANCIAL-VARIABLES-COMPOSITION-001.md
 
-objective: "Determinar por qué ¿Cómo cerramos agosto? no presenta las variables financieras visibles en la fila Agosto 2026 del dashboard, identificar la fuente y semántica exacta de cada variable, y definir cómo debe componerse un cierre ejecutivo sin presentar datos no-FINAL como cierre definitivo."
+objective: "Enriquecer month_close_result con una composición financiera A/B/C: FINAL defendible, vista financiera histórica disponible pero NO FINAL, o datos financieros ausentes; presentar las variables ejecutivas del dashboard sin convertir una vista runtime en cierre contable FINAL."
 
-## Evidencia LIVE
+## North Star
 
 Planta:
 Acapulco
@@ -29,57 +30,22 @@ Pregunta:
 
 ¿Cómo cerramos agosto?
 
-Respuesta LIVE después del FIX de codes:
+Hoy:
 
-- ACTUAL COMERCIAL: 1504.39 t
-- TARGET COMMITMENT: TARGET_MISSING_FOR_PERIOD
-- FORECAST: 1504.39 t
-- ACTUAL FINANCIAL: FINANCIAL_ACTUAL_NOT_FINAL
+- ACTUAL COMERCIAL 1504.39 t
+- TARGET missing
+- FORECAST 1504.39 t
+- FINANCIAL_ACTUAL_NOT_FINAL
+- no presenta P&L visible del dashboard
 
-También genera:
+Deseado cuando el periodo no tiene FINAL pero sí existe vista financiera:
 
-- movimientos de material no explicados
-- fuentes de información no disponibles
-- acciones no disponibles
+Acapulco — Agosto 2026
 
-El TypeError de resolvePlantCodes ya está corregido.
-NO reabrir ese FIX.
+VISTA FINANCIERA DISPONIBLE — NO FINAL
 
-## Evidencia visual dashboard
-
-Fila:
-
-Agosto 2026
-
-Valores observados por el humano:
-
-VENTA:
-1504.39 t
-(UI redondea visualmente a 1,504)
-
-MARGEN:
-7.24 MXN/kg
-
-DESCUENTO:
--0.22 MXN/kg
-
-OPERATIVOS:
-$9,664,071
-
-CORPORATIVOS:
-$2,378,296
-
-GASTO:
-$12,042,367
-
-HG:
-12.87
-
-HG$:
-$12.45
-
-IMPUESTOS:
-0.90
+Venta comercial:
+1,504.39 t
 
 CASA:
 832.74 t
@@ -87,205 +53,276 @@ CASA:
 COMISIONISTA:
 671.65 t
 
-RENTAB.:
+Margen:
+7.24 MXN/kg
+
+Descuento:
+-0.22 MXN/kg
+
+Impuestos:
+0.90 MXN/kg
+
+HG:
+12.87 %
+
+HG$:
+12.45 MXN/kg
+
+Gastos operativos:
+$9,664,071
+
+Gastos corporativos:
+$2,378,296
+
+Gasto total:
+$12,042,367
+
+Rentabilidad operativa de esta vista:
+$3,451,953
+
+Resultado final de esta vista:
 $1,073,657
 
-Control aritmético observable:
+Advertencia obligatoria:
 
-832.74 + 671.65 = 1504.39 t
+Esta vista financiera no está marcada como FINAL.
+No debe presentarse como cierre financiero definitivo.
 
-9,664,071 + 2,378,296 = 12,042,367
+Las cifras son evidencia LIVE humana de referencia.
+NO hardcodearlas.
 
-## Deseo humano
+## Principio de verdad
+
+No alterar:
+
+igf.versions.financial_state
+
+No convertir:
+
+NOT_FINAL
+→ FINAL
+
+por existir números visibles.
+
+La presentación debe distinguir tres estados.
+
+## Estado A — FINAL
+
+Si:
+
+financial.actual
+
+tiene un cierre FINAL defendible y campos financieros disponibles:
+
+presentation_state =
+FINAL
+
+Fuente primaria financiera:
+
+financial.actual / stored FINAL
+
+No reemplazarlo con mini/latest.
+
+Usar los campos FINAL realmente disponibles.
+
+Puede combinarse con ACTUAL comercial ARR para volumen/categoría
+solo si la semántica queda claramente separada y ya existe en month_close.
+
+No rellenar un campo financiero FINAL ausente usando mini
+sin etiquetarlo como fuente distinta.
+
+## Estado B — VISIBLE_NOT_FINAL
+
+Si NO hay FINAL pero existe una vista financiera histórica
+equivalente a la fila visible del dashboard para ese MISMO mes:
+
+presentation_state =
+VISIBLE_NOT_FINAL
+
+Usar la misma semántica física auditada:
+
+- latest IGF para variables stored;
+- mini runtime del MISMO periodo histórico;
+- ARR del MISMO mes para venta/categoría.
+
+Nunca usar mini del mes actual para contestar otro mes.
+
+La etiqueta visible debe ser inequívoca:
+
+VISTA FINANCIERA DISPONIBLE — NO FINAL
+
+No usar:
+
+cierre financiero definitivo
+resultado contable final
+cerramos financieramente en
+
+## Estado C — DATA_MISSING
+
+Si no hay FINAL
+y tampoco puede construirse la vista financiera histórica:
+
+presentation_state =
+DATA_MISSING
+
+Puede mostrar ACTUAL comercial si existe.
+
+Debe decir:
+
+datos financieros no disponibles
+
+No inventar ceros.
+No derivar métricas sin fuente.
+No fallback silencioso a commitment.
+
+## Fuente histórica de la vista
+
+Reusar las funciones/loaders en proceso que alimentan el dashboard.
+
+NO hacer HTTP interno.
+
+NO crear endpoint.
+
+NO crear SQL.
+
+NO copiar datos del frontend.
+
+Si hace falta extraer/reutilizar un helper puro ya existente,
+hacerlo con mínima superficie.
+
+La auditoría probó que el dashboard histórico usa:
+
+latest IGF
++
+computeIgfForecastMiniPayload
++
+ARR clientes/categoría
+
+Debe preservarse esa semántica.
+
+## Periodo
 
 Para:
 
 ¿Cómo cerramos agosto?
 
-se quiere una respuesta ejecutiva que, cuando la evidencia lo permita,
-lea las variables financieras de ese periodo y termine con:
+target period:
 
-RENTABILIDAD OPERATIVA
-RESULTADO FINAL
+2026-08
 
-Conceptualmente:
+Toda la vista B debe ser:
 
-Acapulco — Agosto 2026
+2026-08
 
-Venta:
-CASA:
-COMISIONISTA:
+Prohibido mezclar:
 
-Margen:
-Descuento:
-Impuestos:
-HG:
-HG$:
-
-Gastos operativos:
-Gastos corporativos:
-Gasto total:
-
-Rentabilidad operativa:
-Resultado final:
-
-PERO:
-
-No implementar ese formato todavía.
-
-Primero demostrar físicamente:
-
-- qué significa cada valor;
-- cuál es FINAL;
-- cuál es FORECAST/commit/snapshot;
-- cuál puede llamarse cierre real.
-
-## Regla crítica de verdad
-
-La presencia de un número en el dashboard NO prueba por sí sola:
-
-FINAL
-CIERRE REAL
-ACTUAL CONTABLE DEFINITIVO
-
-Debe trazarse su fuente y financial_state.
-
-No cambiar FINANCIAL_ACTUAL_NOT_FINAL sin evidencia.
-
-## Pregunta central 1
-
-¿Qué representa físicamente la fila Agosto 2026 mostrada?
-
-Determinar si proviene de:
-
-- IGF commitment;
-- forecast;
-- latest version;
-- financial actual;
-- FINAL;
-- mini;
-- combinación de fuentes;
-- otra.
-
-No asumir.
-
-## Pregunta central 2
-
-¿Por qué el dashboard puede mostrar:
-
-MARGEN
-DESCUENTO
-OPERATIVOS
-CORPORATIVOS
-GASTO
-RENTAB
-
-mientras month_close_result dice:
-
-FINANCIAL_ACTUAL_NOT_FINAL?
-
-Determinar si esto es:
-
-A) comportamiento correcto porque el dashboard muestra una vista no FINAL;
-
-B) source mismatch;
-
-C) version mismatch;
-
-D) period mismatch;
-
-E) state bug;
-
-F) presentation/composition gap;
-
-G) combinación.
-
-## Trace dashboard obligatorio
-
-Localizar físicamente:
-
-frontend component de la tabla mostrada
-→ fetch
-→ endpoint
-→ handler
-→ loader
-→ row builder
-→ source(s)
-→ versión
-→ financial_state si existe.
-
-Entregar nombres reales.
-
-## Field parity matrix obligatoria
-
-Para cada campo:
-
-VENTA
-MARGEN
-DESCUENTO
-OPERATIVOS
-CORPORATIVOS
-GASTO
-HG
-HG$
-IMPUESTOS
-CASA
-COMISIONISTA
-RENTAB.
-
-documentar:
-
-UI_LABEL:
-FRONTEND_FIELD:
-BACKEND_FIELD:
-SOURCE_FUNCTION:
-SOURCE_TABLE_OR_VIEW:
-UNIT:
-PERIOD_RULE:
-VERSION_RULE:
-FINANCIAL_STATE_DEPENDENCY:
-MONTH_CLOSE_FIELD_IF_ANY:
-AVAILABLE_TO_MONTH_CLOSE:
-SEMANTIC_MEANING:
-
-No inferir campos por nombre solamente.
+2026-08 financiero
+con
+MINI_FORECAST_PROY 2026-09
 
 ## VENTA
 
-Determinar:
+Para mes histórico cerrado en vista B:
 
-- fuente exacta;
-- si 1504.39 es ACTUAL COMERCIAL;
-- si coincide por casualidad o contrato con FORECAST;
-- si CASA + COMISIONISTA deben reconciliar siempre con VENTA;
-- si CASA/COMISIONISTA representan toneladas.
+venta comercial =
+venta real ARR del periodo
+
+No llamarla forecast.
+
+Ejemplo fixture:
+
+1504.39 t
+
+## CASA / COMISIONISTA
+
+Usar toneladas ARR del mismo periodo.
+
+No asumir contractualmente que:
+
+CASA + COMISIONISTA = VENTA
+
+si el origen tiene otras categorías.
+
+Si en el periodo sí reconcilia, puede mostrarse.
+
+No alterar universo para forzar reconciliación.
 
 ## MARGEN
 
-Determinar:
+Vista B:
 
-- campo físico;
-- MXN/kg;
-- si es FINAL, forecast, commitment o latest visible;
-- si coincide con historical-margin contract.
+margen latest visible del mismo periodo.
 
-No mezclar margen de planta con descuento cliente.
+Unidad:
+
+MXN/kg
+
+No llamarlo margen FINAL.
 
 ## DESCUENTO
 
-Determinar:
+Para paridad de la fila del dashboard,
+usar la misma semántica visible auditada:
 
-- campo físico;
-- unidad MXN/kg;
-- signo;
-- si -0.22 es descuento agregado de planta;
-- universo temporal.
+UI-visible =
+-abs(com_desc_kg)
+
+del IGF correspondiente.
+
+No sustituirlo por el descuento ARR de month_close
+si se presenta como "vista financiera del dashboard".
+
+Preservar exactamente la semántica/signo visible.
+
+## IMPUESTOS
+
+Campo:
+
+impuesto_kg
+
+Unidad:
+
+MXN/kg
+
+## HG
+
+Vista visible:
+
+hg_pct * 100
+
+Unidad:
+
+%
+
+No presentar el fraction crudo como porcentaje.
+
+## HG$
+
+Paridad auditada:
+
+abs(hg_kg / hg_pct)
+
+Unidad:
+
+MXN/kg
+
+Solo calcular cuando la división sea válida.
+
+Si hg_pct es 0/null:
+n/d
+
+No Infinity.
+No NaN.
+
+No llamar HG$ al hg_kg crudo.
 
 ## OPERATIVOS
 
-Determinar campo exacto.
+Fuente vista B:
 
-Preservar semántica:
+mini runtime histórico.
+
+Semántica:
 
 GASTO OPERATIVO
 
@@ -293,482 +330,487 @@ No llamarlo rentabilidad operativa.
 
 ## CORPORATIVOS
 
-Determinar campo exacto y fuente.
+Fuente vista B:
 
-## GASTO
+mini runtime histórico.
 
-Probar físicamente si:
+Semántica:
 
-GASTO =
-OPERATIVOS + CORPORATIVOS
+GASTO CORPORATIVO
 
-es contrato del row builder o solo coincide en agosto.
+## GASTO TOTAL
 
-## HG y HG$
+Vista B:
 
-Determinar exactamente:
+gasto =
+operativos + corporativos
 
-qué significa HG;
-qué significa HG$;
-unidad de cada uno;
-campo físico;
-si ambos pueden incluirse de forma defendible en respuesta ejecutiva.
+Usar el campo/contrato físico del mini.
 
-No inferir significado por la etiqueta.
+No volver a sumar si el campo ya es autoritativo salvo control.
 
-## IMPUESTOS
+## RENTABILIDAD OPERATIVA
 
-Determinar campo y unidad.
+Vista B:
 
-## CASA / COMISIONISTA
+utilOperImporte
 
-Determinar:
+Semántica:
 
-- campos;
-- unidad;
-- relación con venta total;
-- si siempre forman una partición exhaustiva;
-- qué ocurre con otros canales si existen.
+rentabilidad/utilidad operativa de la vista financiera
 
-## RENTAB.
+Fórmula auditada en este builder:
 
-Este punto es CRÍTICO.
+utilOperImporte =
+ingreso - operativos
 
-Determinar exactamente qué significa la columna:
+También:
+
+utilOperImporte =
+resultadoFinalImporte + corporativos
+
+No generalizar a otros universos.
+
+Ejemplo fixture esperado:
+
+3,451,953 MXN
+
+No hardcodear.
+
+## RESULTADO FINAL
+
+Vista B:
+
+resultadoFinalImporte
+
+Este es el valor mostrado por:
 
 RENTAB.
 
-No asumir que es:
+en la tabla.
 
-rentabilidad operativa
-ni
-resultado final
+NO es rentabilidad operativa.
 
-hasta probarlo.
+Fórmula del mini:
 
-Entregar:
+resultadoFinalImporte =
+utilOperImporte - corporativos
 
-RENTAB_UI_FIELD:
-RENTAB_BACKEND_FIELD:
-RENTAB_SOURCE:
-RENTAB_FORMULA:
-RENTAB_SEMANTIC:
-RENTAB_IS_OPERATING_PROFIT:
-RENTAB_IS_FINAL_RESULT:
+Ejemplo fixture:
 
-## Rentabilidad operativa
+1,073,657 MXN
 
-El humano quiere que aparezca explícitamente.
+Debe llamarse:
 
-Determinar si existe físicamente un campo como:
+Resultado final de esta vista
 
-utilOperImporte
-rentabilidad_operativa
-util_oper_importe
-otro
+cuando presentation_state=VISIBLE_NOT_FINAL.
 
-o si se deriva.
+NO:
 
-Entregar:
-
-OPERATING_PROFIT_SOURCE:
-OPERATING_PROFIT_FIELD:
-OPERATING_PROFIT_STORED_OR_DERIVED:
-OPERATING_PROFIT_FORMULA:
-
-Solo marcar fórmula PROVABLE si aparece físicamente en código/contrato.
-
-Candidato NO autorizado hasta probar:
-
-resultado final + corporativos
-
-Para la evidencia visual:
-
-1,073,657 + 2,378,296 = 3,451,953
-
-NO declarar $3,451,953 como verdad en esta auditoría
-salvo que el contrato físico lo pruebe.
-
-## Resultado final
-
-Determinar:
-
-FINAL_RESULT_SOURCE:
-FINAL_RESULT_FIELD:
-FINAL_RESULT_STORED_OR_DERIVED:
-FINAL_RESULT_FORMULA:
-
-Probar si la columna RENTAB corresponde a este valor.
-
-## Fórmulas
-
-Auditar físicamente si para esta fuente histórica se cumple:
-
-utilidad/rentabilidad operativa =
-ingreso - gastos operativos
-
-resultado final =
-rentabilidad operativa - gastos corporativos
-
-No trasladar automáticamente la fórmula del mini forecast al universo histórico.
-
-Debe probarse para esta fuente.
+cierre final
+resultado FINAL contable
 
 ## INGRESO
 
-Aunque la captura no lo muestra como columna,
-determinar si existe en la misma fuente y si es necesario
-para explicar la rentabilidad operativa.
+El mini puede contener ingreso.
 
-No agregarlo a la respuesta futura salvo que sea defendible y útil.
+No es obligatorio mostrarlo en North Star
+porque el humano pidió el formato de la tabla + rentabilidades.
 
-## financial_state
+Puede mantenerse en evidencia/payload para explicar fórmula.
 
-Localizar:
+No añadir ruido innecesario.
 
-- tabla/campo exacto;
-- ámbito GLOBAL o por planta;
-- relación versión/mes;
-- cómo se decide FINAL;
-- cómo month_close_result lo consulta;
-- cómo dashboard lo usa o ignora.
+## Payload normalizado
 
-Entregar:
+Crear una representación determinista para composición.
 
-FINANCIAL_STATE_SOURCE:
-FINANCIAL_STATE_SCOPE:
-FINANCIAL_STATE_FOR_DASHBOARD_ROW:
-DASHBOARD_REQUIRES_FINAL:
-MONTH_CLOSE_REQUIRES_FINAL:
+Nombre recomendado:
 
-Sin LIVE_DB:
+financial.presentation
 
-si no puede demostrarse el estado concreto de agosto,
-decir UNKNOWN_FROM_CODE_ONLY.
+Shape conceptual:
 
-No inventar.
+{
+  state: "FINAL" | "VISIBLE_NOT_FINAL" | "DATA_MISSING",
+  source: "...",
+  period: "YYYY-MM",
+  is_final: boolean,
+  values: {
+    venta_ton,
+    casa_ton,
+    comisionista_ton,
+    margen_mxn_kg,
+    descuento_mxn_kg,
+    impuestos_mxn_kg,
+    hg_pct,
+    hg_mxn_kg,
+    operativos_mxn,
+    corporativos_mxn,
+    gasto_mxn,
+    ingreso_mxn,
+    rentabilidad_operativa_mxn,
+    resultado_final_mxn
+  }
+}
 
-## Versiones
+El nombre exacto puede variar SOLO si existe una convención física
+mejor en el módulo.
 
-Comparar dashboard vs month-close:
+Debe reportarse el shape final.
 
-DASHBOARD_VERSION_RULE
-MONTH_CLOSE_VERSION_RULE
+## Composer / respuesta
 
-Determinar si están leyendo la misma versión física.
+La respuesta por defecto de:
 
-## Periodo
-
-Confirmar:
-
-Agosto 2026
-→ 2026-08
-
-Sin contaminación de septiembre mini.
-
-Entregar:
-
-CURRENT_MINI_USED_FOR_AUGUST:
-NO esperado.
-
-## month_close_result payload
-
-Trazar qué campos financieros ya carga actualmente:
-
-- target
-- actual commercial
-- forecast
-- actual financial
-- gaps
-- limitations
-- evidence
-
-Determinar si los valores de la fila financiera:
-
-ya existen en el payload pero el composer no los muestra
-
-O:
-
-ni siquiera son cargados.
-
-Entregar:
-
-MONTH_CLOSE_FINANCIAL_FIELDS_AVAILABLE:
-MONTH_CLOSE_FINANCIAL_FIELDS_MISSING:
-FIRST_PARITY_GAP:
-
-## Composer
-
-Auditar el composer que produce la respuesta final.
-
-Determinar si frases como:
-
-"movimientos de material no explicados"
-"fuentes de información no disponibles"
-"acciones no disponibles"
-
-provienen de evidencia explícita del payload
-o de composición genérica.
-
-Entregar:
-
-MATERIAL_MOVEMENT_GAP_SOURCE:
-SOURCE_UNAVAILABLE_GAP_SOURCE:
-ACTIONS_UNAVAILABLE_SOURCE:
-
-COMPOSER_ADDS_UNSUPPORTED_GAPS:
-YES/NO
-
-No implementar corrección.
-
-## Preguntas de control
-
-C1:
 ¿Cómo cerramos agosto?
 
-C2:
-Dame el cierre financiero de agosto.
+debe priorizar el bloque financiero.
 
-C3:
-¿Cuál fue la rentabilidad operativa y el resultado final de agosto?
+No iniciar con labels técnicos como:
 
-C4:
-¿Qué margen y descuento tuvimos en agosto?
+ACTUAL COMERCIAL
+TARGET COMMITMENT
+FORECAST
+ACTUAL FINANCIAL
 
-C5:
-¿Qué rentabilidad tenemos?
+si existe presentation A/B.
 
-C6:
-¿Cómo cerramos julio?
+Esos estados pueden quedar como evidencia secundaria.
 
-Determinar intent/ruta/fuente para cada una.
+La salida visible debe ser ejecutiva y en español.
 
-C5 debe preservar current-month MINI_FORECAST_PROY.
+## Orden visible requerido
 
-## Output futuro recomendado
+Periodo + planta
 
-Sin implementar, definir el shape correcto para tres estados:
-
-A) FINANCIAL FINAL disponible
-
-Debe poder decir:
-
-Acapulco — cierre de Agosto 2026
+Estado financiero:
+FINAL
+o
+VISTA FINANCIERA DISPONIBLE — NO FINAL
 
 Venta
 CASA
 COMISIONISTA
+
 Margen
 Descuento
 Impuestos
 HG
 HG$
-Operativos
-Corporativos
-Gasto
+
+Gastos operativos
+Gastos corporativos
+Gasto total
+
 Rentabilidad operativa
 Resultado final
 
-B) números financieros disponibles PERO NOT_FINAL
+Advertencia de no-final si aplica.
 
-Debe presentar los valores con etiqueta inequívoca:
+## Nulls
 
-"vista financiera disponible / no final"
+Si un campo individual no existe:
 
-NO decir que son cierre financiero definitivo.
+n/d
 
-C) datos financieros no disponibles
+No cero inventado.
 
-Fail-close.
+No omitir silenciosamente que la vista es NO FINAL.
 
-No inventar ceros ni fórmulas.
+## Gaps / limitations
 
-## No implementar
+En la respuesta ejecutiva por defecto NO introducir frases genéricas como:
 
-NO cambios de producto.
-NO SQL nuevo.
-NO schema.
-NO migrations.
-NO tool nueva.
-NO endpoint nuevo.
-NO frontend.
-NO server change.
-NO LIVE_DB.
-NO Render.
-NO deploy.
-NO merge.
-NO push main.
+"fuentes de información no disponibles"
+"acciones no disponibles"
+"movimientos de material no explicados"
 
-## Entrega exacta
+solo por existir códigos genéricos de limitation/gap.
 
-AUDIT_RESULT:
+Solo mencionar una incidencia si existe evidencia específica
+y es material para el cierre solicitado.
+
+No convertir ausencia de Action Register en explicación financiera.
+
+No inventar causalidad.
+
+## TARGET / FORECAST
+
+No eliminarlos del payload.
+
+Pero para:
+
+¿Cómo cerramos agosto?
+
+no deben desplazar el resumen financiero principal.
+
+TARGET_MISSING puede informarse al final si es útil,
+pero no debe hacer que la respuesta parezca incompleta.
+
+No afirmar que forecast=actual tiene significado causal.
+
+## C1
+
+¿Cómo cerramos agosto?
+
+intent:
+month_close_result
+
+Debe presentar A/B/C.
+
+Con fixture NO FINAL + vista disponible:
+VISIBLE_NOT_FINAL.
+
+Debe incluir todas las métricas disponibles del North Star.
+
+## C2
+
+Dame el cierre financiero de agosto.
+
+Mismo month_close_result.
+
+Debe obedecer A/B/C.
+
+Si B:
+decir explícitamente NO FINAL.
+
+## C3
+
+¿Cuál fue la rentabilidad operativa y el resultado final de agosto?
+
+NO cambiar routing en este slice.
+
+Preservar el comportamiento/ruta auditada actual.
+
+## C4
+
+¿Qué margen y descuento tuvimos en agosto?
+
+NO cambiar routing historical_margin en este slice.
+
+## C5
+
+¿Qué rentabilidad tenemos?
+
+Debe permanecer:
+
+igf_status
++
+MINI_FORECAST_PROY
+del mes actual.
+
+## C6
+
+¿Cómo cerramos julio?
+
+Misma composición A/B/C
+para JULIO.
+
+No usar agosto/septiembre accidentalmente.
+
+## Regresiones obligatorias
+
+001 C1 intent month_close_result
+002 C1 period 2026-08
+003 C1 no September mini
+004 C1 codes shape fix preserved
+
+005 presentation state enum exists
+006 state FINAL supported
+007 state VISIBLE_NOT_FINAL supported
+008 state DATA_MISSING supported
+
+009 FINAL requires financial actual FINAL
+010 FINAL financial source has priority over mini
+011 FINAL not silently replaced by latest
+012 FINAL does not become nonfinal merely because mini exists
+
+013 NOT_FINAL does not mutate financial_state
+014 NOT_FINAL uses same target historical period
+015 NOT_FINAL uses historical dashboard-view source
+016 NOT_FINAL does not use current-month mini
+017 NOT_FINAL clearly labelled no final
+
+018 missing FINAL + missing view => DATA_MISSING
+019 DATA_MISSING no invented financial values
+020 DATA_MISSING may preserve actual commercial sale
+
+021 venta field populated correctly in B
+022 venta labelled commercial/real, not forecast
+023 casa field same period
+024 comisionista field same period
+025 no forced casa+comisionista reconciliation
+
+026 margen field same period/latest visible
+027 margen unit MXN/kg
+028 margen not labelled FINAL in B
+
+029 descuento parity uses visible -abs(com_desc_kg)
+030 descuento unit MXN/kg
+031 discount ARR field not substituted for visible dashboard discount
+
+032 impuestos field impuesto_kg
+033 impuestos unit MXN/kg
+
+034 HG uses hg_pct*100
+035 HG unit %
+036 HG$ uses abs(hg_kg/hg_pct)
+037 HG$ unit MXN/kg
+038 HG$ null/zero denominator safe
+039 HG$ never NaN/Infinity
+
+040 operativos = mini operativos
+041 operativos labelled gasto operativo
+042 corporativos = mini corporativos
+043 gasto = mini gasto / proven contract
+044 gasto reconciles operativos+corporativos in fixture
+
+045 rentabilidad operativa = utilOperImporte
+046 rentabilidad operativa not RENTAB UI
+047 resultado final = resultadoFinalImporte
+048 RENTAB UI semantic maps to resultado final
+049 util formula ingreso-operativos preserved
+050 final formula utilOper-corporativos preserved
+
+051 August fixture utilOper = 3451953
+052 August fixture resultadoFinal = 1073657
+053 these fixture values not hardcoded into product
+054 B labels both as "de esta vista"/NO FINAL
+
+055 response includes Venta
+056 response includes CASA
+057 response includes COMISIONISTA
+058 response includes Margen
+059 response includes Descuento
+060 response includes Impuestos
+061 response includes HG
+062 response includes HG$
+063 response includes Operativos
+064 response includes Corporativos
+065 response includes Gasto
+066 response includes Rentabilidad operativa
+067 response includes Resultado final
+
+068 B warning NO FINAL visible
+069 response does not claim financial definitive close in B
+070 generic source/actions unavailable prose absent by default
+071 no unsupported material-movement prose by default
+072 no causal claim invented
+
+073 C2 obeys same A/B/C
+074 C3 routing unchanged
+075 C4 routing unchanged
+076 C5 current MINI_FORECAST_PROY unchanged
+077 C6 period July preserved
+
+078 resolvePlantCodes shape fix regression PASS
+079 month-close existing suite PASS
+080 current-month profitability suite PASS
+081 historical-margin focal PASS
+082 client-profile resolution PASS
+083 commercial-trend resolution PASS
+
+084 no SQL
+085 no schema
+086 no migration
+087 no new tool
+088 no endpoint
+089 no internal HTTP
+090 no frontend
+091 no server.js unless physically unavoidable; audit says not needed
+092 no LIVE_DB
+093 no hardcoded Acapulco/Puebla
+094 no hardcoded August values
+095 diff --check PASS
+096 applicable gate PASS
+097 NEW FAILURE = 0
+
+## Expected delivery
+
+IMPLEMENTATION_SHA:
+BASE_MAIN_SHA:
+
+PRESENTATION_SHAPE:
+PRESENTATION_STATE_VALUES:
+
+FINAL_SOURCE:
+VISIBLE_NOT_FINAL_SOURCE:
+DATA_MISSING_BEHAVIOR:
+
+HISTORICAL_MINI_FUNCTION:
+HISTORICAL_MINI_PERIOD_BINDING:
 
 C1_INTENT:
-C1_ROUTE:
-C1_SOURCE:
+C1_PERIOD:
+C1_PRESENTATION_STATE:
+C1_CURRENT_MONTH_MINI_BLOCKED:
 
-DASHBOARD_COMPONENT:
-DASHBOARD_FETCH:
-DASHBOARD_ENDPOINT:
-DASHBOARD_HANDLER:
-DASHBOARD_ROW_BUILDER:
-DASHBOARD_SOURCE:
-
-DASHBOARD_PERIOD_RULE:
-DASHBOARD_VERSION_RULE:
-MONTH_CLOSE_VERSION_RULE:
-
-FINANCIAL_STATE_SOURCE:
-FINANCIAL_STATE_SCOPE:
-FINANCIAL_STATE_FOR_DASHBOARD_ROW:
-DASHBOARD_REQUIRES_FINAL:
-MONTH_CLOSE_REQUIRES_FINAL:
-
-FIELD_MATRIX:
-
-VENTA_SOURCE:
 VENTA_FIELD:
-VENTA_SEMANTIC:
-
-MARGEN_SOURCE:
-MARGEN_FIELD:
-MARGEN_SEMANTIC:
-
-DESCUENTO_SOURCE:
-DESCUENTO_FIELD:
-DESCUENTO_SEMANTIC:
-
-OPERATIVOS_SOURCE:
-OPERATIVOS_FIELD:
-
-CORPORATIVOS_SOURCE:
-CORPORATIVOS_FIELD:
-
-GASTO_SOURCE:
-GASTO_FIELD:
-GASTO_FORMULA_PROVABLE:
-
-HG_SOURCE:
-HG_FIELD:
-HG_UNIT:
-HG_SEMANTIC:
-
-HG_DOLLAR_SOURCE:
-HG_DOLLAR_FIELD:
-HG_DOLLAR_UNIT:
-HG_DOLLAR_SEMANTIC:
-
-IMPUESTOS_SOURCE:
-IMPUESTOS_FIELD:
-IMPUESTOS_UNIT:
-
-CASA_SOURCE:
 CASA_FIELD:
-CASA_UNIT:
-
-COMISIONISTA_SOURCE:
 COMISIONISTA_FIELD:
-COMISIONISTA_UNIT:
-
-CASA_PLUS_COMISIONISTA_EQUALS_VENTA_CONTRACT:
-
-RENTAB_UI_FIELD:
-RENTAB_BACKEND_FIELD:
-RENTAB_SOURCE:
-RENTAB_FORMULA:
-RENTAB_SEMANTIC:
-RENTAB_IS_OPERATING_PROFIT:
-RENTAB_IS_FINAL_RESULT:
-
-OPERATING_PROFIT_SOURCE:
+MARGEN_FIELD:
+DESCUENTO_FIELD:
+IMPUESTOS_FIELD:
+HG_FIELD:
+HG_DOLLAR_FIELD:
+OPERATIVOS_FIELD:
+CORPORATIVOS_FIELD:
+GASTO_FIELD:
 OPERATING_PROFIT_FIELD:
-OPERATING_PROFIT_STORED_OR_DERIVED:
-OPERATING_PROFIT_FORMULA:
-OPERATING_PROFIT_FORMULA_PROVABLE:
-
-FINAL_RESULT_SOURCE:
 FINAL_RESULT_FIELD:
-FINAL_RESULT_STORED_OR_DERIVED:
+
+DISCOUNT_PRESENTATION_RULE:
+HG_PRESENTATION_RULE:
+HG_DOLLAR_FORMULA:
+OPERATING_PROFIT_FORMULA:
 FINAL_RESULT_FORMULA:
-FINAL_RESULT_FORMULA_PROVABLE:
 
-AUGUST_CANDIDATE_OPERATING_PROFIT_3451953_PROVABLE:
-YES/NO
+NOT_FINAL_LABEL:
+GENERIC_GAPS_SUPPRESSED:
 
-MONTH_CLOSE_FINANCIAL_FIELDS_AVAILABLE:
-MONTH_CLOSE_FINANCIAL_FIELDS_MISSING:
-FIRST_PARITY_GAP:
+C2_BEHAVIOR:
+C3_UNCHANGED:
+C4_UNCHANGED:
+C5_MINI_FORECAST_PROY_UNCHANGED:
+C6_PERIOD:
 
-CURRENT_MINI_USED_FOR_AUGUST:
-
-MATERIAL_MOVEMENT_GAP_SOURCE:
-SOURCE_UNAVAILABLE_GAP_SOURCE:
-ACTIONS_UNAVAILABLE_SOURCE:
-COMPOSER_ADDS_UNSUPPORTED_GAPS:
-
-C1_RESULT:
-C2_RESULT:
-C3_RESULT:
-C4_RESULT:
-C5_RESULT:
-C6_RESULT:
-
-CAN_FIX_WITHOUT_NEW_SQL:
-CAN_FIX_WITHOUT_NEW_TOOL:
-CAN_FIX_WITHOUT_SERVER_CHANGE:
-CAN_FIX_WITHOUT_FRONTEND_CHANGE:
-
-ROUTING_BUG:
-SOURCE_BUG:
-VERSION_BUG:
-FINANCIAL_STATE_BUG:
-PAYLOAD_GAP:
-COMPOSER_GAP:
-PRESENTATION_GAP:
-DATA_BUG:
-
-RECOMMENDED_FINAL_SHAPE_FINAL:
-RECOMMENDED_FINAL_SHAPE_NOT_FINAL:
-RECOMMENDED_FINAL_SHAPE_DATA_MISSING:
-
-FILES_INSPECTED:
-TESTS_RUN:
+001..097:
+SUITES:
+FILES:
 RISKS:
 
-RECOMMENDED_NEXT_SLICE:
+MONTH_CLOSE_CHANGED:
+COMPOSER_CHANGED:
+CHAT_CHANGED:
+PLANNER_CHANGED:
+HISTORICAL_MARGIN_CHANGED:
+CURRENT_MONTH_SOURCE_SELECTOR_CHANGED:
+SQL_CHANGED:
+SERVER_CHANGED:
+FRONTEND_CHANGED:
+SCHEMA_CHANGED:
+TOOL_ADDED:
+ENDPOINT_ADDED:
+LIVE_DB_USED:
 
 ## Completion
 
-Al terminar:
+Si PASS:
 
 CURRENT_TASK -> DONE_PENDING_REVIEW
 
+Crear commit implementación.
+
 Crear reporte append-only:
 
-docs/dev-loop/reports/AUDIT-DIRECTOR-IA-MONTH-CLOSE-FINANCIAL-VARIABLES-PARITY-001.md
-
-Commit auditoría.
+docs/dev-loop/reports/IMPL-DIRECTOR-IA-MONTH-CLOSE-FINANCIAL-VARIABLES-COMPOSITION-001.md
 
 STOP.
 
-No implementación.
-No siguiente tarea.
 No merge.
 No push main.
 No deploy.
 No LIVE_DB.
-closure_reason: "HUMAN REVIEW PASS. La fila histórica visible del dashboard es una vista híbrida/latest+mini+ARR y no demuestra financial_state FINAL. month_close es correcto al no presentarla como ACTUAL_FINANCIAL definitivo."
-
-human_semantic_decision: "Para ¿Cómo cerramos <mes>?, Director IA debe manejar tres estados: FINAL financiero defendible; vista financiera disponible pero NO FINAL; o datos financieros no disponibles."
-
-human_not_final_decision: "Cuando no exista FINAL pero sí exista la misma vista financiera histórica disponible en el dashboard, se autoriza mostrar sus variables con etiqueta inequívoca VISTA FINANCIERA DISPONIBLE / NO FINAL. No llamarla cierre financiero definitivo."
-
-human_final_decision: "Cuando financial.actual sea FINAL, sus campos FINAL tienen prioridad. No sustituir un FINAL por mini/latest."
-
-human_missing_decision: "Si no existe FINAL ni vista financiera defendible, fail-close. Puede conservar ACTUAL comercial si existe, pero no inventar variables financieras."
-
-human_composition_decision: "La respuesta de month_close debe priorizar Venta, CASA, COMISIONISTA, Margen, Descuento, Impuestos, HG, HG$, Operativos, Corporativos, Gasto, Rentabilidad operativa y Resultado final. TARGET/FORECAST/limitaciones no deben desplazar el resumen financiero principal."
-
-human_truth_decision: "Rentab. del dashboard corresponde a resultadoFinalImporte del mini, no rentabilidad operativa. Rentabilidad operativa del mini es utilOperImporte. Para la vista NO FINAL ambas deben etiquetarse como valores de esa vista, no como cierre FINAL."
-
-known_routing_scope: "No cambiar en este slice el routing de C3 ¿Qué rentabilidad tuvimos en agosto? ni C4 margen/descuento; este slice implementa composición A/B/C de month_close_result."
+No siguiente tarea.
