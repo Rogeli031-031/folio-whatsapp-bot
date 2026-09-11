@@ -3,8 +3,7 @@ task_id: FIX-DIRECTOR-IA-FOLIO-KEYWORD-TIENEN-PALABRA-PARITY-001
 task_type: FIX
 mode: REGRESSION_FIRST
 
-status: DONE_PENDING_REVIEW
-
+status: CLOSED
 authorized_by: "Human Approver"
 authorized_at: "2026-09-11T17:43:35-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Zaragoza 2026-09-11"
@@ -412,3 +411,12 @@ No push main.
 No deploy.
 No LIVE_DB.
 No siguiente tarea.
+closure_reason: "HUMAN REVIEW PASS. folio_search normaliza de forma equivalente las expresiones 'tienen la palabra X' y 'contienen la palabra X' a keyword_search con concept_query=X."
+
+human_acceptance: "PASS 60/60. Las variantes tiene/tienen/que tiene/que tienen/que tenga/que tengan + 'la palabra' conservan scope, mes_cargo, periodo y result set."
+
+scope_preserved: "Cambio focal únicamente en parser de lib/director-ia-folio-search.js. Matcher, planner, chat, conversation-state, SQL, server y frontend permanecen sin cambios."
+
+negative_guard: "El verbo tener por sí solo no activa keyword_search. Frases como 'tienen estatus PAGADO' o 'tienen responsable' no se reinterpretan como búsqueda keyword."
+
+live_validation_pending: "Validar en Acapulco que 'tienen la palabra aceite' y 'contienen la palabra aceite' entreguen el mismo conjunto y que la continuidad de agregación siga funcionando."
