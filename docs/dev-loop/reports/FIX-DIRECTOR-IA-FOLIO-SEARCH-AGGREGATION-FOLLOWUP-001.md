@@ -40,7 +40,7 @@ Sin antecedente, T2 permanece unknown/clarification.
 ---
 
 IMPLEMENTATION_SHA:
-PENDING_THIS_COMMIT
+2a6d612ec69994df91bea1aa7d9d467d687bf4e6
 
 BASE_MAIN_SHA:
 248997415d86c73bc5f9bf140901bbdc76c27c6b
