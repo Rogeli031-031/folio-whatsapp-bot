@@ -3,7 +3,7 @@ task_id: FIX-DIRECTOR-IA-FOLIO-KEYWORD-TIENEN-PALABRA-PARITY-001
 task_type: FIX
 mode: REGRESSION_FIRST
 
-status: AUTHORIZED
+status: DONE_PENDING_REVIEW
 
 authorized_by: "Human Approver"
 authorized_at: "2026-09-11T17:43:35-06:00"
