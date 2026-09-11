@@ -1,73 +1,37 @@
-task_id: AUDIT-DIRECTOR-IA-FOLIO-KEYWORD-AGGREGATION-CONTINUITY-001
+task_id: FIX-DIRECTOR-IA-FOLIO-SEARCH-AGGREGATION-FOLLOWUP-001
 
-task_type: AUDIT
-mode: READ_ONLY
+task_type: FIX
+mode: REGRESSION_FIRST
 
 status: CLOSED
 authorized_by: "Human Approver"
-authorized_at: "2026-09-11T15:41:34-06:00"
+authorized_at: "2026-09-11T15:57:43-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Zaragoza 2026-09-11"
 
-implementation_authorized: NO
+implementation_authorized: YES
 merge_authorized: NO
 deploy_authorized: NO
 live_db_authorized: NO
 
 max_attempts: 1
 
-base_main_sha: da57cc8c8162a4e189d6cbecf617716070cbe665
-result_report_path: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-FOLIO-KEYWORD-AGGREGATION-CONTINUITY-001.md
+base_main_sha: 248997415d86c73bc5f9bf140901bbdc76c27c6b
+result_report_path: docs/dev-loop/reports/FIX-DIRECTOR-IA-FOLIO-SEARCH-AGGREGATION-FOLLOWUP-001.md
 
-objective: "Determinar por qué Director IA pierde el contexto de una búsqueda de folios por keyword/rango cuando el siguiente turno pide sumar esos mismos resultados y agruparlos por mes, y definir la mínima continuidad determinista necesaria sin inventar folios ni reinterpretar importes."
+objective: "Dar continuidad determinista a una búsqueda previa de folios para que el follow-up 'puedes sumarlos y darme un total por mes?' reutilice la specification canónica del search anterior, reconsulte el universo completo y use el AGGREGATE existente por mes_cargo."
 
-## Antecedente físico ya cerrado
+## Evidencia auditada
 
-Existe el FIX:
-
-FIX-DIRECTOR-IA-FOLIO-KEYWORD-RANGE-SEARCH-PARITY-002
-
-Su contrato probado incluye:
-
-- intent folio_search;
-- universo ALL_PUBLIC_FOLIOS;
-- rango histórico por mes_cargo;
-- keyword search con paridad Kanban;
-- CANCELADO incluido en el listado;
-- query sin pre-truncar;
-- match_count antes del límite visual;
-- list limit 40;
-- no OpenAI matching;
-- no embeddings.
-
-No reabrir ese FIX.
-
-Leer obligatoriamente:
-
-docs/dev-loop/reports/FIX-DIRECTOR-IA-FOLIO-KEYWORD-RANGE-SEARCH-PARITY-002.md
-
-y sus tests relacionados.
-
-## Escenario de continuidad
-
-TURNO 1
-
-Usar el escenario/regresión canónico ya existente del FIX anterior
-para una búsqueda equivalente a:
+T1:
 
 ¿Qué folios de enero a agosto contienen la palabra aceite?
 
-No inventar un nuevo fixture si el test anterior conserva
-la pregunta exacta. Preferir esa pregunta exacta.
-
-Esperado T1:
+Resultado:
 
 intent:
 folio_search
 
-search_term:
-aceite
-
-universe:
+scope:
 ALL_PUBLIC_FOLIOS
 
 period:
@@ -76,613 +40,603 @@ period:
 period_field:
 mes_cargo
 
-La respuesta lista los folios encontrados.
+search term:
+aceite
 
-TURNO 2 exacto:
+operation:
+keyword_search
+
+query pre-truncates:
+NO
+
+display limit:
+40
+
+match count:
+antes del display limit
+
+Problema:
+
+T1 no escribe conversation_state utilizable.
+
+T2 exacto:
 
 puedes sumarlos y darme un total por mes?
 
-Problema observado:
+Actualmente:
 
-Director IA pierde la referencia a "los"
-y actualmente termina fuera de la búsqueda anterior / UNKNOWN.
-
-## Objetivo conversacional
-
-El segundo turno debe poder significar:
-
-"Toma exactamente el mismo conjunto definido por mi búsqueda anterior
-de folios y agrégalo monetariamente por mes."
-
-NO significa:
-
-- buscar todos los folios de la planta;
-- inventar otro keyword;
-- ampliar rango;
-- cambiar ALL_PUBLIC_FOLIOS por apoyos activos;
-- usar solo los 40 mostrados;
-- consultar Action Register;
-- usar IGF;
-- inferir gasto pagado.
-
-## Lo que debe heredarse conceptualmente
-
-Auditar si existen físicamente y dónde pueden persistirse:
-
-- dominio/intent de folios;
-- planta;
-- universe;
-- period start;
-- period end;
-- period field = mes_cargo;
-- search_term;
-- keyword match mode/regla;
-- cualquier filtro explícito aplicado en T1;
-- match_count;
-- identidad o specification del result set.
-
-No implementar persistencia.
-
-## Pregunta central 1 — routing
-
-Trazar T1 y T2 por:
-
-planner
-→ chat
-→ conversation_state
-→ folio_search
-→ composer/response
-
-Entregar el primer punto en el que T2 deja de poder identificar
-el antecedente "los".
-
-Determinar si T2 cae en:
-
+intent:
 unknown
-folio_search
-folio_status
-otro
 
-y por qué.
-
-## Pregunta central 2 — conversation state
-
-Localizar todos los mecanismos actuales de continuidad relevantes:
-
-conversation_state
-active_* fields
-last intent/domain
-entity inheritance
-period inheritance
-client continuity
-folio continuity si existe
-
-Entregar:
-
-STATE_WRITER_AFTER_T1:
-STATE_SHAPE_AFTER_T1:
-STATE_READER_ON_T2:
-FOLIO_SEARCH_STATE_PERSISTED:
-FOLIO_RESULT_SET_REFERENCE_PERSISTED:
-
-No asumir que por existir conversation_state
-folio_search lo usa.
-
-## Pregunta central 3 — filas vs specification
-
-Determinar la arquitectura mínima correcta para continuidad.
-
-Comparar físicamente dos modelos:
-
-A)
-guardar todas las filas matched en conversation_state
-
-B)
-guardar una specification canónica y reconsultar determinísticamente
-
-Ejemplo conceptual de specification, NO autorizado como contrato todavía:
-
-{
-  domain: "folios",
-  intent: "folio_search",
-  planta_id,
-  universe: "ALL_PUBLIC_FOLIOS",
-  period: {
-    start: "2026-01",
-    end: "2026-08",
-    field: "mes_cargo"
-  },
-  search_term: "aceite",
-  match_mode: "...",
-  filters: {...}
-}
-
-Determinar cuál encaja con la arquitectura existente.
-
-Considerar:
-
-- list limit 40;
-- match_count antes de truncado;
-- tamaño de conversation_state;
-- reproducibilidad;
-- autorización por planta;
-- cambios de datos entre turnos.
-
-Entregar:
-
-RECOMMENDED_CONTINUITY_MODEL:
-WHY_ROWS_OR_SPEC:
-REQUERY_REQUIRED_FOR_COMPLETE_AGGREGATE:
-
-## Pregunta central 4 — universo completo
-
-CRÍTICO.
-
-El agregado NO puede sumar únicamente:
-
-rows.slice(0, 40)
-
-si hubo más matches.
-
-Demostrar:
-
-- dónde ocurre el límite visual;
-- dónde existe el universo completo;
-- si el query actual trae todo antes del slice;
-- si un segundo turno puede reejecutar el mismo matcher sobre el universo completo.
-
-Entregar:
-
-QUERY_PRE_TRUNCATES:
-MATCH_COUNT_BEFORE_LIMIT:
-DISPLAY_LIMIT:
-AGGREGATION_MUST_USE_FULL_MATCH_SET:
-
-## Pregunta central 5 — campo monetario
-
-Trazar físicamente el campo:
-
-importe
-
-en la búsqueda de folios.
-
-Determinar:
-
-- tabla/campo físico;
-- nullability;
-- tipo/unidad;
-- si corresponde a importe registrado del folio;
-- si existe otra cifra como pagado/ejercido/autorizado.
-
-No reinterpretar.
-
-La respuesta futura debe usar terminología defendible.
-
-Preferencia humana:
-
-"importe registrado"
-
-NO:
-
-"gasto pagado"
-"gasto real"
-"efectivo desembolsado"
-
-salvo que el código demuestre otra semántica.
-
-Entregar:
-
-AMOUNT_SOURCE:
-AMOUNT_FIELD:
-AMOUNT_SEMANTIC:
-SAFE_VISIBLE_LABEL:
-
-## Pregunta central 6 — mes de agrupación
-
-El grupo futuro debe usar:
-
-mes_cargo
-
-porque el search histórico ya está ligado a ese campo.
-
-Demostrar:
-
-GROUP_MONTH_SOURCE:
-GROUP_MONTH_FIELD:
-GROUP_MONTH_FORMAT:
-
-No reagrupar por fecha_creacion/fecha_pago
-salvo evidencia contraria.
-
-## Pregunta central 7 — CANCELADO
-
-El listado keyword actual incluye CANCELADO.
-
-Para la suma monetaria deseada:
-
-CANCELADO no debe contribuir al total agregado principal.
-
-Auditar físicamente:
-
-- campo de status;
-- valores/status canónicos;
-- cómo se identifica CANCELADO;
-- si importe permanece registrado en un folio cancelado;
-- cómo otros agregados del sistema manejan CANCELADO.
-
-No implementar.
-
-Contrato humano deseado para el siguiente FIX,
-si el código no demuestra una contradicción:
-
-MAIN_TOTAL:
-excluir CANCELADO
-
-LIST:
-puede seguir mostrando CANCELADO
-
-Idealmente el agregado futuro debe poder informar por separado,
-si existe:
-
-cancelados_count
-cancelados_importe_registrado
-
-pero no es requisito de este audit.
-
-Entregar:
-
-STATUS_FIELD:
-CANCELLED_CANONICAL_VALUE:
-CANCELLED_INCLUDED_IN_SEARCH_LIST:
-CANCELLED_EXCLUDED_FROM_MAIN_AGGREGATE_RECOMMENDED:
-EXISTING_SYSTEM_PRECEDENT:
-
-## Pregunta central 8 — forma de agregado
-
-Determinar la salida determinista mínima posible.
-
-Shape conceptual:
-
-{
-  period_field: "mes_cargo",
-  rows: [
-    {
-      month: "2026-01",
-      folio_count,
-      importe_registrado
-    }
-  ],
-  total_folios,
-  total_importe_registrado
-}
-
-Si cancelados se separan:
-
-{
-  ...
-  cancelled_count,
-  cancelled_importe_registrado
-}
-
-No implementar.
-
-No inventar nombres si ya existe convención.
-
-## Pregunta central 9 — dónde debe vivir la operación
-
-Determinar si el agregado debe implementarse:
-
-A) dentro de folio_search como follow-up mode
-
-B) nuevo intent pero misma tool/source
-
-C) composer sobre rows
-
-D) requery helper determinista
-
-E) otro
-
-Evaluar autorización y verdad.
-
-Preferencia:
-
-No crear herramienta nueva si la fuente actual basta.
-
-No hacer matemáticas por LLM sobre texto renderizado.
-
-La suma debe ser determinista en código.
-
-Entregar:
-
-RECOMMENDED_AGGREGATION_LAYER:
-NEW_TOOL_REQUIRED:
-NEW_SQL_REQUIRED:
-LLM_MATH_ALLOWED:
-
-LLM_MATH_ALLOWED esperado:
-NO
-
-## Dos turnos obligatorios
-
-C1 T1:
-keyword + rango existente
-
-Entregar:
-
-C1_INTENT:
-C1_SEARCH_TERM:
-C1_UNIVERSE:
-C1_PERIOD:
-C1_PERIOD_FIELD:
-C1_MATCH_COUNT:
-C1_DISPLAY_COUNT:
-C1_CONVERSATION_STATE_AFTER:
-
-C2 T2 exacto:
-
-puedes sumarlos y darme un total por mes?
-
-Entregar:
-
-C2_CURRENT_INTENT:
-C2_CURRENT_ROUTE:
-C2_CURRENT_CLARIFICATION:
-C2_INHERITS_FOLIO_DOMAIN:
-C2_INHERITS_PLANT:
-C2_INHERITS_PERIOD:
-C2_INHERITS_SEARCH_TERM:
-C2_INHERITS_RESULT_SPEC:
-
-## Controles de no contaminación
-
-C3:
-En chat nuevo:
-
-puedes sumarlos y darme un total por mes?
-
-Debe NO asumir un antecedente inexistente.
-
-Auditar comportamiento correcto esperado:
-clarificación o fail-close.
-
-C4:
-Después de T1, preguntar:
-
-¿cuántos fueron?
-
-Determinar si ya existe continuidad aplicable
-o si también cae en unknown.
-
-C5:
-Después de T1, preguntar:
-
-¿y solo julio?
-
-Determinar si el sistema puede restringir la specification heredada
-o si no existe continuidad.
-
-C4/C5 son diagnóstico.
-NO ampliar implementation recomendada automáticamente.
-
-## Planta / autorización
-
-La continuidad debe seguir ligada a la planta autorizada.
-
-No permitir que una specification heredada
-sobreviva a un cambio de planta sin revalidación.
-
-Entregar:
-
-PLANT_BOUND_STATE:
-AUTH_RECHECK_REQUIRED:
-CROSS_PLANT_REUSE_ALLOWED:
-
-CROSS_PLANT_REUSE_ALLOWED esperado:
-NO
-
-## Temporalidad
-
-El follow-up:
-
-"por mes"
-
-no cambia el rango.
-
-Solo cambia la presentación/agregación.
-
-No interpretar "por mes" como:
-
-mes actual
-último mes
-month discovery
-
-## No implementar
-
-NO product code.
-NO SQL nuevo.
-NO schema.
-NO migration.
-NO tool nueva.
-NO endpoint.
-NO frontend.
-NO server change.
-NO LIVE_DB.
-NO deploy.
-NO merge.
-NO push main.
-
-Tests/sondas read-only con fixtures:
-SÍ.
+porque "los" no tiene antecedente estructurado.
 
 ## FIRST_DIVERGENCE
 
-La auditoría debe terminar con UNA frontera concreta.
-
-Ejemplos:
-
 FOLIO_SEARCH_DOES_NOT_WRITE_CONVERSATION_STATE
 
-PLANNER_DOES_NOT_RESOLVE_AGGREGATION_FOLLOWUP
+## Principio
 
-CHAT_DROPS_FOLIO_SEARCH_STATE
+NO guardar filas como continuidad.
 
-RESULT_SPEC_NOT_PERSISTED
+Guardar una specification canónica y saneada.
 
-AGGREGATION_MODE_MISSING
+Luego:
 
-otro demostrado.
+follow-up aggregate
+→ spec anterior
+→ requery
+→ AGGREGATE existente
+→ SUM
+→ MONTH
+→ mes_cargo
 
-No responder simplemente:
+No hacer matemáticas desde texto renderizado.
 
-"falta contexto".
+## Contrato de state
 
-## Clasificación
+Agregar continuidad efímera para folio_search.
 
-Determinar:
+Puede llamarse:
 
-ROUTING_BUG:
-CONTINUITY_BUG:
-STATE_WRITE_BUG:
-STATE_READ_BUG:
-RESULT_SET_BUG:
-AGGREGATION_CAPABILITY_MISSING:
-DATA_BUG:
-SQL_BUG:
-PRESENTATION_BUG:
+active_folio_search
 
-## Fixability
+folio_search_spec
 
-Entregar:
+u otro nombre acorde a la convención física del módulo.
 
-CAN_FIX_WITHOUT_NEW_SQL:
-CAN_FIX_WITHOUT_NEW_TOOL:
-CAN_FIX_WITHOUT_SERVER_CHANGE:
-CAN_FIX_WITHOUT_FRONTEND_CHANGE:
-CAN_FIX_WITHOUT_SCHEMA_CHANGE:
+El nombre exacto debe reportarse.
+
+Debe contener como máximo la specification necesaria:
+
+version
+planta_id
+scope
+period_mode
+period_month
+period_start
+period_end
+period_field
+concept_mode
+concept_query
+concept_alternatives
+operation
+
+y únicamente filtros adicionales que físicamente afecten
+el mismo result set.
+
+NO guardar:
+
+records
+rows
+importe totals
+analysis
+texto completo de respuesta
+lista truncada de 40
+evidence material
+
+Esto es query state, no evidence cache.
+
+## Sanitización obligatoria
+
+La specification que regresa del cliente/UI NO es confiable.
+
+Debe sanearse en:
+
+director-ia-conversation-state
+
+antes de reutilizarse.
+
+Validar enum/shape de:
+
+scope
+period_mode
+period YYYY-MM
+concept_mode
+operation
+planta_id
+
+concept_query / alternatives:
+strings acotados y saneados.
+
+No aceptar campos arbitrarios.
+
+No aceptar SQL/predicados desde state.
+
+## Plant binding
+
+La specification pertenece a:
+
+planta_id del T1.
+
+Si request.planta_id != state.planta_id:
+
+el spec se elimina.
+
+CROSS_PLANT_REUSE:
+NO
+
+La requery del T2 debe volver a atravesar
+la autorización normal de folio_search.
+
+No reutilizar autorización vieja como evidencia.
+
+## Parent intent
+
+folio_search puede hacerse inheritable SOLO para este
+contrato de continuidad defensible.
+
+Agregarlo a INHERITABLE_INTENTS si la arquitectura lo requiere.
+
+Eso NO autoriza heredar cualquier pregunta ambigua
+como folio_search.
+
+La herencia debe estar condicionada a:
+
+spec válida
++
+misma planta
++
+follow-up agregado explícito.
+
+## Follow-up autorizado
+
+T2 canónico:
+
+puedes sumarlos y darme un total por mes?
+
+Debe reconocerse como:
+
+folio_search aggregate follow-up
+
+solo cuando exista specification válida.
+
+Puede aceptar variaciones estrechas equivalentes como:
+
+súmalos por mes
+dame el total por mes
+suma esos folios por mes
+
+si el detector sigue exigiendo antecedente válido
+y lenguaje de agregación inequívoco.
+
+NO hacer un detector abierto de pronombres.
+
+## Sin antecedente
+
+Chat nuevo:
+
+puedes sumarlos y darme un total por mes?
+
+Debe permanecer:
+
+unknown / clarification
+
+No buscar todos los folios.
+
+No inventar "aceite".
+
+No usar history textual como evidencia.
+
+## C4/C5 fuera de alcance
+
+Después de T1:
+
+¿cuántos fueron?
+
+y:
+
+¿y solo julio?
+
+NO son objetivo de este FIX.
+
+No hacer que funcionen incidentalmente mediante
+una regla genérica demasiado amplia.
+
+Si siguen unknown:
+PASS para este slice.
+
+## Requery
+
+El T2 debe reejecutar la búsqueda completa.
+
+Debe utilizar:
+
+scope heredado
+period heredado
+period_field = mes_cargo
+concept/keyword heredado
+operation heredada
+
+y modificar SOLO el modelo analítico:
+
+analysis_mode:
+AGGREGATE
+
+aggregation:
+SUM
+
+group_by:
+MONTH
+
+cumulative:
+NO
+
+para el T2 canónico.
+
+No reparsear "los" como concepto.
+
+No sustituir search_term con palabras de T2.
+
+## Parser vs direct spec
+
+Preferir pasar filters/spec estructurados al loader
+o un helper determinista equivalente.
+
+NO construir una frase artificial y depender
+de que el parser vuelva a inferir correctamente "aceite".
+
+Si se necesita una entrada opcional como:
+
+filtersOverride
+inheritedFilters
+searchSpec
+
+debe estar saneada y probada.
+
+No crear una segunda implementación del matcher.
+
+## Universo completo
+
+CRÍTICO:
+
+No agregar:
+
+payload.records
+
+porque puede estar truncado a 40.
+
+La requery debe ejecutar el matcher existente
+sobre el universo completo recuperado por la fuente.
+
+El aggregate existente debe trabajar antes del display slice
+o con su actual full matched set.
+
+## AGGREGATE existente
+
+Reusar el comportamiento ya implementado.
+
+No crear otro buildAggregate.
+
+Preservar:
+
+CANCELADO excluido del agregado principal.
+
+Null importe:
+UNKNOWN / incompleto conforme contrato actual.
+
+PAGADO:
+no prueba gasto contable.
+
+Safe label:
+
+importe registrado
+
+## Salida esperada
+
+Para T2, usar el answer existente de AGGREGATE.
+
+Debe poder responder conceptualmente:
+
+El importe total de los folios encontrados,
+excluyendo CANCELADO, es ...
+
+Enero: ...
+Febrero: ...
+...
+Agosto: ...
+
+con tratamiento existente de importes no registrados.
+
+No pedir al LLM sumar.
+
+openai_called:
+false
+
+si ese es el contrato actual de folio_search.
+
+## No cambiar semántica del listado T1
+
+T1 debe seguir:
+
+listando CANCELADO;
+mostrando hasta 40;
+reportando count/match_count completo;
+buscando en ALL_PUBLIC_FOLIOS;
+usando keyword parity existente.
+
+La única adición visible/estructural permitida es
+conversation_state.
+
+## State writer
+
+Después de T1 exitoso,
+el resultado final del chat debe devolver conversation_state
+con la specification.
+
+No basta con context_meta.
+
+Demostrar que el panel puede ecoarla en T2
+con el contrato ya existente.
+
+NO frontend change.
+
+## State reader
+
+En T2:
+
+sanitizeEchoedState
+→ spec válida
+→ follow-up detector
+→ folio_search aggregate path
+
+El planner puede continuar clasificando la frase aislada
+como unknown internamente si el deterministic continuity layer
+la resuelve antes/de forma autorizada.
+
+Preferencia:
+NO planner change si no es necesario.
+
+Si Cursor concluye que planner.js es imprescindible:
+STOP.
+No ampliar alcance.
+
+## Existing aggregation semantics
+
+public.folios.importe:
+importe registrado.
+
+public.folios.mes_cargo:
+YYYY-MM.
+
+f.estatus:
+CANCELADO excluido del main aggregate.
+
+No SQL nuevo.
+
+## No server
+
+No server.js.
+
+El audit determinó que todo puede resolverse
+en libs existentes.
+
+## Tests obligatorios
+
+001 T1 exact question → folio_search
+002 T1 scope ALL_PUBLIC_FOLIOS
+003 T1 period_mode RANGE
+004 T1 period_start 2026-01
+005 T1 period_end 2026-08
+006 T1 period field mes_cargo
+007 T1 operation keyword_search
+008 T1 concept/search term aceite
+
+009 T1 writes conversation_state
+010 T1 state parent_intent folio_search
+011 T1 state contains canonical search spec
+012 spec contains planta_id
+013 spec contains scope
+014 spec contains period
+015 spec contains concept/search term
+016 spec contains operation
+017 spec contains no records
+018 spec contains no rows
+019 spec contains no analysis amounts
+020 spec contains no rendered response text
+
+021 echoed spec sanitized
+022 arbitrary fields removed
+023 malformed period rejected
+024 malformed scope rejected
+025 malformed operation rejected
+026 empty/malformed concept fails closed
+027 state plant mismatch drops folio spec
+
+028 folio_search inheritable only with valid spec
+029 parent_intent alone without spec is insufficient
+
+030 T2 exact phrase recognized with valid spec
+031 T2 does not invent concept from pronoun
+032 T2 inherits planta_id
+033 T2 inherits scope
+034 T2 inherits period_start
+035 T2 inherits period_end
+036 T2 inherits keyword/concept
+037 T2 inherits operation
+038 T2 sets analysis_mode AGGREGATE
+039 T2 sets aggregation SUM
+040 T2 sets group_by MONTH
+041 T2 cumulative NO
+
+042 T2 requery executes source
+043 T2 does not aggregate prior displayed records
+044 T2 operates on full matched set
+045 T2 survives >40 matched fixture
+046 totals include matches beyond display row 40
+
+047 T2 groups by mes_cargo
+048 T2 does not group by creation date
+049 T2 does not group by payment date
+
+050 CANCELADO remains present in T1 list
+051 CANCELADO excluded from T2 main aggregate
+052 non-cancelled rows included
+053 null importe treated by existing incomplete-total contract
+054 zero importe remains known zero
+055 PAGADO semantics unchanged
+
+056 safe label is importe registrado
+057 no claim of gasto pagado
+058 no claim of gasto contable
+059 no LLM math
+060 no OpenAI call required
+
+061 fresh chat T2 without state → unknown/clarification
+062 fresh chat T2 does not execute folio requery
+063 fresh chat T2 does not assume all folios
+
+064 cross-plant echoed state dropped
+065 cross-plant T2 not executed from old spec
+066 authorization rechecked for current planta
+
+067 T1 response/list behavior unchanged
+068 T1 display limit remains 40
+069 T1 match_count remains before display limit
+070 keyword matcher unchanged
+071 project join parity unchanged
+072 resolvePlantCodes unrelated
+
+073 C4 ¿cuántos fueron? remains outside this FIX
+074 C5 ¿y solo julio? remains outside this FIX
+
+075 existing explicit aggregate question still PASS:
+"cuánto suman los folios de enero a agosto de aceite?"
+076 explicit aggregate does not require conversation state
+077 explicit aggregate and follow-up aggregate produce same result fixture
+
+078 folio-search keyword range suite PASS
+079 folio aggregate existing tests PASS
+080 M2 folio status/history/documents PASS
+081 IGF reviewable PASS
+082 conversation-state existing suite PASS
+083 Tier 1/applicable gate PASS
+
+084 no new SQL
+085 no schema
+086 no migration
+087 no new tool
+088 no endpoint
+089 no server.js
+090 no frontend
+091 no planner unless STOP
+092 no LIVE_DB
+093 diff --check PASS
+094 NEW FAILURE = 0
 
 ## Expected delivery
 
-AUDIT_RESULT:
+IMPLEMENTATION_SHA:
+BASE_MAIN_SHA:
 
-PREVIOUS_FOLIO_FIX_CONTRACT:
+STATE_FIELD_NAME:
+STATE_WRITER:
+STATE_SANITIZER:
+STATE_READER:
+FOLIO_SEARCH_INHERITABLE:
 
-C1_EXACT_QUESTION:
-C1_INTENT:
-C1_ROUTE:
-C1_SEARCH_TERM:
-C1_UNIVERSE:
-C1_PERIOD:
-C1_PERIOD_FIELD:
-C1_MATCH_COUNT:
-C1_DISPLAY_LIMIT:
-C1_CONVERSATION_STATE_AFTER:
+STATE_SPEC_SHAPE:
+STATE_STORES_ROWS:
+STATE_STORES_AMOUNTS:
+STATE_PLANT_BOUND:
 
-C2_EXACT_QUESTION:
-C2_CURRENT_INTENT:
-C2_CURRENT_ROUTE:
-C2_CURRENT_RESPONSE_CLASS:
-C2_INHERITS_FOLIO_DOMAIN:
-C2_INHERITS_PLANT:
-C2_INHERITS_PERIOD:
-C2_INHERITS_SEARCH_TERM:
-C2_INHERITS_RESULT_SPEC:
+T1_INTENT:
+T1_SEARCH_TERM:
+T1_PERIOD:
+T1_UNIVERSE:
+T1_STATE_WRITTEN:
 
-STATE_WRITER_AFTER_T1:
-STATE_SHAPE_AFTER_T1:
-STATE_READER_ON_T2:
-FOLIO_SEARCH_STATE_PERSISTED:
-FOLIO_RESULT_SET_REFERENCE_PERSISTED:
+T2_EXACT_QUESTION:
+T2_ROUTE:
+T2_INHERITED_SPEC:
+T2_ANALYSIS_MODE:
+T2_AGGREGATION:
+T2_GROUP_BY:
+T2_REQUERY:
+T2_FULL_MATCH_SET:
+T2_DISPLAY_ROWS_USED_FOR_MATH:
 
-QUERY_PRE_TRUNCATES:
-MATCH_COUNT_BEFORE_LIMIT:
-DISPLAY_LIMIT:
-AGGREGATION_MUST_USE_FULL_MATCH_SET:
-
-RECOMMENDED_CONTINUITY_MODEL:
-WHY_ROWS_OR_SPEC:
-REQUERY_REQUIRED_FOR_COMPLETE_AGGREGATE:
-
-AMOUNT_SOURCE:
-AMOUNT_FIELD:
-AMOUNT_SEMANTIC:
-SAFE_VISIBLE_LABEL:
-
-GROUP_MONTH_SOURCE:
+CANCELLED_LIST_BEHAVIOR:
+CANCELLED_AGGREGATE_BEHAVIOR:
+AMOUNT_LABEL:
 GROUP_MONTH_FIELD:
-GROUP_MONTH_FORMAT:
 
-STATUS_FIELD:
-CANCELLED_CANONICAL_VALUE:
-CANCELLED_INCLUDED_IN_SEARCH_LIST:
-CANCELLED_EXCLUDED_FROM_MAIN_AGGREGATE_RECOMMENDED:
-EXISTING_SYSTEM_PRECEDENT:
+FRESH_CHAT_T2_BEHAVIOR:
+CROSS_PLANT_BEHAVIOR:
+AUTH_RECHECKED:
 
-RECOMMENDED_AGGREGATION_SHAPE:
-RECOMMENDED_AGGREGATION_LAYER:
-NEW_TOOL_REQUIRED:
-NEW_SQL_REQUIRED:
-LLM_MATH_ALLOWED:
+C4_COUNT_FOLLOWUP_CHANGED:
+C5_MONTH_REFINEMENT_CHANGED:
 
-C3_NO_ANTECEDENT_BEHAVIOR:
-C4_COUNT_FOLLOWUP_BEHAVIOR:
-C5_MONTH_REFINEMENT_BEHAVIOR:
+EXPLICIT_AGGREGATE_REGRESSION:
+FOLLOWUP_EQUALS_EXPLICIT_FIXTURE:
 
-PLANT_BOUND_STATE:
-AUTH_RECHECK_REQUIRED:
-CROSS_PLANT_REUSE_ALLOWED:
-
-FIRST_DIVERGENCE:
-
-ROUTING_BUG:
-CONTINUITY_BUG:
-STATE_WRITE_BUG:
-STATE_READ_BUG:
-RESULT_SET_BUG:
-AGGREGATION_CAPABILITY_MISSING:
-DATA_BUG:
-SQL_BUG:
-PRESENTATION_BUG:
-
-CAN_FIX_WITHOUT_NEW_SQL:
-CAN_FIX_WITHOUT_NEW_TOOL:
-CAN_FIX_WITHOUT_SERVER_CHANGE:
-CAN_FIX_WITHOUT_FRONTEND_CHANGE:
-CAN_FIX_WITHOUT_SCHEMA_CHANGE:
-
-FILES_INSPECTED:
-TESTS_RUN:
+001..094:
+SUITES:
+FILES:
 RISKS:
 
-RECOMMENDED_NEXT_SLICE:
+FOLIO_SEARCH_CHANGED:
+CONVERSATION_STATE_CHANGED:
+CHAT_CHANGED:
+PLANNER_CHANGED:
+SQL_CHANGED:
+SERVER_CHANGED:
+FRONTEND_CHANGED:
+SCHEMA_CHANGED:
+TOOL_ADDED:
+ENDPOINT_ADDED:
+OPENAI_MATH_USED:
+LIVE_DB_USED:
 
 ## Completion
 
-Al terminar:
+Si PASS:
 
 CURRENT_TASK -> DONE_PENDING_REVIEW
 
+Crear commit implementación.
+
 Crear reporte append-only:
 
-docs/dev-loop/reports/AUDIT-DIRECTOR-IA-FOLIO-KEYWORD-AGGREGATION-CONTINUITY-001.md
-
-Commit auditoría.
+docs/dev-loop/reports/FIX-DIRECTOR-IA-FOLIO-SEARCH-AGGREGATION-FOLLOWUP-001.md
 
 STOP.
 
-No implementación.
-No siguiente tarea.
 No merge.
 No push main.
 No deploy.
 No LIVE_DB.
-closure_reason: "HUMAN REVIEW PASS. La primera divergencia es que folio_search no escribe una specification heredable en conversation_state; por ello el follow-up pronominal llega sin antecedente y el planner cae en unknown."
+No siguiente tarea.
+closure_reason: "HUMAN REVIEW PASS. folio_search ahora persiste una specification canónica y saneada en conversation_state y el follow-up de agregación reconsulta determinísticamente el conjunto completo."
 
-human_architecture_decision: "La continuidad debe persistir una specification canónica y mínima del search, no las filas renderizadas. El agregado del segundo turno debe reconsultar determinísticamente el universo completo."
+human_acceptance: "PASS 94/94. El segundo turno 'puedes sumarlos y darme un total por mes?' hereda planta, scope, rango, mes_cargo, keyword y operación del turno anterior y reutiliza el aggregate existente con SUM/MONTH."
 
-human_aggregation_decision: "No se autoriza motor nuevo. folio_search ya soporta AGGREGATE/SUM/MONTH. El FIX debe reutilizar esa capacidad sobre el mismo scope, planta, periodo, mes_cargo, keyword/match mode y filtros del turno anterior."
+human_truth_decision: "La continuidad no guarda filas, importes ni texto renderizado. El agregado se ejecuta sobre el full matched set y no sobre el display limit 40."
 
-human_truth_decision: "El agregado principal excluye CANCELADO y debe llamarse importe registrado. No afirmar gasto pagado, gasto real ni gasto contable."
+human_financial_semantics: "public.folios.importe se presenta como importe registrado. CANCELADO permanece visible en el listado T1 pero se excluye del agregado principal. PAGADO no se interpreta como gasto contable."
 
-human_scope_decision: "Este slice cubre únicamente el follow-up de agregación equivalente a 'puedes sumarlos y darme un total por mes?'. ¿cuántos fueron? y ¿y solo julio? permanecen fuera de alcance."
+human_security_decision: "folio_search_spec está ligada a planta_id, se sanea al eco y se elimina ante cambio de planta. La reconsulta vuelve a pasar autorización."
 
-human_security_decision: "La specification debe estar ligada a planta_id, sanearse al eco y descartarse ante cambio de planta. La reconsulta vuelve a ejecutar autorización; no cross-plant reuse."
+scope_preserved: "No planner, SQL, server.js, frontend, schema, tool ni endpoint. ¿cuántos fueron? y ¿y solo julio? permanecen fuera de alcance."
+
+live_validation_pending: "Validar en Acapulco una secuencia real T1→T2 en el mismo chat y confirmar que chat nuevo con T2 aislado sigue fail-close."
