@@ -31,6 +31,7 @@ const {
   parseEtapaFromQuestion,
   loadFolioStatusForChat,
   buildFolioStatusChatResult,
+  folioVisibleToAuth,
 } = require("../lib/director-ia-m2-folio-status");
 
 const LIB_DIR = path.join(__dirname, "..", "lib");
@@ -205,6 +206,16 @@ describe("M2 authz", () => {
     const denied = assertFolioStatusAccess({ role: "GG", plantas_permitidas: [1] }, 2);
     assert.equal(denied.ok, false);
     assert.equal(denied.code, SOURCE_RESTRICTED);
+  });
+
+  it("GA ve folio creado por AD si no es privado", () => {
+    const folio = baseFolio({ creado_por_rol_clave: "AD", solo_zp_ad: false });
+    assert.equal(folioVisibleToAuth({ role: "GA", plantas_permitidas: [1] }, folio).ok, true);
+  });
+
+  it("GA no ve folio creado por AD si es solo ZP/AD", () => {
+    const folio = baseFolio({ creado_por_rol_clave: "AD", solo_zp_ad: true });
+    assert.equal(folioVisibleToAuth({ role: "GA", plantas_permitidas: [1] }, folio).ok, false);
   });
 });
 

@@ -12516,8 +12516,6 @@ app.get("/api/folios/:id/media", dashboardAuthMiddleware, dashboardBlockGVFolios
   try {
     const folio = await getFolioById(client, folioId);
     if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
-    const esZPMedia = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) === "ZP";
-    const esADMedia = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) === "AD";
     if (folio.solo_zp_ad && !authCanVerFoliosSoloZpAd(req.dashboardAuth)) return res.status(404).json({ error: "Folio no encontrado" });
     if ((req.dashboardAuth.role === "GG" || req.dashboardAuth.role === "GA") && req.dashboardAuth.plantas_permitidas && req.dashboardAuth.plantas_permitidas.length > 0) {
       if (!folio.planta_id || !req.dashboardAuth.plantas_permitidas.includes(folio.planta_id)) {
@@ -12549,8 +12547,6 @@ app.get("/api/folios/:id/media/:mediaId/url", dashboardAuthMiddleware, dashboard
   try {
     const folio = await getFolioById(client, folioId);
     if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
-    const esZPUrl = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) === "ZP";
-    const esADUrl = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) === "AD";
     if (folio.solo_zp_ad && !authCanVerFoliosSoloZpAd(req.dashboardAuth)) return res.status(404).json({ error: "Folio no encontrado" });
     if ((req.dashboardAuth.role === "GG" || req.dashboardAuth.role === "GA") && req.dashboardAuth.plantas_permitidas?.length > 0) {
       if (!folio.planta_id || !req.dashboardAuth.plantas_permitidas.includes(folio.planta_id)) {
@@ -12609,8 +12605,6 @@ app.get("/api/folios/:id/timeline", dashboardAuthMiddleware, dashboardBlockGVFol
   try {
     const folio = await getFolioById(client, folioId);
     if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
-    const esZPTl = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) === "ZP";
-    const esADTl = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) === "AD";
     if (folio.solo_zp_ad && !authCanVerFoliosSoloZpAd(req.dashboardAuth)) return res.status(404).json({ error: "Folio no encontrado" });
     if ((req.dashboardAuth.role === "GG" || req.dashboardAuth.role === "GA") && req.dashboardAuth.plantas_permitidas?.length > 0) {
       if (!folio.planta_id || !req.dashboardAuth.plantas_permitidas.includes(folio.planta_id)) {
@@ -12723,8 +12717,6 @@ app.get("/api/folios/:id/finanzas", dashboardAuthMiddleware, dashboardBlockGVFol
   try {
     const folio = await getFolioById(client, folioId);
     if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
-    const esZPFin = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) === "ZP";
-    const esADFin = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) === "AD";
     if (folio.solo_zp_ad && !authCanVerFoliosSoloZpAd(req.dashboardAuth)) return res.status(404).json({ error: "Folio no encontrado" });
     if ((req.dashboardAuth.role === "GG" || req.dashboardAuth.role === "GA") && req.dashboardAuth.plantas_permitidas?.length > 0) {
       if (!folio.planta_id || !req.dashboardAuth.plantas_permitidas.includes(folio.planta_id)) {
@@ -12754,11 +12746,7 @@ app.get("/api/folios/:id", dashboardAuthMiddleware, dashboardBlockGVFoliosMiddle
   try {
     const folio = await getFolioById(client, folioId);
     if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
-    const esZPDash = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) === "ZP";
-    const esADDash = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) === "AD";
     if (folio.solo_zp_ad && !authCanVerFoliosSoloZpAd(req.dashboardAuth)) return res.status(404).json({ error: "Folio no encontrado" });
-    const creadoPorAD = folio.creado_por_rol_clave && String(folio.creado_por_rol_clave).toUpperCase() === "AD";
-    if (creadoPorAD && !esZPDash && !esADDash) return res.status(404).json({ error: "Folio no encontrado" });
     if ((req.dashboardAuth.role === "GG" || req.dashboardAuth.role === "GA") && req.dashboardAuth.plantas_permitidas?.length > 0) {
       if (!folio.planta_id || !req.dashboardAuth.plantas_permitidas.includes(folio.planta_id)) {
         return res.status(403).json({ error: "Sin permiso" });
@@ -12856,8 +12844,6 @@ app.get("/api/folios/:id/cotizacion", dashboardAuthMiddleware, dashboardBlockGVF
     );
     const folio = r.rows[0] || null;
     if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
-    const esZPDoc = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) === "ZP";
-    const esADDoc = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) === "AD";
     if (folio.solo_zp_ad && !authCanVerFoliosSoloZpAd(req.dashboardAuth)) return res.status(404).json({ error: "Folio no encontrado" });
     if ((req.dashboardAuth.role === "GG" || req.dashboardAuth.role === "GA") && req.dashboardAuth.plantas_permitidas?.length > 0) {
       const folioPlantaId = folio.planta_id != null ? folio.planta_id : null;
@@ -12893,8 +12879,6 @@ app.get("/api/folios/:id/facturas", dashboardAuthMiddleware, dashboardBlockGVFol
     );
     const folio = r.rows[0] || null;
     if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
-    const esZPDoc = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) === "ZP";
-    const esADDoc = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) === "AD";
     if (folio.solo_zp_ad && !authCanVerFoliosSoloZpAd(req.dashboardAuth)) return res.status(404).json({ error: "Folio no encontrado" });
     if ((req.dashboardAuth.role === "GG" || req.dashboardAuth.role === "GA") && req.dashboardAuth.plantas_permitidas?.length > 0) {
       const folioPlantaId = folio.planta_id != null ? folio.planta_id : null;
@@ -12971,8 +12955,6 @@ app.get("/api/folios/:id/documento-gastos", dashboardAuthMiddleware, dashboardBl
     );
     const folio = r.rows[0] || null;
     if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
-    const esZPDoc = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) === "ZP";
-    const esADDoc = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) === "AD";
     if (folio.solo_zp_ad && !authCanVerFoliosSoloZpAd(req.dashboardAuth)) return res.status(404).json({ error: "Folio no encontrado" });
     if ((req.dashboardAuth.role === "GG" || req.dashboardAuth.role === "GA") && req.dashboardAuth.plantas_permitidas?.length > 0) {
       const folioPlantaId = folio.planta_id != null ? folio.planta_id : null;
@@ -13118,8 +13100,6 @@ app.get("/api/folios/:id/documento-folio", dashboardAuthMiddleware, dashboardBlo
     );
     const folio = r.rows[0] || null;
     if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
-    const esZPDoc = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) === "ZP";
-    const esADDoc = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) === "AD";
     if (folio.solo_zp_ad && !authCanVerFoliosSoloZpAd(req.dashboardAuth)) return res.status(404).json({ error: "Folio no encontrado" });
     if ((req.dashboardAuth.role === "GG" || req.dashboardAuth.role === "GA") && req.dashboardAuth.plantas_permitidas?.length > 0) {
       const folioPlantaId = folio.planta_id != null ? folio.planta_id : null;
@@ -13454,8 +13434,6 @@ app.get("/api/folios/:id/documento-completo", dashboardAuthMiddleware, dashboard
     );
     const folio = r.rows[0] || null;
     if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
-    const esZPDoc = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) === "ZP";
-    const esADDoc = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) === "AD";
     if (folio.solo_zp_ad && !authCanVerFoliosSoloZpAd(req.dashboardAuth)) return res.status(404).json({ error: "Folio no encontrado" });
     if ((req.dashboardAuth.role === "GG" || req.dashboardAuth.role === "GA") && req.dashboardAuth.plantas_permitidas?.length > 0) {
       const folioPlantaId = folio.planta_id != null ? folio.planta_id : null;
@@ -14680,8 +14658,6 @@ app.get("/api/folios/:id/poliza/documento", dashboardAuthMiddleware, dashboardBl
     );
     const folio = r.rows[0] || null;
     if (!folio) return res.status(404).json({ error: "Folio no encontrado" });
-    const esZPDoc = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) === "ZP";
-    const esADDoc = (req.dashboardAuth.role && String(req.dashboardAuth.role).toUpperCase()) === "AD";
     if (folio.solo_zp_ad && !authCanVerFoliosSoloZpAd(req.dashboardAuth)) return res.status(404).json({ error: "Folio no encontrado" });
     if ((req.dashboardAuth.role === "GG" || req.dashboardAuth.role === "GA") && req.dashboardAuth.plantas_permitidas?.length > 0) {
       const folioPlantaId = folio.planta_id != null ? folio.planta_id : null;

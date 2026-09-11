@@ -22,6 +22,7 @@ const { buildDirectorIaToolPlan } = require("../lib/director-ia-tool-orchestrato
 const {
   loadDashboardKpisForChat,
   loadProyectosForChat,
+  buildDashboardWhere,
   buildDashboardKpisChatResult,
   buildProyectosChatResult,
   assertM3KpisAccess,
@@ -367,5 +368,23 @@ describe("M3 chat end-to-end in-process", () => {
     assert.equal(result.context_meta.mode, "project_status_clarification");
     assert.equal(result.context_meta.openai_called, false);
     assert.match(result.answer, /Action Register/i);
+  });
+});
+
+describe("M3 dashboard where — visibilidad creados por AD", () => {
+  it("GA ve creados por AD; solo oculta privados si no tiene permiso", () => {
+    const ga = buildDashboardWhere(
+      { role: "GA", plantas_permitidas: [2], permisos: { acceso_ver_folios_solo_zp_ad: false } },
+      { ventanaDefault: false }
+    );
+    assert.match(ga.where, /solo_zp_ad/i);
+    assert.doesNotMatch(ga.where, /creado_por_rol_clave/i);
+
+    const gaPriv = buildDashboardWhere(
+      { role: "GA", plantas_permitidas: [2], permisos: { acceso_ver_folios_solo_zp_ad: true } },
+      { ventanaDefault: false }
+    );
+    assert.doesNotMatch(gaPriv.where, /solo_zp_ad/i);
+    assert.doesNotMatch(gaPriv.where, /creado_por_rol_clave/i);
   });
 });
