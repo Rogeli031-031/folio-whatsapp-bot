@@ -3,8 +3,7 @@ task_id: FIX-DIRECTOR-IA-FOLIO-SEARCH-AGGREGATION-FOLLOWUP-001
 task_type: FIX
 mode: REGRESSION_FIRST
 
-status: DONE_PENDING_REVIEW
-
+status: CLOSED
 authorized_by: "Human Approver"
 authorized_at: "2026-09-11T15:57:43-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Zaragoza 2026-09-11"
@@ -628,3 +627,16 @@ No push main.
 No deploy.
 No LIVE_DB.
 No siguiente tarea.
+closure_reason: "HUMAN REVIEW PASS. folio_search ahora persiste una specification canónica y saneada en conversation_state y el follow-up de agregación reconsulta determinísticamente el conjunto completo."
+
+human_acceptance: "PASS 94/94. El segundo turno 'puedes sumarlos y darme un total por mes?' hereda planta, scope, rango, mes_cargo, keyword y operación del turno anterior y reutiliza el aggregate existente con SUM/MONTH."
+
+human_truth_decision: "La continuidad no guarda filas, importes ni texto renderizado. El agregado se ejecuta sobre el full matched set y no sobre el display limit 40."
+
+human_financial_semantics: "public.folios.importe se presenta como importe registrado. CANCELADO permanece visible en el listado T1 pero se excluye del agregado principal. PAGADO no se interpreta como gasto contable."
+
+human_security_decision: "folio_search_spec está ligada a planta_id, se sanea al eco y se elimina ante cambio de planta. La reconsulta vuelve a pasar autorización."
+
+scope_preserved: "No planner, SQL, server.js, frontend, schema, tool ni endpoint. ¿cuántos fueron? y ¿y solo julio? permanecen fuera de alcance."
+
+live_validation_pending: "Validar en Acapulco una secuencia real T1→T2 en el mismo chat y confirmar que chat nuevo con T2 aislado sigue fail-close."
