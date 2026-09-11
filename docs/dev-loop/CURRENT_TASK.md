@@ -1,24 +1,25 @@
-task_id: AUDIT-DIRECTOR-IA-MONTH-CLOSE-HISTORICAL-MINI-LIVE-PARITY-001
+task_id: FIX-DIRECTOR-IA-MONTH-CLOSE-HISTORICAL-MINI-CLIENT-WRAPPER-001
 
-task_type: AUDIT
-mode: READ_ONLY
+task_type: FIX
+mode: REGRESSION_FIRST
 
-status: CLOSED
+status: AUTHORIZED
+
 authorized_by: "Human Approver"
-authorized_at: "2026-09-11T14:24:16-06:00"
+authorized_at: "2026-09-11T14:44:39-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Zaragoza 2026-09-11"
 
-implementation_authorized: NO
+implementation_authorized: YES
 merge_authorized: NO
 deploy_authorized: NO
 live_db_authorized: NO
 
 max_attempts: 1
 
-base_main_sha: 3be41f59a88c417394431987fb3c4faa7b312bb9
-result_report_path: docs/dev-loop/reports/AUDIT-DIRECTOR-IA-MONTH-CLOSE-HISTORICAL-MINI-LIVE-PARITY-001.md
+base_main_sha: ccee6a22b0df20aafb472afd45f78c729a502431
+result_report_path: docs/dev-loop/reports/FIX-DIRECTOR-IA-MONTH-CLOSE-HISTORICAL-MINI-CLIENT-WRAPPER-001.md
 
-objective: "Determinar por qué ArrClient construye la fila Agosto 2026 y month_close_result cae en DATA_MISSING al intentar construir VISIBLE_NOT_FINAL para el mismo periodo."
+objective: "Corregir el ownership del DB handle usado por month_close_result al cargar el mini histórico, evitando pasar un pg.Client ya adquirido a un wrapper que espera Pool y eliminando el falso DATA_MISSING causado por Client.connect()."
 
 ## Evidencia LIVE
 
@@ -38,610 +39,378 @@ Datos financieros no disponibles.
 Venta comercial:
 1,504.39 t
 
-Meta/compromiso del periodo: no cargada.
+## Causa probada
 
-También:
+Ruta actual:
 
-Dame el cierre financiero de agosto.
+loadMonthCloseResultForChat(pool, ...)
+→ acquire()
+→ db = pg.Client
+→ opts.loadIgfForecastMiniPayload(db, ...)
+→ loadIgfForecastMiniPayloadForDirectorIa(db,...)
+→ wrapper trata db como Pool
+→ db.connect()
+→ pg.Client.connect()
+→ throw
+→ catch
+→ historical_mini = null
+→ DATA_MISSING
 
-produce el mismo DATA_MISSING.
+Dashboard correcto:
 
-En cambio:
+pool.connect()
+→ pg.Client
+→ computeIgfForecastMiniPayload(client,...)
 
-¿Qué rentabilidad tenemos?
+## FIRST_PARITY_GAP
 
-responde correctamente con:
+WRAPPER_CONNECT_HEURISTIC_THROWS_ON_CHECKED_OUT_CLIENT
 
-MINI_FORECAST_PROY
-Septiembre 2026
-corte 11/09/2026
+## Decisión de implementación
 
-Este comportamiento de septiembre es correcto.
-NO tocarlo.
+Corregir el call-site/ownership.
 
-## North Star esperado
+El loader runtime:
 
-Para Agosto 2026, el dashboard ya demuestra que existe
-una vista financiera histórica visible.
+loadIgfForecastMiniPayloadForDirectorIa
 
-Por tanto, si month_close puede obtener
-la misma vista defendible del MISMO periodo:
+debe recibir el DB root/Pool que contractualmente espera,
+NO el pg.Client ya adquirido por month_close.
 
-financial.presentation.state
+El fix preferido es en:
 
-debe poder ser:
+lib/director-ia-month-close-result.js
+
+sin modificar server.js.
+
+No cambiar el contrato global del wrapper si no es necesario.
+
+## Contrato
+
+La función inyectada:
+
+opts.loadIgfForecastMiniPayload
+
+en runtime está configurada como:
+
+loadIgfForecastMiniPayloadForDirectorIa
+
+y espera un objeto capaz de adquirir su propio client.
+
+Por lo tanto month_close no debe pasarle:
+
+db = checked-out Client
+
+cuando también dispone de:
+
+pool = root Pool.
+
+## Historical mini call
+
+Antes:
+
+opts.loadIgfForecastMiniPayload(db, {
+  year,
+  month,
+  plantName,
+  plantCode
+})
+
+Deseado conceptualmente:
+
+opts.loadIgfForecastMiniPayload(pool, {
+  year,
+  month,
+  plantName,
+  plantCode
+})
+
+si ese es el contrato físico probado.
+
+No inventar otra abstracción.
+
+## Fixtures / injected dependencies
+
+Preservar tests y dependencias inyectadas razonables.
+
+`historicalMini` directo debe seguir funcionando.
+
+Si un test inyecta loadIgfForecastMiniPayload:
+debe probar el contrato correcto de ownership.
+
+No añadir compatibilidad ambigua Client-or-Pool basada en heurísticas nuevas.
+
+No detectar por nombre de constructor.
+
+No hacer:
+
+if (db.connect) ...
+
+porque un pg.Client también tiene connect().
+
+## No tocar wrapper
+
+Preferencia fuerte:
+
+NO modificar:
+
+loadIgfForecastMiniPayloadForDirectorIa
+
+si basta corregir el argumento en month_close.
+
+La auditoría determinó:
+
+CAN_FIX_WITHOUT_SERVER_CHANGE = YES.
+
+Si Cursor concluye que server.js es imprescindible:
+STOP.
+No ampliar alcance.
+
+## No tocar catch
+
+El catch actual de historical mini queda fuera de alcance.
+
+Este FIX elimina la excepción conocida aguas arriba.
+
+No rediseñar errores/logging.
+
+## Cutoff / upload_day
+
+FUERA DE ALCANCE de este FIX.
+
+Se sabe que:
+
+ArrClient sí pasa upload_day.
+month_close no.
+
+Pero la auditoría demostró:
+
+UPLOAD_DAY_REQUIRED_FOR_HISTORICAL_MINI = NO
+
+y su ausencia no causa DATA_MISSING.
+
+No agregar upload_day ahora.
+
+Después de LIVE se validará paridad numérica.
+
+## Periodo
+
+C1 Agosto:
+2026-08
+
+C3 Julio:
+2026-07
+
+No cambiar resolveCloseMonth.
+
+No current-month fallback.
+
+## Plant match
+
+No tocar findMiniRowForPlant.
+
+La auditoría demostró que:
+
+Acapulco
+→ exact match 100
+
+No es el bug.
+
+## Presentation
+
+No tocar:
+
+financial.presentation
+FINAL
+VISIBLE_NOT_FINAL
+DATA_MISSING
+
+La composición A/B/C ya funciona.
+
+Después de que historical mini cargue,
+el estado existente debe poder seleccionar:
 
 VISIBLE_NOT_FINAL
 
-y no:
+si hay valores defendibles.
 
-DATA_MISSING.
+## Septiembre actual
 
-NO convertirla en FINAL.
+Pregunta:
 
-## Alcance único
-
-Comparar físicamente:
-
-DASHBOARD
-
-ArrClient
-→ fetchIgfForecast(include_mini)
-→ GET /api/dashboard/igf-forecast
-→ buildIgfForecastPayload
-→ computeIgfForecastMiniPayload
-→ mini.rows
-→ fila Acapulco Agosto 2026
-
-VERSUS
-
-MONTH CLOSE
-
-isMonthCloseQuestion
-→ loadMonthCloseResultForChat
-→ chatDeps.loadIgfForecastMiniPayload
-→ loadIgfForecastMiniPayloadForDirectorIa
-→ computeIgfForecastMiniPayload
-→ findMiniRowForPlant
-→ financial.presentation
-→ VISIBLE_NOT_FINAL | DATA_MISSING
-
-Encontrar FIRST_PARITY_GAP.
-
-## No auditar nuevamente
-
-Ya está probado:
-
-- resolvePlantCodes shape FIX funciona;
-- month_close llega a 2026-08;
-- composer A/B/C existe;
-- DATA_MISSING hace fail-close correctamente;
-- septiembre current month usa MINI_FORECAST_PROY correctamente;
-- dashboard histórico no implica FINAL.
-
-No reabrir esos contratos.
-
-## In scope
-
-Solo lectura de:
-
-frontend-dashboard/app/arr/ArrClient.tsx
-frontend-dashboard/lib/api.ts
-server.js
-lib/director-ia-month-close-result.js
-lib/director-ia-chat.js
-lib/director-ia-dashboard-forecast-adapter.js
-
-y helpers directamente llamados por esos paths.
-
-Puede inspeccionar:
-
-computeIgfForecastMiniPayload
-loadIgfForecastMiniPayloadForDirectorIa
-findMiniRowForPlant
-resolveUploadDayForMonth
-buildIgfForecastPayload
-
-y dependencias estrictamente necesarias.
-
-## Out of scope
-
-NO cambios al composer.
-NO cambios de copy A/B/C.
-NO selectIgfStatusSourceMode.
-NO MINI_FORECAST_PROY septiembre.
-NO planner.
-NO resolvePlantCodes.
-NO historical-margin.
-NO SQL nuevo.
-NO schema.
-NO migration.
-NO tool nueva.
-NO endpoint nuevo.
-NO frontend change.
-NO server change.
-NO LIVE_DB.
-NO deploy.
-NO merge.
-NO push main.
-
-## Hipótesis a probar — no asumir
-
-H1 DEPENDENCY/WIRING
-
-¿chatDeps.loadIgfForecastMiniPayload existe realmente en runtime
-y apunta al wrapper correcto?
-
-Entregar:
-
-CHAT_DEP_NAME:
-CHAT_DEP_INJECTION_POINT:
-CHAT_DEP_RUNTIME_TARGET:
-CHAT_DEP_PRESENT:
-CHAT_DEP_OPTIONAL_OR_REQUIRED:
-
-## H2 ARGUMENT SHAPE
-
-Comparar argumentos exactos.
-
-Dashboard:
-
-fetchIgfForecast(...)
-→ year
-→ month
-→ include_mini
-→ upload_day / corte si aplica
-
-Month close:
-
-loadIgfForecastMiniPayload(...)
-→ ?
-
-Entregar:
-
-DASHBOARD_MINI_CALL_ARGS:
-MONTH_CLOSE_MINI_CALL_ARGS:
-
-ARG_YEAR_PARITY:
-ARG_MONTH_PARITY:
-ARG_PLANT_PARITY:
-ARG_CUTOFF_PARITY:
-ARG_VERSION_PARITY:
-
-## H3 CUTOFF
-
-Este punto es prioritario.
-
-Trazar físicamente:
-
-resolveUploadDayForMonth
-
-y determinar:
-
-- qué fecha usa ArrClient para Agosto 2026;
-- si el backend recibe upload_day;
-- si el mini cambia su construcción cuando upload_day está ausente;
-- qué hace month_close al no pasar upload_day.
-
-Entregar:
-
-DASHBOARD_CUTOFF_SOURCE:
-DASHBOARD_CUTOFF_VALUE_RULE:
-MONTH_CLOSE_CUTOFF_SOURCE:
-MONTH_CLOSE_PASSES_UPLOAD_DAY:
-
-UPLOAD_DAY_REQUIRED_FOR_HISTORICAL_MINI:
-UPLOAD_DAY_ABSENCE_EFFECT:
-
-No inventar el valor concreto de agosto sin LIVE_DB.
-
-## H4 PERIOD BINDING
-
-Confirmar:
-
-month_close resolveCloseMonth
-→ 2026-08
-
-y después comprobar que esa misma pareja:
-
-year=2026
-month=8
-
-llega hasta:
-
-computeIgfForecastMiniPayload
-
-No basta con que month_close resuelva agosto correctamente;
-debe comprobarse la llamada final.
-
-Entregar:
-
-RESOLVED_CLOSE_PERIOD:
-MINI_REQUESTED_PERIOD:
-MINI_RETURNED_PERIOD:
-
-PERIOD_PARITY:
-
-## H5 RETURN SHAPE
-
-Determinar shape real de:
-
-loadIgfForecastMiniPayloadForDirectorIa
-
-¿Devuelve directamente?
-
-{
-  year,
-  month,
-  rows
-}
-
-¿o?
-
-{
-  ok,
-  payload: {...}
-}
-
-¿o?
-
-{
-  mini: {...}
-}
-
-¿otro?
-
-Entregar:
-
-DASHBOARD_MINI_SHAPE:
-DIRECTOR_WRAPPER_RETURN_SHAPE:
-MONTH_CLOSE_EXPECTED_SHAPE:
-
-SHAPE_PARITY:
-SHAPE_FIRST_DIVERGENCE:
-
-No arreglar shape.
-
-## H6 PLANT MATCH
-
-Auditar:
-
-findMiniRowForPlant
-
-y los campos reales presentes en mini.rows.
-
-Para fixture/code-only determinar si compara:
-
-nombre
-planta_nombre
-plant_code
-provincia
-clave
-otro
-
-Month close puede tener:
-
-Acapulco
-E3
-ACA
-
-Demostrar cuáles manda.
-
-Entregar:
-
-MINI_ROW_PLANT_FIELDS:
-MONTH_CLOSE_PLANT_NAME:
-MONTH_CLOSE_PLANT_CODE:
-FIND_MINI_ROW_MATCH_RULE:
-
-PLANT_MATCH_POSSIBLE:
-PLANT_MATCH_FIRST_DIVERGENCE:
-
-No asumir que E3 debe coincidir con label.
-
-## H7 FINANCIAL-VALUE GATE
-
-VISIBLE_NOT_FINAL requiere que la fila tenga al menos
-un valor financiero defendible.
-
-Trazar exactamente el predicate.
-
-Entregar:
-
-VISIBLE_NOT_FINAL_REQUIRED_FIELDS:
-VISIBLE_NOT_FINAL_GATE_FUNCTION:
-
-Si mini row existe pero queda DATA_MISSING:
-
-demostrar qué campo/gate lo causa.
-
-## H8 SWALLOWED ERROR
-
-Auditar todos los:
-
-try/catch
-.catch(...)
-optional dependency guards
-fallbacks
-
-entre:
-
-loadIgfForecastMiniPayload
-y
-financial.presentation
-
-Determinar si un error de loader/compute es convertido silenciosamente en:
-
-historical_mini = null
-
-o equivalente.
-
-Entregar:
-
-ERROR_SWALLOW_POINT:
-ERROR_TYPE_VISIBLE_TO_CALLER:
-DATA_MISSING_CAUSED_BY_SWALLOW_POSSIBLE:
-
-No cambiar logging.
-
-## Dashboard vs Director parity table
-
-Entregar una tabla conceptual:
-
-FIELD | DASHBOARD | MONTH_CLOSE | PARITY
-
-para:
-
-year
-month
-upload_day
-plant identifier
-version rule
-compute function
-return shape
-row matcher
-required financial fields
-
-## Sondas READ_ONLY
-
-Puede crear/ejecutar pruebas o sondas temporales READ_ONLY
-sin cambiar producto.
-
-Reproducir con fixtures:
-
-S1
-dashboard-style invocation August
-
-S2
-month-close-style invocation August
-
-Usar el mismo fixture base.
-
-La comparación debe revelar cuál condición hace que:
-
-S1 → row available
-
-y
-
-S2 → DATA_MISSING
-
-si puede reproducirse sin LIVE_DB.
-
-Si no puede reproducirse:
-
-marcar:
-
-NOT_REPRODUCIBLE_WITHOUT_LIVE_DB
-
-y explicar el dato faltante.
-
-No activar LIVE_DB.
-
-## Preguntas de control
-
-C1:
-¿Cómo cerramos agosto?
-
-Esperado routing:
-month_close_result
-
-C2:
-Dame el cierre financiero de agosto.
-
-Esperado:
-month_close_result
-
-C3:
-¿Cómo cerramos julio?
-
-Misma auditoría de path histórico.
-
-C4:
 ¿Qué rentabilidad tenemos?
 
 Debe permanecer:
 
 igf_status
-MINI_FORECAST_PROY
-current month
+→ MINI_FORECAST_PROY
+→ Septiembre 2026
 
-No tocar.
+No tocar selectIgfStatusSourceMode.
 
-## FIRST_PARITY_GAP
+## North Star de regresión
 
-Debe ser UNA frontera física concreta.
+Con fixture equivalente al runtime:
 
-Ejemplos aceptables:
+Pool
+→ month_close acquires Client para sus queries
+→ mini loader recibe Pool
+→ wrapper adquiere su propio Client
+→ compute mini
+→ devuelve row Acapulco
+→ financial.presentation = VISIBLE_NOT_FINAL
 
-MONTH_CLOSE_DOES_NOT_PASS_UPLOAD_DAY
+No Client.connect() sobre checked-out client.
 
-DIRECTOR_WRAPPER_RETURNS_DIFFERENT_SHAPE
+## Tests obligatorios
 
-FIND_MINI_ROW_PLANT_MATCH_FAILS
+001 C1 intent month_close_result
+002 C1 period 2026-08
+003 month_close acquires Client for normal queries
+004 acquired Client remains used for sales/target/forecast/financial paths
 
-CHAT_DEP_NOT_INJECTED
+005 mini loader receives Pool/root handle
+006 mini loader does NOT receive acquired pg.Client
+007 runtime wrapper can call pool.connect once
+008 wrapper-acquired Client reaches compute mini
+009 no second connect on month-close acquired Client
+010 pg.Client.connect throw reproduced pre-fix fixture
 
-HISTORICAL_MINI_COMPUTE_THROWS_AND_IS_SWALLOWED
+011 pre-fix fixture yields DATA_MISSING
+012 post-fix fixture yields mini row
+013 post-fix presentation VISIBLE_NOT_FINAL
+014 no mutation to financial_state
+015 no promotion to FINAL
 
-otro demostrado.
+016 historicalMini direct override preserved
+017 direct historicalMini does not call loader
+018 injected loader called with root handle
+019 injected loader receives year
+020 injected loader receives month
+021 injected loader receives plantName
+022 injected loader receives plantCode
 
-No responder simplemente:
+023 C1 mini requested 2026-08
+024 C1 returned period 2026-08 accepted
+025 C1 current September mini not used
 
-"month-close no encuentra mini".
+026 C3 July requested 2026-07
+027 C3 no August/September contamination
 
-## Clasificación
+028 findMiniRowForPlant unchanged
+029 Acapulco matcher regression PASS
+030 codes shape fix regression PASS
 
-Determinar:
+031 financial.presentation FINAL behavior unchanged
+032 VISIBLE_NOT_FINAL behavior unchanged
+033 DATA_MISSING behavior unchanged when mini truly absent
+034 defendable-values gate unchanged
 
-WIRING_BUG:
-ARGUMENT_BUG:
-CUTOFF_BUG:
-PERIOD_BUG:
-SHAPE_BUG:
-PLANT_MATCH_BUG:
-VALUE_GATE_BUG:
-ERROR_SWALLOW_BUG:
-DATA_BUG:
-COMPOSER_BUG:
-CURRENT_MONTH_SOURCE_BUG:
+035 composer unchanged
+036 generic gaps behavior unchanged
+037 copy unchanged
 
-Composer bug esperado:
-NO
+038 C2 cierre financiero agosto route unchanged
+039 C2 receives same corrected historical mini path
 
-Current-month source bug esperado:
-NO
+040 C4 current-month route unchanged
+041 C4 MINI_FORECAST_PROY September unchanged
 
-## Fixability
+042 no upload_day addition
+043 no cutoff logic change
+044 no version rule change
 
-Entregar:
+045 no server.js
+046 no wrapper modification
+047 no SQL
+048 no schema
+049 no migration
+050 no new tool
+051 no endpoint
+052 no frontend
 
-CAN_FIX_WITHOUT_NEW_SQL:
-CAN_FIX_WITHOUT_NEW_TOOL:
-CAN_FIX_WITHOUT_NEW_ENDPOINT:
-CAN_FIX_WITHOUT_SERVER_CHANGE:
-CAN_FIX_WITHOUT_FRONTEND_CHANGE:
+053 no planner change
+054 no historical-margin change
+055 no resolvePlantCodes change
+056 no source-selector change
 
-No implementar.
+057 month-close existing suite PASS
+058 financial composition suite PASS
+059 current-month profitability suite PASS
+060 historical-margin focal PASS
+061 client-profile regression PASS
+062 commercial-trend regression PASS
 
-## Entrega exacta
+063 diff --check PASS
+064 applicable gate PASS
+065 NEW FAILURE = 0
 
-AUDIT_RESULT:
+## Expected delivery
 
-C1_INTENT:
-C1_ROUTE:
-C2_INTENT:
-C2_ROUTE:
-C3_ROUTE:
-C4_CURRENT_MONTH_ROUTE:
+IMPLEMENTATION_SHA:
+BASE_MAIN_SHA:
 
-DASHBOARD_PATH:
-MONTH_CLOSE_PATH:
+ROOT_DB_HANDLE_TYPE:
+MONTH_CLOSE_ACQUIRED_HANDLE_TYPE:
+MINI_LOADER_HANDLE_BEFORE:
+MINI_LOADER_HANDLE_AFTER:
 
-CHAT_DEP_NAME:
-CHAT_DEP_INJECTION_POINT:
-CHAT_DEP_RUNTIME_TARGET:
-CHAT_DEP_PRESENT:
-CHAT_DEP_OPTIONAL_OR_REQUIRED:
+FIX_FILE:
+FIX_FUNCTION:
+FIX_SIGNATURE_OR_LINE:
 
-DASHBOARD_MINI_CALL_ARGS:
-MONTH_CLOSE_MINI_CALL_ARGS:
+SERVER_CHANGED:
+WRAPPER_CHANGED:
+MONTH_CLOSE_CHANGED:
 
-ARG_YEAR_PARITY:
-ARG_MONTH_PARITY:
-ARG_PLANT_PARITY:
-ARG_CUTOFF_PARITY:
-ARG_VERSION_PARITY:
+C1_PERIOD:
+C1_MINI_REQUEST_PERIOD:
+C1_MINI_ROW_FOUND:
+C1_PRESENTATION_STATE:
+C1_CLIENT_RECONNECT_ERROR_REMOVED:
 
-DASHBOARD_CUTOFF_SOURCE:
-DASHBOARD_CUTOFF_VALUE_RULE:
-MONTH_CLOSE_CUTOFF_SOURCE:
-MONTH_CLOSE_PASSES_UPLOAD_DAY:
-UPLOAD_DAY_REQUIRED_FOR_HISTORICAL_MINI:
-UPLOAD_DAY_ABSENCE_EFFECT:
+C2_BEHAVIOR:
+C3_PERIOD:
+C4_CURRENT_MINI_UNCHANGED:
 
-RESOLVED_CLOSE_PERIOD:
-MINI_REQUESTED_PERIOD:
-MINI_RETURNED_PERIOD:
-PERIOD_PARITY:
+HISTORICAL_MINI_OVERRIDE_PRESERVED:
+INJECTED_LOADER_CONTRACT:
 
-DASHBOARD_MINI_SHAPE:
-DIRECTOR_WRAPPER_RETURN_SHAPE:
-MONTH_CLOSE_EXPECTED_SHAPE:
-SHAPE_PARITY:
-SHAPE_FIRST_DIVERGENCE:
+UPLOAD_DAY_ADDED:
+CUTOFF_CHANGED:
+VERSION_RULE_CHANGED:
 
-MINI_ROW_PLANT_FIELDS:
-MONTH_CLOSE_PLANT_NAME:
-MONTH_CLOSE_PLANT_CODE:
-FIND_MINI_ROW_MATCH_RULE:
-PLANT_MATCH_POSSIBLE:
-PLANT_MATCH_FIRST_DIVERGENCE:
-
-VISIBLE_NOT_FINAL_REQUIRED_FIELDS:
-VISIBLE_NOT_FINAL_GATE_FUNCTION:
-
-ERROR_SWALLOW_POINT:
-ERROR_TYPE_VISIBLE_TO_CALLER:
-DATA_MISSING_CAUSED_BY_SWALLOW_POSSIBLE:
-
-DASHBOARD_VS_MONTH_CLOSE_PARITY_TABLE:
-
-S1_DASHBOARD_STYLE_RESULT:
-S2_MONTH_CLOSE_STYLE_RESULT:
-REPRODUCED_WITHOUT_LIVE_DB:
-
-FIRST_PARITY_GAP:
-
-WIRING_BUG:
-ARGUMENT_BUG:
-CUTOFF_BUG:
-PERIOD_BUG:
-SHAPE_BUG:
-PLANT_MATCH_BUG:
-VALUE_GATE_BUG:
-ERROR_SWALLOW_BUG:
-DATA_BUG:
-COMPOSER_BUG:
-CURRENT_MONTH_SOURCE_BUG:
-
-CAN_FIX_WITHOUT_NEW_SQL:
-CAN_FIX_WITHOUT_NEW_TOOL:
-CAN_FIX_WITHOUT_NEW_ENDPOINT:
-CAN_FIX_WITHOUT_SERVER_CHANGE:
-CAN_FIX_WITHOUT_FRONTEND_CHANGE:
-
-FILES_INSPECTED:
-TESTS_RUN:
+001..065:
+SUITES:
+FILES:
 RISKS:
 
-RECOMMENDED_NEXT_SLICE:
+SQL_CHANGED:
+SCHEMA_CHANGED:
+TOOL_ADDED:
+ENDPOINT_ADDED:
+FRONTEND_CHANGED:
+PLANNER_CHANGED:
+COMPOSER_CHANGED:
+SOURCE_SELECTOR_CHANGED:
+LIVE_DB_USED:
 
 ## Completion
 
-Al terminar:
+Si PASS:
 
 CURRENT_TASK -> DONE_PENDING_REVIEW
 
+Crear commit implementación.
+
 Crear reporte append-only:
 
-docs/dev-loop/reports/AUDIT-DIRECTOR-IA-MONTH-CLOSE-HISTORICAL-MINI-LIVE-PARITY-001.md
-
-Commit auditoría.
+docs/dev-loop/reports/FIX-DIRECTOR-IA-MONTH-CLOSE-HISTORICAL-MINI-CLIENT-WRAPPER-001.md
 
 STOP.
 
-No implementación.
-No siguiente tarea.
 No merge.
 No push main.
 No deploy.
 No LIVE_DB.
-closure_reason: "HUMAN REVIEW PASS. La primera divergencia física entre ArrClient y month_close histórico es WRAPPER_CONNECT_HEURISTIC_THROWS_ON_CHECKED_OUT_CLIENT."
-
-human_root_cause: "loadMonthCloseResultForChat ya adquiere un pg.Client y lo entrega a loadIgfForecastMiniPayloadForDirectorIa. Ese wrapper espera un Pool/root DB owner y vuelve a ejecutar .connect(), provocando throw antes de computeIgfForecastMiniPayload."
-
-human_fix_boundary: "El siguiente slice debe corregir únicamente el ownership/argumento del DB handle para la carga del mini histórico. No tocar composer, planner, MINI_FORECAST_PROY, resolvePlantCodes ni source selectors."
-
-human_cutoff_decision: "La ausencia de upload_day NO explica DATA_MISSING: el compute puede producir filas sin ese argumento. La paridad exacta de cutoff queda fuera de este FIX y se validará después en LIVE."
-
-human_swallow_decision: "El catch que convierte el error del mini histórico en historical_mini=null explica por qué LIVE falla cerrado como DATA_MISSING. No ampliar este slice a rediseñar logging/error policy."
+No siguiente tarea.
