@@ -36,7 +36,7 @@ No se tocó matcher, SQL, planner, chat, conversation-state, server ni frontend.
 ---
 
 IMPLEMENTATION_SHA:
-PENDING_THIS_COMMIT
+f527b112
 
 BASE_MAIN_SHA:
 4807dc3416af90fc3d249ea542ce72c7fbfe2b03
