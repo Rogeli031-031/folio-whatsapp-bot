@@ -1,5 +1,5 @@
 ﻿```yaml
-task_id: "IMPL-DIRECTOR-IA-EXECUTIVE-DIAGNOSIS-OBSERVATIONS-RISKS-001"
+task_id: "IMPL-DIRECTOR-IA-DIAGNOSIS-INDEPENDENT-SIGNALS-001"
 
 status: DONE_PENDING_REVIEW
 
@@ -10,263 +10,272 @@ authorized_at: "2026-09-14"
 human_authorization: "AUTHORIZED_BY_HUMAN"
 
 objective: >
-  Implementar la especialización DIAGNOSIS de Director IA únicamente para
-  responder preguntas ejecutivas de preocupación/problemas mediante
-  observaciones, desviaciones y riesgos ya soportados físicamente por runtime,
-  sin afirmar causas confirmadas ni introducir hipótesis no soportadas.
+  Mejorar DIAGNOSIS para que, aun cuando falte igf_meta del periodo abierto,
+  pueda mostrar señales ejecutivas independientes del target que ya existen
+  físicamente o ya son calculadas por runtime, sin inventar riesgos, prioridad,
+  causalidad ni una segunda lógica de diagnóstico.
 
 source_audit:
-  task_id: "AUDIT-DIRECTOR-IA-EXECUTIVE-DIAGNOSIS-001"
-  report: "docs/dev-loop/reports/AUDIT-DIRECTOR-IA-EXECUTIVE-DIAGNOSIS-001.md"
-  audit_commit: "4e89914f"
+  task_id: "AUDIT-DIRECTOR-IA-DIAGNOSIS-EVIDENCE-COVERAGE-001"
+  report: "docs/dev-loop/reports/AUDIT-DIRECTOR-IA-DIAGNOSIS-EVIDENCE-COVERAGE-001.md"
+  audit_commit: "743444fa"
 
-parent_family:
-  intent: "EXECUTIVE_STATUS"
-  relationship: >
-    DIAGNOSIS es una especialización subordinada. No sustituye EXECUTIVE_STATUS
-    ni convierte cualquier estado ejecutivo en diagnóstico.
+production_problem:
+  plant: "Acapulco"
+  period: "2026-09"
+  prompts:
+    - "¿Qué debería preocuparme?"
+    - "¿Qué riesgos ves?"
+    - "¿Dónde estamos fallando?"
+  current_result:
+    - "TARGET_MISSING_FOR_PERIOD como única OBSERVATION"
+    - "DEVIATION vacía"
+    - "RISK vacío"
+  business_issue: >
+    La respuesta es formalmente segura pero no aporta suficiente valor ejecutivo.
 
-supported_levels:
-  - "OBSERVATION"
-  - "DEVIATION"
-  - "RISK"
+audit_findings:
+  - >
+    TARGET_MISSING_FOR_PERIOD no corta el pack. Simplemente es la única señal
+    que dispara en el run productivo observado.
+  - >
+    ARR vacío + forecast missing + overdue 0 reproduce el resultado casi vacío.
+  - >
+    Venta to-date puede existir sin target y no requiere afirmar cumplimiento.
+  - >
+    FORECAST_MISSING y SOURCE_UNAVAILABLE son gaps ya derivados.
+  - >
+    Algunos movimientos de clientes ya son calculados pero no siempre se proyectan
+    a DIAGNOSIS.
+  - >
+    TARGET_MISSING_FOR_PERIOD debe tratarse como DATA_GAP secundario.
 
-unsupported_levels:
-  - "HYPOTHESIS"
-  - "CONFIRMED_CAUSE"
+primary_goal: >
+  Permitir que DIAGNOSIS proyecte señales independientes del target ya disponibles,
+  manteniendo separadas OBSERVATION, DEVIATION, RISK y DATA_GAP.
 
-canonical_questions:
-  - "¿Qué debería preocuparme?"
-  - "¿Qué me debería preocupar?"
-  - "¿Dónde estamos fallando?"
-  - "¿Dónde tenemos problemas?"
-  - "¿Qué está funcionando y qué no?"
-  - "¿Qué riesgos ves?"
-  - "¿Cuál es el principal problema?"
-  - "¿Qué está saliendo mal?"
-  - "¿Qué se está deteriorando?"
-
-known_baseline:
-  concern_phrase_gap:
-    phrase: "¿Qué debería preocuparme?"
-    current_behavior: "unknown"
-    cause: >
-      El detector reconoce variantes como 'preocupa' pero no cubre
-      correctamente 'preocuparme'.
-  cause_question:
-    example: "¿Por qué estamos debajo de la meta?"
-    current_behavior: "CAUSE_EXPLANATION"
-    rule: >
-      No implementar explicación causal en este slice.
-
-allowed_signal_types:
+supported_signal_types:
   observation:
     examples:
-      - "cliente dejó de comprar"
-      - "acción está vencida"
-      - "folio/incidencia objetiva existente"
-      - "métrica bajó respecto a referencia válida"
-
+      - "venta to-date del periodo"
+      - "cliente dejó de comprar, si ya existe la señal física"
+      - "cliente aumentó o disminuyó, si ya está calculado"
   deviation:
     examples:
-      - "venta real por debajo de igf_meta.venta_ton"
-      - "cambio negativo vs periodo comparable"
-      - "desviación física ya calculada por runtime"
-
+      - "solo cuando ya existe referencia física comparable"
   risk:
-    source_rule: >
-      Solo reglas de riesgo existentes y tipadas físicamente. No crear nuevas
-      reglas subjetivas.
+    rule: >
+      Únicamente riesgos ya tipados por runtime. No crear nuevas reglas.
+  data_gap:
     examples:
-      - "FORECAST_BELOW_TARGET"
-      - "lost client"
-      - "overdue action"
-      - "otras reglas PRE_CLOSE existentes verificadas por auditoría"
+      - "TARGET_MISSING_FOR_PERIOD"
+      - "FORECAST_MISSING"
+      - "SOURCE_UNAVAILABLE"
+
+required_changes:
+  target_missing:
+    before: "OBSERVATION protagonista"
+    after: "DATA_GAP secundario"
+    rule: >
+      No debe presentarse como sustituto del diagnóstico completo.
+
+  sales_to_date:
+    rule: >
+      Si existe venta real del periodo, puede mostrarse como OBSERVATION aun sin meta.
+      No decir que está bien, mal, arriba o abajo de objetivo sin target.
+
+  existing_gaps:
+    rule: >
+      Proyectar gaps ya derivados como FORECAST_MISSING o SOURCE_UNAVAILABLE cuando
+      existan, etiquetados como DATA_GAP y no como riesgo.
+
+  client_movers:
+    rule: >
+      Proyectar movimientos de clientes ya calculados y trazables como OBSERVATION
+      o DEVIATION según contrato vigente. No convertir automáticamente cliente perdido,
+      aumento o disminución en riesgo nuevo.
+
+required_output_behavior:
+  - >
+    Si existen riesgos tipados, mostrarlos en RISK.
+  - >
+    Si no existen riesgos tipados pero sí observaciones o gaps, responder con esos datos.
+  - >
+    Si no existe ningún riesgo, puede decir explícitamente:
+    "No detecto riesgos tipados en este contexto."
+  - >
+    No llenar RISK con DATA_GAP.
+  - >
+    No presentar labels técnicos crudos como única respuesta cuando pueda redactarse
+    una explicación ejecutiva clara.
+  - >
+    Mantener evidencia y trazabilidad.
+
+example_expected_shape: >
+  Diagnóstico ejecutivo — Acapulco — septiembre 2026
+
+  Observaciones:
+  - Venta acumulada del periodo: X toneladas.
+  - N clientes presentan movimiento relevante ya calculado.
+
+  Riesgos:
+  - No detecto riesgos tipados en este contexto.
+
+  Huecos de información:
+  - No existe meta física cargada para septiembre.
+  - Forecast no disponible, si corresponde.
+
+  Sin afirmar causas ni recomendaciones.
 
 prohibited_claims:
+  - "vamos mal" sin referencia
+  - "vamos bien" sin referencia
+  - "esto es un riesgo" sin regla tipada
   - "la causa es"
   - "esto ocurrió porque"
-  - "seguramente se debe a"
-  - "el responsable es"
-  - "recomiendo hacer X"
-  - "lo más importante es X" # PRIORITY queda fuera
-  - "esta es la causa principal"
-  - "este comentario confirma la causa"
-
-diagnostic_contract:
-  input_context:
-    - "planta explícita o contexto válido"
-    - "periodo cuando la señal lo requiera"
-  output:
-    must_distinguish:
-      - "observación"
-      - "desviación"
-      - "riesgo"
-    must_include_when_available:
-      - "hallazgo"
-      - "tipo de hallazgo"
-      - "evidencia/fuente"
-      - "periodo"
-      - "planta"
-      - "valor o referencia relevante"
-    must_not_include:
-      - "causa no demostrada"
-      - "hipótesis libre"
-      - "recomendación"
-      - "priorización subjetiva"
-
-aggregation_rule: >
-  Cuando existan varios hallazgos, Director IA puede agruparlos por tipo o
-  dominio, pero no debe ordenarlos como prioridad salvo que exista una regla
-  objetiva ya soportada y autorizada explícitamente.
-
-linguistic_scope:
-  must_cover:
-    - "preocuparme"
-    - "me debería preocupar"
-    - "problemas"
-    - "fallando"
-    - "riesgos"
-    - "saliendo mal"
-    - "deteriorando"
-  must_not_absorb:
-    - "¿Por qué...?"
-    - "¿Qué hago?"
-    - "¿Qué atiendo primero?"
-    - "¿Qué es lo más importante?"
-    - "¿Qué tal estás?"
+  - "deberías hacer"
+  - "lo más importante es"
+  - "este cliente es el principal problema" sin PRIORITY autorizada
 
 protected_boundaries:
-  cause_explanation:
-    rule: >
-      Preguntas causales continúan fuera. No responderlas con causalidad inventada.
-  priority:
-    rule: >
-      No seleccionar 'lo más importante' ni 'qué atender primero'.
   performance:
     rule: >
-      Puede reutilizar una desviación de performance como hallazgo, pero no
-      modificar el contrato de PERFORMANCE.
+      Falta de target impide evaluar cumplimiento de venta. No modificar.
+  cause_explanation:
+    rule: "No implementar."
+  priority:
+    rule: "No implementar ni ordenar hallazgos como ranking ejecutivo."
+  recommendation:
+    rule: "No implementar."
   executive_status:
-    rule: >
-      No degradar la cobertura existente de EXECUTIVE_STATUS.
+    rule: "No modificar semántica."
   daily_executive_brief:
     rule: "No modificar."
   month_close_result:
-    rule: "No modificar su semántica causal ni de target."
+    rule: "No modificar."
+  pre_close:
+    rule: >
+      Reutilizar señales existentes; no crear segundo motor.
 
-continuity_cases:
-  - conversation:
-      - "¿Cómo vamos contra la meta de venta?"
-      - "¿Qué debería preocuparme?"
-    expected: >
-      Puede reutilizar planta, periodo y desviación ya establecida y añadir otros
-      riesgos soportados del mismo contexto, sin explicar causas.
+signals_in_scope:
+  - "TARGET_MISSING_FOR_PERIOD"
+  - "FORECAST_MISSING"
+  - "SOURCE_UNAVAILABLE"
+  - "venta to-date"
+  - "clientes lost ya calculados"
+  - "clientes positivos ya calculados"
+  - "clientes que disminuyeron ya calculados"
+  - "otros movers ya disponibles en la misma frontera física"
 
-  - conversation:
-      - "¿Qué debería preocuparme?"
-      - "¿Por qué?"
-    expected: >
-      No inventar causa. Si CAUSE_EXPLANATION no está implementado, aplicar
-      comportamiento fail-closed o aclaración existente.
-
-  - conversation:
-      - "¿Qué riesgos ves en Puebla?"
-      - "¿Y Acapulco?"
-    expected: >
-      Resolver nueva planta sin cruzar evidencia entre plantas.
+signals_explicitly_out_of_scope:
+  - "14d si requiere integración nueva"
+  - "M9 si requiere integración nueva"
+  - "month_close agosto como fallback automático"
+  - "KPIs nuevos"
+  - "proyectos"
+  - "nuevas reglas de overdue"
+  - "ranking"
+  - "priorización"
+  - "causalidad"
+  - "recomendaciones"
 
 tests_required:
   positive:
-    - "¿Qué debería preocuparme?"
-    - "¿Qué me debería preocupar?"
-    - "¿Dónde estamos fallando?"
-    - "¿Dónde tenemos problemas?"
-    - "¿Qué riesgos ves?"
-    - "¿Qué está funcionando y qué no?"
-    - "un caso con desviación de venta vs meta"
-    - "un caso con cliente perdido"
-    - "un caso con acción vencida"
+    - "sin target + venta to-date disponible"
+    - "sin target + FORECAST_MISSING"
+    - "sin target + SOURCE_UNAVAILABLE"
+    - "sin target + client movers disponibles"
+    - "riesgo tipado existente sigue apareciendo"
+    - "observaciones y DATA_GAP pueden coexistir"
+    - "RISK vacío produce lenguaje ejecutivo claro y no una tabla vacía"
 
   negative:
-    - "¿Por qué estamos debajo de la meta? no obtiene causa inventada"
-    - "comentario humano no se convierte en causa confirmada"
-    - "Action Register no se convierte en causalidad"
-    - "¿Qué tengo que atender? no entra aquí"
-    - "¿Qué es lo más importante? no entra aquí"
-    - "¿Qué tal estás? no entra aquí"
+    - "TARGET_MISSING_FOR_PERIOD no aparece como RISK"
+    - "venta to-date no se convierte en cumplimiento"
+    - "cliente perdido no genera riesgo nuevo si no existe regla tipada"
+    - "movimiento positivo no se interpreta como 'vamos bien'"
+    - "comentario no se convierte en causa"
+    - "no se crea ranking"
+    - "no se crea recomendación"
     - "no cruce de planta"
     - "no cruce de periodo"
 
   regression:
+    - "DIAGNOSIS actual sigue reconociendo las frases soportadas"
     - "EXECUTIVE_STATUS sigue funcionando"
-    - "PERFORMANCE venta vs meta sigue funcionando"
-    - "daily_executive_brief sigue funcionando"
+    - "PERFORMANCE sigue funcionando"
     - "month_close_result sigue funcionando"
-    - "planner sin regresiones relevantes"
+    - "daily_executive_brief sigue funcionando"
+    - "PRE_CLOSE sigue funcionando"
 
 success_metrics:
-  - "Las frases DIAGNOSIS soportadas llegan a la ruta correcta."
-  - "¿Qué debería preocuparme? deja de caer en unknown."
-  - "0 afirmaciones causales nuevas."
-  - "0 recomendaciones nuevas."
-  - "0 priorización subjetiva."
-  - "0 cruces de planta."
-  - "0 cruces de periodo."
-  - "0 reglas de riesgo inventadas."
+  - >
+    En ausencia de target, DIAGNOSIS puede devolver observaciones independientes
+    si existen.
+  - >
+    TARGET_MISSING_FOR_PERIOD queda como DATA_GAP y no como diagnóstico principal.
+  - "0 riesgos nuevos inventados."
+  - "0 afirmaciones causales."
+  - "0 recomendaciones."
+  - "0 prioridad subjetiva."
+  - "0 cruces de planta o periodo."
+  - "0 segunda lógica de riesgo."
 
 implementation_principle: >
-  Reutilizar señales, reglas y evidencia existentes. No construir un segundo
-  motor de riesgo ni duplicar lógica PRE_CLOSE.
+  Reutilizar únicamente información ya disponible en la frontera actual del pack
+  o helpers directamente existentes y contractualmente compatibles. No ampliar
+  el alcance para traer nuevas familias completas de datos.
 
 in_scope:
-  - "planner mínimo requerido para reconocer DIAGNOSIS"
-  - "capa ejecutiva/CEL mínima necesaria"
-  - "reutilización de señales OBSERVATION/DEVIATION/RISK existentes"
+  - "lib/director-ia-executive-diagnosis-observations-risks.js"
+  - "frontera mínima necesaria en composeExecutiveCycle / deriveRisksAndGaps si aplica"
+  - "proyección de signals/gaps ya existentes"
   - "tests y fixtures"
   - "docs/dev-loop/CURRENT_TASK.md"
-  - "docs/dev-loop/reports/IMPL-DIRECTOR-IA-EXECUTIVE-DIAGNOSIS-OBSERVATIONS-RISKS-001.md"
+  - "docs/dev-loop/reports/IMPL-DIRECTOR-IA-DIAGNOSIS-INDEPENDENT-SIGNALS-001.md"
 
 out_of_scope:
+  - "nuevas sources"
+  - "SQL/schema"
+  - "frontend"
+  - "PRIORITY"
   - "CAUSE_EXPLANATION"
   - "Reasoning Engine N5 runtime"
-  - "hipótesis en chat"
-  - "causa confirmada"
   - "recomendaciones"
-  - "PRIORITY"
-  - "nuevas reglas de riesgo"
-  - "nuevas fuentes"
-  - "SQL"
-  - "schema"
-  - "frontend"
+  - "saludo/identidad"
+  - "Taller Expense Analytics"
   - "merge a main"
   - "push directo a main"
   - "deploy"
   - "siguiente tarea"
 
 allowed_actions:
-  - "crear rama implementation/director-ia-executive-diagnosis-observations-risks-001"
-  - "modificar la mínima frontera runtime necesaria"
+  - "crear rama implementation/director-ia-diagnosis-independent-signals-001"
+  - "modificar la frontera mínima necesaria"
+  - "reusar señales existentes"
   - "agregar tests/fixtures"
   - "ejecutar sondas locales/read-only"
   - "documentar evidencia"
-  - "commit y push únicamente a la rama de trabajo si el protocolo vigente lo permite"
+  - "commit y push únicamente a la rama autorizada si el protocolo vigente lo permite"
 
 forbidden_actions:
+  - "inventar riesgos"
   - "inventar causas"
-  - "inventar hipótesis"
-  - "inventar reglas de riesgo"
-  - "crear recomendaciones"
-  - "crear priorización"
+  - "inventar prioridad"
+  - "inventar recomendaciones"
+  - "crear fallback de target"
+  - "usar forecast como target"
   - "modificar SQL"
   - "merge a main"
   - "push a main"
   - "deploy"
+  - "iniciar saludo/identidad"
+  - "iniciar Taller"
   - "iniciar PRIORITY"
 
 max_attempts: 1
 
-result_report_path: "docs/dev-loop/reports/IMPL-DIRECTOR-IA-EXECUTIVE-DIAGNOSIS-OBSERVATIONS-RISKS-001.md"
+result_report_path: "docs/dev-loop/reports/IMPL-DIRECTOR-IA-DIAGNOSIS-INDEPENDENT-SIGNALS-001.md"
 
 final_state: "DONE_PENDING_REVIEW"
 ```

@@ -19,7 +19,9 @@ const { isMonthCloseQuestion } = require("../lib/director-ia-month-close-result"
 const { isDailyExecutiveBriefQuestion } = require("../lib/director-ia-daily-executive-brief");
 const {
   TYPED_RISK_CODES,
+  DATA_GAP_KINDS,
   containsForbiddenCausalLanguage,
+  containsForbiddenJudgmentLanguage,
   projectFindingsFromCyclePack,
   formatDiagnosisAnswer,
   loadExecutiveDiagnosisForChat,
@@ -169,9 +171,9 @@ describe("DIAGNOSIS findings from existing PRE_CLOSE signals", () => {
     assert.equal(dev.observed, pack.plants[0].current.venta_ton);
     assert.equal(dev.reference, 1200);
     const answer = formatDiagnosisAnswer(findings, pack);
-    assert.match(answer, /DEVIATION/);
-    assert.match(answer, /OBSERVATION/);
-    assert.match(answer, /RISK/);
+    assert.match(answer, /Desviaciones/);
+    assert.match(answer, /Observaciones/);
+    assert.match(answer, /Riesgos/);
     assert.equal(containsForbiddenCausalLanguage(answer), false);
     assert.doesNotMatch(answer, /la causa es/i);
     assert.doesNotMatch(answer, /se debe a/i);
@@ -335,9 +337,9 @@ describe("DIAGNOSIS load + output contract", () => {
     assert.ok(loaded.findings.some((f) => f.level === "RISK"));
     const answer = formatDiagnosisAnswer(loaded.findings, loaded.pack);
     assert.match(answer, /^Diagnóstico ejecutivo/m);
-    assert.match(answer, /\bOBSERVATION\b/);
-    assert.match(answer, /\bDEVIATION\b/);
-    assert.match(answer, /\bRISK\b/);
+    assert.match(answer, /Observaciones/);
+    assert.match(answer, /Desviaciones/);
+    assert.match(answer, /Riesgos/);
     assert.equal(containsForbiddenCausalLanguage(answer), false);
   });
 
@@ -348,5 +350,162 @@ describe("DIAGNOSIS load + output contract", () => {
     assert.match(answer, /sin ranking/i);
     assert.doesNotMatch(answer, /lo más importante es/i);
     assert.doesNotMatch(answer, /recomiendo/i);
+  });
+});
+
+describe("DIAGNOSIS independent signals without target", () => {
+  function missingTargetOpts(over = {}) {
+    return composeOpts({
+      auth: zpAuth(),
+      now: new Date("2026-09-14T12:00:00-06:00"),
+      openYearMonth: { year: 2026, month: 9 },
+      defaultCutoff: "2026-09-13",
+      targetByPlant: { 1: null, 2: null, 3: null },
+      salesRowsByPlant: {
+        2: [salesRow("BETA", 180000, "2026-09")],
+      },
+      priorSalesRowsByPlant: {
+        2: [salesRow("BETA", 400000, "2026-08"), salesRow("PERDIDO", 120000, "2026-08")],
+      },
+      discountRowsByPlant: { 2: [{ month: "2026-09", monto: 1000 }] },
+      forecastByPlant: { 2: { missing: true } },
+      loadActions: async () => ({ ok: true, summary: { open: 0, overdue: 0, closed: 0 }, top_overdue: [] }),
+      ...over,
+    });
+  }
+
+  async function composeAcapulco(over = {}) {
+    return composeExecutiveCycle(null, 2, { dashboardAuth: zpAuth() }, missingTargetOpts(over));
+  }
+
+  it("1. target missing + venta to-date es OBSERVATION, no cumplimiento", async () => {
+    const pack = await composeAcapulco();
+    const findings = projectFindingsFromCyclePack(pack);
+    const sale = findings.find((f) => f.kind === "SALES_TO_DATE");
+    assert.ok(sale);
+    assert.equal(sale.level, "OBSERVATION");
+    assert.equal(sale.period, "2026-09");
+    assert.equal(sale.observed, 180);
+    assert.equal(sale.reference, null);
+    assert.ok(!findings.some((f) => f.kind === "SALES_BELOW_TARGET" || f.kind === "SALES_AT_OR_ABOVE_TARGET"));
+    const gap = findings.find((f) => f.kind === "TARGET_MISSING_FOR_PERIOD");
+    assert.ok(gap);
+    assert.equal(gap.level, "DATA_GAP");
+    const answer = formatDiagnosisAnswer(findings, pack);
+    assert.match(answer, /Venta acumulada/);
+    assert.match(answer, /No evalúa cumplimiento/);
+    assert.match(answer, /Huecos de información/);
+    assert.doesNotMatch(answer, /está en cumplimiento/i);
+    assert.doesNotMatch(answer, /vamos bien/i);
+    assert.doesNotMatch(answer, /vamos mal/i);
+  });
+
+  it("2. target missing + forecast missing es DATA_GAP, no RISK", async () => {
+    const pack = await composeAcapulco({
+      salesRowsByPlant: { 2: [salesRow("BETA", 180000, "2026-09")] },
+      priorSalesRowsByPlant: { 2: [salesRow("BETA", 180000, "2026-08")] },
+    });
+    const findings = projectFindingsFromCyclePack(pack);
+    const fc = findings.find((f) => f.kind === "FORECAST_MISSING_FOR_PERIOD");
+    assert.ok(fc);
+    assert.equal(fc.level, "DATA_GAP");
+    assert.ok(!findings.some((f) => f.level === "RISK" && f.kind === "FORECAST_MISSING_FOR_PERIOD"));
+    const answer = formatDiagnosisAnswer(findings, pack);
+    assert.match(answer, /No detecto riesgos tipados/);
+    assert.doesNotMatch(answer, /RISK:\s*ninguna/);
+    assert.doesNotMatch(answer, /Huecos de información[\s\S]*Riesgos/);
+  });
+
+  it("3. target missing + source unavailable es DATA_GAP", async () => {
+    const pack = await composeAcapulco({
+      salesRowsByPlant: { 2: "error" },
+    });
+    const findings = projectFindingsFromCyclePack(pack);
+    const src = findings.find((f) => f.kind === "SOURCE_UNAVAILABLE");
+    assert.ok(src);
+    assert.equal(src.level, "DATA_GAP");
+    assert.ok(!findings.some((f) => f.level === "RISK" && f.kind === "SOURCE_UNAVAILABLE"));
+    assert.ok(!findings.some((f) => f.kind === "SALES_TO_DATE"));
+  });
+
+  it("4. target missing + mover positivo es OBSERVATION, no 'vamos bien'", async () => {
+    const pack = await composeAcapulco({
+      salesRowsByPlant: { 2: [salesRow("BETA", 500000, "2026-09")] },
+      priorSalesRowsByPlant: { 2: [salesRow("BETA", 100000, "2026-08")] },
+    });
+    assert.ok(pack.plants[0].current.top_positive_movers.some((m) => m.cliente_norm === "BETA"));
+    const findings = projectFindingsFromCyclePack(pack);
+    const up = findings.find((f) => f.kind === "CLIENT_KG_VS_PRIOR_UP" && f.client === "BETA");
+    assert.ok(up);
+    assert.equal(up.level, "OBSERVATION");
+    const answer = formatDiagnosisAnswer(findings, pack);
+    assert.doesNotMatch(answer, /vamos bien/i);
+    assert.equal(containsForbiddenJudgmentLanguage(answer), false);
+  });
+
+  it("5. target missing + mover negativo ya calculado es DEVIATION", async () => {
+    const pack = await composeAcapulco();
+    const findings = projectFindingsFromCyclePack(pack);
+    const down = findings.find((f) => f.level === "DEVIATION" && f.kind === "CLIENT_KG_VS_PRIOR" && f.client === "BETA");
+    assert.ok(down);
+    assert.ok(down.observed < 0);
+    assert.ok(!findings.some((f) => f.level === "RISK" && f.kind === "CLIENT_KG_VS_PRIOR"));
+  });
+
+  it("6. riesgo PRE_CLOSE existente sigue apareciendo sin target", async () => {
+    const pack = await composeAcapulco({
+      forecastByPlant: {
+        2: { version_id: 1, version_number: 1, row: { venta_ton: 500, resultado_final_importe: -10000 } },
+      },
+    });
+    const findings = projectFindingsFromCyclePack(pack);
+    assert.ok(findings.some((f) => f.level === "RISK" && f.risk_code === "FORECAST_RESULT_NEGATIVE"));
+    assert.ok(findings.some((f) => f.level === "RISK" && f.risk_code === "LOST_HIGH_VOLUME_CLIENT"));
+    assert.ok(TYPED_RISK_CODES.includes("FORECAST_RESULT_NEGATIVE"));
+    assert.ok(!findings.some((f) => f.level === "RISK" && !TYPED_RISK_CODES.includes(f.risk_code)));
+  });
+
+  it("7. DATA_GAP no aparece como RISK", async () => {
+    const pack = await composeAcapulco();
+    const findings = projectFindingsFromCyclePack(pack);
+    for (const f of findings.filter((x) => x.level === "DATA_GAP")) {
+      assert.notEqual(f.level, "RISK");
+      assert.ok(["TARGET_MISSING_FOR_PERIOD", "FORECAST_MISSING_FOR_PERIOD", "SOURCE_UNAVAILABLE"].includes(f.kind));
+    }
+    assert.ok(!findings.some((f) => f.level === "RISK" && DATA_GAP_KINDS.includes(f.kind)));
+  });
+
+  it("8-11. venta to-date no es cumplimiento; sin causa, prioridad ni recomendación", async () => {
+    const pack = await composeAcapulco();
+    const findings = projectFindingsFromCyclePack(pack);
+    const answer = formatDiagnosisAnswer(findings, pack);
+    assert.doesNotMatch(answer, /arriba de (la )?meta/i);
+    assert.doesNotMatch(answer, /abajo de (la )?meta/i);
+    assert.equal(containsForbiddenCausalLanguage(answer), false);
+    assert.doesNotMatch(answer, /la causa es/i);
+    assert.doesNotMatch(answer, /lo más importante es/i);
+    assert.doesNotMatch(answer, /recomiendo/i);
+    assert.doesNotMatch(answer, /deberías hacer/i);
+  });
+
+  it("12. no cruce de planta con target missing", async () => {
+    const pack = await composeAcapulco();
+    const findings = projectFindingsFromCyclePack(pack);
+    assert.ok(findings.every((f) => f.plant_id === 2));
+    assert.doesNotMatch(JSON.stringify(findings), /Puebla|ARTURO/);
+  });
+
+  it("13. no cruce de periodo con target missing", async () => {
+    const seen = [];
+    const pack = await composeAcapulco({
+      targetByPlant: undefined,
+      loadTarget: async ({ year, month, plant }) => {
+        seen.push(`${year}-${String(month).padStart(2, "0")}-${plant.planta_id}`);
+        return null;
+      },
+    });
+    assert.ok(seen.every((s) => s.startsWith("2026-09-")));
+    const findings = projectFindingsFromCyclePack(pack, { period: "2026-09" });
+    assert.ok(findings.every((f) => !f.period || f.period === "2026-09"));
   });
 });
