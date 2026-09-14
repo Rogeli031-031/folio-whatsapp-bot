@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   fetchPlanMaestro,
   fetchPlanMaestroFileBlob,
@@ -18,6 +18,8 @@ type Props = {
   token: string;
   onClose: () => void;
 };
+
+type MobilePane = "hojas" | "chat" | "notas";
 
 type PdfJsLib = {
   GlobalWorkerOptions: { workerSrc: string };
@@ -107,7 +109,11 @@ export function PlanMaestroModal({ open, token, onClose }: Props) {
   const [noteSaving, setNoteSaving] = useState(false);
   const [question, setQuestion] = useState("");
   const [chatBusy, setChatBusy] = useState(false);
+  const [mobilePane, setMobilePane] = useState<MobilePane>("hojas");
+  const [maximized, setMaximized] = useState(false);
+  const [viewerWidth, setViewerWidth] = useState(0);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const viewerBoxRef = useRef<HTMLDivElement | null>(null);
   const pdfRef = useRef<PdfDoc | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
@@ -134,8 +140,22 @@ export function PlanMaestroModal({ open, token, onClose }: Props) {
 
   useEffect(() => {
     if (!open) return;
+    setMobilePane("hojas");
+    setMaximized(false);
     void reload();
   }, [open, token]);
+
+  useEffect(() => {
+    const el = viewerBoxRef.current;
+    if (!el || !open) return;
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width || 0;
+      if (w > 0) setViewerWidth(w);
+    });
+    ro.observe(el);
+    if (el.clientWidth > 0) setViewerWidth(el.clientWidth);
+    return () => ro.disconnect();
+  }, [open, maximized, mobilePane, activeDoc?.uploaded]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ block: "end" });
@@ -200,9 +220,21 @@ export function PlanMaestroModal({ open, token, onClose }: Props) {
       try {
         const pg = await pdf.getPage(page);
         if (cancelled) return;
-        const viewport = pg.getViewport({ scale: 1.25 });
+        const base = pg.getViewport({ scale: 1 });
+        const desktop = typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches;
+        const avail = viewerBoxRef.current?.clientWidth || viewerWidth;
+        const scale =
+          !desktop && avail > 0 ? Math.min(2, Math.max(0.4, (avail - 16) / base.width)) : 1.25;
+        const viewport = pg.getViewport({ scale });
         canvas.width = viewport.width;
         canvas.height = viewport.height;
+        if (desktop) {
+          canvas.style.width = "";
+          canvas.style.height = "";
+        } else {
+          canvas.style.width = "100%";
+          canvas.style.height = "auto";
+        }
         const ctx = canvas.getContext("2d");
         if (!ctx) return;
         await pg.render({ canvasContext: ctx, viewport }).promise;
@@ -223,7 +255,7 @@ export function PlanMaestroModal({ open, token, onClose }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [page, pageCount, open, viewerLoading]);
+  }, [page, pageCount, open, viewerLoading, maximized, viewerWidth]);
 
   async function handleUpload(slug: string, file: File | undefined) {
     if (!file) return;
@@ -284,7 +316,97 @@ export function PlanMaestroModal({ open, token, onClose }: Props) {
     }
   }
 
+  function goPrevPage() {
+    setPage((p) => Math.max(1, p - 1));
+  }
+
+  function goNextPage() {
+    setPage((p) => (pageCount ? Math.min(pageCount, p + 1) : p + 1));
+  }
+
+  function onPageInput(raw: string) {
+    const n = Number(raw);
+    if (Number.isFinite(n) && n >= 1) setPage(pageCount ? Math.min(pageCount, n) : n);
+  }
+
+  function pageControls(extra?: ReactNode) {
+    return (
+      <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 px-3 py-2 text-sm">
+        <span className="text-slate-300">{activeDoc?.title || "Documento"}</span>
+        {pageCount > 0 && (
+          <span className="text-xs text-slate-500">
+            Hoja {page} de {pageCount}
+          </span>
+        )}
+        <div className="ml-auto flex flex-wrap items-center gap-1">
+          <button
+            type="button"
+            disabled={page <= 1}
+            onClick={goPrevPage}
+            className="rounded border border-slate-600 px-2 py-1 text-xs disabled:opacity-40"
+          >
+            Anterior
+          </button>
+          <input
+            type="number"
+            min={1}
+            max={pageCount || undefined}
+            value={page}
+            onChange={(e) => onPageInput(e.target.value)}
+            className="w-16 rounded border border-slate-600 bg-slate-950 px-2 py-1 text-center text-xs"
+          />
+          <button
+            type="button"
+            disabled={pageCount > 0 && page >= pageCount}
+            onClick={goNextPage}
+            className="rounded border border-slate-600 px-2 py-1 text-xs disabled:opacity-40"
+          >
+            Siguiente
+          </button>
+          {extra}
+        </div>
+      </div>
+    );
+  }
+
+  function renderViewerBody() {
+    return (
+      <div ref={viewerBoxRef} className="min-h-0 flex-1 overflow-auto bg-slate-950 p-2">
+        {viewerLoading && <p className="p-4 text-sm text-slate-400">Abriendo PDF…</p>}
+        {viewerError && <p className="p-4 text-sm text-red-400">{viewerError}</p>}
+        {!activeDoc?.uploaded && !viewerLoading && (
+          <p className="p-4 text-sm text-slate-400">Todavía no hay archivo. Quien corresponda puede subirlo aquí.</p>
+        )}
+        {fallbackUrl && (
+          <iframe
+            title={activeDoc?.title || "PDF"}
+            src={`${fallbackUrl}#page=${page}&view=FitH`}
+            className={`h-full w-full rounded border border-slate-800 bg-white ${
+              maximized ? "min-h-[70vh]" : "min-h-[50vh] lg:min-h-[420px]"
+            }`}
+          />
+        )}
+        {!fallbackUrl && activeDoc?.uploaded && (
+          <canvas ref={canvasRef} className="mx-auto max-w-full bg-white shadow" />
+        )}
+      </div>
+    );
+  }
+
   if (!open) return null;
+
+  const hojasClass =
+    mobilePane === "hojas" ? "flex min-h-0 flex-1 flex-col gap-3" : "hidden lg:flex min-h-0 flex-col gap-3";
+  const asideClass =
+    mobilePane === "hojas" ? "hidden lg:flex min-h-0 flex-col gap-3" : "flex min-h-0 flex-1 flex-col gap-3 lg:flex";
+  const chatClass =
+    mobilePane === "chat"
+      ? "flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-slate-800 bg-slate-900"
+      : "hidden lg:flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-slate-800 bg-slate-900";
+  const notesClass =
+    mobilePane === "notas"
+      ? "flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-slate-800 bg-slate-900"
+      : "hidden lg:flex max-h-[42%] min-h-[180px] flex-col overflow-hidden rounded-lg border border-slate-800 bg-slate-900";
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-2 sm:p-4" role="dialog" aria-modal="true">
@@ -308,9 +430,33 @@ export function PlanMaestroModal({ open, token, onClose }: Props) {
         {error && <p className="px-4 pt-2 text-sm text-red-400">{error}</p>}
         {loading && <p className="px-4 pt-2 text-sm text-slate-400">Cargando…</p>}
 
-        <div className="grid flex-1 grid-cols-1 gap-3 overflow-hidden p-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.9fr)]">
-          <section className="flex min-h-0 flex-col gap-3">
-            <div className="grid gap-2 md:grid-cols-3">
+        <nav className="flex shrink-0 gap-1 border-b border-slate-800 px-3 py-2 lg:hidden" aria-label="Secciones Plan Maestro">
+          {(
+            [
+              ["hojas", "Hojas"],
+              ["chat", "Chat"],
+              ["notas", "Notas"],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => {
+                setMobilePane(id);
+                setMaximized(false);
+              }}
+              className={`flex-1 rounded px-2 py-2 text-sm font-medium ${
+                mobilePane === id ? "bg-cyan-800 text-white" : "bg-slate-800 text-slate-200"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+
+        <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-hidden p-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.9fr)]">
+          <section className={hojasClass}>
+            <div className="grid max-h-[28vh] shrink-0 gap-2 overflow-auto md:max-h-none md:grid-cols-3">
               {docs.map((doc) => (
                 <article
                   key={doc.slug}
@@ -318,7 +464,14 @@ export function PlanMaestroModal({ open, token, onClose }: Props) {
                     activeDoc?.slug === doc.slug ? "border-cyan-500 bg-cyan-950/30" : "border-slate-700 bg-slate-900/70"
                   }`}
                 >
-                  <button type="button" className="w-full text-left" onClick={() => setActiveSlug(doc.slug)}>
+                  <button
+                    type="button"
+                    className="w-full text-left"
+                    onClick={() => {
+                      setActiveSlug(doc.slug);
+                      setMobilePane("hojas");
+                    }}
+                  >
                     <h3 className="text-sm font-semibold text-slate-100">{doc.title}</h3>
                     <p className="mt-1 text-xs text-slate-400">
                       {doc.uploaded
@@ -333,7 +486,10 @@ export function PlanMaestroModal({ open, token, onClose }: Props) {
                       <>
                         <button
                           type="button"
-                          onClick={() => setActiveSlug(doc.slug)}
+                          onClick={() => {
+                            setActiveSlug(doc.slug);
+                            setMobilePane("hojas");
+                          }}
                           className="rounded bg-cyan-800 px-2.5 py-1 text-xs font-medium text-white hover:bg-cyan-700"
                         >
                           Ver hojas
@@ -376,66 +532,22 @@ export function PlanMaestroModal({ open, token, onClose }: Props) {
               ))}
             </div>
 
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-slate-800 bg-slate-900">
-              <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 px-3 py-2 text-sm">
-                <span className="text-slate-300">{activeDoc?.title || "Documento"}</span>
-                {pageCount > 0 && (
-                  <span className="text-xs text-slate-500">
-                    Hoja {page} de {pageCount}
-                  </span>
-                )}
-                <div className="ml-auto flex items-center gap-1">
-                  <button
-                    type="button"
-                    disabled={page <= 1}
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    className="rounded border border-slate-600 px-2 py-1 text-xs disabled:opacity-40"
-                  >
-                    Anterior
-                  </button>
-                  <input
-                    type="number"
-                    min={1}
-                    max={pageCount || undefined}
-                    value={page}
-                    onChange={(e) => {
-                      const n = Number(e.target.value);
-                      if (Number.isFinite(n) && n >= 1) setPage(pageCount ? Math.min(pageCount, n) : n);
-                    }}
-                    className="w-16 rounded border border-slate-600 bg-slate-950 px-2 py-1 text-center text-xs"
-                  />
-                  <button
-                    type="button"
-                    disabled={pageCount > 0 && page >= pageCount}
-                    onClick={() => setPage((p) => (pageCount ? Math.min(pageCount, p + 1) : p + 1))}
-                    className="rounded border border-slate-600 px-2 py-1 text-xs disabled:opacity-40"
-                  >
-                    Siguiente
-                  </button>
-                </div>
-              </div>
-              <div className="min-h-0 flex-1 overflow-auto bg-slate-950 p-2">
-                {viewerLoading && <p className="p-4 text-sm text-slate-400">Abriendo PDF…</p>}
-                {viewerError && <p className="p-4 text-sm text-red-400">{viewerError}</p>}
-                {!activeDoc?.uploaded && !viewerLoading && (
-                  <p className="p-4 text-sm text-slate-400">Todavía no hay archivo. Quien corresponda puede subirlo aquí.</p>
-                )}
-                {fallbackUrl && (
-                  <iframe
-                    title={activeDoc?.title || "PDF"}
-                    src={`${fallbackUrl}#page=${page}&view=FitH`}
-                    className="h-full min-h-[420px] w-full rounded border border-slate-800 bg-white"
-                  />
-                )}
-                {!fallbackUrl && activeDoc?.uploaded && (
-                  <canvas ref={canvasRef} className="mx-auto max-w-full bg-white shadow" />
-                )}
-              </div>
+            <div className="flex min-h-[50vh] flex-1 flex-col overflow-hidden rounded-lg border border-slate-800 bg-slate-900 lg:min-h-0">
+              {pageControls(
+                <button
+                  type="button"
+                  onClick={() => setMaximized(true)}
+                  className="rounded bg-cyan-800 px-2 py-1 text-xs font-medium text-white hover:bg-cyan-700 lg:hidden"
+                >
+                  Maximizar
+                </button>
+              )}
+              {!maximized && renderViewerBody()}
             </div>
           </section>
 
-          <aside className="flex min-h-0 flex-col gap-3">
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-slate-800 bg-slate-900">
+          <aside className={asideClass}>
+            <div className={chatClass}>
               <h3 className="border-b border-slate-800 px-3 py-2 text-sm font-semibold text-cyan-100">
                 Chat sobre los archivos
               </h3>
@@ -484,7 +596,7 @@ export function PlanMaestroModal({ open, token, onClose }: Props) {
               </form>
             </div>
 
-            <div className="flex max-h-[42%] min-h-[180px] flex-col overflow-hidden rounded-lg border border-slate-800 bg-slate-900">
+            <div className={notesClass}>
               <h3 className="border-b border-slate-800 px-3 py-2 text-sm font-semibold text-amber-100">
                 Notas y comentarios
               </h3>
@@ -525,6 +637,31 @@ export function PlanMaestroModal({ open, token, onClose }: Props) {
           </aside>
         </div>
       </div>
+
+      {maximized && (
+        <div className="fixed inset-0 z-[70] flex flex-col bg-slate-950 text-slate-100" role="dialog" aria-label="Visor maximizado">
+          {pageControls(
+            <>
+              {activeDoc?.uploaded && (
+                <a
+                  href={planMaestroFileUrl(token, activeDoc.slug, "attachment")}
+                  className="rounded bg-slate-700 px-2 py-1 text-xs font-medium text-white hover:bg-slate-600"
+                >
+                  Descargar
+                </a>
+              )}
+              <button
+                type="button"
+                onClick={() => setMaximized(false)}
+                className="rounded border border-slate-200 px-3 py-1 text-xs font-medium text-white hover:bg-slate-800"
+              >
+                Volver
+              </button>
+            </>
+          )}
+          {renderViewerBody()}
+        </div>
+      )}
     </div>
   );
 }

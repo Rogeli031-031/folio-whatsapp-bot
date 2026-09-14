@@ -1,422 +1,96 @@
-task_id: FIX-DIRECTOR-IA-FOLIO-KEYWORD-TIENEN-PALABRA-PARITY-001
+```yaml
+task_id: "FIX-PLAN-MAESTRO-MOBILE-PDF-VIEWER-001"
 
-task_type: FIX
-mode: REGRESSION_FIRST
+status: DONE_PENDING_REVIEW
 
-status: CLOSED
-authorized_by: "Human Approver"
-authorized_at: "2026-09-11T17:43:35-06:00"
-human_authorization: "AUTHORIZED_BY_HUMAN: Luis Zaragoza 2026-09-11"
+authorized_by: "HUMAN"
 
-implementation_authorized: YES
-merge_authorized: NO
-deploy_authorized: NO
-live_db_authorized: NO
+authorized_at: "2026-09-14"
+
+human_authorization: "AUTHORIZED_BY_HUMAN"
+
+objective: >
+  Corregir la experiencia móvil del visor de Plan Maestro para que las hojas PDF
+  sean realmente visibles y utilizables en celular. Implementar navegación móvil
+  por pestañas Hojas | Chat | Notas y permitir maximizar la vista de Hojas a
+  pantalla completa, conservando el comportamiento actual de escritorio.
+
+acceptance_criteria:
+  - "En viewport móvil existe una forma visible y directa de abrir la sección Hojas."
+  - "La hoja PDF activa se renderiza con altura útil y no queda recortada por Chat o Notas."
+  - "En móvil existen pestañas o navegación equivalente: Hojas | Chat | Notas."
+  - "La vista Hojas permite maximizar el visor a pantalla completa."
+  - "Desde la vista maximizada existe una forma clara de regresar al modal."
+  - "Se conservan controles Anterior / Siguiente cuando existan varias hojas."
+  - "La hoja se adapta al ancho disponible del dispositivo."
+  - "Si el visor actual soporta zoom, conservarlo; no introducir una regresión."
+  - "Cambiar de hoja o documento activo sigue funcionando."
+  - "La descarga existente sigue funcionando."
+  - "El chat asociado a la hoja sigue funcionando."
+  - "Notas siguen disponibles."
+  - "Desktop conserva el comportamiento y layout actuales."
+  - "No modificar backend, SQL, S3, Director IA ni Plaud."
+  - "Agregar o actualizar pruebas relevantes para comportamiento responsive."
+  - "Documentar evidencia de validación móvil y desktop en el reporte."
+
+in_scope:
+  - "frontend-dashboard/components/PlanMaestroModal.tsx"
+  - "test/plan-maestro.test.js"
+  - "docs/dev-loop/CURRENT_TASK.md"
+  - "docs/dev-loop/reports/FIX-PLAN-MAESTRO-MOBILE-PDF-VIEWER-001.md"
+
+out_of_scope:
+  - "docs/director-ia/"
+  - "lib/director-ia-*"
+  - "Plaud"
+  - "chat/notas backend"
+  - "SQL / schema / S3"
+  - "cambios funcionales de escritorio salvo los mínimos requeridos para compartir componentes"
+  - "main (push/merge)"
+
+implementation_constraints:
+  - "Preferir tabs Hojas | Chat | Notas en móvil."
+  - "Agregar acción Maximizar dentro de Hojas."
+  - "No renderizar las tres áreas completas simultáneamente en viewport móvil."
+  - "No duplicar lógica de carga del PDF si puede reutilizarse el visor existente."
+  - "Mantener desktop sin regresiones."
+  - "No alterar contratos API."
+  - "No alterar persistencia."
+
+validation:
+  - "Validar viewport móvil representativo."
+  - "Validar que al entrar al modal se pueda llegar a Hojas sin scroll imposible."
+  - "Validar Hojas normal."
+  - "Validar Hojas maximizado."
+  - "Validar Anterior / Siguiente."
+  - "Validar cambio entre Hojas, Chat y Notas."
+  - "Validar regreso desde pantalla completa."
+  - "Validar descarga."
+  - "Validar viewport desktop."
+  - "Ejecutar pruebas existentes y nuevas relacionadas con Plan Maestro."
+
+allowed_actions:
+  - "crear rama fix/plan-maestro-mobile-pdf-viewer-001"
+  - "implementar tabs móviles"
+  - "implementar maximización del visor"
+  - "ajustar layout responsive"
+  - "agregar pruebas"
+  - "crear reporte de evidencia"
+  - "commit y push únicamente a la rama de trabajo si el protocolo vigente lo permite"
+
+forbidden_actions:
+  - "merge a main"
+  - "push directo a main"
+  - "LIVE_DB"
+  - "cambios SQL"
+  - "cambios de backend"
+  - "cambios en Director IA"
+  - "cambios en Plaud"
+  - "iniciar siguiente tarea"
 
 max_attempts: 1
 
-base_main_sha: 4807dc3416af90fc3d249ea542ce72c7fbfe2b03
-result_report_path: docs/dev-loop/reports/FIX-DIRECTOR-IA-FOLIO-KEYWORD-TIENEN-PALABRA-PARITY-001.md
+result_report_path: "docs/dev-loop/reports/FIX-PLAN-MAESTRO-MOBILE-PDF-VIEWER-001.md"
 
-objective: "Hacer equivalentes en folio_search las expresiones 'tienen la palabra X' y 'contienen la palabra X', sin cambiar matcher, SQL, continuidad, planner ni fuentes."
-
-## Evidencia LIVE
-
-FUNCIONA:
-
-¿Qué folios de febrero de 2026 contienen la palabra aceite?
-
-Resultado:
-3 folios correctos.
-concept_query esperado:
-aceite
-
-FALLA:
-
-¿Qué folios de febrero de 2026 tienen la palabra aceite?
-
-Resultado actual:
-No encontré folios con esos filtros.
-Filtros: mes_cargo 2026-02, concepto tienen palabra aceite.
-
-También falla:
-
-¿Qué folios de enero a agosto de 2026 tienen la palabra aceite?
-
-El parser conserva incorrectamente:
-tienen palabra aceite
-
-en vez de:
-aceite
-
-## Causa focal
-
-Archivo:
-
-lib/director-ia-folio-search.js
-
-La detección/wrappers actuales contemplan formas como:
-
-contienen la palabra
-contiene la palabra
-contenga
-contengan
-que tengan
-donde aparezca
-busca
-
-pero no normalizan correctamente:
-
-tiene la palabra
-tienen la palabra
-que tiene la palabra
-que tienen la palabra
-
-## North Star
-
-A:
-
-¿Qué folios de febrero de 2026 contienen la palabra aceite?
-
-B:
-
-¿Qué folios de febrero de 2026 tienen la palabra aceite?
-
-A y B deben producir exactamente:
-
-intent:
-folio_search
-
-scope:
-ALL_PUBLIC_FOLIOS
-
-period_mode:
-SINGLE
-
-period_month:
-2026-02
-
-operation:
-keyword_search
-
-concept_mode:
-SINGLE
-
-concept_query:
-aceite
-
-Mismo result set.
-Mismo count.
-
-## Motor
-
-También deben ser equivalentes:
-
-¿Qué folios de enero de 2026 contienen la palabra motor?
-
-¿Qué folios de enero de 2026 tienen la palabra motor?
-
-Ambas:
-
-concept_query:
-motor
-
-Nunca:
-
-tienen palabra motor
-
-## Rango
-
-También deben ser equivalentes:
-
-¿Qué folios de enero a agosto de 2026 contienen la palabra aceite?
-
-¿Qué folios de enero a agosto de 2026 tienen la palabra aceite?
-
-Ambas:
-
-period_mode:
-RANGE
-
-period_start:
-2026-01
-
-period_end:
-2026-08
-
-operation:
-keyword_search
-
-concept_query:
-aceite
-
-## Variantes autorizadas
-
-Soportar únicamente las variantes explícitas de keyword:
-
-tiene la palabra X
-tienen la palabra X
-que tiene la palabra X
-que tienen la palabra X
-que tenga la palabra X
-que tengan la palabra X
-
-## Control negativo
-
-NO convertir cualquier uso de "tiene/tienen" en keyword.
-
-No activar por este FIX:
-
-tienen estatus PAGADO
-tienen responsable
-tienen comprobaciones
-
-La regla debe depender explícitamente de:
-
-la palabra
-
-o construcción keyword equivalente ya existente.
-
-## Alcance técnico preferido
-
-Modificar únicamente:
-
-lib/director-ia-folio-search.js
-
-y tests focales.
-
-Se permite tocar:
-
-SEARCH_WRAPPER_RES
-KEYWORD_HINT_RE
-
-y helpers del parser estrictamente necesarios.
-
-## Prohibido cambiar
-
-NO modificar matcher:
-
-normalizeForSearch
-textMatchesSearch
-rowMatchesKeywordSearch
-significantSearchTokens
-
-NO cambiar:
-
-lib/director-ia-chat.js
-lib/director-ia-conversation-state.js
-lib/director-ia-planner.js
-server.js
-frontend
-
-NO SQL nuevo.
-NO schema.
-NO migration.
-NO tool.
-NO endpoint.
-NO LIVE_DB.
-
-Si Cursor determina que necesita alguno:
-STOP.
-
-## Semántica a preservar
-
-period field:
-mes_cargo
-
-folios:
-ALL_PUBLIC_FOLIOS
-
-display limit:
-40
-
-match_count:
-antes del display limit
-
-CANCELADO:
-permanece en listado
-
-aggregate:
-excluye CANCELADO
-
-importe:
-importe registrado
-
-## Continuidad regresión
-
-T1:
-
-¿Qué folios de enero a agosto de 2026 tienen la palabra aceite?
-
-Debe escribir folio_search_spec con:
-
-concept_query:
-aceite
-
-operation:
-keyword_search
-
-Luego T2:
-
-puedes sumarlos y darme un total por mes?
-
-Debe continuar funcionando con el FIX anterior.
-
-No modificar código de continuidad.
-
-## Tests obligatorios
-
-001 contiene aceite -> folio_search
-002 contiene aceite -> keyword_search
-003 contiene aceite -> concept_query aceite
-
-004 tienen la palabra aceite -> folio_search
-005 tienen la palabra aceite -> keyword_search
-006 tienen la palabra aceite -> concept_query aceite
-007 no conserva "tienen" en concept_query
-008 no conserva "palabra" en concept_query
-
-009 contiene vs tienen -> mismo scope
-010 contiene vs tienen -> mismo periodo
-011 contiene vs tienen -> misma operation
-012 contiene vs tienen -> mismo concept_query
-013 contiene vs tienen -> mismo result set fixture
-014 contiene vs tienen -> mismo count fixture
-
-015 enero contiene motor -> motor
-016 enero tienen la palabra motor -> motor
-017 motor result parity
-
-018 rango contiene aceite -> 2026-01..2026-08
-019 rango tienen palabra aceite -> 2026-01..2026-08
-020 rango concept parity
-021 rango result parity
-
-022 tiene la palabra aceite soportado
-023 tienen la palabra aceite soportado
-024 que tiene la palabra aceite soportado
-025 que tienen la palabra aceite soportado
-026 que tenga la palabra aceite soportado
-027 que tengan la palabra aceite sigue soportado
-
-028 tienen estatus PAGADO no activa keyword por "tienen"
-029 tienen responsable no activa keyword por "tienen"
-030 no detector abierto de tener
-
-031 matcher unchanged
-032 ALL_PUBLIC_FOLIOS unchanged
-033 mes_cargo unchanged
-034 display limit unchanged
-035 match_count-before-limit unchanged
-036 CANCELADO list unchanged
-
-037 aggregate explícito existente PASS
-038 folio_search_spec con "tienen" guarda aceite
-039 aggregation follow-up PASS
-040 fresh-chat follow-up sigue fail-close
-041 cross-plant continuity unchanged
-
-042 keyword-range suite PASS
-043 aggregation-followup suite PASS
-044 truthful folio-search suite PASS
-045 M2 folio status/history/documents PASS
-046 IGF reviewable PASS
-047 conversation-state PASS
-048 Tier 1/applicable gate PASS
-
-049 planner unchanged
-050 chat unchanged
-051 conversation-state code unchanged
-052 server unchanged
-053 frontend unchanged
-054 SQL unchanged
-055 schema unchanged
-056 tool unchanged
-057 endpoint unchanged
-058 LIVE_DB NO
-
-059 diff --check PASS
-060 NEW FAILURE = 0
-
-## Expected delivery
-
-IMPLEMENTATION_SHA:
-BASE_MAIN_SHA:
-
-FIX_FILE:
-FIX_FUNCTIONS:
-PARSER_CHANGE:
-
-BEFORE_TIENEN_CONCEPT:
-AFTER_TIENEN_CONCEPT:
-
-CONTIENEN_OPERATION:
-TIENEN_OPERATION:
-
-FEBRUARY_CONTAINS_TERM:
-FEBRUARY_HAS_TERM:
-FEBRUARY_PERIOD_PARITY:
-FEBRUARY_RESULT_PARITY:
-
-JANUARY_MOTOR_CONTAINS_TERM:
-JANUARY_MOTOR_HAS_TERM:
-JANUARY_RESULT_PARITY:
-
-RANGE_CONTAINS_TERM:
-RANGE_HAS_TERM:
-RANGE_PERIOD_PARITY:
-RANGE_RESULT_PARITY:
-
-SUPPORTED_HAVE_VARIANTS:
-
-NON_KEYWORD_HAVE_STATUS:
-NON_KEYWORD_HAVE_RESPONSIBLE:
-
-MATCHER_CHANGED:
-SQL_CHANGED:
-PLANNER_CHANGED:
-CHAT_CHANGED:
-CONVERSATION_STATE_CHANGED:
-SERVER_CHANGED:
-FRONTEND_CHANGED:
-SCHEMA_CHANGED:
-TOOL_ADDED:
-ENDPOINT_ADDED:
-LIVE_DB_USED:
-
-AGGREGATION_FOLLOWUP_REGRESSION:
-FOLIO_SEARCH_SPEC_REGRESSION:
-
-001..060:
-SUITES:
-FILES:
-RISKS:
-
-## Completion
-
-Si PASS:
-
-CURRENT_TASK -> DONE_PENDING_REVIEW
-
-Crear commit implementación.
-
-Crear reporte append-only:
-
-docs/dev-loop/reports/FIX-DIRECTOR-IA-FOLIO-KEYWORD-TIENEN-PALABRA-PARITY-001.md
-
-STOP.
-
-No merge.
-No push main.
-No deploy.
-No LIVE_DB.
-No siguiente tarea.
-closure_reason: "HUMAN REVIEW PASS. folio_search normaliza de forma equivalente las expresiones 'tienen la palabra X' y 'contienen la palabra X' a keyword_search con concept_query=X."
-
-human_acceptance: "PASS 60/60. Las variantes tiene/tienen/que tiene/que tienen/que tenga/que tengan + 'la palabra' conservan scope, mes_cargo, periodo y result set."
-
-scope_preserved: "Cambio focal únicamente en parser de lib/director-ia-folio-search.js. Matcher, planner, chat, conversation-state, SQL, server y frontend permanecen sin cambios."
-
-negative_guard: "El verbo tener por sí solo no activa keyword_search. Frases como 'tienen estatus PAGADO' o 'tienen responsable' no se reinterpretan como búsqueda keyword."
-
-live_validation_pending: "Validar en Acapulco que 'tienen la palabra aceite' y 'contienen la palabra aceite' entreguen el mismo conjunto y que la continuidad de agregación siga funcionando."
+final_state: "DONE_PENDING_REVIEW"
+```
