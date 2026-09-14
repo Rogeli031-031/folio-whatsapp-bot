@@ -133,8 +133,8 @@ describe("CEL semantic need — no phrase patch", () => {
   });
 
   it("needs posteriores no se implementan en este slice", () => {
-    assert.equal(resolveExecutiveNeed("¿Qué te preocupa?").need_type, NEED_TYPES.RISK_FOCUS);
-    assert.equal(resolveExecutiveNeed("¿Qué te preocupa?").implemented, false);
+    assert.equal(resolveExecutiveNeed("¿Qué te preocupa?").need_type, NEED_TYPES.DIAGNOSIS_OBSERVATION_RISK);
+    assert.equal(resolveExecutiveNeed("¿Qué te preocupa?").implemented, true);
     assert.equal(resolveExecutiveNeed("¿Por qué?").need_type, NEED_TYPES.CAUSE_EXPLANATION);
     assert.equal(resolveExecutiveNeed("¿Qué harías?").need_type, NEED_TYPES.RECOMMENDATION);
     assert.equal(resolveExecutiveNeed("Compáralas").need_type, NEED_TYPES.COMPARISON);
