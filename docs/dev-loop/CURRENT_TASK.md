@@ -1,5 +1,5 @@
 ﻿```yaml
-task_id: "IMPL-DIRECTOR-IA-EXECUTIVE-DIAGNOSIS-OBSERVATIONS-RISKS-001"
+task_id: "IMPL-DIRECTOR-IA-USER-IDENTITY-GREETING-001"
 
 status: DONE_PENDING_REVIEW
 
@@ -10,263 +10,208 @@ authorized_at: "2026-09-14"
 human_authorization: "AUTHORIZED_BY_HUMAN"
 
 objective: >
-  Implementar la especialización DIAGNOSIS de Director IA únicamente para
-  responder preguntas ejecutivas de preocupación/problemas mediante
-  observaciones, desviaciones y riesgos ya soportados físicamente por runtime,
-  sin afirmar causas confirmadas ni introducir hipótesis no soportadas.
+  Implementar saludo personalizado en Director IA usando exclusivamente la identidad
+  física del usuario autenticado, resolviendo actor_id hacia usuarios.nombre_persona,
+  sin inventar títulos, sin usar la planta como identidad y manteniendo aislamiento
+  estricto entre usuarios.
 
 source_audit:
-  task_id: "AUDIT-DIRECTOR-IA-EXECUTIVE-DIAGNOSIS-001"
-  report: "docs/dev-loop/reports/AUDIT-DIRECTOR-IA-EXECUTIVE-DIAGNOSIS-001.md"
-  audit_commit: "4e89914f"
+  task_id: "AUDIT-DIRECTOR-IA-USER-IDENTITY-GREETING-001"
+  report: "docs/dev-loop/reports/AUDIT-DIRECTOR-IA-USER-IDENTITY-GREETING-001.md"
+  audit_commit: "d31fe03b"
 
-parent_family:
-  intent: "EXECUTIVE_STATUS"
-  relationship: >
-    DIAGNOSIS es una especialización subordinada. No sustituye EXECUTIVE_STATUS
-    ni convierte cualquier estado ejecutivo en diagnóstico.
+known_facts:
+  - "req.dashboardAuth contiene actor_id, role, plantas y permisos."
+  - "El token típico de Director IA no incluye nombre de persona."
+  - "req.dashboardUser / req.user no existen en esta ruta."
+  - "El nombre físico está en usuarios.nombre_persona."
+  - "No existe campo físico de título/honorífico."
+  - "La planta seleccionada no representa identidad."
+  - "La memoria se particiona por usuario:{actor_id} y no define quién habla."
 
-supported_levels:
-  - "OBSERVATION"
-  - "DEVIATION"
-  - "RISK"
+primary_goal: >
+  Cuando el usuario envía un saludo simple, Director IA debe responder de forma
+  natural usando nombre_persona si está disponible para ese actor_id.
 
-unsupported_levels:
-  - "HYPOTHESIS"
-  - "CONFIRMED_CAUSE"
+supported_greetings:
+  - "hola"
+  - "buen día"
+  - "buenos días"
+  - "buenas tardes"
+  - "buenas noches"
+  - "qué tal"
+  - "que tal"
 
-canonical_questions:
-  - "¿Qué debería preocuparme?"
-  - "¿Qué me debería preocupar?"
-  - "¿Dónde estamos fallando?"
-  - "¿Dónde tenemos problemas?"
-  - "¿Qué está funcionando y qué no?"
-  - "¿Qué riesgos ves?"
-  - "¿Cuál es el principal problema?"
-  - "¿Qué está saliendo mal?"
-  - "¿Qué se está deteriorando?"
+name_resolution:
+  source: "usuarios.nombre_persona"
+  key: "actor_id del usuario autenticado"
+  rule: >
+    Resolver exclusivamente la fila correspondiente al actor_id de la sesión actual.
+    No usar memoria, planta, correo, rol o contexto de otro usuario como sustituto.
 
-known_baseline:
-  concern_phrase_gap:
-    phrase: "¿Qué debería preocuparme?"
-    current_behavior: "unknown"
-    cause: >
-      El detector reconoce variantes como 'preocupa' pero no cubre
-      correctamente 'preocuparme'.
-  cause_question:
-    example: "¿Por qué estamos debajo de la meta?"
-    current_behavior: "CAUSE_EXPLANATION"
-    rule: >
-      No implementar explicación causal en este slice.
+title_resolution:
+  status: "NOT_AVAILABLE"
+  rule: >
+    No inferir Ingeniero, Licenciado, Doctor, Don, Señora ni otro tratamiento a
+    partir de rol, puesto, correo, nombre o cualquier otra señal.
 
-allowed_signal_types:
-  observation:
+greeting_contract:
+  with_name:
     examples:
-      - "cliente dejó de comprar"
-      - "acción está vencida"
-      - "folio/incidencia objetiva existente"
-      - "métrica bajó respecto a referencia válida"
+      hola: "Hola, {nombre_persona}. ¿En qué te ayudo?"
+      buenos_dias: "Buenos días, {nombre_persona}. ¿En qué te ayudo?"
+      buenas_tardes: "Buenas tardes, {nombre_persona}. ¿En qué te ayudo?"
+      buenas_noches: "Buenas noches, {nombre_persona}. ¿En qué te ayudo?"
 
-  deviation:
+  without_name:
     examples:
-      - "venta real por debajo de igf_meta.venta_ton"
-      - "cambio negativo vs periodo comparable"
-      - "desviación física ya calculada por runtime"
+      hola: "Hola. ¿En qué te ayudo?"
+      buenos_dias: "Buenos días. ¿En qué te ayudo?"
+      buenas_tardes: "Buenas tardes. ¿En qué te ayudo?"
+      buenas_noches: "Buenas noches. ¿En qué te ayudo?"
 
-  risk:
-    source_rule: >
-      Solo reglas de riesgo existentes y tipadas físicamente. No crear nuevas
-      reglas subjetivas.
-    examples:
-      - "FORECAST_BELOW_TARGET"
-      - "lost client"
-      - "overdue action"
-      - "otras reglas PRE_CLOSE existentes verificadas por auditoría"
+salutation_echo_rule: >
+  Reflejar el tipo de saludo expresado por el usuario. No depender del reloj del
+  servidor para convertir automáticamente "hola" en buenos días/tardes/noches.
 
-prohibited_claims:
-  - "la causa es"
-  - "esto ocurrió porque"
-  - "seguramente se debe a"
-  - "el responsable es"
-  - "recomiendo hacer X"
-  - "lo más importante es X" # PRIORITY queda fuera
-  - "esta es la causa principal"
-  - "este comentario confirma la causa"
+plant_rule:
+  prohibited:
+    - "Hola. Estoy en Acapulco."
+    - "Estoy en {planta}."
+  allowed: >
+    La planta puede mencionarse después solo cuando sea relevante para una consulta
+    operativa o el usuario la mencione explícitamente.
 
-diagnostic_contract:
-  input_context:
-    - "planta explícita o contexto válido"
-    - "periodo cuando la señal lo requiera"
-  output:
-    must_distinguish:
-      - "observación"
-      - "desviación"
-      - "riesgo"
-    must_include_when_available:
-      - "hallazgo"
-      - "tipo de hallazgo"
-      - "evidencia/fuente"
-      - "periodo"
-      - "planta"
-      - "valor o referencia relevante"
-    must_not_include:
-      - "causa no demostrada"
-      - "hipótesis libre"
-      - "recomendación"
-      - "priorización subjetiva"
+privacy_rules:
+  - "No exponer identidad de otro usuario."
+  - "No reutilizar nombre de sesiones previas de otro actor_id."
+  - "No usar memoria global para resolver identidad."
+  - "No mencionar email, role, permisos ni puesto en el saludo."
+  - "No usar usuarios.nombre como sustituto de nombre_persona si la auditoría lo distingue como puesto."
 
-aggregation_rule: >
-  Cuando existan varios hallazgos, Director IA puede agruparlos por tipo o
-  dominio, pero no debe ordenarlos como prioridad salvo que exista una regla
-  objetiva ya soportada y autorizada explícitamente.
+implementation_principle: >
+  Resolver identidad en una frontera mínima y reutilizable, evitando consultas
+  duplicadas por cada frase si ya existe una carga de usuario autorizada disponible
+  en el request. No crear un segundo sistema de identidad.
 
-linguistic_scope:
-  must_cover:
-    - "preocuparme"
-    - "me debería preocupar"
-    - "problemas"
-    - "fallando"
-    - "riesgos"
-    - "saliendo mal"
-    - "deteriorando"
-  must_not_absorb:
-    - "¿Por qué...?"
-    - "¿Qué hago?"
-    - "¿Qué atiendo primero?"
-    - "¿Qué es lo más importante?"
-    - "¿Qué tal estás?"
+required_behavior:
+  - "hola + nombre disponible → saludo personalizado"
+  - "hola + nombre ausente → saludo neutro"
+  - "buenos días → conservar buenos días"
+  - "buenas tardes → conservar buenas tardes"
+  - "buenas noches → conservar buenas noches"
+  - "no mencionar planta en saludo simple"
+  - "no inventar título"
+  - "otro usuario recibe exclusivamente su propio nombre"
+  - "smalltalk no debe consultar datos ejecutivos innecesarios"
+
+fallback_behavior:
+  user_lookup_failure: >
+    Si la búsqueda de identidad falla, el saludo debe continuar sin nombre. No fallar
+    toda la conversación por no poder personalizar.
+  null_name: >
+    Saludo neutro.
+  empty_name: >
+    Saludo neutro.
 
 protected_boundaries:
-  cause_explanation:
-    rule: >
-      Preguntas causales continúan fuera. No responderlas con causalidad inventada.
-  priority:
-    rule: >
-      No seleccionar 'lo más importante' ni 'qué atender primero'.
-  performance:
-    rule: >
-      Puede reutilizar una desviación de performance como hallazgo, pero no
-      modificar el contrato de PERFORMANCE.
+  authorization:
+    rule: "No modificar permisos ni auth."
+  memory:
+    rule: "No modificar almacenamiento o contrato de memoria."
+  plant_context:
+    rule: "No eliminar contexto de planta para consultas operativas."
   executive_status:
-    rule: >
-      No degradar la cobertura existente de EXECUTIVE_STATUS.
-  daily_executive_brief:
     rule: "No modificar."
-  month_close_result:
-    rule: "No modificar su semántica causal ni de target."
-
-continuity_cases:
-  - conversation:
-      - "¿Cómo vamos contra la meta de venta?"
-      - "¿Qué debería preocuparme?"
-    expected: >
-      Puede reutilizar planta, periodo y desviación ya establecida y añadir otros
-      riesgos soportados del mismo contexto, sin explicar causas.
-
-  - conversation:
-      - "¿Qué debería preocuparme?"
-      - "¿Por qué?"
-    expected: >
-      No inventar causa. Si CAUSE_EXPLANATION no está implementado, aplicar
-      comportamiento fail-closed o aclaración existente.
-
-  - conversation:
-      - "¿Qué riesgos ves en Puebla?"
-      - "¿Y Acapulco?"
-    expected: >
-      Resolver nueva planta sin cruzar evidencia entre plantas.
+  diagnosis:
+    rule: "No modificar."
+  performance:
+    rule: "No modificar."
+  frontend:
+    rule: "No requiere cambios salvo evidencia física estrictamente necesaria."
 
 tests_required:
   positive:
-    - "¿Qué debería preocuparme?"
-    - "¿Qué me debería preocupar?"
-    - "¿Dónde estamos fallando?"
-    - "¿Dónde tenemos problemas?"
-    - "¿Qué riesgos ves?"
-    - "¿Qué está funcionando y qué no?"
-    - "un caso con desviación de venta vs meta"
-    - "un caso con cliente perdido"
-    - "un caso con acción vencida"
+    - "hola con nombre_persona"
+    - "buenos días con nombre_persona"
+    - "buenas tardes con nombre_persona"
+    - "buenas noches con nombre_persona"
+    - "usuario sin nombre_persona"
+    - "lookup de identidad falla y greeting sigue funcionando"
+
+  isolation:
+    - "usuario A no recibe nombre de usuario B"
+    - "dos actor_id distintos producen identidades distintas"
+    - "memoria no reemplaza identidad autenticada"
 
   negative:
-    - "¿Por qué estamos debajo de la meta? no obtiene causa inventada"
-    - "comentario humano no se convierte en causa confirmada"
-    - "Action Register no se convierte en causalidad"
-    - "¿Qué tengo que atender? no entra aquí"
-    - "¿Qué es lo más importante? no entra aquí"
-    - "¿Qué tal estás? no entra aquí"
-    - "no cruce de planta"
-    - "no cruce de periodo"
+    - "no aparece 'Estoy en Acapulco' en saludo simple"
+    - "no aparece Ingeniero si no existe título"
+    - "no usa role como tratamiento"
+    - "no usa puesto como tratamiento"
+    - "no usa planta como nombre"
+    - "no filtra identidad entre sesiones"
 
   regression:
-    - "EXECUTIVE_STATUS sigue funcionando"
-    - "PERFORMANCE venta vs meta sigue funcionando"
-    - "daily_executive_brief sigue funcionando"
-    - "month_close_result sigue funcionando"
-    - "planner sin regresiones relevantes"
+    - "smalltalk existente sigue funcionando"
+    - "consultas operativas siguen recibiendo planta"
+    - "EXECUTIVE_STATUS sin regresión"
+    - "DIAGNOSIS sin regresión"
+    - "PERFORMANCE sin regresión"
 
 success_metrics:
-  - "Las frases DIAGNOSIS soportadas llegan a la ruta correcta."
-  - "¿Qué debería preocuparme? deja de caer en unknown."
-  - "0 afirmaciones causales nuevas."
-  - "0 recomendaciones nuevas."
-  - "0 priorización subjetiva."
-  - "0 cruces de planta."
-  - "0 cruces de periodo."
-  - "0 reglas de riesgo inventadas."
-
-implementation_principle: >
-  Reutilizar señales, reglas y evidencia existentes. No construir un segundo
-  motor de riesgo ni duplicar lógica PRE_CLOSE.
+  - "100% de saludos soportados usan nombre_persona cuando existe."
+  - "0 títulos inventados."
+  - "0 menciones de planta como identidad."
+  - "0 cruces de identidad entre usuarios."
+  - "fallo de lookup de identidad no rompe el chat."
+  - "sin cambios SQL/schema."
 
 in_scope:
-  - "planner mínimo requerido para reconocer DIAGNOSIS"
-  - "capa ejecutiva/CEL mínima necesaria"
-  - "reutilización de señales OBSERVATION/DEVIATION/RISK existentes"
+  - "frontera auth/chat necesaria para resolver actor_id → usuarios.nombre_persona"
+  - "smalltalk/greeting runtime"
+  - "director-ia-chat si aplica"
   - "tests y fixtures"
   - "docs/dev-loop/CURRENT_TASK.md"
-  - "docs/dev-loop/reports/IMPL-DIRECTOR-IA-EXECUTIVE-DIAGNOSIS-OBSERVATIONS-RISKS-001.md"
+  - "docs/dev-loop/reports/IMPL-DIRECTOR-IA-USER-IDENTITY-GREETING-001.md"
 
 out_of_scope:
-  - "CAUSE_EXPLANATION"
-  - "Reasoning Engine N5 runtime"
-  - "hipótesis en chat"
-  - "causa confirmada"
-  - "recomendaciones"
+  - "preferred_salutation persistido"
+  - "campo de título/honorífico"
+  - "memoria personal de largo plazo"
+  - "Taller Expense Analytics"
   - "PRIORITY"
-  - "nuevas reglas de riesgo"
-  - "nuevas fuentes"
-  - "SQL"
-  - "schema"
-  - "frontend"
+  - "CAUSE_EXPLANATION"
+  - "SQL/schema"
+  - "frontend adicional"
   - "merge a main"
   - "push directo a main"
   - "deploy"
   - "siguiente tarea"
 
 allowed_actions:
-  - "crear rama implementation/director-ia-executive-diagnosis-observations-risks-001"
-  - "modificar la mínima frontera runtime necesaria"
-  - "agregar tests/fixtures"
-  - "ejecutar sondas locales/read-only"
+  - "crear rama implementation/director-ia-user-identity-greeting-001"
+  - "modificar la mínima frontera necesaria"
+  - "agregar helper reutilizable de identidad si es necesario"
+  - "agregar tests"
+  - "ejecutar sondas locales"
   - "documentar evidencia"
-  - "commit y push únicamente a la rama de trabajo si el protocolo vigente lo permite"
+  - "commit y push únicamente a la rama autorizada si el protocolo vigente lo permite"
 
 forbidden_actions:
-  - "inventar causas"
-  - "inventar hipótesis"
-  - "inventar reglas de riesgo"
-  - "crear recomendaciones"
-  - "crear priorización"
+  - "hardcodear Ingeniero Zaragoza"
+  - "inventar título"
+  - "usar nombre de otro usuario"
+  - "crear nueva tabla/campo"
   - "modificar SQL"
   - "merge a main"
   - "push a main"
   - "deploy"
-  - "iniciar PRIORITY"
+  - "iniciar Taller"
 
 max_attempts: 1
 
-result_report_path: "docs/dev-loop/reports/IMPL-DIRECTOR-IA-EXECUTIVE-DIAGNOSIS-OBSERVATIONS-RISKS-001.md"
+result_report_path: "docs/dev-loop/reports/IMPL-DIRECTOR-IA-USER-IDENTITY-GREETING-001.md"
 
 final_state: "DONE_PENDING_REVIEW"
 ```

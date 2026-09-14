@@ -581,9 +581,11 @@ describe("CEL TREND channel independence", () => {
 });
 
 describe("CEL pack + composer extra", () => {
-  it("saludo neutral + planta, sin lista STALE", () => {
+  it("saludo no usa planta como identidad", () => {
     const text = buildNeutralGreeting("Acapulco");
-    assert.match(text, /Acapulco/);
+    assert.doesNotMatch(text, /Acapulco/);
+    assert.doesNotMatch(text, /Estoy en/);
+    assert.match(text, /¿En qué te ayudo\?/);
     assert.doesNotMatch(text, /Action Register|DICF|bitácoras/);
     assert.match(CHAT_SRC, /buildNeutralGreeting/);
     assert.doesNotMatch(
@@ -829,7 +831,8 @@ describe("CEL chat E2E first slice", () => {
       1,
       "Hola"
     );
-    assert.match(result.answer, /Acapulco/);
+    assert.match(result.answer, /¿En qué te ayudo\?/);
+    assert.doesNotMatch(result.answer, /Acapulco|Estoy en/);
     assert.doesNotMatch(result.answer, /Action Register|DICF|bitácoras de seguimiento/);
     assert.equal(result.context_meta.openai_called, undefined);
   });
