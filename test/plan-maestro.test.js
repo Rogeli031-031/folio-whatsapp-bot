@@ -100,3 +100,60 @@ describe("plan-maestro alcance de archivos", () => {
     assert.match(ui, /PlanMaestroModal/);
   });
 });
+
+describe("plan-maestro visor móvil responsive", () => {
+  const modal = fs.readFileSync(path.join(ROOT, "frontend-dashboard/components/PlanMaestroModal.tsx"), "utf8");
+
+  it("expone pestañas móviles Hojas | Chat | Notas", () => {
+    assert.match(modal, /type MobilePane = "hojas" \| "chat" \| "notas"/);
+    assert.match(modal, /\["hojas", "Hojas"\]/);
+    assert.match(modal, /\["chat", "Chat"\]/);
+    assert.match(modal, /\["notas", "Notas"\]/);
+    assert.match(modal, /lg:hidden/);
+    assert.match(modal, /useState<MobilePane>\("hojas"\)/);
+  });
+
+  it("Hojas permite Maximizar y Volver en pantalla completa", () => {
+    assert.match(modal, />\s*Maximizar\s*</);
+    assert.match(modal, />\s*Volver\s*</);
+    assert.match(modal, /aria-label="Visor maximizado"/);
+    assert.match(modal, /setMaximized\(true\)/);
+    assert.match(modal, /setMaximized\(false\)/);
+  });
+
+  it("móvil no monta Hojas + Chat + Notas completos a la vez", () => {
+    assert.match(modal, /mobilePane === "hojas" \? "flex min-h-0 flex-1 flex-col gap-3" : "hidden lg:flex/);
+    assert.match(modal, /mobilePane === "hojas" \? "hidden lg:flex/);
+    assert.match(modal, /mobilePane === "chat"/);
+    assert.match(modal, /mobilePane === "notas"/);
+    assert.match(modal, /hidden lg:flex min-h-0 flex-1 flex-col overflow-hidden/);
+  });
+
+  it("conserva Anterior, Siguiente, descarga y chat de hoja", () => {
+    assert.match(modal, />\s*Anterior\s*</);
+    assert.match(modal, />\s*Siguiente\s*</);
+    assert.match(modal, /Descargar/);
+    assert.match(modal, /planMaestroFileUrl/);
+    assert.match(modal, /postPlanMaestroChat/);
+    assert.match(modal, /page_text: pageText/);
+    assert.match(modal, /Notas y comentarios/);
+  });
+
+  it("desktop conserva grid de dos columnas y scale 1.25", () => {
+    assert.match(modal, /lg:grid-cols-\[minmax\(0,1\.4fr\)_minmax\(320px,0\.9fr\)\]/);
+    assert.match(modal, /min-width: 1024px/);
+    assert.match(modal, /: 1\.25/);
+    assert.match(modal, /lg:min-h-\[420px\]/);
+  });
+
+  it("la hoja móvil se adapta al ancho del contenedor", () => {
+    assert.match(modal, /viewerBoxRef/);
+    assert.match(modal, /ResizeObserver/);
+    assert.match(modal, /\(avail - 16\) \/ base\.width/);
+    assert.match(modal, /canvas\.style\.width = "100%"/);
+  });
+
+  it("el modal no toca backend, SQL, Director IA ni Plaud", () => {
+    assert.doesNotMatch(modal, /director-ia-|Plaud|CREATE TABLE|INSERT INTO|S3|LIVE_DB/);
+  });
+});
