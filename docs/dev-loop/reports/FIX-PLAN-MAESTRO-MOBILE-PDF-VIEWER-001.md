@@ -43,7 +43,7 @@ Desktop (`lg+`): grid de dos columnas, scale `1.25`, `Maximizar` oculto, Chat y 
 ---
 
 IMPLEMENTATION_SHA:
-PENDING_THIS_COMMIT
+0d937518
 
 BASE_MAIN_SHA:
 471af52f6cef1a1297e0c0964e087b25bcd1c073
