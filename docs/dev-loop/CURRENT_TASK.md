@@ -1,5 +1,5 @@
 ﻿```yaml
-task_id: "IMPL-DIRECTOR-IA-EXECUTIVE-DIAGNOSIS-OBSERVATIONS-RISKS-001"
+task_id: "AUDIT-DIRECTOR-IA-TALLER-EXPENSE-ANALYTICS-001"
 
 status: DONE_PENDING_REVIEW
 
@@ -10,234 +10,229 @@ authorized_at: "2026-09-14"
 human_authorization: "AUTHORIZED_BY_HUMAN"
 
 objective: >
-  Implementar la especialización DIAGNOSIS de Director IA únicamente para
-  responder preguntas ejecutivas de preocupación/problemas mediante
-  observaciones, desviaciones y riesgos ya soportados físicamente por runtime,
-  sin afirmar causas confirmadas ni introducir hipótesis no soportadas.
+  Auditar físicamente la capacidad actual de Director IA para responder consultas
+  agregadas de gastos de Taller, Gastos e Inversiones por periodo, palabra/concepto,
+  categoría, estatus y otras dimensiones disponibles, con el objetivo de definir
+  una familia general de Expense Analytics antes de implementar.
 
-source_audit:
-  task_id: "AUDIT-DIRECTOR-IA-EXECUTIVE-DIAGNOSIS-001"
-  report: "docs/dev-loop/reports/AUDIT-DIRECTOR-IA-EXECUTIVE-DIAGNOSIS-001.md"
-  audit_commit: "4e89914f"
+business_questions:
+  - "¿Cuánto gasté en Taller en agosto?"
+  - "¿Cuánto gasté en Taller de enero a agosto?"
+  - "¿Cuánto gasté en llantas en enero?"
+  - "¿Cuánto fue de llantas?"
+  - "¿Cuánto gasté en refacciones?"
+  - "¿Qué fue lo más caro del Taller?"
+  - "¿Cuántos folios de Taller hubo?"
+  - "¿Cuál fue el promedio por folio?"
+  - "¿Qué unidad gastó más?"
+  - "¿Qué proveedor recibió más?"
+  - "¿Cuánto gasté solo en folios PAGADOS?"
+  - "¿Y solo en Taller?"
+  - "¿Y en febrero?"
+  - "¿Cuánto suman esos folios?"
 
-parent_family:
-  intent: "EXECUTIVE_STATUS"
-  relationship: >
-    DIAGNOSIS es una especialización subordinada. No sustituye EXECUTIVE_STATUS
-    ni convierte cualquier estado ejecutivo en diagnóstico.
+known_production_evidence:
+  case_1:
+    question: "¿Cuánto gasté en apoyos de taller en enero?"
+    observed_behavior: >
+      Director IA buscó mes_cargo=2026-01 y concepto="apoyos de taller" y respondió
+      que no encontró coincidencias.
+    concern: >
+      Puede estar usando la frase completa como concepto en vez de separar dominio,
+      métrica, periodo y término de búsqueda.
 
-supported_levels:
-  - "OBSERVATION"
-  - "DEVIATION"
-  - "RISK"
+  case_2:
+    question: "¿Qué folios contienen la palabra llantas en enero?"
+    observed_behavior: >
+      Encontró 7 folios en Acapulco y devolvió sus importes.
 
-unsupported_levels:
-  - "HYPOTHESIS"
-  - "CONFIRMED_CAUSE"
+  case_3:
+    follow_up: "¿Cuál es la suma del mes?"
+    observed_behavior: >
+      Perdió el hilo y respondió que no pudo determinar intención.
+    note: >
+      Este fallo de continuidad no se implementará en esta auditoría, pero debe
+      documentarse como dependencia o hueco relacionado.
 
-canonical_questions:
-  - "¿Qué debería preocuparme?"
-  - "¿Qué me debería preocupar?"
-  - "¿Dónde estamos fallando?"
-  - "¿Dónde tenemos problemas?"
-  - "¿Qué está funcionando y qué no?"
-  - "¿Qué riesgos ves?"
-  - "¿Cuál es el principal problema?"
-  - "¿Qué está saliendo mal?"
-  - "¿Qué se está deteriorando?"
+important_semantic_distinction:
+  folio_match_total: >
+    Suma total de importes de folios cuyo texto contiene una palabra como "llantas".
+  attributable_component_cost: >
+    Monto exclusivamente correspondiente a esa partida dentro del folio.
+  rule: >
+    No asumir que ambos valores son equivalentes. Si un folio contiene llantas y
+    otras partidas, el importe total del folio no puede llamarse "gasto en llantas"
+    salvo que exista desglose físico.
 
-known_baseline:
-  concern_phrase_gap:
-    phrase: "¿Qué debería preocuparme?"
-    current_behavior: "unknown"
-    cause: >
-      El detector reconoce variantes como 'preocupa' pero no cubre
-      correctamente 'preocuparme'.
-  cause_question:
-    example: "¿Por qué estamos debajo de la meta?"
-    current_behavior: "CAUSE_EXPLANATION"
-    rule: >
-      No implementar explicación causal en este slice.
+core_questions:
+  - "¿Cuál es la fuente física de Taller/Gastos/Inversiones?"
+  - "¿Qué tablas/helpers/tools usa Director IA hoy?"
+  - "¿Qué columna representa importe?"
+  - "¿Qué columna representa mes_cargo?"
+  - "¿Qué columnas representan categoría, descripción, concepto, proveedor, unidad y estatus?"
+  - "¿Existe desglose por partida dentro del folio?"
+  - "¿Existe cantidad y precio unitario por concepto?"
+  - "¿Existe forma de atribuir monto exacto a llantas/refacciones/motor/etc.?"
+  - "¿Qué filtros soporta físicamente hoy?"
+  - "¿Qué agregaciones pueden hacerse con exactitud?"
+  - "¿Qué consultas de rango de meses son posibles?"
+  - "¿Cómo distingue Taller vs Gastos vs Inversiones?"
+  - "¿Cómo se representa PAGADO/PENDIENTE/etc.?"
+  - "¿Qué dimensiones no existen y no deben inventarse?"
+  - "¿Qué consultas actuales caen a keyword search en vez de expense analytics?"
 
-allowed_signal_types:
-  observation:
-    examples:
-      - "cliente dejó de comprar"
-      - "acción está vencida"
-      - "folio/incidencia objetiva existente"
-      - "métrica bajó respecto a referencia válida"
+dimensions_to_audit:
+  - "planta"
+  - "mes_cargo"
+  - "rango de meses"
+  - "categoría"
+  - "descripción"
+  - "concepto"
+  - "palabra clave"
+  - "importe"
+  - "estatus"
+  - "beneficiario"
+  - "proveedor"
+  - "unidad/vehículo"
+  - "folio"
+  - "subpartida/desglose"
+  - "cantidad"
+  - "precio unitario"
 
-  deviation:
-    examples:
-      - "venta real por debajo de igf_meta.venta_ton"
-      - "cambio negativo vs periodo comparable"
-      - "desviación física ya calculada por runtime"
+aggregations_to_audit:
+  - "SUM importe"
+  - "COUNT folios"
+  - "AVG importe por folio"
+  - "MAX folio"
+  - "MIN folio"
+  - "ranking por importe si la dimensión existe"
+  - "group by mes"
+  - "group by categoría"
+  - "group by proveedor"
+  - "group by unidad"
+  - "group by estatus"
 
-  risk:
-    source_rule: >
-      Solo reglas de riesgo existentes y tipadas físicamente. No crear nuevas
-      reglas subjetivas.
-    examples:
-      - "FORECAST_BELOW_TARGET"
-      - "lost client"
-      - "overdue action"
-      - "otras reglas PRE_CLOSE existentes verificadas por auditoría"
+classification_required:
+  - "EXACT_SUPPORTED"
+  - "FOLIO_TOTAL_ONLY"
+  - "KEYWORD_MATCH_ONLY"
+  - "DIMENSION_MISSING"
+  - "BREAKDOWN_MISSING"
+  - "AMBIGUOUS"
+  - "OUT_OF_SCOPE"
 
-prohibited_claims:
-  - "la causa es"
-  - "esto ocurrió porque"
-  - "seguramente se debe a"
-  - "el responsable es"
-  - "recomiendo hacer X"
-  - "lo más importante es X" # PRIORITY queda fuera
-  - "esta es la causa principal"
-  - "este comentario confirma la causa"
+required_probe_questions:
+  - "¿Cuánto gasté en Taller en agosto?"
+  - "¿Cuánto gasté en Taller de enero a agosto?"
+  - "¿Cuánto gasté en llantas en enero?"
+  - "¿Cuánto suman los folios que contienen llantas en enero?"
+  - "¿Cuántos folios de Taller hubo en agosto?"
+  - "¿Cuál fue el folio de Taller más caro en agosto?"
+  - "¿Cuál fue el promedio por folio de Taller?"
+  - "¿Cuánto gasté solo en PAGADOS?"
+  - "¿Qué proveedor recibió más?"
+  - "¿Qué unidad tuvo más gasto?"
+  - "¿Cuánto fue de refacciones?"
+  - "¿Cuánto fue exclusivamente de llantas?"
 
-diagnostic_contract:
-  input_context:
-    - "planta explícita o contexto válido"
-    - "periodo cuando la señal lo requiera"
-  output:
-    must_distinguish:
-      - "observación"
-      - "desviación"
-      - "riesgo"
-    must_include_when_available:
-      - "hallazgo"
-      - "tipo de hallazgo"
-      - "evidencia/fuente"
-      - "periodo"
-      - "planta"
-      - "valor o referencia relevante"
-    must_not_include:
-      - "causa no demostrada"
-      - "hipótesis libre"
-      - "recomendación"
-      - "priorización subjetiva"
+required_real_case:
+  plant: "Acapulco"
+  period: "2026-01"
+  keyword: "llantas"
+  requirement: >
+    Auditar los 7 folios ya observados y determinar qué puede afirmarse exactamente:
+    suma de folios coincidentes vs gasto atribuible exclusivamente a llantas.
 
-aggregation_rule: >
-  Cuando existan varios hallazgos, Director IA puede agruparlos por tipo o
-  dominio, pero no debe ordenarlos como prioridad salvo que exista una regla
-  objetiva ya soportada y autorizada explícitamente.
+must_define_contract:
+  domain_resolution: >
+    Cómo interpretar palabras como Taller, Gastos e Inversiones como dominio/categoría.
+  period_resolution: >
+    Cómo resolver mes único, rango enero-agosto y expresiones relativas.
+  keyword_resolution: >
+    Cómo tratar "llantas", "refacciones", etc. cuando solo existen dentro de descripción.
+  aggregation_resolution: >
+    Cuándo sumar folios completos y cómo etiquetar ese resultado correctamente.
+  exact_cost_rule: >
+    No llamar "gasto en X" al importe total de folios coincidentes si no existe
+    desglose por partida.
+  status_filtering: >
+    Definir cómo filtrar PAGADO, PENDIENTE u otros estados físicos.
+  continuation_dependency: >
+    Documentar que follow-ups como "¿cuánto suman?" requieren continuidad de result-set,
+    pero no implementarla aquí.
 
-linguistic_scope:
-  must_cover:
-    - "preocuparme"
-    - "me debería preocupar"
-    - "problemas"
-    - "fallando"
-    - "riesgos"
-    - "saliendo mal"
-    - "deteriorando"
-  must_not_absorb:
-    - "¿Por qué...?"
-    - "¿Qué hago?"
-    - "¿Qué atiendo primero?"
-    - "¿Qué es lo más importante?"
-    - "¿Qué tal estás?"
+required_matrix_1:
+  columns:
+    - "campo/dimensión"
+    - "fuente física"
+    - "disponible"
+    - "tipo"
+    - "usable para filtro"
+    - "usable para agrupación"
+    - "observaciones"
+
+required_matrix_2:
+  columns:
+    - "pregunta"
+    - "intención actual"
+    - "dato requerido"
+    - "soportada hoy"
+    - "clasificación"
+    - "respuesta correcta conceptual"
+
+required_matrix_3:
+  columns:
+    - "consulta"
+    - "puede dar cifra exacta"
+    - "solo puede sumar folios coincidentes"
+    - "requiere desglose"
+    - "debe aclarar limitación"
 
 protected_boundaries:
-  cause_explanation:
+  folio_keyword_search:
     rule: >
-      Preguntas causales continúan fuera. No responderlas con causalidad inventada.
-  priority:
+      No romper la búsqueda actual de folios por palabra.
+  continuity:
     rule: >
-      No seleccionar 'lo más importante' ni 'qué atender primero'.
-  performance:
-    rule: >
-      Puede reutilizar una desviación de performance como hallazgo, pero no
-      modificar el contrato de PERFORMANCE.
-  executive_status:
-    rule: >
-      No degradar la cobertura existente de EXECUTIVE_STATUS.
-  daily_executive_brief:
+      No implementar result-set continuity en esta auditoría.
+  sql:
     rule: "No modificar."
-  month_close_result:
-    rule: "No modificar su semántica causal ni de target."
+  frontend:
+    rule: "No modificar."
+  causal_analysis:
+    rule: "Fuera de alcance."
+  recommendations:
+    rule: "Fuera de alcance."
 
-continuity_cases:
-  - conversation:
-      - "¿Cómo vamos contra la meta de venta?"
-      - "¿Qué debería preocuparme?"
-    expected: >
-      Puede reutilizar planta, periodo y desviación ya establecida y añadir otros
-      riesgos soportados del mismo contexto, sin explicar causas.
-
-  - conversation:
-      - "¿Qué debería preocuparme?"
-      - "¿Por qué?"
-    expected: >
-      No inventar causa. Si CAUSE_EXPLANATION no está implementado, aplicar
-      comportamiento fail-closed o aclaración existente.
-
-  - conversation:
-      - "¿Qué riesgos ves en Puebla?"
-      - "¿Y Acapulco?"
-    expected: >
-      Resolver nueva planta sin cruzar evidencia entre plantas.
-
-tests_required:
-  positive:
-    - "¿Qué debería preocuparme?"
-    - "¿Qué me debería preocupar?"
-    - "¿Dónde estamos fallando?"
-    - "¿Dónde tenemos problemas?"
-    - "¿Qué riesgos ves?"
-    - "¿Qué está funcionando y qué no?"
-    - "un caso con desviación de venta vs meta"
-    - "un caso con cliente perdido"
-    - "un caso con acción vencida"
-
-  negative:
-    - "¿Por qué estamos debajo de la meta? no obtiene causa inventada"
-    - "comentario humano no se convierte en causa confirmada"
-    - "Action Register no se convierte en causalidad"
-    - "¿Qué tengo que atender? no entra aquí"
-    - "¿Qué es lo más importante? no entra aquí"
-    - "¿Qué tal estás? no entra aquí"
-    - "no cruce de planta"
-    - "no cruce de periodo"
-
-  regression:
-    - "EXECUTIVE_STATUS sigue funcionando"
-    - "PERFORMANCE venta vs meta sigue funcionando"
-    - "daily_executive_brief sigue funcionando"
-    - "month_close_result sigue funcionando"
-    - "planner sin regresiones relevantes"
-
-success_metrics:
-  - "Las frases DIAGNOSIS soportadas llegan a la ruta correcta."
-  - "¿Qué debería preocuparme? deja de caer en unknown."
-  - "0 afirmaciones causales nuevas."
-  - "0 recomendaciones nuevas."
-  - "0 priorización subjetiva."
-  - "0 cruces de planta."
-  - "0 cruces de periodo."
-  - "0 reglas de riesgo inventadas."
-
-implementation_principle: >
-  Reutilizar señales, reglas y evidencia existentes. No construir un segundo
-  motor de riesgo ni duplicar lógica PRE_CLOSE.
+success_criteria:
+  - "Se identifica la fuente física exacta de Taller/Gastos/Inversiones."
+  - "Se documentan todas las dimensiones reales disponibles."
+  - "Se sabe qué agregaciones pueden responderse exactamente."
+  - "Se diferencia gasto por categoría vs keyword match."
+  - "Se demuestra si existe o no desglose por partida."
+  - "Se resuelve conceptualmente el caso de los 7 folios con llantas."
+  - "Se propone una familia general de Expense Analytics."
+  - "Se propone un slice mínimo de implementación."
+  - "No se implementa nada."
 
 in_scope:
-  - "planner mínimo requerido para reconocer DIAGNOSIS"
-  - "capa ejecutiva/CEL mínima necesaria"
-  - "reutilización de señales OBSERVATION/DEVIATION/RISK existentes"
-  - "tests y fixtures"
+  - "lectura de planner/capabilities/tool orchestrator"
+  - "lectura de helpers de folios/gastos/taller/inversiones"
+  - "lectura de SQL existente"
+  - "sondas read-only"
+  - "tests read-only"
   - "docs/dev-loop/CURRENT_TASK.md"
-  - "docs/dev-loop/reports/IMPL-DIRECTOR-IA-EXECUTIVE-DIAGNOSIS-OBSERVATIONS-RISKS-001.md"
+  - "docs/dev-loop/reports/AUDIT-DIRECTOR-IA-TALLER-EXPENSE-ANALYTICS-001.md"
 
 out_of_scope:
-  - "CAUSE_EXPLANATION"
-  - "Reasoning Engine N5 runtime"
-  - "hipótesis en chat"
-  - "causa confirmada"
-  - "recomendaciones"
+  - "implementación"
+  - "SQL/schema"
+  - "nuevas tablas"
+  - "desglose artificial de partidas"
+  - "result-set conversational continuity"
+  - "saludo/identidad"
   - "PRIORITY"
-  - "nuevas reglas de riesgo"
-  - "nuevas fuentes"
-  - "SQL"
-  - "schema"
+  - "CAUSE_EXPLANATION"
   - "frontend"
   - "merge a main"
   - "push directo a main"
@@ -245,28 +240,25 @@ out_of_scope:
   - "siguiente tarea"
 
 allowed_actions:
-  - "crear rama implementation/director-ia-executive-diagnosis-observations-risks-001"
-  - "modificar la mínima frontera runtime necesaria"
-  - "agregar tests/fixtures"
-  - "ejecutar sondas locales/read-only"
-  - "documentar evidencia"
-  - "commit y push únicamente a la rama de trabajo si el protocolo vigente lo permite"
+  - "crear rama audit/director-ia-taller-expense-analytics-001"
+  - "auditar código y fuentes"
+  - "ejecutar sondas read-only"
+  - "crear reporte"
+  - "commit y push únicamente a la rama de auditoría si el protocolo vigente lo permite"
 
 forbidden_actions:
-  - "inventar causas"
-  - "inventar hipótesis"
-  - "inventar reglas de riesgo"
-  - "crear recomendaciones"
-  - "crear priorización"
+  - "implementar expense analytics"
+  - "inventar desglose"
+  - "sumar conceptos parciales como si fueran importes exactos"
   - "modificar SQL"
   - "merge a main"
   - "push a main"
   - "deploy"
-  - "iniciar PRIORITY"
+  - "iniciar continuidad de resultados"
 
 max_attempts: 1
 
-result_report_path: "docs/dev-loop/reports/IMPL-DIRECTOR-IA-EXECUTIVE-DIAGNOSIS-OBSERVATIONS-RISKS-001.md"
+result_report_path: "docs/dev-loop/reports/AUDIT-DIRECTOR-IA-TALLER-EXPENSE-ANALYTICS-001.md"
 
 final_state: "DONE_PENDING_REVIEW"
 ```
