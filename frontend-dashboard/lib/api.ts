@@ -1638,6 +1638,41 @@ export interface ArrClientesMesResponse {
   rows: ArrClienteMesRow[];
 }
 
+export type ArrAnnualCategoryClientRow = {
+  planta: string;
+  subcategoria: string;
+  cliente: string;
+  ytd_prev_ton: number;
+  ytd_curr_ton: number;
+  delta_ton: number;
+  movimiento: string;
+  contribucion: number | null;
+  comment: string;
+};
+
+export type ArrAnnualCategoryPayload = {
+  ok: boolean;
+  period_label: string;
+  casa: {
+    matrix: Array<{ planta: string; autotanque: number; portatil: number; carburacion: number; total: number }>;
+    total: { planta: string; autotanque: number; portatil: number; carburacion: number; total: number };
+    negative: ArrAnnualCategoryClientRow[];
+    positive: ArrAnnualCategoryClientRow[];
+  };
+  comisionista: ArrAnnualCategoryPayload["casa"];
+};
+
+export function fetchArrAnnualCategoryAnalysis(
+  token: string,
+  year: number,
+  month: number
+): Promise<ArrAnnualCategoryPayload> {
+  return apiFetch<ArrAnnualCategoryPayload>("/api/arr/annual-category-analysis", {
+    token,
+    params: { year: String(year), month: String(month) },
+  });
+}
+
 /** Lista de clientes (kg, descuento, estatus) para una empresa/mes — fuente: hoja "Clientes desc mes" del Excel ARR Forecast. */
 export function fetchArrClientesMes(
   token: string,

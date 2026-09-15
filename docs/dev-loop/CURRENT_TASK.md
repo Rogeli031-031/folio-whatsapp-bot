@@ -1,5 +1,5 @@
 ﻿```yaml
-task_id: "IMPL-DIRECTOR-IA-EXPENSE-ANALYTICS-CORE-001"
+task_id: "IMPL-ARR-ANNUAL-CATEGORY-ANALYSIS-EXPORT-001"
 
 status: DONE_PENDING_REVIEW
 
@@ -10,326 +10,163 @@ authorized_at: "2026-09-15"
 human_authorization: "AUTHORIZED_BY_HUMAN"
 
 objective: >
-  Implementar el núcleo de Expense Analytics para Director IA de forma que pueda
-  responder consultas agregadas de Taller, Gastos e Inversiones por periodo,
-  categoría, estatus y keyword cuando la evidencia física lo permita, sin confundir
-  categorías con clientes y sin llamar "gasto exacto en X" a la suma de folios
-  coincidentes cuando no existe desglose atribuible.
+  Extender el Excel generado por el botón Exportar Excel de ARR agregando dos
+  hojas nuevas, CASA ANUAL y COMISIONISTA ANUAL, con análisis YTD de movimiento
+  por planta y subcategoría, más detalle de clientes que explican movimientos
+  negativos y positivos y sus comentarios registrados.
 
-source_audit:
-  task_id: "AUDIT-DIRECTOR-IA-TALLER-EXPENSE-ANALYTICS-001"
-  report: "docs/dev-loop/reports/AUDIT-DIRECTOR-IA-TALLER-EXPENSE-ANALYTICS-001.md"
-  audit_commit: "18d37164"
-
-known_findings:
-  - >
-    "¿Cuánto gasté en Taller en agosto?" cae hoy a client_profile porque
-    Taller se interpreta como cliente.
-  - >
-    "¿Cuánto gasté en apoyos de taller en enero?" no descompone métrica,
-    categoría y keyword; busca concepto="apoyos de taller".
-  - >
-    El verbo "gasté" no dispara SUM de forma confiable.
-  - >
-    folio_search encuentra cabeceras/folios coincidentes por texto, pero no lee
-    detalle_lineas para atribución exacta de una subpartida.
-  - >
-    detalle_lineas existe con concepto + importe, pero no forma parte de la ruta
-    actual y no está autorizado integrarlo en este slice.
-  - >
-    No existen cantidad ni precio unitario utilizables en esta ruta.
-  - >
-    SUM(importes de folios que contienen "llantas") != gasto exacto en llantas.
-  - >
-    "¿Cuál es la suma del mes?" pierde result-set continuity; queda fuera de este slice.
-
-primary_goal: >
-  Crear una resolución general de Expense Analytics que separe correctamente:
-  dominio/categoría + métrica/agregación + periodo + estatus + keyword,
-  reutilizando fuentes actuales y sin introducir desglose artificial.
-
-supported_domains:
-  - "Taller"
-  - "Gastos"
-  - "Inversiones"
-
-supported_metrics:
-  - "SUM"
-  - "COUNT"
-  - "AVG"
-  - "MAX"
-  - "MIN"
-
-language_cues:
-  sum:
-    examples:
-      - "cuánto gasté"
-      - "cuánto gastamos"
-      - "cuánto se gastó"
-      - "cuánto fue"
-      - "cuánto suman"
-      - "total"
-  count:
-    examples:
-      - "cuántos folios"
-      - "cuántos fueron"
-  avg:
-    examples:
-      - "promedio"
-      - "promedio por folio"
-  max:
-    examples:
-      - "el más caro"
-      - "mayor gasto"
-      - "folio de mayor importe"
-  min:
-    examples:
-      - "el más barato"
-      - "menor gasto"
-
-required_semantic_decomposition:
-  examples:
-    - question: "¿Cuánto gasté en Taller en agosto?"
-      expected:
-        domain: "Taller"
-        metric: "SUM"
-        period: "agosto"
-        keyword: null
-
-    - question: "¿Cuánto gasté en apoyos de taller en enero?"
-      expected:
-        domain: "Taller"
-        metric: "SUM"
-        period: "enero"
-        keyword: "apoyos"
-
-    - question: "¿Cuánto suman los folios que contienen llantas en enero?"
-      expected:
-        domain: null
-        metric: "SUM"
-        period: "enero"
-        keyword: "llantas"
-        semantic_label: "TOTAL_FOLIOS_MATCHING_KEYWORD"
-
-    - question: "¿Cuánto gasté exactamente en llantas en enero?"
-      expected:
-        domain: null
-        metric: "ATTRIBUTABLE_COMPONENT_COST"
-        period: "enero"
-        keyword: "llantas"
-        result: "BREAKDOWN_MISSING unless exact detail is physically supported"
-
-category_resolution:
+report_period_contract:
   rule: >
-    Taller/Gastos/Inversiones deben resolverse como categorías/dominios operativos,
-    no como clientes, cuando aparezcan dentro de consultas de gasto/folio.
+    Utilizar desde enero hasta el mes seleccionado en ARR.
+  comparison: >
+    Comparar contra el mismo rango del año anterior.
+  example: >
+    Mes seleccionado septiembre 2026:
+    enero-septiembre 2026 vs enero-septiembre 2025.
 
-client_protection:
+new_sheets:
+  - "CASA ANUAL"
+  - "COMISIONISTA ANUAL"
+
+existing_sheets:
   rule: >
-    No degradar client_profile cuando exista un cliente real cuyo nombre coincida
-    con una palabra de dominio. La resolución debe usar contexto semántico de gasto,
-    no una lista ciega.
+    No modificar estructura ni celdas contractuales de CASA, COMISIONISTA,
+    EVALUACION u otras hojas existentes.
 
-period_resolution:
-  supported:
-    - "mes único"
-    - "rango explícito de meses"
-    - "enero a agosto"
-    - "de enero a agosto"
-    - "enero-agosto"
+plant_matrix:
+  rows:
+    - "Puebla"
+    - "Tehuacán"
+    - "Acapulco"
+    - "Querétaro"
+    - "San Luis"
+    - "Morelos"
+    - "TOTAL"
+
+  columns:
+    A: "PLANTA"
+    B: "AUTOTANQUE Δ TON"
+    C: "PORTÁTIL Δ TON"
+    D: "CARBURACIÓN Δ TON"
+    E: "TOTAL Δ TON"
+
+  calculation:
+    B: "Venta YTD actual Autotanque - venta mismo YTD año anterior"
+    C: "Venta YTD actual Portátil - venta mismo YTD año anterior"
+    D: "Venta YTD actual Carburación - venta mismo YTD año anterior"
+    E: "B + C + D"
+
+client_detail:
+  negative_section:
+    title: "CLIENTES CON IMPACTO NEGATIVO"
+    movement_types:
+      - "DISMINUYERON"
+      - "DEJARON DE COMPRAR"
+
+  positive_section:
+    title: "CLIENTES CON IMPACTO POSITIVO"
+    movement_types:
+      - "AUMENTARON"
+      - "NUEVOS"
+
+  columns:
+    - "PLANTA"
+    - "SUBCATEGORÍA"
+    - "CLIENTE"
+    - "VENTA YTD AÑO ANTERIOR (TON)"
+    - "VENTA YTD AÑO ACTUAL (TON)"
+    - "DELTA VENTA (TON)"
+    - "TIPO DE MOVIMIENTO"
+    - "CONTRIBUCIÓN AL MOVIMIENTO (%)"
+    - "COMENTARIO / EVIDENCIA REGISTRADA"
+
+comments_contract:
+  source: >
+    Reutilizar la fuente física vigente de comentarios de clientes/DICF que ya
+    utilice ARR.
   rule: >
-    Reutilizar la resolución temporal existente cuando sea compatible.
-    No sumar periodos distintos accidentalmente.
+    Mostrar literalmente o resumir fielmente el comentario registrado.
+    No convertir comentario en causa confirmada.
+  missing_comment: >
+    Mostrar "Sin comentario registrado" o equivalente neutro.
 
-status_filtering:
-  examples:
-    - "solo PAGADOS"
-    - "pagados"
-    - "pendientes"
+subcategory_contract:
+  values:
+    - "Autotanque"
+    - "Portátil"
+    - "Carburación"
+
   rule: >
-    Aplicar únicamente estados físicos existentes en la fuente actual.
+    Los clientes deben aparecer dentro de la hoja CASA o COMISIONISTA según su
+    categoría y conservar su subcategoría física correspondiente.
 
-keyword_semantics:
-  header_match:
-    label: "TOTAL_FOLIOS_MATCHING_KEYWORD"
-    meaning: >
-      Suma/estadística sobre importes completos de folios cuya descripción/concepto
-      coincida con el término.
-  exact_component_cost:
-    label: "ATTRIBUTABLE_COMPONENT_COST"
-    meaning: >
-      Monto exclusivamente atribuible a la subpartida.
-    rule: >
-      No soportado en este slice salvo que ya exista en la misma ruta sin integración
-      nueva. No usar detalle_lineas todavía.
+all_plants_rule: >
+  El reporte anual debe incluir todas las plantas autorizadas necesarias para
+  el análisis consolidado, no únicamente la empresa seleccionada en el dropdown,
+  respetando los contratos de autorización existentes.
 
-required_response_rules:
-  category_sum:
-    example: >
-      En agosto 2026, los folios de categoría Taller suman $X MXN.
-  keyword_total:
-    example: >
-      Los folios de enero 2026 que contienen "llantas" suman $X MXN en importe
-      total de folios.
-  keyword_warning:
-    example: >
-      Ese total no equivale necesariamente al gasto exclusivo en llantas porque
-      algunos folios incluyen otros conceptos.
-  exact_cost_missing:
-    example: >
-      No puedo determinar con exactitud cuánto corresponde exclusivamente a llantas
-      con esta fuente, porque la ruta actual no tiene desglose atribuible usable.
+formatting:
+  - "Mantener estilo profesional consistente con el Excel ARR actual."
+  - "Diferenciar visualmente impactos positivos y negativos."
+  - "Congelar encabezados cuando sea útil."
+  - "Formatear toneladas y porcentajes consistentemente."
+  - "Aplicar autofilter en tablas de clientes si la librería actual lo soporta."
+  - "No usar celdas combinadas que dificulten filtros salvo encabezados visuales."
 
-must_not_claim:
-  - "gasto exacto en llantas" a partir de cabeceras coincidentes
-  - "gasto exacto en refacciones" sin desglose
-  - "Taller es un cliente"
-  - "apoyos de taller" como concepto indivisible cuando Taller es categoría
-  - "SUM" si la pregunta pide lista y no agregación
-  - "lista" si la pregunta pide cuánto
-
-required_questions:
-  - "¿Cuánto gasté en Taller en agosto?"
-  - "¿Cuánto gasté en Taller de enero a agosto?"
-  - "¿Cuántos folios de Taller hubo en agosto?"
-  - "¿Cuál fue el folio de Taller más caro en agosto?"
-  - "¿Cuál fue el promedio por folio de Taller en agosto?"
-  - "¿Cuánto gasté solo en folios PAGADOS de Taller en agosto?"
-  - "¿Cuánto gasté en apoyos de taller en enero?"
-  - "¿Cuánto suman los folios que contienen llantas en enero?"
-  - "¿Cuánto fue exactamente de llantas en enero?"
-  - "¿Cuánto gasté en refacciones en enero?"
-
-protected_boundaries:
-  folio_search:
-    rule: >
-      No romper búsqueda/listado existente por keyword.
-  client_profile:
-    rule: >
-      No romper resolución real de clientes.
-  continuity:
-    rule: >
-      No implementar follow-ups sobre result-set como "¿cuánto suman?" sin repetir
-      contexto suficiente.
-  detalle_lineas:
-    rule: >
-      No integrar en este slice.
-  sql:
-    rule: >
-      No modificar schema ni crear tablas.
-  frontend:
-    rule: >
-      No modificar.
-  diagnosis:
-    rule: >
-      No modificar.
-  greeting:
-    rule: >
-      No modificar.
-
-implementation_principle: >
-  Introducir la mínima capa de intención/resolución necesaria para Expense Analytics
-  reutilizando el query/helper actual de folios/gastos. No crear una segunda fuente
-  de verdad ni duplicar lógica SQL si ya existe.
+must_preserve:
+  - "Exportar Excel actual sigue funcionando."
+  - "CASA actual sigue funcionando."
+  - "COMISIONISTA actual sigue funcionando."
+  - "EVALUACION sigue apuntando a sus celdas actuales."
+  - "No modificar cálculos del dashboard."
+  - "No modificar ARR runtime salvo lo mínimo necesario para obtener datos del export."
 
 tests_required:
-  positive:
-    - "Taller + SUM + mes"
-    - "Taller + SUM + rango"
-    - "Taller + COUNT"
-    - "Taller + AVG"
-    - "Taller + MAX"
-    - "Taller + PAGADO"
-    - "Taller + keyword apoyos"
-    - "keyword llantas + SUM folios coincidentes"
-    - "Gastos + SUM"
-    - "Inversiones + SUM"
-
-  semantic:
-    - "gasté dispara SUM"
-    - "Taller no se resuelve como cliente en contexto de gasto"
-    - "apoyos de taller se separa en category=Taller + keyword=apoyos"
-    - "llantas exacto vs folios coincidentes se distinguen"
-
-  negative:
-    - "gasto exacto en llantas no se inventa"
-    - "gasto exacto en refacciones no se inventa"
-    - "detalle_lineas no se usa"
-    - "no continuidad implícita de result-set"
-    - "no cruce de planta"
-    - "no cruce de periodo"
-
-  regression:
-    - "folio keyword search existente sigue funcionando"
-    - "client_profile sigue funcionando con clientes reales"
-    - "EXECUTIVE_STATUS sin regresión"
-    - "DIAGNOSIS sin regresión"
-    - "PERFORMANCE sin regresión"
-    - "greeting sin regresión"
-
-success_metrics:
-  - >
-    "¿Cuánto gasté en Taller en agosto?" deja de caer a client_profile.
-  - >
-    "¿Cuánto gasté en apoyos de taller en enero?" se descompone correctamente.
-  - >
-    Las consultas agregadas soportadas devuelven cifra exacta de folios/categoría.
-  - >
-    Las consultas por keyword etiquetan claramente total de folios coincidentes.
-  - >
-    Las consultas de costo exclusivo fallan cerrado cuando falta desglose.
-  - "0 montos parciales inventados."
-  - "0 cambios SQL/schema."
-  - "0 cruces de planta."
-
-in_scope:
-  - "planner/intención mínima para Expense Analytics"
-  - "resolver category/metric/period/status/keyword"
-  - "reutilizar folio query/helper existente"
-  - "agregaciones SUM/COUNT/AVG/MAX/MIN sobre datos físicamente disponibles"
-  - "tests/fixtures"
-  - "docs/dev-loop/CURRENT_TASK.md"
-  - "docs/dev-loop/reports/IMPL-DIRECTOR-IA-EXPENSE-ANALYTICS-CORE-001.md"
+  - "CASA ANUAL existe."
+  - "COMISIONISTA ANUAL existe."
+  - "las seis plantas aparecen."
+  - "columnas B/C/D corresponden a Autotanque/Portátil/Carburación."
+  - "columna E = B + C + D."
+  - "periodo YTD no cruza meses."
+  - "comparación usa mismo periodo del año anterior."
+  - "clientes negativos aparecen en su hoja/categoría/subcategoría correctas."
+  - "clientes positivos aparecen en su hoja/categoría/subcategoría correctas."
+  - "delta cliente es consistente con los datos fuente."
+  - "comentario corresponde al cliente correcto."
+  - "sin comentario no inventa causa."
+  - "EVALUACION no se rompe."
+  - "hojas CASA/COMISIONISTA existentes no se sustituyen."
+  - "Excel abre sin corrupción."
 
 out_of_scope:
-  - "detalle_lineas"
-  - "costeo exacto por subpartida"
-  - "cantidad/precio unitario"
-  - "result-set conversational continuity"
-  - "ranking por proveedor si requiere nueva dimensión"
-  - "ranking por unidad si requiere nueva dimensión"
-  - "SQL/schema"
-  - "frontend"
-  - "PRIORITY"
-  - "CAUSE_EXPLANATION"
+  - "modificar Director IA"
+  - "inferir causalidad"
+  - "crear comentarios nuevos"
+  - "editar clientes"
+  - "modificar SQL/schema"
+  - "cambiar lógica del dashboard ARR"
+  - "reemplazar hojas CASA o COMISIONISTA existentes"
+  - "merge a main"
+  - "deploy"
+
+allowed_actions:
+  - "crear rama implementation/arr-annual-category-analysis-export-001"
+  - "modificar exportador Excel ARR"
+  - "reutilizar helpers/fuentes ARR existentes"
+  - "agregar tests"
+  - "generar Excel de prueba"
+  - "documentar evidencia"
+  - "commit/push solo a rama autorizada si el protocolo lo permite"
+
+forbidden_actions:
   - "merge a main"
   - "push directo a main"
   - "deploy"
+  - "inferir causas desde comentarios"
+  - "romper EVALUACION"
   - "siguiente tarea"
 
-allowed_actions:
-  - "crear rama implementation/director-ia-expense-analytics-core-001"
-  - "modificar la mínima frontera runtime necesaria"
-  - "reutilizar queries/helpers existentes"
-  - "agregar tests/fixtures"
-  - "ejecutar sondas locales/read-only"
-  - "documentar evidencia"
-  - "commit y push únicamente a la rama autorizada si el protocolo vigente lo permite"
-
-forbidden_actions:
-  - "inventar desglose"
-  - "usar detalle_lineas"
-  - "crear nueva tabla/campo"
-  - "modificar SQL/schema"
-  - "implementar continuidad de resultados"
-  - "merge a main"
-  - "push a main"
-  - "deploy"
-  - "iniciar siguiente tarea"
-
-max_attempts: 1
-
-result_report_path: "docs/dev-loop/reports/IMPL-DIRECTOR-IA-EXPENSE-ANALYTICS-CORE-001.md"
+result_report_path: "docs/dev-loop/reports/IMPL-ARR-ANNUAL-CATEGORY-ANALYSIS-EXPORT-001.md"
 
 final_state: "DONE_PENDING_REVIEW"
 ```

@@ -46,6 +46,7 @@ const arrLoad = require("./lib/arr-load");
 const arrRefreshProvincia = require("./lib/arr-refresh-provincia");
 const forecastMensual = require("./lib/forecast-mensual");
 const dashboardArrForecast = require("./lib/dashboard-arr-forecast");
+const arrAnnualCategoryAnalysis = require("./lib/arr-annual-category-analysis");
 const igfMetaExcel = require("./lib/igf-meta-excel");
 const igfMetahg = require("./lib/igf-metahg");
 const deltaIngresoAi = require("./lib/delta-ingreso-ai");
@@ -15424,6 +15425,29 @@ app.post("/api/arr/forecast-provincia", dashboardAuthMiddleware, async (req, res
   } catch (e) {
     console.error("[ARR forecast-provincia]", e);
     res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+app.get("/api/arr/annual-category-analysis", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGAFinancialKpis(req, res)) return;
+  if (dashboardBlockGVForbidden(req, res)) return;
+  const year = parseInt(String(req.query.year || ""), 10);
+  const month = parseInt(String(req.query.month || ""), 10);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
+    return res.status(400).json({ error: "Faltan year y month válidos" });
+  }
+  const client = await pool.connect();
+  try {
+    const payload = await arrAnnualCategoryAnalysis.loadAnnualCategoryAnalysis(client, { year, month });
+    if (payload && payload.ok === false) {
+      return res.status(payload.status || 500).json({ error: payload.error || "No se pudo armar el análisis anual" });
+    }
+    res.json(payload);
+  } catch (e) {
+    console.error("[ARR annual-category-analysis]", e);
+    res.status(500).json({ error: e.message || "Error al consultar análisis anual" });
   } finally {
     client.release();
   }
