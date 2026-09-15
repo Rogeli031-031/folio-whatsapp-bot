@@ -13,7 +13,7 @@ import {
   moveWorksheetFirst,
 } from "@/lib/arr-export-merge-worksheet";
 import { buildMetahgRowMap, type MetahgCanonicalRowKey } from "@/lib/metahg-canonical";
-import { appendAnnualCategorySheets } from "../../../lib/arr-annual-category-analysis.js";
+import { appendAnnualCategorySheets } from "../../lib/arr-annual-category-analysis.js";
 import type { ArrAnnualCategoryPayload } from "@/lib/api";
 import type {
   ArrExportMovimientoClienteRow,

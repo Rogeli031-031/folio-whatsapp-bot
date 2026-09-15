@@ -1,5 +1,4 @@
-﻿```yaml
-task_id: "IMPL-ARR-ANNUAL-CATEGORY-ANALYSIS-EXPORT-001"
+﻿task_id: "FIX-ARR-ANNUAL-EXPORT-WEBPACK-ALIAS-001"
 
 status: DONE_PENDING_REVIEW
 
@@ -10,163 +9,81 @@ authorized_at: "2026-09-15"
 human_authorization: "AUTHORIZED_BY_HUMAN"
 
 objective: >
-  Extender el Excel generado por el botón Exportar Excel de ARR agregando dos
-  hojas nuevas, CASA ANUAL y COMISIONISTA ANUAL, con análisis YTD de movimiento
-  por planta y subcategoría, más detalle de clientes que explican movimientos
-  negativos y positivos y sus comentarios registrados.
+  Corregir el fallo de build de Next/Render causado por la ruta incorrecta del import
+  de arr-annual-category-analysis.js desde frontend-dashboard/lib/arr-export-excel.ts,
+  sin modificar la lógica funcional del reporte anual ARR.
 
-report_period_contract:
-  rule: >
-    Utilizar desde enero hasta el mes seleccionado en ARR.
-  comparison: >
-    Comparar contra el mismo rango del año anterior.
-  example: >
-    Mes seleccionado septiembre 2026:
-    enero-septiembre 2026 vs enero-septiembre 2025.
+known_failure:
+  file: "frontend-dashboard/lib/arr-export-excel.ts"
+  current_import: "../../../lib/arr-annual-category-analysis.js"
+  problem: >
+    Desde frontend-dashboard/lib esa ruta sube tres niveles y sale del repositorio,
+    por lo que Next/Webpack no puede resolver el módulo durante el build.
 
-new_sheets:
-  - "CASA ANUAL"
-  - "COMISIONISTA ANUAL"
+required_fix:
+  import_change:
+    file: "frontend-dashboard/lib/arr-export-excel.ts"
+    from: "../../../lib/arr-annual-category-analysis.js"
+    to: "../../lib/arr-annual-category-analysis.js"
 
-existing_sheets:
-  rule: >
-    No modificar estructura ni celdas contractuales de CASA, COMISIONISTA,
-    EVALUACION u otras hojas existentes.
+  webpack_alias:
+    file: "frontend-dashboard/next.config.js"
+    requirement: >
+      Agregar alias explícito para arr-annual-category-analysis.js siguiendo el
+      patrón físico ya usado para módulos compartidos fuera de frontend-dashboard.
 
-plant_matrix:
-  rows:
-    - "Puebla"
-    - "Tehuacán"
-    - "Acapulco"
-    - "Querétaro"
-    - "San Luis"
-    - "Morelos"
-    - "TOTAL"
+    aliases:
+      - "../../../lib/arr-annual-category-analysis.js"
+      - "../../lib/arr-annual-category-analysis.js"
 
-  columns:
-    A: "PLANTA"
-    B: "AUTOTANQUE Δ TON"
-    C: "PORTÁTIL Δ TON"
-    D: "CARBURACIÓN Δ TON"
-    E: "TOTAL Δ TON"
+    target: >
+      path.join(__dirname, "..", "lib", "arr-annual-category-analysis.js")
 
-  calculation:
-    B: "Venta YTD actual Autotanque - venta mismo YTD año anterior"
-    C: "Venta YTD actual Portátil - venta mismo YTD año anterior"
-    D: "Venta YTD actual Carburación - venta mismo YTD año anterior"
-    E: "B + C + D"
+scope:
+  in:
+    - "frontend-dashboard/lib/arr-export-excel.ts"
+    - "frontend-dashboard/next.config.js"
+    - "tests/build checks mínimos relacionados"
+    - "docs/dev-loop/CURRENT_TASK.md"
+    - "docs/dev-loop/reports/FIX-ARR-ANNUAL-EXPORT-WEBPACK-ALIAS-001.md"
 
-client_detail:
-  negative_section:
-    title: "CLIENTES CON IMPACTO NEGATIVO"
-    movement_types:
-      - "DISMINUYERON"
-      - "DEJARON DE COMPRAR"
+  out:
+    - "lib/arr-annual-category-analysis.js lógica funcional"
+    - "server.js"
+    - "ARR calculations"
+    - "CASA ANUAL / COMISIONISTA ANUAL contenido"
+    - "SQL/schema"
+    - "Director IA"
+    - "frontend UX"
+    - "main"
+    - "deploy manual"
 
-  positive_section:
-    title: "CLIENTES CON IMPACTO POSITIVO"
-    movement_types:
-      - "AUMENTARON"
-      - "NUEVOS"
-
-  columns:
-    - "PLANTA"
-    - "SUBCATEGORÍA"
-    - "CLIENTE"
-    - "VENTA YTD AÑO ANTERIOR (TON)"
-    - "VENTA YTD AÑO ACTUAL (TON)"
-    - "DELTA VENTA (TON)"
-    - "TIPO DE MOVIMIENTO"
-    - "CONTRIBUCIÓN AL MOVIMIENTO (%)"
-    - "COMENTARIO / EVIDENCIA REGISTRADA"
-
-comments_contract:
-  source: >
-    Reutilizar la fuente física vigente de comentarios de clientes/DICF que ya
-    utilice ARR.
-  rule: >
-    Mostrar literalmente o resumir fielmente el comentario registrado.
-    No convertir comentario en causa confirmada.
-  missing_comment: >
-    Mostrar "Sin comentario registrado" o equivalente neutro.
-
-subcategory_contract:
-  values:
-    - "Autotanque"
-    - "Portátil"
-    - "Carburación"
-
-  rule: >
-    Los clientes deben aparecer dentro de la hoja CASA o COMISIONISTA según su
-    categoría y conservar su subcategoría física correspondiente.
-
-all_plants_rule: >
-  El reporte anual debe incluir todas las plantas autorizadas necesarias para
-  el análisis consolidado, no únicamente la empresa seleccionada en el dropdown,
-  respetando los contratos de autorización existentes.
-
-formatting:
-  - "Mantener estilo profesional consistente con el Excel ARR actual."
-  - "Diferenciar visualmente impactos positivos y negativos."
-  - "Congelar encabezados cuando sea útil."
-  - "Formatear toneladas y porcentajes consistentemente."
-  - "Aplicar autofilter en tablas de clientes si la librería actual lo soporta."
-  - "No usar celdas combinadas que dificulten filtros salvo encabezados visuales."
-
-must_preserve:
-  - "Exportar Excel actual sigue funcionando."
-  - "CASA actual sigue funcionando."
-  - "COMISIONISTA actual sigue funcionando."
-  - "EVALUACION sigue apuntando a sus celdas actuales."
-  - "No modificar cálculos del dashboard."
-  - "No modificar ARR runtime salvo lo mínimo necesario para obtener datos del export."
-
-tests_required:
-  - "CASA ANUAL existe."
-  - "COMISIONISTA ANUAL existe."
-  - "las seis plantas aparecen."
-  - "columnas B/C/D corresponden a Autotanque/Portátil/Carburación."
-  - "columna E = B + C + D."
-  - "periodo YTD no cruza meses."
-  - "comparación usa mismo periodo del año anterior."
-  - "clientes negativos aparecen en su hoja/categoría/subcategoría correctas."
-  - "clientes positivos aparecen en su hoja/categoría/subcategoría correctas."
-  - "delta cliente es consistente con los datos fuente."
-  - "comentario corresponde al cliente correcto."
-  - "sin comentario no inventa causa."
-  - "EVALUACION no se rompe."
-  - "hojas CASA/COMISIONISTA existentes no se sustituyen."
-  - "Excel abre sin corrupción."
-
-out_of_scope:
-  - "modificar Director IA"
-  - "inferir causalidad"
-  - "crear comentarios nuevos"
-  - "editar clientes"
-  - "modificar SQL/schema"
-  - "cambiar lógica del dashboard ARR"
-  - "reemplazar hojas CASA o COMISIONISTA existentes"
-  - "merge a main"
-  - "deploy"
+acceptance_criteria:
+  - "Next/Webpack resuelve arr-annual-category-analysis.js."
+  - "El build ya no falla por Module not found de ese archivo."
+  - "No cambia lógica del reporte anual."
+  - "No cambia estructura de CASA, COMISIONISTA ni EVALUACION."
+  - "No cambia el workbook contractual."
+  - "Tests previos del reporte anual siguen pasando."
+  - "Build de frontend ejecutado y documentado si el entorno lo permite."
 
 allowed_actions:
-  - "crear rama implementation/arr-annual-category-analysis-export-001"
-  - "modificar exportador Excel ARR"
-  - "reutilizar helpers/fuentes ARR existentes"
-  - "agregar tests"
-  - "generar Excel de prueba"
-  - "documentar evidencia"
-  - "commit/push solo a rama autorizada si el protocolo lo permite"
+  - "crear rama fix/arr-annual-export-webpack-alias-001"
+  - "cambiar únicamente import/alias necesarios"
+  - "ejecutar build/tests"
+  - "crear reporte"
+  - "commit/push solo a la rama si el protocolo lo permite"
 
 forbidden_actions:
+  - "modificar lógica del reporte anual"
+  - "modificar SQL/schema"
   - "merge a main"
   - "push directo a main"
   - "deploy"
-  - "inferir causas desde comentarios"
-  - "romper EVALUACION"
   - "siguiente tarea"
 
-result_report_path: "docs/dev-loop/reports/IMPL-ARR-ANNUAL-CATEGORY-ANALYSIS-EXPORT-001.md"
+max_attempts: 1
+
+result_report_path: "docs/dev-loop/reports/FIX-ARR-ANNUAL-EXPORT-WEBPACK-ALIAS-001.md"
 
 final_state: "DONE_PENDING_REVIEW"
-```
