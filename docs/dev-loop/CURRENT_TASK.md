@@ -1,4 +1,4 @@
-﻿task_id: "FIX-ARR-ANNUAL-EXPORT-EXCELJS-RESOLUTION-001"
+﻿task_id: "IMPL-ARR-ANNUAL-PLANT-SHEETS-001"
 
 status: DONE_PENDING_REVIEW
 
@@ -9,79 +9,202 @@ authorized_at: "2026-09-15"
 human_authorization: "AUTHORIZED_BY_HUMAN"
 
 objective: >
-  Corregir el build de Next/Render haciendo que el módulo compartido
-  lib/arr-annual-category-analysis.js pueda resolver exceljs desde
-  frontend-dashboard/node_modules, sin modificar la lógica funcional
-  del reporte anual ARR.
+  Extender el Excel anual de ARR agregando una hoja por planta con el detalle
+  anual YTD de CASA y COMISIONISTA, conservando intactas las hojas consolidadas
+  CASA ANUAL y COMISIONISTA ANUAL y sin modificar las hojas históricas CASA,
+  COMISIONISTA ni EVALUACION.
 
-known_failure:
-  render_commit: "5a3be93cee74a4b2a5c09136b8c0fdebd845082e"
-  error: "Module not found: Can't resolve 'exceljs'"
-  source_file: "lib/arr-annual-category-analysis.js"
+new_plant_sheets:
+  - "PUEBLA"
+  - "TEHUACAN"
+  - "ACAPULCO"
+  - "QUERETARO"
+  - "SAN LUIS"
+  - "MORELOS"
 
-confirmed_facts:
-  - >
-    frontend-dashboard/package.json ya declara exceljs ^4.4.0.
-  - >
-    El import de arr-annual-category-analysis.js ya se resuelve correctamente.
-  - >
-    El nuevo fallo ocurre dentro del módulo compartido al ejecutar require("exceljs").
-  - >
-    El módulo compartido vive fuera de frontend-dashboard y Webpack no resuelve
-    automáticamente frontend-dashboard/node_modules desde esa ubicación.
-
-required_fix:
-  file: "frontend-dashboard/next.config.js"
+sheet_contract:
   rule: >
-    Agregar resolución/alias explícito de exceljs hacia la instalación física
-    disponible para el frontend, usando require.resolve o path seguro desde
-    frontend-dashboard.
+    Cada hoja de planta debe contener primero la sección CASA y debajo la sección
+    COMISIONISTA, utilizando exactamente el mismo periodo, clasificación,
+    subcategorías, movimientos, deltas, contribuciones y comentarios ya
+    implementados en el reporte anual.
 
-preferred_implementation: >
-  Usar require.resolve("exceljs") desde next.config.js o equivalente robusto,
-  evitando hardcodear una ruta interna específica del paquete si no es necesario.
+period_contract:
+  rule: >
+    Reutilizar sin modificar el contrato YTD existente:
+    enero hasta el mes seleccionado vs el mismo rango del año anterior.
 
-acceptance_criteria:
-  - "Next build resuelve exceljs."
-  - "npm run build termina exit 0."
-  - "No aparece Can't resolve 'exceljs'."
-  - "Tests del reporte anual siguen pasando."
-  - "No cambia lógica YTD."
-  - "No cambia workbook."
-  - "No cambia server.js."
-  - "No cambia SQL/schema."
+section_casa:
+  title: "CASA · ANÁLISIS ANUAL YTD"
 
-in_scope:
-  - "frontend-dashboard/next.config.js"
-  - "test mínimo de resolución/build"
-  - "docs/dev-loop/CURRENT_TASK.md"
-  - "docs/dev-loop/reports/FIX-ARR-ANNUAL-EXPORT-EXCELJS-RESOLUTION-001.md"
+  summary_columns:
+    - "AUTOTANQUE Δ TON"
+    - "PORTÁTIL Δ TON"
+    - "CARBURACIÓN Δ TON"
+    - "TOTAL Δ TON"
 
-out_of_scope:
-  - "lib/arr-annual-category-analysis.js lógica"
-  - "package.json salvo que la evidencia demuestre que es estrictamente necesario"
+  client_sections:
+    negative:
+      title: "CLIENTES CASA CON IMPACTO NEGATIVO"
+      movement_types:
+        - "DISMINUYERON"
+        - "DEJARON DE COMPRAR"
+
+    positive:
+      title: "CLIENTES CASA CON IMPACTO POSITIVO"
+      movement_types:
+        - "AUMENTARON"
+        - "NUEVOS"
+
+section_comisionista:
+  title: "COMISIONISTA · ANÁLISIS ANUAL YTD"
+
+  summary_columns:
+    - "AUTOTANQUE Δ TON"
+    - "PORTÁTIL Δ TON"
+    - "CARBURACIÓN Δ TON"
+    - "TOTAL Δ TON"
+
+  client_sections:
+    negative:
+      title: "CLIENTES COMISIONISTA CON IMPACTO NEGATIVO"
+      movement_types:
+        - "DISMINUYERON"
+        - "DEJARON DE COMPRAR"
+
+    positive:
+      title: "CLIENTES COMISIONISTA CON IMPACTO POSITIVO"
+      movement_types:
+        - "AUMENTARON"
+        - "NUEVOS"
+
+plant_client_columns:
+  - "SUBCATEGORÍA"
+  - "CLIENTE"
+  - "VENTA YTD AÑO ANTERIOR (TON)"
+  - "VENTA YTD AÑO ACTUAL (TON)"
+  - "DELTA VENTA (TON)"
+  - "TIPO DE MOVIMIENTO"
+  - "CONTRIBUCIÓN AL MOVIMIENTO (%)"
+  - "COMENTARIO / EVIDENCIA REGISTRADA"
+
+column_rule: >
+  No repetir la columna PLANTA dentro de las hojas individuales, porque la planta
+  ya está determinada por el nombre de la hoja.
+
+must_reuse:
+  - "misma fuente arr.ventas_diarias_cliente"
+  - "misma fuente arr.cliente_comentarios"
+  - "misma clasificación CASA/COMISIONISTA"
+  - "misma clasificación de subcategoría"
+  - "misma lógica YTD"
+  - "misma lógica de movimientos"
+  - "misma lógica de contribución"
+  - "misma política de comentarios"
+
+must_preserve:
   - "CASA ANUAL"
   - "COMISIONISTA ANUAL"
-  - "ARR runtime"
-  - "SQL/schema"
-  - "Director IA"
-  - "merge"
-  - "deploy"
+  - "CASA"
+  - "COMISIONISTA"
+  - "EVALUACION"
+  - "botón Exportar Excel"
+  - "estructura contractual del workbook existente"
 
-allowed_actions:
-  - "crear rama fix/arr-annual-export-exceljs-resolution-001"
-  - "modificar resolución webpack mínima"
-  - "ejecutar tests"
-  - "ejecutar npm run build"
-  - "commit/push solo a rama autorizada"
+ordering:
+  suggested:
+    - "CASA"
+    - "COMISIONISTA"
+    - "EVALUACION"
+    - "CASA ANUAL"
+    - "COMISIONISTA ANUAL"
+    - "PUEBLA"
+    - "TEHUACAN"
+    - "ACAPULCO"
+    - "QUERETARO"
+    - "SAN LUIS"
+    - "MORELOS"
 
-forbidden_actions:
-  - "modificar lógica del reporte"
-  - "npm audit fix"
-  - "npm audit fix --force"
-  - "actualizar dependencias no relacionadas"
+formatting:
+  - "Mantener estilo visual consistente con CASA ANUAL y COMISIONISTA ANUAL."
+  - "Diferenciar visualmente negativos y positivos."
+  - "Mantener comentarios legibles."
+  - "Aplicar anchos de columna razonables."
+  - "Freeze panes cuando aporte legibilidad."
+  - "Autofilter en tablas de clientes si ya está soportado."
+  - "Evitar repetir datos innecesarios."
+
+acceptance_criteria:
+  - "Existen las seis hojas de planta."
+  - "Cada hoja contiene CASA y COMISIONISTA."
+  - "Los datos pertenecen únicamente a esa planta."
+  - "No aparece columna PLANTA en detalle de cliente."
+  - "Autotanque/Portátil/Carburación/Total coinciden con consolidado."
+  - "Clientes negativos coinciden con la planta/categoría correctas."
+  - "Clientes positivos coinciden con la planta/categoría correctas."
+  - "Comentarios corresponden al cliente correcto."
+  - "Sin comentario no inventa causa."
+  - "CASA ANUAL y COMISIONISTA ANUAL siguen intactas."
+  - "CASA, COMISIONISTA y EVALUACION siguen intactas."
+  - "Workbook abre sin corrupción."
+
+tests_required:
+  - "PUEBLA existe."
+  - "TEHUACAN existe."
+  - "ACAPULCO existe."
+  - "QUERETARO existe."
+  - "SAN LUIS existe."
+  - "MORELOS existe."
+  - "cada hoja tiene sección CASA."
+  - "cada hoja tiene sección COMISIONISTA."
+  - "sin mezcla de clientes entre plantas."
+  - "totales de planta coinciden con las filas equivalentes de CASA ANUAL."
+  - "totales de planta coinciden con las filas equivalentes de COMISIONISTA ANUAL."
+  - "columnas cliente no incluyen PLANTA."
+  - "comentarios correctos."
+  - "workbook válido."
+  - "build frontend sigue pasando."
+
+in_scope:
+  - "generación de hojas por planta"
+  - "reutilización de datos ya calculados"
+  - "formato de hojas nuevas"
+  - "tests"
+  - "workbook de prueba"
+  - "CURRENT_TASK"
+  - "reporte de implementación"
+
+out_of_scope:
+  - "cambiar lógica YTD"
+  - "cambiar clasificación de movimientos"
+  - "inferir causas"
+  - "modificar SQL/schema"
+  - "modificar Director IA"
+  - "cambiar EVALUACION"
+  - "reemplazar hojas existentes"
   - "merge a main"
   - "deploy"
   - "siguiente tarea"
+
+allowed_actions:
+  - "crear rama implementation/arr-annual-plant-sheets-001"
+  - "modificar generador/exportador anual mínimo"
+  - "agregar helpers de presentación reutilizando los datos existentes"
+  - "agregar tests"
+  - "generar workbook de prueba"
+  - "commit/push solo a rama autorizada"
+
+forbidden_actions:
+  - "duplicar lógica de negocio YTD"
+  - "crear nueva fuente de verdad"
+  - "modificar SQL/schema"
+  - "merge a main"
+  - "push directo a main"
+  - "deploy"
+  - "siguiente tarea"
+
+max_attempts: 1
+
+result_report_path: "docs/dev-loop/reports/IMPL-ARR-ANNUAL-PLANT-SHEETS-001.md"
 
 final_state: "DONE_PENDING_REVIEW"
