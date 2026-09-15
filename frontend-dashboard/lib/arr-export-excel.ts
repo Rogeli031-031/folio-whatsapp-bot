@@ -13,6 +13,8 @@ import {
   moveWorksheetFirst,
 } from "@/lib/arr-export-merge-worksheet";
 import { buildMetahgRowMap, type MetahgCanonicalRowKey } from "@/lib/metahg-canonical";
+import { appendAnnualCategorySheets } from "../../../lib/arr-annual-category-analysis.js";
+import type { ArrAnnualCategoryPayload } from "@/lib/api";
 import type {
   ArrExportMovimientoClienteRow,
   ArrExportSubcategoriaResumenRow,
@@ -810,6 +812,8 @@ export async function downloadArrDashboardExcelDual(opts: {
   movimientoCategoria?: ArrExportMovimientoCategoriaSheets | null;
   /** Buffer hoja EVIDENCIAS (Action Register, mes en curso). */
   evidenciasBuffer?: ArrayBuffer | null;
+  /** Hojas nuevas CASA ANUAL / COMISIONISTA ANUAL. No sustituye CASA/COMISIONISTA. */
+  annualCategory?: ArrAnnualCategoryPayload | null;
 }): Promise<void> {
   const wb = new ExcelJS.Workbook();
   let metaRowMap: Record<MetahgCanonicalRowKey, number> | null = null;
@@ -854,6 +858,9 @@ export async function downloadArrDashboardExcelDual(opts: {
   }
   if (opts.metaEvaluacionBuffer?.byteLength) {
     moveWorksheetFirst(wb, "EVALUACION");
+  }
+  if (opts.annualCategory && opts.annualCategory.ok !== false) {
+    appendAnnualCategorySheets(wb, opts.annualCategory);
   }
   wb.calcProperties.fullCalcOnLoad = true;
   const buf = await wb.xlsx.writeBuffer();

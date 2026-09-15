@@ -29,6 +29,7 @@ import {
   fetchIgfMetahg,
   fetchActionRegisterEvidenciasBuffer,
   pickIgfMetaVersionNumber,
+  fetchArrAnnualCategoryAnalysis,
   type IgfForecastRow,
   type IgfForecastMiniRow,
   type IgfPeriodo,
@@ -4116,6 +4117,18 @@ export default function ArrClient() {
             };
           }
         }
+        let annualCategory = null;
+        const periodKey = wsPlan.selB || wsBase.selB || "";
+        const [yStr, mStr] = periodKey.split("-");
+        const annualYear = parseInt(yStr, 10);
+        const annualMonth = parseInt(mStr, 10);
+        if (token.trim() && Number.isFinite(annualYear) && Number.isFinite(annualMonth)) {
+          try {
+            annualCategory = await fetchArrAnnualCategoryAnalysis(token, annualYear, annualMonth);
+          } catch (annualErr) {
+            console.warn("Export ARR: CASA ANUAL / COMISIONISTA ANUAL no incluidas", annualErr);
+          }
+        }
         await downloadArrDashboardExcelDual({
           arr,
           plan,
@@ -4124,6 +4137,7 @@ export default function ArrClient() {
           metahgForMetaSheet,
           movimientoCategoria,
           evidenciasBuffer,
+          annualCategory,
         });
       } catch (e) {
         console.error("Export ARR Excel:", e);
