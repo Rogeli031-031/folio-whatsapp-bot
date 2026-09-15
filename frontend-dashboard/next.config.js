@@ -7,6 +7,8 @@ const nextConfig = {
     config.resolve.alias = {
       ...(config.resolve.alias || {}),
       "../../../lib/ingreso-cliente-marginal.js": path.join(__dirname, "..", "lib", "ingreso-cliente-marginal.js"),
+      "../../../lib/arr-annual-category-analysis.js": path.join(__dirname, "..", "lib", "arr-annual-category-analysis.js"),
+      "../../lib/arr-annual-category-analysis.js": path.join(__dirname, "..", "lib", "arr-annual-category-analysis.js"),
     };
     return config;
   },
