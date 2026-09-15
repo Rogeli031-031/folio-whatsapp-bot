@@ -9,6 +9,7 @@ const nextConfig = {
       "../../../lib/ingreso-cliente-marginal.js": path.join(__dirname, "..", "lib", "ingreso-cliente-marginal.js"),
       "../../../lib/arr-annual-category-analysis.js": path.join(__dirname, "..", "lib", "arr-annual-category-analysis.js"),
       "../../lib/arr-annual-category-analysis.js": path.join(__dirname, "..", "lib", "arr-annual-category-analysis.js"),
+      exceljs: path.dirname(require.resolve("exceljs/package.json")),
     };
     return config;
   },
