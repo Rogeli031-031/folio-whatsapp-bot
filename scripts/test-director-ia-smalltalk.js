@@ -65,9 +65,10 @@ for (const { q, mode } of cases) {
 }
 
 const greeting = buildConversationalAnswer("smalltalk", "Morelos");
-assert(greeting.includes("Hola, soy Director IA"), "saludo estándar");
-assert(greeting.includes("Morelos"), "saludo incluye planta");
-assert(greeting.includes("DICF"), "saludo menciona DICF");
+assert(greeting === "Hola. ¿En qué te ayudo?", "saludo simple sin planta ni título");
+assert(!greeting.includes("Morelos"), "saludo no usa planta como identidad");
+assert(!/Estoy en/i.test(greeting), "saludo no dice Estoy en");
+assert(!/Ingeniero/i.test(greeting), "saludo no inventa título");
 
 const help = buildConversationalAnswer("help", "Acapulco");
 assert(help.includes("¿Cómo va mantenimiento?"), "ayuda incluye ejemplo mantenimiento");

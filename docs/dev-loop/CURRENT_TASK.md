@@ -1,202 +1,175 @@
-﻿task_id: "IMPL-ARR-ANNUAL-PLANT-SHEETS-001"
+﻿task_id: "IMPL-DIRECTOR-IA-USER-IDENTITY-GREETING-002"
 
 status: DONE_PENDING_REVIEW
 
 authorized_by: "HUMAN"
 
-authorized_at: "2026-09-15"
+authorized_at: "2026-09-16"
 
 human_authorization: "AUTHORIZED_BY_HUMAN"
 
 objective: >
-  Extender el Excel anual de ARR agregando una hoja por planta con el detalle
-  anual YTD de CASA y COMISIONISTA, conservando intactas las hojas consolidadas
-  CASA ANUAL y COMISIONISTA ANUAL y sin modificar las hojas históricas CASA,
-  COMISIONISTA ni EVALUACION.
+  Reaplicar sobre el main actual la capacidad de Director IA para reconocer al
+  usuario autenticado por identidad física y saludarlo por su nombre real,
+  tomando como referencia la implementación previa
+  IMPL-DIRECTOR-IA-USER-IDENTITY-GREETING-001, sin mergear su rama histórica.
 
-new_plant_sheets:
-  - "PUEBLA"
-  - "TEHUACAN"
-  - "ACAPULCO"
-  - "QUERETARO"
-  - "SAN LUIS"
-  - "MORELOS"
-
-sheet_contract:
+source_reference:
+  previous_task: "IMPL-DIRECTOR-IA-USER-IDENTITY-GREETING-001"
+  previous_branch: "implementation/director-ia-user-identity-greeting-001"
+  previous_commit: "c3125b82"
   rule: >
-    Cada hoja de planta debe contener primero la sección CASA y debajo la sección
-    COMISIONISTA, utilizando exactamente el mismo periodo, clasificación,
-    subcategorías, movimientos, deltas, contribuciones y comentarios ya
-    implementados en el reporte anual.
+    Usar esa implementación como referencia funcional, pero reaplicar únicamente
+    los cambios necesarios sobre el main actual. No mergear ni rebasear la rama
+    histórica completa.
 
-period_contract:
+identity_contract:
+  source:
+    actor: "req.dashboardAuth.actor_id"
+    name: "usuarios.nombre_persona"
+
+  rules:
+    - >
+      La identidad del usuario se determina exclusivamente desde el actor
+      autenticado del request.
+    - >
+      No usar planta seleccionada como identidad.
+    - >
+      No usar memoria conversacional para decidir quién habla.
+    - >
+      No usar role, puesto o usuarios.nombre como sustituto de nombre_persona.
+    - >
+      No inferir títulos u honoríficos.
+
+greeting_contract:
+  examples:
+    - input: "hola"
+      with_name: "Hola, {nombre_persona}. ¿En qué te ayudo?"
+      without_name: "Hola. ¿En qué te ayudo?"
+
+    - input: "buenos días"
+      with_name: "Buenos días, {nombre_persona}. ¿En qué te ayudo?"
+      without_name: "Buenos días. ¿En qué te ayudo?"
+
+    - input: "buenas tardes"
+      with_name: "Buenas tardes, {nombre_persona}. ¿En qué te ayudo?"
+      without_name: "Buenas tardes. ¿En qué te ayudo?"
+
+    - input: "buenas noches"
+      with_name: "Buenas noches, {nombre_persona}. ¿En qué te ayudo?"
+      without_name: "Buenas noches. ¿En qué te ayudo?"
+
+fallback_contract:
   rule: >
-    Reutilizar sin modificar el contrato YTD existente:
-    enero hasta el mes seleccionado vs el mismo rango del año anterior.
+    Si el lookup de identidad falla, el chat debe continuar con saludo neutro.
+    Nunca debe fallar toda la conversación por no poder recuperar nombre_persona.
 
-section_casa:
-  title: "CASA · ANÁLISIS ANUAL YTD"
+cross_user_protection:
+  rule: >
+    El usuario A nunca puede recibir el nombre del usuario B. La resolución debe
+    hacerse por actor_id de cada request y no mediante estado global compartido.
 
-  summary_columns:
-    - "AUTOTANQUE Δ TON"
-    - "PORTÁTIL Δ TON"
-    - "CARBURACIÓN Δ TON"
-    - "TOTAL Δ TON"
+simple_greeting_rule:
+  rule: >
+    Un saludo simple no debe responder con "Estoy en {planta}" ni usar planta,
+    ubicación o contexto comercial como parte del saludo.
 
-  client_sections:
-    negative:
-      title: "CLIENTES CASA CON IMPACTO NEGATIVO"
-      movement_types:
-        - "DISMINUYERON"
-        - "DEJARON DE COMPRAR"
-
-    positive:
-      title: "CLIENTES CASA CON IMPACTO POSITIVO"
-      movement_types:
-        - "AUMENTARON"
-        - "NUEVOS"
-
-section_comisionista:
-  title: "COMISIONISTA · ANÁLISIS ANUAL YTD"
-
-  summary_columns:
-    - "AUTOTANQUE Δ TON"
-    - "PORTÁTIL Δ TON"
-    - "CARBURACIÓN Δ TON"
-    - "TOTAL Δ TON"
-
-  client_sections:
-    negative:
-      title: "CLIENTES COMISIONISTA CON IMPACTO NEGATIVO"
-      movement_types:
-        - "DISMINUYERON"
-        - "DEJARON DE COMPRAR"
-
-    positive:
-      title: "CLIENTES COMISIONISTA CON IMPACTO POSITIVO"
-      movement_types:
-        - "AUMENTARON"
-        - "NUEVOS"
-
-plant_client_columns:
-  - "SUBCATEGORÍA"
-  - "CLIENTE"
-  - "VENTA YTD AÑO ANTERIOR (TON)"
-  - "VENTA YTD AÑO ACTUAL (TON)"
-  - "DELTA VENTA (TON)"
-  - "TIPO DE MOVIMIENTO"
-  - "CONTRIBUCIÓN AL MOVIMIENTO (%)"
-  - "COMENTARIO / EVIDENCIA REGISTRADA"
-
-column_rule: >
-  No repetir la columna PLANTA dentro de las hojas individuales, porque la planta
-  ya está determinada por el nombre de la hoja.
-
-must_reuse:
-  - "misma fuente arr.ventas_diarias_cliente"
-  - "misma fuente arr.cliente_comentarios"
-  - "misma clasificación CASA/COMISIONISTA"
-  - "misma clasificación de subcategoría"
-  - "misma lógica YTD"
-  - "misma lógica de movimientos"
-  - "misma lógica de contribución"
-  - "misma política de comentarios"
+honorific_rule:
+  prohibited:
+    - "Ingeniero"
+    - "Licenciado"
+    - "Doctor"
+    - "Gerente"
+  rule: >
+    No usar ningún honorífico salvo que exista un campo físico explícito y
+    autorizado para ello. Ese campo no forma parte de este slice.
 
 must_preserve:
-  - "CASA ANUAL"
-  - "COMISIONISTA ANUAL"
-  - "CASA"
-  - "COMISIONISTA"
-  - "EVALUACION"
-  - "botón Exportar Excel"
-  - "estructura contractual del workbook existente"
-
-ordering:
-  suggested:
-    - "CASA"
-    - "COMISIONISTA"
-    - "EVALUACION"
-    - "CASA ANUAL"
-    - "COMISIONISTA ANUAL"
-    - "PUEBLA"
-    - "TEHUACAN"
-    - "ACAPULCO"
-    - "QUERETARO"
-    - "SAN LUIS"
-    - "MORELOS"
-
-formatting:
-  - "Mantener estilo visual consistente con CASA ANUAL y COMISIONISTA ANUAL."
-  - "Diferenciar visualmente negativos y positivos."
-  - "Mantener comentarios legibles."
-  - "Aplicar anchos de columna razonables."
-  - "Freeze panes cuando aporte legibilidad."
-  - "Autofilter en tablas de clientes si ya está soportado."
-  - "Evitar repetir datos innecesarios."
-
-acceptance_criteria:
-  - "Existen las seis hojas de planta."
-  - "Cada hoja contiene CASA y COMISIONISTA."
-  - "Los datos pertenecen únicamente a esa planta."
-  - "No aparece columna PLANTA en detalle de cliente."
-  - "Autotanque/Portátil/Carburación/Total coinciden con consolidado."
-  - "Clientes negativos coinciden con la planta/categoría correctas."
-  - "Clientes positivos coinciden con la planta/categoría correctas."
-  - "Comentarios corresponden al cliente correcto."
-  - "Sin comentario no inventa causa."
-  - "CASA ANUAL y COMISIONISTA ANUAL siguen intactas."
-  - "CASA, COMISIONISTA y EVALUACION siguen intactas."
-  - "Workbook abre sin corrupción."
-
-tests_required:
-  - "PUEBLA existe."
-  - "TEHUACAN existe."
-  - "ACAPULCO existe."
-  - "QUERETARO existe."
-  - "SAN LUIS existe."
-  - "MORELOS existe."
-  - "cada hoja tiene sección CASA."
-  - "cada hoja tiene sección COMISIONISTA."
-  - "sin mezcla de clientes entre plantas."
-  - "totales de planta coinciden con las filas equivalentes de CASA ANUAL."
-  - "totales de planta coinciden con las filas equivalentes de COMISIONISTA ANUAL."
-  - "columnas cliente no incluyen PLANTA."
-  - "comentarios correctos."
-  - "workbook válido."
-  - "build frontend sigue pasando."
+  - "Expense Analytics"
+  - "EXECUTIVE_STATUS"
+  - "DIAGNOSIS"
+  - "PERFORMANCE"
+  - "smalltalk"
+  - "planner actual"
+  - "aislamiento por planta"
+  - "autorización actual"
 
 in_scope:
-  - "generación de hojas por planta"
-  - "reutilización de datos ya calculados"
-  - "formato de hojas nuevas"
+  - "resolución actor_id -> usuarios.nombre_persona"
+  - "saludos hola/buenos días/buenas tardes/buenas noches"
+  - "fallback neutral"
+  - "protección cross-user"
   - "tests"
-  - "workbook de prueba"
+  - "reporte"
   - "CURRENT_TASK"
-  - "reporte de implementación"
 
 out_of_scope:
-  - "cambiar lógica YTD"
-  - "cambiar clasificación de movimientos"
-  - "inferir causas"
+  - "preferred_salutation"
+  - "títulos/honoríficos"
+  - "memory relationship layer"
+  - "recordar preferencias personales"
   - "modificar SQL/schema"
-  - "modificar Director IA"
-  - "cambiar EVALUACION"
-  - "reemplazar hojas existentes"
+  - "crear campos nuevos"
+  - "saludo proactivo por horario del servidor"
   - "merge a main"
   - "deploy"
   - "siguiente tarea"
 
+implementation_principle: >
+  Reaplicar la mínima lógica de identidad necesaria sobre el main actual,
+  reutilizando la implementación previa como referencia. No arrastrar cambios
+  obsoletos de la rama histórica.
+
+required_tests:
+  positive:
+    - "hola con nombre"
+    - "buenos días con nombre"
+    - "buenas tardes con nombre"
+    - "buenas noches con nombre"
+
+  fallback:
+    - "actor sin nombre_persona"
+    - "lookup DB falla"
+    - "saludo sigue respondiendo"
+
+  security:
+    - "usuario A no recibe nombre de usuario B"
+    - "no cache global de identidad"
+    - "no memoria como fuente de identidad"
+
+  semantic:
+    - "no aparece planta en saludo simple"
+    - "no aparece role como tratamiento"
+    - "no aparece puesto como tratamiento"
+    - "no se inventa Ingeniero"
+
+  regression:
+    - "Expense Analytics sigue pasando"
+    - "EXECUTIVE_STATUS sigue pasando"
+    - "DIAGNOSIS sigue pasando"
+    - "PERFORMANCE sigue pasando"
+    - "smalltalk no regresiona"
+
+success_metrics:
+  - "saludo con nombre correcto cuando nombre_persona existe"
+  - "fallback neutro cuando no existe"
+  - "0 contaminación cross-user"
+  - "0 honoríficos inventados"
+  - "0 uso de planta como identidad"
+  - "0 cambios SQL/schema"
+
 allowed_actions:
-  - "crear rama implementation/arr-annual-plant-sheets-001"
-  - "modificar generador/exportador anual mínimo"
-  - "agregar helpers de presentación reutilizando los datos existentes"
-  - "agregar tests"
-  - "generar workbook de prueba"
+  - "crear rama implementation/director-ia-user-identity-greeting-002"
+  - "consultar rama/commit previo solo como referencia"
+  - "reaplicar cambios mínimos sobre main actual"
+  - "agregar/ajustar tests"
+  - "documentar evidencia"
   - "commit/push solo a rama autorizada"
 
 forbidden_actions:
-  - "duplicar lógica de negocio YTD"
-  - "crear nueva fuente de verdad"
+  - "mergear la rama histórica completa"
+  - "rebasear la rama histórica sobre main como solución automática"
+  - "crear campos nuevos"
   - "modificar SQL/schema"
   - "merge a main"
   - "push directo a main"
@@ -205,6 +178,6 @@ forbidden_actions:
 
 max_attempts: 1
 
-result_report_path: "docs/dev-loop/reports/IMPL-ARR-ANNUAL-PLANT-SHEETS-001.md"
+result_report_path: "docs/dev-loop/reports/IMPL-DIRECTOR-IA-USER-IDENTITY-GREETING-002.md"
 
 final_state: "DONE_PENDING_REVIEW"
