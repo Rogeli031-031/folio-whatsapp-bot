@@ -8,6 +8,8 @@ const path = require("path");
 const {
   resolveActorIdFromAuth,
   sanitizeNombrePersona,
+  stripLeadingHonorific,
+  nombrePersonaForGreeting,
   classifyGreetingKind,
   buildIdentityGreeting,
   loadNombrePersonaByActorId,
@@ -55,10 +57,35 @@ describe("identidad de saludo — helper", () => {
 
   it("nombre_persona se recorta; vacío o corto no sirve", () => {
     assert.equal(sanitizeNombrePersona("  Luis Zaragoza  "), "Luis Zaragoza");
+    assert.equal(sanitizeNombrePersona("Ing. Luis Rogelio Zaragoza"), "Ing. Luis Rogelio Zaragoza");
     assert.equal(sanitizeNombrePersona(""), null);
     assert.equal(sanitizeNombrePersona(" "), null);
     assert.equal(sanitizeNombrePersona("A"), null);
     assert.equal(sanitizeNombrePersona(null), null);
+  });
+
+  it("vocativo quita honorífico solo al inicio; no toca el persistido", () => {
+    assert.equal(stripLeadingHonorific("Ing. Luis Rogelio Zaragoza"), "Luis Rogelio Zaragoza");
+    assert.equal(stripLeadingHonorific("Ing Luis Rogelio Zaragoza"), "Luis Rogelio Zaragoza");
+    assert.equal(stripLeadingHonorific("Ingeniero Luis Rogelio Zaragoza"), "Luis Rogelio Zaragoza");
+    assert.equal(stripLeadingHonorific("Lic. Ana Pérez"), "Ana Pérez");
+    assert.equal(stripLeadingHonorific("Lic Ana Pérez"), "Ana Pérez");
+    assert.equal(stripLeadingHonorific("Licenciado Ana Pérez"), "Ana Pérez");
+    assert.equal(stripLeadingHonorific("Dr. Carlos Ruiz"), "Carlos Ruiz");
+    assert.equal(stripLeadingHonorific("Dr Carlos Ruiz"), "Carlos Ruiz");
+    assert.equal(stripLeadingHonorific("Doctor Carlos Ruiz"), "Carlos Ruiz");
+    assert.equal(stripLeadingHonorific("Dra. María Soto"), "María Soto");
+    assert.equal(stripLeadingHonorific("Dra María Soto"), "María Soto");
+    assert.equal(stripLeadingHonorific("Doctora María Soto"), "María Soto");
+    assert.equal(stripLeadingHonorific("Arq. Elena Díaz"), "Elena Díaz");
+    assert.equal(stripLeadingHonorific("Arq Elena Díaz"), "Elena Díaz");
+    assert.equal(stripLeadingHonorific("Arquitecto Elena Díaz"), "Elena Díaz");
+    assert.equal(stripLeadingHonorific("Arquitecta Elena Díaz"), "Elena Díaz");
+    assert.equal(stripLeadingHonorific("Luis Rogelio Zaragoza"), "Luis Rogelio Zaragoza");
+    assert.equal(stripLeadingHonorific("Ingrid Garcia"), "Ingrid Garcia");
+    assert.equal(stripLeadingHonorific("Draco Perez"), "Draco Perez");
+    assert.equal(nombrePersonaForGreeting("Ing. Luis Rogelio Zaragoza"), "Luis Rogelio Zaragoza");
+    assert.equal(sanitizeNombrePersona("Ing. Luis Rogelio Zaragoza"), "Ing. Luis Rogelio Zaragoza");
   });
 
   it("SQL de lookup pide solo nombre_persona por id", () => {
@@ -85,6 +112,10 @@ describe("contrato de texto de saludo", () => {
     assert.equal(
       buildIdentityGreeting("buenas_noches", "Luis Zaragoza"),
       "Buenas noches, Luis Zaragoza. ¿En qué te ayudo?"
+    );
+    assert.equal(
+      buildIdentityGreeting("hola", "Ing. Luis Rogelio Zaragoza"),
+      "Hola, Luis Rogelio Zaragoza. ¿En qué te ayudo?"
     );
     assert.equal(buildIdentityGreeting("hola", null), "Hola. ¿En qué te ayudo?");
     assert.equal(buildIdentityGreeting("buenos_dias", ""), "Buenos días. ¿En qué te ayudo?");
@@ -131,6 +162,20 @@ describe("askDirectorIa — saludo por actor_id", () => {
       },
     };
   }
+
+  it("hola quita Ing. del vocativo y no cambia el persistido", async () => {
+    configureDirectorIaChat({
+      pool: usersPool({ 10: { nombre_persona: "Ing. Luis Rogelio Zaragoza" } }),
+    });
+    const result = await askDirectorIa(reqFor(10), 1, "hola");
+    assert.equal(result.answer, "Hola, Luis Rogelio Zaragoza. ¿En qué te ayudo?");
+    assert.doesNotMatch(result.answer, /\bIng\.?\b|Ingeniero/);
+    const persisted = await loadNombrePersonaByActorId(
+      usersPool({ 10: { nombre_persona: "Ing. Luis Rogelio Zaragoza" } }),
+      10
+    );
+    assert.equal(persisted, "Ing. Luis Rogelio Zaragoza");
+  });
 
   it("1 hola + nombre_persona", async () => {
     configureDirectorIaChat({
