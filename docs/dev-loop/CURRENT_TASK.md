@@ -1,4 +1,4 @@
-﻿task_id: "FIX-DIRECTOR-IA-GREETING-AND-GENERIC-EXPENSE-KEYWORD-001"
+﻿task_id: "IMPL-DIRECTOR-IA-SEH-OPERATION-STATUS-001"
 
 status: DONE_PENDING_REVIEW
 
@@ -9,214 +9,441 @@ authorized_at: "2026-09-16"
 human_authorization: "AUTHORIZED_BY_HUMAN"
 
 objective: >
-  Corregir dos fallas observadas en producción:
-  1) limpiar honoríficos del nombre usado como vocativo en el saludo de Director IA,
-  sin modificar la identidad persistida;
-  2) permitir que Expense Analytics reconozca de forma genérica consultas del tipo
-  "cuánto gastamos en [concepto] en [periodo]" sin requerir que el concepto esté
-  predefinido en una lista especial.
+  Implementar en Director IA una capacidad de lectura para consultar el estado
+  operativo de SEH - Seguridad e Higiene usando la misma fuente física que alimenta
+  las pantallas SEH del dashboard.
 
-production_evidence:
-  greeting_observed:
-    input: "hola"
-    output: "Hola, Ing. Luis Rogelio Zaragoza. ¿En qué te ayudo?"
-    issue: >
-      nombre_persona contiene un honorífico persistido y el saludo lo reproduce
-      literalmente.
+  Debe responder sobre:
+  - estaciones de carburación
+  - autotanques/pipas
+  - extintores de planta
+  - sistema contra incendio
+  - extintores por ubicación específica
+  - estado agregado de todos los extintores de una planta
 
-  expense_observed:
-    input: "cuanto gastamos en aceite en febrero?"
-    output: >
-      No se pudo determinar una intención clara con las reglas actuales...
-    issue: >
-      Expense Analytics no entra porque "aceite" no está en la lista especial de
-      componentes y no hay dominio explícito Taller/Gastos/Inversiones.
+north_star: >
+  Director IA debe poder responder preguntas ejecutivas y operativas de SEH sin
+  contar renglones como activos distintos, sin inventar vigencias y sin crear una
+  segunda fuente de verdad.
 
-greeting_fix:
-  source_of_identity:
-    actor: "req.dashboardAuth.actor_id"
-    persisted_name: "usuarios.nombre_persona"
-
+source_contract:
   rule: >
-    Mantener nombre_persona como fuente física de identidad, pero aplicar una
-    normalización solo de presentación para el vocativo del saludo.
+    Reutilizar la misma fuente física/endpoint/tablas que usa actualmente
+    fetchSehBoard en el dashboard SEH.
 
-  strip_only_leading_honorifics:
-    - "Ing."
-    - "Ing"
-    - "Ingeniero"
-    - "Lic."
-    - "Lic"
-    - "Licenciado"
-    - "Dr."
-    - "Dr"
-    - "Doctor"
-    - "Dra."
-    - "Dra"
-    - "Doctora"
-    - "Arq."
-    - "Arq"
-    - "Arquitecto"
-    - "Arquitecta"
+  prohibited:
+    - "scrapear HTML"
+    - "leer datos renderizados desde frontend"
+    - "crear tabla espejo"
+    - "duplicar persistencia SEH"
+    - "inventar datos faltantes"
+
+  required_discovery:
+    - "identificar endpoint real usado por fetchSehBoard"
+    - "identificar tablas/columnas físicas usadas por SEH"
+    - "documentar categoria, locacion, descripcion, componente, nombre, vence"
+    - "reutilizar el mismo aislamiento/autorización por planta"
+
+seh_domain:
+  semantic_class: "seh_operation_status"
+
+  scopes:
+    - "STATION"
+    - "AUTOTANK"
+    - "PLANT"
+    - "FIRE_SYSTEM"
+    - "ALL_EXTINGUISHERS"
+    - "ALL_SEH"
+
+  metrics:
+    - "COUNT"
+    - "LIST"
+    - "STATUS"
+    - "EXPIRED"
+    - "EXPIRING_SOON"
+    - "NEXT_EXPIRATION"
+
+entity_resolution:
+  fields:
+    - "location_name"
+    - "unit_name"
 
   examples:
-    - persisted: "Ing. Luis Rogelio Zaragoza"
-      greeting_name: "Luis Rogelio Zaragoza"
-    - persisted: "Luis Rogelio Zaragoza"
-      greeting_name: "Luis Rogelio Zaragoza"
+    - question: "¿Cuántos extintores tenemos en Pie de la Cuesta?"
+      scope: "STATION"
+      entity: "PIE DE LA CUESTA"
+      metric: "COUNT"
+
+    - question: "¿Cuántos extintores tiene el autotanque ECO 39?"
+      scope: "AUTOTANK"
+      entity: "AUTOTANQUE ECO 39"
+      metric: "COUNT"
+
+    - question: "¿Cómo están los extintores del cuarto de control?"
+      scope: "PLANT"
+      entity: "CUARTO DE CONTROL"
+      metric: "STATUS"
+
+station_contract:
+  identity_rule: >
+    Para ESTACION - OPERACION, LOCACION identifica la estación física.
+
+  dedup_rule: >
+    Si una misma LOCACION aparece varias veces porque tiene varios extintores,
+    debe contarse una sola estación para métricas de cantidad/listado de estaciones.
+
+  extinguisher_rule: >
+    Los renglones NO se deduplican para contar extintores.
+    Cada registro de extintor representa un equipo registrado.
+
+  example: >
+    PIE DE LA CUESTA repetido 6 veces = 1 estación + 6 extintores.
+
+autotank_contract:
+  identity_rule: >
+    Para AUTOTANQUE - OPERACION, LOCACION identifica la unidad/autotanque.
+
+  dedup_rule: >
+    Si el mismo autotanque aparece varias veces por tener varios extintores,
+    debe contarse una sola pipa/autotanque para COUNT/LIST de unidades.
+
+  extinguisher_rule: >
+    Cada registro de extintor asociado a la unidad sí cuenta individualmente.
+
+plant_contract:
+  rule: >
+    Para PLANTA - OPERACION, analizar los registros de extintores de planta
+    por LOCACION/DESCRIPCION/COMPONENTE/VENCE.
+
+  no_asset_count_inference: >
+    No usar LOCACION para inferir número de plantas. La planta ya viene del contexto
+    físico/seleccionado o de una planta explícita en la pregunta.
+
+fire_system_contract:
+  category: "SISTEMA CONTRA INCENDIO"
+
+  fields:
+    - "nombre"
+    - "vence"
+
+  rule: >
+    Clasificar estado usando vence cuando exista. Si no existe fecha usable,
+    reportar SIN FECHA. No asumir VIGENTE.
+
+expiration_contract:
+  statuses:
+    VIGENTE: "vence en más de 30 días"
+    POR_VENCER: "vence entre hoy y 30 días inclusive"
+    VENCIDO: "vence antes de hoy"
+    SIN_FECHA: "no existe fecha de vencimiento válida"
+
+  date_source: >
+    Usar una fecha actual controlable/injectable en tests. No codificar la fecha
+    actual dentro de fixtures.
 
   critical_rule: >
-    No modificar usuarios.nombre_persona en DB. La limpieza aplica únicamente al
-    texto mostrado en el saludo.
+    SIN_FECHA nunca cuenta como VIGENTE.
 
-generic_expense_keyword_contract:
-  mother_pattern: >
-    Consulta cuantitativa de gasto con verbo/expresión de gasto + concepto libre +
-    periodo explícito o resoluble.
+all_extinguishers_contract:
+  question_family:
+    - "¿Están vigentes los extintores de Acapulco?"
+    - "¿Cómo están los extintores en Acapulco?"
+    - "¿Tenemos extintores vencidos en Acapulco?"
 
-  examples_must_route:
-    - "¿cuánto gastamos en aceite en febrero?"
-    - "¿cuánto gasté en baterías en marzo?"
-    - "¿cuánto se gastó en pintura en enero?"
-    - "¿cuánto gastamos en filtros de aceite de enero a marzo?"
-    - "¿cuánto gastamos en uniformes en agosto?"
-    - "¿cuánto se gastó en extintores en febrero?"
+  required_scope: >
+    Si la pregunta habla de "los extintores de [planta]" sin limitar a estaciones,
+    autotanques o planta física, debe considerar:
+    ESTACIONES + AUTOTANQUES + PLANTA.
 
-  routing_rule: >
-    Si existe cue inequívoco de gasto/importe y un keyword/concepto libre usable,
-    Expense Analytics puede aceptar la consulta aunque no exista dominio explícito
-    Taller/Gastos/Inversiones y aunque el keyword no esté en una lista especial.
+  excludes:
+    - "sistema contra incendio que no sea extintor"
 
-  do_not_require:
-    - "keyword predefinido"
-    - "Taller explícito"
-    - "Gastos explícito"
-    - "Inversiones explícito"
+all_seh_contract:
+  question_family:
+    - "¿Cómo está Seguridad e Higiene en Acapulco?"
+    - "Dame el estatus de seguridad contra incendio de Acapulco"
 
-  must_still_reject:
-    - "preguntas sin cue de gasto/métrica"
-    - "consultas financieras IGF/rentabilidad/utilidad"
-    - "exportaciones Excel"
-    - "Taller Mayor"
-    - "preguntas ambiguas sin concepto usable"
+  required_scope: >
+    Resumir estaciones + autotanques + extintores de planta + sistema contra incendio.
 
-keyword_contract:
-  rule: >
-    Reutilizar extractKeyword/normalización existente. No crear catálogo manual de
-    aceite, baterías, pintura, filtros, uniformes, etc.
+station_count_contract:
+  examples:
+    - "¿Cuántas estaciones tenemos en Acapulco?"
+    - "¿Cuántas estaciones de carburación hay en Acapulco?"
+    - "Dime el número de estaciones que tenemos en Acapulco"
+    - "¿Cuáles son nuestras estaciones de Acapulco?"
+
+  count_rule: >
+    COUNT DISTINCT de LOCACION normalizada dentro del universo ESTACION.
+
+autotank_count_contract:
+  examples:
+    - "¿Cuántas pipas tenemos en Acapulco?"
+    - "¿Cuántos autotanques tenemos en Acapulco?"
+    - "Dime cuántas unidades de autotanque hay en Acapulco"
+    - "¿Cuáles son las pipas de Acapulco?"
+
+  count_rule: >
+    COUNT DISTINCT de LOCACION normalizada dentro del universo AUTOTANQUE.
+
+location_specific_contract:
+  required_examples:
+    - "¿Cuántos extintores tenemos en Pie de la Cuesta?"
+    - "¿Cuántos extintores hay en Pie de la Cuesta?"
+    - "Dime cuántos extintores tiene Pie de la Cuesta"
+    - "¿Cuál es el total de extintores en Pie de la Cuesta?"
+    - "¿Cuántos equipos extintores están registrados en Pie de la Cuesta?"
+    - "¿Cuántos extintores aparecen para Pie de la Cuesta?"
+    - "¿Qué cantidad de extintores tiene la estación Pie de la Cuesta?"
+    - "¿Cuántos extintores tiene la estación de Pie de la Cuesta?"
+    - "¿Cuál es el estatus de los extintores de Pie de la Cuesta?"
+    - "¿Cómo están los extintores de Pie de la Cuesta?"
+    - "¿Están vigentes los extintores de Pie de la Cuesta?"
+    - "¿Todos los extintores de Pie de la Cuesta están vigentes?"
+    - "¿Hay extintores vencidos en Pie de la Cuesta?"
+    - "¿Tenemos algún extintor por vencer en Pie de la Cuesta?"
+    - "¿Qué extintores están vencidos en Pie de la Cuesta?"
+    - "¿Qué extintores vencen pronto en Pie de la Cuesta?"
+    - "Dame el estado de los extintores de Pie de la Cuesta"
+    - "Revísame los extintores de Pie de la Cuesta"
+    - "¿Cómo está Pie de la Cuesta en tema de extintores?"
+    - "¿Cuántos extintores tiene Pie de la Cuesta y cuál es su estatus?"
+
+location_resolution_rule: >
+  Resolver ubicaciones de forma case-insensitive y tolerante a acentos/espacios,
+  pero no hacer fuzzy matching agresivo que pueda mezclar dos estaciones distintas.
+
+plant_resolution:
+  precedence:
+    - "planta explícita en la pregunta"
+    - "planta seleccionada/autorizada del dashboard"
+    - "si entidad específica resuelve inequívocamente a una planta permitida, usarla"
+    - "si queda ambigüedad real, pedir aclaración"
+
+  prohibited:
+    - "cruzar plantas no autorizadas"
+    - "asumir Acapulco por defecto"
+    - "resolver una estación homónima a ciegas"
+
+response_contract:
+  station_count_example: >
+    Acapulco tiene N estaciones de carburación registradas en SEH.
+
+  autotank_count_example: >
+    Acapulco tiene N autotanques registrados en SEH.
+
+  location_status_example: >
+    Pie de la Cuesta tiene N extintores registrados:
+    X vigentes, Y por vencer, Z vencidos y W sin fecha.
+
+  all_extinguishers_example: >
+    En Acapulco hay N extintores registrados considerando estaciones,
+    autotanques y planta:
+    X vigentes, Y por vencer, Z vencidos y W sin fecha.
+
+  status_detail_rule: >
+    Si existen vencidos o por vencer, identificar entidad/ubicación,
+    descripción y fecha cuando esté disponible.
+
+  no_fake_data: >
+    Si no hay registros, decirlo explícitamente. No completar cantidades.
+
+conversation_continuity:
+  required: true
+
+  inheritance_scope:
+    - "SEH domain"
+    - "planta"
+    - "scope"
+    - "entity/location"
+    - "extinguishers"
 
   examples:
-    "cuanto gastamos en aceite en febrero": "aceite"
-    "cuanto gastamos en filtros de aceite en marzo": "filtros aceite"
-    "cuanto se gasto en pintura en enero": "pintura"
+    - turn_1: "¿Cuántos extintores tenemos en Pie de la Cuesta?"
+      turn_2: "¿Y cuál es su estatus?"
+      expected: "mantiene Pie de la Cuesta + extintores"
 
-amount_semantics:
-  rule: >
-    Mantener el contrato de veracidad actual de Expense Analytics.
+    - turn_1: "¿Cómo están los extintores de Pie de la Cuesta?"
+      turn_2: "¿Hay alguno vencido?"
+      expected: "mantiene misma entidad"
 
-  if_only_folio_total_available: >
-    Puede sumar importes completos de los folios que coincidan con el keyword,
-    pero debe decir claramente que el total corresponde a los folios coincidentes
-    y no necesariamente al costo exclusivo del concepto.
+    - turn_1: "¿Hay alguno vencido?"
+      turn_2: "¿Cuál vence primero?"
+      expected: "NEXT_EXPIRATION sobre mismo conjunto"
 
-  if_exact_attribution_requested_and_not_available: >
-    Fallar cerrado y explicar que no puede determinar el importe exclusivo.
+  safety_rule: >
+    No heredar contexto SEH si la pregunta nueva contiene una entidad/planta/dominio
+    explícito incompatible.
 
-  forbidden:
-    - "inventar desglose"
-    - "atribuir 100% del folio al concepto sin advertencia"
-    - "convertir coincidencia textual en costo exacto"
+acceptance_suite_plant_level:
+  - "¿Cuántas estaciones tenemos en Acapulco?"
+  - "¿Cuántas estaciones de carburación hay en Acapulco?"
+  - "Dime el número de estaciones que tenemos en Acapulco"
+  - "¿Cuáles son nuestras estaciones de Acapulco?"
+  - "¿Cómo están los extintores de las estaciones de Acapulco?"
+  - "¿Están vigentes los extintores de las estaciones en Acapulco?"
+  - "¿Tenemos algún extintor vencido en las estaciones de Acapulco?"
+  - "¿Qué extintores de estaciones están por vencer en Acapulco?"
+  - "¿Cuántas pipas tenemos en Acapulco?"
+  - "¿Cuántos autotanques tenemos en Acapulco?"
+  - "Dime cuántas unidades de autotanque hay en Acapulco"
+  - "¿Cuáles son las pipas de Acapulco?"
+  - "¿Cómo están los extintores de los autotanques de Acapulco?"
+  - "¿Están vigentes todos los extintores de las pipas de Acapulco?"
+  - "¿Hay alguna pipa con extintor vencido en Acapulco?"
+  - "¿Qué extintores de los autotanques vencen pronto?"
+  - "¿Cómo están los extintores de la planta de Acapulco?"
+  - "¿Cuál es el estatus del sistema contra incendio de Acapulco?"
+  - "¿Están vigentes los extintores de Acapulco?"
+  - "Dame el estatus de seguridad contra incendio de Acapulco"
+
+acceptance_suite_location_specific:
+  - "¿Cuántos extintores tenemos en Pie de la Cuesta?"
+  - "¿Cuántos extintores hay en Pie de la Cuesta?"
+  - "Dime cuántos extintores tiene Pie de la Cuesta"
+  - "¿Cuál es el total de extintores en Pie de la Cuesta?"
+  - "¿Cuántos equipos extintores están registrados en Pie de la Cuesta?"
+  - "¿Cuántos extintores aparecen para Pie de la Cuesta?"
+  - "¿Qué cantidad de extintores tiene la estación Pie de la Cuesta?"
+  - "¿Cuántos extintores tiene la estación de Pie de la Cuesta?"
+  - "¿Cuál es el estatus de los extintores de Pie de la Cuesta?"
+  - "¿Cómo están los extintores de Pie de la Cuesta?"
+  - "¿Están vigentes los extintores de Pie de la Cuesta?"
+  - "¿Todos los extintores de Pie de la Cuesta están vigentes?"
+  - "¿Hay extintores vencidos en Pie de la Cuesta?"
+  - "¿Tenemos algún extintor por vencer en Pie de la Cuesta?"
+  - "¿Qué extintores están vencidos en Pie de la Cuesta?"
+  - "¿Qué extintores vencen pronto en Pie de la Cuesta?"
+  - "Dame el estado de los extintores de Pie de la Cuesta"
+  - "Revísame los extintores de Pie de la Cuesta"
+  - "¿Cómo está Pie de la Cuesta en tema de extintores?"
+  - "¿Cuántos extintores tiene Pie de la Cuesta y cuál es su estatus?"
+
+cross_scope_examples:
+  - "¿Cuántos extintores tiene el autotanque ECO 39?"
+  - "¿Están vigentes los del ECO 39?"
+  - "¿Cómo están los extintores del cuarto de control?"
+  - "¿Qué extintor vence primero en la planta?"
+  - "¿Tenemos algún equipo del sistema contra incendio sin fecha?"
 
 must_preserve:
-  - "actor_id -> usuarios.nombre_persona"
-  - "fallback neutro del saludo"
-  - "aislamiento cross-user"
-  - "Expense Analytics actual"
-  - "llantas/refacciones"
-  - "Taller"
-  - "Gastos"
-  - "Inversiones"
-  - "SUM/COUNT/AVG/MAX/MIN"
-  - "periodos y rangos"
-  - "estatus"
-  - "limitaciones de atribución"
+  - "autorización por planta"
+  - "aislamiento de planta"
+  - "planner actual"
+  - "conversation state actual"
   - "EXECUTIVE_STATUS"
   - "DIAGNOSIS"
-  - "PERFORMANCE"
-  - "smalltalk"
+  - "Expense Analytics"
+  - "saludo por identidad"
+  - "capabilities existentes"
 
 in_scope:
-  - "normalización de vocativo"
-  - "routing genérico de gasto por keyword"
+  - "adapter/read model SEH para Director IA"
+  - "routing semántico SEH_OPERATION_STATUS"
+  - "conteo distinto de estaciones"
+  - "conteo distinto de autotanques"
+  - "conteo de extintores"
+  - "estatus de vigencia"
+  - "sistema contra incendio"
+  - "resolución por ubicación"
+  - "continuidad conversacional SEH"
   - "tests"
-  - "CURRENT_TASK"
   - "reporte"
+  - "CURRENT_TASK"
 
 out_of_scope:
-  - "modificar usuarios.nombre_persona en DB"
-  - "crear preferred_salutation"
-  - "agregar memoria personal"
-  - "crear catálogo de conceptos"
-  - "modificar SQL/schema"
-  - "mejorar atribución por partidas"
-  - "continuidad conversacional de result-set"
+  - "editar SEH"
+  - "guardar cambios"
+  - "subir/borrar fotos"
+  - "modificar fechas"
+  - "modificar esquema DB"
+  - "crear tablas nuevas"
+  - "Regulación SEH"
+  - "Carpetas Legales"
+  - "mutaciones"
   - "merge a main"
   - "deploy"
   - "siguiente tarea"
 
 required_tests:
-  greeting:
-    - "Ing. Luis Rogelio Zaragoza -> Luis Rogelio Zaragoza"
-    - "Luis Rogelio Zaragoza permanece igual"
-    - "Lic./Dr./Arq. se limpian solo al inicio"
-    - "no se mutilan nombres que contengan esas letras internamente"
-    - "fallback sigue funcionando"
-    - "cross-user sigue aislado"
+  source:
+    - "usa fuente física existente SEH"
+    - "sin segunda tabla"
+    - "sin HTML scraping"
 
-  generic_expense:
-    - "cuánto gastamos en aceite en febrero -> Expense Analytics"
-    - "cuánto gasté en baterías en marzo -> Expense Analytics"
-    - "cuánto se gastó en pintura en enero -> Expense Analytics"
-    - "cuánto gastamos en filtros de aceite de enero a marzo -> Expense Analytics"
-    - "cuánto gastamos en uniformes en agosto -> Expense Analytics"
-    - "keyword correcto"
-    - "periodo correcto"
-    - "no requiere dominio explícito"
+  stations:
+    - "misma locacion repetida 6 veces => 1 estación"
+    - "los 6 extintores siguen contando como 6"
+    - "COUNT"
+    - "LIST"
 
-  veracity:
-    - "folio total only conserva disclaimer"
-    - "exacto/exclusivo falla cerrado si no hay atribución"
-    - "no inventa componente"
+  autotanks:
+    - "misma unidad repetida => 1 autotanque"
+    - "extintores no se deduplican"
+
+  expiration:
+    - "vigente > 30 días"
+    - "por vencer 0-30 días"
+    - "vencido < hoy"
+    - "sin fecha"
+    - "sin fecha no cuenta como vigente"
+
+  all_extinguishers:
+    - "agrega ESTACION + AUTOTANQUE + PLANTA"
+    - "no agrega duplicado por scope accidental"
+
+  fire_system:
+    - "status por nombre/vence"
+    - "sin fecha visible"
+
+  entity_resolution:
+    - "Pie de la Cuesta"
+    - "AUTOTANQUE ECO 39"
+    - "Cuarto de control"
+    - "acentos/case"
+    - "no fuzzy agresivo"
+
+  continuity:
+    - "¿Y cuál es su estatus?"
+    - "¿Hay alguno vencido?"
+    - "¿Cuál vence primero?"
+    - "¿Cuándo vence el próximo?"
+
+  acceptance:
+    - "20 frases plant-level"
+    - "20 frases location-specific"
 
   regression:
-    - "Expense Analytics suite completa"
-    - "saludo identidad suite completa"
-    - "smalltalk"
     - "EXECUTIVE_STATUS"
     - "DIAGNOSIS"
-    - "PERFORMANCE"
+    - "Expense Analytics"
+    - "smalltalk"
+    - "saludo"
 
 success_metrics:
-  - "hola ya no muestra Ing./Lic./Dr./Arq. como vocativo"
-  - "aceite entra a Expense Analytics"
-  - "conceptos libres equivalentes entran sin catálogo manual"
-  - "0 cambios de schema"
-  - "0 degradación de contratos de veracidad"
+  - "40/40 frases de aceptación correctamente clasificadas"
+  - "conteo correcto por activo vs extintor"
+  - "estatus consistente con regla visual SEH"
+  - "0 cruces de planta"
+  - "0 mutaciones"
+  - "0 segunda fuente de verdad"
 
 allowed_actions:
-  - "crear rama fix/director-ia-greeting-generic-expense-keyword-001"
-  - "modificar helper de identidad mínimo"
-  - "modificar gate/router de Expense Analytics mínimo"
-  - "agregar tests"
-  - "actualizar CURRENT_TASK"
+  - "crear rama implementation/director-ia-seh-operation-status-001"
+  - "leer código SEH existente"
+  - "crear adapter read-only"
+  - "extender planner/capabilities de forma mínima"
+  - "integrar conversation state SEH"
+  - "crear tests"
   - "crear reporte"
   - "commit/push solo a rama autorizada"
 
 forbidden_actions:
-  - "editar usuarios.nombre_persona en DB"
-  - "agregar catálogo manual de conceptos"
-  - "modificar SQL/schema"
-  - "relajar limitaciones de atribución"
+  - "modificar datos SEH"
+  - "PUT/POST/DELETE desde Director IA"
+  - "crear tablas nuevas"
+  - "copiar SEH a otra fuente"
+  - "scraping HTML"
   - "merge a main"
   - "push directo a main"
   - "deploy"
@@ -224,6 +451,6 @@ forbidden_actions:
 
 max_attempts: 1
 
-result_report_path: "docs/dev-loop/reports/FIX-DIRECTOR-IA-GREETING-AND-GENERIC-EXPENSE-KEYWORD-001.md"
+result_report_path: "docs/dev-loop/reports/IMPL-DIRECTOR-IA-SEH-OPERATION-STATUS-001.md"
 
 final_state: "DONE_PENDING_REVIEW"
