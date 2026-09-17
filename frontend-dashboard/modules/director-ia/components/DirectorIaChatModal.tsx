@@ -129,7 +129,7 @@ export function DirectorIaChatModal({
       <div
         className={
           isLarge
-            ? "flex flex-col overflow-hidden min-h-0 w-[min(900px,calc(100vw-48px))] h-[min(560px,calc(100vh-64px))] max-w-full rounded-xl border border-cyan-800/60 bg-slate-900 shadow-xl"
+            ? "flex flex-col min-h-0 overflow-hidden w-[calc(100vw-48px)] max-w-[900px] h-[calc(100vh-64px)] max-h-[560px] rounded-xl border border-cyan-800/60 bg-slate-900 shadow-xl"
             : "flex flex-col w-full max-w-lg max-h-[85vh] rounded-xl border border-cyan-800/60 bg-slate-900 shadow-xl"
         }
         onClick={(e) => e.stopPropagation()}
