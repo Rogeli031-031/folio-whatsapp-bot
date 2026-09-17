@@ -25,10 +25,13 @@ const ACCIONES_SRC = fs.readFileSync(
 
 describe("FIX-IGF-DIRECTOR-IA-MODAL-BOUNDED-SCROLL-001 — large acotado", () => {
   it("modal large usa 900×560 con overflow-hidden y no reabre 620", () => {
-    assert.match(MODAL_SRC, /w-\[min\(900px,calc\(100vw-48px\)\)\]/);
-    assert.match(MODAL_SRC, /h-\[min\(560px,calc\(100vh-64px\)\)\]/);
-    assert.match(MODAL_SRC, /flex flex-col overflow-hidden min-h-0 w-\[min\(900px/);
+    assert.match(MODAL_SRC, /w-\[calc\(100vw-48px\)\]/);
+    assert.match(MODAL_SRC, /max-w-\[900px\]/);
+    assert.match(MODAL_SRC, /h-\[calc\(100vh-64px\)\]/);
+    assert.match(MODAL_SRC, /max-h-\[560px\]/);
+    assert.match(MODAL_SRC, /flex flex-col min-h-0 overflow-hidden w-\[calc\(100vw-48px\)\]/);
     assert.doesNotMatch(MODAL_SRC, /620px|100vh-48px|1024px|780px/);
+    assert.doesNotMatch(MODAL_SRC, /w-\[min\(|h-\[min\(/);
   });
 
   it("modal default conserva max-w-lg / max-h-85vh / min-h-320", () => {

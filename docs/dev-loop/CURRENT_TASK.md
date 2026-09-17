@@ -1,8 +1,8 @@
 ﻿# CURRENT_TASK
 
 ```yaml
-task_id: "FIX-IGF-DIRECTOR-IA-MODAL-BOUNDED-SCROLL-001"
-title: "IGF Director IA — mantener header e input visibles con scroll interno"
+task_id: "FIX-IGF-DIRECTOR-IA-MODAL-PHYSICAL-BOUNDS-001"
+title: "IGF Director IA — hacer efectivas las dimensiones físicas del modal"
 status: "DONE_PENDING_REVIEW"
 mode: "IMPLEMENTATION"
 
@@ -18,8 +18,8 @@ new_tables: false
 new_indexes: false
 data_mutation: false
 
-reference_main: "57ad6bc01aaa8fd8586c5cf64a096b63b845de88"
-branch: "fix/igf-director-ia-modal-bounded-scroll-001"
+reference_main: "c320d4b45a06fb391c3c59924fd54dc9d150eff7"
+branch: "fix/igf-director-ia-modal-physical-bounds-001"
 
 next_task_authorized: false
 merge_authorized: false
