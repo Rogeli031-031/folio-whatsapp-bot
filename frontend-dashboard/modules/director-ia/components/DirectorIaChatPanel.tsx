@@ -23,6 +23,8 @@ type DirectorIaChatPanelProps = {
   uploadDay?: string | null;
   /** El área de mensajes ocupa el alto disponible (modal large). Default: tope 50vh. */
   fillAvailable?: boolean;
+  /** Si el backend emite OPEN_FOLIO con folio_id, abre el detalle real. */
+  onOpenFolio?: (folioId: number) => void;
 };
 
 function newMessageId() {
@@ -38,6 +40,7 @@ export function DirectorIaChatPanel({
   className = "",
   uploadDay: uploadDayProp = null,
   fillAvailable = false,
+  onOpenFolio,
 }: DirectorIaChatPanelProps) {
   const [question, setQuestion] = useState("");
   const [loading, setLoading] = useState(false);
@@ -109,12 +112,22 @@ export function DirectorIaChatPanel({
           ? (res.context_meta as { conversation_state?: Record<string, unknown> }).conversation_state
           : null;
       if (nextState) setConversationState(nextState);
+      const action = "ui_action" in res ? res.ui_action : null;
+      if (
+        action &&
+        action.type === "OPEN_FOLIO" &&
+        action.folio_id != null &&
+        Number.isFinite(Number(action.folio_id)) &&
+        typeof onOpenFolio === "function"
+      ) {
+        onOpenFolio(Number(action.folio_id));
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Error al consultar");
     } finally {
       setLoading(false);
     }
-  }, [token, plantaId, plantaNombre, question, messages, uploadDayProp, conversationState]);
+  }, [token, plantaId, plantaNombre, question, messages, uploadDayProp, conversationState, onOpenFolio]);
 
   const fillChat = Boolean(chatMode && fillAvailable);
   const shellClass = chatMode

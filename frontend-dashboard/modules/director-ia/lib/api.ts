@@ -118,13 +118,22 @@ export function fetchDirectorIaContext(
   });
 }
 
+export type DirectorIaUiAction = {
+  type: string;
+  numero_folio?: string | null;
+  folio_id?: number | null;
+  plant?: string | null;
+  do_not_pretend_opened?: boolean;
+};
+
 export type DirectorIaChatResponse =
   | { enabled: false }
   | {
       ok: true;
       answer: string;
       sources: string[];
-      context_meta: { planta_id: number; timestamp: string };
+      context_meta: { planta_id: number; timestamp: string; conversation_state?: Record<string, unknown> };
+      ui_action?: DirectorIaUiAction;
     }
   | { ok: false; error: string };
 

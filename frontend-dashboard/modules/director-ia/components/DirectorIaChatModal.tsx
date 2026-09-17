@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { fetchPlantas } from "@/lib/api";
 import { DirectorIaChatPanel } from "@/modules/director-ia/components/DirectorIaChatPanel";
+import FolioDrawer from "@/components/FolioDrawer";
 
 const CLAVES_CODIGO_PLANTA = ["E7", "E8", "E9", "E10", "E11", "E12", "E13", "E15"];
 
@@ -46,6 +47,7 @@ export function DirectorIaChatModal({
   const [plantasLoading, setPlantasLoading] = useState(false);
   const [plantasError, setPlantasError] = useState<string | null>(null);
   const [chatEpoch, setChatEpoch] = useState(0);
+  const [drawerFolioId, setDrawerFolioId] = useState<number | null>(null);
 
   useEffect(() => {
     if (!open) {
@@ -201,12 +203,14 @@ export function DirectorIaChatModal({
               chatMode
               fillAvailable={isLarge}
               className={isLarge ? "flex-1 h-full min-h-0" : "flex-1 min-h-[320px]"}
+              onOpenFolio={setDrawerFolioId}
             />
           ) : (
             <p className="text-sm text-slate-400">Selecciona una planta autorizada para abrir el chat.</p>
           )}
         </div>
       </div>
+      <FolioDrawer folioId={drawerFolioId} token={token} onClose={() => setDrawerFolioId(null)} />
     </div>
   );
 }
