@@ -1,8 +1,8 @@
 ﻿# CURRENT_TASK
 
 ```yaml
-task_id: "IMPL-DIRECTOR-IA-CROSS-DOMAIN-CONVERSATIONAL-ROBUSTNESS-001"
-title: "Director IA — resolución explícita de planta, rankings comerciales y continuidad avanzada de Folios"
+task_id: "IMPL-IGF-FORECAST-HEADER-TOMZA-EN-ACCION-001"
+title: "IGF Forecast — mover Evidencias y centrar branding Tomza en Acción"
 status: "DONE_PENDING_REVIEW"
 mode: "IMPLEMENTATION"
 
@@ -18,9 +18,10 @@ new_tables: false
 new_indexes: false
 data_mutation: false
 
-reference_main: "VERIFY_BEFORE_START"
-branch: "implementation/director-ia-cross-domain-conversational-robustness-001"
+reference_main: "8863f60a897e9025d4227d24ed84f3c1e4aad718"
+branch: "implementation/igf-forecast-header-tomza-en-accion-001"
 
 next_task_authorized: false
 merge_authorized: false
 deploy_authorized: false
+```
