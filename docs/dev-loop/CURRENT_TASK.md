@@ -1,8 +1,8 @@
 ﻿# CURRENT_TASK
 
 ```yaml
-task_id: "FIX-IGF-DIRECTOR-IA-MODAL-PHYSICAL-BOUNDS-001"
-title: "IGF Director IA — hacer efectivas las dimensiones físicas del modal"
+task_id: "IMPL-DIRECTOR-IA-EXECUTIVE-CONVERSATIONAL-BACKLOG-001"
+title: "Director IA — cierre integral de backlog conversacional ejecutivo, Folios, ARR, IGF, clientes, SEH y navegación"
 status: "DONE_PENDING_REVIEW"
 mode: "IMPLEMENTATION"
 
@@ -18,8 +18,8 @@ new_tables: false
 new_indexes: false
 data_mutation: false
 
-reference_main: "c320d4b45a06fb391c3c59924fd54dc9d150eff7"
-branch: "fix/igf-director-ia-modal-physical-bounds-001"
+reference_main: "567e68e05e4e7d7b5fec8ecd1384bf00bff4a9c7"
+branch: "implementation/director-ia-executive-conversational-backlog-001"
 
 next_task_authorized: false
 merge_authorized: false
