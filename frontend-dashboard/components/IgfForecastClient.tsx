@@ -811,7 +811,7 @@ export function IgfForecastContent() {
         </div>
         <div className="min-w-0 px-4 flex items-center justify-center overflow-hidden">
           <p
-            className="font-serif whitespace-nowrap leading-none text-center pointer-events-none select-none text-[clamp(0.8rem,1.8vw,2rem)]"
+            className="font-serif whitespace-nowrap leading-none text-center pointer-events-none select-none text-[clamp(1rem,2.6vw,3rem)] -translate-x-[clamp(0rem,2.2vw,2.75rem)]"
             aria-label="Tomza en Acción"
           >
             <span className="text-white not-italic">Tomza</span>

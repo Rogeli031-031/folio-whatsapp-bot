@@ -1,8 +1,8 @@
 ﻿# CURRENT_TASK
 
 ```yaml
-task_id: "IMPL-IGF-FORECAST-HEADER-TOMZA-EN-ACCION-001"
-title: "IGF Forecast — mover Evidencias y centrar branding Tomza en Acción"
+task_id: "TUNE-IGF-FORECAST-TOMZA-EN-ACCION-SIZING-001"
+title: "IGF Forecast — aumentar tamaño y refinar centrado visual de Tomza en Acción"
 status: "DONE_PENDING_REVIEW"
 mode: "IMPLEMENTATION"
 
@@ -18,8 +18,8 @@ new_tables: false
 new_indexes: false
 data_mutation: false
 
-reference_main: "8863f60a897e9025d4227d24ed84f3c1e4aad718"
-branch: "implementation/igf-forecast-header-tomza-en-accion-001"
+reference_main: "ea759bbbac0f675500a02c0669ebbd1f219c98b3"
+branch: "tune/igf-forecast-tomza-en-accion-sizing-001"
 
 next_task_authorized: false
 merge_authorized: false
