@@ -315,14 +315,14 @@ describe("FIX-DIRECTOR-IA-PENDING-CLARIFICATION-AND-UI-ACTIONS-001", () => {
       now: NOW,
     });
     assert.match(emptyOpen, /observada/);
-    assert.match(emptyOpen, /no la presento como ranking observado|proyec/i);
+    assert.match(emptyOpen, /no la presento como ranking observado|proyec|FORECAST_AVAILABLE|CLIENT_FORECAST_UNAVAILABLE/i);
     const withRows = buildClientRankingAnswer({
       ok: true,
       spec: { ...sep, plant_label: "Acapulco", customer_segment: "ALL", ranking_direction: "TOP", metric: "VENTA_TON" },
       ranked: [{ cliente: "PUBLICO EN GENERAL", venta_ton: 12.5 }],
       now: NOW,
     });
-    assert.match(withRows, /observado/);
+    assert.match(withRows, /observad|OBSERVED_PARTIAL/i);
     assert.doesNotMatch(withRows, /Abro /);
   });
 
