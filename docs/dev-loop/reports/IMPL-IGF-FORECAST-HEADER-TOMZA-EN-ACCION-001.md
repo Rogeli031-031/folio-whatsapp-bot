@@ -24,7 +24,7 @@ human_decision_needed: "Revisar. Este agente no mergea, no abre PR, no despliega
 
 **DONE_PENDING_REVIEW.**
 
-Primera franja de IGF Forecast: EVIDENCIAS junto a PLAN MAESTRO; branding **Tomza en Acción** centrado respecto de todo el header; KPI Financieros a la derecha.
+Primera franja de IGF Forecast: EVIDENCIAS junto a PLAN MAESTRO; branding **Tomza en Acción** centrado en el espacio restante (sin overlap); KPI Financieros a la derecha. Corrección de review aplicada.
 
 ## 2. SHA base
 
@@ -54,61 +54,66 @@ El centro era el espacio sobrante, no el centro geométrico del header.
 
 ## 6. Layout nuevo
 
-Grid de tres columnas `minmax(0,1fr) / auto / minmax(0,1fr)`:
+Grid de tres tracks físicos `auto / minmax(0,1fr) / auto`:
 
-- IZQUIERDA: `IGF Forecast` + `PLAN MAESTRO` + `EVIDENCIAS`
-- CENTRO (columna `auto`): `Tomza` blanco + `en Acción` `text-amber-300 italic` (mismo tono que KPI Financieros)
-- DERECHA: `← KPI Financieros`
+- IZQUIERDA (`auto`): `IGF Forecast` + `PLAN MAESTRO` + `EVIDENCIAS`
+- CENTRO (`1fr`): `Tomza` blanco + `en Acción` `text-amber-300 italic`
+- DERECHA (`auto`): `← KPI Financieros`
 
 Una sola línea en desktop. Segunda fila intacta.
 
-## 7. Estrategia de centrado
+## 7. Estrategia de centrado (corrección de review)
 
-Las dos columnas `1fr` laterales son simétricas. El branding vive en la columna central `auto`. Eso coloca el título en el **centro real del header**, no en el hueco entre bloques de distinto ancho.
+Review humana: el grid `1fr / auto / 1fr` no reservaba el ancho real del bloque izquierdo y arriesgaba overlap EVIDENCIAS / branding.
 
-Los bloques laterales llevan `z-10` para que, si el viewport se estrecha, los controles no queden debajo del título.
+Layout corregido: `grid-cols-[auto_minmax(0,1fr)_auto]`.
+
+- IZQUIERDA `auto`: ancho real de IGF Forecast + PLAN MAESTRO + EVIDENCIAS (`flex-nowrap`)
+- CENTRO `minmax(0,1fr)`: espacio restante; branding centrado **dentro de ese hueco** (`min-w-0`, `px-4`)
+- DERECHA `auto`: ancho real de KPI Financieros
+
+El título puede quedar ligeramente a la derecha del centro geométrico. Es aceptable. Prioridad: **cero superposición**.
 
 ## 8. Estrategia responsive
 
-- `font-size: clamp(0.8rem, 2.1vw, 2.15rem)`
-- `white-space: nowrap` — no se parte “Tomza en Acción”
-- El título reduce tamaño antes que los botones
-- El cluster izquierdo admite `flex-wrap` solo si el espacio no alcanza, para no superponer controles
-- Sin fuentes externas (`font-serif` del tema Tailwind)
-- Sin ocultar funcionalidad
-- Sin rediseñar botones
-
-EVIDENCIAS conserva `openEvidenciasModal` y las clases rose originales.
+- `font-size: clamp(0.8rem, 1.8vw, 2rem)`
+- `white-space: nowrap`
+- `px-4` en el track central
+- Cluster izquierdo `flex-nowrap`
+- Reduce el branding antes que permitir overlap
+- Sin fuentes externas; botones y handlers sin cambio
 
 ## 9. Validación desktop / responsive
 
-- Código: EVIDENCIAS inmediatamente después de PLAN MAESTRO; KPI a la derecha; branding en columna central.
-- `npx tsc --noEmit` en `frontend-dashboard`: **pass**
-- `npx next build`: **pass** (`/igf-forecast` compiló)
-- `npm run lint`: no ejecutable de forma no interactiva (Next pidió configurar ESLint; no hay `.eslintrc` en el frontend). Limitación previa, no introducida por este cambio.
-- Navegación local a `/igf-forecast` sin token: **Acceso no autorizado** (esperado). No se usó token de producción.
-- Preview HTML aislado en viewport estrecho del browser embebido no cargó Tailwind CDN; no se tomó como evidencia del build real.
+Medición `getBoundingClientRect` del layout corregido (preview de tracks equivalentes):
 
-Validación visual completa en dashboard autenticado queda para revisión humana.
+| Ancho | gap EVIDENCIAS → branding | gap branding → KPI | nowrap | overlap |
+|---|---|---|---|---|
+| 1700px | 530px | 530px | sí | no |
+| 1366px | 363px | 363px | sí | no |
+| 1024px | 192px | 192px | sí | no |
+
+Separación inequívoca en los tres anchos. `npx tsc --noEmit` y `npx next build` repetidos: **pass**.
+
+`/igf-forecast` sin token sigue en acceso no autorizado (esperado). Validación autenticada en producción queda para revisión humana.
 
 ## 10. Build/test
 
 ```
-npx tsc --noEmit   → 0
-npx next build     → Compiled successfully
-npm run lint       → prompt interactivo ESLint (preexistente)
+npx tsc --noEmit   → 0 (tras corrección de review)
+npx next build     → Compiled successfully (tras corrección de review)
 ```
 
 ## 11. Limitaciones
 
-- Sin token no se puede ver PLAN MAESTRO / EVIDENCIAS en runtime.
-- En viewports muy estrechos el cluster izquierdo puede pasar a dos líneas internas antes que ocultar botones.
+- Sin token no se ve PLAN MAESTRO / EVIDENCIAS en `/igf-forecast` local.
+- El branding ya no está en el centro geométrico del header; se centra en el espacio restante.
 - No se añadió fuente corporativa nueva.
 
 ## 12. Diff conceptual
 
-Antes: Evidencias ocupaba el centro flex.
-Ahora: Evidencias en el bloque izquierdo; branding institucional centrado de verdad; KPI sin cambio.
+Antes (primer commit): grid simétrico `1fr / auto / 1fr` → riesgo de overlap.
+Ahora (review): `auto / 1fr / auto` → laterales con ancho real, branding en el hueco, cero overlap.
 
 ## 13–16. Confirmaciones
 
@@ -117,8 +122,12 @@ Ahora: Evidencias en el bloque izquierdo; branding institucional centrado de ver
 - `merge=false`
 - `deploy=false`
 
-## 17. STOP
+## 17. Corrección de review
 
-Fin de implementación. Espera revisión humana.
+Aplicada en la misma tarea y la misma rama. `CURRENT_TASK` permanece `DONE_PENDING_REVIEW`.
+
+## 18. STOP
+
+Fin de la corrección de review. Espera revisión humana.
 
 NO PR. NO merge. NO deploy. NO siguiente tarea.

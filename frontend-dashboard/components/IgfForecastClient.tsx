@@ -787,8 +787,8 @@ export function IgfForecastContent() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <div className="border-b border-slate-700 bg-slate-900/50 px-4 py-3 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-x-2">
-        <div className="flex flex-wrap items-center gap-2 min-w-0 justify-self-start relative z-10">
+      <div className="border-b border-slate-700 bg-slate-900/50 px-4 py-3 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center">
+        <div className="flex flex-nowrap items-center gap-2 shrink-0 relative z-10">
           <h1 className="text-xl font-semibold text-white shrink-0">IGF Forecast</h1>
           {token && (
             <button
@@ -809,14 +809,16 @@ export function IgfForecastContent() {
             </button>
           )}
         </div>
-        <p
-          className="font-serif whitespace-nowrap leading-none text-center px-2 pointer-events-none select-none text-[clamp(0.8rem,2.1vw,2.15rem)]"
-          aria-label="Tomza en Acción"
-        >
-          <span className="text-white not-italic">Tomza</span>
-          <span className="text-amber-300 italic"> en Acción</span>
-        </p>
-        <div className="flex justify-end min-w-0 justify-self-end relative z-10">
+        <div className="min-w-0 px-4 flex items-center justify-center overflow-hidden">
+          <p
+            className="font-serif whitespace-nowrap leading-none text-center pointer-events-none select-none text-[clamp(0.8rem,1.8vw,2rem)]"
+            aria-label="Tomza en Acción"
+          >
+            <span className="text-white not-italic">Tomza</span>
+            <span className="text-amber-300 italic"> en Acción</span>
+          </p>
+        </div>
+        <div className="flex justify-end shrink-0 relative z-10">
           <Link
             href={token ? `/?t=${encodeURIComponent(token)}` : "/"}
             className="text-sm text-amber-300 hover:text-amber-200 underline shrink-0"
