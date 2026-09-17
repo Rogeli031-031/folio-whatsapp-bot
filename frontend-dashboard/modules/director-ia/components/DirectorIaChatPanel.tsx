@@ -116,9 +116,78 @@ export function DirectorIaChatPanel({
     }
   }, [token, plantaId, plantaNombre, question, messages, uploadDayProp, conversationState]);
 
+  const fillChat = Boolean(chatMode && fillAvailable);
   const shellClass = chatMode
-    ? `flex flex-col min-h-0 ${className}`
+    ? fillChat
+      ? `h-full flex flex-col min-h-0 overflow-hidden ${className}`
+      : `flex flex-col min-h-0 ${className}`
     : `rounded-lg border border-cyan-800/50 bg-slate-900/60 p-4 space-y-3 ${className}`;
+
+  const emptyPrompt = (
+    <p className="text-sm text-slate-500">
+      Pregunta sobre acciones, riesgos o situación de
+      {plantaNombre ? ` ${plantaNombre}` : " la planta seleccionada"}.
+    </p>
+  );
+
+  const bubbleList = (
+    <>
+      {messages.map((m) => (
+        <div
+          key={m.id}
+          className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
+        >
+          <div
+            className={`max-w-[92%] rounded-lg px-3 py-2 text-sm leading-relaxed whitespace-pre-wrap ${
+              m.role === "user"
+                ? "bg-cyan-950/70 border border-cyan-700/50 text-cyan-50"
+                : "bg-slate-800 border border-slate-600 text-slate-100"
+            }`}
+          >
+            {m.content}
+          </div>
+        </div>
+      ))}
+      {loading ? (
+        <div className="flex justify-start">
+          <div className="rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-400">
+            Pensando…
+          </div>
+        </div>
+      ) : null}
+    </>
+  );
+
+  const composerRow = (
+    <div className={`flex flex-col sm:flex-row gap-2 ${chatMode ? "pt-2 border-t border-slate-700 shrink-0" : ""}`}>
+      <input
+        type="text"
+        value={question}
+        onChange={(e) => setQuestion(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !loading) void consultar();
+        }}
+        placeholder="Escribe tu pregunta…"
+        className="flex-1 rounded border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-200"
+        aria-label="Pregunta al Director IA"
+        disabled={loading}
+      />
+      <button
+        type="button"
+        onClick={() => void consultar()}
+        disabled={loading}
+        className="rounded border border-cyan-600/80 bg-cyan-950/50 px-4 py-2 text-sm font-medium text-cyan-100 hover:bg-cyan-900/40 disabled:opacity-50 shrink-0"
+      >
+        {loading ? "Enviando…" : chatMode ? "Enviar" : "Consultar"}
+      </button>
+    </div>
+  );
+
+  const errorNode = error ? (
+    <p className={fillChat ? "text-sm text-red-300/90 px-1 pt-1 max-h-16 overflow-y-auto" : "text-sm text-red-300/90"}>
+      {error}
+    </p>
+  ) : null;
 
   return (
     <div className={shellClass}>
@@ -132,45 +201,23 @@ export function DirectorIaChatPanel({
         </>
       ) : null}
 
-      {chatMode && messages.length === 0 && !loading ? (
-        <div className="flex-1 flex items-center justify-center px-4 py-8 text-center">
-          <p className="text-sm text-slate-500">
-            Pregunta sobre acciones, riesgos o situación de
-            {plantaNombre ? ` ${plantaNombre}` : " la planta seleccionada"}.
-          </p>
+      {fillChat ? (
+        <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto space-y-3 px-1 py-2">
+          {messages.length === 0 && !loading ? (
+            <div className="flex min-h-full items-center justify-center px-4 py-4 text-center">{emptyPrompt}</div>
+          ) : (
+            bubbleList
+          )}
         </div>
       ) : null}
 
-      {chatMode && messages.length > 0 ? (
-        <div
-          ref={scrollRef}
-          className={`flex-1 overflow-y-auto space-y-3 px-1 py-2 ${
-            fillAvailable ? "min-h-0" : "min-h-[200px] max-h-[50vh]"
-          }`}
-        >
-          {messages.map((m) => (
-            <div
-              key={m.id}
-              className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
-            >
-              <div
-                className={`max-w-[92%] rounded-lg px-3 py-2 text-sm leading-relaxed whitespace-pre-wrap ${
-                  m.role === "user"
-                    ? "bg-cyan-950/70 border border-cyan-700/50 text-cyan-50"
-                    : "bg-slate-800 border border-slate-600 text-slate-100"
-                }`}
-              >
-                {m.content}
-              </div>
-            </div>
-          ))}
-          {loading ? (
-            <div className="flex justify-start">
-              <div className="rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-400">
-                Pensando…
-              </div>
-            </div>
-          ) : null}
+      {chatMode && !fillChat && messages.length === 0 && !loading ? (
+        <div className="flex-1 flex items-center justify-center px-4 py-8 text-center">{emptyPrompt}</div>
+      ) : null}
+
+      {chatMode && !fillChat && messages.length > 0 ? (
+        <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-3 px-1 py-2 min-h-[200px] max-h-[50vh]">
+          {bubbleList}
         </div>
       ) : null}
 
@@ -188,30 +235,17 @@ export function DirectorIaChatPanel({
         </div>
       ) : null}
 
-      <div className={`flex flex-col sm:flex-row gap-2 ${chatMode ? "pt-2 border-t border-slate-700 shrink-0" : ""}`}>
-        <input
-          type="text"
-          value={question}
-          onChange={(e) => setQuestion(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !loading) void consultar();
-          }}
-          placeholder="Escribe tu pregunta…"
-          className="flex-1 rounded border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-200"
-          aria-label="Pregunta al Director IA"
-          disabled={loading}
-        />
-        <button
-          type="button"
-          onClick={() => void consultar()}
-          disabled={loading}
-          className="rounded border border-cyan-600/80 bg-cyan-950/50 px-4 py-2 text-sm font-medium text-cyan-100 hover:bg-cyan-900/40 disabled:opacity-50 shrink-0"
-        >
-          {loading ? "Enviando…" : chatMode ? "Enviar" : "Consultar"}
-        </button>
-      </div>
-
-      {error ? <p className="text-sm text-red-300/90">{error}</p> : null}
+      {fillChat ? (
+        <div className="shrink-0">
+          {errorNode}
+          {composerRow}
+        </div>
+      ) : (
+        <>
+          {composerRow}
+          {errorNode}
+        </>
+      )}
 
       {!chatMode && showSources && lastSources.length > 0 ? (
         <div>
