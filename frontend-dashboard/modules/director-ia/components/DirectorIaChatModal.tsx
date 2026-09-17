@@ -122,14 +122,14 @@ export function DirectorIaChatModal({
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4"
+      className={`fixed inset-0 z-[60] flex items-center justify-center bg-black/70 ${isLarge ? "p-6" : "p-4"}`}
       onClick={onClose}
       role="presentation"
     >
       <div
         className={
           isLarge
-            ? "flex flex-col w-[min(1024px,calc(100vw-32px))] h-[min(780px,calc(100vh-32px))] max-w-full rounded-xl border border-cyan-800/60 bg-slate-900 shadow-xl"
+            ? "flex flex-col w-[min(900px,calc(100vw-48px))] h-[min(620px,calc(100vh-48px))] max-w-full rounded-xl border border-cyan-800/60 bg-slate-900 shadow-xl"
             : "flex flex-col w-full max-w-lg max-h-[85vh] rounded-xl border border-cyan-800/60 bg-slate-900 shadow-xl"
         }
         onClick={(e) => e.stopPropagation()}

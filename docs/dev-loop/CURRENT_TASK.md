@@ -1,8 +1,8 @@
 ﻿# CURRENT_TASK
 
 ```yaml
-task_id: "IMPL-IGF-DIRECTOR-IA-LARGE-CHAT-001"
-title: "IGF Forecast — acceso a Chat Director IA amplio con selección de planta"
+task_id: "FIX-DIRECTOR-IA-FOLIO-CONCEPT-COUNT-AND-IGF-CHAT-SIZING-001"
+title: "Director IA — conteo de folios por concepto + continuidad y ajuste de tamaño del chat IGF"
 status: "DONE_PENDING_REVIEW"
 mode: "IMPLEMENTATION"
 
@@ -18,8 +18,8 @@ new_tables: false
 new_indexes: false
 data_mutation: false
 
-reference_main: "1a72336d88172f86293a2a9f57318b079f875c44"
-branch: "implementation/igf-director-ia-large-chat-001"
+reference_main: "13554948682dd13075a8eecf4848a2ca96177d42"
+branch: "fix/director-ia-folio-concept-count-igf-chat-sizing-001"
 
 next_task_authorized: false
 merge_authorized: false
