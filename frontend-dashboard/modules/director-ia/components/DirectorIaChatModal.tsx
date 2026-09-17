@@ -129,7 +129,7 @@ export function DirectorIaChatModal({
       <div
         className={
           isLarge
-            ? "flex flex-col w-[min(900px,calc(100vw-48px))] h-[min(620px,calc(100vh-48px))] max-w-full rounded-xl border border-cyan-800/60 bg-slate-900 shadow-xl"
+            ? "flex flex-col overflow-hidden min-h-0 w-[min(900px,calc(100vw-48px))] h-[min(560px,calc(100vh-64px))] max-w-full rounded-xl border border-cyan-800/60 bg-slate-900 shadow-xl"
             : "flex flex-col w-full max-w-lg max-h-[85vh] rounded-xl border border-cyan-800/60 bg-slate-900 shadow-xl"
         }
         onClick={(e) => e.stopPropagation()}
@@ -200,7 +200,7 @@ export function DirectorIaChatModal({
               uploadDay={uploadDay}
               chatMode
               fillAvailable={isLarge}
-              className={isLarge ? "flex-1 min-h-0" : "flex-1 min-h-[320px]"}
+              className={isLarge ? "flex-1 h-full min-h-0" : "flex-1 min-h-[320px]"}
             />
           ) : (
             <p className="text-sm text-slate-400">Selecciona una planta autorizada para abrir el chat.</p>
