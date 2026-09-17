@@ -1,8 +1,8 @@
 ﻿# CURRENT_TASK
 
 ```yaml
-task_id: "IMPL-DIRECTOR-IA-EXECUTIVE-CONVERSATIONAL-BACKLOG-001"
-title: "Director IA — cierre integral de backlog conversacional ejecutivo, Folios, ARR, IGF, clientes, SEH y navegación"
+task_id: "FIX-DIRECTOR-IA-PENDING-CLARIFICATION-AND-UI-ACTIONS-001"
+title: "Director IA — completar aclaraciones cortas, auditar ranking ARR y ejecutar navegación de Folios"
 status: "DONE_PENDING_REVIEW"
 mode: "IMPLEMENTATION"
 
@@ -18,10 +18,10 @@ new_tables: false
 new_indexes: false
 data_mutation: false
 
-reference_main: "567e68e05e4e7d7b5fec8ecd1384bf00bff4a9c7"
-branch: "implementation/director-ia-executive-conversational-backlog-001"
+reference_main: "4161444203ab06b1c06b1025ef721fc6e0a48475"
+branch: "fix/director-ia-pending-clarification-ui-actions-001"
 
-next_task_authorized: false
 merge_authorized: false
 deploy_authorized: false
+next_task_authorized: false
 ```

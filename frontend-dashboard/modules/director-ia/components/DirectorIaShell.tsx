@@ -20,6 +20,7 @@ import {
   type DirectorIaTopOverdueAction,
 } from "@/modules/director-ia/lib/api";
 import { DirectorIaChatPanel } from "@/modules/director-ia/components/DirectorIaChatPanel";
+import FolioDrawer from "@/components/FolioDrawer";
 import { DirectorIaCyclePanel } from "@/modules/director-ia/components/DirectorIaCyclePanel";
 import { DirectorIaMejoraContinuaPanel } from "@/modules/director-ia/components/DirectorIaMejoraContinuaPanel";
 import { DirectorIaBitacoraPanel } from "@/modules/director-ia/components/DirectorIaBitacoraPanel";
@@ -152,6 +153,7 @@ function ContextResultPanel({
   token: string;
   plantaId: string;
 }) {
+  const [drawerFolioId, setDrawerFolioId] = useState<number | null>(null);
   if (loading) {
     return <p className="text-sm text-slate-400">Consultando contexto…</p>;
   }
@@ -237,7 +239,8 @@ function ContextResultPanel({
                 </div>
               )}
 
-              <DirectorIaChatPanel token={token} plantaId={plantaId} showSources />
+              <DirectorIaChatPanel token={token} plantaId={plantaId} showSources onOpenFolio={setDrawerFolioId} />
+              <FolioDrawer folioId={drawerFolioId} token={token} onClose={() => setDrawerFolioId(null)} />
 
               {data.action_register.invalid_overdue &&
               data.action_register.invalid_overdue.count > 0 ? (

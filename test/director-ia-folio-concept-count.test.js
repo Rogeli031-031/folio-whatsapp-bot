@@ -175,9 +175,10 @@ describe("FIX folio concept COUNT — periodo", () => {
     assert.notEqual(filters.period_mode, "ANY");
     assert.equal(filters.existence, false);
     const payload = await loadFolioSearchForChat(null, 1, { body: {}, dashboardAuth: { role: "ZP" } }, inject(q));
-    assert.equal(payload.ok, false);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.pending_period, true);
     assert.equal(payload.period_code, "missing_period");
-    assert.match(payload.error, /De qué mes o rango de meses quieres los folios de llantas/);
+    assert.match(payload.clarification || payload.error, /De qué mes o rango de meses quieres los folios de llantas/);
     assert.equal(/exclusivamente/.test(payload.error), false);
   });
 });
