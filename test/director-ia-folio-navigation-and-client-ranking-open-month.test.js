@@ -343,9 +343,8 @@ describe("FIX-DIRECTOR-IA-FOLIO-NAVIGATION-AND-CLIENT-RANKING-OPEN-MONTH-001", (
       ranked: [],
       now: NOW,
     });
-    assert.match(empty, /NO_ROWS_OBSERVED/);
-    assert.match(empty, /CLIENT_FORECAST_UNAVAILABLE/);
-    assert.doesNotMatch(empty, /cierre/);
+    assert.match(empty, /No tengo datos observados por cliente/);
+    assert.doesNotMatch(empty, /NO_ROWS_OBSERVED|LAST_SAFE_CUT|CLIENT_FORECAST_UNAVAILABLE/);
     const partial = buildClientRankingAnswer({
       ok: true,
       spec: { period: "2026-09", plant_label: "Acapulco", customer_segment: "ALL", ranking_direction: "TOP", metric: "VENTA_TON" },
@@ -353,9 +352,8 @@ describe("FIX-DIRECTOR-IA-FOLIO-NAVIGATION-AND-CLIENT-RANKING-OPEN-MONTH-001", (
       now: NOW,
       uniform_projection_factor: 2,
     });
-    assert.match(partial, /OBSERVED_PARTIAL/);
-    assert.match(partial, /proyección uniforme/);
-    assert.match(partial, /PROJECTED_ESTIMATE/);
+    assert.match(partial, /compra observada|mes aún abierto/);
+    assert.doesNotMatch(partial, /OBSERVED_PARTIAL|PROJECTED_ESTIMATE/);
     const last = await loadClientRankingForChat(null, 1, { dashboardAuth: { role: "ZP" } }, {
       question: "top 10 clientes que más compran en septiembre",
       now: NOW,
@@ -366,8 +364,8 @@ describe("FIX-DIRECTOR-IA-FOLIO-NAVIGATION-AND-CLIENT-RANKING-OPEN-MONTH-001", (
     assert.equal(last.data_semantics, "LAST_SAFE_CUT");
     assert.equal(last.asked_period, "2026-09");
     assert.equal(last.spec.period, "2026-08");
-    assert.match(buildClientRankingAnswer(last), /LAST_SAFE_CUT/);
-    assert.match(buildClientRankingAnswer(last), /NO_ROWS_OBSERVED/);
+    assert.match(buildClientRankingAnswer(last), /último ranking disponible es agosto de 2026/);
+    assert.doesNotMatch(buildClientRankingAnswer(last), /LAST_SAFE_CUT|NO_ROWS_OBSERVED/);
   });
 
   it("conversación real folios + ranking", async () => {
@@ -428,11 +426,11 @@ describe("FIX-DIRECTOR-IA-FOLIO-NAVIGATION-AND-CLIENT-RANKING-OPEN-MONTH-001", (
     assert.equal(oob.ui_action, undefined);
 
     const r1 = await askDirectorIa(req("top 10 clientes que más compran"), 1, "top 10 clientes que más compran");
-    assert.match(r1.answer, /Indica el mes/);
+    assert.match(r1.answer, /De qué mes o periodo quieres el ranking/);
     const r2 = await askDirectorIa(req("septiembre", r1.context_meta.conversation_state), 1, "septiembre");
     assert.equal(r2.ok, true);
     assert.doesNotMatch(r2.answer, /No pude determinar el ranking/);
-    assert.match(r2.answer, /PUBLICO EN GENERAL|LAST_SAFE_CUT|NO_ROWS_OBSERVED/);
+    assert.match(r2.answer, /PUBLICO EN GENERAL|último ranking|No tengo datos observados/);
     const specFollow = extractClientRankingSpec("septiembre", { ok: true, limit: 10, ranking_direction: "TOP", customer_segment: "ALL", metric: "VENTA_TON" }, { now: NOW });
     assert.equal(specFollow.limit, 10);
     const r3 = await askDirectorIa(req("top 10 clientes que más compran en septiembre"), 1, "top 10 clientes que más compran en septiembre");

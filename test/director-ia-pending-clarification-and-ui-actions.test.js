@@ -314,8 +314,8 @@ describe("FIX-DIRECTOR-IA-PENDING-CLARIFICATION-AND-UI-ACTIONS-001", () => {
       ranked: [],
       now: NOW,
     });
-    assert.match(emptyOpen, /observada/);
-    assert.match(emptyOpen, /no la presento como ranking observado|proyec|FORECAST_AVAILABLE|CLIENT_FORECAST_UNAVAILABLE/i);
+    assert.match(emptyOpen, /No tengo datos observados por cliente/);
+    assert.doesNotMatch(emptyOpen, /NO_ROWS_OBSERVED|LAST_SAFE_CUT|CLIENT_FORECAST_UNAVAILABLE|FORECAST_AVAILABLE/);
     const withRows = buildClientRankingAnswer({
       ok: true,
       spec: { ...sep, plant_label: "Acapulco", customer_segment: "ALL", ranking_direction: "TOP", metric: "VENTA_TON" },
@@ -379,7 +379,7 @@ describe("FIX-DIRECTOR-IA-PENDING-CLARIFICATION-AND-UI-ACTIONS-001", () => {
 
     const r1 = await askDirectorIa(req("top 5 clientes que más compran"), 1, "top 5 clientes que más compran");
     assert.equal(r1.ok, true);
-    assert.match(r1.answer, /Indica el mes del ranking/);
+    assert.match(r1.answer, /De qué mes o periodo quieres el ranking/);
     const r2 = await askDirectorIa(req("septiembre", r1.context_meta.conversation_state), 1, "septiembre");
     assert.equal(r2.ok, true);
     assert.doesNotMatch(r2.answer, /No pude determinar el ranking/);
