@@ -1,8 +1,8 @@
 ﻿# CURRENT_TASK
 
 ```yaml
-task_id: "TUNE-IGF-FORECAST-TOMZA-EN-ACCION-SIZING-001"
-title: "IGF Forecast — aumentar tamaño y refinar centrado visual de Tomza en Acción"
+task_id: "IMPL-IGF-DIRECTOR-IA-LARGE-CHAT-001"
+title: "IGF Forecast — acceso a Chat Director IA amplio con selección de planta"
 status: "DONE_PENDING_REVIEW"
 mode: "IMPLEMENTATION"
 
@@ -18,8 +18,8 @@ new_tables: false
 new_indexes: false
 data_mutation: false
 
-reference_main: "ea759bbbac0f675500a02c0669ebbd1f219c98b3"
-branch: "tune/igf-forecast-tomza-en-accion-sizing-001"
+reference_main: "1a72336d88172f86293a2a9f57318b079f875c44"
+branch: "implementation/igf-director-ia-large-chat-001"
 
 next_task_authorized: false
 merge_authorized: false

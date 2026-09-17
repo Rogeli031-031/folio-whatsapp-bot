@@ -21,6 +21,8 @@ type DirectorIaChatPanelProps = {
   className?: string;
   /** Corte IGF/ARR ya resuelto por el padre; si falta, se lee `upload_day` de la URL. */
   uploadDay?: string | null;
+  /** El área de mensajes ocupa el alto disponible (modal large). Default: tope 50vh. */
+  fillAvailable?: boolean;
 };
 
 function newMessageId() {
@@ -35,6 +37,7 @@ export function DirectorIaChatPanel({
   chatMode = false,
   className = "",
   uploadDay: uploadDayProp = null,
+  fillAvailable = false,
 }: DirectorIaChatPanelProps) {
   const [question, setQuestion] = useState("");
   const [loading, setLoading] = useState(false);
@@ -141,7 +144,9 @@ export function DirectorIaChatPanel({
       {chatMode && messages.length > 0 ? (
         <div
           ref={scrollRef}
-          className="flex-1 overflow-y-auto space-y-3 px-1 py-2 min-h-[200px] max-h-[50vh]"
+          className={`flex-1 overflow-y-auto space-y-3 px-1 py-2 ${
+            fillAvailable ? "min-h-0" : "min-h-[200px] max-h-[50vh]"
+          }`}
         >
           {messages.map((m) => (
             <div

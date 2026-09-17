@@ -82,6 +82,7 @@ function resolveIgfYearMonthFromCorte(
 }
 import { UsuariosAdminModal } from "@/components/UsuariosAdminModal";
 import { PlanMaestroModal } from "@/components/PlanMaestroModal";
+import { DirectorIaChatModal } from "@/modules/director-ia/components/DirectorIaChatModal";
 
 export function IgfForecastContent() {
   const searchParams = useSearchParams();
@@ -222,6 +223,7 @@ export function IgfForecastContent() {
   const [evidenciasModalOpen, setEvidenciasModalOpen] = useState(false);
   const [usuariosModalOpen, setUsuariosModalOpen] = useState(false);
   const [planMaestroOpen, setPlanMaestroOpen] = useState(false);
+  const [directorIaChatOpen, setDirectorIaChatOpen] = useState(false);
   const [evidenciasFechaInicio, setEvidenciasFechaInicio] = useState("");
   const [evidenciasFechaFin, setEvidenciasFechaFin] = useState("");
   const [evidenciasExportLoading, setEvidenciasExportLoading] = useState(false);
@@ -808,10 +810,19 @@ export function IgfForecastContent() {
               EVIDENCIAS
             </button>
           )}
+          {token && (
+            <button
+              type="button"
+              onClick={() => setDirectorIaChatOpen(true)}
+              className="inline-flex items-center rounded border border-teal-400/80 bg-teal-800/80 px-4 py-2 text-sm font-semibold text-teal-50 hover:bg-teal-700/80 shadow-sm"
+            >
+              Chat Director IA
+            </button>
+          )}
         </div>
-        <div className="min-w-0 px-4 flex items-center justify-center overflow-hidden">
+        <div className="min-w-0 px-3 sm:px-4 flex items-center justify-center overflow-hidden">
           <p
-            className="font-serif whitespace-nowrap leading-none text-center pointer-events-none select-none text-[clamp(1rem,2.6vw,3rem)] -translate-x-[clamp(0rem,2.2vw,2.75rem)]"
+            className="font-serif whitespace-nowrap leading-none text-center pointer-events-none select-none text-[clamp(0.85rem,2.45vw,2.85rem)] -translate-x-[clamp(0rem,1vw,1.5rem)]"
             aria-label="Tomza en Acción"
           >
             <span className="text-white not-italic">Tomza</span>
@@ -2363,6 +2374,16 @@ export function IgfForecastContent() {
           open={planMaestroOpen}
           token={token}
           onClose={() => setPlanMaestroOpen(false)}
+        />
+      )}
+      {token && (
+        <DirectorIaChatModal
+          open={directorIaChatOpen}
+          onClose={() => setDirectorIaChatOpen(false)}
+          token={token}
+          size="large"
+          plantMode="select"
+          uploadDay={uploadDay.trim() || null}
         />
       )}
     </div>
