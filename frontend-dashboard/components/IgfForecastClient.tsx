@@ -787,18 +787,18 @@ export function IgfForecastContent() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <div className="border-b border-slate-700 bg-slate-900/50 px-4 py-3 flex flex-wrap items-center gap-2">
-        <h1 className="text-xl font-semibold text-white shrink-0">IGF Forecast</h1>
-        {token && (
-          <button
-            type="button"
-            onClick={() => setPlanMaestroOpen(true)}
-            className="inline-flex items-center rounded border border-cyan-500/80 bg-cyan-950/70 px-4 py-2 text-sm font-semibold text-cyan-100 hover:bg-cyan-900/60 shadow-sm"
-          >
-            PLAN MAESTRO
-          </button>
-        )}
-        <div className="flex flex-1 justify-center min-w-[10rem]">
+      <div className="border-b border-slate-700 bg-slate-900/50 px-4 py-3 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-x-2">
+        <div className="flex flex-wrap items-center gap-2 min-w-0 justify-self-start relative z-10">
+          <h1 className="text-xl font-semibold text-white shrink-0">IGF Forecast</h1>
+          {token && (
+            <button
+              type="button"
+              onClick={() => setPlanMaestroOpen(true)}
+              className="inline-flex items-center rounded border border-cyan-500/80 bg-cyan-950/70 px-4 py-2 text-sm font-semibold text-cyan-100 hover:bg-cyan-900/60 shadow-sm"
+            >
+              PLAN MAESTRO
+            </button>
+          )}
           {token && (
             <button
               type="button"
@@ -809,12 +809,21 @@ export function IgfForecastContent() {
             </button>
           )}
         </div>
-        <Link
-          href={token ? `/?t=${encodeURIComponent(token)}` : "/"}
-          className="text-sm text-amber-300 hover:text-amber-200 underline shrink-0"
+        <p
+          className="font-serif whitespace-nowrap leading-none text-center px-2 pointer-events-none select-none text-[clamp(0.8rem,2.1vw,2.15rem)]"
+          aria-label="Tomza en Acción"
         >
-          ← KPI Financieros
-        </Link>
+          <span className="text-white not-italic">Tomza</span>
+          <span className="text-amber-300 italic"> en Acción</span>
+        </p>
+        <div className="flex justify-end min-w-0 justify-self-end relative z-10">
+          <Link
+            href={token ? `/?t=${encodeURIComponent(token)}` : "/"}
+            className="text-sm text-amber-300 hover:text-amber-200 underline shrink-0"
+          >
+            ← KPI Financieros
+          </Link>
+        </div>
       </div>
       <div className="flex flex-wrap gap-3 px-4 py-3 border-b border-slate-700/80 bg-slate-800/30 items-center">
         {igfForecast && token && (
