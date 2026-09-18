@@ -222,9 +222,9 @@ function salesRows() {
 
 function discountRows() {
   return [
-    { cliente_norm: "GRUPO MOVE", monto: 45000, canal: "Casa" },
-    { cliente_norm: "PUBLICO EN GENERAL", monto: 22000, canal: "Casa" },
-    { cliente_norm: "CLIENTE TRES", monto: 9000, canal: "Comisionista" },
+    { cliente_norm: "GRUPO MOVE", monto: 45000, kg: 15000, canal: "Casa" },
+    { cliente_norm: "PUBLICO EN GENERAL", monto: 22000, kg: 20000, canal: "Casa" },
+    { cliente_norm: "CLIENTE TRES", monto: 9000, kg: 6000, canal: "Comisionista" },
   ];
 }
 
@@ -408,7 +408,7 @@ describe("FIX-DIRECTOR-IA-CLIENT-RANKINGS-PHYSICAL-SOURCE-001", () => {
     assert.equal(second.spec.period, "2026-09");
     assert.equal(second.spec.ranking_direction, "TOP");
     const answer = buildClientRankingAnswer(second);
-    assert.match(answer, /mayor descuento total observado/);
+    assert.match(answer, /mayor descuento por kg observado/);
     assert.doesNotMatch(answer, /No tengo evidencia de descuento para ese cliente/);
     assert.doesNotMatch(answer, INTERNAL_TOKENS);
     assert.match(answer, /GRUPO MOVE/);
@@ -492,7 +492,7 @@ describe("FIX-DIRECTOR-IA-CLIENT-RANKINGS-PHYSICAL-SOURCE-001", () => {
       forceDiscount: true,
       lastSafeCutDiscountRowsByPeriod: {
         "2026-08": [],
-        "2026-07": [{ cliente_norm: "GRUPO MOVE", monto: 18000, canal: "Casa" }],
+        "2026-07": [{ cliente_norm: "GRUPO MOVE", monto: 18000, kg: 6000, canal: "Casa" }],
       },
     });
     assert.equal(disc.data_semantics, "LAST_SAFE_CUT");
@@ -529,9 +529,9 @@ describe("FIX-DIRECTOR-IA-CLIENT-RANKINGS-PHYSICAL-SOURCE-001", () => {
     }
   });
 
-  it("métrica canónica de descuento es DISCOUNT_TOTAL_MXN y no aclara $/kg", async () => {
+  it("métrica canónica de descuento es DISCOUNT_PER_KG y no aclara total vs kg", async () => {
     const spec = backlog.extractClientDiscountRankingSpec("qué clientes tienen mayor descuento");
-    assert.equal(spec.discount_metric, "DISCOUNT_TOTAL_MXN");
+    assert.equal(spec.discount_metric, "DISCOUNT_PER_KG");
     const payload = await loadClientRankingForChat(null, 1, { dashboardAuth: { role: "ZP" } }, {
       question: "qué clientes tienen mayor descuento en septiembre",
       now: NOW,
@@ -540,8 +540,8 @@ describe("FIX-DIRECTOR-IA-CLIENT-RANKINGS-PHYSICAL-SOURCE-001", () => {
       forceDiscount: true,
     });
     const answer = buildClientRankingAnswer(payload);
-    assert.match(answer, /descuento total observado \(MXN, no \$\/kg\)/);
-    assert.doesNotMatch(answer, /¿Quieres comparar por descuento total/);
+    assert.match(answer, /descuento por kg observado/);
+    assert.doesNotMatch(answer, /¿Quieres comparar el descuento total/);
   });
 
   it("presentación humana no filtra tokens internos", () => {
@@ -604,7 +604,7 @@ describe("FIX-DIRECTOR-IA-CLIENT-RANKINGS-PHYSICAL-SOURCE-001", () => {
     assert.doesNotMatch(c1.answer, /ese cliente/);
     const c2 = await askDirectorIa(req("septiembre", c1.context_meta.conversation_state), 1, "septiembre");
     assert.equal(c2.ok, true);
-    assert.match(c2.answer, /descuento total observado|GRUPO MOVE/);
+    assert.match(c2.answer, /descuento por kg observado|GRUPO MOVE/);
     assert.doesNotMatch(c2.answer, /No tengo evidencia de descuento para ese cliente/);
     assert.doesNotMatch(c2.answer, INTERNAL_TOKENS);
 

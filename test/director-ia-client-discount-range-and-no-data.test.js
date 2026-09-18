@@ -118,9 +118,9 @@ const FOLLOW_15 = Object.freeze([
 
 function discountRows() {
   return [
-    { cliente_norm: "GRUPO MOVE", monto: 40000, canal: "Casa" },
-    { cliente_norm: "PUBLICO EN GENERAL", monto: 18000, canal: "Casa" },
-    { cliente_norm: "CLIENTE TRES", monto: 9000, canal: "Comisionista" },
+    { cliente_norm: "GRUPO MOVE", monto: 37000, kg: 10000, canal: "Casa" },
+    { cliente_norm: "PUBLICO EN GENERAL", monto: 18000, kg: 20000, canal: "Casa" },
+    { cliente_norm: "CLIENTE TRES", monto: 9000, kg: 7000, canal: "Comisionista" },
   ];
 }
 
@@ -166,7 +166,7 @@ describe("FIX-DIRECTOR-IA-CLIENT-DISCOUNT-RANGE-AND-NO-DATA-001", () => {
     const disc = backlog.extractClientDiscountRankingSpec(q);
     assert.equal(disc.limit, 1);
     assert.equal(disc.direction, "HIGH");
-    assert.equal(disc.discount_metric, "DISCOUNT_TOTAL_MXN");
+    assert.equal(disc.discount_metric, "DISCOUNT_PER_KG");
     const spec = extractClientRankingSpec(q, null, { now: NOW });
     assert.equal(spec.period_kind, "RANGE");
     assert.equal(spec.period_start, "2026-01");
@@ -183,14 +183,14 @@ describe("FIX-DIRECTOR-IA-CLIENT-DISCOUNT-RANGE-AND-NO-DATA-001", () => {
     });
     assert.equal(payload.spec.limit, 1);
     assert.equal(payload.spec.metric, "DISCOUNT");
-    assert.equal(payload.spec.discount_metric, "DISCOUNT_TOTAL_MXN");
+    assert.equal(payload.spec.discount_metric, "DISCOUNT_PER_KG");
     assert.equal(payload.spec.period_kind, "RANGE");
     assert.equal(payload.ranked[0].cliente, "GRUPO MOVE");
     assert.equal(payload.ranked.length, 1);
     const answer = buildClientRankingAnswer(payload);
     assert.match(answer, /De enero a septiembre de 2026/);
     assert.match(answer, /GRUPO MOVE/);
-    assert.match(answer, /descuento total observado \(MXN, no \$\/kg\)/);
+    assert.match(answer, /descuento por kg observado/);
     assert.doesNotMatch(answer, INTERNAL);
   });
 
@@ -207,7 +207,7 @@ describe("FIX-DIRECTOR-IA-CLIENT-DISCOUNT-RANGE-AND-NO-DATA-001", () => {
       forceDiscount: true,
     });
     assert.ok(payload.ranked.length >= 2);
-    assert.match(buildClientRankingAnswer(payload), /Clientes con mayor descuento total observado/);
+    assert.match(buildClientRankingAnswer(payload), /Clientes con mayor descuento por kg observado/);
   });
 
   it("rangos de un solo año y con año explícito", () => {
@@ -256,7 +256,7 @@ describe("FIX-DIRECTOR-IA-CLIENT-DISCOUNT-RANGE-AND-NO-DATA-001", () => {
       forceDiscount: true,
     });
     const answer = buildClientRankingAnswer(empty);
-    assert.match(answer, /No tengo descuentos observados por cliente cargados para septiembre de 2026/);
+    assert.match(answer, /No tengo descuentos observados por cliente para septiembre de 2026/);
     assert.doesNotMatch(answer, INTERNAL);
     const emptyRange = await loadClientRankingForChat(null, 1, { dashboardAuth: { role: "ZP" } }, {
       question: "qué clientes tienen mayor descuento de enero a septiembre",
@@ -266,7 +266,7 @@ describe("FIX-DIRECTOR-IA-CLIENT-DISCOUNT-RANGE-AND-NO-DATA-001", () => {
       forceDiscount: true,
     });
     const rangeAnswer = buildClientRankingAnswer(emptyRange);
-    assert.match(rangeAnswer, /No tengo descuentos observados por cliente cargados de enero a septiembre de 2026/);
+    assert.match(rangeAnswer, /No tengo descuentos observados por cliente de enero a septiembre de 2026/);
     assert.doesNotMatch(rangeAnswer, INTERNAL);
     assert.notEqual(emptyRange.data_semantics, "LAST_SAFE_CUT");
   });
@@ -280,7 +280,7 @@ describe("FIX-DIRECTOR-IA-CLIENT-DISCOUNT-RANGE-AND-NO-DATA-001", () => {
       salesRows: [{ cliente_norm: "VENTAS ONLY", kg: 9000, canal: "Casa" }],
       forceDiscount: true,
       lastSafeCutDiscountRowsByPeriod: {
-        "2026-08": [{ cliente_norm: "GRUPO MOVE", monto: 12000, canal: "Casa" }],
+        "2026-08": [{ cliente_norm: "GRUPO MOVE", monto: 12000, kg: 4000, canal: "Casa" }],
       },
       lastSafeCutSalesRowsByPeriod: {
         "2026-08": [{ cliente_norm: "VENTAS ONLY", kg: 9000, canal: "Casa" }],
@@ -311,7 +311,7 @@ describe("FIX-DIRECTOR-IA-CLIENT-DISCOUNT-RANGE-AND-NO-DATA-001", () => {
     }
   });
 
-  it("15 follow-ups conservan DISCOUNT_TOTAL_MXN", () => {
+  it("15 follow-ups conservan DISCOUNT_PER_KG", () => {
     assert.equal(FOLLOW_15.length, 15);
     const prior = {
       ok: true,
@@ -319,7 +319,7 @@ describe("FIX-DIRECTOR-IA-CLIENT-DISCOUNT-RANGE-AND-NO-DATA-001", () => {
       limit: 5,
       customer_segment: "ALL",
       metric: "DISCOUNT",
-      discount_metric: "DISCOUNT_TOTAL_MXN",
+      discount_metric: "DISCOUNT_PER_KG",
       period_kind: "RANGE",
       period_start: "2026-01",
       period_end: "2026-09",
@@ -331,7 +331,7 @@ describe("FIX-DIRECTOR-IA-CLIENT-DISCOUNT-RANGE-AND-NO-DATA-001", () => {
       assert.equal(spec.ok, true, q);
       if (!/\b(compra|venta|tonelada)/.test(q.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase())) {
         assert.equal(spec.metric, "DISCOUNT", q);
-        assert.equal(spec.discount_metric, "DISCOUNT_TOTAL_MXN", q);
+        assert.equal(spec.discount_metric, "DISCOUNT_PER_KG", q);
       }
     }
     const toSingle = extractClientRankingSpec("ahora solo septiembre", prior, { now: NOW });
@@ -342,11 +342,11 @@ describe("FIX-DIRECTOR-IA-CLIENT-DISCOUNT-RANGE-AND-NO-DATA-001", () => {
     assert.equal(toAug.period_end, "2026-08");
   });
 
-  it("agrega SUM(monto) del rango, no rankings mensuales truncados", async () => {
+  it("rango usa SUM(monto)/SUM(kg), no promedio de ratios mensuales", async () => {
     const rows = [
-      { cliente_norm: "A", monto: 10, canal: "Casa" },
-      { cliente_norm: "A", monto: 90, canal: "Casa" },
-      { cliente_norm: "B", monto: 80, canal: "Casa" },
+      { cliente_norm: "A", kg: 10, monto: 100, canal: "Casa" },
+      { cliente_norm: "A", kg: 990, monto: 100, canal: "Casa" },
+      { cliente_norm: "B", kg: 100, monto: 50, canal: "Casa" },
     ];
     const payload = await loadClientRankingForChat(null, 1, { dashboardAuth: { role: "ZP" } }, {
       question: "qué clientes tienen mayor descuento de enero a septiembre",
@@ -355,7 +355,9 @@ describe("FIX-DIRECTOR-IA-CLIENT-DISCOUNT-RANGE-AND-NO-DATA-001", () => {
       discountRows: rows,
       forceDiscount: true,
     });
-    assert.equal(payload.ranked[0].cliente, "A");
-    assert.equal(payload.ranked[0].monto, 100);
+    assert.equal(payload.ranked[0].cliente, "B");
+    assert.equal(payload.ranked[0].desc_kg, 0.5);
+    const a = payload.ranked.find((r) => r.cliente === "A");
+    assert.equal(a.desc_kg, 0.2);
   });
 });
