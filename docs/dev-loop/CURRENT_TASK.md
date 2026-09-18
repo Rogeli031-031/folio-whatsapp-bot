@@ -1,8 +1,8 @@
 ﻿# CURRENT_TASK
 
 ```yaml
-task_id: "IMPL-DIRECTOR-IA-EXECUTIVE-COVERAGE-MOVEMENT-PRONOSTICO-002"
-title: "Director IA — cobertura ejecutiva integral, movimiento de clientes y navegación a Pronóstico"
+task_id: "IMPL-DIRECTOR-IA-PREDICTIVE-COMMERCIAL-COVERAGE-003"
+title: "Director IA — retención, riesgo comercial, forecast accuracy, mix de canales y concentración proyectada"
 status: "DONE_PENDING_REVIEW"
 mode: "IMPLEMENTATION"
 
@@ -16,8 +16,8 @@ code_changes: true
 schema_changes: false
 data_mutation: false
 
-reference_main: "0c5d9adc77cec2ea565ff21ee21cc9a4e997b9a8"
-branch: "implementation/director-ia-executive-coverage-movement-pronostico-002"
+reference_main: "b5a3e1c0d21e4ee7a266711d73b0b79988939e0d"
+branch: "implementation/director-ia-predictive-commercial-coverage-003"
 
 merge_authorized: false
 deploy_authorized: false
