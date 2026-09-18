@@ -1,24 +1,27 @@
 ﻿# CURRENT_TASK
 
 ```yaml
-task_id: "FIX-IGF-FORECAST-TYPECHECK-FORECAST-ROWS-001"
-title: "IGF Forecast — corregir implicit any en forecastRowsForRender"
+task_id: "AUDIT-IGF-FORECAST-RUNTIME-REGRESSION-SINCE-002-001"
+title: "IGF Forecast — aislar regresión cliente introducida desde OPEN_PRONOSTICO"
 status: "DONE_PENDING_REVIEW"
-mode: "IMPLEMENTATION"
+mode: "AUDIT"
 
 authorized_by: "HUMAN"
 human_authorization: "AUTHORIZED_BY_HUMAN"
 authorized_at: "2026-09-18"
 
-implementation: true
-code_changes: true
+implementation: false
+code_changes: false
 
 schema_changes: false
 data_mutation: false
 
-reference_branch: "fix/igf-forecast-typecheck-null-narrowing-001"
-reference_commit: "143b59cb"
-branch: "fix/igf-forecast-typecheck-forecast-rows-001"
+reference_good: "311638c2698552eedcf9fd5df0892fd3239ecb51"
+reference_before_002: "0c5d9adc77cec2ea565ff21ee21cc9a4e997b9a8"
+reference_002: "b5a3e1c0d21e4ee7a266711d73b0b79988939e0d"
+reference_main: "3fc1cf315726c8203d3fb82a60973f3921b957fd"
+
+branch: "audit/igf-forecast-runtime-regression-since-002-001"
 
 merge_authorized: false
 deploy_authorized: false
