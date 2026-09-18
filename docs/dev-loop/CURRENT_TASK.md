@@ -1,8 +1,8 @@
 ﻿# CURRENT_TASK
 
 ```yaml
-task_id: "FIX-IGF-FORECAST-HOOK-ORDER-OPEN-PRONOSTICO-001"
-title: "IGF Forecast — corregir orden de hooks de OPEN_PRONOSTICO"
+task_id: "IMPL-DIRECTOR-IA-COMMERCIAL-RUNTIME-COVERAGE-004"
+title: "Director IA — cerrar gaps comerciales reales, contexto conversacional y guardrails"
 status: "DONE_PENDING_REVIEW"
 mode: "IMPLEMENTATION"
 
@@ -16,8 +16,8 @@ code_changes: true
 schema_changes: false
 data_mutation: false
 
-reference_main: "3fc1cf315726c8203d3fb82a60973f3921b957fd"
-branch: "fix/igf-forecast-hook-order-open-pronostico-001"
+base_sha: "2e50dabae05df7cdad24cbfefaca285c16615db8"
+branch: "implementation/director-ia-commercial-runtime-coverage-004"
 
 merge_authorized: false
 deploy_authorized: false
