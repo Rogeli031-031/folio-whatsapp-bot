@@ -725,7 +725,10 @@ export function IgfForecastContent() {
   };
 
   const openPronosticoMiniRow = async (row: IgfForecastMiniRow) => {
-    if (!canOpenPronosticoMiniRow(row, token, igfForecast)) return;
+    const forecast = igfForecast;
+    const authToken = token;
+    if (!forecast || !authToken) return;
+    if (!canOpenPronosticoMiniRow(row, authToken, forecast)) return;
     const pc = String(row.plant_code || "").trim();
     setPronosticoModal({ empresa: row.empresa || "", plant_code: pc });
     setPronosticoDetail(null);
@@ -733,9 +736,9 @@ export function IgfForecastContent() {
     setPronosticoLoading(true);
     try {
       const up = uploadDay.trim();
-      const data = await fetchPronosticoDetalle(token, {
-        year: igfForecast.year,
-        month: igfForecast.month,
+      const data = await fetchPronosticoDetalle(authToken, {
+        year: forecast.year,
+        month: forecast.month,
         plant_code: pc,
         ...(up && /^\d{4}-\d{2}-\d{2}$/.test(up) ? { upload_day: up } : {}),
       });
@@ -817,7 +820,7 @@ export function IgfForecastContent() {
     }
   };
 
-  const forecastRows = forecastRowsForRender(igfForecast);
+  const forecastRows: IgfForecastRow[] = forecastRowsForRender(igfForecast);
 
   return (
     <div className="min-h-screen flex flex-col">
