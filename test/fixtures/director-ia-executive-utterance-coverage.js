@@ -232,9 +232,11 @@ function thirtyFor(family) {
   ];
 }
 
+const { PREDICTIVE_UTTERANCE_COVERAGE } = require("./director-ia-predictive-commercial-coverage");
+
 const EXECUTIVE_UTTERANCE_COVERAGE = {};
 for (const family of FAMILY_IDS) {
-  EXECUTIVE_UTTERANCE_COVERAGE[family] = thirtyFor(family);
+  EXECUTIVE_UTTERANCE_COVERAGE[family] = PREDICTIVE_UTTERANCE_COVERAGE[family] || thirtyFor(family);
 }
 
 const EXECUTIVE_ANTI_COLLISIONS = [
