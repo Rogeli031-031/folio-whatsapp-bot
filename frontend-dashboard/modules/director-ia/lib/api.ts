@@ -125,6 +125,7 @@ export type DirectorIaUiAction = {
   plant?: string | null;
   year?: number | null;
   month?: number | null;
+  category?: "CASA" | "COMISIONISTA" | null;
   do_not_pretend_opened?: boolean;
 };
 

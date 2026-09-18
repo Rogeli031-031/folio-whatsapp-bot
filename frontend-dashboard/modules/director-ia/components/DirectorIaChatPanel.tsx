@@ -26,8 +26,14 @@ type DirectorIaChatPanelProps = {
   fillAvailable?: boolean;
   /** Si el backend emite OPEN_FOLIO con folio_id, abre el detalle real. */
   onOpenFolio?: (folioId: number) => void;
-  /** Si el backend emite OPEN_PRONOSTICO, abre el modal real de Pronóstico. */
+  /** Si el backend emite OPEN_PRONOSTICO / OPEN_IGF_PRONOSTICO_MODAL, abre el modal real de Pronóstico. */
   onOpenPronostico?: (action: { type: string; plant?: string | null; year?: number | null; month?: number | null }) => void;
+  /** Si el backend emite OPEN_CATEGORY_MOVEMENT, abre Movimiento por categoría. */
+  onOpenCategoryMovement?: (action: {
+    type: string;
+    category?: "CASA" | "COMISIONISTA" | null;
+    plant?: string | null;
+  }) => void;
 };
 
 function newMessageId() {
@@ -45,6 +51,7 @@ export function DirectorIaChatPanel({
   fillAvailable = false,
   onOpenFolio,
   onOpenPronostico,
+  onOpenCategoryMovement,
 }: DirectorIaChatPanelProps) {
   const [question, setQuestion] = useState("");
   const [loading, setLoading] = useState(false);
@@ -53,6 +60,7 @@ export function DirectorIaChatPanel({
   const [lastSources, setLastSources] = useState<string[]>([]);
   const [conversationState, setConversationState] = useState<Record<string, unknown> | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const consumedActionRef = useRef<string | null>(null);
 
   useEffect(() => {
     setConversationState(null);
@@ -117,25 +125,42 @@ export function DirectorIaChatPanel({
           : null;
       if (nextState) setConversationState(nextState);
       const action = "ui_action" in res ? res.ui_action : null;
-      if (
-        action &&
-        action.type === "OPEN_FOLIO" &&
-        action.folio_id != null &&
-        Number.isFinite(Number(action.folio_id)) &&
-        typeof onOpenFolio === "function"
-      ) {
-        onOpenFolio(Number(action.folio_id));
-      }
-      if (action && action.type === "OPEN_PRONOSTICO") {
-        if (typeof onOpenPronostico === "function") {
-          onOpenPronostico({
+      const actionKey = action
+        ? `${action.type}:${action.category || ""}:${action.plant || ""}:${action.folio_id || ""}:${Date.now()}`
+        : null;
+      if (action && actionKey && consumedActionRef.current !== actionKey) {
+        consumedActionRef.current = actionKey;
+        if (
+          action.type === "OPEN_FOLIO" &&
+          action.folio_id != null &&
+          Number.isFinite(Number(action.folio_id)) &&
+          typeof onOpenFolio === "function"
+        ) {
+          onOpenFolio(Number(action.folio_id));
+        }
+        const openPronosticoTypes = new Set([
+          "OPEN_PRONOSTICO",
+          "OPEN_IGF_PRONOSTICO_MODAL",
+          "OPEN_DAILY_SALES_VIEW",
+        ]);
+        if (openPronosticoTypes.has(action.type)) {
+          if (typeof onOpenPronostico === "function") {
+            onOpenPronostico({
+              type: action.type,
+              plant: action.plant || null,
+              year: action.year ?? null,
+              month: action.month ?? null,
+            });
+          } else if (typeof window !== "undefined") {
+            window.location.assign(buildOpenPronosticoHref(window.location.search, { plant: action.plant }));
+          }
+        }
+        if (action.type === "OPEN_CATEGORY_MOVEMENT" && typeof onOpenCategoryMovement === "function") {
+          onOpenCategoryMovement({
             type: action.type,
-            plant: action.plant || null,
-            year: action.year ?? null,
-            month: action.month ?? null,
+            category: action.category === "COMISIONISTA" ? "COMISIONISTA" : "CASA",
+            plant: action.plant || plantaNombre || null,
           });
-        } else if (typeof window !== "undefined") {
-          window.location.assign(buildOpenPronosticoHref(window.location.search, { plant: action.plant }));
         }
       }
     } catch (e: unknown) {
@@ -143,7 +168,7 @@ export function DirectorIaChatPanel({
     } finally {
       setLoading(false);
     }
-  }, [token, plantaId, plantaNombre, question, messages, uploadDayProp, conversationState, onOpenFolio, onOpenPronostico]);
+  }, [token, plantaId, plantaNombre, question, messages, uploadDayProp, conversationState, onOpenFolio, onOpenPronostico, onOpenCategoryMovement]);
 
   const fillChat = Boolean(chatMode && fillAvailable);
   const shellClass = chatMode
