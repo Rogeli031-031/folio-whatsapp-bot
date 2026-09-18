@@ -1,8 +1,8 @@
 ﻿# CURRENT_TASK
 
 ```yaml
-task_id: "IMPL-DIRECTOR-IA-CATEGORY-COMMISSION-AND-UI-ACTIONS-007"
-title: "Director IA — comisión por categoría/subcategoría y navegación real a tablas IGF"
+task_id: "IMPL-DIRECTOR-IA-SEH-TALLER-AND-PURCHASE-EVIDENCE-008"
+title: "Director IA — SEH/Regulación, gasto Taller y recuperación de evidencia de próxima compra"
 status: "DONE_PENDING_REVIEW"
 mode: "IMPLEMENTATION"
 
@@ -16,8 +16,8 @@ code_changes: true
 schema_changes: false
 data_mutation: false
 
-base_sha: "2f41efabcea3754663bd0e9ad85bc1ae225de3ac"
-branch: "implementation/director-ia-category-commission-ui-actions-007"
+base_sha: "397e8599309367a2f6c9a6b8279c03ad90c4c3a1"
+branch: "implementation/director-ia-seh-taller-purchase-evidence-008"
 
 merge_authorized: false
 deploy_authorized: false
