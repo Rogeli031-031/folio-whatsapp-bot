@@ -562,6 +562,47 @@ export function IgfForecastContent() {
       .finally(() => setIgfMesAnteriorLoading(false));
   }, [token, plantaFilter, igfForecast?.year, igfForecast?.month, isGAPageBlocked, isGVPageBlocked]);
 
+  const openPronosticoMiniRow = async (row: IgfForecastMiniRow) => {
+    const forecast = igfForecast;
+    const authToken = token;
+    if (!forecast || !authToken) return;
+    if (!canOpenPronosticoMiniRow(row, authToken, forecast)) return;
+    const pc = String(row.plant_code || "").trim();
+    setPronosticoModal({ empresa: row.empresa || "", plant_code: pc });
+    setPronosticoDetail(null);
+    setPronosticoError(null);
+    setPronosticoLoading(true);
+    try {
+      const up = uploadDay.trim();
+      const data = await fetchPronosticoDetalle(authToken, {
+        year: forecast.year,
+        month: forecast.month,
+        plant_code: pc,
+        ...(up && /^\d{4}-\d{2}-\d{2}$/.test(up) ? { upload_day: up } : {}),
+      });
+      setPronosticoDetail(data);
+    } catch (e: unknown) {
+      setPronosticoError(e instanceof Error ? e.message : "Error al cargar pronóstico");
+    } finally {
+      setPronosticoLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const decision = decideOpenPronosticoFromQuery({
+      alreadyOpened: openedPronosticoFromQueryRef.current,
+      openFlag: searchParams.get("open_pronostico"),
+      token,
+      igfForecast,
+      igfMini,
+      plantHint: searchParams.get("empresa"),
+    });
+    if (decision.action === "wait" || decision.action === "skip") return;
+    openedPronosticoFromQueryRef.current = true;
+    if (decision.action === "open" && decision.row) {
+      void openPronosticoMiniRow(decision.row);
+    }
+  }, [igfMini, igfForecast, token, searchParams]);
 
   if (unauthorized) {
     return (
@@ -724,52 +765,10 @@ export function IgfForecastContent() {
     }
   };
 
-  const openPronosticoMiniRow = async (row: IgfForecastMiniRow) => {
-    const forecast = igfForecast;
-    const authToken = token;
-    if (!forecast || !authToken) return;
-    if (!canOpenPronosticoMiniRow(row, authToken, forecast)) return;
-    const pc = String(row.plant_code || "").trim();
-    setPronosticoModal({ empresa: row.empresa || "", plant_code: pc });
-    setPronosticoDetail(null);
-    setPronosticoError(null);
-    setPronosticoLoading(true);
-    try {
-      const up = uploadDay.trim();
-      const data = await fetchPronosticoDetalle(authToken, {
-        year: forecast.year,
-        month: forecast.month,
-        plant_code: pc,
-        ...(up && /^\d{4}-\d{2}-\d{2}$/.test(up) ? { upload_day: up } : {}),
-      });
-      setPronosticoDetail(data);
-    } catch (e: unknown) {
-      setPronosticoError(e instanceof Error ? e.message : "Error al cargar pronóstico");
-    } finally {
-      setPronosticoLoading(false);
-    }
-  };
-
   const handleOpenPronosticoFromChat = (action: { plant?: string | null }) => {
     const row = findPronosticoMiniRow(igfMini && igfMini.rows, action && action.plant);
     if (row) void openPronosticoMiniRow(row);
   };
-
-  useEffect(() => {
-    const decision = decideOpenPronosticoFromQuery({
-      alreadyOpened: openedPronosticoFromQueryRef.current,
-      openFlag: searchParams.get("open_pronostico"),
-      token,
-      igfForecast,
-      igfMini,
-      plantHint: searchParams.get("empresa"),
-    });
-    if (decision.action === "wait" || decision.action === "skip") return;
-    openedPronosticoFromQueryRef.current = true;
-    if (decision.action === "open" && decision.row) {
-      void openPronosticoMiniRow(decision.row);
-    }
-  }, [igfMini, igfForecast, token, searchParams]);
 
   const togglePronosticoDayByFecha = (fecha: string) => {
     if (!fecha) return;
