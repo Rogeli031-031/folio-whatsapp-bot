@@ -22,6 +22,7 @@ import {
   fetchIgfFoliosDetalle,
   fetchPronosticoDetalle,
   postPronosticoDias,
+  fetchArrClientesMes,
   type IgfForecastResponse,
   type IgfForecastRow,
   type IgfForecastMiniResponse,
@@ -89,6 +90,11 @@ function resolveIgfYearMonthFromCorte(
 import { UsuariosAdminModal } from "@/components/UsuariosAdminModal";
 import { PlanMaestroModal } from "@/components/PlanMaestroModal";
 import { DirectorIaChatModal } from "@/modules/director-ia/components/DirectorIaChatModal";
+import ArrDicfCategoriaBucketsModal from "@/components/ArrDicfCategoriaBucketsModal";
+import {
+  buildCategoryCommissionFromArrRows,
+  toModalResumenRows,
+} from "@/lib/arr-categoria-commission";
 
 export function IgfForecastContent() {
   const searchParams = useSearchParams();
@@ -230,6 +236,15 @@ export function IgfForecastContent() {
   const [usuariosModalOpen, setUsuariosModalOpen] = useState(false);
   const [planMaestroOpen, setPlanMaestroOpen] = useState(false);
   const [directorIaChatOpen, setDirectorIaChatOpen] = useState(false);
+  const [categoryMovementModal, setCategoryMovementModal] = useState<{
+    open: boolean;
+    category: "CASA" | "COMISIONISTA";
+    plant: string;
+  } | null>(null);
+  const [categoryMovementResumen, setCategoryMovementResumen] = useState<{
+    casa: ReturnType<typeof toModalResumenRows>;
+    comisionista: ReturnType<typeof toModalResumenRows>;
+  } | null>(null);
   const [evidenciasFechaInicio, setEvidenciasFechaInicio] = useState("");
   const [evidenciasFechaFin, setEvidenciasFechaFin] = useState("");
   const [evidenciasExportLoading, setEvidenciasExportLoading] = useState(false);
@@ -604,6 +619,31 @@ export function IgfForecastContent() {
     }
   }, [igfMini, igfForecast, token, searchParams]);
 
+  useEffect(() => {
+    if (!categoryMovementModal?.open || !token || !categoryMovementModal.plant || !igfForecast) {
+      return;
+    }
+    let cancelled = false;
+    void fetchArrClientesMes(token, {
+      year: igfForecast.year,
+      month: igfForecast.month,
+      empresa: categoryMovementModal.plant,
+    })
+      .then((resp) => {
+        if (cancelled) return;
+        setCategoryMovementResumen({
+          casa: toModalResumenRows(buildCategoryCommissionFromArrRows(resp.rows, "CASA")),
+          comisionista: toModalResumenRows(buildCategoryCommissionFromArrRows(resp.rows, "COMISIONISTA")),
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setCategoryMovementResumen(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [categoryMovementModal, token, igfForecast]);
+
   if (unauthorized) {
     return (
       <div className="flex min-h-screen items-center justify-center p-4">
@@ -768,6 +808,15 @@ export function IgfForecastContent() {
   const handleOpenPronosticoFromChat = (action: { plant?: string | null }) => {
     const row = findPronosticoMiniRow(igfMini && igfMini.rows, action && action.plant);
     if (row) void openPronosticoMiniRow(row);
+  };
+
+  const handleOpenCategoryMovementFromChat = (action: {
+    category?: "CASA" | "COMISIONISTA" | null;
+    plant?: string | null;
+  }) => {
+    const plant = String(action.plant || plantaFilter || "").trim();
+    const category = action.category === "COMISIONISTA" ? "COMISIONISTA" : "CASA";
+    setCategoryMovementModal({ open: true, category, plant });
   };
 
   const togglePronosticoDayByFecha = (fecha: string) => {
@@ -2419,8 +2468,27 @@ export function IgfForecastContent() {
           plantMode="select"
           uploadDay={uploadDay.trim() || null}
           onOpenPronostico={handleOpenPronosticoFromChat}
+          onOpenCategoryMovement={handleOpenCategoryMovementFromChat}
         />
       )}
+      {token && categoryMovementModal?.open ? (
+        <ArrDicfCategoriaBucketsModal
+          open
+          onClose={() => {
+            setCategoryMovementModal(null);
+            setCategoryMovementResumen(null);
+          }}
+          token={token}
+          planta={categoryMovementModal.plant}
+          initialCategoria={categoryMovementModal.category}
+          mesForecastLabel={
+            igfForecast
+              ? `${MESES[igfForecast.month - 1] || igfForecast.month} ${igfForecast.year}`
+              : undefined
+          }
+          resumenSubcategoriaForecast={categoryMovementResumen}
+        />
+      ) : null}
     </div>
   );
 }

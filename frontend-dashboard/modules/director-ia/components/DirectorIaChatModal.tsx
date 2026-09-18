@@ -31,6 +31,11 @@ type DirectorIaChatModalProps = {
   size?: "default" | "large";
   plantMode?: "fixed" | "select";
   onOpenPronostico?: (action: { type: string; plant?: string | null; year?: number | null; month?: number | null }) => void;
+  onOpenCategoryMovement?: (action: {
+    type: string;
+    category?: "CASA" | "COMISIONISTA" | null;
+    plant?: string | null;
+  }) => void;
 };
 
 export function DirectorIaChatModal({
@@ -43,6 +48,7 @@ export function DirectorIaChatModal({
   size = "default",
   plantMode = "fixed",
   onOpenPronostico,
+  onOpenCategoryMovement,
 }: DirectorIaChatModalProps) {
   const [plantas, setPlantas] = useState<PlantOption[]>([]);
   const [selectedPlant, setSelectedPlant] = useState<PlantOption | null>(null);
@@ -207,6 +213,7 @@ export function DirectorIaChatModal({
               className={isLarge ? "flex-1 h-full min-h-0" : "flex-1 min-h-[320px]"}
               onOpenFolio={setDrawerFolioId}
               onOpenPronostico={onOpenPronostico}
+              onOpenCategoryMovement={onOpenCategoryMovement}
             />
           ) : (
             <p className="text-sm text-slate-400">Selecciona una planta autorizada para abrir el chat.</p>
