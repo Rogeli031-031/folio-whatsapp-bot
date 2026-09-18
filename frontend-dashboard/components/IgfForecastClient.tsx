@@ -820,7 +820,7 @@ export function IgfForecastContent() {
     }
   };
 
-  const forecastRows = forecastRowsForRender(igfForecast);
+  const forecastRows: IgfForecastRow[] = forecastRowsForRender(igfForecast);
 
   return (
     <div className="min-h-screen flex flex-col">

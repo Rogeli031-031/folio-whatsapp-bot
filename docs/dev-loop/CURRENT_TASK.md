@@ -1,9 +1,9 @@
 ﻿# CURRENT_TASK
 
 ```yaml
-task_id: "FIX-IGF-FORECAST-TYPECHECK-NULL-NARROWING-001"
-title: "IGF Forecast — corregir typecheck null de igfForecast en OPEN_PRONOSTICO"
-status: "STOPPED"
+task_id: "FIX-IGF-FORECAST-TYPECHECK-FORECAST-ROWS-001"
+title: "IGF Forecast — corregir implicit any en forecastRowsForRender"
+status: "DONE_PENDING_REVIEW"
 mode: "IMPLEMENTATION"
 
 authorized_by: "HUMAN"
@@ -16,8 +16,9 @@ code_changes: true
 schema_changes: false
 data_mutation: false
 
-reference_main: "dad5b3e43d212f230822de0898bce0318fa33b88"
-branch: "fix/igf-forecast-typecheck-null-narrowing-001"
+reference_branch: "fix/igf-forecast-typecheck-null-narrowing-001"
+reference_commit: "143b59cb"
+branch: "fix/igf-forecast-typecheck-forecast-rows-001"
 
 merge_authorized: false
 deploy_authorized: false
