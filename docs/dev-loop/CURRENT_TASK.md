@@ -1,8 +1,8 @@
 ﻿# CURRENT_TASK
 
 ```yaml
-task_id: "IMPL-DIRECTOR-IA-SEH-TALLER-AND-PURCHASE-EVIDENCE-008"
-title: "Director IA — SEH/Regulación, gasto Taller y recuperación de evidencia de próxima compra"
+task_id: "FIX-DIRECTOR-IA-PURCHASE-EVIDENCE-ENRICHMENT-009"
+title: "Director IA — enriquecer última compra real y completar estados de Taller"
 status: "DONE_PENDING_REVIEW"
 mode: "IMPLEMENTATION"
 
@@ -16,8 +16,8 @@ code_changes: true
 schema_changes: false
 data_mutation: false
 
-base_sha: "397e8599309367a2f6c9a6b8279c03ad90c4c3a1"
-branch: "implementation/director-ia-seh-taller-purchase-evidence-008"
+base_sha: "0b90eab432e42d9d35cd5b4b4621c5d78c14efdf"
+branch: "fix/director-ia-purchase-evidence-enrichment-009"
 
 merge_authorized: false
 deploy_authorized: false
