@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchDirectorIaChat } from "@/modules/director-ia/lib/api";
 import { resolveDirectorIaUploadDayFromSearch } from "@/modules/director-ia/lib/chat-request";
+import { buildOpenPronosticoHref } from "@/lib/igf-open-pronostico";
 
 export type DirectorIaChatMessage = {
   id: string;
@@ -134,13 +135,7 @@ export function DirectorIaChatPanel({
             month: action.month ?? null,
           });
         } else if (typeof window !== "undefined") {
-          const params = new URLSearchParams(window.location.search);
-          const t = params.get("t") || "";
-          const next = new URLSearchParams();
-          if (t) next.set("t", t);
-          next.set("open_pronostico", "1");
-          if (action.plant) next.set("empresa", action.plant);
-          window.location.assign(`/igf-forecast?${next.toString()}`);
+          window.location.assign(buildOpenPronosticoHref(window.location.search, { plant: action.plant }));
         }
       }
     } catch (e: unknown) {
