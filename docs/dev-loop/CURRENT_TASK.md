@@ -1,8 +1,8 @@
 ﻿# CURRENT_TASK
 
 ```yaml
-task_id: "FIX-DIRECTOR-IA-CLIENT-RANKINGS-PHYSICAL-SOURCE-001"
-title: "Director IA — corregir rankings de clientes por compra y descuento contra fuente física real"
+task_id: "FIX-DIRECTOR-IA-CLIENT-DISCOUNT-RANGE-AND-NO-DATA-001"
+title: "Director IA — ranking de descuento por rango de meses y respuesta correcta sin datos"
 status: "DONE_PENDING_REVIEW"
 mode: "IMPLEMENTATION"
 
@@ -17,7 +17,7 @@ schema_changes: false
 data_mutation: false
 
 reference_main: "VERIFY_BEFORE_START"
-branch: "fix/director-ia-client-rankings-physical-source-001"
+branch: "fix/director-ia-client-discount-range-no-data-001"
 
 merge_authorized: false
 deploy_authorized: false
