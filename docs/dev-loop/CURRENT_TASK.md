@@ -1,8 +1,8 @@
 ﻿# CURRENT_TASK
 
 ```yaml
-task_id: "FIX-DIRECTOR-IA-CLIENT-DISCOUNT-RANGE-AND-NO-DATA-001"
-title: "Director IA — ranking de descuento por rango de meses y respuesta correcta sin datos"
+task_id: "AUDIT-FIX-DIRECTOR-IA-DISCOUNT-UI-VS-CHAT-SOURCE-001"
+title: "Director IA — alinear ranking de descuento con la métrica y fuente real del ARR"
 status: "DONE_PENDING_REVIEW"
 mode: "IMPLEMENTATION"
 
@@ -16,8 +16,8 @@ code_changes: true
 schema_changes: false
 data_mutation: false
 
-reference_main: "VERIFY_BEFORE_START"
-branch: "fix/director-ia-client-discount-range-no-data-001"
+reference_main: "6094dd9f9b2c84ab9bd767ddfe896d04aec62804"
+branch: "fix/director-ia-discount-ui-vs-chat-source-001"
 
 merge_authorized: false
 deploy_authorized: false

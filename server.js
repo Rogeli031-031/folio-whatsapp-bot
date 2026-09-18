@@ -15129,16 +15129,7 @@ app.get("/api/dashboard/arr-clientes-mes", dashboardAuthMiddleware, async (req, 
   }
   const client = await pool.connect();
   try {
-    const provRes = await client.query("SELECT plant_code FROM arr.provincia_plants ORDER BY plant_code");
-    const provinciaPlantCodes = (provRes.rows || []).map((r) => (r.plant_code || "").trim()).filter(Boolean);
-    const empNorm = normalizeAccents(empresa);
-    const matches = provinciaPlantCodes.filter((p) => {
-      const pNorm = normalizeAccents(p);
-      return empNorm === pNorm || empNorm.includes(pNorm) || pNorm.includes(empNorm);
-    });
-    const plantCode = matches.length
-      ? matches.reduce((a, b) => (a.length >= b.length ? a : b))
-      : null;
+    const plantCode = await dashboardArrForecast.resolveArrClientesMesPlantCode(client, empresa);
     if (!plantCode) {
       return res.status(404).json({ error: `No se encontró planta provincia para empresa "${empresa}"` });
     }
