@@ -44,6 +44,12 @@ import {
   INVERSION_CDJZ_STORAGE_KEY,
 } from "@/lib/igf-kpi-ui";
 import { mergeVentaSheetHighlights, recomputeVentaSheetFromDays } from "@/lib/pronostico-local-recalc";
+import {
+  canOpenPronosticoMiniRow,
+  decideOpenPronosticoFromQuery,
+  findPronosticoMiniRow,
+  forecastRowsForRender,
+} from "@/lib/igf-open-pronostico";
 
 function lastYmdOfMonth(year: number, month: number): string {
   const last = new Date(year, month, 0).getDate();
@@ -83,27 +89,6 @@ function resolveIgfYearMonthFromCorte(
 import { UsuariosAdminModal } from "@/components/UsuariosAdminModal";
 import { PlanMaestroModal } from "@/components/PlanMaestroModal";
 import { DirectorIaChatModal } from "@/modules/director-ia/components/DirectorIaChatModal";
-
-function findPronosticoMiniRow(rows: IgfForecastMiniRow[] | undefined, plantHint?: string | null) {
-  const list = rows || [];
-  if (!list.length) return null;
-  const n = String(plantHint || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim();
-  if (n) {
-    const hit = list.find((r) => {
-      const emp = String(r.empresa || "")
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .toLowerCase();
-      return emp.includes(n) || n.includes(emp);
-    });
-    if (hit) return hit;
-  }
-  return list[0] || null;
-}
 
 export function IgfForecastContent() {
   const searchParams = useSearchParams();
@@ -740,8 +725,8 @@ export function IgfForecastContent() {
   };
 
   const openPronosticoMiniRow = async (row: IgfForecastMiniRow) => {
-    const pc = (row.plant_code || "").trim();
-    if (!pc || !token || !igfForecast) return;
+    if (!canOpenPronosticoMiniRow(row, token, igfForecast)) return;
+    const pc = String(row.plant_code || "").trim();
     setPronosticoModal({ empresa: row.empresa || "", plant_code: pc });
     setPronosticoDetail(null);
     setPronosticoError(null);
@@ -763,19 +748,25 @@ export function IgfForecastContent() {
   };
 
   const handleOpenPronosticoFromChat = (action: { plant?: string | null }) => {
-    const row = findPronosticoMiniRow(igfMini?.rows, action && action.plant);
+    const row = findPronosticoMiniRow(igfMini && igfMini.rows, action && action.plant);
     if (row) void openPronosticoMiniRow(row);
   };
 
   useEffect(() => {
-    if (openedPronosticoFromQueryRef.current) return;
-    if (searchParams.get("open_pronostico") !== "1") return;
-    if (!igfMini?.rows?.length) return;
-    const row = findPronosticoMiniRow(igfMini.rows, searchParams.get("empresa"));
-    if (!row) return;
+    const decision = decideOpenPronosticoFromQuery({
+      alreadyOpened: openedPronosticoFromQueryRef.current,
+      openFlag: searchParams.get("open_pronostico"),
+      token,
+      igfForecast,
+      igfMini,
+      plantHint: searchParams.get("empresa"),
+    });
+    if (decision.action === "wait" || decision.action === "skip") return;
     openedPronosticoFromQueryRef.current = true;
-    void openPronosticoMiniRow(row);
-  }, [igfMini, searchParams]);
+    if (decision.action === "open" && decision.row) {
+      void openPronosticoMiniRow(decision.row);
+    }
+  }, [igfMini, igfForecast, token, searchParams]);
 
   const togglePronosticoDayByFecha = (fecha: string) => {
     if (!fecha) return;
@@ -799,7 +790,9 @@ export function IgfForecastContent() {
         month: igfForecast.month,
         plant_code: pronosticoDetail.plant_code,
         ...(up && /^\d{4}-\d{2}-\d{2}$/.test(up) ? { upload_day: up } : {}),
-        days: pronosticoDetail.days.map((d) => ({ fecha: d.fecha, selected: d.selected })),
+        days: Array.isArray(pronosticoDetail.days)
+          ? pronosticoDetail.days.map((d) => ({ fecha: d.fecha, selected: d.selected }))
+          : [],
       });
       const data = await fetchIgfForecast(token, {
         year: igfForecast.year,
@@ -823,6 +816,8 @@ export function IgfForecastContent() {
       setPronosticoSaving(false);
     }
   };
+
+  const forecastRows = forecastRowsForRender(igfForecast);
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -987,7 +982,7 @@ export function IgfForecastContent() {
                       className="rounded border border-slate-600 bg-slate-700 px-2 py-1 text-slate-200 text-xs"
                     >
                       <option value="">Todas</option>
-                      {Array.from(new Set(igfForecast.rows.map((r) => r.empresa?.trim()).filter(Boolean))).sort().map((emp) => (
+                      {Array.from(new Set(forecastRows.map((r) => r.empresa?.trim()).filter(Boolean))).sort().map((emp) => (
                         <option key={emp} value={emp}>{emp}</option>
                       ))}
                     </select>
@@ -1161,8 +1156,8 @@ export function IgfForecastContent() {
                       if (!miniByEmpresa.has(key)) miniByEmpresa.set(key, r);
                     });
                     const filtered = plantaFilter
-                      ? igfForecast.rows.filter((r) => (r.empresa?.trim() || "") === plantaFilter)
-                      : igfForecast.rows.filter((r) => !/^TOTALES?$/i.test(r.empresa?.trim() || ""));
+                      ? forecastRows.filter((r) => (r.empresa?.trim() || "") === plantaFilter)
+                      : forecastRows.filter((r) => !/^TOTALES?$/i.test(r.empresa?.trim() || ""));
                     const sorted = [...filtered]
                       .sort((a, b) => {
                         const miniA = miniOrder.get(presupuestoGendKey(a.empresa || "") || normalizeEmpresa(a.empresa || ""));
@@ -1376,7 +1371,7 @@ export function IgfForecastContent() {
                       <td className="py-3 px-2 border-r border-slate-600" />
                       <td className="py-3 px-2 text-right tabular-nums text-base font-bold text-slate-100">
                         {fmtNum(
-                          igfForecast.rows
+                          forecastRows
                             .filter((r) => !/^TOTALES?$/i.test(r.empresa?.trim() || ""))
                             .reduce((sum, r) => sum + getUtilOperImporteFromDisplayedValues(r), 0),
                           0
@@ -1386,7 +1381,7 @@ export function IgfForecastContent() {
                       <td className="py-3 px-2" />
                       <td className="py-3 px-2 text-right tabular-nums text-base font-bold text-slate-100">
                         {fmtNum(
-                          igfForecast.rows
+                          forecastRows
                             .filter((r) => !/^TOTALES?$/i.test(r.empresa?.trim() || ""))
                             .reduce((sum, r) => sum + getResultadoFinalImporteWithCdjz(r), 0),
                           0
@@ -1396,7 +1391,7 @@ export function IgfForecastContent() {
                   </tfoot>
                 )}
               </table>
-              {igfForecast.rows.length === 0 && (
+              {forecastRows.length === 0 && (
                 <p className="text-sm text-slate-500 py-4">No hay datos IGF para este mes.</p>
               )}
             </div>
@@ -1410,8 +1405,8 @@ export function IgfForecastContent() {
             <h3 className="text-base font-medium text-slate-200 mb-2">Comparación IGF Forecast vs última versión del mes anterior</h3>
             {igfMesAnteriorLoading && <p className="text-sm text-slate-400">Cargando mes anterior…</p>}
             {!igfMesAnteriorLoading && igfForecast && (() => {
-              const rowF = findRowByPlanta(igfForecast.rows, plantaFilter);
-              const rowA = igfMesAnterior ? findRowByPlanta(igfMesAnterior.rows, plantaFilter) : undefined;
+              const rowF = findRowByPlanta(forecastRows, plantaFilter);
+              const rowA = igfMesAnterior ? findRowByPlanta(forecastRowsForRender(igfMesAnterior), plantaFilter) : undefined;
               if (!rowF) return <p className="text-sm text-slate-500">No hay datos de forecast para esta planta.</p>;
               const n = (v: unknown): number => (v != null && !Number.isNaN(Number(v)) ? Number(v) : 0);
               const delta = (a: number | null | undefined, b: number | null | undefined) => n(a) - n(b);
@@ -2217,7 +2212,7 @@ export function IgfForecastContent() {
               <div className="overflow-auto flex-1 min-h-0 -mx-1">
                 {(igfFoliosModal.tipo === "inversiones" || /inversiones/i.test(igfFoliosModal.label || "")) && (() => {
                   const empresa = igfFoliosModal.empresa || "";
-                  const rowEmpresa = igfForecast ? findRowByPlanta(igfForecast.rows, empresa) : undefined;
+                  const rowEmpresa = igfForecast ? findRowByPlanta(forecastRows, empresa) : undefined;
                   const ventaTon = rowEmpresa?.venta_ton != null && !Number.isNaN(Number(rowEmpresa.venta_ton)) ? Number(rowEmpresa.venta_ton) : 0;
                   const ventaKg = ventaTon * 1000;
                   const foliosMxn = igfFoliosItems.reduce((s, f) => s + Math.abs(Number(f.importe || 0)), 0);
