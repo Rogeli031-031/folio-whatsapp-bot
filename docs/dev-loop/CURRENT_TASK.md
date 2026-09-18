@@ -1,8 +1,8 @@
 ﻿# CURRENT_TASK
 
 ```yaml
-task_id: "AUDIT-FIX-DIRECTOR-IA-DISCOUNT-UI-VS-CHAT-SOURCE-001"
-title: "Director IA — alinear ranking de descuento con la métrica y fuente real del ARR"
+task_id: "IMPL-DIRECTOR-IA-EXECUTIVE-COVERAGE-MOVEMENT-PRONOSTICO-002"
+title: "Director IA — cobertura ejecutiva integral, movimiento de clientes y navegación a Pronóstico"
 status: "DONE_PENDING_REVIEW"
 mode: "IMPLEMENTATION"
 
@@ -16,8 +16,8 @@ code_changes: true
 schema_changes: false
 data_mutation: false
 
-reference_main: "6094dd9f9b2c84ab9bd767ddfe896d04aec62804"
-branch: "fix/director-ia-discount-ui-vs-chat-source-001"
+reference_main: "0c5d9adc77cec2ea565ff21ee21cc9a4e997b9a8"
+branch: "implementation/director-ia-executive-coverage-movement-pronostico-002"
 
 merge_authorized: false
 deploy_authorized: false

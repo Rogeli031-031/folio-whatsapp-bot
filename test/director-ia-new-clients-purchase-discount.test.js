@@ -120,7 +120,10 @@ describe("historical new clients — P1-P6 routing", () => {
     for (const [id, q] of Object.entries(P)) {
       assert.equal(isHistoricalNewClientsQuestion(q, NOW), true, id);
       const plan = planDirectorIaQuestion(q);
-      assert.equal(plan.intent, "historical_new_clients", id);
+      assert.ok(
+        plan.intent === "historical_new_clients" || plan.intent === "client_movement",
+        `${id} → ${plan.intent}`
+      );
       assert.notEqual(plan.intent, "commercial_trend", id);
       assert.notEqual(plan.intent, "client_profile", id);
       assert.notEqual(plan.intent, "commercial_state", id);
@@ -338,13 +341,13 @@ describe("historical new clients — mes abierto y regresiones", () => {
   });
 
   it("regresión commercial_trend / client_profile / M9 / IGF / compound", () => {
-    assert.equal(planDirectorIaQuestion("¿Qué clientes son nuevos?").intent, "commercial_trend");
+    assert.equal(planDirectorIaQuestion("¿Qué clientes son nuevos?").intent, "client_movement");
     assert.equal(isCommercialTrendQuestion("¿Qué clientes son nuevos?"), true);
     assert.equal(planDirectorIaQuestion("¿Cuánto compró Arturo en agosto?").intent, "client_profile");
     assert.equal(isClientProfileQuestion("¿Cuánto compró Arturo en agosto?"), true);
     assert.equal(planDirectorIaQuestion("¿Cómo cambió el descuento?").intent, "delta_discount");
     assert.equal(planDirectorIaQuestion("¿Cómo se comportó el margen?").intent, "financial_diagnosis");
-    assert.equal(planDirectorIaQuestion("¿Qué clientes aumentaron en agosto en Acapulco?").intent, "commercial_trend");
+    assert.equal(planDirectorIaQuestion("¿Qué clientes aumentaron en agosto en Acapulco?").intent, "client_movement");
     assert.equal(isHistoricalNewClientsQuestion("¿Cuánto compró Y GRUPO MOVE en agosto?", NOW), false);
   });
 

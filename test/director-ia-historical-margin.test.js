@@ -146,7 +146,7 @@ describe("A. detector / period", () => {
     assert.equal(planDirectorIaQuestion(C.C1).intent, "financial_diagnosis");
     assert.equal(planDirectorIaQuestion(C.C2).intent, "delta_discount");
     assert.equal(planDirectorIaQuestion(C.C3).intent, "commercial_trend");
-    assert.equal(planDirectorIaQuestion(C.C4).intent, "historical_new_clients");
+    assert.equal(planDirectorIaQuestion(C.C4).intent, "client_movement");
     assert.equal(isHistoricalMarginQuestion(C.C5), false);
     assert.equal(planDirectorIaQuestion(C.C5).intent, "unknown");
   });
@@ -942,7 +942,7 @@ describe("H. regressions / auth / annual", () => {
     assert.equal(planDirectorIaQuestion(G.G2).intent, "month_close_result");
     assert.equal(planDirectorIaQuestion(G.G3).intent, "month_close_result");
     assert.equal(planDirectorIaQuestion(G.G4).intent, "commercial_trend");
-    assert.equal(planDirectorIaQuestion(G.G6).intent, "historical_new_clients");
+    assert.equal(planDirectorIaQuestion(G.G6).intent, "client_movement");
     assert.equal(planDirectorIaQuestion(G.G7).intent, "client_profile");
     assert.equal(planDirectorIaQuestion(G.G8).intent, "client_profile");
     assert.equal(planDirectorIaQuestion(G.G11).intent, "delta_discount");

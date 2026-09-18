@@ -123,6 +123,8 @@ export type DirectorIaUiAction = {
   numero_folio?: string | null;
   folio_id?: number | null;
   plant?: string | null;
+  year?: number | null;
+  month?: number | null;
   do_not_pretend_opened?: boolean;
 };
 

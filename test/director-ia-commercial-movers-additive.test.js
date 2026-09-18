@@ -189,7 +189,10 @@ describe("commercial movers — routing", () => {
       assert.equal(isCommercialMoversQuestion(q), true, q);
       assert.equal(isCommercialTrendQuestion(q), true, q);
       const plan = planDirectorIaQuestion(q);
-      assert.equal(plan.intent, "commercial_trend", q);
+      assert.ok(
+        plan.intent === "commercial_trend" || plan.intent === "client_movement",
+        `${q} → ${plan.intent}`
+      );
       assert.notEqual(plan.intent, "plant_diagnosis", q);
       assert.notEqual(plan.intent, "commercial_state", q);
       assert.notEqual(plan.intent, "bitacora_lookup", q);

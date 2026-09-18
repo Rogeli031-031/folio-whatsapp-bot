@@ -171,13 +171,13 @@ const FOLIO_ANTI = Object.freeze([
 
 const RANK_ANTI = Object.freeze([
   ["top 10 clientes con mayor descuento", "client_discount_ranking"],
-  ["qué clientes dejaron de comprar", "commercial_trend"],
+  ["qué clientes dejaron de comprar", "client_movement"],
   ["cuánto vendimos en septiembre", null],
   ["qué cliente tiene teléfono", "client_contact_lookup"],
   ["top 10 folios", "folio_search"],
   ["cuánto compró GRUPO MOVE", null],
   ["abre el top 10", null],
-  ["qué clientes nuevos entraron", "commercial_trend"],
+  ["qué clientes nuevos entraron", "client_movement"],
   ["cuánto gastamos en llantas", "expense_analytics"],
   ["cuántos folios de llantas", "folio_search"],
   ["abre F-202602-148", "folio_search"],

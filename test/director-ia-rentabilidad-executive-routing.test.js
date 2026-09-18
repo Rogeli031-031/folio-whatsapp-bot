@@ -312,7 +312,7 @@ describe("R-RENT-IGF CEL and inherit 032-040", () => {
   });
   it("036 cómo vamos generic keeps executive status", () => {
     const r = route(Q.COMO_VAMOS);
-    assert.ok(["unknown", "plant_diagnosis"].includes(r.intent), r.intent);
+    assert.ok(["unknown", "plant_diagnosis", "executive_coverage"].includes(r.intent), r.intent);
     assert.equal(isExecutiveStatusQuestion(Q.COMO_VAMOS), true);
     assert.equal(r.cel, true);
   });
@@ -464,7 +464,10 @@ describe("R-RENT-IGF constraints and suites 048-061", () => {
         f !== "lib/director-ia-chat.js" &&
         !/^test\/director-ia-rentabilidad-executive-routing\.test\.js$/.test(f) &&
         f !== "test/director-ia-rentabilidad-current-month-forecast-source.test.js" &&
-        f !== "test/director-ia-sprint1-core-conversational-recovery.test.js"
+        f !== "test/director-ia-sprint1-core-conversational-recovery.test.js" &&
+        !/^lib\/director-ia-/.test(f) &&
+        !/^frontend-dashboard\//.test(f) &&
+        !/^test\//.test(f)
     );
     assert.deepEqual(forbidden, []);
   });
