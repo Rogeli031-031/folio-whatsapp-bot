@@ -25,6 +25,8 @@ type DirectorIaChatPanelProps = {
   fillAvailable?: boolean;
   /** Si el backend emite OPEN_FOLIO con folio_id, abre el detalle real. */
   onOpenFolio?: (folioId: number) => void;
+  /** Si el backend emite OPEN_PRONOSTICO, abre el modal real de Pronóstico. */
+  onOpenPronostico?: (action: { type: string; plant?: string | null; year?: number | null; month?: number | null }) => void;
 };
 
 function newMessageId() {
@@ -41,6 +43,7 @@ export function DirectorIaChatPanel({
   uploadDay: uploadDayProp = null,
   fillAvailable = false,
   onOpenFolio,
+  onOpenPronostico,
 }: DirectorIaChatPanelProps) {
   const [question, setQuestion] = useState("");
   const [loading, setLoading] = useState(false);
@@ -122,12 +125,30 @@ export function DirectorIaChatPanel({
       ) {
         onOpenFolio(Number(action.folio_id));
       }
+      if (action && action.type === "OPEN_PRONOSTICO") {
+        if (typeof onOpenPronostico === "function") {
+          onOpenPronostico({
+            type: action.type,
+            plant: action.plant || null,
+            year: action.year ?? null,
+            month: action.month ?? null,
+          });
+        } else if (typeof window !== "undefined") {
+          const params = new URLSearchParams(window.location.search);
+          const t = params.get("t") || "";
+          const next = new URLSearchParams();
+          if (t) next.set("t", t);
+          next.set("open_pronostico", "1");
+          if (action.plant) next.set("empresa", action.plant);
+          window.location.assign(`/igf-forecast?${next.toString()}`);
+        }
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Error al consultar");
     } finally {
       setLoading(false);
     }
-  }, [token, plantaId, plantaNombre, question, messages, uploadDayProp, conversationState, onOpenFolio]);
+  }, [token, plantaId, plantaNombre, question, messages, uploadDayProp, conversationState, onOpenFolio, onOpenPronostico]);
 
   const fillChat = Boolean(chatMode && fillAvailable);
   const shellClass = chatMode

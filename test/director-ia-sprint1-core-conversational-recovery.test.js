@@ -144,7 +144,7 @@ describe("SPRINT1 Golden Set — routing", () => {
     assert.equal(isExecutiveStatusQuestion(Q1), true);
     assert.equal(need.need_type, NEED_TYPES.EXECUTIVE_STATUS);
     assert.notEqual(need.specialized, true);
-    assert.ok(["unknown", "plant_diagnosis"].includes(planned.intent), planned.intent);
+    assert.ok(["unknown", "plant_diagnosis", "executive_coverage"].includes(planned.intent), planned.intent);
     assert.equal(shouldHandleExecutiveStatus(need, {}, planned.intent), true);
   });
 

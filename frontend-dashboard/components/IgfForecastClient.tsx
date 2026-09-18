@@ -84,6 +84,27 @@ import { UsuariosAdminModal } from "@/components/UsuariosAdminModal";
 import { PlanMaestroModal } from "@/components/PlanMaestroModal";
 import { DirectorIaChatModal } from "@/modules/director-ia/components/DirectorIaChatModal";
 
+function findPronosticoMiniRow(rows: IgfForecastMiniRow[] | undefined, plantHint?: string | null) {
+  const list = rows || [];
+  if (!list.length) return null;
+  const n = String(plantHint || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+  if (n) {
+    const hit = list.find((r) => {
+      const emp = String(r.empresa || "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase();
+      return emp.includes(n) || n.includes(emp);
+    });
+    if (hit) return hit;
+  }
+  return list[0] || null;
+}
+
 export function IgfForecastContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -233,6 +254,7 @@ export function IgfForecastContent() {
   const [pronosticoLoading, setPronosticoLoading] = useState(false);
   const [pronosticoError, setPronosticoError] = useState<string | null>(null);
   const [pronosticoSaving, setPronosticoSaving] = useState(false);
+  const openedPronosticoFromQueryRef = useRef(false);
 
   const pronosticoSheetDisplay = useMemo(() => {
     if (!pronosticoDetail?.venta_sheet) return null;
@@ -739,6 +761,21 @@ export function IgfForecastContent() {
       setPronosticoLoading(false);
     }
   };
+
+  const handleOpenPronosticoFromChat = (action: { plant?: string | null }) => {
+    const row = findPronosticoMiniRow(igfMini?.rows, action && action.plant);
+    if (row) void openPronosticoMiniRow(row);
+  };
+
+  useEffect(() => {
+    if (openedPronosticoFromQueryRef.current) return;
+    if (searchParams.get("open_pronostico") !== "1") return;
+    if (!igfMini?.rows?.length) return;
+    const row = findPronosticoMiniRow(igfMini.rows, searchParams.get("empresa"));
+    if (!row) return;
+    openedPronosticoFromQueryRef.current = true;
+    void openPronosticoMiniRow(row);
+  }, [igfMini, searchParams]);
 
   const togglePronosticoDayByFecha = (fecha: string) => {
     if (!fecha) return;
@@ -2384,6 +2421,7 @@ export function IgfForecastContent() {
           size="large"
           plantMode="select"
           uploadDay={uploadDay.trim() || null}
+          onOpenPronostico={handleOpenPronosticoFromChat}
         />
       )}
     </div>

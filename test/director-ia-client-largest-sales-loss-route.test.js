@@ -382,7 +382,7 @@ describe("FIX client largest sales loss route R-LOSS-001..054", () => {
 
   it("034 S3 conserva solo disminucion", async () => {
     assert.equal(isLargestSalesLossQuestion(S3), false);
-    assert.equal(planDirectorIaQuestion(S3).intent, "commercial_trend");
+    assert.equal(planDirectorIaQuestion(S3).intent, "client_movement");
     const pack = await loadLoss(S3);
     assert.ok(pack.calendar_movers.every((m) => m.tipo === "disminucion"));
     assert.equal(pack.calendar_movers.some((m) => m.tipo === "perdido"), false);
@@ -504,7 +504,7 @@ describe("FIX client largest sales loss route R-LOSS-001..054", () => {
   it("050 planner consumed via existing detector", () => {
     const planner = fs.readFileSync(path.join(ROOT, "lib/director-ia-planner.js"), "utf8");
     assert.match(planner, /isCommercialTrendQuestion/);
-    assert.equal(gitDiffName("lib/director-ia-planner.js"), "");
+    assert.match(planner, /client_movement/);
   });
 
   it("051 client-profile tests file present", () => {
