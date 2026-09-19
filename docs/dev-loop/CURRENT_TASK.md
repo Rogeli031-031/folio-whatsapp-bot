@@ -1,8 +1,8 @@
 ﻿# CURRENT_TASK
 
 ```yaml
-task_id: "FIX-DIRECTOR-IA-PURCHASE-EVIDENCE-ENRICHMENT-009"
-title: "Director IA — enriquecer última compra real y completar estados de Taller"
+task_id: "FIX-DIRECTOR-IA-EXECUTIVE-CONTEXT-SALES-AND-ENTITY-INHERITANCE-010"
+title: "Director IA — contexto ejecutivo, ventas, comparativos, entidad activa y gastos por concepto"
 status: "DONE_PENDING_REVIEW"
 mode: "IMPLEMENTATION"
 
@@ -16,8 +16,8 @@ code_changes: true
 schema_changes: false
 data_mutation: false
 
-base_sha: "0b90eab432e42d9d35cd5b4b4621c5d78c14efdf"
-branch: "fix/director-ia-purchase-evidence-enrichment-009"
+base_sha: "78cb437a2be2a8f283213899366d9d7e0441d1f4"
+branch: "fix/director-ia-executive-context-sales-entity-inheritance-010"
 
 merge_authorized: false
 deploy_authorized: false
