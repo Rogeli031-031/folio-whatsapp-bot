@@ -109,6 +109,7 @@ Pantalla:
 - Tabla estilo Excel: encabezados oscuros, cuerpo blanco/gris, bloques por proveedor, consolidado a la derecha, Semana N, TOTAL MES
 - Fecha ámbar (`compras-fecha-capturada`) si hay al menos una compra ese día
 - Click en celda de proveedor → detalle con N compras, agregar/editar/eliminar, subir/ver/descargar/eliminar PDF
+- En **Agregar compra** se elige el PDF de respaldo junto a KG/importe; se sube al guardar. En compras ya guardadas el selector de factura es visible (no hidden).
 - Proveedor inactivo: histórico visible; el detalle no ofrece “Agregar compra”
 - Hoja visual tipo Excel: título CONTROL DE COMPRAS, PLANTA, año, MES, encabezados negros, bordes, Semana N gris, TOTAL MES, celdas diarias vacías en blanco
 - La hoja principal **siempre** muestra, en este orden: PEMEX TUXPAN, TOMZA TUXPAN, TOMZA TEPEJI, CONSOLIDADO. `ensureRequiredProviders` completa los nombres faltantes por planta (comparación normalizada, sin duplicar, sin borrar extras ni histórico).
@@ -160,7 +161,7 @@ Frontend (asserción de fuente + selectores): botón Compras, `/compras`, select
 
 ## Build
 
-Frontend cambió (formato Excel + Descargar). `frontend-dashboard`: `npm run build` **verde** de nuevo.
+Frontend cambió (persistencia de fecha + selector + factura en alta). `frontend-dashboard`: `npm run build` **verde**. Tests `test/compras-dashboard-013.test.js`: 33/33.
 
 ## Archivos tocados
 
@@ -238,6 +239,18 @@ DELETE compra lista `storage_key` de todos los documentos **antes** del DELETE y
 BYTEA-only: no llama S3.
 
 Cross-plant: 403 y no toca S3 ni filas.
+
+### Persistencia de KG/importe al recargar
+
+Causa: `node-pg` entrega `arr.compras.fecha` (DATE) como `Date` UTC midnight. `mapPurchase` hacía `String(fecha).slice(0, 10)` → `"Thu Sep 03"` (o locale), no `"2026-09-03"`. El INSERT sí persistía; la cuadrícula y el detalle filtraban por `YYYY-MM-DD` y la celda quedaba en blanco.
+
+Corrección: `toYmd` usa `toISOString().slice(0, 10)` para `Date` y el prefijo ISO para strings. Se usa en `mapPurchase`, `aggregatePurchases` y validación de alta. El cliente del test ahora simula DATE de pg. El detalle compara con `toYmd`.
+
+La planta/año/mes de la hoja se guardan en `localStorage` (`compras-dashboard-sheet`) para que al volver otro día se abra la misma planta (p. ej. Morelos) y el mismo mes, no el primer ítem de la lista.
+
+### Factura PDF en el alta
+
+El formulario de captura muestra `Factura PDF de respaldo`. Tras `POST /api/compras` se sube el PDF con `uploadComprasFactura` si el usuario eligió archivo.
 
 ## Cierre
 
