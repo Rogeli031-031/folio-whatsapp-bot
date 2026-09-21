@@ -846,6 +846,31 @@ describe("013 compras — frontend", () => {
     assert.doesNotMatch(client, /PEMEX TUXPAN/);
   });
 
+  it("menú de plantas deja solo las 6 operativas y oculta México y códigos E", () => {
+    const catalog = [
+      "Acapulco",
+      "Puebla",
+      "Tehuacán",
+      "Querétaro",
+      "San Luis",
+      "Morelos",
+      "Mexico",
+      "E9",
+      "E10",
+      "E15",
+      "E7",
+      "E8",
+      "E12",
+      "E11",
+      "E13",
+    ].map((nombre, i) => ({ id: i + 1, nombre }));
+    const visible = compras.filterComprasPlantasMenu(catalog).map((p) => p.nombre);
+    assert.deepEqual(visible, ["Acapulco", "Puebla", "Tehuacán", "Querétaro", "San Luis", "Morelos"]);
+    assert.match(client, /filterComprasPlantasMenu\(r\.plantas/);
+    assert.match(client, /savedPlantaId && list\.some\(\(p\) => p\.id === savedPlantaId\)/);
+    assert.match(fmtSrc, /function filterComprasPlantasMenu/);
+  });
+
   it("formatos KG / costo / importe", () => {
     assert.match(fmtSrc, /maximumFractionDigits: 3/);
     assert.match(fmtSrc, /minimumFractionDigits: 2/);
