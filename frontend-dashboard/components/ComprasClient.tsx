@@ -33,6 +33,7 @@ import {
   parseLocaleNumber,
   toYmd,
 } from "@/lib/compras-format";
+import { commitHgWrite } from "@/lib/compras-hg-write";
 
 type DetailState = {
   proveedor: ComprasProvider;
@@ -452,7 +453,14 @@ export function ComprasClient() {
                       <ReadOnlyTriple kg={day?.consolidado.kg || 0} importe={day?.consolidado.importe || 0} costo={day?.consolidado.costo_kg ?? null} consolidado />
                       <td className="compras-hg-gap w-6 border-0 bg-white p-0" />
                       {token && plantaId ? (
-                        <HgDayCell token={token} plantaId={plantaId} fecha={row.ymd} value={day?.hg_kilos ?? null} onSaved={loadMonth} />
+                        <HgDayCell
+                          token={token}
+                          plantaId={plantaId}
+                          fecha={row.ymd}
+                          value={day?.hg_kilos ?? null}
+                          onSaved={loadMonth}
+                          onError={setError}
+                        />
                       ) : (
                         <td className="border border-black bg-white px-1 py-1 text-right tabular-nums">{formatHgKilos(day?.hg_kilos ?? null)}</td>
                       )}
@@ -558,12 +566,14 @@ function HgDayCell({
   fecha,
   value,
   onSaved,
+  onError,
 }: {
   token: string;
   plantaId: number;
   fecha: string;
   value: number | null;
   onSaved: () => Promise<void>;
+  onError: (message: string | null) => void;
 }) {
   const [text, setText] = useState(formatHgKilos(value));
   const [saving, setSaving] = useState(false);
@@ -571,18 +581,25 @@ function HgDayCell({
     setText(formatHgKilos(value));
   }, [value, fecha]);
 
+  async function persist(next: number | null) {
+    setSaving(true);
+    const out = await commitHgWrite({
+      next,
+      confirmed: value,
+      write: (hg) => upsertComprasHg(token, plantaId, { fecha, hg_kilos: hg }),
+      reload: onSaved,
+      onError,
+    });
+    if (!out.ok) setText(formatHgKilos(out.restore));
+    setSaving(false);
+  }
+
   async function commit() {
     if (saving) return;
     const raw = text.trim();
     if (raw === "") {
       if (value == null) return;
-      setSaving(true);
-      try {
-        await upsertComprasHg(token, plantaId, { fecha, hg_kilos: null });
-        await onSaved();
-      } finally {
-        setSaving(false);
-      }
+      await persist(null);
       return;
     }
     const n = parseLocaleNumber(raw);
@@ -595,13 +612,7 @@ function HgDayCell({
       setText(formatHgKilos(value));
       return;
     }
-    setSaving(true);
-    try {
-      await upsertComprasHg(token, plantaId, { fecha, hg_kilos: stored });
-      await onSaved();
-    } finally {
-      setSaving(false);
-    }
+    await persist(stored);
   }
 
   return (

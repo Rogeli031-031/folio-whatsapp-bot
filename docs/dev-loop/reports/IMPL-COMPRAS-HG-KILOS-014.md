@@ -11,6 +11,8 @@ files_touched:
   - "lib/compras-excel.js"
   - "frontend-dashboard/components/ComprasClient.tsx"
   - "frontend-dashboard/lib/compras-format.ts"
+  - "frontend-dashboard/lib/compras-hg-write.js"
+  - "frontend-dashboard/lib/compras-hg-write.d.ts"
   - "frontend-dashboard/lib/api.ts"
   - "test/compras-hg-kilos-014.test.js"
   - "test/compras-dashboard-013.test.js"
@@ -60,6 +62,17 @@ Bloque independiente **HG EN KILOS** a la derecha de CONSOLIDADO, con gap visual
 - Auth + `assertPlantaAccess`. Cross-plant 403.
 - Excel: columna HG EN KILOS en col 18 (tras gap 17). CONSOLIDADO permanece en 14.
 
+### HG write failure
+
+Si POST/DELETE HG falla (red, DB, auth, servidor):
+
+- error visible: `No se pudo guardar HG.` (banner `error` de ComprasClient)
+- la celda restaura el último valor confirmado por el servidor (`value`)
+- no se implica persistencia exitosa
+- el fallo no se convierte en 0 ni en vacío persistente
+
+OK → `onSaved()` / reload. Saving/disabled se mantiene durante el write.
+
 ## Schema
 
 `arr.compras_hg`: `id`, `planta_id` → `public.plantas(id)`, `fecha DATE`, `hg_kilos NUMERIC(14,3)` (positivo/negativo/cero), `created_by_usuario_id`, `updated_by_usuario_id`, `created_at`, `updated_at`, `UNIQUE (planta_id, fecha)`.
@@ -68,9 +81,9 @@ Migración: `sql/022_compras_hg.sql`. Runtime: `ensureComprasTables`. **No** se 
 
 ## Tests
 
-- `node --test test/compras-hg-kilos-014.test.js` → 11/11
+- `node --test test/compras-hg-kilos-014.test.js` → 15/15
 - `node --test test/compras-dashboard-013.test.js` → 34/34
-- Total combinado: 45/45
+- Total combinado: 49/49
 
 ## Build
 
