@@ -243,3 +243,27 @@ Revisión G1/G4 humana de esta rama. NO PR. NO merge. NO deploy. NO siguiente ta
 `CURRENT_TASK` → `DONE_PENDING_REVIEW`.  
 Commit + push solo a `fix/director-ia-client-inactivity-direct-answers-ui-011`.  
 NO PR. NO merge. NO deploy. NO siguiente tarea.
+
+---
+
+## Nota de revisión (reopen humano, misma tarea)
+
+Hallazgo: `client_inactivity` guardaba `active_entities: list.slice(0, 1)`, promoviendo el primer cliente de una lista múltiple. Eso autorizaba en silencio `OPEN_CLIENT_DELTA_FORECAST` ante «abre su información».
+
+Corrección:
+
+- Lista de varios clientes → result set (`kind=client_movement`, `result_set` / `ranked_names`). **No** `active_entity=CLIENT`.
+- `active_entity=CLIENT` solo si el usuario nombra un cliente con match único, el result set tiene un solo elemento, o ya había un CLIENT heredado y el turno no lo reemplaza.
+- «abre su información» sobre lista múltiple → aclara «¿cuál?», **sin** `ui_action`.
+- Nombre explícito (p. ej. BAYAM RESIDENCES) fija CLIENT; el siguiente «abre su información» abre ese cliente.
+- Cambio explícito («¿y TORTILLERIA ERICK?») abre el nuevo.
+- No hay first-result fallback silencioso.
+
+Pruebas nuevas en `test/director-ia-client-inactivity-direct-answers-ui-011.test.js` (`011 no first-result silencioso`).
+
+Frontend no se tocó; `npm run build` no era necesario.
+
+Re-run: 011 + 010–003 + plant_diagnosis + continuity = **191/191**.
+
+`CURRENT_TASK` permanece `DONE_PENDING_REVIEW`.  
+Commit + push a la misma rama. NO PR. NO merge. NO deploy. NO siguiente tarea.

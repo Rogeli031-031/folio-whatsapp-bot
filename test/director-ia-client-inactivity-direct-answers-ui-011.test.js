@@ -14,6 +14,8 @@ const {
   resolveClientInCatalog,
   buildOpenClientUiAction,
   answerHasForbiddenExpansion,
+  activeEntitiesForInactiveList,
+  resolveOpenClientTarget,
   UI_ACTION,
 } = require("../lib/director-ia-client-inactivity-direct-answers-ui-011");
 const {
@@ -228,5 +230,195 @@ describe("011 E2E askDirectorIa", () => {
       "abre su información"
     );
     assert.equal(switchClient.ui_action.client, "TORTILLERIA ERICK");
+  });
+});
+
+const MULTI_INACTIVE_ROWS = [
+  {
+    cliente: "BAYAM RESIDENCES",
+    lastPurchaseDate: "2026-08-01",
+    freqDays: 12,
+    estatus: "Inactivo",
+  },
+  {
+    cliente: "TORTILLERIA ERICK",
+    lastPurchaseDate: "2026-07-10",
+    freqDays: 11,
+    estatus: "Inactivo",
+  },
+  {
+    cliente: "CLIENTE INACTIVO C",
+    lastPurchaseDate: "2026-06-01",
+    freqDays: 10,
+    estatus: "Inactivo",
+  },
+];
+
+describe("011 no first-result silencioso", () => {
+  it("nunca first-result fallback silencioso en lista múltiple", () => {
+    const list = listInactiveClients(MULTI_INACTIVE_ROWS, { now: NOW, source: "computeDicf" });
+    assert.ok(list.length > 1);
+    const ents = activeEntitiesForInactiveList(list);
+    assert.ok(!ents.some((e) => e.kind === "CLIENT" || e.kind === "client"));
+    assert.ok((ents[0].result_set || []).length > 1);
+    const target = resolveOpenClientTarget("abre su información", { active_entities: ents }, MULTI_INACTIVE_ROWS);
+    assert.equal(target.status, "ambiguous");
+    assert.equal(target.cliente, undefined);
+  });
+
+  it("lista múltiple + abre su información pide cuál y no emite ui_action", async () => {
+    process.env.ENABLE_DIRECTOR_IA = "true";
+    const { askDirectorIa, configureDirectorIaChat } = require("../lib/director-ia-chat");
+    configureDirectorIaChat({
+      pool: {},
+      now: NOW,
+      predictiveDicfRows: MULTI_INACTIVE_ROWS,
+      predictivePlantCodes: ["ACA"],
+    });
+    const list = await askDirectorIa(
+      { body: { planta_nombre: "Acapulco" }, dashboardAuth: AUTH },
+      1,
+      "¿Qué clientes no han comprado?"
+    );
+    const ents = (list.context_meta.conversation_state.active_entities || []).filter(
+      (e) => e && (e.kind === "CLIENT" || e.kind === "client")
+    );
+    assert.equal(ents.length, 0);
+    const open = await askDirectorIa(
+      {
+        body: {
+          planta_nombre: "Acapulco",
+          conversation_state: list.context_meta.conversation_state,
+        },
+        dashboardAuth: AUTH,
+      },
+      1,
+      "abre su información"
+    );
+    assert.equal(open.ui_action == null, true);
+    assert.match(open.answer, /cuál/i);
+    assert.doesNotMatch(String(open.answer || ""), /Abro Delta Ingreso Cliente Forecast de BAYAM RESIDENCES/);
+  });
+
+  it("lista múltiple + nombre explícito + abre su información abre el nombrado", async () => {
+    process.env.ENABLE_DIRECTOR_IA = "true";
+    const { askDirectorIa, configureDirectorIaChat } = require("../lib/director-ia-chat");
+    configureDirectorIaChat({
+      pool: {},
+      now: NOW,
+      predictiveDicfRows: MULTI_INACTIVE_ROWS,
+      predictivePlantCodes: ["ACA"],
+    });
+    const list = await askDirectorIa(
+      { body: { planta_nombre: "Acapulco" }, dashboardAuth: AUTH },
+      1,
+      "¿Qué clientes no han comprado?"
+    );
+    const named = await askDirectorIa(
+      {
+        body: {
+          planta_nombre: "Acapulco",
+          conversation_state: list.context_meta.conversation_state,
+        },
+        dashboardAuth: AUTH,
+      },
+      1,
+      "BAYAM RESIDENCES"
+    );
+    const active = (named.context_meta.conversation_state.active_entities || []).find(
+      (e) => e && (e.kind === "CLIENT" || e.kind === "client")
+    );
+    assert.equal(active && active.canonical_name, "BAYAM RESIDENCES");
+    const open = await askDirectorIa(
+      {
+        body: {
+          planta_nombre: "Acapulco",
+          conversation_state: named.context_meta.conversation_state,
+        },
+        dashboardAuth: AUTH,
+      },
+      1,
+      "abre su información"
+    );
+    assert.equal(open.ui_action && open.ui_action.type, UI_ACTION);
+    assert.equal(open.ui_action.client, "BAYAM RESIDENCES");
+  });
+
+  it("cambio explícito a otro cliente abre el nuevo", async () => {
+    process.env.ENABLE_DIRECTOR_IA = "true";
+    const { askDirectorIa, configureDirectorIaChat } = require("../lib/director-ia-chat");
+    configureDirectorIaChat({
+      pool: {},
+      now: NOW,
+      predictiveDicfRows: MULTI_INACTIVE_ROWS,
+      predictivePlantCodes: ["ACA"],
+    });
+    const list = await askDirectorIa(
+      { body: { planta_nombre: "Acapulco" }, dashboardAuth: AUTH },
+      1,
+      "¿Qué clientes no han comprado?"
+    );
+    const named = await askDirectorIa(
+      {
+        body: {
+          planta_nombre: "Acapulco",
+          conversation_state: list.context_meta.conversation_state,
+        },
+        dashboardAuth: AUTH,
+      },
+      1,
+      "BAYAM RESIDENCES"
+    );
+    const switched = await askDirectorIa(
+      {
+        body: {
+          planta_nombre: "Acapulco",
+          conversation_state: named.context_meta.conversation_state,
+        },
+        dashboardAuth: AUTH,
+      },
+      1,
+      "¿y TORTILLERIA ERICK?"
+    );
+    const open = await askDirectorIa(
+      {
+        body: {
+          planta_nombre: "Acapulco",
+          conversation_state: switched.context_meta.conversation_state,
+        },
+        dashboardAuth: AUTH,
+      },
+      1,
+      "abre su información"
+    );
+    assert.equal(open.ui_action && open.ui_action.client, "TORTILLERIA ERICK");
+  });
+
+  it("lista de un solo resultado permite abrir ese único cliente", async () => {
+    process.env.ENABLE_DIRECTOR_IA = "true";
+    const { askDirectorIa, configureDirectorIaChat } = require("../lib/director-ia-chat");
+    configureDirectorIaChat({
+      pool: {},
+      now: NOW,
+      predictiveDicfRows: [DICF_ROWS[0]],
+      predictivePlantCodes: ["ACA"],
+    });
+    const list = await askDirectorIa(
+      { body: { planta_nombre: "Acapulco" }, dashboardAuth: AUTH },
+      1,
+      "¿Qué clientes no han comprado?"
+    );
+    const open = await askDirectorIa(
+      {
+        body: {
+          planta_nombre: "Acapulco",
+          conversation_state: list.context_meta.conversation_state,
+        },
+        dashboardAuth: AUTH,
+      },
+      1,
+      "abre su información"
+    );
+    assert.equal(open.ui_action && open.ui_action.client, "BAYAM RESIDENCES");
   });
 });
