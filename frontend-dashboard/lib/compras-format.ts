@@ -37,6 +37,17 @@ export function formatFechaGrid(ymd: string): string {
   return `${d}/${m}/${y}`;
 }
 
+export function toYmd(value: string | Date | null | undefined): string {
+  if (value == null || value === "") return "";
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return "";
+    return value.toISOString().slice(0, 10);
+  }
+  const s = String(value).trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  return "";
+}
+
 export function parseLocaleNumber(raw: string): number | null {
   const s = String(raw || "").trim().replace(/\s/g, "").replace(/,/g, "");
   if (!s) return null;

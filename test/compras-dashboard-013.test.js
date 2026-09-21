@@ -11,6 +11,18 @@ function pdfBuf(extra = "ok") {
   return Buffer.concat([Buffer.from("%PDF-1.4\n"), Buffer.from(extra)]);
 }
 
+function asPgDate(value) {
+  const y =
+    value instanceof Date
+      ? value.toISOString().slice(0, 10)
+      : String(value || "").slice(0, 10);
+  return new Date(`${y}T00:00:00.000Z`);
+}
+
+function fechaYmd(value) {
+  return value instanceof Date ? value.toISOString().slice(0, 10) : String(value || "").slice(0, 10);
+}
+
 class MemClient {
   constructor() {
     this.providers = [];
@@ -66,8 +78,12 @@ class MemClient {
       const end = String(params[2]).slice(0, 10);
       return {
         rows: this.purchases
-          .filter((p) => p.planta_id === planta && p.fecha >= start && p.fecha <= end)
-          .sort((a, b) => (a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : a.id - b.id)),
+          .filter((p) => p.planta_id === planta && fechaYmd(p.fecha) >= start && fechaYmd(p.fecha) <= end)
+          .sort((a, b) => {
+            const fa = fechaYmd(a.fecha);
+            const fb = fechaYmd(b.fecha);
+            return fa < fb ? -1 : fa > fb ? 1 : a.id - b.id;
+          }),
       };
     }
     if (q.startsWith("insert into arr.compras ")) {
@@ -75,7 +91,7 @@ class MemClient {
         id: this.nextId(),
         planta_id: Number(params[0]),
         proveedor_id: Number(params[1]),
-        fecha: String(params[2]).slice(0, 10),
+        fecha: asPgDate(params[2]),
         kg: Number(params[3]),
         importe: Number(params[4]),
         created_by_usuario_id: params[5] ?? null,
@@ -90,7 +106,7 @@ class MemClient {
       const row = this.purchases.find((p) => p.id === Number(params[0]));
       if (!row) return { rows: [] };
       row.proveedor_id = Number(params[1]);
-      row.fecha = String(params[2]).slice(0, 10);
+      row.fecha = asPgDate(params[2]);
       row.kg = Number(params[3]);
       row.importe = Number(params[4]);
       row.updated_by_usuario_id = params[5] ?? null;
@@ -285,6 +301,23 @@ describe("013 compras — cálculos ponderados", () => {
     assert.equal(Number(grid.month.providers[1].costo_kg.toFixed(3)), Number((340 / 40).toFixed(3)));
     assert.equal(grid.month.consolidado.kg, 40);
   });
+
+  it("DATE de PostgreSQL se alinea a YYYY-MM-DD y no queda en blanco", () => {
+    const pgDate = new Date("2026-09-03T00:00:00.000Z");
+    assert.equal(compras.toYmd(pgDate), "2026-09-03");
+    assert.equal(compras.toYmd("2026-09-03T00:00:00.000Z"), "2026-09-03");
+    assert.notEqual(String(pgDate).slice(0, 10), "2026-09-03");
+    const grid = compras.aggregatePurchases(
+      [{ id: 1, proveedor_id: 1, fecha: pgDate, kg: 23540, importe: 224778 }],
+      [{ id: 1, nombre: "A" }],
+      2026,
+      9
+    );
+    const day = grid.days.find((d) => d.ymd === "2026-09-03");
+    assert.equal(day.cells[1].kg, 23540);
+    assert.equal(day.cells[1].importe, 224778);
+    assert.equal(day.captured, true);
+  });
 });
 
 describe("013 compras — CRUD y auth", () => {
@@ -372,6 +405,8 @@ describe("013 compras — CRUD y auth", () => {
     const month = await compras.loadMonth(db, 1, 2026, 9);
     assert.ok(month.providers.length >= 3);
     assert.equal(compras.normProviderName(month.providers[0].nombre), compras.normProviderName("PEMEX TUXPAN"));
+    assert.equal(month.purchases[0].fecha, "2026-09-02");
+    assert.equal(month.grid.days.find((d) => d.ymd === "2026-09-02").cells[p.provider.id].kg, 100);
     assert.equal(month.grid.month.consolidado.kg, 100);
     assert.equal(month.grid.month.consolidado.importe, 950);
   });
@@ -776,9 +811,12 @@ describe("013 compras — frontend", () => {
     assert.match(client, /selector planta/);
     assert.match(client, /selector año/);
     assert.match(client, /selector mes/);
+    assert.match(client, /compras-dashboard-sheet/);
     assert.match(client, /compras-fecha-capturada/);
     assert.match(client, /TOTAL MES/);
     assert.match(client, /Agregar compra/);
+    assert.match(client, /Factura PDF de respaldo/);
+    assert.match(client, /uploadComprasFactura/);
   });
 
   it("detalle admite múltiples compras y no edita el agregado", () => {
@@ -804,6 +842,7 @@ describe("013 compras — frontend", () => {
     assert.match(fmtSrc, /maximumFractionDigits: 3/);
     assert.match(fmtSrc, /minimumFractionDigits: 2/);
     assert.match(fmtSrc, /formatCosto/);
+    assert.match(fmtSrc, /function toYmd/);
     assert.match(fmtSrc, /n === 0 && !showZero/);
     assert.match(client, /formatKg/);
     assert.match(client, /formatCosto/);

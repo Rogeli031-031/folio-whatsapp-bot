@@ -28,6 +28,7 @@ import {
   formatImporte,
   formatKg,
   parseLocaleNumber,
+  toYmd,
 } from "@/lib/compras-format";
 
 type DetailState = {
@@ -67,6 +68,26 @@ function downloadBlob(blob: Blob, name: string) {
   URL.revokeObjectURL(href);
 }
 
+const COMPRAS_SHEET_KEY = "compras-dashboard-sheet";
+
+function readSavedSheet(): { plantaId: number | null; year: number | null; month: number | null } {
+  try {
+    const raw = localStorage.getItem(COMPRAS_SHEET_KEY);
+    if (!raw) return { plantaId: null, year: null, month: null };
+    const saved = JSON.parse(raw) as { plantaId?: unknown; year?: unknown; month?: unknown };
+    const plantaId = Number(saved.plantaId);
+    const year = Number(saved.year);
+    const month = Number(saved.month);
+    return {
+      plantaId: Number.isInteger(plantaId) && plantaId > 0 ? plantaId : null,
+      year: Number.isInteger(year) && year >= 2000 && year <= 2100 ? year : null,
+      month: Number.isInteger(month) && month >= 1 && month <= 12 ? month : null,
+    };
+  } catch {
+    return { plantaId: null, year: null, month: null };
+  }
+}
+
 export function ComprasClient() {
   const searchParams = useSearchParams();
   const [token, setToken] = useState<string | null>(null);
@@ -76,6 +97,8 @@ export function ComprasClient() {
   const now = useMemo(() => new Date(), []);
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
+  const [sheetReady, setSheetReady] = useState(false);
+  const [savedPlantaId, setSavedPlantaId] = useState<number | null>(null);
   const [data, setData] = useState<ComprasMonthResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -97,26 +120,43 @@ export function ComprasClient() {
     }
   }, [searchParams]);
 
+  useEffect(() => {
+    const saved = readSavedSheet();
+    if (saved.year != null) setYear(saved.year);
+    if (saved.month != null) setMonth(saved.month);
+    if (saved.plantaId != null) setSavedPlantaId(saved.plantaId);
+    setSheetReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!sheetReady || plantaId == null) return;
+    localStorage.setItem(COMPRAS_SHEET_KEY, JSON.stringify({ plantaId, year, month }));
+  }, [sheetReady, plantaId, year, month]);
+
   const loadPlantas = useCallback(async () => {
-    if (!token) return;
+    if (!token || !sheetReady) return;
     try {
       const r = await fetchPlantas(token);
       const list = r.plantas || [];
       setPlantas(list);
-      setPlantaId((cur) => (cur && list.some((p) => p.id === cur) ? cur : list[0]?.id ?? null));
+      setPlantaId((cur) => {
+        if (cur && list.some((p) => p.id === cur)) return cur;
+        if (savedPlantaId && list.some((p) => p.id === savedPlantaId)) return savedPlantaId;
+        return list[0]?.id ?? null;
+      });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Error";
       if (msg.includes("401") || msg.toLowerCase().includes("token")) setUnauthorized(true);
       setError("No tienes acceso a esta planta.");
     }
-  }, [token]);
+  }, [token, sheetReady, savedPlantaId]);
 
   useEffect(() => {
     void loadPlantas();
   }, [loadPlantas]);
 
   const loadMonth = useCallback(async () => {
-    if (!token || !plantaId) return;
+    if (!token || !plantaId || !sheetReady) return;
     setLoading(true);
     setError(null);
     try {
@@ -127,7 +167,7 @@ export function ComprasClient() {
     } finally {
       setLoading(false);
     }
-  }, [token, plantaId, year, month]);
+  }, [token, plantaId, year, month, sheetReady]);
 
   useEffect(() => {
     void loadMonth();
@@ -135,8 +175,9 @@ export function ComprasClient() {
 
   const years = useMemo(() => {
     const y = now.getFullYear();
-    return [y - 2, y - 1, y, y + 1];
-  }, [now]);
+    const set = new Set([y - 2, y - 1, y, y + 1, year]);
+    return Array.from(set).sort((a, b) => a - b);
+  }, [now, year]);
 
   const providers = data?.providers || [];
   const allProviders = data?.all_providers || [];
@@ -567,7 +608,9 @@ function ComprasDetailModal({
   onClose: () => void;
   onChanged: () => Promise<void>;
 }) {
-  const purchases = data.purchases.filter((p) => p.proveedor_id === detail.proveedor.id && p.fecha === detail.fecha);
+  const purchases = data.purchases.filter(
+    (p) => p.proveedor_id === detail.proveedor.id && toYmd(p.fecha) === detail.fecha
+  );
   const docsByCompra = useMemo(() => {
     const m = new Map<number, ComprasDocument[]>();
     for (const d of data.documents || []) {
@@ -582,6 +625,7 @@ function ComprasDetailModal({
 
   const [kg, setKg] = useState("");
   const [importe, setImporte] = useState("");
+  const [facturaFile, setFacturaFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -596,17 +640,29 @@ function ComprasDetailModal({
       setErr("kg debe ser mayor que 0 e importe no puede ser negativo.");
       return;
     }
+    if (facturaFile && facturaFile.type && facturaFile.type !== "application/pdf") {
+      setErr("La factura no es válida.");
+      return;
+    }
     setSaving(true);
     setErr(null);
     try {
-      await createComprasPurchase(token, plantaId, {
+      const created = await createComprasPurchase(token, plantaId, {
         proveedor_id: detail.proveedor.id,
         fecha: detail.fecha,
         kg: nKg,
         importe: nImp,
       });
+      if (facturaFile && created.purchase && created.purchase.id) {
+        const fileBase64 = await fileToBase64(facturaFile);
+        await uploadComprasFactura(token, plantaId, created.purchase.id, {
+          fileBase64,
+          file_name: facturaFile.name || "factura.pdf",
+        });
+      }
       setKg("");
       setImporte("");
+      setFacturaFile(null);
       await onChanged();
     } catch (e) {
       setErr(friendlyError(e));
@@ -758,13 +814,13 @@ function ComprasDetailModal({
                       </button>
                     </div>
                   ))}
-                  <label className="inline-flex cursor-pointer items-center gap-2 text-xs text-cyan-200">
-                    <span>Subir factura</span>
+                  <label className="mt-2 block text-xs text-slate-300">
+                    <span className="mb-1 block font-medium text-cyan-200">Subir factura PDF de respaldo</span>
                     <input
                       type="file"
                       accept="application/pdf,.pdf"
-                      className="hidden"
                       disabled={saving}
+                      className="block w-full text-xs text-slate-200 file:mr-2 file:rounded file:border-0 file:bg-cyan-800 file:px-2 file:py-1 file:text-white"
                       onChange={(e) => {
                         const file = e.target.files?.[0];
                         e.target.value = "";
@@ -790,11 +846,31 @@ function ComprasDetailModal({
                 <input value={importe} onChange={(e) => setImporte(e.target.value)} className="mt-1 w-full rounded border border-slate-600 bg-slate-800 px-2 py-1 text-sm" />
               </label>
             </div>
+            <label className="mt-3 block text-xs text-slate-300">
+              <span className="mb-1 block font-medium text-cyan-200">Factura PDF de respaldo</span>
+              <input
+                type="file"
+                accept="application/pdf,.pdf"
+                disabled={saving}
+                className="block w-full text-xs text-slate-200 file:mr-2 file:rounded file:border-0 file:bg-cyan-800 file:px-3 file:py-1.5 file:text-white"
+                onChange={(e) => {
+                  const file = e.target.files?.[0] || null;
+                  if (file && file.type && file.type !== "application/pdf") {
+                    setErr("La factura no es válida.");
+                    setFacturaFile(null);
+                    e.target.value = "";
+                    return;
+                  }
+                  setFacturaFile(file);
+                }}
+              />
+              {facturaFile ? <span className="mt-1 block text-slate-400">{facturaFile.name}</span> : <span className="mt-1 block text-slate-500">Selecciona el PDF de la compra. Se guarda junto con KG e importe.</span>}
+            </label>
             <button
               type="button"
               disabled={saving}
               onClick={() => void addPurchase()}
-              className="mt-2 rounded bg-cyan-800 px-3 py-1.5 text-sm text-white disabled:opacity-50"
+              className="mt-3 rounded bg-cyan-800 px-3 py-1.5 text-sm text-white disabled:opacity-50"
             >
               {saving ? "Guardando…" : "Guardar compra"}
             </button>
