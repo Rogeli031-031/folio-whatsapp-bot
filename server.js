@@ -93,6 +93,7 @@ const commercialTrendEngine = require("./lib/commercial-trend-engine");
 const sehCarpetasLegales = require("./lib/seh-carpetas-legales");
 const sehEquipos = require("./lib/seh-equipos");
 const planMaestro = require("./lib/plan-maestro");
+const comprasDashboard = require("./lib/compras-dashboard");
 
 const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
@@ -2676,6 +2677,9 @@ async function ensureSchema() {
     await igfFinancialFinal.applyIgfFinancialFinalImmutabilityMigration(client).catch((e) => {
       console.warn("[igf financial final immutability]", e.message);
     });
+    await comprasDashboard.ensureComprasTables(client).catch((e) => {
+      console.warn("[compras dashboard schema]", e.message);
+    });
 
     return;
   } finally {
@@ -4705,6 +4709,14 @@ async function uploadPdfToS3(buffer, key) {
     Bucket: bucket, Key: key, Body: buffer, ContentType: "application/pdf",
   }));
   return buildS3PublicUrl(bucket, region, key);
+}
+
+async function deleteFromS3(key) {
+  if (!s3Enabled || !s3) throw new Error("S3 no configurado");
+  await s3.send(new DeleteObjectCommand({
+    Bucket: s3BucketName,
+    Key: key,
+  }));
 }
 
 /** URL firmada S3 para descarga (expira en segundos). */
@@ -21547,6 +21559,16 @@ process.on("SIGTERM", () => {
 });
 process.on("SIGINT", () => {
   stopEksInfra();
+});
+
+comprasDashboard.registerComprasRoutes(app, {
+  pool,
+  dashboardAuthMiddleware,
+  assertPlantaAccess: assertDashboardPlantaAccessForActionRegister,
+  uploadPdfToS3,
+  getBufferFromS3,
+  deleteFromS3,
+  s3Enabled: () => Boolean(s3Enabled),
 });
 
 // Enlazar puerto PRIMERO para que Render detecte el servicio (evita "Port scan timeout").

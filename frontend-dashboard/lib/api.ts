@@ -3186,3 +3186,207 @@ export function postPlanMaestroChat(
     body: JSON.stringify(body),
   });
 }
+
+// ===========================
+// Compras (dashboard)
+// ===========================
+
+export type ComprasProvider = {
+  id: number;
+  planta_id: number;
+  nombre: string;
+  activo: boolean;
+  orden: number;
+};
+
+export type ComprasPurchase = {
+  id: number;
+  planta_id: number;
+  proveedor_id: number;
+  fecha: string;
+  kg: number;
+  importe: number;
+  created_by_usuario_id: number | null;
+  updated_by_usuario_id: number | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type ComprasDocument = {
+  id: number;
+  compra_id: number;
+  nombre_archivo: string;
+  mime_type: string;
+  size_bytes: number;
+  created_at?: string;
+};
+
+export type ComprasCell = {
+  kg: number;
+  importe: number;
+  costo_kg: number | null;
+  count: number;
+  ids: number[];
+};
+
+export type ComprasMonthResponse = {
+  plant: { id: number };
+  year: number;
+  month: number;
+  providers: ComprasProvider[];
+  all_providers: ComprasProvider[];
+  purchases: ComprasPurchase[];
+  documents: ComprasDocument[];
+  grid: {
+    rows: Array<
+      | { type: "day"; ymd: string; day: number; dow: number }
+      | { type: "week"; week: number; ymds: string[] }
+    >;
+    days: Array<{
+      ymd: string;
+      captured: boolean;
+      cells: Record<string, ComprasCell>;
+      consolidado: { kg: number; importe: number; costo_kg: number | null };
+    }>;
+    weeks: Array<{
+      week: number;
+      ymds: string[];
+      providers: Record<string, { kg: number; importe: number; costo_kg: number | null }>;
+      consolidado: { kg: number; importe: number; costo_kg: number | null };
+    }>;
+    month: {
+      providers: Record<string, { kg: number; importe: number; costo_kg: number | null }>;
+      consolidado: { kg: number; importe: number; costo_kg: number | null };
+    };
+    captured_dates: string[];
+  };
+};
+
+export function fetchComprasMonth(
+  token: string,
+  plantaId: number,
+  year: number,
+  month: number
+): Promise<ComprasMonthResponse> {
+  return apiFetch<ComprasMonthResponse>("/api/compras", {
+    token,
+    params: { planta_id: String(plantaId), year: String(year), month: String(month) },
+  });
+}
+
+export function fetchComprasProveedores(
+  token: string,
+  plantaId: number
+): Promise<{ providers: ComprasProvider[] }> {
+  return apiFetch<{ providers: ComprasProvider[] }>("/api/compras/proveedores", {
+    token,
+    params: { planta_id: String(plantaId) },
+  });
+}
+
+export function createComprasProveedor(
+  token: string,
+  plantaId: number,
+  body: { nombre: string; orden?: number }
+): Promise<{ ok: boolean; provider: ComprasProvider }> {
+  return apiFetch("/api/compras/proveedores", {
+    token,
+    method: "POST",
+    body: JSON.stringify({ planta_id: plantaId, ...body }),
+  });
+}
+
+export function patchComprasProveedor(
+  token: string,
+  plantaId: number,
+  id: number,
+  body: { nombre?: string; activo?: boolean; orden?: number }
+): Promise<{ ok: boolean; provider: ComprasProvider }> {
+  return apiFetch(`/api/compras/proveedores/${id}`, {
+    token,
+    method: "PATCH",
+    body: JSON.stringify({ planta_id: plantaId, ...body }),
+  });
+}
+
+export function createComprasPurchase(
+  token: string,
+  plantaId: number,
+  body: { proveedor_id: number; fecha: string; kg: number; importe: number }
+): Promise<{ ok: boolean; purchase: ComprasPurchase }> {
+  return apiFetch("/api/compras", {
+    token,
+    method: "POST",
+    body: JSON.stringify({ planta_id: plantaId, ...body }),
+  });
+}
+
+export function patchComprasPurchase(
+  token: string,
+  plantaId: number,
+  id: number,
+  body: { proveedor_id?: number; fecha?: string; kg?: number; importe?: number }
+): Promise<{ ok: boolean; purchase: ComprasPurchase }> {
+  return apiFetch(`/api/compras/${id}?planta_id=${encodeURIComponent(String(plantaId))}`, {
+    token,
+    method: "PATCH",
+    body: JSON.stringify({ planta_id: plantaId, ...body }),
+  });
+}
+
+export function deleteComprasPurchase(token: string, plantaId: number, id: number): Promise<{ ok: true }> {
+  return apiFetch(`/api/compras/${id}?planta_id=${encodeURIComponent(String(plantaId))}`, {
+    token,
+    method: "DELETE",
+  });
+}
+
+export function uploadComprasFactura(
+  token: string,
+  plantaId: number,
+  compraId: number,
+  body: { fileBase64: string; file_name: string }
+): Promise<{ ok: boolean; document: ComprasDocument }> {
+  return apiFetch(`/api/compras/${compraId}/factura`, {
+    token,
+    method: "POST",
+    body: JSON.stringify({ planta_id: plantaId, ...body }),
+  });
+}
+
+export function deleteComprasFactura(
+  token: string,
+  plantaId: number,
+  compraId: number,
+  documentoId: number
+): Promise<{ ok: true }> {
+  return apiFetch(
+    `/api/compras/${compraId}/factura/${documentoId}?planta_id=${encodeURIComponent(String(plantaId))}`,
+    { token, method: "DELETE" }
+  );
+}
+
+export function getComprasFacturaDownloadUrl(
+  token: string,
+  plantaId: number,
+  compraId: number,
+  documentoId: number
+): string {
+  const base = getApiUrl(`/api/compras/${compraId}/factura/${documentoId}/download`);
+  return `${base}?planta_id=${encodeURIComponent(String(plantaId))}&t=${encodeURIComponent(token)}`;
+}
+
+export async function downloadComprasFacturaBlob(
+  token: string,
+  plantaId: number,
+  compraId: number,
+  documentoId: number
+): Promise<Blob> {
+  const url = getComprasFacturaDownloadUrl(token, plantaId, compraId, documentoId);
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as { error?: string }).error || `HTTP ${res.status}`);
+  }
+  return res.blob();
+}
