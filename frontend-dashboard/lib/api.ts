@@ -3248,6 +3248,10 @@ export type ComprasMonthResponse = {
       cells: Record<string, ComprasCell>;
       consolidado: { kg: number; importe: number; costo_kg: number | null };
       hg_kilos: number | null;
+      flete?: {
+        providers: Record<string, { kg: number; tarifa: number | null; importe: number | null }>;
+        consolidado: { kg: number; tarifa: number | null; importe: number | null };
+      };
     }>;
     weeks: Array<{
       week: number;
@@ -3255,11 +3259,19 @@ export type ComprasMonthResponse = {
       providers: Record<string, { kg: number; importe: number; costo_kg: number | null }>;
       consolidado: { kg: number; importe: number; costo_kg: number | null };
       hg_kilos: number | null;
+      flete?: {
+        providers: Record<string, { kg: number; tarifa: number | null; importe: number | null }>;
+        consolidado: { kg: number; tarifa: number | null; importe: number | null };
+      };
     }>;
     month: {
       providers: Record<string, { kg: number; importe: number; costo_kg: number | null }>;
       consolidado: { kg: number; importe: number; costo_kg: number | null };
       hg_kilos: number | null;
+      flete?: {
+        providers: Record<string, { kg: number; tarifa: number | null; importe: number | null }>;
+        consolidado: { kg: number; tarifa: number | null; importe: number | null };
+      };
     };
     captured_dates: string[];
   };
@@ -3269,7 +3281,27 @@ export type ComprasMonthResponse = {
     fecha: string;
     hg_kilos: number;
   }>;
+  tarifas_flete?: Array<{
+    id: number;
+    planta_id: number;
+    proveedor_id: number;
+    year: number;
+    month: number;
+    tarifa: number;
+  }>;
 };
+
+export function upsertComprasFleteTarifa(
+  token: string,
+  plantaId: number,
+  body: { proveedor_id: number; year: number; month: number; tarifa: number | null }
+): Promise<{ ok: boolean; tarifa?: { id: number; proveedor_id: number; tarifa: number }; deleted?: boolean }> {
+  return apiFetch("/api/compras/flete-tarifa", {
+    token,
+    method: "POST",
+    body: JSON.stringify({ planta_id: plantaId, ...body }),
+  });
+}
 
 export function fetchComprasMonth(
   token: string,

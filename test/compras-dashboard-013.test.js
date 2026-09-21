@@ -109,7 +109,8 @@ class MemClient {
       this.hg = this.hg.filter((h) => !(h.planta_id === plantaId && fechaYmd(h.fecha) === fecha));
       return { rows: [] };
     }
-    if (q.includes("from arr.compras") && q.startsWith("select") && !q.includes("compras_documentos") && !q.includes("compras_hg")) {
+    if (q.includes("from arr.compras_flete_tarifas")) return { rows: this.fleteTarifas || [] };
+    if (q.includes("from arr.compras") && q.startsWith("select") && !q.includes("compras_documentos") && !q.includes("compras_hg") && !q.includes("compras_flete")) {
       if (q.includes("where id =")) {
         return { rows: this.purchases.filter((p) => p.id === Number(params[0])) };
       }
