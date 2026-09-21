@@ -248,7 +248,7 @@ Corrección: `toYmd` usa `toISOString().slice(0, 10)` para `Date` y el prefijo I
 
 La planta/año/mes de la hoja se guardan en `localStorage` (`compras-dashboard-sheet`) para que al volver otro día se abra la misma planta (p. ej. Morelos) y el mismo mes, no el primer ítem de la lista.
 
-El menú de planta en Compras lista solo las 6 operativas: Acapulco, Puebla, Tehuacán, Querétaro, San Luis y Morelos. Se ocultan México, E7–E13, E15 y cualquier otra fila del catálogo. No se borran de la base. `localStorage` solo restaura una planta si sigue en esa lista filtrada.
+El menú de planta en Compras lista solo las 6 operativas: Acapulco, Puebla, Tehuacán, Querétaro, San Luis y Morelos. Tras normalizar acentos/case/espacios, la aceptación es **igualdad exacta** (`COMPRAS_MENU_PLANTAS.includes(n)`). No se acepta un nombre porque contenga esas palabras (`Morelos E15`, `San Luis Planta 2`, etc.). Se ocultan México, E7–E13, E15 y cualquier otra fila. No se borran de la base. `localStorage` solo restaura una planta si sigue en esa lista filtrada. `San Luís` entra porque normaliza a `san luis`.
 
 ### Factura PDF en el alta
 

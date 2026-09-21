@@ -855,20 +855,31 @@ describe("013 compras — frontend", () => {
       "San Luis",
       "Morelos",
       "Mexico",
-      "E9",
-      "E10",
-      "E15",
       "E7",
       "E8",
-      "E12",
+      "E9",
+      "E10",
       "E11",
+      "E12",
       "E13",
+      "E15",
+      "Morelos E15",
+      "Puebla E9",
+      "Acapulco E7",
+      "San Luis Planta 2",
+      "Querétaro E12",
     ].map((nombre, i) => ({ id: i + 1, nombre }));
     const visible = compras.filterComprasPlantasMenu(catalog).map((p) => p.nombre);
     assert.deepEqual(visible, ["Acapulco", "Puebla", "Tehuacán", "Querétaro", "San Luis", "Morelos"]);
+    const sanLuisAccent = compras.filterComprasPlantasMenu([{ id: 99, nombre: "San Luís" }]);
+    assert.equal(sanLuisAccent.length, 1);
+    assert.equal(sanLuisAccent[0].nombre, "San Luís");
+    assert.equal(compras.normComprasPlantaNombre("San Luís"), "san luis");
     assert.match(client, /filterComprasPlantasMenu\(r\.plantas/);
     assert.match(client, /savedPlantaId && list\.some\(\(p\) => p\.id === savedPlantaId\)/);
     assert.match(fmtSrc, /function filterComprasPlantasMenu/);
+    assert.doesNotMatch(fmtSrc, /n\.includes\(key\)/);
+    assert.doesNotMatch(fs.readFileSync(path.join(__dirname, "..", "lib", "compras-dashboard.js"), "utf8"), /n\.includes\(key\)/);
   });
 
   it("formatos KG / costo / importe", () => {

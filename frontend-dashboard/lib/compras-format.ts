@@ -78,8 +78,6 @@ export function filterComprasPlantasMenu<T extends { nombre: string }>(plantas: 
   return (plantas || []).filter((p) => {
     const n = normComprasPlantaNombre(p.nombre);
     if (!n) return false;
-    const compact = n.replace(/\s+/g, "");
-    if (/^e\d+$/.test(compact)) return false;
-    return COMPRAS_MENU_PLANTAS.some((key) => n === key || n.includes(key));
+    return (COMPRAS_MENU_PLANTAS as readonly string[]).includes(n);
   });
 }
