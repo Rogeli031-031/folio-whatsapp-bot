@@ -115,6 +115,7 @@ class MemClient {
       return { rows: this.docs.filter((d) => d.compra_id === Number(params[0])).sort((a, b) => a.id - b.id) };
     }
     if (q.startsWith("insert into arr.compras_documentos")) {
+      if (this.throwOnDocInsert) throw new Error("insert documentos fail");
       const row = {
         id: this.nextId(),
         compra_id: Number(params[0]),
@@ -598,6 +599,101 @@ describe("013 compras — rutas HTTP", () => {
     assert.equal(deleted.length, 2);
     assert.deepEqual(deleted.sort(), keys.sort());
     assert.equal(db.purchases.length, 0);
+    assert.equal(db.docs.length, 0);
+  });
+
+  it("S3 OK + INSERT falla llama deleteFromS3 con el mismo storage_key", async () => {
+    const db = new MemClient();
+    const p = await compras.createProvider(db, 1, { nombre: "P1" });
+    const c = await compras.createPurchase(db, 1, { proveedor_id: p.provider.id, fecha: "2026-09-01", kg: 1, importe: 1 }, 1);
+    const uploaded = [];
+    const deleted = [];
+    db.throwOnDocInsert = true;
+    const app = mount(db, {
+      upload: async (_b, key) => {
+        uploaded.push(key);
+      },
+      del: async (key) => {
+        deleted.push(key);
+      },
+      s3: true,
+    });
+    const res = await app.invoke("POST", `/api/compras/${c.purchase.id}/factura`, {
+      body: { planta_id: 1, file_name: "a.pdf", fileBase64: pdfBuf().toString("base64") },
+    });
+    assert.equal(res.status, 500);
+    assert.equal(uploaded.length, 1);
+    assert.deepEqual(deleted, uploaded);
+    assert.equal(db.docs.length, 0);
+  });
+
+  it("BYTEA + INSERT falla no llama deleteFromS3", async () => {
+    const db = new MemClient();
+    const p = await compras.createProvider(db, 1, { nombre: "P1" });
+    const c = await compras.createPurchase(db, 1, { proveedor_id: p.provider.id, fecha: "2026-09-01", kg: 1, importe: 1 }, 1);
+    const deleted = [];
+    db.throwOnDocInsert = true;
+    const app = mount(db, {
+      upload: async () => {
+        throw new Error("should not upload");
+      },
+      del: async (key) => {
+        deleted.push(key);
+      },
+      s3: false,
+    });
+    const res = await app.invoke("POST", `/api/compras/${c.purchase.id}/factura`, {
+      body: { planta_id: 1, file_name: "b.pdf", fileBase64: pdfBuf().toString("base64") },
+    });
+    assert.equal(res.status, 500);
+    assert.deepEqual(deleted, []);
+    assert.equal(db.docs.length, 0);
+  });
+
+  it("S3 upload falla → BYTEA + INSERT OK sin storage_key", async () => {
+    const db = new MemClient();
+    const p = await compras.createProvider(db, 1, { nombre: "P1" });
+    const c = await compras.createPurchase(db, 1, { proveedor_id: p.provider.id, fecha: "2026-09-01", kg: 1, importe: 1 }, 1);
+    const deleted = [];
+    const app = mount(db, {
+      upload: async () => {
+        throw new Error("s3 down");
+      },
+      del: async (key) => {
+        deleted.push(key);
+      },
+      s3: true,
+    });
+    const res = await app.invoke("POST", `/api/compras/${c.purchase.id}/factura`, {
+      body: { planta_id: 1, file_name: "c.pdf", fileBase64: pdfBuf().toString("base64") },
+    });
+    assert.equal(res.status, 201);
+    assert.equal(db.docs.length, 1);
+    assert.equal(db.docs[0].storage_key, null);
+    assert.ok(db.docs[0].data);
+    assert.deepEqual(deleted, []);
+  });
+
+  it("S3 upload falla → BYTEA + INSERT falla no llama deleteFromS3", async () => {
+    const db = new MemClient();
+    const p = await compras.createProvider(db, 1, { nombre: "P1" });
+    const c = await compras.createPurchase(db, 1, { proveedor_id: p.provider.id, fecha: "2026-09-01", kg: 1, importe: 1 }, 1);
+    const deleted = [];
+    db.throwOnDocInsert = true;
+    const app = mount(db, {
+      upload: async () => {
+        throw new Error("s3 down");
+      },
+      del: async (key) => {
+        deleted.push(key);
+      },
+      s3: true,
+    });
+    const res = await app.invoke("POST", `/api/compras/${c.purchase.id}/factura`, {
+      body: { planta_id: 1, file_name: "d.pdf", fileBase64: pdfBuf().toString("base64") },
+    });
+    assert.equal(res.status, 500);
+    assert.deepEqual(deleted, []);
     assert.equal(db.docs.length, 0);
   });
 });

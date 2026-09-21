@@ -127,7 +127,7 @@ UI: KG con miles, costo 3 decimales, importe 2 decimales.
 
 ## Tests
 
-`node --test test/compras-dashboard-013.test.js` → 24/24.
+`node --test test/compras-dashboard-013.test.js` → 28/28.
 
 Backend: proveedores por planta, 2 compras mismo día, edit/delete, auth cruzada, PDF magic, agregados diarios/semanales/mensuales, costo ponderado vs suma de costos, febrero bisiesto, download 403 sin planta.
 
@@ -143,12 +143,16 @@ Revisión (reopen):
 - DELETE compra con 2 facturas elimina ambos objetos
 - BYTEA-only no intenta S3
 - cross-plant no elimina nada
+- S3 OK + INSERT falla → `deleteFromS3` con el mismo `storage_key`
+- BYTEA + INSERT falla → no llama `deleteFromS3`
+- S3 upload falla → BYTEA + INSERT OK sin `storage_key`
+- S3 upload falla → BYTEA + INSERT falla → no llama `deleteFromS3`
 
 Frontend (asserción de fuente + selectores): botón Compras, `/compras`, selectores, fecha capturada, detalle multi-compra, formatos, bloqueo de altas en proveedor inactivo.
 
 ## Build
 
-Frontend cambió (bloqueo de alta en inactivo). `frontend-dashboard`: `npm run build` **verde** de nuevo. Ruta `/compras` en el manifiesto.
+Este reopen no tocó frontend. El `npm run build` verde del reopen anterior sigue siendo válido. No se relanzó.
 
 ## Archivos tocados
 
@@ -170,6 +174,7 @@ No se commitean `.next` ni reportes OPS-VERIFY ajenos.
 
 - `ensureComprasTables` corre al boot; si `public.plantas` / `public.usuarios` no existen en un entorno vacío, el ensure se registra como warning (mismo patrón que otros módulos).
 - Fallback BYTEA crece si S3 está caído de forma prolongada.
+- Si el INSERT falla y también falla `deleteFromS3` de compensación, puede quedar un objeto S3 huérfano. Se loguea el `storage_key`; no hay outbox.
 - Semanas siguen domingo–sábado del Excel de referencia; no se copió el bug `SUM(costo_kg)` de algunas filas semanales del archivo.
 
 ## Desvíos
@@ -194,6 +199,20 @@ No se commitean `.next` ni reportes OPS-VERIFY ajenos.
 ### Validación antes de S3
 
 `authorizeInvoiceUpload` corre **antes** de `uploadPdfToS3`: compra existe, planta autorizada, PDF no vacío, tamaño ≤ 10 MB, magic `%PDF`, extensión `.pdf`, MIME `application/pdf`.
+
+### Compensación S3 si el INSERT falla
+
+Alta de factura:
+
+1. validar compra/planta/PDF
+2. `uploadPdfToS3` (si S3 está habilitado)
+3. INSERT metadata
+
+Si el paso 2 terminó OK y el INSERT falla: best-effort `deleteFromS3(storageKey)` y se devuelve el error original (500). No se crea metadata falsa.
+
+- BYTEA / S3 deshabilitado: no se llama `deleteFromS3`.
+- Si S3 upload falla: fallback BYTEA; si el INSERT luego falla, no hay objeto S3 que limpiar.
+- Si también falla `deleteFromS3` en la compensación: se loguea el `storage_key`; se conserva el error de persistencia. Riesgo residual: objeto huérfano en S3 sin fila. No hay outbox en esta tarea.
 
 ### Política de eliminación S3
 
