@@ -73,15 +73,16 @@ Planta: `assertDashboardPlantaAccessForActionRegister` (ZP/AD/CF_CDMX global; re
 | GET | `/api/compras/:id/factura/:documento_id/download` |
 | DELETE | `/api/compras/:id/factura/:documento_id` |
 
-GET mensual devuelve `{ plant, year, month, providers, all_providers, purchases, documents, grid }` en una sola query set (sin N+1). El frontend usa `grid` como fuente de verdad de día/semana/mes/consolidado.
+GET mensual devuelve `{ plant, year, month, providers, all_providers, purchases, documents, grid }` en una sola query set (sin N+1). `providers` = activos ∪ inactivos con compras del mes. El consolidado usa esa lista. El frontend usa `grid` como fuente de verdad de día/semana/mes/consolidado.
 
 ## Storage de facturas
 
 Auditoría previa: el repo ya tiene storage persistente de producción.
 
-- Primario: S3 (`uploadPdfToS3` / `getBufferFromS3`), mismo que pólizas / Action Register / plan maestro.
+- Primario: S3 (`uploadPdfToS3` / `getBufferFromS3` / `deleteFromS3`), mismo cliente `@aws-sdk` y `DeleteObjectCommand` que SEH.
 - Fallback: BYTEA en `arr.compras_documentos.data` si S3 no está configurado o falla el upload (mismo patrón que Action Register).
 - Solo PDF. Validación de magic `%PDF`, MIME y extensión. Máx. 10 MB.
+- **Validación ocurre antes de S3:** compra existe, planta autorizada, PDF no vacío, tamaño, magic, extensión y MIME. Solo después `uploadPdfToS3` + INSERT.
 - Descarga siempre por API autenticada + autorización de planta. No se expone URL pública de S3.
 
 No se inventó un segundo sistema de storage.
@@ -107,6 +108,7 @@ Pantalla:
 - Tabla estilo Excel: encabezados oscuros, cuerpo blanco/gris, bloques por proveedor, consolidado a la derecha, Semana N, TOTAL MES
 - Fecha ámbar (`compras-fecha-capturada`) si hay al menos una compra ese día
 - Click en celda de proveedor → detalle con N compras, agregar/editar/eliminar, subir/ver/descargar/eliminar PDF
+- Proveedor inactivo: histórico visible; el detalle no ofrece “Agregar compra”
 - Guardar deshabilitado mientras escribe
 - Scroll horizontal en pantallas chicas; fecha y header sticky cuando es viable
 - Administración mínima de proveedores dentro de Compras
@@ -125,15 +127,28 @@ UI: KG con miles, costo 3 decimales, importe 2 decimales.
 
 ## Tests
 
-`node --test test/compras-dashboard-013.test.js` → 17/17.
+`node --test test/compras-dashboard-013.test.js` → 24/24.
 
 Backend: proveedores por planta, 2 compras mismo día, edit/delete, auth cruzada, PDF magic, agregados diarios/semanales/mensuales, costo ponderado vs suma de costos, febrero bisiesto, download 403 sin planta.
 
-Frontend (asserción de fuente + selectores): botón Compras, `/compras`, selectores, fecha capturada, detalle multi-compra, formatos.
+Revisión (reopen):
+
+- A activo visible + consolidado
+- B inactivo con historia sigue visible y suma
+- C inactivo sin compras del mes se omite
+- D inactivo no crea compra nueva
+- PDF inválido / >10MB / compra inexistente / otra planta → `uploadPdfToS3` no se llama
+- PDF válido + compra autorizada → sí sube
+- DELETE factura con `storage_key` llama `deleteFromS3`
+- DELETE compra con 2 facturas elimina ambos objetos
+- BYTEA-only no intenta S3
+- cross-plant no elimina nada
+
+Frontend (asserción de fuente + selectores): botón Compras, `/compras`, selectores, fecha capturada, detalle multi-compra, formatos, bloqueo de altas en proveedor inactivo.
 
 ## Build
 
-`frontend-dashboard`: `npm run build` **verde**. Ruta `/compras` en el manifiesto.
+Frontend cambió (bloqueo de alta en inactivo). `frontend-dashboard`: `npm run build` **verde** de nuevo. Ruta `/compras` en el manifiesto.
 
 ## Archivos tocados
 
@@ -165,8 +180,40 @@ No se commitean `.next` ni reportes OPS-VERIFY ajenos.
 - Director IA no integrado.
 - Migración no aplicada a producción.
 
+## Revisión — hallazgos bloqueantes (reopen)
+
+### Proveedor inactivo conserva historia
+
+`visibleProviders = activos ∪ inactivos con compras del mes`.
+
+- Activo: visible y admite compras nuevas.
+- Inactivo con histórico en el periodo: sigue en la cuadrícula, semanas, total y consolidado; compras/facturas consultables.
+- Inactivo sin compras del mes: se omite de la cuadrícula (sigue en `all_providers` para administración).
+- Inactivo: `POST /api/compras` rechaza (`El proveedor no está activo.`).
+
+### Validación antes de S3
+
+`authorizeInvoiceUpload` corre **antes** de `uploadPdfToS3`: compra existe, planta autorizada, PDF no vacío, tamaño ≤ 10 MB, magic `%PDF`, extensión `.pdf`, MIME `application/pdf`.
+
+### Política de eliminación S3
+
+No existía helper compartido (SEH borra inline y traga el error). Se añadió `deleteFromS3` en `server.js` sobre el mismo `S3Client` / `DeleteObjectCommand`. No hay segundo cliente.
+
+Orden:
+
+1. Validar auth/planta.
+2. Si hay `storage_key`, borrar objeto S3.
+3. Si S3 falla: **no** borrar metadata; 500 `No se pudo guardar la compra.` La referencia se conserva para reintentar. No se pierde el puntero en silencio.
+4. Si S3 ok (o no hay key / BYTEA-only): borrar metadata o la compra (CASCADE).
+
+DELETE compra lista `storage_key` de todos los documentos **antes** del DELETE y borra esos objetos.
+
+BYTEA-only: no llama S3.
+
+Cross-plant: 403 y no toca S3 ni filas.
+
 ## Cierre
 
 - CURRENT_TASK → `DONE_PENDING_REVIEW`
-- Commit + push solo a `implementation/compras-dashboard-013`
+- Commit + push a la misma rama `implementation/compras-dashboard-013`
 - NO PR / NO merge / NO deploy / NO siguiente tarea

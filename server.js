@@ -4711,6 +4711,14 @@ async function uploadPdfToS3(buffer, key) {
   return buildS3PublicUrl(bucket, region, key);
 }
 
+async function deleteFromS3(key) {
+  if (!s3Enabled || !s3) throw new Error("S3 no configurado");
+  await s3.send(new DeleteObjectCommand({
+    Bucket: s3BucketName,
+    Key: key,
+  }));
+}
+
 /** URL firmada S3 para descarga (expira en segundos). */
 async function getSignedDownloadUrl(s3Key, expiresInSeconds = 600) {
   if (!s3Enabled || !s3) throw new Error("S3 no configurado");
@@ -21559,6 +21567,7 @@ comprasDashboard.registerComprasRoutes(app, {
   assertPlantaAccess: assertDashboardPlantaAccessForActionRegister,
   uploadPdfToS3,
   getBufferFromS3,
+  deleteFromS3,
   s3Enabled: () => Boolean(s3Enabled),
 });
 

@@ -713,27 +713,31 @@ function ComprasDetailModal({
             );
           })}
         </ul>
-        <div className="mt-4 rounded border border-slate-700 p-3">
-          <h3 className="mb-2 text-sm font-medium">+ Agregar compra</h3>
-          <div className="grid grid-cols-2 gap-2">
-            <label className="text-xs text-slate-300">
-              KG
-              <input value={kg} onChange={(e) => setKg(e.target.value)} className="mt-1 w-full rounded border border-slate-600 bg-slate-800 px-2 py-1 text-sm" />
-            </label>
-            <label className="text-xs text-slate-300">
-              Importe
-              <input value={importe} onChange={(e) => setImporte(e.target.value)} className="mt-1 w-full rounded border border-slate-600 bg-slate-800 px-2 py-1 text-sm" />
-            </label>
+        {detail.proveedor.activo !== false ? (
+          <div className="mt-4 rounded border border-slate-700 p-3">
+            <h3 className="mb-2 text-sm font-medium">+ Agregar compra</h3>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="text-xs text-slate-300">
+                KG
+                <input value={kg} onChange={(e) => setKg(e.target.value)} className="mt-1 w-full rounded border border-slate-600 bg-slate-800 px-2 py-1 text-sm" />
+              </label>
+              <label className="text-xs text-slate-300">
+                Importe
+                <input value={importe} onChange={(e) => setImporte(e.target.value)} className="mt-1 w-full rounded border border-slate-600 bg-slate-800 px-2 py-1 text-sm" />
+              </label>
+            </div>
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => void addPurchase()}
+              className="mt-2 rounded bg-cyan-800 px-3 py-1.5 text-sm text-white disabled:opacity-50"
+            >
+              {saving ? "Guardando…" : "Guardar compra"}
+            </button>
           </div>
-          <button
-            type="button"
-            disabled={saving}
-            onClick={() => void addPurchase()}
-            className="mt-2 rounded bg-cyan-800 px-3 py-1.5 text-sm text-white disabled:opacity-50"
-          >
-            {saving ? "Guardando…" : "Guardar compra"}
-          </button>
-        </div>
+        ) : (
+          <p className="mt-4 text-sm text-amber-200">Proveedor inactivo: se conserva el histórico y no admite compras nuevas.</p>
+        )}
         <div className="mt-4 border-t border-slate-700 pt-3 text-sm">
           <strong>TOTAL DEL DÍA</strong>
           <p>

@@ -108,8 +108,11 @@ class MemClient {
       return { rows: compra ? [{ ...doc, planta_id: compra.planta_id }] : [] };
     }
     if (q.includes("from arr.compras_documentos") && q.startsWith("select")) {
-      const ids = params[0] || [];
-      return { rows: this.docs.filter((d) => ids.includes(d.compra_id)).sort((a, b) => a.id - b.id) };
+      if (Array.isArray(params[0])) {
+        const ids = params[0] || [];
+        return { rows: this.docs.filter((d) => ids.includes(d.compra_id)).sort((a, b) => a.id - b.id) };
+      }
+      return { rows: this.docs.filter((d) => d.compra_id === Number(params[0])).sort((a, b) => a.id - b.id) };
     }
     if (q.startsWith("insert into arr.compras_documentos")) {
       const row = {
@@ -357,6 +360,52 @@ describe("013 compras — CRUD y auth", () => {
     assert.equal(compras.validatePdfUpload(pdfBuf(), "application/pdf", "a.pdf").ok, true);
     assert.equal(compras.validatePdfUpload(pdfBuf(), "image/png", "a.png").ok, false);
   });
+
+  it("A) proveedor activo con compras entra al consolidado", async () => {
+    const db = new MemClient();
+    const p = await compras.createProvider(db, 1, { nombre: "Activo" });
+    await compras.createPurchase(db, 1, { proveedor_id: p.provider.id, fecha: "2026-09-02", kg: 100, importe: 950 }, 1);
+    const month = await compras.loadMonth(db, 1, 2026, 9);
+    assert.equal(month.providers.length, 1);
+    assert.equal(month.providers[0].activo, true);
+    assert.equal(month.grid.month.consolidado.kg, 100);
+    assert.equal(month.grid.month.consolidado.importe, 950);
+  });
+
+  it("B) proveedor inactivo con historia sigue visible y en consolidado", async () => {
+    const db = new MemClient();
+    const p = await compras.createProvider(db, 1, { nombre: "Histórico" });
+    await compras.createPurchase(db, 1, { proveedor_id: p.provider.id, fecha: "2026-09-03", kg: 200, importe: 1800 }, 1);
+    await compras.patchProvider(db, 1, p.provider.id, { activo: false });
+    const month = await compras.loadMonth(db, 1, 2026, 9);
+    assert.equal(month.providers.some((x) => x.id === p.provider.id), true);
+    assert.equal(month.providers.find((x) => x.id === p.provider.id).activo, false);
+    assert.equal(month.grid.month.consolidado.kg, 200);
+    assert.equal(month.grid.month.consolidado.importe, 1800);
+    const day = month.grid.days.find((d) => d.ymd === "2026-09-03");
+    assert.equal(day.cells[p.provider.id].kg, 200);
+  });
+
+  it("C) proveedor inactivo sin compras del mes se omite de la cuadrícula", async () => {
+    const db = new MemClient();
+    const live = await compras.createProvider(db, 1, { nombre: "Vivo" });
+    const dead = await compras.createProvider(db, 1, { nombre: "Muerto" });
+    await compras.createPurchase(db, 1, { proveedor_id: live.provider.id, fecha: "2026-09-01", kg: 10, importe: 90 }, 1);
+    await compras.patchProvider(db, 1, dead.provider.id, { activo: false });
+    const month = await compras.loadMonth(db, 1, 2026, 9);
+    assert.equal(month.providers.some((x) => x.id === dead.provider.id), false);
+    assert.equal(month.all_providers.some((x) => x.id === dead.provider.id), true);
+  });
+
+  it("D) proveedor inactivo no puede recibir compra nueva", async () => {
+    const db = new MemClient();
+    const p = await compras.createProvider(db, 1, { nombre: "Off" });
+    await compras.patchProvider(db, 1, p.provider.id, { activo: false });
+    const created = await compras.createPurchase(db, 1, { proveedor_id: p.provider.id, fecha: "2026-09-04", kg: 10, importe: 90 }, 1);
+    assert.equal(created.ok, false);
+    assert.equal(created.status, 400);
+    assert.equal(created.error, compras.USER_ERRORS.INACTIVE);
+  });
 });
 
 describe("013 compras — rutas HTTP", () => {
@@ -421,6 +470,136 @@ describe("013 compras — rutas HTTP", () => {
     assert.equal(okDl.status, 200);
     assert.ok(Buffer.isBuffer(okDl.sent));
   });
+
+  function mount(db, spies) {
+    const app = fakeApp();
+    compras.registerComprasRoutes(app, {
+      pool: {
+        async connect() {
+          return { query: (...args) => db.query(...args), release() {} };
+        },
+      },
+      dashboardAuthMiddleware: (req, _res, next) => next(),
+      assertPlantaAccess: (req, plantaId) => (req.dashboardAuth.plantas_permitidas || []).includes(Number(plantaId)),
+      uploadPdfToS3: spies.upload,
+      deleteFromS3: spies.del,
+      getBufferFromS3: async () => Buffer.from("%PDF"),
+      s3Enabled: () => spies.s3 !== false,
+    });
+    return app;
+  }
+
+  it("PDF inválido / oversize / compra inexistente / otra planta no suben a S3", async () => {
+    const db = new MemClient();
+    const p = await compras.createProvider(db, 1, { nombre: "P1" });
+    const c = await compras.createPurchase(db, 1, { proveedor_id: p.provider.id, fecha: "2026-09-01", kg: 1, importe: 1 }, 1);
+    const p2 = await compras.createProvider(db, 2, { nombre: "P2" });
+    const c2 = await compras.createPurchase(db, 2, { proveedor_id: p2.provider.id, fecha: "2026-09-01", kg: 1, importe: 1 }, 1);
+    const calls = [];
+    const spies = { upload: async () => calls.push("up"), del: async () => calls.push("del"), s3: true };
+    const app = mount(db, spies);
+
+    const invalid = await app.invoke("POST", `/api/compras/${c.purchase.id}/factura`, {
+      body: { planta_id: 1, file_name: "x.pdf", fileBase64: Buffer.from("nope").toString("base64") },
+    });
+    assert.equal(invalid.status, 400);
+    assert.equal(calls.length, 0);
+
+    const huge = Buffer.concat([Buffer.from("%PDF-1.4\n"), Buffer.alloc(compras.MAX_PDF_BYTES + 1, 65)]);
+    const oversize = await app.invoke("POST", `/api/compras/${c.purchase.id}/factura`, {
+      body: { planta_id: 1, file_name: "big.pdf", fileBase64: huge.toString("base64") },
+    });
+    assert.equal(oversize.status, 400);
+    assert.equal(calls.length, 0);
+
+    const missing = await app.invoke("POST", `/api/compras/99999/factura`, {
+      body: { planta_id: 1, file_name: "f.pdf", fileBase64: pdfBuf().toString("base64") },
+    });
+    assert.equal(missing.status, 404);
+    assert.equal(calls.length, 0);
+
+    const cross = await app.invoke("POST", `/api/compras/${c2.purchase.id}/factura`, {
+      body: { planta_id: 1, file_name: "f.pdf", fileBase64: pdfBuf().toString("base64") },
+      auth: { actor_id: 1, plantas_permitidas: [1] },
+    });
+    assert.equal(cross.status, 403);
+    assert.equal(calls.length, 0);
+
+    const ok = await app.invoke("POST", `/api/compras/${c.purchase.id}/factura`, {
+      body: { planta_id: 1, file_name: "ok.pdf", fileBase64: pdfBuf().toString("base64") },
+    });
+    assert.equal(ok.status, 201);
+    assert.deepEqual(calls, ["up"]);
+  });
+
+  it("DELETE factura con storage_key llama delete S3; BYTEA no; cross-plant no toca nada", async () => {
+    const db = new MemClient();
+    const p = await compras.createProvider(db, 1, { nombre: "P1" });
+    const c = await compras.createPurchase(db, 1, { proveedor_id: p.provider.id, fecha: "2026-09-01", kg: 1, importe: 1 }, 1);
+    const deleted = [];
+    const spies = { upload: async (_b, key) => key, del: async (key) => deleted.push(key), s3: true };
+    const app = mount(db, spies);
+    const withKey = await app.invoke("POST", `/api/compras/${c.purchase.id}/factura`, {
+      body: { planta_id: 1, file_name: "a.pdf", fileBase64: pdfBuf().toString("base64") },
+    });
+    assert.equal(withKey.status, 201);
+    const doc = db.docs[0];
+    assert.ok(doc.storage_key);
+
+    const forbidden = await app.invoke(
+      "DELETE",
+      `/api/compras/${c.purchase.id}/factura/${withKey.payload.document.id}`,
+      { query: { planta_id: "1" }, auth: { actor_id: 2, plantas_permitidas: [99] } }
+    );
+    assert.equal(forbidden.status, 403);
+    assert.equal(deleted.length, 0);
+    assert.equal(db.docs.length, 1);
+
+    const okDel = await app.invoke("DELETE", `/api/compras/${c.purchase.id}/factura/${withKey.payload.document.id}`, {
+      query: { planta_id: "1" },
+    });
+    assert.equal(okDel.status, 200);
+    assert.deepEqual(deleted, [doc.storage_key]);
+    assert.equal(db.docs.length, 0);
+
+    const byteaDb = new MemClient();
+    const pB = await compras.createProvider(byteaDb, 1, { nombre: "P1" });
+    const cB = await compras.createPurchase(byteaDb, 1, { proveedor_id: pB.provider.id, fecha: "2026-09-01", kg: 1, importe: 1 }, 1);
+    const byteaCalls = [];
+    const appB = mount(byteaDb, { upload: async () => byteaCalls.push("up"), del: async () => byteaCalls.push("del"), s3: false });
+    const att = await appB.invoke("POST", `/api/compras/${cB.purchase.id}/factura`, {
+      body: { planta_id: 1, file_name: "b.pdf", fileBase64: pdfBuf().toString("base64") },
+    });
+    assert.equal(att.status, 201);
+    assert.equal(byteaDb.docs[0].storage_key, null);
+    const delB = await appB.invoke("DELETE", `/api/compras/${cB.purchase.id}/factura/${att.payload.document.id}`, {
+      query: { planta_id: "1" },
+    });
+    assert.equal(delB.status, 200);
+    assert.deepEqual(byteaCalls, []);
+  });
+
+  it("DELETE compra con 2 facturas elimina ambos objetos S3", async () => {
+    const db = new MemClient();
+    const p = await compras.createProvider(db, 1, { nombre: "P1" });
+    const c = await compras.createPurchase(db, 1, { proveedor_id: p.provider.id, fecha: "2026-09-01", kg: 1, importe: 1 }, 1);
+    const deleted = [];
+    const app = mount(db, { upload: async (_b, key) => key, del: async (key) => deleted.push(key), s3: true });
+    await app.invoke("POST", `/api/compras/${c.purchase.id}/factura`, {
+      body: { planta_id: 1, file_name: "1.pdf", fileBase64: pdfBuf("a").toString("base64") },
+    });
+    await app.invoke("POST", `/api/compras/${c.purchase.id}/factura`, {
+      body: { planta_id: 1, file_name: "2.pdf", fileBase64: pdfBuf("b").toString("base64") },
+    });
+    assert.equal(db.docs.length, 2);
+    const keys = db.docs.map((d) => d.storage_key);
+    const gone = await app.invoke("DELETE", `/api/compras/${c.purchase.id}`, { query: { planta_id: "1" } });
+    assert.equal(gone.status, 200);
+    assert.equal(deleted.length, 2);
+    assert.deepEqual(deleted.sort(), keys.sort());
+    assert.equal(db.purchases.length, 0);
+    assert.equal(db.docs.length, 0);
+  });
 });
 
 describe("013 compras — frontend", () => {
@@ -450,6 +629,7 @@ describe("013 compras — frontend", () => {
     assert.match(client, /purchases\.filter/);
     assert.match(client, /Guardar compra/);
     assert.doesNotMatch(client, /contentEditable/);
+    assert.match(client, /no admite compras nuevas/);
   });
 
   it("formatos KG / costo / importe", () => {
