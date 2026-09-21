@@ -3247,19 +3247,28 @@ export type ComprasMonthResponse = {
       captured: boolean;
       cells: Record<string, ComprasCell>;
       consolidado: { kg: number; importe: number; costo_kg: number | null };
+      hg_kilos: number | null;
     }>;
     weeks: Array<{
       week: number;
       ymds: string[];
       providers: Record<string, { kg: number; importe: number; costo_kg: number | null }>;
       consolidado: { kg: number; importe: number; costo_kg: number | null };
+      hg_kilos: number | null;
     }>;
     month: {
       providers: Record<string, { kg: number; importe: number; costo_kg: number | null }>;
       consolidado: { kg: number; importe: number; costo_kg: number | null };
+      hg_kilos: number | null;
     };
     captured_dates: string[];
   };
+  hg: Array<{
+    id: number;
+    planta_id: number;
+    fecha: string;
+    hg_kilos: number;
+  }>;
 };
 
 export function fetchComprasMonth(
@@ -3306,6 +3315,25 @@ export function patchComprasProveedor(
     token,
     method: "PATCH",
     body: JSON.stringify({ planta_id: plantaId, ...body }),
+  });
+}
+
+export function upsertComprasHg(
+  token: string,
+  plantaId: number,
+  body: { fecha: string; hg_kilos: number | null }
+): Promise<{ ok: boolean; hg?: { id: number; fecha: string; hg_kilos: number }; deleted?: boolean }> {
+  return apiFetch("/api/compras/hg", {
+    token,
+    method: "POST",
+    body: JSON.stringify({ planta_id: plantaId, ...body }),
+  });
+}
+
+export function deleteComprasHg(token: string, plantaId: number, fecha: string): Promise<{ ok: true; deleted: boolean }> {
+  return apiFetch(`/api/compras/hg?planta_id=${encodeURIComponent(String(plantaId))}&fecha=${encodeURIComponent(fecha)}`, {
+    token,
+    method: "DELETE",
   });
 }
 
