@@ -101,7 +101,8 @@ class MemClient {
       return { rows: [] };
     }
 
-    if (q.includes("from arr.compras") && q.startsWith("select") && !q.includes("compras_documentos") && !q.includes("compras_hg")) {
+    if (q.includes("from arr.compras_flete_tarifas")) return { rows: this.fleteTarifas || [] };
+    if (q.includes("from arr.compras") && q.startsWith("select") && !q.includes("compras_documentos") && !q.includes("compras_hg") && !q.includes("compras_flete")) {
       if (q.includes("where id =")) return { rows: this.purchases.filter((p) => p.id === Number(params[0])) };
       const planta = Number(params[0]);
       const start = String(params[1]).slice(0, 10);

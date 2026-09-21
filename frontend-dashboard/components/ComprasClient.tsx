@@ -13,6 +13,7 @@ import {
   downloadComprasExcel,
   fetchComprasMonth,
   upsertComprasHg,
+  upsertComprasFleteTarifa,
   fetchPlantas,
   patchComprasProveedor,
   patchComprasPurchase,
@@ -28,12 +29,15 @@ import {
   formatFechaGrid,
   formatImporte,
   filterComprasPlantasMenu,
+  formatFleteImporte,
   formatHgKilos,
   formatKg,
+  formatTarifa,
   parseLocaleNumber,
   toYmd,
 } from "@/lib/compras-format";
 import { commitHgWrite } from "@/lib/compras-hg-write";
+import { commitFleteTarifaWrite } from "@/lib/compras-flete-write";
 
 type DetailState = {
   proveedor: ComprasProvider;
@@ -381,13 +385,30 @@ export function ComprasClient() {
           <table className="min-w-max border-separate border-spacing-0 text-[11px]">
             <thead>
               <tr>
-                <th rowSpan={2} className="compras-provider-title sticky left-0 z-20 min-w-[92px] border border-black bg-black px-2 py-2 text-center font-semibold text-white">
+                <th rowSpan={3} className="compras-provider-title sticky left-0 z-20 min-w-[92px] border border-black bg-black px-2 py-2 text-center font-semibold text-white">
                   FECHA
                 </th>
                 {providers.map((p, i) => (
                   <Fragment key={`t-${p.id}`}>
                     {i > 0 ? <th className="w-3 border-0 bg-white p-0" /> : null}
                     <th colSpan={3} className="compras-provider-title border-b border-black bg-white px-2 py-2 text-center text-[13px] font-bold uppercase tracking-wide text-black">
+                      {token && plantaId ? (
+                        <TarifaCell
+                          token={token}
+                          plantaId={plantaId}
+                          proveedorId={p.id}
+                          proveedorNombre={p.nombre}
+                          year={year}
+                          month={month}
+                          value={tarifaOf(data, p.id)}
+                          onSaved={loadMonth}
+                          onError={setError}
+                        />
+                      ) : (
+                        <span className="mb-1 block text-[9px] font-semibold normal-case tracking-normal text-slate-600">
+                          TARIFA {formatTarifa(tarifaOf(data, p.id))}
+                        </span>
+                      )}
                       {p.nombre}
                     </th>
                   </Fragment>
@@ -397,20 +418,51 @@ export function ComprasClient() {
                   CONSOLIDADO
                 </th>
                 <th className="compras-hg-gap w-6 border-0 bg-white p-0" />
-                <th rowSpan={2} className="compras-hg-title min-w-[88px] border border-black bg-white px-2 py-2 text-center text-[12px] font-bold uppercase tracking-wide text-black">
+                <th rowSpan={3} className="compras-hg-title min-w-[88px] border border-black bg-white px-2 py-2 text-center text-[12px] font-bold uppercase tracking-wide text-black">
                   HG EN KILOS
+                </th>
+                <th className="compras-flete-gap w-8 border-0 bg-white p-0" />
+                <th
+                  colSpan={Math.max(3, providers.length * 4 + 2)}
+                  className="compras-flete-title border-b border-black bg-white px-2 py-2 text-center text-[13px] font-bold uppercase tracking-wide text-black"
+                >
+                  VALOR DEL FLETE SEGÚN ORIGEN
                 </th>
               </tr>
               <tr>
                 {providers.map((p, i) => (
                   <Fragment key={`m-${p.id}`}>
                     {i > 0 ? <th className="w-3 border-0 bg-white p-0" /> : null}
-                    <MetricHeads />
+                    <MetricHeads rowSpan={2} />
                   </Fragment>
                 ))}
                 <th className="w-3 border-0 bg-white p-0" />
-                <MetricHeads />
+                <MetricHeads rowSpan={2} />
                 <th className="compras-hg-gap w-6 border-0 bg-white p-0" />
+                <th className="compras-flete-gap w-8 border-0 bg-white p-0" />
+                {providers.map((p, i) => (
+                  <Fragment key={`ft-${p.id}`}>
+                    {i > 0 ? <th className="w-3 border-0 bg-white p-0" /> : null}
+                    <th colSpan={3} className="compras-flete-origin border-b border-black bg-white px-2 py-1 text-center text-[11px] font-bold uppercase tracking-wide text-black">
+                      {p.nombre}
+                    </th>
+                  </Fragment>
+                ))}
+                <th className="w-3 border-0 bg-white p-0" />
+                <th colSpan={3} className="compras-flete-origin border-b border-black bg-white px-2 py-1 text-center text-[11px] font-bold uppercase tracking-wide text-black">
+                  CONSOLIDADO
+                </th>
+              </tr>
+              <tr>
+                <th className="compras-flete-gap w-8 border-0 bg-white p-0" />
+                {providers.map((p, i) => (
+                  <Fragment key={`fm-${p.id}`}>
+                    {i > 0 ? <th className="w-3 border-0 bg-white p-0" /> : null}
+                    <FleteMetricHeads />
+                  </Fragment>
+                ))}
+                <th className="w-3 border-0 bg-white p-0" />
+                <FleteMetricHeads />
               </tr>
             </thead>
             <tbody>
@@ -464,6 +516,7 @@ export function ComprasClient() {
                       ) : (
                         <td className="border border-black bg-white px-1 py-1 text-right tabular-nums">{formatHgKilos(day?.hg_kilos ?? null)}</td>
                       )}
+                      <FleteRowCells providers={providers} flete={day?.flete} />
                     </tr>
                   );
                 }
@@ -500,6 +553,7 @@ export function ComprasClient() {
                       <td className="border border-black bg-white px-1 py-1 text-right font-bold tabular-nums">
                         {formatHgKilos(week?.hg_kilos ?? null)}
                       </td>
+                      <FleteRowCells providers={providers} flete={week?.flete} showZero />
                     </tr>
                     <tr className="compras-week-gap h-3">
                       <td className="border-0 bg-white p-0" colSpan={Math.max(6, providers.length * 4 + 7)} />
@@ -538,6 +592,7 @@ export function ComprasClient() {
                   <td className="border border-black bg-white px-1 py-1 text-right font-bold tabular-nums">
                     {formatHgKilos(data.grid.month.hg_kilos ?? null)}
                   </td>
+                  <FleteRowCells providers={providers} flete={data.grid.month.flete} showZero />
                 </tr>
               )}
             </tbody>
@@ -632,13 +687,158 @@ function HgDayCell({
   );
 }
 
-function MetricHeads() {
+function MetricHeads({ rowSpan }: { rowSpan?: number }) {
+  return (
+    <>
+      <th rowSpan={rowSpan} className="min-w-[78px] border border-black bg-black px-1 py-1 text-center font-normal text-white">COMPRA KG</th>
+      <th rowSpan={rowSpan} className="min-w-[70px] border border-black bg-black px-1 py-1 text-center font-normal text-white">COSTO KG</th>
+      <th rowSpan={rowSpan} className="min-w-[88px] border border-black bg-black px-1 py-1 text-center font-normal text-white">IMPORTE</th>
+    </>
+  );
+}
+
+function FleteMetricHeads() {
   return (
     <>
       <th className="min-w-[78px] border border-black bg-black px-1 py-1 text-center font-normal text-white">COMPRA KG</th>
-      <th className="min-w-[70px] border border-black bg-black px-1 py-1 text-center font-normal text-white">COSTO KG</th>
+      <th className="min-w-[70px] border border-black bg-black px-1 py-1 text-center font-normal text-white">TARIFA</th>
       <th className="min-w-[88px] border border-black bg-black px-1 py-1 text-center font-normal text-white">IMPORTE</th>
     </>
+  );
+}
+
+function tarifaOf(data: ComprasMonthResponse | null | undefined, proveedorId: number): number | null {
+  const hit = (data && data.tarifas_flete ? data.tarifas_flete : []).find((t) => Number(t.proveedor_id) === Number(proveedorId));
+  return hit && hit.tarifa != null ? Number(hit.tarifa) : null;
+}
+
+function fleteCellOf(
+  flete:
+    | {
+        providers: Record<string, { kg: number; tarifa: number | null; importe: number | null }>;
+        consolidado: { kg: number; tarifa: number | null; importe: number | null };
+      }
+    | undefined,
+  proveedorId: number
+) {
+  if (!flete) return { kg: 0, tarifa: null as number | null, importe: 0 as number | null };
+  return flete.providers[String(proveedorId)] || flete.providers[proveedorId] || { kg: 0, tarifa: null, importe: 0 };
+}
+
+function FleteRowCells({
+  providers,
+  flete,
+  showZero = false,
+}: {
+  providers: ComprasProvider[];
+  flete?: {
+    providers: Record<string, { kg: number; tarifa: number | null; importe: number | null }>;
+    consolidado: { kg: number; tarifa: number | null; importe: number | null };
+  };
+  showZero?: boolean;
+}) {
+  const cons = (flete && flete.consolidado) || { kg: 0, tarifa: null, importe: 0 };
+  return (
+    <>
+      <td className="compras-flete-gap w-8 border-0 bg-white p-0" />
+      {providers.map((p, i) => {
+        const cell = fleteCellOf(flete, p.id);
+        return (
+          <Fragment key={`flete-${p.id}`}>
+            {i > 0 ? <td className="w-3 border-0 bg-white p-0" /> : null}
+            <td className="border border-black bg-white px-1 py-1 text-right tabular-nums">{formatKg(cell.kg, showZero)}</td>
+            <td className="border border-black bg-white px-1 py-1 text-right tabular-nums">{formatTarifa(cell.tarifa)}</td>
+            <td className="border border-black bg-white px-1 py-1 text-right tabular-nums">
+              {formatFleteImporte(cell.importe, showZero || cell.kg === 0)}
+            </td>
+          </Fragment>
+        );
+      })}
+      <td className="w-3 border-0 bg-white p-0" />
+      <td className="border border-black bg-white px-1 py-1 text-right tabular-nums">{formatKg(cons.kg, showZero)}</td>
+      <td className="border border-black bg-white px-1 py-1 text-right tabular-nums">{formatTarifa(cons.tarifa)}</td>
+      <td className="border border-black bg-white px-1 py-1 text-right tabular-nums">
+        {formatFleteImporte(cons.importe, showZero || cons.kg === 0)}
+      </td>
+    </>
+  );
+}
+
+function TarifaCell({
+  token,
+  plantaId,
+  proveedorId,
+  proveedorNombre,
+  year,
+  month,
+  value,
+  onSaved,
+  onError,
+}: {
+  token: string;
+  plantaId: number;
+  proveedorId: number;
+  proveedorNombre: string;
+  year: number;
+  month: number;
+  value: number | null;
+  onSaved: () => Promise<void>;
+  onError: (message: string | null) => void;
+}) {
+  const [text, setText] = useState(formatTarifa(value));
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    setText(formatTarifa(value));
+  }, [value, proveedorId, year, month]);
+
+  async function persist(next: number | null) {
+    setSaving(true);
+    const out = await commitFleteTarifaWrite({
+      next,
+      confirmed: value,
+      write: (tarifa) => upsertComprasFleteTarifa(token, plantaId, { proveedor_id: proveedorId, year, month, tarifa }),
+      reload: onSaved,
+      onError,
+    });
+    setText(formatTarifa(out.restore));
+    setSaving(false);
+  }
+
+  async function commit() {
+    if (saving) return;
+    const raw = text.trim();
+    if (raw === "") {
+      if (value == null) return;
+      await persist(null);
+      return;
+    }
+    const n = parseLocaleNumber(raw);
+    if (n == null || n < 0) {
+      setText(formatTarifa(value));
+      return;
+    }
+    if (value != null && n === value) {
+      setText(formatTarifa(value));
+      return;
+    }
+    await persist(n);
+  }
+
+  return (
+    <label className="mb-1 flex items-center justify-center gap-1 text-[9px] font-semibold normal-case tracking-normal text-slate-700">
+      <span>TARIFA</span>
+      <input
+        aria-label={`TARIFA ${proveedorNombre}`}
+        value={text}
+        disabled={saving}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={() => void commit()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+        }}
+        className="w-16 border border-slate-400 bg-white px-1 py-0.5 text-right text-[11px] tabular-nums text-black outline-none"
+      />
+    </label>
   );
 }
 

@@ -1,65 +1,76 @@
 ﻿# CURRENT_TASK
 
 ```yaml
-task_id: "FIX-DIRECTOR-IA-TALLER-FALSE-ZERO-015"
-title: "Director IA — corregir keyword residual y falso cero en gasto Taller"
+task_id: "IMPL-COMPRAS-FLETE-TARIFA-016"
+title: "Compras — TARIFA de flete por origen y tabla VALOR DEL FLETE SEGÚN ORIGEN"
 status: "DONE_PENDING_REVIEW"
 mode: "IMPLEMENTATION"
 
 authorized_by: "HUMAN"
-authorized_at: "2026-09-21T14:33:00-06:00"
+authorized_at: "2026-09-21T15:00:00-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN"
 
-objective: "Corregir la regresión de Expense Analytics donde expresiones auxiliares como 'he' y 'cuando' se convierten en keyword y filtran erróneamente folios de Taller, y evitar verbalizar DATA_NOT_FOUND como $0.00."
+objective: "Agregar una TARIFA de flete editable por origen/proveedor y mes, persistida por planta, y una tabla automática VALOR DEL FLETE SEGÚN ORIGEN a la derecha de CONTROL DE COMPRAS, sin modificar la lógica actual de compras ni HG."
 
 implementation: true
 code_changes: true
 
-schema_changes: false
-data_mutation: false
+schema_changes: true
+data_mutation: true
 
-base_sha: "f27ca3e219f604f8de55dfed2e0b0c14c03b31b0"
-branch: "fix/director-ia-taller-false-zero-015"
+base_sha: "872bf076ac4f2d9f2119e2904d951062709ea725"
+branch: "implementation/compras-flete-tarifa-016"
 
 merge_authorized: false
 deploy_authorized: false
 next_task_authorized: false
 
 in_scope:
-  - "lib/director-ia-expense-analytics.js"
-  - "lib/director-ia-chat.js solo si una corrección mínima de continuidad es estrictamente necesaria"
-  - "lib/director-ia-folio-search.js solo si hace falta para evitar falsos matches de keyword"
-  - "tests de Expense Analytics / routing relacionados"
-  - "docs/dev-loop/reports/FIX-DIRECTOR-IA-TALLER-FALSE-ZERO-015.md"
+  - "persistencia de tarifa de flete"
+  - "lib/compras-dashboard.js"
+  - "lib/compras-excel.js"
+  - "sql/ nueva migración"
+  - "frontend-dashboard/components/ComprasClient.tsx"
+  - "frontend-dashboard/lib/compras-format.ts"
+  - "frontend-dashboard/lib/api.ts"
+  - "tests específicos 016"
+  - "test/compras-dashboard-013.test.js solo si requiere regresión"
+  - "test/compras-hg-kilos-014.test.js solo si requiere regresión"
+  - "docs/dev-loop/reports/IMPL-COMPRAS-FLETE-TARIFA-016.md"
   - "docs/dev-loop/CURRENT_TASK.md"
 
 out_of_scope:
-  - "public.folios"
-  - "migraciones/schema"
-  - "Compras/HG"
-  - "docs/director-ia/ salvo que el protocolo exija actualizar índice de capacidad; preferir no tocar"
-  - "cambiar lógica de planta/equivalentes"
-  - "cambiar permisos solo_zp_ad"
-  - "cambiar mes_cargo"
+  - "docs/director-ia/"
+  - "COMPRA KG existente"
+  - "COSTO KG existente"
+  - "IMPORTE de compra existente"
+  - "CONSOLIDADO de compras existente"
+  - "HG EN KILOS"
+  - "facturas"
+  - "proveedores salvo leerlos para relacionar tarifa"
+  - "main"
   - "PR"
   - "merge"
   - "deploy"
 
 contracts_in_force:
   - "dev-loop vigente"
-  - "DATA_NOT_FOUND no equivale a cero"
-  - "no inventar importes"
-  - "semántica > phrase whitelist"
+  - "no modificar cálculos existentes de compras"
+  - "no confundir TARIFA de flete con COSTO KG de compra"
+  - "los valores derivados no se persisten si se pueden recalcular"
 
 validation:
-  - "tests Expense Analytics / routing / continuidad"
-  - "frontend no cambia → no npm run build"
+  - "node --test test/compras-flete-tarifa-016.test.js"
+  - "node --test test/compras-dashboard-013.test.js"
+  - "node --test test/compras-hg-kilos-014.test.js"
+  - "cd frontend-dashboard && npm run build"
+  - "NO commitear frontend-dashboard/.next"
 
-result_report_path: "docs/dev-loop/reports/FIX-DIRECTOR-IA-TALLER-FALSE-ZERO-015.md"
+result_report_path: "docs/dev-loop/reports/IMPL-COMPRAS-FLETE-TARIFA-016.md"
 
 closure:
   - "Al terminar poner CURRENT_TASK en DONE_PENDING_REVIEW."
-  - "Commit + push únicamente a fix/director-ia-taller-false-zero-015."
+  - "Commit + push únicamente a implementation/compras-flete-tarifa-016."
   - "STOP."
   - "NO PR."
   - "NO merge."

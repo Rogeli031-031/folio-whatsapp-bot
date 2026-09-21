@@ -48,6 +48,19 @@ export function toYmd(value: string | Date | null | undefined): string {
   return "";
 }
 
+export function formatTarifa(value: number | null | undefined): string {
+  if (value == null) return "";
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "";
+  return new Intl.NumberFormat("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+}
+
+export function formatFleteImporte(value: number | null | undefined, showZero = false): string {
+  const n = Number(value);
+  if (!Number.isFinite(n) || (n === 0 && !showZero)) return "";
+  return new Intl.NumberFormat("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+}
+
 export function formatHgKilos(value: number | null | undefined): string {
   if (value == null) return "";
   const n = Number(value);
