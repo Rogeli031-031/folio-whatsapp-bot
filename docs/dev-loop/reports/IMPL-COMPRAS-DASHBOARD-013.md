@@ -136,7 +136,7 @@ UI: KG con miles, costo 3 decimales, importe 2 decimales.
 
 ## Tests
 
-`node --test test/compras-dashboard-013.test.js` → 32/32.
+`node --test test/compras-dashboard-013.test.js` → 33/33.
 
 Backend: proveedores por planta, 2 compras mismo día, edit/delete, auth cruzada, PDF magic, agregados diarios/semanales/mensuales, costo ponderado vs suma de costos, febrero bisiesto, download 403 sin planta.
 
@@ -256,5 +256,5 @@ El formulario de captura muestra `Factura PDF de respaldo`. Tras `POST /api/comp
 
 - CURRENT_TASK → `DONE_PENDING_REVIEW`
 - Commit + push a la misma rama `implementation/compras-dashboard-013`
-- Rama actualizada sobre `origin/main` `7afc3544` (PR #58). behind main = 0. No merge a main.
+- Rama actualizada sobre `origin/main` `7efa8f29` (PR #59). behind main = 0. No merge a main.
 - NO PR / NO merge / NO deploy / NO siguiente tarea
