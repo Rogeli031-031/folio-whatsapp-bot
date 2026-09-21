@@ -85,3 +85,30 @@ Si el guardado de tarifa falla: error visible y se restaura el último valor con
 - CURRENT_TASK → `DONE_PENDING_REVIEW`
 - Commit + push solo a `implementation/compras-flete-tarifa-016`
 - NO PR / NO merge / NO deploy / NO siguiente tarea
+
+## REOPEN — TARIFA AUSENTE ≠ FLETE CERO
+
+`Number(cell.importe) || 0` trataba `tarifa == null` + `kg > 0` como importe 0 y producía una tarifa ponderada falsa (p. ej. 0.50).
+
+Regla: solo `null/ausente` es desconocido. `tarifa = 0` es valor explícito y sí participa.
+
+Si cualquier origen con `kg > 0` tiene `tarifa == null`:
+
+- KG consolidado = SUM(all kg)
+- IMPORTE consolidado = null
+- TARIFA consolidada = null
+
+Misma regla en día, Semana N, TOTAL MES y Excel. No se muestra subtotal parcial. No `#DIV/0!`.
+
+Implementación: `hasMissingTarifaForPositiveKg` + `freightConsolidado` en `attachFleteToGrid` / `freightRollup`. Excel `writeEmptyNum` para no convertir `null` en 0 (`Number(null) === 0`). UI: `formatFleteImporte(null)` y `formatTarifa(null)` vacíos aunque `showZero`.
+
+No se tocó persistencia de tarifa, compras ni HG.
+
+Tests añadidos (1–6): ausente vs 0 explícita; semana/mes incompletos; recálculo al capturar tarifa; Excel vacío.
+
+Validación reopen:
+
+- `test/compras-flete-tarifa-016.test.js` → 19/19
+- `test/compras-dashboard-013.test.js` → 34/34
+- `test/compras-hg-kilos-014.test.js` → 17/17
+- `frontend-dashboard` `npm run build` OK. No se commitea `.next`.

@@ -344,6 +344,120 @@ describe("016 compras TARIFA flete", () => {
     assert.notEqual(cons.tarifa, (1.23 + 1.08) / 2);
   });
 
+  it("tarifa ausente no pondera consolidado: kg 200, importe/tarifa null", async () => {
+    const db = new MemClient();
+    const month0 = await compras.loadMonth(db, 1, 2026, 9);
+    const pemex = byName(month0, "PEMEX TUXPAN");
+    const tepeji = byName(month0, "TOMZA TEPEJI");
+    await compras.createPurchase(db, 1, { proveedor_id: pemex.id, fecha: "2026-09-01", kg: 100, importe: 10 }, 1);
+    await compras.createPurchase(db, 1, { proveedor_id: tepeji.id, fecha: "2026-09-01", kg: 100, importe: 10 }, 1);
+    await compras.upsertFleteTarifa(db, 1, { proveedor_id: pemex.id, year: 2026, month: 9, tarifa: 1 }, 1);
+    const month = await compras.loadMonth(db, 1, 2026, 9);
+    const cons = month.grid.days.find((d) => d.ymd === "2026-09-01").flete.consolidado;
+    const a = fleteDay(month, "2026-09-01", pemex.id);
+    const b = fleteDay(month, "2026-09-01", tepeji.id);
+    assert.equal(a.importe, 100);
+    assert.equal(b.tarifa, null);
+    assert.equal(b.importe, null);
+    assert.equal(cons.kg, 200);
+    assert.equal(cons.importe, null);
+    assert.equal(cons.tarifa, null);
+    assert.notEqual(cons.tarifa, 0.5);
+    assert.notEqual(cons.importe, 100);
+  });
+
+  it("tarifa 0 explícita sí pondera consolidado", async () => {
+    const db = new MemClient();
+    const month0 = await compras.loadMonth(db, 1, 2026, 9);
+    const pemex = byName(month0, "PEMEX TUXPAN");
+    const tepeji = byName(month0, "TOMZA TEPEJI");
+    await compras.createPurchase(db, 1, { proveedor_id: pemex.id, fecha: "2026-09-01", kg: 100, importe: 10 }, 1);
+    await compras.createPurchase(db, 1, { proveedor_id: tepeji.id, fecha: "2026-09-01", kg: 100, importe: 10 }, 1);
+    await compras.upsertFleteTarifa(db, 1, { proveedor_id: pemex.id, year: 2026, month: 9, tarifa: 1 }, 1);
+    await compras.upsertFleteTarifa(db, 1, { proveedor_id: tepeji.id, year: 2026, month: 9, tarifa: 0 }, 1);
+    const cons = (await compras.loadMonth(db, 1, 2026, 9)).grid.days.find((d) => d.ymd === "2026-09-01").flete.consolidado;
+    assert.equal(cons.importe, 100);
+    assert.equal(cons.tarifa, 0.5);
+  });
+
+  it("semana y TOTAL MES incompletos si hay KG sin tarifa", async () => {
+    const db = new MemClient();
+    const month0 = await compras.loadMonth(db, 1, 2026, 9);
+    const pemex = byName(month0, "PEMEX TUXPAN");
+    const tepeji = byName(month0, "TOMZA TEPEJI");
+    await compras.createPurchase(db, 1, { proveedor_id: pemex.id, fecha: "2026-09-01", kg: 100, importe: 10 }, 1);
+    await compras.createPurchase(db, 1, { proveedor_id: tepeji.id, fecha: "2026-09-02", kg: 40, importe: 4 }, 1);
+    await compras.upsertFleteTarifa(db, 1, { proveedor_id: pemex.id, year: 2026, month: 9, tarifa: 1 }, 1);
+    const month = await compras.loadMonth(db, 1, 2026, 9);
+    const week = month.grid.weeks[0].flete.consolidado;
+    const tot = month.grid.month.flete.consolidado;
+    assert.equal(week.kg, 140);
+    assert.equal(week.importe, null);
+    assert.equal(week.tarifa, null);
+    assert.equal(tot.kg, 140);
+    assert.equal(tot.importe, null);
+    assert.equal(tot.tarifa, null);
+  });
+
+  it("al capturar la tarifa faltante el consolidado se recalcula", async () => {
+    const db = new MemClient();
+    const month0 = await compras.loadMonth(db, 1, 2026, 9);
+    const pemex = byName(month0, "PEMEX TUXPAN");
+    const tepeji = byName(month0, "TOMZA TEPEJI");
+    await compras.createPurchase(db, 1, { proveedor_id: pemex.id, fecha: "2026-09-01", kg: 100, importe: 10 }, 1);
+    await compras.createPurchase(db, 1, { proveedor_id: tepeji.id, fecha: "2026-09-01", kg: 100, importe: 10 }, 1);
+    await compras.upsertFleteTarifa(db, 1, { proveedor_id: pemex.id, year: 2026, month: 9, tarifa: 1 }, 1);
+    const before = (await compras.loadMonth(db, 1, 2026, 9)).grid.days.find((d) => d.ymd === "2026-09-01").flete.consolidado;
+    assert.equal(before.importe, null);
+    await compras.upsertFleteTarifa(db, 1, { proveedor_id: tepeji.id, year: 2026, month: 9, tarifa: 1 }, 1);
+    const after = (await compras.loadMonth(db, 1, 2026, 9)).grid.days.find((d) => d.ymd === "2026-09-01").flete.consolidado;
+    assert.equal(after.kg, 200);
+    assert.equal(after.importe, 200);
+    assert.equal(after.tarifa, 1);
+  });
+
+  it("Excel deja vacío importe/tarifa consolidado incompleto", async () => {
+    const db = new MemClient();
+    const month0 = await compras.loadMonth(db, 1, 2026, 9);
+    const pemex = byName(month0, "PEMEX TUXPAN");
+    const tepeji = byName(month0, "TOMZA TEPEJI");
+    await compras.createPurchase(db, 1, { proveedor_id: pemex.id, fecha: "2026-09-01", kg: 100, importe: 10 }, 1);
+    await compras.createPurchase(db, 1, { proveedor_id: tepeji.id, fecha: "2026-09-01", kg: 100, importe: 10 }, 1);
+    await compras.upsertFleteTarifa(db, 1, { proveedor_id: pemex.id, year: 2026, month: 9, tarifa: 1 }, 1);
+    const payload = await compras.loadMonth(db, 1, 2026, 9);
+    const wb = await buildComprasWorkbook(payload, { plantName: "Puebla" });
+    const ws = wb.getWorksheet("CONTROL DE COMPRAS");
+    assert.equal(payload.grid.days.find((d) => d.ymd === "2026-09-01").flete.consolidado.importe, null);
+    let fleteCons = null;
+    for (let c = 19; c <= 60; c += 1) {
+      if (ws.getCell(4, c).value === "CONSOLIDADO" && ws.getCell(5, c + 1).value === "TARIFA") fleteCons = c;
+    }
+    assert.ok(fleteCons);
+    let row = 6;
+    while (row < 20 && String(ws.getCell(row, 1).value || "") !== "01/09/2026") row += 1;
+    assert.equal(String(ws.getCell(row, 1).value), "01/09/2026");
+    assert.equal(ws.getCell(row, fleteCons).value, 200);
+    assert.equal(ws.getCell(row, fleteCons + 1).value, null);
+    assert.equal(ws.getCell(row, fleteCons + 2).value, null);
+    let weekRow = 6;
+    while (weekRow < 40 && String(ws.getCell(weekRow, 1).value || "") !== "Semana 1") weekRow += 1;
+    assert.equal(String(ws.getCell(weekRow, 1).value), "Semana 1");
+    assert.equal(ws.getCell(weekRow, fleteCons + 1).value, null);
+    assert.equal(ws.getCell(weekRow, fleteCons + 2).value, null);
+    let totRow = 6;
+    while (totRow < 50 && String(ws.getCell(totRow, 1).value || "") !== "TOTAL MES") totRow += 1;
+    assert.equal(String(ws.getCell(totRow, 1).value), "TOTAL MES");
+    assert.equal(ws.getCell(totRow, fleteCons + 1).value, null);
+    assert.equal(ws.getCell(totRow, fleteCons + 2).value, null);
+    let div0 = false;
+    ws.eachRow((r) => {
+      r.eachCell((cell) => {
+        if (String(cell.value == null ? "" : cell.value).includes("#DIV/0")) div0 = true;
+      });
+    });
+    assert.equal(div0, false);
+  });
+
   it("N) KG total 0: tarifa consolidada vacía, sin división por cero", async () => {
     const db = new MemClient();
     const month0 = await compras.loadMonth(db, 1, 2026, 9);
