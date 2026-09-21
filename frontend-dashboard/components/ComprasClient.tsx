@@ -590,7 +590,7 @@ function HgDayCell({
       reload: onSaved,
       onError,
     });
-    if (!out.ok) setText(formatHgKilos(out.restore));
+    setText(formatHgKilos(out.restore));
     setSaving(false);
   }
 

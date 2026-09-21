@@ -7,7 +7,7 @@ const path = require("path");
 
 const compras = require("../lib/compras-dashboard");
 const { buildComprasWorkbook } = require("../lib/compras-excel");
-const { commitHgWrite, HG_SAVE_ERROR } = require("../frontend-dashboard/lib/compras-hg-write");
+const { commitHgWrite, HG_SAVE_ERROR, HG_RELOAD_ERROR } = require("../frontend-dashboard/lib/compras-hg-write");
 
 function asPgDate(value) {
   const y = value instanceof Date ? value.toISOString().slice(0, 10) : String(value || "").slice(0, 10);
@@ -320,24 +320,7 @@ describe("014 compras HG EN KILOS", () => {
     assert.equal(ws.getCell(totRow, 18).value, -787);
   });
 
-  it("A) HG save OK recarga y no muestra error", async () => {
-    const errors = [];
-    let reloaded = 0;
-    const out = await commitHgWrite({
-      next: 4012,
-      confirmed: null,
-      write: async () => {},
-      reload: async () => {
-        reloaded += 1;
-      },
-      onError: (m) => errors.push(m),
-    });
-    assert.equal(out.ok, true);
-    assert.equal(reloaded, 1);
-    assert.deepEqual(errors, [null]);
-  });
-
-  it("B) HG save falla: error visible y restaura el último valor confirmado", async () => {
+  it("A) write falla: persisted false, error de guardado y restore confirmed", async () => {
     const errors = [];
     let reloaded = 0;
     const out = await commitHgWrite({
@@ -352,13 +335,77 @@ describe("014 compras HG EN KILOS", () => {
       onError: (m) => errors.push(m),
     });
     assert.equal(out.ok, false);
+    assert.equal(out.persisted, false);
+    assert.equal(out.reloadOk, false);
     assert.equal(reloaded, 0);
     assert.equal(out.restore, -787);
     assert.deepEqual(errors, [HG_SAVE_ERROR]);
     assert.equal(HG_SAVE_ERROR, "No se pudo guardar HG.");
   });
 
-  it("C) vacío/delete falla: error visible y vuelve el valor anterior", async () => {
+  it("B) write OK + reload OK: persisted true y sin error", async () => {
+    const errors = [];
+    let reloaded = 0;
+    const out = await commitHgWrite({
+      next: 4012,
+      confirmed: null,
+      write: async () => {},
+      reload: async () => {
+        reloaded += 1;
+      },
+      onError: (m) => errors.push(m),
+    });
+    assert.equal(out.ok, true);
+    assert.equal(out.persisted, true);
+    assert.equal(out.reloadOk, true);
+    assert.equal(out.restore, 4012);
+    assert.equal(reloaded, 1);
+    assert.deepEqual(errors, [null]);
+  });
+
+  it("C) write OK + reload falla: persisted true, no afirma que no se guardó, restore next", async () => {
+    const errors = [];
+    const out = await commitHgWrite({
+      next: 4012,
+      confirmed: -787,
+      write: async () => {},
+      reload: async () => {
+        throw new Error("reload");
+      },
+      onError: (m) => errors.push(m),
+    });
+    assert.equal(out.ok, true);
+    assert.equal(out.persisted, true);
+    assert.equal(out.reloadOk, false);
+    assert.equal(out.restore, 4012);
+    assert.notEqual(out.restore, -787);
+    assert.deepEqual(errors, [HG_RELOAD_ERROR]);
+    assert.equal(HG_RELOAD_ERROR, "HG guardado, pero no se pudo actualizar la vista.");
+    assert.notEqual(errors[0], HG_SAVE_ERROR);
+    assert.notEqual(errors[0], "No se pudo guardar HG.");
+  });
+
+  it("D) DELETE write OK + reload falla: persisted true y visual vacío, no vuelve al anterior", async () => {
+    const errors = [];
+    const out = await commitHgWrite({
+      next: null,
+      confirmed: 4772,
+      write: async () => {},
+      reload: async () => {
+        throw new Error("reload");
+      },
+      onError: (m) => errors.push(m),
+    });
+    assert.equal(out.ok, true);
+    assert.equal(out.persisted, true);
+    assert.equal(out.reloadOk, false);
+    assert.equal(out.restore, null);
+    assert.notEqual(out.restore, 4772);
+    assert.deepEqual(errors, [HG_RELOAD_ERROR]);
+    assert.notEqual(errors[0], HG_SAVE_ERROR);
+  });
+
+  it("vacío/delete write falla: error de guardado y vuelve el valor anterior", async () => {
     const errors = [];
     const out = await commitHgWrite({
       next: null,
@@ -370,12 +417,13 @@ describe("014 compras HG EN KILOS", () => {
       onError: (m) => errors.push(m),
     });
     assert.equal(out.ok, false);
+    assert.equal(out.persisted, false);
     assert.equal(out.restore, 4772);
     assert.notEqual(out.restore, null);
-    assert.deepEqual(errors, ["No se pudo guardar HG."]);
+    assert.deepEqual(errors, [HG_SAVE_ERROR]);
   });
 
-  it("D) el fallo no se convierte en cero ni en vacío persistente", async () => {
+  it("el fallo de write no se convierte en cero ni en vacío persistente", async () => {
     const fromNeg = await commitHgWrite({
       next: 10,
       confirmed: -787,
@@ -385,6 +433,7 @@ describe("014 compras HG EN KILOS", () => {
       reload: async () => {},
       onError: () => {},
     });
+    assert.equal(fromNeg.persisted, false);
     assert.equal(fromNeg.restore, -787);
     assert.notEqual(fromNeg.restore, 0);
     assert.notEqual(fromNeg.restore, null);
@@ -397,6 +446,7 @@ describe("014 compras HG EN KILOS", () => {
       reload: async () => {},
       onError: () => {},
     });
+    assert.equal(fromZero.persisted, false);
     assert.equal(fromZero.restore, 0);
   });
 
@@ -413,6 +463,12 @@ describe("014 compras HG EN KILOS", () => {
     assert.match(client, /onError=\{setError\}/);
     assert.match(client, /formatHgKilos\(out\.restore\)/);
     assert.match(client, /persist\(null\)/);
+    const hgWrite = fs.readFileSync(path.join(root, "lib", "compras-hg-write.js"), "utf8");
+    assert.match(hgWrite, /HG_SAVE_ERROR/);
+    assert.match(hgWrite, /HG_RELOAD_ERROR/);
+    assert.match(hgWrite, /await write\(next\)/);
+    assert.match(hgWrite, /await reload\(\)/);
+    assert.doesNotMatch(hgWrite, /await write\(next\);\s*await reload\(\)/);
     assert.match(client, /hg_kilos: hg/);
     assert.match(fmt, /function formatHgKilos/);
     assert.match(fmt, /maximumFractionDigits: 0/);

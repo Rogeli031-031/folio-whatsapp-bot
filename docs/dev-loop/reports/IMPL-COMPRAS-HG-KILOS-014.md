@@ -62,16 +62,35 @@ Bloque independiente **HG EN KILOS** a la derecha de CONSOLIDADO, con gap visual
 - Auth + `assertPlantaAccess`. Cross-plant 403.
 - Excel: columna HG EN KILOS en col 18 (tras gap 17). CONSOLIDADO permanece en 14.
 
-### HG write failure
+### HG write failure ≠ reload failure
 
-Si POST/DELETE HG falla (red, DB, auth, servidor):
+`commitHgWrite` separa WRITE y RELOAD. No comparten el mismo catch.
 
-- error visible: `No se pudo guardar HG.` (banner `error` de ComprasClient)
-- la celda restaura el último valor confirmado por el servidor (`value`)
-- no se implica persistencia exitosa
+**WRITE failure** (`write(next)` lanza):
+
+- `persisted: false`
+- error visible: `No se pudo guardar HG.`
+- `restore` = último valor confirmado por servidor
+- no reload obligatorio
 - el fallo no se convierte en 0 ni en vacío persistente
+- no se implica persistencia exitosa
 
-OK → `onSaved()` / reload. Saving/disabled se mantiene durante el write.
+**WRITE OK + RELOAD OK**:
+
+- `persisted: true`, `reloadOk: true`
+- sin error
+- la vista usa los datos confirmados del reload
+
+**WRITE OK + RELOAD failure** (incluye DELETE vacío):
+
+- el dato ya fue aceptado por backend
+- `persisted: true`, `reloadOk: false`, `restore` = `next` (vacío si DELETE)
+- error distinto: `HG guardado, pero no se pudo actualizar la vista.`
+- NO se muestra `No se pudo guardar HG.`
+- NO se restaura `confirmed` como si el write hubiera fallado
+- el próximo GET/refresh mostrará el valor persistido
+
+Saving/disabled se mantiene durante el write. Banner vía `onError={setError}`.
 
 ## Schema
 
@@ -81,9 +100,9 @@ Migración: `sql/022_compras_hg.sql`. Runtime: `ensureComprasTables`. **No** se 
 
 ## Tests
 
-- `node --test test/compras-hg-kilos-014.test.js` → 15/15
+- `node --test test/compras-hg-kilos-014.test.js` → 17/17
 - `node --test test/compras-dashboard-013.test.js` → 34/34
-- Total combinado: 49/49
+- Total combinado: 51/51
 
 ## Build
 
