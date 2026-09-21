@@ -136,7 +136,7 @@ UI: KG con miles, costo 3 decimales, importe 2 decimales.
 
 ## Tests
 
-`node --test test/compras-dashboard-013.test.js` → 33/33.
+`node --test test/compras-dashboard-013.test.js` → 34/34.
 
 Backend: proveedores por planta, 2 compras mismo día, edit/delete, auth cruzada, PDF magic, agregados diarios/semanales/mensuales, costo ponderado vs suma de costos, febrero bisiesto, download 403 sin planta.
 
@@ -161,7 +161,7 @@ Frontend (asserción de fuente + selectores): botón Compras, `/compras`, select
 
 ## Build
 
-Frontend cambió (persistencia de fecha + selector + factura en alta). `frontend-dashboard`: `npm run build` **verde**. Tests `test/compras-dashboard-013.test.js`: 33/33.
+Frontend cambió (persistencia de fecha + selector de 6 plantas + factura en alta). `frontend-dashboard`: `npm run build` **verde**. Tests `test/compras-dashboard-013.test.js`: 34/34.
 
 ## Archivos tocados
 
@@ -248,6 +248,8 @@ Corrección: `toYmd` usa `toISOString().slice(0, 10)` para `Date` y el prefijo I
 
 La planta/año/mes de la hoja se guardan en `localStorage` (`compras-dashboard-sheet`) para que al volver otro día se abra la misma planta (p. ej. Morelos) y el mismo mes, no el primer ítem de la lista.
 
+El menú de planta en Compras lista solo las 6 operativas: Acapulco, Puebla, Tehuacán, Querétaro, San Luis y Morelos. Tras normalizar acentos/case/espacios, la aceptación es **igualdad exacta** (`COMPRAS_MENU_PLANTAS.includes(n)`). No se acepta un nombre porque contenga esas palabras (`Morelos E15`, `San Luis Planta 2`, etc.). Se ocultan México, E7–E13, E15 y cualquier otra fila. No se borran de la base. `localStorage` solo restaura una planta si sigue en esa lista filtrada. `San Luís` entra porque normaliza a `san luis`.
+
 ### Factura PDF en el alta
 
 El formulario de captura muestra `Factura PDF de respaldo`. Tras `POST /api/compras` se sube el PDF con `uploadComprasFactura` si el usuario eligió archivo.
@@ -256,5 +258,5 @@ El formulario de captura muestra `Factura PDF de respaldo`. Tras `POST /api/comp
 
 - CURRENT_TASK → `DONE_PENDING_REVIEW`
 - Commit + push a la misma rama `implementation/compras-dashboard-013`
-- Rama actualizada sobre `origin/main` `7efa8f29` (PR #59). behind main = 0. No merge a main.
+- Rama actualizada sobre `origin/main` `d0307a23` (PR #60). behind main = 0. No merge a main.
 - NO PR / NO merge / NO deploy / NO siguiente tarea
