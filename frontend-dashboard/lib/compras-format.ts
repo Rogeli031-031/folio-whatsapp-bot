@@ -48,6 +48,13 @@ export function toYmd(value: string | Date | null | undefined): string {
   return "";
 }
 
+export function formatHgKilos(value: number | null | undefined): string {
+  if (value == null) return "";
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "";
+  return new Intl.NumberFormat("es-MX", { maximumFractionDigits: 0 }).format(n);
+}
+
 export function parseLocaleNumber(raw: string): number | null {
   const s = String(raw || "").trim().replace(/\s/g, "").replace(/,/g, "");
   if (!s) return null;

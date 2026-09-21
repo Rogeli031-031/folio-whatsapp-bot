@@ -12,6 +12,7 @@ import {
   downloadComprasFacturaBlob,
   downloadComprasExcel,
   fetchComprasMonth,
+  upsertComprasHg,
   fetchPlantas,
   patchComprasProveedor,
   patchComprasPurchase,
@@ -27,10 +28,12 @@ import {
   formatFechaGrid,
   formatImporte,
   filterComprasPlantasMenu,
+  formatHgKilos,
   formatKg,
   parseLocaleNumber,
   toYmd,
 } from "@/lib/compras-format";
+import { commitHgWrite } from "@/lib/compras-hg-write";
 
 type DetailState = {
   proveedor: ComprasProvider;
@@ -393,6 +396,10 @@ export function ComprasClient() {
                 <th colSpan={3} className="compras-provider-title border-b border-black bg-white px-2 py-2 text-center text-[13px] font-bold uppercase tracking-wide text-black">
                   CONSOLIDADO
                 </th>
+                <th className="compras-hg-gap w-6 border-0 bg-white p-0" />
+                <th rowSpan={2} className="compras-hg-title min-w-[88px] border border-black bg-white px-2 py-2 text-center text-[12px] font-bold uppercase tracking-wide text-black">
+                  HG EN KILOS
+                </th>
               </tr>
               <tr>
                 {providers.map((p, i) => (
@@ -403,12 +410,13 @@ export function ComprasClient() {
                 ))}
                 <th className="w-3 border-0 bg-white p-0" />
                 <MetricHeads />
+                <th className="compras-hg-gap w-6 border-0 bg-white p-0" />
               </tr>
             </thead>
             <tbody>
               {!data && (
                 <tr>
-                  <td colSpan={Math.max(4, providers.length * 4 + 5)} className="px-3 py-6 text-center text-slate-500">
+                  <td colSpan={Math.max(6, providers.length * 4 + 7)} className="px-3 py-6 text-center text-slate-500">
                     {loading ? "Cargando…" : "Selecciona planta, año y mes."}
                   </td>
                 </tr>
@@ -443,6 +451,19 @@ export function ComprasClient() {
                       })}
                       <td className="w-3 border-0 bg-white p-0" />
                       <ReadOnlyTriple kg={day?.consolidado.kg || 0} importe={day?.consolidado.importe || 0} costo={day?.consolidado.costo_kg ?? null} consolidado />
+                      <td className="compras-hg-gap w-6 border-0 bg-white p-0" />
+                      {token && plantaId ? (
+                        <HgDayCell
+                          token={token}
+                          plantaId={plantaId}
+                          fecha={row.ymd}
+                          value={day?.hg_kilos ?? null}
+                          onSaved={loadMonth}
+                          onError={setError}
+                        />
+                      ) : (
+                        <td className="border border-black bg-white px-1 py-1 text-right tabular-nums">{formatHgKilos(day?.hg_kilos ?? null)}</td>
+                      )}
                     </tr>
                   );
                 }
@@ -475,9 +496,13 @@ export function ComprasClient() {
                         tone="week"
                         consolidado
                       />
+                      <td className="compras-hg-gap w-6 border-0 bg-white p-0" />
+                      <td className="border border-black bg-white px-1 py-1 text-right font-bold tabular-nums">
+                        {formatHgKilos(week?.hg_kilos ?? null)}
+                      </td>
                     </tr>
                     <tr className="compras-week-gap h-3">
-                      <td className="border-0 bg-white p-0" colSpan={Math.max(4, providers.length * 4 + 5)} />
+                      <td className="border-0 bg-white p-0" colSpan={Math.max(6, providers.length * 4 + 7)} />
                     </tr>
                   </Fragment>
                 );
@@ -509,6 +534,10 @@ export function ComprasClient() {
                     tone="total"
                     consolidado
                   />
+                  <td className="compras-hg-gap w-6 border-0 bg-white p-0" />
+                  <td className="border border-black bg-white px-1 py-1 text-right font-bold tabular-nums">
+                    {formatHgKilos(data.grid.month.hg_kilos ?? null)}
+                  </td>
                 </tr>
               )}
             </tbody>
@@ -528,6 +557,78 @@ export function ComprasClient() {
         />
       )}
     </div>
+  );
+}
+
+function HgDayCell({
+  token,
+  plantaId,
+  fecha,
+  value,
+  onSaved,
+  onError,
+}: {
+  token: string;
+  plantaId: number;
+  fecha: string;
+  value: number | null;
+  onSaved: () => Promise<void>;
+  onError: (message: string | null) => void;
+}) {
+  const [text, setText] = useState(formatHgKilos(value));
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    setText(formatHgKilos(value));
+  }, [value, fecha]);
+
+  async function persist(next: number | null) {
+    setSaving(true);
+    const out = await commitHgWrite({
+      next,
+      confirmed: value,
+      write: (hg) => upsertComprasHg(token, plantaId, { fecha, hg_kilos: hg }),
+      reload: onSaved,
+      onError,
+    });
+    setText(formatHgKilos(out.restore));
+    setSaving(false);
+  }
+
+  async function commit() {
+    if (saving) return;
+    const raw = text.trim();
+    if (raw === "") {
+      if (value == null) return;
+      await persist(null);
+      return;
+    }
+    const n = parseLocaleNumber(raw);
+    if (n == null) {
+      setText(formatHgKilos(value));
+      return;
+    }
+    const stored = Math.round(n);
+    if (value != null && stored === value) {
+      setText(formatHgKilos(value));
+      return;
+    }
+    await persist(stored);
+  }
+
+  return (
+    <td className="border border-black bg-white p-0">
+      <input
+        aria-label={`HG EN KILOS ${fecha}`}
+        value={text}
+        disabled={saving}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={() => void commit()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+        }}
+        className="w-full bg-transparent px-1 py-1 text-right tabular-nums outline-none"
+      />
+    </td>
   );
 }
 

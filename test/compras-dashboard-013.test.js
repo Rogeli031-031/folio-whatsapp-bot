@@ -28,6 +28,7 @@ class MemClient {
     this.providers = [];
     this.purchases = [];
     this.docs = [];
+    this.hg = [];
     this.seq = 1;
   }
   nextId() {
@@ -69,7 +70,46 @@ class MemClient {
       return { rows: [row] };
     }
 
-    if (q.includes("from arr.compras") && q.startsWith("select") && !q.includes("compras_documentos")) {
+    if (q.includes("from arr.compras_hg") && q.startsWith("select")) {
+      const planta = Number(params[0]);
+      const start = String(params[1] || "").slice(0, 10);
+      const end = String(params[2] || "").slice(0, 10);
+      return {
+        rows: this.hg
+          .filter((h) => h.planta_id === planta && fechaYmd(h.fecha) >= start && fechaYmd(h.fecha) <= end)
+          .sort((a, b) => fechaYmd(a.fecha).localeCompare(fechaYmd(b.fecha))),
+      };
+    }
+    if (q.startsWith("insert into arr.compras_hg")) {
+      const plantaId = Number(params[0]);
+      const fecha = asPgDate(params[1]);
+      const existing = this.hg.find((h) => h.planta_id === plantaId && fechaYmd(h.fecha) === fechaYmd(fecha));
+      if (existing) {
+        existing.hg_kilos = Number(params[2]);
+        existing.updated_by_usuario_id = params[3] ?? null;
+        existing.updated_at = new Date().toISOString();
+        return { rows: [existing] };
+      }
+      const row = {
+        id: this.nextId(),
+        planta_id: plantaId,
+        fecha,
+        hg_kilos: Number(params[2]),
+        created_by_usuario_id: params[3] ?? null,
+        updated_by_usuario_id: params[3] ?? null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      this.hg.push(row);
+      return { rows: [row] };
+    }
+    if (q.startsWith("delete from arr.compras_hg")) {
+      const plantaId = Number(params[0]);
+      const fecha = fechaYmd(params[1]);
+      this.hg = this.hg.filter((h) => !(h.planta_id === plantaId && fechaYmd(h.fecha) === fecha));
+      return { rows: [] };
+    }
+    if (q.includes("from arr.compras") && q.startsWith("select") && !q.includes("compras_documentos") && !q.includes("compras_hg")) {
       if (q.includes("where id =")) {
         return { rows: this.purchases.filter((p) => p.id === Number(params[0])) };
       }
