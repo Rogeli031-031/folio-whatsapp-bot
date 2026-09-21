@@ -811,6 +811,14 @@ describe("013 compras — frontend", () => {
     assert.match(client, /selector planta/);
     assert.match(client, /selector año/);
     assert.match(client, /selector mes/);
+    assert.match(client, /filterComprasPlantasMenu/);
+    assert.match(fmtSrc, /filterComprasPlantasMenu/);
+    assert.match(fmtSrc, /"acapulco"/);
+    assert.match(fmtSrc, /"puebla"/);
+    assert.match(fmtSrc, /"tehuacan"/);
+    assert.match(fmtSrc, /"queretaro"/);
+    assert.match(fmtSrc, /"san luis"/);
+    assert.match(fmtSrc, /"morelos"/);
     assert.match(client, /compras-dashboard-sheet/);
     assert.match(client, /compras-fecha-capturada/);
     assert.match(client, /TOTAL MES/);
@@ -843,6 +851,7 @@ describe("013 compras — frontend", () => {
     assert.match(fmtSrc, /minimumFractionDigits: 2/);
     assert.match(fmtSrc, /formatCosto/);
     assert.match(fmtSrc, /function toYmd/);
+    assert.match(fmtSrc, /function filterComprasPlantasMenu/);
     assert.match(fmtSrc, /n === 0 && !showZero/);
     assert.match(client, /formatKg/);
     assert.match(client, /formatCosto/);

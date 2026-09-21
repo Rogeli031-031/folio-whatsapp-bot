@@ -161,7 +161,7 @@ Frontend (asserción de fuente + selectores): botón Compras, `/compras`, select
 
 ## Build
 
-Frontend cambió (persistencia de fecha + selector + factura en alta). `frontend-dashboard`: `npm run build` **verde**. Tests `test/compras-dashboard-013.test.js`: 33/33.
+Frontend cambió (persistencia de fecha + selector de 6 plantas + factura en alta). `frontend-dashboard`: `npm run build` **verde**. Tests `test/compras-dashboard-013.test.js`: 33/33.
 
 ## Archivos tocados
 
@@ -247,6 +247,8 @@ Causa: `node-pg` entrega `arr.compras.fecha` (DATE) como `Date` UTC midnight. `m
 Corrección: `toYmd` usa `toISOString().slice(0, 10)` para `Date` y el prefijo ISO para strings. Se usa en `mapPurchase`, `aggregatePurchases` y validación de alta. El cliente del test ahora simula DATE de pg. El detalle compara con `toYmd`.
 
 La planta/año/mes de la hoja se guardan en `localStorage` (`compras-dashboard-sheet`) para que al volver otro día se abra la misma planta (p. ej. Morelos) y el mismo mes, no el primer ítem de la lista.
+
+El menú de planta en Compras lista solo las 6 operativas: Acapulco, Puebla, Tehuacán, Querétaro, San Luís y Morelos. Se ocultan códigos E* (E7–E15) y cualquier otra fila del catálogo (p. ej. México). La planta guardada solo se restaura si sigue en esa lista y autorizada.
 
 ### Factura PDF en el alta
 

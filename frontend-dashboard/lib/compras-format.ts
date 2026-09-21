@@ -54,3 +54,32 @@ export function parseLocaleNumber(raw: string): number | null {
   const n = Number(s);
   return Number.isFinite(n) ? n : null;
 }
+
+/** Las 6 plantas operativas del menú Compras. Códigos E* y el resto del catálogo no se listan. */
+export const COMPRAS_MENU_PLANTAS = [
+  "acapulco",
+  "puebla",
+  "tehuacan",
+  "queretaro",
+  "san luis",
+  "morelos",
+] as const;
+
+export function normComprasPlantaNombre(nombre: string): string {
+  return String(nombre || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ");
+}
+
+export function filterComprasPlantasMenu<T extends { nombre: string }>(plantas: T[]): T[] {
+  return (plantas || []).filter((p) => {
+    const n = normComprasPlantaNombre(p.nombre);
+    if (!n) return false;
+    const compact = n.replace(/\s+/g, "");
+    if (/^e\d+$/.test(compact)) return false;
+    return COMPRAS_MENU_PLANTAS.some((key) => n === key || n.includes(key));
+  });
+}

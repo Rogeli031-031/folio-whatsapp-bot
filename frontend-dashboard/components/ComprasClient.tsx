@@ -26,6 +26,7 @@ import {
   formatCosto,
   formatFechaGrid,
   formatImporte,
+  filterComprasPlantasMenu,
   formatKg,
   parseLocaleNumber,
   toYmd,
@@ -137,7 +138,7 @@ export function ComprasClient() {
     if (!token || !sheetReady) return;
     try {
       const r = await fetchPlantas(token);
-      const list = r.plantas || [];
+      const list = filterComprasPlantasMenu(r.plantas || []);
       setPlantas(list);
       setPlantaId((cur) => {
         if (cur && list.some((p) => p.id === cur)) return cur;
