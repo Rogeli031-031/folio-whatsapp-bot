@@ -1,8 +1,8 @@
 ﻿# CURRENT_TASK
 
 ```yaml
-task_id: "FIX-DIRECTOR-IA-CLIENT-INACTIVITY-DIRECT-ANSWERS-AND-CLIENT-UI-011"
-title: "Director IA — clientes sin compra, respuestas directas y apertura de Delta Ingreso Cliente Forecast"
+task_id: "FIX-DIRECTOR-IA-ROUTING-PRECEDENCE-AND-DIMENSION-PRESERVATION-012"
+title: "Director IA — auditoría transversal de routing, precedencias y conservación de dimensiones"
 status: "DONE_PENDING_REVIEW"
 mode: "IMPLEMENTATION"
 
@@ -16,9 +16,10 @@ code_changes: true
 schema_changes: false
 data_mutation: false
 
-base_sha: "fbbdbebb6e975546dc49712d8397451bf779d407"
-branch: "fix/director-ia-client-inactivity-direct-answers-ui-011"
+base_sha: "39e3ea3c805caf8089b3ee9e46ade598fd07bbe5"
+branch: "fix/director-ia-routing-precedence-dimensions-012"
 
 merge_authorized: false
 deploy_authorized: false
 next_task_authorized: false
+```
