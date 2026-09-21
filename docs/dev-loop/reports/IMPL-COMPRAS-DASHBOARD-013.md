@@ -63,6 +63,7 @@ Planta: `assertDashboardPlantaAccessForActionRegister` (ZP/AD/CF_CDMX global; re
 | Método | Ruta |
 |---|---|
 | GET | `/api/compras?planta_id=&year=&month=` |
+| GET | `/api/compras/excel?planta_id=&year=&month=` |
 | GET | `/api/compras/proveedores?planta_id=` |
 | POST | `/api/compras/proveedores` |
 | PATCH | `/api/compras/proveedores/:id` |
@@ -109,6 +110,9 @@ Pantalla:
 - Fecha ámbar (`compras-fecha-capturada`) si hay al menos una compra ese día
 - Click en celda de proveedor → detalle con N compras, agregar/editar/eliminar, subir/ver/descargar/eliminar PDF
 - Proveedor inactivo: histórico visible; el detalle no ofrece “Agregar compra”
+- Hoja visual tipo Excel: título CONTROL DE COMPRAS, PLANTA, año, MES, encabezados negros, bordes, Semana N gris, TOTAL MES, celdas diarias vacías en blanco
+- Si la planta no tiene proveedores, se siembran (sin `if (planta === Morelos)`): PEMEX TUXPAN, TOMZA TUXPAN, TOMZA TEPEJI. Siguen siendo editables por planta.
+- Botón **Descargar Excel** → `GET /api/compras/excel` (mismo layout/cálculos, auth por planta)
 - Guardar deshabilitado mientras escribe
 - Scroll horizontal en pantallas chicas; fecha y header sticky cuando es viable
 - Administración mínima de proveedores dentro de Compras
@@ -127,7 +131,7 @@ UI: KG con miles, costo 3 decimales, importe 2 decimales.
 
 ## Tests
 
-`node --test test/compras-dashboard-013.test.js` → 28/28.
+`node --test test/compras-dashboard-013.test.js` → 31/31.
 
 Backend: proveedores por planta, 2 compras mismo día, edit/delete, auth cruzada, PDF magic, agregados diarios/semanales/mensuales, costo ponderado vs suma de costos, febrero bisiesto, download 403 sin planta.
 
@@ -152,7 +156,7 @@ Frontend (asserción de fuente + selectores): botón Compras, `/compras`, select
 
 ## Build
 
-Este reopen no tocó frontend. El `npm run build` verde del reopen anterior sigue siendo válido. No se relanzó.
+Frontend cambió (formato Excel + Descargar). `frontend-dashboard`: `npm run build` **verde** de nuevo.
 
 ## Archivos tocados
 

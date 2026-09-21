@@ -10,6 +10,7 @@ import {
   deleteComprasFactura,
   deleteComprasPurchase,
   downloadComprasFacturaBlob,
+  downloadComprasExcel,
   fetchComprasMonth,
   fetchPlantas,
   patchComprasProveedor,
@@ -82,6 +83,7 @@ export function ComprasClient() {
   const [providersOpen, setProvidersOpen] = useState(false);
   const [newProviderName, setNewProviderName] = useState("");
   const [providerSaving, setProviderSaving] = useState(false);
+  const [excelBusy, setExcelBusy] = useState(false);
 
   useEffect(() => {
     const t = parseTokenFromQuery(searchParams) || getTokenFromStorage();
@@ -252,6 +254,20 @@ export function ComprasClient() {
           </label>
           <button
             type="button"
+            disabled={!token || !plantaId || excelBusy}
+            onClick={() => {
+              if (!token || !plantaId || excelBusy) return;
+              setExcelBusy(true);
+              void downloadComprasExcel(token, plantaId, year, month)
+                .catch((e) => setError(friendlyError(e)))
+                .finally(() => setExcelBusy(false));
+            }}
+            className="rounded bg-emerald-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-600 disabled:opacity-50"
+          >
+            {excelBusy ? "Descargando…" : "Descargar Excel"}
+          </button>
+          <button
+            type="button"
             onClick={() => setProvidersOpen((v) => !v)}
             className="rounded border border-cyan-600/70 bg-slate-900 px-3 py-1.5 text-xs text-cyan-100"
           >
@@ -304,19 +320,31 @@ export function ComprasClient() {
           </section>
         )}
 
-        <div className="overflow-x-auto rounded border border-slate-700 bg-white text-slate-900 shadow">
+        <div className="overflow-x-auto rounded border border-slate-300 bg-white text-slate-900 shadow">
+          <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 px-4 py-3">
+            <div>
+              <h2 className="text-2xl font-bold tracking-tight text-black">CONTROL DE COMPRAS</h2>
+              <p className="mt-1 text-xs uppercase text-slate-600">PLANTA {plantaNombre || "—"}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-2xl font-semibold text-black">{year}</p>
+              <p className="text-xs uppercase text-slate-600">
+                MES <span className="font-semibold text-black">{COMPRAS_MESES[month - 1]}</span>
+              </p>
+            </div>
+          </div>
           <table className="min-w-max border-collapse text-[11px]">
             <thead className="sticky top-0 z-10">
               <tr>
-                <th rowSpan={2} className="sticky left-0 z-20 min-w-[92px] border border-slate-500 bg-[#2f2f2f] px-2 py-1 text-left text-white">
+                <th rowSpan={2} className="sticky left-0 z-20 min-w-[92px] border border-black bg-black px-2 py-1 text-left font-semibold text-white">
                   FECHA
                 </th>
                 {providers.map((p) => (
-                  <th key={p.id} colSpan={3} className="border border-slate-500 bg-[#2f2f2f] px-2 py-1 text-center font-semibold uppercase tracking-wide text-white">
+                  <th key={p.id} colSpan={3} className="border border-black bg-black px-2 py-1 text-center font-semibold uppercase tracking-wide text-white">
                     {p.nombre}
                   </th>
                 ))}
-                <th colSpan={3} className="border border-slate-500 bg-[#1f1f1f] px-2 py-1 text-center font-semibold uppercase tracking-wide text-white">
+                <th colSpan={3} className="border border-black bg-black px-2 py-1 text-center font-semibold uppercase tracking-wide text-white">
                   CONSOLIDADO
                 </th>
               </tr>
@@ -343,8 +371,8 @@ export function ComprasClient() {
                     <tr key={row.ymd} className="hover:bg-slate-50">
                       <td
                         data-captured={captured ? "1" : "0"}
-                        className={`sticky left-0 z-[1] border border-slate-300 px-2 py-1 font-medium ${
-                          captured ? "bg-amber-200 text-slate-900 compras-fecha-capturada" : "bg-white text-slate-800"
+                        className={`sticky left-0 z-[1] border border-black px-2 py-1 font-medium ${
+                          captured ? "bg-[#ffff99] text-slate-900 compras-fecha-capturada" : "bg-white text-slate-800"
                         }`}
                       >
                         {formatFechaGrid(row.ymd)}
@@ -361,14 +389,14 @@ export function ComprasClient() {
                           />
                         );
                       })}
-                      <ReadOnlyTriple kg={day?.consolidado.kg || 0} importe={day?.consolidado.importe || 0} costo={day?.consolidado.costo_kg ?? null} strong />
+                      <ReadOnlyTriple kg={day?.consolidado.kg || 0} importe={day?.consolidado.importe || 0} costo={day?.consolidado.costo_kg ?? null} />
                     </tr>
                   );
                 }
                 const week = weekByNum.get(row.week);
                 return (
-                  <tr key={`semana-${row.week}`} className="bg-slate-200 font-semibold">
-                    <td className="sticky left-0 z-[1] border border-slate-400 bg-slate-200 px-2 py-1">Semana {row.week}</td>
+                  <tr key={`semana-${row.week}`} className="bg-[#bfbfbf] font-semibold">
+                    <td className="sticky left-0 z-[1] border border-black bg-[#bfbfbf] px-2 py-1">Semana {row.week}</td>
                     {providers.map((p) => {
                       const cell = week?.providers[String(p.id)] || week?.providers[p.id];
                       return (
@@ -377,6 +405,8 @@ export function ComprasClient() {
                           kg={cell?.kg || 0}
                           importe={cell?.importe || 0}
                           costo={cell?.costo_kg ?? null}
+                          showZero
+                          tone="week"
                         />
                       );
                     })}
@@ -384,14 +414,15 @@ export function ComprasClient() {
                       kg={week?.consolidado.kg || 0}
                       importe={week?.consolidado.importe || 0}
                       costo={week?.consolidado.costo_kg ?? null}
-                      strong
+                      showZero
+                      tone="week"
                     />
                   </tr>
                 );
               })}
               {data && (
-                <tr className="bg-slate-300 font-bold">
-                  <td className="sticky left-0 z-[1] border border-slate-500 bg-slate-300 px-2 py-1">TOTAL MES</td>
+                <tr className="bg-[#a6a6a6] font-bold">
+                  <td className="sticky left-0 z-[1] border border-black bg-[#a6a6a6] px-2 py-1">TOTAL MES</td>
                   {providers.map((p) => {
                     const cell = data.grid.month.providers[String(p.id)] || data.grid.month.providers[p.id];
                     return (
@@ -400,6 +431,8 @@ export function ComprasClient() {
                         kg={cell?.kg || 0}
                         importe={cell?.importe || 0}
                         costo={cell?.costo_kg ?? null}
+                        showZero
+                        tone="total"
                       />
                     );
                   })}
@@ -407,7 +440,8 @@ export function ComprasClient() {
                     kg={data.grid.month.consolidado.kg || 0}
                     importe={data.grid.month.consolidado.importe || 0}
                     costo={data.grid.month.consolidado.costo_kg ?? null}
-                    strong
+                    showZero
+                    tone="total"
                   />
                 </tr>
               )}
@@ -434,9 +468,9 @@ export function ComprasClient() {
 function MetricHeads() {
   return (
     <>
-      <th className="min-w-[78px] border border-slate-500 bg-[#3a3a3a] px-1 py-1 text-center font-normal text-white">COMPRA KG</th>
-      <th className="min-w-[70px] border border-slate-500 bg-[#3a3a3a] px-1 py-1 text-center font-normal text-white">COSTO KG</th>
-      <th className="min-w-[88px] border border-slate-500 bg-[#3a3a3a] px-1 py-1 text-center font-normal text-white">IMPORTE</th>
+      <th className="min-w-[78px] border border-black bg-black px-1 py-1 text-center font-normal text-white">COMPRA KG</th>
+      <th className="min-w-[70px] border border-black bg-black px-1 py-1 text-center font-normal text-white">COSTO KG</th>
+      <th className="min-w-[88px] border border-black bg-black px-1 py-1 text-center font-normal text-white">IMPORTE</th>
     </>
   );
 }
@@ -454,13 +488,13 @@ function ProviderCells({
 }) {
   return (
     <>
-      <td className="cursor-pointer border border-slate-300 px-1 py-1 text-right tabular-nums hover:bg-cyan-50" onClick={onClick}>
+      <td className="cursor-pointer border border-black px-1 py-1 text-right tabular-nums hover:bg-cyan-50" onClick={onClick}>
         {formatKg(kg)}
       </td>
-      <td className="cursor-pointer border border-slate-300 px-1 py-1 text-right tabular-nums text-slate-600 hover:bg-cyan-50" onClick={onClick}>
+      <td className="cursor-pointer border border-black px-1 py-1 text-right tabular-nums text-slate-700 hover:bg-cyan-50" onClick={onClick}>
         {formatCosto(costo)}
       </td>
-      <td className="cursor-pointer border border-slate-300 px-1 py-1 text-right tabular-nums hover:bg-cyan-50" onClick={onClick}>
+      <td className="cursor-pointer border border-black px-1 py-1 text-right tabular-nums hover:bg-cyan-50" onClick={onClick}>
         {formatImporte(importe)}
       </td>
     </>
@@ -471,19 +505,22 @@ function ReadOnlyTriple({
   kg,
   importe,
   costo,
-  strong,
+  showZero,
+  tone,
 }: {
   kg: number;
   importe: number;
   costo: number | null;
-  strong?: boolean;
+  showZero?: boolean;
+  tone?: "week" | "total";
 }) {
-  const cls = `border border-slate-300 px-1 py-1 text-right tabular-nums ${strong ? "bg-slate-100" : ""}`;
+  const bg = tone === "week" ? "bg-[#bfbfbf]" : tone === "total" ? "bg-[#a6a6a6]" : "bg-white";
+  const cls = `border border-black px-1 py-1 text-right tabular-nums ${bg}`;
   return (
     <>
-      <td className={cls}>{formatKg(kg)}</td>
+      <td className={cls}>{formatKg(kg, showZero)}</td>
       <td className={cls}>{formatCosto(costo)}</td>
-      <td className={cls}>{formatImporte(importe)}</td>
+      <td className={cls}>{formatImporte(importe, showZero)}</td>
     </>
   );
 }

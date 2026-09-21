@@ -24,6 +24,9 @@ class MemClient {
   async query(sql, params = []) {
     const q = String(sql).replace(/\s+/g, " ").trim().toLowerCase();
     if (q.startsWith("create ") || q.startsWith("create schema")) return { rows: [] };
+    if (q.includes("from public.plantas")) {
+      return { rows: [{ nombre: "Acapulco" }] };
+    }
 
     if (q.includes("from arr.compras_proveedores") && q.startsWith("select")) {
       if (q.includes("where id =")) {
@@ -398,6 +401,19 @@ describe("013 compras — CRUD y auth", () => {
     assert.equal(month.all_providers.some((x) => x.id === dead.provider.id), true);
   });
 
+  it("planta sin proveedores siembra PEMEX/TOMZA TUXPAN/TOMZA TEPEJI", async () => {
+    const db = new MemClient();
+    const month = await compras.loadMonth(db, 7, 2026, 9);
+    assert.deepEqual(
+      month.providers.map((p) => p.nombre),
+      [...compras.DEFAULT_PROVIDER_NAMES]
+    );
+    const again = await compras.ensureDefaultProviders(db, 7);
+    assert.equal(again.seeded, false);
+    assert.equal(month.providers.length, 3);
+    assert.doesNotMatch(String(compras.ensureDefaultProviders), /Morelos|Acapulco/);
+  });
+
   it("D) proveedor inactivo no puede recibir compra nueva", async () => {
     const db = new MemClient();
     const p = await compras.createProvider(db, 1, { nombre: "Off" });
@@ -696,6 +712,31 @@ describe("013 compras — rutas HTTP", () => {
     assert.deepEqual(deleted, []);
     assert.equal(db.docs.length, 0);
   });
+
+  it("GET excel exige planta y genera xlsx con encabezados del Excel", async () => {
+    const db = new MemClient();
+    const app = mount(db, { upload: async () => {}, del: async () => {}, s3: false });
+    const denied = await app.invoke("GET", "/api/compras/excel", {
+      query: { planta_id: "2", year: "2026", month: "9" },
+      auth: { actor_id: 1, plantas_permitidas: [1] },
+    });
+    assert.equal(denied.status, 403);
+    const ok = await app.invoke("GET", "/api/compras/excel", {
+      query: { planta_id: "1", year: "2026", month: "9" },
+    });
+    assert.equal(ok.status, 200);
+    assert.ok(Buffer.isBuffer(ok.sent));
+    const ExcelJS = require("exceljs");
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(ok.sent);
+    const ws = wb.getWorksheet("CONTROL DE COMPRAS");
+    assert.equal(ws.getCell(1, 1).value, "CONTROL DE COMPRAS");
+    assert.equal(ws.getCell(4, 2).value, "PEMEX TUXPAN");
+    assert.equal(ws.getCell(4, 5).value, "TOMZA TUXPAN");
+    assert.equal(ws.getCell(4, 8).value, "TOMZA TEPEJI");
+    assert.equal(ws.getCell(4, 11).value, "CONSOLIDADO");
+    assert.equal(ws.getCell(5, 2).value, "COMPRA KG");
+  });
 });
 
 describe("013 compras — frontend", () => {
@@ -726,6 +767,14 @@ describe("013 compras — frontend", () => {
     assert.match(client, /Guardar compra/);
     assert.doesNotMatch(client, /contentEditable/);
     assert.match(client, /no admite compras nuevas/);
+  });
+
+  it("hoja estilo Excel y botón Descargar Excel", () => {
+    assert.match(client, /Descargar Excel/);
+    assert.match(client, /downloadComprasExcel/);
+    assert.match(client, /PLANTA \{plantaNombre/);
+    assert.doesNotMatch(client, /if \(planta === ["']Morelos["']\)/);
+    assert.doesNotMatch(client, /PEMEX TUXPAN/);
   });
 
   it("formatos KG / costo / importe", () => {
