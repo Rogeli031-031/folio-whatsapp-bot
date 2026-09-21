@@ -93,6 +93,7 @@ const commercialTrendEngine = require("./lib/commercial-trend-engine");
 const sehCarpetasLegales = require("./lib/seh-carpetas-legales");
 const sehEquipos = require("./lib/seh-equipos");
 const planMaestro = require("./lib/plan-maestro");
+const comprasDashboard = require("./lib/compras-dashboard");
 
 const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
@@ -2675,6 +2676,9 @@ async function ensureSchema() {
     });
     await igfFinancialFinal.applyIgfFinancialFinalImmutabilityMigration(client).catch((e) => {
       console.warn("[igf financial final immutability]", e.message);
+    });
+    await comprasDashboard.ensureComprasTables(client).catch((e) => {
+      console.warn("[compras dashboard schema]", e.message);
     });
 
     return;
@@ -21547,6 +21551,15 @@ process.on("SIGTERM", () => {
 });
 process.on("SIGINT", () => {
   stopEksInfra();
+});
+
+comprasDashboard.registerComprasRoutes(app, {
+  pool,
+  dashboardAuthMiddleware,
+  assertPlantaAccess: assertDashboardPlantaAccessForActionRegister,
+  uploadPdfToS3,
+  getBufferFromS3,
+  s3Enabled: () => Boolean(s3Enabled),
 });
 
 // Enlazar puerto PRIMERO para que Render detecte el servicio (evita "Port scan timeout").

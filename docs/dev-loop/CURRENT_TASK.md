@@ -1,8 +1,8 @@
 ﻿# CURRENT_TASK
 
 ```yaml
-task_id: "FIX-DIRECTOR-IA-ROUTING-PRECEDENCE-AND-DIMENSION-PRESERVATION-012"
-title: "Director IA — auditoría transversal de routing, precedencias y conservación de dimensiones"
+task_id: "IMPL-COMPRAS-DASHBOARD-013"
+title: "Dashboard — módulo Compras por planta con captura diaria, consolidado y facturas"
 status: "DONE_PENDING_REVIEW"
 mode: "IMPLEMENTATION"
 
@@ -13,13 +13,12 @@ authorized_at: "2026-09-20"
 implementation: true
 code_changes: true
 
-schema_changes: false
-data_mutation: false
+schema_changes: true
+data_mutation: true
 
-base_sha: "39e3ea3c805caf8089b3ee9e46ade598fd07bbe5"
-branch: "fix/director-ia-routing-precedence-dimensions-012"
+base_sha: "97ae487d2c36df6eaa88d010b45f62e4c6ec6bdc"
+branch: "implementation/compras-dashboard-013"
 
 merge_authorized: false
 deploy_authorized: false
 next_task_authorized: false
-```
