@@ -126,6 +126,9 @@ export type DirectorIaUiAction = {
   year?: number | null;
   month?: number | null;
   category?: "CASA" | "COMISIONISTA" | null;
+  client?: string | null;
+  plant_id?: number | null;
+  period?: string | null;
   do_not_pretend_opened?: boolean;
 };
 

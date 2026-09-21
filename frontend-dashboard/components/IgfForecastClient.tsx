@@ -91,6 +91,7 @@ import { UsuariosAdminModal } from "@/components/UsuariosAdminModal";
 import { PlanMaestroModal } from "@/components/PlanMaestroModal";
 import { DirectorIaChatModal } from "@/modules/director-ia/components/DirectorIaChatModal";
 import ArrDicfCategoriaBucketsModal from "@/components/ArrDicfCategoriaBucketsModal";
+import DeltaIngresoClienteForecastModal from "@/components/DeltaIngresoClienteForecastModal";
 import {
   buildCategoryCommissionFromArrRows,
   toModalResumenRows,
@@ -241,6 +242,8 @@ export function IgfForecastContent() {
     category: "CASA" | "COMISIONISTA";
     plant: string;
   } | null>(null);
+  const [dicfModalCliente, setDicfModalCliente] = useState<string | null>(null);
+  const [dicfModalPlant, setDicfModalPlant] = useState<string>("");
   const [categoryMovementResumen, setCategoryMovementResumen] = useState<{
     casa: ReturnType<typeof toModalResumenRows>;
     comisionista: ReturnType<typeof toModalResumenRows>;
@@ -817,6 +820,16 @@ export function IgfForecastContent() {
     const plant = String(action.plant || plantaFilter || "").trim();
     const category = action.category === "COMISIONISTA" ? "COMISIONISTA" : "CASA";
     setCategoryMovementModal({ open: true, category, plant });
+  };
+
+  const handleOpenClientDeltaForecastFromChat = (action: {
+    client?: string | null;
+    plant?: string | null;
+  }) => {
+    const client = String(action.client || "").trim();
+    if (!client) return;
+    setDicfModalPlant(String(action.plant || plantaFilter || "").trim());
+    setDicfModalCliente(client);
   };
 
   const togglePronosticoDayByFecha = (fecha: string) => {
@@ -2469,8 +2482,18 @@ export function IgfForecastContent() {
           uploadDay={uploadDay.trim() || null}
           onOpenPronostico={handleOpenPronosticoFromChat}
           onOpenCategoryMovement={handleOpenCategoryMovementFromChat}
+          onOpenClientDeltaForecast={handleOpenClientDeltaForecastFromChat}
         />
       )}
+      {token && dicfModalCliente ? (
+        <DeltaIngresoClienteForecastModal
+          token={token}
+          planta={dicfModalPlant || plantaFilter}
+          clienteNombre={dicfModalCliente}
+          onClose={() => setDicfModalCliente(null)}
+          canDicfAcciones={false}
+        />
+      ) : null}
       {token && categoryMovementModal?.open ? (
         <ArrDicfCategoriaBucketsModal
           open

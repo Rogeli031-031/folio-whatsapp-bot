@@ -34,6 +34,13 @@ type DirectorIaChatPanelProps = {
     category?: "CASA" | "COMISIONISTA" | null;
     plant?: string | null;
   }) => void;
+  onOpenClientDeltaForecast?: (action: {
+    type: string;
+    client?: string | null;
+    plant?: string | null;
+    plant_id?: number | null;
+    period?: string | null;
+  }) => void;
 };
 
 function newMessageId() {
@@ -52,6 +59,7 @@ export function DirectorIaChatPanel({
   onOpenFolio,
   onOpenPronostico,
   onOpenCategoryMovement,
+  onOpenClientDeltaForecast,
 }: DirectorIaChatPanelProps) {
   const [question, setQuestion] = useState("");
   const [loading, setLoading] = useState(false);
@@ -162,13 +170,22 @@ export function DirectorIaChatPanel({
             plant: action.plant || plantaNombre || null,
           });
         }
+        if (action.type === "OPEN_CLIENT_DELTA_FORECAST" && typeof onOpenClientDeltaForecast === "function") {
+          onOpenClientDeltaForecast({
+            type: action.type,
+            client: action.client || null,
+            plant: action.plant || plantaNombre || null,
+            plant_id: action.plant_id ?? null,
+            period: action.period || null,
+          });
+        }
       }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Error al consultar");
     } finally {
       setLoading(false);
     }
-  }, [token, plantaId, plantaNombre, question, messages, uploadDayProp, conversationState, onOpenFolio, onOpenPronostico, onOpenCategoryMovement]);
+  }, [token, plantaId, plantaNombre, question, messages, uploadDayProp, conversationState, onOpenFolio, onOpenPronostico, onOpenCategoryMovement, onOpenClientDeltaForecast]);
 
   const fillChat = Boolean(chatMode && fillAvailable);
   const shellClass = chatMode

@@ -36,6 +36,13 @@ type DirectorIaChatModalProps = {
     category?: "CASA" | "COMISIONISTA" | null;
     plant?: string | null;
   }) => void;
+  onOpenClientDeltaForecast?: (action: {
+    type: string;
+    client?: string | null;
+    plant?: string | null;
+    plant_id?: number | null;
+    period?: string | null;
+  }) => void;
 };
 
 export function DirectorIaChatModal({
@@ -49,6 +56,7 @@ export function DirectorIaChatModal({
   plantMode = "fixed",
   onOpenPronostico,
   onOpenCategoryMovement,
+  onOpenClientDeltaForecast,
 }: DirectorIaChatModalProps) {
   const [plantas, setPlantas] = useState<PlantOption[]>([]);
   const [selectedPlant, setSelectedPlant] = useState<PlantOption | null>(null);
@@ -214,6 +222,7 @@ export function DirectorIaChatModal({
               onOpenFolio={setDrawerFolioId}
               onOpenPronostico={onOpenPronostico}
               onOpenCategoryMovement={onOpenCategoryMovement}
+              onOpenClientDeltaForecast={onOpenClientDeltaForecast}
             />
           ) : (
             <p className="text-sm text-slate-400">Selecciona una planta autorizada para abrir el chat.</p>
