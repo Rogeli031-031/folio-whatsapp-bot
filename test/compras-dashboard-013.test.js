@@ -370,8 +370,8 @@ describe("013 compras — CRUD y auth", () => {
     const p = await compras.createProvider(db, 1, { nombre: "Activo" });
     await compras.createPurchase(db, 1, { proveedor_id: p.provider.id, fecha: "2026-09-02", kg: 100, importe: 950 }, 1);
     const month = await compras.loadMonth(db, 1, 2026, 9);
-    assert.equal(month.providers.length, 1);
-    assert.equal(month.providers[0].activo, true);
+    assert.ok(month.providers.length >= 3);
+    assert.equal(compras.normProviderName(month.providers[0].nombre), compras.normProviderName("PEMEX TUXPAN"));
     assert.equal(month.grid.month.consolidado.kg, 100);
     assert.equal(month.grid.month.consolidado.importe, 950);
   });
@@ -408,10 +408,27 @@ describe("013 compras — CRUD y auth", () => {
       month.providers.map((p) => p.nombre),
       [...compras.DEFAULT_PROVIDER_NAMES]
     );
-    const again = await compras.ensureDefaultProviders(db, 7);
+    const again = await compras.ensureRequiredProviders(db, 7);
     assert.equal(again.seeded, false);
     assert.equal(month.providers.length, 3);
-    assert.doesNotMatch(String(compras.ensureDefaultProviders), /Morelos|Acapulco/);
+  });
+
+  it("con un proveedor previo completa los tres requeridos sin duplicar y en orden", async () => {
+    const db = new MemClient();
+    await compras.createProvider(db, 4, { nombre: "pemex tuxpan", orden: 9 });
+    await compras.createProvider(db, 4, { nombre: "Local Extra", orden: 8 });
+    const out = await compras.ensureRequiredProviders(db, 4);
+    const names = out.providers.map((p) => p.nombre);
+    assert.equal(names.filter((n) => compras.normProviderName(n) === compras.normProviderName("PEMEX TUXPAN")).length, 1);
+    assert.equal(compras.normProviderName(names[0]), compras.normProviderName("PEMEX TUXPAN"));
+    assert.equal(compras.normProviderName(names[1]), compras.normProviderName("TOMZA TUXPAN"));
+    assert.equal(compras.normProviderName(names[2]), compras.normProviderName("TOMZA TEPEJI"));
+    assert.ok(names.includes("Local Extra"));
+    const month = await compras.loadMonth(db, 4, 2026, 9);
+    assert.deepEqual(
+      month.providers.slice(0, 3).map((p) => compras.normProviderName(p.nombre)),
+      compras.DEFAULT_PROVIDER_NAMES.map(compras.normProviderName)
+    );
   });
 
   it("D) proveedor inactivo no puede recibir compra nueva", async () => {
@@ -732,10 +749,12 @@ describe("013 compras — rutas HTTP", () => {
     const ws = wb.getWorksheet("CONTROL DE COMPRAS");
     assert.equal(ws.getCell(1, 1).value, "CONTROL DE COMPRAS");
     assert.equal(ws.getCell(4, 2).value, "PEMEX TUXPAN");
-    assert.equal(ws.getCell(4, 5).value, "TOMZA TUXPAN");
-    assert.equal(ws.getCell(4, 8).value, "TOMZA TEPEJI");
-    assert.equal(ws.getCell(4, 11).value, "CONSOLIDADO");
+    assert.equal(ws.getCell(4, 6).value, "TOMZA TUXPAN");
+    assert.equal(ws.getCell(4, 10).value, "TOMZA TEPEJI");
+    assert.equal(ws.getCell(4, 14).value, "CONSOLIDADO");
     assert.equal(ws.getCell(5, 2).value, "COMPRA KG");
+    assert.equal(ws.getColumn(5).width, 2.2);
+    assert.notEqual(String(ws.getCell(4, 2).fill && ws.getCell(4, 2).fill.fgColor && ws.getCell(4, 2).fill.fgColor.argb), "FF2F2F2F");
   });
 });
 
@@ -773,6 +792,10 @@ describe("013 compras — frontend", () => {
     assert.match(client, /Descargar Excel/);
     assert.match(client, /downloadComprasExcel/);
     assert.match(client, /PLANTA \{plantaNombre/);
+    assert.match(client, /compras-provider-title/);
+    assert.match(client, /compras-week-gap/);
+    assert.match(client, /#b8cce4/);
+    assert.doesNotMatch(client, /#ffff99/i);
     assert.doesNotMatch(client, /if \(planta === ["']Morelos["']\)/);
     assert.doesNotMatch(client, /PEMEX TUXPAN/);
   });
@@ -781,6 +804,7 @@ describe("013 compras — frontend", () => {
     assert.match(fmtSrc, /maximumFractionDigits: 3/);
     assert.match(fmtSrc, /minimumFractionDigits: 2/);
     assert.match(fmtSrc, /formatCosto/);
+    assert.match(fmtSrc, /n === 0 && !showZero/);
     assert.match(client, /formatKg/);
     assert.match(client, /formatCosto/);
     assert.match(client, /formatImporte/);

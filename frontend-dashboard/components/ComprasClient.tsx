@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { getTokenFromStorage, parseTokenFromQuery, setTokenInStorage } from "@/lib/auth";
@@ -320,45 +320,53 @@ export function ComprasClient() {
           </section>
         )}
 
-        <div className="overflow-x-auto rounded border border-slate-300 bg-white text-slate-900 shadow">
-          <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 px-4 py-3">
+        <div className="overflow-x-auto bg-white text-slate-900 shadow">
+          <div className="flex min-w-max items-start justify-between gap-8 px-6 pb-2 pt-5">
             <div>
-              <h2 className="text-2xl font-bold tracking-tight text-black">CONTROL DE COMPRAS</h2>
-              <p className="mt-1 text-xs uppercase text-slate-600">PLANTA {plantaNombre || "—"}</p>
+              <h2 className="text-[28px] font-bold leading-none tracking-tight text-black">CONTROL DE COMPRAS</h2>
+              <p className="mt-3 text-[11px] uppercase tracking-wide text-slate-700">PLANTA {plantaNombre || "—"}</p>
             </div>
-            <div className="text-right">
-              <p className="text-2xl font-semibold text-black">{year}</p>
-              <p className="text-xs uppercase text-slate-600">
-                MES <span className="font-semibold text-black">{COMPRAS_MESES[month - 1]}</span>
+            <div className="pr-6 text-right">
+              <p className="text-[28px] font-semibold leading-none text-black">{year}</p>
+              <p className="mt-3 text-[11px] uppercase text-slate-600">
+                MES <span className="ml-3 font-semibold text-black">{(COMPRAS_MESES[month - 1] || "").toUpperCase()}</span>
               </p>
             </div>
           </div>
-          <table className="min-w-max border-collapse text-[11px]">
-            <thead className="sticky top-0 z-10">
+          <table className="min-w-max border-separate border-spacing-0 text-[11px]">
+            <thead>
               <tr>
-                <th rowSpan={2} className="sticky left-0 z-20 min-w-[92px] border border-black bg-black px-2 py-1 text-left font-semibold text-white">
+                <th rowSpan={2} className="compras-provider-title sticky left-0 z-20 min-w-[92px] border border-black bg-black px-2 py-2 text-center font-semibold text-white">
                   FECHA
                 </th>
-                {providers.map((p) => (
-                  <th key={p.id} colSpan={3} className="border border-black bg-black px-2 py-1 text-center font-semibold uppercase tracking-wide text-white">
-                    {p.nombre}
-                  </th>
+                {providers.map((p, i) => (
+                  <Fragment key={`t-${p.id}`}>
+                    {i > 0 ? <th className="w-3 border-0 bg-white p-0" /> : null}
+                    <th colSpan={3} className="compras-provider-title border-b border-black bg-white px-2 py-2 text-center text-[13px] font-bold uppercase tracking-wide text-black">
+                      {p.nombre}
+                    </th>
+                  </Fragment>
                 ))}
-                <th colSpan={3} className="border border-black bg-black px-2 py-1 text-center font-semibold uppercase tracking-wide text-white">
+                <th className="w-3 border-0 bg-white p-0" />
+                <th colSpan={3} className="compras-provider-title border-b border-black bg-white px-2 py-2 text-center text-[13px] font-bold uppercase tracking-wide text-black">
                   CONSOLIDADO
                 </th>
               </tr>
               <tr>
-                {providers.map((p) => (
-                  <MetricHeads key={p.id} />
+                {providers.map((p, i) => (
+                  <Fragment key={`m-${p.id}`}>
+                    {i > 0 ? <th className="w-3 border-0 bg-white p-0" /> : null}
+                    <MetricHeads />
+                  </Fragment>
                 ))}
+                <th className="w-3 border-0 bg-white p-0" />
                 <MetricHeads />
               </tr>
             </thead>
             <tbody>
               {!data && (
                 <tr>
-                  <td colSpan={Math.max(4, providers.length * 3 + 4)} className="px-3 py-6 text-center text-slate-500">
+                  <td colSpan={Math.max(4, providers.length * 4 + 5)} className="px-3 py-6 text-center text-slate-500">
                     {loading ? "Cargando…" : "Selecciona planta, año y mes."}
                   </td>
                 </tr>
@@ -368,80 +376,96 @@ export function ComprasClient() {
                   const day = dayByYmd.get(row.ymd);
                   const captured = Boolean(day?.captured);
                   return (
-                    <tr key={row.ymd} className="hover:bg-slate-50">
+                    <tr key={row.ymd}>
                       <td
                         data-captured={captured ? "1" : "0"}
                         className={`sticky left-0 z-[1] border border-black px-2 py-1 font-medium ${
-                          captured ? "bg-[#ffff99] text-slate-900 compras-fecha-capturada" : "bg-white text-slate-800"
+                          captured ? "bg-[#b8cce4] text-slate-900 compras-fecha-capturada" : "bg-white text-slate-800"
                         }`}
                       >
                         {formatFechaGrid(row.ymd)}
                       </td>
-                      {providers.map((p) => {
+                      {providers.map((p, i) => {
                         const cell = day?.cells[String(p.id)] || day?.cells[p.id];
                         return (
-                          <ProviderCells
-                            key={`${row.ymd}-${p.id}`}
-                            onClick={() => setDetail({ proveedor: p, fecha: row.ymd })}
-                            kg={cell?.kg || 0}
-                            importe={cell?.importe || 0}
-                            costo={cell?.costo_kg ?? null}
-                          />
+                          <Fragment key={`${row.ymd}-${p.id}`}>
+                            {i > 0 ? <td className="w-3 border-0 bg-white p-0" /> : null}
+                            <ProviderCells
+                              onClick={() => setDetail({ proveedor: p, fecha: row.ymd })}
+                              kg={cell?.kg || 0}
+                              importe={cell?.importe || 0}
+                              costo={cell?.costo_kg ?? null}
+                            />
+                          </Fragment>
                         );
                       })}
-                      <ReadOnlyTriple kg={day?.consolidado.kg || 0} importe={day?.consolidado.importe || 0} costo={day?.consolidado.costo_kg ?? null} />
+                      <td className="w-3 border-0 bg-white p-0" />
+                      <ReadOnlyTriple kg={day?.consolidado.kg || 0} importe={day?.consolidado.importe || 0} costo={day?.consolidado.costo_kg ?? null} consolidado />
                     </tr>
                   );
                 }
                 const week = weekByNum.get(row.week);
                 return (
-                  <tr key={`semana-${row.week}`} className="bg-[#bfbfbf] font-semibold">
-                    <td className="sticky left-0 z-[1] border border-black bg-[#bfbfbf] px-2 py-1">Semana {row.week}</td>
-                    {providers.map((p) => {
-                      const cell = week?.providers[String(p.id)] || week?.providers[p.id];
-                      return (
+                  <Fragment key={`semana-${row.week}`}>
+                    <tr>
+                      <td className="sticky left-0 z-[1] border border-black bg-black px-2 py-1 font-semibold text-white">Semana {row.week}</td>
+                      {providers.map((p, i) => {
+                        const cell = week?.providers[String(p.id)] || week?.providers[p.id];
+                        return (
+                          <Fragment key={`w-${row.week}-${p.id}`}>
+                            {i > 0 ? <td className="w-3 border-0 bg-white p-0" /> : null}
+                            <ReadOnlyTriple
+                              kg={cell?.kg || 0}
+                              importe={cell?.importe || 0}
+                              costo={cell?.costo_kg ?? null}
+                              showZero
+                              tone="week"
+                            />
+                          </Fragment>
+                        );
+                      })}
+                      <td className="w-3 border-0 bg-white p-0" />
+                      <ReadOnlyTriple
+                        kg={week?.consolidado.kg || 0}
+                        importe={week?.consolidado.importe || 0}
+                        costo={week?.consolidado.costo_kg ?? null}
+                        showZero
+                        tone="week"
+                        consolidado
+                      />
+                    </tr>
+                    <tr className="compras-week-gap h-3">
+                      <td className="border-0 bg-white p-0" colSpan={Math.max(4, providers.length * 4 + 5)} />
+                    </tr>
+                  </Fragment>
+                );
+              })}
+              {data && (
+                <tr>
+                  <td className="sticky left-0 z-[1] border border-black bg-black px-2 py-1 font-bold text-white">TOTAL MES</td>
+                  {providers.map((p, i) => {
+                    const cell = data.grid.month.providers[String(p.id)] || data.grid.month.providers[p.id];
+                    return (
+                      <Fragment key={`m-${p.id}`}>
+                        {i > 0 ? <td className="w-3 border-0 bg-white p-0" /> : null}
                         <ReadOnlyTriple
-                          key={`w-${row.week}-${p.id}`}
                           kg={cell?.kg || 0}
                           importe={cell?.importe || 0}
                           costo={cell?.costo_kg ?? null}
                           showZero
-                          tone="week"
+                          tone="total"
                         />
-                      );
-                    })}
-                    <ReadOnlyTriple
-                      kg={week?.consolidado.kg || 0}
-                      importe={week?.consolidado.importe || 0}
-                      costo={week?.consolidado.costo_kg ?? null}
-                      showZero
-                      tone="week"
-                    />
-                  </tr>
-                );
-              })}
-              {data && (
-                <tr className="bg-[#a6a6a6] font-bold">
-                  <td className="sticky left-0 z-[1] border border-black bg-[#a6a6a6] px-2 py-1">TOTAL MES</td>
-                  {providers.map((p) => {
-                    const cell = data.grid.month.providers[String(p.id)] || data.grid.month.providers[p.id];
-                    return (
-                      <ReadOnlyTriple
-                        key={`m-${p.id}`}
-                        kg={cell?.kg || 0}
-                        importe={cell?.importe || 0}
-                        costo={cell?.costo_kg ?? null}
-                        showZero
-                        tone="total"
-                      />
+                      </Fragment>
                     );
                   })}
+                  <td className="w-3 border-0 bg-white p-0" />
                   <ReadOnlyTriple
                     kg={data.grid.month.consolidado.kg || 0}
                     importe={data.grid.month.consolidado.importe || 0}
                     costo={data.grid.month.consolidado.costo_kg ?? null}
                     showZero
                     tone="total"
+                    consolidado
                   />
                 </tr>
               )}
@@ -488,13 +512,13 @@ function ProviderCells({
 }) {
   return (
     <>
-      <td className="cursor-pointer border border-black px-1 py-1 text-right tabular-nums hover:bg-cyan-50" onClick={onClick}>
+      <td className="cursor-pointer border border-black bg-[#d9d9d9] px-1 py-1 text-right tabular-nums hover:bg-slate-200" onClick={onClick}>
         {formatKg(kg)}
       </td>
-      <td className="cursor-pointer border border-black px-1 py-1 text-right tabular-nums text-slate-700 hover:bg-cyan-50" onClick={onClick}>
+      <td className={`cursor-pointer border border-black bg-white px-1 py-1 text-right tabular-nums hover:bg-slate-50 ${costo != null ? "font-bold" : ""}`} onClick={onClick}>
         {formatCosto(costo)}
       </td>
-      <td className="cursor-pointer border border-black px-1 py-1 text-right tabular-nums hover:bg-cyan-50" onClick={onClick}>
+      <td className="cursor-pointer border border-black bg-[#d9d9d9] px-1 py-1 text-right tabular-nums hover:bg-slate-200" onClick={onClick}>
         {formatImporte(importe)}
       </td>
     </>
@@ -506,21 +530,24 @@ function ReadOnlyTriple({
   importe,
   costo,
   showZero,
-  tone,
+  consolidado,
 }: {
   kg: number;
   importe: number;
   costo: number | null;
   showZero?: boolean;
   tone?: "week" | "total";
+  consolidado?: boolean;
 }) {
-  const bg = tone === "week" ? "bg-[#bfbfbf]" : tone === "total" ? "bg-[#a6a6a6]" : "bg-white";
-  const cls = `border border-black px-1 py-1 text-right tabular-nums ${bg}`;
+  const capture = consolidado ? "bg-white" : "bg-[#d9d9d9]";
+  const kgCls = `border border-black px-1 py-1 text-right tabular-nums ${capture} ${showZero ? "font-bold" : ""}`;
+  const costCls = `border border-black bg-white px-1 py-1 text-right tabular-nums ${costo != null || showZero ? "font-bold" : ""}`;
+  const impCls = `border border-black px-1 py-1 text-right tabular-nums ${capture} ${showZero ? "font-bold" : ""}`;
   return (
     <>
-      <td className={cls}>{formatKg(kg, showZero)}</td>
-      <td className={cls}>{formatCosto(costo)}</td>
-      <td className={cls}>{formatImporte(importe, showZero)}</td>
+      <td className={kgCls}>{formatKg(kg, showZero)}</td>
+      <td className={costCls}>{formatCosto(costo)}</td>
+      <td className={impCls}>{formatImporte(importe, showZero)}</td>
     </>
   );
 }

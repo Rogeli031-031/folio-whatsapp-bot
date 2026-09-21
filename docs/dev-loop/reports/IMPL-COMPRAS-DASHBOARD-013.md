@@ -111,8 +111,12 @@ Pantalla:
 - Click en celda de proveedor → detalle con N compras, agregar/editar/eliminar, subir/ver/descargar/eliminar PDF
 - Proveedor inactivo: histórico visible; el detalle no ofrece “Agregar compra”
 - Hoja visual tipo Excel: título CONTROL DE COMPRAS, PLANTA, año, MES, encabezados negros, bordes, Semana N gris, TOTAL MES, celdas diarias vacías en blanco
-- Si la planta no tiene proveedores, se siembran (sin `if (planta === Morelos)`): PEMEX TUXPAN, TOMZA TUXPAN, TOMZA TEPEJI. Siguen siendo editables por planta.
-- Botón **Descargar Excel** → `GET /api/compras/excel` (mismo layout/cálculos, auth por planta)
+- La hoja principal **siempre** muestra, en este orden: PEMEX TUXPAN, TOMZA TUXPAN, TOMZA TEPEJI, CONSOLIDADO. `ensureRequiredProviders` completa los nombres faltantes por planta (comparación normalizada, sin duplicar, sin borrar extras ni histórico).
+- Nombres de proveedor sobre fondo blanco, centrados, negros y en negrita; cada bloque tiene su encabezado de métricas oscuro y un espacio entre bloques (no una barra negra continua).
+- Fecha capturada: `#b8cce4` (gris/azul del Excel). Sin amarillo. Fecha vacía: blanco.
+- KG e IMPORTE en gris de captura; COSTO KG blanco y bold si hay dato; CONSOLIDADO blanco solo lectura. Días vacíos sin ceros.
+- Semana N: etiqueta negra/texto blanco; valores blancos en bold. Respiro vertical entre semanas.
+- Botón **Descargar Excel** → `GET /api/compras/excel` con el mismo layout por bloques.
 - Guardar deshabilitado mientras escribe
 - Scroll horizontal en pantallas chicas; fecha y header sticky cuando es viable
 - Administración mínima de proveedores dentro de Compras
@@ -131,7 +135,7 @@ UI: KG con miles, costo 3 decimales, importe 2 decimales.
 
 ## Tests
 
-`node --test test/compras-dashboard-013.test.js` → 31/31.
+`node --test test/compras-dashboard-013.test.js` → 32/32.
 
 Backend: proveedores por planta, 2 compras mismo día, edit/delete, auth cruzada, PDF magic, agregados diarios/semanales/mensuales, costo ponderado vs suma de costos, febrero bisiesto, download 403 sin planta.
 
@@ -239,4 +243,5 @@ Cross-plant: 403 y no toca S3 ni filas.
 
 - CURRENT_TASK → `DONE_PENDING_REVIEW`
 - Commit + push a la misma rama `implementation/compras-dashboard-013`
+- Rama actualizada sobre `origin/main` `7afc3544` (PR #58). behind main = 0. No merge a main.
 - NO PR / NO merge / NO deploy / NO siguiente tarea
