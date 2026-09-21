@@ -13,15 +13,15 @@ export const COMPRAS_MESES = [
   "Diciembre",
 ] as const;
 
-export function formatKg(value: number | null | undefined): string {
+export function formatKg(value: number | null | undefined, showZero = false): string {
   const n = Number(value);
-  if (!Number.isFinite(n) || n === 0) return "";
+  if (!Number.isFinite(n) || (n === 0 && !showZero)) return "";
   return new Intl.NumberFormat("es-MX", { maximumFractionDigits: 3 }).format(n);
 }
 
-export function formatImporte(value: number | null | undefined): string {
+export function formatImporte(value: number | null | undefined, showZero = false): string {
   const n = Number(value);
-  if (!Number.isFinite(n) || n === 0) return "";
+  if (!Number.isFinite(n) || (n === 0 && !showZero)) return "";
   return new Intl.NumberFormat("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 }
 

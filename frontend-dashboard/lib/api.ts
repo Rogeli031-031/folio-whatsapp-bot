@@ -3390,3 +3390,30 @@ export async function downloadComprasFacturaBlob(
   }
   return res.blob();
 }
+
+export async function downloadComprasExcel(
+  token: string,
+  plantaId: number,
+  year: number,
+  month: number
+): Promise<void> {
+  const base = getApiUrl("/api/compras/excel");
+  const url = `${base}?planta_id=${encodeURIComponent(String(plantaId))}&year=${year}&month=${month}&t=${encodeURIComponent(token)}`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as { error?: string }).error || `HTTP ${res.status}`);
+  }
+  const blob = await res.blob();
+  const cd = res.headers.get("Content-Disposition") || "";
+  const m = /filename="?([^"]+)"?/i.exec(cd);
+  const filename = m?.[1] || `control-compras-${plantaId}-${year}-${String(month).padStart(2, "0")}.xlsx`;
+  const a = document.createElement("a");
+  const href = URL.createObjectURL(blob);
+  a.href = href;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(href);
+}
