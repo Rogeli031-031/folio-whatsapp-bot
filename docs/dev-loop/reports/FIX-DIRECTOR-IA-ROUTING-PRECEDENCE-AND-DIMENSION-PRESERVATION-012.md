@@ -36,6 +36,7 @@ Ninguno.
 - `lib/director-ia-chat.js`
 - `lib/director-ia-conversation-state.js`
 - `lib/director-ia-executive-context-sales-entity-010.js`
+- `lib/action-register-board.js` (expone `created_at` / `creada_ymd` del loader existente)
 - `test/director-ia-routing-precedence-dimensions-012.test.js` (nuevo)
 - `test/fixtures/director-ia-routing-precedence-dimensions-012.js` (nuevo)
 - `docs/dev-loop/reports/FIX-DIRECTOR-IA-ROUTING-PRECEDENCE-AND-DIMENSION-PRESERVATION-012.md`
@@ -126,16 +127,26 @@ La cadena classifier → planner → conversation_state → loader → answer co
 
 «¿Cómo va la venta?» (sin canal) sigue siendo total de planta (010). No hereda CASA de un turno anterior.
 
-## Fuentes físicas
+## Fuentes físicas vs fixtures inyectados
 
-| Familia | Fuente | Regla |
-|---|---|---|
-| CHANNEL_SALES_STATUS | `arr.ventas_diarias_cliente` | `canal\|\|categoria` → CASA/COMISIONISTA; `subcategoria\|\|subcanal`; kg del periodo/corte físico 010 |
-| CLIENT_MOVEMENT_DEJARON | loader de movimiento existente | `kg_B <= 0 AND kg_A > 0`; rank `ABS(delta_kg)` desc; no se cambió la definición |
-| CLIENT_COMMENTS_PERIOD | `arr.cliente_comentarios` | periodo/canal/cliente son filtros; no se convierte en causalidad |
-| ACTION_REGISTER_DIRECT | `arr.action_register_items` | conteo abiertas/cerradas/vencidas; lista solo si se pide |
-| ACTION_REGISTER_RECENT | misma tabla | orden `created_at` / `creada_ymd` / `dicf_creada_ymd`; no `dias_vencido` |
-| BITACORA_TOPIC_LOOKUP | `arr.director_ia_bitacora` | busca título/resumen/contenido/vista previa/texto de la planta UI |
+`server.js` no inyecta `predictiveSalesRows`, `clienteComentariosRows` ni `actionRegisterItems`. Esos arrays son solo atajo de test.
+
+Si el array inyectado existe, el runtime lo usa y declara `source_mode=injected_test_rows`. Si no existe, carga el loader físico real. `sources[]` no afirma `arr.*` cuando el turno consumió fixtures.
+
+| Familia | Test inyectado | Producción (sin inject) | Loader reutilizado |
+|---|---|---|---|
+| CHANNEL_SALES_STATUS | `predictiveSalesRows` / `clientRankingSalesRows` / `executiveSalesRows` | `arr.ventas_diarias_cliente` | `queryMonthlySales` + `resolvePlantCodes` (mismo join `cliente_categoria_mes` que ranking/ARR) |
+| CLIENT_MOVEMENT_DEJARON | loader de movimiento existente | `arr.ventas_diarias_cliente` | sin cambio; ya tenía loader de chat |
+| CLIENT_COMMENTS_PERIOD | `clienteComentariosRows` | `arr.cliente_comentarios` | `loadClienteComentariosForDirectorIa` |
+| ACTION_REGISTER_DIRECT / RECENT | `actionRegisterItems` | `arr.action_register_items` (+ DICF del board) | `loadActionPersonBoardForChat` → `buildActionRegisterBoardPayload` |
+| BITACORA_TOPIC_LOOKUP | `bitacoraEntries` | `arr.director_ia_bitacora` | `loadBitacoraForChat` (`titulo`, `resumen_ia`, `contenido`, `fecha`, `created_at`) |
+
+Reglas físicas:
+
+- venta: `canal\|\|categoria` → CASA/COMISIONISTA; `subcategoria\|\|subcanal`; periodo/corte 010; no se inventa SQL nuevo.
+- comentarios: planta + periodo + canal + cliente si aplica; no lista vacía por falta de fixture.
+- Action Register: misma fuente del board; RECENT ordena `created_at` / `creada_ymd` / `dicf_creada_ymd`. El SELECT existente ahora expone esas fechas.
+- bitácora: fallback a `loadBitacoraForChat(pool, planta_id)` sin cambiar de planta.
 
 ## Pending clarification
 
@@ -202,7 +213,7 @@ node --test test/director-ia-commercial-runtime-coverage-004.test.js
 node --test test/director-ia-conversational-continuity.test.js
 ```
 
-012 + 011–004 + continuidad: **160/160**.
+012 + 011–004 + continuidad + runtime físico sin inject: **161/161**.
 
 Regresiones 011 mantenidas: inactivos; última compra de BAYAM; abre su información; lista múltiple no abre first-result; cliente explícito abre el correcto; «¿y TORTILLERIA ERICK?» abre ERICK.
 
@@ -226,10 +237,14 @@ Regresiones 009–003 mantenidas: regulación, SEH, Taller, comisión Casa/Comis
 - [x] frontend no tocado
 - [x] no phrasebook de producción
 - [x] no hardcode de planta / cliente / mes / cifras en runtime
+- [x] sin arrays inyectados, venta Casa / comentarios / acciones / bitácora cargan loader físico
+- [x] `sources` / `source_mode` distinguen fixture vs `arr.*`
 
 ## Desvíos respecto a CURRENT_TASK
 
 Ninguno material. Bitácora temática se colocó después de 010/008 para no robar Taller, regulación ni «qué sabemos de él» de un diagnóstico con cliente activo.
+
+Reopen de revisión de fuentes: el primer commit enrutaba bien en tests porque inyectaba arrays. La producción ahora reusa loaders existentes; no se agregó SQL nuevo de venta ni una segunda tabla de Action Register.
 
 ## Contradicciones o ambigüedades
 

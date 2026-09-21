@@ -237,6 +237,7 @@ describe("012 E2E askDirectorIa", () => {
     const casa = await askDirectorIa({ body: { planta_nombre: "Acapulco" }, dashboardAuth: AUTH }, 1, "¿Cómo va la venta Casa?");
     assert.match(casa.answer, /CASA/i);
     assert.doesNotMatch(casa.answer, /Estado de venta de la planta/);
+    assert.equal(casa.context_meta.source_mode, "injected_test_rows");
 
     const comments = await askDirectorIa(
       { body: { planta_nombre: "Acapulco", conversation_state: { parent_intent: "client_movement" } }, dashboardAuth: AUTH },
@@ -254,6 +255,77 @@ describe("012 E2E askDirectorIa", () => {
     assert.ok(recent.answer.indexOf("Nueva") < recent.answer.indexOf("Vieja vencida"));
 
     const bit = await askDirectorIa({ body: { planta_nombre: "Acapulco" }, dashboardAuth: AUTH }, 1, "¿Qué sabemos de Oaxaca?");
+    assert.match(bit.answer, /Oaxaca/);
+    assert.match(bit.answer, /Acapulco/);
+  });
+});
+
+describe("012 runtime físico sin arrays inyectados", () => {
+  it("carga ventas, comentarios, Action Register y bitácora desde loaders de producción", async () => {
+    process.env.ENABLE_DIRECTOR_IA = "true";
+    const { askDirectorIa, configureDirectorIaChat } = require("../lib/director-ia-chat");
+    configureDirectorIaChat({
+      pool: { query: async () => ({ rows: [] }) },
+      now: NOW,
+      predictiveSalesRows: undefined,
+      clientRankingSalesRows: undefined,
+      executiveSalesRows: undefined,
+      clienteComentariosRows: undefined,
+      actionRegisterItems: undefined,
+      bitacoraEntries: undefined,
+      resolveClientRankingPlantCodes: async () => ({ uniqueCodes: ["ACA"] }),
+      queryMonthlySales: async () => ({
+        rows: [
+          { month: "2026-09", canal: "Casa", subcanal: "Autotanque", kg: 5000, cliente_norm: "CASA UNO" },
+          { month: "2026-09", canal: "Comisionista", subcanal: "Portátil", kg: 1000, cliente_norm: "COMI UNO" },
+        ],
+      }),
+      loadClienteComentariosForDirectorIa: async () => [
+        { cliente_nombre: "BAYAM RESIDENCES", created_at: "2026-09-05", body: "Sin pedido", canal: "Casa" },
+      ],
+      loadActionPersonBoardForChat: async () => ({
+        ok: true,
+        items: [
+          { title: "Nueva", responsable: "B", closed: false, created_at: "2026-09-19", creada_ymd: "2026-09-19", tema: "Mantenimiento" },
+          { title: "Vieja vencida", responsable: "A", closed: false, created_at: "2026-01-01", creada_ymd: "2026-01-01", dias_vencido: 194, tema: "Comercial" },
+        ],
+      }),
+      loadBitacoraForChat: async () => [
+        { fecha: "2026-09-12", titulo: "Reunión Plaud", resumen_ia: "Gas de Oaxaca", contenido: "Oaxaca" },
+      ],
+    });
+
+    const casa = await askDirectorIa({ body: { planta_nombre: "Acapulco" }, dashboardAuth: AUTH }, 1, "¿Cómo va la venta Casa?");
+    assert.equal(casa.context_meta.source_mode, "arr.ventas_diarias_cliente");
+    assert.deepEqual(casa.sources, ["arr.ventas_diarias_cliente"]);
+    assert.match(casa.answer, /CASA/i);
+    assert.doesNotMatch(casa.answer, /Venta observada: 0\.0 t/);
+    assert.doesNotMatch(casa.answer, /Estado de venta de la planta/);
+
+    const comments = await askDirectorIa(
+      { body: { planta_nombre: "Acapulco" }, dashboardAuth: AUTH },
+      1,
+      "¿Qué comentarios de clientes tenemos en septiembre?"
+    );
+    assert.equal(comments.context_meta.source_mode, "arr.cliente_comentarios");
+    assert.deepEqual(comments.sources, ["arr.cliente_comentarios"]);
+    assert.match(comments.answer, /BAYAM RESIDENCES/);
+    assert.doesNotMatch(comments.answer, /AUMENTÓ|DEJÓ DE COMPRAR/);
+
+    const actions = await askDirectorIa({ body: { planta_nombre: "Acapulco" }, dashboardAuth: AUTH }, 1, "¿Qué acciones tenemos?");
+    assert.equal(actions.context_meta.source_mode, "arr.action_register_items");
+    assert.deepEqual(actions.sources, ["arr.action_register_items"]);
+    assert.match(actions.answer, /Action Register/);
+    assert.match(actions.answer, /Abiertas: 2/);
+
+    const recent = await askDirectorIa({ body: { planta_nombre: "Acapulco" }, dashboardAuth: AUTH }, 1, "¿Cuáles son las últimas acciones?");
+    assert.equal(recent.context_meta.source_mode, "arr.action_register_items");
+    assert.ok(recent.answer.indexOf("Nueva") < recent.answer.indexOf("Vieja vencida"));
+    assert.doesNotMatch(recent.answer, /194/);
+
+    const bit = await askDirectorIa({ body: { planta_nombre: "Acapulco" }, dashboardAuth: AUTH }, 1, "¿Qué sabemos de Oaxaca?");
+    assert.equal(bit.context_meta.source_mode, "arr.director_ia_bitacora");
+    assert.deepEqual(bit.sources, ["arr.director_ia_bitacora"]);
     assert.match(bit.answer, /Oaxaca/);
     assert.match(bit.answer, /Acapulco/);
   });
