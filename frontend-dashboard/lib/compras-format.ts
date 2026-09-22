@@ -62,6 +62,44 @@ export function formatFleteImporte(value: number | null | undefined, showZero = 
   return new Intl.NumberFormat("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 }
 
+export function hgCosto(costoKg: number | null | undefined, tarifa: number | null | undefined): number | null {
+  if (costoKg == null || !Number.isFinite(Number(costoKg))) return null;
+  if (tarifa == null || !Number.isFinite(Number(tarifa))) return null;
+  return Math.round((Number(costoKg) + Number(tarifa)) * 1000) / 1000;
+}
+
+export function hgImporte(costo: number | null | undefined, hgKilos: number | null | undefined): number | null {
+  if (costo == null || !Number.isFinite(Number(costo))) return null;
+  if (hgKilos == null || !Number.isFinite(Number(hgKilos))) return null;
+  const n = Math.round(Number(costo) * Number(hgKilos) * -1 * 100) / 100;
+  return n === 0 ? 0 : n;
+}
+
+export function hgImporteSum(
+  days: {
+    hg_kilos?: number | null;
+    consolidado?: { costo_kg?: number | null };
+    flete?: { consolidado?: { tarifa?: number | null } };
+  }[]
+): number | null {
+  let sum = 0;
+  let saw = false;
+  for (const d of days || []) {
+    if (d == null || d.hg_kilos == null || !Number.isFinite(Number(d.hg_kilos))) continue;
+    const costo = hgCosto(d.consolidado?.costo_kg, d.flete?.consolidado?.tarifa);
+    const imp = hgImporte(costo, d.hg_kilos);
+    if (imp == null) return null;
+    sum += imp;
+    saw = true;
+  }
+  return saw ? Math.round(sum * 100) / 100 : null;
+}
+
+export function formatHgImporte(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(Number(value))) return "";
+  return new Intl.NumberFormat("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value));
+}
+
 export function formatHgKilos(value: number | null | undefined): string {
   if (value == null) return "";
   const n = Number(value);

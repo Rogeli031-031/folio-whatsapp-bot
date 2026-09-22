@@ -30,9 +30,13 @@ import {
   formatImporte,
   filterComprasPlantasMenu,
   formatFleteImporte,
+  formatHgImporte,
   formatHgKilos,
   formatKg,
   formatTarifa,
+  hgCosto,
+  hgImporte,
+  hgImporteSum,
   parseLocaleNumber,
   toYmd,
 } from "@/lib/compras-format";
@@ -388,80 +392,70 @@ export function ComprasClient() {
                 <th rowSpan={3} className="compras-provider-title sticky left-0 z-20 min-w-[92px] border border-black bg-black px-2 py-2 text-center font-semibold text-white">
                   FECHA
                 </th>
-                {providers.map((p, i) => (
-                  <Fragment key={`t-${p.id}`}>
-                    {i > 0 ? <th className="w-3 border-0 bg-white p-0" /> : null}
-                    <th colSpan={3} className="compras-provider-title border-b border-black bg-white px-2 py-2 text-center text-[13px] font-bold uppercase tracking-wide text-black">
-                      {token && plantaId ? (
-                        <TarifaCell
-                          token={token}
-                          plantaId={plantaId}
-                          proveedorId={p.id}
-                          proveedorNombre={p.nombre}
-                          year={year}
-                          month={month}
-                          value={tarifaOf(data, p.id)}
-                          onSaved={loadMonth}
-                          onError={setError}
-                        />
-                      ) : (
-                        <span className="mb-1 block text-[9px] font-semibold normal-case tracking-normal text-slate-600">
-                          TARIFA {formatTarifa(tarifaOf(data, p.id))}
-                        </span>
-                      )}
-                      {p.nombre}
-                    </th>
-                  </Fragment>
+                {providers.map((p) => (
+                  <th
+                    key={`t-${p.id}`}
+                    colSpan={3}
+                    className="compras-provider-title border-b border-black bg-white px-2 py-2 text-center text-[13px] font-bold uppercase tracking-wide text-black"
+                  >
+                    {token && plantaId ? (
+                      <TarifaCell
+                        token={token}
+                        plantaId={plantaId}
+                        proveedorId={p.id}
+                        proveedorNombre={p.nombre}
+                        year={year}
+                        month={month}
+                        value={tarifaOf(data, p.id)}
+                        onSaved={loadMonth}
+                        onError={setError}
+                      />
+                    ) : (
+                      <span className="mb-1 block text-[9px] font-semibold normal-case tracking-normal text-slate-600">
+                        TARIFA {formatTarifa(tarifaOf(data, p.id))}
+                      </span>
+                    )}
+                    {p.nombre}
+                  </th>
                 ))}
-                <th className="w-3 border-0 bg-white p-0" />
                 <th colSpan={3} className="compras-provider-title border-b border-black bg-white px-2 py-2 text-center text-[13px] font-bold uppercase tracking-wide text-black">
                   CONSOLIDADO
                 </th>
-                <th className="compras-hg-gap w-6 border-0 bg-white p-0" />
-                <th rowSpan={3} className="compras-hg-title min-w-[88px] border border-black bg-white px-2 py-2 text-center text-[12px] font-bold uppercase tracking-wide text-black">
-                  HG EN KILOS
+                <th rowSpan={3} className="compras-hg-gap w-3 border-0 bg-white p-0" />
+                <th colSpan={3} className="compras-hg-title border-b border-black bg-white px-2 py-2 text-center text-[12px] font-bold uppercase tracking-wide text-black">
+                  HG
                 </th>
-                <th className="compras-flete-gap w-8 border-0 bg-white p-0" />
+                <th rowSpan={3} className="compras-flete-gap w-3 border-0 bg-white p-0" />
                 <th
-                  colSpan={Math.max(3, providers.length * 4 + 2)}
+                  colSpan={Math.max(3, providers.length * 3 + 3)}
                   className="compras-flete-title border-b border-black bg-white px-2 py-2 text-center text-[13px] font-bold uppercase tracking-wide text-black"
                 >
                   VALOR DEL FLETE SEGÚN ORIGEN
                 </th>
               </tr>
               <tr>
-                {providers.map((p, i) => (
-                  <Fragment key={`m-${p.id}`}>
-                    {i > 0 ? <th className="w-3 border-0 bg-white p-0" /> : null}
-                    <MetricHeads rowSpan={2} />
-                  </Fragment>
+                {providers.map((p) => (
+                  <MetricHeads key={`m-${p.id}`} rowSpan={2} />
                 ))}
-                <th className="w-3 border-0 bg-white p-0" />
                 <MetricHeads rowSpan={2} />
-                <th className="compras-hg-gap w-6 border-0 bg-white p-0" />
-                <th className="compras-flete-gap w-8 border-0 bg-white p-0" />
-                {providers.map((p, i) => (
-                  <Fragment key={`ft-${p.id}`}>
-                    {i > 0 ? <th className="w-3 border-0 bg-white p-0" /> : null}
-                    <th colSpan={3} className="compras-flete-origin border-b border-black bg-white px-2 py-1 text-center text-[11px] font-bold uppercase tracking-wide text-black">
-                      {p.nombre}
-                    </th>
-                  </Fragment>
+                <HgMetricHeads rowSpan={2} />
+                {providers.map((p) => (
+                  <th
+                    key={`ft-${p.id}`}
+                    colSpan={3}
+                    className="compras-flete-origin border-b border-black bg-white px-2 py-1 text-center text-[11px] font-bold uppercase tracking-wide text-black"
+                  >
+                    {p.nombre}
+                  </th>
                 ))}
-                <th className="w-3 border-0 bg-white p-0" />
                 <th colSpan={3} className="compras-flete-origin border-b border-black bg-white px-2 py-1 text-center text-[11px] font-bold uppercase tracking-wide text-black">
                   CONSOLIDADO
                 </th>
               </tr>
               <tr>
-                <th className="compras-flete-gap w-8 border-0 bg-white p-0" />
-                {providers.map((p, i) => (
-                  <Fragment key={`fm-${p.id}`}>
-                    {i > 0 ? <th className="w-3 border-0 bg-white p-0" /> : null}
-                    <FleteMetricHeads />
-                  </Fragment>
+                {providers.map((p) => (
+                  <FleteMetricHeads key={`fm-${p.id}`} />
                 ))}
-                <th className="w-3 border-0 bg-white p-0" />
                 <FleteMetricHeads />
               </tr>
             </thead>
@@ -487,35 +481,34 @@ export function ComprasClient() {
                       >
                         {formatFechaGrid(row.ymd)}
                       </td>
-                      {providers.map((p, i) => {
+                      {providers.map((p) => {
                         const cell = day?.cells[String(p.id)] || day?.cells[p.id];
                         return (
-                          <Fragment key={`${row.ymd}-${p.id}`}>
-                            {i > 0 ? <td className="w-3 border-0 bg-white p-0" /> : null}
-                            <ProviderCells
-                              onClick={() => setDetail({ proveedor: p, fecha: row.ymd })}
-                              kg={cell?.kg || 0}
-                              importe={cell?.importe || 0}
-                              costo={cell?.costo_kg ?? null}
-                            />
-                          </Fragment>
+                          <ProviderCells
+                            key={`${row.ymd}-${p.id}`}
+                            onClick={() => setDetail({ proveedor: p, fecha: row.ymd })}
+                            kg={cell?.kg || 0}
+                            importe={cell?.importe || 0}
+                            costo={cell?.costo_kg ?? null}
+                          />
                         );
                       })}
-                      <td className="w-3 border-0 bg-white p-0" />
                       <ReadOnlyTriple kg={day?.consolidado.kg || 0} importe={day?.consolidado.importe || 0} costo={day?.consolidado.costo_kg ?? null} consolidado />
-                      <td className="compras-hg-gap w-6 border-0 bg-white p-0" />
-                      {token && plantaId ? (
-                        <HgDayCell
-                          token={token}
-                          plantaId={plantaId}
-                          fecha={row.ymd}
-                          value={day?.hg_kilos ?? null}
-                          onSaved={loadMonth}
-                          onError={setError}
-                        />
-                      ) : (
-                        <td className="border border-black bg-white px-1 py-1 text-right tabular-nums">{formatHgKilos(day?.hg_kilos ?? null)}</td>
-                      )}
+                      <td className="compras-hg-gap w-3 border-0 bg-white p-0" />
+                      <HgDerivedCells
+                        costo={hgCosto(day?.consolidado?.costo_kg, day?.flete?.consolidado?.tarifa)}
+                        hg={day?.hg_kilos ?? null}
+                        importe={hgImporte(
+                          hgCosto(day?.consolidado?.costo_kg, day?.flete?.consolidado?.tarifa),
+                          day?.hg_kilos ?? null
+                        )}
+                        editable={Boolean(token && plantaId)}
+                        token={token}
+                        plantaId={plantaId}
+                        fecha={row.ymd}
+                        onSaved={loadMonth}
+                        onError={setError}
+                      />
                       <FleteRowCells providers={providers} flete={day?.flete} />
                     </tr>
                   );
@@ -525,22 +518,19 @@ export function ComprasClient() {
                   <Fragment key={`semana-${row.week}`}>
                     <tr>
                       <td className="sticky left-0 z-[1] border border-black bg-black px-2 py-1 font-semibold text-white">Semana {row.week}</td>
-                      {providers.map((p, i) => {
+                      {providers.map((p) => {
                         const cell = week?.providers[String(p.id)] || week?.providers[p.id];
                         return (
-                          <Fragment key={`w-${row.week}-${p.id}`}>
-                            {i > 0 ? <td className="w-3 border-0 bg-white p-0" /> : null}
-                            <ReadOnlyTriple
-                              kg={cell?.kg || 0}
-                              importe={cell?.importe || 0}
-                              costo={cell?.costo_kg ?? null}
-                              showZero
-                              tone="week"
-                            />
-                          </Fragment>
+                          <ReadOnlyTriple
+                            key={`w-${row.week}-${p.id}`}
+                            kg={cell?.kg || 0}
+                            importe={cell?.importe || 0}
+                            costo={cell?.costo_kg ?? null}
+                            showZero
+                            tone="week"
+                          />
                         );
                       })}
-                      <td className="w-3 border-0 bg-white p-0" />
                       <ReadOnlyTriple
                         kg={week?.consolidado.kg || 0}
                         importe={week?.consolidado.importe || 0}
@@ -549,10 +539,15 @@ export function ComprasClient() {
                         tone="week"
                         consolidado
                       />
-                      <td className="compras-hg-gap w-6 border-0 bg-white p-0" />
-                      <td className="border border-black bg-white px-1 py-1 text-right font-bold tabular-nums">
-                        {formatHgKilos(week?.hg_kilos ?? null)}
-                      </td>
+                      <td className="compras-hg-gap w-3 border-0 bg-white p-0" />
+                      <HgDerivedCells
+                        costo={hgCosto(week?.consolidado?.costo_kg, week?.flete?.consolidado?.tarifa)}
+                        hg={week?.hg_kilos ?? null}
+                        importe={hgImporteSum(
+                          (data?.grid.days || []).filter((d) => (week?.ymds || []).includes(d.ymd))
+                        )}
+                        bold
+                      />
                       <FleteRowCells providers={providers} flete={week?.flete} showZero />
                     </tr>
                     <tr className="compras-week-gap h-3">
@@ -564,22 +559,19 @@ export function ComprasClient() {
               {data && (
                 <tr>
                   <td className="sticky left-0 z-[1] border border-black bg-black px-2 py-1 font-bold text-white">TOTAL MES</td>
-                  {providers.map((p, i) => {
+                  {providers.map((p) => {
                     const cell = data.grid.month.providers[String(p.id)] || data.grid.month.providers[p.id];
                     return (
-                      <Fragment key={`m-${p.id}`}>
-                        {i > 0 ? <td className="w-3 border-0 bg-white p-0" /> : null}
-                        <ReadOnlyTriple
-                          kg={cell?.kg || 0}
-                          importe={cell?.importe || 0}
-                          costo={cell?.costo_kg ?? null}
-                          showZero
-                          tone="total"
-                        />
-                      </Fragment>
+                      <ReadOnlyTriple
+                        key={`m-${p.id}`}
+                        kg={cell?.kg || 0}
+                        importe={cell?.importe || 0}
+                        costo={cell?.costo_kg ?? null}
+                        showZero
+                        tone="total"
+                      />
                     );
                   })}
-                  <td className="w-3 border-0 bg-white p-0" />
                   <ReadOnlyTriple
                     kg={data.grid.month.consolidado.kg || 0}
                     importe={data.grid.month.consolidado.importe || 0}
@@ -588,10 +580,13 @@ export function ComprasClient() {
                     tone="total"
                     consolidado
                   />
-                  <td className="compras-hg-gap w-6 border-0 bg-white p-0" />
-                  <td className="border border-black bg-white px-1 py-1 text-right font-bold tabular-nums">
-                    {formatHgKilos(data.grid.month.hg_kilos ?? null)}
-                  </td>
+                  <td className="compras-hg-gap w-3 border-0 bg-white p-0" />
+                  <HgDerivedCells
+                    costo={hgCosto(data.grid.month.consolidado?.costo_kg, data.grid.month.flete?.consolidado?.tarifa)}
+                    hg={data.grid.month.hg_kilos ?? null}
+                    importe={hgImporteSum(data.grid.days || [])}
+                    bold
+                  />
                   <FleteRowCells providers={providers} flete={data.grid.month.flete} showZero />
                 </tr>
               )}
@@ -671,7 +666,7 @@ function HgDayCell({
   }
 
   return (
-    <td className="border border-black bg-white p-0">
+    <td className="min-w-[56px] max-w-[72px] border border-black bg-[#d9d9d9] p-0">
       <input
         aria-label={`HG EN KILOS ${fecha}`}
         value={text}
@@ -684,6 +679,73 @@ function HgDayCell({
         className="w-full bg-transparent px-1 py-1 text-right tabular-nums outline-none"
       />
     </td>
+  );
+}
+
+function HgMetricHeads({ rowSpan }: { rowSpan?: number }) {
+  return (
+    <>
+      <th rowSpan={rowSpan} className="min-w-[70px] border border-black bg-black px-1 py-1 text-center font-normal text-white">
+        COSTO
+      </th>
+      <th rowSpan={rowSpan} className="min-w-[56px] max-w-[72px] border border-black bg-black px-1 py-1 text-center font-normal text-white">
+        HG EN KILOS
+      </th>
+      <th rowSpan={rowSpan} className="min-w-[80px] border border-black bg-black px-1 py-1 text-center font-normal text-white">
+        IMPORTE
+      </th>
+    </>
+  );
+}
+
+function HgDerivedCells({
+  costo,
+  hg,
+  importe,
+  editable,
+  bold,
+  token,
+  plantaId,
+  fecha,
+  onSaved,
+  onError,
+}: {
+  costo: number | null;
+  hg: number | null;
+  importe: number | null;
+  editable?: boolean;
+  bold?: boolean;
+  token?: string | null;
+  plantaId?: number | null;
+  fecha?: string;
+  onSaved?: () => Promise<void>;
+  onError?: (message: string | null) => void;
+}) {
+  const costCls = `border border-black bg-white px-1 py-1 text-right tabular-nums ${bold || costo != null ? "font-bold" : ""}`;
+  const impCls = `border border-black bg-white px-1 py-1 text-right tabular-nums ${bold || importe != null ? "font-bold" : ""}`;
+  return (
+    <>
+      <td className={costCls}>{formatCosto(costo)}</td>
+      {editable && token && plantaId && fecha && onSaved && onError ? (
+        <HgDayCell
+          token={token}
+          plantaId={plantaId}
+          fecha={fecha}
+          value={hg}
+          onSaved={onSaved}
+          onError={onError}
+        />
+      ) : (
+        <td
+          className={`min-w-[56px] max-w-[72px] border border-black px-1 py-1 text-right tabular-nums ${
+            bold ? "bg-white font-bold" : "bg-[#d9d9d9]"
+          }`}
+        >
+          {formatHgKilos(hg)}
+        </td>
+      )}
+      <td className={impCls}>{formatHgImporte(importe)}</td>
+    </>
   );
 }
 
@@ -740,12 +802,11 @@ function FleteRowCells({
   const cons = (flete && flete.consolidado) || { kg: 0, tarifa: null, importe: 0 };
   return (
     <>
-      <td className="compras-flete-gap w-8 border-0 bg-white p-0" />
-      {providers.map((p, i) => {
+      <td className="compras-flete-gap w-3 border-0 bg-white p-0" />
+      {providers.map((p) => {
         const cell = fleteCellOf(flete, p.id);
         return (
           <Fragment key={`flete-${p.id}`}>
-            {i > 0 ? <td className="w-3 border-0 bg-white p-0" /> : null}
             <td className="border border-black bg-white px-1 py-1 text-right tabular-nums">{formatKg(cell.kg, showZero)}</td>
             <td className="border border-black bg-white px-1 py-1 text-right tabular-nums">{formatTarifa(cell.tarifa)}</td>
             <td className="border border-black bg-white px-1 py-1 text-right tabular-nums">
@@ -754,7 +815,6 @@ function FleteRowCells({
           </Fragment>
         );
       })}
-      <td className="w-3 border-0 bg-white p-0" />
       <td className="border border-black bg-white px-1 py-1 text-right tabular-nums">{formatKg(cons.kg, showZero)}</td>
       <td className="border border-black bg-white px-1 py-1 text-right tabular-nums">{formatTarifa(cons.tarifa)}</td>
       <td className="border border-black bg-white px-1 py-1 text-right tabular-nums">
