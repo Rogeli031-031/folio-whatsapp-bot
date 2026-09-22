@@ -1,16 +1,16 @@
 ﻿# CURRENT_TASK
 
 ```yaml
-task_id: "IMPL-COMPRAS-PROVIDER-SEPARATORS-022"
-title: "Compras — separadores visuales entre proveedores y bloques"
+task_id: "IMPL-ARR-FORECAST-EXCEL-DAILY-CATEGORY-023"
+title: "Forecast Excel — desglose diario CASA / COMISIONISTA por planta"
 status: "DONE_PENDING_REVIEW"
 mode: "IMPLEMENTATION"
 
 authorized_by: "HUMAN"
-authorized_at: "2026-09-22T12:40:00-06:00"
+authorized_at: "2026-09-22T13:30:00-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN"
 
-objective: "Agregar separación visual uniforme entre cada bloque de proveedor en CONTROL DE COMPRAS y en VALOR DEL FLETE SEGÚN ORIGEN, manteniendo separadores grandes entre los bloques principales Compras/HG/Flete."
+objective: "Ampliar las hojas Provincia Venta Diaria y Provincia Comisiones del Excel generado por Descargar Excel (Forecast), agregando desde la columna J el desglose diario por planta de CASA y COMISIONISTA, sin modificar las columnas A-H actuales."
 
 implementation: true
 code_changes: true
@@ -18,38 +18,41 @@ code_changes: true
 schema_changes: false
 data_mutation: false
 
-base_sha: "ccbde39247369dfa39e79839dc56293bf95026e0"
-branch: "implementation/compras-provider-separators-022"
+base_sha: "f7ccaeb03b0b0ff08afebb57ccee8936cc3d106c"
+branch: "implementation/arr-forecast-excel-daily-category-023"
 
 merge_authorized: false
 deploy_authorized: false
 next_task_authorized: false
 
 in_scope:
-  - "frontend-dashboard/components/ComprasClient.tsx"
-  - "tests Compras 022"
-  - "regresión 021/020/016"
-  - "docs/dev-loop/reports/IMPL-COMPRAS-PROVIDER-SEPARATORS-022.md"
+  - "lib/dashboard-arr-forecast.js"
+  - "tests específicos 023"
+  - "tests dashboard ARR forecast/export"
+  - "docs/dev-loop/reports/IMPL-ARR-FORECAST-EXCEL-DAILY-CATEGORY-023.md"
   - "docs/dev-loop/CURRENT_TASK.md"
 
 out_of_scope:
-  - "API"
+  - "frontend"
   - "DB/schema"
   - "persistencia"
-  - "fórmulas"
-  - "Excel"
   - "Director IA"
-  - "ARR/IGF"
+  - "Compras/HG/Flete"
+  - "cálculo IGF"
+  - "ARR Plan UI"
+  - "otras hojas del Excel salvo regresión"
   - "PR"
   - "merge"
   - "deploy"
 
 contracts_in_force:
-  - "solo UI/layout"
-  - "no cambiar datos ni cálculos"
-  - "flete sigue colapsable"
-  - "HG siempre visible"
+  - "A-H de Provincia Venta Diaria permanecen intactas"
+  - "A-H actuales de Provincia Comisiones permanecen intactas"
+  - "columna I queda como separación"
+  - "nuevo bloque inicia en J"
+  - "CASA / COMISIONISTA usan fuentes ARR existentes"
+  - "descuento $/kg siempre ponderado por kg, nunca promedio simple"
 
 max_attempts: 1
-result_report_path: "docs/dev-loop/reports/IMPL-COMPRAS-PROVIDER-SEPARATORS-022.md"
+result_report_path: "docs/dev-loop/reports/IMPL-ARR-FORECAST-EXCEL-DAILY-CATEGORY-023.md"
 ```
