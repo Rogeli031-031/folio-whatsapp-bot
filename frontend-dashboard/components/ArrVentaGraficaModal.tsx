@@ -48,9 +48,14 @@ function fmtMoney(n: number): string {
   });
 }
 
+function discountGraphValue(n: number | null | undefined): number | null {
+  if (n == null || !Number.isFinite(Number(n))) return null;
+  return Math.abs(Number(n));
+}
+
 function fmtDescKg(n: number | null | undefined): string {
   if (n == null || !Number.isFinite(n)) return "—";
-  return `$${n.toLocaleString("es-MX", {
+  return `$${Math.abs(n).toLocaleString("es-MX", {
     minimumFractionDigits: 3,
     maximumFractionDigits: 3,
   })}/kg`;
@@ -84,6 +89,20 @@ function fmtLabelFecha(fecha: string, range: ArrVentaSerieRange): string {
     return `${mo}/${y.slice(2)}`;
   }
   return `${Number(mo)}/${y.slice(2)}`;
+}
+
+function buildGappedPath(points: { x: number; y: number | null }[]): string {
+  let d = "";
+  let penDown = false;
+  for (const p of points) {
+    if (p.y == null || !Number.isFinite(p.y)) {
+      penDown = false;
+      continue;
+    }
+    d += penDown ? ` L ${p.x} ${p.y}` : ` M ${p.x} ${p.y}`;
+    penDown = true;
+  }
+  return d;
 }
 
 function buildPath(
@@ -199,10 +218,7 @@ export default function ArrVentaGraficaModal({
       fecha: p.fecha,
       ton: Number(p.venta_ton) || 0,
       descuento: Number(p.descuento_mxn) || 0,
-      descuentoKg:
-        p.descuento_kg == null || !Number.isFinite(Number(p.descuento_kg))
-          ? null
-          : Number(p.descuento_kg),
+      descuentoKg: discountGraphValue(p.descuento_kg),
     }));
   }, [points]);
 
@@ -215,7 +231,11 @@ export default function ArrVentaGraficaModal({
     const W = 980;
     const H = 460;
     const padL = 56;
-    const padR = 24;
+    const descPresent = isCliente
+      ? series.map((s) => s.descuentoKg).filter((v): v is number => v != null)
+      : [];
+    const hasDescAxis = descPresent.length > 0;
+    const padR = isCliente && hasDescAxis ? 64 : 24;
     const padT = 28;
     const padB = 44;
     const vals = series.map((s) => s.ton);
@@ -232,10 +252,23 @@ export default function ArrVentaGraficaModal({
     const innerW = W - padL - padR;
     const innerH = H - padT - padB;
     const yOf = (ton: number) => padT + (1 - (ton - yMin) / ySpan) * innerH;
+    const dMin = 0;
+    const dMaxRaw = hasDescAxis ? Math.max(...descPresent, 0) : 0;
+    const dSpan = Math.max(dMaxRaw - dMin, 0.001);
+    const dMax = dMaxRaw + dSpan * 0.08;
+    const dYSpan = Math.max(dMax - dMin, 0.001);
+    const yOfDesc = (v: number) => padT + (1 - (v - dMin) / dYSpan) * innerH;
     const pts = series.map((s, i) => {
       const x =
         series.length <= 1 ? padL + innerW / 2 : padL + (i / (series.length - 1)) * innerW;
-      return { x, y: yOf(s.ton), ...s };
+      const desc = s.descuentoKg;
+      return {
+        x,
+        y: yOf(s.ton),
+        yDesc: desc == null ? null : yOfDesc(desc),
+        ...s,
+        descuentoKg: desc,
+      };
     });
     let trendLine: { x1: number; y1: number; x2: number; y2: number } | null = null;
     if (trend && pts.length >= 2) {
@@ -251,6 +284,12 @@ export default function ArrVentaGraficaModal({
       const v = yMin + (ySpan * i) / (ticks - 1);
       return { v, y: yOf(v) };
     });
+    const yTicksDesc = hasDescAxis
+      ? Array.from({ length: ticks }, (_, i) => {
+          const v = dMin + (dYSpan * i) / (ticks - 1);
+          return { v, y: yOfDesc(v) };
+        })
+      : [];
     const xLabelCount = Math.min(8, series.length);
     const xLabels: { i: number; label: string; x: number }[] = [];
     if (series.length) {
@@ -264,11 +303,28 @@ export default function ArrVentaGraficaModal({
         });
       }
     }
-    return { W, H, padL, padR, padT, padB, pts, yTicks, xLabels, trendLine };
-  }, [series, range]);
+    return {
+      W,
+      H,
+      padL,
+      padR,
+      padT,
+      padB,
+      pts,
+      yTicks,
+      yTicksDesc,
+      xLabels,
+      trendLine,
+      hasDescAxis,
+    };
+  }, [series, range, isCliente]);
 
   const lineColor = isCliente ? "#ca8a04" : canal === "casa" ? "#ca8a04" : "#38bdf8";
+  const descColor = "#7c3aed";
   const fillId = isCliente ? "arrFillCliente" : canal === "casa" ? "arrFillCasa" : "arrFillComi";
+  const descPath = isCliente
+    ? buildGappedPath(chart.pts.map((p) => ({ x: p.x, y: p.yDesc })))
+    : "";
   const linePath = buildPath(
     chart.pts.map((p) => ({ x: p.x, y: p.y })),
     false,
@@ -353,9 +409,23 @@ export default function ArrVentaGraficaModal({
               </button>
             </>
           )}
-          <span className="ml-auto inline-flex items-center gap-1.5 text-[11px] text-slate-400">
-            <span className="inline-block h-0.5 w-4 rounded bg-emerald-500" />
-            Línea de tendencia
+          <span className="ml-auto inline-flex flex-wrap items-center gap-3 text-[11px] text-slate-400">
+            {isCliente && (
+              <>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="inline-block h-0.5 w-4 rounded bg-yellow-500" />
+                  Venta (Ton)
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="inline-block h-0.5 w-4 rounded bg-violet-500" />
+                  Descuento ($/kg)
+                </span>
+              </>
+            )}
+            <span className="inline-flex items-center gap-1.5">
+              <span className="inline-block h-0.5 w-4 rounded bg-emerald-500" />
+              Línea de tendencia{isCliente ? " · venta" : ""}
+            </span>
           </span>
         </div>
 
@@ -376,7 +446,11 @@ export default function ArrVentaGraficaModal({
                   viewBox={`0 0 ${chart.W} ${chart.H}`}
                   className="h-auto w-full"
                   role="img"
-                  aria-label="Gráfica de toneladas de venta"
+                  aria-label={
+                    isCliente
+                      ? "Gráfica de toneladas de venta y descuento por kilo"
+                      : "Gráfica de toneladas de venta"
+                  }
                   onMouseLeave={() => setHoverIdx(null)}
                 >
                   <defs>
@@ -406,10 +480,59 @@ export default function ArrVentaGraficaModal({
                       </text>
                     </g>
                   ))}
+                  {isCliente &&
+                    chart.hasDescAxis &&
+                    chart.yTicksDesc.map((t) => (
+                      <text
+                        key={`yd-${t.v}`}
+                        x={chart.W - chart.padR + 8}
+                        y={t.y + 4}
+                        textAnchor="start"
+                        fontSize="11"
+                        fill="#7c3aed"
+                      >
+                        {t.v.toLocaleString("es-MX", {
+                          minimumFractionDigits: 3,
+                          maximumFractionDigits: 3,
+                        })}
+                      </text>
+                    ))}
+                  {isCliente && chart.hasDescAxis && (
+                    <text
+                      x={chart.W - 4}
+                      y={16}
+                      textAnchor="end"
+                      fontSize="10"
+                      fill="#7c3aed"
+                    >
+                      $/kg
+                    </text>
+                  )}
                   {areaPath && <path d={areaPath} fill={`url(#${fillId})`} />}
                   {linePath && (
                     <path d={linePath} fill="none" stroke={lineColor} strokeWidth="2.5" />
                   )}
+                  {isCliente && descPath && (
+                    <path
+                      d={descPath}
+                      fill="none"
+                      stroke={descColor}
+                      strokeWidth="2.2"
+                      strokeLinejoin="round"
+                    />
+                  )}
+                  {isCliente &&
+                    chart.pts.map((p) =>
+                      p.yDesc == null ? null : (
+                        <circle
+                          key={`desc-${p.fecha}`}
+                          cx={p.x}
+                          cy={p.yDesc}
+                          r="3.2"
+                          fill={descColor}
+                        />
+                      )
+                    )}
                   {chart.trendLine && (
                     <g>
                       <line
@@ -484,6 +607,16 @@ export default function ArrVentaGraficaModal({
                         stroke="#fff"
                         strokeWidth="2"
                       />
+                      {isCliente && active.yDesc != null && (
+                        <circle
+                          cx={active.x}
+                          cy={active.yDesc}
+                          r="5"
+                          fill={descColor}
+                          stroke="#fff"
+                          strokeWidth="2"
+                        />
+                      )}
                     </g>
                   )}
                 </svg>
