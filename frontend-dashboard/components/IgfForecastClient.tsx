@@ -958,7 +958,8 @@ export function IgfForecastContent() {
                 igfForecast.month,
                 uploadDay,
                 versionAsOfCorte,
-                plantaFilter
+                plantaFilter,
+                true
               );
               window.open(url, "_blank", "noopener,noreferrer");
             }}

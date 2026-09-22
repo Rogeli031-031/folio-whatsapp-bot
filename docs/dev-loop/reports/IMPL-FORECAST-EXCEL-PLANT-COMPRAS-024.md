@@ -26,7 +26,7 @@ contracts_consulted:
 contracts_modified: []
 ambiguities_or_contradictions: []
 deviations_from_current_task:
-  - "El enlace KPI de frontend-dashboard/app/page.tsx sigue llamando getDashboardExcelDownloadUrl sin planta. Quedó fuera de in_scope. El endpoint ahora responde 400 si falta plant_code."
+  - "La primera entrega hizo plant_code obligatorio en GET /api/arr/dashboard-excel y el botón de KPI Financieros (app/page.tsx) recibía HTTP 400. La corrección exige planta solo con require_plant=1, que envía IgfForecastClient. El caller histórico sin ese flag vuelve al workbook global y no incluye CONTROL DE COMPRAS."
 next_task_proposed: ""
 secrets_check: "none"
 human_decision_needed: []
@@ -81,13 +81,26 @@ Con planta seleccionada, el dataset se reduce antes de escribir. No se ocultan c
 ## Excepciones
 
 - La plantilla mini de IGF sigue reservando filas en blanco del layout de seis plantas. Esas celdas no llevan nombre de otra planta. Las fórmulas del mini y el resumen usan solo la planta seleccionada.
-- No queda otra hoja con dimensión planta sin filtro. Las filas de título y mes no son una planta.
-- `frontend-dashboard/app/page.tsx` (KPI) no envía `plant_code`. El endpoint responde 400. No se editó: está fuera de alcance.
-- El camino interno sin `plantCode` de `generarDashboardArrForecast` se conserva para quien no pase planta. La descarga HTTP ya no entra por ahí.
+- El filtro de planta aplica cuando la descarga trae `require_plant=1` y una planta válida. Sin ese flag el libro sigue siendo el global histórico.
+
+## Compatibilidad KPI
+
+La primera entrega respondía 400 si faltaba `plant_code`. El botón de KPI Financieros en `frontend-dashboard/app/page.tsx` llama `getDashboardExcelDownloadUrl(token, year, month)` y no tiene selector de planta, así que quedó roto.
+
+Corrección: el requisito de una planta no es global. IGF Forecast envía `plant_code` y `require_plant=1`. El backend no mira `Referer`.
+
+| Llamada | Resultado |
+|---|---|
+| IGF Forecast + Todas | el cliente no abre la descarga |
+| IGF Forecast + planta + `require_plant=1` | libro de esa planta y hoja CONTROL DE COMPRAS |
+| `require_plant=1` sin `plant_code` | HTTP 400 |
+| KPI sin `require_plant` | libro global, HTTP distinto de 400, sin CONTROL DE COMPRAS y sin inventar planta |
+
+El nombre con planta (`Dashboard_ARR_Forecast_Puebla_2026_9.xlsx`) queda en el flujo `require_plant`. El histórico conserva `Dashboard_ARR_Forecast_<year>_<month>.xlsx`.
 
 ## CONTROL DE COMPRAS
 
-Tercera hoja, nombre exacto `CONTROL DE COMPRAS`.
+Tercera hoja, nombre exacto `CONTROL DE COMPRAS`, solo si `require_plant=1` resolvió una planta válida. El flujo global no la agrega.
 
 Orden: Provincia Venta Diaria, Provincia Comisiones, CONTROL DE COMPRAS, luego el resto.
 
@@ -107,9 +120,9 @@ Ejemplo: `Dashboard_ARR_Forecast_Puebla_2026_9.xlsx`
 
 ## Pruebas
 
-- `test/forecast-excel-plant-compras-024.test.js`: 21 pass. Incluye Todas bloqueada, `plant_code`, un selector, venta/comisiones/CASA sin Acapulco, numFmt 45 / 51.2 / 64.1234, orden de CONTROL DE COMPRAS, equivalencia celda a celda con `buildComprasWorkbook`, resolución GT Puebla → id 1 y 403 en el endpoint.
+- `test/forecast-excel-plant-compras-024.test.js`: 26 pass. Los 21 anteriores siguen en verde. Se agregó la compatibilidad: KPI sin `plant_code` no entra al 400, el flujo sin `require_plant` conserva el libro global, `require_plant=1` sin planta responde 400, con planta queda scoped, y CONTROL DE COMPRAS solo aparece con planta válida.
 - `test/arr-forecast-excel-daily-category-023.test.js`: pass.
-- Compras 013, 014, 016, 020, 021 y 022: pass (154 en el lote conjunto con 023).
+- Compras 013, 014, 016 y 020: pass.
 - `cd frontend-dashboard && npm run build`: exit 0.
 
 La página IGF en vivo no se recorrió con sesión autenticada. El bloqueo de Todas y la URL se cubren en el fuente del cliente y en el build de tipos.

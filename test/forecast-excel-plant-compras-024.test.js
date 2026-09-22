@@ -13,6 +13,7 @@ const ExcelJS = require("exceljs");
 const ROOT = path.join(__dirname, "..");
 const CLIENT = fs.readFileSync(path.join(ROOT, "frontend-dashboard", "components", "IgfForecastClient.tsx"), "utf8");
 const API = fs.readFileSync(path.join(ROOT, "frontend-dashboard", "lib", "api.ts"), "utf8");
+const PAGE = fs.readFileSync(path.join(ROOT, "frontend-dashboard", "app", "page.tsx"), "utf8");
 const SERVER = fs.readFileSync(path.join(ROOT, "server.js"), "utf8");
 const LIB = fs.readFileSync(path.join(ROOT, "lib", "dashboard-arr-forecast.js"), "utf8");
 const EXCEL = fs.readFileSync(path.join(ROOT, "lib", "compras-excel.js"), "utf8");
@@ -271,11 +272,12 @@ describe("IMPL-FORECAST-EXCEL-PLANT-COMPRAS-024 selector", () => {
     assert.match(CLIENT, /setForecastExcelMsg\("Selecciona una planta para descargar el Excel Forecast\."\)/);
   });
 
-  it("B) Puebla envía plant_code", () => {
+  it("B) Puebla envía plant_code y require_plant", () => {
     assert.match(API, /plant_code=\$\{encodeURIComponent\(plant\)\}/);
-    assert.match(CLIENT, /getDashboardExcelDownloadUrl\([\s\S]*plantaFilter/);
+    assert.match(API, /requirePlant \? "&require_plant=1" : ""/);
+    assert.match(CLIENT, /getDashboardExcelDownloadUrl\([\s\S]*plantaFilter,\s*true/);
     const plant = "GT Puebla";
-    assert.match(`&plant_code=${encodeURIComponent(plant)}`, /plant_code=GT%20Puebla/);
+    assert.match(`&plant_code=${encodeURIComponent(plant)}&require_plant=1`, /plant_code=GT%20Puebla&require_plant=1/);
   });
 
   it("C) Acapulco envía plant_code", () => {
@@ -501,16 +503,67 @@ describe("IMPL-FORECAST-EXCEL-PLANT-COMPRAS-024 autorización", () => {
     assert.equal(await forecast.resolveForecastExportPlant(db, "Corporativo"), null);
   });
 
-  it("el endpoint exige planta, autoriza y nombra el archivo", () => {
+  it("el endpoint exige planta solo con require_plant, autoriza y nombra el archivo", () => {
     const start = SERVER.indexOf('app.get("/api/arr/dashboard-excel"');
-    const slice = SERVER.slice(start, start + 9000);
+    const slice = SERVER.slice(start, start + 12000);
+    assert.match(slice, /if \(requirePlant && !plantCodeRaw\)/);
     assert.match(slice, /Selecciona una planta para descargar el Excel Forecast/);
+    assert.match(slice, /if \(requirePlant\)/);
     assert.match(slice, /resolveForecastExportPlant/);
     assert.match(slice, /assertPlantaPermitidaDashboard\(req, resolvedPlant\.plantaId\)/);
     assert.match(slice, /status\(403\)/);
     assert.match(slice, /loadMonth\(client, resolvedPlant\.plantaId, year, month\)/);
-    assert.match(slice, /Dashboard_ARR_Forecast_\$\{filePlant\}_\$\{year\}_\$\{month\}\.xlsx/);
-    assert.match(slice, /comprasPayload/);
+    assert.match(slice, /Dashboard_ARR_Forecast_\$\{String\(resolvedPlant\.canon/);
+    assert.match(slice, /Dashboard_ARR_Forecast_\$\{year\}_\$\{month\}\.xlsx/);
+    assert.match(slice, /if \(comprasPayload && resolvedPlant\)/);
+    assert.doesNotMatch(slice, /if \(!plantCodeRaw\)/);
+  });
+});
+
+describe("IMPL-FORECAST-EXCEL-PLANT-COMPRAS-024 compatibilidad KPI", () => {
+  const start = SERVER.indexOf('app.get("/api/arr/dashboard-excel"');
+  const slice = SERVER.slice(start, start + 12000);
+
+  it("1) caller histórico sin plant_code no dispara el 400", () => {
+    assert.match(slice, /if \(requirePlant && !plantCodeRaw\)/);
+    assert.doesNotMatch(slice, /if \(!plantCodeRaw\) \{\s*return res\.status\(400\)/);
+    assert.match(PAGE, /getDashboardExcelDownloadUrl\(token, igfForecast\.year, igfForecast\.month\)/);
+    assert.doesNotMatch(
+      PAGE.slice(PAGE.indexOf("Descargar Excel (Forecast)") - 400, PAGE.indexOf("Descargar Excel (Forecast)") + 80),
+      /require_plant|plant_code/
+    );
+  });
+
+  it("2) caller histórico conserva el workbook global", () => {
+    assert.match(slice, /let plantCode = null/);
+    assert.match(slice, /proyeccionCatSubForecast\.forecastKgByPlant = forecastKgByPlant/);
+    assert.match(slice, /Dashboard_ARR_Forecast_\$\{year\}_\$\{month\}\.xlsx/);
+    assert.match(slice, /generarDashboardArrForecast\(client, year, month, plantCode, forecastOpts\)/);
+    const requireIdx = slice.indexOf("if (requirePlant)");
+    const loadIdx = slice.indexOf("loadMonth(client, resolvedPlant.plantaId, year, month)");
+    assert.ok(requireIdx >= 0 && loadIdx > requireIdx);
+  });
+
+  it("3) require_plant=1 sin planta responde 400", () => {
+    assert.match(slice, /require_plant/);
+    assert.match(slice, /if \(requirePlant && !plantCodeRaw\) \{\s*return res\.status\(400\)/);
+  });
+
+  it("4) require_plant con planta válida queda scoped", () => {
+    assert.match(slice, /plantCode = resolvedPlant\.provinciaPlantCode \|\| resolvedPlant\.canon/);
+    assert.match(slice, /plantCodeFilter = plantCode/);
+    assert.match(slice, /empresaMatchesForecastPlant\(r && r\.empresa, plantCode\)/);
+    assert.equal(forecast.plantsEquivalent("GT Puebla", "Puebla"), true);
+  });
+
+  it("5) CONTROL DE COMPRAS solo con planta válida", () => {
+    const globalWb = scopedWorkbook();
+    assert.equal(globalWb.getWorksheet("CONTROL DE COMPRAS"), undefined);
+    assert.match(slice, /if \(comprasPayload && resolvedPlant\)/);
+    const before = slice.indexOf("if (requirePlant)");
+    const assign = slice.indexOf("comprasPayload = await comprasDashboard.loadMonth");
+    assert.ok(before >= 0 && assign > before);
+    assert.doesNotMatch(slice.slice(0, before), /comprasPayload = await/);
   });
 });
 
