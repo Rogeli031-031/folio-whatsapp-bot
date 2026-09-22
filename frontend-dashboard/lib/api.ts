@@ -26,7 +26,9 @@ export function getDashboardExcelDownloadUrl(
   year: number,
   month: number,
   uploadDay?: string | null,
-  versionAsOfCorte?: boolean
+  versionAsOfCorte?: boolean,
+  plantCode?: string | null,
+  requirePlant?: boolean
 ): string {
   const base = getApiUrl("/api/arr/dashboard-excel");
   const next = nextCalendarMonth(year, month);
@@ -35,7 +37,10 @@ export function getDashboardExcelDownloadUrl(
   const hasta = isYmd ? `&proyeccion_hasta=${encodeURIComponent(up)}` : "";
   const upload = isYmd ? `&upload_day=${encodeURIComponent(up)}` : "";
   const asOf = versionAsOfCorte && isYmd ? `&version_as_of_corte=1` : "";
-  return `${base}?year=${year}&month=${month}&proyeccion_anio=${next.y}&proyeccion_mes=${next.m}${hasta}${upload}${asOf}&t=${encodeURIComponent(token)}`;
+  const plant = (plantCode || "").trim();
+  const plantQ = plant ? `&plant_code=${encodeURIComponent(plant)}` : "";
+  const requireQ = requirePlant ? "&require_plant=1" : "";
+  return `${base}?year=${year}&month=${month}&proyeccion_anio=${next.y}&proyeccion_mes=${next.m}${hasta}${upload}${asOf}${plantQ}${requireQ}&t=${encodeURIComponent(token)}`;
 }
 
 /** Descarga Excel Clasificación de apoyos (hoja COMPARATIVOS). */
