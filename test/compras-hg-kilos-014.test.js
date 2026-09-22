@@ -311,14 +311,15 @@ describe("014 compras HG EN KILOS", () => {
     assert.equal(ws.getCell(4, 14).value, "CONSOLIDADO");
     assert.equal(ws.getCell(5, 2).value, "COMPRA KG");
     assert.equal(ws.getCell(4, 18).value, "HG EN KILOS");
+    assert.equal(ws.getCell(5, 19).value, "HG EN KILOS");
     assert.equal(ws.getColumn(17).width, 2.2);
-    assert.equal(ws.getCell(6, 18).value, -787);
+    assert.equal(ws.getCell(6, 19).value, -787);
     const weekRow = [...Array(40).keys()].map((i) => i + 6).find((r) => ws.getCell(r, 1).value === "Semana 1");
     assert.ok(weekRow);
-    assert.equal(ws.getCell(weekRow, 18).value, -787);
+    assert.equal(ws.getCell(weekRow, 19).value, -787);
     const totRow = [...Array(50).keys()].map((i) => i + 6).find((r) => ws.getCell(r, 1).value === "TOTAL MES");
     assert.ok(totRow);
-    assert.equal(ws.getCell(totRow, 18).value, -787);
+    assert.equal(ws.getCell(totRow, 19).value, -787);
   });
 
   it("A) write falla: persisted false, error de guardado y restore confirmed", async () => {
