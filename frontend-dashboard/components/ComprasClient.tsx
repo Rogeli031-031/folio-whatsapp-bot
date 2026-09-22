@@ -81,6 +81,19 @@ function downloadBlob(blob: Blob, name: string) {
 }
 
 const COMPRAS_SHEET_KEY = "compras-dashboard-sheet";
+const COMPRAS_SEP_CLS = "min-w-[70px] w-[70px] border-0 bg-white p-0";
+
+export function comprasGridColSpan(providerCount: number, fleteExpanded: boolean): number {
+  const n = Number.isFinite(providerCount) && providerCount > 0 ? Math.floor(providerCount) : 0;
+  const fecha = 1;
+  const compras = n * 3;
+  const consolidado = 3;
+  const sepHg = 1;
+  const hg = 3;
+  const sepFlete = 1;
+  const flete = fleteExpanded ? n * 3 + 3 : 0;
+  return fecha + compras + consolidado + sepHg + hg + sepFlete + flete;
+}
 
 function readSavedSheet(): { plantaId: number | null; year: number | null; month: number | null } {
   try {
@@ -116,6 +129,7 @@ export function ComprasClient() {
   const [error, setError] = useState<string | null>(null);
   const [detail, setDetail] = useState<DetailState | null>(null);
   const [providersOpen, setProvidersOpen] = useState(false);
+  const [fleteExpanded, setFleteExpanded] = useState(false);
   const [newProviderName, setNewProviderName] = useState("");
   const [providerSaving, setProviderSaving] = useState(false);
   const [excelBusy, setExcelBusy] = useState(false);
@@ -321,6 +335,15 @@ export function ComprasClient() {
           </button>
           <button
             type="button"
+            aria-expanded={fleteExpanded}
+            aria-label={fleteExpanded ? "Ocultar valor del flete según origen" : "Mostrar valor del flete según origen"}
+            onClick={() => setFleteExpanded((v) => !v)}
+            className="rounded border border-slate-600 bg-slate-900 px-3 py-1.5 text-xs text-slate-100"
+          >
+            {fleteExpanded ? "▼ OCULTAR FLETE" : "▶ MOSTRAR FLETE"}
+          </button>
+          <button
+            type="button"
             onClick={() => setProvidersOpen((v) => !v)}
             className="rounded border border-cyan-600/70 bg-slate-900 px-3 py-1.5 text-xs text-cyan-100"
           >
@@ -421,17 +444,19 @@ export function ComprasClient() {
                 <th colSpan={3} className="compras-provider-title border-b border-black bg-white px-2 py-2 text-center text-[13px] font-bold uppercase tracking-wide text-black">
                   CONSOLIDADO
                 </th>
-                <th rowSpan={3} className="compras-hg-gap w-3 border-0 bg-white p-0" />
+                <th rowSpan={3} className={`compras-hg-gap ${COMPRAS_SEP_CLS}`} />
                 <th colSpan={3} className="compras-hg-title border-b border-black bg-white px-2 py-2 text-center text-[12px] font-bold uppercase tracking-wide text-black">
                   HG
                 </th>
-                <th rowSpan={3} className="compras-flete-gap w-3 border-0 bg-white p-0" />
-                <th
-                  colSpan={Math.max(3, providers.length * 3 + 3)}
-                  className="compras-flete-title border-b border-black bg-white px-2 py-2 text-center text-[13px] font-bold uppercase tracking-wide text-black"
-                >
-                  VALOR DEL FLETE SEGÚN ORIGEN
-                </th>
+                <th rowSpan={3} className={`compras-flete-gap ${COMPRAS_SEP_CLS}`} />
+                {fleteExpanded && (
+                  <th
+                    colSpan={Math.max(3, providers.length * 3 + 3)}
+                    className="compras-flete-title border-b border-black bg-white px-2 py-2 text-center text-[13px] font-bold uppercase tracking-wide text-black"
+                  >
+                    VALOR DEL FLETE SEGÚN ORIGEN
+                  </th>
+                )}
               </tr>
               <tr>
                 {providers.map((p) => (
@@ -439,30 +464,34 @@ export function ComprasClient() {
                 ))}
                 <MetricHeads rowSpan={2} />
                 <HgMetricHeads rowSpan={2} />
-                {providers.map((p) => (
-                  <th
-                    key={`ft-${p.id}`}
-                    colSpan={3}
-                    className="compras-flete-origin border-b border-black bg-white px-2 py-1 text-center text-[11px] font-bold uppercase tracking-wide text-black"
-                  >
-                    {p.nombre}
+                {fleteExpanded &&
+                  providers.map((p) => (
+                    <th
+                      key={`ft-${p.id}`}
+                      colSpan={3}
+                      className="compras-flete-origin border-b border-black bg-white px-2 py-1 text-center text-[11px] font-bold uppercase tracking-wide text-black"
+                    >
+                      {p.nombre}
+                    </th>
+                  ))}
+                {fleteExpanded && (
+                  <th colSpan={3} className="compras-flete-origin border-b border-black bg-white px-2 py-1 text-center text-[11px] font-bold uppercase tracking-wide text-black">
+                    CONSOLIDADO
                   </th>
-                ))}
-                <th colSpan={3} className="compras-flete-origin border-b border-black bg-white px-2 py-1 text-center text-[11px] font-bold uppercase tracking-wide text-black">
-                  CONSOLIDADO
-                </th>
+                )}
               </tr>
               <tr>
-                {providers.map((p) => (
-                  <FleteMetricHeads key={`fm-${p.id}`} />
-                ))}
-                <FleteMetricHeads />
+                {fleteExpanded &&
+                  providers.map((p) => (
+                    <FleteMetricHeads key={`fm-${p.id}`} />
+                  ))}
+                {fleteExpanded && <FleteMetricHeads />}
               </tr>
             </thead>
             <tbody>
               {!data && (
                 <tr>
-                  <td colSpan={Math.max(6, providers.length * 4 + 7)} className="px-3 py-6 text-center text-slate-500">
+                  <td colSpan={comprasGridColSpan(providers.length, fleteExpanded)} className="px-3 py-6 text-center text-slate-500">
                     {loading ? "Cargando…" : "Selecciona planta, año y mes."}
                   </td>
                 </tr>
@@ -494,7 +523,7 @@ export function ComprasClient() {
                         );
                       })}
                       <ReadOnlyTriple kg={day?.consolidado.kg || 0} importe={day?.consolidado.importe || 0} costo={day?.consolidado.costo_kg ?? null} consolidado />
-                      <td className="compras-hg-gap w-3 border-0 bg-white p-0" />
+                      <td className={`compras-hg-gap ${COMPRAS_SEP_CLS}`} />
                       <HgDerivedCells
                         costo={hgCosto(day?.consolidado?.costo_kg, day?.flete?.consolidado?.tarifa)}
                         hg={day?.hg_kilos ?? null}
@@ -509,7 +538,8 @@ export function ComprasClient() {
                         onSaved={loadMonth}
                         onError={setError}
                       />
-                      <FleteRowCells providers={providers} flete={day?.flete} />
+                      <td className={`compras-flete-gap ${COMPRAS_SEP_CLS}`} />
+                      {fleteExpanded && <FleteRowCells providers={providers} flete={day?.flete} />}
                     </tr>
                   );
                 }
@@ -539,7 +569,7 @@ export function ComprasClient() {
                         tone="week"
                         consolidado
                       />
-                      <td className="compras-hg-gap w-3 border-0 bg-white p-0" />
+                      <td className={`compras-hg-gap ${COMPRAS_SEP_CLS}`} />
                       <HgDerivedCells
                         costo={hgCosto(week?.consolidado?.costo_kg, week?.flete?.consolidado?.tarifa)}
                         hg={week?.hg_kilos ?? null}
@@ -548,10 +578,11 @@ export function ComprasClient() {
                         )}
                         bold
                       />
-                      <FleteRowCells providers={providers} flete={week?.flete} showZero />
+                      <td className={`compras-flete-gap ${COMPRAS_SEP_CLS}`} />
+                      {fleteExpanded && <FleteRowCells providers={providers} flete={week?.flete} showZero />}
                     </tr>
                     <tr className="compras-week-gap h-3">
-                      <td className="border-0 bg-white p-0" colSpan={Math.max(6, providers.length * 4 + 7)} />
+                      <td className="border-0 bg-white p-0" colSpan={comprasGridColSpan(providers.length, fleteExpanded)} />
                     </tr>
                   </Fragment>
                 );
@@ -580,14 +611,15 @@ export function ComprasClient() {
                     tone="total"
                     consolidado
                   />
-                  <td className="compras-hg-gap w-3 border-0 bg-white p-0" />
+                  <td className={`compras-hg-gap ${COMPRAS_SEP_CLS}`} />
                   <HgDerivedCells
                     costo={hgCosto(data.grid.month.consolidado?.costo_kg, data.grid.month.flete?.consolidado?.tarifa)}
                     hg={data.grid.month.hg_kilos ?? null}
                     importe={hgImporteSum(data.grid.days || [])}
                     bold
                   />
-                  <FleteRowCells providers={providers} flete={data.grid.month.flete} showZero />
+                  <td className={`compras-flete-gap ${COMPRAS_SEP_CLS}`} />
+                  {fleteExpanded && <FleteRowCells providers={providers} flete={data.grid.month.flete} showZero />}
                 </tr>
               )}
             </tbody>
@@ -802,7 +834,6 @@ function FleteRowCells({
   const cons = (flete && flete.consolidado) || { kg: 0, tarifa: null, importe: 0 };
   return (
     <>
-      <td className="compras-flete-gap w-3 border-0 bg-white p-0" />
       {providers.map((p) => {
         const cell = fleteCellOf(flete, p.id);
         return (
