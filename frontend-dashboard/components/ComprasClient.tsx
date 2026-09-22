@@ -82,16 +82,17 @@ function downloadBlob(blob: Blob, name: string) {
 
 const COMPRAS_SHEET_KEY = "compras-dashboard-sheet";
 const COMPRAS_SEP_CLS = "min-w-[70px] w-[70px] border-0 bg-white p-0";
+const COMPRAS_PROVIDER_GAP_CLS = "compras-provider-gap w-3 min-w-[12px] border-0 bg-white p-0";
 
 export function comprasGridColSpan(providerCount: number, fleteExpanded: boolean): number {
   const n = Number.isFinite(providerCount) && providerCount > 0 ? Math.floor(providerCount) : 0;
   const fecha = 1;
-  const compras = n * 3;
+  const compras = n * 3 + n;
   const consolidado = 3;
   const sepHg = 1;
   const hg = 3;
   const sepFlete = 1;
-  const flete = fleteExpanded ? n * 3 + 3 : 0;
+  const flete = fleteExpanded ? n * 3 + n + 3 : 0;
   return fecha + compras + consolidado + sepHg + hg + sepFlete + flete;
 }
 
@@ -416,30 +417,32 @@ export function ComprasClient() {
                   FECHA
                 </th>
                 {providers.map((p) => (
-                  <th
-                    key={`t-${p.id}`}
-                    colSpan={3}
-                    className="compras-provider-title border-b border-black bg-white px-2 py-2 text-center text-[13px] font-bold uppercase tracking-wide text-black"
-                  >
-                    {token && plantaId ? (
-                      <TarifaCell
-                        token={token}
-                        plantaId={plantaId}
-                        proveedorId={p.id}
-                        proveedorNombre={p.nombre}
-                        year={year}
-                        month={month}
-                        value={tarifaOf(data, p.id)}
-                        onSaved={loadMonth}
-                        onError={setError}
-                      />
-                    ) : (
-                      <span className="mb-1 block text-[9px] font-semibold normal-case tracking-normal text-slate-600">
-                        TARIFA {formatTarifa(tarifaOf(data, p.id))}
-                      </span>
-                    )}
-                    {p.nombre}
-                  </th>
+                  <Fragment key={`t-${p.id}`}>
+                    <th
+                      colSpan={3}
+                      className="compras-provider-title border-b border-black bg-white px-2 py-2 text-center text-[13px] font-bold uppercase tracking-wide text-black"
+                    >
+                      {token && plantaId ? (
+                        <TarifaCell
+                          token={token}
+                          plantaId={plantaId}
+                          proveedorId={p.id}
+                          proveedorNombre={p.nombre}
+                          year={year}
+                          month={month}
+                          value={tarifaOf(data, p.id)}
+                          onSaved={loadMonth}
+                          onError={setError}
+                        />
+                      ) : (
+                        <span className="mb-1 block text-[9px] font-semibold normal-case tracking-normal text-slate-600">
+                          TARIFA {formatTarifa(tarifaOf(data, p.id))}
+                        </span>
+                      )}
+                      {p.nombre}
+                    </th>
+                    <th rowSpan={3} className={COMPRAS_PROVIDER_GAP_CLS} />
+                  </Fragment>
                 ))}
                 <th colSpan={3} className="compras-provider-title border-b border-black bg-white px-2 py-2 text-center text-[13px] font-bold uppercase tracking-wide text-black">
                   CONSOLIDADO
@@ -451,7 +454,7 @@ export function ComprasClient() {
                 <th rowSpan={3} className={`compras-flete-gap ${COMPRAS_SEP_CLS}`} />
                 {fleteExpanded && (
                   <th
-                    colSpan={Math.max(3, providers.length * 3 + 3)}
+                    colSpan={Math.max(3, providers.length * 4 + 3)}
                     className="compras-flete-title border-b border-black bg-white px-2 py-2 text-center text-[13px] font-bold uppercase tracking-wide text-black"
                   >
                     VALOR DEL FLETE SEGÚN ORIGEN
@@ -466,13 +469,15 @@ export function ComprasClient() {
                 <HgMetricHeads rowSpan={2} />
                 {fleteExpanded &&
                   providers.map((p) => (
-                    <th
-                      key={`ft-${p.id}`}
-                      colSpan={3}
-                      className="compras-flete-origin border-b border-black bg-white px-2 py-1 text-center text-[11px] font-bold uppercase tracking-wide text-black"
-                    >
-                      {p.nombre}
-                    </th>
+                    <Fragment key={`ft-${p.id}`}>
+                      <th
+                        colSpan={3}
+                        className="compras-flete-origin border-b border-black bg-white px-2 py-1 text-center text-[11px] font-bold uppercase tracking-wide text-black"
+                      >
+                        {p.nombre}
+                      </th>
+                      <th rowSpan={2} className={COMPRAS_PROVIDER_GAP_CLS} />
+                    </Fragment>
                   ))}
                 {fleteExpanded && (
                   <th colSpan={3} className="compras-flete-origin border-b border-black bg-white px-2 py-1 text-center text-[11px] font-bold uppercase tracking-wide text-black">
@@ -513,13 +518,15 @@ export function ComprasClient() {
                       {providers.map((p) => {
                         const cell = day?.cells[String(p.id)] || day?.cells[p.id];
                         return (
-                          <ProviderCells
-                            key={`${row.ymd}-${p.id}`}
-                            onClick={() => setDetail({ proveedor: p, fecha: row.ymd })}
-                            kg={cell?.kg || 0}
-                            importe={cell?.importe || 0}
-                            costo={cell?.costo_kg ?? null}
-                          />
+                          <Fragment key={`${row.ymd}-${p.id}`}>
+                            <ProviderCells
+                              onClick={() => setDetail({ proveedor: p, fecha: row.ymd })}
+                              kg={cell?.kg || 0}
+                              importe={cell?.importe || 0}
+                              costo={cell?.costo_kg ?? null}
+                            />
+                            <td className={COMPRAS_PROVIDER_GAP_CLS} />
+                          </Fragment>
                         );
                       })}
                       <ReadOnlyTriple kg={day?.consolidado.kg || 0} importe={day?.consolidado.importe || 0} costo={day?.consolidado.costo_kg ?? null} consolidado />
@@ -551,14 +558,16 @@ export function ComprasClient() {
                       {providers.map((p) => {
                         const cell = week?.providers[String(p.id)] || week?.providers[p.id];
                         return (
-                          <ReadOnlyTriple
-                            key={`w-${row.week}-${p.id}`}
-                            kg={cell?.kg || 0}
-                            importe={cell?.importe || 0}
-                            costo={cell?.costo_kg ?? null}
-                            showZero
-                            tone="week"
-                          />
+                          <Fragment key={`w-${row.week}-${p.id}`}>
+                            <ReadOnlyTriple
+                              kg={cell?.kg || 0}
+                              importe={cell?.importe || 0}
+                              costo={cell?.costo_kg ?? null}
+                              showZero
+                              tone="week"
+                            />
+                            <td className={COMPRAS_PROVIDER_GAP_CLS} />
+                          </Fragment>
                         );
                       })}
                       <ReadOnlyTriple
@@ -593,14 +602,16 @@ export function ComprasClient() {
                   {providers.map((p) => {
                     const cell = data.grid.month.providers[String(p.id)] || data.grid.month.providers[p.id];
                     return (
-                      <ReadOnlyTriple
-                        key={`m-${p.id}`}
-                        kg={cell?.kg || 0}
-                        importe={cell?.importe || 0}
-                        costo={cell?.costo_kg ?? null}
-                        showZero
-                        tone="total"
-                      />
+                      <Fragment key={`m-${p.id}`}>
+                        <ReadOnlyTriple
+                          kg={cell?.kg || 0}
+                          importe={cell?.importe || 0}
+                          costo={cell?.costo_kg ?? null}
+                          showZero
+                          tone="total"
+                        />
+                        <td className={COMPRAS_PROVIDER_GAP_CLS} />
+                      </Fragment>
                     );
                   })}
                   <ReadOnlyTriple
@@ -843,6 +854,7 @@ function FleteRowCells({
             <td className="border border-black bg-white px-1 py-1 text-right tabular-nums">
               {formatFleteImporte(cell.importe, showZero || cell.kg === 0)}
             </td>
+            <td className={COMPRAS_PROVIDER_GAP_CLS} />
           </Fragment>
         );
       })}

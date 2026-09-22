@@ -33,7 +33,7 @@ describe("IMPL-COMPRAS-FLETE-COLLAPSE-021 default y toggle", () => {
   });
 
   it("C) por default no se renderizan columnas de proveedores de flete", () => {
-    assert.match(CLIENT, /fleteExpanded &&\s*providers\.map\(\(p\) => \(\s*<th[\s\S]*compras-flete-origin/);
+    assert.match(CLIENT, /fleteExpanded &&\s*providers\.map\(\(p\) => \(\s*<Fragment[\s\S]*compras-flete-origin/);
     assert.match(CLIENT, /fleteExpanded && <FleteRowCells/);
     assert.equal((CLIENT.match(/fleteExpanded && <FleteRowCells/g) || []).length, 3);
   });
