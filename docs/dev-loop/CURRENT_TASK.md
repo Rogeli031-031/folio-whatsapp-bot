@@ -1,16 +1,16 @@
 ﻿# CURRENT_TASK
 
 ```yaml
-task_id: "IMPL-ARR-FORECAST-EXCEL-DAILY-CATEGORY-023"
-title: "Forecast Excel — desglose diario CASA / COMISIONISTA por planta"
+task_id: "IMPL-FORECAST-EXCEL-PLANT-COMPRAS-024"
+title: "Forecast Excel — filtro por planta seleccionada, CONTROL DE COMPRAS y venta con 3 decimales"
 status: "DONE_PENDING_REVIEW"
 mode: "IMPLEMENTATION"
 
 authorized_by: "HUMAN"
-authorized_at: "2026-09-22T13:30:00-06:00"
+authorized_at: "2026-09-22T14:28:00-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN"
 
-objective: "Ampliar las hojas Provincia Venta Diaria y Provincia Comisiones del Excel generado por Descargar Excel (Forecast), agregando desde la columna J el desglose diario por planta de CASA y COMISIONISTA, sin modificar las columnas A-H actuales."
+objective: "Hacer que Descargar Excel (Forecast) use la planta seleccionada en IGF Forecast para filtrar todo el workbook a esa planta, agregar como tercera hoja CONTROL DE COMPRAS reutilizando exactamente el generador del módulo Compras y mostrar la venta de Provincia Venta Diaria con 3 decimales."
 
 implementation: true
 code_changes: true
@@ -18,41 +18,43 @@ code_changes: true
 schema_changes: false
 data_mutation: false
 
-base_sha: "f7ccaeb03b0b0ff08afebb57ccee8936cc3d106c"
-branch: "implementation/arr-forecast-excel-daily-category-023"
+base_sha: "ae321d5e98daff1b03f7b843630e76f8db43b55b"
+branch: "implementation/forecast-excel-plant-compras-024"
 
 merge_authorized: false
 deploy_authorized: false
 next_task_authorized: false
 
 in_scope:
+  - "frontend-dashboard/components/IgfForecastClient.tsx"
+  - "frontend-dashboard/lib/api.ts"
+  - "server.js"
   - "lib/dashboard-arr-forecast.js"
-  - "tests específicos 023"
-  - "tests dashboard ARR forecast/export"
-  - "docs/dev-loop/reports/IMPL-ARR-FORECAST-EXCEL-DAILY-CATEGORY-023.md"
+  - "lib/compras-excel.js solo para reutilización/extracción mínima si es necesario"
+  - "lib/compras-dashboard.js solo lectura/reutilización necesaria"
+  - "tests 024"
+  - "regresión 023/Compras Excel"
+  - "docs/dev-loop/reports/IMPL-FORECAST-EXCEL-PLANT-COMPRAS-024.md"
   - "docs/dev-loop/CURRENT_TASK.md"
 
 out_of_scope:
-  - "frontend"
-  - "DB/schema"
-  - "persistencia"
+  - "schema DB"
+  - "mutaciones"
+  - "cambiar fórmulas de Compras"
   - "Director IA"
-  - "Compras/HG/Flete"
-  - "cálculo IGF"
-  - "ARR Plan UI"
-  - "otras hojas del Excel salvo regresión"
+  - "cambiar cálculo físico ARR/IGF"
   - "PR"
   - "merge"
   - "deploy"
 
 contracts_in_force:
-  - "A-H de Provincia Venta Diaria permanecen intactas"
-  - "A-H actuales de Provincia Comisiones permanecen intactas"
-  - "columna I queda como separación"
-  - "nuevo bloque inicia en J"
-  - "CASA / COMISIONISTA usan fuentes ARR existentes"
-  - "descuento $/kg siempre ponderado por kg, nunca promedio simple"
+  - "usar selector existente plantaFilter; NO crear segundo selector"
+  - "una descarga = una planta"
+  - "Todas no es planta válida para exportar"
+  - "no permitir cross-plant leakage en el workbook"
+  - "CONTROL DE COMPRAS debe reutilizar buildComprasWorkbook"
+  - "no reconstruir manualmente la hoja de Compras"
 
 max_attempts: 1
-result_report_path: "docs/dev-loop/reports/IMPL-ARR-FORECAST-EXCEL-DAILY-CATEGORY-023.md"
+result_report_path: "docs/dev-loop/reports/IMPL-FORECAST-EXCEL-PLANT-COMPRAS-024.md"
 ```

@@ -115,6 +115,7 @@ export function IgfForecastContent() {
   const [igfError, setIgfError] = useState<string | null>(null);
   const [hgSaving, setHgSaving] = useState<string | null>(null);
   const [plantaFilter, setPlantaFilter] = useState<string>("");
+  const [forecastExcelMsg, setForecastExcelMsg] = useState<string | null>(null);
   const [uploadDay, setUploadDay] = useState<string>(() => {
     if (typeof window === "undefined") return "";
     try {
@@ -943,20 +944,33 @@ export function IgfForecastContent() {
       </div>
       <div className="flex flex-wrap gap-3 px-4 py-3 border-b border-slate-700/80 bg-slate-800/30 items-center">
         {igfForecast && token && (
-          <a
-            href={getDashboardExcelDownloadUrl(
-              token,
-              igfForecast.year,
-              igfForecast.month,
-              uploadDay,
-              versionAsOfCorte
-            )}
-            target="_blank"
-            rel="noopener noreferrer"
+          <button
+            type="button"
+            onClick={() => {
+              if (!plantaFilter) {
+                setForecastExcelMsg("Selecciona una planta para descargar el Excel Forecast.");
+                return;
+              }
+              setForecastExcelMsg(null);
+              const url = getDashboardExcelDownloadUrl(
+                token,
+                igfForecast.year,
+                igfForecast.month,
+                uploadDay,
+                versionAsOfCorte,
+                plantaFilter
+              );
+              window.open(url, "_blank", "noopener,noreferrer");
+            }}
             className="inline-flex items-center gap-2 rounded bg-slate-600 px-4 py-2 text-sm font-medium text-white hover:bg-slate-500"
           >
             Descargar Excel (Forecast)
-          </a>
+          </button>
+        )}
+        {forecastExcelMsg && (
+          <span className="text-sm text-amber-300" role="status">
+            {forecastExcelMsg}
+          </span>
         )}
         <label className="inline-flex items-center gap-2 rounded border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-200">
           <span className="text-slate-400">Fecha de carga (corte):</span>

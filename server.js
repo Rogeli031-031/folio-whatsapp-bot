@@ -15461,7 +15461,10 @@ app.get("/api/arr/annual-category-analysis", dashboardAuthMiddleware, async (req
 app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) => {
   if (dashboardBlockGAFinancialKpis(req, res)) return;
   if (dashboardBlockGVForbidden(req, res)) return;
-  const plantCode = (req.query.plant_code || "").trim() || null;
+  const plantCodeRaw = (req.query.plant_code || "").toString().trim();
+  if (!plantCodeRaw) {
+    return res.status(400).json({ error: "Selecciona una planta para descargar el Excel Forecast." });
+  }
   const year = parseInt(req.query.year, 10);
   const month = parseInt(req.query.month, 10);
   if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
@@ -15486,7 +15489,7 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
       targetYear: proyeccionAnio,
       targetMonth: proyeccionMes,
       fechaHasta: proyeccionHasta,
-      plantCodeFilter: plantCode,
+      plantCodeFilter: "",
       // También aplicar regla de tres para que coincida con el total oficial del mes objetivo (si existe en forecast_mensual).
       scaleToForecastTotal: true,
     };
@@ -15495,7 +15498,7 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
     targetYear: year,
     targetMonth: month,
     fechaHasta: proyeccionHasta,
-    plantCodeFilter: plantCode,
+    plantCodeFilter: "",
     sheetName: "Proy cat-sub Forecast",
     // Acumulado + factor por planta + proyección por regla de tres para cerrar con IGF.
     scaleToForecastTotal: true,
@@ -15504,6 +15507,17 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
   };
   const client = await pool.connect();
   try {
+    const resolvedPlant = await dashboardArrForecast.resolveForecastExportPlant(client, plantCodeRaw);
+    if (!resolvedPlant) {
+      return res.status(400).json({ error: "Planta no reconocida para exportar el Excel Forecast." });
+    }
+    const deniedPlant = assertPlantaPermitidaDashboard(req, resolvedPlant.plantaId);
+    if (deniedPlant) return res.status(403).json({ error: deniedPlant });
+    const plantCode = resolvedPlant.provinciaPlantCode || resolvedPlant.canon;
+    if (proyeccionCatSub) proyeccionCatSub.plantCodeFilter = plantCode;
+    proyeccionCatSubForecast.plantCodeFilter = plantCode;
+    await comprasDashboard.ensureComprasTables(client);
+    const comprasPayload = await comprasDashboard.loadMonth(client, resolvedPlant.plantaId, year, month);
     const excelIgfOpts = {};
     if (uploadDay) excelIgfOpts.upload_day = uploadDay;
     if (versionAsOfCorteExcel) excelIgfOpts.version_as_of_corte = true;
@@ -15548,11 +15562,28 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
       }
       if (best) forecastKgByPlant[p] = best.kg;
     }
-    proyeccionCatSubForecast.forecastKgByPlant = forecastKgByPlant;
+    const scopedForecastKg = {};
+    for (const [k, v] of Object.entries(forecastKgByPlant)) {
+      if (
+        dashboardArrForecast.plantsEquivalent(k, plantCode) ||
+        dashboardArrForecast.plantsEquivalent(k, plantCodeRaw) ||
+        dashboardArrForecast.plantsEquivalent(k, resolvedPlant.canon)
+      ) {
+        scopedForecastKg[k] = v;
+      }
+    }
+    proyeccionCatSubForecast.forecastKgByPlant = scopedForecastKg;
+    if (igfForecast && Array.isArray(igfForecast.rows)) {
+      igfForecast.rows = igfForecast.rows.filter((r) =>
+        dashboardArrForecast.empresaMatchesForecastPlant(r && r.empresa, plantCode)
+      );
+    }
     const buf = await dashboardArrForecast.generarDashboardArrForecast(client, year, month, plantCode, {
       igfForecast,
       proyeccionCatSub,
       proyeccionCatSubForecast,
+      comprasPayload,
+      comprasPlantName: resolvedPlant.nombre,
       // Fecha de corte seleccionada en el dashboard: a partir de aquí no debe aparecer venta/desc (cero).
       // Si no viene, se usa la fecha del servidor como fallback.
       fechaCorte: uploadDay || proyeccionHasta || null,
@@ -15565,7 +15596,8 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
     } catch (snapErr) {
       console.error("[ARR dashboard-excel] pronostico_mini_snapshot", snapErr);
     }
-    const filename = `Dashboard_ARR_Forecast_${year}_${month}.xlsx`;
+    const filePlant = String(resolvedPlant.canon || "planta").replace(/[^A-Za-z0-9]+/g, "");
+    const filename = `Dashboard_ARR_Forecast_${filePlant}_${year}_${month}.xlsx`;
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
     res.send(buf);
