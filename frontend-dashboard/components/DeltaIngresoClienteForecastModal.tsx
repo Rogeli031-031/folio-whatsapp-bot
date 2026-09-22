@@ -11,6 +11,7 @@ import {
 import { DicfAccionesClientePanel } from "@/components/DicfAccionesClientePanel";
 import { ClienteComentariosPanel } from "@/components/ClienteComentariosPanel";
 import { ClienteContactoPanel } from "@/components/ClienteContactoPanel";
+import ArrVentaGraficaModal from "@/components/ArrVentaGraficaModal";
 import {
   DICF_HISTORY_WEEK_OPTIONS,
   type DicfHistoryWeeks,
@@ -82,6 +83,7 @@ export default function DeltaIngresoClienteForecastModal({
 }: DeltaIngresoClienteForecastModalProps) {
   const open = Boolean(clienteNombre && planta && token);
 
+  const [showClienteGrafica, setShowClienteGrafica] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loadingDicf, setLoadingDicf] = useState(false);
   const [dicfData, setDicfData] = useState<DicfResult | null>(null);
@@ -94,6 +96,7 @@ export default function DeltaIngresoClienteForecastModal({
 
   useEffect(() => {
     if (clienteNombre?.trim()) setHistorialSemanas(4);
+    setShowClienteGrafica(false);
   }, [clienteNombre, planta]);
 
   useEffect(() => {
@@ -280,7 +283,14 @@ export default function DeltaIngresoClienteForecastModal({
 
   if (!open) return null;
 
+  const clienteNormGrafica = (
+    deltaClienteSel?.cliente?.cliente ||
+    clienteNombre ||
+    ""
+  ).trim();
+
   return (
+    <>
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
       onClick={onClose}
@@ -308,9 +318,16 @@ export default function DeltaIngresoClienteForecastModal({
             <>
               <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                 <div className="min-w-0 space-y-3">
-                  <p>
+                  <p className="flex flex-wrap items-center gap-2">
                     <span className="font-semibold">{deltaClienteSel.cliente.cliente}</span>{" "}
                     <span className="text-slate-400">· {deltaClienteSel.grupo}</span>
+                    <button
+                      type="button"
+                      onClick={() => setShowClienteGrafica(true)}
+                      className="rounded border border-sky-600 bg-sky-800/80 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-sky-50 hover:bg-sky-700"
+                    >
+                      GRAFICA
+                    </button>
                   </p>
                   {deltaClienteSel.grupo === GRUPO_DICF_EXCEL_FALLBACK ? (
                     <p className="rounded border border-sky-800/60 bg-sky-950/40 px-3 py-2 text-sm text-sky-100/95">
@@ -521,5 +538,15 @@ export default function DeltaIngresoClienteForecastModal({
         </div>
       </div>
     </div>
+    {showClienteGrafica && clienteNormGrafica && (
+      <ArrVentaGraficaModal
+        token={token}
+        empresa={planta}
+        mode="cliente"
+        clienteNorm={clienteNormGrafica}
+        onClose={() => setShowClienteGrafica(false)}
+      />
+    )}
+    </>
   );
 }

@@ -1,16 +1,16 @@
 ﻿# CURRENT_TASK
 
 ```yaml
-task_id: "FIX-DIRECTOR-IA-SEMANTIC-FOLLOWUPS-017"
-title: "Director IA — aliases de gasto por concepto y continuidad de ranking de descuentos"
+task_id: "IMPL-CLIENT-SALES-GRAPH-018"
+title: "Delta Ingreso Cliente Forecast — gráfica histórica de ventas por cliente"
 status: "DONE_PENDING_REVIEW"
 mode: "IMPLEMENTATION"
 
 authorized_by: "HUMAN"
-authorized_at: "2026-09-21T17:15:00-06:00"
+authorized_at: "2026-09-21T21:45:00-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN"
 
-objective: "Corregir dos regresiones semánticas: búsqueda de gasto por conceptos equivalentes como llantas/llanta/neumáticos y continuidad conversacional del ranking de descuentos ante periodos relativos como mes anterior. Blindar ambas capacidades con 50 paráfrasis de prueba sin convertirlas en phrasebook de producción."
+objective: "Agregar al modal Delta Ingreso Cliente Forecast un botón GRAFICA que abra una vista histórica de ventas exclusivamente del cliente seleccionado, reutilizando la gráfica actual CASA/COMISIONISTA y sus mismas ventanas temporales."
 
 implementation: true
 code_changes: true
@@ -18,59 +18,47 @@ code_changes: true
 schema_changes: false
 data_mutation: false
 
-base_sha: "0f39d0638cf2a8acd78f2baf665e0fdf1499af0c"
-branch: "fix/director-ia-semantic-followups-017"
+base_sha: "d3fa61b457ce730f256e2912f33af2f13d12b32e"
+branch: "implementation/client-sales-graph-018"
 
 merge_authorized: false
 deploy_authorized: false
 next_task_authorized: false
 
 in_scope:
-  - "lib/director-ia-expense-analytics.js"
-  - "lib/director-ia-folio-search.js solo si se necesita un matcher compartido"
-  - "lib/director-ia-executive-context-sales-entity-010.js"
-  - "lib/director-ia-planner.js"
-  - "lib/director-ia-chat.js solo si la persistencia del contexto requiere corrección mínima"
-  - "módulo actual de client_discount_ranking"
-  - "tests de expense analytics"
-  - "tests de client_discount_ranking"
-  - "tests de conversación/context inheritance"
-  - "nuevo fixture de 50 paráfrasis"
-  - "docs/dev-loop/reports/FIX-DIRECTOR-IA-SEMANTIC-FOLLOWUPS-017.md"
+  - "frontend-dashboard/components/DeltaIngresoClienteForecastModal.tsx"
+  - "componente actual de gráfica CASA/COMISIONISTA"
+  - "helpers compartidos de gráfica/rangos/tendencia"
+  - "frontend-dashboard/lib/api.ts si se requiere endpoint existente/nuevo de solo lectura"
+  - "backend ARR de solo lectura si hace falta exponer historial por cliente"
+  - "tests 018"
+  - "docs/dev-loop/reports/IMPL-CLIENT-SALES-GRAPH-018.md"
   - "docs/dev-loop/CURRENT_TASK.md"
 
 out_of_scope:
-  - "DB/schema"
-  - "public.folios"
-  - "ARR data"
-  - "fórmula de descuento $/kg ya contractual"
+  - "Director IA"
+  - "cálculo Delta Ingreso"
+  - "Ingreso A / Ingreso B"
   - "Compras/HG/Flete"
-  - "docs/director-ia/ salvo necesidad contractual demostrada"
+  - "schema DB"
+  - "mutación de ARR"
   - "PR"
   - "merge"
   - "deploy"
 
-contracts_in_force:
-  - "semántica > phrase whitelist"
-  - "EXPLICIT CURRENT TURN > INHERITED CONTEXT > GENERIC FALLBACK"
-  - "no inventar evidencia"
-  - "DATA_NOT_FOUND != 0"
-  - "las paráfrasis viven en tests/fixtures, no en producción"
-
 validation:
-  - "nuevo test 017"
-  - "suite Expense Analytics"
-  - "suite keyword expense"
-  - "suite client_discount_ranking"
-  - "suite conversational inheritance"
-  - "008/010/012 si resultan afectadas"
-  - "50/50 paráfrasis nuevas"
+  - "tests 018"
+  - "tests de gráfica CASA/COMISIONISTA"
+  - "tests Delta Ingreso Cliente Forecast"
+  - "tests de comentarios/cliente afectados"
+  - "cd frontend-dashboard && npm run build"
+  - "NO commitear frontend-dashboard/.next"
 
-result_report_path: "docs/dev-loop/reports/FIX-DIRECTOR-IA-SEMANTIC-FOLLOWUPS-017.md"
+result_report_path: "docs/dev-loop/reports/IMPL-CLIENT-SALES-GRAPH-018.md"
 
 closure:
   - "Al terminar poner CURRENT_TASK en DONE_PENDING_REVIEW."
-  - "Commit + push únicamente a fix/director-ia-semantic-followups-017."
+  - "Commit + push únicamente a implementation/client-sales-graph-018."
   - "STOP."
   - "NO PR."
   - "NO merge."

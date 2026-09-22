@@ -1562,13 +1562,14 @@ export interface ArrVentaSeriePoint {
   fecha: string;
   venta_ton: number;
   descuento_mxn?: number;
+  descuento_kg?: number | null;
   casa_ton?: number;
   comisionista_ton?: number;
   casa_descuento?: number;
   comisionista_descuento?: number;
 }
 
-export type ArrVentaClienteTopTipo = "nuevo" | "perdido" | "aumento" | "disminucion";
+export type ArrVentaClienteTopTipo = "nuevo" | "perdido" | "aumento" | "disminucion" | "sin_cambio";
 
 export interface ArrVentaClienteComentario {
   body: string;
@@ -1597,19 +1598,27 @@ export interface ArrVentaSerieResponse {
   fecha_prev_hasta?: string;
   points: ArrVentaSeriePoint[];
   clientes_top?: ArrVentaClienteTop[];
+  cliente_norm?: string | null;
 }
 
 export function fetchArrVentaSerie(
   token: string,
-  params: { empresa: string; range: ArrVentaSerieRange; canal?: ArrVentaSerieCanal }
+  params: {
+    empresa: string;
+    range: ArrVentaSerieRange;
+    canal?: ArrVentaSerieCanal;
+    cliente_norm?: string | null;
+  }
 ): Promise<ArrVentaSerieResponse> {
+  const q: Record<string, string> = {
+    empresa: params.empresa,
+    range: params.range,
+    canal: params.canal || "ambos",
+  };
+  if (params.cliente_norm) q.cliente_norm = params.cliente_norm;
   return apiFetch<ArrVentaSerieResponse>("/api/arr/venta-serie", {
     token,
-    params: {
-      empresa: params.empresa,
-      range: params.range,
-      canal: params.canal || "ambos",
-    },
+    params: q,
     cache: "no-store",
   });
 }

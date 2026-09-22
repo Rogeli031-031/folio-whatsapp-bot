@@ -24,6 +24,9 @@ type Props = {
   token: string;
   empresa: string;
   onClose: () => void;
+  /** canal = gráfica CASA/COMISIONISTA. cliente = un solo cliente_norm, sin selector. */
+  mode?: "canal" | "cliente";
+  clienteNorm?: string | null;
 };
 
 function fmtTon(n: number): string {
@@ -43,6 +46,14 @@ function fmtMoney(n: number): string {
     currency: "MXN",
     maximumFractionDigits: 2,
   });
+}
+
+function fmtDescKg(n: number | null | undefined): string {
+  if (n == null || !Number.isFinite(n)) return "—";
+  return `$${n.toLocaleString("es-MX", {
+    minimumFractionDigits: 3,
+    maximumFractionDigits: 3,
+  })}/kg`;
 }
 
 function fmtFechaLarga(fecha: string): string {
@@ -123,6 +134,7 @@ function tipoLabel(tipo: string): string {
   if (tipo === "perdido") return "Dejó de comprar";
   if (tipo === "disminucion") return "Disminuyó";
   if (tipo === "aumento") return "Aumentó";
+  if (tipo === "sin_cambio") return "Sin cambio";
   return tipo;
 }
 
@@ -130,10 +142,19 @@ function tipoClass(tipo: string): string {
   if (tipo === "nuevo") return "bg-emerald-100 text-emerald-800";
   if (tipo === "perdido") return "bg-rose-100 text-rose-800";
   if (tipo === "disminucion") return "bg-amber-100 text-amber-900";
+  if (tipo === "sin_cambio") return "bg-slate-200 text-slate-700";
   return "bg-sky-100 text-sky-800";
 }
 
-export default function ArrVentaGraficaModal({ token, empresa, onClose }: Props) {
+export default function ArrVentaGraficaModal({
+  token,
+  empresa,
+  onClose,
+  mode = "canal",
+  clienteNorm = null,
+}: Props) {
+  const isCliente = mode === "cliente";
+  const clienteLabel = String(clienteNorm || "").trim();
   const [range, setRange] = useState<ArrVentaSerieRange>("1m");
   const [canal, setCanal] = useState<"casa" | "comisionista">("casa");
   const [points, setPoints] = useState<ArrVentaSeriePoint[]>([]);
@@ -147,8 +168,13 @@ export default function ArrVentaGraficaModal({ token, empresa, onClose }: Props)
     let cancelled = false;
     setLoading(true);
     setError(null);
-    const canalApi: ArrVentaSerieCanal = canal;
-    fetchArrVentaSerie(token, { empresa, range, canal: canalApi })
+    const canalApi: ArrVentaSerieCanal = isCliente ? "ambos" : canal;
+    fetchArrVentaSerie(token, {
+      empresa,
+      range,
+      canal: canalApi,
+      cliente_norm: isCliente && clienteLabel ? clienteLabel : undefined,
+    })
       .then((data) => {
         if (cancelled) return;
         setPoints(data.points || []);
@@ -166,20 +192,24 @@ export default function ArrVentaGraficaModal({ token, empresa, onClose }: Props)
     return () => {
       cancelled = true;
     };
-  }, [token, empresa, range, canal]);
+  }, [token, empresa, range, canal, isCliente, clienteLabel]);
 
   const series = useMemo(() => {
     return (points || []).map((p) => ({
       fecha: p.fecha,
       ton: Number(p.venta_ton) || 0,
       descuento: Number(p.descuento_mxn) || 0,
+      descuentoKg:
+        p.descuento_kg == null || !Number.isFinite(Number(p.descuento_kg))
+          ? null
+          : Number(p.descuento_kg),
     }));
   }, [points]);
 
   useEffect(() => {
     setSelectedIdx(null);
     setHoverIdx(null);
-  }, [range, canal, empresa]);
+  }, [range, canal, empresa, clienteLabel]);
 
   const chart = useMemo(() => {
     const W = 980;
@@ -237,8 +267,8 @@ export default function ArrVentaGraficaModal({ token, empresa, onClose }: Props)
     return { W, H, padL, padR, padT, padB, pts, yTicks, xLabels, trendLine };
   }, [series, range]);
 
-  const lineColor = canal === "casa" ? "#ca8a04" : "#38bdf8";
-  const fillId = canal === "casa" ? "arrFillCasa" : "arrFillComi";
+  const lineColor = isCliente ? "#ca8a04" : canal === "casa" ? "#ca8a04" : "#38bdf8";
+  const fillId = isCliente ? "arrFillCliente" : canal === "casa" ? "arrFillCasa" : "arrFillComi";
   const linePath = buildPath(
     chart.pts.map((p) => ({ x: p.x, y: p.y })),
     false,
@@ -257,27 +287,35 @@ export default function ArrVentaGraficaModal({ token, empresa, onClose }: Props)
   const active = activeIdx != null ? chart.pts[activeIdx] : null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-3 sm:p-4">
+    <div
+      className={`fixed inset-0 flex items-center justify-center bg-black/70 p-3 sm:p-4 ${
+        isCliente ? "z-[60]" : "z-50"
+      }`}
+    >
       <div className="flex max-h-[96vh] w-full max-w-[1600px] flex-col overflow-hidden rounded-xl border border-slate-600 bg-slate-900 shadow-2xl">
         <div className="relative flex flex-wrap items-center justify-between gap-2 border-b border-slate-700 px-4 py-3">
           <div>
             <h2 className="text-base font-semibold text-white">Gráfica · Toneladas de venta</h2>
             <p className="text-xs text-slate-400">
-              {empresa} · eje Y: toneladas · eje X: tiempo
+              {isCliente && clienteLabel
+                ? `${clienteLabel} · ${empresa}`
+                : `${empresa} · eje Y: toneladas · eje X: tiempo`}
             </p>
           </div>
-          <div
-            className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 text-center"
-            aria-hidden
-          >
+          {!isCliente && (
             <div
-              className={`text-4xl font-black tracking-[0.12em] sm:text-5xl ${
-                canal === "casa" ? "text-yellow-400" : "text-sky-400"
-              }`}
+              className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 text-center"
+              aria-hidden
             >
-              {canal === "casa" ? "CASA" : "COMISIONISTA"}
+              <div
+                className={`text-4xl font-black tracking-[0.12em] sm:text-5xl ${
+                  canal === "casa" ? "text-yellow-400" : "text-sky-400"
+                }`}
+              >
+                {canal === "casa" ? "CASA" : "COMISIONISTA"}
+              </div>
             </div>
-          </div>
+          )}
           <button
             type="button"
             onClick={onClose}
@@ -288,29 +326,33 @@ export default function ArrVentaGraficaModal({ token, empresa, onClose }: Props)
         </div>
 
         <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 px-4 py-2">
-          <span className="text-xs text-slate-500">Canal:</span>
-          <button
-            type="button"
-            onClick={() => setCanal("casa")}
-            className={`rounded px-3 py-1.5 text-xs font-semibold ${
-              canal === "casa"
-                ? "bg-yellow-600/90 text-yellow-50"
-                : "bg-slate-800 text-yellow-200/80 hover:bg-slate-700"
-            }`}
-          >
-            Venta CASA
-          </button>
-          <button
-            type="button"
-            onClick={() => setCanal("comisionista")}
-            className={`rounded px-3 py-1.5 text-xs font-semibold ${
-              canal === "comisionista"
-                ? "bg-sky-600/90 text-sky-50"
-                : "bg-slate-800 text-sky-200/80 hover:bg-slate-700"
-            }`}
-          >
-            Venta COMISIONISTA
-          </button>
+          {!isCliente && (
+            <>
+              <span className="text-xs text-slate-500">Canal:</span>
+              <button
+                type="button"
+                onClick={() => setCanal("casa")}
+                className={`rounded px-3 py-1.5 text-xs font-semibold ${
+                  canal === "casa"
+                    ? "bg-yellow-600/90 text-yellow-50"
+                    : "bg-slate-800 text-yellow-200/80 hover:bg-slate-700"
+                }`}
+              >
+                Venta CASA
+              </button>
+              <button
+                type="button"
+                onClick={() => setCanal("comisionista")}
+                className={`rounded px-3 py-1.5 text-xs font-semibold ${
+                  canal === "comisionista"
+                    ? "bg-sky-600/90 text-sky-50"
+                    : "bg-slate-800 text-sky-200/80 hover:bg-slate-700"
+                }`}
+              >
+                Venta COMISIONISTA
+              </button>
+            </>
+          )}
           <span className="ml-auto inline-flex items-center gap-1.5 text-[11px] text-slate-400">
             <span className="inline-block h-0.5 w-4 rounded bg-emerald-500" />
             Línea de tendencia
@@ -321,7 +363,11 @@ export default function ArrVentaGraficaModal({ token, empresa, onClose }: Props)
           {loading && <p className="p-4 text-sm text-slate-600">Cargando serie…</p>}
           {error && <p className="p-4 text-sm text-red-600">{error}</p>}
           {!loading && !error && series.length === 0 && (
-            <p className="p-4 text-sm text-slate-600">No hay datos de venta diaria para este rango.</p>
+            <p className="p-4 text-sm text-slate-600">
+              {isCliente
+                ? "Sin ventas del cliente en este periodo."
+                : "No hay datos de venta diaria para este rango."}
+            </p>
           )}
           {!loading && !error && series.length > 0 && (
             <div className="flex flex-col gap-3 lg:flex-row lg:items-stretch">
@@ -448,11 +494,14 @@ export default function ArrVentaGraficaModal({ token, empresa, onClose }: Props)
                       <span className="text-sm font-medium text-slate-500">ton</span>
                     </div>
                     <div className="mt-0.5 text-xs text-slate-600">
-                      Venta del día · {canal === "casa" ? "CASA" : "COMISIONISTA"}
+                      Venta del día ·{" "}
+                      {isCliente ? clienteLabel : canal === "casa" ? "CASA" : "COMISIONISTA"}
                     </div>
                     <div className="mt-1 text-xs text-slate-700">
                       Descuento:{" "}
-                      <strong className="tabular-nums">{fmtMoney(active.descuento)}</strong>
+                      <strong className="tabular-nums">
+                        {isCliente ? fmtDescKg(active.descuentoKg) : fmtMoney(active.descuento)}
+                      </strong>
                     </div>
                     <div className="mt-1 text-[11px] text-slate-500">
                       {fmtFechaLarga(active.fecha)}
@@ -464,13 +513,19 @@ export default function ArrVentaGraficaModal({ token, empresa, onClose }: Props)
               <aside className="w-full shrink-0 rounded-lg border border-slate-200 bg-white p-3 lg:w-[640px]">
                 <div className="grid grid-cols-1 gap-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] sm:gap-3">
                   <div>
-                    <h3 className="text-sm font-semibold text-slate-800">Top 6 clientes · Δ venta</h3>
+                    <h3 className="text-sm font-semibold text-slate-800">
+                      {isCliente ? "MOVIMIENTO DEL CLIENTE" : "Top 6 clientes · Δ venta"}
+                    </h3>
                     <p className="mt-0.5 text-[11px] leading-snug text-slate-500">
-                      Vs periodo previo · {canal === "casa" ? "CASA" : "COMISIONISTA"}
+                      {isCliente
+                        ? "Vs periodo previo comparable · mismo cliente"
+                        : `Vs periodo previo · ${canal === "casa" ? "CASA" : "COMISIONISTA"}`}
                     </p>
                   </div>
                   <div className="hidden sm:block">
-                    <h3 className="text-sm font-semibold text-slate-800">Últimos comentarios</h3>
+                    <h3 className="text-sm font-semibold text-slate-800">
+                      {isCliente ? "ÚLTIMOS COMENTARIOS" : "Últimos comentarios"}
+                    </h3>
                     <p className="mt-0.5 text-[11px] leading-snug text-slate-500">
                       Delta Ingreso Cliente Forecast · 2 más recientes
                     </p>
