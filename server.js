@@ -15276,7 +15276,7 @@ app.post("/api/arr/refresh-provincia", dashboardAuthMiddleware, async (req, res)
 /**
  * GET /api/arr/venta-serie
  * Serie diaria de toneladas + top clientes por delta vs periodo previo.
- * Query: empresa, range=1d|5d|1m|3m|ytd|1a|5a|todo, canal=casa|comisionista|ambos
+ * Query: empresa, range=1d|5d|1m|3m|ytd|1a|5a|todo, canal=casa|comisionista|ambos, cliente_norm?
  * Delega al motor compartido lib/commercial-trend-engine.js. Comments se adjuntan aquí
  * (no forman parte del motor que consume Director IA).
  */
@@ -15292,6 +15292,7 @@ app.get("/api/arr/venta-serie", dashboardAuthMiddleware, async (req, res) => {
   const canalRaw = String(req.query.canal || "ambos").trim().toLowerCase();
   const canalFilter =
     canalRaw === "casa" || canalRaw === "comisionista" ? canalRaw : "ambos";
+  const clienteNorm = String(req.query.cliente_norm || req.query.cliente || "").trim();
 
   const client = await pool.connect();
   try {
@@ -15299,6 +15300,7 @@ app.get("/api/arr/venta-serie", dashboardAuthMiddleware, async (req, res) => {
       empresa,
       range: rangeOk,
       canal: canalFilter,
+      cliente_norm: clienteNorm || null,
     });
     if (engineResult && engineResult.ok === false) {
       return res.status(engineResult.status || 500).json({ error: engineResult.error || "Error venta-serie" });
