@@ -1,76 +1,76 @@
 ﻿# CURRENT_TASK
 
 ```yaml
-task_id: "IMPL-COMPRAS-FLETE-TARIFA-016"
-title: "Compras — TARIFA de flete por origen y tabla VALOR DEL FLETE SEGÚN ORIGEN"
+task_id: "FIX-DIRECTOR-IA-SEMANTIC-FOLLOWUPS-017"
+title: "Director IA — aliases de gasto por concepto y continuidad de ranking de descuentos"
 status: "DONE_PENDING_REVIEW"
 mode: "IMPLEMENTATION"
 
 authorized_by: "HUMAN"
-authorized_at: "2026-09-21T15:00:00-06:00"
+authorized_at: "2026-09-21T17:15:00-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN"
 
-objective: "Agregar una TARIFA de flete editable por origen/proveedor y mes, persistida por planta, y una tabla automática VALOR DEL FLETE SEGÚN ORIGEN a la derecha de CONTROL DE COMPRAS, sin modificar la lógica actual de compras ni HG."
+objective: "Corregir dos regresiones semánticas: búsqueda de gasto por conceptos equivalentes como llantas/llanta/neumáticos y continuidad conversacional del ranking de descuentos ante periodos relativos como mes anterior. Blindar ambas capacidades con 50 paráfrasis de prueba sin convertirlas en phrasebook de producción."
 
 implementation: true
 code_changes: true
 
-schema_changes: true
-data_mutation: true
+schema_changes: false
+data_mutation: false
 
-base_sha: "872bf076ac4f2d9f2119e2904d951062709ea725"
-branch: "implementation/compras-flete-tarifa-016"
+base_sha: "0f39d0638cf2a8acd78f2baf665e0fdf1499af0c"
+branch: "fix/director-ia-semantic-followups-017"
 
 merge_authorized: false
 deploy_authorized: false
 next_task_authorized: false
 
 in_scope:
-  - "persistencia de tarifa de flete"
-  - "lib/compras-dashboard.js"
-  - "lib/compras-excel.js"
-  - "sql/ nueva migración"
-  - "frontend-dashboard/components/ComprasClient.tsx"
-  - "frontend-dashboard/lib/compras-format.ts"
-  - "frontend-dashboard/lib/api.ts"
-  - "tests específicos 016"
-  - "test/compras-dashboard-013.test.js solo si requiere regresión"
-  - "test/compras-hg-kilos-014.test.js solo si requiere regresión"
-  - "docs/dev-loop/reports/IMPL-COMPRAS-FLETE-TARIFA-016.md"
+  - "lib/director-ia-expense-analytics.js"
+  - "lib/director-ia-folio-search.js solo si se necesita un matcher compartido"
+  - "lib/director-ia-executive-context-sales-entity-010.js"
+  - "lib/director-ia-planner.js"
+  - "lib/director-ia-chat.js solo si la persistencia del contexto requiere corrección mínima"
+  - "módulo actual de client_discount_ranking"
+  - "tests de expense analytics"
+  - "tests de client_discount_ranking"
+  - "tests de conversación/context inheritance"
+  - "nuevo fixture de 50 paráfrasis"
+  - "docs/dev-loop/reports/FIX-DIRECTOR-IA-SEMANTIC-FOLLOWUPS-017.md"
   - "docs/dev-loop/CURRENT_TASK.md"
 
 out_of_scope:
-  - "docs/director-ia/"
-  - "COMPRA KG existente"
-  - "COSTO KG existente"
-  - "IMPORTE de compra existente"
-  - "CONSOLIDADO de compras existente"
-  - "HG EN KILOS"
-  - "facturas"
-  - "proveedores salvo leerlos para relacionar tarifa"
-  - "main"
+  - "DB/schema"
+  - "public.folios"
+  - "ARR data"
+  - "fórmula de descuento $/kg ya contractual"
+  - "Compras/HG/Flete"
+  - "docs/director-ia/ salvo necesidad contractual demostrada"
   - "PR"
   - "merge"
   - "deploy"
 
 contracts_in_force:
-  - "dev-loop vigente"
-  - "no modificar cálculos existentes de compras"
-  - "no confundir TARIFA de flete con COSTO KG de compra"
-  - "los valores derivados no se persisten si se pueden recalcular"
+  - "semántica > phrase whitelist"
+  - "EXPLICIT CURRENT TURN > INHERITED CONTEXT > GENERIC FALLBACK"
+  - "no inventar evidencia"
+  - "DATA_NOT_FOUND != 0"
+  - "las paráfrasis viven en tests/fixtures, no en producción"
 
 validation:
-  - "node --test test/compras-flete-tarifa-016.test.js"
-  - "node --test test/compras-dashboard-013.test.js"
-  - "node --test test/compras-hg-kilos-014.test.js"
-  - "cd frontend-dashboard && npm run build"
-  - "NO commitear frontend-dashboard/.next"
+  - "nuevo test 017"
+  - "suite Expense Analytics"
+  - "suite keyword expense"
+  - "suite client_discount_ranking"
+  - "suite conversational inheritance"
+  - "008/010/012 si resultan afectadas"
+  - "50/50 paráfrasis nuevas"
 
-result_report_path: "docs/dev-loop/reports/IMPL-COMPRAS-FLETE-TARIFA-016.md"
+result_report_path: "docs/dev-loop/reports/FIX-DIRECTOR-IA-SEMANTIC-FOLLOWUPS-017.md"
 
 closure:
   - "Al terminar poner CURRENT_TASK en DONE_PENDING_REVIEW."
-  - "Commit + push únicamente a implementation/compras-flete-tarifa-016."
+  - "Commit + push únicamente a fix/director-ia-semantic-followups-017."
   - "STOP."
   - "NO PR."
   - "NO merge."
