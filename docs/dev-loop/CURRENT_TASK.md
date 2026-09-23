@@ -1,16 +1,16 @@
 ﻿# CURRENT_TASK
 
 ```yaml
-task_id: "IMPL-IGF-DIARIO-UI-SCOPED-VIEW-025"
-title: "IGF Diario — botón junto a Planta, conservar tabla principal y quitar Tot Provincia en export por planta"
+task_id: "IMPL-COMPRAS-HG-COST-CARRY-FORWARD-026"
+title: "Compras — arrastre del último COSTO HG válido en días sin compras"
 status: "DONE_PENDING_REVIEW"
 mode: "IMPLEMENTATION"
 
 authorized_by: "HUMAN"
-authorized_at: "2026-09-22T21:31:00-06:00"
+authorized_at: "2026-09-23T10:07:00-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN"
 
-objective: "Mover y renombrar el botón de descarga del Forecast junto al selector Planta como IGFDiario, mantener visible la tabla principal IGF Forecast al seleccionar una planta mostrando únicamente esa planta, y eliminar Tot Provincia de la columna C en Provincia Venta Diaria cuando el Excel está filtrado a una sola planta."
+objective: "Hacer que el COSTO diario del bloque HG nunca caiga a cero o vacío por falta de compras: en un día sin compras debe usar el último COSTO HG válido anterior. El mismo costo efectivo debe usarse para calcular el IMPORTE HG diario y, por suma de días, los importes semanales y mensuales. Debe funcionar igual en UI, Excel de Compras y CONTROL DE COMPRAS embebido en IGFDiario."
 
 implementation: true
 code_changes: true
@@ -18,42 +18,44 @@ code_changes: true
 schema_changes: false
 data_mutation: false
 
-base_sha: "49db0dadb9c419edf1519652e850808ead8c6692"
-branch: "implementation/igf-diario-ui-scoped-view-025"
+base_sha: "a18929aaedc3178dcec3b1cca557553d2b40d5a5"
+branch: "implementation/compras-hg-cost-carry-forward-026"
 
 merge_authorized: false
 deploy_authorized: false
 next_task_authorized: false
 
 in_scope:
-  - "frontend-dashboard/components/IgfForecastClient.tsx"
-  - "lib/dashboard-arr-forecast.js"
-  - "tests 025"
-  - "regresión 024/023"
+  - "lib/compras-dashboard.js"
+  - "frontend-dashboard/components/ComprasClient.tsx"
+  - "lib/compras-excel.js"
+  - "tests 026"
+  - "regresión Compras 014/016/020/021/022"
+  - "regresión Forecast CONTROL DE COMPRAS"
   - "frontend build"
-  - "docs/dev-loop/reports/IMPL-IGF-DIARIO-UI-SCOPED-VIEW-025.md"
+  - "docs/dev-loop/reports/IMPL-COMPRAS-HG-COST-CARRY-FORWARD-026.md"
   - "docs/dev-loop/CURRENT_TASK.md"
 
 out_of_scope:
   - "schema DB"
-  - "persistencia"
-  - "cálculos financieros"
-  - "Compras renderer"
+  - "persistir costo"
+  - "cambiar captura HG"
+  - "cambiar tarifas de flete"
+  - "cambiar costo de compras por proveedor"
+  - "cambiar consolidado de compras"
+  - "cambiar COSTO semanal/mensual agregado"
   - "Director IA"
-  - "endpoint nuevo"
   - "PR"
   - "merge"
   - "deploy"
 
 contracts_in_force:
-  - "reutilizar selector Planta existente"
-  - "reutilizar descarga plant-scoped implementada en 024"
-  - "no crear segundo selector"
-  - "no crear segundo endpoint"
-  - "CONTROL DE COMPRAS sigue siendo tercera hoja"
-  - "CASA/COMISIONISTA mantienen su contrato de datos"
-  - "categorías del Excel siguen comenzando en J"
+  - "COSTO HG diario base = costo consolidado compra + tarifa consolidada flete"
+  - "IMPORTE HG diario = COSTO HG efectivo × HG kilos × -1"
+  - "importe semanal/mensual = suma de importes diarios"
+  - "no persistir valores derivados"
+  - "UI y Excel deben usar la misma semántica"
 
 max_attempts: 1
-result_report_path: "docs/dev-loop/reports/IMPL-IGF-DIARIO-UI-SCOPED-VIEW-025.md"
+result_report_path: "docs/dev-loop/reports/IMPL-COMPRAS-HG-COST-CARRY-FORWARD-026.md"
 ```

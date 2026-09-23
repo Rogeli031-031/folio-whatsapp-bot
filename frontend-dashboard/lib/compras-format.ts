@@ -68,6 +68,24 @@ export function hgCosto(costoKg: number | null | undefined, tarifa: number | nul
   return Math.round((Number(costoKg) + Number(tarifa)) * 1000) / 1000;
 }
 
+type HgDay = {
+  hg_kilos?: number | null;
+  hg_costo_efectivo?: number | null;
+  hg_importe_efectivo?: number | null;
+  consolidado?: { costo_kg?: number | null };
+  flete?: { consolidado?: { tarifa?: number | null } };
+};
+
+export function hgCostoDiario(day: HgDay | null | undefined): number | null {
+  if (day && day.hg_costo_efectivo !== undefined) return day.hg_costo_efectivo ?? null;
+  return hgCosto(day?.consolidado?.costo_kg, day?.flete?.consolidado?.tarifa);
+}
+
+export function hgImporteDiario(day: HgDay | null | undefined): number | null {
+  if (day && day.hg_importe_efectivo !== undefined) return day.hg_importe_efectivo ?? null;
+  return hgImporte(hgCosto(day?.consolidado?.costo_kg, day?.flete?.consolidado?.tarifa), day?.hg_kilos ?? null);
+}
+
 export function hgImporte(costo: number | null | undefined, hgKilos: number | null | undefined): number | null {
   if (costo == null || !Number.isFinite(Number(costo))) return null;
   if (hgKilos == null || !Number.isFinite(Number(hgKilos))) return null;
@@ -78,6 +96,7 @@ export function hgImporte(costo: number | null | undefined, hgKilos: number | nu
 export function hgImporteSum(
   days: {
     hg_kilos?: number | null;
+    hg_importe_efectivo?: number | null;
     consolidado?: { costo_kg?: number | null };
     flete?: { consolidado?: { tarifa?: number | null } };
   }[]
@@ -86,8 +105,9 @@ export function hgImporteSum(
   let saw = false;
   for (const d of days || []) {
     if (d == null || d.hg_kilos == null || !Number.isFinite(Number(d.hg_kilos))) continue;
-    const costo = hgCosto(d.consolidado?.costo_kg, d.flete?.consolidado?.tarifa);
-    const imp = hgImporte(costo, d.hg_kilos);
+    const imp = d.hg_importe_efectivo !== undefined
+      ? d.hg_importe_efectivo
+      : hgImporte(hgCosto(d.consolidado?.costo_kg, d.flete?.consolidado?.tarifa), d.hg_kilos);
     if (imp == null) return null;
     sum += imp;
     saw = true;

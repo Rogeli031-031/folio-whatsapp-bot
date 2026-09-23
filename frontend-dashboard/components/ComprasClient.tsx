@@ -35,7 +35,9 @@ import {
   formatKg,
   formatTarifa,
   hgCosto,
+  hgCostoDiario,
   hgImporte,
+  hgImporteDiario,
   hgImporteSum,
   parseLocaleNumber,
   toYmd,
@@ -532,12 +534,16 @@ export function ComprasClient() {
                       <ReadOnlyTriple kg={day?.consolidado.kg || 0} importe={day?.consolidado.importe || 0} costo={day?.consolidado.costo_kg ?? null} consolidado />
                       <td className={`compras-hg-gap ${COMPRAS_SEP_CLS}`} />
                       <HgDerivedCells
-                        costo={hgCosto(day?.consolidado?.costo_kg, day?.flete?.consolidado?.tarifa)}
+                        costo={hgCostoDiario(day) !== undefined
+                          ? hgCostoDiario(day)
+                          : hgCosto(day?.consolidado?.costo_kg, day?.flete?.consolidado?.tarifa)}
                         hg={day?.hg_kilos ?? null}
-                        importe={hgImporte(
-                          hgCosto(day?.consolidado?.costo_kg, day?.flete?.consolidado?.tarifa),
-                          day?.hg_kilos ?? null
-                        )}
+                        importe={hgImporteDiario(day) !== undefined
+                          ? hgImporteDiario(day)
+                          : hgImporte(
+                            hgCosto(day?.consolidado?.costo_kg, day?.flete?.consolidado?.tarifa),
+                            day?.hg_kilos ?? null
+                          )}
                         editable={Boolean(token && plantaId)}
                         token={token}
                         plantaId={plantaId}

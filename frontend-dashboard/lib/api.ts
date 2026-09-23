@@ -3262,6 +3262,8 @@ export type ComprasMonthResponse = {
       cells: Record<string, ComprasCell>;
       consolidado: { kg: number; importe: number; costo_kg: number | null };
       hg_kilos: number | null;
+      hg_costo_efectivo?: number | null;
+      hg_importe_efectivo?: number | null;
       flete?: {
         providers: Record<string, { kg: number; tarifa: number | null; importe: number | null }>;
         consolidado: { kg: number; tarifa: number | null; importe: number | null };
