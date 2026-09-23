@@ -1,16 +1,16 @@
 ﻿# CURRENT_TASK
 
 ```yaml
-task_id: "IMPL-FORECAST-EXCEL-PLANT-COMPRAS-024"
-title: "Forecast Excel — filtro por planta seleccionada, CONTROL DE COMPRAS y venta con 3 decimales"
+task_id: "IMPL-IGF-DIARIO-UI-SCOPED-VIEW-025"
+title: "IGF Diario — botón junto a Planta, conservar tabla principal y quitar Tot Provincia en export por planta"
 status: "DONE_PENDING_REVIEW"
 mode: "IMPLEMENTATION"
 
 authorized_by: "HUMAN"
-authorized_at: "2026-09-22T14:28:00-06:00"
+authorized_at: "2026-09-22T21:31:00-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN"
 
-objective: "Hacer que Descargar Excel (Forecast) use la planta seleccionada en IGF Forecast para filtrar todo el workbook a esa planta, agregar como tercera hoja CONTROL DE COMPRAS reutilizando exactamente el generador del módulo Compras y mostrar la venta de Provincia Venta Diaria con 3 decimales."
+objective: "Mover y renombrar el botón de descarga del Forecast junto al selector Planta como IGFDiario, mantener visible la tabla principal IGF Forecast al seleccionar una planta mostrando únicamente esa planta, y eliminar Tot Provincia de la columna C en Provincia Venta Diaria cuando el Excel está filtrado a una sola planta."
 
 implementation: true
 code_changes: true
@@ -18,8 +18,8 @@ code_changes: true
 schema_changes: false
 data_mutation: false
 
-base_sha: "ae321d5e98daff1b03f7b843630e76f8db43b55b"
-branch: "implementation/forecast-excel-plant-compras-024"
+base_sha: "49db0dadb9c419edf1519652e850808ead8c6692"
+branch: "implementation/igf-diario-ui-scoped-view-025"
 
 merge_authorized: false
 deploy_authorized: false
@@ -27,34 +27,33 @@ next_task_authorized: false
 
 in_scope:
   - "frontend-dashboard/components/IgfForecastClient.tsx"
-  - "frontend-dashboard/lib/api.ts"
-  - "server.js"
   - "lib/dashboard-arr-forecast.js"
-  - "lib/compras-excel.js solo para reutilización/extracción mínima si es necesario"
-  - "lib/compras-dashboard.js solo lectura/reutilización necesaria"
-  - "tests 024"
-  - "regresión 023/Compras Excel"
-  - "docs/dev-loop/reports/IMPL-FORECAST-EXCEL-PLANT-COMPRAS-024.md"
+  - "tests 025"
+  - "regresión 024/023"
+  - "frontend build"
+  - "docs/dev-loop/reports/IMPL-IGF-DIARIO-UI-SCOPED-VIEW-025.md"
   - "docs/dev-loop/CURRENT_TASK.md"
 
 out_of_scope:
   - "schema DB"
-  - "mutaciones"
-  - "cambiar fórmulas de Compras"
+  - "persistencia"
+  - "cálculos financieros"
+  - "Compras renderer"
   - "Director IA"
-  - "cambiar cálculo físico ARR/IGF"
+  - "endpoint nuevo"
   - "PR"
   - "merge"
   - "deploy"
 
 contracts_in_force:
-  - "usar selector existente plantaFilter; NO crear segundo selector"
-  - "una descarga = una planta"
-  - "Todas no es planta válida para exportar"
-  - "no permitir cross-plant leakage en el workbook"
-  - "CONTROL DE COMPRAS debe reutilizar buildComprasWorkbook"
-  - "no reconstruir manualmente la hoja de Compras"
+  - "reutilizar selector Planta existente"
+  - "reutilizar descarga plant-scoped implementada en 024"
+  - "no crear segundo selector"
+  - "no crear segundo endpoint"
+  - "CONTROL DE COMPRAS sigue siendo tercera hoja"
+  - "CASA/COMISIONISTA mantienen su contrato de datos"
+  - "categorías del Excel siguen comenzando en J"
 
 max_attempts: 1
-result_report_path: "docs/dev-loop/reports/IMPL-FORECAST-EXCEL-PLANT-COMPRAS-024.md"
+result_report_path: "docs/dev-loop/reports/IMPL-IGF-DIARIO-UI-SCOPED-VIEW-025.md"
 ```
