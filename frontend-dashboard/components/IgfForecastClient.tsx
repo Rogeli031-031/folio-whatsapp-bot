@@ -943,36 +943,6 @@ export function IgfForecastContent() {
         </div>
       </div>
       <div className="flex flex-wrap gap-3 px-4 py-3 border-b border-slate-700/80 bg-slate-800/30 items-center">
-        {igfForecast && token && (
-          <button
-            type="button"
-            onClick={() => {
-              if (!plantaFilter) {
-                setForecastExcelMsg("Selecciona una planta para descargar el Excel Forecast.");
-                return;
-              }
-              setForecastExcelMsg(null);
-              const url = getDashboardExcelDownloadUrl(
-                token,
-                igfForecast.year,
-                igfForecast.month,
-                uploadDay,
-                versionAsOfCorte,
-                plantaFilter,
-                true
-              );
-              window.open(url, "_blank", "noopener,noreferrer");
-            }}
-            className="inline-flex items-center gap-2 rounded bg-slate-600 px-4 py-2 text-sm font-medium text-white hover:bg-slate-500"
-          >
-            Descargar Excel (Forecast)
-          </button>
-        )}
-        {forecastExcelMsg && (
-          <span className="text-sm text-amber-300" role="status">
-            {forecastExcelMsg}
-          </span>
-        )}
         <label className="inline-flex items-center gap-2 rounded border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-200">
           <span className="text-slate-400">Fecha de carga (corte):</span>
           <input
@@ -1062,7 +1032,7 @@ export function IgfForecastContent() {
       <main className={plantaFilter ? "flex-1 p-4 flex flex-col" : "flex-1 p-4"}>
         <section className={`rounded-lg border border-slate-700 bg-slate-800/60 p-4 ${plantaFilter ? "flex-shrink-0" : ""}`}>
           <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-            <h2 className="text-lg font-medium text-slate-200">{plantaFilter ? "Comparación por planta" : "IGF Forecast"}</h2>
+            <h2 className="text-lg font-medium text-slate-200">IGF Forecast</h2>
             <div className="flex flex-wrap items-center gap-2">
                         {igfForecast && (
                 <>
@@ -1079,6 +1049,36 @@ export function IgfForecastContent() {
                       ))}
                     </select>
                   </label>
+                  {token && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!plantaFilter) {
+                          setForecastExcelMsg("Selecciona una planta para descargar el Excel Forecast.");
+                          return;
+                        }
+                        setForecastExcelMsg(null);
+                        const url = getDashboardExcelDownloadUrl(
+                          token,
+                          igfForecast.year,
+                          igfForecast.month,
+                          uploadDay,
+                          versionAsOfCorte,
+                          plantaFilter,
+                          true
+                        );
+                        window.open(url, "_blank", "noopener,noreferrer");
+                      }}
+                      className="inline-flex items-center rounded bg-slate-600 px-2 py-1 text-xs font-medium text-white hover:bg-slate-500"
+                    >
+                      IGFDiario
+                    </button>
+                  )}
+                  {forecastExcelMsg && (
+                    <span className="text-xs text-amber-300" role="status">
+                      {forecastExcelMsg}
+                    </span>
+                  )}
                   <span className="text-xs text-slate-500">
                     {MESES[igfForecast.month - 1]} {igfForecast.year}
                     {igfForecast.version_number != null && ` · v${igfForecast.version_number}`}
@@ -1090,8 +1090,6 @@ export function IgfForecastContent() {
               )}
             </div>
           </div>
-          {!plantaFilter && (
-          <>
           {igfLoading && <p className="text-sm text-slate-400">Cargando datos…</p>}
           {igfError && <p className="text-sm text-red-400">{igfError}</p>}
           {!igfLoading && !igfError && igfForecast && (
@@ -1099,7 +1097,9 @@ export function IgfForecastContent() {
             {igfMiniLoading && <p className="text-xs text-slate-400 mb-2">Cargando mini-resumen…</p>}
             {igfMiniError && <p className="text-xs text-red-400 mb-2">{igfMiniError}</p>}
             {igfMini && igfMini.rows && igfMini.rows.length > 0 && (() => {
-              const plantRows = igfMini.rows;
+              const plantRows = plantaFilter
+                ? igfMini.rows.filter((r) => (r.empresa || "").trim() === plantaFilter)
+                : igfMini.rows;
               const zona = igfMini.zona;
               const miniCols = [
                 { key: "ventaTon" as const, label: "Venta", fmt: (v: number) => fmtNum(v, 2), money: false },
@@ -1197,7 +1197,7 @@ export function IgfForecastContent() {
                     </thead>
                     <tbody>
                       {plantRows.map((r) => renderRow(r, false))}
-                      {renderRow(zona, true)}
+                      {!plantaFilter && zona ? renderRow(zona, true) : null}
                     </tbody>
                   </table>
                 </div>
@@ -1488,8 +1488,6 @@ export function IgfForecastContent() {
               )}
             </div>
             </>
-          )}
-          </>
           )}
         </section>
         {plantaFilter && igfForecast && (
