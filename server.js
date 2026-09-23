@@ -15511,6 +15511,7 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
     let plantCode = null;
     let resolvedPlant = null;
     let comprasPayload = null;
+    let precioDiario = null;
     if (requirePlant) {
       resolvedPlant = await dashboardArrForecast.resolveForecastExportPlant(client, plantCodeRaw);
       if (!resolvedPlant) {
@@ -15523,6 +15524,7 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
       proyeccionCatSubForecast.plantCodeFilter = plantCode;
       await comprasDashboard.ensureComprasTables(client);
       comprasPayload = await comprasDashboard.loadMonth(client, resolvedPlant.plantaId, year, month);
+      precioDiario = await dashboardArrForecast.loadPrecioDiario(client, plantCode, year, month);
     }
     const excelIgfOpts = {};
     if (uploadDay) excelIgfOpts.upload_day = uploadDay;
@@ -15597,6 +15599,9 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
     if (comprasPayload && resolvedPlant) {
       forecastOpts.comprasPayload = comprasPayload;
       forecastOpts.comprasPlantName = resolvedPlant.nombre;
+    }
+    if (Array.isArray(precioDiario)) {
+      forecastOpts.precioDiario = precioDiario;
     }
     const buf = await dashboardArrForecast.generarDashboardArrForecast(client, year, month, plantCode, forecastOpts);
     try {
