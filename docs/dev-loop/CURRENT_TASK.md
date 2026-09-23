@@ -1,16 +1,16 @@
 ﻿# CURRENT_TASK
 
 ```yaml
-task_id: "IMPL-IGF-DIARIO-PRECIO-SHEET-027"
-title: "IGFDiario — agregar hoja PRECIO desde arr.precio_diario"
+task_id: "IMPL-IGF-DIARIO-PRONOSTICO-FILL-028"
+title: "IGFDiario — sincronizar Pronostico con setup de corte y rellenar días futuros en Venta/Comisiones"
 status: "DONE_PENDING_REVIEW"
 mode: "IMPLEMENTATION"
 
 authorized_by: "HUMAN"
-authorized_at: "2026-09-23T12:00:00-06:00"
+authorized_at: "2026-09-23T14:44:00-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN"
 
-objective: "Agregar al Excel descargado desde IGFDiario una nueva tercera hoja llamada PRECIO, alimentada desde arr.precio_diario para la planta, año y mes seleccionados. Debe mostrar Fecha y PRECIO diario ya calculado en PostgreSQL. CONTROL DE COMPRAS pasa a ser la cuarta hoja."
+objective: "Hacer que la hoja Pronostico del Excel IGFDiario use exactamente el mismo setup persistido de días seleccionados que el modal Pronóstico para la fecha de corte vigente, y reutilizar esos mismos promedios por día de semana para rellenar los días desde el corte hacia fin de mes en Provincia Venta Diaria y Provincia Comisiones, incluyendo CASA/COMISIONISTA."
 
 implementation: true
 code_changes: true
@@ -18,43 +18,44 @@ code_changes: true
 schema_changes: false
 data_mutation: false
 
-base_sha: "187a4b643300f695273205d1250c5bae318dbf5b"
-branch: "implementation/igf-diario-precio-sheet-027"
+base_sha: "22f780d126e7488ef9ebbe5a741887d70162ff74"
+branch: "implementation/igf-diario-pronostico-fill-028"
 
 merge_authorized: false
 deploy_authorized: false
 next_task_authorized: false
 
 in_scope:
-  - "server.js"
   - "lib/dashboard-arr-forecast.js"
-  - "tests 027"
-  - "regresión 023/024/025"
-  - "regresión CONTROL DE COMPRAS"
-  - "docs/dev-loop/reports/IMPL-IGF-DIARIO-PRECIO-SHEET-027.md"
+  - "server.js solo si hace falta pasar contexto explícito"
+  - "tests 028"
+  - "regresión 023/024/025/027"
+  - "docs/dev-loop/reports/IMPL-IGF-DIARIO-PRONOSTICO-FILL-028.md"
   - "docs/dev-loop/CURRENT_TASK.md"
 
 out_of_scope:
   - "schema DB"
+  - "mutaciones nuevas"
+  - "cambiar UI del modal Pronóstico"
+  - "cambiar algoritmo del modal"
   - "VBA"
-  - "recalcular PRECIO"
-  - "modificar arr.precio_detalle"
-  - "modificar arr.precio_diario"
-  - "frontend"
-  - "Compras UI"
+  - "PRECIO"
+  - "CONTROL DE COMPRAS"
   - "Director IA"
   - "PR"
   - "merge"
   - "deploy"
 
 contracts_in_force:
-  - "PRECIO ya viene calculado desde arr.precio_diario"
-  - "NO recalcular fórmula en Excel"
-  - "plant-scoped IGFDiario solamente"
-  - "usar la misma planta autorizada de require_plant=1"
-  - "no contaminar datos entre plantas"
-  - "CONTROL DE COMPRAS conserva renderer existente"
+  - "modal Pronóstico es fuente contractual del cálculo"
+  - "arr.pronostico_dias_seleccion guarda inclusión/exclusión por planta/año/mes/corte"
+  - "misma fecha de corte => mismo setup"
+  - "días anteriores al corte son reales"
+  - "día de corte y posteriores son proyectados"
+  - "categoría desconocida NO se asigna a CASA"
+  - "CASA/COMISIONISTA siguen contrato 023"
+  - "no duplicar motor de pronóstico"
 
 max_attempts: 1
-result_report_path: "docs/dev-loop/reports/IMPL-IGF-DIARIO-PRECIO-SHEET-027.md"
+result_report_path: "docs/dev-loop/reports/IMPL-IGF-DIARIO-PRONOSTICO-FILL-028.md"
 ```
