@@ -1,16 +1,16 @@
 ﻿# CURRENT_TASK
 
 ```yaml
-task_id: "IMPL-COMPRAS-HG-COST-CARRY-FORWARD-026"
-title: "Compras — arrastre del último COSTO HG válido en días sin compras"
+task_id: "IMPL-IGF-DIARIO-PRECIO-SHEET-027"
+title: "IGFDiario — agregar hoja PRECIO desde arr.precio_diario"
 status: "DONE_PENDING_REVIEW"
 mode: "IMPLEMENTATION"
 
 authorized_by: "HUMAN"
-authorized_at: "2026-09-23T10:07:00-06:00"
+authorized_at: "2026-09-23T12:00:00-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN"
 
-objective: "Hacer que el COSTO diario del bloque HG nunca caiga a cero o vacío por falta de compras: en un día sin compras debe usar el último COSTO HG válido anterior. El mismo costo efectivo debe usarse para calcular el IMPORTE HG diario y, por suma de días, los importes semanales y mensuales. Debe funcionar igual en UI, Excel de Compras y CONTROL DE COMPRAS embebido en IGFDiario."
+objective: "Agregar al Excel descargado desde IGFDiario una nueva tercera hoja llamada PRECIO, alimentada desde arr.precio_diario para la planta, año y mes seleccionados. Debe mostrar Fecha y PRECIO diario ya calculado en PostgreSQL. CONTROL DE COMPRAS pasa a ser la cuarta hoja."
 
 implementation: true
 code_changes: true
@@ -18,44 +18,43 @@ code_changes: true
 schema_changes: false
 data_mutation: false
 
-base_sha: "a18929aaedc3178dcec3b1cca557553d2b40d5a5"
-branch: "implementation/compras-hg-cost-carry-forward-026"
+base_sha: "187a4b643300f695273205d1250c5bae318dbf5b"
+branch: "implementation/igf-diario-precio-sheet-027"
 
 merge_authorized: false
 deploy_authorized: false
 next_task_authorized: false
 
 in_scope:
-  - "lib/compras-dashboard.js"
-  - "frontend-dashboard/components/ComprasClient.tsx"
-  - "lib/compras-excel.js"
-  - "tests 026"
-  - "regresión Compras 014/016/020/021/022"
-  - "regresión Forecast CONTROL DE COMPRAS"
-  - "frontend build"
-  - "docs/dev-loop/reports/IMPL-COMPRAS-HG-COST-CARRY-FORWARD-026.md"
+  - "server.js"
+  - "lib/dashboard-arr-forecast.js"
+  - "tests 027"
+  - "regresión 023/024/025"
+  - "regresión CONTROL DE COMPRAS"
+  - "docs/dev-loop/reports/IMPL-IGF-DIARIO-PRECIO-SHEET-027.md"
   - "docs/dev-loop/CURRENT_TASK.md"
 
 out_of_scope:
   - "schema DB"
-  - "persistir costo"
-  - "cambiar captura HG"
-  - "cambiar tarifas de flete"
-  - "cambiar costo de compras por proveedor"
-  - "cambiar consolidado de compras"
-  - "cambiar COSTO semanal/mensual agregado"
+  - "VBA"
+  - "recalcular PRECIO"
+  - "modificar arr.precio_detalle"
+  - "modificar arr.precio_diario"
+  - "frontend"
+  - "Compras UI"
   - "Director IA"
   - "PR"
   - "merge"
   - "deploy"
 
 contracts_in_force:
-  - "COSTO HG diario base = costo consolidado compra + tarifa consolidada flete"
-  - "IMPORTE HG diario = COSTO HG efectivo × HG kilos × -1"
-  - "importe semanal/mensual = suma de importes diarios"
-  - "no persistir valores derivados"
-  - "UI y Excel deben usar la misma semántica"
+  - "PRECIO ya viene calculado desde arr.precio_diario"
+  - "NO recalcular fórmula en Excel"
+  - "plant-scoped IGFDiario solamente"
+  - "usar la misma planta autorizada de require_plant=1"
+  - "no contaminar datos entre plantas"
+  - "CONTROL DE COMPRAS conserva renderer existente"
 
 max_attempts: 1
-result_report_path: "docs/dev-loop/reports/IMPL-COMPRAS-HG-COST-CARRY-FORWARD-026.md"
+result_report_path: "docs/dev-loop/reports/IMPL-IGF-DIARIO-PRECIO-SHEET-027.md"
 ```
