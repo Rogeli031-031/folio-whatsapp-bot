@@ -152,6 +152,29 @@ test("K–U) las derivadas diarias conservan las relaciones vigentes", async () 
   assert.match(formulaOf(ws.getCell(row, flete[3] + 2)), /COUNT/);
 });
 
+test("R diario estimado es O+AJ de la misma fila", async () => {
+  const wb = new ExcelJS.Workbook();
+  await appendComprasWorksheet(wb, payloadFrom(sampleDays()), { plantName: "Puebla" });
+  const ws = wb.getWorksheet("CONTROL DE COMPRAS");
+  const estimated = ws.getCell(8, 18).value;
+  const real = ws.getCell(6, 18).value;
+  assert.equal(typeof estimated, "object");
+  assert.match(estimated.formula, /O8\+AJ8/);
+  assert.match(estimated.formula, /O8/);
+  assert.match(estimated.formula, /AJ8/);
+  assert.doesNotMatch(estimated.formula, /\d+\.\d+/);
+  assert.notEqual(fillOf(ws.getCell(8, 18)), ESTIMATED_BLUE);
+  assert.match(real.formula, /O6\+AJ6/);
+  assert.equal(typeof ws.getCell(11, 18).value, "number");
+  assert.equal(typeof ws.getCell(13, 18).value, "number");
+
+  const lone = day("2026-09-01", { hg: 5 });
+  lone.hg_costo_efectivo = 13.195;
+  const carryWb = new ExcelJS.Workbook();
+  await appendComprasWorksheet(carryWb, payloadFrom([lone]), { plantName: "Puebla" });
+  assert.equal(carryWb.getWorksheet("CONTROL DE COMPRAS").getCell(6, 18).value, 13.195);
+});
+
 test("V–AA) semana y mes suman reales y estimados", async () => {
   const days = sampleDays();
   const ctx = buildComprasDailyEstimateContext(payloadFrom(days));

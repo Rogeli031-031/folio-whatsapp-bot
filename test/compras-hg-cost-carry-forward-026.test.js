@@ -198,10 +198,14 @@ test("Y–AA) Excel y CONTROL DE COMPRAS comparten el costo efectivo", async () 
   const b = wb.getWorksheet("CONTROL DE COMPRAS");
   const cols = hgCols();
   assert.ok(String(a.getCell(6, cols.costo).value.formula || "").includes("+"));
-  assert.equal(a.getCell(7, cols.costo).value, 13.195);
+  const estimatedCost = a.getCell(7, cols.costo).value;
+  assert.ok(estimatedCost && estimatedCost.formula);
+  assert.match(String(estimatedCost.formula), /G7/);
+  assert.match(String(estimatedCost.formula), /T7/);
+  assert.doesNotMatch(String(estimatedCost.formula), /13\.195/);
+  assert.equal(String(b.getCell(7, cols.costo).value.formula), String(estimatedCost.formula));
   assert.match(String(a.getCell(7, cols.importe).value.formula || ""), /\*-1/);
   assert.equal(a.getCell(7, cols.hg).value, 7685);
-  assert.equal(b.getCell(7, cols.costo).value, a.getCell(7, cols.costo).value);
   assert.equal(String(b.getCell(7, cols.importe).value.formula), String(a.getCell(7, cols.importe).value.formula));
   const weekCosto = a.getCell(8, cols.costo).value;
   assert.equal(weekCosto, compras.hgCosto(11.965, 1.23));

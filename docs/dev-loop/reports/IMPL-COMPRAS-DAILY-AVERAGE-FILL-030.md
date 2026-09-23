@@ -28,6 +28,7 @@ contracts_modified: []
 ambiguities_or_contradictions: []
 deviations_from_current_task:
   - "test/compras-hg-cost-carry-forward-026.test.js: el costo del proveedor en el día sin compra ya no queda null; queda la fórmula IMPORTE/KG porque 030 estima esa compra"
+  - "test/compras-hg-cost-carry-forward-026.test.js: el COSTO HG del día estimado ya no es el número arrastrado; es la fórmula de costo consolidado más tarifa de esa fila"
 next_task_proposed: ""
 secrets_check: "none"
 human_decision_needed: []
@@ -64,7 +65,7 @@ Las filas de fecha calculan las derivadas con fórmula:
 
 - C = D / B, G = H / F, K = L / J
 - N = B + F + J, P = D + H + L, O = P / N
-- R conserva la fórmula vigente de costo HG
+- R, en cada fila de fecha con compra o estimación suficiente, es la fórmula de esa fila: costo consolidado + tarifa consolidada de flete. No usa el costo crudo del payload ni el arrastre cuando O y AJ ya se pueden calcular. Si la fila no tiene base suficiente, conserva el número arrastrado. Semana y TOTAL MES siguen agregados y no usan esa fórmula diaria. R no se pinta de azul y no se persiste.
 - el flete de cada origen toma los kilos de la compra y la tarifa vigente; el importe es kilos por tarifa
 - el flete consolidado suma kilos e importes y pondera la tarifa
 
