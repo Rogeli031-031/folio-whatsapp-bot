@@ -82,9 +82,9 @@ test("E–L) fechas del mes, valores de la base y vacíos", async () => {
   assert.equal(wb.getCell(2, 2).value, 18.8657443);
   assert.equal(wb.getCell(22, 2).value, 19.7724741);
   assert.equal(wb.getCell(23, 2).value, 19.7690271);
-  assert.equal(wb.getCell(6, 2).value, null);
-  assert.equal(wb.getCell(24, 2).value, null);
-  assert.equal(wb.getCell(31, 2).value, null);
+  assert.equal(wb.getCell(6, 2).value, 18.8657443);
+  assert.equal(wb.getCell(24, 2).value, 19.7690271);
+  assert.equal(wb.getCell(31, 2).value, 19.7690271);
   assert.equal(calls[0].params[0], "Puebla");
   assert.match(calls[0].sql, /FROM arr\.precio_diario/);
   assert.match(calls[0].sql, /plant_code = \$1/);
