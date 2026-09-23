@@ -1,16 +1,16 @@
 ﻿# CURRENT_TASK
 
 ```yaml
-task_id: "IMPL-IGF-DIARIO-PRECIO-CARRY-FORWARD-029"
-title: "IGFDiario — arrastrar último PRECIO válido a días sin dato"
+task_id: "IMPL-COMPRAS-DAILY-AVERAGE-FILL-030"
+title: "CONTROL DE COMPRAS — rellenar días sin dato con promedio histórico y recalcular derivados"
 status: "DONE_PENDING_REVIEW"
 mode: "IMPLEMENTATION"
 
 authorized_by: "HUMAN"
-authorized_at: "2026-09-23T15:47:00-06:00"
+authorized_at: "2026-09-23T16:30:00-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN"
 
-objective: "En la hoja PRECIO del Excel IGFDiario, rellenar cada día sin precio propio con el último PRECIO válido anterior del mismo mes. No recalcular ni persistir datos; solo aplicar carry-forward en la generación del Excel."
+objective: "En la hoja CONTROL DE COMPRAS, para cada fila de fecha sin información real, rellenar las columnas base B,D,F,H,J,L,S,T con el promedio de los días anteriores del mismo mes que sí tengan valor válido en esa misma columna; pintar esas celdas estimadas en azul; recalcular las columnas derivadas usando las fórmulas existentes; y mantener cierres semanales/mensuales como agregados de los días."
 
 implementation: true
 code_changes: true
@@ -18,40 +18,41 @@ code_changes: true
 schema_changes: false
 data_mutation: false
 
-base_sha: "fe1da1f81af672dc3d057ddda2d8423b3a4e572f"
-branch: "implementation/igf-diario-precio-carry-forward-029"
+base_sha: "114b662846d77225bc0515231754bfb7d38dbda6"
+branch: "implementation/compras-daily-average-fill-030"
 
 merge_authorized: false
 deploy_authorized: false
 next_task_authorized: false
 
 in_scope:
-  - "lib/dashboard-arr-forecast.js"
-  - "tests 029"
-  - "regresión 027/028"
-  - "docs/dev-loop/reports/IMPL-IGF-DIARIO-PRECIO-CARRY-FORWARD-029.md"
+  - "lib/compras-excel.js"
+  - "tests 030"
+  - "regresión Compras 020/021/022/026"
+  - "regresión IGFDiario CONTROL DE COMPRAS 024/027/028/029"
+  - "docs/dev-loop/reports/IMPL-COMPRAS-DAILY-AVERAGE-FILL-030.md"
   - "docs/dev-loop/CURRENT_TASK.md"
 
 out_of_scope:
   - "schema DB"
-  - "arr.precio_diario"
-  - "arr.precio_detalle"
+  - "persistir estimaciones"
+  - "UI web /compras"
   - "VBA"
-  - "recalcular PRECIO"
-  - "frontend"
-  - "CONTROL DE COMPRAS"
   - "Pronostico"
+  - "PRECIO"
+  - "Director IA"
   - "PR"
   - "merge"
   - "deploy"
 
 contracts_in_force:
-  - "PRECIO fuente = arr.precio_diario"
-  - "no recalcular formula"
-  - "no persistir carry-forward"
-  - "conservar valor numérico y precisión"
-  - "hoja PRECIO sigue tercera"
+  - "CONTROL DE COMPRAS usa appendComprasWorksheet"
+  - "mismo renderer para Excel Compras e IGFDiario"
+  - "estimaciones no se persisten"
+  - "filas Semana siguen agregadas"
+  - "TOTAL MES sigue agregado"
+  - "fórmulas existentes deben reutilizarse"
 
 max_attempts: 1
-result_report_path: "docs/dev-loop/reports/IMPL-IGF-DIARIO-PRECIO-CARRY-FORWARD-029.md"
+result_report_path: "docs/dev-loop/reports/IMPL-COMPRAS-DAILY-AVERAGE-FILL-030.md"
 ```

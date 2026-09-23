@@ -207,6 +207,7 @@ test("Y–AA) Excel y CONTROL DE COMPRAS comparten el costo efectivo", async () 
   assert.equal(weekCosto, compras.hgCosto(11.965, 1.23));
   assert.equal(typeof weekCosto, "number");
   assert.equal(a.getCell(8, cols.importe).value, compras.hgImporteSum(payload.grid.days));
-  assert.equal(a.getCell(7, cols.providerCosto).value, null);
+  const providerCosto = a.getCell(7, cols.providerCosto).value;
+  assert.match(String(providerCosto && providerCosto.formula || ""), /IF\(OR\(/);
   assert.match(FORECAST, /appendComprasWorksheet\(wb, options\.comprasPayload/);
 });
