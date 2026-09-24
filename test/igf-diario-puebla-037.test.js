@@ -87,8 +87,8 @@ test("subtotales no multiplican rangos con texto y quedan vacíos sin números",
   igf.fillIgfDiarioPuebla(wb, { year: 2026, month: 9, corporativos: 1034293, operativos: 2998518 });
   const ws = wb.getWorksheet("IGF Diario Puebla");
   const week = ws.getCell(12, 3);
-  assert.match(formulaOf(week), /N\(C6:C11\)/);
-  assert.match(formulaOf(week), /N\(B6:B11\)/);
+  assert.match(formulaOf(week), /IF\(AND\(ISNUMBER\(C6\),ISNUMBER\(B6\)\),C6\*B6,0\)/);
+  assert.match(formulaOf(week), /IF\(AND\(ISNUMBER\(C6\),ISNUMBER\(B6\)\),B6,0\)/);
   assert.doesNotMatch(formulaOf(week), /\*\(C6:C11\)\*\(B6:B11\)/);
   assert.match(formulaOf(ws.getCell(12, 2)), /IF\(COUNT\(B6:B11\)=0,"",SUM\(B6:B11\)\)/);
   assert.match(formulaOf(ws.getCell(12, 4)), /IF\(COUNT\(D6:D11\)=0,"",SUM\(D6:D11\)\)/);
