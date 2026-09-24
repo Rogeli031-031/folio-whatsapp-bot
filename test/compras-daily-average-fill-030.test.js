@@ -86,18 +86,19 @@ function formulaOf(cell) {
   return cell.value && cell.value.formula ? String(cell.value.formula) : "";
 }
 
-test("A–F) el promedio usa solo reales anteriores", () => {
-  const ctx = buildComprasDailyEstimateContext(payloadFrom(sampleDays()), "2026-08-31");
-  assert.equal(slot(ctx, "2026-09-03", 1).kg, 150);
-  assert.equal(slot(ctx, "2026-09-03", 1).kg_estimated, true);
-  assert.equal(slot(ctx, "2026-09-05", 1).kg, (100 + 200 + 400) / 3);
-  assert.notEqual(slot(ctx, "2026-09-05", 1).kg, (100 + 200 + 150 + 400) / 4);
-  assert.equal(slot(ctx, "2026-09-03", 2).kg, 10);
-  assert.equal(ctx.byYmd.get("2026-09-03").hg.kilos, 2.5);
-  assert.equal(ctx.byYmd.get("2026-09-04").hg.kilos, 0);
-  assert.equal(ctx.byYmd.get("2026-09-04").hg.kilos_estimated, false);
-  assert.equal(ctx.byYmd.get("2026-09-03").hg.importe, -75);
-  assert.equal(ctx.byYmd.get("2026-09-05").hg.importe, -50);
+test("A–F) el promedio usa días calendario hasta ayer", () => {
+  const ctx = buildComprasDailyEstimateContext(payloadFrom(sampleDays()), "2026-09-03");
+  assert.equal(slot(ctx, "2026-09-03", 1).kg, null);
+  assert.equal(slot(ctx, "2026-09-05", 1).kg, (100 + 200) / 2);
+  assert.equal(slot(ctx, "2026-09-05", 1).kg_estimated, true);
+  assert.equal(slot(ctx, "2026-09-04", 1).kg, 400);
+  assert.equal(slot(ctx, "2026-09-05", 2).kg, 10 / 2);
+  const hgCtx = buildComprasDailyEstimateContext(payloadFrom(sampleDays()), "2026-08-31");
+  assert.equal(hgCtx.byYmd.get("2026-09-03").hg.kilos, 2.5);
+  assert.equal(hgCtx.byYmd.get("2026-09-04").hg.kilos, 0);
+  assert.equal(hgCtx.byYmd.get("2026-09-04").hg.kilos_estimated, false);
+  assert.equal(hgCtx.byYmd.get("2026-09-03").hg.importe, -75);
+  assert.equal(hgCtx.byYmd.get("2026-09-05").hg.importe, -50);
 
   const leading = buildComprasDailyEstimateContext(payloadFrom([
     day("2026-09-01"),
@@ -113,9 +114,8 @@ test("G–J) solo las celdas base estimadas van en azul", async () => {
   const ws = wb.getWorksheet("CONTROL DE COMPRAS");
   assert.equal(ws.getCell(6, 2).value, 100);
   assert.notEqual(fillOf(ws.getCell(6, 2)), ESTIMATED_BLUE);
-  assert.equal(ws.getCell(8, 2).value, 150);
-  assert.equal(fillOf(ws.getCell(8, 2)), ESTIMATED_BLUE);
-  assert.equal(fillOf(ws.getCell(8, 4)), ESTIMATED_BLUE);
+  assert.equal(ws.getCell(8, 2).value, null);
+  assert.notEqual(fillOf(ws.getCell(8, 2)), ESTIMATED_BLUE);
   assert.equal(fillOf(ws.getCell(8, 19)), ESTIMATED_BLUE);
   assert.equal(fillOf(ws.getCell(8, 20)), ESTIMATED_BLUE);
   assert.equal(ws.getCell(9, 19).value, 0);
@@ -156,17 +156,15 @@ test("K–U) las derivadas diarias conservan las relaciones vigentes", async () 
 
 test("R diario estimado es O+AJ de la misma fila", async () => {
   const wb = new ExcelJS.Workbook();
-  await appendComprasWorksheet(wb, payloadFrom(sampleDays()), { plantName: "Puebla", corteYmd: "2026-08-31" });
+  await appendComprasWorksheet(wb, payloadFrom(sampleDays()), { plantName: "Puebla", corteYmd: "2026-09-03" });
   const ws = wb.getWorksheet("CONTROL DE COMPRAS");
-  const estimated = ws.getCell(8, 18).value;
+  const estimated = ws.getCell(10, 18).value;
   const real = ws.getCell(6, 18).value;
   assert.equal(typeof estimated, "object");
-  assert.match(estimated.formula, /ISNUMBER\(O8\),ISNUMBER\(AJ8\)/);
-  assert.match(estimated.formula, /O8\+AJ8/);
-  assert.match(estimated.formula, /O8/);
-  assert.match(estimated.formula, /AJ8/);
+  assert.match(estimated.formula, /ISNUMBER\(O10\),ISNUMBER\(AJ10\)/);
+  assert.match(estimated.formula, /O10\+AJ10/);
   assert.doesNotMatch(estimated.formula, /\d+\.\d+/);
-  assert.notEqual(fillOf(ws.getCell(8, 18)), ESTIMATED_BLUE);
+  assert.notEqual(fillOf(ws.getCell(10, 18)), ESTIMATED_BLUE);
   assert.match(real.formula, /O6\+AJ6/);
   assert.equal(typeof ws.getCell(11, 18).value, "number");
   assert.equal(typeof ws.getCell(13, 18).value, "number");
@@ -204,8 +202,8 @@ test("V–AA) semana y mes suman reales y estimados", async () => {
 
 test("AB) Compras e IGFDiario escriben el mismo CONTROL DE COMPRAS", async () => {
   const payload = payloadFrom(sampleDays());
-  payload.corteYmd = "2026-08-31";
-  const comprasWb = await buildComprasWorkbook(payload, { plantName: "Puebla", corteYmd: "2026-08-31" });
+  payload.corteYmd = "2026-09-03";
+  const comprasWb = await buildComprasWorkbook(payload, { plantName: "Puebla", corteYmd: "2026-09-03" });
   const forecastWb = forecast.renderProvinciaDiariaSheets({
     year: 2026,
     month: 9,
@@ -225,7 +223,7 @@ test("AB) Compras e IGFDiario escriben el mismo CONTROL DE COMPRAS", async () =>
   });
   const a = comprasWb.getWorksheet("CONTROL DE COMPRAS");
   const b = forecastWb.getWorksheet("CONTROL DE COMPRAS");
-  assert.equal(b.getCell(8, 2).value, 150);
+  assert.equal(b.getCell(10, 2).value, 150);
   assert.equal(b.getCell(8, 2).value, a.getCell(8, 2).value);
   assert.equal(formulaOf(b.getCell(8, 3)), formulaOf(a.getCell(8, 3)));
   assert.equal(b.getCell(11, 20).value, a.getCell(11, 20).value);
@@ -256,9 +254,9 @@ test("corte México: 19/09 y 24/09 vacíos, 25/09 estimable, SUM no usa +", asyn
   assert.equal(ws.getCell(row24, 10).value, null);
   assert.equal(ws.getCell(row24, 19).value, null);
   assert.notEqual(fillOf(ws.getCell(row24, 2)), ESTIMATED_BLUE);
-  assert.equal(ws.getCell(row25, 2).value, 100);
+  assert.equal(ws.getCell(row25, 2).value, 100 / 23);
   assert.equal(fillOf(ws.getCell(row25, 2)), ESTIMATED_BLUE);
-  assert.equal(ws.getCell(row25, 10).value, 40);
+  assert.equal(ws.getCell(row25, 10).value, 40 / 23);
   assert.equal(fillOf(ws.getCell(row25, 10)), ESTIMATED_BLUE);
   assert.equal(ws.getCell(row25, 19).value, 10);
   assert.equal(fillOf(ws.getCell(row25, 19)), ESTIMATED_BLUE);
@@ -267,4 +265,21 @@ test("corte México: 19/09 y 24/09 vacíos, 25/09 estimable, SUM no usa +", asyn
   assert.match(formulaOf(ws.getCell(row19, 18)), /ISNUMBER\(O7\),ISNUMBER\(AJ7\)/);
   assert.match(formulaOf(ws.getCell(row25, 18)), /ISNUMBER\(O9\),ISNUMBER\(AJ9\)/);
   assert.equal(ws.getCell(row24, 18).value, null);
+});
+
+test("divisor 23 con grid incompleto y corte 2026-09-24", () => {
+  const days = [
+    day("2026-09-02", { p1: [929020, 100] }),
+    day("2026-09-10", { p3: [92750, 1045311.27] }),
+    day("2026-09-24", { p1: [999999, 999999] }),
+    day("2026-09-25"),
+    day("2026-09-30"),
+  ];
+  const ctx = buildComprasDailyEstimateContext(payloadFrom(days), "2026-09-24");
+  assert.equal(slot(ctx, "2026-09-25", 1).kg, 929020 / 23);
+  assert.equal(slot(ctx, "2026-09-30", 1).kg, 929020 / 23);
+  assert.equal(slot(ctx, "2026-09-24", 1).kg, 999999);
+  assert.equal(slot(ctx, "2026-09-25", 3).kg, 92750 / 23);
+  assert.equal(slot(ctx, "2026-09-25", 3).importe, 1045311.27 / 23);
+  assert.equal(slot(ctx, "2026-09-25", 2).kg, null);
 });
