@@ -191,19 +191,16 @@ function hgCols() {
 
 test("Y–AA) Excel y CONTROL DE COMPRAS comparten el costo efectivo", async () => {
   const payload = acceptancePayload();
-  const built = await buildComprasWorkbook(payload, { plantName: "Puebla" });
+  const built = await buildComprasWorkbook(payload, { plantName: "Puebla", corteYmd: "2026-09-24" });
   const wb = new ExcelJS.Workbook();
-  await appendComprasWorksheet(wb, payload, { plantName: "Puebla" });
+  await appendComprasWorksheet(wb, payload, { plantName: "Puebla", corteYmd: "2026-09-24" });
   const a = built.getWorksheet("CONTROL DE COMPRAS");
   const b = wb.getWorksheet("CONTROL DE COMPRAS");
   const cols = hgCols();
   assert.ok(String(a.getCell(6, cols.costo).value.formula || "").includes("+"));
-  const estimatedCost = a.getCell(7, cols.costo).value;
-  assert.ok(estimatedCost && estimatedCost.formula);
-  assert.match(String(estimatedCost.formula), /G7/);
-  assert.match(String(estimatedCost.formula), /T7/);
-  assert.doesNotMatch(String(estimatedCost.formula), /13\.195/);
-  assert.equal(String(b.getCell(7, cols.costo).value.formula), String(estimatedCost.formula));
+  assert.equal(a.getCell(7, cols.costo).value, 13.195);
+  assert.equal(b.getCell(7, cols.costo).value, 13.195);
+  assert.equal(a.getCell(7, blockStarts(1)[0]).value, null);
   assert.match(String(a.getCell(7, cols.importe).value.formula || ""), /\*-1/);
   assert.equal(a.getCell(7, cols.hg).value, 7685);
   assert.equal(String(b.getCell(7, cols.importe).value.formula), String(a.getCell(7, cols.importe).value.formula));
@@ -212,6 +209,6 @@ test("Y–AA) Excel y CONTROL DE COMPRAS comparten el costo efectivo", async () 
   assert.equal(typeof weekCosto, "number");
   assert.equal(a.getCell(8, cols.importe).value, compras.hgImporteSum(payload.grid.days));
   const providerCosto = a.getCell(7, cols.providerCosto).value;
-  assert.match(String(providerCosto && providerCosto.formula || ""), /IF\(OR\(/);
+  assert.match(String(providerCosto && providerCosto.formula || ""), /ISNUMBER\(/);
   assert.match(FORECAST, /appendComprasWorksheet\(wb, options\.comprasPayload/);
 });
