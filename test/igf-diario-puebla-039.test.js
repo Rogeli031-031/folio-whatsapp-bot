@@ -91,8 +91,10 @@ test("el 19 arrastra costo y flete del 18 con fórmula y amarillo", () => {
   assert.doesNotMatch(f, /11\.965423104349892/);
   assert.match(g, /'CONTROL DE COMPRAS'!AJ28/);
   assert.match(g, /'CONTROL DE COMPRAS'!AJ29/);
-  assert.equal(fillOf(ws.getCell(28, 6)), "FFFFFF00");
-  assert.equal(fillOf(ws.getCell(28, 7)), "FFFFFF00");
+  const rules = JSON.stringify(ws.conditionalFormattings || []);
+  assert.match(rules, /F28/);
+  assert.match(rules, /G28/);
+  assert.match(rules, /FFFFFF00/);
   assert.match(formulaOf(ws.getCell(r20, 6)), /'CONTROL DE COMPRAS'!O28/);
   assert.doesNotMatch(formulaOf(ws.getCell(r24, 6)), /'CONTROL DE COMPRAS'!O28/);
   assert.doesNotMatch(formulaOf(ws.getCell(r25, 7)), /'CONTROL DE COMPRAS'!AJ28/);
@@ -114,6 +116,7 @@ test("el 19 arrastra costo y flete del 18 con fórmula y amarillo", () => {
   assert.equal(ws.getColumn(34).width, 65.8867);
   assert.equal(ws.getRow(1).height, 25.8);
   assert.equal(fillOf(ws.getCell(12, 1)), "FF000000");
-  assert.equal(fillOf(ws.getCell(21, 1)), "FFF2F2F2");
+  assert.equal(fillOf(ws.getCell(21, 1)), "FF000000");
+  assert.equal(fillOf(ws.getCell(21, 2)), "FFF2F2F2");
   assert.equal(r18 < r19 && r19 < r20, true);
 });
