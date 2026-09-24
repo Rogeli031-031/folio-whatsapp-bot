@@ -88,7 +88,8 @@ function formulaOf(cell) {
 
 test("A–F) el promedio usa días calendario hasta ayer", () => {
   const ctx = buildComprasDailyEstimateContext(payloadFrom(sampleDays()), "2026-09-03");
-  assert.equal(slot(ctx, "2026-09-03", 1).kg, null);
+  assert.equal(slot(ctx, "2026-09-03", 1).kg, (100 + 200) / 2);
+  assert.equal(slot(ctx, "2026-09-03", 1).kg_estimated, true);
   assert.equal(slot(ctx, "2026-09-05", 1).kg, (100 + 200) / 2);
   assert.equal(slot(ctx, "2026-09-05", 1).kg_estimated, true);
   assert.equal(slot(ctx, "2026-09-04", 1).kg, 400);
@@ -229,7 +230,7 @@ test("AB) Compras e IGFDiario escriben el mismo CONTROL DE COMPRAS", async () =>
   assert.equal(b.getCell(11, 20).value, a.getCell(11, 20).value);
 });
 
-test("corte México: 19/09 y 24/09 vacíos, 25/09 estimable, SUM no usa +", async () => {
+test("corte México: 19/09 vacío, 24/09 y 25/09 estimados, SUM no usa +", async () => {
   assert.equal(mexicoTodayYmd(new Date("2026-09-24T05:30:00Z")), "2026-09-23");
   assert.equal(mexicoTodayYmd(new Date("2026-09-24T06:30:00Z")), "2026-09-24");
   const days = [
@@ -250,10 +251,12 @@ test("corte México: 19/09 y 24/09 vacíos, 25/09 estimable, SUM no usa +", asyn
   assert.equal(ws.getCell(row19, 6).value, 80);
   assert.notEqual(fillOf(ws.getCell(row19, 6)), ESTIMATED_BLUE);
   assert.equal(ws.getCell(row19, 19).value, null);
-  assert.equal(ws.getCell(row24, 2).value, null);
-  assert.equal(ws.getCell(row24, 10).value, null);
-  assert.equal(ws.getCell(row24, 19).value, null);
-  assert.notEqual(fillOf(ws.getCell(row24, 2)), ESTIMATED_BLUE);
+  assert.equal(ws.getCell(row24, 2).value, 100 / 23);
+  assert.equal(fillOf(ws.getCell(row24, 2)), ESTIMATED_BLUE);
+  assert.equal(ws.getCell(row24, 10).value, 40 / 23);
+  assert.equal(fillOf(ws.getCell(row24, 10)), ESTIMATED_BLUE);
+  assert.equal(ws.getCell(row24, 19).value, 10);
+  assert.equal(fillOf(ws.getCell(row24, 19)), ESTIMATED_BLUE);
   assert.equal(ws.getCell(row25, 2).value, 100 / 23);
   assert.equal(fillOf(ws.getCell(row25, 2)), ESTIMATED_BLUE);
   assert.equal(ws.getCell(row25, 10).value, 40 / 23);
@@ -264,7 +267,8 @@ test("corte México: 19/09 y 24/09 vacíos, 25/09 estimable, SUM no usa +", asyn
   assert.doesNotMatch(formulaOf(ws.getCell(row19, 14)), /#VALUE|B7\+F7\+J7/);
   assert.match(formulaOf(ws.getCell(row19, 18)), /ISNUMBER\(O7\),ISNUMBER\(AJ7\)/);
   assert.match(formulaOf(ws.getCell(row25, 18)), /ISNUMBER\(O9\),ISNUMBER\(AJ9\)/);
-  assert.equal(ws.getCell(row24, 18).value, null);
+  assert.match(formulaOf(ws.getCell(row24, 18)), /ISNUMBER\(O8\),ISNUMBER\(AJ8\)/);
+  assert.match(formulaOf(ws.getCell(row24, 14)), /SUM\(B8,F8,J8\)/);
 });
 
 test("divisor 23 con grid incompleto y corte 2026-09-24", () => {
@@ -279,7 +283,49 @@ test("divisor 23 con grid incompleto y corte 2026-09-24", () => {
   assert.equal(slot(ctx, "2026-09-25", 1).kg, 929020 / 23);
   assert.equal(slot(ctx, "2026-09-30", 1).kg, 929020 / 23);
   assert.equal(slot(ctx, "2026-09-24", 1).kg, 999999);
+  assert.equal(slot(ctx, "2026-09-24", 1).kg_estimated, false);
+  assert.equal(slot(ctx, "2026-09-24", 3).kg, 92750 / 23);
+  assert.equal(slot(ctx, "2026-09-24", 3).importe, 1045311.27 / 23);
+  assert.equal(slot(ctx, "2026-09-24", 3).kg_estimated, true);
   assert.equal(slot(ctx, "2026-09-25", 3).kg, 92750 / 23);
   assert.equal(slot(ctx, "2026-09-25", 3).importe, 1045311.27 / 23);
   assert.equal(slot(ctx, "2026-09-25", 2).kg, null);
+});
+
+test("IGF Forecast aplica la fecha seleccionada aunque no sea hoy", async () => {
+  const days = [
+    day("2026-09-01", { p1: [100, 500] }),
+    day("2026-09-09"),
+    day("2026-09-10"),
+    day("2026-09-11"),
+  ];
+  const forecastWb = forecast.renderProvinciaDiariaSheets({
+    year: 2026,
+    month: 9,
+    ventaTonGrid: {
+      plants: ["Puebla"],
+      cutoffDay: 99,
+      forecastByPlant: new Map([["Puebla", 1]]),
+      byDate: [{ day: 1, fecha: "2026-09-01", byPlant: { Puebla: 1 }, tot: 1 }],
+    },
+    descuentoGrid: {
+      plants: ["Puebla"],
+      cutoffDay: 99,
+      byDate: [{ day: 1, fecha: "2026-09-01", byPlant: { Puebla: 0 } }],
+    },
+    comprasPayload: payloadFrom(days),
+    comprasPlantName: "Puebla",
+    fechaCorte: "2026-09-10",
+  });
+  const selected = forecastWb.getWorksheet("CONTROL DE COMPRAS");
+  assert.equal(selected.getCell(7, 2).value, null);
+  assert.equal(selected.getCell(8, 2).value, 100 / 9);
+  assert.equal(fillOf(selected.getCell(8, 2)), ESTIMATED_BLUE);
+  assert.equal(selected.getCell(9, 2).value, 100 / 9);
+  const independent = new ExcelJS.Workbook();
+  await appendComprasWorksheet(independent, payloadFrom(days), {
+    plantName: "Puebla",
+    now: new Date("2026-09-24T18:00:00Z"),
+  });
+  assert.equal(independent.getWorksheet("CONTROL DE COMPRAS").getCell(8, 2).value, null);
 });
