@@ -1,78 +1,79 @@
 ﻿# CURRENT_TASK
 
 ```yaml
-task_id: "FIX-IGF-PRECIO-ACCENTED-PLANTS-033"
-title: "PRECIO — recuperar datos de Querétaro y Tehuacán sin alterar otras plantas"
-status: "DONE_PENDING_REVIEW"
+task_id: "FIX-COMPRAS-INCLUDE-CUTOFF-DAY-034"
+title: "CONTROL DE COMPRAS — proyectar el día seleccionado como corte"
+status: "BLOCKED"
 mode: "IMPLEMENTATION"
 
 authorized_by: "HUMAN_APPROVER"
-authorized_at: "2026-09-24T11:36:00-06:00"
+authorized_at: "2026-09-24T12:00:00-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-09-24"
 
-objective: "Mostrar en la hoja PRECIO los precios existentes de Querétaro y Tehuacán, guardados en arr.precio_diario bajo códigos con acento, sin cambiar la lectura de las demás plantas."
+objective: "Aplicar al día seleccionado como corte la proyección de compras cuando falten datos reales, conservando vacíos los días anteriores sin compras."
 
 implementation: true
 code_changes: true
 schema_changes: false
 data_mutation: false
 
-base_sha: "08f2d37dc9e8a00d89709f76e69760b43d3bc502"
-branch: "fix/igf-precio-accented-plants-033"
+base_sha: "095ba9586003a0d7282582228b68aa7641a8aab4"
+branch: "fix/compras-include-cutoff-day-034"
 
 in_scope:
-  - "lib/dashboard-arr-forecast.js: únicamente loadPrecioDiario y auxiliares estrictamente necesarios"
-  - "test/igf-diario-precio-sheet-027.test.js"
-  - "test/igf-diario-precio-carry-forward-029.test.js"
-  - "test/igf-diario-precio-plant-aliases-033.test.js"
-  - "docs/dev-loop/reports/FIX-IGF-PRECIO-ACCENTED-PLANTS-033.md"
+  - "lib/compras-excel.js: elegibilidad de la proyección desde el día de corte"
+  - "lib/dashboard-arr-forecast.js: pasar la fecha de corte ya recibida a CONTROL DE COMPRAS"
+  - "test/compras-daily-average-fill-030.test.js"
+  - "test/forecast-excel-plant-compras-024.test.js"
+  - "tests directamente afectados por el cambio"
+  - "docs/dev-loop/reports/FIX-COMPRAS-INCLUDE-CUTOFF-DAY-034.md"
   - "docs/dev-loop/CURRENT_TASK.md: únicamente transición de status"
 
 out_of_scope:
-  - "otras plantas y otras fuentes de precio"
-  - "modificar registros, códigos o esquema en PostgreSQL"
-  - "server.js, autorización de planta y frontend"
-  - "CONTROL DE COMPRAS, HG EN KILOS y proyección del día de corte"
+  - "cambiar la fórmula o el divisor del promedio aprobado en 032"
+  - "cambiar el método de cálculo de HG EN KILOS"
+  - "rellenar días anteriores al corte que no tengan compras reales"
+  - "frontend, PostgreSQL, hoja PRECIO y demás hojas del Excel"
   - "AGENTS.md, LOOP_PROTOCOL.md y contratos de Director IA"
   - "PR, merge a main y despliegue"
 
 contracts_in_force:
   - "AGENTS.md y docs/dev-loop/LOOP_PROTOCOL.md"
-  - "la rama 032 en base_sha; conservar íntegro su cambio de promedios"
-  - "arr.precio_diario es la fuente exclusiva de la hoja PRECIO"
-  - "la consulta de precios queda limitada a la planta autorizada y al mes solicitado"
-  - "appendPrecioWorksheet conserva precisión, formato de ocho decimales y arrastre dentro del mismo mes"
+  - "origin/main en base_sha"
+  - "El promedio de proveedores de 032 suma compras reales anteriores al corte y divide entre todos los días calendario transcurridos anteriores al corte."
+  - "Los datos reales prevalecen sobre cualquier estimación."
+  - "HG EN KILOS conserva su método vigente de cálculo."
 
 acceptance_criteria:
-  - "En septiembre de 2026 existen 23 precios válidos bajo plant_code 'Querétaro' y 23 bajo 'Tehuacán'; los códigos sin acento 'Queretaro' y 'Tehuacan' tienen cero registros."
-  - "Una exportación autorizada para Queretaro obtiene exclusivamente precios de Queretaro y Querétaro; una de Tehuacan, exclusivamente de Tehuacan y Tehuacán."
-  - "Si ambos códigos de una misma planta contienen precio válido para una fecha, prevalece el código exacto recibido por loadPrecioDiario. No duplicar fechas ni mezclar plantas."
-  - "Puebla y todas las demás plantas conservan exactamente la consulta de un solo código y el comportamiento actual. No aplicar búsqueda difusa ni fallback general."
-  - "La hoja PRECIO de Querétaro y Tehuacán muestra los precios reales disponibles; los huecos posteriores heredan el último precio válido del mismo mes conforme a la tarea 029."
-  - "Los días anteriores al primer precio válido del mes siguen vacíos. No inventar precios ni tomarlos de IGF, compras u otra tabla."
-  - "No cambiar el orden ni los nombres de las hojas, la precisión del número ni el formato visual."
-  - "No cambiar datos persistidos ni introducir una dependencia de extensiones SQL."
+  - "Con corte 2026-09-24, el día 24 recibe el promedio estimado en los kilos e importes de cada proveedor que no tengan dato real; el día 25 conserva su proyección."
+  - "El promedio usado el 24 y el 25 conserva el divisor 23; no incluye datos reales ni estimaciones del 24 en el numerador."
+  - "Ejemplos: PEMEX TUXPAN kg = 929020/23; TOMZA TEPEJI kg = 92750/23; TOMZA TEPEJI importe = 1045311.27/23, con el formato visual existente."
+  - "Si una celda del 24 contiene un dato real, conserva ese dato; únicamente se proyectan sus celdas faltantes."
+  - "El 19 y cualquier otra fecha anterior al corte sin compras reales permanecen vacíos en las celdas correspondientes."
+  - "HG EN KILOS puede estimarse el día del corte si falta el dato real, usando exactamente su cálculo vigente; sus datos reales y fórmulas conservan prioridad."
+  - "La fecha seleccionada en la descarga IGF Forecast llega a CONTROL DE COMPRAS. Si no se proporciona fecha seleccionada, la exportación independiente de Compras conserva su corte predeterminado de hoy en Ciudad de México."
+  - "Los consolidados y totales incluyen las estimaciones aplicables al 24 sin producir errores de fórmula."
 
 validation:
-  - "Pruebas sintéticas de ambos pares de códigos: datos solo bajo código con acento, código exacto con datos, coexistencia con prioridad exacta y ausencia total de datos."
-  - "Comprobar que Puebla y una cuarta planta usan la consulta vigente y no reciben precios ajenos."
-  - "Regresiones 027, 029 y exportación por planta 024; ejecutar cualquier prueba adicional directamente afectada."
-  - "git diff --check, git status y reporte con SHA final."
+  - "Actualizar la prueba que actualmente exige que el 24 esté vacío; comprobar 19 vacío, 24 proyectado y 25 proyectado."
+  - "Comprobar divisor 23, dato real del 24 con prioridad, ausencia de historial y HG con su método existente."
+  - "Comprobar que IGF Forecast transmite a CONTROL DE COMPRAS la fecha de corte seleccionada, incluso si difiere del día del servidor."
+  - "Ejecutar pruebas 030, 020, 021, 022, 024, 026, 027, 028 y 029, y las adicionales directamente afectadas."
+  - "Ejecutar git diff --check y registrar resultados y SHA en el reporte."
 
 allowed_actions:
   - "editar únicamente archivos in_scope"
   - "ejecutar pruebas"
-  - "crear reporte 033"
-  - "commit y push únicamente a la rama 033"
+  - "crear reporte 034"
+  - "commit y push únicamente a la rama 034"
 
 forbidden_actions:
   - "modificar authorized_by, authorized_at o human_authorization"
-  - "alterar datos en pgAdmin o PostgreSQL"
-  - "modificar el cálculo de las demás plantas"
+  - "modificar datos persistidos"
   - "abrir PR, fusionar a main o desplegar"
   - "poner status APPROVED o CLOSED"
   - "encadenar otra tarea"
 
 max_attempts: 1
-result_report_path: "docs/dev-loop/reports/FIX-IGF-PRECIO-ACCENTED-PLANTS-033.md"
+result_report_path: "docs/dev-loop/reports/FIX-COMPRAS-INCLUDE-CUTOFF-DAY-034.md"
 ```
