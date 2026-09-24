@@ -15596,6 +15596,19 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
       proyeccionCatSubForecast,
       fechaCorte: uploadDay || proyeccionHasta || null,
     };
+    if (plantCode && dashboardArrForecast.plantsEquivalent(plantCode, "Puebla")) {
+      const mini = await computeIgfForecastMiniPayload(client, igfForecast, year, month, uploadDay);
+      const pueblaMini = (mini && mini.rows ? mini.rows : []).find((row) =>
+        dashboardArrForecast.plantsEquivalent(row && row.plant_code, "Puebla")
+        || dashboardArrForecast.plantsEquivalent(row && row.empresa, "Puebla")
+      );
+      if (pueblaMini && Number.isFinite(Number(pueblaMini.corporativos)) && Number.isFinite(Number(pueblaMini.operativos))) {
+        forecastOpts.igfDiarioGastos = {
+          corporativos: Number(pueblaMini.corporativos),
+          operativos: Number(pueblaMini.operativos),
+        };
+      }
+    }
     if (comprasPayload && resolvedPlant) {
       forecastOpts.comprasPayload = comprasPayload;
       forecastOpts.comprasPlantName = resolvedPlant.nombre;
