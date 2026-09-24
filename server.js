@@ -15602,11 +15602,17 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
         dashboardArrForecast.plantsEquivalent(row && row.plant_code, "Puebla")
         || dashboardArrForecast.plantsEquivalent(row && row.empresa, "Puebla")
       );
-      if (pueblaMini && Number.isFinite(Number(pueblaMini.corporativos)) && Number.isFinite(Number(pueblaMini.operativos))) {
-        forecastOpts.igfDiarioGastos = {
-          corporativos: Number(pueblaMini.corporativos),
-          operativos: Number(pueblaMini.operativos),
-        };
+      const importeArrMini = (value) => {
+        if (value == null || value === "") return null;
+        const n = Number(value);
+        return Number.isFinite(n) ? n : null;
+      };
+      const corporativos = importeArrMini(pueblaMini && pueblaMini.corporativos);
+      const operativos = importeArrMini(pueblaMini && pueblaMini.operativos);
+      if (corporativos != null || operativos != null) {
+        forecastOpts.igfDiarioGastos = {};
+        if (corporativos != null) forecastOpts.igfDiarioGastos.corporativos = corporativos;
+        if (operativos != null) forecastOpts.igfDiarioGastos.operativos = operativos;
       }
     }
     if (comprasPayload && resolvedPlant) {

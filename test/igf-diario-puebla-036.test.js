@@ -172,6 +172,7 @@ test("otras plantas y el libro global no reservan la hoja", () => {
   assert.match(slice, /computeIgfForecastMiniPayload\(client, igfForecast, year, month, uploadDay\)/);
   assert.match(slice, /plantsEquivalent\(plantCode, "Puebla"\)/);
   assert.match(slice, /igfDiarioGastos/);
-  assert.match(slice, /corporativos: Number\(pueblaMini\.corporativos\)/);
-  assert.match(slice, /operativos: Number\(pueblaMini\.operativos\)/);
+  assert.match(slice, /importeArrMini\(pueblaMini && pueblaMini\.corporativos\)/);
+  assert.match(slice, /importeArrMini\(pueblaMini && pueblaMini\.operativos\)/);
+  assert.match(slice, /if \(value == null \|\| value === ""\) return null/);
 });
