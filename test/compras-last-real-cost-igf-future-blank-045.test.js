@@ -46,13 +46,14 @@ test("el importe proyectado usa el último costo real del proveedor", () => {
     day("2026-09-24"),
     day("2026-09-25"),
   ];
-  const ctx = buildComprasDailyEstimateContext(payload(days), "2026-09-24");
+  const venta = { "2026-09-24": kgProj, "2026-09-25": kgProj };
+  const ctx = buildComprasDailyEstimateContext(payload(days), "2026-09-24", venta);
   const unit = 236938.17 / 19370;
   const d25 = ctx.byYmd.get("2026-09-25").providers[1];
   const d24 = ctx.byYmd.get("2026-09-24").providers[1];
   assert.equal(d25.kg, kgProj);
-  assert.equal(d25.importe, kgProj * unit);
-  assert.equal(d24.importe, kgProj * unit);
+  assert.equal(d25.importe, unit * kgProj);
+  assert.equal(d24.importe, unit * kgProj);
   assert.equal(d25.importe_estimated, true);
   assert.equal(ctx.byYmd.get("2026-09-25").providers[2].importe, null);
 
@@ -61,7 +62,7 @@ test("el importe proyectado usa el último costo real del proveedor", () => {
     day("2026-09-24", { 1: purchase(100, 500) }),
     day("2026-09-25"),
   ];
-  const next = buildComprasDailyEstimateContext(payload(withCorte), "2026-09-24");
+  const next = buildComprasDailyEstimateContext(payload(withCorte), "2026-09-24", { "2026-09-25": 230 / 23 });
   assert.equal(next.byYmd.get("2026-09-24").providers[1].importe, 500);
   assert.equal(next.byYmd.get("2026-09-25").providers[1].importe, (230 / 23) * 5);
 
