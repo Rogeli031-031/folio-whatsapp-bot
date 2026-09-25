@@ -1,61 +1,60 @@
 ﻿# CURRENT_TASK
 
 ```yaml
-task_id: "FIX-IGF-DIARIO-PUEBLA-EXPORT-YELLOW-043"
-title: "Pintar al exportar el costo y flete históricos arrastrados"
+task_id: "FIX-IGF-DIARIO-PUEBLA-SHARED-FORMULAS-044"
+title: "Pintar el arrastre al leer fórmulas compartidas de CONTROL DE COMPRAS"
 status: "DONE_PENDING_REVIEW"
 mode: "IMPLEMENTATION"
 
 authorized_by: "HUMAN_APPROVER"
-authorized_at: "2026-09-24T17:49:22-06:00"
+authorized_at: "2026-09-24T18:05:39-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-09-24"
-prior_task_review: "La 042 calcula correctamente el 19, pero Excel muestra F28/G28 blancas. Autorizo pintar el amarillo al generar cada exportación; acepto que una edición manual posterior del XLSX requiera exportarlo de nuevo para actualizar ese color. Sin integración ni despliegue."
+prior_task_review: "Revisé la 043: pasa 72 pruebas, pero sobre el archivo real F28/G28 siguen sin relleno. Autorizo corregir la lectura de fórmulas compartidas en la 044. Sin PR, merge ni despliegue."
 
-objective: "Garantizar que el Excel descargado muestre amarillas F y G cuando se use un costo o flete histórico arrastrado."
+objective: "Hacer que el archivo real de Puebla exporte F28 y G28 físicamente amarillas cuando arrastran costo y flete."
 implementation: true
 code_changes: true
 schema_changes: false
 data_mutation: false
-base_sha: "ece45315cfff0ddf683823a2093876a83fb12bd5"
-branch: "fix/igf-diario-puebla-export-yellow-043"
+base_sha: "a5ae3d9dd49c6b5e7515f019d13ea913a73dc9ac"
+branch: "fix/igf-diario-puebla-shared-formulas-044"
 
 in_scope:
-  - "lib/igf-diario-puebla.js: determinar y aplicar el relleno visible al exportar"
-  - "lib/dashboard-arr-forecast.js: solo si hace falta pasar los datos de compras necesarios"
-  - "test/igf-diario-puebla-043.test.js"
-  - "pruebas 039, 040, 041 y 042: ajustar solo aserciones incompatibles con el nuevo contrato visual"
-  - "docs/dev-loop/reports/FIX-IGF-DIARIO-PUEBLA-EXPORT-YELLOW-043.md"
+  - "lib/igf-diario-puebla.js: resolver valores numéricos y ausencias en fórmulas compartidas de CONTROL DE COMPRAS"
+  - "test/igf-diario-puebla-044.test.js: reproducir fórmulas compartidas con y sin resultado guardado"
+  - "docs/dev-loop/reports/FIX-IGF-DIARIO-PUEBLA-SHARED-FORMULAS-044.md"
   - "docs/dev-loop/CURRENT_TASK.md: solo transición de status"
 out_of_scope:
-  - "cambiar valores o fórmulas de F/G/H/AF, gastos, calendario o datos de CONTROL DE COMPRAS"
-  - "cambiar otras plantas, base de datos o frontend-dashboard/.next"
+  - "alterar fórmulas o importes de IGF Diario Puebla y CONTROL DE COMPRAS"
+  - "modificar otras plantas, base de datos o frontend-dashboard/.next"
   - "PR, merge a main y despliegue"
 
 contracts_in_force:
   - "AGENTS.md y docs/dev-loop/LOOP_PROTOCOL.md"
-  - "El amarillo de F y G debe ser un relleno físico de la celda exportada cuando efectivamente exista un antecedente usado."
-  - "Determinar el estado con los datos reales de compras del día y de sus antecedentes; no asumir que una fórmula ExcelJS sin result equivale a ausencia de compra."
-  - "Costo y flete se evalúan por separado. El día del corte y las fechas futuras no reciben amarillo por arrastre."
-  - "Las fórmulas y los importes correctos de la 042 permanecen intactos."
+  - "La 043 conserva las fórmulas y pinta físicamente de amarillo solo el costo o flete histórico efectivamente arrastrado."
+  - "Un valor numérico válido en una fórmula compartida cuenta como dato propio o antecedente, aunque la celda no tenga la propiedad formula."
+  - "Una fórmula sin resultado guardado se resuelve desde sus entradas cuando sea posible; una ausencia indeterminada no debe inventar compras ni amarillo."
 
 acceptance_criteria:
-  - "Con corte 2026-09-24, F28 y G28 conservan 11.965423104349892 y 1.23, y ambas tienen fill.fgColor.argb=FFFFFF00 antes de guardar y después de reabrir el XLSX."
-  - "F27/G27 con datos propios no tienen relleno amarillo; F35/G35, día del corte, tampoco lo reciben por arrastre."
-  - "Si falta solo costo o solo flete, se pinta únicamente la variable que usa antecedente. Si falta antecedente válido, la celda queda vacía y sin amarillo."
-  - "La clasificación funciona aunque las celdas calculadas de CONTROL DE COMPRAS sean fórmulas sin resultado almacenado."
-  - "Conservar 32 hojas, AI/AJ ocultas, AH visible, C12 y las filas 45/47. Una nueva exportación con compra propia válida elimina el amarillo."
+  - "Sobre el archivo real de Puebla de septiembre 2026, con corte 2026-09-24, F28 y G28 tienen fill.fgColor.argb=FFFFFF00 después de guardar y reabrir el XLSX."
+  - "F28/G28 siguen refiriéndose al costo 11.965423104349892 y al flete 1.23 de la fila 27; sus fórmulas no cambian."
+  - "F27/G27 con datos propios no están amarillas; F35/G35 del día del corte tampoco."
+  - "Si solo una variable necesita antecedente, únicamente esa variable se pinta."
+  - "Un antecedente válido representado mediante sharedFormula con result numérico se reconoce; uno sin dato válido no produce un falso amarillo."
+  - "Se conservan las 32 hojas, las columnas AI/AJ ocultas y las filas 45/47."
 
 validation:
-  - "Probar con datos sintéticos reales, ceros, vacíos y fórmulas fuente sin resultado almacenado."
-  - "Guardar y reabrir un XLSX temporal; comprobar el fill físico de F28/G28 y ausencia de amarillo en días con dato propio."
-  - "Ejecutar 043, 042, 041, 040, 039, 038, 037, 036, 024, 026, 027, 028, 029 y 030; git diff --check."
+  - "Añadir una prueba con fórmulas compartidas de ExcelJS, incluida una celda con sharedFormula y result numérico, y verificar el XLSX reabierto."
+  - "Revisar de forma local el archivo real 01-Dashboard_ARR_Forecast_Puebla_2026_9-15-.xlsx si está disponible, sin incorporarlo al commit."
+  - "Ejecutar 044, 043, 042, 041, 040, 039, 038, 037, 036, 024, 026, 027, 028, 029 y 030; git diff --check."
+
 allowed_actions:
-  - "crear rama 043 desde base_sha en árbol aislado"
-  - "editar solo in_scope; probar, reportar, commit y push solo a rama 043"
+  - "crear rama 044 desde base_sha en árbol aislado"
+  - "editar solo in_scope; probar, reportar, commit y push solo a rama 044"
 forbidden_actions:
   - "modificar authorized_by, authorized_at o human_authorization"
   - "usar git add .; abrir PR; fusionar a main; desplegar; encadenar tareas"
 
 max_attempts: 1
-result_report_path: "docs/dev-loop/reports/FIX-IGF-DIARIO-PUEBLA-EXPORT-YELLOW-043.md"
+result_report_path: "docs/dev-loop/reports/FIX-IGF-DIARIO-PUEBLA-SHARED-FORMULAS-044.md"
 ```
