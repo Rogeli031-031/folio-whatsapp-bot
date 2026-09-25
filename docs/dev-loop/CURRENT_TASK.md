@@ -1,60 +1,60 @@
-﻿# CURRENT_TASK
-
-```yaml
-task_id: "FIX-IGF-DIARIO-PUEBLA-SHARED-FORMULAS-044"
-title: "Pintar el arrastre al leer fórmulas compartidas de CONTROL DE COMPRAS"
+﻿task_id: "FIX-COMPRAS-IMPORTE-POR-VENTA-IGF-PLANTA-046"
+title: "Proyectar el importe con la venta y mostrar IGF Diario en cada planta"
 status: "AUTHORIZED"
 mode: "IMPLEMENTATION"
 
 authorized_by: "HUMAN_APPROVER"
-authorized_at: "2026-09-24T18:05:39-06:00"
-human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-09-24"
-prior_task_review: "Revisé la 043: pasa 72 pruebas, pero sobre el archivo real F28/G28 siguen sin relleno. Autorizo corregir la lectura de fórmulas compartidas en la 044. Sin PR, merge ni despliegue."
+authorized_at: "2026-09-25T11:52:00-06:00"
+human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-09-25"
+prior_task_review: "La 045 está en su rama y no está en main. Autorizo usarla como base. No autorizo integración ni despliegue."
 
-objective: "Hacer que el archivo real de Puebla exporte F28 y G28 físicamente amarillas cuando arrastran costo y flete."
+objective: "Calcular el importe proyectado de CONTROL DE COMPRAS con el último costo real por kilo y la venta pronosticada del día, dejar en blanco los días posteriores al corte en IGF Diario, y generar esa primera hoja para la planta exportada."
 implementation: true
 code_changes: true
 schema_changes: false
 data_mutation: false
-base_sha: "a5ae3d9dd49c6b5e7515f019d13ea913a73dc9ac"
-branch: "fix/igf-diario-puebla-shared-formulas-044"
+base_sha: "87d45cb1cc4b8644594b949ffef13c35bc2101ac"
+branch: "fix/compras-importe-por-venta-igf-planta-046"
 
 in_scope:
-  - "lib/igf-diario-puebla.js: resolver valores numéricos y ausencias en fórmulas compartidas de CONTROL DE COMPRAS"
-  - "test/igf-diario-puebla-044.test.js: reproducir fórmulas compartidas con y sin resultado guardado"
-  - "docs/dev-loop/reports/FIX-IGF-DIARIO-PUEBLA-SHARED-FORMULAS-044.md"
+  - "lib/compras-excel.js: importe proyectado = último costo real por kilo × venta pronosticada del día"
+  - "lib/igf-diario-puebla.js: hoja IGF Diario de la planta exportada, no solo Puebla; días posteriores al corte en blanco"
+  - "lib/dashboard-arr-forecast.js y server.js: solo el enlace necesario para crear esa hoja y pasarle la venta pronosticada y los gastos de la planta"
+  - "test/compras-importe-por-venta-igf-planta-046.test.js"
+  - "pruebas 030, 036 y 045: ajustar solo aserciones incompatibles con este requisito"
+  - "docs/dev-loop/reports/FIX-COMPRAS-IMPORTE-POR-VENTA-IGF-PLANTA-046.md"
   - "docs/dev-loop/CURRENT_TASK.md: solo transición de status"
 out_of_scope:
-  - "alterar fórmulas o importes de IGF Diario Puebla y CONTROL DE COMPRAS"
-  - "modificar otras plantas, base de datos o frontend-dashboard/.next"
-  - "PR, merge a main y despliegue"
+  - "cambiar el promedio calendario de COMPRA KG, HG EN KILOS u otras hojas"
+  - "llenar con ceros los días futuros de IGF Diario"
+  - "frontend-dashboard/.next, base de datos, PR, merge y despliegue"
 
 contracts_in_force:
   - "AGENTS.md y docs/dev-loop/LOOP_PROTOCOL.md"
-  - "La 043 conserva las fórmulas y pinta físicamente de amarillo solo el costo o flete histórico efectivamente arrastrado."
-  - "Un valor numérico válido en una fórmula compartida cuenta como dato propio o antecedente, aunque la celda no tenga la propiedad formula."
-  - "Una fórmula sin resultado guardado se resuelve desde sus entradas cuando sea posible; una ausencia indeterminada no debe inventar compras ni amarillo."
+  - "COMPRA KG proyectado sigue el promedio de días calendario anteriores al corte."
+  - "COSTO KG proyectado muestra el último costo real por kilo del proveedor, importe real / kilos reales de la misma fecha anterior, sin redondeo intermedio."
+  - "IMPORTE proyectado = ese costo × la venta pronosticada de esa fecha, la misma venta que ya escribe Provincia Venta Diaria. No se multiplica por los kilos proyectados de compra."
+  - "Un importe real capturado prevalece. Sin costo real válido o sin venta pronosticada, el importe queda vacío."
+  - "En IGF Diario, con corte 2026-09-24, el 24 conserva sus cálculos y del 25 al 30 la columna A conserva la fecha y B:AF quedan vacías, sin fórmulas."
+  - "La primera hoja se genera para la planta exportada. Querétaro no puede descargar el libro sin esa hoja."
 
 acceptance_criteria:
-  - "Sobre el archivo real de Puebla de septiembre 2026, con corte 2026-09-24, F28 y G28 tienen fill.fgColor.argb=FFFFFF00 después de guardar y reabrir el XLSX."
-  - "F28/G28 siguen refiriéndose al costo 11.965423104349892 y al flete 1.23 de la fila 27; sus fórmulas no cambian."
-  - "F27/G27 con datos propios no están amarillas; F35/G35 del día del corte tampoco."
-  - "Si solo una variable necesita antecedente, únicamente esa variable se pinta."
-  - "Un antecedente válido representado mediante sharedFormula con result numérico se reconoce; uno sin dato válido no produce un falso amarillo."
-  - "Se conservan las 32 hojas, las columnas AI/AJ ocultas y las filas 45/47."
+  - "PEMEX TUXPAN, corte 2026-09-24: el 23/09 conserva 19370 kg, costo 12.232 e importe 236938.17. El 25/09 y el 26/09 muestran COMPRA KG 38709.2 y COSTO KG 12.232. El importe del 25 es 473499.18 y el del 26 es 449819.00, porque la venta pronosticada de cada día es distinta."
+  - "La misma regla aplica a cada proveedor y a la fecha de corte si a esa fecha le falta el importe real."
+  - "IGF Diario Puebla, corte 2026-09-24: filas del 25 al 30 con fecha y B:AF vacías. Semana 4, semana 5 y TOTAL MES no suman esas filas. M3 y T3 de Puebla se conservan."
+  - "La descarga de Querétaro abre con la hoja IGF Diario de Querétaro en primer lugar, usando su venta, precio, compras y gastos. Puebla conserva la suya."
 
 validation:
-  - "Añadir una prueba con fórmulas compartidas de ExcelJS, incluida una celda con sharedFormula y result numérico, y verificar el XLSX reabierto."
-  - "Revisar de forma local el archivo real 01-Dashboard_ARR_Forecast_Puebla_2026_9-15-.xlsx si está disponible, sin incorporarlo al commit."
-  - "Ejecutar 044, 043, 042, 041, 040, 039, 038, 037, 036, 024, 026, 027, 028, 029 y 030; git diff --check."
+  - "Probar el 25 y el 26 con ventas distintas y el mismo costo 12.232."
+  - "Guardar y reabrir un XLSX de Puebla y otro de Querétaro."
+  - "Ejecutar 046, 045, 044, 043, 042, 041, 040, 039, 038, 037, 036, 030, 026, 024, 022, 021 y 020; git diff --check."
 
 allowed_actions:
-  - "crear rama 044 desde base_sha en árbol aislado"
-  - "editar solo in_scope; probar, reportar, commit y push solo a rama 044"
+  - "crear la rama 046 desde base_sha en un árbol aislado"
+  - "editar solo in_scope, probar, reportar, commit y push solo a la rama 046"
 forbidden_actions:
   - "modificar authorized_by, authorized_at o human_authorization"
-  - "usar git add .; abrir PR; fusionar a main; desplegar; encadenar tareas"
+  - "usar git add .; tocar .next; abrir PR; fusionar o desplegar"
 
 max_attempts: 1
-result_report_path: "docs/dev-loop/reports/FIX-IGF-DIARIO-PUEBLA-SHARED-FORMULAS-044.md"
-```
+result_report_path: "docs/dev-loop/reports/FIX-COMPRAS-IMPORTE-POR-VENTA-IGF-PLANTA-046.md"
