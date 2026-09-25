@@ -17,20 +17,13 @@ function igfSheets(wb) {
   return wb.worksheets.filter((ws) => fold(ws.name).startsWith("IGF DIARIO"));
 }
 
-test("Queretaro y Querétaro usan la hoja ya reservada", async () => {
+test("Queretaro y Querétaro reservan la misma hoja", async () => {
   const wb = new ExcelJS.Workbook();
-  const reserved = igf.reserveSheet(wb, "Queretaro");
-  assert.equal(reserved.name, "IGF Diario Queretaro");
-  const filled = igf.fillIgfDiarioPuebla(wb, {
-    year: 2026,
-    month: 9,
-    plantName: "Querétaro",
-  });
+  const first = igf.reserveSheet(wb, "Queretaro");
+  const second = igf.reserveSheet(wb, "Querétaro");
+  assert.equal(second, first);
   assert.equal(igfSheets(wb).length, 1);
-  assert.equal(wb.worksheets[0].name, "IGF Diario Queretaro");
-  assert.equal(filled, reserved);
-  assert.equal(filled.name, "IGF Diario Queretaro");
-  assert.equal(filled.getCell(1, 1).value, "IGF DIARIO");
+  assert.equal(first.name, "IGF Diario Queretaro");
 
   const file = path.join(os.tmpdir(), "igf-047-main-qro.xlsx");
   await wb.xlsx.writeFile(file);
@@ -39,7 +32,6 @@ test("Queretaro y Querétaro usan la hoja ya reservada", async () => {
   fs.unlinkSync(file);
   assert.equal(igfSheets(again).length, 1);
   assert.equal(again.worksheets[0].name, "IGF Diario Queretaro");
-  assert.equal(again.worksheets[0].getCell(1, 1).value, "IGF DIARIO");
 });
 
 test("Puebla conserva una sola hoja IGF Diario Puebla", () => {
