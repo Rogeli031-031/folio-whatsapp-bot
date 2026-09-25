@@ -1,11 +1,15 @@
 {
   "/_not-found/page": "app/_not-found/page.js",
-  "/arr/page": "app/arr/page.js",
   "/acciones/page": "app/acciones/page.js",
+  "/compras/page": "app/compras/page.js",
+  "/arr/page": "app/arr/page.js",
   "/dashboard/page": "app/dashboard/page.js",
   "/dicf-accion/page": "app/dicf-accion/page.js",
   "/director-ia/page": "app/director-ia/page.js",
   "/igf-forecast/page": "app/igf-forecast/page.js",
   "/page": "app/page.js",
+  "/seh/operacion/[ambito]/page": "app/seh/operacion/[ambito]/page.js",
+  "/seh/page": "app/seh/page.js",
+  "/seh/carpetas-legales/page": "app/seh/carpetas-legales/page.js",
   "/health/route": "app/health/route.js"
 }
