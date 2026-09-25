@@ -1,60 +1,55 @@
-﻿task_id: "FIX-COMPRAS-IMPORTE-POR-VENTA-IGF-PLANTA-046"
-title: "Proyectar el importe con la venta y mostrar IGF Diario en cada planta"
+﻿task_id: "FIX-IGF-DIARIO-UNA-HOJA-POR-PLANTA-047"
+title: "Dejar una sola hoja IGF Diario cuando el código y el nombre de la planta no se escriben igual"
 status: "DONE_PENDING_REVIEW"
 mode: "IMPLEMENTATION"
 
 authorized_by: "HUMAN_APPROVER"
-authorized_at: "2026-09-25T11:52:00-06:00"
+authorized_at: "2026-09-25T13:02:00-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-09-25"
-prior_task_review: "La 045 está en su rama y no está en main. Autorizo usarla como base. No autorizo integración ni despliegue."
+prior_task_review: "La 045 ya está en main, en c055554c. La 046 no se integra: con código Queretaro y nombre Querétaro crea dos hojas IGF, la primera vacía. CURRENT_TASK de la 046 se equivoca al decir que la 045 no está en main."
 
-objective: "Calcular el importe proyectado de CONTROL DE COMPRAS con el último costo real por kilo y la venta pronosticada del día, dejar en blanco los días posteriores al corte en IGF Diario, y generar esa primera hoja para la planta exportada."
+objective: "Crear y llenar una sola hoja IGF Diario por planta, aunque el código no lleve acento y el nombre sí."
 implementation: true
 code_changes: true
 schema_changes: false
 data_mutation: false
-base_sha: "87d45cb1cc4b8644594b949ffef13c35bc2101ac"
-branch: "fix/compras-importe-por-venta-igf-planta-046"
+base_sha: "4182e0a3fcf247555b04f08d6cb0edada59f3aac"
+branch: "fix/igf-diario-una-hoja-por-planta-047"
 
 in_scope:
-  - "lib/compras-excel.js: importe proyectado = último costo real por kilo × venta pronosticada del día"
-  - "lib/igf-diario-puebla.js: hoja IGF Diario de la planta exportada, no solo Puebla; días posteriores al corte en blanco"
-  - "lib/dashboard-arr-forecast.js y server.js: solo el enlace necesario para crear esa hoja y pasarle la venta pronosticada y los gastos de la planta"
-  - "test/compras-importe-por-venta-igf-planta-046.test.js"
-  - "pruebas 030, 036 y 045: ajustar solo aserciones incompatibles con este requisito"
-  - "docs/dev-loop/reports/FIX-COMPRAS-IMPORTE-POR-VENTA-IGF-PLANTA-046.md"
+  - "lib/igf-diario-puebla.js: si ya existe una hoja IGF Diario de la misma planta, escribir ahí; no crear otra por un acento"
+  - "lib/dashboard-arr-forecast.js: reservar y llenar con el mismo nombre de hoja"
+  - "test/igf-diario-una-hoja-por-planta-047.test.js"
+  - "prueba 046: ajustar solo la aserción que choque con una sola hoja"
+  - "docs/dev-loop/reports/FIX-IGF-DIARIO-UNA-HOJA-POR-PLANTA-047.md"
   - "docs/dev-loop/CURRENT_TASK.md: solo transición de status"
 out_of_scope:
-  - "cambiar el promedio calendario de COMPRA KG, HG EN KILOS u otras hojas"
-  - "llenar con ceros los días futuros de IGF Diario"
+  - "cambiar el importe proyectado, COMPRA KG o el costo por kilo"
+  - "cambiar el contenido de IGF Diario Puebla"
   - "frontend-dashboard/.next, base de datos, PR, merge y despliegue"
 
 contracts_in_force:
   - "AGENTS.md y docs/dev-loop/LOOP_PROTOCOL.md"
-  - "COMPRA KG proyectado sigue el promedio de días calendario anteriores al corte."
-  - "COSTO KG proyectado muestra el último costo real por kilo del proveedor, importe real / kilos reales de la misma fecha anterior, sin redondeo intermedio."
-  - "IMPORTE proyectado = ese costo × la venta pronosticada de esa fecha, la misma venta que ya escribe Provincia Venta Diaria. No se multiplica por los kilos proyectados de compra."
-  - "Un importe real capturado prevalece. Sin costo real válido o sin venta pronosticada, el importe queda vacío."
-  - "En IGF Diario, con corte 2026-09-24, el 24 conserva sus cálculos y del 25 al 30 la columna A conserva la fecha y B:AF quedan vacías, sin fórmulas."
-  - "La primera hoja se genera para la planta exportada. Querétaro no puede descargar el libro sin esa hoja."
+  - "Queretaro y Querétaro son la misma planta. El libro queda con una sola hoja IGF Diario, en primer lugar, y esa hoja trae los datos."
+  - "La reserva y el llenado no pueden inventar dos nombres. Si la hoja ya existe, se llena esa."
+  - "Puebla sigue con una sola hoja IGF Diario Puebla. Los días posteriores al corte siguen en blanco."
+  - "La 045 ya está en main. La 046 no se fusiona ni se despliega."
 
 acceptance_criteria:
-  - "PEMEX TUXPAN, corte 2026-09-24: el 23/09 conserva 19370 kg, costo 12.232 e importe 236938.17. El 25/09 y el 26/09 muestran COMPRA KG 38709.2 y COSTO KG 12.232. El importe del 25 es 473499.18 y el del 26 es 449819.00, porque la venta pronosticada de cada día es distinta."
-  - "La misma regla aplica a cada proveedor y a la fecha de corte si a esa fecha le falta el importe real."
-  - "IGF Diario Puebla, corte 2026-09-24: filas del 25 al 30 con fecha y B:AF vacías. Semana 4, semana 5 y TOTAL MES no suman esas filas. M3 y T3 de Puebla se conservan."
-  - "La descarga de Querétaro abre con la hoja IGF Diario de Querétaro en primer lugar, usando su venta, precio, compras y gastos. Puebla conserva la suya."
+  - "Código Queretaro y nombre Querétaro: el archivo abre con una sola hoja IGF Diario. No existe una segunda. La primera trae la venta, el precio y los gastos de Querétaro. Con corte 2026-09-24, del 25 al 30 la columna A conserva la fecha y B:AF quedan vacías."
+  - "Puebla sigue abriendo con IGF Diario Puebla, una sola hoja, con sus datos."
+  - "El importe proyectado de CONTROL DE COMPRAS no cambia."
 
 validation:
-  - "Probar el 25 y el 26 con ventas distintas y el mismo costo 12.232."
-  - "Guardar y reabrir un XLSX de Puebla y otro de Querétaro."
-  - "Ejecutar 046, 045, 044, 043, 042, 041, 040, 039, 038, 037, 036, 030, 026, 024, 022, 021 y 020; git diff --check."
+  - "Reproducir reserva con Queretaro y llenado con Querétaro, guardar y reabrir el XLSX."
+  - "Ejecutar 047, 046, 045, 044, 043, 042, 041, 040, 039, 038, 037, 036, 030, 026, 024, 022, 021 y 020; git diff --check."
 
 allowed_actions:
-  - "crear la rama 046 desde base_sha en un árbol aislado"
-  - "editar solo in_scope, probar, reportar, commit y push solo a la rama 046"
+  - "crear la rama 047 desde base_sha en un árbol aislado"
+  - "editar solo in_scope, probar, reportar, commit y push solo a la rama 047"
 forbidden_actions:
   - "modificar authorized_by, authorized_at o human_authorization"
   - "usar git add .; tocar .next; abrir PR; fusionar o desplegar"
 
 max_attempts: 1
-result_report_path: "docs/dev-loop/reports/FIX-COMPRAS-IMPORTE-POR-VENTA-IGF-PLANTA-046.md"
+result_report_path: "docs/dev-loop/reports/FIX-IGF-DIARIO-UNA-HOJA-POR-PLANTA-047.md"
