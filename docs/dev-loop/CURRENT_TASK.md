@@ -1,89 +1,60 @@
 ﻿# CURRENT_TASK
 
 ```yaml
-task_id: "FIX-COMPRAS-INCLUDE-CUTOFF-DAY-035"
-title: "CONTROL DE COMPRAS — mostrar el promedio el día del corte"
+task_id: "FIX-IGF-DIARIO-PUEBLA-SHARED-FORMULAS-044"
+title: "Pintar el arrastre al leer fórmulas compartidas de CONTROL DE COMPRAS"
 status: "DONE_PENDING_REVIEW"
 mode: "IMPLEMENTATION"
 
 authorized_by: "HUMAN_APPROVER"
-authorized_at: "2026-09-24T12:10:04-06:00"
+authorized_at: "2026-09-24T18:05:39-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-09-24"
+prior_task_review: "Revisé la 043: pasa 72 pruebas, pero sobre el archivo real F28/G28 siguen sin relleno. Autorizo corregir la lectura de fórmulas compartidas en la 044. Sin PR, merge ni despliegue."
 
-objective: "Proyectar las compras faltantes del día seleccionado como corte sin modificar los días anteriores ni el cálculo aprobado del promedio."
-
+objective: "Hacer que el archivo real de Puebla exporte F28 y G28 físicamente amarillas cuando arrastran costo y flete."
 implementation: true
 code_changes: true
 schema_changes: false
 data_mutation: false
-
-base_sha: "a2cfac4a12b6200d306e97cd1fcc40287629e8fc"
-integrated_main_sha: "095ba9586003a0d7282582228b68aa7641a8aab4"
-branch: "fix/compras-include-cutoff-day-035"
+base_sha: "a5ae3d9dd49c6b5e7515f019d13ea913a73dc9ac"
+branch: "fix/igf-diario-puebla-shared-formulas-044"
 
 in_scope:
-  - "lib/compras-excel.js: elegibilidad de la proyección en el día del corte"
-  - "lib/dashboard-arr-forecast.js: transmitir a CONTROL DE COMPRAS la fecha de corte ya recibida"
-  - "test/compras-daily-average-fill-030.test.js"
-  - "test/forecast-excel-plant-compras-024.test.js"
-  - "otras pruebas directamente afectadas"
-  - "docs/dev-loop/reports/FIX-COMPRAS-INCLUDE-CUTOFF-DAY-035.md"
-  - "docs/dev-loop/CURRENT_TASK.md: únicamente transición de status"
-
+  - "lib/igf-diario-puebla.js: resolver valores numéricos y ausencias en fórmulas compartidas de CONTROL DE COMPRAS"
+  - "test/igf-diario-puebla-044.test.js: reproducir fórmulas compartidas con y sin resultado guardado"
+  - "docs/dev-loop/reports/FIX-IGF-DIARIO-PUEBLA-SHARED-FORMULAS-044.md"
+  - "docs/dev-loop/CURRENT_TASK.md: solo transición de status"
 out_of_scope:
-  - "frontend-dashboard/.next y cualquier otro cambio ajeno existente"
-  - "cambiar la fórmula o el divisor del promedio aprobado en 032"
-  - "cambiar el método de cálculo de HG EN KILOS"
-  - "rellenar fechas anteriores al corte sin compras reales"
-  - "frontend, PostgreSQL, hoja PRECIO y demás hojas"
-  - "AGENTS.md, LOOP_PROTOCOL.md y contratos de Director IA"
+  - "alterar fórmulas o importes de IGF Diario Puebla y CONTROL DE COMPRAS"
+  - "modificar otras plantas, base de datos o frontend-dashboard/.next"
   - "PR, merge a main y despliegue"
 
 contracts_in_force:
   - "AGENTS.md y docs/dev-loop/LOOP_PROTOCOL.md"
-  - "origin/main integrado en integrated_main_sha"
-  - "El reporte BLOCKED de 034 permanece intacto; 035 es una tarea nueva."
-  - "El promedio de proveedores usa compras reales anteriores al corte divididas entre todos los días calendario anteriores al corte."
-  - "Los datos reales prevalecen sobre las estimaciones; HG EN KILOS conserva su método."
-
-working_tree_exception:
-  - "Se permite continuar únicamente si los cambios ajenos preexistentes son los ocho archivos frontend-dashboard/.next enumerados en el reporte 034, además del CURRENT_TASK que el humano acaba de autorizar."
-  - "No editar, limpiar, descartar, ocultar, añadir al índice ni incluir en el commit esos archivos .next."
-  - "Si existe cualquier otro cambio ajeno o no puede distinguirse su procedencia: BLOCKED y STOP."
+  - "La 043 conserva las fórmulas y pinta físicamente de amarillo solo el costo o flete histórico efectivamente arrastrado."
+  - "Un valor numérico válido en una fórmula compartida cuenta como dato propio o antecedente, aunque la celda no tenga la propiedad formula."
+  - "Una fórmula sin resultado guardado se resuelve desde sus entradas cuando sea posible; una ausencia indeterminada no debe inventar compras ni amarillo."
 
 acceptance_criteria:
-  - "Con corte 2026-09-24, el 24 recibe la estimación en cada celda de kilos e importe de proveedor sin dato real; el 25 conserva su proyección."
-  - "El promedio del 24 y del 25 conserva divisor 23 y excluye los datos del 24 de su numerador."
-  - "PEMEX TUXPAN kg = 929020/23; TOMZA TEPEJI kg = 92750/23; TOMZA TEPEJI importe = 1045311.27/23, con el formato visual existente."
-  - "Cada dato real del 24 prevalece en su celda; las demás celdas faltantes pueden estimarse."
-  - "El 19 y cualquier día anterior al corte sin compras reales conservan vacías sus celdas correspondientes."
-  - "HG EN KILOS puede estimarse el 24 si falta su dato real, con su método vigente y sin modificar su fórmula."
-  - "La fecha seleccionada en IGF Forecast se aplica también a CONTROL DE COMPRAS, aunque difiera del día del servidor."
-  - "Sin fecha seleccionada, la exportación independiente de Compras mantiene su corte predeterminado de hoy en Ciudad de México."
-  - "Los consolidados incluyen las estimaciones aplicables sin errores de fórmula."
+  - "Sobre el archivo real de Puebla de septiembre 2026, con corte 2026-09-24, F28 y G28 tienen fill.fgColor.argb=FFFFFF00 después de guardar y reabrir el XLSX."
+  - "F28/G28 siguen refiriéndose al costo 11.965423104349892 y al flete 1.23 de la fila 27; sus fórmulas no cambian."
+  - "F27/G27 con datos propios no están amarillas; F35/G35 del día del corte tampoco."
+  - "Si solo una variable necesita antecedente, únicamente esa variable se pinta."
+  - "Un antecedente válido representado mediante sharedFormula con result numérico se reconoce; uno sin dato válido no produce un falso amarillo."
+  - "Se conservan las 32 hojas, las columnas AI/AJ ocultas y las filas 45/47."
 
 validation:
-  - "Actualizar prueba 030: día 19 vacío donde no hay compra, día 24 proyectado y día 25 proyectado; dato real del 24 con prioridad."
-  - "Comprobar divisor 23, ausencia de historial y comportamiento vigente de HG."
-  - "Comprobar transmisión de la fecha seleccionada mediante la exportación IGF Forecast."
-  - "Ejecutar pruebas 030, 020, 021, 022, 024, 026, 027, 028 y 029 y otras directamente afectadas."
-  - "Ejecutar git diff --check y verificar que el commit contiene exclusivamente archivos in_scope."
+  - "Añadir una prueba con fórmulas compartidas de ExcelJS, incluida una celda con sharedFormula y result numérico, y verificar el XLSX reabierto."
+  - "Revisar de forma local el archivo real 01-Dashboard_ARR_Forecast_Puebla_2026_9-15-.xlsx si está disponible, sin incorporarlo al commit."
+  - "Ejecutar 044, 043, 042, 041, 040, 039, 038, 037, 036, 024, 026, 027, 028, 029 y 030; git diff --check."
 
 allowed_actions:
-  - "crear la rama 035 desde base_sha sin alterar los cambios locales ajenos"
-  - "editar únicamente archivos in_scope"
-  - "ejecutar pruebas"
-  - "crear reporte 035"
-  - "commit y push únicamente a la rama 035"
-
+  - "crear rama 044 desde base_sha en árbol aislado"
+  - "editar solo in_scope; probar, reportar, commit y push solo a rama 044"
 forbidden_actions:
   - "modificar authorized_by, authorized_at o human_authorization"
-  - "usar git add . o incluir frontend-dashboard/.next en commits"
-  - "alterar el reporte 034 o datos persistidos"
-  - "abrir PR, fusionar a main o desplegar"
-  - "poner status APPROVED o CLOSED"
-  - "encadenar otra tarea"
+  - "usar git add .; abrir PR; fusionar a main; desplegar; encadenar tareas"
 
 max_attempts: 1
-result_report_path: "docs/dev-loop/reports/FIX-COMPRAS-INCLUDE-CUTOFF-DAY-035.md"
+result_report_path: "docs/dev-loop/reports/FIX-IGF-DIARIO-PUEBLA-SHARED-FORMULAS-044.md"
 ```
