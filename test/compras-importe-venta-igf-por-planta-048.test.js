@@ -33,13 +33,14 @@ function igfSheets(wb) {
   return wb.worksheets.filter((ws) => fold(ws.name).startsWith("IGF DIARIO"));
 }
 
-test("el importe proyectado usa la venta del día y no los kilos de compra", async () => {
+// 049 sustituye el contrato de esta prueba: el importe proyectado ya no es costo × venta.
+// Pasa a ser COMPRA KG × COSTO KG del mismo proveedor. La venta deja de mover el importe.
+test("el importe proyectado usa los kilos y el costo del proveedor", async () => {
   const providers = [{ id: 1, nombre: "PEMEX TUXPAN" }, { id: 2, nombre: "OTRO" }];
   const kgProj = 38709.16666666667;
   const earlier = kgProj * 23 - 19370;
   const unit = 236938.17 / 19370;
-  const venta25 = kgProj;
-  const venta26 = 449819 / unit;
+  const venta = { "2026-09-24": 1000, "2026-09-25": kgProj, "2026-09-26": 449819 / unit };
   const days = [
     day("2026-09-01", { 1: purchase(earlier, 1000), 2: purchase(10, 0) }),
     day("2026-09-23", { 1: purchase(19370, 236938.17) }),
@@ -47,7 +48,6 @@ test("el importe proyectado usa la venta del día y no los kilos de compra", asy
     day("2026-09-25"),
     day("2026-09-26"),
   ];
-  const venta = { "2026-09-24": 1000, "2026-09-25": venta25, "2026-09-26": venta26 };
   const ctx = buildComprasDailyEstimateContext({ year: 2026, month: 9, providers, grid: { days } }, "2026-09-24", venta);
   const d23 = ctx.byYmd.get("2026-09-23").providers[1];
   const d25 = ctx.byYmd.get("2026-09-25").providers[1];
@@ -58,17 +58,16 @@ test("el importe proyectado usa la venta del día y no los kilos de compra", asy
   assert.equal(d26.kg, kgProj);
   assert.equal(d25.costo_kg, unit);
   assert.equal(d26.costo_kg, unit);
-  assert.equal(d25.importe, unit * venta25);
-  assert.equal(d26.importe, 449819);
-  assert.notEqual(d25.importe, d26.importe);
-  assert.equal(ctx.byYmd.get("2026-09-24").providers[1].importe, unit * 1000);
+  assert.equal(d25.importe, unit * kgProj);
+  assert.equal(d26.importe, unit * kgProj);
+  assert.equal(ctx.byYmd.get("2026-09-24").providers[1].importe, unit * kgProj);
   assert.equal(ctx.byYmd.get("2026-09-25").providers[2].importe, null);
 
   const noSale = buildComprasDailyEstimateContext({ year: 2026, month: 9, providers, grid: { days } }, "2026-09-24", {});
   const noSale25 = noSale.byYmd.get("2026-09-25").providers[1];
   assert.equal(noSale25.kg, kgProj);
   assert.equal(noSale25.costo_kg, unit);
-  assert.equal(noSale25.importe, null);
+  assert.equal(noSale25.importe, unit * kgProj);
   assert.equal(noSale.byYmd.get("2026-09-25").providers[2].costo_kg, null);
   assert.equal(noSale.byYmd.get("2026-09-25").providers[2].importe, null);
 
@@ -83,7 +82,7 @@ test("el importe proyectado usa la venta del día y no los kilos de compra", asy
     { "2026-09-25": 10 }
   );
   assert.equal(after.byYmd.get("2026-09-24").providers[1].importe, 500);
-  assert.equal(after.byYmd.get("2026-09-25").providers[1].importe, 50);
+  assert.equal(after.byYmd.get("2026-09-25").providers[1].importe, (230 / 23) * 5);
   assert.equal(after.byYmd.get("2026-09-25").providers[1].costo_kg, 5);
 
   const wb = new ExcelJS.Workbook();
@@ -96,8 +95,8 @@ test("el importe proyectado usa la venta del día y no los kilos de compra", asy
   const ws = wb.getWorksheet("CONTROL DE COMPRAS");
   assert.equal(ws.getCell(9, 3).value, unit);
   assert.equal(ws.getCell(10, 3).value, unit);
-  assert.equal(ws.getCell(9, 4).value, unit * venta25);
-  assert.equal(ws.getCell(10, 4).value, 449819);
+  assert.equal(ws.getCell(9, 4).value.formula, 'IF(AND(ISNUMBER(B9),ISNUMBER(C9)),B9*C9,"")');
+  assert.equal(ws.getCell(10, 4).value.formula, 'IF(AND(ISNUMBER(B10),ISNUMBER(C10)),B10*C10,"")');
 
   const emptySale = new ExcelJS.Workbook();
   await appendComprasWorksheet(emptySale, {
@@ -109,7 +108,7 @@ test("el importe proyectado usa la venta del día y no los kilos de compra", asy
   const blank = emptySale.getWorksheet("CONTROL DE COMPRAS");
   assert.equal(blank.getCell(9, 2).value, kgProj);
   assert.equal(blank.getCell(9, 3).value, unit);
-  assert.equal(blank.getCell(9, 4).value, null);
+  assert.equal(blank.getCell(9, 4).value.formula, 'IF(AND(ISNUMBER(B9),ISNUMBER(C9)),B9*C9,"")');
 });
 
 function sources(wb, plant, ventaCasa, price) {

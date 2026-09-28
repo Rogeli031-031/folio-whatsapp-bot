@@ -1,60 +1,57 @@
-﻿task_id: "FIX-COMPRAS-IMPORTE-VENTA-IGF-POR-PLANTA-048"
-title: "Reconstruir sobre main el importe por venta y el IGF Diario de la planta exportada"
+﻿task_id: "FIX-IGF-CORTE-PROYECCION-COMPRAS-IMPORTE-049"
+title: "Proyectar los huecos hasta el corte y calcular el importe de compras con sus propios kilos"
 status: "DONE_PENDING_REVIEW"
 mode: "IMPLEMENTATION"
 
 authorized_by: "HUMAN_APPROVER"
-authorized_at: "2026-09-25T13:32:00-06:00"
-human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-09-25"
-prior_task_review: "main está en d64d98fab41bed67f7c3fccc7de95fa3b72ba80a e incluye la 045 y la 047 por squash. La 046, 4182e0a3, queda descartada como rama de integración. Esta 048 reconstruye la funcionalidad sobre main, sin cherry-pick."
+authorized_at: "2026-09-27T20:54:00-06:00"
+human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-09-27"
+prior_task_review: "main está en 982fe9a15175d467d7312faa29e04c34471ed48d. La 048 queda sustituida en el importe de compras: ya no se multiplica por la venta pronosticada."
 
-objective: "Calcular el importe proyectado de CONTROL DE COMPRAS con el último costo real por kilo y la venta pronosticada del día, y generar una sola hoja IGF Diario de la planta exportada, con su venta, precio, compras y gastos."
+objective: "Hasta la fecha seleccionada, IGF Diario y la venta de la planta usan el dato real si existe y la proyección si falta. Después de esa fecha, IGF Diario deja B:AF vacías. El importe proyectado de cada proveedor es sus kilos por su costo."
 implementation: true
 code_changes: true
 schema_changes: false
 data_mutation: false
-base_sha: "d64d98fab41bed67f7c3fccc7de95fa3b72ba80a"
-branch: "fix/compras-importe-venta-igf-por-planta-048"
+base_sha: "982fe9a15175d467d7312faa29e04c34471ed48d"
+branch: "fix/igf-corte-proyeccion-compras-importe-049"
 
 in_scope:
-  - "lib/compras-excel.js: importe proyectado = último costo real por kilo × venta pronosticada del día"
-  - "lib/igf-diario-puebla.js: hoja, nombre visible, canales, precio, compras, gastos y corte de la planta exportada, reutilizando la identidad de hoja de la 047"
-  - "lib/dashboard-arr-forecast.js y server.js: reservar esa hoja primero y pasarle la venta y los gastos de la planta exportada"
-  - "test/compras-importe-venta-igf-por-planta-048.test.js"
-  - "pruebas existentes: ajustar solo aserciones que choquen de forma legítima con este contrato, y documentarlo"
-  - "docs/dev-loop/reports/FIX-COMPRAS-IMPORTE-VENTA-IGF-POR-PLANTA-048.md"
+  - "lib/dashboard-arr-forecast.js: hojaA, writeProvinciaCanalColumns y writeCanalPairCells proyectan el día solo cuando falta el dato real, usando el pronóstico que ya existe"
+  - "lib/compras-excel.js: importe proyectado = COMPRA KG × COSTO KG del mismo proveedor, con fórmula Excel en la fila proyectada"
+  - "lib/igf-diario-puebla.js: solo si hace falta conservar que el día de corte puede tener datos y los días posteriores quedan vacíos"
+  - "test/igf-corte-proyeccion-compras-importe-049.test.js"
+  - "prueba 048: actualizar solo las aserciones del importe por venta, y documentarlo"
+  - "docs/dev-loop/reports/FIX-IGF-CORTE-PROYECCION-COMPRAS-IMPORTE-049.md"
   - "docs/dev-loop/CURRENT_TASK.md: solo transición de status"
 out_of_scope:
-  - "cherry-pick o ancestro de la 046"
-  - "cambiar el promedio calendario de COMPRA KG o HG EN KILOS"
-  - "frontend-dashboard/.next, base de datos, Director IA conversacional, UI, PR, merge y despliegue"
+  - "identidad Querétaro/Queretaro, nombres de hoja, gastos por planta, permisos, Director IA, base de datos y otros módulos del dashboard"
+  - "un segundo motor de pronóstico o un parámetro nuevo de fecha"
+  - "frontend-dashboard/.next, PR, merge y despliegue"
 
 contracts_in_force:
   - "AGENTS.md y docs/dev-loop/LOOP_PROTOCOL.md"
-  - "COMPRA KG proyectado sigue el promedio calendario. COSTO KG proyectado es el último costo real por kilo. IMPORTE proyectado es ese costo por la venta pronosticada del día, en kilos. No se multiplica por los kilos de compra."
-  - "Un importe real prevalece. Sin costo real válido o sin venta pronosticada, el importe queda vacío. Una compra real completa del corte actualiza el costo de los días siguientes. Un importe proyectado no es antecedente real."
-  - "La hoja se reserva con el código técnico y se reutiliza si el nombre solo cambia por acento o mayúsculas, con la primitiva de la 047. El encabezado visible usa el nombre humano. Querétaro abre con una sola hoja IGF Diario Queretaro y PLANTA QUERÉTARO."
-  - "Los canales CASA y COMISIONISTA, el precio, las compras y los gastos son los de la planta exportada. Sin planta, no se crea IGF Diario."
-  - "Con corte 2026-09-24, el 24 conserva sus cálculos y del 25 al 30 la columna A conserva la fecha y B:AF quedan vacías. Semana y TOTAL MES no suman esas filas."
+  - "La fecha seleccionada es el último día que IGF Diario puede mostrar. Un día posterior deja la fecha en A y B:AF vacías, sin fórmulas. Semana y TOTAL MES no suman esos días."
+  - "En un día hasta el corte, el dato real capturado prevalece, incluido un cero real. Si no hay registro, se usa el pronóstico del día de semana: promVentaTotal, promVentaCasa y promVentaComisionista."
+  - "En compras, una fecha anterior al corte conserva la captura. Desde el corte, COMPRA KG sigue el promedio calendario y COSTO KG el último costo real. IMPORTE = kilos × costo de ese proveedor: D=B×C, H=F×G, L=J×K. El consolidado suma esos proveedores. No se usa la venta de la planta."
+  - "Sin costo real o sin kilos, el importe queda vacío. Un importe real capturado prevalece."
 
 acceptance_criteria:
-  - "PEMEX TUXPAN, corte 2026-09-24: el 23/09 conserva 19370 kg e importe 236938.17. El 25/09 y el 26/09 conservan la misma COMPRA KG y el mismo costo 236938.17/19370. Sus importes difieren porque la venta de cada día es distinta. El 25 se muestra como 473499.18 cuando su venta es el promedio de kilos; el 26 como 449819.00 cuando su venta es 449819 dividido entre ese costo."
-  - "Puebla: una sola IGF Diario Puebla, primera hoja, PLANTA PUEBLA, con su venta, precio, compras y gastos. Del 25 al 30, B:AF vacías."
-  - "Código Queretaro y nombre Querétaro: una sola hoja IGF Diario Queretaro, primera, sin una segunda pestaña acentuada. Encabezado PLANTA QUERÉTARO. Venta, precio y gastos de Querétaro. Futuros vacíos. Igual después de reabrir."
-  - "Otra planta distinta, Acapulco o Tehuacán, genera su propia hoja y no la de Puebla ni la de Querétaro."
-  - "Sin plantCode no aparece IGF Diario."
-  - "4182e0a3 no es ancestro de la rama."
+  - "Corte 2026-09-27 y último real el 25: Acapulco y Tehuacán muestran el 25 real, el 26 y el 27 proyectados, y del 28 al 30 solo la fecha. CASA y COMISIONISTA siguen la misma regla. Al reabrir el XLSX se conserva."
+  - "Corte 2026-09-25: del 26 al 30, B:AF vacías."
+  - "Compras, corte 2026-09-25: una fila proyectada tiene D=B*C, H=F*G y L=J*K, cada proveedor con su propio importe. El histórico no cambia. El corte proyecta si no hay captura. Un real prevalece. Sin costo, costo e importe vacíos. El consolidado suma B+F+J y D+H+L."
 
 validation:
-  - "Probar importe, Puebla, Querétaro/Queretaro, otra planta y el libro sin planta. Guardar y reabrir."
-  - "Ejecutar 048, las pruebas de Compras 020 a 030 que existan en main y las de IGF Diario Puebla 036 a 047 que existan en main; git diff --check; git diff d64d98fa; comprobar que 4182e0a3 no es ancestro."
+  - "Probar Acapulco y Tehuacán con corte 27 y corte 25. Guardar y reabrir."
+  - "Probar la fila proyectada de compras y el consolidado. Guardar y reabrir."
+  - "Ejecutar 049, 048, 047, 045, 044 a 036, 030, 026, 024, 022, 021 y 020; git diff --check."
 
 allowed_actions:
-  - "crear la rama 048 desde base_sha en un árbol aislado"
-  - "editar solo in_scope, probar, reportar, commit y push solo a la rama 048"
+  - "crear la rama 049 desde base_sha en un árbol aislado"
+  - "editar solo in_scope, probar, reportar, commit y push solo a la rama 049"
 forbidden_actions:
   - "modificar authorized_by, authorized_at o human_authorization"
-  - "cherry-pick de la 046; usar git add .; tocar .next; abrir PR; fusionar o desplegar"
+  - "reutilizar una rama antigua; usar git add .; tocar .next; abrir PR; fusionar o desplegar"
 
 max_attempts: 1
-result_report_path: "docs/dev-loop/reports/FIX-COMPRAS-IMPORTE-VENTA-IGF-POR-PLANTA-048.md"
+result_report_path: "docs/dev-loop/reports/FIX-IGF-CORTE-PROYECCION-COMPRAS-IMPORTE-049.md"

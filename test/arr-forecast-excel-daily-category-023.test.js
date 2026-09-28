@@ -196,7 +196,7 @@ describe("IMPL-ARR-FORECAST-EXCEL-DAILY-CATEGORY-023 toneladas y canal", () => {
       PLANTS
     );
     assert.equal(out.byFecha.get("2026-09-01").ACAPULCO.CASA, 1000);
-    assert.equal(out.byFecha.get("2026-09-01").ACAPULCO.COMISIONISTA, 0);
+    assert.equal(out.byFecha.get("2026-09-01").ACAPULCO.COMISIONISTA, null);
     assert.equal(out.unclassifiedKg, 5700);
   });
 
