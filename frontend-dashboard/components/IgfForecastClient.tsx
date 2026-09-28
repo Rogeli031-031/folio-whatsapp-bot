@@ -9,6 +9,7 @@ import {
   setTokenInStorage,
   getRoleFromDashboardToken,
   tokenCanAccessCompras,
+  tokenHasGlobalPlantScope,
 } from "@/lib/auth";
 import { buildIgfForecastAccionesHref } from "@/lib/igf-to-acciones-href";
 import {
@@ -1058,6 +1059,10 @@ export function IgfForecastContent() {
                       onClick={() => {
                         setForecastExcelMsg(null);
                         const todas = !plantaFilter;
+                        if (todas && !tokenHasGlobalPlantScope(token)) {
+                          setForecastExcelMsg("No tienes alcance global para exportar IGF Diario Todas.");
+                          return;
+                        }
                         const url = getDashboardExcelDownloadUrl(
                           token,
                           igfForecast.year,

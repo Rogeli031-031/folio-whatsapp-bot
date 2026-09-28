@@ -59,6 +59,15 @@ export function decodeDashboardTokenPayload(token: string): Record<string, unkno
   }
 }
 
+/** Alcance de planta global del dashboard: ZP, AD y CF_CDMX. No usa plantas_permitidas. */
+export function tokenHasGlobalPlantScope(token: string | null | undefined): boolean {
+  if (!token) return false;
+  const payload = decodeDashboardTokenPayload(token);
+  const raw = payload && typeof payload.role === "string" ? payload.role : "";
+  const role = raw.replace(/\s/g, "").toUpperCase();
+  return role === "ZP" || role === "AD" || role === "CF_CDMX";
+}
+
 export function getRoleFromDashboardToken(token: string): string | null {
   if (typeof window === "undefined") return null;
   const payload = decodeDashboardTokenPayload(token);

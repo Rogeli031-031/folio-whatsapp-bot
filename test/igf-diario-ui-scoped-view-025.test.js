@@ -88,7 +88,7 @@ function scopedSheet() {
 describe("IMPL-IGF-DIARIO-UI-SCOPED-VIEW-025 UI", () => {
   const mainAt = CLIENT.indexOf("<main");
   const topBar = CLIENT.slice(0, mainAt);
-  const header = CLIENT.slice(CLIENT.indexOf("<span>Planta:</span>"), CLIENT.indexOf("<span>Planta:</span>") + 2200);
+  const header = CLIENT.slice(CLIENT.indexOf("<span>Planta:</span>"), CLIENT.indexOf("<span>Planta:</span>") + 2500);
 
   it("A) la barra superior no tiene Descargar Excel (Forecast)", () => {
     assert.doesNotMatch(topBar, /Descargar Excel \(Forecast\)/);
