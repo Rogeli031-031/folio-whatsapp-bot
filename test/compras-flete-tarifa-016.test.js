@@ -169,7 +169,7 @@ function fakeApp() {
     post: add("POST"),
     patch: add("PATCH"),
     delete: add("DELETE"),
-    async invoke(method, url, { query = {}, body = {}, auth = { actor_id: 9, plantas_permitidas: [1] } } = {}) {
+    async invoke(method, url, { query = {}, body = {}, auth = { actor_id: 9, plantas_permitidas: [1], permisos: { acceso_compras: true } } } = {}) {
       const [pathname] = url.split("?");
       const hit = routes.find((r) => r.method === method && r.path === pathname);
       if (!hit) throw new Error(`no route ${method} ${pathname}`);
@@ -304,7 +304,7 @@ describe("016 compras TARIFA flete", () => {
     const pemex = byName(month, "PEMEX TUXPAN");
     const res = await app.invoke("POST", "/api/compras/flete-tarifa", {
       body: { planta_id: 2, proveedor_id: pemex.id, year: 2026, month: 9, tarifa: 1.23 },
-      auth: { actor_id: 1, plantas_permitidas: [1] },
+      auth: { actor_id: 1, plantas_permitidas: [1], permisos: { acceso_compras: true } },
     });
     assert.equal(res.status, 403);
   });

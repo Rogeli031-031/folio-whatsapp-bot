@@ -206,7 +206,7 @@ function fakeApp() {
     post: add("POST"),
     patch: add("PATCH"),
     delete: add("DELETE"),
-    async invoke(method, url, { query = {}, body = {}, auth = { actor_id: 9, plantas_permitidas: [1] } } = {}) {
+    async invoke(method, url, { query = {}, body = {}, auth = { actor_id: 9, plantas_permitidas: [1], permisos: { acceso_compras: true } } } = {}) {
       const [pathname] = url.split("?");
       const hit = routes.find((r) => r.method === method && matchPath(r.path, pathname));
       if (!hit) throw new Error(`no route ${method} ${pathname}`);
@@ -541,7 +541,7 @@ describe("013 compras — rutas HTTP", () => {
 
     const denied = await app.invoke("GET", "/api/compras", {
       query: { planta_id: "2", year: "2026", month: "9" },
-      auth: { actor_id: 1, plantas_permitidas: [1] },
+      auth: { actor_id: 1, plantas_permitidas: [1], permisos: { acceso_compras: true } },
     });
     assert.equal(denied.status, 403);
     assert.equal(denied.payload.error, compras.USER_ERRORS.PLANT);
@@ -567,7 +567,7 @@ describe("013 compras — rutas HTTP", () => {
       `/api/compras/${created.payload.purchase.id}/factura/${factura.payload.document.id}/download`,
       {
         query: { planta_id: "1" },
-        auth: { actor_id: 2, plantas_permitidas: [99] },
+        auth: { actor_id: 2, plantas_permitidas: [99], permisos: { acceso_compras: true } },
       }
     );
     assert.equal(forbiddenDl.status, 403);
@@ -630,7 +630,7 @@ describe("013 compras — rutas HTTP", () => {
 
     const cross = await app.invoke("POST", `/api/compras/${c2.purchase.id}/factura`, {
       body: { planta_id: 1, file_name: "f.pdf", fileBase64: pdfBuf().toString("base64") },
-      auth: { actor_id: 1, plantas_permitidas: [1] },
+      auth: { actor_id: 1, plantas_permitidas: [1], permisos: { acceso_compras: true } },
     });
     assert.equal(cross.status, 403);
     assert.equal(calls.length, 0);
@@ -659,7 +659,7 @@ describe("013 compras — rutas HTTP", () => {
     const forbidden = await app.invoke(
       "DELETE",
       `/api/compras/${c.purchase.id}/factura/${withKey.payload.document.id}`,
-      { query: { planta_id: "1" }, auth: { actor_id: 2, plantas_permitidas: [99] } }
+      { query: { planta_id: "1" }, auth: { actor_id: 2, plantas_permitidas: [99], permisos: { acceso_compras: true } } }
     );
     assert.equal(forbidden.status, 403);
     assert.equal(deleted.length, 0);
@@ -811,7 +811,7 @@ describe("013 compras — rutas HTTP", () => {
     const app = mount(db, { upload: async () => {}, del: async () => {}, s3: false });
     const denied = await app.invoke("GET", "/api/compras/excel", {
       query: { planta_id: "2", year: "2026", month: "9" },
-      auth: { actor_id: 1, plantas_permitidas: [1] },
+      auth: { actor_id: 1, plantas_permitidas: [1], permisos: { acceso_compras: true } },
     });
     assert.equal(denied.status, 403);
     const ok = await app.invoke("GET", "/api/compras/excel", {

@@ -156,9 +156,9 @@ test("Puebla, Querétaro y Acapulco tienen una sola hoja IGF de su planta", asyn
   assert.equal(p.getCell(2, 1).value, "PLANTA PUEBLA");
   assert.equal(p.getCell(3, 13).value, 1034293);
   assert.equal(p.getCell(3, 20).value, 2998518);
-  // 050: la venta sale de la columna total (B), no de CASA (H). El 25 ya no queda vacío.
-  assert.match(String(p.getCell(6, 2).value.formula), /B2/);
-  assert.doesNotMatch(String(p.getCell(6, 2).value.formula), /H2\+/);
+  // 051: VENTA KG es CASA + COMISIONISTA (H+I), no el total redondeado de B. El 25 sigue lleno.
+  assert.match(String(p.getCell(6, 2).value.formula), /H2\+.*I2\)\*1000/);
+  assert.doesNotMatch(String(p.getCell(6, 2).value.formula), /B2\*1000/);
   assert.equal(typeof p.getCell(36, 2).value, "object");
   assert.equal(typeof p.getCell(36, 32).value, "object");
 
@@ -180,7 +180,7 @@ test("Puebla, Querétaro y Acapulco tienen una sola hoja IGF de su planta", asyn
   assert.equal(q.getCell(2, 1).value, "PLANTA QUERÉTARO");
   assert.equal(q.getCell(3, 13).value, 800);
   assert.equal(q.getCell(3, 20).value, 900);
-  assert.match(String(q.getCell(6, 2).value.formula), /B2/);
+  assert.match(String(q.getCell(6, 2).value.formula), /H2\+.*I2\)\*1000/);
   assert.doesNotMatch(String(q.getCell(6, 2).value.formula), /PUEBLA/);
   assert.match(String(q.getCell(6, 3).value.formula), /PRECIO/);
   assert.equal(q.getCell(36, 1).value instanceof Date, true);
@@ -202,7 +202,7 @@ test("Puebla, Querétaro y Acapulco tienen una sola hoja IGF de su planta", asyn
   assert.equal(aca.worksheets[0].name, "IGF Diario Acapulco");
   assert.equal(a.getCell(2, 1).value, "PLANTA ACAPULCO");
   assert.equal(a.getCell(3, 13).value, 11);
-  assert.match(String(a.getCell(6, 2).value.formula), /B2/);
+  assert.match(String(a.getCell(6, 2).value.formula), /H2\+.*I2\)\*1000/);
   assert.doesNotMatch(String(a.getCell(6, 2).value.formula), /PUEBLA|QUERETARO/);
 });
 

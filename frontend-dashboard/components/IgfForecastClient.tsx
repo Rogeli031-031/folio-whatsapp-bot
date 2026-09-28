@@ -8,6 +8,7 @@ import {
   getTokenFromStorage,
   setTokenInStorage,
   getRoleFromDashboardToken,
+  tokenCanAccessCompras,
 } from "@/lib/auth";
 import { buildIgfForecastAccionesHref } from "@/lib/igf-to-acciones-href";
 import {
@@ -1022,12 +1023,14 @@ export function IgfForecastContent() {
             Usuarios
           </button>
         )}
-        <Link
-          href={comprasPageHref}
-          className="inline-flex items-center gap-2 rounded border border-cyan-500/70 bg-slate-900 px-4 py-2 text-sm font-medium text-cyan-100 hover:bg-slate-800"
-        >
-          Compras
-        </Link>
+        {token && tokenCanAccessCompras(token) && (
+          <Link
+            href={comprasPageHref}
+            className="inline-flex items-center gap-2 rounded border border-cyan-500/70 bg-slate-900 px-4 py-2 text-sm font-medium text-cyan-100 hover:bg-slate-800"
+          >
+            Compras
+          </Link>
+        )}
       </div>
       <main className={plantaFilter ? "flex-1 p-4 flex flex-col" : "flex-1 p-4"}>
         <section className={`rounded-lg border border-slate-700 bg-slate-800/60 p-4 ${plantaFilter ? "flex-shrink-0" : ""}`}>

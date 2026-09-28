@@ -1,6 +1,6 @@
-﻿task_id: "FIX-IGF-DIARIO-CONTINUAR-PROYECCION-DESDE-CORTE-050"
+﻿task_id: "FIX-IGF-VENTA-PRECISA-PERMISO-COMPRAS-WHATSAPP-051"
 
-title: "IGF Diario sigue hasta fin de mes y toma la venta total de la planta"
+title: "IGF Diario usa CASA + COMISIONISTA y Compras obtiene permiso específico y comando comprasT"
 
 status: "DONE_PENDING_REVIEW"
 
@@ -8,13 +8,13 @@ mode: "IMPLEMENTATION"
 
 authorized_by: "HUMAN_APPROVER"
 
-authorized_at: "2026-09-27T21:49:00-06:00"
+authorized_at: "2026-09-28T08:16:00-06:00"
 
-human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-09-27"
+human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-09-28"
 
-prior_task_review: "main está en 164310afb26466424c64c1a03139f11a94b93162. La 049 vaciaba IGF Diario después del corte. Esa regla queda sustituida: el corte es el primer día proyectado y la hoja se llena hasta el último día del mes."
+prior_task_review: "main está en 83fc6bf4db77351b1bf7ecb477d44f6b041af1ee. La 050 quedó integrada. Se conserva su contrato de proyección desde el corte hasta fin de mes, pero se corrige únicamente la fuente de VENTA KG: la columna total de Provincia Venta Diaria está redondeada y debe sustituirse por CASA + COMISIONISTA."
 
-objective: "IGF Diario se llena hasta fin de mes. Antes del corte usa datos reales y desde el corte, incluido ese día, usa la proyección que ya está en las hojas fuente. La venta en kilos sale de la columna total de la planta, no de CASA más COMISIONISTA."
+objective: "Corregir VENTA KG de IGF Diario para usar (CASA + COMISIONISTA) * 1000 con la precisión de las columnas de canal. Crear el permiso específico acceso_compras, aplicarlo al módulo Compras y habilitar el comando WhatsApp comprasT para abrir Compras con el alcance correspondiente al usuario."
 
 implementation: true
 
@@ -24,87 +24,110 @@ schema_changes: false
 
 data_mutation: false
 
-base_sha: "164310afb26466424c64c1a03139f11a94b93162"
+base_sha: "83fc6bf4db77351b1bf7ecb477d44f6b041af1ee"
 
-branch: "fix/igf-diario-continuar-proyeccion-desde-corte-050"
+branch: "fix/igf-venta-permiso-compras-whatsapp-051"
 
 in_scope:
-  - "lib/igf-diario-puebla.js: quitar el corte que deja B:AF vacías; fecha < corte es real con el carry histórico; fecha >= corte es proyectado y lee las hojas fuente de ese día, sin carry adicional; VENTA KG referencia la columna total de la planta por 1000"
-  - "test/igf-diario-continuar-proyeccion-desde-corte-050.test.js"
-  - "pruebas 045 y 049: actualizar solo las aserciones que exigían B:AF vacías después del corte, documentando que ese contrato quedó sustituido"
-  - "docs/dev-loop/reports/FIX-IGF-DIARIO-CONTINUAR-PROYECCION-DESDE-CORTE-050.md"
+  - "lib/igf-diario-puebla.js"
+  - "lib/usuario-permisos.js"
+  - "lib/compras-dashboard.js"
+  - "server.js"
+  - "frontend-dashboard/components/IgfForecastClient.tsx"
+  - "frontend-dashboard/components/ComprasClient.tsx"
+  - "frontend-dashboard/lib/auth.ts solo si hace falta resolver acceso_compras en frontend sin romper tokens existentes"
+  - "pruebas nuevas y regresiones estrictamente relacionadas"
+  - "docs/dev-loop/reports/FIX-IGF-VENTA-PRECISA-PERMISO-COMPRAS-WHATSAPP-051.md"
   - "docs/dev-loop/CURRENT_TASK.md: solo transición de status"
 
 out_of_scope:
-  - "lib/compras-excel.js"
-  - "server.js"
-  - "frontend"
-  - "motor de Pronóstico"
-  - "Provincia Venta Diaria"
-  - "Provincia Comisiones"
-  - "PRECIO"
-  - "fórmula de Compras"
-  - "base de datos"
+  - "cambiar el motor de Pronóstico"
+  - "cambiar Provincia Venta Diaria"
+  - "cambiar Provincia Comisiones"
+  - "cambiar CONTROL DE COMPRAS"
+  - "cambiar fórmulas o captura de compras"
+  - "cambiar PRECIO"
+  - "cambiar la semántica del corte de la 050"
+  - "crear roles nuevos"
+  - "cambiar permisos no relacionados con Compras"
+  - "modificar base de datos o schema"
   - "Director IA"
-  - "un segundo motor de pronóstico"
   - "frontend-dashboard/.next"
-  - "PR, merge y despliegue"
+  - "PR, merge o despliegue"
 
 contracts_in_force:
   - "AGENTS.md y docs/dev-loop/LOOP_PROTOCOL.md"
-  - "fecha < corte es real"
-  - "fecha >= corte es proyectado"
-  - "el día de corte entra en la proyección"
-  - "IGF Diario se llena hasta el último día del mes"
-  - "Semana y TOTAL MES incluyen reales y proyectados"
-  - "VENTA KG proviene de la columna total de la planta en Provincia Venta Diaria multiplicada por 1000"
-  - "VENTA KG no se reconstruye con CASA más COMISIONISTA"
-  - "PRECIO proviene de PRECIO"
-  - "COSTO KG, FLETE KG y HG provienen de CONTROL DE COMPRAS"
-  - "C&D proviene de Provincia Comisiones"
-  - "desde el corte no hay carry histórico adicional"
-  - "el carry amarillo histórico se conserva solo cuando fecha < corte"
+  - "La 050 sigue vigente: fecha < corte es real y fecha >= corte es proyectado; IGF Diario continúa hasta fin de mes."
+  - "VENTA KG de IGF Diario NO usa la columna total redondeada de la planta."
+  - "VENTA KG = (CASA + COMISIONISTA) * 1000 de Provincia Venta Diaria para la misma planta y fecha."
+  - "Las columnas CASA y COMISIONISTA se localizan dinámicamente por planta mediante la equivalencia existente; no hardcodear J/K."
+  - "El nuevo permiso se llama acceso_compras y debe controlar UI, APIs y comando WhatsApp."
+  - "No basta ocultar el botón: un usuario sin acceso_compras debe recibir 403 en /api/compras."
+  - "Los overrides explícitos de permisos_json continúan prevaleciendo sobre defaults."
+  - "comprasT es case-insensitive y solo funciona para usuarios con acceso_compras."
+
+roles_with_default_compras:
+  - "GG"
+  - "GO / Gerente Operaciones"
+  - "Director ZP usando las claves/aliases ya reconocidas por el sistema: ZP, DIR_ZP, DIRZP, DIRECTOR_ZP, DZP y equivalentes existentes"
+  - "Contralor CDMX usando CF_CDMX/CDMX según la clave existente"
+  - "AD cuando la clave real sea Asistente Dirección"
+  - "si existen en el catálogo las claves DZC o AZP mencionadas por el aprobador, deben considerarse equivalentes para acceso_compras; no crear esos roles si no existen"
+
+roles_without_default_compras:
+  - "GA genérico no recibe Compras solamente por ser GA"
+  - "GV"
+  - "SG"
+  - "SEH"
+  - "cualquier otro rol no autorizado, salvo override individual explícito"
 
 acceptance_criteria:
-  - "Puebla, corte 2026-09-25: 25=42000 kg, 26=49500, 27=21500, 28=57000, 29=61500 y 30=45500"
-  - "No hay filas vacías después del corte"
-  - "PRECIO, COSTO KG, FLETE KG, C&D y HG del 25 al 30 referencian las hojas fuente"
-  - "Si el total de Puebla es 49.500 y CASA más COMISIONISTA es otro número, IGF Diario usa 49500 kg"
-  - "Acapulco usa su propia columna total"
-  - "Queretaro/Querétaro o Tehuacan/Tehuacán usa su propia columna total mediante la equivalencia existente"
-  - "Corte 2026-09-27: 1 al 26 real y 27 al 30 proyectado"
-  - "Semana 4 incluye 21 al 27"
-  - "Semana 5 incluye 28 al 30"
-  - "TOTAL MES incluye 1 al 30"
+  - "IGF Diario Tehuacán: si Provincia Venta Diaria J=14.114 y K=25.642, VENTA KG debe ser (14.114+25.642)*1000 = 39756 kg y no el total redondeado de la columna B."
+  - "La fórmula debe referenciar las columnas CASA y COMISIONISTA correctas de la planta exportada."
+  - "Puebla, Acapulco, Tehuacán, Querétaro, San Luis y Morelos siguen resolviendo sus propios canales."
+  - "El contrato de la 050 continúa: el día del corte y los posteriores siguen proyectados hasta fin de mes."
+  - "PERMISOS_CATALOGO incluye acceso_compras con etiqueta Acceso a Compras."
+  - "UsuariosAdminModal muestra automáticamente el nuevo checkbox porque consume el catálogo del backend."
+  - "GG, GO y perfiles corporativos autorizados tienen acceso_compras por default; un override false lo puede quitar."
+  - "Un usuario no autorizado no puede consultar, crear, editar, borrar, subir factura ni descargar Excel de /api/compras."
+  - "El botón Compras de IGF Forecast solo aparece cuando el usuario tiene acceso efectivo."
+  - "La página Compras rechaza o muestra acceso no autorizado cuando falta el permiso."
+  - "comprasT devuelve un enlace firmado válido por 20 horas."
+  - "Para GG/GO con planta asignada, comprasT abre Compras directamente en su planta."
+  - "Para perfiles corporativos/globales autorizados y sin planta, comprasT abre Compras sin forzar una planta para que puedan seleccionar dentro de su alcance."
+  - "Un usuario de una planta no puede cambiar planta_id en la URL/API para entrar a otra planta."
+  - "GO puede ejecutar comprasT a pesar de la restricción especial nivel 6."
+  - "Un usuario sin acceso_compras recibe un mensaje claro de WhatsApp indicando que no tiene permiso."
 
 validation:
-  - "Probar Puebla con corte 25"
-  - "Probar Puebla con corte 27"
-  - "Probar caso donde CASA más COMISIONISTA no coincide con total planta"
-  - "Probar Acapulco"
-  - "Probar una planta con alias"
-  - "Ejecutar 050, 049, 048, 047, 045 y 044 a 036"
-  - "Ejecutar git diff --check"
+  - "Crear prueba de precisión IGF donde el total redondeado difiera de CASA+COMISIONISTA."
+  - "Probar Puebla, Tehuacán y una planta con alias."
+  - "Probar acceso_compras defaults y overrides true/false."
+  - "Probar todas las rutas /api/compras con permiso true y false."
+  - "Probar alcance de planta para GG/GO."
+  - "Probar alcance global para ZP/AD/CF_CDMX o aliases reales equivalentes."
+  - "Probar comprasT con GG, GO, perfil global autorizado y usuario sin permiso."
+  - "Probar que GO no sea bloqueado por la restricción de nivel 6."
+  - "Ejecutar regresión 050, 049, 048 y pruebas existentes de compras-dashboard."
+  - "Ejecutar git diff --check."
 
 allowed_actions:
-  - "crear la rama 050 desde base_sha en un árbol aislado"
+  - "crear la rama 051 desde base_sha en árbol aislado"
   - "editar solo archivos in_scope"
-  - "ejecutar pruebas"
+  - "crear pruebas"
   - "crear reporte"
   - "commit"
-  - "push solo a la rama 050"
+  - "push solamente a la rama 051"
 
 forbidden_actions:
-  - "modificar authorized_by"
-  - "modificar authorized_at"
-  - "modificar human_authorization"
-  - "reutilizar una rama antigua"
   - "usar git add ."
   - "tocar frontend-dashboard/.next"
+  - "crear roles o modificar public.roles"
+  - "hacer migraciones o mutaciones de datos"
   - "abrir PR"
-  - "fusionar"
+  - "hacer merge"
   - "desplegar"
 
 max_attempts: 1
 
-result_report_path: "docs/dev-loop/reports/FIX-IGF-DIARIO-CONTINUAR-PROYECCION-DESDE-CORTE-050.md"
+result_report_path: "docs/dev-loop/reports/FIX-IGF-VENTA-PRECISA-PERMISO-COMPRAS-WHATSAPP-051.md"

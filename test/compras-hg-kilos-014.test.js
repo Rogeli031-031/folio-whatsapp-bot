@@ -140,7 +140,7 @@ function fakeApp() {
     post: add("POST"),
     patch: add("PATCH"),
     delete: add("DELETE"),
-    async invoke(method, url, { query = {}, body = {}, auth = { actor_id: 9, plantas_permitidas: [1] } } = {}) {
+    async invoke(method, url, { query = {}, body = {}, auth = { actor_id: 9, plantas_permitidas: [1], permisos: { acceso_compras: true } } } = {}) {
       const [pathname] = url.split("?");
       const hit = routes.find((r) => r.method === method && r.path === pathname);
       if (!hit) throw new Error(`no route ${method} ${pathname}`);
@@ -291,12 +291,12 @@ describe("014 compras HG EN KILOS", () => {
     const app = mount(db);
     const denied = await app.invoke("POST", "/api/compras/hg", {
       body: { planta_id: 2, fecha: "2026-09-01", hg_kilos: 10 },
-      auth: { actor_id: 1, plantas_permitidas: [1] },
+      auth: { actor_id: 1, plantas_permitidas: [1], permisos: { acceso_compras: true } },
     });
     assert.equal(denied.status, 403);
     const del = await app.invoke("DELETE", "/api/compras/hg", {
       query: { planta_id: "2", fecha: "2026-09-01" },
-      auth: { actor_id: 1, plantas_permitidas: [1] },
+      auth: { actor_id: 1, plantas_permitidas: [1], permisos: { acceso_compras: true } },
     });
     assert.equal(del.status, 403);
     assert.equal(db.hg.length, 0);

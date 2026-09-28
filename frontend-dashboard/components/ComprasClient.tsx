@@ -3,7 +3,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { getTokenFromStorage, parseTokenFromQuery, setTokenInStorage } from "@/lib/auth";
+import { getTokenFromStorage, parseTokenFromQuery, setTokenInStorage, tokenCanAccessCompras } from "@/lib/auth";
 import {
   createComprasProveedor,
   createComprasPurchase,
@@ -120,6 +120,7 @@ export function ComprasClient() {
   const searchParams = useSearchParams();
   const [token, setToken] = useState<string | null>(null);
   const [unauthorized, setUnauthorized] = useState(false);
+  const [sinPermiso, setSinPermiso] = useState(false);
   const [plantas, setPlantas] = useState<{ id: number; nombre: string }[]>([]);
   const [plantaId, setPlantaId] = useState<number | null>(null);
   const now = useMemo(() => new Date(), []);
@@ -143,9 +144,11 @@ export function ComprasClient() {
       setTokenInStorage(t);
       setToken(t);
       setUnauthorized(false);
+      setSinPermiso(!tokenCanAccessCompras(t));
     } else {
       setToken(null);
       setUnauthorized(true);
+      setSinPermiso(false);
     }
   }, [searchParams]);
 
@@ -162,13 +165,24 @@ export function ComprasClient() {
     localStorage.setItem(COMPRAS_SHEET_KEY, JSON.stringify({ plantaId, year, month }));
   }, [sheetReady, plantaId, year, month]);
 
+  const requestedPlantaId = useMemo(() => {
+    const n = Number(searchParams.get("planta_id"));
+    return Number.isInteger(n) && n > 0 ? n : null;
+  }, [searchParams]);
+
   const loadPlantas = useCallback(async () => {
-    if (!token || !sheetReady) return;
+    if (!token || !sheetReady || sinPermiso) return;
     try {
       const r = await fetchPlantas(token);
       const list = filterComprasPlantasMenu(r.plantas || []);
       setPlantas(list);
+      if (requestedPlantaId && !list.some((p) => p.id === requestedPlantaId)) {
+        setPlantaId(null);
+        setError("No tienes acceso a esta planta.");
+        return;
+      }
       setPlantaId((cur) => {
+        if (requestedPlantaId && list.some((p) => p.id === requestedPlantaId)) return requestedPlantaId;
         if (cur && list.some((p) => p.id === cur)) return cur;
         if (savedPlantaId && list.some((p) => p.id === savedPlantaId)) return savedPlantaId;
         return list[0]?.id ?? null;
@@ -178,7 +192,7 @@ export function ComprasClient() {
       if (msg.includes("401") || msg.toLowerCase().includes("token")) setUnauthorized(true);
       setError("No tienes acceso a esta planta.");
     }
-  }, [token, sheetReady, savedPlantaId]);
+  }, [token, sheetReady, savedPlantaId, sinPermiso, requestedPlantaId]);
 
   useEffect(() => {
     void loadPlantas();
@@ -265,6 +279,14 @@ export function ComprasClient() {
     return (
       <div className="flex min-h-screen items-center justify-center p-6">
         <p className="text-slate-300">Inicia sesión en el dashboard para abrir Compras.</p>
+      </div>
+    );
+  }
+
+  if (sinPermiso) {
+    return (
+      <div className="flex min-h-screen items-center justify-center p-6">
+        <p className="text-slate-300">No tienes permiso de Compras.</p>
       </div>
     );
   }

@@ -107,9 +107,9 @@ test("la hoja queda primera y liga cada fecha, incluido el 6 y el día posterior
   const r23 = rowByDate(ws, 2026, 9, 23);
   const r30 = rowByDate(ws, 2026, 9, 30);
   assert.equal(rowByDate(ws, 2026, 9, 31), null);
-  // 050: VENTA KG es la columna total de la planta × 1000, no CASA + COMISIONISTA.
-  assert.match(formulaOf(ws.getCell(r1, 2)), /'Provincia Venta Diaria'!B2\*1000/);
-  assert.doesNotMatch(formulaOf(ws.getCell(r1, 2)), /L2\+/);
+  // 051: VENTA KG es CASA + COMISIONISTA (L+M), no el total redondeado de B.
+  assert.match(formulaOf(ws.getCell(r1, 2)), /L2\+.*M2\)\*1000/);
+  assert.doesNotMatch(formulaOf(ws.getCell(r1, 2)), /B2\*1000/);
   assert.equal(formulaOf(ws.getCell(r1, 2)).includes("!H2"), false);
   assert.equal(formulaOf(ws.getCell(r6, 3)), 'IF(AND(ISNUMBER(PRECIO!B7),ISNUMBER(PRECIO!B7)),PRECIO!B7,"")');
   assert.match(formulaOf(ws.getCell(r6, 6)), /'CONTROL DE COMPRAS'!O13/);
