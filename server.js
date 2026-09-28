@@ -8188,8 +8188,7 @@ async function getDicfAttachmentBuffer(client, attachmentRow) {
 
 function assertDashboardPlantaAccessForActionRegister(req, plantaId) {
   // Action Register: ZP/AD/CF_CDMX acceso global por role (sin lista de plantas en el JWT).
-  const roleNorm = dashboardAuthRoleNorm(req.dashboardAuth);
-  if (roleNorm === "ZP" || roleNorm === "AD" || roleNorm === "CF_CDMX") return true;
+  if (dashboardHasGlobalPlantScope(req.dashboardAuth)) return true;
   const allowed = new Set((req.dashboardAuth.plantas_permitidas || []).map((x) => Number(x)).filter(Number.isFinite));
   return allowed.has(Number(plantaId));
 }
@@ -11162,6 +11161,25 @@ function dashboardBlockDicfAccionesRole(req, res) {
 function dashboardAuthRoleNorm(auth) {
   if (!auth || auth.role == null || auth.role === "") return "";
   return String(auth.role).replace(/\s/g, "").toUpperCase();
+}
+
+function dashboardHasGlobalPlantScope(auth) {
+  const role = dashboardAuthRoleNorm(auth);
+  return role === "ZP" || role === "AD" || role === "CF_CDMX";
+}
+
+function igfDiarioTodasRequestBlock(req) {
+  const igfDiarioTodas = /^(1|true|yes)$/i.test(String((req.query && req.query.igf_diario_todas) || "").trim());
+  if (!igfDiarioTodas) return null;
+  const requirePlant = /^(1|true|yes)$/i.test(String((req.query && req.query.require_plant) || "").trim());
+  const plantCodeRaw = ((req.query && req.query.plant_code) || "").toString().trim();
+  if (requirePlant || plantCodeRaw) {
+    return { status: 400, error: "IGF Diario Todas no puede combinarse con una planta individual." };
+  }
+  if (!dashboardHasGlobalPlantScope(req.dashboardAuth)) {
+    return { status: 403, error: "No tienes alcance global para exportar IGF Diario Todas." };
+  }
+  return null;
 }
 
 function isDashboardGV(req) {
@@ -15445,6 +15463,8 @@ app.get("/api/arr/annual-category-analysis", dashboardAuthMiddleware, async (req
 app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) => {
   if (dashboardBlockGAFinancialKpis(req, res)) return;
   if (dashboardBlockGVForbidden(req, res)) return;
+  const todasBlock = igfDiarioTodasRequestBlock(req);
+  if (todasBlock) return res.status(todasBlock.status).json({ error: todasBlock.error });
   const requirePlant = /^(1|true|yes)$/i.test(String(req.query.require_plant || "").trim());
   const plantCodeRaw = (req.query.plant_code || "").toString().trim();
   if (requirePlant && !plantCodeRaw) {
@@ -15580,17 +15600,17 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
       proyeccionCatSubForecast,
       fechaCorte: uploadDay || proyeccionHasta || null,
     };
+    const importeArrMini = (value) => {
+      if (value == null || value === "") return null;
+      const n = Number(value);
+      return Number.isFinite(n) ? n : null;
+    };
     if (plantCode) {
       const mini = await computeIgfForecastMiniPayload(client, igfForecast, year, month, uploadDay);
       const plantMini = (mini && mini.rows ? mini.rows : []).find((row) =>
         dashboardArrForecast.plantsEquivalent(row && row.plant_code, plantCode)
         || dashboardArrForecast.plantsEquivalent(row && row.empresa, plantCode)
       );
-      const importeArrMini = (value) => {
-        if (value == null || value === "") return null;
-        const n = Number(value);
-        return Number.isFinite(n) ? n : null;
-      };
       const corporativos = importeArrMini(plantMini && plantMini.corporativos);
       const operativos = importeArrMini(plantMini && plantMini.operativos);
       if (corporativos != null || operativos != null) {
@@ -15605,6 +15625,31 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
     }
     if (Array.isArray(precioDiario)) {
       forecastOpts.precioDiario = precioDiario;
+    }
+    const igfDiarioTodas = /^(1|true|yes)$/i.test(String(req.query.igf_diario_todas || "").trim());
+    if (!requirePlant && igfDiarioTodas) {
+      const plants = await dashboardArrForecast.listIgfDiarioProvinciaPlants(client, year, month);
+      const miniAll = await computeIgfForecastMiniPayload(client, igfForecast, year, month, uploadDay);
+      await comprasDashboard.ensureComprasTables(client);
+      const igfDiarioPlantas = [];
+      for (const plant of plants) {
+        const code = plant.provinciaPlantCode || plant.canon;
+        const plantMini = (miniAll && miniAll.rows ? miniAll.rows : []).find((row) =>
+          dashboardArrForecast.plantsEquivalent(row && row.plant_code, code)
+          || dashboardArrForecast.plantsEquivalent(row && row.empresa, code)
+          || dashboardArrForecast.plantsEquivalent(row && row.plant_code, plant.nombre)
+          || dashboardArrForecast.plantsEquivalent(row && row.empresa, plant.nombre)
+        );
+        igfDiarioPlantas.push({
+          exportPlant: code,
+          humanName: plant.nombre,
+          comprasPayload: await comprasDashboard.loadMonth(client, plant.plantaId, year, month),
+          precioDiario: await dashboardArrForecast.loadPrecioDiario(client, code, year, month),
+          corporativos: importeArrMini(plantMini && plantMini.corporativos),
+          operativos: importeArrMini(plantMini && plantMini.operativos),
+        });
+      }
+      forecastOpts.igfDiarioPlantas = igfDiarioPlantas;
     }
     const buf = await dashboardArrForecast.generarDashboardArrForecast(client, year, month, plantCode, forecastOpts);
     try {

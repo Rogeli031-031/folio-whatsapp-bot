@@ -266,16 +266,17 @@ function scopedWorkbook() {
 }
 
 describe("IMPL-FORECAST-EXCEL-PLANT-COMPRAS-024 selector", () => {
-  it("A) Todas bloquea la descarga", () => {
-    assert.match(CLIENT, /if \(!plantaFilter\)/);
-    assert.match(CLIENT, /Selecciona una planta para descargar el Excel Forecast\./);
-    assert.match(CLIENT, /setForecastExcelMsg\("Selecciona una planta para descargar el Excel Forecast\."\)/);
+  it("A) Todas descarga un solo Excel de IGF Diario", () => {
+    assert.match(CLIENT, /const todas = !plantaFilter/);
+    assert.match(CLIENT, /todas \? null : plantaFilter/);
+    assert.match(CLIENT, /!todas,\s*\n\s*todas/);
+    assert.doesNotMatch(CLIENT, /Selecciona una planta para descargar el Excel Forecast\./);
   });
 
   it("B) Puebla envía plant_code y require_plant", () => {
     assert.match(API, /plant_code=\$\{encodeURIComponent\(plant\)\}/);
     assert.match(API, /requirePlant \? "&require_plant=1" : ""/);
-    assert.match(CLIENT, /getDashboardExcelDownloadUrl\([\s\S]*plantaFilter,\s*true/);
+    assert.match(CLIENT, /getDashboardExcelDownloadUrl\([\s\S]*todas \? null : plantaFilter,\s*\n\s*!todas/);
     const plant = "GT Puebla";
     assert.match(`&plant_code=${encodeURIComponent(plant)}&require_plant=1`, /plant_code=GT%20Puebla&require_plant=1/);
   });

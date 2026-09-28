@@ -9,6 +9,7 @@ import {
   setTokenInStorage,
   getRoleFromDashboardToken,
   tokenCanAccessCompras,
+  tokenHasGlobalPlantScope,
 } from "@/lib/auth";
 import { buildIgfForecastAccionesHref } from "@/lib/igf-to-acciones-href";
 import {
@@ -1056,19 +1057,21 @@ export function IgfForecastContent() {
                     <button
                       type="button"
                       onClick={() => {
-                        if (!plantaFilter) {
-                          setForecastExcelMsg("Selecciona una planta para descargar el Excel Forecast.");
+                        setForecastExcelMsg(null);
+                        const todas = !plantaFilter;
+                        if (todas && !tokenHasGlobalPlantScope(token)) {
+                          setForecastExcelMsg("No tienes alcance global para exportar IGF Diario Todas.");
                           return;
                         }
-                        setForecastExcelMsg(null);
                         const url = getDashboardExcelDownloadUrl(
                           token,
                           igfForecast.year,
                           igfForecast.month,
                           uploadDay,
                           versionAsOfCorte,
-                          plantaFilter,
-                          true
+                          todas ? null : plantaFilter,
+                          !todas,
+                          todas
                         );
                         window.open(url, "_blank", "noopener,noreferrer");
                       }}
