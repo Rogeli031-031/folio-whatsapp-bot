@@ -1,6 +1,6 @@
-﻿task_id: "IMPL-IGF-DIARIO-COMENTARIO-VENTAS-053BC"
+﻿task_id: "IMPL-IGF-DIARIO-GRAFICA-RENTABILIDAD-NUEVOS-054"
 
-title: "Comentario diario y clientes nuevos por fecha en IGF Diario"
+title: "Gráfica IGF Diario de rentabilidad y clientes nuevos"
 
 status: "DONE_PENDING_REVIEW"
 
@@ -12,239 +12,328 @@ authorized_at: "2026-09-28"
 
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-09-28"
 
-prior_task_review: "053A + R1 + R2 están integradas en main c224dbc97d69d7fad699902d38e20869aca8638d. La comparación visual real confirmó que IGF Diario Puebla individual coincide con IGF Diario Puebla dentro de Todas. AH existe como COMENTARIO DEL DIA pero está vacío. AI/AJ son actualmente auxiliares técnicos ocultos."
+prior_task_review: "053BC está integrada en main fca7d35a47901d95f9bd2bcd6cb23d274ea8c259. IGF Diario ya contiene AH COMENTARIO DEL DIA y AI VENTAS/clientes nuevos tanto por planta como Provincia."
 
-objective: "Poblar AH con un resumen ejecutivo diario objetivo basado en el mismo motor matemático de 'cómo nos fue ayer', agregar AI visible VENTAS con los clientes nuevos obtenidos en cada fecha, y mover los auxiliares técnicos actuales a AJ/AK. Aplicar tanto a cada IGF Diario de planta como a IGF Diario Provincia."
+objective: "Cambiar el botón IGFDiario para que abra primero una ventana gráfica tipo Gráfica Toneladas de venta. La gráfica principal mostrará rentabilidad diaria con selector entre AF ($) y AE ($/kg), línea de tendencia, tooltip y resumen semanal. A la derecha mostrará adquisición de clientes nuevos de las dos semanas anteriores y la semana actual por día, más Top 10 de clientes nuevos por volumen. El Excel actual se descargará desde un botón dentro del modal."
 
 implementation: true
-
 code_changes: true
-
 schema_changes: false
-
 data_mutation: false
 
-base_sha: "c224dbc97d69d7fad699902d38e20869aca8638d"
+base_sha: "fca7d35a47901d95f9bd2bcd6cb23d274ea8c259"
 
-branch: "impl/igf-diario-comentario-ventas-053bc"
+branch: "impl/igf-diario-grafica-rentabilidad-nuevos-054"
 
 in_scope:
-  - "nuevo helper lib/igf-diario-daily-insights.js o equivalente"
-  - "lib/igf-diario-puebla.js"
-  - "lib/dashboard-arr-forecast.js si es necesario para transportar payloads"
+  - "frontend-dashboard/components/IgfDiarioGraficaModal.tsx nuevo"
+  - "frontend-dashboard/components/IgfForecastClient.tsx"
+  - "frontend-dashboard/lib/api.ts"
   - "server.js"
-  - "reutilización read-only de lib/director-ia-daily-deviation.js"
-  - "reutilización read-only de lib/director-ia-daily-discount.js"
-  - "reutilización read-only de normalización de lib/cliente-contacto.js"
-  - "pruebas nuevas 053BC"
-  - "ajustes mínimos de regresión por desplazamiento AI/AJ -> AJ/AK"
-  - "docs/dev-loop/reports/IMPL-IGF-DIARIO-COMENTARIO-VENTAS-053BC.md"
+  - "lib/igf-diario-daily-insights.js si se requiere exponer eventos estructurados"
+  - "nuevo helper lib/igf-diario-grafica.js o equivalente"
+  - "reutilización de loaders/cálculos IGF existentes"
+  - "tests 054"
+  - "docs/dev-loop/reports/IMPL-IGF-DIARIO-GRAFICA-RENTABILIDAD-NUEVOS-054.md"
   - "docs/dev-loop/CURRENT_TASK.md: solo transición de status"
 
 out_of_scope:
-  - "cambiar la matemática financiera de IGF"
-  - "cambiar 053A/R1/R2"
-  - "cambiar la respuesta conversacional de Director IA"
-  - "cambiar clasificación DICF"
-  - "hacer llamadas OpenAI durante export Excel"
-  - "crear acciones DICF"
-  - "modificar contactos"
-  - "crear contactos"
+  - "cambiar fórmulas del Excel IGF Diario"
+  - "cambiar definición de AF"
+  - "cambiar definición de AE"
+  - "cambiar clasificación de cliente nuevo de 053BC"
+  - "cambiar columnas AH/AI/AJ/AK"
+  - "cambiar Director IA"
   - "DB/schema/migrations"
+  - "writes de BD"
   - "PR, merge o deploy"
 
-contracts_in_force:
-  - "AH debe llamarse COMENTARIO DEL DIA."
-  - "AI debe llamarse VENTAS."
-  - "AI deja de ser columna auxiliar."
-  - "Los auxiliares técnicos de carry pasan a AJ y AK."
-  - "AJ y AK deben permanecer ocultas."
-  - "AH y AI deben permanecer visibles."
-  - "La información se escribe en la fecha a la que pertenece, no en la fecha de generación."
-  - "Si el resumen corresponde al 27/09, va en la fila 27/09."
-  - "No escribir comentario ejecutivo ni cliente nuevo en filas proyectadas."
-  - "No usar OpenAI para llenar el Excel."
-  - "No almacenar respuestas conversacionales."
-  - "No realizar writes en BD durante la exportación."
-  - "No ejecutar CREATE TABLE/ALTER/INSERT/UPDATE para resolver contactos."
-  - "No hacer una consulta SQL por cada día."
-  - "Los cálculos diarios deben reutilizar computeDailySalesDeviationFromRows y computeDailyDiscountDeviationFromRows."
-  - "Provincia debe calcularse como una sola empresa para métricas diarias, pero conservar identidad planta+cliente para evitar mezclar clientes homónimos entre plantas."
-  - "Los contactos se buscan estrictamente por planta."
-  - "Todas conserva el gate global ZP/AD/CF_CDMX de 053A-R2."
+source_of_truth:
+  - "AF = RESULTADO absoluto MXN."
+  - "AE = RESULTADO POR KG."
+  - "La gráfica no puede crear una tercera definición de rentabilidad."
+  - "Para los mismos inputs, los puntos JSON deben coincidir con AF y AE de IGF Diario."
+  - "Provincia debe utilizar exactamente la semántica financiera de IGF Diario Provincia."
+  - "Las hojas individuales deben coincidir con su serie gráfica individual."
 
-closed_date_contract:
-  - "En mes actual, nunca analizar hoy como día cerrado."
-  - "Si existe fecha de corte, solo fechas < corte son elegibles."
-  - "Fecha máxima elegible = mínimo entre ayer calendario CDMX y corte-1 cuando haya corte."
-  - "En meses históricos completamente cerrados, pueden analizarse todas las fechas reales del mes."
-  - "Fechas proyectadas quedan AH/AI vacías."
+button_contract:
+  - "Hoy IGFDiario abre directamente el Excel."
+  - "Después de 054, IGFDiario abre IgfDiarioGraficaModal."
+  - "No descargar automáticamente el Excel."
+  - "El modal incluye arriba a la derecha Descargar Excel y Cerrar."
+  - "Descargar Excel usa getDashboardExcelDownloadUrl existente sin cambiar su contrato."
+  - "Todas conserva el gate global ZP/AD/CF_CDMX."
+  - "Una planta individual conserva assertPlantaPermitidaDashboard."
 
-comment_column:
-  column: "AH"
-  header: "COMENTARIO DEL DIA"
-  source_sales: "arr.ventas_diarias_cliente"
-  source_discount: "arr.descuentos_diarios_cliente"
-  source_contacts: "arr.cliente_contactos"
-  format: "deterministic"
-  openai: false
+modal_header:
+  title: "Gráfica · Rentabilidad IGF Diario"
+  center_label: "nombre de planta o PROVINCIA"
+  right_actions:
+    - "Descargar Excel"
+    - "Cerrar"
 
-comment_content:
-  - "Primera línea: venta real del día vs referencia same-weekday 14d del motor actual."
-  - "Segunda señal, en la misma línea o inmediatamente después: descuento/kg real vs referencia pooled same-weekday 14d."
-  - "Después: clientes materiales con contribución negativa."
-  - "kg_target=0 y kg_reference>0 => texto 'dejó de comprar'."
-  - "kg_target>0 y contribution_kg<0 => texto 'bajó'."
-  - "Para esos clientes agregar literalmente 'Llamar y recuperar.'."
-  - "Agregar contacto comercial de arr.cliente_contactos."
-  - "Si nombre, teléfono y correo están vacíos: 'Contacto: no capturado.'."
-  - "Nunca inventar nombre, teléfono, correo ni causa."
-  - "No afirmar que contribución matemática es causa."
-  - "Ordenar clientes negativos por magnitud absoluta de contribution_kg."
-  - "Usar solo contribuidores materiales/top del mismo motor diario; no llenar la celda con todos los clientes de la planta."
+profitability_metric_toggle:
+  default: "mxn"
+  options:
+    - id: "mxn"
+      label: "$"
+      source: "AF"
+      unit: "MXN"
+    - id: "per_kg"
+      label: "$/kg"
+      source: "AE"
+      unit: "MXN/kg"
 
-comment_example: |
-  Venta: 25,025 kg vs ref 31,200 kg (-6,175 kg; -19.8%). Desc.: $0.71/kg vs ref $0.65/kg (+$0.06).
-  TORTILLERIA ERICK: dejó de comprar (0 vs 1,800 kg ref). Llamar y recuperar. Contacto: Jesús Laynes Pérez | 2231126169 | rafaellaynes@hotmail...
-  CLIENTE X: bajó 1,200 kg (800 vs 2,000 kg ref). Llamar y recuperar. Contacto: no capturado.
+main_chart:
+  x_axis: "fecha"
+  y_axis_mxn: "AF RESULTADO"
+  y_axis_per_kg: "AE RESULTADO POR KG"
+  allow_negative_values: true
+  zero_baseline: true
+  hover_tooltip: true
+  trend_line: true
 
-comment_missing_data:
-  - "Si hay venta del día pero no referencia suficiente, reportar venta y 'referencia insuficiente'; no fabricar delta."
-  - "Si descuento/kg no es calculable, omitir esa señal o indicar 'descuento/kg no calculable'; nunca usar 0 artificial."
-  - "Si no existen datos suficientes del día, usar una indicación corta o dejar vacío según el renderer, pero nunca afirmar 0."
+main_chart_tooltip:
+  - "Fecha."
+  - "Resultado $."
+  - "Resultado $/kg."
+  - "Venta KG."
+  - "Estado: Real o Proyectado."
+  - "Cobertura: Completa o Incompleta."
+  - "Si está incompleto, mostrar componentes/plantas faltantes."
 
-new_clients_column:
-  column: "AI"
-  header: "VENTAS"
-  source: "arr.ventas_diarias_cliente"
+real_projection_contract:
+  - "Los días < corte son reales."
+  - "Los días >= corte siguen el contrato proyectado vigente del IGF."
+  - "La gráfica puede mostrar ambos."
+  - "Diferenciar visualmente tramo real y tramo proyectado."
+  - "El tramo proyectado debe ser reconocible, por ejemplo línea punteada."
+  - "La línea de tendencia se calcula solo con días REALES, numéricos y completos."
+  - "No permitir que el forecast altere la tendencia histórica real."
+
+trend_contract:
+  - "Regresión lineal equivalente a la usada visualmente en ArrVentaGraficaModal."
+  - "Al seleccionar $, tendencia sobre AF."
+  - "Al seleccionar $/kg, tendencia sobre AE."
+  - "Excluir puntos incompletos."
+  - "Excluir proyectados."
+
+range_selector:
+  visual_contract: "mismo patrón que ArrVentaGraficaModal"
+  ranges:
+    - "1D"
+    - "5D"
+    - "1M"
+    - "3M"
+    - "YTD"
+    - "1A"
+    - "5A"
+    - "Todo"
+  default: "1M"
+
+range_data_contract:
+  - "No inventar historia financiera."
+  - "Cada mes histórico debe usar sus propios valores de venta, precio, compras, corporativos, operativos, HG y C&D."
+  - "Nunca aplicar corporativo/operativo del mes actual a un mes histórico."
+  - "Si una fecha no tiene cobertura financiera defendible, marcarla incompleta."
+  - "Todo empieza en la primera fecha para la que las fuentes IGF necesarias tengan datos."
+  - "No convertir faltantes en cero."
+  - "El eje X sigue siendo temporal diario; solo las etiquetas pueden espaciarse para legibilidad."
+
+weekly_summary:
+  location: "dentro de la gráfica principal"
+  - "Separar visualmente semanas."
+  - "Mostrar Semana 1, Semana 2, etc. según calendario IGF vigente."
+  - "En modo $ mostrar AF semanal."
+  - "En modo $/kg mostrar AE semanal."
+  - "AF semana debe coincidir con el resumen semanal del Excel."
+  - "AE semana debe coincidir con el resumen semanal del Excel; no promediar AE diario."
+  - "Si la semana mezcla real/proyectado, indicarlo."
+  - "Si la semana tiene cobertura incompleta, indicarlo."
+
+incomplete_contract:
+  - "No ocultar un problema de cobertura financiera."
+  - "Un punto puede conservar el AF/AE que produce el contrato actual pero debe llevar complete=false cuando faltan componentes requeridos."
+  - "Un punto incompleto no entra a la tendencia."
+  - "En Provincia devolver missing_plants/missing_components por fecha cuando sea posible."
+  - "Ejemplo tooltip: Falta COSTO/FLETE: San Luis, Morelos."
+  - "No presentar silenciosamente una cifra parcial como cobertura completa."
+
+new_clients_panel:
+  source_of_truth: "misma definición newClientEvents de 053BC"
   forecast: false
+  anchor: "última fecha real elegible del IGF activo"
 
-new_client_operational_definition:
-  - "Se evalúa por planta."
-  - "cliente_norm debe tener SUM(kg) <= 0 o ausencia de compra positiva en el mes calendario inmediatamente anterior."
-  - "Debe tener SUM(kg) > 0 real en el mes solicitado."
-  - "La fecha del cliente nuevo es MIN(fecha) del mes solicitado donde la suma diaria real del cliente sea > 0."
-  - "El cliente aparece una sola vez en el mes, en esa primera fecha."
-  - "No usar forecast para determinar la fecha."
-  - "No repetir al cliente en compras posteriores del mismo mes."
-  - "Cruce enero/diciembre debe funcionar."
-  - "Un cliente homónimo en dos plantas se considera por planta, no se fusiona."
+new_clients_small_chart:
+  metric: "cantidad de clientes nuevos"
+  categories:
+    - "Semana -2: total de nuevos de la semana completa"
+    - "Semana -1: total de nuevos de la semana completa"
+    - "Semana actual: un punto/barra por día real transcurrido"
+  tooltip:
+    - "Número de clientes nuevos."
+    - "KG captados por esos clientes."
+  - "Semana inicia lunes y termina domingo."
+  - "No incluir clientes proyectados."
+  - "Días futuros de la semana actual no cuentan como cero real."
 
-new_client_cell_format:
-  plant: |
-    NUEVO: TORTILLERIA NUEVA — 1,850 kg
-    NUEVO: CLIENTE B — 620 kg
-  provincia: |
-    Puebla · TORTILLERIA NUEVA — 1,850 kg
-    Acapulco · CLIENTE B — 620 kg
-
-new_client_kg_contract:
-  - "El kg mostrado es la suma real comprada por ese cliente en su primera fecha positiva."
-  - "No mostrar forecast mensual como kg del día."
-  - "Si existen varias filas/canales del cliente ese día, sumar los kg de ese día."
+top_new_clients:
+  limit: 10
+  sort: "kg acumulados descendente"
+  definition:
+    - "Debe ser cliente nuevo según 053BC."
+    - "El volumen TOP es la suma real de kg desde su primera compra del mes hasta la fecha real elegible."
+    - "No ordenar por forecast."
+    - "No ordenar solamente por kg del primer día."
+  display:
+    - "Posición."
+    - "Cliente."
+    - "Planta cuando scope=Provincia."
+    - "Fecha de ingreso."
+    - "KG acumulados."
+    - "Descuento $/kg."
+  discount_formula:
+    - "SUM(descuento MXN real del cliente desde ingreso hasta fecha elegible) / SUM(kg real mismo periodo)."
+    - "No promedio simple de descuentos diarios."
+    - "Mostrar con la misma convención visual de descuento que la gráfica de ventas."
+    - "Si no es calculable, mostrar —."
 
 province_contract:
-  - "AH de Provincia usa venta y descuento agregados de todas las plantas como una sola empresa."
-  - "La referencia de Provincia se calcula con el mismo motor diario sobre datos agregados."
-  - "Para contribución por cliente en Provincia, usar identidad compuesta planta+cliente para evitar colisiones."
-  - "Al presentar cliente negativo en Provincia incluir nombre de planta."
-  - "El contacto debe buscarse en la planta correspondiente."
-  - "AI de Provincia es la unión de eventos de clientes nuevos de todas las plantas, agrupados por fecha."
-  - "Cada evento de AI Provincia debe incluir la planta."
+  - "Planta=Todas abre PROVINCIA."
+  - "Solo ZP/AD/CF_CDMX."
+  - "La serie principal usa IGF Diario Provincia."
+  - "Clientes nuevos conservan identidad planta+cliente."
+  - "Top 10 Provincia muestra la planta."
+  - "Clientes homónimos en plantas distintas no se fusionan."
 
-plant_contract:
-  - "Cada hoja IGF Diario <planta> solo contiene comentario, contactos y clientes nuevos de esa planta."
-  - "Puebla individual y Puebla dentro de Todas deben producir el mismo AH y AI para la misma fecha/corte."
+individual_contract:
+  - "Planta=Puebla abre Puebla."
+  - "Solo información de Puebla."
+  - "AF/AE deben coincidir con IGF Diario Puebla."
+  - "Top clientes nuevos solo Puebla."
+  - "Mismos resultados al comparar Puebla individual con Puebla dentro de Todas."
 
-excel_layout:
-  - "AH = COMENTARIO DEL DIA visible."
-  - "AI = VENTAS visible."
-  - "AJ = auxiliar carry COSTO, hidden."
-  - "AK = auxiliar carry FLETE, hidden."
-  - "Actualizar markCarry y cualquier referencia auxiliar 35/36 a 36/37."
-  - "No dejar flags 0/1 visibles."
-  - "AH y AI con wrapText=true y alineación vertical top."
-  - "AI debe tener ancho suficiente para varios clientes."
-  - "Ajustar altura de fila según máximo de líneas AH/AI con un límite razonable para no deformar el workbook."
-  - "Filas Semana y TOTAL MES no deben contener comentario ni clientes nuevos."
+api_contract:
+  endpoint: "GET /api/dashboard/igf-diario-grafica"
+  response_shape:
+    scope: "string"
+    range: "string"
+    corte_ymd: "string|null"
+    points:
+      - fecha: "YYYY-MM-DD"
+        resultado_mxn: "number|null"
+        resultado_per_kg: "number|null"
+        venta_kg: "number|null"
+        estado: "real|proyectado"
+        complete: "boolean"
+        missing_components: "string[]"
+        missing_plants: "string[]"
+    weeks:
+      - label: "Semana N"
+        fecha_desde: "YYYY-MM-DD"
+        fecha_hasta: "YYYY-MM-DD"
+        resultado_mxn: "number|null"
+        resultado_per_kg: "number|null"
+        complete: "boolean"
+        estado: "real|proyectado|mixto"
+    new_clients_chart:
+      - label: "string"
+        tipo: "week|day"
+        count: "number"
+        kg: "number"
+    new_clients_top:
+      - planta: "string|null"
+        cliente: "string"
+        fecha_ingreso: "YYYY-MM-DD"
+        kg: "number"
+        descuento_per_kg: "number|null"
 
-performance_contract:
-  - "No hacer N consultas por N días."
-  - "Precargar ventas del rango necesario por planta y calcular cada fecha en memoria."
-  - "Precargar descuentos del rango necesario por planta."
-  - "Precargar contactos una sola vez por planta."
-  - "Para Provincia reutilizar los datasets precargados de las plantas; no volver a consultar seis veces."
-  - "La ventana de datos debe cubrir al menos previous-calendar-month y los 28 días necesarios para referencias same-weekday antes del inicio del mes."
+architecture_contract:
+  - "No leer/parsing del archivo XLSX descargado para construir la gráfica."
+  - "No generar un Excel temporal por cada request de gráfica."
+  - "Reutilizar las mismas fuentes y reglas financieras."
+  - "Extraer/helperizar cálculo compartido si es necesario."
+  - "Evitar crear un motor paralelo sin tests de equivalencia."
+  - "No SQL por día."
+  - "Las consultas deben ser por rango/planta/mes según corresponda."
+  - "Provincia debe reutilizar datasets ya cargados cuando sea posible."
 
 security_contract:
-  - "Export individual: cargar datos solo después de validar assertPlantaPermitidaDashboard."
-  - "Export Todas: cargar insights multi-planta solo después del gate global 053A-R2."
-  - "No mezclar contactos entre plantas."
-  - "Un usuario local no debe obtener contactos de otras plantas manipulando query params."
+  - "Aplicar middleware de dashboard existente."
+  - "Todas: ejecutar gate global antes de consultar datos multi-planta."
+  - "Individual: validar planta antes de cargar datos."
+  - "No exponer clientes nuevos de otras plantas a usuarios locales."
+  - "Manipulación manual del endpoint debe devolver 403 donde corresponda."
 
 acceptance_criteria:
-  - "AH del 27/09 contiene exclusivamente el análisis del 27/09."
-  - "28/09 proyectado no recibe el análisis del 27."
-  - "Venta y referencia AH coinciden con computeDailySalesDeviationFromRows para la misma fecha."
-  - "Descuento y referencia AH coinciden con computeDailyDiscountDeviationFromRows."
-  - "Cliente con target 0 y reference >0 se muestra como 'dejó de comprar'."
-  - "Cliente con target menor a reference se muestra como 'bajó'."
-  - "Ambos incluyen 'Llamar y recuperar'."
-  - "Contacto existente muestra nombre/teléfono/correo disponibles."
-  - "Contacto inexistente muestra 'Contacto: no capturado.'."
-  - "AI lista un cliente en su primera fecha positiva y solo una vez."
-  - "Cliente con compra positiva en mes anterior no aparece como nuevo."
-  - "Cruce enero/diciembre funciona."
-  - "AI Provincia agrega clientes nuevos de todas las plantas y muestra planta."
-  - "AH Provincia agrega empresa completa sin fusionar homónimos."
-  - "Puebla individual coincide con Puebla dentro de Todas en AH y AI."
-  - "AJ/AK permanecen hidden."
-  - "AI es visible y ya no contiene 0/1 técnicos."
-  - "053A/R1/R2 y 052 no cambian."
-  - "No hay llamadas OpenAI durante export."
-  - "No hay writes/DDL de BD durante export."
+  - "IGFDiario ya no descarga Excel inmediatamente."
+  - "IGFDiario abre modal."
+  - "Modal inicia en métrica $."
+  - "Cambiar a $/kg actualiza eje Y, serie, tendencia y resumen semanal."
+  - "Punto $ coincide con AF del Excel."
+  - "Punto $/kg coincide con AE del Excel."
+  - "Tooltip muestra ambos valores."
+  - "Escala soporta resultados negativos y positivos."
+  - "Existe línea visual de cero."
+  - "La tendencia cambia al cambiar métrica."
+  - "La tendencia solo usa real+completo."
+  - "Proyectados se distinguen visualmente."
+  - "Resumen semanal $ coincide con AF semanal."
+  - "Resumen semanal $/kg coincide con AE semanal."
+  - "Mini gráfica muestra Semana -2, Semana -1 y semana actual por día."
+  - "Top 10 ordena por kg reales acumulados."
+  - "Descuento Top 10 es descuento total / kg total."
+  - "Provincia muestra planta de cada cliente."
+  - "Botón Descargar Excel produce exactamente el mismo Excel actual."
+  - "Botón Cerrar funciona."
+  - "053A/R1/R2/053BC no cambian."
+  - "No DB writes."
+  - "No OpenAI."
 
 validation:
-  - "Caso fecha 27 con venta debajo de referencia."
-  - "Caso cliente dejó de comprar."
-  - "Caso cliente bajó."
-  - "Caso contacto completo."
-  - "Caso contacto parcial."
-  - "Caso sin contacto."
-  - "Caso primer cliente nuevo del mes."
-  - "Caso cliente que compra varias veces: aparece solo en primera compra."
-  - "Caso cliente que compró mes anterior: no aparece."
-  - "Caso enero con diciembre anterior."
-  - "Caso mismo cliente_norm en Puebla y Acapulco: Provincia no los fusiona."
-  - "Caso corte 28: AH/AI hasta 27; 28+ vacíos."
-  - "Guardar/reabrir XLSX y revisar texto, wrap, columnas hidden."
-  - "Comparar Puebla individual vs Puebla dentro de Todas."
-  - "Ejecutar regresión 025, 050, 051, 052, 053A, R1, R2."
+  - "Caso AF positivo."
+  - "Caso AF negativo."
+  - "Caso AE positivo."
+  - "Caso AE negativo."
+  - "Cambio $ -> $/kg."
+  - "Tooltip."
+  - "Tendencia."
+  - "Real vs proyectado."
+  - "Semana con solo reales."
+  - "Semana mixta real/proyectado."
+  - "Provincia con planta incompleta."
+  - "Semana -2 y Semana -1 de clientes nuevos."
+  - "Semana actual diaria."
+  - "Top 10 por volumen."
+  - "Descuento ponderado."
+  - "Mismo cliente en dos plantas."
+  - "Puebla individual vs Puebla de Todas."
+  - "Gate Todas."
+  - "Descargar Excel."
+  - "Responsive escritorio y móvil."
   - "git diff --check."
 
 allowed_actions:
-  - "crear rama desde base_sha"
-  - "crear helper read-only de insights"
-  - "reutilizar funciones compute existentes"
+  - "crear rama 054 desde base_sha"
+  - "crear endpoint read-only"
+  - "crear modal"
+  - "extraer helpers financieros puros si es necesario"
+  - "reutilizar newClientEvents"
   - "agregar pruebas"
   - "crear reporte"
   - "commit"
-  - "push solo a la rama 053BC"
+  - "push solo a rama 054"
 
 forbidden_actions:
-  - "usar OpenAI para generar celdas"
-  - "llamar Director IA vía HTTP desde el export"
-  - "crear una consulta SQL por día"
-  - "inventar causas"
-  - "inventar contactos"
-  - "crear/modificar contactos"
+  - "cambiar matemáticas del Excel"
+  - "usar OpenAI"
+  - "crear writes/DDL"
   - "usar git add ."
   - "tocar frontend-dashboard/.next"
-  - "hacer migraciones"
   - "abrir PR"
   - "hacer merge"
   - "desplegar"
 
 max_attempts: 1
 
-result_report_path: "docs/dev-loop/reports/IMPL-IGF-DIARIO-COMENTARIO-VENTAS-053BC.md"
+result_report_path: "docs/dev-loop/reports/IMPL-IGF-DIARIO-GRAFICA-RENTABILIDAD-NUEVOS-054.md"

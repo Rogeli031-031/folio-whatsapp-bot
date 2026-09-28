@@ -45,6 +45,70 @@ export function getDashboardExcelDownloadUrl(
   return `${base}?year=${year}&month=${month}&proyeccion_anio=${next.y}&proyeccion_mes=${next.m}${hasta}${upload}${asOf}${plantQ}${requireQ}${todasQ}&t=${encodeURIComponent(token)}`;
 }
 
+export type IgfDiarioGraficaPoint = {
+  fecha: string;
+  resultado_mxn: number | null;
+  resultado_per_kg: number | null;
+  venta_kg: number | null;
+  estado: "real" | "proyectado";
+  complete: boolean;
+  missing_components: string[];
+  missing_plants: string[];
+};
+
+export type IgfDiarioGraficaResponse = {
+  ok: boolean;
+  scope: string;
+  range: string;
+  corte_ymd: string | null;
+  points: IgfDiarioGraficaPoint[];
+  weeks: Array<{
+    label: string;
+    fecha_desde: string;
+    fecha_hasta: string;
+    resultado_mxn: number | null;
+    resultado_per_kg: number | null;
+    complete: boolean;
+    estado: "real" | "proyectado" | "mixto";
+  }>;
+  new_clients_chart: Array<{ label: string; tipo: "week" | "day"; count: number; kg: number }>;
+  new_clients_top: Array<{
+    planta: string | null;
+    cliente: string;
+    fecha_ingreso: string;
+    kg: number;
+    descuento_per_kg: number | null;
+  }>;
+};
+
+export async function fetchIgfDiarioGrafica(opts: {
+  token: string;
+  year: number;
+  month: number;
+  range: string;
+  uploadDay?: string | null;
+  versionAsOfCorte?: boolean;
+  plantCode?: string | null;
+  todas?: boolean;
+}): Promise<IgfDiarioGraficaResponse> {
+  const up = (opts.uploadDay || "").trim();
+  const params = new URLSearchParams({
+    year: String(opts.year),
+    month: String(opts.month),
+    range: opts.range,
+  });
+  if (/^\d{4}-\d{2}-\d{2}$/.test(up)) params.set("upload_day", up);
+  if (opts.versionAsOfCorte && /^\d{4}-\d{2}-\d{2}$/.test(up)) params.set("version_as_of_corte", "1");
+  if (opts.todas) params.set("igf_diario_todas", "1");
+  else if (opts.plantCode) params.set("plant_code", opts.plantCode);
+  const res = await fetch(getApiUrl(`/api/dashboard/igf-diario-grafica?${params.toString()}`), {
+    headers: { Authorization: `Bearer ${opts.token}` },
+  });
+  const body = await res.json().catch(() => ({ error: res.statusText }));
+  if (!res.ok) throw new Error((body as { error?: string }).error || `HTTP ${res.status}`);
+  return body as IgfDiarioGraficaResponse;
+}
+
 /** Descarga Excel Clasificación de apoyos (hoja COMPARATIVOS). */
 export async function downloadClasificacionApoyosExcel(
   token: string,
