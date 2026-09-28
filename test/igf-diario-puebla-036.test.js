@@ -156,8 +156,8 @@ test("sin precio, con B en cero y sin gastos no inventa ceros", () => {
 
 test("otras plantas y el libro global no reservan la hoja", () => {
   const fn = LIB.slice(LIB.indexOf("async function generarDashboardArrForecast"), LIB.indexOf("async function fetchForecastKgByPlantMap"));
-  assert.match(fn, /plantsEquivalent\(exportPlant, "Puebla"\)/);
-  assert.match(fn, /igfDiarioPuebla\.reserveSheet\(wb\)/);
+  assert.match(fn, /const includeIgfDiario = Boolean\(exportPlant\)/);
+  assert.match(fn, /igfDiarioPuebla\.reserveSheet\(wb, exportPlant\)/);
   assert.match(fn, /igfDiarioPuebla\.fillIgfDiarioPuebla\(wb/);
   const reserveAt = fn.indexOf("igfDiarioPuebla.reserveSheet");
   const hojaA = fn.indexOf("hojaA(wb");
@@ -170,9 +170,9 @@ test("otras plantas y el libro global no reservan la hoja", () => {
   const start = SERVER.indexOf('app.get("/api/arr/dashboard-excel"');
   const slice = SERVER.slice(start, start + 18000);
   assert.match(slice, /computeIgfForecastMiniPayload\(client, igfForecast, year, month, uploadDay\)/);
-  assert.match(slice, /plantsEquivalent\(plantCode, "Puebla"\)/);
+  assert.match(slice, /plantsEquivalent\(row && row\.plant_code, plantCode\)/);
   assert.match(slice, /igfDiarioGastos/);
-  assert.match(slice, /importeArrMini\(pueblaMini && pueblaMini\.corporativos\)/);
-  assert.match(slice, /importeArrMini\(pueblaMini && pueblaMini\.operativos\)/);
+  assert.match(slice, /importeArrMini\(plantMini && plantMini\.corporativos\)/);
+  assert.match(slice, /importeArrMini\(plantMini && plantMini\.operativos\)/);
   assert.match(slice, /if \(value == null \|\| value === ""\) return null/);
 });

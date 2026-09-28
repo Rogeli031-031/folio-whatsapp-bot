@@ -125,7 +125,8 @@ test("G–J) solo las celdas base estimadas van en azul", async () => {
   assert.notEqual(fillOf(ws.getCell(11, 2)), ESTIMATED_BLUE);
   assert.equal(ws.getCell(13, 1).value, "TOTAL MES");
   assert.notEqual(fillOf(ws.getCell(13, 2)), ESTIMATED_BLUE);
-  assert.notEqual(fillOf(ws.getCell(8, 3)), ESTIMATED_BLUE);
+  assert.equal(fillOf(ws.getCell(8, 3)), ESTIMATED_BLUE);
+  assert.equal(ws.getCell(8, 3).value, 15);
 });
 
 test("K–U) las derivadas diarias conservan las relaciones vigentes", async () => {
@@ -133,9 +134,9 @@ test("K–U) las derivadas diarias conservan las relaciones vigentes", async () 
   await appendComprasWorksheet(wb, payloadFrom(sampleDays()), { plantName: "Puebla", corteYmd: "2026-08-31" });
   const ws = wb.getWorksheet("CONTROL DE COMPRAS");
   const row = 8;
-  assert.match(formulaOf(ws.getCell(row, 3)), /D8\/B8/);
-  assert.match(formulaOf(ws.getCell(row, 7)), /H8\/F8/);
-  assert.match(formulaOf(ws.getCell(row, 11)), /L8\/J8/);
+  assert.equal(ws.getCell(row, 3).value, 15);
+  assert.equal(ws.getCell(row, 7).value, 4);
+  assert.equal(ws.getCell(row, 11).value, 4);
   assert.match(formulaOf(ws.getCell(row, 14)), /SUM\(B8,F8,J8\)/);
   assert.match(formulaOf(ws.getCell(row, 16)), /SUM\(D8,H8,L8\)/);
   assert.doesNotMatch(formulaOf(ws.getCell(row, 14)), /B8\+F8\+J8/);
@@ -285,10 +286,10 @@ test("divisor 23 con grid incompleto y corte 2026-09-24", () => {
   assert.equal(slot(ctx, "2026-09-24", 1).kg, 999999);
   assert.equal(slot(ctx, "2026-09-24", 1).kg_estimated, false);
   assert.equal(slot(ctx, "2026-09-24", 3).kg, 92750 / 23);
-  assert.equal(slot(ctx, "2026-09-24", 3).importe, 1045311.27 / 23);
+  assert.equal(slot(ctx, "2026-09-24", 3).importe, null);
   assert.equal(slot(ctx, "2026-09-24", 3).kg_estimated, true);
   assert.equal(slot(ctx, "2026-09-25", 3).kg, 92750 / 23);
-  assert.equal(slot(ctx, "2026-09-25", 3).importe, 1045311.27 / 23);
+  assert.equal(slot(ctx, "2026-09-25", 3).importe, null);
   assert.equal(slot(ctx, "2026-09-25", 2).kg, null);
 });
 

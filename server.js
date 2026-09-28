@@ -15596,19 +15596,19 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
       proyeccionCatSubForecast,
       fechaCorte: uploadDay || proyeccionHasta || null,
     };
-    if (plantCode && dashboardArrForecast.plantsEquivalent(plantCode, "Puebla")) {
+    if (plantCode) {
       const mini = await computeIgfForecastMiniPayload(client, igfForecast, year, month, uploadDay);
-      const pueblaMini = (mini && mini.rows ? mini.rows : []).find((row) =>
-        dashboardArrForecast.plantsEquivalent(row && row.plant_code, "Puebla")
-        || dashboardArrForecast.plantsEquivalent(row && row.empresa, "Puebla")
+      const plantMini = (mini && mini.rows ? mini.rows : []).find((row) =>
+        dashboardArrForecast.plantsEquivalent(row && row.plant_code, plantCode)
+        || dashboardArrForecast.plantsEquivalent(row && row.empresa, plantCode)
       );
       const importeArrMini = (value) => {
         if (value == null || value === "") return null;
         const n = Number(value);
         return Number.isFinite(n) ? n : null;
       };
-      const corporativos = importeArrMini(pueblaMini && pueblaMini.corporativos);
-      const operativos = importeArrMini(pueblaMini && pueblaMini.operativos);
+      const corporativos = importeArrMini(plantMini && plantMini.corporativos);
+      const operativos = importeArrMini(plantMini && plantMini.operativos);
       if (corporativos != null || operativos != null) {
         forecastOpts.igfDiarioGastos = {};
         if (corporativos != null) forecastOpts.igfDiarioGastos.corporativos = corporativos;
