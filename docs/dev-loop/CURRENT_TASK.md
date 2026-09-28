@@ -1,6 +1,6 @@
-﻿task_id: "FIX-IGF-DIARIO-CONTINUAR-PROYECCION-DESDE-CORTE-050"
+﻿task_id: "FIX-COMPRAS-ASISTENTE-DIRECCION-GLOBAL-051-R1"
 
-title: "IGF Diario sigue hasta fin de mes y toma la venta total de la planta"
+title: "Asistente Dirección con rol técnico GA usa Compras global cuando tiene permiso explícito"
 
 status: "DONE_PENDING_REVIEW"
 
@@ -8,103 +8,91 @@ mode: "IMPLEMENTATION"
 
 authorized_by: "HUMAN_APPROVER"
 
-authorized_at: "2026-09-27T21:49:00-06:00"
+authorized_at: "2026-09-28T09:26:00-06:00"
 
-human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-09-27"
+human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-09-28"
 
-prior_task_review: "main está en 164310afb26466424c64c1a03139f11a94b93162. La 049 vaciaba IGF Diario después del corte. Esa regla queda sustituida: el corte es el primer día proyectado y la hoja se llena hasta el último día del mes."
+prior_task_review: "La 051 está en 7eee26ff422dc40c15d6f0b56ccef4f53ac35709 y no está integrada. Se detectó que algunos Asistentes Dirección tienen rol técnico GA. GA debe seguir sin acceso_compras por default, pero un Asistente Dirección GA con override explícito acceso_compras=true debe ser tratado como perfil global en Compras y comprasT."
 
-objective: "IGF Diario se llena hasta fin de mes. Antes del corte usa datos reales y desde el corte, incluido ese día, usa la proyección que ya está en las hojas fuente. La venta en kilos sale de la columna total de la planta, no de CASA más COMISIONISTA."
+objective: "Corregir únicamente el reconocimiento de Asistente Dirección para Compras. Un usuario GA cuyo puesto o nombre de rol sea Asistente Dirección, y que tenga acceso_compras=true explícito, debe abrir Compras con alcance global y comprasT no debe forzar planta_id. Un GA genérico no obtiene acceso por esta corrección."
 
 implementation: true
-
 code_changes: true
-
 schema_changes: false
-
 data_mutation: false
 
-base_sha: "164310afb26466424c64c1a03139f11a94b93162"
+base_sha: "7eee26ff422dc40c15d6f0b56ccef4f53ac35709"
 
-branch: "fix/igf-diario-continuar-proyeccion-desde-corte-050"
+branch: "fix/compras-asistente-direccion-global-051-r1"
 
 in_scope:
-  - "lib/igf-diario-puebla.js: quitar el corte que deja B:AF vacías; fecha < corte es real con el carry histórico; fecha >= corte es proyectado y lee las hojas fuente de ese día, sin carry adicional; VENTA KG referencia la columna total de la planta por 1000"
-  - "test/igf-diario-continuar-proyeccion-desde-corte-050.test.js"
-  - "pruebas 045 y 049: actualizar solo las aserciones que exigían B:AF vacías después del corte, documentando que ese contrato quedó sustituido"
-  - "docs/dev-loop/reports/FIX-IGF-DIARIO-CONTINUAR-PROYECCION-DESDE-CORTE-050.md"
+  - "lib/compras-dashboard.js"
+  - "server.js únicamente si es necesario compartir/reutilizar la detección de Asistente Dirección y evitar lógica duplicada"
+  - "test/igf-venta-permiso-compras-whatsapp-051.test.js o una prueba nueva específica 051-R1"
+  - "docs/dev-loop/reports/FIX-COMPRAS-ASISTENTE-DIRECCION-GLOBAL-051-R1.md"
   - "docs/dev-loop/CURRENT_TASK.md: solo transición de status"
 
 out_of_scope:
-  - "lib/compras-excel.js"
-  - "server.js"
-  - "frontend"
-  - "motor de Pronóstico"
-  - "Provincia Venta Diaria"
-  - "Provincia Comisiones"
-  - "PRECIO"
-  - "fórmula de Compras"
-  - "base de datos"
-  - "Director IA"
-  - "un segundo motor de pronóstico"
-  - "frontend-dashboard/.next"
-  - "PR, merge y despliegue"
+  - "cambiar defaults de GA"
+  - "dar acceso_compras automáticamente a todos los Asistentes Dirección"
+  - "cambiar permisos de GG, GO, ZP, CF_CDMX, GV, SG o SEH"
+  - "cambiar IGF Diario"
+  - "cambiar CONTROL DE COMPRAS"
+  - "cambiar frontend salvo que una prueba demuestre que es estrictamente necesario"
+  - "cambiar DB o schema"
+  - "mutar permisos de usuarios existentes"
+  - "PR, merge o deploy"
 
 contracts_in_force:
-  - "AGENTS.md y docs/dev-loop/LOOP_PROTOCOL.md"
-  - "fecha < corte es real"
-  - "fecha >= corte es proyectado"
-  - "el día de corte entra en la proyección"
-  - "IGF Diario se llena hasta el último día del mes"
-  - "Semana y TOTAL MES incluyen reales y proyectados"
-  - "VENTA KG proviene de la columna total de la planta en Provincia Venta Diaria multiplicada por 1000"
-  - "VENTA KG no se reconstruye con CASA más COMISIONISTA"
-  - "PRECIO proviene de PRECIO"
-  - "COSTO KG, FLETE KG y HG provienen de CONTROL DE COMPRAS"
-  - "C&D proviene de Provincia Comisiones"
-  - "desde el corte no hay carry histórico adicional"
-  - "el carry amarillo histórico se conserva solo cuando fecha < corte"
+  - "La 051 permanece vigente."
+  - "GA genérico tiene acceso_compras=false por default."
+  - "Los overrides de permisos_json mandan."
+  - "Asistente Dirección con rol técnico GA y acceso_compras=true explícito obtiene acceso."
+  - "Asistente Dirección con rol técnico GA sin override true continúa sin acceso."
+  - "La detección de Asistente Dirección debe ser por rol/puesto, nunca por identidad personal, teléfono o una lista de nombres."
+  - "Un Asistente Dirección autorizado se considera global para Compras y comprasT."
+  - "Un GA genérico con acceso_compras=true continúa limitado a su planta; no se vuelve global solo por tener el permiso."
 
 acceptance_criteria:
-  - "Puebla, corte 2026-09-25: 25=42000 kg, 26=49500, 27=21500, 28=57000, 29=61500 y 30=45500"
-  - "No hay filas vacías después del corte"
-  - "PRECIO, COSTO KG, FLETE KG, C&D y HG del 25 al 30 referencian las hojas fuente"
-  - "Si el total de Puebla es 49.500 y CASA más COMISIONISTA es otro número, IGF Diario usa 49500 kg"
-  - "Acapulco usa su propia columna total"
-  - "Queretaro/Querétaro o Tehuacan/Tehuacán usa su propia columna total mediante la equivalencia existente"
-  - "Corte 2026-09-27: 1 al 26 real y 27 al 30 proyectado"
-  - "Semana 4 incluye 21 al 27"
-  - "Semana 5 incluye 28 al 30"
-  - "TOTAL MES incluye 1 al 30"
+  - "GA + puesto Asistente Dirección + acceso_compras=true: permiso efectivo true."
+  - "Ese mismo actor es reconocido como global por Compras."
+  - "comprasT genera /compras?t=... sin planta_id para ese actor."
+  - "El JWT se construye con alcance global coherente con la detección existente de Asistente Dirección."
+  - "GA + puesto Asistente Dirección sin acceso_compras=true: comprasT responde sin permiso."
+  - "GA genérico sin override: sin permiso."
+  - "GA genérico con acceso_compras=true: tiene Compras pero queda limitado a su planta."
+  - "AD real sigue global."
+  - "GG y GO siguen ligados a su planta."
+  - "ZP y CF_CDMX siguen globales."
+  - "No se hardcodean nombres personales."
 
 validation:
-  - "Probar Puebla con corte 25"
-  - "Probar Puebla con corte 27"
-  - "Probar caso donde CASA más COMISIONISTA no coincide con total planta"
-  - "Probar Acapulco"
-  - "Probar una planta con alias"
-  - "Ejecutar 050, 049, 048, 047, 045 y 044 a 036"
-  - "Ejecutar git diff --check"
+  - "Probar Asistente Dirección técnico GA con override true."
+  - "Probar Asistente Dirección técnico GA sin override."
+  - "Probar GA genérico con override true."
+  - "Probar AD real."
+  - "Probar GG y GO."
+  - "Probar ZP y CF_CDMX."
+  - "Ejecutar prueba 051 completa y regresión de permisos/Twilio."
+  - "Ejecutar git diff --check."
 
 allowed_actions:
-  - "crear la rama 050 desde base_sha en un árbol aislado"
-  - "editar solo archivos in_scope"
-  - "ejecutar pruebas"
+  - "crear rama 051-R1 desde base_sha"
+  - "editar solo in_scope"
+  - "probar"
   - "crear reporte"
   - "commit"
-  - "push solo a la rama 050"
+  - "push solo a rama 051-R1"
 
 forbidden_actions:
-  - "modificar authorized_by"
-  - "modificar authorized_at"
-  - "modificar human_authorization"
-  - "reutilizar una rama antigua"
   - "usar git add ."
-  - "tocar frontend-dashboard/.next"
+  - "modificar public.roles"
+  - "hacer migraciones"
+  - "modificar usuarios/permisos existentes en DB"
   - "abrir PR"
-  - "fusionar"
+  - "hacer merge"
   - "desplegar"
 
 max_attempts: 1
 
-result_report_path: "docs/dev-loop/reports/FIX-IGF-DIARIO-CONTINUAR-PROYECCION-DESDE-CORTE-050.md"
+result_report_path: "docs/dev-loop/reports/FIX-COMPRAS-ASISTENTE-DIRECCION-GLOBAL-051-R1.md"

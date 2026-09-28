@@ -85,6 +85,31 @@ export function tokenHasPermiso(token: string | null | undefined, permisoClave: 
   return !!permisos[permisoClave];
 }
 
+const COMPRAS_DEFAULT_ROLES = new Set([
+  "GG",
+  "GO",
+  "ZP",
+  "AD",
+  "CF_CDMX",
+  "CDMX",
+  "DIR_ZP",
+  "DIRZP",
+  "DIRECTOR_ZP",
+  "DIRECTORZP",
+  "DZP",
+  "DIR-ZP",
+]);
+
+/** Permiso efectivo de Compras. Un token antiguo sin la clave usa el default del rol. */
+export function tokenCanAccessCompras(token: string | null | undefined): boolean {
+  if (!token) return false;
+  const explicit = tokenHasPermiso(token, "acceso_compras");
+  if (explicit != null) return explicit;
+  const payload = decodeDashboardTokenPayload(token);
+  const role = typeof payload?.role === "string" ? payload.role.trim().toUpperCase() : "";
+  return COMPRAS_DEFAULT_ROLES.has(role);
+}
+
 /** Token del comando WhatsApp "SEH": solo permite la página /seh. */
 export function isSehOnlyToken(token: string | null | undefined): boolean {
   if (!token) return false;

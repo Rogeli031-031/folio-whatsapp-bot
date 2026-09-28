@@ -5077,10 +5077,7 @@ async function buildDicfNotifDashboardUrls(client, usuarioRow, accionMeta) {
   const normalizarParaAD = (s) => (s || "").toLowerCase().normalize("NFD").replace(/\p{M}/gu, "").replace(/[\s\u00a0]+/g, " ").trim();
   const rolNormNombre = normalizarParaAD(rolNom);
   const nombreUsuarioNorm = normalizarParaAD(usuarioRow.nombre || "");
-  const esAD =
-    rolClave === "AD" ||
-    (/asistente/.test(rolNormNombre) && /direccion/.test(rolNormNombre)) ||
-    (/asistente/.test(nombreUsuarioNorm) && /direccion/.test(nombreUsuarioNorm));
+  const esAD = comprasDashboard.isAsistenteDireccion(usuarioRow);
   const esCFCDMX =
     rolClave === "CF_CDMX" ||
     (/contralor/.test(rolNormNombre) && /cdmx/.test(rolNormNombre)) ||
@@ -5589,17 +5586,7 @@ function assertUsuariosAdminClave(req) {
  * backend/frontend usan los permisos del rol.
  */
 function permisosForDashboardToken(role, usuarioRow) {
-  const effective = usuarioPermisos.permisosEfectivos(role, usuarioRow && usuarioRow.permisos_json);
-  const base = usuarioPermisos.permisosPorRol(role);
-  const overrides = {};
-  let any = false;
-  for (const k of usuarioPermisos.PERMISO_CLAVES) {
-    if (!!effective[k] !== !!base[k]) {
-      overrides[k] = !!effective[k];
-      any = true;
-    }
-  }
-  return any ? overrides : undefined;
+  return usuarioPermisos.permisosParaTokenDashboard(role, usuarioRow);
 }
 
 /** ¿Puede ver folios marcados Solo ZP/AD (privados)? */
@@ -8469,10 +8456,7 @@ async function buildDashboardSignedUrlForUsuario(client, usuarioRow, dashboardPa
   const normalizarParaAD = (s) => (s || "").toLowerCase().normalize("NFD").replace(/\p{M}/gu, "").replace(/[\s\u00a0]+/g, " ").trim();
   const rolNormNombre = normalizarParaAD(rolNom);
   const nombreUsuarioNorm = normalizarParaAD(usuarioRow.nombre || usuarioRow.nombre_persona || "");
-  const esAD =
-    rolClave === "AD" ||
-    (/asistente/.test(rolNormNombre) && /direccion/.test(rolNormNombre)) ||
-    (/asistente/.test(nombreUsuarioNorm) && /direccion/.test(nombreUsuarioNorm));
+  const esAD = comprasDashboard.isAsistenteDireccion(usuarioRow);
   const esCFCDMX =
     rolClave === "CF_CDMX" ||
     (/contralor/.test(rolNormNombre) && /cdmx/.test(rolNormNombre)) ||
@@ -17396,8 +17380,29 @@ app.post("/twilio/whatsapp", async (req, res) => {
         const rolClaveRestr = (actor.rol_clave && String(actor.rol_clave).toUpperCase()) || "";
         const rolNivelRestr = actor.rol_nivel != null ? Number(actor.rol_nivel) : null;
         const esNivel6Especial = rolNivelRestr === 6 && ["GO", "SG", "SEH"].includes(rolClaveRestr);
-        if (esNivel6Especial && !/^(ar|director\s*ia|directoria|seh)$/i.test(bodyForCmd)) {
+        if (esNivel6Especial && !comprasDashboard.nivel6CommandAllowed(rolClaveRestr, bodyForCmd)) {
+          if (rolClaveRestr === "GO") {
+            return safeReply('⛔ Tu rol (nivel 6: GO) solo tiene acceso a los comandos "AR", "DirectorIA", "SEH" y "comprasT".');
+          }
           return safeReply('⛔ Tu rol (nivel 6: GO/SG/SEH) solo tiene acceso a los comandos "AR", "DirectorIA" y "SEH".');
+        }
+      }
+
+      if (comprasDashboard.isExactComprasT(bodyForCmd)) {
+        try {
+          if (!actor) return safeReply(comprasDashboard.comprasTDenyText(null));
+          const comprasOk = usuarioPermisos.permisosEfectivos(actor.rol_clave, actor.permisos_json).acceso_compras === true;
+          if (!comprasOk) return safeReply(comprasDashboard.comprasTDenyText(actor));
+          const linkBase = await buildDashboardSignedUrlForUsuario(client, actor, "compras");
+          if (!linkBase) {
+            return safeReply("Error al generar el enlace de Compras. Revisa DASHBOARD_URL en el servidor.");
+          }
+          const plantaLink = comprasDashboard.comprasPlantaIdForLink(actor, getCanonicalPlantaId(actor.planta_id));
+          const link = comprasDashboard.appendComprasPlanta(linkBase, plantaLink);
+          return safeReply(comprasDashboard.comprasTSuccessText(link));
+        } catch (comprasErr) {
+          console.error("[comprasT command error]", comprasErr);
+          return safeReply("Error al generar el enlace de Compras. Revisa los logs o contacta al administrador.");
         }
       }
 

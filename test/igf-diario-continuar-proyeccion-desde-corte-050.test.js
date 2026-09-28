@@ -88,7 +88,7 @@ function formula(cell) {
   return cell.value && cell.value.formula ? String(cell.value.formula) : "";
 }
 
-test("Puebla corte 25 sigue hasta el 30 y usa la columna total", async () => {
+test("Puebla corte 25 sigue hasta el 30; la 051 usa CASA + COMISIONISTA", async () => {
   const totalCol = 4;
   const { wb, ws, venta } = build({
     corte: "2026-09-25",
@@ -106,11 +106,11 @@ test("Puebla corte 25 sigue hasta el 30 y usa la columna total", async () => {
     const row = igfRow(day);
     const ventaRow = day + 1;
     const f = formula(ws.getCell(row, 2));
-    assert.match(f, new RegExp(`${letter}${ventaRow}\\*1000`));
-    assert.doesNotMatch(f, /J\d+\+|K\d+/);
+    assert.match(f, new RegExp(`J${ventaRow}\\+.*K${ventaRow}\\)\\*1000`));
+    assert.doesNotMatch(f, new RegExp(`${letter}${ventaRow}\\*1000`));
     assert.doesNotMatch(f, new RegExp(`!B${ventaRow}\\*`));
     assert.equal(venta.getCell(ventaRow, totalCol).value * 1000, TONS[day] * 1000);
-    assert.notEqual(venta.getCell(ventaRow, 10).value + venta.getCell(ventaRow, 11).value, TONS[day]);
+    assert.notEqual((venta.getCell(ventaRow, 10).value + venta.getCell(ventaRow, 11).value) * 1000, TONS[day] * 1000);
     assert.match(formula(ws.getCell(row, 3)), new RegExp(`PRECIO!B${ventaRow}`));
     assert.match(formula(ws.getCell(row, 6)), new RegExp(`CONTROL DE COMPRAS'!O${day + 5}`));
     assert.match(formula(ws.getCell(row, 7)), new RegExp(`CONTROL DE COMPRAS'!AJ${day + 5}`));
@@ -122,7 +122,7 @@ test("Puebla corte 25 sigue hasta el 30 y usa la columna total", async () => {
     assert.notEqual(ws.getCell(row, 2).value, null);
     assert.notEqual(ws.getCell(row, 32).value, null);
   }
-  assert.match(formula(ws.getCell(igfRow(26), 2)), /D27\*1000/);
+  assert.match(formula(ws.getCell(igfRow(26), 2)), /J27\+.*K27\)\*1000/);
   assert.equal(venta.getCell(27, totalCol).value, 49.5);
   const historical = formula(ws.getCell(igfRow(24), 6));
   assert.match(historical, /O28/);
@@ -140,7 +140,7 @@ test("Puebla corte 25 sigue hasta el 30 y usa la columna total", async () => {
   await again.xlsx.readFile(file);
   fs.unlinkSync(file);
   const re = again.getWorksheet("IGF Diario Puebla");
-  assert.match(formula(re.getCell(igfRow(26), 2)), /D27\*1000/);
+  assert.match(formula(re.getCell(igfRow(26), 2)), /J27\+.*K27\)\*1000/);
   assert.match(formula(re.getCell(igfRow(30), 3)), /PRECIO!B31/);
   assert.match(formula(re.getCell(45, 2)), /B41:B43/);
 });
@@ -179,9 +179,9 @@ test("Acapulco usa su columna total y no la de otra planta", () => {
   });
   assert.equal(ws.getCell(2, 1).value, "PLANTA ACAPULCO");
   const f = formula(ws.getCell(igfRow(26), 2));
-  assert.match(f, /E27\*1000/);
-  assert.doesNotMatch(f, /!B27\*/);
-  assert.doesNotMatch(f, /PUEBLA|J27\+/);
+  assert.match(f, /J27\+.*K27\)\*1000/);
+  assert.doesNotMatch(f, /E27\*1000/);
+  assert.doesNotMatch(f, /!B27\*|PUEBLA/);
 });
 
 test("Querétaro con código Queretaro encuentra su columna total", () => {
@@ -197,6 +197,6 @@ test("Querétaro con código Queretaro encuentra su columna total", () => {
   assert.equal(wb.getWorksheet("IGF Diario Queretaro").name, "IGF Diario Queretaro");
   assert.equal(ws.getCell(2, 1).value, "PLANTA QUERÉTARO");
   const f = formula(ws.getCell(igfRow(26), 2));
-  assert.match(f, /F27\*1000/);
-  assert.doesNotMatch(f, /!B27\*|PUEBLA|J27\+/);
+  assert.match(f, /J27\+.*K27\)\*1000/);
+  assert.doesNotMatch(f, /F27\*1000|!B27\*|PUEBLA/);
 });
