@@ -46,6 +46,7 @@ const arrLoad = require("./lib/arr-load");
 const arrRefreshProvincia = require("./lib/arr-refresh-provincia");
 const forecastMensual = require("./lib/forecast-mensual");
 const dashboardArrForecast = require("./lib/dashboard-arr-forecast");
+const igfDiarioDailyInsights = require("./lib/igf-diario-daily-insights");
 const arrAnnualCategoryAnalysis = require("./lib/arr-annual-category-analysis");
 const igfMetaExcel = require("./lib/igf-meta-excel");
 const igfMetahg = require("./lib/igf-metahg");
@@ -15516,6 +15517,7 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
     let resolvedPlant = null;
     let comprasPayload = null;
     let precioDiario = null;
+    let individualInsights = null;
     if (requirePlant) {
       resolvedPlant = await dashboardArrForecast.resolveForecastExportPlant(client, plantCodeRaw);
       if (!resolvedPlant) {
@@ -15523,6 +15525,14 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
       }
       const deniedPlant = assertPlantaPermitidaDashboard(req, resolvedPlant.plantaId);
       if (deniedPlant) return res.status(403).json({ error: deniedPlant });
+      individualInsights = await igfDiarioDailyInsights.loadPlantDailyInsights(client, {
+        plantaId: resolvedPlant.plantaId,
+        plantaNombre: resolvedPlant.nombre,
+        plantLabel: resolvedPlant.nombre,
+        year,
+        month,
+        corteYmd: uploadDay || proyeccionHasta || "",
+      });
       plantCode = resolvedPlant.provinciaPlantCode || resolvedPlant.canon;
       if (proyeccionCatSub) proyeccionCatSub.plantCodeFilter = plantCode;
       proyeccionCatSubForecast.plantCodeFilter = plantCode;
@@ -15626,12 +15636,14 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
     if (Array.isArray(precioDiario)) {
       forecastOpts.precioDiario = precioDiario;
     }
+    if (individualInsights) forecastOpts.igfDailyInsights = individualInsights;
     const igfDiarioTodas = /^(1|true|yes)$/i.test(String(req.query.igf_diario_todas || "").trim());
     if (!requirePlant && igfDiarioTodas) {
       const plants = await dashboardArrForecast.listIgfDiarioProvinciaPlants(client, year, month);
       const miniAll = await computeIgfForecastMiniPayload(client, igfForecast, year, month, uploadDay);
       await comprasDashboard.ensureComprasTables(client);
       const igfDiarioPlantas = [];
+      const insightBundles = [];
       for (const plant of plants) {
         const code = plant.provinciaPlantCode || plant.canon;
         const plantMini = (miniAll && miniAll.rows ? miniAll.rows : []).find((row) =>
@@ -15640,6 +15652,15 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
           || dashboardArrForecast.plantsEquivalent(row && row.plant_code, plant.nombre)
           || dashboardArrForecast.plantsEquivalent(row && row.empresa, plant.nombre)
         );
+        const dailyInsights = await igfDiarioDailyInsights.loadPlantDailyInsights(client, {
+          plantaId: plant.plantaId,
+          plantaNombre: plant.nombre,
+          plantLabel: plant.nombre,
+          year,
+          month,
+          corteYmd: uploadDay || proyeccionHasta || "",
+        });
+        insightBundles.push(dailyInsights);
         igfDiarioPlantas.push({
           exportPlant: code,
           humanName: plant.nombre,
@@ -15647,9 +15668,15 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
           precioDiario: await dashboardArrForecast.loadPrecioDiario(client, code, year, month),
           corporativos: importeArrMini(plantMini && plantMini.corporativos),
           operativos: importeArrMini(plantMini && plantMini.operativos),
+          dailyInsights,
         });
       }
       forecastOpts.igfDiarioPlantas = igfDiarioPlantas;
+      forecastOpts.igfProvinciaInsights = igfDiarioDailyInsights.buildProvinceInsightMap(insightBundles, {
+        year,
+        month,
+        corteYmd: uploadDay || proyeccionHasta || "",
+      });
     }
     const buf = await dashboardArrForecast.generarDashboardArrForecast(client, year, month, plantCode, forecastOpts);
     try {
