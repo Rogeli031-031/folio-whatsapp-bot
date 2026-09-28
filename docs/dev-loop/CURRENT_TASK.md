@@ -1,6 +1,6 @@
-﻿task_id: "FIX-COMPRAS-ASISTENTE-DIRECCION-GLOBAL-051-R1"
+﻿task_id: "FIX-COMPRAS-DIA1-COSTO-FALLBACK-052"
 
-title: "Asistente Dirección con rol técnico GA usa Compras global cuando tiene permiso explícito"
+title: "CONTROL DE COMPRAS día 1 toma costo anterior o, si no existe, costo del día siguiente"
 
 status: "DONE_PENDING_REVIEW"
 
@@ -8,91 +8,99 @@ mode: "IMPLEMENTATION"
 
 authorized_by: "HUMAN_APPROVER"
 
-authorized_at: "2026-09-28T09:26:00-06:00"
+authorized_at: "2026-09-28T10:35:00-06:00"
 
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-09-28"
 
-prior_task_review: "La 051 está en 7eee26ff422dc40c15d6f0b56ccef4f53ac35709 y no está integrada. Se detectó que algunos Asistentes Dirección tienen rol técnico GA. GA debe seguir sin acceso_compras por default, pero un Asistente Dirección GA con override explícito acceso_compras=true debe ser tratado como perfil global en Compras y comprasT."
+prior_task_review: "main está en d3d75329dec24b00c352cdb6efc66671367c8069. CONTROL DE COMPRAS ya busca un costo HG anterior incluso fuera del mes para el carry de R, pero O sigue dependiendo únicamente de compras del mismo día y no existe fallback hacia el día 2 cuando el día 1 carece de histórico anterior."
 
-objective: "Corregir únicamente el reconocimiento de Asistente Dirección para Compras. Un usuario GA cuyo puesto o nombre de rol sea Asistente Dirección, y que tenga acceso_compras=true explícito, debe abrir Compras con alcance global y comprasT no debe forzar planta_id. Un GA genérico no obtiene acceso por esta corrección."
+objective: "Solo para el día 1 del mes, cuando no existe compra propia, completar COSTO KG consolidado (columna O en el layout actual) y COSTO HG (columna R) con prioridad al último costo anterior disponible incluso de otro mes; si no existe histórico anterior, tomar el valor del día 2. No alterar ningún otro día."
 
 implementation: true
+
 code_changes: true
+
 schema_changes: false
+
 data_mutation: false
 
-base_sha: "7eee26ff422dc40c15d6f0b56ccef4f53ac35709"
+base_sha: "d3d75329dec24b00c352cdb6efc66671367c8069"
 
-branch: "fix/compras-asistente-direccion-global-051-r1"
+branch: "fix/compras-dia1-costo-fallback-052"
 
 in_scope:
-  - "lib/compras-dashboard.js"
-  - "server.js únicamente si es necesario compartir/reutilizar la detección de Asistente Dirección y evitar lógica duplicada"
-  - "test/igf-venta-permiso-compras-whatsapp-051.test.js o una prueba nueva específica 051-R1"
-  - "docs/dev-loop/reports/FIX-COMPRAS-ASISTENTE-DIRECCION-GLOBAL-051-R1.md"
+  - "lib/compras-dashboard.js: exponer al payload el último costo consolidado válido anterior al inicio del mes si hace falta"
+  - "lib/compras-excel.js: aplicar únicamente al día 1 la prioridad histórico anterior -> día 2 para COSTO KG consolidado y COSTO HG"
+  - "test/compras-dia1-costo-fallback-052.test.js"
+  - "ajustes estrictamente necesarios en pruebas existentes de Compras"
+  - "docs/dev-loop/reports/FIX-COMPRAS-DIA1-COSTO-FALLBACK-052.md"
   - "docs/dev-loop/CURRENT_TASK.md: solo transición de status"
 
 out_of_scope:
-  - "cambiar defaults de GA"
-  - "dar acceso_compras automáticamente a todos los Asistentes Dirección"
-  - "cambiar permisos de GG, GO, ZP, CF_CDMX, GV, SG o SEH"
+  - "cambiar kilos de compra"
+  - "cambiar importes de compra"
+  - "cambiar proveedores"
+  - "cambiar proyecciones 046/048/049"
   - "cambiar IGF Diario"
-  - "cambiar CONTROL DE COMPRAS"
-  - "cambiar frontend salvo que una prueba demuestre que es estrictamente necesario"
-  - "cambiar DB o schema"
-  - "mutar permisos de usuarios existentes"
+  - "cambiar fecha de corte"
+  - "cambiar HG EN KILOS"
+  - "cambiar tarifas de flete"
+  - "cambiar permisos, comprasT o usuarios"
+  - "frontend"
+  - "DB/schema"
   - "PR, merge o deploy"
 
 contracts_in_force:
-  - "La 051 permanece vigente."
-  - "GA genérico tiene acceso_compras=false por default."
-  - "Los overrides de permisos_json mandan."
-  - "Asistente Dirección con rol técnico GA y acceso_compras=true explícito obtiene acceso."
-  - "Asistente Dirección con rol técnico GA sin override true continúa sin acceso."
-  - "La detección de Asistente Dirección debe ser por rol/puesto, nunca por identidad personal, teléfono o una lista de nombres."
-  - "Un Asistente Dirección autorizado se considera global para Compras y comprasT."
-  - "Un GA genérico con acceso_compras=true continúa limitado a su planta; no se vuelve global solo por tener el permiso."
+  - "La 051 y 051-R1 permanecen vigentes."
+  - "La corrección aplica únicamente al día calendario 1."
+  - "Solo aplica cuando el día 1 no tiene compra propia válida para producir su costo."
+  - "Prioridad 1: último costo válido anterior al día 1, incluso si pertenece al mes anterior."
+  - "Prioridad 2: solo si no existe costo anterior, usar el costo del día 2."
+  - "Si tampoco existe costo válido en el día 2, dejar vacío."
+  - "No buscar hacia adelante para ningún otro día."
+  - "No sobrescribir un costo propio real del día 1."
+  - "El valor heredado debe conservar señal visual amarilla."
+  - "O representa COSTO KG consolidado."
+  - "R representa COSTO HG efectivo, es decir costo consolidado más flete según la lógica ya existente."
 
 acceptance_criteria:
-  - "GA + puesto Asistente Dirección + acceso_compras=true: permiso efectivo true."
-  - "Ese mismo actor es reconocido como global por Compras."
-  - "comprasT genera /compras?t=... sin planta_id para ese actor."
-  - "El JWT se construye con alcance global coherente con la detección existente de Asistente Dirección."
-  - "GA + puesto Asistente Dirección sin acceso_compras=true: comprasT responde sin permiso."
-  - "GA genérico sin override: sin permiso."
-  - "GA genérico con acceso_compras=true: tiene Compras pero queda limitado a su planta."
-  - "AD real sigue global."
-  - "GG y GO siguen ligados a su planta."
-  - "ZP y CF_CDMX siguen globales."
-  - "No se hardcodean nombres personales."
+  - "Caso Querétaro septiembre: día 1 sin compra, sin histórico anterior, día 2 COSTO KG=11.380; O del día 1 queda 11.380."
+  - "En el mismo caso, día 2 COSTO HG=12.180; R del día 1 queda 12.180."
+  - "O y R del día 1 quedan amarillos cuando el valor es heredado."
+  - "Si 31/08 tiene COSTO KG=11.500 y día 2 tiene 11.380, día 1 usa 11.500 y no 11.380."
+  - "Si el costo HG anterior válido es 12.300 y día 2 es 12.180, R día 1 usa 12.300."
+  - "Si día 1 tiene compra propia, usa su propio O y R y no aplica fallback."
+  - "Si no hay histórico anterior ni valor válido en día 2, O y R día 1 permanecen vacíos."
+  - "Días 2 en adelante no cambian."
+  - "Semana y TOTAL MES no cambian por esta corrección salvo por las fórmulas que legítimamente dependan de esos valores diarios."
 
 validation:
-  - "Probar Asistente Dirección técnico GA con override true."
-  - "Probar Asistente Dirección técnico GA sin override."
-  - "Probar GA genérico con override true."
-  - "Probar AD real."
-  - "Probar GG y GO."
-  - "Probar ZP y CF_CDMX."
-  - "Ejecutar prueba 051 completa y regresión de permisos/Twilio."
+  - "Probar día 1 sin compra y sin histórico anterior."
+  - "Probar día 1 con histórico del mes anterior."
+  - "Probar prioridad histórico anterior sobre día 2."
+  - "Probar día 1 con compra propia."
+  - "Probar día 1 sin histórico y día 2 también sin costo."
+  - "Probar que días 2 a fin de mes no cambian."
+  - "Probar O y R tras guardar y reabrir XLSX."
+  - "Ejecutar regresión de compras 013, 014, 016, 020, 021, 022, 024, 026, 030, 048, 049 y 051 relacionadas."
   - "Ejecutar git diff --check."
 
 allowed_actions:
-  - "crear rama 051-R1 desde base_sha"
+  - "crear rama 052 desde base_sha"
   - "editar solo in_scope"
-  - "probar"
+  - "ejecutar pruebas"
   - "crear reporte"
   - "commit"
-  - "push solo a rama 051-R1"
+  - "push solo a la rama 052"
 
 forbidden_actions:
   - "usar git add ."
-  - "modificar public.roles"
-  - "hacer migraciones"
-  - "modificar usuarios/permisos existentes en DB"
+  - "tocar frontend-dashboard/.next"
+  - "hacer migraciones o mutaciones DB"
   - "abrir PR"
   - "hacer merge"
   - "desplegar"
 
 max_attempts: 1
 
-result_report_path: "docs/dev-loop/reports/FIX-COMPRAS-ASISTENTE-DIRECCION-GLOBAL-051-R1.md"
+result_report_path: "docs/dev-loop/reports/FIX-COMPRAS-DIA1-COSTO-FALLBACK-052.md"
