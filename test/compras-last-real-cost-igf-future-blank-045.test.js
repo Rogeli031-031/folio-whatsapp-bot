@@ -73,9 +73,11 @@ test("el importe proyectado usa el último costo real del proveedor", () => {
   assert.equal(none.byYmd.get("2026-09-25").providers[1].importe, null);
 });
 
-test("IGF Diario deja vacíos los días posteriores al corte", async () => {
+// 050 sustituye el contrato de filas vacías: desde el corte, incluido ese día, IGF sigue hasta fin de mes.
+test("IGF Diario proyecta desde el corte hasta el último día", async () => {
   const wb = new ExcelJS.Workbook();
   const venta = wb.addWorksheet("Provincia Venta Diaria");
+  venta.getCell(1, 2).value = "Puebla";
   venta.getCell(1, 8).value = "Puebla\nCASA";
   venta.getCell(1, 9).value = "Puebla\nCOMISIONISTA";
   wb.addWorksheet("Provincia Comisiones");
@@ -87,6 +89,7 @@ test("IGF Diario deja vacíos los días posteriores al corte", async () => {
   compras.getCell(5, 36).value = "TARIFA";
   for (let day = 1; day <= 30; day += 1) {
     venta.getCell(day + 1, 1).value = day;
+    venta.getCell(day + 1, 2).value = 10;
     venta.getCell(day + 1, 8).value = 1;
     venta.getCell(day + 1, 9).value = 1;
     precio.getCell(day + 1, 1).value = new Date(Date.UTC(2026, 8, day));
@@ -103,21 +106,20 @@ test("IGF Diario deja vacíos los días posteriores al corte", async () => {
     operativos: 2998518,
   });
   assert.equal(typeof ws.getCell(35, 2).value, "object");
-  assert.equal(ws.getCell(36, 2).value, null);
-  assert.equal(ws.getCell(36, 32).value, null);
+  assert.equal(typeof ws.getCell(36, 2).value, "object");
+  assert.equal(typeof ws.getCell(36, 32).value, "object");
   assert.equal(ws.getCell(36, 1).value instanceof Date, true);
-  assert.match(String(ws.getCell(39, 2).value.formula), /B32:B35/);
-  assert.doesNotMatch(String(ws.getCell(39, 2).value.formula), /B36/);
-  assert.equal(ws.getCell(45, 2).value, null);
+  assert.match(String(ws.getCell(39, 2).value.formula), /B32:B38/);
+  assert.match(String(ws.getCell(45, 2).value.formula), /B41:B43/);
   assert.match(String(ws.getCell(47, 2).value.formula), /B39/);
-  assert.doesNotMatch(String(ws.getCell(47, 2).value.formula), /B45/);
+  assert.match(String(ws.getCell(47, 2).value.formula), /B45/);
   const file = path.join(os.tmpdir(), "igf-045-future.xlsx");
   await wb.xlsx.writeFile(file);
   const again = new ExcelJS.Workbook();
   await again.xlsx.readFile(file);
   fs.unlinkSync(file);
   const re = again.getWorksheet("IGF Diario Puebla");
-  assert.equal(re.getCell(36, 2).value, null);
+  assert.equal(typeof re.getCell(36, 2).value, "object");
   assert.equal(typeof re.getCell(35, 2).value, "object");
   assert.equal(re.getCell(3, 13).value, 1034293);
   assert.equal(re.getCell(3, 20).value, 2998518);

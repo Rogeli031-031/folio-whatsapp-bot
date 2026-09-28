@@ -1,57 +1,110 @@
-﻿task_id: "FIX-IGF-CORTE-PROYECCION-COMPRAS-IMPORTE-049"
-title: "Proyectar los huecos hasta el corte y calcular el importe de compras con sus propios kilos"
+﻿task_id: "FIX-IGF-DIARIO-CONTINUAR-PROYECCION-DESDE-CORTE-050"
+
+title: "IGF Diario sigue hasta fin de mes y toma la venta total de la planta"
+
 status: "DONE_PENDING_REVIEW"
+
 mode: "IMPLEMENTATION"
 
 authorized_by: "HUMAN_APPROVER"
-authorized_at: "2026-09-27T20:54:00-06:00"
-human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-09-27"
-prior_task_review: "main está en 982fe9a15175d467d7312faa29e04c34471ed48d. La 048 queda sustituida en el importe de compras: ya no se multiplica por la venta pronosticada."
 
-objective: "Hasta la fecha seleccionada, IGF Diario y la venta de la planta usan el dato real si existe y la proyección si falta. Después de esa fecha, IGF Diario deja B:AF vacías. El importe proyectado de cada proveedor es sus kilos por su costo."
+authorized_at: "2026-09-27T21:49:00-06:00"
+
+human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-09-27"
+
+prior_task_review: "main está en 164310afb26466424c64c1a03139f11a94b93162. La 049 vaciaba IGF Diario después del corte. Esa regla queda sustituida: el corte es el primer día proyectado y la hoja se llena hasta el último día del mes."
+
+objective: "IGF Diario se llena hasta fin de mes. Antes del corte usa datos reales y desde el corte, incluido ese día, usa la proyección que ya está en las hojas fuente. La venta en kilos sale de la columna total de la planta, no de CASA más COMISIONISTA."
+
 implementation: true
+
 code_changes: true
+
 schema_changes: false
+
 data_mutation: false
-base_sha: "982fe9a15175d467d7312faa29e04c34471ed48d"
-branch: "fix/igf-corte-proyeccion-compras-importe-049"
+
+base_sha: "164310afb26466424c64c1a03139f11a94b93162"
+
+branch: "fix/igf-diario-continuar-proyeccion-desde-corte-050"
 
 in_scope:
-  - "lib/dashboard-arr-forecast.js: hojaA, writeProvinciaCanalColumns y writeCanalPairCells proyectan el día solo cuando falta el dato real, usando el pronóstico que ya existe"
-  - "lib/compras-excel.js: importe proyectado = COMPRA KG × COSTO KG del mismo proveedor, con fórmula Excel en la fila proyectada"
-  - "lib/igf-diario-puebla.js: solo si hace falta conservar que el día de corte puede tener datos y los días posteriores quedan vacíos"
-  - "test/igf-corte-proyeccion-compras-importe-049.test.js"
-  - "prueba 048: actualizar solo las aserciones del importe por venta, y documentarlo"
-  - "docs/dev-loop/reports/FIX-IGF-CORTE-PROYECCION-COMPRAS-IMPORTE-049.md"
+  - "lib/igf-diario-puebla.js: quitar el corte que deja B:AF vacías; fecha < corte es real con el carry histórico; fecha >= corte es proyectado y lee las hojas fuente de ese día, sin carry adicional; VENTA KG referencia la columna total de la planta por 1000"
+  - "test/igf-diario-continuar-proyeccion-desde-corte-050.test.js"
+  - "pruebas 045 y 049: actualizar solo las aserciones que exigían B:AF vacías después del corte, documentando que ese contrato quedó sustituido"
+  - "docs/dev-loop/reports/FIX-IGF-DIARIO-CONTINUAR-PROYECCION-DESDE-CORTE-050.md"
   - "docs/dev-loop/CURRENT_TASK.md: solo transición de status"
+
 out_of_scope:
-  - "identidad Querétaro/Queretaro, nombres de hoja, gastos por planta, permisos, Director IA, base de datos y otros módulos del dashboard"
-  - "un segundo motor de pronóstico o un parámetro nuevo de fecha"
-  - "frontend-dashboard/.next, PR, merge y despliegue"
+  - "lib/compras-excel.js"
+  - "server.js"
+  - "frontend"
+  - "motor de Pronóstico"
+  - "Provincia Venta Diaria"
+  - "Provincia Comisiones"
+  - "PRECIO"
+  - "fórmula de Compras"
+  - "base de datos"
+  - "Director IA"
+  - "un segundo motor de pronóstico"
+  - "frontend-dashboard/.next"
+  - "PR, merge y despliegue"
 
 contracts_in_force:
   - "AGENTS.md y docs/dev-loop/LOOP_PROTOCOL.md"
-  - "La fecha seleccionada es el último día que IGF Diario puede mostrar. Un día posterior deja la fecha en A y B:AF vacías, sin fórmulas. Semana y TOTAL MES no suman esos días."
-  - "En un día hasta el corte, el dato real capturado prevalece, incluido un cero real. Si no hay registro, se usa el pronóstico del día de semana: promVentaTotal, promVentaCasa y promVentaComisionista."
-  - "En compras, una fecha anterior al corte conserva la captura. Desde el corte, COMPRA KG sigue el promedio calendario y COSTO KG el último costo real. IMPORTE = kilos × costo de ese proveedor: D=B×C, H=F×G, L=J×K. El consolidado suma esos proveedores. No se usa la venta de la planta."
-  - "Sin costo real o sin kilos, el importe queda vacío. Un importe real capturado prevalece."
+  - "fecha < corte es real"
+  - "fecha >= corte es proyectado"
+  - "el día de corte entra en la proyección"
+  - "IGF Diario se llena hasta el último día del mes"
+  - "Semana y TOTAL MES incluyen reales y proyectados"
+  - "VENTA KG proviene de la columna total de la planta en Provincia Venta Diaria multiplicada por 1000"
+  - "VENTA KG no se reconstruye con CASA más COMISIONISTA"
+  - "PRECIO proviene de PRECIO"
+  - "COSTO KG, FLETE KG y HG provienen de CONTROL DE COMPRAS"
+  - "C&D proviene de Provincia Comisiones"
+  - "desde el corte no hay carry histórico adicional"
+  - "el carry amarillo histórico se conserva solo cuando fecha < corte"
 
 acceptance_criteria:
-  - "Corte 2026-09-27 y último real el 25: Acapulco y Tehuacán muestran el 25 real, el 26 y el 27 proyectados, y del 28 al 30 solo la fecha. CASA y COMISIONISTA siguen la misma regla. Al reabrir el XLSX se conserva."
-  - "Corte 2026-09-25: del 26 al 30, B:AF vacías."
-  - "Compras, corte 2026-09-25: una fila proyectada tiene D=B*C, H=F*G y L=J*K, cada proveedor con su propio importe. El histórico no cambia. El corte proyecta si no hay captura. Un real prevalece. Sin costo, costo e importe vacíos. El consolidado suma B+F+J y D+H+L."
+  - "Puebla, corte 2026-09-25: 25=42000 kg, 26=49500, 27=21500, 28=57000, 29=61500 y 30=45500"
+  - "No hay filas vacías después del corte"
+  - "PRECIO, COSTO KG, FLETE KG, C&D y HG del 25 al 30 referencian las hojas fuente"
+  - "Si el total de Puebla es 49.500 y CASA más COMISIONISTA es otro número, IGF Diario usa 49500 kg"
+  - "Acapulco usa su propia columna total"
+  - "Queretaro/Querétaro o Tehuacan/Tehuacán usa su propia columna total mediante la equivalencia existente"
+  - "Corte 2026-09-27: 1 al 26 real y 27 al 30 proyectado"
+  - "Semana 4 incluye 21 al 27"
+  - "Semana 5 incluye 28 al 30"
+  - "TOTAL MES incluye 1 al 30"
 
 validation:
-  - "Probar Acapulco y Tehuacán con corte 27 y corte 25. Guardar y reabrir."
-  - "Probar la fila proyectada de compras y el consolidado. Guardar y reabrir."
-  - "Ejecutar 049, 048, 047, 045, 044 a 036, 030, 026, 024, 022, 021 y 020; git diff --check."
+  - "Probar Puebla con corte 25"
+  - "Probar Puebla con corte 27"
+  - "Probar caso donde CASA más COMISIONISTA no coincide con total planta"
+  - "Probar Acapulco"
+  - "Probar una planta con alias"
+  - "Ejecutar 050, 049, 048, 047, 045 y 044 a 036"
+  - "Ejecutar git diff --check"
 
 allowed_actions:
-  - "crear la rama 049 desde base_sha en un árbol aislado"
-  - "editar solo in_scope, probar, reportar, commit y push solo a la rama 049"
+  - "crear la rama 050 desde base_sha en un árbol aislado"
+  - "editar solo archivos in_scope"
+  - "ejecutar pruebas"
+  - "crear reporte"
+  - "commit"
+  - "push solo a la rama 050"
+
 forbidden_actions:
-  - "modificar authorized_by, authorized_at o human_authorization"
-  - "reutilizar una rama antigua; usar git add .; tocar .next; abrir PR; fusionar o desplegar"
+  - "modificar authorized_by"
+  - "modificar authorized_at"
+  - "modificar human_authorization"
+  - "reutilizar una rama antigua"
+  - "usar git add ."
+  - "tocar frontend-dashboard/.next"
+  - "abrir PR"
+  - "fusionar"
+  - "desplegar"
 
 max_attempts: 1
-result_report_path: "docs/dev-loop/reports/FIX-IGF-CORTE-PROYECCION-COMPRAS-IMPORTE-049.md"
+
+result_report_path: "docs/dev-loop/reports/FIX-IGF-DIARIO-CONTINUAR-PROYECCION-DESDE-CORTE-050.md"

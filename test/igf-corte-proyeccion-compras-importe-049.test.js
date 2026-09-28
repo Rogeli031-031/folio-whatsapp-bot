@@ -115,20 +115,21 @@ test("corte 27: real el 25, proyección el 26 y el 27, y del 28 al 30 solo la fe
   assert.equal(venta.getCell(28, 12).value, 5);
   assert.equal(venta.getCell(28, 13).value, 6);
 
-  assert.match(String(aca.getCell(36, 2).value.formula), /J26/);
-  assert.match(String(aca.getCell(36, 2).value.formula), /K26/);
-  assert.match(String(aca.getCell(37, 2).value.formula), /J27/);
-  assert.match(String(aca.getCell(38, 2).value.formula), /J28/);
-  assert.match(String(teh.getCell(36, 2).value.formula), /L26/);
-  assert.match(String(teh.getCell(36, 2).value.formula), /M26/);
-  assert.match(String(teh.getCell(37, 2).value.formula), /L27/);
-  assert.match(String(teh.getCell(38, 2).value.formula), /L28/);
+  // 050: VENTA KG usa la columna total de la planta, no CASA + COMISIONISTA, y sigue hasta fin de mes.
+  assert.match(String(aca.getCell(36, 2).value.formula), /B26\*1000/);
+  assert.doesNotMatch(String(aca.getCell(36, 2).value.formula), /J26/);
+  assert.match(String(aca.getCell(37, 2).value.formula), /B27\*1000/);
+  assert.match(String(aca.getCell(38, 2).value.formula), /B28\*1000/);
+  assert.match(String(teh.getCell(36, 2).value.formula), /C26\*1000/);
+  assert.doesNotMatch(String(teh.getCell(36, 2).value.formula), /L26/);
+  assert.match(String(teh.getCell(37, 2).value.formula), /C27\*1000/);
+  assert.match(String(teh.getCell(38, 2).value.formula), /C28\*1000/);
   assert.match(String(aca.getCell(39, 2).value.formula), /B32:B38/);
-  assertFutureBlank(aca, 41);
-  assertFutureBlank(aca, 42);
-  assertFutureBlank(aca, 43);
-  assertFutureBlank(teh, 41);
-  assertFutureBlank(teh, 43);
+  assert.equal(typeof aca.getCell(41, 2).value, "object");
+  assert.equal(typeof aca.getCell(42, 2).value, "object");
+  assert.equal(typeof aca.getCell(43, 2).value, "object");
+  assert.equal(typeof teh.getCell(41, 2).value, "object");
+  assert.equal(typeof teh.getCell(43, 2).value, "object");
   assert.equal(aca.getCell(2, 1).value, "PLANTA ACAPULCO");
   assert.equal(teh.getCell(2, 1).value, "PLANTA TEHUACÁN");
 
@@ -143,25 +144,22 @@ test("corte 27: real el 25, proyección el 26 y el 27, y del 28 al 30 solo la fe
   assert.equal(ventaAgain.getCell(26, 11).value, 0);
   assert.equal(ventaAgain.getCell(27, 10).value, 1);
   assert.equal(ventaAgain.getCell(28, 13).value, 6);
-  assert.match(String(acaAgain.getCell(38, 2).value.formula), /J28/);
-  assert.match(String(tehAgain.getCell(37, 2).value.formula), /L27/);
-  assertFutureBlank(acaAgain, 41);
-  assertFutureBlank(tehAgain, 42);
+  assert.match(String(acaAgain.getCell(38, 2).value.formula), /B28\*1000/);
+  assert.match(String(tehAgain.getCell(37, 2).value.formula), /C27\*1000/);
+  assert.equal(typeof acaAgain.getCell(41, 2).value, "object");
+  assert.equal(typeof tehAgain.getCell(42, 2).value, "object");
 });
 
-test("corte 25: del 26 al 30, B:AF vacías", () => {
+test("corte 25: del 25 al 30 siguen proyectados, sin filas vacías", () => {
   const { aca, teh } = book("2026-09-25");
   assert.equal(typeof aca.getCell(36, 2).value, "object");
   assert.equal(typeof teh.getCell(36, 2).value, "object");
-  assertFutureBlank(aca, 37);
-  assertFutureBlank(aca, 38);
-  assertFutureBlank(aca, 41);
-  assertFutureBlank(aca, 42);
-  assertFutureBlank(aca, 43);
-  assertFutureBlank(teh, 37);
-  assertFutureBlank(teh, 43);
-  assert.match(String(aca.getCell(39, 2).value.formula), /B32:B36/);
-  assert.doesNotMatch(String(aca.getCell(39, 2).value.formula), /B37/);
+  for (const row of [37, 38, 41, 42, 43]) {
+    assert.equal(typeof aca.getCell(row, 2).value, "object");
+    assert.equal(typeof teh.getCell(row, 2).value, "object");
+  }
+  assert.match(String(aca.getCell(39, 2).value.formula), /B32:B38/);
+  assert.match(String(aca.getCell(45, 2).value.formula), /B41:B43/);
 });
 
 function purchase(kg, importe) {

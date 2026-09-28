@@ -26,6 +26,7 @@ function buildBook() {
   igf.reserveSheet(wb);
   const venta = wb.addWorksheet("Provincia Venta Diaria");
   venta.getCell(1, 1).value = "DÍA";
+  venta.getCell(1, 2).value = "Puebla";
   venta.getCell(1, 12).value = "Puebla\nCASA";
   venta.getCell(1, 13).value = "Puebla\nCOMISIONISTA";
   const com = wb.addWorksheet("Provincia Comisiones");
@@ -44,6 +45,7 @@ function buildBook() {
   for (let day = 1; day <= 30; day += 1) {
     const fecha = `2026-09-${String(day).padStart(2, "0")}`;
     venta.getCell(day + 1, 1).value = day;
+    venta.getCell(day + 1, 2).value = 49.5;
     venta.getCell(day + 1, 12).value = day === 16 ? 1.5 : 2;
     venta.getCell(day + 1, 13).value = 3;
     com.getCell(day + 1, 1).value = day;
@@ -105,7 +107,9 @@ test("la hoja queda primera y liga cada fecha, incluido el 6 y el día posterior
   const r23 = rowByDate(ws, 2026, 9, 23);
   const r30 = rowByDate(ws, 2026, 9, 30);
   assert.equal(rowByDate(ws, 2026, 9, 31), null);
-  assert.match(formulaOf(ws.getCell(r1, 2)), /'Provincia Venta Diaria'!L2\+'Provincia Venta Diaria'!M2\)\*1000/);
+  // 050: VENTA KG es la columna total de la planta × 1000, no CASA + COMISIONISTA.
+  assert.match(formulaOf(ws.getCell(r1, 2)), /'Provincia Venta Diaria'!B2\*1000/);
+  assert.doesNotMatch(formulaOf(ws.getCell(r1, 2)), /L2\+/);
   assert.equal(formulaOf(ws.getCell(r1, 2)).includes("!H2"), false);
   assert.equal(formulaOf(ws.getCell(r6, 3)), 'IF(AND(ISNUMBER(PRECIO!B7),ISNUMBER(PRECIO!B7)),PRECIO!B7,"")');
   assert.match(formulaOf(ws.getCell(r6, 6)), /'CONTROL DE COMPRAS'!O13/);

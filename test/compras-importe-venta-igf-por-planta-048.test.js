@@ -113,6 +113,7 @@ test("el importe proyectado usa los kilos y el costo del proveedor", async () =>
 
 function sources(wb, plant, ventaCasa, price) {
   const venta = wb.addWorksheet("Provincia Venta Diaria");
+  venta.getCell(1, 2).value = plant;
   venta.getCell(1, 8).value = `${plant}\nCASA`;
   venta.getCell(1, 9).value = `${plant}\nCOMISIONISTA`;
   wb.addWorksheet("Provincia Comisiones");
@@ -122,6 +123,7 @@ function sources(wb, plant, ventaCasa, price) {
   compras.getCell(5, 15).value = "COSTO KG";
   for (let d = 1; d <= 30; d += 1) {
     venta.getCell(d + 1, 1).value = d;
+    venta.getCell(d + 1, 2).value = ventaCasa;
     venta.getCell(d + 1, 8).value = ventaCasa;
     venta.getCell(d + 1, 9).value = 1;
     precio.getCell(d + 1, 1).value = new Date(Date.UTC(2026, 8, d));
@@ -154,9 +156,11 @@ test("Puebla, Querétaro y Acapulco tienen una sola hoja IGF de su planta", asyn
   assert.equal(p.getCell(2, 1).value, "PLANTA PUEBLA");
   assert.equal(p.getCell(3, 13).value, 1034293);
   assert.equal(p.getCell(3, 20).value, 2998518);
-  assert.match(String(p.getCell(6, 2).value.formula), /H2/);
-  assert.equal(p.getCell(36, 2).value, null);
-  assert.equal(p.getCell(36, 32).value, null);
+  // 050: la venta sale de la columna total (B), no de CASA (H). El 25 ya no queda vacío.
+  assert.match(String(p.getCell(6, 2).value.formula), /B2/);
+  assert.doesNotMatch(String(p.getCell(6, 2).value.formula), /H2\+/);
+  assert.equal(typeof p.getCell(36, 2).value, "object");
+  assert.equal(typeof p.getCell(36, 32).value, "object");
 
   const qro = new ExcelJS.Workbook();
   igf.reserveSheet(qro, "Queretaro");
@@ -176,11 +180,11 @@ test("Puebla, Querétaro y Acapulco tienen una sola hoja IGF de su planta", asyn
   assert.equal(q.getCell(2, 1).value, "PLANTA QUERÉTARO");
   assert.equal(q.getCell(3, 13).value, 800);
   assert.equal(q.getCell(3, 20).value, 900);
-  assert.match(String(q.getCell(6, 2).value.formula), /H2/);
+  assert.match(String(q.getCell(6, 2).value.formula), /B2/);
   assert.doesNotMatch(String(q.getCell(6, 2).value.formula), /PUEBLA/);
   assert.match(String(q.getCell(6, 3).value.formula), /PRECIO/);
   assert.equal(q.getCell(36, 1).value instanceof Date, true);
-  assert.equal(q.getCell(36, 2).value, null);
+  assert.equal(typeof q.getCell(36, 2).value, "object");
 
   const file = path.join(os.tmpdir(), "igf-048-qro.xlsx");
   await qro.xlsx.writeFile(file);
@@ -190,7 +194,7 @@ test("Puebla, Querétaro y Acapulco tienen una sola hoja IGF de su planta", asyn
   assert.equal(igfSheets(again).length, 1);
   assert.equal(again.worksheets[0].name, "IGF Diario Queretaro");
   assert.equal(again.worksheets[0].getCell(2, 1).value, "PLANTA QUERÉTARO");
-  assert.equal(again.worksheets[0].getCell(36, 2).value, null);
+  assert.equal(typeof again.worksheets[0].getCell(36, 2).value, "object");
 
   const aca = new ExcelJS.Workbook();
   const a = fillPlant(aca, "Acapulco", "Acapulco", 7, 15, 11, 22);
@@ -198,7 +202,7 @@ test("Puebla, Querétaro y Acapulco tienen una sola hoja IGF de su planta", asyn
   assert.equal(aca.worksheets[0].name, "IGF Diario Acapulco");
   assert.equal(a.getCell(2, 1).value, "PLANTA ACAPULCO");
   assert.equal(a.getCell(3, 13).value, 11);
-  assert.match(String(a.getCell(6, 2).value.formula), /H2/);
+  assert.match(String(a.getCell(6, 2).value.formula), /B2/);
   assert.doesNotMatch(String(a.getCell(6, 2).value.formula), /PUEBLA|QUERETARO/);
 });
 
