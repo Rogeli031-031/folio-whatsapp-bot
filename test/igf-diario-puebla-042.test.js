@@ -42,7 +42,7 @@ function book() {
   return wb;
 }
 
-test("F28 y G28 se pintan con una condición local y AI/AJ ocultas", async () => {
+test("F28 y G28 se pintan con una condición local y AJ/AK ocultas", async () => {
   const wb = book();
   const ws = igf.fillIgfDiarioPuebla(wb, {
     year: 2026,
@@ -54,16 +54,18 @@ test("F28 y G28 se pintan con una condición local y AI/AJ ocultas", async () =>
   assert.match(formulaOf(ws.getCell(28, 6)), /CONTROL DE COMPRAS/);
   assert.match(formulaOf(ws.getCell(28, 7)), /CONTROL DE COMPRAS/);
   assert.match(formulaOf(ws.getCell(28, 8)), /C28-F28-G28/);
-  assert.match(formulaOf(ws.getCell(28, 35)), /CONTROL DE COMPRAS/);
+  assert.equal(formulaOf(ws.getCell(28, 35)), "");
   assert.match(formulaOf(ws.getCell(28, 36)), /CONTROL DE COMPRAS/);
+  assert.match(formulaOf(ws.getCell(28, 37)), /CONTROL DE COMPRAS/);
   const rules = ws.conditionalFormattings || [];
   const fRule = rules.find((item) => item.ref === "F28");
   const gRule = rules.find((item) => item.ref === "G28");
-  assert.equal(fRule.rules[0].formulae[0], "AND(ISNUMBER(F28),AI28=1)");
-  assert.equal(gRule.rules[0].formulae[0], "AND(ISNUMBER(G28),AJ28=1)");
+  assert.equal(fRule.rules[0].formulae[0], "AND(ISNUMBER(F28),AJ28=1)");
+  assert.equal(gRule.rules[0].formulae[0], "AND(ISNUMBER(G28),AK28=1)");
   assert.equal(ws.getColumn(34).hidden, false);
-  assert.equal(ws.getColumn(35).hidden, true);
+  assert.equal(ws.getColumn(35).hidden, false);
   assert.equal(ws.getColumn(36).hidden, true);
+  assert.equal(ws.getColumn(37).hidden, true);
   const file = path.join(os.tmpdir(), "igf-042-yellow.xlsx");
   await wb.xlsx.writeFile(file);
   const bytes = fs.readFileSync(file);
@@ -85,7 +87,7 @@ test("F28 y G28 se pintan con una condición local y AI/AJ ocultas", async () =>
     const dxfs = [...styles.matchAll(/<dxf>([\s\S]*?)<\/dxf>/g)].map((item) => item[1]);
     assert.match(dxfs[Number(dxfId)], /<fgColor rgb="FFFFFF00"\/>/);
   }
-  assert.match(sheet, /min="35"[^>]*hidden="1"/);
   assert.match(sheet, /min="36"[^>]*hidden="1"/);
   assert.doesNotMatch(sheet, /min="34"[^>]*hidden="1"/);
+  assert.doesNotMatch(sheet, /min="35"[^>]*hidden="1"/);
 });

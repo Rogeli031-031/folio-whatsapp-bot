@@ -82,6 +82,8 @@ test("el 19 queda amarillo al exportar y una fórmula sin resultado no oculta un
   assert.notEqual(yellow(re.getCell(27, 6)), "FFFFFF00");
   assert.equal(re.getCell(45, 1).value, "Semana 5");
   assert.equal(re.getCell(47, 1).value, "TOTAL MES");
-  assert.equal(re.getColumn(35).hidden, true);
   assert.equal(re.getColumn(34).hidden, false);
+  assert.equal(re.getColumn(35).hidden, false);
+  assert.equal(re.getColumn(36).hidden, true);
+  assert.equal(re.getColumn(37).hidden, true);
 });
