@@ -5077,10 +5077,7 @@ async function buildDicfNotifDashboardUrls(client, usuarioRow, accionMeta) {
   const normalizarParaAD = (s) => (s || "").toLowerCase().normalize("NFD").replace(/\p{M}/gu, "").replace(/[\s\u00a0]+/g, " ").trim();
   const rolNormNombre = normalizarParaAD(rolNom);
   const nombreUsuarioNorm = normalizarParaAD(usuarioRow.nombre || "");
-  const esAD =
-    rolClave === "AD" ||
-    (/asistente/.test(rolNormNombre) && /direccion/.test(rolNormNombre)) ||
-    (/asistente/.test(nombreUsuarioNorm) && /direccion/.test(nombreUsuarioNorm));
+  const esAD = comprasDashboard.isAsistenteDireccion(usuarioRow);
   const esCFCDMX =
     rolClave === "CF_CDMX" ||
     (/contralor/.test(rolNormNombre) && /cdmx/.test(rolNormNombre)) ||
@@ -8459,10 +8456,7 @@ async function buildDashboardSignedUrlForUsuario(client, usuarioRow, dashboardPa
   const normalizarParaAD = (s) => (s || "").toLowerCase().normalize("NFD").replace(/\p{M}/gu, "").replace(/[\s\u00a0]+/g, " ").trim();
   const rolNormNombre = normalizarParaAD(rolNom);
   const nombreUsuarioNorm = normalizarParaAD(usuarioRow.nombre || usuarioRow.nombre_persona || "");
-  const esAD =
-    rolClave === "AD" ||
-    (/asistente/.test(rolNormNombre) && /direccion/.test(rolNormNombre)) ||
-    (/asistente/.test(nombreUsuarioNorm) && /direccion/.test(nombreUsuarioNorm));
+  const esAD = comprasDashboard.isAsistenteDireccion(usuarioRow);
   const esCFCDMX =
     rolClave === "CF_CDMX" ||
     (/contralor/.test(rolNormNombre) && /cdmx/.test(rolNormNombre)) ||
