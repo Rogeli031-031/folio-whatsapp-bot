@@ -28,7 +28,8 @@ export function getDashboardExcelDownloadUrl(
   uploadDay?: string | null,
   versionAsOfCorte?: boolean,
   plantCode?: string | null,
-  requirePlant?: boolean
+  requirePlant?: boolean,
+  igfDiarioTodas?: boolean
 ): string {
   const base = getApiUrl("/api/arr/dashboard-excel");
   const next = nextCalendarMonth(year, month);
@@ -40,7 +41,8 @@ export function getDashboardExcelDownloadUrl(
   const plant = (plantCode || "").trim();
   const plantQ = plant ? `&plant_code=${encodeURIComponent(plant)}` : "";
   const requireQ = requirePlant ? "&require_plant=1" : "";
-  return `${base}?year=${year}&month=${month}&proyeccion_anio=${next.y}&proyeccion_mes=${next.m}${hasta}${upload}${asOf}${plantQ}${requireQ}&t=${encodeURIComponent(token)}`;
+  const todasQ = igfDiarioTodas ? "&igf_diario_todas=1" : "";
+  return `${base}?year=${year}&month=${month}&proyeccion_anio=${next.y}&proyeccion_mes=${next.m}${hasta}${upload}${asOf}${plantQ}${requireQ}${todasQ}&t=${encodeURIComponent(token)}`;
 }
 
 /** Descarga Excel Clasificación de apoyos (hoja COMPARATIVOS). */

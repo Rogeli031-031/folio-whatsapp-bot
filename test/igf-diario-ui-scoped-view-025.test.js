@@ -111,14 +111,16 @@ describe("IMPL-IGF-DIARIO-UI-SCOPED-VIEW-025 UI", () => {
     assert.equal((CLIENT.match(/Planta:/g) || []).length, 1);
   });
 
-  it("E) Todas no descarga y muestra el mensaje", () => {
-    assert.match(header, /if \(!plantaFilter\)/);
-    assert.match(header, /Selecciona una planta para descargar el Excel Forecast\./);
+  it("E) Todas descarga un solo Excel sin require_plant", () => {
+    assert.match(header, /const todas = !plantaFilter/);
+    assert.match(header, /todas \? null : plantaFilter/);
+    assert.match(header, /!todas,\s*\n\s*todas/);
+    assert.doesNotMatch(header, /Selecciona una planta para descargar el Excel Forecast\./);
     assert.doesNotMatch(header, /disabled=\{!plantaFilter\}/);
   });
 
   it("F) planta usa plant_code y require_plant=1", () => {
-    assert.match(header, /getDashboardExcelDownloadUrl\([\s\S]*plantaFilter,\s*true/);
+    assert.match(header, /getDashboardExcelDownloadUrl\([\s\S]*todas \? null : plantaFilter,\s*\n\s*!todas/);
   });
 
   it("G–H) el título es siempre IGF Forecast", () => {

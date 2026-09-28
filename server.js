@@ -15580,17 +15580,17 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
       proyeccionCatSubForecast,
       fechaCorte: uploadDay || proyeccionHasta || null,
     };
+    const importeArrMini = (value) => {
+      if (value == null || value === "") return null;
+      const n = Number(value);
+      return Number.isFinite(n) ? n : null;
+    };
     if (plantCode) {
       const mini = await computeIgfForecastMiniPayload(client, igfForecast, year, month, uploadDay);
       const plantMini = (mini && mini.rows ? mini.rows : []).find((row) =>
         dashboardArrForecast.plantsEquivalent(row && row.plant_code, plantCode)
         || dashboardArrForecast.plantsEquivalent(row && row.empresa, plantCode)
       );
-      const importeArrMini = (value) => {
-        if (value == null || value === "") return null;
-        const n = Number(value);
-        return Number.isFinite(n) ? n : null;
-      };
       const corporativos = importeArrMini(plantMini && plantMini.corporativos);
       const operativos = importeArrMini(plantMini && plantMini.operativos);
       if (corporativos != null || operativos != null) {
@@ -15605,6 +15605,31 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
     }
     if (Array.isArray(precioDiario)) {
       forecastOpts.precioDiario = precioDiario;
+    }
+    const igfDiarioTodas = /^(1|true|yes)$/i.test(String(req.query.igf_diario_todas || "").trim());
+    if (!requirePlant && igfDiarioTodas) {
+      const plants = await dashboardArrForecast.listIgfDiarioProvinciaPlants(client, year, month);
+      const miniAll = await computeIgfForecastMiniPayload(client, igfForecast, year, month, uploadDay);
+      await comprasDashboard.ensureComprasTables(client);
+      const igfDiarioPlantas = [];
+      for (const plant of plants) {
+        const code = plant.provinciaPlantCode || plant.canon;
+        const plantMini = (miniAll && miniAll.rows ? miniAll.rows : []).find((row) =>
+          dashboardArrForecast.plantsEquivalent(row && row.plant_code, code)
+          || dashboardArrForecast.plantsEquivalent(row && row.empresa, code)
+          || dashboardArrForecast.plantsEquivalent(row && row.plant_code, plant.nombre)
+          || dashboardArrForecast.plantsEquivalent(row && row.empresa, plant.nombre)
+        );
+        igfDiarioPlantas.push({
+          exportPlant: code,
+          humanName: plant.nombre,
+          comprasPayload: await comprasDashboard.loadMonth(client, plant.plantaId, year, month),
+          precioDiario: await dashboardArrForecast.loadPrecioDiario(client, code, year, month),
+          corporativos: importeArrMini(plantMini && plantMini.corporativos),
+          operativos: importeArrMini(plantMini && plantMini.operativos),
+        });
+      }
+      forecastOpts.igfDiarioPlantas = igfDiarioPlantas;
     }
     const buf = await dashboardArrForecast.generarDashboardArrForecast(client, year, month, plantCode, forecastOpts);
     try {

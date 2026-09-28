@@ -1056,19 +1056,17 @@ export function IgfForecastContent() {
                     <button
                       type="button"
                       onClick={() => {
-                        if (!plantaFilter) {
-                          setForecastExcelMsg("Selecciona una planta para descargar el Excel Forecast.");
-                          return;
-                        }
                         setForecastExcelMsg(null);
+                        const todas = !plantaFilter;
                         const url = getDashboardExcelDownloadUrl(
                           token,
                           igfForecast.year,
                           igfForecast.month,
                           uploadDay,
                           versionAsOfCorte,
-                          plantaFilter,
-                          true
+                          todas ? null : plantaFilter,
+                          !todas,
+                          todas
                         );
                         window.open(url, "_blank", "noopener,noreferrer");
                       }}

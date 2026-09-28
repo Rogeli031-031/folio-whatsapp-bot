@@ -1,6 +1,6 @@
-﻿task_id: "FIX-COMPRAS-DIA1-COSTO-FALLBACK-052"
+﻿task_id: "IMPL-IGF-DIARIO-PROVINCIA-MULTIPLANTA-053A"
 
-title: "CONTROL DE COMPRAS día 1 toma costo anterior o, si no existe, costo del día siguiente"
+title: "Exportar Todas con IGF Diario Provincia y una hoja IGF Diario por planta"
 
 status: "DONE_PENDING_REVIEW"
 
@@ -8,13 +8,13 @@ mode: "IMPLEMENTATION"
 
 authorized_by: "HUMAN_APPROVER"
 
-authorized_at: "2026-09-28T10:35:00-06:00"
+authorized_at: "2026-09-28"
 
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-09-28"
 
-prior_task_review: "main está en d3d75329dec24b00c352cdb6efc66671367c8069. CONTROL DE COMPRAS ya busca un costo HG anterior incluso fuera del mes para el carry de R, pero O sigue dependiendo únicamente de compras del mismo día y no existe fallback hacia el día 2 cuando el día 1 carece de histórico anterior."
+prior_task_review: "main está en c15b77779f8173dc3fff6ca6effc371b50d45285. Actualmente el export por planta genera IGF Diario <planta>, pero al seleccionar Todas no se generan IGF Diario individuales ni una hoja consolidada Provincia."
 
-objective: "Solo para el día 1 del mes, cuando no existe compra propia, completar COSTO KG consolidado (columna O en el layout actual) y COSTO HG (columna R) con prioridad al último costo anterior disponible incluso de otro mes; si no existe histórico anterior, tomar el valor del día 2. No alterar ningún otro día."
+objective: "Cuando el usuario seleccione Todas en IGF Forecast y descargue Excel, generar como primera hoja IGF Diario Provincia y después una hoja IGF Diario por cada planta de Provincia. IGF Diario Provincia debe conservar exactamente el formato de IGF Diario de planta y representar a todas las plantas como una sola empresa, agregando importes y kilos y recalculando correctamente todas las métricas por kg."
 
 implementation: true
 
@@ -24,76 +24,147 @@ schema_changes: false
 
 data_mutation: false
 
-base_sha: "d3d75329dec24b00c352cdb6efc66671367c8069"
+base_sha: "c15b77779f8173dc3fff6ca6effc371b50d45285"
 
-branch: "fix/compras-dia1-costo-fallback-052"
+branch: "impl/igf-diario-provincia-multiplanta-053a"
 
 in_scope:
-  - "lib/compras-dashboard.js: exponer al payload el último costo consolidado válido anterior al inicio del mes si hace falta"
-  - "lib/compras-excel.js: aplicar únicamente al día 1 la prioridad histórico anterior -> día 2 para COSTO KG consolidado y COSTO HG"
-  - "test/compras-dia1-costo-fallback-052.test.js"
-  - "ajustes estrictamente necesarios en pruebas existentes de Compras"
-  - "docs/dev-loop/reports/FIX-COMPRAS-DIA1-COSTO-FALLBACK-052.md"
+  - "lib/dashboard-arr-forecast.js"
+  - "lib/igf-diario-puebla.js"
+  - "server.js"
+  - "frontend-dashboard/components/IgfForecastClient.tsx solo si es estrictamente necesario para distinguir export Todas"
+  - "nuevas funciones auxiliares necesarias para generar soportes por planta sin duplicar el motor financiero"
+  - "test/igf-diario-provincia-multiplanta-053a.test.js"
+  - "ajustes estrictamente necesarios en pruebas existentes de IGF Diario/export Excel"
+  - "docs/dev-loop/reports/IMPL-IGF-DIARIO-PROVINCIA-MULTIPLANTA-053A.md"
   - "docs/dev-loop/CURRENT_TASK.md: solo transición de status"
 
 out_of_scope:
-  - "cambiar kilos de compra"
-  - "cambiar importes de compra"
-  - "cambiar proveedores"
-  - "cambiar proyecciones 046/048/049"
-  - "cambiar IGF Diario"
+  - "AH COMENTARIO DEL DIA; se implementará en 053B"
+  - "nueva columna VENTAS/clientes nuevos; se implementará en 053C"
+  - "Director IA"
+  - "cliente_contactos"
+  - "cambiar definiciones comerciales de clientes nuevos, clientes que bajaron o dejaron de comprar"
   - "cambiar fecha de corte"
-  - "cambiar HG EN KILOS"
-  - "cambiar tarifas de flete"
-  - "cambiar permisos, comprasT o usuarios"
-  - "frontend"
+  - "cambiar CONTROL DE COMPRAS existente"
+  - "cambiar reglas 050, 051, 052"
   - "DB/schema"
   - "PR, merge o deploy"
 
 contracts_in_force:
-  - "La 051 y 051-R1 permanecen vigentes."
-  - "La corrección aplica únicamente al día calendario 1."
-  - "Solo aplica cuando el día 1 no tiene compra propia válida para producir su costo."
-  - "Prioridad 1: último costo válido anterior al día 1, incluso si pertenece al mes anterior."
-  - "Prioridad 2: solo si no existe costo anterior, usar el costo del día 2."
-  - "Si tampoco existe costo válido en el día 2, dejar vacío."
-  - "No buscar hacia adelante para ningún otro día."
-  - "No sobrescribir un costo propio real del día 1."
-  - "El valor heredado debe conservar señal visual amarilla."
-  - "O representa COSTO KG consolidado."
-  - "R representa COSTO HG efectivo, es decir costo consolidado más flete según la lógica ya existente."
+  - "La 050, 051, 051-R1 y 052 permanecen vigentes."
+  - "Seleccionar una planta individual debe seguir produciendo el mismo reporte actual de esa planta."
+  - "Seleccionar Todas debe producir un único XLSX."
+  - "La primera hoja visible debe llamarse exactamente IGF Diario Provincia."
+  - "Después deben aparecer las hojas IGF Diario <planta>, una por cada planta de Provincia disponible para el periodo."
+  - "Usar plantsEquivalent y aliases existentes; no hardcodear Querétaro/Queretaro, Tehuacán/Tehuacan, GTM, etc."
+  - "No crear un segundo motor de pronóstico o financiero."
+  - "Las hojas individuales deben usar exactamente la misma lógica que el export individual."
+  - "IGF Diario Provincia debe calcularse desde las mismas cifras defendibles de las hojas individuales."
+  - "No sumar directamente métricas expresadas en $/kg."
+  - "Los valores absolutos se suman. Los valores por kg se reconstruyen usando importes absolutos y venta total."
+  - "Las fórmulas de Provincia deben mantenerse auditables dentro del Excel."
+  - "Las hojas técnicas adicionales necesarias pueden quedar ocultas, pero no eliminar hojas existentes que hoy sean visibles para el usuario salvo que sean duplicados exclusivamente técnicos creados por 053A."
+
+visible_sheet_order:
+  - "IGF Diario Provincia"
+  - "IGF Diario <planta 1>"
+  - "IGF Diario <planta 2>"
+  - "..."
+  - "resto de hojas actuales del workbook"
+
+province_daily_contract:
+  - "B VENTA KG = suma de B de todas las hojas IGF Diario de planta para esa fecha."
+  - "D INGRESO = suma de D de las plantas."
+  - "C PRECIO = D Provincia / B Provincia."
+  - "F COSTO KG = suma(F planta * B planta) / B Provincia."
+  - "G FLETE KG = suma(G planta * B planta) / B Provincia."
+  - "H MARGEN BRUTO = C - F - G."
+  - "M GASTO CORPORATIVO por kg = suma(M planta * B planta) / B Provincia."
+  - "O MARGEN NETO = H - M."
+  - "T GASTO OPERATIVO por kg = suma(T planta * B planta) / B Provincia."
+  - "V SOBRANTE OPERACION = O - T."
+  - "X IMPORTE HG = suma(X de todas las plantas)."
+  - "Y HG POR KG = X Provincia / B Provincia."
+  - "AA SOBRANTE OPERACION = V - Y."
+  - "AC C&D por kg = suma(AC planta * B planta) / B Provincia."
+  - "AE RESULTADO POR KG = AF Provincia / B Provincia."
+  - "AF RESULTADO = suma(AF de todas las plantas)."
+  - "Cuando B Provincia sea cero o no numérico, no inventar ratios."
+
+province_monthly_contract:
+  - "Los importes corporativos superiores usados por la hoja Provincia deben ser la suma de los importes corporativos de las plantas."
+  - "Los importes operativos superiores usados por Provincia deben ser la suma de los importes operativos de las plantas."
+  - "Semana y TOTAL MES deben operar sobre las filas diarias de Provincia con la misma lógica de ponderación existente."
+  - "No promediar promedios de plantas."
+  - "No sumar $/kg de plantas."
+
+per_plant_contract:
+  - "Cada IGF Diario <planta> debe coincidir con lo que actualmente se obtiene descargando esa misma planta individualmente."
+  - "Misma venta."
+  - "Mismo precio."
+  - "Mismo costo y flete."
+  - "Mismos gastos."
+  - "Mismo HG."
+  - "Mismo C&D."
+  - "Mismo resultado."
+  - "Mismo corte y proyección."
+  - "Mismos amarillos/carry."
+
+future_contract:
+  - "053B agregará COMENTARIO DEL DIA en AH tanto a Provincia como a cada planta."
+  - "053C agregará VENTAS/clientes nuevos por día tanto a Provincia como a cada planta."
+  - "No implementar todavía esos dos contenidos en 053A."
 
 acceptance_criteria:
-  - "Caso Querétaro septiembre: día 1 sin compra, sin histórico anterior, día 2 COSTO KG=11.380; O del día 1 queda 11.380."
-  - "En el mismo caso, día 2 COSTO HG=12.180; R del día 1 queda 12.180."
-  - "O y R del día 1 quedan amarillos cuando el valor es heredado."
-  - "Si 31/08 tiene COSTO KG=11.500 y día 2 tiene 11.380, día 1 usa 11.500 y no 11.380."
-  - "Si el costo HG anterior válido es 12.300 y día 2 es 12.180, R día 1 usa 12.300."
-  - "Si día 1 tiene compra propia, usa su propio O y R y no aplica fallback."
-  - "Si no hay histórico anterior ni valor válido en día 2, O y R día 1 permanecen vacíos."
-  - "Días 2 en adelante no cambian."
-  - "Semana y TOTAL MES no cambian por esta corrección salvo por las fórmulas que legítimamente dependan de esos valores diarios."
+  - "Con Planta=Todas se descarga un solo XLSX."
+  - "La primera hoja es IGF Diario Provincia."
+  - "Existe una hoja IGF Diario por cada planta de Provincia del periodo."
+  - "Querétaro no se duplica por diferencias de acento o alias."
+  - "Tehuacán no se duplica por diferencias de acento o alias."
+  - "La suma de VENTA KG diaria de plantas coincide exactamente con B de Provincia."
+  - "La suma de INGRESO diario coincide exactamente con D de Provincia."
+  - "PRECIO Provincia es D/B, no promedio simple de precios."
+  - "COSTO KG y FLETE KG Provincia son ponderados por kilos."
+  - "Gasto corporativo y operativo por kg se reconstruyen desde importes, no se suman."
+  - "HG por kg se reconstruye desde importe HG total / venta total."
+  - "C&D por kg se reconstruye desde importe económico equivalente / venta total."
+  - "AF Provincia es suma de resultados absolutos de plantas."
+  - "AE Provincia es AF/B."
+  - "Semana y TOTAL MES incluyen correctamente las seis plantas como una sola empresa."
+  - "El export individual por planta no cambia."
+  - "La fecha de corte sigue siendo el primer día proyectado."
+  - "No aparece un segundo cálculo distinto al usado en las hojas individuales."
 
 validation:
-  - "Probar día 1 sin compra y sin histórico anterior."
-  - "Probar día 1 con histórico del mes anterior."
-  - "Probar prioridad histórico anterior sobre día 2."
-  - "Probar día 1 con compra propia."
-  - "Probar día 1 sin histórico y día 2 también sin costo."
-  - "Probar que días 2 a fin de mes no cambian."
-  - "Probar O y R tras guardar y reabrir XLSX."
-  - "Ejecutar regresión de compras 013, 014, 016, 020, 021, 022, 024, 026, 030, 048, 049 y 051 relacionadas."
-  - "Ejecutar git diff --check."
+  - "Comparar Puebla en export Todas contra export Puebla individual."
+  - "Comparar Acapulco."
+  - "Comparar Tehuacan/Tehuacán."
+  - "Comparar Queretaro/Querétaro."
+  - "Probar al menos una fecha con plantas que tengan precios/costos diferentes para demostrar ponderación."
+  - "Probar que precio Provincia no sea promedio aritmético."
+  - "Probar que descuento/C&D Provincia no sea suma de $/kg."
+  - "Probar corporativo, operativo y HG con importes diferentes entre plantas."
+  - "Probar corte dentro del mes."
+  - "Guardar y reabrir XLSX."
+  - "Verificar orden y nombres de hojas."
+  - "Ejecutar regresión 036 a 052 relacionada con IGF/Compras/export."
+  - "git diff --check."
 
 allowed_actions:
-  - "crear rama 052 desde base_sha"
+  - "crear rama 053A desde base_sha"
   - "editar solo in_scope"
+  - "crear hojas técnicas namespaced u ocultas si son necesarias para conservar fórmulas y la lógica existente"
   - "ejecutar pruebas"
   - "crear reporte"
   - "commit"
-  - "push solo a la rama 052"
+  - "push solo a la rama 053A"
 
 forbidden_actions:
+  - "hardcodear seis plantas si el catálogo actual puede resolverlas dinámicamente"
+  - "copiar valores redondeados cuando existe un importe o fórmula defendible"
+  - "crear otro motor financiero"
+  - "usar promedio simple para métricas por kg"
   - "usar git add ."
   - "tocar frontend-dashboard/.next"
   - "hacer migraciones o mutaciones DB"
@@ -103,4 +174,4 @@ forbidden_actions:
 
 max_attempts: 1
 
-result_report_path: "docs/dev-loop/reports/FIX-COMPRAS-DIA1-COSTO-FALLBACK-052.md"
+result_report_path: "docs/dev-loop/reports/IMPL-IGF-DIARIO-PROVINCIA-MULTIPLANTA-053A.md"
