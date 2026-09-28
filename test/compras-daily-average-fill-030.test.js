@@ -286,10 +286,11 @@ test("divisor 23 con grid incompleto y corte 2026-09-24", () => {
   assert.equal(slot(ctx, "2026-09-24", 1).kg, 999999);
   assert.equal(slot(ctx, "2026-09-24", 1).kg_estimated, false);
   assert.equal(slot(ctx, "2026-09-24", 3).kg, 92750 / 23);
-  assert.equal(slot(ctx, "2026-09-24", 3).importe, null);
+  // 049: sin venta, el importe proyectado es kilos × último costo, no queda vacío.
+  assert.equal(slot(ctx, "2026-09-24", 3).importe, 1045311.27 / 23);
   assert.equal(slot(ctx, "2026-09-24", 3).kg_estimated, true);
   assert.equal(slot(ctx, "2026-09-25", 3).kg, 92750 / 23);
-  assert.equal(slot(ctx, "2026-09-25", 3).importe, null);
+  assert.equal(slot(ctx, "2026-09-25", 3).importe, 1045311.27 / 23);
   assert.equal(slot(ctx, "2026-09-25", 2).kg, null);
 });
 

@@ -73,7 +73,7 @@ function monthGrid() {
   const byDate = [];
   for (let day = 1; day <= 30; day += 1) {
     const fecha = `2026-09-${String(day).padStart(2, "0")}`;
-    const venta = day >= 23 ? 0 : (day === 3 ? 0 : day === 22 ? 61.5 : day === 4 ? 1054 : day === 9 ? 37.5 : day === 1 || day === 8 || day === 15 ? 61.5 : "");
+    const venta = day > 23 ? 0 : (day === 3 ? 0 : day === 22 ? 61.5 : day === 4 ? 1054 : day === 9 ? 37.5 : day === 1 || day === 8 || day === 15 ? 61.5 : "");
     const desc = day >= 23 ? 0 : (day === 16 ? -4.72 : day === 2 ? -1 : "");
     byDate.push({
       day,
@@ -92,8 +92,10 @@ function monthGrid() {
     fecha: d.fecha,
     byPlant: {
       Puebla: d.day === 7
-        ? { CASA: 10, COMISIONISTA: 5, }
-        : { CASA: 0, COMISIONISTA: 0 },
+        ? { CASA: 10, COMISIONISTA: 5 }
+        : d.day === 23
+          ? { CASA: null, COMISIONISTA: null }
+          : { CASA: 0, COMISIONISTA: 0 },
     },
   }));
   const descCanalByDate = byDate.map((d) => ({
