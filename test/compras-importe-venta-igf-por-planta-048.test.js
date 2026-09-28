@@ -65,8 +65,12 @@ test("el importe proyectado usa la venta del día y no los kilos de compra", asy
   assert.equal(ctx.byYmd.get("2026-09-25").providers[2].importe, null);
 
   const noSale = buildComprasDailyEstimateContext({ year: 2026, month: 9, providers, grid: { days } }, "2026-09-24", {});
-  assert.equal(noSale.byYmd.get("2026-09-25").providers[1].kg, kgProj);
-  assert.equal(noSale.byYmd.get("2026-09-25").providers[1].importe, null);
+  const noSale25 = noSale.byYmd.get("2026-09-25").providers[1];
+  assert.equal(noSale25.kg, kgProj);
+  assert.equal(noSale25.costo_kg, unit);
+  assert.equal(noSale25.importe, null);
+  assert.equal(noSale.byYmd.get("2026-09-25").providers[2].costo_kg, null);
+  assert.equal(noSale.byYmd.get("2026-09-25").providers[2].importe, null);
 
   const corteBuy = [
     day("2026-09-01", { 1: purchase(230, 230) }),
@@ -94,6 +98,18 @@ test("el importe proyectado usa la venta del día y no los kilos de compra", asy
   assert.equal(ws.getCell(10, 3).value, unit);
   assert.equal(ws.getCell(9, 4).value, unit * venta25);
   assert.equal(ws.getCell(10, 4).value, 449819);
+
+  const emptySale = new ExcelJS.Workbook();
+  await appendComprasWorksheet(emptySale, {
+    year: 2026,
+    month: 9,
+    providers: [providers[0]],
+    grid: { days, rows: days.map((d) => ({ type: "day", ymd: d.ymd })) },
+  }, { plantName: "Puebla", corteYmd: "2026-09-24" });
+  const blank = emptySale.getWorksheet("CONTROL DE COMPRAS");
+  assert.equal(blank.getCell(9, 2).value, kgProj);
+  assert.equal(blank.getCell(9, 3).value, unit);
+  assert.equal(blank.getCell(9, 4).value, null);
 });
 
 function sources(wb, plant, ventaCasa, price) {
