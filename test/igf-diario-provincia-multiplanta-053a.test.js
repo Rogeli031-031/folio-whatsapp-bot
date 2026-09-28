@@ -153,14 +153,16 @@ function evalFormula(wb, ws, expr, stack = new Set()) {
       .filter((n) => typeof n === "number");
     return call === "COUNT" ? nums.length : nums.reduce((sum, n) => sum + n, 0);
   }
-  for (const op of ["<>", ">=", "<=", "=", "+", "-", "/", "*"]) {
+  for (const op of ["<>", ">=", "<=", ">", "<", "=", "+", "-", "/", "*"]) {
     const parts = splitOp(text, op);
     if (!parts) continue;
     const left = evalFormula(wb, ws, parts[0], stack);
     const right = evalFormula(wb, ws, parts[1], stack);
     if (op === "<>") return left !== right;
-    if (op === ">=") return left >= right;
-    if (op === "<=") return left <= right;
+    if (op === ">=") return typeof left === "number" && typeof right === "number" && left >= right;
+    if (op === "<=") return typeof left === "number" && typeof right === "number" && left <= right;
+    if (op === ">") return typeof left === "number" && typeof right === "number" && left > right;
+    if (op === "<") return typeof left === "number" && typeof right === "number" && left < right;
     if (op === "=") return left === right;
     if (typeof left !== "number" || typeof right !== "number") return undefined;
     if (op === "+") return left + right;
