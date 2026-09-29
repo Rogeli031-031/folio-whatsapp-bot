@@ -1,6 +1,6 @@
-﻿task_id: "IMPL-IGF-DIARIO-COMENTARIO-VENTAS-053BC"
+﻿task_id: "FIX-IGF-GRAFICA-CORTE-CD-CLIENTES-054-R2"
 
-title: "Comentario diario y clientes nuevos por fecha en IGF Diario"
+title: "Cerrar paridad de corte, C&D mensual y contexto de clientes nuevos"
 
 status: "DONE_PENDING_REVIEW"
 
@@ -12,232 +12,152 @@ authorized_at: "2026-09-28"
 
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-09-28"
 
-prior_task_review: "053A + R1 + R2 están integradas en main c224dbc97d69d7fad699902d38e20869aca8638d. La comparación visual real confirmó que IGF Diario Puebla individual coincide con IGF Diario Puebla dentro de Todas. AH existe como COMENTARIO DEL DIA pero está vacío. AI/AJ son actualmente auxiliares técnicos ocultos."
+prior_task_review: "054-R1 está en 12d9381b18bae8697accf1cea34ec2d27a538101. La paridad B/C/F/G/X/AC/AE/AF quedó corregida en los casos probados, pero la auditoría encontró tres bordes: venta capturada en la fecha exacta del corte puede ganar sobre forecast; C&D primary/fallback se decide una sola vez para toda la ventana en vez de mes por mes; y el loader de clientes puede omitir el mes anterior necesario para newClientEvents."
 
-objective: "Poblar AH con un resumen ejecutivo diario objetivo basado en el mismo motor matemático de 'cómo nos fue ayer', agregar AI visible VENTAS con los clientes nuevos obtenidos en cada fecha, y mover los auxiliares técnicos actuales a AJ/AK. Aplicar tanto a cada IGF Diario de planta como a IGF Diario Provincia."
+objective: "Cerrar únicamente los tres bordes restantes de 054: fecha exacta del corte siempre proyectada, resolución C&D primary/fallback por mes exactamente como Excel, y conservación del mes calendario anterior para clasificar clientes nuevos sin ampliar innecesariamente las consultas financieras."
 
 implementation: true
-
 code_changes: true
-
 schema_changes: false
-
 data_mutation: false
 
-base_sha: "c224dbc97d69d7fad699902d38e20869aca8638d"
+base_sha: "12d9381b18bae8697accf1cea34ec2d27a538101"
 
-branch: "impl/igf-diario-comentario-ventas-053bc"
+branch: "fix/igf-grafica-corte-cd-clientes-054-r2"
 
 in_scope:
-  - "nuevo helper lib/igf-diario-daily-insights.js o equivalente"
-  - "lib/igf-diario-puebla.js"
-  - "lib/dashboard-arr-forecast.js si es necesario para transportar payloads"
-  - "server.js"
-  - "reutilización read-only de lib/director-ia-daily-deviation.js"
-  - "reutilización read-only de lib/director-ia-daily-discount.js"
-  - "reutilización read-only de normalización de lib/cliente-contacto.js"
-  - "pruebas nuevas 053BC"
-  - "ajustes mínimos de regresión por desplazamiento AI/AJ -> AJ/AK"
-  - "docs/dev-loop/reports/IMPL-IGF-DIARIO-COMENTARIO-VENTAS-053BC.md"
+  - "lib/dashboard-arr-forecast.js"
+  - "lib/igf-diario-grafica.js"
+  - "tests 054/054-R1 afectados"
+  - "nuevo test 054-R2"
+  - "docs/dev-loop/reports/FIX-IGF-GRAFICA-CORTE-CD-CLIENTES-054-R2.md"
   - "docs/dev-loop/CURRENT_TASK.md: solo transición de status"
 
 out_of_scope:
-  - "cambiar la matemática financiera de IGF"
-  - "cambiar 053A/R1/R2"
-  - "cambiar la respuesta conversacional de Director IA"
-  - "cambiar clasificación DICF"
-  - "hacer llamadas OpenAI durante export Excel"
-  - "crear acciones DICF"
-  - "modificar contactos"
-  - "crear contactos"
-  - "DB/schema/migrations"
+  - "rediseñar modal"
+  - "cambiar AF/AE"
+  - "cambiar costo/flete/HG salvo regresión"
+  - "cambiar definición de cliente nuevo 053BC"
+  - "cambiar Top 10"
+  - "cambiar seguridad"
+  - "DB/schema"
+  - "writes/DDL"
+  - "OpenAI"
   - "PR, merge o deploy"
 
-contracts_in_force:
-  - "AH debe llamarse COMENTARIO DEL DIA."
-  - "AI debe llamarse VENTAS."
-  - "AI deja de ser columna auxiliar."
-  - "Los auxiliares técnicos de carry pasan a AJ y AK."
-  - "AJ y AK deben permanecer ocultas."
-  - "AH y AI deben permanecer visibles."
-  - "La información se escribe en la fecha a la que pertenece, no en la fecha de generación."
-  - "Si el resumen corresponde al 27/09, va en la fila 27/09."
-  - "No escribir comentario ejecutivo ni cliente nuevo en filas proyectadas."
-  - "No usar OpenAI para llenar el Excel."
-  - "No almacenar respuestas conversacionales."
-  - "No realizar writes en BD durante la exportación."
-  - "No ejecutar CREATE TABLE/ALTER/INSERT/UPDATE para resolver contactos."
-  - "No hacer una consulta SQL por cada día."
-  - "Los cálculos diarios deben reutilizar computeDailySalesDeviationFromRows y computeDailyDiscountDeviationFromRows."
-  - "Provincia debe calcularse como una sola empresa para métricas diarias, pero conservar identidad planta+cliente para evitar mezclar clientes homónimos entre plantas."
-  - "Los contactos se buscan estrictamente por planta."
-  - "Todas conserva el gate global ZP/AD/CF_CDMX de 053A-R2."
+cutoff_contract:
+  - "Contrato 050: fecha < corte = real."
+  - "Contrato 050: fecha >= corte = proyectado."
+  - "La fecha exacta del corte nunca debe conservar venta capturada como real para IGF."
+  - "Si fecha == corte y existe venta real + forecast, gana forecast."
+  - "Venta y C&D deben usar la misma frontera temporal."
+  - "No permitir día híbrido donde venta sea real y C&D proyectado."
+  - "Después del corte también sigue ganando forecast."
+  - "Antes del corte sigue ganando dato real."
 
-closed_date_contract:
-  - "En mes actual, nunca analizar hoy como día cerrado."
-  - "Si existe fecha de corte, solo fechas < corte son elegibles."
-  - "Fecha máxima elegible = mínimo entre ayer calendario CDMX y corte-1 cuando haya corte."
-  - "En meses históricos completamente cerrados, pueden analizarse todas las fechas reales del mes."
-  - "Fechas proyectadas quedan AH/AI vacías."
+shared_cutoff_helper_contract:
+  - "Corregir la lógica compartida usada por Excel y gráfica, no solo el endpoint."
+  - "Auditar canalIsAfterCutoff, projectMissingVenta y helpers equivalentes."
+  - "No hacer reemplazo global ciego de > por >=."
+  - "Cambiar únicamente comparaciones que representen la frontera fecha real/proyectada del contrato 050."
+  - "Excel y gráfica deben seguir usando el mismo helper."
 
-comment_column:
-  column: "AH"
-  header: "COMENTARIO DEL DIA"
-  source_sales: "arr.ventas_diarias_cliente"
-  source_discount: "arr.descuentos_diarios_cliente"
-  source_contacts: "arr.cliente_contactos"
-  format: "deterministic"
-  openai: false
+cd_month_contract:
+  - "La decisión primary/fallback de C&D se hace por MES calendario."
+  - "Debe reproducir getDescuentoPorKiloGrid."
+  - "Si un mes tiene al menos una fila primary, ese mes usa primary y NO fallback."
+  - "Si ese mes completo no tiene filas primary, usar fallback ventas/descuentos para ese mes."
+  - "La existencia de primary en septiembre no puede impedir fallback de agosto."
+  - "La existencia de primary en un mes no rellena huecos de otro mes."
+  - "No hacer fallback por día ni por planta si el Excel lo decide a nivel mensual."
+  - "En el mes abierto, después de resolver el dato real mensual, la proyección sigue entrando mediante resolveComisionCd/promDescTotal."
+  - "Meses históricos cerrados no usan forecast."
 
-comment_content:
-  - "Primera línea: venta real del día vs referencia same-weekday 14d del motor actual."
-  - "Segunda señal, en la misma línea o inmediatamente después: descuento/kg real vs referencia pooled same-weekday 14d."
-  - "Después: clientes materiales con contribución negativa."
-  - "kg_target=0 y kg_reference>0 => texto 'dejó de comprar'."
-  - "kg_target>0 y contribution_kg<0 => texto 'bajó'."
-  - "Para esos clientes agregar literalmente 'Llamar y recuperar.'."
-  - "Agregar contacto comercial de arr.cliente_contactos."
-  - "Si nombre, teléfono y correo están vacíos: 'Contacto: no capturado.'."
-  - "Nunca inventar nombre, teléfono, correo ni causa."
-  - "No afirmar que contribución matemática es causa."
-  - "Ordenar clientes negativos por magnitud absoluta de contribution_kg."
-  - "Usar solo contribuidores materiales/top del mismo motor diario; no llenar la celda con todos los clientes de la planta."
+cd_loader_contract:
+  - "Preferir loadCdMonthIndex(client, year, month) o equivalente."
+  - "Puede cachearse por YYYY-MM."
+  - "No ejecutar un query primary y fallback por cada planta."
+  - "Resolver cada mes una sola vez y compartirlo entre plantas."
+  - "Query count debe crecer por meses, no por días ni por plantas."
 
-comment_example: |
-  Venta: 25,025 kg vs ref 31,200 kg (-6,175 kg; -19.8%). Desc.: $0.71/kg vs ref $0.65/kg (+$0.06).
-  TORTILLERIA ERICK: dejó de comprar (0 vs 1,800 kg ref). Llamar y recuperar. Contacto: Jesús Laynes Pérez | 2231126169 | rafaellaynes@hotmail...
-  CLIENTE X: bajó 1,200 kg (800 vs 2,000 kg ref). Llamar y recuperar. Contacto: no capturado.
+new_clients_context_contract:
+  - "newClientEvents necesita el mes calendario anterior al mes seleccionado."
+  - "Para septiembre debe poder ver agosto."
+  - "Para enero debe poder ver diciembre del año anterior."
+  - "El rango visual 1D/5D/1M no puede recortar esa historia necesaria."
+  - "Separar customerFactsStart de financialStart."
+  - "financialStart = inicio del primer mes realmente mostrado por el rango."
+  - "customerFactsStart = mínimo entre financialStart y previousMonthStart(year, month)."
+  - "loadPlantFacts ventas/descuentos debe usar customerFactsStart."
+  - "Compras, precio y C&D financiero no necesitan retroceder al mes anterior si ese mes no está en la gráfica."
+  - "No alterar el periodo mostrado al usuario."
 
-comment_missing_data:
-  - "Si hay venta del día pero no referencia suficiente, reportar venta y 'referencia insuficiente'; no fabricar delta."
-  - "Si descuento/kg no es calculable, omitir esa señal o indicar 'descuento/kg no calculable'; nunca usar 0 artificial."
-  - "Si no existen datos suficientes del día, usar una indicación corta o dejar vacío según el renderer, pero nunca afirmar 0."
+new_clients_examples:
+  - "Agosto 100 kg, septiembre 850 kg => NO nuevo."
+  - "Agosto 0 kg, septiembre 850 kg => nuevo."
+  - "Diciembre 100 kg, enero 500 kg => NO nuevo."
+  - "Diciembre 0 kg, enero 500 kg => nuevo."
 
-new_clients_column:
-  column: "AI"
-  header: "VENTAS"
-  source: "arr.ventas_diarias_cliente"
-  forecast: false
-
-new_client_operational_definition:
-  - "Se evalúa por planta."
-  - "cliente_norm debe tener SUM(kg) <= 0 o ausencia de compra positiva en el mes calendario inmediatamente anterior."
-  - "Debe tener SUM(kg) > 0 real en el mes solicitado."
-  - "La fecha del cliente nuevo es MIN(fecha) del mes solicitado donde la suma diaria real del cliente sea > 0."
-  - "El cliente aparece una sola vez en el mes, en esa primera fecha."
-  - "No usar forecast para determinar la fecha."
-  - "No repetir al cliente en compras posteriores del mismo mes."
-  - "Cruce enero/diciembre debe funcionar."
-  - "Un cliente homónimo en dos plantas se considera por planta, no se fusiona."
-
-new_client_cell_format:
-  plant: |
-    NUEVO: TORTILLERIA NUEVA — 1,850 kg
-    NUEVO: CLIENTE B — 620 kg
-  provincia: |
-    Puebla · TORTILLERIA NUEVA — 1,850 kg
-    Acapulco · CLIENTE B — 620 kg
-
-new_client_kg_contract:
-  - "El kg mostrado es la suma real comprada por ese cliente en su primera fecha positiva."
-  - "No mostrar forecast mensual como kg del día."
-  - "Si existen varias filas/canales del cliente ese día, sumar los kg de ese día."
-
-province_contract:
-  - "AH de Provincia usa venta y descuento agregados de todas las plantas como una sola empresa."
-  - "La referencia de Provincia se calcula con el mismo motor diario sobre datos agregados."
-  - "Para contribución por cliente en Provincia, usar identidad compuesta planta+cliente para evitar colisiones."
-  - "Al presentar cliente negativo en Provincia incluir nombre de planta."
-  - "El contacto debe buscarse en la planta correspondiente."
-  - "AI de Provincia es la unión de eventos de clientes nuevos de todas las plantas, agrupados por fecha."
-  - "Cada evento de AI Provincia debe incluir la planta."
-
-plant_contract:
-  - "Cada hoja IGF Diario <planta> solo contiene comentario, contactos y clientes nuevos de esa planta."
-  - "Puebla individual y Puebla dentro de Todas deben producir el mismo AH y AI para la misma fecha/corte."
-
-excel_layout:
-  - "AH = COMENTARIO DEL DIA visible."
-  - "AI = VENTAS visible."
-  - "AJ = auxiliar carry COSTO, hidden."
-  - "AK = auxiliar carry FLETE, hidden."
-  - "Actualizar markCarry y cualquier referencia auxiliar 35/36 a 36/37."
-  - "No dejar flags 0/1 visibles."
-  - "AH y AI con wrapText=true y alineación vertical top."
-  - "AI debe tener ancho suficiente para varios clientes."
-  - "Ajustar altura de fila según máximo de líneas AH/AI con un límite razonable para no deformar el workbook."
-  - "Filas Semana y TOTAL MES no deben contener comentario ni clientes nuevos."
-
-performance_contract:
-  - "No hacer N consultas por N días."
-  - "Precargar ventas del rango necesario por planta y calcular cada fecha en memoria."
-  - "Precargar descuentos del rango necesario por planta."
-  - "Precargar contactos una sola vez por planta."
-  - "Para Provincia reutilizar los datasets precargados de las plantas; no volver a consultar seis veces."
-  - "La ventana de datos debe cubrir al menos previous-calendar-month y los 28 días necesarios para referencias same-weekday antes del inicio del mes."
-
-security_contract:
-  - "Export individual: cargar datos solo después de validar assertPlantaPermitidaDashboard."
-  - "Export Todas: cargar insights multi-planta solo después del gate global 053A-R2."
-  - "No mezclar contactos entre plantas."
-  - "Un usuario local no debe obtener contactos de otras plantas manipulando query params."
+parity_contract:
+  - "B/C/F/G/X/AC/AE/AF siguen coincidiendo con Excel."
+  - "Fecha exacta del corte debe probarse con captura real existente y forecast distinto."
+  - "No basta probar fecha de corte sin captura real."
+  - "Rangos multi-mes deben probar C&D con modos distintos por mes."
 
 acceptance_criteria:
-  - "AH del 27/09 contiene exclusivamente el análisis del 27/09."
-  - "28/09 proyectado no recibe el análisis del 27."
-  - "Venta y referencia AH coinciden con computeDailySalesDeviationFromRows para la misma fecha."
-  - "Descuento y referencia AH coinciden con computeDailyDiscountDeviationFromRows."
-  - "Cliente con target 0 y reference >0 se muestra como 'dejó de comprar'."
-  - "Cliente con target menor a reference se muestra como 'bajó'."
-  - "Ambos incluyen 'Llamar y recuperar'."
-  - "Contacto existente muestra nombre/teléfono/correo disponibles."
-  - "Contacto inexistente muestra 'Contacto: no capturado.'."
-  - "AI lista un cliente en su primera fecha positiva y solo una vez."
-  - "Cliente con compra positiva en mes anterior no aparece como nuevo."
+  - "Corte 03/09, captura real 9,000 kg y forecast 30,750 kg: B Excel y gráfica deben ser 30,750."
+  - "02/09 sigue usando captura real."
+  - "04/09 sigue proyectado."
+  - "AC en la fecha exacta del corte usa forecast igual que Excel."
+  - "No existe combinación B real + AC forecast en el corte."
+  - "Agosto sin primary C&D + septiembre con primary: agosto usa fallback y septiembre primary."
+  - "Agosto primary + septiembre sin primary: agosto primary y septiembre fallback."
+  - "Cada mes cerrado usa su decisión propia."
+  - "1M septiembre carga agosto para clasificar nuevos aunque no muestre agosto."
+  - "Cliente con compra agosto no aparece como nuevo septiembre."
+  - "Cliente sin compra agosto sí aparece."
   - "Cruce enero/diciembre funciona."
-  - "AI Provincia agrega clientes nuevos de todas las plantas y muestra planta."
-  - "AH Provincia agrega empresa completa sin fusionar homónimos."
-  - "Puebla individual coincide con Puebla dentro de Todas en AH y AI."
-  - "AJ/AK permanecen hidden."
-  - "AI es visible y ya no contiene 0/1 técnicos."
-  - "053A/R1/R2 y 052 no cambian."
-  - "No hay llamadas OpenAI durante export."
-  - "No hay writes/DDL de BD durante export."
+  - "Top 10 conserva volumen/descuento actual."
+  - "Mini gráfica conserva Semana -2, Semana -1 y semana actual."
+  - "No aumenta financialStart solo para clientes nuevos."
+  - "Tendencia R1 sigue correcta."
+  - "Gate global sigue intacto."
+  - "No XLSX runtime."
+  - "No writes/DDL."
+  - "No OpenAI."
 
 validation:
-  - "Caso fecha 27 con venta debajo de referencia."
-  - "Caso cliente dejó de comprar."
-  - "Caso cliente bajó."
-  - "Caso contacto completo."
-  - "Caso contacto parcial."
-  - "Caso sin contacto."
-  - "Caso primer cliente nuevo del mes."
-  - "Caso cliente que compra varias veces: aparece solo en primera compra."
-  - "Caso cliente que compró mes anterior: no aparece."
-  - "Caso enero con diciembre anterior."
-  - "Caso mismo cliente_norm en Puebla y Acapulco: Provincia no los fusiona."
-  - "Caso corte 28: AH/AI hasta 27; 28+ vacíos."
-  - "Guardar/reabrir XLSX y revisar texto, wrap, columnas hidden."
-  - "Comparar Puebla individual vs Puebla dentro de Todas."
-  - "Ejecutar regresión 025, 050, 051, 052, 053A, R1, R2."
+  - "Test explícito fecha == corte con venta capturada distinta al forecast."
+  - "Comparar B/AC/AE/AF Excel vs gráfica en esa fecha."
+  - "Test día anterior."
+  - "Test día posterior."
+  - "Test multi-mes agosto fallback + septiembre primary."
+  - "Test inverso agosto primary + septiembre fallback."
+  - "Test 1M con contexto de mes anterior."
+  - "Test enero/diciembre."
+  - "Test cliente no nuevo por compra previa."
+  - "Test cliente nuevo sin compra previa."
+  - "Ejecutar 054, R1, R2."
+  - "Ejecutar 053BC."
+  - "Ejecutar 050 y pruebas forecast afectadas."
   - "git diff --check."
 
 allowed_actions:
-  - "crear rama desde base_sha"
-  - "crear helper read-only de insights"
-  - "reutilizar funciones compute existentes"
+  - "crear rama R2 desde base_sha"
+  - "ajustar helpers compartidos de frontera de corte"
+  - "crear loader C&D mensual cacheable"
+  - "separar financialStart y customerFactsStart"
   - "agregar pruebas"
   - "crear reporte"
   - "commit"
-  - "push solo a la rama 053BC"
+  - "push solo a rama R2"
 
 forbidden_actions:
-  - "usar OpenAI para generar celdas"
-  - "llamar Director IA vía HTTP desde el export"
-  - "crear una consulta SQL por día"
-  - "inventar causas"
-  - "inventar contactos"
-  - "crear/modificar contactos"
+  - "usar query por día"
+  - "usar query C&D por planta"
+  - "generar XLSX en runtime"
+  - "cambiar definición comercial de nuevo"
+  - "cambiar UI salvo que test requiera ajuste estrictamente técnico"
   - "usar git add ."
   - "tocar frontend-dashboard/.next"
   - "hacer migraciones"
@@ -247,4 +167,4 @@ forbidden_actions:
 
 max_attempts: 1
 
-result_report_path: "docs/dev-loop/reports/IMPL-IGF-DIARIO-COMENTARIO-VENTAS-053BC.md"
+result_report_path: "docs/dev-loop/reports/FIX-IGF-GRAFICA-CORTE-CD-CLIENTES-054-R2.md"

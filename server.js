@@ -47,6 +47,7 @@ const arrRefreshProvincia = require("./lib/arr-refresh-provincia");
 const forecastMensual = require("./lib/forecast-mensual");
 const dashboardArrForecast = require("./lib/dashboard-arr-forecast");
 const igfDiarioDailyInsights = require("./lib/igf-diario-daily-insights");
+const igfDiarioGrafica = require("./lib/igf-diario-grafica");
 const arrAnnualCategoryAnalysis = require("./lib/arr-annual-category-analysis");
 const igfMetaExcel = require("./lib/igf-meta-excel");
 const igfMetahg = require("./lib/igf-metahg");
@@ -15456,6 +15457,72 @@ app.get("/api/arr/annual-category-analysis", dashboardAuthMiddleware, async (req
   } catch (e) {
     console.error("[ARR annual-category-analysis]", e);
     res.status(500).json({ error: e.message || "Error al consultar análisis anual" });
+  } finally {
+    client.release();
+  }
+});
+
+app.get("/api/dashboard/igf-diario-grafica", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGAFinancialKpis(req, res)) return;
+  if (dashboardBlockGVForbidden(req, res)) return;
+  const todasBlock = igfDiarioTodasRequestBlock(req);
+  if (todasBlock) return res.status(todasBlock.status).json({ error: todasBlock.error });
+  const todas = /^(1|true|yes)$/i.test(String((req.query && req.query.igf_diario_todas) || "").trim());
+  const plantCodeRaw = ((req.query && req.query.plant_code) || "").toString().trim();
+  if (!todas && !plantCodeRaw) {
+    return res.status(400).json({ error: "Selecciona una planta o IGF Diario Todas." });
+  }
+  const year = parseInt(req.query.year, 10);
+  const month = parseInt(req.query.month, 10);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
+    return res.status(400).json({ error: "Faltan year y month válidos en query" });
+  }
+  const uploadDay = ((req.query.upload_day || "").toString().trim().slice(0, 10)) || null;
+  const versionAsOfCorte = /^(1|true|yes)$/i.test(String(req.query.version_as_of_corte || "").trim());
+  const range = String(req.query.range || "1m");
+  const client = await pool.connect();
+  try {
+    let plants = [];
+    if (!todas) {
+      const resolvedPlant = await dashboardArrForecast.resolveForecastExportPlant(client, plantCodeRaw);
+      if (!resolvedPlant) {
+        return res.status(400).json({ error: "Planta no reconocida para exportar el Excel Forecast." });
+      }
+      const deniedPlant = assertPlantaPermitidaDashboard(req, resolvedPlant.plantaId);
+      if (deniedPlant) return res.status(403).json({ error: deniedPlant });
+      plants = [resolvedPlant];
+    } else {
+      plants = await dashboardArrForecast.listIgfDiarioProvinciaPlants(client, year, month);
+    }
+    let projection = null;
+    try {
+      projection = await dashboardArrForecast.buildPronosticoProjectionContext(client, year, month, uploadDay);
+    } catch (error) {
+      console.error("[igf-diario-grafica] pronostico", error && error.message ? error.message : error);
+    }
+    const payload = await igfDiarioGrafica.loadLiveGrafica(client, {
+      plants,
+      year,
+      month,
+      range,
+      uploadDay,
+      versionAsOfCorte,
+      scope: todas ? "Provincia" : (plants[0] && (plants[0].nombre || plantCodeRaw)) || plantCodeRaw,
+      corteYmd: uploadDay,
+      projection,
+      loadPrecio: (plantName, y, m) => dashboardArrForecast.loadPrecioDiario(client, plantName, y, m),
+      gastosForMonth: async (y, m) => {
+        const igf = await buildIgfForecastPayload(client, y, m, {
+          upload_day: uploadDay,
+          version_as_of_corte: versionAsOfCorte,
+        });
+        return computeIgfForecastMiniPayload(client, igf, y, m, uploadDay);
+      },
+    });
+    res.json(payload);
+  } catch (error) {
+    console.error("[igf-diario-grafica]", error);
+    res.status(500).json({ error: (error && error.message) || "No se pudo armar la gráfica IGF Diario" });
   } finally {
     client.release();
   }

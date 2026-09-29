@@ -12,6 +12,7 @@ import {
   tokenHasGlobalPlantScope,
 } from "@/lib/auth";
 import { buildIgfForecastAccionesHref } from "@/lib/igf-to-acciones-href";
+import IgfDiarioGraficaModal from "@/components/IgfDiarioGraficaModal";
 import {
   fetchIgfForecast,
   fetchIgfForecastMini,
@@ -118,6 +119,8 @@ export function IgfForecastContent() {
   const [hgSaving, setHgSaving] = useState<string | null>(null);
   const [plantaFilter, setPlantaFilter] = useState<string>("");
   const [forecastExcelMsg, setForecastExcelMsg] = useState<string | null>(null);
+  const [igfGraficaOpen, setIgfGraficaOpen] = useState(false);
+  const [igfExcelUrl, setIgfExcelUrl] = useState("");
   const [uploadDay, setUploadDay] = useState<string>(() => {
     if (typeof window === "undefined") return "";
     try {
@@ -1073,7 +1076,8 @@ export function IgfForecastContent() {
                           !todas,
                           todas
                         );
-                        window.open(url, "_blank", "noopener,noreferrer");
+                        setIgfExcelUrl(url);
+                        setIgfGraficaOpen(true);
                       }}
                       className="inline-flex items-center rounded bg-slate-600 px-2 py-1 text-xs font-medium text-white hover:bg-slate-500"
                     >
@@ -2542,6 +2546,20 @@ export function IgfForecastContent() {
               : undefined
           }
           resumenSubcategoriaForecast={categoryMovementResumen}
+        />
+      ) : null}
+      {token && igfGraficaOpen && igfForecast && igfExcelUrl ? (
+        <IgfDiarioGraficaModal
+          token={token}
+          year={igfForecast.year}
+          month={igfForecast.month}
+          uploadDay={uploadDay}
+          versionAsOfCorte={versionAsOfCorte}
+          plantCode={plantaFilter || null}
+          todas={!plantaFilter}
+          scopeLabel={plantaFilter ? plantaFilter : "PROVINCIA"}
+          excelUrl={igfExcelUrl}
+          onClose={() => setIgfGraficaOpen(false)}
         />
       ) : null}
     </div>
