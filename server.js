@@ -15494,6 +15494,12 @@ app.get("/api/dashboard/igf-diario-grafica", dashboardAuthMiddleware, async (req
     } else {
       plants = await dashboardArrForecast.listIgfDiarioProvinciaPlants(client, year, month);
     }
+    let projection = null;
+    try {
+      projection = await dashboardArrForecast.buildPronosticoProjectionContext(client, year, month, uploadDay);
+    } catch (error) {
+      console.error("[igf-diario-grafica] pronostico", error && error.message ? error.message : error);
+    }
     const payload = await igfDiarioGrafica.loadLiveGrafica(client, {
       plants,
       year,
@@ -15503,6 +15509,8 @@ app.get("/api/dashboard/igf-diario-grafica", dashboardAuthMiddleware, async (req
       versionAsOfCorte,
       scope: todas ? "Provincia" : (plants[0] && (plants[0].nombre || plantCodeRaw)) || plantCodeRaw,
       corteYmd: uploadDay,
+      projection,
+      loadPrecio: (plantName, y, m) => dashboardArrForecast.loadPrecioDiario(client, plantName, y, m),
       gastosForMonth: async (y, m) => {
         const igf = await buildIgfForecastPayload(client, y, m, {
           upload_day: uploadDay,

@@ -30,25 +30,27 @@ type Props = {
   onClose: () => void;
 };
 
-function linearTrend(values: number[]): { a: number; b: number } | null {
-  const n = values.length;
+function linearTrendIndexed(pairs: { x: number; y: number }[]): { a: number; b: number; xFirst: number; xLast: number } | null {
+  const usable = pairs.filter((pair) => Number.isFinite(pair.x) && Number.isFinite(pair.y));
+  const n = usable.length;
   if (n < 2) return null;
   let sumX = 0;
   let sumY = 0;
   let sumXY = 0;
   let sumXX = 0;
-  for (let i = 0; i < n; i += 1) {
-    sumX += i;
-    sumY += values[i];
-    sumXY += i * values[i];
-    sumXX += i * i;
+  for (const pair of usable) {
+    sumX += pair.x;
+    sumY += pair.y;
+    sumXY += pair.x * pair.y;
+    sumXX += pair.x * pair.x;
   }
   const denom = n * sumXX - sumX * sumX;
   if (Math.abs(denom) < 1e-12) return null;
   const b = (n * sumXY - sumX * sumY) / denom;
   const a = (sumY - b * sumX) / n;
   if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
-  return { a, b };
+  const xs = usable.map((pair) => pair.x);
+  return { a, b, xFirst: Math.min(...xs), xLast: Math.max(...xs) };
 }
 
 function fmtMoney(n: number | null | undefined): string {
@@ -142,14 +144,14 @@ export default function IgfDiarioGraficaModal({
     const usable = points
       .map((point, index) => ({ point, index, value: valueOf(point) }))
       .filter((item) => typeof item.value === "number");
-    const trendSource = points.filter(
-      (point) => point.estado === "real" && point.complete && typeof valueOf(point) === "number"
-    );
-    const trend = linearTrend(trendSource.map((point) => valueOf(point) as number));
+    const trendPairs = points.flatMap((point, index) => {
+      const value = valueOf(point);
+      if (point.estado !== "real" || !point.complete || typeof value !== "number") return [];
+      return [{ x: index, y: value }];
+    });
+    const trend = linearTrendIndexed(trendPairs);
     const vals = usable.map((item) => item.value as number);
-    const trendVals = trend && trendSource.length >= 2
-      ? [trend.a, trend.a + trend.b * (trendSource.length - 1)]
-      : [];
+    const trendVals = trend ? [trend.a + trend.b * trend.xFirst, trend.a + trend.b * trend.xLast] : [];
     const all = [...vals, ...trendVals, 0];
     const minV = all.length ? Math.min(...all) : 0;
     const maxV = all.length ? Math.max(...all) : 1;
@@ -250,12 +252,12 @@ export default function IgfDiarioGraficaModal({
                   />
                 );
               })}
-              {chart.trend && chart.points.filter((point) => point.estado === "real" && point.complete).length >= 2 && (
+              {chart.trend && (
                 <line
-                  x1={chart.xOf(chart.points.findIndex((point) => point.estado === "real" && point.complete))}
-                  y1={chart.yOf(chart.trend.a)}
-                  x2={chart.xOf(chart.points.length - 1)}
-                  y2={chart.yOf(chart.trend.a + chart.trend.b * (chart.points.filter((point) => point.estado === "real" && point.complete).length - 1))}
+                  x1={chart.xOf(chart.trend.xFirst)}
+                  y1={chart.yOf(chart.trend.a + chart.trend.b * chart.trend.xFirst)}
+                  x2={chart.xOf(chart.trend.xLast)}
+                  y2={chart.yOf(chart.trend.a + chart.trend.b * chart.trend.xLast)}
                   stroke="#ffffff"
                   strokeWidth={1.5}
                 />
