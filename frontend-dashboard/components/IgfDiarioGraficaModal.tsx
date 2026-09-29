@@ -16,6 +16,16 @@ const RANGOS = [
 
 type RangeId = (typeof RANGOS)[number]["id"];
 type Metric = "mxn" | "per_kg";
+type CoverageSummary = {
+  total_points: number;
+  numeric_points: number;
+  complete_points: number;
+  missing_by_component: Record<string, number>;
+  first_missing_date?: { fecha: string; components: string[] } | null;
+  missing_by_plant?: Record<string, number>;
+};
+type GraficaData = IgfDiarioGraficaResponse & { coverage_summary?: CoverageSummary };
+const COVERAGE_ORDER = ["VENTA", "PRECIO", "COSTO", "FLETE", "HG", "C&D", "CORPORATIVO", "OPERATIVO"];
 
 type Props = {
   token: string;
@@ -103,7 +113,7 @@ export default function IgfDiarioGraficaModal({
 }: Props) {
   const [metric, setMetric] = useState<Metric>("mxn");
   const [range, setRange] = useState<RangeId>("1m");
-  const [data, setData] = useState<IgfDiarioGraficaResponse | null>(null);
+  const [data, setData] = useState<GraficaData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [hover, setHover] = useState<number | null>(null);
 
@@ -222,6 +232,19 @@ export default function IgfDiarioGraficaModal({
         <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-auto p-4 lg:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
           <div>
             {error && <p className="text-sm text-red-300">{error}</p>}
+            {(data?.coverage_summary?.numeric_points ?? chart.points.filter((point) => typeof chart.valueOf(point) === "number").length) === 0 ? (
+              <div className="flex h-[380px] flex-col justify-center rounded border border-slate-700 px-4 text-sm text-slate-200">
+                <p className="font-medium text-white">Sin rentabilidad calculable para este periodo.</p>
+                <p className="mt-2 text-amber-200">
+                  Falta: {COVERAGE_ORDER
+                    .map((key) => ({ key, days: data?.coverage_summary?.missing_by_component?.[key] || 0 }))
+                    .filter((item) => item.days > 0)
+                    .sort((a, b) => b.days - a.days || a.key.localeCompare(b.key, "es"))
+                    .map((item) => `${item.key} · ${item.days} días`)
+                    .join(" · ") || "sin detalle"}
+                </p>
+              </div>
+            ) : (
             <svg viewBox={`0 0 ${chart.W} ${chart.H}`} className="h-[380px] w-full">
               <line
                 x1={chart.padL}
@@ -279,6 +302,7 @@ export default function IgfDiarioGraficaModal({
                 );
               })}
             </svg>
+            )}
             {hover != null && chart.points[hover] && (
               <div className="mt-2 rounded border border-slate-700 bg-slate-950 p-3 text-xs text-slate-200">
                 <div className="font-medium text-white">{fmtFecha(chart.points[hover].fecha)}</div>
