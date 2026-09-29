@@ -15521,8 +15521,8 @@ app.get("/api/dashboard/igf-diario-grafica", dashboardAuthMiddleware, async (req
     });
     res.json(payload);
   } catch (error) {
-    console.error("[igf-diario-grafica]", error);
-    res.status(500).json({ error: (error && error.message) || "No se pudo armar la gráfica IGF Diario" });
+    console.error("[igf-diario-grafica]", error && error.message ? error.message : error);
+    res.status(500).json({ error: "No se pudo armar la gráfica IGF Diario" });
   } finally {
     client.release();
   }
