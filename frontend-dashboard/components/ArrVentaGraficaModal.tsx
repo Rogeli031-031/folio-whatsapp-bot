@@ -501,8 +501,8 @@ export function ArrVentaSerieView({
   }
 
   return (
-    <div className={`flex flex-col gap-3 lg:flex-row lg:items-stretch ${embedded ? "max-h-[320px] overflow-auto" : ""}`}>
-      <div className={`relative min-w-0 flex-1 ${embedded ? "min-h-[220px]" : ""}`}>
+    <div className={embedded ? "flex flex-col gap-3" : "flex flex-col gap-3 lg:flex-row lg:items-stretch"}>
+      <div className={embedded ? "relative w-full" : "relative min-w-0 flex-1"}>
         <svg
           viewBox={`0 0 ${chart.W} ${chart.H}`}
           className="h-auto w-full"
@@ -666,27 +666,44 @@ export function ArrVentaSerieView({
         )}
       </div>
 
-      <aside className={`w-full shrink-0 rounded-lg border border-slate-200 bg-white p-3 ${embedded ? "lg:w-[240px]" : "lg:w-[640px]"}`}>
-        <div className="grid grid-cols-1 gap-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] sm:gap-3">
+      <aside className={embedded ? "w-full" : "w-full shrink-0 rounded-lg border border-slate-200 bg-white p-3 lg:w-[640px]"}>
+        {embedded ? (
           <div>
-            <h3 className="text-sm font-semibold text-slate-800">
-              {isCliente ? "MOVIMIENTO DEL CLIENTE" : "Top 6 clientes · Δ venta"}
-            </h3>
+            <h3 className="text-sm font-semibold text-slate-800">Top 6 clientes · Δ venta</h3>
             <p className="mt-0.5 text-[11px] leading-snug text-slate-500">
-              {isCliente
-                ? "Vs periodo previo comparable · mismo cliente"
-                : `Vs periodo previo · ${canal === "casa" ? "CASA" : "COMISIONISTA"}`}
+              Vs periodo previo · {canal === "casa" ? "CASA" : "COMISIONISTA"}
             </p>
+            <div className="mt-2 hidden gap-2 border-b border-slate-200 pb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500 md:grid md:grid-cols-[minmax(0,2fr)_minmax(72px,100px)_minmax(64px,90px)_minmax(64px,90px)_minmax(64px,90px)_minmax(0,2fr)]">
+              <span>Cliente</span>
+              <span>Movimiento</span>
+              <span>Δ venta</span>
+              <span>Prev</span>
+              <span>Actual</span>
+              <span>Últimos comentarios</span>
+            </div>
           </div>
-          <div className="hidden sm:block">
-            <h3 className="text-sm font-semibold text-slate-800">
-              {isCliente ? "ÚLTIMOS COMENTARIOS" : "Últimos comentarios"}
-            </h3>
-            <p className="mt-0.5 text-[11px] leading-snug text-slate-500">
-              Delta Ingreso Cliente Forecast · 2 más recientes
-            </p>
+        ) : (
+          <div className="grid grid-cols-1 gap-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] sm:gap-3">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-800">
+                {isCliente ? "MOVIMIENTO DEL CLIENTE" : "Top 6 clientes · Δ venta"}
+              </h3>
+              <p className="mt-0.5 text-[11px] leading-snug text-slate-500">
+                {isCliente
+                  ? "Vs periodo previo comparable · mismo cliente"
+                  : `Vs periodo previo · ${canal === "casa" ? "CASA" : "COMISIONISTA"}`}
+              </p>
+            </div>
+            <div className="hidden sm:block">
+              <h3 className="text-sm font-semibold text-slate-800">
+                {isCliente ? "ÚLTIMOS COMENTARIOS" : "Últimos comentarios"}
+              </h3>
+              <p className="mt-0.5 text-[11px] leading-snug text-slate-500">
+                Delta Ingreso Cliente Forecast · 2 más recientes
+              </p>
+            </div>
           </div>
-        </div>
+        )}
 
         {clientesTop.length === 0 ? (
           <p className="mt-3 text-xs text-slate-500">Sin cambios relevantes en el rango.</p>
@@ -694,68 +711,94 @@ export function ArrVentaSerieView({
           <ol className="mt-3 space-y-2">
             {clientesTop.map((cliente, idx) => {
               const comments = Array.isArray(cliente.comentarios) ? cliente.comentarios.slice(0, 2) : [];
+              const commentBlock = comments.length === 0 ? (
+                <p className="text-[11px] italic text-slate-400">Sin comentarios</p>
+              ) : (
+                <ul className="space-y-1.5">
+                  {comments.map((com, j) => (
+                    <li key={`c-${idx}-${j}`} className="border-l-2 border-sky-300 pl-2">
+                      <p className="whitespace-normal break-words text-[11px] leading-snug text-slate-700">
+                        {String(com.body || "").trim() || "—"}
+                      </p>
+                      <p className="mt-0.5 text-[10px] text-slate-400">
+                        {[com.created_at, com.author_name].filter(Boolean).join(" · ") || "—"}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              );
               return (
                 <li
                   key={`${cliente.cliente}-${idx}`}
                   title={onClienteDoubleClick ? "Doble clic para abrir gráfica del cliente" : undefined}
-                  className={`grid grid-cols-1 items-stretch gap-2 rounded-md border border-slate-100 bg-slate-50 p-2.5 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] sm:gap-3 ${
-                    onClienteDoubleClick ? "cursor-pointer" : ""
-                  }`}
+                  className={
+                    embedded
+                      ? `grid w-full grid-cols-1 gap-1 border-b border-slate-100 py-2 md:grid-cols-[minmax(0,2fr)_minmax(72px,100px)_minmax(64px,90px)_minmax(64px,90px)_minmax(64px,90px)_minmax(0,2fr)] md:items-start md:gap-2 ${
+                          onClienteDoubleClick ? "cursor-pointer" : ""
+                        }`
+                      : `grid grid-cols-1 items-stretch gap-2 rounded-md border border-slate-100 bg-slate-50 p-2.5 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] sm:gap-3 ${
+                          onClienteDoubleClick ? "cursor-pointer" : ""
+                        }`
+                  }
                   onClick={(event) => event.stopPropagation()}
                   onDoubleClick={(event) => {
                     event.stopPropagation();
                     onClienteDoubleClick?.(cliente.cliente);
                   }}
                 >
-                  <div className="min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="truncate text-xs font-semibold text-slate-800" title={cliente.cliente}>
-                          {idx + 1}. {cliente.cliente}
-                        </div>
-                        <span
-                          className={`mt-1 inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold ${tipoClass(
-                            String(cliente.tipo)
-                          )}`}
-                        >
+                  {embedded ? (
+                    <>
+                      <div className="whitespace-normal break-words text-xs font-semibold text-slate-800">
+                        {idx + 1}. {cliente.cliente}
+                      </div>
+                      <div>
+                        <span className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold ${tipoClass(String(cliente.tipo))}`}>
                           {tipoLabel(String(cliente.tipo))}
                         </span>
                       </div>
-                      <div
-                        className={`shrink-0 text-right text-sm font-bold tabular-nums ${
-                          cliente.delta_ton < 0 ? "text-rose-600" : "text-emerald-600"
-                        }`}
-                      >
-                        {fmtTonSigned(cliente.delta_ton)}
-                        <div className="text-[10px] font-medium text-slate-500">ton</div>
+                      <div className={`text-sm font-bold tabular-nums ${cliente.delta_ton < 0 ? "text-rose-600" : "text-emerald-600"}`}>
+                        {fmtTonSigned(cliente.delta_ton)} ton
                       </div>
-                    </div>
-                    <div className="mt-1.5 flex justify-between text-[10px] text-slate-500">
-                      <span>Prev: {fmtTon(cliente.venta_ton_prev)}</span>
-                      <span>Actual: {fmtTon(cliente.venta_ton_actual)}</span>
-                    </div>
-                  </div>
-                  <div className="min-w-0 border-t border-slate-200 pt-2 sm:border-l sm:border-t-0 sm:pl-3 sm:pt-0">
-                    <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 sm:hidden">
-                      Comentarios
-                    </div>
-                    {comments.length === 0 ? (
-                      <p className="text-[11px] italic text-slate-400">Sin comentarios</p>
-                    ) : (
-                      <ul className="space-y-1.5">
-                        {comments.map((com, j) => (
-                          <li key={`c-${idx}-${j}`} className="border-l-2 border-sky-300 pl-2">
-                            <p className="text-[11px] leading-snug text-slate-700">
-                              {String(com.body || "").trim() || "—"}
-                            </p>
-                            <p className="mt-0.5 text-[10px] text-slate-400">
-                              {[com.created_at, com.author_name].filter(Boolean).join(" · ") || "—"}
-                            </p>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
+                      <div className="text-[11px] tabular-nums text-slate-600">
+                        <span className="md:hidden">Prev </span>
+                        {fmtTon(cliente.venta_ton_prev)}
+                      </div>
+                      <div className="text-[11px] tabular-nums text-slate-600">
+                        <span className="md:hidden">Actual </span>
+                        {fmtTon(cliente.venta_ton_actual)}
+                      </div>
+                      <div className="min-w-0">{commentBlock}</div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="truncate text-xs font-semibold text-slate-800" title={cliente.cliente}>
+                              {idx + 1}. {cliente.cliente}
+                            </div>
+                            <span className={`mt-1 inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold ${tipoClass(String(cliente.tipo))}`}>
+                              {tipoLabel(String(cliente.tipo))}
+                            </span>
+                          </div>
+                          <div className={`shrink-0 text-right text-sm font-bold tabular-nums ${cliente.delta_ton < 0 ? "text-rose-600" : "text-emerald-600"}`}>
+                            {fmtTonSigned(cliente.delta_ton)}
+                            <div className="text-[10px] font-medium text-slate-500">ton</div>
+                          </div>
+                        </div>
+                        <div className="mt-1.5 flex justify-between text-[10px] text-slate-500">
+                          <span>Prev: {fmtTon(cliente.venta_ton_prev)}</span>
+                          <span>Actual: {fmtTon(cliente.venta_ton_actual)}</span>
+                        </div>
+                      </div>
+                      <div className="min-w-0 border-t border-slate-200 pt-2 sm:border-l sm:border-t-0 sm:pl-3 sm:pt-0">
+                        <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 sm:hidden">
+                          Comentarios
+                        </div>
+                        {commentBlock}
+                      </div>
+                    </>
+                  )}
                 </li>
               );
             })}

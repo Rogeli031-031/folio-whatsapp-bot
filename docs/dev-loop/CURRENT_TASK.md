@@ -1,6 +1,6 @@
-﻿task_id: "FIX-IGF-ARR-VISUAL-PARITY-COMMENTS-056-R1"
+﻿task_id: "FIX-IGF-ARR-TOP6-VERTICAL-LAYOUT-057"
 
-title: "Reutilizar visual ARR real en IGF y completar comentarios Provincia"
+title: "Extender gráficas ARR embebidas y poner Top 6 debajo en renglones"
 
 status: "DONE_PENDING_REVIEW"
 
@@ -12,32 +12,22 @@ authorized_at: "2026-10-01"
 
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-10-01"
 
-prior_task:
-  task_id: "IMPL-IGF-GRAFICA-ARR-CANALES-LAYOUT-056"
-  sha: "3755443cdb962214277a3ce07729d4b9abf3a49d"
-  status: "DONE_PENDING_REVIEW"
+base_sha: "0528b93123aa61c199a75fb4b9048701ac9652f0"
 
-base_sha: "3755443cdb962214277a3ce07729d4b9abf3a49d"
+branch: "fix/igf-arr-top6-vertical-layout-057"
 
-branch: "fix/igf-arr-visual-parity-comments-056-r1"
-
-review_findings: >
-  056 resolvió correctamente tendencia amarilla, alineación de semanas,
-  eliminación visual de Clientes Nuevos, CASA/COMISIONISTA con el motor ARR,
-  Top 6, doble clic, Provincia y seguridad.
-  Sin embargo ArrVentaCanalPanel creó una visualización paralela 320x120
-  simplificada. No reproduce la gráfica ARR mostrada por el usuario:
-  faltan ejes X/Y, área sombreada, labels, hover, tooltip y composición
-  gráfica + Top 6 + Últimos comentarios.
-  Además Provincia puede devolver comentarios vacíos porque intenta resolver
-  "Provincia" como una planta individual.
+production_evidence: >
+  En producción, CASA y COMISIONISTA usan correctamente ArrVentaSerieView,
+  pero en modo embedded la gráfica comparte horizontalmente el espacio con
+  un aside de 240px que contiene Top 6 y comentarios. Eso comprime nombres,
+  Prev/Actual, delta y comentarios. El usuario solicita extender la gráfica
+  y mostrar debajo los seis clientes, un renglón completo por cliente.
 
 objective: >
-  Hacer que CASA y COMISIONISTA dentro del modal IGF utilicen exactamente
-  el mismo componente visual/presentacional que ArrVentaGraficaModal,
-  manteniendo el mismo endpoint, cálculos, ejes, área, tendencia, hover,
-  tooltips, Top 6 y comentarios. Corregir además la resolución de comentarios
-  cuando el scope es Provincia.
+  Cambiar únicamente el layout embedded de ArrVentaSerieView para que la
+  gráfica CASA/COMISIONISTA use todo el ancho disponible y debajo aparezca
+  el Top 6 como una lista vertical de seis renglones legibles, sin alterar
+  cálculos, datos, interacciones, gráfica ARR normal ni lógica IGF.
 
 implementation: true
 code_changes: true
@@ -46,257 +36,206 @@ data_mutation: false
 
 in_scope:
   - "frontend-dashboard/components/ArrVentaGraficaModal.tsx"
-  - "frontend-dashboard/components/ArrVentaCanalPanel.tsx"
-  - "frontend-dashboard/components/IgfDiarioGraficaModal.tsx"
-  - "frontend-dashboard/lib/api.ts solo si es estrictamente necesario"
-  - "server.js"
-  - "lib/commercial-trend-engine.js solo si hace falta exponer scope resuelto"
-  - "tests 056 y nuevo 056-R1"
-  - "docs/dev-loop/reports/FIX-IGF-ARR-VISUAL-PARITY-COMMENTS-056-R1.md"
+  - "frontend-dashboard/components/ArrVentaCanalPanel.tsx solo si hace falta ajustar contenedor"
+  - "frontend-dashboard/components/IgfDiarioGraficaModal.tsx solo si hace falta spacing"
+  - "test/igf-arr-top6-vertical-layout-057.test.js"
+  - "tests 056/056-R1 afectados"
+  - "docs/dev-loop/reports/FIX-IGF-ARR-TOP6-VERTICAL-LAYOUT-057.md"
   - "docs/dev-loop/CURRENT_TASK.md solo status"
 
 out_of_scope:
-  - "cambiar AF/AE"
-  - "cambiar CIERRE PROYECTADO"
-  - "cambiar cálculo commercialTrend"
-  - "cambiar selección Top 6"
-  - "cambiar definición de canal"
-  - "cambiar Delta Ingreso Cliente Forecast"
-  - "cambiar Clientes Nuevos backend"
+  - "server.js"
+  - "commercial-trend-engine"
+  - "API ARR"
+  - "Top 6 calculation"
+  - "comments calculation"
+  - "Provincia"
+  - "AF/AE"
+  - "CIERRE PROYECTADO"
+  - "range"
   - "DB/schema"
-  - "writes nuevos"
+  - "writes"
   - "OpenAI"
   - "PR"
   - "merge"
   - "deploy"
 
-primary_rule:
-  - "Debe existir UNA sola implementación visual de la gráfica ARR."
-  - "ArrVentaGraficaModal y los paneles embebidos IGF deben renderizar ese mismo contenido."
-  - "No mantener una gráfica 320x120 paralela con otra matemática/render."
-  - "No duplicar linearTrend."
-  - "No duplicar escala X/Y."
-  - "No duplicar ticks."
-  - "No duplicar hover/tooltip."
-  - "No duplicar areaPath/linePath."
+shared_view_rule:
+  - "Mantener ArrVentaSerieView como única implementación visual ARR."
+  - "NO crear una segunda gráfica para embedded."
+  - "NO duplicar linearTrend, ticks, paths ni tooltip."
+  - "Solo cambiar composición/layout cuando embedded=true."
 
-shared_visual:
-  preferred_design: >
-    Extraer dentro de ArrVentaGraficaModal.tsx o a un componente compartido
-    una vista presentacional reusable, por ejemplo ArrVentaSerieView /
-    ArrVentaGraficaContent. ArrVentaGraficaModal conserva el shell modal
-    y usa esa vista. ArrVentaCanalPanel obtiene data con fetchArrVentaSerie
-    y usa exactamente esa misma vista.
-  requirements:
-    - "Mismo eje Y toneladas."
-    - "Mismos ticks Y."
-    - "Mismo eje X y labels de fechas."
-    - "Misma área sombreada bajo Venta."
-    - "Misma línea de venta."
-    - "Misma línea verde de tendencia."
-    - "Mismo punto final."
-    - "Mismo hover/click por fecha."
-    - "Mismo tooltip con toneladas y descuento."
-    - "Mismo cálculo y formatting."
-    - "Mismo Top 6 delta."
-    - "Mismos Prev / Actual."
-    - "Mismos últimos comentarios."
-    - "Mismos badges Aumentó/Disminuyó/Nuevo/Dejó de comprar."
-
-arr_original_regression:
-  - "ArrVentaGraficaModal debe verse y funcionar igual que antes."
-  - "Los tests 018/019 deben continuar pasando."
-  - "El botón GRAFICA de DeltaIngresoClienteForecastModal sigue abriendo el mismo modal."
-  - "Mode cliente conserva Venta Ton + Descuento $/kg + tendencia + Movimiento + comentarios."
-  - "No degradar la gráfica ARR original para facilitar embedded."
-
-embedded_mode:
-  - "Crear modo embedded en la vista compartida, no una implementación visual distinta."
-  - "En embedded ocultar únicamente:"
-  - "shell fixed/fullscreen"
-  - "botón Cerrar"
-  - "selector CASA/COMISIONISTA"
-  - "botones propios de rango"
-  - "Mantener gráfica, ejes, área, tooltip, Top 6 y comentarios."
-  - "El rango lo sigue controlando IGF."
+normal_modal_contract:
+  - "ArrVentaGraficaModal normal conserva exactamente el layout actual."
+  - "Mode cliente conserva gráfica izquierda + panel derecho."
+  - "Delta Ingreso Cliente Forecast -> GRAFICA sigue igual."
+  - "018 y 019 deben seguir pasando."
+  - "No modificar experiencia fullscreen."
 
 embedded_layout:
-  desktop:
-    - "Cada canal debe parecer una versión compacta de la gráfica ARR de la captura."
-    - "Gráfica a la izquierda."
-    - "Top 6 y Últimos comentarios a la derecha."
-    - "CASA arriba."
-    - "COMISIONISTA abajo."
-    - "No reducir a sparkline."
-  dimensions:
-    - "No fijar SVG conceptual a 320x120."
-    - "Usar el mismo viewBox/layout base ARR o un responsive derivado del mismo componente."
-    - "Debe conservar ejes legibles."
-    - "Objetivo aproximado por panel: 260-330 px de alto en desktop."
-  mobile:
-    - "Gráfica arriba."
-    - "Top 6/comentarios debajo."
-    - "Sin overflow destructivo."
+  - "Cuando embedded=true usar layout vertical."
+  - "Primero gráfica ARR a todo el ancho."
+  - "Después Top 6 debajo."
+  - "Eliminar en embedded la columna lateral lg:w-[240px]."
+  - "Eliminar max-h-[320px] que obliga scroll interno/corte del contenido."
+  - "El panel completo puede crecer verticalmente."
+  - "El scroll principal debe ser el del modal IGF, no un scroll interno pequeño."
 
-channel_identity:
-  - "CASA conserva amarillo."
-  - "COMISIONISTA conserva azul."
-  - "Tendencia conserva verde."
-  - "No cambiar colores ARR actuales."
+embedded_chart:
+  - "La gráfica debe ocupar width: 100% del panel CASA/COMISIONISTA."
+  - "Mantener viewBox 980x460 y mismo renderer."
+  - "No cambiar datos ni escala."
+  - "Mantener eje Y."
+  - "Mantener eje X."
+  - "Mantener área."
+  - "Mantener línea de tendencia."
+  - "Mantener hover."
+  - "Mantener tooltip."
+  - "Mantener colores CASA/COMISIONISTA."
+  - "Puede limitarse visualmente a una altura responsive razonable sin recortar ejes."
 
-top6_contract:
-  - "Top 6 = data.clientes_top."
-  - "No sort adicional."
-  - "No recalcular delta."
-  - "Mostrar las mismas seis filas del ARR normal."
-  - "Mostrar comentarios asociados a cada cliente igual que ARR."
-  - "Doble clic sigue abriendo mode=cliente."
+top6_position:
+  - "Top 6 siempre debajo de la gráfica en embedded."
+  - "No a la derecha."
+  - "Usar todo el ancho del panel."
+  - "Título Top 6 clientes · Δ venta arriba de la lista."
+  - "Subtítulo Vs periodo previo · CASA/COMISIONISTA."
+
+top6_rows:
+  - "Exactamente un cliente por renglón."
+  - "Máximo seis renglones porque clientes_top ya entrega Top 6."
+  - "No grid de tarjetas lado a lado."
+  - "No truncar nombre del cliente en desktop salvo caso extremo."
+  - "Permitir wrap del nombre si es muy largo."
+  - "Cada row debe mostrar claramente:"
+  - "posición"
+  - "nombre completo"
+  - "badge de movimiento"
+  - "delta ton"
+  - "Prev ton"
+  - "Actual ton"
+  - "hasta 2 últimos comentarios"
+  - "autor/fecha del comentario"
+
+top6_row_desktop:
+  layout: >
+    Una fila tipo tabla/grid con columnas estables:
+    cliente | movimiento | delta | previo | actual | últimos comentarios.
+  - "Nombre debe recibir el mayor ancho."
+  - "Delta, Prev y Actual numéricos alineados."
+  - "Comentarios reciben un bloque amplio."
+  - "No comprimir nombre a una columna de pocos caracteres."
+  - "No usar truncate para cliente en embedded desktop."
+
+top6_row_example: |
+  1. RESTAURANTE EJEMPLO MUY LARGO | Aumentó | +15.15 ton | Prev 46.58 | Actual 61.73 | PROCESO EN MTTO A SU INSTALACIÓN...
+  2. LA MORENA ...                 | Aumentó |  +4.30 ton | Prev 19.57 | Actual 23.87 | SE FUE EL OPERADOR...
+
+top6_mobile:
+  - "En pantallas pequeñas cada cliente sigue siendo un solo bloque/renglón lógico."
+  - "Puede envolver internamente a 2-3 líneas."
+  - "Nombre arriba."
+  - "Movimiento/delta/Prev/Actual debajo."
+  - "Comentarios al final."
+  - "No overflow horizontal obligatorio."
+
+comments:
+  - "Conservar comentarios existentes."
+  - "Máximo 2 por cliente como ahora."
+  - "Si no hay comentario mostrar Sin comentarios."
+  - "No hacer fetch nuevo."
+  - "No cambiar Provincia comments."
 
 double_click:
-  - "Click simple no abre."
-  - "Doble clic abre ArrVentaGraficaModal mode=cliente."
-  - "clienteNorm exacto del item."
-  - "province flag se conserva."
-  - "Cliente modal z-index > IGF."
-  - "Cerrar cliente deja IGF abierto."
+  - "Toda la fila del cliente mantiene cursor pointer."
+  - "Doble clic abre la gráfica individual."
+  - "Click simple NO abre."
+  - "clienteNorm exacto."
+  - "Cerrar cliente regresa a IGF."
 
-igf_layout:
-  - "Mantener Rentabilidad IGF izquierda."
-  - "Mantener semanas alineadas de 056."
-  - "Mantener CIERRE PROYECTADO en columna separada."
-  - "Mantener tendencia IGF amarilla."
-  - "Derecha sigue CASA + COMISIONISTA."
-  - "Clientes Nuevos permanece fuera del render."
+channel_panels:
+  - "CASA y COMISIONISTA mantienen la misma estructura."
+  - "CASA arriba."
+  - "COMISIONISTA abajo."
+  - "Cada una tiene su propia gráfica full-width + Top6 vertical debajo."
+  - "No mezclar clientes entre canales."
 
-province_comments_problem:
-  current_issue: >
-    /api/arr/venta-serie con provincia=1 usa correctamente todos los plant codes
-    para venta/Top6, pero la carga de comentarios intenta resolver empresa
-    "Provincia" o plantCode "Provincia" como una planta individual.
-  required_behavior:
-    - "Para provincia=1, obtener todos los planta_id del mismo scope Provincia."
-    - "No resolver literalmente una planta llamada Provincia."
-    - "Usar las mismas plantas autorizadas por resolveAllProvinciaPlantCodes."
-    - "Mapear esos plant codes a public.plantas / planta_id canónico o equivalentes."
-    - "Consultar arr.cliente_comentarios para todos esos planta_id."
-    - "Máximo 2 comentarios recientes por cliente Top 6."
-    - "Para gráfica mode=cliente en Provincia, los comentarios también deben ser del scope Provincia."
-    - "No mezclar comentarios de plantas fuera de arr.provincia_plants."
-    - "No duplicar un mismo comentario por aliases equivalentes."
-
-province_security:
-  - "provincia=1 sigue protegido por igfDiarioTodasRequestBlock."
-  - "El gate debe correr antes de pool.connect()."
-  - "Usuarios locales siguen recibiendo 403."
-  - "No permitir empresa=Provincia sin provincia=1."
-  - "La corrección de comentarios no puede debilitar el gate."
-
-province_comments_query:
-  - "Resolver planta IDs una sola vez por request."
-  - "No consultar comentarios por cada cliente."
-  - "Mantener consulta batch con nombres del Top 6."
-  - "No N+1."
+igf_left_side:
+  - "No cambiar gráfica de Rentabilidad."
+  - "No cambiar semanas."
+  - "No cambiar CIERRE PROYECTADO."
+  - "No cambiar tendencia amarilla."
+  - "Solo la columna derecha crecerá verticalmente."
 
 performance:
-  - "CASA y COMISIONISTA siguen cargándose en paralelo."
-  - "Una request por canal por empresa/range."
-  - "AbortController sigue activo en embedded."
-  - "No request por hover."
-  - "No duplicar fetch porque la vista compartida no debe volver a cargar datos si ya recibe payload."
-
-data_ownership:
-  - "ArrVentaCanalPanel puede seguir siendo responsable del fetch embedded."
-  - "La vista compartida debe ser presentacional: recibe points/clientesTop/range/canal."
-  - "ArrVentaGraficaModal puede conservar su fetch propio y pasar los mismos datos a la vista."
-  - "No montar ArrVentaGraficaModal fullscreen dentro de la columna como sustituto."
-
-visual_parity_acceptance:
-  - "Embedded CASA tiene ticks Y."
-  - "Embedded CASA tiene fechas X."
-  - "Embedded CASA tiene área sombreada."
-  - "Embedded CASA tiene tendencia verde."
-  - "Embedded CASA tiene hover/tooltip."
-  - "Embedded CASA tiene Top 6."
-  - "Embedded CASA tiene Últimos comentarios."
-  - "COMISIONISTA igual."
-  - "La matemática gráfica debe ser compartida, no copiada."
-
-province_acceptance:
-  - "Provincia CASA serie sigue agregada."
-  - "Provincia COMISIONISTA serie sigue agregada."
-  - "Top 6 sigue agregado por cliente."
-  - "Top 6 Provincia recibe comentarios de las plantas Provincia."
-  - "Cliente Provincia recibe comentarios del mismo scope."
-  - "Planta ajena no aparece."
-  - "Gate local 403."
+  - "No nuevos endpoints."
+  - "No requests extra."
+  - "No fetch por fila."
+  - "No fetch por comentario."
+  - "Una request CASA y una COMISIONISTA por range como actualmente."
 
 acceptance_criteria:
-  - "No existe mini gráfica visual independiente 320x120 como implementación principal."
-  - "ArrVentaCanalPanel usa la vista visual compartida ARR."
-  - "No hay segunda función linearTrend en ArrVentaCanalPanel."
-  - "No hay segunda implementación de ticks/paths/tooltip."
-  - "CASA embebida visualmente corresponde al ARR normal."
-  - "COMISIONISTA embebida visualmente corresponde al ARR normal."
-  - "ARR normal no cambia funcionalmente."
-  - "Delta Forecast GRAFICA no cambia."
-  - "Doble clic cliente funciona."
-  - "Provincia comments funciona."
-  - "056 anterior sigue intacta."
-  - "055/054-R3 siguen intactas."
-  - "No writes nuevos."
-  - "No DDL nuevo."
-  - "No OpenAI."
+  - "CASA: gráfica ocupa todo el ancho del panel."
+  - "COMISIONISTA: gráfica ocupa todo el ancho del panel."
+  - "Top 6 aparece debajo de cada gráfica."
+  - "Se ven seis renglones verticales."
+  - "Cada renglón corresponde a un solo cliente."
+  - "Nombres largos son legibles."
+  - "Delta es legible."
+  - "Prev y Actual son legibles."
+  - "Comentarios son legibles."
+  - "Doble clic sigue funcionando."
+  - "No existe lg:w-[240px] para el aside cuando embedded=true."
+  - "No existe max-h-[320px] limitando ArrVentaSerieView embedded."
+  - "Modal ARR normal conserva layout actual."
+  - "Top6 data permanece exactamente data.clientes_top."
+  - "No cambios backend."
+  - "No cambios matemáticos."
 
 validation:
-  - "CASA individual 1M."
-  - "COMISIONISTA individual 1M."
-  - "CASA 3M."
-  - "COMISIONISTA 3M."
-  - "hover embedded."
-  - "tooltip embedded."
-  - "Top6 parity normal vs embedded."
-  - "comments parity normal vs embedded."
-  - "double click CASA."
-  - "double click COMISIONISTA."
-  - "Provincia Top6 comments."
-  - "Provincia cliente comments."
-  - "Provincia gate 403."
-  - "planta ajena excluida."
+  - "CASA con 6 clientes y nombres largos."
+  - "COMISIONISTA con 6 clientes."
+  - "Cliente con 0 comentarios."
+  - "Cliente con 1 comentario."
+  - "Cliente con 2 comentarios."
+  - "double click."
+  - "click simple."
+  - "1M."
+  - "3M."
+  - "Provincia."
+  - "desktop 1920."
+  - "desktop 1366."
+  - "mobile."
+  - "056."
+  - "056-R1."
+  - "055."
   - "018."
   - "019."
-  - "056."
-  - "055."
-  - "054/R1/R2/R3."
-  - "053A/053BC."
-  - "050/052."
-  - "commercial-trend engine."
   - "git diff --check."
 
 allowed_actions:
-  - "crear rama R1 desde base_sha"
-  - "refactorizar visual ARR a componente compartido"
-  - "adaptar ArrVentaCanalPanel para usar visual compartido"
-  - "corregir comentarios Provincia"
+  - "crear rama 057 desde base_sha"
+  - "cambiar layout embedded en ArrVentaSerieView"
+  - "ajustar estilos del Top 6 embedded"
   - "agregar tests"
   - "crear reporte"
   - "commit"
-  - "push solo rama R1"
+  - "push solo rama 057"
 
 forbidden_actions:
-  - "crear otra mini gráfica ARR"
-  - "duplicar linearTrend"
-  - "duplicar paths/ticks"
-  - "cambiar Top6"
-  - "cambiar matemática commercialTrend"
+  - "cambiar cálculo Top6"
+  - "cambiar renderer matemático de la gráfica"
+  - "cambiar backend"
+  - "cambiar API"
   - "cambiar IGF financiero"
-  - "writes nuevos"
-  - "DDL nuevo"
+  - "writes"
+  - "DDL"
   - "git add ."
-  - "tocar frontend-dashboard/.next"
   - "PR"
   - "merge"
   - "deploy"
 
 max_attempts: 1
 
-result_report_path: "docs/dev-loop/reports/FIX-IGF-ARR-VISUAL-PARITY-COMMENTS-056-R1.md"
+result_report_path: "docs/dev-loop/reports/FIX-IGF-ARR-TOP6-VERTICAL-LAYOUT-057.md"
