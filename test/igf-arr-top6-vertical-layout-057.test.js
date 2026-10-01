@@ -14,7 +14,7 @@ test("embedded es vertical y no limita la altura", () => {
   assert.match(VIEW, /embedded \? "flex flex-col gap-3" : "flex flex-col gap-3 lg:flex-row lg:items-stretch"/);
   assert.match(VIEW, /embedded \? "relative w-full"/);
   assert.match(VIEW, /className="h-auto w-full"/);
-  assert.match(VIEW, /embedded \? "w-full"/);
+  assert.match(VIEW, /embedded \? "w-full rounded-lg border border-slate-200 bg-white p-3"/);
   assert.match(VIEW, /lg:w-\[640px\]/);
   assert.doesNotMatch(VIEW, /max-h-\[320px\]/);
   assert.doesNotMatch(VIEW, /lg:w-\[240px\]/);

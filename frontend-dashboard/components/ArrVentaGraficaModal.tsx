@@ -666,7 +666,7 @@ export function ArrVentaSerieView({
         )}
       </div>
 
-      <aside className={embedded ? "w-full" : "w-full shrink-0 rounded-lg border border-slate-200 bg-white p-3 lg:w-[640px]"}>
+      <aside className={embedded ? "w-full rounded-lg border border-slate-200 bg-white p-3" : "w-full shrink-0 rounded-lg border border-slate-200 bg-white p-3 lg:w-[640px]"}>
         {embedded ? (
           <div>
             <h3 className="text-sm font-semibold text-slate-800">Top 6 clientes · Δ venta</h3>
