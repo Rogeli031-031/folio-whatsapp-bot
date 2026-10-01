@@ -1,6 +1,6 @@
-﻿task_id: "IMPL-IGF-GRAFICA-ARR-CANALES-LAYOUT-056"
+﻿task_id: "FIX-IGF-ARR-VISUAL-PARITY-COMMENTS-056-R1"
 
-title: "Integrar CASA/COMISIONISTA ARR en gráfica IGF y alinear semanas"
+title: "Reutilizar visual ARR real en IGF y completar comentarios Provincia"
 
 status: "DONE_PENDING_REVIEW"
 
@@ -12,17 +12,32 @@ authorized_at: "2026-10-01"
 
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-10-01"
 
-base_sha: "cb2a25337e17091a04d3c36990f739b62f87df19"
+prior_task:
+  task_id: "IMPL-IGF-GRAFICA-ARR-CANALES-LAYOUT-056"
+  sha: "3755443cdb962214277a3ce07729d4b9abf3a49d"
+  status: "DONE_PENDING_REVIEW"
 
-branch: "impl/igf-grafica-arr-canales-layout-056"
+base_sha: "3755443cdb962214277a3ce07729d4b9abf3a49d"
+
+branch: "fix/igf-arr-visual-parity-comments-056-r1"
+
+review_findings: >
+  056 resolvió correctamente tendencia amarilla, alineación de semanas,
+  eliminación visual de Clientes Nuevos, CASA/COMISIONISTA con el motor ARR,
+  Top 6, doble clic, Provincia y seguridad.
+  Sin embargo ArrVentaCanalPanel creó una visualización paralela 320x120
+  simplificada. No reproduce la gráfica ARR mostrada por el usuario:
+  faltan ejes X/Y, área sombreada, labels, hover, tooltip y composición
+  gráfica + Top 6 + Últimos comentarios.
+  Además Provincia puede devolver comentarios vacíos porque intenta resolver
+  "Provincia" como una planta individual.
 
 objective: >
-  Mejorar el modal de Rentabilidad IGF Diario:
-  cambiar la tendencia real a amarillo, alinear cada tarjeta semanal
-  con sus días reales en el eje X, retirar del modal el bloque de
-  Clientes Nuevos y sustituirlo por las gráficas ARR de CASA y
-  COMISIONISTA, permitiendo abrir con doble clic la gráfica individual
-  de cualquier cliente del Top 6 delta.
+  Hacer que CASA y COMISIONISTA dentro del modal IGF utilicen exactamente
+  el mismo componente visual/presentacional que ArrVentaGraficaModal,
+  manteniendo el mismo endpoint, cálculos, ejes, área, tendencia, hover,
+  tooltips, Top 6 y comentarios. Corregir además la resolución de comentarios
+  cuando el scope es Provincia.
 
 implementation: true
 code_changes: true
@@ -30,255 +45,258 @@ schema_changes: false
 data_mutation: false
 
 in_scope:
-  - "frontend-dashboard/components/IgfDiarioGraficaModal.tsx"
   - "frontend-dashboard/components/ArrVentaGraficaModal.tsx"
-  - "nuevo componente reusable ARR si es necesario"
-  - "frontend-dashboard/lib/api.ts solo si necesita types/props"
-  - "server.js únicamente si Todas/Provincia requiere soporte agregado"
-  - "lib/commercial-trend-engine.js únicamente si Todas/Provincia requiere resolver agregado"
-  - "tests 056"
-  - "docs/dev-loop/reports/IMPL-IGF-GRAFICA-ARR-CANALES-LAYOUT-056.md"
+  - "frontend-dashboard/components/ArrVentaCanalPanel.tsx"
+  - "frontend-dashboard/components/IgfDiarioGraficaModal.tsx"
+  - "frontend-dashboard/lib/api.ts solo si es estrictamente necesario"
+  - "server.js"
+  - "lib/commercial-trend-engine.js solo si hace falta exponer scope resuelto"
+  - "tests 056 y nuevo 056-R1"
+  - "docs/dev-loop/reports/FIX-IGF-ARR-VISUAL-PARITY-COMMENTS-056-R1.md"
   - "docs/dev-loop/CURRENT_TASK.md solo status"
 
 out_of_scope:
-  - "cambiar matemática AF/AE"
+  - "cambiar AF/AE"
   - "cambiar CIERRE PROYECTADO"
-  - "cambiar cálculo ARR"
-  - "cambiar definición Top 6"
+  - "cambiar cálculo commercialTrend"
+  - "cambiar selección Top 6"
+  - "cambiar definición de canal"
   - "cambiar Delta Ingreso Cliente Forecast"
-  - "eliminar backend de Clientes Nuevos"
+  - "cambiar Clientes Nuevos backend"
   - "DB/schema"
-  - "writes"
+  - "writes nuevos"
   - "OpenAI"
   - "PR"
   - "merge"
   - "deploy"
 
-trend_color:
-  - "La línea Tendencia real de Rentabilidad IGF pasa de blanca a amarillo."
-  - "Usar amarillo visible equivalente a amber/yellow."
-  - "Cambiar también la muestra de la leyenda."
-  - "Real continúa azul."
-  - "Proyectado conserva amarillo punteado."
-  - "Deben distinguirse: proyectado punteado; tendencia sólida."
-  - "No modificar la regresión ni los puntos usados para la tendencia."
+primary_rule:
+  - "Debe existir UNA sola implementación visual de la gráfica ARR."
+  - "ArrVentaGraficaModal y los paneles embebidos IGF deben renderizar ese mismo contenido."
+  - "No mantener una gráfica 320x120 paralela con otra matemática/render."
+  - "No duplicar linearTrend."
+  - "No duplicar escala X/Y."
+  - "No duplicar ticks."
+  - "No duplicar hover/tooltip."
+  - "No duplicar areaPath/linePath."
 
-weekly_alignment:
-  - "Las tarjetas Semana 1..Semana 5 ya no se distribuyen con flex uniforme independiente del gráfico."
-  - "Cada tarjeta debe quedar horizontalmente debajo del intervalo de fechas que representa."
-  - "Semana 1 debajo de sus días reales."
-  - "Semana 2 debajo de sus días reales."
-  - "Etc."
-  - "Usar fecha_desde/fecha_hasta de cada week y los índices de points."
-  - "No asumir que cada semana siempre tiene 7 días."
-  - "No asumir que el mes inicia lunes."
-  - "No posicionar por label Semana N."
-  - "Debe funcionar también en meses de 28/29/30/31 días."
+shared_visual:
+  preferred_design: >
+    Extraer dentro de ArrVentaGraficaModal.tsx o a un componente compartido
+    una vista presentacional reusable, por ejemplo ArrVentaSerieView /
+    ArrVentaGraficaContent. ArrVentaGraficaModal conserva el shell modal
+    y usa esa vista. ArrVentaCanalPanel obtiene data con fetchArrVentaSerie
+    y usa exactamente esa misma vista.
+  requirements:
+    - "Mismo eje Y toneladas."
+    - "Mismos ticks Y."
+    - "Mismo eje X y labels de fechas."
+    - "Misma área sombreada bajo Venta."
+    - "Misma línea de venta."
+    - "Misma línea verde de tendencia."
+    - "Mismo punto final."
+    - "Mismo hover/click por fecha."
+    - "Mismo tooltip con toneladas y descuento."
+    - "Mismo cálculo y formatting."
+    - "Mismo Top 6 delta."
+    - "Mismos Prev / Actual."
+    - "Mismos últimos comentarios."
+    - "Mismos badges Aumentó/Disminuyó/Nuevo/Dejó de comprar."
 
-weekly_layout:
-  - "Preferir layout basado en las mismas posiciones X del gráfico."
-  - "Puede implementarse con CSS grid donde cada point/fecha represente una columna, o porcentajes derivados de xOf()."
-  - "La tarjeta debe abarcar visualmente desde fecha_desde hasta fecha_hasta."
-  - "Mantener separación pequeña entre semanas."
-  - "No solapar tarjetas."
-  - "En móvil permitir scroll/stack controlado si el ancho no alcanza."
+arr_original_regression:
+  - "ArrVentaGraficaModal debe verse y funcionar igual que antes."
+  - "Los tests 018/019 deben continuar pasando."
+  - "El botón GRAFICA de DeltaIngresoClienteForecastModal sigue abriendo el mismo modal."
+  - "Mode cliente conserva Venta Ton + Descuento $/kg + tendencia + Movimiento + comentarios."
+  - "No degradar la gráfica ARR original para facilitar embedded."
 
-main_left_layout:
-  - "Se permite desplazar/reducir ligeramente la gráfica hacia la izquierda."
-  - "Reservar una columna estable para CIERRE PROYECTADO."
-  - "Las semanas deben alinearse únicamente con el ancho real del chart, no con la tarjeta de cierre."
-  - "CIERRE PROYECTADO no forma parte del eje temporal."
+embedded_mode:
+  - "Crear modo embedded en la vista compartida, no una implementación visual distinta."
+  - "En embedded ocultar únicamente:"
+  - "shell fixed/fullscreen"
+  - "botón Cerrar"
+  - "selector CASA/COMISIONISTA"
+  - "botones propios de rango"
+  - "Mantener gráfica, ejes, área, tooltip, Top 6 y comentarios."
+  - "El rango lo sigue controlando IGF."
 
-month_close:
-  - "Mantener exactamente lógica 055."
-  - "No recalcular."
-  - "No modificar B/AF/AE."
-  - "Solo puede cambiar su posición visual."
+embedded_layout:
+  desktop:
+    - "Cada canal debe parecer una versión compacta de la gráfica ARR de la captura."
+    - "Gráfica a la izquierda."
+    - "Top 6 y Últimos comentarios a la derecha."
+    - "CASA arriba."
+    - "COMISIONISTA abajo."
+    - "No reducir a sparkline."
+  dimensions:
+    - "No fijar SVG conceptual a 320x120."
+    - "Usar el mismo viewBox/layout base ARR o un responsive derivado del mismo componente."
+    - "Debe conservar ejes legibles."
+    - "Objetivo aproximado por panel: 260-330 px de alto en desktop."
+  mobile:
+    - "Gráfica arriba."
+    - "Top 6/comentarios debajo."
+    - "Sin overflow destructivo."
 
-remove_new_clients:
-  - "Retirar del modal IGF el bloque visual Clientes Nuevos."
-  - "Retirar también Top 10 nuevos del modal IGF para liberar toda la columna derecha."
-  - "NO eliminar new_clients_chart/new_clients_top del endpoint."
-  - "NO cambiar 053BC."
-  - "Los datos se conservan para reutilizarlos más adelante en otro lugar."
+channel_identity:
+  - "CASA conserva amarillo."
+  - "COMISIONISTA conserva azul."
+  - "Tendencia conserva verde."
+  - "No cambiar colores ARR actuales."
 
-arr_source_of_truth:
-  component: "frontend-dashboard/components/ArrVentaGraficaModal.tsx"
-  endpoint: "/api/arr/venta-serie"
-  engine: "lib/commercial-trend-engine.js"
-  - "No duplicar cálculo de series."
-  - "No reconstruir Top 6."
-  - "No consultar directamente tablas ARR desde frontend."
-  - "CASA usa canal=casa."
-  - "COMISIONISTA usa canal=comisionista."
-  - "Top 6 debe ser exactamente clientes_top del endpoint."
-  - "La comparación vs periodo previo debe seguir siendo la misma del ARR actual."
+top6_contract:
+  - "Top 6 = data.clientes_top."
+  - "No sort adicional."
+  - "No recalcular delta."
+  - "Mostrar las mismas seis filas del ARR normal."
+  - "Mostrar comentarios asociados a cada cliente igual que ARR."
+  - "Doble clic sigue abriendo mode=cliente."
 
-arr_embedded_panels:
-  - "Crear un componente reutilizable del contenido ARR, preferiblemente extraído de ArrVentaGraficaModal."
-  - "El modal ARR existente debe seguir funcionando."
-  - "El nuevo componente debe poder usarse embedded sin header modal ni botones de cerrar."
-  - "Renderizar dos instancias simultáneas:"
-  - "CASA arriba."
-  - "COMISIONISTA abajo."
-  - "Cada panel incluye gráfica de toneladas + línea de tendencia + Top 6 delta."
-  - "Mantener colores actuales ARR: CASA amarillo; COMISIONISTA azul."
-  - "Comentarios pueden conservarse si el ancho lo permite, pero Top 6 tiene prioridad."
-  - "No agregar selector CASA/COMISIONISTA dentro de cada panel."
+double_click:
+  - "Click simple no abre."
+  - "Doble clic abre ArrVentaGraficaModal mode=cliente."
+  - "clienteNorm exacto del item."
+  - "province flag se conserva."
+  - "Cliente modal z-index > IGF."
+  - "Cerrar cliente deja IGF abierto."
 
-arr_range_sync:
-  - "Los paneles CASA y COMISIONISTA siguen el mismo range seleccionado en IGF."
-  - "1D IGF => ARR 1d."
-  - "5D => 5d."
-  - "1M => 1m."
-  - "3M => 3m."
-  - "YTD => ytd."
-  - "1A => 1a."
-  - "5A => 5a."
-  - "Todo => todo."
-  - "No mostrar segundo selector de rango dentro de panels embedded."
-  - "Cambiar rango debe refrescar los dos canales."
+igf_layout:
+  - "Mantener Rentabilidad IGF izquierda."
+  - "Mantener semanas alineadas de 056."
+  - "Mantener CIERRE PROYECTADO en columna separada."
+  - "Mantener tendencia IGF amarilla."
+  - "Derecha sigue CASA + COMISIONISTA."
+  - "Clientes Nuevos permanece fuera del render."
 
-arr_plant_scope:
-  - "Planta individual: empresa debe ser la planta/empresa seleccionada en IGF."
-  - "Usar alias compatible con /api/arr/venta-serie."
-  - "GT Puebla debe resolver correctamente a Puebla con el mecanismo existente."
-  - "No hardcodear aliases por planta."
+province_comments_problem:
+  current_issue: >
+    /api/arr/venta-serie con provincia=1 usa correctamente todos los plant codes
+    para venta/Top6, pero la carga de comentarios intenta resolver empresa
+    "Provincia" o plantCode "Provincia" como una planta individual.
+  required_behavior:
+    - "Para provincia=1, obtener todos los planta_id del mismo scope Provincia."
+    - "No resolver literalmente una planta llamada Provincia."
+    - "Usar las mismas plantas autorizadas por resolveAllProvinciaPlantCodes."
+    - "Mapear esos plant codes a public.plantas / planta_id canónico o equivalentes."
+    - "Consultar arr.cliente_comentarios para todos esos planta_id."
+    - "Máximo 2 comentarios recientes por cliente Top 6."
+    - "Para gráfica mode=cliente en Provincia, los comentarios también deben ser del scope Provincia."
+    - "No mezclar comentarios de plantas fuera de arr.provincia_plants."
+    - "No duplicar un mismo comentario por aliases equivalentes."
 
-province_scope:
-  - "Cuando IGF está en Todas, mostrar CASA y COMISIONISTA de Provincia."
-  - "No seleccionar arbitrariamente una planta."
-  - "Extender el motor compartido únicamente si hace falta."
-  - "Provincia = agregación de todos los plant_code de arr.provincia_plants."
-  - "Serie diaria = suma de toneladas de todas las plantas del scope."
-  - "Top 6 = delta de cliente agregado en Provincia, no concatenación de Top 6 por planta."
-  - "Mantener clasificación CASA/COMISIONISTA."
-  - "El acceso Provincia debe usar el mismo gate global de IGF Diario Todas."
-  - "Usuarios locales no pueden pedir Provincia por URL."
+province_security:
+  - "provincia=1 sigue protegido por igfDiarioTodasRequestBlock."
+  - "El gate debe correr antes de pool.connect()."
+  - "Usuarios locales siguen recibiendo 403."
+  - "No permitir empresa=Provincia sin provincia=1."
+  - "La corrección de comentarios no puede debilitar el gate."
 
-embedded_client_double_click:
-  - "Cada fila/cliente del Top 6 debe indicar visualmente que es interactiva."
-  - "Doble clic sobre el cliente abre ArrVentaGraficaModal."
-  - 'Abrir con mode="cliente".'
-  - "clienteNorm = c.cliente."
-  - "empresa = scope actual."
-  - "Para planta individual, misma empresa/planta seleccionada."
-  - "Para Provincia, usar scope agregado Provincia si se implementa soporte aggregate-client."
-  - "No abrir DeltaIngresoClienteForecastModal primero."
-  - "Debe abrir directamente la misma gráfica individual que usa el botón GRAFICA dentro de Delta Ingreso Cliente Forecast."
-
-client_graph_contract:
-  - "La gráfica individual mantiene Venta Ton."
-  - "Mantiene Descuento $/kg."
-  - "Mantiene Línea de tendencia."
-  - "Mantiene Movimiento del cliente."
-  - "Mantiene Últimos comentarios."
-  - "Mantiene rangos 1D/5D/1M/3M/YTD/1A/5A/Todo."
-  - "No modificar esa experiencia salvo para habilitar el launch desde Top 6."
-
-double_click_behavior:
-  - "Un clic no debe abrir la gráfica."
-  - "Doble clic sí."
-  - "No disparar accidentalmente selección/close del IGF modal."
-  - "stopPropagation cuando corresponda."
-  - "Cursor visual pointer."
-  - "title/tooltip: Doble clic para abrir gráfica del cliente."
-
-modal_layering:
-  - "La gráfica individual debe aparecer encima del modal IGF."
-  - "Cerrar la gráfica del cliente regresa al modal IGF todavía abierto."
-  - "No cerrar IGF al abrir/cerrar cliente."
-  - "z-index debe ser mayor que IGF."
+province_comments_query:
+  - "Resolver planta IDs una sola vez por request."
+  - "No consultar comentarios por cada cliente."
+  - "Mantener consulta batch con nombres del Top 6."
+  - "No N+1."
 
 performance:
-  - "CASA y COMISIONISTA pueden cargarse en paralelo."
-  - "Máximo una request por canal por cambio de empresa/range."
-  - "No query por día."
-  - "Evitar que un re-render dispare requests duplicadas."
-  - "Abort/cancel stale requests cuando cambia range o planta."
+  - "CASA y COMISIONISTA siguen cargándose en paralelo."
+  - "Una request por canal por empresa/range."
+  - "AbortController sigue activo en embedded."
+  - "No request por hover."
+  - "No duplicar fetch porque la vista compartida no debe volver a cargar datos si ya recibe payload."
 
-error_handling:
-  - "Si CASA falla, COMISIONISTA sigue visible."
-  - "Si COMISIONISTA falla, CASA sigue visible."
-  - "Mostrar error dentro del panel correspondiente."
-  - "No tumbar la gráfica principal IGF."
-  - "Loading independiente por canal."
+data_ownership:
+  - "ArrVentaCanalPanel puede seguir siendo responsable del fetch embedded."
+  - "La vista compartida debe ser presentacional: recibe points/clientesTop/range/canal."
+  - "ArrVentaGraficaModal puede conservar su fetch propio y pasar los mismos datos a la vista."
+  - "No montar ArrVentaGraficaModal fullscreen dentro de la columna como sustituto."
 
-responsive:
-  desktop:
-    - "Rentabilidad IGF a la izquierda."
-    - "CASA y COMISIONISTA apilados a la derecha."
-  mobile:
-    - "Rentabilidad primero."
-    - "Semanas."
-    - "Cierre."
-    - "CASA."
-    - "COMISIONISTA."
-    - "Sin overflow horizontal destructivo."
+visual_parity_acceptance:
+  - "Embedded CASA tiene ticks Y."
+  - "Embedded CASA tiene fechas X."
+  - "Embedded CASA tiene área sombreada."
+  - "Embedded CASA tiene tendencia verde."
+  - "Embedded CASA tiene hover/tooltip."
+  - "Embedded CASA tiene Top 6."
+  - "Embedded CASA tiene Últimos comentarios."
+  - "COMISIONISTA igual."
+  - "La matemática gráfica debe ser compartida, no copiada."
+
+province_acceptance:
+  - "Provincia CASA serie sigue agregada."
+  - "Provincia COMISIONISTA serie sigue agregada."
+  - "Top 6 sigue agregado por cliente."
+  - "Top 6 Provincia recibe comentarios de las plantas Provincia."
+  - "Cliente Provincia recibe comentarios del mismo scope."
+  - "Planta ajena no aparece."
+  - "Gate local 403."
 
 acceptance_criteria:
-  - "Tendencia IGF sólida amarilla."
-  - "Leyenda Tendencia real amarilla."
-  - "Semanas alineadas con sus fechas."
-  - "CIERRE PROYECTADO conserva exactamente valores 055."
-  - "Clientes Nuevos y Top 10 nuevos ya no aparecen en este modal."
-  - "CASA aparece en su lugar."
-  - "COMISIONISTA aparece debajo."
-  - "CASA coincide con ArrVentaGraficaModal para misma empresa/range."
-  - "COMISIONISTA coincide con ArrVentaGraficaModal para misma empresa/range."
-  - "Top 6 coincide exactamente con endpoint ARR."
-  - "Doble clic Top 6 abre gráfica individual."
-  - "Cerrar gráfica individual conserva modal IGF."
-  - "1M/3M/etc sincronizan las tres gráficas."
-  - "Planta individual funciona."
-  - "Todas/Provincia funciona con gate global."
-  - "054-R3 y 055 permanecen intactas financieramente."
-  - "No writes."
-  - "No DDL."
+  - "No existe mini gráfica visual independiente 320x120 como implementación principal."
+  - "ArrVentaCanalPanel usa la vista visual compartida ARR."
+  - "No hay segunda función linearTrend en ArrVentaCanalPanel."
+  - "No hay segunda implementación de ticks/paths/tooltip."
+  - "CASA embebida visualmente corresponde al ARR normal."
+  - "COMISIONISTA embebida visualmente corresponde al ARR normal."
+  - "ARR normal no cambia funcionalmente."
+  - "Delta Forecast GRAFICA no cambia."
+  - "Doble clic cliente funciona."
+  - "Provincia comments funciona."
+  - "056 anterior sigue intacta."
+  - "055/054-R3 siguen intactas."
+  - "No writes nuevos."
+  - "No DDL nuevo."
   - "No OpenAI."
 
 validation:
-  - "GT Puebla CASA 1M."
-  - "GT Puebla COMISIONISTA 1M."
-  - "Acapulco."
-  - "Tehuacán."
-  - "range 5D."
-  - "range 1M."
-  - "range 3M."
-  - "Provincia/Todas."
-  - "Top 6 parity."
-  - "double click cliente CASA."
-  - "double click cliente COMISIONISTA."
-  - "client modal stacking."
-  - "weekly date alignment 30-day month."
-  - "weekly date alignment 31-day month."
-  - "month starts midweek."
-  - "CIERRE PROYECTADO parity."
-  - "regresión 054/R1/R2/R3/055."
+  - "CASA individual 1M."
+  - "COMISIONISTA individual 1M."
+  - "CASA 3M."
+  - "COMISIONISTA 3M."
+  - "hover embedded."
+  - "tooltip embedded."
+  - "Top6 parity normal vs embedded."
+  - "comments parity normal vs embedded."
+  - "double click CASA."
+  - "double click COMISIONISTA."
+  - "Provincia Top6 comments."
+  - "Provincia cliente comments."
+  - "Provincia gate 403."
+  - "planta ajena excluida."
+  - "018."
+  - "019."
+  - "056."
+  - "055."
+  - "054/R1/R2/R3."
+  - "053A/053BC."
+  - "050/052."
+  - "commercial-trend engine."
   - "git diff --check."
 
 allowed_actions:
-  - "crear rama 056 desde base_sha"
-  - "extraer componente reusable ARR"
-  - "ajustar layout modal IGF"
-  - "agregar soporte Provincia read-only si es necesario"
+  - "crear rama R1 desde base_sha"
+  - "refactorizar visual ARR a componente compartido"
+  - "adaptar ArrVentaCanalPanel para usar visual compartido"
+  - "corregir comentarios Provincia"
   - "agregar tests"
   - "crear reporte"
   - "commit"
-  - "push solo rama 056"
+  - "push solo rama R1"
 
 forbidden_actions:
-  - "copiar lógica commercialTrendEngine al frontend"
-  - "duplicar cálculo Top 6"
-  - "cambiar matemática IGF"
-  - "borrar backend Clientes Nuevos"
-  - "writes"
-  - "DDL"
+  - "crear otra mini gráfica ARR"
+  - "duplicar linearTrend"
+  - "duplicar paths/ticks"
+  - "cambiar Top6"
+  - "cambiar matemática commercialTrend"
+  - "cambiar IGF financiero"
+  - "writes nuevos"
+  - "DDL nuevo"
   - "git add ."
+  - "tocar frontend-dashboard/.next"
   - "PR"
   - "merge"
   - "deploy"
 
 max_attempts: 1
 
-result_report_path: "docs/dev-loop/reports/IMPL-IGF-GRAFICA-ARR-CANALES-LAYOUT-056.md"
+result_report_path: "docs/dev-loop/reports/FIX-IGF-ARR-VISUAL-PARITY-COMMENTS-056-R1.md"

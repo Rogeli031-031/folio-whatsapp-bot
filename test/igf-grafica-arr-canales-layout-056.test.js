@@ -105,19 +105,21 @@ test("CASA y COMISIONISTA usan fetchArrVentaSerie y el Top 6 del response", () =
   assert.match(PANEL, /fetchArrVentaSerie/);
   assert.match(PANEL, /setClientesTop\(data\.clientes_top \|\| \[\]\)/);
   assert.match(PANEL, /setPoints\(data\.points \|\| \[\]\)/);
+  assert.match(PANEL, /<ArrVentaSerieView/);
   assert.doesNotMatch(PANEL, /sort\(/);
-  assert.match(PANEL, /Δ \{fmtTonSigned/);
-  assert.match(PANEL, /Prev /);
-  assert.match(PANEL, /Actual /);
+  assert.match(ARR, /Prev: /);
+  assert.match(ARR, /Actual: /);
+  assert.match(ARR, /export function ArrVentaSerieView/);
 });
 
 test("doble clic abre el cliente y un clic no", () => {
-  assert.match(PANEL, /onDoubleClick=\{\(event\) => \{/);
-  assert.match(PANEL, /event\.stopPropagation\(\)/);
-  assert.match(PANEL, /onClienteDoubleClick\?\.\(cliente\.cliente\)/);
-  assert.match(PANEL, /title="Doble clic para abrir gráfica del cliente"/);
-  assert.match(PANEL, /cursor-pointer/);
-  assert.doesNotMatch(PANEL, /onClick=\{[^}]*onClienteDoubleClick/);
+  assert.match(ARR, /onDoubleClick=\{\(event\) => \{/);
+  assert.match(ARR, /event\.stopPropagation\(\)/);
+  assert.match(ARR, /onClienteDoubleClick\?\.\(cliente\.cliente\)/);
+  assert.match(ARR, /Doble clic para abrir gráfica del cliente/);
+  assert.match(ARR, /cursor-pointer/);
+  assert.match(PANEL, /onClienteDoubleClick=\{onClienteDoubleClick\}/);
+  assert.doesNotMatch(ARR, /onClick=\{[^}]*onClienteDoubleClick/);
   assert.match(IGF, /mode="cliente"/);
   assert.match(IGF, /clienteNorm=\{arrCliente\}/);
   assert.match(IGF, /onClose=\{\(\) => setArrCliente\(null\)\}/);

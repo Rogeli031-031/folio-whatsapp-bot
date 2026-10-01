@@ -92,6 +92,7 @@ const usuarioPermisos = require("./lib/usuario-permisos");
 const clienteComentariosLib = require("./lib/cliente-comentarios");
 const clienteContactoLib = require("./lib/cliente-contacto");
 const commercialTrendEngine = require("./lib/commercial-trend-engine");
+const arrVentaSerieComments = require("./lib/arr-venta-serie-comments");
 const sehCarpetasLegales = require("./lib/seh-carpetas-legales");
 const sehEquipos = require("./lib/seh-equipos");
 const planMaestro = require("./lib/plan-maestro");
@@ -15329,16 +15330,23 @@ app.get("/api/arr/venta-serie", dashboardAuthMiddleware, async (req, res) => {
     try {
       await clienteComentariosLib.ensureClienteComentariosTable(client);
       let plantaIds = [];
-      const rawPid = await dicfAccionesLib.resolvePlantaId(client, empresa);
-      if (Number.isFinite(rawPid)) {
-        const canon = dicfAccionesLib.getCanonicalPlantaId(rawPid);
-        plantaIds = dicfAccionesLib.getPlantaIdsEquivalentes(canon);
-      }
-      if (!plantaIds.length && plantCode) {
-        const raw2 = await dicfAccionesLib.resolvePlantaId(client, plantCode);
-        if (Number.isFinite(raw2)) {
-          const canon2 = dicfAccionesLib.getCanonicalPlantaId(raw2);
-          plantaIds = dicfAccionesLib.getPlantaIdsEquivalentes(canon2);
+      if (provincia) {
+        plantaIds = await arrVentaSerieComments.resolveComentarioPlantaIds(
+          client,
+          (engineResult && engineResult.plant_codes) || []
+        );
+      } else {
+        const rawPid = await dicfAccionesLib.resolvePlantaId(client, empresa);
+        if (Number.isFinite(rawPid)) {
+          const canon = dicfAccionesLib.getCanonicalPlantaId(rawPid);
+          plantaIds = dicfAccionesLib.getPlantaIdsEquivalentes(canon);
+        }
+        if (!plantaIds.length && plantCode) {
+          const raw2 = await dicfAccionesLib.resolvePlantaId(client, plantCode);
+          if (Number.isFinite(raw2)) {
+            const canon2 = dicfAccionesLib.getCanonicalPlantaId(raw2);
+            plantaIds = dicfAccionesLib.getPlantaIdsEquivalentes(canon2);
+          }
         }
       }
       const nombres = clientes_top.map((c) => String(c.cliente || "").trim()).filter(Boolean);
