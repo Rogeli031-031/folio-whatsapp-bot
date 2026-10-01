@@ -68,7 +68,7 @@ export default function ArrVentaCanalPanel({
   const title = canal === "casa" ? "CASA" : "COMISIONISTA";
 
   return (
-    <section className="overflow-hidden rounded border border-slate-700 bg-slate-950">
+    <section className="rounded border border-slate-700 bg-slate-950">
       <div className={`px-3 py-2 text-sm font-semibold ${canal === "casa" ? "text-yellow-400" : "text-sky-400"}`}>
         {title}
       </div>
