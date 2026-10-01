@@ -63,6 +63,114 @@ function linearTrendIndexed(pairs: { x: number; y: number }[]): { a: number; b: 
   return { a, b, xFirst: Math.min(...xs), xLast: Math.max(...xs) };
 }
 
+const MES_ABREV = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+
+function niceStep(span: number, targetCount: number) {
+  const slots = Math.max(1, targetCount - 1);
+  const rough = span / slots;
+  if (!(rough > 0) || !Number.isFinite(rough)) return 1;
+  const mag = 10 ** Math.floor(Math.log10(rough));
+  const residual = rough / mag;
+  let base = 10;
+  if (residual <= 1) base = 1;
+  else if (residual <= 2) base = 2;
+  else if (residual <= 2.5) base = 2.5;
+  else if (residual <= 5) base = 5;
+  return base * mag;
+}
+
+function buildNiceYTicks(yMin: number, yMax: number, _metric: Metric, targetCount = 5) {
+  let lo = Math.min(yMin || 0, yMax || 0, 0);
+  let hi = Math.max(yMin || 0, yMax || 0, 0);
+  if (lo === hi) {
+    lo -= 1;
+    hi += 1;
+  }
+  const step = niceStep(hi - lo, targetCount);
+  const start = Math.floor(lo / step + 1e-9) * step;
+  const end = Math.ceil(hi / step - 1e-9) * step;
+  const ticks: number[] = [];
+  for (let value = start; value <= end + step * 0.5; value += step) {
+    const clean = Number((Math.round(value / step) * step).toPrecision(12));
+    if (!ticks.length || Math.abs(ticks[ticks.length - 1] - clean) > step * 1e-6) ticks.push(clean);
+  }
+  if (!ticks.some((tick) => Math.abs(tick) < step * 1e-6)) ticks.push(0);
+  ticks.sort((a, b) => a - b);
+  return ticks;
+}
+
+function formatXLabel(fecha: string, range: string) {
+  const match = String(fecha || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return String(fecha || "");
+  const mon = MES_ABREV[Number(match[2]) - 1] || match[2];
+  const id = String(range || "1m").trim().toLowerCase();
+  if (id === "3m") return `${match[3]} ${mon}`;
+  if (id === "ytd" || id === "1a" || id === "5a" || id === "todo") return `${mon} ${match[1].slice(2)}`;
+  return `${match[3]}/${match[2]}`;
+}
+
+function buildXAxisTicks(points: { fecha: string }[], range: string, maxTicks = 7) {
+  const n = points.length;
+  if (!n) return [] as { index: number; fecha: string; label: string }[];
+  const limit = Math.max(1, maxTicks);
+  const indexes: number[] = [];
+  if (n === 1 || limit === 1) indexes.push(0);
+  else {
+    const count = Math.min(limit, n);
+    for (let i = 0; i < count; i += 1) indexes.push(Math.round((i * (n - 1)) / (count - 1)));
+  }
+  const uniqueIdx: number[] = [];
+  for (const index of indexes) {
+    if (!uniqueIdx.includes(index)) uniqueIdx.push(index);
+  }
+  const ticks = uniqueIdx.map((index) => ({
+    index,
+    fecha: points[index].fecha,
+    label: formatXLabel(points[index].fecha, range),
+  }));
+  const seen = new Set<string>();
+  const kept: { index: number; fecha: string; label: string }[] = [];
+  ticks.forEach((tick, i) => {
+    const edge = i === 0 || i === ticks.length - 1;
+    if (!edge && seen.has(tick.label)) return;
+    seen.add(tick.label);
+    kept.push(tick);
+  });
+  return kept;
+}
+
+function buildWeeklyClientTrend(chart: { label: string; tipo: "week" | "day"; count: number; kg: number }[]) {
+  const weeks = chart.filter((item) => item.tipo === "week");
+  const days = chart.filter((item) => item.tipo === "day");
+  const sem2 = weeks.find((item) => item.label === "SEM -2") || { label: "SEM -2", count: 0, kg: 0 };
+  const sem1 = weeks.find((item) => item.label === "SEM -1") || { label: "SEM -1", count: 0, kg: 0 };
+  return [
+    { label: "SEM -2", count: Number(sem2.count) || 0, kg: Number(sem2.kg) || 0, partial: false },
+    { label: "SEM -1", count: Number(sem1.count) || 0, kg: Number(sem1.kg) || 0, partial: false },
+    {
+      label: "SEM ACTUAL · PARCIAL",
+      count: days.reduce((sum, item) => sum + (Number(item.count) || 0), 0),
+      kg: days.reduce((sum, item) => sum + (Number(item.kg) || 0), 0),
+      partial: true,
+    },
+  ];
+}
+
+function fmtYTick(value: number, metric: Metric) {
+  if (metric === "per_kg") {
+    const sign = value < 0 ? "-" : "";
+    return `${sign}$${Math.abs(value).toFixed(2)}`;
+  }
+  const sign = value < 0 ? "-" : "";
+  const abs = Math.abs(value);
+  if (abs >= 1000) {
+    const kilos = abs / 1000;
+    const text = Number.isInteger(kilos) ? String(kilos) : kilos.toFixed(1);
+    return `${sign}$${text}k`;
+  }
+  return `${sign}$${Math.round(abs)}`;
+}
+
 function fmtMoney(n: number | null | undefined): string {
   if (n == null || !Number.isFinite(n)) return "—";
   return n.toLocaleString("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 });
@@ -145,10 +253,10 @@ export default function IgfDiarioGraficaModal({
     const points = data?.points || [];
     const W = 760;
     const H = 380;
-    const padL = 64;
+    const padL = 78;
     const padR = 16;
     const padT = 16;
-    const padB = 32;
+    const padB = 48;
     const valueOf = (point: IgfDiarioGraficaResponse["points"][number]) =>
       metric === "mxn" ? point.resultado_mxn : point.resultado_per_kg;
     const usable = points
@@ -174,10 +282,26 @@ export default function IgfDiarioGraficaModal({
     const yOf = (value: number) => padT + (1 - (value - yMin) / ySpan) * innerH;
     const xOf = (index: number) =>
       points.length <= 1 ? padL + innerW / 2 : padL + (index / (points.length - 1)) * innerW;
-    return { W, H, padL, padT, padB, yOf, xOf, yMin, yMax, trend, points, valueOf };
-  }, [data, metric]);
+    const yTicks = buildNiceYTicks(yMin, yMax, metric);
+    const xTicks = buildXAxisTicks(points, range);
+    return { W, H, padL, padT, padB, yOf, xOf, yMin, yMax, trend, points, valueOf, yTicks, xTicks };
+  }, [data, metric, range]);
 
-  const maxClients = Math.max(1, ...(data?.new_clients_chart || []).map((item) => item.count));
+  const clientBars = data?.new_clients_chart || [];
+  const maxClients = Math.max(1, ...clientBars.map((item) => item.count));
+  const weeklyTrend = buildWeeklyClientTrend(clientBars);
+  const trendMax = Math.max(1, ...weeklyTrend.map((item) => item.count));
+  const dayIndexes = clientBars.flatMap((item, index) => (item.tipo === "day" ? [index] : []));
+  const barCenter = (index: number) => (index + 0.5) * 10;
+  const currentTrendX = dayIndexes.length
+    ? dayIndexes.reduce((sum, index) => sum + barCenter(index), 0) / dayIndexes.length
+    : barCenter(Math.max(clientBars.length - 1, 0));
+  const trendDots = weeklyTrend.map((item, index) => {
+    const found = clientBars.findIndex((bar) => bar.label === item.label);
+    const x = index === 2 ? currentTrendX : barCenter(found >= 0 ? found : index);
+    const y = 128 - (item.count / trendMax) * 120;
+    return { ...item, x, y };
+  });
   const metricLabel = metric === "mxn" ? "$" : "$/kg";
 
   return (
@@ -246,6 +370,28 @@ export default function IgfDiarioGraficaModal({
               </div>
             ) : (
             <svg viewBox={`0 0 ${chart.W} ${chart.H}`} className="h-[380px] w-full">
+              {chart.yTicks.map((tick) => (
+                <g key={`y-${tick}`}>
+                  {Math.abs(tick) > 1e-9 && (
+                    <line
+                      x1={chart.padL}
+                      x2={chart.W - 16}
+                      y1={chart.yOf(tick)}
+                      y2={chart.yOf(tick)}
+                      stroke="#334155"
+                      strokeWidth={1}
+                    />
+                  )}
+                  <text x={chart.padL - 8} y={chart.yOf(tick) + 3} textAnchor="end" fill="#94a3b8" fontSize={11}>
+                    {fmtYTick(tick, metric)}
+                  </text>
+                </g>
+              ))}
+              {chart.xTicks.map((tick) => (
+                <text key={`x-${tick.index}`} x={chart.xOf(tick.index)} y={chart.H - 12} textAnchor="middle" fill="#94a3b8" fontSize={11}>
+                  {tick.label}
+                </text>
+              ))}
               <line
                 x1={chart.padL}
                 x2={chart.W - 16}
@@ -327,22 +473,68 @@ export default function IgfDiarioGraficaModal({
                   {!week.complete && <div className="text-amber-300">Cobertura incompleta</div>}
                 </div>
               ))}
+              {data?.month_close && (
+                <div className="min-w-[180px] rounded border border-sky-400 bg-slate-950 px-3 py-2 text-xs text-slate-200">
+                  <div className="font-semibold tracking-wide text-sky-300">{data.month_close.label}</div>
+                  {!data.month_close.complete ? (
+                    <>
+                      <div className="text-2xl font-semibold text-white">—</div>
+                      <div className="text-amber-300">Cobertura incompleta</div>
+                      <div>Falta: {(data.month_close.missing_components || []).join(", ")}</div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="text-2xl font-semibold text-white">
+                        {metric === "mxn" ? fmtMoney(data.month_close.resultado_mxn) : fmtPerKg(data.month_close.resultado_per_kg)}
+                      </div>
+                      <div>
+                        {metric === "mxn" ? fmtPerKg(data.month_close.resultado_per_kg) : fmtMoney(data.month_close.resultado_mxn)}
+                      </div>
+                      <div>Venta: {fmtKg(data.month_close.venta_kg)}</div>
+                      {data.month_close.has_projection && <div>Real + proyectado</div>}
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
           <div className="space-y-3">
             <div className="rounded border border-slate-700 p-3">
-              <div className="mb-2 text-xs uppercase tracking-wide text-slate-400">Clientes nuevos</div>
-              <div className="flex h-36 items-end gap-1">
-                {(data?.new_clients_chart || []).map((item) => (
-                  <div key={item.label} className="group flex flex-1 flex-col items-center justify-end" title={`${item.label}: ${item.count} clientes nuevos, ${fmtKg(item.kg)} captados`}>
-                    <div
-                      className="w-full rounded-t bg-emerald-500"
-                      style={{ height: `${Math.max(4, (item.count / maxClients) * 120)}px` }}
+              <div className="mb-2 flex items-center justify-between text-xs uppercase tracking-wide text-slate-400">
+                <span>Clientes nuevos</span>
+                <span className="inline-flex items-center gap-1 normal-case tracking-normal text-slate-300">
+                  <span className="h-0.5 w-4 bg-white" /> Tendencia semanal
+                </span>
+              </div>
+              <div className="relative h-36">
+                <div className="flex h-full items-end gap-1">
+                  {clientBars.map((item) => (
+                    <div key={item.label} className="group flex flex-1 flex-col items-center justify-end" title={`${item.label}: ${item.count} clientes nuevos, ${fmtKg(item.kg)} captados`}>
+                      <div
+                        className="w-full rounded-t bg-emerald-500"
+                        style={{ height: `${Math.max(4, (item.count / maxClients) * 120)}px` }}
+                      />
+                      <div className="mt-1 text-[10px] text-slate-400">{item.label}</div>
+                    </div>
+                  ))}
+                </div>
+                {clientBars.length > 0 && (
+                  <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox={`0 0 ${clientBars.length * 10} 144`} preserveAspectRatio="none">
+                    <polyline
+                      fill="none"
+                      stroke="#ffffff"
+                      strokeWidth="1.5"
+                      vectorEffect="non-scaling-stroke"
+                      points={trendDots.map((dot) => `${dot.x},${dot.y}`).join(" ")}
                     />
-                    <div className="mt-1 text-[10px] text-slate-400">{item.label}</div>
-                  </div>
-                ))}
+                    {trendDots.map((dot) => (
+                      <circle key={dot.label} cx={dot.x} cy={dot.y} r="2.2" fill="#ffffff" className="pointer-events-auto">
+                        <title>{`${dot.label}\n${dot.count} clientes\n${fmtKg(dot.kg)}`}</title>
+                      </circle>
+                    ))}
+                  </svg>
+                )}
               </div>
             </div>
             <div>
