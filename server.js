@@ -92,6 +92,7 @@ const usuarioPermisos = require("./lib/usuario-permisos");
 const clienteComentariosLib = require("./lib/cliente-comentarios");
 const clienteContactoLib = require("./lib/cliente-contacto");
 const commercialTrendEngine = require("./lib/commercial-trend-engine");
+const arrVentaSerieComments = require("./lib/arr-venta-serie-comments");
 const sehCarpetasLegales = require("./lib/seh-carpetas-legales");
 const sehEquipos = require("./lib/seh-equipos");
 const planMaestro = require("./lib/plan-maestro");
@@ -15287,8 +15288,19 @@ app.post("/api/arr/refresh-provincia", dashboardAuthMiddleware, async (req, res)
 app.get("/api/arr/venta-serie", dashboardAuthMiddleware, async (req, res) => {
   if (dashboardBlockGAFinancialKpis(req, res)) return;
   if (dashboardBlockGVForbidden(req, res)) return;
+  const provincia = /^(1|true|yes)$/i.test(String(req.query.provincia || "").trim());
+  if (provincia) {
+    const blocked = igfDiarioTodasRequestBlock({
+      dashboardAuth: req.dashboardAuth,
+      query: { ...req.query, igf_diario_todas: "1", plant_code: "", require_plant: "" },
+    });
+    if (blocked) return res.status(blocked.status).json({ error: blocked.error });
+  }
   const empresa = (req.query.empresa || "").toString().trim();
   if (!empresa) return res.status(400).json({ error: "Falta empresa" });
+  if (!provincia && commercialTrendEngine.normalizeAccents(empresa) === "PROVINCIA") {
+    return res.status(400).json({ error: "Provincia requiere provincia=1" });
+  }
   const rangeRaw = String(req.query.range || "1m").trim().toLowerCase();
   const rangeOk = ["1d", "5d", "1m", "3m", "ytd", "1a", "5a", "todo"].includes(rangeRaw)
     ? rangeRaw
@@ -15301,10 +15313,11 @@ app.get("/api/arr/venta-serie", dashboardAuthMiddleware, async (req, res) => {
   const client = await pool.connect();
   try {
     const engineResult = await commercialTrendEngine.loadCommercialTrend(client, {
-      empresa,
+      empresa: provincia ? "Provincia" : empresa,
       range: rangeOk,
       canal: canalFilter,
       cliente_norm: clienteNorm || null,
+      resolvePlantCodes: provincia ? commercialTrendEngine.resolveAllProvinciaPlantCodes : undefined,
     });
     if (engineResult && engineResult.ok === false) {
       return res.status(engineResult.status || 500).json({ error: engineResult.error || "Error venta-serie" });
@@ -15317,16 +15330,23 @@ app.get("/api/arr/venta-serie", dashboardAuthMiddleware, async (req, res) => {
     try {
       await clienteComentariosLib.ensureClienteComentariosTable(client);
       let plantaIds = [];
-      const rawPid = await dicfAccionesLib.resolvePlantaId(client, empresa);
-      if (Number.isFinite(rawPid)) {
-        const canon = dicfAccionesLib.getCanonicalPlantaId(rawPid);
-        plantaIds = dicfAccionesLib.getPlantaIdsEquivalentes(canon);
-      }
-      if (!plantaIds.length && plantCode) {
-        const raw2 = await dicfAccionesLib.resolvePlantaId(client, plantCode);
-        if (Number.isFinite(raw2)) {
-          const canon2 = dicfAccionesLib.getCanonicalPlantaId(raw2);
-          plantaIds = dicfAccionesLib.getPlantaIdsEquivalentes(canon2);
+      if (provincia) {
+        plantaIds = await arrVentaSerieComments.resolveComentarioPlantaIds(
+          client,
+          (engineResult && engineResult.plant_codes) || []
+        );
+      } else {
+        const rawPid = await dicfAccionesLib.resolvePlantaId(client, empresa);
+        if (Number.isFinite(rawPid)) {
+          const canon = dicfAccionesLib.getCanonicalPlantaId(rawPid);
+          plantaIds = dicfAccionesLib.getPlantaIdsEquivalentes(canon);
+        }
+        if (!plantaIds.length && plantCode) {
+          const raw2 = await dicfAccionesLib.resolvePlantaId(client, plantCode);
+          if (Number.isFinite(raw2)) {
+            const canon2 = dicfAccionesLib.getCanonicalPlantaId(raw2);
+            plantaIds = dicfAccionesLib.getPlantaIdsEquivalentes(canon2);
+          }
         }
       }
       const nombres = clientes_top.map((c) => String(c.cliente || "").trim()).filter(Boolean);
