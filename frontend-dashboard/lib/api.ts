@@ -79,6 +79,19 @@ export type IgfDiarioGraficaResponse = {
     kg: number;
     descuento_per_kg: number | null;
   }>;
+  month_close?: {
+    label: string;
+    year: number;
+    month: number;
+    resultado_mxn: number | null;
+    resultado_per_kg: number | null;
+    venta_kg: number | null;
+    real_mxn: number | null;
+    projected_mxn: number | null;
+    complete: boolean;
+    missing_components: string[];
+    has_projection: boolean;
+  };
 };
 
 export async function fetchIgfDiarioGrafica(opts: {
