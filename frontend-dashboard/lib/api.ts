@@ -1692,7 +1692,9 @@ export function fetchArrVentaSerie(
     range: ArrVentaSerieRange;
     canal?: ArrVentaSerieCanal;
     cliente_norm?: string | null;
-  }
+    provincia?: boolean;
+  },
+  init?: { signal?: AbortSignal }
 ): Promise<ArrVentaSerieResponse> {
   const q: Record<string, string> = {
     empresa: params.empresa,
@@ -1700,10 +1702,12 @@ export function fetchArrVentaSerie(
     canal: params.canal || "ambos",
   };
   if (params.cliente_norm) q.cliente_norm = params.cliente_norm;
+  if (params.provincia) q.provincia = "1";
   return apiFetch<ArrVentaSerieResponse>("/api/arr/venta-serie", {
     token,
     params: q,
     cache: "no-store",
+    signal: init?.signal,
   });
 }
 

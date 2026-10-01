@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { fetchIgfDiarioGrafica, type IgfDiarioGraficaResponse } from "@/lib/api";
+import { fetchIgfDiarioGrafica, type ArrVentaSerieRange, type IgfDiarioGraficaResponse } from "@/lib/api";
+import ArrVentaCanalPanel from "@/components/ArrVentaCanalPanel";
+import ArrVentaGraficaModal from "@/components/ArrVentaGraficaModal";
 
 const RANGOS = [
   { id: "1d", label: "1D" },
@@ -156,6 +158,22 @@ function buildWeeklyClientTrend(chart: { label: string; tipo: "week" | "day"; co
   ];
 }
 
+function weekGridSpan(
+  points: { fecha: string }[],
+  week: { fecha_desde: string; fecha_hasta: string }
+) {
+  let start = -1;
+  let end = -1;
+  points.forEach((point, index) => {
+    if (point.fecha >= week.fecha_desde && point.fecha <= week.fecha_hasta) {
+      if (start < 0) start = index;
+      end = index;
+    }
+  });
+  if (start < 0 || end < 0) return null;
+  return { gridColumnStart: start + 1, gridColumnEnd: end + 2 };
+}
+
 function fmtYTick(value: number, metric: Metric) {
   if (metric === "per_kg") {
     const sign = value < 0 ? "-" : "";
@@ -224,6 +242,8 @@ export default function IgfDiarioGraficaModal({
   const [data, setData] = useState<GraficaData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [hover, setHover] = useState<number | null>(null);
+  const [arrCliente, setArrCliente] = useState<string | null>(null);
+  const arrEmpresa = todas ? "Provincia" : scopeLabel;
 
   useEffect(() => {
     let cancel = false;
@@ -287,22 +307,10 @@ export default function IgfDiarioGraficaModal({
     return { W, H, padL, padT, padB, yOf, xOf, yMin, yMax, trend, points, valueOf, yTicks, xTicks };
   }, [data, metric, range]);
 
-  const clientBars = data?.new_clients_chart || [];
-  const maxClients = Math.max(1, ...clientBars.map((item) => item.count));
-  const weeklyTrend = buildWeeklyClientTrend(clientBars);
-  const trendMax = Math.max(1, ...weeklyTrend.map((item) => item.count));
-  const dayIndexes = clientBars.flatMap((item, index) => (item.tipo === "day" ? [index] : []));
-  const barCenter = (index: number) => (index + 0.5) * 10;
-  const currentTrendX = dayIndexes.length
-    ? dayIndexes.reduce((sum, index) => sum + barCenter(index), 0) / dayIndexes.length
-    : barCenter(Math.max(clientBars.length - 1, 0));
-  const trendDots = weeklyTrend.map((item, index) => {
-    const found = clientBars.findIndex((bar) => bar.label === item.label);
-    const x = index === 2 ? currentTrendX : barCenter(found >= 0 ? found : index);
-    const y = 128 - (item.count / trendMax) * 120;
-    return { ...item, x, y };
-  });
   const metricLabel = metric === "mxn" ? "$" : "$/kg";
+  const weekSpans = (data?.weeks || [])
+    .map((week) => ({ week, span: weekGridSpan(chart.points, week) }))
+    .filter((item) => item.span);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-3 sm:p-4">
@@ -349,11 +357,11 @@ export default function IgfDiarioGraficaModal({
           <div className="flex items-center gap-3 text-xs text-slate-300">
             <span className="inline-flex items-center gap-1"><span className="h-0.5 w-5 bg-sky-400" /> Real</span>
             <span className="inline-flex items-center gap-1"><span className="h-0.5 w-5 border-t border-dashed border-amber-300" /> Proyectado</span>
-            <span className="inline-flex items-center gap-1"><span className="h-0.5 w-5 bg-white" /> Tendencia real</span>
+            <span className="inline-flex items-center gap-1"><span className="h-0.5 w-5 bg-yellow-300" /> Tendencia real</span>
           </div>
         </div>
 
-        <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-auto p-4 lg:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
+        <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-auto p-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(420px,1fr)]">
           <div>
             {error && <p className="text-sm text-red-300">{error}</p>}
             {(data?.coverage_summary?.numeric_points ?? chart.points.filter((point) => typeof chart.valueOf(point) === "number").length) === 0 ? (
@@ -427,7 +435,7 @@ export default function IgfDiarioGraficaModal({
                   y1={chart.yOf(chart.trend.a + chart.trend.b * chart.trend.xFirst)}
                   x2={chart.xOf(chart.trend.xLast)}
                   y2={chart.yOf(chart.trend.a + chart.trend.b * chart.trend.xLast)}
-                  stroke="#ffffff"
+                  stroke="#facc15"
                   strokeWidth={1.5}
                 />
               )}
@@ -462,19 +470,36 @@ export default function IgfDiarioGraficaModal({
                 )}
               </div>
             )}
-            <div className="mt-3 flex flex-wrap gap-2">
-              {(data?.weeks || []).map((week) => (
-                <div key={`${week.label}-${week.fecha_desde}`} className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-200">
-                  <div className="text-slate-400">{week.label}{week.estado === "mixto" ? " · Mixta" : ""}</div>
-                  <div className="text-base font-semibold text-white">
-                    {metric === "mxn" ? fmtMoney(week.resultado_mxn) : fmtPerKg(week.resultado_per_kg)}
+            <div className="mt-3 flex items-start gap-2">
+              <div className="min-w-0 flex-1">
+                {chart.points.length > 0 && (
+                  <div
+                    className="grid gap-1"
+                    style={{
+                      marginLeft: `${(chart.padL / chart.W) * 100}%`,
+                      marginRight: `${(16 / chart.W) * 100}%`,
+                      gridTemplateColumns: `repeat(${chart.points.length}, minmax(0, 1fr))`,
+                    }}
+                  >
+                    {weekSpans.map(({ week, span }) => (
+                      <div
+                        key={`${week.label}-${week.fecha_desde}`}
+                        className="rounded border border-slate-700 px-1 py-1 text-[10px] text-slate-200"
+                        style={{ gridColumnStart: span?.gridColumnStart, gridColumnEnd: span?.gridColumnEnd }}
+                      >
+                        <div className="text-slate-400">{week.label}{week.estado === "mixto" ? " · Mixta" : ""}</div>
+                        <div className="text-sm font-semibold text-white">
+                          {metric === "mxn" ? fmtMoney(week.resultado_mxn) : fmtPerKg(week.resultado_per_kg)}
+                        </div>
+                        <div>{fmtMoney(week.resultado_mxn)} · {fmtPerKg(week.resultado_per_kg)}</div>
+                        {!week.complete && <div className="text-amber-300">Cobertura incompleta</div>}
+                      </div>
+                    ))}
                   </div>
-                  <div>{fmtMoney(week.resultado_mxn)} · {fmtPerKg(week.resultado_per_kg)}</div>
-                  {!week.complete && <div className="text-amber-300">Cobertura incompleta</div>}
-                </div>
-              ))}
+                )}
+              </div>
               {data?.month_close && (
-                <div className="min-w-[180px] rounded border border-sky-400 bg-slate-950 px-3 py-2 text-xs text-slate-200">
+                <div className="w-[180px] shrink-0 rounded border border-sky-400 bg-slate-950 px-3 py-2 text-xs text-slate-200">
                   <div className="font-semibold tracking-wide text-sky-300">{data.month_close.label}</div>
                   {!data.month_close.complete ? (
                     <>
@@ -500,56 +525,25 @@ export default function IgfDiarioGraficaModal({
           </div>
 
           <div className="space-y-3">
-            <div className="rounded border border-slate-700 p-3">
-              <div className="mb-2 flex items-center justify-between text-xs uppercase tracking-wide text-slate-400">
-                <span>Clientes nuevos</span>
-                <span className="inline-flex items-center gap-1 normal-case tracking-normal text-slate-300">
-                  <span className="h-0.5 w-4 bg-white" /> Tendencia semanal
-                </span>
-              </div>
-              <div className="relative h-36">
-                <div className="flex h-full items-end gap-1">
-                  {clientBars.map((item) => (
-                    <div key={item.label} className="group flex flex-1 flex-col items-center justify-end" title={`${item.label}: ${item.count} clientes nuevos, ${fmtKg(item.kg)} captados`}>
-                      <div
-                        className="w-full rounded-t bg-emerald-500"
-                        style={{ height: `${Math.max(4, (item.count / maxClients) * 120)}px` }}
-                      />
-                      <div className="mt-1 text-[10px] text-slate-400">{item.label}</div>
-                    </div>
-                  ))}
-                </div>
-                {clientBars.length > 0 && (
-                  <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox={`0 0 ${clientBars.length * 10} 144`} preserveAspectRatio="none">
-                    <polyline
-                      fill="none"
-                      stroke="#ffffff"
-                      strokeWidth="1.5"
-                      vectorEffect="non-scaling-stroke"
-                      points={trendDots.map((dot) => `${dot.x},${dot.y}`).join(" ")}
-                    />
-                    {trendDots.map((dot) => (
-                      <circle key={dot.label} cx={dot.x} cy={dot.y} r="2.2" fill="#ffffff" className="pointer-events-auto">
-                        <title>{`${dot.label}\n${dot.count} clientes\n${fmtKg(dot.kg)}`}</title>
-                      </circle>
-                    ))}
-                  </svg>
-                )}
-              </div>
-            </div>
-            <div>
-              <div className="mb-2 text-xs uppercase tracking-wide text-slate-400">Top 10 nuevos</div>
-              <ol className="space-y-1 text-xs text-slate-200">
-                {(data?.new_clients_top || []).map((item, index) => (
-                  <li key={`${item.planta}-${item.cliente}-${item.fecha_ingreso}`}>
-                    <span className="font-medium text-white">
-                      {index + 1}. {todas && item.planta ? `${item.planta} · ` : ""}{item.cliente}
-                    </span>
-                    <div>{fmtKg(item.kg)} · Desc. {fmtDescKg(item.descuento_per_kg)} · Ingreso {fmtIngreso(item.fecha_ingreso)}</div>
-                  </li>
-                ))}
-              </ol>
-            </div>
+            {/* Clientes nuevos y Top 10 nuevos no se renderizan en esta vista. Tendencia semanal permanece en el backend. */}
+            <ArrVentaCanalPanel
+              token={token}
+              empresa={arrEmpresa}
+              canal="casa"
+              range={range as ArrVentaSerieRange}
+              provincia={todas}
+              embedded
+              onClienteDoubleClick={setArrCliente}
+            />
+            <ArrVentaCanalPanel
+              token={token}
+              empresa={arrEmpresa}
+              canal="comisionista"
+              range={range as ArrVentaSerieRange}
+              provincia={todas}
+              embedded
+              onClienteDoubleClick={setArrCliente}
+            />
           </div>
         </div>
 
@@ -566,6 +560,16 @@ export default function IgfDiarioGraficaModal({
           ))}
         </div>
       </div>
+      {arrCliente && (
+        <ArrVentaGraficaModal
+          token={token}
+          empresa={arrEmpresa}
+          mode="cliente"
+          clienteNorm={arrCliente}
+          provincia={todas}
+          onClose={() => setArrCliente(null)}
+        />
+      )}
     </div>
   );
 }

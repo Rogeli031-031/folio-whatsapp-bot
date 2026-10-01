@@ -27,6 +27,7 @@ type Props = {
   /** canal = gráfica CASA/COMISIONISTA. cliente = un solo cliente_norm, sin selector. */
   mode?: "canal" | "cliente";
   clienteNorm?: string | null;
+  provincia?: boolean;
 };
 
 function fmtTon(n: number): string {
@@ -171,6 +172,7 @@ export default function ArrVentaGraficaModal({
   onClose,
   mode = "canal",
   clienteNorm = null,
+  provincia = false,
 }: Props) {
   const isCliente = mode === "cliente";
   const clienteLabel = String(clienteNorm || "").trim();
@@ -193,6 +195,7 @@ export default function ArrVentaGraficaModal({
       range,
       canal: canalApi,
       cliente_norm: isCliente && clienteLabel ? clienteLabel : undefined,
+      provincia,
     })
       .then((data) => {
         if (cancelled) return;
@@ -211,7 +214,7 @@ export default function ArrVentaGraficaModal({
     return () => {
       cancelled = true;
     };
-  }, [token, empresa, range, canal, isCliente, clienteLabel]);
+  }, [token, empresa, range, canal, isCliente, clienteLabel, provincia]);
 
   const series = useMemo(() => {
     return (points || []).map((p) => ({
