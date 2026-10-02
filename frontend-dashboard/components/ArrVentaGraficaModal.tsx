@@ -505,7 +505,8 @@ export function ArrVentaSerieView({
       <div className={embedded ? "relative w-full" : "relative min-w-0 flex-1"}>
         <svg
           viewBox={`0 0 ${chart.W} ${chart.H}`}
-          className="h-auto w-full"
+          preserveAspectRatio={embedded ? "none" : "xMidYMid meet"}
+          className={embedded ? "h-[240px] w-full" : "h-auto w-full"}
           role="img"
           aria-label={
             isCliente
@@ -673,7 +674,8 @@ export function ArrVentaSerieView({
             <p className="mt-0.5 text-[11px] leading-snug text-slate-500">
               Vs periodo previo · {canal === "casa" ? "CASA" : "COMISIONISTA"}
             </p>
-            <div className="mt-2 hidden gap-2 border-b border-slate-200 pb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500 md:grid md:grid-cols-[minmax(0,2fr)_minmax(72px,100px)_minmax(64px,90px)_minmax(64px,90px)_minmax(64px,90px)_minmax(0,2fr)]">
+            <div className="mt-1 hidden gap-2 border-b border-slate-200 pb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500 xl:grid xl:grid-cols-[28px_minmax(140px,1.8fr)_minmax(72px,0.7fr)_minmax(78px,0.7fr)_minmax(56px,0.55fr)_minmax(56px,0.55fr)_minmax(150px,1.8fr)]">
+              <span>#</span>
               <span>Cliente</span>
               <span>Movimiento</span>
               <span>Δ venta</span>
@@ -708,13 +710,13 @@ export function ArrVentaSerieView({
         {clientesTop.length === 0 ? (
           <p className="mt-3 text-xs text-slate-500">Sin cambios relevantes en el rango.</p>
         ) : (
-          <ol className="mt-3 space-y-2">
+          <ol className={embedded ? "mt-1" : "mt-3 space-y-2"}>
             {clientesTop.map((cliente, idx) => {
               const comments = Array.isArray(cliente.comentarios) ? cliente.comentarios.slice(0, 2) : [];
               const commentBlock = comments.length === 0 ? (
                 <p className="text-[11px] italic text-slate-400">Sin comentarios</p>
               ) : (
-                <ul className="space-y-1.5">
+                <ul className={embedded ? "space-y-0.5" : "space-y-1.5"}>
                   {comments.map((com, j) => (
                     <li key={`c-${idx}-${j}`} className="border-l-2 border-sky-300 pl-2">
                       <p className="whitespace-normal break-words text-[11px] leading-snug text-slate-700">
@@ -733,7 +735,7 @@ export function ArrVentaSerieView({
                   title={onClienteDoubleClick ? "Doble clic para abrir gráfica del cliente" : undefined}
                   className={
                     embedded
-                      ? `grid w-full grid-cols-1 gap-1 border-b border-slate-100 py-2 md:grid-cols-[minmax(0,2fr)_minmax(72px,100px)_minmax(64px,90px)_minmax(64px,90px)_minmax(64px,90px)_minmax(0,2fr)] md:items-start md:gap-2 ${
+                      ? `grid w-full grid-cols-1 items-start gap-x-2 gap-y-0.5 border-b border-slate-100 py-1 xl:grid-cols-[28px_minmax(140px,1.8fr)_minmax(72px,0.7fr)_minmax(78px,0.7fr)_minmax(56px,0.55fr)_minmax(56px,0.55fr)_minmax(150px,1.8fr)] ${
                           onClienteDoubleClick ? "cursor-pointer" : ""
                         }`
                       : `grid grid-cols-1 items-stretch gap-2 rounded-md border border-slate-100 bg-slate-50 p-2.5 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] sm:gap-3 ${
@@ -748,8 +750,9 @@ export function ArrVentaSerieView({
                 >
                   {embedded ? (
                     <>
-                      <div className="whitespace-normal break-words text-xs font-semibold text-slate-800">
-                        {idx + 1}. {cliente.cliente}
+                      <div className="text-[11px] tabular-nums text-slate-500">{idx + 1}</div>
+                      <div className="whitespace-normal break-words text-xs font-semibold leading-snug text-slate-800">
+                        {cliente.cliente}
                       </div>
                       <div>
                         <span className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold ${tipoClass(String(cliente.tipo))}`}>

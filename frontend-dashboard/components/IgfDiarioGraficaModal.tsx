@@ -361,7 +361,7 @@ export default function IgfDiarioGraficaModal({
           </div>
         </div>
 
-        <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-auto p-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(420px,1fr)]">
+        <div className="grid min-h-0 flex-1 grid-cols-1 gap-2 overflow-auto p-4 xl:grid-cols-[minmax(0,44fr)_minmax(0,56fr)] 2xl:grid-cols-[minmax(0,46fr)_minmax(0,54fr)]">
           <div>
             {error && <p className="text-sm text-red-300">{error}</p>}
             {(data?.coverage_summary?.numeric_points ?? chart.points.filter((point) => typeof chart.valueOf(point) === "number").length) === 0 ? (

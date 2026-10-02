@@ -13,7 +13,7 @@ const embeddedRows = VIEW.slice(VIEW.indexOf("whitespace-normal break-words text
 test("embedded es vertical y no limita la altura", () => {
   assert.match(VIEW, /embedded \? "flex flex-col gap-3" : "flex flex-col gap-3 lg:flex-row lg:items-stretch"/);
   assert.match(VIEW, /embedded \? "relative w-full"/);
-  assert.match(VIEW, /className="h-auto w-full"/);
+  assert.match(VIEW, /embedded \? "h-\[240px\] w-full" : "h-auto w-full"/);
   assert.match(VIEW, /embedded \? "w-full rounded-lg border border-slate-200 bg-white p-3"/);
   assert.match(VIEW, /lg:w-\[640px\]/);
   assert.doesNotMatch(VIEW, /max-h-\[320px\]/);
@@ -26,8 +26,8 @@ test("embedded es vertical y no limita la altura", () => {
 test("el Top 6 embedded es un renglón por cliente a todo el ancho", () => {
   assert.equal(VIEW.split("clientesTop.map").length - 1, 1);
   assert.match(VIEW, /grid w-full grid-cols-1/);
-  assert.match(VIEW, /md:grid-cols-\[minmax\(0,2fr\)_minmax\(72px,100px\)_minmax\(64px,90px\)_minmax\(64px,90px\)_minmax\(64px,90px\)_minmax\(0,2fr\)\]/);
-  assert.match(embeddedRows, /\{idx \+ 1\}\. \{cliente\.cliente\}/);
+  assert.match(VIEW, /xl:grid-cols-\[28px_minmax\(140px,1\.8fr\)_minmax\(72px,0\.7fr\)_minmax\(78px,0\.7fr\)_minmax\(56px,0\.55fr\)_minmax\(56px,0\.55fr\)_minmax\(150px,1\.8fr\)\]/);
+  assert.match(embeddedRows, /\{cliente\.cliente\}/);
   assert.match(embeddedRows, /tipoLabel\(String\(cliente\.tipo\)\)/);
   assert.match(embeddedRows, /fmtTonSigned\(cliente\.delta_ton\)/);
   assert.match(embeddedRows, /cliente\.venta_ton_prev/);
