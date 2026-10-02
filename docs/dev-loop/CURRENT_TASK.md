@@ -1,6 +1,6 @@
-﻿task_id: "FIX-IGF-ARR-TOP6-EMBEDDED-CONTRAST-057-R1"
+﻿task_id: "FIX-IGF-ARR-EMBEDDED-ASPECT-LABELS-058-R1"
 
-title: "Recuperar fondo y contraste del Top 6 embebido"
+title: "Corregir proporción SVG embebida y labels Prev/Actual"
 
 status: "DONE_PENDING_REVIEW"
 
@@ -8,29 +8,31 @@ mode: "IMPLEMENTATION"
 
 authorized_by: "HUMAN_APPROVER"
 
-authorized_at: "2026-10-01"
+authorized_at: "2026-10-02"
 
-human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-10-01"
+human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-10-02"
 
 prior_task:
-  task_id: "FIX-IGF-ARR-TOP6-VERTICAL-LAYOUT-057"
-  sha: "4eae27960aab0f2c1fe83f75c78498de9591e912"
+  task_id: "FIX-IGF-ARR-DESKTOP-OPTIMIZED-LAYOUT-058"
+  sha: "e6f6246330f1364006fb0a7e8d91653df5018280"
   status: "DONE_PENDING_REVIEW"
 
-base_sha: "4eae27960aab0f2c1fe83f75c78498de9591e912"
+base_sha: "e6f6246330f1364006fb0a7e8d91653df5018280"
 
-branch: "fix/igf-arr-top6-embedded-contrast-057-r1"
+branch: "fix/igf-arr-embedded-aspect-labels-058-r1"
 
-review_finding: >
-  057 corrigió correctamente el layout: gráfica full-width y Top 6 debajo.
-  Sin embargo el aside embedded quedó con className="w-full", perdiendo
-  bg-white, border, rounded y p-3. Como los textos conservan text-slate-800/600/500
-  y el padre es bg-slate-950, el Top 6 puede quedar oscuro sobre fondo oscuro.
+review_findings: >
+  058 optimiza correctamente la proporción 44/56 y 46/54 y compacta el Top 6.
+  Quedan dos bordes visuales: embedded fuerza preserveAspectRatio="none",
+  deformando verticalmente el SVG; y Prev/Actual usan md:hidden aunque el
+  header tabular solo aparece desde xl, dejando valores sin etiqueta entre
+  md y xl.
 
 objective: >
-  Mantener exactamente el layout vertical de 057 y restaurar en el Top 6
-  embebido el fondo claro, borde, redondeo y padding necesarios para que
-  cliente, movimiento, delta, Prev, Actual y comentarios sean legibles.
+  Mantener intacto el layout aprobado de 058, eliminando la deformación
+  del SVG ARR embebido mediante una altura interna compacta del viewBox
+  y manteniendo visibles Prev/Actual hasta el mismo breakpoint xl en que
+  aparece la cabecera tabular.
 
 implementation: true
 code_changes: true
@@ -39,14 +41,16 @@ data_mutation: false
 
 in_scope:
   - "frontend-dashboard/components/ArrVentaGraficaModal.tsx"
+  - "test/igf-arr-desktop-optimized-layout-058.test.js"
   - "test/igf-arr-top6-vertical-layout-057.test.js"
-  - "nuevo test 057-R1 si conviene"
-  - "docs/dev-loop/reports/FIX-IGF-ARR-TOP6-EMBEDDED-CONTRAST-057-R1.md"
+  - "test/igf-arr-top6-embedded-contrast-057-r1.test.js"
+  - "nuevo test 058-R1"
+  - "docs/dev-loop/reports/FIX-IGF-ARR-EMBEDDED-ASPECT-LABELS-058-R1.md"
   - "docs/dev-loop/CURRENT_TASK.md solo status"
 
 out_of_scope:
-  - "ArrVentaCanalPanel salvo regresión estrictamente necesaria"
-  - "IgfDiarioGraficaModal"
+  - "IgfDiarioGraficaModal salvo regresión"
+  - "ArrVentaCanalPanel"
   - "server.js"
   - "API"
   - "commercial-trend-engine"
@@ -54,7 +58,7 @@ out_of_scope:
   - "comments"
   - "Provincia"
   - "AF/AE"
-  - "CIERRE PROYECTADO"
+  - "month_close"
   - "DB/schema"
   - "writes"
   - "OpenAI"
@@ -62,57 +66,93 @@ out_of_scope:
   - "merge"
   - "deploy"
 
-embedded_aside_contract:
-  - "Cuando embedded=true, conservar width 100%."
-  - "Agregar rounded-lg."
-  - "Agregar border border-slate-200."
-  - "Agregar bg-white."
-  - "Agregar p-3."
-  - "NO agregar lg:w-[640px]."
-  - "NO reintroducir lg:w-[240px]."
-  - "NO reintroducir max-h-[320px]."
+embedded_svg_contract:
+  - "Eliminar preserveAspectRatio='none'."
+  - "No estirar X/Y de forma independiente."
+  - "Mantener preserveAspectRatio='xMidYMid meet'."
+  - "Mantener W=980."
+  - "Modo normal conserva H=460."
+  - "Modo embedded usa H compacto cercano a 330."
+  - "H debe formar parte del mismo cálculo chart/useMemo."
+  - "Agregar embedded a dependencies del useMemo."
+  - "No duplicar renderer."
 
-expected_class_concept:
-  embedded: "w-full rounded-lg border border-slate-200 bg-white p-3"
-  normal: "w-full shrink-0 rounded-lg border border-slate-200 bg-white p-3 lg:w-[640px]"
+expected_chart_geometry:
+  normal:
+    W: 980
+    H: 460
+  embedded:
+    W: 980
+    H: 330
 
-layout_contract:
-  - "Embedded sigue vertical."
-  - "Gráfica sigue primero y full-width."
-  - "Top 6 sigue debajo y full-width."
-  - "Un cliente sigue siendo un renglón."
-  - "Seis clientes siguen siendo seis renglones."
-  - "Nombre sigue sin truncate en embedded."
-  - "Comentarios siguen en columna propia."
-  - "No cambiar grid de seis columnas."
+embedded_height_rationale:
+  - "Con ancho aproximado 700 px: 700*330/980 ≈ 236 px."
+  - "Con ancho aproximado 760 px: ≈256 px."
+  - "Eso cumple el objetivo visual 220–260 px sin deformación."
 
-normal_modal:
-  - "embedded=false queda exactamente igual."
-  - "Gráfica izquierda + aside lg:w-[640px]."
-  - "ARR fullscreen no cambia."
+svg_class:
+  - "Volver a h-auto w-full en embedded y normal."
+  - "No fijar h-[240px]."
+  - "No usar overflow:hidden para simular compresión."
 
-visual_acceptance:
-  - "Top 6 embedded tiene fondo blanco."
-  - "Texto slate-800/600/500 tiene contraste legible."
-  - "Cada renglón se distingue visualmente."
-  - "Comentarios se leen claramente."
-  - "CASA y COMISIONISTA usan el mismo estilo."
+chart_math:
+  - "linearTrend intacta."
+  - "yMin/yMax intactos."
+  - "ticks intactos."
+  - "xLabels intactos."
+  - "paths intactos."
+  - "Solo innerH cambia porque H embedded es menor."
+  - "Datos de venta/tendencia no cambian."
 
-functional_acceptance:
-  - "clientesTop order intacto."
-  - "tipo intacto."
-  - "delta intacto."
-  - "Prev intacto."
-  - "Actual intacto."
-  - "comentarios intactos."
-  - "doble clic intacto."
-  - "click simple no abre."
+tooltip:
+  - "Tooltip debe usar coordenadas del mismo chart.H."
+  - "No debe quedar fuera del viewBox embedded."
+  - "Hover/click intactos."
+
+responsive_labels:
+  - "Header tabular embedded aparece desde xl."
+  - "Prev y Actual deben mantener prefijo visible mientras no haya header."
+  - "Cambiar md:hidden -> xl:hidden."
+  - "En < xl mostrar 'Prev 46.58' y 'Actual 61.73'."
+  - "En >= xl ocultar prefijos porque existen columnas PREV / ACTUAL."
+
+layout_058:
+  - "44/56 desde xl permanece."
+  - "46/54 desde 2xl permanece."
+  - "Gap permanece."
+  - "Top 6 siete columnas permanece."
+  - "Nombre completo permanece."
+  - "Comentarios permanecen."
+  - "No scroll interno."
+
+normal_arr_contract:
+  - "embedded=false sigue usando H=460."
+  - "Modal ARR normal visualmente intacto."
+  - "Mode cliente intacto."
+  - "018/019 PASS."
+
+acceptance_criteria:
+  - "No existe preserveAspectRatio='none'."
+  - "SVG usa xMidYMid meet."
+  - "W=980."
+  - "H embedded=330."
+  - "H normal=460."
+  - "embedded está en dependencies de chart useMemo."
+  - "SVG usa h-auto w-full."
+  - "No h-[240px]."
+  - "Prev/Actual usan xl:hidden."
+  - "No md:hidden en esos dos labels."
+  - "44/56 y 46/54 intactos."
+  - "Top6 intacto."
+  - "Double click intacto."
   - "Provincia intacta."
-  - "057 intacta salvo contraste."
+  - "No backend."
 
 validation:
-  - "057-R1."
+  - "058-R1."
+  - "058."
   - "057."
+  - "057-R1."
   - "056."
   - "056-R1."
   - "018."
@@ -121,16 +161,18 @@ validation:
 
 allowed_actions:
   - "crear rama R1 desde base_sha"
-  - "ajustar className del aside embedded"
-  - "ajustar test"
+  - "ajustar H dentro del renderer compartido"
+  - "corregir preserveAspectRatio"
+  - "corregir breakpoints Prev/Actual"
+  - "ajustar tests"
   - "crear reporte"
   - "commit"
   - "push solo rama R1"
 
 forbidden_actions:
-  - "cambiar layout vertical"
-  - "cambiar renderer ARR"
-  - "cambiar datos"
+  - "cambiar proporciones 058"
+  - "cambiar Top6 layout"
+  - "cambiar cálculo ARR"
   - "cambiar backend"
   - "cambiar API"
   - "writes"
@@ -142,4 +184,4 @@ forbidden_actions:
 
 max_attempts: 1
 
-result_report_path: "docs/dev-loop/reports/FIX-IGF-ARR-TOP6-EMBEDDED-CONTRAST-057-R1.md"
+result_report_path: "docs/dev-loop/reports/FIX-IGF-ARR-EMBEDDED-ASPECT-LABELS-058-R1.md"

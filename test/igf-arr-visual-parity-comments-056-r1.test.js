@@ -52,7 +52,7 @@ test("modal y panel usan la misma ArrVentaSerieView", () => {
   assert.match(VIEW, /Top 6 clientes/);
   assert.match(VIEW, /Últimos comentarios/);
   assert.match(VIEW, /const W = 980/);
-  assert.match(VIEW, /const H = 460/);
+  assert.match(VIEW, /const H = embedded \? 330 : 460/);
   assert.match(VIEW, /canal === "casa" \? "#ca8a04" : "#38bdf8"/);
   assert.match(VIEW, /stroke="#16a34a"/);
   assert.match(IGF, /canal="casa"/);

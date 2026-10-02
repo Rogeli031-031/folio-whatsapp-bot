@@ -19,15 +19,15 @@ test("embedded es vertical y no limita la altura", () => {
   assert.doesNotMatch(VIEW, /max-h-\[320px\]/);
   assert.doesNotMatch(VIEW, /lg:w-\[240px\]/);
   assert.match(VIEW, /const W = 980/);
-  assert.match(VIEW, /const H = 460/);
+  assert.match(VIEW, /const H = embedded \? 330 : 460/);
   assert.equal(VIEW.split("function linearTrend").length, 1);
 });
 
 test("el Top 6 embedded es un renglón por cliente a todo el ancho", () => {
   assert.equal(VIEW.split("clientesTop.map").length - 1, 1);
   assert.match(VIEW, /grid w-full grid-cols-1/);
-  assert.match(VIEW, /md:grid-cols-\[minmax\(0,2fr\)_minmax\(72px,100px\)_minmax\(64px,90px\)_minmax\(64px,90px\)_minmax\(64px,90px\)_minmax\(0,2fr\)\]/);
-  assert.match(embeddedRows, /\{idx \+ 1\}\. \{cliente\.cliente\}/);
+  assert.match(VIEW, /xl:grid-cols-\[28px_minmax\(140px,1\.8fr\)_minmax\(72px,0\.7fr\)_minmax\(78px,0\.7fr\)_minmax\(56px,0\.55fr\)_minmax\(56px,0\.55fr\)_minmax\(150px,1\.8fr\)\]/);
+  assert.match(embeddedRows, /\{cliente\.cliente\}/);
   assert.match(embeddedRows, /tipoLabel\(String\(cliente\.tipo\)\)/);
   assert.match(embeddedRows, /fmtTonSigned\(cliente\.delta_ton\)/);
   assert.match(embeddedRows, /cliente\.venta_ton_prev/);
