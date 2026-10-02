@@ -1,6 +1,6 @@
-﻿task_id: "FIX-IGF-ARR-DESKTOP-OPTIMIZED-LAYOUT-058"
+﻿task_id: "FIX-IGF-ARR-EMBEDDED-ASPECT-LABELS-058-R1"
 
-title: "Optimizar distribución desktop de Rentabilidad, CASA y COMISIONISTA"
+title: "Corregir proporción SVG embebida y labels Prev/Actual"
 
 status: "DONE_PENDING_REVIEW"
 
@@ -8,26 +8,31 @@ mode: "IMPLEMENTATION"
 
 authorized_by: "HUMAN_APPROVER"
 
-authorized_at: "2026-10-01"
+authorized_at: "2026-10-02"
 
-human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-10-01"
+human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-10-02"
 
-base_sha: "137574f5cad04585a46b6b34b4fb13772f1e8415"
+prior_task:
+  task_id: "FIX-IGF-ARR-DESKTOP-OPTIMIZED-LAYOUT-058"
+  sha: "e6f6246330f1364006fb0a7e8d91653df5018280"
+  status: "DONE_PENDING_REVIEW"
 
-branch: "fix/igf-arr-desktop-optimized-layout-058"
+base_sha: "e6f6246330f1364006fb0a7e8d91653df5018280"
 
-visual_reference: >
-  Implementar la propuesta visual aprobada por el usuario:
-  Rentabilidad IGF a la izquierda; CASA y COMISIONISTA apiladas a la derecha.
-  Cada canal muestra gráfica full-width y debajo Top 6 en seis renglones.
-  La columna derecha gana ancho respecto a producción actual para hacer
-  legibles gráfica, nombres, métricas y comentarios.
+branch: "fix/igf-arr-embedded-aspect-labels-058-r1"
+
+review_findings: >
+  058 optimiza correctamente la proporción 44/56 y 46/54 y compacta el Top 6.
+  Quedan dos bordes visuales: embedded fuerza preserveAspectRatio="none",
+  deformando verticalmente el SVG; y Prev/Actual usan md:hidden aunque el
+  header tabular solo aparece desde xl, dejando valores sin etiqueta entre
+  md y xl.
 
 objective: >
-  Optimizar el uso del espacio del modal IGF en desktop sin modificar ninguna
-  matemática ni fuente de datos. Redistribuir el ancho entre Rentabilidad
-  y ARR, compactar verticalmente CASA/COMISIONISTA y hacer que los Top 6
-  sean legibles de un vistazo, conservando toda la funcionalidad 057-R1.
+  Mantener intacto el layout aprobado de 058, eliminando la deformación
+  del SVG ARR embebido mediante una altura interna compacta del viewBox
+  y manteniendo visibles Prev/Actual hasta el mismo breakpoint xl en que
+  aparece la cabecera tabular.
 
 implementation: true
 code_changes: true
@@ -35,24 +40,25 @@ schema_changes: false
 data_mutation: false
 
 in_scope:
-  - "frontend-dashboard/components/IgfDiarioGraficaModal.tsx"
-  - "frontend-dashboard/components/ArrVentaCanalPanel.tsx"
-  - "frontend-dashboard/components/ArrVentaGraficaModal.tsx solo estilos embedded"
-  - "tests 058"
-  - "tests 057/057-R1 afectados"
-  - "docs/dev-loop/reports/FIX-IGF-ARR-DESKTOP-OPTIMIZED-LAYOUT-058.md"
+  - "frontend-dashboard/components/ArrVentaGraficaModal.tsx"
+  - "test/igf-arr-desktop-optimized-layout-058.test.js"
+  - "test/igf-arr-top6-vertical-layout-057.test.js"
+  - "test/igf-arr-top6-embedded-contrast-057-r1.test.js"
+  - "nuevo test 058-R1"
+  - "docs/dev-loop/reports/FIX-IGF-ARR-EMBEDDED-ASPECT-LABELS-058-R1.md"
   - "docs/dev-loop/CURRENT_TASK.md solo status"
 
 out_of_scope:
+  - "IgfDiarioGraficaModal salvo regresión"
+  - "ArrVentaCanalPanel"
   - "server.js"
-  - "API ARR"
+  - "API"
   - "commercial-trend-engine"
-  - "cálculo Top 6"
-  - "comentarios"
+  - "Top 6 data"
+  - "comments"
   - "Provincia"
   - "AF/AE"
   - "month_close"
-  - "forecast"
   - "DB/schema"
   - "writes"
   - "OpenAI"
@@ -60,193 +66,91 @@ out_of_scope:
   - "merge"
   - "deploy"
 
-desktop_master_layout:
-  - "Mantener dos columnas."
-  - "Izquierda aproximadamente 46%."
-  - "Derecha aproximadamente 54%."
-  - "Puede ajustarse entre 45/55 y 48/52 según breakpoint."
-  - "La derecha debe ser perceptiblemente más ancha que en producción actual."
-  - "No dejar que la gráfica Rentabilidad domine ~60% si eso comprime ARR."
-  - "Gap entre columnas reducido pero respirable."
+embedded_svg_contract:
+  - "Eliminar preserveAspectRatio='none'."
+  - "No estirar X/Y de forma independiente."
+  - "Mantener preserveAspectRatio='xMidYMid meet'."
+  - "Mantener W=980."
+  - "Modo normal conserva H=460."
+  - "Modo embedded usa H compacto cercano a 330."
+  - "H debe formar parte del mismo cálculo chart/useMemo."
+  - "Agregar embedded a dependencies del useMemo."
+  - "No duplicar renderer."
 
-desktop_left:
-  - "Título y toggle intactos."
-  - "Gráfica Rentabilidad intacta."
-  - "Semanas intactas y alineadas."
-  - "CIERRE PROYECTADO intacto."
-  - "Reducir espacios muertos verticales innecesarios."
-  - "No aumentar artificialmente altura de Rentabilidad para igualar derecha."
+expected_chart_geometry:
+  normal:
+    W: 980
+    H: 460
+  embedded:
+    W: 980
+    H: 330
 
-desktop_right:
-  - "CASA arriba."
-  - "COMISIONISTA abajo."
-  - "Mismo ancho."
-  - "Misma estructura."
-  - "Cada canal visualmente funciona como una unidad compacta."
+embedded_height_rationale:
+  - "Con ancho aproximado 700 px: 700*330/980 ≈ 236 px."
+  - "Con ancho aproximado 760 px: ≈256 px."
+  - "Eso cumple el objetivo visual 220–260 px sin deformación."
 
-channel_panel:
-  - "Título del canal sobre fondo oscuro."
-  - "Gráfica inmediatamente debajo."
-  - "Top 6 inmediatamente debajo de la gráfica."
-  - "No usar aside lateral."
-  - "No usar scroll interno."
-  - "No separar gráfica y Top6 con espacios grandes."
+svg_class:
+  - "Volver a h-auto w-full en embedded y normal."
+  - "No fijar h-[240px]."
+  - "No usar overflow:hidden para simular compresión."
 
-embedded_chart_height:
-  desktop_target: "aprox 220-260 px visuales"
-  - "Conservar viewBox 980x460 y renderer único."
-  - "Escalar visualmente el SVG mediante wrapper/CSS, no cambiar matemática."
-  - "Ejes X/Y deben seguir legibles."
-  - "Tooltip debe seguir funcionando."
-  - "No recortar puntos, labels ni tendencia."
-  - "CASA y COMISIONISTA misma altura."
+chart_math:
+  - "linearTrend intacta."
+  - "yMin/yMax intactos."
+  - "ticks intactos."
+  - "xLabels intactos."
+  - "paths intactos."
+  - "Solo innerH cambia porque H embedded es menor."
+  - "Datos de venta/tendencia no cambian."
 
-top6_desktop:
-  - "Tabla/lista compacta."
-  - "Seis clientes visibles consecutivamente."
-  - "Un renglón por cliente."
-  - "Sin tarjetas altas."
-  - "Fila objetivo aproximadamente 42-56 px, permitiendo más si comentario requiere wrap."
-  - "No imponer altura fija que corte comentarios."
+tooltip:
+  - "Tooltip debe usar coordenadas del mismo chart.H."
+  - "No debe quedar fuera del viewBox embedded."
+  - "Hover/click intactos."
 
-top6_columns:
-  - "#"
-  - "Cliente"
-  - "Movimiento"
-  - "Δ venta"
-  - "Prev"
-  - "Actual"
-  - "Últimos comentarios"
+responsive_labels:
+  - "Header tabular embedded aparece desde xl."
+  - "Prev y Actual deben mantener prefijo visible mientras no haya header."
+  - "Cambiar md:hidden -> xl:hidden."
+  - "En < xl mostrar 'Prev 46.58' y 'Actual 61.73'."
+  - "En >= xl ocultar prefijos porque existen columnas PREV / ACTUAL."
 
-top6_width_priority:
-  - "Cliente recibe mucho más espacio que hoy."
-  - "Últimos comentarios recibe el otro bloque ancho."
-  - "Movimiento, delta, prev y actual son columnas compactas."
-  - "No comprimir nombre para favorecer columnas numéricas."
+layout_058:
+  - "44/56 desde xl permanece."
+  - "46/54 desde 2xl permanece."
+  - "Gap permanece."
+  - "Top 6 siete columnas permanece."
+  - "Nombre completo permanece."
+  - "Comentarios permanecen."
+  - "No scroll interno."
 
-suggested_embedded_grid:
-  desktop: >
-    28px
-    minmax(180px, 1.8fr)
-    minmax(72px, 0.7fr)
-    minmax(78px, 0.7fr)
-    minmax(62px, 0.55fr)
-    minmax(62px, 0.55fr)
-    minmax(190px, 1.8fr)
-
-client_name:
-  - "Mostrar nombre completo."
-  - "Permitir máximo wrap natural."
-  - "No truncate en embedded."
-  - "No ellipsis salvo breakpoint realmente estrecho."
-
-comments:
-  - "Mantener máximo 2 comentarios por cliente."
-  - "En desktop priorizar el comentario más reciente visualmente."
-  - "Segundo comentario puede aparecer debajo si cabe."
-  - "No ocultar datos."
-  - "No cambiar backend."
-
-visual_density:
-  - "Reducir padding vertical excesivo en filas."
-  - "Header Top 6 compacto."
-  - "Bordes finos."
-  - "Usar fondo blanco actual."
-  - "Mantener jerarquía clara sin tarjetas innecesarias."
-  - "Evitar que cada fila parezca una tarjeta independiente."
-
-channel_color:
-  - "CASA conserva amarillo."
-  - "COMISIONISTA conserva azul."
-  - "Tendencia conserva verde."
-  - "No cambiar colores del motor ARR."
-
-main_chart:
-  - "Rentabilidad conserva azul Real."
-  - "Proyectado punteado."
-  - "Tendencia real amarilla."
-  - "No cambiar geometría ni datos."
-
-weekly_cards:
-  - "Mantener 5 semanas."
-  - "Mantener alineación por fechas."
-  - "No ampliar verticalmente."
-  - "CIERRE PROYECTADO sigue separado y destacado."
-
-range_controls:
-  - "Mantener en footer inferior."
-  - "Siguen controlando Rentabilidad + CASA + COMISIONISTA."
-  - "No agregar controles duplicados."
-
-scroll_behavior:
-  - "Solo scroll vertical del modal general."
-  - "No scroll interno en CASA."
-  - "No scroll interno en COMISIONISTA."
-  - "No scroll interno en Top 6."
-  - "Evitar overflow horizontal desktop."
-
-breakpoints:
-  large_desktop:
-    - "dos columnas ~46/54."
-  desktop_1366:
-    - "dos columnas si sigue siendo legible."
-    - "se permite 44/56."
-    - "Top6 puede reducir comentario o envolver."
-  tablet:
-    - "si ya no cabe legible, apilar."
-  mobile:
-    - "Rentabilidad."
-    - "Semanas + cierre."
-    - "CASA gráfica."
-    - "CASA Top6."
-    - "COMISIONISTA gráfica."
-    - "COMISIONISTA Top6."
-
-double_click:
-  - "Fila completa continúa interactiva."
-  - "Doble clic abre gráfica cliente."
-  - "Click simple no abre."
-  - "No cambiar modal cliente."
-
-functional_contract:
-  - "Top6 sigue exactamente data.clientes_top."
-  - "No sort."
-  - "No recompute."
-  - "No nuevo fetch."
-  - "Provincia intacta."
-  - "Comentarios intactos."
-  - "Rango intacto."
-  - "IGF financiero intacto."
+normal_arr_contract:
+  - "embedded=false sigue usando H=460."
+  - "Modal ARR normal visualmente intacto."
+  - "Mode cliente intacto."
+  - "018/019 PASS."
 
 acceptance_criteria:
-  - "La columna ARR es notablemente más ancha que en 057."
-  - "CASA gráfica ocupa todo el ancho de columna derecha."
-  - "COMISIONISTA igual."
-  - "Top 6 CASA muestra 6 rows legibles."
-  - "Top 6 COMISIONISTA muestra 6 rows legibles."
-  - "Nombre del cliente se aprecia claramente."
-  - "Movimiento, delta, Prev y Actual se leen sin apretarse."
-  - "Comentarios tienen espacio útil."
-  - "No scroll interno."
-  - "No gran hueco entre gráfica y Top6."
-  - "Izquierda conserva Rentabilidad/semanas/cierre."
-  - "ARR normal fullscreen no cambia."
+  - "No existe preserveAspectRatio='none'."
+  - "SVG usa xMidYMid meet."
+  - "W=980."
+  - "H embedded=330."
+  - "H normal=460."
+  - "embedded está en dependencies de chart useMemo."
+  - "SVG usa h-auto w-full."
+  - "No h-[240px]."
+  - "Prev/Actual usan xl:hidden."
+  - "No md:hidden en esos dos labels."
+  - "44/56 y 46/54 intactos."
+  - "Top6 intacto."
   - "Double click intacto."
   - "Provincia intacta."
   - "No backend."
 
 validation:
-  - "1920x1080."
-  - "1600x900."
-  - "1366x768."
-  - "CASA con nombres largos."
-  - "COMISIONISTA con nombres largos."
-  - "0/1/2 comentarios."
-  - "6 clientes."
-  - "1M."
-  - "3M."
-  - "Provincia."
-  - "double click."
+  - "058-R1."
+  - "058."
   - "057."
   - "057-R1."
   - "056."
@@ -256,21 +160,21 @@ validation:
   - "git diff --check."
 
 allowed_actions:
-  - "crear rama 058 desde base_sha"
-  - "ajustar layout desktop IGF"
-  - "ajustar CSS embedded ARR"
-  - "compactar Top6"
-  - "agregar tests"
+  - "crear rama R1 desde base_sha"
+  - "ajustar H dentro del renderer compartido"
+  - "corregir preserveAspectRatio"
+  - "corregir breakpoints Prev/Actual"
+  - "ajustar tests"
   - "crear reporte"
   - "commit"
-  - "push solo rama 058"
+  - "push solo rama R1"
 
 forbidden_actions:
-  - "cambiar renderer matemático"
-  - "cambiar datos Top6"
-  - "cambiar comentarios backend"
+  - "cambiar proporciones 058"
+  - "cambiar Top6 layout"
+  - "cambiar cálculo ARR"
+  - "cambiar backend"
   - "cambiar API"
-  - "cambiar IGF financiero"
   - "writes"
   - "DDL"
   - "git add ."
@@ -280,4 +184,4 @@ forbidden_actions:
 
 max_attempts: 1
 
-result_report_path: "docs/dev-loop/reports/FIX-IGF-ARR-DESKTOP-OPTIMIZED-LAYOUT-058.md"
+result_report_path: "docs/dev-loop/reports/FIX-IGF-ARR-EMBEDDED-ASPECT-LABELS-058-R1.md"

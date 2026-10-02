@@ -22,11 +22,13 @@ test("el modal IGF da más ancho a la derecha desde xl", () => {
 
 test("embedded sigue vertical, la gráfica va antes del Top 6 y no tiene scroll interno", () => {
   assert.match(VIEW, /embedded \? "flex flex-col gap-3"/);
-  assert.match(VIEW, /embedded \? "h-\[240px\] w-full"/);
-  assert.match(VIEW, /preserveAspectRatio=\{embedded \? "none"/);
+  assert.match(VIEW, /className="h-auto w-full"/);
+  assert.match(VIEW, /preserveAspectRatio="xMidYMid meet"/);
   assert.match(VIEW, /const W = 980/);
-  assert.match(VIEW, /const H = 460/);
-  assert.ok(VIEW.indexOf('h-[240px] w-full') < VIEW.indexOf("Top 6 clientes"));
+  assert.match(VIEW, /const H = embedded \? 330 : 460/);
+  assert.ok(VIEW.indexOf('className="h-auto w-full"') < VIEW.indexOf("Top 6 clientes"));
+  assert.doesNotMatch(VIEW, /h-\[240px\]/);
+  assert.doesNotMatch(VIEW, /preserveAspectRatio="none"/);
   assert.equal(VIEW.split("clientesTop.map").length - 1, 1);
   assert.match(VIEW, /whitespace-normal break-words/);
   assert.doesNotMatch(VIEW, /max-h-\[320px\]|overflow-auto/);

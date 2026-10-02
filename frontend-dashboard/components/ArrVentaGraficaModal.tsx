@@ -377,7 +377,7 @@ export function ArrVentaSerieView({
 
   const chart = useMemo(() => {
     const W = 980;
-    const H = 460;
+    const H = embedded ? 330 : 460;
     const padL = 56;
     const descPresent = isCliente
       ? series.map((s) => s.descuentoKg).filter((v): v is number => v != null)
@@ -465,7 +465,7 @@ export function ArrVentaSerieView({
       trendLine,
       hasDescAxis,
     };
-  }, [series, range, isCliente]);
+  }, [series, range, isCliente, embedded]);
 
   const lineColor = isCliente ? "#ca8a04" : canal === "casa" ? "#ca8a04" : "#38bdf8";
   const descColor = "#7c3aed";
@@ -505,8 +505,8 @@ export function ArrVentaSerieView({
       <div className={embedded ? "relative w-full" : "relative min-w-0 flex-1"}>
         <svg
           viewBox={`0 0 ${chart.W} ${chart.H}`}
-          preserveAspectRatio={embedded ? "none" : "xMidYMid meet"}
-          className={embedded ? "h-[240px] w-full" : "h-auto w-full"}
+          preserveAspectRatio="xMidYMid meet"
+          className="h-auto w-full"
           role="img"
           aria-label={
             isCliente
@@ -763,11 +763,11 @@ export function ArrVentaSerieView({
                         {fmtTonSigned(cliente.delta_ton)} ton
                       </div>
                       <div className="text-[11px] tabular-nums text-slate-600">
-                        <span className="md:hidden">Prev </span>
+                        <span className="xl:hidden">Prev </span>
                         {fmtTon(cliente.venta_ton_prev)}
                       </div>
                       <div className="text-[11px] tabular-nums text-slate-600">
-                        <span className="md:hidden">Actual </span>
+                        <span className="xl:hidden">Actual </span>
                         {fmtTon(cliente.venta_ton_actual)}
                       </div>
                       <div className="min-w-0">{commentBlock}</div>

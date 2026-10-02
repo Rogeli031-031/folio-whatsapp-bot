@@ -18,9 +18,9 @@ test("el Top 6 embedded recupera fondo blanco y el normal conserva el aside anch
   );
   assert.match(VIEW, /embedded \? "flex flex-col gap-3"/);
   assert.match(VIEW, /embedded \? "relative w-full"/);
-  assert.match(VIEW, /embedded \? "h-\[240px\] w-full" : "h-auto w-full"/);
+  assert.match(VIEW, /className="h-auto w-full"/);
   assert.match(VIEW, /const W = 980/);
-  assert.match(VIEW, /const H = 460/);
+  assert.match(VIEW, /const H = embedded \? 330 : 460/);
   assert.doesNotMatch(VIEW, /max-h-\[320px\]/);
   assert.doesNotMatch(VIEW, /lg:w-\[240px\]/);
   assert.match(VIEW, /whitespace-normal break-words/);
