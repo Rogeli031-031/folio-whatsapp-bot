@@ -1,169 +1,126 @@
-﻿task_id: "FIX-IGF-FORECAST-ACUMULADO-HG-COMPRAS-TARIFA-059-R1"
+﻿task_id: "INTEGRATION-IGF-FORECAST-ACUMULADO-059-R1"
 
-title: "Evitar datos acumulados obsoletos y mezcla Forecast/IGF Diario"
+title: "Validación pre-merge de 059 + 059-R1"
 
 status: "DONE_PENDING_REVIEW"
 
-mode: "IMPLEMENTATION"
-
 authorized_by: "HUMAN_APPROVER"
 
-authorized_at: "2026-10-03"
+authorized_at: "2026-10-03T11:33:00-06:00"
 
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-10-03"
 
-prior_task:
-  task_id: "FIX-IGF-FORECAST-ACUMULADO-HG-COMPRAS-TARIFA-059"
-  sha: "48863b0f29ec983396c64ffb09e3b52805572f36"
-  status: "DONE_PENDING_REVIEW"
-
-base_sha: "48863b0f29ec983396c64ffb09e3b52805572f36"
-
-branch: "fix/igf-forecast-acumulado-hg-compras-tarifa-059-r1"
-
 objective: >
-  Mantener intacta la implementación 059, formalizar el uso de
-  lib/igf-diario-grafica.js y evitar que el modo IGF Diario acumulado
-  muestre datos obsoletos o mezcle silenciosamente valores Forecast
-  con valores IGF Diario cuando una planta carece de Margen/HG acumulado.
+  Validar como unidad integrada FIX-IGF-FORECAST-ACUMULADO-HG-COMPRAS-TARIFA-059
+  y FIX-IGF-FORECAST-ACUMULADO-HG-COMPRAS-TARIFA-059-R1 contra el main vigente,
+  documentar la evidencia final y dejar la rama preparada para decisión humana G4,
+  sin modificar código de producto, datos ni base de datos.
 
-implementation: true
-code_changes: true
-schema_changes: false
-data_mutation: false
+source_sha: "8a4c49f5b482d78e6157f871afb7bb64adcdb856"
+
+main_reference_sha: "c907696506594860e286db432cb07cbf3f3f5c72"
+
+source_branch: "fix/igf-forecast-acumulado-hg-compras-tarifa-059-r1"
+
+branch: "integration/igf-forecast-acumulado-059-r1"
+
+prior_tasks:
+  - task_id: "FIX-IGF-FORECAST-ACUMULADO-HG-COMPRAS-TARIFA-059"
+    sha: "48863b0f29ec983396c64ffb09e3b52805572f36"
+  - task_id: "FIX-IGF-FORECAST-ACUMULADO-HG-COMPRAS-TARIFA-059-R1"
+    sha: "8a4c49f5b482d78e6157f871afb7bb64adcdb856"
+
+production_evidence:
+  - "folio-dashboard Live en c907696506594860e286db432cb07cbf3f3f5c72."
+  - "folio-whatsapp-bot Live en c907696506594860e286db432cb07cbf3f3f5c72."
+  - "FIX 054-R3 8f8bbd79aaafed126449d3090338d1d5a8adf5eb es ancestro de main."
+  - "Acapulco productivo es public.plantas.id=1, nombre Acapulco, clave ACAPULCO."
+  - "public.plantas.id=12 corresponde a E10, no a Acapulco."
+  - "La prueba inicial de la auditoría 060 contra planta_id=12 no representaba Acapulco."
+  - "Con planta_id=1, septiembre 2026 tiene 3 proveedores, 72 compras, 30 HG y 3 tarifas."
+  - "Con planta_id=1, octubre 2026 al corte 2026-10-03 tiene 3 proveedores, 4 compras, 2 HG y 3 tarifas."
+  - "resolveControlComprasDays entrega COSTO/FLETE numéricos para Acapulco id=1."
+  - "En main, 2026-10-01 hereda costo anterior pero flete queda null."
+  - "059 agrega el fallback histórico de tarifa consolidada para ese caso del día 1."
+  - "No se requiere migración, alias ni modificación de IDs de plantas."
 
 in_scope:
-  - "frontend-dashboard/components/IgfForecastClient.tsx"
-  - "frontend-dashboard/lib/api.ts solo si requiere ajuste de tipos"
-  - "lib/igf-diario-grafica.js"
-  - "test/igf-forecast-acumulado-hg-compras-tarifa-059.test.js"
-  - "nuevo test 059-R1"
-  - "docs/dev-loop/reports/FIX-IGF-FORECAST-ACUMULADO-HG-COMPRAS-TARIFA-059-R1.md"
-  - "docs/dev-loop/CURRENT_TASK.md solo status"
+  - "Validación read-only del diff main c907696506594860e286db432cb07cbf3f3f5c72 -> source 8a4c49f5b482d78e6157f871afb7bb64adcdb856."
+  - "Ejecutar tests existentes de 059 y 059-R1."
+  - "Ejecutar regresiones 052, 036, 037, 054, 054-R1, 054-R2, 054-R3 y 055."
+  - "Ejecutar frontend build."
+  - "Ejecutar git diff --check."
+  - "Verificar ahead 2 / behind 0 respecto de main_reference_sha."
+  - "Verificar que no existen commits de producto posteriores a source_sha."
+  - "Crear docs/dev-loop/reports/INTEGRATION-IGF-FORECAST-ACUMULADO-059-R1.md."
+  - "docs/dev-loop/CURRENT_TASK.md solo para transición de status permitida por LOOP_PROTOCOL."
+  - "Commit del reporte y CURRENT_TASK en la rama integration/igf-forecast-acumulado-059-r1."
+  - "Push únicamente de integration/igf-forecast-acumulado-059-r1."
 
 out_of_scope:
-  - "lib/compras-dashboard.js salvo regresión"
-  - "lib/compras-excel.js salvo regresión"
-  - "lib/dashboard-arr-forecast.js salvo regresión"
-  - "lib/igf-diario-puebla.js salvo regresión"
-  - "server.js"
-  - "DB schema"
-  - "DDL"
-  - "data mutation"
-  - "Director IA"
-  - "ARR"
-  - "Action Register"
-  - "permisos"
-  - "merge"
-  - "deploy"
+  - "Modificar frontend-dashboard/components/IgfForecastClient.tsx."
+  - "Modificar frontend-dashboard/lib/api.ts."
+  - "Modificar lib/compras-dashboard.js."
+  - "Modificar lib/compras-excel.js."
+  - "Modificar lib/dashboard-arr-forecast.js."
+  - "Modificar lib/igf-diario-grafica.js."
+  - "Modificar lib/igf-diario-puebla.js."
+  - "Modificar tests de producto."
+  - "Modificar server.js."
+  - "Modificar schema o datos."
+  - "Modificar public.plantas."
+  - "Migrar compras entre planta_id."
+  - "Editar el worktree folio-060-wt."
+  - "Editar o incorporar el reporte 060 local incorrecto."
+  - "Merge a main."
+  - "Push a main."
+  - "Deploy."
 
-authorized_deviation_from_059:
-  - "Se autoriza explícitamente lib/igf-diario-grafica.js como parte de 059-R1."
-  - "Se conserva el campo acumulado agregado por 059."
-  - "No crear ruta nueva si la respuesta existente de gráfica continúa siendo suficiente."
-  - "No exponer margen/hg diario adicional al frontend; acumulado sigue siendo el contrato necesario."
-
-stale_state_contract:
-  - "Al comenzar una nueva carga de IGF Diario acumulado, limpiar acumuladoByPlant antes de realizar requests."
-  - "Cambiar mes, corte, versionAsOfCorte o cualquier dependencia que dispare una nueva carga no puede dejar visibles acumulados de la carga anterior."
-  - "Durante acumuladoLoading no se deben renderizar cifras acumuladas anteriores."
-  - "Si la nueva carga falla, los datos anteriores no deben permanecer visibles bajo el modo IGF Diario acumulado."
-  - "Cambiar a Forecast debe mostrar inmediatamente el mini Forecast original."
-
-completeness_contract:
-  - "IGF Diario acumulado solo se aplica si todas las plantas necesarias tienen Margen y HG válidos."
-  - "No usar una fila Forecast como fallback silencioso para una planta sin acumulado."
-  - "No construir Zona Provincia mezclando plantas Forecast con plantas IGF Diario."
-  - "margen debe ser finite number."
-  - "hg debe ser finite number."
-  - "null, undefined, NaN o Infinity cuentan como dato faltante."
-
-incomplete_ui:
-  - "Si falta acumulado para una o más plantas, mostrar estado explícito: IGF Diario acumulado incompleto."
-  - "Indicar las plantas faltantes cuando estén disponibles."
-  - "Mientras el modo esté incompleto no mostrar una tabla que parezca ser IGF Diario usando cifras Forecast."
-  - "No sustituir silenciosamente por Forecast."
-  - "El usuario puede volver al botón Forecast y ver inmediatamente el cálculo original."
-
-loading_ui:
-  - "Mientras carga, mostrar Cargando IGF Diario acumulado…"
-  - "No mostrar la tabla acumulada hasta que la carga esté completa."
-  - "No reutilizar visualmente el resultado del request anterior."
-
-forecast_contract:
-  - "Forecast permanece exactamente como quedó antes de 059."
-  - "applyIgfDiarioAcumuladoMini no debe mutar igfMini."
-  - "Volver a Forecast debe usar el objeto mini original."
-  - "No alterar fórmulas Forecast."
-
-igf_diario_contract:
-  - "Margen sigue siendo H TOTAL MES ponderado."
-  - "HG sigue siendo -Y TOTAL MES ponderado."
-  - "No usar H48/Y48 hardcode."
-  - "acumulado de lib/igf-diario-grafica.js continúa siendo read-only."
-  - "No agregar escrituras en DB."
-
-compras_contract:
-  - "La solución TARIFA día 1 implementada en 059 permanece intacta."
-  - "No cambiar fallback histórico salvo que una prueba de regresión demuestre un defecto."
-  - "Dato propio día 1 prevalece."
-  - "Sin histórico permanece vacío."
-  - "No usar cero."
-  - "No usar día 2."
+contracts_in_force:
+  - "AGENTS.md"
+  - "docs/dev-loop/LOOP_PROTOCOL.md"
+  - "origin/main en c907696506594860e286db432cb07cbf3f3f5c72"
 
 acceptance_criteria:
-  - "lib/igf-diario-grafica.js queda formalmente dentro del alcance."
-  - "Al iniciar carga acumulada se elimina el estado acumulado anterior."
-  - "Cambio de corte no muestra temporalmente valores del corte anterior."
-  - "Cambio de mes no muestra temporalmente valores del mes anterior."
-  - "Error de request no conserva valores acumulados anteriores."
-  - "Una planta sin Margen/HG no usa Forecast como fallback."
-  - "Zona Provincia nunca mezcla Forecast e IGF Diario acumulado."
-  - "Modo incompleto muestra mensaje explícito."
-  - "Durante loading no se muestra tabla acumulada vieja."
-  - "Forecast sigue visible y correcto al volver a ese modo."
-  - "059 continúa PASS."
-  - "052 continúa PASS."
-  - "npm run build PASS."
-  - "git diff --check limpio."
+  - "La rama fuente conserva ahead 2 / behind 0 respecto de main."
+  - "No hay cambios de producto posteriores a 8a4c49f5b482d78e6157f871afb7bb64adcdb856."
+  - "Forecast conserva el comportamiento original."
+  - "IGF Diario acumulado usa Margen desde H del TOTAL MES dinámico."
+  - "HG acumulado usa negativo de Y del TOTAL MES dinámico."
+  - "No existen hardcodes H48/Y48."
+  - "No se mezcla Forecast con acumulado cuando falta una planta."
+  - "Cambio de periodo/corte invalida acumulado anterior."
+  - "Zona Provincia se recalcula con una sola metodología."
+  - "Tarifa propia válida del día 1 prevalece."
+  - "Sin tarifa propia del día 1 se usa tarifa consolidada histórica válida."
+  - "No se usa día 2 como fallback de tarifa."
+  - "No se usa cero como fallback."
+  - "No se selecciona arbitrariamente la tarifa de un proveedor."
+  - "No existen modificaciones a DB/schema/data."
+  - "El reporte deja explícito que Acapulco=id1/ACAPULCO e id12=E10."
+  - "El reporte deja G4 como decisión exclusivamente humana."
 
 validation:
-  - "test 059-R1: limpia acumulado antes de nueva carga"
-  - "test 059-R1: cambio de corte no reutiliza acumulado anterior"
-  - "test 059-R1: request fallido no conserva datos anteriores"
-  - "test 059-R1: planta sin margen no usa Forecast"
-  - "test 059-R1: planta sin HG no usa Forecast"
-  - "test 059-R1: Zona Provincia no mezcla modos"
-  - "test 059-R1: regreso a Forecast restaura mini original"
-  - "regresión 059"
-  - "regresión 052"
-  - "regresiones IGF Diario relacionadas"
-  - "frontend-dashboard npm run build"
+  - "test/igf-forecast-acumulado-hg-compras-tarifa-059.test.js"
+  - "test/igf-forecast-acumulado-hg-compras-tarifa-059-r1.test.js"
+  - "regresiones 052, 036, 037, 054, 054-R1, 054-R2, 054-R3, 055"
+  - "frontend build"
   - "git diff --check"
 
-allowed_actions:
-  - "crear rama R1 desde base_sha"
-  - "cambiar AUTHORIZED a IN_PROGRESS sin modificar autorización humana"
-  - "modificar únicamente archivos in_scope"
-  - "crear tests"
-  - "crear reporte"
-  - "commit"
-  - "push únicamente rama 059-R1"
-  - "dejar DONE_PENDING_REVIEW al terminar"
-
 forbidden_actions:
+  - "Modificar código de producto."
+  - "Modificar tests para hacerlos pasar."
+  - "Writes o DDL."
+  - "Acceso de escritura a producción."
+  - "Mover compras entre plantas."
+  - "Cambiar IDs o claves de public.plantas."
   - "git add ."
-  - "merge a main"
-  - "push a main"
-  - "PR"
-  - "deploy"
-  - "DDL"
-  - "data mutation"
-  - "modificar contratos Director IA"
-  - "crear otra ruta API sin necesidad"
-  - "fallback silencioso Forecast dentro de modo IGF Diario"
-  - "autorizar siguiente tarea"
+  - "push a main."
+  - "merge a main."
+  - "crear o aprobar G4."
+  - "deploy."
+  - "abrir automáticamente una tarea siguiente."
 
 max_attempts: 1
 
-result_report_path: "docs/dev-loop/reports/FIX-IGF-FORECAST-ACUMULADO-HG-COMPRAS-TARIFA-059-R1.md"
+result_report_path: "docs/dev-loop/reports/INTEGRATION-IGF-FORECAST-ACUMULADO-059-R1.md"
