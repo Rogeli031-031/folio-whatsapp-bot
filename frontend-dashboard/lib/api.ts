@@ -92,6 +92,11 @@ export type IgfDiarioGraficaResponse = {
     missing_components: string[];
     has_projection: boolean;
   };
+  acumulado?: {
+    margen: number | null;
+    y: number | null;
+    hg: number | null;
+  } | null;
 };
 
 export async function fetchIgfDiarioGrafica(opts: {

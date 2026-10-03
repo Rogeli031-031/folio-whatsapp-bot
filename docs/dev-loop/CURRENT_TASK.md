@@ -1,187 +1,158 @@
-﻿task_id: "FIX-IGF-ARR-EMBEDDED-ASPECT-LABELS-058-R1"
+﻿task_id: "G4-PREP-IGF-FORECAST-ACUMULADO-059-R1"
 
-title: "Corregir proporción SVG embebida y labels Prev/Actual"
+title: "Preparar PR para merge humano G4 de 059 + 059-R1"
 
 status: "DONE_PENDING_REVIEW"
 
-mode: "IMPLEMENTATION"
+mode: "INTEGRATION"
 
 authorized_by: "HUMAN_APPROVER"
 
-authorized_at: "2026-10-02"
+authorized_at: "2026-10-03T11:54:45-06:00"
 
-human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-10-02"
+human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-10-03"
 
-prior_task:
-  task_id: "FIX-IGF-ARR-DESKTOP-OPTIMIZED-LAYOUT-058"
-  sha: "e6f6246330f1364006fb0a7e8d91653df5018280"
-  status: "DONE_PENDING_REVIEW"
-
-base_sha: "e6f6246330f1364006fb0a7e8d91653df5018280"
-
-branch: "fix/igf-arr-embedded-aspect-labels-058-r1"
-
-review_findings: >
-  058 optimiza correctamente la proporción 44/56 y 46/54 y compacta el Top 6.
-  Quedan dos bordes visuales: embedded fuerza preserveAspectRatio="none",
-  deformando verticalmente el SVG; y Prev/Actual usan md:hidden aunque el
-  header tabular solo aparece desde xl, dejando valores sin etiqueta entre
-  md y xl.
+g4_authorization: "G4_AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-10-03"
 
 objective: >
-  Mantener intacto el layout aprobado de 058, eliminando la deformación
-  del SVG ARR embebido mediante una altura interna compacta del viewBox
-  y manteniendo visibles Prev/Actual hasta el mismo breakpoint xl en que
-  aparece la cabecera tabular.
+  Preparar el Pull Request de integration/igf-forecast-acumulado-059-r1
+  hacia main después de la validación completa de 059 + 059-R1.
+  El implementador puede verificar, documentar y crear el PR,
+  pero el merge a main será ejecutado exclusivamente por el HUMAN_APPROVER.
+  Esta tarea no autoriza deploy automático ni siguiente tarea.
 
-implementation: true
-code_changes: true
+implementation: false
+
+code_changes: false
+
 schema_changes: false
+
 data_mutation: false
 
+main_reference_sha: "c907696506594860e286db432cb07cbf3f3f5c72"
+
+validated_source_sha: "5f74da3945d0fdec0a3f46648dc35e7ae7f3dcca"
+
+product_source_sha: "8a4c49f5b482d78e6157f871afb7bb64adcdb856"
+
+branch: "integration/igf-forecast-acumulado-059-r1"
+
+target_branch: "main"
+
+validated_product_commits:
+  - "48863b0f29ec983396c64ffb09e3b52805572f36"
+  - "8a4c49f5b482d78e6157f871afb7bb64adcdb856"
+
+validation_commit:
+  - "5f74da3945d0fdec0a3f46648dc35e7ae7f3dcca"
+
+validated_evidence:
+  - "75 tests PASS, 0 FAIL."
+  - "frontend-dashboard npm run build PASS."
+  - "git diff --check limpio."
+  - "Rama de integración ahead 3 / behind 0 respecto de main."
+  - "No existen cambios de producto posteriores a 8a4c49f5b482d78e6157f871afb7bb64adcdb856."
+  - "Acapulco producción = public.plantas.id 1, clave ACAPULCO."
+  - "public.plantas.id 12 = E10."
+  - "No se requiere migración ni modificación de datos."
+  - "El null de FLETE del 2026-10-01 en main es cubierto por el fallback histórico implementado en 059."
+
 in_scope:
-  - "frontend-dashboard/components/ArrVentaGraficaModal.tsx"
-  - "test/igf-arr-desktop-optimized-layout-058.test.js"
-  - "test/igf-arr-top6-vertical-layout-057.test.js"
-  - "test/igf-arr-top6-embedded-contrast-057-r1.test.js"
-  - "nuevo test 058-R1"
-  - "docs/dev-loop/reports/FIX-IGF-ARR-EMBEDDED-ASPECT-LABELS-058-R1.md"
-  - "docs/dev-loop/CURRENT_TASK.md solo status"
+  - "Leer AGENTS.md."
+  - "Leer docs/dev-loop/LOOP_PROTOCOL.md."
+  - "Leer docs/dev-loop/CURRENT_TASK.md."
+  - "Verificar que origin/main sigue exactamente en main_reference_sha."
+  - "Verificar que validated_source_sha sigue siendo ancestro/punta previa de esta rama."
+  - "Verificar que main es ancestro de product_source_sha."
+  - "Verificar que no existen cambios de producto posteriores a product_source_sha."
+  - "Verificar que el único cambio nuevo de esta tarea antes del commit sea CURRENT_TASK.md."
+  - "Ejecutar git diff --check."
+  - "Crear docs/dev-loop/reports/G4-PREP-IGF-FORECAST-ACUMULADO-059-R1.md."
+  - "docs/dev-loop/CURRENT_TASK.md solo transiciones de status permitidas."
+  - "Commit únicamente del reporte y CURRENT_TASK.md."
+  - "Push únicamente a integration/igf-forecast-acumulado-059-r1."
+  - "Crear Pull Request desde integration/igf-forecast-acumulado-059-r1 hacia main."
+  - "Reportar número y URL del PR."
+  - "STOP antes de cualquier merge."
 
 out_of_scope:
-  - "IgfDiarioGraficaModal salvo regresión"
-  - "ArrVentaCanalPanel"
-  - "server.js"
-  - "API"
-  - "commercial-trend-engine"
-  - "Top 6 data"
-  - "comments"
-  - "Provincia"
-  - "AF/AE"
-  - "month_close"
-  - "DB/schema"
-  - "writes"
-  - "OpenAI"
-  - "PR"
-  - "merge"
-  - "deploy"
+  - "Modificar frontend-dashboard/components/IgfForecastClient.tsx."
+  - "Modificar frontend-dashboard/lib/api.ts."
+  - "Modificar lib/compras-dashboard.js."
+  - "Modificar lib/compras-excel.js."
+  - "Modificar lib/dashboard-arr-forecast.js."
+  - "Modificar lib/igf-diario-grafica.js."
+  - "Modificar lib/igf-diario-puebla.js."
+  - "Modificar server.js."
+  - "Modificar cualquier test."
+  - "Modificar DB/schema/data."
+  - "Modificar public.plantas."
+  - "Migrar compras."
+  - "Editar folio-060-wt."
+  - "Editar otros worktrees."
+  - "Push a main."
+  - "Merge a main."
+  - "Deploy."
+  - "Autorizar siguiente tarea."
 
-embedded_svg_contract:
-  - "Eliminar preserveAspectRatio='none'."
-  - "No estirar X/Y de forma independiente."
-  - "Mantener preserveAspectRatio='xMidYMid meet'."
-  - "Mantener W=980."
-  - "Modo normal conserva H=460."
-  - "Modo embedded usa H compacto cercano a 330."
-  - "H debe formar parte del mismo cálculo chart/useMemo."
-  - "Agregar embedded a dependencies del useMemo."
-  - "No duplicar renderer."
+contracts_in_force:
+  - "AGENTS.md"
+  - "docs/dev-loop/LOOP_PROTOCOL.md"
+  - "origin/main en c907696506594860e286db432cb07cbf3f3f5c72"
 
-expected_chart_geometry:
-  normal:
-    W: 980
-    H: 460
-  embedded:
-    W: 980
-    H: 330
-
-embedded_height_rationale:
-  - "Con ancho aproximado 700 px: 700*330/980 ≈ 236 px."
-  - "Con ancho aproximado 760 px: ≈256 px."
-  - "Eso cumple el objetivo visual 220–260 px sin deformación."
-
-svg_class:
-  - "Volver a h-auto w-full en embedded y normal."
-  - "No fijar h-[240px]."
-  - "No usar overflow:hidden para simular compresión."
-
-chart_math:
-  - "linearTrend intacta."
-  - "yMin/yMax intactos."
-  - "ticks intactos."
-  - "xLabels intactos."
-  - "paths intactos."
-  - "Solo innerH cambia porque H embedded es menor."
-  - "Datos de venta/tendencia no cambian."
-
-tooltip:
-  - "Tooltip debe usar coordenadas del mismo chart.H."
-  - "No debe quedar fuera del viewBox embedded."
-  - "Hover/click intactos."
-
-responsive_labels:
-  - "Header tabular embedded aparece desde xl."
-  - "Prev y Actual deben mantener prefijo visible mientras no haya header."
-  - "Cambiar md:hidden -> xl:hidden."
-  - "En < xl mostrar 'Prev 46.58' y 'Actual 61.73'."
-  - "En >= xl ocultar prefijos porque existen columnas PREV / ACTUAL."
-
-layout_058:
-  - "44/56 desde xl permanece."
-  - "46/54 desde 2xl permanece."
-  - "Gap permanece."
-  - "Top 6 siete columnas permanece."
-  - "Nombre completo permanece."
-  - "Comentarios permanecen."
-  - "No scroll interno."
-
-normal_arr_contract:
-  - "embedded=false sigue usando H=460."
-  - "Modal ARR normal visualmente intacto."
-  - "Mode cliente intacto."
-  - "018/019 PASS."
+pr_contract:
+  base: "main"
+  head: "integration/igf-forecast-acumulado-059-r1"
+  title: "FIX 059 + 059-R1: IGF Diario acumulado y tarifa día 1"
+  merge_executor: "HUMAN_APPROVER_ONLY"
+  deploy_authorized: false
 
 acceptance_criteria:
-  - "No existe preserveAspectRatio='none'."
-  - "SVG usa xMidYMid meet."
-  - "W=980."
-  - "H embedded=330."
-  - "H normal=460."
-  - "embedded está en dependencies de chart useMemo."
-  - "SVG usa h-auto w-full."
-  - "No h-[240px]."
-  - "Prev/Actual usan xl:hidden."
-  - "No md:hidden en esos dos labels."
-  - "44/56 y 46/54 intactos."
-  - "Top6 intacto."
-  - "Double click intacto."
-  - "Provincia intacta."
-  - "No backend."
-
-validation:
-  - "058-R1."
-  - "058."
-  - "057."
-  - "057-R1."
-  - "056."
-  - "056-R1."
-  - "018."
-  - "019."
-  - "git diff --check."
+  - "origin/main continúa exactamente en c907696506594860e286db432cb07cbf3f3f5c72 antes de crear el PR."
+  - "No se modifica ningún archivo de producto."
+  - "No se modifica ningún test."
+  - "El nuevo commit de esta tarea contiene solo CURRENT_TASK.md y el reporte G4-PREP."
+  - "La rama continúa basada en los dos commits de producto 059 y 059-R1 ya validados."
+  - "git diff --check PASS."
+  - "El PR apunta de integration/igf-forecast-acumulado-059-r1 a main."
+  - "El PR no se fusiona."
+  - "No se ejecuta deploy."
+  - "El reporte identifica el SHA final de la rama y el número/URL del PR."
+  - "El reporte deja explícito que el siguiente acto es el merge humano G4."
 
 allowed_actions:
-  - "crear rama R1 desde base_sha"
-  - "ajustar H dentro del renderer compartido"
-  - "corregir preserveAspectRatio"
-  - "corregir breakpoints Prev/Actual"
-  - "ajustar tests"
-  - "crear reporte"
-  - "commit"
-  - "push solo rama R1"
+  - "Cambiar AUTHORIZED a IN_PROGRESS modificando solo status."
+  - "Validaciones read-only."
+  - "Crear reporte G4-PREP."
+  - "Cambiar status final a DONE_PENDING_REVIEW."
+  - "Commit de CURRENT_TASK.md y reporte únicamente."
+  - "Push solo a integration/igf-forecast-acumulado-059-r1."
+  - "Crear PR hacia main."
+  - "Usar gh pr create si gh ya está instalado y autenticado."
 
 forbidden_actions:
-  - "cambiar proporciones 058"
-  - "cambiar Top6 layout"
-  - "cambiar cálculo ARR"
-  - "cambiar backend"
-  - "cambiar API"
-  - "writes"
-  - "DDL"
+  - "Modificar código de producto."
+  - "Modificar tests."
   - "git add ."
-  - "PR"
-  - "merge"
-  - "deploy"
+  - "git push origin main."
+  - "git merge."
+  - "gh pr merge."
+  - "Squash/merge/rebase sobre main."
+  - "Deploy."
+  - "Writes o DDL."
+  - "Cambiar authorized_by."
+  - "Cambiar authorized_at."
+  - "Cambiar human_authorization."
+  - "Cambiar g4_authorization."
+  - "Abrir o ejecutar siguiente tarea."
+
+fallback_if_gh_unavailable:
+  - "No instalar gh."
+  - "No iniciar sesión ni cambiar credenciales."
+  - "Documentar el bloqueo."
+  - "Entregar la URL manual para abrir el PR."
+  - "STOP sin merge."
 
 max_attempts: 1
 
-result_report_path: "docs/dev-loop/reports/FIX-IGF-ARR-EMBEDDED-ASPECT-LABELS-058-R1.md"
+result_report_path: "docs/dev-loop/reports/G4-PREP-IGF-FORECAST-ACUMULADO-059-R1.md"

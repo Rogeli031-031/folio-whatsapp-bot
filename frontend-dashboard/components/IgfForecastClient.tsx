@@ -16,6 +16,7 @@ import IgfDiarioGraficaModal from "@/components/IgfDiarioGraficaModal";
 import {
   fetchIgfForecast,
   fetchIgfForecastMini,
+  fetchIgfDiarioGrafica,
   fetchArrLastUploadDay,
   postForecastProvincia,
   patchIgfForecastHg,
@@ -100,6 +101,88 @@ import {
   toModalResumenRows,
 } from "@/lib/arr-categoria-commission";
 
+function acumuladoHit(
+  row: IgfForecastMiniRow,
+  byPlant: Record<string, { margen: number | null; hg: number | null } | null>
+): { margen: number; hg: number } | null {
+  const code = String(row.plant_code || "").trim();
+  const name = String(row.empresa || "").trim();
+  const hit = (code && byPlant[code]) || (name && byPlant[name]) || null;
+  if (!hit || !Number.isFinite(hit.margen) || !Number.isFinite(hit.hg)) return null;
+  return { margen: Number(hit.margen), hg: Number(hit.hg) };
+}
+
+function missingAcumuladoPlants(
+  rows: IgfForecastMiniRow[],
+  byPlant: Record<string, { margen: number | null; hg: number | null } | null>
+): string[] {
+  const missing: string[] = [];
+  for (const row of rows || []) {
+    if (acumuladoHit(row, byPlant)) continue;
+    missing.push(String(row.empresa || row.plant_code || "planta").trim() || "planta");
+  }
+  return missing;
+}
+
+function applyIgfDiarioAcumuladoMini(
+  mini: IgfForecastMiniResponse,
+  byPlant: Record<string, { margen: number | null; hg: number | null } | null>
+): IgfForecastMiniResponse | null {
+  if (missingAcumuladoPlants(mini.rows || [], byPlant).length) return null;
+  const rows = (mini.rows || []).map((row) => {
+    const hit = acumuladoHit(row, byPlant);
+    if (!hit) return null;
+    const margen = hit.margen;
+    const hgKg = hit.hg;
+    const venta = Number(row.ventaTon) || 0;
+    const com = Number(row.comDesc) || 0;
+    const ingreso = Math.round((margen + com - hgKg) * venta * 1000);
+    const operativos = Math.round(Number(row.operativos) || 0);
+    const corporativos = Math.round(Number(row.corporativos) || 0);
+    const gasto = operativos + corporativos;
+    const utilOperImporte = ingreso - operativos;
+    const resultadoFinalImporte = utilOperImporte - corporativos;
+    return {
+      ...row,
+      margen,
+      hgKg,
+      ingreso,
+      operativos,
+      corporativos,
+      gasto,
+      utilOperImporte,
+      resultadoFinalImporte,
+    };
+  });
+  if (rows.some((row) => row == null)) return null;
+  const ready = rows as IgfForecastMiniRow[];
+  const sumB = ready.reduce((sum, row) => sum + (Number(row.ventaTon) || 0), 0);
+  const wAvg = (getter: (row: IgfForecastMiniRow) => number) => (
+    sumB > 0
+      ? Math.round((ready.reduce((sum, row) => sum + getter(row) * (Number(row.ventaTon) || 0), 0) / sumB) * 10000) / 10000
+      : 0
+  );
+  return {
+    ...mini,
+    rows: ready,
+    zona: {
+      empresa: "Zona Provincia",
+      plant_code: null,
+      ventaTon: Math.round(sumB * 100) / 100,
+      margen: wAvg((row) => Number(row.margen) || 0),
+      comDesc: wAvg((row) => Number(row.comDesc) || 0),
+      impuestos: wAvg((row) => Number(row.impuestos) || 0),
+      hgKg: wAvg((row) => Number(row.hgKg) || 0),
+      ingreso: ready.reduce((sum, row) => sum + (Number(row.ingreso) || 0), 0),
+      operativos: ready.reduce((sum, row) => sum + (Number(row.operativos) || 0), 0),
+      corporativos: ready.reduce((sum, row) => sum + (Number(row.corporativos) || 0), 0),
+      gasto: ready.reduce((sum, row) => sum + (Number(row.gasto) || 0), 0),
+      utilOperImporte: ready.reduce((sum, row) => sum + (Number(row.utilOperImporte) || 0), 0),
+      resultadoFinalImporte: ready.reduce((sum, row) => sum + (Number(row.resultadoFinalImporte) || 0), 0),
+    },
+  };
+}
+
 export function IgfForecastContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -120,6 +203,11 @@ export function IgfForecastContent() {
   const [plantaFilter, setPlantaFilter] = useState<string>("");
   const [forecastExcelMsg, setForecastExcelMsg] = useState<string | null>(null);
   const [igfGraficaOpen, setIgfGraficaOpen] = useState(false);
+  const [igfTableMode, setIgfTableMode] = useState<"forecast" | "igf_diario">("forecast");
+  const [acumuladoByPlant, setAcumuladoByPlant] = useState<Record<string, { margen: number | null; hg: number | null }> | null>(null);
+  const [acumuladoMissing, setAcumuladoMissing] = useState<string[]>([]);
+  const [acumuladoLoading, setAcumuladoLoading] = useState(false);
+  const [acumuladoError, setAcumuladoError] = useState<string | null>(null);
   const [igfExcelUrl, setIgfExcelUrl] = useState("");
   const [uploadDay, setUploadDay] = useState<string>(() => {
     if (typeof window === "undefined") return "";
@@ -212,6 +300,62 @@ export function IgfForecastContent() {
       // ignore
     }
   }, [versionAsOfCorte]);
+
+  useEffect(() => {
+    if (igfTableMode !== "igf_diario" || !token || !igfForecast || !igfMini) return;
+    let cancel = false;
+    setAcumuladoByPlant(null);
+    setAcumuladoMissing([]);
+    setAcumuladoError(null);
+    setAcumuladoLoading(true);
+    const up = uploadDay.trim();
+    void (async () => {
+      try {
+        const entries = await Promise.all((igfMini.rows || []).map(async (row) => {
+          const code = String(row.plant_code || "").trim();
+          if (!code) return null;
+          const data = await fetchIgfDiarioGrafica({
+            token,
+            year: igfForecast.year,
+            month: igfForecast.month,
+            range: "1m",
+            uploadDay: up,
+            versionAsOfCorte,
+            plantCode: code,
+          });
+          return [code, data.acumulado || null] as const;
+        }));
+        if (cancel) return;
+        const next: Record<string, { margen: number | null; hg: number | null }> = {};
+        for (const entry of entries) {
+          if (!entry) continue;
+          next[entry[0]] = {
+            margen: entry[1] ? entry[1].margen : null,
+            hg: entry[1] ? entry[1].hg : null,
+          };
+        }
+        const missing = missingAcumuladoPlants(igfMini.rows || [], next);
+        if (missing.length) {
+          setAcumuladoByPlant(null);
+          setAcumuladoMissing(missing);
+        } else {
+          setAcumuladoMissing([]);
+          setAcumuladoByPlant(next);
+        }
+      } catch (error: unknown) {
+        if (!cancel) {
+          setAcumuladoByPlant(null);
+          setAcumuladoMissing([]);
+          setAcumuladoError(error instanceof Error ? error.message : "No se pudo cargar el IGF Diario acumulado");
+        }
+      } finally {
+        if (!cancel) setAcumuladoLoading(false);
+      }
+    })();
+    return () => {
+      cancel = true;
+    };
+  }, [igfTableMode, token, igfForecast, igfMini, uploadDay, versionAsOfCorte]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1039,7 +1183,25 @@ export function IgfForecastContent() {
       <main className={plantaFilter ? "flex-1 p-4 flex flex-col" : "flex-1 p-4"}>
         <section className={`rounded-lg border border-slate-700 bg-slate-800/60 p-4 ${plantaFilter ? "flex-shrink-0" : ""}`}>
           <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-            <h2 className="text-lg font-medium text-slate-200">IGF Forecast</h2>
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-lg font-medium text-slate-200">IGF Forecast</h2>
+              <div className="flex items-center gap-1" role="group" aria-label="Modo de la tabla IGF">
+                <button
+                  type="button"
+                  onClick={() => setIgfTableMode("forecast")}
+                  className={`rounded px-2 py-1 text-xs font-semibold ${igfTableMode === "forecast" ? "bg-sky-600 text-white" : "bg-slate-700 text-slate-200"}`}
+                >
+                  Forecast
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIgfTableMode("igf_diario")}
+                  className={`rounded px-2 py-1 text-xs font-semibold ${igfTableMode === "igf_diario" ? "bg-sky-600 text-white" : "bg-slate-700 text-slate-200"}`}
+                >
+                  IGF Diario acumulado
+                </button>
+              </div>
+            </div>
             <div className="flex flex-wrap items-center gap-2">
                         {igfForecast && (
                 <>
@@ -1106,11 +1268,27 @@ export function IgfForecastContent() {
             <>
             {igfMiniLoading && <p className="text-xs text-slate-400 mb-2">Cargando mini-resumen…</p>}
             {igfMiniError && <p className="text-xs text-red-400 mb-2">{igfMiniError}</p>}
-            {igfMini && igfMini.rows && igfMini.rows.length > 0 && (() => {
+            {igfTableMode === "igf_diario" && acumuladoLoading && (
+              <p className="mb-2 text-xs text-slate-400">Cargando IGF Diario acumulado…</p>
+            )}
+            {igfTableMode === "igf_diario" && !acumuladoLoading && acumuladoError && (
+              <p className="mb-2 text-xs text-red-400">{acumuladoError}</p>
+            )}
+            {igfTableMode === "igf_diario" && !acumuladoLoading && !acumuladoError && acumuladoMissing.length > 0 && (
+              <p className="mb-2 text-xs text-amber-300">
+                IGF Diario acumulado incompleto
+                {acumuladoMissing.length ? `: ${acumuladoMissing.join(", ")}` : ""}
+              </p>
+            )}
+            {igfMini && igfMini.rows && igfMini.rows.length > 0 && (igfTableMode === "forecast" || (igfTableMode === "igf_diario" && !acumuladoLoading && !acumuladoError && acumuladoMissing.length === 0 && acumuladoByPlant)) && (() => {
+              const miniView = igfTableMode === "igf_diario" && !acumuladoLoading && !acumuladoError && acumuladoMissing.length === 0 && acumuladoByPlant
+                ? applyIgfDiarioAcumuladoMini(igfMini, acumuladoByPlant)
+                : igfMini;
+              if (!miniView) return null;
               const plantRows = plantaFilter
-                ? igfMini.rows.filter((r) => (r.empresa || "").trim() === plantaFilter)
-                : igfMini.rows;
-              const zona = igfMini.zona;
+                ? miniView.rows.filter((r) => (r.empresa || "").trim() === plantaFilter)
+                : miniView.rows;
+              const zona = miniView.zona;
               const miniCols = [
                 { key: "ventaTon" as const, label: "Venta", fmt: (v: number) => fmtNum(v, 2), money: false },
                 { key: "margen" as const, label: "Margen", fmt: (v: number) => fmtNum(v), money: false },
