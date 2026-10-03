@@ -101,18 +101,39 @@ import {
   toModalResumenRows,
 } from "@/lib/arr-categoria-commission";
 
+function acumuladoHit(
+  row: IgfForecastMiniRow,
+  byPlant: Record<string, { margen: number | null; hg: number | null } | null>
+): { margen: number; hg: number } | null {
+  const code = String(row.plant_code || "").trim();
+  const name = String(row.empresa || "").trim();
+  const hit = (code && byPlant[code]) || (name && byPlant[name]) || null;
+  if (!hit || !Number.isFinite(hit.margen) || !Number.isFinite(hit.hg)) return null;
+  return { margen: Number(hit.margen), hg: Number(hit.hg) };
+}
+
+function missingAcumuladoPlants(
+  rows: IgfForecastMiniRow[],
+  byPlant: Record<string, { margen: number | null; hg: number | null } | null>
+): string[] {
+  const missing: string[] = [];
+  for (const row of rows || []) {
+    if (acumuladoHit(row, byPlant)) continue;
+    missing.push(String(row.empresa || row.plant_code || "planta").trim() || "planta");
+  }
+  return missing;
+}
+
 function applyIgfDiarioAcumuladoMini(
   mini: IgfForecastMiniResponse,
   byPlant: Record<string, { margen: number | null; hg: number | null } | null>
-): IgfForecastMiniResponse {
+): IgfForecastMiniResponse | null {
+  if (missingAcumuladoPlants(mini.rows || [], byPlant).length) return null;
   const rows = (mini.rows || []).map((row) => {
-    const code = String(row.plant_code || "").trim();
-    const hit = byPlant[code] || byPlant[String(row.empresa || "").trim()] || null;
-    if (!hit || hit.margen == null || hit.hg == null || !Number.isFinite(hit.margen) || !Number.isFinite(hit.hg)) {
-      return row;
-    }
-    const margen = Number(hit.margen);
-    const hgKg = Number(hit.hg);
+    const hit = acumuladoHit(row, byPlant);
+    if (!hit) return null;
+    const margen = hit.margen;
+    const hgKg = hit.hg;
     const venta = Number(row.ventaTon) || 0;
     const com = Number(row.comDesc) || 0;
     const ingreso = Math.round((margen + com - hgKg) * venta * 1000);
@@ -133,15 +154,17 @@ function applyIgfDiarioAcumuladoMini(
       resultadoFinalImporte,
     };
   });
-  const sumB = rows.reduce((sum, row) => sum + (Number(row.ventaTon) || 0), 0);
+  if (rows.some((row) => row == null)) return null;
+  const ready = rows as IgfForecastMiniRow[];
+  const sumB = ready.reduce((sum, row) => sum + (Number(row.ventaTon) || 0), 0);
   const wAvg = (getter: (row: IgfForecastMiniRow) => number) => (
     sumB > 0
-      ? Math.round((rows.reduce((sum, row) => sum + getter(row) * (Number(row.ventaTon) || 0), 0) / sumB) * 10000) / 10000
+      ? Math.round((ready.reduce((sum, row) => sum + getter(row) * (Number(row.ventaTon) || 0), 0) / sumB) * 10000) / 10000
       : 0
   );
   return {
     ...mini,
-    rows,
+    rows: ready,
     zona: {
       empresa: "Zona Provincia",
       plant_code: null,
@@ -150,12 +173,12 @@ function applyIgfDiarioAcumuladoMini(
       comDesc: wAvg((row) => Number(row.comDesc) || 0),
       impuestos: wAvg((row) => Number(row.impuestos) || 0),
       hgKg: wAvg((row) => Number(row.hgKg) || 0),
-      ingreso: rows.reduce((sum, row) => sum + (Number(row.ingreso) || 0), 0),
-      operativos: rows.reduce((sum, row) => sum + (Number(row.operativos) || 0), 0),
-      corporativos: rows.reduce((sum, row) => sum + (Number(row.corporativos) || 0), 0),
-      gasto: rows.reduce((sum, row) => sum + (Number(row.gasto) || 0), 0),
-      utilOperImporte: rows.reduce((sum, row) => sum + (Number(row.utilOperImporte) || 0), 0),
-      resultadoFinalImporte: rows.reduce((sum, row) => sum + (Number(row.resultadoFinalImporte) || 0), 0),
+      ingreso: ready.reduce((sum, row) => sum + (Number(row.ingreso) || 0), 0),
+      operativos: ready.reduce((sum, row) => sum + (Number(row.operativos) || 0), 0),
+      corporativos: ready.reduce((sum, row) => sum + (Number(row.corporativos) || 0), 0),
+      gasto: ready.reduce((sum, row) => sum + (Number(row.gasto) || 0), 0),
+      utilOperImporte: ready.reduce((sum, row) => sum + (Number(row.utilOperImporte) || 0), 0),
+      resultadoFinalImporte: ready.reduce((sum, row) => sum + (Number(row.resultadoFinalImporte) || 0), 0),
     },
   };
 }
@@ -182,6 +205,7 @@ export function IgfForecastContent() {
   const [igfGraficaOpen, setIgfGraficaOpen] = useState(false);
   const [igfTableMode, setIgfTableMode] = useState<"forecast" | "igf_diario">("forecast");
   const [acumuladoByPlant, setAcumuladoByPlant] = useState<Record<string, { margen: number | null; hg: number | null }> | null>(null);
+  const [acumuladoMissing, setAcumuladoMissing] = useState<string[]>([]);
   const [acumuladoLoading, setAcumuladoLoading] = useState(false);
   const [acumuladoError, setAcumuladoError] = useState<string | null>(null);
   const [igfExcelUrl, setIgfExcelUrl] = useState("");
@@ -280,8 +304,10 @@ export function IgfForecastContent() {
   useEffect(() => {
     if (igfTableMode !== "igf_diario" || !token || !igfForecast || !igfMini) return;
     let cancel = false;
-    setAcumuladoLoading(true);
+    setAcumuladoByPlant(null);
+    setAcumuladoMissing([]);
     setAcumuladoError(null);
+    setAcumuladoLoading(true);
     const up = uploadDay.trim();
     void (async () => {
       try {
@@ -302,12 +328,26 @@ export function IgfForecastContent() {
         if (cancel) return;
         const next: Record<string, { margen: number | null; hg: number | null }> = {};
         for (const entry of entries) {
-          if (!entry || !entry[1]) continue;
-          next[entry[0]] = { margen: entry[1].margen, hg: entry[1].hg };
+          if (!entry) continue;
+          next[entry[0]] = {
+            margen: entry[1] ? entry[1].margen : null,
+            hg: entry[1] ? entry[1].hg : null,
+          };
         }
-        setAcumuladoByPlant(next);
+        const missing = missingAcumuladoPlants(igfMini.rows || [], next);
+        if (missing.length) {
+          setAcumuladoByPlant(null);
+          setAcumuladoMissing(missing);
+        } else {
+          setAcumuladoMissing([]);
+          setAcumuladoByPlant(next);
+        }
       } catch (error: unknown) {
-        if (!cancel) setAcumuladoError(error instanceof Error ? error.message : "No se pudo cargar el IGF Diario acumulado");
+        if (!cancel) {
+          setAcumuladoByPlant(null);
+          setAcumuladoMissing([]);
+          setAcumuladoError(error instanceof Error ? error.message : "No se pudo cargar el IGF Diario acumulado");
+        }
       } finally {
         if (!cancel) setAcumuladoLoading(false);
       }
@@ -1231,13 +1271,20 @@ export function IgfForecastContent() {
             {igfTableMode === "igf_diario" && acumuladoLoading && (
               <p className="mb-2 text-xs text-slate-400">Cargando IGF Diario acumulado…</p>
             )}
-            {igfTableMode === "igf_diario" && acumuladoError && (
+            {igfTableMode === "igf_diario" && !acumuladoLoading && acumuladoError && (
               <p className="mb-2 text-xs text-red-400">{acumuladoError}</p>
             )}
-            {igfMini && igfMini.rows && igfMini.rows.length > 0 && (() => {
-              const miniView = igfTableMode === "igf_diario" && acumuladoByPlant
+            {igfTableMode === "igf_diario" && !acumuladoLoading && !acumuladoError && acumuladoMissing.length > 0 && (
+              <p className="mb-2 text-xs text-amber-300">
+                IGF Diario acumulado incompleto
+                {acumuladoMissing.length ? `: ${acumuladoMissing.join(", ")}` : ""}
+              </p>
+            )}
+            {igfMini && igfMini.rows && igfMini.rows.length > 0 && (igfTableMode === "forecast" || (igfTableMode === "igf_diario" && !acumuladoLoading && !acumuladoError && acumuladoMissing.length === 0 && acumuladoByPlant)) && (() => {
+              const miniView = igfTableMode === "igf_diario" && !acumuladoLoading && !acumuladoError && acumuladoMissing.length === 0 && acumuladoByPlant
                 ? applyIgfDiarioAcumuladoMini(igfMini, acumuladoByPlant)
                 : igfMini;
+              if (!miniView) return null;
               const plantRows = plantaFilter
                 ? miniView.rows.filter((r) => (r.empresa || "").trim() === plantaFilter)
                 : miniView.rows;

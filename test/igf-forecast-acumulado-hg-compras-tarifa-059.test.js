@@ -106,7 +106,7 @@ test("Forecast conserva el mini original y el selector ofrece los dos modos", ()
   assert.match(CLIENT, /IGF Diario acumulado\s*<\/button>/);
   assert.match(CLIENT, /setIgfTableMode\("forecast"\)/);
   assert.match(CLIENT, /setIgfTableMode\("igf_diario"\)/);
-  assert.match(CLIENT, /igfTableMode === "igf_diario" && acumuladoByPlant/);
+  assert.match(CLIENT, /igfTableMode === "igf_diario" && !acumuladoLoading && !acumuladoError && acumuladoMissing\.length === 0 && acumuladoByPlant/);
   assert.match(CLIENT, /IGFDiario/);
   assert.doesNotMatch(CLIENT, /H48|Y48/);
   assert.doesNotMatch(PUEBLA, /H48|Y48/);
