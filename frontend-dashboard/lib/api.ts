@@ -127,6 +127,69 @@ export async function fetchIgfDiarioGrafica(opts: {
   return body as IgfDiarioGraficaResponse;
 }
 
+export type IgfDiarioGastoManual = {
+  plant_code: string;
+  year: number;
+  month: number;
+  operativos: number | null;
+  corporativos: number | null;
+  updated_at?: string | null;
+  updated_by?: string | null;
+};
+
+export async function fetchIgfDiarioGastosManuales(opts: {
+  token: string;
+  year: number;
+  month: number;
+}): Promise<{ ok: boolean; year: number; month: number; rows: IgfDiarioGastoManual[] }> {
+  const params = new URLSearchParams({
+    year: String(opts.year),
+    month: String(opts.month),
+  });
+  const res = await fetch(getApiUrl(`/api/dashboard/igf-diario-gastos-manuales?${params.toString()}`), {
+    headers: { Authorization: `Bearer ${opts.token}` },
+  });
+  const body = await res.json().catch(() => ({ error: res.statusText }));
+  if (!res.ok) throw new Error((body as { error?: string }).error || `HTTP ${res.status}`);
+  return body as { ok: boolean; year: number; month: number; rows: IgfDiarioGastoManual[] };
+}
+
+export async function patchIgfDiarioGastosManuales(
+  token: string,
+  body: {
+    year: number;
+    month: number;
+    plant_code: string;
+    operativos?: number | null;
+    corporativos?: number | null;
+  }
+): Promise<{ ok: boolean; deleted: boolean; row: IgfDiarioGastoManual | null; plant_code: string }> {
+  const payload: {
+    year: number;
+    month: number;
+    plant_code: string;
+    operativos?: number | null;
+    corporativos?: number | null;
+  } = {
+    year: body.year,
+    month: body.month,
+    plant_code: body.plant_code,
+  };
+  if (body.operativos !== undefined) payload.operativos = body.operativos;
+  if (body.corporativos !== undefined) payload.corporativos = body.corporativos;
+  const res = await fetch(getApiUrl("/api/dashboard/igf-diario-gastos-manuales"), {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  const parsed = await res.json().catch(() => ({ error: res.statusText }));
+  if (!res.ok) throw new Error((parsed as { error?: string }).error || `HTTP ${res.status}`);
+  return parsed as { ok: boolean; deleted: boolean; row: IgfDiarioGastoManual | null; plant_code: string };
+}
+
 /** Descarga Excel Clasificación de apoyos (hoja COMPARATIVOS). */
 export async function downloadClasificacionApoyosExcel(
   token: string,
@@ -1479,6 +1542,8 @@ export interface IgfForecastMiniRow {
   gasto: number;
   utilOperImporte: number;
   resultadoFinalImporte: number;
+  operativosManual?: boolean;
+  corporativosManual?: boolean;
 }
 
 export interface IgfForecastMiniResponse {

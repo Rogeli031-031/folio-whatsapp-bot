@@ -17,6 +17,8 @@ import {
   fetchIgfForecast,
   fetchIgfForecastMini,
   fetchIgfDiarioGrafica,
+  fetchIgfDiarioGastosManuales,
+  patchIgfDiarioGastosManuales,
   fetchArrLastUploadDay,
   postForecastProvincia,
   patchIgfForecastHg,
@@ -31,6 +33,7 @@ import {
   type IgfForecastRow,
   type IgfForecastMiniResponse,
   type IgfForecastMiniRow,
+  type IgfDiarioGastoManual,
   type PronosticoDetalleResponse,
   type IgfFolioDetalleItem,
   type IgfFolioDetalleTipo,
@@ -183,6 +186,87 @@ function applyIgfDiarioAcumuladoMini(
   };
 }
 
+function foldPlantKey(value: string | null | undefined): string {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function manualForPlant(overrides: IgfDiarioGastoManual[], row: IgfForecastMiniRow): IgfDiarioGastoManual | null {
+  const code = foldPlantKey(row.plant_code);
+  const name = foldPlantKey(row.empresa);
+  return (
+    overrides.find((item) => {
+      const key = foldPlantKey(item.plant_code);
+      return (code && key === code) || (name && key === name);
+    }) || null
+  );
+}
+
+function manualAmount(manual: number | null | undefined, automatic: number): number {
+  if (manual != null) {
+    const n = Number(manual);
+    if (Number.isFinite(n)) return Math.round(n);
+  }
+  return Math.round(Number(automatic) || 0);
+}
+
+function applyManualGastosToAcumulado(
+  mini: IgfForecastMiniResponse | null,
+  overrides: IgfDiarioGastoManual[]
+): IgfForecastMiniResponse | null {
+  if (!mini) return null;
+  const rows = (mini.rows || []).map((row) => {
+    const hit = manualForPlant(overrides, row);
+    const manualOperativos = hit ? hit.operativos : null;
+    const manualCorporativos = hit ? hit.corporativos : null;
+    const operativos = manualAmount(manualOperativos, row.operativos);
+    const corporativos = manualAmount(manualCorporativos, row.corporativos);
+    const ingreso = row.ingreso;
+    const gasto = operativos + corporativos;
+    const utilOperImporte = ingreso - operativos;
+    const resultadoFinalImporte = utilOperImporte - corporativos;
+    return {
+      ...row,
+      ingreso,
+      operativos,
+      corporativos,
+      gasto,
+      utilOperImporte,
+      resultadoFinalImporte,
+      operativosManual: manualOperativos != null,
+      corporativosManual: manualCorporativos != null,
+    };
+  });
+  const sumB = rows.reduce((sum, row) => sum + (Number(row.ventaTon) || 0), 0);
+  const wAvg = (getter: (row: IgfForecastMiniRow) => number) => (
+    sumB > 0
+      ? Math.round((rows.reduce((sum, row) => sum + getter(row) * (Number(row.ventaTon) || 0), 0) / sumB) * 10000) / 10000
+      : 0
+  );
+  return {
+    ...mini,
+    rows,
+    zona: {
+      empresa: "Zona Provincia",
+      plant_code: null,
+      ventaTon: Math.round(sumB * 100) / 100,
+      margen: wAvg((row) => Number(row.margen) || 0),
+      comDesc: wAvg((row) => Number(row.comDesc) || 0),
+      impuestos: wAvg((row) => Number(row.impuestos) || 0),
+      hgKg: wAvg((row) => Number(row.hgKg) || 0),
+      ingreso: rows.reduce((sum, row) => sum + (Number(row.ingreso) || 0), 0),
+      operativos: rows.reduce((sum, row) => sum + (Number(row.operativos) || 0), 0),
+      corporativos: rows.reduce((sum, row) => sum + (Number(row.corporativos) || 0), 0),
+      gasto: rows.reduce((sum, row) => sum + (Number(row.gasto) || 0), 0),
+      utilOperImporte: rows.reduce((sum, row) => sum + (Number(row.utilOperImporte) || 0), 0),
+      resultadoFinalImporte: rows.reduce((sum, row) => sum + (Number(row.resultadoFinalImporte) || 0), 0),
+    },
+  };
+}
+
 export function IgfForecastContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -208,6 +292,10 @@ export function IgfForecastContent() {
   const [acumuladoMissing, setAcumuladoMissing] = useState<string[]>([]);
   const [acumuladoLoading, setAcumuladoLoading] = useState(false);
   const [acumuladoError, setAcumuladoError] = useState<string | null>(null);
+  const [gastosManuales, setGastosManuales] = useState<IgfDiarioGastoManual[]>([]);
+  const [gastoEdit, setGastoEdit] = useState<{ plant: string; field: "operativos" | "corporativos"; draft: string } | null>(null);
+  const [gastoSaving, setGastoSaving] = useState(false);
+  const [gastoEditError, setGastoEditError] = useState<string | null>(null);
   const [igfExcelUrl, setIgfExcelUrl] = useState("");
   const [uploadDay, setUploadDay] = useState<string>(() => {
     if (typeof window === "undefined") return "";
@@ -356,6 +444,57 @@ export function IgfForecastContent() {
       cancel = true;
     };
   }, [igfTableMode, token, igfForecast, igfMini, uploadDay, versionAsOfCorte]);
+
+  useEffect(() => {
+    if (igfTableMode !== "igf_diario" || !token || !igfForecast) return;
+    let cancel = false;
+    setGastosManuales([]);
+    setGastoEdit(null);
+    void fetchIgfDiarioGastosManuales({
+      token,
+      year: igfForecast.year,
+      month: igfForecast.month,
+    })
+      .then((data) => {
+        if (!cancel) setGastosManuales(data.rows || []);
+      })
+      .catch((error: unknown) => {
+        if (!cancel) {
+          setGastoEditError(error instanceof Error ? error.message : "No se pudieron cargar los gastos manuales");
+        }
+      });
+    return () => {
+      cancel = true;
+    };
+  }, [igfTableMode, token, igfForecast?.year, igfForecast?.month]);
+
+  const saveGastoManual = async (
+    plantCode: string,
+    field: "operativos" | "corporativos",
+    value: number | null
+  ) => {
+    if (!token || !igfForecast || !plantCode || gastoSaving) return;
+    setGastoSaving(true);
+    setGastoEditError(null);
+    try {
+      const saved = await patchIgfDiarioGastosManuales(token, {
+        year: igfForecast.year,
+        month: igfForecast.month,
+        plant_code: plantCode,
+        [field]: value,
+      });
+      setGastosManuales((prev) => {
+        const rest = prev.filter((row) => foldPlantKey(row.plant_code) !== foldPlantKey(saved.plant_code));
+        if (saved.deleted || !saved.row) return rest;
+        return [...rest, saved.row];
+      });
+      setGastoEdit(null);
+    } catch (error: unknown) {
+      setGastoEditError(error instanceof Error ? error.message : "No se pudo guardar el gasto manual");
+    } finally {
+      setGastoSaving(false);
+    }
+  };
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1280,9 +1419,12 @@ export function IgfForecastContent() {
                 {acumuladoMissing.length ? `: ${acumuladoMissing.join(", ")}` : ""}
               </p>
             )}
+            {igfTableMode === "igf_diario" && gastoEditError && (
+              <p className="mb-2 text-xs text-red-400">{gastoEditError}</p>
+            )}
             {igfMini && igfMini.rows && igfMini.rows.length > 0 && (igfTableMode === "forecast" || (igfTableMode === "igf_diario" && !acumuladoLoading && !acumuladoError && acumuladoMissing.length === 0 && acumuladoByPlant)) && (() => {
               const miniView = igfTableMode === "igf_diario" && !acumuladoLoading && !acumuladoError && acumuladoMissing.length === 0 && acumuladoByPlant
-                ? applyIgfDiarioAcumuladoMini(igfMini, acumuladoByPlant)
+                ? applyManualGastosToAcumulado(applyIgfDiarioAcumuladoMini(igfMini, acumuladoByPlant), gastosManuales)
                 : igfMini;
               if (!miniView) return null;
               const plantRows = plantaFilter
@@ -1333,6 +1475,15 @@ export function IgfForecastContent() {
                       !isZona &&
                       miniRow.plant_code &&
                       typeof v === "number";
+                    const gastoField = c.key === "operativos" || c.key === "corporativos" ? c.key : null;
+                    const plantKey = String(miniRow.plant_code || miniRow.empresa || "").trim();
+                    const editableGasto = igfTableMode === "igf_diario" && !isZona && gastoField != null && plantKey !== "";
+                    const manual = gastoField === "operativos"
+                      ? Boolean(miniRow.operativosManual)
+                      : gastoField === "corporativos"
+                        ? Boolean(miniRow.corporativosManual)
+                        : false;
+                    const editing = editableGasto && gastoEdit != null && gastoEdit.plant === plantKey && gastoEdit.field === gastoField;
                     return (
                       <td
                         key={c.key}
@@ -1344,7 +1495,78 @@ export function IgfForecastContent() {
                               : `text-slate-300 ${moneyHighlight}`
                         }`}
                       >
-                        {ventaBtn ? (
+                        {editing && gastoField ? (
+                          <div className="flex flex-col items-end gap-1">
+                            <input
+                              value={gastoEdit ? gastoEdit.draft : ""}
+                              inputMode="decimal"
+                              aria-label={`${c.label} manual`}
+                              className="w-24 rounded border border-slate-500 bg-slate-900 px-1 text-right text-slate-100"
+                              onChange={(event) => {
+                                const draft = event.target.value;
+                                setGastoEdit((prev) => (prev ? { ...prev, draft } : prev));
+                              }}
+                            />
+                            <span className="flex gap-1">
+                              <button
+                                type="button"
+                                disabled={gastoSaving}
+                                className="rounded bg-sky-700 px-1 text-white"
+                                onClick={() => {
+                                  const raw = (gastoEdit ? gastoEdit.draft : "").trim().replace(/,/g, "");
+                                  const n = Number(raw);
+                                  if (raw === "" || !Number.isFinite(n)) {
+                                    setGastoEditError("Escribe un número. 0 también es un valor manual.");
+                                    return;
+                                  }
+                                  void saveGastoManual(plantKey, gastoField, n);
+                                }}
+                              >
+                                Guardar
+                              </button>
+                              <button
+                                type="button"
+                                disabled={gastoSaving}
+                                className="rounded bg-slate-600 px-1 text-slate-100"
+                                onClick={() => void saveGastoManual(plantKey, gastoField, null)}
+                              >
+                                Auto
+                              </button>
+                              <button
+                                type="button"
+                                className="rounded px-1 text-slate-300"
+                                onClick={() => setGastoEdit(null)}
+                              >
+                                Cancelar
+                              </button>
+                            </span>
+                          </div>
+                        ) : editableGasto && gastoField ? (
+                          <div className="flex flex-col items-end gap-0.5">
+                            <button
+                              type="button"
+                              title="Editar importe manual de este mes"
+                              className="w-full text-right underline decoration-dotted decoration-amber-400/80 text-amber-200 hover:text-amber-100"
+                              onClick={() => {
+                                setGastoEditError(null);
+                                setGastoEdit({ plant: plantKey, field: gastoField, draft: String(v ?? "") });
+                              }}
+                            >
+                              {c.fmt(v as number)}
+                            </button>
+                            {manual ? <span className="text-amber-300">Manual</span> : null}
+                            {manual ? (
+                              <button
+                                type="button"
+                                disabled={gastoSaving}
+                                className="text-slate-300 underline"
+                                onClick={() => void saveGastoManual(plantKey, gastoField, null)}
+                              >
+                                Auto
+                              </button>
+                            ) : null}
+                          </div>
+                        ) : ventaBtn ? (
                           <button
                             type="button"
                             title="Pronóstico (misma lógica que hoja Pronostico del Excel)"

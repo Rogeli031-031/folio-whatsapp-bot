@@ -1,122 +1,80 @@
-﻿task_id: "FIX-IGF-ACUMULADO-HG-SIGN-061"
+﻿task_id: "G4-PREP-IGF-DIARIO-GASTOS-MANUALES-062"
 
-title: "Corregir signo HG en IGF Diario acumulado"
+title: "Preparar PR para merge humano de gastos manuales IGF Diario"
 
 status: "DONE_PENDING_REVIEW"
 
-mode: "IMPLEMENTATION"
+mode: "INTEGRATION"
 
 authorized_by: "HUMAN_APPROVER"
 
-authorized_at: "2026-10-03T22:41:00-06:00"
+authorized_at: "2026-10-03"
 
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-10-03"
 
 g4_authorization: "G4_AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-10-03"
 
-deploy_authorization: "DEPLOY_AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-10-03"
-
 objective: >
-  Corregir exclusivamente el signo de HG usado por el modo IGF Diario acumulado.
-  El HG acumulado debe conservar el signo de Y de TOTAL MES, sin invertirlo una
-  segunda vez. Forecast debe permanecer exactamente igual. Los cálculos derivados
-  de IGF Diario acumulado deben recalcularse naturalmente con el HG corregido.
+  Preparar el Pull Request de implementation/igf-diario-gastos-manuales-062
+  hacia main. No modificar producto ni tests. El merge a main queda
+  reservado al HUMAN_APPROVER.
 
-base_sha: "330d4b115a43eda1010237cdaa1b9d58f84fc4a4"
+main_reference_sha: "eb6dd697d9a80fcc573dac62d8a59dfecf4bea08"
 
-branch: "fix/igf-acumulado-hg-sign-061"
+validated_source_sha: "4b11b6e43e856c96ab482e137553e459c88d980b"
 
-production_case:
-  plant: "GT Puebla"
-  corte: "2026-10-03"
-  venta_ton_aprox: 1198.48
-  margen_acumulado_aprox: 6.29
-  hg_actual_mostrado_aprox: 1.12
-  hg_esperado_mostrado_aprox: -1.12
-  resultado_actual_aprox: -1410529
-  resultado_esperado_aprox: 1287771
-  note: >
-    La gráfica IGF Diario muestra CIERRE PROYECTADO ≈ 1,287,771.
-    El cambio de signo del HG explica aproximadamente 2,698,300 pesos
-    de diferencia, consistente con el resultado esperado.
+product_sha: "4071cd3dce4ee15ad74d22dfd772bf898b6e5af0"
+
+branch: "implementation/igf-diario-gastos-manuales-062"
+
+target_branch: "main"
+
+validated_evidence:
+  - "062 PASS (12)."
+  - "059 PASS."
+  - "059-R1 PASS."
+  - "061 PASS."
+  - "053A / 053A-R1 / 053A-R2 / 054-R3 PASS."
+  - "51 pruebas relevantes PASS."
+  - "frontend npm run build PASS."
+  - "node --check server.js PASS."
+  - "git diff --check limpio."
+  - "Forecast no consume overrides."
+  - "M3 recibe Corporativos efectivos."
+  - "T3 recibe Operativos efectivos."
+  - "0 manual es válido."
+  - "null restaura automático."
 
 in_scope:
-  - "lib/igf-diario-puebla.js"
-  - "test/igf-forecast-acumulado-hg-compras-tarifa-059.test.js"
-  - "Nuevo test específico 061 si conviene."
-  - "docs/dev-loop/CURRENT_TASK.md"
-  - "docs/dev-loop/reports/FIX-IGF-ACUMULADO-HG-SIGN-061.md"
+  - "Verificar origin/main exacto."
+  - "Verificar rama ahead 2 / behind 0."
+  - "Verificar que 4071cd3d es producto y 4b11b6e4 documentación."
+  - "Crear reporte G4-PREP."
+  - "Crear PR hacia main."
+  - "STOP antes de merge."
 
-required_change:
-  - "En totalMesMarginAndHg, conservar Y con su signo natural."
-  - "Cambiar hg: -y por hg: y."
-  - "Actualizar el contrato/comentario que actualmente dice HG del forecast = -Y."
-  - "Actualizar tests que formalizaron erróneamente el cambio de signo."
+out_of_scope:
+  - "Modificar producto."
+  - "Modificar tests."
+  - "Modificar DB o datos."
+  - "Push directo a main."
+  - "Merge a main."
+  - "Deploy."
+  - "Siguiente tarea."
 
-must_not_change:
-  - "Modo Forecast."
-  - "Valores o fórmulas de Forecast."
-  - "Cálculo de Margen H."
-  - "Venta."
-  - "Comisiones y descuentos."
-  - "Impuestos."
-  - "Operativos."
-  - "Corporativos."
-  - "Fórmula de INGRESO."
-  - "Fórmula de Util. Operación."
-  - "Fórmula de Resultado Final."
-  - "Excel IGF Diario."
-  - "DB/schema/data."
-  - "Compras."
-  - "Tarifa día 1."
-  - "Identidades de plantas."
-
-calculation_contract:
-  - "IGF Diario acumulado toma Margen desde H TOTAL MES dinámico."
-  - "IGF Diario acumulado toma HG desde Y TOTAL MES dinámico TAL CUAL, conservando su signo."
-  - "No aplicar Math.abs."
-  - "No invertir nuevamente el signo."
-  - "INGRESO conserva exactamente: (margen + comDesc - hgKg) * venta * 1000."
-  - "Los resultados posteriores cambian únicamente como consecuencia del HG corregido."
-  - "Zona Provincia se recalcula desde las plantas con el mismo contrato."
-  - "Forecast sigue usando sus valores originales sin alteración."
+pr_contract:
+  base: "main"
+  head: "implementation/igf-diario-gastos-manuales-062"
+  title: "IMPL 062: gastos manuales Operativos/Corporativos en IGF Diario"
+  merge_executor: "HUMAN_APPROVER_ONLY"
+  preferred_merge: "Squash and merge"
 
 acceptance_criteria:
-  - "Forecast antes/después es idéntico."
-  - "GT Puebla IGF Diario acumulado muestra HG aproximadamente -1.12 al corte 03/10/2026."
-  - "GT Puebla deja de mostrar Resultado Final aproximado -1,410,529."
-  - "GT Puebla Resultado Final queda alrededor de 1.28-1.29 millones, consistente con CIERRE PROYECTADO 1,287,771."
-  - "No hay cambios de producto fuera del alcance."
-  - "Todos los tests 059, 059-R1 y regresiones relevantes pasan."
-  - "frontend build PASS."
-  - "git diff --check PASS."
+  - "origin/main sigue exactamente en eb6dd697d9a80fcc573dac62d8a59dfecf4bea08."
+  - "No hay cambios nuevos de producto ni tests."
+  - "PR base main / head implementation/igf-diario-gastos-manuales-062."
+  - "PR creado sin merge."
+  - "Reporte registra URL y número del PR."
+  - "status final DONE_PENDING_REVIEW."
 
-validation:
-  - "test/igf-forecast-acumulado-hg-compras-tarifa-059.test.js"
-  - "test/igf-forecast-acumulado-hg-compras-tarifa-059-r1.test.js"
-  - "test específico 061"
-  - "regresiones IGF Diario 054-R3"
-  - "frontend build"
-  - "git diff --check"
-
-merge_contract:
-  executor: "HUMAN_APPROVER_ONLY"
-  merge_authorized: true
-  deploy_authorized: true
-  preferred_method: "Squash and merge"
-  render_expected_auto_deploy:
-    - "folio-dashboard"
-    - "folio-whatsapp-bot"
-
-forbidden_actions:
-  - "Modificar Forecast."
-  - "Cambiar otras fórmulas para acercar artificialmente el resultado a 1,287,771."
-  - "Hardcodear Puebla."
-  - "Hardcodear 1.12."
-  - "Hardcodear 1,287,771."
-  - "Cambiar datos de producción."
-  - "Modificar DB/schema."
-  - "Push directo a main."
-  - "Merge ejecutado por implementador."
-
-result_report_path: "docs/dev-loop/reports/FIX-IGF-ACUMULADO-HG-SIGN-061.md"
+result_report_path: "docs/dev-loop/reports/G4-PREP-IGF-DIARIO-GASTOS-MANUALES-062.md"
