@@ -46,6 +46,7 @@ const arrLoad = require("./lib/arr-load");
 const arrRefreshProvincia = require("./lib/arr-refresh-provincia");
 const forecastMensual = require("./lib/forecast-mensual");
 const dashboardArrForecast = require("./lib/dashboard-arr-forecast");
+const igfDiarioGastosManuales = require("./lib/igf-diario-gastos-manuales");
 const igfDiarioDailyInsights = require("./lib/igf-diario-daily-insights");
 const igfDiarioGrafica = require("./lib/igf-diario-grafica");
 const arrAnnualCategoryAnalysis = require("./lib/arr-annual-category-analysis");
@@ -12373,6 +12374,66 @@ app.get("/api/dashboard/igf-forecast-mini", dashboardAuthMiddleware, async (req,
   }
 });
 
+async function filterIgfDiarioGastosManuales(client, auth, rows) {
+  if (igfDiarioGastosManuales.overrideVisible(auth, null)) return rows;
+  const visible = [];
+  for (const row of rows || []) {
+    const resolved = await dashboardArrForecast.resolveForecastExportPlant(client, row.plant_code);
+    const plantaId = resolved ? resolved.plantaId : null;
+    if (igfDiarioGastosManuales.overrideVisible(auth, plantaId)) visible.push(row);
+  }
+  return visible;
+}
+
+app.get("/api/dashboard/igf-diario-gastos-manuales", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGAFinancialKpis(req, res)) return;
+  if (dashboardBlockGVForbidden(req, res)) return;
+  const period = igfDiarioGastosManuales.parsePeriod(req.query.year, req.query.month);
+  if (!period.ok) return res.status(400).json({ error: period.error });
+  const client = await pool.connect();
+  try {
+    const rows = await igfDiarioGastosManuales.listMonth(client, period.year, period.month);
+    const visible = await filterIgfDiarioGastosManuales(client, req.dashboardAuth, rows);
+    res.json({ ok: true, year: period.year, month: period.month, rows: visible });
+  } catch (e) {
+    console.error("[igf-diario-gastos-manuales GET]", e);
+    res.status(500).json({ error: e.message || "No se pudieron consultar los gastos manuales" });
+  } finally {
+    client.release();
+  }
+});
+
+app.patch("/api/dashboard/igf-diario-gastos-manuales", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGAFinancialKpis(req, res)) return;
+  if (dashboardBlockGVForbidden(req, res)) return;
+  const patch = igfDiarioGastosManuales.parsePatch(req.body || {});
+  if (!patch.ok) return res.status(400).json({ error: patch.error });
+  const client = await pool.connect();
+  try {
+    const resolved = await dashboardArrForecast.resolveForecastExportPlant(client, patch.plantCode);
+    if (!resolved) return res.status(400).json({ error: "Planta no reconocida" });
+    const denied = assertPlantaPermitidaDashboard(req, resolved.plantaId);
+    if (denied) return res.status(403).json({ error: denied });
+    const updatedBy = req.dashboardAuth && req.dashboardAuth.actor_id != null
+      ? `Dashboard:${req.dashboardAuth.actor_id}`
+      : "Dashboard";
+    const saved = await igfDiarioGastosManuales.patchManual(client, patch, updatedBy);
+    res.json({
+      ok: true,
+      year: patch.year,
+      month: patch.month,
+      plant_code: patch.plantCode,
+      deleted: saved.deleted,
+      row: saved.row,
+    });
+  } catch (e) {
+    console.error("[igf-diario-gastos-manuales PATCH]", e);
+    res.status(500).json({ error: e.message || "No se pudo guardar el gasto manual" });
+  } finally {
+    client.release();
+  }
+});
+
 /** Detalle hoja Pronóstico (lookback + días seleccionables) para una planta provincia. */
 app.get("/api/dashboard/pronostico-detalle", dashboardAuthMiddleware, async (req, res) => {
   if (dashboardBlockGAFinancialKpis(req, res)) return;
@@ -15710,10 +15771,16 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
       );
       const corporativos = importeArrMini(plantMini && plantMini.corporativos);
       const operativos = importeArrMini(plantMini && plantMini.operativos);
-      if (corporativos != null || operativos != null) {
+      const manualRows = await igfDiarioGastosManuales.listMonth(client, year, month);
+      const effective = igfDiarioGastosManuales.effectivePair(
+        { operativos, corporativos },
+        manualRows,
+        [plantCode, resolvedPlant && resolvedPlant.nombre, resolvedPlant && resolvedPlant.canon, resolvedPlant && resolvedPlant.provinciaPlantCode]
+      );
+      if (effective.corporativos != null || effective.operativos != null) {
         forecastOpts.igfDiarioGastos = {};
-        if (corporativos != null) forecastOpts.igfDiarioGastos.corporativos = corporativos;
-        if (operativos != null) forecastOpts.igfDiarioGastos.operativos = operativos;
+        if (effective.corporativos != null) forecastOpts.igfDiarioGastos.corporativos = effective.corporativos;
+        if (effective.operativos != null) forecastOpts.igfDiarioGastos.operativos = effective.operativos;
       }
     }
     if (comprasPayload && resolvedPlant) {
@@ -15728,6 +15795,7 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
     if (!requirePlant && igfDiarioTodas) {
       const plants = await dashboardArrForecast.listIgfDiarioProvinciaPlants(client, year, month);
       const miniAll = await computeIgfForecastMiniPayload(client, igfForecast, year, month, uploadDay);
+      const manualRowsTodas = await igfDiarioGastosManuales.listMonth(client, year, month);
       await comprasDashboard.ensureComprasTables(client);
       const igfDiarioPlantas = [];
       const insightBundles = [];
@@ -15753,8 +15821,14 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
           humanName: plant.nombre,
           comprasPayload: await comprasDashboard.loadMonth(client, plant.plantaId, year, month),
           precioDiario: await dashboardArrForecast.loadPrecioDiario(client, code, year, month),
-          corporativos: importeArrMini(plantMini && plantMini.corporativos),
-          operativos: importeArrMini(plantMini && plantMini.operativos),
+          ...igfDiarioGastosManuales.effectivePair(
+            {
+              corporativos: importeArrMini(plantMini && plantMini.corporativos),
+              operativos: importeArrMini(plantMini && plantMini.operativos),
+            },
+            manualRowsTodas,
+            [code, plant.nombre, plant.canon, plant.provinciaPlantCode]
+          ),
           dailyInsights,
         });
       }
