@@ -10,7 +10,7 @@ base_sha: eb6dd697d9a80fcc573dac62d8a59dfecf4bea08
 
 branch: implementation/igf-diario-gastos-manuales-062
 
-sha: pendiente del commit de esta entrega
+sha: 4071cd3dce4ee15ad74d22dfd772bf898b6e5af0
 
 ## Schema
 
