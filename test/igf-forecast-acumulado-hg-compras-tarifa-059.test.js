@@ -134,13 +134,13 @@ test("Margen es H ponderado de TOTAL MES y no una fila fija", () => {
   assert.equal(out.y == null, false);
 });
 
-test("HG es el Y ponderado de TOTAL MES con signo cambiado", () => {
+test("HG acumulado conserva el signo de Y ponderado de TOTAL MES", () => {
   const out = totalMesMarginAndHg([
     { ventaKg: 1000, margen: 8, hgKg: 0.5 },
     { ventaKg: 1000, margen: 10, hgKg: 0.72 },
   ]);
   assert.equal(Math.round(out.y * 100) / 100, 0.61);
-  assert.equal(Math.round(out.hg * 100) / 100, -0.61);
+  assert.equal(out.hg, out.y);
 });
 
 test("Zona Provincia se recalcula con los Margen y HG de las plantas y el modo es reversible", () => {
